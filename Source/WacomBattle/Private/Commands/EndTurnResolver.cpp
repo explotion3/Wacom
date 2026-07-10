@@ -75,7 +75,7 @@ FWacomStatus FEndTurnResolver::Resolve(
 	TArray<FGuid> DiscardedAtTurnEnd;
 	const int32 DiscardFirstEventSequence = Events.GetNextSequence();
 	FHandZoneService::DiscardNonRetainedNormalCardsAtTurnEnd(State, DiscardedAtTurnEnd);
-	FHandZoneMoveEventService::ResolveDiscardedFromHand(
+	FHandZoneMoveEventService::FinalizeAlreadyMovedDiscards(
 		State,
 		Events,
 		DiscardedAtTurnEnd,

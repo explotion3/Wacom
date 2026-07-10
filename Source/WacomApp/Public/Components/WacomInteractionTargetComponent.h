@@ -16,7 +16,7 @@
  * 组件只做身份描述（目标 ID、过滤标签），不写任何规则或表现。
  *
  * 后续拖拽系统拿到 FWacomInteractionTargetHandle 后，
- * 由对应域层的 Target Resolver 判断"当前卡能否作用到这个目标"。
+ * 由对应领域的只读规则求值判断"当前操作能否作用到这个目标"。
  */
 UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent, ToolTip = "挂载到任意 Actor 上使其成为交互目标，供 cursor trace / 拖拽系统识别。"))
 class WACOMAPP_API UWacomInteractionTargetComponent : public UActorComponent, public IWacomInteractionTargetProvider

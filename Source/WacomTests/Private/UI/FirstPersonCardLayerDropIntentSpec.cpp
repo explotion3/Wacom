@@ -1190,11 +1190,11 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonDropIntentSelfCardRejectTest,
-	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.SameSourceCardTargetRejects",
+	FWacomFirstPersonDropIntentWrongKindCardTargetProbeTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.WrongKindCardTargetRemainsProbe",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonDropIntentSelfCardRejectTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonDropIntentWrongKindCardTargetProbeTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerDropIntentSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -1229,9 +1229,96 @@ bool FWacomFirstPersonDropIntentSelfCardRejectTest::RunTest(const FString& Param
 		EWacomFirstPersonCardGestureState::AimingTargetedCard);
 	DragView.CurrentTarget = FWacomInteractionTargetHandle::ForCardTarget(CardId, HUD, FVector2D(500.0f, 600.0f));
 	const FWacomBattleCardDropResolveResult Result = HUD->ResolveFirstPersonCardDropIntentForTest(CardId, DragView);
-	TestEqual(TEXT("Self card rejects"), Result.IntentKind, EWacomBattleCardDropIntentKind::Reject);
-	TestEqual(TEXT("Self card reject reason"), Result.RejectReason, EWacomBattleCardDropRejectReason::SelfTarget);
-	TestFalse(TEXT("Self card cannot submit"), Result.bCanSubmit);
+	TestEqual(
+		TEXT("Wrong card target kind stays a probe"),
+		Result.IntentKind,
+		EWacomBattleCardDropIntentKind::ProbeCardTarget);
+	TestEqual(
+		TEXT("Wrong target kind wins over self identity"),
+		Result.RejectReason,
+		EWacomBattleCardDropRejectReason::UnsupportedCardTarget);
+	TestEqual(
+		TEXT("Target validation preserves the canonical wrong-kind reason"),
+		Result.TargetValidationRejectReason,
+		EWacomBattleTargetRejectReason::UnsupportedCardTarget);
+	TestFalse(TEXT("Wrong-kind card target cannot submit"), Result.bCanSubmit);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonDropIntentHandCardSelfTargetRejectTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.HandCardSelfTargetRejects",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonDropIntentHandCardSelfTargetRejectTest::RunTest(const FString& Parameters)
+{
+	UWorld* World = WacomFirstPersonCardLayerDropIntentSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCardDefinition* HandTargetCard = Fx.MakeHandCardCostModifierCard(
+		/*Cost*/0,
+		/*Magnitude*/1,
+		/*bReduceCost*/false);
+	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { HandTargetCard });
+	UBattleSession* Session = Fx.CreateSession(
+		CharacterDefinition,
+		Fx.MakeSinglePartEnemy(20, 0, 0),
+		1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(
+		Snapshot,
+		ECardTargetMode::HandCard);
+
+	AWacomBattleHUDLocalPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleHUDLocalPlayerControllerTest>(
+			AWacomBattleHUDLocalPlayerControllerTest::StaticClass(),
+			FTransform::Identity);
+	UWacomBattleHUDDetailTest* HUD = NewObject<UWacomBattleHUDDetailTest>(PC);
+	if (!TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("HandCard source exists"), CardId.IsValid()))
+	{
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	WacomFirstPersonCardLayerDropIntentSpec::SettleBattlePresentationQueue(*HUD);
+
+	FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerDropIntentSpec::MakeDropDragView(
+		CardId,
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+	DragView.CurrentTarget = FWacomInteractionTargetHandle::ForCardTarget(
+		CardId,
+		HUD,
+		FVector2D(500.0f, 600.0f));
+	const FWacomBattleCardDropResolveResult Result =
+		HUD->ResolveFirstPersonCardDropIntentForTest(CardId, DragView);
+	TestEqual(
+		TEXT("Same-kind self target rejects"),
+		Result.IntentKind,
+		EWacomBattleCardDropIntentKind::Reject);
+	TestEqual(
+		TEXT("HandCard self target keeps SelfTarget reason"),
+		Result.RejectReason,
+		EWacomBattleCardDropRejectReason::SelfTarget);
+	TestEqual(
+		TEXT("Target validation reports SelfTarget"),
+		Result.TargetValidationRejectReason,
+		EWacomBattleTargetRejectReason::SelfTarget);
+	TestFalse(TEXT("HandCard self target cannot submit"), Result.bCanSubmit);
 
 	PC->Destroy();
 	return true;

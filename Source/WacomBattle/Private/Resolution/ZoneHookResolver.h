@@ -7,6 +7,7 @@
 struct FBattleState;
 struct FBattleEventBus;
 class UCardDefinition;
+class IBattleOperationAdapter;
 
 /**
  * ZoneHook 消费。
@@ -32,7 +33,8 @@ public:
 		const UCardDefinition& Def,
 		int32 RuntimeCost,
 		const FGuid& SelectedPartId,
-		const FGuid& CardId);
+		const FGuid& CardId,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
 
 	/**
 	 * 判断本卡在当前区域 + 存在先机命中时，是否需要"跳过先机推进"。

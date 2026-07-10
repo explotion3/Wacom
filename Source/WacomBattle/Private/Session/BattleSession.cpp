@@ -4,12 +4,13 @@
 
 #include "Core/BattleState.h"
 #include "Commands/KnockdownChoiceAvailability.h"
+#include "Commands/PlayCardEvaluation.h"
 #include "Events/BattleEventBus.h"
 #include "Session/BattleCommandPipeline.h"
 #include "Session/BattleInitializer.h"
 #include "Session/BattleResultPacketBuilder.h"
+#include "Resolution/BattleCardActionPreviewBuilder.h"
 #include "Resolution/BattleCardTargetPreviewBuilder.h"
-#include "Resolution/BattleTargetResolver.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
 
 UBattleSession::UBattleSession()
@@ -128,7 +129,7 @@ FWacomBattleTargetValidationResult UBattleSession::ValidateTargetWithCard(
 		return Result;
 	}
 
-	return FBattleTargetResolver::ValidateTargetWithCard(*State, CardInstanceId, Target);
+	return FPlayCardEvaluator::EvaluateTargetProbe(*State, CardInstanceId, Target).Validation;
 }
 
 FBattleCardTargetPreview UBattleSession::BuildCardTargetPreview(
@@ -145,4 +146,20 @@ FBattleCardTargetPreview UBattleSession::BuildCardTargetPreview(
 	}
 
 	return FBattleCardTargetPreviewBuilder::Build(*State, CardInstanceId, Target);
+}
+
+FBattleCardActionPreview UBattleSession::BuildCardActionPreview(
+	const FGuid& CardInstanceId,
+	const FWacomInteractionTargetHandle& Target) const
+{
+	if (!State)
+	{
+		FBattleCardActionPreview Preview;
+		Preview.TargetPreview.Validation.bCanTarget = false;
+		Preview.TargetPreview.Validation.RejectReason = EWacomBattleTargetRejectReason::SourceCardInvalid;
+		Preview.TargetPreview.Validation.DebugSummary = TEXT("CardActionPreview{MissingBattleState}");
+		return Preview;
+	}
+
+	return FBattleCardActionPreviewBuilder::Build(*State, CardInstanceId, Target);
 }

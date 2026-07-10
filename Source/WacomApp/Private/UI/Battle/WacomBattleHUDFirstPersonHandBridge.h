@@ -3,7 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Runtime/BattlePartSlotIdentity.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Battle/WacomBattleFirstPersonDropResolver.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHandPresentationController.h"
@@ -23,6 +25,23 @@ struct FBattleSnapshot;
 struct FHandCardSnapshot;
 struct FWacomFirstPersonCardDragView;
 struct FWacomFirstPersonCardLayerSlotView;
+
+struct FWacomBattleActionPreviewRequestKey
+{
+	int32 SnapshotVersion = INDEX_NONE;
+	EWacomBattleCardDropIntentKind IntentKind = EWacomBattleCardDropIntentKind::None;
+	FGuid SourceCardInstanceId;
+	EWacomInteractionTargetKind TargetKind = EWacomInteractionTargetKind::None;
+	FGuid WorldTargetId;
+	FGuid CardInstanceId;
+	FName ZoneId = NAME_None;
+	FGameplayTag TargetTag;
+	FName StableTargetId = NAME_None;
+	FName EncounterId = NAME_None;
+	FName EnemySlotId = NAME_None;
+	FName PartSlotId = NAME_None;
+	bool bCanSubmit = false;
+};
 
 class FWacomBattleHUDFirstPersonHandBridge
 {
@@ -135,7 +154,7 @@ public:
 		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation) const;
 	void StoreActiveTargetPreviewState(
 		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation);
-	void ResetActiveTargetPreviewState();
+	void ResetActiveTargetPreviewState(bool bResetActionPreviewState = true);
 	void ApplyPendingTargetingFlag(TArray<FWacomFirstPersonCardLayerEntry>& Entries) const;
 
 	void BindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
@@ -160,6 +179,7 @@ private:
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> CurrentDragPreviewPresentation;
 	FWacomBattleCardTargetPreviewPresentationStateKey ActiveTargetPreviewState;
+	FWacomBattleActionPreviewRequestKey ActiveActionPreviewRequestKey;
 	FWacomFirstPersonCardDragView ActiveDragView;
 	FGuid ActiveDragCardInstanceId;
 	FWacomInteractionTargetHandle ActiveCardTargetHandle;
@@ -167,6 +187,7 @@ private:
 	bool bFirstPersonCardDragActiveForBattleSceneHover = false;
 	bool bHasActiveTargetPreviewLayer = false;
 	bool bHasActiveTargetPreviewState = false;
+	bool bHasActiveActionPreviewRequestKey = false;
 	bool bHasActiveDragView = false;
 	bool bHasActiveCardTargetHandle = false;
 	float PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;

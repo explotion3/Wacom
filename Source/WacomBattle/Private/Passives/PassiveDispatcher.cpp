@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Passives/PassiveDispatcher.h"
+#include "Core/BattleOperationAdapter.h"
 #include "Effects/CardEffectDispatcher.h"
 #include "Effects/ConditionResolver.h"
 
@@ -50,7 +51,8 @@ void FPassiveDispatcher::RunAfterPlayed(
 	FBattleState& State,
 	FBattleEventBus& Events,
 	const FRuntimeCardInstance& Card,
-	int32 RuntimeCost)
+	int32 RuntimeCost,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	if (!Card.Definition) { return; }
 
@@ -74,12 +76,19 @@ void FPassiveDispatcher::RunAfterPlayed(
 		for (const FCardEffect& Eff : Passive.Effects)
 		{
 			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				/*SelectedPartId=*/FGuid(), Card.InstanceId, LocalLastShuffledCardId);
+				/*SelectedPartId=*/FGuid(),
+				Card.InstanceId,
+				LocalLastShuffledCardId,
+				FGuid(),
+				OperationAdapter);
 		}
 	}
 }
 
-void FPassiveDispatcher::RunOnCompanionCount(FBattleState& State, FBattleEventBus& Events)
+void FPassiveDispatcher::RunOnCompanionCount(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	if (State.Player.CompanionPlayedCount <= 0) { return; }
 
@@ -108,6 +117,19 @@ void FPassiveDispatcher::RunOnCompanionCount(FBattleState& State, FBattleEventBu
 		}
 	}
 
+	if (!Candidates.IsEmpty() && OperationAdapter)
+	{
+		const FBattleOperationDescriptor Operation{
+			EBattleOperationKind::DirectRule,
+			EBattleOperationDeterminism::Random,
+			FGameplayTag(),
+			/*bReportUnresolvedWhenSkipped*/true };
+		if (!OperationAdapter->ShouldExecute(Operation))
+		{
+			return;
+		}
+	}
+
 	bool bAnyTriggered = false;
 	for (const FGuid& Id : Candidates)
 	{
@@ -125,14 +147,15 @@ void FPassiveDispatcher::RunOnCompanionCount(FBattleState& State, FBattleEventBu
 	{
 		TArray<FGuid> DiscardedByLimit;
 		FHandZoneService::EnforceNormalCardLimit(State, DiscardedByLimit);
-		FHandZoneMoveEventService::ResolveDiscardedFromHand(
+		FHandZoneMoveEventService::FinalizeAlreadyMovedDiscards(
 			State,
 			Events,
 			DiscardedByLimit,
 			EHandCardZoneMoveReason::HandLimit,
 			FGuid(),
 			FGameplayTag(),
-			EHandLimitDiscardSource::PassiveOnCompanionCount);
+			EHandLimitDiscardSource::PassiveOnCompanionCount,
+			OperationAdapter);
 		State.Player.CompanionPlayedCount = 0;
 	}
 }
@@ -200,7 +223,11 @@ void FPassiveDispatcher::RunOnDraw(FBattleState& State, FBattleEventBus& Events,
 	}
 }
 
-void FPassiveDispatcher::RunOnDiscard(FBattleState& State, FBattleEventBus& Events, const FGuid& DiscardedCardId)
+void FPassiveDispatcher::RunOnDiscard(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	const FGuid& DiscardedCardId,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, DiscardedCardId);
 	if (!Card || !Card->Definition) { return; }
@@ -214,7 +241,7 @@ void FPassiveDispatcher::RunOnDiscard(FBattleState& State, FBattleEventBus& Even
 		for (const FCardEffect& Eff : Passive.Effects)
 		{
 			FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
-				FGuid(), DiscardedCardId, LocalLastShuffled);
+				FGuid(), DiscardedCardId, LocalLastShuffled, FGuid(), OperationAdapter);
 		}
 	}
 }

@@ -14,6 +14,7 @@ class UBattleCommandBarWidget;
 class UBattlePresentationStackWidget;
 class UBattleSession;
 class UEnemyDefinition;
+class UPlayerStatusBar;
 class UWacomBattleCommandBarTestProbe;
 class UWacomBattleCameraLookComponent;
 class UWacomBattleHUDDetailTest;
@@ -41,6 +42,7 @@ public:
 	UBattleCombatLogFeedWidget* CombatLogFeed() const { return CombatLogFeedPtr.Get(); }
 	UBattlePresentationStackWidget* PresentationStack() const { return PresentationStackPtr.Get(); }
 	UWacomBattleCommandBarTestProbe* CommandBar() const { return CommandBarPtr.Get(); }
+	UPlayerStatusBar* PlayerStatusBar() const { return PlayerStatusBarPtr.Get(); }
 	AWacomPlayerCharacter* FirstPersonCharacter() const { return FirstPersonCharacterActor.Get(); }
 	UWacomFirstPersonCardAnchorComponent* FirstPersonAnchor() const { return FirstPersonAnchorPtr; }
 	UWacomBattleCameraLookComponent* BattleCameraLook() const { return BattleCameraLookPtr; }
@@ -49,6 +51,7 @@ public:
 	UBattleCombatLogFeedWidget* AttachCombatLogFeed();
 	UBattlePresentationStackWidget* AttachPresentationStack();
 	UWacomBattleCommandBarTestProbe* AttachCommandBar();
+	UPlayerStatusBar* AttachPlayerStatusBar();
 	AWacomPlayerCharacter* AttachFirstPersonCharacter();
 	FWacomBattleHUDTestSceneEnemyHost& AttachSceneEnemyHost(
 		UEnemyDefinition* EnemyDefinition,
@@ -70,6 +73,7 @@ private:
 	TStrongObjectPtr<UBattleCombatLogFeedWidget> CombatLogFeedPtr;
 	TStrongObjectPtr<UBattlePresentationStackWidget> PresentationStackPtr;
 	TStrongObjectPtr<UWacomBattleCommandBarTestProbe> CommandBarPtr;
+	TStrongObjectPtr<UPlayerStatusBar> PlayerStatusBarPtr;
 	TWeakObjectPtr<AWacomPlayerCharacter> FirstPersonCharacterActor;
 	UWacomFirstPersonCardAnchorComponent* FirstPersonAnchorPtr = nullptr;
 	UWacomBattleCameraLookComponent* BattleCameraLookPtr = nullptr;

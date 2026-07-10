@@ -32,7 +32,7 @@ enum class EWacomInteractionTargetKind : uint8
  * 拖拽/点击系统只需要消费这个 struct，不用知道目标来源是 Actor、Component 还是 Widget。
  *
  * 当前定位是纯数据容器，不带行为。命中层（IWacomInteractionTargetProvider）负责构造，
- * 规则层（Target Resolver）负责判断"当前卡能否作用到这个目标"。
+ * 对应领域的只读规则求值负责判断"当前操作能否作用到这个目标"。
  */
 USTRUCT(BlueprintType)
 struct WACOMCORE_API FWacomInteractionTargetHandle

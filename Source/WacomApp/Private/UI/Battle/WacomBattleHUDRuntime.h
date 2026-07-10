@@ -33,6 +33,7 @@ class FWacomBattleHUDCommandBarPresenter;
 class FWacomBattleHUDFirstPersonHandBridge;
 class FWacomBattleHUDPresentationCoordinator;
 class FWacomBattleHUDSceneEnemyTargetCoordinator;
+struct FWacomBattleActionPreviewPresentation;
 class FWacomBattleHUDSnapshotPresenter;
 class FWacomBattleHUDTargetingController;
 struct FKnockdownChoiceView;
@@ -246,6 +247,10 @@ public:
 	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snapshot);
 	void ClearBattleEnemyPartWorldTargets();
 	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
+	void ApplyActionPreviewPresentation(
+		const FWacomBattleActionPreviewPresentation& Presentation,
+		bool bApplyScenePartPreview = true);
+	void ClearActionPreview();
 	FWacomBattleEnemyPartDragPredictionDebugInput BuildBattleSceneEnemyPartHoverPredictionInput(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);

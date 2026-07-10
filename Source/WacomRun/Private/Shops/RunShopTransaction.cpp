@@ -43,6 +43,13 @@ bool FRunShopTransaction::BeginVisit(FRunState& State, FName ShopId, const TArra
 			TEXT("[RunShopTransaction] BeginShopVisit: ShopId 为 None，拒绝"));
 		return false;
 	}
+	if (!State.ActiveShopId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunShopTransaction] BeginShopVisit: 已有 active shop=%s，拒绝重入"),
+			*State.ActiveShopId.ToString());
+		return false;
+	}
 
 	if (!State.ShopStates.Contains(ShopId))
 	{

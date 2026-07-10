@@ -664,6 +664,32 @@ void AWacomBattleEnemyActor::ClearEnemyPanelViewData()
 	}
 }
 
+void AWacomBattleEnemyActor::SetEnemyPanelActionPreview(
+	const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts)
+{
+	if (!EnemyPanelWidgetComponent)
+	{
+		return;
+	}
+
+	EnemyPanelWidgetComponent->InitWidget();
+	if (UWacomBattleEnemyPanelWidget* PanelWidget =
+		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	{
+		PanelWidget->TakeWidget();
+		PanelWidget->SetActionPreviewPartViews(PreviewParts);
+	}
+}
+
+void AWacomBattleEnemyActor::ClearEnemyPanelActionPreview()
+{
+	if (UWacomBattleEnemyPanelWidget* PanelWidget =
+		EnemyPanelWidgetComponent ? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()) : nullptr)
+	{
+		PanelWidget->ClearActionPreview();
+	}
+}
+
 void AWacomBattleEnemyActor::SetEnemyPanelHoveredVisible(bool bVisible)
 {
 	if (!EnemyPanelWidgetComponent)

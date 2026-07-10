@@ -2,6 +2,7 @@
 
 #include "Rules/BattleRuleContentContract.h"
 
+#include "Effects/EffectSemanticsRegistry.h"
 #include "Tags/WacomGameplayTags.h"
 
 namespace
@@ -26,13 +27,6 @@ namespace
 			|| EffectType == WacomTags::Effect_Card_ExhaustSelected;
 	}
 
-	bool IsShuffleEffect(const FGameplayTag& EffectType)
-	{
-		return EffectType == WacomTags::Effect_Shuffle_Random
-			|| EffectType == WacomTags::Effect_Shuffle_FromBothToOther
-			|| EffectType == WacomTags::Effect_Shuffle_ToRandomZone;
-	}
-
 	bool IsPlayerOrEnemyPartTarget(const FGameplayTag& Target)
 	{
 		return Target == WacomTags::Target_Player
@@ -44,26 +38,14 @@ namespace
 
 bool FWacomBattleRuleContentContract::IsSupportedCardEffectType(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_Damage
-		|| EffectType == WacomTags::Status_Shield
-		|| IsStatusEffect(EffectType)
-		|| IsShuffleEffect(EffectType)
-		|| IsCardCostEffect(EffectType)
-		|| IsSelectedHandCardMoveEffect(EffectType)
-		|| EffectType == WacomTags::Effect_Draw
-		|| EffectType == WacomTags::Effect_Discard
-		|| EffectType == WacomTags::Effect_ExhaustSelf
-		|| EffectType == WacomTags::Effect_Heal
-		|| EffectType == WacomTags::Effect_GainKeyword
-		|| EffectType == WacomTags::Effect_RemoveStatus
-		|| EffectType == WacomTags::Effect_ModifyInitiative;
+	const FBattleEffectSemantics* Semantics = FBattleEffectSemanticsRegistry::Find(EffectType);
+	return Semantics && Semantics->bSupportedCardEffect;
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedEnemyIntentEffectType(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_Damage
-		|| EffectType == WacomTags::Status_Shield
-		|| IsStatusEffect(EffectType);
+	const FBattleEffectSemantics* Semantics = FBattleEffectSemanticsRegistry::Find(EffectType);
+	return Semantics && Semantics->bSupportedEnemyIntentEffect;
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedMagnitudeSource(const FGameplayTag& MagnitudeSource)

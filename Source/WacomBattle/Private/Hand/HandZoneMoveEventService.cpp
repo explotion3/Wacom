@@ -26,14 +26,15 @@ namespace
 	}
 }
 
-void FHandZoneMoveEventService::ResolveDiscardedFromHand(
+void FHandZoneMoveEventService::FinalizeAlreadyMovedDiscards(
 	FBattleState& State,
 	FBattleEventBus& Events,
 	const TArray<FGuid>& DiscardedCardIds,
 	EHandCardZoneMoveReason Reason,
 	const FGuid& SourceCardId,
 	const FGameplayTag& EffectTag,
-	EHandLimitDiscardSource HandLimitSource)
+	EHandLimitDiscardSource HandLimitSource,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	if (DiscardedCardIds.IsEmpty())
 	{
@@ -67,7 +68,7 @@ void FHandZoneMoveEventService::ResolveDiscardedFromHand(
 		Ev.HandLimitDiscardSource = HandLimitSource;
 		Events.Emit(Ev);
 
-		FPassiveDispatcher::RunOnDiscard(State, Events, DiscardedCardId);
+		FPassiveDispatcher::RunOnDiscard(State, Events, DiscardedCardId, OperationAdapter);
 		++ValidMoveCount;
 		SingleMovedCardId = DiscardedCardId;
 	}
@@ -83,7 +84,7 @@ void FHandZoneMoveEventService::ResolveDiscardedFromHand(
 	}
 }
 
-void FHandZoneMoveEventService::ResolveExhaustedFromHand(
+void FHandZoneMoveEventService::FinalizeAlreadyMovedExhausts(
 	FBattleState& State,
 	FBattleEventBus& Events,
 	const TArray<FGuid>& ExhaustedCardIds,

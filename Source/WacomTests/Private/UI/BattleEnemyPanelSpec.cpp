@@ -13,6 +13,7 @@
 #include "Components/VerticalBox.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/WacomBattleEnemyPanelViewData.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
@@ -206,6 +207,66 @@ bool FWacomUIBattleEnemyPartEntryShowsViewDataSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Destroyed overlay becomes visible"), DestroyedOverlay->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	TestEqual(TEXT("Destroyed part fades entry"), Widget->GetRenderOpacity(), 0.64f);
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyPartEntryActionPreviewSpec,
+	"Wacom.UI.Battle.EnemyPanel.PartEntryActionPreviewApplyAndClear",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyPartEntryActionPreviewSpec::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomBattleEnemyPanelSpec;
+
+	TStrongObjectPtr<UWacomBattleEnemyPartEntryWidget> Widget(NewObject<UWacomBattleEnemyPartEntryWidget>());
+	Widget->TakeWidget();
+
+	FWacomBattleEnemyPartEntryViewData BaseView = MakePart(
+		TEXT("Head"),
+		TEXT("蛇头"),
+		7,
+		12,
+		4,
+		3,
+		TEXT("撕咬"));
+	Widget->SetPartEntryViewData(BaseView);
+
+	FWacomBattleEnemyPartEntryViewData PreviewView = BaseView;
+	PreviewView.CurrentHp = 4;
+	PreviewView.Shield = 0;
+	PreviewView.CurrentInitiative = 0;
+	PreviewView.RuntimeStatuses.AddTag(WacomTags::Status_Poison);
+	PreviewView.RuntimeStatusStacks.Add(WacomTags::Status_Poison, 2);
+	Widget->SetActionPreview(PreviewView);
+
+	UTextBlock* HpText = FindTextBlock(Widget->WidgetTree, TEXT("HpText"));
+	UTextBlock* ShieldText = FindTextBlock(Widget->WidgetTree, TEXT("ShieldText"));
+	UTextBlock* InitiativeText = FindTextBlock(Widget->WidgetTree, TEXT("InitiativeText"));
+	UTextBlock* StatusText = FindTextBlock(Widget->WidgetTree, TEXT("StatusText"));
+	if (!TestNotNull(TEXT("HpText"), HpText)
+		|| !TestNotNull(TEXT("ShieldText"), ShieldText)
+		|| !TestNotNull(TEXT("InitiativeText"), InitiativeText)
+		|| !TestNotNull(TEXT("StatusText"), StatusText))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Preview flag active"), Widget->HasActionPreview());
+	TestEqual(TEXT("Base view remains unchanged"), Widget->GetPartEntryViewData().CurrentHp, 7);
+	TestEqual(TEXT("Effective view uses preview HP"), Widget->GetEffectivePartEntryViewData().CurrentHp, 4);
+	TestEqual(TEXT("Preview HP text"), HpText->GetText().ToString(), FString(TEXT("4/12")));
+	TestEqual(TEXT("Preview shield collapses at zero"), ShieldText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Preview initiative text"), InitiativeText->GetText().ToString(), FString(TEXT("0")));
+	TestTrue(TEXT("Preview status text includes poison"), StatusText->GetText().ToString().Contains(TEXT("中毒")));
+
+	Widget->ClearActionPreview();
+
+	TestFalse(TEXT("Preview flag cleared"), Widget->HasActionPreview());
+	TestEqual(TEXT("Effective view returns base HP"), Widget->GetEffectivePartEntryViewData().CurrentHp, 7);
+	TestEqual(TEXT("Base HP text restored"), HpText->GetText().ToString(), FString(TEXT("7/12")));
+	TestEqual(TEXT("Base shield text restored"), ShieldText->GetText().ToString(), FString(TEXT("4")));
+	TestEqual(TEXT("Base initiative text restored"), InitiativeText->GetText().ToString(), FString(TEXT("3")));
 	return true;
 }
 

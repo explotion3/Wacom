@@ -92,6 +92,45 @@ void UWacomBattleEnemyPanelWidget::SetEnemyPanelViewData(const TArray<FWacomBatt
 	SyncEnemyWidgets();
 }
 
+void UWacomBattleEnemyPanelWidget::SetActionPreviewPartViews(
+	const TArray<FWacomBattleEnemyPartEntryViewData>& InPreviewParts)
+{
+	for (const FWacomBattleEnemyPartEntryViewData& PreviewPart : InPreviewParts)
+	{
+		const FName EnemyKey = PreviewPart.Identity.IsValidSlot()
+			? PreviewPart.Identity.GetEffectiveEnemySlotId()
+			: (PreviewPart.EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : PreviewPart.EnemySlotId);
+		FWacomBattleEnemyPanelEnemyWidgetState* EnemyState = EnemyWidgetStates.Find(EnemyKey);
+		if (!EnemyState)
+		{
+			continue;
+		}
+
+		const FName PartKey = BuildPartEntryWidgetKey(PreviewPart);
+		if (TObjectPtr<UWacomBattleEnemyPartEntryWidget>* PartWidget = EnemyState->PartEntryWidgets.Find(PartKey))
+		{
+			if (PartWidget->Get())
+			{
+				PartWidget->Get()->SetActionPreview(PreviewPart);
+			}
+		}
+	}
+}
+
+void UWacomBattleEnemyPanelWidget::ClearActionPreview()
+{
+	for (TPair<FName, FWacomBattleEnemyPanelEnemyWidgetState>& EnemyStatePair : EnemyWidgetStates)
+	{
+		for (TPair<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>>& PartWidgetPair : EnemyStatePair.Value.PartEntryWidgets)
+		{
+			if (PartWidgetPair.Value)
+			{
+				PartWidgetPair.Value->ClearActionPreview();
+			}
+		}
+	}
+}
+
 void UWacomBattleEnemyPanelWidget::SetPartEntryWidgetClass(
 	TSubclassOf<UWacomBattleEnemyPartEntryWidget> InWidgetClass)
 {

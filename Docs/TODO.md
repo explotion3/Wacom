@@ -89,6 +89,12 @@ tags:
   - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / [WacomBattle.md](./WacomBattle.md)
   - 说明：继续做正式掉落 / 奖励池、更多敌人包、卡牌平衡和正式卡组入口；新增规则能力前先接 resolver、合同、文档和验证。
 
+- [ ] **Battle Card Zone Transition 后续迁移**
+  - 状态：`In Progress: Effect 第一切片已完成`
+  - 归属：Battle 规则内核
+  - 入口：[WacomBattle §5](./WacomBattle.md) / [TechDebt: 规则层技术债](./TechDebt.md)
+  - 说明：下一安全切片先拆分并迁移 HandLimit、TurnEnd、奖励和 Companion 的“选择 + 移动 + 事件”双阶段路径；Draw / 回手 / PlayedPile / Limbo 等路径继续遵守各自规则和 `Questions.md` 中尚未确认的口径，不在迁移中顺带写死。
+
 - [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和动画状态机**
   - 状态：`Ready: 美术 / 表现 polish`
   - 归属：App / UI / Battle World Target
@@ -113,11 +119,11 @@ tags:
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)
   - 说明：基础链路已进入当前事实文档；TODO 只追踪正式内容、动画、SaveGame、复杂筛选、掉落表和更多奖励类型。
 
-- [ ] **交互目标系统：规则层 Target Resolver**
-  - 状态：`Ready: Card-to-Card / Run / Zone 规则接入时`
-  - 归属：Battle / Run
+- [ ] **交互目标系统：Run / Zone 域规则求值接入**
+  - 状态：`Ready: Run / Zone 正式规则接入时`
+  - 归属：Run
   - 入口：[WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)
-  - 说明：域层 Resolver 根据 `TargetKind` 判断当前卡能否作用到目标，替代硬编码的 TargetMode 过滤。
+  - 说明：Battle 已由 `PlayCard Evaluation` 权威处理 Card-World / Card-Card；本项只追踪 Run 与 Zone 后续各自的领域求值，避免重新引入跨域通用 Resolver。
 
 - [ ] **接入击倒事件实际分支、奖励卡差异化和节点事件联动**
   - 状态：`Blocked: P0 击倒口径`

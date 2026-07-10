@@ -13,6 +13,7 @@
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 #include "UI/Battle/WacomBattleEnemyPanelViewData.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
+#include "UI/Common/WacomProgressBar.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomBattleStatusIconWidgetSpec
@@ -21,6 +22,13 @@ namespace WacomBattleStatusIconWidgetSpec
 	{
 		return WidgetTree
 			? Cast<UWacomBattleStatusIconListWidget>(WidgetTree->FindWidget(TEXT("StatusList")))
+			: nullptr;
+	}
+
+	UWacomProgressBar* FindProgressBar(UWidgetTree* WidgetTree, FName WidgetName)
+	{
+		return WidgetTree
+			? Cast<UWacomProgressBar>(WidgetTree->FindWidget(WidgetName))
 			: nullptr;
 	}
 
@@ -172,6 +180,69 @@ bool FWacomUIBattlePlayerStatusBarRefreshesStatusListSpec::RunTest(const FString
 	TestEqual(TEXT("Player poison stack"), Views[0].StackCount, 4);
 	TestTrue(TEXT("Player freeze second"), Views[1].StatusTag == WacomTags::Status_Freeze);
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattlePlayerStatusBarActionPreviewSpec,
+	"Wacom.UI.Battle.StatusIcons.PlayerStatusBarActionPreviewApplyAndClear",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattlePlayerStatusBarActionPreviewSpec::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomBattleStatusIconWidgetSpec;
+
+	TStrongObjectPtr<UPlayerStatusBar> Widget(NewObject<UPlayerStatusBar>());
+	Widget->TakeWidget();
+
+	UWacomProgressBar* HpBar = FindProgressBar(Widget->WidgetTree, TEXT("HpBar"));
+	UTextBlock* ShieldText = FindTextBlock(Widget->WidgetTree, TEXT("ShieldText"));
+	UWacomBattleStatusIconListWidget* StatusList = FindStatusList(Widget->WidgetTree);
+	if (!TestNotNull(TEXT("HpBar"), HpBar)
+		|| !TestNotNull(TEXT("ShieldText"), ShieldText)
+		|| !TestNotNull(TEXT("StatusList"), StatusList))
+	{
+		return false;
+	}
+
+	FBattleSnapshot Snap;
+	Snap.Player.CurrentHp = 12;
+	Snap.Player.MaxHp = 20;
+	Snap.Player.Shield = 5;
+	Snap.Player.Statuses.AddTag(WacomTags::Status_Poison);
+	Snap.Player.StatusStacks.Add(WacomTags::Status_Poison, 4);
+	Widget->RefreshFromSnapshot(Snap);
+
+	FPlayerSnapshot PreviewPlayer = Snap.Player;
+	PreviewPlayer.CurrentHp = 9;
+	PreviewPlayer.Shield = 0;
+	PreviewPlayer.Statuses.Reset();
+	PreviewPlayer.StatusStacks.Reset();
+	PreviewPlayer.Statuses.AddTag(WacomTags::Status_Freeze);
+	PreviewPlayer.StatusStacks.Add(WacomTags::Status_Freeze, 2);
+	Widget->SetActionPreview(PreviewPlayer);
+
+	TestEqual(TEXT("Preview HP current"), HpBar->GetCurrent(), 9);
+	TestEqual(TEXT("Preview shield collapses at zero"), ShieldText->GetVisibility(), ESlateVisibility::Collapsed);
+	TArray<FWacomBattleStatusIconView> PreviewViews = StatusList->GetStatusIconViews();
+	TestEqual(TEXT("Preview has one status"), PreviewViews.Num(), 1);
+	if (PreviewViews.Num() == 1)
+	{
+		TestTrue(TEXT("Preview status is freeze"), PreviewViews[0].StatusTag == WacomTags::Status_Freeze);
+		TestEqual(TEXT("Preview freeze stack"), PreviewViews[0].StackCount, 2);
+	}
+
+	Widget->ClearActionPreview();
+
+	TestEqual(TEXT("Base HP restored"), HpBar->GetCurrent(), 12);
+	TestTrue(TEXT("Base shield text restored"), ShieldText->GetText().ToString().Contains(TEXT("5")));
+	TArray<FWacomBattleStatusIconView> BaseViews = StatusList->GetStatusIconViews();
+	TestEqual(TEXT("Base has one status"), BaseViews.Num(), 1);
+	if (BaseViews.Num() == 1)
+	{
+		TestTrue(TEXT("Base status is poison"), BaseViews[0].StatusTag == WacomTags::Status_Poison);
+		TestEqual(TEXT("Base poison stack"), BaseViews[0].StackCount, 4);
+	}
 	return true;
 }
 

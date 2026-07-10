@@ -158,12 +158,17 @@ void UWacomRunEventScreen::NativeOnActivated()
 {
 	Super::NativeOnActivated();
 	bDidEndRunEvent = false;
+	OwnedRunEventVisitToken.Invalidate();
 	RefreshEvent();
 }
 
 void UWacomRunEventScreen::NativeOnDeactivated()
 {
-	FWacomRunEventScreenFlow::EndRunEventOnDeactivate(ResolveRunSession(), bDidEndRunEvent);
+	FWacomRunEventScreenFlow::EndRunEventOnDeactivate(
+		ResolveRunSession(),
+		OwnedRunEventVisitToken,
+		bDidEndRunEvent);
+	OwnedRunEventVisitToken.Invalidate();
 	Super::NativeOnDeactivated();
 }
 
@@ -207,6 +212,10 @@ void UWacomRunEventScreen::RefreshEvent()
 {
 	if (URunSession* Run = ResolveRunSession())
 	{
+		if (!OwnedRunEventVisitToken.IsValid())
+		{
+			OwnedRunEventVisitToken = Run->GetActiveRunEventVisitToken();
+		}
 		const FRunEventSnapshot Snapshot = Run->BuildCurrentRunEventSnapshot();
 		if (TitleText)
 		{

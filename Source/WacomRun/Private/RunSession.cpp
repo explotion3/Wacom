@@ -437,6 +437,8 @@ void URunSession::EnsureSpecialZoneEntryFor(const FCardInstance& Inst)
 
 bool URunSession::Initialize(UCharacterDefinition* InCharacter)
 {
+	ActiveShopVisitToken.Invalidate();
+	ActiveRunEventVisitToken.Invalidate();
 	RunState = FRunState{};
 	RunState.Character   = InCharacter;
 	RunState.BattleSeed  = 0;
@@ -694,6 +696,8 @@ bool URunSession::ApplySaveGameToRunState(UWacomSaveGame* SaveGame)
 	{
 		return false;
 	}
+	ActiveShopVisitToken.Invalidate();
+	ActiveRunEventVisitToken.Invalidate();
 	MarkRunUiSnapshotsDirty(
 		MakeRunUiSnapshotDirtyFlags(
 			ERunUiSnapshotDirtyFlags::BackpackStorage,
@@ -1829,8 +1833,21 @@ bool URunSession::SubmitRunWorldCardInteraction(
 
 bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
 {
+	if (IsShopVisitActive())
+	{
+		return false;
+	}
+
+	const FGuid NewVisitToken = FGuid::NewGuid();
+	if (!NewVisitToken.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[RunSession] BeginShopVisit: 生成访问 token 失败"));
+		return false;
+	}
+
 	if (FRunShopTransaction::BeginVisit(RunState, ShopId, Offers))
 	{
+		ActiveShopVisitToken = NewVisitToken;
 		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
 		NotifyRunStateChanged();
 		return true;
@@ -1838,10 +1855,22 @@ bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>&
 	return false;
 }
 
+bool URunSession::EndShopVisitIfOwned(FGuid VisitToken)
+{
+	if (!VisitToken.IsValid() || VisitToken != ActiveShopVisitToken)
+	{
+		return false;
+	}
+
+	EndShopVisit();
+	return true;
+}
+
 void URunSession::EndShopVisit()
 {
 	if (!IsShopVisitActive())
 	{
+		ActiveShopVisitToken.Invalidate();
 		return;
 	}
 
@@ -1857,6 +1886,7 @@ void URunSession::EndShopVisit()
 		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
 		NotifyRunStateChanged();
 	}
+	ActiveShopVisitToken.Invalidate();
 }
 
 FRunShopSnapshot URunSession::BuildCurrentShopSnapshot() const
@@ -1914,23 +1944,49 @@ bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 
 bool URunSession::BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition)
 {
+	if (IsRunEventActive())
+	{
+		return false;
+	}
+
+	const FGuid NewVisitToken = FGuid::NewGuid();
+	if (!NewVisitToken.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("[RunSession] BeginRunEvent: 生成访问 token 失败"));
+		return false;
+	}
+
 	if (FRunEventExecutor::BeginEvent(RunState, PersistentId, EventDefinition))
 	{
+		ActiveRunEventVisitToken = NewVisitToken;
 		NotifyRunStateChanged();
 		return true;
 	}
 	return false;
 }
 
+bool URunSession::EndRunEventIfOwned(FGuid VisitToken)
+{
+	if (!VisitToken.IsValid() || VisitToken != ActiveRunEventVisitToken)
+	{
+		return false;
+	}
+
+	EndRunEvent();
+	return true;
+}
+
 void URunSession::EndRunEvent()
 {
 	if (RunState.ActiveRunEventId.IsNone() && !RunState.ActiveRunEventDefinition)
 	{
+		ActiveRunEventVisitToken.Invalidate();
 		return;
 	}
 
 	RunState.ActiveRunEventId = NAME_None;
 	RunState.ActiveRunEventDefinition = nullptr;
+	ActiveRunEventVisitToken.Invalidate();
 	NotifyRunStateChanged();
 }
 
@@ -1960,6 +2016,10 @@ FRunEventChoiceResult URunSession::ChooseRunEventOptionWithResult(FName ChoiceId
 	FRunEventChoiceResult Result = FRunEventExecutor::ChooseOption(RunState, ChoiceId);
 	if (Result.bSucceeded)
 	{
+		if (!IsRunEventActive())
+		{
+			ActiveRunEventVisitToken.Invalidate();
+		}
 		MarkRunUiSnapshotsDirty(GetRunEventChoiceResultDirtyFlags(Result));
 		NotifyRunStateChanged();
 	}
@@ -1982,6 +2042,10 @@ FRunEventChoiceResult URunSession::ChooseRunEventOptionWithPaidCardResult(
 		FRunEventExecutor::ChooseOptionWithPaidCard(RunState, ChoiceId, PaidCardInstanceId);
 	if (Result.bSucceeded)
 	{
+		if (!IsRunEventActive())
+		{
+			ActiveRunEventVisitToken.Invalidate();
+		}
 		MarkRunUiSnapshotsDirty(GetRunEventChoiceResultDirtyFlags(Result));
 		NotifyRunStateChanged();
 	}

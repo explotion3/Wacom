@@ -113,4 +113,5 @@ private:
 	TSharedPtr<FWacomShopRefreshGate> ShopRefreshGate;
 
 	bool bDidEndShopVisit = false;
+	FGuid OwnedShopVisitToken;
 };

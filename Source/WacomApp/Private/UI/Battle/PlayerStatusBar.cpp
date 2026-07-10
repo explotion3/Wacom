@@ -14,6 +14,42 @@
 #include "Blueprint/WidgetTree.h"
 #include "Snapshots/BattleSnapshot.h"
 
+namespace
+{
+	bool AreStatusStacksEquivalent(
+		const TMap<FGameplayTag, int32>& Left,
+		const TMap<FGameplayTag, int32>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (const TPair<FGameplayTag, int32>& Pair : Left)
+		{
+			const int32* RightValue = Right.Find(Pair.Key);
+			if (!RightValue || *RightValue != Pair.Value)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool ArePlayerSnapshotsEquivalent(
+		const FPlayerSnapshot& Left,
+		const FPlayerSnapshot& Right)
+	{
+		return Left.CurrentHp == Right.CurrentHp
+			&& Left.MaxHp == Right.MaxHp
+			&& Left.Shield == Right.Shield
+			&& Left.Statuses.Num() == Right.Statuses.Num()
+			&& Left.Statuses.HasAllExact(Right.Statuses)
+			&& Right.Statuses.HasAllExact(Left.Statuses)
+			&& AreStatusStacksEquivalent(Left.StatusStacks, Right.StatusStacks);
+	}
+}
+
 TSharedRef<SWidget> UPlayerStatusBar::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
@@ -54,14 +90,68 @@ TSharedRef<SWidget> UPlayerStatusBar::RebuildWidget()
 
 void UPlayerStatusBar::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 {
+	BasePlayerView = Snap.Player;
+	bHasBasePlayerView = true;
+	RefreshDisplay();
+}
+
+void UPlayerStatusBar::SetActionPreview(const FPlayerSnapshot& ProjectedPlayer)
+{
+	if (bHasActionPreview && ArePlayerSnapshotsEquivalent(ActionPreviewPlayerView, ProjectedPlayer))
+	{
+		return;
+	}
+
+	ActionPreviewPlayerView = ProjectedPlayer;
+	bHasActionPreview = true;
+	RefreshDisplay();
+}
+
+void UPlayerStatusBar::ClearActionPreview()
+{
+	if (!bHasActionPreview)
+	{
+		return;
+	}
+
+	bHasActionPreview = false;
+	RefreshDisplay();
+}
+
+void UPlayerStatusBar::RefreshDisplay()
+{
+	if (!bCapturedBaseRenderOpacity)
+	{
+		BaseRenderOpacity = GetRenderOpacity();
+		bCapturedBaseRenderOpacity = true;
+	}
+
+	SetRenderOpacity(bHasActionPreview
+		? ActionPreviewRenderOpacity
+		: BaseRenderOpacity);
+
+	if (bHasActionPreview)
+	{
+		RefreshFromPlayerSnapshot(ActionPreviewPlayerView);
+		return;
+	}
+
+	if (bHasBasePlayerView)
+	{
+		RefreshFromPlayerSnapshot(BasePlayerView);
+	}
+}
+
+void UPlayerStatusBar::RefreshFromPlayerSnapshot(const FPlayerSnapshot& PlayerView)
+{
 	if (HpBar)
 	{
-		HpBar->SetValue(Snap.Player.CurrentHp, Snap.Player.MaxHp);
+		HpBar->SetValue(PlayerView.CurrentHp, PlayerView.MaxHp);
 	}
 
 	if (ShieldText)
 	{
-		if (bHideShieldWhenZero && Snap.Player.Shield <= 0)
+		if (bHideShieldWhenZero && PlayerView.Shield <= 0)
 		{
 			ShieldText->SetVisibility(ESlateVisibility::Collapsed);
 		}
@@ -69,13 +159,13 @@ void UPlayerStatusBar::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		{
 			ShieldText->SetVisibility(ESlateVisibility::HitTestInvisible);
 			ShieldText->SetText(FText::Format(
-				LOCTEXT("ShieldFmt", "护盾 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(Snap.Player.Shield) }));
+				LOCTEXT("ShieldFmt", "护盾 {0}"), FFormatOrderedArguments{ FFormatArgumentValue(PlayerView.Shield) }));
 		}
 	}
 
 	if (UWacomBattleStatusIconListWidget* ResolvedStatusList = ResolveStatusListWidget())
 	{
-		ResolvedStatusList->SetStatuses(Snap.Player.Statuses, Snap.Player.StatusStacks);
+		ResolvedStatusList->SetStatuses(PlayerView.Statuses, PlayerView.StatusStacks);
 	}
 }
 

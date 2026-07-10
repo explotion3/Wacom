@@ -69,4 +69,5 @@ private:
 	void RemoveAt(int32 Index);
 	void TickToasts(float DeltaTime);
 	void HandleQueueEmpty();
+	int32 GetEffectiveMaxVisibleMessages() const;
 };

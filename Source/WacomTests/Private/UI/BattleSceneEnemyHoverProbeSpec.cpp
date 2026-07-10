@@ -470,11 +470,11 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectPredictionSpec::RunTest(c
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectInvalidPredictionSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartTargetSelectInvalidHoverShowsRejectPrediction",
+	FWacomUIBattleSceneEnemyPartHoverProbeImplicitTargetFocusSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartImplicitTargetHoverRemainsPreviewFocus",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectInvalidPredictionSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleSceneEnemyPartHoverProbeImplicitTargetFocusSpec::RunTest(const FString& /*Parameters*/)
 {
 	UWorld* World = WacomBattleSceneEnemyHoverProbeSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -540,16 +540,16 @@ bool FWacomUIBattleSceneEnemyPartHoverProbeTargetSelectInvalidPredictionSpec::Ru
 
 	const FWacomBattleEnemyPartPresentationDebugView View =
 		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestTrue(TEXT("Invalid TargetSelect hover still activates part focus"), View.bHoverActive);
-	TestFalse(TEXT("Invalid TargetSelect hover prediction is handled by enemy panel"), View.PredictionView.bVisible);
-	TestEqual(TEXT("Invalid TargetSelect hover clears part prediction badge"),
+	TestTrue(TEXT("Implicit-target hover activates part focus"), View.bHoverActive);
+	TestFalse(TEXT("Implicit-target hover prediction is handled by enemy panel"), View.PredictionView.bVisible);
+	TestEqual(TEXT("Implicit-target hover clears part prediction badge"),
 		View.PredictionView.RejectReason,
 		FName(TEXT("EnemyPanelHover")));
-	TestTrue(TEXT("Invalid TargetSelect prediction input records source card"),
+	TestTrue(TEXT("Implicit-target prediction input records source card"),
 		View.LastHoverPredictionInput.bHasSourceCard);
-	TestFalse(TEXT("Invalid TargetSelect prediction input cannot submit"),
+	TestTrue(TEXT("Implicit-target focus does not block submission"),
 		View.LastHoverPredictionInput.bPreviewCanSubmit);
-	TestFalse(TEXT("Invalid TargetSelect reject reason present"),
+	TestTrue(TEXT("Implicit-target focus has no reject reason"),
 		View.LastHoverPredictionInput.PreviewRejectReason.IsNone());
 	return true;
 }

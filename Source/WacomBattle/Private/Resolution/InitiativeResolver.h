@@ -7,6 +7,7 @@
 struct FBattleState;
 struct FBattleEventBus;
 class UCardDefinition;
+class IBattleOperationAdapter;
 
 /**
  * 先机命中 / 抵抗 / 完美释放。
@@ -61,5 +62,6 @@ public:
 		int32 RuntimeCost,
 		const TArray<FGuid>& HitPartIds,
 		const FGuid& CardId,
-		bool bSwift);
+		bool bSwift,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
 };

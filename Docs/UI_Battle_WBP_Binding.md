@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-battle
 status: active
-updated: 2026-07-08
+updated: 2026-07-09
 tags:
   - wacom/ui
   - wacom/wbp
@@ -56,6 +56,7 @@ WBP 不应做：
 最小 PIE 验收：
 
 - 玩家状态、牌堆数量、CommandBar 和 CombatLogFeed 在 Snapshot 刷新后显示。
+- 拖牌指向合法敌人部位 / 手牌目标，或无目标卡已经达到 armed commit 可释放状态时，玩家状态条和敌人部位面板可以直接显示 Action Preview projected value；单纯拖出手牌区但未 armed、未指向有效目标或目标无效时不显示玩家侧收益预览。
 - `CombatLogFeed` 可滚动，连续出牌后能查看最近命令块。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 扫描到的 PartActor Status Badge 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
@@ -226,6 +227,7 @@ WBP 不应做：
 
 - 推荐把状态列表实例直接命名为 `StatusList`。C++ 会在 `StatusList` 未绑定时回退查找唯一一个 `UWacomBattleStatusIconListWidget` 子控件，但存在多个状态列表时不会猜测。
 - `StatusList` 只在 Snapshot 里有非 `Status.Shield` 状态时显示；单纯配置图标 Brush 不会让 PIE 自动出现状态。
+- Action Preview 不需要新增必绑控件。预览激活时，C++ 会用 Battle 规则层产出的 projected player state 覆盖 `HpBar / ShieldText / StatusList` 当前显示，并用可调透明度提示这是预览态；清理后恢复最近一次真实 Snapshot。
 
 WBP 不应做：不提交玩家命令，不修改 BattleSession。
 
@@ -398,6 +400,7 @@ WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor �
 - `Shield == 0` 时 `ShieldText` 会清空并折叠；如果 WBP 只绑定 `StatsText` 而未绑定 `HpText / ShieldText / InitiativeText`，汇总文本仍会显示。
 - `StatusList` 绑定时，C++ 使用共享图标列表并隐藏 `StatusText`；未绑定时保留旧状态文本格式。
 - `bDestroyed` 时 `DestroyedOverlay` 显示，条目整体透明度降低。
+- Action Preview 不需要新增必绑控件。预览激活时，C++ 会用 Battle 规则层产出的 projected part view 覆盖 `HpText / ShieldText / InitiativeText / StatusList / DestroyedOverlay` 当前显示；如果部位会因本次打牌立即行动，`InitiativeText` 显示 `0`。同一次出牌触发多个敌人部位行动时，敌人聚合面板会显示所有 projected 部位的净结果，不限于当前鼠标指向部位。预览刷新不触发真实 HP / Shield pulse，清理后恢复基础 ViewData。
 - C++ fallback 使用暗色紧凑面板和水平部位条目：部位名、HP、护盾、先机、意图同排展示，状态和破坏标记作为次级信息显示。
 - C++ fallback 自带轻量表现动效：新增条目错峰淡入/轻微下移归位，HP、护盾和破坏状态变化时短促 pulse。正式 WBP 可以用 UMG Animation 覆盖更完整的动效表现。
 

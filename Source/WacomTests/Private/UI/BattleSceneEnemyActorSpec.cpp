@@ -325,6 +325,40 @@ namespace WacomBattleSceneEnemyActorSpec
 		return FGuid();
 	}
 
+	FWacomFirstPersonCardLayerSlotView MakeProjectedCardSlot(
+		const FGuid& CardInstanceId,
+		const FVector2D& ScreenPosition = FVector2D(500.0f, 600.0f))
+	{
+		FWacomFirstPersonCardLayerSlotView Slot;
+		Slot.Index = 0;
+		Slot.Entry.CardInstanceId = CardInstanceId;
+		Slot.Entry.bIsPlayable = true;
+		Slot.ScreenPosition = ScreenPosition;
+		Slot.WidgetPosition = ScreenPosition;
+		Slot.InputHitCenter = ScreenPosition;
+		Slot.RenderScale = 0.55f;
+		Slot.RenderOpacity = 1.0f;
+		Slot.bProjected = true;
+		return Slot;
+	}
+
+	FWacomFirstPersonCardDragView MakeTargetedCardDragView(
+		const FGuid& CardInstanceId,
+		const FWacomInteractionTargetHandle& TargetHandle)
+	{
+		FWacomFirstPersonCardDragView DragView;
+		DragView.CardInstanceId = CardInstanceId;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
+		DragView.SourceSlotView = MakeProjectedCardSlot(CardInstanceId);
+		DragView.PressScreenPosition = FVector2D(500.0f, 600.0f);
+		DragView.CurrentScreenPosition = FVector2D(540.0f, 590.0f);
+		DragView.PointerViewportPosition = DragView.CurrentScreenPosition;
+		DragView.PointerNormalizedViewportPosition = FVector2D::ZeroVector;
+		DragView.bHasPointerViewportPosition = true;
+		DragView.CurrentTarget = TargetHandle;
+		return DragView;
+	}
+
 	void SettleBattlePresentationQueue(UWacomBattleHUDDetailTest& HUD, int32 MaxSteps = 32)
 	{
 		for (int32 Iteration = 0; HUD.IsBattlePresentationBusy() && Iteration < MaxSteps; ++Iteration)
@@ -1022,6 +1056,132 @@ bool FWacomUIBattleSceneEnemyPartPredictionSwiftSpec::RunTest(const FString& /*P
 	TestFalse(TEXT("Swift does not mark perfect candidate"), PredictionView.bPerfectReleaseCandidate);
 	TestFalse(TEXT("Swift does not mark action risk"), PredictionView.bActionRisk);
 	TestTrue(TEXT("Swift detail mentions swift"), PredictionView.DetailText.ToString().Contains(TEXT("迅捷")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyPartActionPreviewAllActingPartsSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyPartActionPreviewAppliesToAllActingParts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyPartActionPreviewAllActingPartsSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fx;
+	UCharacterDefinition* Character = Fx.MakeCharacter(
+		Fx.MakeNoopCard(0),
+		Fx.MakeNoopCard(0),
+		{ Fx.MakeSimpleDamageCard(1, 3) });
+	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(20, 20, 20, 1, 1, 1);
+	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId =
+		WacomBattleSceneEnemyActorSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
+
+	WacomBattleSceneEnemyActorSpec::FSceneEnemyHostActors SceneEnemy =
+		WacomBattleSceneEnemyActorSpec::SpawnSceneEnemyHost(
+			*World,
+			Enemy,
+			{ TEXT("Test.Part.Head"), TEXT("Test.Part.Body"), TEXT("Test.Part.Tail") });
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC =
+		World->SpawnActor<AWacomBattleSceneClickRouterPlayerControllerTest>(
+			AWacomBattleSceneClickRouterPlayerControllerTest::StaticClass(),
+			FTransform::Identity);
+	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestEqual(TEXT("Three scene parts"), SceneEnemy.Parts.Num(), 3)
+		|| !TestNotNull(TEXT("PlayerController"), PC)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid()))
+	{
+		WacomBattleSceneEnemyActorSpec::DestroySceneEnemyHost(SceneEnemy);
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		WacomBattleSceneEnemyActorSpec::DestroySceneEnemyHost(SceneEnemy);
+		if (IsValid(PC))
+		{
+			PC->Destroy();
+		}
+	};
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	HUD->SetOwningPlayerForTest(PC);
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+	HUD->SetBattleInputReady(true);
+
+	AWacomBattleEnemyPartActor* TargetPart = SceneEnemy.Parts[0];
+	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, TargetPart, TargetPart->GetHitBounds());
+	FWacomFirstPersonCardDragView DragView =
+		WacomBattleSceneEnemyActorSpec::MakeTargetedCardDragView(
+			SourceCardId,
+			WacomBattleSceneEnemyActorSpec::MakeBattlePartHoverHandle(TargetPart));
+	DragView.CurrentTarget = FWacomInteractionTargetHandle();
+	DragView.bHasPointerViewportPosition = false;
+	const FWacomBattleCardDropResolveResult DropResult =
+		HUD->ResolveFirstPersonCardDropIntentForTest(SourceCardId, DragView);
+	if (!DropResult.bCanSubmit)
+	{
+		AddError(FString::Printf(
+			TEXT("Drag target reject debug: %s"),
+			*DropResult.ToDebugString()));
+	}
+	TestEqual(TEXT("Drag target resolves play intent"),
+		DropResult.IntentKind,
+		EWacomBattleCardDropIntentKind::PlayCardWorldTarget);
+	TestTrue(TEXT("Drag target can submit"), DropResult.bCanSubmit);
+
+	HUD->HandleFirstPersonCardDragUpdatedForTest(SourceCardId, DragView);
+
+	for (int32 PartIndex = 0; PartIndex < SceneEnemy.Parts.Num(); ++PartIndex)
+	{
+		AWacomBattleEnemyPartActor* PartActor = SceneEnemy.Parts[PartIndex];
+		if (!TestNotNull(FString::Printf(TEXT("Scene part %d"), PartIndex), PartActor)
+			|| !TestNotNull(
+				FString::Printf(TEXT("Scene part %d presentation"), PartIndex),
+				PartActor->GetPresentationComponent()))
+		{
+			return false;
+		}
+
+		const FWacomBattleEnemyPartPresentationDebugView DebugView =
+			PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+		TestTrue(FString::Printf(TEXT("Part %d action preview active"), PartIndex),
+			DebugView.bActionPreviewPartActive);
+		TestTrue(FString::Printf(TEXT("Part %d prediction visible"), PartIndex),
+			DebugView.PredictionView.bVisible);
+		TestEqual(FString::Printf(TEXT("Part %d prediction mode"), PartIndex),
+			DebugView.PredictionView.Mode,
+			EWacomBattleEnemyPartPredictionMode::CardPrediction);
+		TestEqual(FString::Printf(TEXT("Part %d predicted initiative"), PartIndex),
+			DebugView.PredictionView.PredictedInitiative,
+			0);
+		TestTrue(FString::Printf(TEXT("Part %d action risk"), PartIndex),
+			DebugView.PredictionView.bActionRisk);
+	}
+
+	HUD->HandleFirstPersonCardDragCancelledForTest(SourceCardId, DragView);
+	for (int32 PartIndex = 0; PartIndex < SceneEnemy.Parts.Num(); ++PartIndex)
+	{
+		const FWacomBattleEnemyPartPresentationDebugView DebugView =
+			SceneEnemy.Parts[PartIndex]->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+		TestFalse(FString::Printf(TEXT("Part %d action preview clears"), PartIndex),
+			DebugView.bActionPreviewPartActive);
+		TestFalse(FString::Printf(TEXT("Part %d prediction hides"), PartIndex),
+			DebugView.PredictionView.bVisible);
+	}
 	return true;
 }
 

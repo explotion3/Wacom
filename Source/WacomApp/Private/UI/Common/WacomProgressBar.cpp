@@ -53,6 +53,11 @@ void UWacomProgressBar::NativePreConstruct()
 
 void UWacomProgressBar::SetValue(int32 InCurrent, int32 InMax)
 {
+	if (Current == InCurrent && MaxValue == InMax)
+	{
+		return;
+	}
+
 	Current  = InCurrent;
 	MaxValue = InMax;
 	RefreshDisplay();

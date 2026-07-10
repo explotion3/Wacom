@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "PlayerStatusBar.generated.h"
 
@@ -14,6 +15,13 @@ UCLASS(Blueprintable, meta = (ToolTip = "Battle 玩家状态条 Widget。继承 
 class WACOMAPP_API UPlayerStatusBar : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()
+
+public:
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Player Status", meta = (ToolTip = "应用战斗行动预览。只覆盖本控件显示，不修改 BattleSession；ClearActionPreview 后恢复最近一次 Snapshot。"))
+	void SetActionPreview(const FPlayerSnapshot& ProjectedPlayer);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Player Status", meta = (ToolTip = "清除战斗行动预览，恢复最近一次 Snapshot 显示。"))
+	void ClearActionPreview();
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -31,6 +39,22 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Player Status|Authoring", meta = (ToolTip = "护盾为 0 时是否隐藏 ShieldText。只影响玩家状态条显示，不改变 BattleSession 中的护盾数值。"))
 	bool bHideShieldWhenZero = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Player Status|Preview", meta = (ToolTip = "Action Preview 激活时整个玩家状态条的渲染透明度。单位：0-1；推荐 0.7-1.0，仅提示这是预览态，不影响布局或规则。"))
+	float ActionPreviewRenderOpacity = 0.82f;
+
 private:
+	void RefreshDisplay();
+	void RefreshFromPlayerSnapshot(const FPlayerSnapshot& PlayerView);
 	UWacomBattleStatusIconListWidget* ResolveStatusListWidget();
+
+	UPROPERTY(Transient)
+	FPlayerSnapshot BasePlayerView;
+
+	UPROPERTY(Transient)
+	FPlayerSnapshot ActionPreviewPlayerView;
+
+	float BaseRenderOpacity = 1.0f;
+	bool bCapturedBaseRenderOpacity = false;
+	bool bHasBasePlayerView = false;
+	bool bHasActionPreview = false;
 };

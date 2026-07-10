@@ -30,12 +30,27 @@ struct FRunEventExecutor
 
 	static bool IsEventCompleted(const FRunState& State, FName PersistentId);
 	static bool IsRunFlagSet(const FRunState& State, FName FlagId);
-	static bool IsChoiceAvailable(const FRunState& State, const FWacomRunEventChoiceDefinition& Choice, FName& OutDisabledReason);
-	static FName ResolvePaymentZoneId(const FWacomRunEventChoiceDefinition& Choice);
-	static void CollectCardPaymentCandidateInstanceIds(const FRunState& State, const FWacomRunEventChoiceDefinition& Choice, TArray<FGuid>& OutInstanceIds, FName& OutDisabledReason);
 
 private:
-	static FRunEventChoiceRequirementSnapshot BuildRequirementSnapshotForCondition(const FRunState& State, const FWacomRunEventConditionDefinition& Condition);
+	/** One read-only evaluation of the current Choice facts; defined in the .cpp. */
+	struct FChoiceEvaluation;
+
+	static FChoiceEvaluation EvaluateChoice(
+		const FRunState& State,
+		const FWacomRunEventChoiceDefinition& Choice);
+	static FRunEventChoiceRequirementSnapshot EvaluateCondition(
+		const FRunState& State,
+		const FWacomRunEventConditionDefinition& Condition);
+	static FName ResolvePaymentZoneId(const FWacomRunEventChoiceDefinition& Choice);
+	static void CollectCardPaymentCandidateInstanceIds(
+		const FRunState& State,
+		const FWacomRunEventChoiceDefinition& Choice,
+		TArray<FGuid>& OutInstanceIds,
+		FName& OutDisabledReason);
+	static FRunDeckOperationValidation ValidatePaymentCandidate(
+		const FRunState& State,
+		const FWacomRunEventChoiceDefinition& Choice,
+		FGuid PaidCardInstanceId);
 	static void BuildConsequenceSnapshotsForChoice(
 		const UWacomRunEventDefinition* EventDefinition,
 		const FWacomRunEventChoiceDefinition& Choice,

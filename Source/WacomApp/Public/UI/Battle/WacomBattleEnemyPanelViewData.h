@@ -55,6 +55,9 @@ struct WACOMAPP_API FWacomBattleEnemyPartEntryViewData
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
 	bool bDestroyed = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "Action Preview 中该部位是否会在松手后立即行动。只用于 UI 表现，不写回战斗规则。"))
+	bool bActionPreviewWillAct = false;
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = "单个敌人的 HUD 展示数据。由 BattleHUD 从 FBattleSnapshot.Enemies 生成。"))

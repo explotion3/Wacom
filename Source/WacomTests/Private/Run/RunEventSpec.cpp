@@ -501,6 +501,7 @@ bool FWacomRunEventCardAndEventStateConditionsSpec::RunTest(const FString& /*Par
 		TestEqual(TEXT("Mark effect type"), Result.EffectResults[0].EffectType, EWacomRunEventEffectType::MarkEventCompleted);
 		TestEqual(TEXT("Mark effect delta"), Result.EffectResults[0].ActualDelta, 1);
 	}
+	Run->EndRunEvent();
 
 	FWacomRunEventChoiceDefinition Blocked;
 	Blocked.ChoiceId = TEXT("Blocked");

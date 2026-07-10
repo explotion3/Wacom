@@ -43,6 +43,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel")
 	void SetEnemyPanelViewData(const TArray<FWacomBattleEnemyPanelViewData>& InViews);
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "应用部位行动预览。只覆盖已存在部位条目的显示，不改变真实 EnemyPanelViewData。"))
+	void SetActionPreviewPartViews(const TArray<FWacomBattleEnemyPartEntryViewData>& InPreviewParts);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "清除所有部位行动预览，恢复真实 EnemyPanelViewData 显示。"))
+	void ClearActionPreview();
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "设置敌人面板内每个部位条目使用的 Widget 类。通常在 WBP 默认值中指定；运行时切换会清空并重建条目缓存。"))
 	void SetPartEntryWidgetClass(TSubclassOf<UWacomBattleEnemyPartEntryWidget> InWidgetClass);
 

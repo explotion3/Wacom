@@ -3,6 +3,7 @@
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 
 #include "Cards/CardDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "Snapshots/HandSnapshot.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 
@@ -325,6 +326,61 @@ namespace WacomBattleCardPresentation
 					BuildCardDetailViewData(CardSnapshot, TargetPreview);
 				Presentation.bHasTargetHandCardDetailViewData = true;
 			}
+		}
+		return Presentation;
+	}
+
+	FWacomBattleEnemyPartEntryViewData BuildEnemyPartEntryViewDataFromPreviewSnapshot(
+		const FEnemyPartSnapshot& PartSnapshot,
+		const bool bWillAct)
+	{
+		FWacomBattleEnemyPartEntryViewData View;
+		View.PartInstanceId = PartSnapshot.InstanceId;
+		View.Identity = PartSnapshot.Identity;
+		View.EnemySlotId = PartSnapshot.EnemySlotId;
+		View.PartSlotId = PartSnapshot.PartSlotId;
+		View.PartDisplayName = PartSnapshot.Definition
+			? PartSnapshot.Definition->DisplayName
+			: FText::FromName(PartSnapshot.PartSlotId);
+		View.CurrentHp = PartSnapshot.CurrentHp;
+		View.MaxHp = PartSnapshot.MaxHp;
+		View.Shield = PartSnapshot.Shield;
+		View.CurrentInitiative = PartSnapshot.CurrentInitiative;
+		View.CurrentIntentDisplayName = PartSnapshot.CurrentIntent.DisplayName;
+		View.CurrentIntentInitiative = PartSnapshot.CurrentIntent.Initiative;
+		View.CurrentIntentResistanceValue = PartSnapshot.CurrentIntent.ResistanceValue;
+		View.RuntimeStatuses = PartSnapshot.Statuses;
+		View.RuntimeStatusStacks = PartSnapshot.StatusStacks;
+		View.bDestroyed = PartSnapshot.bDestroyed;
+		View.bActionPreviewWillAct = bWillAct;
+		return View;
+	}
+
+	FWacomBattleActionPreviewPresentation BuildActionPreviewPresentation(
+		const FBattleSnapshot& Snapshot,
+		const FBattleCardActionPreview& ActionPreview,
+		const bool bBuildTargetPreviewPresentation)
+	{
+		FWacomBattleActionPreviewPresentation Presentation;
+		if (!ActionPreview.bHasPreview)
+		{
+			return Presentation;
+		}
+
+		Presentation.bHasPreview = true;
+		if (bBuildTargetPreviewPresentation)
+		{
+			Presentation.TargetPreviewPresentation =
+				BuildTargetPreviewPresentation(Snapshot, ActionPreview.TargetPreview);
+		}
+		Presentation.bHasProjectedPlayer = ActionPreview.bHasProjectedPlayer;
+		Presentation.ProjectedPlayer = ActionPreview.ProjectedPlayer;
+		Presentation.ProjectedEnemyParts.Reserve(ActionPreview.ProjectedEnemyParts.Num());
+
+		for (const FBattleCardActionPreviewEnemyPartState& PartState : ActionPreview.ProjectedEnemyParts)
+		{
+			Presentation.ProjectedEnemyParts.Add(
+				BuildEnemyPartEntryViewDataFromPreviewSnapshot(PartState.Snapshot, PartState.bWillAct));
 		}
 		return Presentation;
 	}

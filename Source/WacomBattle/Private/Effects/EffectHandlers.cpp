@@ -11,8 +11,8 @@
 #include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEventBus.h"
 #include "Events/BattleEventHelpers.h"
+#include "Hand/BattleCardZoneTransition.h"
 #include "Hand/HandZoneService.h"
-#include "Hand/HandZoneMoveEventService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
@@ -82,18 +82,6 @@ namespace
 	FRuntimeCardInstance* FindCardInstance(FBattleState& State, const FGuid& Id)
 	{
 		return FBattleRules::FindCard(State, Id);
-	}
-
-	bool IsNormalHandCardTarget(const FBattleState& State, const FGuid& Id)
-	{
-		const FRuntimeCardInstance* CardInst = FBattleRules::FindCard(State, Id);
-		if (!CardInst || CardInst->Location != ECardLocation::Hand)
-		{
-			return false;
-		}
-
-		return Id != State.Cards.LeftHandInstanceId
-			&& Id != State.Cards.RightHandInstanceId;
 	}
 
 	// ================ Damage 分支 ================
@@ -302,23 +290,16 @@ bool HandleCardDiscardSelected(FEffectContext& Ctx)
 	{
 		return false;
 	}
-	if (!IsNormalHandCardTarget(*Ctx.State, Ctx.TargetInstanceId))
-	{
-		return false;
-	}
-	if (!FDeckService::DiscardFromHand(*Ctx.State, Ctx.TargetInstanceId))
-	{
-		return false;
-	}
 
-	FHandZoneMoveEventService::ResolveDiscardedFromHand(
+	const TArray<FGuid> RequestedCardIds = { Ctx.TargetInstanceId };
+	return FBattleCardZoneTransition::DiscardCardsFromHand(
 		*Ctx.State,
 		*Ctx.Events,
-		{ Ctx.TargetInstanceId },
-		EHandCardZoneMoveReason::Effect,
-		Ctx.SourceInstanceId,
-		Ctx.EffectTag);
-	return true;
+		RequestedCardIds,
+		FBattleCardZoneTransitionCause::FromEffect(
+			Ctx.SourceInstanceId,
+			Ctx.EffectTag,
+			Ctx.OperationAdapter)).MovedAny();
 }
 
 bool HandleCardExhaustSelected(FEffectContext& Ctx)
@@ -327,23 +308,16 @@ bool HandleCardExhaustSelected(FEffectContext& Ctx)
 	{
 		return false;
 	}
-	if (!IsNormalHandCardTarget(*Ctx.State, Ctx.TargetInstanceId))
-	{
-		return false;
-	}
-	if (!FDeckService::ExhaustFromHand(*Ctx.State, Ctx.TargetInstanceId))
-	{
-		return false;
-	}
 
-	FHandZoneMoveEventService::ResolveExhaustedFromHand(
+	const TArray<FGuid> RequestedCardIds = { Ctx.TargetInstanceId };
+	return FBattleCardZoneTransition::ExhaustCardsFromHand(
 		*Ctx.State,
 		*Ctx.Events,
-		{ Ctx.TargetInstanceId },
-		EHandCardZoneMoveReason::Effect,
-		Ctx.SourceInstanceId,
-		Ctx.EffectTag);
-	return true;
+		RequestedCardIds,
+		FBattleCardZoneTransitionCause::FromEffect(
+			Ctx.SourceInstanceId,
+			Ctx.EffectTag,
+			Ctx.OperationAdapter)).MovedAny();
 }
 
 // ================ Draw / Discard / Exhaust / Heal ================
@@ -432,35 +406,14 @@ bool HandleDiscard(FEffectContext& Ctx)
 	// 随机弃掉手牌中 Magnitude 张普通卡（不弃锚点）。
 	if (Ctx.Magnitude <= 0) { return false; }
 
-	TArray<FGuid> DiscardedIds;
-	DiscardedIds.Reserve(Ctx.Magnitude);
-	for (int32 i = 0; i < Ctx.Magnitude; ++i)
-	{
-		// 收集可弃的普通卡
-		TArray<FGuid> Candidates;
-		for (const FGuid& Id : Ctx.State->Cards.Hand)
-		{
-			if (Id == Ctx.State->Cards.LeftHandInstanceId) { continue; }
-			if (Id == Ctx.State->Cards.RightHandInstanceId) { continue; }
-			Candidates.Add(Id);
-		}
-		if (Candidates.IsEmpty()) { break; }
-
-		const int32 Idx = Ctx.State->Rng.RandRange(0, Candidates.Num() - 1);
-		const FGuid DiscardedId = Candidates[Idx];
-		if (FDeckService::DiscardFromHand(*Ctx.State, DiscardedId))
-		{
-			DiscardedIds.Add(DiscardedId);
-		}
-	}
-	FHandZoneMoveEventService::ResolveDiscardedFromHand(
+	return FBattleCardZoneTransition::DiscardRandomNormalCardsFromHand(
 		*Ctx.State,
 		*Ctx.Events,
-		DiscardedIds,
-		EHandCardZoneMoveReason::Effect,
-		Ctx.SourceInstanceId,
-		Ctx.EffectTag);
-	return DiscardedIds.Num() > 0;
+		Ctx.Magnitude,
+		FBattleCardZoneTransitionCause::FromEffect(
+			Ctx.SourceInstanceId,
+			Ctx.EffectTag,
+			Ctx.OperationAdapter)).MovedAny();
 }
 
 bool HandleExhaustSelf(FEffectContext& Ctx)

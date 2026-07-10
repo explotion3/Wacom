@@ -6,17 +6,26 @@
 #include "Types/WacomResult.h"
 
 struct FBattleState;
-struct FBattleCommand;
 struct FBattleEventBus;
+class FPreparedPlayCard;
+class IBattleOperationAdapter;
 
 /**
- * 打牌命令解析。
+ * PlayCard Transaction 执行。
  *
- * 校验费用、目标和手牌状态后，执行卡牌效果、先机命中、抵抗、完美释放、
- * 卡牌去向、被动触发、击倒事件和战斗结束判定。
+ * 只消费 PlayCard Evaluation 产出的 Prepared PlayCard，执行卡牌效果、
+ * 先机命中、抵抗、完美释放、卡牌去向、被动触发、击倒事件和战斗结束判定。
  */
 class FPlayCardResolver
 {
 public:
-	static FWacomStatus Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command);
+	/**
+	 * Execute the complete PlayCard transaction through the supplied operation adapter.
+	 * Formal commit and deterministic Action Preview share this single ordered implementation.
+	 */
+	static FWacomStatus ResolvePrepared(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FPreparedPlayCard& Prepared,
+		IBattleOperationAdapter& OperationAdapter);
 };

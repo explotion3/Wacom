@@ -323,6 +323,7 @@ namespace
 		TWeakObjectPtr<AWacomPlayerController> WeakPC,
 		FName ShopId,
 		TArray<FRunShopOfferInput> Offers,
+		FGuid& OutVisitToken,
 		FName& OutFailureReason)
 	{
 		AWacomPlayerController* PC = WeakPC.Get();
@@ -331,6 +332,13 @@ namespace
 		{
 			OutFailureReason = TEXT("BeginShopVisitFailed");
 			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop.AsyncPush: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
+			return false;
+		}
+		OutVisitToken = RunSession->GetActiveShopVisitToken();
+		if (!OutVisitToken.IsValid())
+		{
+			OutFailureReason = TEXT("MissingShopVisitToken");
+			RunSession->EndShopVisit();
 			return false;
 		}
 		return true;
@@ -348,13 +356,16 @@ namespace
 		return true;
 	}
 
-	void RollbackShopAsyncPush(TWeakObjectPtr<AWacomPlayerController> WeakPC, FName /*FailureReason*/)
+	void RollbackShopAsyncPush(
+		TWeakObjectPtr<AWacomPlayerController> WeakPC,
+		FGuid VisitToken,
+		FName /*FailureReason*/)
 	{
 		if (AWacomPlayerController* PC = WeakPC.Get())
 		{
 			if (URunSession* RunSession = PC->GetRunSession())
 			{
-				RunSession->EndShopVisit();
+				RunSession->EndShopVisitIfOwned(VisitToken);
 			}
 		}
 	}
@@ -376,6 +387,7 @@ namespace
 	{
 		TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 		TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(&UIManager);
+		TSharedRef<FGuid> ShopVisitToken = MakeShared<FGuid>();
 		BeginGameMenuTransitionSuppression(PC);
 
 		FWacomAsyncWidgetPushRequest Request;
@@ -388,9 +400,9 @@ namespace
 		{
 			return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("OpenShop.AsyncPush"));
 		};
-		Request.BeforePush = [WeakPC, ShopId, Offers](FName& OutFailureReason)
+		Request.BeforePush = [WeakPC, ShopId, Offers, ShopVisitToken](FName& OutFailureReason)
 		{
-			return BeginShopVisitForAsyncPush(WeakPC, ShopId, Offers, OutFailureReason);
+			return BeginShopVisitForAsyncPush(WeakPC, ShopId, Offers, *ShopVisitToken, OutFailureReason);
 		};
 		Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
 		{
@@ -400,9 +412,9 @@ namespace
 		{
 			PrepareFailedShopAsyncPush(PushedWidget, FailureReason);
 		};
-		Request.Rollback = [WeakPC](FName FailureReason)
+		Request.Rollback = [WeakPC, ShopVisitToken](FName FailureReason)
 		{
-			RollbackShopAsyncPush(WeakPC, FailureReason);
+			RollbackShopAsyncPush(WeakPC, *ShopVisitToken, FailureReason);
 		};
 		Request.OnComplete = [WeakPC, ShopId, bReturnToRunTunnelAfterClose](const FWacomAsyncWidgetPushResult& Result)
 		{
@@ -433,6 +445,7 @@ namespace
 		TWeakObjectPtr<AWacomPlayerController> WeakPC,
 		FName PersistentId,
 		TWeakObjectPtr<UWacomRunEventDefinition> WeakEventDefinition,
+		FGuid& OutVisitToken,
 		FName& OutFailureReason)
 	{
 		AWacomPlayerController* PC = WeakPC.Get();
@@ -442,6 +455,13 @@ namespace
 		{
 			OutFailureReason = TEXT("BeginRunEventFailed");
 			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent.AsyncPush: BeginRunEvent 失败 PersistentId=%s"), *PersistentId.ToString());
+			return false;
+		}
+		OutVisitToken = RunSession->GetActiveRunEventVisitToken();
+		if (!OutVisitToken.IsValid())
+		{
+			OutFailureReason = TEXT("MissingRunEventVisitToken");
+			RunSession->EndRunEvent();
 			return false;
 		}
 		return true;
@@ -459,13 +479,16 @@ namespace
 		return true;
 	}
 
-	void RollbackRunEventAsyncPush(TWeakObjectPtr<AWacomPlayerController> WeakPC, FName /*FailureReason*/)
+	void RollbackRunEventAsyncPush(
+		TWeakObjectPtr<AWacomPlayerController> WeakPC,
+		FGuid VisitToken,
+		FName /*FailureReason*/)
 	{
 		if (AWacomPlayerController* PC = WeakPC.Get())
 		{
 			if (URunSession* RunSession = PC->GetRunSession())
 			{
-				RunSession->EndRunEvent();
+				RunSession->EndRunEventIfOwned(VisitToken);
 			}
 		}
 	}
@@ -488,6 +511,7 @@ namespace
 		TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 		TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(&UIManager);
 		TWeakObjectPtr<UWacomRunEventDefinition> WeakEventDefinition(EventDefinition);
+		TSharedRef<FGuid> RunEventVisitToken = MakeShared<FGuid>();
 		BeginGameMenuTransitionSuppression(PC);
 
 		FWacomAsyncWidgetPushRequest Request;
@@ -500,9 +524,14 @@ namespace
 		{
 			return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("OpenRunEvent.AsyncPush"));
 		};
-		Request.BeforePush = [WeakPC, PersistentId, WeakEventDefinition](FName& OutFailureReason)
+		Request.BeforePush = [WeakPC, PersistentId, WeakEventDefinition, RunEventVisitToken](FName& OutFailureReason)
 		{
-			return BeginRunEventForAsyncPush(WeakPC, PersistentId, WeakEventDefinition, OutFailureReason);
+			return BeginRunEventForAsyncPush(
+				WeakPC,
+				PersistentId,
+				WeakEventDefinition,
+				*RunEventVisitToken,
+				OutFailureReason);
 		};
 		Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
 		{
@@ -512,9 +541,9 @@ namespace
 		{
 			PrepareFailedRunEventAsyncPush(PushedWidget, FailureReason);
 		};
-		Request.Rollback = [WeakPC](FName FailureReason)
+		Request.Rollback = [WeakPC, RunEventVisitToken](FName FailureReason)
 		{
-			RollbackRunEventAsyncPush(WeakPC, FailureReason);
+			RollbackRunEventAsyncPush(WeakPC, *RunEventVisitToken, FailureReason);
 		};
 		Request.OnComplete = [WeakPC, PersistentId, bReturnToRunTunnelAfterClose](const FWacomAsyncWidgetPushResult& Result)
 		{

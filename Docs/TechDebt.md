@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-07-08
+updated: 2026-07-10
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -29,6 +29,7 @@ tags:
 | `Effect.GainKeyword` / `Effect.RemoveStatus` 参数 | 借用 `FEffectContext::MetaTag` 或 `TargetZone` 传 Keyword / Status Tag | 同上，收口到专用 `FilterTag` 字段 |
 | `IsDeleteFunctionAvailable` | 接口已存在，但当前 Run 删牌事务和背包 UI 仍按始终可删的简化口径工作 | 等删牌可用性口径确认后，Run 校验和 UI 显隐统一接入 |
 | 手牌锚点左右归属 | `FHandCardSnapshot` 不带左右手角色，UI 用遍历顺序启发式 | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
+| Battle Card Zone Transition 双入口 | `Effect.Discard / DiscardSelected / ExhaustSelected` 已统一走 `BattleCardZoneTransition`；HandLimit、TurnEnd、奖励和 Companion 仍由 `HandZoneService` 先改状态，再调用 migration-only `HandZoneMoveEventService::FinalizeAlreadyMoved*`，Draw / 回手 / 出牌去向也尚未进入语义事务 | 下一切片先把 hand-limit 和 turn-end 的“选择”与“移动”拆开并迁入语义入口，再处理奖励 / Companion；Draw、回手、PlayedPile / Limbo 按各自规则单独扩展。全部迁移后删除 post-move event API，并限制 `DeckService::DiscardFromHand / ExhaustFromHand` 只能作为事务内部 primitive |
 | BattleResult identity 兼容字段 | `FBattleResultPacket` 仍同时暴露 `PartId / Identity / PartKey`、`DestroyedParts / DestroyedPartKeys`；Run 撤离进度的新写入和 Run 结算日志已收敛为 key-first，GameMode 撤离全灭判断已改为 key-only；`DestroyedParts` 仅作旧数据 / 手写 snapshot fallback | 继续把测试、日志和消费者迁到 `FBattleEnemyPartKey` / `DestroyedPartKeys`；确认没有资产 / 蓝图依赖后再降级或移除 legacy projection 字段 |
 
 ---

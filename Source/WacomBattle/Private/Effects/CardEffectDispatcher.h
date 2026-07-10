@@ -8,6 +8,7 @@ struct FBattleState;
 struct FBattleEventBus;
 struct FCardEffect;
 struct FEffectContext;
+class IBattleOperationAdapter;
 
 /**
  * 卡牌效果分发器。
@@ -45,5 +46,6 @@ public:
 		const FGuid& SelectedPartId,
 		const FGuid& SelfCardId,
 		FGuid& InOutLastShuffledCardId,
-		const FGuid& SelectedHandCardId = FGuid());
+		const FGuid& SelectedHandCardId = FGuid(),
+		IBattleOperationAdapter* OperationAdapter = nullptr);
 };

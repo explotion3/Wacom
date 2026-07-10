@@ -10,6 +10,7 @@
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleCommandBarWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
+#include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Common/PileCountView.h"
@@ -600,6 +601,15 @@ public:
 			InCommandBar->OnBattleCommandRequested.AddDynamic(
 				this,
 				&UBattleHUD::HandleCommandBarCommandRequested);
+		}
+	}
+
+	void SetPlayerStatusBarForTest(UPlayerStatusBar* InPlayerStatusBar)
+	{
+		PlayerStatusBar = InPlayerStatusBar;
+		if (InPlayerStatusBar)
+		{
+			ChildBattleWidgets.AddUnique(InPlayerStatusBar);
 		}
 	}
 

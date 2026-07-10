@@ -7,6 +7,7 @@
 
 struct FBattleState;
 struct FBattleEventBus;
+class IBattleOperationAdapter;
 
 /**
  * 效果来源类型。决定效果计算口径（例如"卡牌的 Runtime Cost 影响伤害"）。
@@ -78,4 +79,7 @@ struct FEffectContext
 	 * 调用之间可见。PlayCardResolver 的 ExecuteCardEffectOnce 负责透传。
 	 */
 	FGuid LastShuffledCardId;
+
+	/** Optional private adapter for formal commit versus deterministic preview execution. */
+	IBattleOperationAdapter* OperationAdapter = nullptr;
 };

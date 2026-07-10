@@ -2,7 +2,7 @@
 type: architecture
 scope: wacom-project
 status: active
-updated: 2026-05-23
+updated: 2026-07-10
 tags:
   - wacom/architecture
   - wacom/modules
@@ -131,6 +131,8 @@ Source/
 - `WacomRun` 承载战斗外状态、背包、多 zone 卡牌归属、压力/经验、商店、RunEvent、战斗结果回传。
 - `WacomApp` 承载 CommonUI 层级、探索/战斗状态切换、世界交互、输入协调和 HUD/Screen/Toast。
 
+RunEvent Choice Evaluation 的唯一 Implementation 位于 `WacomRun/Private/Events/FRunEventExecutor`。RunEvent Snapshot、普通提交、卡牌支付预检和正式支付提交共享同一份 condition / payment fact 求值；提交入口始终读取最新 `FRunState`，Public Snapshot / Result 与 Blueprint contract 不暴露内部 seam。Effects 仍在 working-state 事务中执行和回滚，不进入 Choice Evaluation。
+
 `BattleState`、`BattleResolver`、各命令 Resolver、各效果执行器都在 `WacomBattle/Private`，
 外部模块编译期不可见。对外入口是 `WacomBattle/Public/Session/BattleSession.h`。
 
@@ -141,6 +143,12 @@ Source/
 核心公共契约是 `UBattleSession + FBattleCommand + FBattleSnapshot + FBattleEvent + FBattleResultPacket`。Resolver、Executor、Service 和 `BattleState` 都在 `WacomBattle/Private`，外部模块只通过公共契约交互。
 
 `UBattleSession` 是 public facade，不承载规则实现。初始化、命令外壳、击倒请求流和战后包构造分别收口到 `WacomBattle/Private` helper：`BattleInitializer`、`BattleCommandPipeline`、`KnockdownFlowService`、`BattleResultPacketBuilder`。这些 helper 可以读写 `BattleState`，但不进入 Public API，也不被 UI / Run / App 直接 include。
+
+PlayCard Evaluation 的唯一 Implementation 位于 `WacomBattle/Private/Commands` 的 `FPlayCardEvaluator`。该深层 Module 在一个 Private Interface 后集中源卡、结构性目标、运行时费用、阶段与拒绝投影：Target Probe 严格求值具体显式对象，Preview Candidate 把可选 Preview Focus 与规范化执行绑定分离，Commit Evaluation 为正式提交与 Action Preview 生成携带 `StateVersion` 的 Prepared PlayCard。这个 seam 不新增 UE 反射类型，也不扩张 `WacomBattle/Public` 的 Session / Command / Preview 或 Blueprint Interface。
+
+PlayCard Transaction 的唯一 Implementation 位于 `WacomBattle/Private/Commands/PlayCardResolver`。`PlayCardResolver` 只消费 Prepared PlayCard，不重复阶段、源卡、目标或费用判断；Prepared 状态版本过期时必须在事件、RNG 和状态变更前拒绝。正式提交使用 formal operation adapter，Action Preview 在复制的 `BattleState` 上使用 deterministic preview adapter；两者共享 Commit Evaluation 与同一结算顺序。operation adapter 会显式透传到 Effect、ZoneHook、Passive、OnDiscard 和 EnemyAction，不使用全局或 `thread_local` 模式。Effect handler、preview determinism 和内容支持事实集中在 Private `EffectSemanticsRegistry`；这些 Private seam 不进入外部模块的编译依赖。
+
+`WacomBattle/Private/Hand/BattleCardZoneTransition` 是卡牌区域迁移的深层规则 seam。当前 v1 权威范围是 `Effect.Discard / Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected`：调用方只提交语义意图，事务内部统一真实容器移动、Runtime `Location`、成功 ID、随机选择、事件批次和 `OnDiscard` adapter 透传。`DeckService` 只作为无事件的物理移动 primitive；`HandZoneMoveEventService` 是 HandLimit、TurnEnd、奖励等未迁移路径仍使用的过渡 Implementation，不是新增规则入口。该事务表示同步有序操作，不提供嵌套被动失败后的原子回滚。
 
 UI、Actor 和测试入口都不应该直接改 `BattleState`。它们只能提交命令，读取快照、事件和战后包。
 

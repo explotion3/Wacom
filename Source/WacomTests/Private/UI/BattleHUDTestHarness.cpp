@@ -12,6 +12,7 @@
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
+#include "UI/Battle/PlayerStatusBar.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 
 namespace
@@ -128,6 +129,22 @@ UWacomBattleCommandBarTestProbe* FWacomBattleHUDTestHarness::AttachCommandBar()
 		HUDPtr->SetCommandBarForTest(CommandBarPtr.Get());
 	}
 	return CommandBarPtr.Get();
+}
+
+UPlayerStatusBar* FWacomBattleHUDTestHarness::AttachPlayerStatusBar()
+{
+	if (!HUDPtr)
+	{
+		return nullptr;
+	}
+
+	PlayerStatusBarPtr.Reset(NewObject<UPlayerStatusBar>(HUDPtr.Get()));
+	if (PlayerStatusBarPtr)
+	{
+		PlayerStatusBarPtr->TakeWidget();
+		HUDPtr->SetPlayerStatusBarForTest(PlayerStatusBarPtr.Get());
+	}
+	return PlayerStatusBarPtr.Get();
 }
 
 AWacomPlayerCharacter* FWacomBattleHUDTestHarness::AttachFirstPersonCharacter()

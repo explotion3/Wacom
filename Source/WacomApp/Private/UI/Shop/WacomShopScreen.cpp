@@ -135,6 +135,7 @@ void UWacomShopScreen::NativeOnActivated()
 {
 	Super::NativeOnActivated();
 	bDidEndShopVisit = false;
+	OwnedShopVisitToken.Invalidate();
 	TrySubscribeRunSession();
 	RefreshShop();
 }
@@ -142,7 +143,11 @@ void UWacomShopScreen::NativeOnActivated()
 void UWacomShopScreen::NativeOnDeactivated()
 {
 	UnsubscribeRunSession();
-	FWacomShopScreenFlow::EndShopVisitOnDeactivate(ResolveRunSession(), bDidEndShopVisit);
+	FWacomShopScreenFlow::EndShopVisitOnDeactivate(
+		ResolveRunSession(),
+		OwnedShopVisitToken,
+		bDidEndShopVisit);
+	OwnedShopVisitToken.Invalidate();
 	Super::NativeOnDeactivated();
 }
 
@@ -150,6 +155,10 @@ void UWacomShopScreen::RefreshShop()
 {
 	TrySubscribeRunSession();
 	URunSession* Run = ResolveRunSession();
+	if (Run && !OwnedShopVisitToken.IsValid())
+	{
+		OwnedShopVisitToken = Run->GetActiveShopVisitToken();
+	}
 	FWacomShopRefreshGate& RefreshGate = GetShopRefreshGate();
 	if (RefreshGate.SetRunSession(Run))
 	{

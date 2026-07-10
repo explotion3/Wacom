@@ -7,6 +7,7 @@
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Resolution/BattleCardActionPreview.h"
 #include "Resolution/BattleCardTargetPreview.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -40,6 +41,46 @@ namespace
 		return nullptr;
 	}
 
+	FWacomBattleActionPreviewRequestKey BuildActionPreviewRequestKey(
+		const int32 SnapshotVersion,
+		const FGuid& SourceCardInstanceId,
+		const FWacomBattleCardDropResolveResult& DropResult)
+	{
+		FWacomBattleActionPreviewRequestKey Key;
+		Key.SnapshotVersion = SnapshotVersion;
+		Key.IntentKind = DropResult.IntentKind;
+		Key.SourceCardInstanceId = SourceCardInstanceId;
+		Key.TargetKind = DropResult.TargetHandle.TargetKind;
+		Key.WorldTargetId = DropResult.TargetHandle.WorldTargetId;
+		Key.CardInstanceId = DropResult.TargetHandle.CardInstanceId;
+		Key.ZoneId = DropResult.TargetHandle.ZoneId;
+		Key.TargetTag = DropResult.TargetHandle.TargetTag;
+		Key.StableTargetId = DropResult.TargetHandle.StableTargetId;
+		Key.EncounterId = DropResult.TargetHandle.EncounterId;
+		Key.EnemySlotId = DropResult.TargetHandle.EnemySlotId;
+		Key.PartSlotId = DropResult.TargetHandle.PartSlotId;
+		Key.bCanSubmit = DropResult.bCanSubmit;
+		return Key;
+	}
+
+	bool AreActionPreviewRequestKeysEquivalent(
+		const FWacomBattleActionPreviewRequestKey& Left,
+		const FWacomBattleActionPreviewRequestKey& Right)
+	{
+		return Left.SnapshotVersion == Right.SnapshotVersion
+			&& Left.IntentKind == Right.IntentKind
+			&& Left.SourceCardInstanceId == Right.SourceCardInstanceId
+			&& Left.TargetKind == Right.TargetKind
+			&& Left.WorldTargetId == Right.WorldTargetId
+			&& Left.CardInstanceId == Right.CardInstanceId
+			&& Left.ZoneId == Right.ZoneId
+			&& Left.TargetTag == Right.TargetTag
+			&& Left.StableTargetId == Right.StableTargetId
+			&& Left.EncounterId == Right.EncounterId
+			&& Left.EnemySlotId == Right.EnemySlotId
+			&& Left.PartSlotId == Right.PartSlotId
+			&& Left.bCanSubmit == Right.bCanSubmit;
+	}
 }
 
 FWacomBattleHUDFirstPersonHandBridge::FWacomBattleHUDFirstPersonHandBridge(FWacomBattleHUDRuntime& InRuntime)
@@ -479,6 +520,10 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragUpdated(
 	}
 	ApplyDragCameraLookOverride(DragView);
 
+	const bool bNoTargetCommitReady =
+		DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
+		&& DragView.bCommitArmed;
+
 	if (ShouldShowDragInspectDetail(DragView)
 		&& Runtime.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
 		&& DragView.SourceSlotView.bProjected)
@@ -492,7 +537,10 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragUpdated(
 		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit)
 	{
 		Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
-		ClearTargetPreviewLayer();
+		if (!bNoTargetCommitReady)
+		{
+			ClearTargetPreviewLayer();
+		}
 	}
 
 	UpdateDragTargetFeedback(CardInstanceId, DragView);
@@ -770,7 +818,11 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	FBattleSnapshot CurrentSnapshot;
 	FBattleCardTargetPreview TargetPreview;
 	FWacomBattleCardTargetPreviewPresentation TargetPreviewPresentation;
+	FWacomBattleActionPreviewPresentation ActionPreviewPresentation;
 	bool bHasTargetPreview = false;
+	bool bReusedActiveActionPreview = false;
+	bool bHasActionPreviewRequestKey = false;
+	FWacomBattleActionPreviewRequestKey ActionPreviewRequestKey;
 
 	switch (DropResult.IntentKind)
 	{
@@ -816,27 +868,84 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 		PreviewPresentation = Runtime.ResolveBattleEnemyPartWorldTargetPresentation(DropResult.TargetHandle);
 	}
 
-	if ((DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardWorldTarget
-			|| DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardCardTarget)
-		&& DropResult.bCanSubmit)
+	const bool bShouldBuildActionPreview =
+		DropResult.bCanSubmit
+		&& (DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardNoTarget
+			|| DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardWorldTarget
+			|| DropResult.IntentKind == EWacomBattleCardDropIntentKind::PlayCardCardTarget);
+	if (bShouldBuildActionPreview)
 	{
 		if (const UBattleSession* CurrentSession = Runtime.GetSession())
 		{
-			CurrentSnapshot = CurrentSession->BuildSnapshot();
-			TargetPreview = CurrentSession->BuildCardTargetPreview(CardInstanceId, DropResult.TargetHandle);
-			bHasTargetPreview = TargetPreview.bHasPreview;
-			if (bHasTargetPreview)
+			const int32 CachedSnapshotVersion = Runtime.HasLastBattleSnapshot()
+				? Runtime.GetLastBattleSnapshot().Version
+				: INDEX_NONE;
+			if (CachedSnapshotVersion != INDEX_NONE)
 			{
-				TargetPreviewPresentation =
-					WacomBattleCardPresentation::BuildTargetPreviewPresentation(
-						CurrentSnapshot,
-						TargetPreview);
-				bHasTargetPreview = TargetPreviewPresentation.bHasPreview;
+				ActionPreviewRequestKey = BuildActionPreviewRequestKey(
+					CachedSnapshotVersion,
+					CardInstanceId,
+					DropResult);
+				bHasActionPreviewRequestKey = true;
+				bReusedActiveActionPreview =
+					!bForceApplyTargetPreview
+					&& bHasActiveActionPreviewRequestKey
+					&& AreActionPreviewRequestKeysEquivalent(
+						ActiveActionPreviewRequestKey,
+						ActionPreviewRequestKey);
+			}
+
+			if (!bReusedActiveActionPreview)
+			{
+				CurrentSnapshot = CurrentSession->BuildSnapshot();
+				ActionPreviewRequestKey = BuildActionPreviewRequestKey(
+					CurrentSnapshot.Version,
+					CardInstanceId,
+					DropResult);
+				bHasActionPreviewRequestKey = true;
+				if (!bForceApplyTargetPreview
+					&& bHasActiveActionPreviewRequestKey
+					&& AreActionPreviewRequestKeysEquivalent(
+						ActiveActionPreviewRequestKey,
+						ActionPreviewRequestKey))
+				{
+					bReusedActiveActionPreview = true;
+				}
+			}
+
+			if (!bReusedActiveActionPreview)
+			{
+				const FBattleCardActionPreview ActionPreview =
+					CurrentSession->BuildCardActionPreview(CardInstanceId, DropResult.TargetHandle);
+				TargetPreview = ActionPreview.TargetPreview;
+				if (ActionPreview.bHasPreview)
+				{
+					const bool bBuildTargetPreviewPresentation =
+						DropResult.IntentKind != EWacomBattleCardDropIntentKind::PlayCardNoTarget;
+					ActionPreviewPresentation =
+						WacomBattleCardPresentation::BuildActionPreviewPresentation(
+							CurrentSnapshot,
+							ActionPreview,
+							bBuildTargetPreviewPresentation);
+					TargetPreviewPresentation = ActionPreviewPresentation.TargetPreviewPresentation;
+					bHasTargetPreview = TargetPreviewPresentation.bHasPreview;
+				}
 			}
 		}
 	}
 
-	if (bHasTargetPreview)
+	if (bReusedActiveActionPreview)
+	{
+		// Same source card, stable target identity and snapshot version: keep the
+		// currently-applied preview instead of rebuilding rules/UI data every drag tick.
+		if (Runtime.IsCurrentFirstPersonCardDetailSource(CardInstanceId)
+			&& DragView.SourceSlotView.bProjected)
+		{
+			Runtime.UpdateFirstPersonCardDetailSlot(DragView.SourceSlotView);
+			Runtime.PositionFirstPersonCardDetailPanelBesideSlot(DragView.SourceSlotView);
+		}
+	}
+	else if (bHasTargetPreview)
 	{
 		const bool bCanReuseActiveTargetPreview =
 			!bForceApplyTargetPreview
@@ -865,6 +974,27 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 						DragView.SourceSlotView);
 				}
 			}
+		}
+
+		if (ActionPreviewPresentation.bHasPreview)
+		{
+			Runtime.ApplyActionPreviewPresentation(ActionPreviewPresentation);
+			if (bHasActionPreviewRequestKey)
+			{
+				ActiveActionPreviewRequestKey = ActionPreviewRequestKey;
+				bHasActiveActionPreviewRequestKey = true;
+			}
+		}
+	}
+	else if (ActionPreviewPresentation.bHasPreview)
+	{
+		ResetActiveTargetPreviewState(false);
+		RestoreBaseTargetPreviewLayer();
+		Runtime.ApplyActionPreviewPresentation(ActionPreviewPresentation);
+		if (bHasActionPreviewRequestKey)
+		{
+			ActiveActionPreviewRequestKey = ActionPreviewRequestKey;
+			bHasActiveActionPreviewRequestKey = true;
 		}
 	}
 	else
@@ -897,6 +1027,16 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 			PredictionDebugInput.bHasSourceCard = true;
 			PredictionDebugInput.SourceCardRuntimeCost = TargetPreview.SourceCardRuntimeCost;
 			PredictionDebugInput.bSourceCardSwift = TargetPreview.bSourceCardSwift;
+		}
+		else if (Runtime.HasLastBattleSnapshot())
+		{
+			if (const FHandCardSnapshot* SourceSnapshot =
+				FindHandCardSnapshotForFirstPersonHandBridge(Runtime.GetLastBattleSnapshot(), CardInstanceId))
+			{
+				PredictionDebugInput.bHasSourceCard = true;
+				PredictionDebugInput.SourceCardRuntimeCost = SourceSnapshot->RuntimeCost;
+				PredictionDebugInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
+			}
 		}
 		else if (const UBattleSession* CurrentSession = Runtime.GetSession())
 		{
@@ -1151,15 +1291,22 @@ void FWacomBattleHUDFirstPersonHandBridge::StoreActiveTargetPreviewState(
 	bHasActiveTargetPreviewState = true;
 }
 
-void FWacomBattleHUDFirstPersonHandBridge::ResetActiveTargetPreviewState()
+void FWacomBattleHUDFirstPersonHandBridge::ResetActiveTargetPreviewState(
+	const bool bResetActionPreviewState)
 {
 	ActiveTargetPreviewState = FWacomBattleCardTargetPreviewPresentationStateKey();
 	bHasActiveTargetPreviewState = false;
+	if (bResetActionPreviewState)
+	{
+		ActiveActionPreviewRequestKey = FWacomBattleActionPreviewRequestKey();
+		bHasActiveActionPreviewRequestKey = false;
+	}
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearTargetPreviewLayer()
 {
 	ResetActiveTargetPreviewState();
+	Runtime.ClearActionPreview();
 	RestoreBaseTargetPreviewLayer();
 }
 

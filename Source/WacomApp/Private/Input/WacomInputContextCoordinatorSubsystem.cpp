@@ -49,6 +49,20 @@ void UWacomInputContextCoordinatorSubsystem::SetMappingContexts(
 	UInputMappingContext* InExplorationMappingContext,
 	UInputMappingContext* InBattleMappingContext)
 {
+	const bool bExplorationMappingChanged = ExplorationMappingContext != InExplorationMappingContext;
+	const bool bBattleMappingChanged = BattleMappingContext != InBattleMappingContext;
+
+	if (bExplorationMappingChanged && bExplorationMappingActive)
+	{
+		RemoveMappingContext(ExplorationMappingContext);
+		bExplorationMappingActive = false;
+	}
+	if (bBattleMappingChanged && bBattleMappingActive)
+	{
+		RemoveMappingContext(BattleMappingContext);
+		bBattleMappingActive = false;
+	}
+
 	ExplorationMappingContext = InExplorationMappingContext;
 	BattleMappingContext = InBattleMappingContext;
 	ApplyMappingContexts();
@@ -250,6 +264,13 @@ void UWacomInputContextCoordinatorSubsystem::AddMappingContext(UInputMappingCont
 		return;
 	}
 
+#if WITH_AUTOMATION_TESTS
+	if (MappingOperationObserverForTest)
+	{
+		MappingOperationObserverForTest(true, MappingContext, Priority);
+	}
+#endif
+
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 	{
@@ -263,6 +284,13 @@ void UWacomInputContextCoordinatorSubsystem::RemoveMappingContext(UInputMappingC
 	{
 		return;
 	}
+
+#if WITH_AUTOMATION_TESTS
+	if (MappingOperationObserverForTest)
+	{
+		MappingOperationObserverForTest(false, MappingContext, INDEX_NONE);
+	}
+#endif
 
 	if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
 		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))

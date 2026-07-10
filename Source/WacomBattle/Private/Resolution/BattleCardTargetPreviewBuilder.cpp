@@ -2,13 +2,12 @@
 
 #include "Resolution/BattleCardTargetPreviewBuilder.h"
 
+#include "Commands/PlayCardEvaluation.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Effects/CardEffectMagnitudeEvaluator.h"
 #include "Effects/ConditionResolver.h"
-#include "Resolution/BattleTargetResolver.h"
 #include "Runtime/RuntimeCardInstance.h"
-#include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
 
@@ -17,12 +16,6 @@
 
 namespace
 {
-	bool HasEffectiveKeyword(const FRuntimeCardInstance& Card, const FGameplayTag& Keyword)
-	{
-		return (Card.Definition && Card.Definition->Keywords.HasTagExact(Keyword))
-			|| Card.TemporaryKeywords.HasTagExact(Keyword);
-	}
-
 	bool IsHandAnchor(const FBattleState& State, const FGuid& CardInstanceId)
 	{
 		return CardInstanceId.IsValid()
@@ -71,31 +64,12 @@ namespace
 		}
 	}
 
-	void FillEnemyPartTarget(
-		const FBattleState& State,
-		const FWacomInteractionTargetHandle& Target,
-		FBattleCardTargetPreview& Preview)
-	{
-		EWacomBattleTargetRejectReason RejectReason = EWacomBattleTargetRejectReason::None;
-		const FRuntimeEnemyPart* Part =
-			FBattleTargetResolver::ResolveWorldEnemyPartTarget(State, Target, RejectReason);
-		if (!Part)
-		{
-			return;
-		}
-
-		Preview.TargetKind = EWacomBattleCardPreviewTargetKind::EnemyPart;
-		Preview.TargetEnemyPartInstanceId = Part->InstanceId;
-		Preview.TargetEnemyPartIdentity = Part->Identity;
-		Preview.TargetEnemyPartKey = Part->Identity.ToEnemyPartKey();
-	}
-
 	void FillHandCardTarget(
 		const FBattleState& State,
-		const FWacomInteractionTargetHandle& Target,
+		const FGuid& TargetCardInstanceId,
 		FBattleCardTargetPreview& Preview)
 	{
-		const FRuntimeCardInstance* TargetCard = FBattleRules::FindCard(State, Target.CardInstanceId);
+		const FRuntimeCardInstance* TargetCard = FBattleRules::FindCard(State, TargetCardInstanceId);
 		if (!TargetCard || TargetCard->Location != ECardLocation::Hand)
 		{
 			return;
@@ -127,33 +101,61 @@ FBattleCardTargetPreview FBattleCardTargetPreviewBuilder::Build(
 	const FGuid& CardInstanceId,
 	const FWacomInteractionTargetHandle& Target)
 {
+	return Build(
+		State,
+		FPlayCardEvaluator::EvaluatePreviewCandidate(State, CardInstanceId, Target));
+}
+
+FBattleCardTargetPreview FBattleCardTargetPreviewBuilder::Build(
+	const FBattleState& State,
+	const FPlayCardPreviewCandidate& Candidate)
+{
 	FBattleCardTargetPreview Preview;
-	Preview.Validation = FBattleTargetResolver::ValidateTargetWithCard(State, CardInstanceId, Target);
-	if (!Preview.Validation.bCanTarget)
+	Preview.Validation = Candidate.Validation;
+	if (!Candidate.bCanPreview || !Preview.Validation.bCanTarget)
 	{
 		return Preview;
 	}
-
-	const FRuntimeCardInstance* SourceCard = FBattleRules::FindCard(State, CardInstanceId);
-	if (!SourceCard || SourceCard->Location != ECardLocation::Hand || !SourceCard->Definition)
+	if (Candidate.EvaluatedStateVersion != State.StateVersion)
 	{
 		Preview.Validation.bCanTarget = false;
 		Preview.Validation.RejectReason = EWacomBattleTargetRejectReason::SourceCardInvalid;
+		Preview.Validation.DebugSummary += TEXT(" StalePlayCardPreviewCandidate");
+		return Preview;
+	}
+
+	const FRuntimeCardInstance* SourceCard =
+		FBattleRules::FindCard(State, Candidate.SourceCardInstanceId);
+	const UCardDefinition* Definition = Candidate.SourceDefinition;
+	if (!SourceCard || !Definition || SourceCard->Definition != Definition)
+	{
+		Preview.Validation.bCanTarget = false;
+		Preview.Validation.RejectReason = EWacomBattleTargetRejectReason::SourceCardInvalid;
+		Preview.Validation.DebugSummary += TEXT(" StalePlayCardSourceFacts");
 		return Preview;
 	}
 
 	Preview.bHasPreview = true;
-	Preview.SourceCardInstanceId = SourceCard->InstanceId;
-	Preview.SourceCardRuntimeCost = FBattleRules::ComputeRuntimeCost(*SourceCard);
-	Preview.bSourceCardSwift = HasEffectiveKeyword(*SourceCard, WacomTags::Card_Keyword_Swift);
+	Preview.SourceCardInstanceId = Candidate.SourceCardInstanceId;
+	Preview.SourceCardRuntimeCost = Candidate.RuntimeCost;
+	Preview.bSourceCardSwift = Candidate.bSwift;
 
-	if (Target.TargetKind == EWacomInteractionTargetKind::World)
+	const FPlayCardTargetFacts& EnemyTarget = Candidate.ExecutionTarget.HasEnemyPart()
+		? Candidate.ExecutionTarget
+		: Candidate.FocusTarget;
+	if (EnemyTarget.HasEnemyPart())
 	{
-		FillEnemyPartTarget(State, Target, Preview);
+		Preview.TargetKind = EWacomBattleCardPreviewTargetKind::EnemyPart;
+		Preview.TargetEnemyPartInstanceId = EnemyTarget.EnemyPartInstanceId;
+		Preview.TargetEnemyPartIdentity = EnemyTarget.EnemyPartIdentity;
+		Preview.TargetEnemyPartKey = EnemyTarget.EnemyPartKey;
 	}
-	else if (Target.TargetKind == EWacomInteractionTargetKind::Card)
+	else if (Candidate.ExecutionTarget.HasHandCard())
 	{
-		FillHandCardTarget(State, Target, Preview);
+		FillHandCardTarget(
+			State,
+			Candidate.ExecutionTarget.HandCardInstanceId,
+			Preview);
 	}
 
 	const FGuid SelectedPartId = Preview.TargetEnemyPartInstanceId;
@@ -162,13 +164,16 @@ FBattleCardTargetPreview FBattleCardTargetPreviewBuilder::Build(
 		SelectedHandCardId.IsValid() ? FBattleRules::FindCard(State, SelectedHandCardId) : nullptr;
 	int32 TargetHandCardModifierDelta = 0;
 
-	const UCardDefinition* Definition = SourceCard->Definition;
 	Preview.Effects.Reserve(Definition->Effects.Num());
 
 	for (int32 EffectIndex = 0; EffectIndex < Definition->Effects.Num(); ++EffectIndex)
 	{
 		const FCardEffect& Effect = Definition->Effects[EffectIndex];
-		if (!FConditionResolver::Evaluate(State, Effect.Condition, CardInstanceId, SelectedPartId))
+		if (!FConditionResolver::Evaluate(
+			State,
+			Effect.Condition,
+			Candidate.SourceCardInstanceId,
+			SelectedPartId))
 		{
 			Preview.Effects.Add(MakeSkippedEffectPreview(
 				EffectIndex,
@@ -191,11 +196,11 @@ FBattleCardTargetPreview FBattleCardTargetPreviewBuilder::Build(
 		EffectPreview.EffectType = Effect.EffectType;
 		EffectPreview.Target = Effect.Target;
 		EffectPreview.Magnitude = FCardEffectMagnitudeEvaluator::ComputeFinalMagnitude(
-			State,
-			Effect,
-			Preview.SourceCardRuntimeCost,
-			SelectedPartId,
-			CardInstanceId);
+				State,
+				Effect,
+				Preview.SourceCardRuntimeCost,
+				SelectedPartId,
+				Candidate.SourceCardInstanceId);
 		EffectPreview.bHasMagnitude = true;
 
 		if (Effect.Target == WacomTags::Target_SelectedHandCard && TargetHandCard)

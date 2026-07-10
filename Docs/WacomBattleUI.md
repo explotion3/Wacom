@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-07-08
+updated: 2026-07-10
 tags:
   - wacom/ui
   - wacom/battle
@@ -185,9 +185,11 @@ First-person 详情面板的 viewport 生命周期由 `FWacomFirstPersonCardDeta
 
 Battle hand entries 由 `WacomBattleCardPresentation` 从 `FHandCardSnapshot` 构建：`ECardTargetMode` 只在 Battle adapter 内部映射成 first-person card layer 的 `InteractionIntent`，不再写入通用 entry。通用 first-person card layer 公共类型不提供 TargetMode 转换 helper；SlotWidget 只消费 `InteractionIntent` 来决定无目标拖拽或瞄准态，目标合法性和提交仍由 BattleHUD / BattleSession 处理。旧 `OnCardClickedByUser` 兼容入口不再参与该流程，也不再维护独立 TargetMode 分支。Hand-card target release、probe-only 状态和 full-hand card affordance 都以 `UBattleSession::ValidateTargetWithCard()` 的 reject reason 为准，first-person hand bridge 不再直接读取卡牌 `TargetMode` 来判断 hand-card 目标规则。
 
-当玩家拖拽手牌并指向敌人部位或目标手牌时，first-person hand bridge 会把当前 `CardInstanceId + TargetHandle` 交给 `UBattleSession::BuildCardTargetPreview()`。Battle 返回的 `FBattleCardTargetPreview` 是只读规则 facts；App 侧随后用 `WacomBattleCardPresentation::BuildTargetPreviewPresentation()` 一次性生成 hand layer entries、源卡详情和可选目标手牌详情。源卡卡面徽章和详情正文显示目标修正后的主效果最终值；被强化 / 削弱的数值通过 RichText `ValueBuffed / ValueNerfed` 样式提示，不显示 `基础值 -> 预览值` 公式。若 preview 最终值不同于基础值，详情 value run 会隐藏 “相当于当前费用 / 相当于目标状态层数” 等来源短语，只保留最终值，避免来源文案和目标修正事实冲突。若目标是手牌，目标卡自己的卡面费用可以显示预测后的费用，但详情不生成 `[费] before -> after` 文本。preview 不提交命令、不模拟完整出牌事件链、不修改 Battle state。
+当玩家拖拽手牌并指向敌人部位、目标手牌，或无目标卡已经达到 `ArmedForCommit` 可释放状态时，first-person hand bridge 会把当前 `CardInstanceId + TargetHandle` 交给 `UBattleSession::BuildCardActionPreview()`。Battle 返回的 `FBattleCardActionPreview` 是只读规则 facts；它内嵌 `FBattleCardTargetPreview`，App 侧随后用 `WacomBattleCardPresentation::BuildActionPreviewPresentation()` 一次性生成 hand layer entries、源卡详情、可选目标手牌详情、玩家 projected state 和敌人部位 projected state。源卡卡面徽章和详情正文仍复用 target preview facts 显示目标修正后的主效果最终值；被强化 / 削弱的数值通过 RichText `ValueBuffed / ValueNerfed` 样式提示，不显示 `基础值 -> 预览值` 公式。若 preview 最终值不同于基础值，详情 value run 会隐藏 “相当于当前费用 / 相当于目标状态层数” 等来源短语，只保留最终值，避免来源文案和目标修正事实冲突。若目标是手牌，目标卡自己的卡面费用可以显示预测后的费用，但详情不生成 `[费] before -> after` 文本。preview 不提交命令、不修改 Battle state，也不在 UI 里重新计算伤害、护盾、状态、先机或敌人行动。
 
-拖拽 release、cancel、离开目标、候选目标无效或 UI state 退出时，bridge 会清理 preview entries，恢复基础 hand entries 和当前详情。Scene enemy hover / TargetSelect hover 也先构建同一份 `FWacomBattleCardTargetPreviewPresentation` 再应用：场景目标反馈仍由 enemy presentation component 负责，卡面和详情只消费该 presentation，不在 hover / drag 两条路径里重复拼。Preview semantic state 由 snapshot version、source id、目标身份和 preview facts hash 组成；同一 state 上的高频 hover / drag move 只允许更新指针反馈、敌人 hover 和详情位置，hand layer preview entries 与详情数据必须等 preview semantic state 变化后再重建。Active drag 期间，目标手牌 preview 的生命周期由 bridge 保存的 `ActiveDragView.CurrentTarget` / target preview state 决定，SlotWidget 重建或 hover/unhover 抖动不能作为清理 preview 的权威信号。
+Action Preview 的数值显示只在“有效释放语义”成立时启用：目标合法或无目标卡已经 armed、当前规则阶段是 `PlayerAction`、源卡通过完整 PlayCard preflight，且 `BuildCardActionPreview()` 生成 projected values。拖出手牌区但还没达到无目标提交距离、还没指向有效目标、目标无效或规则阶段不可提交时，不显示玩家侧收益或敌人净结果，只保留 hand / scene target 的轻量可作用对象提示。有效敌人部位目标上，`UPlayerStatusBar` 直接覆盖显示 projected HP / Shield / runtime statuses，`UWacomBattleEnemyPartEntryWidget` 直接覆盖显示 projected HP / Shield / Initiative / runtime statuses / destroyed；无目标卡的 projected player state 同样直接覆盖玩家状态条。所有预览都不显示箭头、公式、来源文案或 `+N/-N`。敌人部位若会因本次打牌立即行动，部位 UI 的先机显示为 `0`，代表“松手后会出手”，不显示行动后刷新出的下一意图先机。first-person 拖拽命中有效场景目标时，HUD 会把规则层返回的全部 projected enemy parts 应用到敌人聚合面板和场景部位 prediction badge；这意味着同一次出牌会触发多个部位行动时，非当前鼠标指向部位也会显示 projected 先机 / 行动风险。TargetSelect hover probe 只刷新目标预览和敌人面板，不打开场景部位 action preview badge，避免普通 hover 与正式拖拽释放预览混淆。
+
+拖拽 release、cancel、离开目标、候选目标无效、snapshot version 变化、BattleEnd 或 UI state 退出时，bridge / runtime 会清理 preview entries 和 action preview，恢复基础 hand entries、当前详情、玩家状态条和敌人部位条目。Scene enemy hover / TargetSelect hover 也先构建同一份 `FWacomBattleActionPreviewPresentation` 再应用：场景目标反馈仍由 enemy presentation component 负责，卡面、详情、玩家状态条和敌人面板只消费该 presentation，不在 hover / drag 两条路径里重复拼。Preview semantic state 由 snapshot version、source id、目标身份和 preview facts hash 组成；同一 state 上的高频 hover / drag move 只允许更新指针反馈、敌人 hover 和详情位置，hand layer preview entries 与详情数据必须等 preview semantic state 变化后再重建。Active drag 期间，目标手牌 preview 的生命周期由 bridge 保存的 `ActiveDragView.CurrentTarget` / target preview state 决定，SlotWidget 重建或 hover/unhover 抖动不能作为清理 preview 的权威信号。
 
 `FirstPersonCardDetailViewportZOrder / FirstPersonCardDetailAnchorBaseSize` 属于 `Wacom|Battle|First Person Card Layer|Authoring`。第一人称手牌交互开关由当前 runtime source owner 通过 `SetFirstPersonCardLayerInteractionEnabled()` / `IsFirstPersonCardLayerInteractionEnabled()` 控制；Anchor 上旧的 `bEnableBattleHandInteraction` / BattleHand 命名 getter 只作为旧资产和旧 Blueprint 兼容别名保留。
 
@@ -199,7 +201,7 @@ Battle hand 入场音效同样属于 first-person card layer 表现层。`Drawn 
 
 ## §8 Battle Shared Widgets
 
-BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命令、不修改规则状态。玩家和敌人 runtime 状态共用 `UWacomBattleStatusIconListWidget / UWacomBattleStatusIconWidget`：控件只消费 Snapshot / ViewData 中的 `Statuses / StatusStacks`，图标 Brush 由 WBP 变量配置，`Status.Shield` 仍由 HP / Shield UI 单独显示。状态图标控件提供 design-time preview 字段，方便在 UMG 视口调图标和层数；这些预览字段不进入运行时规则数据。
+BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命令、不修改规则状态。玩家和敌人 runtime 状态共用 `UWacomBattleStatusIconListWidget / UWacomBattleStatusIconWidget`：控件只消费 Snapshot / ViewData 中的 `Statuses / StatusStacks`，图标 Brush 由 WBP 变量配置，`Status.Shield` 仍由 HP / Shield UI 单独显示。状态图标控件提供 design-time preview 字段，方便在 UMG 视口调图标和层数；这些预览字段不进入运行时规则数据。Action Preview 激活时，玩家状态条和敌人部位条目读取 `WacomBattle` 产出的 projected state 覆盖当前显示；清理后恢复最近一次真实 Snapshot / ViewData。
 
 | 控件 | 分类 | 语义 |
 |---|---|---|

@@ -7,26 +7,28 @@
 
 struct FBattleEventBus;
 struct FBattleState;
+class IBattleOperationAdapter;
 
 /**
- * 手牌卡完成区域移动后的事件/被动收口。
+ * 迁移期的“状态已移动”事件/被动收口层。
  *
- * DeckService / HandZoneService 只负责状态搬区；本服务在调用方完成搬区后统一发事件、
- * 触发 OnDiscard，并按批次发 HandZoneChanged。
+ * 只接受调用方已经完成状态迁移后得到的真实成功 ID。新增规则路径必须优先走
+ * FBattleCardZoneTransition，不要直接调用本服务；剩余旧调用迁移完成后删除。
  */
 class FHandZoneMoveEventService
 {
 public:
-	static void ResolveDiscardedFromHand(
+	static void FinalizeAlreadyMovedDiscards(
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const TArray<FGuid>& DiscardedCardIds,
 		EHandCardZoneMoveReason Reason,
 		const FGuid& SourceCardId = FGuid(),
 		const FGameplayTag& EffectTag = FGameplayTag(),
-		EHandLimitDiscardSource HandLimitSource = EHandLimitDiscardSource::None);
+		EHandLimitDiscardSource HandLimitSource = EHandLimitDiscardSource::None,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
 
-	static void ResolveExhaustedFromHand(
+	static void FinalizeAlreadyMovedExhausts(
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const TArray<FGuid>& ExhaustedCardIds,

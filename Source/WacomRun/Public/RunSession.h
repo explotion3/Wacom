@@ -575,10 +575,17 @@ public:
 	 *
 	 * ShopId 使用场景商店/节点的 PersistentId。第一次打开该 ShopId 时用传入 Offers 初始化库存；
 	 * 之后重复打开同一 ShopId 会保留既有库存和已购买状态，忽略新的 Offers。
+	 * 已有 active shop visit 时拒绝重入，必须先结束当前访问。
 	 * 打开商店不消耗节点，关闭时若本次访问买过至少一件商品才消耗 1 节点。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	bool BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
+
+	/** C++ UI ownership token for the currently active shop visit. */
+	FGuid GetActiveShopVisitToken() const { return ActiveShopVisitToken; }
+
+	/** Ends the shop visit only when the caller still owns the active visit token. */
+	bool EndShopVisitIfOwned(FGuid VisitToken);
 
 	/**
 	 * 结束当前商店访问并清理访问标记。
@@ -628,9 +635,16 @@ public:
 	 *
 	 * PersistentId 使用场景事件 Actor 的持久化 ID；EventDefinition 只提供静态事件图。
 	 * 已完成的 PersistentId 当前拒绝再次打开。
+	 * 已有 active RunEvent visit 时拒绝重入，必须先结束当前访问。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
 	bool BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition);
+
+	/** C++ UI ownership token for the currently active RunEvent visit. */
+	FGuid GetActiveRunEventVisitToken() const { return ActiveRunEventVisitToken; }
+
+	/** Ends the RunEvent only when the caller still owns the active visit token. */
+	bool EndRunEventIfOwned(FGuid VisitToken);
 
 	/** 结束当前事件访问，不改变完成状态。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
@@ -862,6 +876,10 @@ private:
 	uint64 BackpackStorageSnapshotRevision = 0;
 	uint64 ShopSnapshotRevision = 0;
 	uint64 EconomySnapshotRevision = 0;
+
+	/** Transient UI ownership; never serialized as RunState/SaveGame data. */
+	FGuid ActiveShopVisitToken;
+	FGuid ActiveRunEventVisitToken;
 
 	int32 RunStateNotificationDeferralDepth = 0;
 	bool bRunStateNotificationPending = false;

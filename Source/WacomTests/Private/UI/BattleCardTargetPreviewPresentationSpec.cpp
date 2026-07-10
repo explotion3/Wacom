@@ -10,6 +10,8 @@
 #include "Cards/CardEffect.h"
 #include "Characters/CharacterDefinition.h"
 #include "Commands/BattleCommand.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/TextBlock.h"
 #include "Components/PrimitiveComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -25,6 +27,7 @@
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Battle/BattlePresentationStackEntryWidget.h"
+#include "UI/Battle/PlayerStatusBar.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
@@ -195,6 +198,29 @@ namespace
 		DragView.PointerNormalizedViewportPosition = FVector2D::ZeroVector;
 		DragView.bHasPointerViewportPosition = true;
 		return DragView;
+	}
+
+	FWacomFirstPersonCardDragView MakeNoTargetCommitDragViewForTargetPreviewPresentation(
+		const FGuid& CardInstanceId,
+		const FVector2D& SourceSlotPosition = FVector2D(500.0f, 600.0f))
+	{
+		FWacomFirstPersonCardDragView DragView;
+		DragView.CardInstanceId = CardInstanceId;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::ArmedForCommit;
+		DragView.bCommitArmed = true;
+		DragView.SourceSlotView =
+			MakeProjectedSlotForTargetPreviewPresentation(CardInstanceId, SourceSlotPosition);
+		DragView.PressScreenPosition = SourceSlotPosition;
+		DragView.CurrentScreenPosition = FVector2D(SourceSlotPosition.X, SourceSlotPosition.Y - 140.0f);
+		DragView.PointerViewportPosition = DragView.CurrentScreenPosition;
+		DragView.PointerNormalizedViewportPosition = FVector2D::ZeroVector;
+		DragView.bHasPointerViewportPosition = false;
+		return DragView;
+	}
+
+	UTextBlock* FindTextBlockForTargetPreviewPresentation(UWidgetTree* WidgetTree, FName WidgetName)
+	{
+		return WidgetTree ? Cast<UTextBlock>(WidgetTree->FindWidget(WidgetName)) : nullptr;
 	}
 
 	FCardEffect MakePreviewPresentationEffect(
@@ -668,5 +694,104 @@ bool FWacomUIBattleFirstPersonHandCardPreviewShowsOnFirstUpdateSpec::RunTest(con
 	TestTrue(TEXT("Source detail uses section document data"),
 		HUD->GetFirstPersonCardDetailDataForTest().Sections.Num() > 0);
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleFirstPersonNoTargetCommitShowsPlayerActionPreviewSpec,
+	"Wacom.UI.Battle.FirstPersonTargetPreview.NoTargetCommitShowsPlayerActionPreview",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleFirstPersonNoTargetCommitShowsPlayerActionPreviewSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = FindAutomationWorldForTargetPreviewPresentation();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UCardDefinition* ShieldCard = Fixture.MakeNoopCard(/*Cost*/0);
+	ShieldCard->CardId = TEXT("UI.TargetPreview.NoTargetShield");
+	ShieldCard->TargetMode = ECardTargetMode::None;
+	FCardEffect ShieldEffect;
+	ShieldEffect.EffectType = WacomTags::Status_Shield;
+	ShieldEffect.Magnitude = 10;
+	ShieldEffect.Target = WacomTags::Target_Player;
+	ShieldCard->Effects = { ShieldEffect };
+
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0);
+	UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
+		Fixture.MakeNoopCard(0),
+		Fixture.MakeNoopCard(0),
+		{ ShieldCard, Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) });
+	UBattleSession* Session = Fixture.CreateSession(CharacterDefinition, Enemy, /*Seed*/1);
+	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid SourceCardId =
+		FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ShieldCard->CardId);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	UWacomBattleHUDDetailTest* HUD = Harness ? Harness->HUD() : nullptr;
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("HUD"), HUD)
+		|| !TestTrue(TEXT("Source card exists"), SourceCardId.IsValid()))
+	{
+		return false;
+	}
+	if (!TestNotNull(TEXT("First-person character"), Harness->AttachFirstPersonCharacter()))
+	{
+		return false;
+	}
+
+	HUD->TakeWidget();
+	UPlayerStatusBar* PlayerStatusBar = Harness->AttachPlayerStatusBar();
+	if (!TestNotNull(TEXT("PlayerStatusBar"), PlayerStatusBar))
+	{
+		return false;
+	}
+	Harness->SetSession(Session);
+	SettleBattlePresentationQueueForTargetPreviewPresentation(*HUD);
+	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
+
+	UTextBlock* ShieldText =
+		FindTextBlockForTargetPreviewPresentation(PlayerStatusBar->WidgetTree, TEXT("ShieldText"));
+	if (!TestNotNull(TEXT("ShieldText"), ShieldText))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardDragView DragView =
+		MakeNoTargetCommitDragViewForTargetPreviewPresentation(SourceCardId);
+	const FWacomBattleCardDropResolveResult DropResult =
+		HUD->ResolveFirstPersonCardDropIntentForTest(SourceCardId, DragView);
+	TestEqual(TEXT("No-target commit resolves play intent"),
+		DropResult.IntentKind,
+		EWacomBattleCardDropIntentKind::PlayCardNoTarget);
+	TestTrue(TEXT("No-target commit can submit"), DropResult.bCanSubmit);
+
+	HUD->HandleFirstPersonCardDragUpdatedForTest(SourceCardId, DragView);
+
+	TestEqual(TEXT("No-target action preview applies projected shield"),
+		ShieldText->GetText().ToString(),
+		FString(TEXT("护盾 10")));
+	TestEqual(TEXT("No-target action preview makes shield text visible"),
+		ShieldText->GetVisibility(),
+		ESlateVisibility::HitTestInvisible);
+	TestTrue(TEXT("No-target action preview applies preview opacity"),
+		PlayerStatusBar->GetRenderOpacity() < 1.0f);
+
+	PlayerStatusBar->SetRenderOpacity(0.33f);
+	HUD->HandleFirstPersonCardDragUpdatedForTest(SourceCardId, DragView);
+	TestEqual(TEXT("Equivalent no-target preview does not reapply player preview"),
+		PlayerStatusBar->GetRenderOpacity(),
+		0.33f);
+
+	DragView.GestureState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
+	DragView.bCommitArmed = false;
+	HUD->HandleFirstPersonCardDragUpdatedForTest(SourceCardId, DragView);
+	TestEqual(TEXT("Leaving commit-ready clears player preview opacity"),
+		PlayerStatusBar->GetRenderOpacity(),
+		1.0f);
 	return true;
 }

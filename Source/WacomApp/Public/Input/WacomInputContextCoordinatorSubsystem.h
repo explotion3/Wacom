@@ -48,6 +48,10 @@ public:
 	bool ShouldShowMouseCursorForCurrentContextForTest() const;
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend class FWacomUITestAccess;
+#endif
+
 	struct FInteractionEventLease
 	{
 		TWeakObjectPtr<UObject> Owner;
@@ -68,6 +72,10 @@ private:
 	bool bApplyingInputContext = false;
 	bool bExplorationMappingActive = false;
 	bool bBattleMappingActive = false;
+
+#if WITH_AUTOMATION_TESTS
+	TFunction<void(bool, const UInputMappingContext*, int32)> MappingOperationObserverForTest;
+#endif
 
 	TArray<FInteractionEventLease> InteractionLeases;
 	bool bHasSavedInteractionEventState = false;

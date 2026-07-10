@@ -103,7 +103,8 @@ namespace
 		const FCardEffect& Effect,
 		int32 FinalMag,
 		const FGuid& SelfCardId,
-		const FGuid& LastShuffledCardId)
+		const FGuid& LastShuffledCardId,
+		IBattleOperationAdapter* OperationAdapter)
 	{
 		Ctx.State              = &State;
 		Ctx.Events             = &Events;
@@ -115,6 +116,7 @@ namespace
 		Ctx.MetaTag            = Effect.TargetZone;
 		Ctx.ExcludeHandCardId  = SelfCardId;
 		Ctx.LastShuffledCardId = LastShuffledCardId;
+		Ctx.OperationAdapter   = OperationAdapter;
 	}
 }
 
@@ -126,7 +128,8 @@ void FCardEffectDispatcher::Execute(
 	const FGuid& SelectedPartId,
 	const FGuid& SelfCardId,
 	FGuid& InOutLastShuffledCardId,
-	const FGuid& SelectedHandCardId)
+	const FGuid& SelectedHandCardId,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	const int32 FinalMag = FCardEffectMagnitudeEvaluator::ComputeFinalMagnitude(
 		State,
@@ -149,7 +152,15 @@ void FCardEffectDispatcher::Execute(
 			}
 
 			FEffectContext Ctx;
-			FillCommonContext(Ctx, State, Events, Effect, FinalMag, SelfCardId, InOutLastShuffledCardId);
+			FillCommonContext(
+				Ctx,
+				State,
+				Events,
+				Effect,
+				FinalMag,
+				SelfCardId,
+				InOutLastShuffledCardId,
+				OperationAdapter);
 			Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
 			Ctx.TargetInstanceId = Part.InstanceId;
 
@@ -166,7 +177,15 @@ void FCardEffectDispatcher::Execute(
 	}
 
 	FEffectContext Ctx;
-	FillCommonContext(Ctx, State, Events, Effect, FinalMag, SelfCardId, InOutLastShuffledCardId);
+	FillCommonContext(
+		Ctx,
+		State,
+		Events,
+		Effect,
+		FinalMag,
+		SelfCardId,
+		InOutLastShuffledCardId,
+		OperationAdapter);
 	FillTargetFromCardEffect(Ctx, Effect, SelectedPartId, SelfCardId, InOutLastShuffledCardId, SelectedHandCardId);
 
 	FEffectExecutor::Execute(Ctx);

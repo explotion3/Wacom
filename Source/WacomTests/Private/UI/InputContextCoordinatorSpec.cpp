@@ -10,6 +10,7 @@
 #include "InputCoreTypes.h"
 #include "InputMappingContext.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
+#include "UI/WacomUITestAccess.h"
 
 namespace WacomInputContextSpec
 {
@@ -92,6 +93,177 @@ bool FWacomInputContextBattleRestoresExplorationTest::RunTest(const FString& Par
 	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
 	TestTrue(TEXT("Exploration returns to visible cursor profile"), Harness.Coordinator->ShouldShowMouseCursorForCurrentContextForTest());
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomInputContextReplacesActiveExplorationMappingTest,
+	"Wacom.UI.InputContext.ReplacesActiveExplorationMapping",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomInputContextReplacesActiveExplorationMappingTest::RunTest(const FString& Parameters)
+{
+	struct FMappingOperation
+	{
+		bool bAdded = false;
+		const UInputMappingContext* MappingContext = nullptr;
+		int32 Priority = INDEX_NONE;
+	};
+
+	WacomInputContextSpec::FCoordinatorHarness Harness;
+	if (!TestNotNull(TEXT("Input coordinator"), Harness.Coordinator.Get()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UInputMappingContext> OldExplorationContext(NewObject<UInputMappingContext>());
+	TStrongObjectPtr<UInputMappingContext> NewExplorationContext(NewObject<UInputMappingContext>());
+	TArray<FMappingOperation> Operations;
+	FWacomUITestAccess::SetInputMappingOperationObserver(
+		*Harness.Coordinator,
+		[&Operations](const bool bAdded, const UInputMappingContext* MappingContext, const int32 Priority)
+		{
+			Operations.Add({bAdded, MappingContext, Priority});
+		});
+
+	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Exploration);
+	Harness.Coordinator->SetMappingContexts(OldExplorationContext.Get(), nullptr);
+	if (!TestEqual(TEXT("Initial exploration context is added once"), Operations.Num(), 1))
+	{
+		FWacomUITestAccess::SetInputMappingOperationObserver(*Harness.Coordinator, {});
+		return false;
+	}
+	TestTrue(TEXT("Initial operation adds the old exploration context"),
+		Operations[0].bAdded && Operations[0].MappingContext == OldExplorationContext.Get());
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(OldExplorationContext.Get(), nullptr);
+	TestEqual(TEXT("Reapplying the same active exploration context is a no-op"), Operations.Num(), 0);
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(NewExplorationContext.Get(), nullptr);
+
+	if (TestEqual(TEXT("Replacing an active context removes old then adds new"), Operations.Num(), 2))
+	{
+		TestTrue(TEXT("Old exploration context is removed first"),
+			!Operations[0].bAdded && Operations[0].MappingContext == OldExplorationContext.Get());
+		TestTrue(TEXT("New exploration context is added second"),
+			Operations[1].bAdded
+			&& Operations[1].MappingContext == NewExplorationContext.Get()
+			&& Operations[1].Priority == 0);
+	}
+
+	TestEqual(TEXT("Flow remains exploration after replacement"),
+		Harness.Coordinator->GetFlowContext(), EWacomInputFlowContext::Exploration);
+	TestTrue(TEXT("Exploration mapping remains active after replacement"),
+		FWacomUITestAccess::IsExplorationMappingActive(*Harness.Coordinator));
+	TestEqual(TEXT("Configured exploration context becomes the replacement"),
+		FWacomUITestAccess::GetExplorationMappingContext(*Harness.Coordinator),
+		static_cast<const UInputMappingContext*>(NewExplorationContext.Get()));
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(nullptr, nullptr);
+	if (TestEqual(TEXT("Clearing an active exploration context removes it once"), Operations.Num(), 1))
+	{
+		TestTrue(TEXT("Clearing removes the replacement exploration context"),
+			!Operations[0].bAdded && Operations[0].MappingContext == NewExplorationContext.Get());
+	}
+	TestFalse(TEXT("Exploration mapping becomes inactive after clearing"),
+		FWacomUITestAccess::IsExplorationMappingActive(*Harness.Coordinator));
+	TestNull(TEXT("Configured exploration context is cleared"),
+		FWacomUITestAccess::GetExplorationMappingContext(*Harness.Coordinator));
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(nullptr, nullptr);
+	TestEqual(TEXT("Reapplying null exploration context is a no-op"), Operations.Num(), 0);
+
+	FWacomUITestAccess::SetInputMappingOperationObserver(*Harness.Coordinator, {});
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomInputContextReplacesActiveBattleMappingTest,
+	"Wacom.UI.InputContext.ReplacesActiveBattleMapping",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomInputContextReplacesActiveBattleMappingTest::RunTest(const FString& Parameters)
+{
+	struct FMappingOperation
+	{
+		bool bAdded = false;
+		const UInputMappingContext* MappingContext = nullptr;
+		int32 Priority = INDEX_NONE;
+	};
+
+	WacomInputContextSpec::FCoordinatorHarness Harness;
+	if (!TestNotNull(TEXT("Input coordinator"), Harness.Coordinator.Get()))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UInputMappingContext> OldBattleContext(NewObject<UInputMappingContext>());
+	TStrongObjectPtr<UInputMappingContext> NewBattleContext(NewObject<UInputMappingContext>());
+	TArray<FMappingOperation> Operations;
+	FWacomUITestAccess::SetInputMappingOperationObserver(
+		*Harness.Coordinator,
+		[&Operations](const bool bAdded, const UInputMappingContext* MappingContext, const int32 Priority)
+		{
+			Operations.Add({bAdded, MappingContext, Priority});
+		});
+
+	Harness.Coordinator->SetFlowContext(EWacomInputFlowContext::Battle);
+	Harness.Coordinator->SetMappingContexts(nullptr, OldBattleContext.Get());
+	if (!TestEqual(TEXT("Initial battle context is added once"), Operations.Num(), 1))
+	{
+		FWacomUITestAccess::SetInputMappingOperationObserver(*Harness.Coordinator, {});
+		return false;
+	}
+	TestTrue(TEXT("Initial operation adds the old battle context at battle priority"),
+		Operations[0].bAdded
+		&& Operations[0].MappingContext == OldBattleContext.Get()
+		&& Operations[0].Priority == 1);
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(nullptr, OldBattleContext.Get());
+	TestEqual(TEXT("Reapplying the same active battle context is a no-op"), Operations.Num(), 0);
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(nullptr, NewBattleContext.Get());
+	if (TestEqual(TEXT("Replacing an active battle context removes old then adds new"), Operations.Num(), 2))
+	{
+		TestTrue(TEXT("Old battle context is removed first"),
+			!Operations[0].bAdded && Operations[0].MappingContext == OldBattleContext.Get());
+		TestTrue(TEXT("New battle context is added second"),
+			Operations[1].bAdded
+			&& Operations[1].MappingContext == NewBattleContext.Get()
+			&& Operations[1].Priority == 1);
+	}
+
+	TestEqual(TEXT("Flow remains battle after replacement"),
+		Harness.Coordinator->GetFlowContext(), EWacomInputFlowContext::Battle);
+	TestTrue(TEXT("Battle mapping remains active after replacement"),
+		FWacomUITestAccess::IsBattleMappingActive(*Harness.Coordinator));
+	TestEqual(TEXT("Configured battle context becomes the replacement"),
+		FWacomUITestAccess::GetBattleMappingContext(*Harness.Coordinator),
+		static_cast<const UInputMappingContext*>(NewBattleContext.Get()));
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(nullptr, nullptr);
+	if (TestEqual(TEXT("Clearing an active battle context removes it once"), Operations.Num(), 1))
+	{
+		TestTrue(TEXT("Clearing removes the replacement battle context"),
+			!Operations[0].bAdded && Operations[0].MappingContext == NewBattleContext.Get());
+	}
+	TestFalse(TEXT("Battle mapping becomes inactive after clearing"),
+		FWacomUITestAccess::IsBattleMappingActive(*Harness.Coordinator));
+	TestNull(TEXT("Configured battle context is cleared"),
+		FWacomUITestAccess::GetBattleMappingContext(*Harness.Coordinator));
+
+	Operations.Reset();
+	Harness.Coordinator->SetMappingContexts(nullptr, nullptr);
+	TestEqual(TEXT("Reapplying null battle context is a no-op"), Operations.Num(), 0);
+
+	FWacomUITestAccess::SetInputMappingOperationObserver(*Harness.Coordinator, {});
 	return true;
 }
 

@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "Events/BattleEvent.h"
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
+#include "UI/Battle/WacomBattleEnemyPanelViewData.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionTypes.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
@@ -79,6 +80,12 @@ struct WACOMAPP_API FWacomBattleEnemyPartPresentationDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	FWacomBattleEnemyPartPredictionView PredictionView;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bActionPreviewPartActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FWacomBattleEnemyPartEntryViewData ActionPreviewPartView;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	FName PredictionWidgetName = NAME_None;
@@ -170,6 +177,8 @@ public:
 		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput =
 			FWacomBattleEnemyPartDragPredictionDebugInput());
 	void ClearHoverProbeState(FName Reason = NAME_None);
+	void SetActionPreviewPartView(const FWacomBattleEnemyPartEntryViewData& InPreviewView);
+	void ClearActionPreviewPartView();
 	void SetPredictionWidgetComponent(UWidgetComponent* InPredictionWidgetComponent);
 	void SetBadgeLayoutDebugState(int32 InStaggerIndex);
 	void ClearPredictionDisplay(FName Reason = NAME_None);
@@ -187,6 +196,7 @@ private:
 	void ApplyPredictionViewToWidget();
 	FWacomBattleEnemyPartPredictionView BuildPredictionView(
 		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput) const;
+	FWacomBattleEnemyPartPredictionView BuildActionPreviewPredictionView() const;
 	void ApplyPersistentScaleState();
 	void BeginScaleFeedback(float ScaleMultiplier, float HoldSeconds);
 	void ClearScaleFeedback();
@@ -214,10 +224,12 @@ private:
 	bool bHasCachedBaseScale = false;
 	bool bDragPreviewActive = false;
 	bool bHoverProbeActive = false;
+	bool bActionPreviewPartActive = false;
 	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	FWacomBattleEnemyPartDragPredictionDebugInput LastDragPredictionDebugInput;
 	FWacomBattleEnemyPartDragPredictionDebugInput LastHoverPredictionInput;
+	FWacomBattleEnemyPartEntryViewData ActionPreviewPartView;
 	FWacomBattleEnemyPartPredictionView CurrentPredictionView;
 	FVector PredictionBadgeBaseRelativeLocation = FVector::ZeroVector;
 	bool bHasPredictionBadgeBaseRelativeLocation = false;

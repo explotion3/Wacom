@@ -124,7 +124,8 @@ void FInitiativeResolver::ResolvePerfectRelease(
 	int32 RuntimeCost,
 	const TArray<FGuid>& HitPartIds,
 	const FGuid& CardId,
-	bool bSwift)
+	bool bSwift,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	if (bSwift) { return; }
 	if (Def.PerfectReleaseEffects.IsEmpty()) { return; }
@@ -148,7 +149,11 @@ void FInitiativeResolver::ResolvePerfectRelease(
 		for (const FCardEffect& Eff : Def.PerfectReleaseEffects)
 		{
 			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				/*SelectedPartId=*/PartId, CardId, LocalLastShuffledCardId);
+				/*SelectedPartId=*/PartId,
+				CardId,
+				LocalLastShuffledCardId,
+				FGuid(),
+				OperationAdapter);
 		}
 	}
 }

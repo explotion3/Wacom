@@ -1,8 +1,10 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Core/BattleResolver.h"
+#include "Core/BattleOperationAdapter.h"
 #include "Core/BattleState.h"
 #include "Commands/BattleCommand.h"
+#include "Commands/PlayCardEvaluation.h"
 #include "Commands/PlayCardResolver.h"
 #include "Commands/WaitResolver.h"
 #include "Commands/EndTurnResolver.h"
@@ -24,7 +26,25 @@ FWacomStatus FBattleResolver::Resolve(
 		return FKnockdownChoiceResolver::Resolve(State, Events, Command);
 	}
 
-	// 其余命令仅在 PlayerAction 阶段。
+	// PlayCard 的完整可提交性只由 PlayCard Evaluation 判断。
+	if (Command.Type == EBattleCommandType::PlayCard)
+	{
+		const FPlayCardCommitResult Evaluation =
+			FPlayCardEvaluator::EvaluateCommit(State, Command);
+		if (!Evaluation.CanCommit())
+		{
+			return Evaluation.GetStatus();
+		}
+
+		FFormalBattleOperationAdapter OperationAdapter;
+		return FPlayCardResolver::ResolvePrepared(
+			State,
+			Events,
+			Evaluation.GetPrepared(),
+			OperationAdapter);
+	}
+
+	// Wait / EndTurn / 未知普通命令仅在 PlayerAction 阶段。
 	// Setup / TurnStart / TurnEnd / PendingKnockdownChoice / BattleEnd 阶段由 Session 内部状态机推进。
 	if (State.Phase != EBattlePhase::PlayerAction)
 	{
@@ -33,9 +53,6 @@ FWacomStatus FBattleResolver::Resolve(
 
 	switch (Command.Type)
 	{
-	case EBattleCommandType::PlayCard:
-		return FPlayCardResolver::Resolve(State, Events, Command);
-
 	case EBattleCommandType::Wait:
 		return FWaitResolver::Resolve(State, Events, Command);
 

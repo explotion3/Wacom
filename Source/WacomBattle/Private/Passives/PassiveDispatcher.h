@@ -7,6 +7,7 @@
 struct FBattleState;
 struct FBattleEventBus;
 struct FRuntimeCardInstance;
+class IBattleOperationAdapter;
 
 /**
  * 卡牌被动触发调度器。
@@ -31,7 +32,8 @@ public:
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const FRuntimeCardInstance& Card,
-		int32 RuntimeCost);
+		int32 RuntimeCost,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
 
 	/**
 	 * 检查所有拥有 OnCompanionCount 被动的卡：
@@ -42,7 +44,10 @@ public:
 	 *
 	 * 触发后立即执行普通卡手牌上限，超限卡进入弃牌堆。
 	 */
-	static void RunOnCompanionCount(FBattleState& State, FBattleEventBus& Events);
+	static void RunOnCompanionCount(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
 
 	/**
 	 * 回合开始时触发所有拥有 OnTurnStart 被动的卡。
@@ -66,5 +71,9 @@ public:
 	  * 某张卡被弃掉时触发该卡的 OnDiscard 被动。
 	 * 调用点：HandZoneMoveEventService，在卡已经从手牌进入弃牌堆之后。
 	  */
-	static void RunOnDiscard(FBattleState& State, FBattleEventBus& Events, const FGuid& DiscardedCardId);
+	static void RunOnDiscard(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FGuid& DiscardedCardId,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
 };

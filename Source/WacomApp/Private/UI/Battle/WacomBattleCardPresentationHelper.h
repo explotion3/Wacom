@@ -2,8 +2,10 @@
 
 #pragma once
 
+#include "Resolution/BattleCardActionPreview.h"
 #include "Resolution/BattleCardTargetPreview.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "UI/Battle/WacomBattleEnemyPanelViewData.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
@@ -33,6 +35,15 @@ struct FWacomBattleCardTargetPreviewPresentation
 	FWacomCardDetailViewData SourceCardDetailViewData;
 	bool bHasTargetHandCardDetailViewData = false;
 	FWacomCardDetailViewData TargetHandCardDetailViewData;
+};
+
+struct FWacomBattleActionPreviewPresentation
+{
+	bool bHasPreview = false;
+	FWacomBattleCardTargetPreviewPresentation TargetPreviewPresentation;
+	bool bHasProjectedPlayer = false;
+	FPlayerSnapshot ProjectedPlayer;
+	TArray<FWacomBattleEnemyPartEntryViewData> ProjectedEnemyParts;
 };
 
 namespace WacomBattleCardPresentation
@@ -69,4 +80,8 @@ namespace WacomBattleCardPresentation
 	FWacomBattleCardTargetPreviewPresentation BuildTargetPreviewPresentation(
 		const FBattleSnapshot& Snapshot,
 		const FBattleCardTargetPreview& TargetPreview);
+	FWacomBattleActionPreviewPresentation BuildActionPreviewPresentation(
+		const FBattleSnapshot& Snapshot,
+		const FBattleCardActionPreview& ActionPreview,
+		bool bBuildTargetPreviewPresentation = true);
 }

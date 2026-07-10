@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-06-24
+updated: 2026-07-10
 tags:
   - wacom/battle
   - wacom/rules
@@ -44,9 +44,12 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `FBattleResultPacket` | BattleEnd 后给 Run 层消费的战后包 |
 | `BattleCommandPipeline` | 拦截 BattleEnd、分派 resolver、维护版本兜底和击倒请求 |
 | `BattleResolver` | PlayCard / Wait / EndTurn / KnockdownChoice 调度入口 |
+| `PlayCardEvaluator` | 唯一 PlayCard Evaluation Implementation；只读求值源卡、目标、费用、当前可提交性和 Prepared PlayCard |
+| `PlayCardResolver` | 唯一 PlayCard Transaction Implementation；只消费 Prepared PlayCard，不重复前置规则 |
 | `CardEffectDispatcher` | Target 映射、条件、Magnitude 和 Effect 执行分发 |
-| `EffectExecutor` | 按 `EffectTag -> Handler` 注册制执行效果 |
+| `EffectSemanticsRegistry / EffectExecutor` | 集中维护 `EffectTag -> Handler / determinism / authoring support` 事实，并按 operation adapter 决定执行或标记未决 |
 | `HandZoneService` | 手牌区域、上限和腾挪规则 |
+| `BattleCardZoneTransition` | Private 的卡牌区域迁移事务；当前统一三个 Effect 的真实移动、Location、事件、OnDiscard 和批次顺序 |
 | `EnemyIntentSelector` | 按 BehaviorDefinition / phase / intent set / selector rule 刷新敌方部位当前意图 |
 | `EnemyPartActionResolver` | 敌方部位行动子流程 |
 | `BattleResultPacketBuilder` | 从 `BattleState` 构造战后包 |
@@ -62,6 +65,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `UBattleSession::ConsumePresentationJournal()` | 输出并清空自上次成功命令以来的表现 checkpoint journal；与事件一样只消费一次 |
 | `UBattleSession::BuildPendingKnockdownChoiceView()` | 输出当前击倒选择 ViewData；UI 不解析事件 `Count` 位掩码 |
 | `UBattleSession::BuildCardTargetPreview()` | 输出单张手牌对候选目标的只读目标预览 facts；不提交命令、不改 BattleState |
+| `UBattleSession::BuildCardActionPreview()` | 输出松手后可确定的 projected player / enemy part values；不展开随机结果、不改 BattleState |
 | `UBattleSession::BuildResultPacket()` | BattleEnd 后输出战后包；具体 Run 结算见 [WacomRun §10](./WacomRun.md#wacomrun-battle-settlement) |
 
 `SubmitCommand()` 是同步规则结算入口。命令成功后，`BattleState`、Snapshot 派生事实和事件列表立即更新。
@@ -88,6 +92,10 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 | `SingleEnemyPart` | `TargetEnemyPartKey` | 目标 key 必须解析到当前战斗中未破坏的敌方部位 |
 | `HandCard` | `TargetCardInstanceId` | 目标必须是另一张当前手牌；拒绝 self、无效 ID、已离开手牌的卡 |
 
+Private `FPlayCardEvaluator` 是上述前置规则的唯一 Implementation。Target Probe 和 Preview Candidate 只读求值源卡与结构性目标，不校验阶段或费用；正式提交与 Action Preview 共享 Commit Evaluation，按 `Phase -> Command 形状 -> Source 存在 -> Hand -> Definition -> TargetMode/目标 -> Cost` 的固定顺序产生 Prepared PlayCard。目标类型不匹配时优先返回 `UnsupportedWorldTarget / UnsupportedCardTarget`，然后才进入具体 ID、self、区域和关键词资格判断；源卡已离手时优先于缺少 Definition 拒绝。
+
+Prepared PlayCard 只保存状态版本、规范化命令、运行时费用、Anchor / Swift / Combo 和目标稳定身份，不携带可变 runtime 指针。它只能交给 `FPlayCardResolver` 执行；若 `StateVersion` 已变，会在发布事件、消耗 RNG 或修改状态前以 `InvalidState / StalePlayCardEvaluation` 拒绝。
+
 `TargetMode=HandCard` 会把玩家选中的目标手牌作为 `Target.SelectedHandCard` 传给主效果链。基础资格由 `UCardDefinition::HandCardTargetFilter` 决定：
 
 - 显式开启 `bUseExplicitHandCardTargetFilter` 时，`bAllowNormalHandCards / bAllowHandAnchors` 直接决定普通手牌和左右手锚点是否可选。
@@ -99,17 +107,23 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 
 当前 `Effect.Card.AddCost / Effect.Card.ReduceCost` 可精确作用到目标手牌；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 可把选中的普通手牌移入弃牌堆 / 消耗牌堆。费用、卡牌类型、区域、伙伴 / 食物专用属性等更复杂筛选属于后续扩展方向。
 
-`UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读校验入口，返回 `FWacomBattleTargetValidationResult`。调用方读取 `bCanTarget` 判断是否可选，并可使用 `RejectReason / DebugSummary / ResolvedPartKey` 做 UI 反馈和排查；不再保留 bool-only 兼容入口。
+`UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读 Target Probe 入口，返回 `FWacomBattleTargetValidationResult`。它严格回答一个具体显式目标是否与源卡兼容：`None / Self` 不接受显式对象，`AllEnemyParts` 仅接受可解析的存活敌人部位。调用方读取 `bCanTarget` 判断是否可选，并可使用 `RejectReason / DebugSummary / ResolvedPartKey` 做 UI 反馈和排查；不再保留 bool-only 兼容入口。
 
-`UBattleSession::BuildCardTargetPreview(CardInstanceId, TargetHandle)` 是 Battle 卡牌目标预览的 public 入口。它先复用目标校验，再返回 `FBattleCardTargetPreview`：validation、源卡运行时费用 / 迅捷事实、目标类型、resolved enemy part 或 target hand card，以及每个主效果的 preview magnitude / skip facts。该 API 只读，不触发事件、不修改手牌 / 敌人 / 状态，也不模拟整次 `PlayCard` 事务。
+`UBattleSession::BuildCardTargetPreview(CardInstanceId, TargetHandle)` 是 Battle 卡牌目标预览的 public 入口。它消费 PlayCard Evaluation 生成的 Preview Candidate，再返回 `FBattleCardTargetPreview`：validation、源卡运行时费用 / 迅捷事实、规范化执行绑定、可选 Preview Focus，以及每个主效果的 preview magnitude / skip facts。该 Interface 只读，不触发事件、不修改手牌 / 敌人 / 状态，也不模拟整次 `PlayCard` 事务。
 
 敌人部位目标的 preview 归 `WacomBattle` 计算，复用 private 规则路径：`MagnitudeResolver`、`ConditionResolver`、`MagnitudeModifiers`、武器容量伤害 +3、伤害 clamp，并与正式结算共享最终 Magnitude helper。App / Widget 只能把这些 facts 转成卡面和详情 ViewData，不能复制或重算战斗规则。
 
-手牌目标的 preview 第一版只覆盖主效果摘要：`Effect.Card.AddCost / Effect.Card.ReduceCost` 预测目标卡费用变化；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected / Effect.Card.GainKeyword` 返回结构化动作事实。它不执行真实移动、不写临时关键词、不触发后续事件链。`AllEnemyParts` 在 hover 某个部位时按当前指向的单部位生成 preview；全体目标聚合预览属于后续扩展。
+手牌目标的 preview 第一版只覆盖主效果摘要：`Effect.Card.AddCost / Effect.Card.ReduceCost` 预测目标卡费用变化；`Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected / Effect.Card.GainKeyword` 返回结构化动作事实。它不执行真实移动、不写临时关键词、不触发后续事件链。`None / Self / AllEnemyParts` 的规范化命令始终清空显式目标字段；`None / Self` 不生成 Preview Focus，`AllEnemyParts` 仅把有效存活敌人部位作为单部位表现摘要的 Focus，无效 Focus 被忽略且不改变结构性合法性。全体目标聚合预览属于后续扩展。
 
-Battle world target 按 handle 上的 `EncounterId + EnemySlotId + PartSlotId` 构造 `FBattleEnemyPartKey` 并定位。`WorldTargetId`（runtime GUID）只作为表现层目标 cue / debug 的运行时校验字段；如果 handle 同时携带 runtime GUID 和稳定 key，两者必须指向同一部位，否则返回 `TargetIdentityMismatch`。`FBattleCommand` 不再接受 runtime part GUID 或 slot 字段作为敌方目标，最终提交统一使用 `TargetEnemyPartKey`。
+`UBattleSession::BuildCardActionPreview(CardInstanceId, TargetHandle)` 是 Battle 数值预览入口。它内嵌 `FBattleCardTargetPreview`，并与 Target Preview 共享内部 Preview Candidate 求值；随后执行与正式提交相同的 Commit Evaluation，在复制的 `BattleState` 上把 Prepared PlayCard 交给 `PlayCardResolver`，并使用 deterministic preview adapter。因此正式提交和 Action Preview 只维护一份前置规则与一份 PlayCard Transaction 顺序。Action Preview 只有在当前阶段是 `PlayerAction`，且源卡、目标和费用等完整提交前置条件全部通过时才成立；非 `PlayerAction` 阶段仍可保留独立 Target Preview，但 `bHasPreview=false` 且不返回 projected values。
 
-Validation 只解释“这个目标能不能被这张卡作用”。它不校验费用、UI 状态、动画队列或命令提交时机；最终提交仍由 `PlayCardResolver` 再校验。`FWacomBattleTargetValidationResult` 会回填 `ResolvedPartKey`，并保留 `ResolvedPartInstanceId / ResolvedPartIdentity` 作为表现 cue / debug 投影。
+Action Preview 的 projected facts 来自副本事务完成后的 Snapshot diff。返回内容包括玩家 HP / Shield / runtime statuses 和敌人部位 HP / Shield / Initiative / runtime statuses / destroyed；preview 从副本事件流中的 `EnemyPartActed` 识别所有会行动的部位，不限于鼠标当前指向的目标。会行动部位的显示先机固定为 `0`，并保留行动前的当前意图，不预测或展示行动后刷新出的下一意图。
+
+Action Preview 只投影当前规则层已经能确定的事实。`EffectSemanticsRegistry` 是 Effect handler、authoring support 和 preview determinism 的唯一分类事实；`Damage`、`Heal`、`Status.Shield`、`ApplyStatus.*`、`RemoveStatus`、`ModifyInitiative` 以及确定性的选中手牌操作继续经过正式 `CardEffectDispatcher / EffectExecutor` 作用到副本。`Draw`、随机 `Discard`、三类随机 Shuffle 和未知 Effect 会由 preview adapter 跳过，并写入 `bHasUnresolvedFacts / UnresolvedEffectTypes`；该 adapter 会继续透传到 `OnDiscard` 等嵌套被动，避免随机后续漏过过滤。`Passive.Trigger.OnCompanionCount` 的随机回手在发现实际候选后整体标记为未决并停止，不执行随机插牌、手牌上限弃牌或由此产生的 `OnDiscard` 后续；这类非 Effect 直接规则可令 `bHasUnresolvedFacts=true` 而不向 legacy 命名的 `UnresolvedEffectTypes` 填入伪造 EffectTag。UI 只能消费 `FBattleCardActionPreview`，不能在 `WacomApp` 或 Widget 中重新计算伤害、护盾、先机、状态或敌人行动。
+
+Battle world target 按 handle 上的 `EncounterId + EnemySlotId + PartSlotId` 构造 `FBattleEnemyPartKey` 并定位。稳定 key 是执行权威；`WorldTargetId`（runtime GUID）只作为表现层目标 cue / debug 的运行时校验字段。如果 runtime GUID 解析到另一个当前部位，返回 `TargetIdentityMismatch`；无法解析的 runtime GUID 不覆盖有效稳定 key。`FBattleCommand` 不再接受 runtime part GUID 或 slot 字段作为敌方目标，最终提交统一使用 `TargetEnemyPartKey`。
+
+Target Probe 只解释“这个显式对象能不能被这张卡作用”，不校验费用、UI 状态、动画队列或命令提交时机。`FWacomBattleTargetValidationResult` 会回填 `ResolvedPartKey`，并保留 `ResolvedPartInstanceId / ResolvedPartIdentity` 作为表现 cue / debug 投影。`BuildCardActionPreview` 使用 Commit Evaluation 补齐阶段和费用等完整提交条件：费用不足时把内嵌 validation 标记为 `NotEnoughInitiative`；非 `PlayerAction` 等其它不可提交状态保留独立目标合法性，但不生成 Action Preview projected values。
 
 ## §4 战斗流程
 
@@ -119,7 +133,7 @@ Validation 只解释“这个目标能不能被这张卡作用”。它不校验
 敌人初始化 -> 起始阶段 -> 执行阶段 -> 结束阶段 -> 若战斗未结束，回到起始阶段
 ```
 
-PlayCard resolver 当前顺序：
+Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 只执行 Prepared PlayCard 以下顺序：
 
 1. 发射 `CardPlayed`。
 2. 执行 `ZoneHook.OnPlay`。
@@ -211,6 +225,8 @@ PlayCard resolver 当前顺序：
 - `HandZoneChanged` 只表示手牌区需要刷新，不承载具体弃牌语义。
 
 `OnDiscard` 表示“本卡被弃掉”，不表示“任何进入弃牌堆”。会触发的路径包括 `Effect.Discard`、`Effect.Card.DiscardSelected`、普通手牌上限弃牌和回合结束非保留普通卡弃牌。普通打出进入本回合使用牌堆、回合结束自然转入弃牌堆、`Effect.Card.ExhaustSelected` 和 `Effect.ExhaustSelf` 不触发 `OnDiscard`。
+
+当前 `Effect.Discard / Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 统一进入 Private `BattleCardZoneTransition`。它只为真正从 Hand 完成迁移并同步 Runtime `Location` 的卡牌发布事件；批量弃牌会先完成整批状态迁移，再逐张执行 `CardDiscarded -> OnDiscard`，最后只发一次 `HandZoneChanged`。显式消耗按 `CardExhausted -> HandZoneChanged` 发布，不执行 `OnDiscard`。该事务不会重复调用 operation adapter 的执行判定，只把同一个 adapter 继续传给弃牌后的嵌套效果链，因此正式提交和 Action Preview 仍共享同一条规则路径。
 
 腾挪会重新放置当前手牌中的普通卡，使其进入不同区域或同一区域随机位置。默认不选择左右手锚点。左手牌或右手牌离开手牌区时，双手区立刻失效；左右手牌都不在时，所有普通卡 `Zone=None`，腾挪不可用。
 

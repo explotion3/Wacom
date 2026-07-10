@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-run
 status: active
-updated: 2026-06-08
+updated: 2026-07-10
 tags:
   - wacom/run
   - wacom/rules
@@ -221,6 +221,8 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 关闭商店时，如果本次访问买过至少一件商品，统一消耗 1 节点。
 - 没买东西就关闭，不消耗节点。
 - `ShopId == NAME_None`、无效 Offer、重复购买、商品为空、负价格、金币不足等失败路径不修改 RunState。
+- 同一时刻只能存在一个 active shop visit；重入 Begin 会被 Run 层拒绝，不依赖旧 UI 先完成关闭。
+- App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；迟到的旧 Screen 不得结束新访问。token 不进入 RunState/SaveGame。
 
 当前 `ShopStates` 只保存在 Run 内存态，不写入 SaveGame。Actor 商品来源、Definition 字段和 Validate Map/Level 口径见 [WacomData.md](./WacomData.md)、[WacomDataAuthoring.md](./WacomDataAuthoring.md) 和 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
@@ -236,9 +238,11 @@ RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，�
 
 - `PersistentId == NAME_None` 或定义为空时拒绝打开。
 - 已完成事件拒绝重复打开。
+- 同一时刻只能存在一个 active RunEvent visit；重入 Begin 会被 Run 层拒绝。
 - 打开事件不消耗节点。
 - 只有选项 Effects 配置 `ConsumeNode` 时才消耗节点。
 - 关闭事件只清 active 标记，不改变完成状态。
+- App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；token 不进入 RunState/SaveGame。
 
 当前条件：
 
@@ -266,6 +270,8 @@ RunEvent 的移除卡搜索四个物理持有区：`Backpack`、`BattleDeck`、`
 RunFlag 是当前 Run 内的轻量 bool/set 记忆。`RunFlagSet / RunFlagNotSet` 条件和 `SetRunFlag / ClearRunFlag` 效果都使用 `FlagId`。RunFlag 不是 GameplayTag，不是数值变量，当前不写入 SaveGame。`SetRunFlag / ClearRunFlag` 在 RunEvent working-state 事务内执行；后续 effect 失败时会和其他前置效果一起回滚。
 
 `FRunEventChoiceSnapshot::Requirements` 和 `Consequences` 是结构化预览事实。它们记录条件是否满足、支付需求、后果意图、节点跳转和事件结束预览；不模拟金币 clamp、行动点跨时段、副作用压力或后续效果失败。Snapshot 的 `bAvailable / DisabledReason` 也只是当前刷新时刻的展示事实，不能作为 UI 提交前的最终 veto。真实结果仍以提交后的 `FRunEventChoiceResult` 和事务状态为准。
+
+RunEvent Choice Evaluation 的唯一 Implementation 位于 `WacomRun/Private/Events/FRunEventExecutor`。它按 Definition 顺序生成全部 condition requirement facts，固定第一条失败 condition 的 reason，并把 Owned Card Payment requirement 追加在末尾；Snapshot、普通提交、支付预检和正式支付提交都复用这份求值。正式入口每次都针对最新 `FRunState` 重新求值，不读取旧 Snapshot 作为授权。支付选项同时配置 `RemoveCard` effect 属于互斥制作错误，Snapshot、支付预检和正式提交都会返回 `PaymentChoiceHasRemoveCardEffect`。Effects、Consequences 和 working-state 回滚不属于 Choice Evaluation。
 
 卡牌支付通过 active GameMenu 的 Run menu zone drop 提交：`FWacomRunFirstPersonCardDropCoordinator` 负责命中、preview 和分发，`AWacomPlayerController` 只提供输入/查询上下文，`UWacomRunEventScreen` 接管 release 并调用 `URunSession::ChooseRunEventOptionWithPaidCardResult()`。支付 UI、menu lease 和 drop target 合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target) 与 [WacomUI.md](./WacomUI.md)。
 

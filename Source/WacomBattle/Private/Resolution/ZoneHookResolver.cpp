@@ -32,7 +32,8 @@ void FZoneHookResolver::RunOnPlayHooks(
 	const UCardDefinition& Def,
 	int32 RuntimeCost,
 	const FGuid& SelectedPartId,
-	const FGuid& CardId)
+	const FGuid& CardId,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	const EHandZone CurrentZone = FHandZoneService::GetZoneOf(State, CardId);
 	if (CurrentZone == EHandZone::None) { return; }
@@ -48,7 +49,7 @@ void FZoneHookResolver::RunOnPlayHooks(
 		for (const FCardEffect& Eff : Hook.ExtraEffects)
 		{
 			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				SelectedPartId, CardId, LastShuffledCardId);
+				SelectedPartId, CardId, LastShuffledCardId, FGuid(), OperationAdapter);
 		}
 	}
 }

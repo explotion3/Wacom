@@ -12,7 +12,7 @@ class UWacomShopScreen;
 /** Private workflow helper for ShopScreen command/settlement behavior. */
 struct FWacomShopScreenFlow
 {
-	static void EndShopVisitOnDeactivate(URunSession* Run, bool& bDidEndShopVisit);
+	static void EndShopVisitOnDeactivate(URunSession* Run, FGuid VisitToken, bool& bDidEndShopVisit);
 
 	static bool PurchaseOffer(
 		UWacomShopScreen& Screen,

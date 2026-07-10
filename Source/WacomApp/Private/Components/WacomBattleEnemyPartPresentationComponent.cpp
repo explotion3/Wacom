@@ -15,6 +15,49 @@
 
 #define LOCTEXT_NAMESPACE "WacomBattleEnemyPartPresentation"
 
+namespace
+{
+	bool AreStatusStacksEquivalent(
+		const TMap<FGameplayTag, int32>& Left,
+		const TMap<FGameplayTag, int32>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (const TPair<FGameplayTag, int32>& Pair : Left)
+		{
+			const int32* RightValue = Right.Find(Pair.Key);
+			if (!RightValue || *RightValue != Pair.Value)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool AreActionPreviewPartViewsEquivalent(
+		const FWacomBattleEnemyPartEntryViewData& Left,
+		const FWacomBattleEnemyPartEntryViewData& Right)
+	{
+		return Left.PartInstanceId == Right.PartInstanceId
+			&& Left.Identity == Right.Identity
+			&& Left.EnemySlotId == Right.EnemySlotId
+			&& Left.PartSlotId == Right.PartSlotId
+			&& Left.CurrentHp == Right.CurrentHp
+			&& Left.MaxHp == Right.MaxHp
+			&& Left.Shield == Right.Shield
+			&& Left.CurrentInitiative == Right.CurrentInitiative
+			&& Left.RuntimeStatuses.Num() == Right.RuntimeStatuses.Num()
+			&& Left.RuntimeStatuses.HasAllExact(Right.RuntimeStatuses)
+			&& Right.RuntimeStatuses.HasAllExact(Left.RuntimeStatuses)
+			&& AreStatusStacksEquivalent(Left.RuntimeStatusStacks, Right.RuntimeStatusStacks)
+			&& Left.bDestroyed == Right.bDestroyed
+			&& Left.bActionPreviewWillAct == Right.bActionPreviewWillAct;
+	}
+}
+
 UWacomBattleEnemyPartPresentationComponent::UWacomBattleEnemyPartPresentationComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -158,6 +201,32 @@ void UWacomBattleEnemyPartPresentationComponent::ClearHoverProbeState(FName Reas
 	RefreshPredictionDisplay();
 }
 
+void UWacomBattleEnemyPartPresentationComponent::SetActionPreviewPartView(
+	const FWacomBattleEnemyPartEntryViewData& InPreviewView)
+{
+	if (bActionPreviewPartActive
+		&& AreActionPreviewPartViewsEquivalent(ActionPreviewPartView, InPreviewView))
+	{
+		return;
+	}
+
+	ActionPreviewPartView = InPreviewView;
+	bActionPreviewPartActive = true;
+	RefreshPredictionDisplay();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::ClearActionPreviewPartView()
+{
+	if (!bActionPreviewPartActive)
+	{
+		return;
+	}
+
+	bActionPreviewPartActive = false;
+	ActionPreviewPartView = FWacomBattleEnemyPartEntryViewData();
+	RefreshPredictionDisplay();
+}
+
 void UWacomBattleEnemyPartPresentationComponent::SetPredictionWidgetComponent(
 	UWidgetComponent* InPredictionWidgetComponent)
 {
@@ -204,6 +273,8 @@ UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugV
 	View.HoverWorldTargetId = HoverWorldTargetId;
 	View.HoverScreenPosition = HoverScreenPosition;
 	View.PredictionView = CurrentPredictionView;
+	View.bActionPreviewPartActive = bActionPreviewPartActive;
+	View.ActionPreviewPartView = ActionPreviewPartView;
 	if (const UWidgetComponent* PredictionWidget = PredictionWidgetComponent.Get())
 	{
 		View.PredictionWidgetName = FName(*PredictionWidget->GetName());
@@ -258,7 +329,11 @@ void UWacomBattleEnemyPartPresentationComponent::RefreshPredictionDisplay()
 		return;
 	}
 
-	if (bDragPreviewActive)
+	if (bActionPreviewPartActive)
+	{
+		CurrentPredictionView = BuildActionPreviewPredictionView();
+	}
+	else if (bDragPreviewActive)
 	{
 		CurrentPredictionView = BuildPredictionView(LastDragPredictionDebugInput);
 	}
@@ -369,6 +444,29 @@ FWacomBattleEnemyPartPredictionView UWacomBattleEnemyPartPresentationComponent::
 	else if (View.bActionRisk)
 	{
 		View.DetailText = LOCTEXT("ActionRisk", "行动风险");
+	}
+	return View;
+}
+
+FWacomBattleEnemyPartPredictionView UWacomBattleEnemyPartPresentationComponent::BuildActionPreviewPredictionView() const
+{
+	FWacomBattleEnemyPartPredictionView View;
+	View.bVisible = true;
+	View.Mode = EWacomBattleEnemyPartPredictionMode::CardPrediction;
+	View.CurrentInitiative = CurrentInitiative;
+	View.PredictedInitiative = ActionPreviewPartView.CurrentInitiative;
+	View.bActionRisk = ActionPreviewPartView.bActionPreviewWillAct;
+	View.MainText = FText::Format(
+		LOCTEXT("ActionPreviewPredictionFmt", "先机 {0} -> {1}"),
+		FText::AsNumber(CurrentInitiative),
+		FText::AsNumber(ActionPreviewPartView.CurrentInitiative));
+	if (ActionPreviewPartView.bActionPreviewWillAct)
+	{
+		View.DetailText = LOCTEXT("ActionPreviewActionRisk", "行动风险");
+	}
+	else if (ActionPreviewPartView.bDestroyed)
+	{
+		View.DetailText = LOCTEXT("ActionPreviewDestroyed", "将被破坏");
 	}
 	return View;
 }

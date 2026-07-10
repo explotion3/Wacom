@@ -104,6 +104,50 @@ namespace
 			Slot->SetVerticalAlignment(VAlign_Center);
 		}
 	}
+
+	bool AreStatusStacksEquivalent(
+		const TMap<FGameplayTag, int32>& Left,
+		const TMap<FGameplayTag, int32>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (const TPair<FGameplayTag, int32>& Pair : Left)
+		{
+			const int32* RightValue = Right.Find(Pair.Key);
+			if (!RightValue || *RightValue != Pair.Value)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool ArePartEntryViewsEquivalent(
+		const FWacomBattleEnemyPartEntryViewData& Left,
+		const FWacomBattleEnemyPartEntryViewData& Right)
+	{
+		return Left.PartInstanceId == Right.PartInstanceId
+			&& Left.Identity == Right.Identity
+			&& Left.EnemySlotId == Right.EnemySlotId
+			&& Left.PartSlotId == Right.PartSlotId
+			&& Left.PartDisplayName.EqualTo(Right.PartDisplayName)
+			&& Left.CurrentHp == Right.CurrentHp
+			&& Left.MaxHp == Right.MaxHp
+			&& Left.Shield == Right.Shield
+			&& Left.CurrentInitiative == Right.CurrentInitiative
+			&& Left.CurrentIntentDisplayName.EqualTo(Right.CurrentIntentDisplayName)
+			&& Left.CurrentIntentInitiative == Right.CurrentIntentInitiative
+			&& Left.CurrentIntentResistanceValue == Right.CurrentIntentResistanceValue
+			&& Left.RuntimeStatuses.Num() == Right.RuntimeStatuses.Num()
+			&& Left.RuntimeStatuses.HasAllExact(Right.RuntimeStatuses)
+			&& Right.RuntimeStatuses.HasAllExact(Left.RuntimeStatuses)
+			&& AreStatusStacksEquivalent(Left.RuntimeStatusStacks, Right.RuntimeStatusStacks)
+			&& Left.bDestroyed == Right.bDestroyed
+			&& Left.bActionPreviewWillAct == Right.bActionPreviewWillAct;
+	}
 }
 
 void UWacomBattleEnemyPartEntryWidget::SetPartEntryViewData(const FWacomBattleEnemyPartEntryViewData& InView)
@@ -138,6 +182,34 @@ void UWacomBattleEnemyPartEntryWidget::SetPartEntryViewData(const FWacomBattleEn
 	{
 		StartFallbackPulseAnimation(FLinearColor(0.30f, 0.70f, 1.0f, 1.0f), 0.70f);
 	}
+}
+
+const FWacomBattleEnemyPartEntryViewData& UWacomBattleEnemyPartEntryWidget::GetEffectivePartEntryViewData() const
+{
+	return bHasActionPreview ? ActionPreviewView : CurrentView;
+}
+
+void UWacomBattleEnemyPartEntryWidget::SetActionPreview(const FWacomBattleEnemyPartEntryViewData& InPreviewView)
+{
+	if (bHasActionPreview && ArePartEntryViewsEquivalent(ActionPreviewView, InPreviewView))
+	{
+		return;
+	}
+
+	ActionPreviewView = InPreviewView;
+	bHasActionPreview = true;
+	RefreshText();
+}
+
+void UWacomBattleEnemyPartEntryWidget::ClearActionPreview()
+{
+	if (!bHasActionPreview)
+	{
+		return;
+	}
+
+	bHasActionPreview = false;
+	RefreshText();
 }
 
 TSharedRef<SWidget> UWacomBattleEnemyPartEntryWidget::RebuildWidget()
@@ -283,7 +355,8 @@ void UWacomBattleEnemyPartEntryWidget::NativeRefreshFromSnapshot(const FBattleSn
 
 void UWacomBattleEnemyPartEntryWidget::RefreshText()
 {
-	const bool bDestroyed = CurrentView.bDestroyed;
+	const FWacomBattleEnemyPartEntryViewData& View = GetEffectivePartEntryViewData();
+	const bool bDestroyed = View.bDestroyed;
 
 	if (EntryBackground)
 	{
@@ -292,7 +365,7 @@ void UWacomBattleEnemyPartEntryWidget::RefreshText()
 
 	if (PartNameText)
 	{
-		PartNameText->SetText(CurrentView.PartDisplayName.IsEmpty() ? FText::FromName(CurrentView.PartSlotId) : CurrentView.PartDisplayName);
+		PartNameText->SetText(View.PartDisplayName.IsEmpty() ? FText::FromName(View.PartSlotId) : View.PartDisplayName);
 		PartNameText->SetColorAndOpacity(FSlateColor(bDestroyed
 			? FLinearColor(0.64f, 0.62f, 0.58f, 1.0f)
 			: FLinearColor(0.96f, 0.92f, 0.82f, 1.0f)));
@@ -300,7 +373,7 @@ void UWacomBattleEnemyPartEntryWidget::RefreshText()
 
 	if (StatsText)
 	{
-		StatsText->SetText(FText::FromString(FString::Printf(TEXT("HP %d/%d  SH %d  INIT %d"), CurrentView.CurrentHp, CurrentView.MaxHp, CurrentView.Shield, CurrentView.CurrentInitiative)));
+		StatsText->SetText(FText::FromString(FString::Printf(TEXT("HP %d/%d  SH %d  INIT %d"), View.CurrentHp, View.MaxHp, View.Shield, View.CurrentInitiative)));
 		const bool bHasStructuredStats = HpText || ShieldText || InitiativeText;
 		StatsText->SetVisibility(bUsingGeneratedFallbackLayout || bHasStructuredStats
 			? ESlateVisibility::Collapsed
@@ -309,42 +382,42 @@ void UWacomBattleEnemyPartEntryWidget::RefreshText()
 
 	if (HpText)
 	{
-		HpText->SetText(FText::FromString(FString::Printf(TEXT("%d/%d"), CurrentView.CurrentHp, CurrentView.MaxHp)));
+		HpText->SetText(FText::FromString(FString::Printf(TEXT("%d/%d"), View.CurrentHp, View.MaxHp)));
 	}
 
 	if (ShieldText)
 	{
-		ShieldText->SetText(CurrentView.Shield > 0
-			? FText::AsNumber(CurrentView.Shield)
+		ShieldText->SetText(View.Shield > 0
+			? FText::AsNumber(View.Shield)
 			: FText::GetEmpty());
-		ShieldText->SetVisibility(CurrentView.Shield > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		ShieldText->SetVisibility(View.Shield > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
 	if (ShieldPill)
 	{
-		ShieldPill->SetVisibility(CurrentView.Shield > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		ShieldPill->SetVisibility(View.Shield > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 
 	if (InitiativeText)
 	{
-		InitiativeText->SetText(FText::AsNumber(CurrentView.CurrentInitiative));
+		InitiativeText->SetText(FText::AsNumber(View.CurrentInitiative));
 	}
 
 	if (IntentText)
 	{
-		if (CurrentView.CurrentIntentDisplayName.IsEmpty())
+		if (View.CurrentIntentDisplayName.IsEmpty())
 		{
 			IntentText->SetText(FText::FromString(TEXT("No intent")));
 		}
 		else
 		{
-			IntentText->SetText(FText::FromString(FString::Printf(TEXT("%s  %d"), *CurrentView.CurrentIntentDisplayName.ToString(), CurrentView.CurrentIntentInitiative)));
+			IntentText->SetText(FText::FromString(FString::Printf(TEXT("%s  %d"), *View.CurrentIntentDisplayName.ToString(), View.CurrentIntentInitiative)));
 		}
 	}
 
 	if (StatusList)
 	{
-		StatusList->SetStatuses(CurrentView.RuntimeStatuses, CurrentView.RuntimeStatusStacks);
+		StatusList->SetStatuses(View.RuntimeStatuses, View.RuntimeStatusStacks);
 		if (StatusText)
 		{
 			StatusText->SetVisibility(ESlateVisibility::Collapsed);
@@ -352,7 +425,7 @@ void UWacomBattleEnemyPartEntryWidget::RefreshText()
 	}
 	else if (StatusText)
 	{
-		const FText Status = BuildStatusText();
+		const FText Status = BuildStatusText(View);
 		StatusText->SetText(Status);
 		StatusText->SetVisibility(Status.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
 	}
@@ -365,11 +438,11 @@ void UWacomBattleEnemyPartEntryWidget::RefreshText()
 	ApplyFallbackMotionVisual();
 }
 
-FText UWacomBattleEnemyPartEntryWidget::BuildStatusText() const
+FText UWacomBattleEnemyPartEntryWidget::BuildStatusText(const FWacomBattleEnemyPartEntryViewData& View) const
 {
 	TArray<FString> Parts;
 	TArray<FGameplayTag> Tags;
-	CurrentView.RuntimeStatuses.GetGameplayTagArray(Tags);
+	View.RuntimeStatuses.GetGameplayTagArray(Tags);
 	Tags.Sort([](const FGameplayTag& A, const FGameplayTag& B)
 	{
 		return A.GetTagName().LexicalLess(B.GetTagName());
@@ -377,7 +450,7 @@ FText UWacomBattleEnemyPartEntryWidget::BuildStatusText() const
 
 	for (const FGameplayTag& Tag : Tags)
 	{
-		const int32* Stack = CurrentView.RuntimeStatusStacks.Find(Tag);
+		const int32* Stack = View.RuntimeStatusStacks.Find(Tag);
 		const int32 StackCount = Stack ? *Stack : 0;
 		const FString StatusName = UWacomBattleEventPresentationBuilder::FormatStatusName(Tag);
 		Parts.Add(StackCount > 1 ? FString::Printf(TEXT("%s x%d"), *StatusName, StackCount) : StatusName);
@@ -413,12 +486,15 @@ void UWacomBattleEnemyPartEntryWidget::StartFallbackPulseAnimation(
 
 float UWacomBattleEnemyPartEntryWidget::GetFallbackBaseOpacity() const
 {
-	return CurrentView.bDestroyed ? 0.64f : 1.0f;
+	const FWacomBattleEnemyPartEntryViewData& View = GetEffectivePartEntryViewData();
+	const float PreviewOpacity = bHasActionPreview ? ActionPreviewRenderOpacity : 1.0f;
+	return (View.bDestroyed ? 0.64f : 1.0f) * PreviewOpacity;
 }
 
 FLinearColor UWacomBattleEnemyPartEntryWidget::GetFallbackBaseBackgroundColor() const
 {
-	return CurrentView.bDestroyed
+	const FWacomBattleEnemyPartEntryViewData& View = GetEffectivePartEntryViewData();
+	return View.bDestroyed
 		? FLinearColor(0.045f, 0.048f, 0.055f, 0.82f)
 		: FLinearColor(0.095f, 0.11f, 0.13f, 0.92f);
 }

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "Input/Events.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
@@ -113,6 +114,11 @@ public:
 		Widget.TickToasts(DeltaTime);
 	}
 
+	static int32 GetEffectiveToastCapacity(const UWacomAppToastWidget& Widget)
+	{
+		return Widget.GetEffectiveMaxVisibleMessages();
+	}
+
 	static void SetToastWidget(UWacomAppToastSubsystem& Subsystem, UWacomAppToastWidget* Widget)
 	{
 		Subsystem.ToastWidget = Widget;
@@ -131,6 +137,35 @@ public:
 		const APlayerController* CurrentPC)
 	{
 		return Subsystem.IsToastOwnerPairUsable(WidgetWorld, WidgetOwner, CurrentWorld, CurrentPC);
+	}
+
+	static void SetInputMappingOperationObserver(
+		UWacomInputContextCoordinatorSubsystem& Coordinator,
+		TFunction<void(bool, const UInputMappingContext*, int32)> Observer)
+	{
+		Coordinator.MappingOperationObserverForTest = MoveTemp(Observer);
+	}
+
+	static bool IsExplorationMappingActive(const UWacomInputContextCoordinatorSubsystem& Coordinator)
+	{
+		return Coordinator.bExplorationMappingActive;
+	}
+
+	static const UInputMappingContext* GetExplorationMappingContext(
+		const UWacomInputContextCoordinatorSubsystem& Coordinator)
+	{
+		return Coordinator.ExplorationMappingContext;
+	}
+
+	static bool IsBattleMappingActive(const UWacomInputContextCoordinatorSubsystem& Coordinator)
+	{
+		return Coordinator.bBattleMappingActive;
+	}
+
+	static const UInputMappingContext* GetBattleMappingContext(
+		const UWacomInputContextCoordinatorSubsystem& Coordinator)
+	{
+		return Coordinator.BattleMappingContext;
 	}
 
 };

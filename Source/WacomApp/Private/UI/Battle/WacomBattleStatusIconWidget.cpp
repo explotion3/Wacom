@@ -85,6 +85,27 @@ namespace
 		TextBlock->SetShadowOffset(FVector2D(0.0f, 1.0f));
 		TextBlock->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.65f));
 	}
+
+	bool AreStatusIconViewsEquivalent(
+		const TArray<FWacomBattleStatusIconView>& Left,
+		const TArray<FWacomBattleStatusIconView>& Right)
+	{
+		if (Left.Num() != Right.Num())
+		{
+			return false;
+		}
+
+		for (int32 Index = 0; Index < Left.Num(); ++Index)
+		{
+			if (Left[Index].StatusTag != Right[Index].StatusTag
+				|| Left[Index].StackCount != Right[Index].StackCount
+				|| !Left[Index].DisplayName.EqualTo(Right[Index].DisplayName))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 }
 
 void UWacomBattleStatusIconWidget::SetStatusIconView(const FWacomBattleStatusIconView& InView)
@@ -225,7 +246,15 @@ void UWacomBattleStatusIconListWidget::SetStatuses(
 	const FGameplayTagContainer& InStatuses,
 	const TMap<FGameplayTag, int32>& InStatusStacks)
 {
-	CurrentViews = BuildStatusIconViews(InStatuses, InStatusStacks);
+	TArray<FWacomBattleStatusIconView> NextViews =
+		BuildStatusIconViews(InStatuses, InStatusStacks);
+	if (bHasAssignedStatusIconViews
+		&& AreStatusIconViewsEquivalent(CurrentViews, NextViews))
+	{
+		return;
+	}
+
+	CurrentViews = MoveTemp(NextViews);
 	bHasAssignedStatusIconViews = true;
 	RefreshDisplay();
 }

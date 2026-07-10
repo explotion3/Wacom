@@ -91,7 +91,8 @@ void UWacomAppToastWidget::PushToast(const FWacomAppToastView& View)
 		return;
 	}
 
-	while (ActiveViews.Num() >= MaxVisibleMessages)
+	const int32 EffectiveMaxVisibleMessages = GetEffectiveMaxVisibleMessages();
+	while (ActiveViews.Num() >= EffectiveMaxVisibleMessages)
 	{
 		RemoveAt(0);
 	}
@@ -175,4 +176,9 @@ void UWacomAppToastWidget::HandleQueueEmpty()
 	{
 		SetVisibility(ESlateVisibility::Collapsed);
 	}
+}
+
+int32 UWacomAppToastWidget::GetEffectiveMaxVisibleMessages() const
+{
+	return FMath::Max(1, MaxVisibleMessages);
 }

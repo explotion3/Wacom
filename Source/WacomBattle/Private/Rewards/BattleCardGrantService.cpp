@@ -52,7 +52,7 @@ FBattleCardGrantResult FBattleCardGrantService::GrantCardToHand(
 		Events.Emit(Ev);
 	}
 
-	FHandZoneMoveEventService::ResolveDiscardedFromHand(
+	FHandZoneMoveEventService::FinalizeAlreadyMovedDiscards(
 		State,
 		Events,
 		Result.DiscardedByLimit,

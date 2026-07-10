@@ -295,6 +295,7 @@ private:
 
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	void ApplyLayerVisibility();
+	void ReleaseOwnedSlateMouseCapture();
 	void BindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
 	void UnbindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
 	void ClearHoveredCardTargetState(bool bBroadcastUnhover);

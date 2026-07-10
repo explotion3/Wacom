@@ -43,6 +43,8 @@ namespace
 		case EWacomBattleTargetRejectReason::SourceCardNotInHand:
 		case EWacomBattleTargetRejectReason::SourceCardMissingDefinition:
 			return EWacomBattleCardDropRejectReason::SourceCardInvalid;
+		case EWacomBattleTargetRejectReason::NotEnoughInitiative:
+			return EWacomBattleCardDropRejectReason::SourceCardNotPlayable;
 		case EWacomBattleTargetRejectReason::UnsupportedWorldTarget:
 		case EWacomBattleTargetRejectReason::InvalidWorldTarget:
 		case EWacomBattleTargetRejectReason::TargetIdentityMismatch:

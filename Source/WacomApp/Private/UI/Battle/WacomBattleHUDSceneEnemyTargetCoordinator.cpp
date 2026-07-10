@@ -9,6 +9,7 @@
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Resolution/BattleCardActionPreview.h"
 #include "Resolution/BattleCardTargetPreview.h"
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
@@ -42,6 +43,7 @@ namespace
 		case EWacomBattleTargetRejectReason::BlockedTargetKeyword: return TEXT("BlockedTargetKeyword");
 		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
 		case EWacomBattleTargetRejectReason::TargetIdentityMismatch: return TEXT("TargetIdentityMismatch");
+		case EWacomBattleTargetRejectReason::NotEnoughInitiative: return TEXT("NotEnoughInitiative");
 		default: return TEXT("Unknown");
 		}
 	}
@@ -83,6 +85,23 @@ namespace
 		PredictionInput.PreviewRejectReason =
 			FName(LexToStringForSceneEnemyTarget(TargetPreview.Validation.RejectReason));
 		return PredictionInput;
+	}
+
+	bool DoesPreviewPartMatchBridge(
+		const FWacomBattleEnemyPartEntryViewData& PreviewPart,
+		const UWacomBattleEnemyPartWorldTargetBridgeComponent& Bridge)
+	{
+		if (PreviewPart.PartInstanceId.IsValid()
+			&& PreviewPart.PartInstanceId == Bridge.GetPartInstanceId())
+		{
+			return true;
+		}
+
+		const FBattlePartSlotIdentity& Identity = PreviewPart.Identity;
+		return Identity.IsValidSlot()
+			&& Identity.EncounterId == Bridge.GetBoundEncounterId()
+			&& Identity.GetEffectiveEnemySlotId() == Bridge.GetBoundEnemySlotId()
+			&& Identity.GetEffectivePartSlotId() == Bridge.GetBoundPartSlotId();
 	}
 }
 
@@ -375,6 +394,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 			}
 			Presentation->ClearDragTargetPreviewState();
 			Presentation->ClearHoverProbeState(TEXT("BindingCleared"));
+			Presentation->ClearActionPreviewPartView();
 			Presentation->SetTargetableAffordance(false);
 			continue;
 		}
@@ -417,6 +437,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 			Runtime.UnregisterBattlePresentationTargetsForOwner(Presentation);
 			Presentation->ClearDragTargetPreviewState();
 			Presentation->ClearHoverProbeState(TEXT("WorldTargetsCleared"));
+			Presentation->ClearActionPreviewPartView();
 			Presentation->SetTargetableAffordance(false);
 			Presentation->ClearRuntimePartFacts();
 		}
@@ -428,6 +449,86 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 	}
 	SceneEnemyPartWorldTargets.Reset();
 	SceneEnemyHosts.Reset();
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyActionPreviewToEnemyPanels(
+	const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts,
+	const bool bApplyScenePartPreview) const
+{
+	if (PreviewParts.IsEmpty())
+	{
+		ClearActionPreviewFromSceneParts();
+		return;
+	}
+
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
+	{
+		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
+		{
+			Host->SetEnemyPanelActionPreview(PreviewParts);
+		}
+	}
+
+	if (bApplyScenePartPreview)
+	{
+		ApplyActionPreviewToSceneParts(PreviewParts);
+	}
+	else
+	{
+		ClearActionPreviewFromSceneParts();
+	}
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearActionPreviewFromEnemyPanels() const
+{
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
+	{
+		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
+		{
+			Host->ClearEnemyPanelActionPreview();
+		}
+	}
+
+	ClearActionPreviewFromSceneParts();
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyActionPreviewToSceneParts(
+	const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const
+{
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
+	{
+		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get();
+		UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get();
+		if (!IsValid(Bridge) || !Bridge->IsBoundToBattlePart() || !Presentation)
+		{
+			continue;
+		}
+
+		const FWacomBattleEnemyPartEntryViewData* MatchedPreview = PreviewParts.FindByPredicate(
+			[Bridge](const FWacomBattleEnemyPartEntryViewData& PreviewPart)
+			{
+				return DoesPreviewPartMatchBridge(PreviewPart, *Bridge);
+			});
+		if (MatchedPreview)
+		{
+			Presentation->SetActionPreviewPartView(*MatchedPreview);
+		}
+		else
+		{
+			Presentation->ClearActionPreviewPartView();
+		}
+	}
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearActionPreviewFromSceneParts() const
+{
+	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
+	{
+		if (UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get())
+		{
+			Presentation->ClearActionPreviewPartView();
+		}
+	}
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::TickHoverProbe(float DeltaTime)
@@ -552,22 +653,26 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 
 	FBattleSnapshot CurrentSnapshot;
 	const FHandCardSnapshot* SourceSnapshot = nullptr;
+	FBattleCardActionPreview ActionPreview;
 	FBattleCardTargetPreview TargetPreview;
 	FWacomBattleCardTargetPreviewPresentation TargetPreviewPresentation;
+	FWacomBattleActionPreviewPresentation ActionPreviewPresentation;
 	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
 	const bool bHasTargetPreviewContext =
 		TryBuildHoverTargetPreviewContext(
 			TargetHandle,
 			CurrentSnapshot,
 			SourceSnapshot,
+			ActionPreview,
 			TargetPreview,
 			PredictionInput);
 	if (bHasTargetPreviewContext && TargetPreview.bHasPreview)
 	{
-		TargetPreviewPresentation =
-			WacomBattleCardPresentation::BuildTargetPreviewPresentation(
+		ActionPreviewPresentation =
+			WacomBattleCardPresentation::BuildActionPreviewPresentation(
 				CurrentSnapshot,
-				TargetPreview);
+				ActionPreview);
+		TargetPreviewPresentation = ActionPreviewPresentation.TargetPreviewPresentation;
 	}
 	Presentation->SetHoverProbeState(
 		TargetHandle,
@@ -576,6 +681,12 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 	ApplyHoverTargetPreview(
 		TargetPreviewPresentation,
 		bHasTargetPreviewContext);
+	if (ActionPreviewPresentation.bHasPreview)
+	{
+		Runtime.ApplyActionPreviewPresentation(
+			ActionPreviewPresentation,
+			/*bApplyScenePartPreview=*/false);
+	}
 }
 
 FWacomBattleEnemyPartDragPredictionDebugInput
@@ -584,12 +695,14 @@ FWacomBattleHUDSceneEnemyTargetCoordinator::BuildHoverPredictionInput(
 {
 	FBattleSnapshot CurrentSnapshot;
 	const FHandCardSnapshot* SourceSnapshot = nullptr;
+	FBattleCardActionPreview ActionPreview;
 	FBattleCardTargetPreview TargetPreview;
 	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
 	TryBuildHoverTargetPreviewContext(
 		TargetHandle,
 		CurrentSnapshot,
 		SourceSnapshot,
+		ActionPreview,
 		TargetPreview,
 		PredictionInput);
 	return PredictionInput;
@@ -599,10 +712,12 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryBuildHoverTargetPreviewConte
 	const FWacomInteractionTargetHandle& TargetHandle,
 	FBattleSnapshot& OutSnapshot,
 	const FHandCardSnapshot*& OutSourceSnapshot,
+	FBattleCardActionPreview& OutActionPreview,
 	FBattleCardTargetPreview& OutTargetPreview,
 	FWacomBattleEnemyPartDragPredictionDebugInput& OutPredictionInput) const
 {
 	OutSourceSnapshot = nullptr;
+	OutActionPreview = FBattleCardActionPreview();
 	OutTargetPreview = FBattleCardTargetPreview();
 	OutPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 	if (Runtime.GetUIState() != EBattleUIState::TargetSelect
@@ -625,8 +740,9 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryBuildHoverTargetPreviewConte
 		return false;
 	}
 
-	OutTargetPreview =
-		CurrentSession->BuildCardTargetPreview(Runtime.GetPendingTargetingCardId(), TargetHandle);
+	OutActionPreview =
+		CurrentSession->BuildCardActionPreview(Runtime.GetPendingTargetingCardId(), TargetHandle);
+	OutTargetPreview = OutActionPreview.TargetPreview;
 	OutPredictionInput =
 		BuildHoverPredictionInputFromPreview(
 			Runtime.GetPendingTargetingCardId(),
@@ -668,6 +784,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyHoverTargetPreview(
 		|| Runtime.GetUIState() != EBattleUIState::TargetSelect
 		|| !Runtime.GetPendingTargetingCardId().IsValid())
 	{
+		Runtime.GetFirstPersonHandBridge().ClearTargetPreviewLayer();
 		return;
 	}
 

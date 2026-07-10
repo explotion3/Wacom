@@ -64,12 +64,14 @@ public:
 	/**
 	 * 把一张卡从手牌移到弃牌堆。
 	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
+	 * 仅作为 BattleCardZoneTransition 的无事件物理移动 primitive；新增规则调用方禁止直连。
 	 */
 	static bool DiscardFromHand(FBattleState& State, const FGuid& CardInstanceId);
 
 	/**
 	 * 把一张卡从手牌移到消耗牌堆。
 	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
+	 * 仅作为 BattleCardZoneTransition 的无事件物理移动 primitive；新增规则调用方禁止直连。
 	 */
 	static bool ExhaustFromHand(FBattleState& State, const FGuid& CardInstanceId);
 

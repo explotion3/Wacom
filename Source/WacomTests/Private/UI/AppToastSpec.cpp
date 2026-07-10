@@ -63,6 +63,41 @@ bool FWacomUIAppToastWidgetQueueSpec::RunTest(const FString& /*Parameters*/)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIAppToastWidgetInvalidRuntimeCapacitySpec,
+	"Wacom.UI.AppToast.InvalidRuntimeCapacityUsesMinimumOne",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIAppToastWidgetInvalidRuntimeCapacitySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomAppToastWidget> Widget(NewObject<UWacomAppToastWidget>());
+	Widget->MaxVisibleMessages = 0;
+	Widget->TakeWidget();
+
+	TestEqual(
+		TEXT("Runtime capacity zero is consumed as a minimum capacity of one"),
+		FWacomUITestAccess::GetEffectiveToastCapacity(*Widget),
+		1);
+
+	FWacomAppToastView First;
+	First.MessageText = FText::FromString(TEXT("第一条"));
+	FWacomAppToastView Second;
+	Second.MessageText = FText::FromString(TEXT("第二条"));
+
+	Widget->EnqueueToast(First);
+	Widget->EnqueueToast(Second);
+
+	TestEqual(TEXT("Invalid runtime capacity cannot prevent queue progress"), Widget->GetVisibleToastCount(), 1);
+	const TArray<FWacomAppToastView> Current = FWacomUITestAccess::GetCurrentToasts(*Widget);
+	if (!TestEqual(TEXT("Effective minimum capacity is enforced"), Current.Num(), 1))
+	{
+		return false;
+	}
+
+	TestEqual(TEXT("Newest toast replaces the oldest at effective capacity one"), Current[0].MessageText.ToString(), FString(TEXT("第二条")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIAppToastLifecycleOwnerPolicySpec,
 	"Wacom.UI.AppToast.Lifecycle.OwnerPolicy",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

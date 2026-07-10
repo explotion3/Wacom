@@ -46,7 +46,10 @@ namespace
 	}
 }
 
-void FWacomShopScreenFlow::EndShopVisitOnDeactivate(URunSession* Run, bool& bDidEndShopVisit)
+void FWacomShopScreenFlow::EndShopVisitOnDeactivate(
+	URunSession* Run,
+	FGuid VisitToken,
+	bool& bDidEndShopVisit)
 {
 	if (bDidEndShopVisit)
 	{
@@ -55,7 +58,7 @@ void FWacomShopScreenFlow::EndShopVisitOnDeactivate(URunSession* Run, bool& bDid
 
 	if (Run)
 	{
-		Run->EndShopVisit();
+		Run->EndShopVisitIfOwned(VisitToken);
 	}
 	bDidEndShopVisit = true;
 }

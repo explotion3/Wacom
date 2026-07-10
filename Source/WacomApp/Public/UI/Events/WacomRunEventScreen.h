@@ -227,6 +227,7 @@ private:
 	TArray<TObjectPtr<UWacomRunMenuDropTargetWidget>> PaymentDropTargets;
 
 	bool bDidEndRunEvent = false;
+	FGuid OwnedRunEventVisitToken;
 
 	void RefreshPaymentLeaseFromCachedChoices();
 	void RecordPaymentDropResolveDebug(const FWacomRunMenuCardDropResolveResult& Result) const;

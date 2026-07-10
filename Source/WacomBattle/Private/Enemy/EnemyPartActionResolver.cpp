@@ -2,6 +2,7 @@
 
 #include "Enemy/EnemyPartActionResolver.h"
 
+#include "Core/BattleOperationAdapter.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Enemy/EnemyIntentSelector.h"
@@ -82,7 +83,11 @@ namespace
 	 * 让单个部位执行一次行动。
 	 * 晕厥/冻结跳过效果，只刷新意图 + 消耗一层该状态。
 	 */
-	void ActOnce(FBattleState& State, FBattleEventBus& Events, FRuntimeEnemyPart& Part)
+	void ActOnce(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		FRuntimeEnemyPart& Part,
+		IBattleOperationAdapter* OperationAdapter)
 	{
 		if (Part.bDestroyed || !Part.Definition)
 		{
@@ -122,6 +127,7 @@ namespace
 				Ctx.EffectTag        = Eff.EffectType;
 				Ctx.Magnitude        = Eff.Magnitude;
 				Ctx.Duration         = Eff.Duration;
+				Ctx.OperationAdapter = OperationAdapter;
 				FillTargetFromIntent(Ctx, Eff.Target, Part.InstanceId);
 
 				FEffectExecutor::Execute(Ctx);
@@ -139,8 +145,26 @@ namespace
 			ConsumeStunOrFreezeOnAct(Part);
 		}
 
-		// 无论是否跳过，行动结算后都刷新意图。
-		FEnemyIntentSelector::RefreshIntentForPart(State, Part, /*bAdvanceSequence*/true, &Events);
+		// Action Preview deliberately keeps the current intent visible at initiative 0.
+		// Formal commit refreshes the next intent exactly as before.
+		bool bShouldRefreshIntent = true;
+		if (OperationAdapter)
+		{
+			const FBattleOperationDescriptor RefreshOperation{
+				EBattleOperationKind::DirectRule,
+				EBattleOperationDeterminism::Random,
+				FGameplayTag(),
+				/*bReportUnresolvedWhenSkipped*/false };
+			bShouldRefreshIntent = OperationAdapter->ShouldExecute(RefreshOperation);
+		}
+		if (bShouldRefreshIntent)
+		{
+			FEnemyIntentSelector::RefreshIntentForPart(State, Part, /*bAdvanceSequence*/true, &Events);
+		}
+		else
+		{
+			Part.CurrentInitiative = 0;
+		}
 
 		// 敌方部位每行动一次后，对双方中毒结算一次。
 		// 放在意图刷新之后：即使此次行动本部位被中毒打死，AdvanceToNextIntent 内部已对
@@ -150,7 +174,10 @@ namespace
 	}
 }
 
-void FEnemyPartActionResolver::ResolveInitiativeZeroActions(FBattleState& State, FBattleEventBus& Events)
+void FEnemyPartActionResolver::ResolveInitiativeZeroActions(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	// 收集 CurrentInitiative <= 0 且未破坏的部位，按部位顺序行动。
 	// 按 State.Enemy.Parts 的数组顺序即为部位顺序（Definition 的 Parts 顺序）。
@@ -169,7 +196,7 @@ void FEnemyPartActionResolver::ResolveInitiativeZeroActions(FBattleState& State,
 		{
 			continue;
 		}
-		ActOnce(State, Events, Part);
+		ActOnce(State, Events, Part, OperationAdapter);
 
 		// 玩家死亡则停止后续部位行动（战斗结束由调用方统一判断）。
 		if (State.Player.CurrentHp <= 0)
@@ -179,7 +206,10 @@ void FEnemyPartActionResolver::ResolveInitiativeZeroActions(FBattleState& State,
 	}
 }
 
-void FEnemyPartActionResolver::ResolveEndTurnActions(FBattleState& State, FBattleEventBus& Events)
+void FEnemyPartActionResolver::ResolveEndTurnActions(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	IBattleOperationAdapter* OperationAdapter)
 {
 	// 结束阶段所有存活且可行动部位按部位顺序行动，
 	// 即使该部位本回合内已因先机归零行动过。
@@ -190,7 +220,7 @@ void FEnemyPartActionResolver::ResolveEndTurnActions(FBattleState& State, FBattl
 		{
 			continue;
 		}
-		ActOnce(State, Events, Part);
+		ActOnce(State, Events, Part, OperationAdapter);
 
 		if (State.Player.CurrentHp <= 0)
 		{

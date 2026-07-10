@@ -20,6 +20,7 @@ class USceneComponent;
 class UWidgetComponent;
 class UWacomBattleEnemyHostVisualComponent;
 class UWacomBattleEnemyPanelWidget;
+struct FWacomBattleEnemyPartEntryViewData;
 struct FWacomBattleEnemyPanelViewData;
 
 UENUM(BlueprintType)
@@ -344,6 +345,10 @@ public:
 	void SetEnemyPanelViewData(const FWacomBattleEnemyPanelViewData& ViewData);
 
 	void ClearEnemyPanelViewData();
+
+	void SetEnemyPanelActionPreview(const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts);
+
+	void ClearEnemyPanelActionPreview();
 
 	void SetEnemyPanelHoveredVisible(bool bVisible);
 

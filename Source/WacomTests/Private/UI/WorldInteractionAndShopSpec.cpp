@@ -10170,14 +10170,14 @@ bool FWacomUIGameMenuSwitchClosesOldShopBeforeBeginNewShopSpec::RunTest(const FS
 		OldScreen->TakeWidget();
 		OldScreen->ActivateWidget();
 
-		TestTrue(TEXT("Hazard: new Begin can replace active shop before old screen closes"),
+		TestFalse(TEXT("Active shop rejects reentrant Begin before old screen closes"),
 			Run->BeginShopVisit(NewShopId, Offers));
-		TestEqual(TEXT("Hazard: active shop is new before old deactivation"),
+		TestEqual(TEXT("Active shop remains owned by the old visit"),
 			Run->BuildCurrentShopSnapshot().ShopId,
-			NewShopId);
+			OldShopId);
 
 		OldScreen->DeactivateWidget();
-		TestFalse(TEXT("Hazard: old NativeOnDeactivated End clears the new active shop"),
+		TestFalse(TEXT("Old NativeOnDeactivated ends the old active shop"),
 			Run->IsShopVisitActive());
 	}
 
@@ -10233,14 +10233,14 @@ bool FWacomUIGameMenuSwitchClosesOldRunEventBeforeBeginNewRunEventSpec::RunTest(
 		OldScreen->TakeWidget();
 		OldScreen->ActivateWidget();
 
-		TestTrue(TEXT("Hazard: new Begin can replace active event before old screen closes"),
+		TestFalse(TEXT("Active event rejects reentrant Begin before old screen closes"),
 			Run->BeginRunEvent(NewEventId, Event.Get()));
-		TestEqual(TEXT("Hazard: active event is new before old deactivation"),
+		TestEqual(TEXT("Active event remains owned by the old visit"),
 			Run->BuildCurrentRunEventSnapshot().PersistentId,
-			NewEventId);
+			OldEventId);
 
 		OldScreen->DeactivateWidget();
-		TestFalse(TEXT("Hazard: old NativeOnDeactivated End clears the new active event"),
+		TestFalse(TEXT("Old NativeOnDeactivated ends the old active event"),
 			Run->IsRunEventActive());
 	}
 

@@ -12,6 +12,7 @@ class FWacomBattleHUDRuntime;
 class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 struct FBattleSnapshot;
+struct FBattleCardActionPreview;
 struct FBattleCardTargetPreview;
 struct FHandCardSnapshot;
 struct FWacomFirstPersonCardLayerSlotView;
@@ -37,6 +38,10 @@ public:
 	void RebuildRegistry();
 	void SyncWorldTargets(const FBattleSnapshot& Snapshot);
 	void ClearWorldTargets();
+	void ApplyActionPreviewToEnemyPanels(
+		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts,
+		bool bApplyScenePartPreview = true) const;
+	void ClearActionPreviewFromEnemyPanels() const;
 
 	bool CanUpdateHoverProbe() const;
 	void TickHoverProbe(float DeltaTime);
@@ -66,10 +71,13 @@ private:
 		const FWacomInteractionTargetHandle& TargetHandle,
 		FBattleSnapshot& OutSnapshot,
 		const FHandCardSnapshot*& OutSourceSnapshot,
+		FBattleCardActionPreview& OutActionPreview,
 		FBattleCardTargetPreview& OutTargetPreview,
 		FWacomBattleEnemyPartDragPredictionDebugInput& OutPredictionInput) const;
 	bool TryFindPendingTargetingCardSlot(FWacomFirstPersonCardLayerSlotView& OutSlotView) const;
 	void ApplyHoverTargetPreview(
 		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation,
 		bool bHasTargetPreviewContext) const;
+	void ApplyActionPreviewToSceneParts(const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const;
+	void ClearActionPreviewFromSceneParts() const;
 };

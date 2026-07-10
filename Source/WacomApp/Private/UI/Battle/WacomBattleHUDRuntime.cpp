@@ -14,6 +14,7 @@
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
+#include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
@@ -246,6 +247,7 @@ void FWacomBattleHUDRuntime::NativeDestruct()
 		PresentationCoordinator->Shutdown();
 		PresentationCoordinator.Reset();
 	}
+	ClearActionPreview();
 	ClearFirstPersonBattleHandLayer();
 	ClearBattleEnemyPartWorldTargets();
 	ClearBattlePresentationTargetRegistry();
@@ -273,6 +275,7 @@ void FWacomBattleHUDRuntime::NativeRefreshFromSnapshot(
 	GetSnapshotPresenter().RefreshFromSnapshot(Snapshot);
 	if (Snapshot.Phase == EBattlePhase::BattleEnd && !bHasBroadcastBattleEnd)
 	{
+		ClearActionPreview();
 		bHasBroadcastBattleEnd = true;
 		RuntimeHost.BroadcastBattleEnd(Snapshot.Outcome);
 	}
@@ -290,6 +293,7 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 		ClearBattlePresentationStack();
 		ClearPendingTurnBoundaryCommand();
 		ClearFirstPersonBattleHandLayer();
+		ClearActionPreview();
 		SetBattleSceneEnemyHosts({});
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 		ClearPendingFirstPersonCardTransitionEvents();
@@ -308,6 +312,7 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 	GetCombatLogController().Clear();
 	ClearBattlePresentationStack();
 	ClearPendingTurnBoundaryCommand();
+	ClearActionPreview();
 	ClearBattleSceneEnemyPartHoverProbe(TEXT("SessionChanged"));
 
 	if (NewSession)
@@ -330,6 +335,7 @@ void FWacomBattleHUDRuntime::NativeOnUIStateChanged(
 	}
 	if (NewState == EBattleUIState::BattleEnd)
 	{
+		ClearActionPreview();
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
 	}
 
@@ -1026,6 +1032,38 @@ void FWacomBattleHUDRuntime::ClearBattleEnemyPartWorldTargets()
 bool FWacomBattleHUDRuntime::CanUpdateBattleSceneEnemyPartHoverProbe() const
 {
 	return GetSceneEnemyTargetCoordinator().CanUpdateHoverProbe();
+}
+
+void FWacomBattleHUDRuntime::ApplyActionPreviewPresentation(
+	const FWacomBattleActionPreviewPresentation& Presentation,
+	const bool bApplyScenePartPreview)
+{
+	ClearActionPreview();
+	if (!Presentation.bHasPreview)
+	{
+		return;
+	}
+
+	if (Presentation.bHasProjectedPlayer)
+	{
+		if (UPlayerStatusBar* PlayerStatusBar = Host().GetPlayerStatusBar())
+		{
+			PlayerStatusBar->SetActionPreview(Presentation.ProjectedPlayer);
+		}
+	}
+
+	GetSceneEnemyTargetCoordinator().ApplyActionPreviewToEnemyPanels(
+		Presentation.ProjectedEnemyParts,
+		bApplyScenePartPreview);
+}
+
+void FWacomBattleHUDRuntime::ClearActionPreview()
+{
+	if (UPlayerStatusBar* PlayerStatusBar = Host().GetPlayerStatusBar())
+	{
+		PlayerStatusBar->ClearActionPreview();
+	}
+	GetSceneEnemyTargetCoordinator().ClearActionPreviewFromEnemyPanels();
 }
 
 FWacomBattleEnemyPartDragPredictionDebugInput

@@ -11,6 +11,7 @@
 #include "Events/BattleEvent.h"
 #include "Presentation/BattlePresentationJournal.h"
 #include "Resolution/BattleTargetValidationResult.h"
+#include "Resolution/BattleCardActionPreview.h"
 #include "Resolution/BattleCardTargetPreview.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "Session/BattleResultPacket.h"
@@ -283,6 +284,16 @@ public:
 	 * 不应自行重算 Magnitude、Condition 或目标筛选规则。
 	 */
 	FBattleCardTargetPreview BuildCardTargetPreview(
+		const FGuid& CardInstanceId,
+		const FWacomInteractionTargetHandle& Target) const;
+
+	/**
+	 * 构造一张手牌松手后的确定数值预览。
+	 *
+	 * 仅在目标合法且命令可提交语义成立时生成 projected values。随机或未决效果不
+	 * 展开到净结果，只记录 debug 标记；UI 只能消费返回 facts，不应重算规则。
+	 */
+	FBattleCardActionPreview BuildCardActionPreview(
 		const FGuid& CardInstanceId,
 		const FWacomInteractionTargetHandle& Target) const;
 

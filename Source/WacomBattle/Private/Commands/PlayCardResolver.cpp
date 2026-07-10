@@ -1,7 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Commands/PlayCardResolver.h"
-#include "Commands/BattleCommand.h"
+#include "Commands/PlayCardEvaluation.h"
 
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
@@ -10,11 +10,9 @@
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
 #include "Passives/PassiveDispatcher.h"
-#include "Resolution/HandCardTargetEligibility.h"
 #include "Resolution/InitiativeResolver.h"
 #include "Resolution/ZoneHookResolver.h"
 #include "Runtime/RuntimeCardInstance.h"
-#include "Runtime/RuntimeEnemyPart.h"
 #include "Status/PoisonResolver.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
@@ -80,133 +78,39 @@ namespace
 		    || Card.TemporaryKeywords.HasTag(Keyword);
 	}
 
-	FRuntimeEnemyPart* ResolveTargetPart(FBattleState& State, const FBattleCommand& Command, FName& OutRejectDetail)
-	{
-		OutRejectDetail = NAME_None;
-
-		if (!Command.TargetEnemyPartKey.IsValidKey())
-		{
-			OutRejectDetail = TEXT("MissingTarget");
-			return nullptr;
-		}
-
-		FRuntimeEnemyPart* ResolvedPart = FBattleRules::FindEnemyPartByKey(State, Command.TargetEnemyPartKey);
-		if (!ResolvedPart)
-		{
-			OutRejectDetail = TEXT("TargetKeyInvalid");
-			return nullptr;
-		}
-		if (ResolvedPart->bDestroyed)
-		{
-			OutRejectDetail = TEXT("TargetInvalid");
-			return nullptr;
-		}
-
-		return ResolvedPart;
-	}
-
-	FName MapHandCardEligibilityRejectToStatusDetail(
-		EWacomHandCardTargetEligibilityReject RejectReason)
-	{
-		switch (RejectReason)
-		{
-		case EWacomHandCardTargetEligibilityReject::NormalHandCardUnsupported:
-			return TEXT("TargetNormalHandCardUnsupported");
-		case EWacomHandCardTargetEligibilityReject::HandAnchorUnsupported:
-			return TEXT("TargetCardAnchorUnsupported");
-		case EWacomHandCardTargetEligibilityReject::MissingRequiredTargetKeyword:
-			return TEXT("TargetMissingRequiredKeyword");
-		case EWacomHandCardTargetEligibilityReject::BlockedTargetKeyword:
-			return TEXT("TargetBlockedKeyword");
-		case EWacomHandCardTargetEligibilityReject::None:
-		default:
-			return TEXT("TargetCardFilterUnsupported");
-		}
-	}
 }
 
-FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
+FWacomStatus FPlayCardResolver::ResolvePrepared(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	const FPreparedPlayCard& Prepared,
+	IBattleOperationAdapter& OperationAdapter)
 {
-	// ================ 1. 基础合法性 ================
-	if (!Command.CardInstanceId.IsValid())
+	if (Prepared.GetEvaluatedStateVersion() != State.StateVersion)
 	{
-		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoCardInstanceId"));
+		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("StalePlayCardEvaluation"));
 	}
 
-	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, Command.CardInstanceId);
-	if (!Card)
+	const FBattleCommand& Command = Prepared.GetCanonicalCommand();
+	const UCardDefinition* Def = Prepared.GetSourceDefinition();
+	const FRuntimeCardInstance* EvaluatedCard =
+		FBattleRules::FindCard(State, Command.CardInstanceId);
+	if (!Def || !EvaluatedCard || EvaluatedCard->Definition != Def)
 	{
-		return FWacomStatus::Fail(EWacomError::NotFound, TEXT("CardInstanceNotFound"));
-	}
-	if (Card->Location != ECardLocation::Hand)
-	{
-		return FWacomStatus::Fail(EWacomError::IllegalCardZone, TEXT("CardNotInHand"));
-	}
-	if (!Card->Definition)
-	{
-		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("CardHasNoDefinition"));
+		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("StalePlayCardEvaluation"));
 	}
 
-	// ================ 2. 目标枚举 ================
-	const UCardDefinition* Def = Card->Definition;
+	const FPlayCardTargetFacts& Target = Prepared.GetExecutionTarget();
+	const int32 RuntimeCost = Prepared.GetRuntimeCost();
+	const bool bAnchor = Prepared.IsAnchor();
+	const bool bSwift = Prepared.IsSwift();
+	const bool bCombo = Prepared.IsCombo();
+	const FGuid CardId = Command.CardInstanceId;
+	const FGuid SelectedPartId = Target.EnemyPartInstanceId;
+	const FBattleEnemyPartKey SelectedPartKey = Target.EnemyPartKey;
+	const FGuid SelectedHandCardId = Target.HandCardInstanceId;
 
-	FRuntimeEnemyPart* TargetPart = nullptr;
-	FRuntimeCardInstance* TargetCard = nullptr;
-	if (Def->TargetMode == ECardTargetMode::SingleEnemyPart)
-	{
-		FName RejectDetail = NAME_None;
-		TargetPart = ResolveTargetPart(State, Command, RejectDetail);
-		if (!TargetPart)
-		{
-			return FWacomStatus::Fail(EWacomError::IllegalTarget,
-				RejectDetail.IsNone() ? FName(TEXT("TargetInvalid")) : RejectDetail);
-		}
-	}
-	else if (Def->TargetMode == ECardTargetMode::HandCard)
-	{
-		if (!Command.TargetCardInstanceId.IsValid())
-		{
-			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("MissingTargetCard"));
-		}
-		if (Command.TargetCardInstanceId == Command.CardInstanceId)
-		{
-			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("SelfTargetCard"));
-		}
-		TargetCard = FBattleRules::FindCard(State, Command.TargetCardInstanceId);
-		if (!TargetCard || TargetCard->Location != ECardLocation::Hand)
-		{
-			return FWacomStatus::Fail(EWacomError::IllegalTarget, TEXT("TargetCardInvalid"));
-		}
-		const FWacomHandCardTargetEligibility Eligibility =
-			FHandCardTargetEligibility::Validate(State, *Def, Command.TargetCardInstanceId);
-		if (!Eligibility.bCanTarget)
-		{
-			return FWacomStatus::Fail(
-				EWacomError::IllegalTarget,
-				MapHandCardEligibilityRejectToStatusDetail(Eligibility.RejectReason));
-		}
-	}
-	// 其他 TargetMode 不要求 Command 带目标字段。
-
-	// ================ 3. 费用判断 ================
-	if (!FBattleRules::IsCardCostLegal(State, *Card))
-	{
-		return FWacomStatus::Fail(EWacomError::NotEnoughInitiative, TEXT("CostExceedsInitiativeSum"));
-	}
-
-	const int32 RuntimeCost = FBattleRules::ComputeRuntimeCost(*Card);
-	const bool  bAnchor     = (Card->InstanceId == State.Cards.LeftHandInstanceId)
-	                       || (Card->InstanceId == State.Cards.RightHandInstanceId);
-	const bool  bSwift      = HasKeyword(*Card, WacomTags::Card_Keyword_Swift);
-	const bool  bCombo      = HasKeyword(*Card, WacomTags::Card_Keyword_Combo);
-
-	const FGuid CardId            = Card->InstanceId;
-	const FGuid SelectedPartId    = TargetPart ? TargetPart->InstanceId : FGuid();
-	const FBattleEnemyPartKey SelectedPartKey =
-		TargetPart ? TargetPart->Identity.ToEnemyPartKey() : FBattleEnemyPartKey();
-	const FGuid SelectedHandCardId = TargetCard ? TargetCard->InstanceId : FGuid();
-
-	// ================ 4. 打牌事件 ================
+	// ================ 1. 打牌事件 ================
 	{
 		FBattleEvent Ev;
 		Ev.Type            = EBattleEventType::CardPlayed;
@@ -217,11 +121,18 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		Events.Emit(Ev);
 	}
 
-	// ================ 5. ZoneHook: OnPlay ================
+	// ================ 2. ZoneHook: OnPlay ================
 	// 放在 CardPlayed 之后、"记录出牌前先机"之前。
-	FZoneHookResolver::RunOnPlayHooks(State, Events, *Def, RuntimeCost, SelectedPartId, CardId);
+	FZoneHookResolver::RunOnPlayHooks(
+		State,
+		Events,
+		*Def,
+		RuntimeCost,
+		SelectedPartId,
+		CardId,
+		&OperationAdapter);
 
-	// ================ 6. 先机命中 + 抵抗（先于完美释放）================
+	// ================ 3. 先机命中 + 抵抗（先于完美释放）================
 	TArray<FInitiativeResolver::FPreCastEntry> PreCastInitiative;
 	FInitiativeResolver::SnapshotInitiativeBeforePlay(State, PreCastInitiative);
 
@@ -241,21 +152,33 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 
 	FInitiativeResolver::ResolveResistance(State, Events, *Def, RuntimeCost, HitPartIds, CardId);
 
-	// ================ 7. 主效果 ================
+	// ================ 4. 主效果 ================
 	// 主效果链独立维护 LastShuffledCardId（与 ZoneHook / PerfectRelease / AfterPlayed 互不串）。
 	{
 		FGuid MainLastShuffledCardId;
 		for (const FCardEffect& Eff : Def->Effects)
 		{
 			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				SelectedPartId, CardId, MainLastShuffledCardId, SelectedHandCardId);
+				SelectedPartId,
+				CardId,
+				MainLastShuffledCardId,
+				SelectedHandCardId,
+				&OperationAdapter);
 		}
 	}
 
-	// ================ 8. 完美释放 ================
-	FInitiativeResolver::ResolvePerfectRelease(State, Events, *Def, RuntimeCost, HitPartIds, CardId, bSwift);
+	// ================ 5. 完美释放 ================
+	FInitiativeResolver::ResolvePerfectRelease(
+		State,
+		Events,
+		*Def,
+		RuntimeCost,
+		HitPartIds,
+		CardId,
+		bSwift,
+		&OperationAdapter);
 
-	// ================ 9. 先机推进 ================
+	// ================ 6. 先机推进 ================
 	// 非迅捷卡：所有仍拥有先机的敌方部位当前先机 -= RuntimeCost。
 	// 左手区 + 先机命中 -> ZoneHook(OnPerfectReleaseHit) 跳过推进。
 	const bool bSkipPush = FZoneHookResolver::ShouldSkipInitiativePush(
@@ -271,10 +194,10 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		Events.Emit(Ev);
 	}
 
-	// ================ 10. 卡牌去向 ================
+	// ================ 7. 卡牌去向 ================
 	SendCardAfterPlay(State, CardId, bAnchor, bCombo);
 
-	// ================ 11. Companion 计数累加（在 AfterPlayed 之前）================
+	// ================ 8. Companion 计数累加（在 AfterPlayed 之前）================
 	if (const FRuntimeCardInstance* PlayedCard = FBattleRules::FindCard(State, CardId))
 	{
 		if (HasKeyword(*PlayedCard, WacomTags::Card_Keyword_Companion))
@@ -283,28 +206,33 @@ FWacomStatus FPlayCardResolver::Resolve(FBattleState& State, FBattleEventBus& Ev
 		}
 	}
 
-	// ================ 12. AfterPlayed 被动 ================
+	// ================ 9. AfterPlayed 被动 ================
 	// 必须在"卡牌去向"之后触发（Combo 留在手牌，其他的如果作用于本卡会失败但不崩）。
 	if (const FRuntimeCardInstance* CardAfter = FBattleRules::FindCard(State, CardId))
 	{
-		FPassiveDispatcher::RunAfterPlayed(State, Events, *CardAfter, RuntimeCost);
+		FPassiveDispatcher::RunAfterPlayed(
+			State,
+			Events,
+			*CardAfter,
+			RuntimeCost,
+			&OperationAdapter);
 	}
 
-	// ================ 13. OnCompanionCount 被动 ================
+	// ================ 10. OnCompanionCount 被动 ================
 	// AfterPlayed 之后触发：此时本次打出的 Companion 已计入 CompanionPlayedCount。
-	FPassiveDispatcher::RunOnCompanionCount(State, Events);
+	FPassiveDispatcher::RunOnCompanionCount(State, Events, &OperationAdapter);
 
-	// ================ 14. 中毒结算 ================
+	// ================ 11. 中毒结算 ================
 	// 敌方部位行动之前：中毒可能破坏部位，从而影响随后的先机归零行动集合。
 	FPoisonResolver::ResolvePoisonForAllHosts(State, Events);
 
-	// ================ 15. 敌方部位行动子流程 ================
+	// ================ 12. 敌方部位行动子流程 ================
 	if (!bSwift)
 	{
-		FEnemyPartActionResolver::ResolveInitiativeZeroActions(State, Events);
+		FEnemyPartActionResolver::ResolveInitiativeZeroActions(State, Events, &OperationAdapter);
 	}
 
-	// ================ 16. 战斗结束判断 ================
+	// ================ 13. 战斗结束判断 ================
 	if (FBattleRules::CheckAndApplyBattleEnd(State, Events))
 	{
 		return FWacomStatus::Ok();

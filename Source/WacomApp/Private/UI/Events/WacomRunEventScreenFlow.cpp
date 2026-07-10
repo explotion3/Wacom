@@ -26,7 +26,10 @@ namespace
 	}
 }
 
-void FWacomRunEventScreenFlow::EndRunEventOnDeactivate(URunSession* Run, bool& bDidEndRunEvent)
+void FWacomRunEventScreenFlow::EndRunEventOnDeactivate(
+	URunSession* Run,
+	FGuid VisitToken,
+	bool& bDidEndRunEvent)
 {
 	if (bDidEndRunEvent)
 	{
@@ -35,7 +38,7 @@ void FWacomRunEventScreenFlow::EndRunEventOnDeactivate(URunSession* Run, bool& b
 
 	if (Run)
 	{
-		Run->EndRunEvent();
+		Run->EndRunEventIfOwned(VisitToken);
 	}
 	bDidEndRunEvent = true;
 }

@@ -28,6 +28,7 @@ enum class EWacomBattleTargetRejectReason : uint8
 	BlockedTargetKeyword UMETA(DisplayName = "BlockedTargetKeyword"),
 	UnsupportedZoneTarget UMETA(DisplayName = "UnsupportedZoneTarget"),
 	TargetIdentityMismatch UMETA(DisplayName = "TargetIdentityMismatch"),
+	NotEnoughInitiative UMETA(DisplayName = "NotEnoughInitiative"),
 };
 
 USTRUCT(BlueprintType)

@@ -12,7 +12,7 @@ class UWacomRunEventScreen;
 /** Private workflow helper for RunEventScreen command/settlement behavior. */
 struct FWacomRunEventScreenFlow
 {
-	static void EndRunEventOnDeactivate(URunSession* Run, bool& bDidEndRunEvent);
+	static void EndRunEventOnDeactivate(URunSession* Run, FGuid VisitToken, bool& bDidEndRunEvent);
 
 	static bool ChooseChoice(
 		UWacomRunEventScreen& Screen,

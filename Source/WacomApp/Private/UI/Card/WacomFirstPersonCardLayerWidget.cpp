@@ -8,6 +8,8 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Engine/GameViewportClient.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Framework/Application/SlateUser.h"
 #include "Rendering/DrawElements.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
@@ -1350,6 +1352,7 @@ TSharedRef<SWidget> UWacomFirstPersonCardLayerWidget::RebuildWidget()
 
 void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 {
+	ReleaseOwnedSlateMouseCapture();
 	ClearCardPointerView(true);
 	ClearHoveredSlotState(false);
 	ClearHoveredCardTargetState(false);
@@ -1522,6 +1525,63 @@ void UWacomFirstPersonCardLayerWidget::ApplyLayerVisibility()
 	}
 }
 
+void UWacomFirstPersonCardLayerWidget::ReleaseOwnedSlateMouseCapture()
+{
+	if (!FSlateApplication::IsInitialized())
+	{
+		return;
+	}
+
+	const TSharedPtr<FSlateUser> CursorUser = FSlateApplication::Get().GetCursorUser();
+	if (!CursorUser)
+	{
+		return;
+	}
+	const FWidgetPath CursorCapturePath = CursorUser->GetCursorCaptorPath();
+
+	auto SlotOwnsMouseCapture = [&CursorCapturePath](const UWacomFirstPersonCardLayerSlotWidget* SlotWidget)
+	{
+		if (!SlotWidget)
+		{
+			return false;
+		}
+
+		const TSharedPtr<SWidget> CachedSlotWidget = SlotWidget->GetCachedWidget();
+		if (CachedSlotWidget.IsValid() && CursorCapturePath.ContainsWidget(CachedSlotWidget.Get()))
+		{
+			return true;
+		}
+		const TSharedRef<SWidget> SlotSlateWidget = const_cast<UWacomFirstPersonCardLayerSlotWidget*>(SlotWidget)->TakeWidget();
+		return CursorCapturePath.ContainsWidget(&SlotSlateWidget.Get());
+	};
+
+	// PressedSlotWidget is assigned only when this layer returns CaptureMouse,
+	// so it is the authoritative ownership marker while a gesture is active.
+	bool bOwnsMouseCapture = PressedSlotWidget != nullptr;
+	if (!bOwnsMouseCapture)
+	{
+		bOwnsMouseCapture = SlotWidgets.ContainsByPredicate(
+			[&SlotOwnsMouseCapture](const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget)
+			{
+				return SlotOwnsMouseCapture(SlotWidget.Get());
+			});
+	}
+	if (!bOwnsMouseCapture)
+	{
+		bOwnsMouseCapture = OutgoingSlotWidgets.ContainsByPredicate(
+			[&SlotOwnsMouseCapture](const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget)
+			{
+				return SlotOwnsMouseCapture(SlotWidget.Get());
+			});
+	}
+	if (!bOwnsMouseCapture)
+	{
+		return;
+	}
+
+	FSlateApplication::Get().ReleaseAllPointerCapture(CursorUser->GetUserIndex());
+}
+
 void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget)
 {
 	if (!SlotWidget)
@@ -1561,6 +1621,10 @@ void UWacomFirstPersonCardLayerWidget::UnbindSlotWidget(UWacomFirstPersonCardLay
 	if (!SlotWidget)
 	{
 		return;
+	}
+	if (PressedSlotWidget.Get() == SlotWidget)
+	{
+		ReleaseOwnedSlateMouseCapture();
 	}
 
 	SlotWidget->OnCardHoveredNative.RemoveAll(this);
@@ -1634,6 +1698,7 @@ void UWacomFirstPersonCardLayerWidget::ClearCardPointerView(bool bBroadcastPoint
 
 void UWacomFirstPersonCardLayerWidget::ClearCurrentDragState(bool bBroadcastCancel)
 {
+	ReleaseOwnedSlateMouseCapture();
 	const bool bHadDrag = CurrentDragView.CardInstanceId.IsValid()
 		&& CurrentDragView.GestureState != EWacomFirstPersonCardGestureState::Idle
 		&& CurrentDragView.GestureState != EWacomFirstPersonCardGestureState::Cancelled;
