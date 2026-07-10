@@ -100,23 +100,6 @@ public:
 	 */
 	static bool ShouldRetainCardAtTurnEnd(const FBattleState& State, const FGuid& CardInstanceId);
 
-	/**
-	 * 收集回合结束时明确保留的普通手牌 ID。
-	 *
-	 * 不包含左右手锚点；顺序遵循当前 State.Cards.Hand，供 CardsRetained 事件和
-	 * presentation checkpoint 直接消费。
-	 */
-	static void CollectRetainedNormalCardsAtTurnEnd(const FBattleState& State, TArray<FGuid>& OutRetained);
-
-	/**
-	 * 回合结束时把所有不满足保留条件的普通卡移到弃牌区。
-	 * 锚点不动。保留的普通卡留在 State.Cards.Hand 中，BeginPlayerTurn 会把
-	 * 它们和新抽普通卡一起重新编排。
-	 *
-	 * 从末尾向前扫描以保证索引稳定，输出被弃掉的卡 ID 列表供事件发射使用。
-	 */
-	static void DiscardNonRetainedNormalCardsAtTurnEnd(FBattleState& State, TArray<FGuid>& OutDiscarded);
-
 	// ======== 腾挪（Shuffle）API ========
 	// 腾挪总是作用于当前手牌中的卡。
 	// 所有腾挪 API 使用 State.Rng。

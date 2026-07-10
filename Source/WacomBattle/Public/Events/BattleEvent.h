@@ -30,7 +30,9 @@ enum class EBattleEventType : uint8
 	PerfectReleaseResolved UMETA(DisplayName = "PerfectReleaseResolved"),
 	DamageDealt           UMETA(DisplayName = "DamageDealt"),
 	StatusApplied         UMETA(DisplayName = "StatusApplied"),
-	InitiativePushed      UMETA(DisplayName = "InitiativePushed"),     // 打牌推进先机后的统一扣减
+	CardStatusChanged     UMETA(DisplayName = "CardStatusChanged"),
+	EnemyInitiativeChanged UMETA(DisplayName = "EnemyInitiativeChanged"),
+	InitiativePushed      UMETA(DisplayName = "InitiativePushed"),     // 打牌推进尝试摘要；逐部位实际变化见 EnemyInitiativeChanged
 	WaitPerformed         UMETA(DisplayName = "WaitPerformed"),
 	EnemyPartActed        UMETA(DisplayName = "EnemyPartActed"),
 	EnemyIntentSelected   UMETA(DisplayName = "EnemyIntentSelected"),
@@ -83,9 +85,11 @@ enum class EHandCardZoneMoveReason : uint8
  * - CardsRetained       ：CardInstanceIds = 本次回合结束明确保留的普通手牌，Count = CardInstanceIds.Num()
  * - CardPlayed          ：CardInstanceId、ActorEnemyPartKey = 目标部位稳定 key
  * - InitiativeHit       ：ActorEnemyPartKey = 被命中部位、Amount = 本次 RuntimeCost
- * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；玩家目标时 key 为空
+ * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；全盾吸收为 0，overkill 只记剩余 HP，玩家目标时 key 为空
  * - StatusApplied       ：ActorEnemyPartKey、Tag = Status.*、Amount = 层数；玩家目标时 key 为空
- * - InitiativePushed    ：Amount = 扣减量（RuntimeCost）
+ * - CardStatusChanged   ：CardInstanceId = 目标卡，Tag = Status.*、Amount = 本次 delta、Count = 变更后层数
+ * - EnemyInitiativeChanged：ActorEnemyPartKey、Tag = 原因、Amount = 实际 delta、Count = 变更后倒计时
+ * - InitiativePushed    ：Amount = 本次尝试推进量（RuntimeCost）；冻结可能使部分部位实际变化为 0
  * - WaitPerformed       ：Amount = 本次等待值
  * - EnemyPartActed      ：ActorEnemyPartKey = 行动部位、IntentId = 本次执行的意图
  * - EnemyIntentSelected ：ActorEnemyPartKey = 行动部位、IntentId / IntentSetId / EnemyPhaseId = 新选中意图上下文

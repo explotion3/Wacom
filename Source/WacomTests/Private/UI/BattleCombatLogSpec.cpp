@@ -100,6 +100,39 @@ bool FWacomUIBattleCombatLogBuilderPlayCardSpec::RunTest(const FString& /*Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatLogBuilderZeroActualDamageSpec,
+	"Wacom.UI.Battle.CombatLog.Builder.FullyAbsorbedDamageShowsZero",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatLogBuilderZeroActualDamageSpec::RunTest(const FString& /*Parameters*/)
+{
+	FBattleSnapshot Snapshot;
+	Snapshot.TurnNumber = 1;
+
+	FBattleEvent Damage;
+	Damage.Type = EBattleEventType::DamageDealt;
+	Damage.Sequence = 1;
+	Damage.Amount = 0;
+
+	const FWacomBattleCombatLogBlockView Block = UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot),
+		{ Damage },
+		Snapshot,
+		Snapshot);
+
+	TestTrue(TEXT("Fully absorbed damage remains visible"), Block.bShouldDisplay);
+	TestEqual(TEXT("Combat Log displays actual zero HP loss"), Block.DetailLines.Num(), 1);
+	if (Block.DetailLines.Num() == 1)
+	{
+		TestEqual(
+			TEXT("Fully absorbed damage text uses zero"),
+			Block.DetailLines[0].MessageText.ToString(),
+			FString(TEXT("造成 0 点伤害")));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCombatLogBuilderWaitEndTurnSystemSpec,
 	"Wacom.UI.Battle.CombatLog.Builder.WaitEndTurnAndSystemBlocks",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

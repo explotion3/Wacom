@@ -2,12 +2,13 @@
 
 #include "Session/BattleInitializer.h"
 
+#include "Combatants/BattleCombatantMutationModule.h"
 #include "Core/BattleState.h"
-#include "Core/BattleTurnFlow.h"
 #include "Deck/DeckService.h"
 #include "Enemy/EnemyIntentSelector.h"
 #include "Events/BattleEventBus.h"
 #include "Session/BattleSession.h"
+#include "Turns/BattleTurnLifecycleModule.h"
 
 #include "Cards/CardDefinition.h"
 #include "Cards/CardPhysique.h"
@@ -264,10 +265,7 @@ FWacomStatus FBattleInitializer::Initialize(
 			if (!P.Definition) { continue; }
 			if (IsPartPreDestroyed(P.Identity, Params.PreDestroyedParts))
 			{
-				P.bDestroyed        = true;
-				P.CurrentHp         = 0;
-				P.CurrentInitiative = 0;
-				State.DestroyedParts.AddUnique(P.Identity);
+				FBattleCombatantMutationModule::InitializePreDestroyedEnemyPart(State, P.InstanceId);
 
 				UE_LOG(LogTemp, Display,
 					TEXT("[BattleSession] Initialize: 应用预先破坏部位 %s（来自 RunState.BattleProgress）"),
@@ -278,7 +276,7 @@ FWacomStatus FBattleInitializer::Initialize(
 
 	// ---- 阶段推进 ----
 	// Setup -> TurnStart -> PlayerAction。
-	// Setup 阶段完成敌人初始化；TurnStart 由 FBattleTurnFlow::BeginPlayerTurn 执行。
+	// Setup 阶段完成敌人初始化；TurnStart 由 Turn Lifecycle 执行。
 	State.Phase            = EBattlePhase::Setup;
 	State.TurnNumber       = 1;
 	State.CurrentWaitValue = 2;
@@ -321,15 +319,8 @@ FWacomStatus FBattleInitializer::Initialize(
 		}
 	}
 
-	{
-		FBattleEvent TurnEvent;
-		TurnEvent.Type  = EBattleEventType::TurnStarted;
-		TurnEvent.Count = State.TurnNumber;
-		EventBus.Emit(TurnEvent);
-	}
 
-	// 起始阶段：抽牌、重置等待值、生成手牌队列。
-	FBattleTurnFlow::BeginPlayerTurn(State, EventBus, /*bIsFirstTurn=*/true);
+	FBattleTurnLifecycleModule::StartInitialPlayerTurn(State, EventBus);
 
 	return FWacomStatus::Ok();
 }

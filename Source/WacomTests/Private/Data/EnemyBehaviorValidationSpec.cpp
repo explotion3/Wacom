@@ -217,3 +217,45 @@ bool FWacomDataEnemyBehaviorValidationConditionsSpec::RunTest(const FString& /*P
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataEnemyBehaviorValidationHandAfflictionSpec,
+	"Wacom.Data.EnemyValidation.Behavior.HandAfflictionContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataEnemyBehaviorValidationHandAfflictionSpec::RunTest(const FString&)
+{
+	UObject* Root = GetTransientPackage();
+	UEnemyDefinition* Enemy = MakeBehaviorValidationEnemy(Root);
+	TArray<FText> Errors;
+
+	{
+		UEnemyBehaviorDefinition* Behavior = MakeValidBehavior(Root);
+		FIntentEffect& Effect = Behavior->Phases[0].IntentSets[0].Intents[0].Intent.Effects[0];
+		Effect.EffectType = WacomTags::Effect_ApplyStatus_Slow;
+		Effect.Magnitude = 2;
+		Effect.HandAffliction.TargetCardCount = 0;
+		TestFalse(TEXT("Slow requires a positive target-card count"),
+			ValidateBehaviorForTest(Behavior, Errors, Enemy));
+	}
+
+	{
+		UEnemyBehaviorDefinition* Behavior = MakeValidBehavior(Root);
+		FIntentEffect& Effect = Behavior->Phases[0].IntentSets[0].Intents[0].Intent.Effects[0];
+		Effect.EffectType = WacomTags::Effect_ApplyStatus_Twilight;
+		Effect.Magnitude = 2;
+		Effect.HandAffliction.Selection = EHandAfflictionSelection::RandomUnique;
+		TestFalse(TEXT("Twilight must target the whole current hand"),
+			ValidateBehaviorForTest(Behavior, Errors, Enemy));
+	}
+
+	{
+		UEnemyBehaviorDefinition* Behavior = MakeValidBehavior(Root);
+		FIntentEffect& Effect = Behavior->Phases[0].IntentSets[0].Intents[0].Intent.Effects[0];
+		Effect.HandAffliction.Selection = EHandAfflictionSelection::RandomUnique;
+		TestFalse(TEXT("Non-status intent cannot author hand-affliction delivery"),
+			ValidateBehaviorForTest(Behavior, Errors, Enemy));
+	}
+
+	return true;
+}

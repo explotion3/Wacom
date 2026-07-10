@@ -19,14 +19,13 @@ tags:
 <a id="roadmap-battle-rules"></a>
 ## 战斗规则与卡牌系统
 
-当前战斗规则真相见 [WacomBattle.md](./WacomBattle.md)，静态字段见 [WacomData.md](./WacomData.md)，GameplayTag 见 [WacomGameplayTags.md](./WacomGameplayTags.md)，制作矩阵见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)，待确认公式见 [Questions: 状态与触发时机](./Questions.md#questions-status)。
+当前战斗规则真相见 [WacomBattle.md](./WacomBattle.md)，静态字段见 [WacomData.md](./WacomData.md)，GameplayTag 见 [WacomGameplayTags.md](./WacomGameplayTags.md)，制作矩阵见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)，剩余开放决策见 [Questions](./Questions.md)。
 
 ### 状态与被动扩展
 
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
-| `Status.Slow` 减速数值效果 | 当前状态事实见 [WacomBattle.md](./WacomBattle.md)，待确认公式见 [Questions](./Questions.md#questions-status) | 等减速公式确认后接入 Initiative / Cost 相关结算 |
-| `Status.Twilight` 暮气数值效果 | 当前状态事实见 [WacomBattle.md](./WacomBattle.md)，待确认公式见 [Questions](./Questions.md#questions-status) | 等暮气归属、触发点和数值公式确认后实现 |
+| Card Status 专用视觉 | Hand Snapshot 已暴露 Slow / Freeze / Twilight 层数、冻结可打出性与统一 RuntimeCost | 为 first-person 卡牌增加状态角标、冻结覆盖材质和层数变化 cue；UI 不重算规则 |
 | 暮蛉 `OnTwilightTriggered` | 当前被动只发触发事件，详情系统不会把旧 DisplayText 中的“中毒卡牌效果 +1”写成已实现结果 | 引入运行时效果数值修正机制，让中毒卡牌效果可被实际修正；规则落地后再补对应 passive outcome / effect 展示 |
 | `FCardPhysique::Durability` | 字段入口见 [WacomData.md](./WacomData.md) | 等耐久系统正式设计后接入；暮色引虫灯是首个需求样例 |
 | 左手主动效果 / 完美释放效果 | 左手 `Effects` / `PerfectReleaseEffects` 仍为空 | 等具体卡牌设计后补效果配置和必要执行器 |
@@ -49,9 +48,9 @@ tags:
 
 | Trigger | 入口 / 依赖 | 接入要求 |
 |---|---|---|
-| `Passive.Trigger.OnTurnStart` | Dispatcher 方法已就位，无调用点 | 出现回合开始触发的被动卡时，在 `BattleTurnFlow` 起始阶段加调用 |
-| `Passive.Trigger.OnTurnEnd` | Dispatcher 方法已就位，无调用点 | 出现回合结束触发的被动卡时，在 `EndTurnResolver` 加调用，并确认保留 / 弃牌时序 |
-| `Passive.Trigger.OnDraw` | Dispatcher 方法已就位，无调用点 | 出现入手触发的被动卡时，在 `DeckService::DrawCards` 和手牌编排路径加调用 |
+| `Passive.Trigger.OnTurnStart` | Reserved；Turn Lifecycle 已固定 start boundary，但无运行时 Dispatcher | 出现正式卡牌时，定义触发对象 / 次数 / chain，并在 `Phase=TurnStart` 后、等待值重置和抽牌前接入 |
+| `Passive.Trigger.OnTurnEnd` | Reserved；Turn Lifecycle 已固定 end boundary，但无运行时 Dispatcher | 出现正式卡牌时，定义触发对象 / 次数 / chain，并在 `TurnEnded` 后、卡牌清理前接入 |
+| `Passive.Trigger.OnDraw` | Reserved；无运行时 Dispatcher | 出现正式卡牌时，先定义 Effect.Draw 与回合抽牌是否同语义，再从卡牌已进入 hand queue 后的单一入口接入 |
 | `Passive.Trigger.OnEnemyPartDestroyed` | 触发点方向见 [WacomBattle.md](./WacomBattle.md) / [Game_Design.md](./Game_Design.md) | 后续需要破坏部位触发卡时接入 |
 | `Passive.Trigger.OnPlayerDamaged` | 未做 | 可由战内伤口阈值跨越 flag 承接；先观察是否需要独立被动 trigger |
 

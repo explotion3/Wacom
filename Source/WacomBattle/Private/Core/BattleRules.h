@@ -46,16 +46,6 @@ public:
 	 */
 	static void SetCardLocation(FBattleState& State, const FGuid& CardInstanceId, ECardLocation NewLocation);
 
-	// -------- 先机 --------
-
-	/**
-	 * 对所有未破坏部位的 CurrentInitiative 减去 Amount。
-	 *
-	 * 不发事件、不判断战斗结束、不触发先机归零行动。调用方负责后续流程。
-	 * 当前在 PlayCardResolver（非迅捷且非 ZoneHook 跳过时）和 WaitResolver 中共用。
-	 */
-	static void PushEnemyInitiative(FBattleState& State, int32 Amount);
-
 	// -------- 战斗结束 --------
 
 	/** 所有部位是否都被破坏。 */

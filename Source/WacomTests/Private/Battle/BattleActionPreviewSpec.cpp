@@ -66,7 +66,7 @@ namespace
 			Seed);
 	}
 
-	FWacomInteractionTargetHandle MakePartTargetHandle(const FEnemyPartSnapshot& Part)
+	FWacomInteractionTargetHandle MakeActionPreviewPartTargetHandle(const FEnemyPartSnapshot& Part)
 	{
 		return FWacomInteractionTargetHandle::ForWorldTarget(
 			Part.InstanceId,
@@ -80,13 +80,13 @@ namespace
 			Part.PartSlotId);
 	}
 
-	FWacomInteractionTargetHandle MakeFirstPartTargetHandle(const FBattleSnapshot& Snapshot)
+	FWacomInteractionTargetHandle MakeActionPreviewFirstPartTargetHandle(const FBattleSnapshot& Snapshot)
 	{
 		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
-		return Part ? MakePartTargetHandle(*Part) : FWacomInteractionTargetHandle();
+		return Part ? MakeActionPreviewPartTargetHandle(*Part) : FWacomInteractionTargetHandle();
 	}
 
-	const FBattleCardActionPreviewEnemyPartState* FindProjectedPart(
+	const FBattleCardActionPreviewEnemyPartState* FindActionPreviewProjectedPart(
 		const FBattleCardActionPreview& Preview,
 		const FGuid& PartInstanceId)
 	{
@@ -127,7 +127,7 @@ bool FWacomBattleActionPreviewDamageAndEnemyActionSpec::RunTest(const FString& /
 	}
 
 	const FBattleCardActionPreview Preview =
-		Session->BuildCardActionPreview(CardId, MakePartTargetHandle(*Part));
+		Session->BuildCardActionPreview(CardId, MakeActionPreviewPartTargetHandle(*Part));
 
 	TestTrue(TEXT("Action preview exists"), Preview.bHasPreview);
 	TestTrue(TEXT("Player projection exists"), Preview.bHasProjectedPlayer);
@@ -135,7 +135,7 @@ bool FWacomBattleActionPreviewDamageAndEnemyActionSpec::RunTest(const FString& /
 	TestEqual(TEXT("Player shield stays zero"), Preview.ProjectedPlayer.Shield, 0);
 
 	const FBattleCardActionPreviewEnemyPartState* ProjectedPart =
-		FindProjectedPart(Preview, Part->InstanceId);
+		FindActionPreviewProjectedPart(Preview, Part->InstanceId);
 	if (!TestNotNull(TEXT("Projected enemy part exists"), ProjectedPart))
 	{
 		return false;
@@ -166,7 +166,7 @@ bool FWacomBattleActionPreviewShieldThenEnemyDamageSpec::RunTest(const FString& 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ShieldCard->CardId);
 	const FBattleCardActionPreview Preview =
-		Session->BuildCardActionPreview(CardId, MakeFirstPartTargetHandle(Snapshot));
+		Session->BuildCardActionPreview(CardId, MakeActionPreviewFirstPartTargetHandle(Snapshot));
 
 	TestTrue(TEXT("Action preview exists"), Preview.bHasPreview);
 	TestTrue(TEXT("Player projection exists"), Preview.bHasProjectedPlayer);
@@ -197,12 +197,12 @@ bool FWacomBattleActionPreviewSwiftSkipsInitiativeSpec::RunTest(const FString& /
 	const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SwiftDamageCard->CardId);
 	const FBattleCardActionPreview Preview =
-		Session->BuildCardActionPreview(CardId, MakeFirstPartTargetHandle(Snapshot));
+		Session->BuildCardActionPreview(CardId, MakeActionPreviewFirstPartTargetHandle(Snapshot));
 
 	TestTrue(TEXT("Action preview exists"), Preview.bHasPreview);
 	TestFalse(TEXT("No player projection because swift skips enemy action"), Preview.bHasProjectedPlayer);
 	const FBattleCardActionPreviewEnemyPartState* ProjectedPart =
-		Part ? FindProjectedPart(Preview, Part->InstanceId) : nullptr;
+		Part ? FindActionPreviewProjectedPart(Preview, Part->InstanceId) : nullptr;
 	if (!TestNotNull(TEXT("Projected swift damage part exists"), ProjectedPart))
 	{
 		return false;
@@ -245,7 +245,7 @@ bool FWacomBattleActionPreviewProjectsAllInitiativeZeroEnemyActionsSpec::RunTest
 	}
 
 	const FBattleCardActionPreview Preview =
-		Session->BuildCardActionPreview(CardId, MakePartTargetHandle(*TargetPart));
+		Session->BuildCardActionPreview(CardId, MakeActionPreviewPartTargetHandle(*TargetPart));
 
 	TestTrue(TEXT("Action preview exists"), Preview.bHasPreview);
 	TestTrue(TEXT("Player projection includes all enemy actions"), Preview.bHasProjectedPlayer);
@@ -255,7 +255,7 @@ bool FWacomBattleActionPreviewProjectsAllInitiativeZeroEnemyActionsSpec::RunTest
 	{
 		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, PartIndex);
 		const FBattleCardActionPreviewEnemyPartState* ProjectedPart =
-			Part ? FindProjectedPart(Preview, Part->InstanceId) : nullptr;
+			Part ? FindActionPreviewProjectedPart(Preview, Part->InstanceId) : nullptr;
 		if (!TestNotNull(FString::Printf(TEXT("Projected part %d exists"), PartIndex), ProjectedPart))
 		{
 			return false;
@@ -293,13 +293,13 @@ bool FWacomBattleActionPreviewRandomFollowUpSpec::RunTest(const FString& /*Param
 	const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, RandomFollowUpCard->CardId);
 	const FBattleCardActionPreview Preview =
-		Session->BuildCardActionPreview(CardId, MakeFirstPartTargetHandle(Snapshot));
+		Session->BuildCardActionPreview(CardId, MakeActionPreviewFirstPartTargetHandle(Snapshot));
 
 	TestTrue(TEXT("Action preview exists"), Preview.bHasPreview);
 	TestTrue(TEXT("Random discard is marked unresolved"), Preview.bHasUnresolvedFacts);
 	TestTrue(TEXT("Unresolved facts include discard"), Preview.UnresolvedEffectTypes.Contains(WacomTags::Effect_Discard));
 	const FBattleCardActionPreviewEnemyPartState* ProjectedPart =
-		Part ? FindProjectedPart(Preview, Part->InstanceId) : nullptr;
+		Part ? FindActionPreviewProjectedPart(Preview, Part->InstanceId) : nullptr;
 	if (!TestNotNull(TEXT("Projected enemy part exists"), ProjectedPart))
 	{
 		return false;
@@ -334,7 +334,7 @@ bool FWacomBattleActionPreviewAfterPlayedShieldSpec::RunTest(const FString& /*Pa
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Card->CardId);
 	const FBattleCardActionPreview Preview =
-		Session->BuildCardActionPreview(CardId, MakeFirstPartTargetHandle(Snapshot));
+		Session->BuildCardActionPreview(CardId, MakeActionPreviewFirstPartTargetHandle(Snapshot));
 
 	TestTrue(TEXT("Action preview exists"), Preview.bHasPreview);
 	TestTrue(TEXT("AfterPlayed shield projects to player"), Preview.bHasProjectedPlayer);

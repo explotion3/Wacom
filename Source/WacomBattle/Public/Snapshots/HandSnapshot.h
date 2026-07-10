@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Types/WacomEnums.h"
 #include "HandSnapshot.generated.h"
 
@@ -28,6 +29,22 @@ struct WACOMBATTLE_API FHandCardSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 RuntimeCost = 0;
 
+	/** 是否仅从费用角度满足 RuntimeCost <= 敌方先机总和。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	bool bIsCostLegal = false;
+
+	/** 当前卡牌状态的标签投影；层数读取 StatusStacks。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FGameplayTagContainer Statuses;
+
+	/** 当前卡牌 stack status。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	TMap<FGameplayTag, int32> StatusStacks;
+
+	/** 冻结会阻止正式出牌，但不阻止结构性 Target Preview。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	bool bIsFrozen = false;
+
 	/** 本卡当前所在区域。可能为 None（左右手锚点缺失时）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	EHandZone Zone = EHandZone::None;
@@ -36,7 +53,7 @@ struct WACOMBATTLE_API FHandCardSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	bool bIsHandAnchor = false;
 
-	/** 本卡是否满足当前费用合法性（RuntimeCost <= 敌方先机总和）。 */
+	/** 本卡是否同时满足费用和卡牌运行时限制。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	bool bIsPlayable = false;
 

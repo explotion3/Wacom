@@ -30,6 +30,15 @@ struct WACOMBATTLE_API FRuntimeCardInstance
 	UPROPERTY()
 	int32 RuntimeCostModifier = 0;
 
+	/**
+	 * 单卡 stack status 的唯一运行时真相，只保存正层数。
+	 *
+	 * 当前正式语义：Slow / Freeze 为回合级手牌状态，Twilight 随卡跨区域持久化。
+	 * 状态的生命周期由 Private Status Semantics 解释，本结构不保存通用 Duration。
+	 */
+	UPROPERTY()
+	TMap<FGameplayTag, int32> StatusStacks;
+
 	/** 本场战斗内临时关键字，不写入 Definition。 */
 	UPROPERTY()
 	FGameplayTagContainer TemporaryKeywords;
@@ -42,7 +51,7 @@ struct WACOMBATTLE_API FRuntimeCardInstance
 	 *   - 来自 SpecialZone 的 instance：单元素集合 `{ B 主卡.Physique.CapacityEffect }`。
 	 *
 	 * 由 `UBattleSession::Initialize` 从 `FBattleDeckEntry::CapacityEffectTags` 拷贝而来，
-	 * 战斗中只读，用于 `FCardEffectDispatcher` Damage 路径的 +3 修正等增量分支。
+	 * 战斗中只读，用于 Effect Semantics 的 Damage magnitude +3 修正等增量分支。
 	 *
 	 * 反射门槛：仅 UPROPERTY()，不暴露 Blueprint —— 战斗内核字段，不需要 WBP 直接读取。
 	 */

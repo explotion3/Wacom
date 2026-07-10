@@ -24,12 +24,13 @@ tags:
 | ZoneHook Trigger 种类 | 只支持 `OnPlay` / `OnPerfectReleaseHit` | 按卡牌需求扩展 `OnTurnStart`、`OnDiscard`、`OnEnterZone` 等 |
 | 费用转移 | 只支持 `ReduceCost(LastShuffled) + AddCost(Self)` 组合 | 更复杂的多点 / 条件费用转移引入 `CostLedger` 或 `CostTransferEvent` |
 | CompanionPlayedCount | 全局计数，不区分哪张伙伴 | 当前对齐 BugGirl.md §5；多角色或多类伙伴时再评估是否拆分 |
-| 回合结束保留 / 弃牌时序 | `EndTurnResolver` 中放在敌方行动之前 | 若规则明确放在敌方行动之后，需要调整 resolver 时序 |
-| `Magnitude.Source.TargetStatusStacks` 参数 | 借用 `FCardEffect::TargetZone` 传 Status Tag | 给 `FCardEffect` 或 `FEffectContext` 加专用 `FilterTag` 字段 |
-| `Effect.GainKeyword` / `Effect.RemoveStatus` 参数 | 借用 `FEffectContext::MetaTag` 或 `TargetZone` 传 Keyword / Status Tag | 同上，收口到专用 `FilterTag` 字段 |
+| 回合结束保留 / 弃牌时序 | `BattleTurnLifecycleModule` 权威固定在敌方行动之前 | 若规则明确放在敌方行动之后，需要迁移 Turn Lifecycle 的事件、checkpoint 和 early-exit 合同 |
+| `Magnitude.Source.TargetStatusStacks` 资产参数 | Public `FCardEffect` 仍借用 `TargetZone` 传 Status Tag；Private Effect Semantics 已在 decode seam 转成独立 magnitude plan | 只有在允许迁移现有 DataAsset schema 时，新增专用反射字段并提供资产迁移；运行时不再扩散该复用 |
+| `Effect.GainKeyword` / `Effect.RemoveStatus` 资产参数 | Public `FCardEffect` 仍借用 `TargetZone`；Private handler 已只消费 typed Keyword / Status 参数，不再存在 `EffectContext::MetaTag` | 只有在允许迁移现有 DataAsset schema 时，拆为专用反射 payload；保持 semantic definition 为唯一解释入口 |
+| `Effect.Shuffle.FromBothToOther` HandZone 参数 | 制作校验兼容接受任意 `HandZone.*`，但正式执行始终从 Both 选择；Effect Semantics 显式保留该兼容怪点 | 先确认是否要扩展为通用 FromZone，或收紧资产只允许 Both；确认后同步校验、内容迁移和规则测试 |
 | `IsDeleteFunctionAvailable` | 接口已存在，但当前 Run 删牌事务和背包 UI 仍按始终可删的简化口径工作 | 等删牌可用性口径确认后，Run 校验和 UI 显隐统一接入 |
 | 手牌锚点左右归属 | `FHandCardSnapshot` 不带左右手角色，UI 用遍历顺序启发式 | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
-| Battle Card Zone Transition 双入口 | `Effect.Discard / DiscardSelected / ExhaustSelected` 已统一走 `BattleCardZoneTransition`；HandLimit、TurnEnd、奖励和 Companion 仍由 `HandZoneService` 先改状态，再调用 migration-only `HandZoneMoveEventService::FinalizeAlreadyMoved*`，Draw / 回手 / 出牌去向也尚未进入语义事务 | 下一切片先把 hand-limit 和 turn-end 的“选择”与“移动”拆开并迁入语义入口，再处理奖励 / Companion；Draw、回手、PlayedPile / Limbo 按各自规则单独扩展。全部迁移后删除 post-move event API，并限制 `DeckService::DiscardFromHand / ExhaustFromHand` 只能作为事务内部 primitive |
+| Battle Card Zone Transition 双入口 | `Effect.Discard / DiscardSelected / ExhaustSelected` 与 EndTurn 普通手牌弃置已统一走 `BattleCardZoneTransition`；HandLimit、奖励和 Companion 仍由 `HandZoneService` 先改状态，再调用 migration-only `HandZoneMoveEventService::FinalizeAlreadyMoved*`，Draw / 回手 / 出牌去向也尚未进入语义事务 | 下一切片迁移 hand-limit，再处理奖励 / Companion；Draw、回手、PlayedPile / Limbo 按各自规则单独扩展。全部迁移后删除 post-move event API，并限制 `DeckService::DiscardFromHand / ExhaustFromHand` 只能作为事务内部 primitive |
 | BattleResult identity 兼容字段 | `FBattleResultPacket` 仍同时暴露 `PartId / Identity / PartKey`、`DestroyedParts / DestroyedPartKeys`；Run 撤离进度的新写入和 Run 结算日志已收敛为 key-first，GameMode 撤离全灭判断已改为 key-only；`DestroyedParts` 仅作旧数据 / 手写 snapshot fallback | 继续把测试、日志和消费者迁到 `FBattleEnemyPartKey` / `DestroyedPartKeys`；确认没有资产 / 蓝图依赖后再降级或移除 legacy projection 字段 |
 
 ---

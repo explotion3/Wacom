@@ -2,6 +2,7 @@
 
 #include "Effects/ConditionResolver.h"
 
+#include "Combatants/BattleCombatantMutationModule.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Hand/HandZoneService.h"
@@ -60,8 +61,7 @@ namespace
 		const FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(P.State, P.TargetPartId);
 		if (!Part || Part->bDestroyed)    { return false; }
 
-		const int32* Stacks = Part->StatusStacks.Find(P.Cond.ParamTag);
-		return Stacks && *Stacks > 0;
+		return FBattleCombatantStatusFacts::HasStatusExact(Part->StatusStacks, P.Cond.ParamTag);
 	}
 
 	/**

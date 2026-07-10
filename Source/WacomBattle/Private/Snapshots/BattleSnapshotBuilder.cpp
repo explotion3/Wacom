@@ -1,6 +1,8 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Snapshots/BattleSnapshotBuilder.h"
+#include "Cards/BattleCardRuntimeStateModule.h"
+#include "Combatants/BattleCombatantMutationModule.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Hand/HandZoneService.h"
@@ -11,6 +13,7 @@
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Statuses/BattleStatusSemanticsModule.h"
 
 namespace
 {
@@ -32,7 +35,7 @@ namespace
 		PartSnap.CurrentInitiative = Part.CurrentInitiative;
 		PartSnap.Shield            = Part.Shield;
 		PartSnap.bDestroyed        = Part.bDestroyed;
-		PartSnap.Statuses          = Part.Statuses;
+		PartSnap.Statuses          = FBattleCombatantStatusFacts::BuildTagProjection(Part.StatusStacks);
 		PartSnap.StatusStacks      = Part.StatusStacks;
 
 		if (!Part.CurrentIntentId.IsNone())
@@ -89,8 +92,11 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 	Out.Player.CurrentHp = State.Player.CurrentHp;
 	Out.Player.MaxHp     = State.Player.MaxHp;
 	Out.Player.Shield    = State.Player.Shield;
-	Out.Player.Statuses  = State.Player.Statuses;
 	Out.Player.StatusStacks = State.Player.StatusStacks;
+	FBattleStatusSemanticsModule::ProjectPendingPlayerStatuses(
+		State,
+		Out.Player.StatusStacks);
+	Out.Player.Statuses  = FBattleCombatantStatusFacts::BuildTagProjection(Out.Player.StatusStacks);
 
 	// ---- Enemies ----
 	Out.Enemies.Reserve(State.Enemy.EnemySlots.Num());
@@ -134,9 +140,13 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		HandCard.InstanceId    = Card->InstanceId;
 		HandCard.Definition    = Card->Definition;
 		HandCard.RuntimeCost   = ComputeRuntimeCost(*Card);
+		HandCard.bIsCostLegal  = FBattleCardRuntimeStateModule::IsCostLegal(State, *Card);
+		HandCard.Statuses      = FBattleCardRuntimeStateModule::BuildStatusProjection(*Card);
+		HandCard.StatusStacks  = Card->StatusStacks;
+		HandCard.bIsFrozen     = FBattleCardRuntimeStateModule::IsFrozen(*Card);
 		HandCard.Zone          = FHandZoneService::GetZoneOf(State, CardId);
 		HandCard.bIsHandAnchor = FHandZoneService::IsHandAnchor(State, CardId);
-		HandCard.bIsPlayable   = FBattleRules::IsCardCostLegal(State, *Card);
+		HandCard.bIsPlayable   = HandCard.bIsCostLegal && !HandCard.bIsFrozen;
 		HandCard.bIsSwift      = HasSwiftKeyword(*Card);
 
 		if (CardId == State.Cards.LeftHandInstanceId)  { Out.Hand.bLeftHandPresent = true; }

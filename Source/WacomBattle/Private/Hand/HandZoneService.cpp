@@ -322,54 +322,6 @@ bool FHandZoneService::ShouldRetainCardAtTurnEnd(const FBattleState& State, cons
 	return false;
 }
 
-void FHandZoneService::CollectRetainedNormalCardsAtTurnEnd(const FBattleState& State, TArray<FGuid>& OutRetained)
-{
-	OutRetained.Reset();
-
-	for (const FGuid& Id : State.Cards.Hand)
-	{
-		if (!Id.IsValid() || IsHandAnchor(State, Id))
-		{
-			continue;
-		}
-
-		if (ShouldRetainCardAtTurnEnd(State, Id))
-		{
-			OutRetained.Add(Id);
-		}
-	}
-}
-
-void FHandZoneService::DiscardNonRetainedNormalCardsAtTurnEnd(FBattleState& State, TArray<FGuid>& OutDiscarded)
-{
-	OutDiscarded.Reset();
-
-	// 从末尾向前扫，索引稳定；用快照的 State.Cards.Hand 做决策（所有"双手区"计算基于
-	// 回合结束那一刻的手牌布局）。
-	// 注意：ShouldRetainCardAtTurnEnd 对"双手区"的判断依赖锚点位置，我们不在
-	// 扫描中途移除锚点，所以"双手区"判断在整个过程中保持一致。
-	for (int32 i = State.Cards.Hand.Num() - 1; i >= 0; --i)
-	{
-		const FGuid Id = State.Cards.Hand[i];
-
-		// 锚点永不进弃牌，ShouldRetainCardAtTurnEnd 会返回 true，这里直接跳过。
-		if (IsHandAnchor(State, Id))
-		{
-			continue;
-		}
-
-		if (ShouldRetainCardAtTurnEnd(State, Id))
-		{
-			continue;
-		}
-
-		State.Cards.Hand.RemoveAt(i);
-		State.Cards.DiscardPile.Add(Id);
-		SetCardLocation(State, Id, ECardLocation::Discard);
-		OutDiscarded.Add(Id);
-	}
-}
-
 // ================ Shuffle 腾挪 ================
 void FHandZoneService::GetAvailableZones(const FBattleState& State, TArray<EHandZone>& OutZones)
 {

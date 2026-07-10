@@ -3,55 +3,49 @@
 #pragma once
 
 #include "CoreMinimal.h"
-
-struct FEffectContext;
+#include "Effects/Semantics/EffectSemanticTypes.h"
 
 /**
- * 具体效果处理函数集合。按 EffectTag 注册到 EffectSemanticsRegistry，
- * 再由 EffectExecutor 统一执行。
+ * Typed effect handlers owned by the Effect Semantics Module.
  *
- * 每个 Handler 是独立的 bool(FEffectContext&)。新增 EffectType 时：
- *   1. 在此处声明处理函数
- *   2. 在 .cpp 实现
- *   3. 在 EffectSemanticsRegistry.cpp 注册 handler、determinism 和 authoring support
- *
- * Handler 返回 false 表示"未能成功执行"（目标非法、已破坏等），调用方可据此决定是否继续效果链。
+ * A failed result describes only the current invocation. Card and intent chain
+ * continuation policy stays in BattleEffectSemanticsModule.
  */
 namespace WacomEffects
 {
 	// ---- Damage ----
-	bool HandleDamage(FEffectContext& Ctx);
+	FEffectApplyResult HandleDamage(FEffectExecutionContext& Ctx);
 
 	// ---- Shield（+盾）----
-	bool HandleShield(FEffectContext& Ctx);
+	FEffectApplyResult HandleShield(FEffectExecutionContext& Ctx);
 
 	// ---- ApplyStatus 系列 ----
-	bool HandleApplyPoison(FEffectContext& Ctx);
-	bool HandleApplySlow(FEffectContext& Ctx);
-	bool HandleApplyFreeze(FEffectContext& Ctx);
-	bool HandleApplyTwilight(FEffectContext& Ctx);
+	FEffectApplyResult HandleApplyPoison(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleApplySlow(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleApplyFreeze(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleApplyTwilight(FEffectExecutionContext& Ctx);
 
 	// ---- Shuffle（腾挪）----
-	bool HandleShuffleRandom(FEffectContext& Ctx);
-	bool HandleShuffleFromBothToOther(FEffectContext& Ctx);
-	bool HandleShuffleToRandomZone(FEffectContext& Ctx);
+	FEffectApplyResult HandleShuffleRandom(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleShuffleFromBothToOther(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleShuffleToRandomZone(FEffectExecutionContext& Ctx);
 
 	// ---- Card Cost 修正 ----
-	bool HandleCardAddCost(FEffectContext& Ctx);
-	bool HandleCardReduceCost(FEffectContext& Ctx);
-	bool HandleCardDiscardSelected(FEffectContext& Ctx);
-	bool HandleCardExhaustSelected(FEffectContext& Ctx);
+	FEffectApplyResult HandleCardAddCost(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleCardReduceCost(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleCardDiscardSelected(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleCardExhaustSelected(FEffectExecutionContext& Ctx);
 
 	// ---- Draw / Discard / Exhaust ----
-	bool HandleDraw(FEffectContext& Ctx);
-	bool HandleDiscard(FEffectContext& Ctx);
-	bool HandleExhaustSelf(FEffectContext& Ctx);
+	FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleDiscard(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleExhaustSelf(FEffectExecutionContext& Ctx);
 
 	// ---- Heal ----
-	bool HandleHeal(FEffectContext& Ctx);
+	FEffectApplyResult HandleHeal(FEffectExecutionContext& Ctx);
 
 	// ---- GainKeyword / RemoveStatus / ModifyInitiative ----
-	bool HandleGainKeyword(FEffectContext& Ctx);
-	bool HandleRemoveStatus(FEffectContext& Ctx);
-	bool HandleModifyInitiative(FEffectContext& Ctx);
+	FEffectApplyResult HandleGainKeyword(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleRemoveStatus(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleModifyInitiative(FEffectExecutionContext& Ctx);
 }

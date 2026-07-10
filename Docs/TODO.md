@@ -36,11 +36,6 @@ tags:
 
 ## P0 策划确认
 
-- [ ] **确认减速、暮气、冻结等状态的数值公式和触发时机**
-  - 状态：`Blocked: 策划确认`
-  - 归属：战斗规则
-  - 入口：[Questions: 状态与触发时机](./Questions.md#questions-status)
-
 - [ ] **明确击倒事件 Aid / Withdraw / Destroy 的正式分支效果**
   - 状态：`Blocked: 策划确认`
   - 归属：战斗 / Run
@@ -90,10 +85,10 @@ tags:
   - 说明：继续做正式掉落 / 奖励池、更多敌人包、卡牌平衡和正式卡组入口；新增规则能力前先接 resolver、合同、文档和验证。
 
 - [ ] **Battle Card Zone Transition 后续迁移**
-  - 状态：`In Progress: Effect 第一切片已完成`
+  - 状态：`In Progress: Effect + EndTurn 手牌切片已完成`
   - 归属：Battle 规则内核
   - 入口：[WacomBattle §5](./WacomBattle.md) / [TechDebt: 规则层技术债](./TechDebt.md)
-  - 说明：下一安全切片先拆分并迁移 HandLimit、TurnEnd、奖励和 Companion 的“选择 + 移动 + 事件”双阶段路径；Draw / 回手 / PlayedPile / Limbo 等路径继续遵守各自规则和 `Questions.md` 中尚未确认的口径，不在迁移中顺带写死。
+  - 说明：下一安全切片迁移 HandLimit，再处理奖励和 Companion 的“选择 + 移动 + 事件”双阶段路径；Draw / 回手 / PlayedPile / Limbo 等路径继续遵守各自规则和 `Questions.md` 中尚未确认的口径，不在迁移中顺带写死。
 
 - [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和动画状态机**
   - 状态：`Ready: 美术 / 表现 polish`

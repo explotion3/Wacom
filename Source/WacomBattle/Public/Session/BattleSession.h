@@ -29,8 +29,8 @@ struct FWacomInteractionTargetHandle;
  * URunSession::BuildInitParamsForBattle 在战斗启动前填上备战区原生 instances
  * 与各 SpecialZone 中 bBattleEnabledInSpecialZone == true 的 instances；
  * BattleSession 在 Initialize 时按 entry 创建 FRuntimeCardInstance，把
- * CapacityEffectTags 拷入 RuntimeCardInstance，供 FCardEffectDispatcher
- * 在 Damage 路径上叠加修正（如蛛茧绒囊给武器卡 +3）。
+ * CapacityEffectTags 拷入 RuntimeCardInstance，供 Effect Semantics 的
+ * Damage magnitude 路径叠加修正（如蛛茧绒囊给武器卡 +3）。
  *
  * - 来自备战区原生位置：CapacityEffectTags = 空集合
  * - 来自 SpecialZone 的卡：CapacityEffectTags = { 主卡 Definition.Physique.CapacityEffect }
@@ -168,7 +168,7 @@ struct WACOMBATTLE_API FBattleInitParams
 	 *
 	 * BattleSession::Initialize 在 BattleDeckEntries.Num() > 0 时优先按 entry 创建
 	 * RuntimeCardInstance，把 entry 的 CapacityEffectTags 拷入 RuntimeCardInstance；
-	 * FCardEffectDispatcher 在 Damage 路径上读取 RuntimeCardInstance.CapacityEffectTags
+	 * Effect Semantics 的 Damage magnitude 路径读取 RuntimeCardInstance.CapacityEffectTags
 	 * 决定是否叠加修正（如 Card.CapacityEffect.WeaponDamagePlus3 给武器卡 +3）。
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")

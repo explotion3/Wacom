@@ -51,6 +51,8 @@ namespace
 		case EBattleEventType::PerfectReleaseResolved:    return TEXT("PerfectReleaseResolved");
 		case EBattleEventType::DamageDealt:               return TEXT("DamageDealt");
 		case EBattleEventType::StatusApplied:             return TEXT("StatusApplied");
+		case EBattleEventType::CardStatusChanged:         return TEXT("CardStatusChanged");
+		case EBattleEventType::EnemyInitiativeChanged:    return TEXT("EnemyInitiativeChanged");
 		case EBattleEventType::InitiativePushed:          return TEXT("InitiativePushed");
 		case EBattleEventType::WaitPerformed:             return TEXT("WaitPerformed");
 		case EBattleEventType::EnemyPartActed:            return TEXT("EnemyPartActed");

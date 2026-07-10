@@ -55,7 +55,7 @@ public:
 	 * 对命中部位执行完美释放效果。
 	 * 迅捷卡不触发；主效果致死的部位不参与。
 	 */
-	static void ResolvePerfectRelease(
+	static bool ResolvePerfectRelease(
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const UCardDefinition& Def,

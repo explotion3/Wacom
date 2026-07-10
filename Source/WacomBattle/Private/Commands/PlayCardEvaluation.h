@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Commands/BattleCommand.h"
+#include "Cards/BattleCardPlacementFacts.h"
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Types/WacomResult.h"
 
@@ -22,6 +23,7 @@ enum class EPlayCardEvaluationReject : uint8
 	CardInstanceNotFound,
 	CardNotInHand,
 	CardHasNoDefinition,
+	CardFrozen,
 	UnsupportedTargetMode,
 	InvalidInteractionTarget,
 	UnsupportedWorldTarget,
@@ -118,6 +120,7 @@ private:
 	FBattleCommand CanonicalCommand;
 	FPlayCardTargetFacts ExecutionTarget;
 	FPlayCardTargetFacts FocusTarget;
+	FBattleCardPlacementFacts PrePlayPlacement;
 	FWacomBattleTargetValidationResult Validation;
 };
 
@@ -140,6 +143,7 @@ public:
 	bool IsSwift() const { return bSwift; }
 	bool IsCombo() const { return bCombo; }
 	const FPlayCardTargetFacts& GetExecutionTarget() const { return ExecutionTarget; }
+	const FBattleCardPlacementFacts& GetPrePlayPlacement() const { return PrePlayPlacement; }
 
 private:
 	FPreparedPlayCard() = default;
@@ -152,6 +156,7 @@ private:
 	bool bSwift = false;
 	bool bCombo = false;
 	FPlayCardTargetFacts ExecutionTarget;
+	FBattleCardPlacementFacts PrePlayPlacement;
 };
 
 /** 完整可提交性求值；成功时携带唯一可执行 Prepared PlayCard。 */
@@ -212,5 +217,6 @@ private:
 		bool bAnchor,
 		bool bSwift,
 		bool bCombo,
-		const FPlayCardTargetFacts& ExecutionTarget);
+		const FPlayCardTargetFacts& ExecutionTarget,
+		const FBattleCardPlacementFacts& PrePlayPlacement);
 };

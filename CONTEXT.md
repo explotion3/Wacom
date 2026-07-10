@@ -40,6 +40,42 @@ _Avoid_: UI 可用性判断、后果模拟
 一批真实卡牌区域移动及其 Location、事件和被动后果的一次同步有序规则操作；它不承诺嵌套效果失败时回滚。
 _Avoid_: 先移动再通知、弃牌事件服务、卡牌移动 Helper
 
+**Turn Lifecycle（回合生命周期）**:
+从首回合启动或当前玩家回合结束开始，按唯一顺序推进 TurnStart、TurnEnd、手牌清理、敌方行动、BattleEnd gate、下一回合与表现 checkpoint 的同步规则范围。
+_Avoid_: EndTurn Resolver 流程、回合事件拼装、UI 回合状态机
+
+**Effect Semantics（效果语义）**:
+一类 Effect 从资产字段到制作合法性、typed 参数、目标计划、Preview determinism、handler 和 Target Preview 投影的唯一代码定义。
+_Avoid_: Effect 配置行、Dispatcher 特判、Preview 专用效果规则
+
+**Effect Chain（效果链）**:
+按定义顺序执行一个或多个 Effect segment、并在明确词法生命周期内共享 `LastShuffledCard` scratch 的同步规则范围。
+_Avoid_: Effect 数组循环、全局效果上下文、跨触发器 scratch
+
+**Combatant Mutation（战斗单位变更）**:
+对玩家或敌方部位应用一次伤害、治疗、护盾或 stack status 意图，并统一维护 HP、Shield、阈值、状态层数、事件和部位破坏边沿的同步规则操作。
+_Avoid_: Handler 直接扣血、Poison 专用死亡逻辑、状态标签与层数双写
+
+**Status Semantics（状态语义）**:
+按状态和宿主解释施加、物化、消费与触发时机，并把原始变更委托给 Combatant Mutation、Card Runtime State 或 Initiative Timeline 的唯一代码定义。
+_Avoid_: 通用 timed-status 表、Effect Handler 状态特判、把所有状态都存进 Combatant StatusStacks
+
+**Initiative Timeline（先机时间线）**:
+安装、延迟或推进敌方部位 `CurrentInitiative`，并产生逐部位实际变化事实的唯一运行时写入口；部位破坏的原子归零除外。
+_Avoid_: Resolver 直接写 CurrentInitiative、只发全局推进摘要
+
+**Card Runtime State（卡牌运行时状态）**:
+单卡状态层数、战内费用修正、有效费用和出牌限制的唯一运行时真相与求值入口。
+_Avoid_: Preview 单独算费用、用 RuntimeCostModifier 混存状态、把卡牌状态挂到玩家本体
+
+**Pending Hand Affliction（待生效手牌控制）**:
+敌方意图施加给玩家、在下个玩家回合抽牌并重建 Hand 后才选择具体卡牌的 Slow、Freeze 或 Twilight 事实。
+_Avoid_: 玩家 StatusStacks 与卡牌 StatusStacks 双写、在抽牌前提前选卡
+
+**Damage Facts（伤害事实）**:
+一次 Combatant Mutation 解析出的请求伤害、护盾吸收、实际 HP 损失、overkill 和本次破坏结果；`DamageDealt.Amount` 投影实际 HP 损失。
+_Avoid_: 名义伤害等于扣血、用 Combat Log 反推护盾吸收
+
 ## Relationships
 
 - **Target Probe** 和 Target Preview 使用同一份 **PlayCard Evaluation** 目标规则，但前者要求一个具体显式目标。
@@ -52,6 +88,16 @@ _Avoid_: 先移动再通知、弃牌事件服务、卡牌移动 Helper
 - **RunEvent Choice Evaluation** 只读取当前事实；选项 Effects 在求值通过后才进入 working-state 事务。
 - 一个 **PlayCard Transaction** 可以包含零个或多个 **Battle Card Zone Transition**。
 - **Battle Card Zone Transition** 只为真实成功移动发布事实；Action Preview adapter 继续透传到弃牌后的嵌套被动。
+- **Turn Lifecycle** 在回合结束时消费一份 **Battle Card Zone Transition** 的 retained / discarded facts，并独占 `CardsRetained` 与 EndTurn presentation checkpoint 的发布时机。
+- **Turn Lifecycle** 只编排既有规则 Module；Enemy Action、BattleEnd 和 Card Zone 的具体算法仍由各自 Implementation 维护。
+- 每个 Effect invocation 都由同一份 **Effect Semantics** 解释；正式执行、Action Preview、Target Preview 和制作校验不维护 EffectType 分支副本。
+- 一个 **Effect Chain** 可以连续消费多个 segment；Main、ZoneHook、PerfectRelease 和 Passive 只决定 chain 生命周期，不持有 scratch 或逐条解释 Effect。
+- Action Preview adapter 位于 **Effect Semantics** 的 resolved invocation 与 handler 之间；随机目标选择只能在 adapter 放行后发生。
+- Effect handler 把状态意图交给 **Status Semantics**；后者按宿主委托 **Combatant Mutation**、**Card Runtime State** 或 **Initiative Timeline**，不在调用方散落状态分支。
+- **Turn Lifecycle** 在抽牌并重建 Hand 后物化 **Pending Hand Affliction**，并在 TurnEnd 清除回合级 Card Status。
+- **PlayCard Evaluation**、Target Preview、Action Preview 和 Snapshot 共享 **Card Runtime State** 的费用与冻结事实。
+- **Status Semantics** 在出牌开始时捕获敌方 Freeze，确保当前卡新施加的 Freeze 只拦截下一次真实先机推进。
+- 一次伤害 **Combatant Mutation** 产生一份 **Damage Facts**；事件、Combat Log 和 Action Preview 共享其中的实际 HP 损失。
 
 ## Example dialogue
 

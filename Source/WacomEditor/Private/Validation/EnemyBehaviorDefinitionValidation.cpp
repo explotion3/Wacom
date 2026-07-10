@@ -113,6 +113,41 @@ namespace
 			AddValidationError(OutErrors,
 				FormatValidationError(TEXT("{0} 的 Duration 不能为负数。"), EffectLabel));
 		}
+
+		const bool bUsesHandAffliction =
+			FWacomBattleRuleContentContract::EnemyIntentEffectUsesHandAfflictionDelivery(
+				Effect.EffectType,
+				Effect.Target);
+		if (bUsesHandAffliction)
+		{
+			const EHandAfflictionSelection CanonicalSelection =
+				FWacomBattleRuleContentContract::GetCanonicalHandAfflictionSelection(
+					Effect.EffectType);
+			if (Effect.HandAffliction.Selection != EHandAfflictionSelection::Default
+				&& Effect.HandAffliction.Selection != CanonicalSelection)
+			{
+				AddValidationError(OutErrors,
+					FormatValidationError(
+						TEXT("{0} 的 HandAffliction.Selection 与该状态规则不匹配。"),
+						EffectLabel));
+			}
+			if (CanonicalSelection == EHandAfflictionSelection::RandomUnique
+				&& Effect.HandAffliction.TargetCardCount <= 0)
+			{
+				AddValidationError(OutErrors,
+					FormatValidationError(
+						TEXT("{0} 的 HandAffliction.TargetCardCount 必须大于 0。"),
+						EffectLabel));
+			}
+		}
+		else if (Effect.HandAffliction.Selection != EHandAfflictionSelection::Default
+			|| Effect.HandAffliction.TargetCardCount != 1)
+		{
+			AddValidationError(OutErrors,
+				FormatValidationError(
+					TEXT("{0} 当前效果不允许填写 HandAffliction。"),
+					EffectLabel));
+		}
 	}
 }
 

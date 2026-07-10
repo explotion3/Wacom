@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Core/BattleRules.h"
+#include "Cards/BattleCardRuntimeStateModule.h"
 #include "Core/BattleState.h"
 #include "Events/BattleEventBus.h"
 #include "Runtime/RuntimeCardInstance.h"
@@ -9,8 +10,7 @@
 
 int32 FBattleRules::ComputeRuntimeCost(const FRuntimeCardInstance& Card)
 {
-	const int32 Base = Card.Definition ? Card.Definition->BaseCost : 0;
-	return FMath::Max(0, Base + Card.RuntimeCostModifier);
+	return FBattleCardRuntimeStateModule::EvaluateCost(Card).EffectiveCost;
 }
 
 int32 FBattleRules::ComputeEnemyInitiativeSum(const FBattleState& State)
@@ -28,7 +28,7 @@ int32 FBattleRules::ComputeEnemyInitiativeSum(const FBattleState& State)
 
 bool FBattleRules::IsCardCostLegal(const FBattleState& State, const FRuntimeCardInstance& Card)
 {
-	return ComputeRuntimeCost(Card) <= ComputeEnemyInitiativeSum(State);
+	return FBattleCardRuntimeStateModule::IsCostLegal(State, Card);
 }
 
 FRuntimeEnemyPart* FBattleRules::FindEnemyPart(FBattleState& State, const FGuid& PartInstanceId)
@@ -108,18 +108,6 @@ void FBattleRules::SetCardLocation(FBattleState& State, const FGuid& CardInstanc
 	if (FRuntimeCardInstance* Card = FindCard(State, CardInstanceId))
 	{
 		Card->Location = NewLocation;
-	}
-}
-
-void FBattleRules::PushEnemyInitiative(FBattleState& State, int32 Amount)
-{
-	if (Amount == 0) { return; }
-	for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
-	{
-		if (!Part.bDestroyed)
-		{
-			Part.CurrentInitiative -= Amount;
-		}
 	}
 }
 

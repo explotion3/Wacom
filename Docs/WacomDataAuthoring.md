@@ -170,6 +170,21 @@ Magnitude 计算顺序：
 3. 否则使用 `Magnitude`。
 4. 按数组顺序应用 `MagnitudeModifiers`。
 
+`FCardEffect` 保持兼容性的宽资产 schema，但战斗执行不会把 `TargetZone` 继续作为通用 MetaTag 透传。Private Effect Semantics 在 decode seam 按 EffectType 将它转换为 DrawSource、HandZone、Keyword 或 Status typed 参数；`Magnitude.Source.TargetStatusStacks` 的 Status 读取参数单独进入 magnitude plan。制作校验、正式执行和 Target Preview 均读取同一份 semantic definition。
+
+`FIntentEffect` 额外包含窄类型 `FHandAfflictionDelivery`：
+
+```cpp
+USTRUCT(BlueprintType)
+struct FHandAfflictionDelivery
+{
+    EHandAfflictionSelection Selection = Default;
+    int32 TargetCardCount = 1;
+};
+```
+
+它只允许用于 `Target.Player` 的 Slow / Freeze / Twilight。`Magnitude=y` 表示每张卡的状态强度；Slow / Freeze 的 `TargetCardCount=x` 表示随机不重复目标数；Twilight 固定 `AllCurrentHandCards`。不要复用 `Duration` 表示目标数。
+
 卡牌效果矩阵：
 
 | EffectType | Magnitude 语义 | Target 典型值 | TargetZone | Duration | MagnitudeSource | 备注 |
@@ -177,9 +192,9 @@ Magnitude 计算顺序：
 | `Effect.Damage` | 伤害值 | SingleEnemyPart / AllEnemyParts / Player | - | - | Literal / RuntimeCost / TargetStatusStacks | 部位 HP 归零立即破坏 |
 | `Effect.Heal` | 治疗量 | Self(->Player) / Player | - | - | Literal | 恢复玩家 HP，并按规则移除中毒 |
 | `Effect.ApplyStatus.Poison` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | - | Literal / RuntimeCost | 层数模型 |
-| `Effect.ApplyStatus.Slow` | 层数 | 同上 | - | - | Literal | 当前只记录层数 |
-| `Effect.ApplyStatus.Freeze` | 层数 | SingleEnemyPart | - | 回合数或 0 | Literal | 按层数消耗实现 |
-| `Effect.ApplyStatus.Twilight` | 层数 | SingleEnemyPart | - | - | Literal | 当前只记录层数 |
+| `Effect.ApplyStatus.Slow` | 强度 | Player / SingleEnemyPart / AllEnemyParts | - | 0 | Literal | 敌方立即延迟当前意图；玩家创建 Pending Hand Affliction |
+| `Effect.ApplyStatus.Freeze` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | 0 | Literal | 敌方拦截后续卡牌推进；玩家创建 Pending Hand Affliction |
+| `Effect.ApplyStatus.Twilight` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | 0 | Literal | 敌方作用于下一意图；玩家污染下回合整手牌 |
 | `Status.Shield` | 护盾值 | Player / Self(->Player) | - | - | Literal | 写 Player Shield；敌方自身护盾只在 Enemy Intent 合同中使用 |
 | `Effect.Shuffle.Random` | - | RandomHandCard | - | - | - | 从手牌随机选普通卡腾挪 |
 | `Effect.Shuffle.FromBothToOther` | - | ZoneHandCard | HandZone.Both | - | - | 从双手区挑一张腾挪到左 / 右 |
@@ -188,21 +203,24 @@ Magnitude 计算顺序：
 | `Effect.Card.ReduceCost` | Modifier 减量 | 同上 | - | - | Literal | 计算时下限 clamp 到 0 |
 | `Effect.Card.DiscardSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进弃牌堆，触发目标卡 `OnDiscard` |
 | `Effect.Card.ExhaustSelected` | 建议填 1 | SelectedHandCard | - | - | Literal | 指定普通手牌进消耗牌堆，不触发 `OnDiscard` |
-| `Effect.Draw` | 张数 | Self / Player | CardLocation.Draw / Discard / Exhaust | - | Literal / RuntimeCost | `TargetZone` 复用为源区域 |
+| `Effect.Draw` | 张数 | Self / Player | CardLocation.Draw / Discard / Exhaust | - | Literal / RuntimeCost | `TargetZone` 在 decode seam 转换为 DrawSource |
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉普通手牌，不弃锚点 |
 | `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 交给打出后去向阶段 |
-| `Effect.GainKeyword` | - | LastShuffledCard / SelectedHandCard | Card.Keyword.* | - | - | `TargetZone` 复用为要添加的 keyword |
-| `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | Status.Poison / Slow / Freeze / Twilight / Stunned | - | Literal / TargetStatusStacks | 不支持 `Status.Shield` |
+| `Effect.GainKeyword` | - | LastShuffledCard / SelectedHandCard | Card.Keyword.* | - | - | `TargetZone` 在 decode seam 转换为 Keyword 参数 |
+| `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | Status.Poison / Freeze / Twilight / Stunned | - | Literal / TargetStatusStacks | 不支持 Shield；敌方 Slow 是即时操作，没有可移除层数 |
 | `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal / TargetStatusStacks | 正数增加，负数减少 |
 
-`Magnitude.Source.RuntimeCost` 当前允许用于 `Effect.Damage`、`Effect.ApplyStatus.Poison` 和 `Effect.Draw`。用于 `Effect.Draw` 时，抽牌数量等于本卡打出时的 RuntimeCost，例如基础费用 2 的测试卡默认抽 2 张，费用被改变后按改变后的费用抽。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的状态，只允许 Poison / Slow / Freeze / Twilight / Stunned。`Status.Shield` 不在 `StatusStacks` 中。详情面板会通过 WacomApp 的 `MagnitudeSourceTemplates` 给非 Literal source 增加来源短语，例如 RuntimeCost 显示为“相当于当前费用 2”。
+`Magnitude.Source.RuntimeCost` 当前允许用于 `Effect.Damage`、`Effect.ApplyStatus.Poison` 和 `Effect.Draw`。用于 `Effect.Draw` 时，抽牌数量等于本卡打出时的 RuntimeCost，例如基础费用 2 的测试卡默认抽 2 张，费用被改变后按改变后的费用抽。`Magnitude.Source.TargetStatusStacks` 当前借用 `TargetZone` 指定要读取的 Combatant 状态，只允许 Poison / Freeze / Twilight / Stunned；敌方 Slow 不保留层数，玩家卡牌 Slow 也不通过 actor-target magnitude 读取。`Status.Shield` 不在 `StatusStacks` 中。
 
 敌人 Intent 效果矩阵：
 
 | EffectType | Target | Magnitude | Duration | 备注 |
 |---|---|---:|---:|---|
 | `Effect.Damage` | `Target.Player` | > 0 | 0 | 对玩家造成伤害 |
-| `Effect.ApplyStatus.Poison / Slow / Freeze / Twilight` | `Target.Player` 或 `Target.Self` | > 0 | >= 0 | Self 表示行动部位自身 |
+| `Effect.ApplyStatus.Poison` | `Target.Player` 或 `Target.Self` | > 0 | >= 0 | 持久 Combatant 层数 |
+| `Effect.ApplyStatus.Slow / Freeze` | `Target.Player` | `y > 0` | 0 | `HandAffliction.TargetCardCount=x>0`，默认 RandomUnique |
+| `Effect.ApplyStatus.Twilight` | `Target.Player` | `y > 0` | 0 | 固定作用于下回合抽牌后的当前整手牌 |
+| `Effect.ApplyStatus.Slow / Freeze / Twilight` | `Target.Self` | > 0 | 0 | Self 表示行动部位；HandAffliction 必须保持默认 |
 | `Status.Shield` | `Target.Self` | > 0 | 0 | 当前敌人 Intent 不给玩家加护盾 |
 
 敌人 Intent 当前不支持手牌目标、全体敌方部位目标、伤害自身、给玩家加护盾、抽弃牌、卡牌专用效果、治疗、移除状态或修改先机。不要依赖运行时静默忽略非法目标。
@@ -218,8 +236,8 @@ Target 解析速查：
 | `Target.SingleEnemyPart` | EnemyPart | 调用方选中的部位 | 否 |
 | `Target.AllEnemyParts` | EnemyPart，循环展开 | 自动遍历存活部位 | 否 |
 | `Target.RandomHandCard` | HandCard | HandZoneService 自选 | 否 |
-| `Target.ZoneHandCard` | HandCard | 按 TargetZone 过滤后自选 | 是 |
-| `Target.LastShuffledCard` | HandCard | `EffectContext::LastShuffledCardId` | 否 |
+| `Target.ZoneHandCard` | 延迟选择的 HandCard | Adapter 放行后由对应 Shuffle handler 自选；当前 FromBoth 固定从 Both 选择 | 是 |
+| `Target.LastShuffledCard` | HandCard | 当前 Effect Chain 的 `LastShuffledCard` scratch | 否 |
 | `Target.SelectedHandCard` | HandCard | `PlayCard` 命令的 `TargetCardInstanceId` | 否 |
 | `Target.Adjacent.Right` | EnemyPart | 未实现 | 否 |
 
@@ -256,7 +274,7 @@ struct FEffectCondition
 |---|---|---|---|
 | Invalid | 永真 | - | - |
 | `Condition.Self.InZone` | 本卡当前在指定区域 | `HandZone.*` | - |
-| `Condition.Target.HasStatus` | 目标部位含指定状态 | `Status.Poison / Slow / Freeze / Twilight / Stunned` | - |
+| `Condition.Target.HasStatus` | 目标部位含指定持久状态 | `Status.Poison / Freeze / Twilight / Stunned` | - |
 
 `FCardZoneHook`：
 

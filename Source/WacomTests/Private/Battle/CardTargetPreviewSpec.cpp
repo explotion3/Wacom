@@ -66,7 +66,7 @@ namespace
 		return Card;
 	}
 
-	FWacomInteractionTargetHandle MakePartTargetHandle(const FEnemyPartSnapshot& Part)
+	FWacomInteractionTargetHandle MakeTargetPreviewPartHandle(const FEnemyPartSnapshot& Part)
 	{
 		return FWacomInteractionTargetHandle::ForWorldTarget(
 			Part.InstanceId,
@@ -80,10 +80,10 @@ namespace
 			Part.PartSlotId);
 	}
 
-	FWacomInteractionTargetHandle MakeFirstPartTargetHandle(const FBattleSnapshot& Snapshot)
+	FWacomInteractionTargetHandle MakeTargetPreviewFirstPartHandle(const FBattleSnapshot& Snapshot)
 	{
 		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
-		return Part ? MakePartTargetHandle(*Part) : FWacomInteractionTargetHandle();
+		return Part ? MakeTargetPreviewPartHandle(*Part) : FWacomInteractionTargetHandle();
 	}
 
 	UBattleSession* CreateDeckSession(
@@ -197,7 +197,7 @@ namespace
 			{ PoisonCard, StackDamageCard, ModifierDamageCard },
 			Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0));
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
-		FWacomInteractionTargetHandle TargetHandle = MakeFirstPartTargetHandle(Snapshot);
+		FWacomInteractionTargetHandle TargetHandle = MakeTargetPreviewFirstPartHandle(Snapshot);
 
 		const FGuid ModifierCardId =
 			FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ModifierDamageCard->CardId);
@@ -213,7 +213,7 @@ namespace
 		Test.TestTrue(TEXT("Seed poison card plays"),
 			Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPart(Snapshot, PoisonCardId, 0)).IsOk());
 		Snapshot = Session->BuildSnapshot();
-		TargetHandle = MakeFirstPartTargetHandle(Snapshot);
+		TargetHandle = MakeTargetPreviewFirstPartHandle(Snapshot);
 
 		const FGuid StackDamageCardId =
 			FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, StackDamageCard->CardId);
@@ -246,7 +246,7 @@ namespace
 			const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Weapon->CardId);
 
 			const FBattleCardTargetPreview Preview =
-				Session->BuildCardTargetPreview(CardId, MakeFirstPartTargetHandle(Before));
+				Session->BuildCardTargetPreview(CardId, MakeTargetPreviewFirstPartHandle(Before));
 			Test.TestTrue(TEXT("Weapon preview exists"), Preview.bHasPreview);
 			Test.TestEqual(TEXT("WeaponDamagePlus3 preview applies to weapon damage"),
 				FindEffectMagnitude(Preview, WacomTags::Effect_Damage),
@@ -272,7 +272,7 @@ namespace
 				FWacomBattleFixture::FindHandInstanceByCardId(Before, NegativeWeapon->CardId);
 
 			const FBattleCardTargetPreview Preview =
-				Session->BuildCardTargetPreview(CardId, MakeFirstPartTargetHandle(Before));
+				Session->BuildCardTargetPreview(CardId, MakeTargetPreviewFirstPartHandle(Before));
 			Test.TestTrue(TEXT("Negative weapon preview exists"), Preview.bHasPreview);
 			Test.TestEqual(TEXT("Damage preview clamps after weapon capacity modifier"),
 				FindEffectMagnitude(Preview, WacomTags::Effect_Damage),

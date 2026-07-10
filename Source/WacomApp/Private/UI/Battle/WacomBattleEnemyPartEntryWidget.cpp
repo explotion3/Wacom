@@ -105,7 +105,7 @@ namespace
 		}
 	}
 
-	bool AreStatusStacksEquivalent(
+	bool AreEnemyPartStatusStacksEquivalent(
 		const TMap<FGameplayTag, int32>& Left,
 		const TMap<FGameplayTag, int32>& Right)
 	{
@@ -144,7 +144,7 @@ namespace
 			&& Left.RuntimeStatuses.Num() == Right.RuntimeStatuses.Num()
 			&& Left.RuntimeStatuses.HasAllExact(Right.RuntimeStatuses)
 			&& Right.RuntimeStatuses.HasAllExact(Left.RuntimeStatuses)
-			&& AreStatusStacksEquivalent(Left.RuntimeStatusStacks, Right.RuntimeStatusStacks)
+			&& AreEnemyPartStatusStacksEquivalent(Left.RuntimeStatusStacks, Right.RuntimeStatusStacks)
 			&& Left.bDestroyed == Right.bDestroyed
 			&& Left.bActionPreviewWillAct == Right.bActionPreviewWillAct;
 	}

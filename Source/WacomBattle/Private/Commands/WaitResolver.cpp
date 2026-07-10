@@ -6,6 +6,7 @@
 #include "Core/BattleState.h"
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
+#include "Initiative/BattleInitiativeTimelineModule.h"
 
 FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& /*Command*/)
 {
@@ -17,7 +18,7 @@ FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events
 
 	const int32 Amount = State.CurrentWaitValue;
 
-	FBattleRules::PushEnemyInitiative(State, Amount);
+	FBattleInitiativeTimelineModule::PushAllLiving(State, Amount);
 
 	{
 		FBattleEvent Ev;

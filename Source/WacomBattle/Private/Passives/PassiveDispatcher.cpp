@@ -2,7 +2,7 @@
 
 #include "Passives/PassiveDispatcher.h"
 #include "Core/BattleOperationAdapter.h"
-#include "Effects/CardEffectDispatcher.h"
+#include "Effects/Semantics/BattleEffectSemanticsModule.h"
 #include "Effects/ConditionResolver.h"
 
 #include "Core/BattleRules.h"
@@ -56,8 +56,16 @@ void FPassiveDispatcher::RunAfterPlayed(
 {
 	if (!Card.Definition) { return; }
 
-	// AfterPlayed 自成一条效果链，LastShuffledCardId 独立。
-	FGuid LocalLastShuffledCardId;
+	// AfterPlayed 自成一条 chain；所有匹配 passive 按当前语义共享 scratch。
+	FCardEffectChain Chain = FBattleEffectSemanticsModule::BeginCardChain(
+		State,
+		Events,
+		FCardEffectChainBindings{
+			RuntimeCost,
+			Card.InstanceId,
+			FGuid(),
+			FGuid() },
+		OperationAdapter);
 
 	for (const FCardPassive& Passive : Card.Definition->Passives)
 	{
@@ -73,15 +81,7 @@ void FPassiveDispatcher::RunAfterPlayed(
 			continue;
 		}
 
-		for (const FCardEffect& Eff : Passive.Effects)
-		{
-			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				/*SelectedPartId=*/FGuid(),
-				Card.InstanceId,
-				LocalLastShuffledCardId,
-				FGuid(),
-				OperationAdapter);
-		}
+		Chain.Execute(Passive.Effects);
 	}
 }
 
@@ -161,67 +161,7 @@ void FPassiveDispatcher::RunOnCompanionCount(
 }
 
 
-// ================ OnTurnStart / OnTurnEnd / OnDraw / OnDiscard ================
-
-void FPassiveDispatcher::RunOnTurnStart(FBattleState& State, FBattleEventBus& Events)
-{
-	// 遍历所有卡（不限位置），触发拥有 OnTurnStart 被动的卡。
-	for (const FRuntimeCardInstance& C : State.Cards.AllCards)
-	{
-		if (!C.Definition) { continue; }
-		for (const FCardPassive& Passive : C.Definition->Passives)
-		{
-			if (Passive.Trigger != WacomTags::Passive_Trigger_OnTurnStart) { continue; }
-			if (!FConditionResolver::Evaluate(State, Passive.Condition, C.InstanceId, FGuid())) { continue; }
-
-			FGuid LocalLastShuffled;
-			for (const FCardEffect& Eff : Passive.Effects)
-			{
-				FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
-					FGuid(), C.InstanceId, LocalLastShuffled);
-			}
-		}
-	}
-}
-
-void FPassiveDispatcher::RunOnTurnEnd(FBattleState& State, FBattleEventBus& Events)
-{
-	for (const FRuntimeCardInstance& C : State.Cards.AllCards)
-	{
-		if (!C.Definition) { continue; }
-		for (const FCardPassive& Passive : C.Definition->Passives)
-		{
-			if (Passive.Trigger != WacomTags::Passive_Trigger_OnTurnEnd) { continue; }
-			if (!FConditionResolver::Evaluate(State, Passive.Condition, C.InstanceId, FGuid())) { continue; }
-
-			FGuid LocalLastShuffled;
-			for (const FCardEffect& Eff : Passive.Effects)
-			{
-				FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
-					FGuid(), C.InstanceId, LocalLastShuffled);
-			}
-		}
-	}
-}
-
-void FPassiveDispatcher::RunOnDraw(FBattleState& State, FBattleEventBus& Events, const FGuid& DrawnCardId)
-{
-	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, DrawnCardId);
-	if (!Card || !Card->Definition) { return; }
-
-	for (const FCardPassive& Passive : Card->Definition->Passives)
-	{
-		if (Passive.Trigger != WacomTags::Passive_Trigger_OnDraw) { continue; }
-		if (!FConditionResolver::Evaluate(State, Passive.Condition, DrawnCardId, FGuid())) { continue; }
-
-		FGuid LocalLastShuffled;
-		for (const FCardEffect& Eff : Passive.Effects)
-		{
-			FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
-				FGuid(), DrawnCardId, LocalLastShuffled);
-		}
-	}
-}
+// ================ OnDiscard ================
 
 void FPassiveDispatcher::RunOnDiscard(
 	FBattleState& State,
@@ -237,11 +177,11 @@ void FPassiveDispatcher::RunOnDiscard(
 		if (Passive.Trigger != WacomTags::Passive_Trigger_OnDiscard) { continue; }
 		if (!FConditionResolver::Evaluate(State, Passive.Condition, DiscardedCardId, FGuid())) { continue; }
 
-		FGuid LocalLastShuffled;
-		for (const FCardEffect& Eff : Passive.Effects)
-		{
-			FCardEffectDispatcher::Execute(State, Events, Eff, /*RuntimeCost=*/0,
-				FGuid(), DiscardedCardId, LocalLastShuffled, FGuid(), OperationAdapter);
-		}
+		FCardEffectChain Chain = FBattleEffectSemanticsModule::BeginCardChain(
+			State,
+			Events,
+			FCardEffectChainBindings{ 0, DiscardedCardId, FGuid(), FGuid() },
+			OperationAdapter);
+		Chain.Execute(Passive.Effects);
 	}
 }

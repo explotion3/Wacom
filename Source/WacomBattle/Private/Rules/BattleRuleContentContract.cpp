@@ -2,95 +2,31 @@
 
 #include "Rules/BattleRuleContentContract.h"
 
-#include "Effects/EffectSemanticsRegistry.h"
+#include "Effects/Semantics/BattleEffectSemanticsModule.h"
 #include "Tags/WacomGameplayTags.h"
-
-namespace
-{
-	bool IsStatusEffect(const FGameplayTag& EffectType)
-	{
-		return EffectType == WacomTags::Effect_ApplyStatus_Poison
-			|| EffectType == WacomTags::Effect_ApplyStatus_Slow
-			|| EffectType == WacomTags::Effect_ApplyStatus_Freeze
-			|| EffectType == WacomTags::Effect_ApplyStatus_Twilight;
-	}
-
-	bool IsCardCostEffect(const FGameplayTag& EffectType)
-	{
-		return EffectType == WacomTags::Effect_Card_AddCost
-			|| EffectType == WacomTags::Effect_Card_ReduceCost;
-	}
-
-	bool IsSelectedHandCardMoveEffect(const FGameplayTag& EffectType)
-	{
-		return EffectType == WacomTags::Effect_Card_DiscardSelected
-			|| EffectType == WacomTags::Effect_Card_ExhaustSelected;
-	}
-
-	bool IsPlayerOrEnemyPartTarget(const FGameplayTag& Target)
-	{
-		return Target == WacomTags::Target_Player
-			|| Target == WacomTags::Target_Self
-			|| Target == WacomTags::Target_SingleEnemyPart
-			|| Target == WacomTags::Target_AllEnemyParts;
-	}
-}
 
 bool FWacomBattleRuleContentContract::IsSupportedCardEffectType(const FGameplayTag& EffectType)
 {
-	const FBattleEffectSemantics* Semantics = FBattleEffectSemanticsRegistry::Find(EffectType);
-	return Semantics && Semantics->bSupportedCardEffect;
+	return FBattleEffectSemanticsModule::IsSupportedCardEffectType(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedEnemyIntentEffectType(const FGameplayTag& EffectType)
 {
-	const FBattleEffectSemantics* Semantics = FBattleEffectSemanticsRegistry::Find(EffectType);
-	return Semantics && Semantics->bSupportedEnemyIntentEffect;
+	return FBattleEffectSemanticsModule::IsSupportedEnemyIntentEffectType(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedMagnitudeSource(const FGameplayTag& MagnitudeSource)
 {
-	return !MagnitudeSource.IsValid()
-		|| MagnitudeSource == WacomTags::Magnitude_Source_Literal
-		|| MagnitudeSource == WacomTags::Magnitude_Source_RuntimeCost
-		|| MagnitudeSource == WacomTags::Magnitude_Source_HandCount
-		|| MagnitudeSource == WacomTags::Magnitude_Source_TargetStatusStacks;
+	return FBattleEffectSemanticsModule::IsSupportedMagnitudeSource(MagnitudeSource);
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedCardEffectMagnitudeSource(
 	const FGameplayTag& EffectType,
 	const FGameplayTag& MagnitudeSource)
 {
-	if (!IsSupportedMagnitudeSource(MagnitudeSource))
-	{
-		return false;
-	}
-
-	if (!MagnitudeSource.IsValid() || MagnitudeSource == WacomTags::Magnitude_Source_Literal)
-	{
-		return true;
-	}
-
-	if (MagnitudeSource == WacomTags::Magnitude_Source_RuntimeCost)
-	{
-		return EffectType == WacomTags::Effect_Damage
-			|| EffectType == WacomTags::Effect_ApplyStatus_Poison
-			|| EffectType == WacomTags::Effect_Draw;
-	}
-
-	if (MagnitudeSource == WacomTags::Magnitude_Source_TargetStatusStacks)
-	{
-		return EffectType == WacomTags::Effect_Damage
-			|| EffectType == WacomTags::Status_Shield
-			|| IsStatusEffect(EffectType)
-			|| EffectType == WacomTags::Effect_Heal
-			|| EffectType == WacomTags::Effect_RemoveStatus
-			|| IsCardCostEffect(EffectType)
-			|| IsSelectedHandCardMoveEffect(EffectType)
-			|| EffectType == WacomTags::Effect_ModifyInitiative;
-	}
-
-	return false;
+	return FBattleEffectSemanticsModule::IsSupportedCardEffectMagnitudeSource(
+		EffectType,
+		MagnitudeSource);
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedConditionType(const FGameplayTag& ConditionType)
@@ -103,7 +39,17 @@ bool FWacomBattleRuleContentContract::IsSupportedConditionType(const FGameplayTa
 bool FWacomBattleRuleContentContract::IsStackStatusTag(const FGameplayTag& StatusTag)
 {
 	return StatusTag == WacomTags::Status_Poison
-		|| StatusTag == WacomTags::Status_Slow
+		|| StatusTag == WacomTags::Status_Freeze
+		|| StatusTag == WacomTags::Status_Twilight
+		|| StatusTag == WacomTags::Status_Stunned;
+}
+
+bool FWacomBattleRuleContentContract::IsRemovableCombatantStatusTag(
+	const FGameplayTag& StatusTag)
+{
+	// Enemy Slow is an immediate initiative operation; it has no lingering
+	// combatant stack to remove. Card Slow is owned by card-state lifecycle.
+	return StatusTag == WacomTags::Status_Poison
 		|| StatusTag == WacomTags::Status_Freeze
 		|| StatusTag == WacomTags::Status_Twilight
 		|| StatusTag == WacomTags::Status_Stunned;
@@ -166,169 +112,81 @@ bool FWacomBattleRuleContentContract::IsSupportedCardEffectTarget(
 	ECardEffectContext Context,
 	ECardTargetMode CardTargetMode)
 {
-	if (!IsSupportedCardEffectType(EffectType))
-	{
-		return false;
-	}
-
-	if (EffectType == WacomTags::Effect_Heal)
-	{
-		return Target == WacomTags::Target_Player || Target == WacomTags::Target_Self;
-	}
-
-	if (EffectType == WacomTags::Effect_Damage
-		|| EffectType == WacomTags::Status_Shield
-		|| IsStatusEffect(EffectType)
-		|| EffectType == WacomTags::Effect_RemoveStatus)
-	{
-		if (Target == WacomTags::Target_SingleEnemyPart)
-		{
-			return Context == ECardEffectContext::PerfectRelease
-				|| ((Context == ECardEffectContext::MainEffect || Context == ECardEffectContext::ZoneHookOnPlay)
-					&& CardTargetMode == ECardTargetMode::SingleEnemyPart);
-		}
-		return IsPlayerOrEnemyPartTarget(Target);
-	}
-
-	if (EffectType == WacomTags::Effect_ModifyInitiative)
-	{
-		if (Target == WacomTags::Target_SingleEnemyPart)
-		{
-			return Context == ECardEffectContext::PerfectRelease
-				|| ((Context == ECardEffectContext::MainEffect || Context == ECardEffectContext::ZoneHookOnPlay)
-					&& CardTargetMode == ECardTargetMode::SingleEnemyPart);
-		}
-		return Target == WacomTags::Target_AllEnemyParts;
-	}
-
-	if (EffectType == WacomTags::Effect_Shuffle_Random)
-	{
-		return Target == WacomTags::Target_RandomHandCard;
-	}
-	if (EffectType == WacomTags::Effect_Shuffle_FromBothToOther)
-	{
-		return Target == WacomTags::Target_ZoneHandCard;
-	}
-	if (EffectType == WacomTags::Effect_Shuffle_ToRandomZone)
-	{
-		return Target == WacomTags::Target_Self;
-	}
-
-	if (IsCardCostEffect(EffectType))
-	{
-		if (Target == WacomTags::Target_SelectedHandCard)
-		{
-			return CardTargetMode == ECardTargetMode::HandCard;
-		}
-		return Target == WacomTags::Target_Self || Target == WacomTags::Target_LastShuffledCard;
-	}
-
-	if (IsSelectedHandCardMoveEffect(EffectType))
-	{
-		return Target == WacomTags::Target_SelectedHandCard
-			&& CardTargetMode == ECardTargetMode::HandCard;
-	}
-
-	if (EffectType == WacomTags::Effect_Draw
-		|| EffectType == WacomTags::Effect_Discard
-		|| EffectType == WacomTags::Effect_ExhaustSelf)
-	{
-		return !Target.IsValid()
-			|| Target == WacomTags::Target_Player
-			|| Target == WacomTags::Target_Self;
-	}
-
-	if (EffectType == WacomTags::Effect_GainKeyword)
-	{
-		if (Target == WacomTags::Target_SelectedHandCard)
-		{
-			return CardTargetMode == ECardTargetMode::HandCard;
-		}
-		return Target == WacomTags::Target_LastShuffledCard;
-	}
-
-	return false;
+	return FBattleEffectSemanticsModule::IsSupportedCardEffectTarget(
+		EffectType,
+		Target,
+		Context,
+		CardTargetMode);
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedEnemyIntentEffectTarget(
 	const FGameplayTag& EffectType,
 	const FGameplayTag& Target)
 {
-	if (!IsSupportedEnemyIntentEffectType(EffectType))
-	{
-		return false;
-	}
+	return FBattleEffectSemanticsModule::IsSupportedEnemyIntentEffectTarget(
+		EffectType,
+		Target);
+}
 
-	if (EffectType == WacomTags::Effect_Damage)
-	{
-		return Target == WacomTags::Target_Player;
-	}
+bool FWacomBattleRuleContentContract::EnemyIntentEffectUsesHandAfflictionDelivery(
+	const FGameplayTag& EffectType,
+	const FGameplayTag& Target)
+{
+	return Target == WacomTags::Target_Player
+		&& (EffectType == WacomTags::Effect_ApplyStatus_Slow
+			|| EffectType == WacomTags::Effect_ApplyStatus_Freeze
+			|| EffectType == WacomTags::Effect_ApplyStatus_Twilight);
+}
 
-	if (EffectType == WacomTags::Status_Shield)
-	{
-		return Target == WacomTags::Target_Self;
-	}
-
-	if (IsStatusEffect(EffectType))
-	{
-		return Target == WacomTags::Target_Player || Target == WacomTags::Target_Self;
-	}
-
-	return false;
+EHandAfflictionSelection FWacomBattleRuleContentContract::GetCanonicalHandAfflictionSelection(
+	const FGameplayTag& EffectType)
+{
+	return EffectType == WacomTags::Effect_ApplyStatus_Twilight
+		? EHandAfflictionSelection::AllCurrentHandCards
+		: EHandAfflictionSelection::RandomUnique;
 }
 
 bool FWacomBattleRuleContentContract::CardEffectRequiresTargetZone(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_Shuffle_FromBothToOther
-		|| EffectType == WacomTags::Effect_GainKeyword
-		|| EffectType == WacomTags::Effect_RemoveStatus;
+	return FBattleEffectSemanticsModule::CardEffectRequiresTargetZone(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectAllowsTargetZone(const FGameplayTag& EffectType)
 {
-	return CardEffectRequiresTargetZone(EffectType)
-		|| EffectType == WacomTags::Effect_Draw;
+	return FBattleEffectSemanticsModule::CardEffectAllowsTargetZone(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeHandZone(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_Shuffle_FromBothToOther;
+	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeHandZone(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeCardLocation(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_Draw;
+	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeCardLocation(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeStackStatus(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_RemoveStatus;
+	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeStackStatus(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeCardKeyword(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_GainKeyword;
+	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeCardKeyword(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectSupportsNegativeMagnitude(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_ModifyInitiative;
+	return FBattleEffectSemanticsModule::CardEffectSupportsNegativeMagnitude(EffectType);
 }
 
-bool FWacomBattleRuleContentContract::EnemyIntentEffectSupportsNegativeMagnitude(const FGameplayTag& /*EffectType*/)
+bool FWacomBattleRuleContentContract::EnemyIntentEffectSupportsNegativeMagnitude(const FGameplayTag& EffectType)
 {
-	return false;
+	return FBattleEffectSemanticsModule::EnemyIntentEffectSupportsNegativeMagnitude(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::EffectUsesPositiveMagnitude(const FGameplayTag& EffectType)
 {
-	return EffectType == WacomTags::Effect_Damage
-		|| EffectType == WacomTags::Status_Shield
-		|| IsStatusEffect(EffectType)
-		|| EffectType == WacomTags::Effect_Draw
-		|| EffectType == WacomTags::Effect_Discard
-		|| EffectType == WacomTags::Effect_Heal
-		|| EffectType == WacomTags::Effect_RemoveStatus
-		|| IsCardCostEffect(EffectType)
-		|| IsSelectedHandCardMoveEffect(EffectType);
+	return FBattleEffectSemanticsModule::EffectUsesPositiveMagnitude(EffectType);
 }

@@ -25,9 +25,10 @@ public:
 	 * 执行本卡 OnPlay 的 ZoneHook ExtraEffects。
 	 *
 	 * 触发时机：CardPlayed 事件发射之后、"记录出牌前先机"之前。
-	 * LastShuffledCardId 在所有 ExtraEffects 之间共享。
+	 * 所有匹配 Hook 的 ExtraEffects 作为 segment 提交到同一 Effect Chain，
+	 * 由 chain 在其词法生命周期内共享 LastShuffledCard scratch。
 	 */
-	static void RunOnPlayHooks(
+	static bool RunOnPlayHooks(
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const UCardDefinition& Def,

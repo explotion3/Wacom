@@ -896,7 +896,7 @@ bool FWacomDataBattleStarterContentAssetValidationSpec::RunTest(const FString& /
 	if (MoltCut->Effects.Num() >= 2)
 	{
 		TestEqual(TEXT("MoltCut remove status"), MoltCut->Effects[0].EffectType, FGameplayTag(WacomTags::Effect_RemoveStatus));
-		TestEqual(TEXT("MoltCut removes slow"), MoltCut->Effects[0].TargetZone, FGameplayTag(WacomTags::Status_Slow));
+		TestEqual(TEXT("MoltCut removes freeze"), MoltCut->Effects[0].TargetZone, FGameplayTag(WacomTags::Status_Freeze));
 		TestEqual(TEXT("MoltCut initiative"), MoltCut->Effects[1].EffectType, FGameplayTag(WacomTags::Effect_ModifyInitiative));
 		TestEqual(TEXT("MoltCut initiative amount"), MoltCut->Effects[1].Magnitude, -2);
 	}

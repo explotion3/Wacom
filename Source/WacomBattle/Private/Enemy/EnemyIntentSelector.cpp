@@ -2,11 +2,14 @@
 
 #include "Enemy/EnemyIntentSelector.h"
 
+#include "Combatants/BattleCombatantMutationModule.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Events/BattleEventBus.h"
+#include "Initiative/BattleInitiativeTimelineModule.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Statuses/BattleStatusSemanticsModule.h"
 
 #include "Enemies/EnemyBehaviorDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -140,9 +143,11 @@ namespace
 		case EWacomEnemyIntentConditionType::UnitPhase:
 			return !Condition.PhaseId.IsNone() && Part.CurrentPhaseId == Condition.PhaseId;
 		case EWacomEnemyIntentConditionType::SelfStatusPresent:
-			return Condition.StatusTag.IsValid() && Part.Statuses.HasTagExact(Condition.StatusTag);
+			return Condition.StatusTag.IsValid()
+				&& FBattleCombatantStatusFacts::HasStatusExact(Part.StatusStacks, Condition.StatusTag);
 		case EWacomEnemyIntentConditionType::PlayerStatusPresent:
-			return Condition.StatusTag.IsValid() && State.Player.Statuses.HasTagExact(Condition.StatusTag);
+			return Condition.StatusTag.IsValid()
+				&& FBattleCombatantStatusFacts::HasStatusExact(State.Player.StatusStacks, Condition.StatusTag);
 		case EWacomEnemyIntentConditionType::CooldownAvailable:
 			return IsCooldownAvailable(Part, IntentSet, Rule, &Condition);
 		default:
@@ -225,6 +230,10 @@ void FEnemyIntentSelector::RefreshIntentForPart(
 			ApplyCooldownForSelectedRule(Part, *IntentEntry, SelectedRule);
 			if (Events)
 			{
+				FBattleStatusSemanticsModule::FinalizeSelectedEnemyIntent(
+					State,
+					*Events,
+					Part);
 				FBattleEvent Ev;
 				Ev.Type = EBattleEventType::EnemyIntentSelected;
 				Ev.ActorInstanceId = Part.InstanceId;
@@ -242,7 +251,7 @@ void FEnemyIntentSelector::RefreshIntentForPart(
 	Part.CurrentIntent = FIntentDefinition();
 	Part.CurrentIntentId = NAME_None;
 	Part.CurrentIntentSetId = NAME_None;
-	Part.CurrentInitiative = 0;
+	FBattleInitiativeTimelineModule::SetCurrent(Part, 0);
 }
 
 void FEnemyIntentSelector::ApplySelectedIntent(
@@ -253,7 +262,7 @@ void FEnemyIntentSelector::ApplySelectedIntent(
 	Part.CurrentIntentSetId = IntentSet.IntentSetId;
 	Part.CurrentIntentId = IntentEntry.Intent.IntentId;
 	Part.CurrentIntent = IntentEntry.Intent;
-	Part.CurrentInitiative = IntentEntry.Intent.Initiative;
+	FBattleInitiativeTimelineModule::SetCurrent(Part, IntentEntry.Intent.Initiative);
 }
 
 const FWacomEnemyIntentSetDefinition* FEnemyIntentSelector::ResolveIntentSet(

@@ -82,9 +82,9 @@ tags:
 | `Effect.Damage` | `Effect_Damage` | 伤害 |
 | `Effect.Heal` | `Effect_Heal` | 治疗玩家 HP，并移除治疗量 10% 的中毒层数，向下取整 |
 | `Effect.ApplyStatus.Poison` | `Effect_ApplyStatus_Poison` | 施加中毒 |
-| `Effect.ApplyStatus.Slow` | `Effect_ApplyStatus_Slow` | 施加减速 |
-| `Effect.ApplyStatus.Freeze` | `Effect_ApplyStatus_Freeze` | 施加冻结 |
-| `Effect.ApplyStatus.Twilight` | `Effect_ApplyStatus_Twilight` | 施加暮气 |
+| `Effect.ApplyStatus.Slow` | `Effect_ApplyStatus_Slow` | 敌方即时延迟当前意图；玩家投递下回合卡牌减速 |
+| `Effect.ApplyStatus.Freeze` | `Effect_ApplyStatus_Freeze` | 敌方拦截后续卡牌推进；玩家投递下回合冻结卡 |
+| `Effect.ApplyStatus.Twilight` | `Effect_ApplyStatus_Twilight` | 敌方延迟下一意图；玩家投递下回合整手牌暮气 |
 | `Effect.Shuffle.Random` | `Effect_Shuffle_Random` | 随机腾挪 |
 | `Effect.Shuffle.FromBothToOther` | `Effect_Shuffle_FromBothToOther` | 从双手区腾挪到其他区域 |
 | `Effect.Shuffle.ToRandomZone` | `Effect_Shuffle_ToRandomZone` | 把本卡腾挪到随机区域 |
@@ -96,7 +96,7 @@ tags:
 | `Effect.Discard` | `Effect_Discard` | 随机弃掉手牌中的普通卡 |
 | `Effect.ExhaustSelf` | `Effect_ExhaustSelf` | 标记本卡打出后进入消耗牌堆 |
 | `Effect.GainKeyword` | `Effect_GainKeyword` | 给目标手牌临时添加关键词 |
-| `Effect.RemoveStatus` | `Effect_RemoveStatus` | 移除目标指定状态层数 |
+| `Effect.RemoveStatus` | `Effect_RemoveStatus` | 移除目标持久 Combatant 状态层数；不移除即时敌方 Slow |
 | `Effect.ModifyInitiative` | `Effect_ModifyInitiative` | 修改目标敌方部位当前先机 |
 
 当前没有 `Effect.ApplyStatus.Burn` 或 `Status.Burn`。UI 的 Burn 徽章只是美术预留位，不能作为正式 DataAsset 配置依据。
@@ -122,9 +122,9 @@ tags:
 | Tag | 代码名 | 说明 |
 |---|---|---|
 | `Status.Poison` | `Status_Poison` | 中毒 |
-| `Status.Slow` | `Status_Slow` | 减速 |
-| `Status.Freeze` | `Status_Freeze` | 冻结 |
-| `Status.Twilight` | `Status_Twilight` | 暮气 |
+| `Status.Slow` | `Status_Slow` | 卡牌回合级费用增加；敌方侧只作为即时 Initiative cause |
+| `Status.Freeze` | `Status_Freeze` | 敌方推进拦截层数或卡牌回合级出牌限制 |
+| `Status.Twilight` | `Status_Twilight` | 敌方下一意图延迟层数或随卡持久费用状态 |
 | `Status.Stunned` | `Status_Stunned` | 晕厥 |
 | `Status.Shield` | `Status_Shield` | 护盾数值入口；不进入 `StatusStacks` |
 

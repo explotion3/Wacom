@@ -6,7 +6,6 @@
 #include "GameplayTagContainer.h"
 #include "Enemies/IntentDefinition.h"
 #include "Runtime/BattlePartSlotIdentity.h"
-#include "Runtime/RuntimeStatus.h"
 #include "RuntimeEnemyPart.generated.h"
 
 class UEnemyBehaviorDefinition;
@@ -76,14 +75,7 @@ struct WACOMBATTLE_API FRuntimeEnemyPart
 	UPROPERTY()
 	int32 Shield = 0;
 
-	/** 状态标签集合与层数。Shield 单独存字段不进状态模型。 */
-	UPROPERTY()
-	FGameplayTagContainer Statuses;
-
+	/** Stack status 的唯一运行时真相，只保存正层数。Shield 单独存字段。 */
 	UPROPERTY()
 	TMap<FGameplayTag, int32> StatusStacks;
-
-	/** 便于把 FStatusInstance 的 Duration 一并承载；多数当前状态仍通过 StatusStacks 结算。 */
-	UPROPERTY()
-	TArray<FStatusInstance> StatusInstances;
 };

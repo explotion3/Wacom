@@ -163,3 +163,138 @@ bool FWacomBattleRandomDiscardBatchTransitionSpec::RunTest(const FString& /*Para
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleTurnEndHandTransitionOrderSpec,
+	"Wacom.Battle.CardZoneTransition.TurnEndUsesStableRetainAndDiscardFacts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleTurnEndHandTransitionOrderSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fixture;
+	UCardDefinition* LeftHand = Fixture.MakeNoopCard(0);
+	UCardDefinition* RightHand = Fixture.MakeNoopCard(0);
+	UCardDefinition* PlayedCard = Fixture.MakeNoopCard(0);
+	PlayedCard->CardId = TEXT("CardZoneTransition.TurnEnd.Played");
+	AddOnDiscardPlayerPoison(*PlayedCard);
+
+	UCardDefinition* FirstDiscard = Fixture.MakeNoopCard(0);
+	FirstDiscard->CardId = TEXT("CardZoneTransition.TurnEnd.FirstDiscard");
+	AddOnDiscardPlayerPoison(*FirstDiscard);
+	UCardDefinition* SecondDiscard = Fixture.MakeNoopCard(0);
+	SecondDiscard->CardId = TEXT("CardZoneTransition.TurnEnd.SecondDiscard");
+	AddOnDiscardPlayerPoison(*SecondDiscard);
+	UCardDefinition* RetainedCard = Fixture.MakeNoopCard(0);
+	RetainedCard->CardId = TEXT("CardZoneTransition.TurnEnd.Retained");
+	RetainedCard->Keywords.AddTag(WacomTags::Card_Keyword_Retain);
+	UCardDefinition* PlainDiscard = Fixture.MakeNoopCard(0);
+	PlainDiscard->CardId = TEXT("CardZoneTransition.TurnEnd.PlainDiscard");
+
+	UBattleSession* Session = Fixture.CreateSession(
+		Fixture.MakeCharacter(
+			LeftHand,
+			RightHand,
+			{ PlayedCard, FirstDiscard, SecondDiscard, RetainedCard, PlainDiscard }),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(
+			/*Hp*/100,
+			/*Initiative*/50,
+			/*IntentResist*/0,
+			/*Damage*/0),
+		/*Seed*/7);
+
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid PlayedCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PlayedCard->CardId);
+	const FGuid LeftHandId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, LeftHand->CardId);
+	const FGuid RightHandId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, RightHand->CardId);
+	const FGuid RetainedCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, RetainedCard->CardId);
+	if (!TestTrue(TEXT("Played card starts in hand"), PlayedCardId.IsValid())
+		|| !TestTrue(TEXT("Left anchor starts in hand"), LeftHandId.IsValid())
+		|| !TestTrue(TEXT("Right anchor starts in hand"), RightHandId.IsValid())
+		|| !TestTrue(TEXT("Retained card starts in hand"), RetainedCardId.IsValid()))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Move normal card to PlayedPile"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCard(PlayedCardId)).IsOk());
+	TestTrue(TEXT("Remove one anchor so Both-zone does not retain plain cards"),
+		Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
+
+	const FBattleSnapshot BeforeEndTurn = Session->BuildSnapshot();
+	TArray<FGuid> ExpectedDiscardOrder;
+	for (int32 HandIndex = BeforeEndTurn.Hand.Cards.Num() - 1; HandIndex >= 0; --HandIndex)
+	{
+		const FHandCardSnapshot& Card = BeforeEndTurn.Hand.Cards[HandIndex];
+		if (!Card.bIsHandAnchor && Card.InstanceId != RetainedCardId)
+		{
+			ExpectedDiscardOrder.Add(Card.InstanceId);
+		}
+	}
+
+	Session->ConsumeEvents();
+	Session->ConsumePresentationJournal();
+	TestTrue(TEXT("EndTurn succeeds"),
+		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+
+	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	TArray<const FBattleEvent*> TurnEndDiscardEvents;
+	const FBattleEvent* RetainedEvent = nullptr;
+	const FBattleEvent* DiscardBatchEvent = nullptr;
+	int32 OnDiscardPoisonEvents = 0;
+	for (const FBattleEvent& Event : Events)
+	{
+		if (Event.Type == EBattleEventType::CardDiscarded
+			&& Event.HandCardZoneMoveReason == EHandCardZoneMoveReason::TurnEnd)
+		{
+			TurnEndDiscardEvents.Add(&Event);
+		}
+		else if (Event.Type == EBattleEventType::CardsRetained)
+		{
+			RetainedEvent = &Event;
+		}
+		else if (Event.Type == EBattleEventType::HandZoneChanged
+			&& Event.Count == ExpectedDiscardOrder.Num())
+		{
+			DiscardBatchEvent = &Event;
+		}
+		else if (Event.Type == EBattleEventType::StatusApplied
+			&& Event.Tag == WacomTags::Status_Poison)
+		{
+			++OnDiscardPoisonEvents;
+		}
+	}
+
+	TestEqual(TEXT("Only non-retained hand cards publish turn-end discard facts"),
+		TurnEndDiscardEvents.Num(), ExpectedDiscardOrder.Num());
+	for (int32 Index = 0; Index < FMath::Min(TurnEndDiscardEvents.Num(), ExpectedDiscardOrder.Num()); ++Index)
+	{
+		TestEqual(
+			*FString::Printf(TEXT("Turn-end discard order[%d]"), Index),
+			TurnEndDiscardEvents[Index]->CardInstanceId,
+			ExpectedDiscardOrder[Index]);
+		TestFalse(TEXT("Turn-end discard has no effect source actor"),
+			TurnEndDiscardEvents[Index]->ActorInstanceId.IsValid());
+	}
+	TestNotNull(TEXT("Turn-end discard publishes one sized batch event"), DiscardBatchEvent);
+	if (DiscardBatchEvent && !TurnEndDiscardEvents.IsEmpty())
+	{
+		TestTrue(TEXT("All CardDiscarded events precede the batch HandZoneChanged"),
+			TurnEndDiscardEvents.Last()->Sequence < DiscardBatchEvent->Sequence);
+	}
+	TestEqual(TEXT("Only the two discarded passive cards run OnDiscard"), OnDiscardPoisonEvents, 2);
+	TestTrue(TEXT("PlayedPile natural cleanup does not publish CardDiscarded"),
+		!TurnEndDiscardEvents.ContainsByPredicate(
+			[PlayedCardId](const FBattleEvent* Event)
+			{
+				return Event && Event->CardInstanceId == PlayedCardId;
+			}));
+	if (TestNotNull(TEXT("Explicit retained card publishes CardsRetained"), RetainedEvent))
+	{
+		TestTrue(TEXT("CardsRetained contains retained normal card"),
+			RetainedEvent->CardInstanceIds.Contains(RetainedCardId));
+		TestFalse(TEXT("CardsRetained excludes hand anchors"),
+			RetainedEvent->CardInstanceIds.Contains(RightHandId));
+	}
+
+	return true;
+}

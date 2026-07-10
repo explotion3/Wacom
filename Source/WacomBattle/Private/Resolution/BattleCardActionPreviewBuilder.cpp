@@ -79,6 +79,38 @@ namespace
 			|| !AreStatusStacksEqual(Baseline.StatusStacks, Projected.StatusStacks);
 	}
 
+	bool HasHandCardChanged(
+		const FHandCardSnapshot& Baseline,
+		const FHandCardSnapshot& Projected)
+	{
+		return Baseline.InstanceId != Projected.InstanceId
+			|| Baseline.RuntimeCost != Projected.RuntimeCost
+			|| Baseline.Zone != Projected.Zone
+			|| Baseline.bIsCostLegal != Projected.bIsCostLegal
+			|| Baseline.bIsPlayable != Projected.bIsPlayable
+			|| Baseline.bIsFrozen != Projected.bIsFrozen
+			|| !AreTagContainersEqualExact(Baseline.Statuses, Projected.Statuses)
+			|| !AreStatusStacksEqual(Baseline.StatusStacks, Projected.StatusStacks);
+	}
+
+	bool HasHandChanged(
+		const FHandQueueSnapshot& Baseline,
+		const FHandQueueSnapshot& Projected)
+	{
+		if (Baseline.Cards.Num() != Projected.Cards.Num())
+		{
+			return true;
+		}
+		for (int32 Index = 0; Index < Baseline.Cards.Num(); ++Index)
+		{
+			if (HasHandCardChanged(Baseline.Cards[Index], Projected.Cards[Index]))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	const FEnemyPartSnapshot* FindPartSnapshot(
 		const FBattleSnapshot& Snapshot,
 		const FGuid& PartInstanceId)
@@ -106,6 +138,11 @@ namespace
 		{
 			Preview.bHasProjectedPlayer = true;
 			Preview.ProjectedPlayer = ProjectedSnapshot.Player;
+		}
+		if (HasHandChanged(BaselineSnapshot.Hand, ProjectedSnapshot.Hand))
+		{
+			Preview.bHasProjectedHand = true;
+			Preview.ProjectedHand = ProjectedSnapshot.Hand;
 		}
 
 		for (const FEnemySnapshot& Enemy : ProjectedSnapshot.Enemies)
@@ -178,6 +215,12 @@ FBattleCardActionPreview FBattleCardActionPreviewBuilder::Build(
 			Preview.TargetPreview.Validation.bCanTarget = false;
 			Preview.TargetPreview.Validation.RejectReason =
 				EWacomBattleTargetRejectReason::NotEnoughInitiative;
+		}
+		else if (Status.Detail == TEXT("CardFrozen"))
+		{
+			Preview.TargetPreview.Validation.bCanTarget = false;
+			Preview.TargetPreview.Validation.RejectReason =
+				EWacomBattleTargetRejectReason::SourceCardFrozen;
 		}
 		AppendTransactionFailureDebug(Preview.TargetPreview.Validation, Status);
 		return Preview;

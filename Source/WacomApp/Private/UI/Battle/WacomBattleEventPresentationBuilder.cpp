@@ -15,6 +15,10 @@ namespace
 			return TEXT("CardGained");
 		case EBattleEventType::StatusApplied:
 			return TEXT("StatusApplied");
+		case EBattleEventType::CardStatusChanged:
+			return TEXT("CardStatusChanged");
+		case EBattleEventType::EnemyInitiativeChanged:
+			return TEXT("EnemyInitiativeChanged");
 		case EBattleEventType::DamageDealt:
 			return TEXT("DamageDealt");
 		case EBattleEventType::HandLimitDiscarded:
@@ -109,6 +113,8 @@ namespace
 		case EBattleEventType::BattleEnded:
 			return E.Count == 1 ? TEXT("战斗胜利") : TEXT("战斗失败");
 		case EBattleEventType::HandZoneChanged:
+		case EBattleEventType::CardStatusChanged:
+		case EBattleEventType::EnemyInitiativeChanged:
 		case EBattleEventType::CardDiscarded:
 		case EBattleEventType::CardExhausted:
 			return FString();  // 太频繁，不弹提示

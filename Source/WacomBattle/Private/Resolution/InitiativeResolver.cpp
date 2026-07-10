@@ -1,8 +1,8 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Resolution/InitiativeResolver.h"
-#include "Effects/CardEffectDispatcher.h"
-#include "Effects/MagnitudeResolver.h"
+#include "Combatants/BattleCombatantMutationModule.h"
+#include "Effects/Semantics/BattleEffectSemanticsModule.h"
 
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
@@ -20,7 +20,8 @@ namespace
 	/**
 	 * 取一张卡的抵抗比较数值。
 	 * 使用主效果首个 Effect.Damage 的 Magnitude；无伤害效果为 0。
-	 * Magnitude 的实际值由 MagnitudeResolver 决定（Literal / RuntimeCost / ...）。
+	 * 使用 Effect Semantics 的 base magnitude（Literal / RuntimeCost / ...），
+	 * 不应用主效果的 modifiers 或 Damage 后处理。
 	 */
 	int32 ComputeCardResistanceValue(const FBattleState& State, const UCardDefinition& Def, int32 RuntimeCost)
 	{
@@ -28,7 +29,10 @@ namespace
 		{
 			if (Eff.EffectType == WacomTags::Effect_Damage)
 			{
-				return FMagnitudeResolver::Compute(State, Eff, RuntimeCost);
+				return FBattleEffectSemanticsModule::EvaluateCardBaseMagnitude(
+					State,
+					Eff,
+					RuntimeCost);
 			}
 		}
 		return 0;
@@ -101,23 +105,17 @@ void FInitiativeResolver::ResolveResistance(
 
 		if (bStun)
 		{
-			Part->Statuses.AddTag(WacomTags::Status_Stunned);
-			int32& Stacks = Part->StatusStacks.FindOrAdd(WacomTags::Status_Stunned);
-			Stacks += 1;
-
-			FBattleEvent SEv;
-			SEv.Type            = EBattleEventType::StatusApplied;
-			SEv.ActorInstanceId = PartId;
-			SEv.ActorEnemyPartKey = Part->Identity.ToEnemyPartKey();
-			SEv.CardInstanceId  = CardId;
-			SEv.Tag             = WacomTags::Status_Stunned;
-			SEv.Amount          = 1;
-			Events.Emit(SEv);
+			FStatusApplicationIntent Intent;
+			Intent.Target = FBattleCombatantHandle::EnemyPart(PartId);
+			Intent.Status = WacomTags::Status_Stunned;
+			Intent.Stacks = 1;
+			Intent.EventSourceCardInstanceId = CardId;
+			FBattleCombatantMutationModule::ApplyStatusStacks(State, Events, Intent);
 		}
 	}
 }
 
-void FInitiativeResolver::ResolvePerfectRelease(
+bool FInitiativeResolver::ResolvePerfectRelease(
 	FBattleState& State,
 	FBattleEventBus& Events,
 	const UCardDefinition& Def,
@@ -127,8 +125,9 @@ void FInitiativeResolver::ResolvePerfectRelease(
 	bool bSwift,
 	IBattleOperationAdapter* OperationAdapter)
 {
-	if (bSwift) { return; }
-	if (Def.PerfectReleaseEffects.IsEmpty()) { return; }
+	if (bSwift) { return false; }
+	if (Def.PerfectReleaseEffects.IsEmpty()) { return false; }
+	bool bSourceCardShuffled = false;
 
 	for (const FGuid& PartId : HitPartIds)
 	{
@@ -144,16 +143,18 @@ void FInitiativeResolver::ResolvePerfectRelease(
 			Events.Emit(Ev);
 		}
 
-		// 每个命中部位独立一条效果链，LastShuffledCardId 不跨部位共享。
-		FGuid LocalLastShuffledCardId;
-		for (const FCardEffect& Eff : Def.PerfectReleaseEffects)
-		{
-			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				/*SelectedPartId=*/PartId,
+		// 每个命中部位独立一条 chain，scratch 不跨部位共享。
+		FCardEffectChain Chain = FBattleEffectSemanticsModule::BeginCardChain(
+			State,
+			Events,
+			FCardEffectChainBindings{
+				RuntimeCost,
 				CardId,
-				LocalLastShuffledCardId,
-				FGuid(),
-				OperationAdapter);
-		}
+				PartId,
+				FGuid() },
+			OperationAdapter);
+		Chain.Execute(Def.PerfectReleaseEffects);
+		bSourceCardShuffled |= Chain.WasCardShuffled(CardId);
 	}
+	return bSourceCardShuffled;
 }

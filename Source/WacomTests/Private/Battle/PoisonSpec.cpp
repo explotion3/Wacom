@@ -110,7 +110,7 @@ bool FWacomBattlePoisonTickOnCardPlaySpec::RunTest(const FString& /*Parameters*/
 
 	// 打出中毒卡：
 	// 1) 施加 3 层毒到部位
-	// 2) PlayCardResolver 末尾 PoisonResolver 触发 → 部位 -3 HP
+	// 2) PlayCardResolver 末尾 Status Semantics 结算 Poison → 部位 -3 HP
 	// 敌方先机由 20 扣到 19，不触发行动。
 	TestTrue(TEXT("PlayPoison"),
 		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, Pid, PartId)).IsOk());
@@ -131,7 +131,7 @@ bool FWacomBattlePoisonTickOnCardPlaySpec::RunTest(const FString& /*Parameters*/
 
 // ================================================================
 // Test 2: TickOnEnemyAct
-// 玩家中毒，EndTurn → 敌方部位行动 → ActOnce 结束的 PoisonResolver 扣玩家 HP。
+// 玩家中毒，EndTurn → 敌方部位行动 → ActOnce 结束的 Status Semantics 扣玩家 HP。
 // ================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattlePoisonTickOnEnemyActSpec,
@@ -173,7 +173,7 @@ bool FWacomBattlePoisonTickOnEnemyActSpec::RunTest(const FString& /*Parameters*/
 
 	// 结束回合 → 所有敌方部位按序行动（ResolveEndTurnActions）
 	//   - 部位意图：Damage 1 打玩家 → 玩家 -1
-	//   - ActOnce 末尾触发 PoisonResolver → 玩家 -3（因为还有 3 层毒）
+	//   - ActOnce 末尾由 Status Semantics 结算 Poison → 玩家 -3（因为还有 3 层毒）
 	// 最终玩家 HP = 97 - 1 - 3 = 93。
 	TestTrue(TEXT("EndTurn"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
@@ -221,7 +221,7 @@ bool FWacomBattlePoisonPenetratesShieldSpec::RunTest(const FString& /*Parameters
 	// 打出：
 	// 1) Shield 100 加到玩家
 	// 2) 施加 Poison 3 到玩家
-	// 3) PoisonResolver 触发 → 玩家直接 -3 HP（Shield 不吸收）
+	// 3) Status Semantics 结算 Poison → 玩家直接 -3 HP（Shield 不吸收）
 	TestTrue(TEXT("PlayCombo"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid)).IsOk());
 
 	Snap = S->BuildSnapshot();
@@ -271,7 +271,7 @@ bool FWacomBattlePoisonStacksUnchangedSpec::RunTest(const FString& /*Parameters*
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after tick1"), FWacomBattleFixture::FindPartHp(Snap, 0), 47);
 
-	// 第 2 张：无效果卡，PoisonResolver 仍应触发（部位 HP 47→44）
+	// 第 2 张：无效果卡，Status Semantics 仍应结算 Poison（部位 HP 47→44）
 	TestTrue(TEXT("Play2"), S->SubmitCommand(FBattleCommand::MakePlayCard(NoopId)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after tick2"), FWacomBattleFixture::FindPartHp(Snap, 0), 44);

@@ -3,6 +3,7 @@
 #include "Commands/PlayCardEvaluation.h"
 
 #include "Cards/CardDefinition.h"
+#include "Cards/BattleCardRuntimeStateModule.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Resolution/HandCardTargetEligibility.h"
@@ -22,6 +23,8 @@ namespace
 		bool bAnchor = false;
 		bool bSwift = false;
 		bool bCombo = false;
+		bool bFrozen = false;
+		FBattleCardPlacementFacts PrePlayPlacement;
 	};
 
 	struct FTargetEvaluation
@@ -69,6 +72,18 @@ namespace
 			|| Result.Card->InstanceId == State.Cards.RightHandInstanceId;
 		Result.bSwift = HasKeyword(*Result.Card, WacomTags::Card_Keyword_Swift);
 		Result.bCombo = HasKeyword(*Result.Card, WacomTags::Card_Keyword_Combo);
+		Result.bFrozen = FBattleCardRuntimeStateModule::IsFrozen(*Result.Card);
+		Result.PrePlayPlacement.OriginalIndex = State.Cards.Hand.IndexOfByKey(CardInstanceId);
+		if (Result.PrePlayPlacement.OriginalIndex > 0)
+		{
+			Result.PrePlayPlacement.PreviousCardInstanceId =
+				State.Cards.Hand[Result.PrePlayPlacement.OriginalIndex - 1];
+		}
+		if (State.Cards.Hand.IsValidIndex(Result.PrePlayPlacement.OriginalIndex + 1))
+		{
+			Result.PrePlayPlacement.NextCardInstanceId =
+				State.Cards.Hand[Result.PrePlayPlacement.OriginalIndex + 1];
+		}
 		return Result;
 	}
 
@@ -213,6 +228,8 @@ namespace
 			return EWacomBattleTargetRejectReason::SourceCardNotInHand;
 		case EPlayCardEvaluationReject::CardHasNoDefinition:
 			return EWacomBattleTargetRejectReason::SourceCardMissingDefinition;
+		case EPlayCardEvaluationReject::CardFrozen:
+			return EWacomBattleTargetRejectReason::SourceCardFrozen;
 		case EPlayCardEvaluationReject::UnsupportedTargetMode:
 		case EPlayCardEvaluationReject::InvalidInteractionTarget:
 		case EPlayCardEvaluationReject::MissingEnemyPartTarget:
@@ -262,6 +279,7 @@ namespace
 		case EPlayCardEvaluationReject::CardInstanceNotFound: return TEXT("CardInstanceNotFound");
 		case EPlayCardEvaluationReject::CardNotInHand: return TEXT("CardNotInHand");
 		case EPlayCardEvaluationReject::CardHasNoDefinition: return TEXT("CardHasNoDefinition");
+		case EPlayCardEvaluationReject::CardFrozen: return TEXT("CardFrozen");
 		case EPlayCardEvaluationReject::UnsupportedTargetMode: return TEXT("UnsupportedTargetMode");
 		case EPlayCardEvaluationReject::InvalidInteractionTarget: return TEXT("InvalidInteractionTarget");
 		case EPlayCardEvaluationReject::UnsupportedWorldTarget: return TEXT("UnsupportedWorldTarget");
@@ -337,6 +355,8 @@ namespace
 			return FWacomStatus::Fail(EWacomError::IllegalCardZone, TEXT("CardNotInHand"));
 		case EPlayCardEvaluationReject::CardHasNoDefinition:
 			return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("CardHasNoDefinition"));
+		case EPlayCardEvaluationReject::CardFrozen:
+			return FWacomStatus::Fail(EWacomError::CardForbidden, TEXT("CardFrozen"));
 		case EPlayCardEvaluationReject::UnsupportedTargetMode:
 			return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("UnsupportedCardTargetMode"));
 		case EPlayCardEvaluationReject::MissingEnemyPartTarget:
@@ -413,7 +433,8 @@ FPlayCardCommitResult FPlayCardEvaluator::MakeCommitSuccess(
 	bool bAnchor,
 	bool bSwift,
 	bool bCombo,
-	const FPlayCardTargetFacts& ExecutionTarget)
+	const FPlayCardTargetFacts& ExecutionTarget,
+	const FBattleCardPlacementFacts& PrePlayPlacement)
 {
 	FPreparedPlayCard Prepared;
 	Prepared.EvaluatedStateVersion = StateVersion;
@@ -424,6 +445,7 @@ FPlayCardCommitResult FPlayCardEvaluator::MakeCommitSuccess(
 	Prepared.bSwift = bSwift;
 	Prepared.bCombo = bCombo;
 	Prepared.ExecutionTarget = ExecutionTarget;
+	Prepared.PrePlayPlacement = PrePlayPlacement;
 
 	FPlayCardCommitResult Result;
 	Result.Status = FWacomStatus::Ok();
@@ -521,6 +543,7 @@ FPlayCardPreviewCandidate FPlayCardEvaluator::EvaluatePreviewCandidate(
 	Result.bAnchor = Source.bAnchor;
 	Result.bSwift = Source.bSwift;
 	Result.bCombo = Source.bCombo;
+	Result.PrePlayPlacement = Source.PrePlayPlacement;
 	Result.CanonicalCommand = FBattleCommand::MakePlayCard(CardInstanceId);
 
 	switch (Source.Definition->TargetMode)
@@ -664,6 +687,10 @@ FPlayCardCommitResult FPlayCardEvaluator::EvaluateCommit(
 	}
 
 	check(Source.Card && Source.Definition);
+	if (Source.bFrozen)
+	{
+		return MakeCommitFailure(EPlayCardEvaluationReject::CardFrozen);
+	}
 	FBattleCommand CanonicalCommand = FBattleCommand::MakePlayCard(Command.CardInstanceId);
 	FPlayCardTargetFacts ExecutionTarget;
 	EPlayCardEvaluationReject TargetReject = EPlayCardEvaluationReject::None;
@@ -742,7 +769,8 @@ FPlayCardCommitResult FPlayCardEvaluator::EvaluateCommit(
 		Source.bAnchor,
 		Source.bSwift,
 		Source.bCombo,
-		ExecutionTarget);
+		ExecutionTarget,
+		Source.PrePlayPlacement);
 }
 
 FPlayCardCommitResult FPlayCardEvaluator::EvaluateCommit(
@@ -768,6 +796,10 @@ FPlayCardCommitResult FPlayCardEvaluator::EvaluateCommit(
 	{
 		return MakeCommitFailure(EPlayCardEvaluationReject::StaleEvaluation);
 	}
+	if (FBattleCardRuntimeStateModule::IsFrozen(*SourceCard))
+	{
+		return MakeCommitFailure(EPlayCardEvaluationReject::CardFrozen);
+	}
 	if (!FBattleRules::IsCardCostLegal(State, *SourceCard))
 	{
 		return MakeCommitFailure(EPlayCardEvaluationReject::NotEnoughInitiative);
@@ -781,5 +813,6 @@ FPlayCardCommitResult FPlayCardEvaluator::EvaluateCommit(
 		Candidate.bAnchor,
 		Candidate.bSwift,
 		Candidate.bCombo,
-		Candidate.ExecutionTarget);
+		Candidate.ExecutionTarget,
+		Candidate.PrePlayPlacement);
 }

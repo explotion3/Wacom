@@ -1,10 +1,12 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Effects/EffectHandlers.h"
-#include "Effects/EffectContext.h"
+#include "Effects/Semantics/EffectSemanticTypes.h"
 
 #include "Cards/CardDefinition.h"
 #include "Cards/CardPassive.h"
+#include "Cards/BattleCardRuntimeStateModule.h"
+#include "Combatants/BattleCombatantMutationModule.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Deck/DeckService.h"
@@ -16,6 +18,8 @@
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Statuses/BattleStatusSemanticsModule.h"
+#include "Initiative/BattleInitiativeTimelineModule.h"
 namespace WacomEffects
 {
 
@@ -23,55 +27,44 @@ namespace
 {
 	// ================ 通用辅助 ================
 
-	void EmitStatusApplied(FEffectContext& Ctx, const FGameplayTag& StatusTag, int32 Stacks)
-	{
-		FBattleEvent Ev;
-		Ev.Type            = EBattleEventType::StatusApplied;
-		Ev.ActorInstanceId = Ctx.TargetInstanceId;
-		Ev.ActorEnemyPartKey = (Ctx.TargetKind == EEffectTargetKind::EnemyPart)
-			? FBattleRules::FindEnemyPartKey(*Ctx.State, Ctx.TargetInstanceId)
-			: FBattleEnemyPartKey();
-		Ev.Tag             = StatusTag;
-		Ev.Amount          = Stacks;
-		Ctx.Events->Emit(Ev);
-	}
-
 	/**
-	 * 状态类效果的通用落地：目标是 EnemyPart 就加到部位的 StatusStacks，
-	 * 目标是 Player 就加到 State 的 PlayerStatusStacks，发 StatusApplied 事件。
+	 * 状态类效果的通用落地。普通 Effect ApplyStatus 保持 legacy 事件合同：
+	 * StatusApplied 不填写来源卡实例；Resistance Stun 会在自己的调用点显式填写。
 	 */
-	bool ApplyStatusToTarget(FEffectContext& Ctx, const FGameplayTag& StatusTag)
+	bool ApplyStatusToTarget(FEffectExecutionContext& Ctx, const FGameplayTag& StatusTag)
 	{
 		if (Ctx.Magnitude <= 0) { return false; }
 
+		FBattleStatusApplicationIntent Intent;
+		Intent.Status = StatusTag;
+		Intent.Stacks = Ctx.Magnitude;
+		Intent.SourceInstanceId = Ctx.SourceInstanceId;
+		Intent.HandAffliction = Ctx.HandAffliction;
 		if (Ctx.TargetKind == EEffectTargetKind::EnemyPart)
 		{
-			FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(*Ctx.State, Ctx.TargetInstanceId);
-			if (!Part || Part->bDestroyed) { return false; }
-
-			Part->Statuses.AddTag(StatusTag);
-			int32& Stored = Part->StatusStacks.FindOrAdd(StatusTag);
-			Stored += Ctx.Magnitude;
-			EmitStatusApplied(Ctx, StatusTag, Ctx.Magnitude);
-			return true;
+			Intent.Target = EBattleStatusApplicationTarget::EnemyPart;
+			Intent.EnemyPartInstanceId = Ctx.TargetInstanceId;
 		}
-		if (Ctx.TargetKind == EEffectTargetKind::Player)
+		else if (Ctx.TargetKind == EEffectTargetKind::Player)
 		{
-			Ctx.State->Player.Statuses.AddTag(StatusTag);
-			int32& Stored = Ctx.State->Player.StatusStacks.FindOrAdd(StatusTag);
-			Stored += Ctx.Magnitude;
-			EmitStatusApplied(Ctx, StatusTag, Ctx.Magnitude);
-			return true;
+			Intent.Target = EBattleStatusApplicationTarget::Player;
 		}
-		return false;
+		else
+		{
+			return false;
+		}
+
+		return FBattleStatusSemanticsModule::ApplyStatus(
+			*Ctx.State,
+			*Ctx.Events,
+			Intent);
 	}
 
 	/**
-	 * Shuffle 成功后发 HandZoneChanged 并记录 LastShuffledCardId。
+	 * Shuffle 成功后发 HandZoneChanged；被移动 ID 由 handler result 交给 chain scratch。
 	 */
-	void OnShuffleSuccess(FEffectContext& Ctx, const FGuid& MovedId)
+	void EmitShuffleSuccess(FEffectExecutionContext& Ctx, const FGuid& MovedId)
 	{
-		Ctx.LastShuffledCardId = MovedId;
 		FBattleEvent Ev;
 		Ev.Type           = EBattleEventType::HandZoneChanged;
 		Ev.CardInstanceId = MovedId;
@@ -84,82 +77,13 @@ namespace
 		return FBattleRules::FindCard(State, Id);
 	}
 
-	// ================ Damage 分支 ================
-
-	void ApplyDamageToPlayer(FEffectContext& Ctx, int32 Damage)
-	{
-		if (Damage <= 0) { return; }
-		FBattleState& State = *Ctx.State;
-
-		int32 Remaining = Damage;
-		if (State.Player.Shield > 0)
-		{
-			const int32 Absorbed = FMath::Min(State.Player.Shield, Remaining);
-			State.Player.Shield -= Absorbed;
-			Remaining -= Absorbed;
-		}
-		if (Remaining > 0)
-		{
-			State.Player.CurrentHp = FMath::Max(0, State.Player.CurrentHp - Remaining);
-			State.CheckHpThresholdsCrossed();
-		}
-
-		FBattleEvent Ev;
-		Ev.Type            = EBattleEventType::DamageDealt;
-		Ev.ActorInstanceId = FGuid();  // Target = Player
-		Ev.CardInstanceId  = (Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
-		Ev.Amount          = Damage;
-		Ctx.Events->Emit(Ev);
-	}
-
-	void ApplyDamageToPart(FEffectContext& Ctx, int32 Damage)
-	{
-		if (Damage <= 0) { return; }
-
-		FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(*Ctx.State, Ctx.TargetInstanceId);
-		if (!Part || Part->bDestroyed) { return; }
-
-		int32 Remaining = Damage;
-		if (Part->Shield > 0)
-		{
-			const int32 Absorbed = FMath::Min(Part->Shield, Remaining);
-			Part->Shield -= Absorbed;
-			Remaining -= Absorbed;
-		}
-		if (Remaining > 0)
-		{
-			Part->CurrentHp = FMath::Max(0, Part->CurrentHp - Remaining);
-		}
-
-		FBattleEvent Ev;
-		Ev.Type            = EBattleEventType::DamageDealt;
-		Ev.ActorInstanceId = Part->InstanceId;
-		Ev.ActorEnemyPartKey = Part->Identity.ToEnemyPartKey();
-		Ev.CardInstanceId  = (Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
-		Ev.Amount          = Damage;
-		Ctx.Events->Emit(Ev);
-
-		// 部位 HP 归零：立即破坏。
-		if (Part->CurrentHp <= 0 && !Part->bDestroyed)
-		{
-			Part->bDestroyed        = true;
-			Part->CurrentInitiative = 0;
-
-			// 统一处理：发事件 + 经验 + DestroyedParts + 击倒事件队列。
-			// 传当前卡实例 ID：让击倒选项排除"正在被打出的左/右手 anchor"
-			const FGuid InflictedByCardId =
-				(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
-			Ctx.State->RecordPartDestroyed(*Part, *Ctx.Events, InflictedByCardId);
-		}
-	}
-
 	// ================ OnTwilightTriggered ================
 
 	/**
 	 * 暮气施加成功后，对所有拥有 OnTwilightTriggered 被动的卡发事件。
 	 * 具体被动效果由后续调度/效果配置承接。
 	 */
-	void DispatchOnTwilightTriggered(FEffectContext& Ctx)
+	void DispatchOnTwilightTriggered(FEffectExecutionContext& Ctx)
 	{
 		for (const FRuntimeCardInstance& C : Ctx.State->Cards.AllCards)
 		{
@@ -182,180 +106,193 @@ namespace
 
 // ================ Handler 实现 ================
 
-bool HandleDamage(FEffectContext& Ctx)
+FEffectApplyResult HandleDamage(FEffectExecutionContext& Ctx)
 {
+	FDamageMutationIntent Intent;
+	Intent.RequestedDamage = Ctx.Magnitude;
+	Intent.ShieldInteraction = EDamageShieldInteraction::ConsumeShield;
+	Intent.SourceCardInstanceId =
+		(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
+
 	switch (Ctx.TargetKind)
 	{
-	case EEffectTargetKind::Player:    ApplyDamageToPlayer(Ctx, Ctx.Magnitude); return true;
-	case EEffectTargetKind::EnemyPart: ApplyDamageToPart(Ctx, Ctx.Magnitude);   return true;
-	default: return false;
+	case EEffectTargetKind::Player:
+		Intent.Target = FBattleCombatantHandle::Player();
+		FBattleCombatantMutationModule::ApplyDamage(*Ctx.State, *Ctx.Events, Intent);
+		return FEffectApplyResult::Applied();
+	case EEffectTargetKind::EnemyPart:
+		Intent.Target = FBattleCombatantHandle::EnemyPart(Ctx.TargetInstanceId);
+		FBattleCombatantMutationModule::ApplyDamage(*Ctx.State, *Ctx.Events, Intent);
+		return FEffectApplyResult::Applied();
+	default:
+		return FEffectApplyResult::Failed();
 	}
 }
 
-bool HandleShield(FEffectContext& Ctx)
+FEffectApplyResult HandleShield(FEffectExecutionContext& Ctx)
 {
 	// 护盾简化为 ApplyStatus.Shield 的特例：不走 StatusStacks，直接加到 Shield 字段。
 	if (Ctx.TargetKind == EEffectTargetKind::Player)
 	{
-		Ctx.State->Player.Shield += Ctx.Magnitude;
-		return true;
+		return FEffectApplyResult::FromBool(
+			FBattleCombatantMutationModule::AddShield(
+				*Ctx.State,
+				FBattleCombatantHandle::Player(),
+				Ctx.Magnitude).IsAccepted());
 	}
 	if (Ctx.TargetKind == EEffectTargetKind::EnemyPart)
 	{
-		FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(*Ctx.State, Ctx.TargetInstanceId);
-		if (!Part || Part->bDestroyed) { return false; }
-		Part->Shield += Ctx.Magnitude;
-		return true;
+		return FEffectApplyResult::FromBool(
+			FBattleCombatantMutationModule::AddShield(
+				*Ctx.State,
+				FBattleCombatantHandle::EnemyPart(Ctx.TargetInstanceId),
+				Ctx.Magnitude).IsAccepted());
 	}
-	return false;
+	return FEffectApplyResult::Failed();
 }
 
-bool HandleApplyPoison(FEffectContext& Ctx)
+FEffectApplyResult HandleApplyPoison(FEffectExecutionContext& Ctx)
 {
-	return ApplyStatusToTarget(Ctx, WacomTags::Status_Poison);
+	return FEffectApplyResult::FromBool(ApplyStatusToTarget(Ctx, WacomTags::Status_Poison));
 }
 
-bool HandleApplySlow(FEffectContext& Ctx)
+FEffectApplyResult HandleApplySlow(FEffectExecutionContext& Ctx)
 {
-	return ApplyStatusToTarget(Ctx, WacomTags::Status_Slow);
+	return FEffectApplyResult::FromBool(ApplyStatusToTarget(Ctx, WacomTags::Status_Slow));
 }
 
-bool HandleApplyFreeze(FEffectContext& Ctx)
+FEffectApplyResult HandleApplyFreeze(FEffectExecutionContext& Ctx)
 {
-	return ApplyStatusToTarget(Ctx, WacomTags::Status_Freeze);
+	return FEffectApplyResult::FromBool(ApplyStatusToTarget(Ctx, WacomTags::Status_Freeze));
 }
 
-bool HandleApplyTwilight(FEffectContext& Ctx)
+FEffectApplyResult HandleApplyTwilight(FEffectExecutionContext& Ctx)
 {
 	const bool bOk = ApplyStatusToTarget(Ctx, WacomTags::Status_Twilight);
 	if (bOk)
 	{
 		DispatchOnTwilightTriggered(Ctx);
 	}
-	return bOk;
+	return FEffectApplyResult::FromBool(bOk);
 }
 
-bool HandleShuffleRandom(FEffectContext& Ctx)
+FEffectApplyResult HandleShuffleRandom(FEffectExecutionContext& Ctx)
 {
 	const FGuid Moved = FHandZoneService::RandomShuffleOneInHand(*Ctx.State, Ctx.ExcludeHandCardId);
-	if (!Moved.IsValid()) { return false; }
-	OnShuffleSuccess(Ctx, Moved);
-	return true;
+	if (!Moved.IsValid()) { return FEffectApplyResult::Failed(); }
+	EmitShuffleSuccess(Ctx, Moved);
+	return FEffectApplyResult::Shuffled(Moved);
 }
 
-bool HandleShuffleFromBothToOther(FEffectContext& Ctx)
+FEffectApplyResult HandleShuffleFromBothToOther(FEffectExecutionContext& Ctx)
 {
 	const FGuid Moved = FHandZoneService::MoveRandomFromBothToOther(*Ctx.State, Ctx.ExcludeHandCardId);
-	if (!Moved.IsValid()) { return false; }
-	OnShuffleSuccess(Ctx, Moved);
-	return true;
+	if (!Moved.IsValid()) { return FEffectApplyResult::Failed(); }
+	EmitShuffleSuccess(Ctx, Moved);
+	return FEffectApplyResult::Shuffled(Moved);
 }
 
-bool HandleShuffleToRandomZone(FEffectContext& Ctx)
+FEffectApplyResult HandleShuffleToRandomZone(FEffectExecutionContext& Ctx)
 {
-	if (!Ctx.TargetInstanceId.IsValid()) { return false; }
+	if (!Ctx.TargetInstanceId.IsValid()) { return FEffectApplyResult::Failed(); }
 	const bool bOk = FHandZoneService::MoveCardToRandomZone(*Ctx.State, Ctx.TargetInstanceId);
-	if (!bOk) { return false; }
-	OnShuffleSuccess(Ctx, Ctx.TargetInstanceId);
-	return true;
+	if (!bOk) { return FEffectApplyResult::Failed(); }
+	EmitShuffleSuccess(Ctx, Ctx.TargetInstanceId);
+	return FEffectApplyResult::Shuffled(Ctx.TargetInstanceId);
 }
 
-bool HandleCardAddCost(FEffectContext& Ctx)
+FEffectApplyResult HandleCardAddCost(FEffectExecutionContext& Ctx)
 {
 	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
 	{
-		return false;
+		return FEffectApplyResult::Failed();
 	}
-	FRuntimeCardInstance* CardInst = FindCardInstance(*Ctx.State, Ctx.TargetInstanceId);
-	if (!CardInst) { return false; }
-	CardInst->RuntimeCostModifier += Ctx.Magnitude;
-	return true;
+	return FEffectApplyResult::FromBool(
+		FBattleCardRuntimeStateModule::ApplyRuntimeCostModifier(
+			*Ctx.State,
+			Ctx.TargetInstanceId,
+			Ctx.Magnitude));
 }
 
-bool HandleCardReduceCost(FEffectContext& Ctx)
+FEffectApplyResult HandleCardReduceCost(FEffectExecutionContext& Ctx)
 {
 	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
 	{
-		return false;
+		return FEffectApplyResult::Failed();
 	}
-	FRuntimeCardInstance* CardInst = FindCardInstance(*Ctx.State, Ctx.TargetInstanceId);
-	if (!CardInst) { return false; }
-	CardInst->RuntimeCostModifier -= Ctx.Magnitude;
-	return true;
+	return FEffectApplyResult::FromBool(
+		FBattleCardRuntimeStateModule::ApplyRuntimeCostModifier(
+			*Ctx.State,
+			Ctx.TargetInstanceId,
+			-Ctx.Magnitude));
 }
 
-bool HandleCardDiscardSelected(FEffectContext& Ctx)
+FEffectApplyResult HandleCardDiscardSelected(FEffectExecutionContext& Ctx)
 {
 	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
 	{
-		return false;
+		return FEffectApplyResult::Failed();
 	}
 
 	const TArray<FGuid> RequestedCardIds = { Ctx.TargetInstanceId };
-	return FBattleCardZoneTransition::DiscardCardsFromHand(
+	return FEffectApplyResult::FromBool(FBattleCardZoneTransition::DiscardCardsFromHand(
 		*Ctx.State,
 		*Ctx.Events,
 		RequestedCardIds,
 		FBattleCardZoneTransitionCause::FromEffect(
 			Ctx.SourceInstanceId,
 			Ctx.EffectTag,
-			Ctx.OperationAdapter)).MovedAny();
+			Ctx.OperationAdapter)).MovedAny());
 }
 
-bool HandleCardExhaustSelected(FEffectContext& Ctx)
+FEffectApplyResult HandleCardExhaustSelected(FEffectExecutionContext& Ctx)
 {
 	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
 	{
-		return false;
+		return FEffectApplyResult::Failed();
 	}
 
 	const TArray<FGuid> RequestedCardIds = { Ctx.TargetInstanceId };
-	return FBattleCardZoneTransition::ExhaustCardsFromHand(
+	return FEffectApplyResult::FromBool(FBattleCardZoneTransition::ExhaustCardsFromHand(
 		*Ctx.State,
 		*Ctx.Events,
 		RequestedCardIds,
 		FBattleCardZoneTransitionCause::FromEffect(
 			Ctx.SourceInstanceId,
 			Ctx.EffectTag,
-			Ctx.OperationAdapter)).MovedAny();
+			Ctx.OperationAdapter)).MovedAny());
 }
 
 // ================ Draw / Discard / Exhaust / Heal ================
 
-bool HandleDraw(FEffectContext& Ctx)
+FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx)
 {
 	// Effect.Draw：从源区域移动 Magnitude 张卡到手牌。
 	//
 	// 字段约定：
 	//   Magnitude = 移动几张
-	//   MetaTag（= Effect.TargetZone）= 源区域 Tag
-	//     空 / CardLocation.Draw = 抽牌堆（默认）
-	//     CardLocation.Discard   = 弃牌堆
-	//     CardLocation.Exhaust   = 消耗牌堆
+	//   Parameters.DrawSource = 已由 semantics decode 的源区域
 	//
-	// 筛选关键词：第一版不支持（需要给 FEffectContext 加 FilterTag 字段）。
+	// 筛选关键词：第一版不支持。
 	// 等策划给出具体需要筛选的卡牌时再扩展。
 	//
-	if (Ctx.Magnitude <= 0) { return false; }
+	if (Ctx.Magnitude <= 0) { return FEffectApplyResult::Failed(); }
 
 	// 确定源区域
 	TArray<FGuid>* SourcePile = nullptr;
 	ECardLocation SourceLocation = ECardLocation::Draw;
-
-	if (!Ctx.MetaTag.IsValid() || Ctx.MetaTag == WacomTags::CardLocation_Draw)
+	if (Ctx.Parameters.IsType<FDrawSourceEffectParameters>())
 	{
-		SourcePile = &Ctx.State->Cards.DrawPile;
-		SourceLocation = ECardLocation::Draw;
+		SourceLocation = Ctx.Parameters.Get<FDrawSourceEffectParameters>().SourceLocation;
 	}
-	else if (Ctx.MetaTag == WacomTags::CardLocation_Discard)
+
+	if (SourceLocation == ECardLocation::Discard)
 	{
 		SourcePile = &Ctx.State->Cards.DiscardPile;
-		SourceLocation = ECardLocation::Discard;
 	}
-	else if (Ctx.MetaTag == WacomTags::CardLocation_Exhaust)
+	else if (SourceLocation == ECardLocation::Exhaust)
 	{
 		SourcePile = &Ctx.State->Cards.ExhaustPile;
-		SourceLocation = ECardLocation::Exhaust;
 	}
 	else
 	{
@@ -374,11 +311,11 @@ bool HandleDraw(FEffectContext& Ctx)
 		{
 			WacomBattleEvents::EmitCardsDrawn(*Ctx.Events, DrawnIds);
 		}
-		return DrawnIds.Num() > 0;
+		return FEffectApplyResult::FromBool(DrawnIds.Num() > 0);
 	}
 
 	// 从弃牌堆 / 消耗牌堆：随机选 Magnitude 张移到手牌
-	if (!SourcePile || SourcePile->IsEmpty()) { return false; }
+	if (!SourcePile || SourcePile->IsEmpty()) { return FEffectApplyResult::Failed(); }
 
 	TArray<FGuid> MovedIds;
 	const int32 AvailableSlots = FHandZoneService::GetAvailableNormalCardSlots(*Ctx.State, Ctx.SourceInstanceId);
@@ -398,132 +335,130 @@ bool HandleDraw(FEffectContext& Ctx)
 	{
 		WacomBattleEvents::EmitCardsDrawn(*Ctx.Events, MovedIds);
 	}
-	return MovedIds.Num() > 0;
+	return FEffectApplyResult::FromBool(MovedIds.Num() > 0);
 }
 
-bool HandleDiscard(FEffectContext& Ctx)
+FEffectApplyResult HandleDiscard(FEffectExecutionContext& Ctx)
 {
 	// 随机弃掉手牌中 Magnitude 张普通卡（不弃锚点）。
-	if (Ctx.Magnitude <= 0) { return false; }
+	if (Ctx.Magnitude <= 0) { return FEffectApplyResult::Failed(); }
 
-	return FBattleCardZoneTransition::DiscardRandomNormalCardsFromHand(
+	return FEffectApplyResult::FromBool(FBattleCardZoneTransition::DiscardRandomNormalCardsFromHand(
 		*Ctx.State,
 		*Ctx.Events,
 		Ctx.Magnitude,
 		FBattleCardZoneTransitionCause::FromEffect(
 			Ctx.SourceInstanceId,
 			Ctx.EffectTag,
-			Ctx.OperationAdapter)).MovedAny();
+			Ctx.OperationAdapter)).MovedAny());
 }
 
-bool HandleExhaustSelf(FEffectContext& Ctx)
+FEffectApplyResult HandleExhaustSelf(FEffectExecutionContext& Ctx)
 {
 	// 只打临时关键字；实际去向由 PlayCardResolver 的卡牌去向阶段统一处理。
-	if (Ctx.SourceKind != EEffectSourceKind::Card) { return false; }
+	if (Ctx.SourceKind != EEffectSourceKind::Card) { return FEffectApplyResult::Failed(); }
 	FRuntimeCardInstance* Card = FindCardInstance(*Ctx.State, Ctx.SourceInstanceId);
-	if (!Card) { return false; }
+	if (!Card) { return FEffectApplyResult::Failed(); }
 	Card->TemporaryKeywords.AddTag(WacomTags::Card_Keyword_Exhaust);
-	return true;
+	return FEffectApplyResult::Applied();
 }
 
-bool HandleHeal(FEffectContext& Ctx)
+FEffectApplyResult HandleHeal(FEffectExecutionContext& Ctx)
 {
 	// 恢复玩家 HP。顺带移除 10% 中毒层数（向下取整）。
-	if (Ctx.Magnitude <= 0) { return false; }
-	if (Ctx.TargetKind != EEffectTargetKind::Player) { return false; }
+	if (Ctx.Magnitude <= 0) { return FEffectApplyResult::Failed(); }
+	if (Ctx.TargetKind != EEffectTargetKind::Player) { return FEffectApplyResult::Failed(); }
 
 	const int32 HealAmount = Ctx.Magnitude;
-	Ctx.State->Player.CurrentHp = FMath::Min(
-		Ctx.State->Player.CurrentHp + HealAmount,
-		Ctx.State->Player.MaxHp);
+	const FHealingMutationResult HealResult = FBattleCombatantMutationModule::RestoreHealth(
+		*Ctx.State,
+		FBattleCombatantHandle::Player(),
+		HealAmount);
+	if (!HealResult.IsAccepted()) { return FEffectApplyResult::Failed(); }
 
 	// 移除 10% 中毒层数
-	int32* PoisonStacks = Ctx.State->Player.StatusStacks.Find(WacomTags::Status_Poison);
-	if (PoisonStacks && *PoisonStacks > 0)
+	const int32 Remove = FMath::FloorToInt32(static_cast<float>(HealAmount) * 0.1f);
+	if (Remove > 0)
 	{
-		const int32 Remove = FMath::FloorToInt32(static_cast<float>(HealAmount) * 0.1f);
-		if (Remove > 0)
-		{
-			*PoisonStacks = FMath::Max(0, *PoisonStacks - Remove);
-			if (*PoisonStacks == 0)
-			{
-				Ctx.State->Player.Statuses.RemoveTag(WacomTags::Status_Poison);
-				Ctx.State->Player.StatusStacks.Remove(WacomTags::Status_Poison);
-			}
-		}
+		FBattleCombatantMutationModule::RemoveStatusStacks(
+			*Ctx.State,
+			FBattleCombatantHandle::Player(),
+			WacomTags::Status_Poison,
+			Remove);
 	}
 
 	UE_LOG(LogTemp, Display, TEXT("[EffectHandler] Heal %d → Player HP=%d/%d"),
 		HealAmount, Ctx.State->Player.CurrentHp, Ctx.State->Player.MaxHp);
-	return true;
+	return FEffectApplyResult::Applied();
 }
 
 // ================ GainKeyword / RemoveStatus / ModifyInitiative ================
 
-bool HandleGainKeyword(FEffectContext& Ctx)
+FEffectApplyResult HandleGainKeyword(FEffectExecutionContext& Ctx)
 {
-	// 给目标卡临时添加关键词。MetaTag 里存要添加的 Keyword Tag。
 	if (Ctx.TargetKind != EEffectTargetKind::HandCard || !Ctx.TargetInstanceId.IsValid())
 	{
-		return false;
+		return FEffectApplyResult::Failed();
 	}
-	if (!Ctx.MetaTag.IsValid()) { return false; }
+	if (!Ctx.Parameters.IsType<FKeywordEffectParameters>())
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const FGameplayTag Keyword = Ctx.Parameters.Get<FKeywordEffectParameters>().Keyword;
+	if (!Keyword.IsValid()) { return FEffectApplyResult::Failed(); }
 
 	FRuntimeCardInstance* CardInst = FindCardInstance(*Ctx.State, Ctx.TargetInstanceId);
-	if (!CardInst) { return false; }
+	if (!CardInst) { return FEffectApplyResult::Failed(); }
 
-	CardInst->TemporaryKeywords.AddTag(Ctx.MetaTag);
-	return true;
+	CardInst->TemporaryKeywords.AddTag(Keyword);
+	return FEffectApplyResult::Applied();
 }
 
-bool HandleRemoveStatus(FEffectContext& Ctx)
+FEffectApplyResult HandleRemoveStatus(FEffectExecutionContext& Ctx)
 {
-	// 移除目标的指定状态 Magnitude 层。MetaTag 里存要移除的 Status Tag。
-	if (!Ctx.MetaTag.IsValid()) { return false; }
-	if (Ctx.Magnitude <= 0) { return false; }
+	if (!Ctx.Parameters.IsType<FStatusEffectParameters>())
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const FGameplayTag Status = Ctx.Parameters.Get<FStatusEffectParameters>().Status;
+	if (!Status.IsValid()) { return FEffectApplyResult::Failed(); }
+	if (Ctx.Magnitude <= 0) { return FEffectApplyResult::Failed(); }
 
 	if (Ctx.TargetKind == EEffectTargetKind::EnemyPart)
 	{
-		FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(*Ctx.State, Ctx.TargetInstanceId);
-		if (!Part || Part->bDestroyed) { return false; }
-
-		int32* Stacks = Part->StatusStacks.Find(Ctx.MetaTag);
-		if (!Stacks || *Stacks <= 0) { return false; }
-
-		*Stacks = FMath::Max(0, *Stacks - Ctx.Magnitude);
-		if (*Stacks == 0)
-		{
-			Part->Statuses.RemoveTag(Ctx.MetaTag);
-			Part->StatusStacks.Remove(Ctx.MetaTag);
-		}
-		return true;
+		return FEffectApplyResult::FromBool(
+			FBattleCombatantMutationModule::RemoveStatusStacks(
+				*Ctx.State,
+				FBattleCombatantHandle::EnemyPart(Ctx.TargetInstanceId),
+				Status,
+				Ctx.Magnitude).IsAccepted());
 	}
 	if (Ctx.TargetKind == EEffectTargetKind::Player)
 	{
-		int32* Stacks = Ctx.State->Player.StatusStacks.Find(Ctx.MetaTag);
-		if (!Stacks || *Stacks <= 0) { return false; }
-
-		*Stacks = FMath::Max(0, *Stacks - Ctx.Magnitude);
-		if (*Stacks == 0)
-		{
-			Ctx.State->Player.Statuses.RemoveTag(Ctx.MetaTag);
-			Ctx.State->Player.StatusStacks.Remove(Ctx.MetaTag);
-		}
-		return true;
+		return FEffectApplyResult::FromBool(
+			FBattleCombatantMutationModule::RemoveStatusStacks(
+				*Ctx.State,
+				FBattleCombatantHandle::Player(),
+				Status,
+				Ctx.Magnitude).IsAccepted());
 	}
-	return false;
+	return FEffectApplyResult::Failed();
 }
 
-bool HandleModifyInitiative(FEffectContext& Ctx)
+FEffectApplyResult HandleModifyInitiative(FEffectExecutionContext& Ctx)
 {
 	// 直接修改目标部位的当前先机。Magnitude 为正 = 增加先机，为负 = 减少先机。
-	if (Ctx.TargetKind != EEffectTargetKind::EnemyPart) { return false; }
+	if (Ctx.TargetKind != EEffectTargetKind::EnemyPart) { return FEffectApplyResult::Failed(); }
 
 	FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(*Ctx.State, Ctx.TargetInstanceId);
-	if (!Part || Part->bDestroyed) { return false; }
+	if (!Part || Part->bDestroyed) { return FEffectApplyResult::Failed(); }
 
-	Part->CurrentInitiative += Ctx.Magnitude;
-	return true;
+	return FEffectApplyResult::FromBool(
+		FBattleInitiativeTimelineModule::ModifyCurrent(
+			*Part,
+			Ctx.Magnitude,
+			Ctx.Events,
+			Ctx.EffectTag).bApplied);
 }
 
 }  // namespace WacomEffects

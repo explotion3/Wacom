@@ -346,6 +346,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		{
 			return false;
 		}
+		const int32 InitiativeBeforeFuxiao = BodyBefore->CurrentInitiative;
 
 		FGuid FuxiaoId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, FuxiaoFeie->CardId);
 		TestTrue(TEXT("FuxiaoFeie is in hand"), FuxiaoId.IsValid());
@@ -358,9 +359,12 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		{
 			return false;
 		}
-		TestEqual(TEXT("FuxiaoFeie applied one Slow"),
+		TestEqual(TEXT("FuxiaoFeie Slow delays the current intent immediately"),
+			BodyAfterSlow->CurrentInitiative,
+			InitiativeBeforeFuxiao + 1);
+		TestEqual(TEXT("Enemy Slow does not leave a redundant stack"),
 			FWacomBattleFixture::GetStatusStacks(BodyAfterSlow->StatusStacks, WacomTags::Status_Slow),
-			1);
+			0);
 		const int32 InitiativeBeforeMolt = BodyAfterSlow->CurrentInitiative;
 
 		const FGuid MoltCutId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, MoltCut->CardId);
@@ -373,7 +377,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		{
 			return false;
 		}
-		TestEqual(TEXT("MoltCut removes Slow"), FWacomBattleFixture::GetStatusStacks(BodyAfterMolt->StatusStacks, WacomTags::Status_Slow), 0);
+		TestEqual(TEXT("MoltCut leaves no legacy Slow stack"), FWacomBattleFixture::GetStatusStacks(BodyAfterMolt->StatusStacks, WacomTags::Status_Slow), 0);
 		TestEqual(TEXT("MoltCut lowers initiative by modify effect plus normal cost push"),
 			InitiativeBeforeMolt - BodyAfterMolt->CurrentInitiative,
 			3);
@@ -632,7 +636,12 @@ bool FWacomBattleGeneratedSnakeIntentVariantsSpec::RunTest(const FString& /*Para
 		bSawPlayerPoison = bSawPlayerPoison
 			|| FWacomBattleFixture::GetStatusStacks(After.Player.StatusStacks, WacomTags::Status_Poison) > 0;
 		bSawPlayerSlow = bSawPlayerSlow
-			|| FWacomBattleFixture::GetStatusStacks(After.Player.StatusStacks, WacomTags::Status_Slow) > 0;
+			|| After.Hand.Cards.ContainsByPredicate([](const FHandCardSnapshot& Card)
+			{
+				return FWacomBattleFixture::GetStatusStacks(
+					Card.StatusStacks,
+					WacomTags::Status_Slow) > 0;
+			});
 		for (const FEnemySnapshot& EnemySnapshot : After.Enemies)
 		{
 			for (const FEnemyPartSnapshot& Part : EnemySnapshot.Parts)
@@ -660,7 +669,7 @@ bool FWacomBattleGeneratedSnakeIntentVariantsSpec::RunTest(const FString& /*Para
 	const FBattleSnapshot Final = Session->BuildSnapshot();
 	TestTrue(TEXT("Generated Snake intent sequence deals player damage"), bSawPlayerDamage);
 	TestTrue(TEXT("Generated Snake intent sequence applies Poison to player"), bSawPlayerPoison);
-	TestTrue(TEXT("Generated Snake intent sequence applies Slow to player"), bSawPlayerSlow);
+	TestTrue(TEXT("Generated Snake intent sequence materializes Slow on a hand card"), bSawPlayerSlow);
 	TestTrue(TEXT("Generated Snake intent sequence applies self Shield"), bSawEnemyShield);
 	TestTrue(TEXT("High HP fixture survives generated Snake smoke"), Final.Player.CurrentHp > 0);
 	return true;

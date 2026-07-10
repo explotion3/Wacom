@@ -307,7 +307,8 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot& Part = *FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 		TestEqual(TEXT("Poison stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Poison), 2);
-		TestEqual(TEXT("Slow stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Slow), 3);
+		TestEqual(TEXT("Slow is not retained as an enemy stack"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Slow), 0);
+		TestEqual(TEXT("Slow immediately delays the current intent"), Part.CurrentInitiative, 53);
 		// Freeze skips the immediate initiative-zero action and consumes one stack during that skipped action.
 		TestEqual(TEXT("Freeze stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Freeze), 1);
 		TestEqual(TEXT("Twilight stacks applied"), FWacomBattleFixture::GetStatusStacks(Part.StatusStacks, WacomTags::Status_Twilight), 4);
@@ -407,8 +408,8 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 	{
 		FWacomBattleFixture Fixture;
 		UCardDefinition* ApplyRemoveCard = MakeEnemyPartCard(Outer, TEXT("Matrix.RemoveStatus"), {
-			MakeEffect(WacomTags::Effect_ApplyStatus_Slow, 3, WacomTags::Target_SingleEnemyPart),
-			MakeEffect(WacomTags::Effect_RemoveStatus, 2, WacomTags::Target_SingleEnemyPart, WacomTags::Status_Slow)
+			MakeEffect(WacomTags::Effect_ApplyStatus_Twilight, 3, WacomTags::Target_SingleEnemyPart),
+			MakeEffect(WacomTags::Effect_RemoveStatus, 2, WacomTags::Target_SingleEnemyPart, WacomTags::Status_Twilight)
 		});
 		ValidateCardForMatrix(ApplyRemoveCard, *this);
 		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
@@ -419,7 +420,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 		TestNotNull(TEXT("Primary part exists"), Part);
-		TestEqual(TEXT("RemoveStatus removes requested stacks"), FWacomBattleFixture::GetStatusStacks(Part ? Part->StatusStacks : TMap<FGameplayTag, int32>(), WacomTags::Status_Slow), 1);
+		TestEqual(TEXT("RemoveStatus removes requested stacks"), FWacomBattleFixture::GetStatusStacks(Part ? Part->StatusStacks : TMap<FGameplayTag, int32>(), WacomTags::Status_Twilight), 1);
 	}
 
 	{
@@ -825,7 +826,17 @@ bool FWacomBattleRuleContentMatrixEnemyIntentSpec::RunTest(const FString& /*Para
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("Enemy intent damages player and poison ticks after action"), Snapshot.Player.CurrentHp, Snapshot.Player.MaxHp - 9);
 		TestEqual(TEXT("Enemy intent applies poison to player"), FWacomBattleFixture::GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Poison), 2);
-		TestEqual(TEXT("Enemy intent applies slow to player"), FWacomBattleFixture::GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Slow), 1);
+		int32 SlowCardCount = 0;
+		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+		{
+			if (FWacomBattleFixture::GetStatusStacks(
+				Card.StatusStacks,
+				WacomTags::Status_Slow) == 1)
+			{
+				++SlowCardCount;
+			}
+		}
+		TestEqual(TEXT("Enemy intent materializes Slow on one hand card"), SlowCardCount, 1);
 	}
 
 	{

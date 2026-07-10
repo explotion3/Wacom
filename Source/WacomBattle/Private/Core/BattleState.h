@@ -9,6 +9,7 @@
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Session/BattleResultPacket.h"
+#include "Enemies/IntentEffect.h"
 
 class UEnemyDefinition;
 class UCharacterDefinition;
@@ -27,8 +28,7 @@ struct FPlayerState
 
 	TObjectPtr<const UCharacterDefinition> CharacterDef = nullptr;
 
-	/** 玩家持有的状态（当前支持 Poison，未来可扩展 Slow/Twilight/Freeze）。 */
-	FGameplayTagContainer Statuses;
+	/** 玩家持有的 stack status 权威状态；只保存正层数。 */
 	TMap<FGameplayTag, int32> StatusStacks;
 
 	/**
@@ -88,6 +88,15 @@ struct FEnemyState
 	TArray<FRuntimeEnemyPart> Parts;        // 按部位顺序
 	TMap<FGuid, int32> PartIndexById;       // InstanceId → Parts 索引，O(1) 查找
 	TMap<FBattleEnemyPartKey, int32> PartIndexByKey; // Stable key → Parts 索引，O(1) 查找
+};
+
+/** 尚未在下个玩家回合物化到具体卡牌的控制效果。 */
+struct FPendingHandAffliction
+{
+	FGameplayTag Status;
+	int32 StacksPerCard = 0;
+	FHandAfflictionDelivery Delivery;
+	FGuid SourceInstanceId;
 };
 
 /**
@@ -201,49 +210,6 @@ struct FBattleState
 	FCardContainers Cards;
 	FEnemyState     Enemy;
 
-	/**
-	 * 玩家 HP 变更后（**减少**或维持）调用，按当前 CurrentHp/MaxHp 比例
-	 * 检查是否首次跨过 High / Low 阈值，触发后置 flag 永久 true（不会回退）。
-	 *
-	 * 调用约定：所有扣血路径在写入 CurrentHp 之后调用一次。
-	 * 治疗（HP 增加）也可以调，逻辑等价于"现在是否已经在阈值下"，
-	 * 但因为 flag 已设置就不会再设，对治疗实质 no-op。
-	 */
-	FORCEINLINE void CheckHpThresholdsCrossed()
-	{
-		if (Player.MaxHp <= 0) { return; }
-		const float Ratio = static_cast<float>(Player.CurrentHp) / static_cast<float>(Player.MaxHp);
-		if (!bCrossedHighHpThreshold && Ratio < HighHpThreshold)
-		{
-			bCrossedHighHpThreshold = true;
-		}
-		if (!bCrossedLowHpThreshold && Ratio < LowHpThreshold)
-		{
-			bCrossedLowHpThreshold = true;
-		}
-	}
-
-	/**
-	 * 部位被破坏的统一处理（伤害 / 中毒共用路径）。
-	 *
-	 * 调用约定：CurrentHp <= 0 且 bDestroyed 即将从 false 变 true 时调用一次。
-	 * 调用方应已经把 Part->bDestroyed = true、CurrentInitiative = 0 设好。
-	 *
-	 * 本函数：
-	 *   1. 发 EnemyPartHpEmptied 事件
-	 *   2. 记 KnockdownExpGain 经验
-	 *   3. 加入 DestroyedParts（撤离时持久化用）
-	 *   4. push PendingKnockdownEvent 队列（等玩家三选一）
-	 *
-	 * 不调用本函数的场景：
-	 *   - Initialize 时按 PreDestroyedParts 设的预先破坏部位（已经处理过经验和选择，不重复）
-	 *
-	 * @param Part           被破坏的部位（已置 bDestroyed=true / CurrentHp=0）
-	 * @param Events         事件总线
-	 * @param InflictedByCardId 触发本次破坏的卡牌实例 ID（Effect.Damage 命中时传 Ctx.SourceInstanceId；
-	 *                          中毒结算等没有"卡牌来源"的路径传空）。保留参数用于事件来源追踪扩展；
-	 *                          击倒事件的左右手分支不再依赖手牌区锚点是否存在。
-	 */
-	void RecordPartDestroyed(struct FRuntimeEnemyPart& Part, struct FBattleEventBus& Events,
-		const FGuid& InflictedByCardId = FGuid());
+	/** 玩家侧 Slow / Freeze / Twilight 的唯一待生效真相。 */
+	TArray<FPendingHandAffliction> PendingHandAfflictions;
 };

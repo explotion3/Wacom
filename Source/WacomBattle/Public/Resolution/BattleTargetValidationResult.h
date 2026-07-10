@@ -16,6 +16,7 @@ enum class EWacomBattleTargetRejectReason : uint8
 	SourceCardInvalid UMETA(DisplayName = "SourceCardInvalid"),
 	SourceCardNotInHand UMETA(DisplayName = "SourceCardNotInHand"),
 	SourceCardMissingDefinition UMETA(DisplayName = "SourceCardMissingDefinition"),
+	SourceCardFrozen UMETA(DisplayName = "SourceCardFrozen"),
 	UnsupportedWorldTarget UMETA(DisplayName = "UnsupportedWorldTarget"),
 	InvalidWorldTarget UMETA(DisplayName = "InvalidWorldTarget"),
 	UnsupportedCardTarget UMETA(DisplayName = "UnsupportedCardTarget"),

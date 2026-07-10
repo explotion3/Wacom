@@ -107,8 +107,8 @@ Source/
   WacomBattle/
     Public/ { Session/, Commands/, Snapshots/, Events/, Runtime/ }
     Private/ {
-      Session/, Core/, Commands/, Deck/, Hand/,
-      Enemy/, Status/, Events/, Snapshots/,
+      Session/, Core/, Commands/, Deck/, Hand/, Cards/,
+      Enemy/, Initiative/, Statuses/, Combatants/, Events/, Snapshots/,
       Effects/, Resolution/, Passives/, Rewards/
     }
   WacomRun/
@@ -146,9 +146,21 @@ RunEvent Choice Evaluation 的唯一 Implementation 位于 `WacomRun/Private/Eve
 
 PlayCard Evaluation 的唯一 Implementation 位于 `WacomBattle/Private/Commands` 的 `FPlayCardEvaluator`。该深层 Module 在一个 Private Interface 后集中源卡、结构性目标、运行时费用、阶段与拒绝投影：Target Probe 严格求值具体显式对象，Preview Candidate 把可选 Preview Focus 与规范化执行绑定分离，Commit Evaluation 为正式提交与 Action Preview 生成携带 `StateVersion` 的 Prepared PlayCard。这个 seam 不新增 UE 反射类型，也不扩张 `WacomBattle/Public` 的 Session / Command / Preview 或 Blueprint Interface。
 
-PlayCard Transaction 的唯一 Implementation 位于 `WacomBattle/Private/Commands/PlayCardResolver`。`PlayCardResolver` 只消费 Prepared PlayCard，不重复阶段、源卡、目标或费用判断；Prepared 状态版本过期时必须在事件、RNG 和状态变更前拒绝。正式提交使用 formal operation adapter，Action Preview 在复制的 `BattleState` 上使用 deterministic preview adapter；两者共享 Commit Evaluation 与同一结算顺序。operation adapter 会显式透传到 Effect、ZoneHook、Passive、OnDiscard 和 EnemyAction，不使用全局或 `thread_local` 模式。Effect handler、preview determinism 和内容支持事实集中在 Private `EffectSemanticsRegistry`；这些 Private seam 不进入外部模块的编译依赖。
+PlayCard Transaction 的唯一 Implementation 位于 `WacomBattle/Private/Commands/PlayCardResolver`。`PlayCardResolver` 只消费 Prepared PlayCard，不重复阶段、源卡、目标或费用判断；Prepared 状态版本过期时必须在事件、RNG 和状态变更前拒绝。正式提交使用 formal operation adapter，Action Preview 在复制的 `BattleState` 上使用 deterministic preview adapter；两者共享 Commit Evaluation 与同一结算顺序。operation adapter 会显式透传到 Effect、ZoneHook、Passive、OnDiscard 和 EnemyAction，不使用全局或 `thread_local` 模式。
 
-`WacomBattle/Private/Hand/BattleCardZoneTransition` 是卡牌区域迁移的深层规则 seam。当前 v1 权威范围是 `Effect.Discard / Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected`：调用方只提交语义意图，事务内部统一真实容器移动、Runtime `Location`、成功 ID、随机选择、事件批次和 `OnDiscard` adapter 透传。`DeckService` 只作为无事件的物理移动 primitive；`HandZoneMoveEventService` 是 HandLimit、TurnEnd、奖励等未迁移路径仍使用的过渡 Implementation，不是新增规则入口。该事务表示同步有序操作，不提供嵌套被动失败后的原子回滚。
+Effect Semantics 的唯一 Implementation 位于 `WacomBattle/Private/Effects/Semantics`。该深层 Module 通过 code-defined semantic family 集中 Card / Intent 支持、资产字段到 typed target / parameter facts 的 decode、制作合法性、目标展开、preview determinism、handler 和 Target Preview projector；Registry 只作为 `EffectTag -> semantics` 索引，不是万能配置表。`FCardEffectChain` 是词法 scratch 所有者，Main、ZoneHook、PerfectRelease 和 Passive 只建立正确生命周期并提交 effect segment，不维护 `LastShuffledCardId` 或 EffectType 分支。formal 与 preview 两个 operation adapter 继续位于 resolved invocation 和 handler 之间，随机目标选择只能在 adapter 放行后发生。该 Private Interface 不新增 UE 反射类型、Public Blueprint surface 或 Build.cs 依赖。
+
+Combatant Mutation 的唯一 Implementation 位于 `WacomBattle/Private/Combatants`。该深层 Module 在一个 typed Private Interface 后集中玩家和敌方部位的 HP、Shield、stack status、玩家 HP 阈值与运行时部位破坏边沿；Damage Facts 同时记录请求伤害、护盾吸收、实际 HP 损失和 overkill，`DamageDealt.Amount` 只投影实际 HP 损失。Operation Adapter、RNG、Effect Chain 继续策略、击倒请求阶段和 Battle End 判断不下沉到该 Module。
+
+Status Semantics 的唯一 Implementation 位于 `WacomBattle/Private/Statuses`。它按状态与宿主解释施加、待生效手牌控制、回合物化、消费和 Poison cadence，再分别委托 Combatant Mutation、Card Runtime State 与 Initiative Timeline；它不是通用 callback registry 或 timed-status 配置表。玩家侧 Slow / Freeze / Twilight 先以 `PendingHandAfflictions` 保存，抽牌并重建 Hand 后才选择具体卡牌，物化后立即删除 pending facts。
+
+Card Runtime State 位于 `WacomBattle/Private/Cards`，集中单卡正层数 `StatusStacks`、永久战内 `RuntimeCostModifier`、状态费用贡献、冻结限制和唯一 `FCardCostFacts` 计算。PlayCard Evaluation、Effect Preview、Snapshot 与 Action Preview 不再自行拼接费用。Initiative Timeline 位于 `WacomBattle/Private/Initiative`，是正常运行时 `CurrentInitiative` 的唯一写入口；Combatant Mutation 在部位破坏原子事务中归零先机属于明确例外。
+
+运行时 stack status 按宿主各有唯一正层数真相：Combatant 状态位于玩家/部位 `StatusStacks`，Card 状态位于 `FRuntimeCardInstance.StatusStacks`。Snapshot 的 `Statuses` 都由对应层数表投影，不是第二份可变状态；当前未实现 timed status，也不保留平行 `StatusInstances` 容器。
+
+Turn Lifecycle 的唯一 Implementation 位于 `WacomBattle/Private/Turns`。`FBattleTurnLifecycleModule` 通过 `StartInitialPlayerTurn / CompleteCurrentTurn` 两个 Private Interface 集中首回合事件、TurnStart、TurnEnd、敌方行动前后 BattleEnd gate、下一回合和 PresentationJournal checkpoint 顺序；`BattleInitializer` 与 `EndTurnResolver` 只保留各自的初始化 / Command Adapter 职责。该 Module 不吸收 Enemy Action、BattleEnd 或 Card Zone 算法，不新增通用 stage registry、Journal Adapter、Operation Adapter、反射类型或 Public surface。
+
+`WacomBattle/Private/Hand/BattleCardZoneTransition` 是卡牌区域迁移的深层规则 seam。当前权威范围包括正式出牌去向、Combo 稳定返回、`Effect.Discard / Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 与 EndTurn 普通手牌弃置。Combo 与相邻冻结共享 PlayCard Evaluation 捕获的前邻居、后邻居和原始 index；若效果链已经显式腾挪源卡，则显式移动优先。`DeckService` 只作为无事件的物理移动 primitive，PlayedPile 自然清理仍由 Turn Lifecycle 单独编排；`HandZoneMoveEventService` 是 HandLimit、奖励和 Companion 等未迁移路径仍使用的过渡 Implementation。
 
 UI、Actor 和测试入口都不应该直接改 `BattleState`。它们只能提交命令，读取快照、事件和战后包。
 
@@ -194,7 +206,7 @@ Event 用来记录结算过程，不作为战斗真相，只作为表现、日�
 - `RuntimeCardInstance`
 - `RuntimeEnemyPart`
 - `RuntimeIntent`
-- `RuntimeStatus`
+- `RuntimeCardInstance` 的卡牌状态与战内费用事实
 
 不要在战斗中直接修改静态卡牌定义。Cost 修正、状态层数、卡牌临时变化都应写到运行时实例或战斗状态中。
 

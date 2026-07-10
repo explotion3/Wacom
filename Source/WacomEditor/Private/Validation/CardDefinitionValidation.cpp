@@ -140,12 +140,21 @@ namespace
 			&& !Effect.TargetZone.IsValid())
 		{
 			AddValidationError(OutErrors,
-				FormatValidationError(TEXT("{0} 必须配置 TargetZone / MetaTag。"), EffectLabel));
+				FormatValidationError(TEXT("{0} 必须配置 TargetZone 参数。"), EffectLabel));
 		}
 
 		if (Effect.TargetZone.IsValid())
 		{
-			if (FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeHandZone(Effect.EffectType)
+			if (Effect.EffectType == WacomTags::Effect_RemoveStatus
+				&& !FWacomBattleRuleContentContract::IsRemovableCombatantStatusTag(
+					Effect.TargetZone))
+			{
+				AddValidationError(OutErrors,
+					FormatValidationError(
+						TEXT("{0} 的 RemoveStatus 只能移除有持久战斗单位层数的状态；敌方 Slow 是即时先机操作。"),
+						EffectLabel));
+			}
+			else if (FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeHandZone(Effect.EffectType)
 				&& !FWacomBattleRuleContentContract::IsHandZoneTag(Effect.TargetZone))
 			{
 				AddValidationError(OutErrors,
@@ -173,7 +182,7 @@ namespace
 				&& Effect.MagnitudeSource != WacomTags::Magnitude_Source_TargetStatusStacks)
 			{
 				AddValidationError(OutErrors,
-					FormatValidationError(TEXT("{0} 当前 Effect 不读取 TargetZone / MetaTag。"), EffectLabel));
+					FormatValidationError(TEXT("{0} 当前 Effect 不读取 TargetZone 参数。"), EffectLabel));
 			}
 		}
 

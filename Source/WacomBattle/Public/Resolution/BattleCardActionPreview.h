@@ -38,6 +38,10 @@ struct WACOMBATTLE_API FBattleCardActionPreview
 	bool bHasProjectedPlayer = false;
 	FPlayerSnapshot ProjectedPlayer;
 
+	/** Present when card cost/status/zone/order would change. */
+	bool bHasProjectedHand = false;
+	FHandQueueSnapshot ProjectedHand;
+
 	TArray<FBattleCardActionPreviewEnemyPartState> ProjectedEnemyParts;
 
 	bool bHasUnresolvedFacts = false;

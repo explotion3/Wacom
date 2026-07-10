@@ -5,15 +5,15 @@
 
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
-#include "Deck/DeckService.h"
-#include "Effects/CardEffectDispatcher.h"
+#include "Effects/Semantics/BattleEffectSemanticsModule.h"
 #include "Enemy/EnemyPartActionResolver.h"
 #include "Events/BattleEventBus.h"
+#include "Hand/BattleCardZoneTransition.h"
 #include "Passives/PassiveDispatcher.h"
 #include "Resolution/InitiativeResolver.h"
 #include "Resolution/ZoneHookResolver.h"
 #include "Runtime/RuntimeCardInstance.h"
-#include "Status/PoisonResolver.h"
+#include "Statuses/BattleStatusSemanticsModule.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 
@@ -21,57 +21,7 @@
 
 namespace
 {
-	/**
-	 * 卡牌离开手牌后的去向。
-	 *
-	 * 当前覆盖：
-	 * - 左/右手锚点：进入 Limbo（本回合离开手牌但不入任何区域）
-	 * - Combo：回原位置（当前位置即原位置）
-	 * - 其它：进入本回合使用牌堆
-	 *
-	 * 保留不进弃牌是回合结束时的行为，不是打出后去向。
-	 */
-	void SendCardAfterPlay(FBattleState& State, const FGuid& CardInstanceId, bool bIsAnchor, bool bIsCombo)
-	{
-		const int32 HandIdx = State.Cards.Hand.IndexOfByKey(CardInstanceId);
-
-		if (bIsCombo && HandIdx != INDEX_NONE)
-		{
-			// 连击：留在原位置。Location 保持 Hand。
-			FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Hand);
-			return;
-		}
-
-		if (bIsAnchor)
-		{
-			if (HandIdx != INDEX_NONE)
-			{
-				State.Cards.Hand.RemoveAt(HandIdx);
-			}
-			State.Cards.Limbo.Add(CardInstanceId);
-			FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Limbo);
-			return;
-		}
-
-		// ExhaustSelf：如果本卡有临时 Exhaust 关键词，进消耗牌堆而不是弃牌堆。
-		if (FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardInstanceId))
-		{
-			if (Card->TemporaryKeywords.HasTagExact(WacomTags::Card_Keyword_Exhaust))
-			{
-				if (HandIdx != INDEX_NONE)
-				{
-					State.Cards.Hand.RemoveAt(HandIdx);
-				}
-				State.Cards.ExhaustPile.Add(CardInstanceId);
-				FBattleRules::SetCardLocation(State, CardInstanceId, ECardLocation::Exhaust);
-				return;
-			}
-		}
-
-		FDeckService::MoveFromHandToPlayedPile(State, CardInstanceId);
-	}
-
-	bool HasKeyword(const FRuntimeCardInstance& Card, const FGameplayTag& Keyword)
+	bool HasResolvedCardKeyword(const FRuntimeCardInstance& Card, const FGameplayTag& Keyword)
 	{
 		if (!Card.Definition) { return false; }
 		return Card.Definition->Keywords.HasTag(Keyword)
@@ -109,6 +59,8 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 	const FGuid SelectedPartId = Target.EnemyPartInstanceId;
 	const FBattleEnemyPartKey SelectedPartKey = Target.EnemyPartKey;
 	const FGuid SelectedHandCardId = Target.HandCardInstanceId;
+	const TArray<FGuid> FrozenPartIdsAtPlayStart =
+		FBattleStatusSemanticsModule::CaptureFrozenEnemyPartsForNextCard(State);
 
 	// ================ 1. 打牌事件 ================
 	{
@@ -123,7 +75,7 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 
 	// ================ 2. ZoneHook: OnPlay ================
 	// 放在 CardPlayed 之后、"记录出牌前先机"之前。
-	FZoneHookResolver::RunOnPlayHooks(
+	bool bSourceExplicitlyMoved = FZoneHookResolver::RunOnPlayHooks(
 		State,
 		Events,
 		*Def,
@@ -138,6 +90,14 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 
 	TArray<FGuid> HitPartIds;
 	FInitiativeResolver::CollectInitiativeHits(PreCastInitiative, RuntimeCost, HitPartIds);
+	if (!bSwift && RuntimeCost > 0)
+	{
+		HitPartIds.RemoveAll(
+			[&FrozenPartIdsAtPlayStart](const FGuid& PartId)
+			{
+				return FrozenPartIdsAtPlayStart.Contains(PartId);
+			});
+	}
 
 	for (const FGuid& HitId : HitPartIds)
 	{
@@ -153,22 +113,23 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 	FInitiativeResolver::ResolveResistance(State, Events, *Def, RuntimeCost, HitPartIds, CardId);
 
 	// ================ 4. 主效果 ================
-	// 主效果链独立维护 LastShuffledCardId（与 ZoneHook / PerfectRelease / AfterPlayed 互不串）。
+	// 主效果自成一条词法 chain（与 ZoneHook / PerfectRelease / AfterPlayed 互不串）。
 	{
-		FGuid MainLastShuffledCardId;
-		for (const FCardEffect& Eff : Def->Effects)
-		{
-			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				SelectedPartId,
+		FCardEffectChain MainChain = FBattleEffectSemanticsModule::BeginCardChain(
+			State,
+			Events,
+			FCardEffectChainBindings{
+				RuntimeCost,
 				CardId,
-				MainLastShuffledCardId,
-				SelectedHandCardId,
-				&OperationAdapter);
-		}
+				SelectedPartId,
+				SelectedHandCardId },
+			&OperationAdapter);
+		MainChain.Execute(Def->Effects);
+		bSourceExplicitlyMoved |= MainChain.WasCardShuffled(CardId);
 	}
 
 	// ================ 5. 完美释放 ================
-	FInitiativeResolver::ResolvePerfectRelease(
+	bSourceExplicitlyMoved |= FInitiativeResolver::ResolvePerfectRelease(
 		State,
 		Events,
 		*Def,
@@ -186,7 +147,11 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 
 	if (!bSwift && !bSkipPush)
 	{
-		FBattleRules::PushEnemyInitiative(State, RuntimeCost);
+		FBattleStatusSemanticsModule::ResolveCardInitiativePush(
+			State,
+			Events,
+			RuntimeCost,
+			FrozenPartIdsAtPlayStart);
 
 		FBattleEvent Ev;
 		Ev.Type   = EBattleEventType::InitiativePushed;
@@ -195,12 +160,18 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 	}
 
 	// ================ 7. 卡牌去向 ================
-	SendCardAfterPlay(State, CardId, bAnchor, bCombo);
+	FBattleCardZoneTransition::ResolvePlayedCardDestination(
+		State,
+		CardId,
+		bAnchor,
+		bCombo,
+		bSourceExplicitlyMoved,
+		Prepared.GetPrePlayPlacement());
 
 	// ================ 8. Companion 计数累加（在 AfterPlayed 之前）================
 	if (const FRuntimeCardInstance* PlayedCard = FBattleRules::FindCard(State, CardId))
 	{
-		if (HasKeyword(*PlayedCard, WacomTags::Card_Keyword_Companion))
+		if (HasResolvedCardKeyword(*PlayedCard, WacomTags::Card_Keyword_Companion))
 		{
 			++State.Player.CompanionPlayedCount;
 		}
@@ -224,7 +195,11 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 
 	// ================ 11. 中毒结算 ================
 	// 敌方部位行动之前：中毒可能破坏部位，从而影响随后的先机归零行动集合。
-	FPoisonResolver::ResolvePoisonForAllHosts(State, Events);
+	FBattleStatusSemanticsModule::ResolveAfterPlayerCard(
+		State,
+		Events,
+		CardId,
+		Prepared.GetPrePlayPlacement());
 
 	// ================ 12. 敌方部位行动子流程 ================
 	if (!bSwift)

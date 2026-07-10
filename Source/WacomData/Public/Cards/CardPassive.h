@@ -13,7 +13,7 @@
  *
  * 字段职责：
  * - Trigger           什么时机触发（Passive.Trigger.*）
- * - Effects           触发后执行的效果列表（走 CardEffectDispatcher）
+ * - Effects           触发后执行的效果列表（作为 Effect Chain segment）
  * - Condition         触发时的门控条件；未设置则永真（见 FEffectCondition）
  * - TriggerThreshold  计数类 trigger 的阈值（仅 OnCompanionCount 使用：
  *                     达到此值后才触发、触发后清零）。其他 trigger 不读此字段。

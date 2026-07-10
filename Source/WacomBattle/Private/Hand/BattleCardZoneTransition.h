@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/BattleCardPlacementFacts.h"
 #include "Events/BattleEvent.h"
 
 class IBattleOperationAdapter;
@@ -46,6 +47,16 @@ struct FBattleCardZoneTransitionResult
 	}
 };
 
+/** 回合结束手牌迁移产生的稳定事实。 */
+struct FBattleTurnEndHandTransitionResult
+{
+	/** 回合结束前 Hand 正序中的明确保留普通卡；不包含左右手锚点。 */
+	TArray<FGuid> RetainedCardInstanceIds;
+
+	/** 按当前逆向 Hand 扫描顺序真正进入弃牌堆的普通卡。 */
+	TArray<FGuid> DiscardedCardInstanceIds;
+};
+
 /**
  * 战斗内卡牌区域迁移事务。
  *
@@ -57,6 +68,29 @@ struct FBattleCardZoneTransitionResult
 class FBattleCardZoneTransition
 {
 public:
+	/**
+	 * 完成一张已结算卡的正式去向。Combo 使用出牌前稳定位置返回；若效果已经把
+	 * 卡移出 Hand，则显式移动优先，本入口不覆盖其结果。
+	 */
+	static void ResolvePlayedCardDestination(
+		FBattleState& State,
+		const FGuid& CardInstanceId,
+		bool bIsAnchor,
+		bool bIsCombo,
+		bool bSourceExplicitlyMoved,
+		const FBattleCardPlacementFacts& PrePlayPlacement);
+
+	/**
+	 * 结算回合结束的普通手牌保留与弃置。
+	 *
+	 * retained 与 discard candidates 都基于同一份迁移前 Hand 布局求值；所有真实
+	 * 移动完成后，按弃置顺序逐张发布 CardDiscarded 并运行 OnDiscard，最后只发布
+	 * 一个批次 HandZoneChanged。本入口不发布 CardsRetained，也不接收 OperationAdapter。
+	 */
+	static FBattleTurnEndHandTransitionResult ResolveTurnEndHand(
+		FBattleState& State,
+		FBattleEventBus& Events);
+
 	/** 将请求中当前仍为普通手牌的卡按请求顺序弃置。 */
 	static FBattleCardZoneTransitionResult DiscardCardsFromHand(
 		FBattleState& State,

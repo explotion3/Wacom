@@ -2,15 +2,16 @@
 
 #include "Enemy/EnemyPartActionResolver.h"
 
+#include "Combatants/BattleCombatantMutationModule.h"
 #include "Core/BattleOperationAdapter.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Enemy/EnemyIntentSelector.h"
-#include "Effects/EffectContext.h"
-#include "Effects/EffectExecutor.h"
+#include "Effects/Semantics/BattleEffectSemanticsModule.h"
 #include "Events/BattleEventBus.h"
 #include "Runtime/RuntimeEnemyPart.h"
-#include "Status/PoisonResolver.h"
+#include "Statuses/BattleStatusSemanticsModule.h"
+#include "Initiative/BattleInitiativeTimelineModule.h"
 #include "Tags/WacomGameplayTags.h"
 
 #include "Enemies/EnemyPartDefinition.h"
@@ -18,70 +19,34 @@
 
 namespace
 {
-	bool IsStunnedOrFrozen(const FRuntimeEnemyPart& Part)
+	bool IsStunned(const FRuntimeEnemyPart& Part)
 	{
-		// 晕厥和冻结都会让本次部位行动跳过效果。
-		return Part.Statuses.HasTag(WacomTags::Status_Stunned)
-		    || Part.Statuses.HasTag(WacomTags::Status_Freeze);
+		return FBattleCombatantStatusFacts::HasStatus(
+			Part.StatusStacks,
+			WacomTags::Status_Stunned);
 	}
 
 	/**
-	 * 把意图 IntentEffect 的 Target tag 映射到 EffectContext 的 target。
-	 *
-	 * 约定：
-	 * - Target.Player：作用于玩家
-	 * - Target.Self   ：作用于施加该意图的部位自己（例如自身加护盾）
-	 * - 其他：当前不支持，忽略
+	 * 晕厥消耗。晕厥处理后仍刷新意图；Freeze 由卡牌推进先机时消费，
+	 * 不参与敌方行动跳过。
 	 */
-	void FillTargetFromIntent(FEffectContext& Ctx, const FGameplayTag& TargetTag, const FGuid& ActingPartId)
+	void ConsumeStunOnAct(FBattleState& State, const FRuntimeEnemyPart& Part)
 	{
-		if (TargetTag == WacomTags::Target_Player)
+		if (FBattleCombatantStatusFacts::HasStatus(
+			Part.StatusStacks,
+			WacomTags::Status_Stunned))
 		{
-			Ctx.TargetKind       = EEffectTargetKind::Player;
-			Ctx.TargetInstanceId = FGuid();
-			return;
+			FBattleCombatantMutationModule::RemoveStatusStacks(
+				State,
+				FBattleCombatantHandle::EnemyPart(Part.InstanceId),
+				WacomTags::Status_Stunned,
+				1);
 		}
-		if (TargetTag == WacomTags::Target_Self)
-		{
-			Ctx.TargetKind       = EEffectTargetKind::EnemyPart;
-			Ctx.TargetInstanceId = ActingPartId;
-			return;
-		}
-		// 未支持：保持 None，EffectExecutor 会 fallback return false
-		Ctx.TargetKind       = EEffectTargetKind::None;
-		Ctx.TargetInstanceId = FGuid();
-	}
-
-	/**
-	 * 晕厥消耗。晕厥处理后仍刷新意图。当前把 Stunned / Freeze 都按
-	 * "每次行动消耗一层"处理，层数归零时移除该状态。
-	 */
-	void ConsumeStunOrFreezeOnAct(FRuntimeEnemyPart& Part)
-	{
-		auto Consume = [&Part](const FGameplayTag& Tag)
-		{
-			if (!Part.Statuses.HasTag(Tag)) { return; }
-			int32* Stacks = Part.StatusStacks.Find(Tag);
-			if (!Stacks || *Stacks <= 0)
-			{
-				Part.Statuses.RemoveTag(Tag);
-				Part.StatusStacks.Remove(Tag);
-				return;
-			}
-			--(*Stacks);
-			if (*Stacks <= 0)
-			{
-				Part.Statuses.RemoveTag(Tag);
-				Part.StatusStacks.Remove(Tag);
-			}
-		};
-		Consume(WacomTags::Status_Stunned);
-		Consume(WacomTags::Status_Freeze);
 	}
 
 	/**
 	 * 让单个部位执行一次行动。
-	 * 晕厥/冻结跳过效果，只刷新意图 + 消耗一层该状态。
+	 * 仅晕厥跳过效果；跳过后仍刷新意图并消耗一层晕厥。
 	 */
 	void ActOnce(
 		FBattleState& State,
@@ -99,7 +64,7 @@ namespace
 		}
 
 		const FIntentDefinition Intent = Part.CurrentIntent;
-		const bool bSkip = IsStunnedOrFrozen(Part);
+		const bool bSkip = IsStunned(Part);
 
 		// 事件只记录行动部位和是否跳过；意图展示名由 Snapshot 提供给 UI。
 		{
@@ -116,33 +81,16 @@ namespace
 
 		if (!bSkip)
 		{
-			// 执行该意图的所有 Effects。
-			for (const FIntentEffect& Eff : Intent.Effects)
-			{
-				FEffectContext Ctx;
-				Ctx.State            = &State;
-				Ctx.Events           = &Events;
-				Ctx.SourceKind       = EEffectSourceKind::EnemyPartIntent;
-				Ctx.SourceInstanceId = Part.InstanceId;
-				Ctx.EffectTag        = Eff.EffectType;
-				Ctx.Magnitude        = Eff.Magnitude;
-				Ctx.Duration         = Eff.Duration;
-				Ctx.OperationAdapter = OperationAdapter;
-				FillTargetFromIntent(Ctx, Eff.Target, Part.InstanceId);
-
-				FEffectExecutor::Execute(Ctx);
-
-				// 玩家被打死就立即停手，不继续执行该意图剩余效果。
-				if (State.Player.CurrentHp <= 0)
-				{
-					break;
-				}
-			}
+			FBattleEffectSemanticsModule::ExecuteEnemyIntentChain(
+				State,
+				Events,
+				Intent.Effects,
+				Part.InstanceId,
+				OperationAdapter);
 		}
 		else
 		{
-			// 被晕厥/冻结消耗一层。
-			ConsumeStunOrFreezeOnAct(Part);
+			ConsumeStunOnAct(State, Part);
 		}
 
 		// Action Preview deliberately keeps the current intent visible at initiative 0.
@@ -163,14 +111,14 @@ namespace
 		}
 		else
 		{
-			Part.CurrentInitiative = 0;
+			FBattleInitiativeTimelineModule::SetCurrent(Part, 0);
 		}
 
 		// 敌方部位每行动一次后，对双方中毒结算一次。
 		// 放在意图刷新之后：即使此次行动本部位被中毒打死，AdvanceToNextIntent 内部已对
 		// bDestroyed 做 no-op。玩家若被中毒打死，外层 ResolveInitiativeZeroActions /
 		// ResolveEndTurnActions 会在下一轮 PlayerCurrentHp <= 0 检查时 return。
-		FPoisonResolver::ResolvePoisonForAllHosts(State, Events);
+		FBattleStatusSemanticsModule::ResolveAfterEnemyPartAction(State, Events);
 	}
 }
 

@@ -1,7 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Resolution/ZoneHookResolver.h"
-#include "Effects/CardEffectDispatcher.h"
+#include "Effects/Semantics/BattleEffectSemanticsModule.h"
 
 #include "Core/BattleState.h"
 #include "Hand/HandZoneService.h"
@@ -26,7 +26,7 @@ namespace
 	}
 }
 
-void FZoneHookResolver::RunOnPlayHooks(
+bool FZoneHookResolver::RunOnPlayHooks(
 	FBattleState& State,
 	FBattleEventBus& Events,
 	const UCardDefinition& Def,
@@ -36,22 +36,26 @@ void FZoneHookResolver::RunOnPlayHooks(
 	IBattleOperationAdapter* OperationAdapter)
 {
 	const EHandZone CurrentZone = FHandZoneService::GetZoneOf(State, CardId);
-	if (CurrentZone == EHandZone::None) { return; }
+	if (CurrentZone == EHandZone::None) { return false; }
 
-	// 所有 OnPlay Hook 共享一条效果链的 LastShuffledCardId：
-	// 让 ReduceCost/AddCost 能引用紧邻上一条 Shuffle 的产物。
-	FGuid LastShuffledCardId;
+	// 所有匹配的 OnPlay Hook 作为 segment 提交给同一条 chain。
+	FCardEffectChain Chain = FBattleEffectSemanticsModule::BeginCardChain(
+		State,
+		Events,
+		FCardEffectChainBindings{
+			RuntimeCost,
+			CardId,
+			SelectedPartId,
+			FGuid() },
+		OperationAdapter);
 	for (const FCardZoneHook& Hook : Def.ZoneHooks)
 	{
 		if (Hook.Trigger != WacomTags::ZoneHook_Trigger_OnPlay) { continue; }
 		if (HookZoneTagToEnum(Hook.Zone) != CurrentZone)            { continue; }
 
-		for (const FCardEffect& Eff : Hook.ExtraEffects)
-		{
-			FCardEffectDispatcher::Execute(State, Events, Eff, RuntimeCost,
-				SelectedPartId, CardId, LastShuffledCardId, FGuid(), OperationAdapter);
-		}
+		Chain.Execute(Hook.ExtraEffects);
 	}
+	return Chain.WasCardShuffled(CardId);
 }
 
 bool FZoneHookResolver::ShouldSkipInitiativePush(
