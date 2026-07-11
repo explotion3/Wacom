@@ -4,6 +4,7 @@
 
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Session/BattleSession.h"
 #include "InputCoreTypes.h"
 #include "Input/CommonUIInputSettings.h"
 #include "UI/Battle/BattleCommandBarWidget.h"
@@ -101,6 +102,32 @@ UBattleHUD::~UBattleHUD()
 {
 	delete BattleHUDRuntime;
 	BattleHUDRuntime = nullptr;
+}
+
+void UBattleHUD::AttachInitializedBattleSession(
+	UBattleSession* InSession,
+	FBattleInitializationResult Initialization)
+{
+	// Battle entry staging is owned by the GameMode/camera flow, not by the
+	// session. Preserve gates that were explicitly established before the
+	// session-change cleanup runs so the initialization snapshot cannot leak
+	// the hand into the viewport before entry staging releases it.
+	const bool bWasBattleInputReady = IsBattleInputReady();
+	const bool bWasFirstPersonBattleHandSuppressed =
+		IsFirstPersonBattleHandSuppressedForEntry();
+	SetInjectedBattleSession(InSession);
+	SetBattleInputReady(bWasBattleInputReady);
+	SetFirstPersonBattleHandSuppressedForEntry(bWasFirstPersonBattleHandSuppressed);
+	if (!InSession || !Initialization.IsOk()
+		|| InitializationPresentationSession.Get() == InSession)
+	{
+		return;
+	}
+
+	InitializationPresentationSession = InSession;
+	GetBattleHUDRuntime().StoreFirstPersonCardTransitionEvents(Initialization.Events);
+	RefreshFromSnapshot(Initialization.PostSnapshot);
+	GetBattleHUDRuntime().PresentInitialization(Initialization);
 }
 
 FWacomBattleHUDRuntime& UBattleHUD::GetBattleHUDRuntime()
@@ -452,16 +479,6 @@ void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)
 void UBattleHUD::SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId)
 {
 	GetBattleHUDRuntime().SubmitPlayCardOnHandCard(CardId, TargetCardId);
-}
-
-void UBattleHUD::AfterCommand()
-{
-	GetBattleHUDRuntime().AfterCommand();
-}
-
-void UBattleHUD::ConsumeAndLogEvents()
-{
-	GetBattleHUDRuntime().ConsumeAndLogEvents();
 }
 
 void UBattleHUD::AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block)

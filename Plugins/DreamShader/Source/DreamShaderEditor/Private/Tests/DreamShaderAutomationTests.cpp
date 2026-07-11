@@ -10,7 +10,9 @@
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialExpressionIf.h"
 #include "Materials/MaterialExpressionAdd.h"
+#include "Materials/MaterialExpressionComponentMask.h"
 #include "Materials/MaterialExpressionMultiply.h"
+#include "Materials/MaterialExpressionNamedReroute.h"
 #include "Materials/MaterialExpressionSine.h"
 #include "Materials/MaterialExpressionScalarParameter.h"
 #include "Materials/MaterialExpressionVectorParameter.h"
@@ -720,6 +722,67 @@ namespace UE::DreamShader::Editor::Private::Tests
 		return false;
 	}
 
+	bool HasMaskedInputFromClass(
+		UMaterial* Material,
+		const TCHAR* SourceClassName,
+		const bool bMaskR,
+		const bool bMaskG,
+		const bool bMaskB,
+		const bool bMaskA)
+	{
+		if (!Material || !SourceClassName)
+		{
+			return false;
+		}
+
+		auto ResolveRerouteSource = [](UMaterialExpression* SourceExpression)
+		{
+			TSet<UMaterialExpression*> Visited;
+			while (auto* Usage = Cast<UMaterialExpressionNamedRerouteUsage>(SourceExpression))
+			{
+				if (!Usage->Declaration || Visited.Contains(SourceExpression))
+				{
+					break;
+				}
+				Visited.Add(SourceExpression);
+				SourceExpression = Usage->Declaration->Input.Expression;
+			}
+			return SourceExpression;
+		};
+
+		for (auto&& ExpressionPtr : Material->GetExpressions())
+		{
+			UMaterialExpression* Expression = ExpressionPtr;
+			if (!Expression)
+			{
+				continue;
+			}
+
+			for (int32 InputIndex = 0; InputIndex < 32; ++InputIndex)
+			{
+				FExpressionInput* Input = Expression->GetInput(InputIndex);
+				if (!Input)
+				{
+					break;
+				}
+
+				UMaterialExpression* SourceExpression = ResolveRerouteSource(Input->Expression);
+				if (SourceExpression
+					&& SourceExpression->GetClass()->GetName() == SourceClassName
+					&& Input->Mask != 0
+					&& (Input->MaskR != 0) == bMaskR
+					&& (Input->MaskG != 0) == bMaskG
+					&& (Input->MaskB != 0) == bMaskB
+					&& (Input->MaskA != 0) == bMaskA)
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	bool GenerateAndLoadMaterial(
 		FAutomationTestBase& Test,
 		FScopedDreamShaderAutomationArtifacts& Artifacts,
@@ -838,6 +901,137 @@ Shader(Name="DreamShaderTests/Automation/%s")
 	}
 
 	TestTrue(TEXT("'sin' generates a Sine node"), CountMaterialExpressionsOfClass<UMaterialExpressionSine>(Material) >= 1);
+	return true;
+}
+
+IMPLEMENT_CUSTOM_SIMPLE_AUTOMATION_TEST(
+	FDreamShaderSwizzleInputMaskGenerationTest,
+	FDreamShaderQuietAutomationTestBase,
+	"DreamShader.Gen.Graph.SwizzleInputMasks",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDreamShaderSwizzleInputMaskGenerationTest::RunTest(const FString& Parameters)
+{
+	using namespace UE::DreamShader::Editor::Private::Tests;
+
+	FScopedDreamShaderAutomationArtifacts Artifacts;
+	const FString AssetName = MakeUniqueTestAssetName(TEXT("M_SwizzleMasks"));
+	const FString Source = FString::Printf(TEXT(R"(
+Function SelfContained BuildPackedValue(in float2 uv, out float3 packed) {
+    packed = float3(uv.x, uv.y, 0.75);
+}
+
+Shader(Name="DreamShaderTests/Automation/%s")
+{
+    Properties = {
+        TextureSampleParameter2D Texture = Path(Engine, "/EngineResources/DefaultTexture");
+        VectorParameter Tint = float4(0.8, 0.6, 0.4, 0.5);
+    }
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "Translucent"; }
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 packed;
+        BuildPackedValue(uv, packed);
+        float4 surface = Texture(Coordinates=packed.xy);
+        Color = surface.rgb;
+        Alpha = surface.a * packed.z * Tint.a;
+    }
+}
+)"), *AssetName);
+
+	UMaterial* Material = nullptr;
+	if (!GenerateAndLoadMaterial(*this, Artifacts, AssetName, Source, Material))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Texture coordinates preserve the packed.xy RG input mask"),
+		HasMaskedInputFromClass(Material, TEXT("MaterialExpressionCustom"), true, true, false, false));
+	TestTrue(TEXT("Packed mask preserves the packed.z B input mask"),
+		HasMaskedInputFromClass(Material, TEXT("MaterialExpressionCustom"), false, false, true, false));
+	TestTrue(TEXT("Surface color preserves the surface.rgb RGB input mask"),
+		HasMaskedInputFromClass(Material, TEXT("MaterialExpressionTextureSampleParameter2D"), true, true, true, false));
+	TestTrue(TEXT("Surface alpha preserves the surface.a A input mask"),
+		HasMaskedInputFromClass(Material, TEXT("MaterialExpressionTextureSampleParameter2D"), false, false, false, true));
+	TestTrue(TEXT("Vector alpha preserves the Tint.a A input mask"),
+		HasMaskedInputFromClass(Material, TEXT("MaterialExpressionVectorParameter"), false, false, false, true));
+	return true;
+}
+
+IMPLEMENT_CUSTOM_SIMPLE_AUTOMATION_TEST(
+	FDreamShaderExplicitComponentMaskChannelTest,
+	FDreamShaderQuietAutomationTestBase,
+	"DreamShader.Gen.Graph.ExplicitComponentMaskChannels",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FDreamShaderExplicitComponentMaskChannelTest::RunTest(const FString& Parameters)
+{
+	using namespace UE::DreamShader::Editor::Private::Tests;
+
+	FScopedDreamShaderAutomationArtifacts Artifacts;
+	const FString AssetName = MakeUniqueTestAssetName(TEXT("M_ExplicitMasks"));
+	const FString Source = FString::Printf(TEXT(R"(
+Shader(Name="DreamShaderTests/Automation/%s")
+{
+    Properties = {
+        VectorParameter Packed = float4(0.1, 0.2, 0.3, 0.4);
+    }
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "Translucent"; }
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+    Graph = {
+        float onlyB = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float1",
+            Input=Packed,
+            B=true);
+        float onlyA = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float1",
+            Input=Packed,
+            A=true);
+		float2 defaultRG = UE.Expression(
+			Class="ComponentMask",
+			OutputType="float2",
+			Input=Packed);
+        Color = float3(onlyB, onlyB, onlyB);
+        Alpha = onlyA;
+    }
+}
+)"), *AssetName);
+
+	UMaterial* Material = nullptr;
+	if (!GenerateAndLoadMaterial(*this, Artifacts, AssetName, Source, Material))
+	{
+		return false;
+	}
+
+	bool bFoundBOnlyMask = false;
+	bool bFoundAOnlyMask = false;
+	bool bFoundDefaultRGMask = false;
+	for (auto&& ExpressionPtr : Material->GetExpressions())
+	{
+		if (const auto* Mask = Cast<UMaterialExpressionComponentMask>(ExpressionPtr))
+		{
+			bFoundBOnlyMask |= !Mask->R && !Mask->G && Mask->B && !Mask->A;
+			bFoundAOnlyMask |= !Mask->R && !Mask->G && !Mask->B && Mask->A;
+			bFoundDefaultRGMask |= Mask->R && Mask->G && !Mask->B && !Mask->A;
+		}
+	}
+
+	TestTrue(TEXT("UE.Expression ComponentMask B=true clears Unreal's default R/G channels"), bFoundBOnlyMask);
+	TestTrue(TEXT("UE.Expression ComponentMask A=true clears Unreal's default R/G channels"), bFoundAOnlyMask);
+	TestTrue(TEXT("UE.Expression ComponentMask with no channel flags preserves Unreal's default RG channels"), bFoundDefaultRGMask);
 	return true;
 }
 

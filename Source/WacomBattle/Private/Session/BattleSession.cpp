@@ -30,36 +30,41 @@ UBattleSession::~UBattleSession()
 	EventBus = nullptr;
 }
 
-FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
+FBattleInitializationResult UBattleSession::Initialize(const FBattleInitParams& Params)
 {
+	FBattleInitializationResult Result;
+	Result.PostSnapshot = BuildSnapshot();
+
 	if (!Params.Character)
 	{
-		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoCharacter"));
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoCharacter"));
+		return Result;
 	}
 	if (Params.EnemySlots.IsEmpty())
 	{
-		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoEnemy"));
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("NoEnemy"));
+		return Result;
 	}
 
-	// 重置状态容器。
-	delete State;
-	State = new FBattleState();
-	EventBus->Reset();
-	PresentationJournal.Reset();
-	ReferencedAssets.Reset();
-
-	return FBattleInitializer::Initialize(*State, *EventBus, Params, ReferencedAssets);
-}
-
-FWacomStatus UBattleSession::SubmitCommand(const FBattleCommand& Command)
-{
-	const FBattleResolution Resolution = ResolveCommand(Command);
-	if (Resolution.IsOk())
+	FBattleState WorkingState;
+	FBattleEventBus WorkingEventBus;
+	TArray<TObjectPtr<const UObject>> WorkingReferencedAssets;
+	Result.Status = FBattleInitializer::Initialize(
+		WorkingState,
+		WorkingEventBus,
+		Params,
+		WorkingReferencedAssets);
+	if (!Result.Status.IsOk())
 	{
-		EventBus->AppendResolved(Resolution.Events);
-		PresentationJournal = Resolution.PresentationJournal;
+		return Result;
 	}
-	return Resolution.Status;
+
+	Result.Events = WorkingEventBus.Consume();
+	Result.PostSnapshot = FBattleSnapshotBuilder::Build(WorkingState);
+	*State = MoveTemp(WorkingState);
+	*EventBus = MoveTemp(WorkingEventBus);
+	ReferencedAssets = MoveTemp(WorkingReferencedAssets);
+	return Result;
 }
 
 FBattleResolution UBattleSession::ResolveCommand(const FBattleCommand& Command)
@@ -105,22 +110,6 @@ FBattleSnapshot UBattleSession::BuildSnapshot() const
 		return FBattleSnapshot{};
 	}
 	return FBattleSnapshotBuilder::Build(*State);
-}
-
-TArray<FBattleEvent> UBattleSession::ConsumeEvents()
-{
-	if (!EventBus)
-	{
-		return {};
-	}
-	return EventBus->Consume();
-}
-
-FBattlePresentationJournal UBattleSession::ConsumePresentationJournal()
-{
-	FBattlePresentationJournal Out = MoveTemp(PresentationJournal);
-	PresentationJournal.Reset();
-	return Out;
 }
 
 bool UBattleSession::IsBattleEnded() const
@@ -200,5 +189,25 @@ FBattleCardActionPreview UBattleSession::BuildCardActionPreview(
 bool UBattleSession::ValidateCardZoneInvariantsForAutomationTest(FString& OutError) const
 {
 	return State && FCardZoneAggregate::ValidateInvariants(*State, &OutError);
+}
+
+int32 UBattleSession::GetReferencedAssetCountForAutomationTest() const
+{
+	return ReferencedAssets.Num();
+}
+
+bool UBattleSession::ContainsReferencedAssetForAutomationTest(const UObject* Asset) const
+{
+	return ReferencedAssets.Contains(Asset);
+}
+
+int32 UBattleSession::GetNextEventSequenceForAutomationTest() const
+{
+	return EventBus ? EventBus->GetNextSequence() : INDEX_NONE;
+}
+
+int32 UBattleSession::GetRandomCurrentSeedForAutomationTest() const
+{
+	return State ? State->Rng.GetCurrentSeed() : INDEX_NONE;
 }
 #endif

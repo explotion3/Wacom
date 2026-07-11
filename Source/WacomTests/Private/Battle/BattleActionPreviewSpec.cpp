@@ -407,7 +407,7 @@ bool FWacomBattleActionPreviewNoTargetPlayerShieldSpec::RunTest(const FString& /
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattleActionPreviewSelectedDiscardPassiveParitySpec,
-	"Wacom.Battle.ActionPreview.SelectedDiscardOnDiscardPassiveMatchesSubmitCommand",
+	"Wacom.Battle.ActionPreview.SelectedDiscardOnDiscardPassiveMatchesResolution",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomBattleActionPreviewSelectedDiscardPassiveParitySpec::RunTest(const FString& /*Parameters*/)
@@ -473,19 +473,19 @@ bool FWacomBattleActionPreviewSelectedDiscardPassiveParitySpec::RunTest(const FS
 	const FBattleCardActionPreview Preview = PreviewSession->BuildCardActionPreview(
 		PreviewSourceId,
 		FWacomInteractionTargetHandle::ForCardTarget(PreviewTargetId, PreviewSession));
-	const FWacomStatus SubmitStatus = SubmitSession->SubmitCommand(
+	const FBattleResolution SubmitStatus = SubmitSession->ResolveCommand(
 		FBattleCommand::MakePlayCardOnHandCard(SubmitSourceId, SubmitTargetId));
 	const FBattleSnapshot ResolvedSnapshot = SubmitSession->BuildSnapshot();
 
 	TestTrue(TEXT("Selected discard action preview exists"), Preview.bHasPreview);
-	TestTrue(TEXT("Selected discard resolves through SubmitCommand"), SubmitStatus.IsOk());
+	TestTrue(TEXT("Selected discard resolves through command resolution"), SubmitStatus.IsOk());
 	TestEqual(
-		TEXT("SubmitCommand applies target OnDiscard shield"),
+		TEXT("Command resolution applies target OnDiscard shield"),
 		ResolvedSnapshot.Player.Shield,
 		ShieldAmount);
 	TestTrue(TEXT("Selected discard preview projects the player"), Preview.bHasProjectedPlayer);
 	TestEqual(
-		TEXT("Selected discard preview shield matches SubmitCommand"),
+		TEXT("Selected discard preview shield matches command resolution"),
 		Preview.ProjectedPlayer.Shield,
 		ResolvedSnapshot.Player.Shield);
 	return true;

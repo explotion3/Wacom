@@ -76,6 +76,10 @@ _Avoid_: 玩家 StatusStacks 与卡牌 StatusStacks 双写、在抽牌前提前�
 一次 Combatant Mutation 解析出的请求伤害、护盾吸收、实际 HP 损失、overkill 和本次破坏结果；`DamageDealt.Amount` 投影实际 HP 损失。
 _Avoid_: 名义伤害等于扣血、用 Combat Log 反推护盾吸收
 
+**Battle Initialization Result（战斗初始化结果）**:
+一次新战斗初始化 commit 的显式原子结果，绑定 status、开场 events 和 post snapshot；失败时保留 Session 当前旧战斗且不发布事件。
+_Avoid_: 初始化事件队列、Session 开场事件拉取
+
 ## Relationships
 
 - **Target Probe** 和 Target Preview 使用同一份 **PlayCard Evaluation** 目标规则，但前者要求一个具体显式目标。
@@ -98,6 +102,7 @@ _Avoid_: 名义伤害等于扣血、用 Combat Log 反推护盾吸收
 - **PlayCard Evaluation**、Target Preview、Action Preview 和 Snapshot 共享 **Card Runtime State** 的费用与冻结事实。
 - **Status Semantics** 在出牌开始时捕获敌方 Freeze，确保当前卡新施加的 Freeze 只拦截下一次真实先机推进。
 - 一次伤害 **Combatant Mutation** 产生一份 **Damage Facts**；事件、Combat Log 和 Action Preview 共享其中的实际 HP 损失。
+- **Battle Initialization Result** 与单次命令的 `FBattleResolution` 分别拥有自己的事件批次；BattleSession 不提供跨调用累积输出队列。
 
 ## Example dialogue
 

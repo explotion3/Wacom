@@ -38,6 +38,7 @@ struct FWacomBattleActionPreviewPresentation;
 class FWacomBattleHUDSnapshotPresenter;
 class FWacomBattleHUDTargetingController;
 struct FKnockdownChoiceView;
+struct FBattleInitializationResult;
 struct FBattleResolution;
 struct FBattleSnapshot;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
@@ -186,10 +187,8 @@ public:
 		const FGuid& CardId,
 		const FGuid& TargetCardId,
 		const TOptional<FVector2D>& PresentationTargetWidgetPosition = TOptional<FVector2D>());
-	void AfterCommand();
-
-	void ConsumeAndLogEvents();
-	bool ConsumeAndLogEvents(
+	void PresentInitialization(const FBattleInitializationResult& Initialization);
+	bool PresentCommandResolution(
 		const FWacomBattleCombatLogCommandContext& CommandContext,
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleResolution& Resolution);

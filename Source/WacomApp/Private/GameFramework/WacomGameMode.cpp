@@ -409,6 +409,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	// 1) 创建 BattleSession + Initialize
 	int32 EnterBattleEnemySlotCount = 0;
 	const UEnemyDefinition* FirstEnemySlotDefinition = nullptr;
+	FBattleInitializationResult BattleInitialization;
 	{
 		FBattleInitParams Params;
 
@@ -429,11 +430,11 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		EnterBattleEnemySlotCount = Params.EnemySlots.Num() > 0 ? Params.EnemySlots.Num() : 1;
 
 		ActiveSession = NewObject<UBattleSession>(this);
-		const FWacomStatus Status = ActiveSession->Initialize(Params);
-		if (!Status.IsOk())
+		BattleInitialization = ActiveSession->Initialize(Params);
+		if (!BattleInitialization.IsOk())
 		{
 			UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] Session Initialize 失败 Code=%d"),
-				(int32)Status.Code);
+				(int32)BattleInitialization.Status.Code);
 			ActiveSession = nullptr;
 			return;
 		}
@@ -458,8 +459,8 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		WacomPC->ClearRunFirstPersonCardLayer();
 	}
 
-	BattleHUD->SetInjectedBattleSession(ActiveSession);
 	GuardBattleEntryHUD(BattleHUD);
+	BattleHUD->AttachInitializedBattleSession(ActiveSession, MoveTemp(BattleInitialization));
 	TArray<AWacomBattleEnemyActor*> SceneEnemyHosts;
 	Trigger->BuildBattleSceneEnemyHosts(SceneEnemyHosts);
 	BattleHUD->SetBattleSceneEnemyHosts(SceneEnemyHosts);

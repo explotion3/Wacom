@@ -131,7 +131,7 @@ namespace
 		Entry.CapacityEffectTags.AddTag(WacomTags::Card_CapacityEffect_WeaponDamagePlus3);
 		Params.BattleDeckEntries.Add(Entry);
 
-		const FWacomStatus Status = Session->Initialize(Params);
+		const FBattleInitializationResult Status = Session->Initialize(Params);
 		check(Status.IsOk());
 		return Session;
 	}
@@ -211,7 +211,7 @@ namespace
 		const FGuid PoisonCardId =
 			FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonCard->CardId);
 		Test.TestTrue(TEXT("Seed poison card plays"),
-			Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPart(Snapshot, PoisonCardId, 0)).IsOk());
+			Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPart(Snapshot, PoisonCardId, 0)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TargetHandle = MakeTargetPreviewFirstPartHandle(Snapshot);
 
@@ -253,7 +253,7 @@ namespace
 				7);
 
 			Test.TestTrue(TEXT("Play weapon with capacity effect"),
-				Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPart(Before, CardId, 0)).IsOk());
+				Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPart(Before, CardId, 0)).IsOk());
 			Test.TestEqual(TEXT("Formal damage matches preview weapon capacity bonus"),
 				FWacomBattleFixture::FindPartHp(Session->BuildSnapshot(), 0),
 				13);
@@ -279,7 +279,7 @@ namespace
 				0);
 
 			Test.TestTrue(TEXT("Play negative weapon with capacity effect"),
-				Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPart(Before, CardId, 0)).IsOk());
+				Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPart(Before, CardId, 0)).IsOk());
 			Test.TestEqual(TEXT("Formal damage clamp keeps HP unchanged"),
 				FWacomBattleFixture::FindPartHp(Session->BuildSnapshot(), 0),
 				20);
@@ -333,7 +333,7 @@ namespace
 			3);
 
 		Test.TestTrue(TEXT("Formal AddCost play succeeds"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 		Test.TestEqual(TEXT("Formal AddCost matches preview"),
 			GetRuntimeCostInHand(Session->BuildSnapshot(), TargetId),
 			5);

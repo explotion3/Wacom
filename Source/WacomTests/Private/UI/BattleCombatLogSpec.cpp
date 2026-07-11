@@ -321,11 +321,11 @@ bool FWacomUIBattleHUDCombatLogSpec::RunTest(const FString& /*Parameters*/)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleHUDInitialEventsConsumedSpec,
-	"Wacom.UI.Battle.CombatLog.HUD.InitialEventsConsumedOnSessionSet",
+	FWacomUIBattleHUDInitializationResultPresentedOnceSpec,
+	"Wacom.UI.Battle.CombatLog.HUD.InitializationResultPresentedOnce",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleHUDInitialEventsConsumedSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleHUDInitializationResultPresentedOnceSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* Character = Fx.MakeCharacter(
@@ -333,15 +333,21 @@ bool FWacomUIBattleHUDInitialEventsConsumedSpec::RunTest(const FString& /*Parame
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
 	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
+	const FWacomInitializedBattleSession Initialized =
+		Fx.CreateInitializedSession(Character, Enemy, 1);
+	UBattleSession* Session = Initialized.Session;
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
 	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>(HUD.Get()));
 	Feed->TakeWidget();
 	HUD->SetCombatLogFeedForTest(Feed.Get());
-	HUD->SetSession(Session);
+	HUD->SetInjectedBattleSession(Session);
+	TestEqual(TEXT("Direct session injection does not synthesize initialization events"),
+		HUD->GetBattleCombatLogBlockCount(),
+		0);
+	HUD->AttachInitializedBattleSession(Session, Initialized.Initialization);
 
-	TestTrue(TEXT("SetSession consumes initial visible battle events immediately"),
+	TestTrue(TEXT("Attach presents initial visible battle events immediately"),
 		HUD->GetBattleCombatLogBlockCount() > 0);
 	TestTrue(TEXT("Combat log feed receives initial visible battle events"),
 		Feed->GetVisibleBlockCount() > 0);
@@ -367,8 +373,12 @@ bool FWacomUIBattleHUDInitialEventsConsumedSpec::RunTest(const FString& /*Parame
 		});
 	TestTrue(TEXT("Initial log includes battle start"), bHasBattleStarted);
 	TestTrue(TEXT("Initial log includes opening draw"), bHasCardsDrawn);
+	HUD->AttachInitializedBattleSession(Session, Initialized.Initialization);
+	TestEqual(TEXT("Repeated attach does not replay initialization"),
+		HUD->GetBattleCombatLogBlockCount(),
+		1);
 
-	const int32 EntryCountAfterSetSession = HUD->GetBattleCombatLogBlockCount();
+	const int32 EntryCountAfterAttach = HUD->GetBattleCombatLogBlockCount();
 	HUD->OnWaitRequested();
 
 	const TArray<FWacomBattleCombatLogBlockView> BlocksAfterWait = HUD->GetBattleCombatLogHistoryForTest();
@@ -383,7 +393,7 @@ bool FWacomUIBattleHUDInitialEventsConsumedSpec::RunTest(const FString& /*Parame
 		}).Num();
 	TestEqual(TEXT("Initial battle start is not consumed again after first command"), BattleStartedCountAfterWait, 1);
 	TestTrue(TEXT("Wait appends later command events"),
-		HUD->GetBattleCombatLogBlockCount() > EntryCountAfterSetSession);
+		HUD->GetBattleCombatLogBlockCount() > EntryCountAfterAttach);
 
 	return true;
 }
@@ -436,9 +446,12 @@ bool FWacomUIBattleHUDCombatLogControllerContractSpec::RunTest(const FString& /*
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(Character, Fx.MakeSinglePartEnemy(20, 5, 0), 1);
-	Harness->SetSession(Session);
-	TestTrue(TEXT("SetSession appends initial system-visible combat log"),
+	const FWacomInitializedBattleSession Initialized = Fx.CreateInitializedSession(
+		Character,
+		Fx.MakeSinglePartEnemy(20, 5, 0),
+		1);
+	Harness->SetInitializedSession(Initialized);
+	TestTrue(TEXT("Initialized attach appends system-visible combat log"),
 		HUD->GetBattleCombatLogBlockCount() > 0);
 	Harness->SetSession(nullptr);
 	TestEqual(TEXT("Session clear clears combat log through HUD"), HUD->GetBattleCombatLogBlockCount(), 0);

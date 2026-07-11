@@ -65,7 +65,7 @@ bool FWacomBattleCardZoneInvariantLifecycleSpec::RunTest(const FString& /*Parame
 	if (NormalId.IsValid())
 	{
 		TestTrue(TEXT("Normal card play succeeds"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(NormalId)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(NormalId)).IsOk());
 		TestCardZoneInvariant(*this, TEXT("Hand to Played"), Session);
 	}
 
@@ -74,7 +74,7 @@ bool FWacomBattleCardZoneInvariantLifecycleSpec::RunTest(const FString& /*Parame
 	if (LeftId.IsValid())
 	{
 		TestTrue(TEXT("Anchor play succeeds"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftId)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftId)).IsOk());
 		TestCardZoneInvariant(*this, TEXT("Hand to Limbo"), Session);
 	}
 
@@ -84,7 +84,7 @@ bool FWacomBattleCardZoneInvariantLifecycleSpec::RunTest(const FString& /*Parame
 	if (ExhaustSourceId.IsValid() && ExhaustTargetId.IsValid())
 	{
 		TestTrue(TEXT("Selected-card exhaust succeeds"),
-			Session->SubmitCommand(
+			Session->ResolveCommand(
 				FBattleCommand::MakePlayCardOnHandCard(ExhaustSourceId, ExhaustTargetId)).IsOk());
 		TestCardZoneInvariant(*this, TEXT("Hand to Exhaust"), Session);
 	}
@@ -92,7 +92,7 @@ bool FWacomBattleCardZoneInvariantLifecycleSpec::RunTest(const FString& /*Parame
 	if (Session->GetPhase() == EBattlePhase::PlayerAction)
 	{
 		TestTrue(TEXT("EndTurn succeeds"),
-			Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		TestCardZoneInvariant(*this, TEXT("Turn cleanup and next draw"), Session);
 	}
 

@@ -96,7 +96,7 @@ namespace
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattleActionExecutionDeterministicParitySpec,
-	"Wacom.Battle.ActionPreview.Parity.DeterministicTransactionMatchesSubmitCommand",
+	"Wacom.Battle.ActionPreview.Parity.DeterministicTransactionMatchesResolution",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomBattleActionExecutionDeterministicParitySpec::RunTest(const FString& /*Parameters*/)
@@ -150,7 +150,7 @@ bool FWacomBattleActionExecutionDeterministicParitySpec::RunTest(const FString& 
 	const FBattleCardActionPreview Preview = PreviewSession->BuildCardActionPreview(
 		PreviewCardId,
 		MakePartTargetHandle(*PreviewPart));
-	const FWacomStatus SubmitStatus = SubmitSession->SubmitCommand(
+	const FBattleResolution SubmitStatus = SubmitSession->ResolveCommand(
 		FBattleCommand::MakePlayCardOnEnemyPartKey(SubmitCardId, SubmitPart->PartKey));
 	const FBattleSnapshot Resolved = SubmitSession->BuildSnapshot();
 	const FEnemyPartSnapshot* ResolvedPart = FWacomBattleFixture::GetEnemyPartSnapshot(Resolved, 0);
@@ -159,7 +159,7 @@ bool FWacomBattleActionExecutionDeterministicParitySpec::RunTest(const FString& 
 
 	TestTrue(TEXT("Deterministic preview exists"), Preview.bHasPreview);
 	TestFalse(TEXT("Deterministic transaction has no unresolved facts"), Preview.bHasUnresolvedFacts);
-	TestTrue(TEXT("Equivalent SubmitCommand succeeds"), SubmitStatus.IsOk());
+	TestTrue(TEXT("Equivalent command resolution succeeds"), SubmitStatus.IsOk());
 	if (!TestNotNull(TEXT("Projected enemy part exists"), ProjectedPart)
 		|| !TestNotNull(TEXT("Resolved enemy part exists"), ResolvedPart))
 	{
@@ -225,7 +225,7 @@ bool FWacomBattleActionPreviewRequiresPlayerActionPhaseSpec::RunTest(const FStri
 		return false;
 	}
 
-	const FWacomStatus SubmitStatus = Session->SubmitCommand(
+	const FBattleResolution SubmitStatus = Session->ResolveCommand(
 		FBattleCommand::MakePlayCardOnEnemyPartKey(LethalCardId, FirstPart->PartKey));
 	const FBattleSnapshot PendingSnapshot = Session->BuildSnapshot();
 	const FBattleCardActionPreview Preview = Session->BuildCardActionPreview(

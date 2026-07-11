@@ -41,17 +41,17 @@ bool FWacomBattlePerfectReleaseSpec::RunTest(const FString& /*Parameters*/)
 	UBattleSession*       S     = Fx.CreateSession(Char, Enemy, 1);
 
 	// 清掉 Initialize 的事件
-	S->ConsumeEvents();
 
 	const FBattleSnapshot Snap = S->BuildSnapshot();
 	const FGuid TargetPart = FWacomBattleFixture::FindPartInstanceId(Snap, 0);
 	const FGuid CardId     = FWacomBattleFixture::FindHandInstanceByCardId(Snap, HitCard->CardId);
 	TestTrue(TEXT("CardInHand"), CardId.IsValid());
 
-	TestTrue(TEXT("Play ok"),
-		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, CardId, TargetPart)).IsOk());
+	const FBattleResolution Resolution = S->ResolveCommand(
+		FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, CardId, TargetPart));
+	TestTrue(TEXT("Play ok"), Resolution.IsOk());
 
-	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 
 	int32 IdxHit = INDEX_NONE, IdxResist = INDEX_NONE, IdxStun = INDEX_NONE;
 	for (int32 i = 0; i < Events.Num(); ++i)

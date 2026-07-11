@@ -82,7 +82,26 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Shadow")
             Softness,
             shadowMask);
 
-        Color = ShadowColor.rgb;
-        Alpha = shadowMask * ShadowColor.a;
+        // Use explicit masks so the generated graph communicates the intended RGB/A split and the
+        // shadow opacity cannot be mistaken for the vector parameter's red channel.
+        float3 shadowColorRGB = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float3",
+            Input=ShadowColor,
+            R=true,
+            G=true,
+            B=true,
+            A=false);
+        float shadowColorAlpha = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float1",
+            Input=ShadowColor,
+            R=false,
+            G=false,
+            B=false,
+            A=true);
+
+        Color = shadowColorRGB;
+        Alpha = shadowMask * shadowColorAlpha;
     }
 }

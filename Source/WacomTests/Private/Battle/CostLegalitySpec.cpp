@@ -14,7 +14,7 @@
  * 构造：敌人总先机 = 3（单部位）；卡 Cost = 5。
  * 断言：
  *   - Snapshot 里 bIsPlayable == false
- *   - SubmitCommand PlayCard 失败，状态码 = NotEnoughInitiative
+ *   - ResolveCommand PlayCard 失败，状态码 = NotEnoughInitiative
  *   - 再建一个 Cost=3 的卡，bIsPlayable == true
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -55,12 +55,12 @@ bool FWacomBattleCostLegalitySpec::RunTest(const FString& /*Parameters*/)
 	}
 
 	// 提交 PlayCard 应被拒绝
-	const FWacomStatus StExp = S->SubmitCommand(
+	const FBattleResolution StExp = S->ResolveCommand(
 		FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, ExpId, TargetPart));
-	TestEqual(TEXT("Expensive rejected code"), (int32)StExp.Code, (int32)EWacomError::NotEnoughInitiative);
+	TestEqual(TEXT("Expensive rejected code"), (int32)StExp.Status.Code, (int32)EWacomError::NotEnoughInitiative);
 
 	// 提交可支付的
-	const FWacomStatus StAff = S->SubmitCommand(
+	const FBattleResolution StAff = S->ResolveCommand(
 		FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, AffId, TargetPart));
 	TestTrue(TEXT("Affordable accepted"), StAff.IsOk());
 	return true;

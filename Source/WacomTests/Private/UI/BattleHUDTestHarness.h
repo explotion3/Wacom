@@ -21,6 +21,7 @@ class UWacomBattleHUDDetailTest;
 class UWacomFirstPersonCardAnchorComponent;
 
 struct FWacomBattlePresentationStackEntryView;
+struct FWacomInitializedBattleSession;
 
 struct FWacomBattleHUDTestSceneEnemyHost
 {
@@ -58,6 +59,9 @@ public:
 		const TArray<FName>& PartIds);
 
 	void SetSession(UBattleSession* Session, bool bSettleInitialPresentation = true);
+	void SetInitializedSession(
+		const FWacomInitializedBattleSession& Initialized,
+		bool bSettleInitialPresentation = true);
 	void SettlePresentationQueue(int32 MaxSteps = 32);
 	void SettlePresentationQueueAndExitStack(int32 MaxSteps = 64);
 

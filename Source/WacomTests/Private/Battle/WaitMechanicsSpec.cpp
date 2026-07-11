@@ -35,7 +35,7 @@ bool FWacomBattleWaitMechanicsSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("PartInitiative initial"),   FWacomBattleFixture::FindPartInitiative(Before, 0), 20);
 
 	// 第一次等待：扣 2、值变 3
-	TestTrue(TEXT("Wait1 ok"), S->SubmitCommand(FBattleCommand::MakeWait()).IsOk());
+	TestTrue(TEXT("Wait1 ok"), S->ResolveCommand(FBattleCommand::MakeWait()).IsOk());
 	{
 		const FBattleSnapshot After = S->BuildSnapshot();
 		TestEqual(TEXT("Init after wait1"),     FWacomBattleFixture::FindPartInitiative(After, 0), 18);
@@ -43,7 +43,7 @@ bool FWacomBattleWaitMechanicsSpec::RunTest(const FString& /*Parameters*/)
 	}
 
 	// 第二次等待：扣 3、值变 4
-	TestTrue(TEXT("Wait2 ok"), S->SubmitCommand(FBattleCommand::MakeWait()).IsOk());
+	TestTrue(TEXT("Wait2 ok"), S->ResolveCommand(FBattleCommand::MakeWait()).IsOk());
 	{
 		const FBattleSnapshot After = S->BuildSnapshot();
 		TestEqual(TEXT("Init after wait2"),     FWacomBattleFixture::FindPartInitiative(After, 0), 15);
@@ -51,7 +51,7 @@ bool FWacomBattleWaitMechanicsSpec::RunTest(const FString& /*Parameters*/)
 	}
 
 	// 结束回合 → 新回合开始应把等待值重置为 2
-	TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+	TestTrue(TEXT("EndTurn ok"), S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	{
 		const FBattleSnapshot After = S->BuildSnapshot();
 		TestEqual(TEXT("WaitValue reset on new turn"), After.CurrentWaitValue, 2);

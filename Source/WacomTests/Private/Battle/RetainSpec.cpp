@@ -92,7 +92,7 @@ bool FWacomBattleRetainNormalCardKeepsSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("RetainCardInHand"), RetainId.IsValid());
 
 	// 结束回合：新回合开始后 Hand 应该仍包含 RetainCard。
-	TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+	TestTrue(TEXT("EndTurn ok"), S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestTrue (TEXT("RetainCard still in hand next turn"), HandHas(Snap, RetainId));
@@ -134,7 +134,7 @@ bool FWacomBattleRetainNormalCardDiscardsSpec::RunTest(const FString& /*Paramete
 	TestTrue(TEXT("LH anchor in hand"), LHId.IsValid());
 
 	// 打出左手锚点（进 Limbo，本回合离开手牌）。这样结束回合时只剩右手。
-	TestTrue(TEXT("PlayLH"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId)).IsOk());
+	TestTrue(TEXT("PlayLH"), S->ResolveCommand(FBattleCommand::MakePlayCard(LHId)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestTrue (TEXT("LH gone from hand"),  !HandHas(Snap, LHId));
@@ -149,7 +149,7 @@ bool FWacomBattleRetainNormalCardDiscardsSpec::RunTest(const FString& /*Paramete
 	TestTrue(TEXT("HasNormalsBefore"), NormalsBeforeEnd.Num() > 0);
 
 	// 结束回合。只有一张锚点在手 → 无双手区 → 非保留普通卡全进弃牌。
-	TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+	TestTrue(TEXT("EndTurn ok"), S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
 	// 下一回合 Hand 不应再含有上一回合的任何普通卡（它们应该都进了弃牌区）。
 	// 由于 DrawPile 足够大不会触发 Reshuffle，所以新抽到的 5 张都是原先没在手的卡。
@@ -202,7 +202,7 @@ bool FWacomBattleRetainBothZoneKeepsSpec::RunTest(const FString& /*Parameters*/)
 
 		// 结束回合。左右手都未被打出，仍在手牌 → 双手区普通卡保留。
 		TestTrue(TEXT("EndTurn ok"),
-			S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+			S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
 		Snap = S->BuildSnapshot();
 		TestTrue(FString::Printf(TEXT("Seed=%d Both-zone card kept"), Seed),
@@ -244,7 +244,7 @@ bool FWacomBattleRetainBothZoneDiscardsIfAnchorMissingSpec::RunTest(const FStrin
 		TestTrue(TEXT("LH in hand"), LHId.IsValid());
 
 		// 打出左手：进 Limbo，LH 离开手牌。
-		TestTrue(TEXT("PlayLH"), S->SubmitCommand(FBattleCommand::MakePlayCard(LHId)).IsOk());
+		TestTrue(TEXT("PlayLH"), S->ResolveCommand(FBattleCommand::MakePlayCard(LHId)).IsOk());
 
 		Snap = S->BuildSnapshot();
 		TestFalse(FString::Printf(TEXT("Seed=%d LH present = false"), Seed), Snap.Hand.bLeftHandPresent);
@@ -260,7 +260,7 @@ bool FWacomBattleRetainBothZoneDiscardsIfAnchorMissingSpec::RunTest(const FStrin
 			NormalsBeforeEnd.Num() > 0);
 
 		// EndTurn：单锚点在手 → 没有双手区 → 所有普通卡（无 Retain）全进弃牌区。
-		TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		TestTrue(TEXT("EndTurn ok"), S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
 		// 下一回合开始时，上一回合的普通卡应全部不在 Hand 中（进了弃牌）。
 		// 注意：新回合又抽 5 张，所以必须按 ID 精确比对，而不是"Hand 是否非空"。
@@ -302,11 +302,10 @@ bool FWacomBattleTurnStartDrawStopsAtHandLimitSpec::RunTest(const FString& /*Par
 
 		// 清掉初始化事件。第一轮结束后：保留 5 张 + 新抽 5 张 = 10，刚好不超限。
 		// 第二轮结束后：保留 10 张，手牌已满，不再抽剩余 2 张，它们保留在抽牌堆。
-		S->ConsumeEvents();
-		TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-		S->ConsumeEvents();
+		TestTrue(TEXT("EndTurn ok"), S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		const int32 DrawBeforeSecondEndTurn = S->BuildSnapshot().PileCounts.DrawCount;
-		TestTrue(TEXT("EndTurn second turn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		const FBattleResolution SecondEndTurn = S->ResolveCommand(FBattleCommand::MakeEndTurn());
+		TestTrue(TEXT("EndTurn second turn ok"), SecondEndTurn.IsOk());
 
 		const FBattleSnapshot Snap = S->BuildSnapshot();
 		TestEqual(TEXT("Turn start keeps normal hand at limit"),
@@ -314,7 +313,7 @@ bool FWacomBattleTurnStartDrawStopsAtHandLimitSpec::RunTest(const FString& /*Par
 		TestEqual(TEXT("Full hand leaves undrawn cards in draw pile"),
 			Snap.PileCounts.DrawCount, DrawBeforeSecondEndTurn);
 
-		const TArray<FBattleEvent> Events = S->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = SecondEndTurn.Events;
 		int32 LimitDiscardEvents = 0;
 		int32 DrawEvents = 0;
 		for (const FBattleEvent& Event : Events)

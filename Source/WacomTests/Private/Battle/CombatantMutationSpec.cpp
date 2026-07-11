@@ -126,13 +126,14 @@ bool FWacomBattleCombatantMutationDamageFactsSpec::RunTest(const FString& /*Para
 			Card,
 			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0));
 
-		Session->ConsumeEvents();
 		const FBattleSnapshot Before = Session->BuildSnapshot();
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
 		TestTrue(TEXT("Partial-shield card is in hand"), CardId.IsValid());
-		TestTrue(TEXT("Partial-shield play succeeds"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId));
+		TestTrue(TEXT("Partial-shield play succeeds"), Resolution.IsOk());
 
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		const FBattleEvent* Damage = FindFirstEvent(Events, EBattleEventType::DamageDealt);
 		const FBattleSnapshot After = Session->BuildSnapshot();
 		TestNotNull(TEXT("Partial-shield damage event exists"), Damage);
@@ -155,12 +156,13 @@ bool FWacomBattleCombatantMutationDamageFactsSpec::RunTest(const FString& /*Para
 			Card,
 			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0));
 
-		Session->ConsumeEvents();
 		const FBattleSnapshot Before = Session->BuildSnapshot();
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
-		TestTrue(TEXT("Full-shield play succeeds"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId));
+		TestTrue(TEXT("Full-shield play succeeds"), Resolution.IsOk());
 
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		const FBattleEvent* Damage = FindFirstEvent(Events, EBattleEventType::DamageDealt);
 		const FBattleSnapshot After = Session->BuildSnapshot();
 		TestNotNull(TEXT("Full-shield damage event still exists"), Damage);
@@ -189,15 +191,15 @@ bool FWacomBattleCombatantMutationDestructionOrderSpec::RunTest(const FString& /
 		Card,
 		Fixture.MakeSinglePartEnemy(/*Hp*/3, /*Initiative*/7, /*IntentResist*/0));
 
-	Session->ConsumeEvents();
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
 	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Before, 0);
 	const FBattleEnemyPartKey PartKey = FWacomBattleFixture::FindPartKeyByInstanceId(Before, PartId);
-	TestTrue(TEXT("Lethal play succeeds"), Session->SubmitCommand(
-		FWacomBattleFixture::MakePlayCardOnPartInstance(Before, CardId, PartId)).IsOk());
+	const FBattleResolution Resolution = Session->ResolveCommand(
+		FWacomBattleFixture::MakePlayCardOnPartInstance(Before, CardId, PartId));
+	TestTrue(TEXT("Lethal play succeeds"), Resolution.IsOk());
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	const int32 DamageIndex = FindFirstEventIndex(Events, EBattleEventType::DamageDealt);
 	const int32 DestroyedIndex = FindFirstEventIndex(Events, EBattleEventType::EnemyPartHpEmptied);
 	const int32 ChoiceIndex = FindFirstEventIndex(Events, EBattleEventType::KnockdownChoiceRequested);
@@ -243,12 +245,13 @@ bool FWacomBattleCombatantMutationStatusProjectionSpec::RunTest(const FString& /
 		Card,
 		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0));
 
-	Session->ConsumeEvents();
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
-	TestTrue(TEXT("Status card play succeeds"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
+	const FBattleResolution Resolution =
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId));
+	TestTrue(TEXT("Status card play succeeds"), Resolution.IsOk());
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	const FBattleEvent* StatusApplied = FindFirstEvent(Events, EBattleEventType::StatusApplied);
 	TestNotNull(TEXT("Status application event exists"), StatusApplied);
 	if (StatusApplied)
@@ -278,14 +281,14 @@ bool FWacomBattleCombatantMutationPoisonOverkillSpec::RunTest(const FString& /*P
 		Card,
 		Fixture.MakeSinglePartEnemy(/*Hp*/2, /*Initiative*/100, /*IntentResist*/0));
 
-	Session->ConsumeEvents();
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
 	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Before, 0);
-	TestTrue(TEXT("Shield-poison play succeeds"), Session->SubmitCommand(
-		FWacomBattleFixture::MakePlayCardOnPartInstance(Before, CardId, PartId)).IsOk());
+	const FBattleResolution Resolution = Session->ResolveCommand(
+		FWacomBattleFixture::MakePlayCardOnPartInstance(Before, CardId, PartId));
+	TestTrue(TEXT("Shield-poison play succeeds"), Resolution.IsOk());
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	const FBattleEvent* PoisonDamage = Events.FindByPredicate([](const FBattleEvent& Event)
 	{
 		return Event.Type == EBattleEventType::DamageDealt && Event.Tag == WacomTags::Status_Poison;

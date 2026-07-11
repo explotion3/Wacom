@@ -308,19 +308,6 @@ void FWacomBattleHUDCommandController::SubmitKnockdownChoice(
 	AfterCommand(LogContext, PreCommandSnapshot, Resolution);
 }
 
-void FWacomBattleHUDCommandController::AfterCommand()
-{
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	Runtime.ConsumeAndLogEvents();
-	Runtime.NativeRefreshFromSnapshot(Snapshot);
-}
-
 void FWacomBattleHUDCommandController::AfterCommand(
 	const FWacomBattleCombatLogCommandContext& LogContext,
 	const FBattleSnapshot& PreCommandSnapshot,
@@ -335,7 +322,7 @@ void FWacomBattleHUDCommandController::AfterCommand(
 	}
 
 	const bool bPresentationHandled =
-		Runtime.ConsumeAndLogEvents(
+		Runtime.PresentCommandResolution(
 			LogContext,
 			PreCommandSnapshot,
 			Resolution);

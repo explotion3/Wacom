@@ -175,7 +175,6 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonNeedle->CardId);
 		const FEnemyPartSnapshot* HeadBefore = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
@@ -186,9 +185,10 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		const FGuid HeadInstanceId = HeadBefore->InstanceId;
 		const int32 HeadHpBefore = HeadBefore->CurrentHp;
 		TestTrue(TEXT("PoisonNeedle is in hand"), CardId.IsValid());
-		TestTrue(TEXT("Play PoisonNeedle without poison"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, HeadBefore->PartKey)).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution = Session->ResolveCommand(
+			FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, HeadBefore->PartKey));
+		TestTrue(TEXT("Play PoisonNeedle without poison"), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* HeadAfter = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
 		if (!TestNotNull(TEXT("Snake.Head exists after PoisonNeedle"), HeadAfter))
@@ -220,10 +220,8 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		TestTrue(TEXT("EndTurn keeps Both-zone ChitinWard while real Snake damages player"),
-			Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-		Session->ConsumeEvents();
+			Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const int32 HpBefore = Snapshot.Player.CurrentHp;
 		const int32 ShieldBefore = Snapshot.Player.Shield;
@@ -231,7 +229,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ChitinWard->CardId);
 		TestTrue(TEXT("ChitinWard remains in hand after one EndTurn"), CardId.IsValid());
-		TestTrue(TEXT("Play ChitinWard"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
+		TestTrue(TEXT("Play ChitinWard"), Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("ChitinWard adds player shield"), Snapshot.Player.Shield - ShieldBefore, 5);
 		TestEqual(TEXT("ChitinWard heals player HP"), Snapshot.Player.CurrentHp - HpBefore, 2);
@@ -256,14 +254,15 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const int32 DrawBefore = Snapshot.PileCounts.DrawCount;
 		const int32 DiscardBefore = Snapshot.PileCounts.DiscardCount;
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, AntennaSearch->CardId);
 		TestTrue(TEXT("AntennaSearch is in hand"), CardId.IsValid());
-		TestTrue(TEXT("Play AntennaSearch"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId));
+		TestTrue(TEXT("Play AntennaSearch"), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("AntennaSearch draws two cards from draw pile"), FWacomBattleFixture::CountEvents(Events, EBattleEventType::CardsDrawn), 1);
 		TestEqual(TEXT("AntennaSearch draw event count"), Events.ContainsByPredicate([](const FBattleEvent& Event)
@@ -301,13 +300,14 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const int32 DrawBefore = Snapshot.PileCounts.DrawCount;
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DrawByCost->CardId);
 		TestTrue(TEXT("DrawByCost is in hand"), CardId.IsValid());
-		TestTrue(TEXT("Play DrawByCost"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId));
+		TestTrue(TEXT("Play DrawByCost"), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("DrawByCost emits draw count equal to default cost"), Events.ContainsByPredicate([](const FBattleEvent& Event)
 		{
@@ -339,7 +339,6 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* BodyBefore = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
 		if (!TestNotNull(TEXT("Snake.Body exists before Fuxiao/MoltCut"), BodyBefore))
@@ -351,8 +350,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		FGuid FuxiaoId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, FuxiaoFeie->CardId);
 		TestTrue(TEXT("FuxiaoFeie is in hand"), FuxiaoId.IsValid());
 		TestTrue(TEXT("Play FuxiaoFeie to apply Slow"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(FuxiaoId, BodyBefore->PartKey)).IsOk());
-		Session->ConsumeEvents();
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(FuxiaoId, BodyBefore->PartKey)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* BodyAfterSlow = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
 		if (!TestNotNull(TEXT("Snake.Body exists after Fuxiao"), BodyAfterSlow))
@@ -370,7 +368,7 @@ bool FWacomBattleGeneratedStarterCardsExecuteSpec::RunTest(const FString& /*Para
 		const FGuid MoltCutId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, MoltCut->CardId);
 		TestTrue(TEXT("MoltCut is in hand"), MoltCutId.IsValid());
 		TestTrue(TEXT("Play MoltCut"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(MoltCutId, BodyAfterSlow->PartKey)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(MoltCutId, BodyAfterSlow->PartKey)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* BodyAfterMolt = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
 		if (!TestNotNull(TEXT("Snake.Body exists after MoltCut"), BodyAfterMolt))
@@ -438,7 +436,6 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
 		if (!TestNotNull(TEXT("Snake.Head exists for conditional PoisonNeedle"), Head))
@@ -449,8 +446,7 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 		FGuid PoisonFangId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonFang->CardId);
 		TestTrue(TEXT("PoisonFang is in hand"), PoisonFangId.IsValid());
 		TestTrue(TEXT("Play PoisonFang"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonFangId, Head->PartKey)).IsOk());
-		Session->ConsumeEvents();
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonFangId, Head->PartKey)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
 		if (!TestNotNull(TEXT("Snake.Head exists after PoisonFang"), Head))
@@ -465,9 +461,10 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 
 		const FGuid PoisonNeedleId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonNeedle->CardId);
 		TestTrue(TEXT("PoisonNeedle is in hand after PoisonFang"), PoisonNeedleId.IsValid());
-		TestTrue(TEXT("Play PoisonNeedle against poisoned target"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonNeedleId, Head->PartKey)).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution = Session->ResolveCommand(
+			FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonNeedleId, Head->PartKey));
+		TestTrue(TEXT("Play PoisonNeedle against poisoned target"), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
 		if (!TestNotNull(TEXT("Snake.Head exists after conditional PoisonNeedle"), Head))
@@ -501,15 +498,15 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DiscardSelected->CardId);
 		const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, LightHusk->CardId);
 		TestTrue(TEXT("DiscardSelected is in hand"), SourceId.IsValid());
 		TestTrue(TEXT("LightHusk is in hand"), TargetId.IsValid());
-		TestTrue(TEXT("DiscardSelected discards LightHusk"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution = Session->ResolveCommand(
+			FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId));
+		TestTrue(TEXT("DiscardSelected discards LightHusk"), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("LightHusk OnDiscard grants shield"), Snapshot.Player.Shield, 4);
 		TestEqual(TEXT("Selected discard emitted one discard event"), FWacomBattleFixture::CountEvents(Events, EBattleEventType::CardDiscarded), 1);
@@ -533,7 +530,6 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 			return false;
 		}
 
-		Session->ConsumeEvents();
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardIdInZone(Snapshot, SilklineFeint->CardId, EHandZone::Left);
 		const FEnemyPartSnapshot* TailBefore = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Tail"));
@@ -547,9 +543,10 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 		TestEqual(TEXT("Tail starts at perfect-release initiative for SilklineFeint"),
 			TailInitiativeBefore,
 			1);
-		TestTrue(TEXT("Play left-zone SilklineFeint on Tail"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, TailBefore->PartKey)).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution = Session->ResolveCommand(
+			FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, TailBefore->PartKey));
+		TestTrue(TEXT("Play left-zone SilklineFeint on Tail"), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* TailAfter = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Tail"));
 		if (!TestNotNull(TEXT("Snake.Tail exists after SilklineFeint"), TailAfter))
@@ -613,7 +610,6 @@ bool FWacomBattleGeneratedSnakeIntentVariantsSpec::RunTest(const FString& /*Para
 		/*Seed*/ 1,
 		/*MinimumDeckSize*/ 8);
 
-	Session->ConsumeEvents();
 	bool bSawPlayerDamage = false;
 	bool bSawPlayerPoison = false;
 	bool bSawPlayerSlow = false;
@@ -622,9 +618,9 @@ bool FWacomBattleGeneratedSnakeIntentVariantsSpec::RunTest(const FString& /*Para
 	for (int32 Turn = 0; Turn < 4; ++Turn)
 	{
 		const FBattleSnapshot Before = Session->BuildSnapshot();
-		TestTrue(*FString::Printf(TEXT("EndTurn %d succeeds"), Turn + 1),
-			Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution = Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+		TestTrue(*FString::Printf(TEXT("EndTurn %d succeeds"), Turn + 1), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		const FBattleSnapshot After = Session->BuildSnapshot();
 
 		bSawPlayerDamage = bSawPlayerDamage

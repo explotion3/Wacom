@@ -132,7 +132,7 @@ bool FWacomKnockdownChoicePhaseSpec::RunTest(const FString& /*Parameters*/)
 
 	TestTrue(TEXT("Phase 起始 PlayerAction"), S->GetPhase() == EBattlePhase::PlayerAction);
 
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
 
 	TestTrue(TEXT("部位破坏后 Phase 切到 PendingKnockdownChoice"),
 		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
@@ -161,8 +161,8 @@ bool FWacomKnockdownChoiceWithdrawSpec::RunTest(const FString& /*Parameters*/)
 	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
-	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
+	S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
 
 	TestTrue(TEXT("撤离后 Phase=BattleEnd"), S->GetPhase() == EBattlePhase::BattleEnd);
 	TestTrue(TEXT("Outcome=Victory"),         S->BuildSnapshot().Outcome == EBattleOutcome::Victory);
@@ -204,7 +204,7 @@ bool FWacomKnockdownChoiceAidContinuesSpec::RunTest(const FString& /*Parameters*
 	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
 	const FKnockdownChoiceView View = S->BuildPendingKnockdownChoiceView();
@@ -215,7 +215,7 @@ bool FWacomKnockdownChoiceAidContinuesSpec::RunTest(const FString& /*Parameters*
 	TestTrue(TEXT("Destroy available in multi-part fight"), View.DestroyOption.bAvailable);
 	TestEqual(TEXT("Withdraw reason none"), View.WithdrawOption.DisabledReason, FName(TEXT("None")));
 
-	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("Aid 后回到 PlayerAction（敌人未全死）"),
 		S->GetPhase() == EBattlePhase::PlayerAction);
 
@@ -245,15 +245,15 @@ bool FWacomKnockdownChoiceRewardCardAidSpec::RunTest(const FString& /*Parameters
 	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
-	const FWacomStatus AidStatus = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
+	const FBattleResolution AidStatus = S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("Aid resolves"), AidStatus.IsOk());
 
 	const FBattleSnapshot SnapAfter = S->BuildSnapshot();
 	TestTrue(TEXT("Reward card immediately appears in battle hand"),
 		HandContainsDefinition(SnapAfter, RewardCard));
 
-	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = AidStatus.Events;
 	const FBattleEvent* CardGained = FindCardGainedEvent(Events, RewardCard);
 	TestNotNull(TEXT("CardGained event emitted"), CardGained);
 	if (CardGained)
@@ -299,15 +299,15 @@ bool FWacomKnockdownChoiceRewardCardDestroySpec::RunTest(const FString& /*Parame
 	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
-	const FWacomStatus DestroyStatus = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Destroy));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
+	const FBattleResolution DestroyStatus = S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Destroy));
 	TestTrue(TEXT("Destroy resolves"), DestroyStatus.IsOk());
 
 	const FBattleSnapshot SnapAfter = S->BuildSnapshot();
 	TestTrue(TEXT("Reward card immediately appears in battle hand"),
 		HandContainsDefinition(SnapAfter, RewardCard));
 
-	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = DestroyStatus.Events;
 	const FBattleEvent* CardGained = FindCardGainedEvent(Events, RewardCard);
 	TestNotNull(TEXT("CardGained event emitted"), CardGained);
 	if (CardGained)
@@ -353,11 +353,11 @@ bool FWacomKnockdownChoiceRewardCardWithdrawIgnoredSpec::RunTest(const FString& 
 	const FGuid Head = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
-	const FWacomStatus WithdrawStatus = S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Head));
+	const FBattleResolution WithdrawStatus = S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
 	TestTrue(TEXT("Withdraw resolves"), WithdrawStatus.IsOk());
 
-	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = WithdrawStatus.Events;
 	TestNull(TEXT("Withdraw does not emit CardGained"), FindCardGainedEvent(Events, RewardCard));
 
 	const FBattleResultPacket Packet = S->BuildResultPacket();
@@ -406,18 +406,19 @@ bool FWacomKnockdownChoiceRewardCardRespectsHandLimitSpec::RunTest(const FString
 		}
 
 		TestTrue(TEXT("Play draw card to fill hand"),
-			S->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
+			S->ResolveCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
 		Snap = S->BuildSnapshot();
 		TestEqual(TEXT("Draw effect fills normal hand to limit"),
 			Snap.Hand.NormalCardCount,
 			Snap.Hand.NormalCardLimit);
-		S->ConsumeEvents();
 
 		TestTrue(TEXT("Play right-hand killer anchor"),
-			S->SubmitCommand(MakePlayOnPartInstance(Snap, KillerAnchorId, Head)).IsOk());
-		TestTrue(TEXT("Choose Aid"), S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
+			S->ResolveCommand(MakePlayOnPartInstance(Snap, KillerAnchorId, Head)).IsOk());
+		const FBattleResolution AidResolution =
+			S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+		TestTrue(TEXT("Choose Aid"), AidResolution.IsOk());
 
-		const TArray<FBattleEvent> Events = S->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = AidResolution.Events;
 		Snap = S->BuildSnapshot();
 
 		int32 LimitDiscardEvents = 0;
@@ -471,14 +472,14 @@ bool FWacomKnockdownChoiceAidAvailableWhenLeftHandPlayedSpec::RunTest(const FStr
 	const FGuid LHId    = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, LH->CardId);
 
 	// 先打出左手（无目标）
-	S->SubmitCommand(FBattleCommand::MakePlayCard(LHId));
+	S->ResolveCommand(FBattleCommand::MakePlayCard(LHId));
 	// 再打死 Head
-	S->SubmitCommand(MakePlayOnPartInstance(S->BuildSnapshot(), KillerId, Head));
+	S->ResolveCommand(MakePlayOnPartInstance(S->BuildSnapshot(), KillerId, Head));
 
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
 	// Aid 是击倒事件分支，不依赖左手锚点当前是否在手牌区。
-	const FWacomStatus AidStatus = S->SubmitCommand(
+	const FBattleResolution AidStatus = S->ResolveCommand(
 		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("左手已打出，Aid 仍可选"), AidStatus.IsOk());
 
@@ -516,11 +517,11 @@ bool FWacomKnockdownChoiceAnchorAsKillerStillAllowsChoiceSpec::RunTest(const FSt
 	const FGuid RHId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, RH->CardId);
 
 	// 用右手 anchor 直接打死 Head
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, RHId, Head));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, RHId, Head));
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
 	// Destroy 是击倒事件分支，不依赖右手锚点当前是否在手牌区。
-	const FWacomStatus DestroyStatus = S->SubmitCommand(
+	const FBattleResolution DestroyStatus = S->ResolveCommand(
 		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Destroy));
 	TestTrue(TEXT("右手就是杀手，Destroy 仍可选"), DestroyStatus.IsOk());
 
@@ -550,7 +551,8 @@ bool FWacomKnockdownChoiceWithdrawUnavailableOnLastLivingPartSpec::RunTest(const
 	const FGuid Solo = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Solo));
+	const FBattleResolution KnockdownResolution =
+		S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Solo));
 	TestTrue(TEXT("Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
 	const FKnockdownChoiceView View = S->BuildPendingKnockdownChoiceView();
@@ -563,7 +565,7 @@ bool FWacomKnockdownChoiceWithdrawUnavailableOnLastLivingPartSpec::RunTest(const
 	TestTrue(TEXT("Final-part Destroy available"), View.DestroyOption.bAvailable);
 
 	{
-		const TArray<FBattleEvent> Events = S->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = KnockdownResolution.Events;
 		int32 LastRequestMask = INDEX_NONE;
 		for (const FBattleEvent& E : Events)
 		{
@@ -575,13 +577,13 @@ bool FWacomKnockdownChoiceWithdrawUnavailableOnLastLivingPartSpec::RunTest(const
 		TestEqual(TEXT("Last-part request exposes Aid+Destroy but not Withdraw"), LastRequestMask, 3);
 	}
 
-	const FWacomStatus WithdrawStatus = S->SubmitCommand(
+	const FBattleResolution WithdrawStatus = S->ResolveCommand(
 		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
 	TestFalse(TEXT("No living part remains, Withdraw rejected"), WithdrawStatus.IsOk());
 	TestTrue(TEXT("Still pending after rejected Withdraw"),
 		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 
-	const FWacomStatus AidStatus = S->SubmitCommand(
+	const FBattleResolution AidStatus = S->ResolveCommand(
 		FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("Aid still resolves final knockdown"), AidStatus.IsOk());
 	TestTrue(TEXT("Final Aid ends battle as victory"), S->GetPhase() == EBattlePhase::BattleEnd);
@@ -629,7 +631,7 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 		ApplySingleEnemySlot(Params, Enemy);
 
 		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
-		const FWacomStatus InitStatus = Session->Initialize(Params);
+		const FBattleInitializationResult InitStatus = Session->Initialize(Params);
 		TestTrue(TEXT("Initial battle initializes"), InitStatus.IsOk());
 		if (!InitStatus.IsOk())
 		{
@@ -641,10 +643,10 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 		const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
 
 		TestTrue(TEXT("Killer card is in opening hand"), KillerId.IsValid());
-		TestTrue(TEXT("Play killer"), Session->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Head)).IsOk());
+		TestTrue(TEXT("Play killer"), Session->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Head)).IsOk());
 		TestTrue(TEXT("Phase pending knockdown after head destroyed"),
 			Session->GetPhase() == EBattlePhase::PendingKnockdownChoice);
-		TestTrue(TEXT("Choose withdraw"), Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw)).IsOk());
+		TestTrue(TEXT("Choose withdraw"), Session->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw)).IsOk());
 
 		const FBattleResultPacket Packet = Session->BuildResultPacket();
 		TestTrue(TEXT("Packet outcome is Victory after withdraw"),
@@ -723,8 +725,8 @@ FakeProgress.DestroyedParts.Add(FBattlePartSlotIdentity::Make(
 	const FBattleSnapshot Snap0 = S->BuildSnapshot();
 	const FGuid Solo = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(Snap0, Killer->CardId);
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, KillerId, Solo));
-	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	S->ResolveCommand(MakePlayOnPartInstance(Snap0, KillerId, Solo));
+	S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 
 	const FBattleResultPacket Packet = S->BuildResultPacket();
 	TestFalse(TEXT("非撤离"), Packet.bWithdrawn);
@@ -773,7 +775,8 @@ bool FWacomKnockdownChoiceMultiPartSequenceSpec::RunTest(const FString& /*Parame
 
 	// 打出 AoE 卡，目标随便给 part0（AllEnemyParts 不依赖 TargetInstanceId）
 	const FGuid Part0 = FWacomBattleFixture::FindPartInstanceId(Snap0, 0);
-	S->SubmitCommand(MakePlayOnPartInstance(Snap0, AoeId, Part0));
+	const FBattleResolution AoeResolution =
+		S->ResolveCommand(MakePlayOnPartInstance(Snap0, AoeId, Part0));
 
 	// 出牌后应进入 PendingKnockdownChoice 阶段
 	TestTrue(TEXT("AoE 后 Phase=PendingKnockdownChoice"),
@@ -781,7 +784,7 @@ bool FWacomKnockdownChoiceMultiPartSequenceSpec::RunTest(const FString& /*Parame
 
 	// 这一波事件里应有 1 条 KnockdownChoiceRequested（首次入队时由 Session 末尾发）
 	{
-		TArray<FBattleEvent> Events = S->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = AoeResolution.Events;
 		int32 RequestCount = 0;
 		for (const FBattleEvent& E : Events)
 		{
@@ -791,10 +794,11 @@ bool FWacomKnockdownChoiceMultiPartSequenceSpec::RunTest(const FString& /*Parame
 	}
 
 	// 第一次 Aid → 队列还剩 2 条 → Resolver 必须再发一条 Request
-	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	const FBattleResolution FirstAidResolution =
+		S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("仍 Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 	{
-		TArray<FBattleEvent> Events = S->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = FirstAidResolution.Events;
 		int32 RequestCount = 0;
 		for (const FBattleEvent& E : Events)
 		{
@@ -804,10 +808,11 @@ bool FWacomKnockdownChoiceMultiPartSequenceSpec::RunTest(const FString& /*Parame
 	}
 
 	// 第二次 Aid → 队列还剩 1 条
-	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	const FBattleResolution SecondAidResolution =
+		S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("仍 Pending"), S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 	{
-		TArray<FBattleEvent> Events = S->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = SecondAidResolution.Events;
 		int32 RequestCount = 0;
 		for (const FBattleEvent& E : Events)
 		{
@@ -817,7 +822,7 @@ bool FWacomKnockdownChoiceMultiPartSequenceSpec::RunTest(const FString& /*Parame
 	}
 
 	// 第三次 Aid → 队列空 → 触发 CheckAndApplyBattleEnd → 三部位全死 → Victory
-	S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
 	TestTrue(TEXT("第三次 Aid 后 BattleEnd"), S->GetPhase() == EBattlePhase::BattleEnd);
 
 	const FBattleResultPacket P = S->BuildResultPacket();

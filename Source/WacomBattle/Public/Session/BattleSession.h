@@ -14,6 +14,7 @@
 #include "Resolution/BattleCardActionPreview.h"
 #include "Resolution/BattleCardTargetPreview.h"
 #include "Runtime/BattlePartSlotIdentity.h"
+#include "Session/BattleInitializationResult.h"
 #include "Session/BattleResultPacket.h"
 #include "Session/BattleResolution.h"
 #include "Snapshots/BattleSnapshot.h"
@@ -204,8 +205,8 @@ struct WACOMBATTLE_API FBattleInitParams
  *
  * 唯一职责：
  * - 持有 FBattleState（战斗真相）
- * - 持有 FBattleEventBus（事件流）
- * - 对外暴露 SubmitCommand / BuildSnapshot / ConsumeEvents
+ * - 持有 FBattleEventBus（事件 Sequence）
+ * - 对外暴露 Initialize / ResolveCommand / BuildSnapshot
  *
  * UBattleSession 不写任何规则。规则在 Resolver / Executor / Service。
  *
@@ -222,34 +223,21 @@ public:
 	UBattleSession();
 	virtual ~UBattleSession() override;
 
-	/** 初始化一场战斗。成功后 Phase 推进到 PlayerAction，等待 SubmitCommand。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle")
-	FWacomStatus Initialize(const FBattleInitParams& Params);
-
 	/**
-	 * 提交一条命令。
-	 * 命令非法时 BattleState 不变，返回 Fail。
+	 * 原子初始化一场战斗。成功后 Phase 推进到 PlayerAction；失败时保留当前旧战斗。
+	 * 初始化事件与命令后快照由返回值一次性交给调用方，不保存在 Session 消费队列中。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle",
-		meta = (DeprecatedFunction, DeprecationMessage = "C++ 请改用 ResolveCommand 原子结果；本入口只保留 Blueprint 兼容。"))
-	FWacomStatus SubmitCommand(const FBattleCommand& Command);
+	FBattleInitializationResult Initialize(const FBattleInitParams& Params);
 
 	/**
 	 * 提交命令并原子返回该命令的事件、表现 checkpoint 与命令后快照。
-	 * 这是 C++ 正式入口；SubmitCommand/Consume* 仅保留为 Blueprint/旧测试兼容层。
+	 * 这是唯一命令入口。
 	 */
 	FBattleResolution ResolveCommand(const FBattleCommand& Command);
 
 	/** 构建当前战斗的只读快照。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle")
 	FBattleSnapshot BuildSnapshot() const;
-
-	/** 取走自上次调用以来累积的事件并清空。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle")
-	TArray<FBattleEvent> ConsumeEvents();
-
-	/** 取走上一条命令生成的表现 checkpoint journal 并清空。 */
-	FBattlePresentationJournal ConsumePresentationJournal();
 
 	/** 战斗是否已结束（Phase == BattleEnd）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
@@ -312,12 +300,15 @@ private:
 #if WITH_AUTOMATION_TESTS
 	friend struct FWacomBattleSessionTestAccess;
 	bool ValidateCardZoneInvariantsForAutomationTest(FString& OutError) const;
+	int32 GetReferencedAssetCountForAutomationTest() const;
+	bool ContainsReferencedAssetForAutomationTest(const UObject* Asset) const;
+	int32 GetNextEventSequenceForAutomationTest() const;
+	int32 GetRandomCurrentSeedForAutomationTest() const;
 #endif
 
 	/** 持有 FBattleState 和 FBattleEventBus。裸指针 + 手动管理，避免 TUniquePtr 在 UHT gen.cpp 里需要完整定义。 */
 	FBattleState* State = nullptr;
 	FBattleEventBus* EventBus = nullptr;
-	FBattlePresentationJournal PresentationJournal;
 
 	/** 让 GC 追踪 Session 生命周期内引用到的资产。 */
 	UPROPERTY()

@@ -790,6 +790,25 @@ namespace UE::DreamShader::Editor::Private
 			return false;
 		}
 
+		const bool bHasExplicitComponentMaskChannel =
+			FindNamedArgument(Arguments, TEXT("R"))
+			|| FindNamedArgument(Arguments, TEXT("G"))
+			|| FindNamedArgument(Arguments, TEXT("B"))
+			|| FindNamedArgument(Arguments, TEXT("A"));
+		if (!bReusedExpressionNode && bHasExplicitComponentMaskChannel)
+		{
+			// UMaterialExpressionComponentMask defaults to R/G enabled. In DreamShader's named-argument
+			// form, once any channel is authored, omitted channel flags mean "not selected" (for example
+			// B=true is a B-only mask). With no authored channel flags, Unreal's default RG is preserved.
+			if (auto* ComponentMaskExpression = Cast<UMaterialExpressionComponentMask>(Expression))
+			{
+				ComponentMaskExpression->R = false;
+				ComponentMaskExpression->G = false;
+				ComponentMaskExpression->B = false;
+				ComponentMaskExpression->A = false;
+			}
+		}
+
 		UMaterialExpressionCustom* CustomExpression = Cast<UMaterialExpressionCustom>(Expression);
 		if (CustomExpression && bIsSubstrateMaterial)
 		{

@@ -132,7 +132,7 @@ bool FWacomBattleStatusEnemySlowFreezeSpec::RunTest(const FString&)
 	const FGuid SlowId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Slow->CardId);
 	const FGuid NoopId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Noop->CardId);
 
-	TestTrue(TEXT("Apply Freeze"), Session->SubmitCommand(
+	TestTrue(TEXT("Apply Freeze"), Session->ResolveCommand(
 		FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, FreezeId, PartId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Freeze does not block its own card"),
@@ -142,7 +142,7 @@ bool FWacomBattleStatusEnemySlowFreezeSpec::RunTest(const FString&)
 			FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0)->StatusStacks,
 			WacomTags::Status_Freeze), 1);
 
-	TestTrue(TEXT("Play Slow through Freeze"), Session->SubmitCommand(
+	TestTrue(TEXT("Play Slow through Freeze"), Session->ResolveCommand(
 		FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, SlowId, PartId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Slow delays current intent and Freeze blocks this push"),
@@ -157,7 +157,7 @@ bool FWacomBattleStatusEnemySlowFreezeSpec::RunTest(const FString&)
 			WacomTags::Status_Slow), 0);
 
 	TestTrue(TEXT("Next card pushes normally"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(NoopId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(NoopId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Normal push after Freeze"),
 		FWacomBattleFixture::FindPartInitiative(Snapshot, 0), 10);
@@ -181,7 +181,7 @@ bool FWacomBattleStatusEnemyTwilightSpec::RunTest(const FString&)
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Twilight->CardId);
 	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
-	TestTrue(TEXT("Play Twilight"), Session->SubmitCommand(
+	TestTrue(TEXT("Play Twilight"), Session->ResolveCommand(
 		FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, CardId, PartId)).IsOk());
 
 	Snapshot = Session->BuildSnapshot();
@@ -191,7 +191,7 @@ bool FWacomBattleStatusEnemyTwilightSpec::RunTest(const FString&)
 		FWacomBattleFixture::GetStatusStacks(Part->StatusStacks, WacomTags::Status_Twilight), 1);
 
 	TestTrue(TEXT("End turn triggers following intent"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 	TestEqual(TEXT("Remaining Twilight delays one more intent"), Part->CurrentInitiative, 2);
@@ -218,7 +218,7 @@ bool FWacomBattleStatusPlayerSlowSpec::RunTest(const FString&)
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, 103);
 
 	TestTrue(TEXT("End turn applies pending Slow"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Exactly two cards selected"),
 		CountHandCardsWithStatus(Snapshot, WacomTags::Status_Slow, 2), 2);
@@ -233,7 +233,7 @@ bool FWacomBattleStatusPlayerSlowSpec::RunTest(const FString&)
 	}
 
 	TestTrue(TEXT("Second turn expires Slow"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Turn-scoped Slow removed"),
 		CountHandCardsWithStatus(Snapshot, WacomTags::Status_Slow), 0);
@@ -260,7 +260,7 @@ bool FWacomBattleStatusPlayerTwilightSpec::RunTest(const FString&)
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, 104);
 
 	TestTrue(TEXT("End turn applies Twilight to the whole hand"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Every current hand card receives Twilight"),
 		CountHandCardsWithStatus(Snapshot, WacomTags::Status_Twilight, 2),
@@ -295,7 +295,7 @@ bool FWacomBattleStatusPlayerTwilightSpec::RunTest(const FString&)
 			: -1,
 		2);
 	TestTrue(TEXT("Play Twilight Combo"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(ComboId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(ComboId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	const FHandCardSnapshot* ComboAfter =
 		FWacomBattleFixture::FindHandCardByInstanceId(Snapshot, ComboId);
@@ -310,7 +310,7 @@ bool FWacomBattleStatusPlayerTwilightSpec::RunTest(const FString&)
 	}
 
 	TestTrue(TEXT("End turn does not clear Twilight"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	const FHandCardSnapshot* ComboRedrawn =
 		FWacomBattleFixture::FindHandCardByCardId(Snapshot, Combo->CardId);
@@ -343,7 +343,7 @@ bool FWacomBattleStatusPlayerFreezeSpec::RunTest(const FString&)
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, 105);
 
 	TestTrue(TEXT("End turn materializes one frozen card"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	int32 FrozenIndex = INDEX_NONE;
 	for (int32 Index = 0; Index < Snapshot.Hand.Cards.Num(); ++Index)
@@ -369,9 +369,9 @@ bool FWacomBattleStatusPlayerFreezeSpec::RunTest(const FString&)
 		FrozenPreview.TargetPreview.Validation.RejectReason,
 		EWacomBattleTargetRejectReason::SourceCardFrozen);
 
-	const FWacomStatus FrozenCommit = Session->SubmitCommand(FBattleCommand::MakePlayCard(FrozenId));
-	TestEqual(TEXT("Frozen commit uses CardForbidden"), FrozenCommit.Code, EWacomError::CardForbidden);
-	TestEqual(TEXT("Frozen commit detail"), FrozenCommit.Detail, FName(TEXT("CardFrozen")));
+	const FBattleResolution FrozenCommit = Session->ResolveCommand(FBattleCommand::MakePlayCard(FrozenId));
+	TestEqual(TEXT("Frozen commit uses CardForbidden"), FrozenCommit.Status.Code, EWacomError::CardForbidden);
+	TestEqual(TEXT("Frozen commit detail"), FrozenCommit.Status.Detail, FName(TEXT("CardFrozen")));
 
 	const int32 NeighborIndex = FrozenIndex > 0 ? FrozenIndex - 1 : FrozenIndex + 1;
 	TestTrue(TEXT("Frozen card has a neighbor"), Snapshot.Hand.Cards.IsValidIndex(NeighborIndex));
@@ -381,7 +381,7 @@ bool FWacomBattleStatusPlayerFreezeSpec::RunTest(const FString&)
 	}
 	const FGuid NeighborId = Snapshot.Hand.Cards[NeighborIndex].InstanceId;
 	TestTrue(TEXT("Playing an adjacent card succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(NeighborId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(NeighborId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	const FHandCardSnapshot* Thawed =
 		FWacomBattleFixture::FindHandCardByInstanceId(Snapshot, FrozenId);

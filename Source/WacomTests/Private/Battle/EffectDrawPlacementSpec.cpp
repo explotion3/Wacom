@@ -76,11 +76,11 @@ bool FWacomBattleEffectDrawInsertsCardsAtRandomSpec::RunTest(const FString& /*Pa
 		const int32 DrawPileBefore = Snap.PileCounts.DrawCount;
 		TestTrue(FString::Printf(TEXT("Seed=%d has draw pile card"), Seed), DrawPileBefore > 0);
 
-		Session->ConsumeEvents();
-		TestTrue(TEXT("Play draw card"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(DrawCardId));
+		TestTrue(TEXT("Play draw card"), Resolution.IsOk());
 
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 
 		Snap = Session->BuildSnapshot();
 		TestEqual(FString::Printf(TEXT("Seed=%d hand count stable after play one draw one"), Seed),
@@ -167,10 +167,10 @@ bool FWacomBattleEffectDrawStopsAtHandLimitSpec::RunTest(const FString& /*Parame
 		const int32 DrawPileBefore = Snap.PileCounts.DrawCount;
 		const int32 DiscardBefore = Snap.PileCounts.DiscardCount;
 
-		Session->ConsumeEvents();
-		TestTrue(TEXT("Play draw card"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(DrawCardId));
+		TestTrue(TEXT("Play draw card"), Resolution.IsOk());
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 
 		Snap = Session->BuildSnapshot();
 		TestEqual(FString::Printf(TEXT("Seed=%d normal count remains limited immediately"), Seed),

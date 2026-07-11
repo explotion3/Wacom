@@ -76,7 +76,7 @@ bool FWacomBattleEffectChainContinuesAfterHandlerFailureSpec::RunTest(const FStr
 		Card->CardId);
 	TestTrue(TEXT("Source card is in hand"), CardId.IsValid());
 	TestTrue(TEXT("Play succeeds although RemoveStatus cannot apply"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
 	TestEqual(TEXT("Following shield effect still executes"),
 		Session->BuildSnapshot().Player.Shield,
 		4);
@@ -130,7 +130,7 @@ bool FWacomBattleEffectChainScratchFailureAndIsolationSpec::RunTest(const FStrin
 		Card->CardId);
 	TestTrue(TEXT("Source card is in hand"), CardId.IsValid());
 	TestTrue(TEXT("Play succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(CardId)).IsOk());
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Main chain keeps LastShuffledCard across a failed effect"),

@@ -395,7 +395,7 @@ bool FWacomUIBattleTriggerSceneEnemyHostSlotsRegistrySpec::RunTest(const FString
 		Params.EnemySlots.Add(RightSlot);
 
 		Session = NewObject<UBattleSession>(GetTransientPackage(), NAME_None, RF_Transient);
-		const FWacomStatus Status = Session->Initialize(Params);
+		const FBattleInitializationResult Status = Session->Initialize(Params);
 		if (!TestTrue(TEXT("Session initializes"), Status.IsOk()))
 		{
 			return false;

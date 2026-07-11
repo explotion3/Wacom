@@ -30,7 +30,9 @@ bool FWacomBattleDrawFiveSpec::RunTest(const FString& /*Parameters*/)
 	}
 	UCharacterDefinition* Char  = Fx.MakeCharacter(LeftHand, RightHand, Deck);
 	UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(/*HP*/20, /*Init*/5, /*Resist*/0);
-	UBattleSession*       S     = Fx.CreateSession(Char, Enemy, /*Seed*/12345);
+	const FWacomInitializedBattleSession Initialized =
+		Fx.CreateInitializedSession(Char, Enemy, /*Seed*/12345);
+	UBattleSession* S = Initialized.Session;
 
 	const FBattleSnapshot Snap = S->BuildSnapshot();
 
@@ -40,7 +42,7 @@ bool FWacomBattleDrawFiveSpec::RunTest(const FString& /*Parameters*/)
 	TestTrue (TEXT("RightHandPresent"), Snap.Hand.bRightHandPresent);
 	TestEqual(TEXT("DrawPileAfter"),  Snap.PileCounts.DrawCount, 5);  // 10 - 5
 
-	const TArray<FBattleEvent> InitialEvents = S->ConsumeEvents();
+	const TArray<FBattleEvent>& InitialEvents = Initialized.Initialization.Events;
 	const FBattleEvent* OpeningDrawEvent = InitialEvents.FindByPredicate(
 		[](const FBattleEvent& Event)
 		{

@@ -119,15 +119,15 @@ bool FWacomBattleTurnLifecycleInitialStartSpec::RunTest(const FString& /*Paramet
 
 	UCardDefinition* LeftHand = nullptr;
 	UCardDefinition* RightHand = nullptr;
-	UBattleSession* Session = CreateLifecycleSession(
-		Fixture,
+	LeftHand = Fixture.MakeNoopCard(0);
+	RightHand = Fixture.MakeNoopCard(0);
+	const FWacomInitializedBattleSession Initialized = Fixture.CreateInitializedSession(
+		Fixture.MakeCharacter(LeftHand, RightHand, Deck),
 		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
-		Deck,
-		LeftHand,
-		RightHand,
 		/*Seed*/3);
+	UBattleSession* Session = Initialized.Session;
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Initialized.Initialization.Events;
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const int32 BattleStartedIndex = FindEventIndex(Events, EBattleEventType::BattleStarted);
 	const int32 TurnStartedIndex = FindEventIndex(Events, EBattleEventType::TurnStarted);
@@ -162,8 +162,6 @@ bool FWacomBattleTurnLifecycleInitialStartSpec::RunTest(const FString& /*Paramet
 	TestEqual(TEXT("Initial turn number"), Snapshot.TurnNumber, 1);
 	TestEqual(TEXT("Initial wait value"), Snapshot.CurrentWaitValue, 2);
 	TestEqual(TEXT("Initial StateVersion increments once"), Snapshot.Version, 1);
-	TestTrue(TEXT("Initial lifecycle does not write command presentation journal"),
-		Session->ConsumePresentationJournal().IsEmpty());
 	return true;
 }
 
@@ -203,17 +201,16 @@ bool FWacomBattleTurnLifecycleNormalCompletionSpec::RunTest(const FString& /*Par
 	}
 
 	TestTrue(TEXT("Play normal card into PlayedPile"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(PlayedCardId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(PlayedCardId)).IsOk());
 	TestTrue(TEXT("Play left anchor to disable Both-zone retention"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
 	const FBattleSnapshot BeforeEndTurn = Session->BuildSnapshot();
-	Session->ConsumeEvents();
-	Session->ConsumePresentationJournal();
 
-	TestTrue(TEXT("EndTurn succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	const FBattlePresentationJournal Journal = Session->ConsumePresentationJournal();
+	const FBattleResolution EndTurnResolution =
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn succeeds"), EndTurnResolution.IsOk());
+	const TArray<FBattleEvent>& Events = EndTurnResolution.Events;
+	const FBattlePresentationJournal& Journal = EndTurnResolution.PresentationJournal;
 	const FBattleSnapshot AfterEndTurn = Session->BuildSnapshot();
 
 	const int32 TurnEndedIndex = FindEventIndex(Events, EBattleEventType::TurnEnded);
@@ -314,15 +311,14 @@ bool FWacomBattleTurnLifecyclePreEnemyBattleEndSpec::RunTest(const FString& /*Pa
 	const FGuid LeftHandId = FWacomBattleFixture::FindHandInstanceByCardId(
 		Session->BuildSnapshot(), LeftHand->CardId);
 	TestTrue(TEXT("Play left anchor"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
 	const FBattleSnapshot BeforeEndTurn = Session->BuildSnapshot();
-	Session->ConsumeEvents();
-	Session->ConsumePresentationJournal();
 
-	TestTrue(TEXT("EndTurn succeeds even when OnDiscard ends battle"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	const FBattlePresentationJournal Journal = Session->ConsumePresentationJournal();
+	const FBattleResolution EndTurnResolution =
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn succeeds even when OnDiscard ends battle"), EndTurnResolution.IsOk());
+	const TArray<FBattleEvent>& Events = EndTurnResolution.Events;
+	const FBattlePresentationJournal& Journal = EndTurnResolution.PresentationJournal;
 	const FBattleSnapshot AfterEndTurn = Session->BuildSnapshot();
 	TestTrue(TEXT("OnDiscard damage is published"),
 		FindEventIndex(Events, EBattleEventType::DamageDealt) != INDEX_NONE);
@@ -366,15 +362,14 @@ bool FWacomBattleTurnLifecyclePostEnemyBattleEndSpec::RunTest(const FString& /*P
 	const FGuid LeftHandId = FWacomBattleFixture::FindHandInstanceByCardId(
 		Session->BuildSnapshot(), LeftHand->CardId);
 	TestTrue(TEXT("Play left anchor"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
 	const FBattleSnapshot BeforeEndTurn = Session->BuildSnapshot();
-	Session->ConsumeEvents();
-	Session->ConsumePresentationJournal();
 
-	TestTrue(TEXT("EndTurn succeeds when enemy action ends battle"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	const FBattlePresentationJournal Journal = Session->ConsumePresentationJournal();
+	const FBattleResolution EndTurnResolution =
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn succeeds when enemy action ends battle"), EndTurnResolution.IsOk());
+	const TArray<FBattleEvent>& Events = EndTurnResolution.Events;
+	const FBattlePresentationJournal& Journal = EndTurnResolution.PresentationJournal;
 	const FBattleSnapshot AfterEndTurn = Session->BuildSnapshot();
 	const int32 EnemyActedIndex = FindEventIndex(Events, EBattleEventType::EnemyPartActed);
 	const int32 BattleEndedIndex = FindEventIndex(Events, EBattleEventType::BattleEnded);
@@ -423,11 +418,11 @@ bool FWacomBattleTurnLifecycleReservedTriggersSpec::RunTest(const FString& /*Par
 	const FGuid LeftHandId = FWacomBattleFixture::FindHandInstanceByCardId(
 		Session->BuildSnapshot(), LeftHand->CardId);
 	TestTrue(TEXT("Play left anchor"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
-	Session->ConsumeEvents();
-	TestTrue(TEXT("EndTurn succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
+	const FBattleResolution EndTurnResolution =
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn succeeds"), EndTurnResolution.IsOk());
+	const TArray<FBattleEvent>& Events = EndTurnResolution.Events;
 	TestEqual(TEXT("Reserved turn triggers do not apply shield"),
 		Session->BuildSnapshot().Player.Shield, 0);
 	TestEqual(TEXT("Reserved turn triggers do not publish PassiveTriggered"),

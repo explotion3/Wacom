@@ -8,8 +8,8 @@
 /**
  * 战斗事件总线。
  *
- * 所有 Resolver 通过本总线 Emit 事件。事件由 UBattleSession::ConsumeEvents
- * 整批取走后清空，保证上层每批 Event 不会重复读。
+ * 所有 Resolver 通过本总线 Emit 事件。每次初始化或命令事务通过原子结果
+ * 整批取走事件，Session 本身不保存等待上层消费的输出队列。
  *
  * Sequence 在总线内部自增，跨整场战斗唯一。
  * 总线不是反射结构，仅 WacomBattle/Private 内部使用。
@@ -31,12 +31,6 @@ struct FBattleEventBus
 
 	/** 成功 commit 后接纳事务的下一个 Sequence，不复制事务事件。 */
 	void CommitTransactionSequence(const FBattleEventBus& Transaction);
-
-	/** 仅供旧 SubmitCommand/ConsumeEvents 兼容层保存已经分配好 Sequence 的事件。 */
-	void AppendResolved(TConstArrayView<FBattleEvent> ResolvedEvents);
-
-	/** 清空并重置序号。仅 Initialize 时使用。 */
-	void Reset();
 
 private:
 	TArray<FBattleEvent> Pending;

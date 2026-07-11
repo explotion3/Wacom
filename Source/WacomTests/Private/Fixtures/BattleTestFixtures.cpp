@@ -329,6 +329,14 @@ UCharacterDefinition* FWacomBattleFixture::MakeCharacter(UCardDefinition* LeftHa
 
 UBattleSession* FWacomBattleFixture::CreateSession(UCharacterDefinition* Character, UEnemyDefinition* Enemy, int32 Seed)
 {
+	return CreateInitializedSession(Character, Enemy, Seed).Session;
+}
+
+FWacomInitializedBattleSession FWacomBattleFixture::CreateInitializedSession(
+	UCharacterDefinition* Character,
+	UEnemyDefinition* Enemy,
+	int32 Seed)
+{
 	UBattleSession* Session = NewTransient<UBattleSession>();
 	SessionPtr = TStrongObjectPtr<UBattleSession>(Session);
 
@@ -340,9 +348,12 @@ UBattleSession* FWacomBattleFixture::CreateSession(UCharacterDefinition* Charact
 	EnemySlot.Enemy = Enemy;
 	P.EnemySlots.Add(EnemySlot);
 
-	const FWacomStatus Status = Session->Initialize(P);
-	checkf(Status.IsOk(), TEXT("BattleFixture::CreateSession Initialize failed: %d"), (int32)Status.Code);
-	return Session;
+	FBattleInitializationResult Initialization = Session->Initialize(P);
+	checkf(
+		Initialization.IsOk(),
+		TEXT("BattleFixture::CreateInitializedSession Initialize failed: %d"),
+		(int32)Initialization.Status.Code);
+	return { Session, MoveTemp(Initialization) };
 }
 
 // ================ Snapshot 查询 ================

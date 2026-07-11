@@ -113,7 +113,7 @@ bool FWacomBattlePoisonTickOnCardPlaySpec::RunTest(const FString& /*Parameters*/
 	// 2) PlayCardResolver 末尾 Status Semantics 结算 Poison → 部位 -3 HP
 	// 敌方先机由 20 扣到 19，不触发行动。
 	TestTrue(TEXT("PlayPoison"),
-		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, Pid, PartId)).IsOk());
+		S->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, Pid, PartId)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after poison tick"), FWacomBattleFixture::FindPartHp(Snap, 0), 27);
@@ -163,7 +163,7 @@ bool FWacomBattlePoisonTickOnEnemyActSpec::RunTest(const FString& /*Parameters*/
 
 	// 打出 → 玩家获得 3 层毒 + 立即触发一次中毒结算（玩家 -3）。
 	// 先机 20→19，敌方不行动。
-	TestTrue(TEXT("PlayPoisonOnPlayer"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid)).IsOk());
+	TestTrue(TEXT("PlayPoisonOnPlayer"), S->ResolveCommand(FBattleCommand::MakePlayCard(Pid)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PlayerHp after card-play tick"), Snap.Player.CurrentHp, 97);
@@ -175,7 +175,7 @@ bool FWacomBattlePoisonTickOnEnemyActSpec::RunTest(const FString& /*Parameters*/
 	//   - 部位意图：Damage 1 打玩家 → 玩家 -1
 	//   - ActOnce 末尾由 Status Semantics 结算 Poison → 玩家 -3（因为还有 3 层毒）
 	// 最终玩家 HP = 97 - 1 - 3 = 93。
-	TestTrue(TEXT("EndTurn"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+	TestTrue(TEXT("EndTurn"), S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PlayerHp after enemy-act tick"), Snap.Player.CurrentHp, 93);
@@ -222,7 +222,7 @@ bool FWacomBattlePoisonPenetratesShieldSpec::RunTest(const FString& /*Parameters
 	// 1) Shield 100 加到玩家
 	// 2) 施加 Poison 3 到玩家
 	// 3) Status Semantics 结算 Poison → 玩家直接 -3 HP（Shield 不吸收）
-	TestTrue(TEXT("PlayCombo"), S->SubmitCommand(FBattleCommand::MakePlayCard(Pid)).IsOk());
+	TestTrue(TEXT("PlayCombo"), S->ResolveCommand(FBattleCommand::MakePlayCard(Pid)).IsOk());
 
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PlayerShield unchanged by poison"), Snap.Player.Shield,    100);
@@ -267,12 +267,12 @@ bool FWacomBattlePoisonStacksUnchangedSpec::RunTest(const FString& /*Parameters*
 
 	// 第 1 张：施加 3 层毒 + 结算一次（部位 HP 50→47）
 	TestTrue(TEXT("Play1"),
-		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, PoisonId, PartId)).IsOk());
+		S->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, PoisonId, PartId)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after tick1"), FWacomBattleFixture::FindPartHp(Snap, 0), 47);
 
 	// 第 2 张：无效果卡，Status Semantics 仍应结算 Poison（部位 HP 47→44）
-	TestTrue(TEXT("Play2"), S->SubmitCommand(FBattleCommand::MakePlayCard(NoopId)).IsOk());
+	TestTrue(TEXT("Play2"), S->ResolveCommand(FBattleCommand::MakePlayCard(NoopId)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("PartHp after tick2"), FWacomBattleFixture::FindPartHp(Snap, 0), 44);
 

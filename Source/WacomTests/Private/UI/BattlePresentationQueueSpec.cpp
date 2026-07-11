@@ -486,7 +486,7 @@ bool FWacomUIBattlePresentationQueueBlocksPlayerActionOutsidePlayerPhaseSpec::Ru
 	}
 
 	TestTrue(TEXT("Submit killer card"),
-		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
+		Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
 			InitialSnapshot,
 			KillerCardId,
 			TargetPartId)).IsOk());
@@ -652,13 +652,12 @@ bool FWacomUIBattlePresentationQueueBattleEndClearsQueueSafelySpec::RunTest(cons
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(InitialSnapshot, Killer->CardId);
 	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
 	TestTrue(TEXT("Play killer card"),
-		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
+		Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
 			InitialSnapshot,
 			KillerId,
 			TargetPartId)).IsOk());
-	TestTrue(TEXT("Submit final Aid"), Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
+	TestTrue(TEXT("Submit final Aid"), Session->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
 	TestTrue(TEXT("Session reached BattleEnd"), Session->GetPhase() == EBattlePhase::BattleEnd);
-	Session->ConsumeEvents();
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.ObjectFlags |= RF_Transient;
@@ -737,12 +736,11 @@ bool FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec::RunTes
 	const FGuid KillerId = FWacomBattleFixture::FindHandInstanceByCardId(InitialSnapshot, Killer->CardId);
 	const FGuid HeadId = FWacomBattleFixture::FindPartInstanceId(InitialSnapshot, 0);
 	TestTrue(TEXT("Play killer card"),
-		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
+		Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
 			InitialSnapshot,
 			KillerId,
 			HeadId)).IsOk());
 	TestTrue(TEXT("Session is pending knockdown"), Session->BuildPendingKnockdownChoiceView().bHasPendingChoice);
-	Session->ConsumeEvents();
 
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.ObjectFlags |= RF_Transient;
@@ -788,8 +786,7 @@ bool FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec::RunTes
 
 	HUD->ClearBattlePresentationQueueForTest();
 	TestTrue(TEXT("Resolve pending knockdown choice"),
-		Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
-	Session->ConsumeEvents();
+		Session->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
 	TestFalse(TEXT("No pending choice remains after Aid"),
 		Session->BuildPendingKnockdownChoiceView().bHasPendingChoice);
 

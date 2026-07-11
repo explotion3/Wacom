@@ -64,7 +64,7 @@ namespace
 		const FBattleSnapshot Snap = S->BuildSnapshot();
 		const FGuid Pid = FWacomBattleFixture::FindHandInstanceByCardId(Snap, CardId);
 		check(Pid.IsValid());
-		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid));
+		S->ResolveCommand(FBattleCommand::MakePlayCard(Pid));
 	}
 }
 
@@ -167,8 +167,8 @@ bool FWacomBattleHpThresholdFlagPermanentSpec::RunTest(const FString& /*Paramete
 	TestTrue(TEXT("Flag true after damage"), Packet1.bCrossedHighHpThreshold);
 
 	// 多次 EndTurn 后 flag 仍 true（阈值跨越是 latching）
-	S->SubmitCommand(FBattleCommand::MakeEndTurn());
-	S->SubmitCommand(FBattleCommand::MakeEndTurn());
+	S->ResolveCommand(FBattleCommand::MakeEndTurn());
+	S->ResolveCommand(FBattleCommand::MakeEndTurn());
 
 	FBattleResultPacket Packet2 = S->BuildResultPacket();
 	TestTrue(TEXT("Flag still true after EndTurns"), Packet2.bCrossedHighHpThreshold);
@@ -204,7 +204,7 @@ bool FWacomBattleHpThresholdFirstTimeOnlySpec::RunTest(const FString& /*Paramete
 	{
 		const FBattleSnapshot Snap = S->BuildSnapshot();
 		const FGuid Pid = FWacomBattleFixture::FindHandInstanceByCardId(Snap, Self30->CardId);
-		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid));
+		S->ResolveCommand(FBattleCommand::MakePlayCard(Pid));
 	}
 	{
 		const FBattleResultPacket P = S->BuildResultPacket();
@@ -215,7 +215,7 @@ bool FWacomBattleHpThresholdFirstTimeOnlySpec::RunTest(const FString& /*Paramete
 	{
 		const FBattleSnapshot Snap = S->BuildSnapshot();
 		const FGuid Pid = FWacomBattleFixture::FindHandInstanceByCardId(Snap, Self30->CardId);
-		S->SubmitCommand(FBattleCommand::MakePlayCard(Pid));
+		S->ResolveCommand(FBattleCommand::MakePlayCard(Pid));
 	}
 	{
 		const FBattleSnapshot Snap = S->BuildSnapshot();

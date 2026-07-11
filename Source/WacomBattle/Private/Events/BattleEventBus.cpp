@@ -26,14 +26,3 @@ void FBattleEventBus::CommitTransactionSequence(const FBattleEventBus& Transacti
 {
 	NextSequence = Transaction.NextSequence;
 }
-
-void FBattleEventBus::AppendResolved(TConstArrayView<FBattleEvent> ResolvedEvents)
-{
-	Pending.Append(ResolvedEvents);
-}
-
-void FBattleEventBus::Reset()
-{
-	Pending.Reset();
-	NextSequence = 0;
-}

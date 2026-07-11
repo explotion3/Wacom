@@ -49,7 +49,7 @@ bool FWacomBattleHandQueueRebuildAcrossTurnsSpec::RunTest(const FString& /*Param
 		TestTrue(FString::Printf(TEXT("Seed=%d anchors in hand turn1"), Seed), L1 != INDEX_NONE && R1 != INDEX_NONE);
 		TestTrue(FString::Printf(TEXT("Seed=%d anchor spacing turn1"), Seed), FMath::Abs(L1 - R1) >= 2);
 
-		TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		TestTrue(TEXT("EndTurn ok"), S->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 
 		FBattleSnapshot Snap2 = S->BuildSnapshot();
 		int32 L2 = INDEX_NONE, R2 = INDEX_NONE;

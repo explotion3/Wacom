@@ -235,7 +235,7 @@ bool FWacomUIBattleSceneEnemyTargetClickRoutesByEnemyPartKeySpec::RunTest(const 
 	Params.EnemySlots.Add(RightSlot);
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>(GetTransientPackage(), NAME_None, RF_Transient));
-	const FWacomStatus InitStatus = Session->Initialize(Params);
+	const FBattleInitializationResult InitStatus = Session->Initialize(Params);
 	if (!TestTrue(TEXT("Session initializes"), InitStatus.IsOk()))
 	{
 		return false;

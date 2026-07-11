@@ -40,7 +40,7 @@ bool FWacomBattleComboReturnSpec::RunTest(const FString& /*Parameters*/)
 	const FGuid TargetPart    = FWacomBattleFixture::FindPartInstanceId(Snap, 0);
 
 	TestTrue(TEXT("Play Combo"),
-		S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, ComboId, TargetPart)).IsOk());
+		S->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, ComboId, TargetPart)).IsOk());
 	Snap = S->BuildSnapshot();
 
 	const int32 IdxAfter = FWacomBattleFixture::FindHandIndex(Snap, ComboId);

@@ -121,7 +121,7 @@ for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 		for (int32 i = 0; i < 3; ++i)
 		{
 			TestTrue(FString::Printf(TEXT("Seed=%d PlayComp%d"), Seed, i),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
+				S->ResolveCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
 		}
 
 		// After 3rd play, Fuxiao should be in hand.
@@ -200,7 +200,7 @@ for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 		for (int32 i = 0; i < 3; ++i)
 		{
 			TestTrue(TEXT("PlayComp"),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
+				S->ResolveCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
 		}
 
 		Snap = S->BuildSnapshot();
@@ -212,7 +212,7 @@ for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 		for (int32 i = 3; i < 5; ++i)
 		{
 			TestTrue(TEXT("PlayComp post-trigger"),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
+				S->ResolveCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
 		}
 
 		Snap = S->BuildSnapshot();
@@ -295,19 +295,20 @@ bool FWacomBattleCompanionCountHandLimitDiscardEventSpec::RunTest(const FString&
 		}
 
 		// 清掉初始化事件，让断言只看本次触发。
-		S->ConsumeEvents();
 
+		TArray<FBattleEvent> Events;
 		for (int32 i = 0; i < 3; ++i)
 		{
-			TestTrue(TEXT("Play companion for limit event"),
-				S->SubmitCommand(FBattleCommand::MakePlayCard(CompIds[i])).IsOk());
+			const FBattleResolution Resolution =
+				S->ResolveCommand(FBattleCommand::MakePlayCard(CompIds[i]));
+			TestTrue(TEXT("Play companion for limit event"), Resolution.IsOk());
+			Events.Append(Resolution.Events);
 		}
 
 		Snap = S->BuildSnapshot();
 		TestEqual(TEXT("Companion trigger keeps hand at normal limit"),
 			Snap.Hand.NormalCardCount, Snap.Hand.NormalCardLimit);
 
-		const TArray<FBattleEvent> Events = S->ConsumeEvents();
 		int32 LimitDiscardEvents = 0;
 		const int32 ExpectedDiscardedByLimit = 4; // 5 opening - 3 played + 12 returned = 14 normals, limit 10.
 		for (const FBattleEvent& Event : Events)

@@ -118,6 +118,7 @@ WBP 合同：
 - `CardShadowImage` 必须是 `Fake3DSurfaceRetainer` 的兄弟节点而不是子节点，这样阴影继承 Slot 的整体位置 / scale / angle，但不会被卡面 UV 透视扭曲。Brush 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Shadow`，Brush Tint 保持白色；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Shadow.dsm`，不使用运行时 blur。
 - `Fake3DSurfaceRetainer` Effect Material 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，Retainer texture parameter 填 `Texture` 并启用效果；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm`。C++ 参数名固定为 `TiltX`、`TiltY`、`PerspectiveStrength`。没有材质或缺少可选绑定时安全退化，不取消 Hover / Drag 或抽弃牌动画。
 - 两个材质都由 DreamShader 1.4.1 生成，`.dsm` 是长期真源。若 Content 资产缺失，使用 DreamShader commandlet 分别对上述源文件执行 `compile -Force`；不要在 Unreal 材质图里做无法回写到 `.dsm` 的平行修改。
+- 材质图人工复查时，Fake3D 应有四个显式 ComponentMask：`RG` 用于投影 UV、`B` 用于 inside mask、`RGB` 用于卡面颜色、`A` 用于卡面透明度；Shadow 应有 `RGB` 与 `A` 两个显式 ComponentMask。若单通道节点仍显示 `RGB` 或 `RGA`，说明资产没有使用带 ComponentMask 默认通道修复的 DreamShader 版本重新生成。
 - `InteractionFeedbackImage` 优先使用 Anchor 的 `InteractionFeedbackMaterial`；该材质为空时，会复用 WBP Image brush 上预设的材质。推荐制作流程是：常规风格直接把材质放到 `InteractionFeedbackImage` 的 brush 上；需要角色 / 场景级替换时再在 Anchor 上填 override。若没有材质，pressed / confirm / commit 仍可退化为普通 tint，deny 只保留 shake，不退回整卡红色 overlay。
 - 交互反馈材质需要支持 C++ 写入参数：`FeedbackColor`、`EdgeWidth`、`EdgeSoftness`、`VignetteStrength`、`VignetteRadius`、`VignetteSoftness`、`Opacity`、`Pulse`。
 - 不再支持旧 `DenyFeedbackEdgeImage` fallback；源卡交互反馈统一绑定到 `InteractionFeedbackImage`。

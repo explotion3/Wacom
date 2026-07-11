@@ -228,7 +228,7 @@ bool FWacomRunExperiencePartDestroyedRecordedInPacketSpec::RunTest(const FString
 	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snap0, /*PartIndex*/0);
 
 	const FBattleCommand Cmd = FWacomBattleFixture::MakePlayCardOnPartInstance(Snap0, KillerId, PartId);
-	const FWacomStatus Status = S->SubmitCommand(Cmd);
+	const FBattleResolution Status = S->ResolveCommand(Cmd);
 	TestTrue(TEXT("PlayCard success"), Status.IsOk());
 
 	// Stage 7：部位破坏后弹击倒事件，必须先选才能继续。
@@ -237,7 +237,7 @@ bool FWacomRunExperiencePartDestroyedRecordedInPacketSpec::RunTest(const FString
 	TestTrue(TEXT("Phase pending knockdown"),
 		S->GetPhase() == EBattlePhase::PendingKnockdownChoice);
 	TestTrue(TEXT("Aid OK"),
-		S->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
+		S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid)).IsOk());
 
 	const FBattleSnapshot Snap1 = S->BuildSnapshot();
 	TestTrue(TEXT("Battle ended"), Snap1.Phase == EBattlePhase::BattleEnd);

@@ -197,6 +197,8 @@ Anchor `11 Fake 3D & Shadow` 是 Battle / Run 共用的数值制作入口。默�
 
 Card Depth 材质采用 DreamShader 1.4.1 制作：`DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm` 生成 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，`DShader/Material/Card/M_FirstPersonCard_Shadow.dsm` 生成 `/Game/DreamMaterials/Card/M_FirstPersonCard_Shadow`。前者是唯一 Retainer Effect Material，动态采样名固定为 `Texture`，运行时参数固定为 `TiltX / TiltY / PerspectiveStrength`；后者只生成圆角软阴影 mask，位移、缩放和整体透明度仍由 C++ Card Depth 控制。`.dsm` 是可版本管理的材质真源，生成 `.uasset` 只作为 WBP 制作结果；改变参数名、生成路径或 ShadowHost 宽高比时必须同步本节与 WBP binding 文档。
 
+两份 Card Depth `.dsm` 对 UV、颜色和透明度通道使用显式 `UE.Expression(ComponentMask)`，避免仅从 Named Reroute 的上游 `RGBA` 标签误判实际消费通道。正式生成图中 Fake3D 应包含 `RG / B / RGB / A` 四个 mask，Shadow 应包含 `RGB / A` 两个 mask。DreamShader 的跨区布局 reroute 会把完整值接到 declaration，并把普通 `.xy / .z / .rgb / .a` swizzle 保存在消费端 `FExpressionInput`；检查生成器正确性时必须穿透 reroute 读取消费端 mask。项目内 DreamShader 1.4.1 已补齐 `UE.Expression(ComponentMask)` 的初始化语义：新节点先清空 Unreal 默认启用的 R/G，再应用 DSL 明确指定的通道；`DreamShader.Gen.Graph.SwizzleInputMasks` 与 `DreamShader.Gen.Graph.ExplicitComponentMaskChannels` 负责回归该合同。
+
 Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和本次刷新创建、复用、移除、异常修复数量。诊断日志默认关闭，只在手动排查时开启。
 
 ## §6 Battle 交互

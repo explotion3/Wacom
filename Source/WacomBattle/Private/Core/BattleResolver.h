@@ -13,7 +13,7 @@ struct FBattlePresentationJournal;
 /**
  * 战斗命令分派入口。
  *
- * 仅 WacomBattle/Private 内部使用。UBattleSession::SubmitCommand 是唯一调用点。
+ * 仅 WacomBattle/Private 内部使用。UBattleSession::ResolveCommand 是唯一调用点。
  *
  * 约定：
  * - 所有 Resolver 都不改写静态定义。

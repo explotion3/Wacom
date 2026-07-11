@@ -35,11 +35,12 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 | 对象 | 职责 |
 |---|---|
-| `UBattleSession` | 单场战斗 public facade；持有状态、事件并委托 private helper |
+| `UBattleSession` | 单场战斗 public facade；持有状态与事件序号，并委托 private helper |
 | `BattleState` | Private 可变规则状态 |
 | `FBattleCommand` | 玩家或系统提交的规则命令 |
 | `FBattleSnapshot` | UI / 测试读取的当前只读状态 |
 | `FBattleEvent` | 结算过程事件流；不是真正规则状态 |
+| `FBattleInitializationResult` | 一次初始化的原子结果；绑定 status、opening events 与 post snapshot |
 | `FBattleResolution` | 一条 C++ 命令的原子结果；绑定 status、前后版本、events、journal 与 post snapshot |
 | `FBattlePresentationJournal` | 单次命令内的 C++ only 只读表现 checkpoint journal；当前仅记录 EndTurn 手牌规则 checkpoint |
 | `FBattleResultPacket` | BattleEnd 后给 Run 层消费的战后包 |
@@ -63,18 +64,17 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 | 契约 | 当前用途 |
 |---|---|
-| `UBattleSession::Initialize()` | 根据 `FBattleInitParams` 创建单场战斗，发 `BattleStarted / TurnStarted`，进入首个玩家回合 |
-| `UBattleSession::ResolveCommand()` | C++ 正式命令入口；原子返回 `FBattleResolution` |
-| `UBattleSession::SubmitCommand()` | Blueprint 与旧测试兼容 adapter；内部调用 `ResolveCommand()`，再投影到旧 Consume 队列 |
+| `UBattleSession::Initialize()` | C++ 初始化入口；原子返回 `FBattleInitializationResult`，失败时保留当前旧战斗 |
+| `UBattleSession::ResolveCommand()` | 唯一命令入口；原子返回 `FBattleResolution` |
 | `UBattleSession::BuildSnapshot()` | 输出当前只读状态；UI 和测试读取，不作为事件历史 |
-| `UBattleSession::ConsumeEvents()` | 输出并清空自上次消费以来的事件流 |
-| `UBattleSession::ConsumePresentationJournal()` | 输出并清空自上次成功命令以来的表现 checkpoint journal；与事件一样只消费一次 |
 | `UBattleSession::BuildPendingKnockdownChoiceView()` | 输出当前击倒选择 ViewData；UI 不解析事件 `Count` 位掩码 |
 | `UBattleSession::BuildCardTargetPreview()` | 输出单张手牌对候选目标的只读目标预览 facts；不提交命令、不改 BattleState |
 | `UBattleSession::BuildCardActionPreview()` | 输出松手后可确定的 projected player / enemy part values；不展开随机结果、不改 BattleState |
 | `UBattleSession::BuildResultPacket()` | BattleEnd 后输出战后包；具体 Run 结算见 [WacomRun §10](./WacomRun.md#wacomrun-battle-settlement) |
 
-`ResolveCommand()` 是同步规则结算入口。它在 working-state / transaction event bus 上执行，失败时丢弃 working copy，保证 State、RNG、Event、Journal 和版本零变化；成功时统一 commit，且 `VersionAfter == VersionBefore + 1`。`Events / PresentationJournal / PostSnapshot` 都属于同一次命令，不由 App 再分别消费和拼接。初始化事件仍由旧事件队列单独发布，不混入第一条玩家命令的 resolution。
+`Initialize()` 和 `ResolveCommand()` 都以原子结果作为唯一输出 Seam。初始化在 fresh working state / event bus / referenced-assets 上执行，失败时丢弃 working data，旧 State、RNG、事件序号和资产引用均不改变；成功时作为新战斗一次性 commit，`PostSnapshot.Version == 1`，开场事件序号从 `0` 开始。`FBattleInitializationResult.Events` 只属于本次初始化，第一条成功命令的事件序号紧接其后。
+
+`ResolveCommand()` 在 working-state / transaction event bus 上执行，失败时丢弃 working copy，保证 State、RNG、Event、Journal 和版本零变化；成功时统一 commit，且 `VersionAfter == VersionBefore + 1`。`Events / PresentationJournal / PostSnapshot` 都属于同一次命令。BattleSession 不保存等待外部拉取的事件或 journal 队列，App 和测试必须直接消费具名结果。
 
 规则层不等待 UI 动画。BattleHUD 的 presentation queue、Combat Log、Presentation Stack 和 turn-boundary barrier 都属于表现层；它们只决定何时把玩家意图提交成 `FBattleCommand`，不改变命令本身。
 

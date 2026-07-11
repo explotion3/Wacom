@@ -67,10 +67,11 @@ namespace
 	void TestRejectedStatus(
 		FAutomationTestBase& Test,
 		const TCHAR* Label,
-		const FWacomStatus& Status,
+		const FBattleResolution& Resolution,
 		EWacomError ExpectedCode,
 		FName ExpectedDetail)
 	{
+		const FWacomStatus& Status = Resolution.Status;
 		Test.TestFalse(FString::Printf(TEXT("%s rejects"), Label), Status.IsOk());
 		Test.TestEqual(
 			FString::Printf(TEXT("%s error code"), Label),
@@ -271,7 +272,7 @@ bool FWacomPlayCardEvaluationAllEnemyPartsProbeSpec::RunTest(const FString& /*Pa
 		StaleProbe.RejectReason,
 		EWacomBattleTargetRejectReason::InvalidWorldTarget);
 
-	const FWacomStatus DestroyStatus = Session->SubmitCommand(
+	const FBattleResolution DestroyStatus = Session->ResolveCommand(
 		FBattleCommand::MakePlayCardOnEnemyPartKey(DestroyId, Head->PartKey));
 	TestTrue(TEXT("Destroy setup card resolves"), DestroyStatus.IsOk());
 	TestEqual(
@@ -358,7 +359,7 @@ bool FWacomPlayCardEvaluationStableKeyAuthoritySpec::RunTest(const FString& /*Pa
 		Part->InstanceId);
 	TestTrue(TEXT("Target Preview exposes the stable key"), Preview.TargetEnemyPartKey == Part->PartKey);
 
-	const FWacomStatus Status = Session->SubmitCommand(
+	const FBattleResolution Status = Session->ResolveCommand(
 		FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, Probe.ResolvedPartKey));
 	TestTrue(TEXT("Formal submit accepts the resolved stable key"), Status.IsOk());
 	const FBattleSnapshot After = Session->BuildSnapshot();
@@ -467,7 +468,6 @@ bool FWacomPlayCardEvaluationCostParitySpec::RunTest(const FString& /*Parameters
 	{
 		return false;
 	}
-	Session->ConsumeEvents();
 
 	const FWacomInteractionTargetHandle Target = MakePartHandle(*Part);
 	const FBattleCardTargetPreview TargetPreview =
@@ -489,7 +489,7 @@ bool FWacomPlayCardEvaluationCostParitySpec::RunTest(const FString& /*Parameters
 		ActionPreview.TargetPreview.Validation.RejectReason,
 		EWacomBattleTargetRejectReason::NotEnoughInitiative);
 
-	const FWacomStatus Status = Session->SubmitCommand(
+	const FBattleResolution Status = Session->ResolveCommand(
 		FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, Part->PartKey));
 	TestRejectedStatus(
 		*this,
@@ -514,7 +514,7 @@ bool FWacomPlayCardEvaluationCostParitySpec::RunTest(const FString& /*Parameters
 	TestNotNull(
 		TEXT("Rejected cost keeps source card in hand"),
 		FWacomBattleFixture::FindHandCardByInstanceId(After, CardId));
-	TestEqual(TEXT("Previews and rejected submit emit no events"), Session->ConsumeEvents().Num(), 0);
+	TestTrue(TEXT("Previews and rejected submit emit no events"), Status.Events.IsEmpty());
 	return true;
 }
 
@@ -563,14 +563,14 @@ bool FWacomPlayCardEvaluationFormalStatusDetailSpec::RunTest(const FString& /*Pa
 	TestRejectedStatus(
 		*this,
 		TEXT("Missing enemy target"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(EnemyPartCardId)),
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(EnemyPartCardId)),
 		EWacomError::IllegalTarget,
 		TEXT("MissingTarget"));
 
 	TestRejectedStatus(
 		*this,
 		TEXT("Invalid enemy target key"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(
 			EnemyPartCardId,
 			FBattleEnemyPartKey::Make(TEXT("Encounter"), TEXT("Enemy"), TEXT("MissingPart")))),
 		EWacomError::IllegalTarget,
@@ -579,14 +579,14 @@ bool FWacomPlayCardEvaluationFormalStatusDetailSpec::RunTest(const FString& /*Pa
 	TestRejectedStatus(
 		*this,
 		TEXT("Missing hand-card target"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(HandTargetCardId)),
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(HandTargetCardId)),
 		EWacomError::IllegalTarget,
 		TEXT("MissingTargetCard"));
 
 	TestRejectedStatus(
 		*this,
 		TEXT("Self hand-card target"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(
 			HandTargetCardId,
 			HandTargetCardId)),
 		EWacomError::IllegalTarget,
@@ -595,17 +595,17 @@ bool FWacomPlayCardEvaluationFormalStatusDetailSpec::RunTest(const FString& /*Pa
 	TestRejectedStatus(
 		*this,
 		TEXT("Missing source instance"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(FGuid::NewGuid())),
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(FGuid::NewGuid())),
 		EWacomError::NotFound,
 		TEXT("CardInstanceNotFound"));
 
-	const FWacomStatus FirstPlay =
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(NoTargetCardId));
+	const FBattleResolution FirstPlay =
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(NoTargetCardId));
 	TestTrue(TEXT("No-target card plays once to leave Hand"), FirstPlay.IsOk());
 	TestRejectedStatus(
 		*this,
 		TEXT("Previously played source"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(NoTargetCardId)),
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(NoTargetCardId)),
 		EWacomError::IllegalCardZone,
 		TEXT("CardNotInHand"));
 	return true;
@@ -648,15 +648,14 @@ bool FWacomPlayCardEvaluationCanonicalCommandSpec::RunTest(const FString& /*Para
 	{
 		return false;
 	}
-	Session->ConsumeEvents();
 
 	FBattleCommand Command =
 		FBattleCommand::MakePlayCardOnEnemyPartKey(AllCardId, Part->PartKey);
 	Command.TargetCardInstanceId = OtherCardId;
-	const FWacomStatus Status = Session->SubmitCommand(Command);
+	const FBattleResolution Status = Session->ResolveCommand(Command);
 	TestTrue(TEXT("AllEnemyParts accepts a command carrying unused target fields"), Status.IsOk());
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Status.Events;
 	const FBattleEvent* CardPlayed = Events.FindByPredicate(
 		[AllCardId](const FBattleEvent& Event)
 		{

@@ -78,16 +78,15 @@ bool FWacomBattleRandomDiscardBatchTransitionSpec::RunTest(const FString& /*Para
 		return false;
 	}
 
-	Session->ConsumeEvents();
-	if (!TestTrue(
-		TEXT("Submit two-card random discard"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(SourceId)).IsOk()))
+	const FBattleResolution Resolution =
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(SourceId));
+	if (!TestTrue(TEXT("Submit two-card random discard"), Resolution.IsOk()))
 	{
 		return false;
 	}
 
 	const FBattleSnapshot After = Session->BuildSnapshot();
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	TArray<const FBattleEvent*> DiscardEvents;
 	TArray<const FBattleEvent*> HandZoneEvents;
 	TArray<const FBattleEvent*> OnDiscardStatusEvents;
@@ -216,9 +215,9 @@ bool FWacomBattleTurnEndHandTransitionOrderSpec::RunTest(const FString& /*Parame
 	}
 
 	TestTrue(TEXT("Move normal card to PlayedPile"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(PlayedCardId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(PlayedCardId)).IsOk());
 	TestTrue(TEXT("Remove one anchor so Both-zone does not retain plain cards"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftHandId)).IsOk());
 
 	const FBattleSnapshot BeforeEndTurn = Session->BuildSnapshot();
 	TArray<FGuid> ExpectedDiscardOrder;
@@ -231,12 +230,10 @@ bool FWacomBattleTurnEndHandTransitionOrderSpec::RunTest(const FString& /*Parame
 		}
 	}
 
-	Session->ConsumeEvents();
-	Session->ConsumePresentationJournal();
-	TestTrue(TEXT("EndTurn succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+	const FBattleResolution Resolution = Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn succeeds"), Resolution.IsOk());
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	TArray<const FBattleEvent*> TurnEndDiscardEvents;
 	const FBattleEvent* RetainedEvent = nullptr;
 	const FBattleEvent* DiscardBatchEvent = nullptr;

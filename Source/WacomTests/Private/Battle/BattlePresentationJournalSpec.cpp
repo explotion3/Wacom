@@ -125,15 +125,11 @@ bool FWacomBattleEndTurnPresentationJournalSpec::RunTest(const FString& /*Parame
 		return false;
 	}
 
-	Session->ConsumeEvents();
-	TestTrue(TEXT("Initialize does not leave a presentation journal"), Session->ConsumePresentationJournal().IsEmpty());
+	const FBattleResolution Resolution = Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn command succeeds"), Resolution.IsOk());
 
-	TestTrue(
-		TEXT("EndTurn command succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
-
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	const FBattlePresentationJournal Journal = Session->ConsumePresentationJournal();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
+	const FBattlePresentationJournal& Journal = Resolution.PresentationJournal;
 	TestEqual(TEXT("EndTurn journal has three hand checkpoints"), Journal.Checkpoints.Num(), 3);
 	if (Journal.Checkpoints.Num() == 3)
 	{
@@ -193,7 +189,5 @@ bool FWacomBattleEndTurnPresentationJournalSpec::RunTest(const FString& /*Parame
 		TestEqual(TEXT("CardsDrawn count matches ids"), DrawEvent->Count, DrawEvent->CardInstanceIds.Num());
 	}
 
-	TestTrue(TEXT("Presentation journal consumes once"), Session->ConsumePresentationJournal().IsEmpty());
-	TestEqual(TEXT("Events consume once"), Session->ConsumeEvents().Num(), 0);
 	return true;
 }

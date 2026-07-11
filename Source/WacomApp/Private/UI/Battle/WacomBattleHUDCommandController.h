@@ -31,7 +31,6 @@ public:
 	void SubmitWait();
 	void SubmitEndTurn();
 	void SubmitKnockdownChoice(EKnockdownChoice Choice);
-	void AfterCommand();
 	void AfterCommand(
 		const FWacomBattleCombatLogCommandContext& LogContext,
 		const FBattleSnapshot& PreCommandSnapshot,

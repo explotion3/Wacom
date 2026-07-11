@@ -232,7 +232,7 @@ namespace
 		return Effect;
 	}
 
-	bool PlayCardByDefinition(
+	FBattleResolution PlayCardByDefinition(
 		UBattleSession* Session,
 		const FBattleSnapshot& Snapshot,
 		UCardDefinition* Card,
@@ -243,12 +243,16 @@ namespace
 		Test.TestTrue(FString::Printf(TEXT("%s is in hand"), *Card->CardId.ToString()), CardId.IsValid());
 		if (!CardId.IsValid())
 		{
-			return false;
+			FBattleResolution MissingCard;
+			MissingCard.Status = FWacomStatus::Fail(EWacomError::NotFound, TEXT("MatrixCardNotInHand"));
+			return MissingCard;
 		}
-		const bool bOk = Session->SubmitCommand(
-			FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, CardId, TargetPartId)).IsOk();
-		Test.TestTrue(FString::Printf(TEXT("%s play command succeeds"), *Card->CardId.ToString()), bOk);
-		return bOk;
+		FBattleResolution Resolution = Session->ResolveCommand(
+			FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, CardId, TargetPartId));
+		Test.TestTrue(
+			FString::Printf(TEXT("%s play command succeeds"), *Card->CardId.ToString()),
+			Resolution.IsOk());
+		return Resolution;
 	}
 }
 
@@ -325,8 +329,9 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { DrawCard, Filler, Filler, Filler, Filler, Filler }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const int32 DrawBefore = Snapshot.PileCounts.DrawCount;
-		PlayCardByDefinition(Session, Snapshot, DrawCard, FGuid(), *this);
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			PlayCardByDefinition(Session, Snapshot, DrawCard, FGuid(), *this);
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		TestTrue(TEXT("Draw effect emits CardsDrawn"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::CardsDrawn));
 		TestTrue(TEXT("Draw effect emits CardsDrawn ids matching count"),
@@ -348,8 +353,9 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { DiscardCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
-		PlayCardByDefinition(Session, Snapshot, DiscardCard, FGuid(), *this);
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			PlayCardByDefinition(Session, Snapshot, DiscardCard, FGuid(), *this);
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		TestTrue(TEXT("Discard effect emits CardDiscarded"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::CardDiscarded, WacomTags::Effect_Discard));
 	}
 
@@ -377,14 +383,14 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		FIntentEffect DamageIntent = MakeIntentEffect(WacomTags::Effect_Damage, 10, WacomTags::Target_Player);
 		UEnemyDefinition* Enemy = MakeEnemyWithIntent(Outer, { DamageIntent }, /*Hp*/50, /*Initiative*/1);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { HealCard }, Enemy);
-		TestTrue(TEXT("End turn damages player before heal"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		TestTrue(TEXT("End turn damages player before heal"), Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("Player took enemy damage"), Snapshot.Player.CurrentHp, Snapshot.Player.MaxHp - 10);
 		const FGuid HealId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, HealCard->CardId);
 		TestTrue(TEXT("Heal card remains/draws into hand"), HealId.IsValid());
 		if (HealId.IsValid())
 		{
-			TestTrue(TEXT("Play heal"), Session->SubmitCommand(FBattleCommand::MakePlayCard(HealId)).IsOk());
+			TestTrue(TEXT("Play heal"), Session->ResolveCommand(FBattleCommand::MakePlayCard(HealId)).IsOk());
 			Snapshot = Session->BuildSnapshot();
 			TestEqual(TEXT("Heal effect restores player HP"), Snapshot.Player.CurrentHp, Snapshot.Player.MaxHp - 4);
 		}
@@ -435,7 +441,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, GainKeywordCard->CardId);
 		const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
 		TestTrue(TEXT("Play GainKeyword on selected hand card"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 
 		UCardDefinition* FilterCard = MakeHandTargetCard(Outer, TEXT("Matrix.KeywordFilter"),
 			MakeEffect(WacomTags::Effect_Card_AddCost, 1, WacomTags::Target_SelectedHandCard));
@@ -500,8 +506,9 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 			Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const int32 DrawBefore = Snapshot.PileCounts.DrawCount;
-		PlayCardByDefinition(Session, Snapshot, DrawCard, FGuid(), *this);
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			PlayCardByDefinition(Session, Snapshot, DrawCard, FGuid(), *this);
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("RuntimeCost draw event count"), Events.ContainsByPredicate([](const FBattleEvent& Event)
 		{
@@ -579,7 +586,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 			Snapshot = Session->BuildSnapshot();
 			const int32 HpAfterPoison = FWacomBattleFixture::FindPartHp(Snapshot, 0);
 			TestTrue(TEXT("Play left-zone modifier card"),
-				Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, LeftId, PartId)).IsOk());
+				Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, LeftId, PartId)).IsOk());
 			Snapshot = Session->BuildSnapshot();
 			TestEqual(TEXT("Condition modifiers run in order with Self.InZone and Target.HasStatus"), FWacomBattleFixture::FindPartHp(Snapshot, 0), HpAfterPoison - 11);
 			bCoveredLeftZone = true;
@@ -641,7 +648,7 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Source->CardId);
 		const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Target->CardId);
 		TestTrue(TEXT("Play selected discard to trigger OnDiscard"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("OnDiscard passive executes effects when discarded by effect"), Snapshot.Player.Shield, 6);
 	}
@@ -668,10 +675,10 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		const FGuid ReturnId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ReturnCard->CardId);
 		const FGuid CompanionId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Companion->CardId);
 		TestTrue(TEXT("First discard return card by effect"),
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(ReturnSourceId, ReturnId)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(ReturnSourceId, ReturnId)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("OnCompanionCount effects did not run while moving source out"), Snapshot.Player.Shield, 0);
-		TestTrue(TEXT("Play companion to trigger return"), Session->SubmitCommand(FBattleCommand::MakePlayCard(CompanionId)).IsOk());
+		TestTrue(TEXT("Play companion to trigger return"), Session->ResolveCommand(FBattleCommand::MakePlayCard(CompanionId)).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestTrue(TEXT("OnCompanionCount moved card back to hand"), FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ReturnCard->CardId).IsValid());
 		TestEqual(TEXT("OnCompanionCount still does not execute Effects"), Snapshot.Player.Shield, 0);
@@ -693,8 +700,9 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { TwilightWatcher, TwilightCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
-		PlayCardByDefinition(Session, Snapshot, TwilightCard, PartId, *this);
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			PlayCardByDefinition(Session, Snapshot, TwilightCard, PartId, *this);
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		TestTrue(TEXT("OnTwilightTriggered emits PassiveTriggered event only"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::PassiveTriggered, WacomTags::Passive_Trigger_OnTwilightTriggered));
 	}
 
@@ -743,7 +751,7 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 				continue;
 			}
 			TestTrue(TEXT("Play left-zone OnPlay hook card"),
-				Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftId)).IsOk());
+				Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftId)).IsOk());
 			Snapshot = Session->BuildSnapshot();
 			TestEqual(TEXT("OnPlay zone hook executes extra effects"), Snapshot.Player.Shield, 3);
 			bCoveredLeftZone = true;
@@ -785,9 +793,10 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 				continue;
 			}
 			const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
-			TestTrue(TEXT("Play left-zone perfect-release hook card"),
-				Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, LeftId, PartId)).IsOk());
-			const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+			const FBattleResolution Resolution = Session->ResolveCommand(
+				FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, LeftId, PartId));
+			TestTrue(TEXT("Play left-zone perfect-release hook card"), Resolution.IsOk());
+			const TArray<FBattleEvent>& Events = Resolution.Events;
 			Snapshot = Session->BuildSnapshot();
 			TestTrue(TEXT("Perfect release hit event emitted"), FWacomBattleFixture::HasEvent(Events, EBattleEventType::InitiativeHit));
 			TestEqual(TEXT("Empty OnPerfectReleaseHit hook skips initiative push"), FWacomBattleFixture::FindPartInitiative(Snapshot, 0), 5);
@@ -822,7 +831,7 @@ bool FWacomBattleRuleContentMatrixEnemyIntentSpec::RunTest(const FString& /*Para
 			{ MakeNoopMatrixCard(Outer, TEXT("Matrix.EnemyIntent.Filler")) },
 			Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
-		TestTrue(TEXT("End turn resolves player-targeting enemy intent"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		TestTrue(TEXT("End turn resolves player-targeting enemy intent"), Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("Enemy intent damages player and poison ticks after action"), Snapshot.Player.CurrentHp, Snapshot.Player.MaxHp - 9);
 		TestEqual(TEXT("Enemy intent applies poison to player"), FWacomBattleFixture::GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Poison), 2);
@@ -851,7 +860,7 @@ bool FWacomBattleRuleContentMatrixEnemyIntentSpec::RunTest(const FString& /*Para
 			{ MakeNoopMatrixCard(Outer, TEXT("Matrix.EnemyIntent.SelfFiller")) },
 			Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
-		TestTrue(TEXT("End turn resolves self-targeting enemy intent"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		TestTrue(TEXT("End turn resolves self-targeting enemy intent"), Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 		TestNotNull(TEXT("Primary part exists"), Part);

@@ -110,8 +110,44 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
             EdgeFadeUV,
             projectedUVAndMask);
 
-        float4 surface = Texture(Coordinates=projectedUVAndMask.xy);
-        Color = surface.rgb;
-        Alpha = surface.a * projectedUVAndMask.z;
+        // Keep the generated graph explicit: Retainer UVs use XY, the projected edge mask uses Z,
+        // and the sampled widget opacity uses A. This avoids relying on Unreal's visually opaque
+        // FExpressionInput channel masks when artists inspect the generated material graph.
+        float2 projectedUV = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float2",
+            Input=projectedUVAndMask,
+            R=true,
+            G=true,
+            B=false,
+            A=false);
+        float insideMask = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float1",
+            Input=projectedUVAndMask,
+            R=false,
+            G=false,
+            B=true,
+            A=false);
+        float4 surface = Texture(Coordinates=projectedUV);
+        float3 surfaceColor = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float3",
+            Input=surface,
+            R=true,
+            G=true,
+            B=true,
+            A=false);
+        float surfaceAlpha = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float1",
+            Input=surface,
+            R=false,
+            G=false,
+            B=false,
+            A=true);
+
+        Color = surfaceColor;
+        Alpha = surfaceAlpha * insideMask;
     }
 }

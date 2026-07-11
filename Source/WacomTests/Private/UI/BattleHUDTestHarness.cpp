@@ -9,6 +9,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Engine/World.h"
+#include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
@@ -232,6 +233,22 @@ void FWacomBattleHUDTestHarness::SetSession(
 	}
 
 	HUDPtr->SetInjectedBattleSession(Session);
+	if (bSettleInitialPresentation)
+	{
+		SettlePresentationQueue();
+	}
+}
+
+void FWacomBattleHUDTestHarness::SetInitializedSession(
+	const FWacomInitializedBattleSession& Initialized,
+	bool bSettleInitialPresentation)
+{
+	if (!HUDPtr)
+	{
+		return;
+	}
+
+	HUDPtr->AttachInitializedBattleSession(Initialized.Session, Initialized.Initialization);
 	if (bSettleInitialPresentation)
 	{
 		SettlePresentationQueue();

@@ -36,10 +36,10 @@ bool FWacomBattleEndTurnTriggersEnemySpec::RunTest(const FString& /*Parameters*/
 	FBattleSnapshot Before = S->BuildSnapshot();
 	TestEqual(TEXT("Player initial HP"), Before.Player.CurrentHp, 100);
 
-	S->ConsumeEvents();  // 清 Initialize 的事件
-	TestTrue(TEXT("EndTurn ok"), S->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+	const FBattleResolution Resolution = S->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn ok"), Resolution.IsOk());
 
-	const TArray<FBattleEvent> Events = S->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	bool bActed = false;
 	for (const FBattleEvent& E : Events)
 	{

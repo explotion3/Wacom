@@ -58,9 +58,10 @@ bool FWacomBattlePlayedPileReceivesOrdinaryPlayedCardsSpec::RunTest(const FStrin
 		const int32 PlayedBefore = Snapshot.PileCounts.PlayedCount;
 		const int32 DiscardBefore = Snapshot.PileCounts.DiscardCount;
 
-		Session->ConsumeEvents();
-		TestTrue(TEXT("Play ordinary card"), Session->SubmitCommand(FBattleCommand::MakePlayCard(PlayedId)).IsOk());
-		const TArray<FBattleEvent> PlayEvents = Session->ConsumeEvents();
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(PlayedId));
+		TestTrue(TEXT("Play ordinary card"), Resolution.IsOk());
+		const TArray<FBattleEvent>& PlayEvents = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
 
 		TestEqual(TEXT("Ordinary played card leaves hand"),
@@ -76,7 +77,7 @@ bool FWacomBattlePlayedPileReceivesOrdinaryPlayedCardsSpec::RunTest(const FStrin
 			FWacomBattleFixture::CountEvents(PlayEvents, EBattleEventType::CardDiscarded),
 			0);
 
-		TestTrue(TEXT("End turn"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		TestTrue(TEXT("End turn"), Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		Snapshot = Session->BuildSnapshot();
 		TestEqual(TEXT("Played pile drains at end turn"), Snapshot.PileCounts.PlayedCount, 0);
 		TestTrue(TEXT("Discard pile receives played card by end turn"),
@@ -120,10 +121,9 @@ bool FWacomBattlePlayedPileExcludedFromSameTurnReshuffleSpec::RunTest(const FStr
 	const FGuid DiscardTargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DiscardTarget->CardId);
 	TestTrue(TEXT("Discard source starts in hand"), DiscardSourceId.IsValid());
 	TestTrue(TEXT("Discard target starts in hand"), DiscardTargetId.IsValid());
-	Session->ConsumeEvents();
 
 	TestTrue(TEXT("Play first ordinary card"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(FirstPlayedId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(FirstPlayedId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("First ordinary card is in played pile before reshuffle"),
 		Snapshot.PileCounts.PlayedCount,
@@ -133,7 +133,7 @@ bool FWacomBattlePlayedPileExcludedFromSameTurnReshuffleSpec::RunTest(const FStr
 		0);
 
 	TestTrue(TEXT("Move one target to discard pile"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(DiscardSourceId, DiscardTargetId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(DiscardSourceId, DiscardTargetId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	TestEqual(TEXT("Discard target waits in discard pile before reshuffle"),
 		Snapshot.PileCounts.DiscardCount,
@@ -150,7 +150,7 @@ bool FWacomBattlePlayedPileExcludedFromSameTurnReshuffleSpec::RunTest(const FStr
 	}
 
 	TestTrue(TEXT("Play draw card to reshuffle discard only"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(DrawCardId)).IsOk());
 	Snapshot = Session->BuildSnapshot();
 
 	TestEqual(TEXT("Draw cannot pull from same-turn played pile"),

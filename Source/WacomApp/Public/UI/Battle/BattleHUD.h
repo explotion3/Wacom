@@ -27,6 +27,7 @@ class UWacomFirstPersonCardAnchorComponent;
 class FWacomBattlePresentationTargetRegistry;
 struct FBattleHUDFallbackLayoutBuilder;
 struct FBattleCommand;
+struct FBattleInitializationResult;
 struct FBattlePresentationJournal;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomBattlePresentationStackEntryView;
@@ -172,7 +173,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
  * 战斗 UI 根 Widget。
  *
  * 状态机（EBattleUIState）驱动所有子 Widget 的交互模式。
- * 命令提交的唯一入口：子 Widget 发委托给 HUD，HUD 统一调 Session->SubmitCommand。
+ * 命令提交的唯一入口：子 Widget 发委托给 HUD，HUD 统一调 Session->ResolveCommand。
  *
  * 交互流程：
  *   Idle
@@ -214,6 +215,14 @@ class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 
 public:
 	virtual ~UBattleHUD() override;
+
+	/**
+	 * 绑定新 BattleSession，并且只呈现一次与该 Session 同次 commit 的初始化结果。
+	 * 普通 SetInjectedBattleSession 只负责绑定已有 Session，不会推断或重播开场事件。
+	 */
+	void AttachInitializedBattleSession(
+		class UBattleSession* InSession,
+		FBattleInitializationResult Initialization);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "战斗手牌悬浮详情面板的估算宽高，单位为 Slate 像素。用于 CanvasPanel Slot 尺寸和边界 clamp；实际样式仍由 WBP_CardDetailPanel 决定。"))
 	FVector2D CardDetailPanelEstimatedSize = FVector2D(360.0f, 420.0f);
@@ -301,8 +310,8 @@ public:
 
 	/**
 	 * 击倒事件 dialog 的选择入口（GDD §6）。
-	 * dialog 不直接调 Session->SubmitCommand，而是走这里，
-	 * 让 HUD 在提交后统一调 AfterCommand（事件消费 + Snapshot 刷新 + BattleEnd 广播）。
+	 * dialog 不直接调 Session->ResolveCommand，而是走这里，
+	 * 让 HUD 在提交后统一调 AfterCommand（应用 FBattleResolution + Snapshot 刷新 + BattleEnd 广播）。
 	 * 与 OnWaitRequested / OnEndTurnRequested 对称。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "击倒选择 dialog 的 BattleHUD 命令入口。Dialog 不直接提交 BattleSession，统一由 HUD 做命令后刷新和事件消费。"))
@@ -432,6 +441,9 @@ private:
 
 	FWacomBattleHUDRuntime* BattleHUDRuntime = nullptr;
 
+	/** 已经呈现过初始化结果的 Session；防止重复 Attach 重播开场事件。 */
+	TWeakObjectPtr<class UBattleSession> InitializationPresentationSession;
+
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
 	FWacomBattleHUDRuntime& GetBattleHUDRuntime();
@@ -444,9 +456,6 @@ private:
 	/** 内部：提交 PlayCard 命令 + 事件消费 + 刷新。 */
 	void SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId);
 	void SubmitPlayCardOnHandCard(const FGuid& CardId, const FGuid& TargetCardId);
-
-	/** 内部：消费 Session 事件并分发给战斗记录 / 表现队列 / 击倒 dialog。 */
-	void ConsumeAndLogEvents();
 
 	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
 	void StoreFirstPersonCardTransitionEvents(const TArray<struct FBattleEvent>& Events);
@@ -502,9 +511,6 @@ private:
 	void ClearTargetSelectionStateForAutomationTest();
 	void QueuePendingTurnBoundaryWaitForAutomationTest();
 #endif
-
-	/** 内部：提交命令后的通用收尾（刷新 + 战斗结束检测）。 */
-	void AfterCommand();
 
 	void HideCardDetailPanel();
 	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);

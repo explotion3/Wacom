@@ -87,12 +87,12 @@ bool FWacomBattleSelectedDiscardEmitsCardDiscardedAndRunsOnDiscardSpec::RunTest(
 	TestTrue(TEXT("Source exists"), SourceId.IsValid());
 	TestTrue(TEXT("Target exists"), TargetId.IsValid());
 
-	Session->ConsumeEvents();
-	TestTrue(TEXT("Submit selected discard"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+	const FBattleResolution Resolution =
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId));
+	TestTrue(TEXT("Submit selected discard"), Resolution.IsOk());
 
 	Snapshot = Session->BuildSnapshot();
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	TestFalse(TEXT("Target left hand"), FindHandZoneMoveEventHandCard(Snapshot, TargetId) != nullptr);
 	TestEqual(TEXT("OnDiscard passive added shield"), Snapshot.Player.Shield, 7);
 	if (const FBattleEvent* DiscardEvent = FindEvent(Events, EBattleEventType::CardDiscarded, TargetId))
@@ -141,10 +141,11 @@ bool FWacomBattleRandomDiscardEmitsCardDiscardedAndRunsOnDiscardSpec::RunTest(co
 			continue;
 		}
 
-		Session->ConsumeEvents();
-		TestTrue(TEXT("Submit random discard"), Session->SubmitCommand(FBattleCommand::MakePlayCard(SourceId)).IsOk());
+		const FBattleResolution Resolution =
+			Session->ResolveCommand(FBattleCommand::MakePlayCard(SourceId));
+		TestTrue(TEXT("Submit random discard"), Resolution.IsOk());
 		Snapshot = Session->BuildSnapshot();
-		const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+		const TArray<FBattleEvent>& Events = Resolution.Events;
 		if (FindEvent(Events, EBattleEventType::CardDiscarded, TargetId))
 		{
 			TestEqual(TEXT("Random discard target OnDiscard passive added shield"), Snapshot.Player.Shield, 5);
@@ -202,10 +203,10 @@ bool FWacomBattleDrawLimitDoesNotEmitHandLimitDiscardEventsSpec::RunTest(const F
 		return false;
 	}
 
-	Session->ConsumeEvents();
-	TestTrue(TEXT("Submit draw that reaches hand limit"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(SourceId)).IsOk());
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const FBattleResolution Resolution =
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(SourceId));
+	TestTrue(TEXT("Submit draw that reaches hand limit"), Resolution.IsOk());
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 
 	int32 LimitDiscardEvents = 0;
@@ -270,12 +271,13 @@ bool FWacomBattleTurnEndDiscardRunsOnDiscardWithoutHandLimitEventSpec::RunTest(c
 	TestTrue(TEXT("Target exists"), TargetId.IsValid());
 
 	TestTrue(TEXT("Play left anchor so normal cards do not retain"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(LeftId)).IsOk());
-	Session->ConsumeEvents();
-	TestTrue(TEXT("End turn"), Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(LeftId)).IsOk());
+	const FBattleResolution EndTurnResolution =
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("End turn"), EndTurnResolution.IsOk());
 
 	Snapshot = Session->BuildSnapshot();
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = EndTurnResolution.Events;
 	TestFalse(TEXT("Target left hand after turn-end discard"), FindHandZoneMoveEventHandCard(Snapshot, TargetId) != nullptr);
 	TestEqual(TEXT("Turn-end OnDiscard passive added shield"), Snapshot.Player.Shield, 4);
 	if (const FBattleEvent* DiscardEvent = FindEvent(Events, EBattleEventType::CardDiscarded, TargetId))
@@ -306,12 +308,12 @@ bool FWacomBattleExhaustSelectedEmitsCardExhaustedWithoutOnDiscardSpec::RunTest(
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
 	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetDef->CardId);
-	Session->ConsumeEvents();
 
-	TestTrue(TEXT("Submit selected exhaust"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+	const FBattleResolution Resolution =
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId));
+	TestTrue(TEXT("Submit selected exhaust"), Resolution.IsOk());
 	Snapshot = Session->BuildSnapshot();
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 
 	TestFalse(TEXT("Target left hand"), FindHandZoneMoveEventHandCard(Snapshot, TargetId) != nullptr);
 	TestEqual(TEXT("OnDiscard passive did not run for exhaust"), Snapshot.Player.Shield, 0);
@@ -347,11 +349,12 @@ bool FWacomBattlePlayedCardDiscardDestinationDoesNotRunOnDiscardSpec::RunTest(co
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid PlayedId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PlayedCard->CardId);
 	TestTrue(TEXT("Played card exists"), PlayedId.IsValid());
-	Session->ConsumeEvents();
 
-	TestTrue(TEXT("Play OnDiscard card"), Session->SubmitCommand(FBattleCommand::MakePlayCard(PlayedId)).IsOk());
+	const FBattleResolution Resolution =
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(PlayedId));
+	TestTrue(TEXT("Play OnDiscard card"), Resolution.IsOk());
 	Snapshot = Session->BuildSnapshot();
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 
 	TestFalse(TEXT("Played card left hand"), FindHandZoneMoveEventHandCard(Snapshot, PlayedId) != nullptr);
 	TestEqual(TEXT("Played card destination does not trigger OnDiscard"), Snapshot.Player.Shield, 0);
@@ -378,12 +381,12 @@ bool FWacomBattleDiscardHooksRunAfterCardIsAlreadyInDiscardPileSpec::RunTest(con
 	const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Before, TargetDef->CardId);
 	const int32 DiscardBefore = Before.PileCounts.DiscardCount;
 	const int32 PlayedBefore = Before.PileCounts.PlayedCount;
-	Session->ConsumeEvents();
 
-	TestTrue(TEXT("Submit selected discard"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId)).IsOk());
+	const FBattleResolution Resolution =
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnHandCard(SourceId, TargetId));
+	TestTrue(TEXT("Submit selected discard"), Resolution.IsOk());
 	const FBattleSnapshot After = Session->BuildSnapshot();
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
 
 	TestEqual(TEXT("Played pile contains source"), After.PileCounts.PlayedCount, PlayedBefore + 1);
 	TestEqual(TEXT("Discard pile contains selected target"), After.PileCounts.DiscardCount, DiscardBefore + 1);

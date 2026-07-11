@@ -31,7 +31,7 @@ namespace WacomBattleEntryInputReadySpec
 		return GWorld;
 	}
 
-	UBattleSession* CreatePlayerActionSession(FWacomBattleFixture& Fixture)
+	FWacomInitializedBattleSession CreateInitializedPlayerActionSession(FWacomBattleFixture& Fixture)
 	{
 		UCardDefinition* LeftHand = Fixture.MakeNoopCard(0);
 		UCardDefinition* RightHand = Fixture.MakeNoopCard(0);
@@ -45,7 +45,12 @@ namespace WacomBattleEntryInputReadySpec
 				Fixture.MakeNoopCard(0)
 			});
 		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 50, 0);
-		return Fixture.CreateSession(Character, Enemy, 1);
+		return Fixture.CreateInitializedSession(Character, Enemy, 1);
+	}
+
+	UBattleSession* CreatePlayerActionSession(FWacomBattleFixture& Fixture)
+	{
+		return CreateInitializedPlayerActionSession(Fixture).Session;
 	}
 }
 
@@ -323,6 +328,116 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 	TestEqual(TEXT("Input-ready refresh remains no-replay after anchor tick"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).PendingTransitionHintCardIds.Num(),
 		0);
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleInitializationAttachPreservesEntrySuppressionSpec,
+	"Wacom.UI.Battle.EntryInputReady.InitializationAttachPreservesHandSuppression",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleInitializationAttachPreservesEntrySuppressionSpec::RunTest(const FString& /*Parameters*/)
+{
+	UWorld* World = WacomBattleEntryInputReadySpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	const FWacomInitializedBattleSession Initialized =
+		WacomBattleEntryInputReadySpec::CreateInitializedPlayerActionSession(Fixture);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Battle session"), Initialized.Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+
+	Harness->AttachFirstPersonCharacter();
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
+	if (!TestNotNull(TEXT("HUD"), HUD)
+		|| !TestNotNull(TEXT("First-person anchor"), Anchor))
+	{
+		return false;
+	}
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(HUD);
+	if (!TestNotNull(TEXT("First-person card layer widget"), Layer))
+	{
+		return false;
+	}
+	FWacomFirstPersonCardLayerTestAccess::SetCardLayer(*Anchor, Layer);
+
+	const FBattleSnapshot& Snapshot = Initialized.Initialization.PostSnapshot;
+	TArray<FGuid> OpeningHandAnchorIds;
+	for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+	{
+		if (Card.bIsHandAnchor && Card.InstanceId.IsValid())
+		{
+			OpeningHandAnchorIds.Add(Card.InstanceId);
+		}
+	}
+	if (!TestTrue(TEXT("Initialization fixture has opening hand anchors"),
+		OpeningHandAnchorIds.Num() > 0))
+	{
+		return false;
+	}
+
+	HUD->SetBattleInputReady(false);
+	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	HUD->AttachInitializedBattleSession(Initialized.Session, Initialized.Initialization);
+
+	TestFalse(TEXT("Initialization attach preserves the closed battle input gate"),
+		HUD->IsBattleInputReady());
+	TestTrue(TEXT("Initialization attach preserves first-person hand entry suppression"),
+		HUD->IsFirstPersonBattleHandSuppressedForEntry());
+	TestEqual(TEXT("Suppressed initialization attach keeps the battle hand visually empty"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		0);
+
+	HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
+	HUD->SetBattleInputReady(true);
+	HUD->RefreshFromSnapshotForTest(Snapshot);
+
+	const int32 OpeningDrawFrameCardCount = Snapshot.Hand.Cards.Num() - OpeningHandAnchorIds.Num();
+	TestEqual(TEXT("Released opening draw frame still hides hand anchors"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		OpeningDrawFrameCardCount);
+	for (const FGuid& HandAnchorId : OpeningHandAnchorIds)
+	{
+		TestFalse(TEXT("Hand anchor is absent until normal-card entry playback completes"),
+			Anchor->GetRuntimeCardLayerEntries().ContainsByPredicate(
+				[&HandAnchorId](const FWacomFirstPersonCardLayerEntry& Entry)
+				{
+					return Entry.CardInstanceId == HandAnchorId;
+				}));
+	}
+
+	Anchor->PrimaryComponentTick.ExecuteTick(
+		0.0f,
+		LEVELTICK_All,
+		ENamedThreads::GameThread,
+		FGraphEventRef());
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	HUD->TickCardDetailMotionForTest(0.05f);
+
+	TestEqual(TEXT("Hand-anchor follow-up restores the full opening hand once"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		Snapshot.Hand.Cards.Num());
+
+	Anchor->PrimaryComponentTick.ExecuteTick(
+		0.0f,
+		LEVELTICK_All,
+		ENamedThreads::GameThread,
+		FGraphEventRef());
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 1.0f);
+	HUD->TickCardDetailMotionForTest(0.05f);
+	TestEqual(TEXT("Opening hand-anchor follow-up remains stable on later ticks"),
+		Anchor->GetRuntimeCardLayerCardCount(),
+		Snapshot.Hand.Cards.Num());
 
 	return true;
 }

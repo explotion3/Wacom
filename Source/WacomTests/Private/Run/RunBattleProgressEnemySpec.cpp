@@ -126,7 +126,7 @@ bool FWacomRunBattleProgressDestroyedPartKeysRestoreOnlyMatchingEnemySlotSpec::R
 		AppendRunProgressEnemySlots(Params, LeftEnemy, RightEnemy);
 
 		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
-		const FWacomStatus InitStatus = Session->Initialize(Params);
+		const FBattleInitializationResult InitStatus = Session->Initialize(Params);
 		TestTrue(TEXT("Initial battle initializes"), InitStatus.IsOk());
 		if (!InitStatus.IsOk())
 		{
@@ -145,13 +145,13 @@ bool FWacomRunBattleProgressDestroyedPartKeysRestoreOnlyMatchingEnemySlotSpec::R
 		}
 
 		DestroyedRightPartKey = RightPart->PartKey;
-		const FWacomStatus PlayStatus =
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(KillerCardId, DestroyedRightPartKey));
+		const FBattleResolution PlayStatus =
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(KillerCardId, DestroyedRightPartKey));
 		TestTrue(TEXT("Play card destroys right part"), PlayStatus.IsOk());
 		TestEqual(TEXT("Pending knockdown choice"), Session->GetPhase(), EBattlePhase::PendingKnockdownChoice);
 
-		const FWacomStatus WithdrawStatus =
-			Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+		const FBattleResolution WithdrawStatus =
+			Session->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
 		TestTrue(TEXT("Withdraw succeeds"), WithdrawStatus.IsOk());
 
 		const FBattleResultPacket Packet = Session->BuildResultPacket();
@@ -198,7 +198,7 @@ bool FWacomRunBattleProgressDestroyedPartKeysRestoreOnlyMatchingEnemySlotSpec::R
 	AppendRunProgressEnemySlots(ReentryParams, LeftEnemy, RightEnemy);
 
 	TStrongObjectPtr<UBattleSession> ReentrySession(NewObject<UBattleSession>());
-	const FWacomStatus ReentryStatus = ReentrySession->Initialize(ReentryParams);
+	const FBattleInitializationResult ReentryStatus = ReentrySession->Initialize(ReentryParams);
 	TestTrue(TEXT("Reentry battle initializes"), ReentryStatus.IsOk());
 	if (!ReentryStatus.IsOk())
 	{

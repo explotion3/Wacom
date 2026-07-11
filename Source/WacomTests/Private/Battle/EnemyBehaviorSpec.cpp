@@ -194,7 +194,9 @@ bool FWacomBattleEnemyBehaviorSequenceInitialAndAdvanceSpec::RunTest(const FStri
 	UEnemyBehaviorDefinition* Behavior = MakeSequenceBehavior(GetTransientPackage());
 	UEnemyDefinition* Enemy = MakeBehaviorEnemy(Fx, Behavior);
 	UCharacterDefinition* Character = MakeBehaviorCharacter(Fx, {});
-	UBattleSession* Session = Fx.CreateSession(Character, Enemy, /*Seed*/1);
+	const FWacomInitializedBattleSession Initialized =
+		Fx.CreateInitializedSession(Character, Enemy, /*Seed*/1);
+	UBattleSession* Session = Initialized.Session;
 
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
@@ -219,7 +221,7 @@ bool FWacomBattleEnemyBehaviorSequenceInitialAndAdvanceSpec::RunTest(const FStri
 		Part->CurrentInitiative,
 		1);
 
-	const TArray<FBattleEvent> InitialEvents = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& InitialEvents = Initialized.Initialization.Events;
 	TestTrue(TEXT("Initial phase event emitted"),
 		InitialEvents.ContainsByPredicate([](const FBattleEvent& Event)
 		{
@@ -236,9 +238,9 @@ bool FWacomBattleEnemyBehaviorSequenceInitialAndAdvanceSpec::RunTest(const FStri
 				&& Event.Amount == 1;
 		}));
 
-	TestTrue(TEXT("Wait triggers first intent"),
-		Session->SubmitCommand(FBattleCommand::MakeWait()).IsOk());
-	const TArray<FBattleEvent> WaitEvents = Session->ConsumeEvents();
+	const FBattleResolution WaitResolution = Session->ResolveCommand(FBattleCommand::MakeWait());
+	TestTrue(TEXT("Wait triggers first intent"), WaitResolution.IsOk());
+	const TArray<FBattleEvent>& WaitEvents = WaitResolution.Events;
 	Snapshot = Session->BuildSnapshot();
 	Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 	TestNotNull(TEXT("Part snapshot exists after action"), Part);
@@ -304,10 +306,10 @@ bool FWacomBattleEnemyBehaviorPriorityHpConditionSpec::RunTest(const FString& /*
 	}
 
 	TestTrue(TEXT("Damage part below hp threshold"),
-		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, CardId, PartId)).IsOk());
+		Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, CardId, PartId)).IsOk());
 
 	TestTrue(TEXT("EndTurn triggers calm action then refreshes to wounded"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 	TestNotNull(TEXT("Part exists after end turn"), Part);
@@ -352,10 +354,10 @@ bool FWacomBattleEnemyBehaviorPlayerStatusConditionSpec::RunTest(const FString& 
 		return false;
 	}
 	TestTrue(TEXT("Apply poison to player"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCard(PoisonCardId)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakePlayCard(PoisonCardId)).IsOk());
 
 	TestTrue(TEXT("EndTurn triggers normal action then refreshes by player status"),
-		Session->SubmitCommand(FBattleCommand::MakeEndTurn()).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 	Snapshot = Session->BuildSnapshot();
 	Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
 	TestNotNull(TEXT("Part exists after status refresh"), Part);

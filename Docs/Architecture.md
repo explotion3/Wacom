@@ -140,9 +140,9 @@ RunEvent Choice Evaluation 的唯一 Implementation 位于 `WacomRun/Private/Eve
 
 战斗内核负责单场战斗的唯一规则真相。
 
-核心公共契约是 `UBattleSession + FBattleCommand + FBattleResolution + FBattleSnapshot + FBattleEvent + FBattleResultPacket`。Resolver、Executor、Service 和 `BattleState` 都在 `WacomBattle/Private`，外部模块只通过公共契约交互。
+核心公共契约是 `UBattleSession + FBattleInitializationResult + FBattleCommand + FBattleResolution + FBattleSnapshot + FBattleEvent + FBattleResultPacket`。Resolver、Executor、Service 和 `BattleState` 都在 `WacomBattle/Private`，外部模块只通过公共契约交互。
 
-`UBattleSession` 是 public facade，不承载规则实现。`ResolveCommand` 在复制的 working-state 和独立 transaction event bus 上执行；失败不 commit，成功统一递增一次 `StateVersion`，并原子返回 events、presentation journal 和 post snapshot。WacomApp 正式路径消费该 resolution；旧 `SubmitCommand / Consume*` 只作为 Blueprint / 测试兼容 adapter。
+`UBattleSession` 是 public facade，不承载规则实现或跨调用输出队列。`Initialize` 在 fresh working state / event bus / referenced-assets 上执行并返回 `FBattleInitializationResult`；失败保留旧战斗，成功提交一场 version 1、event sequence 0 起步的新战斗。`ResolveCommand` 在复制的 working-state 和独立 transaction event bus 上执行；失败不 commit，成功统一递增一次 `StateVersion`，并原子返回 events、presentation journal 和 post snapshot。WacomApp 与测试直接消费这两个结果 Interface，不再通过 `SubmitCommand / Consume*` split-consume Adapter。
 
 PlayCard Evaluation 的唯一 Implementation 位于 `WacomBattle/Private/Commands` 的 `FPlayCardEvaluator`。该深层 Module 在一个 Private Interface 后集中源卡、结构性目标、运行时费用、阶段与拒绝投影：Target Probe 严格求值具体显式对象，Preview Candidate 把可选 Preview Focus 与规范化执行绑定分离，Commit Evaluation 为正式提交与 Action Preview 生成携带 `StateVersion` 的 Prepared PlayCard。这个 seam 不新增 UE 反射类型，也不扩张 `WacomBattle/Public` 的 Session / Command / Preview 或 Blueprint Interface。
 

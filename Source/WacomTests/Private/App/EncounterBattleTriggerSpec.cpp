@@ -190,7 +190,7 @@ bool FWacomAppEncounterTriggerBuildsBattleEnemySlotsSpec::RunTest(const FString&
 	Params.EnemySlots = EnemySlots;
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
-	const FWacomStatus InitStatus = Session->Initialize(Params);
+	const FBattleInitializationResult InitStatus = Session->Initialize(Params);
 	TestTrue(TEXT("Battle initializes from Encounter slots"), InitStatus.IsOk());
 	if (!InitStatus.IsOk())
 	{

@@ -337,10 +337,9 @@ bool FWacomUIBattlePresentationStackUsesCardTargetPreviewSpec::RunTest(const FSt
 	}
 
 	TestTrue(TEXT("Seed poison before HUD submit"),
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(
 			PoisonCardId,
 			FWacomBattleFixture::FindPartKey(Snapshot, 0))).IsOk());
-	Session->ConsumeEvents();
 	Snapshot = Session->BuildSnapshot();
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =

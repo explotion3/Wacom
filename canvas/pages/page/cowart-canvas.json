@@ -33,16 +33,16 @@
     }
   },
   "store": {
-    "shape:BgmLm5v_P5e54RGgPxJrQ": {
-      "x": 525.3025910513163,
-      "y": 1182.0020423636663,
+    "shape:byBCwGE2wRcEUFILvDGnU": {
+      "x": 474.9475097895703,
+      "y": 1522.1078674628147,
       "rotation": 0,
       "isLocked": false,
       "opacity": 1,
       "meta": {
         "cowartAnnotationArrow": true
       },
-      "id": "shape:BgmLm5v_P5e54RGgPxJrQ",
+      "id": "shape:byBCwGE2wRcEUFILvDGnU",
       "type": "arrow",
       "props": {
         "kind": "arc",
@@ -52,34 +52,22 @@
         "fill": "none",
         "color": "red",
         "labelColor": "red",
-        "bend": 48,
+        "bend": 16,
         "start": {
           "x": 0,
           "y": 0
         },
         "end": {
-          "x": -142.08153419959945,
-          "y": -440.7158509192641
+          "x": -8.845815093228339,
+          "y": 19.657375205722474
         },
         "arrowheadStart": "none",
         "arrowheadEnd": "arrow",
         "richText": {
           "type": "doc",
-          "attrs": {
-            "dir": "auto"
-          },
           "content": [
             {
-              "type": "paragraph",
-              "attrs": {
-                "dir": "auto"
-              },
-              "content": [
-                {
-                  "type": "text",
-                  "text": "这里放敌人部位的意图和倒计时"
-                }
-              ]
+              "type": "paragraph"
             }
           ]
         },
@@ -88,7 +76,7 @@
         "scale": 1
       },
       "parentId": "page:page",
-      "index": "a5aVT1hV",
+      "index": "a3IBupBV",
       "typeName": "shape"
     },
     "user:iGNoF4J1O2GkaoR24d9Wl": {
@@ -99,31 +87,31 @@
       "id": "user:iGNoF4J1O2GkaoR24d9Wl",
       "typeName": "user"
     },
-    "asset:-245640071": {
-      "id": "asset:-245640071",
+    "asset:-540339686": {
+      "id": "asset:-540339686",
       "type": "image",
       "typeName": "asset",
       "props": {
-        "name": "asset--245640071.png",
-        "src": "/page-assets/page/asset--245640071.png",
-        "w": 1025,
-        "h": 529,
-        "fileSize": 54073,
+        "name": "asset--540339686.png",
+        "src": "/page-assets/page/asset--540339686.png",
+        "w": 719,
+        "h": 482,
+        "fileSize": 404876,
         "mimeType": "image/png",
         "isAnimated": false
       },
       "meta": {}
     },
-    "shape:x0cRaGXo3GGJEEnLqyc_B": {
-      "x": 252.97962122749652,
-      "y": 1125.4324984918287,
+    "shape:grkG0Dep__1s71RYoU-0w": {
+      "x": 615.4977443851583,
+      "y": 1832.6945306897114,
       "rotation": 0,
       "isLocked": false,
       "opacity": 1,
       "meta": {
         "cowartAnnotationArrow": true
       },
-      "id": "shape:x0cRaGXo3GGJEEnLqyc_B",
+      "id": "shape:grkG0Dep__1s71RYoU-0w",
       "type": "arrow",
       "props": {
         "kind": "arc",
@@ -133,14 +121,14 @@
         "fill": "none",
         "color": "red",
         "labelColor": "red",
-        "bend": 48,
+        "bend": 31.695654720382443,
         "start": {
           "x": 0,
           "y": 0
         },
         "end": {
-          "x": -119.71683664387382,
-          "y": -445.9781504094374
+          "x": 183.7964656721972,
+          "y": -189.69385070386534
         },
         "arrowheadStart": "none",
         "arrowheadEnd": "arrow",
@@ -158,7 +146,7 @@
               "content": [
                 {
                   "type": "text",
-                  "text": "特性介绍不需要了，特性后面做成buff图标发放在旁边的buff栏中"
+                  "text": "这里本来应该有伙伴这个词条的，但是retainerbox好像会将接近到屏幕的widget给隐藏掉，导致我只要视角抬高，手牌下移到屏幕外，这个词条就会消失。有什么办法解决嘛？"
                 }
               ]
             }
@@ -169,148 +157,16 @@
         "scale": 1
       },
       "parentId": "page:page",
-      "index": "a4QKYc6V",
+      "index": "a29cvrgV",
       "typeName": "shape"
     },
-    "shape:pNg7tTUwAkFUEZ6Bmk8RM": {
-      "x": -164.05603254100942,
-      "y": 834.6915808224169,
-      "rotation": 0,
-      "isLocked": false,
-      "opacity": 1,
-      "meta": {
-        "cowartAnnotationArrow": true
-      },
-      "id": "shape:pNg7tTUwAkFUEZ6Bmk8RM",
-      "type": "arrow",
-      "props": {
-        "kind": "arc",
-        "elbowMidPoint": 0.5,
-        "dash": "draw",
-        "size": "m",
-        "fill": "none",
-        "color": "red",
-        "labelColor": "red",
-        "bend": -39.21496283609675,
-        "start": {
-          "x": 0,
-          "y": 0
-        },
-        "end": {
-          "x": 260.4828210634335,
-          "y": -197.33547810639016
-        },
-        "arrowheadStart": "none",
-        "arrowheadEnd": "arrow",
-        "richText": {
-          "type": "doc",
-          "attrs": {
-            "dir": "auto"
-          },
-          "content": [
-            {
-              "type": "paragraph",
-              "attrs": {
-                "dir": "auto"
-              },
-              "content": [
-                {
-                  "type": "text",
-                  "text": "多部位敌人的血条并排"
-                }
-              ]
-            }
-          ]
-        },
-        "labelPosition": 0,
-        "font": "draw",
-        "scale": 1
-      },
-      "parentId": "page:page",
-      "index": "a2TEfbPV",
-      "typeName": "shape"
-    },
-    "shape:TLah9fRGmC5wCskytWIT1": {
-      "x": -111.33545978125284,
-      "y": 536.4599394025968,
-      "rotation": 0,
-      "isLocked": false,
-      "opacity": 1,
+    "user:pphgzPqegkGNqPiXpn0lX": {
+      "name": "",
+      "color": "#BD54C6",
+      "imageUrl": "",
       "meta": {},
-      "id": "shape:TLah9fRGmC5wCskytWIT1",
-      "type": "image",
-      "props": {
-        "w": 1025,
-        "h": 529,
-        "assetId": "asset:-245640071",
-        "playing": true,
-        "url": "",
-        "crop": null,
-        "flipX": false,
-        "flipY": false,
-        "altText": ""
-      },
-      "parentId": "page:page",
-      "index": "a1gnaUuG",
-      "typeName": "shape"
-    },
-    "shape:jFFn7b1_eOOemTTAWC7mF": {
-      "x": -137.7446354601574,
-      "y": 1122.8015996717784,
-      "rotation": 0,
-      "isLocked": false,
-      "opacity": 1,
-      "meta": {
-        "cowartAnnotationArrow": true
-      },
-      "id": "shape:jFFn7b1_eOOemTTAWC7mF",
-      "type": "arrow",
-      "props": {
-        "kind": "arc",
-        "elbowMidPoint": 0.5,
-        "dash": "draw",
-        "size": "m",
-        "fill": "none",
-        "color": "red",
-        "labelColor": "red",
-        "bend": 42.54282224338426,
-        "start": {
-          "x": 0,
-          "y": 0
-        },
-        "end": {
-          "x": 244.69602296292808,
-          "y": -256.53612153830727
-        },
-        "arrowheadStart": "none",
-        "arrowheadEnd": "arrow",
-        "richText": {
-          "type": "doc",
-          "attrs": {
-            "dir": "auto"
-          },
-          "content": [
-            {
-              "type": "paragraph",
-              "attrs": {
-                "dir": "auto"
-              },
-              "content": [
-                {
-                  "type": "text",
-                  "text": "这里是敌人的2d像素图"
-                }
-              ]
-            }
-          ]
-        },
-        "labelPosition": 0,
-        "font": "draw",
-        "scale": 1
-      },
-      "parentId": "page:page",
-      "index": "a3AXxgmV",
-      "typeName": "shape"
+      "id": "user:pphgzPqegkGNqPiXpn0lX",
+      "typeName": "user"
     },
     "page:page": {
       "meta": {},
@@ -326,46 +182,28 @@
       "id": "document:document",
       "typeName": "document"
     },
-    "asset:annotation-edit-20260709-015610": {
-      "id": "asset:annotation-edit-20260709-015610",
-      "typeName": "asset",
-      "type": "image",
-      "props": {
-        "name": "annotation-edit-20260709-015610.png",
-        "src": "/page-assets/page/annotation-edit-20260709-015610.png",
-        "w": 1600,
-        "h": 1000,
-        "fileSize": 89456,
-        "mimeType": "image/png",
-        "isAnimated": false
-      },
-      "meta": {}
-    },
-    "shape:annotation-edit-20260709-015610": {
-      "x": 953.6645402187471,
-      "y": 536.4599394025968,
+    "shape:0ZZL1_jVs0fga1s6LPMhy": {
+      "x": 400.09557075850284,
+      "y": 1173.6754535724035,
       "rotation": 0,
       "isLocked": false,
       "opacity": 1,
-      "meta": {
-        "cowartGeneratedFromAnnotationEdit": true,
-        "cowartAnnotationScreenshot": "codex-clipboard-85a15d0f-a9a1-4211-a634-c0e073ad9c36.png"
-      },
-      "id": "shape:annotation-edit-20260709-015610",
+      "meta": {},
+      "id": "shape:0ZZL1_jVs0fga1s6LPMhy",
       "type": "image",
       "props": {
-        "w": 800,
-        "h": 500,
-        "assetId": "asset:annotation-edit-20260709-015610",
+        "w": 719,
+        "h": 482,
+        "assetId": "asset:-540339686",
         "playing": true,
         "url": "",
         "crop": null,
         "flipX": false,
         "flipY": false,
-        "altText": "Clean revised enemy overhead UI layout generated from Cowart annotation screenshot"
+        "altText": ""
       },
       "parentId": "page:page",
-      "index": "a6",
+      "index": "a1UgWqEG",
       "typeName": "shape"
     }
   }

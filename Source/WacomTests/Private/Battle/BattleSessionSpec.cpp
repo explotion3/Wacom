@@ -124,14 +124,14 @@ bool FWacomBattleSessionPreDestroyedPartsDoNotRequestKnockdownSpec::RunTest(cons
 		TEXT("Test.Part.Head")));
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
-	const FWacomStatus Status = Session->Initialize(Params);
+	const FBattleInitializationResult Status = Session->Initialize(Params);
 	TestTrue(TEXT("Initialize succeeds"), Status.IsOk());
 	if (!Status.IsOk())
 	{
 		return false;
 	}
 
-	const TArray<FBattleEvent> InitialEvents = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& InitialEvents = Status.Events;
 	TestEqual(TEXT("Pre-destroyed part does not request knockdown choice"),
 		CountEventsOfType(InitialEvents, EBattleEventType::KnockdownChoiceRequested),
 		0);
@@ -174,7 +174,6 @@ bool FWacomBattleKnockdownRequestFlowSingleInitialRequestSpec::RunTest(const FSt
 	UCharacterDefinition* Character = MakeCharacterWithRightHandKiller(Fx, &Killer);
 	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(/*HH*/50, /*HB*/50, /*HT*/50, /*IH*/100, /*IB*/100, /*IT*/100);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, /*Seed*/1);
-	Session->ConsumeEvents();
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid HeadId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -187,11 +186,11 @@ bool FWacomBattleKnockdownRequestFlowSingleInitialRequestSpec::RunTest(const FSt
 		return false;
 	}
 
-	const FWacomStatus Status = Session->SubmitCommand(
+	const FBattleResolution Status = Session->ResolveCommand(
 		FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, KillerId, HeadId));
 	TestTrue(TEXT("Killer play succeeds"), Status.IsOk());
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
+	const TArray<FBattleEvent>& Events = Status.Events;
 	TestEqual(TEXT("Exactly one initial KnockdownChoiceRequested event"),
 		CountEventsOfType(Events, EBattleEventType::KnockdownChoiceRequested),
 		1);
@@ -226,9 +225,9 @@ bool FWacomBattleResultPacketWithdrawnDerivedFromChoicesSpec::RunTest(const FStr
 	}
 
 	TestTrue(TEXT("Killer play succeeds"),
-		Session->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, KillerId, HeadId)).IsOk());
+		Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, KillerId, HeadId)).IsOk());
 	TestTrue(TEXT("Withdraw choice succeeds"),
-		Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw)).IsOk());
+		Session->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw)).IsOk());
 
 	const FBattleResultPacket Packet = Session->BuildResultPacket();
 	TestTrue(TEXT("Packet bWithdrawn is derived from choices"), Packet.bWithdrawn);

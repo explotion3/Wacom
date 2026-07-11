@@ -322,7 +322,6 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 
 	if (NewSession)
 	{
-		ConsumeAndLogEvents();
 		RefreshCommandBarFromSnapshot(NewSession->BuildSnapshot());
 	}
 	else
@@ -556,31 +555,24 @@ void FWacomBattleHUDRuntime::SubmitPlayCardOnHandCard(
 		PresentationTargetWidgetPosition);
 }
 
-void FWacomBattleHUDRuntime::AfterCommand()
+void FWacomBattleHUDRuntime::PresentInitialization(
+	const FBattleInitializationResult& Initialization)
 {
-	GetCommandController().AfterCommand();
-}
-
-void FWacomBattleHUDRuntime::ConsumeAndLogEvents()
-{
-	UBattleSession* Session = GetSession();
-	if (!Session)
+	if (!Initialization.IsOk())
 	{
 		return;
 	}
 
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	(void)Session->ConsumePresentationJournal();
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const TArray<FBattleEvent>& Events = Initialization.Events;
+	const FBattleSnapshot& Snapshot = Initialization.PostSnapshot;
 	const FWacomBattleCombatLogCommandContext SystemContext =
 		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot);
 	LogRawBattleEvents(Events);
-	StoreFirstPersonCardTransitionEvents(Events);
 	GetCombatLogController().AppendBlock(SystemContext, Events, Snapshot, Snapshot);
 	EnqueueBattlePresentationEvents(Events, INDEX_NONE);
 }
 
-bool FWacomBattleHUDRuntime::ConsumeAndLogEvents(
+bool FWacomBattleHUDRuntime::PresentCommandResolution(
 	const FWacomBattleCombatLogCommandContext& CommandContext,
 	const FBattleSnapshot& PreCommandSnapshot,
 	const FBattleResolution& Resolution)

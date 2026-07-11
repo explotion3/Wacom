@@ -24,5 +24,4 @@ struct WACOMBATTLE_API FBattleResolution
 	FBattleSnapshot PostSnapshot;
 
 	bool IsOk() const { return Status.IsOk(); }
-	operator const FWacomStatus&() const { return Status; }
 };

@@ -141,7 +141,7 @@ namespace
 		AppendTwoEnemySlots(Params, Fixture);
 
 		UBattleSession* Session = NewObject<UBattleSession>(GetTransientPackage(), NAME_None, RF_Transient);
-		const FWacomStatus Status = Session->Initialize(Params);
+		const FBattleInitializationResult Status = Session->Initialize(Params);
 		if (!ensure(Status.IsOk()))
 		{
 			return nullptr;
@@ -205,8 +205,8 @@ bool FWacomBattleTargetIdentityPartKeyResolvesDuplicatePartIdsSpec::RunTest(cons
 		Validation.ResolvedPartKey,
 		RightPart->PartKey);
 
-	const FWacomStatus Status =
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, RightPart->PartKey));
+	const FBattleResolution Status =
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, RightPart->PartKey));
 	TestTrue(TEXT("PlayCard by part key succeeds"), Status.IsOk());
 
 	const FBattleSnapshot After = Session->BuildSnapshot();
@@ -268,11 +268,11 @@ bool FWacomBattleTargetIdentityMismatchedRuntimeAndKeyRejectsSpec::RunTest(const
 
 	const FBattleEnemyPartKey MissingKey =
 		FBattleEnemyPartKey::Make(TEXT("Encounter.TargetIdentity"), TEXT("RightEnemy"), TEXT("Missing"));
-	const FWacomStatus Status =
-		Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, MissingKey));
+	const FBattleResolution Status =
+		Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, MissingKey));
 	TestFalse(TEXT("PlayCard rejects stale or missing part key"), Status.IsOk());
 	TestEqual(TEXT("Reject detail reports invalid key"),
-		Status.Detail,
+		Status.Status.Detail,
 		FName(TEXT("TargetKeyInvalid")));
 
 	return true;
@@ -307,7 +307,7 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 		AppendTwoEnemySlots(Params, Fixture);
 
 		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
-		const FWacomStatus InitStatus = Session->Initialize(Params);
+		const FBattleInitializationResult InitStatus = Session->Initialize(Params);
 		TestTrue(TEXT("Initial battle initializes"), InitStatus.IsOk());
 		if (!InitStatus.IsOk())
 		{
@@ -324,13 +324,13 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 			return false;
 		}
 
-		const FWacomStatus PlayStatus =
-			Session->SubmitCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, RightPart->PartKey));
+		const FBattleResolution PlayStatus =
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, RightPart->PartKey));
 		TestTrue(TEXT("PlayCard destroys right enemy slot"), PlayStatus.IsOk());
 		TestEqual(TEXT("Pending knockdown choice"), Session->GetPhase(), EBattlePhase::PendingKnockdownChoice);
 
-		const FWacomStatus WithdrawStatus =
-			Session->SubmitCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
+		const FBattleResolution WithdrawStatus =
+			Session->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Withdraw));
 		TestTrue(TEXT("Withdraw succeeds"), WithdrawStatus.IsOk());
 
 		const FBattleResultPacket Packet = Session->BuildResultPacket();
@@ -389,7 +389,7 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 	AppendTwoEnemySlots(ReentryParams, Fixture);
 
 	TStrongObjectPtr<UBattleSession> ReentrySession(NewObject<UBattleSession>());
-	const FWacomStatus ReentryStatus = ReentrySession->Initialize(ReentryParams);
+	const FBattleInitializationResult ReentryStatus = ReentrySession->Initialize(ReentryParams);
 	TestTrue(TEXT("Reentry battle initializes"), ReentryStatus.IsOk());
 	if (!ReentryStatus.IsOk())
 	{

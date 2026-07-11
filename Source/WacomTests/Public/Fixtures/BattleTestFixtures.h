@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Session/BattleInitializationResult.h"
 #include "UObject/StrongObjectPtr.h"
 
 class UBattleSession;
@@ -20,6 +21,13 @@ struct FEnemyPartSnapshot;
 struct FHandCardSnapshot;
 enum class EBattleEventType : uint8;
 enum class EHandZone : uint8;
+
+/** 测试夹具显式返回的已初始化 Session 与其一次性初始化结果。 */
+struct WACOMTESTS_API FWacomInitializedBattleSession
+{
+	UBattleSession* Session = nullptr;
+	FBattleInitializationResult Initialization;
+};
 
 /**
  * WacomTests 的测试工厂 + 工具集合。
@@ -101,6 +109,12 @@ public:
 
 	/** 创建并 Initialize。失败 check-fail。返回的指针由 fixture 持有。 */
 	UBattleSession* CreateSession(UCharacterDefinition* Character, UEnemyDefinition* Enemy, int32 Seed);
+
+	/** 创建并 Initialize，同时把开场事件与快照显式交给需要验证初始化表现的测试。 */
+	FWacomInitializedBattleSession CreateInitializedSession(
+		UCharacterDefinition* Character,
+		UEnemyDefinition* Enemy,
+		int32 Seed);
 
 	// ---- Snapshot 查询 ----
 

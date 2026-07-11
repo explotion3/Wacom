@@ -135,7 +135,7 @@ bool FWacomBattleZoneHookLeftHitSkipsInitiativePushSpec::RunTest(const FString& 
 		// 期望：部位先机仍为 3（未被 -3）。
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snap, 0);
 		TestTrue(TEXT("Play Left"),
-			S->SubmitCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, LeftId, PartId)).IsOk());
+			S->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, LeftId, PartId)).IsOk());
 
 		Snap = S->BuildSnapshot();
 		TestEqual(FString::Printf(TEXT("Seed=%d init unchanged after left-hook hit"), Seed),
@@ -206,7 +206,7 @@ bool FWacomBattleZoneHookRightPlayTransfersCostSpec::RunTest(const FString& /*Pa
 		if (!RightId.IsValid()) { continue; }
 
 		TestTrue(TEXT("PlayRight"),
-			S->SubmitCommand(FBattleCommand::MakePlayCard(RightId)).IsOk());
+			S->ResolveCommand(FBattleCommand::MakePlayCard(RightId)).IsOk());
 
 		// 断言：手牌里某张 Filler 的 RuntimeCost == 4（5 - 1）。
 		Snap = S->BuildSnapshot();
@@ -283,7 +283,7 @@ bool FWacomBattleZoneHookRightPlayCostAccumulatesSpec::RunTest(const FString& /*
 
 		// 第 1 次打出
 		TestTrue(TEXT("Play1"),
-			S->SubmitCommand(FBattleCommand::MakePlayCard(RightId)).IsOk());
+			S->ResolveCommand(FBattleCommand::MakePlayCard(RightId)).IsOk());
 
 		Snap = S->BuildSnapshot();
 		// Combo 留在原位置，Cost = 1 + 1 = 2
@@ -306,7 +306,7 @@ bool FWacomBattleZoneHookRightPlayCostAccumulatesSpec::RunTest(const FString& /*
 
 		// 第 2 次打出 → 验证 Cost 累计到 3
 		TestTrue(TEXT("Play2"),
-			S->SubmitCommand(FBattleCommand::MakePlayCard(RightId)).IsOk());
+			S->ResolveCommand(FBattleCommand::MakePlayCard(RightId)).IsOk());
 
 		Snap = S->BuildSnapshot();
 		const int32 CostAfter2 = GetRuntimeCostInHand(Snap, RightId);
@@ -356,7 +356,7 @@ bool FWacomBattleEffectAddCostWorksOnSelfSpec::RunTest(const FString& /*Paramete
 	TestTrue(TEXT("InHand"), Id.IsValid());
 	TestEqual(TEXT("InitialCost"), GetRuntimeCostInHand(Snap, Id), 0);
 
-	TestTrue(TEXT("Play"), S->SubmitCommand(FBattleCommand::MakePlayCard(Id)).IsOk());
+	TestTrue(TEXT("Play"), S->ResolveCommand(FBattleCommand::MakePlayCard(Id)).IsOk());
 	Snap = S->BuildSnapshot();
 	TestEqual(TEXT("CostAfterPlay"), GetRuntimeCostInHand(Snap, Id), 2);
 
@@ -398,7 +398,7 @@ bool FWacomBattleEffectReduceCostClampsAtZeroSpec::RunTest(const FString& /*Para
 	TestTrue(TEXT("InHand"), Id.IsValid());
 	TestEqual(TEXT("InitialCost"), GetRuntimeCostInHand(Snap, Id), 1);
 
-	TestTrue(TEXT("Play"), S->SubmitCommand(FBattleCommand::MakePlayCard(Id)).IsOk());
+	TestTrue(TEXT("Play"), S->ResolveCommand(FBattleCommand::MakePlayCard(Id)).IsOk());
 	Snap = S->BuildSnapshot();
 	// Modifier = -5, BaseCost = 1 → ComputeRuntimeCost clamps to 0
 	TestEqual(TEXT("CostAfterPlay clamps to 0"), GetRuntimeCostInHand(Snap, Id), 0);

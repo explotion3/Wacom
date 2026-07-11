@@ -19,7 +19,7 @@ tags:
 
 ## §1 BattleHUD 职责
 
-`UBattleHUD` 是战斗 UI Screen façade。它保留 WBP 绑定、CommonUI 生命周期、C++ session 注入（`SetInjectedBattleSession()`）、Blueprint/public 命令入口、typed BattleEnd 广播（`EBattleOutcome`）、Authoring 参数和 GC-owned Widget 引用。
+`UBattleHUD` 是战斗 UI Screen façade。它保留 WBP 绑定、CommonUI 生命周期、C++ session 注入（`SetInjectedBattleSession()` / `AttachInitializedBattleSession()`）、Blueprint/public 命令入口、typed BattleEnd 广播（`EBattleOutcome`）、Authoring 参数和 GC-owned Widget 引用。
 
 `UBattleHUD` 不直接实现战斗规则，也不直接持有 command、targeting、snapshot presentation、hand、scene enemy、detail 或 combat log 的业务状态。运行时状态收口到 `WacomApp/Private/UI/Battle/FWacomBattleHUDRuntime`；`FWacomBattleHUDRuntimeHost` 是唯一读取 HUD 私有 WBP / UPROPERTY / GC 引用的 adapter。
 
@@ -53,6 +53,8 @@ BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`�
 - `OnKnockdownChoiceSelected`
 
 HUD 是命令出口。子 Widget 和 WBP 不直接修改 `UBattleSession`，也不在图里实现出牌、等待、结束回合、击倒选择或目标选择规则。`OnCardClickedByUser` 已收口为空兼容入口，只用于避免旧资产加载断裂；它不会提交命令，也不应作为新的 first-person hand 制作入口。新手牌出牌必须走 first-person card layer drag / release 或数字快捷键启动拖拽。
+
+Battle 创建完成后，`AWacomGameMode` 必须把 `UBattleSession` 与同次 commit 的 `FBattleInitializationResult` 一起交给 `UBattleHUD::AttachInitializedBattleSession()`。该入口先绑定 Session、缓存 opening transition、刷新 `PostSnapshot`，再把 opening events 交给 Combat Log 和 presentation queue，并按 Session 保证只呈现一次。普通 `SetInjectedBattleSession()` 只绑定已有 Session 和刷新当前视图，不推断、拉取或重播初始化事件。命令后表现只消费对应 `FBattleResolution`，不会混入开场事件。
 
 键盘数字牌位快捷键进入 `AWacomPlayerController` 后只提交 one-based hand index 和当前 pointer widget-space 坐标给 `UBattleHUD`；当前可见战斗手牌的 `CardInstanceId` 由 BattleHUD / first-person hand bridge 根据已同步的 hand snapshot 解析，PlayerController 不直接读取 `UBattleSession` 或 `FBattleSnapshot`。键盘 `IA_Wait` / `IA_EndTurn` 进入 BattleHUD 前由 `AWacomPlayerController` 做 first-person hand 输入仲裁：如果当前卡牌层存在 active gesture，快捷键先取消该手势并被消费；只有卡牌层处于 idle / cancelled 时才调用 `OnWaitRequested` 或 `OnEndTurnRequested`。
 
