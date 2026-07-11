@@ -27,11 +27,6 @@ void FWacomRunFirstPersonCardDragController::RefreshBinding()
 	if ((!bShouldBind || CurrentBoundAnchor != Anchor) && CurrentBoundAnchor)
 	{
 		UnbindAnchor(*CurrentBoundAnchor);
-		CameraLookBridge.ClearDragView(
-			[this]()
-			{
-				PlayerController.ClearRunFirstPersonCardDragCameraLookOverride();
-			});
 		BoundAnchor.Reset();
 	}
 
@@ -50,12 +45,6 @@ void FWacomRunFirstPersonCardDragController::RefreshBinding()
 		Anchor->OnFirstPersonCardLayerDragCancelled.AddUObject(
 			&PlayerController,
 			&AWacomPlayerController::HandleRunFirstPersonCardLayerDragCancelled);
-		Anchor->OnFirstPersonCardLayerPointerMoved.AddUObject(
-			&PlayerController,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerMoved);
-		Anchor->OnFirstPersonCardLayerPointerLeft.AddUObject(
-			&PlayerController,
-			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerLeft);
 		BoundAnchor = Anchor;
 	}
 }
@@ -66,11 +55,6 @@ void FWacomRunFirstPersonCardDragController::UnbindCurrentBinding()
 	{
 		UnbindAnchor(*Anchor);
 	}
-	CameraLookBridge.ClearDragView(
-		[this]()
-		{
-			PlayerController.ClearRunFirstPersonCardDragCameraLookOverride();
-		});
 	BoundAnchor.Reset();
 }
 
@@ -131,10 +115,8 @@ void FWacomRunFirstPersonCardDragController::HandleDragStarted(
 	if (PlayerController.GetRunFirstPersonCardDetailController()
 		.HandleInspectDragStartedOrUpdated(CardInstanceId, DragView))
 	{
-		HandleInspectDrag(DragView);
 		return;
 	}
-
 	if (!IsFormalDragGesture(DragView.GestureState))
 	{
 		return;
@@ -150,10 +132,8 @@ void FWacomRunFirstPersonCardDragController::HandleDragUpdated(
 	if (PlayerController.GetRunFirstPersonCardDetailController()
 		.HandleInspectDragStartedOrUpdated(CardInstanceId, DragView))
 	{
-		HandleInspectDrag(DragView);
 		return;
 	}
-
 	if (!IsFormalDragGesture(DragView.GestureState))
 	{
 		return;
@@ -166,16 +146,12 @@ void FWacomRunFirstPersonCardDragController::HandleDragReleased(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
-	CameraLookBridge.ClearDragView(
-		[this]()
-		{
-			PlayerController.ClearRunFirstPersonCardDragCameraLookOverride();
-		});
 	if (IsNeutralGesture(DragView.GestureState))
 	{
 		if (DragView.GestureState == EWacomFirstPersonCardGestureState::Inspecting)
 		{
-			PlayerController.GetRunFirstPersonCardDetailController().FinishInspectDetail(CardInstanceId);
+			PlayerController.GetRunFirstPersonCardDetailController()
+				.FinishInspectDetail(CardInstanceId);
 		}
 		PlayerController.GetRunFirstPersonCardDropCoordinator().ClearAllDropProbes();
 		return;
@@ -194,36 +170,12 @@ void FWacomRunFirstPersonCardDragController::HandleDragCancelled(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
-	CameraLookBridge.ClearDragView(
-		[this]()
-		{
-			PlayerController.ClearRunFirstPersonCardDragCameraLookOverride();
-		});
 	if (DragView.GestureState == EWacomFirstPersonCardGestureState::Inspecting)
 	{
-		PlayerController.GetRunFirstPersonCardDetailController().FinishInspectDetail(CardInstanceId);
+		PlayerController.GetRunFirstPersonCardDetailController()
+			.FinishInspectDetail(CardInstanceId);
 	}
 	PlayerController.GetRunFirstPersonCardDropCoordinator().ClearAllDropProbes();
-}
-
-void FWacomRunFirstPersonCardDragController::HandlePointerMoved(
-	const FWacomFirstPersonCardPointerView& PointerView)
-{
-	CameraLookBridge.HandlePointerMoved(
-		PointerView,
-		[this](const FWacomFirstPersonCardPointerView& AppliedPointerView)
-		{
-			PlayerController.ApplyRunFirstPersonCardPointerCameraLookOverride(AppliedPointerView);
-		});
-}
-
-void FWacomRunFirstPersonCardDragController::HandlePointerLeft()
-{
-	CameraLookBridge.HandlePointerLeft(
-		[this]()
-		{
-			PlayerController.ClearRunFirstPersonCardDragCameraLookOverride();
-		});
 }
 
 void FWacomRunFirstPersonCardDragController::UnbindAnchor(
@@ -233,19 +185,6 @@ void FWacomRunFirstPersonCardDragController::UnbindAnchor(
 	Anchor.OnFirstPersonCardLayerDragUpdated.RemoveAll(&PlayerController);
 	Anchor.OnFirstPersonCardLayerDragReleased.RemoveAll(&PlayerController);
 	Anchor.OnFirstPersonCardLayerDragCancelled.RemoveAll(&PlayerController);
-	Anchor.OnFirstPersonCardLayerPointerMoved.RemoveAll(&PlayerController);
-	Anchor.OnFirstPersonCardLayerPointerLeft.RemoveAll(&PlayerController);
-}
-
-void FWacomRunFirstPersonCardDragController::HandleInspectDrag(
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	CameraLookBridge.ApplyDragView(
-		DragView,
-		[this](const FWacomFirstPersonCardDragView& AppliedDragView)
-		{
-			PlayerController.ApplyRunFirstPersonCardDragCameraLookOverride(AppliedDragView);
-		});
 }
 
 void FWacomRunFirstPersonCardDragController::HandleFormalDrag(
@@ -254,15 +193,6 @@ void FWacomRunFirstPersonCardDragController::HandleFormalDrag(
 	bool bReleased)
 {
 	PlayerController.GetRunFirstPersonCardDetailController().HideForSource(CardInstanceId);
-	if (!bReleased)
-	{
-		CameraLookBridge.ApplyDragView(
-			DragView,
-			[this](const FWacomFirstPersonCardDragView& AppliedDragView)
-			{
-				PlayerController.ApplyRunFirstPersonCardDragCameraLookOverride(AppliedDragView);
-			});
-	}
 
 	PlayerController.GetRunFirstPersonCardDropCoordinator()
 		.HandleFormalDrag(CardInstanceId, DragView, bReleased);

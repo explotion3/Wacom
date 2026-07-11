@@ -64,16 +64,6 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 		return Hint;
 	}
 
-	FWacomFirstPersonCardLayerFeedbackHint MakeRetainedHint(const FGuid& CardInstanceId)
-	{
-		FWacomFirstPersonCardLayerFeedbackHint Hint;
-		Hint.CardInstanceId = CardInstanceId;
-		Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::Retained;
-		Hint.SequenceIndex = 0;
-		Hint.SequenceCount = 1;
-		return Hint;
-	}
-
 	FWacomFirstPersonCardSlotMotionConfig MakeMotionConfig()
 	{
 		FWacomFirstPersonCardSlotMotionConfig Config;
@@ -81,25 +71,11 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 		Config.DrawnEnterOffsetPixels = FVector2D(0.0f, 80.0f);
 		Config.DrawnEnterDurationSeconds = 0.2f;
 		Config.DrawnEnterStaggerSeconds = 0.0f;
-		Config.GainedEnterOffsetPixels = FVector2D(0.0f, -80.0f);
-		Config.GainedEnterDurationSeconds = 0.2f;
-		Config.GainedEnterStaggerSeconds = 0.0f;
-		Config.GainedEnterArcLiftPixels = 30.0f;
 		Config.HandAnchorEnterOffsetPixels = FVector2D(0.0f, -80.0f);
 		Config.HandAnchorEnterDurationSeconds = 0.2f;
 		Config.HandAnchorEnterStaggerSeconds = 0.0f;
 		Config.ExitDuration = 0.12f;
 		Config.DiscardedExitStaggerSeconds = 0.08f;
-		return Config;
-	}
-
-	FWacomFirstPersonCardSlotFeedbackConfig MakeFeedbackConfig()
-	{
-		FWacomFirstPersonCardSlotFeedbackConfig Config;
-		Config.bEnabled = true;
-		Config.bEnableRetainedFeedback = true;
-		Config.RetainedFeedbackDuration = 0.18f;
-		Config.RetainedFeedbackStaggerSeconds = 0.0f;
 		return Config;
 	}
 
@@ -127,18 +103,6 @@ namespace WacomFirstPersonCardLayerPresentationPlaybackSpec
 		Entry.Zone = EHandZone::Both;
 		Entry.bIsPlayable = true;
 		return Entry;
-	}
-
-	FWacomFirstPersonCardLayerFeedbackHint MakeFeedbackHint(
-		const FGuid& CardInstanceId,
-		EWacomFirstPersonCardLayerFeedbackKind FeedbackKind)
-	{
-		FWacomFirstPersonCardLayerFeedbackHint Hint;
-		Hint.CardInstanceId = CardInstanceId;
-		Hint.FeedbackKind = FeedbackKind;
-		Hint.SequenceIndex = 0;
-		Hint.SequenceCount = 1;
-		return Hint;
 	}
 
 	FWacomFirstPersonCardLayerPresentationFrame MakeCommitFrame(
@@ -184,41 +148,6 @@ bool FWacomFirstPersonCardLayerEnterPlaybackActiveContractTest::RunTest(const FS
 	TestTrue(TEXT("Drawn enter reports active playback"), Layer->HasActivePresentationPlayback());
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.3f);
 	TestFalse(TEXT("Drawn enter clears active playback"), Layer->HasActivePresentationPlayback());
-
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerGainedEnterPlaybackActiveContractTest,
-	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.GainedEnterReportsActive",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerGainedEnterPlaybackActiveContractTest::RunTest(const FString& /*Parameters*/)
-{
-	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
-
-	UWorld* World = FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
-	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
-	{
-		return false;
-	}
-
-	Layer->SetSlotMotionConfig(MakeMotionConfig());
-	const FGuid CardId = FGuid::NewGuid();
-	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Gained) });
-	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(140.0f, 250.0f)) });
-
-	TestTrue(TEXT("Gained enter reports active playback"), Layer->HasActivePresentationPlayback());
-	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.3f);
-	TestFalse(TEXT("Gained enter clears active playback"), Layer->HasActivePresentationPlayback());
 
 	PC->Destroy();
 	return true;
@@ -398,41 +327,6 @@ bool FWacomFirstPersonCardLayerForceSettlePresentationPlaybackTest::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerRetainedPlaybackActiveContractTest,
-	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.RetainedFeedbackReportsActive",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerRetainedPlaybackActiveContractTest::RunTest(const FString& /*Parameters*/)
-{
-	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
-
-	UWorld* World = FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
-	if (!TestNotNull(TEXT("PlayerController"), PC) || !TestNotNull(TEXT("Layer"), Layer))
-	{
-		return false;
-	}
-
-	Layer->SetSlotFeedbackConfig(MakeFeedbackConfig());
-	const FGuid CardId = FGuid::NewGuid();
-	Layer->SetCardFeedbackHints({ MakeRetainedHint(CardId) });
-	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(220.0f, 280.0f)) });
-
-	TestTrue(TEXT("Retained feedback reports active playback"), Layer->HasActivePresentationPlayback());
-	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.24f);
-	TestFalse(TEXT("Retained feedback clears active playback"), Layer->HasActivePresentationPlayback());
-
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest,
 	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.AnchorRefreshCardLayerNowConsumesPresentationFrame",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -488,8 +382,7 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor,
 		SourceId,
 		{ RetainedEntry },
-		{ MakeTransitionHint(DiscardedId, EWacomFirstPersonCardSlotTransitionKind::Discarded) },
-		{});
+		{ MakeTransitionHint(DiscardedId, EWacomFirstPersonCardSlotTransitionKind::Discarded) });
 	Anchor->RefreshCardLayerNow(0.0f);
 	TestTrue(TEXT("Discard presentation frame starts playback immediately"), Anchor->HasActiveCardLayerPresentationPlayback());
 	TestTrue(TEXT("Discard presentation starts outgoing slot"), Layer->GetSlotMotionDebugView().OutgoingStartedThisUpdate > 0);
@@ -499,20 +392,8 @@ bool FWacomFirstPersonCardAnchorRefreshCardLayerNowConsumesPresentationFrameTest
 
 	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor,
 		SourceId,
-		{ RetainedEntry },
-		{},
-		{ MakeFeedbackHint(RetainedId, EWacomFirstPersonCardLayerFeedbackKind::Retained) });
-	Anchor->RefreshCardLayerNow(0.0f);
-	TestTrue(TEXT("Retain feedback frame starts playback immediately"), Anchor->HasActiveCardLayerPresentationPlayback());
-
-	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.40f);
-	TestFalse(TEXT("Retain feedback completes"), Anchor->HasActiveCardLayerPresentationPlayback());
-
-	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(*Anchor,
-		SourceId,
 		{ RetainedEntry, DrawnEntry },
-		{ MakeTransitionHint(DrawnId, EWacomFirstPersonCardSlotTransitionKind::Drawn) },
-		{});
+		{ MakeTransitionHint(DrawnId, EWacomFirstPersonCardSlotTransitionKind::Drawn) });
 	Anchor->RefreshCardLayerNow(0.0f);
 	TestTrue(TEXT("Draw presentation frame starts playback immediately"), Anchor->HasActiveCardLayerPresentationPlayback());
 
@@ -643,8 +524,6 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 			EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame);
 	PresentationFrame.TransitionHints.Add(
 		MakeTransitionHint(DrawnId, EWacomFirstPersonCardSlotTransitionKind::Drawn));
-	PresentationFrame.FeedbackHints.Add(
-		MakeFeedbackHint(RetainedId, EWacomFirstPersonCardLayerFeedbackKind::Retained));
 	FWacomFirstPersonCardLayerTestAccess::CommitRuntimeCardLayerFrame(*Anchor, PresentationFrame);
 
 	const FWacomFirstPersonCardAnchorAutomationTestView PendingAfterPresentation =
@@ -653,16 +532,9 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 		TEXT("Presentation frame writes one pending transition"),
 		PendingAfterPresentation.PendingTransitionHintCardIds.Num(),
 		1);
-	TestEqual(
-		TEXT("Presentation frame writes one pending feedback"),
-		PendingAfterPresentation.PendingFeedbackHintCardIds.Num(),
-		1);
 	TestTrue(
 		TEXT("Presentation frame stores draw hint"),
 		PendingAfterPresentation.PendingTransitionHintCardIds.Contains(DrawnId));
-	TestTrue(
-		TEXT("Presentation frame stores feedback hint"),
-		PendingAfterPresentation.PendingFeedbackHintCardIds.Contains(RetainedId));
 
 	const FWacomFirstPersonCardLayerPresentationFrame StateRefreshFrame =
 		MakeCommitFrame(
@@ -680,9 +552,6 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 	TestTrue(
 		TEXT("State refresh preserves pending draw hint"),
 		PendingAfterStateRefresh.PendingTransitionHintCardIds.Contains(DrawnId));
-	TestTrue(
-		TEXT("State refresh preserves pending feedback hint"),
-		PendingAfterStateRefresh.PendingFeedbackHintCardIds.Contains(RetainedId));
 
 	const FWacomFirstPersonCardLayerPresentationFrame PreviewFrame =
 		MakeCommitFrame(
@@ -700,9 +569,6 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 	TestTrue(
 		TEXT("Preview overlay preserves pending draw hint"),
 		PendingAfterPreview.PendingTransitionHintCardIds.Contains(DrawnId));
-	TestTrue(
-		TEXT("Preview overlay preserves pending feedback hint"),
-		PendingAfterPreview.PendingFeedbackHintCardIds.Contains(RetainedId));
 
 	const FWacomFirstPersonCardLayerPresentationFrame SuppressedFrame =
 		MakeCommitFrame(
@@ -720,10 +586,6 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 	TestEqual(
 		TEXT("Suppressed frame clears pending transitions"),
 		PendingAfterSuppressed.PendingTransitionHintCardIds.Num(),
-		0);
-	TestEqual(
-		TEXT("Suppressed frame clears pending feedback"),
-		PendingAfterSuppressed.PendingFeedbackHintCardIds.Num(),
 		0);
 
 	PC->Destroy();

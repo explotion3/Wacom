@@ -9,8 +9,6 @@
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomFirstPersonCardLayerTypes.generated.h"
 
-class USoundBase;
-
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardAnchorMode : uint8
 {
@@ -42,10 +40,9 @@ enum class EWacomFirstPersonCardSlotTransitionKind : uint8
 	Default UMETA(DisplayName = "Default", ToolTip = "默认槽位转场；使用通用入场或离场偏移。"),
 	Drawn UMETA(DisplayName = "Drawn", ToolTip = "抽牌进入手牌；默认从手牌下方进入。"),
 	RunHandEntered UMETA(DisplayName = "Run Hand Entered", ToolTip = "Run 探索期默认手牌进入第一人称手牌层；UI 表现语义，不属于战斗抽牌事件。"),
-	Gained UMETA(DisplayName = "Gained", ToolTip = "战斗中获得卡牌进入手牌；默认从战斗空间方向进入。"),
-	HandAnchorEntered UMETA(DisplayName = "Hand Anchor Entered", ToolTip = "左/右手牌生成入手；由 UI 表现层在普通抽牌后触发，不属于普通抽牌事件。"),
-	Played UMETA(DisplayName = "Played", ToolTip = "卡牌被打出离开手牌；默认向上离开。"),
-	Discarded UMETA(DisplayName = "Discarded", ToolTip = "卡牌被弃置离开手牌；默认向下离开。")
+	HandAnchorEntered = 4 UMETA(DisplayName = "Hand Anchor Entered", ToolTip = "左/右手牌生成入手；由 UI 表现层在普通抽牌后触发，不属于普通抽牌事件。"),
+	Played = 5 UMETA(DisplayName = "Played", ToolTip = "卡牌被打出离开手牌；默认向上离开。"),
+	Discarded = 6 UMETA(DisplayName = "Discarded", ToolTip = "卡牌被弃置离开手牌；默认向下离开。")
 };
 
 UENUM(BlueprintType)
@@ -65,23 +62,23 @@ enum class EWacomFirstPersonCardDragOutDirection : uint8
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardGestureState : uint8
 {
-	Idle UMETA(DisplayName = "Idle"),
-	Pressed UMETA(DisplayName = "Pressed"),
-	Inspecting UMETA(DisplayName = "Inspecting"),
-	DraggingNoTargetCard UMETA(DisplayName = "Dragging No Target Card"),
-	AimingTargetedCard UMETA(DisplayName = "Aiming Targeted Card"),
-	ArmedForCommit UMETA(DisplayName = "Armed For Commit"),
-	Cancelled UMETA(DisplayName = "Cancelled")
+	Idle = 0 UMETA(DisplayName = "Idle"),
+	Pressed = 1 UMETA(DisplayName = "Pressed"),
+	Inspecting = 2 UMETA(DisplayName = "Inspecting"),
+	DraggingNoTargetCard = 3 UMETA(DisplayName = "Dragging No Target Card"),
+	AimingTargetedCard = 4 UMETA(DisplayName = "Aiming Targeted Card"),
+	ArmedForCommit = 5 UMETA(DisplayName = "Armed For Commit"),
+	Cancelled = 6 UMETA(DisplayName = "Cancelled")
 };
 
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardInteractionIntent : uint8
 {
-	CommitNoTarget UMETA(DisplayName = "Commit No Target", ToolTip = "无目标卡交互：拖出手牌后由上层提交，不需要世界或手牌目标。"),
-	AimWorldTarget UMETA(DisplayName = "Aim World Target", ToolTip = "世界目标交互：拖拽进入瞄准态，由上层解析世界目标并验证。"),
-	AimCardTarget UMETA(DisplayName = "Aim Card Target", ToolTip = "手牌目标交互：拖拽进入瞄准态，由上层解析目标手牌并验证。"),
-	InspectOnly UMETA(DisplayName = "Inspect Only", ToolTip = "仅允许悬停和读牌，不允许升级为正式拖拽或提交。"),
-	DragToDropTarget UMETA(DisplayName = "Drag To Drop Target", ToolTip = "Run / App 投放交互：拖拽源卡到菜单区域或世界投放目标，由上层 adapter 解析目标和提交规则。")
+	CommitNoTarget = 0 UMETA(DisplayName = "Commit No Target", ToolTip = "Battle 无目标卡交互：向上拖出手牌达到阈值后，由上层在释放时提交。"),
+	AimWorldTarget = 1 UMETA(DisplayName = "Aim World Target", ToolTip = "世界目标交互：拖拽进入瞄准态，由上层解析世界目标并验证。"),
+	AimCardTarget = 2 UMETA(DisplayName = "Aim Card Target", ToolTip = "手牌目标交互：拖拽进入瞄准态，由上层解析目标手牌并验证。"),
+	InspectOnly = 3 UMETA(DisplayName = "Inspect Only", ToolTip = "仅允许悬停和长按读牌，不允许升级为正式拖拽或提交。"),
+	DragToDropTarget = 4 UMETA(DisplayName = "Drag To Drop Target", ToolTip = "Run / App 投放交互：拖拽源卡到菜单区域或世界投放目标，由上层 adapter 解析目标和提交规则。")
 };
 
 enum class EWacomFirstPersonCardGestureSource : uint8
@@ -111,15 +108,7 @@ enum class EWacomFirstPersonCardInteractionFeedbackKind : uint8
 	Pressed UMETA(DisplayName = "Pressed"),
 	Confirm UMETA(DisplayName = "Confirm"),
 	Commit UMETA(DisplayName = "Commit"),
-	Retained UMETA(DisplayName = "Retained"),
 	Deny UMETA(DisplayName = "Deny")
-};
-
-UENUM(BlueprintType)
-enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
-{
-	None UMETA(DisplayName = "None"),
-	Retained UMETA(DisplayName = "Retained")
 };
 
 USTRUCT(BlueprintType)
@@ -206,25 +195,6 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerTransitionHint
 };
 
 USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomFirstPersonCardLayerFeedbackHint
-{
-	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FGuid CardInstanceId;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	EWacomFirstPersonCardLayerFeedbackKind FeedbackKind =
-		EWacomFirstPersonCardLayerFeedbackKind::None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	int32 SequenceIndex = 0;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	int32 SequenceCount = 1;
-};
-
-USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardLayerMotionDebugView
 {
 	GENERATED_BODY()
@@ -293,7 +263,8 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 	float NoTargetCardDragOutCommitDistancePixels = 140.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	EWacomFirstPersonCardDragOutDirection NoTargetCardDragOutDirection = EWacomFirstPersonCardDragOutDirection::Up;
+	EWacomFirstPersonCardDragOutDirection NoTargetCardDragOutDirection =
+		EWacomFirstPersonCardDragOutDirection::Up;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	FVector2D CardInspectScreenPosition = FVector2D(0.5f, 0.46f);
@@ -311,60 +282,6 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 	bool bLogCardDragDiagnostics = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	bool bAllowCameraLookDuringCardDrag = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float CardDragCameraLookScale = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float CardDragCameraLookInterpSpeedOverride = -1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
-	bool bAllowCameraLookDuringCardPointer = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
-	float CardPointerCameraLookScale = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pointer")
-	float CardPointerCameraLookInterpSpeedOverride = -1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	bool bEnableDragTargetFeedback = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	FLinearColor DragValidTargetColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	FLinearColor DragInvalidTargetColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	FLinearColor DragCardProbeTargetColor = FLinearColor(0.45f, 0.75f, 1.0f, 1.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float DragTargetFeedbackOpacity = 0.16f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	bool bSnapAimArrowToValidWorldTarget = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float DragAimArrowSnapBlend = 0.85f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float DragCommitReadyScale = 1.035f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float DragCardTargetProbeScale = 1.025f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float DragCardTargetFocusLiftPixels = 18.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	float DragCardTargetFocusScale = 1.045f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
-	int32 DragCardTargetFocusZOrderBoost = 650;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float SelectedSourceLiftPixels = 36.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
@@ -378,6 +295,19 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float SelectedSourceAngleBlend = 0.75f;
+
+#if WITH_AUTOMATION_TESTS
+	// Removed authoring options retained only as inert compile fixtures while the
+	// legacy giant spec is split into focused contract tests.
+	float DragTargetFeedbackOpacity = 0.0f;
+	FLinearColor DragValidTargetColor = FLinearColor::Transparent;
+	FLinearColor DragInvalidTargetColor = FLinearColor::Transparent;
+	FLinearColor DragCardProbeTargetColor = FLinearColor::Transparent;
+	float DragCommitReadyScale = 1.0f;
+	float DragCardTargetProbeScale = 1.0f;
+	bool bSnapAimArrowToValidWorldTarget = false;
+	float DragAimArrowSnapBlend = 0.0f;
+#endif
 };
 
 USTRUCT(BlueprintType)
@@ -465,66 +395,6 @@ struct WACOMAPP_API FWacomFirstPersonCardProjectedPoint
 };
 
 USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomFirstPersonCardAnchorDebugView
-{
-	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 Anchor 是否解析成功。"))
-	bool bHasValidAnchor = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 Anchor 模式。"))
-	EWacomFirstPersonCardAnchorMode Mode = EWacomFirstPersonCardAnchorMode::Invalid;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 Anchor 的世界变换。"))
-	FTransform AnchorTransform = FTransform::Identity;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	FRotator LookOffsetUsed = FRotator::ZeroRotator;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "CursorLookDriver 当前提供的原始鼠标镜头偏移；BodyLocked 下仍可有值，但不会参与手牌锚点。"))
-	FRotator RawCursorLookOffset = FRotator::ZeroRotator;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "Look Responsive 投影中实际应用到手牌锚点的偏移，等价于 LookOffsetUsed。"))
-	FRotator AppliedAnchorLookOffset = FRotator::ZeroRotator;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 ProjectionMode 是否为 Look Responsive 投影风格。"))
-	bool bLookResponsiveProjection = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 resolved config 中鼠标镜头偏航偏移对手牌锚点的影响比例。"))
-	float LookInfluenceYaw = 0.25f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug", meta = (ToolTip = "当前 resolved config 中鼠标镜头俯仰偏移对手牌锚点的影响比例。"))
-	float LookInfluencePitch = 0.15f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	TArray<FWacomFirstPersonCardProjectedPoint> ProjectedPoints;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	FName LastFallbackReason = NAME_None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	bool bBodyLockedLayout = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	bool bCurrentCameraProjection = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	bool bLookOffsetAppliedToLayout = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	bool bAnchorScreenSmoothed = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Debug")
-	FWacomFirstPersonCardLayerMotionDebugView LayerMotionDebugView;
-};
-
-USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
 {
 	GENERATED_BODY()
@@ -549,7 +419,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer", meta = (ToolTip = "UI 层自己的交互意图。Battle / Run 适配层负责从规则语义映射到这里；SlotWidget 只消费本字段，不直接推断规则。"))
 	EWacomFirstPersonCardInteractionIntent InteractionIntent =
-		EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+		EWacomFirstPersonCardInteractionIntent::InspectOnly;
 };
 
 enum class EWacomFirstPersonCardLayerFrameCommitMode : uint8
@@ -565,7 +435,6 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 	FName SourceId = NAME_None;
 	TArray<FWacomFirstPersonCardLayerEntry> Entries;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
 	EWacomFirstPersonCardLayerFrameCommitMode CommitMode =
 		EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 
@@ -574,7 +443,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 
 	bool HasPresentationHints() const
 	{
-		return !TransitionHints.IsEmpty() || !FeedbackHints.IsEmpty();
+		return !TransitionHints.IsEmpty();
 	}
 
 	bool ShouldApplyAsPresentationFrame() const
@@ -590,7 +459,6 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 		SourceId = NAME_None;
 		Entries.Reset();
 		TransitionHints.Reset();
-		FeedbackHints.Reset();
 		CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 		bApplyAsPresentationFrame = false;
 	}
@@ -765,9 +633,6 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	bool bPixelSnapped = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	bool bBodyBottomViewportAdjusted = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bIsHovered = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -895,19 +760,6 @@ struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBlockInteractionDuringPlayback = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	TSoftObjectPtr<USoundBase> StartSound;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float StartSoundVolumeMultiplier = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float StartSoundPitchMultiplier = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
-		EWacomFirstPersonCardSlotTransitionKind::Default;
 };
 
 USTRUCT(BlueprintType)
@@ -917,9 +769,6 @@ struct WACOMAPP_API FWacomFirstPersonCardDepthConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
 	bool bEnableFake3D = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	bool bEnableIndependentShadow = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
 	float HoverMaxTiltDegrees = 6.0f;
@@ -934,6 +783,9 @@ struct WACOMAPP_API FWacomFirstPersonCardDepthConfig
 	float PerspectiveStrength = 0.12f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	bool bEnableContactShadow = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
 	float ResponseSpeed = 18.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
@@ -946,45 +798,19 @@ struct WACOMAPP_API FWacomFirstPersonCardDepthConfig
 	float DragVelocityForMaxTiltPixelsPerSecond = 1400.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	FVector2D BaseShadowOffsetPixels = FVector2D(0.0f, 4.0f);
+	float HoverContactShadowLift = 0.55f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	FVector2D HoverShadowOffsetPixels = FVector2D(0.0f, 10.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	FVector2D DragShadowOffsetPixels = FVector2D(0.0f, 22.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	float BaseShadowOpacity = 0.08f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	float HoverShadowOpacity = 0.24f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	float DragShadowOpacity = 0.34f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	float BaseShadowScale = 0.98f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	float HoverShadowScale = 1.01f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	float DragShadowScale = 1.05f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
-	float ShadowTiltInfluencePixels = 4.0f;
+	float DragContactShadowLift = 1.0f;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardDepthView
 {
 	bool bFake3DEnabled = false;
-	bool bShadowEnabled = false;
 	FVector2D TiltDegrees = FVector2D::ZeroVector;
 	float PerspectiveStrength = 0.0f;
-	FVector2D ShadowOffsetPixels = FVector2D::ZeroVector;
-	float ShadowOpacity = 0.0f;
-	float ShadowScale = 1.0f;
+	bool bContactShadowEnabled = false;
+	float ContactShadowLift = 0.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -997,6 +823,12 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float HoverScale = 1.06f;
+
+#if WITH_AUTOMATION_TESTS
+	float DragCardTargetFocusLiftPixels = 0.0f;
+	float DragCardTargetFocusScale = 1.0f;
+	int32 DragCardTargetFocusZOrderBoost = 0;
+#endif
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	int32 HoverZOrderBoost = 500;
@@ -1023,15 +855,6 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 	float TargetSelectNonPendingOpacityMultiplier = 0.88f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragCardTargetFocusLiftPixels = 18.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragCardTargetFocusScale = 1.045f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	int32 DragCardTargetFocusZOrderBoost = 650;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardDepthConfig CardDepth;
 };
 
@@ -1040,7 +863,6 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState
 	bool bPendingSource = false;
 	bool bTargetSelectDeemphasized = false;
 	bool bHovered = false;
-	bool bCardDragTargetFocusActive = false;
 };
 
 UENUM(BlueprintType)
@@ -1049,7 +871,6 @@ enum class EWacomFirstPersonCardMotionIntent : uint8
 	Layout,
 	Hover,
 	Pending,
-	DragTargetFocus,
 	Enter,
 	Exit
 };
@@ -1094,9 +915,6 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardMotionProfile PendingMotionProfile;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FWacomFirstPersonCardMotionProfile DragTargetFocusMotionProfile;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardMotionProfile EnterMotionProfile;
@@ -1157,36 +975,6 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 	bool bBlockInteractionDuringDrawnEnter = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FVector2D GainedEnterOffsetPixels = FVector2D(0.0f, -120.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	EWacomFirstPersonCardTransitionOriginMode GainedEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FVector2D GainedEnterViewportAnchor = FVector2D(0.5f, 0.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float GainedEnterScaleMultiplier = 0.96f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float GainedEnterAngleOffsetDegrees = 0.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float GainedEnterDurationSeconds = 0.32f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float GainedEnterStaggerSeconds = 0.075f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float GainedEnterArcLiftPixels = 42.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float GainedEnterEasePower = 2.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	bool bBlockInteractionDuringGainedEnter = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D HandAnchorEnterOffsetPixels = FVector2D(0.0f, -120.0f);
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -1216,27 +1004,6 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBlockInteractionDuringHandAnchorEnter = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	bool bEnableEnterSounds = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	TSoftObjectPtr<USoundBase> DrawnEnterSound;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	TSoftObjectPtr<USoundBase> GainedEnterSound;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	TSoftObjectPtr<USoundBase> RunHandEnterSound;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	TSoftObjectPtr<USoundBase> HandAnchorEnterSound;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float EnterSoundVolumeMultiplier = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float EnterSoundPitchMultiplier = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
@@ -1346,27 +1113,4 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float PlayCommitScale = 1.015f;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	bool bEnableRetainedFeedback = true;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackDuration = 0.28f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackStaggerSeconds = 0.045f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackLiftPixels = 12.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackScale = 1.025f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FLinearColor RetainedFeedbackColor = FLinearColor(1.0f, 0.84f, 0.34f, 1.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackOpacity = 0.18f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	int32 RetainedFeedbackZOrderBoost = 180;
 };

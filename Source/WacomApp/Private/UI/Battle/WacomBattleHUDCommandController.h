@@ -6,9 +6,6 @@
 #include "Types/WacomEnums.h"
 
 class FWacomBattleHUDRuntime;
-struct FBattleSnapshot;
-struct FBattleResolution;
-struct FWacomBattleCombatLogCommandContext;
 struct FWacomInteractionTargetHandle;
 
 class FWacomBattleHUDCommandController
@@ -31,10 +28,6 @@ public:
 	void SubmitWait();
 	void SubmitEndTurn();
 	void SubmitKnockdownChoice(EKnockdownChoice Choice);
-	void AfterCommand(
-		const FWacomBattleCombatLogCommandContext& LogContext,
-		const FBattleSnapshot& PreCommandSnapshot,
-		const FBattleResolution& Resolution);
 
 private:
 	FWacomBattleHUDRuntime& Runtime;

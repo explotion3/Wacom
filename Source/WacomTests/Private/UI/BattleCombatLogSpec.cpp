@@ -345,6 +345,7 @@ bool FWacomUIBattleHUDInitializationResultPresentedOnceSpec::RunTest(const FStri
 	TestEqual(TEXT("Direct session injection does not synthesize initialization events"),
 		HUD->GetBattleCombatLogBlockCount(),
 		0);
+	HUD->BeginBattleEntryPresentation();
 	HUD->AttachInitializedBattleSession(Session, Initialized.Initialization);
 
 	TestTrue(TEXT("Attach presents initial visible battle events immediately"),
@@ -377,6 +378,7 @@ bool FWacomUIBattleHUDInitializationResultPresentedOnceSpec::RunTest(const FStri
 	TestEqual(TEXT("Repeated attach does not replay initialization"),
 		HUD->GetBattleCombatLogBlockCount(),
 		1);
+	HUD->ReleaseBattleEntryPresentation();
 
 	const int32 EntryCountAfterAttach = HUD->GetBattleCombatLogBlockCount();
 	HUD->OnWaitRequested();

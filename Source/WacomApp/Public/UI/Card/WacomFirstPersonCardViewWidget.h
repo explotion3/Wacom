@@ -29,9 +29,9 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	bool bInteractionFeedbackUsesBrushMaterial = false;
 	bool bInteractionFeedbackLayerAboveFeedbackOverlay = false;
 	FWacomFirstPersonCardDepthView CardDepthView;
-	bool bHasCardShadowImage = false;
 	bool bHasFake3DSurfaceRetainer = false;
 	bool bFake3DEffectMaterialReady = false;
+	bool bRetainerCaptureRootUsesIndependentClipping = false;
 };
 #endif
 
@@ -80,9 +80,8 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> InteractionFeedbackImage;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UImage> CardShadowImage;
-
+	// The legacy widget name is retained because the existing WBP binds it.
+	// Its current responsibility is Retainer-based material contact shadow only.
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<URetainerBox> Fake3DSurfaceRetainer;
 
@@ -106,6 +105,7 @@ private:
 	bool bLastInteractionFeedbackUsedBrushMaterial = false;
 
 	void EnsureFallbackWidgetTree();
+	void ConfigureRetainerCaptureRootClipping();
 	UImage* GetInteractionFeedbackImage() const;
 	void CacheInteractionFeedbackBrushMaterial();
 	void EnsureInteractionFeedbackMaterialInstance(const FWacomFirstPersonCardInteractionFeedbackView& View);

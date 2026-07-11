@@ -2,8 +2,6 @@
 
 #include "UI/Card/WacomFirstPersonCardSlotLayoutBuilder.h"
 
-#include "UI/Card/WacomCardView.h"
-
 TArray<FWacomFirstPersonCardLayerSlotView> FWacomFirstPersonCardSlotLayoutBuilder::BuildSlots(
 	const FWacomFirstPersonCardSlotLayoutBuildInput& Input)
 {
@@ -113,38 +111,11 @@ TArray<FWacomFirstPersonCardLayerSlotView> FWacomFirstPersonCardSlotLayoutBuilde
 			Slot.bBodyLockedLayout = Input.AnchorPoint.bBodyLockedLayout;
 			Slot.bCurrentCameraProjection = Input.AnchorPoint.bCurrentCameraProjection;
 			Slot.bLookOffsetAppliedToLayout = Input.AnchorPoint.bLookOffsetAppliedToLayout;
-			FVector2D InputHitPosition = FinalPosition;
-			if (Input.WidgetViewportSize.X > 1.0f
-				&& Input.WidgetViewportSize.Y > 1.0f
-				&& Input.AnchorPoint.ViewportScale > 0.0f)
-			{
-				const FVector2D ScaledViewportSize = Input.WidgetViewportSize / Input.AnchorPoint.ViewportScale;
-				InputHitPosition = KeepCardBodyBottomInsideViewport(
-					InputHitPosition,
-					ScaledViewportSize,
-					Config,
-					Slot.InputHitScale);
-			}
-			bool bInputHitPixelSnapped = false;
-			Slot.InputHitCenter = SnapPosition(InputHitPosition, Config, bInputHitPixelSnapped);
-			const FVector2D BeforeViewportReadableClamp = FinalPosition;
-			if (Input.WidgetViewportSize.X > 1.0f
-				&& Input.WidgetViewportSize.Y > 1.0f
-				&& Input.AnchorPoint.ViewportScale > 0.0f)
-			{
-				const FVector2D ScaledViewportSize = Input.WidgetViewportSize / Input.AnchorPoint.ViewportScale;
-				FinalPosition = KeepCardBodyBottomInsideViewport(
-					FinalPosition,
-					ScaledViewportSize,
-					Config,
-					Slot.RenderScale);
-			}
-			Slot.bBodyBottomViewportAdjusted =
-				!FinalPosition.Equals(BeforeViewportReadableClamp, KINDA_SMALL_NUMBER);
 			bool bPixelSnapped = false;
 			Slot.WidgetPosition = FinalPosition;
 			Slot.SnappedWidgetPosition = SnapPosition(FinalPosition, Config, bPixelSnapped);
 			Slot.ScreenPosition = Slot.SnappedWidgetPosition;
+			Slot.InputHitCenter = Slot.SnappedWidgetPosition;
 			Slot.bPixelSnapped = bPixelSnapped;
 			Slot.bProjected = Input.AnchorPoint.bProjected;
 		}
@@ -226,32 +197,6 @@ FVector2D FWacomFirstPersonCardSlotLayoutBuilder::SnapPosition(
 		FMath::RoundToFloat(Position.Y / Grid) * Grid);
 	bOutPixelSnapped = !SnappedPosition.Equals(Position, KINDA_SMALL_NUMBER);
 	return SnappedPosition;
-}
-
-FVector2D FWacomFirstPersonCardSlotLayoutBuilder::KeepCardBodyBottomInsideViewport(
-	FVector2D Position,
-	FVector2D WidgetViewportSize,
-	const FWacomFirstPersonCardResolvedLayoutConfig& Config,
-	float RenderScale)
-{
-	if (!Config.bKeepAuthoredCardBodyBottomInViewport
-		|| WidgetViewportSize.X <= 1.0f
-		|| WidgetViewportSize.Y <= 1.0f)
-	{
-		return Position;
-	}
-
-	const float BodyHeight =
-		UWacomCardView::GetDefaultCardBodyHitSize().Y * FMath::Max(0.01f, RenderScale);
-	const float BottomPadding = FMath::Max(0.0f, Config.AuthoredCardBodyBottomViewportPaddingPixels);
-	const float MaxCenterY = WidgetViewportSize.Y - BottomPadding - (BodyHeight * 0.5f);
-	if (MaxCenterY <= 0.0f || Position.Y <= MaxCenterY)
-	{
-		return Position;
-	}
-
-	Position.Y = MaxCenterY;
-	return Position;
 }
 
 float FWacomFirstPersonCardSlotLayoutBuilder::ResolveEdgeDropPixelsForHandCount(

@@ -11,7 +11,7 @@
 
 namespace
 {
-	TArray<FGuid> GetHandIds(const FBattleSnapshot& Snapshot)
+	TArray<FGuid> GetCommandResolutionHandIds(const FBattleSnapshot& Snapshot)
 	{
 		TArray<FGuid> Result;
 		Result.Reserve(Snapshot.Hand.Cards.Num());
@@ -48,7 +48,7 @@ bool FWacomBattleCommandResolutionAtomicSpec::RunTest(const FString& /*Parameter
 	TestTrue(TEXT("Failure returns no presentation journal"), Failure.PresentationJournal.IsEmpty());
 	TestEqual(TEXT("Failure post snapshot is unchanged"), Failure.PostSnapshot.Version, BeforeFailure.Version);
 	TestTrue(TEXT("Failure keeps stable hand membership"),
-		GetHandIds(Failure.PostSnapshot) == GetHandIds(BeforeFailure));
+		GetCommandResolutionHandIds(Failure.PostSnapshot) == GetCommandResolutionHandIds(BeforeFailure));
 	TestEqual(TEXT("Failure leaves live session unchanged"),
 		Session->BuildSnapshot().Version,
 		BeforeFailure.Version);

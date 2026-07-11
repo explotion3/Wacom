@@ -214,8 +214,7 @@ namespace
 		FWacomFirstPersonCardDragView& DragView,
 		const FWacomFirstPersonCardDragView& PreviousDragView,
 		const FWacomInteractionTargetHandle& PointerCardTargetHandle,
-		const FWacomFirstPersonCardLayerSlotView& PointerCardTargetSlotView,
-		bool bEnableDragTargetFeedback)
+		const FWacomFirstPersonCardLayerSlotView& PointerCardTargetSlotView)
 	{
 		const bool bSameResolvedCardTarget =
 			PreviousDragView.CardInstanceId == DragView.CardInstanceId
@@ -239,9 +238,7 @@ namespace
 		}
 
 		DragView.bTargetValid = false;
-		DragView.TargetFeedbackState = bEnableDragTargetFeedback
-			? EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
-			: EWacomFirstPersonCardDragTargetFeedbackState::None;
+		DragView.TargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::CardProbe;
 	}
 }
 
@@ -391,37 +388,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardDragFeedbackTarget(
 	const FString& ResolvedIntentDebugSummary,
 	const TArray<FWacomFirstPersonCardTargetAffordance>& CardTargetAffordances)
 {
-	if (!CardDragConfig.bEnableDragTargetFeedback)
-	{
-		FeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::None;
-	}
 	CurrentDragResolvedIntentDebugSummary = ResolvedIntentDebugSummary;
-
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (!SlotWidget)
-		{
-			continue;
-		}
-
-		const FGuid SlotCardId = SlotWidget->GetSlotView().Entry.CardInstanceId;
-		if (SlotCardId == CurrentDragView.CardInstanceId)
-		{
-			SlotWidget->SetCardDragFeedbackTarget(
-				TargetHandle,
-				bValidTarget,
-				FeedbackState,
-				FeedbackTargetScreenPosition);
-		}
-	}
-	ApplyCardTargetAffordances(TargetHandle, FeedbackState, bValidTarget, CardTargetAffordances);
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->ClearCardDragTargetFeedback();
-		}
-	}
 
 	ApplyDragFeedbackToCurrentDragView(TargetHandle, bValidTarget, FeedbackState, FeedbackTargetScreenPosition);
 	Invalidate(EInvalidateWidgetReason::Paint);
@@ -510,8 +477,9 @@ bool UWacomFirstPersonCardLayerWidget::ReleaseActiveDragGestureFromWidgetPositio
 	const bool bSuppressInspectDragPromotion =
 		GestureSlot->IsInspectScrubActiveForFirstPersonLayer()
 		&& IsWidgetPositionInsideInspectScrubArea(WidgetPosition);
-	const bool bReleased =
-		GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition, bSuppressInspectDragPromotion);
+	const bool bReleased = GestureSlot->ReleaseGestureFromFirstPersonLayer(
+		WidgetPosition,
+		bSuppressInspectDragPromotion);
 	PressedSlotWidget.Reset();
 	if (bSuppressHoverAfterRelease)
 	{
@@ -566,7 +534,6 @@ void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 	OutgoingSlotWidgets.Reset();
 	LastSlots.Reset();
 	PendingTransitionHintsByKey.Reset();
-	PendingFeedbackHintsByKey.Reset();
 	HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 	HoveredCardTargetSlotView = FWacomFirstPersonCardLayerSlotView();
 	LastMotionDebugView = FWacomFirstPersonCardLayerMotionDebugView();
@@ -599,28 +566,6 @@ void UWacomFirstPersonCardLayerWidget::SetCardTransitionHints(
 		ResolvedHint.bHasPlayedExitTargetWidgetPosition = Hint.bHasPlayedExitTargetWidgetPosition;
 		ResolvedHint.PlayedExitTargetWidgetPosition = Hint.PlayedExitTargetWidgetPosition;
 		PendingTransitionHintsByKey.Add(
-			Hint.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower),
-			ResolvedHint);
-	}
-}
-
-void UWacomFirstPersonCardLayerWidget::SetCardFeedbackHints(
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints)
-{
-	PendingFeedbackHintsByKey.Reset();
-	for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : InHints)
-	{
-		if (!Hint.CardInstanceId.IsValid()
-			|| Hint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::None)
-		{
-			continue;
-		}
-
-		FWacomFirstPersonCardLayerResolvedFeedbackHint ResolvedHint;
-		ResolvedHint.FeedbackKind = Hint.FeedbackKind;
-		ResolvedHint.SequenceIndex = FMath::Max(0, Hint.SequenceIndex);
-		ResolvedHint.SequenceCount = FMath::Max(1, Hint.SequenceCount);
-		PendingFeedbackHintsByKey.Add(
 			Hint.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower),
 			ResolvedHint);
 	}
@@ -687,7 +632,6 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	TSet<FString> IncomingKeys;
 	TSet<FString> UsedKeys;
 	TSet<FString> AppliedTransitionHintKeys;
-	TSet<FString> AppliedFeedbackHintKeys;
 	TArray<TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>> NewSlotWidgets;
 	NewSlotWidgets.Reserve(InSlots.Num());
 	bool bHoveredCardTargetUpdatedThisRefresh = false;
@@ -741,8 +685,6 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 		}
 		const FWacomFirstPersonCardLayerResolvedTransitionHint* IncomingTransitionHint =
 			PendingTransitionHintsByKey.Find(SlotKey);
-		const FWacomFirstPersonCardLayerResolvedFeedbackHint* IncomingFeedbackHint =
-			PendingFeedbackHintsByKey.Find(SlotKey);
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile> EnterProfileOverride =
 			(IncomingTransitionHint && SlotView.bProjected)
 				? GetEnterProfileForTransition(*IncomingTransitionHint, SlotView)
@@ -791,22 +733,6 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 			const FWacomFirstPersonCardLayerSlotView& VisualSlotView = SlotWidget->GetVisualSlotView();
 			CanvasSlot->SetPosition(VisualSlotView.ScreenPosition);
 			CanvasSlot->SetZOrder(VisualSlotView.ZOrder);
-		}
-
-		if (IncomingFeedbackHint && SlotView.bProjected)
-		{
-			switch (IncomingFeedbackHint->FeedbackKind)
-			{
-			case EWacomFirstPersonCardLayerFeedbackKind::Retained:
-				SlotWidget->TriggerRetainedFeedback(
-					IncomingFeedbackHint->SequenceIndex,
-					IncomingFeedbackHint->SequenceCount);
-				AppliedFeedbackHintKeys.Add(SlotKey);
-				break;
-			case EWacomFirstPersonCardLayerFeedbackKind::None:
-			default:
-				break;
-			}
 		}
 
 		if (SlotView.bIsHovered && SlotView.bProjected && SlotView.Entry.CardInstanceId.IsValid())
@@ -926,17 +852,6 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 	{
 		PendingTransitionHintsByKey.Remove(AppliedTransitionHintKey);
 	}
-	for (const FString& AppliedFeedbackHintKey : AppliedFeedbackHintKeys)
-	{
-		PendingFeedbackHintsByKey.Remove(AppliedFeedbackHintKey);
-	}
-	for (auto It = PendingFeedbackHintsByKey.CreateIterator(); It; ++It)
-	{
-		if (!IncomingKeys.Contains(It.Key()))
-		{
-			It.RemoveCurrent();
-		}
-	}
 }
 
 bool UWacomFirstPersonCardLayerWidget::HasActivePresentationPlayback() const
@@ -963,7 +878,6 @@ bool UWacomFirstPersonCardLayerWidget::HasActivePresentationPlayback() const
 void UWacomFirstPersonCardLayerWidget::ForceSettlePresentationPlayback()
 {
 	PendingTransitionHintsByKey.Reset();
-	PendingFeedbackHintsByKey.Reset();
 	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
 		if (SlotWidget)
@@ -985,7 +899,6 @@ bool UWacomFirstPersonCardLayerWidget::CanSkipEquivalentSlotRefresh(
 	const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots) const
 {
 	if (PendingTransitionHintsByKey.Num() > 0
-		|| PendingFeedbackHintsByKey.Num() > 0
 		|| OutgoingSlotWidgets.Num() > 0
 		|| SlotWidgets.Num() != InSlots.Num()
 		|| LastSlots.Num() != InSlots.Num()
@@ -1054,7 +967,6 @@ bool UWacomFirstPersonCardLayerWidget::AreSlotViewsEquivalentForRefresh(
 		&& A.bClamped == B.bClamped
 		&& A.bOutsideViewport == B.bOutsideViewport
 		&& A.bPixelSnapped == B.bPixelSnapped
-		&& A.bBodyBottomViewportAdjusted == B.bBodyBottomViewportAdjusted
 		&& A.bIsHovered == B.bIsHovered
 		&& A.bHasPendingTargetingCardInHand == B.bHasPendingTargetingCardInHand
 		&& A.bAnchorScreenSmoothed == B.bAnchorScreenSmoothed
@@ -1216,14 +1128,6 @@ FWacomFirstPersonCardLayerAutomationTestView UWacomFirstPersonCardLayerWidget::G
 	View.AimArrowStart = ResolveAimArrowStart();
 	View.AimArrowEnd = ResolveAimArrowEnd();
 	View.CardViewClass = CardViewClass;
-	for (const TPair<FString, FWacomFirstPersonCardLayerResolvedFeedbackHint>& Pair : PendingFeedbackHintsByKey)
-	{
-		FGuid CardId;
-		if (FGuid::Parse(Pair.Key, CardId))
-		{
-			View.PendingFeedbackHintCardIds.Add(CardId);
-		}
-	}
 	return View;
 }
 
@@ -1421,7 +1325,6 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	CurrentDragView = FWacomFirstPersonCardDragView();
 	RootCanvas = nullptr;
 	PendingTransitionHintsByKey.Reset();
-	PendingFeedbackHintsByKey.Reset();
 	Super::NativeDestruct();
 }
 
@@ -2071,19 +1974,6 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		Profile.EasePower = SlotMotionConfig.DrawnEnterEasePower;
 		Profile.bBlockInteractionDuringPlayback = SlotMotionConfig.bBlockInteractionDuringDrawnEnter;
 		break;
-	case EWacomFirstPersonCardSlotTransitionKind::Gained:
-		Profile.OriginMode = SlotMotionConfig.GainedEnterOriginMode;
-		Profile.OffsetPixels = SlotMotionConfig.GainedEnterOffsetPixels;
-		Profile.ViewportAnchor = SlotMotionConfig.GainedEnterViewportAnchor;
-		Profile.ScaleMultiplier = SlotMotionConfig.GainedEnterScaleMultiplier;
-		Profile.AngleOffsetDegrees = SlotMotionConfig.GainedEnterAngleOffsetDegrees;
-		Profile.StartDelaySeconds =
-			FMath::Max(0, TransitionHint.SequenceIndex) * SlotMotionConfig.GainedEnterStaggerSeconds;
-		Profile.DurationSeconds = SlotMotionConfig.GainedEnterDurationSeconds;
-		Profile.ArcLiftPixels = SlotMotionConfig.GainedEnterArcLiftPixels;
-		Profile.EasePower = SlotMotionConfig.GainedEnterEasePower;
-		Profile.bBlockInteractionDuringPlayback = SlotMotionConfig.bBlockInteractionDuringGainedEnter;
-		break;
 	case EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered:
 		Profile.OriginMode = SlotMotionConfig.HandAnchorEnterOriginMode;
 		Profile.OffsetPixels = SlotMotionConfig.HandAnchorEnterOffsetPixels;
@@ -2099,30 +1989,6 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		break;
 	default:
 		return TOptional<FWacomFirstPersonCardTransitionMotionProfile>();
-	}
-
-	Profile.SoundTransitionKind = TransitionHint.TransitionKind;
-	if (SlotMotionConfig.bEnableEnterSounds)
-	{
-		switch (TransitionHint.TransitionKind)
-		{
-		case EWacomFirstPersonCardSlotTransitionKind::Drawn:
-			Profile.StartSound = SlotMotionConfig.DrawnEnterSound;
-			break;
-		case EWacomFirstPersonCardSlotTransitionKind::RunHandEntered:
-			Profile.StartSound = SlotMotionConfig.RunHandEnterSound;
-			break;
-		case EWacomFirstPersonCardSlotTransitionKind::Gained:
-			Profile.StartSound = SlotMotionConfig.GainedEnterSound;
-			break;
-		case EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered:
-			Profile.StartSound = SlotMotionConfig.HandAnchorEnterSound;
-			break;
-		default:
-			break;
-		}
-		Profile.StartSoundVolumeMultiplier = SlotMotionConfig.EnterSoundVolumeMultiplier;
-		Profile.StartSoundPitchMultiplier = SlotMotionConfig.EnterSoundPitchMultiplier;
 	}
 
 	if (TransitionHint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Drawn)
@@ -2759,7 +2625,9 @@ UWacomFirstPersonCardLayerWidget::RouteSlotPointerReleasedAtWidgetPosition(
 	const bool bSuppressInspectDragPromotion =
 		GestureSlot->IsInspectScrubActiveForFirstPersonLayer()
 		&& IsWidgetPositionInsideInspectScrubArea(WidgetPosition);
-	if (!GestureSlot->ReleaseGestureFromFirstPersonLayer(WidgetPosition, bSuppressInspectDragPromotion))
+	if (!GestureSlot->ReleaseGestureFromFirstPersonLayer(
+		WidgetPosition,
+		bSuppressInspectDragPromotion))
 	{
 		return FWacomFirstPersonCardPointerRouteResult::Unhandled();
 	}
@@ -2810,7 +2678,10 @@ bool UWacomFirstPersonCardLayerWidget::RoutePointerPressToActiveGesture(
 	const bool bSuppressInspectDragPromotion =
 		GestureSlot->IsInspectScrubActiveForFirstPersonLayer()
 		&& IsWidgetPositionInsideInspectScrubArea(WidgetPosition);
-	GestureSlot->UpdateGestureFromFirstPersonLayer(0.0f, WidgetPosition, bSuppressInspectDragPromotion);
+	GestureSlot->UpdateGestureFromFirstPersonLayer(
+		0.0f,
+		WidgetPosition,
+		bSuppressInspectDragPromotion);
 	if (ShouldSuppressOrdinaryHoverForDrag())
 	{
 		ClearCardPointerView(true);
@@ -2958,10 +2829,10 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragStarted(
 	ClearCardPointerView(true);
 	ClearHoveredSlotState(true);
 	if (CurrentDragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
-		&& CurrentDragView.bCommitArmed
-		&& CardDragConfig.bEnableDragTargetFeedback)
+		&& CurrentDragView.bCommitArmed)
 	{
-		CurrentDragView.TargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::CommitReady;
+		CurrentDragView.TargetFeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::CommitReady;
 	}
 	OnCardDragStartedNative.Broadcast(CardInstanceId, CurrentDragView);
 	Invalidate(EInvalidateWidgetReason::Paint);
@@ -3017,8 +2888,7 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragUpdated(
 			CurrentDragView,
 			PreviousDragView,
 			PointerCardTargetHandle,
-			PointerCardTargetSlotView,
-			CardDragConfig.bEnableDragTargetFeedback);
+			PointerCardTargetSlotView);
 	}
 	else if (CurrentDragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card)
 	{
@@ -3032,12 +2902,11 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragUpdated(
 		CurrentDragView.FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 	}
 	if (CurrentDragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
-		&& CurrentDragView.bCommitArmed
-		&& CardDragConfig.bEnableDragTargetFeedback)
+		&& CurrentDragView.bCommitArmed)
 	{
-		CurrentDragView.TargetFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::CommitReady;
+		CurrentDragView.TargetFeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::CommitReady;
 	}
-	ApplyCardProbeFeedbackForCurrentDrag();
 	OnCardDragUpdatedNative.Broadcast(CardInstanceId, CurrentDragView);
 	Invalidate(EInvalidateWidgetReason::Paint);
 }
@@ -3108,8 +2977,7 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased(
 			CurrentDragView,
 			PreviousDragView,
 			PointerCardTargetHandle,
-			PointerCardTargetSlotView,
-			CardDragConfig.bEnableDragTargetFeedback);
+			PointerCardTargetSlotView);
 	}
 	else if (CurrentDragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card)
 	{
@@ -3122,7 +2990,12 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased(
 		CurrentDragView.bHasFeedbackTargetScreenPosition = false;
 		CurrentDragView.FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 	}
-	ApplyCardProbeFeedbackForCurrentDrag();
+	if (CurrentDragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
+		&& CurrentDragView.bCommitArmed)
+	{
+		CurrentDragView.TargetFeedbackState =
+			EWacomFirstPersonCardDragTargetFeedbackState::CommitReady;
+	}
 	OnCardDragReleasedNative.Broadcast(CardInstanceId, CurrentDragView);
 	CurrentDragView = FWacomFirstPersonCardDragView();
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
@@ -3168,8 +3041,7 @@ bool UWacomFirstPersonCardLayerWidget::TryResolveCardTargetUnderDragPointer(
 
 	const bool bCanProbeCardTarget =
 		DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit;
+		|| DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
 	if (!bCanProbeCardTarget)
 	{
 		return false;
@@ -3198,122 +3070,6 @@ bool UWacomFirstPersonCardLayerWidget::TryResolveCardTargetUnderDragPointer(
 	return OutTargetHandle.IsValid();
 }
 
-void UWacomFirstPersonCardLayerWidget::ApplyCardProbeFeedbackForCurrentDrag()
-{
-	const bool bCardProbeActive =
-		CardDragConfig.bEnableDragTargetFeedback
-		&& IsCardTargetFeedbackState(CurrentDragView.TargetFeedbackState)
-		&& CurrentDragView.CurrentTarget.TargetKind == EWacomInteractionTargetKind::Card
-		&& CurrentDragView.CurrentTarget.CardInstanceId.IsValid();
-
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (!SlotWidget)
-		{
-			continue;
-		}
-
-		const FGuid SlotCardId = SlotWidget->GetSlotView().Entry.CardInstanceId;
-		const bool bProbeTarget =
-			bCardProbeActive
-			&& SlotCardId == CurrentDragView.CurrentTarget.CardInstanceId
-			&& SlotCardId != CurrentDragView.CardInstanceId;
-		SlotWidget->SetCardDragTargetFocusFeedback(
-			bProbeTarget
-				? CurrentDragView.TargetFeedbackState
-				: EWacomFirstPersonCardDragTargetFeedbackState::None,
-			CurrentDragView.bTargetValid);
-	}
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->ClearCardDragTargetFeedback();
-		}
-	}
-}
-
-void UWacomFirstPersonCardLayerWidget::ApplyCardTargetAffordances(
-	const FWacomInteractionTargetHandle& FocusTargetHandle,
-	EWacomFirstPersonCardDragTargetFeedbackState FocusFeedbackState,
-	bool bFocusTargetValid,
-	const TArray<FWacomFirstPersonCardTargetAffordance>& CardTargetAffordances)
-{
-	TMap<FGuid, FWacomFirstPersonCardTargetAffordance> AffordanceByCardId;
-	AffordanceByCardId.Reserve(CardTargetAffordances.Num());
-	for (const FWacomFirstPersonCardTargetAffordance& Affordance : CardTargetAffordances)
-	{
-		if (Affordance.CardInstanceId.IsValid()
-			&& Affordance.CardInstanceId != CurrentDragView.CardInstanceId)
-		{
-			AffordanceByCardId.Add(Affordance.CardInstanceId, Affordance);
-		}
-	}
-
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (!SlotWidget)
-		{
-			continue;
-		}
-
-		const FGuid SlotCardId = SlotWidget->GetSlotView().Entry.CardInstanceId;
-		if (!SlotCardId.IsValid())
-		{
-			SlotWidget->ClearCardDragTargetFeedback();
-			continue;
-		}
-		if (SlotCardId == CurrentDragView.CardInstanceId)
-		{
-			SlotWidget->SetCardDragTargetFocusFeedback(EWacomFirstPersonCardDragTargetFeedbackState::None, false);
-			SlotWidget->SetCardDragTargetAffordanceFeedback(EWacomFirstPersonCardDragTargetFeedbackState::None, false);
-			continue;
-		}
-
-		EWacomFirstPersonCardDragTargetFeedbackState State =
-			EWacomFirstPersonCardDragTargetFeedbackState::None;
-		bool bCanSubmit = false;
-		if (const FWacomFirstPersonCardTargetAffordance* Affordance = AffordanceByCardId.Find(SlotCardId))
-		{
-			State = Affordance->FeedbackState;
-			bCanSubmit = Affordance->bCanSubmit;
-		}
-
-		SlotWidget->SetCardDragTargetAffordanceFeedback(State, bCanSubmit);
-	}
-
-	const bool bHasCardFocus =
-		FocusTargetHandle.TargetKind == EWacomInteractionTargetKind::Card
-		&& FocusTargetHandle.CardInstanceId.IsValid()
-		&& FocusTargetHandle.CardInstanceId != CurrentDragView.CardInstanceId;
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (!SlotWidget)
-		{
-			continue;
-		}
-
-		const FGuid SlotCardId = SlotWidget->GetSlotView().Entry.CardInstanceId;
-		EWacomFirstPersonCardDragTargetFeedbackState FocusState =
-			EWacomFirstPersonCardDragTargetFeedbackState::None;
-		bool bCanFocusSubmit = false;
-		if (bHasCardFocus && SlotCardId == FocusTargetHandle.CardInstanceId)
-		{
-			FocusState = FocusFeedbackState;
-			if (FocusState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget)
-			{
-				FocusState = EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget;
-			}
-			if (FocusState == EWacomFirstPersonCardDragTargetFeedbackState::Invalid)
-			{
-				FocusState = EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
-			}
-			bCanFocusSubmit = bFocusTargetValid;
-		}
-		SlotWidget->SetCardDragTargetFocusFeedback(FocusState, bCanFocusSubmit);
-	}
-}
-
 void UWacomFirstPersonCardLayerWidget::ApplyDragFeedbackToCurrentDragView(
 	const FWacomInteractionTargetHandle& TargetHandle,
 	bool bValidTarget,
@@ -3337,23 +3093,7 @@ void UWacomFirstPersonCardLayerWidget::ApplyDragFeedbackToCurrentDragView(
 
 FLinearColor UWacomFirstPersonCardLayerWidget::ResolveAimArrowColor() const
 {
-	FLinearColor LineColor = CardDragConfig.DragInvalidTargetColor;
-	if (CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
-		|| CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget
-		|| CurrentDragView.bTargetValid)
-	{
-		LineColor = CardDragConfig.DragValidTargetColor;
-	}
-	else if (CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe)
-	{
-		LineColor = CardDragConfig.DragCardProbeTargetColor;
-	}
-	else if (CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ZoneProbe)
-	{
-		LineColor = CardDragConfig.DragCardProbeTargetColor;
-	}
-	LineColor.A = FMath::Clamp(FMath::Max(LineColor.A, 0.01f), 0.0f, 1.0f);
-	return LineColor;
+	return FLinearColor::White;
 }
 
 FVector2D UWacomFirstPersonCardLayerWidget::ResolveAimArrowStart() const
@@ -3394,16 +3134,6 @@ FVector2D UWacomFirstPersonCardLayerWidget::ResolveAimArrowStart() const
 
 FVector2D UWacomFirstPersonCardLayerWidget::ResolveAimArrowEnd() const
 {
-	if (CardDragConfig.bEnableDragTargetFeedback
-		&& CardDragConfig.bSnapAimArrowToValidWorldTarget
-		&& CurrentDragView.TargetFeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
-		&& CurrentDragView.bHasFeedbackTargetScreenPosition)
-	{
-		return FMath::Lerp(
-			CurrentDragView.CurrentScreenPosition,
-			CurrentDragView.FeedbackTargetScreenPosition,
-			CardDragConfig.DragAimArrowSnapBlend);
-	}
 	return CurrentDragView.CurrentScreenPosition;
 }
 

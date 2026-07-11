@@ -93,7 +93,7 @@ bool FWacomUIBattleEntryInputReadyBlocksCommandsSpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Wait starts enabled"), CommandBar->IsWaitCommandEnabledForTest());
 	TestTrue(TEXT("End turn starts enabled"), CommandBar->IsEndTurnCommandEnabledForTest());
 
-	HUD->SetBattleInputReady(false);
+	HUD->SetBattleInputReadyForTest(false);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestFalse(TEXT("Battle input ready gate blocks commands"), HUD->CanSubmitPlayerActionCommand());
 	TestFalse(TEXT("Wait disables while battle input is not ready"),
@@ -101,7 +101,7 @@ bool FWacomUIBattleEntryInputReadyBlocksCommandsSpec::RunTest(const FString& /*P
 	TestFalse(TEXT("End turn disables while battle input is not ready"),
 		CommandBar->IsEndTurnCommandEnabledForTest());
 
-	HUD->SetBattleInputReady(true);
+	HUD->SetBattleInputReadyForTest(true);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestTrue(TEXT("Commands unlock after battle input ready"), HUD->CanSubmitPlayerActionCommand());
 	TestTrue(TEXT("Wait re-enables after battle input ready"), CommandBar->IsWaitCommandEnabledForTest());
@@ -204,7 +204,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 
 	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	HUD->StoreFirstPersonCardTransitionEventsForTest({ OpeningDrawEvent });
-	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	HUD->SetFirstPersonBattleHandSuppressedForTest(true);
 	TestTrue(TEXT("HUD records entry hand suppression"), HUD->IsFirstPersonBattleHandSuppressedForEntry());
 	TestTrue(TEXT("Suppression keeps an empty runtime hand source"), Anchor->HasRuntimeCardLayerData());
 	TestEqual(TEXT("Suppression keeps BattleHand as the active source"),
@@ -235,7 +235,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		Anchor->GetRuntimeCardLayerCardCount(),
 		0);
 
-	HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
+	HUD->SetFirstPersonBattleHandSuppressedForTest(false);
 	const TArray<FWacomFirstPersonCardLayerTransitionHint> DeferredEntryHints =
 		HUD->BuildFirstPersonCardTransitionHintsForRefreshForTest(Snapshot);
 	TestEqual(TEXT("Deferred entry reveal keeps one opening draw hint"), DeferredEntryHints.Num(), 1);
@@ -255,7 +255,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		AddError(TEXT("Missing deferred opening draw hint"));
 	}
 
-	HUD->SetBattleInputReady(false);
+	HUD->SetBattleInputReadyForTest(false);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	const int32 OpeningDrawFrameCardCount = Snapshot.Hand.Cards.Num() - OpeningHandAnchorIds.Num();
 	TestTrue(TEXT("Unsuppressed refresh rewrites runtime hand source"),
@@ -313,7 +313,7 @@ bool FWacomUIBattleEntryFirstPersonHandSuppressionSpec::RunTest(const FString& /
 		TestTrue(TEXT("Opening hand-anchor enter follow-up contains generated hand anchor"), bContainsHandAnchor);
 	}
 
-	HUD->SetBattleInputReady(true);
+	HUD->SetBattleInputReadyForTest(true);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestEqual(TEXT("Input-ready refresh does not submit another deferred draw hint"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Anchor).PendingTransitionHintCardIds.Num(),
@@ -386,8 +386,7 @@ bool FWacomUIBattleInitializationAttachPreservesEntrySuppressionSpec::RunTest(co
 		return false;
 	}
 
-	HUD->SetBattleInputReady(false);
-	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	HUD->BeginBattleEntryPresentation();
 	HUD->AttachInitializedBattleSession(Initialized.Session, Initialized.Initialization);
 
 	TestFalse(TEXT("Initialization attach preserves the closed battle input gate"),
@@ -398,9 +397,7 @@ bool FWacomUIBattleInitializationAttachPreservesEntrySuppressionSpec::RunTest(co
 		Anchor->GetRuntimeCardLayerCardCount(),
 		0);
 
-	HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
-	HUD->SetBattleInputReady(true);
-	HUD->RefreshFromSnapshotForTest(Snapshot);
+	HUD->ReleaseBattleEntryPresentation();
 
 	const int32 OpeningDrawFrameCardCount = Snapshot.Hand.Cards.Num() - OpeningHandAnchorIds.Num();
 	TestEqual(TEXT("Released opening draw frame still hides hand anchors"),

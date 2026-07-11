@@ -24,7 +24,6 @@ public:
 
 	void HideAll();
 	void HideFirstPersonForSource(const FGuid& CardInstanceId);
-	bool IsFirstPersonInspectDetailActiveForSource(const FGuid& CardInstanceId) const;
 
 	UWacomCardDetailPanel* EnsureFirstPersonPanel();
 	bool ShowFirstPersonAtSlot(

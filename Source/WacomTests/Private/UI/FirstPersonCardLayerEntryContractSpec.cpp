@@ -50,7 +50,7 @@ namespace WacomFirstPersonCardLayerEntryContractSpec
 		Slot.Entry.bIsPlayable = true;
 		Slot.Entry.CardViewData.bDisabled = false;
 		Slot.Entry.InteractionIntent =
-			EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+			EWacomFirstPersonCardInteractionIntent::InspectOnly;
 		Slot.ScreenPosition = Position;
 		Slot.WidgetPosition = Position;
 		Slot.SnappedWidgetPosition = Position;

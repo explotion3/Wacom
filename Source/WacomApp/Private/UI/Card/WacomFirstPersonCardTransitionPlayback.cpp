@@ -16,17 +16,9 @@ void FWacomFirstPersonCardTransitionPlayback::BeginEnter(
 	ArcLiftPixels = FMath::Max(0.0f, Profile.ArcLiftPixels);
 	EasePower = FMath::Max(0.1f, Profile.EasePower);
 	bBlockInteractionDuringPlayback = Profile.bBlockInteractionDuringPlayback;
-	StartSound = Profile.StartSound;
-	StartSoundVolumeMultiplier = FMath::Max(0.0f, Profile.StartSoundVolumeMultiplier);
-	StartSoundPitchMultiplier = FMath::Max(0.01f, Profile.StartSoundPitchMultiplier);
-	SoundTransitionKind = Profile.SoundTransitionKind;
-	if (StartDelaySeconds <= 0.0f)
-	{
-		QueueStartSoundRequest();
-	}
 	if (StartDelaySeconds <= 0.0f && DurationSeconds <= 0.0f && ArcLiftPixels <= 0.0f)
 	{
-		ClearActiveStatePreservingPendingSound();
+		ClearActiveState();
 	}
 }
 
@@ -45,14 +37,13 @@ void FWacomFirstPersonCardTransitionPlayback::BeginExit(
 	EasePower = FMath::Max(0.1f, Profile.EasePower);
 	if (StartDelaySeconds <= 0.0f && DurationSeconds <= 0.0f)
 	{
-		ClearActiveStatePreservingPendingSound();
+		ClearActiveState();
 	}
 }
 
 void FWacomFirstPersonCardTransitionPlayback::Reset()
 {
-	PendingSoundRequest.Reset();
-	ClearActiveStatePreservingPendingSound();
+	ClearActiveState();
 }
 
 void FWacomFirstPersonCardTransitionPlayback::ResetIfMode(
@@ -84,10 +75,6 @@ FWacomFirstPersonCardTransitionTickResult FWacomFirstPersonCardTransitionPlaybac
 		return Result;
 	}
 
-	if (IsEnterActive())
-	{
-		QueueStartSoundRequest();
-	}
 	const FWacomFirstPersonCardLayerSlotView TargetSlotView =
 		IsEnterActive() ? DynamicEnterTargetSlotView : ExitTargetSlotView;
 	const float LinearAlpha = DurationSeconds <= 0.0f
@@ -112,35 +99,12 @@ FWacomFirstPersonCardTransitionTickResult FWacomFirstPersonCardTransitionPlaybac
 	{
 		Result.VisualSlotView = TargetSlotView;
 		Result.bCompleted = true;
-		ClearActiveStatePreservingPendingSound();
+		ClearActiveState();
 	}
 	return Result;
 }
 
-TOptional<FWacomFirstPersonCardTransitionSoundRequest>
-FWacomFirstPersonCardTransitionPlayback::ConsumePendingSoundRequest()
-{
-	TOptional<FWacomFirstPersonCardTransitionSoundRequest> Result = MoveTemp(PendingSoundRequest);
-	PendingSoundRequest.Reset();
-	return Result;
-}
-
-void FWacomFirstPersonCardTransitionPlayback::QueueStartSoundRequest()
-{
-	if (bStartSoundRequested || StartSound.IsNull())
-	{
-		return;
-	}
-	bStartSoundRequested = true;
-	FWacomFirstPersonCardTransitionSoundRequest Request;
-	Request.Sound = StartSound;
-	Request.VolumeMultiplier = StartSoundVolumeMultiplier;
-	Request.PitchMultiplier = StartSoundPitchMultiplier;
-	Request.TransitionKind = SoundTransitionKind;
-	PendingSoundRequest = Request;
-}
-
-void FWacomFirstPersonCardTransitionPlayback::ClearActiveStatePreservingPendingSound()
+void FWacomFirstPersonCardTransitionPlayback::ClearActiveState()
 {
 	Mode = EWacomFirstPersonCardTransitionPlaybackMode::None;
 	StartSlotView = FWacomFirstPersonCardLayerSlotView();
@@ -151,9 +115,4 @@ void FWacomFirstPersonCardTransitionPlayback::ClearActiveStatePreservingPendingS
 	ArcLiftPixels = 0.0f;
 	EasePower = 1.0f;
 	bBlockInteractionDuringPlayback = true;
-	StartSound.Reset();
-	StartSoundVolumeMultiplier = 1.0f;
-	StartSoundPitchMultiplier = 1.0f;
-	SoundTransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
-	bStartSoundRequested = false;
 }

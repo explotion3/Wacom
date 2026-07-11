@@ -248,7 +248,9 @@ void FWacomBattleHUDTestHarness::SetInitializedSession(
 		return;
 	}
 
+	HUDPtr->BeginBattleEntryPresentation();
 	HUDPtr->AttachInitializedBattleSession(Initialized.Session, Initialized.Initialization);
+	HUDPtr->ReleaseBattleEntryPresentation();
 	if (bSettleInitialPresentation)
 	{
 		SettlePresentationQueue();

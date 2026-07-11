@@ -2723,11 +2723,11 @@ bool FWacomUIRunWorldCardDropMenuBlockedSpec::RunTest(const FString& /*Parameter
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunWorldCardDropDragCameraLookOverrideSpec,
-	"Wacom.UI.WorldInteraction.RunWorldCardDrop.DragUsesRunTunnelCameraLookOverride",
+	FWacomUIRunCardInteractionCameraLookOverrideSpec,
+	"Wacom.UI.WorldInteraction.RunFirstPersonCardCameraLook.HoverInspectAndDragUseRunTunnelOverride",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunWorldCardDropDragCameraLookOverrideSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*Parameters*/)
 {
 	UWorld* World = FindWorldInteractionAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -2788,63 +2788,36 @@ bool FWacomUIRunWorldCardDropDragCameraLookOverrideSpec::RunTest(const FString& 
 	TestFalse(TEXT("Hover pointer leave clears run tunnel camera look override"),
 		Tunnel->HasCursorLookOverrideForTest());
 
-	FWacomFirstPersonCardDragView InspectDragView =
-		MakeUiWorldDropDragView(FVector2D(100.0f, 100.0f));
-	InspectDragView.CardInstanceId = KeyInstanceId;
-	InspectDragView.GestureState = EWacomFirstPersonCardGestureState::Inspecting;
-	InspectDragView.PointerNormalizedViewportPosition = FVector2D(0.35f, -0.45f);
-	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
-		PC.Get(),
-		KeyInstanceId,
-		InspectDragView);
-	TestTrue(TEXT("Inspect start writes run tunnel camera look override"),
-		Tunnel->HasCursorLookOverrideForTest());
-	TestEqual(
-		TEXT("Inspect override stores normalized pointer"),
-		Tunnel->GetCursorLookOverrideNormalizedForTest(),
-		FVector2D(0.35f, -0.45f));
-
-	InspectDragView.PointerNormalizedViewportPosition = FVector2D(-0.2f, 0.15f);
-	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragUpdated(
-		PC.Get(),
-		KeyInstanceId,
-		InspectDragView);
-	TestEqual(
-		TEXT("Inspect update refreshes normalized pointer"),
-		Tunnel->GetCursorLookOverrideNormalizedForTest(),
-		FVector2D(-0.2f, 0.15f));
-
-	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragReleased(
-		PC.Get(),
-		KeyInstanceId,
-		InspectDragView);
-	TestFalse(TEXT("Inspect release clears run tunnel camera look override"),
-		Tunnel->HasCursorLookOverrideForTest());
-
 	FWacomFirstPersonCardDragView DragView =
 		MakeUiWorldDropDragView(FVector2D(100.0f, 100.0f));
-	DragView.PointerNormalizedViewportPosition = FVector2D(0.6f, -0.25f);
+	DragView.GestureState = EWacomFirstPersonCardGestureState::Inspecting;
+	DragView.PointerNormalizedViewportPosition = FVector2D(0.40f, -0.20f);
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerMoved(
+		PC.Get(),
+		PointerView);
+	TestTrue(TEXT("Hover pointer is active before drag starts"),
+		Tunnel->HasCursorLookOverrideForTest());
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
 		PC.Get(),
 		KeyInstanceId,
 		DragView);
-	TestTrue(TEXT("Drag start writes run tunnel camera look override"),
+	TestTrue(TEXT("Inspect keeps run tunnel camera look following the mouse"),
 		Tunnel->HasCursorLookOverrideForTest());
 	TestEqual(
-		TEXT("Drag override stores normalized pointer"),
+		TEXT("Inspect stores normalized drag pointer"),
 		Tunnel->GetCursorLookOverrideNormalizedForTest(),
-		FVector2D(0.6f, -0.25f));
+		FVector2D(0.40f, -0.20f));
 
-	DragView.PointerNormalizedViewportPosition = FVector2D(-0.4f, 0.5f);
+	DragView.GestureState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
+	DragView.PointerNormalizedViewportPosition = FVector2D(-0.30f, 0.45f);
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragUpdated(
 		PC.Get(),
 		KeyInstanceId,
 		DragView);
 	TestEqual(
-		TEXT("Drag update refreshes normalized pointer"),
+		TEXT("Formal drag refreshes run tunnel camera look"),
 		Tunnel->GetCursorLookOverrideNormalizedForTest(),
-		FVector2D(-0.4f, 0.5f));
-
+		FVector2D(-0.30f, 0.45f));
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragReleased(
 		PC.Get(),
 		KeyInstanceId,
@@ -2852,17 +2825,24 @@ bool FWacomUIRunWorldCardDropDragCameraLookOverrideSpec::RunTest(const FString& 
 	TestFalse(TEXT("Drag release clears run tunnel camera look override"),
 		Tunnel->HasCursorLookOverrideForTest());
 
+	UWacomFirstPersonCardAnchorComponent* Anchor = Pawn->GetFirstPersonCardAnchorComponent();
+	if (!TestNotNull(TEXT("First-person card anchor"), Anchor))
+	{
+		return false;
+	}
+	Anchor->bAllowCameraLookDuringCardPointer = false;
+	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerMoved(
+		PC.Get(),
+		PointerView);
+	TestFalse(TEXT("Disabled hover camera look does not write an override"),
+		Tunnel->HasCursorLookOverrideForTest());
+
+	Anchor->bAllowCameraLookDuringCardDrag = false;
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
 		PC.Get(),
 		KeyInstanceId,
 		DragView);
-	TestTrue(TEXT("Second drag start writes override"),
-		Tunnel->HasCursorLookOverrideForTest());
-	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragCancelled(
-		PC.Get(),
-		KeyInstanceId,
-		DragView);
-	TestFalse(TEXT("Drag cancel clears run tunnel camera look override"),
+	TestFalse(TEXT("Disabled inspect and drag camera look does not write an override"),
 		Tunnel->HasCursorLookOverrideForTest());
 
 	Segment->Destroy();

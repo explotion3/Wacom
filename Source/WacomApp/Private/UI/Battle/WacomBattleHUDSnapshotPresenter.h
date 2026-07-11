@@ -16,8 +16,7 @@ public:
 	void RefreshFromSnapshot(const FBattleSnapshot& Snapshot);
 	void RefreshFromPresentationPhase(
 		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
 
 private:
 	FWacomBattleHUDRuntime& Runtime;

@@ -27,7 +27,7 @@ namespace
 		return INDEX_NONE;
 	}
 
-	int32 CountEvents(const TArray<FBattleEvent>& Events, EBattleEventType Type)
+	int32 CountTurnLifecycleEvents(const TArray<FBattleEvent>& Events, EBattleEventType Type)
 	{
 		int32 Count = 0;
 		for (const FBattleEvent& Event : Events)
@@ -152,7 +152,7 @@ bool FWacomBattleTurnLifecycleInitialStartSpec::RunTest(const FString& /*Paramet
 	TestTrue(TEXT("CardsDrawn precedes HandZoneChanged"),
 		CardsDrawnIndex != INDEX_NONE && CardsDrawnIndex < HandZoneChangedIndex);
 	TestEqual(TEXT("Initial lifecycle emits TurnStarted exactly once"),
-		CountEvents(Events, EBattleEventType::TurnStarted), 1);
+		CountTurnLifecycleEvents(Events, EBattleEventType::TurnStarted), 1);
 	if (CardsDrawnIndex != INDEX_NONE)
 	{
 		TestEqual(TEXT("Initial lifecycle emits five drawn-card facts"),
@@ -227,7 +227,7 @@ bool FWacomBattleTurnLifecycleNormalCompletionSpec::RunTest(const FString& /*Par
 	TestTrue(TEXT("CardsDrawn precedes final HandZoneChanged"),
 		CardsDrawnIndex != INDEX_NONE && CardsDrawnIndex < FinalHandZoneIndex);
 	TestEqual(TEXT("Following turn does not publish TurnStarted"),
-		CountEvents(Events, EBattleEventType::TurnStarted), 0);
+		CountTurnLifecycleEvents(Events, EBattleEventType::TurnStarted), 0);
 	TestFalse(TEXT("PlayedPile natural cleanup does not publish CardDiscarded"),
 		Events.ContainsByPredicate(
 			[PlayedCardId](const FBattleEvent& Event)
@@ -324,8 +324,8 @@ bool FWacomBattleTurnLifecyclePreEnemyBattleEndSpec::RunTest(const FString& /*Pa
 		FindEventIndex(Events, EBattleEventType::DamageDealt) != INDEX_NONE);
 	TestTrue(TEXT("First BattleEnd gate publishes BattleEnded"),
 		FindEventIndex(Events, EBattleEventType::BattleEnded) != INDEX_NONE);
-	TestEqual(TEXT("Enemy actions are skipped"), CountEvents(Events, EBattleEventType::EnemyPartActed), 0);
-	TestEqual(TEXT("Next-turn draw is skipped"), CountEvents(Events, EBattleEventType::CardsDrawn), 0);
+	TestEqual(TEXT("Enemy actions are skipped"), CountTurnLifecycleEvents(Events, EBattleEventType::EnemyPartActed), 0);
+	TestEqual(TEXT("Next-turn draw is skipped"), CountTurnLifecycleEvents(Events, EBattleEventType::CardsDrawn), 0);
 	TestNotNull(TEXT("Resolved discard checkpoint is preserved"),
 		FindCheckpoint(Journal, EBattlePresentationCheckpointType::TurnEndDiscardResolved));
 	TestNull(TEXT("Early BattleEnd has no draw checkpoint"),
@@ -376,7 +376,7 @@ bool FWacomBattleTurnLifecyclePostEnemyBattleEndSpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Enemy action precedes second BattleEnd gate"),
 		EnemyActedIndex != INDEX_NONE && EnemyActedIndex < BattleEndedIndex);
 	TestEqual(TEXT("Post-enemy BattleEnd skips next-turn draw"),
-		CountEvents(Events, EBattleEventType::CardsDrawn), 0);
+		CountTurnLifecycleEvents(Events, EBattleEventType::CardsDrawn), 0);
 	TestNull(TEXT("Post-enemy BattleEnd has no draw checkpoint"),
 		FindCheckpoint(Journal, EBattlePresentationCheckpointType::TurnStartDrawResolved));
 	TestEqual(TEXT("Post-enemy BattleEnd does not advance turn"), AfterEndTurn.TurnNumber, 1);
@@ -426,7 +426,7 @@ bool FWacomBattleTurnLifecycleReservedTriggersSpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Reserved turn triggers do not apply shield"),
 		Session->BuildSnapshot().Player.Shield, 0);
 	TestEqual(TEXT("Reserved turn triggers do not publish PassiveTriggered"),
-		CountEvents(Events, EBattleEventType::PassiveTriggered), 0);
+		CountTurnLifecycleEvents(Events, EBattleEventType::PassiveTriggered), 0);
 	TestFalse(TEXT("Reserved turn triggers do not publish shield StatusApplied"),
 		Events.ContainsByPredicate(
 			[](const FBattleEvent& Event)

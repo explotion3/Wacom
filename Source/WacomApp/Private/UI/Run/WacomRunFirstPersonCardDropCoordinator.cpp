@@ -632,9 +632,7 @@ FWacomRunFirstPersonCardDropCoordinator::BuildDropTransaction(
 		: DragView.CurrentScreenPosition;
 	Transaction.bReleased = bReleased;
 	Transaction.bHasActiveDrag =
-		DragView.GestureState == EWacomFirstPersonCardGestureState::Inspecting
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
-		|| DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
+		DragView.GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
 		|| DragView.GestureState == EWacomFirstPersonCardGestureState::AimingTargetedCard;
 	return Transaction;
 }

@@ -300,12 +300,6 @@ public:
 		return BuildFirstPersonCardTransitionHints(PreviousSnapshot, NextSnapshot);
 	}
 
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHintsForTest(
-		const FBattleSnapshot& NextSnapshot) const
-	{
-		return BuildFirstPersonCardFeedbackHints(NextSnapshot);
-	}
-
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
 		const FBattleSnapshot& NextSnapshot) const
 	{
@@ -350,6 +344,16 @@ public:
 	void SetUIStateForTest(EBattleUIState NewState)
 	{
 		SetUIState(NewState);
+	}
+
+	void SetBattleInputReadyForTest(bool bReady)
+	{
+		SetBattleInputReadyForAutomationTest(bReady);
+	}
+
+	void SetFirstPersonBattleHandSuppressedForTest(bool bSuppressed)
+	{
+		SetFirstPersonBattleHandSuppressedForAutomationTest(bSuppressed);
 	}
 
 	FReply MouseLeftButtonUpForTest()
@@ -428,17 +432,6 @@ public:
 		HandleFirstPersonCardLayerDragReleased(CardInstanceId, DragView);
 	}
 
-	void HandleFirstPersonCardPointerMovedForTest(
-		const FWacomFirstPersonCardPointerView& PointerView)
-	{
-		HandleFirstPersonCardLayerPointerMoved(PointerView);
-	}
-
-	void HandleFirstPersonCardPointerLeftForTest()
-	{
-		HandleFirstPersonCardLayerPointerLeft();
-	}
-
 	void SetFirstPersonCardAnchorForTest(UWacomFirstPersonCardAnchorComponent* Anchor)
 	{
 		BindFirstPersonBattleHandLayerInteractions(Anchor);
@@ -508,6 +501,24 @@ public:
 		return AutomationViewForTest().LastBattleSnapshotHandCount;
 	}
 
+	int32 GetLastBattleSnapshotVersionForTest() const
+	{
+		return AutomationViewForTest().LastBattleSnapshotVersion;
+	}
+
+	void ApplyCommandResolutionForTest(
+		const FWacomBattleCombatLogCommandContext& LogContext,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleResolution& Resolution,
+		UBattleSession* SourceSession = nullptr)
+	{
+		ApplyCommandResolutionForAutomationTest(
+			SourceSession ? SourceSession : GetInjectedBattleSession(),
+			LogContext,
+			PreCommandSnapshot,
+			Resolution);
+	}
+
 	bool HasLastBattleHandCardForTest(const FGuid& CardInstanceId) const
 	{
 		return FindLastBattleHandCardSnapshot(CardInstanceId) != nullptr;
@@ -568,6 +579,17 @@ public:
 		const FWacomFirstPersonCardDragView& DragView)
 	{
 		HandleFirstPersonCardLayerDragStarted(CardInstanceId, DragView);
+	}
+
+	void HandleFirstPersonCardPointerMovedForTest(
+		const FWacomFirstPersonCardPointerView& PointerView)
+	{
+		HandleFirstPersonCardLayerPointerMoved(PointerView);
+	}
+
+	void HandleFirstPersonCardPointerLeftForTest()
+	{
+		HandleFirstPersonCardLayerPointerLeft();
 	}
 
 	void HandleFirstPersonCardDragCancelledForTest(

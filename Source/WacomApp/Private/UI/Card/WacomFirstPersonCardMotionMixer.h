@@ -10,11 +10,7 @@ struct FWacomFirstPersonCardLocalFeedbackMixInput
 {
 	const FWacomFirstPersonCardLayerSlotView* SlotView = nullptr;
 	const FWacomFirstPersonCardSlotFeedbackConfig* FeedbackConfig = nullptr;
-	const FWacomFirstPersonCardDragConfig* DragConfig = nullptr;
-	EWacomFirstPersonCardDragTargetFeedbackState EffectiveDragTargetFeedbackState =
-		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	float DenyFeedbackElapsedSeconds = 0.0f;
-	float RetainedAlpha = 0.0f;
 	bool bPressed = false;
 	bool bCommitFeedbackActive = false;
 };

@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Card/WacomFirstPersonCardCameraLookBridge.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class AWacomPlayerController;
@@ -33,12 +32,8 @@ public:
 	void HandleDragCancelled(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);
-	void HandlePointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
-	void HandlePointerLeft();
-
 private:
 	void UnbindAnchor(UWacomFirstPersonCardAnchorComponent& Anchor);
-	void HandleInspectDrag(const FWacomFirstPersonCardDragView& DragView);
 	void HandleFormalDrag(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView,
@@ -47,6 +42,5 @@ private:
 	static bool IsNeutralGesture(EWacomFirstPersonCardGestureState GestureState);
 
 	AWacomPlayerController& PlayerController;
-	FWacomFirstPersonCardCameraLookBridge CameraLookBridge;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> BoundAnchor;
 };

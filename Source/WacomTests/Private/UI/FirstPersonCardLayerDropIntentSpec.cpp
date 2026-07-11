@@ -15,6 +15,7 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
+#include "TimerManager.h"
 #include "UI/BattleSceneTargetClickTestAccess.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
@@ -142,7 +143,7 @@ namespace WacomFirstPersonCardLayerDropIntentSpec
 		case ECardTargetMode::Self:
 		case ECardTargetMode::AllEnemyParts:
 		default:
-			return EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+			return EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
 		}
 	}
 

@@ -238,7 +238,6 @@ bool FWacomFirstPersonCardLayerInspectScrubKeepsPreviewInHandTest::RunTest(const
 	PC->Destroy();
 	return true;
 }
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerInspectScrubDragSourceTest,
 	"Wacom.UI.FirstPersonCardLayer.CardDragInspect.ScrubbedPreviewBecomesDragSourceWhenLeavingHand",

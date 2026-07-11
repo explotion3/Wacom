@@ -37,12 +37,6 @@ void FWacomBattleHUDCardDetailController::HideFirstPersonForSource(
 		BuildMotionConfig());
 }
 
-bool FWacomBattleHUDCardDetailController::IsFirstPersonInspectDetailActiveForSource(
-	const FGuid& CardInstanceId) const
-{
-	return MotionController.IsActiveSlotInspectingForSource(CardInstanceId);
-}
-
 UWacomCardDetailPanel* FWacomBattleHUDCardDetailController::EnsureFirstPersonPanel()
 {
 	return FWacomFirstPersonCardDetailPanelHost::EnsurePanel(

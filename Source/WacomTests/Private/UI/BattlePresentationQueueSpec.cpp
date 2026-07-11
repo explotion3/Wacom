@@ -86,7 +86,7 @@ namespace WacomBattlePresentationQueueSpec
 	{
 		FWacomFirstPersonCardDragView DragView;
 		DragView.CardInstanceId = CardInstanceId;
-		DragView.GestureState = EWacomFirstPersonCardGestureState::ArmedForCommit;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
 		DragView.bCommitArmed = true;
 		DragView.PressScreenPosition = FVector2D(500.0f, 600.0f);
 		DragView.CurrentScreenPosition = FVector2D(540.0f, 590.0f);

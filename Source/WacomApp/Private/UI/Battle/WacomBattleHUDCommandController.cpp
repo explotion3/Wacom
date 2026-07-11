@@ -11,6 +11,7 @@
 #include "Snapshots/EnemySnapshot.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
+#include "UI/Battle/WacomBattleHUDResultApplicator.h"
 #include "UI/Battle/WacomBattleHUDTargetingController.h"
 
 namespace
@@ -60,8 +61,6 @@ void FWacomBattleHUDCommandController::SubmitPlayCard(
 	const FGuid& TargetPartId,
 	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
-	Runtime.HideCardDetailPanel();
-
 	UBattleSession* Session = Runtime.GetSession();
 	if (!Session || !Runtime.CanSubmitPlayerActionCommand())
 	{
@@ -89,20 +88,15 @@ void FWacomBattleHUDCommandController::SubmitPlayCard(
 		: FBattleCommand::MakePlayCard(CardId);
 
 	const FBattleResolution Resolution = Session->ResolveCommand(Command);
-	if (!Resolution.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCard failed, code=%d detail=%s"),
-			(int32)Resolution.Status.Code, *Resolution.Status.Detail.ToString());
-		return;
-	}
-
-	Runtime.RecordFirstPersonPlayCommit(
+	FWacomBattleCommandPresentationContext PresentationContext;
+	PresentationContext.SourceSession = Session;
+	PresentationContext.CombatLogContext = MoveTemp(LogContext);
+	PresentationContext.PreCommandSnapshot = PreCommandSnapshot;
+	PresentationContext.PlayCardCommit.Emplace(FWacomBattlePlayCardCommitPresentation{
 		CardId,
 		TargetPart ? TargetPart->Identity : FBattlePartSlotIdentity(),
-		PresentationTargetWidgetPosition);
-	Runtime.ClearPendingTargetingCardId();
-	Runtime.SetUIState(EBattleUIState::Idle);
-	AfterCommand(LogContext, PreCommandSnapshot, Resolution);
+		PresentationTargetWidgetPosition});
+	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
 }
 
 void FWacomBattleHUDCommandController::SubmitPlayCardOnWorldTarget(
@@ -110,8 +104,6 @@ void FWacomBattleHUDCommandController::SubmitPlayCardOnWorldTarget(
 	const FWacomInteractionTargetHandle& TargetHandle,
 	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
-	Runtime.HideCardDetailPanel();
-
 	UBattleSession* Session = Runtime.GetSession();
 	if (!Session || !Runtime.CanSubmitPlayerActionCommand())
 	{
@@ -139,20 +131,15 @@ void FWacomBattleHUDCommandController::SubmitPlayCardOnWorldTarget(
 
 	const FBattleResolution Resolution = Session->ResolveCommand(
 		FBattleCommand::MakePlayCardOnEnemyPartKey(CardId, Validation.ResolvedPartKey));
-	if (!Resolution.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCardOnWorldTarget failed, code=%d detail=%s"),
-			(int32)Resolution.Status.Code, *Resolution.Status.Detail.ToString());
-		return;
-	}
-
-	Runtime.RecordFirstPersonPlayCommit(
+	FWacomBattleCommandPresentationContext PresentationContext;
+	PresentationContext.SourceSession = Session;
+	PresentationContext.CombatLogContext = MoveTemp(LogContext);
+	PresentationContext.PreCommandSnapshot = PreCommandSnapshot;
+	PresentationContext.PlayCardCommit.Emplace(FWacomBattlePlayCardCommitPresentation{
 		CardId,
 		FBattlePartSlotIdentity::FromEnemyPartKey(Validation.ResolvedPartKey),
-		PresentationTargetWidgetPosition);
-	Runtime.ClearPendingTargetingCardId();
-	Runtime.SetUIState(EBattleUIState::Idle);
-	AfterCommand(LogContext, PreCommandSnapshot, Resolution);
+		PresentationTargetWidgetPosition});
+	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
 }
 
 void FWacomBattleHUDCommandController::SubmitPlayCardOnHandCard(
@@ -160,8 +147,6 @@ void FWacomBattleHUDCommandController::SubmitPlayCardOnHandCard(
 	const FGuid& TargetCardId,
 	const TOptional<FVector2D>& PresentationTargetWidgetPosition)
 {
-	Runtime.HideCardDetailPanel();
-
 	UBattleSession* Session = Runtime.GetSession();
 	if (!Session || !Runtime.CanSubmitPlayerActionCommand())
 	{
@@ -181,26 +166,19 @@ void FWacomBattleHUDCommandController::SubmitPlayCardOnHandCard(
 
 	const FBattleResolution Resolution = Session->ResolveCommand(
 		FBattleCommand::MakePlayCardOnHandCard(CardId, TargetCardId));
-	if (!Resolution.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] PlayCardOnHandCard failed, code=%d detail=%s"),
-			(int32)Resolution.Status.Code, *Resolution.Status.Detail.ToString());
-		return;
-	}
-
-	Runtime.RecordFirstPersonPlayCommit(
+	FWacomBattleCommandPresentationContext PresentationContext;
+	PresentationContext.SourceSession = Session;
+	PresentationContext.CombatLogContext = MoveTemp(LogContext);
+	PresentationContext.PreCommandSnapshot = PreCommandSnapshot;
+	PresentationContext.PlayCardCommit.Emplace(FWacomBattlePlayCardCommitPresentation{
 		CardId,
 		FBattlePartSlotIdentity(),
-		PresentationTargetWidgetPosition);
-	Runtime.ClearPendingTargetingCardId();
-	Runtime.SetUIState(EBattleUIState::Idle);
-	AfterCommand(LogContext, PreCommandSnapshot, Resolution);
+		PresentationTargetWidgetPosition});
+	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
 }
 
 void FWacomBattleHUDCommandController::SubmitWait()
 {
-	Runtime.HideCardDetailPanel();
-
 	if (Runtime.HasBattlePresentationStackEntries())
 	{
 		Runtime.QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand::Wait);
@@ -228,19 +206,15 @@ void FWacomBattleHUDCommandController::SubmitWait()
 		UWacomBattleCombatLogBuilder::BuildWaitCommandContext(PreCommandSnapshot);
 
 	const FBattleResolution Resolution = Session->ResolveCommand(FBattleCommand::MakeWait());
-	if (!Resolution.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] Wait failed, code=%d"), (int32)Resolution.Status.Code);
-		return;
-	}
-
-	AfterCommand(LogContext, PreCommandSnapshot, Resolution);
+	FWacomBattleCommandPresentationContext PresentationContext;
+	PresentationContext.SourceSession = Session;
+	PresentationContext.CombatLogContext = LogContext;
+	PresentationContext.PreCommandSnapshot = PreCommandSnapshot;
+	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
 }
 
 void FWacomBattleHUDCommandController::SubmitEndTurn()
 {
-	Runtime.HideCardDetailPanel();
-
 	if (Runtime.HasBattlePresentationStackEntries())
 	{
 		Runtime.QueuePendingTurnBoundaryCommand(EWacomBattleHUDTurnBoundaryCommand::EndTurn);
@@ -268,20 +242,16 @@ void FWacomBattleHUDCommandController::SubmitEndTurn()
 		UWacomBattleCombatLogBuilder::BuildEndTurnCommandContext(PreCommandSnapshot);
 
 	const FBattleResolution Resolution = Session->ResolveCommand(FBattleCommand::MakeEndTurn());
-	if (!Resolution.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] EndTurn failed, code=%d"), (int32)Resolution.Status.Code);
-		return;
-	}
-
-	AfterCommand(LogContext, PreCommandSnapshot, Resolution);
+	FWacomBattleCommandPresentationContext PresentationContext;
+	PresentationContext.SourceSession = Session;
+	PresentationContext.CombatLogContext = LogContext;
+	PresentationContext.PreCommandSnapshot = PreCommandSnapshot;
+	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
 }
 
 void FWacomBattleHUDCommandController::SubmitKnockdownChoice(
 	EKnockdownChoice Choice)
 {
-	Runtime.HideCardDetailPanel();
-
 	if (Choice == EKnockdownChoice::None)
 	{
 		return;
@@ -298,37 +268,9 @@ void FWacomBattleHUDCommandController::SubmitKnockdownChoice(
 		UWacomBattleCombatLogBuilder::BuildKnockdownChoiceCommandContext(PreCommandSnapshot, Choice);
 
 	const FBattleResolution Resolution = Session->ResolveCommand(FBattleCommand::MakeKnockdownChoice(Choice));
-	if (!Resolution.IsOk())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[BattleHUD] KnockdownChoice failed, code=%d detail=%s"),
-			(int32)Resolution.Status.Code, *Resolution.Status.Detail.ToString());
-		return;
-	}
-
-	AfterCommand(LogContext, PreCommandSnapshot, Resolution);
-}
-
-void FWacomBattleHUDCommandController::AfterCommand(
-	const FWacomBattleCombatLogCommandContext& LogContext,
-	const FBattleSnapshot& PreCommandSnapshot,
-	const FBattleResolution& Resolution)
-{
-	Runtime.HideCardDetailPanel();
-
-	UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return;
-	}
-
-	const bool bPresentationHandled =
-		Runtime.PresentCommandResolution(
-			LogContext,
-			PreCommandSnapshot,
-			Resolution);
-	if (bPresentationHandled)
-	{
-		return;
-	}
-	Runtime.NativeRefreshFromSnapshot(Resolution.PostSnapshot);
+	FWacomBattleCommandPresentationContext PresentationContext;
+	PresentationContext.SourceSession = Session;
+	PresentationContext.CombatLogContext = LogContext;
+	PresentationContext.PreCommandSnapshot = PreCommandSnapshot;
+	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
 }

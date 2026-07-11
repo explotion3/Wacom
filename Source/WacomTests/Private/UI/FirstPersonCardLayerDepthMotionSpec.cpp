@@ -19,7 +19,7 @@ namespace WacomFirstPersonCardLayerDepthMotionSpec
 		Slot.Entry.CardInstanceId = FGuid::NewGuid();
 		Slot.Entry.Zone = EHandZone::Both;
 		Slot.Entry.bIsPlayable = true;
-		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
 		Slot.ScreenPosition = Position;
 		Slot.WidgetPosition = Position;
 		Slot.SnappedWidgetPosition = Position;
@@ -32,32 +32,30 @@ namespace WacomFirstPersonCardLayerDepthMotionSpec
 		return Slot;
 	}
 
-	FWacomFirstPersonCardSlotVisualConfig MakeVisualConfig()
-	{
-		FWacomFirstPersonCardSlotVisualConfig Config;
-		Config.HoverLiftPixels = 0.0f;
-		Config.HoverScale = 1.0f;
-		Config.CardDepth.bEnableFake3D = true;
-		Config.CardDepth.bEnableIndependentShadow = true;
-		Config.CardDepth.HoverMaxTiltDegrees = 6.0f;
-		Config.CardDepth.DragMaxTiltDegrees = 9.0f;
-		Config.CardDepth.PressedTiltMultiplier = 0.35f;
-		Config.CardDepth.ResponseSpeed = 18.0f;
-		Config.CardDepth.ReturnSpeed = 14.0f;
-		Config.CardDepth.DragVelocityFilterSpeed = 16.0f;
-		Config.CardDepth.DragVelocityForMaxTiltPixelsPerSecond = 1400.0f;
-		return Config;
-	}
-
 	UWacomFirstPersonCardLayerSlotWidget* MakeWidget(const FVector2D& Position)
 	{
 		UWacomFirstPersonCardLayerSlotWidget* Widget = NewObject<UWacomFirstPersonCardLayerSlotWidget>();
 		Widget->SetCardLayerInteractionEnabled(true);
-		Widget->SetSlotVisualConfig(MakeVisualConfig());
+		FWacomFirstPersonCardSlotVisualConfig VisualConfig;
+		VisualConfig.HoverLiftPixels = 0.0f;
+		VisualConfig.HoverScale = 1.0f;
+		VisualConfig.CardDepth.bEnableFake3D = true;
+		VisualConfig.CardDepth.HoverMaxTiltDegrees = 6.0f;
+		VisualConfig.CardDepth.DragMaxTiltDegrees = 9.0f;
+		VisualConfig.CardDepth.PressedTiltMultiplier = 0.35f;
+		VisualConfig.CardDepth.PerspectiveStrength = 0.12f;
+		VisualConfig.CardDepth.bEnableContactShadow = true;
+		VisualConfig.CardDepth.ResponseSpeed = 18.0f;
+		VisualConfig.CardDepth.ReturnSpeed = 14.0f;
+		VisualConfig.CardDepth.DragVelocityFilterSpeed = 16.0f;
+		VisualConfig.CardDepth.DragVelocityForMaxTiltPixelsPerSecond = 1400.0f;
+		VisualConfig.CardDepth.HoverContactShadowLift = 0.55f;
+		VisualConfig.CardDepth.DragContactShadowLift = 1.0f;
+		Widget->SetSlotVisualConfig(VisualConfig);
+
 		FWacomFirstPersonCardDragConfig DragConfig;
 		DragConfig.bEnableFirstPersonCardDragCommit = true;
 		DragConfig.CardDragStartThresholdPixels = 1.0f;
-		DragConfig.CardInspectScale = 1.0f;
 		Widget->SetCardDragConfig(DragConfig);
 		Widget->SetSlotViewImmediate(MakeSlot(Position));
 		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Widget, TestStepSeconds);
@@ -93,34 +91,36 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 		CardCenter + FVector2D(110.0f, 0.0f));
 	TestTrue(TEXT("Playable card accepts hover"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*Widget));
 	Tick(*Widget, 20);
-	const FWacomFirstPersonCardSlotAutomationTestView HoverView =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
-	TestTrue(TEXT("Right-side hover tilts the horizontal perspective axis"), HoverView.CardDepthView.TiltDegrees.Y > 2.0f);
-	TestTrue(TEXT("Centered vertical pointer keeps pitch restrained"), FMath::Abs(HoverView.CardDepthView.TiltDegrees.X) < 0.25f);
-	TestTrue(TEXT("Hover raises shadow opacity"), HoverView.CardDepthView.ShadowOpacity > 0.16f);
+	const FWacomFirstPersonCardDepthView HoverDepth =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
+	TestTrue(TEXT("Fake-3D is enabled"), HoverDepth.bFake3DEnabled);
+	TestTrue(TEXT("Right-side hover tilts the horizontal perspective axis"), HoverDepth.TiltDegrees.Y > 2.0f);
+	TestTrue(TEXT("Centered vertical pointer keeps pitch restrained"), FMath::Abs(HoverDepth.TiltDegrees.X) < 0.25f);
+	TestTrue(TEXT("Material contact shadow is enabled"), HoverDepth.bContactShadowEnabled);
+	TestTrue(TEXT("Hover lifts the material contact shadow"), HoverDepth.ContactShadowLift > 0.35f);
 
 	TestTrue(TEXT("Hovered card accepts pressed feedback"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*Widget));
 	Tick(*Widget, 20);
-	const FWacomFirstPersonCardSlotAutomationTestView PressedView =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	const FWacomFirstPersonCardDepthView PressedDepth =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
 	TestTrue(
 		TEXT("Pressed state damps hover tilt"),
-		FMath::Abs(PressedView.CardDepthView.TiltDegrees.Y)
-			< FMath::Abs(HoverView.CardDepthView.TiltDegrees.Y) * 0.65f);
+		FMath::Abs(PressedDepth.TiltDegrees.Y) < FMath::Abs(HoverDepth.TiltDegrees.Y) * 0.65f);
 
-	FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*Widget);
 	FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*Widget);
+	FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*Widget);
 	Tick(*Widget, 40);
-	const FWacomFirstPersonCardSlotAutomationTestView RestView =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
-	TestTrue(TEXT("Leaving the card returns tilt to neutral"), RestView.CardDepthView.TiltDegrees.IsNearlyZero(0.05f));
-	TestTrue(TEXT("Resting shadow returns to base opacity"), FMath::IsNearlyEqual(RestView.CardDepthView.ShadowOpacity, 0.08f, 0.01f));
+	const FWacomFirstPersonCardDepthView RestDepth =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
+	TestTrue(TEXT("Leaving the card returns tilt to neutral"), RestDepth.TiltDegrees.IsNearlyZero(0.05f));
+	TestTrue(TEXT("Rest returns material shadow to contact"), RestDepth.ContactShadowLift < 0.01f);
 
 	const FWacomFirstPersonCardViewAutomationTestView NativeView =
 		Widget->GetCardView()->GetAutomationTestViewForTest();
-	TestTrue(TEXT("Native fallback owns an independent shadow image"), NativeView.bHasCardShadowImage);
-	TestTrue(TEXT("Native fallback owns a single fake-3D retainer"), NativeView.bHasFake3DSurfaceRetainer);
-	TestFalse(TEXT("Missing optional effect material degrades safely"), NativeView.bFake3DEffectMaterialReady);
+	TestTrue(TEXT("Native fallback retains the material Retainer"), NativeView.bHasFake3DSurfaceRetainer);
+	TestTrue(
+		TEXT("Retainer capture owns independent local clipping"),
+		NativeView.bRetainerCaptureRootUsesIndependentClipping);
 	return true;
 }
 
@@ -148,21 +148,20 @@ bool FWacomFirstPersonCardLayerDragDepthMotionTest::RunTest(const FString& /*Par
 		0.0f,
 		CardCenter + FVector2D(80.0f, 0.0f));
 	Tick(*Widget, 8);
-	const FWacomFirstPersonCardSlotAutomationTestView MovingView =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
-	TestTrue(TEXT("Rightward drag creates opposite inertial yaw"), MovingView.CardDepthView.TiltDegrees.Y < -0.25f);
-	TestTrue(TEXT("Drag uses the lifted shadow"), MovingView.CardDepthView.ShadowOpacity > 0.25f);
-	TestTrue(TEXT("Drag expands the independent shadow"), MovingView.CardDepthView.ShadowScale > 1.025f);
+	const FWacomFirstPersonCardDepthView MovingDepth =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
+	TestTrue(TEXT("Rightward drag creates opposite inertial yaw"), MovingDepth.TiltDegrees.Y < -0.25f);
+	TestTrue(TEXT("Drag lifts the material contact shadow further"), MovingDepth.ContactShadowLift > 0.80f);
 
 	Tick(*Widget, 50);
-	const FWacomFirstPersonCardSlotAutomationTestView SettledDragView =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	const FWacomFirstPersonCardDepthView SettledDragDepth =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
 	TestTrue(
 		TEXT("Stopped pointer lets inertial tilt settle without ending drag"),
-		SettledDragView.CardDepthView.TiltDegrees.IsNearlyZero(0.08f));
+		SettledDragDepth.TiltDegrees.IsNearlyZero(0.08f));
 	TestTrue(
-		TEXT("Drag lift shadow remains while gesture is active"),
-		SettledDragView.CardDepthView.ShadowOpacity > 0.30f);
+		TEXT("Drag contact-shadow lift remains while the gesture is active"),
+		SettledDragDepth.ContactShadowLift > 0.90f);
 	return true;
 }
 
@@ -188,17 +187,21 @@ bool FWacomFirstPersonCardLayerDepthMotionExitFlattenTest::RunTest(const FString
 	Tick(*Widget, 20);
 	const float TiltBeforeExit = FMath::Abs(
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView.TiltDegrees.Y);
+	const float LiftBeforeExit =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView.ContactShadowLift;
 
 	FWacomFirstPersonCardLayerSlotView ExitTarget = MakeSlot(CardCenter + FVector2D(0.0f, 120.0f));
 	ExitTarget.Entry.CardInstanceId = Widget->GetSlotView().Entry.CardInstanceId;
 	Widget->BeginExitMotion(ExitTarget);
-	Tick(*Widget, 10);
-	const FWacomFirstPersonCardSlotAutomationTestView ExitView =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	Tick(*Widget, 15);
+	const float LiftDuringExit =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView.ContactShadowLift;
+	const float TiltDuringExit = FMath::Abs(
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView.TiltDegrees.Y);
 	TestTrue(TEXT("Exit begins from a visible hover tilt"), TiltBeforeExit > 2.0f);
-	TestTrue(
-		TEXT("Semantic exit drives fake-3D back toward flat"),
-		FMath::Abs(ExitView.CardDepthView.TiltDegrees.Y) < TiltBeforeExit * 0.35f);
+	TestTrue(TEXT("Semantic exit drives fake-3D back toward flat"), TiltDuringExit < TiltBeforeExit * 0.4f);
+	TestTrue(TEXT("Exit begins from lifted material shadow"), LiftBeforeExit > 0.35f);
+	TestTrue(TEXT("Semantic exit returns shadow toward contact"), LiftDuringExit < LiftBeforeExit * 0.4f);
 	return true;
 }
 

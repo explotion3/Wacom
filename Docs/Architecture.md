@@ -144,6 +144,8 @@ RunEvent Choice Evaluation 的唯一 Implementation 位于 `WacomRun/Private/Eve
 
 `UBattleSession` 是 public facade，不承载规则实现或跨调用输出队列。`Initialize` 在 fresh working state / event bus / referenced-assets 上执行并返回 `FBattleInitializationResult`；失败保留旧战斗，成功提交一场 version 1、event sequence 0 起步的新战斗。`ResolveCommand` 在复制的 working-state 和独立 transaction event bus 上执行；失败不 commit，成功统一递增一次 `StateVersion`，并原子返回 events、presentation journal 和 post snapshot。WacomApp 与测试直接消费这两个结果 Interface，不再通过 `SubmitCommand / Consume*` split-consume Adapter。
 
+`WacomApp` 对这两个结果只有一个表现应用 seam：App-private `FWacomBattleHUDResultApplicator`。它由 `FWacomBattleHUDRuntime` 独占，集中初始化 generation / entry gate、Session 与 state version 幂等，以及 Snapshot、Combat Log、first-person transition、presentation queue / stack 和 EndTurn plan 的应用顺序。`FWacomBattleHUDCommandController` 只构造并提交命令；`AWacomGameMode` 只发出 Begin / Attach / Release 生命周期信号。该 seam 不新增反射类型、不扩大 `WacomBattle/Public`，也不改变模块依赖。
+
 PlayCard Evaluation 的唯一 Implementation 位于 `WacomBattle/Private/Commands` 的 `FPlayCardEvaluator`。该深层 Module 在一个 Private Interface 后集中源卡、结构性目标、运行时费用、阶段与拒绝投影：Target Probe 严格求值具体显式对象，Preview Candidate 把可选 Preview Focus 与规范化执行绑定分离，Commit Evaluation 为正式提交与 Action Preview 生成携带 `StateVersion` 的 Prepared PlayCard。这个 seam 不新增 UE 反射类型，也不扩张 `WacomBattle/Public` 的 Session / Command / Preview 或 Blueprint Interface。
 
 PlayCard Transaction 的唯一 Implementation 位于 `WacomBattle/Private/Commands/PlayCardResolver`。`PlayCardResolver` 只消费 Prepared PlayCard，不重复阶段、源卡、目标或费用判断；Prepared 状态版本过期时必须在事件、RNG 和状态变更前拒绝。正式提交使用 formal operation adapter，Action Preview 在复制的 `BattleState` 上使用 deterministic preview adapter；两者共享 Commit Evaluation 与同一结算顺序。operation adapter 会显式透传到 Effect、ZoneHook、Passive、OnDiscard 和 EnemyAction，不使用全局或 `thread_local` 模式。

@@ -33,6 +33,7 @@ class FWacomBattleHUDCommandController;
 class FWacomBattleHUDCommandBarPresenter;
 class FWacomBattleHUDFirstPersonHandBridge;
 class FWacomBattleHUDPresentationCoordinator;
+class FWacomBattleHUDResultApplicator;
 class FWacomBattleHUDSceneEnemyTargetCoordinator;
 struct FWacomBattleActionPreviewPresentation;
 class FWacomBattleHUDSnapshotPresenter;
@@ -187,15 +188,8 @@ public:
 		const FGuid& CardId,
 		const FGuid& TargetCardId,
 		const TOptional<FVector2D>& PresentationTargetWidgetPosition = TOptional<FVector2D>());
-	void PresentInitialization(const FBattleInitializationResult& Initialization);
-	bool PresentCommandResolution(
-		const FWacomBattleCombatLogCommandContext& CommandContext,
-		const FBattleSnapshot& PreCommandSnapshot,
-		const FBattleResolution& Resolution);
-
 	void HideCardDetailPanel();
 	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);
-	bool IsFirstPersonCardInspectDetailActiveForSource(const FGuid& CardInstanceId) const;
 	UWacomCardDetailPanel* EnsureFirstPersonCardDetailPanel();
 	bool ShowFirstPersonCardDetailAtSlot(
 		const FWacomCardDetailViewData& DetailData,
@@ -227,8 +221,6 @@ public:
 		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
-		const FBattleSnapshot& NextSnapshot) const;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHints(
 		const FBattleSnapshot& NextSnapshot) const;
 
 	int32 AppendBattlePresentationStackEntry(
@@ -280,14 +272,9 @@ public:
 	void SyncFirstPersonBattleHandLayer(
 		const FBattleSnapshot& Snapshot,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
-	void SyncFirstPersonBattleHandLayer(
-		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void RefreshFromPresentationPhase(
 		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
 	void ClearFirstPersonBattleHandLayer();
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;
@@ -299,14 +286,12 @@ public:
 	void HandleFirstPersonCardLayerCardTargetHovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerCardTargetUnhovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerHoveredCardTargetUpdated(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandleFirstPersonCardLayerPointerLeft();
 	void HandleFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
-	void HandleFirstPersonCardLayerPointerLeft();
-	void ApplyFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
-	void ClearFirstPersonCardDragCameraLookOverride();
 	void UpdateFirstPersonCardDragTargetFeedback(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void ClearFirstPersonCardDragTargetFeedback();
 	bool IsFirstPersonCardDragActiveForBattleSceneHover() const;
@@ -339,6 +324,7 @@ public:
 	FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator();
 	const FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator() const;
 	FWacomBattleHUDCommandController& GetCommandController();
+	FWacomBattleHUDResultApplicator& GetResultApplicator();
 	FWacomBattleHUDCommandBarPresenter& GetCommandBarPresenter();
 	FWacomBattleHUDTargetingController& GetTargetingController();
 	FWacomBattleHUDSnapshotPresenter& GetSnapshotPresenter();
@@ -360,6 +346,7 @@ private:
 	FWacomBattleHUDRuntimeHost RuntimeHost;
 	TUniquePtr<FWacomBattleHUDSnapshotPresenter> SnapshotPresenter;
 	TUniquePtr<FWacomBattleHUDCommandController> CommandController;
+	TUniquePtr<FWacomBattleHUDResultApplicator> ResultApplicator;
 	TUniquePtr<FWacomBattleHUDCommandBarPresenter> CommandBarPresenter;
 	TUniquePtr<FWacomBattleHUDTargetingController> TargetingController;
 	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;

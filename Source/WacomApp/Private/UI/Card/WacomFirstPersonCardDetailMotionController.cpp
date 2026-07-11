@@ -396,14 +396,6 @@ bool FWacomFirstPersonCardDetailMotionController::GetActiveSlotForSource(
 	return true;
 }
 
-bool FWacomFirstPersonCardDetailMotionController::IsActiveSlotInspectingForSource(
-	const FGuid& CardInstanceId) const
-{
-	FWacomFirstPersonCardLayerSlotView SlotView;
-	return GetActiveSlotForSource(CardInstanceId, SlotView)
-		&& SlotView.GestureState == EWacomFirstPersonCardGestureState::Inspecting;
-}
-
 void FWacomFirstPersonCardDetailMotionController::PositionBesideSlot(
 	UWacomCardDetailPanel& Panel,
 	const FWacomFirstPersonCardLayerSlotView& SlotView,

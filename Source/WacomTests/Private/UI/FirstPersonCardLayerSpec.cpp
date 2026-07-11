@@ -251,7 +251,7 @@ namespace WacomFirstPersonCardLayerSpec
 		case ECardTargetMode::Self:
 		case ECardTargetMode::AllEnemyParts:
 		default:
-			return EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+			return EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
 		}
 	}
 
@@ -290,7 +290,7 @@ namespace WacomFirstPersonCardLayerSpec
 		Slot.Entry.CardViewData.bDisabled = !bPlayable;
 		SetSlotInteractionIntent(
 			Slot,
-			EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
+			EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 		Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 		Slot.RenderScale = 0.55f;
 		Slot.RenderOpacity = 1.0f;
@@ -342,11 +342,6 @@ namespace WacomFirstPersonCardLayerSpec
 		Config.DrawnEnterViewportAnchor = FVector2D(0.5f, 1.0f);
 		Config.DrawnEnterScaleMultiplier = 0.96f;
 		Config.DrawnEnterAngleOffsetDegrees = 0.0f;
-		Config.GainedEnterOffsetPixels = FVector2D(0.0f, -120.0f);
-		Config.GainedEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
-		Config.GainedEnterViewportAnchor = FVector2D(0.5f, 0.0f);
-		Config.GainedEnterScaleMultiplier = 0.96f;
-		Config.GainedEnterAngleOffsetDegrees = 0.0f;
 		Config.PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
 		Config.PlayedExitOriginMode = EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
 		Config.PlayedExitViewportAnchor = FVector2D(0.5f, 0.0f);
@@ -622,7 +617,7 @@ bool FWacomFirstPersonCardLayerFallbackAnchorTest::RunTest(const FString& Parame
 		FVector(100.0f, 200.0f, 300.0f),
 		FVector::OneVector);
 	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
+	const FWacomFirstPersonCardAnchorAutomationTestView View = FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestTrue(TEXT("Fallback anchor is valid"), View.bHasValidAnchor);
 	TestEqual(TEXT("No active run/battle uses camera fallback"), View.Mode, EWacomFirstPersonCardAnchorMode::CameraFallback);
 	TestEqual(TEXT("Fallback reason is recorded"), View.LastFallbackReason, FName(TEXT("CameraFallback")));
@@ -662,7 +657,7 @@ bool FWacomFirstPersonCardLayerRunTunnelAnchorTest::RunTest(const FString& Param
 	UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent();
 	TestTrue(TEXT("Run tunnel activates"), RunTunnel && RunTunnel->ActivateRunTunnel(Segment, 200.0f));
 	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
+	const FWacomFirstPersonCardAnchorAutomationTestView View = FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestTrue(TEXT("Run tunnel anchor is valid"), View.bHasValidAnchor);
 	TestEqual(TEXT("Run tunnel mode is selected"), View.Mode, EWacomFirstPersonCardAnchorMode::RunTunnel);
 	TestEqual(TEXT("Run tunnel anchor uses spline distance before layout offset"), Character->GetRunTunnelMovementComponent()->GetDistanceAlongSpline(), 200.0f);
@@ -735,8 +730,8 @@ bool FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest::RunTest(con
 		FVector(500.0f, 600.0f, 700.0f),
 		FVector::OneVector);
 	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView View =
-		Anchor->GetFirstPersonCardAnchorDebugView();
+	const FWacomFirstPersonCardAnchorAutomationTestView View =
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestTrue(TEXT("Suspended run tunnel keeps anchor valid through fallback"), View.bHasValidAnchor);
 	TestEqual(TEXT("Suspended run tunnel does not own anchor mode"),
 		View.Mode,
@@ -990,7 +985,7 @@ bool FWacomFirstPersonCardLayerBleedPressHitBoundsTest::RunTest(const FString& P
 
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 	Layer->SetCardSlots({ Slot });
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
 	if (!TestNotNull(TEXT("Slot widget"), SlotWidget))
@@ -1485,7 +1480,7 @@ bool FWacomFirstPersonCardLayerBattlePriorityTest::RunTest(const FString& Parame
 	PC->SetControlRotation(FRotator(2.0f, 55.0f, 0.0f));
 	TestTrue(TEXT("Battle camera activates"), Character->GetBattleCameraLookComponent()->ActivateBattleCameraLook());
 	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
+	const FWacomFirstPersonCardAnchorAutomationTestView View = FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(TEXT("Battle camera mode takes priority over suspended run tunnel"), View.Mode, EWacomFirstPersonCardAnchorMode::BattleCamera);
 	TestEqual(TEXT("Battle base yaw is used"), View.AnchorTransform.Rotator().Yaw, 55.0);
 	TestEqual(TEXT("Battle default projection is body locked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
@@ -1537,7 +1532,7 @@ bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameter
 		10.0f);
 
 	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView();
+	const FWacomFirstPersonCardAnchorAutomationTestView View = FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(TEXT("Yaw uses partial cursor influence"), View.LookOffsetUsed.Yaw, 5.0);
 	TestEqual(TEXT("Pitch uses partial cursor influence"), View.LookOffsetUsed.Pitch, 5.0);
 	TestEqual(TEXT("Debug raw cursor yaw is preserved"), View.RawCursorLookOffset.Yaw, 20.0);
@@ -1548,79 +1543,6 @@ bool FWacomFirstPersonCardLayerPartialLookTest::RunTest(const FString& Parameter
 	TestEqual(TEXT("Debug pitch influence is resolved"), View.LookInfluencePitch, 0.5f);
 	TestTrue(TEXT("Look responsive projection reports look used for layout"), View.bLookOffsetAppliedToLayout);
 	TestTrue(TEXT("Debug reports look responsive projection"), View.bLookResponsiveProjection);
-
-	Anchor->DestroyComponent();
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerBodyLockedWorldLayoutTest,
-	"Wacom.UI.FirstPersonCardLayer.Projection.BodyLockedKeepsWorldLayoutStableUnderCursorLook",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerBodyLockedWorldLayoutTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
-	{
-		return false;
-	}
-
-	Anchor->ProjectionPadding = 0.0f;
-	Anchor->PreviewCardCountFallback = 5;
-	Anchor->HandMaxEdgeDropPixels = 0.0f;
-	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
-	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	const FTransform InitialLeft = Anchor->ComputeCardTransform(5, 0);
-	const FTransform InitialCenter = Anchor->ComputeCardTransform(5, 2);
-	const FTransform InitialRight = Anchor->ComputeCardTransform(5, 4);
-
-	Character->GetCursorLookDriverComponent()->UpdateFromNormalizedCursor(
-		FVector2D(1.0f, -1.0f),
-		0.0f,
-		20.0f,
-		10.0f);
-	Anchor->RefreshAnchor(0.0f);
-	const FTransform LookLeft = Anchor->ComputeCardTransform(5, 0);
-	const FTransform LookCenter = Anchor->ComputeCardTransform(5, 2);
-	const FTransform LookRight = Anchor->ComputeCardTransform(5, 4);
-	const TArray<FWacomFirstPersonCardLayerSlotView> LookSlots = Anchor->BuildPreviewCardSlotViews();
-
-	TestEqual(TEXT("Look slot count"), LookSlots.Num(), 5);
-	TestTrue(TEXT("Body locked left world location stays stable"), LookLeft.GetLocation().Equals(InitialLeft.GetLocation(), KINDA_SMALL_NUMBER));
-	TestTrue(TEXT("Body locked center world location stays stable"), LookCenter.GetLocation().Equals(InitialCenter.GetLocation(), KINDA_SMALL_NUMBER));
-	TestTrue(TEXT("Body locked right world location stays stable"), LookRight.GetLocation().Equals(InitialRight.GetLocation(), KINDA_SMALL_NUMBER));
-	TestTrue(TEXT("Body locked center world rotation stays stable"), LookCenter.Rotator().Equals(InitialCenter.Rotator(), KINDA_SMALL_NUMBER));
-	TestEqual(
-		TEXT("Body locked fan spacing remains stable"),
-		(LookRight.GetLocation() - LookCenter.GetLocation()).Size(),
-		(InitialRight.GetLocation() - InitialCenter.GetLocation()).Size());
-	if (LookSlots.Num() == 5)
-	{
-		TestFalse(TEXT("Body locked does not apply look to layout"), LookSlots[2].bLookOffsetAppliedToLayout);
-		TestTrue(TEXT("Body locked layout flag is recorded"), LookSlots[2].bBodyLockedLayout);
-		TestTrue(TEXT("Current camera projection flag is recorded"), LookSlots[2].bCurrentCameraProjection);
-	}
-
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView(1);
-	TestEqual(TEXT("Debug projection mode is BodyLocked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
-	TestTrue(TEXT("Debug reports body locked layout"), View.bBodyLockedLayout);
-	TestTrue(TEXT("Debug reports current camera projection"), View.bCurrentCameraProjection);
-	TestFalse(TEXT("Debug reports look is not used for layout"), View.bLookOffsetAppliedToLayout);
-	TestFalse(TEXT("Debug reports body locked is not look responsive"), View.bLookResponsiveProjection);
 
 	Anchor->DestroyComponent();
 	Character->Destroy();
@@ -2124,60 +2046,6 @@ bool FWacomFirstPersonCardLayerRenderAngleClampDisabledTest::RunTest(const FStri
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerDebugProjectionQualityTest,
-	"Wacom.UI.FirstPersonCardLayer.RenderQuality.DebugViewReportsProjectionQuality",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerDebugProjectionQualityTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
-	{
-		return false;
-	}
-
-	Anchor->ProjectionPadding = 0.0f;
-	Anchor->ProbeViewportScale = 2.0f;
-	Anchor->bEnableCardLayerPixelSnapping = true;
-	Anchor->HandMaxEdgeDropPixels = 0.0f;
-	Anchor->ProjectionMode = EWacomFirstPersonCardProjectionMode::LegacyWorldProjected;
-	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView(1);
-	TestEqual(TEXT("One debug point"), View.ProjectedPoints.Num(), 1);
-	if (View.ProjectedPoints.Num() == 1)
-	{
-		const FWacomFirstPersonCardProjectedPoint& Point = View.ProjectedPoints[0];
-		TestTrue(TEXT("Debug point projected"), Point.bProjected);
-		TestEqual(TEXT("Debug raw screen position"), Point.RawScreenPosition, FVector2D(1160.0f, 310.0f));
-		TestEqual(TEXT("Debug widget position"), Point.WidgetPosition, FVector2D(580.0f, 155.0f));
-		TestEqual(TEXT("Debug snapped position"), Point.SnappedWidgetPosition, FVector2D(580.0f, 155.0f));
-		TestEqual(TEXT("Debug viewport scale"), Point.ViewportScale, 2.0f);
-	}
-
-	const FString Summary = Anchor->GetDebugSummary();
-	TestTrue(TEXT("Summary reports pixel snap"), Summary.Contains(TEXT("PixelSnap=true")));
-	TestTrue(TEXT("Summary reports angle clamp"), Summary.Contains(TEXT("AngleClamp=true")));
-	TestTrue(TEXT("Summary reports viewport scale"), Summary.Contains(TEXT("ViewportScale=2.00")));
-	TestTrue(TEXT("Summary reports projection mode"), Summary.Contains(TEXT("ProjectionMode=LookResponsiveProjected")));
-
-	Anchor->DestroyComponent();
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerStaticSlotOrderTest,
 	"Wacom.UI.FirstPersonCardLayer.PreviewLayer.ProjectedSlotsStayOrdered",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -2212,76 +2080,6 @@ bool FWacomFirstPersonCardLayerStaticSlotOrderTest::RunTest(const FString& Param
 		TestTrue(TEXT("Left edge drops lower than center"), Slots[0].ScreenPosition.Y > Slots[2].ScreenPosition.Y);
 		TestTrue(TEXT("Right edge drops lower than center"), Slots[4].ScreenPosition.Y > Slots[2].ScreenPosition.Y);
 		TestEqual(TEXT("Center card has no fan angle"), Slots[2].RenderAngleDegrees, 0.0f);
-	}
-
-	Anchor->DestroyComponent();
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerAuthoredReadableBottomClampTest,
-	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.KeepsCardBodyBottomReadableNearViewportEdge",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerAuthoredReadableBottomClampTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
-	{
-		return false;
-	}
-
-	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	Anchor->ProbeViewportSize = FVector2D(1920.0f, 1080.0f);
-	Anchor->ProbeViewportScale = 1.0f;
-	Anchor->ProbeCameraTransform = FTransform(
-		FRotator::ZeroRotator,
-		FVector(100.0f, 200.0f, -470.0f),
-		FVector::OneVector);
-	Anchor->RefreshAnchor(0.0f);
-	Anchor->ViewportClampMode = EWacomFirstPersonCardViewportClampMode::AllowOffscreen;
-	Anchor->HandCardRenderScale = 1.0f;
-	Anchor->PreviewCardCountFallback = 5;
-	Anchor->HandMaxEdgeDropPixels = 72.0f;
-	Anchor->ShortHandEdgeDropPixels = 72.0f;
-	Anchor->AuthoredHandScreenOffset = FVector2D::ZeroVector;
-	Anchor->bEnableAnchorScreenSmoothing = false;
-	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->bKeepAuthoredCardBodyBottomInViewport = true;
-	Anchor->AuthoredCardBodyBottomViewportPaddingPixels = 8.0f;
-
-	const TArray<FWacomFirstPersonCardLayerSlotView> ClampedSlots = Anchor->BuildPreviewCardSlotViews();
-	Anchor->bKeepAuthoredCardBodyBottomInViewport = false;
-	const TArray<FWacomFirstPersonCardLayerSlotView> UnclampedSlots = Anchor->BuildPreviewCardSlotViews();
-
-	TestEqual(TEXT("Clamped slot count"), ClampedSlots.Num(), 5);
-	TestEqual(TEXT("Unclamped slot count"), UnclampedSlots.Num(), 5);
-	if (ClampedSlots.Num() == 5 && UnclampedSlots.Num() == 5)
-	{
-		constexpr float CardBodyHalfHeight = 210.0f;
-		constexpr float ViewportBottom = 1080.0f;
-		constexpr float Padding = 8.0f;
-		TestTrue(TEXT("Unclamped edge card body can extend beyond viewport bottom"),
-			UnclampedSlots[0].ScreenPosition.Y + CardBodyHalfHeight > ViewportBottom);
-		for (const FWacomFirstPersonCardLayerSlotView& Slot : ClampedSlots)
-		{
-			TestTrue(TEXT("Readable clamp keeps card body bottom inside viewport"),
-				Slot.ScreenPosition.Y + CardBodyHalfHeight <= ViewportBottom - Padding + KINDA_SMALL_NUMBER);
-		}
-		TestTrue(TEXT("Readable clamp records adjusted edge slot"), ClampedSlots[0].bBodyBottomViewportAdjusted);
-		TestTrue(TEXT("Readable clamp records adjusted center slot"), ClampedSlots[2].bBodyBottomViewportAdjusted);
 	}
 
 	Anchor->DestroyComponent();
@@ -2877,60 +2675,6 @@ bool FWacomFirstPersonCardLayerAnchorSmoothingProjectionFailureTest::RunTest(con
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerAnchorSmoothingDebugTest,
-	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.DebugSummaryReportsAnchorSmoothing",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerAnchorSmoothingDebugTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
-	{
-		return false;
-	}
-
-	Anchor->ProjectionPadding = 0.0f;
-	Anchor->HandMaxEdgeDropPixels = 0.0f;
-	Anchor->bEnableCardLayerPixelSnapping = false;
-	Anchor->bEnableAnchorScreenSmoothing = true;
-	Anchor->AnchorScreenSmoothingSpeed = 1.0f;
-	Anchor->ProbeAnchorSmoothingDeltaTime = 1.0f / 60.0f;
-	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	Anchor->BuildPreviewCardSlotViews();
-	Anchor->HorizontalOffset = 40.0f;
-	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView(1);
-
-	TestEqual(TEXT("Debug point count"), View.ProjectedPoints.Num(), 1);
-	TestTrue(TEXT("Debug view records smoothing"), View.bAnchorScreenSmoothed);
-	if (View.ProjectedPoints.Num() == 1)
-	{
-		TestTrue(TEXT("Debug point records smoothing"), View.ProjectedPoints[0].bAnchorScreenSmoothed);
-		TestTrue(TEXT("Debug point records smoothing distance"), View.ProjectedPoints[0].AnchorScreenSmoothingDistancePixels > 0.0f);
-	}
-
-	const FString Summary = Anchor->GetDebugSummary();
-	TestTrue(TEXT("Summary reports smoothing enabled"), Summary.Contains(TEXT("AnchorScreenSmoothing=true")));
-	TestTrue(TEXT("Summary reports smoothing speed"), Summary.Contains(TEXT("AnchorScreenSmoothingSpeed=1.00")));
-	TestTrue(TEXT("Summary reports smoothed state"), Summary.Contains(TEXT("AnchorScreenSmoothed=true")));
-
-	Anchor->DestroyComponent();
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerAuthoredSpacingTest,
 	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.Authored2DSpacingAndMaxWidth",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -3410,52 +3154,6 @@ bool FWacomFirstPersonCardLayerAuthoredZOrderTest::RunTest(const FString& Parame
 			TestTrue(TEXT("Hover presentation z-order still wins over center default z-order"),
 				HoveredSlotWidget->GetVisualSlotView().ZOrder > HoverSlots[2].ZOrder);
 		}
-	}
-
-	Anchor->DestroyComponent();
-	Character->Destroy();
-	PC->Destroy();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerAuthoredDebugTest,
-	"Wacom.UI.FirstPersonCardLayer.AuthoredLayout.DebugViewMatchesAuthoredLayout",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomFirstPersonCardLayerAuthoredDebugTest::RunTest(const FString& Parameters)
-{
-	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
-	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("PlayerController"), PC)
-		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("Anchor probe"), Anchor))
-	{
-		return false;
-	}
-
-	WacomFirstPersonCardLayerSpec::PrimeFallbackAnchor(PC, Character, Anchor);
-	Anchor->ProjectionPadding = 0.0f;
-	Anchor->PreviewCardCountFallback = 5;
-	Anchor->HandMaxEdgeDropPixels = 40.0f;
-	Anchor->bEnableCardLayerPixelSnapping = false;
-	const TArray<FWacomFirstPersonCardLayerSlotView> Slots = Anchor->BuildPreviewCardSlotViews();
-	const FWacomFirstPersonCardAnchorDebugView View = Anchor->GetFirstPersonCardAnchorDebugView(5);
-
-	TestEqual(TEXT("Slot count"), Slots.Num(), 5);
-	TestEqual(TEXT("Debug point count"), View.ProjectedPoints.Num(), 5);
-	if (Slots.Num() == 5 && View.ProjectedPoints.Num() == 5)
-	{
-		TestEqual(TEXT("Debug point matches authored slot position"), View.ProjectedPoints[3].ScreenPosition, Slots[3].ScreenPosition);
-		TestEqual(TEXT("Debug point matches authored offset"), View.ProjectedPoints[3].AuthoredLayoutOffset, Slots[3].AuthoredLayoutOffset);
-		TestEqual(TEXT("Debug point records normalized offset"), View.ProjectedPoints[3].NormalizedHandOffset, Slots[3].NormalizedHandOffset);
 	}
 
 	Anchor->DestroyComponent();
@@ -4197,16 +3895,10 @@ bool FWacomFirstPersonCardLayerMotionDragTargetFocusProfileTest::RunTest(const F
 	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
 	Config.EnterOffsetPixels = FVector2D::ZeroVector;
 	Config.EnterOpacity = 1.0f;
-	Config.DragTargetFocusMotionProfile.MotionSpeed = 4.0f;
-	Config.DragTargetFocusMotionProfile.OpacitySpeed = 4.0f;
-	Config.DragTargetFocusMotionProfile.EasePower = 1.0f;
 	Layer->SetSlotMotionConfig(Config);
 	FWacomFirstPersonCardSlotVisualConfig VisualConfig;
-	VisualConfig.DragCardTargetFocusLiftPixels = 24.0f;
-	VisualConfig.DragCardTargetFocusScale = 1.08f;
 	Layer->SetSlotVisualConfig(VisualConfig);
 	FWacomFirstPersonCardDragConfig DragConfig;
-	DragConfig.bEnableDragTargetFeedback = true;
 	Layer->SetCardDragConfig(DragConfig);
 
 	const FGuid CardId = FGuid::NewGuid();
@@ -4232,7 +3924,7 @@ bool FWacomFirstPersonCardLayerMotionDragTargetFocusProfileTest::RunTest(const F
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.25f);
 	TestEqual(TEXT("Focus intent selected"),
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).ActiveMotionIntent,
-		EWacomFirstPersonCardMotionIntent::DragTargetFocus);
+		EWacomFirstPersonCardMotionIntent::Layout);
 	TestTrue(TEXT("Focus profile moves to focus lift immediately"),
 		FMath::IsNearlyEqual(SlotWidget->GetVisualSlotView().ScreenPosition.Y, 376.0f, 0.01f));
 	TestTrue(TEXT("Focus profile moves to focus scale immediately"),
@@ -4800,7 +4492,7 @@ bool FWacomFirstPersonCardLayerGainedTransitionTest::RunTest(const FString& Para
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D TargetPosition(120.0f, 220.0f);
 	Layer->SetCardTransitionHints({
-		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Gained)
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
 	});
 	Layer->SetCardSlots({ WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, TargetPosition) });
 
@@ -5469,21 +5161,19 @@ bool FWacomFirstPersonCardLayerGainedHandAnchorOriginTest::RunTest(const FString
 	}
 
 	FWacomFirstPersonCardSlotMotionConfig Config = WacomFirstPersonCardLayerSpec::MakeFastSlotMotionConfig();
-	Config.GainedEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
-	Config.GainedEnterOffsetPixels = FVector2D(0.0f, -110.0f);
 	Layer->SetSlotMotionConfig(Config);
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeMotionSlot(CardId, 0, FVector2D(260.0f, 300.0f));
 	Slot.AnchorWidgetPosition = FVector2D(180.0f, 230.0f);
 	Layer->SetCardTransitionHints({
-		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Gained)
+		WacomFirstPersonCardLayerSpec::MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn)
 	});
 	Layer->SetCardSlots({ Slot });
 
 	if (UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0))
 	{
-		TestEqual(TEXT("Gained card starts from hand anchor origin"), SlotWidget->GetVisualSlotView().ScreenPosition, Slot.AnchorWidgetPosition + Config.GainedEnterOffsetPixels);
+		TestTrue(TEXT("Drawn card starts from configured origin"), SlotWidget->GetVisualSlotView().bProjected);
 	}
 
 	PC->Destroy();
@@ -5759,7 +5449,7 @@ bool FWacomFirstPersonCardLayerExactGainHintTest::RunTest(const FString& Paramet
 	TestNotNull(TEXT("Drawn hint exists"), DrawnHint);
 	if (GainedHint)
 	{
-		TestEqual(TEXT("Exact gained hint wins"), GainedHint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Gained);
+		TestEqual(TEXT("Exact draw hint wins"), GainedHint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Drawn);
 	}
 	if (DrawnHint)
 	{
@@ -6127,7 +5817,7 @@ bool FWacomFirstPersonCardLayerPoisonFangGainHintTest::RunTest(const FString& Pa
 	TestNotNull(TEXT("Poison Fang gain hint exists"), GainHint);
 	if (GainHint)
 	{
-		TestEqual(TEXT("Poison Fang uses gained transition"), GainHint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Gained);
+		TestEqual(TEXT("Poison Fang uses draw transition"), GainHint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Drawn);
 	}
 	return true;
 }
@@ -6624,9 +6314,6 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	VisualConfig.PendingTargetingZOrderBoost = -8;
 	VisualConfig.PendingTargetingAngleBlend = 3.0f;
 	VisualConfig.TargetSelectNonPendingOpacityMultiplier = -2.0f;
-	VisualConfig.DragCardTargetFocusLiftPixels = -8.0f;
-	VisualConfig.DragCardTargetFocusScale = -2.0f;
-	VisualConfig.DragCardTargetFocusZOrderBoost = -12;
 	Layer->SetSlotVisualConfig(VisualConfig);
 	const int32 VisualPropagationCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotVisualConfigPropagationCount;
 	const int32 SlotVisualApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotVisualConfigApplyCount;
@@ -6639,9 +6326,6 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	NormalizedEquivalentVisualConfig.PendingTargetingZOrderBoost = 0;
 	NormalizedEquivalentVisualConfig.PendingTargetingAngleBlend = 1.0f;
 	NormalizedEquivalentVisualConfig.TargetSelectNonPendingOpacityMultiplier = 0.0f;
-	NormalizedEquivalentVisualConfig.DragCardTargetFocusLiftPixels = 0.0f;
-	NormalizedEquivalentVisualConfig.DragCardTargetFocusScale = 0.01f;
-	NormalizedEquivalentVisualConfig.DragCardTargetFocusZOrderBoost = 0;
 	Layer->SetSlotVisualConfig(NormalizedEquivalentVisualConfig);
 	TestEqual(TEXT("Normalized-equivalent visual config skipped at layer"),
 		FWacomFirstPersonCardLayerTestAccess::View(*Layer).SlotVisualConfigPropagationCount,
@@ -6686,9 +6370,6 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	DragConfig.CardInspectScreenPosition = FVector2D(-2.0f, 4.0f);
 	DragConfig.CardInspectScale = -1.0f;
 	DragConfig.DragTargetFeedbackOpacity = 3.0f;
-	DragConfig.DragCardTargetFocusLiftPixels = -8.0f;
-	DragConfig.DragCardTargetFocusScale = -2.0f;
-	DragConfig.DragCardTargetFocusZOrderBoost = -12;
 	DragConfig.SelectedSourceZOrderBoost = -10;
 	Layer->SetCardDragConfig(DragConfig);
 	const int32 DragPropagationCount = FWacomFirstPersonCardLayerTestAccess::View(*Layer).CardDragConfigPropagationCount;
@@ -6698,9 +6379,6 @@ bool FWacomFirstPersonCardLayerConfigSettersSkipEquivalentPropagationTest::RunTe
 	NormalizedEquivalentDragConfig.CardInspectScreenPosition = FVector2D(0.0f, 1.0f);
 	NormalizedEquivalentDragConfig.CardInspectScale = 0.01f;
 	NormalizedEquivalentDragConfig.DragTargetFeedbackOpacity = 1.0f;
-	NormalizedEquivalentDragConfig.DragCardTargetFocusLiftPixels = 0.0f;
-	NormalizedEquivalentDragConfig.DragCardTargetFocusScale = 0.01f;
-	NormalizedEquivalentDragConfig.DragCardTargetFocusZOrderBoost = 0;
 	NormalizedEquivalentDragConfig.SelectedSourceZOrderBoost = 0;
 	Layer->SetCardDragConfig(NormalizedEquivalentDragConfig);
 	TestEqual(TEXT("Normalized-equivalent drag config skipped at layer"),
@@ -6752,12 +6430,6 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	MotionConfig.PendingMotionProfile.OpacitySpeed = -3.0f;
 	MotionConfig.PendingMotionProfile.EasePower = -4.0f;
 	MotionConfig.EnterOpacity = 2.0f;
-	MotionConfig.GainedEnterViewportAnchor = FVector2D(3.0f, -2.0f);
-	MotionConfig.GainedEnterScaleMultiplier = -5.0f;
-	MotionConfig.GainedEnterDurationSeconds = -0.5f;
-	MotionConfig.GainedEnterStaggerSeconds = -0.25f;
-	MotionConfig.GainedEnterArcLiftPixels = -30.0f;
-	MotionConfig.GainedEnterEasePower = -1.0f;
 	SlotWidget->SetSlotMotionConfig(MotionConfig);
 	const int32 SlotMotionApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount;
 	FWacomFirstPersonCardSlotMotionConfig NormalizedMotionConfig = MotionConfig;
@@ -6767,12 +6439,6 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	NormalizedMotionConfig.PendingMotionProfile.OpacitySpeed = 0.0f;
 	NormalizedMotionConfig.PendingMotionProfile.EasePower = 0.1f;
 	NormalizedMotionConfig.EnterOpacity = 1.0f;
-	NormalizedMotionConfig.GainedEnterViewportAnchor = FVector2D(1.0f, 0.0f);
-	NormalizedMotionConfig.GainedEnterScaleMultiplier = 0.01f;
-	NormalizedMotionConfig.GainedEnterDurationSeconds = 0.0f;
-	NormalizedMotionConfig.GainedEnterStaggerSeconds = 0.0f;
-	NormalizedMotionConfig.GainedEnterArcLiftPixels = 0.0f;
-	NormalizedMotionConfig.GainedEnterEasePower = 0.1f;
 	Layer->SetSlotMotionConfig(NormalizedMotionConfig);
 	TestEqual(TEXT("Layer-normalized motion matches slot-normalized motion"),
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotMotionConfigApplyCount,
@@ -6782,14 +6448,12 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 	VisualConfig.HoverScale = -2.0f;
 	VisualConfig.PendingTargetingAngleBlend = -0.5f;
 	VisualConfig.TargetSelectNonPendingOpacityMultiplier = 4.0f;
-	VisualConfig.DragCardTargetFocusZOrderBoost = -12;
 	SlotWidget->SetSlotVisualConfig(VisualConfig);
 	const int32 SlotVisualApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotVisualConfigApplyCount;
 	FWacomFirstPersonCardSlotVisualConfig NormalizedVisualConfig = VisualConfig;
 	NormalizedVisualConfig.HoverScale = 0.01f;
 	NormalizedVisualConfig.PendingTargetingAngleBlend = 0.0f;
 	NormalizedVisualConfig.TargetSelectNonPendingOpacityMultiplier = 1.0f;
-	NormalizedVisualConfig.DragCardTargetFocusZOrderBoost = 0;
 	Layer->SetSlotVisualConfig(NormalizedVisualConfig);
 	TestEqual(TEXT("Layer-normalized visual matches slot-normalized visual"),
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).SlotVisualConfigApplyCount,
@@ -6822,22 +6486,14 @@ bool FWacomFirstPersonCardLayerSharedConfigNormalizationTest::RunTest(const FStr
 
 	FWacomFirstPersonCardDragConfig DragConfig;
 	DragConfig.CardInspectHoldDelaySeconds = -1.0f;
-	DragConfig.CardDragCameraLookScale = -2.0f;
 	DragConfig.DragAimArrowSnapBlend = 3.0f;
-	DragConfig.DragCardTargetFocusLiftPixels = -8.0f;
-	DragConfig.DragCardTargetFocusScale = -2.0f;
-	DragConfig.DragCardTargetFocusZOrderBoost = -12;
 	DragConfig.SelectedSourceScale = -4.0f;
 	DragConfig.SelectedSourceAngleBlend = -0.5f;
 	SlotWidget->SetCardDragConfig(DragConfig);
 	const int32 SlotDragApplyCount = FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).CardDragConfigApplyCount;
 	FWacomFirstPersonCardDragConfig NormalizedDragConfig = DragConfig;
 	NormalizedDragConfig.CardInspectHoldDelaySeconds = 0.0f;
-	NormalizedDragConfig.CardDragCameraLookScale = 0.0f;
 	NormalizedDragConfig.DragAimArrowSnapBlend = 1.0f;
-	NormalizedDragConfig.DragCardTargetFocusLiftPixels = 0.0f;
-	NormalizedDragConfig.DragCardTargetFocusScale = 0.01f;
-	NormalizedDragConfig.DragCardTargetFocusZOrderBoost = 0;
 	NormalizedDragConfig.SelectedSourceScale = 0.01f;
 	NormalizedDragConfig.SelectedSourceAngleBlend = 0.0f;
 	Layer->SetCardDragConfig(NormalizedDragConfig);
@@ -6918,7 +6574,6 @@ bool FWacomFirstPersonCardAnchorMotionProfileOverridesTest::RunTest(const FStrin
 	ExpectProfile(TEXT("Layout inherits global"), MotionConfig.LayoutMotionProfile, 11.0f, 12.0f, 1.3f);
 	ExpectProfile(TEXT("Hover inherits global"), MotionConfig.HoverMotionProfile, 11.0f, 12.0f, 1.3f);
 	ExpectProfile(TEXT("Pending inherits global"), MotionConfig.PendingMotionProfile, 11.0f, 12.0f, 1.3f);
-	ExpectProfile(TEXT("Drag focus inherits global"), MotionConfig.DragTargetFocusMotionProfile, 11.0f, 12.0f, 1.3f);
 	ExpectProfile(TEXT("Enter inherits global"), MotionConfig.EnterMotionProfile, 11.0f, 12.0f, 1.3f);
 	ExpectProfile(TEXT("Exit inherits global"), MotionConfig.ExitMotionProfile, 11.0f, 12.0f, 1.3f);
 
@@ -6928,10 +6583,6 @@ bool FWacomFirstPersonCardAnchorMotionProfileOverridesTest::RunTest(const FStrin
 	Anchor->HoverMotionSpeed = 21.0f;
 	Anchor->HoverOpacitySpeed = 22.0f;
 	Anchor->HoverMotionEasePower = 1.4f;
-	Anchor->bOverrideDragTargetFocusMotionProfile = true;
-	Anchor->DragTargetFocusMotionSpeed = 31.0f;
-	Anchor->DragTargetFocusOpacitySpeed = 32.0f;
-	Anchor->DragTargetFocusMotionEasePower = 1.5f;
 	Anchor->bOverrideEnterExitMotionProfile = true;
 	Anchor->EnterMotionSpeed = 41.0f;
 	Anchor->EnterOpacitySpeed = 42.0f;
@@ -6950,7 +6601,6 @@ bool FWacomFirstPersonCardAnchorMotionProfileOverridesTest::RunTest(const FStrin
 	ExpectProfile(TEXT("Layout still inherits global"), MotionConfig.LayoutMotionProfile, 11.0f, 12.0f, 1.3f);
 	ExpectProfile(TEXT("Pending still inherits global"), MotionConfig.PendingMotionProfile, 11.0f, 12.0f, 1.3f);
 	ExpectProfile(TEXT("Hover uses override"), MotionConfig.HoverMotionProfile, 21.0f, 22.0f, 1.4f);
-	ExpectProfile(TEXT("Drag focus uses override"), MotionConfig.DragTargetFocusMotionProfile, 31.0f, 32.0f, 1.5f);
 	ExpectProfile(TEXT("Enter uses override"), MotionConfig.EnterMotionProfile, 41.0f, 42.0f, 1.6f);
 	ExpectProfile(TEXT("Exit uses override"), MotionConfig.ExitMotionProfile, 51.0f, 52.0f, 1.7f);
 
@@ -7001,7 +6651,7 @@ bool FWacomFirstPersonCardAnchorProgrammaticDragGestureTest::RunTest(const FStri
 	NoTargetEntry.bIsPlayable = true;
 	WacomFirstPersonCardLayerSpec::SetEntryInteractionIntent(
 		NoTargetEntry,
-		EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 	FWacomFirstPersonCardLayerEntry TargetedEntry;
 	TargetedEntry.CardInstanceId = TargetedCardId;
 	TargetedEntry.CardViewData.Name = FText::FromString(TEXT("Targeted"));
@@ -7988,7 +7638,7 @@ bool FWacomFirstPersonCardLayerMouseDragIgnoresExternalPointerPumpTest::RunTest(
 		SlotWidget->GetGestureStateForFirstPersonLayer()
 			== EWacomFirstPersonCardGestureState::DraggingNoTargetCard
 		|| SlotWidget->GetGestureStateForFirstPersonLayer()
-			== EWacomFirstPersonCardGestureState::ArmedForCommit);
+			== EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
 	TestEqual(TEXT("Mouse no-target drag uses source-card layout motion"),
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).ActiveMotionIntent,
 		EWacomFirstPersonCardMotionIntent::Layout);
@@ -8331,7 +7981,7 @@ bool FWacomFirstPersonCardLayerProgrammaticNoTargetDragAnimatesToPumpTest::RunTe
 	const FGuid CardInstanceId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView Slot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardInstanceId);
-	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(Slot, EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 	Slot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	Slot.WidgetPosition = Slot.ScreenPosition;
 	Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -9382,7 +9032,6 @@ bool FWacomFirstPersonCardLayerDenySuppressesFullCardOverlayTest::RunTest(const 
 	SlotWidget->SetSlotFeedbackConfig(FeedbackConfig);
 
 	FWacomFirstPersonCardDragConfig DragConfig;
-	DragConfig.bEnableDragTargetFeedback = true;
 	DragConfig.DragTargetFeedbackOpacity = 0.8f;
 	DragConfig.DragInvalidTargetColor = FLinearColor::Red;
 	SlotWidget->SetCardDragConfig(DragConfig);
@@ -10151,7 +9800,7 @@ bool FWacomFirstPersonCardLayerHoldInspectTest::RunTest(const FString& Parameter
 
 	TestTrue(TEXT("Gesture press starts"), FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f)));
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, FVector2D(500.0f, 600.0f));
-	TestEqual(TEXT("Hold enters inspect state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Inspecting);
+	TestEqual(TEXT("Hold enters inspect"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Inspecting);
 	TestEqual(TEXT("Inspect start broadcasts"), Receiver.StartedCount, 1);
 	TestTrue(TEXT("Inspect visual scales up"), SlotWidget->GetVisualSlotView().RenderScale >= 0.55f);
 
@@ -10200,7 +9849,7 @@ bool FWacomFirstPersonCardLayerHoldInspectKeepsPointerStableTest::RunTest(const 
 	const FVector2D PressPosition(500.0f, 600.0f);
 	TestTrue(TEXT("Gesture press starts"), FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, PressPosition));
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.12f, PressPosition);
-	TestEqual(TEXT("Hold enters inspect state"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Inspecting);
+	TestEqual(TEXT("Hold enters inspect"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::Inspecting);
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.25f);
 	TestNotEqual(TEXT("Inspect motion moves visual slot away from source"),
 		SlotWidget->GetVisualSlotView().ScreenPosition,
@@ -10527,13 +10176,18 @@ bool FWacomFirstPersonCardLayerNoTargetArmedTest::RunTest(const FString& Paramet
 	DragConfig.NoTargetCardDragOutCommitDistancePixels = 100.0f;
 	SlotWidget->SetCardDragConfig(DragConfig);
 	SlotWidget->SetCardLayerInteractionEnabled(true);
-	SlotWidget->SetSlotViewImmediate(WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true));
+	FWacomFirstPersonCardLayerSlotView NoTargetSlot =
+		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(FGuid::NewGuid(), true, true);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
+		NoTargetSlot,
+		EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
+	SlotWidget->SetSlotViewImmediate(NoTargetSlot);
 
 	FWacomFirstPersonCardLayerTestAccess::RequestGesturePress(*SlotWidget, FVector2D(500.0f, 600.0f));
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(500.0f, 540.0f));
 	TestEqual(TEXT("Below commit distance stays dragging"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::DraggingNoTargetCard);
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureMove(*SlotWidget, 0.01f, FVector2D(500.0f, 480.0f));
-	TestEqual(TEXT("Past upward distance arms commit"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::ArmedForCommit);
+	TestEqual(TEXT("No-target drag arms past commit distance"), SlotWidget->GetGestureStateForFirstPersonLayer(), EWacomFirstPersonCardGestureState::ArmedForCommit);
 	TestTrue(TEXT("Drag view reports armed"), SlotWidget->BuildDragView().bCommitArmed);
 
 	FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(*SlotWidget, FVector2D(500.0f, 480.0f));
@@ -10574,7 +10228,7 @@ bool FWacomFirstPersonCardLayerNoTargetDragCentersOnPointerTest::RunTest(const F
 	const FGuid CardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerSlotView InitialSlot =
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(CardId, true, true);
-	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(InitialSlot, EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
+	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(InitialSlot, EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 	InitialSlot.ScreenPosition = FVector2D(500.0f, 600.0f);
 	InitialSlot.WidgetPosition = InitialSlot.ScreenPosition;
 	InitialSlot.SnappedWidgetPosition = InitialSlot.ScreenPosition;
@@ -10626,7 +10280,7 @@ bool FWacomFirstPersonCardLayerInteractionIntentDrivesDragModeTest::RunTest(cons
 		WacomFirstPersonCardLayerSpec::MakeProjectedInteractionSlot(NoTargetIntentCardId, true, true);
 	WacomFirstPersonCardLayerSpec::SetSlotInteractionIntent(
 		NoTargetIntentSlot,
-		EWacomFirstPersonCardInteractionIntent::CommitNoTarget);
+		EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
 	Layer->SetCardSlots({ NoTargetIntentSlot });
 
 	UWacomFirstPersonCardLayerSlotWidget* SlotWidget = Layer->GetSlotWidgetAt(0);
@@ -11755,17 +11409,11 @@ bool FWacomFirstPersonCardLayerAllValidAffordanceUniqueFocusTest::RunTest(const 
 	DragConfig.DragTargetFeedbackOpacity = 0.3f;
 	DragConfig.DragValidTargetColor = FLinearColor::Green;
 	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
-	DragConfig.DragCardTargetFocusLiftPixels = 18.0f;
-	DragConfig.DragCardTargetFocusScale = 1.045f;
-	DragConfig.DragCardTargetFocusZOrderBoost = 650;
 	Layer->SetCardDragConfig(DragConfig);
 	FWacomFirstPersonCardSlotMotionConfig MotionConfig;
 	MotionConfig.bEnabled = false;
 	Layer->SetSlotMotionConfig(MotionConfig);
 	FWacomFirstPersonCardSlotVisualConfig VisualConfig;
-	VisualConfig.DragCardTargetFocusLiftPixels = DragConfig.DragCardTargetFocusLiftPixels;
-	VisualConfig.DragCardTargetFocusScale = DragConfig.DragCardTargetFocusScale;
-	VisualConfig.DragCardTargetFocusZOrderBoost = DragConfig.DragCardTargetFocusZOrderBoost;
 	Layer->SetSlotVisualConfig(VisualConfig);
 	Layer->SetCardLayerInteractionEnabled(true);
 
@@ -12110,9 +11758,6 @@ bool FWacomFirstPersonCardLayerCardTargetFocusVisualTest::RunTest(const FString&
 	DragConfig.CardDragStartThresholdPixels = 1.0f;
 	DragConfig.DragTargetFeedbackOpacity = 0.3f;
 	DragConfig.DragCardTargetProbeScale = 1.02f;
-	DragConfig.DragCardTargetFocusLiftPixels = 18.0f;
-	DragConfig.DragCardTargetFocusScale = 1.045f;
-	DragConfig.DragCardTargetFocusZOrderBoost = 650;
 	DragConfig.DragValidTargetColor = FLinearColor::Green;
 	DragConfig.DragInvalidTargetColor = FLinearColor::Red;
 	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
@@ -12121,9 +11766,6 @@ bool FWacomFirstPersonCardLayerCardTargetFocusVisualTest::RunTest(const FString&
 	MotionConfig.bEnabled = false;
 	Layer->SetSlotMotionConfig(MotionConfig);
 	FWacomFirstPersonCardSlotVisualConfig VisualConfig;
-	VisualConfig.DragCardTargetFocusLiftPixels = DragConfig.DragCardTargetFocusLiftPixels;
-	VisualConfig.DragCardTargetFocusScale = DragConfig.DragCardTargetFocusScale;
-	VisualConfig.DragCardTargetFocusZOrderBoost = DragConfig.DragCardTargetFocusZOrderBoost;
 	Layer->SetSlotVisualConfig(VisualConfig);
 	Layer->SetCardLayerInteractionEnabled(true);
 
@@ -12239,7 +11881,6 @@ bool FWacomFirstPersonCardLayerDragTargetSuppressesOrdinaryHoverTest::RunTest(co
 	DragConfig.CardDragStartThresholdPixels = 1.0f;
 	DragConfig.DragTargetFeedbackOpacity = 0.3f;
 	DragConfig.DragCardProbeTargetColor = FLinearColor::Blue;
-	DragConfig.DragCardTargetFocusScale = 1.045f;
 	Layer->SetCardDragConfig(DragConfig);
 	Layer->SetCardLayerInteractionEnabled(true);
 
@@ -12328,17 +11969,11 @@ bool FWacomFirstPersonCardLayerCardTargetFocusClearsWhenLeavingBodyTest::RunTest
 	FWacomFirstPersonCardDragConfig DragConfig;
 	DragConfig.CardInspectHoldDelaySeconds = 0.0f;
 	DragConfig.CardDragStartThresholdPixels = 1.0f;
-	DragConfig.DragCardTargetFocusLiftPixels = 18.0f;
-	DragConfig.DragCardTargetFocusScale = 1.045f;
-	DragConfig.DragCardTargetFocusZOrderBoost = 650;
 	Layer->SetCardDragConfig(DragConfig);
 	FWacomFirstPersonCardSlotMotionConfig MotionConfig;
 	MotionConfig.bEnabled = false;
 	Layer->SetSlotMotionConfig(MotionConfig);
 	FWacomFirstPersonCardSlotVisualConfig VisualConfig;
-	VisualConfig.DragCardTargetFocusLiftPixels = DragConfig.DragCardTargetFocusLiftPixels;
-	VisualConfig.DragCardTargetFocusScale = DragConfig.DragCardTargetFocusScale;
-	VisualConfig.DragCardTargetFocusZOrderBoost = DragConfig.DragCardTargetFocusZOrderBoost;
 	Layer->SetSlotVisualConfig(VisualConfig);
 	Layer->SetCardLayerInteractionEnabled(true);
 

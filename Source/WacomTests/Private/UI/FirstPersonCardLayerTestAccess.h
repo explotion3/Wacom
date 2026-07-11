@@ -48,16 +48,11 @@ struct FWacomFirstPersonCardLayerTestAccess
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
 	static void SetRuntimeCardLayerTransitionHints(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		FName SourceId,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
-	static void SetRuntimeCardLayerFeedbackHints(
-		UWacomFirstPersonCardAnchorComponent& Anchor,
-		FName SourceId,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
 	static void SetRuntimeCardLayerTransitionPresentationEnabled(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		FName SourceId,

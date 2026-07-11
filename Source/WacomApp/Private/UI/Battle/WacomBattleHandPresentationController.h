@@ -27,16 +27,12 @@ public:
 		bool bSuppressed);
 	FWacomFirstPersonCardLayerPresentationFrame BuildExplicitFrame(
 		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints =
-			TArray<FWacomFirstPersonCardLayerFeedbackHint>());
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
 
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHintsForRefresh(
-		const FBattleSnapshot& NextSnapshot) const;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFeedbackHints(
 		const FBattleSnapshot& NextSnapshot) const;
 	void SetTransitionSnapshot(const FBattleSnapshot& Snapshot);
 	void ClearTransitionSnapshot();

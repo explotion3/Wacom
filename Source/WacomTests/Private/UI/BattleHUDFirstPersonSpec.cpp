@@ -21,6 +21,7 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "UObject/Package.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomBattleHUDFirstPersonSpec
@@ -104,7 +105,7 @@ namespace WacomBattleHUDFirstPersonSpec
 	{
 		FWacomFirstPersonCardDragView DragView;
 		DragView.CardInstanceId = CardInstanceId;
-		DragView.GestureState = EWacomFirstPersonCardGestureState::ArmedForCommit;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
 		DragView.bCommitArmed = true;
 		DragView.PressScreenPosition = FVector2D(500.0f, 600.0f);
 		DragView.CurrentScreenPosition = FVector2D(540.0f, 590.0f);
@@ -122,7 +123,7 @@ namespace WacomBattleHUDFirstPersonSpec
 		Slot.Index = Index;
 		Slot.Entry.CardInstanceId = CardInstanceId;
 		Slot.Entry.bIsPlayable = true;
-		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::InspectOnly;
 		Slot.ScreenPosition = FVector2D(500.0f + 42.0f * static_cast<float>(Index), 600.0f);
 		Slot.WidgetPosition = Slot.ScreenPosition;
 		Slot.SnappedWidgetPosition = Slot.ScreenPosition;
@@ -188,9 +189,7 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	}
 
 	UWacomFirstPersonCardAnchorComponent* Anchor = Harness->FirstPersonAnchor();
-	UWacomBattleCameraLookComponent* BattleCamera = Harness->BattleCameraLook();
-	if (!TestNotNull(TEXT("First-person card anchor"), Anchor)
-		|| !TestNotNull(TEXT("Battle camera look"), BattleCamera))
+	if (!TestNotNull(TEXT("First-person card anchor"), Anchor))
 	{
 		return false;
 	}
@@ -225,31 +224,54 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 	TestTrue(TEXT("HUD bridge restores first-person hand interaction"),
 		Anchor->IsFirstPersonCardLayerInteractionEnabled());
 
-	TestTrue(TEXT("Battle camera activates for drag override"), BattleCamera->ActivateBattleCameraLook());
+	UWacomBattleCameraLookComponent* BattleCamera = Character->GetBattleCameraLookComponent();
+	if (!TestNotNull(TEXT("Battle camera look component"), BattleCamera)
+		|| !TestTrue(TEXT("Battle camera look activates"), BattleCamera->ActivateBattleCameraLook()))
+	{
+		return false;
+	}
 	FWacomFirstPersonCardPointerView PointerView;
 	PointerView.CardInstanceId = CardId;
 	PointerView.bHasPointerViewportPosition = true;
 	PointerView.PointerNormalizedViewportPosition = FVector2D(0.35f, -0.45f);
 	HUD->HandleFirstPersonCardPointerMovedForTest(PointerView);
-	TestTrue(TEXT("Hover pointer writes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
+	TestTrue(TEXT("Battle hover pointer writes camera look override"),
+		BattleCamera->HasCursorLookOverrideForTest());
 	TestEqual(
-		TEXT("Hover pointer override stores normalized pointer"),
+		TEXT("Battle hover pointer stores normalized viewport position"),
 		BattleCamera->GetCursorLookOverrideNormalizedForTest(),
 		FVector2D(0.35f, -0.45f));
 	HUD->HandleFirstPersonCardPointerLeftForTest();
-	TestFalse(TEXT("Hover pointer leave clears camera look override"), BattleCamera->HasCursorLookOverrideForTest());
+	TestFalse(TEXT("Battle hover pointer leave clears camera look override"),
+		BattleCamera->HasCursorLookOverrideForTest());
 
 	FWacomFirstPersonCardDragView DragView = WacomBattleHUDFirstPersonSpec::MakeCommitDragView(CardId);
+	DragView.GestureState = EWacomFirstPersonCardGestureState::Inspecting;
+	DragView.bCommitArmed = false;
+	DragView.PointerNormalizedViewportPosition = FVector2D(0.45f, -0.25f);
+	HUD->HandleFirstPersonCardPointerMovedForTest(PointerView);
 	HUD->HandleFirstPersonCardDragStartedForTest(CardId, DragView);
+	TestTrue(TEXT("Battle inspect keeps camera look following the mouse"),
+		BattleCamera->HasCursorLookOverrideForTest());
+	TestEqual(
+		TEXT("Battle inspect stores normalized drag pointer"),
+		BattleCamera->GetCursorLookOverrideNormalizedForTest(),
+		FVector2D(0.45f, -0.25f));
+	DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
+	DragView.PointerNormalizedViewportPosition = FVector2D(-0.30f, 0.40f);
 	HUD->HandleFirstPersonCardDragUpdatedForTest(CardId, DragView);
-	TestTrue(TEXT("Drag update writes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
+	TestEqual(
+		TEXT("Battle formal drag keeps refreshing camera look"),
+		BattleCamera->GetCursorLookOverrideNormalizedForTest(),
+		FVector2D(-0.30f, 0.40f));
 
 	HUD->ClearFirstPersonBattleHandLayerForTest();
 	TestFalse(TEXT("HUD bridge clear removes runtime hand"), Anchor->HasRuntimeCardLayerData());
 	TestFalse(TEXT("HUD bridge clear disables interaction"), Anchor->IsFirstPersonCardLayerInteractionEnabled());
-	TestFalse(TEXT("HUD bridge clear removes camera look override"), BattleCamera->HasCursorLookOverrideForTest());
 	TestFalse(TEXT("HUD bridge clear hides first-person detail"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
+	TestFalse(TEXT("HUD bridge clear removes card camera look override"),
+		BattleCamera->HasCursorLookOverrideForTest());
 
 	const int32 VersionBeforeStaleDelegate = Session->BuildSnapshot().Version;
 	FWacomFirstPersonCardDragView StaleDragView = WacomBattleHUDFirstPersonSpec::MakeCommitDragView(CardId);
@@ -1093,6 +1115,10 @@ bool FWacomUIBattleHUDFirstPersonInspectDetailUnhoverGuardSpec::RunTest(const FS
 
 	HUD->TakeWidget();
 	HUD->RefreshFromSnapshotForTest(BattleSnapshot);
+	HUD->SetFirstPersonBattleHandSuppressedForTest(false);
+	HUD->SetBattleInputReadyForTest(true);
+	TestTrue(TEXT("First-person hand interaction is enabled for inspect"),
+		HUD->ShouldEnableFirstPersonBattleHandInteractionForTest());
 
 	FWacomFirstPersonCardLayerSlotView HoverSlot;
 	HoverSlot.Entry.CardInstanceId = Snap.InstanceId;
@@ -1108,7 +1134,12 @@ bool FWacomUIBattleHUDFirstPersonInspectDetailUnhoverGuardSpec::RunTest(const FS
 	InspectSlot.ScreenPosition = FVector2D(960.0f, 496.0f);
 	InspectSlot.RenderScale = 1.18f;
 	InspectSlot.GestureState = EWacomFirstPersonCardGestureState::Inspecting;
-	HUD->HandleFirstPersonCardLayoutUpdatedForTest(Snap.InstanceId, InspectSlot);
+	FWacomFirstPersonCardDragView InspectDragView;
+	InspectDragView.CardInstanceId = Snap.InstanceId;
+	InspectDragView.GestureState = EWacomFirstPersonCardGestureState::Inspecting;
+	InspectDragView.SourceSlotView = InspectSlot;
+	InspectDragView.CurrentScreenPosition = InspectSlot.ScreenPosition;
+	HUD->HandleFirstPersonCardDragStartedForTest(Snap.InstanceId, InspectDragView);
 	HUD->TickCardDetailMotionForTest(0.02f);
 
 	HUD->HandleFirstPersonCardUnhoveredForTest(Snap.InstanceId, HoverSlot);

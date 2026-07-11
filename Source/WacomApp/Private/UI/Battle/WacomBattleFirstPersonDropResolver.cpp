@@ -144,7 +144,6 @@ FWacomBattleCardDropResolveResult FWacomBattleFirstPersonDropResolver::ResolveDr
 		Result.RejectReason = EWacomBattleCardDropRejectReason::SourceCardNotPlayable;
 		return Result;
 	}
-
 	if (DragView.GestureState == EWacomFirstPersonCardGestureState::ArmedForCommit)
 	{
 		if (DragView.bCommitArmed)

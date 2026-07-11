@@ -25,7 +25,7 @@ namespace
 		return nullptr;
 	}
 
-	int32 CountEvents(const TArray<FBattleEvent>& Events, EBattleEventType Type, const FGuid& CardId = FGuid())
+	int32 CountHandZoneEvents(const TArray<FBattleEvent>& Events, EBattleEventType Type, const FGuid& CardId = FGuid())
 	{
 		int32 Count = 0;
 		for (const FBattleEvent& Event : Events)
@@ -107,7 +107,7 @@ bool FWacomBattleSelectedDiscardEmitsCardDiscardedAndRunsOnDiscardSpec::RunTest(
 		AddError(TEXT("Missing CardDiscarded event for selected target"));
 	}
 	TestEqual(TEXT("Selected discard emits one HandZoneChanged for target move"),
-		CountEvents(Events, EBattleEventType::HandZoneChanged, FGuid()), 1);
+		CountHandZoneEvents(Events, EBattleEventType::HandZoneChanged, FGuid()), 1);
 	return true;
 }
 
@@ -290,7 +290,7 @@ bool FWacomBattleTurnEndDiscardRunsOnDiscardWithoutHandLimitEventSpec::RunTest(c
 		AddError(TEXT("Missing CardDiscarded event for turn-end discard"));
 	}
 	TestEqual(TEXT("Turn-end discard does not emit HandLimitDiscarded"),
-		CountEvents(Events, EBattleEventType::HandLimitDiscarded), 0);
+		CountHandZoneEvents(Events, EBattleEventType::HandLimitDiscarded), 0);
 	return true;
 }
 
@@ -318,7 +318,7 @@ bool FWacomBattleExhaustSelectedEmitsCardExhaustedWithoutOnDiscardSpec::RunTest(
 	TestFalse(TEXT("Target left hand"), FindHandZoneMoveEventHandCard(Snapshot, TargetId) != nullptr);
 	TestEqual(TEXT("OnDiscard passive did not run for exhaust"), Snapshot.Player.Shield, 0);
 	TestEqual(TEXT("No CardDiscarded for exhaust target"),
-		CountEvents(Events, EBattleEventType::CardDiscarded, TargetId), 0);
+		CountHandZoneEvents(Events, EBattleEventType::CardDiscarded, TargetId), 0);
 	if (const FBattleEvent* ExhaustEvent = FindEvent(Events, EBattleEventType::CardExhausted, TargetId))
 	{
 		TestEqual(TEXT("Exhaust reason is effect"),
@@ -359,9 +359,9 @@ bool FWacomBattlePlayedCardDiscardDestinationDoesNotRunOnDiscardSpec::RunTest(co
 	TestFalse(TEXT("Played card left hand"), FindHandZoneMoveEventHandCard(Snapshot, PlayedId) != nullptr);
 	TestEqual(TEXT("Played card destination does not trigger OnDiscard"), Snapshot.Player.Shield, 0);
 	TestEqual(TEXT("Played card destination does not emit CardDiscarded"),
-		CountEvents(Events, EBattleEventType::CardDiscarded, PlayedId), 0);
+		CountHandZoneEvents(Events, EBattleEventType::CardDiscarded, PlayedId), 0);
 	TestEqual(TEXT("CardPlayed still emitted"),
-		CountEvents(Events, EBattleEventType::CardPlayed, PlayedId), 1);
+		CountHandZoneEvents(Events, EBattleEventType::CardPlayed, PlayedId), 1);
 	return true;
 }
 

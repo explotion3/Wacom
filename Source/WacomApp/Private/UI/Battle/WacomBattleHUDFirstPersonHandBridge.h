@@ -10,7 +10,6 @@
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleHandPresentationController.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
-#include "UI/Card/WacomFirstPersonCardCameraLookBridge.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class FWacomBattleHUDRuntime;
@@ -53,10 +52,6 @@ public:
 	void SyncLayer(
 		const FBattleSnapshot& Snapshot,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
-	void SyncLayer(
-		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void ClearLayer(bool bClearPendingTransitionEvents = true);
 	void SuppressLayerForEntry();
 
@@ -83,8 +78,6 @@ public:
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFeedbackHints(
-		const FBattleSnapshot& NextSnapshot) const;
 
 	void ClearTransitionSnapshot();
 	bool CanBuildTransitionHintsFor(const FBattleSnapshot& NextSnapshot) const;
@@ -106,6 +99,8 @@ public:
 	void HandleHoveredCardTargetUpdated(
 		const FWacomInteractionTargetHandle& CardTargetHandle,
 		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandlePointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandlePointerLeft();
 	void HandleDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
@@ -113,13 +108,6 @@ public:
 	bool TryStartDragByHandIndex(
 		int32 OneBasedIndex,
 		const TOptional<FVector2D>& InitialPointerWidgetPosition);
-	void HandlePointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
-	void HandlePointerLeft();
-
-	void ApplyDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
-	void ClearDragCameraLookOverride();
-	void ApplyPointerCameraLookOverride(const FWacomFirstPersonCardPointerView& PointerView);
-	void ClearPointerCameraLookOverride();
 	void UpdateDragTargetFeedback(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void UpdateDragTargetFeedback(
 		const FGuid& CardInstanceId,
@@ -164,21 +152,22 @@ public:
 	void UnbindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor);
 
 private:
-	void ApplyDragCameraLookOverrideToBattleCamera(const FWacomFirstPersonCardDragView& DragView);
-	void ApplyPointerCameraLookOverrideToBattleCamera(const FWacomFirstPersonCardPointerView& PointerView);
-	void ClearCameraLookOverrideOnBattleCamera();
 	void SyncLayerInternal(
 		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>* FeedbackHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints);
 	void ApplyPresentationFrame(
 		UWacomFirstPersonCardAnchorComponent& Anchor,
 		FWacomFirstPersonCardLayerPresentationFrame&& Frame);
+	void ApplyPointerCameraLookOverrideToBattleCamera(
+		const FWacomFirstPersonCardPointerView& PointerView);
+	void ClearPointerCameraLookOverride();
+	void ApplyDragCameraLookOverrideToBattleCamera(
+		const FWacomFirstPersonCardDragView& DragView);
+	void ClearDragCameraLookOverride();
 
 	FWacomBattleHUDRuntime& Runtime;
 	FWacomBattleFirstPersonDropResolver DropResolver;
 	FWacomBattleHandPresentationController PresentationController;
-	FWacomFirstPersonCardCameraLookBridge CameraLookBridge;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> CurrentDragPreviewPresentation;
 	FWacomBattleCardTargetPreviewPresentationStateKey ActiveTargetPreviewState;

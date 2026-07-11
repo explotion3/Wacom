@@ -346,15 +346,12 @@ protected:
 	void HandleRunFirstPersonCardLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleRunFirstPersonCardLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleRunFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandleRunFirstPersonCardLayerPointerLeft();
 	void HandleRunFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void HandleRunFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
-	void HandleRunFirstPersonCardLayerPointerLeft();
-	void ApplyRunFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
-	void ApplyRunFirstPersonCardPointerCameraLookOverride(const FWacomFirstPersonCardPointerView& PointerView);
-	void ClearRunFirstPersonCardDragCameraLookOverride();
 	virtual UWacomAppToastSubsystem* ResolveAppToastSubsystem() const;
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
@@ -366,6 +363,13 @@ protected:
 	virtual URunSession* ResolveRunSessionForFirstPersonCardSource() const;
 
 private:
+	void ApplyRunFirstPersonCardPointerCameraLookOverride(
+		const FWacomFirstPersonCardPointerView& PointerView);
+	void ClearRunFirstPersonCardPointerCameraLookOverride();
+	void ApplyRunFirstPersonCardDragCameraLookOverride(
+		const FWacomFirstPersonCardDragView& DragView);
+	void ClearRunFirstPersonCardDragCameraLookOverride();
+
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
 	UBattleHUD* GetActiveBattleHUD() const;
 	FWacomBattleSceneInteractionRouter& GetBattleSceneInteractionRouter();
@@ -446,7 +450,6 @@ private:
 	bool TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut();
 	bool TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
-	UWacomRunTunnelMovementComponent* ResolveRunTunnelMovementForCardDragLook() const;
 	bool ShouldHandleRunFirstPersonMenuDropProbe() const;
 	bool ShouldHandleRunWorldCardDropProbe() const;
 	UWacomRunMenuWidgetBase* ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const;

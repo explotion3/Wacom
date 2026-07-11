@@ -86,9 +86,8 @@ BattleHUD 战斗手牌由 first-person card layer 提供，不再通过 WBP_Batt
 ```text
 WBP_FPCardView
 └─ RootOverlay / Overlay
-   ├─ CardShadowImage : Image
    └─ Fake3DSurfaceRetainer : RetainerBox
-      └─ SurfaceOverlay / Overlay
+      └─ SurfaceOverlay / Overlay [Clipping = Clip To Bounds - Without Intersecting]
          ├─ CardView : UWacomCardView
          │  └─ BleedCanvas / SizeBox
          │     └─ CardSizeBox / SizeBox
@@ -104,8 +103,8 @@ WBP_FPCardView
 | `CardView` | `UWacomCardView` | Optional BindWidget | 通用卡面显示、`FWacomCardViewData` 刷新、主体命中几何来源 |
 | `FeedbackOverlay` | `Image` | Optional BindWidget | playable hover / drag target / card target affordance 的 full-card overlay |
 | `InteractionFeedbackImage` | `Image` | Optional BindWidget | pressed / confirm / commit / deny 的第一人称源卡交互反馈层；尺寸、层级和默认材质由 WBP 控制 |
-| `CardShadowImage` | `Image` | Optional BindWidget | 独立阴影；C++ 写入 offset / opacity / scale，必须位于 Retainer 外部且绘制在卡面之前 |
-| `Fake3DSurfaceRetainer` | `RetainerBox` | Optional BindWidget | 卡面唯一 Retainer；Effect Material 消费 `TiltX / TiltY / PerspectiveStrength` |
+| `Fake3DSurfaceRetainer` | `RetainerBox` | Optional BindWidget | 卡面唯一 Retainer；Effect Material 消费 `TiltX / TiltY / PerspectiveStrength / ContactShadowEnabled / ContactShadowLift` |
+| `SurfaceOverlay` | `Overlay` | Retainer direct content by convention | Retainer 完整离屏捕获根；覆盖完整 bleed 范围并重置继承自视口的普通 culling rect |
 | `CardSizeBox` | `SizeBox` | `CardView` 内 Required by convention | 296 x 420 主体显示和交互参考范围 |
 | `CostDigitImage` | `Image` | `CardView` 内 Optional | 单位费用数字图标 brush |
 | `SurfaceFoilOverlay` | `Widget` | `CardView` 内 Optional | 复用 `UWacomCardView` 弱流光 / 表面装饰；未绑定时不会自动创建覆盖层 |
@@ -115,14 +114,15 @@ WBP 合同：
 - `WBP_FPCardView` 外层只负责包装和反馈层；通用卡面内容应放在 `CardView` 子控件里。
 - `FeedbackOverlay` 和 `InteractionFeedbackImage` 都由 WBP 控制尺寸、锚点和层级；C++ 只写颜色、透明度和材质参数。
 - `WBP_FPCardView` 一张卡只允许一个 Retainer。需要把旧 `CardView` 内 Retainer 移除，并让 `CardView / FeedbackOverlay / InteractionFeedbackImage` 一起成为 `Fake3DSurfaceRetainer` 内容；嵌套 Retainer 会增加离屏渲染成本并造成刷新时序不稳定。
-- `CardShadowImage` 必须是 `Fake3DSurfaceRetainer` 的兄弟节点而不是子节点，这样阴影继承 Slot 的整体位置 / scale / angle，但不会被卡面 UV 透视扭曲。Brush 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Shadow`，Brush Tint 保持白色；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Shadow.dsm`，不使用运行时 blur。
-- `Fake3DSurfaceRetainer` Effect Material 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，Retainer texture parameter 填 `Texture` 并启用效果；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm`。C++ 参数名固定为 `TiltX`、`TiltY`、`PerspectiveStrength`。没有材质或缺少可选绑定时安全退化，不取消 Hover / Drag 或抽弃牌动画。
-- 两个材质都由 DreamShader 1.4.1 生成，`.dsm` 是长期真源。若 Content 资产缺失，使用 DreamShader commandlet 分别对上述源文件执行 `compile -Force`；不要在 Unreal 材质图里做无法回写到 `.dsm` 的平行修改。
-- 材质图人工复查时，Fake3D 应有四个显式 ComponentMask：`RG` 用于投影 UV、`B` 用于 inside mask、`RGB` 用于卡面颜色、`A` 用于卡面透明度；Shadow 应有 `RGB` 与 `A` 两个显式 ComponentMask。若单通道节点仍显示 `RGB` 或 `RGA`，说明资产没有使用带 ComponentMask 默认通道修复的 DreamShader 版本重新生成。
+- `SurfaceOverlay` 必须是 `Fake3DSurfaceRetainer` 的直接内容根，尺寸覆盖完整 Retainer / bleed 区域，Clipping 使用 `Clip To Bounds - Without Intersecting (Advanced)`。`UWacomFirstPersonCardViewWidget` 会在 Rebuild / Construct 时自动保证该值，以免 Slate 使用视口 culling rect 提前整批剔除靠近屏幕底边的 `TypeText`。该修复只改变 Retainer 内部绘制边界，不移动卡牌、不改变扇形、角度或命中。
+- `Fake3DSurfaceRetainer` Effect Material 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，Retainer texture parameter 填 `Texture` 并启用效果；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm`，Blend Mode 必须是 `AlphaComposite`（DreamShader 源写作 `PremultipliedAlpha`），以符合 Retainer 的预乘 Alpha 合成。C++ 参数名固定为 `TiltX`、`TiltY`、`PerspectiveStrength`、`ContactShadowEnabled`、`ContactShadowLift`。接触阴影从实时 `Texture.A` 生成，会包含不同卡牌的实体出血卡框装饰；低透明度光效由材质阈值过滤。没有材质或缺少可选绑定时安全退化，不取消 Hover / Drag 或抽弃牌动画。
+- Card Depth 材质由 DreamShader 1.4.1 生成，`.dsm` 是长期真源。若 Content 资产缺失，使用 DreamShader commandlet 对上述源文件执行 `compile -Force`；不要在 Unreal 材质图里做无法回写到 `.dsm` 的平行修改。
+- 材质图人工复查时，Fake3D 主卡面应有 `RG` 投影 UV、`B` inside mask、`RGB` 卡面颜色、`A` 卡面透明度；接触阴影还应有 9 个 `A` 采样 mask 与 `ContactShadowColor RGB`。若单通道节点仍显示 `RGB` 或 `RGA`，说明资产没有使用带 ComponentMask 默认通道修复的 DreamShader 版本重新生成。
+- 当前 C++ 不查找或驱动外部 `CardShadowImage`；WBP 中若仍保留历史 `ShadowHost / CardShadowImage`，它不会随 Card Depth 参数变化，可先隐藏或删除，后续是否重做宽泛阴影另行决定。
 - `InteractionFeedbackImage` 优先使用 Anchor 的 `InteractionFeedbackMaterial`；该材质为空时，会复用 WBP Image brush 上预设的材质。推荐制作流程是：常规风格直接把材质放到 `InteractionFeedbackImage` 的 brush 上；需要角色 / 场景级替换时再在 Anchor 上填 override。若没有材质，pressed / confirm / commit 仍可退化为普通 tint，deny 只保留 shake，不退回整卡红色 overlay。
 - 交互反馈材质需要支持 C++ 写入参数：`FeedbackColor`、`EdgeWidth`、`EdgeSoftness`、`VignetteStrength`、`VignetteRadius`、`VignetteSoftness`、`Opacity`、`Pulse`。
 - 不再支持旧 `DenyFeedbackEdgeImage` fallback；源卡交互反馈统一绑定到 `InteractionFeedbackImage`。
-- RootOverlay / SurfaceOverlay 可使用透明 bleed 画布，建议主体外每边预留约 `32-40 px` 且不要启用 ClipToBounds，保证透视角和阴影不被裁切。
+- RootOverlay 使用 `Inherit`；SurfaceOverlay 使用 `Clip To Bounds - Without Intersecting (Advanced)`，并覆盖完整透明 bleed 画布。建议主体外每边预留约 `32-40 px`，保证透视角完整，同时避免 Retainer 内小型文字在视口边缘整批瞬隐。
 - `SurfaceFoilOverlay` 是显式 opt-in 装饰层；需要卡面流光时由 WBP 自己添加并绑定该 Image。
 - `CardView.CardSizeBox` 默认保持 296 x 420，并居中放在 bleed 画布中；缺失时运行时回退旧主体尺寸。
 - 透明 bleed 只负责渲染，不扩大 hover、click、drag 起手或 Card target probe 范围。
@@ -132,6 +132,7 @@ WBP 合同：
 最小 PIE 验收：
 
 - Battle 中 first-person hand 使用该卡面，旋转时边缘没有明显黑边、断线或主体裁切。
+- 带实体出血卡框装饰的卡牌，其紧贴接触阴影跟随真实装饰轮廓；Hover / Drag 时接触阴影平滑变软、变淡，且没有明显双黑边。
 - Hover 卡面随卡内 pointer 克制倾斜，按下后倾角减弱；Drag 改由 pointer velocity 产生惯性，pointer 停止后倾角回正但抬升阴影保持到 release。
 - 抽牌 / 出牌 / 弃牌 semantic transition 期间卡面逐渐压平；目标候选卡不倾斜，只有 Drag source 消费 fake-3D。
 - 鼠标在主体范围外、bleed 范围内不触发 hover 或拖拽起手。

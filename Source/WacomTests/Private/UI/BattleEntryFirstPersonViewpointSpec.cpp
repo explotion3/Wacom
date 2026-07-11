@@ -23,6 +23,7 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/FirstPersonCardLayerTestAccess.h"
 #include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -469,8 +470,8 @@ bool FWacomUIBattleEntryViewpointBlendUnlocksHUDHandAfterCompletionSpec::RunTest
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
-	HUD->SetBattleInputReady(false);
-	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	HUD->SetBattleInputReadyForTest(false);
+	HUD->SetFirstPersonBattleHandSuppressedForTest(true);
 	HUD->RefreshFromSnapshotForTest(Snapshot);
 	TestFalse(TEXT("Entry staging keeps HUD input not ready"), HUD->IsBattleInputReady());
 	TestTrue(TEXT("Entry staging keeps an empty BattleHand runtime source"),
@@ -507,8 +508,8 @@ bool FWacomUIBattleEntryViewpointBlendUnlocksHUDHandAfterCompletionSpec::RunTest
 			[&bFinished, HUD, Session]()
 			{
 				bFinished = true;
-				HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
-				HUD->SetBattleInputReady(true);
+				HUD->SetFirstPersonBattleHandSuppressedForTest(false);
+				HUD->SetBattleInputReadyForTest(true);
 				HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
 			}));
 
@@ -587,8 +588,8 @@ bool FWacomUIBattleEntryViewpointBlendCancelKeepsHUDGuardedSpec::RunTest(
 		return false;
 	}
 
-	HUD->SetBattleInputReady(false);
-	HUD->SetFirstPersonBattleHandSuppressedForEntry(true);
+	HUD->SetBattleInputReadyForTest(false);
+	HUD->SetFirstPersonBattleHandSuppressedForTest(true);
 	HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
 
 	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
@@ -615,8 +616,8 @@ bool FWacomUIBattleEntryViewpointBlendCancelKeepsHUDGuardedSpec::RunTest(
 			[&bFinished, HUD, Session]()
 			{
 				bFinished = true;
-				HUD->SetFirstPersonBattleHandSuppressedForEntry(false);
-				HUD->SetBattleInputReady(true);
+				HUD->SetFirstPersonBattleHandSuppressedForTest(false);
+				HUD->SetBattleInputReadyForTest(true);
 				HUD->RefreshFromSnapshotForTest(Session->BuildSnapshot());
 			}));
 
@@ -798,8 +799,8 @@ bool FWacomUIBattleEntryViewpointAnchorUsesStageBlendSpec::RunTest(
 	FWacomFirstPersonViewStageBlendTestAccess::Tick(*StageBlend, 0.5f);
 	TestTrue(TEXT("Stage blend remains active at half time"), StageBlend->IsStageBlendActive());
 	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView HalfTimeView =
-		Anchor->GetFirstPersonCardAnchorDebugView();
+	const FWacomFirstPersonCardAnchorAutomationTestView HalfTimeView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestTrue(TEXT("Anchor remains valid during stage blend"), HalfTimeView.bHasValidAnchor);
 	TestEqual(TEXT("Anchor uses stage blend before battle camera activates"),
 		HalfTimeView.Mode,
@@ -810,8 +811,8 @@ bool FWacomUIBattleEntryViewpointAnchorUsesStageBlendSpec::RunTest(
 	TestTrue(TEXT("Battle camera activates after stage blend"),
 		BattleCamera->IsBattleCameraLookActive());
 	Anchor->RefreshAnchor(0.0f);
-	const FWacomFirstPersonCardAnchorDebugView CompletedView =
-		Anchor->GetFirstPersonCardAnchorDebugView();
+	const FWacomFirstPersonCardAnchorAutomationTestView CompletedView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
 	TestEqual(TEXT("Completed staging switches anchor to battle camera mode"),
 		CompletedView.Mode,
 		EWacomFirstPersonCardAnchorMode::BattleCamera);

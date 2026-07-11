@@ -116,7 +116,7 @@ bool FWacomUIBattleCommandBarRoutesRequestsThroughHUDSpec::RunTest(const FString
 	TestTrue(TEXT("Wait command remains enabled after command refresh"),
 		CommandBar->IsWaitCommandEnabledForTest());
 
-	HUD->SetBattleInputReady(false);
+	HUD->SetBattleInputReadyForTest(false);
 	const int32 WaitValueBeforeBlockedRequest = Session->BuildSnapshot().CurrentWaitValue;
 	TestFalse(TEXT("Battle input gate disables command bar wait"),
 		CommandBar->IsWaitCommandEnabledForTest());

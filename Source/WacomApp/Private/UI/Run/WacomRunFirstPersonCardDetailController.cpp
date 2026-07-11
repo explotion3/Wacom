@@ -98,6 +98,8 @@ void FWacomRunFirstPersonCardDetailController::RefreshBinding()
 		Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&PlayerController);
 		Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&PlayerController);
 		Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&PlayerController);
+		Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&PlayerController);
+		Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&PlayerController);
 		Anchor->OnFirstPersonCardLayerCardHovered.AddUObject(
 			&PlayerController,
 			&AWacomPlayerController::HandleRunFirstPersonCardLayerCardHovered);
@@ -107,6 +109,12 @@ void FWacomRunFirstPersonCardDetailController::RefreshBinding()
 		Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.AddUObject(
 			&PlayerController,
 			&AWacomPlayerController::HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated);
+		Anchor->OnFirstPersonCardLayerPointerMoved.AddUObject(
+			&PlayerController,
+			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerMoved);
+		Anchor->OnFirstPersonCardLayerPointerLeft.AddUObject(
+			&PlayerController,
+			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerLeft);
 		BoundAnchor = Anchor;
 	}
 
@@ -127,6 +135,9 @@ void FWacomRunFirstPersonCardDetailController::UnbindBinding(
 	Anchor->OnFirstPersonCardLayerCardHovered.RemoveAll(&PlayerController);
 	Anchor->OnFirstPersonCardLayerCardUnhovered.RemoveAll(&PlayerController);
 	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&PlayerController);
+	Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&PlayerController);
+	Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&PlayerController);
+	PlayerController.ClearRunFirstPersonCardPointerCameraLookOverride();
 	if (BoundAnchor.Get() == Anchor)
 	{
 		BoundAnchor.Reset();
@@ -141,6 +152,7 @@ void FWacomRunFirstPersonCardDetailController::UnbindCurrentBinding()
 		return;
 	}
 	BoundAnchor.Reset();
+	PlayerController.ClearRunFirstPersonCardPointerCameraLookOverride();
 }
 
 bool FWacomRunFirstPersonCardDetailController::CanReuseCurrentDetail(
@@ -302,7 +314,6 @@ void FWacomRunFirstPersonCardDetailController::HandleCardHovered(
 	const FWacomFirstPersonCardLayerSlotView& SlotView)
 {
 	SetHoveredSlot(CardInstanceId, SlotView);
-
 	if (IsInspectHeldForSource(FGuid()))
 	{
 		return;
@@ -323,7 +334,6 @@ void FWacomRunFirstPersonCardDetailController::HandleCardUnhovered(
 	{
 		return;
 	}
-
 	HideForSource(CardInstanceId);
 }
 
@@ -352,7 +362,6 @@ bool FWacomRunFirstPersonCardDetailController::HandleInspectDragStartedOrUpdated
 	{
 		return false;
 	}
-
 	ShowInspectDetail(CardInstanceId, DragView);
 	return true;
 }
@@ -366,7 +375,6 @@ void FWacomRunFirstPersonCardDetailController::FinishInspectDetail(
 	}
 
 	ClearInspectHold();
-
 	FGuid HoveredCardInstanceId;
 	FWacomFirstPersonCardLayerSlotView HoveredSlotView;
 	if (GetHoveredSlot(HoveredCardInstanceId, HoveredSlotView))
@@ -377,7 +385,6 @@ void FWacomRunFirstPersonCardDetailController::FinishInspectDetail(
 			EWacomRunFirstPersonCardDetailHoldReason::Hover);
 		return;
 	}
-
 	HideForSource(CardInstanceId);
 }
 
@@ -464,7 +471,6 @@ bool FWacomRunFirstPersonCardDetailController::ShowInspectDetail(
 		HideForSource(CardInstanceId);
 		return false;
 	}
-
 	return ShowAtSlotFromRunData(
 		CardInstanceId,
 		DragView.SourceSlotView,

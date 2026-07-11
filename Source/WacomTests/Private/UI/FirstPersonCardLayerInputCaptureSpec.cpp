@@ -36,7 +36,7 @@ namespace WacomFirstPersonCardLayerInputCaptureSpec
 		Slot.Index = 0;
 		Slot.Entry.CardInstanceId = CardInstanceId;
 		Slot.Entry.bIsPlayable = true;
-		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::CommitNoTarget;
+		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::DragToDropTarget;
 		Slot.ScreenPosition = Position;
 		Slot.WidgetPosition = Position;
 		Slot.SnappedWidgetPosition = Position;

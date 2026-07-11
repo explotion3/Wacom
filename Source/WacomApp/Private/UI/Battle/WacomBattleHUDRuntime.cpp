@@ -22,6 +22,7 @@
 #include "UI/Battle/WacomBattleHUDCommandBarPresenter.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
+#include "UI/Battle/WacomBattleHUDResultApplicator.h"
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 #include "UI/Battle/WacomBattleHUDSnapshotPresenter.h"
 #include "UI/Battle/WacomBattleHUDTargetingController.h"
@@ -290,6 +291,8 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 	UBattleSession* OldSession,
 	UBattleSession* NewSession)
 {
+	GetResultApplicator().HandleSessionChanged(OldSession, NewSession);
+
 	if (OldSession != NewSession)
 	{
 		bBattleInputReady = true;
@@ -555,55 +558,6 @@ void FWacomBattleHUDRuntime::SubmitPlayCardOnHandCard(
 		PresentationTargetWidgetPosition);
 }
 
-void FWacomBattleHUDRuntime::PresentInitialization(
-	const FBattleInitializationResult& Initialization)
-{
-	if (!Initialization.IsOk())
-	{
-		return;
-	}
-
-	const TArray<FBattleEvent>& Events = Initialization.Events;
-	const FBattleSnapshot& Snapshot = Initialization.PostSnapshot;
-	const FWacomBattleCombatLogCommandContext SystemContext =
-		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Snapshot);
-	LogRawBattleEvents(Events);
-	GetCombatLogController().AppendBlock(SystemContext, Events, Snapshot, Snapshot);
-	EnqueueBattlePresentationEvents(Events, INDEX_NONE);
-}
-
-bool FWacomBattleHUDRuntime::PresentCommandResolution(
-	const FWacomBattleCombatLogCommandContext& CommandContext,
-	const FBattleSnapshot& PreCommandSnapshot,
-	const FBattleResolution& Resolution)
-{
-	const TArray<FBattleEvent>& Events = Resolution.Events;
-	const FBattlePresentationJournal& PresentationJournal = Resolution.PresentationJournal;
-	const FBattleSnapshot& PostCommandSnapshot = Resolution.PostSnapshot;
-	LogRawBattleEvents(Events);
-	GetCombatLogController().AppendBlock(
-		CommandContext,
-		Events,
-		PreCommandSnapshot,
-		PostCommandSnapshot);
-	if (CommandContext.CommandKind == EWacomBattleCombatLogCommandKind::EndTurn
-		&& GetPresentationCoordinator().EnqueueEndTurnPresentationPlan(
-			PresentationJournal,
-			Events,
-			PostCommandSnapshot))
-	{
-		return true;
-	}
-
-	StoreFirstPersonCardTransitionEvents(Events);
-	const int32 PresentationStackEntryId =
-		CommandContext.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
-			? AppendBattlePresentationStackEntry(CommandContext, PreCommandSnapshot)
-			: INDEX_NONE;
-	EnqueueBattlePresentationEvents(Events, PresentationStackEntryId);
-	return false;
-}
-
 FWacomBattleHUDCardDetailController& FWacomBattleHUDRuntime::GetCardDetailController()
 {
 	if (!CardDetailController)
@@ -683,6 +637,15 @@ FWacomBattleHUDCommandController& FWacomBattleHUDRuntime::GetCommandController()
 	return *CommandController;
 }
 
+FWacomBattleHUDResultApplicator& FWacomBattleHUDRuntime::GetResultApplicator()
+{
+	if (!ResultApplicator)
+	{
+		ResultApplicator = MakeUnique<FWacomBattleHUDResultApplicator>(*this);
+	}
+	return *ResultApplicator;
+}
+
 FWacomBattleHUDCommandBarPresenter& FWacomBattleHUDRuntime::GetCommandBarPresenter()
 {
 	if (!CommandBarPresenter)
@@ -718,12 +681,6 @@ void FWacomBattleHUDRuntime::HideCardDetailPanel()
 void FWacomBattleHUDRuntime::HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId)
 {
 	GetCardDetailController().HideFirstPersonForSource(CardInstanceId);
-}
-
-bool FWacomBattleHUDRuntime::IsFirstPersonCardInspectDetailActiveForSource(
-	const FGuid& CardInstanceId) const
-{
-	return GetCardDetailController().IsFirstPersonInspectDetailActiveForSource(CardInstanceId);
 }
 
 UWacomCardDetailPanel* FWacomBattleHUDRuntime::EnsureFirstPersonCardDetailPanel()
@@ -846,13 +803,6 @@ FWacomBattleHUDRuntime::BuildFirstPersonCardTransitionHints(
 	const FBattleSnapshot& NextSnapshot) const
 {
 	return GetFirstPersonHandBridge().BuildTransitionHints(PreviousSnapshot, NextSnapshot);
-}
-
-TArray<FWacomFirstPersonCardLayerFeedbackHint>
-FWacomBattleHUDRuntime::BuildFirstPersonCardFeedbackHints(
-	const FBattleSnapshot& NextSnapshot) const
-{
-	return GetFirstPersonHandBridge().BuildFeedbackHints(NextSnapshot);
 }
 
 int32 FWacomBattleHUDRuntime::AppendBattlePresentationStackEntry(
@@ -1125,20 +1075,11 @@ void FWacomBattleHUDRuntime::SyncFirstPersonBattleHandLayer(
 	GetFirstPersonHandBridge().SyncLayer(Snapshot, TransitionHints);
 }
 
-void FWacomBattleHUDRuntime::SyncFirstPersonBattleHandLayer(
-	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
-{
-	GetFirstPersonHandBridge().SyncLayer(Snapshot, TransitionHints, FeedbackHints);
-}
-
 void FWacomBattleHUDRuntime::RefreshFromPresentationPhase(
 	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
 {
-	GetSnapshotPresenter().RefreshFromPresentationPhase(Snapshot, TransitionHints, FeedbackHints);
+	GetSnapshotPresenter().RefreshFromPresentationPhase(Snapshot, TransitionHints);
 }
 
 void FWacomBattleHUDRuntime::ClearFirstPersonBattleHandLayer()
@@ -1210,6 +1151,17 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerHoveredCardTargetUpdated(
 	GetFirstPersonHandBridge().HandleHoveredCardTargetUpdated(CardTargetHandle, SlotView);
 }
 
+void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerPointerMoved(
+	const FWacomFirstPersonCardPointerView& PointerView)
+{
+	GetFirstPersonHandBridge().HandlePointerMoved(PointerView);
+}
+
+void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerPointerLeft()
+{
+	GetFirstPersonHandBridge().HandlePointerLeft();
+}
+
 void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragStarted(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
@@ -1236,28 +1188,6 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragCancelled(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	GetFirstPersonHandBridge().HandleDragCancelled(CardInstanceId, DragView);
-}
-
-void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerPointerMoved(
-	const FWacomFirstPersonCardPointerView& PointerView)
-{
-	GetFirstPersonHandBridge().HandlePointerMoved(PointerView);
-}
-
-void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerPointerLeft()
-{
-	GetFirstPersonHandBridge().HandlePointerLeft();
-}
-
-void FWacomBattleHUDRuntime::ApplyFirstPersonCardDragCameraLookOverride(
-	const FWacomFirstPersonCardDragView& DragView)
-{
-	GetFirstPersonHandBridge().ApplyDragCameraLookOverride(DragView);
-}
-
-void FWacomBattleHUDRuntime::ClearFirstPersonCardDragCameraLookOverride()
-{
-	GetFirstPersonHandBridge().ClearDragCameraLookOverride();
 }
 
 void FWacomBattleHUDRuntime::UpdateFirstPersonCardDragTargetFeedback(
@@ -1368,6 +1298,7 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;
 	View.bHasLastBattleSnapshot = bHasLastBattleSnapshot;
 	View.LastBattleSnapshotHandCount = bHasLastBattleSnapshot ? LastBattleSnapshot.Hand.Cards.Num() : 0;
+	View.LastBattleSnapshotVersion = bHasLastBattleSnapshot ? LastBattleSnapshot.Version : INDEX_NONE;
 	if (PresentationCoordinator)
 	{
 		View.bPresentationPlanActive = PresentationCoordinator->IsPresentationPlanBusy();

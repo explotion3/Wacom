@@ -214,6 +214,17 @@ private:
 		HandleRunFirstPersonCardLayerHoveredCardLayoutUpdated(CardInstanceId, SlotView);
 	}
 
+	void HandleRunFirstPersonCardLayerPointerMovedForTest(
+		const FWacomFirstPersonCardPointerView& PointerView)
+	{
+		HandleRunFirstPersonCardLayerPointerMoved(PointerView);
+	}
+
+	void HandleRunFirstPersonCardLayerPointerLeftForTest()
+	{
+		HandleRunFirstPersonCardLayerPointerLeft();
+	}
+
 	void HandleRunFirstPersonCardLayerDragStartedForTest(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView)
@@ -240,17 +251,6 @@ private:
 		const FWacomFirstPersonCardDragView& DragView)
 	{
 		HandleRunFirstPersonCardLayerDragCancelled(CardInstanceId, DragView);
-	}
-
-	void HandleRunFirstPersonCardLayerPointerMovedForTest(
-		const FWacomFirstPersonCardPointerView& PointerView)
-	{
-		HandleRunFirstPersonCardLayerPointerMoved(PointerView);
-	}
-
-	void HandleRunFirstPersonCardLayerPointerLeftForTest()
-	{
-		HandleRunFirstPersonCardLayerPointerLeft();
 	}
 
 	bool ApplyRunMenuDropProbeFeedbackForTest(

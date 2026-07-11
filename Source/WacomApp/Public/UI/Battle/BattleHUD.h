@@ -28,6 +28,7 @@ class FWacomBattlePresentationTargetRegistry;
 struct FBattleHUDFallbackLayoutBuilder;
 struct FBattleCommand;
 struct FBattleInitializationResult;
+struct FBattleResolution;
 struct FBattlePresentationJournal;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomBattlePresentationStackEntryView;
@@ -166,6 +167,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 	const TArray<FName>* PresentationPlanStartedPhaseNames = nullptr;
 	bool bHasLastBattleSnapshot = false;
 	int32 LastBattleSnapshotHandCount = 0;
+	int32 LastBattleSnapshotVersion = INDEX_NONE;
 };
 #endif
 
@@ -216,13 +218,19 @@ class WACOMAPP_API UBattleHUD : public UWacomBattleWidgetBase
 public:
 	virtual ~UBattleHUD() override;
 
-	/**
-	 * 绑定新 BattleSession，并且只呈现一次与该 Session 同次 commit 的初始化结果。
-	 * 普通 SetInjectedBattleSession 只负责绑定已有 Session，不会推断或重播开场事件。
-	 */
+	/** 开启新的战斗入场表现代次。必须先于 AttachInitializedBattleSession 调用。 */
+	void BeginBattleEntryPresentation();
+
+	/** 绑定并应用本表代表唯一的成功初始化结果。 */
 	void AttachInitializedBattleSession(
 		class UBattleSession* InSession,
 		FBattleInitializationResult Initialization);
+
+	/** 释放当前入场门控，并用已保存的初始化快照揭示 first-person hand。 */
+	void ReleaseBattleEntryPresentation();
+
+	/** 普通 Session 注入：取消未完成的入场代次，且绝不重播初始化结果。 */
+	void SetInjectedBattleSession(class UBattleSession* InSession);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ClampMin = "1.0", UIMin = "120.0", UIMax = "900.0", ToolTip = "战斗手牌悬浮详情面板的估算宽高，单位为 Slate 像素。用于 CanvasPanel Slot 尺寸和边界 clamp；实际样式仍由 WBP_CardDetailPanel 决定。"))
 	FVector2D CardDetailPanelEstimatedSize = FVector2D(360.0f, 420.0f);
@@ -311,7 +319,7 @@ public:
 	/**
 	 * 击倒事件 dialog 的选择入口（GDD §6）。
 	 * dialog 不直接调 Session->ResolveCommand，而是走这里，
-	 * 让 HUD 在提交后统一调 AfterCommand（应用 FBattleResolution + Snapshot 刷新 + BattleEnd 广播）。
+	 * 让 HUD 把 FBattleResolution 交给单一 ResultApplicator（Snapshot 刷新 + 表现 + BattleEnd 广播）。
 	 * 与 OnWaitRequested / OnEndTurnRequested 对称。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "击倒选择 dialog 的 BattleHUD 命令入口。Dialog 不直接提交 BattleSession，统一由 HUD 做命令后刷新和事件消费。"))
@@ -346,9 +354,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 BattleHUD 是否允许提交普通玩家行动命令。只读查询，包含战斗阶段、击倒选择和表现 pending gate。"))
 	bool CanSubmitPlayerActionCommand() const;
 
-	void SetBattleInputReady(bool bReady);
 	bool IsBattleInputReady() const;
-	void SetFirstPersonBattleHandSuppressedForEntry(bool bSuppressed);
 	bool IsFirstPersonBattleHandSuppressedForEntry() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "是否存在等待表现栈清空后再提交的 Wait / EndTurn 命令。"))
@@ -441,9 +447,6 @@ private:
 
 	FWacomBattleHUDRuntime* BattleHUDRuntime = nullptr;
 
-	/** 已经呈现过初始化结果的 Session；防止重复 Attach 重播开场事件。 */
-	TWeakObjectPtr<class UBattleSession> InitializationPresentationSession;
-
 	/** 内部状态切换入口，同时触发 Native + BP 钩子。 */
 	void SetUIState(EBattleUIState NewState);
 	FWacomBattleHUDRuntime& GetBattleHUDRuntime();
@@ -466,8 +469,6 @@ private:
 		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
-		const FBattleSnapshot& NextSnapshot) const;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHints(
 		const FBattleSnapshot& NextSnapshot) const;
 	int32 AppendBattlePresentationStackEntry(
 		const FWacomBattleCombatLogCommandContext& CommandContext,
@@ -510,11 +511,17 @@ private:
 	void SetTargetSelectionStateForAutomationTest(const FGuid& PendingCardId);
 	void ClearTargetSelectionStateForAutomationTest();
 	void QueuePendingTurnBoundaryWaitForAutomationTest();
+	void SetBattleInputReadyForAutomationTest(bool bReady);
+	void SetFirstPersonBattleHandSuppressedForAutomationTest(bool bSuppressed);
+	void ApplyCommandResolutionForAutomationTest(
+		class UBattleSession* SourceSession,
+		const FWacomBattleCombatLogCommandContext& LogContext,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleResolution& Resolution);
 #endif
 
 	void HideCardDetailPanel();
 	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);
-	bool IsFirstPersonCardInspectDetailActiveForSource(const FGuid& CardInstanceId) const;
 	UWacomCardDetailPanel* EnsureFirstPersonCardDetailPanel();
 	bool ShowFirstPersonCardDetailAtSlot(
 		const FWacomCardDetailViewData& DetailData,
@@ -554,14 +561,9 @@ private:
 	void SyncFirstPersonBattleHandLayer(
 		const FBattleSnapshot& Snap,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
-	void SyncFirstPersonBattleHandLayer(
-		const FBattleSnapshot& Snap,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void RefreshFromPresentationPhase(
 		const FBattleSnapshot& Snap,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
 	void ClearFirstPersonBattleHandLayer();
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;
@@ -573,14 +575,12 @@ private:
 	void HandleFirstPersonCardLayerCardTargetHovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerCardTargetUnhovered(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerHoveredCardTargetUpdated(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
+	void HandleFirstPersonCardLayerPointerLeft();
 	void HandleFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
-	void HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
-	void HandleFirstPersonCardLayerPointerLeft();
-	void ApplyFirstPersonCardDragCameraLookOverride(const FWacomFirstPersonCardDragView& DragView);
-	void ClearFirstPersonCardDragCameraLookOverride();
 	void UpdateFirstPersonCardDragTargetFeedback(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);

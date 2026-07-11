@@ -35,6 +35,39 @@ Function SelfContained WacomFirstPersonCard_ProjectSurface(
     projectedUVAndMask = float3(projectedUV.x, projectedUV.y, insideMask);
 }
 
+Function SelfContained WacomFirstPersonCard_CombineContactShadowAlpha(
+    in float centerAlpha,
+    in float leftAlpha,
+    in float rightAlpha,
+    in float topAlpha,
+    in float bottomAlpha,
+    in float topLeftAlpha,
+    in float topRightAlpha,
+    in float bottomLeftAlpha,
+    in float bottomRightAlpha,
+    in float alphaThreshold,
+    in float alphaFeather,
+    out float contactShadowMask)
+{
+    float safeFeather = max(alphaFeather, 0.0001);
+    float thresholdMin = max(alphaThreshold - safeFeather, 0.0);
+    float thresholdMax = min(alphaThreshold + safeFeather, 1.0);
+    float centerCaster = smoothstep(thresholdMin, thresholdMax, centerAlpha);
+    float leftCaster = smoothstep(thresholdMin, thresholdMax, leftAlpha);
+    float rightCaster = smoothstep(thresholdMin, thresholdMax, rightAlpha);
+    float topCaster = smoothstep(thresholdMin, thresholdMax, topAlpha);
+    float bottomCaster = smoothstep(thresholdMin, thresholdMax, bottomAlpha);
+    float topLeftCaster = smoothstep(thresholdMin, thresholdMax, topLeftAlpha);
+    float topRightCaster = smoothstep(thresholdMin, thresholdMax, topRightAlpha);
+    float bottomLeftCaster = smoothstep(thresholdMin, thresholdMax, bottomLeftAlpha);
+    float bottomRightCaster = smoothstep(thresholdMin, thresholdMax, bottomRightAlpha);
+    contactShadowMask = (
+        centerCaster * 4.0
+        + (leftCaster + rightCaster + topCaster + bottomCaster) * 2.0
+        + topLeftCaster + topRightCaster + bottomLeftCaster + bottomRightCaster)
+        / 16.0;
+}
+
 Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
 {
     Properties = {
@@ -64,6 +97,18 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
             Description="项目透视强度；由 Anchor 的 CardFake3DPerspectiveStrength 写入，推荐 0.08 到 0.18。";
         ];
 
+        ScalarParameter ContactShadowEnabled = 1.0 [
+            Group="第一人称手牌透视|接触阴影运行时";
+            SortPriority=35;
+            Description="是否输出由 Retainer 实时 Alpha 生成的接触阴影；由 C++ Card Depth 写入 0 或 1。";
+        ];
+
+        ScalarParameter ContactShadowLift = 0.0 [
+            Group="第一人称手牌透视|接触阴影运行时";
+            SortPriority=36;
+            Description="接触阴影的抬升归一化值；0 为静止时紧贴轮廓，1 为 Drag 时更软更淡，由 C++ Card Depth 平滑写入。";
+        ];
+
         ScalarParameter ReferenceTiltDegrees = 9.0 [
             Group="第一人称手牌透视|制作";
             SortPriority=40;
@@ -81,12 +126,78 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
             SortPriority=60;
             Description="投影采样越过 Retainer 边界时的淡出宽度，UV 单位；推荐 0.001 到 0.006。";
         ];
+
+        VectorParameter ContactShadowColor = float4(0.008, 0.006, 0.004, 1.0) [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=70;
+            Description="接触阴影颜色；透明度由 Base/Lift Opacity 单独控制，推荐使用带轻微暖色的近黑色。";
+        ];
+
+        ScalarParameter ContactShadowBaseOffsetXUV = 0.0 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=80;
+            Description="静止接触阴影横向偏移，UV 单位；推荐 -0.004 到 0.004。";
+        ];
+
+        ScalarParameter ContactShadowBaseOffsetYUV = 0.0039 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=81;
+            Description="静止接触阴影纵向偏移，UV 单位；当前 484 px Retainer 上 0.0039 约为 2 px。";
+        ];
+
+        ScalarParameter ContactShadowLiftOffsetXUV = 0.0 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=82;
+            Description="完全抬升时接触阴影横向偏移，UV 单位；推荐 -0.008 到 0.008。";
+        ];
+
+        ScalarParameter ContactShadowLiftOffsetYUV = 0.0100 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=83;
+            Description="完全抬升时接触阴影纵向偏移，UV 单位；当前 484 px Retainer 上 0.01 约为 5 px。";
+        ];
+
+        ScalarParameter ContactShadowBaseSoftnessUV = 0.0025 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=90;
+            Description="静止接触阴影 3x3 采样核半径，UV 单位；推荐 0.0015 到 0.004。";
+        ];
+
+        ScalarParameter ContactShadowLiftSoftnessUV = 0.0065 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=91;
+            Description="完全抬升时接触阴影 3x3 采样核半径，UV 单位；推荐 0.004 到 0.009。";
+        ];
+
+        ScalarParameter ContactShadowBaseOpacity = 0.22 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=100;
+            Description="静止接触阴影不透明度；推荐 0.16 到 0.26。";
+        ];
+
+        ScalarParameter ContactShadowLiftOpacity = 0.09 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=101;
+            Description="完全抬升时接触阴影不透明度；推荐 0.06 到 0.14，使接触阴影随卡牌抬起而变淡。";
+        ];
+
+        ScalarParameter ContactShadowAlphaThreshold = 0.18 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=110;
+            Description="实时 CardView Alpha 转换为实体投影轮廓的中心阈值；推荐 0.1 到 0.3，越高越会过滤半透明光效。";
+        ];
+
+        ScalarParameter ContactShadowAlphaFeather = 0.12 [
+            Group="第一人称手牌透视|接触阴影制作";
+            SortPriority=111;
+            Description="实体投影轮廓 Alpha 阈值的柔化范围；推荐 0.06 到 0.18，用于保留实体出血装饰的抗锯齿边缘。";
+        ];
     }
 
     Settings = {
         Domain = "UI";
         ShadingModel = "Unlit";
-        BlendMode = "Translucent";
+        BlendMode = "PremultipliedAlpha";
         TwoSided = true;
     }
 
@@ -147,7 +258,76 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
             B=false,
             A=true);
 
-        Color = surfaceColor;
-        Alpha = surfaceAlpha * insideMask;
+        float safeContactShadowLift = clamp(ContactShadowLift, 0.0, 1.0);
+        float2 contactShadowOffsetUV = float2(
+            lerp(ContactShadowBaseOffsetXUV, ContactShadowLiftOffsetXUV, safeContactShadowLift),
+            lerp(ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetYUV, safeContactShadowLift));
+        float contactShadowSoftnessUV = lerp(
+            ContactShadowBaseSoftnessUV,
+            ContactShadowLiftSoftnessUV,
+            safeContactShadowLift);
+        float2 contactShadowSampleUV = projectedUV - contactShadowOffsetUV;
+        float2 contactShadowStepX = float2(contactShadowSoftnessUV, 0.0);
+        float2 contactShadowStepY = float2(0.0, contactShadowSoftnessUV);
+
+        float4 contactCenter = Texture(Coordinates=contactShadowSampleUV);
+        float4 contactLeft = Texture(Coordinates=contactShadowSampleUV - contactShadowStepX);
+        float4 contactRight = Texture(Coordinates=contactShadowSampleUV + contactShadowStepX);
+        float4 contactTop = Texture(Coordinates=contactShadowSampleUV - contactShadowStepY);
+        float4 contactBottom = Texture(Coordinates=contactShadowSampleUV + contactShadowStepY);
+        float4 contactTopLeft = Texture(Coordinates=contactShadowSampleUV - contactShadowStepX - contactShadowStepY);
+        float4 contactTopRight = Texture(Coordinates=contactShadowSampleUV + contactShadowStepX - contactShadowStepY);
+        float4 contactBottomLeft = Texture(Coordinates=contactShadowSampleUV - contactShadowStepX + contactShadowStepY);
+        float4 contactBottomRight = Texture(Coordinates=contactShadowSampleUV + contactShadowStepX + contactShadowStepY);
+
+        float contactCenterAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactCenter, R=false, G=false, B=false, A=true);
+        float contactLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactLeft, R=false, G=false, B=false, A=true);
+        float contactRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactRight, R=false, G=false, B=false, A=true);
+        float contactTopAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactTop, R=false, G=false, B=false, A=true);
+        float contactBottomAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactBottom, R=false, G=false, B=false, A=true);
+        float contactTopLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactTopLeft, R=false, G=false, B=false, A=true);
+        float contactTopRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactTopRight, R=false, G=false, B=false, A=true);
+        float contactBottomLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactBottomLeft, R=false, G=false, B=false, A=true);
+        float contactBottomRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactBottomRight, R=false, G=false, B=false, A=true);
+
+        float contactShadowMask;
+        WacomFirstPersonCard_CombineContactShadowAlpha(
+            contactCenterAlpha,
+            contactLeftAlpha,
+            contactRightAlpha,
+            contactTopAlpha,
+            contactBottomAlpha,
+            contactTopLeftAlpha,
+            contactTopRightAlpha,
+            contactBottomLeftAlpha,
+            contactBottomRightAlpha,
+            ContactShadowAlphaThreshold,
+            ContactShadowAlphaFeather,
+            contactShadowMask);
+
+        float3 contactShadowColorRGB = UE.Expression(
+            Class="ComponentMask",
+            OutputType="float3",
+            Input=ContactShadowColor,
+            R=true,
+            G=true,
+            B=true,
+            A=false);
+        float cardAlpha = surfaceAlpha * insideMask;
+        float contactShadowOpacity = lerp(
+            ContactShadowBaseOpacity,
+            ContactShadowLiftOpacity,
+            safeContactShadowLift);
+        float contactShadowAlpha =
+            contactShadowMask
+            * contactShadowOpacity
+            * clamp(ContactShadowEnabled, 0.0, 1.0)
+            * insideMask
+            * (1.0 - cardAlpha);
+
+        // Retainer surfaces are composited as premultiplied alpha. Preserve the captured card RGB
+        // and add only the shadow contribution in transparent pixels behind the live CardView shape.
+        Color = surfaceColor * insideMask + contactShadowColorRGB * contactShadowAlpha;
+        Alpha = saturate(cardAlpha + contactShadowAlpha);
     }
 }

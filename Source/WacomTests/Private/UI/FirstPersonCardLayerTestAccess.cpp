@@ -92,14 +92,12 @@ void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerPresentationFrame(
 	UWacomFirstPersonCardAnchorComponent& Anchor,
 	FName SourceId,
 	const TArray<FWacomFirstPersonCardLayerEntry>& Entries,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
 {
 	Anchor.SetRuntimeCardLayerPresentationFrame(
 		SourceId,
 		Entries,
-		TransitionHints,
-		FeedbackHints);
+		TransitionHints);
 }
 
 void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionHints(
@@ -108,14 +106,6 @@ void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionHints(
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints)
 {
 	Anchor.SetRuntimeCardLayerTransitionHints(SourceId, Hints);
-}
-
-void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerFeedbackHints(
-	UWacomFirstPersonCardAnchorComponent& Anchor,
-	FName SourceId,
-	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints)
-{
-	Anchor.SetRuntimeCardLayerFeedbackHints(SourceId, Hints);
 }
 
 void FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerTransitionPresentationEnabled(

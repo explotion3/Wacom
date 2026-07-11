@@ -5,8 +5,8 @@
 namespace
 {
 	constexpr float DepthTiltToleranceDegrees = 0.01f;
-	constexpr float DepthShadowOffsetTolerancePixels = 0.02f;
 	constexpr float DepthScalarTolerance = 0.001f;
+	constexpr float ContactShadowLiftTolerance = 0.001f;
 	constexpr float PointerVelocityTolerance = 0.5f;
 }
 
@@ -26,25 +26,23 @@ const FWacomFirstPersonCardDepthView& FWacomFirstPersonCardDepthMotion::Update(
 		bInitialized = true;
 	}
 
-	const bool bReturningToRest = TargetView.TiltDegrees.IsNearlyZero(DepthTiltToleranceDegrees)
-		&& TargetView.ShadowOffsetPixels.Equals(Config.BaseShadowOffsetPixels, DepthShadowOffsetTolerancePixels)
-		&& FMath::IsNearlyEqual(TargetView.ShadowOpacity, Config.BaseShadowOpacity, DepthScalarTolerance);
+	const bool bReturningToRest =
+		TargetView.TiltDegrees.IsNearlyZero(DepthTiltToleranceDegrees)
+		&& FMath::IsNearlyZero(TargetView.ContactShadowLift, ContactShadowLiftTolerance);
 	const float ResponseSpeed = bReturningToRest ? Config.ReturnSpeed : Config.ResponseSpeed;
 	const float Alpha = ComputeExponentialAlpha(ResponseSpeed, SafeDeltaTime);
 
 	CurrentView.bFake3DEnabled = TargetView.bFake3DEnabled;
-	CurrentView.bShadowEnabled = TargetView.bShadowEnabled;
 	CurrentView.TiltDegrees = FMath::Lerp(CurrentView.TiltDegrees, TargetView.TiltDegrees, Alpha);
 	CurrentView.PerspectiveStrength = FMath::Lerp(
 		CurrentView.PerspectiveStrength,
 		TargetView.PerspectiveStrength,
 		Alpha);
-	CurrentView.ShadowOffsetPixels = FMath::Lerp(
-		CurrentView.ShadowOffsetPixels,
-		TargetView.ShadowOffsetPixels,
+	CurrentView.bContactShadowEnabled = TargetView.bContactShadowEnabled;
+	CurrentView.ContactShadowLift = FMath::Lerp(
+		CurrentView.ContactShadowLift,
+		TargetView.ContactShadowLift,
 		Alpha);
-	CurrentView.ShadowOpacity = FMath::Lerp(CurrentView.ShadowOpacity, TargetView.ShadowOpacity, Alpha);
-	CurrentView.ShadowScale = FMath::Lerp(CurrentView.ShadowScale, TargetView.ShadowScale, Alpha);
 
 	if (!IsInMotion())
 	{
@@ -76,10 +74,14 @@ bool FWacomFirstPersonCardDepthMotion::IsInMotion() const
 		return true;
 	}
 	return !CurrentView.TiltDegrees.Equals(TargetView.TiltDegrees, DepthTiltToleranceDegrees)
-		|| !CurrentView.ShadowOffsetPixels.Equals(TargetView.ShadowOffsetPixels, DepthShadowOffsetTolerancePixels)
-		|| !FMath::IsNearlyEqual(CurrentView.PerspectiveStrength, TargetView.PerspectiveStrength, DepthScalarTolerance)
-		|| !FMath::IsNearlyEqual(CurrentView.ShadowOpacity, TargetView.ShadowOpacity, DepthScalarTolerance)
-		|| !FMath::IsNearlyEqual(CurrentView.ShadowScale, TargetView.ShadowScale, DepthScalarTolerance)
+		|| !FMath::IsNearlyEqual(
+			CurrentView.PerspectiveStrength,
+			TargetView.PerspectiveStrength,
+			DepthScalarTolerance)
+		|| !FMath::IsNearlyEqual(
+			CurrentView.ContactShadowLift,
+			TargetView.ContactShadowLift,
+			ContactShadowLiftTolerance)
 		|| FilteredPointerVelocity.SizeSquared() > FMath::Square(PointerVelocityTolerance);
 }
 
@@ -109,7 +111,7 @@ FVector2D FWacomFirstPersonCardDepthMotion::ResolvePointerInCardSpace(
 	const FVector2D LocalDelta(
 		CosAngle * Delta.X + SinAngle * Delta.Y,
 		-SinAngle * Delta.X + CosAngle * Delta.Y);
-	const FVector2D SafeHalfSize = FVector2D(
+	const FVector2D SafeHalfSize(
 		FMath::Max(1.0f, Input.CardBodySize.X * 0.5f * FMath::Max(0.01f, Input.CardRenderScale)),
 		FMath::Max(1.0f, Input.CardBodySize.Y * 0.5f * FMath::Max(0.01f, Input.CardRenderScale)));
 	return FVector2D(
@@ -123,11 +125,10 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::MakeNeutralView
 {
 	FWacomFirstPersonCardDepthView View;
 	View.bFake3DEnabled = Config.bEnableFake3D && bProjected;
-	View.bShadowEnabled = Config.bEnableIndependentShadow && bProjected;
-	View.PerspectiveStrength = View.bFake3DEnabled ? FMath::Max(0.0f, Config.PerspectiveStrength) : 0.0f;
-	View.ShadowOffsetPixels = Config.BaseShadowOffsetPixels;
-	View.ShadowOpacity = View.bShadowEnabled ? FMath::Clamp(Config.BaseShadowOpacity, 0.0f, 1.0f) : 0.0f;
-	View.ShadowScale = FMath::Max(0.01f, Config.BaseShadowScale);
+	View.PerspectiveStrength = View.bFake3DEnabled
+		? FMath::Max(0.0f, Config.PerspectiveStrength)
+		: 0.0f;
+	View.bContactShadowEnabled = Config.bEnableContactShadow && bProjected;
 	return View;
 }
 
@@ -141,61 +142,43 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::BuildTargetView
 		return View;
 	}
 
-	float MaxTiltDegrees = FMath::Max(0.0f, Config.HoverMaxTiltDegrees);
-	float ShadowBlend = 0.0f;
 	if (Input.bDragging)
 	{
-		MaxTiltDegrees = FMath::Max(0.0f, Config.DragMaxTiltDegrees);
-		const float VelocityForMaxTilt = FMath::Max(1.0f, Config.DragVelocityForMaxTiltPixelsPerSecond);
-		const FVector2D NormalizedVelocity(
-			FMath::Clamp(FilteredPointerVelocity.X / VelocityForMaxTilt, -1.0f, 1.0f),
-			FMath::Clamp(FilteredPointerVelocity.Y / VelocityForMaxTilt, -1.0f, 1.0f));
-		View.TiltDegrees = FVector2D(
-			NormalizedVelocity.Y * MaxTiltDegrees,
-			-NormalizedVelocity.X * MaxTiltDegrees);
-		View.ShadowOffsetPixels = Config.DragShadowOffsetPixels;
-		View.ShadowOpacity = FMath::Clamp(Config.DragShadowOpacity, 0.0f, 1.0f);
-		View.ShadowScale = FMath::Max(0.01f, Config.DragShadowScale);
-		ShadowBlend = 1.0f;
+		if (View.bFake3DEnabled)
+		{
+			const float MaxTiltDegrees = FMath::Max(0.0f, Config.DragMaxTiltDegrees);
+			const float VelocityForMaxTilt =
+				FMath::Max(1.0f, Config.DragVelocityForMaxTiltPixelsPerSecond);
+			const FVector2D NormalizedVelocity(
+				FMath::Clamp(FilteredPointerVelocity.X / VelocityForMaxTilt, -1.0f, 1.0f),
+				FMath::Clamp(FilteredPointerVelocity.Y / VelocityForMaxTilt, -1.0f, 1.0f));
+			View.TiltDegrees = FVector2D(
+				NormalizedVelocity.Y * MaxTiltDegrees,
+				-NormalizedVelocity.X * MaxTiltDegrees);
+		}
+		if (View.bContactShadowEnabled)
+		{
+			View.ContactShadowLift = FMath::Clamp(Config.DragContactShadowLift, 0.0f, 1.0f);
+		}
 	}
 	else if (Input.bHovered || Input.bPressed)
 	{
-		const FVector2D PointerInCardSpace = ResolvePointerInCardSpace(Input);
-		View.TiltDegrees = FVector2D(
-			-PointerInCardSpace.Y * MaxTiltDegrees,
-			PointerInCardSpace.X * MaxTiltDegrees);
-		ShadowBlend = Input.bPressed
-			? FMath::Clamp(Config.PressedTiltMultiplier, 0.0f, 1.0f)
-			: 1.0f;
-		View.TiltDegrees *= ShadowBlend;
-		View.ShadowOffsetPixels = FMath::Lerp(
-			Config.BaseShadowOffsetPixels,
-			Config.HoverShadowOffsetPixels,
-			ShadowBlend);
-		View.ShadowOpacity = FMath::Lerp(
-			FMath::Clamp(Config.BaseShadowOpacity, 0.0f, 1.0f),
-			FMath::Clamp(Config.HoverShadowOpacity, 0.0f, 1.0f),
-			ShadowBlend);
-		View.ShadowScale = FMath::Lerp(
-			FMath::Max(0.01f, Config.BaseShadowScale),
-			FMath::Max(0.01f, Config.HoverShadowScale),
-			ShadowBlend);
-	}
-
-	if (!View.bFake3DEnabled)
-	{
-		View.TiltDegrees = FVector2D::ZeroVector;
-		View.PerspectiveStrength = 0.0f;
-	}
-	if (!View.bShadowEnabled)
-	{
-		View.ShadowOpacity = 0.0f;
-	}
-	else if (MaxTiltDegrees > KINDA_SMALL_NUMBER && ShadowBlend > 0.0f)
-	{
-		const FVector2D NormalizedTilt = View.TiltDegrees / MaxTiltDegrees;
-		View.ShadowOffsetPixels += FVector2D(-NormalizedTilt.Y, NormalizedTilt.X)
-			* FMath::Max(0.0f, Config.ShadowTiltInfluencePixels);
+		if (View.bFake3DEnabled)
+		{
+			const float MaxTiltDegrees = FMath::Max(0.0f, Config.HoverMaxTiltDegrees);
+			const FVector2D PointerInCardSpace = ResolvePointerInCardSpace(Input);
+			View.TiltDegrees = FVector2D(
+				-PointerInCardSpace.Y * MaxTiltDegrees,
+				PointerInCardSpace.X * MaxTiltDegrees);
+			if (Input.bPressed)
+			{
+				View.TiltDegrees *= FMath::Clamp(Config.PressedTiltMultiplier, 0.0f, 1.0f);
+			}
+		}
+		if (View.bContactShadowEnabled)
+		{
+			View.ContactShadowLift = FMath::Clamp(Config.HoverContactShadowLift, 0.0f, 1.0f);
+		}
 	}
 	return View;
 }

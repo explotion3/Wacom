@@ -20,7 +20,6 @@ public:
 
 	TArray<FWacomFirstPersonCardLayerEntry> LastWrittenEntries;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> LastWrittenTransitionHints;
-	TArray<FWacomFirstPersonCardLayerFeedbackHint> LastWrittenFeedbackHints;
 	FName LastWrittenSourceId = NAME_None;
 	FName LastClearedSourceId = NAME_None;
 	EWacomFirstPersonCardLayerFrameCommitMode LastWrittenCommitMode =
@@ -45,7 +44,6 @@ protected:
 		LastWrittenSourceId = Frame.SourceId;
 		LastWrittenEntries = Frame.Entries;
 		LastWrittenTransitionHints = Frame.TransitionHints;
-		LastWrittenFeedbackHints = Frame.FeedbackHints;
 		LastWrittenCommitMode = Frame.CommitMode;
 		++WriteCount;
 		if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame
@@ -63,7 +61,6 @@ protected:
 		LastClearedSourceId = SourceId;
 		LastWrittenEntries.Reset();
 		LastWrittenTransitionHints.Reset();
-		LastWrittenFeedbackHints.Reset();
 		++ClearCount;
 	}
 };

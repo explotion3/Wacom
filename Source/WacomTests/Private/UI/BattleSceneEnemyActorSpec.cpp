@@ -1119,7 +1119,7 @@ bool FWacomUIBattleSceneEnemyPartActionPreviewAllActingPartsSpec::RunTest(const 
 	HUD->SetSession(Session);
 	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
 	HUD->RefreshFromSnapshotForTest(Snapshot);
-	HUD->SetBattleInputReady(true);
+	HUD->SetBattleInputReadyForTest(true);
 
 	AWacomBattleEnemyPartActor* TargetPart = SceneEnemy.Parts[0];
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD.Get());

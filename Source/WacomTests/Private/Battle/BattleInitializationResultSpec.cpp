@@ -29,7 +29,7 @@ namespace
 		return Params;
 	}
 
-	TArray<FGuid> GetHandIds(const FBattleSnapshot& Snapshot)
+	TArray<FGuid> GetInitializationHandIds(const FBattleSnapshot& Snapshot)
 	{
 		TArray<FGuid> Ids;
 		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
@@ -92,7 +92,7 @@ bool FWacomBattleInitializationResultAtomicSpec::RunTest(const FString& /*Parame
 	}
 
 	const FBattleSnapshot BeforeFailedReinitialize = Session->BuildSnapshot();
-	const TArray<FGuid> BeforeHandIds = GetHandIds(BeforeFailedReinitialize);
+	const TArray<FGuid> BeforeHandIds = GetInitializationHandIds(BeforeFailedReinitialize);
 	const int32 BeforeNextSequence =
 		FWacomBattleSessionTestAccess::GetNextEventSequence(Session.Get());
 	const int32 BeforeRandomSeed =
@@ -117,9 +117,9 @@ bool FWacomBattleInitializationResultAtomicSpec::RunTest(const FString& /*Parame
 		Rejected.PostSnapshot.Version,
 		BeforeFailedReinitialize.Version);
 	TestTrue(TEXT("Failed reinitialize preserves hand identity"),
-		GetHandIds(Rejected.PostSnapshot) == BeforeHandIds);
+		GetInitializationHandIds(Rejected.PostSnapshot) == BeforeHandIds);
 	TestTrue(TEXT("Failed reinitialize preserves live hand identity"),
-		GetHandIds(Session->BuildSnapshot()) == BeforeHandIds);
+		GetInitializationHandIds(Session->BuildSnapshot()) == BeforeHandIds);
 	TestEqual(TEXT("Failed reinitialize preserves event sequence"),
 		FWacomBattleSessionTestAccess::GetNextEventSequence(Session.Get()),
 		BeforeNextSequence);

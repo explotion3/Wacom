@@ -5,22 +5,11 @@
 #include "CoreMinimal.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
-class USoundBase;
-
 enum class EWacomFirstPersonCardTransitionPlaybackMode : uint8
 {
 	None,
 	Enter,
 	Exit
-};
-
-struct FWacomFirstPersonCardTransitionSoundRequest
-{
-	TSoftObjectPtr<USoundBase> Sound;
-	float VolumeMultiplier = 1.0f;
-	float PitchMultiplier = 1.0f;
-	EWacomFirstPersonCardSlotTransitionKind TransitionKind =
-		EWacomFirstPersonCardSlotTransitionKind::Default;
 };
 
 struct FWacomFirstPersonCardTransitionTickResult
@@ -47,7 +36,6 @@ public:
 	FWacomFirstPersonCardTransitionTickResult Tick(
 		float DeltaTime,
 		const FWacomFirstPersonCardLayerSlotView& DynamicEnterTargetSlotView);
-	TOptional<FWacomFirstPersonCardTransitionSoundRequest> ConsumePendingSoundRequest();
 
 	bool IsActive() const { return Mode != EWacomFirstPersonCardTransitionPlaybackMode::None; }
 	bool IsEnterActive() const { return Mode == EWacomFirstPersonCardTransitionPlaybackMode::Enter; }
@@ -58,8 +46,7 @@ public:
 	float GetDurationSeconds() const { return DurationSeconds; }
 
 private:
-	void QueueStartSoundRequest();
-	void ClearActiveStatePreservingPendingSound();
+	void ClearActiveState();
 
 	EWacomFirstPersonCardTransitionPlaybackMode Mode =
 		EWacomFirstPersonCardTransitionPlaybackMode::None;
@@ -71,11 +58,4 @@ private:
 	float ArcLiftPixels = 0.0f;
 	float EasePower = 1.0f;
 	bool bBlockInteractionDuringPlayback = true;
-	TSoftObjectPtr<USoundBase> StartSound;
-	float StartSoundVolumeMultiplier = 1.0f;
-	float StartSoundPitchMultiplier = 1.0f;
-	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
-		EWacomFirstPersonCardSlotTransitionKind::Default;
-	bool bStartSoundRequested = false;
-	TOptional<FWacomFirstPersonCardTransitionSoundRequest> PendingSoundRequest;
 };

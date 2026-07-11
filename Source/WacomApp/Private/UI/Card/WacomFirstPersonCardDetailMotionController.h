@@ -73,7 +73,6 @@ public:
 	bool GetActiveSlotForSource(
 		const FGuid& CardInstanceId,
 		FWacomFirstPersonCardLayerSlotView& OutSlotView) const;
-	bool IsActiveSlotInspectingForSource(const FGuid& CardInstanceId) const;
 	bool ComputeTarget(
 		const FWacomFirstPersonCardLayerSlotView& SlotView,
 		const FWacomFirstPersonCardDetailMotionConfig& Config,

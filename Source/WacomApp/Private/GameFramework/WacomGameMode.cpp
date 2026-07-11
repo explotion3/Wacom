@@ -49,32 +49,6 @@ namespace
 		return CountBattleEnemySlotParts(Params.EnemySlots);
 	}
 
-	void GuardBattleEntryHUD(UBattleHUD* BattleHUD)
-	{
-		if (!BattleHUD)
-		{
-			return;
-		}
-
-		BattleHUD->SetBattleInputReady(false);
-		BattleHUD->SetFirstPersonBattleHandSuppressedForEntry(true);
-	}
-
-	void ReleaseBattleEntryHUD(UBattleHUD* BattleHUD, UBattleSession* ActiveSession, bool bRefreshSnapshot)
-	{
-		if (!BattleHUD)
-		{
-			return;
-		}
-
-		BattleHUD->SetFirstPersonBattleHandSuppressedForEntry(false);
-		BattleHUD->SetBattleInputReady(true);
-		if (bRefreshSnapshot && ActiveSession)
-		{
-			BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
-		}
-	}
-
 	struct FExitBattleRunPresentationRestoreState
 	{
 		explicit FExitBattleRunPresentationRestoreState(AWacomPlayerController* InPlayerController)
@@ -459,7 +433,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		WacomPC->ClearRunFirstPersonCardLayer();
 	}
 
-	GuardBattleEntryHUD(BattleHUD);
+	BattleHUD->BeginBattleEntryPresentation();
 	BattleHUD->AttachInitializedBattleSession(ActiveSession, MoveTemp(BattleInitialization));
 	TArray<AWacomBattleEnemyActor*> SceneEnemyHosts;
 	Trigger->BuildBattleSceneEnemyHosts(SceneEnemyHosts);
@@ -507,19 +481,16 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 					{
 						return;
 					}
-					ReleaseBattleEntryHUD(
-						GameMode->BattleHUD,
-						GameMode->ActiveSession,
-						/*bRefreshSnapshot*/true);
+					if (GameMode->BattleHUD)
+					{
+						GameMode->BattleHUD->ReleaseBattleEntryPresentation();
+					}
 				});
 	}
 
 	if (!bBattleCameraActivationDeferred)
 	{
-		ReleaseBattleEntryHUD(
-			BattleHUD,
-			ActiveSession,
-			/*bRefreshSnapshot*/false);
+		BattleHUD->ReleaseBattleEntryPresentation();
 	}
 
 	// 5) 记录状态
@@ -531,9 +502,6 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	{
 		WPC->RefreshInteractToast();
 	}
-
-	// 让 HUD 立即刷出初始 Snapshot
-	BattleHUD->RefreshFromSnapshot(ActiveSession->BuildSnapshot());
 
 	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：FirstEnemySlotDefinition=%s EncounterSlots=%d"),
 		*GetNameSafe(FirstEnemySlotDefinition),

@@ -58,9 +58,9 @@ public:
 	bool GetHoveredSlot(
 		FGuid& OutCardInstanceId,
 		FWacomFirstPersonCardLayerSlotView& OutSlotView) const;
-
 	bool IsInspectHeldForSource(const FGuid& CardInstanceId) const;
 	void ClearInspectHold();
+
 	void HandleCardHovered(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardLayerSlotView& SlotView);

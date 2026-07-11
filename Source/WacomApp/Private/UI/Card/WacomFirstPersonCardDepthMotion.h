@@ -23,9 +23,8 @@ struct FWacomFirstPersonCardDepthMotionInput
 
 /**
  * Stateful, frame-rate-independent depth motion for one first-person card.
- *
- * Hover tilt follows the pointer inside the card body. Drag tilt follows
- * filtered pointer velocity so a card that follows the cursor still has inertia.
+ * Hover follows the pointer within the authored card body; drag follows filtered
+ * pointer velocity. The same semantic state also drives the Retainer contact shadow.
  */
 class FWacomFirstPersonCardDepthMotion
 {
