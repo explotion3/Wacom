@@ -198,17 +198,24 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 	const float RetainedScale = bRetainedTransformActive
 		? FMath::Lerp(1.0f, FeedbackConfig.RetainedFeedbackScale, Input.RetainedAlpha)
 		: 1.0f;
+	const float DragPickupAlpha = FMath::Clamp(Input.DragPickupAlpha, 0.0f, 1.0f);
+	const float DragPickupScale = FMath::Lerp(
+		1.0f,
+		FeedbackConfig.DragPickupScaleMultiplier,
+		DragPickupAlpha);
 	Result.RenderTransform.Translation = FVector2D(
 		DenyShakeOffset,
-		bRetainedTransformActive
-			? -FeedbackConfig.RetainedFeedbackLiftPixels * Input.RetainedAlpha
-			: 0.0f);
+		-(bRetainedTransformActive
+			? FeedbackConfig.RetainedFeedbackLiftPixels * Input.RetainedAlpha
+			: 0.0f)
+			- FeedbackConfig.DragPickupLiftPixels * DragPickupAlpha);
 	Result.RenderTransform.Scale = FVector2D(FMath::Max(
 		0.01f,
 		SlotView.RenderScale
 			* PressedScale
 			* CommitScale
-			* RetainedScale));
+			* RetainedScale
+			* DragPickupScale));
 	Result.RenderTransform.Angle = SlotView.RenderAngleDegrees;
 	return Result;
 }

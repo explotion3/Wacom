@@ -140,6 +140,9 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static bool RequestGestureRelease(
 		UWacomFirstPersonCardLayerSlotWidget& Slot,
 		const FVector2D& ScreenPosition);
+	static void SetGestureState(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		EWacomFirstPersonCardGestureState State);
 };
 
 #endif

@@ -6,6 +6,7 @@
 #include "CommonActivatableWidget.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Misc/PackageName.h"
 #include "TimerManager.h"
 
@@ -15,8 +16,10 @@
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
-#include "UI/Foundation/WacomMenuWidgetBase.h"
+#include "UI/Menus/WacomConfirmDialog.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
+
+#define LOCTEXT_NAMESPACE "WacomMenuGameMode"
 
 AWacomMenuGameMode::AWacomMenuGameMode()
 {
@@ -75,13 +78,156 @@ void AWacomMenuGameMode::BeginPlay()
 	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
 		WacomUITags::UI_Layer_GameMenu.GetTag(), MainMenuScreenClass);
 
-	if (!Pushed)
+	UWacomMainMenuScreen* MainMenuScreen = Cast<UWacomMainMenuScreen>(Pushed);
+	if (!MainMenuScreen)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[MenuGameMode] Push MainMenuScreen 失败"));
 		return;
 	}
 
+	BindMainMenuScreen(MainMenuScreen);
+
 	UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] BeginPlay 完成，MainMenu 已 Push 到 GameMenu 层"));
+}
+
+void AWacomMenuGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnbindMainMenuScreen();
+	Super::EndPlay(EndPlayReason);
+}
+
+FWacomMainMenuViewData AWacomMenuGameMode::BuildMainMenuViewData() const
+{
+	FWacomMainMenuViewData ViewData;
+
+	// 当前正式存档流程仍暂停。关闭时不访问磁盘，主菜单只开放新旅程和退出。
+	if (AWacomGameMode::bSaveSystemEnabled)
+	{
+		ViewData.bHasActiveJourney = UGameplayStatics::DoesSaveGameExist(
+			AWacomGameMode::SlotName_Main, 0);
+		ViewData.bCanContinueJourney = ViewData.bHasActiveJourney;
+		if (ViewData.bHasActiveJourney)
+		{
+			ViewData.ActiveJourneyTitle = LOCTEXT("LegacyActiveJourneyTitle", "当前旅程");
+			ViewData.ActiveJourneySummary = LOCTEXT(
+				"LegacyActiveJourneySummary",
+				"继续上次安全保存的旅程。");
+		}
+	}
+
+	// 对应页面尚未落地。本轮只建立合同，不向玩家展示死入口。
+	ViewData.bShowJourneyHistory = false;
+	ViewData.bShowSettings = false;
+	ViewData.bShowCredits = false;
+	return ViewData;
+}
+
+void AWacomMenuGameMode::BindMainMenuScreen(UWacomMainMenuScreen* Screen)
+{
+	UnbindMainMenuScreen();
+	if (!Screen)
+	{
+		return;
+	}
+
+	ActiveMainMenuScreen = Screen;
+	Screen->OnActionRequestedNative.AddUObject(this, &AWacomMenuGameMode::HandleMainMenuAction);
+	Screen->ApplyViewData(BuildMainMenuViewData());
+}
+
+void AWacomMenuGameMode::UnbindMainMenuScreen()
+{
+	if (UWacomMainMenuScreen* Screen = ActiveMainMenuScreen.Get())
+	{
+		Screen->OnActionRequestedNative.RemoveAll(this);
+	}
+	ActiveMainMenuScreen.Reset();
+}
+
+void AWacomMenuGameMode::HandleMainMenuAction(EWacomMainMenuAction Action)
+{
+	switch (Action)
+	{
+	case EWacomMainMenuAction::ContinueJourney:
+	{
+		const FWacomMainMenuViewData ViewData = BuildMainMenuViewData();
+		if (!ViewData.bHasActiveJourney || !ViewData.bCanContinueJourney)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[MenuGameMode] Continue action rejected by current ViewData"));
+			if (UWacomMainMenuScreen* Screen = ActiveMainMenuScreen.Get())
+			{
+				Screen->ApplyViewData(ViewData);
+			}
+			return;
+		}
+		RequestContinueGame();
+		return;
+	}
+
+	case EWacomMainMenuAction::StartNewJourney:
+	{
+		const FWacomMainMenuViewData ViewData = BuildMainMenuViewData();
+		if (!ViewData.bHasActiveJourney)
+		{
+			RequestStartNewGame();
+			return;
+		}
+
+		TWeakObjectPtr<AWacomMenuGameMode> WeakThis(this);
+		UWacomConfirmDialog::Show(
+			ActiveMainMenuScreen.IsValid()
+				? static_cast<UObject*>(ActiveMainMenuScreen.Get())
+				: static_cast<UObject*>(this),
+			LOCTEXT("NewJourneyConfirmTitle", "开始新旅程"),
+			LOCTEXT("NewJourneyConfirmMessage", "开始新的旅程将结束当前旅程。确定继续？"),
+			[WeakThis]()
+			{
+				if (AWacomMenuGameMode* GameMode = WeakThis.Get())
+				{
+					GameMode->RequestStartNewGame();
+				}
+			});
+		return;
+	}
+
+	case EWacomMainMenuAction::Quit:
+		RequestQuitGame();
+		return;
+
+	case EWacomMainMenuAction::JourneyHistory:
+	case EWacomMainMenuAction::Settings:
+	case EWacomMainMenuAction::Credits:
+	default:
+		UE_LOG(LogTemp, Warning,
+			TEXT("[MenuGameMode] Reject unavailable main menu action: %d"),
+			static_cast<int32>(Action));
+		return;
+	}
+}
+
+void AWacomMenuGameMode::RequestQuitGame()
+{
+	TWeakObjectPtr<AWacomMenuGameMode> WeakThis(this);
+	UWacomConfirmDialog::Show(
+		ActiveMainMenuScreen.IsValid()
+			? static_cast<UObject*>(ActiveMainMenuScreen.Get())
+			: static_cast<UObject*>(this),
+		LOCTEXT("QuitConfirmTitle", "退出游戏"),
+		LOCTEXT("QuitConfirmMessage", "确定要退出游戏吗？"),
+		[WeakThis]()
+		{
+			AWacomMenuGameMode* GameMode = WeakThis.Get();
+			if (!GameMode)
+			{
+				return;
+			}
+
+			UKismetSystemLibrary::QuitGame(
+				GameMode,
+				GameMode->GetWorld() ? GameMode->GetWorld()->GetFirstPlayerController() : nullptr,
+				EQuitPreference::Quit,
+				false);
+		});
 }
 
 // ================ 切关卡入口（由 MainMenuScreen 按钮回调调用） ================
@@ -185,6 +331,8 @@ void AWacomMenuGameMode::RequestTravelToLevel(FName LevelName, FName Reason)
 			*PackageLevelName.ToString());
 	}
 
+	UnbindMainMenuScreen();
+
 	// 注：TearDown 必须走到 DeactivateWidget，让 CommonUI Router 释放 UIInputConfig。
 	LastMenuTravelDebugView.bPrimaryLayoutTeardownRequested = true;
 	LastMenuTravelDebugView.TeardownOrder = ++LastMenuTravelOrderCounter;
@@ -271,3 +419,5 @@ FString AWacomMenuGameMode::GetMenuTravelDebugSummary() const
 		View.ScheduleOrder,
 		View.ExecuteOrder);
 }
+
+#undef LOCTEXT_NAMESPACE

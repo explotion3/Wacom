@@ -125,6 +125,8 @@ Details / Blueprint 分类口径：
 
 CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。通用菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入。Backpack / Shop / RunEvent 这类 Run 领域 GameMenu Screen 继承 `UWacomRunMenuWidgetBase`，Run first-person menu lease / drop 合同由该 Run 专用父类承载。
 
+项目 `GameViewportClientClassName` 使用 `UWacomGameViewportClient : UCommonGameViewportClient`。Battle / Exploration 保持 `All + NoCapture`；该模式下 UE 不保证首次 mouse-down 进入 `ViewportClient::InputKey()`，因此 ViewportClient 在 `Init()` 注册 App-private Slate `IInputProcessor`，在 `DetachViewportClient()` / `BeginDestroy()` 幂等注销。Processor 位于 `Game` priority bucket，在 Widget 路由前只仲裁一条跨 Widget 的 first-person card 输入：右键按下、指针命中路径包含当前 GameViewport 且正式拖拽来源为 `KeyboardShortcut` 时，请求 PlayerController / Anchor 中性取消并消费事件。鼠标来源拖拽、Viewport 外点击和其它右键全部继续交给 Slate、CommonUI 与 gameplay 原路由；`HandleRerouteInput()` / PlayerController `InputKey()` 只保留为其它捕获模式 fallback。该 seam 不提交 Battle / Run 命令，也不依赖鼠标当前命中某个 Slot，因此快捷键瞄准世界目标时仍可在所属 GameViewport 任意位置取消。更换 GameViewportClient 配置或 native 实现后必须完整重启编辑器再做 PIE 验收。
+
 战斗 HUD 和探索 HUD 仍声明自身期望的 UI input config，但底层 gameplay profile 由 `UWacomInputContextCoordinatorSubsystem` 统一应用。探索期固定使用 Run Tunnel 输入模型：Coordinator 切到 `All + NoCapture`、显示鼠标并保持探索 IMC。
 
 `UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`。子类只在语义不同，例如 ConfirmDialog 把 Back 当 Cancel 时覆盖。
@@ -141,7 +143,9 @@ CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。
 | `UWacomModalDialog::Show / CloseDialog` | `Wacom|Common UI|Modal Dialog` | Push 到 Modal layer 或关闭当前 dialog |
 | `UWacomConfirmDialog` | 无额外分类 | 二按钮确认对话框，Confirm / Cancel 由调用方解释 |
 
-`UWacomMainMenuScreen` 是 `L_MainMenu` 的顶层菜单 Screen，玩家意图委托给 `AWacomMenuGameMode` / controller 流程。`ExplorationLevelName` 位于 `Wacom|Main Menu|Authoring`，必须是 UE package path，不使用 `.AssetName` object path。
+`UWacomMainMenuScreen` 是 `L_MainMenu` 的被动顶层菜单 Screen。它只接收 `FWacomMainMenuViewData`，并通过 `EWacomMainMenuAction + OnActionRequestedNative` 上报 Continue Journey、Start New Journey、Journey History、Settings、Credits 和 Quit 意图；不直接读取 SaveGame、查找 GameMode、切关卡或退出游戏。`AWacomMenuGameMode` 是当前 ViewData producer 和 Action consumer，负责磁盘可用性检查、确认对话框、退出与 travel。
+
+Continue 只有在 `bHasActiveJourney` 时显示，并由 `bCanContinueJourney` 决定是否可交互；History、Settings、Credits 在对应页面未接入时保持 `Collapsed`，不产生死入口。CommonUI 默认焦点优先可用 Continue，否则落到 Start New Journey；Screen 打开 `bAutoRestoreFocus`，Modal 关闭后恢复原菜单焦点。按钮 delegate 在 `NativeConstruct / NativeDestruct` 对称绑定和解绑，重复构建不会重复上报。当前没有正式 `WBP_MainMenuScreen`，C++ fallback 提供左侧导航和右侧旅程摘要；后续 WBP 只需复用相同 BindWidget / ViewData 合同。
 
 菜单按钮不直接 `OpenLevel`；切关卡由 GameMode 或 PlayerController 执行。主菜单和暂停菜单切关前先 `TearDownPrimaryLayout()`，再在下一帧 `OpenLevel()`，避免在 CommonUI deactivate 链中立即切关。
 

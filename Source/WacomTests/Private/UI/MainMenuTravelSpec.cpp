@@ -5,7 +5,6 @@
 #include "Engine/World.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomMenuGameMode.h"
-#include "UI/Menus/WacomMainMenuScreen.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
 
 namespace
@@ -62,23 +61,11 @@ bool FWacomUIMainMenuTravelPathsUsePackageNamesSpec::RunTest(const FString& /*Pa
 		return false;
 	}
 
-	const UWacomMainMenuScreen* MainMenuScreen = GetDefault<UWacomMainMenuScreen>();
-	if (!TestNotNull(TEXT("MainMenuScreen CDO"), MainMenuScreen))
-	{
-		return false;
-	}
-
 	TestEqual(TEXT("MenuGameMode exploration target uses package path"),
 		MenuGameMode->ExplorationLevelName.ToString(),
 		FString(ExplorationPackagePath));
 	TestTrue(TEXT("MenuGameMode exploration target has no object suffix"),
 		IsLevelPackagePath(MenuGameMode->ExplorationLevelName));
-
-	TestEqual(TEXT("MainMenuScreen exploration target uses package path"),
-		MainMenuScreen->ExplorationLevelName.ToString(),
-		FString(ExplorationPackagePath));
-	TestTrue(TEXT("MainMenuScreen exploration target has no object suffix"),
-		IsLevelPackagePath(MainMenuScreen->ExplorationLevelName));
 
 	TestEqual(TEXT("PauseMenu quit target uses package path"),
 		UWacomPauseMenuScreen::GetMainMenuLevelPackagePathForTravel().ToString(),

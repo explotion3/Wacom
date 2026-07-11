@@ -13,6 +13,7 @@ class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
+class FWacomFirstPersonCardDragPickupPlayback;
 class FWacomFirstPersonCardTransitionPlayback;
 struct FWacomFirstPersonCardLayerTestAccess;
 
@@ -24,6 +25,11 @@ struct FWacomFirstPersonCardTransitionPlaybackDeleter
 struct FWacomFirstPersonCardDepthMotionDeleter
 {
 	void operator()(FWacomFirstPersonCardDepthMotion* Motion) const;
+};
+
+struct FWacomFirstPersonCardDragPickupPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardDragPickupPlayback* Playback) const;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -72,6 +78,14 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	FWacomFirstPersonCardDepthView CardDepthView;
+	FWacomFirstPersonCardSelectionView SelectionView;
+	FWidgetTransform RenderTransform;
+	int32 RenderZOrder = 0;
+	bool bDragPickupFeedbackActive = false;
+	float DragPickupAlpha = 0.0f;
+	int32 DragPickupTriggerCount = 0;
+	int32 DragPickupSoundRequestCount = 0;
+	float LastDragPickupSoundPitchMultiplier = 1.0f;
 	bool bEnterTransitionPlaybackActive = false;
 	bool bEnterTransitionBlocksInteraction = false;
 	float EnterTransitionElapsedSeconds = 0.0f;
@@ -272,6 +286,9 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardDepthMotion,
 		FWacomFirstPersonCardDepthMotionDeleter> CardDepthMotion;
+	TUniquePtr<
+		FWacomFirstPersonCardDragPickupPlayback,
+		FWacomFirstPersonCardDragPickupPlaybackDeleter> DragPickupPlayback;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
@@ -327,6 +344,9 @@ private:
 	int32 CardDragConfigApplyCountForTest = 0;
 	int32 SlotVisualConfigApplyCountForTest = 0;
 	int32 EnterTransitionSoundRequestCountForTest = 0;
+	int32 DragPickupTriggerCountForTest = 0;
+	int32 DragPickupSoundRequestCountForTest = 0;
+	float LastDragPickupSoundPitchMultiplierForTest = 1.0f;
 	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKindForTest =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
 #endif
@@ -394,6 +414,13 @@ private:
 	void ClearPointerViewportDiagnostics();
 	void UpdateCardDepthMotion(float DeltaTime);
 	void ApplyCardDepthView();
+	void BeginDragPickupFeedback();
+	void TickDragPickupFeedback(float DeltaTime);
+	void TryStartDeferredDragPickupFeedback();
+	void ResetDragPickupFeedback();
+	void PlayPendingDragPickupSound();
+	float GetDragPickupAlpha() const;
+	void ResetCardSurfaceEffectView();
 	void BroadcastDragStarted();
 	void BroadcastDragUpdated();
 	void BroadcastDragReleased();

@@ -7,7 +7,9 @@
 #include "Templates/SubclassOf.h"
 #include "WacomMenuGameMode.generated.h"
 
-class UWacomMenuWidgetBase;
+class UWacomMainMenuScreen;
+enum class EWacomMainMenuAction : uint8;
+struct FWacomMainMenuViewData;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomMenuTravelDebugView
@@ -86,9 +88,9 @@ class WACOMAPP_API AWacomMenuGameMode : public AGameModeBase
 public:
 	AWacomMenuGameMode();
 
-	/** 主菜单 Widget 类，Push 到 GameMenu 层。默认 `UWacomMainMenuScreen`。 */
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
-	TSubclassOf<UWacomMenuWidgetBase> MainMenuScreenClass;
+	/** 主菜单 Screen 类，Push 到 GameMenu 层。默认 `UWacomMainMenuScreen`。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI", meta = (ToolTip = "L_MainMenu Push 到 GameMenu layer 的主菜单 Screen 类。必须继承 UWacomMainMenuScreen；正式 WBP 可以在这里覆盖。"))
+	TSubclassOf<UWacomMainMenuScreen> MainMenuScreenClass;
 
 	/**
 	 * 开新游戏：存档启用时清存档，然后拆 UI 并在下一帧切到探索关。
@@ -125,6 +127,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	static FName NormalizeLevelPackagePath(FName LevelName);
@@ -133,6 +136,11 @@ private:
 
 	void RequestTravelToLevel(FName LevelName, FName Reason);
 	void ExecutePendingTravel();
+	FWacomMainMenuViewData BuildMainMenuViewData() const;
+	void BindMainMenuScreen(UWacomMainMenuScreen* Screen);
+	void UnbindMainMenuScreen();
+	void HandleMainMenuAction(EWacomMainMenuAction Action);
+	void RequestQuitGame();
 
 	UPROPERTY(Transient)
 	FWacomMenuTravelDebugView LastMenuTravelDebugView;
@@ -142,6 +150,9 @@ private:
 
 	UPROPERTY(Transient)
 	FName PendingTravelReason = NAME_None;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomMainMenuScreen> ActiveMainMenuScreen;
 
 	int32 LastMenuTravelOrderCounter = 0;
 	bool bSuppressActualTravelForAutomation = false;

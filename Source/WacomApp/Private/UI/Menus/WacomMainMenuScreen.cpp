@@ -8,36 +8,46 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
-#include "Kismet/GameplayStatics.h"
-#include "Kismet/KismetSystemLibrary.h"
-
-#include "RunSession.h"
-#include "GameFramework/WacomGameMode.h"
-#include "GameFramework/WacomMenuGameMode.h"
-#include "UI/Menus/WacomConfirmDialog.h"
 
 namespace
 {
-	/** 快速构造带居中文本的按钮。 */
+	bool IsConfiguredVisible(const UWidget* Widget)
+	{
+		if (!Widget)
+		{
+			return false;
+		}
+		const ESlateVisibility Visibility = Widget->GetVisibility();
+		return Visibility != ESlateVisibility::Collapsed
+			&& Visibility != ESlateVisibility::Hidden;
+	}
+
 	UButton* MakeLabelButton(UWidgetTree* Tree, FName Name, const FText& Label, UVerticalBox* Parent)
 	{
-		UButton* Btn = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-
+		UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
 		UTextBlock* Text = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
 		Text->SetText(Label);
-		Text->SetJustification(ETextJustify::Center);
-		Btn->AddChild(Text);
+		Text->SetJustification(ETextJustify::Left);
+		Button->AddChild(Text);
 
-		if (UVerticalBoxSlot* BtnSlot = Parent->AddChildToVerticalBox(Btn))
+		if (UVerticalBoxSlot* ButtonSlot = Parent->AddChildToVerticalBox(Button))
 		{
-			BtnSlot->SetPadding(FMargin(0.f, 8.f));
-			BtnSlot->SetHorizontalAlignment(HAlign_Center);
+			ButtonSlot->SetPadding(FMargin(0.0f, 7.0f));
+			ButtonSlot->SetHorizontalAlignment(HAlign_Fill);
 		}
-		return Btn;
+		return Button;
 	}
+}
+
+UWacomMainMenuScreen::UWacomMainMenuScreen(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	bAutoRestoreFocus = true;
 }
 
 TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
@@ -52,179 +62,300 @@ TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
 		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
 		WidgetTree->RootWidget = Root;
 
-		// 垂直排列三个按钮，画面中央
-		UVerticalBox* VBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("VBox"));
-		if (UCanvasPanelSlot* CanvasSlot = Root->AddChildToCanvas(VBox))
+		UHorizontalBox* Content = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(), TEXT("MainMenuContent"));
+		if (UCanvasPanelSlot* ContentSlot = Root->AddChildToCanvas(Content))
 		{
-			CanvasSlot->SetAnchors(FAnchors(0.5f, 0.5f));
-			CanvasSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-			CanvasSlot->SetOffsets(FMargin(-180.f, -150.f, 360.f, 300.f));
-			CanvasSlot->SetAutoSize(false);
+			ContentSlot->SetAnchors(FAnchors(0.08f, 0.15f, 0.92f, 0.85f));
+			ContentSlot->SetOffsets(FMargin(0.0f));
+			ContentSlot->SetAlignment(FVector2D::ZeroVector);
 		}
 
-		// 标题
+		UVerticalBox* NavigationBox = WidgetTree->ConstructWidget<UVerticalBox>(
+			UVerticalBox::StaticClass(), TEXT("Navigation"));
+		if (UHorizontalBoxSlot* NavigationSlot = Content->AddChildToHorizontalBox(NavigationBox))
+		{
+			NavigationSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			NavigationSlot->SetPadding(FMargin(0.0f, 0.0f, 48.0f, 0.0f));
+			NavigationSlot->SetHorizontalAlignment(HAlign_Fill);
+			NavigationSlot->SetVerticalAlignment(VAlign_Center);
+		}
+
 		UTextBlock* Title = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("Title"));
 		Title->SetText(LOCTEXT("Title", "Wacom"));
-		Title->SetJustification(ETextJustify::Center);
-		FSlateFontInfo Font = Title->GetFont();
-		Font.Size = 48;
-		Title->SetFont(Font);
-		if (UVerticalBoxSlot* TitleSlot = VBox->AddChildToVerticalBox(Title))
+		FSlateFontInfo TitleFont = Title->GetFont();
+		TitleFont.Size = 48;
+		Title->SetFont(TitleFont);
+		if (UVerticalBoxSlot* TitleSlot = NavigationBox->AddChildToVerticalBox(Title))
 		{
-			TitleSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 40.f));
-			TitleSlot->SetHorizontalAlignment(HAlign_Center);
+			TitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 32.0f));
+			TitleSlot->SetHorizontalAlignment(HAlign_Left);
 		}
 
-		if (!NewGameButton)
+		ContinueButton = MakeLabelButton(
+			WidgetTree, TEXT("ContinueButton"), LOCTEXT("ContinueJourney", "继续旅程"), NavigationBox);
+		NewJourneyButton = MakeLabelButton(
+			WidgetTree, TEXT("NewJourneyButton"), LOCTEXT("StartNewJourney", "开始新旅程"), NavigationBox);
+		JourneyHistoryButton = MakeLabelButton(
+			WidgetTree, TEXT("JourneyHistoryButton"), LOCTEXT("JourneyHistory", "旅程记录"), NavigationBox);
+		SettingsButton = MakeLabelButton(
+			WidgetTree, TEXT("SettingsButton"), LOCTEXT("Settings", "设置"), NavigationBox);
+		CreditsButton = MakeLabelButton(
+			WidgetTree, TEXT("CreditsButton"), LOCTEXT("Credits", "制作人员"), NavigationBox);
+		QuitButton = MakeLabelButton(
+			WidgetTree, TEXT("QuitButton"), LOCTEXT("Quit", "退出游戏"), NavigationBox);
+
+		UVerticalBox* Summary = WidgetTree->ConstructWidget<UVerticalBox>(
+			UVerticalBox::StaticClass(), TEXT("JourneySummary"));
+		if (UHorizontalBoxSlot* SummarySlot = Content->AddChildToHorizontalBox(Summary))
 		{
-			NewGameButton = MakeLabelButton(WidgetTree, TEXT("NewGameButton"),
-				LOCTEXT("NewGame", "新游戏"), VBox);
+			SummarySlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			SummarySlot->SetPadding(FMargin(48.0f, 0.0f, 0.0f, 0.0f));
+			SummarySlot->SetHorizontalAlignment(HAlign_Fill);
+			SummarySlot->SetVerticalAlignment(VAlign_Center);
 		}
-		if (!ContinueButton)
+
+		ActiveJourneyTitleText = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("ActiveJourneyTitleText"));
+		FSlateFontInfo SummaryTitleFont = ActiveJourneyTitleText->GetFont();
+		SummaryTitleFont.Size = 30;
+		ActiveJourneyTitleText->SetFont(SummaryTitleFont);
+		if (UVerticalBoxSlot* SummaryTitleSlot = Summary->AddChildToVerticalBox(ActiveJourneyTitleText))
 		{
-			ContinueButton = MakeLabelButton(WidgetTree, TEXT("ContinueButton"),
-				LOCTEXT("Continue", "继续"), VBox);
+			SummaryTitleSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 16.0f));
 		}
-		if (!QuitButton)
-		{
-			QuitButton = MakeLabelButton(WidgetTree, TEXT("QuitButton"),
-				LOCTEXT("QuitGame", "退出游戏"), VBox);
-		}
+
+		ActiveJourneySummaryText = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("ActiveJourneySummaryText"));
+		ActiveJourneySummaryText->SetAutoWrapText(true);
+		Summary->AddChildToVerticalBox(ActiveJourneySummaryText);
 	}
-	return Super::RebuildWidget();
-}
 
-void UWacomMainMenuScreen::NativeOnInitialized()
-{
-	Super::NativeOnInitialized();
-	// 注意：此时 RebuildWidget 可能还没执行，NewGameButton 等 BindWidget/自建 Widget
-	// 都还没就位。OnClicked 的绑定放在 NativeConstruct。
+	return Super::RebuildWidget();
 }
 
 void UWacomMainMenuScreen::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	if (NewGameButton)
-	{
-		NewGameButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleNewGameClicked);
-	}
 	if (ContinueButton)
 	{
 		ContinueButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleContinueClicked);
+	}
+	if (NewJourneyButton)
+	{
+		NewJourneyButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleNewJourneyClicked);
+	}
+	if (JourneyHistoryButton)
+	{
+		JourneyHistoryButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleJourneyHistoryClicked);
+	}
+	if (SettingsButton)
+	{
+		SettingsButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleSettingsClicked);
+	}
+	if (CreditsButton)
+	{
+		CreditsButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleCreditsClicked);
 	}
 	if (QuitButton)
 	{
 		QuitButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleQuitClicked);
 	}
 
-	UE_LOG(LogTemp, Display,
-		TEXT("[MainMenu] NativeConstruct: NewGame=%s Continue=%s Quit=%s"),
-		NewGameButton  ? TEXT("OK") : TEXT("null"),
-		ContinueButton ? TEXT("OK") : TEXT("null"),
-		QuitButton     ? TEXT("OK") : TEXT("null"));
-
-	RefreshContinueEnabled();
+	RefreshFromViewData();
 }
 
-void UWacomMainMenuScreen::RefreshContinueEnabled()
+void UWacomMainMenuScreen::NativeDestruct()
 {
-	if (!ContinueButton) { return; }
-
-	// 存档系统关闭时 Continue 永远禁用。
-	if (!AWacomGameMode::bSaveSystemEnabled)
+	if (ContinueButton)
 	{
-		ContinueButton->SetIsEnabled(false);
-		return;
+		ContinueButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleContinueClicked);
+	}
+	if (NewJourneyButton)
+	{
+		NewJourneyButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleNewJourneyClicked);
+	}
+	if (JourneyHistoryButton)
+	{
+		JourneyHistoryButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleJourneyHistoryClicked);
+	}
+	if (SettingsButton)
+	{
+		SettingsButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleSettingsClicked);
+	}
+	if (CreditsButton)
+	{
+		CreditsButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleCreditsClicked);
+	}
+	if (QuitButton)
+	{
+		QuitButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleQuitClicked);
 	}
 
-	const bool bHasMain = UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, /*UserIndex*/0);
-	ContinueButton->SetIsEnabled(bHasMain);
+	Super::NativeDestruct();
 }
 
-void UWacomMainMenuScreen::HandleNewGameClicked()
+void UWacomMainMenuScreen::ApplyViewData(const FWacomMainMenuViewData& InViewData)
 {
-	// 存档系统关闭时直接开新游戏，不弹 Confirm。
-	if (!AWacomGameMode::bSaveSystemEnabled)
+	ViewData = InViewData;
+	RefreshFromViewData();
+	BP_OnMainMenuViewDataApplied(ViewData);
+}
+
+void UWacomMainMenuScreen::RefreshFromViewData()
+{
+	if (ContinueButton)
 	{
-		if (UWorld* World = GetWorld())
-		{
-			if (AWacomMenuGameMode* GM = World->GetAuthGameMode<AWacomMenuGameMode>())
-			{
-				GM->RequestStartNewGame();
-			}
-		}
+		ContinueButton->SetVisibility(ViewData.bHasActiveJourney
+			? ESlateVisibility::Visible
+			: ESlateVisibility::Collapsed);
+		ContinueButton->SetIsEnabled(ViewData.bHasActiveJourney && ViewData.bCanContinueJourney);
+	}
+	if (JourneyHistoryButton)
+	{
+		JourneyHistoryButton->SetVisibility(ViewData.bShowJourneyHistory
+			? ESlateVisibility::Visible
+			: ESlateVisibility::Collapsed);
+		JourneyHistoryButton->SetIsEnabled(ViewData.bShowJourneyHistory);
+	}
+	if (SettingsButton)
+	{
+		SettingsButton->SetVisibility(ViewData.bShowSettings
+			? ESlateVisibility::Visible
+			: ESlateVisibility::Collapsed);
+		SettingsButton->SetIsEnabled(ViewData.bShowSettings);
+	}
+	if (CreditsButton)
+	{
+		CreditsButton->SetVisibility(ViewData.bShowCredits
+			? ESlateVisibility::Visible
+			: ESlateVisibility::Collapsed);
+		CreditsButton->SetIsEnabled(ViewData.bShowCredits);
+	}
+
+	if (ActiveJourneyTitleText)
+	{
+		ActiveJourneyTitleText->SetText(
+			ViewData.bHasActiveJourney && !ViewData.ActiveJourneyTitle.IsEmpty()
+				? ViewData.ActiveJourneyTitle
+				: LOCTEXT("NewJourneySummaryTitle", "准备启程"));
+	}
+	if (ActiveJourneySummaryText)
+	{
+		ActiveJourneySummaryText->SetText(
+			ViewData.bHasActiveJourney && !ViewData.ActiveJourneySummary.IsEmpty()
+				? ViewData.ActiveJourneySummary
+				: LOCTEXT("NewJourneySummary", "开始一段新的旅程。"));
+	}
+}
+
+UWidget* UWacomMainMenuScreen::NativeGetDesiredFocusTarget() const
+{
+	if (ContinueButton
+		&& IsConfiguredVisible(ContinueButton)
+		&& ContinueButton->GetIsEnabled())
+	{
+		return ContinueButton;
+	}
+	if (NewJourneyButton
+		&& IsConfiguredVisible(NewJourneyButton)
+		&& NewJourneyButton->GetIsEnabled())
+	{
+		return NewJourneyButton;
+	}
+	return Super::NativeGetDesiredFocusTarget();
+}
+
+bool UWacomMainMenuScreen::IsActionAvailable(EWacomMainMenuAction Action) const
+{
+	switch (Action)
+	{
+	case EWacomMainMenuAction::ContinueJourney:
+		return ViewData.bHasActiveJourney && ViewData.bCanContinueJourney;
+	case EWacomMainMenuAction::StartNewJourney:
+	case EWacomMainMenuAction::Quit:
+		return true;
+	case EWacomMainMenuAction::JourneyHistory:
+		return ViewData.bShowJourneyHistory;
+	case EWacomMainMenuAction::Settings:
+		return ViewData.bShowSettings;
+	case EWacomMainMenuAction::Credits:
+		return ViewData.bShowCredits;
+	default:
+		return false;
+	}
+}
+
+void UWacomMainMenuScreen::RequestAction(EWacomMainMenuAction Action)
+{
+	if (!IsActionAvailable(Action))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[MainMenu] Reject unavailable action: %d"),
+			static_cast<int32>(Action));
 		return;
 	}
 
-	// 有存档时弹确认对话框
-	if (UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
-	{
-		UWacomConfirmDialog::Show(
-			this,
-			LOCTEXT("NewGameConfirmTitle", "新游戏"),
-			LOCTEXT("NewGameConfirmMsg", "开始新游戏将覆盖现有存档，确定继续？"),
-			[this]()
-			{
-				// 确认：委托给 MenuGameMode
-				if (UWorld* World = GetWorld())
-				{
-					if (AWacomMenuGameMode* GM = World->GetAuthGameMode<AWacomMenuGameMode>())
-					{
-						GM->RequestStartNewGame();
-					}
-				}
-			});
-		return;
-	}
-
-	// 无存档直接开
-	if (UWorld* World = GetWorld())
-	{
-		if (AWacomMenuGameMode* GM = World->GetAuthGameMode<AWacomMenuGameMode>())
-		{
-			GM->RequestStartNewGame();
-		}
-	}
+	OnActionRequestedNative.Broadcast(Action);
 }
 
 void UWacomMainMenuScreen::HandleContinueClicked()
 {
-	// 存档系统关闭时忽略 Continue。
-	if (!AWacomGameMode::bSaveSystemEnabled)
-	{
-		UE_LOG(LogTemp, Display, TEXT("[MainMenu] Continue 被点但存档系统已暂停"));
-		return;
-	}
+	RequestAction(EWacomMainMenuAction::ContinueJourney);
+}
 
-	if (!UGameplayStatics::DoesSaveGameExist(AWacomGameMode::SlotName_Main, 0))
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[MainMenu] Continue 被按到但无存档"));
-		return;
-	}
+void UWacomMainMenuScreen::HandleNewJourneyClicked()
+{
+	RequestAction(EWacomMainMenuAction::StartNewJourney);
+}
 
-	if (UWorld* World = GetWorld())
-	{
-		if (AWacomMenuGameMode* GM = World->GetAuthGameMode<AWacomMenuGameMode>())
-		{
-			GM->RequestContinueGame();
-			return;
-		}
-	}
-	UE_LOG(LogTemp, Warning, TEXT("[MainMenu] 找不到 AWacomMenuGameMode"));
+void UWacomMainMenuScreen::HandleJourneyHistoryClicked()
+{
+	RequestAction(EWacomMainMenuAction::JourneyHistory);
+}
+
+void UWacomMainMenuScreen::HandleSettingsClicked()
+{
+	RequestAction(EWacomMainMenuAction::Settings);
+}
+
+void UWacomMainMenuScreen::HandleCreditsClicked()
+{
+	RequestAction(EWacomMainMenuAction::Credits);
 }
 
 void UWacomMainMenuScreen::HandleQuitClicked()
 {
-	UWacomConfirmDialog::Show(
-		this,
-		LOCTEXT("QuitConfirmTitle", "退出游戏"),
-		LOCTEXT("QuitConfirmMsg", "确定要退出游戏吗？"),
-		[this]()
-		{
-			UE_LOG(LogTemp, Display, TEXT("[MainMenu] Quit confirmed"));
-			UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
-		});
+	RequestAction(EWacomMainMenuAction::Quit);
 }
+
+#if WITH_AUTOMATION_TESTS
+FWacomMainMenuScreenAutomationTestView UWacomMainMenuScreen::GetAutomationTestViewForTest() const
+{
+	FWacomMainMenuScreenAutomationTestView TestView;
+	TestView.bContinueVisible = IsConfiguredVisible(ContinueButton);
+	TestView.bContinueEnabled = ContinueButton && ContinueButton->GetIsEnabled();
+	TestView.bNewJourneyVisible = IsConfiguredVisible(NewJourneyButton);
+	TestView.bJourneyHistoryVisible = IsConfiguredVisible(JourneyHistoryButton);
+	TestView.bSettingsVisible = IsConfiguredVisible(SettingsButton);
+	TestView.bCreditsVisible = IsConfiguredVisible(CreditsButton);
+	TestView.bQuitVisible = IsConfiguredVisible(QuitButton);
+	TestView.bAutoRestoreFocus = bAutoRestoreFocus;
+	if (const UWidget* FocusTarget = GetDesiredFocusTarget())
+	{
+		TestView.DesiredFocusTargetName = FocusTarget->GetFName();
+	}
+	if (ActiveJourneyTitleText)
+	{
+		TestView.SummaryTitle = ActiveJourneyTitleText->GetText();
+	}
+	if (ActiveJourneySummaryText)
+	{
+		TestView.SummaryBody = ActiveJourneySummaryText->GetText();
+	}
+	return TestView;
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE

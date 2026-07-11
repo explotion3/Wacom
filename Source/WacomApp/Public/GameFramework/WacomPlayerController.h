@@ -23,6 +23,7 @@ class UBattleHUD;
 class UWacomRunEventDefinition;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunWorldCardDropReceiverComponent;
+class UWacomGameViewportClient;
 class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
 class UWacomRunTunnelMovementComponent;
@@ -447,6 +448,7 @@ private:
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
 	void PumpFirstPersonCardActiveDragPointer();
 	bool TryReleaseFirstPersonCardActiveDragPointer();
+	bool TryCancelFirstPersonCardKeyboardShortcutDrag();
 	bool TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut();
 	bool TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
@@ -492,6 +494,7 @@ private:
 	friend class FWacomRunWorldInteractionRouter;
 	friend class FWacomRunFirstPersonCardDetailController;
 	friend class FWacomRunFirstPersonCardDragController;
+	friend class UWacomGameViewportClient;
 #if WITH_AUTOMATION_TESTS
 	friend class AWacomPlayerControllerProbe;
 	friend struct FWacomPlayerControllerRunInteractionTestAccess;

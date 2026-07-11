@@ -177,6 +177,13 @@ void UWacomFirstPersonCardViewWidget::SetCardDepthView(const FWacomFirstPersonCa
 	}
 }
 
+void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
+	const FWacomFirstPersonCardSurfaceEffectView& View)
+{
+	EnsureFallbackWidgetTree();
+	LastSurfaceEffectView = View;
+}
+
 #if WITH_AUTOMATION_TESTS
 FWacomFirstPersonCardViewAutomationTestView
 UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
@@ -193,6 +200,7 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.bInteractionFeedbackUsesOverrideMaterial = bLastInteractionFeedbackUsedOverrideMaterial;
 	View.bInteractionFeedbackUsesBrushMaterial = bLastInteractionFeedbackUsedBrushMaterial;
 	View.CardDepthView = LastCardDepthView;
+	View.SurfaceEffectView = LastSurfaceEffectView;
 	View.bHasFake3DSurfaceRetainer = Fake3DSurfaceRetainer != nullptr;
 	View.bFake3DEffectMaterialReady =
 		Fake3DSurfaceRetainer && Fake3DSurfaceRetainer->GetEffectMaterial() != nullptr;
@@ -229,6 +237,7 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 	SetFeedbackOverlayView(LastFeedbackOverlayColor, LastFeedbackOverlayOpacity);
 	ClearInteractionFeedbackView();
 	SetCardDepthView(LastCardDepthView);
+	SetCardSurfaceEffectView(LastSurfaceEffectView);
 }
 
 void UWacomFirstPersonCardViewWidget::EnsureFallbackWidgetTree()

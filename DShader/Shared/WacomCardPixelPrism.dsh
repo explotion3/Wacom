@@ -1,0 +1,57 @@
+// Dormant pixel-prism helpers retained for future CardDataChanged / Upgrade surface effects.
+// This header is intentionally not imported by M_FirstPersonCard_Fake3D: ordinary hand cards
+// should not pay the selection-noise or glint cost while idle or dragging.
+
+Function SelfContained WacomCardPixelPrism_QuantizeSurfaceUV(
+    in float2 surfaceUV,
+    in float gridColumns,
+    in float2 surfaceInvSize,
+    out float2 pixelCell,
+    out float2 pixelUV)
+{
+    float safeGridColumns = max(gridColumns, 1.0);
+    float safeInvWidth = max(surfaceInvSize.x, 0.000001);
+    float safeInvHeight = max(surfaceInvSize.y, 0.000001);
+    float gridRows = max(safeGridColumns * safeInvWidth / safeInvHeight, 1.0);
+    float2 selectionGrid = float2(safeGridColumns, gridRows);
+    pixelCell = floor(surfaceUV * selectionGrid);
+    pixelUV = (pixelCell + float2(0.5, 0.5)) / selectionGrid;
+}
+
+Function SelfContained WacomCardPixelPrism_QuantizedSweep(
+    in float2 pixelUV,
+    in float angleDegrees,
+    in float progress,
+    in float sweepWidth,
+    in float quantizationLevels,
+    out float sweepMask)
+{
+    float angleRadians = angleDegrees * 0.01745329252;
+    float2 sweepAxis = float2(cos(angleRadians), sin(angleRadians));
+    float axisPosition = dot(pixelUV - float2(0.5, 0.5), sweepAxis);
+    float sweepCenter = lerp(-0.85, 0.85, saturate(progress));
+    float safeWidth = max(sweepWidth, 0.001);
+    float safeLevels = max(quantizationLevels, 1.0);
+    float rawMask = 1.0 - smoothstep(
+        safeWidth * 0.42,
+        safeWidth,
+        abs(axisPosition - sweepCenter));
+    sweepMask = floor(saturate(rawMask) * safeLevels) / safeLevels;
+}
+
+Function SelfContained WacomCardPixelPrism_GlintClusters(
+    in float2 pixelCell,
+    in float distributionNoise,
+    in float timeSeconds,
+    in float density,
+    in float speed,
+    out float glintMask)
+{
+    float cellOffset = floor(timeSeconds * max(speed, 0.0) * 12.0);
+    float movingNoise = frac(
+        sin(dot(pixelCell + cellOffset, float2(37.719, 19.913)))
+        * 43758.5453);
+    glintMask = step(
+        1.0 - saturate(density),
+        movingNoise * 0.60 + saturate(distributionNoise) * 0.40);
+}

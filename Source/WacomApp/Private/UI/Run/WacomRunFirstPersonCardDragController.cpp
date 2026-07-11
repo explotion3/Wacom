@@ -95,6 +95,19 @@ bool FWacomRunFirstPersonCardDragController::TryReleaseActiveDragPointer()
 	return Anchor->ReleaseFirstPersonCardDragGestureAtCurrentPointer();
 }
 
+bool FWacomRunFirstPersonCardDragController::TryCancelKeyboardShortcutActiveDrag()
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
+	if (!Anchor || !Anchor->IsFirstPersonCardKeyboardShortcutDragGestureActive())
+	{
+		return false;
+	}
+
+	Anchor->CancelFirstPersonCardDragGesture(true);
+	return true;
+}
+
 bool FWacomRunFirstPersonCardDragController::TryCancelActiveGestureForTurnBoundaryShortcut()
 {
 	UWacomFirstPersonCardAnchorComponent* Anchor =

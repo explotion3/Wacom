@@ -15,6 +15,7 @@
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardDepthMotion.h"
+#include "UI/Card/WacomFirstPersonCardDragPickupPlayback.h"
 #include "UI/Card/WacomFirstPersonCardMotionMixer.h"
 #include "UI/Card/WacomFirstPersonCardTransitionPlayback.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
@@ -103,6 +104,8 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotView(const FWacomFirstPersonCa
 void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	const FWacomFirstPersonCardLayerSlotView& InSlotView)
 {
+	const bool bCardIdentityChanged =
+		CurrentSlotView.Entry.CardInstanceId != InSlotView.Entry.CardInstanceId;
 	const bool bResetCardDepth =
 		CurrentSlotView.Entry.CardInstanceId != InSlotView.Entry.CardInstanceId
 		|| !InSlotView.bProjected
@@ -128,6 +131,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 		CardDepthMotion->Reset();
 		ClearPointerViewportDiagnostics();
 	}
+	if (bCardIdentityChanged)
+	{
+		ResetDragPickupFeedback();
+	}
 
 	CurrentSlotView = InSlotView;
 	bHasVisualSlotView = true;
@@ -138,6 +145,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	bUsesFixedExitTransitionPlayback = false;
 	ExitMotionElapsedSeconds = 0.0f;
 	ApplyCurrentSlotView();
+	ResetCardSurfaceEffectView();
 	ApplyVisualSlotView();
 	UpdateWantsTick();
 }
@@ -187,6 +195,12 @@ void FWacomFirstPersonCardDepthMotionDeleter::operator()(
 	delete Motion;
 }
 
+void FWacomFirstPersonCardDragPickupPlaybackDeleter::operator()(
+	FWacomFirstPersonCardDragPickupPlayback* Playback) const
+{
+	delete Playback;
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
 	bool bTreatAsNewSlot,
@@ -231,6 +245,11 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	const FWacomFirstPersonCardLayerSlotView PreviousPresentationSlotView = TargetSlotView;
 	const FWacomFirstPersonCardLayerSlotView IncomingPresentationSlotView =
 		ComposePresentationSlotView(InTargetSlotView);
+	if (bTreatAsNewSlot
+		|| CurrentSlotView.Entry.CardInstanceId != InTargetSlotView.Entry.CardInstanceId)
+	{
+		ResetDragPickupFeedback();
+	}
 
 	CurrentSlotView = InTargetSlotView;
 	TargetSlotView = IncomingPresentationSlotView;
@@ -247,6 +266,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	ExitMotionElapsedSeconds = 0.0f;
 	ClearExitTransitionPlayback();
 	ApplyCurrentSlotView();
+	ResetCardSurfaceEffectView();
 
 	if (!bCanReuseVisual)
 	{
@@ -339,6 +359,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 		bUsesFixedExitTransitionPlayback = false;
 		ExitMotionElapsedSeconds = ResolvedExitDuration;
 		SetVisibility(ESlateVisibility::Collapsed);
+		ResetDragPickupFeedback();
 		SetTickEnabledForMotion(false);
 		return;
 	}
@@ -425,6 +446,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotVisualConfig(
 	++SlotVisualConfigApplyCountForTest;
 #endif
 	RefreshPresentationTarget(true, EWacomFirstPersonCardMotionIntent::Layout);
+	ResetCardSurfaceEffectView();
 	ApplyVisualSlotView();
 	UpdateWantsTick();
 }
@@ -442,6 +464,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotFeedbackConfig(
 #if WITH_AUTOMATION_TESTS
 	++SlotFeedbackConfigApplyCountForTest;
 #endif
+	if (DragPickupPlayback && DragPickupPlayback->IsActive())
+	{
+		ResetDragPickupFeedback();
+	}
 	if (!SlotFeedbackConfig.bEnabled)
 	{
 		ClearInteractionFeedback();
@@ -753,6 +779,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	ClearInteractionFeedback();
 	TransitionPlayback.Reset();
 	CardDepthMotion.Reset();
+	DragPickupPlayback.Reset();
 	SetTickEnabledForMotion(false);
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
@@ -807,6 +834,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	{
 		RetainedFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
 	}
+	TickDragPickupFeedback(InDeltaTime);
 	bool bNearTarget = true;
 	const FWacomFirstPersonCardLayerSlotView PreviousVisualSlotView = VisualSlotView;
 	if (IsEnterTransitionPlaybackActive())
@@ -855,6 +883,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	{
 		ApplyVisualSlotView();
 	}
+	TryStartDeferredDragPickupFeedback();
 	UpdateCardDepthMotion(InDeltaTime);
 
 	if (IsExitMotionFinished())
@@ -1013,6 +1042,7 @@ void UWacomFirstPersonCardLayerSlotWidget::EnsureCardView()
 		CardSlot->SetHorizontalAlignment(HAlign_Fill);
 		CardSlot->SetVerticalAlignment(VAlign_Fill);
 	}
+	ResetCardSurfaceEffectView();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ApplyCurrentSlotView()
@@ -1135,6 +1165,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	FeedbackMixInput.FeedbackConfig = &SlotFeedbackConfig;
 	FeedbackMixInput.DenyFeedbackElapsedSeconds = DenyFeedbackElapsedSeconds;
 	FeedbackMixInput.RetainedAlpha = ComputeRetainedFeedbackAlpha();
+	FeedbackMixInput.DragPickupAlpha = GetDragPickupAlpha();
 	FeedbackMixInput.bPressed = bIsPressedForFirstPersonLayer;
 	FeedbackMixInput.bCommitFeedbackActive =
 		CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration;
@@ -1587,6 +1618,18 @@ void UWacomFirstPersonCardLayerSlotWidget::SetGestureState(
 	GestureState = NewState;
 	bGestureCommitArmed = NewState == EWacomFirstPersonCardGestureState::ArmedForCommit;
 	UpdateGestureOverrideTarget();
+	const bool bWasFormalDrag = IsFormalDragGestureState(PreviousState);
+	const bool bIsFormalDrag = IsFormalDragGestureState(NewState);
+	if (!bWasFormalDrag && bIsFormalDrag)
+	{
+		SetPressedForFirstPersonLayer(false);
+		BeginDragPickupFeedback();
+	}
+	else if (bWasFormalDrag && !bIsFormalDrag)
+	{
+		ResetDragPickupFeedback();
+	}
+	UpdateWantsTick();
 
 	if (bBroadcastStartOrCancel
 		&& PreviousState == EWacomFirstPersonCardGestureState::Pressed
@@ -1650,6 +1693,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCanc
 	bGestureCommitArmed = false;
 	GestureElapsedSeconds = 0.0f;
 	SetPressedForFirstPersonLayer(false);
+	ResetDragPickupFeedback();
 	RefreshPresentationTarget(true, EWacomFirstPersonCardMotionIntent::Layout);
 	ApplyVisualSlotView();
 	UpdateWantsTick();
@@ -1743,6 +1787,112 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyCardDepthView()
 	if (CardView && CardDepthMotion)
 	{
 		CardView->SetCardDepthView(CardDepthMotion->GetView());
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginDragPickupFeedback()
+{
+	if (!DragPickupPlayback)
+	{
+		DragPickupPlayback.Reset(new FWacomFirstPersonCardDragPickupPlayback());
+	}
+
+	const bool bIsFarKeyboardNoTargetDrag =
+		GestureSource == EWacomFirstPersonCardGestureSource::KeyboardShortcut
+		&& GestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
+		&& GestureOverrideTargetSlotView.IsSet()
+		&& FVector2D::Distance(
+			VisualSlotView.ScreenPosition,
+			GestureOverrideTargetSlotView->ScreenPosition)
+			> FMath::Max(1.0f, CardDragConfig.CardDragStartThresholdPixels);
+	DragPickupPlayback->Begin(SlotFeedbackConfig, !bIsFarKeyboardNoTargetDrag);
+#if WITH_AUTOMATION_TESTS
+	++DragPickupTriggerCountForTest;
+#endif
+	PlayPendingDragPickupSound();
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::TickDragPickupFeedback(float DeltaTime)
+{
+	if (!DragPickupPlayback || !DragPickupPlayback->IsActive())
+	{
+		return;
+	}
+
+	DragPickupPlayback->Tick(DeltaTime);
+	ApplyVisualSlotView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::TryStartDeferredDragPickupFeedback()
+{
+	const float PointerAcquireDistancePixels = FMath::Max(
+		24.0f,
+		CardDragConfig.CardDragStartThresholdPixels * 2.0f);
+	if (!DragPickupPlayback
+		|| !DragPickupPlayback->IsWaitingForVisualStart()
+		|| !IsFormalDragGestureState(GestureState)
+		|| FVector2D::Distance(
+			VisualSlotView.ScreenPosition,
+			GetEffectiveTargetSlotView().ScreenPosition) > PointerAcquireDistancePixels)
+	{
+		return;
+	}
+
+	DragPickupPlayback->StartVisualPlayback();
+	ApplyVisualSlotView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ResetDragPickupFeedback()
+{
+	if (DragPickupPlayback)
+	{
+		DragPickupPlayback->Reset();
+	}
+	ResetCardSurfaceEffectView();
+	ApplyVisualSlotView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::PlayPendingDragPickupSound()
+{
+	if (!DragPickupPlayback)
+	{
+		return;
+	}
+
+	const TOptional<FWacomFirstPersonCardDragPickupSoundRequest> PendingRequest =
+		DragPickupPlayback->ConsumePendingSoundRequest();
+	if (!PendingRequest.IsSet())
+	{
+		return;
+	}
+
+	const FWacomFirstPersonCardDragPickupSoundRequest& Request = PendingRequest.GetValue();
+#if WITH_AUTOMATION_TESTS
+	++DragPickupSoundRequestCountForTest;
+	LastDragPickupSoundPitchMultiplierForTest = Request.PitchMultiplier;
+#endif
+	if (USoundBase* Sound = Request.Sound.Get(); Sound && GetWorld())
+	{
+		UGameplayStatics::PlaySound2D(
+			GetWorld(),
+			Sound,
+			Request.VolumeMultiplier,
+			Request.PitchMultiplier);
+	}
+}
+
+float UWacomFirstPersonCardLayerSlotWidget::GetDragPickupAlpha() const
+{
+	return DragPickupPlayback ? DragPickupPlayback->GetAlpha() : 0.0f;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ResetCardSurfaceEffectView()
+{
+	if (CardView)
+	{
+		CardView->SetCardSurfaceEffectView(FWacomFirstPersonCardSurfaceEffectView());
 	}
 }
 
@@ -1919,7 +2069,18 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 			CardViewTestView.bInteractionFeedbackUsesBrushMaterial;
 		View.bInteractionFeedbackLayerAboveFeedbackOverlay =
 			CardViewTestView.bInteractionFeedbackLayerAboveFeedbackOverlay;
+		View.SelectionView = CardViewTestView.SurfaceEffectView.Selection;
 	}
+	View.RenderTransform = GetRenderTransform();
+	if (const UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Slot))
+	{
+		View.RenderZOrder = CanvasSlot->GetZOrder();
+	}
+	View.bDragPickupFeedbackActive = DragPickupPlayback && DragPickupPlayback->IsActive();
+	View.DragPickupAlpha = GetDragPickupAlpha();
+	View.DragPickupTriggerCount = DragPickupTriggerCountForTest;
+	View.DragPickupSoundRequestCount = DragPickupSoundRequestCountForTest;
+	View.LastDragPickupSoundPitchMultiplier = LastDragPickupSoundPitchMultiplierForTest;
 	View.GestureSource = GestureSource;
 	View.bPressed = bIsPressedForFirstPersonLayer;
 	View.bDenyFeedbackActive = DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
@@ -2230,6 +2391,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerRetainedFeedback(
 void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 {
 	bIsPressedForFirstPersonLayer = false;
+	ResetDragPickupFeedback();
 	ClearCardDragTargetFeedback();
 	bHasFeedbackTargetScreenPosition = false;
 	FeedbackTargetScreenPosition = FVector2D::ZeroVector;
@@ -2448,6 +2610,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 			|| VisualSlotView.ZOrder != EffectiveTargetSlotView.ZOrder))
 		|| bFeedbackActive
 		|| bGestureActive
+		|| (DragPickupPlayback && DragPickupPlayback->IsActive())
 		|| (CardDepthMotion && CardDepthMotion->IsInMotion());
 }
 

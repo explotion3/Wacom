@@ -101,9 +101,10 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `07 Hover` | hover lift / scale / ZOrder / hit hysteresis |
 | `08 Targeting State` | pending targeting、target select deemphasis |
 | `09 Gesture` | 按住读牌、拖出提交、快捷键拿起卡牌、inspect 姿态、aim arrow |
-| `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit feedback |
+| `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit、正式 Drag 拾牌反馈与音效 |
 | `11 Card Depth` | Hover / Drag tilt、pointer velocity filter、perspective strength、Retainer 实时轮廓接触阴影开关与 lift |
 | `12 Camera Look While UI` | Hover pointer 与 Inspect / Drag view 驱动 Battle / Run 镜头的独立开关、强度倍率与插值速度覆盖 |
+| `98 Experimental Surface Effect` | 暂不接入生产 Drag 的像素棱镜 Style / 参数原型；只为未来 CardDataChanged / Upgrade 效果保留 |
 | `99 Debug` | lifecycle 与 gesture diagnostics |
 
 `CardLayerWidgetClass` 和 `CardLayerZOrder` 是正式第一人称卡牌层配置，同时服务 Battle / Run runtime hand 与 PIE 预览，不属于 preview-only。`HandCardRenderScale`、`HandMaxEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 是 runtime hand 表现参数，不是 preview-only。`Development Preview` 只保留预览开关、预览卡牌定义和占位卡数量。
@@ -199,6 +200,18 @@ Card Depth 材质采用 DreamShader 1.4.1 制作：`DShader/Material/Card/M_Firs
 
 Card Depth `.dsm` 对 UV、颜色和透明度通道使用显式 `UE.Expression(ComponentMask)`，避免仅从 Named Reroute 的上游 `RGBA` 标签误判实际消费通道。正式生成图中 Fake3D 主卡面路径保留 `RG / B / RGB / A` 四个 mask，接触阴影另有 9 个实时纹理 `A` mask 与一个 `ContactShadowColor RGB` mask。DreamShader 的跨区布局 reroute 会把完整值接到 declaration，并把普通 `.xy / .z / .rgb / .a` swizzle 保存在消费端 `FExpressionInput`；检查生成器正确性时必须穿透 reroute 读取消费端 mask。项目内 DreamShader 1.4.1 已补齐 `UE.Expression(ComponentMask)` 的初始化语义：新节点先清空 Unreal 默认启用的 R/G，再应用 DSL 明确指定的通道；`DreamShader.Gen.Graph.SwizzleInputMasks` 与 `DreamShader.Gen.Graph.ExplicitComponentMaskChannels` 负责回归该合同。
 
+### Drag Pickup 与实验性 Surface Effect
+
+正式拖拽不再使用循环扫光、移动亮点或持续轮廓。SlotWidget 只在手势首次从非正式状态进入 `DraggingNoTargetCard / AimingTargetedCard / ArmedForCommit` 时启动一次 App-private `FWacomFirstPersonCardDragPickupPlayback`；`Pressed`、`Inspecting`、单纯 `Entry.bIsPendingTargeting` 以及正式 Drag 状态之间的切换都不触发。进入正式 Drag 的同一状态边缘必须先结束 `Pressed` 局部缩放，避免 `PressedScale` 抵消拾牌放大。鼠标、Inspect 后拖出、快捷键和 Run 正式拖拽共用该状态边缘。快捷键首次拿起无目标卡且源卡离鼠标较远时，声音仍立即请求，但短时上提 / 缩放会等待 slot motion 追到当前 pointer 后再开始，避免 `0.14s` 反馈在长距离飞行途中耗尽；已在 pointer 附近的快捷键重选、鼠标拖拽和 targeted aim 仍立即播放。release、cancel、source clear、语义离场和 slot 重用立即清理，且不改变既有 drag delegate、命中或命令语义。
+
+默认拾牌反馈总时长 `0.14s`：前 `0.02s` 使用快速 quart-out 建立峰值，余下时间 cubic settle 回到零；Motion Mixer 在 `layout -> state -> gesture / transition -> local feedback` 的最后阶段额外叠加 `12px` 上提与 `1.03` 缩放倍率。它与已有正式 Drag 源卡缩放相乘，不增加第二套持续 Transform；持续拖拽仍只由现有源卡 lift / scale / ZOrder、Fake-3D 惯性和实时 Alpha 接触阴影表达。`bReduceCardDragPickupMotion` 取消这段短时局部位移与缩放，但保留正式 Drag 姿态和拾牌音。
+
+Anchor `10 Interaction Feedback | Drag Pickup` 是制作入口，包含启用、时长、rise、上提、缩放、Reduced Motion、硬引用 `USoundBase`、音量、基础音高和随机音高范围。声音在首次进入正式 Drag 时用 `PlaySound2D` 请求一次；即使远距离快捷键的视觉反馈等待 pointer acquire，声音也不延迟。默认建议使用 `80-140ms` 的纸张摩擦加轻微卡边扣响，并以 `0.03` 产生约正负 3% 的音高变化；资产为空时静默跳过。硬引用随 Anchor / Widget 所有权驻留，不在交互瞬间同步加载。
+
+`FWacomFirstPersonCardSurfaceEffectView`、`UWacomFirstPersonCardSelectionStyle` 和像素簇纹理源暂时保留，但 Selection 默认关闭且不再由 Drag 或 Pending 推断。`M_FirstPersonCard_Fake3D.dsm` 的生产图只包含 Fake-3D 和接触阴影，不包含 Selection 参数、Noise 采样、扫光、硬边或 Glint。可复用的像素量化、扫光和亮点簇算法保存在 `DShader/Shared/WacomCardPixelPrism.dsh`，该 header 当前不被实时卡牌材质 import，避免所有卡牌承担未启用效果的成本。未来只有明确的 `CardDataChanged / Upgrade` 表现语义可以重新接入该能力。
+
+像素簇制作源继续保存在 `DShader/Texture/Card/T_FirstPersonCard_SelectionPixelClusters_Source.png`，确定性后处理结果为 `T_FirstPersonCard_SelectionPixelClusters.png`；导入设置仍为 `Masks / sRGB off / Nearest / NoMipmaps / UI`，但当前生产 Fake-3D 材质不引用该纹理。
+
 Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和本次刷新创建、复用、移除、异常修复数量。诊断日志默认关闭，只在手动排查时开启。
 
 ## §6 Battle 交互
@@ -211,14 +224,14 @@ Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和�
 |---|---|
 | hover idle card | 可查看详情；可打卡获得 lift / scale / ZOrder，不可打卡只允许读牌 |
 | quick press / release | 中性返回手牌，不提交卡牌 |
-| keyboard `1~7` | 直接拿起对应手牌并进入拖拽 / 瞄准手势；后续 release 仍走同一拖拽提交路径 |
+| keyboard `1~7` | 直接拿起对应手牌并进入拖拽 / 瞄准手势；左键 release 仍走同一拖拽提交路径，右键可中性取消并返回手牌 |
 | hold | 超过读牌延迟后进入 inspect，源卡移动到读牌位置并显示 first-person detail，松开不提交 |
 | drag no-target card | 向上超过 commit distance 后 armed，release 才提交无目标出牌 |
 | drag targeted card | 源卡保持 selected-source，C++ aim arrow 指向鼠标；release 到合法 target 后提交 |
 
 快捷键 `1~7` 进入拖拽时，PlayerController 只收集 one-based hand index 和当前鼠标 widget-space 坐标，再交给 BattleHUD / first-person hand bridge 从已同步的 battle hand snapshot 解析 `CardInstanceId` 并启动 external drag；PlayerController 不读取 `UBattleSession` 或自行构造 `FBattleSnapshot`。拖拽内部使用双位置初始化：`PressScreenPosition` 固定为被选中卡牌的基础手牌位置，`CurrentScreenPosition / PointerViewportPosition` 使用 PlayerController 读取到的当前鼠标 widget-space 坐标；没有鼠标坐标时才退回卡牌自身位置。`CurrentPointerView` 只表示普通 hover / pointer view，不作为快捷键拖拽启动坐标来源，避免鼠标悬浮在 B 卡时按 A 卡快捷键却串用 B 的旧 pointer。
 
-快捷键拖拽启动后，`AWacomPlayerController` 每帧执行 active-drag pointer pump：如果当前 Anchor 的 first-person card layer 存在 active gesture，就优先通过 Slate viewport geometry 读取全局 cursor 在 viewport 内的 widget-space 坐标；如果 Slate viewport geometry 不可用，再退回 `GetMousePosition()` + `UWidgetLayoutLibrary::GetViewportScale()` 的 PlayerController 路径。随后调用 `UpdateFirstPersonCardDragPointer()` 喂给 Layer。Layer 继续复用 active gesture slot 的 `UpdateGesture()` 链路刷新 `DragView`、aim arrow 和 card target probe。没有 active gesture、读取不到鼠标位置，或当前 active gesture 不是 `ExternalPointer` 来源时，pump 为 no-op，不会改变普通 hover / pointer view，也不会覆盖鼠标来源拖拽的最新指针。左键 release 时，PlayerController 会先尝试释放 active first-person drag：能读取鼠标坐标时先 pump 到最新位置再 release，读取不到时使用 DragView 当前指针位置 release；只有没有 active drag 时，左键 release 才继续走 Battle scene click、Run tunnel branch 或 Run world interactable click 路由。
+快捷键拖拽启动后，`AWacomPlayerController` 每帧执行 active-drag pointer pump：如果当前 Anchor 的 first-person card layer 存在 active gesture，就优先通过 Slate viewport geometry 读取全局 cursor 在 viewport 内的 widget-space 坐标；如果 Slate viewport geometry 不可用，再退回 `GetMousePosition()` + `UWidgetLayoutLibrary::GetViewportScale()` 的 PlayerController 路径。随后调用 `UpdateFirstPersonCardDragPointer()` 喂给 Layer。Layer 继续复用 active gesture slot 的 `UpdateGesture()` 链路刷新 `DragView`、aim arrow 和 card target probe。没有 active gesture、读取不到鼠标位置，或当前 active gesture 不是 `ExternalPointer` 来源时，pump 为 no-op，不会改变普通 hover / pointer view，也不会覆盖鼠标来源拖拽的最新指针。左键 release 时，PlayerController 会先尝试释放 active first-person drag：能读取鼠标坐标时先 pump 到最新位置再 release，读取不到时使用 DragView 当前指针位置 release；只有没有 active drag 时，左键 release 才继续走 Battle scene click、Run tunnel branch 或 Run world interactable click 路由。由于 `All + NoCapture` 下 `FSceneViewport` 会跳过首次 mouse-down 的 `ViewportClient::InputKey()`，右键取消的正式入口是 `UWacomGameViewportClient` 生命周期内注册的 App-private `FWacomFirstPersonCardInputPreprocessor`。它在 Slate Widget 路由前检查右键按下、指针命中路径属于当前 GameViewport，且 active gesture 的 `GestureSource == KeyboardShortcut`，满足时才请求 PlayerController / Anchor 执行 cancel 并消费事件；`HandleRerouteInput()` 和 PlayerController `InputKey()` 保留为其它捕获模式的同条件 fallback。取消广播沿既有 Battle / Run delegate 清理目标 probe、Action Preview、详情和 camera override，源卡使用现有 return motion 回到手牌，不触发 release、Deny 或规则命令。鼠标按住产生的 `MousePress` 拖拽、Viewport 外点击和没有 active shortcut drag 的普通右键都会继续交给 Slate / CommonUI / gameplay 原路由。
 
 Battle 回合边界快捷键 `IA_Wait` / `IA_EndTurn` 在 PlayerController 入口先检查 first-person card layer active gesture。只要当前手势不是 `Idle` / `Cancelled`（包括 pressed、inspect、no-target drag、targeted aim、armed commit），本次快捷键会取消并消费该手势，不向 BattleHUD 提交等待或结束回合；下一次按键才按普通命令入口执行。取消后源卡保留当前 visual slot，并继续用 slot motion 返回手牌布局，不触发普通布局大跳变 reset。单纯 hover 不属于 active gesture，不会阻塞等待或结束回合。
 
@@ -233,7 +246,7 @@ Battle Action Preview 只在有效释放语义成立时由 BattleHUD / first-per
 
 Layer pointer arbitration 是 first-person hand 输入的正式入口。`UWacomFirstPersonCardLayerSlotWidget` 的 Slate mouse down / move / up 只把 pointer 事件转交给 `UWacomFirstPersonCardLayerWidget`，再按 Layer 返回的 route action 映射成 `Unhandled`、`Handled`、`CaptureMouse` 或 `ReleaseMouseCapture`；没有 Owner Layer 的 hand Slot 不再自管 press / drag / release 生命周期。`PressedSlotWidget` 只在没有 active gesture 且 press 成功开启新手势时写入。已有 active gesture 时，release 永远优先释放当前 gesture；mouse-origin drag 的 slot move 在 `Pressed / Inspecting / DraggingNoTargetCard / ArmedForCommit / AimingTargetedCard` 阶段都可以写入 pointer，用于启动拖拽、读牌姿态和鼠标来源拖拽持续更新。external-origin drag 的 slot enter / move 只消费并压制普通 hover，不改写正式拖拽 pointer；它的 pointer 只能由 PlayerController pump 写入。external drag 下点击目标手牌时，slot press 只更新当前源卡 drag pointer / card target，不抢占 pressed slot，也不重新开启目标卡手势。
 
-鼠标拖拽和快捷键拖拽进入 active drag 时共用 SlotWidget 内部的 card-drag promotion 路径。拖拽内部同时记录两条互不替代的输入语义：`GestureSource` 表示手势起源和生命周期意图，目前为 `MousePress` 或 `KeyboardShortcut`；`GestureInputSource` 表示持续 pointer owner，目前为 `MousePointer` 或 `ExternalPointer`。真实鼠标拖拽使用 `MousePress + MousePointer`，`1~7` 快捷键拖拽使用 `KeyboardShortcut + ExternalPointer`。`GestureSource` 不直接改变提交规则、目标合法性或视觉动画，只让后续输入生命周期可以按起源扩展；`GestureInputSource` 决定正式拖拽态的持续 pointer 写入来源：`MousePointer` 只接受 slot pointer route，`ExternalPointer` 只接受 PlayerController pump。SlotWidget 的 promotion 分支只消费 `InteractionIntent`：Battle `CommitNoTarget` 进入 `DraggingNoTargetCard`，达到提交距离后进入 `ArmedForCommit`；Run `DragToDropTarget` 保持普通无目标拖拽并由 drop coordinator 决定投放；`AimWorldTarget / AimCardTarget` 进入 `AimingTargetedCard`，`InspectOnly` 不升级为正式拖拽。LayerWidget slot refresh 的等价判断同样只比较正式 entry facts 和 `InteractionIntent`，不会同步或保留旧 TargetMode 调试投影。无目标卡和 Run/App drop target 卡的 `CurrentScreenPosition / PointerViewportPosition` 会立即更新，用于提交距离、DragView 和 release；源卡视觉位置以当前 pointer 作为 drag override 的视觉中心，再由同一套 slot motion 追踪该 override，并在拖拽 override 中把源卡角度归零，不继承手牌扇形角度。需要目标的战斗卡继续把真实 pointer 与目标 identity 交给 BattleHUD 校验，不恢复已清理的箭头吸附表现。
+鼠标拖拽和快捷键拖拽进入 active drag 时共用 SlotWidget 内部的 card-drag promotion 路径。拖拽内部同时记录两条互不替代的输入语义：`GestureSource` 表示手势起源和生命周期意图，目前为 `MousePress` 或 `KeyboardShortcut`；`GestureInputSource` 表示持续 pointer owner，目前为 `MousePointer` 或 `ExternalPointer`。真实鼠标拖拽使用 `MousePress + MousePointer`，`1~7` 快捷键拖拽使用 `KeyboardShortcut + ExternalPointer`。`GestureSource` 不改变提交规则或目标合法性，但允许 Slate GameViewport preprocessor 及其 fallback 只为 `KeyboardShortcut` 来源提供右键取消；`GestureInputSource` 决定正式拖拽态的持续 pointer 写入来源：`MousePointer` 只接受 slot pointer route，`ExternalPointer` 只接受 PlayerController pump。SlotWidget 的 promotion 分支只消费 `InteractionIntent`：Battle `CommitNoTarget` 进入 `DraggingNoTargetCard`，达到提交距离后进入 `ArmedForCommit`；Run `DragToDropTarget` 保持普通无目标拖拽并由 drop coordinator 决定投放；`AimWorldTarget / AimCardTarget` 进入 `AimingTargetedCard`，`InspectOnly` 不升级为正式拖拽。LayerWidget slot refresh 的等价判断同样只比较正式 entry facts 和 `InteractionIntent`，不会同步或保留旧 TargetMode 调试投影。无目标卡和 Run/App drop target 卡的 `CurrentScreenPosition / PointerViewportPosition` 会立即更新，用于提交距离、DragView 和 release；源卡视觉位置以当前 pointer 作为 drag override 的视觉中心，再由同一套 slot motion 追踪该 override，并在拖拽 override 中把源卡角度归零，不继承手牌扇形角度。需要目标的战斗卡继续把真实 pointer 与目标 identity 交给 BattleHUD 校验，不恢复已清理的箭头吸附表现。
 
 快捷键启动的 external drag 没有真实鼠标按住状态，因此鼠标点击目标手牌时，目标 SlotWidget 的 mouse down 不能重新占有 `PressedSlotWidget` 或开始目标卡的新 press。Layer 在已有 active gesture 时会把这次 pointer press 作为当前 drag 的最终指针更新并消费事件，随后 mouse up 释放的仍是原来的源卡；这样 `HandCard` 目标卡牌可以通过“快捷键进入拖拽 -> 点击另一张手牌”完成 card-to-card release，和普通鼠标拖拽到目标卡后松开左键得到一致提交语义。
 
@@ -245,7 +258,7 @@ Hover 输入命中与最终视觉几何分离。Anchor 先投影并平滑整副�
 
 视觉状态优先级固定为：pending source 高于普通 hover；drag card-target focus 不触发普通 hover，只负责当前指针压中的唯一目标卡 lift / scale / ZOrder；target affordance 只控制 overlay，不参与 lift / scale / ZOrder；pressed、commit pulse 和 deny shake 保留为短时 micro feedback，其中 deny 只做 shake + 边缘 / 暗角反馈，不改变主 scale / ZOrder。
 
-源卡短时交互反馈统一走 `InteractionFeedbackImage`，当前包括 `Pressed / Confirm / Commit / Deny`。SlotWidget 只计算状态、shake、scale 和 `FWacomFirstPersonCardInteractionFeedbackView`，然后交给 `UWacomFirstPersonCardViewWidget`；实际尺寸、层级和默认材质由 WBP 内的 `InteractionFeedbackImage` 控件负责。材质来源有两级：AnchorComponent Details 的 `InteractionFeedbackMaterial` 显式 override 优先；为空时 C++ 会复用 `InteractionFeedbackImage` 自身 brush 上的材质，作为 WBP 默认材质。若没有任何材质，pressed / confirm / commit 会退化为普通 tint，deny 仍保留 shake，且不会回退成整卡红色填充。`Retained` 专用 pulse 当前未接回，后续需与 Gained / audio 一起重新评估。`DenyFeedbackEdgeImage` 旧 fallback 已删除，新制作主线必须使用 `InteractionFeedbackImage`。拖拽 `InvalidCardTarget / ValidCardTarget`、card probe、commit ready 和 playable hover 等目标/候选提示继续使用 `FeedbackOverlay` full-card overlay 语义，但 overlay 控件本身也由 `WBP_FPCardView` 绑定和控制尺寸。
+源卡颜色类短时交互反馈统一走 `InteractionFeedbackImage`，当前包括 `Pressed / Confirm / Commit / Deny`。SlotWidget 只计算状态、shake、scale 和 `FWacomFirstPersonCardInteractionFeedbackView`，然后交给 `UWacomFirstPersonCardViewWidget`；实际尺寸、层级和默认材质由 WBP 内的 `InteractionFeedbackImage` 控件负责。正式 Drag 拾牌反馈不使用该 Image，而是在 Motion Mixer 的 local feedback 阶段直接合成短时 RenderTransform 并由 Slot 播放一次声音。材质来源有两级：AnchorComponent Details 的 `InteractionFeedbackMaterial` 显式 override 优先；为空时 C++ 会复用 `InteractionFeedbackImage` 自身 brush 上预设的材质，作为 WBP 默认材质。若没有任何材质，pressed / confirm / commit 会退化为普通 tint，deny 仍保留 shake，且不会回退成整卡红色填充。`Retained` 已恢复为独立语义运动，不借用 Selection 或旧 Overlay 发光。`DenyFeedbackEdgeImage` 旧 fallback 已删除，新制作主线必须使用 `InteractionFeedbackImage`。拖拽 `InvalidCardTarget / ValidCardTarget`、card probe、commit ready 和 playable hover 等目标/候选提示继续使用 `FeedbackOverlay` full-card overlay 语义，但 overlay 控件本身也由 `WBP_FPCardView` 绑定和控制尺寸。
 
 `InteractionFeedbackImage` 材质需要支持以下参数名，C++ 会在每次反馈刷新时写入动态材质实例：
 

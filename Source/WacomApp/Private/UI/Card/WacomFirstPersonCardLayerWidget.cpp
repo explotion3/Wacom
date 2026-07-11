@@ -550,6 +550,13 @@ bool UWacomFirstPersonCardLayerWidget::IsCardDragGestureActive() const
 	return FindActiveGestureSlot() != nullptr;
 }
 
+bool UWacomFirstPersonCardLayerWidget::IsKeyboardShortcutCardDragGestureActive() const
+{
+	return IsCardDragGestureActive()
+		&& CurrentDragView.GestureSource
+			== EWacomFirstPersonCardGestureSource::KeyboardShortcut;
+}
+
 void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 {
 	ClearHoveredCardTargetState(true);

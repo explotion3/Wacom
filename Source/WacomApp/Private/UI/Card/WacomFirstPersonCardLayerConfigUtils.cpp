@@ -211,6 +211,19 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.CardDepth.ReturnSpeed = FMath::Max(0.0f, Config.CardDepth.ReturnSpeed);
 	Config.CardDepth.HoverContactShadowLift = FMath::Clamp(Config.CardDepth.HoverContactShadowLift, 0.0f, 1.0f);
 	Config.CardDepth.DragContactShadowLift = FMath::Clamp(Config.CardDepth.DragContactShadowLift, 0.0f, 1.0f);
+	Config.Selection.Style.EnterDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.EnterDurationSeconds);
+	Config.Selection.Style.ExitDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.ExitDurationSeconds);
+	Config.Selection.Style.SustainPeriodSeconds = FMath::Max(0.01f, Config.Selection.Style.SustainPeriodSeconds);
+	Config.Selection.Style.SustainIntensity = FMath::Clamp(Config.Selection.Style.SustainIntensity, 0.0f, 1.0f);
+	Config.Selection.Style.GridColumns = FMath::Max(1.0f, Config.Selection.Style.GridColumns);
+	Config.Selection.Style.SweepWidth = FMath::Max(0.001f, Config.Selection.Style.SweepWidth);
+	Config.Selection.Style.SweepIntensity = FMath::Max(0.0f, Config.Selection.Style.SweepIntensity);
+	Config.Selection.Style.InnerEdgePixels = FMath::Max(0.0f, Config.Selection.Style.InnerEdgePixels);
+	Config.Selection.Style.OuterEdgePixels = FMath::Max(
+		Config.Selection.Style.InnerEdgePixels,
+		Config.Selection.Style.OuterEdgePixels);
+	Config.Selection.Style.GlintDensity = FMath::Clamp(Config.Selection.Style.GlintDensity, 0.0f, 1.0f);
+	Config.Selection.Style.GlintSpeed = FMath::Max(0.0f, Config.Selection.Style.GlintSpeed);
 	return Config;
 }
 
@@ -235,7 +248,25 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.CardDepth.ResponseSpeed, B.CardDepth.ResponseSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.ReturnSpeed, B.CardDepth.ReturnSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.HoverContactShadowLift, B.CardDepth.HoverContactShadowLift)
-		&& AreFloatsEquivalent(A.CardDepth.DragContactShadowLift, B.CardDepth.DragContactShadowLift);
+		&& AreFloatsEquivalent(A.CardDepth.DragContactShadowLift, B.CardDepth.DragContactShadowLift)
+		&& A.Selection.bEnabled == B.Selection.bEnabled
+		&& A.Selection.bReducedMotion == B.Selection.bReducedMotion
+		&& AreColorsEquivalent(A.Selection.Style.PrimaryColor, B.Selection.Style.PrimaryColor)
+		&& AreColorsEquivalent(A.Selection.Style.SecondaryColor, B.Selection.Style.SecondaryColor)
+		&& AreColorsEquivalent(A.Selection.Style.AccentColor, B.Selection.Style.AccentColor)
+		&& AreFloatsEquivalent(A.Selection.Style.EnterDurationSeconds, B.Selection.Style.EnterDurationSeconds)
+		&& AreFloatsEquivalent(A.Selection.Style.ExitDurationSeconds, B.Selection.Style.ExitDurationSeconds)
+		&& AreFloatsEquivalent(A.Selection.Style.SustainPeriodSeconds, B.Selection.Style.SustainPeriodSeconds)
+		&& AreFloatsEquivalent(A.Selection.Style.SustainIntensity, B.Selection.Style.SustainIntensity)
+		&& AreFloatsEquivalent(A.Selection.Style.GridColumns, B.Selection.Style.GridColumns)
+		&& AreFloatsEquivalent(A.Selection.Style.SweepAngleDegrees, B.Selection.Style.SweepAngleDegrees)
+		&& AreFloatsEquivalent(A.Selection.Style.SweepWidth, B.Selection.Style.SweepWidth)
+		&& AreFloatsEquivalent(A.Selection.Style.SweepIntensity, B.Selection.Style.SweepIntensity)
+		&& AreFloatsEquivalent(A.Selection.Style.InnerEdgePixels, B.Selection.Style.InnerEdgePixels)
+		&& AreFloatsEquivalent(A.Selection.Style.OuterEdgePixels, B.Selection.Style.OuterEdgePixels)
+		&& AreFloatsEquivalent(A.Selection.Style.GlintDensity, B.Selection.Style.GlintDensity)
+		&& AreFloatsEquivalent(A.Selection.Style.GlintSpeed, B.Selection.Style.GlintSpeed)
+		&& A.Selection.Style.PixelClusterMask == B.Selection.Style.PixelClusterMask;
 }
 
 FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
@@ -245,6 +276,19 @@ FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
 	Config.PlayableHoverOpacity = FMath::Clamp(Config.PlayableHoverOpacity, 0.0f, 1.0f);
 	Config.PressedScale = FMath::Max(0.01f, Config.PressedScale);
 	Config.PressedOpacity = FMath::Clamp(Config.PressedOpacity, 0.0f, 1.0f);
+	Config.DragPickupDurationSeconds = FMath::Max(0.0f, Config.DragPickupDurationSeconds);
+	Config.DragPickupRiseSeconds = FMath::Clamp(
+		Config.DragPickupRiseSeconds,
+		0.0f,
+		Config.DragPickupDurationSeconds);
+	Config.DragPickupLiftPixels = FMath::Max(0.0f, Config.DragPickupLiftPixels);
+	Config.DragPickupScaleMultiplier = FMath::Max(0.01f, Config.DragPickupScaleMultiplier);
+	Config.DragPickupSoundVolumeMultiplier = FMath::Max(0.0f, Config.DragPickupSoundVolumeMultiplier);
+	Config.DragPickupSoundPitchMultiplier = FMath::Max(0.01f, Config.DragPickupSoundPitchMultiplier);
+	Config.DragPickupSoundPitchVariation = FMath::Clamp(
+		Config.DragPickupSoundPitchVariation,
+		0.0f,
+		0.99f);
 	Config.ConfirmDuration = FMath::Max(0.0f, Config.ConfirmDuration);
 	Config.ConfirmOpacity = FMath::Clamp(Config.ConfirmOpacity, 0.0f, 1.0f);
 	Config.DenyDuration = FMath::Max(0.0f, Config.DenyDuration);
@@ -276,6 +320,16 @@ bool AreSlotFeedbackConfigsEquivalent(
 		&& AreFloatsEquivalent(A.PressedScale, B.PressedScale)
 		&& AreColorsEquivalent(A.PressedColor, B.PressedColor)
 		&& AreFloatsEquivalent(A.PressedOpacity, B.PressedOpacity)
+		&& A.bEnableDragPickupFeedback == B.bEnableDragPickupFeedback
+		&& AreFloatsEquivalent(A.DragPickupDurationSeconds, B.DragPickupDurationSeconds)
+		&& AreFloatsEquivalent(A.DragPickupRiseSeconds, B.DragPickupRiseSeconds)
+		&& AreFloatsEquivalent(A.DragPickupLiftPixels, B.DragPickupLiftPixels)
+		&& AreFloatsEquivalent(A.DragPickupScaleMultiplier, B.DragPickupScaleMultiplier)
+		&& A.bReduceDragPickupMotion == B.bReduceDragPickupMotion
+		&& A.DragPickupSound == B.DragPickupSound
+		&& AreFloatsEquivalent(A.DragPickupSoundVolumeMultiplier, B.DragPickupSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(A.DragPickupSoundPitchMultiplier, B.DragPickupSoundPitchMultiplier)
+		&& AreFloatsEquivalent(A.DragPickupSoundPitchVariation, B.DragPickupSoundPitchVariation)
 		&& AreFloatsEquivalent(A.ConfirmDuration, B.ConfirmDuration)
 		&& AreFloatsEquivalent(A.ConfirmOpacity, B.ConfirmOpacity)
 		&& AreFloatsEquivalent(A.DenyDuration, B.DenyDuration)

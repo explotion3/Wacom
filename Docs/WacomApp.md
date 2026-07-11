@@ -46,7 +46,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 | 关卡 | GameMode | 职责 |
 |---|---|---|
-| `L_MainMenu` | `AWacomMenuGameMode` | 主菜单，不 Spawn 探索 Pawn，提供 New Game / Continue / Quit 入口 |
+| `L_MainMenu` | `AWacomMenuGameMode` | 主菜单，不 Spawn 探索 Pawn；注入主菜单 ViewData，并处理菜单 Action、确认、退出和 travel |
 | `L_Exploration` | `AWacomGameMode` | 探索主流程，持有 GameFlowState，进入 / 退出战斗，初始化探索 HUD |
 
 当前 `EGameFlowState` 只有 `Exploration` 与 `Battle`：
@@ -62,6 +62,8 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 - MainMenu：`/Game/Wacom/Maps/L_MainMenu`
 
 不要把 travel 目标写成 `/Game/Wacom/Maps/L_Exploration.L_Exploration` 这类 ObjectPath。UE PIE 下 ObjectPath travel 曾触发 `FPackagePath::TryFromMountedName was passed an ObjectPath` 和 `!NewPIEWorld->bIsWorldInitialized` ensure。
+
+主菜单采用 App flow 与 Screen 分离：`AWacomMenuGameMode` 构造 `FWacomMainMenuViewData`，绑定 `UWacomMainMenuScreen::OnActionRequestedNative`，并处理 `EWacomMainMenuAction`；Screen 只应用 ViewData、刷新 fallback / WBP 和上报玩家意图，不读取或删除 SaveGame，不调用 `OpenLevel()` 或退出 API。Screen class 配置已收紧为 `TSubclassOf<UWacomMainMenuScreen>`，travel 前和 `EndPlay` 都会显式解绑。当前存档总开关关闭，因此 GameMode 不访问磁盘，Continue、Journey History、Settings、Credits 保持隐藏；Start New Journey 仍直接走 `/Game/Wacom/Maps/L_Exploration`。未来档案服务接入后，只替换 GameMode 的 ViewData 构建与 Action flow，不让 Screen 重新拥有 slot 语义。
 
 ---
 
@@ -107,6 +109,8 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 - 鼠标显隐 / capture。
 - Enhanced Input mapping context。
 - PlayerController `bEnableClickEvents / bEnableMouseOverEvents` owner lease。
+
+`UWacomGameViewportClient : UCommonGameViewportClient` 是极窄的 Slate 前置输入仲裁 owner，不替代 Coordinator 或 PlayerController。由于正式输入配置保持 `NoCapture`，ViewportClient 注册 `Game` priority 的 App-private `IInputProcessor`，在 Widget 路由前只处理“指针属于当前 GameViewport + 快捷键来源 first-person card active drag + 右键按下”的中性取消；其余输入返回未处理并继续正常路由。Viewport `HandleRerouteInput()` 和 PlayerController `InputKey()` 的同条件分支只作为其它捕获模式 fallback。
 
 当前上下文：
 

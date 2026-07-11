@@ -275,6 +275,12 @@ void AWacomPlayerController::SetupInputComponent()
 
 bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
+	if (Params.Key == EKeys::RightMouseButton
+		&& Params.Event == IE_Pressed
+		&& TryCancelFirstPersonCardKeyboardShortcutDrag())
+	{
+		return true;
+	}
 	if (Params.Key == EKeys::LeftMouseButton
 		&& Params.Event == IE_Released
 		&& TryReleaseFirstPersonCardActiveDragPointer())
@@ -1240,6 +1246,11 @@ void AWacomPlayerController::PumpFirstPersonCardActiveDragPointer()
 bool AWacomPlayerController::TryReleaseFirstPersonCardActiveDragPointer()
 {
 	return GetRunFirstPersonCardDragController().TryReleaseActiveDragPointer();
+}
+
+bool AWacomPlayerController::TryCancelFirstPersonCardKeyboardShortcutDrag()
+{
+	return GetRunFirstPersonCardDragController().TryCancelKeyboardShortcutActiveDrag();
 }
 
 bool AWacomPlayerController::TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut()

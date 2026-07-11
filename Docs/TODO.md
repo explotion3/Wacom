@@ -188,15 +188,17 @@ tags:
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
   - 说明：后续按美术反馈微调扇形参数、卡面采样、Retainer 外元素、slot motion、commit pulse 和 drag / aim 读牌姿态。
 
-- [ ] **存档系统恢复：Bootstrap 读盘、PauseMenu Save、MainMenu Continue**
-  - 状态：`Blocked: Demo 范围确认`
+- [ ] **单一玩家档案与旅程存档：活动旅程、滚动备份、历史摘要**
+  - 状态：`Ready: 产品口径已确认，等待独立规格与实现`
   - 归属：Run / App
   - 入口：[Roadmap: 存档恢复](./Roadmap.md#roadmap-save)
+  - 说明：采用一个玩家档案、一个活动旅程、若干不可见滚动备份；结束旅程生成只读历史摘要。该切片负责恢复 Bootstrap / PauseMenu Save / MainMenu Continue，不把 slot 语义写回 MainMenu Screen。
 
-- [ ] **MainMenu V2 资产重做评估**
-  - 状态：`Deferred: 现有主菜单资产不可维护时再评估`
+- [ ] **MainMenu 正式表现：WBP、实时场景与子页面**
+  - 状态：`Ready: C++ ViewData / Action 契约已完成`
   - 归属：App / UI
   - 入口：[Roadmap: App 壳层与菜单](./Roadmap.md#roadmap-app-shell-and-menus)
+  - 说明：后续创建 `WBP_MainMenuScreen`，制作 `L_MainMenu` 实时场景和固定镜头，并依次接入旅程准备、旅程记录、设置与制作人员页面；当前 C++ fallback 继续保证主菜单可玩。
 
 - [ ] **清理 UI MVVM 迁移尾项：WBP ViewBinding、逐步移除 C++ 手动 SetText fallback**
   - 状态：`Ready: WBP 化后清理`

@@ -328,4 +328,11 @@ bool FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(
 	return Slot.RequestGestureReleaseForTest(ScreenPosition);
 }
 
+void FWacomFirstPersonCardLayerTestAccess::SetGestureState(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	EWacomFirstPersonCardGestureState State)
+{
+	Slot.SetGestureState(State, false);
+}
+
 #endif

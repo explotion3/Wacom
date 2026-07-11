@@ -18,6 +18,7 @@ public:
 
 	void PumpActiveDragPointer();
 	bool TryReleaseActiveDragPointer();
+	bool TryCancelKeyboardShortcutActiveDrag();
 	bool TryCancelActiveGestureForTurnBoundaryShortcut();
 
 	void HandleDragStarted(

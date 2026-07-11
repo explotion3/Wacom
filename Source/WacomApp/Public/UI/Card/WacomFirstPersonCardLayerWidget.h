@@ -147,6 +147,7 @@ public:
 	bool ReleaseActiveDragGestureFromWidgetPosition(const FVector2D& WidgetPosition);
 	bool ReleaseActiveDragGestureAtCurrentPointer();
 	bool IsCardDragGestureActive() const;
+	bool IsKeyboardShortcutCardDragGestureActive() const;
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardFeedbackHints(const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints);
 	void SetPresentationAnchors(const FWacomFirstPersonCardPresentationAnchorSet& InAnchors);

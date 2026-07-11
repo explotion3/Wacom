@@ -10,6 +10,7 @@
 #include "WacomFirstPersonCardLayerTypes.generated.h"
 
 class USoundBase;
+class UTexture2D;
 
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardAnchorMode : uint8
@@ -202,6 +203,92 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerTransitionHint
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitTargetWidgetPosition = FVector2D::ZeroVector;
+};
+
+/** Theme-neutral authoring values for the first-person source-card selection material. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardSelectionStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "像素选中扫光和内侧硬边的主色；默认暖象牙金。"))
+	FLinearColor PrimaryColor = FLinearColor(1.0f, 0.88f, 0.48f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "像素选中外侧硬边和折射过渡的次色；默认低饱和蓝。"))
+	FLinearColor SecondaryColor = FLinearColor(0.50f, 0.68f, 1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "像素亮点尖峰颜色；默认紫红，仅占少量高亮。"))
+	FLinearColor AccentColor = FLinearColor(0.86f, 0.34f, 0.92f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "选中进入扫光时长，单位为秒；推荐 0.24 到 0.42。"))
+	float EnterDurationSeconds = 0.34f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "选中退出淡出时长，单位为秒；推荐 0.10 到 0.22。"))
+	float ExitDurationSeconds = 0.16f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "保持选中时弱扫光的循环周期，单位为秒；推荐 2 到 4。"))
+	float SustainPeriodSeconds = 2.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "弱扫光相对进入扫光的强度，推荐 0.18 到 0.38。"))
+	float SustainIntensity = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "横向像素网格列数；当前卡面推荐 80 到 112，默认 96。"))
+	float GridColumns = 96.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "扫光角度，单位为度；推荐 35 到 50。"))
+	float SweepAngleDegrees = 42.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "扫光宽度，UV 单位；推荐 0.10 到 0.20。"))
+	float SweepWidth = 0.145f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "进入扫光亮度强度；推荐 0.7 到 1.25。"))
+	float SweepIntensity = 0.95f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "实时 Alpha 内侧硬边宽度，单位为卡面像素；推荐 1 到 2。"))
+	float InnerEdgePixels = 1.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "实时 Alpha 外侧硬边宽度，单位为卡面像素；推荐 3 到 6。"))
+	float OuterEdgePixels = 4.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "沿轮廓出现像素亮点的密度，0 到 1；推荐 0.10 到 0.25。"))
+	float GlintDensity = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "轮廓像素亮点移动速度，单位为循环/秒；推荐 0.35 到 0.9。"))
+	float GlintSpeed = 0.62f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Selection", meta = (ToolTip = "像素亮点分布 Mask；推荐使用 Masks 压缩、关闭 sRGB、Nearest 过滤和 Mipmaps。为空时材质使用程序化方格噪声。"))
+	TObjectPtr<UTexture2D> PixelClusterMask = nullptr;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardSelectionConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Selection")
+	bool bEnabled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Selection")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Selection")
+	FWacomFirstPersonCardSelectionStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardSelectionView
+{
+	bool bTargetActive = false;
+	bool bReducedMotion = false;
+	float Amount = 0.0f;
+	float EnterProgress = 0.0f;
+	float TimeSeconds = 0.0f;
+	FWacomFirstPersonCardSelectionStyleData Style;
+};
+
+/** Card-surface material state. Selection is the first channel; flash/dissolve can extend this contract later. */
+struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
+{
+	FWacomFirstPersonCardSelectionView Selection;
 };
 
 USTRUCT(BlueprintType)
@@ -901,6 +988,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardDepthConfig CardDepth;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardSelectionConfig Selection;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState
@@ -1163,6 +1253,36 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float PressedOpacity = 0.10f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableDragPickupFeedback = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragPickupDurationSeconds = 0.14f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragPickupRiseSeconds = 0.02f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragPickupLiftPixels = 12.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragPickupScaleMultiplier = 1.03f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bReduceDragPickupMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TObjectPtr<USoundBase> DragPickupSound = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragPickupSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragPickupSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float DragPickupSoundPitchVariation = 0.03f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float ConfirmDuration = 0.08f;

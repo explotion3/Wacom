@@ -17,6 +17,7 @@
 #include "UI/Card/WacomFirstPersonCardAnchorRuntimeState.h"
 #include "UI/Card/WacomFirstPersonCardLayerDelegateRouter.h"
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
+#include "UI/Card/WacomFirstPersonCardSelectionStyle.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #if WITH_AUTOMATION_TESTS
 #include "Cards/CardDefinition.h"
@@ -203,12 +204,37 @@ namespace
 		Config.CardDepth.bEnableContactShadow = Anchor.bEnableCardContactShadow;
 		Config.CardDepth.HoverContactShadowLift = Anchor.CardHoverContactShadowLift;
 		Config.CardDepth.DragContactShadowLift = Anchor.CardDragContactShadowLift;
+		Config.Selection.bEnabled = Anchor.bEnableCardSelectionEffect;
+		Config.Selection.bReducedMotion = Anchor.bReduceCardSelectionMotion;
+		Config.Selection.Style = Anchor.CardSelectionStyle
+			? Anchor.CardSelectionStyle->Style
+			: FWacomFirstPersonCardSelectionStyleData();
+		if (Anchor.CardSelectionEnterDurationOverrideSeconds >= 0.0f)
+		{
+			Config.Selection.Style.EnterDurationSeconds =
+				Anchor.CardSelectionEnterDurationOverrideSeconds;
+		}
+		if (Anchor.CardSelectionExitDurationOverrideSeconds >= 0.0f)
+		{
+			Config.Selection.Style.ExitDurationSeconds =
+				Anchor.CardSelectionExitDurationOverrideSeconds;
+		}
 		Config.bEnableCardInteractionFeedback = Anchor.bEnableCardInteractionFeedback;
 		Config.PlayableHoverFeedbackColor = Anchor.PlayableHoverFeedbackColor;
 		Config.PlayableHoverFeedbackOpacity = Anchor.PlayableHoverFeedbackOpacity;
 		Config.PressedFeedbackScale = Anchor.PressedFeedbackScale;
 		Config.PressedFeedbackColor = Anchor.PressedFeedbackColor;
 		Config.PressedFeedbackOpacity = Anchor.PressedFeedbackOpacity;
+		Config.bEnableDragPickupFeedback = Anchor.bEnableCardDragPickupFeedback;
+		Config.DragPickupDurationSeconds = Anchor.CardDragPickupDurationSeconds;
+		Config.DragPickupRiseSeconds = Anchor.CardDragPickupRiseSeconds;
+		Config.DragPickupLiftPixels = Anchor.CardDragPickupLiftPixels;
+		Config.DragPickupScaleMultiplier = Anchor.CardDragPickupScaleMultiplier;
+		Config.bReduceDragPickupMotion = Anchor.bReduceCardDragPickupMotion;
+		Config.DragPickupSound = Anchor.CardDragPickupSound;
+		Config.DragPickupSoundVolumeMultiplier = Anchor.CardDragPickupSoundVolumeMultiplier;
+		Config.DragPickupSoundPitchMultiplier = Anchor.CardDragPickupSoundPitchMultiplier;
+		Config.DragPickupSoundPitchVariation = Anchor.CardDragPickupSoundPitchVariation;
 		Config.ConfirmFeedbackDuration = Anchor.ConfirmFeedbackDuration;
 		Config.ConfirmFeedbackOpacity = Anchor.ConfirmFeedbackOpacity;
 		Config.DenyFeedbackDuration = Anchor.DenyFeedbackDuration;
@@ -264,6 +290,16 @@ namespace
 		FeedbackConfig.PressedScale = Config.PressedFeedbackScale;
 		FeedbackConfig.PressedColor = Config.PressedFeedbackColor;
 		FeedbackConfig.PressedOpacity = Config.PressedFeedbackOpacity;
+		FeedbackConfig.bEnableDragPickupFeedback = Config.bEnableDragPickupFeedback;
+		FeedbackConfig.DragPickupDurationSeconds = Config.DragPickupDurationSeconds;
+		FeedbackConfig.DragPickupRiseSeconds = Config.DragPickupRiseSeconds;
+		FeedbackConfig.DragPickupLiftPixels = Config.DragPickupLiftPixels;
+		FeedbackConfig.DragPickupScaleMultiplier = Config.DragPickupScaleMultiplier;
+		FeedbackConfig.bReduceDragPickupMotion = Config.bReduceDragPickupMotion;
+		FeedbackConfig.DragPickupSound = Config.DragPickupSound;
+		FeedbackConfig.DragPickupSoundVolumeMultiplier = Config.DragPickupSoundVolumeMultiplier;
+		FeedbackConfig.DragPickupSoundPitchMultiplier = Config.DragPickupSoundPitchMultiplier;
+		FeedbackConfig.DragPickupSoundPitchVariation = Config.DragPickupSoundPitchVariation;
 		FeedbackConfig.ConfirmDuration = Config.ConfirmFeedbackDuration;
 		FeedbackConfig.ConfirmOpacity = Config.ConfirmFeedbackOpacity;
 		FeedbackConfig.DenyDuration = Config.DenyFeedbackDuration;
@@ -308,6 +344,7 @@ namespace
 		VisualConfig.DragCardTargetFocusScale = Config.DragCardTargetFocusScale;
 		VisualConfig.DragCardTargetFocusZOrderBoost = Config.DragCardTargetFocusZOrderBoost;
 		VisualConfig.CardDepth = Config.CardDepth;
+		VisualConfig.Selection = Config.Selection;
 		return VisualConfig;
 	}
 
@@ -605,12 +642,40 @@ namespace
 		AddBool(Config.CardDepth.bEnableContactShadow);
 		AddFloat(Config.CardDepth.HoverContactShadowLift);
 		AddFloat(Config.CardDepth.DragContactShadowLift);
+		AddBool(Config.Selection.bEnabled);
+		AddBool(Config.Selection.bReducedMotion);
+		AddColor(Config.Selection.Style.PrimaryColor);
+		AddColor(Config.Selection.Style.SecondaryColor);
+		AddColor(Config.Selection.Style.AccentColor);
+		AddFloat(Config.Selection.Style.EnterDurationSeconds);
+		AddFloat(Config.Selection.Style.ExitDurationSeconds);
+		AddFloat(Config.Selection.Style.SustainPeriodSeconds);
+		AddFloat(Config.Selection.Style.SustainIntensity);
+		AddFloat(Config.Selection.Style.GridColumns);
+		AddFloat(Config.Selection.Style.SweepAngleDegrees);
+		AddFloat(Config.Selection.Style.SweepWidth);
+		AddFloat(Config.Selection.Style.SweepIntensity);
+		AddFloat(Config.Selection.Style.InnerEdgePixels);
+		AddFloat(Config.Selection.Style.OuterEdgePixels);
+		AddFloat(Config.Selection.Style.GlintDensity);
+		AddFloat(Config.Selection.Style.GlintSpeed);
+		Combine(GetTypeHash(Config.Selection.Style.PixelClusterMask.Get()));
 		AddBool(Config.bEnableCardInteractionFeedback);
 		AddColor(Config.PlayableHoverFeedbackColor);
 		AddFloat(Config.PlayableHoverFeedbackOpacity);
 		AddFloat(Config.PressedFeedbackScale);
 		AddColor(Config.PressedFeedbackColor);
 		AddFloat(Config.PressedFeedbackOpacity);
+		AddBool(Config.bEnableDragPickupFeedback);
+		AddFloat(Config.DragPickupDurationSeconds);
+		AddFloat(Config.DragPickupRiseSeconds);
+		AddFloat(Config.DragPickupLiftPixels);
+		AddFloat(Config.DragPickupScaleMultiplier);
+		AddBool(Config.bReduceDragPickupMotion);
+		Combine(GetTypeHash(Config.DragPickupSound.Get()));
+		AddFloat(Config.DragPickupSoundVolumeMultiplier);
+		AddFloat(Config.DragPickupSoundPitchMultiplier);
+		AddFloat(Config.DragPickupSoundPitchVariation);
 		AddFloat(Config.ConfirmFeedbackDuration);
 		AddFloat(Config.ConfirmFeedbackOpacity);
 		AddColor(Config.DenyFeedbackColor);
@@ -2050,4 +2115,10 @@ bool UWacomFirstPersonCardAnchorComponent::ReleaseFirstPersonCardDragGestureAtCu
 bool UWacomFirstPersonCardAnchorComponent::IsFirstPersonCardDragGestureActive() const
 {
 	return CardLayerWidget && CardLayerWidget->IsCardDragGestureActive();
+}
+
+bool UWacomFirstPersonCardAnchorComponent::IsFirstPersonCardKeyboardShortcutDragGestureActive() const
+{
+	return CardLayerWidget
+		&& CardLayerWidget->IsKeyboardShortcutCardDragGestureActive();
 }

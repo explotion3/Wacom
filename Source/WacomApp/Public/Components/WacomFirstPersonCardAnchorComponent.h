@@ -15,6 +15,7 @@ class USoundBase;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
+class UWacomFirstPersonCardSelectionStyle;
 class UCardDefinition;
 class FWacomFirstPersonCardLayerDelegateRouter;
 class FWacomFirstPersonCardLayerOwner;
@@ -478,6 +479,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "Drag 状态传给材质接触阴影的抬升归一化值；0 表示紧贴轮廓，1 表示最软最淡端点。推荐 0.85 到 1.0。"))
 	float CardDragContactShadowLift = 1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜 Surface Effect 制作开关；当前拖拽流程不会激活它，默认关闭。后续只允许由明确的卡面数据更新或升级表现语义驱动。"))
+	bool bEnableCardSelectionEffect = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜预设；当前 Fake3D 实时材质不消费该资源，保留给未来卡面更新效果。"))
+	TObjectPtr<UWacomFirstPersonCardSelectionStyle> CardSelectionStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜的弱化动态标记；当前拖拽流程不读取该参数。"))
+	bool bReduceCardSelectionMotion = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜进入时长覆盖，单位为秒；当前拖拽流程不读取该参数。"))
+	float CardSelectionEnterDurationOverrideSeconds = -1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜退出时长覆盖，单位为秒；当前拖拽流程不读取该参数。"))
+	float CardSelectionExitDurationOverrideSeconds = -1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|12 Camera Look While UI", meta = (ToolTip = "Inspect 或拖拽第一人称卡牌时，是否让当前 Battle / Run 第一人称镜头持续跟随鼠标偏转。只影响镜头表现，不改变鼠标捕获、Inspect 滑选、目标校验或出牌结果。"))
 	bool bAllowCameraLookDuringCardDrag = true;
 
@@ -513,6 +529,36 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.5", ToolTip = "左键按下可交互卡牌时颜色叠加的不透明度，范围 0 到 1。"))
 	float PressedFeedbackOpacity = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "是否在卡牌首次进入正式拖拽时播放一次拾牌反馈；只影响局部缩放、上提和 2D 音效，不改变拖拽、瞄准或提交规则。"))
+	bool bEnableCardDragPickupFeedback = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (Units = "s", ToolTip = "拾牌反馈总时长，单位为秒；推荐 0.10 到 0.18。只作用于 UMG RenderTransform，不阻塞输入。"))
+	float CardDragPickupDurationSeconds = 0.14f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (Units = "s", ToolTip = "拾牌反馈快速建立到峰值的时长，单位为秒；推荐 0.01 到 0.04，运行时不会超过总时长。"))
+	float CardDragPickupRiseSeconds = 0.02f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "拾牌瞬间额外上提距离，单位为 UMG 布局像素；推荐 8 到 18。它是短时局部偏移，不改变手牌布局或命中区域。"))
+	float CardDragPickupLiftPixels = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "拾牌瞬间额外缩放倍率；推荐 1.015 到 1.05，会与现有正式拖拽源卡缩放相乘，不改变命中区域。"))
+	float CardDragPickupScaleMultiplier = 1.03f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "弱化拾牌动态：开启后取消额外上提和缩放，但仍保留现有正式拖拽姿态并播放拾牌音效。"))
+	bool bReduceCardDragPickupMotion = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "正式拖拽开始时播放的短促实体纸牌音，建议使用 80 到 140 毫秒的纸张摩擦加轻微卡边扣响；为空时静默跳过。使用硬引用以避免交互瞬间同步加载。"))
+	TObjectPtr<USoundBase> CardDragPickupSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "拾牌音效音量倍率；推荐 0.6 到 1.1，只影响本地 2D UI 音效。"))
+	float CardDragPickupSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "拾牌音效基础音高倍率；推荐 0.9 到 1.1。"))
+	float CardDragPickupSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "每次拾牌音效相对基础音高的随机浮动比例；0.03 表示约正负 3%，推荐 0 到 0.06。"))
+	float CardDragPickupSoundPitchVariation = 0.03f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.5", Units = "s", ToolTip = "有效点击释放后确认反馈保留的时长，单位为秒；不延迟出牌或目标选择流程。"))
 	float ConfirmFeedbackDuration = 0.08f;
@@ -694,6 +740,7 @@ public:
 	bool ReleaseFirstPersonCardDragGesture(const FVector2D& WidgetPosition);
 	bool ReleaseFirstPersonCardDragGestureAtCurrentPointer();
 	bool IsFirstPersonCardDragGestureActive() const;
+	bool IsFirstPersonCardKeyboardShortcutDragGestureActive() const;
 
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardHovered;
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardUnhovered;
