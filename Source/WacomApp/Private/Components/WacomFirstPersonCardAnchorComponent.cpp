@@ -107,6 +107,10 @@ namespace
 		Config.HoverMotionSpeed = Anchor.HoverMotionSpeed;
 		Config.HoverOpacitySpeed = Anchor.HoverOpacitySpeed;
 		Config.HoverMotionEasePower = Anchor.HoverMotionEasePower;
+		Config.bOverrideDragTargetFocusMotionProfile = Anchor.bOverrideDragTargetFocusMotionProfile;
+		Config.DragTargetFocusMotionSpeed = Anchor.DragTargetFocusMotionSpeed;
+		Config.DragTargetFocusOpacitySpeed = Anchor.DragTargetFocusOpacitySpeed;
+		Config.DragTargetFocusMotionEasePower = Anchor.DragTargetFocusMotionEasePower;
 		Config.bOverrideEnterExitMotionProfile = Anchor.bOverrideEnterExitMotionProfile;
 		Config.EnterMotionSpeed = Anchor.EnterMotionSpeed;
 		Config.EnterOpacitySpeed = Anchor.EnterOpacitySpeed;
@@ -131,6 +135,16 @@ namespace
 		Config.DrawnCardEnterArcLiftPixels = Anchor.DrawnCardEnterArcLiftPixels;
 		Config.DrawnCardEnterEasePower = Anchor.DrawnCardEnterEasePower;
 		Config.bBlockInteractionDuringDrawnCardEnter = Anchor.bBlockInteractionDuringDrawnCardEnter;
+		Config.GainedCardEnterOffsetPixels = Anchor.GainedCardEnterOffsetPixels;
+		Config.GainedCardEnterOriginMode = Anchor.GainedCardEnterOriginMode;
+		Config.GainedCardEnterViewportAnchor = Anchor.GainedCardEnterViewportAnchor;
+		Config.GainedCardEnterScaleMultiplier = Anchor.GainedCardEnterScaleMultiplier;
+		Config.GainedCardEnterAngleOffsetDegrees = Anchor.GainedCardEnterAngleOffsetDegrees;
+		Config.GainedCardEnterDurationSeconds = Anchor.GainedCardEnterDurationSeconds;
+		Config.GainedCardEnterStaggerSeconds = Anchor.GainedCardEnterStaggerSeconds;
+		Config.GainedCardEnterArcLiftPixels = Anchor.GainedCardEnterArcLiftPixels;
+		Config.GainedCardEnterEasePower = Anchor.GainedCardEnterEasePower;
+		Config.bBlockInteractionDuringGainedCardEnter = Anchor.bBlockInteractionDuringGainedCardEnter;
 		Config.HandAnchorCardEnterOffsetPixels = Anchor.HandAnchorCardEnterOffsetPixels;
 		Config.HandAnchorCardEnterOriginMode = Anchor.HandAnchorCardEnterOriginMode;
 		Config.HandAnchorCardEnterViewportAnchor = Anchor.HandAnchorCardEnterViewportAnchor;
@@ -141,6 +155,13 @@ namespace
 		Config.HandAnchorCardEnterArcLiftPixels = Anchor.HandAnchorCardEnterArcLiftPixels;
 		Config.HandAnchorCardEnterEasePower = Anchor.HandAnchorCardEnterEasePower;
 		Config.bBlockInteractionDuringHandAnchorCardEnter = Anchor.bBlockInteractionDuringHandAnchorCardEnter;
+		Config.bEnableCardEnterSounds = Anchor.bEnableCardEnterSounds;
+		Config.DrawnCardEnterSound = Anchor.DrawnCardEnterSound;
+		Config.GainedCardEnterSound = Anchor.GainedCardEnterSound;
+		Config.RunHandCardEnterSound = Anchor.RunHandCardEnterSound;
+		Config.HandAnchorCardEnterSound = Anchor.HandAnchorCardEnterSound;
+		Config.CardEnterSoundVolumeMultiplier = Anchor.CardEnterSoundVolumeMultiplier;
+		Config.CardEnterSoundPitchMultiplier = Anchor.CardEnterSoundPitchMultiplier;
 		Config.PlayedCardExitOffsetPixels = Anchor.PlayedCardExitOffsetPixels;
 		Config.PlayedCardExitOriginMode = Anchor.PlayedCardExitOriginMode;
 		Config.PlayedCardExitViewportAnchor = Anchor.PlayedCardExitViewportAnchor;
@@ -205,6 +226,15 @@ namespace
 		Config.PlayCommitFeedbackOpacity = Anchor.PlayCommitFeedbackOpacity;
 		Config.PlayCommitFeedbackColor = Anchor.PlayCommitFeedbackColor;
 		Config.PlayCommitFeedbackScale = Anchor.PlayCommitFeedbackScale;
+		Config.bEnableRetainedFeedback = Anchor.bEnableRetainedFeedback;
+		Config.RetainedFeedbackDuration = Anchor.RetainedFeedbackDuration;
+		Config.RetainedFeedbackStaggerSeconds = Anchor.RetainedFeedbackStaggerSeconds;
+		Config.RetainedFeedbackLiftPixels = Anchor.RetainedFeedbackLiftPixels;
+		Config.RetainedFeedbackScale = Anchor.RetainedFeedbackScale;
+		Config.RetainedFeedbackZOrderBoost = Anchor.RetainedFeedbackZOrderBoost;
+		Config.DragCardTargetFocusLiftPixels = Anchor.DragCardTargetFocusLiftPixels;
+		Config.DragCardTargetFocusScale = Anchor.DragCardTargetFocusScale;
+		Config.DragCardTargetFocusZOrderBoost = Anchor.DragCardTargetFocusZOrderBoost;
 	}
 
 	FWacomFirstPersonCardResolvedLayoutConfig BuildResolvedLayoutConfigFromComponent(
@@ -251,6 +281,12 @@ namespace
 		FeedbackConfig.PlayCommitOpacity = Config.PlayCommitFeedbackOpacity;
 		FeedbackConfig.PlayCommitColor = Config.PlayCommitFeedbackColor;
 		FeedbackConfig.PlayCommitScale = Config.PlayCommitFeedbackScale;
+		FeedbackConfig.bEnableRetainedFeedback = Config.bEnableRetainedFeedback;
+		FeedbackConfig.RetainedFeedbackDuration = Config.RetainedFeedbackDuration;
+		FeedbackConfig.RetainedFeedbackStaggerSeconds = Config.RetainedFeedbackStaggerSeconds;
+		FeedbackConfig.RetainedFeedbackLiftPixels = Config.RetainedFeedbackLiftPixels;
+		FeedbackConfig.RetainedFeedbackScale = Config.RetainedFeedbackScale;
+		FeedbackConfig.RetainedFeedbackZOrderBoost = Config.RetainedFeedbackZOrderBoost;
 		return FeedbackConfig;
 	}
 
@@ -268,6 +304,9 @@ namespace
 		VisualConfig.PendingTargetingAngleBlend = Config.PendingTargetingAngleBlend;
 		VisualConfig.bEnableTargetSelectHandDeemphasis = Config.bEnableTargetSelectHandDeemphasis;
 		VisualConfig.TargetSelectNonPendingOpacityMultiplier = Config.TargetSelectNonPendingOpacityMultiplier;
+		VisualConfig.DragCardTargetFocusLiftPixels = Config.DragCardTargetFocusLiftPixels;
+		VisualConfig.DragCardTargetFocusScale = Config.DragCardTargetFocusScale;
+		VisualConfig.DragCardTargetFocusZOrderBoost = Config.DragCardTargetFocusZOrderBoost;
 		VisualConfig.CardDepth = Config.CardDepth;
 		return VisualConfig;
 	}
@@ -304,6 +343,9 @@ namespace
 				Config.HoverMotionEasePower)
 			: DefaultProfile;
 		MotionConfig.PendingMotionProfile = DefaultProfile;
+		MotionConfig.DragTargetFocusMotionProfile = Config.bOverrideDragTargetFocusMotionProfile
+			? MakeProfile(Config.DragTargetFocusMotionSpeed, Config.DragTargetFocusOpacitySpeed, Config.DragTargetFocusMotionEasePower)
+			: DefaultProfile;
 		MotionConfig.EnterMotionProfile = Config.bOverrideEnterExitMotionProfile
 			? MakeProfile(
 				Config.EnterMotionSpeed,
@@ -333,6 +375,16 @@ namespace
 		MotionConfig.DrawnEnterArcLiftPixels = Config.DrawnCardEnterArcLiftPixels;
 		MotionConfig.DrawnEnterEasePower = Config.DrawnCardEnterEasePower;
 		MotionConfig.bBlockInteractionDuringDrawnEnter = Config.bBlockInteractionDuringDrawnCardEnter;
+		MotionConfig.GainedEnterOffsetPixels = Config.GainedCardEnterOffsetPixels;
+		MotionConfig.GainedEnterOriginMode = Config.GainedCardEnterOriginMode;
+		MotionConfig.GainedEnterViewportAnchor = Config.GainedCardEnterViewportAnchor;
+		MotionConfig.GainedEnterScaleMultiplier = Config.GainedCardEnterScaleMultiplier;
+		MotionConfig.GainedEnterAngleOffsetDegrees = Config.GainedCardEnterAngleOffsetDegrees;
+		MotionConfig.GainedEnterDurationSeconds = Config.GainedCardEnterDurationSeconds;
+		MotionConfig.GainedEnterStaggerSeconds = Config.GainedCardEnterStaggerSeconds;
+		MotionConfig.GainedEnterArcLiftPixels = Config.GainedCardEnterArcLiftPixels;
+		MotionConfig.GainedEnterEasePower = Config.GainedCardEnterEasePower;
+		MotionConfig.bBlockInteractionDuringGainedEnter = Config.bBlockInteractionDuringGainedCardEnter;
 		MotionConfig.HandAnchorEnterOffsetPixels = Config.HandAnchorCardEnterOffsetPixels;
 		MotionConfig.HandAnchorEnterOriginMode = Config.HandAnchorCardEnterOriginMode;
 		MotionConfig.HandAnchorEnterViewportAnchor = Config.HandAnchorCardEnterViewportAnchor;
@@ -343,6 +395,13 @@ namespace
 		MotionConfig.HandAnchorEnterArcLiftPixels = Config.HandAnchorCardEnterArcLiftPixels;
 		MotionConfig.HandAnchorEnterEasePower = Config.HandAnchorCardEnterEasePower;
 		MotionConfig.bBlockInteractionDuringHandAnchorEnter = Config.bBlockInteractionDuringHandAnchorCardEnter;
+		MotionConfig.bEnableEnterSounds = Config.bEnableCardEnterSounds;
+		MotionConfig.DrawnEnterSound = Config.DrawnCardEnterSound;
+		MotionConfig.GainedEnterSound = Config.GainedCardEnterSound;
+		MotionConfig.RunHandEnterSound = Config.RunHandCardEnterSound;
+		MotionConfig.HandAnchorEnterSound = Config.HandAnchorCardEnterSound;
+		MotionConfig.EnterSoundVolumeMultiplier = Config.CardEnterSoundVolumeMultiplier;
+		MotionConfig.EnterSoundPitchMultiplier = Config.CardEnterSoundPitchMultiplier;
 		MotionConfig.PlayedExitOffsetPixels = Config.PlayedCardExitOffsetPixels;
 		MotionConfig.PlayedExitOriginMode = Config.PlayedCardExitOriginMode;
 		MotionConfig.PlayedExitViewportAnchor = Config.PlayedCardExitViewportAnchor;
@@ -456,6 +515,10 @@ namespace
 		AddFloat(Config.HoverMotionSpeed);
 		AddFloat(Config.HoverOpacitySpeed);
 		AddFloat(Config.HoverMotionEasePower);
+		AddBool(Config.bOverrideDragTargetFocusMotionProfile);
+		AddFloat(Config.DragTargetFocusMotionSpeed);
+		AddFloat(Config.DragTargetFocusOpacitySpeed);
+		AddFloat(Config.DragTargetFocusMotionEasePower);
 		AddBool(Config.bOverrideEnterExitMotionProfile);
 		AddFloat(Config.EnterMotionSpeed);
 		AddFloat(Config.EnterOpacitySpeed);
@@ -480,6 +543,16 @@ namespace
 		AddFloat(Config.DrawnCardEnterArcLiftPixels);
 		AddFloat(Config.DrawnCardEnterEasePower);
 		AddBool(Config.bBlockInteractionDuringDrawnCardEnter);
+		AddVector(Config.GainedCardEnterOffsetPixels);
+		AddInt(static_cast<int32>(Config.GainedCardEnterOriginMode));
+		AddVector(Config.GainedCardEnterViewportAnchor);
+		AddFloat(Config.GainedCardEnterScaleMultiplier);
+		AddFloat(Config.GainedCardEnterAngleOffsetDegrees);
+		AddFloat(Config.GainedCardEnterDurationSeconds);
+		AddFloat(Config.GainedCardEnterStaggerSeconds);
+		AddFloat(Config.GainedCardEnterArcLiftPixels);
+		AddFloat(Config.GainedCardEnterEasePower);
+		AddBool(Config.bBlockInteractionDuringGainedCardEnter);
 		AddVector(Config.HandAnchorCardEnterOffsetPixels);
 		AddInt(static_cast<int32>(Config.HandAnchorCardEnterOriginMode));
 		AddVector(Config.HandAnchorCardEnterViewportAnchor);
@@ -490,6 +563,13 @@ namespace
 		AddFloat(Config.HandAnchorCardEnterArcLiftPixels);
 		AddFloat(Config.HandAnchorCardEnterEasePower);
 		AddBool(Config.bBlockInteractionDuringHandAnchorCardEnter);
+		AddBool(Config.bEnableCardEnterSounds);
+		AddSoftObjectPath(Config.DrawnCardEnterSound.ToSoftObjectPath());
+		AddSoftObjectPath(Config.GainedCardEnterSound.ToSoftObjectPath());
+		AddSoftObjectPath(Config.RunHandCardEnterSound.ToSoftObjectPath());
+		AddSoftObjectPath(Config.HandAnchorCardEnterSound.ToSoftObjectPath());
+		AddFloat(Config.CardEnterSoundVolumeMultiplier);
+		AddFloat(Config.CardEnterSoundPitchMultiplier);
 		AddVector(Config.PlayedCardExitOffsetPixels);
 		AddInt(static_cast<int32>(Config.PlayedCardExitOriginMode));
 		AddVector(Config.PlayedCardExitViewportAnchor);
@@ -548,6 +628,15 @@ namespace
 		AddFloat(Config.PlayCommitFeedbackOpacity);
 		AddColor(Config.PlayCommitFeedbackColor);
 		AddFloat(Config.PlayCommitFeedbackScale);
+		AddBool(Config.bEnableRetainedFeedback);
+		AddFloat(Config.RetainedFeedbackDuration);
+		AddFloat(Config.RetainedFeedbackStaggerSeconds);
+		AddFloat(Config.RetainedFeedbackLiftPixels);
+		AddFloat(Config.RetainedFeedbackScale);
+		AddInt(Config.RetainedFeedbackZOrderBoost);
+		AddFloat(Config.DragCardTargetFocusLiftPixels);
+		AddFloat(Config.DragCardTargetFocusScale);
+		AddInt(Config.DragCardTargetFocusZOrderBoost);
 		return Hash;
 	}
 
@@ -966,12 +1055,16 @@ void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerPresentationFram
 	{
 	case EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame:
 		RuntimeState->SetPresentationFrameHints(Frame.SourceId, Frame.TransitionHints);
+		RuntimeState->SetPresentationFrameFeedbackHints(Frame.SourceId, Frame.FeedbackHints);
 		break;
 	case EWacomFirstPersonCardLayerFrameCommitMode::Suppressed:
 	{
 		const TArray<FWacomFirstPersonCardLayerTransitionHint> EmptyTransitionHints;
 		RuntimeState->SetPresentationFrameHints(Frame.SourceId, EmptyTransitionHints);
 		RuntimeState->SetTransitionHints(Frame.SourceId, EmptyTransitionHints);
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint> EmptyFeedbackHints;
+		RuntimeState->SetPresentationFrameFeedbackHints(Frame.SourceId, EmptyFeedbackHints);
+		RuntimeState->SetFeedbackHints(Frame.SourceId, EmptyFeedbackHints);
 		RuntimeState->ClearTransientInteraction();
 		break;
 	}
@@ -1044,7 +1137,9 @@ void UWacomFirstPersonCardAnchorComponent::SetRuntimeCardLayerTransitionPresenta
 
 bool UWacomFirstPersonCardAnchorComponent::HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const
 {
-	return RuntimeState && RuntimeState->HasPresentationFrameHintsForSource(SourceId);
+	return RuntimeState
+		&& (RuntimeState->HasPresentationFrameHintsForSource(SourceId)
+			|| RuntimeState->HasPresentationFrameFeedbackHintsForSource(SourceId));
 }
 
 bool UWacomFirstPersonCardAnchorComponent::HasActiveCardLayerPresentationPlayback() const
@@ -1057,6 +1152,7 @@ void UWacomFirstPersonCardAnchorComponent::ForceSettleCardLayerPresentationPlayb
 	if (RuntimeState)
 	{
 		RuntimeState->ClearPresentationFrameHints();
+		RuntimeState->ClearPresentationFrameFeedbackHints();
 	}
 	if (CardLayerWidget)
 	{
@@ -1712,6 +1808,23 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 		RuntimeState
 		&& (RuntimeState->CanConsumePresentationFrameHintsForCurrentSource()
 			|| RuntimeState->CanConsumeTransitionHintsForCurrentSource());
+	UpdateInput.ConsumeFeedbackHints = [this]()
+	{
+		if (!RuntimeState)
+		{
+			return TArray<FWacomFirstPersonCardLayerFeedbackHint>();
+		}
+		if (RuntimeState->CanConsumePresentationFrameFeedbackHintsForCurrentSource())
+		{
+			return RuntimeState->ConsumePresentationFrameFeedbackHintsForCurrentSource();
+		}
+		return RuntimeState->CanConsumeFeedbackHintsForCurrentSource()
+			? RuntimeState->ConsumeFeedbackHintsForCurrentSource()
+			: TArray<FWacomFirstPersonCardLayerFeedbackHint>();
+	};
+	UpdateInput.bCanConsumeFeedbackHints = RuntimeState
+		&& (RuntimeState->CanConsumePresentationFrameFeedbackHintsForCurrentSource()
+			|| RuntimeState->CanConsumeFeedbackHintsForCurrentSource());
 
 	CardLayerOwner->Update(UpdateInput, CardLayerWidget);
 }
@@ -1734,6 +1847,8 @@ void UWacomFirstPersonCardAnchorComponent::RemoveCardLayer()
 	{
 		RuntimeState->ClearTransitionHints();
 		RuntimeState->ClearPresentationFrameHints();
+		RuntimeState->ClearFeedbackHints();
+		RuntimeState->ClearPresentationFrameFeedbackHints();
 		RuntimeState->ClearTransientInteraction();
 	}
 }

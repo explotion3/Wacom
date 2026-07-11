@@ -9,6 +9,8 @@
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomFirstPersonCardLayerTypes.generated.h"
 
+class USoundBase;
+
 UENUM(BlueprintType)
 enum class EWacomFirstPersonCardAnchorMode : uint8
 {
@@ -40,6 +42,7 @@ enum class EWacomFirstPersonCardSlotTransitionKind : uint8
 	Default UMETA(DisplayName = "Default", ToolTip = "默认槽位转场；使用通用入场或离场偏移。"),
 	Drawn UMETA(DisplayName = "Drawn", ToolTip = "抽牌进入手牌；默认从手牌下方进入。"),
 	RunHandEntered UMETA(DisplayName = "Run Hand Entered", ToolTip = "Run 探索期默认手牌进入第一人称手牌层；UI 表现语义，不属于战斗抽牌事件。"),
+	Gained = 3 UMETA(DisplayName = "Gained", ToolTip = "战斗中获得卡牌进入手牌；使用独立的获得牌入场运动。"),
 	HandAnchorEntered = 4 UMETA(DisplayName = "Hand Anchor Entered", ToolTip = "左/右手牌生成入手；由 UI 表现层在普通抽牌后触发，不属于普通抽牌事件。"),
 	Played = 5 UMETA(DisplayName = "Played", ToolTip = "卡牌被打出离开手牌；默认向上离开。"),
 	Discarded = 6 UMETA(DisplayName = "Discarded", ToolTip = "卡牌被弃置离开手牌；默认向下离开。")
@@ -109,6 +112,13 @@ enum class EWacomFirstPersonCardInteractionFeedbackKind : uint8
 	Confirm UMETA(DisplayName = "Confirm"),
 	Commit UMETA(DisplayName = "Commit"),
 	Deny UMETA(DisplayName = "Deny")
+};
+
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Retained UMETA(DisplayName = "Retained")
 };
 
 USTRUCT(BlueprintType)
@@ -192,6 +202,25 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerTransitionHint
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitTargetWidgetPosition = FVector2D::ZeroVector;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardLayerFeedbackHint
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FGuid CardInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardLayerFeedbackKind FeedbackKind =
+		EWacomFirstPersonCardLayerFeedbackKind::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 SequenceIndex = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 SequenceCount = 1;
 };
 
 USTRUCT(BlueprintType)
@@ -435,6 +464,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 	FName SourceId = NAME_None;
 	TArray<FWacomFirstPersonCardLayerEntry> Entries;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
 	EWacomFirstPersonCardLayerFrameCommitMode CommitMode =
 		EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 
@@ -443,7 +473,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 
 	bool HasPresentationHints() const
 	{
-		return !TransitionHints.IsEmpty();
+		return !TransitionHints.IsEmpty() || !FeedbackHints.IsEmpty();
 	}
 
 	bool ShouldApplyAsPresentationFrame() const
@@ -459,6 +489,7 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerPresentationFrame
 		SourceId = NAME_None;
 		Entries.Reset();
 		TransitionHints.Reset();
+		FeedbackHints.Reset();
 		CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh;
 		bApplyAsPresentationFrame = false;
 	}
@@ -760,6 +791,19 @@ struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBlockInteractionDuringPlayback = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> StartSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float StartSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float StartSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
 };
 
 USTRUCT(BlueprintType)
@@ -824,11 +868,12 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float HoverScale = 1.06f;
 
-#if WITH_AUTOMATION_TESTS
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float DragCardTargetFocusLiftPixels = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float DragCardTargetFocusScale = 1.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	int32 DragCardTargetFocusZOrderBoost = 0;
-#endif
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	int32 HoverZOrderBoost = 500;
@@ -863,6 +908,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState
 	bool bPendingSource = false;
 	bool bTargetSelectDeemphasized = false;
 	bool bHovered = false;
+	bool bCardDragTargetFocusActive = false;
 };
 
 UENUM(BlueprintType)
@@ -871,6 +917,7 @@ enum class EWacomFirstPersonCardMotionIntent : uint8
 	Layout,
 	Hover,
 	Pending,
+	DragTargetFocus,
 	Enter,
 	Exit
 };
@@ -915,6 +962,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardMotionProfile PendingMotionProfile;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardMotionProfile DragTargetFocusMotionProfile;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardMotionProfile EnterMotionProfile;
@@ -975,6 +1025,37 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 	bool bBlockInteractionDuringDrawnEnter = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D GainedEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomFirstPersonCardTransitionOriginMode GainedEnterOriginMode =
+		EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FVector2D GainedEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterScaleMultiplier = 0.96f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterAngleOffsetDegrees = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterDurationSeconds = 0.32f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterStaggerSeconds = 0.075f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterArcLiftPixels = 42.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float GainedEnterEasePower = 2.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bBlockInteractionDuringGainedEnter = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D HandAnchorEnterOffsetPixels = FVector2D(0.0f, -120.0f);
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
@@ -1004,6 +1085,27 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bBlockInteractionDuringHandAnchorEnter = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableEnterSounds = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> DrawnEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> GainedEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> RunHandEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	TSoftObjectPtr<USoundBase> HandAnchorEnterSound;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float EnterSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float EnterSoundPitchMultiplier = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FVector2D PlayedExitOffsetPixels = FVector2D(0.0f, -120.0f);
@@ -1112,5 +1214,23 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float PlayCommitScale = 1.015f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bEnableRetainedFeedback = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackDuration = 0.28f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackStaggerSeconds = 0.045f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackLiftPixels = 12.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackScale = 1.025f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	int32 RetainedFeedbackZOrderBoost = 180;
 
 };

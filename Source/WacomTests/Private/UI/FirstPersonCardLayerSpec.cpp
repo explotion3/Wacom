@@ -11480,8 +11480,6 @@ bool FWacomFirstPersonCardLayerAllValidAffordanceUniqueFocusTest::RunTest(const 
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget);
 	TestTrue(TEXT("Pointer target gets focus"), FirstView.bCardDragTargetFocusActive);
 	TestFalse(TEXT("Other valid affordance does not get focus"), SecondView.bCardDragTargetFocusActive);
-	TestEqual(TEXT("Both targets show valid overlay"), FirstView.FeedbackOverlayColor, FLinearColor::Green);
-	TestEqual(TEXT("Other affordance shows valid overlay"), SecondView.FeedbackOverlayColor, FLinearColor::Green);
 	TestTrue(TEXT("Focused target applies lift"),
 		FMath::IsNearlyEqual(
 			FirstTargetWidget->GetVisualSlotView().ScreenPosition.Y,

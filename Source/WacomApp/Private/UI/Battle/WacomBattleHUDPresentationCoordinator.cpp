@@ -274,6 +274,22 @@ namespace
 		return Result;
 	}
 
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildRetainedFeedbackHintsForCardIds(
+		const TArray<FGuid>& CardInstanceIds)
+	{
+		TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
+		for (int32 Index = 0; Index < CardInstanceIds.Num(); ++Index)
+		{
+			FWacomFirstPersonCardLayerFeedbackHint Hint;
+			Hint.CardInstanceId = CardInstanceIds[Index];
+			Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::Retained;
+			Hint.SequenceIndex = Index;
+			Hint.SequenceCount = FMath::Max(1, CardInstanceIds.Num());
+			Hints.Add(Hint);
+		}
+		return Hints;
+	}
+
 	FWacomBattlePresentationPlan BuildEndTurnPresentationPlan(
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
@@ -308,6 +324,21 @@ namespace
 				Phase.TransitionHints = BuildTransitionHintsForCardIds(
 					DiscardedCardIds,
 					EWacomFirstPersonCardSlotTransitionKind::Discarded);
+				Plan.Phases.Add(MoveTemp(Phase));
+			}
+		}
+
+		if (RetainCheckpoint)
+		{
+			const TArray<FGuid> RetainedFeedbackCardIds = BuildRetainedPhaseFeedbackCardIds(
+				RetainCheckpoint->Snapshot,
+				RetainCheckpoint->CardInstanceIds);
+			if (!RetainedFeedbackCardIds.IsEmpty())
+			{
+				FWacomBattlePresentationPhase Phase;
+				Phase.Kind = EWacomBattlePresentationPhaseKind::TurnEndRetain;
+				Phase.Snapshot = RetainCheckpoint->Snapshot;
+				Phase.FeedbackHints = BuildRetainedFeedbackHintsForCardIds(RetainedFeedbackCardIds);
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}
@@ -832,7 +863,8 @@ void FWacomBattleHUDPresentationCoordinator::StartHandPresentationPlanPhase(
 {
 	Runtime.RefreshFromPresentationPhase(
 		Phase.Snapshot,
-		Phase.TransitionHints);
+		Phase.TransitionHints,
+		Phase.FeedbackHints);
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
 	{
 		Anchor->RefreshCardLayerNow(0.0f);

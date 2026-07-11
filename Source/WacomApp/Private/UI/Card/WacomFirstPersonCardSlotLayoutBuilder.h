@@ -43,6 +43,10 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float HoverMotionSpeed = 26.0f;
 	float HoverOpacitySpeed = 18.0f;
 	float HoverMotionEasePower = 1.0f;
+	bool bOverrideDragTargetFocusMotionProfile = false;
+	float DragTargetFocusMotionSpeed = 26.0f;
+	float DragTargetFocusOpacitySpeed = 18.0f;
+	float DragTargetFocusMotionEasePower = 1.0f;
 	bool bOverrideEnterExitMotionProfile = false;
 	float EnterMotionSpeed = 26.0f;
 	float EnterOpacitySpeed = 18.0f;
@@ -68,6 +72,16 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float DrawnCardEnterArcLiftPixels = 42.0f;
 	float DrawnCardEnterEasePower = 2.0f;
 	bool bBlockInteractionDuringDrawnCardEnter = true;
+	FVector2D GainedCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+	EWacomFirstPersonCardTransitionOriginMode GainedCardEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+	FVector2D GainedCardEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+	float GainedCardEnterScaleMultiplier = 0.96f;
+	float GainedCardEnterAngleOffsetDegrees = 0.0f;
+	float GainedCardEnterDurationSeconds = 0.32f;
+	float GainedCardEnterStaggerSeconds = 0.075f;
+	float GainedCardEnterArcLiftPixels = 42.0f;
+	float GainedCardEnterEasePower = 2.0f;
+	bool bBlockInteractionDuringGainedCardEnter = true;
 	FVector2D HandAnchorCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
 	EWacomFirstPersonCardTransitionOriginMode HandAnchorCardEnterOriginMode =
 		EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
@@ -79,6 +93,13 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float HandAnchorCardEnterArcLiftPixels = 42.0f;
 	float HandAnchorCardEnterEasePower = 2.0f;
 	bool bBlockInteractionDuringHandAnchorCardEnter = true;
+	bool bEnableCardEnterSounds = true;
+	TSoftObjectPtr<USoundBase> DrawnCardEnterSound;
+	TSoftObjectPtr<USoundBase> GainedCardEnterSound;
+	TSoftObjectPtr<USoundBase> RunHandCardEnterSound;
+	TSoftObjectPtr<USoundBase> HandAnchorCardEnterSound;
+	float CardEnterSoundVolumeMultiplier = 1.0f;
+	float CardEnterSoundPitchMultiplier = 1.0f;
 	FVector2D PlayedCardExitOffsetPixels = FVector2D(0.0f, -120.0f);
 	EWacomFirstPersonCardTransitionOriginMode PlayedCardExitOriginMode =
 		EWacomFirstPersonCardTransitionOriginMode::SlotOffset;
@@ -103,6 +124,9 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float HoverLiftPixels = 28.0f;
 	float HoverScale = 1.06f;
 	int32 HoverZOrderBoost = 500;
+	float DragCardTargetFocusLiftPixels = 18.0f;
+	float DragCardTargetFocusScale = 1.045f;
+	int32 DragCardTargetFocusZOrderBoost = 650;
 	float HoverHitHysteresisPixels = 16.0f;
 	FWacomFirstPersonCardDepthConfig CardDepth;
 	bool bEnableCardInteractionFeedback = true;
@@ -128,6 +152,12 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float PlayCommitFeedbackOpacity = 0.16f;
 	FLinearColor PlayCommitFeedbackColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
 	float PlayCommitFeedbackScale = 1.015f;
+	bool bEnableRetainedFeedback = true;
+	float RetainedFeedbackDuration = 0.28f;
+	float RetainedFeedbackStaggerSeconds = 0.045f;
+	float RetainedFeedbackLiftPixels = 12.0f;
+	float RetainedFeedbackScale = 1.025f;
+	int32 RetainedFeedbackZOrderBoost = 180;
 };
 
 struct FWacomFirstPersonCardSlotLayoutBuildInput

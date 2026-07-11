@@ -272,9 +272,15 @@ public:
 	void SyncFirstPersonBattleHandLayer(
 		const FBattleSnapshot& Snapshot,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+	void SyncFirstPersonBattleHandLayer(
+		const FBattleSnapshot& Snapshot,
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void RefreshFromPresentationPhase(
 		const FBattleSnapshot& Snapshot,
-		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints =
+			TArray<FWacomFirstPersonCardLayerFeedbackHint>());
 	void ClearFirstPersonBattleHandLayer();
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;

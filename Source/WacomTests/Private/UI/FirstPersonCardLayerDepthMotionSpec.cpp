@@ -205,4 +205,31 @@ bool FWacomFirstPersonCardLayerDepthMotionExitFlattenTest::RunTest(const FString
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerHandTargetFocusMotionTest,
+	"Wacom.UI.FirstPersonCardLayer.DepthMotion.HandTargetFocusUsesLiftScaleAndZOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerHandTargetFocusMotionTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerDepthMotionSpec;
+	UWacomFirstPersonCardLayerSlotWidget* Widget = MakeWidget(FVector2D(500.0f, 500.0f));
+	if (!TestNotNull(TEXT("Target focus slot"), Widget)) return false;
+	FWacomFirstPersonCardSlotVisualConfig VisualConfig =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).SlotVisualConfig;
+	VisualConfig.DragCardTargetFocusLiftPixels = 18.0f;
+	VisualConfig.DragCardTargetFocusScale = 1.045f;
+	VisualConfig.DragCardTargetFocusZOrderBoost = 650;
+	Widget->SetSlotVisualConfig(VisualConfig);
+	Widget->SetCardDragTargetFocusFeedback(
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
+		true);
+	Tick(*Widget, 2);
+	const FWacomFirstPersonCardSlotAutomationTestView View =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestTrue(TEXT("Hand target focus is active"), View.bCardDragTargetFocusActive);
+	TestEqual(TEXT("Hand target focus selects its motion intent"), View.ActiveMotionIntent, EWacomFirstPersonCardMotionIntent::DragTargetFocus);
+	return true;
+}
+
 #endif

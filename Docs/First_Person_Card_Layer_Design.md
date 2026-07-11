@@ -33,7 +33,7 @@ Battle / Run snapshot
 
 卡牌仍由 UMG 渲染，因此保留 HUD 级别清晰度、材质动画和 WBP 可迭代性。第一人称感来自 anchor 投影、身体 / tunnel / battle base rotation、soft clamp、hand center smoothing 和 slot motion，而不是把常驻手牌做成 `WidgetComponent`。
 
-2026-07-11 清理后，Anchor 不再承担 Development Preview 或 Debug Projection Widget，外部 `CardShadowImage`、transition audio、`Gained` / `Retained` 专用表现和 drag-target 颜色 / 缩放 / 箭头吸附均已移除。Hover / Drag fake-3D 倾斜、长按 `Inspecting`、手牌内 inspect scrub、Battle 无目标牌 drag-out commit 与 Hover / Inspect / Drag camera look 随后按现有 first-person card layer 边界恢复；镜头路径直接使用 BattleCamera / RunTunnel 组件，不复活旧共享 camera-look bridge。Card Depth 与 Retainer 内 `ContactShadowEnabled / ContactShadowLift` 材质接触阴影共存。Run 的 `DragToDropTarget` 投放语义、Battle 正式目标校验以及规则层 `CardGained / CardsRetained` 事件不变。
+2026-07-12 收口后，Anchor 不再承担 Development Preview 或 Debug Projection Widget，外部 `CardShadowImage`、旧 drag-target 颜色覆盖和箭头吸附仍保持移除。Hover / Drag fake-3D、Inspect scrub、Battle 无目标 drag-out commit、Hover / Inspect / Drag camera look、语义入场音频、`Gained` 入场、`Retained` 纯运动反馈以及手牌目标 lift / scale / ZOrder 均沿现有 first-person card layer 边界恢复；镜头路径直接使用 BattleCamera / RunTunnel，阴影继续使用 Retainer 内实时 Alpha 接触阴影。`Retained` 不恢复旧 Overlay 发光，未来由统一卡牌效果系统接管颜色、闪光、选中和溶解。
 
 ## §2 核心对象
 
@@ -161,7 +161,7 @@ Slot motion 现在按语义选择 motion intent / motion profile：`Layout` 负�
 
 Anchor Details 的默认入口仍是 `CardSlotMotionSpeed / CardSlotOpacitySpeed / CardSlotMotionEasePower`，这三个值会映射到全部 profile；如果某个 profile 保持默认值，Normalize 时也会继承这三个旧参数。当前只开放少量高级覆盖项：`bOverrideHoverMotionProfile` 单独调悬浮，`bOverrideDragTargetFocusMotionProfile` 单独调拖拽手牌目标 focus，`bOverrideEnterExitMotionProfile` 单独调入场和离场。`Layout` 和 `Pending` 仍继承全局参数，避免 Details 面板过早变成全量 motion 表。`CardSlotMotionEasePower = 1` 保持线性旧手感；大于 `1` 时当前 profile 每帧起步更柔和，小于 `1` 时更快贴近目标。
 
-Motion profile 只影响最终 visual slot 追踪，不改变 `InputHitCenter / InputHitScale / InputHitAngleDegrees` 等稳定命中几何，也不改变 hover / press / drag target resolver。候选目标 affordance 仍只控制 `FeedbackOverlay`，不会触发 `DragTargetFocus` 的 lift / scale / ZOrder；deny shake、confirm / commit pulse 和 `InteractionFeedbackImage` 也不接入 motion profile。
+Motion profile 只影响最终 visual slot 追踪，不改变 `InputHitCenter / InputHitScale / InputHitAngleDegrees` 等稳定命中几何，也不改变 hover / press / drag target resolver。候选目标 affordance 只表达可选目标身份，不触发 `DragTargetFocus`；`TargetHandle.CardInstanceId` 指向的唯一手牌目标才应用 lift / scale / ZOrder。deny shake、confirm / commit pulse 和其它局部反馈也不接入 motion profile。
 
 Transition audio 是 first-person card layer 的表现能力，不属于 Battle / Run 规则。Anchor `07 Transition Audio` 下的 `DrawnCardEnterSound / RunHandCardEnterSound / GainedCardEnterSound / HandAnchorCardEnterSound` 只在对应 transition hint 被 Layer 消费、目标 slot 可投影并实际开始入场 playback 时触发；没有 transition hint 的普通新 slot、layout refresh、reflow、投影恢复或 hover / drag presentation 不播放入场音效。入场音效使用 UI 2D 播放，`CardEnterSoundVolumeMultiplier / CardEnterSoundPitchMultiplier` 控制统一音量和音高；声音触发点会尊重 `SequenceIndex * StaggerSeconds`，多张抽牌不会在同一帧一起响。
 

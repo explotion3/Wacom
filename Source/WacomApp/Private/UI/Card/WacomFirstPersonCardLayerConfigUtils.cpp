@@ -80,6 +80,7 @@ FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
 	Config.LayoutMotionProfile = NormalizeMotionProfile(Config.LayoutMotionProfile, LegacyProfile);
 	Config.HoverMotionProfile = NormalizeMotionProfile(Config.HoverMotionProfile, LegacyProfile);
 	Config.PendingMotionProfile = NormalizeMotionProfile(Config.PendingMotionProfile, LegacyProfile);
+	Config.DragTargetFocusMotionProfile = NormalizeMotionProfile(Config.DragTargetFocusMotionProfile, LegacyProfile);
 	Config.EnterMotionProfile = NormalizeMotionProfile(Config.EnterMotionProfile, LegacyProfile);
 	Config.ExitMotionProfile = NormalizeMotionProfile(Config.ExitMotionProfile, LegacyProfile);
 	Config.EnterOpacity = FMath::Clamp(Config.EnterOpacity, 0.0f, 1.0f);
@@ -92,6 +93,15 @@ FWacomFirstPersonCardSlotMotionConfig NormalizeSlotMotionConfig(
 	Config.DrawnEnterStaggerSeconds = FMath::Max(0.0f, Config.DrawnEnterStaggerSeconds);
 	Config.DrawnEnterArcLiftPixels = FMath::Max(0.0f, Config.DrawnEnterArcLiftPixels);
 	Config.DrawnEnterEasePower = FMath::Max(0.1f, Config.DrawnEnterEasePower);
+	Config.GainedEnterViewportAnchor.X = FMath::Clamp(Config.GainedEnterViewportAnchor.X, 0.0f, 1.0f);
+	Config.GainedEnterViewportAnchor.Y = FMath::Clamp(Config.GainedEnterViewportAnchor.Y, 0.0f, 1.0f);
+	Config.GainedEnterScaleMultiplier = FMath::Max(0.01f, Config.GainedEnterScaleMultiplier);
+	Config.GainedEnterDurationSeconds = FMath::Max(0.0f, Config.GainedEnterDurationSeconds);
+	Config.GainedEnterStaggerSeconds = FMath::Max(0.0f, Config.GainedEnterStaggerSeconds);
+	Config.GainedEnterArcLiftPixels = FMath::Max(0.0f, Config.GainedEnterArcLiftPixels);
+	Config.GainedEnterEasePower = FMath::Max(0.1f, Config.GainedEnterEasePower);
+	Config.EnterSoundVolumeMultiplier = FMath::Max(0.0f, Config.EnterSoundVolumeMultiplier);
+	Config.EnterSoundPitchMultiplier = FMath::Max(0.01f, Config.EnterSoundPitchMultiplier);
 	Config.HandAnchorEnterViewportAnchor.X = FMath::Clamp(Config.HandAnchorEnterViewportAnchor.X, 0.0f, 1.0f);
 	Config.HandAnchorEnterViewportAnchor.Y = FMath::Clamp(Config.HandAnchorEnterViewportAnchor.Y, 0.0f, 1.0f);
 	Config.HandAnchorEnterScaleMultiplier = FMath::Max(0.01f, Config.HandAnchorEnterScaleMultiplier);
@@ -120,6 +130,7 @@ bool AreSlotMotionConfigsEquivalent(
 		&& AreMotionProfilesEquivalent(A.LayoutMotionProfile, B.LayoutMotionProfile)
 		&& AreMotionProfilesEquivalent(A.HoverMotionProfile, B.HoverMotionProfile)
 		&& AreMotionProfilesEquivalent(A.PendingMotionProfile, B.PendingMotionProfile)
+		&& AreMotionProfilesEquivalent(A.DragTargetFocusMotionProfile, B.DragTargetFocusMotionProfile)
 		&& AreMotionProfilesEquivalent(A.EnterMotionProfile, B.EnterMotionProfile)
 		&& AreMotionProfilesEquivalent(A.ExitMotionProfile, B.ExitMotionProfile)
 		&& AreVectorsEquivalent(A.EnterOffsetPixels, B.EnterOffsetPixels)
@@ -139,6 +150,16 @@ bool AreSlotMotionConfigsEquivalent(
 		&& AreFloatsEquivalent(A.DrawnEnterArcLiftPixels, B.DrawnEnterArcLiftPixels)
 		&& AreFloatsEquivalent(A.DrawnEnterEasePower, B.DrawnEnterEasePower)
 		&& A.bBlockInteractionDuringDrawnEnter == B.bBlockInteractionDuringDrawnEnter
+		&& AreVectorsEquivalent(A.GainedEnterOffsetPixels, B.GainedEnterOffsetPixels)
+		&& A.GainedEnterOriginMode == B.GainedEnterOriginMode
+		&& AreVectorsEquivalent(A.GainedEnterViewportAnchor, B.GainedEnterViewportAnchor)
+		&& AreFloatsEquivalent(A.GainedEnterScaleMultiplier, B.GainedEnterScaleMultiplier)
+		&& AreFloatsEquivalent(A.GainedEnterAngleOffsetDegrees, B.GainedEnterAngleOffsetDegrees)
+		&& AreFloatsEquivalent(A.GainedEnterDurationSeconds, B.GainedEnterDurationSeconds)
+		&& AreFloatsEquivalent(A.GainedEnterStaggerSeconds, B.GainedEnterStaggerSeconds)
+		&& AreFloatsEquivalent(A.GainedEnterArcLiftPixels, B.GainedEnterArcLiftPixels)
+		&& AreFloatsEquivalent(A.GainedEnterEasePower, B.GainedEnterEasePower)
+		&& A.bBlockInteractionDuringGainedEnter == B.bBlockInteractionDuringGainedEnter
 		&& AreVectorsEquivalent(A.HandAnchorEnterOffsetPixels, B.HandAnchorEnterOffsetPixels)
 		&& A.HandAnchorEnterOriginMode == B.HandAnchorEnterOriginMode
 		&& AreVectorsEquivalent(A.HandAnchorEnterViewportAnchor, B.HandAnchorEnterViewportAnchor)
@@ -149,6 +170,13 @@ bool AreSlotMotionConfigsEquivalent(
 		&& AreFloatsEquivalent(A.HandAnchorEnterArcLiftPixels, B.HandAnchorEnterArcLiftPixels)
 		&& AreFloatsEquivalent(A.HandAnchorEnterEasePower, B.HandAnchorEnterEasePower)
 		&& A.bBlockInteractionDuringHandAnchorEnter == B.bBlockInteractionDuringHandAnchorEnter
+		&& A.bEnableEnterSounds == B.bEnableEnterSounds
+		&& A.DrawnEnterSound.ToSoftObjectPath() == B.DrawnEnterSound.ToSoftObjectPath()
+		&& A.GainedEnterSound.ToSoftObjectPath() == B.GainedEnterSound.ToSoftObjectPath()
+		&& A.RunHandEnterSound.ToSoftObjectPath() == B.RunHandEnterSound.ToSoftObjectPath()
+		&& A.HandAnchorEnterSound.ToSoftObjectPath() == B.HandAnchorEnterSound.ToSoftObjectPath()
+		&& AreFloatsEquivalent(A.EnterSoundVolumeMultiplier, B.EnterSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(A.EnterSoundPitchMultiplier, B.EnterSoundPitchMultiplier)
 		&& AreVectorsEquivalent(A.PlayedExitOffsetPixels, B.PlayedExitOffsetPixels)
 		&& A.PlayedExitOriginMode == B.PlayedExitOriginMode
 		&& AreVectorsEquivalent(A.PlayedExitViewportAnchor, B.PlayedExitViewportAnchor)
@@ -176,6 +204,9 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 		FMath::Clamp(Config.PendingTargetingAngleBlend, 0.0f, 1.0f);
 	Config.TargetSelectNonPendingOpacityMultiplier =
 		FMath::Clamp(Config.TargetSelectNonPendingOpacityMultiplier, 0.0f, 1.0f);
+	Config.DragCardTargetFocusLiftPixels = FMath::Max(0.0f, Config.DragCardTargetFocusLiftPixels);
+	Config.DragCardTargetFocusScale = FMath::Max(0.01f, Config.DragCardTargetFocusScale);
+	Config.DragCardTargetFocusZOrderBoost = FMath::Max(0, Config.DragCardTargetFocusZOrderBoost);
 	Config.CardDepth.ResponseSpeed = FMath::Max(0.0f, Config.CardDepth.ResponseSpeed);
 	Config.CardDepth.ReturnSpeed = FMath::Max(0.0f, Config.CardDepth.ReturnSpeed);
 	Config.CardDepth.HoverContactShadowLift = FMath::Clamp(Config.CardDepth.HoverContactShadowLift, 0.0f, 1.0f);
@@ -197,6 +228,9 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.PendingTargetingAngleBlend, B.PendingTargetingAngleBlend)
 		&& A.bEnableTargetSelectHandDeemphasis == B.bEnableTargetSelectHandDeemphasis
 		&& AreFloatsEquivalent(A.TargetSelectNonPendingOpacityMultiplier, B.TargetSelectNonPendingOpacityMultiplier)
+		&& AreFloatsEquivalent(A.DragCardTargetFocusLiftPixels, B.DragCardTargetFocusLiftPixels)
+		&& AreFloatsEquivalent(A.DragCardTargetFocusScale, B.DragCardTargetFocusScale)
+		&& A.DragCardTargetFocusZOrderBoost == B.DragCardTargetFocusZOrderBoost
 		&& A.CardDepth.bEnableContactShadow == B.CardDepth.bEnableContactShadow
 		&& AreFloatsEquivalent(A.CardDepth.ResponseSpeed, B.CardDepth.ResponseSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.ReturnSpeed, B.CardDepth.ReturnSpeed)
@@ -224,6 +258,11 @@ FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
 	Config.PlayCommitDuration = FMath::Max(0.0f, Config.PlayCommitDuration);
 	Config.PlayCommitOpacity = FMath::Clamp(Config.PlayCommitOpacity, 0.0f, 1.0f);
 	Config.PlayCommitScale = FMath::Max(0.01f, Config.PlayCommitScale);
+	Config.RetainedFeedbackDuration = FMath::Max(0.0f, Config.RetainedFeedbackDuration);
+	Config.RetainedFeedbackStaggerSeconds = FMath::Max(0.0f, Config.RetainedFeedbackStaggerSeconds);
+	Config.RetainedFeedbackLiftPixels = FMath::Max(0.0f, Config.RetainedFeedbackLiftPixels);
+	Config.RetainedFeedbackScale = FMath::Max(0.01f, Config.RetainedFeedbackScale);
+	Config.RetainedFeedbackZOrderBoost = FMath::Max(0, Config.RetainedFeedbackZOrderBoost);
 	return Config;
 }
 
@@ -253,7 +292,13 @@ bool AreSlotFeedbackConfigsEquivalent(
 		&& AreFloatsEquivalent(A.PlayCommitDuration, B.PlayCommitDuration)
 		&& AreFloatsEquivalent(A.PlayCommitOpacity, B.PlayCommitOpacity)
 		&& AreColorsEquivalent(A.PlayCommitColor, B.PlayCommitColor)
-		&& AreFloatsEquivalent(A.PlayCommitScale, B.PlayCommitScale);
+		&& AreFloatsEquivalent(A.PlayCommitScale, B.PlayCommitScale)
+		&& A.bEnableRetainedFeedback == B.bEnableRetainedFeedback
+		&& AreFloatsEquivalent(A.RetainedFeedbackDuration, B.RetainedFeedbackDuration)
+		&& AreFloatsEquivalent(A.RetainedFeedbackStaggerSeconds, B.RetainedFeedbackStaggerSeconds)
+		&& AreFloatsEquivalent(A.RetainedFeedbackLiftPixels, B.RetainedFeedbackLiftPixels)
+		&& AreFloatsEquivalent(A.RetainedFeedbackScale, B.RetainedFeedbackScale)
+		&& A.RetainedFeedbackZOrderBoost == B.RetainedFeedbackZOrderBoost;
 }
 
 FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(

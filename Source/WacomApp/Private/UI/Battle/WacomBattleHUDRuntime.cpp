@@ -1077,9 +1077,18 @@ void FWacomBattleHUDRuntime::SyncFirstPersonBattleHandLayer(
 
 void FWacomBattleHUDRuntime::RefreshFromPresentationPhase(
 	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
 {
-	GetSnapshotPresenter().RefreshFromPresentationPhase(Snapshot, TransitionHints);
+	GetSnapshotPresenter().RefreshFromPresentationPhase(Snapshot, TransitionHints, FeedbackHints);
+}
+
+void FWacomBattleHUDRuntime::SyncFirstPersonBattleHandLayer(
+	const FBattleSnapshot& Snapshot,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+{
+	GetFirstPersonHandBridge().SyncLayer(Snapshot, TransitionHints, FeedbackHints);
 }
 
 void FWacomBattleHUDRuntime::ClearFirstPersonBattleHandLayer()

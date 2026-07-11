@@ -22,6 +22,7 @@ struct FWacomBattlePresentationPhase
 	EWacomBattlePresentationPhaseKind Kind = EWacomBattlePresentationPhaseKind::None;
 	FBattleSnapshot Snapshot;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
 	TArray<FBattleEvent> Events;
 
 	bool HasHandFrame() const

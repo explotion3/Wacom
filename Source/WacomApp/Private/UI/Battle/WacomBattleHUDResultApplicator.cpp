@@ -13,7 +13,7 @@
 
 namespace
 {
-	void LogRawBattleEvents(const TArray<FBattleEvent>& Events)
+	void LogResultApplicatorRawBattleEvents(const TArray<FBattleEvent>& Events)
 	{
 		for (const FBattleEvent& Event : Events)
 		{
@@ -92,7 +92,7 @@ void FWacomBattleHUDResultApplicator::AttachInitializedBattleSession(
 
 	const FWacomBattleCombatLogCommandContext SystemContext =
 		UWacomBattleCombatLogBuilder::BuildSystemCommandContext(Initialization.PostSnapshot);
-	LogRawBattleEvents(Initialization.Events);
+	LogResultApplicatorRawBattleEvents(Initialization.Events);
 	Runtime.GetCombatLogController().AppendBlock(
 		SystemContext,
 		Initialization.Events,
@@ -156,7 +156,7 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 		Runtime.SetUIState(EBattleUIState::Idle);
 	}
 
-	LogRawBattleEvents(Resolution.Events);
+	LogResultApplicatorRawBattleEvents(Resolution.Events);
 	Runtime.GetCombatLogController().AppendBlock(
 		Context.CombatLogContext,
 		Resolution.Events,

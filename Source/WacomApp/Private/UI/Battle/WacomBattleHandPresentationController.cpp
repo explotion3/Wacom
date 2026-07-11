@@ -279,6 +279,7 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 			BuildSnapshotWithoutHandCardIdsForBattleHandPresentation(Snapshot, NewHandAnchorCardIds);
 		Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(FrameSnapshot);
 		Frame.TransitionHints = BuildTransitionHints(Baseline, FrameSnapshot);
+		Frame.FeedbackHints = BuildFeedbackHints(FrameSnapshot);
 		Frame.CommitMode = ResolveBattleHandPresentationFrameCommitMode(Frame);
 		if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame)
 		{
@@ -303,11 +304,13 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 
 FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationController::BuildExplicitFrame(
 	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
 {
 	FWacomFirstPersonCardLayerPresentationFrame Frame;
 	Frame.Entries = WacomBattleCardPresentation::BuildCardLayerEntries(Snapshot);
 	Frame.TransitionHints = TransitionHints;
+	Frame.FeedbackHints = FeedbackHints;
 	// An explicit frame is a replacement contract even when the hint channel is empty.
 	// Treating it as a state refresh would leave an older deferred hint alive in the layer.
 	Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame;
@@ -400,7 +403,11 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 		switch (Event.Type)
 		{
 		case EBattleEventType::CardGained:
-			// Card acquisition remains a rule/log event. It has no dedicated hand-layer visual.
+			if (NewCardIds.Contains(Event.CardInstanceId))
+			{
+				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Gained);
+				NewCardIds.Remove(Event.CardInstanceId);
+			}
 			break;
 		case EBattleEventType::CardPlayed:
 			if (RemovedCardIds.Contains(Event.CardInstanceId))
@@ -505,6 +512,43 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 		DiscardHints[Index]->SequenceCount = FMath::Max(1, DiscardSequenceCount);
 	}
 
+	return Hints;
+}
+
+TArray<FWacomFirstPersonCardLayerFeedbackHint>
+FWacomBattleHandPresentationController::BuildFeedbackHints(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	TArray<FGuid> RetainedCardIds;
+	TSet<FGuid> SeenRetainedCardIds;
+	for (const FBattleEvent& Event : PendingTransitionEvents)
+	{
+		if (Event.Type != EBattleEventType::CardsRetained)
+		{
+			continue;
+		}
+		for (const FGuid& CardInstanceId : Event.CardInstanceIds)
+		{
+			if (!CardInstanceId.IsValid()
+				|| SeenRetainedCardIds.Contains(CardInstanceId)
+				|| !ContainsNormalHandCardIdForBattleHandPresentation(NextSnapshot, CardInstanceId))
+			{
+				continue;
+			}
+			SeenRetainedCardIds.Add(CardInstanceId);
+			RetainedCardIds.Add(CardInstanceId);
+		}
+	}
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
+	for (int32 Index = 0; Index < RetainedCardIds.Num(); ++Index)
+	{
+		FWacomFirstPersonCardLayerFeedbackHint Hint;
+		Hint.CardInstanceId = RetainedCardIds[Index];
+		Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::Retained;
+		Hint.SequenceIndex = Index;
+		Hint.SequenceCount = FMath::Max(1, RetainedCardIds.Num());
+		Hints.Add(Hint);
+	}
 	return Hints;
 }
 

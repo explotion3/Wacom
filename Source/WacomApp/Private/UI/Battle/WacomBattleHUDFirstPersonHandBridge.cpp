@@ -116,19 +116,28 @@ UWacomFirstPersonCardAnchorComponent* FWacomBattleHUDFirstPersonHandBridge::Reso
 void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 	const FBattleSnapshot& Snapshot)
 {
-	SyncLayerInternal(Snapshot, nullptr);
+	SyncLayerInternal(Snapshot, nullptr, nullptr);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
 	const FBattleSnapshot& Snapshot,
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
 {
-	SyncLayerInternal(Snapshot, &TransitionHints);
+	SyncLayerInternal(Snapshot, &TransitionHints, nullptr);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::SyncLayer(
+	const FBattleSnapshot& Snapshot,
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
+{
+	SyncLayerInternal(Snapshot, &TransitionHints, &FeedbackHints);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::SyncLayerInternal(
 	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>* TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>* FeedbackHints)
 {
 	if (Runtime.IsFirstPersonBattleHandSuppressedForEntry())
 	{
@@ -161,11 +170,13 @@ void FWacomBattleHUDFirstPersonHandBridge::SyncLayerInternal(
 	LastAnchor = Anchor;
 	if (TransitionHints)
 	{
+		const TArray<FWacomFirstPersonCardLayerFeedbackHint> EmptyFeedbackHints;
 		ApplyPresentationFrame(
 			*Anchor,
 			PresentationController.BuildExplicitFrame(
 				Snapshot,
-				*TransitionHints));
+				*TransitionHints,
+				FeedbackHints ? *FeedbackHints : EmptyFeedbackHints));
 	}
 	else
 	{

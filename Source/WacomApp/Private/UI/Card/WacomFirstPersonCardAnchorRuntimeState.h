@@ -12,7 +12,9 @@ class FWacomFirstPersonCardAnchorRuntimeState
 public:
 	bool SetEntries(FName SourceId, const TArray<FWacomFirstPersonCardLayerEntry>& Entries);
 	void SetTransitionHints(FName SourceId, const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
+	void SetFeedbackHints(FName SourceId, const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
 	void SetPresentationFrameHints(FName SourceId, const TArray<FWacomFirstPersonCardLayerTransitionHint>& Hints);
+	void SetPresentationFrameFeedbackHints(FName SourceId, const TArray<FWacomFirstPersonCardLayerFeedbackHint>& Hints);
 	void SetTransitionPresentationEnabled(FName SourceId, bool bEnabled);
 	void SetPresentationAnchors(
 		FName SourceId,
@@ -21,7 +23,9 @@ public:
 	bool Clear(FName SourceId);
 	void ClearTransientInteraction();
 	void ClearTransitionHints();
+	void ClearFeedbackHints();
 	void ClearPresentationFrameHints();
+	void ClearPresentationFrameFeedbackHints();
 
 	bool HasRuntimeData() const { return bHasRuntimeData; }
 	FName GetSourceId() const { return SourceId; }
@@ -39,10 +43,15 @@ public:
 	bool HasTransitionHintsForCurrentSource() const;
 	bool CanConsumeTransitionHintsForCurrentSource() const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> ConsumeTransitionHintsForCurrentSource();
+	bool CanConsumeFeedbackHintsForCurrentSource() const;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> ConsumeFeedbackHintsForCurrentSource();
 	bool HasPresentationFrameHintsForCurrentSource() const;
 	bool HasPresentationFrameHintsForSource(FName SourceId) const;
 	bool CanConsumePresentationFrameHintsForCurrentSource() const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> ConsumePresentationFrameHintsForCurrentSource();
+	bool HasPresentationFrameFeedbackHintsForSource(FName SourceId) const;
+	bool CanConsumePresentationFrameFeedbackHintsForCurrentSource() const;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> ConsumePresentationFrameFeedbackHintsForCurrentSource();
 
 	FGuid GetHoveredCardInstanceId() const { return HoveredCardInstanceId; }
 	void SetHoveredCardInstanceId(const FGuid& CardInstanceId) { HoveredCardInstanceId = CardInstanceId; }
@@ -59,11 +68,15 @@ private:
 	TArray<FWacomCardViewData> CardData;
 	TArray<FWacomFirstPersonCardLayerEntry> Entries;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> PresentationFrameHints;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> PresentationFrameFeedbackHints;
 	bool bHasRuntimeData = false;
 	FName SourceId = NAME_None;
 	FName TransitionHintSourceId = NAME_None;
+	FName FeedbackHintSourceId = NAME_None;
 	FName PresentationFrameHintSourceId = NAME_None;
+	FName PresentationFrameFeedbackHintSourceId = NAME_None;
 	FName PresentationAnchorSourceId = NAME_None;
 	FWacomFirstPersonCardPresentationAnchorSet PresentationAnchors;
 	TSet<FName> TransitionPresentationSuppressedSources;

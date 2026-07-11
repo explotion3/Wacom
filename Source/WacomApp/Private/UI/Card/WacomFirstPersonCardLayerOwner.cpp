@@ -50,6 +50,10 @@ bool FWacomFirstPersonCardLayerOwner::Update(
 			Input.ConsumeTransitionHints();
 		WidgetRef->SetCardTransitionHints(TransitionHints);
 	}
+	if (Input.bCanConsumeFeedbackHints && Input.ConsumeFeedbackHints)
+	{
+		WidgetRef->SetCardFeedbackHints(Input.ConsumeFeedbackHints());
+	}
 
 	WidgetRef->SetCardSlots(Input.Slots);
 	return true;

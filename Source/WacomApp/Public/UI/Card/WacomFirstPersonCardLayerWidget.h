@@ -82,6 +82,13 @@ struct FWacomFirstPersonCardLayerResolvedTransitionHint
 	FVector2D PlayedExitTargetWidgetPosition = FVector2D::ZeroVector;
 };
 
+struct FWacomFirstPersonCardLayerResolvedFeedbackHint
+{
+	EWacomFirstPersonCardLayerFeedbackKind FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::None;
+	int32 SequenceIndex = 0;
+	int32 SequenceCount = 1;
+};
+
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 {
@@ -141,6 +148,7 @@ public:
 	bool ReleaseActiveDragGestureAtCurrentPointer();
 	bool IsCardDragGestureActive() const;
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
+	void SetCardFeedbackHints(const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints);
 	void SetPresentationAnchors(const FWacomFirstPersonCardPresentationAnchorSet& InAnchors);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
@@ -248,6 +256,7 @@ private:
 	bool bHasCurrentPointerView = false;
 	FString CurrentDragResolvedIntentDebugSummary;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
+	TMap<FString, FWacomFirstPersonCardLayerResolvedFeedbackHint> PendingFeedbackHintsByKey;
 	bool bCardLayerInteractionEnabled = false;
 	bool bLogSlotMotionDiagnostics = false;
 #if WITH_AUTOMATION_TESTS
@@ -380,6 +389,7 @@ private:
 		bool bValidTarget,
 		EWacomFirstPersonCardDragTargetFeedbackState FeedbackState,
 		const TOptional<FVector2D>& FeedbackTargetScreenPosition);
+	void RefreshCardTargetFocusFromCurrentDragView();
 	FLinearColor ResolveAimArrowColor() const;
 	FVector2D ResolveAimArrowStart() const;
 	FVector2D ResolveAimArrowEnd() const;

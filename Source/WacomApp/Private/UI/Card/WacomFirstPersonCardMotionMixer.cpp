@@ -46,6 +46,17 @@ FWacomFirstPersonCardLayerSlotView FWacomFirstPersonCardMotionMixer::ComposePres
 		Presentation.ZOrder += VisualConfig.HoverZOrderBoost;
 	}
 
+	if (State.bCardDragTargetFocusActive)
+	{
+		Presentation.ScreenPosition.Y -= VisualConfig.DragCardTargetFocusLiftPixels;
+		Presentation.WidgetPosition = Presentation.ScreenPosition;
+		Presentation.SnappedWidgetPosition = Presentation.ScreenPosition;
+		Presentation.RenderScale = FMath::Max(
+			0.01f,
+			Presentation.RenderScale * VisualConfig.DragCardTargetFocusScale);
+		Presentation.ZOrder += VisualConfig.DragCardTargetFocusZOrderBoost;
+	}
+
 	return Presentation;
 }
 
@@ -64,6 +75,11 @@ EWacomFirstPersonCardMotionIntent FWacomFirstPersonCardMotionMixer::ResolveMotio
 			Intent = Candidate;
 		}
 	};
+
+	if (PreviousState.bCardDragTargetFocusActive != NewState.bCardDragTargetFocusActive)
+	{
+		ChooseHigherPriorityIntent(EWacomFirstPersonCardMotionIntent::DragTargetFocus);
+	}
 
 	if (PreviousState.bPendingSource != NewState.bPendingSource
 		|| PreviousState.bTargetSelectDeemphasized != NewState.bTargetSelectDeemphasized)
@@ -94,6 +110,8 @@ const FWacomFirstPersonCardMotionProfile& FWacomFirstPersonCardMotionMixer::GetM
 		return MotionConfig.HoverMotionProfile;
 	case EWacomFirstPersonCardMotionIntent::Pending:
 		return MotionConfig.PendingMotionProfile;
+	case EWacomFirstPersonCardMotionIntent::DragTargetFocus:
+		return MotionConfig.DragTargetFocusMotionProfile;
 	case EWacomFirstPersonCardMotionIntent::Enter:
 		return MotionConfig.EnterMotionProfile;
 	case EWacomFirstPersonCardMotionIntent::Exit:
@@ -156,7 +174,9 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 	}
 	const FWacomFirstPersonCardLayerSlotView& SlotView = *Input.SlotView;
 	const FWacomFirstPersonCardSlotFeedbackConfig& FeedbackConfig = *Input.FeedbackConfig;
-	Result.ZOrder = SlotView.ZOrder;
+	const bool bRetainedTransformActive = Input.RetainedAlpha > 0.0f;
+	Result.ZOrder = SlotView.ZOrder
+		+ (bRetainedTransformActive ? FeedbackConfig.RetainedFeedbackZOrderBoost : 0);
 
 	const bool bDenyActive = FeedbackConfig.bEnabled
 		&& Input.DenyFeedbackElapsedSeconds < FeedbackConfig.DenyDuration;
@@ -175,12 +195,20 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 		&& Input.bCommitFeedbackActive
 			? FeedbackConfig.PlayCommitScale
 			: 1.0f;
-	Result.RenderTransform.Translation = FVector2D(DenyShakeOffset, 0.0f);
+	const float RetainedScale = bRetainedTransformActive
+		? FMath::Lerp(1.0f, FeedbackConfig.RetainedFeedbackScale, Input.RetainedAlpha)
+		: 1.0f;
+	Result.RenderTransform.Translation = FVector2D(
+		DenyShakeOffset,
+		bRetainedTransformActive
+			? -FeedbackConfig.RetainedFeedbackLiftPixels * Input.RetainedAlpha
+			: 0.0f);
 	Result.RenderTransform.Scale = FVector2D(FMath::Max(
 		0.01f,
 		SlotView.RenderScale
 			* PressedScale
-			* CommitScale));
+			* CommitScale
+			* RetainedScale));
 	Result.RenderTransform.Angle = SlotView.RenderAngleDegrees;
 	return Result;
 }
@@ -191,6 +219,7 @@ int32 FWacomFirstPersonCardMotionMixer::GetMotionIntentPriority(EWacomFirstPerso
 	{
 	case EWacomFirstPersonCardMotionIntent::Exit: return 60;
 	case EWacomFirstPersonCardMotionIntent::Enter: return 50;
+	case EWacomFirstPersonCardMotionIntent::DragTargetFocus: return 40;
 	case EWacomFirstPersonCardMotionIntent::Pending: return 30;
 	case EWacomFirstPersonCardMotionIntent::Hover: return 20;
 	case EWacomFirstPersonCardMotionIntent::Layout:

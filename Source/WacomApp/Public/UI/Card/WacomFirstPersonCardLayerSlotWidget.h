@@ -56,6 +56,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bDenyFeedbackActive = false;
 	bool bConfirmFeedbackActive = false;
 	bool bCommitFeedbackActive = false;
+	bool bRetainedFeedbackActive = false;
+	float RetainedFeedbackElapsedSeconds = 0.0f;
+	float RetainedFeedbackStartDelaySeconds = 0.0f;
 	bool bCardDragProbeFeedback = false;
 	bool bCardDragTargetAffordanceFeedback = false;
 	bool bCardDragTargetFocusActive = false;
@@ -78,6 +81,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	float ExitTransitionElapsedSeconds = 0.0f;
 	float ExitTransitionStartDelaySeconds = 0.0f;
 	float ExitTransitionDurationSeconds = 0.0f;
+	int32 EnterTransitionSoundRequestCount = 0;
+	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
@@ -123,6 +129,7 @@ public:
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride);
 	void TriggerCommitFeedback();
+	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
 	bool HasActivePresentationPlayback() const;
 	void ForceCompletePresentationPlayback();
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
@@ -268,6 +275,8 @@ private:
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
+	float RetainedFeedbackElapsedSeconds = 999999.0f;
+	float RetainedFeedbackStartDelaySeconds = 0.0f;
 	bool bCardLayerInteractionEnabled = false;
 	bool bIsHoveredForFirstPersonLayer = false;
 	bool bIsPressedForFirstPersonLayer = false;
@@ -317,6 +326,9 @@ private:
 	int32 SlotFeedbackConfigApplyCountForTest = 0;
 	int32 CardDragConfigApplyCountForTest = 0;
 	int32 SlotVisualConfigApplyCountForTest = 0;
+	int32 EnterTransitionSoundRequestCountForTest = 0;
+	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKindForTest =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
 #endif
 
 	friend class UWacomFirstPersonCardLayerWidget;
@@ -392,6 +404,8 @@ private:
 	void TriggerDenyFeedback();
 	void ClearInteractionFeedback();
 	bool IsDenyFeedbackActive() const;
+	bool IsRetainedFeedbackActive() const;
+	float ComputeRetainedFeedbackAlpha() const;
 	void ApplyFeedbackOverlay();
 	void ApplyInteractionFeedbackOverlay();
 	void UpdateVisibilityForInteractionMode();
@@ -402,6 +416,7 @@ private:
 		const FWacomFirstPersonCardTransitionMotionProfile& EnterProfile);
 	void ClearEnterTransitionPlayback();
 	bool TickEnterTransitionPlayback(float DeltaTime);
+	void PlayPendingTransitionStartSound();
 	bool IsEnterTransitionPlaybackActive() const;
 	bool IsEnterTransitionBlockingInteraction() const;
 	void StartExitTransitionPlayback(

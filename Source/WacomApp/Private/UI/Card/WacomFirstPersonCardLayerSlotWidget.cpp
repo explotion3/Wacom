@@ -10,6 +10,8 @@
 #include "Components/OverlaySlot.h"
 #include "Engine/GameViewportClient.h"
 #include "InputCoreTypes.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardDepthMotion.h"
@@ -270,7 +272,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 			VisualSlotView.RenderOpacity = FMath::Clamp(SlotMotionConfig.EnterOpacity, 0.0f, 1.0f);
 			if (EnterProfile.DurationSeconds > 0.0f
 				|| EnterProfile.StartDelaySeconds > 0.0f
-				|| EnterProfile.ArcLiftPixels > 0.0f)
+				|| EnterProfile.ArcLiftPixels > 0.0f
+				|| !EnterProfile.StartSound.IsNull())
 			{
 				StartEnterTransitionPlayback(VisualSlotView, EnterProfile);
 			}
@@ -561,11 +564,16 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragTargetFocusFeedback(
 	bCardDragProbeFeedback = bEnableFeedback;
 	bCardDragProbeFeedbackValid = bValidFeedback;
 	DragTargetFeedbackState = ResolveEffectiveDragTargetFeedbackState();
-	Invalidate(EInvalidateWidgetReason::Paint);
+	RefreshPresentationTarget(true, EWacomFirstPersonCardMotionIntent::DragTargetFocus);
+	ApplyVisualSlotView();
+	UpdateWantsTick();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearCardDragTargetFeedback()
 {
+	const bool bHadFocusFeedback =
+		CardDragTargetFocusFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None
+		|| bCardDragProbeFeedback;
 	const bool bHadFeedback =
 		DragTargetFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None
 		|| CardDragTargetAffordanceFeedbackState != EWacomFirstPersonCardDragTargetFeedbackState::None
@@ -583,7 +591,13 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearCardDragTargetFeedback()
 	bCardDragProbeFeedbackValid = false;
 	if (bHadFeedback)
 	{
-		Invalidate(EInvalidateWidgetReason::Paint);
+		RefreshPresentationTarget(
+			true,
+			bHadFocusFeedback
+				? EWacomFirstPersonCardMotionIntent::DragTargetFocus
+				: EWacomFirstPersonCardMotionIntent::Layout);
+		ApplyVisualSlotView();
+		UpdateWantsTick();
 	}
 }
 
@@ -788,6 +802,10 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	if (CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration)
 	{
 		CommitFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
+	}
+	if (IsRetainedFeedbackActive())
+	{
+		RetainedFeedbackElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
 	}
 	bool bNearTarget = true;
 	const FWacomFirstPersonCardLayerSlotView PreviousVisualSlotView = VisualSlotView;
@@ -1060,6 +1078,9 @@ FWacomFirstPersonCardSlotVisualState UWacomFirstPersonCardLayerSlotWidget::Resol
 {
 	FWacomFirstPersonCardSlotVisualState State;
 	State.bPendingSource = BaseSlotView.Entry.bIsPendingTargeting;
+	State.bCardDragTargetFocusActive =
+		bCardDragProbeFeedback
+		&& IsCardTargetFocusFeedbackState(CardDragTargetFocusFeedbackState);
 	State.bTargetSelectDeemphasized =
 		BaseSlotView.bHasPendingTargetingCardInHand
 		&& !State.bPendingSource
@@ -1068,7 +1089,7 @@ FWacomFirstPersonCardSlotVisualState UWacomFirstPersonCardLayerSlotWidget::Resol
 		BaseSlotView.bIsHovered
 		&& BaseSlotView.Entry.bIsPlayable
 		&& !State.bPendingSource
-		;
+		&& !State.bCardDragTargetFocusActive;
 	return State;
 }
 
@@ -1113,6 +1134,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	FeedbackMixInput.SlotView = &SlotView;
 	FeedbackMixInput.FeedbackConfig = &SlotFeedbackConfig;
 	FeedbackMixInput.DenyFeedbackElapsedSeconds = DenyFeedbackElapsedSeconds;
+	FeedbackMixInput.RetainedAlpha = ComputeRetainedFeedbackAlpha();
 	FeedbackMixInput.bPressed = bIsPressedForFirstPersonLayer;
 	FeedbackMixInput.bCommitFeedbackActive =
 		CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration;
@@ -1903,9 +1925,14 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.bDenyFeedbackActive = DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
 	View.bConfirmFeedbackActive = ConfirmFeedbackElapsedSeconds < SlotFeedbackConfig.ConfirmDuration;
 	View.bCommitFeedbackActive = CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration;
+	View.bRetainedFeedbackActive = IsRetainedFeedbackActive();
+	View.RetainedFeedbackElapsedSeconds = RetainedFeedbackElapsedSeconds;
+	View.RetainedFeedbackStartDelaySeconds = RetainedFeedbackStartDelaySeconds;
 	View.bCardDragProbeFeedback = bCardDragProbeFeedback;
 	View.bCardDragTargetAffordanceFeedback = bCardDragTargetAffordanceFeedback;
-	View.bCardDragTargetFocusActive = false;
+	View.bCardDragTargetFocusActive =
+		bCardDragProbeFeedback
+		&& IsCardTargetFocusFeedbackState(CardDragTargetFocusFeedbackState);
 	View.CardDragTargetAffordanceFeedbackState = CardDragTargetAffordanceFeedbackState;
 	View.CardDragTargetFocusFeedbackState = CardDragTargetFocusFeedbackState;
 	View.DirectDragTargetFeedbackState = DirectDragTargetFeedbackState;
@@ -1936,6 +1963,8 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.ExitTransitionDurationSeconds = IsExitTransitionPlaybackActive()
 		? TransitionPlayback->GetDurationSeconds()
 		: 0.0f;
+	View.EnterTransitionSoundRequestCount = EnterTransitionSoundRequestCountForTest;
+	View.LastEnterTransitionSoundKind = LastEnterTransitionSoundKindForTest;
 	View.SlotMotionConfig = SlotMotionConfig;
 	View.CardDragConfig = CardDragConfig;
 	View.SlotVisualConfig = SlotVisualConfig;
@@ -2177,6 +2206,27 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerCommitFeedback()
 	UpdateWantsTick();
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::TriggerRetainedFeedback(
+	int32 SequenceIndex,
+	int32 SequenceCount)
+{
+	if (!SlotFeedbackConfig.bEnabled
+		|| !SlotFeedbackConfig.bEnableRetainedFeedback
+		|| SlotFeedbackConfig.RetainedFeedbackDuration <= 0.0f)
+	{
+		return;
+	}
+	const int32 SafeSequenceIndex = FMath::Clamp(
+		SequenceIndex,
+		0,
+		FMath::Max(0, SequenceCount - 1));
+	RetainedFeedbackStartDelaySeconds =
+		static_cast<float>(SafeSequenceIndex) * SlotFeedbackConfig.RetainedFeedbackStaggerSeconds;
+	RetainedFeedbackElapsedSeconds = 0.0f;
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 {
 	bIsPressedForFirstPersonLayer = false;
@@ -2186,6 +2236,8 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearInteractionFeedback()
 	ConfirmFeedbackElapsedSeconds = SlotFeedbackConfig.ConfirmDuration;
 	DenyFeedbackElapsedSeconds = SlotFeedbackConfig.DenyDuration;
 	CommitFeedbackElapsedSeconds = SlotFeedbackConfig.PlayCommitDuration;
+	RetainedFeedbackStartDelaySeconds = 0.0f;
+	RetainedFeedbackElapsedSeconds = SlotFeedbackConfig.RetainedFeedbackDuration;
 	ApplyFeedbackOverlay();
 	ApplyInteractionFeedbackOverlay();
 }
@@ -2196,9 +2248,33 @@ bool UWacomFirstPersonCardLayerSlotWidget::IsDenyFeedbackActive() const
 		&& DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration;
 }
 
+bool UWacomFirstPersonCardLayerSlotWidget::IsRetainedFeedbackActive() const
+{
+	return SlotFeedbackConfig.bEnabled
+		&& SlotFeedbackConfig.bEnableRetainedFeedback
+		&& SlotFeedbackConfig.RetainedFeedbackDuration > 0.0f
+		&& RetainedFeedbackElapsedSeconds
+			< RetainedFeedbackStartDelaySeconds + SlotFeedbackConfig.RetainedFeedbackDuration;
+}
+
+float UWacomFirstPersonCardLayerSlotWidget::ComputeRetainedFeedbackAlpha() const
+{
+	if (!IsRetainedFeedbackActive())
+	{
+		return 0.0f;
+	}
+	const float PlaybackSeconds =
+		RetainedFeedbackElapsedSeconds - RetainedFeedbackStartDelaySeconds;
+	return PlaybackSeconds < 0.0f
+		? 0.0f
+		: ComputeFeedbackPulseAlpha(PlaybackSeconds, SlotFeedbackConfig.RetainedFeedbackDuration);
+}
+
 bool UWacomFirstPersonCardLayerSlotWidget::HasActivePresentationPlayback() const
 {
-	return IsEnterTransitionPlaybackActive() || IsExitingForFirstPersonLayer();
+	return IsEnterTransitionPlaybackActive()
+		|| IsExitingForFirstPersonLayer()
+		|| IsRetainedFeedbackActive();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ForceCompletePresentationPlayback()
@@ -2218,6 +2294,8 @@ void UWacomFirstPersonCardLayerSlotWidget::ForceCompletePresentationPlayback()
 		VisualSlotView = GetEffectiveTargetSlotView();
 		ApplyVisualSlotView();
 	}
+	RetainedFeedbackElapsedSeconds =
+		RetainedFeedbackStartDelaySeconds + FMath::Max(0.0f, SlotFeedbackConfig.RetainedFeedbackDuration);
 	ApplyFeedbackOverlay();
 	UpdateWantsTick();
 }
@@ -2355,7 +2433,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 		|| DenyFeedbackElapsedSeconds < SlotFeedbackConfig.DenyDuration
 		|| (SlotFeedbackConfig.bEnablePlayCommitFeedback
 			&& CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration)
-		;
+		|| IsRetainedFeedbackActive();
 	const FWacomFirstPersonCardLayerSlotView& EffectiveTargetSlotView = GetEffectiveTargetSlotView();
 	const bool bGestureActive =
 		GestureState != EWacomFirstPersonCardGestureState::Idle
@@ -2382,6 +2460,7 @@ void UWacomFirstPersonCardLayerSlotWidget::StartEnterTransitionPlayback(
 		TransitionPlayback.Reset(new FWacomFirstPersonCardTransitionPlayback());
 	}
 	TransitionPlayback->BeginEnter(StartSlotView, EnterProfile);
+	PlayPendingTransitionStartSound();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearEnterTransitionPlayback()
@@ -2400,12 +2479,45 @@ bool UWacomFirstPersonCardLayerSlotWidget::TickEnterTransitionPlayback(float Del
 	}
 	const FWacomFirstPersonCardTransitionTickResult Result =
 		TransitionPlayback->Tick(DeltaTime, GetEffectiveTargetSlotView());
+	PlayPendingTransitionStartSound();
 	if (Result.bHasVisualSlotView)
 	{
 		VisualSlotView = Result.VisualSlotView;
 		ApplyVisualSlotView();
 	}
 	return Result.bCompleted;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::PlayPendingTransitionStartSound()
+{
+	if (!TransitionPlayback)
+	{
+		return;
+	}
+	const TOptional<FWacomFirstPersonCardTransitionSoundRequest> PendingRequest =
+		TransitionPlayback->ConsumePendingSoundRequest();
+	if (!PendingRequest.IsSet())
+	{
+		return;
+	}
+	const FWacomFirstPersonCardTransitionSoundRequest& Request = PendingRequest.GetValue();
+#if WITH_AUTOMATION_TESTS
+	++EnterTransitionSoundRequestCountForTest;
+	LastEnterTransitionSoundKindForTest = Request.TransitionKind;
+#endif
+	USoundBase* Sound = Request.Sound.Get();
+	if (!Sound)
+	{
+		Sound = Request.Sound.LoadSynchronous();
+	}
+	if (Sound && GetWorld())
+	{
+		UGameplayStatics::PlaySound2D(
+			GetWorld(),
+			Sound,
+			Request.VolumeMultiplier,
+			Request.PitchMultiplier);
+	}
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::IsEnterTransitionPlaybackActive() const

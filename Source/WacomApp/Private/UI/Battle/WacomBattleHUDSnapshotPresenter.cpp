@@ -57,14 +57,15 @@ void FWacomBattleHUDSnapshotPresenter::RefreshFromSnapshot(
 
 void FWacomBattleHUDSnapshotPresenter::RefreshFromPresentationPhase(
 	const FBattleSnapshot& Snapshot,
-	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
 {
 	Runtime.HideCardDetailPanel();
 	Runtime.SetLastBattleSnapshot(Snapshot);
 	RefreshBoundBattleWidgets(Snapshot);
 	RefreshPileViews(Snapshot);
 	Runtime.RefreshCommandBarFromSnapshot(Snapshot);
-	Runtime.SyncFirstPersonBattleHandLayer(Snapshot, TransitionHints);
+	Runtime.SyncFirstPersonBattleHandLayer(Snapshot, TransitionHints, FeedbackHints);
 	Runtime.SyncBattleEnemyPartWorldTargets(Snapshot);
 }
 

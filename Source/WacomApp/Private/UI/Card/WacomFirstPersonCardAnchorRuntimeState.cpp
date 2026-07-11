@@ -75,6 +75,40 @@ void FWacomFirstPersonCardAnchorRuntimeState::SetPresentationFrameHints(
 	}
 }
 
+void FWacomFirstPersonCardAnchorRuntimeState::SetFeedbackHints(
+	FName InSourceId,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints)
+{
+	if (InSourceId.IsNone()) return;
+	FeedbackHintSourceId = InSourceId;
+	FeedbackHints.Reset(InHints.Num());
+	for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : InHints)
+	{
+		if (Hint.CardInstanceId.IsValid()
+			&& Hint.FeedbackKind != EWacomFirstPersonCardLayerFeedbackKind::None)
+		{
+			FeedbackHints.Add(Hint);
+		}
+	}
+}
+
+void FWacomFirstPersonCardAnchorRuntimeState::SetPresentationFrameFeedbackHints(
+	FName InSourceId,
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints)
+{
+	if (InSourceId.IsNone()) return;
+	PresentationFrameFeedbackHintSourceId = InSourceId;
+	PresentationFrameFeedbackHints.Reset(InHints.Num());
+	for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : InHints)
+	{
+		if (Hint.CardInstanceId.IsValid()
+			&& Hint.FeedbackKind != EWacomFirstPersonCardLayerFeedbackKind::None)
+		{
+			PresentationFrameFeedbackHints.Add(Hint);
+		}
+	}
+}
+
 void FWacomFirstPersonCardAnchorRuntimeState::SetTransitionPresentationEnabled(
 	FName InSourceId,
 	bool bEnabled)
@@ -105,9 +139,13 @@ bool FWacomFirstPersonCardAnchorRuntimeState::Clear(FName InSourceId)
 	CardData.Reset();
 	Entries.Reset();
 	TransitionHints.Reset();
+	FeedbackHints.Reset();
 	PresentationFrameHints.Reset();
+	PresentationFrameFeedbackHints.Reset();
 	TransitionHintSourceId = NAME_None;
+	FeedbackHintSourceId = NAME_None;
 	PresentationFrameHintSourceId = NAME_None;
+	PresentationFrameFeedbackHintSourceId = NAME_None;
 	PresentationAnchorSourceId = NAME_None;
 	PresentationAnchors = FWacomFirstPersonCardPresentationAnchorSet();
 	TransitionPresentationSuppressedSources.Remove(InSourceId);
@@ -126,6 +164,12 @@ void FWacomFirstPersonCardAnchorRuntimeState::ClearTransitionHints()
 {
 	TransitionHints.Reset();
 	TransitionHintSourceId = NAME_None;
+}
+
+void FWacomFirstPersonCardAnchorRuntimeState::ClearFeedbackHints()
+{
+	FeedbackHints.Reset();
+	FeedbackHintSourceId = NAME_None;
 }
 
 void FWacomFirstPersonCardAnchorRuntimeState::SetPresentationAnchors(
@@ -164,6 +208,12 @@ void FWacomFirstPersonCardAnchorRuntimeState::ClearPresentationFrameHints()
 	PresentationFrameHintSourceId = NAME_None;
 }
 
+void FWacomFirstPersonCardAnchorRuntimeState::ClearPresentationFrameFeedbackHints()
+{
+	PresentationFrameFeedbackHints.Reset();
+	PresentationFrameFeedbackHintSourceId = NAME_None;
+}
+
 bool FWacomFirstPersonCardAnchorRuntimeState::IsTransitionPresentationEnabled(FName InSourceId) const
 {
 	return InSourceId.IsNone()
@@ -193,6 +243,25 @@ FWacomFirstPersonCardAnchorRuntimeState::ConsumeTransitionHintsForCurrentSource(
 	return Result;
 }
 
+bool FWacomFirstPersonCardAnchorRuntimeState::CanConsumeFeedbackHintsForCurrentSource() const
+{
+	return FeedbackHintSourceId == SourceId
+		&& FeedbackHints.Num() > 0
+		&& IsTransitionPresentationEnabled(SourceId);
+}
+
+TArray<FWacomFirstPersonCardLayerFeedbackHint>
+FWacomFirstPersonCardAnchorRuntimeState::ConsumeFeedbackHintsForCurrentSource()
+{
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> Result;
+	if (CanConsumeFeedbackHintsForCurrentSource())
+	{
+		Result = MoveTemp(FeedbackHints);
+		FeedbackHintSourceId = NAME_None;
+	}
+	return Result;
+}
+
 bool FWacomFirstPersonCardAnchorRuntimeState::HasPresentationFrameHintsForCurrentSource() const
 {
 	return !SourceId.IsNone() && PresentationFrameHintSourceId == SourceId;
@@ -218,6 +287,31 @@ FWacomFirstPersonCardAnchorRuntimeState::ConsumePresentationFrameHintsForCurrent
 	{
 		Result = MoveTemp(PresentationFrameHints);
 		PresentationFrameHintSourceId = NAME_None;
+	}
+	return Result;
+}
+
+bool FWacomFirstPersonCardAnchorRuntimeState::HasPresentationFrameFeedbackHintsForSource(
+	FName InSourceId) const
+{
+	return !InSourceId.IsNone() && PresentationFrameFeedbackHintSourceId == InSourceId;
+}
+
+bool FWacomFirstPersonCardAnchorRuntimeState::CanConsumePresentationFrameFeedbackHintsForCurrentSource() const
+{
+	return !SourceId.IsNone()
+		&& PresentationFrameFeedbackHintSourceId == SourceId
+		&& IsTransitionPresentationEnabled(SourceId);
+}
+
+TArray<FWacomFirstPersonCardLayerFeedbackHint>
+FWacomFirstPersonCardAnchorRuntimeState::ConsumePresentationFrameFeedbackHintsForCurrentSource()
+{
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> Result;
+	if (CanConsumePresentationFrameFeedbackHintsForCurrentSource())
+	{
+		Result = MoveTemp(PresentationFrameFeedbackHints);
+		PresentationFrameFeedbackHintSourceId = NAME_None;
 	}
 	return Result;
 }

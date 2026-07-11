@@ -7,6 +7,7 @@
 #include "FirstPersonCardLayerSpecReceiver.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Sound/SoundWave.h"
 #include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
@@ -590,6 +591,45 @@ bool FWacomFirstPersonCardAnchorCommitFrameModesContractTest::RunTest(const FStr
 
 	PC->Destroy();
 	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerGainedAndRetainedPlaybackTest,
+	"Wacom.UI.FirstPersonCardLayer.PresentationPlayback.GainedAndRetainedSemanticMotion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerGainedAndRetainedPlaybackTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World)) return false;
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("Layer"), Layer)) return false;
+	FWacomFirstPersonCardSlotMotionConfig Motion = MakeMotionConfig();
+	Motion.GainedEnterDurationSeconds = 0.2f;
+	Motion.GainedEnterSound = NewObject<USoundWave>(Layer);
+	Layer->SetSlotMotionConfig(Motion);
+	const FGuid CardId = FGuid::NewGuid();
+	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Gained) });
+	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(220.0f, 280.0f)) });
+	TestTrue(TEXT("Gained uses finite semantic enter playback"), Layer->HasActivePresentationPlayback());
+	const FWacomFirstPersonCardSlotAutomationTestView GainedView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer->GetSlotWidgetAt(0));
+	TestEqual(TEXT("Gained enter requests its sound once"), GainedView.EnterTransitionSoundRequestCount, 1);
+	TestEqual(TEXT("Gained sound keeps semantic kind"), GainedView.LastEnterTransitionSoundKind, EWacomFirstPersonCardSlotTransitionKind::Gained);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.3f);
+	FWacomFirstPersonCardLayerFeedbackHint RetainedHint;
+	RetainedHint.CardInstanceId = CardId;
+	RetainedHint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::Retained;
+	Layer->SetCardFeedbackHints({ RetainedHint });
+	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(220.0f, 280.0f)) });
+	TestTrue(TEXT("Retained reports active semantic motion"), Layer->HasActivePresentationPlayback());
+	const FWacomFirstPersonCardSlotAutomationTestView RetainedView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Layer->GetSlotWidgetAt(0));
+	TestTrue(TEXT("Retained motion starts without requiring an overlay"), RetainedView.bRetainedFeedbackActive);
+	PC->Destroy();
 	return true;
 }
 

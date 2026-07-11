@@ -11,6 +11,7 @@
 class APlayerController;
 class AWacomPlayerCharacter;
 class UMaterialInterface;
+class USoundBase;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
@@ -179,6 +180,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (EditCondition = "bOverrideHoverMotionProfile", ClampMin = "0.1", UIMin = "0.5", UIMax = "4.0", ToolTip = "悬浮卡牌插值缓动指数；1 为线性，只在启用 Hover motion profile 覆盖时生效。"))
 	float HoverMotionEasePower = 1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (ToolTip = "是否单独覆盖拖拽时当前手牌目标的运动参数；关闭时沿用通用槽位参数。"))
+	bool bOverrideDragTargetFocusMotionProfile = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (EditCondition = "bOverrideDragTargetFocusMotionProfile", ToolTip = "手牌目标上浮、缩放追向目标值的速度，单位为反秒；推荐 18 到 32。"))
+	float DragTargetFocusMotionSpeed = 26.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (EditCondition = "bOverrideDragTargetFocusMotionProfile", ToolTip = "手牌目标透明度追踪速度，单位为反秒；推荐 14 到 26。"))
+	float DragTargetFocusOpacitySpeed = 18.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (EditCondition = "bOverrideDragTargetFocusMotionProfile", ToolTip = "手牌目标运动缓动指数；1 为线性，推荐 1 到 2。"))
+	float DragTargetFocusMotionEasePower = 1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|05 Slot Motion", meta = (ToolTip = "是否单独覆盖卡牌入场 / 离场的 motion profile。关闭时 Enter / Exit 继续使用通用 CardSlot motion 参数。"))
 	bool bOverrideEnterExitMotionProfile = false;
 
@@ -251,6 +261,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "抽牌入场播放期间是否禁止该卡 hover / press / drag；用于避免发牌途中被交互状态打断。"))
 	bool bBlockInteractionDuringDrawnCardEnter = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场起点偏移，单位为 UMG 布局像素；默认从手牌中心上方进入。"))
+	FVector2D GainedCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场来源模式；只影响表现。"))
+	EWacomFirstPersonCardTransitionOriginMode GainedCardEnterOriginMode = EWacomFirstPersonCardTransitionOriginMode::HandAnchorOffset;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌使用视口锚点时的归一化位置。"))
+	FVector2D GainedCardEnterViewportAnchor = FVector2D(0.5f, 0.0f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场起点缩放倍率；推荐 0.9 到 1.0。"))
+	float GainedCardEnterScaleMultiplier = 0.96f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场起点角度偏移，单位为度。"))
+	float GainedCardEnterAngleOffsetDegrees = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场时长，单位为秒；推荐 0.25 到 0.4。"))
+	float GainedCardEnterDurationSeconds = 0.32f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "同批获得卡牌的错峰间隔，单位为秒；推荐 0.04 到 0.1。"))
+	float GainedCardEnterStaggerSeconds = 0.075f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场弧线抬升，单位为 UMG 布局像素；推荐 24 到 64。"))
+	float GainedCardEnterArcLiftPixels = 42.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场缓动指数；推荐 1.5 到 2.5。"))
+	float GainedCardEnterEasePower = 2.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "获得卡牌入场播放期间是否阻止该卡交互。"))
+	bool bBlockInteractionDuringGainedCardEnter = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "左/右手牌生成入手时相对目标位置的起始偏移，单位为 UMG 布局像素；只影响 UI 表现，不改变抽牌或保留规则。"))
 	FVector2D HandAnchorCardEnterOffsetPixels = FVector2D(0.0f, -120.0f);
 
@@ -281,6 +312,21 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (ToolTip = "左/右手牌生成入手播放期间是否禁止该卡 hover / press / drag；用于避免生成途中被交互状态打断。"))
 	bool bBlockInteractionDuringHandAnchorCardEnter = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (ToolTip = "是否启用语义入场音效；只在实际开始入场播放时请求一次。"))
+	bool bEnableCardEnterSounds = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "抽牌入场的 UI 2D 音效；留空表示静音。"))
+	TSoftObjectPtr<USoundBase> DrawnCardEnterSound;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "获得卡牌入场的 UI 2D 音效；留空表示静音。"))
+	TSoftObjectPtr<USoundBase> GainedCardEnterSound;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "Run 手牌入场的 UI 2D 音效；留空表示静音。"))
+	TSoftObjectPtr<USoundBase> RunHandCardEnterSound;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "左右手牌锚点入场的 UI 2D 音效；留空表示静音。"))
+	TSoftObjectPtr<USoundBase> HandAnchorCardEnterSound;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "入场音效音量倍率；1 为资产原始音量，推荐 0.5 到 1.2。"))
+	float CardEnterSoundVolumeMultiplier = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Transition Audio", meta = (EditCondition = "bEnableCardEnterSounds", ToolTip = "入场音效音高倍率；1 为资产原始音高，推荐 0.8 到 1.2。"))
+	float CardEnterSoundPitchMultiplier = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|06 Transition Motion", meta = (UIMin = "-240.0", UIMax = "240.0", ToolTip = "卡牌被打出时相对当前位置的离场偏移，单位为 UMG 布局像素；默认向上离开手牌。"))
 	FVector2D PlayedCardExitOffsetPixels = FVector2D(0.0f, -120.0f);
@@ -519,6 +565,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.2", ToolTip = "成功提交出牌后 commit 反馈额外乘上的缩放倍率；只作用于视觉 slot。"))
 	float PlayCommitFeedbackScale = 1.015f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用回合结束保留牌的纯运动反馈；不使用旧 Overlay 发光。"))
+	bool bEnableRetainedFeedback = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留牌运动反馈时长，单位为秒；推荐 0.22 到 0.34。"))
+	float RetainedFeedbackDuration = 0.28f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "多张保留牌的错峰间隔，单位为秒；推荐 0.03 到 0.07。"))
+	float RetainedFeedbackStaggerSeconds = 0.045f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留反馈额外上浮距离，单位为 UMG 布局像素；推荐 8 到 18。"))
+	float RetainedFeedbackLiftPixels = 12.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留反馈额外缩放倍率；推荐 1.015 到 1.04。"))
+	float RetainedFeedbackScale = 1.025f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留反馈期间额外增加的绘制层级；推荐 100 到 300。"))
+	int32 RetainedFeedbackZOrderBoost = 180;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ToolTip = "是否启用第一人称手牌按住读牌、拖出手牌或拉箭头提交。关闭后只保留 hover / 读牌表现，不再提交卡牌。"))
 	bool bEnableFirstPersonCardDragCommit = true;
 
@@ -552,6 +611,13 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|99 Debug", meta = (ToolTip = "是否输出第一人称卡牌拖拽/瞄准诊断日志；默认关闭，仅用于排查手势状态，不改变拖拽语义。"))
 	bool bLogCardDragDiagnostics = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Drag Target Feedback", meta = (ToolTip = "拖拽指向手牌目标时的额外上浮距离，单位为 UMG 布局像素；推荐 12 到 24。"))
+	float DragCardTargetFocusLiftPixels = 18.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Drag Target Feedback", meta = (ToolTip = "拖拽指向手牌目标时的额外缩放倍率；推荐 1.025 到 1.06。"))
+	float DragCardTargetFocusScale = 1.045f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Drag Target Feedback", meta = (ToolTip = "拖拽指向手牌目标时额外增加的绘制层级；推荐 400 到 900。"))
+	int32 DragCardTargetFocusZOrderBoost = 650;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|First Person Hand|99 Debug")
 	void RefreshAnchor(float DeltaTime);
