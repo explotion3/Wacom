@@ -12,7 +12,13 @@ class UOverlay;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
+class FWacomFirstPersonCardTransitionPlayback;
 struct FWacomFirstPersonCardLayerTestAccess;
+
+struct FWacomFirstPersonCardTransitionPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardTransitionPlayback* Playback) const;
+};
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
@@ -23,36 +29,6 @@ enum class EWacomFirstPersonCardGestureInputSource : uint8
 	None,
 	MousePointer,
 	ExternalPointer
-};
-
-struct FWacomFirstPersonCardEnterTransitionPlayback
-{
-	bool bActive = false;
-	FWacomFirstPersonCardLayerSlotView StartSlotView;
-	float ElapsedSeconds = 0.0f;
-	float StartDelaySeconds = 0.0f;
-	float DurationSeconds = 0.0f;
-	float ArcLiftPixels = 0.0f;
-	float EasePower = 1.0f;
-	bool bBlockInteractionDuringPlayback = true;
-	TSoftObjectPtr<USoundBase> StartSound;
-	float StartSoundVolumeMultiplier = 1.0f;
-	float StartSoundPitchMultiplier = 1.0f;
-	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
-		EWacomFirstPersonCardSlotTransitionKind::Default;
-	bool bStartSoundPlayed = false;
-};
-
-struct FWacomFirstPersonCardExitTransitionPlayback
-{
-	bool bActive = false;
-	FWacomFirstPersonCardLayerSlotView StartSlotView;
-	FWacomFirstPersonCardLayerSlotView TargetSlotView;
-	float ElapsedSeconds = 0.0f;
-	float StartDelaySeconds = 0.0f;
-	float DurationSeconds = 0.0f;
-	float ArcLiftPixels = 0.0f;
-	float EasePower = 1.0f;
 };
 
 #if WITH_AUTOMATION_TESTS
@@ -123,6 +99,9 @@ class WACOMAPP_API UWacomFirstPersonCardLayerSlotWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	UWacomFirstPersonCardLayerSlotWidget(const FObjectInitializer& ObjectInitializer);
+	virtual ~UWacomFirstPersonCardLayerSlotWidget() override;
+
 	void SetCardViewClass(TSubclassOf<UWacomFirstPersonCardViewWidget> InCardViewClass);
 	void SetSlotView(const FWacomFirstPersonCardLayerSlotView& InSlotView);
 	void SetSlotViewImmediate(const FWacomFirstPersonCardLayerSlotView& InSlotView);
@@ -280,8 +259,9 @@ private:
 	FVector2D CurrentGestureScreenPosition = FVector2D::ZeroVector;
 	float GestureElapsedSeconds = 0.0f;
 	float ExitMotionElapsedSeconds = 0.0f;
-	FWacomFirstPersonCardEnterTransitionPlayback EnterTransitionPlayback;
-	FWacomFirstPersonCardExitTransitionPlayback ExitTransitionPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardTransitionPlayback,
+		FWacomFirstPersonCardTransitionPlaybackDeleter> TransitionPlayback;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
@@ -357,7 +337,6 @@ private:
 		const FWacomFirstPersonCardLayerSlotView& PreviousPresentationSlotView,
 		const FWacomFirstPersonCardLayerSlotView& NewPresentationSlotView,
 		EWacomFirstPersonCardMotionIntent PreferredIntent) const;
-	static int32 GetMotionIntentPriority(EWacomFirstPersonCardMotionIntent Intent);
 	const FWacomFirstPersonCardMotionProfile& GetMotionProfileForIntent(
 		EWacomFirstPersonCardMotionIntent Intent) const;
 	FWacomFirstPersonCardLayerSlotView ComposePresentationSlotView(
@@ -423,8 +402,8 @@ private:
 		const FWacomFirstPersonCardTransitionMotionProfile& EnterProfile);
 	void ClearEnterTransitionPlayback();
 	bool TickEnterTransitionPlayback(float DeltaTime);
-	void PlayEnterTransitionStartSound();
-	bool IsEnterTransitionPlaybackActive() const { return EnterTransitionPlayback.bActive; }
+	void PlayPendingTransitionStartSound();
+	bool IsEnterTransitionPlaybackActive() const;
 	bool IsEnterTransitionBlockingInteraction() const;
 	void StartExitTransitionPlayback(
 		const FWacomFirstPersonCardLayerSlotView& StartSlotView,
@@ -432,10 +411,5 @@ private:
 		const FWacomFirstPersonCardTransitionMotionProfile& ExitProfile);
 	void ClearExitTransitionPlayback();
 	bool TickExitTransitionPlayback(float DeltaTime);
-	bool IsExitTransitionPlaybackActive() const { return ExitTransitionPlayback.bActive; }
-	static FWacomFirstPersonCardLayerSlotView LerpSlotView(
-		const FWacomFirstPersonCardLayerSlotView& From,
-		const FWacomFirstPersonCardLayerSlotView& To,
-		float MotionAlpha,
-		float OpacityAlpha);
+	bool IsExitTransitionPlaybackActive() const;
 };

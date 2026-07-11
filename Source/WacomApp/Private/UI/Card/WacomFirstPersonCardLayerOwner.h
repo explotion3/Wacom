@@ -29,6 +29,7 @@ struct FWacomFirstPersonCardLayerOwnerUpdateInput
 	APlayerController* PlayerController = nullptr;
 	FWacomFirstPersonCardLayerOwnerConfig Config;
 	TArray<FWacomFirstPersonCardLayerSlotView> Slots;
+	FWacomFirstPersonCardPresentationAnchorSet PresentationAnchors;
 	TFunction<UWacomFirstPersonCardLayerWidget*(
 		APlayerController*,
 		TSubclassOf<UWacomFirstPersonCardLayerWidget>)> CreateLayerWidget;

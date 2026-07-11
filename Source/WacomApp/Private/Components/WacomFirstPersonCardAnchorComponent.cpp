@@ -1100,6 +1100,10 @@ void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerSourceLifecycleF
 			SourceId,
 			Frame.bTransitionPresentationEnabled);
 	}
+	if (Frame.bSetPresentationAnchors && RuntimeState && !SourceId.IsNone())
+	{
+		RuntimeState->SetPresentationAnchors(SourceId, Frame.PresentationAnchors);
+	}
 
 	if (Frame.bCommitPresentationFrame)
 	{
@@ -1125,6 +1129,10 @@ void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerSourceLifecycleF
 		}
 		break;
 	case EWacomFirstPersonCardLayerSourceClearMode::VisualState:
+		if (RuntimeState && !SourceId.IsNone())
+		{
+			RuntimeState->ClearPresentationAnchors(SourceId);
+		}
 		ClearCardLayerVisualState();
 		break;
 	case EWacomFirstPersonCardLayerSourceClearMode::None:
@@ -1470,6 +1478,8 @@ FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorCompone
 			|| RuntimeState->CanConsumePresentationFrameFeedbackHintsForCurrentSource();
 		View.bTransitionPresentationEnabledForCurrentSource =
 			RuntimeState->IsTransitionPresentationEnabled(RuntimeState->GetSourceId());
+		View.PresentationAnchorSourceId = RuntimeState->GetPresentationAnchorSourceId();
+		View.PresentationAnchors = RuntimeState->GetPresentationAnchors();
 		for (const FWacomFirstPersonCardLayerTransitionHint& Hint : RuntimeState->GetTransitionHints())
 		{
 			View.PendingTransitionHintCardIds.Add(Hint.CardInstanceId);
@@ -1978,6 +1988,9 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	UpdateInput.PlayerController = PC;
 	UpdateInput.Config = OwnerConfig;
 	UpdateInput.Slots = BuildActiveCardLayerSlotViews();
+	UpdateInput.PresentationAnchors = RuntimeState
+		? RuntimeState->GetPresentationAnchorsForCurrentSource()
+		: FWacomFirstPersonCardPresentationAnchorSet();
 	UpdateInput.CreateLayerWidget = [this](
 		APlayerController* PlayerController,
 		TSubclassOf<UWacomFirstPersonCardLayerWidget> LayerClass)

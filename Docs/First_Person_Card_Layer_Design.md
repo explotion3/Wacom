@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-07-10
+updated: 2026-07-11
 tags:
   - wacom/ui
   - wacom/cards
@@ -153,7 +153,7 @@ Layer 使用稳定 motion key 复用 slot widget：
 - Development preview 或 placeholder 使用 `StaticIndex:{Index}`。
 - 同一 key 重新进入时复用 active 或回收 outgoing widget，避免幽灵 widget。
 
-Anchor 每帧计算基础目标 slot，Layer 只在输入 slot、transition hint、配置或生命周期状态实际变化时完整 reconcile。SlotWidget 会先把基础 slot 与 hover / pending / drag card-target focus 等状态合成为最终 presentation，Slot motion 再独立 tick，把 visual position、angle、scale、opacity 和 ZOrder 追向这个最终 presentation。
+Anchor 每帧计算基础目标 slot，Layer 只在输入 slot、transition hint、配置或生命周期状态实际变化时完整 reconcile。SlotWidget 保留输入、gesture、反馈计时器和最终 UMG 渲染；App-private `FWacomFirstPersonCardMotionMixer` 以纯值计算固定执行 `layout -> state -> gesture / transition -> local feedback` 合成顺序，并负责 motion intent、插值、到达判定和最终局部 transform。带明确语义 hint 的固定时长 enter / exit 由 App-private `FWacomFirstPersonCardTransitionPlayback` 以互斥 `None / Enter / Exit` 状态播放：Enter 每帧追随最新手牌目标，Exit 在启动时冻结终点；新播放、slot 重用、force-settle 和 teardown 都显式中断旧状态。Layer / Slot 不因此获得 Battle 或 Run 规则职责。
 
 Slot motion 现在按语义选择 motion intent / motion profile：`Layout` 负责普通手牌重排，`Hover` 负责悬浮 presentation，`Pending` 负责等待选目标源卡和非源卡弱化，`DragTargetFocus` 负责当前拖拽指针压中的唯一手牌目标，`Enter` / `Exit` 负责入场和离场。每个 `FWacomFirstPersonCardMotionProfile` 包含 `MotionSpeed / OpacitySpeed / EasePower`，Tick 时用当前 active profile 计算位置、角度、缩放和透明度追踪 alpha。带明确语义 hint 的 enter / exit 使用独立 elapsed / delay / duration playback；普通 layout / hover / drag 和无语义的兼容离场仍沿用 profile 追踪模型。
 
@@ -183,9 +183,9 @@ Run 探索期默认手牌和 provider-backed menu lease 的卡牌进入使用 `R
 
 `CardGained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 `Gained` transition hint。`Gained` 和 `Drawn / RunHandEntered / HandAnchorEntered` 一样必须启动有限时长 enter playback；Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 控制奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
 
-`Played / Discarded` 离场使用和 enter 对称的固定 elapsed playback。`Played` 成功提交后，release resolver 已确认的目标屏幕位置会进入 play commit hint，再随 `Played` transition hint 交给 Layer；Layer 只据此修正离场方向，不重新判断目标是否合法。连续 `CardDiscarded / HandLimitDiscarded / CardExhausted` loose events 和 EndTurn discard phase 都携带稳定 `SequenceIndex / SequenceCount`；`DiscardedCardExitStaggerSeconds`（默认 `0.06s`）据此错峰启动，`CardSlotExitDuration` 控制单张离场时长。表现计划 phase 超时时必须先调用 Anchor / Layer force-settle，清除未应用 hint、把 active slot 收到最终目标并移除 outgoing slot，再进入下一 phase，不能让旧阶段动画与新阶段重叠。
+`Played / Discarded` 离场使用和 enter 对称的固定 elapsed playback。BattleHUD 每次提交 BattleHand presentation frame 时，把当前 UMG 几何中心转成 DPI-aware 逻辑 viewport 坐标，并随同一 source lifecycle frame 写入 `DrawPile / DiscardPile / PlayTarget` presentation anchors；Anchor runtime state 按 source 保存，source 切换、runtime clear 或 visual suppression 时清理。`Drawn` 使用 DrawPile 完整坐标作为起点，`Discarded` 使用 DiscardPile 完整坐标作为终点，二者不再叠加旧 authored offset；`RunHandEntered / Gained / HandAnchorEntered` 暂不使用这些 Battle 锚点。`Played` 成功提交后优先使用 release resolver 已确认的真实目标屏幕位置；没有真实目标时使用 PlayTarget；锚点无效时才回退旧 origin / offset。Layer 只消费这些表现坐标，不重新判断目标是否合法。连续 `CardDiscarded / HandLimitDiscarded / CardExhausted` loose events 和 EndTurn discard phase 都携带稳定 `SequenceIndex / SequenceCount`；`DiscardedCardExitStaggerSeconds`（默认 `0.06s`）据此错峰启动，`CardSlotExitDuration` 控制单张离场时长。表现计划 phase 超时时必须先调用 Anchor / Layer force-settle，清除未应用 hint、把 active slot 收到最终目标并移除 outgoing slot，再进入下一 phase，不能让旧阶段动画与新阶段重叠。
 
-`bEnableReadableTransitionOrigins` 只控制 Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded 的可读来源方向兼容，不关闭 Drawn / RunHandEntered / Gained / HandAnchorEntered 的有限时长播放、错峰和弧线。需要在 PIE 中验证抽牌、Run 手牌入场、战斗奖励卡或左右手生成手感时，优先调整 `06 Transition Motion` 的对应专用参数；不应在 BattleHUD、Run source 或 BattleSession 中硬编码动画位置、延迟或曲线。
+`bEnableReadableTransitionOrigins` 控制没有有效 presentation anchor 时的旧 origin / offset fallback，不关闭有限时长播放、错峰和弧线；有效的 Battle MotionAnchor 或真实 Played target 始终是完整空间事实。需要在 PIE 中验证抽牌、Run 手牌入场、战斗奖励卡或左右手生成手感时，优先调整 WBP MotionAnchor 位置和 `06 Transition Motion` 的非位置参数；不应在 BattleHUD、Run source 或 BattleSession 中硬编码动画位置、延迟或曲线。
 
 本项目可以参考本地 Godot Fake3D Card Game UI Demo 0.2 的行为目标，例如真实牌堆起终点、批次 stagger、两段式出牌、翻面、tilt / shadow depth 和可中断通道；该参考项目采用 GPL-3.0，因此 Wacom 只吸收动作语义和节奏判断，必须以现有 UE / UMG / Material 架构独立实现，不复制其代码、shader、资产或工程结构。
 

@@ -9,6 +9,7 @@ class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UPlayerStatusBar;
 class UPileCountView;
+class UWidget;
 class UWidgetTree;
 class UBattleHUD;
 
@@ -22,6 +23,9 @@ struct FBattleHUDFallbackLayoutBuilderContext
 	TObjectPtr<UPileCountView>* DrawPileView = nullptr;
 	TObjectPtr<UPileCountView>* DiscardPileView = nullptr;
 	TObjectPtr<UPileCountView>* ExhaustPileView = nullptr;
+	TObjectPtr<UWidget>* DrawPileMotionAnchor = nullptr;
+	TObjectPtr<UWidget>* DiscardPileMotionAnchor = nullptr;
+	TObjectPtr<UWidget>* PlayTargetMotionAnchor = nullptr;
 	TObjectPtr<UBattleCombatLogFeedWidget>* CombatLogFeed = nullptr;
 	TObjectPtr<UBattlePresentationStackWidget>* BattlePresentationStack = nullptr;
 };

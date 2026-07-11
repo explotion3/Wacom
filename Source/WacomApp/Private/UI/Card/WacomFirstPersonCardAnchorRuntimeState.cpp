@@ -13,6 +13,11 @@ bool FWacomFirstPersonCardAnchorRuntimeState::SetEntries(
 
 	const bool bSourceChanged = SourceId != InSourceId;
 	SourceId = InSourceId;
+	if (bSourceChanged && PresentationAnchorSourceId != InSourceId)
+	{
+		PresentationAnchorSourceId = NAME_None;
+		PresentationAnchors = FWacomFirstPersonCardPresentationAnchorSet();
+	}
 	Entries.Reset(InEntries.Num());
 	CardData.Reset(InEntries.Num());
 	for (FWacomFirstPersonCardLayerEntry Entry : InEntries)
@@ -149,6 +154,8 @@ bool FWacomFirstPersonCardAnchorRuntimeState::Clear(FName InSourceId)
 	FeedbackHintSourceId = NAME_None;
 	PresentationFrameHintSourceId = NAME_None;
 	PresentationFrameFeedbackHintSourceId = NAME_None;
+	PresentationAnchorSourceId = NAME_None;
+	PresentationAnchors = FWacomFirstPersonCardPresentationAnchorSet();
 	TransitionPresentationSuppressedSources.Remove(InSourceId);
 	ClearTransientInteraction();
 	bHasRuntimeData = false;
@@ -165,6 +172,36 @@ void FWacomFirstPersonCardAnchorRuntimeState::ClearTransitionHints()
 {
 	TransitionHints.Reset();
 	TransitionHintSourceId = NAME_None;
+}
+
+void FWacomFirstPersonCardAnchorRuntimeState::SetPresentationAnchors(
+	FName InSourceId,
+	const FWacomFirstPersonCardPresentationAnchorSet& InAnchors)
+{
+	if (InSourceId.IsNone())
+	{
+		return;
+	}
+	PresentationAnchorSourceId = InSourceId;
+	PresentationAnchors = InAnchors;
+}
+
+void FWacomFirstPersonCardAnchorRuntimeState::ClearPresentationAnchors(FName InSourceId)
+{
+	if (!InSourceId.IsNone() && PresentationAnchorSourceId == InSourceId)
+	{
+		PresentationAnchorSourceId = NAME_None;
+		PresentationAnchors = FWacomFirstPersonCardPresentationAnchorSet();
+	}
+}
+
+const FWacomFirstPersonCardPresentationAnchorSet&
+FWacomFirstPersonCardAnchorRuntimeState::GetPresentationAnchorsForCurrentSource() const
+{
+	static const FWacomFirstPersonCardPresentationAnchorSet EmptyAnchors;
+	return !SourceId.IsNone() && PresentationAnchorSourceId == SourceId
+		? PresentationAnchors
+		: EmptyAnchors;
 }
 
 void FWacomFirstPersonCardAnchorRuntimeState::ClearFeedbackHints()

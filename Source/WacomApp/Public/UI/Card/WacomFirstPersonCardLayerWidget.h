@@ -151,6 +151,7 @@ public:
 	bool IsCardDragGestureActive() const;
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardFeedbackHints(const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints);
+	void SetPresentationAnchors(const FWacomFirstPersonCardPresentationAnchorSet& InAnchors);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 	bool HasActivePresentationPlayback() const;
@@ -228,6 +229,7 @@ protected:
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCanvasPanel> RootCanvas;
+	FWacomFirstPersonCardPresentationAnchorSet PresentationAnchors;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>> SlotWidgets;

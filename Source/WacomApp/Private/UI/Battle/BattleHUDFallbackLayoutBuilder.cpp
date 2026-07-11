@@ -5,6 +5,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/SizeBox.h"
 #include "UI/Battle/BattleCommandBarWidget.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleHUD.h"
@@ -66,6 +67,31 @@ namespace
 
 		SetCanvasSlot(Root->AddChildToCanvas(PileView), Anchors, Alignment, Offsets);
 	}
+
+	void AddMotionAnchor(
+		UWidgetTree* WidgetTree,
+		UCanvasPanel* Root,
+		TObjectPtr<UWidget>* OutAnchor,
+		FName Name,
+		const FAnchors& Anchors,
+		const FVector2D& Alignment,
+		const FMargin& Offsets)
+	{
+		if (!WidgetTree || !Root || !OutAnchor)
+		{
+			return;
+		}
+		USizeBox* Anchor = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), Name);
+		*OutAnchor = Anchor;
+		if (!Anchor)
+		{
+			return;
+		}
+		Anchor->SetWidthOverride(8.0f);
+		Anchor->SetHeightOverride(8.0f);
+		Anchor->SetVisibility(ESlateVisibility::HitTestInvisible);
+		SetCanvasSlot(Root->AddChildToCanvas(Anchor), Anchors, Alignment, Offsets);
+	}
 }
 void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilderContext& Context)
 {
@@ -125,6 +151,31 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 		FAnchors(1.0f, 1.0f),
 		FVector2D(1.0f, 1.0f),
 		FMargin(-200.0f, -110.0f, 80.0f, 80.0f));
+
+	AddMotionAnchor(
+		Context.WidgetTree,
+		Root,
+		Context.DrawPileMotionAnchor,
+		TEXT("DrawPileMotionAnchor"),
+		FAnchors(0.0f, 1.0f),
+		FVector2D(0.5f, 0.5f),
+		FMargin(60.0f, -60.0f, 8.0f, 8.0f));
+	AddMotionAnchor(
+		Context.WidgetTree,
+		Root,
+		Context.DiscardPileMotionAnchor,
+		TEXT("DiscardPileMotionAnchor"),
+		FAnchors(1.0f, 1.0f),
+		FVector2D(0.5f, 0.5f),
+		FMargin(-160.0f, -60.0f, 8.0f, 8.0f));
+	AddMotionAnchor(
+		Context.WidgetTree,
+		Root,
+		Context.PlayTargetMotionAnchor,
+		TEXT("PlayTargetMotionAnchor"),
+		FAnchors(0.5f, 0.45f),
+		FVector2D(0.5f, 0.5f),
+		FMargin(0.0f, 0.0f, 8.0f, 8.0f));
 
 	if (UBattleCombatLogFeedWidget* CombatLogFeed = ConstructWidget(Context.WidgetTree, Context.CombatLogFeed, TEXT("CombatLogFeed")))
 	{

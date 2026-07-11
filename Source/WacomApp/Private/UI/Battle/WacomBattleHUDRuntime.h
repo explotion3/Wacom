@@ -21,6 +21,7 @@ class UBattlePresentationStackWidget;
 class UBattleSession;
 class UPlayerStatusBar;
 class UPileCountView;
+class UWidget;
 class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
 class UWacomCardDetailPanel;
@@ -82,6 +83,9 @@ public:
 	UPileCountView* GetDrawPileView() const;
 	UPileCountView* GetDiscardPileView() const;
 	UPileCountView* GetExhaustPileView() const;
+	UWidget* GetDrawPileMotionAnchor() const;
+	UWidget* GetDiscardPileMotionAnchor() const;
+	UWidget* GetPlayTargetMotionAnchor() const;
 	UBattleCombatLogFeedWidget* GetCombatLogFeed() const;
 	UBattlePresentationStackWidget* GetBattlePresentationStack() const;
 	TObjectPtr<UWacomCardDetailPanel>& GetFirstPersonCardDetailPanelSlot() const;

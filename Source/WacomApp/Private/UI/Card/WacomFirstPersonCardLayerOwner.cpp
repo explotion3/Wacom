@@ -42,6 +42,7 @@ bool FWacomFirstPersonCardLayerOwner::Update(
 	}
 
 	ApplyConfigIfNeeded(*WidgetRef, Input.Config);
+	WidgetRef->SetPresentationAnchors(Input.PresentationAnchors);
 
 	if (Input.bCanConsumeTransitionHints && Input.ConsumeTransitionHints)
 	{

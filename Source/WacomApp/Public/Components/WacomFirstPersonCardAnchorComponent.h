@@ -55,6 +55,8 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorAutomationTestView
 	bool bHasPendingFeedbackHintsForCurrentSource = false;
 	bool bCanConsumePendingFeedbackHintsForCurrentSource = false;
 	bool bTransitionPresentationEnabledForCurrentSource = true;
+	FName PresentationAnchorSourceId = NAME_None;
+	FWacomFirstPersonCardPresentationAnchorSet PresentationAnchors;
 };
 #endif
 

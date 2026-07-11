@@ -603,6 +603,42 @@ enum class EWacomFirstPersonCardLayerSourceClearMode : uint8
 	VisualState
 };
 
+enum class EWacomFirstPersonCardPresentationAnchorKind : uint8
+{
+	DrawPile,
+	DiscardPile,
+	PlayTarget
+};
+
+/** Logical UMG viewport-space point. Widget ownership stays outside the card layer. */
+struct WACOMAPP_API FWacomFirstPersonCardPresentationAnchorPoint
+{
+	bool bValid = false;
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardPresentationAnchorSet
+{
+	FWacomFirstPersonCardPresentationAnchorPoint DrawPile;
+	FWacomFirstPersonCardPresentationAnchorPoint DiscardPile;
+	FWacomFirstPersonCardPresentationAnchorPoint PlayTarget;
+
+	const FWacomFirstPersonCardPresentationAnchorPoint& Get(
+		EWacomFirstPersonCardPresentationAnchorKind Kind) const
+	{
+		switch (Kind)
+		{
+		case EWacomFirstPersonCardPresentationAnchorKind::DrawPile:
+			return DrawPile;
+		case EWacomFirstPersonCardPresentationAnchorKind::DiscardPile:
+			return DiscardPile;
+		case EWacomFirstPersonCardPresentationAnchorKind::PlayTarget:
+		default:
+			return PlayTarget;
+		}
+	}
+};
+
 struct WACOMAPP_API FWacomFirstPersonCardLayerSourceLifecycleFrame
 {
 	FName SourceId = NAME_None;
@@ -617,6 +653,8 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSourceLifecycleFrame
 	bool bInteractionEnabled = false;
 	bool bCancelActiveDrag = false;
 	bool bBroadcastDragCancel = true;
+	bool bSetPresentationAnchors = false;
+	FWacomFirstPersonCardPresentationAnchorSet PresentationAnchors;
 
 	FName ResolveSourceId() const
 	{

@@ -405,6 +405,18 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<class UPileCountView> ExhaustPileView;
 
+	/** 抽牌语义动画的可选专用起点；WBP 推荐使用 8x8、HitTestInvisible 的 SizeBox。 */
+	UPROPERTY(meta = (BindWidgetOptional, ToolTip = "抽牌动画的可选逻辑起点。使用非 Collapsed 的无绘制 Widget；缺失时回退到 DrawPileView 中心。"))
+	TObjectPtr<class UWidget> DrawPileMotionAnchor;
+
+	/** 弃牌语义动画的可选专用终点。 */
+	UPROPERTY(meta = (BindWidgetOptional, ToolTip = "弃牌动画的可选逻辑终点。使用非 Collapsed 的无绘制 Widget；缺失时回退到 DiscardPileView 中心。"))
+	TObjectPtr<class UWidget> DiscardPileMotionAnchor;
+
+	/** 无目标出牌语义动画的可选终点；真实目标点仍拥有更高优先级。 */
+	UPROPERTY(meta = (BindWidgetOptional, ToolTip = "无目标出牌动画的可选逻辑终点。真实目标坐标优先；缺失时回退到旧 Played origin。"))
+	TObjectPtr<class UWidget> PlayTargetMotionAnchor;
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBattleCombatLogFeedWidget> CombatLogFeed;
 

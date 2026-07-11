@@ -150,6 +150,9 @@ UBattleCommandBarWidget* FWacomBattleHUDRuntimeHost::GetCommandBar() const { ret
 UPileCountView* FWacomBattleHUDRuntimeHost::GetDrawPileView() const { return HUD.DrawPileView; }
 UPileCountView* FWacomBattleHUDRuntimeHost::GetDiscardPileView() const { return HUD.DiscardPileView; }
 UPileCountView* FWacomBattleHUDRuntimeHost::GetExhaustPileView() const { return HUD.ExhaustPileView; }
+UWidget* FWacomBattleHUDRuntimeHost::GetDrawPileMotionAnchor() const { return HUD.DrawPileMotionAnchor; }
+UWidget* FWacomBattleHUDRuntimeHost::GetDiscardPileMotionAnchor() const { return HUD.DiscardPileMotionAnchor; }
+UWidget* FWacomBattleHUDRuntimeHost::GetPlayTargetMotionAnchor() const { return HUD.PlayTargetMotionAnchor; }
 UBattleCombatLogFeedWidget* FWacomBattleHUDRuntimeHost::GetCombatLogFeed() const { return HUD.CombatLogFeed; }
 UBattlePresentationStackWidget* FWacomBattleHUDRuntimeHost::GetBattlePresentationStack() const { return HUD.BattlePresentationStack; }
 TObjectPtr<UWacomCardDetailPanel>& FWacomBattleHUDRuntimeHost::GetFirstPersonCardDetailPanelSlot() const { return HUD.FirstPersonCardDetailPanel; }

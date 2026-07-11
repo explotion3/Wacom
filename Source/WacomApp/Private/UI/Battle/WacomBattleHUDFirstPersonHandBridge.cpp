@@ -2,6 +2,8 @@
 
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 
+#include "UI/Battle/WacomBattleHUDCardPresentationAnchors.h"
+
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
@@ -1175,8 +1177,13 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPresentationFrame(
 	{
 		Frame.CommitMode = EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame;
 	}
-	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(
-		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(Frame));
+	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame =
+		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(Frame);
+	LifecycleFrame.bSetPresentationAnchors = true;
+	LifecycleFrame.PresentationAnchors = FWacomBattleHUDCardPresentationAnchors::Build(
+		Runtime.Host().GetHUD(),
+		Runtime.Host());
+	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 }
 
 FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveDropIntent(

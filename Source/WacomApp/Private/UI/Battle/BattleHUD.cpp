@@ -187,6 +187,9 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			&DrawPileView,
 			&DiscardPileView,
 			&ExhaustPileView,
+			&DrawPileMotionAnchor,
+			&DiscardPileMotionAnchor,
+			&PlayTargetMotionAnchor,
 			&CombatLogFeed,
 			&BattlePresentationStack});
 	}
