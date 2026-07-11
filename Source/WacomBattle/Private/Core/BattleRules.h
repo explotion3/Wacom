@@ -40,12 +40,6 @@ public:
 	static FRuntimeCardInstance* FindCard(FBattleState& State, const FGuid& CardInstanceId);
 	static const FRuntimeCardInstance* FindCard(const FBattleState& State, const FGuid& CardInstanceId);
 
-	/**
-	 * 找到卡实例并设置 Location。找不到则 no-op。
-	 * 统一 helper，替代各处 "FindCard + 赋 Location" 的重复代码。
-	 */
-	static void SetCardLocation(FBattleState& State, const FGuid& CardInstanceId, ECardLocation NewLocation);
-
 	// -------- 战斗结束 --------
 
 	/** 所有部位是否都被破坏。 */

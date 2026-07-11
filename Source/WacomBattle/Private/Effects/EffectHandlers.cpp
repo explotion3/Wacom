@@ -1,6 +1,8 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Effects/EffectHandlers.h"
+
+#include "Cards/CardZoneAggregate.h"
 #include "Effects/Semantics/EffectSemanticTypes.h"
 
 #include "Cards/CardDefinition.h"
@@ -279,7 +281,7 @@ FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx)
 	if (Ctx.Magnitude <= 0) { return FEffectApplyResult::Failed(); }
 
 	// 确定源区域
-	TArray<FGuid>* SourcePile = nullptr;
+	const TArray<FGuid>* SourcePile = nullptr;
 	ECardLocation SourceLocation = ECardLocation::Draw;
 	if (Ctx.Parameters.IsType<FDrawSourceEffectParameters>())
 	{
@@ -325,8 +327,14 @@ FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx)
 	{
 		const int32 Idx = Ctx.State->Rng.RandRange(0, SourcePile->Num() - 1);
 		const FGuid CardId = (*SourcePile)[Idx];
-		SourcePile->RemoveAt(Idx);
-		MovedIds.Add(CardId);
+		if (FCardZoneAggregate::MoveCardFrom(
+			*Ctx.State,
+			CardId,
+			SourceLocation,
+			ECardLocation::Hand))
+		{
+			MovedIds.Add(CardId);
+		}
 	}
 
 	FHandZoneService::InsertCardsIntoHandAtRandom(*Ctx.State, MovedIds);

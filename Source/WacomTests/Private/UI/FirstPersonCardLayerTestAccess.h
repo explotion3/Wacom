@@ -129,6 +129,9 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static void RequestMoveAtLocalPosition(
 		UWacomFirstPersonCardLayerSlotWidget& Slot,
 		const FVector2D& LocalPosition);
+	static void SetCardDepthPointerPosition(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		const FVector2D& WidgetPosition);
 	static bool RequestPressAtLocalPosition(
 		UWacomFirstPersonCardLayerSlotWidget& Slot,
 		const FVector2D& LocalPosition);

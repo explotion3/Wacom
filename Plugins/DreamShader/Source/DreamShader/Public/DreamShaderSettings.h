@@ -28,6 +28,11 @@ public:
 	bool TryResolveBlendMode(const FString& InName, EBlendMode& OutBlendMode) const;
 	bool TryResolveMaterialDomain(const FString& InName, EMaterialDomain& OutMaterialDomain) const;
 
+	static FString NormalizeMappingKey(const FString& InName);
+	static void BuildDefaultShadingModelMappings(TMap<FString, TEnumAsByte<EMaterialShadingModel>>& OutMappings);
+	static void BuildDefaultBlendModeMappings(TMap<FString, TEnumAsByte<EBlendMode>>& OutMappings);
+	static void BuildDefaultMaterialDomainMappings(TMap<FString, TEnumAsByte<EMaterialDomain>>& OutMappings);
+
 	UPROPERTY(Config, EditAnywhere, Category="Mappings")
 	TMap<FString, TEnumAsByte<EMaterialShadingModel>> ShadingModelMappings;
 
@@ -41,10 +46,12 @@ public:
 	FDirectoryPath SourceDirectory;
 
 	UPROPERTY(Config, EditAnywhere, Category="Paths", meta=(RelativeToGameDir))
-	FDirectoryPath BuiltinLibraryDirectory;
-
-	UPROPERTY(Config, EditAnywhere, Category="Paths", meta=(RelativeToGameDir))
 	FDirectoryPath GeneratedShaderDirectory;
+
+	UPROPERTY(Config, EditAnywhere, Category="Virtual Materials",
+		meta=(DisplayName="Enable Virtual Material Mode",
+			ToolTip="When enabled, DreamShader generates materials as transient in-memory assets at editor startup instead of saving .uasset files. DreamShader source files become the single asset source. Materials are automatically generated as persistent assets during cooking for packaging."))
+	bool bVirtualMaterialMode = false;
 
 	UPROPERTY(Config, EditAnywhere, Category="Compiler")
 	bool bAutoCompileOnSave = true;
@@ -54,6 +61,9 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category="Compiler")
 	bool bVerboseLogs = false;
+
+	UPROPERTY(Config, EditAnywhere, Category="Decompiler")
+	bool bExportDecompiledLayout = true;
 	
 	UPROPERTY(Config, EditAnywhere, Category="Editor")
 	bool bOpenInNewWindow = true;

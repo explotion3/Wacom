@@ -39,6 +39,5 @@ FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events
 		return FWacomStatus::Ok();
 	}
 
-	++State.StateVersion;
 	return FWacomStatus::Ok();
 }

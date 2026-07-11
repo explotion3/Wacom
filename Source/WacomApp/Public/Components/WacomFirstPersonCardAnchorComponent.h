@@ -475,6 +475,66 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|07 Hover", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "64.0", ToolTip = "第一人称手牌父层命中解析的悬停滞后距离，单位为 UMG 布局像素；用于避免鼠标在重叠卡牌分界线附近来回抖动。"))
 	float HoverHitHysteresisPixels = 16.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "是否启用 Hover / Drag 卡面透视倾斜。关闭后卡面保持平面，独立阴影仍可单独启用；只影响 UMG 表现。"))
+	bool bEnableCardFake3D = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "是否启用卡面外部的独立阴影层。阴影不参与 RetainerBox 透视变形；关闭后只保留卡面本身。"))
+	bool bEnableCardIndependentShadow = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Hover 时卡面单轴最大倾角，单位为度；推荐 4 到 7 度，数值过大会影响读牌。"))
+	float HoverCardFake3DMaxTiltDegrees = 6.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Drag 时由指针速度产生的单轴最大惯性倾角，单位为度；推荐 7 到 11 度。"))
+	float DragCardFake3DMaxTiltDegrees = 9.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "按住但尚未拖拽时保留 Hover 倾角的倍率；推荐 0.2 到 0.5，0 表示按下立即压平。"))
+	float PressedCardFake3DTiltMultiplier = 0.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "传给 WBP Retainer Effect Material 的透视强度；推荐 0.08 到 0.18。材质未绑定时该值不会产生透视，但阴影仍可工作。"))
+	float CardFake3DPerspectiveStrength = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "卡面倾斜和阴影追向交互目标的响应速度，单位为每秒；推荐 14 到 22，越高越跟手。"))
+	float CardFake3DResponseSpeed = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "结束 Hover / Drag 后回到平面的速度，单位为每秒；推荐 10 到 18，越低余韵越明显。"))
+	float CardFake3DReturnSpeed = 14.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Drag 指针速度低通滤波速度，单位为每秒；推荐 12 到 20，用于抑制高频抖动。"))
+	float CardFake3DDragVelocityFilterSpeed = 16.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Drag 达到最大倾角所需的指针速度，单位为 UMG 布局像素/秒；推荐 1000 到 1800。"))
+	float CardFake3DVelocityForMaxTiltPixelsPerSecond = 1400.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "静止卡牌阴影偏移，单位为 UMG 布局像素；推荐 Y 为 2 到 6。"))
+	FVector2D CardBaseShadowOffsetPixels = FVector2D(0.0f, 4.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Hover 卡牌阴影偏移，单位为 UMG 布局像素；推荐 Y 为 8 到 14。"))
+	FVector2D CardHoverShadowOffsetPixels = FVector2D(0.0f, 10.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Drag 卡牌阴影偏移，单位为 UMG 布局像素；推荐 Y 为 18 到 28。"))
+	FVector2D CardDragShadowOffsetPixels = FVector2D(0.0f, 22.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "静止卡牌阴影不透明度，运行时限制到 0 到 1；推荐 0.05 到 0.12。"))
+	float CardBaseShadowOpacity = 0.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Hover 卡牌阴影不透明度，运行时限制到 0 到 1；推荐 0.18 到 0.28。"))
+	float CardHoverShadowOpacity = 0.24f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Drag 卡牌阴影不透明度，运行时限制到 0 到 1；推荐 0.28 到 0.40。"))
+	float CardDragShadowOpacity = 0.34f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "静止卡牌阴影相对卡面主体的缩放倍率；推荐 0.96 到 1.0。"))
+	float CardBaseShadowScale = 0.98f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Hover 卡牌阴影相对卡面主体的缩放倍率；推荐 1.0 到 1.03。"))
+	float CardHoverShadowScale = 1.01f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "Drag 卡牌阴影相对卡面主体的缩放倍率；推荐 1.03 到 1.07，用于表现离开桌面的高度。"))
+	float CardDragShadowScale = 1.05f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Fake 3D & Shadow", meta = (ToolTip = "最大倾角额外推动阴影的距离，单位为 UMG 布局像素；推荐 2 到 6。"))
+	float CardShadowTiltInfluencePixels = 4.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量交互反馈；只影响 hover、按下、确认和不可用点击的 UMG 表现，不改变出牌命令路径。"))
 	bool bEnableCardInteractionFeedback = true;
 

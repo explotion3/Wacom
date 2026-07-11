@@ -1,8 +1,8 @@
 # DreamShader 文档总览
 
-这份文档覆盖 DreamShader `1.2.2` 的核心工作流、DreamShaderLang 语法、VSCode 扩展、Package 系统和常见示例。
+这份文档覆盖 DreamShader `1.4.1` 的核心工作流、DreamShaderLang 语法、VSCode 扩展、Package 系统和常见示例。
 
-DreamShader 的推荐用法是：用 `.dsm` 描述材质资产，用 `.dsh` 组织共享 helper，用 `Graph` 生成材质节点，用 `Function` 编写可复用 HLSL 风格逻辑。
+DreamShader 的推荐用法是：用 `.dsm` 描述材质资产，用 `.dsf` 描述可复用材质函数和 Layer/Blend 资产，用 `.dsh` 组织共享 helper，用 `Graph` 生成材质节点，用 `Function` 编写可复用 HLSL 风格逻辑。
 
 ## 阅读路径
 
@@ -18,12 +18,15 @@ DreamShader 的推荐用法是：用 `.dsm` 描述材质资产，用 `.dsh` 组�
 
 | 概念 | 说明 |
 | --- | --- |
-| `.dsm` | Dream Shader Material。材质实现文件，用于生成 `UMaterial` 或 `UMaterialFunction`。 |
-| `.dsh` | Dream Shader Header。共享头文件，用于存放 `Function` / `Namespace`。 |
+| `.dsm` | Dream Shader Material。材质实现文件，用于生成 `UMaterial`，也可以内联生成函数资产。 |
+| `.dsf` | Dream Shader Function。函数资产文件，用于生成 `ShaderFunction`、`ShaderLayer` 或 `ShaderLayerBlend`。 |
+| `.dsh` | Dream Shader Header。共享头文件，用于存放 `Function` / `GraphFunction` / `Namespace`。 |
 | `Shader` | 顶层材质声明，生成 Unreal `UMaterial`。 |
 | `ShaderFunction` | 顶层材质函数声明，生成 Unreal `UMaterialFunction`。 |
+| `ShaderLayer` | 顶层 Material Layer 函数声明，生成 Unreal `UMaterialFunctionMaterialLayer`。 |
+| `ShaderLayerBlend` | 顶层 Material Layer Blend 函数声明，生成 Unreal `UMaterialFunctionMaterialLayerBlend`。 |
 | `VirtualFunction` | 顶层虚拟材质函数声明，引用已有 Unreal `UMaterialFunction`，不生成或覆盖资产。 |
-| `Graph` | `Shader` / `ShaderFunction` 中的图 DSL，负责创建和连接材质节点。 |
+| `Graph` | `Shader` / `ShaderFunction` / `ShaderLayer` / `ShaderLayerBlend` 中的图 DSL，负责创建和连接材质节点。 |
 | `Function` | 可复用 helper，函数体按 HLSL 风格编写。 |
 | `Namespace` | 对 helper 函数分组，调用形式为 `NamespaceName::FunctionName(...)`。 |
 | `Path(...)` | 为纹理属性或对象设置声明 Unreal 资产路径。 |
@@ -37,7 +40,10 @@ Moon_Dev/
 │  ├─ Materials/
 │  │  └─ M_Sample.dsm
 │  ├─ Functions/
-│  │  └─ F_Tint.dsm
+│  │  └─ F_Tint.dsf
+│  ├─ Layers/
+│  │  ├─ L_Surface.dsf
+│  │  └─ LB_Overlay.dsf
 │  ├─ Shared/
 │  │  ├─ Common.dsh
 │  │  └─ Color.dsh
@@ -49,28 +55,16 @@ Moon_Dev/
 │              └─ Noise.dsh
 └─ Plugins/
    └─ DreamShader/
-      └─ Library/
-         └─ Builtin/
-            ├─ Common.dsh
-            ├─ Texture.dsh
-            ├─ Math.dsh
-            ├─ Color.dsh
-            ├─ UV.dsh
-            ├─ Noise.dsh
-            ├─ SDF.dsh
-            ├─ Normal.dsh
-            ├─ PBR.dsh
-            └─ PostProcess.dsh
 ```
 
 ## 基本工作流
 
-1. 在 `DShader` 中创建 `.dsm` / `.dsh`。
+1. 在 `DShader` 中创建 `.dsm` / `.dsf` / `.dsh`。
 2. 在 `.dsh` 中编写共享 `Function` 和 `Namespace`。
-3. 在 `.dsm` 中通过 `import` 引入共享头文件或 Package。
-4. 在 `Shader` / `ShaderFunction` 的 `Graph` 中构建材质节点。
+3. 在 `.dsm` / `.dsf` 中通过 `import` 引入共享头文件、其他函数文件或 Package。
+4. 在 `Shader` / `ShaderFunction` / `ShaderLayer` / `ShaderLayerBlend` 的 `Graph` 中构建材质节点。
 5. 保存源文件，插件自动生成或更新 Unreal 资产。
-6. 如果改动 `.dsh`，DreamShader 会通过 import graph 只刷新依赖它的 `.dsm`。
+6. 如果改动 `.dsh` / `.dsf`，DreamShader 会通过 import graph 只刷新依赖它的 `.dsm` / `.dsf`。
 
 ## 语言分层
 
@@ -84,7 +78,7 @@ Moon_Dev/
 
 迁移规则：
 
-- `Shader` / `ShaderFunction` 的图逻辑写在 `Graph = { ... }`。
+- `Shader` / `ShaderFunction` / `ShaderLayer` / `ShaderLayerBlend` 的图逻辑写在 `Graph = { ... }`。
 - `Function` helper 代码保持 `Function Name(...) { ... }` 写法。
 - `Function` 调用使用显式 `out` 参数，例如 `ApplyTint(Color, Tint, Result);`。
 - `VirtualFunction` 只描述现有资产签名，不包含 `Graph` / `Code`。
@@ -92,15 +86,14 @@ Moon_Dev/
 
 ## 当前能力
 
-- `.dsm` / `.dsh` 文件模型。
-- `Shader` / `ShaderFunction` 资产生成。
-- `Shader` / `ShaderFunction` 可通过 `Root="Game"` 或 `Root="Plugin.PluginName"` 指定生成资产根路径；`Plugin.PluginName` 指向 `[Project]/Plugins/PluginName/Content`。
+- `.dsm` / `.dsf` / `.dsh` 文件模型。
+- `Shader` / `ShaderFunction` / `ShaderLayer` / `ShaderLayerBlend` 资产生成。
+- `Shader` / `ShaderFunction` / `ShaderLayer` / `ShaderLayerBlend` 可通过 `Root="Game"` 或 `Root="Plugin.PluginName"` 指定生成资产根路径；`Plugin.PluginName` 指向 `[Project]/Plugins/PluginName/Content`。
 - `VirtualFunction` 可通过 `Options.Asset = Path(Game|Engine|Plugin.PluginName, "...")` / `Path(Plugins.PluginName, "...")` 声明现有 `UMaterialFunction` 并在 `Graph` 中值调用。
 - `Function Name(in ..., out ...) { ... }` helper。
 - `Function Inline` / `Function SelfContained` 自包含模式。
 - `Namespace(Name="...") { Function ... }` 命名空间。
 - `import "Shared/Common.dsh";`
-- `import "Builtin/Texture.dsh";`
 - `import "@scope/package/Library/File.dsh";`
 - HLSL 风格类型与 GLSL 风格别名混用，例如 `float3` 与 `vec3`。
 - `Graph` 中的声明、赋值、构造、brace initializer、基础 `if` / `else`、独立函数调用。

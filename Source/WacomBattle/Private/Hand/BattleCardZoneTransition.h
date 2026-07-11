@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Cards/BattleCardPlacementFacts.h"
+#include "Cards/CardZoneAggregate.h"
 #include "Events/BattleEvent.h"
 
 class IBattleOperationAdapter;
@@ -26,6 +27,10 @@ public:
 		const FGameplayTag& EffectTag,
 		IBattleOperationAdapter* OperationAdapter = nullptr);
 
+	static FBattleCardZoneTransitionCause FromHandLimit(
+		EHandLimitDiscardSource HandLimitSource,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
+
 private:
 	FBattleCardZoneTransitionCause() = default;
 
@@ -40,6 +45,7 @@ private:
 struct FBattleCardZoneTransitionResult
 {
 	TArray<FGuid> MovedCardInstanceIds;
+	TArray<FCardZoneTransitionFact> TransitionFacts;
 
 	bool MovedAny() const
 	{
@@ -111,6 +117,13 @@ public:
 		FBattleEventBus& Events,
 		TConstArrayView<FGuid> RequestedCardInstanceIds,
 		const FBattleCardZoneTransitionCause& Cause);
+
+	/** 从 Hand 尾部稳定选择超出普通卡上限的卡，并在同一事务中移动、发事件和运行 OnDiscard。 */
+	static FBattleCardZoneTransitionResult DiscardExcessNormalCardsFromHand(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FBattleCardZoneTransitionCause& Cause,
+		const FGuid& ExcludeId = FGuid());
 
 private:
 	static bool IsNormalCardInHand(const FBattleState& State, const FGuid& CardInstanceId);

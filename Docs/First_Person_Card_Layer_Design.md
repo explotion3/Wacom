@@ -44,8 +44,9 @@ Battle / Run snapshot
 | `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 presentation frame / transition hints / feedback hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
 | `FWacomFirstPersonCardLayerDelegateRouter` | Anchor 私有 LayerWidget 事件 router：绑定 / 解绑 native delegates、同步 hovered runtime state、转发 Anchor 对外 delegates | 不创建 widget，不解析布局，不提交 Battle / Run 命令 |
 | `UWacomFirstPersonCardLayerWidget` | 按 entries 的正式 UI facts reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback；dirty gate 只把 `InteractionIntent` 当手势差异 | 不读取 Battle / Run 规则状态 |
-| `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomFirstPersonCardViewWidget`，处理 hover / press / inspect / drag gesture 和 visual slot motion | 不直接调用 BattleSession 或 RunSession，不直接创建卡面反馈 Image / 材质控件 |
-| `UWacomFirstPersonCardViewWidget` | 第一人称卡面 wrapper：组合通用 `UWacomCardView` 与 first-person 专属 `FeedbackOverlay`、`InteractionFeedbackImage` | 不处理 hover / drag 手势，不提交 Battle / Run 命令 |
+| `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomFirstPersonCardViewWidget`，处理 hover / press / inspect / drag gesture、visual slot motion 和 Card Depth 输入采样 | 不直接调用 BattleSession 或 RunSession，不直接创建卡面反馈 Image / 材质控件 |
+| `FWacomFirstPersonCardDepthMotion` | App-private 单卡深度运动：Hover 使用卡内 pointer，Drag 使用低通后的 pointer velocity，输出可中断的 tilt / perspective / shadow view | 不持有 Widget，不读取 Battle / Run 规则，不加载材质资产 |
+| `UWacomFirstPersonCardViewWidget` | 第一人称卡面 wrapper：组合通用 `UWacomCardView`、first-person 反馈层、单个 fake-3D Retainer 和独立阴影 | 不处理 hover / drag 手势，不提交 Battle / Run 命令 |
 | `FWacomFirstPersonCardLayerPresentationFrame` | Battle / Run 共用的 C++ 表现帧 contract：`SourceId + entries + transition hints + feedback hints + CommitMode` | 不读取规则状态，不决定 hints 来自哪个领域事件 |
 | `WacomFirstPersonCardLayerSourceIds` | Battle / Run 共用的保留 runtime source id：`BattleHand`、`RunFirstPersonBattleDeck`、`RunFirstPersonMenuSuppressed` | 不生成菜单 lease 的自定义 source id，不读取 Anchor 状态 |
 | `UWacomRunFirstPersonCardSourceComponent` | 探索期把 Run Card Workspace / menu lease 写入 anchor runtime source，缓存当前 `CardInstanceId -> FRunCardWorkspaceEntry` 来源 metadata，并集中回答 default / menu lease / suppressed source ownership 查询 | 不提交 Run 规则，不直接扫描 RunState 物理区 |
@@ -99,6 +100,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `08 Targeting State` | pending targeting、target select deemphasis |
 | `09 Gesture` | 按住读牌、拖出提交、快捷键拿起卡牌、inspect 姿态、aim arrow |
 | `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit、retained feedback |
+| `11 Fake 3D & Shadow` | Hover / Drag tilt、pointer velocity filter、perspective strength、独立阴影 offset / opacity / scale |
 | `11 Drag Target Feedback` | world / card target 颜色、opacity、arrow snap、card-target focus |
 | `12 Camera Look While UI` | hover / pointer 和 drag 期间 camera look override |
 | `90 Development Preview` | preview source-only 字段：`bDrawPreviewCardLayer`、`PreviewCardDefinitions`、`PreviewCardCountFallback` |
@@ -188,6 +190,12 @@ Run 探索期默认手牌和 provider-backed menu lease 的卡牌进入使用 `R
 `bEnableReadableTransitionOrigins` 控制没有有效 presentation anchor 时的旧 origin / offset fallback，不关闭有限时长播放、错峰和弧线；有效的 Battle MotionAnchor 或真实 Played target 始终是完整空间事实。需要在 PIE 中验证抽牌、Run 手牌入场、战斗奖励卡或左右手生成手感时，优先调整 WBP MotionAnchor 位置和 `06 Transition Motion` 的非位置参数；不应在 BattleHUD、Run source 或 BattleSession 中硬编码动画位置、延迟或曲线。
 
 本项目可以参考本地 Godot Fake3D Card Game UI Demo 0.2 的行为目标，例如真实牌堆起终点、批次 stagger、两段式出牌、翻面、tilt / shadow depth 和可中断通道；该参考项目采用 GPL-3.0，因此 Wacom 只吸收动作语义和节奏判断，必须以现有 UE / UMG / Material 架构独立实现，不复制其代码、shader、资产或工程结构。
+
+Card Depth 是独立于 slot layout / semantic transition / local feedback 的次级表现通道。Hover 根据 DPI-aware widget-space pointer、当前视觉卡牌中心、扇形角度、主体尺寸和 render scale 计算卡内归一化位置；Drag 不使用卡内位置，因为无目标拖拽时卡牌中心会跟随 pointer，而是使用低通后的 pointer velocity 形成惯性倾斜。倾角和阴影使用 `1 - exp(-Speed * DeltaTime)` 的帧率无关追踪，可在 pointer 停止、release、cancel、source clear 或 Widget 复用时返回稳定状态。`Enter / Exit` 播放期间 Card Depth 目标强制压平到基础阴影，避免空间转场与局部透视争夺主动作。目标候选卡仍保持平面；只有 Hover 卡或正式 Drag source 消费 tilt。
+
+Anchor `11 Fake 3D & Shadow` 是 Battle / Run 共用的数值制作入口。默认采用克制纸牌实体感：Hover 最大 `6°`、Drag 最大 `9°`、Drag 达到最大倾角速度 `1400 UMG px/s`，基础 / Hover / Drag 阴影 Y 偏移分别为 `4 / 10 / 22 px`。关闭 `bEnableCardFake3D` 时材质倾角归零但独立阴影可以继续工作；关闭 `bEnableCardIndependentShadow` 时只关闭阴影，不影响卡面内容或命中。Retainer Effect Material 由 WBP 持有并随 Widget 资产加载，运行时不通过软引用同步加载。
+
+Card Depth 材质采用 DreamShader 1.4.1 制作：`DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm` 生成 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，`DShader/Material/Card/M_FirstPersonCard_Shadow.dsm` 生成 `/Game/DreamMaterials/Card/M_FirstPersonCard_Shadow`。前者是唯一 Retainer Effect Material，动态采样名固定为 `Texture`，运行时参数固定为 `TiltX / TiltY / PerspectiveStrength`；后者只生成圆角软阴影 mask，位移、缩放和整体透明度仍由 C++ Card Depth 控制。`.dsm` 是可版本管理的材质真源，生成 `.uasset` 只作为 WBP 制作结果；改变参数名、生成路径或 ShadowHost 宽高比时必须同步本节与 WBP binding 文档。
 
 Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和本次刷新创建、复用、移除、异常修复数量。诊断日志默认关闭，只在手动排查时开启。
 
@@ -309,11 +317,15 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 - 必须提供 `CardView : UWacomCardView`，用于显示 `FWacomCardViewData` 和提供 `CardSizeBox` 主体命中几何。
 - 建议提供 `FeedbackOverlay : UImage`，用于 playable hover / drag target / card target affordance full-card overlay；尺寸和层级由 WBP 控制。
 - 建议提供 `InteractionFeedbackImage : UImage`，用于 pressed / confirm / commit / deny 第一人称源卡交互反馈层；尺寸、层级和默认材质由 WBP 控制，通常放在 `FeedbackOverlay` 上方。
+- 建议提供 `CardShadowImage : UImage`，作为 `Fake3DSurfaceRetainer` 的前一个兄弟节点；C++ 独立写入 offset、opacity 和 scale，阴影不参与卡面透视采样。
+- 建议提供 `Fake3DSurfaceRetainer : URetainerBox`，作为第一人称卡面的唯一 Retainer。`CardView / FeedbackOverlay / InteractionFeedbackImage` 必须位于该 Retainer 的同一个 surface overlay 内；不要在 `CardView` 内再嵌套 Retainer。
 - 不再支持旧 `DenyFeedbackEdgeImage` fallback；需要源卡交互反馈时必须绑定 `InteractionFeedbackImage`。
 - 外层可以是大于主体的透明 bleed 画布，例如 392 x 422 或 392 x 516，用于完整渲染主体外装饰。
 - 内层 `CardView` 必须提供 `CardSizeBox` 主体 `SizeBox`，默认 296 x 420，并在 bleed 画布中尽量居中。
 - 命中范围使用 `UWacomCardView.FixedCardBodyHitSize`，默认 296 x 420；不会因 bleed 画布、RetainerBox 或布局压缩而变小。
-- RetainerBox 内部可轻微缩放，给旋转采样留下透明边缘。
+- RootOverlay 应保留约 `32-40 px` 透明 bleed，Clipping 使用 `Inherit`，避免透视角和独立阴影被裁切。主体命中仍固定使用 `CardSizeBox`，bleed 不扩大输入范围。
+- `Fake3DSurfaceRetainer` Effect Material 使用 DreamShader 生成的 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`；Domain 为 User Interface，采样参数名使用 Retainer 的 `Texture`，C++ 写入标量参数 `TiltX`、`TiltY`、`PerspectiveStrength`。没有 Effect Material 时卡面安全退化为平面，独立阴影仍可显示。
+- `CardShadowImage` Brush 使用 DreamShader 生成的 `/Game/DreamMaterials/Card/M_FirstPersonCard_Shadow`；默认 `CardAspectRatio=0.7257` 对应当前 `ShadowHost 328 x 452`，修改该尺寸后需同步材质实例或 `.dsm` 默认值。
 - 费用图标使用固定 `CostDigitImage : Image` 绑定；多位数、缺图标或未绑定时不会回退成文字费用。
 - 材质流光和 disabled overlay 继续走内层 `UWacomCardView` 现有绑定；first-person 交互反馈走 wrapper 的 `FeedbackOverlay / InteractionFeedbackImage`。
 - WBP 只负责卡面显示质量，不提交战斗命令，不读取 `UBattleSession`。
@@ -322,7 +334,7 @@ Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCar
 
 - 大角度扇形排布下没有明显锯齿、像素断裂或黑边。
 - 卡面材质动画在 HUD first-person layer 中正常刷新。
-- Hover、pending、disabled、pressed、confirm、deny、retained 由 slot transform、opacity 和 wrapper feedback overlay 表现，WBP 只提供控件和材质承载，不重复实现状态机。
+- Hover、Drag、pending、disabled、pressed、confirm、deny、retained 由 slot motion、Card Depth 和 wrapper feedback 表现，WBP 只提供控件和材质承载，不重复实现状态机。
 - 透明 bleed 区只用于渲染，不扩大 hover、press、drag 起手或 card target probe 范围。
 
 ## §10 测试入口

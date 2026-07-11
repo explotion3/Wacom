@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-07-10
+updated: 2026-07-11
 tags:
   - wacom/battle
   - wacom/rules
@@ -40,18 +40,20 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `FBattleCommand` | 玩家或系统提交的规则命令 |
 | `FBattleSnapshot` | UI / 测试读取的当前只读状态 |
 | `FBattleEvent` | 结算过程事件流；不是真正规则状态 |
+| `FBattleResolution` | 一条 C++ 命令的原子结果；绑定 status、前后版本、events、journal 与 post snapshot |
 | `FBattlePresentationJournal` | 单次命令内的 C++ only 只读表现 checkpoint journal；当前仅记录 EndTurn 手牌规则 checkpoint |
 | `FBattleResultPacket` | BattleEnd 后给 Run 层消费的战后包 |
-| `BattleCommandPipeline` | 拦截 BattleEnd、分派 resolver、维护版本兜底和击倒请求 |
+| `BattleCommandPipeline` | 拦截 BattleEnd、分派 resolver 和触发击倒请求；不拥有版本号 |
 | `BattleResolver` | PlayCard / Wait / EndTurn / KnockdownChoice 调度入口 |
 | `PlayCardEvaluator` | 唯一 PlayCard Evaluation Implementation；只读求值源卡、目标、费用、当前可提交性和 Prepared PlayCard |
 | `PlayCardResolver` | 唯一 PlayCard Transaction Implementation；只消费 Prepared PlayCard，不重复前置规则 |
-| `BattleEffectSemanticsModule / CardEffectChain` | Effect Semantics 的唯一 Private Implementation；集中资产解码、制作合法性、目标计划与展开、typed 参数、determinism、handler、Target Preview 投影和 chain scratch |
+| `EffectSemanticRegistry / semantic families / CardEffectChain` | Effect descriptor 唯一事实、按 Combatant/CardMovement/CardRuntime/Initiative 分组的 Implementation，以及运行时 chain scratch |
 | `BattleStatusSemanticsModule` | Status Semantics 的唯一 Private Implementation；解释宿主、生命周期、消费、Poison cadence 与 Pending Hand Affliction |
 | `BattleCardRuntimeStateModule` | 单卡状态、费用组成、冻结限制和卡牌状态事件的唯一 Private Implementation |
 | `BattleInitiativeTimelineModule` | 正常运行时 `CurrentInitiative` 的唯一写入口，返回逐部位实际变化 facts |
 | `HandZoneService` | 手牌区域、上限和腾挪规则 |
-| `BattleCardZoneTransition` | Private 卡牌区域迁移事务；统一正式出牌去向、Combo 返回、三个 Effect 与 EndTurn 弃置的真实移动、Location、事件和被动顺序 |
+| `CardZoneAggregate` | 所有 runtime card 注册、定位容器、`Location` 与同区顺序的唯一 Private 写入口 |
+| `BattleCardZoneTransition` | 消费 typed zone transition facts，统一弃置/消耗、HandLimit、奖励与 Companion 的事件和被动顺序 |
 | `BattleTurnLifecycleModule` | Turn Lifecycle 的唯一 Private Implementation；集中首回合、TurnStart、TurnEnd、双 BattleEnd gate、敌方行动和 checkpoint 顺序 |
 | `EnemyIntentSelector` | 按 BehaviorDefinition / phase / intent set / selector rule 刷新敌方部位当前意图 |
 | `EnemyPartActionResolver` | 敌方部位行动子流程 |
@@ -62,7 +64,8 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | 契约 | 当前用途 |
 |---|---|
 | `UBattleSession::Initialize()` | 根据 `FBattleInitParams` 创建单场战斗，发 `BattleStarted / TurnStarted`，进入首个玩家回合 |
-| `UBattleSession::SubmitCommand()` | 唯一命令入口：`PlayCard / Wait / EndTurn / KnockdownChoice` |
+| `UBattleSession::ResolveCommand()` | C++ 正式命令入口；原子返回 `FBattleResolution` |
+| `UBattleSession::SubmitCommand()` | Blueprint 与旧测试兼容 adapter；内部调用 `ResolveCommand()`，再投影到旧 Consume 队列 |
 | `UBattleSession::BuildSnapshot()` | 输出当前只读状态；UI 和测试读取，不作为事件历史 |
 | `UBattleSession::ConsumeEvents()` | 输出并清空自上次消费以来的事件流 |
 | `UBattleSession::ConsumePresentationJournal()` | 输出并清空自上次成功命令以来的表现 checkpoint journal；与事件一样只消费一次 |
@@ -71,7 +74,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `UBattleSession::BuildCardActionPreview()` | 输出松手后可确定的 projected player / enemy part values；不展开随机结果、不改 BattleState |
 | `UBattleSession::BuildResultPacket()` | BattleEnd 后输出战后包；具体 Run 结算见 [WacomRun §10](./WacomRun.md#wacomrun-battle-settlement) |
 
-`SubmitCommand()` 是同步规则结算入口。命令成功后，`BattleState`、Snapshot 派生事实和事件列表立即更新。
+`ResolveCommand()` 是同步规则结算入口。它在 working-state / transaction event bus 上执行，失败时丢弃 working copy，保证 State、RNG、Event、Journal 和版本零变化；成功时统一 commit，且 `VersionAfter == VersionBefore + 1`。`Events / PresentationJournal / PostSnapshot` 都属于同一次命令，不由 App 再分别消费和拼接。初始化事件仍由旧事件队列单独发布，不混入第一条玩家命令的 resolution。
 
 规则层不等待 UI 动画。BattleHUD 的 presentation queue、Combat Log、Presentation Stack 和 turn-boundary barrier 都属于表现层；它们只决定何时把玩家意图提交成 `FBattleCommand`，不改变命令本身。
 
@@ -155,7 +158,7 @@ Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 
 13. 消费本卡 Twilight、解除出牌前相邻卡 Freeze，并结算 `Poison`。
 14. 若有部位先机 <= 0，执行敌方部位行动子流程。
 15. 检查战斗结束。
-16. 若未结束，递增 `StateVersion`，返回执行阶段。
+16. 返回执行阶段；`BattleSession` 在整条命令成功后统一 commit 并只递增一次 `StateVersion`。
 
 起始阶段：
 
@@ -236,7 +239,7 @@ Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 
 
 `OnDiscard` 表示“本卡被弃掉”，不表示“任何进入弃牌堆”。会触发的路径包括 `Effect.Discard`、`Effect.Card.DiscardSelected`、普通手牌上限弃牌和回合结束非保留普通卡弃牌。普通打出进入本回合使用牌堆、回合结束自然转入弃牌堆、`Effect.Card.ExhaustSelected` 和 `Effect.ExhaustSelf` 不触发 `OnDiscard`。
 
-当前 `Effect.Discard / Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected` 统一进入 Private `BattleCardZoneTransition`。它只为真正从 Hand 完成迁移并同步 Runtime `Location` 的卡牌发布事件；批量弃牌会先完成整批状态迁移，再逐张执行 `CardDiscarded -> OnDiscard`，最后只发一次 `HandZoneChanged`。显式消耗按 `CardExhausted -> HandZoneChanged` 发布，不执行 `OnDiscard`。该事务不会重复调用 operation adapter 的执行判定，只把同一个 adapter 继续传给弃牌后的嵌套效果链，因此正式提交和 Action Preview 仍共享同一条规则路径。
+`CardZoneAggregate` 是 runtime card 注册、Draw / Hand / Played / Discard / Exhaust / Limbo membership、`RuntimeCard.Location` 与容器内顺序的唯一写入口。跨区移动和同区重排都先验证当前权威位置，再原子更新并返回 `FCardZoneTransitionFact`；初始化完成后的 invariant 要求每张卡恰好属于一个定位容器且 Location 一致。`BattleCardZoneTransition` 消费这些 facts，统一 `Effect.Discard / Effect.Card.DiscardSelected / Effect.Card.ExhaustSelected`、EndTurn、HandLimit、奖励和 Companion 的事件与被动。批量弃牌先完成整批状态迁移，再逐张执行 `CardDiscarded -> OnDiscard`，最后只发一次 `HandZoneChanged`；显式消耗按 `CardExhausted -> HandZoneChanged` 发布，不执行 `OnDiscard`。Draw、洗牌、PlayedPile 自然清理和 Limbo 返回由各自规则 Module 编排，但状态写入仍委托 aggregate。
 
 腾挪会重新放置当前手牌中的普通卡，使其进入不同区域或同一区域随机位置。默认不选择左右手锚点。左手牌或右手牌离开手牌区时，双手区立刻失效；左右手牌都不在时，所有普通卡 `Zone=None`，腾挪不可用。
 
@@ -311,7 +314,7 @@ UI 先机预测、scene part Status Badge 和拖卡 preview 只读取 Snapshot /
 
 ## §8 Effect Semantics、Effect Chain 与制作边界
 
-Private `BattleEffectSemanticsModule` 以 code-defined semantic family 维护 `EffectTag -> semantics` 索引；索引本身不承载万能配置行。每个 semantics 同时定义 Card / Intent 支持、目标计划、MagnitudeSource、typed 参数、determinism、handler 和可选 Target Preview projector。`FIntentEffect` 为玩家侧控制新增窄类型 `HandAffliction` 制作字段；`FCardEffect.TargetZone` 仍只在 decode seam 被读取，下游 handler 不读取通用 `MetaTag`。
+Private `FEffectSemanticRegistry` 保存不可变 `FEffectSemanticDescriptor`，是 EffectTag、Card / Intent 支持、目标政策、MagnitudeSource、typed 参数、determinism、handler 与 Target Preview projector 的共同事实来源。descriptor 的注册按 `CombatantMutation`、`CardMovement`、`CardRuntimeMutation`、`Initiative` 四个 semantic family 分文件维护；`BattleEffectSemanticsModule` 只负责 effect chain 执行、目标展开、magnitude 和 preview 编排，不再同时承担制作支持表。`FIntentEffect` 的窄类型 `HandAffliction` 与 `FCardEffect.TargetZone` 的 legacy decode 约定保持不变。
 
 `FCardEffectChain` 是 scratch 的词法所有者。Main 独立一条；所有匹配 OnPlay ZoneHook 共享一条；PerfectRelease 每个命中部位独立一条；AfterPlayed 的匹配 passive 共享一条；OnDiscard 每个 passive 独立一条。Handler 失败只表示当前 invocation 未应用，card chain 继续；Intent chain 也不因 handler 失败停止，只在玩家死亡时停止剩余效果。`OnTurnStart / OnTurnEnd / OnDraw` 当前没有运行时 Implementation，其 chain 生命周期在正式开放制作语义时再定义。
 
@@ -340,7 +343,7 @@ Private `BattleEffectSemanticsModule` 以 code-defined semantic family 维护 `E
 
 效果字段和 DataAsset 契约见 [WacomData.md](./WacomData.md)，GameplayTag 字典见 [WacomGameplayTags.md](./WacomGameplayTags.md)，当前可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
 
-`FWacomBattleRuleContentContract` 是 WacomEditor 可见的只读 authoring Adapter。它保持现有 Public Interface，但所有 Effect-specific 事实都委托同一份 Private Effect Semantics；它不执行规则，不改变 `UBattleSession::SubmitCommand()` 同步结算，也不让 `WacomData` 依赖 `WacomBattle`。
+`FWacomBattleRuleContentContract` 是 WacomEditor 可见的只读 authoring Adapter。它直接投影同一份 Private descriptor registry，并可枚举当前 Card / Intent Effect 集合供矩阵测试；它不执行规则，不让 `WacomData` 依赖 `WacomBattle`。
 
 GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWacomBattleRuleContentContract`、Data Validation 和 `WacomDataAuthoring` authoring matrix 为准。
 

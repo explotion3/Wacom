@@ -1,31 +1,76 @@
 #include "DreamShaderSettings.h"
 
 #include "DreamShaderModule.h"
+#include "DreamShaderVersionCompat.h"
 
 namespace UE::DreamShader::Private
 {
-	static void AddDefaultShadingModelMapping(
-		TMap<FString, TEnumAsByte<EMaterialShadingModel>>& InMappings,
-		const TCHAR* Alias,
-		const EMaterialShadingModel ShadingModel)
+	template<typename EnumType>
+	static void AddDefaultEnumMapping(
+		TMap<FString, TEnumAsByte<EnumType>>& InMappings,
+		const FString& Alias,
+		const EnumType Value)
 	{
-		InMappings.Add(Alias, ShadingModel);
+		if (!Alias.TrimStartAndEnd().IsEmpty() && !InMappings.Contains(Alias))
+		{
+			InMappings.Add(Alias, Value);
+		}
 	}
 
-	static void AddDefaultBlendModeMapping(
-		TMap<FString, TEnumAsByte<EBlendMode>>& InMappings,
+	template<typename EnumType>
+	static void AddDefaultEnumMapping(
+		TMap<FString, TEnumAsByte<EnumType>>& InMappings,
 		const TCHAR* Alias,
-		const EBlendMode BlendMode)
+		const EnumType Value)
 	{
-		InMappings.Add(Alias, BlendMode);
+		AddDefaultEnumMapping(InMappings, FString(Alias), Value);
 	}
 
-	static void AddDefaultMaterialDomainMapping(
-		TMap<FString, TEnumAsByte<EMaterialDomain>>& InMappings,
-		const TCHAR* Alias,
-		const EMaterialDomain MaterialDomain)
+	static FString BuildAliasFromEnumName(const UEnum* Enum, const int32 Index, const TCHAR* Prefix)
 	{
-		InMappings.Add(Alias, MaterialDomain);
+		if (!Enum)
+		{
+			return FString();
+		}
+
+		FString Alias = Enum->GetNameStringByIndex(Index);
+		int32 ScopeIndex = INDEX_NONE;
+		if (Alias.FindLastChar(TEXT(':'), ScopeIndex))
+		{
+			Alias = Alias.Mid(ScopeIndex + 1);
+		}
+		Alias.RemoveFromStart(Prefix, ESearchCase::CaseSensitive);
+		return Alias;
+	}
+
+	template<typename EnumType>
+	static void AddReflectedEnumMappings(
+		TMap<FString, TEnumAsByte<EnumType>>& InMappings,
+		const UEnum* Enum,
+		const TCHAR* Prefix,
+		TFunctionRef<bool(int64, const FString&, bool)> ShouldSkip)
+	{
+		if (!Enum)
+		{
+			return;
+		}
+
+		for (int32 Index = 0; Index < Enum->NumEnums(); ++Index)
+		{
+			const int64 Value = Enum->GetValueByIndex(Index);
+			const FString Name = Enum->GetNameStringByIndex(Index);
+		#if WITH_METADATA
+			const bool bHidden = Enum->HasMetaData(TEXT("Hidden"), Index);
+		#else
+			const bool bHidden = false;
+		#endif
+			if (ShouldSkip(Value, Name, bHidden))
+			{
+				continue;
+			}
+
+			AddDefaultEnumMapping(InMappings, BuildAliasFromEnumName(Enum, Index, Prefix), static_cast<EnumType>(Value));
+		}
 	}
 }
 
@@ -34,98 +79,148 @@ UDreamShaderSettings::UDreamShaderSettings()
 	using namespace UE::DreamShader::Private;
 
 	SourceDirectory.Path = TEXT("DShader");
-	BuiltinLibraryDirectory.Path = TEXT("Plugins/DreamShader/Library");
 	GeneratedShaderDirectory.Path = TEXT("Intermediate/DreamShader/GeneratedShaders");
+}
 
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Unlit"), MSM_Unlit);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("DefaultLit"), MSM_DefaultLit);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Default Lit"), MSM_DefaultLit);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Lit"), MSM_DefaultLit);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Subsurface"), MSM_Subsurface);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("PreintegratedSkin"), MSM_PreintegratedSkin);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Preintegrated Skin"), MSM_PreintegratedSkin);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("ClearCoat"), MSM_ClearCoat);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Clear Coat"), MSM_ClearCoat);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("SubsurfaceProfile"), MSM_SubsurfaceProfile);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Subsurface Profile"), MSM_SubsurfaceProfile);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("TwoSidedFoliage"), MSM_TwoSidedFoliage);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Two Sided Foliage"), MSM_TwoSidedFoliage);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Hair"), MSM_Hair);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Cloth"), MSM_Cloth);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Eye"), MSM_Eye);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("SingleLayerWater"), MSM_SingleLayerWater);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Single Layer Water"), MSM_SingleLayerWater);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("ThinTranslucent"), MSM_ThinTranslucent);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Thin Translucent"), MSM_ThinTranslucent);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Substrate"), MSM_Strata);
-	AddDefaultShadingModelMapping(ShadingModelMappings, TEXT("Strata"), MSM_Strata);
+FString UDreamShaderSettings::NormalizeMappingKey(const FString& InName)
+{
+	FString Normalized = InName;
+	Normalized.TrimStartAndEndInline();
+	Normalized.ToLowerInline();
+	Normalized.ReplaceInline(TEXT(" "), TEXT(""));
+	Normalized.ReplaceInline(TEXT("_"), TEXT(""));
+	Normalized.ReplaceInline(TEXT("-"), TEXT(""));
+	return Normalized;
+}
 
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Opaque"), BLEND_Opaque);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Masked"), BLEND_Masked);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Cutout"), BLEND_Masked);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Translucent"), BLEND_Translucent);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Transparent"), BLEND_Translucent);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Additive"), BLEND_Additive);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Modulate"), BLEND_Modulate);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("AlphaComposite"), BLEND_AlphaComposite);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("PremultipliedAlpha"), BLEND_AlphaComposite);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("Premultiplied"), BLEND_AlphaComposite);
-	AddDefaultBlendModeMapping(BlendModeMappings, TEXT("AlphaHoldout"), BLEND_AlphaHoldout);
+void UDreamShaderSettings::BuildDefaultShadingModelMappings(
+	TMap<FString, TEnumAsByte<EMaterialShadingModel>>& OutMappings)
+{
+	using namespace UE::DreamShader::Private;
 
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("Surface"), MD_Surface);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("DeferredDecal"), MD_DeferredDecal);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("Decal"), MD_DeferredDecal);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("LightFunction"), MD_LightFunction);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("Light Function"), MD_LightFunction);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("Volume"), MD_Volume);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("PostProcess"), MD_PostProcess);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("Post Process"), MD_PostProcess);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("UI"), MD_UI);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("UserInterface"), MD_UI);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("User Interface"), MD_UI);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("RuntimeVirtualTexture"), MD_RuntimeVirtualTexture);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("Runtime Virtual Texture"), MD_RuntimeVirtualTexture);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("VirtualTexture"), MD_RuntimeVirtualTexture);
-	AddDefaultMaterialDomainMapping(MaterialDomainMappings, TEXT("Virtual Texture"), MD_RuntimeVirtualTexture);
+	AddReflectedEnumMappings<EMaterialShadingModel>(
+		OutMappings,
+		StaticEnum<EMaterialShadingModel>(),
+		TEXT("MSM_"),
+		[](const int64 Value, const FString& Name, const bool bHidden)
+		{
+			if (Name.Equals(TEXT("Strata"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("MSM_Strata"), ESearchCase::CaseSensitive)
+				|| Value == static_cast<int64>(MSM_Strata))
+			{
+#if DREAMSHADER_WITH_SUBSTRATE_BUILTINS
+				return false;
+#else
+				return true;
+#endif
+			}
+
+			return bHidden
+				|| Name.Equals(TEXT("NUM"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("MSM_NUM"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("MAX"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("MSM_MAX"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("FromMaterialExpression"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("MSM_FromMaterialExpression"), ESearchCase::CaseSensitive)
+				|| Value == static_cast<int64>(MSM_NUM)
+				|| Value == static_cast<int64>(MSM_MAX)
+				|| Value == static_cast<int64>(MSM_FromMaterialExpression);
+		});
+
+	AddDefaultEnumMapping(OutMappings, TEXT("Default Lit"), MSM_DefaultLit);
+	AddDefaultEnumMapping(OutMappings, TEXT("Lit"), MSM_DefaultLit);
+	AddDefaultEnumMapping(OutMappings, TEXT("Preintegrated Skin"), MSM_PreintegratedSkin);
+	AddDefaultEnumMapping(OutMappings, TEXT("Clear Coat"), MSM_ClearCoat);
+	AddDefaultEnumMapping(OutMappings, TEXT("Subsurface Profile"), MSM_SubsurfaceProfile);
+	AddDefaultEnumMapping(OutMappings, TEXT("Two Sided Foliage"), MSM_TwoSidedFoliage);
+	AddDefaultEnumMapping(OutMappings, TEXT("Single Layer Water"), MSM_SingleLayerWater);
+	AddDefaultEnumMapping(OutMappings, TEXT("Thin Translucent"), MSM_ThinTranslucent);
+#if DREAMSHADER_WITH_SUBSTRATE_BUILTINS
+	AddDefaultEnumMapping(OutMappings, TEXT("Substrate"), MSM_Strata);
+	AddDefaultEnumMapping(OutMappings, TEXT("Strata"), MSM_Strata);
+#endif
+}
+
+void UDreamShaderSettings::BuildDefaultBlendModeMappings(TMap<FString, TEnumAsByte<EBlendMode>>& OutMappings)
+{
+	using namespace UE::DreamShader::Private;
+
+	AddReflectedEnumMappings<EBlendMode>(
+		OutMappings,
+		StaticEnum<EBlendMode>(),
+		TEXT("BLEND_"),
+		[](const int64 Value, const FString& Name, const bool bHidden)
+		{
+			return bHidden
+				|| Name.Equals(TEXT("MAX"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("BLEND_MAX"), ESearchCase::CaseSensitive)
+				|| Value == static_cast<int64>(BLEND_MAX);
+		});
+
+	AddDefaultEnumMapping(OutMappings, TEXT("Cutout"), BLEND_Masked);
+	AddDefaultEnumMapping(OutMappings, TEXT("Transparent"), BLEND_Translucent);
+	AddDefaultEnumMapping(OutMappings, TEXT("PremultipliedAlpha"), BLEND_AlphaComposite);
+	AddDefaultEnumMapping(OutMappings, TEXT("Premultiplied"), BLEND_AlphaComposite);
+}
+
+void UDreamShaderSettings::BuildDefaultMaterialDomainMappings(
+	TMap<FString, TEnumAsByte<EMaterialDomain>>& OutMappings)
+{
+	using namespace UE::DreamShader::Private;
+
+	AddReflectedEnumMappings<EMaterialDomain>(
+		OutMappings,
+		StaticEnum<EMaterialDomain>(),
+		TEXT("MD_"),
+		[](const int64 Value, const FString& Name, const bool bHidden)
+		{
+			return (bHidden && Value != static_cast<int64>(MD_RuntimeVirtualTexture))
+				|| Name.Equals(TEXT("MAX"), ESearchCase::CaseSensitive)
+				|| Name.Equals(TEXT("MD_MAX"), ESearchCase::CaseSensitive)
+				|| Value == static_cast<int64>(MD_MAX);
+		});
+
+	AddDefaultEnumMapping(OutMappings, TEXT("DeferredDecal"), MD_DeferredDecal);
+	AddDefaultEnumMapping(OutMappings, TEXT("Decal"), MD_DeferredDecal);
+	AddDefaultEnumMapping(OutMappings, TEXT("Light Function"), MD_LightFunction);
+	AddDefaultEnumMapping(OutMappings, TEXT("Post Process"), MD_PostProcess);
+	AddDefaultEnumMapping(OutMappings, TEXT("UserInterface"), MD_UI);
+	AddDefaultEnumMapping(OutMappings, TEXT("User Interface"), MD_UI);
+	AddDefaultEnumMapping(OutMappings, TEXT("Runtime Virtual Texture"), MD_RuntimeVirtualTexture);
+	AddDefaultEnumMapping(OutMappings, TEXT("VirtualTexture"), MD_RuntimeVirtualTexture);
+	AddDefaultEnumMapping(OutMappings, TEXT("Virtual Texture"), MD_RuntimeVirtualTexture);
 }
 
 FString UDreamShaderSettings::NormalizeShadingModelKey(const FString& InName)
 {
-	FString Normalized = InName;
-	Normalized.TrimStartAndEndInline();
-	Normalized.ToLowerInline();
-	Normalized.ReplaceInline(TEXT(" "), TEXT(""));
-	Normalized.ReplaceInline(TEXT("_"), TEXT(""));
-	Normalized.ReplaceInline(TEXT("-"), TEXT(""));
-	return Normalized;
+	return NormalizeMappingKey(InName);
 }
 
 FString UDreamShaderSettings::NormalizeBlendModeKey(const FString& InName)
 {
-	FString Normalized = InName;
-	Normalized.TrimStartAndEndInline();
-	Normalized.ToLowerInline();
-	Normalized.ReplaceInline(TEXT(" "), TEXT(""));
-	Normalized.ReplaceInline(TEXT("_"), TEXT(""));
-	Normalized.ReplaceInline(TEXT("-"), TEXT(""));
-	return Normalized;
+	return NormalizeMappingKey(InName);
 }
 
 FString UDreamShaderSettings::NormalizeMaterialDomainKey(const FString& InName)
 {
-	FString Normalized = InName;
-	Normalized.TrimStartAndEndInline();
-	Normalized.ToLowerInline();
-	Normalized.ReplaceInline(TEXT(" "), TEXT(""));
-	Normalized.ReplaceInline(TEXT("_"), TEXT(""));
-	Normalized.ReplaceInline(TEXT("-"), TEXT(""));
-	return Normalized;
+	return NormalizeMappingKey(InName);
 }
 
 bool UDreamShaderSettings::TryResolveShadingModel(const FString& InName, EMaterialShadingModel& OutShadingModel) const
 {
 	const FString NormalizedInput = NormalizeShadingModelKey(InName);
 	for (const TPair<FString, TEnumAsByte<EMaterialShadingModel>>& Pair : ShadingModelMappings)
+	{
+		if (NormalizeShadingModelKey(Pair.Key) == NormalizedInput)
+		{
+			OutShadingModel = Pair.Value.GetValue();
+			return OutShadingModel != MSM_MAX;
+		}
+	}
+
+	TMap<FString, TEnumAsByte<EMaterialShadingModel>> DefaultMappings;
+	BuildDefaultShadingModelMappings(DefaultMappings);
+	for (const TPair<FString, TEnumAsByte<EMaterialShadingModel>>& Pair : DefaultMappings)
 	{
 		if (NormalizeShadingModelKey(Pair.Key) == NormalizedInput)
 		{
@@ -149,6 +244,17 @@ bool UDreamShaderSettings::TryResolveBlendMode(const FString& InName, EBlendMode
 		}
 	}
 
+	TMap<FString, TEnumAsByte<EBlendMode>> DefaultMappings;
+	BuildDefaultBlendModeMappings(DefaultMappings);
+	for (const TPair<FString, TEnumAsByte<EBlendMode>>& Pair : DefaultMappings)
+	{
+		if (NormalizeBlendModeKey(Pair.Key) == NormalizedInput)
+		{
+			OutBlendMode = Pair.Value.GetValue();
+			return OutBlendMode != BLEND_MAX;
+		}
+	}
+
 	return false;
 }
 
@@ -156,6 +262,17 @@ bool UDreamShaderSettings::TryResolveMaterialDomain(const FString& InName, EMate
 {
 	const FString NormalizedInput = NormalizeMaterialDomainKey(InName);
 	for (const TPair<FString, TEnumAsByte<EMaterialDomain>>& Pair : MaterialDomainMappings)
+	{
+		if (NormalizeMaterialDomainKey(Pair.Key) == NormalizedInput)
+		{
+			OutMaterialDomain = Pair.Value.GetValue();
+			return OutMaterialDomain != MD_MAX;
+		}
+	}
+
+	TMap<FString, TEnumAsByte<EMaterialDomain>> DefaultMappings;
+	BuildDefaultMaterialDomainMappings(DefaultMappings);
+	for (const TPair<FString, TEnumAsByte<EMaterialDomain>>& Pair : DefaultMappings)
 	{
 		if (NormalizeMaterialDomainKey(Pair.Key) == NormalizedInput)
 		{

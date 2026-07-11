@@ -103,14 +103,6 @@ const FRuntimeCardInstance* FBattleRules::FindCard(const FBattleState& State, co
 	return nullptr;
 }
 
-void FBattleRules::SetCardLocation(FBattleState& State, const FGuid& CardInstanceId, ECardLocation NewLocation)
-{
-	if (FRuntimeCardInstance* Card = FindCard(State, CardInstanceId))
-	{
-		Card->Location = NewLocation;
-	}
-}
-
 bool FBattleRules::AreAllEnemyPartsDestroyed(const FBattleState& State)
 {
 	if (State.Enemy.Parts.IsEmpty())
@@ -170,6 +162,5 @@ bool FBattleRules::CheckAndApplyBattleEnd(FBattleState& State, FBattleEventBus& 
 	Ev.Count = (State.Outcome == EBattleOutcome::Victory) ? 1 : 0;
 	Events.Emit(Ev);
 
-	++State.StateVersion;
 	return true;
 }

@@ -29,7 +29,8 @@ public:
 	 * 返回实际抽出的张数。
 	 *
 	 * OutDrawnCardIds 仅接收本次新抽出的卡，不包含已在手牌中的。
-	 * 调用方负责把这些卡加入 State.Cards.Hand 的合适位置（由 HandZoneService 决定）。
+	 * 本方法已通过 CardZoneAggregate 把卡移入 Hand；调用方可再由 HandZoneService
+	 * 重排 Hand，但不得重复写 membership 或 Location。
 	 */
 	static int32 DrawCards(FBattleState& State, int32 Count, TArray<FGuid>& OutDrawnCardIds);
 
@@ -61,21 +62,4 @@ public:
 	 */
 	static void ShuffleDrawPile(FBattleState& State);
 
-	/**
-	 * 把一张卡从手牌移到弃牌堆。
-	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
-	 * 仅作为 BattleCardZoneTransition 的无事件物理移动 primitive；新增规则调用方禁止直连。
-	 */
-	static bool DiscardFromHand(FBattleState& State, const FGuid& CardInstanceId);
-
-	/**
-	 * 把一张卡从手牌移到消耗牌堆。
-	 * 若 CardInstanceId 不在手牌中，不做任何事，返回 false。
-	 * 仅作为 BattleCardZoneTransition 的无事件物理移动 primitive；新增规则调用方禁止直连。
-	 */
-	static bool ExhaustFromHand(FBattleState& State, const FGuid& CardInstanceId);
-
-private:
-	/** 内部：根据 CardInstanceId 更新 FRuntimeCardInstance::Location。找不到则忽略。 */
-	static void SetCardLocation(FBattleState& State, const FGuid& CardInstanceId, ECardLocation NewLocation);
 };

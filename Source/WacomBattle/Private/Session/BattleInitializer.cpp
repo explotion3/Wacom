@@ -3,6 +3,7 @@
 #include "Session/BattleInitializer.h"
 
 #include "Combatants/BattleCombatantMutationModule.h"
+#include "Cards/CardZoneAggregate.h"
 #include "Core/BattleState.h"
 #include "Deck/DeckService.h"
 #include "Enemy/EnemyIntentSelector.h"
@@ -44,14 +45,16 @@ namespace
 		FRuntimeCardInstance Card;
 		Card.InstanceId = FGuid::NewGuid();
 		Card.Definition = Def;
-		Card.Location   = InitialLocation;
 		if (CapacityEffectTags)
 		{
 			Card.CapacityEffectTags = *CapacityEffectTags;
 		}
+		const FGuid CardInstanceId = Card.InstanceId;
 
-		const int32 NewIdx = State.Cards.AllCards.Add(Card);
-		State.Cards.CardIndexById.Add(Card.InstanceId, NewIdx);
+		if (!FCardZoneAggregate::RegisterCard(State, MoveTemp(Card), InitialLocation))
+		{
+			return FGuid();
+		}
 
 		if (Def)
 		{
@@ -64,7 +67,7 @@ namespace
 				State.Player.CurrentHp += HpBonus;
 			}
 		}
-		return Card.InstanceId;
+		return CardInstanceId;
 	}
 
 	bool IsPartPreDestroyed(
@@ -145,7 +148,6 @@ FWacomStatus FBattleInitializer::Initialize(
 				Entry.Definition.Get(),
 				ECardLocation::Draw,
 				&Entry.CapacityEffectTags);
-			State.Cards.DrawPile.Add(CardId);
 		}
 	}
 	else
@@ -158,7 +160,6 @@ FWacomStatus FBattleInitializer::Initialize(
 				ReferencedAssets,
 				CardDef.Get(),
 				ECardLocation::Draw);
-			State.Cards.DrawPile.Add(CardId);
 		}
 	}
 
@@ -321,6 +322,8 @@ FWacomStatus FBattleInitializer::Initialize(
 
 
 	FBattleTurnLifecycleModule::StartInitialPlayerTurn(State, EventBus);
+	// 初始化发布第一份稳定 Snapshot revision；之后只在命令事务 commit 时递增。
+	State.StateVersion = 1;
 
 	return FWacomStatus::Ok();
 }

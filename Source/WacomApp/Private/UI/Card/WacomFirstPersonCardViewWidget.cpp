@@ -6,6 +6,8 @@
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/PanelWidget.h"
+#include "Components/RetainerBox.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Styling/SlateBrush.h"
@@ -21,6 +23,9 @@ namespace
 	const FName VignetteSoftnessParameterName(TEXT("VignetteSoftness"));
 	const FName OpacityParameterName(TEXT("Opacity"));
 	const FName PulseParameterName(TEXT("Pulse"));
+	const FName Fake3DTiltXParameterName(TEXT("TiltX"));
+	const FName Fake3DTiltYParameterName(TEXT("TiltY"));
+	const FName Fake3DPerspectiveStrengthParameterName(TEXT("PerspectiveStrength"));
 }
 
 void UWacomFirstPersonCardViewWidget::SetCardViewData(const FWacomCardViewData& InData)
@@ -140,6 +145,41 @@ void UWacomFirstPersonCardViewWidget::ClearInteractionFeedbackView()
 	}
 }
 
+void UWacomFirstPersonCardViewWidget::SetCardDepthView(const FWacomFirstPersonCardDepthView& View)
+{
+	EnsureFallbackWidgetTree();
+	LastCardDepthView = View;
+	LastCardDepthView.ShadowOpacity = FMath::Clamp(LastCardDepthView.ShadowOpacity, 0.0f, 1.0f);
+	LastCardDepthView.ShadowScale = FMath::Max(0.01f, LastCardDepthView.ShadowScale);
+	LastCardDepthView.PerspectiveStrength = FMath::Max(0.0f, LastCardDepthView.PerspectiveStrength);
+
+	if (Fake3DSurfaceRetainer)
+	{
+		if (UMaterialInstanceDynamic* EffectMaterial = Fake3DSurfaceRetainer->GetEffectMaterial())
+		{
+			const FVector2D AppliedTilt = LastCardDepthView.bFake3DEnabled
+				? LastCardDepthView.TiltDegrees
+				: FVector2D::ZeroVector;
+			EffectMaterial->SetScalarParameterValue(Fake3DTiltXParameterName, AppliedTilt.X);
+			EffectMaterial->SetScalarParameterValue(Fake3DTiltYParameterName, AppliedTilt.Y);
+			EffectMaterial->SetScalarParameterValue(
+				Fake3DPerspectiveStrengthParameterName,
+				LastCardDepthView.bFake3DEnabled ? LastCardDepthView.PerspectiveStrength : 0.0f);
+		}
+		Fake3DSurfaceRetainer->RequestRender();
+	}
+
+	if (CardShadowImage)
+	{
+		CardShadowImage->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+		CardShadowImage->SetRenderTranslation(LastCardDepthView.ShadowOffsetPixels);
+		CardShadowImage->SetRenderScale(FVector2D(LastCardDepthView.ShadowScale));
+		CardShadowImage->SetRenderOpacity(
+			LastCardDepthView.bShadowEnabled ? LastCardDepthView.ShadowOpacity : 0.0f);
+		CardShadowImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+}
+
 #if WITH_AUTOMATION_TESTS
 FWacomFirstPersonCardViewAutomationTestView
 UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
@@ -155,12 +195,18 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.bInteractionFeedbackMaterialLoaded = InteractionFeedbackMaterialInstance != nullptr;
 	View.bInteractionFeedbackUsesOverrideMaterial = bLastInteractionFeedbackUsedOverrideMaterial;
 	View.bInteractionFeedbackUsesBrushMaterial = bLastInteractionFeedbackUsedBrushMaterial;
-	const UOverlay* RootOverlay = WidgetTree ? Cast<UOverlay>(WidgetTree->RootWidget) : nullptr;
+	View.CardDepthView = LastCardDepthView;
+	View.bHasCardShadowImage = CardShadowImage != nullptr;
+	View.bHasFake3DSurfaceRetainer = Fake3DSurfaceRetainer != nullptr;
+	View.bFake3DEffectMaterialReady =
+		Fake3DSurfaceRetainer && Fake3DSurfaceRetainer->GetEffectMaterial() != nullptr;
+	const UPanelWidget* FeedbackParent = FeedbackOverlay ? FeedbackOverlay->GetParent() : nullptr;
 	View.bInteractionFeedbackLayerAboveFeedbackOverlay =
-		RootOverlay
+		FeedbackParent
 		&& FeedbackOverlay
 		&& FeedbackImage
-		&& RootOverlay->GetChildIndex(FeedbackImage) > RootOverlay->GetChildIndex(FeedbackOverlay);
+		&& FeedbackImage->GetParent() == FeedbackParent
+		&& FeedbackParent->GetChildIndex(FeedbackImage) > FeedbackParent->GetChildIndex(FeedbackOverlay);
 	return View;
 }
 #endif
@@ -177,6 +223,7 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 	ApplyPendingCardViewData();
 	SetFeedbackOverlayView(LastFeedbackOverlayColor, LastFeedbackOverlayOpacity);
 	ClearInteractionFeedbackView();
+	SetCardDepthView(LastCardDepthView);
 }
 
 void UWacomFirstPersonCardViewWidget::EnsureFallbackWidgetTree()
@@ -195,13 +242,50 @@ void UWacomFirstPersonCardViewWidget::EnsureFallbackWidgetTree()
 		TEXT("FirstPersonCardViewRoot"));
 	WidgetTree->RootWidget = RootOverlay;
 
+	CardShadowImage = WidgetTree->ConstructWidget<UImage>(
+		UImage::StaticClass(),
+		TEXT("CardShadowImage"));
+	if (CardShadowImage)
+	{
+		CardShadowImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		CardShadowImage->SetColorAndOpacity(FLinearColor(0.015f, 0.012f, 0.01f, 1.0f));
+		CardShadowImage->SetRenderOpacity(0.0f);
+		FSlateBrush ShadowBrush;
+		ShadowBrush.DrawAs = ESlateBrushDrawType::Box;
+		CardShadowImage->SetBrush(ShadowBrush);
+		if (UOverlaySlot* ShadowSlot = RootOverlay->AddChildToOverlay(CardShadowImage))
+		{
+			ShadowSlot->SetHorizontalAlignment(HAlign_Fill);
+			ShadowSlot->SetVerticalAlignment(VAlign_Fill);
+		}
+	}
+
+	Fake3DSurfaceRetainer = WidgetTree->ConstructWidget<URetainerBox>(
+		URetainerBox::StaticClass(),
+		TEXT("Fake3DSurfaceRetainer"));
+	UOverlay* SurfaceOverlay = WidgetTree->ConstructWidget<UOverlay>(
+		UOverlay::StaticClass(),
+		TEXT("Fake3DSurfaceOverlay"));
+	if (Fake3DSurfaceRetainer && SurfaceOverlay)
+	{
+		Fake3DSurfaceRetainer->SetVisibility(ESlateVisibility::HitTestInvisible);
+		SurfaceOverlay->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Fake3DSurfaceRetainer->SetContent(SurfaceOverlay);
+		if (UOverlaySlot* SurfaceSlot = RootOverlay->AddChildToOverlay(Fake3DSurfaceRetainer))
+		{
+			SurfaceSlot->SetHorizontalAlignment(HAlign_Fill);
+			SurfaceSlot->SetVerticalAlignment(VAlign_Fill);
+		}
+	}
+	UOverlay* ContentOverlay = SurfaceOverlay ? SurfaceOverlay : RootOverlay;
+
 	CardView = WidgetTree->ConstructWidget<UWacomCardView>(
 		UWacomCardView::StaticClass(),
 		TEXT("CardView"));
 	if (CardView)
 	{
 		CardView->SetVisibility(ESlateVisibility::HitTestInvisible);
-		if (UOverlaySlot* CardSlot = RootOverlay->AddChildToOverlay(CardView))
+		if (UOverlaySlot* CardSlot = ContentOverlay->AddChildToOverlay(CardView))
 		{
 			CardSlot->SetHorizontalAlignment(HAlign_Fill);
 			CardSlot->SetVerticalAlignment(VAlign_Fill);
@@ -218,7 +302,7 @@ void UWacomFirstPersonCardViewWidget::EnsureFallbackWidgetTree()
 		FSlateBrush FeedbackBrush;
 		FeedbackBrush.DrawAs = ESlateBrushDrawType::Box;
 		FeedbackOverlay->SetBrush(FeedbackBrush);
-		if (UOverlaySlot* OverlaySlot = RootOverlay->AddChildToOverlay(FeedbackOverlay))
+		if (UOverlaySlot* OverlaySlot = ContentOverlay->AddChildToOverlay(FeedbackOverlay))
 		{
 			OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
 			OverlaySlot->SetVerticalAlignment(VAlign_Fill);
@@ -235,7 +319,7 @@ void UWacomFirstPersonCardViewWidget::EnsureFallbackWidgetTree()
 		FSlateBrush FeedbackBrush;
 		FeedbackBrush.DrawAs = ESlateBrushDrawType::Box;
 		InteractionFeedbackImage->SetBrush(FeedbackBrush);
-		if (UOverlaySlot* EdgeSlot = RootOverlay->AddChildToOverlay(InteractionFeedbackImage))
+		if (UOverlaySlot* EdgeSlot = ContentOverlay->AddChildToOverlay(InteractionFeedbackImage))
 		{
 			EdgeSlot->SetHorizontalAlignment(HAlign_Fill);
 			EdgeSlot->SetVerticalAlignment(VAlign_Fill);
@@ -350,5 +434,9 @@ void UWacomFirstPersonCardViewWidget::ApplyPendingCardViewData()
 	if (CardView)
 	{
 		CardView->SetCardViewData(PendingCardViewData);
+	}
+	if (Fake3DSurfaceRetainer)
+	{
+		Fake3DSurfaceRetainer->RequestRender();
 	}
 }

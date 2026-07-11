@@ -7,6 +7,7 @@
 
 class FWacomBattleHUDRuntime;
 struct FBattleSnapshot;
+struct FBattleResolution;
 struct FWacomBattleCombatLogCommandContext;
 struct FWacomInteractionTargetHandle;
 
@@ -33,7 +34,8 @@ public:
 	void AfterCommand();
 	void AfterCommand(
 		const FWacomBattleCombatLogCommandContext& LogContext,
-		const FBattleSnapshot& PreCommandSnapshot);
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleResolution& Resolution);
 
 private:
 	FWacomBattleHUDRuntime& Runtime;

@@ -78,11 +78,11 @@ tags:
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
   - 说明：后续只追踪表现体验，如 cue 合并、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
-- [ ] **First-person hand 动效第二阶段：两段式出牌与 fake-3D 次级通道**
-  - 状态：`Ready: 体验 polish`
+- [ ] **First-person hand 动效第二阶段：两段式出牌与 fake-3D 资产接线**
+  - 状态：`In Progress: Card Depth C++ 通道完成，待 WBP / 材质与 PIE polish`
   - 归属：App / First-person Card Layer
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、目标位置优先 Played、弃牌 stagger、phase timeout force-settle 和 plan 交互锁。下一阶段参考 Godot Demo 0.2 的行为节奏，独立实现 anticipation / overshoot / settle 两段式出牌、flip、tilt / shadow depth、Exhausted 独立语义、音效预热和 reduced-motion / 全局速度策略；不复制 GPL 代码、shader 或资产。
+  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、目标位置优先 Played、弃牌 stagger、phase timeout force-settle 和 plan 交互锁；Hover pointer / Drag velocity Card Depth、帧率无关追踪、单 Retainer optional binding 与独立 shadow view 已落地。下一步在 `WBP_FPCardView` 完成单 Retainer 树和 UE 原生 UI perspective / soft-shadow 材质，再做 PIE 调参；之后继续 anticipation / overshoot / settle 两段式出牌、flip、Exhausted 独立语义、音效预热和 reduced-motion / 全局速度策略。不复制 GPL 代码、shader 或资产。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 内容扩展`
@@ -90,11 +90,11 @@ tags:
   - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / [WacomBattle.md](./WacomBattle.md)
   - 说明：继续做正式掉落 / 奖励池、更多敌人包、卡牌平衡和正式卡组入口；新增规则能力前先接 resolver、合同、文档和验证。
 
-- [ ] **Battle Card Zone Transition 后续迁移**
-  - 状态：`In Progress: Effect + EndTurn 手牌切片已完成`
+- [x] **Battle Card Zone Transition 后续迁移**
+  - 状态：`Done: CardZoneAggregate + 全路径 typed transition 已完成`
   - 归属：Battle 规则内核
   - 入口：[WacomBattle §5](./WacomBattle.md) / [TechDebt: 规则层技术债](./TechDebt.md)
-  - 说明：下一安全切片迁移 HandLimit，再处理奖励和 Companion 的“选择 + 移动 + 事件”双阶段路径；Draw / 回手 / PlayedPile / Limbo 等路径继续遵守各自规则和 `Questions.md` 中尚未确认的口径，不在迁移中顺带写死。
+  - 说明：卡牌注册、六个定位容器、Runtime Location 与顺序已收口到 `CardZoneAggregate`；Effect、EndTurn、HandLimit、奖励和 Companion 统一由 `BattleCardZoneTransition` 消费 typed facts，旧 post-move event API 已删除。
 
 - [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和动画状态机**
   - 状态：`Ready: 美术 / 表现 polish`

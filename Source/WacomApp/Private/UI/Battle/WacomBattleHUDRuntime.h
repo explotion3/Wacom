@@ -38,6 +38,7 @@ struct FWacomBattleActionPreviewPresentation;
 class FWacomBattleHUDSnapshotPresenter;
 class FWacomBattleHUDTargetingController;
 struct FKnockdownChoiceView;
+struct FBattleResolution;
 struct FBattleSnapshot;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
 struct FWacomBattlePresentationTargetCue;
@@ -191,7 +192,7 @@ public:
 	bool ConsumeAndLogEvents(
 		const FWacomBattleCombatLogCommandContext& CommandContext,
 		const FBattleSnapshot& PreCommandSnapshot,
-		const FBattleSnapshot& PostCommandSnapshot);
+		const FBattleResolution& Resolution);
 
 	void HideCardDetailPanel();
 	void HideFirstPersonCardDetailPanelForSource(const FGuid& CardInstanceId);

@@ -58,7 +58,7 @@ namespace
 			FMath::Min(InitialDrawCount, AvailableSlots),
 			DrawnCardIds);
 
-		// DrawCards only updates Location; hand queue ownership stays in HandZoneService.
+		// DrawCards atomically moves membership into Hand; HandZoneService only rebuilds order.
 		FHandZoneService::GenerateHandQueueOnTurnStart(State, DrawnCardIds);
 
 		if (!DrawnCardIds.IsEmpty())
@@ -73,7 +73,6 @@ namespace
 		Events.Emit(HandZoneEvent);
 
 		State.Phase = EBattlePhase::PlayerAction;
-		++State.StateVersion;
 		return DrawnCardIds;
 	}
 }

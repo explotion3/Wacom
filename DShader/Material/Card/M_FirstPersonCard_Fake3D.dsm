@@ -1,0 +1,117 @@
+Function SelfContained WacomFirstPersonCard_ProjectSurface(
+    in float2 uv,
+    in float tiltXDegrees,
+    in float tiltYDegrees,
+    in float perspectiveStrength,
+    in float referenceTiltDegrees,
+    in float foreshortenStrength,
+    in float edgeFadeUV,
+    out float3 projectedUVAndMask)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        float2(tiltXDegrees, tiltYDegrees) / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+
+    float2 centeredUV = uv - float2(0.5, 0.5);
+    float depth = centeredUV.x * normalizedTilt.y - centeredUV.y * normalizedTilt.x;
+    float projectiveScale = clamp(
+        1.0 - depth * max(perspectiveStrength, 0.0),
+        0.72,
+        1.28);
+    float2 axisForeshorten = float2(
+        1.0 + abs(normalizedTilt.y) * max(foreshortenStrength, 0.0),
+        1.0 + abs(normalizedTilt.x) * max(foreshortenStrength, 0.0));
+    float2 projectedUV = centeredUV * projectiveScale * axisForeshorten + float2(0.5, 0.5);
+
+    float safeEdgeFade = max(edgeFadeUV, 0.0001);
+    float insideMask =
+        smoothstep(0.0, safeEdgeFade, projectedUV.x)
+        * smoothstep(0.0, safeEdgeFade, 1.0 - projectedUV.x)
+        * smoothstep(0.0, safeEdgeFade, projectedUV.y)
+        * smoothstep(0.0, safeEdgeFade, 1.0 - projectedUV.y);
+
+    projectedUVAndMask = float3(projectedUV.x, projectedUV.y, insideMask);
+}
+
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
+{
+    Properties = {
+        TextureSampleParameter2D Texture = Path(Engine, "/EngineResources/DefaultTexture") [
+            Group="第一人称手牌透视|Retainer";
+            SortPriority=0;
+            Description="RetainerBox 注入的卡面渲染纹理；参数名必须保持为 Texture。";
+            SamplerType="Color";
+            SamplerSource="FromTextureAsset";
+        ];
+
+        ScalarParameter TiltX = 0.0 [
+            Group="第一人称手牌透视|运行时";
+            SortPriority=10;
+            Description="绕卡牌横轴的倾角，单位为度；由 C++ Card Depth 每帧写入。";
+        ];
+
+        ScalarParameter TiltY = 0.0 [
+            Group="第一人称手牌透视|运行时";
+            SortPriority=20;
+            Description="绕卡牌纵轴的倾角，单位为度；由 C++ Card Depth 每帧写入。";
+        ];
+
+        ScalarParameter PerspectiveStrength = 0.12 [
+            Group="第一人称手牌透视|运行时";
+            SortPriority=30;
+            Description="项目透视强度；由 Anchor 的 CardFake3DPerspectiveStrength 写入，推荐 0.08 到 0.18。";
+        ];
+
+        ScalarParameter ReferenceTiltDegrees = 9.0 [
+            Group="第一人称手牌透视|制作";
+            SortPriority=40;
+            Description="归一化材质倾角使用的参考角度，单位为度；推荐与 Drag 最大倾角一致，默认 9。";
+        ];
+
+        ScalarParameter ForeshortenStrength = 0.025 [
+            Group="第一人称手牌透视|制作";
+            SortPriority=50;
+            Description="倾斜轴向的轻微缩短强度；推荐 0.015 到 0.045，越大纸牌侧向压缩越明显。";
+        ];
+
+        ScalarParameter EdgeFadeUV = 0.0025 [
+            Group="第一人称手牌透视|制作";
+            SortPriority=60;
+            Description="投影采样越过 Retainer 边界时的淡出宽度，UV 单位；推荐 0.001 到 0.006。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 projectedUVAndMask;
+        WacomFirstPersonCard_ProjectSurface(
+            uv,
+            TiltX,
+            TiltY,
+            PerspectiveStrength,
+            ReferenceTiltDegrees,
+            ForeshortenStrength,
+            EdgeFadeUV,
+            projectedUVAndMask);
+
+        float4 surface = Texture(Coordinates=projectedUVAndMask.xy);
+        Color = surface.rgb;
+        Alpha = surface.a * projectedUVAndMask.z;
+    }
+}

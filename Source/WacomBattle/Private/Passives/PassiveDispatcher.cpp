@@ -8,8 +8,8 @@
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Events/BattleEventBus.h"
+#include "Hand/BattleCardZoneTransition.h"
 #include "Hand/HandZoneService.h"
-#include "Hand/HandZoneMoveEventService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
@@ -31,19 +31,14 @@ namespace
 		FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardId);
 		if (!Card) { return false; }
 		if (Card->Location == ECardLocation::Hand) { return false; }
-
-		switch (Card->Location)
+		if (Card->Location == ECardLocation::Played
+			|| Card->Location == ECardLocation::Unknown)
 		{
-		case ECardLocation::Draw:    State.Cards.DrawPile.RemoveSingle(CardId);    break;
-		case ECardLocation::Discard: State.Cards.DiscardPile.RemoveSingle(CardId); break;
-		case ECardLocation::Exhaust: State.Cards.ExhaustPile.RemoveSingle(CardId); break;
-		case ECardLocation::Limbo:   State.Cards.Limbo.RemoveSingle(CardId);       break;
-		case ECardLocation::Played:  return false;
-		default: break;  // Unknown / Hand 不处理
+			return false;
 		}
 
 		FHandZoneService::InsertCardsIntoHandAtRandom(State, { CardId });
-		return true;
+		return Card->Location == ECardLocation::Hand;
 	}
 }
 
@@ -145,17 +140,12 @@ void FPassiveDispatcher::RunOnCompanionCount(
 
 	if (bAnyTriggered)
 	{
-		TArray<FGuid> DiscardedByLimit;
-		FHandZoneService::EnforceNormalCardLimit(State, DiscardedByLimit);
-		FHandZoneMoveEventService::FinalizeAlreadyMovedDiscards(
+		FBattleCardZoneTransition::DiscardExcessNormalCardsFromHand(
 			State,
 			Events,
-			DiscardedByLimit,
-			EHandCardZoneMoveReason::HandLimit,
-			FGuid(),
-			FGameplayTag(),
-			EHandLimitDiscardSource::PassiveOnCompanionCount,
-			OperationAdapter);
+			FBattleCardZoneTransitionCause::FromHandLimit(
+				EHandLimitDiscardSource::PassiveOnCompanionCount,
+				OperationAdapter));
 		State.Player.CompanionPlayedCount = 0;
 	}
 }

@@ -302,6 +302,13 @@ void FWacomFirstPersonCardLayerTestAccess::RequestMoveAtLocalPosition(
 	Slot.RequestMoveAtLocalPositionForTest(LocalPosition);
 }
 
+void FWacomFirstPersonCardLayerTestAccess::SetCardDepthPointerPosition(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FVector2D& WidgetPosition)
+{
+	Slot.SetCardDepthPointerPositionForTest(WidgetPosition);
+}
+
 bool FWacomFirstPersonCardLayerTestAccess::RequestPressAtLocalPosition(
 	UWacomFirstPersonCardLayerSlotWidget& Slot,
 	const FVector2D& LocalPosition)

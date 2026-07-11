@@ -86,14 +86,15 @@ BattleHUD 战斗手牌由 first-person card layer 提供，不再通过 WBP_Batt
 ```text
 WBP_FPCardView
 └─ RootOverlay / Overlay
-   ├─ CardView : UWacomCardView
-   │  └─ BleedCanvas / SizeBox
-   │     └─ RetainerBox
-   │        └─ Overlay
-   │           └─ CardSizeBox / SizeBox
-   │              └─ 原 WBP_CardView 卡面内容
-   ├─ FeedbackOverlay : Image
-   └─ InteractionFeedbackImage : Image
+   ├─ CardShadowImage : Image
+   └─ Fake3DSurfaceRetainer : RetainerBox
+      └─ SurfaceOverlay / Overlay
+         ├─ CardView : UWacomCardView
+         │  └─ BleedCanvas / SizeBox
+         │     └─ CardSizeBox / SizeBox
+         │        └─ 原 WBP_CardView 卡面内容
+         ├─ FeedbackOverlay : Image
+         └─ InteractionFeedbackImage : Image
 ```
 
 关键绑定 / 命名：
@@ -103,6 +104,8 @@ WBP_FPCardView
 | `CardView` | `UWacomCardView` | Optional BindWidget | 通用卡面显示、`FWacomCardViewData` 刷新、主体命中几何来源 |
 | `FeedbackOverlay` | `Image` | Optional BindWidget | playable hover / drag target / card target affordance 的 full-card overlay |
 | `InteractionFeedbackImage` | `Image` | Optional BindWidget | pressed / confirm / commit / deny 的第一人称源卡交互反馈层；尺寸、层级和默认材质由 WBP 控制 |
+| `CardShadowImage` | `Image` | Optional BindWidget | 独立阴影；C++ 写入 offset / opacity / scale，必须位于 Retainer 外部且绘制在卡面之前 |
+| `Fake3DSurfaceRetainer` | `RetainerBox` | Optional BindWidget | 卡面唯一 Retainer；Effect Material 消费 `TiltX / TiltY / PerspectiveStrength` |
 | `CardSizeBox` | `SizeBox` | `CardView` 内 Required by convention | 296 x 420 主体显示和交互参考范围 |
 | `CostDigitImage` | `Image` | `CardView` 内 Optional | 单位费用数字图标 brush |
 | `SurfaceFoilOverlay` | `Widget` | `CardView` 内 Optional | 复用 `UWacomCardView` 弱流光 / 表面装饰；未绑定时不会自动创建覆盖层 |
@@ -111,10 +114,14 @@ WBP 合同：
 
 - `WBP_FPCardView` 外层只负责包装和反馈层；通用卡面内容应放在 `CardView` 子控件里。
 - `FeedbackOverlay` 和 `InteractionFeedbackImage` 都由 WBP 控制尺寸、锚点和层级；C++ 只写颜色、透明度和材质参数。
+- `WBP_FPCardView` 一张卡只允许一个 Retainer。需要把旧 `CardView` 内 Retainer 移除，并让 `CardView / FeedbackOverlay / InteractionFeedbackImage` 一起成为 `Fake3DSurfaceRetainer` 内容；嵌套 Retainer 会增加离屏渲染成本并造成刷新时序不稳定。
+- `CardShadowImage` 必须是 `Fake3DSurfaceRetainer` 的兄弟节点而不是子节点，这样阴影继承 Slot 的整体位置 / scale / angle，但不会被卡面 UV 透视扭曲。Brush 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Shadow`，Brush Tint 保持白色；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Shadow.dsm`，不使用运行时 blur。
+- `Fake3DSurfaceRetainer` Effect Material 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，Retainer texture parameter 填 `Texture` 并启用效果；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm`。C++ 参数名固定为 `TiltX`、`TiltY`、`PerspectiveStrength`。没有材质或缺少可选绑定时安全退化，不取消 Hover / Drag 或抽弃牌动画。
+- 两个材质都由 DreamShader 1.4.1 生成，`.dsm` 是长期真源。若 Content 资产缺失，使用 DreamShader commandlet 分别对上述源文件执行 `compile -Force`；不要在 Unreal 材质图里做无法回写到 `.dsm` 的平行修改。
 - `InteractionFeedbackImage` 优先使用 Anchor 的 `InteractionFeedbackMaterial`；该材质为空时，会复用 WBP Image brush 上预设的材质。推荐制作流程是：常规风格直接把材质放到 `InteractionFeedbackImage` 的 brush 上；需要角色 / 场景级替换时再在 Anchor 上填 override。若没有材质，pressed / confirm / commit 仍可退化为普通 tint，deny 只保留 shake，不退回整卡红色 overlay。
 - 交互反馈材质需要支持 C++ 写入参数：`FeedbackColor`、`EdgeWidth`、`EdgeSoftness`、`VignetteStrength`、`VignetteRadius`、`VignetteSoftness`、`Opacity`、`Pulse`。
 - 不再支持旧 `DenyFeedbackEdgeImage` fallback；源卡交互反馈统一绑定到 `InteractionFeedbackImage`。
-- `CardView` 内部可使用透明 bleed 画布，保证超出主体边界的装饰被 Retainer 完整渲染。
+- RootOverlay / SurfaceOverlay 可使用透明 bleed 画布，建议主体外每边预留约 `32-40 px` 且不要启用 ClipToBounds，保证透视角和阴影不被裁切。
 - `SurfaceFoilOverlay` 是显式 opt-in 装饰层；需要卡面流光时由 WBP 自己添加并绑定该 Image。
 - `CardView.CardSizeBox` 默认保持 296 x 420，并居中放在 bleed 画布中；缺失时运行时回退旧主体尺寸。
 - 透明 bleed 只负责渲染，不扩大 hover、click、drag 起手或 Card target probe 范围。
@@ -124,6 +131,8 @@ WBP 合同：
 最小 PIE 验收：
 
 - Battle 中 first-person hand 使用该卡面，旋转时边缘没有明显黑边、断线或主体裁切。
+- Hover 卡面随卡内 pointer 克制倾斜，按下后倾角减弱；Drag 改由 pointer velocity 产生惯性，pointer 停止后倾角回正但抬升阴影保持到 release。
+- 抽牌 / 出牌 / 弃牌 semantic transition 期间卡面逐渐压平；目标候选卡不倾斜，只有 Drag source 消费 fake-3D。
 - 鼠标在主体范围外、bleed 范围内不触发 hover 或拖拽起手。
 - 费用图标、卡名、类型、效果徽章和耐久显示仍跟普通 CardView 数据一致。
 

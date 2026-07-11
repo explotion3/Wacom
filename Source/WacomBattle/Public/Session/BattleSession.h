@@ -15,6 +15,7 @@
 #include "Resolution/BattleCardTargetPreview.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "Session/BattleResultPacket.h"
+#include "Session/BattleResolution.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "BattleSession.generated.h"
 
@@ -50,6 +51,9 @@ struct WACOMBATTLE_API FBattleDeckEntry
 
 struct FBattleState;
 struct FBattleEventBus;
+#if WITH_AUTOMATION_TESTS
+struct FWacomBattleSessionTestAccess;
+#endif
 
 /**
  * Encounter 内的单个敌人槽。
@@ -226,8 +230,15 @@ public:
 	 * 提交一条命令。
 	 * 命令非法时 BattleState 不变，返回 Fail。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle")
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle",
+		meta = (DeprecatedFunction, DeprecationMessage = "C++ 请改用 ResolveCommand 原子结果；本入口只保留 Blueprint 兼容。"))
 	FWacomStatus SubmitCommand(const FBattleCommand& Command);
+
+	/**
+	 * 提交命令并原子返回该命令的事件、表现 checkpoint 与命令后快照。
+	 * 这是 C++ 正式入口；SubmitCommand/Consume* 仅保留为 Blueprint/旧测试兼容层。
+	 */
+	FBattleResolution ResolveCommand(const FBattleCommand& Command);
 
 	/** 构建当前战斗的只读快照。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle")
@@ -298,6 +309,11 @@ public:
 		const FWacomInteractionTargetHandle& Target) const;
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomBattleSessionTestAccess;
+	bool ValidateCardZoneInvariantsForAutomationTest(FString& OutError) const;
+#endif
+
 	/** 持有 FBattleState 和 FBattleEventBus。裸指针 + 手动管理，避免 TUniquePtr 在 UHT gen.cpp 里需要完整定义。 */
 	FBattleState* State = nullptr;
 	FBattleEventBus* EventBus = nullptr;

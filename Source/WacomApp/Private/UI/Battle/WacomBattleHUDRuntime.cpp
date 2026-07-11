@@ -583,16 +583,11 @@ void FWacomBattleHUDRuntime::ConsumeAndLogEvents()
 bool FWacomBattleHUDRuntime::ConsumeAndLogEvents(
 	const FWacomBattleCombatLogCommandContext& CommandContext,
 	const FBattleSnapshot& PreCommandSnapshot,
-	const FBattleSnapshot& PostCommandSnapshot)
+	const FBattleResolution& Resolution)
 {
-	UBattleSession* Session = GetSession();
-	if (!Session)
-	{
-		return false;
-	}
-
-	const TArray<FBattleEvent> Events = Session->ConsumeEvents();
-	const FBattlePresentationJournal PresentationJournal = Session->ConsumePresentationJournal();
+	const TArray<FBattleEvent>& Events = Resolution.Events;
+	const FBattlePresentationJournal& PresentationJournal = Resolution.PresentationJournal;
+	const FBattleSnapshot& PostCommandSnapshot = Resolution.PostSnapshot;
 	LogRawBattleEvents(Events);
 	GetCombatLogController().AppendBlock(
 		CommandContext,

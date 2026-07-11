@@ -11,6 +11,7 @@
 class UImage;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
+class URetainerBox;
 class UWacomCardView;
 
 #if WITH_AUTOMATION_TESTS
@@ -27,6 +28,10 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	bool bInteractionFeedbackUsesOverrideMaterial = false;
 	bool bInteractionFeedbackUsesBrushMaterial = false;
 	bool bInteractionFeedbackLayerAboveFeedbackOverlay = false;
+	FWacomFirstPersonCardDepthView CardDepthView;
+	bool bHasCardShadowImage = false;
+	bool bHasFake3DSurfaceRetainer = false;
+	bool bFake3DEffectMaterialReady = false;
 };
 #endif
 
@@ -56,6 +61,7 @@ public:
 	void SetFeedbackOverlayView(const FLinearColor& Color, float Opacity);
 	void SetInteractionFeedbackView(const FWacomFirstPersonCardInteractionFeedbackView& View);
 	void ClearInteractionFeedbackView();
+	void SetCardDepthView(const FWacomFirstPersonCardDepthView& View);
 
 #if WITH_AUTOMATION_TESTS
 	FWacomFirstPersonCardViewAutomationTestView GetAutomationTestViewForTest() const;
@@ -74,6 +80,12 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> InteractionFeedbackImage;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> CardShadowImage;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<URetainerBox> Fake3DSurfaceRetainer;
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> InteractionFeedbackMaterial;
@@ -89,6 +101,7 @@ private:
 	float LastFeedbackOverlayOpacity = 0.0f;
 	FWacomFirstPersonCardInteractionFeedbackView LastInteractionFeedbackView;
 	float LastInteractionFeedbackOpacity = 0.0f;
+	FWacomFirstPersonCardDepthView LastCardDepthView;
 	bool bLastInteractionFeedbackUsedOverrideMaterial = false;
 	bool bLastInteractionFeedbackUsedBrushMaterial = false;
 

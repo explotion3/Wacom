@@ -15,6 +15,23 @@ TArray<FBattleEvent> FBattleEventBus::Consume()
 	return Out;
 }
 
+FBattleEventBus FBattleEventBus::BeginTransaction() const
+{
+	FBattleEventBus Transaction;
+	Transaction.NextSequence = NextSequence;
+	return Transaction;
+}
+
+void FBattleEventBus::CommitTransactionSequence(const FBattleEventBus& Transaction)
+{
+	NextSequence = Transaction.NextSequence;
+}
+
+void FBattleEventBus::AppendResolved(TConstArrayView<FBattleEvent> ResolvedEvents)
+{
+	Pending.Append(ResolvedEvents);
+}
+
 void FBattleEventBus::Reset()
 {
 	Pending.Reset();

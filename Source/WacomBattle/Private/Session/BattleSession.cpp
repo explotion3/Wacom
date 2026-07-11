@@ -2,6 +2,7 @@
 
 #include "Session/BattleSession.h"
 
+#include "Cards/CardZoneAggregate.h"
 #include "Core/BattleState.h"
 #include "Commands/KnockdownChoiceAvailability.h"
 #include "Commands/PlayCardEvaluation.h"
@@ -52,18 +53,49 @@ FWacomStatus UBattleSession::Initialize(const FBattleInitParams& Params)
 
 FWacomStatus UBattleSession::SubmitCommand(const FBattleCommand& Command)
 {
+	const FBattleResolution Resolution = ResolveCommand(Command);
+	if (Resolution.IsOk())
+	{
+		EventBus->AppendResolved(Resolution.Events);
+		PresentationJournal = Resolution.PresentationJournal;
+	}
+	return Resolution.Status;
+}
+
+FBattleResolution UBattleSession::ResolveCommand(const FBattleCommand& Command)
+{
+	FBattleResolution Resolution;
 	if (!State)
 	{
-		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("NotInitialized"));
+		Resolution.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("NotInitialized"));
+		return Resolution;
 	}
-	PresentationJournal.Reset();
-	const FWacomStatus Status =
-		FBattleCommandPipeline::Submit(*State, *EventBus, PresentationJournal, Command);
-	if (!Status.IsOk())
+
+	Resolution.VersionBefore = State->StateVersion;
+	FBattleState WorkingState = *State;
+	FBattleEventBus TransactionEvents = EventBus->BeginTransaction();
+	FBattlePresentationJournal TransactionJournal;
+	Resolution.Status = FBattleCommandPipeline::Submit(
+		WorkingState,
+		TransactionEvents,
+		TransactionJournal,
+		Command);
+	if (!Resolution.Status.IsOk())
 	{
-		PresentationJournal.Reset();
+		Resolution.VersionAfter = Resolution.VersionBefore;
+		Resolution.PostSnapshot = FBattleSnapshotBuilder::Build(*State);
+		return Resolution;
 	}
-	return Status;
+
+	WorkingState.StateVersion = Resolution.VersionBefore + 1;
+	Resolution.VersionAfter = WorkingState.StateVersion;
+	Resolution.Events = TransactionEvents.Consume();
+	Resolution.PresentationJournal = MoveTemp(TransactionJournal);
+	Resolution.PostSnapshot = FBattleSnapshotBuilder::Build(WorkingState);
+
+	*State = MoveTemp(WorkingState);
+	EventBus->CommitTransactionSequence(TransactionEvents);
+	return Resolution;
 }
 
 FBattleSnapshot UBattleSession::BuildSnapshot() const
@@ -163,3 +195,10 @@ FBattleCardActionPreview UBattleSession::BuildCardActionPreview(
 
 	return FBattleCardActionPreviewBuilder::Build(*State, CardInstanceId, Target);
 }
+
+#if WITH_AUTOMATION_TESTS
+bool UBattleSession::ValidateCardZoneInvariantsForAutomationTest(FString& OutError) const
+{
+	return State && FCardZoneAggregate::ValidateInvariants(*State, &OutError);
+}
+#endif

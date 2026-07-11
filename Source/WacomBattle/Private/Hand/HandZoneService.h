@@ -24,14 +24,14 @@ public:
 	 *
 	 * 调用方职责：
 	 * - 已经从抽牌堆抽出若干张普通卡，ID 传入 NewlyDrawnCards；
-	 *   这些卡必须已经记录 Location = Hand（FDeckService::DrawCards 会自动处理）。
+	 *   这些卡必须已经由 FDeckService::DrawCards 原子移入 Hand。
 	 * - 左右手锚点的 InstanceId 在 State 中已就位，当前 Location 不要求。
 	 *
 	 * 本方法职责：
 	 * - 把上回合保留普通卡和新抽普通卡合并为本回合普通卡池。
 	 * - 每回合重新随机编排普通卡池，再插入有效左右手锚点。
 	 * - 保留只保留"卡在手牌中"，不保留 index、相对顺序或区域。
-	 * - 更新所有相关卡的 Location = Hand。
+	 * - 仅重排 Hand；容器 membership 与 Location 由 CardZoneAggregate 维护。
 	 *
 	 * 调用方应在抽牌前使用 GetAvailableNormalCardSlots 截断抽牌数量，避免把放不下的牌
 	 * 从源牌堆移出。
@@ -43,7 +43,7 @@ public:
 	 *
 	 * 用于 Effect.Draw / 从弃牌堆或消耗牌堆回收等非回合开始路径。它不重建整条手牌，
 	 * 只把传入卡逐张随机插入当前 Hand，以免所有中途入手卡固定堆在最右侧。
-	 * 调用方需保证这些卡已从源牌堆移除；本方法会设置 Location = Hand。
+	 * 本方法通过 CardZoneAggregate 从实例当前权威位置移入 Hand 并随机插入。
 	 */
 	static void InsertCardsIntoHandAtRandom(FBattleState& State, const TArray<FGuid>& CardInstanceIds);
 
@@ -55,16 +55,6 @@ public:
 	 * 因此不应占用本次抽牌容量。
 	 */
 	static int32 GetAvailableNormalCardSlots(const FBattleState& State, const FGuid& ExcludeId = FGuid());
-
-	/**
-	 * 执行普通卡手牌上限规则。超限的普通卡移动到弃牌区。
-	 * 锚点不计入上限，也不会因上限进入弃牌区。
-	 * ExcludeId 用于排除正在结算、随后会离开手牌的源卡，避免中途抽牌时多弃一张。
-	 *
-	 * 算法：从手牌末尾向前扫描，跳过锚点，把超限的普通卡依次移入弃牌区。
-	 * 返回被移入弃牌区的卡 ID 列表，调用方可据此发射事件。
-	 */
-	static void EnforceNormalCardLimit(FBattleState& State, TArray<FGuid>& OutDiscarded, const FGuid& ExcludeId = FGuid());
 
 	/**
 	 * 计算某张卡当前所属区域。

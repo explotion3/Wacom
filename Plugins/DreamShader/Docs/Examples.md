@@ -1,6 +1,6 @@
 # DreamShaderLang 示例与模式
 
-本页提供可复制的 DreamShaderLang 片段。示例按常见工作流排列：最小材质、共享头文件、Package、函数调用、Graph 语法、UE 节点、`ShaderFunction` 和 `VirtualFunction`。
+本页提供可复制的 DreamShaderLang 片段。示例按常见工作流排列：最小材质、共享头文件、Package、函数调用、Graph 语法、UE 节点、Substrate、`ShaderFunction`、`ShaderLayer` / `ShaderLayerBlend` 和 `VirtualFunction`。
 
 ## 1. 最小材质
 
@@ -227,7 +227,201 @@ ShaderFunction(Name="Functions/F_Tint")
 }
 ```
 
-## 12. `VirtualFunction`
+## 12. Substrate 材质
+
+最小 Unlit：
+
+```c
+Shader(Name="DreamMaterials/M_Substrate_Unlit")
+{
+    Properties = {
+        vec3 Color = vec3(0.1, 0.6, 1.0);
+    }
+
+    Outputs = {
+        Substrate Surface;
+        Base.FrontMaterial = Surface;
+    }
+
+    Graph = {
+        Surface = Substrate.Unlit(EmissiveColor=Color);
+    }
+}
+```
+
+Slab BSDF：
+
+```c
+Shader(Name="DreamMaterials/M_Substrate_Slab")
+{
+    Properties = {
+        vec3 BaseColor = vec3(0.8, 0.35, 0.18);
+        float Roughness = 0.45;
+    }
+
+    Outputs = {
+        Substrate Surface;
+        Base.FrontMaterial = Surface;
+    }
+
+    Graph = {
+        Surface = Substrate.Slab(
+            DiffuseAlbedo=BaseColor,
+            Roughness=Roughness,
+            F0=vec3(0.04, 0.04, 0.04));
+    }
+}
+```
+
+从 `MaterialAttributes` 转换：
+
+```c
+Shader(Name="DreamMaterials/M_Substrate_FromAttributes")
+{
+    Outputs = {
+        MaterialAttributes Attrs;
+        Substrate Surface;
+        Base.FrontMaterial = Surface;
+    }
+
+    Graph = {
+        Attrs.BaseColor = vec3(0.6, 0.8, 1.0);
+        Attrs.Roughness = 0.35;
+
+        Surface = Substrate.ConvertMaterialAttributes(Attributes=Attrs);
+    }
+}
+```
+
+Vertical Layer：
+
+```c
+Shader(Name="DreamMaterials/M_Substrate_Layered")
+{
+    Outputs = {
+        Substrate BaseLayer;
+        Substrate TopLayer;
+        Substrate Surface;
+        Base.FrontMaterial = Surface;
+    }
+
+    Graph = {
+        BaseLayer = Substrate.Slab(
+            DiffuseAlbedo=vec3(0.35, 0.42, 0.5),
+            Roughness=0.7,
+            F0=vec3(0.04, 0.04, 0.04));
+        TopLayer = Substrate.Unlit(EmissiveColor=vec3(0.0, 0.15, 0.4));
+        Surface = Substrate.VerticalLayer(Top=TopLayer, Base=BaseLayer, Thickness=0.01);
+    }
+}
+```
+
+## 13. Substrate `ShaderFunction` / `.dsf`
+
+`Substrate` 可以作为 `.dsf` 中生成材质函数的输入输出类型：
+
+```c
+ShaderFunction(Name="Functions/F_Substrate_Unlit")
+{
+    Inputs = {
+        vec3 Color;
+    }
+
+    Outputs = {
+        Substrate Result;
+    }
+
+    Graph = {
+        Result = Substrate.Unlit(EmissiveColor=Color);
+    }
+}
+```
+
+调用：
+
+```c
+import "Functions/F_Substrate_Unlit.dsf";
+
+Shader(Name="DreamMaterials/M_Substrate_FunctionCall")
+{
+    Outputs = {
+        Substrate Surface;
+        Base.FrontMaterial = Surface;
+    }
+
+    Graph = {
+        Surface = F_Substrate_Unlit(vec3(0.2, 0.7, 1.0));
+    }
+}
+```
+
+## 14. Substrate `VirtualFunction`
+
+已有 Unreal `UMaterialFunction` 的 Substrate pin 可以用 `VirtualFunction` 声明：
+
+```c
+VirtualFunction(Name="ExistingSubstrateSurface")
+{
+    Options = {
+        Asset = Path(Game, "MaterialFunctions/F_ExistingSubstrateSurface");
+    }
+
+    Inputs = {
+        vec3 Tint;
+    }
+
+    Outputs = {
+        Substrate Surface;
+    }
+}
+```
+
+调用：
+
+```c
+Graph = {
+    Surface = ExistingSubstrateSurface(vec3(0.2, 0.7, 1.0));
+}
+```
+
+## 15. `ShaderLayer` / `ShaderLayerBlend`
+
+```c
+ShaderLayer(Name="Layers/L_SimpleSurface")
+{
+    Outputs = {
+        MaterialAttributes Attrs;
+    }
+
+    Graph = {
+        Attrs.BaseColor = vec3(0.8, 0.2, 0.1);
+        Attrs.Roughness = 0.5;
+    }
+}
+
+ShaderLayerBlend(Name="Layers/LB_Overlay")
+{
+    Properties = {
+        float Alpha = 0.5;
+    }
+
+    Inputs = {
+        MaterialAttributes Bottom;
+        MaterialAttributes Top;
+    }
+
+    Outputs = {
+        MaterialAttributes Attrs;
+    }
+
+    Graph = {
+        Attrs.BaseColor = lerp(Bottom.BaseColor, Top.BaseColor, Alpha);
+        Attrs.Roughness = lerp(Bottom.Roughness, Top.Roughness, Alpha);
+    }
+}
+```
+
+## 16. `VirtualFunction`
 
 `VirtualFunction` 用来声明项目里已经存在的 `UMaterialFunction`，不会生成或覆盖资产。
 

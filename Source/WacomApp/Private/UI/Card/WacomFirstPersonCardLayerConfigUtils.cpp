@@ -207,6 +207,22 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.DragCardTargetFocusLiftPixels = FMath::Max(0.0f, Config.DragCardTargetFocusLiftPixels);
 	Config.DragCardTargetFocusScale = FMath::Max(0.01f, Config.DragCardTargetFocusScale);
 	Config.DragCardTargetFocusZOrderBoost = FMath::Max(0, Config.DragCardTargetFocusZOrderBoost);
+	Config.CardDepth.HoverMaxTiltDegrees = FMath::Max(0.0f, Config.CardDepth.HoverMaxTiltDegrees);
+	Config.CardDepth.DragMaxTiltDegrees = FMath::Max(0.0f, Config.CardDepth.DragMaxTiltDegrees);
+	Config.CardDepth.PressedTiltMultiplier = FMath::Clamp(Config.CardDepth.PressedTiltMultiplier, 0.0f, 1.0f);
+	Config.CardDepth.PerspectiveStrength = FMath::Max(0.0f, Config.CardDepth.PerspectiveStrength);
+	Config.CardDepth.ResponseSpeed = FMath::Max(0.0f, Config.CardDepth.ResponseSpeed);
+	Config.CardDepth.ReturnSpeed = FMath::Max(0.0f, Config.CardDepth.ReturnSpeed);
+	Config.CardDepth.DragVelocityFilterSpeed = FMath::Max(0.0f, Config.CardDepth.DragVelocityFilterSpeed);
+	Config.CardDepth.DragVelocityForMaxTiltPixelsPerSecond =
+		FMath::Max(1.0f, Config.CardDepth.DragVelocityForMaxTiltPixelsPerSecond);
+	Config.CardDepth.BaseShadowOpacity = FMath::Clamp(Config.CardDepth.BaseShadowOpacity, 0.0f, 1.0f);
+	Config.CardDepth.HoverShadowOpacity = FMath::Clamp(Config.CardDepth.HoverShadowOpacity, 0.0f, 1.0f);
+	Config.CardDepth.DragShadowOpacity = FMath::Clamp(Config.CardDepth.DragShadowOpacity, 0.0f, 1.0f);
+	Config.CardDepth.BaseShadowScale = FMath::Max(0.01f, Config.CardDepth.BaseShadowScale);
+	Config.CardDepth.HoverShadowScale = FMath::Max(0.01f, Config.CardDepth.HoverShadowScale);
+	Config.CardDepth.DragShadowScale = FMath::Max(0.01f, Config.CardDepth.DragShadowScale);
+	Config.CardDepth.ShadowTiltInfluencePixels = FMath::Max(0.0f, Config.CardDepth.ShadowTiltInfluencePixels);
 	return Config;
 }
 
@@ -226,7 +242,29 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.TargetSelectNonPendingOpacityMultiplier, B.TargetSelectNonPendingOpacityMultiplier)
 		&& AreFloatsEquivalent(A.DragCardTargetFocusLiftPixels, B.DragCardTargetFocusLiftPixels)
 		&& AreFloatsEquivalent(A.DragCardTargetFocusScale, B.DragCardTargetFocusScale)
-		&& A.DragCardTargetFocusZOrderBoost == B.DragCardTargetFocusZOrderBoost;
+		&& A.DragCardTargetFocusZOrderBoost == B.DragCardTargetFocusZOrderBoost
+		&& A.CardDepth.bEnableFake3D == B.CardDepth.bEnableFake3D
+		&& A.CardDepth.bEnableIndependentShadow == B.CardDepth.bEnableIndependentShadow
+		&& AreFloatsEquivalent(A.CardDepth.HoverMaxTiltDegrees, B.CardDepth.HoverMaxTiltDegrees)
+		&& AreFloatsEquivalent(A.CardDepth.DragMaxTiltDegrees, B.CardDepth.DragMaxTiltDegrees)
+		&& AreFloatsEquivalent(A.CardDepth.PressedTiltMultiplier, B.CardDepth.PressedTiltMultiplier)
+		&& AreFloatsEquivalent(A.CardDepth.PerspectiveStrength, B.CardDepth.PerspectiveStrength)
+		&& AreFloatsEquivalent(A.CardDepth.ResponseSpeed, B.CardDepth.ResponseSpeed)
+		&& AreFloatsEquivalent(A.CardDepth.ReturnSpeed, B.CardDepth.ReturnSpeed)
+		&& AreFloatsEquivalent(A.CardDepth.DragVelocityFilterSpeed, B.CardDepth.DragVelocityFilterSpeed)
+		&& AreFloatsEquivalent(
+			A.CardDepth.DragVelocityForMaxTiltPixelsPerSecond,
+			B.CardDepth.DragVelocityForMaxTiltPixelsPerSecond)
+		&& AreVectorsEquivalent(A.CardDepth.BaseShadowOffsetPixels, B.CardDepth.BaseShadowOffsetPixels)
+		&& AreVectorsEquivalent(A.CardDepth.HoverShadowOffsetPixels, B.CardDepth.HoverShadowOffsetPixels)
+		&& AreVectorsEquivalent(A.CardDepth.DragShadowOffsetPixels, B.CardDepth.DragShadowOffsetPixels)
+		&& AreFloatsEquivalent(A.CardDepth.BaseShadowOpacity, B.CardDepth.BaseShadowOpacity)
+		&& AreFloatsEquivalent(A.CardDepth.HoverShadowOpacity, B.CardDepth.HoverShadowOpacity)
+		&& AreFloatsEquivalent(A.CardDepth.DragShadowOpacity, B.CardDepth.DragShadowOpacity)
+		&& AreFloatsEquivalent(A.CardDepth.BaseShadowScale, B.CardDepth.BaseShadowScale)
+		&& AreFloatsEquivalent(A.CardDepth.HoverShadowScale, B.CardDepth.HoverShadowScale)
+		&& AreFloatsEquivalent(A.CardDepth.DragShadowScale, B.CardDepth.DragShadowScale)
+		&& AreFloatsEquivalent(A.CardDepth.ShadowTiltInfluencePixels, B.CardDepth.ShadowTiltInfluencePixels);
 }
 
 FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(

@@ -27,16 +27,18 @@ Dream Shader Material。用于生成资产，通常包含：
 
 ### 1.2 `.dsf`
 
-Dream Shader Function。用于生成可复用 Unreal `UMaterialFunction` 资产，通常包含：
+Dream Shader Function。用于生成可复用 Unreal `UMaterialFunction`、Material Layer 和 Material Layer Blend 资产，通常包含：
 
 - `import "Shared/Common.dsh";`
 - `import "OtherFunction.dsf";`
 - `ShaderFunction(Name="...")`
+- `ShaderLayer(Name="...")`
+- `ShaderLayerBlend(Name="...")`
 - `Function Name(...) { ... }`
 - `GraphFunction Name(...) { ... }`
 - `VirtualFunction(Name="...")`
 
-`.dsf` 可以被 `.dsm` 或其他 `.dsf` 导入。导入后，文件中的 `ShaderFunction` 会先生成资产，再作为当前 Graph 可调用的函数签名参与生成。`.dsf` 不允许声明顶层 `Shader(...)`。
+`.dsf` 可以被 `.dsm` 或其他 `.dsf` 导入。导入后，文件中的 `ShaderFunction`、`ShaderLayer` 和 `ShaderLayerBlend` 会先生成资产，再作为当前 Graph 可调用的函数签名参与生成。`.dsf` 不允许声明顶层 `Shader(...)`。
 
 ### 1.3 `.dsh`
 
@@ -140,8 +142,9 @@ ShaderFunction(Name="Functions/F_Tint", Root="Plugin.MyPlugin")
 - `ShaderLayer` 会创建 `UMaterialFunctionMaterialLayer` 资产。
 - `ShaderLayerBlend` 会创建 `UMaterialFunctionMaterialLayerBlend` 资产。
 - 两者复用 `ShaderFunction` 的 `Properties`、`Inputs`、`Outputs`、`Settings` 和 `Graph` sections。
+- `ShaderLayer` 最多只能声明一个输入，且该输入必须是 `MaterialAttributes`；层控制量请使用 `Properties`。
 - `ShaderLayer` / `ShaderLayerBlend` 必须声明且只声明一个 `MaterialAttributes` 输出。
-- `ShaderLayerBlend` 至少需要两个 `MaterialAttributes` 输入。
+- `ShaderLayerBlend` 必须刚好声明两个输入，且都必须是 `MaterialAttributes`；混合控制量请使用 `Properties`。
 
 ### 2.4 `VirtualFunction(Name="...")`
 
@@ -274,9 +277,9 @@ Properties = {
 }
 ```
 
-除 `float` / `vec3` / `Texture2D` 简写外，`Properties` 也支持常见显式 Parameter 节点类型，例如 `ScalarParameter`、`VectorParameter`、`DoubleVectorParameter`、`TextureObjectParameter`、`TextureSampleParameter2D`、`StaticBoolParameter`、`StaticSwitchParameter` 等。
+除 `float` / `vec3` / `Texture2D` 简写外，`Properties` 也支持常见显式 Parameter 节点类型，例如 `ScalarParameter`、`VectorParameter`、`DoubleVectorParameter`、`TextureObjectParameter`、`TextureSampleParameter2D`、`TextureSampleParameterVolume`、`StaticBoolParameter`、`StaticSwitchParameter` 等。
 
-在 `Properties` 声明前加 `const` 会生成不可外部调参的常量/helper 节点，而不是 parameter 节点。`const` 支持标量、向量和纹理简写类型；`const Texture2D` 默认创建 Unreal Texture Object 节点，可用 `= Path(...)` 指定预览纹理，不写时使用 Unreal 默认纹理。
+在 `Properties` 声明前加 `const` 会生成不可外部调参的常量/helper 节点，而不是 parameter 节点。`const` 支持标量、向量和纹理简写类型；`const Texture2D` 默认创建 Unreal Texture Object 节点，可用 `= Path(...)` 指定预览纹理，不写时使用 Unreal 默认纹理。`const TextureCube`、`const Texture2DArray`、`const VolumeTexture` 必须显式指定默认资产。
 
 声明尾部可以加 `[...]` 反射属性块。属性块里的每一项都会按 Unreal `MaterialExpression` 的 UPROPERTY 名称写入生成节点；不写的字段保持 Unreal 默认值。`Group`、`SortPriority`、`Description` 是常用别名，其中 `Description` 会写到节点 `Desc`。
 
@@ -392,6 +395,21 @@ Graph = {
 
 当 `Shader` 绑定 `Base.MaterialAttributes` 时，生成器会自动启用 Unreal 材质的 `Use Material Attributes`。
 
+`Substrate` 可以作为 ShaderFunction / `.dsf` / VirtualFunction 的输入输出类型，也可以在 `Shader` 中绑定到 `Base.FrontMaterial`：
+
+```c
+Outputs = {
+    Substrate Surface;
+    Base.FrontMaterial = Surface;
+}
+
+Graph = {
+    Surface = Substrate.Unlit(EmissiveColor=Color);
+}
+```
+
+当 `Shader` 绑定 `Base.FrontMaterial` 时，生成器会自动设置 `ShadingModel="Substrate"`。不要在同一个 `Shader` 中同时绑定 `Base.FrontMaterial` 和 `Base.MaterialAttributes`。
+
 ### 3.4 `Settings`
 
 配置 Unreal 材质或 Material Function 属性。
@@ -431,14 +449,31 @@ Options = {
 - 标量、向量构造。
 - Brace initializer。
 - `UE.*` builtin 调用。
+- `Substrate.*` UE 5.7 Substrate 节点封装。
 - `UE.CollectionParam(Collection=Path(...), Parameter="Name")` 读取 Material Parameter Collection。
 - `UE.StaticSwitchParameter(...)` 或 `StaticSwitchParameter` 属性调用。
 - `Function(...)` / `Namespace::Function(...)` 独立调用。
 - `GraphFunction(...)` / `Namespace::GraphFunction(...)` Custom 节点调用。
 - `ShaderFunction(...)` / `VirtualFunction(...)` 值调用和多输出独立调用。
 - `MaterialAttributes` 聚合值，以及 `Attrs.BaseColor = ...` / `Attrs.Roughness = ...` 形式的成员写入。
+- `Substrate` 值和 `Base.FrontMaterial` 输出；`Substrate` 不能参与算术、向量构造、swizzle 或 `if` 分支合并。
 - 基础 `if` / `else` 图分支。
 - 将结果绑定到输出变量。
+
+常用 `Substrate.*` wrapper：
+
+```c
+Graph = {
+    Substrate unlit = Substrate.Unlit(EmissiveColor=float3(0.1, 0.6, 1.0));
+    Substrate slab = Substrate.Slab(
+        DiffuseAlbedo=float3(0.8, 0.2, 0.1),
+        F0=float3(0.04, 0.04, 0.04),
+        Roughness=0.45);
+    Substrate layered = Substrate.VerticalLayer(Top=unlit, Base=slab, Thickness=0.01);
+}
+```
+
+`Substrate.ConvertMaterialAttributes(Attributes=Attrs)` 可把现有 `MaterialAttributes` 图转成 `Substrate`。`Substrate.TransmittanceToMFP`、`Substrate.MetalnessToDiffuseAlbedoF0`、`Substrate.HazinessToSecondaryRoughness`、`Substrate.ThinFilm` 是工具节点，返回普通数值输出。需要逃生口时可以使用 `UE.Expression(Class="MaterialExpressionSubstrateSlabBSDF", OutputType="Substrate", ...)`；`UMaterialExpressionCustom` 不支持 `OutputType="Substrate"`。
 
 `ShaderFunction` / `VirtualFunction` 多输出独立调用使用“输入参数在前，输出目标变量在后”的顺序：
 
@@ -463,7 +498,6 @@ Graph = {
 ```c
 import "Shared/Common.dsh";
 import "Functions/F_PulseTint.dsf";
-import "Builtin/Texture.dsh";
 import "@typedreammoon/dream-noise/Library/Noise.dsh";
 ```
 
@@ -473,7 +507,6 @@ import "@typedreammoon/dream-noise/Library/Noise.dsh";
 | --- | --- |
 | `"Shared/Common.dsh"` | 当前文件目录和项目 `DShader` 根目录。 |
 | `"Functions/F_PulseTint.dsf"` | 当前文件目录和项目 `DShader` 根目录。 |
-| `"Builtin/Texture.dsh"` | 插件内置库目录。 |
 | `"@scope/package/Library/File.dsh"` | 项目 `DShader/Packages`。 |
 
 规则：
@@ -512,6 +545,7 @@ Package 相关说明见 [Packages.md](Packages.md)。
 - `Texture2D`
 - `TextureCube`
 - `Texture2DArray`
+- `VolumeTexture` / `Texture3D`
 - `SamplerState`
 
 ### 5.4 已移除别名
@@ -532,6 +566,7 @@ Properties = {
     Texture2D MainTex = Path(Game, "/Textures/T_Main");
     Texture2D DefaultTex = Path("/Engine/EngineResources/DefaultTexture");
     TextureCube SkyTex = Path(Engine, "/EngineResources/DefaultTextureCube");
+    VolumeTexture NoiseVolume = Path(Game, "/Textures/T_NoiseVolume");
 }
 ```
 
@@ -697,7 +732,7 @@ DreamShader 会维护源文件和资产之间的关系：
 
 - `.dsm` 直接生成资产。
 - `.dsh` 不直接生成资产。
-- `.dsf` 会生成其中声明的 `ShaderFunction` 资产。
+- `.dsf` 会生成其中声明的 `ShaderFunction`、`ShaderLayer` 和 `ShaderLayerBlend` 资产。
 - `.dsh` / `.dsf` 保存后只重编依赖它们的 `.dsm` / `.dsf`。
 - Parser 错误会尽量通过 source map 映射回真实 `.dsm` / `.dsf` / `.dsh` 行列。
 - 生成资产会写入 `DreamShader.SourceFile`、`DreamShader.SourceHash`、`DreamShader.GeneratedAtUtc`。

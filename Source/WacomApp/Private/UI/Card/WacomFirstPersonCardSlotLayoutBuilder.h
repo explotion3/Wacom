@@ -128,6 +128,7 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float HoverScale = 1.06f;
 	int32 HoverZOrderBoost = 500;
 	float HoverHitHysteresisPixels = 16.0f;
+	FWacomFirstPersonCardDepthConfig CardDepth;
 	float DragCardTargetFocusLiftPixels = 18.0f;
 	float DragCardTargetFocusScale = 1.045f;
 	int32 DragCardTargetFocusZOrderBoost = 650;

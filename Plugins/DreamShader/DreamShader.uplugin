@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 138,
-	"VersionName": "1.3.7",
+	"Version": 142,
+	"VersionName": "1.4.1",
 	"FriendlyName": "DreamShader",
 	"Description": "Author Unreal materials and material functions with DreamShaderLang .dsm/.dsh source files that auto-generate standard UMaterial and UMaterialFunction assets.",
 	"Category": "DreamPlugin",
@@ -22,9 +22,24 @@
 			"LoadingPhase": "Default"
 		},
 		{
+			"Name": "DreamShaderCompiler",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
 			"Name": "DreamShaderEditor",
 			"Type": "Editor",
 			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "WebSocketNetworking",
+			"Enabled": true
+		},
+		{
+			"Name": "SQLiteCore",
+			"Enabled": true
 		}
 	],
 	"IsExperimentalVersion": false

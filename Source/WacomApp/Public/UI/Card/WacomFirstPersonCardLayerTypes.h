@@ -911,6 +911,83 @@ struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
 };
 
 USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardDepthConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	bool bEnableFake3D = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	bool bEnableIndependentShadow = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float HoverMaxTiltDegrees = 6.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float DragMaxTiltDegrees = 9.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float PressedTiltMultiplier = 0.35f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float PerspectiveStrength = 0.12f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float ResponseSpeed = 18.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float ReturnSpeed = 14.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float DragVelocityFilterSpeed = 16.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float DragVelocityForMaxTiltPixelsPerSecond = 1400.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	FVector2D BaseShadowOffsetPixels = FVector2D(0.0f, 4.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	FVector2D HoverShadowOffsetPixels = FVector2D(0.0f, 10.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	FVector2D DragShadowOffsetPixels = FVector2D(0.0f, 22.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float BaseShadowOpacity = 0.08f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float HoverShadowOpacity = 0.24f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float DragShadowOpacity = 0.34f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float BaseShadowScale = 0.98f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float HoverShadowScale = 1.01f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float DragShadowScale = 1.05f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float ShadowTiltInfluencePixels = 4.0f;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardDepthView
+{
+	bool bFake3DEnabled = false;
+	bool bShadowEnabled = false;
+	FVector2D TiltDegrees = FVector2D::ZeroVector;
+	float PerspectiveStrength = 0.0f;
+	FVector2D ShadowOffsetPixels = FVector2D::ZeroVector;
+	float ShadowOpacity = 0.0f;
+	float ShadowScale = 1.0f;
+};
+
+USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 {
 	GENERATED_BODY()
@@ -953,6 +1030,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	int32 DragCardTargetFocusZOrderBoost = 650;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardDepthConfig CardDepth;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState

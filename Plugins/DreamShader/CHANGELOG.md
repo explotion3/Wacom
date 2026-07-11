@@ -1,5 +1,46 @@
 # DreamShader ChangeLog
 
+## 1.4.1 - 2026-07-01
+
+### Added
+
+- Parameter input pins can be wired from the `Graph` with a call form, e.g. `Mask(Input = ...)` and `Tex(Coordinates = ...)`, for channel/component-mask and texture-sample parameters.
+- `Docs/ParameterReference.md`: per-type declaration + metadata reference covering asset slots (`[Prop = Path(...)]`) and input pins for every parameter type.
+
+### Fixed
+
+- Decompiled multi-output Custom nodes emitted both `Output=` and `OutputIndex=` and failed to regenerate; the decompiler now emits a single output selector.
+- `DynamicParameter`, `CurveAtlasRowParameter` inline defaults, and the texture-sample parameter family failed to generate or compile; they now produce valid nodes (texture samples seed a default texture).
+- Import directives no longer shift diagnostic line/column numbers in multi-file sources.
+
+### Changed
+
+- De-duplicated internal JSON/SQLite editor helpers to remove a unity-build symbol-collision risk.
+
+## 1.4.0 - 2026-06-06
+
+### Compatibility
+
+- Added Unreal Engine `5.3` through `5.7` compatibility coverage.
+- Verified single-plugin `RunUAT BuildPlugin` builds for UE `5.3`, `5.4`, `5.5`, `5.6`, and `5.7` on Win64.
+
+## 1.3.9 - 2026-05-29
+
+### Maintenance
+
+- Updated plugin version metadata and documentation references.
+
+## 1.3.8 - 2026-05-25
+
+### Texture Support
+
+- Added `VolumeTexture` property parsing, code generation, and default texture handling.
+- Preserved texture object subtypes during code generation so `Texture2D`, `Texture2DArray`, and `VolumeTexture` inputs are passed to generated HLSL with the correct Unreal texture type.
+
+### Plugin Cleanup
+
+- Removed built-in shader library path support from project settings and documentation.
+
 ## 1.3.7 - 2026-05-18
 
 ### Decompiler

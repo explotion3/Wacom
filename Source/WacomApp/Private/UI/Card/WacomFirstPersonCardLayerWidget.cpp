@@ -2635,6 +2635,10 @@ bool UWacomFirstPersonCardLayerWidget::UpdateHoveredSlotFromWidgetPosition(const
 		true,
 		&ResolvedSlotView);
 	UWacomFirstPersonCardLayerSlotWidget* PreviousHoveredSlot = HoveredSlotWidget.Get();
+	if (NewHoveredSlot)
+	{
+		NewHoveredSlot->UpdatePointerViewportDiagnostics(WidgetPosition);
+	}
 	if (PreviousHoveredSlot == NewHoveredSlot)
 	{
 		return NewHoveredSlot != nullptr;

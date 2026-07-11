@@ -12,12 +12,18 @@ class UOverlay;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
+class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardTransitionPlayback;
 struct FWacomFirstPersonCardLayerTestAccess;
 
 struct FWacomFirstPersonCardTransitionPlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardTransitionPlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardDepthMotionDeleter
+{
+	void operator()(FWacomFirstPersonCardDepthMotion* Motion) const;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -65,6 +71,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	EWacomFirstPersonCardDragTargetFeedbackState DragTargetFeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
+	FWacomFirstPersonCardDepthView CardDepthView;
 	bool bEnterTransitionPlaybackActive = false;
 	bool bEnterTransitionBlocksInteraction = false;
 	float EnterTransitionElapsedSeconds = 0.0f;
@@ -262,6 +269,9 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardTransitionPlayback,
 		FWacomFirstPersonCardTransitionPlaybackDeleter> TransitionPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardDepthMotion,
+		FWacomFirstPersonCardDepthMotionDeleter> CardDepthMotion;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
@@ -278,6 +288,7 @@ private:
 	bool bGestureTargetValid = false;
 	bool bGestureCommitArmed = false;
 	bool bHasPointerViewportPosition = false;
+	bool bCardDepthPointerDirty = false;
 	bool bHasFeedbackTargetScreenPosition = false;
 	bool bCardDragProbeFeedback = false;
 	bool bCardDragProbeFeedbackValid = false;
@@ -304,6 +315,7 @@ private:
 	void SetLocalHitCanvasSizeOverrideForTest(const TOptional<FVector2D>& InSize);
 	bool RequestHoverAtLocalPositionForTest(const FVector2D& LocalPosition);
 	void RequestMoveAtLocalPositionForTest(const FVector2D& LocalPosition);
+	void SetCardDepthPointerPositionForTest(const FVector2D& WidgetPosition);
 	bool RequestPressAtLocalPositionForTest(const FVector2D& LocalPosition);
 	bool RequestGesturePressForTest(const FVector2D& ScreenPosition);
 	void RequestGestureMoveForTest(float DeltaTime, const FVector2D& ScreenPosition);
@@ -380,6 +392,8 @@ private:
 	float ComputeNoTargetDragOutDistance() const;
 	void UpdatePointerViewportDiagnostics(const FVector2D& WidgetPosition);
 	void ClearPointerViewportDiagnostics();
+	void UpdateCardDepthMotion(float DeltaTime);
+	void ApplyCardDepthView();
 	void BroadcastDragStarted();
 	void BroadcastDragUpdated();
 	void BroadcastDragReleased();

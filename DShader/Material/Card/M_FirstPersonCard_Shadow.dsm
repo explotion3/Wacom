@@ -1,0 +1,88 @@
+Function SelfContained WacomFirstPersonCard_EvaluateShadow(
+    in float2 uv,
+    in float cardAspectRatio,
+    in float edgeInset,
+    in float cornerRadius,
+    in float softness,
+    out float shadowMask)
+{
+    float safeAspectRatio = max(cardAspectRatio, 0.01);
+    float2 centered = (uv - float2(0.5, 0.5)) * float2(safeAspectRatio, 1.0);
+    float2 halfExtent = max(
+        float2(0.5 * safeAspectRatio, 0.5) - max(edgeInset, 0.0),
+        float2(0.001, 0.001));
+    float safeRadius = min(
+        max(cornerRadius, 0.0),
+        min(halfExtent.x, halfExtent.y));
+    float2 signedCorner = abs(centered) - (halfExtent - float2(safeRadius, safeRadius));
+    float signedDistance =
+        length(max(signedCorner, float2(0.0, 0.0)))
+        + min(max(signedCorner.x, signedCorner.y), 0.0)
+        - safeRadius;
+    float safeSoftness = max(softness, 0.0001);
+    shadowMask = 1.0 - smoothstep(-safeSoftness, safeSoftness, signedDistance);
+}
+
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Shadow")
+{
+    Properties = {
+        VectorParameter ShadowColor = float4(0.008, 0.006, 0.004, 0.82) [
+            Group="第一人称手牌阴影|颜色";
+            SortPriority=0;
+            Description="纸牌投影颜色与材质内透明度；Widget 的运行时 RenderOpacity 会继续乘在其上。";
+        ];
+
+        ScalarParameter CardAspectRatio = 0.7257 [
+            Group="第一人称手牌阴影|形状";
+            SortPriority=10;
+            Description="ShadowHost 宽高比；当前 328 x 452 对应约 0.7257，调整 WBP 尺寸后应同步修改。";
+        ];
+
+        ScalarParameter EdgeInset = 0.0355 [
+            Group="第一人称手牌阴影|形状";
+            SortPriority=20;
+            Description="阴影主体离材质边缘的距离，以 ShadowHost 高度归一化；默认约 16 px。";
+        ];
+
+        ScalarParameter CornerRadius = 0.035 [
+            Group="第一人称手牌阴影|形状";
+            SortPriority=30;
+            Description="阴影圆角半径，以 ShadowHost 高度归一化；推荐 0.025 到 0.055。";
+        ];
+
+        ScalarParameter Softness = 0.035 [
+            Group="第一人称手牌阴影|柔和";
+            SortPriority=40;
+            Description="阴影边缘柔化宽度，以 ShadowHost 高度归一化；推荐 0.025 到 0.06。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float shadowMask;
+        WacomFirstPersonCard_EvaluateShadow(
+            uv,
+            CardAspectRatio,
+            EdgeInset,
+            CornerRadius,
+            Softness,
+            shadowMask);
+
+        Color = ShadowColor.rgb;
+        Alpha = shadowMask * ShadowColor.a;
+    }
+}

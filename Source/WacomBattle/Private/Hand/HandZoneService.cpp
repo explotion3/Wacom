@@ -2,6 +2,7 @@
 
 #include "Hand/HandZoneService.h"
 
+#include "Cards/CardZoneAggregate.h"
 #include "Cards/CardDefinition.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
@@ -11,11 +12,6 @@
 
 namespace
 {
-	void SetCardLocation(FBattleState& State, const FGuid& CardId, ECardLocation NewLocation)
-	{
-		FBattleRules::SetCardLocation(State, CardId, NewLocation);
-	}
-
 	int32 IndexOfInHand(const FBattleState& State, const FGuid& CardId)
 	{
 		return State.Cards.Hand.IndexOfByKey(CardId);
@@ -103,10 +99,10 @@ namespace
 
 void FHandZoneService::GenerateHandQueueOnTurnStart(FBattleState& State, const TArray<FGuid>& NewlyDrawnCards)
 {
-	// 调用方约定：FDeckService::DrawCards 已把 NewlyDrawnCards 的 Location 置为 Hand，
-	// 但不会直接加入 State.Cards.Hand 队列。本服务才是回合开始 Hand 的唯一编排者。
+	// FDeckService::DrawCards 已通过 CardZoneAggregate 把 NewlyDrawnCards 原子移入 Hand。
+	// 本服务只负责将当前 Hand membership 编排成新回合顺序。
 	TArray<FGuid> NormalPool;
-	NormalPool.Reserve(State.Cards.Hand.Num() + NewlyDrawnCards.Num());
+	NormalPool.Reserve(State.Cards.Hand.Num());
 	for (const FGuid& Id : State.Cards.Hand)
 	{
 		if (!IsHandAnchor(State, Id))
@@ -116,19 +112,31 @@ void FHandZoneService::GenerateHandQueueOnTurnStart(FBattleState& State, const T
 	}
 	for (const FGuid& Id : NewlyDrawnCards)
 	{
-		if (!IsHandAnchor(State, Id))
+		ensureMsgf(State.Cards.Hand.Contains(Id),
+			TEXT("[HandZoneService] Drawn card %s must already belong to Hand"),
+			*Id.ToString());
+	}
+
+	const FGuid Anchors[] = {
+		State.Cards.LeftHandInstanceId,
+		State.Cards.RightHandInstanceId };
+	for (const FGuid& AnchorId : Anchors)
+	{
+		if (AnchorId.IsValid() && !State.Cards.Hand.Contains(AnchorId))
 		{
-			NormalPool.Add(Id);
+			const bool bMoved = FCardZoneAggregate::MoveCard(
+				State,
+				AnchorId,
+				ECardLocation::Hand);
+			ensureMsgf(bMoved,
+				TEXT("[HandZoneService] Failed to return hand anchor %s"),
+				*AnchorId.ToString());
 		}
 	}
 
-	State.Cards.Hand = BuildQueueFromNormalPool(State, NormalPool);
-
-	// 更新 Location。
-	for (const FGuid& Id : State.Cards.Hand)
-	{
-		SetCardLocation(State, Id, ECardLocation::Hand);
-	}
+	const TArray<FGuid> OrderedHand = BuildQueueFromNormalPool(State, NormalPool);
+	ensureMsgf(FCardZoneAggregate::SetZoneOrder(State, ECardLocation::Hand, OrderedHand),
+		TEXT("[HandZoneService] Failed to apply generated Hand order"));
 }
 
 void FHandZoneService::InsertCardsIntoHandAtRandom(FBattleState& State, const TArray<FGuid>& CardInstanceIds)
@@ -140,15 +148,12 @@ void FHandZoneService::InsertCardsIntoHandAtRandom(FBattleState& State, const TA
 			continue;
 		}
 
-		const int32 ExistingIndex = State.Cards.Hand.IndexOfByKey(Id);
-		if (ExistingIndex != INDEX_NONE)
-		{
-			State.Cards.Hand.RemoveAt(ExistingIndex);
-		}
-
-		const int32 InsertAt = State.Rng.RandRange(0, State.Cards.Hand.Num());
-		State.Cards.Hand.Insert(Id, InsertAt);
-		SetCardLocation(State, Id, ECardLocation::Hand);
+		const bool bAlreadyInHand = State.Cards.Hand.Contains(Id);
+		const int32 TargetHandSize = State.Cards.Hand.Num() - (bAlreadyInHand ? 1 : 0);
+		const int32 InsertAt = State.Rng.RandRange(0, TargetHandSize);
+		ensureMsgf(FCardZoneAggregate::MoveCard(State, Id, ECardLocation::Hand, InsertAt),
+			TEXT("[HandZoneService] Failed to insert card %s into Hand"),
+			*Id.ToString());
 	}
 }
 
@@ -169,48 +174,6 @@ int32 FHandZoneService::GetAvailableNormalCardSlots(const FBattleState& State, c
 	}
 
 	return FMath::Max(0, NormalCardLimit - NormalCount);
-}
-
-void FHandZoneService::EnforceNormalCardLimit(FBattleState& State, TArray<FGuid>& OutDiscarded, const FGuid& ExcludeId)
-{
-	OutDiscarded.Reset();
-
-	int32 NormalCount = 0;
-	for (const FGuid& Id : State.Cards.Hand)
-	{
-		if (IsHandAnchor(State, Id))
-		{
-			continue;
-		}
-		if (ExcludeId.IsValid() && Id == ExcludeId)
-		{
-			continue;
-		}
-		++NormalCount;
-	}
-	if (NormalCount <= NormalCardLimit)
-	{
-		return;
-	}
-
-	// 从末尾向前扫描，跳过锚点和临时排除卡，把超限的普通卡移入弃牌区。
-	for (int32 i = State.Cards.Hand.Num() - 1; i >= 0 && NormalCount > NormalCardLimit; --i)
-	{
-		const FGuid Id = State.Cards.Hand[i];
-		if (IsHandAnchor(State, Id))
-		{
-			continue;
-		}
-		if (ExcludeId.IsValid() && Id == ExcludeId)
-		{
-			continue;
-		}
-		State.Cards.Hand.RemoveAt(i);
-		State.Cards.DiscardPile.Add(Id);
-		SetCardLocation(State, Id, ECardLocation::Discard);
-		OutDiscarded.Add(Id);
-		--NormalCount;
-	}
 }
 
 EHandZone FHandZoneService::GetZoneOf(const FBattleState& State, const FGuid& CardInstanceId)
@@ -358,14 +321,20 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 		return;
 	}
 
-	const int32 LeftIdx  = State.Cards.Hand.IndexOfByKey(State.Cards.LeftHandInstanceId);
-	const int32 RightIdx = State.Cards.Hand.IndexOfByKey(State.Cards.RightHandInstanceId);
+	TArray<FGuid> OrderedHand = State.Cards.Hand;
+	if (OrderedHand.RemoveSingle(CardId) != 1)
+	{
+		return;
+	}
+
+	const int32 LeftIdx  = OrderedHand.IndexOfByKey(State.Cards.LeftHandInstanceId);
+	const int32 RightIdx = OrderedHand.IndexOfByKey(State.Cards.RightHandInstanceId);
 	const bool bLeftIn  = LeftIdx != INDEX_NONE;
 	const bool bRightIn = RightIdx != INDEX_NONE;
 
 	// 计算目标区间 [Begin, End]（闭区间，都是"插入位置"坐标）。
 	int32 Begin = 0;
-	int32 End   = State.Cards.Hand.Num();
+	int32 End   = OrderedHand.Num();
 
 	if (bLeftIn && bRightIn)
 	{
@@ -375,7 +344,7 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 		{
 		case EHandZone::Left:  Begin = 0;     End = Lo;          break;
 		case EHandZone::Both:  Begin = Lo + 1;End = Hi;          break;
-		case EHandZone::Right: Begin = Hi + 1;End = State.Cards.Hand.Num(); break;
+		case EHandZone::Right: Begin = Hi + 1;End = OrderedHand.Num(); break;
 		default: return;
 		}
 	}
@@ -394,13 +363,13 @@ void FHandZoneService::InsertIntoZoneAtRandom(FBattleState& State, const FGuid& 
 	{
 		// 锚点都不在：§6 不提供区域判定，插末尾兜底。
 		Begin = 0;
-		End   = State.Cards.Hand.Num();
+		End   = OrderedHand.Num();
 	}
 
 	const int32 InsertAt = State.Rng.RandRange(Begin, End);
-	State.Cards.Hand.Insert(CardId, InsertAt);
-
-	FBattleRules::SetCardLocation(State, CardId, ECardLocation::Hand);
+	OrderedHand.Insert(CardId, InsertAt);
+	ensureMsgf(FCardZoneAggregate::SetZoneOrder(State, ECardLocation::Hand, OrderedHand),
+		TEXT("[HandZoneService] Failed to apply shuffled Hand order"));
 }
 
 bool FHandZoneService::MoveCardToRandomZone(FBattleState& State, const FGuid& CardInstanceId)
@@ -426,9 +395,6 @@ bool FHandZoneService::MoveCardToRandomZone(FBattleState& State, const FGuid& Ca
 	{
 		return false;
 	}
-
-	// 先从 Hand 取出，再选目标区域插入。
-	State.Cards.Hand.RemoveAt(Idx);
 
 	const int32 ZonePick = State.Rng.RandRange(0, AvailableZones.Num() - 1);
 	InsertIntoZoneAtRandom(State, CardInstanceId, AvailableZones[ZonePick]);
@@ -475,8 +441,6 @@ FGuid FHandZoneService::MoveRandomFromBothToOther(FBattleState& State, const FGu
 
 	const int32 Pick = BothIndices[State.Rng.RandRange(0, BothIndices.Num() - 1)];
 	const FGuid CardId = State.Cards.Hand[Pick];
-
-	State.Cards.Hand.RemoveAt(Pick);
 
 	// 目标区域排除双手区：只从 Left / Right 中选。
 	TArray<EHandZone> TargetZones;

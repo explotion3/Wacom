@@ -2,29 +2,39 @@
 
 #include "Rules/BattleRuleContentContract.h"
 
-#include "Effects/Semantics/BattleEffectSemanticsModule.h"
+#include "Effects/Semantics/EffectSemanticRegistry.h"
 #include "Tags/WacomGameplayTags.h"
 
 bool FWacomBattleRuleContentContract::IsSupportedCardEffectType(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::IsSupportedCardEffectType(EffectType);
+	return FEffectSemanticRegistry::IsSupportedCardEffectType(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedEnemyIntentEffectType(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::IsSupportedEnemyIntentEffectType(EffectType);
+	return FEffectSemanticRegistry::IsSupportedEnemyIntentEffectType(EffectType);
+}
+
+TArray<FGameplayTag> FWacomBattleRuleContentContract::GetSupportedCardEffectTypes()
+{
+	return FEffectSemanticRegistry::GetSupportedCardEffectTypes();
+}
+
+TArray<FGameplayTag> FWacomBattleRuleContentContract::GetSupportedEnemyIntentEffectTypes()
+{
+	return FEffectSemanticRegistry::GetSupportedEnemyIntentEffectTypes();
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedMagnitudeSource(const FGameplayTag& MagnitudeSource)
 {
-	return FBattleEffectSemanticsModule::IsSupportedMagnitudeSource(MagnitudeSource);
+	return FEffectSemanticRegistry::IsSupportedMagnitudeSource(MagnitudeSource);
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedCardEffectMagnitudeSource(
 	const FGameplayTag& EffectType,
 	const FGameplayTag& MagnitudeSource)
 {
-	return FBattleEffectSemanticsModule::IsSupportedCardEffectMagnitudeSource(
+	return FEffectSemanticRegistry::IsSupportedCardEffectMagnitudeSource(
 		EffectType,
 		MagnitudeSource);
 }
@@ -112,7 +122,7 @@ bool FWacomBattleRuleContentContract::IsSupportedCardEffectTarget(
 	ECardEffectContext Context,
 	ECardTargetMode CardTargetMode)
 {
-	return FBattleEffectSemanticsModule::IsSupportedCardEffectTarget(
+	return FEffectSemanticRegistry::IsSupportedCardEffectTarget(
 		EffectType,
 		Target,
 		Context,
@@ -123,7 +133,7 @@ bool FWacomBattleRuleContentContract::IsSupportedEnemyIntentEffectTarget(
 	const FGameplayTag& EffectType,
 	const FGameplayTag& Target)
 {
-	return FBattleEffectSemanticsModule::IsSupportedEnemyIntentEffectTarget(
+	return FEffectSemanticRegistry::IsSupportedEnemyIntentEffectTarget(
 		EffectType,
 		Target);
 }
@@ -148,45 +158,45 @@ EHandAfflictionSelection FWacomBattleRuleContentContract::GetCanonicalHandAfflic
 
 bool FWacomBattleRuleContentContract::CardEffectRequiresTargetZone(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::CardEffectRequiresTargetZone(EffectType);
+	return FEffectSemanticRegistry::CardEffectRequiresTargetZone(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectAllowsTargetZone(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::CardEffectAllowsTargetZone(EffectType);
+	return FEffectSemanticRegistry::CardEffectAllowsTargetZone(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeHandZone(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeHandZone(EffectType);
+	return FEffectSemanticRegistry::CardEffectTargetZoneMustBeHandZone(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeCardLocation(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeCardLocation(EffectType);
+	return FEffectSemanticRegistry::CardEffectTargetZoneMustBeCardLocation(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeStackStatus(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeStackStatus(EffectType);
+	return FEffectSemanticRegistry::CardEffectTargetZoneMustBeStackStatus(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectTargetZoneMustBeCardKeyword(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::CardEffectTargetZoneMustBeCardKeyword(EffectType);
+	return FEffectSemanticRegistry::CardEffectTargetZoneMustBeCardKeyword(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::CardEffectSupportsNegativeMagnitude(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::CardEffectSupportsNegativeMagnitude(EffectType);
+	return FEffectSemanticRegistry::CardEffectSupportsNegativeMagnitude(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::EnemyIntentEffectSupportsNegativeMagnitude(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::EnemyIntentEffectSupportsNegativeMagnitude(EffectType);
+	return FEffectSemanticRegistry::EnemyIntentEffectSupportsNegativeMagnitude(EffectType);
 }
 
 bool FWacomBattleRuleContentContract::EffectUsesPositiveMagnitude(const FGameplayTag& EffectType)
 {
-	return FBattleEffectSemanticsModule::EffectUsesPositiveMagnitude(EffectType);
+	return FEffectSemanticRegistry::EffectUsesPositiveMagnitude(EffectType);
 }

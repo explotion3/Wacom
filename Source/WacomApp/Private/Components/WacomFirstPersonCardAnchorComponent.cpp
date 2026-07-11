@@ -191,6 +191,27 @@ namespace
 		Config.HoverScale = Anchor.HoverScale;
 		Config.HoverZOrderBoost = Anchor.HoverZOrderBoost;
 		Config.HoverHitHysteresisPixels = Anchor.HoverHitHysteresisPixels;
+		Config.CardDepth.bEnableFake3D = Anchor.bEnableCardFake3D;
+		Config.CardDepth.bEnableIndependentShadow = Anchor.bEnableCardIndependentShadow;
+		Config.CardDepth.HoverMaxTiltDegrees = Anchor.HoverCardFake3DMaxTiltDegrees;
+		Config.CardDepth.DragMaxTiltDegrees = Anchor.DragCardFake3DMaxTiltDegrees;
+		Config.CardDepth.PressedTiltMultiplier = Anchor.PressedCardFake3DTiltMultiplier;
+		Config.CardDepth.PerspectiveStrength = Anchor.CardFake3DPerspectiveStrength;
+		Config.CardDepth.ResponseSpeed = Anchor.CardFake3DResponseSpeed;
+		Config.CardDepth.ReturnSpeed = Anchor.CardFake3DReturnSpeed;
+		Config.CardDepth.DragVelocityFilterSpeed = Anchor.CardFake3DDragVelocityFilterSpeed;
+		Config.CardDepth.DragVelocityForMaxTiltPixelsPerSecond =
+			Anchor.CardFake3DVelocityForMaxTiltPixelsPerSecond;
+		Config.CardDepth.BaseShadowOffsetPixels = Anchor.CardBaseShadowOffsetPixels;
+		Config.CardDepth.HoverShadowOffsetPixels = Anchor.CardHoverShadowOffsetPixels;
+		Config.CardDepth.DragShadowOffsetPixels = Anchor.CardDragShadowOffsetPixels;
+		Config.CardDepth.BaseShadowOpacity = Anchor.CardBaseShadowOpacity;
+		Config.CardDepth.HoverShadowOpacity = Anchor.CardHoverShadowOpacity;
+		Config.CardDepth.DragShadowOpacity = Anchor.CardDragShadowOpacity;
+		Config.CardDepth.BaseShadowScale = Anchor.CardBaseShadowScale;
+		Config.CardDepth.HoverShadowScale = Anchor.CardHoverShadowScale;
+		Config.CardDepth.DragShadowScale = Anchor.CardDragShadowScale;
+		Config.CardDepth.ShadowTiltInfluencePixels = Anchor.CardShadowTiltInfluencePixels;
 		Config.bEnableCardInteractionFeedback = Anchor.bEnableCardInteractionFeedback;
 		Config.PlayableHoverFeedbackColor = Anchor.PlayableHoverFeedbackColor;
 		Config.PlayableHoverFeedbackOpacity = Anchor.PlayableHoverFeedbackOpacity;
@@ -312,6 +333,7 @@ namespace
 		VisualConfig.DragCardTargetFocusLiftPixels = Config.DragCardTargetFocusLiftPixels;
 		VisualConfig.DragCardTargetFocusScale = Config.DragCardTargetFocusScale;
 		VisualConfig.DragCardTargetFocusZOrderBoost = Config.DragCardTargetFocusZOrderBoost;
+		VisualConfig.CardDepth = Config.CardDepth;
 		return VisualConfig;
 	}
 
@@ -619,6 +641,26 @@ namespace
 		AddFloat(Config.HoverScale);
 		AddInt(Config.HoverZOrderBoost);
 		AddFloat(Config.HoverHitHysteresisPixels);
+		AddBool(Config.CardDepth.bEnableFake3D);
+		AddBool(Config.CardDepth.bEnableIndependentShadow);
+		AddFloat(Config.CardDepth.HoverMaxTiltDegrees);
+		AddFloat(Config.CardDepth.DragMaxTiltDegrees);
+		AddFloat(Config.CardDepth.PressedTiltMultiplier);
+		AddFloat(Config.CardDepth.PerspectiveStrength);
+		AddFloat(Config.CardDepth.ResponseSpeed);
+		AddFloat(Config.CardDepth.ReturnSpeed);
+		AddFloat(Config.CardDepth.DragVelocityFilterSpeed);
+		AddFloat(Config.CardDepth.DragVelocityForMaxTiltPixelsPerSecond);
+		AddVector(Config.CardDepth.BaseShadowOffsetPixels);
+		AddVector(Config.CardDepth.HoverShadowOffsetPixels);
+		AddVector(Config.CardDepth.DragShadowOffsetPixels);
+		AddFloat(Config.CardDepth.BaseShadowOpacity);
+		AddFloat(Config.CardDepth.HoverShadowOpacity);
+		AddFloat(Config.CardDepth.DragShadowOpacity);
+		AddFloat(Config.CardDepth.BaseShadowScale);
+		AddFloat(Config.CardDepth.HoverShadowScale);
+		AddFloat(Config.CardDepth.DragShadowScale);
+		AddFloat(Config.CardDepth.ShadowTiltInfluencePixels);
 		AddFloat(Config.DragCardTargetFocusLiftPixels);
 		AddFloat(Config.DragCardTargetFocusScale);
 		AddInt(Config.DragCardTargetFocusZOrderBoost);

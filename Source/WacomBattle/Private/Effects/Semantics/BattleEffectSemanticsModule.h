@@ -100,31 +100,6 @@ public:
 		const FGuid& TargetEnemyPartId,
 		const FGuid& SourceCardId);
 
-	// Authoring facts consumed by the public BattleRuleContentContract Adapter.
-	static bool IsSupportedCardEffectType(const FGameplayTag& EffectType);
-	static bool IsSupportedEnemyIntentEffectType(const FGameplayTag& EffectType);
-	static bool IsSupportedMagnitudeSource(const FGameplayTag& MagnitudeSource);
-	static bool IsSupportedCardEffectMagnitudeSource(
-		const FGameplayTag& EffectType,
-		const FGameplayTag& MagnitudeSource);
-	static bool IsSupportedCardEffectTarget(
-		const FGameplayTag& EffectType,
-		const FGameplayTag& Target,
-		FWacomBattleRuleContentContract::ECardEffectContext Context,
-		ECardTargetMode CardTargetMode);
-	static bool IsSupportedEnemyIntentEffectTarget(
-		const FGameplayTag& EffectType,
-		const FGameplayTag& Target);
-	static bool CardEffectRequiresTargetZone(const FGameplayTag& EffectType);
-	static bool CardEffectAllowsTargetZone(const FGameplayTag& EffectType);
-	static bool CardEffectTargetZoneMustBeHandZone(const FGameplayTag& EffectType);
-	static bool CardEffectTargetZoneMustBeCardLocation(const FGameplayTag& EffectType);
-	static bool CardEffectTargetZoneMustBeStackStatus(const FGameplayTag& EffectType);
-	static bool CardEffectTargetZoneMustBeCardKeyword(const FGameplayTag& EffectType);
-	static bool CardEffectSupportsNegativeMagnitude(const FGameplayTag& EffectType);
-	static bool EnemyIntentEffectSupportsNegativeMagnitude(const FGameplayTag& EffectType);
-	static bool EffectUsesPositiveMagnitude(const FGameplayTag& EffectType);
-
 private:
 	friend class FCardEffectChain;
 

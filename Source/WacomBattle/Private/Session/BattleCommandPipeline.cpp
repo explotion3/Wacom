@@ -18,13 +18,7 @@ FWacomStatus FBattleCommandPipeline::Submit(
 		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("BattleEnded"));
 	}
 
-	const int32 VersionBefore = State.StateVersion;
 	const FWacomStatus Status = FBattleResolver::Resolve(State, Events, PresentationJournal, Command);
-	if (Status.IsOk() && State.StateVersion == VersionBefore)
-	{
-		// 成功执行但未显式递增版本号，补一次。Resolver 应当自行管理，这里只是兜底。
-		++State.StateVersion;
-	}
 
 	if (Status.IsOk()
 		&& State.Phase != EBattlePhase::BattleEnd
@@ -32,7 +26,6 @@ FWacomStatus FBattleCommandPipeline::Submit(
 		&& State.PendingKnockdownEvents.Num() > 0)
 	{
 		State.Phase = EBattlePhase::PendingKnockdownChoice;
-		++State.StateVersion;
 		FKnockdownFlowService::RequestCurrentChoiceIfPending(State, Events);
 	}
 

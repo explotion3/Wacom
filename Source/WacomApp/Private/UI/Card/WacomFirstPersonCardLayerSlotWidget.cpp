@@ -14,6 +14,7 @@
 #include "Sound/SoundBase.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
+#include "UI/Card/WacomFirstPersonCardDepthMotion.h"
 #include "UI/Card/WacomFirstPersonCardMotionMixer.h"
 #include "UI/Card/WacomFirstPersonCardTransitionPlayback.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
@@ -102,6 +103,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotView(const FWacomFirstPersonCa
 void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	const FWacomFirstPersonCardLayerSlotView& InSlotView)
 {
+	const bool bResetCardDepth =
+		CurrentSlotView.Entry.CardInstanceId != InSlotView.Entry.CardInstanceId
+		|| !InSlotView.bProjected
+		|| !InSlotView.Entry.CardInstanceId.IsValid();
 	if (bIsHoveredForFirstPersonLayer
 		&& (CurrentSlotView.Entry.CardInstanceId != InSlotView.Entry.CardInstanceId
 			|| !InSlotView.bProjected
@@ -118,6 +123,11 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	ClearInteractionFeedback();
 	ClearEnterTransitionPlayback();
 	ClearExitTransitionPlayback();
+	if (bResetCardDepth && CardDepthMotion)
+	{
+		CardDepthMotion->Reset();
+		ClearPointerViewportDiagnostics();
+	}
 
 	CurrentSlotView = InSlotView;
 	bHasVisualSlotView = true;
@@ -129,7 +139,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	ExitMotionElapsedSeconds = 0.0f;
 	ApplyCurrentSlotView();
 	ApplyVisualSlotView();
-	SetTickEnabledForMotion(false);
+	UpdateWantsTick();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotion(
@@ -159,6 +169,7 @@ UWacomFirstPersonCardLayerSlotWidget::UWacomFirstPersonCardLayerSlotWidget(
 	const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 	, TransitionPlayback(new FWacomFirstPersonCardTransitionPlayback())
+	, CardDepthMotion(new FWacomFirstPersonCardDepthMotion())
 {
 }
 
@@ -168,6 +179,12 @@ void FWacomFirstPersonCardTransitionPlaybackDeleter::operator()(
 	FWacomFirstPersonCardTransitionPlayback* Playback) const
 {
 	delete Playback;
+}
+
+void FWacomFirstPersonCardDepthMotionDeleter::operator()(
+	FWacomFirstPersonCardDepthMotion* Motion) const
+{
+	delete Motion;
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
@@ -195,6 +212,15 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 		ClearEnterTransitionPlayback();
 		ClearGestureState(true);
 		ClearInteractionFeedback();
+	}
+	if ((bTreatAsNewSlot
+			|| CurrentSlotView.Entry.CardInstanceId != InTargetSlotView.Entry.CardInstanceId
+			|| !InTargetSlotView.bProjected
+			|| !InTargetSlotView.Entry.CardInstanceId.IsValid())
+		&& CardDepthMotion)
+	{
+		CardDepthMotion->Reset();
+		ClearPointerViewportDiagnostics();
 	}
 
 	const bool bCanReuseVisual =
@@ -391,6 +417,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotVisualConfig(
 	}
 
 	SlotVisualConfig = NewConfig;
+	if (CardDepthMotion)
+	{
+		CardDepthMotion->InvalidateTarget();
+	}
 #if WITH_AUTOMATION_TESTS
 	++SlotVisualConfigApplyCountForTest;
 #endif
@@ -734,6 +764,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	ClearGestureState(false);
 	ClearInteractionFeedback();
 	TransitionPlayback.Reset();
+	CardDepthMotion.Reset();
 	SetTickEnabledForMotion(false);
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
@@ -837,6 +868,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	{
 		ApplyVisualSlotView();
 	}
+	UpdateCardDepthMotion(InDeltaTime);
 
 	const bool bInspectVisualChanged =
 		GestureState == EWacomFirstPersonCardGestureState::Inspecting
@@ -1014,6 +1046,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyCurrentSlotView()
 	if (CardView)
 	{
 		CardView->SetCardViewData(CurrentSlotView.Entry.CardViewData);
+		ApplyCardDepthView();
 	}
 	UpdateVisibilityForInteractionMode();
 }
@@ -1688,13 +1721,52 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdatePointerViewportDiagnostics(cons
 		FMath::Clamp((WidgetPosition.X / WidgetViewportSize.X) * 2.0f - 1.0f, -1.0f, 1.0f),
 		FMath::Clamp((WidgetPosition.Y / WidgetViewportSize.Y) * 2.0f - 1.0f, -1.0f, 1.0f));
 	bHasPointerViewportPosition = true;
+	bCardDepthPointerDirty = true;
+	UpdateWantsTick();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearPointerViewportDiagnostics()
 {
 	bHasPointerViewportPosition = false;
+	bCardDepthPointerDirty = true;
 	PointerViewportPosition = FVector2D::ZeroVector;
 	PointerNormalizedViewportPosition = FVector2D::ZeroVector;
+	UpdateWantsTick();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::UpdateCardDepthMotion(float DeltaTime)
+{
+	if (!CardDepthMotion || !bHasVisualSlotView)
+	{
+		return;
+	}
+
+	FWacomFirstPersonCardDepthMotionInput Input;
+	Input.bProjected = VisualSlotView.bProjected;
+	Input.bHovered = ResolveVisualState(CurrentSlotView).bHovered;
+	Input.bPressed = bIsPressedForFirstPersonLayer && !IsFormalDragGestureState(GestureState);
+	Input.bDragging = IsFormalDragGestureState(GestureState);
+	Input.bFlattenForSemanticTransition =
+		IsEnterTransitionPlaybackActive() || bIsExitingForFirstPersonLayer;
+	Input.bHasPointerPosition = bHasPointerViewportPosition;
+	Input.bPointerPositionChanged = bCardDepthPointerDirty;
+	Input.PointerPosition = PointerViewportPosition;
+	Input.CardCenter = VisualSlotView.ScreenPosition;
+	Input.CardBodySize = GetCardBodyHitSizeForFirstPersonLayer();
+	Input.CardRenderScale = VisualSlotView.RenderScale;
+	Input.CardRenderAngleDegrees = VisualSlotView.RenderAngleDegrees;
+
+	CardDepthMotion->Update(SlotVisualConfig.CardDepth, Input, DeltaTime);
+	bCardDepthPointerDirty = false;
+	ApplyCardDepthView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ApplyCardDepthView()
+{
+	if (CardView && CardDepthMotion)
+	{
+		CardView->SetCardDepthView(CardDepthMotion->GetView());
+	}
 }
 
 FWacomFirstPersonCardDragView UWacomFirstPersonCardLayerSlotWidget::BuildDragView() const
@@ -1888,6 +1960,10 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.DirectDragTargetFeedbackState = DirectDragTargetFeedbackState;
 	View.DragTargetFeedbackState = ResolveEffectiveDragTargetFeedbackState();
 	View.ActiveMotionIntent = ActiveMotionIntent;
+	if (CardDepthMotion)
+	{
+		View.CardDepthView = CardDepthMotion->GetView();
+	}
 	View.bEnterTransitionPlaybackActive = IsEnterTransitionPlaybackActive();
 	View.bEnterTransitionBlocksInteraction = IsEnterTransitionBlockingInteraction();
 	View.EnterTransitionElapsedSeconds = IsEnterTransitionPlaybackActive()
@@ -1947,6 +2023,12 @@ void UWacomFirstPersonCardLayerSlotWidget::RequestMoveAtLocalPositionForTest(con
 	}
 
 	UpdateBodyHoverFromLocalPosition(LocalPosition);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::SetCardDepthPointerPositionForTest(
+	const FVector2D& WidgetPosition)
+{
+	UpdatePointerViewportDiagnostics(WidgetPosition);
 }
 
 bool UWacomFirstPersonCardLayerSlotWidget::RequestPressAtLocalPositionForTest(const FVector2D& LocalPosition)
@@ -2448,9 +2530,11 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 				|| FMath::Abs(VisualSlotView.RenderAngleDegrees - EffectiveTargetSlotView.RenderAngleDegrees) > 0.05f
 				|| FMath::Abs(VisualSlotView.RenderScale - EffectiveTargetSlotView.RenderScale) > 0.001f
 				|| FMath::Abs(VisualSlotView.RenderOpacity - EffectiveTargetSlotView.RenderOpacity) > 0.01f
-				|| VisualSlotView.ZOrder != EffectiveTargetSlotView.ZOrder))
+			|| VisualSlotView.ZOrder != EffectiveTargetSlotView.ZOrder))
 		|| bFeedbackActive
-		|| bGestureActive;
+		|| bGestureActive
+		|| bCardDepthPointerDirty
+		|| (CardDepthMotion && CardDepthMotion->IsInMotion());
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::StartEnterTransitionPlayback(

@@ -3,9 +3,10 @@
 #include "Rewards/BattleCardGrantService.h"
 
 #include "Core/BattleState.h"
+#include "Cards/CardZoneAggregate.h"
 #include "Events/BattleEventBus.h"
+#include "Hand/BattleCardZoneTransition.h"
 #include "Hand/HandZoneService.h"
-#include "Hand/HandZoneMoveEventService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Types/WacomEnums.h"
 
@@ -26,7 +27,6 @@ FBattleCardGrantResult FBattleCardGrantService::GrantCardToHand(
 	FRuntimeCardInstance Card;
 	Card.InstanceId = FGuid::NewGuid();
 	Card.Definition = CardDefinition;
-	Card.Location = ECardLocation::Hand;
 
 	if (!ensureMsgf(Card.InstanceId.IsValid(),
 		TEXT("[BattleCardGrantService] FGuid::NewGuid produced an invalid card instance id")))
@@ -34,12 +34,13 @@ FBattleCardGrantResult FBattleCardGrantService::GrantCardToHand(
 		return Result;
 	}
 
-	const int32 NewIndex = State.Cards.AllCards.Add(Card);
-	State.Cards.CardIndexById.Add(Card.InstanceId, NewIndex);
+	if (!FCardZoneAggregate::RegisterCard(State, Card, ECardLocation::Hand))
+	{
+		return Result;
+	}
 	Result.GrantedCardInstanceId = Card.InstanceId;
 
 	FHandZoneService::InsertCardsIntoHandAtRandom(State, { Card.InstanceId });
-	FHandZoneService::EnforceNormalCardLimit(State, Result.DiscardedByLimit);
 
 	{
 		FBattleEvent Ev;
@@ -52,14 +53,12 @@ FBattleCardGrantResult FBattleCardGrantService::GrantCardToHand(
 		Events.Emit(Ev);
 	}
 
-	FHandZoneMoveEventService::FinalizeAlreadyMovedDiscards(
-		State,
-		Events,
-		Result.DiscardedByLimit,
-		EHandCardZoneMoveReason::HandLimit,
-		FGuid(),
-		FGameplayTag(),
-		EHandLimitDiscardSource::None);
+	Result.DiscardedByLimit =
+		FBattleCardZoneTransition::DiscardExcessNormalCardsFromHand(
+			State,
+			Events,
+			FBattleCardZoneTransitionCause::FromHandLimit(
+				EHandLimitDiscardSource::None)).MovedCardInstanceIds;
 
 	if (Result.DiscardedByLimit.IsEmpty())
 	{

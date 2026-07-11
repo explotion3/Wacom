@@ -213,6 +213,5 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 		return FWacomStatus::Ok();
 	}
 
-	++State.StateVersion;
 	return FWacomStatus::Ok();
 }

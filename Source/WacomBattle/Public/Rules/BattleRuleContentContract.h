@@ -25,6 +25,8 @@ struct WACOMBATTLE_API FWacomBattleRuleContentContract
 
 	static bool IsSupportedCardEffectType(const FGameplayTag& EffectType);
 	static bool IsSupportedEnemyIntentEffectType(const FGameplayTag& EffectType);
+	static TArray<FGameplayTag> GetSupportedCardEffectTypes();
+	static TArray<FGameplayTag> GetSupportedEnemyIntentEffectTypes();
 
 	static bool IsSupportedMagnitudeSource(const FGameplayTag& MagnitudeSource);
 	static bool IsSupportedCardEffectMagnitudeSource(

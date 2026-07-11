@@ -63,7 +63,6 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 	{
 		State.Outcome  = EBattleOutcome::Victory;
 		State.Phase    = EBattlePhase::BattleEnd;
-		++State.StateVersion;
 
 		FBattleEvent Ended;
 		Ended.Type  = EBattleEventType::BattleEnded;
@@ -120,8 +119,5 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 		// （命令 pipeline 的事件分派只在"首次入队"时触发；后续连续选项必须由 Resolver 自己推送。）
 		FKnockdownFlowService::RequestCurrentChoiceIfPending(State, Events);
 	}
-	// 不论是否非空都视为 state 有变更
-	++State.StateVersion;
-
 	return FWacomStatus::Ok();
 }

@@ -13,7 +13,8 @@ struct FBattleState;
 /**
  * BattleSession 的命令处理管线。
  *
- * 负责命令级状态机外壳：BattleEnd 拦截、Resolver 分派、版本兜底和击倒请求入口。
+ * 负责命令级状态机外壳：BattleEnd 拦截、Resolver 分派和击倒请求入口。
+ * StateVersion 只由 BattleSession 在成功事务 commit 时递增。
  */
 struct FBattleCommandPipeline
 {
