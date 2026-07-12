@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Events/BattleEvent.h"
 #include "Snapshots/BattleSnapshot.h"
 
 /**
@@ -18,6 +19,22 @@ enum class EBattlePresentationCheckpointType : uint8
 	TurnEndDiscardResolved,
 	TurnEndRetainResolved,
 	TurnStartDrawResolved
+};
+
+enum class EBattlePresentationDeckStepKind : uint8
+{
+	DrawBatch,
+	DiscardPileReshuffledIntoDraw
+};
+
+/** Ordered deck-operation fact used to reconstruct intermediate UI presentation. */
+struct WACOMBATTLE_API FBattlePresentationDeckStep
+{
+	EBattlePresentationDeckStepKind Kind = EBattlePresentationDeckStepKind::DrawBatch;
+	TArray<FGuid> CardInstanceIds;
+	int32 EventSequence = INDEX_NONE;
+	int32 DrawPileCountAfter = INDEX_NONE;
+	int32 DiscardPileCountAfter = INDEX_NONE;
 };
 
 /**
@@ -46,15 +63,17 @@ struct WACOMBATTLE_API FBattlePresentationCheckpoint
 struct WACOMBATTLE_API FBattlePresentationJournal
 {
 	TArray<FBattlePresentationCheckpoint> Checkpoints;
+	TArray<FBattlePresentationDeckStep> DeckSteps;
 
 	bool IsEmpty() const
 	{
-		return Checkpoints.IsEmpty();
+		return Checkpoints.IsEmpty() && DeckSteps.IsEmpty();
 	}
 
 	void Reset()
 	{
 		Checkpoints.Reset();
+		DeckSteps.Reset();
 	}
 
 	void AddCheckpoint(
@@ -71,5 +90,32 @@ struct WACOMBATTLE_API FBattlePresentationJournal
 		Checkpoint.FirstEventSequence = FirstEventSequence;
 		Checkpoint.LastEventSequence = LastEventSequence;
 		Checkpoints.Add(MoveTemp(Checkpoint));
+	}
+
+	void AppendDeckStepsFromEvents(const TArray<FBattleEvent>& Events)
+	{
+		for (const FBattleEvent& Event : Events)
+		{
+			EBattlePresentationDeckStepKind Kind;
+			if (Event.Type == EBattleEventType::CardsDrawn)
+			{
+				Kind = EBattlePresentationDeckStepKind::DrawBatch;
+			}
+			else if (Event.Type == EBattleEventType::DiscardPileReshuffledIntoDraw)
+			{
+				Kind = EBattlePresentationDeckStepKind::DiscardPileReshuffledIntoDraw;
+			}
+			else
+			{
+				continue;
+			}
+
+			FBattlePresentationDeckStep& Step = DeckSteps.AddDefaulted_GetRef();
+			Step.Kind = Kind;
+			Step.CardInstanceIds = Event.CardInstanceIds;
+			Step.EventSequence = Event.Sequence;
+			Step.DrawPileCountAfter = Event.DrawPileCountAfter;
+			Step.DiscardPileCountAfter = Event.DiscardPileCountAfter;
+		}
 	}
 };

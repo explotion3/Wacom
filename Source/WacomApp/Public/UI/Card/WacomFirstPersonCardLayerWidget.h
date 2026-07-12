@@ -13,6 +13,7 @@ class UCanvasPanel;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerSlotWidget;
+class UWacomFirstPersonCardPileTransferWidget;
 struct FWacomFirstPersonCardLayerTestAccess;
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -20,6 +21,9 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerTargetNative, con
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerPointerNative, const FWacomFirstPersonCardPointerView&);
 DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerPointerExitNative);
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FWacomFirstPersonCardLayerPileTransferProgressNative,
+	const FWacomFirstPersonCardPileTransferProgressView&);
 
 enum class EWacomFirstPersonCardPointerRouteAction : uint8
 {
@@ -151,6 +155,8 @@ public:
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardFeedbackHints(const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints);
 	void SetPresentationAnchors(const FWacomFirstPersonCardPresentationAnchorSet& InAnchors);
+	void SetPileTransferConfig(const FWacomFirstPersonCardPileTransferConfig& InConfig);
+	void SetPileTransferHints(const TArray<FWacomFirstPersonCardPileTransferHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 	bool HasActivePresentationPlayback() const;
@@ -211,6 +217,7 @@ public:
 	FWacomFirstPersonCardLayerDragNative OnCardDragCancelledNative;
 	FWacomFirstPersonCardLayerPointerNative OnCardPointerMovedNative;
 	FWacomFirstPersonCardLayerPointerExitNative OnCardPointerLeftNative;
+	FWacomFirstPersonCardLayerPileTransferProgressNative OnPileTransferProgressNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -228,6 +235,9 @@ protected:
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UCanvasPanel> RootCanvas;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomFirstPersonCardPileTransferWidget> PileTransferWidget;
 	FWacomFirstPersonCardPresentationAnchorSet PresentationAnchors;
 
 	UPROPERTY(Transient)
@@ -246,6 +256,7 @@ private:
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
+	FWacomFirstPersonCardPileTransferConfig PileTransferConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
 	FGuid HoveredCardInstanceId;
 	FWacomInteractionTargetHandle HoveredCardTargetHandle;
@@ -258,6 +269,7 @@ private:
 	FString CurrentDragResolvedIntentDebugSummary;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedFeedbackHint> PendingFeedbackHintsByKey;
+	TSet<int32> PlayedPileTransferSequences;
 	bool bCardLayerInteractionEnabled = false;
 	bool bLogSlotMotionDiagnostics = false;
 #if WITH_AUTOMATION_TESTS
@@ -297,6 +309,8 @@ private:
 
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	void ApplyLayerVisibility();
+	void EnsurePileTransferWidget();
+	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void ReleaseOwnedSlateMouseCapture();
 	void BindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
 	void UnbindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);

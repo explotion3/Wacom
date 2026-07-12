@@ -51,6 +51,7 @@ enum class EBattleEventType : uint8
 	BattleEnded           UMETA(DisplayName = "BattleEnded"),
 	// Append-only presentation fact. Keep existing serialized enum values stable.
 	CardPlayDestinationResolved UMETA(DisplayName = "CardPlayDestinationResolved"),
+	DiscardPileReshuffledIntoDraw UMETA(DisplayName = "DiscardPileReshuffledIntoDraw"),
 };
 
 /**
@@ -85,6 +86,7 @@ enum class EHandCardZoneMoveReason : uint8
  *
  * 字段使用约定（非穷举）：
  * - CardsDrawn          ：CardInstanceIds = 本批真实抽到 / 移入手牌的普通卡实例，Count = CardInstanceIds.Num()
+ * - DiscardPileReshuffledIntoDraw：CardInstanceIds = 本批从弃牌堆洗回抽牌堆的卡，Count = CardInstanceIds.Num()
  * - CardsRetained       ：CardInstanceIds = 本次回合结束明确保留的普通手牌，Count = CardInstanceIds.Num()
  * - CardPlayed          ：CardInstanceId、ActorEnemyPartKey = 目标部位稳定 key
  * - CardPlayDestinationResolved：CardInstanceId、CardDestination = 打出结算后的最终区域
@@ -153,6 +155,14 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 通用计数字段：抽牌数、连击次数等。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	int32 Count = 0;
+
+	/** Deck step 完成后的抽牌堆数量；仅 CardsDrawn / DiscardPileReshuffledIntoDraw 使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	int32 DrawPileCountAfter = INDEX_NONE;
+
+	/** Deck step 完成后的弃牌堆数量；仅 CardsDrawn / DiscardPileReshuffledIntoDraw 使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	int32 DiscardPileCountAfter = INDEX_NONE;
 
 	/** 普通手牌上限弃牌的来源，仅 HandLimitDiscarded 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

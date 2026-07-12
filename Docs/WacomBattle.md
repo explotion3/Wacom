@@ -42,7 +42,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `FBattleEvent` | 结算过程事件流；不是真正规则状态 |
 | `FBattleInitializationResult` | 一次初始化的原子结果；绑定 status、opening events 与 post snapshot |
 | `FBattleResolution` | 一条 C++ 命令的原子结果；绑定 status、前后版本、events、journal 与 post snapshot |
-| `FBattlePresentationJournal` | 单次命令内的 C++ only 只读表现 checkpoint journal；当前仅记录 EndTurn 手牌规则 checkpoint |
+| `FBattlePresentationJournal` | 单次命令内的 C++ only 只读表现 journal；记录 EndTurn checkpoint 和任意正式命令的有序 Deck Steps |
 | `FBattleResultPacket` | BattleEnd 后给 Run 层消费的战后包 |
 | `BattleCommandPipeline` | 拦截 BattleEnd、分派 resolver 和触发击倒请求；不拥有版本号 |
 | `BattleResolver` | PlayCard / Wait / EndTurn / KnockdownChoice 调度入口 |
@@ -78,7 +78,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 规则层不等待 UI 动画。BattleHUD 的 presentation queue、Combat Log、Presentation Stack 和 turn-boundary barrier 都属于表现层；它们只决定何时把玩家意图提交成 `FBattleCommand`，不改变命令本身。
 
-`FBattlePresentationJournal` 也是 C++ only 只读表现合同，不是规则状态，也不是 WBP 制作面。它记录一次成功命令结算中的关键 checkpoint snapshot 和相关卡实例 ID，让 App 层后续表现计划能读取精确中间态；恢复、存档、规则判断和权威 UI 刷新仍以 `FBattleSnapshot` 为准。当前 journal v1 只覆盖 `EndTurn` 手牌阶段：`TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`。
+`FBattlePresentationJournal` 也是 C++ only 只读表现合同，不是规则状态，也不是 WBP 制作面。它记录一次成功命令结算中的关键 checkpoint snapshot、相关卡实例 ID，以及从同次正式事件流派生的有序 Deck Steps，让 App 层后续表现计划能读取精确中间态；恢复、存档、规则判断和权威 UI 刷新仍以 `FBattleSnapshot` 为准。EndTurn checkpoint 包含 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`；`DeckSteps` 可由 EndTurn 或 `Effect.Draw` 等任意正式命令产生，Action Preview 不生成这组事实。
 
 普通玩家命令在 `PlayerAction` 阶段提交。`PendingKnockdownChoice`、`BattleEnd` 和非玩家行动阶段会阻止普通 `PlayCard / Wait / EndTurn`。
 
@@ -445,7 +445,7 @@ BattleState
 | 连击牌 | 通过 Card Zone Transaction 按出牌前邻居 / index 返回原位置；显式腾挪优先 |
 | 保留牌打出 | 本回合使用牌堆；保留只影响回合结束弃牌 |
 
-本回合使用牌堆（`PlayedPile`）只保存本回合自然打出的普通牌。抽牌堆耗尽时只把弃牌堆洗回抽牌堆，`PlayedPile` 不参与同回合洗牌。玩家回合结束时，`PlayedPile` 整体自然转入弃牌堆；这个转移不发 `CardDiscarded`，也不触发 `OnDiscard`。
+本回合使用牌堆（`PlayedPile`）只保存本回合自然打出的普通牌。抽牌请求按可追踪步骤执行：先从当前抽牌堆形成连续 `DrawBatch`；抽牌堆为空且弃牌堆非空时，形成 `DiscardPileReshuffledIntoDraw`，把弃牌堆全部移动并沿用现有 Fisher–Yates / RNG 顺序洗牌；随后再形成新的 `DrawBatch`。规则立即结算且最终顺序不变，但事件严格保持“前一批 `CardsDrawn` → `DiscardPileReshuffledIntoDraw` → 后一批 `CardsDrawn`”。洗回事件携带本次实际移动的完整 `CardInstanceIds / Count` 和该步后的 Draw / Discard 数量；初始牌库随机、手牌区 Shuffle 和 PlayedPile 清理不发该事件。`PlayedPile` 不参与同回合洗牌。玩家回合结束时，`PlayedPile` 整体自然转入弃牌堆；这个转移不发 `CardDiscarded`，也不触发 `OnDiscard`。
 
 ## §11 BattleEvent
 
@@ -456,6 +456,7 @@ BattleState
 | `BattleStarted` | `Initialize` 成功后发出 |
 | `TurnStarted` | `Initialize` 成功后首回合发出 |
 | `CardsDrawn` | 回合开始抽牌或 `Effect.Draw` 成功入手 |
+| `DiscardPileReshuffledIntoDraw` | 抽牌堆耗尽后，弃牌堆整体洗回抽牌堆；携带全部真实 ID、数量和步骤后牌堆计数 |
 | `CardsRetained` | 玩家回合结束明确保留普通手牌 |
 | `HandZoneChanged` | 手牌队列、区域或上限弃牌后需要 UI 刷新 |
 | `CardPlayed` | 玩家打出卡牌 |

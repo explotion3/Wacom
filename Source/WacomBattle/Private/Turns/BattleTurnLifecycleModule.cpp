@@ -51,20 +51,16 @@ namespace
 		// before wait reset and draw. This slice deliberately executes neither.
 		State.CurrentWaitValue = DefaultCurrentWaitValue;
 
-		TArray<FGuid> DrawnCardIds;
 		const int32 AvailableSlots = FHandZoneService::GetAvailableNormalCardSlots(State);
-		FDeckService::DrawCards(
+		const FDeckDrawResult DrawResult = FDeckService::DrawCards(
 			State,
-			FMath::Min(InitialDrawCount, AvailableSlots),
-			DrawnCardIds);
+			FMath::Min(InitialDrawCount, AvailableSlots));
+		const TArray<FGuid>& DrawnCardIds = DrawResult.DrawnCardIds;
 
 		// DrawCards atomically moves membership into Hand; HandZoneService only rebuilds order.
 		FHandZoneService::GenerateHandQueueOnTurnStart(State, DrawnCardIds);
 
-		if (!DrawnCardIds.IsEmpty())
-		{
-			WacomBattleEvents::EmitCardsDrawn(Events, DrawnCardIds);
-		}
+		WacomBattleEvents::EmitDeckDrawResult(Events, DrawResult);
 
 		FBattleStatusSemanticsModule::MaterializePendingHandAfflictions(State, Events);
 
@@ -73,7 +69,7 @@ namespace
 		Events.Emit(HandZoneEvent);
 
 		State.Phase = EBattlePhase::PlayerAction;
-		return DrawnCardIds;
+		return DrawResult.DrawnCardIds;
 	}
 }
 

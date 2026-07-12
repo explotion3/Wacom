@@ -5,15 +5,15 @@
 #include "Core/BattleState.h"
 #include "Types/WacomEnums.h"
 
-int32 FDeckService::DrawCards(FBattleState& State, int32 Count, TArray<FGuid>& OutDrawnCardIds)
+FDeckDrawResult FDeckService::DrawCards(FBattleState& State, int32 Count)
 {
+	FDeckDrawResult Result;
 	if (Count <= 0)
 	{
-		return 0;
+		return Result;
 	}
 
-	int32 Drawn = 0;
-	while (Drawn < Count)
+	while (Result.DrawnCardIds.Num() < Count)
 	{
 		if (State.Cards.DrawPile.IsEmpty())
 		{
@@ -21,22 +21,40 @@ int32 FDeckService::DrawCards(FBattleState& State, int32 Count, TArray<FGuid>& O
 			{
 				break;  // 无卡可抽
 			}
+
+			FDeckDrawStepFact& ReshuffleStep = Result.Steps.AddDefaulted_GetRef();
+			ReshuffleStep.Kind = EDeckDrawStepKind::DiscardPileReshuffledIntoDraw;
+			ReshuffleStep.CardInstanceIds = State.Cards.DiscardPile;
 			ReshuffleDiscardIntoDraw(State);
+			ReshuffleStep.DrawPileCountAfter = State.Cards.DrawPile.Num();
+			ReshuffleStep.DiscardPileCountAfter = State.Cards.DiscardPile.Num();
 		}
 
-		const FGuid TopId = State.Cards.DrawPile.Last();
-		if (!FCardZoneAggregate::MoveCardFrom(
-			State,
-			TopId,
-			ECardLocation::Draw,
-			ECardLocation::Hand))
+		FDeckDrawStepFact DrawStep;
+		DrawStep.Kind = EDeckDrawStepKind::DrawBatch;
+		while (Result.DrawnCardIds.Num() < Count && !State.Cards.DrawPile.IsEmpty())
+		{
+			const FGuid TopId = State.Cards.DrawPile.Last();
+			if (!FCardZoneAggregate::MoveCardFrom(
+				State,
+				TopId,
+				ECardLocation::Draw,
+				ECardLocation::Hand))
+			{
+				break;
+			}
+			Result.DrawnCardIds.Add(TopId);
+			DrawStep.CardInstanceIds.Add(TopId);
+		}
+		if (DrawStep.CardInstanceIds.IsEmpty())
 		{
 			break;
 		}
-		OutDrawnCardIds.Add(TopId);
-		++Drawn;
+		DrawStep.DrawPileCountAfter = State.Cards.DrawPile.Num();
+		DrawStep.DiscardPileCountAfter = State.Cards.DiscardPile.Num();
+		Result.Steps.Add(MoveTemp(DrawStep));
 	}
-	return Drawn;
+	return Result;
 }
 
 void FDeckService::ShuffleDrawPile(FBattleState& State)

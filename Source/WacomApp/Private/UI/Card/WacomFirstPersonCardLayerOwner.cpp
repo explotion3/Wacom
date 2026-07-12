@@ -54,6 +54,10 @@ bool FWacomFirstPersonCardLayerOwner::Update(
 	{
 		WidgetRef->SetCardFeedbackHints(Input.ConsumeFeedbackHints());
 	}
+	if (Input.bCanConsumePileTransferHints && Input.ConsumePileTransferHints)
+	{
+		WidgetRef->SetPileTransferHints(Input.ConsumePileTransferHints());
+	}
 
 	WidgetRef->SetCardSlots(Input.Slots);
 	return true;
@@ -102,6 +106,7 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfig(
 	LayerWidget.SetSlotVisualConfig(Config.SlotVisualConfig);
 	LayerWidget.SetSlotFeedbackConfig(Config.SlotFeedbackConfig);
 	LayerWidget.SetCardDragConfig(Config.CardDragConfig);
+	LayerWidget.SetPileTransferConfig(Config.PileTransferConfig);
 	LayerWidget.SetLogSlotMotionDiagnostics(Config.bLogSlotMotionDiagnostics);
 	LayerWidget.SetCardViewClass(Config.CardViewClass);
 	LayerWidget.SetCardLayerInteractionEnabled(Config.bInteractionEnabled);

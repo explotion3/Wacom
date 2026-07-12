@@ -20,6 +20,7 @@ struct FWacomFirstPersonCardLayerOwnerConfig
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
 	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
+	FWacomFirstPersonCardPileTransferConfig PileTransferConfig;
 	bool bLogSlotMotionDiagnostics = false;
 	bool bInteractionEnabled = false;
 };
@@ -37,8 +38,10 @@ struct FWacomFirstPersonCardLayerOwnerUpdateInput
 	TFunction<void(UWacomFirstPersonCardLayerWidget*, int32)> AddLayerWidgetToViewport;
 	TFunction<TArray<FWacomFirstPersonCardLayerTransitionHint>()> ConsumeTransitionHints;
 	TFunction<TArray<FWacomFirstPersonCardLayerFeedbackHint>()> ConsumeFeedbackHints;
+	TFunction<TArray<FWacomFirstPersonCardPileTransferHint>()> ConsumePileTransferHints;
 	bool bCanConsumeTransitionHints = true;
 	bool bCanConsumeFeedbackHints = true;
+	bool bCanConsumePileTransferHints = true;
 };
 
 class FWacomFirstPersonCardLayerOwner

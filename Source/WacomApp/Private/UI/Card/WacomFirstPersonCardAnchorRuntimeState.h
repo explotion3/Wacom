@@ -20,6 +20,8 @@ public:
 		FName SourceId,
 		const FWacomFirstPersonCardPresentationAnchorSet& Anchors);
 	void ClearPresentationAnchors(FName SourceId);
+	void SetPileTransferHints(FName SourceId, const TArray<FWacomFirstPersonCardPileTransferHint>& Hints);
+	void ClearPileTransferHints();
 	bool Clear(FName SourceId);
 	void ClearTransientInteraction();
 	void ClearTransitionHints();
@@ -52,6 +54,8 @@ public:
 	bool HasPresentationFrameFeedbackHintsForSource(FName SourceId) const;
 	bool CanConsumePresentationFrameFeedbackHintsForCurrentSource() const;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> ConsumePresentationFrameFeedbackHintsForCurrentSource();
+	bool CanConsumePileTransferHintsForCurrentSource() const;
+	TArray<FWacomFirstPersonCardPileTransferHint> ConsumePileTransferHintsForCurrentSource();
 
 	FGuid GetHoveredCardInstanceId() const { return HoveredCardInstanceId; }
 	void SetHoveredCardInstanceId(const FGuid& CardInstanceId) { HoveredCardInstanceId = CardInstanceId; }
@@ -71,6 +75,7 @@ private:
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> PresentationFrameHints;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> PresentationFrameFeedbackHints;
+	TArray<FWacomFirstPersonCardPileTransferHint> PileTransferHints;
 	bool bHasRuntimeData = false;
 	FName SourceId = NAME_None;
 	FName TransitionHintSourceId = NAME_None;
@@ -78,6 +83,7 @@ private:
 	FName PresentationFrameHintSourceId = NAME_None;
 	FName PresentationFrameFeedbackHintSourceId = NAME_None;
 	FName PresentationAnchorSourceId = NAME_None;
+	FName PileTransferHintSourceId = NAME_None;
 	FWacomFirstPersonCardPresentationAnchorSet PresentationAnchors;
 	TSet<FName> TransitionPresentationSuppressedSources;
 	FGuid HoveredCardInstanceId;

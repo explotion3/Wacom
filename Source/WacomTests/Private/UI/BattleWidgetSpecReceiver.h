@@ -265,6 +265,16 @@ public:
 		return TArray<FName>();
 	}
 
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> GetSubmittedPresentationPlanFeedbackHintsForTest() const
+	{
+		if (const TArray<FWacomFirstPersonCardLayerFeedbackHint>* Hints =
+			AutomationViewForTest().PresentationPlanSubmittedFeedbackHints)
+		{
+			return *Hints;
+		}
+		return TArray<FWacomFirstPersonCardLayerFeedbackHint>();
+	}
+
 	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
 	{
 		return AutomationViewForTest().SceneEnemyPartWorldTargetBridgeCount;

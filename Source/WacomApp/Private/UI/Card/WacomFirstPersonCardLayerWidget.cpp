@@ -14,6 +14,7 @@
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
+#include "UI/Card/WacomFirstPersonCardPileTransferWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 
 namespace
@@ -593,6 +594,11 @@ void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 	LastSlots.Reset();
 	PendingTransitionHintsByKey.Reset();
 	PendingFeedbackHintsByKey.Reset();
+	PlayedPileTransferSequences.Reset();
+	if (PileTransferWidget)
+	{
+		PileTransferWidget->ResetPlayback();
+	}
 	HoveredCardTargetHandle = FWacomInteractionTargetHandle();
 	HoveredCardTargetSlotView = FWacomFirstPersonCardLayerSlotView();
 	LastMotionDebugView = FWacomFirstPersonCardLayerMotionDebugView();
@@ -602,6 +608,58 @@ void UWacomFirstPersonCardLayerWidget::SetPresentationAnchors(
 	const FWacomFirstPersonCardPresentationAnchorSet& InAnchors)
 {
 	PresentationAnchors = InAnchors;
+}
+
+void UWacomFirstPersonCardLayerWidget::SetPileTransferConfig(
+	const FWacomFirstPersonCardPileTransferConfig& InConfig)
+{
+	PileTransferConfig = InConfig;
+	EnsurePileTransferWidget();
+	if (PileTransferWidget)
+	{
+		PileTransferWidget->SetConfig(PileTransferConfig);
+	}
+}
+
+void UWacomFirstPersonCardLayerWidget::SetPileTransferHints(
+	const TArray<FWacomFirstPersonCardPileTransferHint>& InHints)
+{
+	EnsurePileTransferWidget();
+	if (!PileTransferWidget)
+	{
+		return;
+	}
+
+	for (const FWacomFirstPersonCardPileTransferHint& Hint : InHints)
+	{
+		if (Hint.EventSequence == INDEX_NONE
+			|| Hint.CardInstanceIds.IsEmpty()
+			|| PlayedPileTransferSequences.Contains(Hint.EventSequence))
+		{
+			continue;
+		}
+		PlayedPileTransferSequences.Add(Hint.EventSequence);
+		if (PileTransferWidget->IsPlaybackActive())
+		{
+			PileTransferWidget->ForceComplete();
+		}
+
+		const FWacomFirstPersonCardPresentationAnchorPoint& SourceAnchor =
+			PresentationAnchors.Get(Hint.SourceAnchorKind);
+		const FWacomFirstPersonCardPresentationAnchorPoint& TargetAnchor =
+			PresentationAnchors.Get(Hint.TargetAnchorKind);
+		if (!IsValidPresentationAnchorPoint(SourceAnchor)
+			|| !IsValidPresentationAnchorPoint(TargetAnchor)
+			|| !PileTransferWidget->Play(Hint, SourceAnchor.WidgetPosition, TargetAnchor.WidgetPosition))
+		{
+			FWacomFirstPersonCardPileTransferProgressView Progress;
+			Progress.EventSequence = Hint.EventSequence;
+			Progress.ArrivedCount = Hint.CardInstanceIds.Num();
+			Progress.TotalCount = Hint.CardInstanceIds.Num();
+			Progress.bCompleted = true;
+			HandlePileTransferProgress(Progress);
+		}
+	}
 }
 
 void UWacomFirstPersonCardLayerWidget::SetCardTransitionHints(
@@ -970,6 +1028,10 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 
 bool UWacomFirstPersonCardLayerWidget::HasActivePresentationPlayback() const
 {
+	if (PileTransferWidget && PileTransferWidget->IsPlaybackActive())
+	{
+		return true;
+	}
 	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
 		if (SlotWidget && SlotWidget->HasActivePresentationPlayback())
@@ -993,6 +1055,10 @@ void UWacomFirstPersonCardLayerWidget::ForceSettlePresentationPlayback()
 {
 	PendingTransitionHintsByKey.Reset();
 	PendingFeedbackHintsByKey.Reset();
+	if (PileTransferWidget)
+	{
+		PileTransferWidget->ForceComplete();
+	}
 	for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
 		if (SlotWidget)
@@ -1401,6 +1467,7 @@ TSharedRef<SWidget> UWacomFirstPersonCardLayerWidget::RebuildWidget()
 		RootCanvas = Cast<UCanvasPanel>(WidgetTree->RootWidget);
 	}
 
+	EnsurePileTransferWidget();
 	ApplyLayerVisibility();
 	return Super::RebuildWidget();
 }
@@ -1431,6 +1498,12 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	OnCardTargetHoveredNative.Clear();
 	OnCardTargetUnhoveredNative.Clear();
 	OnHoveredCardTargetUpdatedNative.Clear();
+	OnPileTransferProgressNative.Clear();
+	if (PileTransferWidget)
+	{
+		PileTransferWidget->OnProgressNative.RemoveAll(this);
+		PileTransferWidget->ResetPlayback();
+	}
 	SlotWidgets.Reset();
 	OutgoingSlotWidgets.Reset();
 	HoveredSlotWidget.Reset();
@@ -1440,7 +1513,9 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	HoveredCardTargetSlotView = FWacomFirstPersonCardLayerSlotView();
 	CurrentDragView = FWacomFirstPersonCardDragView();
 	RootCanvas = nullptr;
+	PileTransferWidget = nullptr;
 	PendingTransitionHintsByKey.Reset();
+	PlayedPileTransferSequences.Reset();
 	Super::NativeDestruct();
 }
 
@@ -1449,6 +1524,10 @@ void UWacomFirstPersonCardLayerWidget::NativeTick(
 	float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	if (PileTransferWidget)
+	{
+		PileTransferWidget->TickPlayback(InDeltaTime);
+	}
 	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
 	RefreshSlotMotionDebugCounts();
 }
@@ -1577,6 +1656,39 @@ void UWacomFirstPersonCardLayerWidget::ApplyLayerVisibility()
 	{
 		RootCanvas->SetVisibility(LayerVisibility);
 	}
+}
+
+void UWacomFirstPersonCardLayerWidget::EnsurePileTransferWidget()
+{
+	if (!RootCanvas || PileTransferWidget)
+	{
+		return;
+	}
+	PileTransferWidget = WidgetTree->ConstructWidget<UWacomFirstPersonCardPileTransferWidget>(
+		UWacomFirstPersonCardPileTransferWidget::StaticClass(),
+		TEXT("FirstPersonCardPileTransfer"));
+	if (!PileTransferWidget)
+	{
+		return;
+	}
+	PileTransferWidget->SetConfig(PileTransferConfig);
+	PileTransferWidget->OnProgressNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardLayerWidget::HandlePileTransferProgress);
+	RootCanvas->AddChild(PileTransferWidget);
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(PileTransferWidget->Slot))
+	{
+		CanvasSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		CanvasSlot->SetOffsets(FMargin(0.0f));
+		CanvasSlot->SetAlignment(FVector2D::ZeroVector);
+		CanvasSlot->SetZOrder(1000000);
+	}
+}
+
+void UWacomFirstPersonCardLayerWidget::HandlePileTransferProgress(
+	const FWacomFirstPersonCardPileTransferProgressView& Progress)
+{
+	OnPileTransferProgressNative.Broadcast(Progress);
 }
 
 void UWacomFirstPersonCardLayerWidget::ReleaseOwnedSlateMouseCapture()

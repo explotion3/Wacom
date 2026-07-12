@@ -18,6 +18,10 @@ bool FWacomFirstPersonCardAnchorRuntimeState::SetEntries(
 		PresentationAnchorSourceId = NAME_None;
 		PresentationAnchors = FWacomFirstPersonCardPresentationAnchorSet();
 	}
+	if (bSourceChanged && PileTransferHintSourceId != InSourceId)
+	{
+		ClearPileTransferHints();
+	}
 	Entries.Reset(InEntries.Num());
 	CardData.Reset(InEntries.Num());
 	for (FWacomFirstPersonCardLayerEntry Entry : InEntries)
@@ -142,10 +146,12 @@ bool FWacomFirstPersonCardAnchorRuntimeState::Clear(FName InSourceId)
 	FeedbackHints.Reset();
 	PresentationFrameHints.Reset();
 	PresentationFrameFeedbackHints.Reset();
+	PileTransferHints.Reset();
 	TransitionHintSourceId = NAME_None;
 	FeedbackHintSourceId = NAME_None;
 	PresentationFrameHintSourceId = NAME_None;
 	PresentationFrameFeedbackHintSourceId = NAME_None;
+	PileTransferHintSourceId = NAME_None;
 	PresentationAnchorSourceId = NAME_None;
 	PresentationAnchors = FWacomFirstPersonCardPresentationAnchorSet();
 	TransitionPresentationSuppressedSources.Remove(InSourceId);
@@ -191,6 +197,31 @@ void FWacomFirstPersonCardAnchorRuntimeState::ClearPresentationAnchors(FName InS
 		PresentationAnchorSourceId = NAME_None;
 		PresentationAnchors = FWacomFirstPersonCardPresentationAnchorSet();
 	}
+}
+
+void FWacomFirstPersonCardAnchorRuntimeState::SetPileTransferHints(
+	FName InSourceId,
+	const TArray<FWacomFirstPersonCardPileTransferHint>& InHints)
+{
+	if (InSourceId.IsNone())
+	{
+		return;
+	}
+	PileTransferHintSourceId = InSourceId;
+	PileTransferHints.Reset(InHints.Num());
+	for (const FWacomFirstPersonCardPileTransferHint& Hint : InHints)
+	{
+		if (Hint.EventSequence != INDEX_NONE && !Hint.CardInstanceIds.IsEmpty())
+		{
+			PileTransferHints.Add(Hint);
+		}
+	}
+}
+
+void FWacomFirstPersonCardAnchorRuntimeState::ClearPileTransferHints()
+{
+	PileTransferHints.Reset();
+	PileTransferHintSourceId = NAME_None;
 }
 
 const FWacomFirstPersonCardPresentationAnchorSet&
@@ -312,6 +343,26 @@ FWacomFirstPersonCardAnchorRuntimeState::ConsumePresentationFrameFeedbackHintsFo
 	{
 		Result = MoveTemp(PresentationFrameFeedbackHints);
 		PresentationFrameFeedbackHintSourceId = NAME_None;
+	}
+	return Result;
+}
+
+bool FWacomFirstPersonCardAnchorRuntimeState::CanConsumePileTransferHintsForCurrentSource() const
+{
+	return !SourceId.IsNone()
+		&& PileTransferHintSourceId == SourceId
+		&& !PileTransferHints.IsEmpty()
+		&& IsTransitionPresentationEnabled(SourceId);
+}
+
+TArray<FWacomFirstPersonCardPileTransferHint>
+FWacomFirstPersonCardAnchorRuntimeState::ConsumePileTransferHintsForCurrentSource()
+{
+	TArray<FWacomFirstPersonCardPileTransferHint> Result;
+	if (CanConsumePileTransferHintsForCurrentSource())
+	{
+		Result = MoveTemp(PileTransferHints);
+		PileTransferHintSourceId = NAME_None;
 	}
 	return Result;
 }

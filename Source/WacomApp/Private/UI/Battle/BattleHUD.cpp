@@ -309,6 +309,9 @@ void UBattleHUD::BindFirstPersonCardLayerInteractionsForRuntime(
 	Anchor.OnFirstPersonCardLayerDragCancelled.AddUObject(
 		this,
 		&UBattleHUD::HandleFirstPersonCardLayerDragCancelled);
+	Anchor.OnFirstPersonCardLayerPileTransferProgress.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerPileTransferProgress);
 }
 
 void UBattleHUD::UnbindFirstPersonCardLayerInteractionsForRuntime(
@@ -326,6 +329,7 @@ void UBattleHUD::UnbindFirstPersonCardLayerInteractionsForRuntime(
 	Anchor.OnFirstPersonCardLayerDragUpdated.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerDragReleased.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerPileTransferProgress.RemoveAll(this);
 }
 
 EBattleUIState UBattleHUD::GetUIState() const
@@ -908,6 +912,12 @@ void UBattleHUD::HandleFirstPersonCardLayerDragCancelled(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	GetBattleHUDRuntime().HandleFirstPersonCardLayerDragCancelled(CardInstanceId, DragView);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerPileTransferProgress(
+	const FWacomFirstPersonCardPileTransferProgressView& Progress)
+{
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerPileTransferProgress(Progress);
 }
 
 void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(

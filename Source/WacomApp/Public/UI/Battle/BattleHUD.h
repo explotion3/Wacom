@@ -165,6 +165,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 	int32 PresentationPlanPendingPhaseCount = 0;
 	FName ActivePresentationPlanPhaseName = NAME_None;
 	const TArray<FName>* PresentationPlanStartedPhaseNames = nullptr;
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>* PresentationPlanSubmittedFeedbackHints = nullptr;
 	bool bHasLastBattleSnapshot = false;
 	int32 LastBattleSnapshotHandCount = 0;
 	int32 LastBattleSnapshotVersion = INDEX_NONE;
@@ -583,6 +584,7 @@ private:
 	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerPileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void UpdateFirstPersonCardDragTargetFeedback(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);

@@ -40,6 +40,13 @@ public:
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PostCommandSnapshot);
+	bool EnqueueDeckPresentationPlan(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot,
+		int32 PresentationStackEntryId = INDEX_NONE);
+	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void ClearQueue();
 	bool IsQueueBusy() const;
 	bool IsPresentationPlanBusy() const { return bProcessingPresentationPlan; }
@@ -81,6 +88,10 @@ public:
 	{
 		return StartedPresentationPlanPhaseNamesForTest;
 	}
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint>& GetSubmittedPresentationPlanFeedbackHintsForTest() const
+	{
+		return SubmittedPresentationPlanFeedbackHintsForTest;
+	}
 #endif
 
 private:
@@ -99,12 +110,16 @@ private:
 		EWacomBattleHUDTurnBoundaryCommand::None;
 	bool bProcessingPresentationPlan = false;
 	bool bWaitingForPresentationPlanEventQueue = false;
+	int32 ActivePileTransferEventSequence = INDEX_NONE;
+	int32 ActivePileTransferTotalCount = 0;
 #if WITH_AUTOMATION_TESTS
 	TArray<FName> StartedPresentationPlanPhaseNamesForTest;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> SubmittedPresentationPlanFeedbackHintsForTest;
 #endif
 
 	void SyncStackWidget();
 	void ExecuteTurnBoundaryCommandNow(EWacomBattleHUDTurnBoundaryCommand Command);
+	void RefreshCommandBarOnly();
 	void RefreshCommandBar();
 	void ClearPresentationPlan();
 	void StartNextPresentationPlanPhase();

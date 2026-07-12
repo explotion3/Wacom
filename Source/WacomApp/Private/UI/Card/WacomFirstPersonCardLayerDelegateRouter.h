@@ -23,6 +23,7 @@ struct FWacomFirstPersonCardLayerDelegateRouterCallbacks
 	TFunction<void(const FGuid&, const FWacomFirstPersonCardDragView&)> DragCancelled;
 	TFunction<void(const FWacomFirstPersonCardPointerView&)> PointerMoved;
 	TFunction<void()> PointerLeft;
+	TFunction<void(const FWacomFirstPersonCardPileTransferProgressView&)> PileTransferProgress;
 	TFunction<FGuid()> GetHoveredCardInstanceId;
 	TFunction<void(const FGuid&)> SetHoveredCardInstanceId;
 	TFunction<void()> ClearHoveredCardInstanceId;
@@ -57,6 +58,7 @@ private:
 	void HandleDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandlePointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
 	void HandlePointerLeft();
+	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 
 	FWacomFirstPersonCardLayerDelegateRouterCallbacks Callbacks;
 };

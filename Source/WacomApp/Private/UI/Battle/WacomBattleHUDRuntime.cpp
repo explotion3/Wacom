@@ -806,6 +806,13 @@ FWacomBattleHUDRuntime::BuildFirstPersonCardTransitionHints(
 	return GetFirstPersonHandBridge().BuildTransitionHints(PreviousSnapshot, NextSnapshot);
 }
 
+TArray<FWacomFirstPersonCardLayerFeedbackHint>
+FWacomBattleHUDRuntime::BuildFirstPersonCardFeedbackHints(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return GetFirstPersonHandBridge().BuildFeedbackHints(NextSnapshot);
+}
+
 int32 FWacomBattleHUDRuntime::AppendBattlePresentationStackEntry(
 	const FWacomBattleCombatLogCommandContext& CommandContext,
 	const FBattleSnapshot& PreCommandSnapshot)
@@ -1084,6 +1091,12 @@ void FWacomBattleHUDRuntime::RefreshFromPresentationPhase(
 	GetSnapshotPresenter().RefreshFromPresentationPhase(Snapshot, TransitionHints, FeedbackHints);
 }
 
+void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerPileTransferProgress(
+	const FWacomFirstPersonCardPileTransferProgressView& Progress)
+{
+	GetPresentationCoordinator().HandlePileTransferProgress(Progress);
+}
+
 void FWacomBattleHUDRuntime::SyncFirstPersonBattleHandLayer(
 	const FBattleSnapshot& Snapshot,
 	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
@@ -1316,6 +1329,8 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 		View.ActivePresentationPlanPhaseName = PresentationCoordinator->GetActivePresentationPlanPhaseName();
 		View.PresentationPlanStartedPhaseNames =
 			&PresentationCoordinator->GetStartedPresentationPlanPhaseNamesForTest();
+		View.PresentationPlanSubmittedFeedbackHints =
+			&PresentationCoordinator->GetSubmittedPresentationPlanFeedbackHintsForTest();
 	}
 	return View;
 }

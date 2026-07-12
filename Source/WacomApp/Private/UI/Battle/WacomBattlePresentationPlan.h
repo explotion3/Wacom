@@ -14,7 +14,9 @@ enum class EWacomBattlePresentationPhaseKind : uint8
 	TurnEndRetain,
 	EnemyAction,
 	TurnStartDraw,
-	TurnStartHandAnchorEnter
+	TurnStartHandAnchorEnter,
+	CommandHandResolution,
+	DeckReshuffle
 };
 
 struct FWacomBattlePresentationPhase
@@ -24,13 +26,19 @@ struct FWacomBattlePresentationPhase
 	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
 	TArray<FBattleEvent> Events;
+	int32 PresentationStackEntryId = INDEX_NONE;
+	TArray<FWacomFirstPersonCardPileTransferHint> PileTransferHints;
+	int32 PileTransferInitialDrawCount = 0;
+	int32 PileTransferInitialDiscardCount = 0;
 
 	bool HasHandFrame() const
 	{
 		return Kind == EWacomBattlePresentationPhaseKind::TurnEndDiscard
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnEndRetain
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartDraw
-			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter;
+			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandHandResolution
+			|| Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle;
 	}
 
 	bool HasEventQueue() const

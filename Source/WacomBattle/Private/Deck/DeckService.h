@@ -7,6 +7,28 @@
 struct FBattleState;
 enum class ECardLocation : uint8;
 
+enum class EDeckDrawStepKind : uint8
+{
+	DrawBatch,
+	DiscardPileReshuffledIntoDraw
+};
+
+struct FDeckDrawStepFact
+{
+	EDeckDrawStepKind Kind = EDeckDrawStepKind::DrawBatch;
+	TArray<FGuid> CardInstanceIds;
+	int32 DrawPileCountAfter = 0;
+	int32 DiscardPileCountAfter = 0;
+};
+
+struct FDeckDrawResult
+{
+	TArray<FGuid> DrawnCardIds;
+	TArray<FDeckDrawStepFact> Steps;
+
+	int32 NumDrawn() const { return DrawnCardIds.Num(); }
+};
+
 /**
  * 抽牌堆 / 本回合使用牌堆 / 弃牌堆 / 消耗牌堆的原子操作。
  *
@@ -32,7 +54,7 @@ public:
 	 * 本方法已通过 CardZoneAggregate 把卡移入 Hand；调用方可再由 HandZoneService
 	 * 重排 Hand，但不得重复写 membership 或 Location。
 	 */
-	static int32 DrawCards(FBattleState& State, int32 Count, TArray<FGuid>& OutDrawnCardIds);
+	static FDeckDrawResult DrawCards(FBattleState& State, int32 Count);
 
 	/**
 	 * 把弃牌堆洗回抽牌堆。弃牌堆清空。

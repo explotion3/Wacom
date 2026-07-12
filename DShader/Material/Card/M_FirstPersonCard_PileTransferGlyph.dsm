@@ -1,0 +1,71 @@
+import "Shared/WacomFirstPersonCardPileTransferGlyph.dsh";
+
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
+{
+    Properties = {
+        VectorParameter GlyphOutlineColor = float4(0.96, 0.82, 0.42, 1.0) [
+            Group="第一人称牌堆迁移|材质实例";
+            SortPriority=10;
+            Description="像素卡背牌印外轮廓颜色和透明度。";
+        ];
+        VectorParameter GlyphFillColor = float4(0.08, 0.18, 0.32, 0.92) [
+            Group="第一人称牌堆迁移|材质实例";
+            SortPriority=20;
+            Description="像素卡背牌印内部填充颜色和透明度。";
+        ];
+        VectorParameter GlyphCenterColor = float4(0.58, 0.80, 1.0, 1.0) [
+            Group="第一人称牌堆迁移|材质实例";
+            SortPriority=30;
+            Description="中央菱形方印颜色和透明度。";
+        ];
+        ScalarParameter GlyphPixelColumns = 14.0 [
+            Group="第一人称牌堆迁移|材质实例";
+            SortPriority=40;
+            Description="横向像素量化列数；默认 14，推荐 10 到 20。";
+        ];
+        ScalarParameter GlyphBorderWidth = 0.10 [
+            Group="第一人称牌堆迁移|材质实例";
+            SortPriority=50;
+            Description="卡背描边宽度，使用 UV 单位；默认 0.10，推荐 0.06 到 0.16。";
+        ];
+        ScalarParameter GlyphCenterMarkSize = 0.22 [
+            Group="第一人称牌堆迁移|材质实例";
+            SortPriority=60;
+            Description="中央方印半径，使用 UV 曼哈顿距离；默认 0.22，推荐 0.14 到 0.30。";
+        ];
+        ScalarParameter GlyphGlowStrength = 0.65 [
+            Group="第一人称牌堆迁移|材质实例";
+            SortPriority=70;
+            Description="描边和中央方印的额外自发光强度；默认 0.65，推荐 0.2 到 1.4。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "PremultipliedAlpha";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        WacomFirstPersonCard_ComputePileTransferGlyph(
+            uv,
+            GlyphPixelColumns,
+            GlyphBorderWidth,
+            GlyphCenterMarkSize,
+            GlyphOutlineColor,
+            GlyphFillColor,
+            GlyphCenterColor,
+            GlyphGlowStrength,
+            Color,
+            Alpha);
+    }
+}

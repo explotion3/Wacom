@@ -1163,6 +1163,26 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPresentationFrame(
 	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
 }
 
+void FWacomBattleHUDFirstPersonHandBridge::ApplyPileTransferHints(
+	const TArray<FWacomFirstPersonCardPileTransferHint>& Hints)
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor();
+	if (!Anchor || Hints.IsEmpty())
+	{
+		return;
+	}
+	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame;
+	LifecycleFrame.SourceId = FirstPersonBattleHandLayerSourceId;
+	LifecycleFrame.bSetPresentationAnchors = true;
+	LifecycleFrame.PresentationAnchors = FWacomBattleHUDCardPresentationAnchors::Build(
+		Runtime.Host().GetHUD(),
+		Runtime.Host());
+	LifecycleFrame.bSetPileTransferHints = true;
+	LifecycleFrame.PileTransferHints = Hints;
+	Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
+	Anchor->RefreshCardLayerNow(0.0f);
+}
+
 FWacomBattleCardDropResolveResult FWacomBattleHUDFirstPersonHandBridge::ResolveDropIntent(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView) const

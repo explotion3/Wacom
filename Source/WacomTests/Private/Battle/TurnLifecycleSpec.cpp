@@ -265,8 +265,10 @@ bool FWacomBattleTurnLifecycleNormalCompletionSpec::RunTest(const FString& /*Par
 	{
 		const FBattleEvent* FirstRangeEvent = FindEventBySequence(Events, DrawCheckpoint->FirstEventSequence);
 		const FBattleEvent* LastRangeEvent = FindEventBySequence(Events, DrawCheckpoint->LastEventSequence);
-		TestTrue(TEXT("Draw range starts at CardsDrawn"),
-			FirstRangeEvent && FirstRangeEvent->Type == EBattleEventType::CardsDrawn);
+		TestTrue(TEXT("Draw range starts at an explicit deck step"),
+			FirstRangeEvent
+			&& (FirstRangeEvent->Type == EBattleEventType::CardsDrawn
+				|| FirstRangeEvent->Type == EBattleEventType::DiscardPileReshuffledIntoDraw));
 		TestTrue(TEXT("Draw range ends at HandZoneChanged"),
 			LastRangeEvent && LastRangeEvent->Type == EBattleEventType::HandZoneChanged);
 		TestEqual(TEXT("Draw checkpoint is final PlayerAction state"),

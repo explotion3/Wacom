@@ -1,0 +1,41 @@
+Function SelfContained WacomFirstPersonCard_ComputePileTransferGlyph(
+    in float2 uv,
+    in float pixelColumns,
+    in float borderWidth,
+    in float centerMarkSize,
+    in float4 outlineColor,
+    in float4 fillColor,
+    in float4 centerColor,
+    in float glowStrength,
+    out float3 glyphColor,
+    out float glyphAlpha)
+{
+    float safeColumns = max(pixelColumns, 4.0);
+    float2 grid = float2(safeColumns, safeColumns * 1.57142857);
+    float2 pixelUV = (floor(saturate(uv) * grid) + float2(0.5, 0.5)) / grid;
+    float2 edgeDistance = min(pixelUV, 1.0 - pixelUV);
+    float cornerCut = step(1.5 / safeColumns, edgeDistance.x + edgeDistance.y);
+    float body = step(0.5 / safeColumns, edgeDistance.x)
+        * step(0.5 / (safeColumns * 1.57142857), edgeDistance.y)
+        * cornerCut;
+    float safeBorder = max(borderWidth, 0.5 / safeColumns);
+    float inner = step(safeBorder, edgeDistance.x)
+        * step(safeBorder * 0.63636364, edgeDistance.y)
+        * step(safeBorder * 1.6, edgeDistance.x + edgeDistance.y);
+    float border = saturate(body - inner);
+
+    float2 centered = abs(pixelUV - float2(0.5, 0.5));
+    float diamondDistance = centered.x + centered.y;
+    float markOuter = 1.0 - step(max(centerMarkSize, 0.05), diamondDistance);
+    float markInner = 1.0 - step(max(centerMarkSize * 0.45, 0.02), diamondDistance);
+    float markRing = saturate(markOuter - markInner);
+    float diagonal = step(abs(centered.x - centered.y), 0.75 / safeColumns)
+        * step(diamondDistance, 0.34);
+    float mark = saturate(markRing + markInner * 0.65 + diagonal * 0.35) * inner;
+
+    float3 baseColor = lerp(fillColor.rgb, outlineColor.rgb, border);
+    baseColor = lerp(baseColor, centerColor.rgb, mark);
+    float glow = 1.0 + max(glowStrength, 0.0) * (border + mark) * 0.35;
+    glyphAlpha = body * max(max(outlineColor.a, fillColor.a), centerColor.a);
+    glyphColor = baseColor * glow * glyphAlpha;
+}

@@ -305,14 +305,13 @@ FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx)
 	// 从抽牌堆：用 DeckService（支持自动 Reshuffle）
 	if (SourceLocation == ECardLocation::Draw)
 	{
-		TArray<FGuid> DrawnIds;
 		const int32 AvailableSlots = FHandZoneService::GetAvailableNormalCardSlots(*Ctx.State, Ctx.SourceInstanceId);
-		FDeckService::DrawCards(*Ctx.State, FMath::Min(Ctx.Magnitude, AvailableSlots), DrawnIds);
+		const FDeckDrawResult DrawResult = FDeckService::DrawCards(
+			*Ctx.State,
+			FMath::Min(Ctx.Magnitude, AvailableSlots));
+		const TArray<FGuid>& DrawnIds = DrawResult.DrawnCardIds;
 		FHandZoneService::InsertCardsIntoHandAtRandom(*Ctx.State, DrawnIds);
-		if (DrawnIds.Num() > 0)
-		{
-			WacomBattleEvents::EmitCardsDrawn(*Ctx.Events, DrawnIds);
-		}
+		WacomBattleEvents::EmitDeckDrawResult(*Ctx.Events, DrawResult);
 		return FEffectApplyResult::FromBool(DrawnIds.Num() > 0);
 	}
 

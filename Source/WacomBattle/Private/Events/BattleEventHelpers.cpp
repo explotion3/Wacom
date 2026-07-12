@@ -3,12 +3,15 @@
 #include "Events/BattleEventHelpers.h"
 
 #include "Events/BattleEventBus.h"
+#include "Deck/DeckService.h"
 
 namespace WacomBattleEvents
 {
 	void EmitCardsDrawn(
 		FBattleEventBus& Events,
-		const TArray<FGuid>& DrawnCardIds)
+		const TArray<FGuid>& DrawnCardIds,
+		int32 DrawPileCountAfter,
+		int32 DiscardPileCountAfter)
 	{
 		FBattleEvent Ev;
 		Ev.Type = EBattleEventType::CardsDrawn;
@@ -21,7 +24,35 @@ namespace WacomBattleEvents
 			}
 		}
 		Ev.Count = Ev.CardInstanceIds.Num();
+		Ev.DrawPileCountAfter = DrawPileCountAfter;
+		Ev.DiscardPileCountAfter = DiscardPileCountAfter;
 		Events.Emit(Ev);
+	}
+
+	void EmitDeckDrawResult(
+		FBattleEventBus& Events,
+		const FDeckDrawResult& Result)
+	{
+		for (const FDeckDrawStepFact& Step : Result.Steps)
+		{
+			if (Step.Kind == EDeckDrawStepKind::DrawBatch)
+			{
+				EmitCardsDrawn(
+					Events,
+					Step.CardInstanceIds,
+					Step.DrawPileCountAfter,
+					Step.DiscardPileCountAfter);
+				continue;
+			}
+
+			FBattleEvent Event;
+			Event.Type = EBattleEventType::DiscardPileReshuffledIntoDraw;
+			Event.CardInstanceIds = Step.CardInstanceIds;
+			Event.Count = Event.CardInstanceIds.Num();
+			Event.DrawPileCountAfter = Step.DrawPileCountAfter;
+			Event.DiscardPileCountAfter = Step.DiscardPileCountAfter;
+			Events.Emit(MoveTemp(Event));
+		}
 	}
 
 	void EmitCardsRetained(

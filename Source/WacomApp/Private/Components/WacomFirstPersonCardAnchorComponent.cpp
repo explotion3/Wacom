@@ -18,6 +18,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerDelegateRouter.h"
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 #include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
+#include "UI/Card/WacomFirstPersonCardPileTransferStyle.h"
 #include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
 #include "UI/Card/WacomFirstPersonCardSelectionStyle.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
@@ -225,6 +226,20 @@ namespace
 		{
 			Config.PlayedDissolve.Style.DurationSeconds =
 				Anchor.CardPlayedDissolveDurationOverrideSeconds;
+		}
+		Config.PileTransfer.bEnabled = Anchor.bEnableCardPileTransfer;
+		Config.PileTransfer.bReducedMotion = Anchor.bReduceCardPileTransferMotion;
+		Config.PileTransfer.Style = Anchor.CardPileTransferStyle
+			? Anchor.CardPileTransferStyle->Style
+			: FWacomFirstPersonCardPileTransferStyleData();
+		if (Anchor.CardPileTransferDurationOverrideSeconds >= 0.0f)
+		{
+			const float RequestedDuration = FMath::Min(0.95f, Anchor.CardPileTransferDurationOverrideSeconds);
+			const float FixedTime = Config.PileTransfer.Style.StartChargeSeconds
+				+ Config.PileTransfer.Style.FlightSeconds
+				+ Config.PileTransfer.Style.SettleSeconds;
+			Config.PileTransfer.Style.MaxLaunchWindowSeconds =
+				FMath::Max(0.0f, RequestedDuration - FixedTime);
 		}
 		Config.Selection.bEnabled = Anchor.bEnableCardSelectionEffect;
 		Config.Selection.bReducedMotion = Anchor.bReduceCardSelectionMotion;
@@ -718,6 +733,27 @@ namespace
 		AddFloat(Config.PlayedDissolve.Style.StartSoundVolumeMultiplier);
 		AddFloat(Config.PlayedDissolve.Style.StartSoundPitchMultiplier);
 		AddFloat(Config.PlayedDissolve.Style.StartSoundPitchVariation);
+		AddBool(Config.PileTransfer.bEnabled);
+		AddBool(Config.PileTransfer.bReducedMotion);
+		Combine(GetTypeHash(Config.PileTransfer.Style.GlyphMaterialInstance.Get()));
+		AddFloat(Config.PileTransfer.Style.GlyphSize.X);
+		AddFloat(Config.PileTransfer.Style.GlyphSize.Y);
+		AddFloat(Config.PileTransfer.Style.StartChargeSeconds);
+		AddFloat(Config.PileTransfer.Style.FlightSeconds);
+		AddInt(Config.PileTransfer.Style.LaneCount);
+		AddFloat(Config.PileTransfer.Style.BaseStaggerSeconds);
+		AddFloat(Config.PileTransfer.Style.MaxLaunchWindowSeconds);
+		AddFloat(Config.PileTransfer.Style.SettleSeconds);
+		AddFloat(Config.PileTransfer.Style.ArcHeightRatio);
+		AddFloat(Config.PileTransfer.Style.MinArcHeightPixels);
+		AddFloat(Config.PileTransfer.Style.MaxArcHeightPixels);
+		AddInt(Config.PileTransfer.Style.TrailLayerCount);
+		AddFloat(Config.PileTransfer.Style.ReducedMotionDurationSeconds);
+		Combine(GetTypeHash(Config.PileTransfer.Style.StartSound.Get()));
+		Combine(GetTypeHash(Config.PileTransfer.Style.TravelSound.Get()));
+		Combine(GetTypeHash(Config.PileTransfer.Style.CompleteSound.Get()));
+		AddFloat(Config.PileTransfer.Style.SoundVolumeMultiplier);
+		AddFloat(Config.PileTransfer.Style.SoundPitchMultiplier);
 		AddBool(Config.Selection.bEnabled);
 		AddBool(Config.Selection.bReducedMotion);
 		AddColor(Config.Selection.Style.PrimaryColor);
@@ -1145,6 +1181,10 @@ void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerSourceLifecycleF
 	{
 		RuntimeState->SetPresentationAnchors(SourceId, Frame.PresentationAnchors);
 	}
+	if (Frame.bSetPileTransferHints && RuntimeState && !SourceId.IsNone())
+	{
+		RuntimeState->SetPileTransferHints(SourceId, Frame.PileTransferHints);
+	}
 
 	if (Frame.bCommitPresentationFrame)
 	{
@@ -1293,6 +1333,7 @@ void UWacomFirstPersonCardAnchorComponent::ForceSettleCardLayerPresentationPlayb
 	if (RuntimeState)
 	{
 		RuntimeState->ClearPresentationFrameHints();
+		RuntimeState->ClearPileTransferHints();
 		RuntimeState->ClearPresentationFrameFeedbackHints();
 	}
 	if (CardLayerWidget)
@@ -1889,6 +1930,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 		CachedSlotVisualConfig         = BuildSlotVisualConfig(ResolvedConfig);
 		CachedSlotFeedbackConfig       = BuildSlotFeedbackConfig(ResolvedConfig);
 		CachedCardDragConfig           = BuildCardDragConfig(*this, ResolvedConfig);
+		CachedPileTransferConfig       = ResolvedConfig.PileTransfer;
 		CachedInteractionEnabled       = bFirstPersonCardLayerInteractionEnabled;
 		CachedLogDiagnostics           = bLogCardLayerMotionDiagnostics;
 		CachedCardViewClass            = FirstPersonCardViewClass.Get();
@@ -1904,6 +1946,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	OwnerConfig.SlotVisualConfig          = CachedSlotVisualConfig;
 	OwnerConfig.SlotFeedbackConfig        = CachedSlotFeedbackConfig;
 	OwnerConfig.CardDragConfig            = CachedCardDragConfig;
+	OwnerConfig.PileTransferConfig        = CachedPileTransferConfig;
 	OwnerConfig.bLogSlotMotionDiagnostics  = CachedLogDiagnostics;
 	OwnerConfig.bInteractionEnabled       = CachedInteractionEnabled;
 
@@ -1966,6 +2009,14 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	UpdateInput.bCanConsumeFeedbackHints = RuntimeState
 		&& (RuntimeState->CanConsumePresentationFrameFeedbackHintsForCurrentSource()
 			|| RuntimeState->CanConsumeFeedbackHintsForCurrentSource());
+	UpdateInput.ConsumePileTransferHints = [this]()
+	{
+		return RuntimeState && RuntimeState->CanConsumePileTransferHintsForCurrentSource()
+			? RuntimeState->ConsumePileTransferHintsForCurrentSource()
+			: TArray<FWacomFirstPersonCardPileTransferHint>();
+	};
+	UpdateInput.bCanConsumePileTransferHints = RuntimeState
+		&& RuntimeState->CanConsumePileTransferHintsForCurrentSource();
 
 	CardLayerOwner->Update(UpdateInput, CardLayerWidget);
 }
@@ -2061,6 +2112,10 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureCardLayerDelegateRouter()
 	Callbacks.PointerLeft = [this]()
 	{
 		OnFirstPersonCardLayerPointerLeft.Broadcast();
+	};
+	Callbacks.PileTransferProgress = [this](const FWacomFirstPersonCardPileTransferProgressView& Progress)
+	{
+		OnFirstPersonCardLayerPileTransferProgress.Broadcast(Progress);
 	};
 	Callbacks.GetHoveredCardInstanceId = [this]()
 	{

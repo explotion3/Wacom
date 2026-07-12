@@ -229,3 +229,9 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 - 新能力能被后续内容复用。
 - 编译和相关测试通过，或明确说明未验证原因。
 - 重要设计变化已同步到 `Docs/`。
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+at specs/003-backpack-workspace-refactor/plan.md
+<!-- SPECKIT END -->

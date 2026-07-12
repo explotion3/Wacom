@@ -95,6 +95,7 @@ FBattleResolution UBattleSession::ResolveCommand(const FBattleCommand& Command)
 	WorkingState.StateVersion = Resolution.VersionBefore + 1;
 	Resolution.VersionAfter = WorkingState.StateVersion;
 	Resolution.Events = TransactionEvents.Consume();
+	TransactionJournal.AppendDeckStepsFromEvents(Resolution.Events);
 	Resolution.PresentationJournal = MoveTemp(TransactionJournal);
 	Resolution.PostSnapshot = FBattleSnapshotBuilder::Build(WorkingState);
 

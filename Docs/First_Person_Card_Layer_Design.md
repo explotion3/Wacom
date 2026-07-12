@@ -228,6 +228,12 @@ Anchor `10 Interaction Feedback | Drag Pickup` 是制作入口，包含启用、
 
 Layer debug view 记录 active / outgoing / RootCanvas child / ticking slot 和本次刷新创建、复用、移除、异常修复数量。诊断日志默认关闭，只在手动排查时开启。
 
+### Pile Transfer：弃牌堆洗回抽牌堆
+
+弃牌堆洗回抽牌堆使用独立的一次性 pile-transfer contract，不伪装成单卡 transition。Battle `DiscardPileReshuffledIntoDraw` 事实进入 `FBattlePresentationJournal.DeckSteps`，App 的 command presentation plan 严格按 `DrawBatch → DeckReshuffle → DrawBatch` 分段；`FWacomFirstPersonCardLayerSourceLifecycleFrame::PileTransferHints` 只携带事件 Sequence、真实卡 ID、起止锚点类型和稳定 Seed，不保存 Widget 指针。Layer 在现有 RootCanvas 内创建高 ZOrder、`HitTestInvisible` 的 App-private `UWacomFirstPersonCardPileTransferWidget / SFirstPersonCardPileTransfer`，用一次 `FSlateDrawElement::MakeCustomVerts` 批量绘制主体与残影，不创建逐牌 Widget，也不改变 296×420 命中主体。
+
+正常模式严格一张卡对应一枚 14×22 逻辑像素牌印，使用三条确定性弧线、单枚约 0.36 秒、发射窗最多约 0.43 秒，整体不超过约 0.95 秒；逐枚抵达通过 native progress delegate 临时覆盖 HUD Draw / Discard 计数，phase 完成、超时或清理后恢复权威 Snapshot。Reduced Motion 使用约 0.18 秒源牌堆静态牌印、`×N` 与目标收束，不跨屏飞行。起止位置沿用 `DiscardPileMotionAnchor → DiscardPileView → invalid` 与 `DrawPileMotionAnchor → DrawPileView → invalid`；任一端最终无效时立即完成，不能阻塞后续抽牌。视觉真源为 `DShader/Material/Card/M_FirstPersonCard_PileTransferGlyph.dsm` 与 `DShader/Shared/WacomFirstPersonCardPileTransferGlyph.dsh`；颜色、描边、填充、中央方印和像素密度在默认 MI 中调整，`UWacomFirstPersonCardPileTransferStyle` 只管理 MI、运动节奏与可选硬引用音效。Anchor 的制作入口是 `14 Card Pile Transfer`，Run 当前不触发该事实，但 renderer 不写死 Battle 规则。
+
 ## §6 Battle 交互
 
 第一人称战斗手牌不恢复旧 2D hand 的拖拽语义，也不直接提交 `UBattleSession`。

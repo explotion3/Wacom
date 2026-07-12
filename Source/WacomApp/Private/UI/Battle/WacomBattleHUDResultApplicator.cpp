@@ -171,14 +171,24 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 	{
 		return;
 	}
-
-	Runtime.StoreFirstPersonCardTransitionEvents(Resolution.Events);
 	const int32 PresentationStackEntryId =
 		Context.CombatLogContext.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
 			? Runtime.AppendBattlePresentationStackEntry(
 				Context.CombatLogContext,
 				Context.PreCommandSnapshot)
 			: INDEX_NONE;
+	if (Context.CombatLogContext.CommandKind != EWacomBattleCombatLogCommandKind::EndTurn
+		&& Runtime.GetPresentationCoordinator().EnqueueDeckPresentationPlan(
+			Resolution.PresentationJournal,
+			Resolution.Events,
+			Context.PreCommandSnapshot,
+			Resolution.PostSnapshot,
+			PresentationStackEntryId))
+	{
+		return;
+	}
+
+	Runtime.StoreFirstPersonCardTransitionEvents(Resolution.Events);
 	Runtime.EnqueueBattlePresentationEvents(Resolution.Events, PresentationStackEntryId);
 	Runtime.NativeRefreshFromSnapshot(Resolution.PostSnapshot);
 }
