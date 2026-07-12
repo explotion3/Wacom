@@ -6,6 +6,8 @@
 
 #include "UI/MainMenuScreenTestAccess.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
+#include "Components/Widget.h"
+#include "UObject/UnrealType.h"
 
 namespace
 {
@@ -15,6 +17,49 @@ namespace
 		FWacomMainMenuScreenTestAccess::Build(*Screen);
 		return Screen;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIMainMenuCommonUIButtonContractSpec,
+	"Wacom.UI.MainMenu.Screen.CommonUIButtonContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIMainMenuCommonUIButtonContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomMainMenuScreen> Screen = MakeMainMenuScreen();
+	TestTrue(
+		TEXT("Fallback provides six focusable CommonUI navigation buttons"),
+		FWacomMainMenuScreenTestAccess::HasCompleteFocusableCommonUIButtonSet(*Screen));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIMainMenuFallbackNamesAvoidWidgetPropertiesSpec,
+	"Wacom.UI.MainMenu.Screen.FallbackNamesAvoidUWidgetProperties",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIMainMenuFallbackNamesAvoidWidgetPropertiesSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomMainMenuScreen> Screen = MakeMainMenuScreen();
+	const TArray<FName> WidgetNames = FWacomMainMenuScreenTestAccess::WidgetNames(*Screen);
+
+	TSet<FName> ReservedWidgetPropertyNames;
+	for (TFieldIterator<FProperty> PropertyIt(UWidget::StaticClass(), EFieldIteratorFlags::IncludeSuper);
+		PropertyIt;
+		++PropertyIt)
+	{
+		ReservedWidgetPropertyNames.Add(PropertyIt->GetFName());
+	}
+
+	for (FName WidgetName : WidgetNames)
+	{
+		TestFalse(
+			*FString::Printf(
+				TEXT("Fallback widget name '%s' must not shadow a UWidget property"),
+				*WidgetName.ToString()),
+			ReservedWidgetPropertyNames.Contains(WidgetName));
+	}
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

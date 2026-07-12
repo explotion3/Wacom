@@ -13,6 +13,9 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class URetainerBox;
 class UWacomCardView;
+#if WITH_AUTOMATION_TESTS
+struct FWacomFirstPersonCardLayerTestAccess;
+#endif
 
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
@@ -32,6 +35,8 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	FWacomFirstPersonCardSurfaceEffectView SurfaceEffectView;
 	bool bHasFake3DSurfaceRetainer = false;
 	bool bFake3DEffectMaterialReady = false;
+	bool bUsingSurfaceEffectMaterial = false;
+	bool bBaseSurfaceEffectMaterialCached = false;
 	bool bRetainerCaptureRootUsesIndependentClipping = false;
 };
 #endif
@@ -72,6 +77,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWacomCardView> CardView;
@@ -88,6 +94,10 @@ protected:
 	TObjectPtr<URetainerBox> Fake3DSurfaceRetainer;
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomFirstPersonCardLayerTestAccess;
+#endif
+
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> InteractionFeedbackMaterial;
 
@@ -96,6 +106,18 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> InteractionFeedbackMaterialInstance;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> BaseSurfaceEffectMaterialSource;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> BaseSurfaceEffectMaterialInstance;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> ActiveSurfaceEffectMaterialInstance;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> ActiveSurfaceEffectMaterialSource;
 
 	FWacomCardViewData PendingCardViewData;
 	FLinearColor LastFeedbackOverlayColor = FLinearColor::Transparent;
@@ -106,9 +128,17 @@ private:
 	FWacomFirstPersonCardSurfaceEffectView LastSurfaceEffectView;
 	bool bLastInteractionFeedbackUsedOverrideMaterial = false;
 	bool bLastInteractionFeedbackUsedBrushMaterial = false;
+	bool bBaseSurfaceEffectMaterialCached = false;
 
 	void EnsureFallbackWidgetTree();
 	void ConfigureRetainerCaptureRootClipping();
+	void CacheBaseSurfaceEffectMaterial();
+	void RestoreBaseSurfaceEffectMaterial();
+	void EnsureSurfaceEffectMaterialInstance(UMaterialInterface* Material);
+	void ApplyCardDepthParameters(UMaterialInstanceDynamic& Material) const;
+	void ApplyPlayedDissolveParameters(
+		UMaterialInstanceDynamic& Material,
+		const FWacomFirstPersonCardPlayedDissolveView& View) const;
 	UImage* GetInteractionFeedbackImage() const;
 	void CacheInteractionFeedbackBrushMaterial();
 	void EnsureInteractionFeedbackMaterialInstance(const FWacomFirstPersonCardInteractionFeedbackView& View);

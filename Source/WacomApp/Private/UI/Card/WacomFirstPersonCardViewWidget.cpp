@@ -28,6 +28,26 @@ namespace
 	const FName Fake3DPerspectiveStrengthParameterName(TEXT("PerspectiveStrength"));
 	const FName ContactShadowEnabledParameterName(TEXT("ContactShadowEnabled"));
 	const FName ContactShadowLiftParameterName(TEXT("ContactShadowLift"));
+	const FName PlayedDissolveEnabledParameterName(TEXT("PlayedDissolveEnabled"));
+	const FName PlayedDissolveAmountParameterName(TEXT("PlayedDissolveAmount"));
+	const FName PlayedDissolveTimeParameterName(TEXT("PlayedDissolveTime"));
+	const FName PlayedDissolveDurationParameterName(TEXT("PlayedDissolveDuration"));
+	const FName PlayedDissolveSeedParameterName(TEXT("PlayedDissolveSeed"));
+	const FName PlayedDissolveReducedMotionParameterName(TEXT("PlayedDissolveReducedMotion"));
+	const FName PlayedDissolveGridColumnsParameterName(TEXT("PlayedDissolveGridColumns"));
+	const FName PlayedDissolveDirectionAngleParameterName(TEXT("PlayedDissolveDirectionAngle"));
+	const FName PlayedDissolveJitterParameterName(TEXT("PlayedDissolveJitter"));
+	const FName PlayedDissolveEdgeColorParameterName(TEXT("PlayedDissolveEdgeColor"));
+	const FName PlayedDissolveEdgeAccentColorParameterName(TEXT("PlayedDissolveEdgeAccentColor"));
+	const FName PlayedDissolveEdgeWidthParameterName(TEXT("PlayedDissolveEdgeWidth"));
+	const FName PlayedDissolveEdgeIntensityParameterName(TEXT("PlayedDissolveEdgeIntensity"));
+	const FName PlayedDissolveAshDensityParameterName(TEXT("PlayedDissolveAshDensity"));
+	const FName PlayedDissolveAshTrailWidthParameterName(TEXT("PlayedDissolveAshTrailWidth"));
+	const FName PlayedDissolveAshLiftPixelsParameterName(TEXT("PlayedDissolveAshLiftPixels"));
+	const FName PlayedDissolveAshDriftPixelsParameterName(TEXT("PlayedDissolveAshDriftPixels"));
+	const FName PlayedDissolveShadowFadeFractionParameterName(TEXT("PlayedDissolveShadowFadeFraction"));
+	const FName PlayedDissolveNoiseTextureParameterName(TEXT("PlayedDissolveNoiseTexture"));
+	const FName SurfaceInvSizeParameterName(TEXT("SurfaceInvSize"));
 }
 
 void UWacomFirstPersonCardViewWidget::SetCardViewData(const FWacomCardViewData& InData)
@@ -156,22 +176,24 @@ void UWacomFirstPersonCardViewWidget::SetCardDepthView(const FWacomFirstPersonCa
 
 	if (Fake3DSurfaceRetainer)
 	{
-		if (UMaterialInstanceDynamic* EffectMaterial = Fake3DSurfaceRetainer->GetEffectMaterial())
+		UMaterialInstanceDynamic* EffectMaterial = Fake3DSurfaceRetainer->GetEffectMaterial();
+		if (!EffectMaterial)
 		{
-			const FVector2D AppliedTilt = LastCardDepthView.bFake3DEnabled
-				? LastCardDepthView.TiltDegrees
-				: FVector2D::ZeroVector;
-			EffectMaterial->SetScalarParameterValue(Fake3DTiltXParameterName, AppliedTilt.X);
-			EffectMaterial->SetScalarParameterValue(Fake3DTiltYParameterName, AppliedTilt.Y);
-			EffectMaterial->SetScalarParameterValue(
-				Fake3DPerspectiveStrengthParameterName,
-				LastCardDepthView.bFake3DEnabled ? LastCardDepthView.PerspectiveStrength : 0.0f);
-			EffectMaterial->SetScalarParameterValue(
-				ContactShadowEnabledParameterName,
-				LastCardDepthView.bContactShadowEnabled ? 1.0f : 0.0f);
-			EffectMaterial->SetScalarParameterValue(
-				ContactShadowLiftParameterName,
-				LastCardDepthView.ContactShadowLift);
+			// The authored material is synchronized into the UMG property before the
+			// nested Retainer's Slate widget necessarily creates its runtime MID.
+			// Reapplying the current source is safe and lets a late Slate rebuild
+			// create the MID before we submit the first interactive depth frame.
+			UMaterialInterface* EffectMaterialSource = const_cast<UMaterialInterface*>(
+				Fake3DSurfaceRetainer->GetEffectMaterialInterface());
+			if (EffectMaterialSource)
+			{
+				Fake3DSurfaceRetainer->SetEffectMaterial(EffectMaterialSource);
+				EffectMaterial = Fake3DSurfaceRetainer->GetEffectMaterial();
+			}
+		}
+		if (EffectMaterial)
+		{
+			ApplyCardDepthParameters(*EffectMaterial);
 		}
 		Fake3DSurfaceRetainer->RequestRender();
 	}
@@ -182,6 +204,29 @@ void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
 {
 	EnsureFallbackWidgetTree();
 	LastSurfaceEffectView = View;
+	if (!Fake3DSurfaceRetainer)
+	{
+		return;
+	}
+
+	CacheBaseSurfaceEffectMaterial();
+	const FWacomFirstPersonCardPlayedDissolveView& DissolveView = View.PlayedDissolve;
+	if (DissolveView.bActive
+		&& DissolveView.Style.SurfaceEffectMaterial
+		&& DissolveView.Style.NoiseTexture)
+	{
+		EnsureSurfaceEffectMaterialInstance(DissolveView.Style.SurfaceEffectMaterial);
+		if (ActiveSurfaceEffectMaterialInstance)
+		{
+			ApplyCardDepthParameters(*ActiveSurfaceEffectMaterialInstance);
+			ApplyPlayedDissolveParameters(*ActiveSurfaceEffectMaterialInstance, DissolveView);
+		}
+	}
+	else
+	{
+		RestoreBaseSurfaceEffectMaterial();
+	}
+	Fake3DSurfaceRetainer->RequestRender();
 }
 
 #if WITH_AUTOMATION_TESTS
@@ -204,6 +249,11 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.bHasFake3DSurfaceRetainer = Fake3DSurfaceRetainer != nullptr;
 	View.bFake3DEffectMaterialReady =
 		Fake3DSurfaceRetainer && Fake3DSurfaceRetainer->GetEffectMaterial() != nullptr;
+	View.bUsingSurfaceEffectMaterial =
+		Fake3DSurfaceRetainer
+		&& ActiveSurfaceEffectMaterialInstance
+		&& Fake3DSurfaceRetainer->GetEffectMaterial() == ActiveSurfaceEffectMaterialInstance;
+	View.bBaseSurfaceEffectMaterialCached = bBaseSurfaceEffectMaterialCached;
 	const UWidget* RetainerCaptureRoot = Fake3DSurfaceRetainer
 		? Fake3DSurfaceRetainer->GetContent()
 		: nullptr;
@@ -233,11 +283,178 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	ConfigureRetainerCaptureRootClipping();
+	CacheBaseSurfaceEffectMaterial();
 	ApplyPendingCardViewData();
 	SetFeedbackOverlayView(LastFeedbackOverlayColor, LastFeedbackOverlayOpacity);
 	ClearInteractionFeedbackView();
 	SetCardDepthView(LastCardDepthView);
 	SetCardSurfaceEffectView(LastSurfaceEffectView);
+}
+
+void UWacomFirstPersonCardViewWidget::NativeDestruct()
+{
+	RestoreBaseSurfaceEffectMaterial();
+	ActiveSurfaceEffectMaterialInstance = nullptr;
+	ActiveSurfaceEffectMaterialSource = nullptr;
+	BaseSurfaceEffectMaterialInstance = nullptr;
+	BaseSurfaceEffectMaterialSource = nullptr;
+	bBaseSurfaceEffectMaterialCached = false;
+	Super::NativeDestruct();
+}
+
+void UWacomFirstPersonCardViewWidget::CacheBaseSurfaceEffectMaterial()
+{
+	if (!Fake3DSurfaceRetainer)
+	{
+		return;
+	}
+
+	if (!BaseSurfaceEffectMaterialSource)
+	{
+		BaseSurfaceEffectMaterialSource = const_cast<UMaterialInterface*>(
+			Fake3DSurfaceRetainer->GetEffectMaterialInterface());
+	}
+
+	if (!BaseSurfaceEffectMaterialInstance && BaseSurfaceEffectMaterialSource)
+	{
+		UMaterialInstanceDynamic* CurrentMaterialInstance = Fake3DSurfaceRetainer->GetEffectMaterial();
+		const UMaterialInterface* CurrentMaterialSource =
+			Fake3DSurfaceRetainer->GetEffectMaterialInterface();
+		if (!CurrentMaterialInstance || CurrentMaterialSource != BaseSurfaceEffectMaterialSource)
+		{
+			Fake3DSurfaceRetainer->SetEffectMaterial(BaseSurfaceEffectMaterialSource);
+			CurrentMaterialInstance = Fake3DSurfaceRetainer->GetEffectMaterial();
+		}
+		BaseSurfaceEffectMaterialInstance = CurrentMaterialInstance;
+	}
+
+	bBaseSurfaceEffectMaterialCached =
+		BaseSurfaceEffectMaterialSource != nullptr
+		|| BaseSurfaceEffectMaterialInstance != nullptr;
+}
+
+void UWacomFirstPersonCardViewWidget::RestoreBaseSurfaceEffectMaterial()
+{
+	if (!Fake3DSurfaceRetainer)
+	{
+		return;
+	}
+
+	CacheBaseSurfaceEffectMaterial();
+	if (!bBaseSurfaceEffectMaterialCached)
+	{
+		return;
+	}
+
+	UMaterialInterface* RestoreMaterial = BaseSurfaceEffectMaterialSource
+		? BaseSurfaceEffectMaterialSource.Get()
+		: BaseSurfaceEffectMaterialInstance.Get();
+	if (!RestoreMaterial)
+	{
+		return;
+	}
+
+	UMaterialInstanceDynamic* CurrentMaterialInstance = Fake3DSurfaceRetainer->GetEffectMaterial();
+	const UMaterialInterface* CurrentMaterialSource =
+		Fake3DSurfaceRetainer->GetEffectMaterialInterface();
+	if (!CurrentMaterialInstance || CurrentMaterialSource != RestoreMaterial)
+	{
+		Fake3DSurfaceRetainer->SetEffectMaterial(RestoreMaterial);
+		CurrentMaterialInstance = Fake3DSurfaceRetainer->GetEffectMaterial();
+	}
+	if (CurrentMaterialInstance)
+	{
+		BaseSurfaceEffectMaterialInstance = CurrentMaterialInstance;
+		ApplyCardDepthParameters(*CurrentMaterialInstance);
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::EnsureSurfaceEffectMaterialInstance(
+	UMaterialInterface* Material)
+{
+	if (!Material)
+	{
+		ActiveSurfaceEffectMaterialInstance = nullptr;
+		ActiveSurfaceEffectMaterialSource = nullptr;
+		return;
+	}
+	if (ActiveSurfaceEffectMaterialInstance
+		&& ActiveSurfaceEffectMaterialSource == Material
+		&& Fake3DSurfaceRetainer
+		&& Fake3DSurfaceRetainer->GetEffectMaterial() == ActiveSurfaceEffectMaterialInstance)
+	{
+		return;
+	}
+	if (!Fake3DSurfaceRetainer)
+	{
+		ActiveSurfaceEffectMaterialInstance = nullptr;
+		ActiveSurfaceEffectMaterialSource = nullptr;
+		return;
+	}
+
+	ActiveSurfaceEffectMaterialSource = Material;
+	Fake3DSurfaceRetainer->SetEffectMaterial(Material);
+	ActiveSurfaceEffectMaterialInstance = Fake3DSurfaceRetainer->GetEffectMaterial();
+}
+
+void UWacomFirstPersonCardViewWidget::ApplyCardDepthParameters(
+	UMaterialInstanceDynamic& Material) const
+{
+	const FVector2D AppliedTilt = LastCardDepthView.bFake3DEnabled
+		? LastCardDepthView.TiltDegrees
+		: FVector2D::ZeroVector;
+	Material.SetScalarParameterValue(Fake3DTiltXParameterName, AppliedTilt.X);
+	Material.SetScalarParameterValue(Fake3DTiltYParameterName, AppliedTilt.Y);
+	Material.SetScalarParameterValue(
+		Fake3DPerspectiveStrengthParameterName,
+		LastCardDepthView.bFake3DEnabled ? LastCardDepthView.PerspectiveStrength : 0.0f);
+	Material.SetScalarParameterValue(
+		ContactShadowEnabledParameterName,
+		LastCardDepthView.bContactShadowEnabled ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(
+		ContactShadowLiftParameterName,
+		LastCardDepthView.ContactShadowLift);
+}
+
+void UWacomFirstPersonCardViewWidget::ApplyPlayedDissolveParameters(
+	UMaterialInstanceDynamic& Material,
+	const FWacomFirstPersonCardPlayedDissolveView& View) const
+{
+	const FWacomFirstPersonCardPlayedDissolveStyleData& Style = View.Style;
+	Material.SetScalarParameterValue(PlayedDissolveEnabledParameterName, View.bActive ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(PlayedDissolveAmountParameterName, FMath::Clamp(View.Amount, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(PlayedDissolveTimeParameterName, FMath::Max(0.0f, View.TimeSeconds));
+	Material.SetScalarParameterValue(
+		PlayedDissolveDurationParameterName,
+		View.bReducedMotion ? 0.12f : FMath::Max(KINDA_SMALL_NUMBER, Style.DurationSeconds));
+	Material.SetScalarParameterValue(PlayedDissolveSeedParameterName, FMath::Frac(FMath::Abs(View.Seed)));
+	Material.SetScalarParameterValue(PlayedDissolveReducedMotionParameterName, View.bReducedMotion ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(PlayedDissolveGridColumnsParameterName, FMath::Max(1.0f, Style.GridColumns));
+	Material.SetScalarParameterValue(PlayedDissolveDirectionAngleParameterName, Style.DirectionAngleDegrees);
+	Material.SetScalarParameterValue(PlayedDissolveJitterParameterName, FMath::Max(0.0f, Style.Jitter));
+	Material.SetVectorParameterValue(PlayedDissolveEdgeColorParameterName, Style.EdgeColor);
+	Material.SetVectorParameterValue(PlayedDissolveEdgeAccentColorParameterName, Style.EdgeAccentColor);
+	Material.SetScalarParameterValue(PlayedDissolveEdgeWidthParameterName, FMath::Max(0.001f, Style.EdgeWidth));
+	Material.SetScalarParameterValue(PlayedDissolveEdgeIntensityParameterName, FMath::Max(0.0f, Style.EdgeIntensity));
+	Material.SetScalarParameterValue(PlayedDissolveAshDensityParameterName, FMath::Clamp(Style.AshDensity, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(PlayedDissolveAshTrailWidthParameterName, FMath::Max(0.001f, Style.AshTrailWidth));
+	Material.SetScalarParameterValue(PlayedDissolveAshLiftPixelsParameterName, FMath::Max(0.0f, Style.AshLiftPixels));
+	Material.SetScalarParameterValue(PlayedDissolveAshDriftPixelsParameterName, FMath::Max(0.0f, Style.AshDriftPixels));
+	Material.SetScalarParameterValue(
+		PlayedDissolveShadowFadeFractionParameterName,
+		FMath::Clamp(Style.ShadowFadeFraction, KINDA_SMALL_NUMBER, 1.0f));
+	Material.SetTextureParameterValue(PlayedDissolveNoiseTextureParameterName, Style.NoiseTexture);
+
+	FVector2D SurfaceSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
+	{
+		SurfaceSize = FVector2D(360.0f, 484.0f);
+	}
+	Material.SetVectorParameterValue(
+		SurfaceInvSizeParameterName,
+		FLinearColor(1.0f / SurfaceSize.X, 1.0f / SurfaceSize.Y, 0.0f, 0.0f));
 }
 
 void UWacomFirstPersonCardViewWidget::EnsureFallbackWidgetTree()

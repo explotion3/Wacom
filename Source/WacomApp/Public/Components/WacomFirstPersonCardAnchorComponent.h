@@ -15,6 +15,7 @@ class USoundBase;
 class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
+class UWacomFirstPersonCardPlayedDissolveStyle;
 class UWacomFirstPersonCardSelectionStyle;
 class UCardDefinition;
 class FWacomFirstPersonCardLayerDelegateRouter;
@@ -478,6 +479,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "Drag 状态传给材质接触阴影的抬升归一化值；0 表示紧贴轮廓，1 表示最软最淡端点。推荐 0.85 到 1.0。"))
 	float CardDragContactShadowLift = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|12 Card Played Dissolve", meta = (ToolTip = "是否用原地像素灰烬消散替换 Played 卡牌飞向目标点的旧离场；只改变 outgoing 表现，不改变规则结算。"))
+	bool bEnableCardPlayedDissolve = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|12 Card Played Dissolve", meta = (ToolTip = "Played 原地消散的可复用主题预设；为空或资源无效时安全回退旧 Played 空间离场。"))
+	TObjectPtr<UWacomFirstPersonCardPlayedDissolveStyle> CardPlayedDissolveStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|12 Card Played Dissolve", meta = (ToolTip = "弱化 Played 消散动态：使用约 0.12 秒均匀淡出，不播放方向前沿或灰烬漂移，但仍允许一次性音效。"))
+	bool bReduceCardPlayedDissolveMotion = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|12 Card Played Dissolve", meta = (Units = "s", ToolTip = "Played 消散总时长覆盖，单位为秒；负值表示使用 Style，推荐 0.32 到 0.48。"))
+	float CardPlayedDissolveDurationOverrideSeconds = -1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜 Surface Effect 制作开关；当前拖拽流程不会激活它，默认关闭。后续只允许由明确的卡面数据更新或升级表现语义驱动。"))
 	bool bEnableCardSelectionEffect = false;

@@ -17,6 +17,7 @@
 #include "UI/Card/WacomFirstPersonCardAnchorRuntimeState.h"
 #include "UI/Card/WacomFirstPersonCardLayerDelegateRouter.h"
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
+#include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 #include "UI/Card/WacomFirstPersonCardSelectionStyle.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #if WITH_AUTOMATION_TESTS
@@ -204,6 +205,16 @@ namespace
 		Config.CardDepth.bEnableContactShadow = Anchor.bEnableCardContactShadow;
 		Config.CardDepth.HoverContactShadowLift = Anchor.CardHoverContactShadowLift;
 		Config.CardDepth.DragContactShadowLift = Anchor.CardDragContactShadowLift;
+		Config.PlayedDissolve.bEnabled = Anchor.bEnableCardPlayedDissolve;
+		Config.PlayedDissolve.bReducedMotion = Anchor.bReduceCardPlayedDissolveMotion;
+		Config.PlayedDissolve.Style = Anchor.CardPlayedDissolveStyle
+			? Anchor.CardPlayedDissolveStyle->Style
+			: FWacomFirstPersonCardPlayedDissolveStyleData();
+		if (Anchor.CardPlayedDissolveDurationOverrideSeconds >= 0.0f)
+		{
+			Config.PlayedDissolve.Style.DurationSeconds =
+				Anchor.CardPlayedDissolveDurationOverrideSeconds;
+		}
 		Config.Selection.bEnabled = Anchor.bEnableCardSelectionEffect;
 		Config.Selection.bReducedMotion = Anchor.bReduceCardSelectionMotion;
 		Config.Selection.Style = Anchor.CardSelectionStyle
@@ -345,6 +356,7 @@ namespace
 		VisualConfig.DragCardTargetFocusZOrderBoost = Config.DragCardTargetFocusZOrderBoost;
 		VisualConfig.CardDepth = Config.CardDepth;
 		VisualConfig.Selection = Config.Selection;
+		VisualConfig.PlayedDissolve = Config.PlayedDissolve;
 		return VisualConfig;
 	}
 
@@ -642,6 +654,28 @@ namespace
 		AddBool(Config.CardDepth.bEnableContactShadow);
 		AddFloat(Config.CardDepth.HoverContactShadowLift);
 		AddFloat(Config.CardDepth.DragContactShadowLift);
+		AddBool(Config.PlayedDissolve.bEnabled);
+		AddBool(Config.PlayedDissolve.bReducedMotion);
+		Combine(GetTypeHash(Config.PlayedDissolve.Style.SurfaceEffectMaterial.Get()));
+		Combine(GetTypeHash(Config.PlayedDissolve.Style.NoiseTexture.Get()));
+		AddFloat(Config.PlayedDissolve.Style.DurationSeconds);
+		AddFloat(Config.PlayedDissolve.Style.ConfirmHoldSeconds);
+		AddFloat(Config.PlayedDissolve.Style.GridColumns);
+		AddFloat(Config.PlayedDissolve.Style.DirectionAngleDegrees);
+		AddFloat(Config.PlayedDissolve.Style.Jitter);
+		AddColor(Config.PlayedDissolve.Style.EdgeColor);
+		AddColor(Config.PlayedDissolve.Style.EdgeAccentColor);
+		AddFloat(Config.PlayedDissolve.Style.EdgeWidth);
+		AddFloat(Config.PlayedDissolve.Style.EdgeIntensity);
+		AddFloat(Config.PlayedDissolve.Style.AshDensity);
+		AddFloat(Config.PlayedDissolve.Style.AshTrailWidth);
+		AddFloat(Config.PlayedDissolve.Style.AshLiftPixels);
+		AddFloat(Config.PlayedDissolve.Style.AshDriftPixels);
+		AddFloat(Config.PlayedDissolve.Style.ShadowFadeFraction);
+		Combine(GetTypeHash(Config.PlayedDissolve.Style.StartSound.Get()));
+		AddFloat(Config.PlayedDissolve.Style.StartSoundVolumeMultiplier);
+		AddFloat(Config.PlayedDissolve.Style.StartSoundPitchMultiplier);
+		AddFloat(Config.PlayedDissolve.Style.StartSoundPitchVariation);
 		AddBool(Config.Selection.bEnabled);
 		AddBool(Config.Selection.bReducedMotion);
 		AddColor(Config.Selection.Style.PrimaryColor);

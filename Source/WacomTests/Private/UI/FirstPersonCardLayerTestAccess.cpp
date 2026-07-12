@@ -2,6 +2,8 @@
 
 #include "UI/FirstPersonCardLayerTestAccess.h"
 
+#include "Components/RetainerBox.h"
+
 #if WITH_AUTOMATION_TESTS
 
 FWacomFirstPersonCardLayerAutomationTestView FWacomFirstPersonCardLayerTestAccess::View(
@@ -20,6 +22,26 @@ FWacomFirstPersonCardAnchorAutomationTestView FWacomFirstPersonCardLayerTestAcce
 	const UWacomFirstPersonCardAnchorComponent& Anchor)
 {
 	return Anchor.GetAutomationTestViewForTest();
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetCardViewRetainerEffectMaterialBeforeSlate(
+	UWacomFirstPersonCardViewWidget& CardView,
+	UMaterialInterface* Material)
+{
+	CardView.EnsureFallbackWidgetTree();
+	if (CardView.Fake3DSurfaceRetainer)
+	{
+		CardView.Fake3DSurfaceRetainer->SetEffectMaterial(Material);
+	}
+}
+
+const UMaterialInterface* FWacomFirstPersonCardLayerTestAccess::CardViewRetainerEffectMaterialInterface(
+	UWacomFirstPersonCardViewWidget& CardView)
+{
+	CardView.EnsureFallbackWidgetTree();
+	return CardView.Fake3DSurfaceRetainer
+		? CardView.Fake3DSurfaceRetainer->GetEffectMaterialInterface()
+		: nullptr;
 }
 
 FWacomRunFirstPersonCardSourceRefreshCountersForTest FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(

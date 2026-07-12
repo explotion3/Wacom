@@ -848,7 +848,10 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 				PendingTransitionHintsByKey.FindRef(OutgoingSlotKey);
 			const TOptional<FWacomFirstPersonCardTransitionMotionProfile> ExitProfileOverride =
 				GetExitProfileForTransition(OutgoingTransitionHint, SlotWidget->GetVisualSlotView());
-			SlotWidget->BeginExitMotionWithProfile(SlotWidget->GetSlotView(), ExitProfileOverride);
+			SlotWidget->BeginExitMotionWithProfile(
+				SlotWidget->GetSlotView(),
+				ExitProfileOverride,
+				OutgoingTransitionHint.TransitionKind);
 			if (ExitProfileOverride.IsSet() || OutgoingTransitionHint.bPlayCommitFeedback)
 			{
 				AppliedTransitionHintKeys.Add(OutgoingSlotKey);

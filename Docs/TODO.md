@@ -78,11 +78,11 @@ tags:
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
   - 说明：后续只追踪表现体验，如 cue 合并、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
-- [ ] **First-person hand 动效第二阶段：两段式出牌与 fake-3D 资产接线**
-  - 状态：`In Progress: Card Depth C++ 通道完成，待 WBP / 材质与 PIE polish`
+- [ ] **First-person hand 动效第二阶段：Played 目标命中反馈与整体 PIE polish**
+  - 状态：`In Progress: Card Depth、Drag Pickup 与 Played 原地像素灰烬消散已接线，待 PIE polish`
   - 归属：App / First-person Card Layer
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、目标位置优先 Played、弃牌 stagger、phase timeout force-settle 和 plan 交互锁；Hover pointer / Drag velocity Card Depth、帧率无关追踪、单 Retainer optional binding 与独立 shadow view 已落地。下一步在 `WBP_FPCardView` 完成单 Retainer 树和 UE 原生 UI perspective / soft-shadow 材质，再做 PIE 调参；之后继续 anticipation / overshoot / settle 两段式出牌、flip、Exhausted 独立语义、音效预热和 reduced-motion / 全局速度策略。不复制 GPL 代码、shader 或资产。
+  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、弃牌 stagger、phase timeout force-settle、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup 与 Played 原地像素灰烬消散。Played 仍保留真实目标 / PlayTarget 坐标但启用消散时不移动源卡；下一切片应消费该坐标制作独立目标命中反馈，并继续做 flip、Exhausted 独立语义、音效预热、reduced-motion / 全局速度策略和 PIE 调参。不复制第三方代码、shader 或资产。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 内容扩展`
@@ -198,7 +198,7 @@ tags:
   - 状态：`Ready: C++ ViewData / Action 契约已完成`
   - 归属：App / UI
   - 入口：[Roadmap: App 壳层与菜单](./Roadmap.md#roadmap-app-shell-and-menus)
-  - 说明：后续创建 `WBP_MainMenuScreen`，制作 `L_MainMenu` 实时场景和固定镜头，并依次接入旅程准备、旅程记录、设置与制作人员页面；当前 C++ fallback 继续保证主菜单可玩。
+  - 说明：`WBP_MainMenuScreen` 已进入制作阶段，六个导航入口合同已统一为 `UWacomMainMenuButtonWidget`；后续先创建其视觉子类 `WBP_MainMenuNavButton`，再完成正式像素视觉、`L_MainMenu` 实时场景和固定镜头，并依次接入旅程准备、旅程记录、设置与制作人员页面。当前 C++ fallback 继续保证主菜单可玩。
 
 - [ ] **清理 UI MVVM 迁移尾项：WBP ViewBinding、逐步移除 C++ 手动 SetText fallback**
   - 状态：`Ready: WBP 化后清理`

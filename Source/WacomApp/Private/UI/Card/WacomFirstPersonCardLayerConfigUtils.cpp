@@ -211,6 +211,33 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.CardDepth.ReturnSpeed = FMath::Max(0.0f, Config.CardDepth.ReturnSpeed);
 	Config.CardDepth.HoverContactShadowLift = FMath::Clamp(Config.CardDepth.HoverContactShadowLift, 0.0f, 1.0f);
 	Config.CardDepth.DragContactShadowLift = FMath::Clamp(Config.CardDepth.DragContactShadowLift, 0.0f, 1.0f);
+	Config.PlayedDissolve.Style.DurationSeconds = FMath::Max(0.0f, Config.PlayedDissolve.Style.DurationSeconds);
+	Config.PlayedDissolve.Style.ConfirmHoldSeconds = FMath::Clamp(
+		Config.PlayedDissolve.Style.ConfirmHoldSeconds,
+		0.0f,
+		Config.PlayedDissolve.Style.DurationSeconds);
+	Config.PlayedDissolve.Style.GridColumns = FMath::Max(1.0f, Config.PlayedDissolve.Style.GridColumns);
+	Config.PlayedDissolve.Style.Jitter = FMath::Max(0.0f, Config.PlayedDissolve.Style.Jitter);
+	Config.PlayedDissolve.Style.EdgeWidth = FMath::Max(0.001f, Config.PlayedDissolve.Style.EdgeWidth);
+	Config.PlayedDissolve.Style.EdgeIntensity = FMath::Max(0.0f, Config.PlayedDissolve.Style.EdgeIntensity);
+	Config.PlayedDissolve.Style.AshDensity = FMath::Clamp(Config.PlayedDissolve.Style.AshDensity, 0.0f, 1.0f);
+	Config.PlayedDissolve.Style.AshTrailWidth = FMath::Max(0.001f, Config.PlayedDissolve.Style.AshTrailWidth);
+	Config.PlayedDissolve.Style.AshLiftPixels = FMath::Max(0.0f, Config.PlayedDissolve.Style.AshLiftPixels);
+	Config.PlayedDissolve.Style.AshDriftPixels = FMath::Max(0.0f, Config.PlayedDissolve.Style.AshDriftPixels);
+	Config.PlayedDissolve.Style.ShadowFadeFraction = FMath::Clamp(
+		Config.PlayedDissolve.Style.ShadowFadeFraction,
+		KINDA_SMALL_NUMBER,
+		1.0f);
+	Config.PlayedDissolve.Style.StartSoundVolumeMultiplier = FMath::Max(
+		0.0f,
+		Config.PlayedDissolve.Style.StartSoundVolumeMultiplier);
+	Config.PlayedDissolve.Style.StartSoundPitchMultiplier = FMath::Max(
+		0.01f,
+		Config.PlayedDissolve.Style.StartSoundPitchMultiplier);
+	Config.PlayedDissolve.Style.StartSoundPitchVariation = FMath::Clamp(
+		Config.PlayedDissolve.Style.StartSoundPitchVariation,
+		0.0f,
+		0.99f);
 	Config.Selection.Style.EnterDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.EnterDurationSeconds);
 	Config.Selection.Style.ExitDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.ExitDurationSeconds);
 	Config.Selection.Style.SustainPeriodSeconds = FMath::Max(0.01f, Config.Selection.Style.SustainPeriodSeconds);
@@ -249,6 +276,28 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.CardDepth.ReturnSpeed, B.CardDepth.ReturnSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.HoverContactShadowLift, B.CardDepth.HoverContactShadowLift)
 		&& AreFloatsEquivalent(A.CardDepth.DragContactShadowLift, B.CardDepth.DragContactShadowLift)
+		&& A.PlayedDissolve.bEnabled == B.PlayedDissolve.bEnabled
+		&& A.PlayedDissolve.bReducedMotion == B.PlayedDissolve.bReducedMotion
+		&& A.PlayedDissolve.Style.SurfaceEffectMaterial == B.PlayedDissolve.Style.SurfaceEffectMaterial
+		&& A.PlayedDissolve.Style.NoiseTexture == B.PlayedDissolve.Style.NoiseTexture
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.DurationSeconds, B.PlayedDissolve.Style.DurationSeconds)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.ConfirmHoldSeconds, B.PlayedDissolve.Style.ConfirmHoldSeconds)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.GridColumns, B.PlayedDissolve.Style.GridColumns)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.DirectionAngleDegrees, B.PlayedDissolve.Style.DirectionAngleDegrees)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.Jitter, B.PlayedDissolve.Style.Jitter)
+		&& AreColorsEquivalent(A.PlayedDissolve.Style.EdgeColor, B.PlayedDissolve.Style.EdgeColor)
+		&& AreColorsEquivalent(A.PlayedDissolve.Style.EdgeAccentColor, B.PlayedDissolve.Style.EdgeAccentColor)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.EdgeWidth, B.PlayedDissolve.Style.EdgeWidth)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.EdgeIntensity, B.PlayedDissolve.Style.EdgeIntensity)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.AshDensity, B.PlayedDissolve.Style.AshDensity)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.AshTrailWidth, B.PlayedDissolve.Style.AshTrailWidth)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.AshLiftPixels, B.PlayedDissolve.Style.AshLiftPixels)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.AshDriftPixels, B.PlayedDissolve.Style.AshDriftPixels)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.ShadowFadeFraction, B.PlayedDissolve.Style.ShadowFadeFraction)
+		&& A.PlayedDissolve.Style.StartSound == B.PlayedDissolve.Style.StartSound
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.StartSoundVolumeMultiplier, B.PlayedDissolve.Style.StartSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.StartSoundPitchMultiplier, B.PlayedDissolve.Style.StartSoundPitchMultiplier)
+		&& AreFloatsEquivalent(A.PlayedDissolve.Style.StartSoundPitchVariation, B.PlayedDissolve.Style.StartSoundPitchVariation)
 		&& A.Selection.bEnabled == B.Selection.bEnabled
 		&& A.Selection.bReducedMotion == B.Selection.bReducedMotion
 		&& AreColorsEquivalent(A.Selection.Style.PrimaryColor, B.Selection.Style.PrimaryColor)

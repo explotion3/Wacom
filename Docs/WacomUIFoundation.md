@@ -106,6 +106,8 @@ Details / Blueprint 分类口径：
 
 `UWacomButtonBase` 是 CommonUI 按钮基础合同，统一文本、点击、hover、interactable 和音效表现钩子。具体业务命令仍由 Screen、HUD 或调用方监听并提交。
 
+`UWacomMainMenuButtonWidget` 是主菜单导航按钮的可实例化 CommonUI 制作入口，继承 `UWacomButtonBase`。C++ fallback 与正式主菜单 WBP 使用同一个按钮类型；正式 `WBP_MainMenuNavButton` 应继承该类，不使用原生 `UButton` 重新建立鼠标专用交互。按钮负责焦点、hover、pressed、disabled、文本和音效表现，`UWacomMainMenuScreen` 仍是 Action 广播所有者。
+
 | Hook | 分类 |
 |---|---|
 | `SetButtonText / GetButtonText` | `Wacom|UI Foundation|Button Text` |
@@ -145,7 +147,9 @@ CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。
 
 `UWacomMainMenuScreen` 是 `L_MainMenu` 的被动顶层菜单 Screen。它只接收 `FWacomMainMenuViewData`，并通过 `EWacomMainMenuAction + OnActionRequestedNative` 上报 Continue Journey、Start New Journey、Journey History、Settings、Credits 和 Quit 意图；不直接读取 SaveGame、查找 GameMode、切关卡或退出游戏。`AWacomMenuGameMode` 是当前 ViewData producer 和 Action consumer，负责磁盘可用性检查、确认对话框、退出与 travel。
 
-Continue 只有在 `bHasActiveJourney` 时显示，并由 `bCanContinueJourney` 决定是否可交互；History、Settings、Credits 在对应页面未接入时保持 `Collapsed`，不产生死入口。CommonUI 默认焦点优先可用 Continue，否则落到 Start New Journey；Screen 打开 `bAutoRestoreFocus`，Modal 关闭后恢复原菜单焦点。按钮 delegate 在 `NativeConstruct / NativeDestruct` 对称绑定和解绑，重复构建不会重复上报。当前没有正式 `WBP_MainMenuScreen`，C++ fallback 提供左侧导航和右侧旅程摘要；后续 WBP 只需复用相同 BindWidget / ViewData 合同。
+Continue 只有在 `bHasActiveJourney` 时显示，并由 `bCanContinueJourney` 决定是否可交互；History、Settings、Credits 在对应页面未接入时保持 `Collapsed`，不产生死入口。CommonUI 默认焦点优先可用 Continue，否则落到 Start New Journey；Screen 打开 `bAutoRestoreFocus`，Modal 关闭后恢复原菜单焦点。按钮 delegate 在 `NativeConstruct / NativeDestruct` 对称绑定和解绑，重复构建不会重复上报。
+
+`WBP_MainMenuScreen` 的六个可选按钮绑定 `ContinueButton / NewJourneyButton / JourneyHistoryButton / SettingsButton / CreditsButton / QuitButton` 必须是 `UWacomMainMenuButtonWidget` 或其 WBP 子类；交互可用性统一通过 CommonUI `SetIsInteractionEnabled` 应用。摘要绑定仍为 `ActiveJourneyTitleText / ActiveJourneySummaryText`。C++ fallback 提供相同 CommonUI 按钮、左侧导航和右侧旅程摘要，确保没有正式视觉资产时仍可键鼠 / 手柄操作。
 
 菜单按钮不直接 `OpenLevel`；切关卡由 GameMode 或 PlayerController 执行。主菜单和暂停菜单切关前先 `TearDownPrimaryLayout()`，再在下一帧 `OpenLevel()`，避免在 CommonUI deactivate 链中立即切关。
 

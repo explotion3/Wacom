@@ -3,13 +3,31 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UI/Foundation/WacomButtonBase.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "WacomMainMenuScreen.generated.h"
 
-class UButton;
 class UTextBlock;
 class UWidget;
 struct FWacomMainMenuScreenTestAccess;
+
+/**
+ * 主菜单导航按钮的 CommonUI 制作入口。
+ *
+ * 正式 WBP 应继承本类；C++ fallback 也使用同一个类型，确保鼠标、键盘和手柄
+ * 始终经过 CommonUI 的焦点与交互状态机。
+ */
+UCLASS(Blueprintable, meta = (ToolTip = "主菜单导航按钮的 CommonUI 基类。WBP_MainMenuNavButton 应继承本类，只负责按钮视觉、焦点反馈和音效，不提交菜单 Action。"))
+class WACOMAPP_API UWacomMainMenuButtonWidget : public UWacomButtonBase
+{
+	GENERATED_BODY()
+
+public:
+	UWacomMainMenuButtonWidget(const FObjectInitializer& ObjectInitializer);
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override;
+};
 
 /** 主菜单能够上报给 App flow 的玩家意图。 */
 UENUM(BlueprintType)
@@ -143,22 +161,22 @@ protected:
 	void HandleQuitClicked();
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> ContinueButton;
+	TObjectPtr<UWacomMainMenuButtonWidget> ContinueButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> NewJourneyButton;
+	TObjectPtr<UWacomMainMenuButtonWidget> NewJourneyButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> JourneyHistoryButton;
+	TObjectPtr<UWacomMainMenuButtonWidget> JourneyHistoryButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> SettingsButton;
+	TObjectPtr<UWacomMainMenuButtonWidget> SettingsButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> CreditsButton;
+	TObjectPtr<UWacomMainMenuButtonWidget> CreditsButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UButton> QuitButton;
+	TObjectPtr<UWacomMainMenuButtonWidget> QuitButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> ActiveJourneyTitleText;

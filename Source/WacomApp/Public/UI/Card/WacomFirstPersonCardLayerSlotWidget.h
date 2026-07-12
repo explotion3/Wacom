@@ -14,6 +14,7 @@ class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardDragPickupPlayback;
+class FWacomFirstPersonCardPlayedDissolvePlayback;
 class FWacomFirstPersonCardTransitionPlayback;
 struct FWacomFirstPersonCardLayerTestAccess;
 
@@ -30,6 +31,11 @@ struct FWacomFirstPersonCardDepthMotionDeleter
 struct FWacomFirstPersonCardDragPickupPlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardDragPickupPlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardPlayedDissolvePlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardPlayedDissolvePlayback* Playback) const;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -79,6 +85,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	FWacomFirstPersonCardDepthView CardDepthView;
 	FWacomFirstPersonCardSelectionView SelectionView;
+	FWacomFirstPersonCardPlayedDissolveView PlayedDissolveView;
 	FWidgetTransform RenderTransform;
 	int32 RenderZOrder = 0;
 	bool bDragPickupFeedbackActive = false;
@@ -86,6 +93,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	int32 DragPickupTriggerCount = 0;
 	int32 DragPickupSoundRequestCount = 0;
 	float LastDragPickupSoundPitchMultiplier = 1.0f;
+	bool bPlayedDissolvePlaybackActive = false;
+	int32 PlayedDissolveSoundRequestCount = 0;
+	float LastPlayedDissolveSoundPitchMultiplier = 1.0f;
 	bool bEnterTransitionPlaybackActive = false;
 	bool bEnterTransitionBlocksInteraction = false;
 	float EnterTransitionElapsedSeconds = 0.0f;
@@ -141,7 +151,9 @@ public:
 		const TOptional<FVector2D>& ExitOffsetOverride);
 	void BeginExitMotionWithProfile(
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
-		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride);
+		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride,
+		EWacomFirstPersonCardSlotTransitionKind TransitionKind =
+			EWacomFirstPersonCardSlotTransitionKind::Default);
 	void TriggerCommitFeedback();
 	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
 	bool HasActivePresentationPlayback() const;
@@ -289,6 +301,9 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardDragPickupPlayback,
 		FWacomFirstPersonCardDragPickupPlaybackDeleter> DragPickupPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardPlayedDissolvePlayback,
+		FWacomFirstPersonCardPlayedDissolvePlaybackDeleter> PlayedDissolvePlayback;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
@@ -300,6 +315,7 @@ private:
 	bool bHasVisualSlotView = false;
 	bool bIsExitingForFirstPersonLayer = false;
 	bool bUsesFixedExitTransitionPlayback = false;
+	bool bUsesPlayedDissolveExit = false;
 	bool bWantsSlotMotionTick = false;
 	bool bPreserveGestureReturnMotion = false;
 	bool bGestureTargetValid = false;
@@ -347,6 +363,8 @@ private:
 	int32 DragPickupTriggerCountForTest = 0;
 	int32 DragPickupSoundRequestCountForTest = 0;
 	float LastDragPickupSoundPitchMultiplierForTest = 1.0f;
+	int32 PlayedDissolveSoundRequestCountForTest = 0;
+	float LastPlayedDissolveSoundPitchMultiplierForTest = 1.0f;
 	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKindForTest =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
 #endif
@@ -421,6 +439,12 @@ private:
 	void PlayPendingDragPickupSound();
 	float GetDragPickupAlpha() const;
 	void ResetCardSurfaceEffectView();
+	bool CanPlayPlayedDissolve() const;
+	void StartPlayedDissolvePlayback();
+	void TickPlayedDissolvePlayback(float DeltaTime);
+	void ClearPlayedDissolvePlayback();
+	void PlayPendingPlayedDissolveSound();
+	bool IsPlayedDissolvePlaybackActive() const;
 	void BroadcastDragStarted();
 	void BroadcastDragUpdated();
 	void BroadcastDragReleased();

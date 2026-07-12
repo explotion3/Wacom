@@ -7,6 +7,7 @@
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -18,6 +19,11 @@ struct FWacomFirstPersonCardLayerTestAccess
 		const UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static FWacomFirstPersonCardAnchorAutomationTestView View(
 		const UWacomFirstPersonCardAnchorComponent& Anchor);
+	static void SetCardViewRetainerEffectMaterialBeforeSlate(
+		UWacomFirstPersonCardViewWidget& CardView,
+		UMaterialInterface* Material);
+	static const UMaterialInterface* CardViewRetainerEffectMaterialInterface(
+		UWacomFirstPersonCardViewWidget& CardView);
 
 	static FWacomRunFirstPersonCardSourceRefreshCountersForTest DefaultSourceCounters(
 		const UWacomRunFirstPersonCardSourceComponent& Source);

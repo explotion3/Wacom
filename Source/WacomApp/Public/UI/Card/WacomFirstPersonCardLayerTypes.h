@@ -285,10 +285,103 @@ struct WACOMAPP_API FWacomFirstPersonCardSelectionView
 	FWacomFirstPersonCardSelectionStyleData Style;
 };
 
-/** Card-surface material state. Selection is the first channel; flash/dissolve can extend this contract later. */
+/** Theme-neutral authoring values for the Played pixel-ash dissolve. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardPlayedDissolveStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "Played 期间临时切换到的单 Retainer Surface Effect 材质；必须使用 Texture 作为 Retainer 采样参数。"))
+	TObjectPtr<UMaterialInterface> SurfaceEffectMaterial = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "五级灰度硬边噪声 Mask；推荐 256×256、Masks 压缩、关闭 sRGB、Nearest、NoMipmaps、UI。"))
+	TObjectPtr<UTexture2D> NoiseTexture = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (Units = "s", ToolTip = "完整 Played 消散时长，单位为秒；推荐 0.32 到 0.48。"))
+	float DurationSeconds = 0.40f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (Units = "s", ToolTip = "提交成功后保持完整卡面的确认停顿，单位为秒；推荐 0.03 到 0.08，包含在总时长内。"))
+	float ConfirmHoldSeconds = 0.05f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "横向像素网格列数；推荐 72 到 120，默认 96 接近当前像素卡面密度。"))
+	float GridColumns = 96.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (Units = "deg", ToolTip = "消散前沿在 UV 空间中的方向角，单位为度；默认 -78 表示以向上为主并略向右推进。"))
+	float DirectionAngleDegrees = -78.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "噪声对消散前沿的扰动强度；推荐 0.16 到 0.42。"))
+	float Jitter = 0.32f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿主色；默认暖象牙金。"))
+	FLinearColor EdgeColor = FLinearColor(1.0f, 0.82f, 0.34f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿少量折射高光色；默认低饱和蓝。"))
+	FLinearColor EdgeAccentColor = FLinearColor(0.46f, 0.66f, 1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿宽度，使用归一化阈值单位；推荐 0.025 到 0.07。"))
+	float EdgeWidth = 0.045f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿亮度倍率；推荐 0.8 到 1.8。"))
+	float EdgeIntensity = 1.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "前沿附近生成灰烬像素簇的密度，0 到 1；推荐 0.10 到 0.26。"))
+	float AshDensity = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿后方允许灰烬存活的阈值宽度；推荐 0.08 到 0.20。"))
+	float AshTrailWidth = 0.14f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "灰烬最大上升距离，单位为 Retainer 像素；推荐 14 到 30，避免超过 WBP bleed。"))
+	float AshLiftPixels = 22.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "灰烬最大横向漂移，单位为 Retainer 像素；推荐 3 到 10。"))
+	float AshDriftPixels = 7.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "接触阴影在总时长前多少比例内完全消退，0 到 1；默认 0.25 约等于前 0.10 秒。"))
+	float ShadowFadeFraction = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "Played 消散开始时立即播放的一次性 UI 2D 音效；留空表示静音。"))
+	TObjectPtr<USoundBase> StartSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "Played 消散音效音量倍率；1 为资产原始音量，推荐 0.5 到 1.2。"))
+	float StartSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "Played 消散音效基础音高倍率；1 为资产原始音高，推荐 0.85 到 1.15。"))
+	float StartSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "每次播放在基础音高附近的随机比例；0.03 表示约正负 3%。"))
+	float StartSoundPitchVariation = 0.03f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardPlayedDissolveConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Played Dissolve")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Played Dissolve")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Played Dissolve")
+	FWacomFirstPersonCardPlayedDissolveStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardPlayedDissolveView
+{
+	bool bActive = false;
+	bool bReducedMotion = false;
+	float Amount = 0.0f;
+	float TimeSeconds = 0.0f;
+	float Seed = 0.0f;
+	FWacomFirstPersonCardPlayedDissolveStyleData Style;
+};
+
+/** Card-surface material state. Selection remains dormant; PlayedDissolve is the first production channel. */
 struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 {
 	FWacomFirstPersonCardSelectionView Selection;
+	FWacomFirstPersonCardPlayedDissolveView PlayedDissolve;
 };
 
 USTRUCT(BlueprintType)
@@ -991,6 +1084,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardSelectionConfig Selection;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardPlayedDissolveConfig PlayedDissolve;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState

@@ -1,0 +1,69 @@
+Function SelfContained WacomFirstPersonCard_ProjectSurface(
+    in float2 uv,
+    in float tiltXDegrees,
+    in float tiltYDegrees,
+    in float perspectiveStrength,
+    in float referenceTiltDegrees,
+    in float foreshortenStrength,
+    in float edgeFadeUV,
+    out float3 projectedUVAndMask)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        float2(tiltXDegrees, tiltYDegrees) / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+
+    float2 centeredUV = uv - float2(0.5, 0.5);
+    float depth = centeredUV.x * normalizedTilt.y - centeredUV.y * normalizedTilt.x;
+    float projectiveScale = clamp(
+        1.0 - depth * max(perspectiveStrength, 0.0),
+        0.72,
+        1.28);
+    float2 axisForeshorten = float2(
+        1.0 + abs(normalizedTilt.y) * max(foreshortenStrength, 0.0),
+        1.0 + abs(normalizedTilt.x) * max(foreshortenStrength, 0.0));
+    float2 projectedUV = centeredUV * projectiveScale * axisForeshorten + float2(0.5, 0.5);
+
+    float safeEdgeFade = max(edgeFadeUV, 0.0001);
+    float insideMask =
+        smoothstep(0.0, safeEdgeFade, projectedUV.x)
+        * smoothstep(0.0, safeEdgeFade, 1.0 - projectedUV.x)
+        * smoothstep(0.0, safeEdgeFade, projectedUV.y)
+        * smoothstep(0.0, safeEdgeFade, 1.0 - projectedUV.y);
+
+    projectedUVAndMask = float3(projectedUV.x, projectedUV.y, insideMask);
+}
+
+Function SelfContained WacomFirstPersonCard_CombineContactShadowAlpha(
+    in float centerAlpha,
+    in float leftAlpha,
+    in float rightAlpha,
+    in float topAlpha,
+    in float bottomAlpha,
+    in float topLeftAlpha,
+    in float topRightAlpha,
+    in float bottomLeftAlpha,
+    in float bottomRightAlpha,
+    in float alphaThreshold,
+    in float alphaFeather,
+    out float contactShadowMask)
+{
+    float safeFeather = max(alphaFeather, 0.0001);
+    float thresholdMin = max(alphaThreshold - safeFeather, 0.0);
+    float thresholdMax = min(alphaThreshold + safeFeather, 1.0);
+    float centerCaster = smoothstep(thresholdMin, thresholdMax, centerAlpha);
+    float leftCaster = smoothstep(thresholdMin, thresholdMax, leftAlpha);
+    float rightCaster = smoothstep(thresholdMin, thresholdMax, rightAlpha);
+    float topCaster = smoothstep(thresholdMin, thresholdMax, topAlpha);
+    float bottomCaster = smoothstep(thresholdMin, thresholdMax, bottomAlpha);
+    float topLeftCaster = smoothstep(thresholdMin, thresholdMax, topLeftAlpha);
+    float topRightCaster = smoothstep(thresholdMin, thresholdMax, topRightAlpha);
+    float bottomLeftCaster = smoothstep(thresholdMin, thresholdMax, bottomLeftAlpha);
+    float bottomRightCaster = smoothstep(thresholdMin, thresholdMax, bottomRightAlpha);
+    contactShadowMask = (
+        centerCaster * 4.0
+        + (leftCaster + rightCaster + topCaster + bottomCaster) * 2.0
+        + topLeftCaster + topRightCaster + bottomLeftCaster + bottomRightCaster)
+        / 16.0;
+}

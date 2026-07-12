@@ -2,6 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Materials/Material.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
@@ -121,6 +122,81 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 	TestTrue(
 		TEXT("Retainer capture owns independent local clipping"),
 		NativeView.bRetainerCaptureRootUsesIndependentClipping);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardAuthoredRetainerBaseMaterialLifecycleTest,
+	"Wacom.UI.FirstPersonCardLayer.DepthMotion.AuthoredRetainerKeepsBaseMaterialOnConstruct",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardAuthoredRetainerBaseMaterialLifecycleTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	UClass* CardViewClass = LoadClass<UWacomFirstPersonCardViewWidget>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_FPCardView.WBP_FPCardView_C"));
+	if (!TestNotNull(TEXT("Authored first-person card view class"), CardViewClass))
+	{
+		return false;
+	}
+
+	UWacomFirstPersonCardViewWidget* CardView =
+		NewObject<UWacomFirstPersonCardViewWidget>(GetTransientPackage(), CardViewClass);
+	if (!TestNotNull(TEXT("Authored first-person card view"), CardView))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Authored card view initializes"), CardView->Initialize());
+	const TSharedRef<SWidget> SlateWidget = CardView->TakeWidget();
+
+	FWacomFirstPersonCardDepthView DepthView;
+	DepthView.bFake3DEnabled = true;
+	DepthView.TiltDegrees = FVector2D(2.0f, -3.0f);
+	DepthView.PerspectiveStrength = 0.12f;
+	CardView->SetCardDepthView(DepthView);
+
+	const FWacomFirstPersonCardViewAutomationTestView View =
+		CardView->GetAutomationTestViewForTest();
+	TestTrue(TEXT("Authored WBP keeps its Fake3D Retainer"), View.bHasFake3DSurfaceRetainer);
+	TestTrue(
+		TEXT("NativeConstruct does not clear the authored base Effect Material"),
+		View.bFake3DEffectMaterialReady);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardPreSlateBaseMaterialLifecycleTest,
+	"Wacom.UI.FirstPersonCardLayer.DepthMotion.BaseMaterialSurvivesPreSlateSurfaceReset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardPreSlateBaseMaterialLifecycleTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWacomFirstPersonCardViewWidget* CardView = NewObject<UWacomFirstPersonCardViewWidget>();
+	UMaterial* BaseMaterial = NewObject<UMaterial>();
+	FWacomFirstPersonCardLayerTestAccess::SetCardViewRetainerEffectMaterialBeforeSlate(
+		*CardView,
+		BaseMaterial);
+	TestEqual(
+		TEXT("Pre-Slate Retainer owns the authored base material source"),
+		FWacomFirstPersonCardLayerTestAccess::CardViewRetainerEffectMaterialInterface(*CardView),
+		static_cast<const UMaterialInterface*>(BaseMaterial));
+
+	CardView->SetCardSurfaceEffectView(FWacomFirstPersonCardSurfaceEffectView());
+	TestEqual(
+		TEXT("Inactive Surface reset must not clear a base material whose MID is not built yet"),
+		FWacomFirstPersonCardLayerTestAccess::CardViewRetainerEffectMaterialInterface(*CardView),
+		static_cast<const UMaterialInterface*>(BaseMaterial));
+
+	FWacomFirstPersonCardLayerTestAccess::SetCardViewRetainerEffectMaterialBeforeSlate(
+		*CardView,
+		nullptr);
+	CardView->SetCardSurfaceEffectView(FWacomFirstPersonCardSurfaceEffectView());
+	TestEqual(
+		TEXT("Surface reset restores the cached authored source when the runtime MID is missing"),
+		FWacomFirstPersonCardLayerTestAccess::CardViewRetainerEffectMaterialInterface(*CardView),
+		static_cast<const UMaterialInterface*>(BaseMaterial));
 	return true;
 }
 

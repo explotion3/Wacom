@@ -4,7 +4,7 @@
 
 #if WITH_AUTOMATION_TESTS
 
-#include "Components/Button.h"
+#include "Blueprint/WidgetTree.h"
 
 void FWacomMainMenuScreenTestAccess::Build(UWacomMainMenuScreen& Screen)
 {
@@ -25,7 +25,7 @@ void FWacomMainMenuScreenTestAccess::Click(
 	UWacomMainMenuScreen& Screen,
 	EWacomMainMenuAction Action)
 {
-	UButton* Button = nullptr;
+	UWacomMainMenuButtonWidget* Button = nullptr;
 	switch (Action)
 	{
 	case EWacomMainMenuAction::ContinueJourney:
@@ -52,8 +52,48 @@ void FWacomMainMenuScreenTestAccess::Click(
 
 	if (Button)
 	{
-		Button->OnClicked.Broadcast();
+		Button->OnClicked().Broadcast();
 	}
+}
+
+bool FWacomMainMenuScreenTestAccess::HasCompleteFocusableCommonUIButtonSet(
+	const UWacomMainMenuScreen& Screen)
+{
+	const UWacomMainMenuButtonWidget* Buttons[] = {
+		Screen.ContinueButton,
+		Screen.NewJourneyButton,
+		Screen.JourneyHistoryButton,
+		Screen.SettingsButton,
+		Screen.CreditsButton,
+		Screen.QuitButton
+	};
+
+	for (const UWacomMainMenuButtonWidget* Button : Buttons)
+	{
+		if (!Button || !Button->GetIsFocusable())
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+TArray<FName> FWacomMainMenuScreenTestAccess::WidgetNames(
+	const UWacomMainMenuScreen& Screen)
+{
+	TArray<FName> Names;
+	if (Screen.WidgetTree)
+	{
+		Screen.WidgetTree->ForEachWidget(
+			[&Names](UWidget* Widget)
+			{
+				if (Widget)
+				{
+					Names.Add(Widget->GetFName());
+				}
+			});
+	}
+	return Names;
 }
 
 FWacomMainMenuScreenAutomationTestView FWacomMainMenuScreenTestAccess::View(

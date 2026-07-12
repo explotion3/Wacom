@@ -5,7 +5,8 @@
 #define LOCTEXT_NAMESPACE "WacomMainMenu"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/Button.h"
+#include "CommonTextBlock.h"
+#include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
@@ -27,13 +28,29 @@ namespace
 			&& Visibility != ESlateVisibility::Hidden;
 	}
 
-	UButton* MakeLabelButton(UWidgetTree* Tree, FName Name, const FText& Label, UVerticalBox* Parent)
+	void SetButtonInteractionEnabled(
+		UWacomMainMenuButtonWidget* Button,
+		bool bEnabled)
 	{
-		UButton* Button = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-		UTextBlock* Text = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		Text->SetText(Label);
-		Text->SetJustification(ETextJustify::Left);
-		Button->AddChild(Text);
+		if (!Button || Button->IsInteractionEnabled() == bEnabled)
+		{
+			return;
+		}
+
+		Button->SetIsInteractionEnabled(bEnabled);
+		Button->BP_OnInteractabilityChanged(bEnabled);
+	}
+
+	UWacomMainMenuButtonWidget* MakeLabelButton(
+		UWidgetTree* Tree,
+		FName Name,
+		const FText& Label,
+		UVerticalBox* Parent)
+	{
+		UWacomMainMenuButtonWidget* Button = Tree->ConstructWidget<UWacomMainMenuButtonWidget>(
+			UWacomMainMenuButtonWidget::StaticClass(),
+			Name);
+		Button->SetButtonText(Label);
 
 		if (UVerticalBoxSlot* ButtonSlot = Parent->AddChildToVerticalBox(Button))
 		{
@@ -42,6 +59,40 @@ namespace
 		}
 		return Button;
 	}
+}
+
+UWacomMainMenuButtonWidget::UWacomMainMenuButtonWidget(
+	const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	SetIsFocusable(true);
+}
+
+TSharedRef<SWidget> UWacomMainMenuButtonWidget::RebuildWidget()
+{
+	if (!WidgetTree || !WidgetTree->RootWidget)
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
+		}
+
+		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(),
+			TEXT("Root"));
+		Root->SetPadding(FMargin(14.0f, 8.0f));
+		Root->SetBrushColor(FLinearColor(0.06f, 0.07f, 0.09f, 0.88f));
+		WidgetTree->RootWidget = Root;
+
+		ButtonText = WidgetTree->ConstructWidget<UCommonTextBlock>(
+			UCommonTextBlock::StaticClass(),
+			TEXT("ButtonText"));
+		ButtonText->SetText(GetButtonText());
+		ButtonText->SetJustification(ETextJustify::Left);
+		Root->AddChild(ButtonText);
+	}
+
+	return Super::RebuildWidget();
 }
 
 UWacomMainMenuScreen::UWacomMainMenuScreen(const FObjectInitializer& ObjectInitializer)
@@ -71,8 +122,10 @@ TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
 			ContentSlot->SetAlignment(FVector2D::ZeroVector);
 		}
 
+		// Do not name this widget "Navigation": that shadows UWidget::Navigation and
+		// makes the UE 5.8 Widget Blueprint Designer preview build invalid navigation metadata.
 		UVerticalBox* NavigationBox = WidgetTree->ConstructWidget<UVerticalBox>(
-			UVerticalBox::StaticClass(), TEXT("Navigation"));
+			UVerticalBox::StaticClass(), TEXT("MainMenuNavigationBox"));
 		if (UHorizontalBoxSlot* NavigationSlot = Content->AddChildToHorizontalBox(NavigationBox))
 		{
 			NavigationSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -140,27 +193,33 @@ void UWacomMainMenuScreen::NativeConstruct()
 
 	if (ContinueButton)
 	{
-		ContinueButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleContinueClicked);
+		ContinueButton->OnClicked().RemoveAll(this);
+		ContinueButton->OnClicked().AddUObject(this, &UWacomMainMenuScreen::HandleContinueClicked);
 	}
 	if (NewJourneyButton)
 	{
-		NewJourneyButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleNewJourneyClicked);
+		NewJourneyButton->OnClicked().RemoveAll(this);
+		NewJourneyButton->OnClicked().AddUObject(this, &UWacomMainMenuScreen::HandleNewJourneyClicked);
 	}
 	if (JourneyHistoryButton)
 	{
-		JourneyHistoryButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleJourneyHistoryClicked);
+		JourneyHistoryButton->OnClicked().RemoveAll(this);
+		JourneyHistoryButton->OnClicked().AddUObject(this, &UWacomMainMenuScreen::HandleJourneyHistoryClicked);
 	}
 	if (SettingsButton)
 	{
-		SettingsButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleSettingsClicked);
+		SettingsButton->OnClicked().RemoveAll(this);
+		SettingsButton->OnClicked().AddUObject(this, &UWacomMainMenuScreen::HandleSettingsClicked);
 	}
 	if (CreditsButton)
 	{
-		CreditsButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleCreditsClicked);
+		CreditsButton->OnClicked().RemoveAll(this);
+		CreditsButton->OnClicked().AddUObject(this, &UWacomMainMenuScreen::HandleCreditsClicked);
 	}
 	if (QuitButton)
 	{
-		QuitButton->OnClicked.AddUniqueDynamic(this, &UWacomMainMenuScreen::HandleQuitClicked);
+		QuitButton->OnClicked().RemoveAll(this);
+		QuitButton->OnClicked().AddUObject(this, &UWacomMainMenuScreen::HandleQuitClicked);
 	}
 
 	RefreshFromViewData();
@@ -170,27 +229,27 @@ void UWacomMainMenuScreen::NativeDestruct()
 {
 	if (ContinueButton)
 	{
-		ContinueButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleContinueClicked);
+		ContinueButton->OnClicked().RemoveAll(this);
 	}
 	if (NewJourneyButton)
 	{
-		NewJourneyButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleNewJourneyClicked);
+		NewJourneyButton->OnClicked().RemoveAll(this);
 	}
 	if (JourneyHistoryButton)
 	{
-		JourneyHistoryButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleJourneyHistoryClicked);
+		JourneyHistoryButton->OnClicked().RemoveAll(this);
 	}
 	if (SettingsButton)
 	{
-		SettingsButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleSettingsClicked);
+		SettingsButton->OnClicked().RemoveAll(this);
 	}
 	if (CreditsButton)
 	{
-		CreditsButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleCreditsClicked);
+		CreditsButton->OnClicked().RemoveAll(this);
 	}
 	if (QuitButton)
 	{
-		QuitButton->OnClicked.RemoveDynamic(this, &UWacomMainMenuScreen::HandleQuitClicked);
+		QuitButton->OnClicked().RemoveAll(this);
 	}
 
 	Super::NativeDestruct();
@@ -210,28 +269,30 @@ void UWacomMainMenuScreen::RefreshFromViewData()
 		ContinueButton->SetVisibility(ViewData.bHasActiveJourney
 			? ESlateVisibility::Visible
 			: ESlateVisibility::Collapsed);
-		ContinueButton->SetIsEnabled(ViewData.bHasActiveJourney && ViewData.bCanContinueJourney);
+		SetButtonInteractionEnabled(
+			ContinueButton,
+			ViewData.bHasActiveJourney && ViewData.bCanContinueJourney);
 	}
 	if (JourneyHistoryButton)
 	{
 		JourneyHistoryButton->SetVisibility(ViewData.bShowJourneyHistory
 			? ESlateVisibility::Visible
 			: ESlateVisibility::Collapsed);
-		JourneyHistoryButton->SetIsEnabled(ViewData.bShowJourneyHistory);
+		SetButtonInteractionEnabled(JourneyHistoryButton, ViewData.bShowJourneyHistory);
 	}
 	if (SettingsButton)
 	{
 		SettingsButton->SetVisibility(ViewData.bShowSettings
 			? ESlateVisibility::Visible
 			: ESlateVisibility::Collapsed);
-		SettingsButton->SetIsEnabled(ViewData.bShowSettings);
+		SetButtonInteractionEnabled(SettingsButton, ViewData.bShowSettings);
 	}
 	if (CreditsButton)
 	{
 		CreditsButton->SetVisibility(ViewData.bShowCredits
 			? ESlateVisibility::Visible
 			: ESlateVisibility::Collapsed);
-		CreditsButton->SetIsEnabled(ViewData.bShowCredits);
+		SetButtonInteractionEnabled(CreditsButton, ViewData.bShowCredits);
 	}
 
 	if (ActiveJourneyTitleText)
@@ -254,13 +315,13 @@ UWidget* UWacomMainMenuScreen::NativeGetDesiredFocusTarget() const
 {
 	if (ContinueButton
 		&& IsConfiguredVisible(ContinueButton)
-		&& ContinueButton->GetIsEnabled())
+		&& ContinueButton->IsInteractionEnabled())
 	{
 		return ContinueButton;
 	}
 	if (NewJourneyButton
 		&& IsConfiguredVisible(NewJourneyButton)
-		&& NewJourneyButton->GetIsEnabled())
+		&& NewJourneyButton->IsInteractionEnabled())
 	{
 		return NewJourneyButton;
 	}
@@ -335,7 +396,7 @@ FWacomMainMenuScreenAutomationTestView UWacomMainMenuScreen::GetAutomationTestVi
 {
 	FWacomMainMenuScreenAutomationTestView TestView;
 	TestView.bContinueVisible = IsConfiguredVisible(ContinueButton);
-	TestView.bContinueEnabled = ContinueButton && ContinueButton->GetIsEnabled();
+	TestView.bContinueEnabled = ContinueButton && ContinueButton->IsInteractionEnabled();
 	TestView.bNewJourneyVisible = IsConfiguredVisible(NewJourneyButton);
 	TestView.bJourneyHistoryVisible = IsConfiguredVisible(JourneyHistoryButton);
 	TestView.bSettingsVisible = IsConfiguredVisible(SettingsButton);
