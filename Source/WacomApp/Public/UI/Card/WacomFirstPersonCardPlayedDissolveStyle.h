@@ -7,7 +7,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomFirstPersonCardPlayedDissolveStyle.generated.h"
 
-/** Reusable theme preset for the first-person Played pixel-ash dissolve. */
+/** Reusable theme preset for first-person Played surface dissolves. */
 UCLASS(BlueprintType, Const)
 class WACOMAPP_API UWacomFirstPersonCardPlayedDissolveStyle : public UDataAsset
 {

@@ -3,6 +3,8 @@
 #include "Misc/AutomationTest.h"
 
 #include "Engine/Texture2D.h"
+#include "Blueprint/WidgetBlueprintGeneratedClass.h"
+#include "Blueprint/WidgetTree.h"
 #include "Materials/Material.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -215,6 +217,82 @@ bool FWacomFirstPersonCardPlayedDissolveFallbackAndReducedMotionTest::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardPlayedDissolveStyleVariantTest,
+	"Wacom.UI.FirstPersonCardLayer.PlayedDissolve.StyleVariantsSharePlayback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardPlayedDissolveStyleVariantTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardPlayedDissolveSpec;
+	FWacomFirstPersonCardPlayedDissolveConfig OrderedConfig = MakeDissolveConfig();
+	OrderedConfig.Style.EffectKind =
+		EWacomFirstPersonCardPlayedDissolveEffectKind::OrderedDither;
+	OrderedConfig.Style.OrderedDither.BayerMatrixSize = 5;
+	OrderedConfig.Style.OrderedDither.BandWidth = -1.0f;
+	OrderedConfig.Style.OrderedDither.ResidueDensity = -0.5f;
+	OrderedConfig.Style.OrderedDither.ResidueTrailWidth = -1.0f;
+	OrderedConfig.Style.OrderedDither.ResidueTravelPixels = -12.0f;
+	OrderedConfig.Style.OrderedDither.ResidueMainDirectionRatio = 2.0f;
+	OrderedConfig.Style.OrderedDither.ResidueDirectionSpreadDegrees = -270.0f;
+	OrderedConfig.Style.OrderedDither.ResidueScatterStrength = -0.5f;
+	UWacomFirstPersonCardLayerSlotWidget* Widget = MakeWidget(OrderedConfig);
+	if (!TestNotNull(TEXT("Ordered Dither slot"), Widget))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotAutomationTestView View =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	const FWacomFirstPersonCardOrderedDitherStyleData& NormalizedDither =
+		View.SlotVisualConfig.PlayedDissolve.Style.OrderedDither;
+	TestEqual(TEXT("Bayer sizes above four normalize to eight"), NormalizedDither.BayerMatrixSize, 8);
+	TestTrue(TEXT("Dither band width remains positive"), NormalizedDither.BandWidth > 0.0f);
+	TestTrue(TEXT("Residue density clamps to zero"), FMath::IsNearlyZero(NormalizedDither.ResidueDensity));
+	TestTrue(TEXT("Residue trail remains positive"), NormalizedDither.ResidueTrailWidth > 0.0f);
+	TestTrue(TEXT("Residue travel clamps to zero"), FMath::IsNearlyZero(NormalizedDither.ResidueTravelPixels));
+	TestTrue(
+		TEXT("Residue main direction ratio clamps to one"),
+		FMath::IsNearlyEqual(NormalizedDither.ResidueMainDirectionRatio, 1.0f));
+	TestTrue(
+		TEXT("Residue direction spread normalizes to 180 degrees"),
+		FMath::IsNearlyEqual(NormalizedDither.ResidueDirectionSpreadDegrees, 180.0f));
+	TestTrue(
+		TEXT("Residue scatter strength clamps to zero"),
+		FMath::IsNearlyZero(NormalizedDither.ResidueScatterStrength));
+
+	Widget->BeginExitMotionWithProfile(
+		Widget->GetSlotView(),
+		MakeSpatialProfile(),
+		EWacomFirstPersonCardSlotTransitionKind::Played);
+	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestTrue(TEXT("Ordered Dither uses the existing Played playback"), View.bPlayedDissolvePlaybackActive);
+	TestEqual(
+		TEXT("Ordered Dither kind reaches the shared surface view"),
+		View.PlayedDissolveView.Style.EffectKind,
+		EWacomFirstPersonCardPlayedDissolveEffectKind::OrderedDither);
+
+	Widget->ForceCompletePresentationPlayback();
+	FWacomFirstPersonCardPlayedDissolveConfig AshConfig = MakeDissolveConfig();
+	AshConfig.Style.EffectKind = EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh;
+	FWacomFirstPersonCardSlotVisualConfig AshVisualConfig;
+	AshVisualConfig.PlayedDissolve = AshConfig;
+	Widget->SetSlotVisualConfig(AshVisualConfig);
+	Widget->SetSlotViewImmediate(MakeSlot());
+	Widget->BeginExitMotionWithProfile(
+		Widget->GetSlotView(),
+		MakeSpatialProfile(),
+		EWacomFirstPersonCardSlotTransitionKind::Played);
+	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestTrue(TEXT("Pixel Ash still uses the same Played playback"), View.bPlayedDissolvePlaybackActive);
+	TestEqual(
+		TEXT("Switching Style does not retain Ordered Dither kind"),
+		View.PlayedDissolveView.Style.EffectKind,
+		EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardPlayedDissolveDreamShaderContractTest,
 	"Wacom.UI.FirstPersonCardLayer.PlayedDissolve.DreamShaderContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -239,6 +317,9 @@ bool FWacomFirstPersonCardPlayedDissolveDreamShaderContractTest::RunTest(
 	TestTrue(
 		TEXT("Surface material imports dissolve helpers"),
 		EffectSource.Contains(TEXT("WacomFirstPersonCardPlayedDissolve.dsh")));
+	TestFalse(
+		TEXT("Pixel Ash material remains independent from Ordered Dither"),
+		EffectSource.Contains(TEXT("WacomFirstPersonCardPlayedOrderedDither.dsh")));
 	TestTrue(TEXT("Retainer texture parameter remains Texture"), EffectSource.Contains(TEXT("TextureSampleParameter2D Texture")));
 	TestTrue(TEXT("Surface material keeps premultiplied alpha"), EffectSource.Contains(TEXT("BlendMode = \"PremultipliedAlpha\"")));
 	TestTrue(TEXT("Surface material exposes dissolve amount"), EffectSource.Contains(TEXT("PlayedDissolveAmount")));
@@ -275,6 +356,166 @@ bool FWacomFirstPersonCardPlayedDissolveDreamShaderContractTest::RunTest(
 		TestTrue(
 			TEXT("Retainer-owned Surface effect MID is ready"),
 			CardViewTestView.bFake3DEffectMaterialReady);
+	}
+
+	FString OrderedDitherSource;
+	const FString OrderedDitherPath = FPaths::Combine(
+		FPaths::ProjectDir(),
+		TEXT("DShader/Material/Card/M_FirstPersonCard_SurfaceEffects_OrderedDither.dsm"));
+	TestTrue(
+		TEXT("Ordered Dither Surface source can be read"),
+		FFileHelper::LoadFileToString(OrderedDitherSource, *OrderedDitherPath));
+	TestTrue(
+		TEXT("Ordered Dither material imports its own helper"),
+		OrderedDitherSource.Contains(TEXT("WacomFirstPersonCardPlayedOrderedDither.dsh")));
+	TestFalse(
+		TEXT("Ordered Dither material does not import Pixel Ash helper"),
+		OrderedDitherSource.Contains(TEXT("WacomFirstPersonCardPlayedDissolve.dsh")));
+	TestTrue(
+		TEXT("Ordered Dither exposes Bayer size"),
+		OrderedDitherSource.Contains(TEXT("PlayedOrderedDitherBayerSize")));
+	TestFalse(
+		TEXT("Ordered Dither no longer exposes a visible duotone palette"),
+		OrderedDitherSource.Contains(TEXT("PlayedOrderedDitherDarkColor"))
+			|| OrderedDitherSource.Contains(TEXT("PlayedOrderedDitherLightColor")));
+	TestTrue(
+		TEXT("Ordered Dither keeps surviving pixels in the original card color"),
+		OrderedDitherSource.Contains(TEXT(
+			"float3 cardColor = surfaceColor * insideMask * cardVisibleMask")));
+	TestTrue(
+		TEXT("Ordered Dither keeps the Retainer Texture contract"),
+		OrderedDitherSource.Contains(TEXT("TextureSampleParameter2D Texture")));
+	TestTrue(
+		TEXT("Ordered Dither keeps premultiplied alpha"),
+		OrderedDitherSource.Contains(TEXT("BlendMode = \"PremultipliedAlpha\"")));
+	TestTrue(
+		TEXT("Ordered Dither residue travel uses per-fragment age"),
+		OrderedDitherSource.Contains(TEXT(
+			"residueAgeAtOutput * (2.0 - residueAgeAtOutput)")));
+	TestFalse(
+		TEXT("Ordered Dither residue travel no longer uses global dissolve progress"),
+		OrderedDitherSource.Contains(TEXT(
+			"residueTravelProgress = saturate(PlayedDissolveAmount")));
+	TestTrue(
+		TEXT("Ordered Dither contact shadow follows the surviving caster"),
+		OrderedDitherSource.Contains(TEXT("* shadowCasterVisibleMask")));
+
+	FString OrderedDitherHelperSource;
+	const FString OrderedDitherHelperPath = FPaths::Combine(
+		FPaths::ProjectDir(),
+		TEXT("DShader/Shared/WacomFirstPersonCardPlayedOrderedDither.dsh"));
+	TestTrue(
+		TEXT("Ordered Dither helper source can be read"),
+		FFileHelper::LoadFileToString(OrderedDitherHelperSource, *OrderedDitherHelperPath));
+	TestTrue(
+		TEXT("Ordered Dither helper exposes deterministic residue age"),
+		OrderedDitherHelperSource.Contains(TEXT("out float residueAge"))
+			&& OrderedDitherHelperSource.Contains(TEXT(
+				"residueAge = saturate(-field / safeTrailWidth)")));
+	TestTrue(
+		TEXT("Ordered Dither helper splits main-direction and radial residue"),
+		OrderedDitherHelperSource.Contains(TEXT("useMainDirection"))
+			&& OrderedDitherHelperSource.Contains(TEXT("scatterAngleDegrees"))
+			&& OrderedDitherHelperSource.Contains(TEXT("residueTravelDirection")));
+	TestTrue(
+		TEXT("Ordered Dither material follows the authored dissolve direction"),
+		OrderedDitherSource.Contains(TEXT("PlayedDissolveDirectionAngle"))
+			&& OrderedDitherSource.Contains(TEXT(
+				"PlayedOrderedDitherResidueMainDirectionRatio")));
+
+	UWidgetBlueprintGeneratedClass* CardViewWidgetClass = LoadObject<UWidgetBlueprintGeneratedClass>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_FPCardView.WBP_FPCardView_C"));
+	if (TestNotNull(TEXT("First-person CardView WBP can be loaded"), CardViewWidgetClass))
+	{
+		const UWidgetTree* CardViewTree = CardViewWidgetClass->GetWidgetTreeArchetype();
+		if (TestNotNull(TEXT("First-person CardView WBP has a widget tree"), CardViewTree))
+		{
+			TestNull(
+				TEXT("Legacy ShadowHost was removed from the production WBP"),
+				CardViewTree->FindWidget(TEXT("ShadowHost")));
+			TestNull(
+				TEXT("Legacy CardShadowImage was removed from the production WBP"),
+				CardViewTree->FindWidget(TEXT("CardShadowImage")));
+		}
+	}
+
+	UMaterial* OrderedDitherMaterial = LoadObject<UMaterial>(
+		nullptr,
+		TEXT("/Game/DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_OrderedDither.M_FirstPersonCard_SurfaceEffects_OrderedDither"));
+	TestNotNull(TEXT("Generated Ordered Dither material exists"), OrderedDitherMaterial);
+	UWacomFirstPersonCardPlayedDissolveStyle* OrderedDitherStyle =
+		LoadObject<UWacomFirstPersonCardPlayedDissolveStyle>(
+			nullptr,
+			TEXT("/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardPlayedDissolveStyle_OrderedDither.DA_FPCardPlayedDissolveStyle_OrderedDither"));
+	if (TestNotNull(TEXT("Ordered Dither Style exists"), OrderedDitherStyle))
+	{
+		TestEqual(
+			TEXT("Ordered Dither Style declares its effect kind"),
+			OrderedDitherStyle->Style.EffectKind,
+			EWacomFirstPersonCardPlayedDissolveEffectKind::OrderedDither);
+		TestNotNull(
+			TEXT("Ordered Dither Style references its Surface material"),
+			OrderedDitherStyle->Style.SurfaceEffectMaterial.Get());
+		TestNotNull(
+			TEXT("Ordered Dither Style reuses the Played noise texture"),
+			OrderedDitherStyle->Style.NoiseTexture.Get());
+		TestEqual(
+			TEXT("Ordered Dither defaults to a four-by-four Bayer matrix"),
+			OrderedDitherStyle->Style.OrderedDither.BayerMatrixSize,
+			4);
+		TestTrue(
+			TEXT("Ordered Dither advances on a forty-five degree diagonal"),
+			FMath::IsNearlyEqual(OrderedDitherStyle->Style.DirectionAngleDegrees, -45.0f));
+		TestTrue(
+			TEXT("Ordered Dither keeps only subtle boundary jitter"),
+			FMath::IsNearlyEqual(OrderedDitherStyle->Style.Jitter, 0.03f));
+		TestTrue(
+			TEXT("Ordered Dither uses the active residue density"),
+			FMath::IsNearlyEqual(
+				OrderedDitherStyle->Style.OrderedDither.ResidueDensity,
+				0.28f));
+		TestTrue(
+			TEXT("Ordered Dither residue lives for the authored trail width"),
+			FMath::IsNearlyEqual(
+				OrderedDitherStyle->Style.OrderedDither.ResidueTrailWidth,
+				0.48f));
+		TestTrue(
+			TEXT("Ordered Dither residue has visible travel distance"),
+			FMath::IsNearlyEqual(
+				OrderedDitherStyle->Style.OrderedDither.ResidueTravelPixels,
+				34.0f));
+		TestTrue(
+			TEXT("Ordered Dither sends most residue along the dissolve direction"),
+			FMath::IsNearlyEqual(
+				OrderedDitherStyle->Style.OrderedDither.ResidueMainDirectionRatio,
+				0.75f));
+		TestTrue(
+			TEXT("Ordered Dither gives main residue a controlled spread"),
+			FMath::IsNearlyEqual(
+				OrderedDitherStyle->Style.OrderedDither.ResidueDirectionSpreadDegrees,
+				18.0f));
+		TestTrue(
+			TEXT("Ordered Dither keeps radial residue shorter than main residue"),
+			FMath::IsNearlyEqual(
+				OrderedDitherStyle->Style.OrderedDither.ResidueScatterStrength,
+				0.55f));
+		TestTrue(
+			TEXT("Ordered Dither contact shadow fades in the first quarter"),
+			FMath::IsNearlyEqual(
+				OrderedDitherStyle->Style.ShadowFadeFraction,
+				0.25f));
+		if (Style)
+		{
+			TestEqual(
+				TEXT("Pixel Ash Style retains its effect kind"),
+				Style->Style.EffectKind,
+				EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh);
+			TestNotEqual(
+				TEXT("The two Styles use independent materials"),
+				OrderedDitherStyle->Style.SurfaceEffectMaterial.Get(),
+				Style->Style.SurfaceEffectMaterial.Get());
+		}
 	}
 	return true;
 }

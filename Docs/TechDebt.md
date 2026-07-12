@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-07-11
+updated: 2026-07-12
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -121,6 +121,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 |---|---|---|
 | MSVC 工具链 14.38 | 旧引擎阶段曾有 “not preferred” 警告；当前 UE 5.8 构建使用 14.44 | 旧开发机若仍使用 14.38，升级到 14.44+ |
 | `RunSession.cpp::ApplySaveGameToRunState` C1001 ICE | 把 `RestoreCardInstanceList` 提取为 anonymous-namespace file-scope free function | MSVC 14.44+ 或 Clang 后视情况合回 lambda |
+| DreamShader 旧材质 generated include 失效 | 允许 commandlet rendering 的全工程 shader 检查会因 `M_CardSurface_CosmicFoil` 与 `M_CosmicBlob` 引用已失效的 `/DreamShaderGenerated/*.ush` 失败；新 first-person OrderedDither 已单独完成 PCD3D_SM6 生成且没有自身编译错误 | 对两个旧 `.dsm` 执行 clean generated shaders + 强制重生成，确认资产不再缓存旧虚拟 include；随后恢复全工程 AllowCommandletRendering shader gate |
 
 ---
 

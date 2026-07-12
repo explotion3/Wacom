@@ -116,13 +116,13 @@ WBP 合同：
 - `WBP_FPCardView` 一张卡只允许一个 Retainer。需要把旧 `CardView` 内 Retainer 移除，并让 `CardView / FeedbackOverlay / InteractionFeedbackImage` 一起成为 `Fake3DSurfaceRetainer` 内容；嵌套 Retainer 会增加离屏渲染成本并造成刷新时序不稳定。
 - `SurfaceOverlay` 必须是 `Fake3DSurfaceRetainer` 的直接内容根，尺寸覆盖完整 Retainer / bleed 区域，Clipping 使用 `Clip To Bounds - Without Intersecting (Advanced)`。`UWacomFirstPersonCardViewWidget` 会在 Rebuild / Construct 时自动保证该值，以免 Slate 使用视口 culling rect 提前整批剔除靠近屏幕底边的 `TypeText`。该修复只改变 Retainer 内部绘制边界，不移动卡牌、不改变扇形、角度或命中。
 - `Fake3DSurfaceRetainer` Effect Material 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，Retainer texture parameter 填 `Texture` 并启用效果；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm`，Blend Mode 必须是 `AlphaComposite`（DreamShader 源写作 `PremultipliedAlpha`），以符合 Retainer 的预乘 Alpha 合成。C++ Card Depth 参数名固定为 `TiltX`、`TiltY`、`PerspectiveStrength`、`ContactShadowEnabled`、`ContactShadowLift`。当前生产材质不包含 Selection 参数、Noise 采样、轮廓、扫光或 Glint；实体出血卡框只参与实时 `Texture.A` 接触阴影。没有材质或缺少可选绑定时安全退化，不取消 Hover / Drag 或抽弃牌动画。
-- Played 消散不增加第二个 Retainer、Image 或 WBP 动画轨道。Anchor `12 Card Played Dissolve` 指定 `/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardPlayedDissolveStyle_PixelAsh` 后，C++ 只在活动期间把现有 Retainer 切到 `/Game/DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects`，结束后恢复 WBP 创作源材质并重新取得 Retainer 实际 MID；不能依赖 `NativeConstruct` 当帧一定已有 MID。两个材质都保持 `UI Domain + AlphaComposite + Texture` 合同。Style、材质或噪声无效时自动使用旧 Played 空间离场。
+- Played 消散不增加第二个 Retainer、Image 或 WBP 动画轨道。默认 Anchor Style 为 `/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardPlayedDissolveStyle_OrderedDither`，使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_OrderedDither`；旧 `DA_FPCardPlayedDissolveStyle_PixelAsh` 与 `M_FirstPersonCard_SurfaceEffects` 保留为可切换灰烬方案。C++ 只在活动期间切换现有 Retainer，结束后恢复 WBP 创作源材质并重新取得实际 MID；所有材质保持 `UI Domain + AlphaComposite + Texture` 合同。Style、材质或噪声无效时自动使用旧 Played 空间离场。
 - `T_FirstPersonCard_PlayedDissolveNoise` 导入设置为 `Compression=Masks`、`sRGB=false`、`Filter=Nearest`、`Mip Gen=NoMipmaps`、`LOD Group=UI`。DreamShader 中 `PlayedDissolveNoiseTexture` 的默认 Path 也必须指向这张 Masks 资产，不能使用 Engine `DefaultTexture`，否则 SM6 会报告 `Sampler type is Masks, should be Color` 并导致 Surface 材质错误回退。它只供活动 Surface-Effect MID 使用；原始源图和确定性五级灰度结果保存在 `DShader/Texture/Card/`。
 - 正式 Drag 拾牌反馈不新增 WBP 控件，也不使用 `FeedbackOverlay / InteractionFeedbackImage`。它由 Slot 的 Motion Mixer 对整个 wrapper 叠加约 `0.14s` 的局部上提/缩放，并从 Anchor `10 Interaction Feedback | Drag Pickup` 读取声音；因此 `WBP_FPCardView` 无需增加动画轨道、Image 或第二个 Retainer。首次快捷键让无目标卡长距离飞向鼠标时，声音立即播放，局部上提/缩放等卡牌追到 pointer 后再播放；卡牌已在 pointer 附近时仍立即播放。
 - 像素棱镜 Style 与 `T_FirstPersonCard_SelectionPixelClusters` 暂作为未来 `CardDataChanged / Upgrade` 效果源保留。纹理导入设置仍为 `Compression=Masks`、`sRGB=false`、`Filter=Nearest`、`Mip Gen=NoMipmaps`、`LOD Group=UI`，但当前 Fake-3D 材质不引用它；复用算法位于 `DShader/Shared/WacomCardPixelPrism.dsh`，不得为了拖拽效果重新接回生产材质。
 - Card Depth 材质由 DreamShader 1.4.1 生成，`.dsm` 是长期真源。若 Content 资产缺失，使用 DreamShader commandlet 对上述源文件执行 `compile -Force`；不要在 Unreal 材质图里做无法回写到 `.dsm` 的平行修改。
 - 材质图人工复查时，Fake3D 主卡面应有 `RG` 投影 UV、`B` inside mask、`RGB` 卡面颜色、`A` 卡面透明度；接触阴影还应有 9 个 `A` 采样 mask 与 `ContactShadowColor RGB`。若单通道节点仍显示 `RGB` 或 `RGA`，说明资产没有使用带 ComponentMask 默认通道修复的 DreamShader 版本重新生成。
-- 当前 C++ 不查找或驱动外部 `CardShadowImage`；WBP 中若仍保留历史 `ShadowHost / CardShadowImage`，它不会随 Card Depth 参数变化，可先隐藏或删除，后续是否重做宽泛阴影另行决定。
+- `WBP_FPCardView` 已删除历史 `ShadowHost / CardShadowImage`；生产链只允许 `Fake3DSurfaceRetainer` 内的实时 Alpha 接触阴影，禁止重新加入与 Card Depth、消散 caster 不同步的宽泛矩形阴影。
 - `InteractionFeedbackImage` 优先使用 Anchor 的 `InteractionFeedbackMaterial`；该材质为空时，会复用 WBP Image brush 上预设的材质。推荐制作流程是：常规风格直接把材质放到 `InteractionFeedbackImage` 的 brush 上；需要角色 / 场景级替换时再在 Anchor 上填 override。若没有材质，pressed / confirm / commit 仍可退化为普通 tint，deny 只保留 shake，不退回整卡红色 overlay。
 - 交互反馈材质需要支持 C++ 写入参数：`FeedbackColor`、`EdgeWidth`、`EdgeSoftness`、`VignetteStrength`、`VignetteRadius`、`VignetteSoftness`、`Opacity`、`Pulse`。
 - 不再支持旧 `DenyFeedbackEdgeImage` fallback；源卡交互反馈统一绑定到 `InteractionFeedbackImage`。
@@ -139,7 +139,7 @@ WBP 合同：
 - 带实体出血卡框装饰的卡牌，其紧贴接触阴影跟随真实装饰轮廓；Hover / Drag 时接触阴影平滑变软、变淡，且没有明显双黑边。
 - Hover 卡面随卡内 pointer 克制倾斜，按下后倾角减弱；Drag 改由 pointer velocity 产生惯性，pointer 停止后倾角回正但抬升阴影保持到 release。
 - 抽牌 / 出牌 / 弃牌 semantic transition 期间卡面逐渐压平；目标候选卡不倾斜，只有 Drag source 消费 fake-3D。
-- Played 成功后卡牌停在提交位置，Commit 脉冲后从左下向右上形成像素前沿并化为上升灰烬；完成前 outgoing 卡槽仍存在，完成后无残留材质或像素。无目标、世界目标和手牌目标均使用同一行为；禁用 Style 或移除噪声后应安全回退旧飞向目标的离场。
+- Played 成功后卡牌停在提交位置，Commit 脉冲后从左下向右上形成 Bayer 透明棋盘前沿；默认 `0.28` 密度的原色网点在约 `0.14s` 内飘散，其中约 `75%` 沿消散方向移动约 `34px`，其余向四周做约 `0.55` 倍距离的短散射。接触阴影只跟随尚未消失的卡面 caster，并在前约 `0.10s` 结束；完成前 outgoing 卡槽仍存在，完成后无残留材质或像素。无目标、世界目标和手牌目标均使用同一行为；禁用 Style 或移除噪声后应安全回退旧飞向目标的离场。
 - Battle 无目标 / 世界目标 / 手牌目标和 Run 正式拖拽都只在首次进入正式 Drag 时播放一次短促拾牌上提/缩放；随后只保留现有 Fake-3D 与接触阴影。鼠标按下超过拖拽阈值后，Pressed 压缩必须先结束，再播放完整拾牌脉冲。首次远距离快捷键拿起无目标卡时，卡牌抵达 pointer 后必须仍能看到这次脉冲；连续按同一牌位快捷键时保持立即重播。Hover、Inspect、Pending 本身和 Drag 内部状态切换不触发；退出、取消、换牌后立即清理，Reduced Motion 取消额外上提/缩放但仍允许拾牌音。
 - 鼠标在主体范围外、bleed 范围内不触发 hover 或拖拽起手。
 - 费用图标、卡名、类型、效果徽章和耐久显示仍跟普通 CardView 数据一致。

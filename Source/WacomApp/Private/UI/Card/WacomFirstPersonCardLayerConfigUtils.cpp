@@ -224,6 +224,22 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.PlayedDissolve.Style.AshTrailWidth = FMath::Max(0.001f, Config.PlayedDissolve.Style.AshTrailWidth);
 	Config.PlayedDissolve.Style.AshLiftPixels = FMath::Max(0.0f, Config.PlayedDissolve.Style.AshLiftPixels);
 	Config.PlayedDissolve.Style.AshDriftPixels = FMath::Max(0.0f, Config.PlayedDissolve.Style.AshDriftPixels);
+	FWacomFirstPersonCardOrderedDitherStyleData& OrderedDither =
+		Config.PlayedDissolve.Style.OrderedDither;
+	OrderedDither.BayerMatrixSize = OrderedDither.BayerMatrixSize <= 4 ? 4 : 8;
+	OrderedDither.BandWidth = FMath::Max(0.001f, OrderedDither.BandWidth);
+	OrderedDither.ResidueDensity = FMath::Clamp(OrderedDither.ResidueDensity, 0.0f, 1.0f);
+	OrderedDither.ResidueTrailWidth = FMath::Max(0.001f, OrderedDither.ResidueTrailWidth);
+	OrderedDither.ResidueTravelPixels = FMath::Max(0.0f, OrderedDither.ResidueTravelPixels);
+	OrderedDither.ResidueMainDirectionRatio = FMath::Clamp(
+		OrderedDither.ResidueMainDirectionRatio,
+		0.0f,
+		1.0f);
+	OrderedDither.ResidueDirectionSpreadDegrees = FMath::Clamp(
+		FMath::Abs(OrderedDither.ResidueDirectionSpreadDegrees),
+		0.0f,
+		180.0f);
+	OrderedDither.ResidueScatterStrength = FMath::Max(0.0f, OrderedDither.ResidueScatterStrength);
 	Config.PlayedDissolve.Style.ShadowFadeFraction = FMath::Clamp(
 		Config.PlayedDissolve.Style.ShadowFadeFraction,
 		KINDA_SMALL_NUMBER,
@@ -278,6 +294,7 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.CardDepth.DragContactShadowLift, B.CardDepth.DragContactShadowLift)
 		&& A.PlayedDissolve.bEnabled == B.PlayedDissolve.bEnabled
 		&& A.PlayedDissolve.bReducedMotion == B.PlayedDissolve.bReducedMotion
+		&& A.PlayedDissolve.Style.EffectKind == B.PlayedDissolve.Style.EffectKind
 		&& A.PlayedDissolve.Style.SurfaceEffectMaterial == B.PlayedDissolve.Style.SurfaceEffectMaterial
 		&& A.PlayedDissolve.Style.NoiseTexture == B.PlayedDissolve.Style.NoiseTexture
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.DurationSeconds, B.PlayedDissolve.Style.DurationSeconds)
@@ -293,6 +310,29 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.AshTrailWidth, B.PlayedDissolve.Style.AshTrailWidth)
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.AshLiftPixels, B.PlayedDissolve.Style.AshLiftPixels)
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.AshDriftPixels, B.PlayedDissolve.Style.AshDriftPixels)
+		&& A.PlayedDissolve.Style.OrderedDither.BayerMatrixSize
+			== B.PlayedDissolve.Style.OrderedDither.BayerMatrixSize
+		&& AreFloatsEquivalent(
+			A.PlayedDissolve.Style.OrderedDither.BandWidth,
+			B.PlayedDissolve.Style.OrderedDither.BandWidth)
+		&& AreFloatsEquivalent(
+			A.PlayedDissolve.Style.OrderedDither.ResidueDensity,
+			B.PlayedDissolve.Style.OrderedDither.ResidueDensity)
+		&& AreFloatsEquivalent(
+			A.PlayedDissolve.Style.OrderedDither.ResidueTrailWidth,
+			B.PlayedDissolve.Style.OrderedDither.ResidueTrailWidth)
+		&& AreFloatsEquivalent(
+			A.PlayedDissolve.Style.OrderedDither.ResidueTravelPixels,
+			B.PlayedDissolve.Style.OrderedDither.ResidueTravelPixels)
+		&& AreFloatsEquivalent(
+			A.PlayedDissolve.Style.OrderedDither.ResidueMainDirectionRatio,
+			B.PlayedDissolve.Style.OrderedDither.ResidueMainDirectionRatio)
+		&& AreFloatsEquivalent(
+			A.PlayedDissolve.Style.OrderedDither.ResidueDirectionSpreadDegrees,
+			B.PlayedDissolve.Style.OrderedDither.ResidueDirectionSpreadDegrees)
+		&& AreFloatsEquivalent(
+			A.PlayedDissolve.Style.OrderedDither.ResidueScatterStrength,
+			B.PlayedDissolve.Style.OrderedDither.ResidueScatterStrength)
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.ShadowFadeFraction, B.PlayedDissolve.Style.ShadowFadeFraction)
 		&& A.PlayedDissolve.Style.StartSound == B.PlayedDissolve.Style.StartSound
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.StartSoundVolumeMultiplier, B.PlayedDissolve.Style.StartSoundVolumeMultiplier)

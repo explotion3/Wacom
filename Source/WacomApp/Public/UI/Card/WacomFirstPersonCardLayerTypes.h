@@ -285,11 +285,53 @@ struct WACOMAPP_API FWacomFirstPersonCardSelectionView
 	FWacomFirstPersonCardSelectionStyleData Style;
 };
 
-/** Theme-neutral authoring values for the Played pixel-ash dissolve. */
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardPlayedDissolveEffectKind : uint8
+{
+	PixelAsh UMETA(DisplayName = "Pixel Ash", ToolTip = "现有斜向上升像素灰烬消散。"),
+	OrderedDither UMETA(DisplayName = "Ordered Dither", ToolTip = "Bayer 有序抖动透明棋盘消散，并让原卡面像素以主方向流和少量四周散射离场。")
+};
+
+/** Ordered-dither-only authoring values for a Played dissolve Style. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardOrderedDitherStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (ToolTip = "Bayer 阈值矩阵边长；运行时只使用 4 或 8，小于等于 4 归一为 4，其余归一为 8。默认 4 可获得清晰的像素网点。"))
+	int32 BayerMatrixSize = 4;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (ToolTip = "原色卡面与完全透明区域之间的 Bayer 棋盘过渡带归一化宽度；推荐 0.12 到 0.24，默认 0.18。"))
+	float BandWidth = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (ToolTip = "刚离开卡面的原色残留网点密度，0 到 1；推荐 0.22 到 0.34，默认 0.28。网点不参与接触阴影。"))
+	float ResidueDensity = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (ToolTip = "残留网点在消散前沿后方存活的归一化带宽；默认 0.48，在 0.40 秒总时长和 0.05 秒停顿下约对应 0.14 秒。推荐 0.35 到 0.58。"))
+	float ResidueTrailWidth = 0.48f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (ToolTip = "主方向残留网点的最大移动距离，单位为 Retainer 像素；推荐 26 到 42，默认 34，不影响布局或命中。四散网点会再乘 ScatterStrength。"))
+	float ResidueTravelPixels = 34.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (ToolTip = "沿卡牌消散方向移动的残片比例，0 到 1；推荐 0.65 到 0.85，默认 0.75。其余残片向四周散开。"))
+	float ResidueMainDirectionRatio = 0.75f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (Units = "deg", ToolTip = "主方向残片围绕卡牌消散方向的最大随机偏角，单位为度；推荐 10 到 28，默认 18。运行时只需 0 到 180。"))
+	float ResidueDirectionSpreadDegrees = 18.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve|Ordered Dither", meta = (ToolTip = "四散残片相对主方向移动距离的倍率；推荐 0.35 到 0.75，默认 0.55。数值越大越接近爆散。"))
+	float ResidueScatterStrength = 0.55f;
+};
+
+/** Theme-neutral authoring values for a Played surface dissolve. */
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardPlayedDissolveStyleData
 {
 	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "该 Style 使用的 Played 消散算法；Pixel Ash 保留旧灰烬，Ordered Dither 使用独立 Bayer 透明棋盘材质。"))
+	EWacomFirstPersonCardPlayedDissolveEffectKind EffectKind =
+		EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "Played 期间临时切换到的单 Retainer Surface Effect 材质；必须使用 Texture 作为 Retainer 采样参数。"))
 	TObjectPtr<UMaterialInterface> SurfaceEffectMaterial = nullptr;
@@ -312,29 +354,32 @@ struct WACOMAPP_API FWacomFirstPersonCardPlayedDissolveStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "噪声对消散前沿的扰动强度；推荐 0.16 到 0.42。"))
 	float Jitter = 0.32f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿主色；默认暖象牙金。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 消散前沿主色；默认暖象牙金。"))
 	FLinearColor EdgeColor = FLinearColor(1.0f, 0.82f, 0.34f, 1.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿少量折射高光色；默认低饱和蓝。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 消散前沿少量折射高光色；默认低饱和蓝。"))
 	FLinearColor EdgeAccentColor = FLinearColor(0.46f, 0.66f, 1.0f, 1.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿宽度，使用归一化阈值单位；推荐 0.025 到 0.07。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 消散前沿宽度，使用归一化阈值单位；推荐 0.025 到 0.07。"))
 	float EdgeWidth = 0.045f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿亮度倍率；推荐 0.8 到 1.8。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 消散前沿亮度倍率；推荐 0.8 到 1.8。"))
 	float EdgeIntensity = 1.35f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "前沿附近生成灰烬像素簇的密度，0 到 1；推荐 0.10 到 0.26。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 前沿附近生成灰烬像素簇的密度，0 到 1；推荐 0.10 到 0.26。"))
 	float AshDensity = 0.18f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "消散前沿后方允许灰烬存活的阈值宽度；推荐 0.08 到 0.20。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 消散前沿后方允许灰烬存活的阈值宽度；推荐 0.08 到 0.20。"))
 	float AshTrailWidth = 0.14f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "灰烬最大上升距离，单位为 Retainer 像素；推荐 14 到 30，避免超过 WBP bleed。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 灰烬最大上升距离，单位为 Retainer 像素；推荐 14 到 30，避免超过 WBP bleed。"))
 	float AshLiftPixels = 22.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "灰烬最大横向漂移，单位为 Retainer 像素；推荐 3 到 10。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh", EditConditionHides, ToolTip = "Pixel Ash 灰烬最大横向漂移，单位为 Retainer 像素；推荐 3 到 10。"))
 	float AshDriftPixels = 7.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::OrderedDither", EditConditionHides, ShowOnlyInnerProperties, ToolTip = "Ordered Dither 独立的 Bayer 透明棋盘与短上浮残留参数。"))
+	FWacomFirstPersonCardOrderedDitherStyleData OrderedDither;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Played Dissolve", meta = (ToolTip = "接触阴影在总时长前多少比例内完全消退，0 到 1；默认 0.25 约等于前 0.10 秒。"))
 	float ShadowFadeFraction = 0.25f;

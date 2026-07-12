@@ -1,0 +1,353 @@
+import "Shared/WacomFirstPersonCardSurface.dsh";
+import "Shared/WacomFirstPersonCardPlayedOrderedDither.dsh";
+
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_OrderedDither")
+{
+    Properties = {
+        TextureSampleParameter2D Texture = Path(Engine, "/EngineResources/DefaultTexture") [
+            Group="第一人称卡牌表面效果|Retainer";
+            SortPriority=0;
+            Description="RetainerBox 注入的实时卡面；参数名必须保持为 Texture。";
+            SamplerType="Color";
+            SamplerSource="FromTextureAsset";
+        ];
+
+        ScalarParameter TiltX = 0.0 [ Group="第一人称卡牌表面效果|运行时"; SortPriority=10; ];
+        ScalarParameter TiltY = 0.0 [ Group="第一人称卡牌表面效果|运行时"; SortPriority=11; ];
+        ScalarParameter PerspectiveStrength = 0.12 [ Group="第一人称卡牌表面效果|运行时"; SortPriority=12; ];
+        ScalarParameter ContactShadowEnabled = 1.0 [ Group="第一人称卡牌表面效果|运行时"; SortPriority=13; ];
+        ScalarParameter ContactShadowLift = 0.0 [ Group="第一人称卡牌表面效果|运行时"; SortPriority=14; ];
+
+        ScalarParameter PlayedDissolveEnabled = 0.0 [ Group="第一人称卡牌表面效果|Played 运行时"; SortPriority=20; ];
+        ScalarParameter PlayedDissolveAmount = 0.0 [ Group="第一人称卡牌表面效果|Played 运行时"; SortPriority=21; ];
+        ScalarParameter PlayedDissolveTime = 0.0 [ Group="第一人称卡牌表面效果|Played 运行时"; SortPriority=22; ];
+        ScalarParameter PlayedDissolveDuration = 0.40 [ Group="第一人称卡牌表面效果|Played 运行时"; SortPriority=23; ];
+        ScalarParameter PlayedDissolveSeed = 0.0 [ Group="第一人称卡牌表面效果|Played 运行时"; SortPriority=24; ];
+        ScalarParameter PlayedDissolveReducedMotion = 0.0 [ Group="第一人称卡牌表面效果|Played 运行时"; SortPriority=25; ];
+        ScalarParameter PlayedDissolveGridColumns = 96.0 [ Group="第一人称卡牌表面效果|Played 制作"; SortPriority=30; ];
+        ScalarParameter PlayedDissolveDirectionAngle = -45.0 [ Group="第一人称卡牌表面效果|Played 制作"; SortPriority=31; ];
+        ScalarParameter PlayedDissolveJitter = 0.03 [ Group="第一人称卡牌表面效果|Played 制作"; SortPriority=32; ];
+        ScalarParameter PlayedOrderedDitherBayerSize = 4.0 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=33; ];
+        ScalarParameter PlayedOrderedDitherBandWidth = 0.18 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=34; ];
+        ScalarParameter PlayedOrderedDitherResidueDensity = 0.28 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=35; ];
+        ScalarParameter PlayedOrderedDitherResidueTrailWidth = 0.48 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=36; ];
+        ScalarParameter PlayedOrderedDitherResidueTravelPixels = 34.0 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=37; ];
+        ScalarParameter PlayedOrderedDitherResidueMainDirectionRatio = 0.75 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=38; ];
+        ScalarParameter PlayedOrderedDitherResidueDirectionSpread = 18.0 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=39; ];
+        ScalarParameter PlayedOrderedDitherResidueScatterStrength = 0.55 [ Group="第一人称卡牌表面效果|Ordered Dither"; SortPriority=40; ];
+        ScalarParameter PlayedDissolveShadowFadeFraction = 0.25 [ Group="第一人称卡牌表面效果|Played 制作"; SortPriority=41; ];
+        VectorParameter SurfaceInvSize = float4(0.00277778, 0.00206612, 0.0, 0.0) [ Group="第一人称卡牌表面效果|运行时"; SortPriority=42; ];
+        TextureSampleParameter2D PlayedDissolveNoiseTexture = Path(Game, "Wacom/UI/Card/SurfaceEffects/T_FirstPersonCard_PlayedDissolveNoise") [
+            Group="第一人称卡牌表面效果|Played 制作";
+            SortPriority=43;
+            SamplerType="Masks";
+            SamplerSource="FromTextureAsset";
+        ];
+
+        ScalarParameter ReferenceTiltDegrees = 9.0 [ Group="第一人称卡牌表面效果|投影制作"; SortPriority=50; ];
+        ScalarParameter ForeshortenStrength = 0.025 [ Group="第一人称卡牌表面效果|投影制作"; SortPriority=51; ];
+        ScalarParameter EdgeFadeUV = 0.0025 [ Group="第一人称卡牌表面效果|投影制作"; SortPriority=52; ];
+        VectorParameter ContactShadowColor = float4(0.008, 0.006, 0.004, 1.0) [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=60; ];
+        ScalarParameter ContactShadowBaseOffsetXUV = 0.0 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=61; ];
+        ScalarParameter ContactShadowBaseOffsetYUV = 0.0039 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=62; ];
+        ScalarParameter ContactShadowLiftOffsetXUV = 0.0 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=63; ];
+        ScalarParameter ContactShadowLiftOffsetYUV = 0.0100 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=64; ];
+        ScalarParameter ContactShadowBaseSoftnessUV = 0.0025 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=65; ];
+        ScalarParameter ContactShadowLiftSoftnessUV = 0.0065 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=66; ];
+        ScalarParameter ContactShadowBaseOpacity = 0.22 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=67; ];
+        ScalarParameter ContactShadowLiftOpacity = 0.09 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=68; ];
+        ScalarParameter ContactShadowAlphaThreshold = 0.18 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=69; ];
+        ScalarParameter ContactShadowAlphaFeather = 0.12 [ Group="第一人称卡牌表面效果|阴影制作"; SortPriority=70; ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "PremultipliedAlpha";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 projectedUVAndMask;
+        WacomFirstPersonCard_ProjectSurface(
+            uv,
+            TiltX,
+            TiltY,
+            PerspectiveStrength,
+            ReferenceTiltDegrees,
+            ForeshortenStrength,
+            EdgeFadeUV,
+            projectedUVAndMask);
+
+        float2 projectedUV = UE.Expression(
+            Class="ComponentMask", OutputType="float2", Input=projectedUVAndMask,
+            R=true, G=true, B=false, A=false);
+        float insideMask = UE.Expression(
+            Class="ComponentMask", OutputType="float1", Input=projectedUVAndMask,
+            R=false, G=false, B=true, A=false);
+        float4 surface = Texture(Coordinates=projectedUV);
+        float3 surfaceColor = UE.Expression(
+            Class="ComponentMask", OutputType="float3", Input=surface,
+            R=true, G=true, B=true, A=false);
+        float surfaceAlpha = UE.Expression(
+            Class="ComponentMask", OutputType="float1", Input=surface,
+            R=false, G=false, B=false, A=true);
+        float2 surfaceInvSize = UE.Expression(
+            Class="ComponentMask", OutputType="float2", Input=SurfaceInvSize,
+            R=true, G=true, B=false, A=false);
+
+        float2 pixelCell;
+        float2 pixelUV;
+        WacomFirstPersonCard_QuantizeOrderedDitherUV(
+            projectedUV,
+            PlayedDissolveGridColumns,
+            surfaceInvSize,
+            pixelCell,
+            pixelUV);
+        float bayerThreshold;
+        WacomFirstPersonCard_ComputeBayerThreshold(
+            pixelCell,
+            PlayedOrderedDitherBayerSize,
+            bayerThreshold);
+        float4 noiseSample = PlayedDissolveNoiseTexture(Coordinates=pixelUV);
+        float noiseValue = UE.Expression(
+            Class="ComponentMask", OutputType="float1", Input=noiseSample,
+            R=true, G=false, B=false, A=false);
+
+        float visibleMask;
+        float residueTrailMaskAtOutput;
+        float residueAgeAtOutput;
+        WacomFirstPersonCard_ComputeOrderedDitherMasks(
+            pixelUV,
+            bayerThreshold,
+            noiseValue,
+            PlayedDissolveAmount,
+            PlayedDissolveDirectionAngle,
+            PlayedDissolveJitter,
+            PlayedOrderedDitherBandWidth,
+            PlayedOrderedDitherResidueTrailWidth,
+            PlayedDissolveReducedMotion,
+            visibleMask,
+            residueTrailMaskAtOutput,
+            residueAgeAtOutput);
+
+        float dissolveEnabled = saturate(PlayedDissolveEnabled);
+        float cardVisibleMask = lerp(1.0, visibleMask, dissolveEnabled);
+        float cardAlpha = surfaceAlpha * insideMask * cardVisibleMask;
+        float3 cardColor = surfaceColor * insideMask * cardVisibleMask;
+
+        float residueSpawnAtOutput;
+        float2 residueTravelDirectionAtOutput;
+        float residueTravelScaleAtOutput;
+        WacomFirstPersonCard_ComputeOrderedDitherResidue(
+            pixelCell,
+            noiseValue,
+            PlayedDissolveSeed,
+            PlayedOrderedDitherResidueDensity,
+            PlayedDissolveDirectionAngle,
+            PlayedOrderedDitherResidueMainDirectionRatio,
+            PlayedOrderedDitherResidueDirectionSpread,
+            PlayedOrderedDitherResidueScatterStrength,
+            residueSpawnAtOutput,
+            residueTravelDirectionAtOutput,
+            residueTravelScaleAtOutput);
+        float residueTravelProgress = residueAgeAtOutput * (2.0 - residueAgeAtOutput);
+        float2 residueTravelUV = float2(
+            residueTravelDirectionAtOutput.x * surfaceInvSize.x,
+            residueTravelDirectionAtOutput.y * surfaceInvSize.y)
+            * PlayedOrderedDitherResidueTravelPixels
+            * residueTravelScaleAtOutput;
+        float2 residueSourceUV = projectedUV
+            - residueTravelUV * residueTravelProgress;
+        float4 residueSourceSurface = Texture(Coordinates=residueSourceUV);
+        float3 residueSourceColor = UE.Expression(
+            Class="ComponentMask", OutputType="float3", Input=residueSourceSurface,
+            R=true, G=true, B=true, A=false);
+        float residueSourceAlpha = UE.Expression(
+            Class="ComponentMask", OutputType="float1", Input=residueSourceSurface,
+            R=false, G=false, B=false, A=true);
+        float2 residueSourceCell;
+        float2 residueSourcePixelUV;
+        WacomFirstPersonCard_QuantizeOrderedDitherUV(
+            residueSourceUV,
+            PlayedDissolveGridColumns,
+            surfaceInvSize,
+            residueSourceCell,
+            residueSourcePixelUV);
+        float residueSourceBayer;
+        WacomFirstPersonCard_ComputeBayerThreshold(
+            residueSourceCell,
+            PlayedOrderedDitherBayerSize,
+            residueSourceBayer);
+        float4 residueNoiseSample = PlayedDissolveNoiseTexture(Coordinates=residueSourcePixelUV);
+        float residueNoiseValue = UE.Expression(
+            Class="ComponentMask", OutputType="float1", Input=residueNoiseSample,
+            R=true, G=false, B=false, A=false);
+        float residueSourceVisibleUnused;
+        float residueSourceTrail;
+        float residueSourceAge;
+        WacomFirstPersonCard_ComputeOrderedDitherMasks(
+            residueSourcePixelUV,
+            residueSourceBayer,
+            residueNoiseValue,
+            PlayedDissolveAmount,
+            PlayedDissolveDirectionAngle,
+            PlayedDissolveJitter,
+            PlayedOrderedDitherBandWidth,
+            PlayedOrderedDitherResidueTrailWidth,
+            PlayedDissolveReducedMotion,
+            residueSourceVisibleUnused,
+            residueSourceTrail,
+            residueSourceAge);
+        float residueSpawn;
+        float2 residueTravelDirectionUnused;
+        float residueTravelScaleUnused;
+        WacomFirstPersonCard_ComputeOrderedDitherResidue(
+            residueSourceCell,
+            residueNoiseValue,
+            PlayedDissolveSeed,
+            PlayedOrderedDitherResidueDensity,
+            PlayedDissolveDirectionAngle,
+            PlayedOrderedDitherResidueMainDirectionRatio,
+            PlayedOrderedDitherResidueDirectionSpread,
+            PlayedOrderedDitherResidueScatterStrength,
+            residueSpawn,
+            residueTravelDirectionUnused,
+            residueTravelScaleUnused);
+        float residueFade = (1.0 - residueSourceAge) * (1.0 - residueSourceAge);
+        float residueAlpha = residueSourceAlpha
+            * residueSourceTrail
+            * residueSpawn
+            * residueFade
+            * insideMask
+            * dissolveEnabled
+            * (1.0 - saturate(PlayedDissolveReducedMotion));
+        float3 residueColor = residueSourceColor
+            * residueSourceTrail
+            * residueSpawn
+            * residueFade
+            * insideMask
+            * dissolveEnabled
+            * (1.0 - saturate(PlayedDissolveReducedMotion));
+
+        float safeContactShadowLift = clamp(ContactShadowLift, 0.0, 1.0);
+        float2 contactShadowOffsetUV = float2(
+            lerp(ContactShadowBaseOffsetXUV, ContactShadowLiftOffsetXUV, safeContactShadowLift),
+            lerp(ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetYUV, safeContactShadowLift));
+        float contactShadowSoftnessUV = lerp(
+            ContactShadowBaseSoftnessUV,
+            ContactShadowLiftSoftnessUV,
+            safeContactShadowLift);
+        float2 contactShadowSampleUV = projectedUV - contactShadowOffsetUV;
+        float2 contactShadowStepX = float2(contactShadowSoftnessUV, 0.0);
+        float2 contactShadowStepY = float2(0.0, contactShadowSoftnessUV);
+
+        float4 contactCenter = Texture(Coordinates=contactShadowSampleUV);
+        float4 contactLeft = Texture(Coordinates=contactShadowSampleUV - contactShadowStepX);
+        float4 contactRight = Texture(Coordinates=contactShadowSampleUV + contactShadowStepX);
+        float4 contactTop = Texture(Coordinates=contactShadowSampleUV - contactShadowStepY);
+        float4 contactBottom = Texture(Coordinates=contactShadowSampleUV + contactShadowStepY);
+        float4 contactTopLeft = Texture(Coordinates=contactShadowSampleUV - contactShadowStepX - contactShadowStepY);
+        float4 contactTopRight = Texture(Coordinates=contactShadowSampleUV + contactShadowStepX - contactShadowStepY);
+        float4 contactBottomLeft = Texture(Coordinates=contactShadowSampleUV - contactShadowStepX + contactShadowStepY);
+        float4 contactBottomRight = Texture(Coordinates=contactShadowSampleUV + contactShadowStepX + contactShadowStepY);
+
+        float contactCenterAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactCenter, R=false, G=false, B=false, A=true);
+        float contactLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactLeft, R=false, G=false, B=false, A=true);
+        float contactRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactRight, R=false, G=false, B=false, A=true);
+        float contactTopAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactTop, R=false, G=false, B=false, A=true);
+        float contactBottomAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactBottom, R=false, G=false, B=false, A=true);
+        float contactTopLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactTopLeft, R=false, G=false, B=false, A=true);
+        float contactTopRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactTopRight, R=false, G=false, B=false, A=true);
+        float contactBottomLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactBottomLeft, R=false, G=false, B=false, A=true);
+        float contactBottomRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=contactBottomRight, R=false, G=false, B=false, A=true);
+        float contactShadowMask;
+        WacomFirstPersonCard_CombineContactShadowAlpha(
+            contactCenterAlpha,
+            contactLeftAlpha,
+            contactRightAlpha,
+            contactTopAlpha,
+            contactBottomAlpha,
+            contactTopLeftAlpha,
+            contactTopRightAlpha,
+            contactBottomLeftAlpha,
+            contactBottomRightAlpha,
+            ContactShadowAlphaThreshold,
+            ContactShadowAlphaFeather,
+            contactShadowMask);
+
+        float2 contactShadowPixelCell;
+        float2 contactShadowPixelUV;
+        WacomFirstPersonCard_QuantizeOrderedDitherUV(
+            contactShadowSampleUV,
+            PlayedDissolveGridColumns,
+            surfaceInvSize,
+            contactShadowPixelCell,
+            contactShadowPixelUV);
+        float contactShadowBayerThreshold;
+        WacomFirstPersonCard_ComputeBayerThreshold(
+            contactShadowPixelCell,
+            PlayedOrderedDitherBayerSize,
+            contactShadowBayerThreshold);
+        float4 contactShadowNoiseSample = PlayedDissolveNoiseTexture(Coordinates=contactShadowPixelUV);
+        float contactShadowNoiseValue = UE.Expression(
+            Class="ComponentMask", OutputType="float1", Input=contactShadowNoiseSample,
+            R=true, G=false, B=false, A=false);
+        float contactShadowCasterVisibleMask;
+        float contactShadowResidueTrailUnused;
+        float contactShadowResidueAgeUnused;
+        WacomFirstPersonCard_ComputeOrderedDitherMasks(
+            contactShadowPixelUV,
+            contactShadowBayerThreshold,
+            contactShadowNoiseValue,
+            PlayedDissolveAmount,
+            PlayedDissolveDirectionAngle,
+            PlayedDissolveJitter,
+            PlayedOrderedDitherBandWidth,
+            PlayedOrderedDitherResidueTrailWidth,
+            PlayedDissolveReducedMotion,
+            contactShadowCasterVisibleMask,
+            contactShadowResidueTrailUnused,
+            contactShadowResidueAgeUnused);
+        float shadowCasterVisibleMask = lerp(
+            1.0,
+            contactShadowCasterVisibleMask,
+            dissolveEnabled);
+
+        float3 contactShadowColorRGB = UE.Expression(
+            Class="ComponentMask", OutputType="float3", Input=ContactShadowColor,
+            R=true, G=true, B=true, A=false);
+        float contactShadowOpacity = lerp(
+            ContactShadowBaseOpacity,
+            ContactShadowLiftOpacity,
+            safeContactShadowLift);
+        float shadowFadeDuration = max(
+            PlayedDissolveDuration * max(PlayedDissolveShadowFadeFraction, 0.001),
+            0.001);
+        float playedShadowFade = lerp(
+            1.0,
+            1.0 - saturate(PlayedDissolveTime / shadowFadeDuration),
+            dissolveEnabled);
+        float contactShadowAlpha =
+            contactShadowMask
+            * shadowCasterVisibleMask
+            * contactShadowOpacity
+            * clamp(ContactShadowEnabled, 0.0, 1.0)
+            * insideMask
+            * (1.0 - cardAlpha)
+            * playedShadowFade;
+
+        Color = cardColor
+            + residueColor
+            + contactShadowColorRGB * contactShadowAlpha;
+        Alpha = saturate(cardAlpha + residueAlpha + contactShadowAlpha);
+    }
+}

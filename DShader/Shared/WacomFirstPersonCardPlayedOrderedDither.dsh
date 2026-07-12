@@ -1,0 +1,127 @@
+Function SelfContained WacomFirstPersonCard_QuantizeOrderedDitherUV(
+    in float2 surfaceUV,
+    in float gridColumns,
+    in float2 surfaceInvSize,
+    out float2 pixelCell,
+    out float2 pixelUV)
+{
+    float safeColumns = max(gridColumns, 1.0);
+    float safeInvWidth = max(surfaceInvSize.x, 0.000001);
+    float safeInvHeight = max(surfaceInvSize.y, 0.000001);
+    float gridRows = max(safeColumns * safeInvWidth / safeInvHeight, 1.0);
+    float2 gridSize = float2(safeColumns, gridRows);
+    pixelCell = floor(surfaceUV * gridSize);
+    pixelUV = (pixelCell + float2(0.5, 0.5)) / gridSize;
+}
+
+Function SelfContained WacomFirstPersonCard_ComputeBayerThreshold(
+    in float2 pixelCell,
+    in float matrixSize,
+    out float threshold)
+{
+    float2 cell = floor(pixelCell);
+    float2 bit0 = fmod(cell, 2.0);
+    float index2 = bit0.x * 2.0 + bit0.y * 3.0 - bit0.x * bit0.y * 4.0;
+    float2 bit1 = fmod(floor(cell / 2.0), 2.0);
+    float index4 = bit1.x * 2.0 + bit1.y * 3.0 - bit1.x * bit1.y * 4.0
+        + index2 * 4.0;
+    float2 bit2 = fmod(floor(cell / 4.0), 2.0);
+    float index8 = bit2.x * 2.0 + bit2.y * 3.0 - bit2.x * bit2.y * 4.0
+        + index4 * 4.0;
+    float threshold4 = (index4 + 0.5) / 16.0;
+    float threshold8 = (index8 + 0.5) / 64.0;
+    threshold = lerp(threshold4, threshold8, step(6.0, matrixSize));
+}
+
+Function SelfContained WacomFirstPersonCard_ComputeOrderedDitherMasks(
+    in float2 pixelUV,
+    in float bayerThreshold,
+    in float noiseValue,
+    in float amount,
+    in float directionAngleDegrees,
+    in float jitter,
+    in float bandWidth,
+    in float residueTrailWidth,
+    in float reducedMotion,
+    out float visibleMask,
+    out float residueTrailMask,
+    out float residueAge)
+{
+    float safeAmount = saturate(amount);
+    float angleRadians = directionAngleDegrees * 0.01745329252;
+    float2 direction = float2(cos(angleRadians), sin(angleRadians));
+    float directionalPosition = saturate(
+        dot(pixelUV - float2(0.5, 0.5), direction) * 0.70710678 + 0.5);
+    float safeJitter = max(jitter, 0.0);
+    float safeBandWidth = max(bandWidth, 0.0001);
+    float dissolveThreshold = lerp(
+        -safeJitter * 0.5 - safeBandWidth * 0.5 - 0.001,
+        1.0 + safeJitter * 0.5 + safeBandWidth * 0.5 + 0.001,
+        safeAmount);
+    float field = directionalPosition
+        + (saturate(noiseValue) - 0.5) * safeJitter
+        - dissolveThreshold;
+
+    float coverage = saturate(0.5 - field / safeBandWidth);
+    float orderedVisible = step(coverage, saturate(bayerThreshold));
+    float progressActive = step(0.0001, safeAmount) * (1.0 - step(0.9999, safeAmount));
+    float safeTrailWidth = max(residueTrailWidth, 0.0001);
+    float orderedTrail = step(-safeTrailWidth, field)
+        * (1.0 - step(0.0, field))
+        * progressActive;
+    float useReducedMotion = step(0.5, reducedMotion);
+
+    visibleMask = lerp(orderedVisible, 1.0 - safeAmount, useReducedMotion);
+    residueTrailMask = orderedTrail * (1.0 - useReducedMotion);
+    residueAge = saturate(-field / safeTrailWidth) * residueTrailMask;
+}
+
+Function SelfContained WacomFirstPersonCard_ComputeOrderedDitherResidue(
+    in float2 pixelCell,
+    in float noiseValue,
+    in float seed,
+    in float density,
+    in float directionAngleDegrees,
+    in float mainDirectionRatio,
+    in float directionSpreadDegrees,
+    in float scatterStrength,
+    out float residueSpawn,
+    out float2 residueTravelDirection,
+    out float residueTravelScale)
+{
+    float randomSpawn = frac(
+        sin(dot(pixelCell + seed * 149.0, float2(31.731, 67.193)))
+        * 43758.5453);
+    float randomBranch = frac(
+        sin(dot(pixelCell + seed * 211.0, float2(53.117, 19.913)))
+        * 24634.6345);
+    float randomAngle = frac(
+        sin(dot(pixelCell + seed * 283.0, float2(11.719, 89.443)))
+        * 56445.2341);
+    float randomDistance = frac(
+        sin(dot(pixelCell + seed * 347.0, float2(73.337, 41.773)))
+        * 39847.1873);
+    residueSpawn = step(
+        1.0 - saturate(density),
+        randomSpawn * 0.62 + saturate(noiseValue) * 0.38);
+
+    float useMainDirection = step(randomBranch, saturate(mainDirectionRatio));
+    float safeSpreadDegrees = clamp(abs(directionSpreadDegrees), 0.0, 180.0);
+    float mainAngleDegrees = directionAngleDegrees
+        + (randomAngle * 2.0 - 1.0) * safeSpreadDegrees;
+    float scatterAngleDegrees = randomAngle * 360.0 - 180.0;
+    float travelAngleRadians = lerp(
+        scatterAngleDegrees,
+        mainAngleDegrees,
+        useMainDirection) * 0.01745329252;
+    residueTravelDirection = float2(
+        cos(travelAngleRadians),
+        sin(travelAngleRadians));
+
+    float distanceVariation = lerp(0.82, 1.16, randomDistance);
+    float directionScale = lerp(
+        max(scatterStrength, 0.0),
+        1.0,
+        useMainDirection);
+    residueTravelScale = distanceVariation * directionScale;
+}

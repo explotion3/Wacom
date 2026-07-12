@@ -45,6 +45,14 @@ namespace
 	const FName PlayedDissolveAshTrailWidthParameterName(TEXT("PlayedDissolveAshTrailWidth"));
 	const FName PlayedDissolveAshLiftPixelsParameterName(TEXT("PlayedDissolveAshLiftPixels"));
 	const FName PlayedDissolveAshDriftPixelsParameterName(TEXT("PlayedDissolveAshDriftPixels"));
+	const FName PlayedOrderedDitherBayerSizeParameterName(TEXT("PlayedOrderedDitherBayerSize"));
+	const FName PlayedOrderedDitherBandWidthParameterName(TEXT("PlayedOrderedDitherBandWidth"));
+	const FName PlayedOrderedDitherResidueDensityParameterName(TEXT("PlayedOrderedDitherResidueDensity"));
+	const FName PlayedOrderedDitherResidueTrailWidthParameterName(TEXT("PlayedOrderedDitherResidueTrailWidth"));
+	const FName PlayedOrderedDitherResidueTravelPixelsParameterName(TEXT("PlayedOrderedDitherResidueTravelPixels"));
+	const FName PlayedOrderedDitherResidueMainDirectionRatioParameterName(TEXT("PlayedOrderedDitherResidueMainDirectionRatio"));
+	const FName PlayedOrderedDitherResidueDirectionSpreadParameterName(TEXT("PlayedOrderedDitherResidueDirectionSpread"));
+	const FName PlayedOrderedDitherResidueScatterStrengthParameterName(TEXT("PlayedOrderedDitherResidueScatterStrength"));
 	const FName PlayedDissolveShadowFadeFractionParameterName(TEXT("PlayedDissolveShadowFadeFraction"));
 	const FName PlayedDissolveNoiseTextureParameterName(TEXT("PlayedDissolveNoiseTexture"));
 	const FName SurfaceInvSizeParameterName(TEXT("SurfaceInvSize"));
@@ -432,14 +440,45 @@ void UWacomFirstPersonCardViewWidget::ApplyPlayedDissolveParameters(
 	Material.SetScalarParameterValue(PlayedDissolveGridColumnsParameterName, FMath::Max(1.0f, Style.GridColumns));
 	Material.SetScalarParameterValue(PlayedDissolveDirectionAngleParameterName, Style.DirectionAngleDegrees);
 	Material.SetScalarParameterValue(PlayedDissolveJitterParameterName, FMath::Max(0.0f, Style.Jitter));
-	Material.SetVectorParameterValue(PlayedDissolveEdgeColorParameterName, Style.EdgeColor);
-	Material.SetVectorParameterValue(PlayedDissolveEdgeAccentColorParameterName, Style.EdgeAccentColor);
-	Material.SetScalarParameterValue(PlayedDissolveEdgeWidthParameterName, FMath::Max(0.001f, Style.EdgeWidth));
-	Material.SetScalarParameterValue(PlayedDissolveEdgeIntensityParameterName, FMath::Max(0.0f, Style.EdgeIntensity));
-	Material.SetScalarParameterValue(PlayedDissolveAshDensityParameterName, FMath::Clamp(Style.AshDensity, 0.0f, 1.0f));
-	Material.SetScalarParameterValue(PlayedDissolveAshTrailWidthParameterName, FMath::Max(0.001f, Style.AshTrailWidth));
-	Material.SetScalarParameterValue(PlayedDissolveAshLiftPixelsParameterName, FMath::Max(0.0f, Style.AshLiftPixels));
-	Material.SetScalarParameterValue(PlayedDissolveAshDriftPixelsParameterName, FMath::Max(0.0f, Style.AshDriftPixels));
+	if (Style.EffectKind == EWacomFirstPersonCardPlayedDissolveEffectKind::OrderedDither)
+	{
+		const FWacomFirstPersonCardOrderedDitherStyleData& Dither = Style.OrderedDither;
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherBayerSizeParameterName,
+			Dither.BayerMatrixSize <= 4 ? 4.0f : 8.0f);
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherBandWidthParameterName,
+			FMath::Max(0.001f, Dither.BandWidth));
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherResidueDensityParameterName,
+			FMath::Clamp(Dither.ResidueDensity, 0.0f, 1.0f));
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherResidueTrailWidthParameterName,
+			FMath::Max(0.001f, Dither.ResidueTrailWidth));
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherResidueTravelPixelsParameterName,
+			FMath::Max(0.0f, Dither.ResidueTravelPixels));
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherResidueMainDirectionRatioParameterName,
+			FMath::Clamp(Dither.ResidueMainDirectionRatio, 0.0f, 1.0f));
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherResidueDirectionSpreadParameterName,
+			FMath::Clamp(FMath::Abs(Dither.ResidueDirectionSpreadDegrees), 0.0f, 180.0f));
+		Material.SetScalarParameterValue(
+			PlayedOrderedDitherResidueScatterStrengthParameterName,
+			FMath::Max(0.0f, Dither.ResidueScatterStrength));
+	}
+	else
+	{
+		Material.SetVectorParameterValue(PlayedDissolveEdgeColorParameterName, Style.EdgeColor);
+		Material.SetVectorParameterValue(PlayedDissolveEdgeAccentColorParameterName, Style.EdgeAccentColor);
+		Material.SetScalarParameterValue(PlayedDissolveEdgeWidthParameterName, FMath::Max(0.001f, Style.EdgeWidth));
+		Material.SetScalarParameterValue(PlayedDissolveEdgeIntensityParameterName, FMath::Max(0.0f, Style.EdgeIntensity));
+		Material.SetScalarParameterValue(PlayedDissolveAshDensityParameterName, FMath::Clamp(Style.AshDensity, 0.0f, 1.0f));
+		Material.SetScalarParameterValue(PlayedDissolveAshTrailWidthParameterName, FMath::Max(0.001f, Style.AshTrailWidth));
+		Material.SetScalarParameterValue(PlayedDissolveAshLiftPixelsParameterName, FMath::Max(0.0f, Style.AshLiftPixels));
+		Material.SetScalarParameterValue(PlayedDissolveAshDriftPixelsParameterName, FMath::Max(0.0f, Style.AshDriftPixels));
+	}
 	Material.SetScalarParameterValue(
 		PlayedDissolveShadowFadeFractionParameterName,
 		FMath::Clamp(Style.ShadowFadeFraction, KINDA_SMALL_NUMBER, 1.0f));

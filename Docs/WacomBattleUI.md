@@ -212,7 +212,7 @@ Battle hand 抽牌表现由 `FWacomBattleHandPresentationController` 事务化�
 
 First-person card layer 重新拥有语义 Transition Audio，并生成 `Gained` 专用 transition：音效只在对应 enter playback 跨过错峰延迟、真正开始播放时请求一次；普通 refresh/reflow 不播放。`CardsRetained` 通过独立 feedback hint 驱动原槽位上的短促上浮、缩放、错峰与临时 ZOrder，不使用旧 Overlay 发光。`Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` 均保持显式表现语义；规则事件、日志和 Toast 行为不变。
 
-`Played` 默认表现为 App-private `FWacomFirstPersonCardPlayedDissolvePlayback`：保留提交成功时的位置和现有 Commit 脉冲，随后约 `0.40s` 在唯一 `Fake3DSurfaceRetainer` 内完成方向性像素灰烬消散，材质完成后 Layer 才移除 outgoing slot。Surface-Effect Style、材质或噪声缺失时自动回退旧空间离场；Reduced Motion 使用约 `0.12s` 均匀淡出。该表现不延迟 BattleSession 命令结算，也不创建目标命中反馈。
+`Played` 默认表现为 App-private `FWacomFirstPersonCardPlayedDissolvePlayback`：保留提交成功时的位置和现有 Commit 脉冲，随后约 `0.40s` 在唯一 `Fake3DSurfaceRetainer` 内完成 Style 驱动消散，材质完成后 Layer 才移除 outgoing slot。当前默认 `OrderedDither` 使用从左下到右上的 `45°` Bayer Alpha 棋盘前沿，已消失区域完全透明；较丰富的原色残片按独立 age 在约 `0.14s` 内飘散，约 `75%` 延续消散方向、约 `25%` 向四周做更短散射。接触阴影只由仍可见的卡面 Bayer caster 生成并在前约 `0.10s` 淡出，残片不投影。旧 `PixelAsh` Style 完整保留并通过同一个 Anchor 引用切换。Surface-Effect Style、材质或噪声缺失时自动回退旧空间离场；Reduced Motion 使用约 `0.12s` 均匀淡出且不生成方向运动。该表现不延迟 BattleSession 命令结算，也不创建目标命中反馈。
 
 ## §8 Battle Shared Widgets
 

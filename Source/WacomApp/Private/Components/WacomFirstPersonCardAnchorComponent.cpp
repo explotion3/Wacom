@@ -656,6 +656,7 @@ namespace
 		AddFloat(Config.CardDepth.DragContactShadowLift);
 		AddBool(Config.PlayedDissolve.bEnabled);
 		AddBool(Config.PlayedDissolve.bReducedMotion);
+		AddInt(static_cast<int32>(Config.PlayedDissolve.Style.EffectKind));
 		Combine(GetTypeHash(Config.PlayedDissolve.Style.SurfaceEffectMaterial.Get()));
 		Combine(GetTypeHash(Config.PlayedDissolve.Style.NoiseTexture.Get()));
 		AddFloat(Config.PlayedDissolve.Style.DurationSeconds);
@@ -671,6 +672,14 @@ namespace
 		AddFloat(Config.PlayedDissolve.Style.AshTrailWidth);
 		AddFloat(Config.PlayedDissolve.Style.AshLiftPixels);
 		AddFloat(Config.PlayedDissolve.Style.AshDriftPixels);
+		AddInt(Config.PlayedDissolve.Style.OrderedDither.BayerMatrixSize);
+		AddFloat(Config.PlayedDissolve.Style.OrderedDither.BandWidth);
+		AddFloat(Config.PlayedDissolve.Style.OrderedDither.ResidueDensity);
+		AddFloat(Config.PlayedDissolve.Style.OrderedDither.ResidueTrailWidth);
+		AddFloat(Config.PlayedDissolve.Style.OrderedDither.ResidueTravelPixels);
+		AddFloat(Config.PlayedDissolve.Style.OrderedDither.ResidueMainDirectionRatio);
+		AddFloat(Config.PlayedDissolve.Style.OrderedDither.ResidueDirectionSpreadDegrees);
+		AddFloat(Config.PlayedDissolve.Style.OrderedDither.ResidueScatterStrength);
 		AddFloat(Config.PlayedDissolve.Style.ShadowFadeFraction);
 		Combine(GetTypeHash(Config.PlayedDissolve.Style.StartSound.Get()));
 		AddFloat(Config.PlayedDissolve.Style.StartSoundVolumeMultiplier);
