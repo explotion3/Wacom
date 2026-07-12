@@ -1,0 +1,68 @@
+Function SelfContained WacomFirstPersonCard_ComputeUseDiamondWave(
+    in float2 surfaceUV,
+    in float2 surfaceInvSize,
+    in float gridColumns,
+    in float rotationDegrees,
+    in float waveBandCells,
+    in float outlineWidth,
+    in float outlineSoftness,
+    in float progress,
+    in float reducedMotion,
+    out float visibleMask,
+    out float outlineGlowMask,
+    out float fillGlowMask)
+{
+    float safeProgress = saturate(progress);
+    float safeColumns = max(gridColumns, 1.0);
+    float safeInvWidth = max(surfaceInvSize.x, 0.000001);
+    float safeInvHeight = max(surfaceInvSize.y, 0.000001);
+    float surfaceHeightOverWidth = safeInvWidth / safeInvHeight;
+
+    float2 metricPosition = float2(
+        surfaceUV.x - 0.5,
+        (surfaceUV.y - 0.5) * surfaceHeightOverWidth);
+    float rotationRadians = rotationDegrees * 0.01745329252;
+    float rotationCos = cos(rotationRadians);
+    float rotationSin = sin(rotationRadians);
+    float2 rotatedMetricPosition = float2(
+        metricPosition.x * rotationCos - metricPosition.y * rotationSin,
+        metricPosition.x * rotationSin + metricPosition.y * rotationCos);
+
+    float2 gridPosition = rotatedMetricPosition * safeColumns;
+    float2 cell = floor(gridPosition);
+    float2 cellLocal = frac(gridPosition);
+    float2 cellCenterMetric = (cell + float2(0.5, 0.5)) / safeColumns;
+    float cellRadius = 0.70710678 / safeColumns;
+    float maxRadius = max(
+        length(float2(0.5, 0.5 * surfaceHeightOverWidth)),
+        cellRadius + 0.0001);
+    float cellDelay = saturate(
+        (length(cellCenterMetric) - cellRadius)
+        / max(maxRadius - cellRadius, 0.0001));
+    float phaseSpan = max(
+        max(waveBandCells, 0.01) / max(maxRadius * safeColumns, 1.0),
+        0.001);
+    float waveFront = safeProgress * (1.0 + phaseSpan);
+    float cellActivated = step(cellDelay, waveFront);
+    float cellPhase = saturate((waveFront - cellDelay) / phaseSpan) * cellActivated;
+
+    float cellEdgeDistance = 2.0 * min(
+        min(cellLocal.x, 1.0 - cellLocal.x),
+        min(cellLocal.y, 1.0 - cellLocal.y));
+    float safeOutlineWidth = clamp(outlineWidth, 0.001, 0.95);
+    float safeOutlineSoftness = max(outlineSoftness, 0.0001);
+    float cellOutline = 1.0 - smoothstep(
+        safeOutlineWidth,
+        safeOutlineWidth + safeOutlineSoftness,
+        cellEdgeDistance);
+    float outlinePulse = smoothstep(0.02, 0.22, cellPhase)
+        * (1.0 - smoothstep(0.58, 0.78, cellPhase));
+    float fillPulse = smoothstep(0.28, 0.58, cellPhase)
+        * (1.0 - smoothstep(0.68, 0.88, cellPhase));
+    float cellVisible = 1.0 - step(0.82, cellPhase) * cellActivated;
+    float useReducedMotion = step(0.5, reducedMotion);
+
+    visibleMask = lerp(cellVisible, 1.0 - safeProgress, useReducedMotion);
+    outlineGlowMask = cellOutline * outlinePulse * (1.0 - useReducedMotion);
+    fillGlowMask = fillPulse * (1.0 - useReducedMotion);
+}

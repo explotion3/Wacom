@@ -151,7 +151,7 @@ Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 
 6. 执行卡牌主动 `Effect`。
 7. 执行完美释放效果。
 8. 非迅捷卡推进敌方先机，除非被 `ZoneHook.OnPerfectReleaseHit` 跳过。
-9. 执行卡牌离开手牌后的去向规则。
+9. 执行卡牌离开手牌后的去向规则，并紧接着发射携带最终 `ECardLocation` 的 `CardPlayDestinationResolved`。
 10. 若本卡有 Companion 关键词，全局计数 +1。
 11. 执行 `Passive.AfterPlayed`。
 12. 执行 `Passive.OnCompanionCount`。
@@ -459,6 +459,7 @@ BattleState
 | `CardsRetained` | 玩家回合结束明确保留普通手牌 |
 | `HandZoneChanged` | 手牌队列、区域或上限弃牌后需要 UI 刷新 |
 | `CardPlayed` | 玩家打出卡牌 |
+| `CardPlayDestinationResolved` | 本次成功打出后的最终卡区事实；紧跟本次去向解析发布，`CardDestination` 为最终 `ECardLocation` |
 | `InitiativeHit` | 出牌前先机命中部位 |
 | `ResistanceResolved` | 抵抗判定完成 |
 | `PerfectReleaseResolved` | 完美释放效果完成 |

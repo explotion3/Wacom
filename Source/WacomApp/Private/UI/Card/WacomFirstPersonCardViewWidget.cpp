@@ -8,6 +8,7 @@
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/RetainerBox.h"
+#include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "Styling/SlateBrush.h"
@@ -28,6 +29,12 @@ namespace
 	const FName Fake3DPerspectiveStrengthParameterName(TEXT("PerspectiveStrength"));
 	const FName ContactShadowEnabledParameterName(TEXT("ContactShadowEnabled"));
 	const FName ContactShadowLiftParameterName(TEXT("ContactShadowLift"));
+	const FName CardUseEnabledParameterName(TEXT("CardUseEnabled"));
+	const FName CardUseProgressParameterName(TEXT("CardUseProgress"));
+	const FName CardUseFlipProgressParameterName(TEXT("CardUseFlipProgress"));
+	const FName CardUseImpactProgressParameterName(TEXT("CardUseImpactProgress"));
+	const FName CardUseTimeParameterName(TEXT("CardUseTime"));
+	const FName CardUseReducedMotionParameterName(TEXT("CardUseReducedMotion"));
 	const FName PlayedDissolveEnabledParameterName(TEXT("PlayedDissolveEnabled"));
 	const FName PlayedDissolveAmountParameterName(TEXT("PlayedDissolveAmount"));
 	const FName PlayedDissolveTimeParameterName(TEXT("PlayedDissolveTime"));
@@ -218,8 +225,19 @@ void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
 	}
 
 	CacheBaseSurfaceEffectMaterial();
+	const FWacomFirstPersonCardUseEffectView& CardUseView = View.CardUse;
 	const FWacomFirstPersonCardPlayedDissolveView& DissolveView = View.PlayedDissolve;
-	if (DissolveView.bActive
+	if (CardUseView.bActive
+		&& CardUseView.Style.SurfaceEffectMaterialInstance)
+	{
+		EnsureSurfaceEffectMaterialInstance(CardUseView.Style.SurfaceEffectMaterialInstance);
+		if (ActiveSurfaceEffectMaterialInstance)
+		{
+			ApplyCardDepthParameters(*ActiveSurfaceEffectMaterialInstance);
+			ApplyCardUseEffectParameters(*ActiveSurfaceEffectMaterialInstance, CardUseView);
+		}
+	}
+	else if (DissolveView.bActive
 		&& DissolveView.Style.SurfaceEffectMaterial
 		&& DissolveView.Style.NoiseTexture)
 	{
@@ -422,6 +440,31 @@ void UWacomFirstPersonCardViewWidget::ApplyCardDepthParameters(
 	Material.SetScalarParameterValue(
 		ContactShadowLiftParameterName,
 		LastCardDepthView.ContactShadowLift);
+}
+
+void UWacomFirstPersonCardViewWidget::ApplyCardUseEffectParameters(
+	UMaterialInstanceDynamic& Material,
+	const FWacomFirstPersonCardUseEffectView& View) const
+{
+	Material.SetScalarParameterValue(CardUseEnabledParameterName, View.bActive ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(CardUseProgressParameterName, FMath::Clamp(View.Amount, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(CardUseFlipProgressParameterName, FMath::Clamp(View.FlipProgress, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(CardUseImpactProgressParameterName, FMath::Clamp(View.ImpactProgress, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(CardUseTimeParameterName, FMath::Max(0.0f, View.TimeSeconds));
+	Material.SetScalarParameterValue(
+		CardUseReducedMotionParameterName,
+		View.bReducedMotion ? 1.0f : 0.0f);
+
+	FVector2D SurfaceSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
+	{
+		SurfaceSize = FVector2D(360.0f, 484.0f);
+	}
+	Material.SetVectorParameterValue(
+		SurfaceInvSizeParameterName,
+		FLinearColor(1.0f / SurfaceSize.X, 1.0f / SurfaceSize.Y, 0.0f, 0.0f));
 }
 
 void UWacomFirstPersonCardViewWidget::ApplyPlayedDissolveParameters(

@@ -507,6 +507,8 @@ private:
 	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
 		const FBattleSnapshot& NextSnapshot) const;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHintsForTest(
+		const FBattleSnapshot& NextSnapshot) const;
 	void SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot);
 	void SetTargetSelectionStateForAutomationTest(const FGuid& PendingCardId);
 	void ClearTargetSelectionStateForAutomationTest();

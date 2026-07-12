@@ -17,7 +17,8 @@
 #include "UI/Card/WacomFirstPersonCardDepthMotion.h"
 #include "UI/Card/WacomFirstPersonCardDragPickupPlayback.h"
 #include "UI/Card/WacomFirstPersonCardMotionMixer.h"
-#include "UI/Card/WacomFirstPersonCardPlayedDissolvePlayback.h"
+#include "UI/Card/WacomFirstPersonCardSurfaceDeparturePlayback.h"
+#include "UI/Card/WacomFirstPersonCardUseReformPlayback.h"
 #include "UI/Card/WacomFirstPersonCardTransitionPlayback.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
@@ -64,6 +65,49 @@ namespace
 		default:
 			return FReply::Unhandled();
 		}
+	}
+
+	FWacomFirstPersonCardSurfaceEffectView BuildSurfaceDepartureView(
+		const FWacomFirstPersonCardSurfaceDepartureTickResult& PlaybackView,
+		const FWacomFirstPersonCardSlotVisualConfig& VisualConfig)
+	{
+		FWacomFirstPersonCardSurfaceEffectView SurfaceView;
+		if (PlaybackView.Kind == EWacomFirstPersonCardSurfaceDepartureKind::CardUse)
+		{
+			SurfaceView.CardUse.bActive = true;
+			SurfaceView.CardUse.bReducedMotion = PlaybackView.bReducedMotion;
+			SurfaceView.CardUse.Amount = PlaybackView.Amount;
+			SurfaceView.CardUse.FlipProgress = PlaybackView.FlipProgress;
+			SurfaceView.CardUse.ImpactProgress = PlaybackView.ImpactProgress;
+			SurfaceView.CardUse.TimeSeconds = PlaybackView.TimeSeconds;
+			SurfaceView.CardUse.Style = VisualConfig.CardUseEffect.Style;
+		}
+		else if (PlaybackView.Kind == EWacomFirstPersonCardSurfaceDepartureKind::ExhaustDissolve)
+		{
+			SurfaceView.PlayedDissolve.bActive = true;
+			SurfaceView.PlayedDissolve.bReducedMotion = PlaybackView.bReducedMotion;
+			SurfaceView.PlayedDissolve.Amount = PlaybackView.Amount;
+			SurfaceView.PlayedDissolve.TimeSeconds = PlaybackView.TimeSeconds;
+			SurfaceView.PlayedDissolve.Seed = PlaybackView.Seed;
+			SurfaceView.PlayedDissolve.Style = VisualConfig.PlayedDissolve.Style;
+		}
+		return SurfaceView;
+	}
+
+	FWacomFirstPersonCardSurfaceEffectView BuildCardUseReformView(
+		const FWacomFirstPersonCardUseReformTickResult& PlaybackView,
+		const FWacomFirstPersonCardSlotVisualConfig& VisualConfig)
+	{
+		FWacomFirstPersonCardSurfaceEffectView SurfaceView;
+		SurfaceView.CardUse.bActive =
+			PlaybackView.Phase != EWacomFirstPersonCardUseReformPhase::Inactive;
+		SurfaceView.CardUse.bReducedMotion = PlaybackView.bReducedMotion;
+		SurfaceView.CardUse.Amount = PlaybackView.Amount;
+		SurfaceView.CardUse.FlipProgress = PlaybackView.FlipProgress;
+		SurfaceView.CardUse.ImpactProgress = PlaybackView.ImpactProgress;
+		SurfaceView.CardUse.TimeSeconds = PlaybackView.TimeSeconds;
+		SurfaceView.CardUse.Style = VisualConfig.CardUseEffect.Style;
+		return SurfaceView;
 	}
 }
 
@@ -127,12 +171,14 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	ClearInteractionFeedback();
 	ClearEnterTransitionPlayback();
 	ClearExitTransitionPlayback();
-	ClearPlayedDissolvePlayback();
+	ClearSurfaceDeparturePlayback();
+	ClearCardUseReformPlayback();
 	if (bResetCardDepth && CardDepthMotion)
 	{
 		CardDepthMotion->Reset();
 		ClearPointerViewportDiagnostics();
 	}
+
 	if (bCardIdentityChanged)
 	{
 		ResetDragPickupFeedback();
@@ -145,7 +191,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	bIsExitingForFirstPersonLayer = false;
 	bUsesFixedExitTransitionPlayback = false;
-	bUsesPlayedDissolveExit = false;
+	bUsesSurfaceDepartureExit = false;
 	ExitMotionElapsedSeconds = 0.0f;
 	ApplyCurrentSlotView();
 	ResetCardSurfaceEffectView();
@@ -204,8 +250,14 @@ void FWacomFirstPersonCardDragPickupPlaybackDeleter::operator()(
 	delete Playback;
 }
 
-void FWacomFirstPersonCardPlayedDissolvePlaybackDeleter::operator()(
-	FWacomFirstPersonCardPlayedDissolvePlayback* Playback) const
+void FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter::operator()(
+	FWacomFirstPersonCardSurfaceDeparturePlayback* Playback) const
+{
+	delete Playback;
+}
+
+void FWacomFirstPersonCardUseReformPlaybackDeleter::operator()(
+	FWacomFirstPersonCardUseReformPlayback* Playback) const
 {
 	delete Playback;
 }
@@ -233,6 +285,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 		|| !InTargetSlotView.Entry.CardInstanceId.IsValid())
 	{
 		ClearEnterTransitionPlayback();
+		ClearCardUseReformPlayback();
 		ClearGestureState(true);
 		ClearInteractionFeedback();
 	}
@@ -272,12 +325,15 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 			EWacomFirstPersonCardMotionIntent::Layout);
 	bIsExitingForFirstPersonLayer = false;
 	bUsesFixedExitTransitionPlayback = false;
-	bUsesPlayedDissolveExit = false;
+	bUsesSurfaceDepartureExit = false;
 	ExitMotionElapsedSeconds = 0.0f;
 	ClearExitTransitionPlayback();
-	ClearPlayedDissolvePlayback();
+	ClearSurfaceDeparturePlayback();
 	ApplyCurrentSlotView();
-	ResetCardSurfaceEffectView();
+	if (!IsCardUseReformPlaybackActive())
+	{
+		ResetCardSurfaceEffectView();
+	}
 
 	if (!bCanReuseVisual)
 	{
@@ -354,22 +410,30 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 	const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride,
 	EWacomFirstPersonCardSlotTransitionKind TransitionKind)
 {
-	const bool bUsePlayedDissolve =
+	const bool bUseCardUseEffect =
 		TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Played
-		&& CanPlayPlayedDissolve();
+		&& CanPlayCardUseEffect();
+	const bool bUseExhaustDissolve =
+		TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Exhausted
+		&& CanPlayExhaustDissolve();
+	const bool bUseSurfaceDeparture = bUseCardUseEffect || bUseExhaustDissolve;
 	const bool bUseFixedPlayback = ExitProfileOverride.IsSet()
-		&& !bUsePlayedDissolve
+		&& !bUseSurfaceDeparture
 		&& (ExitProfileOverride.GetValue().DurationSeconds > 0.0f
 			|| ExitProfileOverride.GetValue().StartDelaySeconds > 0.0f
 			|| ExitProfileOverride.GetValue().ArcLiftPixels > 0.0f);
-	const float ResolvedExitDuration = bUsePlayedDissolve
-		? (SlotVisualConfig.PlayedDissolve.bReducedMotion
+	const float ResolvedExitDuration = bUseCardUseEffect
+		? (SlotVisualConfig.CardUseEffect.bReducedMotion
 			? 0.12f
-			: FMath::Max(0.0f, SlotVisualConfig.PlayedDissolve.Style.DurationSeconds))
+			: FMath::Max(0.0f, SlotVisualConfig.CardUseEffect.Style.DurationSeconds))
+		: (bUseExhaustDissolve
+			? (SlotVisualConfig.PlayedDissolve.bReducedMotion
+				? 0.12f
+				: FMath::Max(0.0f, SlotVisualConfig.PlayedDissolve.Style.DurationSeconds))
 		: (bUseFixedPlayback
 			? FMath::Max(0.0f, ExitProfileOverride.GetValue().DurationSeconds)
-			: FMath::Max(0.0f, SlotMotionConfig.ExitDuration));
-	if ((!SlotMotionConfig.bEnabled && !bUsePlayedDissolve)
+			: FMath::Max(0.0f, SlotMotionConfig.ExitDuration)));
+	if ((!SlotMotionConfig.bEnabled && !bUseSurfaceDeparture)
 		|| ResolvedExitDuration <= 0.0f
 		|| !bHasVisualSlotView)
 	{
@@ -377,10 +441,11 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 		ClearInteractionFeedback();
 		ClearEnterTransitionPlayback();
 		ClearExitTransitionPlayback();
-		ClearPlayedDissolvePlayback();
+		ClearSurfaceDeparturePlayback();
 		bIsExitingForFirstPersonLayer = true;
 		bUsesFixedExitTransitionPlayback = false;
-		bUsesPlayedDissolveExit = false;
+		bUsesSurfaceDepartureExit = false;
+		SurfaceDepartureTransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
 		ExitMotionElapsedSeconds = ResolvedExitDuration;
 		SetVisibility(ESlateVisibility::Collapsed);
 		ResetDragPickupFeedback();
@@ -392,7 +457,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 	ClearGestureState(true);
 	ClearInteractionFeedback();
 	ClearEnterTransitionPlayback();
-	ClearPlayedDissolvePlayback();
+	ClearSurfaceDeparturePlayback();
+	ClearCardUseReformPlayback();
 	CurrentSlotView = InExitTargetSlotView;
 	CurrentSlotView.bProjected = false;
 	TargetSlotView = InExitTargetSlotView;
@@ -404,28 +470,31 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 	DefaultExitProfile.AngleOffsetDegrees = 0.0f;
 	const FWacomFirstPersonCardTransitionMotionProfile ExitProfile =
 		ExitProfileOverride.Get(DefaultExitProfile);
-	TargetSlotView.ScreenPosition = bUsePlayedDissolve
+	TargetSlotView.ScreenPosition = bUseSurfaceDeparture
 		? VisualSlotView.ScreenPosition
 		: VisualSlotView.ScreenPosition + ExitProfile.OffsetPixels;
 	TargetSlotView.WidgetPosition = TargetSlotView.ScreenPosition;
 	TargetSlotView.SnappedWidgetPosition = TargetSlotView.ScreenPosition;
-	TargetSlotView.RenderScale = bUsePlayedDissolve
+	TargetSlotView.RenderScale = bUseSurfaceDeparture
 		? VisualSlotView.RenderScale
 		: FMath::Max(0.01f, VisualSlotView.RenderScale * FMath::Max(0.01f, ExitProfile.ScaleMultiplier));
-	TargetSlotView.RenderAngleDegrees = bUsePlayedDissolve
+	TargetSlotView.RenderAngleDegrees = bUseSurfaceDeparture
 		? VisualSlotView.RenderAngleDegrees
 		: VisualSlotView.RenderAngleDegrees + ExitProfile.AngleOffsetDegrees;
-	TargetSlotView.RenderOpacity = bUsePlayedDissolve ? 1.0f : 0.0f;
+	TargetSlotView.RenderOpacity = bUseSurfaceDeparture ? 1.0f : 0.0f;
 	TargetSlotView.bProjected = VisualSlotView.bProjected;
 	bIsExitingForFirstPersonLayer = true;
 	bUsesFixedExitTransitionPlayback = bUseFixedPlayback;
-	bUsesPlayedDissolveExit = bUsePlayedDissolve;
+	bUsesSurfaceDepartureExit = bUseSurfaceDeparture;
+	SurfaceDepartureTransitionKind = bUseSurfaceDeparture
+		? TransitionKind
+		: EWacomFirstPersonCardSlotTransitionKind::Default;
 	ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Exit;
 	ExitMotionElapsedSeconds = 0.0f;
-	if (bUsePlayedDissolve)
+	if (bUseSurfaceDeparture)
 	{
 		ClearExitTransitionPlayback();
-		StartPlayedDissolvePlayback();
+		StartSurfaceDeparturePlayback(TransitionKind);
 	}
 	else if (bUseFixedPlayback)
 	{
@@ -473,9 +542,13 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotVisualConfig(
 	}
 
 	SlotVisualConfig = NewConfig;
-	if (IsPlayedDissolvePlaybackActive())
+	if (IsSurfaceDeparturePlaybackActive())
 	{
-		ClearPlayedDissolvePlayback();
+		ClearSurfaceDeparturePlayback();
+	}
+	if (IsCardUseReformPlaybackActive())
+	{
+		ClearCardUseReformPlayback(true);
 	}
 	if (CardDepthMotion)
 	{
@@ -674,8 +747,8 @@ void UWacomFirstPersonCardLayerSlotWidget::CancelCardDragGesture(bool bBroadcast
 bool UWacomFirstPersonCardLayerSlotWidget::IsExitMotionFinished() const
 {
 	return bIsExitingForFirstPersonLayer
-		&& (bUsesPlayedDissolveExit
-			? !IsPlayedDissolvePlaybackActive()
+		&& (bUsesSurfaceDepartureExit
+			? !IsSurfaceDeparturePlaybackActive()
 			: (bUsesFixedExitTransitionPlayback
 				? !IsExitTransitionPlaybackActive()
 				: ExitMotionElapsedSeconds >= FMath::Max(0.0f, SlotMotionConfig.ExitDuration)));
@@ -818,11 +891,13 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	SetHoveredForFirstPersonLayer(false);
 	ClearGestureState(false);
 	ClearInteractionFeedback();
-	ClearPlayedDissolvePlayback();
+	ClearSurfaceDeparturePlayback();
+	ClearCardUseReformPlayback();
 	TransitionPlayback.Reset();
 	CardDepthMotion.Reset();
 	DragPickupPlayback.Reset();
-	PlayedDissolvePlayback.Reset();
+	SurfaceDeparturePlayback.Reset();
+	CardUseReformPlayback.Reset();
 	SetTickEnabledForMotion(false);
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
@@ -854,7 +929,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	}
 	if (bIsExitingForFirstPersonLayer
 		&& !bUsesFixedExitTransitionPlayback
-		&& !bUsesPlayedDissolveExit)
+		&& !bUsesSurfaceDepartureExit)
 	{
 		ExitMotionElapsedSeconds += FMath::Max(0.0f, InDeltaTime);
 	}
@@ -882,9 +957,14 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	TickDragPickupFeedback(InDeltaTime);
 	bool bNearTarget = true;
 	const FWacomFirstPersonCardLayerSlotView PreviousVisualSlotView = VisualSlotView;
-	if (IsPlayedDissolvePlaybackActive())
+	if (IsCardUseReformPlaybackActive())
 	{
-		TickPlayedDissolvePlayback(InDeltaTime);
+		TickCardUseReformPlayback(InDeltaTime);
+		ApplyVisualSlotView();
+	}
+	else if (IsSurfaceDeparturePlaybackActive())
+	{
+		TickSurfaceDeparturePlayback(InDeltaTime);
 		ApplyVisualSlotView();
 	}
 	else if (IsEnterTransitionPlaybackActive())
@@ -1219,8 +1299,30 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 	FeedbackMixInput.bPressed = bIsPressedForFirstPersonLayer;
 	FeedbackMixInput.bCommitFeedbackActive =
 		CommitFeedbackElapsedSeconds < SlotFeedbackConfig.PlayCommitDuration;
-	const FWacomFirstPersonCardLocalFeedbackMixResult FeedbackMixResult =
+	FWacomFirstPersonCardLocalFeedbackMixResult FeedbackMixResult =
 		FWacomFirstPersonCardMotionMixer::MixLocalFeedback(FeedbackMixInput);
+	const FWacomFirstPersonCardUseEffectStyleData& CardUseStyle = SlotVisualConfig.CardUseEffect.Style;
+	if (CardUseStyle.EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip
+		&& (IsSurfaceDeparturePlaybackActive() || IsCardUseReformPlaybackActive()))
+	{
+		const float MinimumHorizontalScale = FMath::Clamp(
+			CardUseStyle.EdgeFlipMinimumHorizontalScale, 0.01f, 1.0f);
+		const float HorizontalScale = FMath::Lerp(
+			1.0f, MinimumHorizontalScale, FMath::Clamp(CardUseFlipProgress, 0.0f, 1.0f));
+		const float MotionScale = FMath::Lerp(
+			1.0f,
+			FMath::Max(1.0f, CardUseStyle.EdgeFlipScaleMultiplier),
+			FMath::Clamp(CardUseMotionAlpha, 0.0f, 1.0f));
+		FeedbackMixResult.RenderTransform.Scale.X *= HorizontalScale * MotionScale;
+		FeedbackMixResult.RenderTransform.Scale.Y *= MotionScale;
+		FeedbackMixResult.RenderTransform.Translation.Y -=
+			FMath::Max(0.0f, CardUseStyle.EdgeFlipLiftPixels)
+			* FMath::Clamp(CardUseMotionAlpha, 0.0f, 1.0f);
+		FeedbackMixResult.RenderTransform.Angle = FMath::Lerp(
+			FeedbackMixResult.RenderTransform.Angle,
+			0.0f,
+			FMath::Clamp(CardUseFlipProgress, 0.0f, 1.0f));
+	}
 	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Slot))
 	{
 		CanvasSlot->SetAutoSize(true);
@@ -1229,7 +1331,8 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplySlotViewToWidget(
 		CanvasSlot->SetZOrder(FeedbackMixResult.ZOrder);
 	}
 
-	SetRenderOpacity(FMath::Clamp(SlotView.RenderOpacity, 0.0f, 1.0f));
+	SetRenderOpacity(FMath::Clamp(
+		SlotView.RenderOpacity * CardUseOpacityMultiplier, 0.0f, 1.0f));
 	SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	SetRenderTransform(FeedbackMixResult.RenderTransform);
 	ApplyFeedbackOverlay();
@@ -1275,6 +1378,7 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanInteractWithCurrentSlot() const
 {
 	return bCardLayerInteractionEnabled
 		&& !IsEnterTransitionBlockingInteraction()
+		&& !IsCardUseReformPlaybackActive()
 		&& CurrentSlotView.bProjected
 		&& CurrentSlotView.Entry.CardInstanceId.IsValid();
 }
@@ -1531,7 +1635,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginGesturePress(
 void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(
 	float DeltaTime,
 	const FVector2D& ScreenPosition,
-	bool bSuppressInspectDragPromotion)
+	bool bSuppressInspectDragPromotion,
+	bool bBroadcastDragUpdate)
 {
 	if (GestureState == EWacomFirstPersonCardGestureState::Idle
 		|| GestureState == EWacomFirstPersonCardGestureState::Cancelled)
@@ -1584,7 +1689,10 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGesture(
 	}
 
 	UpdateGestureOverrideTarget();
-	BroadcastDragUpdated();
+	if (bBroadcastDragUpdate)
+	{
+		BroadcastDragUpdated();
+	}
 	UpdateWantsTick();
 }
 
@@ -1599,23 +1707,31 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(
 	}
 
 	CurrentGestureScreenPosition = ScreenPosition;
-	UpdateGesture(0.0f, ScreenPosition, bSuppressInspectDragPromotion);
+	UpdateGesture(0.0f, ScreenPosition, bSuppressInspectDragPromotion, false);
 
 	const EWacomFirstPersonCardGestureState ReleaseState = GestureState;
-	SetPressedForFirstPersonLayer(false);
-	BroadcastDragReleased();
-
-	if (ReleaseState == EWacomFirstPersonCardGestureState::ArmedForCommit
+	// Release delegates synchronously submit commands and may refresh the entire
+	// card layer. Capture the semantic outcome before broadcasting so that a
+	// successful refresh cannot clear bGestureTargetValid and turn acceptance
+	// into a false Deny pulse on return.
+	const bool bAcceptedRelease =
+		ReleaseState == EWacomFirstPersonCardGestureState::ArmedForCommit
 		|| (ReleaseState == EWacomFirstPersonCardGestureState::AimingTargetedCard
-			&& bGestureTargetValid))
-	{
-		TriggerConfirmFeedback();
-	}
-	else if (ReleaseState == EWacomFirstPersonCardGestureState::Inspecting
+			&& bGestureTargetValid);
+	const bool bNeutralRelease =
+		ReleaseState == EWacomFirstPersonCardGestureState::Inspecting
 		|| ReleaseState == EWacomFirstPersonCardGestureState::Pressed
 		|| (ReleaseState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
 			&& CurrentSlotView.Entry.InteractionIntent
-				== EWacomFirstPersonCardInteractionIntent::DragToDropTarget))
+				== EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
+	SetPressedForFirstPersonLayer(false);
+	BroadcastDragReleased();
+
+	if (bAcceptedRelease)
+	{
+		TriggerConfirmFeedback();
+	}
+	else if (bNeutralRelease)
 	{
 		// Inspect/press is a neutral return. Run drag-to-drop owns its own acceptance feedback.
 	}
@@ -1819,7 +1935,9 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateCardDepthMotion(float DeltaTime
 	Input.bPressed = bIsPressedForFirstPersonLayer && !IsFormalDragGestureState(GestureState);
 	Input.bDragging = IsFormalDragGestureState(GestureState);
 	Input.bFlattenForSemanticTransition =
-		IsEnterTransitionPlaybackActive() || bIsExitingForFirstPersonLayer;
+		IsEnterTransitionPlaybackActive()
+		|| bIsExitingForFirstPersonLayer
+		|| IsCardUseReformPlaybackActive();
 	Input.bHasPointerPosition = bHasPointerViewportPosition;
 	Input.bPointerPositionChanged = bCardDepthPointerDirty;
 	Input.PointerPosition = PointerViewportPosition;
@@ -1947,7 +2065,28 @@ void UWacomFirstPersonCardLayerSlotWidget::ResetCardSurfaceEffectView()
 	}
 }
 
-bool UWacomFirstPersonCardLayerSlotWidget::CanPlayPlayedDissolve() const
+bool UWacomFirstPersonCardLayerSlotWidget::CanPlayCardUseEffect() const
+{
+	const FWacomFirstPersonCardUseEffectConfig& Config = SlotVisualConfig.CardUseEffect;
+	return Config.bEnabled
+		&& Config.Style.SurfaceEffectMaterialInstance != nullptr
+		&& (Config.bReducedMotion || Config.Style.DurationSeconds > KINDA_SMALL_NUMBER);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CanPlayCardUseReformEffect() const
+{
+	const FWacomFirstPersonCardUseEffectConfig& Config = SlotVisualConfig.CardUseEffect;
+	const bool bHasValidTiming = Config.Style.EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip
+		? Config.Style.EdgeFlipReformOutSeconds > KINDA_SMALL_NUMBER
+			&& Config.Style.EdgeFlipReformInSeconds > KINDA_SMALL_NUMBER
+		: Config.Style.ReformDissolveOutSeconds > KINDA_SMALL_NUMBER
+			&& Config.Style.ReformBuildInSeconds > KINDA_SMALL_NUMBER;
+	return Config.bEnabled
+		&& Config.Style.SurfaceEffectMaterialInstance != nullptr
+		&& (Config.bReducedMotion || bHasValidTiming);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CanPlayExhaustDissolve() const
 {
 	const FWacomFirstPersonCardPlayedDissolveConfig& Config = SlotVisualConfig.PlayedDissolve;
 	return Config.bEnabled
@@ -1956,76 +2095,137 @@ bool UWacomFirstPersonCardLayerSlotWidget::CanPlayPlayedDissolve() const
 		&& (Config.bReducedMotion || Config.Style.DurationSeconds > KINDA_SMALL_NUMBER);
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::StartPlayedDissolvePlayback()
+void UWacomFirstPersonCardLayerSlotWidget::StartSurfaceDeparturePlayback(
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind)
 {
-	if (!PlayedDissolvePlayback)
+	if (!SurfaceDeparturePlayback)
 	{
-		PlayedDissolvePlayback.Reset(new FWacomFirstPersonCardPlayedDissolvePlayback());
+		SurfaceDeparturePlayback.Reset(new FWacomFirstPersonCardSurfaceDeparturePlayback());
 	}
+
 	const uint32 CardHash = GetTypeHash(CurrentSlotView.Entry.CardInstanceId);
 	const float Seed = static_cast<float>(CardHash & 0xFFFFu) / 65535.0f;
-	PlayedDissolvePlayback->Begin(SlotVisualConfig.PlayedDissolve, Seed);
-	if (!PlayedDissolvePlayback->IsActive())
+	FWacomFirstPersonCardSurfaceDeparturePlaybackConfig PlaybackConfig;
+	PlaybackConfig.Seed = Seed;
+	if (TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Played)
+	{
+		const FWacomFirstPersonCardUseEffectConfig& Config = SlotVisualConfig.CardUseEffect;
+		PlaybackConfig.Kind = EWacomFirstPersonCardSurfaceDepartureKind::CardUse;
+		PlaybackConfig.bReducedMotion = Config.bReducedMotion;
+		PlaybackConfig.DurationSeconds = Config.bReducedMotion
+			? 0.12f
+			: Config.Style.DurationSeconds;
+		PlaybackConfig.ConfirmHoldSeconds = Config.Style.ConfirmHoldSeconds;
+		PlaybackConfig.ImpactSeconds = Config.Style.EdgeFlipImpactSeconds;
+		PlaybackConfig.CardUseEffectKind = Config.Style.EffectKind;
+		PlaybackConfig.StartSound = Config.Style.StartSound;
+		PlaybackConfig.SoundVolumeMultiplier = Config.Style.StartSoundVolumeMultiplier;
+		PlaybackConfig.SoundPitchMultiplier = Config.Style.StartSoundPitchMultiplier;
+		PlaybackConfig.SoundPitchVariation = Config.Style.StartSoundPitchVariation;
+	}
+	else if (TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Exhausted)
+	{
+		const FWacomFirstPersonCardPlayedDissolveConfig& Config = SlotVisualConfig.PlayedDissolve;
+		PlaybackConfig.Kind = EWacomFirstPersonCardSurfaceDepartureKind::ExhaustDissolve;
+		PlaybackConfig.bReducedMotion = Config.bReducedMotion;
+		PlaybackConfig.DurationSeconds = Config.bReducedMotion
+			? 0.12f
+			: Config.Style.DurationSeconds;
+		PlaybackConfig.ConfirmHoldSeconds = Config.Style.ConfirmHoldSeconds;
+		PlaybackConfig.StartSound = Config.Style.StartSound;
+		PlaybackConfig.SoundVolumeMultiplier = Config.Style.StartSoundVolumeMultiplier;
+		PlaybackConfig.SoundPitchMultiplier = Config.Style.StartSoundPitchMultiplier;
+		PlaybackConfig.SoundPitchVariation = Config.Style.StartSoundPitchVariation;
+	}
+
+	SurfaceDeparturePlayback->Begin(PlaybackConfig);
+	if (!SurfaceDeparturePlayback->IsActive())
 	{
 		return;
 	}
+	const FWacomFirstPersonCardSurfaceDepartureTickResult InitialView =
+		SurfaceDeparturePlayback->BuildView();
+	CardUseFlipProgress = InitialView.FlipProgress;
+	CardUseImpactProgress = InitialView.ImpactProgress;
+	CardUseMotionAlpha = InitialView.MotionAlpha;
+	CardUseOpacityMultiplier = 1.0f;
 
-	FWacomFirstPersonCardSurfaceEffectView SurfaceView;
-	SurfaceView.PlayedDissolve = PlayedDissolvePlayback->BuildView();
 	if (CardView)
 	{
-		CardView->SetCardSurfaceEffectView(SurfaceView);
+		CardView->SetCardSurfaceEffectView(BuildSurfaceDepartureView(
+			SurfaceDeparturePlayback->BuildView(),
+			SlotVisualConfig));
 	}
-	PlayPendingPlayedDissolveSound();
+	PlayPendingSurfaceDepartureSound();
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::TickPlayedDissolvePlayback(float DeltaTime)
+void UWacomFirstPersonCardLayerSlotWidget::TickSurfaceDeparturePlayback(float DeltaTime)
 {
-	if (!PlayedDissolvePlayback || !PlayedDissolvePlayback->IsActive())
+	if (!SurfaceDeparturePlayback || !SurfaceDeparturePlayback->IsActive())
 	{
 		return;
 	}
 
-	const FWacomFirstPersonCardPlayedDissolveTickResult TickResult =
-		PlayedDissolvePlayback->Tick(DeltaTime);
-	FWacomFirstPersonCardSurfaceEffectView SurfaceView;
-	SurfaceView.PlayedDissolve = TickResult.View;
+	const FWacomFirstPersonCardSurfaceDepartureTickResult TickResult =
+		SurfaceDeparturePlayback->Tick(DeltaTime);
+	CardUseFlipProgress = TickResult.FlipProgress;
+	CardUseImpactProgress = TickResult.ImpactProgress;
+	CardUseMotionAlpha = TickResult.MotionAlpha;
+	CardUseOpacityMultiplier = 1.0f;
 	if (CardView)
 	{
-		CardView->SetCardSurfaceEffectView(SurfaceView);
+		CardView->SetCardSurfaceEffectView(BuildSurfaceDepartureView(TickResult, SlotVisualConfig));
 	}
 	if (TickResult.bCompleted)
 	{
-		ClearPlayedDissolvePlayback();
+		ClearSurfaceDeparturePlayback();
+	}
+	else
+	{
+		ApplyVisualSlotView();
 	}
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::ClearPlayedDissolvePlayback()
+void UWacomFirstPersonCardLayerSlotWidget::ClearSurfaceDeparturePlayback()
 {
-	if (PlayedDissolvePlayback)
+	if (SurfaceDeparturePlayback)
 	{
-		PlayedDissolvePlayback->Reset();
+		SurfaceDeparturePlayback->Reset();
 	}
+	SurfaceDepartureTransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
+	CardUseFlipProgress = 0.0f;
+	CardUseImpactProgress = 0.0f;
+	CardUseMotionAlpha = 0.0f;
+	CardUseOpacityMultiplier = 1.0f;
 	ResetCardSurfaceEffectView();
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::PlayPendingPlayedDissolveSound()
+void UWacomFirstPersonCardLayerSlotWidget::PlayPendingSurfaceDepartureSound()
 {
-	if (!PlayedDissolvePlayback)
+	if (!SurfaceDeparturePlayback)
 	{
 		return;
 	}
-	const TOptional<FWacomFirstPersonCardPlayedDissolveSoundRequest> PendingRequest =
-		PlayedDissolvePlayback->ConsumePendingSoundRequest();
+	const EWacomFirstPersonCardSurfaceDepartureKind Kind = SurfaceDeparturePlayback->GetKind();
+	const TOptional<FWacomFirstPersonCardSurfaceDepartureSoundRequest> PendingRequest =
+		SurfaceDeparturePlayback->ConsumePendingSoundRequest();
 	if (!PendingRequest.IsSet())
 	{
 		return;
 	}
 
-	const FWacomFirstPersonCardPlayedDissolveSoundRequest& Request = PendingRequest.GetValue();
+	const FWacomFirstPersonCardSurfaceDepartureSoundRequest& Request = PendingRequest.GetValue();
 #if WITH_AUTOMATION_TESTS
-	++PlayedDissolveSoundRequestCountForTest;
-	LastPlayedDissolveSoundPitchMultiplierForTest = Request.PitchMultiplier;
+	if (Kind == EWacomFirstPersonCardSurfaceDepartureKind::CardUse)
+	{
+		++CardUseEffectSoundRequestCountForTest;
+		LastCardUseEffectSoundPitchMultiplierForTest = Request.PitchMultiplier;
+	}
+	else if (Kind == EWacomFirstPersonCardSurfaceDepartureKind::ExhaustDissolve)
+	{
+		++PlayedDissolveSoundRequestCountForTest;
+		LastPlayedDissolveSoundPitchMultiplierForTest = Request.PitchMultiplier;
+	}
 #endif
 	if (USoundBase* Sound = Request.Sound.Get(); Sound && GetWorld())
 	{
@@ -2037,9 +2237,161 @@ void UWacomFirstPersonCardLayerSlotWidget::PlayPendingPlayedDissolveSound()
 	}
 }
 
-bool UWacomFirstPersonCardLayerSlotWidget::IsPlayedDissolvePlaybackActive() const
+bool UWacomFirstPersonCardLayerSlotWidget::IsSurfaceDeparturePlaybackActive() const
 {
-	return PlayedDissolvePlayback && PlayedDissolvePlayback->IsActive();
+	return SurfaceDeparturePlayback && SurfaceDeparturePlayback->IsActive();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::TriggerCardUseReformFeedback()
+{
+	if (!CanPlayCardUseReformEffect() || bIsExitingForFirstPersonLayer || !bHasVisualSlotView)
+	{
+		return;
+	}
+
+	ClearCardUseReformPlayback();
+	ClearEnterTransitionPlayback();
+	ClearExitTransitionPlayback();
+	ClearSurfaceDeparturePlayback();
+	if (!CardUseReformPlayback)
+	{
+		CardUseReformPlayback.Reset(new FWacomFirstPersonCardUseReformPlayback());
+	}
+
+	const FWacomFirstPersonCardUseEffectConfig& Config = SlotVisualConfig.CardUseEffect;
+	FWacomFirstPersonCardUseReformPlaybackConfig PlaybackConfig;
+	PlaybackConfig.EffectKind = Config.Style.EffectKind;
+	PlaybackConfig.DissolveOutSeconds = Config.Style.EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip
+		? Config.Style.EdgeFlipReformOutSeconds
+		: Config.Style.ReformDissolveOutSeconds;
+	PlaybackConfig.HiddenHoldSeconds = Config.Style.EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip
+		? Config.Style.EdgeFlipReformHiddenHoldSeconds
+		: Config.Style.ReformHiddenHoldSeconds;
+	PlaybackConfig.ReformSeconds = Config.Style.EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip
+		? Config.Style.EdgeFlipReformInSeconds
+		: Config.Style.ReformBuildInSeconds;
+	PlaybackConfig.SettleSeconds = Config.Style.EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip
+		? Config.Style.EdgeFlipReformSettleSeconds
+		: 0.0f;
+	PlaybackConfig.ImpactSeconds = Config.Style.EdgeFlipImpactSeconds;
+	PlaybackConfig.bReducedMotion = Config.bReducedMotion;
+	PlaybackConfig.StartSound = Config.Style.StartSound;
+	PlaybackConfig.SoundVolumeMultiplier = Config.Style.StartSoundVolumeMultiplier;
+	PlaybackConfig.SoundPitchMultiplier = Config.Style.StartSoundPitchMultiplier;
+	PlaybackConfig.SoundPitchVariation = Config.Style.StartSoundPitchVariation;
+	CardUseReformStartSlotView = VisualSlotView;
+	CardUseReformStartSlotView.RenderOpacity = 1.0f;
+	CardUseReformPlayback->Begin(PlaybackConfig);
+	if (!CardUseReformPlayback->IsActive())
+	{
+		return;
+	}
+	const FWacomFirstPersonCardUseReformTickResult InitialView =
+		CardUseReformPlayback->BuildView();
+	CardUseFlipProgress = InitialView.FlipProgress;
+	CardUseImpactProgress = InitialView.ImpactProgress;
+	CardUseMotionAlpha = InitialView.MotionAlpha;
+	CardUseOpacityMultiplier = InitialView.OpacityMultiplier;
+
+	VisualSlotView = CardUseReformStartSlotView;
+	if (CardView)
+	{
+		CardView->SetCardSurfaceEffectView(BuildCardUseReformView(
+			CardUseReformPlayback->BuildView(),
+			SlotVisualConfig));
+	}
+	PlayPendingCardUseReformSound();
+	ApplyVisualSlotView();
+	UpdateWantsTick();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::TickCardUseReformPlayback(float DeltaTime)
+{
+	if (!CardUseReformPlayback || !CardUseReformPlayback->IsActive())
+	{
+		return;
+	}
+
+	const FWacomFirstPersonCardUseReformTickResult TickResult =
+		CardUseReformPlayback->Tick(DeltaTime);
+	CardUseFlipProgress = TickResult.FlipProgress;
+	CardUseImpactProgress = TickResult.ImpactProgress;
+	CardUseMotionAlpha = TickResult.MotionAlpha;
+	CardUseOpacityMultiplier = TickResult.OpacityMultiplier;
+	VisualSlotView = TickResult.bUseTargetSlotPosition
+		? TargetSlotView
+		: CardUseReformStartSlotView;
+	VisualSlotView.RenderOpacity = 1.0f;
+	if (CardView)
+	{
+		CardView->SetCardSurfaceEffectView(BuildCardUseReformView(
+			TickResult,
+			SlotVisualConfig));
+	}
+	if (TickResult.bCompleted)
+	{
+		ClearCardUseReformPlayback(true);
+	}
+	else
+	{
+		ApplyVisualSlotView();
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ClearCardUseReformPlayback(bool bSnapToTarget)
+{
+	if (CardUseReformPlayback)
+	{
+		CardUseReformPlayback->Reset();
+	}
+	CardUseFlipProgress = 0.0f;
+	CardUseImpactProgress = 0.0f;
+	CardUseMotionAlpha = 0.0f;
+	CardUseOpacityMultiplier = 1.0f;
+	if (bSnapToTarget && bHasVisualSlotView)
+	{
+		VisualSlotView = TargetSlotView;
+		VisualSlotView.RenderOpacity = TargetSlotView.RenderOpacity;
+	}
+	ResetCardSurfaceEffectView();
+	if (bSnapToTarget)
+	{
+		ApplyVisualSlotView();
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::PlayPendingCardUseReformSound()
+{
+	if (!CardUseReformPlayback)
+	{
+		return;
+	}
+	const TOptional<FWacomFirstPersonCardUseReformSoundRequest> PendingRequest =
+		CardUseReformPlayback->ConsumePendingSoundRequest();
+	if (!PendingRequest.IsSet())
+	{
+		return;
+	}
+
+	const FWacomFirstPersonCardUseReformSoundRequest& Request = PendingRequest.GetValue();
+#if WITH_AUTOMATION_TESTS
+	++CardUseEffectSoundRequestCountForTest;
+	++CardUseReformSoundRequestCountForTest;
+	LastCardUseEffectSoundPitchMultiplierForTest = Request.PitchMultiplier;
+#endif
+	if (USoundBase* Sound = Request.Sound.Get(); Sound && GetWorld())
+	{
+		UGameplayStatics::PlaySound2D(
+			GetWorld(),
+			Sound,
+			Request.VolumeMultiplier,
+			Request.PitchMultiplier);
+	}
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::IsCardUseReformPlaybackActive() const
+{
+	return CardUseReformPlayback && CardUseReformPlayback->IsActive();
 }
 
 FWacomFirstPersonCardDragView UWacomFirstPersonCardLayerSlotWidget::BuildDragView() const
@@ -2216,6 +2568,7 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 		View.bInteractionFeedbackLayerAboveFeedbackOverlay =
 			CardViewTestView.bInteractionFeedbackLayerAboveFeedbackOverlay;
 		View.SelectionView = CardViewTestView.SurfaceEffectView.Selection;
+		View.CardUseEffectView = CardViewTestView.SurfaceEffectView.CardUse;
 		View.PlayedDissolveView = CardViewTestView.SurfaceEffectView.PlayedDissolve;
 	}
 	View.RenderTransform = GetRenderTransform();
@@ -2228,7 +2581,26 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.DragPickupTriggerCount = DragPickupTriggerCountForTest;
 	View.DragPickupSoundRequestCount = DragPickupSoundRequestCountForTest;
 	View.LastDragPickupSoundPitchMultiplier = LastDragPickupSoundPitchMultiplierForTest;
-	View.bPlayedDissolvePlaybackActive = IsPlayedDissolvePlaybackActive();
+	View.bCardUseEffectPlaybackActive = IsSurfaceDeparturePlaybackActive()
+		&& SurfaceDepartureTransitionKind == EWacomFirstPersonCardSlotTransitionKind::Played;
+	View.bPlayedDissolvePlaybackActive = IsSurfaceDeparturePlaybackActive()
+		&& SurfaceDepartureTransitionKind == EWacomFirstPersonCardSlotTransitionKind::Exhausted;
+	View.bCardUseReformPlaybackActive = IsCardUseReformPlaybackActive();
+	View.bCardUseReformUsingTargetSlot = IsCardUseReformPlaybackActive()
+		&& CardUseReformPlayback->BuildView().bUseTargetSlotPosition;
+	View.CardUseEffectSoundRequestCount = CardUseEffectSoundRequestCountForTest;
+	View.CardUseReformSoundRequestCount = CardUseReformSoundRequestCountForTest;
+	View.LastCardUseEffectSoundPitchMultiplier = LastCardUseEffectSoundPitchMultiplierForTest;
+	View.CardUseFlipProgress = CardUseFlipProgress;
+	View.CardUseImpactProgress = CardUseImpactProgress;
+	View.CardUseHorizontalScaleMultiplier = SlotVisualConfig.CardUseEffect.Style.EffectKind
+		== EWacomFirstPersonCardUseEffectKind::EdgeFlip
+		? FMath::Lerp(
+			1.0f,
+			FMath::Clamp(SlotVisualConfig.CardUseEffect.Style.EdgeFlipMinimumHorizontalScale, 0.01f, 1.0f),
+			FMath::Clamp(CardUseFlipProgress, 0.0f, 1.0f))
+		: 1.0f;
+	View.CardUseOpacityMultiplier = CardUseOpacityMultiplier;
 	View.PlayedDissolveSoundRequestCount = PlayedDissolveSoundRequestCountForTest;
 	View.LastPlayedDissolveSoundPitchMultiplier = LastPlayedDissolveSoundPitchMultiplierForTest;
 	View.GestureSource = GestureSource;
@@ -2586,21 +2958,27 @@ bool UWacomFirstPersonCardLayerSlotWidget::HasActivePresentationPlayback() const
 {
 	return IsEnterTransitionPlaybackActive()
 		|| IsExitingForFirstPersonLayer()
+		|| IsCardUseReformPlaybackActive()
 		|| IsRetainedFeedbackActive();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ForceCompletePresentationPlayback()
 {
 	ClearEnterTransitionPlayback();
+	if (IsCardUseReformPlaybackActive())
+	{
+		ClearCardUseReformPlayback(true);
+	}
 	if (bIsExitingForFirstPersonLayer)
 	{
 		VisualSlotView = TargetSlotView;
 		VisualSlotView.bProjected = false;
 		ApplyVisualSlotView();
 		ClearExitTransitionPlayback();
-		ClearPlayedDissolvePlayback();
+		ClearSurfaceDeparturePlayback();
 		bUsesFixedExitTransitionPlayback = false;
-		bUsesPlayedDissolveExit = false;
+		bUsesSurfaceDepartureExit = false;
+		SurfaceDepartureTransitionKind = EWacomFirstPersonCardSlotTransitionKind::Default;
 		ExitMotionElapsedSeconds = FMath::Max(0.0f, SlotMotionConfig.ExitDuration);
 	}
 	else if (bHasVisualSlotView)
@@ -2754,6 +3132,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 		&& GestureState != EWacomFirstPersonCardGestureState::Cancelled;
 	bWantsSlotMotionTick = IsEnterTransitionPlaybackActive()
 		|| bIsExitingForFirstPersonLayer
+		|| IsCardUseReformPlaybackActive()
 		|| (bHasVisualSlotView
 			&& (FVector2D::Distance(VisualSlotView.ScreenPosition, EffectiveTargetSlotView.ScreenPosition) > 0.1f
 				|| FMath::Abs(VisualSlotView.RenderAngleDegrees - EffectiveTargetSlotView.RenderAngleDegrees) > 0.05f

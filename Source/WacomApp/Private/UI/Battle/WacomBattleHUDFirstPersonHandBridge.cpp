@@ -1350,6 +1350,13 @@ void FWacomBattleHUDFirstPersonHandBridge::StoreTransitionEvents(const TArray<FB
 	PresentationController.StoreTransitionEvents(Events);
 }
 
+TArray<FWacomFirstPersonCardLayerFeedbackHint>
+FWacomBattleHUDFirstPersonHandBridge::BuildFeedbackHints(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return PresentationController.BuildFeedbackHints(NextSnapshot);
+}
+
 bool FWacomBattleHUDFirstPersonHandBridge::HasPendingTransitionPresentation() const
 {
 	return PresentationController.HasPendingTransitionPresentation();

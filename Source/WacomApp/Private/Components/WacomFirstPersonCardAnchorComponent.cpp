@@ -18,6 +18,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerDelegateRouter.h"
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 #include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
+#include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
 #include "UI/Card/WacomFirstPersonCardSelectionStyle.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
 #if WITH_AUTOMATION_TESTS
@@ -205,6 +206,16 @@ namespace
 		Config.CardDepth.bEnableContactShadow = Anchor.bEnableCardContactShadow;
 		Config.CardDepth.HoverContactShadowLift = Anchor.CardHoverContactShadowLift;
 		Config.CardDepth.DragContactShadowLift = Anchor.CardDragContactShadowLift;
+		Config.CardUseEffect.bEnabled = Anchor.bEnableCardUseEffect;
+		Config.CardUseEffect.bReducedMotion = Anchor.bReduceCardUseEffectMotion;
+		Config.CardUseEffect.Style = Anchor.CardUseEffectStyle
+			? Anchor.CardUseEffectStyle->Style
+			: FWacomFirstPersonCardUseEffectStyleData();
+		if (Anchor.CardUseEffectDurationOverrideSeconds >= 0.0f)
+		{
+			Config.CardUseEffect.Style.DurationSeconds =
+				Anchor.CardUseEffectDurationOverrideSeconds;
+		}
 		Config.PlayedDissolve.bEnabled = Anchor.bEnableCardPlayedDissolve;
 		Config.PlayedDissolve.bReducedMotion = Anchor.bReduceCardPlayedDissolveMotion;
 		Config.PlayedDissolve.Style = Anchor.CardPlayedDissolveStyle
@@ -356,6 +367,7 @@ namespace
 		VisualConfig.DragCardTargetFocusZOrderBoost = Config.DragCardTargetFocusZOrderBoost;
 		VisualConfig.CardDepth = Config.CardDepth;
 		VisualConfig.Selection = Config.Selection;
+		VisualConfig.CardUseEffect = Config.CardUseEffect;
 		VisualConfig.PlayedDissolve = Config.PlayedDissolve;
 		return VisualConfig;
 	}
@@ -654,6 +666,27 @@ namespace
 		AddBool(Config.CardDepth.bEnableContactShadow);
 		AddFloat(Config.CardDepth.HoverContactShadowLift);
 		AddFloat(Config.CardDepth.DragContactShadowLift);
+		AddBool(Config.CardUseEffect.bEnabled);
+		AddBool(Config.CardUseEffect.bReducedMotion);
+		Combine(GetTypeHash(Config.CardUseEffect.Style.SurfaceEffectMaterialInstance.Get()));
+		Combine(GetTypeHash(static_cast<uint8>(Config.CardUseEffect.Style.EffectKind)));
+		AddFloat(Config.CardUseEffect.Style.DurationSeconds);
+		AddFloat(Config.CardUseEffect.Style.ConfirmHoldSeconds);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipImpactSeconds);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipLiftPixels);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipScaleMultiplier);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipMinimumHorizontalScale);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipReformOutSeconds);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipReformHiddenHoldSeconds);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipReformInSeconds);
+		AddFloat(Config.CardUseEffect.Style.EdgeFlipReformSettleSeconds);
+		AddFloat(Config.CardUseEffect.Style.ReformDissolveOutSeconds);
+		AddFloat(Config.CardUseEffect.Style.ReformHiddenHoldSeconds);
+		AddFloat(Config.CardUseEffect.Style.ReformBuildInSeconds);
+		Combine(GetTypeHash(Config.CardUseEffect.Style.StartSound.Get()));
+		AddFloat(Config.CardUseEffect.Style.StartSoundVolumeMultiplier);
+		AddFloat(Config.CardUseEffect.Style.StartSoundPitchMultiplier);
+		AddFloat(Config.CardUseEffect.Style.StartSoundPitchVariation);
 		AddBool(Config.PlayedDissolve.bEnabled);
 		AddBool(Config.PlayedDissolve.bReducedMotion);
 		AddInt(static_cast<int32>(Config.PlayedDissolve.Style.EffectKind));

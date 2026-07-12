@@ -306,6 +306,12 @@ public:
 		return UBattleHUD::BuildFirstPersonCardTransitionHintsForRefreshForTest(NextSnapshot);
 	}
 
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHintsForTest(
+		const FBattleSnapshot& NextSnapshot) const
+	{
+		return UBattleHUD::BuildFirstPersonCardFeedbackHintsForTest(NextSnapshot);
+	}
+
 	void SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot)
 	{
 		UBattleHUD::SetFirstPersonCardTransitionSnapshotForTest(Snapshot);

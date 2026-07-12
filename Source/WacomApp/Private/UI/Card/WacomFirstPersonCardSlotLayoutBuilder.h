@@ -130,6 +130,7 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	float HoverHitHysteresisPixels = 16.0f;
 	FWacomFirstPersonCardDepthConfig CardDepth;
 	FWacomFirstPersonCardSelectionConfig Selection;
+	FWacomFirstPersonCardUseEffectConfig CardUseEffect;
 	FWacomFirstPersonCardPlayedDissolveConfig PlayedDissolve;
 	bool bEnableCardInteractionFeedback = true;
 	FLinearColor PlayableHoverFeedbackColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);

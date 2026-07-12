@@ -82,6 +82,8 @@ public:
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFeedbackHints(
+		const FBattleSnapshot& NextSnapshot) const;
 
 	void ClearTransitionSnapshot();
 	bool CanBuildTransitionHintsFor(const FBattleSnapshot& NextSnapshot) const;

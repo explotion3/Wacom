@@ -14,7 +14,8 @@ class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardDragPickupPlayback;
-class FWacomFirstPersonCardPlayedDissolvePlayback;
+class FWacomFirstPersonCardSurfaceDeparturePlayback;
+class FWacomFirstPersonCardUseReformPlayback;
 class FWacomFirstPersonCardTransitionPlayback;
 struct FWacomFirstPersonCardLayerTestAccess;
 
@@ -33,9 +34,14 @@ struct FWacomFirstPersonCardDragPickupPlaybackDeleter
 	void operator()(FWacomFirstPersonCardDragPickupPlayback* Playback) const;
 };
 
-struct FWacomFirstPersonCardPlayedDissolvePlaybackDeleter
+struct FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter
 {
-	void operator()(FWacomFirstPersonCardPlayedDissolvePlayback* Playback) const;
+	void operator()(FWacomFirstPersonCardSurfaceDeparturePlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardUseReformPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardUseReformPlayback* Playback) const;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -85,6 +91,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	FWacomFirstPersonCardDepthView CardDepthView;
 	FWacomFirstPersonCardSelectionView SelectionView;
+	FWacomFirstPersonCardUseEffectView CardUseEffectView;
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolveView;
 	FWidgetTransform RenderTransform;
 	int32 RenderZOrder = 0;
@@ -94,6 +101,16 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	int32 DragPickupSoundRequestCount = 0;
 	float LastDragPickupSoundPitchMultiplier = 1.0f;
 	bool bPlayedDissolvePlaybackActive = false;
+	bool bCardUseEffectPlaybackActive = false;
+	bool bCardUseReformPlaybackActive = false;
+	bool bCardUseReformUsingTargetSlot = false;
+	int32 CardUseEffectSoundRequestCount = 0;
+	int32 CardUseReformSoundRequestCount = 0;
+	float LastCardUseEffectSoundPitchMultiplier = 1.0f;
+	float CardUseFlipProgress = 0.0f;
+	float CardUseImpactProgress = 0.0f;
+	float CardUseHorizontalScaleMultiplier = 1.0f;
+	float CardUseOpacityMultiplier = 1.0f;
 	int32 PlayedDissolveSoundRequestCount = 0;
 	float LastPlayedDissolveSoundPitchMultiplier = 1.0f;
 	bool bEnterTransitionPlaybackActive = false;
@@ -156,6 +173,7 @@ public:
 			EWacomFirstPersonCardSlotTransitionKind::Default);
 	void TriggerCommitFeedback();
 	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
+	void TriggerCardUseReformFeedback();
 	bool HasActivePresentationPlayback() const;
 	void ForceCompletePresentationPlayback();
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
@@ -302,8 +320,16 @@ private:
 		FWacomFirstPersonCardDragPickupPlayback,
 		FWacomFirstPersonCardDragPickupPlaybackDeleter> DragPickupPlayback;
 	TUniquePtr<
-		FWacomFirstPersonCardPlayedDissolvePlayback,
-		FWacomFirstPersonCardPlayedDissolvePlaybackDeleter> PlayedDissolvePlayback;
+		FWacomFirstPersonCardSurfaceDeparturePlayback,
+		FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter> SurfaceDeparturePlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardUseReformPlayback,
+		FWacomFirstPersonCardUseReformPlaybackDeleter> CardUseReformPlayback;
+	FWacomFirstPersonCardLayerSlotView CardUseReformStartSlotView;
+	float CardUseFlipProgress = 0.0f;
+	float CardUseImpactProgress = 0.0f;
+	float CardUseMotionAlpha = 0.0f;
+	float CardUseOpacityMultiplier = 1.0f;
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
@@ -315,7 +341,9 @@ private:
 	bool bHasVisualSlotView = false;
 	bool bIsExitingForFirstPersonLayer = false;
 	bool bUsesFixedExitTransitionPlayback = false;
-	bool bUsesPlayedDissolveExit = false;
+	bool bUsesSurfaceDepartureExit = false;
+	EWacomFirstPersonCardSlotTransitionKind SurfaceDepartureTransitionKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
 	bool bWantsSlotMotionTick = false;
 	bool bPreserveGestureReturnMotion = false;
 	bool bGestureTargetValid = false;
@@ -365,6 +393,9 @@ private:
 	float LastDragPickupSoundPitchMultiplierForTest = 1.0f;
 	int32 PlayedDissolveSoundRequestCountForTest = 0;
 	float LastPlayedDissolveSoundPitchMultiplierForTest = 1.0f;
+	int32 CardUseEffectSoundRequestCountForTest = 0;
+	int32 CardUseReformSoundRequestCountForTest = 0;
+	float LastCardUseEffectSoundPitchMultiplierForTest = 1.0f;
 	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKindForTest =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
 #endif
@@ -419,7 +450,8 @@ private:
 	void UpdateGesture(
 		float DeltaTime,
 		const FVector2D& ScreenPosition,
-		bool bSuppressInspectDragPromotion = false);
+		bool bSuppressInspectDragPromotion = false,
+		bool bBroadcastDragUpdate = true);
 	bool ReleaseGesture(
 		const FVector2D& ScreenPosition,
 		bool bSuppressInspectDragPromotion = false);
@@ -439,12 +471,18 @@ private:
 	void PlayPendingDragPickupSound();
 	float GetDragPickupAlpha() const;
 	void ResetCardSurfaceEffectView();
-	bool CanPlayPlayedDissolve() const;
-	void StartPlayedDissolvePlayback();
-	void TickPlayedDissolvePlayback(float DeltaTime);
-	void ClearPlayedDissolvePlayback();
-	void PlayPendingPlayedDissolveSound();
-	bool IsPlayedDissolvePlaybackActive() const;
+	bool CanPlayCardUseEffect() const;
+	bool CanPlayCardUseReformEffect() const;
+	bool CanPlayExhaustDissolve() const;
+	void StartSurfaceDeparturePlayback(EWacomFirstPersonCardSlotTransitionKind TransitionKind);
+	void TickSurfaceDeparturePlayback(float DeltaTime);
+	void ClearSurfaceDeparturePlayback();
+	void PlayPendingSurfaceDepartureSound();
+	bool IsSurfaceDeparturePlaybackActive() const;
+	void TickCardUseReformPlayback(float DeltaTime);
+	void ClearCardUseReformPlayback(bool bSnapToTarget = false);
+	void PlayPendingCardUseReformSound();
+	bool IsCardUseReformPlaybackActive() const;
 	void BroadcastDragStarted();
 	void BroadcastDragUpdated();
 	void BroadcastDragReleased();

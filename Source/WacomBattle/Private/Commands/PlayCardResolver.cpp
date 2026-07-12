@@ -160,13 +160,21 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 	}
 
 	// ================ 7. 卡牌去向 ================
-	FBattleCardZoneTransition::ResolvePlayedCardDestination(
+	const ECardLocation ResolvedCardDestination =
+		FBattleCardZoneTransition::ResolvePlayedCardDestination(
 		State,
 		CardId,
 		bAnchor,
 		bCombo,
 		bSourceExplicitlyMoved,
 		Prepared.GetPrePlayPlacement());
+	{
+		FBattleEvent Ev;
+		Ev.Type = EBattleEventType::CardPlayDestinationResolved;
+		Ev.CardInstanceId = CardId;
+		Ev.CardDestination = ResolvedCardDestination;
+		Events.Emit(Ev);
+	}
 
 	// ================ 8. Companion 计数累加（在 AfterPlayed 之前）================
 	if (const FRuntimeCardInstance* PlayedCard = FBattleRules::FindCard(State, CardId))

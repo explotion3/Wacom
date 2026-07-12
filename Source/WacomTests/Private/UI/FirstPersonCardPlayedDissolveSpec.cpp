@@ -107,7 +107,7 @@ bool FWacomFirstPersonCardPlayedDissolveLifecycleTest::RunTest(const FString& /*
 	Widget->BeginExitMotionWithProfile(
 		Widget->GetSlotView(),
 		MakeSpatialProfile(),
-		EWacomFirstPersonCardSlotTransitionKind::Played);
+		EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 	Widget->TriggerCommitFeedback();
 	FWacomFirstPersonCardSlotAutomationTestView View =
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
@@ -171,7 +171,7 @@ bool FWacomFirstPersonCardPlayedDissolveFallbackAndReducedMotionTest::RunTest(
 	MissingNoiseWidget->BeginExitMotionWithProfile(
 		MissingNoiseWidget->GetSlotView(),
 		MakeSpatialProfile(),
-		EWacomFirstPersonCardSlotTransitionKind::Played);
+		EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 	Tick(*MissingNoiseWidget, 0.08f);
 	TestFalse(
 		TEXT("Missing noise falls back instead of starting dissolve"),
@@ -185,7 +185,7 @@ bool FWacomFirstPersonCardPlayedDissolveFallbackAndReducedMotionTest::RunTest(
 	ReducedWidget->BeginExitMotionWithProfile(
 		ReducedWidget->GetSlotView(),
 		MakeSpatialProfile(),
-		EWacomFirstPersonCardSlotTransitionKind::Played);
+		EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 	Tick(*ReducedWidget, 0.06f);
 	const FWacomFirstPersonCardSlotAutomationTestView ReducedView =
 		FWacomFirstPersonCardLayerTestAccess::View(*ReducedWidget);
@@ -203,7 +203,7 @@ bool FWacomFirstPersonCardPlayedDissolveFallbackAndReducedMotionTest::RunTest(
 	ReusedWidget->BeginExitMotionWithProfile(
 		ReusedWidget->GetSlotView(),
 		MakeSpatialProfile(),
-		EWacomFirstPersonCardSlotTransitionKind::Played);
+		EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 	Tick(*ReusedWidget, 0.08f);
 	TestTrue(
 		TEXT("Reuse fixture starts with an active dissolve"),
@@ -264,7 +264,7 @@ bool FWacomFirstPersonCardPlayedDissolveStyleVariantTest::RunTest(
 	Widget->BeginExitMotionWithProfile(
 		Widget->GetSlotView(),
 		MakeSpatialProfile(),
-		EWacomFirstPersonCardSlotTransitionKind::Played);
+		EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
 	TestTrue(TEXT("Ordered Dither uses the existing Played playback"), View.bPlayedDissolvePlaybackActive);
 	TestEqual(
@@ -282,7 +282,7 @@ bool FWacomFirstPersonCardPlayedDissolveStyleVariantTest::RunTest(
 	Widget->BeginExitMotionWithProfile(
 		Widget->GetSlotView(),
 		MakeSpatialProfile(),
-		EWacomFirstPersonCardSlotTransitionKind::Played);
+		EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
 	TestTrue(TEXT("Pixel Ash still uses the same Played playback"), View.bPlayedDissolvePlaybackActive);
 	TestEqual(

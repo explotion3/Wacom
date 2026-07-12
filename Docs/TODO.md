@@ -79,10 +79,10 @@ tags:
   - 说明：后续只追踪表现体验，如 cue 合并、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
 - [ ] **First-person hand 动效第二阶段：Played 目标命中反馈与整体 PIE polish**
-  - 状态：`In Progress: Card Depth、Drag Pickup 与 Played PixelAsh / OrderedDither 原地消散已接线，待 PIE polish`
+  - 状态：`In Progress: Card Use 像素翻面收牌与 Exhausted 消耗消散已接线，待 PIE polish`
   - 归属：App / First-person Card Layer
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、弃牌 stagger、phase timeout force-settle、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup，以及可由 Anchor Style 切换的 Played PixelAsh / OrderedDither 原地消散。Played 仍保留真实目标 / PlayTarget 坐标但启用消散时不移动源卡；下一切片应消费该坐标制作独立目标命中反馈，并继续做 flip、Exhausted 独立语义、音效预热、reduced-motion / 全局速度策略和 PIE 调参。不复制第三方代码、shader 或资产。
+  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、弃牌 stagger、phase timeout force-settle、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup、普通 Played 像素翻面收牌、仍留在 Hand 的成功使用牌“翻到侧边—隐藏换位—反向展开”，以及 Exhausted 独立语义下可切换的 PixelAsh / OrderedDither 消耗消散。旧 DiamondWave Style 完整保留为可切换回退。Played 仍保留真实目标 / PlayTarget 坐标但启用 Surface Effect 时不移动源卡；下一切片应消费该坐标制作独立目标命中反馈，并继续做音效预热、reduced-motion / 全局速度策略和 PIE 调参。不复制第三方代码、shader 或资产。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 内容扩展`

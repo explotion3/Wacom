@@ -78,7 +78,7 @@ public:
 	 * 完成一张已结算卡的正式去向。Combo 使用出牌前稳定位置返回；若效果已经把
 	 * 卡移出 Hand，则显式移动优先，本入口不覆盖其结果。
 	 */
-	static void ResolvePlayedCardDestination(
+	static ECardLocation ResolvePlayedCardDestination(
 		FBattleState& State,
 		const FGuid& CardInstanceId,
 		bool bIsAnchor,

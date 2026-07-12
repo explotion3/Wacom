@@ -211,6 +211,48 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.CardDepth.ReturnSpeed = FMath::Max(0.0f, Config.CardDepth.ReturnSpeed);
 	Config.CardDepth.HoverContactShadowLift = FMath::Clamp(Config.CardDepth.HoverContactShadowLift, 0.0f, 1.0f);
 	Config.CardDepth.DragContactShadowLift = FMath::Clamp(Config.CardDepth.DragContactShadowLift, 0.0f, 1.0f);
+	Config.CardUseEffect.Style.DurationSeconds = FMath::Max(
+		0.0f,
+		Config.CardUseEffect.Style.DurationSeconds);
+	Config.CardUseEffect.Style.ConfirmHoldSeconds = FMath::Clamp(
+		Config.CardUseEffect.Style.ConfirmHoldSeconds,
+		0.0f,
+		Config.CardUseEffect.Style.DurationSeconds);
+	Config.CardUseEffect.Style.EdgeFlipImpactSeconds = FMath::Max(
+		0.0f, Config.CardUseEffect.Style.EdgeFlipImpactSeconds);
+	Config.CardUseEffect.Style.EdgeFlipLiftPixels = FMath::Max(
+		0.0f, Config.CardUseEffect.Style.EdgeFlipLiftPixels);
+	Config.CardUseEffect.Style.EdgeFlipScaleMultiplier = FMath::Max(
+		1.0f, Config.CardUseEffect.Style.EdgeFlipScaleMultiplier);
+	Config.CardUseEffect.Style.EdgeFlipMinimumHorizontalScale = FMath::Clamp(
+		Config.CardUseEffect.Style.EdgeFlipMinimumHorizontalScale, 0.01f, 1.0f);
+	Config.CardUseEffect.Style.EdgeFlipReformOutSeconds = FMath::Max(
+		0.0f, Config.CardUseEffect.Style.EdgeFlipReformOutSeconds);
+	Config.CardUseEffect.Style.EdgeFlipReformHiddenHoldSeconds = FMath::Max(
+		0.0f, Config.CardUseEffect.Style.EdgeFlipReformHiddenHoldSeconds);
+	Config.CardUseEffect.Style.EdgeFlipReformInSeconds = FMath::Max(
+		0.0f, Config.CardUseEffect.Style.EdgeFlipReformInSeconds);
+	Config.CardUseEffect.Style.EdgeFlipReformSettleSeconds = FMath::Max(
+		0.0f, Config.CardUseEffect.Style.EdgeFlipReformSettleSeconds);
+	Config.CardUseEffect.Style.ReformDissolveOutSeconds = FMath::Max(
+		0.0f,
+		Config.CardUseEffect.Style.ReformDissolveOutSeconds);
+	Config.CardUseEffect.Style.ReformHiddenHoldSeconds = FMath::Max(
+		0.0f,
+		Config.CardUseEffect.Style.ReformHiddenHoldSeconds);
+	Config.CardUseEffect.Style.ReformBuildInSeconds = FMath::Max(
+		0.0f,
+		Config.CardUseEffect.Style.ReformBuildInSeconds);
+	Config.CardUseEffect.Style.StartSoundVolumeMultiplier = FMath::Max(
+		0.0f,
+		Config.CardUseEffect.Style.StartSoundVolumeMultiplier);
+	Config.CardUseEffect.Style.StartSoundPitchMultiplier = FMath::Max(
+		0.01f,
+		Config.CardUseEffect.Style.StartSoundPitchMultiplier);
+	Config.CardUseEffect.Style.StartSoundPitchVariation = FMath::Clamp(
+		Config.CardUseEffect.Style.StartSoundPitchVariation,
+		0.0f,
+		0.99f);
 	Config.PlayedDissolve.Style.DurationSeconds = FMath::Max(0.0f, Config.PlayedDissolve.Style.DurationSeconds);
 	Config.PlayedDissolve.Style.ConfirmHoldSeconds = FMath::Clamp(
 		Config.PlayedDissolve.Style.ConfirmHoldSeconds,
@@ -292,6 +334,44 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.CardDepth.ReturnSpeed, B.CardDepth.ReturnSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.HoverContactShadowLift, B.CardDepth.HoverContactShadowLift)
 		&& AreFloatsEquivalent(A.CardDepth.DragContactShadowLift, B.CardDepth.DragContactShadowLift)
+		&& A.CardUseEffect.bEnabled == B.CardUseEffect.bEnabled
+		&& A.CardUseEffect.bReducedMotion == B.CardUseEffect.bReducedMotion
+		&& A.CardUseEffect.Style.SurfaceEffectMaterialInstance
+			== B.CardUseEffect.Style.SurfaceEffectMaterialInstance
+		&& A.CardUseEffect.Style.EffectKind == B.CardUseEffect.Style.EffectKind
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.DurationSeconds,
+			B.CardUseEffect.Style.DurationSeconds)
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.ConfirmHoldSeconds,
+			B.CardUseEffect.Style.ConfirmHoldSeconds)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipImpactSeconds, B.CardUseEffect.Style.EdgeFlipImpactSeconds)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipLiftPixels, B.CardUseEffect.Style.EdgeFlipLiftPixels)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipScaleMultiplier, B.CardUseEffect.Style.EdgeFlipScaleMultiplier)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipMinimumHorizontalScale, B.CardUseEffect.Style.EdgeFlipMinimumHorizontalScale)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipReformOutSeconds, B.CardUseEffect.Style.EdgeFlipReformOutSeconds)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipReformHiddenHoldSeconds, B.CardUseEffect.Style.EdgeFlipReformHiddenHoldSeconds)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipReformInSeconds, B.CardUseEffect.Style.EdgeFlipReformInSeconds)
+		&& AreFloatsEquivalent(A.CardUseEffect.Style.EdgeFlipReformSettleSeconds, B.CardUseEffect.Style.EdgeFlipReformSettleSeconds)
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.ReformDissolveOutSeconds,
+			B.CardUseEffect.Style.ReformDissolveOutSeconds)
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.ReformHiddenHoldSeconds,
+			B.CardUseEffect.Style.ReformHiddenHoldSeconds)
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.ReformBuildInSeconds,
+			B.CardUseEffect.Style.ReformBuildInSeconds)
+		&& A.CardUseEffect.Style.StartSound == B.CardUseEffect.Style.StartSound
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.StartSoundVolumeMultiplier,
+			B.CardUseEffect.Style.StartSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.StartSoundPitchMultiplier,
+			B.CardUseEffect.Style.StartSoundPitchMultiplier)
+		&& AreFloatsEquivalent(
+			A.CardUseEffect.Style.StartSoundPitchVariation,
+			B.CardUseEffect.Style.StartSoundPitchVariation)
 		&& A.PlayedDissolve.bEnabled == B.PlayedDissolve.bEnabled
 		&& A.PlayedDissolve.bReducedMotion == B.PlayedDissolve.bReducedMotion
 		&& A.PlayedDissolve.Style.EffectKind == B.PlayedDissolve.Style.EffectKind

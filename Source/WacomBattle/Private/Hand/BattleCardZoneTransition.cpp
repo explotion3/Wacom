@@ -185,7 +185,7 @@ bool FBattleCardZoneTransition::IsNormalCardInHand(
 	return Card && Card->Location == ECardLocation::Hand;
 }
 
-void FBattleCardZoneTransition::ResolvePlayedCardDestination(
+ECardLocation FBattleCardZoneTransition::ResolvePlayedCardDestination(
 	FBattleState& State,
 	const FGuid& CardInstanceId,
 	bool bIsAnchor,
@@ -198,11 +198,11 @@ void FBattleCardZoneTransition::ResolvePlayedCardDestination(
 	if (!Card || Card->Location != ECardLocation::Hand || HandIndex == INDEX_NONE)
 	{
 		// A resolved effect already moved the source card. Explicit movement wins.
-		return;
+		return Card ? Card->Location : ECardLocation::Unknown;
 	}
 	if (bSourceExplicitlyMoved)
 	{
-		return;
+		return Card->Location;
 	}
 
 	// Preserve the existing precedence: Combo anchors return to their hand slot.
@@ -216,7 +216,7 @@ void FBattleCardZoneTransition::ResolvePlayedCardDestination(
 			ECardLocation::Hand,
 			ECardLocation::Hand,
 			ResolveComboReturnIndex(HandWithoutSource, PrePlayPlacement));
-		return;
+		return ECardLocation::Hand;
 	}
 
 	if (bIsAnchor)
@@ -226,7 +226,7 @@ void FBattleCardZoneTransition::ResolvePlayedCardDestination(
 			CardInstanceId,
 			ECardLocation::Hand,
 			ECardLocation::Limbo);
-		return;
+		return ECardLocation::Limbo;
 	}
 
 	if (Card->TemporaryKeywords.HasTagExact(WacomTags::Card_Keyword_Exhaust))
@@ -236,10 +236,11 @@ void FBattleCardZoneTransition::ResolvePlayedCardDestination(
 			CardInstanceId,
 			ECardLocation::Hand,
 			ECardLocation::Exhaust);
-		return;
+		return ECardLocation::Exhaust;
 	}
 
 	FDeckService::MoveFromHandToPlayedPile(State, CardInstanceId);
+	return ECardLocation::Played;
 }
 
 FBattleTurnEndHandTransitionResult FBattleCardZoneTransition::ResolveTurnEndHand(

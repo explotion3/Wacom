@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Runtime/BattleEnemyKeys.h"
+#include "Types/WacomEnums.h"
 #include "BattleEvent.generated.h"
 
 class UCardDefinition;
@@ -48,6 +49,8 @@ enum class EBattleEventType : uint8
 	CardExhausted         UMETA(DisplayName = "CardExhausted"),       // 卡牌因消耗规则从手牌进入消耗牌堆
 	CardGained            UMETA(DisplayName = "CardGained"),          // 战斗中获得一张新卡
 	BattleEnded           UMETA(DisplayName = "BattleEnded"),
+	// Append-only presentation fact. Keep existing serialized enum values stable.
+	CardPlayDestinationResolved UMETA(DisplayName = "CardPlayDestinationResolved"),
 };
 
 /**
@@ -84,6 +87,7 @@ enum class EHandCardZoneMoveReason : uint8
  * - CardsDrawn          ：CardInstanceIds = 本批真实抽到 / 移入手牌的普通卡实例，Count = CardInstanceIds.Num()
  * - CardsRetained       ：CardInstanceIds = 本次回合结束明确保留的普通手牌，Count = CardInstanceIds.Num()
  * - CardPlayed          ：CardInstanceId、ActorEnemyPartKey = 目标部位稳定 key
+ * - CardPlayDestinationResolved：CardInstanceId、CardDestination = 打出结算后的最终区域
  * - InitiativeHit       ：ActorEnemyPartKey = 被命中部位、Amount = 本次 RuntimeCost
  * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；全盾吸收为 0，overkill 只记剩余 HP，玩家目标时 key 为空
  * - StatusApplied       ：ActorEnemyPartKey、Tag = Status.*、Amount = 层数；玩家目标时 key 为空
@@ -157,6 +161,10 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 手牌卡移动来源，仅 CardDiscarded / CardExhausted 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	EHandCardZoneMoveReason HandCardZoneMoveReason = EHandCardZoneMoveReason::None;
+
+	/** 打出的源卡最终所在区域，仅 CardPlayDestinationResolved 使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	ECardLocation CardDestination = ECardLocation::Unknown;
 
 	/** 事件涉及的新卡定义。第一版仅 CardGained 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

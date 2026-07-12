@@ -136,6 +136,9 @@ private:
 	void RestoreBaseSurfaceEffectMaterial();
 	void EnsureSurfaceEffectMaterialInstance(UMaterialInterface* Material);
 	void ApplyCardDepthParameters(UMaterialInstanceDynamic& Material) const;
+	void ApplyCardUseEffectParameters(
+		UMaterialInstanceDynamic& Material,
+		const FWacomFirstPersonCardUseEffectView& View) const;
 	void ApplyPlayedDissolveParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardPlayedDissolveView& View) const;

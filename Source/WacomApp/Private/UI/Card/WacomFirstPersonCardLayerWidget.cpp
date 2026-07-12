@@ -406,6 +406,17 @@ void UWacomFirstPersonCardLayerWidget::SetCardDragFeedbackTarget(
 			continue;
 		}
 		const FGuid CardId = SlotWidget->GetSlotView().Entry.CardInstanceId;
+		if (CardId.IsValid() && CardId == CurrentDragView.CardInstanceId)
+		{
+			// The Layer owns target resolution, but ReleaseGesture executes on the
+			// source Slot. Keep the source's release snapshot in sync so a valid
+			// target cannot be lost during synchronous HUD refresh/re-entry.
+			SlotWidget->SetCardDragFeedbackTarget(
+				TargetHandle,
+				bValidTarget,
+				FeedbackState,
+				FeedbackTargetScreenPosition);
+		}
 		const FWacomFirstPersonCardTargetAffordance* Affordance = AffordanceByCardId.Find(CardId);
 		if (Affordance)
 		{
@@ -814,6 +825,12 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 				SlotWidget->TriggerRetainedFeedback(
 					IncomingFeedbackHint->SequenceIndex,
 					IncomingFeedbackHint->SequenceCount);
+				AppliedFeedbackHintKeys.Add(SlotKey);
+			}
+			else if (IncomingFeedbackHint->FeedbackKind
+				== EWacomFirstPersonCardLayerFeedbackKind::CardUseReform)
+			{
+				SlotWidget->TriggerCardUseReformFeedback();
 				AppliedFeedbackHintKeys.Add(SlotKey);
 			}
 		}
@@ -2191,6 +2208,7 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		Profile.EasePower = SlotMotionConfig.ExitMotionProfile.EasePower;
 		break;
 	case EWacomFirstPersonCardSlotTransitionKind::Discarded:
+	case EWacomFirstPersonCardSlotTransitionKind::Exhausted:
 		Profile.OriginMode = SlotMotionConfig.DiscardedExitOriginMode;
 		Profile.OffsetPixels = SlotMotionConfig.DiscardedExitOffsetPixels;
 		Profile.ViewportAnchor = SlotMotionConfig.DiscardedExitViewportAnchor;
@@ -2225,7 +2243,8 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 			return Profile;
 		}
 	}
-	else if (TransitionHint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Discarded)
+	else if (TransitionHint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Discarded
+		|| TransitionHint.TransitionKind == EWacomFirstPersonCardSlotTransitionKind::Exhausted)
 	{
 		const FWacomFirstPersonCardPresentationAnchorPoint& DiscardPileAnchor =
 			PresentationAnchors.Get(EWacomFirstPersonCardPresentationAnchorKind::DiscardPile);

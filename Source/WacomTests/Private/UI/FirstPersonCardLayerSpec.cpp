@@ -5713,7 +5713,7 @@ bool FWacomFirstPersonCardLayerCardDiscardedHintAssignmentTest::RunTest(const FS
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerCardExhaustedHintAssignmentTest,
-	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.CardExhaustedEventAssignsDiscardedExitHint",
+	"Wacom.UI.FirstPersonCardLayer.EventAwareTransitions.CardExhaustedEventAssignsExhaustedExitHint",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerCardExhaustedHintAssignmentTest::RunTest(const FString& Parameters)
@@ -5739,8 +5739,8 @@ bool FWacomFirstPersonCardLayerCardExhaustedHintAssignmentTest::RunTest(const FS
 	TestNotNull(TEXT("CardExhausted hint exists"), Hint);
 	if (Hint)
 	{
-		TestEqual(TEXT("CardExhausted maps to discarded transition"),
-			Hint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+		TestEqual(TEXT("CardExhausted maps to exhausted transition"),
+			Hint->TransitionKind, EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 	}
 	return true;
 }

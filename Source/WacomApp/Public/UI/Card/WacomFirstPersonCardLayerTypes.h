@@ -10,6 +10,7 @@
 #include "WacomFirstPersonCardLayerTypes.generated.h"
 
 class USoundBase;
+class UMaterialInstance;
 class UTexture2D;
 
 UENUM(BlueprintType)
@@ -46,7 +47,8 @@ enum class EWacomFirstPersonCardSlotTransitionKind : uint8
 	Gained = 3 UMETA(DisplayName = "Gained", ToolTip = "战斗中获得卡牌进入手牌；使用独立的获得牌入场运动。"),
 	HandAnchorEntered = 4 UMETA(DisplayName = "Hand Anchor Entered", ToolTip = "左/右手牌生成入手；由 UI 表现层在普通抽牌后触发，不属于普通抽牌事件。"),
 	Played = 5 UMETA(DisplayName = "Played", ToolTip = "卡牌被打出离开手牌；默认向上离开。"),
-	Discarded = 6 UMETA(DisplayName = "Discarded", ToolTip = "卡牌被弃置离开手牌；默认向下离开。")
+	Discarded = 6 UMETA(DisplayName = "Discarded", ToolTip = "卡牌被弃置离开手牌；默认向下离开。"),
+	Exhausted = 7 UMETA(DisplayName = "Exhausted", ToolTip = "卡牌实际进入消耗区；使用独立消耗 Surface Effect，失效时按弃牌方向离场。")
 };
 
 UENUM(BlueprintType)
@@ -119,7 +121,8 @@ UENUM(BlueprintType)
 enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
 {
 	None UMETA(DisplayName = "None"),
-	Retained UMETA(DisplayName = "Retained")
+	Retained UMETA(DisplayName = "Retained"),
+	CardUseReform UMETA(DisplayName = "Card Use Reform")
 };
 
 USTRUCT(BlueprintType)
@@ -286,6 +289,103 @@ struct WACOMAPP_API FWacomFirstPersonCardSelectionView
 };
 
 UENUM(BlueprintType)
+enum class EWacomFirstPersonCardUseEffectKind : uint8
+{
+	DiamondWave UMETA(DisplayName = "Diamond Wave", ToolTip = "旧版中心向外菱形波放电消失；保留为可回退预设。"),
+	EdgeFlip UMETA(DisplayName = "Pixel Edge Flip", ToolTip = "卡牌单面横向压缩成发光像素边后收起；打出后仍在手牌时会在目标槽位反向翻回。")
+};
+
+/** Playback semantics for a normal Played card-use surface effect. Visual tuning lives in the referenced material instance. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardUseEffectStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (ToolTip = "普通使用卡牌采用的表现算法；Diamond Wave 保留旧菱形波，Pixel Edge Flip 使用单面 90 度像素翻面收牌。"))
+	EWacomFirstPersonCardUseEffectKind EffectKind = EWacomFirstPersonCardUseEffectKind::EdgeFlip;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (ToolTip = "普通使用卡牌离场时临时绑定到唯一 Retainer 的材质实例；视觉颜色、菱形密度和波宽直接在材质实例中调整，必须保留 Texture 参数合同。"))
+	TObjectPtr<UMaterialInstance> SurfaceEffectMaterialInstance = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (Units = "s", ToolTip = "普通使用效果总时长，单位为秒；默认 0.36，推荐 0.28 到 0.46，不影响规则结算。"))
+	float DurationSeconds = 0.36f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (Units = "s", ToolTip = "卡牌提交后保持完整卡面的中心充能时间，单位为秒；默认 0.04，推荐 0.02 到 0.07，包含在总时长内。"))
+	float ConfirmHoldSeconds = 0.04f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", Units = "s", ToolTip = "像素翻面开始时闪边脉冲的持续时间，单位为秒；默认 0.05，推荐 0.035 到 0.08，只影响一次性视觉冲击。"))
+	float EdgeFlipImpactSeconds = 0.05f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", ToolTip = "翻面确认阶段额外上提距离，单位为 UMG 逻辑像素；默认 12，推荐 8 到 18，不改变布局和命中区域。"))
+	float EdgeFlipLiftPixels = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", ToolTip = "翻面确认阶段额外缩放倍率；默认 1.04，推荐 1.02 到 1.07，不改变命中区域。"))
+	float EdgeFlipScaleMultiplier = 1.04f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", ToolTip = "卡牌压缩到侧边时保留的最小横向比例；默认 0.06，推荐 0.035 到 0.10。必须大于零，避免 RenderTransform 奇异。"))
+	float EdgeFlipMinimumHorizontalScale = 0.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip|Return To Hand", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", Units = "s", ToolTip = "成功使用后仍留在手牌的卡牌，从提交姿态压缩到发光侧边的时间；默认 0.22 秒，推荐 0.16 到 0.28。"))
+	float EdgeFlipReformOutSeconds = 0.22f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip|Return To Hand", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", Units = "s", ToolTip = "卡牌成为侧边后、在目标槽位反向展开前的隐藏换位停顿；默认 0.06 秒，推荐 0.03 到 0.10。"))
+	float EdgeFlipReformHiddenHoldSeconds = 0.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip|Return To Hand", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", Units = "s", ToolTip = "卡牌在最新手牌槽位从侧边反向展开到完整卡面的时间；默认 0.18 秒，推荐 0.14 到 0.24。"))
+	float EdgeFlipReformInSeconds = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Edge Flip|Return To Hand", meta = (EditCondition = "EffectKind == EWacomFirstPersonCardUseEffectKind::EdgeFlip", Units = "s", ToolTip = "反向展开后轻微落定的时间；默认 0.04 秒，推荐 0.02 到 0.07。"))
+	float EdgeFlipReformSettleSeconds = 0.04f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Return To Hand", meta = (Units = "s", ToolTip = "成功使用后仍留在手牌的卡牌，从提交位置完全消失所需时间；默认 0.28 秒，推荐 0.22 到 0.34，不改变规则和手牌布局。"))
+	float ReformDissolveOutSeconds = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Return To Hand", meta = (Units = "s", ToolTip = "卡牌完全透明后、在目标手牌槽位重新生成前的停顿；默认 0.08 秒，推荐 0.04 到 0.12，换位发生在此阶段且玩家不可见。"))
+	float ReformHiddenHoldSeconds = 0.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect|Return To Hand", meta = (Units = "s", ToolTip = "卡牌在最新手牌槽位由外圈和四角向中心重新生成的时间；默认 0.24 秒，推荐 0.18 到 0.30，不影响命中区域。"))
+	float ReformBuildInSeconds = 0.24f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (ToolTip = "普通使用菱形波开始时立即播放的一次性 UI 2D 音效；留空表示静音。"))
+	TObjectPtr<USoundBase> StartSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (ToolTip = "普通使用音效音量倍率；1 为资产原始音量，推荐 0.5 到 1.2。"))
+	float StartSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (ToolTip = "普通使用音效基础音高倍率；1 为资产原始音高，推荐 0.85 到 1.15。"))
+	float StartSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Use Effect", meta = (ToolTip = "每次播放在基础音高附近的随机比例；0.03 表示约正负 3%。"))
+	float StartSoundPitchVariation = 0.03f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardUseEffectConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Card Use Effect")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Card Use Effect")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Card Use Effect")
+	FWacomFirstPersonCardUseEffectStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardUseEffectView
+{
+	bool bActive = false;
+	bool bReducedMotion = false;
+	float Amount = 0.0f;
+	float FlipProgress = 0.0f;
+	float ImpactProgress = 0.0f;
+	float TimeSeconds = 0.0f;
+	FWacomFirstPersonCardUseEffectStyleData Style;
+};
+
+UENUM(BlueprintType)
 enum class EWacomFirstPersonCardPlayedDissolveEffectKind : uint8
 {
 	PixelAsh UMETA(DisplayName = "Pixel Ash", ToolTip = "现有斜向上升像素灰烬消散。"),
@@ -426,6 +526,7 @@ struct WACOMAPP_API FWacomFirstPersonCardPlayedDissolveView
 struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 {
 	FWacomFirstPersonCardSelectionView Selection;
+	FWacomFirstPersonCardUseEffectView CardUse;
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolve;
 };
 
@@ -1129,6 +1230,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardSelectionConfig Selection;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardUseEffectConfig CardUseEffect;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardPlayedDissolveConfig PlayedDissolve;

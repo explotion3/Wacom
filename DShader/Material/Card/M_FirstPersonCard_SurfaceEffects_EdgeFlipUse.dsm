@@ -1,0 +1,108 @@
+import "Shared/WacomFirstPersonCardSurface.dsh";
+import "Shared/WacomFirstPersonCardUseEdgeFlip.dsh";
+
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_EdgeFlipUse")
+{
+    Properties = {
+        TextureSampleParameter2D Texture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="第一人称卡牌使用效果|Retainer"; SortPriority=0; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+
+        ScalarParameter TiltX = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=10; ];
+        ScalarParameter TiltY = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=11; ];
+        ScalarParameter PerspectiveStrength = 0.12 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=12; ];
+        ScalarParameter ContactShadowEnabled = 1.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=13; ];
+        ScalarParameter ContactShadowLift = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=14; ];
+        ScalarParameter CardUseEnabled = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=20; ];
+        ScalarParameter CardUseProgress = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=21; ];
+        ScalarParameter CardUseFlipProgress = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=22; ];
+        ScalarParameter CardUseImpactProgress = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=23; ];
+        ScalarParameter CardUseTime = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=24; ];
+        ScalarParameter CardUseReducedMotion = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=25; ];
+        VectorParameter SurfaceInvSize = float4(0.00277778, 0.00206612, 0.0, 0.0) [ Group="第一人称卡牌使用效果|运行时"; SortPriority=26; ];
+
+        VectorParameter UseImpactPrimaryColor = float4(1.0, 0.86, 0.56, 1.0) [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=30; ];
+        VectorParameter UseImpactAccentColor = float4(0.34, 0.63, 1.0, 1.0) [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=31; ];
+        ScalarParameter UsePixelBlockSize = 3.0 [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=32; ];
+        ScalarParameter UseImpactIntensity = 0.90 [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=33; ];
+        ScalarParameter UseEdgeGlowIntensity = 1.35 [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=34; ];
+        ScalarParameter UseAfterimageOpacity = 0.20 [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=35; ];
+        ScalarParameter UseAfterimageOffsetPixels = 7.0 [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=36; ];
+        ScalarParameter UseShadowFadeSeconds = 0.10 [ Group="第一人称卡牌使用效果|材质实例"; SortPriority=37; ];
+
+        ScalarParameter ReferenceTiltDegrees = 9.0 [ Group="第一人称卡牌使用效果|投影制作"; SortPriority=50; ];
+        ScalarParameter ForeshortenStrength = 0.025 [ Group="第一人称卡牌使用效果|投影制作"; SortPriority=51; ];
+        ScalarParameter EdgeFadeUV = 0.0025 [ Group="第一人称卡牌使用效果|投影制作"; SortPriority=52; ];
+        VectorParameter ContactShadowColor = float4(0.008, 0.006, 0.004, 1.0) [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=60; ];
+        ScalarParameter ContactShadowBaseOffsetXUV = 0.0 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=61; ];
+        ScalarParameter ContactShadowBaseOffsetYUV = 0.0039 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=62; ];
+        ScalarParameter ContactShadowLiftOffsetXUV = 0.0 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=63; ];
+        ScalarParameter ContactShadowLiftOffsetYUV = 0.0100 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=64; ];
+        ScalarParameter ContactShadowBaseSoftnessUV = 0.0025 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=65; ];
+        ScalarParameter ContactShadowLiftSoftnessUV = 0.0065 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=66; ];
+        ScalarParameter ContactShadowBaseOpacity = 0.22 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=67; ];
+        ScalarParameter ContactShadowLiftOpacity = 0.09 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=68; ];
+        ScalarParameter ContactShadowAlphaThreshold = 0.18 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=69; ];
+        ScalarParameter ContactShadowAlphaFeather = 0.12 [ Group="第一人称卡牌使用效果|阴影制作"; SortPriority=70; ];
+    }
+
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "PremultipliedAlpha"; TwoSided = true; }
+    Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 projectedUVAndMask;
+        WacomFirstPersonCard_ProjectSurface(uv, TiltX, TiltY, PerspectiveStrength, ReferenceTiltDegrees, ForeshortenStrength, EdgeFadeUV, projectedUVAndMask);
+        float2 projectedUV = UE.Expression(Class="ComponentMask", OutputType="float2", Input=projectedUVAndMask, R=true, G=true, B=false, A=false);
+        float insideMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=projectedUVAndMask, R=false, G=false, B=true, A=false);
+        float4 surface = Texture(Coordinates=projectedUV);
+        float3 surfaceColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=surface, R=true, G=true, B=true, A=false);
+        float surfaceAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=surface, R=false, G=false, B=false, A=true);
+        float2 surfaceInvSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=SurfaceInvSize, R=true, G=true, B=false, A=false);
+
+        float cardVisibility;
+        float pixelImpactMask;
+        float edgeGlowMask;
+        WacomFirstPersonCard_ComputeUseEdgeFlip(projectedUV, surfaceInvSize, CardUseProgress, CardUseFlipProgress, CardUseImpactProgress, CardUseReducedMotion, UsePixelBlockSize, cardVisibility, pixelImpactMask, edgeGlowMask);
+        float useEnabled = saturate(CardUseEnabled);
+        float visibleMask = lerp(1.0, cardVisibility, useEnabled);
+        float cardAlpha = surfaceAlpha * insideMask * visibleMask;
+        float3 cardColor = surfaceColor * insideMask * visibleMask;
+
+        float3 primaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=UseImpactPrimaryColor, R=true, G=true, B=true, A=false);
+        float3 accentColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=UseImpactAccentColor, R=true, G=true, B=true, A=false);
+        float3 flashColor = lerp(primaryColor, accentColor, saturate(CardUseFlipProgress));
+        float flashMask = saturate(pixelImpactMask * UseImpactIntensity + edgeGlowMask * UseEdgeGlowIntensity) * surfaceAlpha * insideMask * useEnabled;
+
+        float2 afterimageUV = projectedUV + float2(UseAfterimageOffsetPixels * surfaceInvSize.x, 0.0);
+        float4 afterimageSurface = Texture(Coordinates=afterimageUV);
+        float afterimageAlphaSample = UE.Expression(Class="ComponentMask", OutputType="float1", Input=afterimageSurface, R=false, G=false, B=false, A=true);
+        float afterimageAlpha = afterimageAlphaSample * (1.0 - surfaceAlpha) * pixelImpactMask * max(UseAfterimageOpacity, 0.0) * insideMask * useEnabled;
+
+        float safeLift = clamp(ContactShadowLift, 0.0, 1.0);
+        float2 shadowOffset = float2(lerp(ContactShadowBaseOffsetXUV, ContactShadowLiftOffsetXUV, safeLift), lerp(ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetYUV, safeLift));
+        float shadowSoftness = lerp(ContactShadowBaseSoftnessUV, ContactShadowLiftSoftnessUV, safeLift);
+        float2 shadowUV = projectedUV - shadowOffset;
+        float2 sx = float2(shadowSoftness, 0.0);
+        float2 sy = float2(0.0, shadowSoftness);
+        float4 c0 = Texture(Coordinates=shadowUV); float4 c1 = Texture(Coordinates=shadowUV-sx); float4 c2 = Texture(Coordinates=shadowUV+sx);
+        float4 c3 = Texture(Coordinates=shadowUV-sy); float4 c4 = Texture(Coordinates=shadowUV+sy); float4 c5 = Texture(Coordinates=shadowUV-sx-sy);
+        float4 c6 = Texture(Coordinates=shadowUV+sx-sy); float4 c7 = Texture(Coordinates=shadowUV-sx+sy); float4 c8 = Texture(Coordinates=shadowUV+sx+sy);
+        float a0 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c0, R=false,G=false,B=false,A=true);
+        float a1 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c1, R=false,G=false,B=false,A=true);
+        float a2 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c2, R=false,G=false,B=false,A=true);
+        float a3 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c3, R=false,G=false,B=false,A=true);
+        float a4 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c4, R=false,G=false,B=false,A=true);
+        float a5 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c5, R=false,G=false,B=false,A=true);
+        float a6 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c6, R=false,G=false,B=false,A=true);
+        float a7 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c7, R=false,G=false,B=false,A=true);
+        float a8 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c8, R=false,G=false,B=false,A=true);
+        float shadowMask;
+        WacomFirstPersonCard_CombineContactShadowAlpha(a0,a1,a2,a3,a4,a5,a6,a7,a8,ContactShadowAlphaThreshold,ContactShadowAlphaFeather,shadowMask);
+        float3 shadowColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ContactShadowColor, R=true,G=true,B=true,A=false);
+        float shadowOpacity = lerp(ContactShadowBaseOpacity, ContactShadowLiftOpacity, safeLift);
+        float useShadowFade = lerp(1.0, (1.0-saturate(CardUseTime/max(UseShadowFadeSeconds,0.001))) * (1.0-saturate(CardUseFlipProgress)), useEnabled);
+        float shadowAlpha = shadowMask * shadowOpacity * clamp(ContactShadowEnabled,0.0,1.0) * insideMask * (1.0-cardAlpha) * useShadowFade;
+
+        Color = cardColor + flashColor * flashMask + accentColor * afterimageAlpha + shadowColor * shadowAlpha;
+        Alpha = saturate(cardAlpha + flashMask + afterimageAlpha + shadowAlpha);
+    }
+}

@@ -68,6 +68,7 @@ namespace
 		case EBattleEventType::HandLimitDiscarded:        return TEXT("HandLimitDiscarded");
 		case EBattleEventType::CardDiscarded:             return TEXT("CardDiscarded");
 		case EBattleEventType::CardExhausted:             return TEXT("CardExhausted");
+		case EBattleEventType::CardPlayDestinationResolved: return TEXT("CardPlayDestinationResolved");
 		case EBattleEventType::CardGained:                return TEXT("CardGained");
 		case EBattleEventType::CardsRetained:             return TEXT("CardsRetained");
 		case EBattleEventType::BattleEnded:               return TEXT("BattleEnded");
@@ -1324,6 +1325,13 @@ FWacomBattleHUDRuntime::BuildFirstPersonCardTransitionHintsForRefreshForTest(
 	const FBattleSnapshot& NextSnapshot) const
 {
 	return GetFirstPersonHandBridge().BuildTransitionHintsForRefresh(NextSnapshot);
+}
+
+TArray<FWacomFirstPersonCardLayerFeedbackHint>
+FWacomBattleHUDRuntime::BuildFirstPersonCardFeedbackHintsForTest(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return GetFirstPersonHandBridge().BuildFeedbackHints(NextSnapshot);
 }
 
 void FWacomBattleHUDRuntime::SetFirstPersonCardTransitionSnapshotForTest(

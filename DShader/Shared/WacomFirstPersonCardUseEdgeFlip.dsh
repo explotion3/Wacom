@@ -1,0 +1,23 @@
+Function SelfContained WacomFirstPersonCard_ComputeUseEdgeFlip(
+    in float2 surfaceUV,
+    in float2 surfaceInvSize,
+    in float useProgress,
+    in float flipProgress,
+    in float impactProgress,
+    in float reducedMotion,
+    in float pixelBlockSize,
+    out float cardVisibility,
+    out float pixelImpactMask,
+    out float edgeGlowMask)
+{
+    float safeFlip = saturate(flipProgress);
+    float useReducedMotion = step(0.5, reducedMotion);
+    float2 safeInvSize = max(surfaceInvSize, float2(0.000001, 0.000001));
+    float2 pixelCoordinate = floor(surfaceUV / safeInvSize / max(pixelBlockSize, 1.0));
+    float checker = frac((pixelCoordinate.x + pixelCoordinate.y) * 0.5) * 2.0;
+    float pixelWeight = lerp(0.58, 1.0, checker);
+
+    cardVisibility = lerp(1.0, 1.0 - saturate(useProgress), useReducedMotion);
+    pixelImpactMask = saturate(impactProgress) * pixelWeight * (1.0 - useReducedMotion);
+    edgeGlowMask = smoothstep(0.58, 0.98, safeFlip) * (1.0 - useReducedMotion);
+}

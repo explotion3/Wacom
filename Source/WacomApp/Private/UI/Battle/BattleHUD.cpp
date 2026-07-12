@@ -1002,6 +1002,12 @@ TArray<FWacomFirstPersonCardLayerTransitionHint> UBattleHUD::BuildFirstPersonCar
 	return GetBattleHUDRuntime().BuildFirstPersonCardTransitionHintsForRefreshForTest(NextSnapshot);
 }
 
+TArray<FWacomFirstPersonCardLayerFeedbackHint> UBattleHUD::BuildFirstPersonCardFeedbackHintsForTest(
+	const FBattleSnapshot& NextSnapshot) const
+{
+	return GetBattleHUDRuntime().BuildFirstPersonCardFeedbackHintsForTest(NextSnapshot);
+}
+
 void UBattleHUD::SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot)
 {
 	GetBattleHUDRuntime().SetFirstPersonCardTransitionSnapshotForTest(Snapshot);

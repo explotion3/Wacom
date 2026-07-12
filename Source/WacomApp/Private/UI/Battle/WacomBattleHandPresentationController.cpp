@@ -175,6 +175,7 @@ void FWacomBattleHandPresentationController::StoreTransitionEvents(const TArray<
 		case EBattleEventType::CardsDrawn:
 		case EBattleEventType::CardGained:
 		case EBattleEventType::CardPlayed:
+		case EBattleEventType::CardPlayDestinationResolved:
 		case EBattleEventType::HandLimitDiscarded:
 		case EBattleEventType::CardDiscarded:
 		case EBattleEventType::CardExhausted:
@@ -352,6 +353,16 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 		}
 	}
 
+	TMap<FGuid, ECardLocation> ResolvedPlayedDestinations;
+	for (const FBattleEvent& Event : PendingTransitionEvents)
+	{
+		if (Event.Type == EBattleEventType::CardPlayDestinationResolved
+			&& Event.CardInstanceId.IsValid())
+		{
+			ResolvedPlayedDestinations.Add(Event.CardInstanceId, Event.CardDestination);
+		}
+	}
+
 	auto FindCommitHint = [this](const FGuid& CardInstanceId) -> const FPlayCommitHint*
 	{
 		return PendingPlayCommitHints.FindByPredicate(
@@ -412,16 +423,28 @@ FWacomBattleHandPresentationController::BuildTransitionHints(
 		case EBattleEventType::CardPlayed:
 			if (RemovedCardIds.Contains(Event.CardInstanceId))
 			{
-				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Played);
+				const ECardLocation* Destination =
+					ResolvedPlayedDestinations.Find(Event.CardInstanceId);
+				AddHint(
+					Event.CardInstanceId,
+					Destination && *Destination == ECardLocation::Exhaust
+						? EWacomFirstPersonCardSlotTransitionKind::Exhausted
+						: EWacomFirstPersonCardSlotTransitionKind::Played);
 				RemovedCardIds.Remove(Event.CardInstanceId);
 			}
 			break;
 		case EBattleEventType::HandLimitDiscarded:
 		case EBattleEventType::CardDiscarded:
-		case EBattleEventType::CardExhausted:
 			if (RemovedCardIds.Contains(Event.CardInstanceId))
 			{
 				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Discarded);
+				RemovedCardIds.Remove(Event.CardInstanceId);
+			}
+			break;
+		case EBattleEventType::CardExhausted:
+			if (RemovedCardIds.Contains(Event.CardInstanceId))
+			{
+				AddHint(Event.CardInstanceId, EWacomFirstPersonCardSlotTransitionKind::Exhausted);
 				RemovedCardIds.Remove(Event.CardInstanceId);
 			}
 			break;
@@ -519,6 +542,34 @@ TArray<FWacomFirstPersonCardLayerFeedbackHint>
 FWacomBattleHandPresentationController::BuildFeedbackHints(
 	const FBattleSnapshot& NextSnapshot) const
 {
+	TArray<FGuid> CardUseReformIds;
+	TSet<FGuid> SeenCardUseReformIds;
+	for (const FBattleEvent& Event : PendingTransitionEvents)
+	{
+		if (Event.Type != EBattleEventType::CardPlayed
+			|| !Event.CardInstanceId.IsValid()
+			|| SeenCardUseReformIds.Contains(Event.CardInstanceId)
+			|| !ContainsNormalHandCardIdForBattleHandPresentation(
+				NextSnapshot,
+				Event.CardInstanceId))
+		{
+			continue;
+		}
+
+		const bool bHasAcceptedPlayCommit = PendingPlayCommitHints.ContainsByPredicate(
+			[&Event](const FPlayCommitHint& CommitHint)
+			{
+				return CommitHint.CardInstanceId == Event.CardInstanceId;
+			});
+		if (!bHasAcceptedPlayCommit)
+		{
+			continue;
+		}
+
+		SeenCardUseReformIds.Add(Event.CardInstanceId);
+		CardUseReformIds.Add(Event.CardInstanceId);
+	}
+
 	TArray<FGuid> RetainedCardIds;
 	TSet<FGuid> SeenRetainedCardIds;
 	for (const FBattleEvent& Event : PendingTransitionEvents)
@@ -530,6 +581,7 @@ FWacomBattleHandPresentationController::BuildFeedbackHints(
 		for (const FGuid& CardInstanceId : Event.CardInstanceIds)
 		{
 			if (!CardInstanceId.IsValid()
+				|| SeenCardUseReformIds.Contains(CardInstanceId)
 				|| SeenRetainedCardIds.Contains(CardInstanceId)
 				|| !ContainsNormalHandCardIdForBattleHandPresentation(NextSnapshot, CardInstanceId))
 			{
@@ -540,6 +592,13 @@ FWacomBattleHandPresentationController::BuildFeedbackHints(
 		}
 	}
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
+	for (const FGuid& CardInstanceId : CardUseReformIds)
+	{
+		FWacomFirstPersonCardLayerFeedbackHint Hint;
+		Hint.CardInstanceId = CardInstanceId;
+		Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::CardUseReform;
+		Hints.Add(Hint);
+	}
 	for (int32 Index = 0; Index < RetainedCardIds.Num(); ++Index)
 	{
 		FWacomFirstPersonCardLayerFeedbackHint Hint;
