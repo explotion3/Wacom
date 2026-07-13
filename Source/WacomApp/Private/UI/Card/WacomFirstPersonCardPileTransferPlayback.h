@@ -9,7 +9,8 @@ enum class EWacomFirstPersonCardPileTransferShapeKind : uint8
 {
 	MainGlyph = 0,
 	Trail = 1,
-	Mote = 2
+	Mote = 2,
+	Impact = 3
 };
 
 struct FWacomFirstPersonCardPileTransferGlyphView
@@ -31,9 +32,20 @@ public:
 	bool Start(
 		const FWacomFirstPersonCardPileTransferHint& Hint,
 		const FWacomFirstPersonCardPileTransferConfig& Config,
-		const FVector2D& SourcePosition,
+		const TArray<FVector2D>& SourcePositions,
 		const FVector2D& TargetPosition,
 		const FVector2D& ViewportSize);
+	bool Start(
+		const FWacomFirstPersonCardPileTransferHint& Hint,
+		const FWacomFirstPersonCardPileTransferConfig& Config,
+		const FVector2D& SourcePosition,
+		const FVector2D& TargetPosition,
+		const FVector2D& InViewportSize)
+	{
+		TArray<FVector2D> SourcePositions;
+		SourcePositions.Init(SourcePosition, Hint.CardInstanceIds.Num());
+		return Start(Hint, Config, SourcePositions, TargetPosition, InViewportSize);
+	}
 
 	FWacomFirstPersonCardPileTransferProgressView Tick(float DeltaSeconds);
 	FWacomFirstPersonCardPileTransferProgressView ForceComplete();
@@ -49,6 +61,7 @@ public:
 	const FWacomFirstPersonCardPileTransferStyleData& GetStyle() const { return Style; }
 	int32 GetTotalCount() const { return CardInstanceIds.Num(); }
 	float GetCompletionPulse() const { return CompletionPulse; }
+	FWacomFirstPersonCardPileTransferHint::ETransferKind GetTransferKind() const { return TransferKind; }
 	bool ConsumeStartSoundRequest();
 	bool ConsumeTravelSoundRequest();
 	bool ConsumeCompleteSoundRequest();
@@ -58,7 +71,7 @@ private:
 	TArray<FWacomFirstPersonCardPileTransferGlyphView> Glyphs;
 	TArray<FWacomFirstPersonCardPileTransferGlyphView> AuxiliaryShapes;
 	FWacomFirstPersonCardPileTransferStyleData Style;
-	FVector2D Source = FVector2D::ZeroVector;
+	TArray<FVector2D> Sources;
 	FVector2D Target = FVector2D::ZeroVector;
 	FVector2D ViewportSize = FVector2D::ZeroVector;
 	float ElapsedSeconds = 0.0f;
@@ -66,9 +79,12 @@ private:
 	float TotalSeconds = 0.0f;
 	float CompletionPulse = 0.0f;
 	uint32 BaseSeed = 0;
+	int32 LaunchedCount = 0;
 	int32 ArrivedCount = 0;
 	int32 DetailReferenceActiveGlyphCount = 1;
 	int32 EventSequence = INDEX_NONE;
+	FWacomFirstPersonCardPileTransferHint::ETransferKind TransferKind =
+		FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
 	bool bActive = false;
 	bool bReducedMotion = false;
 	bool bStartSoundRequested = false;
@@ -76,12 +92,14 @@ private:
 	bool bCompleteSoundRequested = false;
 
 	uint32 MakeGlyphSeed(int32 Index) const;
+	const FVector2D& GetSource(int32 Index) const;
 	bool EvaluateGlyphAtTime(
 		int32 Index,
 		float SampleTimeSeconds,
 		FWacomFirstPersonCardPileTransferGlyphView& OutGlyph,
 		FVector2D* OutTangent = nullptr) const;
 	FVector2D MakeLaneControlPoint(int32 Index) const;
+	FVector2D MakeInitialLaunchDirection(int32 Index) const;
 	FVector2D ClampToSafeViewport(const FVector2D& Position, const FVector2D& HalfSize) const;
 	void BuildAuxiliaryShapes();
 	void UpdateGlyphs();

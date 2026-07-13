@@ -238,6 +238,10 @@ void FWacomBattleHUDFirstPersonHandBridge::ClearLayer(bool bClearPendingTransiti
 	{
 		ClearPendingTransitionEvents();
 		PresentationController.Reset();
+		Runtime.ResetDrawPileFeedback(
+			Runtime.HasLastBattleSnapshot()
+				? Runtime.GetLastBattleSnapshot().PileCounts.DrawCount
+				: INDEX_NONE);
 	}
 	PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;
 }
@@ -1149,6 +1153,7 @@ void FWacomBattleHUDFirstPersonHandBridge::ApplyPresentationFrame(
 {
 	Frame.SourceId = FirstPersonBattleHandLayerSourceId;
 	ApplyPendingTargetingFlag(Frame.Entries);
+	Runtime.PrepareDrawPileFeedbackForPresentationFrame(Frame.TransitionHints);
 	if (Frame.CommitMode == EWacomFirstPersonCardLayerFrameCommitMode::StateRefresh
 		&& Frame.ShouldApplyAsPresentationFrame())
 	{
@@ -1458,6 +1463,12 @@ void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 	}
 
 	PresentationController.RecordPlayCommit(CardInstanceId, TargetWidgetPosition);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::RecordHandTargetImpact(
+	const FGuid& TargetCardInstanceId)
+{
+	PresentationController.RecordHandTargetImpact(TargetCardInstanceId);
 }
 
 TArray<FWacomFirstPersonCardLayerTransitionHint> FWacomBattleHUDFirstPersonHandBridge::BuildTransitionHints(

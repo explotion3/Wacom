@@ -295,6 +295,23 @@ public:
 		StoreFirstPersonCardTransitionEvents(Events);
 	}
 
+	void PrepareDrawPileFeedbackForTest(
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+	{
+		PrepareDrawPileFeedbackForAutomationTest(TransitionHints);
+	}
+
+	void DispatchEnterTransitionStartedForTest(
+		const FWacomFirstPersonCardEnterTransitionStartedView& View)
+	{
+		DispatchEnterTransitionStartedForAutomationTest(View);
+	}
+
+	void ResetDrawPileFeedbackForTest(int32 AuthoritativeDrawPileCount)
+	{
+		ResetDrawPileFeedbackForAutomationTest(AuthoritativeDrawPileCount);
+	}
+
 	void RecordFirstPersonPlayCommitForTest(
 		const FGuid& CardInstanceId,
 		const FBattlePartSlotIdentity& TargetPartKey = FBattlePartSlotIdentity(),
@@ -526,13 +543,15 @@ public:
 		const FWacomBattleCombatLogCommandContext& LogContext,
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleResolution& Resolution,
-		UBattleSession* SourceSession = nullptr)
+		UBattleSession* SourceSession = nullptr,
+		const FGuid& PlayCommitCardInstanceId = FGuid())
 	{
 		ApplyCommandResolutionForAutomationTest(
 			SourceSession ? SourceSession : GetInjectedBattleSession(),
 			LogContext,
 			PreCommandSnapshot,
-			Resolution);
+			Resolution,
+			PlayCommitCardInstanceId);
 	}
 
 	bool HasLastBattleHandCardForTest(const FGuid& CardInstanceId) const
@@ -698,6 +717,19 @@ public:
 			PostCommandSnapshot);
 	}
 
+	bool EnqueueCommandPresentationPlanForTest(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot)
+	{
+		return UBattleHUD::EnqueueCommandPresentationPlanForTest(
+			Journal,
+			Events,
+			PreCommandSnapshot,
+			PostCommandSnapshot);
+	}
+
 	void ClearBattlePresentationQueueForTest()
 	{
 		ClearBattlePresentationQueue();
@@ -711,6 +743,42 @@ public:
 	void AdvanceBattlePresentationQueueForTest()
 	{
 		AdvanceBattlePresentationQueueOnce();
+	}
+
+	void PrimeDiscardPileReceiveFeedbackForTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDiscardCount)
+	{
+		PrimeDiscardPileReceiveFeedbackForAutomationTest(
+			EventSequence,
+			TotalCount,
+			InitialDiscardCount);
+	}
+
+	void PrimeReshufflePileFeedbackForTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDrawCount,
+		int32 FinalDrawCount,
+		int32 InitialDiscardCount,
+		int32 FinalDiscardCount,
+		int32 PlayedCount)
+	{
+		PrimeReshufflePileFeedbackForAutomationTest(
+			EventSequence,
+			TotalCount,
+			InitialDrawCount,
+			FinalDrawCount,
+			InitialDiscardCount,
+			FinalDiscardCount,
+			PlayedCount);
+	}
+
+	void HandlePileTransferProgressForTest(
+		const FWacomFirstPersonCardPileTransferProgressView& Progress)
+	{
+		HandleFirstPersonCardLayerPileTransferProgress(Progress);
 	}
 
 	void PlayBattlePresentationCueForTest(

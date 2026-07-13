@@ -14,6 +14,7 @@ class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardDragPickupPlayback;
+class FWacomFirstPersonCardHandTargetImpactPlayback;
 class FWacomFirstPersonCardSurfaceDeparturePlayback;
 class FWacomFirstPersonCardUseReformPlayback;
 class FWacomFirstPersonCardTransitionPlayback;
@@ -39,6 +40,11 @@ struct FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter
 	void operator()(FWacomFirstPersonCardSurfaceDeparturePlayback* Playback) const;
 };
 
+struct FWacomFirstPersonCardHandTargetImpactPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardHandTargetImpactPlayback* Playback) const;
+};
+
 struct FWacomFirstPersonCardUseReformPlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardUseReformPlayback* Playback) const;
@@ -47,6 +53,9 @@ struct FWacomFirstPersonCardUseReformPlaybackDeleter
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FWacomFirstPersonCardLayerSlotEnterTransitionStartedNative,
+	const FWacomFirstPersonCardEnterTransitionStartedView&);
 
 enum class EWacomFirstPersonCardGestureInputSource : uint8
 {
@@ -93,6 +102,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	FWacomFirstPersonCardSelectionView SelectionView;
 	FWacomFirstPersonCardUseEffectView CardUseEffectView;
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolveView;
+	FWacomFirstPersonCardHandTargetImpactView HandTargetImpactView;
 	FWidgetTransform RenderTransform;
 	int32 RenderZOrder = 0;
 	bool bDragPickupFeedbackActive = false;
@@ -104,6 +114,10 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bCardUseEffectPlaybackActive = false;
 	bool bCardUseReformPlaybackActive = false;
 	bool bCardUseReformUsingTargetSlot = false;
+	bool bHandTargetImpactCommitActive = false;
+	bool bHandTargetDeparturePending = false;
+	bool bHandTargetDepartureGateOpen = false;
+	int32 HandTargetImpactZOrderBoost = 0;
 	int32 CardUseEffectSoundRequestCount = 0;
 	int32 CardUseReformSoundRequestCount = 0;
 	float LastCardUseEffectSoundPitchMultiplier = 1.0f;
@@ -174,6 +188,15 @@ public:
 	void TriggerCommitFeedback();
 	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
 	void TriggerCardUseReformFeedback();
+	void TriggerHandTargetImpactFeedback();
+	void BeginDeferredExitWithHandTargetImpact(
+		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
+		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride,
+		EWacomFirstPersonCardSlotTransitionKind TransitionKind);
+	bool IsHandTargetImpactDeparturePending() const { return bHandTargetImpactDeparturePending; }
+	bool IsHandTargetImpactDepartureGateOpen() const;
+	void SetHandTargetImpactDepartureOwnedByPileTransfer(bool bOwned);
+	void ReleaseDeferredHandTargetExitNow();
 	bool HasActivePresentationPlayback() const;
 	void ForceCompletePresentationPlayback();
 	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
@@ -263,6 +286,7 @@ public:
 	FWacomFirstPersonCardLayerSlotDragNative OnCardDragUpdatedNative;
 	FWacomFirstPersonCardLayerSlotDragNative OnCardDragReleasedNative;
 	FWacomFirstPersonCardLayerSlotDragNative OnCardDragCancelledNative;
+	FWacomFirstPersonCardLayerSlotEnterTransitionStartedNative OnEnterTransitionStartedNative;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -325,6 +349,19 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardUseReformPlayback,
 		FWacomFirstPersonCardUseReformPlaybackDeleter> CardUseReformPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardHandTargetImpactPlayback,
+		FWacomFirstPersonCardHandTargetImpactPlaybackDeleter> HandTargetImpactPlayback;
+	FWacomFirstPersonCardLayerSlotView DeferredHandTargetExitSlotView;
+	TOptional<FWacomFirstPersonCardTransitionMotionProfile> DeferredHandTargetExitProfile;
+	EWacomFirstPersonCardSlotTransitionKind DeferredHandTargetExitTransitionKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
+	float HandTargetImpactScaleMultiplier = 1.0f;
+	float HandTargetImpactTranslationYPixels = 0.0f;
+	int32 HandTargetImpactZOrderBoost = 0;
+	bool bHandTargetImpactDeparturePending = false;
+	bool bHandTargetImpactDepartureOwnedByPileTransfer = false;
+	bool bHandTargetImpactDepartureGateReleased = false;
 	FWacomFirstPersonCardLayerSlotView CardUseReformStartSlotView;
 	float CardUseFlipProgress = 0.0f;
 	float CardUseImpactProgress = 0.0f;
@@ -471,6 +508,15 @@ private:
 	void PlayPendingDragPickupSound();
 	float GetDragPickupAlpha() const;
 	void ResetCardSurfaceEffectView();
+	bool CanPlayHandTargetImpact() const;
+	void BeginHandTargetImpactPreview();
+	void EndHandTargetImpactPreview();
+	void TickHandTargetImpactPlayback(float DeltaTime);
+	void ClearHandTargetImpactPlayback();
+	void ApplyHandTargetImpactSurfaceView();
+	void PlayPendingHandTargetImpactSound();
+	bool IsHandTargetImpactPlaybackActive() const;
+	bool IsHandTargetImpactCommitPlaybackActive() const;
 	bool CanPlayCardUseEffect() const;
 	bool CanPlayCardUseReformEffect() const;
 	bool CanPlayExhaustDissolve() const;
@@ -505,6 +551,7 @@ private:
 		const FWacomFirstPersonCardTransitionMotionProfile& EnterProfile);
 	void ClearEnterTransitionPlayback();
 	bool TickEnterTransitionPlayback(float DeltaTime);
+	void BroadcastPendingEnterTransitionStarted();
 	void PlayPendingTransitionStartSound();
 	bool IsEnterTransitionPlaybackActive() const;
 	bool IsEnterTransitionBlockingInteraction() const;
@@ -515,4 +562,6 @@ private:
 	void ClearExitTransitionPlayback();
 	bool TickExitTransitionPlayback(float DeltaTime);
 	bool IsExitTransitionPlaybackActive() const;
+
+	FVector2D EnterTransitionStartWidgetPosition = FVector2D::ZeroVector;
 };

@@ -126,6 +126,13 @@ bool FWacomBattleRandomDiscardBatchTransitionSpec::RunTest(const FString& /*Para
 
 		TSet<FGuid> PublishedCardIds;
 		TArray<FName> PublishedDefinitionIds;
+		TArray<FGuid> PublishedBatchOrder;
+		if (DiscardEvents.Num() == 2)
+		{
+			PublishedBatchOrder = {
+				DiscardEvents[0]->CardInstanceId,
+				DiscardEvents[1]->CardInstanceId };
+		}
 		for (const FBattleEvent* DiscardEvent : DiscardEvents)
 		{
 			TestTrue(TEXT("CardDiscarded identifies a moved card"), DiscardEvent->CardInstanceId.IsValid());
@@ -135,6 +142,15 @@ bool FWacomBattleRandomDiscardBatchTransitionSpec::RunTest(const FString& /*Para
 			TestTrue(TEXT("Discard event keeps the effect tag"), DiscardEvent->Tag == WacomTags::Effect_Discard);
 			TestTrue(TEXT("CardDiscarded precedes the batch HandZoneChanged"),
 				DiscardEvent->Sequence < HandZoneEvent.Sequence);
+			TestEqual(TEXT("Discard event batch sequence identifies the first canonical event"),
+				DiscardEvent->HandCardZoneMoveBatchSequence,
+				DiscardEvents.IsEmpty() ? INDEX_NONE : DiscardEvents[0]->Sequence);
+			TestEqual(TEXT("Discard event carries the completed discard pile count"),
+				DiscardEvent->DiscardPileCountAfter,
+				After.PileCounts.DiscardCount);
+			TestEqual(TEXT("Discard event carries the complete ordered batch"),
+				DiscardEvent->CardInstanceIds,
+				PublishedBatchOrder);
 			PublishedCardIds.Add(DiscardEvent->CardInstanceId);
 			PublishedDefinitionIds.Add(FindInitialCardId(Before, DiscardEvent->CardInstanceId));
 		}

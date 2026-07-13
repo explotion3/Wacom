@@ -22,6 +22,9 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerDragNative, const
 DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerPointerNative, const FWacomFirstPersonCardPointerView&);
 DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerPointerExitNative);
 DECLARE_MULTICAST_DELEGATE_OneParam(
+	FWacomFirstPersonCardLayerEnterTransitionStartedNative,
+	const FWacomFirstPersonCardEnterTransitionStartedView&);
+DECLARE_MULTICAST_DELEGATE_OneParam(
 	FWacomFirstPersonCardLayerPileTransferProgressNative,
 	const FWacomFirstPersonCardPileTransferProgressView&);
 
@@ -217,6 +220,7 @@ public:
 	FWacomFirstPersonCardLayerDragNative OnCardDragCancelledNative;
 	FWacomFirstPersonCardLayerPointerNative OnCardPointerMovedNative;
 	FWacomFirstPersonCardLayerPointerExitNative OnCardPointerLeftNative;
+	FWacomFirstPersonCardLayerEnterTransitionStartedNative OnEnterTransitionStartedNative;
 	FWacomFirstPersonCardLayerPileTransferProgressNative OnPileTransferProgressNative;
 
 protected:
@@ -269,7 +273,8 @@ private:
 	FString CurrentDragResolvedIntentDebugSummary;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedFeedbackHint> PendingFeedbackHintsByKey;
-	TSet<int32> PlayedPileTransferSequences;
+	TSet<uint64> PlayedPileTransferKeys;
+	TArray<FWacomFirstPersonCardPileTransferHint> DeferredPileTransferHints;
 	bool bCardLayerInteractionEnabled = false;
 	bool bLogSlotMotionDiagnostics = false;
 #if WITH_AUTOMATION_TESTS
@@ -310,6 +315,7 @@ private:
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	void ApplyLayerVisibility();
 	void EnsurePileTransferWidget();
+	void ProcessDeferredPileTransferHints();
 	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void ReleaseOwnedSlateMouseCapture();
 	void BindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget);
@@ -358,6 +364,8 @@ private:
 	void HandleSlotDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleSlotEnterTransitionStarted(
+		const FWacomFirstPersonCardEnterTransitionStartedView& View);
 	bool RoutePointerPressToActiveGesture(const FVector2D& WidgetPosition);
 	bool HandleSlotPointerEntered(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);
 	void HandleSlotPointerLeft(UWacomFirstPersonCardLayerSlotWidget& SourceSlot, const FVector2D& ScreenPosition);

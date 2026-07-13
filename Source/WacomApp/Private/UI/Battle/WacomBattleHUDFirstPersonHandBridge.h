@@ -80,6 +80,7 @@ public:
 		const FGuid& CardInstanceId,
 		const FBattlePartSlotIdentity& TargetPartKey,
 		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
+	void RecordHandTargetImpact(const FGuid& TargetCardInstanceId);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;

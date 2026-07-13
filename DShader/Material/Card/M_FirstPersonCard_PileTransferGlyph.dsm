@@ -108,6 +108,21 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
             SortPriority=210;
             Description="飘散像素出生阶段的额外亮度；默认 0.55，推荐 0 到 1.2。";
         ];
+        VectorParameter ImpactPrimaryColor = float4(0.58, 0.80, 1.0, 1.0) [
+            Group="第一人称牌堆迁移|接收方印";
+            SortPriority=220;
+            Description="普通弃牌抵达弃牌堆时的像素方印主色。";
+        ];
+        VectorParameter ImpactAccentColor = float4(0.96, 0.82, 0.42, 1.0) [
+            Group="第一人称牌堆迁移|接收方印";
+            SortPriority=230;
+            Description="同批最后一枚牌印抵达时使用的强调色。";
+        ];
+        ScalarParameter ImpactGlowStrength = 0.85 [
+            Group="第一人称牌堆迁移|接收方印";
+            SortPriority=240;
+            Description="弃牌堆接收方印的额外亮度；默认 0.85，推荐 0 到 1.6。";
+        ];
     }
 
     Settings = {
@@ -151,6 +166,9 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
             MotePrimaryColor,
             MoteAccentColor,
             MoteGlowStrength,
+            ImpactPrimaryColor,
+            ImpactAccentColor,
+            ImpactGlowStrength,
             Color,
             Alpha);
     }

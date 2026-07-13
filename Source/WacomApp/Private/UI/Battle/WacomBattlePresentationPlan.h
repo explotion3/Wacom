@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "UI/Battle/WacomBattleDrawPileFeedbackController.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 enum class EWacomBattlePresentationPhaseKind : uint8
@@ -16,6 +17,7 @@ enum class EWacomBattlePresentationPhaseKind : uint8
 	TurnStartDraw,
 	TurnStartHandAnchorEnter,
 	CommandHandResolution,
+	HandDiscardGlyphTransfer,
 	DeckReshuffle
 };
 
@@ -30,6 +32,10 @@ struct FWacomBattlePresentationPhase
 	TArray<FWacomFirstPersonCardPileTransferHint> PileTransferHints;
 	int32 PileTransferInitialDrawCount = 0;
 	int32 PileTransferInitialDiscardCount = 0;
+	int32 PileTransferFinalDrawCount = 0;
+	int32 PileTransferFinalDiscardCount = 0;
+	int32 PileTransferPlayedCount = 0;
+	TOptional<FWacomBattleDrawPileFeedbackBatch> DrawPileFeedbackBatch;
 
 	bool HasHandFrame() const
 	{
@@ -38,6 +44,7 @@ struct FWacomBattlePresentationPhase
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartDraw
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter
 			|| Kind == EWacomBattlePresentationPhaseKind::CommandHandResolution
+			|| Kind == EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer
 			|| Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle;
 	}
 

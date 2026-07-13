@@ -594,7 +594,8 @@ void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
 	LastSlots.Reset();
 	PendingTransitionHintsByKey.Reset();
 	PendingFeedbackHintsByKey.Reset();
-	PlayedPileTransferSequences.Reset();
+	PlayedPileTransferKeys.Reset();
+	DeferredPileTransferHints.Reset();
 	if (PileTransferWidget)
 	{
 		PileTransferWidget->ResetPlayback();
@@ -627,39 +628,153 @@ void UWacomFirstPersonCardLayerWidget::SetPileTransferHints(
 	EnsurePileTransferWidget();
 	if (!PileTransferWidget)
 	{
+		for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& OutgoingSlot : OutgoingSlotWidgets)
+		{
+			if (OutgoingSlot && OutgoingSlot->IsHandTargetImpactDeparturePending())
+			{
+				OutgoingSlot->ReleaseDeferredHandTargetExitNow();
+			}
+		}
 		return;
 	}
 
 	for (const FWacomFirstPersonCardPileTransferHint& Hint : InHints)
 	{
+		const uint64 PlaybackKey = (static_cast<uint64>(Hint.TransferKind) << 32)
+			| static_cast<uint32>(Hint.EventSequence);
 		if (Hint.EventSequence == INDEX_NONE
 			|| Hint.CardInstanceIds.IsEmpty()
-			|| PlayedPileTransferSequences.Contains(Hint.EventSequence))
+			|| PlayedPileTransferKeys.Contains(PlaybackKey))
 		{
 			continue;
 		}
-		PlayedPileTransferSequences.Add(Hint.EventSequence);
-		if (PileTransferWidget->IsPlaybackActive())
-		{
-			PileTransferWidget->ForceComplete();
-		}
+		PlayedPileTransferKeys.Add(PlaybackKey);
 
-		const FWacomFirstPersonCardPresentationAnchorPoint& SourceAnchor =
-			PresentationAnchors.Get(Hint.SourceAnchorKind);
 		const FWacomFirstPersonCardPresentationAnchorPoint& TargetAnchor =
 			PresentationAnchors.Get(Hint.TargetAnchorKind);
-		if (!IsValidPresentationAnchorPoint(SourceAnchor)
-			|| !IsValidPresentationAnchorPoint(TargetAnchor)
-			|| !PileTransferWidget->Play(Hint, SourceAnchor.WidgetPosition, TargetAnchor.WidgetPosition))
+		TArray<FVector2D> SourcePositions;
+		SourcePositions.Reserve(Hint.CardInstanceIds.Num());
+		TArray<UWacomFirstPersonCardLayerSlotWidget*> DiscardSlots;
+		const bool bDiscardToPile = Hint.TransferKind
+			== FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile;
+		bool bCanPlay = IsValidPresentationAnchorPoint(TargetAnchor)
+			&& (!bDiscardToPile || PileTransferConfig.bDiscardToPileEnabled);
+		if (bDiscardToPile)
 		{
+			for (const FGuid& CardInstanceId : Hint.CardInstanceIds)
+			{
+				UWacomFirstPersonCardLayerSlotWidget* FoundSlot = nullptr;
+				for (const TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& OutgoingSlot : OutgoingSlotWidgets)
+				{
+					if (OutgoingSlot && OutgoingSlot->GetSlotView().Entry.CardInstanceId == CardInstanceId)
+					{
+						FoundSlot = OutgoingSlot.Get();
+						break;
+					}
+				}
+				if (!FoundSlot)
+				{
+					bCanPlay = false;
+					break;
+				}
+				DiscardSlots.Add(FoundSlot);
+				SourcePositions.Add(FoundSlot->GetVisualSlotView().ScreenPosition);
+			}
+		}
+		else if (bCanPlay)
+		{
+			const FWacomFirstPersonCardPresentationAnchorPoint& SourceAnchor =
+				PresentationAnchors.Get(Hint.SourceAnchorKind);
+			bCanPlay = IsValidPresentationAnchorPoint(SourceAnchor);
+			if (bCanPlay)
+			{
+				SourcePositions.Init(SourceAnchor.WidgetPosition, Hint.CardInstanceIds.Num());
+			}
+		}
+
+		bool bWaitingForHandTargetGate = false;
+		if (bCanPlay && bDiscardToPile)
+		{
+			for (UWacomFirstPersonCardLayerSlotWidget* DiscardSlot : DiscardSlots)
+			{
+				if (DiscardSlot && DiscardSlot->IsHandTargetImpactDeparturePending())
+				{
+					DiscardSlot->SetHandTargetImpactDepartureOwnedByPileTransfer(true);
+					bWaitingForHandTargetGate = bWaitingForHandTargetGate
+						|| !DiscardSlot->IsHandTargetImpactDepartureGateOpen();
+				}
+			}
+		}
+		if (bWaitingForHandTargetGate)
+		{
+			DeferredPileTransferHints.Add(Hint);
+			continue;
+		}
+
+		if (bCanPlay && bDiscardToPile)
+		{
+			for (UWacomFirstPersonCardLayerSlotWidget* DiscardSlot : DiscardSlots)
+			{
+				DiscardSlot->SetHandTargetImpactDepartureOwnedByPileTransfer(false);
+				const FWacomFirstPersonCardLayerSlotView& Visual = DiscardSlot->GetVisualSlotView();
+				const FVector2D CardBodySize = DiscardSlot->GetCardBodyHitSizeForFirstPersonLayer();
+				FWacomFirstPersonCardTransitionMotionProfile CollapseProfile;
+				CollapseProfile.ScaleMultiplier = PileTransferConfig.bReducedMotion
+					? 1.0f
+					: PileTransferConfig.Style.GlyphSize.Y / FMath::Max(1.0f, CardBodySize.Y);
+				CollapseProfile.AngleOffsetDegrees = -Visual.RenderAngleDegrees;
+				CollapseProfile.DurationSeconds = PileTransferConfig.bReducedMotion
+					? 0.10f
+					: PileTransferConfig.Style.DiscardCollapseSeconds;
+				CollapseProfile.EasePower = 2.4f;
+				DiscardSlot->BeginExitMotionWithProfile(
+					DiscardSlot->GetSlotView(),
+					CollapseProfile,
+					EWacomFirstPersonCardSlotTransitionKind::Discarded);
+			}
+		}
+
+		if (!bCanPlay
+			|| !PileTransferWidget->Play(Hint, SourcePositions, TargetAnchor.WidgetPosition))
+		{
+			for (UWacomFirstPersonCardLayerSlotWidget* DiscardSlot : DiscardSlots)
+			{
+				if (DiscardSlot)
+				{
+					DiscardSlot->SetHandTargetImpactDepartureOwnedByPileTransfer(false);
+					DiscardSlot->ReleaseDeferredHandTargetExitNow();
+				}
+			}
 			FWacomFirstPersonCardPileTransferProgressView Progress;
 			Progress.EventSequence = Hint.EventSequence;
+			Progress.TransferKind = Hint.TransferKind;
 			Progress.ArrivedCount = Hint.CardInstanceIds.Num();
 			Progress.TotalCount = Hint.CardInstanceIds.Num();
 			Progress.bCompleted = true;
+			Progress.bReducedMotion = PileTransferConfig.bReducedMotion;
+			Progress.bWasForceCompleted = true;
 			HandlePileTransferProgress(Progress);
 		}
 	}
+}
+
+void UWacomFirstPersonCardLayerWidget::ProcessDeferredPileTransferHints()
+{
+	if (DeferredPileTransferHints.IsEmpty())
+	{
+		return;
+	}
+
+	TArray<FWacomFirstPersonCardPileTransferHint> RetryHints =
+		MoveTemp(DeferredPileTransferHints);
+	DeferredPileTransferHints.Reset();
+	for (const FWacomFirstPersonCardPileTransferHint& Hint : RetryHints)
+	{
+		const uint64 PlaybackKey = (static_cast<uint64>(Hint.TransferKind) << 32)
+			| static_cast<uint32>(Hint.EventSequence);
+		PlayedPileTransferKeys.Remove(PlaybackKey);
+	}
+	SetPileTransferHints(RetryHints);
 }
 
 void UWacomFirstPersonCardLayerWidget::SetCardTransitionHints(
@@ -891,6 +1006,12 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 				SlotWidget->TriggerCardUseReformFeedback();
 				AppliedFeedbackHintKeys.Add(SlotKey);
 			}
+			else if (IncomingFeedbackHint->FeedbackKind
+				== EWacomFirstPersonCardLayerFeedbackKind::HandTargetImpact)
+			{
+				SlotWidget->TriggerHandTargetImpactFeedback();
+				AppliedFeedbackHintKeys.Add(SlotKey);
+			}
 		}
 
 		if (SlotView.bIsHovered && SlotView.bProjected && SlotView.Entry.CardInstanceId.IsValid())
@@ -921,12 +1042,27 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 			const FString OutgoingSlotKey = SlotWidget->GetSlotMotionKey();
 			const FWacomFirstPersonCardLayerResolvedTransitionHint OutgoingTransitionHint =
 				PendingTransitionHintsByKey.FindRef(OutgoingSlotKey);
+			const FWacomFirstPersonCardLayerResolvedFeedbackHint* OutgoingFeedbackHint =
+				PendingFeedbackHintsByKey.Find(OutgoingSlotKey);
 			const TOptional<FWacomFirstPersonCardTransitionMotionProfile> ExitProfileOverride =
 				GetExitProfileForTransition(OutgoingTransitionHint, SlotWidget->GetVisualSlotView());
-			SlotWidget->BeginExitMotionWithProfile(
-				SlotWidget->GetSlotView(),
-				ExitProfileOverride,
-				OutgoingTransitionHint.TransitionKind);
+			if (OutgoingFeedbackHint
+				&& OutgoingFeedbackHint->FeedbackKind
+					== EWacomFirstPersonCardLayerFeedbackKind::HandTargetImpact)
+			{
+				SlotWidget->BeginDeferredExitWithHandTargetImpact(
+					SlotWidget->GetSlotView(),
+					ExitProfileOverride,
+					OutgoingTransitionHint.TransitionKind);
+				AppliedFeedbackHintKeys.Add(OutgoingSlotKey);
+			}
+			else
+			{
+				SlotWidget->BeginExitMotionWithProfile(
+					SlotWidget->GetSlotView(),
+					ExitProfileOverride,
+					OutgoingTransitionHint.TransitionKind);
+			}
 			if (ExitProfileOverride.IsSet() || OutgoingTransitionHint.bPlayCommitFeedback)
 			{
 				AppliedTransitionHintKeys.Add(OutgoingSlotKey);
@@ -1055,6 +1191,7 @@ void UWacomFirstPersonCardLayerWidget::ForceSettlePresentationPlayback()
 {
 	PendingTransitionHintsByKey.Reset();
 	PendingFeedbackHintsByKey.Reset();
+	DeferredPileTransferHints.Reset();
 	if (PileTransferWidget)
 	{
 		PileTransferWidget->ForceComplete();
@@ -1498,6 +1635,7 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	OnCardTargetHoveredNative.Clear();
 	OnCardTargetUnhoveredNative.Clear();
 	OnHoveredCardTargetUpdatedNative.Clear();
+	OnEnterTransitionStartedNative.Clear();
 	OnPileTransferProgressNative.Clear();
 	if (PileTransferWidget)
 	{
@@ -1515,7 +1653,8 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	RootCanvas = nullptr;
 	PileTransferWidget = nullptr;
 	PendingTransitionHintsByKey.Reset();
-	PlayedPileTransferSequences.Reset();
+	PlayedPileTransferKeys.Reset();
+	DeferredPileTransferHints.Reset();
 	Super::NativeDestruct();
 }
 
@@ -1524,6 +1663,7 @@ void UWacomFirstPersonCardLayerWidget::NativeTick(
 	float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	ProcessDeferredPileTransferHints();
 	if (PileTransferWidget)
 	{
 		PileTransferWidget->TickPlayback(InDeltaTime);
@@ -1764,6 +1904,7 @@ void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayer
 	SlotWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	SlotWidget->OnCardDragReleasedNative.RemoveAll(this);
 	SlotWidget->OnCardDragCancelledNative.RemoveAll(this);
+	SlotWidget->OnEnterTransitionStartedNative.RemoveAll(this);
 	SlotWidget->SetOwningFirstPersonCardLayer(this);
 	SlotWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotHovered);
 	SlotWidget->OnCardUnhoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotUnhovered);
@@ -1780,6 +1921,9 @@ void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayer
 	SlotWidget->OnCardDragUpdatedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragUpdated);
 	SlotWidget->OnCardDragReleasedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased);
 	SlotWidget->OnCardDragCancelledNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragCancelled);
+	SlotWidget->OnEnterTransitionStartedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardLayerWidget::HandleSlotEnterTransitionStarted);
 }
 
 void UWacomFirstPersonCardLayerWidget::UnbindSlotWidget(UWacomFirstPersonCardLayerSlotWidget* SlotWidget)
@@ -1802,6 +1946,7 @@ void UWacomFirstPersonCardLayerWidget::UnbindSlotWidget(UWacomFirstPersonCardLay
 	SlotWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	SlotWidget->OnCardDragReleasedNative.RemoveAll(this);
 	SlotWidget->OnCardDragCancelledNative.RemoveAll(this);
+	SlotWidget->OnEnterTransitionStartedNative.RemoveAll(this);
 	SlotWidget->SetOwningFirstPersonCardLayer(nullptr);
 }
 
@@ -2232,7 +2377,7 @@ TOptional<FWacomFirstPersonCardTransitionMotionProfile> UWacomFirstPersonCardLay
 		return TOptional<FWacomFirstPersonCardTransitionMotionProfile>();
 	}
 
-	Profile.SoundTransitionKind = TransitionHint.TransitionKind;
+	Profile.TransitionKind = TransitionHint.TransitionKind;
 	if (SlotMotionConfig.bEnableEnterSounds)
 	{
 		switch (TransitionHint.TransitionKind)
@@ -3292,6 +3437,12 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragCancelled(
 		}
 	}
 	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UWacomFirstPersonCardLayerWidget::HandleSlotEnterTransitionStarted(
+	const FWacomFirstPersonCardEnterTransitionStartedView& View)
+{
+	OnEnterTransitionStartedNative.Broadcast(View);
 }
 
 bool UWacomFirstPersonCardLayerWidget::TryResolveCardTargetUnderDragPointer(

@@ -150,8 +150,10 @@ void FWacomBattleHandPresentationController::Reset()
 	LastTransitionSnapshot = FBattleSnapshot();
 	PendingTransitionEvents.Reset();
 	PendingPlayCommitHints.Reset();
+	PendingHandTargetImpactIds.Reset();
 	SubmittedTransitionEvents.Reset();
 	SubmittedPlayCommitHints.Reset();
+	SubmittedHandTargetImpactIds.Reset();
 	ClearPendingHandAnchorEnterFrame();
 	bHasLastPresentedSnapshot = false;
 	bHasTransitionSnapshot = false;
@@ -162,6 +164,7 @@ void FWacomBattleHandPresentationController::ClearPendingTransitionEvents()
 {
 	PendingTransitionEvents.Reset();
 	PendingPlayCommitHints.Reset();
+	PendingHandTargetImpactIds.Reset();
 	ClearPendingHandAnchorEnterFrame();
 	bUseEmptyHandSnapshotForNextTransitionRefresh = false;
 }
@@ -203,10 +206,20 @@ void FWacomBattleHandPresentationController::RecordPlayCommit(
 	PendingPlayCommitHints.Add(CommitHint);
 }
 
+void FWacomBattleHandPresentationController::RecordHandTargetImpact(
+	const FGuid& TargetCardInstanceId)
+{
+	if (TargetCardInstanceId.IsValid())
+	{
+		PendingHandTargetImpactIds.AddUnique(TargetCardInstanceId);
+	}
+}
+
 bool FWacomBattleHandPresentationController::HasPendingTransitionPresentation() const
 {
 	return !PendingTransitionEvents.IsEmpty()
-		|| !PendingPlayCommitHints.IsEmpty();
+		|| !PendingPlayCommitHints.IsEmpty()
+		|| !PendingHandTargetImpactIds.IsEmpty();
 }
 
 void FWacomBattleHandPresentationController::PreservePendingEntryRevealForNextRefresh()
@@ -219,6 +232,7 @@ void FWacomBattleHandPresentationController::DiscardSubmittedTransitionFrame()
 {
 	SubmittedTransitionEvents.Reset();
 	SubmittedPlayCommitHints.Reset();
+	SubmittedHandTargetImpactIds.Reset();
 }
 
 bool FWacomBattleHandPresentationController::HasPendingHandAnchorEnterFrame() const
@@ -293,6 +307,7 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 		MarkSnapshotPresented(FrameSnapshot);
 		PendingTransitionEvents.Reset();
 		PendingPlayCommitHints.Reset();
+		PendingHandTargetImpactIds.Reset();
 		bUseEmptyHandSnapshotForNextTransitionRefresh = false;
 		return Frame;
 	}
@@ -592,6 +607,17 @@ FWacomBattleHandPresentationController::BuildFeedbackHints(
 		}
 	}
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
+	for (const FGuid& CardInstanceId : PendingHandTargetImpactIds)
+	{
+		if (!CardInstanceId.IsValid())
+		{
+			continue;
+		}
+		FWacomFirstPersonCardLayerFeedbackHint Hint;
+		Hint.CardInstanceId = CardInstanceId;
+		Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::HandTargetImpact;
+		Hints.Add(Hint);
+	}
 	for (const FGuid& CardInstanceId : CardUseReformIds)
 	{
 		FWacomFirstPersonCardLayerFeedbackHint Hint;
@@ -665,6 +691,7 @@ void FWacomBattleHandPresentationController::RecordSubmittedTransitionFrame()
 {
 	SubmittedTransitionEvents = PendingTransitionEvents;
 	SubmittedPlayCommitHints = PendingPlayCommitHints;
+	SubmittedHandTargetImpactIds = PendingHandTargetImpactIds;
 }
 
 void FWacomBattleHandPresentationController::StorePendingHandAnchorEnterFrame(
@@ -702,5 +729,6 @@ void FWacomBattleHandPresentationController::RestoreSubmittedEntryRevealEventsIf
 	if (!PendingTransitionEvents.IsEmpty())
 	{
 		PendingPlayCommitHints = SubmittedPlayCommitHints;
+		PendingHandTargetImpactIds = SubmittedHandTargetImpactIds;
 	}
 }

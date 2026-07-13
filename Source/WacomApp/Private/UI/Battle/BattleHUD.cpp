@@ -312,6 +312,9 @@ void UBattleHUD::BindFirstPersonCardLayerInteractionsForRuntime(
 	Anchor.OnFirstPersonCardLayerPileTransferProgress.AddUObject(
 		this,
 		&UBattleHUD::HandleFirstPersonCardLayerPileTransferProgress);
+	Anchor.OnFirstPersonCardLayerEnterTransitionStarted.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerEnterTransitionStarted);
 }
 
 void UBattleHUD::UnbindFirstPersonCardLayerInteractionsForRuntime(
@@ -330,6 +333,7 @@ void UBattleHUD::UnbindFirstPersonCardLayerInteractionsForRuntime(
 	Anchor.OnFirstPersonCardLayerDragReleased.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerPileTransferProgress.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerEnterTransitionStarted.RemoveAll(this);
 }
 
 EBattleUIState UBattleHUD::GetUIState() const
@@ -920,6 +924,31 @@ void UBattleHUD::HandleFirstPersonCardLayerPileTransferProgress(
 	GetBattleHUDRuntime().HandleFirstPersonCardLayerPileTransferProgress(Progress);
 }
 
+void UBattleHUD::HandleFirstPersonCardLayerEnterTransitionStarted(
+	const FWacomFirstPersonCardEnterTransitionStartedView& View)
+{
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerEnterTransitionStarted(View);
+}
+
+#if WITH_AUTOMATION_TESTS
+void UBattleHUD::PrepareDrawPileFeedbackForAutomationTest(
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+{
+	GetBattleHUDRuntime().PrepareDrawPileFeedbackForPresentationFrame(TransitionHints);
+}
+
+void UBattleHUD::DispatchEnterTransitionStartedForAutomationTest(
+	const FWacomFirstPersonCardEnterTransitionStartedView& View)
+{
+	HandleFirstPersonCardLayerEnterTransitionStarted(View);
+}
+
+void UBattleHUD::ResetDrawPileFeedbackForAutomationTest(int32 AuthoritativeDrawPileCount)
+{
+	GetBattleHUDRuntime().ResetDrawPileFeedback(AuthoritativeDrawPileCount);
+}
+#endif
+
 void UBattleHUD::UpdateFirstPersonCardDragTargetFeedback(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
@@ -1001,6 +1030,49 @@ bool UBattleHUD::EnqueueEndTurnPresentationPlanForTest(
 	return GetBattleHUDRuntime().EnqueueEndTurnPresentationPlanForTest(Journal, Events, PostCommandSnapshot);
 }
 
+bool UBattleHUD::EnqueueCommandPresentationPlanForTest(
+	const FBattlePresentationJournal& Journal,
+	const TArray<FBattleEvent>& Events,
+	const FBattleSnapshot& PreCommandSnapshot,
+	const FBattleSnapshot& PostCommandSnapshot)
+{
+	return GetBattleHUDRuntime().EnqueueCommandPresentationPlanForTest(
+		Journal,
+		Events,
+		PreCommandSnapshot,
+		PostCommandSnapshot);
+}
+
+void UBattleHUD::PrimeDiscardPileReceiveFeedbackForAutomationTest(
+	int32 EventSequence,
+	int32 TotalCount,
+	int32 InitialDiscardCount)
+{
+	GetBattleHUDRuntime().PrimeDiscardPileReceiveFeedbackForTest(
+		EventSequence,
+		TotalCount,
+		InitialDiscardCount);
+}
+
+void UBattleHUD::PrimeReshufflePileFeedbackForAutomationTest(
+	int32 EventSequence,
+	int32 TotalCount,
+	int32 InitialDrawCount,
+	int32 FinalDrawCount,
+	int32 InitialDiscardCount,
+	int32 FinalDiscardCount,
+	int32 PlayedCount)
+{
+	GetBattleHUDRuntime().PrimeReshufflePileFeedbackForTest(
+		EventSequence,
+		TotalCount,
+		InitialDrawCount,
+		FinalDrawCount,
+		InitialDiscardCount,
+		FinalDiscardCount,
+		PlayedCount);
+}
+
 FWacomBattleHUDAutomationTestView UBattleHUD::GetAutomationTestViewForTest() const
 {
 	return GetBattleHUDRuntime().GetAutomationTestViewForTest();
@@ -1054,12 +1126,19 @@ void UBattleHUD::ApplyCommandResolutionForAutomationTest(
 	UBattleSession* SourceSession,
 	const FWacomBattleCombatLogCommandContext& LogContext,
 	const FBattleSnapshot& PreCommandSnapshot,
-	const FBattleResolution& Resolution)
+	const FBattleResolution& Resolution,
+	const FGuid& PlayCommitCardInstanceId)
 {
 	FWacomBattleCommandPresentationContext Context;
 	Context.SourceSession = SourceSession;
 	Context.CombatLogContext = LogContext;
 	Context.PreCommandSnapshot = PreCommandSnapshot;
+	if (PlayCommitCardInstanceId.IsValid())
+	{
+		FWacomBattlePlayCardCommitPresentation Commit;
+		Commit.CardInstanceId = PlayCommitCardInstanceId;
+		Context.PlayCardCommit = Commit;
+	}
 	GetBattleHUDRuntime().GetResultApplicator().ApplyCommandResolution(Context, Resolution);
 }
 #endif

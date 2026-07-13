@@ -54,12 +54,12 @@ bool FWacomFirstPersonCardLayerOwner::Update(
 	{
 		WidgetRef->SetCardFeedbackHints(Input.ConsumeFeedbackHints());
 	}
+	WidgetRef->SetCardSlots(Input.Slots);
 	if (Input.bCanConsumePileTransferHints && Input.ConsumePileTransferHints)
 	{
+		// Outgoing slots must exist before card-slot sourced glyph transfers resolve their origins.
 		WidgetRef->SetPileTransferHints(Input.ConsumePileTransferHints());
 	}
-
-	WidgetRef->SetCardSlots(Input.Slots);
 	return true;
 }
 

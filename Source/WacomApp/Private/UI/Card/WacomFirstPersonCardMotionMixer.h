@@ -13,6 +13,9 @@ struct FWacomFirstPersonCardLocalFeedbackMixInput
 	float DenyFeedbackElapsedSeconds = 0.0f;
 	float RetainedAlpha = 0.0f;
 	float DragPickupAlpha = 0.0f;
+	float HandTargetImpactScaleMultiplier = 1.0f;
+	float HandTargetImpactTranslationYPixels = 0.0f;
+	int32 HandTargetImpactZOrderBoost = 0;
 	bool bPressed = false;
 	bool bCommitFeedbackActive = false;
 };

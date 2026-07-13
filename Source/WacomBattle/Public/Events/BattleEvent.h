@@ -131,7 +131,7 @@ struct WACOMBATTLE_API FBattleEvent
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	FGuid CardInstanceId;
 
-	/** 批量卡牌事件涉及的运行时实例 ID。CardsDrawn / CardsRetained 按规则顺序记录真实普通手牌。 */
+	/** 批量卡牌事件涉及的运行时实例 ID。CardsDrawn / CardsRetained / CardDiscarded 按规则顺序记录真实普通手牌；CardDiscarded 的同批逐张事件共享完整批次列表。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	TArray<FGuid> CardInstanceIds;
 
@@ -160,7 +160,7 @@ struct WACOMBATTLE_API FBattleEvent
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	int32 DrawPileCountAfter = INDEX_NONE;
 
-	/** Deck step 完成后的弃牌堆数量；仅 CardsDrawn / DiscardPileReshuffledIntoDraw 使用。 */
+	/** Deck step 或正式弃牌批次完成后的弃牌堆数量；CardsDrawn / DiscardPileReshuffledIntoDraw / CardDiscarded 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	int32 DiscardPileCountAfter = INDEX_NONE;
 
@@ -171,6 +171,10 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 手牌卡移动来源，仅 CardDiscarded / CardExhausted 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	EHandCardZoneMoveReason HandCardZoneMoveReason = EHandCardZoneMoveReason::None;
+
+	/** 同一正式弃牌迁移批次的稳定首个 CardDiscarded Sequence；仅 CardDiscarded 使用，用于把逐张事件还原成一次有序表现。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	int32 HandCardZoneMoveBatchSequence = INDEX_NONE;
 
 	/** 打出的源卡最终所在区域，仅 CardPlayDestinationResolved 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

@@ -152,6 +152,15 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 			Commit.CardInstanceId,
 			Commit.TargetPartIdentity,
 			Commit.TargetWidgetPosition);
+		const FBattleCardTargetPreview& TargetPreview =
+			Context.CombatLogContext.CardTargetPreview;
+		if (TargetPreview.bHasPreview
+			&& TargetPreview.TargetKind == EWacomBattleCardPreviewTargetKind::HandCard
+			&& TargetPreview.TargetHandCardInstanceId.IsValid())
+		{
+			Runtime.RecordFirstPersonHandTargetImpact(
+				TargetPreview.TargetHandCardInstanceId);
+		}
 		Runtime.ClearPendingTargetingCardId();
 		Runtime.SetUIState(EBattleUIState::Idle);
 	}

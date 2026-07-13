@@ -64,6 +64,9 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
     in float4 motePrimaryColor,
     in float4 moteAccentColor,
     in float moteGlowStrength,
+    in float4 impactPrimaryColor,
+    in float4 impactAccentColor,
+    in float impactGlowStrength,
     out float3 visualColor,
     out float visualAlpha)
 {
@@ -84,7 +87,8 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
     float shapeKind = shapeData.x;
     float isMain = 1.0 - step(0.5, shapeKind);
     float isTrail = step(0.5, shapeKind) * (1.0 - step(1.5, shapeKind));
-    float isMote = step(1.5, shapeKind);
+    float isMote = step(1.5, shapeKind) * (1.0 - step(2.5, shapeKind));
+    float isImpact = step(2.5, shapeKind);
     float variant = step(1.5, shapeData.y);
     float shapeAge = saturate(shapeData.y - variant * 2.0);
 
@@ -131,8 +135,23 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
     float moteGlow = 1.0 + max(moteGlowStrength, 0.0) * (1.0 - shapeAge) * 0.35;
     float3 motePremultiplied = moteColor.rgb * moteGlow * moteAlpha;
 
+    float2 impactGrid = floor(saturate(uv) * float2(12.0, 12.0)) / 12.0;
+    float2 impactCentered = abs(impactGrid - float2(0.5, 0.5));
+    float impactDistance = max(impactCentered.x, impactCentered.y);
+    float impactOuter = 1.0 - step(0.48, impactDistance);
+    float impactInner = 1.0 - step(lerp(0.24, 0.42, shapeAge), impactDistance);
+    float impactRing = saturate(impactOuter - impactInner);
+    float4 impactColor = lerp(impactPrimaryColor, impactAccentColor, variant);
+    float impactAlpha = impactRing * impactColor.a;
+    float impactGlow = 1.0 + max(impactGlowStrength, 0.0) * (1.0 - shapeAge) * 0.5;
+    float3 impactPremultiplied = impactColor.rgb * impactGlow * impactAlpha;
+
     visualColor = glyphColor * isMain
         + trailPremultiplied * isTrail
-        + motePremultiplied * isMote;
-    visualAlpha = glyphAlpha * isMain + trailAlpha * isTrail + moteAlpha * isMote;
+        + motePremultiplied * isMote
+        + impactPremultiplied * isImpact;
+    visualAlpha = glyphAlpha * isMain
+        + trailAlpha * isTrail
+        + moteAlpha * isMote
+        + impactAlpha * isImpact;
 }

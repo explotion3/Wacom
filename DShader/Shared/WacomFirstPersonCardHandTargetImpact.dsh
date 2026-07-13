@@ -1,0 +1,60 @@
+Function SelfContained WacomFirstPersonCard_ComputeHandTargetImpact(
+    in float2 surfaceUV,
+    in float2 surfaceInvSize,
+    in float previewAmount,
+    in float commitProgress,
+    in float reducedMotion,
+    in float seed,
+    in float gridColumns,
+    in float lineWidth,
+    in float fragmentDensity,
+    out float primaryMask,
+    out float secondaryMask,
+    out float fragmentMask)
+{
+    float2 safeInvSize = max(surfaceInvSize, float2(0.000001, 0.000001));
+    float safeColumns = max(gridColumns, 4.0);
+    float aspect = safeInvSize.x / max(safeInvSize.y, 0.000001);
+    float2 gridSize = float2(safeColumns, max(4.0, safeColumns * aspect));
+    float2 quantizedUV = (floor(surfaceUV * gridSize) + float2(0.5, 0.5)) / gridSize;
+    float2 centered = quantizedUV - float2(0.5, 0.5);
+    float squareDistance = max(abs(centered.x), abs(centered.y));
+
+    float safeLine = max(lineWidth, 0.002);
+    float previewRadius = 0.115;
+    float previewRing = 1.0 - smoothstep(
+        safeLine,
+        safeLine * 1.65,
+        abs(squareDistance - previewRadius));
+    float cornerX = 1.0 - smoothstep(0.0, safeLine * 1.8, abs(abs(centered.x) - 0.31));
+    float cornerY = 1.0 - smoothstep(0.0, safeLine * 1.8, abs(abs(centered.y) - 0.39));
+    float cornerGate = step(0.22, abs(centered.x)) * step(0.30, abs(centered.y));
+    float cornerMarks = saturate(max(cornerX, cornerY) * cornerGate);
+    float previewMask = saturate(previewRing + cornerMarks * 0.72) * saturate(previewAmount);
+
+    float safeCommit = saturate(commitProgress);
+    float expansion = smoothstep(0.0, 0.52, safeCommit);
+    float commitRadius = lerp(0.035, 0.35, expansion);
+    float commitRing = 1.0 - smoothstep(
+        safeLine,
+        safeLine * 1.85,
+        abs(squareDistance - commitRadius));
+    float centerCore = 1.0 - smoothstep(0.0, safeLine * 2.6, squareDistance);
+    float commitFade = 1.0 - smoothstep(0.64, 1.0, safeCommit);
+    float commitMask = saturate(commitRing + centerCore * (1.0 - expansion)) * commitFade;
+
+    float2 pixelCoordinate = floor(surfaceUV / safeInvSize / 3.0);
+    float stableHash = frac(sin(dot(
+        pixelCoordinate + float2(seed * 19.31, seed * 7.17),
+        float2(12.9898, 78.233))) * 43758.5453);
+    float fragmentBand = smoothstep(0.12, 0.0, abs(squareDistance - commitRadius));
+    float fragmentLife = smoothstep(0.34, 0.58, safeCommit)
+        * (1.0 - smoothstep(0.76, 1.0, safeCommit));
+    float fragments = step(1.0 - saturate(fragmentDensity), stableHash)
+        * fragmentBand * fragmentLife;
+
+    float useReducedMotion = step(0.5, reducedMotion);
+    primaryMask = lerp(max(previewMask, commitMask), max(previewMask, safeCommit), useReducedMotion);
+    secondaryMask = lerp(commitRing * expansion * commitFade, safeCommit * (1.0 - safeCommit), useReducedMotion);
+    fragmentMask = fragments * (1.0 - useReducedMotion);
+}
