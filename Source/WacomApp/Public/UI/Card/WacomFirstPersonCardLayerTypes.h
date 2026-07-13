@@ -566,6 +566,36 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (ToolTip = "最大弧高，单位为 UMG 逻辑像素；默认 128，推荐 96 到 180。"))
 	float MaxArcHeightPixels = 128.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "是否启用牌印后方的多色像素抖动拖尾；关闭后只保留牌印主体与飘散粒子，不改变卡牌数量、路径或抵达计数。"))
+	bool bEnableTrail = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (Units = "s", ToolTip = "相邻拖尾段采样历史路径的时间间隔，单位为秒；默认 0.007，推荐 0.004 到 0.012。数值越大拖尾越长，不改变主体飞行时间。"))
+	float TrailSampleIntervalSeconds = 0.007f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "高细节档每枚活动牌印的拖尾段数；默认 7，推荐 5 到 10。运行时会受总拖尾四边形预算限制。"))
+	int32 HighDetailTrailSegmentsPerGlyph = 7;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "中细节档每枚活动牌印的拖尾段数；默认 5，推荐 3 到 7。"))
+	int32 MediumDetailTrailSegmentsPerGlyph = 5;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "低细节档每枚活动牌印的拖尾段数；默认 3，推荐 1 到 5。"))
+	int32 LowDetailTrailSegmentsPerGlyph = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾靠近牌印一端的宽度，单位为 UMG 逻辑像素；默认 3.5，推荐 2 到 6，不影响布局或命中。"))
+	float TrailHeadWidthPixels = 3.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾末端宽度，单位为 UMG 逻辑像素；默认 1，推荐 0.5 到 2。"))
+	float TrailTailWidthPixels = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾靠近牌印一端的透明度倍率；默认 0.44，推荐 0.2 到 0.7。"))
+	float TrailHeadOpacity = 0.44f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾末端的透明度倍率；默认 0.04，推荐 0 到 0.12。"))
+	float TrailTailOpacity = 0.04f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Performance", meta = (ToolTip = "单帧最多提交的拖尾四边形数量；默认 120，推荐 72 到 180。达到上限只减少装饰拖尾，不减少真实牌印、粒子或改变抵达计数。"))
+	int32 MaxTrailQuadCount = 120;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (Units = "s", ToolTip = "单枚飘散像素的存活时间，单位为秒；默认 0.24，推荐 0.16 到 0.32。只影响辅助粒子与尾部排空时间，不改变牌印数量或抵达计数。"))
 	float MoteLifetimeSeconds = 0.24f;
 

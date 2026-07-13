@@ -8,6 +8,7 @@
 enum class EWacomFirstPersonCardPileTransferShapeKind : uint8
 {
 	MainGlyph = 0,
+	Trail = 1,
 	Mote = 2
 };
 

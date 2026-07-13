@@ -41,6 +41,14 @@ for name, value in {
     "GlyphBorderWidth": 0.10,
     "GlyphCenterMarkSize": 0.22,
     "GlyphGlowStrength": 0.65,
+    "TrailPrimaryWeight": 0.50,
+    "TrailSecondaryWeight": 0.32,
+    "TrailAccentWeight": 0.18,
+    "TrailPixelColumns": 6.0,
+    "TrailPixelRows": 2.0,
+    "TrailHeadPixelRetention": 0.88,
+    "TrailTailPixelRetention": 0.20,
+    "TrailGlowStrength": 0.45,
     "MoteGlowStrength": 0.55,
 }.items():
     unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(
@@ -49,6 +57,9 @@ for name, value in {
     "GlyphOutlineColor": unreal.LinearColor(0.96, 0.82, 0.42, 1.0),
     "GlyphFillColor": unreal.LinearColor(0.08, 0.18, 0.32, 0.92),
     "GlyphCenterColor": unreal.LinearColor(0.58, 0.80, 1.0, 1.0),
+    "TrailPrimaryColor": unreal.LinearColor(0.58, 0.80, 1.0, 1.0),
+    "TrailSecondaryColor": unreal.LinearColor(0.96, 0.82, 0.42, 1.0),
+    "TrailAccentColor": unreal.LinearColor(0.88, 0.30, 0.72, 1.0),
     "MotePrimaryColor": unreal.LinearColor(0.62, 0.82, 1.0, 1.0),
     "MoteAccentColor": unreal.LinearColor(1.0, 0.82, 0.42, 1.0),
 }.items():
@@ -80,6 +91,16 @@ style.set_editor_property("settle_seconds", 0.24)
 style.set_editor_property("arc_height_ratio", 0.18)
 style.set_editor_property("min_arc_height_pixels", 48.0)
 style.set_editor_property("max_arc_height_pixels", 128.0)
+style.set_editor_property("enable_trail", True)
+style.set_editor_property("trail_sample_interval_seconds", 0.007)
+style.set_editor_property("high_detail_trail_segments_per_glyph", 7)
+style.set_editor_property("medium_detail_trail_segments_per_glyph", 5)
+style.set_editor_property("low_detail_trail_segments_per_glyph", 3)
+style.set_editor_property("trail_head_width_pixels", 3.5)
+style.set_editor_property("trail_tail_width_pixels", 1.0)
+style.set_editor_property("trail_head_opacity", 0.44)
+style.set_editor_property("trail_tail_opacity", 0.04)
+style.set_editor_property("max_trail_quad_count", 120)
 style.set_editor_property("mote_lifetime_seconds", 0.24)
 style.set_editor_property("mote_min_size_pixels", 2.0)
 style.set_editor_property("mote_max_size_pixels", 4.5)

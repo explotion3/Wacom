@@ -737,6 +737,16 @@ namespace
 		AddFloat(Config.PileTransfer.Style.ArcHeightRatio);
 		AddFloat(Config.PileTransfer.Style.MinArcHeightPixels);
 		AddFloat(Config.PileTransfer.Style.MaxArcHeightPixels);
+		AddBool(Config.PileTransfer.Style.bEnableTrail);
+		AddFloat(Config.PileTransfer.Style.TrailSampleIntervalSeconds);
+		AddInt(Config.PileTransfer.Style.HighDetailTrailSegmentsPerGlyph);
+		AddInt(Config.PileTransfer.Style.MediumDetailTrailSegmentsPerGlyph);
+		AddInt(Config.PileTransfer.Style.LowDetailTrailSegmentsPerGlyph);
+		AddFloat(Config.PileTransfer.Style.TrailHeadWidthPixels);
+		AddFloat(Config.PileTransfer.Style.TrailTailWidthPixels);
+		AddFloat(Config.PileTransfer.Style.TrailHeadOpacity);
+		AddFloat(Config.PileTransfer.Style.TrailTailOpacity);
+		AddInt(Config.PileTransfer.Style.MaxTrailQuadCount);
 		AddFloat(Config.PileTransfer.Style.MoteLifetimeSeconds);
 		AddFloat(Config.PileTransfer.Style.MoteMinSizePixels);
 		AddFloat(Config.PileTransfer.Style.MoteMaxSizePixels);

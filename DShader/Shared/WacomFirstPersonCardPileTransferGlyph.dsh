@@ -50,6 +50,17 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
     in float4 fillColor,
     in float4 centerColor,
     in float glowStrength,
+    in float4 trailPrimaryColor,
+    in float4 trailSecondaryColor,
+    in float4 trailAccentColor,
+    in float trailPrimaryWeight,
+    in float trailSecondaryWeight,
+    in float trailAccentWeight,
+    in float trailPixelColumns,
+    in float trailPixelRows,
+    in float trailHeadPixelRetention,
+    in float trailTailPixelRetention,
+    in float trailGlowStrength,
     in float4 motePrimaryColor,
     in float4 moteAccentColor,
     in float moteGlowStrength,
@@ -72,9 +83,46 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
 
     float shapeKind = shapeData.x;
     float isMain = 1.0 - step(0.5, shapeKind);
+    float isTrail = step(0.5, shapeKind) * (1.0 - step(1.5, shapeKind));
     float isMote = step(1.5, shapeKind);
     float variant = step(1.5, shapeData.y);
     float shapeAge = saturate(shapeData.y - variant * 2.0);
+
+    float2 safeTrailGrid = float2(max(trailPixelColumns, 1.0), max(trailPixelRows, 1.0));
+    float2 trailCell = floor(saturate(uv) * safeTrailGrid);
+    float2 trailBit0 = fmod(trailCell, 2.0);
+    float trailIndex2 = trailBit0.x * 2.0 + trailBit0.y * 3.0
+        - trailBit0.x * trailBit0.y * 4.0;
+    float2 trailBit1 = fmod(floor(trailCell / 2.0), 2.0);
+    float trailIndex4 = trailBit1.x * 2.0 + trailBit1.y * 3.0
+        - trailBit1.x * trailBit1.y * 4.0 + trailIndex2 * 4.0;
+    float trailThreshold = (trailIndex4 + 0.5) / 16.0;
+    float trailRetention = saturate(lerp(
+        trailHeadPixelRetention,
+        trailTailPixelRetention,
+        shapeAge));
+    float trailMask = step(trailThreshold, trailRetention);
+
+    float3 trailWeights = max(
+        float3(trailPrimaryWeight, trailSecondaryWeight, trailAccentWeight),
+        float3(0.0, 0.0, 0.0));
+    float trailWeightSum = max(trailWeights.x + trailWeights.y + trailWeights.z, 0.0001);
+    trailWeights /= trailWeightSum;
+    float trailPaletteValue = frac(
+        trailCell.x * 0.754877666
+        + trailCell.y * 0.569840296
+        + variant * 0.438289);
+    float4 trailColor = lerp(
+        trailPrimaryColor,
+        trailSecondaryColor,
+        step(trailWeights.x, trailPaletteValue));
+    trailColor = lerp(
+        trailColor,
+        trailAccentColor,
+        step(trailWeights.x + trailWeights.y, trailPaletteValue));
+    float trailAlpha = trailMask * trailColor.a;
+    float trailGlow = 1.0 + max(trailGlowStrength, 0.0) * (1.0 - shapeAge) * 0.35;
+    float3 trailPremultiplied = trailColor.rgb * trailGlow * trailAlpha;
 
     float2 moteCentered = abs(uv - float2(0.5, 0.5));
     float moteBody = step(max(moteCentered.x, moteCentered.y), 0.46);
@@ -83,6 +131,8 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
     float moteGlow = 1.0 + max(moteGlowStrength, 0.0) * (1.0 - shapeAge) * 0.35;
     float3 motePremultiplied = moteColor.rgb * moteGlow * moteAlpha;
 
-    visualColor = glyphColor * isMain + motePremultiplied * isMote;
-    visualAlpha = glyphAlpha * isMain + moteAlpha * isMote;
+    visualColor = glyphColor * isMain
+        + trailPremultiplied * isTrail
+        + motePremultiplied * isMote;
+    visualAlpha = glyphAlpha * isMain + trailAlpha * isTrail + moteAlpha * isMote;
 }

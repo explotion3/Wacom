@@ -50,6 +50,15 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	Style.SettleSeconds = FMath::Max(0.0f, Style.SettleSeconds);
 	Style.MinArcHeightPixels = FMath::Max(0.0f, Style.MinArcHeightPixels);
 	Style.MaxArcHeightPixels = FMath::Max(Style.MinArcHeightPixels, Style.MaxArcHeightPixels);
+	Style.TrailSampleIntervalSeconds = FMath::Max(0.001f, Style.TrailSampleIntervalSeconds);
+	Style.HighDetailTrailSegmentsPerGlyph = FMath::Clamp(Style.HighDetailTrailSegmentsPerGlyph, 0, 16);
+	Style.MediumDetailTrailSegmentsPerGlyph = FMath::Clamp(Style.MediumDetailTrailSegmentsPerGlyph, 0, 16);
+	Style.LowDetailTrailSegmentsPerGlyph = FMath::Clamp(Style.LowDetailTrailSegmentsPerGlyph, 0, 16);
+	Style.TrailHeadWidthPixels = FMath::Max(0.0f, Style.TrailHeadWidthPixels);
+	Style.TrailTailWidthPixels = FMath::Max(0.0f, Style.TrailTailWidthPixels);
+	Style.TrailHeadOpacity = FMath::Clamp(Style.TrailHeadOpacity, 0.0f, 1.0f);
+	Style.TrailTailOpacity = FMath::Clamp(Style.TrailTailOpacity, 0.0f, 1.0f);
+	Style.MaxTrailQuadCount = FMath::Max(0, Style.MaxTrailQuadCount);
 	Style.MoteLifetimeSeconds = FMath::Max(0.01f, Style.MoteLifetimeSeconds);
 	Style.MoteMinSizePixels = FMath::Max(0.5f, Style.MoteMinSizePixels);
 	Style.MoteMaxSizePixels = FMath::Max(Style.MoteMinSizePixels, Style.MoteMaxSizePixels);
@@ -65,7 +74,17 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	Style.MaxMoteQuadCount = FMath::Max(0, Style.MaxMoteQuadCount);
 	Style.SafeViewportPaddingPixels = FMath::Max(0.0f, Style.SafeViewportPaddingPixels);
 	Style.ReducedMotionDurationSeconds = FMath::Max(0.01f, Style.ReducedMotionDurationSeconds);
-	Style.SettleSeconds = FMath::Max(Style.SettleSeconds, Style.MoteLifetimeSeconds);
+	const int32 MaximumTrailSegments = Style.bEnableTrail
+		? FMath::Max3(
+			Style.HighDetailTrailSegmentsPerGlyph,
+			Style.MediumDetailTrailSegmentsPerGlyph,
+			Style.LowDetailTrailSegmentsPerGlyph)
+		: 0;
+	const float TrailDrainSeconds = Style.TrailSampleIntervalSeconds * MaximumTrailSegments;
+	Style.SettleSeconds = FMath::Max3(
+		Style.SettleSeconds,
+		Style.MoteLifetimeSeconds,
+		TrailDrainSeconds);
 
 	CardInstanceIds = Hint.CardInstanceIds;
 	ViewportSize = InViewportSize;
@@ -289,17 +308,71 @@ void FWacomFirstPersonCardPileTransferPlayback::BuildAuxiliaryShapes()
 		return;
 	}
 
+	int32 TrailSegmentsPerGlyph = Style.LowDetailTrailSegmentsPerGlyph;
 	int32 MoteSlotsPerGlyph = Style.LowDetailMoteSlotsPerGlyph;
 	if (DetailReferenceActiveGlyphCount <= Style.HighDetailMaxActiveGlyphs)
 	{
+		TrailSegmentsPerGlyph = Style.HighDetailTrailSegmentsPerGlyph;
 		MoteSlotsPerGlyph = Style.HighDetailMoteSlotsPerGlyph;
 	}
 	else if (DetailReferenceActiveGlyphCount <= Style.MediumDetailMaxActiveGlyphs)
 	{
+		TrailSegmentsPerGlyph = Style.MediumDetailTrailSegmentsPerGlyph;
 		MoteSlotsPerGlyph = Style.MediumDetailMoteSlotsPerGlyph;
 	}
 	AuxiliaryShapes.Reserve(
-		FMath::Min(Style.MaxMoteQuadCount, Glyphs.Num() * MoteSlotsPerGlyph));
+		FMath::Min(Style.MaxTrailQuadCount, Glyphs.Num() * TrailSegmentsPerGlyph)
+		+ FMath::Min(Style.MaxMoteQuadCount, Glyphs.Num() * MoteSlotsPerGlyph));
+
+	int32 TrailQuadCount = 0;
+	if (Style.bEnableTrail && TrailSegmentsPerGlyph > 0 && Style.MaxTrailQuadCount > 0)
+	{
+		for (int32 Index = 0; Index < Glyphs.Num() && TrailQuadCount < Style.MaxTrailQuadCount; ++Index)
+		{
+			for (int32 SegmentIndex = 0;
+				SegmentIndex < TrailSegmentsPerGlyph && TrailQuadCount < Style.MaxTrailQuadCount;
+				++SegmentIndex)
+			{
+				const float NewerSampleTime = ElapsedSeconds
+					- Style.TrailSampleIntervalSeconds * SegmentIndex;
+				const float OlderSampleTime = NewerSampleTime - Style.TrailSampleIntervalSeconds;
+				FWacomFirstPersonCardPileTransferGlyphView NewerSample;
+				FWacomFirstPersonCardPileTransferGlyphView OlderSample;
+				if (!EvaluateGlyphAtTime(Index, NewerSampleTime, NewerSample)
+					|| !EvaluateGlyphAtTime(Index, OlderSampleTime, OlderSample))
+				{
+					continue;
+				}
+
+				const FVector2D SegmentDelta = NewerSample.Position - OlderSample.Position;
+				const float SegmentLength = SegmentDelta.Size();
+				if (SegmentLength <= UE_SMALL_NUMBER)
+				{
+					continue;
+				}
+
+				const float TrailAge = (static_cast<float>(SegmentIndex) + 0.5f)
+					/ static_cast<float>(TrailSegmentsPerGlyph);
+				const float TaperProgress = FMath::SmoothStep(0.0f, 1.0f, TrailAge);
+				const uint32 SegmentSeed = HashCombineFast(
+					MakeGlyphSeed(Index),
+					GetTypeHash(SegmentIndex + 0x1000));
+
+				FWacomFirstPersonCardPileTransferGlyphView Trail;
+				Trail.Position = (NewerSample.Position + OlderSample.Position) * 0.5f;
+				Trail.Size = FVector2D(
+					SegmentLength + 1.0f,
+					FMath::Lerp(Style.TrailHeadWidthPixels, Style.TrailTailWidthPixels, TaperProgress));
+				Trail.RotationRadians = FMath::Atan2(SegmentDelta.Y, SegmentDelta.X);
+				Trail.Opacity = FMath::Lerp(Style.TrailHeadOpacity, Style.TrailTailOpacity, TaperProgress);
+				Trail.ShapeAge = TrailAge;
+				Trail.ShapeVariant = Hash01(SegmentSeed ^ 0x9e3779b9u) >= 0.5f ? 1.0f : 0.0f;
+				Trail.ShapeKind = EWacomFirstPersonCardPileTransferShapeKind::Trail;
+				AuxiliaryShapes.Add(Trail);
+				++TrailQuadCount;
+			}
+		}
+	}
 
 	int32 MoteQuadCount = 0;
 	for (int32 Index = 0; Index < Glyphs.Num() && MoteQuadCount < Style.MaxMoteQuadCount; ++Index)

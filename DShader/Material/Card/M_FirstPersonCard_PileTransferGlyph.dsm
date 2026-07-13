@@ -38,19 +38,74 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
             SortPriority=70;
             Description="描边和中央方印的额外自发光强度；默认 0.65，推荐 0.2 到 1.4。";
         ];
+        VectorParameter TrailPrimaryColor = float4(0.58, 0.80, 1.0, 1.0) [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=80;
+            Description="多色像素拖尾的主色，默认冰蓝。";
+        ];
+        VectorParameter TrailSecondaryColor = float4(0.96, 0.82, 0.42, 1.0) [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=90;
+            Description="多色像素拖尾的次色，默认暖象牙金。";
+        ];
+        VectorParameter TrailAccentColor = float4(0.88, 0.30, 0.72, 1.0) [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=100;
+            Description="多色像素拖尾的强调色，默认紫红。";
+        ];
+        ScalarParameter TrailPrimaryWeight = 0.50 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=110;
+            Description="主色的相对抽样权重；默认 0.50，推荐 0 到 1。三色权重会在材质内归一化。";
+        ];
+        ScalarParameter TrailSecondaryWeight = 0.32 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=120;
+            Description="次色的相对抽样权重；默认 0.32，推荐 0 到 1。";
+        ];
+        ScalarParameter TrailAccentWeight = 0.18 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=130;
+            Description="强调色的相对抽样权重；默认 0.18，推荐 0 到 1。";
+        ];
+        ScalarParameter TrailPixelColumns = 6.0 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=140;
+            Description="单个拖尾段沿长度方向的像素列数；默认 6，推荐 3 到 10。";
+        ];
+        ScalarParameter TrailPixelRows = 2.0 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=150;
+            Description="单个拖尾段沿宽度方向的像素行数；默认 2，推荐 1 到 3。";
+        ];
+        ScalarParameter TrailHeadPixelRetention = 0.88 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=160;
+            Description="靠近牌印一端保留的硬像素比例；默认 0.88，推荐 0.65 到 1。";
+        ];
+        ScalarParameter TrailTailPixelRetention = 0.20 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=170;
+            Description="拖尾末端保留的硬像素比例；默认 0.20，推荐 0.05 到 0.40。";
+        ];
+        ScalarParameter TrailGlowStrength = 0.45 [
+            Group="第一人称牌堆迁移|像素拖尾";
+            SortPriority=180;
+            Description="拖尾靠近牌印一端的额外亮度；默认 0.45，推荐 0 到 1。";
+        ];
         VectorParameter MotePrimaryColor = float4(0.62, 0.82, 1.0, 1.0) [
             Group="第一人称牌堆迁移|飘散像素";
-            SortPriority=80;
+            SortPriority=190;
             Description="大多数飘散像素的主颜色和透明度。";
         ];
         VectorParameter MoteAccentColor = float4(1.0, 0.82, 0.42, 1.0) [
             Group="第一人称牌堆迁移|飘散像素";
-            SortPriority=90;
+            SortPriority=200;
             Description="少量飘散像素的强调颜色和透明度。";
         ];
         ScalarParameter MoteGlowStrength = 0.55 [
             Group="第一人称牌堆迁移|飘散像素";
-            SortPriority=100;
+            SortPriority=210;
             Description="飘散像素出生阶段的额外亮度；默认 0.55，推荐 0 到 1.2。";
         ];
     }
@@ -82,6 +137,17 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
             GlyphFillColor,
             GlyphCenterColor,
             GlyphGlowStrength,
+            TrailPrimaryColor,
+            TrailSecondaryColor,
+            TrailAccentColor,
+            TrailPrimaryWeight,
+            TrailSecondaryWeight,
+            TrailAccentWeight,
+            TrailPixelColumns,
+            TrailPixelRows,
+            TrailHeadPixelRetention,
+            TrailTailPixelRetention,
+            TrailGlowStrength,
             MotePrimaryColor,
             MoteAccentColor,
             MoteGlowStrength,

@@ -50,12 +50,35 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 			if (bRecordMetrics)
 			{
 				Result.MaxMainGlyphCount = FMath::Max(Result.MaxMainGlyphCount, Playback.GetGlyphs().Num());
+				int32 TrailCount = 0;
 				int32 MoteCount = 0;
 				for (const FWacomFirstPersonCardPileTransferGlyphView& Shape : Playback.GetAuxiliaryShapes())
 				{
+					TrailCount += Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Trail ? 1 : 0;
 					MoteCount += Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote ? 1 : 0;
-					Result.bAuxiliaryShapesAreMotes &=
-						Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote;
+					Result.bAuxiliaryShapesAreTrailsOrMotes &=
+						Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Trail
+						|| Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote;
+					if (Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Trail)
+					{
+						const float TaperProgress = FMath::SmoothStep(0.0f, 1.0f, Shape.ShapeAge);
+						Result.bTrailsTaperWithAge &= FMath::IsNearlyEqual(
+							Shape.Size.Y,
+							FMath::Lerp(
+								Config.Style.TrailHeadWidthPixels,
+								Config.Style.TrailTailWidthPixels,
+								TaperProgress),
+							0.001f);
+						Result.bTrailsTaperWithAge &= FMath::IsNearlyEqual(
+							Shape.Opacity,
+							FMath::Lerp(
+								Config.Style.TrailHeadOpacity,
+								Config.Style.TrailTailOpacity,
+								TaperProgress),
+							0.001f);
+						Result.bTrailsRemainNarrow &= Shape.Size.Y <= Config.Style.TrailHeadWidthPixels + 0.001f
+							&& Shape.Size.Y < Config.Style.GlyphSize.X * 0.5f;
+					}
 					if (Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote)
 					{
 						const float DissolveProgress = FMath::SmoothStep(0.0f, 1.0f, Shape.ShapeAge);
@@ -70,6 +93,7 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 							&& FMath::IsNearlyEqual(Shape.Size.X, Shape.Size.Y, 0.001f);
 					}
 				}
+				Result.MaxTrailCount = FMath::Max(Result.MaxTrailCount, TrailCount);
 				Result.MaxMoteCount = FMath::Max(Result.MaxMoteCount, MoteCount);
 				if (Progress.ArrivedCount == Progress.TotalCount && Progress.TotalCount > 0)
 				{
@@ -81,6 +105,13 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 					Result.MaxAuxiliaryCountAfterAllArrived = FMath::Max(
 						Result.MaxAuxiliaryCountAfterAllArrived,
 						Playback.GetAuxiliaryShapes().Num());
+					Result.MaxTrailCountAfterAllArrived = FMath::Max(
+						Result.MaxTrailCountAfterAllArrived,
+						TrailCount);
+					if (TrailCount > 0)
+					{
+						Result.LastTrailVisibleSeconds = OutSeconds;
+					}
 				}
 				for (const FWacomFirstPersonCardPileTransferGlyphView& Glyph : Playback.GetGlyphs())
 				{
@@ -143,7 +174,72 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 	Result.CompletionSeconds = FirstSeconds;
 	Result.ArrivedCount = FirstProgress.ArrivedCount;
 	Result.TotalCount = FirstProgress.TotalCount;
+
+	FWacomFirstPersonCardPileTransferPlayback CleanupPlayback;
+	if (CleanupPlayback.Start(
+		Hint,
+		Config,
+		FVector2D(100.0f, 500.0f),
+		FVector2D(900.0f, 500.0f),
+		ViewportSize))
+	{
+		CleanupPlayback.Tick(0.20f);
+		CleanupPlayback.ForceComplete();
+		Result.bForceCompleteClearsAuxiliaryShapes &= CleanupPlayback.GetAuxiliaryShapes().IsEmpty();
+		CleanupPlayback.Start(
+			Hint,
+			Config,
+			FVector2D(100.0f, 500.0f),
+			FVector2D(900.0f, 500.0f),
+			ViewportSize);
+		CleanupPlayback.Tick(0.20f);
+		CleanupPlayback.Reset();
+		Result.bResetClearsAuxiliaryShapes &= CleanupPlayback.GetAuxiliaryShapes().IsEmpty();
+	}
 	return Result;
+}
+
+int32 FWacomFirstPersonCardPileTransferTestAccess::RunPeakTrailCountForDetailTier(
+	int32 CardCount,
+	int32 HighDetailMaxActiveGlyphs,
+	int32 MediumDetailMaxActiveGlyphs)
+{
+	FWacomFirstPersonCardPileTransferConfig Config;
+	Config.bEnabled = true;
+	Config.Style.GlyphMaterialInstance = NewObject<UMaterialInstanceConstant>();
+	Config.Style.HighDetailMaxActiveGlyphs = HighDetailMaxActiveGlyphs;
+	Config.Style.MediumDetailMaxActiveGlyphs = MediumDetailMaxActiveGlyphs;
+	FWacomFirstPersonCardPileTransferHint Hint;
+	Hint.EventSequence = 92;
+	Hint.Seed = 67890;
+	for (int32 Index = 0; Index < CardCount; ++Index)
+	{
+		Hint.CardInstanceIds.Add(FGuid(Index + 1, 5, 6, 7));
+	}
+
+	FWacomFirstPersonCardPileTransferPlayback Playback;
+	if (!Playback.Start(
+		Hint,
+		Config,
+		FVector2D(100.0f, 500.0f),
+		FVector2D(900.0f, 500.0f),
+		FVector2D(1000.0f, 600.0f)))
+	{
+		return 0;
+	}
+
+	int32 PeakTrailCount = 0;
+	while (Playback.IsActive())
+	{
+		Playback.Tick(0.005f);
+		int32 TrailCount = 0;
+		for (const FWacomFirstPersonCardPileTransferGlyphView& Shape : Playback.GetAuxiliaryShapes())
+		{
+			TrailCount += Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Trail ? 1 : 0;
+		}
+		PeakTrailCount = FMath::Max(PeakTrailCount, TrailCount);
+	}
+	return PeakTrailCount;
 }
 
 #endif
