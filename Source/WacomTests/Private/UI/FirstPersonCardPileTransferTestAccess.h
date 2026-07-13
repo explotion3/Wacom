@@ -13,13 +13,14 @@ struct FWacomFirstPersonCardPileTransferTestResult
 	int32 ArrivedCount = 0;
 	int32 TotalCount = 0;
 	int32 MaxMainGlyphCount = 0;
-	int32 MaxEchoCount = 0;
 	int32 MaxMoteCount = 0;
 	int32 MaxAuxiliaryCountAfterAllArrived = 0;
 	float AllMainGlyphsArrivedSeconds = 0.0f;
 	bool bMainPathsInsideSafeViewport = true;
 	bool bReducedMotionHasNoAuxiliaryShapes = true;
 	bool bPlaybackRemainsActiveForTailDrain = false;
+	bool bAuxiliaryShapesAreMotes = true;
+	bool bMotesFadeAndShrinkWithAge = true;
 	TArray<FVector2D> FirstRunMidPositions;
 	TArray<FVector2D> SecondRunMidPositions;
 	TArray<FVector2D> FirstRunMidAuxiliaryPositions;

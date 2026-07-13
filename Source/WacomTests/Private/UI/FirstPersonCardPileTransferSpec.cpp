@@ -35,8 +35,10 @@ bool FWacomFirstPersonCardPileTransferPlaybackSpec::RunTest(const FString&)
 			Result.bMainPathsInsideSafeViewport);
 		TestTrue(FString::Printf(TEXT("%d glyph motes respect the quad budget"), Count),
 			Result.MaxMoteCount <= 240);
-		TestTrue(FString::Printf(TEXT("%d glyph playback produces historical echoes"), Count),
-			Result.MaxEchoCount > 0);
+		TestTrue(FString::Printf(TEXT("%d glyph playback only uses non-card mote auxiliaries"), Count),
+			Result.bAuxiliaryShapesAreMotes);
+		TestTrue(FString::Printf(TEXT("%d glyph motes fade and shrink throughout their lifetime"), Count),
+			Result.bMotesFadeAndShrinkWithAge);
 		TestTrue(FString::Printf(TEXT("%d glyph playback keeps tail visuals after every main glyph arrived"), Count),
 			Result.MaxAuxiliaryCountAfterAllArrived > 0);
 		TestTrue(FString::Printf(TEXT("%d glyph playback remains active while the tail drains"), Count),
@@ -45,8 +47,6 @@ bool FWacomFirstPersonCardPileTransferPlaybackSpec::RunTest(const FString&)
 			Result.CompletionSeconds - Result.AllMainGlyphsArrivedSeconds >= 0.20f);
 		if (Count == 1)
 		{
-			TestTrue(TEXT("high-detail playback exposes at least four card echoes"),
-				Result.MaxEchoCount >= 4);
 			TestTrue(TEXT("high-detail playback keeps several motes visible at once"),
 				Result.MaxMoteCount >= 5);
 		}

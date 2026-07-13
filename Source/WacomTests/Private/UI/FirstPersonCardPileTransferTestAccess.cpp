@@ -50,14 +50,26 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 			if (bRecordMetrics)
 			{
 				Result.MaxMainGlyphCount = FMath::Max(Result.MaxMainGlyphCount, Playback.GetGlyphs().Num());
-				int32 EchoCount = 0;
 				int32 MoteCount = 0;
 				for (const FWacomFirstPersonCardPileTransferGlyphView& Shape : Playback.GetAuxiliaryShapes())
 				{
-					EchoCount += Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Echo ? 1 : 0;
 					MoteCount += Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote ? 1 : 0;
+					Result.bAuxiliaryShapesAreMotes &=
+						Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote;
+					if (Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote)
+					{
+						const float DissolveProgress = FMath::SmoothStep(0.0f, 1.0f, Shape.ShapeAge);
+						const float SizeMultiplier = FMath::Lerp(1.0f, 0.08f, DissolveProgress);
+						Result.bMotesFadeAndShrinkWithAge &= FMath::IsNearlyEqual(
+							Shape.Opacity,
+							0.88f * (1.0f - DissolveProgress),
+							0.001f);
+						Result.bMotesFadeAndShrinkWithAge &=
+							Shape.Size.X >= Config.Style.MoteMinSizePixels * SizeMultiplier - 0.001f
+							&& Shape.Size.X <= Config.Style.MoteMaxSizePixels * SizeMultiplier + 0.001f
+							&& FMath::IsNearlyEqual(Shape.Size.X, Shape.Size.Y, 0.001f);
+					}
 				}
-				Result.MaxEchoCount = FMath::Max(Result.MaxEchoCount, EchoCount);
 				Result.MaxMoteCount = FMath::Max(Result.MaxMoteCount, MoteCount);
 				if (Progress.ArrivedCount == Progress.TotalCount && Progress.TotalCount > 0)
 				{

@@ -50,9 +50,6 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
     in float4 fillColor,
     in float4 centerColor,
     in float glowStrength,
-    in float echoDitherColumns,
-    in float echoPixelRetention,
-    in float4 echoColorMultiplier,
     in float4 motePrimaryColor,
     in float4 moteAccentColor,
     in float moteGlowStrength,
@@ -75,24 +72,9 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
 
     float shapeKind = shapeData.x;
     float isMain = 1.0 - step(0.5, shapeKind);
-    float isEcho = step(0.5, shapeKind) * (1.0 - step(1.5, shapeKind));
     float isMote = step(1.5, shapeKind);
     float variant = step(1.5, shapeData.y);
     float shapeAge = saturate(shapeData.y - variant * 2.0);
-
-    float safeEchoColumns = max(echoDitherColumns, 2.0);
-    float2 echoGrid = float2(safeEchoColumns, safeEchoColumns * 1.57142857);
-    float2 echoCell = floor(saturate(uv) * echoGrid);
-    float2 bit0 = fmod(echoCell, 2.0);
-    float echoIndex2 = bit0.x * 2.0 + bit0.y * 3.0 - bit0.x * bit0.y * 4.0;
-    float2 bit1 = fmod(floor(echoCell / 2.0), 2.0);
-    float echoIndex4 = bit1.x * 2.0 + bit1.y * 3.0 - bit1.x * bit1.y * 4.0
-        + echoIndex2 * 4.0;
-    float echoThreshold = (echoIndex4 + 0.5) / 16.0;
-    float echoRetention = saturate(echoPixelRetention * (1.0 - shapeAge * 0.35));
-    float echoMask = step(echoThreshold, echoRetention);
-    float echoAlpha = glyphAlpha * echoColorMultiplier.a * echoMask;
-    float3 echoColor = glyphColor * echoColorMultiplier.rgb * echoMask;
 
     float2 moteCentered = abs(uv - float2(0.5, 0.5));
     float moteBody = step(max(moteCentered.x, moteCentered.y), 0.46);
@@ -101,6 +83,6 @@ Function SelfContained WacomFirstPersonCard_ComputePileTransferVisual(
     float moteGlow = 1.0 + max(moteGlowStrength, 0.0) * (1.0 - shapeAge) * 0.35;
     float3 motePremultiplied = moteColor.rgb * moteGlow * moteAlpha;
 
-    visualColor = glyphColor * isMain + echoColor * isEcho + motePremultiplied * isMote;
-    visualAlpha = glyphAlpha * isMain + echoAlpha * isEcho + moteAlpha * isMote;
+    visualColor = glyphColor * isMain + motePremultiplied * isMote;
+    visualAlpha = glyphAlpha * isMain + moteAlpha * isMote;
 }

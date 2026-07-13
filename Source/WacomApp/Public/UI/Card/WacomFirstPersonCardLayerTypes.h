@@ -554,7 +554,7 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (Units = "s", ToolTip = "相邻牌印的固定发射间隔，单位为秒；默认 0.045，推荐 0.03 到 0.07。数量较多时不会自动压缩，整体时长会随真实洗回数量自然增长。"))
 	float BaseStaggerSeconds = 0.045f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (Units = "s", ToolTip = "最后一枚主体抵达后等待牌影和粒子自然排空的最短时间，单位为秒；默认 0.24，推荐 0.18 到 0.32。运行时还会确保不早于最长粒子寿命和牌影历史跨度。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (Units = "s", ToolTip = "最后一枚主体抵达后等待飘散像素自然排空的最短时间，单位为秒；默认 0.24，推荐 0.18 到 0.32。运行时还会确保不早于最长粒子寿命。"))
 	float SettleSeconds = 0.24f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (ToolTip = "弧高占起止锚点距离的比例；默认 0.18，推荐 0.12 到 0.26，随后受最小和最大弧高限制。"))
@@ -566,12 +566,6 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (ToolTip = "最大弧高，单位为 UMG 逻辑像素；默认 128，推荐 96 到 180。"))
 	float MaxArcHeightPixels = 128.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "每枚牌印最多保留的历史路径残影层数；默认 4，推荐 2 到 5。残影按过去的真实飞行位置采样，不是固定方向复制，并与主体合并到同一 Slate 顶点批次。"))
-	int32 TrailLayerCount = 4;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (Units = "s", ToolTip = "相邻历史路径残影之间的时间间隔，单位为秒；默认 0.045，推荐 0.03 到 0.06。数值越大拖尾越长，但不会改变牌印主体飞行时间。"))
-	float EchoSampleIntervalSeconds = 0.045f;
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (Units = "s", ToolTip = "单枚飘散像素的存活时间，单位为秒；默认 0.24，推荐 0.16 到 0.32。只影响辅助粒子与尾部排空时间，不改变牌印数量或抵达计数。"))
 	float MoteLifetimeSeconds = 0.24f;
 
@@ -581,19 +575,16 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "飘散像素的最大边长，单位为 UMG 逻辑像素；默认 4.5，推荐 3 到 6，不影响布局或命中。"))
 	float MoteMaxSizePixels = 4.5f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "粒子出生后保持完整亮度的生命周期比例；默认 0.20，推荐 0.10 到 0.35，之后使用缓出曲线自然淡化。"))
-	float MoteOpacityHoldFraction = 0.20f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "多数粒子沿牌印飞行反方向拉开的最大距离，单位为 UMG 逻辑像素；默认 28，推荐 18 到 42。粒子使用先快后慢的三次缓出运动，不改变牌印主体路径。"))
+	float MoteBackwardDistancePixels = 28.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "多数粒子沿牌印飞行反方向拉开的最大距离，单位为 UMG 逻辑像素；默认 18，推荐 10 到 28。"))
-	float MoteBackwardDistancePixels = 18.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "少量粒子向飞行路径两侧飘散的最大距离，单位为 UMG 逻辑像素；默认 14，推荐 8 到 24。粒子使用先快后慢的三次缓出运动。"))
+	float MoteLateralDistancePixels = 14.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "少量粒子向飞行路径两侧飘散的最大距离，单位为 UMG 逻辑像素；默认 9，推荐 4 到 16。"))
-	float MoteLateralDistancePixels = 9.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Performance", meta = (ToolTip = "稳定估算的同时活动牌印不超过该数量时使用最高辅助密度：最多 4 层历史残影；默认 6，推荐 4 到 8。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Performance", meta = (ToolTip = "稳定估算的同时活动牌印不超过该数量时使用最高粒子密度；默认 6，推荐 4 到 8。"))
 	int32 HighDetailMaxActiveGlyphs = 6;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Performance", meta = (ToolTip = "稳定估算的同时活动牌印不超过该数量时使用中等辅助密度：最多 3 层历史残影；超过后使用 2 层。默认 14，推荐 10 到 20。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Performance", meta = (ToolTip = "稳定估算的同时活动牌印不超过该数量时使用中等粒子密度；超过后使用低粒子密度。默认 14，推荐 10 到 20。"))
 	int32 MediumDetailMaxActiveGlyphs = 14;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Performance", meta = (ToolTip = "高细节档每枚牌印在整段飞行内使用的确定性粒子槽数量；默认 14，推荐 8 到 20。槽位会错峰出现，并非全部同时存在。"))

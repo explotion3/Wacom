@@ -50,12 +50,9 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	Style.SettleSeconds = FMath::Max(0.0f, Style.SettleSeconds);
 	Style.MinArcHeightPixels = FMath::Max(0.0f, Style.MinArcHeightPixels);
 	Style.MaxArcHeightPixels = FMath::Max(Style.MinArcHeightPixels, Style.MaxArcHeightPixels);
-	Style.TrailLayerCount = FMath::Clamp(Style.TrailLayerCount, 0, 5);
-	Style.EchoSampleIntervalSeconds = FMath::Max(0.005f, Style.EchoSampleIntervalSeconds);
 	Style.MoteLifetimeSeconds = FMath::Max(0.01f, Style.MoteLifetimeSeconds);
 	Style.MoteMinSizePixels = FMath::Max(0.5f, Style.MoteMinSizePixels);
 	Style.MoteMaxSizePixels = FMath::Max(Style.MoteMinSizePixels, Style.MoteMaxSizePixels);
-	Style.MoteOpacityHoldFraction = FMath::Clamp(Style.MoteOpacityHoldFraction, 0.0f, 0.9f);
 	Style.MoteBackwardDistancePixels = FMath::Max(0.0f, Style.MoteBackwardDistancePixels);
 	Style.MoteLateralDistancePixels = FMath::Max(0.0f, Style.MoteLateralDistancePixels);
 	Style.HighDetailMaxActiveGlyphs = FMath::Max(1, Style.HighDetailMaxActiveGlyphs);
@@ -68,11 +65,7 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	Style.MaxMoteQuadCount = FMath::Max(0, Style.MaxMoteQuadCount);
 	Style.SafeViewportPaddingPixels = FMath::Max(0.0f, Style.SafeViewportPaddingPixels);
 	Style.ReducedMotionDurationSeconds = FMath::Max(0.01f, Style.ReducedMotionDurationSeconds);
-	Style.SettleSeconds = FMath::Max(
-		Style.SettleSeconds,
-		FMath::Max(
-			Style.MoteLifetimeSeconds,
-			Style.EchoSampleIntervalSeconds * Style.TrailLayerCount));
+	Style.SettleSeconds = FMath::Max(Style.SettleSeconds, Style.MoteLifetimeSeconds);
 
 	CardInstanceIds = Hint.CardInstanceIds;
 	ViewportSize = InViewportSize;
@@ -296,43 +289,17 @@ void FWacomFirstPersonCardPileTransferPlayback::BuildAuxiliaryShapes()
 		return;
 	}
 
-	int32 EchoLayerCount = 2;
 	int32 MoteSlotsPerGlyph = Style.LowDetailMoteSlotsPerGlyph;
 	if (DetailReferenceActiveGlyphCount <= Style.HighDetailMaxActiveGlyphs)
 	{
-		EchoLayerCount = 4;
 		MoteSlotsPerGlyph = Style.HighDetailMoteSlotsPerGlyph;
 	}
 	else if (DetailReferenceActiveGlyphCount <= Style.MediumDetailMaxActiveGlyphs)
 	{
-		EchoLayerCount = 3;
 		MoteSlotsPerGlyph = Style.MediumDetailMoteSlotsPerGlyph;
 	}
-	EchoLayerCount = FMath::Min(EchoLayerCount, Style.TrailLayerCount);
 	AuxiliaryShapes.Reserve(
-		Glyphs.Num() * EchoLayerCount
-		+ FMath::Min(Style.MaxMoteQuadCount, Glyphs.Num() * MoteSlotsPerGlyph));
-
-	static constexpr float EchoScaleMultipliers[5] = { 0.96f, 0.90f, 0.82f, 0.72f, 0.62f };
-	static constexpr float EchoOpacityMultipliers[5] = { 0.62f, 0.38f, 0.22f, 0.12f, 0.06f };
-	for (int32 Index = 0; Index < Glyphs.Num(); ++Index)
-	{
-		for (int32 EchoIndex = 0; EchoIndex < EchoLayerCount; ++EchoIndex)
-		{
-			FWacomFirstPersonCardPileTransferGlyphView Echo;
-			const float SampleTime = ElapsedSeconds
-				- Style.EchoSampleIntervalSeconds * static_cast<float>(EchoIndex + 1);
-			if (!EvaluateGlyphAtTime(Index, SampleTime, Echo))
-			{
-				continue;
-			}
-			Echo.Size *= EchoScaleMultipliers[EchoIndex];
-			Echo.Opacity *= EchoOpacityMultipliers[EchoIndex];
-			Echo.ShapeAge = static_cast<float>(EchoIndex + 1) / static_cast<float>(EchoLayerCount);
-			Echo.ShapeKind = EWacomFirstPersonCardPileTransferShapeKind::Echo;
-			AuxiliaryShapes.Add(Echo);
-		}
-	}
+		FMath::Min(Style.MaxMoteQuadCount, Glyphs.Num() * MoteSlotsPerGlyph));
 
 	int32 MoteQuadCount = 0;
 	for (int32 Index = 0; Index < Glyphs.Num() && MoteQuadCount < Style.MaxMoteQuadCount; ++Index)
@@ -384,14 +351,11 @@ void FWacomFirstPersonCardPileTransferPlayback::BuildAuxiliaryShapes()
 				Style.MoteMinSizePixels,
 				Style.MoteMaxSizePixels,
 				Hash01(Seed ^ 0xb55a4f09u));
-			Mote.Size = FVector2D(Size, Size);
+			const float DissolveProgress = FMath::SmoothStep(0.0f, 1.0f, Age);
+			const float SizeMultiplier = FMath::Lerp(1.0f, 0.08f, DissolveProgress);
+			Mote.Size = FVector2D(Size, Size) * SizeMultiplier;
 			Mote.RotationRadians = 0.0f;
-			const float FadeProgress = FMath::Clamp(
-				(Age - Style.MoteOpacityHoldFraction)
-					/ FMath::Max(0.01f, 1.0f - Style.MoteOpacityHoldFraction),
-				0.0f,
-				1.0f);
-			Mote.Opacity = 0.88f * (1.0f - FMath::SmoothStep(0.0f, 1.0f, FadeProgress));
+			Mote.Opacity = 0.88f * (1.0f - DissolveProgress);
 			Mote.ShapeAge = Age;
 			Mote.ShapeVariant = Hash01(Seed ^ 0x9e3779b9u) > 0.78f ? 1.0f : 0.0f;
 			Mote.ShapeKind = EWacomFirstPersonCardPileTransferShapeKind::Mote;
