@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Deck/RunDeckBatchTypes.h"
 #include "RunStateTypes.h"
 
 class UCardDefinition;
@@ -55,6 +56,45 @@ struct FRunDeckRules
 
 	static FRunDeckOperationValidation ValidateMoveInstance(const FRunState& State, FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId);
 	static bool MoveInstance(FRunState& State, FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId, FRunOwnedCardLocation* OutFromLocation = nullptr, FName* OutDisabledReason = nullptr);
+
+	/** 规范化 Zone 地址：非 SpecialZone 强制清空 OwnerInstanceId。 */
+	static FRunDeckZoneAddress NormalizeZoneAddress(const FRunDeckZoneAddress& Address);
+
+	/** 校验空集合、重复/无效 InstanceId、严格 revision 和共同来源；不修改 State。 */
+	static FRunDeckBatchOperationValidation ValidateBatchInstanceSet(
+		const FRunState& State,
+		uint64 CurrentStorageRevision,
+		const TArray<FGuid>& InstanceIds,
+		const FRunDeckZoneAddress& ExpectedSource,
+		uint64 ExpectedStorageRevision);
+
+	/** 在只读权威 State 上预演整组移动；不修改 State。 */
+	static FRunDeckBatchOperationValidation ValidateMoveInstancesAtomic(
+		const FRunState& State,
+		uint64 CurrentStorageRevision,
+		const FRunDeckBatchMoveRequest& Request);
+
+	/**
+	 * 在调用方提供的 working state 上执行整组移动。
+	 * 调用方只能在返回成功后提交 working state；失败时不得提交任何中间修改。
+	 */
+	static FRunDeckBatchOperationResult ApplyMoveInstancesAtomic(
+		FRunState& InOutWorkingState,
+		uint64 CurrentStorageRevision,
+		const FRunDeckBatchMoveRequest& Request);
+
+	/** 在只读权威 State 上计算整组永久移除合法性和总金币；不修改 State。 */
+	static FRunDeckBatchDeletePreview ValidateDeleteCardsForGoldAtomic(
+		const FRunState& State,
+		uint64 CurrentStorageRevision,
+		const FRunDeckBatchDeleteRequest& Request);
+
+	/** 在 working state 上执行整组永久移除；失败时调用方丢弃 working state。 */
+	static FRunDeckBatchOperationResult ApplyDeleteCardsForGoldAtomic(
+		FRunState& InOutWorkingState,
+		uint64 CurrentStorageRevision,
+		const FRunDeckBatchDeleteRequest& Request);
+
 	static FRunDeckOperationValidation ValidateSetSpecialZoneCardBattleEnabled(const FRunState& State, FGuid InstanceId, bool bEnabled);
 	static FRunDeckOperationValidation ValidateToggleSpecialZoneCardBattleEnabled(const FRunState& State, FGuid InstanceId);
 	static bool SetSpecialZoneCardBattleEnabled(FRunState& State, FGuid InstanceId, bool bEnabled, FName* OutDisabledReason = nullptr);

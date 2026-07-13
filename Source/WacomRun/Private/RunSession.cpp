@@ -1855,6 +1855,86 @@ bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>&
 	return false;
 }
 
+FRunDeckBatchDeletePreview URunSession::ValidateDeleteCardsForGoldAtomic(
+	const FRunDeckBatchDeleteRequest& Request) const
+{
+	return FRunDeckRules::ValidateDeleteCardsForGoldAtomic(
+		RunState,
+		BackpackStorageSnapshotRevision,
+		Request);
+}
+
+FRunDeckBatchOperationResult URunSession::DeleteCardsForGoldAtomic(
+	const FRunDeckBatchDeleteRequest& Request)
+{
+	FRunDeckBatchOperationResult Result;
+	Result.StorageRevision = BackpackStorageSnapshotRevision;
+	const FRunDeckBatchDeletePreview Preview = ValidateDeleteCardsForGoldAtomic(Request);
+	if (!Preview.Validation.bCanExecute)
+	{
+		Result.DisabledReason = Preview.Validation.DisabledReason;
+		return Result;
+	}
+	FRunState WorkingState = RunState;
+	Result = FRunDeckRules::ApplyDeleteCardsForGoldAtomic(
+		WorkingState,
+		BackpackStorageSnapshotRevision,
+		Request);
+	if (!Result.bSucceeded)
+	{
+		Result.AffectedCount = 0;
+		Result.GoldReward = 0;
+		Result.StorageRevision = BackpackStorageSnapshotRevision;
+		return Result;
+	}
+	WorkingState.Gold += Result.GoldReward;
+	RunState = MoveTemp(WorkingState);
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(
+		ERunUiSnapshotDirtyFlags::BackpackStorage,
+		ERunUiSnapshotDirtyFlags::Economy));
+	NotifyRunStateChanged();
+	Result.StorageRevision = BackpackStorageSnapshotRevision;
+	return Result;
+}
+
+FRunDeckBatchOperationValidation URunSession::ValidateMoveInstancesAtomic(
+	const FRunDeckBatchMoveRequest& Request) const
+{
+	return FRunDeckRules::ValidateMoveInstancesAtomic(
+		RunState,
+		BackpackStorageSnapshotRevision,
+		Request);
+}
+
+FRunDeckBatchOperationResult URunSession::MoveInstancesAtomic(
+	const FRunDeckBatchMoveRequest& Request)
+{
+	FRunDeckBatchOperationResult Result;
+	Result.StorageRevision = BackpackStorageSnapshotRevision;
+	const FRunDeckBatchOperationValidation Validation = ValidateMoveInstancesAtomic(Request);
+	if (!Validation.bCanExecute)
+	{
+		Result.DisabledReason = Validation.DisabledReason;
+		return Result;
+	}
+	FRunState WorkingState = RunState;
+	Result = FRunDeckRules::ApplyMoveInstancesAtomic(
+		WorkingState,
+		BackpackStorageSnapshotRevision,
+		Request);
+	if (!Result.bSucceeded)
+	{
+		Result.AffectedCount = 0;
+		Result.StorageRevision = BackpackStorageSnapshotRevision;
+		return Result;
+	}
+	RunState = MoveTemp(WorkingState);
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
+	NotifyRunStateChanged();
+	Result.StorageRevision = BackpackStorageSnapshotRevision;
+	return Result;
+}
+
 bool URunSession::EndShopVisitIfOwned(FGuid VisitToken)
 {
 	if (!VisitToken.IsValid() || VisitToken != ActiveShopVisitToken)

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Deck/RunDeckBatchTypes.h"
 #include "UObject/Object.h"
 #include "Types/WacomEnums.h"
 #include "RunState.h"
@@ -482,6 +483,23 @@ public:
 	FRunDeckOperationValidation ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const;
 
 	/**
+	 * C++-only 原子批量移动预检。
+	 *
+	 * 校验整个 InstanceId 集合、共同来源、目标区、容量和严格 storage revision；不修改 RunState，
+	 * 不广播。被动 WBP 不直接调用，由 App Screen command flow 转发意图。
+	 */
+	FRunDeckBatchOperationValidation ValidateMoveInstancesAtomic(
+		const FRunDeckBatchMoveRequest& Request) const;
+
+	/**
+	 * C++-only 原子批量移动提交。
+	 *
+	 * 全部成功才一次替换权威状态、推进背包 storage revision 并广播一次；任一项失败则零修改、
+	 * 零 revision 推进、零广播。
+	 */
+	FRunDeckBatchOperationResult MoveInstancesAtomic(const FRunDeckBatchMoveRequest& Request);
+
+	/**
 	 * 战外获得一张卡的统一入口。
 	 *
 	 * 当前实现等价于加入背包并重算负重；后续战斗奖励、节点事件、商店购买、
@@ -518,6 +536,16 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	FRunDeckOperationValidation ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const;
+
+	/** C++-only 原子批量删牌预览；返回整组校验和预计总金币，不保留提交授权。 */
+	FRunDeckBatchDeletePreview ValidateDeleteCardsForGoldAtomic(
+		const FRunDeckBatchDeleteRequest& Request) const;
+
+	/**
+	 * C++-only 原子批量删牌提交；确认后重新校验严格 revision，成功只发一次金币、revision 和广播。
+	 */
+	FRunDeckBatchOperationResult DeleteCardsForGoldAtomic(
+		const FRunDeckBatchDeleteRequest& Request);
 
 	// ---- 经济：金币 ----
 

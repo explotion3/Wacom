@@ -103,3 +103,66 @@ Workspace 请求必须携带起手/确认前 Snapshot 的 storage revision，并
 **Alternatives considered**:
 - 直接移植 Demo shader 或脚本：许可证与项目边界不合，拒绝。
 - 把 hover/carry shader 逻辑写死到 Screen：难以复用和调参，拒绝。
+
+## Implementation Audit — T001–T004 (2026-07-13)
+
+### Protected baseline
+
+- `54ce8781 feat: add card pile transfer presentation and backpack refactor plan` 已提交全部先前工作区内容。
+- 本背包切片不得回退或重写该提交中的 Battle、first-person hand、pile-transfer、DreamShader 和对应测试/资产；仅在真实编译依赖冲突时做最小兼容修改并记录原因。
+- 审计开始时 `git status --short` 为空。
+
+### Legacy drag owner inventory
+
+| Symbol | Current producers/hosts | Current consumers/tests | Migration decision |
+|---|---|---|---|
+| `UWacomCardDragOperation` | `WacomDeckCardWidget.cpp` 构造单卡 payload；`WacomSpecialZoneWidget.cpp` 为 Owner/内容卡提供拖拽；`WacomBackpackScreen.cpp` / runtime builder 间接创建卡牌源 | `WacomZoneDropTarget.cpp`、`WacomDeleteZoneDropTarget.cpp`、`WacomBackpackCommandFlow.*`、`WacomBackpackScreen.*`；大量断言集中在 `BackpackScreenSpec.cpp` / `BackpackScreenTestAccess.*` | 在 US2 新 Workspace 输入 owner 可覆盖单卡后停止生产；US3/US4 迁移 move/delete 后按 T061 删除，不保留并行状态机 |
+| `UWacomZoneDropTarget` | `BackpackRuntimeZoneBuilder.*`、`WacomBackpackScreen.cpp`、`WacomSpecialZoneWidget.cpp` 动态创建 | `WacomBackpackScreen` 预览/提交、`BackpackScreenSpec.cpp` | 基础切片保留；ZoneRack preview/intent 接通后移除旧 drag/drop owner |
+| `UWacomDeleteZoneDropTarget` | `BackpackRuntimeZoneBuilder.*`、`WacomBackpackScreen.cpp` | `WacomBackpackCommandFlow.*`、`BackpackScreenSpec.cpp` | 基础切片保留；US4 batch confirm 完成后移除 |
+
+Legacy symbol live-file set:
+
+```text
+Source/WacomApp/{Public,Private}/UI/Backpack/
+  WacomCardDragOperation, WacomZoneDropTarget, WacomDeleteZoneDropTarget,
+  WacomDeckCardWidget, WacomSpecialZoneWidget, WacomBackpackScreen,
+  WacomBackpackCommandFlow, BackpackRuntimeZoneBuilder
+Source/WacomTests/Private/UI/
+  BackpackScreenSpec.cpp, BackpackScreenTestAccess.{h,cpp}
+Docs/
+  UI_Backpack_WBP_Binding.md, TechDebt.md
+```
+
+### Single-card Run API call-site decision
+
+- `URunSession::MoveInstance()` / `ValidateMoveInstance()` 的规则实现位于 `RunSession.cpp` → `FRunDeckRules`；生产 Backpack UI 提交集中在 `WacomBackpackCommandFlow.cpp`。
+- `URunSession::DeleteCardForGoldByInstance()` / validation 同样由 `WacomBackpackCommandFlow.cpp` 作为生产 Backpack UI 入口。
+- 其余直接调用主要位于 `BackpackSpec.cpp`、`RunEventSpec.cpp`、`SaveGameRoundtripSpec.cpp`、`SnapshotRevisionSpec.cpp`、`SpecialZoneBattleEnabledValidationSpec.cpp`、`RunFirstPersonCardLayerSpec.cpp` 和 `BackpackScreenSpec.cpp`，用于规则构造或现有单卡契约验证。
+- 决策：保留现有 public 单卡 API 兼容其它正式调用与测试；新增 C++-only atomic batch API。新 Workspace 不允许循环调用 public 单卡 API 实现 batch。待一项 batch parity 测试通过后，可在内部让单卡入口委托一项 batch helper，但不在 T001–T011 提前改变行为。
+
+### Module/API boundary confirmed
+
+| Module | Foundational ownership | Exposure |
+|---|---|---|
+| `WacomRun` | batch request/result contract 与 `URunSession` C++ API 声明；`FRunDeckRules` working-state helper 声明 | Public contract 不反射、不 Blueprint；算法保持 Private |
+| `WacomApp` | ZoneKey/layout/selection/carry 基础值类型；Workspace presentation style；只读 automation view | 只有 WBP/style/production test view 所需类型进入 Public；交互状态保持 Private |
+| `WacomTests` | 只消费 production automation view 的 private wrapper | 不向 production module 反向暴露任何测试类型 |
+
+### Toolchain verification
+
+- `E:\UE_5.8\Engine\Build\BatchFiles\Build.bat`：存在。
+- `E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe`：存在。
+- `quickstart.md` 的 UE 5.8 compile 和 focused automation 命令无需修正。
+- CodeGraph MCP 在当前工具会话不可调用，因此此次 live call-site 审计使用 `rg`；真正编辑仍以当前文件内容为准。
+
+## Migration Audit — T067 (2026-07-13)
+
+已按 `quickstart.md` 运行完整旧路径 `rg`。新 Workspace/ZoneRack/批量 command flow 已是 C++ fallback 的唯一可见输入路径，但以下生产符号仍有意保留：
+
+| Remaining match | Why it remains | Removal gate |
+|---|---|---|
+| `DeleteZoneHost`、`BattleDeckZoneHost`、`FluxContentDropTargetHost`、`SpecialZonesHost`、`BurdenZoneHost` | 当前 `Content/Wacom/UI/Backpack/WBP_BackpackScreen.uasset` 仍按旧 simultaneous-zone Host 制作；fallback 会折叠这些 Host，正式文档已降级为迁移兼容合同 | T055–T058 完成新 WBP/Style 资产并通过 PIE 后移除 |
+| `UWacomCardDragOperation`、`NativeOnDragDetected`、`UWacomZoneDropTarget`、`UWacomDeleteZoneDropTarget` | 旧 WBP/SpecialZone 资产和 `BackpackScreenSpec.cpp` 仍依赖单卡 drag/drop 回归路径；直接删除会让现有资产失去内容或造成编译破坏 | 新资产注册并验证 Workspace 单卡/批量移动与销毁后，执行 T061–T062 一次性删除生产 owner 和旧测试 |
+| `BackpackRuntimeZoneBuilder` 与旧 Screen command wrapper | 为上述旧资产提供无状态兼容桥；新 Workspace 不调用这些 wrapper，批量路径只走 `FWacomBackpackCommandFlow` 的 atomic API | 与旧 Host/drag 类同批移除，避免双输入 owner 长期并存 |
+
+本次审计没有把任何剩余匹配误判为正式新合同；对应清理已记录在 `Docs/TechDebt.md` 和 `Docs/TODO.md`。由于当前协作边界禁止修改 FirstPersonCard/PileTransfer/DreamShader 卡牌表现文件，T059–T060 也不能在本线程执行。

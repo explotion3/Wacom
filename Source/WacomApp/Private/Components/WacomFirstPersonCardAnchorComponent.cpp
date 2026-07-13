@@ -232,15 +232,6 @@ namespace
 		Config.PileTransfer.Style = Anchor.CardPileTransferStyle
 			? Anchor.CardPileTransferStyle->Style
 			: FWacomFirstPersonCardPileTransferStyleData();
-		if (Anchor.CardPileTransferDurationOverrideSeconds >= 0.0f)
-		{
-			const float RequestedDuration = FMath::Min(0.95f, Anchor.CardPileTransferDurationOverrideSeconds);
-			const float FixedTime = Config.PileTransfer.Style.StartChargeSeconds
-				+ Config.PileTransfer.Style.FlightSeconds
-				+ Config.PileTransfer.Style.SettleSeconds;
-			Config.PileTransfer.Style.MaxLaunchWindowSeconds =
-				FMath::Max(0.0f, RequestedDuration - FixedTime);
-		}
 		Config.Selection.bEnabled = Anchor.bEnableCardSelectionEffect;
 		Config.Selection.bReducedMotion = Anchor.bReduceCardSelectionMotion;
 		Config.Selection.Style = Anchor.CardSelectionStyle
@@ -742,12 +733,25 @@ namespace
 		AddFloat(Config.PileTransfer.Style.FlightSeconds);
 		AddInt(Config.PileTransfer.Style.LaneCount);
 		AddFloat(Config.PileTransfer.Style.BaseStaggerSeconds);
-		AddFloat(Config.PileTransfer.Style.MaxLaunchWindowSeconds);
 		AddFloat(Config.PileTransfer.Style.SettleSeconds);
 		AddFloat(Config.PileTransfer.Style.ArcHeightRatio);
 		AddFloat(Config.PileTransfer.Style.MinArcHeightPixels);
 		AddFloat(Config.PileTransfer.Style.MaxArcHeightPixels);
 		AddInt(Config.PileTransfer.Style.TrailLayerCount);
+		AddFloat(Config.PileTransfer.Style.EchoSampleIntervalSeconds);
+		AddFloat(Config.PileTransfer.Style.MoteLifetimeSeconds);
+		AddFloat(Config.PileTransfer.Style.MoteMinSizePixels);
+		AddFloat(Config.PileTransfer.Style.MoteMaxSizePixels);
+		AddFloat(Config.PileTransfer.Style.MoteOpacityHoldFraction);
+		AddFloat(Config.PileTransfer.Style.MoteBackwardDistancePixels);
+		AddFloat(Config.PileTransfer.Style.MoteLateralDistancePixels);
+		AddInt(Config.PileTransfer.Style.HighDetailMaxActiveGlyphs);
+		AddInt(Config.PileTransfer.Style.MediumDetailMaxActiveGlyphs);
+		AddInt(Config.PileTransfer.Style.HighDetailMoteSlotsPerGlyph);
+		AddInt(Config.PileTransfer.Style.MediumDetailMoteSlotsPerGlyph);
+		AddInt(Config.PileTransfer.Style.LowDetailMoteSlotsPerGlyph);
+		AddInt(Config.PileTransfer.Style.MaxMoteQuadCount);
+		AddFloat(Config.PileTransfer.Style.SafeViewportPaddingPixels);
 		AddFloat(Config.PileTransfer.Style.ReducedMotionDurationSeconds);
 		Combine(GetTypeHash(Config.PileTransfer.Style.StartSound.Get()));
 		Combine(GetTypeHash(Config.PileTransfer.Style.TravelSound.Get()));

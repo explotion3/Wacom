@@ -14,6 +14,7 @@ class UWacomDeckCardWidget;
 class UWacomSpecialZoneWidget;
 enum class EZoneKind : uint8;
 struct FWacomBackpackScreenAutomationTestView;
+struct FWacomBackpackWorkspaceAutomationTestView;
 
 struct FWacomBackpackScreenTestAccess
 {
@@ -35,6 +36,21 @@ struct FWacomBackpackScreenTestAccess
 	static int32 RefreshSkipCount(const UWacomBackpackScreen& Screen);
 	static int32 SnapshotBuildCount(const UWacomBackpackScreen& Screen);
 	static int32 SnapshotRevisionSkipCount(const UWacomBackpackScreen& Screen);
+	static int32 ZoneRackEntryCount(const UWacomBackpackScreen& Screen);
+	static int32 WorkspaceCardCount(const UWacomBackpackScreen& Screen);
+	static EZoneKind ActiveWorkspaceZone(const UWacomBackpackScreen& Screen);
+	static FGuid ActiveWorkspaceOwnerInstanceId(const UWacomBackpackScreen& Screen);
+	static void ActivateZone(UWacomBackpackScreen& Screen, EZoneKind Zone, FGuid OwnerInstanceId = FGuid());
+	static bool BeginWorkspaceCarry(UWacomBackpackScreen& Screen, int32 CardIndex = 0);
+	static bool BeginWorkspaceCarryForIds(UWacomBackpackScreen& Screen, TConstArrayView<FGuid> InstanceIds);
+	static void DeactivateWorkspaceScreen(UWacomBackpackScreen& Screen);
+	static FWacomBackpackWorkspaceAutomationTestView WorkspaceView(const UWacomBackpackScreen& Screen);
+	static bool BeginDeleteConfirmation(UWacomBackpackScreen& Screen);
+	static void ConfirmDelete(UWacomBackpackScreen& Screen);
+	static void CancelDelete(UWacomBackpackScreen& Screen);
+	static bool IsDeleteConfirmationPending(const UWacomBackpackScreen& Screen);
+	static int32 DeletePreviewCardCount(const UWacomBackpackScreen& Screen);
+	static int32 DeletePreviewGoldReward(const UWacomBackpackScreen& Screen);
 
 	static bool IsDetailVisible(const UWacomBackpackScreen& Screen);
 	static FText DetailNameText(const UWacomBackpackScreen& Screen);

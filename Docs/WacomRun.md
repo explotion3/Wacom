@@ -146,6 +146,17 @@ Run first-person hand 不直接等同于某个物理持有区。`URunSession::Bu
 
 玩家已拥有卡的操作以 `InstanceId` 为主。UI、蓝图玩家操作和交互层必须使用 `DestroyCardByInstance()`、`ValidateDestroyCardByInstance()`、`DeleteCardForGoldByInstance()`、`MoveInstance()` 等入口，不能用 Definition 指代某张已拥有卡。`URunSession` 不再提供 `AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()`、`DestroyCardFromBackpack()`、`DeleteCardForGold()` 这类 Definition 级已拥有卡 wrapper。
 
+### 原子批量移动与销毁
+
+自由工作台的跨区移动只走 `FRunDeckBatchMoveRequest -> URunSession::MoveInstancesAtomic()`；批量销毁只走 `FRunDeckBatchDeleteRequest -> ValidateDeleteCardsForGoldAtomic() -> DeleteCardsForGoldAtomic()`。两类请求都必须携带起手时的共同来源和严格 `ExpectedStorageRevision`。
+
+- 空集合、重复/无效 InstanceId、来源漂移、revision 漂移、失效 SpecialZone Owner 或任一单卡规则失败，整组零修改。
+- Run 先在 `FRunState` working copy 中按请求稳定顺序执行现有单卡规则；全部成功后才替换权威状态。
+- 成功只推进一次 BackpackStorage revision、广播一次；批量销毁同时推进 Economy revision，但仍只广播一次。
+- 批量销毁奖励按当前单卡奖励规则求和，成功后一次性加金币；失败时奖励恒为 0。
+- 同区牌匣收拢属于 App 布局整理，不调用 Run move API，不改变物理顺序、revision 或 SaveGame。
+- 工作台布局是 `WacomApp` 当前 Run 的瞬态表现状态，不写入 `FRunState` 或 SaveGame。
+
 Definition 仍然用于资产语义：`AcquireCardToRun()` / 战斗奖励 / 商店购买 / 世界拾取表达“获得一张某种卡”；RunEvent / DataAsset 可以表达“交出一张某种卡”，由 RunEvent 执行路径在运行态选择一张匹配 instance。玩家直接操作某张已拥有卡时必须先解析到 `InstanceId`。
 
 ### 容器分类

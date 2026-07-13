@@ -40,6 +40,9 @@ for name, value in {
     "GlyphBorderWidth": 0.10,
     "GlyphCenterMarkSize": 0.22,
     "GlyphGlowStrength": 0.65,
+    "EchoDitherColumns": 8.0,
+    "EchoPixelRetention": 0.82,
+    "MoteGlowStrength": 0.55,
 }.items():
     unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(
         material_instance, name, value)
@@ -47,6 +50,9 @@ for name, value in {
     "GlyphOutlineColor": unreal.LinearColor(0.96, 0.82, 0.42, 1.0),
     "GlyphFillColor": unreal.LinearColor(0.08, 0.18, 0.32, 0.92),
     "GlyphCenterColor": unreal.LinearColor(0.58, 0.80, 1.0, 1.0),
+    "EchoColorMultiplier": unreal.LinearColor(0.80, 0.92, 1.0, 0.95),
+    "MotePrimaryColor": unreal.LinearColor(0.62, 0.82, 1.0, 1.0),
+    "MoteAccentColor": unreal.LinearColor(1.0, 0.82, 0.42, 1.0),
 }.items():
     unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(
         material_instance, name, value)
@@ -72,12 +78,25 @@ style.set_editor_property("start_charge_seconds", 0.08)
 style.set_editor_property("flight_seconds", 0.36)
 style.set_editor_property("lane_count", 3)
 style.set_editor_property("base_stagger_seconds", 0.045)
-style.set_editor_property("max_launch_window_seconds", 0.43)
-style.set_editor_property("settle_seconds", 0.08)
+style.set_editor_property("settle_seconds", 0.24)
 style.set_editor_property("arc_height_ratio", 0.18)
 style.set_editor_property("min_arc_height_pixels", 48.0)
 style.set_editor_property("max_arc_height_pixels", 128.0)
-style.set_editor_property("trail_layer_count", 2)
+style.set_editor_property("trail_layer_count", 4)
+style.set_editor_property("echo_sample_interval_seconds", 0.045)
+style.set_editor_property("mote_lifetime_seconds", 0.24)
+style.set_editor_property("mote_min_size_pixels", 2.0)
+style.set_editor_property("mote_max_size_pixels", 4.5)
+style.set_editor_property("mote_opacity_hold_fraction", 0.20)
+style.set_editor_property("mote_backward_distance_pixels", 18.0)
+style.set_editor_property("mote_lateral_distance_pixels", 9.0)
+style.set_editor_property("high_detail_max_active_glyphs", 6)
+style.set_editor_property("medium_detail_max_active_glyphs", 14)
+style.set_editor_property("high_detail_mote_slots_per_glyph", 14)
+style.set_editor_property("medium_detail_mote_slots_per_glyph", 8)
+style.set_editor_property("low_detail_mote_slots_per_glyph", 4)
+style.set_editor_property("max_mote_quad_count", 240)
+style.set_editor_property("safe_viewport_padding_pixels", 36.0)
 style.set_editor_property("reduced_motion_duration_seconds", 0.18)
 style_asset.set_editor_property("style", style)
 unreal.EditorAssetLibrary.save_loaded_asset(style_asset)

@@ -112,6 +112,7 @@ private:
 	bool bWaitingForPresentationPlanEventQueue = false;
 	int32 ActivePileTransferEventSequence = INDEX_NONE;
 	int32 ActivePileTransferTotalCount = 0;
+	float ActivePileTransferExpectedDurationSeconds = 0.0f;
 #if WITH_AUTOMATION_TESTS
 	TArray<FName> StartedPresentationPlanPhaseNamesForTest;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> SubmittedPresentationPlanFeedbackHintsForTest;

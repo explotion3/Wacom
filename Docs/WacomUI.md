@@ -91,6 +91,22 @@ Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 
 
 Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.md)。WBP 制作槽位见各 Binding 文档。`UWacomBackpackScreen` 保留 Screen 生命周期、WBP 绑定、列表刷新和玩家意图入口；顶部金币 / 备战区标题等 header 标量刷新由 App-private `FWacomBackpackHeaderPresenter` 承接，移动 / 删牌 / SpecialZone 入战 toggle 的 Toast 文案由 App-private command presentation helper 承接，卡牌详情面板的创建、source guard、显示隐藏和 viewport-safe positioning 由 `FWacomBackpackCardDetailController` 承接，存放区 snapshot revision / signature dirty gate 由 `FWacomBackpackStorageRefreshGate` 承接，普通卡牌列表的 identity reconcile、复用、排序和移除回调由 `FWacomBackpackDeckCardListReconciler` 承接，SpecialZone 区块的 identity reconcile、排序和移除回调由 `FWacomBackpackSpecialZoneListReconciler` 承接，避免在 Screen / SpecialZone Widget 内重复扩散列表算法。DeckCard 的右键入战 affordance 和入战角标可见性来自 `FRunStorageCardView`，Widget 不按自身所在列表或物理区重新推断规则。
 
+### Backpack Workspace 输入与事务流
+
+正式结构是一个中央 `UWacomBackpackWorkspaceWidget` 加右侧常驻 `UWacomBackpackZoneRackWidget`。`FRunBackpackStorageSnapshot` 每次只投影一个活动区域；卡牌按 InstanceId reconcile，BattleDeck projection 只读且不进入选择。
+
+```text
+Run Snapshot / revision
+  -> BackpackScreen coordinator
+  -> passive Workspace / ZoneRack / DeleteConfirm
+  -> selection / carry intent
+  -> BackpackCommandFlow
+  -> Run atomic batch command
+  -> one notification -> reconcile
+```
+
+Screen 持有输入租约和纯 interaction model；Workspace 统一处理框选、拖动阈值、滚轮、按键和鼠标捕获；DeckCard 在 Workspace 模式只发指针意图，不创建独立 `UDragDropOperation`。区域切换、Deactivate、Destruct、不同 Run 或使携带身份失效的 Snapshot 会清选择/携带并释放捕获。确认框暂停不可变 carry snapshot，取消或提交失败原样恢复；成功才退出携带。
+
 `UWacomShopScreen` 保留 Screen 生命周期、WBP 绑定、cached shop snapshot、商品行创建和购买意图入口；shop snapshot revision / offer row signature dirty gate 由 `FWacomShopRefreshGate` 承接，商品行的 identity reconcile、排序和移除由 `FWacomShopOfferRowListReconciler` 承接，金币变化仍通过 `CurrentGold` 进入 signature 来刷新购买可用状态。
 
 `UWacomRunEventScreen` 保留 Screen 生命周期、WBP 绑定、cached choices、支付 Zone 映射和玩家意图入口；cached choices 与 Zone 映射的查询、支付 Zone -> Choice 解析和 debug 摘要由 App-private `FWacomRunEventPresentationStateView / Edit` 承接。Cached choices 只作为展示、复用、支付 Zone 映射和调试输入，不作为普通选项提交的最终可用性判断；点击选项必须调用 `URunSession::ChooseRunEventOptionWithResult()` 并以 `FRunEventChoiceResult` 为准。选项行和支付 DropTarget 的 identity reconcile、排序、复用和移除由 `FWacomRunEventChoiceListReconciler` 承接，稳定键为 `ChoiceId`，避免刷新事件 snapshot 时重建动态 WBP 实例或丢失支付 Zone 表现状态。卡牌支付 drop 的 resolve / submit 由 `FWacomRunEventPaymentDropFlow` 承接；Screen 只提供当前 RunSession、presentation state view、Toast 和结束状态，并在 flow 返回后记录调试摘要。卡牌支付候选进入 first-person menu lease 的 request 构造由 App-private `FWacomRunEventPaymentLeaseBuilder` 承接，负责从支付选项聚合稳定、去重、有效的 `ExplicitCardInstanceIds`，Screen 只负责清理或提交菜单租约。PIE / 蓝图排查用的 debug view、单行 summary 和 drop result summary 由 `FWacomRunEventScreenDebugBuilder` 统一生成，避免 Screen 内散落诊断字符串拼装。

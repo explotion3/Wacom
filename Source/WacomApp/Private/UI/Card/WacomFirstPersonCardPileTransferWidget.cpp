@@ -62,10 +62,7 @@ public:
 			return LayerId;
 		}
 
-		const int32 TrailCount = Playback->IsReducedMotion()
-			? 0
-			: FMath::Clamp(Playback->GetStyle().TrailLayerCount, 0, 3);
-		const int32 QuadCount = Playback->GetGlyphs().Num() * (TrailCount + 1);
+		const int32 QuadCount = Playback->GetGlyphs().Num() + Playback->GetAuxiliaryShapes().Num();
 		TArray<FSlateVertex> Vertices;
 		TArray<SlateIndex> Indices;
 		Vertices.Reserve(QuadCount * 4);
@@ -77,7 +74,10 @@ public:
 			const FVector2D& Center,
 			const FVector2D& Size,
 			float RotationRadians,
-			float Opacity)
+			float Opacity,
+			EWacomFirstPersonCardPileTransferShapeKind ShapeKind,
+			float ShapeAge,
+			float ShapeVariant)
 		{
 			if (Opacity <= UE_KINDA_SMALL_NUMBER || Size.X <= 0.0f || Size.Y <= 0.0f)
 			{
@@ -105,26 +105,36 @@ public:
 				Vertex.Position[1] = Absolute.Y;
 				Vertex.TexCoords[0] = UVs[CornerIndex].X;
 				Vertex.TexCoords[1] = UVs[CornerIndex].Y;
-				Vertex.TexCoords[2] = 1.0f;
-				Vertex.TexCoords[3] = 1.0f;
+				Vertex.TexCoords[2] = static_cast<float>(ShapeKind);
+				Vertex.TexCoords[3] = FMath::Clamp(ShapeAge, 0.0f, 1.0f)
+					+ 2.0f * FMath::Clamp(ShapeVariant, 0.0f, 1.0f);
 				Vertex.Color = FLinearColor(1.0f, 1.0f, 1.0f, Opacity).ToFColor(true);
 			}
 			Indices.Append({ BaseVertex, static_cast<SlateIndex>(BaseVertex + 1), static_cast<SlateIndex>(BaseVertex + 2),
 				BaseVertex, static_cast<SlateIndex>(BaseVertex + 2), static_cast<SlateIndex>(BaseVertex + 3) });
 		};
 
+		for (const FWacomFirstPersonCardPileTransferGlyphView& Shape : Playback->GetAuxiliaryShapes())
+		{
+			AddQuad(
+				Shape.Position,
+				Shape.Size,
+				Shape.RotationRadians,
+				Shape.Opacity,
+				Shape.ShapeKind,
+				Shape.ShapeAge,
+				Shape.ShapeVariant);
+		}
 		for (const FWacomFirstPersonCardPileTransferGlyphView& Glyph : Playback->GetGlyphs())
 		{
-			for (int32 TrailIndex = TrailCount; TrailIndex > 0; --TrailIndex)
-			{
-				const float TrailAlpha = Glyph.Opacity * (0.16f / static_cast<float>(TrailIndex));
-				AddQuad(
-					Glyph.Position - FVector2D(0.0f, 4.0f * TrailIndex),
-					Glyph.Size * (1.0f - 0.08f * TrailIndex),
-					Glyph.RotationRadians,
-					TrailAlpha);
-			}
-			AddQuad(Glyph.Position, Glyph.Size, Glyph.RotationRadians, Glyph.Opacity);
+			AddQuad(
+				Glyph.Position,
+				Glyph.Size,
+				Glyph.RotationRadians,
+				Glyph.Opacity,
+				Glyph.ShapeKind,
+				Glyph.ShapeAge,
+				Glyph.ShapeVariant);
 		}
 
 		if (!Vertices.IsEmpty())
@@ -182,7 +192,13 @@ bool UWacomFirstPersonCardPileTransferWidget::Play(
 {
 	LastBroadcastArrivedCount = INDEX_NONE;
 	bCompletionBroadcast = false;
-	if (!Playback->Start(Hint, Config, SourcePosition, TargetPosition))
+	FVector2D ViewportSize = GetCachedGeometry().GetLocalSize();
+	if (ViewportSize.X <= UE_SMALL_NUMBER || ViewportSize.Y <= UE_SMALL_NUMBER)
+	{
+		const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+		ViewportSize = UWidgetLayoutLibrary::GetViewportSize(this) / ViewportScale;
+	}
+	if (!Playback->Start(Hint, Config, SourcePosition, TargetPosition, ViewportSize))
 	{
 		return false;
 	}

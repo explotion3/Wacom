@@ -961,6 +961,235 @@ bool FRunDeckRules::MoveInstance(
 	return true;
 }
 
+FRunDeckZoneAddress FRunDeckRules::NormalizeZoneAddress(const FRunDeckZoneAddress& Address)
+{
+	FRunDeckZoneAddress Normalized = Address;
+	if (Normalized.Zone != EZoneKind::SpecialZone)
+	{
+		Normalized.OwnerInstanceId.Invalidate();
+	}
+	return Normalized;
+}
+
+FRunDeckBatchOperationValidation FRunDeckRules::ValidateBatchInstanceSet(
+	const FRunState& State,
+	uint64 CurrentStorageRevision,
+	const TArray<FGuid>& InstanceIds,
+	const FRunDeckZoneAddress& ExpectedSource,
+	uint64 ExpectedStorageRevision)
+{
+	FRunDeckBatchOperationValidation Result;
+	Result.RequestedCount = InstanceIds.Num();
+	Result.ValidatedStorageRevision = CurrentStorageRevision;
+	if (InstanceIds.IsEmpty())
+	{
+		Result.DisabledReason = DeckReasons::EmptyBatchRequest();
+		return Result;
+	}
+	if (ExpectedStorageRevision != CurrentStorageRevision)
+	{
+		Result.DisabledReason = DeckReasons::StaleStorageRevision();
+		return Result;
+	}
+
+	const FRunDeckZoneAddress Source = NormalizeZoneAddress(ExpectedSource);
+	if (Source.Zone == EZoneKind::SpecialZone)
+	{
+		if (!Source.OwnerInstanceId.IsValid()
+			|| State.SpecialZones.IndexOfByPredicate(
+				[&Source](const FSpecialZone& Zone) { return Zone.OwnerInstanceId == Source.OwnerInstanceId; }) == INDEX_NONE)
+		{
+			Result.DisabledReason = DeckReasons::SpecialZoneMissing();
+			return Result;
+		}
+	}
+
+	TSet<FGuid> UniqueIds;
+	for (const FGuid InstanceId : InstanceIds)
+	{
+		if (!InstanceId.IsValid())
+		{
+			Result.DisabledReason = DeckReasons::CardNotFound();
+			return Result;
+		}
+		if (UniqueIds.Contains(InstanceId))
+		{
+			Result.DisabledReason = DeckReasons::DuplicateInstanceId();
+			return Result;
+		}
+		UniqueIds.Add(InstanceId);
+
+		FRunOwnedCardLocation Location;
+		if (!FindOwnedCardInstance(State, InstanceId, Location) || !Location.Instance.Definition)
+		{
+			Result.DisabledReason = DeckReasons::CardNotFound();
+			return Result;
+		}
+		FRunDeckZoneAddress Actual;
+		Actual.Zone = Location.Zone;
+		Actual.OwnerInstanceId = Location.ZoneOwnerInstanceId;
+		Actual = NormalizeZoneAddress(Actual);
+		if (Actual.Zone != Source.Zone || Actual.OwnerInstanceId != Source.OwnerInstanceId)
+		{
+			Result.DisabledReason = DeckReasons::SourceZoneMismatch();
+			return Result;
+		}
+	}
+
+	Result.bCanExecute = true;
+	Result.DisabledReason = NAME_None;
+	return Result;
+}
+
+FRunDeckBatchOperationValidation FRunDeckRules::ValidateMoveInstancesAtomic(
+	const FRunState& State,
+	uint64 CurrentStorageRevision,
+	const FRunDeckBatchMoveRequest& Request)
+{
+	FRunDeckBatchOperationValidation Result = ValidateBatchInstanceSet(
+		State,
+		CurrentStorageRevision,
+		Request.InstanceIds,
+		Request.ExpectedSource,
+		Request.ExpectedStorageRevision);
+	if (!Result.bCanExecute)
+	{
+		return Result;
+	}
+	const FRunDeckZoneAddress Source = NormalizeZoneAddress(Request.ExpectedSource);
+	const FRunDeckZoneAddress Target = NormalizeZoneAddress(Request.Target);
+	if (Target.Zone == EZoneKind::SpecialZone && !Target.OwnerInstanceId.IsValid())
+	{
+		Result.bCanExecute = false;
+		Result.DisabledReason = DeckReasons::SpecialZoneMissing();
+		return Result;
+	}
+	if (Source.Zone == Target.Zone && Source.OwnerInstanceId == Target.OwnerInstanceId)
+	{
+		Result.bCanExecute = false;
+		Result.DisabledReason = DeckReasons::SameZoneBatch();
+		return Result;
+	}
+
+	FRunState WorkingState = State;
+	for (const FGuid InstanceId : Request.InstanceIds)
+	{
+		FName DisabledReason = NAME_None;
+		if (!MoveInstance(WorkingState, InstanceId, Target.Zone, Target.OwnerInstanceId, nullptr, &DisabledReason))
+		{
+			Result.bCanExecute = false;
+			Result.DisabledReason = DisabledReason.IsNone() ? DeckReasons::Unknown() : DisabledReason;
+			return Result;
+		}
+	}
+	return Result;
+}
+
+FRunDeckBatchOperationResult FRunDeckRules::ApplyMoveInstancesAtomic(
+	FRunState& InOutWorkingState,
+	uint64 CurrentStorageRevision,
+	const FRunDeckBatchMoveRequest& Request)
+{
+	FRunDeckBatchOperationResult Result;
+	Result.StorageRevision = CurrentStorageRevision;
+	const FRunDeckBatchOperationValidation Validation = ValidateMoveInstancesAtomic(
+		InOutWorkingState,
+		CurrentStorageRevision,
+		Request);
+	if (!Validation.bCanExecute)
+	{
+		Result.DisabledReason = Validation.DisabledReason;
+		return Result;
+	}
+	const FRunDeckZoneAddress Target = NormalizeZoneAddress(Request.Target);
+	for (const FGuid InstanceId : Request.InstanceIds)
+	{
+		FName DisabledReason = NAME_None;
+		if (!MoveInstance(InOutWorkingState, InstanceId, Target.Zone, Target.OwnerInstanceId, nullptr, &DisabledReason))
+		{
+			Result.DisabledReason = DisabledReason.IsNone() ? DeckReasons::Unknown() : DisabledReason;
+			return Result;
+		}
+	}
+	Result.bSucceeded = true;
+	Result.DisabledReason = NAME_None;
+	Result.AffectedCount = Request.InstanceIds.Num();
+	return Result;
+}
+
+FRunDeckBatchDeletePreview FRunDeckRules::ValidateDeleteCardsForGoldAtomic(
+	const FRunState& State,
+	uint64 CurrentStorageRevision,
+	const FRunDeckBatchDeleteRequest& Request)
+{
+	FRunDeckBatchDeletePreview Preview;
+	Preview.Validation = ValidateBatchInstanceSet(
+		State,
+		CurrentStorageRevision,
+		Request.InstanceIds,
+		Request.ExpectedSource,
+		Request.ExpectedStorageRevision);
+	if (!Preview.Validation.bCanExecute)
+	{
+		return Preview;
+	}
+
+	FRunState WorkingState = State;
+	for (const FGuid InstanceId : Request.InstanceIds)
+	{
+		FRunOwnedCardLocation Location;
+		if (!FindOwnedCardInstance(WorkingState, InstanceId, Location) || !Location.Instance.Definition)
+		{
+			Preview.Validation.bCanExecute = false;
+			Preview.Validation.DisabledReason = DeckReasons::CardNotFound();
+			Preview.TotalGoldReward = 0;
+			return Preview;
+		}
+		Preview.TotalGoldReward += GetDeleteGoldRewardForCard(Location.Instance.Definition);
+		FName DisabledReason = NAME_None;
+		if (!PermanentRemoveOwnedInstance(WorkingState, InstanceId, &DisabledReason))
+		{
+			Preview.Validation.bCanExecute = false;
+			Preview.Validation.DisabledReason = DisabledReason.IsNone() ? DeckReasons::Unknown() : DisabledReason;
+			Preview.TotalGoldReward = 0;
+			return Preview;
+		}
+	}
+	return Preview;
+}
+
+FRunDeckBatchOperationResult FRunDeckRules::ApplyDeleteCardsForGoldAtomic(
+	FRunState& InOutWorkingState,
+	uint64 CurrentStorageRevision,
+	const FRunDeckBatchDeleteRequest& Request)
+{
+	FRunDeckBatchOperationResult Result;
+	Result.StorageRevision = CurrentStorageRevision;
+	const FRunDeckBatchDeletePreview Preview = ValidateDeleteCardsForGoldAtomic(
+		InOutWorkingState,
+		CurrentStorageRevision,
+		Request);
+	if (!Preview.Validation.bCanExecute)
+	{
+		Result.DisabledReason = Preview.Validation.DisabledReason;
+		return Result;
+	}
+	for (const FGuid InstanceId : Request.InstanceIds)
+	{
+		FName DisabledReason = NAME_None;
+		if (!PermanentRemoveOwnedInstance(InOutWorkingState, InstanceId, &DisabledReason))
+		{
+			Result.DisabledReason = DisabledReason.IsNone() ? DeckReasons::Unknown() : DisabledReason;
+			return Result;
+		}
+	}
+	Result.bSucceeded = true;
+	Result.DisabledReason = NAME_None;
+	Result.AffectedCount = Request.InstanceIds.Num();
+	Result.GoldReward = Preview.TotalGoldReward;
+	return Result;
+}
+
 void FRunDeckRules::RecomputeBurden(FRunState& State, bool bAllowBurdenRefill)
 {
 	{

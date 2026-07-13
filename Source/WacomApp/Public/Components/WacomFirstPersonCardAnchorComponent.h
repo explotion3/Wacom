@@ -518,9 +518,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|14 Card Pile Transfer", meta = (ToolTip = "弱化洗回动态：使用约 0.18 秒的源牌堆静态牌印与目标收束闪光，不执行跨屏弧线飞行。"))
 	bool bReduceCardPileTransferMotion = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|14 Card Pile Transfer", meta = (Units = "s", ToolTip = "洗回迁移总时长覆盖，单位为秒；负值表示使用 Style 自动节奏。推荐 0.55 到 0.95，运行时仍不会超过约 0.95 秒。"))
-	float CardPileTransferDurationOverrideSeconds = -1.0f;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜 Surface Effect 制作开关；当前拖拽流程不会激活它，默认关闭。后续只允许由明确的卡面数据更新或升级表现语义驱动。"))
 	bool bEnableCardSelectionEffect = false;
 

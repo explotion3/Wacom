@@ -24,8 +24,17 @@ class UWacomZoneDropTarget;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 class UWacomCardDragOperation;
+class UWacomBackpackWorkspaceStyle;
+class UWacomBackpackWorkspaceWidget;
+class UWacomBackpackZoneRackWidget;
+class UWacomBackpackDeleteConfirmWidget;
 class FWacomBackpackCardDetailController;
 class FWacomBackpackStorageRefreshGate;
+class FWacomBackpackWorkspaceInteractionModel;
+struct FWacomBackpackWorkspaceStateStore;
+struct FWacomBackpackWorkspaceReleaseIntent;
+struct FWacomBackpackZoneKey;
+struct FWacomBackpackPendingDeleteConfirmation;
 struct FWacomBackpackScreenTestAccess;
 struct FCardInstance;
 
@@ -36,6 +45,10 @@ struct WACOMAPP_API FWacomBackpackScreenAutomationTestView
 	int32 ListRefreshSkipCount = 0;
 	int32 SnapshotBuildCount = 0;
 	int32 SnapshotRevisionSkipCount = 0;
+	int32 ZoneRackEntryCount = 0;
+	int32 WorkspaceCardCount = 0;
+	EZoneKind ActiveWorkspaceZone = EZoneKind::Backpack;
+	FGuid ActiveWorkspaceOwnerInstanceId;
 };
 #endif
 
@@ -94,6 +107,7 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeOnActivated() override;
+	virtual void NativeOnDeactivated() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 
 	/** 全量重建：顶部读 ViewModel，WrapBox 子项读 Run 层 Snapshot。 */
@@ -125,6 +139,24 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> BackpackTitleText;
+
+	/** 单一中央自由工作台 Host。WBP 可提供；未绑定时 fallback 自动创建。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> WorkspaceHost;
+
+	/** 右侧常驻区域牌匣 Host。WBP 可提供；未绑定时 fallback 自动创建。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> ZoneRackHost;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> DeleteTargetHost;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> DeleteConfirmHost;
+
+	/** 将当前区域的手动位置、角度和层级恢复为确定性默认布局。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> ArrangeAllButton;
 
 	/** WBP 可绑定的删牌区运行时内容槽。未绑定时 C++ fallback 会创建。 */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -176,12 +208,24 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UTextBlock> BurdenZoneTitleText;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBackpackWorkspaceWidget> WorkspaceWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBackpackZoneRackWidget> ZoneRackWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBackpackDeleteConfirmWidget> DeleteConfirmWidget;
+
 	/** 关闭按钮（点击 = DeactivateWidget）。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CloseButton;
 
 	UFUNCTION()
 	void HandleCloseClicked();
+
+	UFUNCTION()
+	void HandleArrangeAllClicked();
 
 private:
 	UWacomRunViewModelProvider* GetProvider() const;
@@ -195,6 +239,7 @@ private:
 
 	/** 默认 C++ 布局只负责搭出三大区和 Host，实际 DropTarget 由 EnsureRuntimeZoneWidgets 填充。 */
 	void EnsureRuntimeZoneWidgets();
+	void EnsureWorkspaceWidgets();
 
 	/** 子控件类（默认 UWacomDeckCardWidget，蓝图可覆盖）。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack")
@@ -207,6 +252,22 @@ private:
 	/** 卡牌详情悬浮面板类（默认 WBP_CardDetailPanel，失败则用 C++ 类）。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack")
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
+		meta = (ToolTip = "中央自由工作台 Widget 类。保持被动，只显示 Screen 提供的活动区域与布局。"))
+	TSubclassOf<UWacomBackpackWorkspaceWidget> WorkspaceWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
+		meta = (ToolTip = "右侧常驻区域牌匣 Widget 类。入口只转发区域激活意图，不直接修改 Run 状态。"))
+	TSubclassOf<UWacomBackpackZoneRackWidget> ZoneRackWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
+		meta = (ToolTip = "批量销毁确认 Widget 类。只显示数量和奖励并转发确认、取消意图。"))
+	TSubclassOf<UWacomBackpackDeleteConfirmWidget> DeleteConfirmWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
+		meta = (ToolTip = "背包自由工作台的布局、颜色和动效表现参数。留空时使用 C++ 默认表现，不影响 Run 规则。"))
+	TObjectPtr<UWacomBackpackWorkspaceStyle> WorkspaceStyle;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
@@ -252,6 +313,18 @@ private:
 	void RebuildFluxContentCards(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildSpecialZones(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildBurdenZone(const FRunBackpackStorageSnapshot& Snapshot);
+	void RebuildWorkspaceChrome(const FRunBackpackStorageSnapshot& Snapshot);
+	void RebuildWorkspaceFromCachedSnapshot();
+	void HandleZoneActivated(EZoneKind Zone, FGuid OwnerInstanceId);
+	void HandleWorkspaceReleaseIntent(const FWacomBackpackWorkspaceReleaseIntent& Intent);
+	void HandleWorkspaceInteractionChanged();
+	void CancelWorkspaceInteraction();
+	bool ResolveWorkspaceRackTarget(FWacomBackpackZoneKey& OutTarget) const;
+	bool IsWorkspaceDeleteTarget() const;
+	void BeginWorkspaceDeleteConfirmation(TConstArrayView<FGuid> InstanceIds);
+	void HandleWorkspaceDeleteConfirmed();
+	void HandleWorkspaceDeleteCancelled();
+	FWacomBackpackWorkspaceStateStore& GetWorkspaceStateStore(URunSession* Run);
 	void ResetBackpackRefreshDirtyGate();
 
 	void HandleCardHovered(UWacomDeckCardWidget* SourceWidget);
@@ -295,6 +368,15 @@ private:
 #endif
 
 	TSharedPtr<FWacomBackpackStorageRefreshGate> StorageRefreshGate;
+	TSharedPtr<FWacomBackpackWorkspaceStateStore> WorkspaceStateFallback;
+	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> WorkspaceInteractionModel;
+	TSharedPtr<FWacomBackpackPendingDeleteConfirmation> PendingDeleteConfirmation;
+
+	FRunBackpackStorageSnapshot LastAppliedStorageSnapshot;
+	bool bHasLastAppliedStorageSnapshot = false;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWacomDeckCardWidget>> ActiveWorkspaceCardWidgets;
 
 #if WITH_AUTOMATION_TESTS
 	URunSession* RunSessionOverrideForTest = nullptr;

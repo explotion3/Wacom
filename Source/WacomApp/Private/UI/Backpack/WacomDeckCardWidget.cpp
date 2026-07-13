@@ -11,6 +11,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Cards/CardDefinition.h"
 #include "UI/Backpack/WacomCardDragOperation.h"
+#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomCardView.h"
 
@@ -51,11 +52,46 @@ void UWacomDeckCardWidget::SetStorageCardView(const FRunStorageCardView& Storage
 
 void UWacomDeckCardWidget::PrepareForBackpackListReuse()
 {
+	SetWorkspaceInputOwned(false);
+	SetWorkspaceVisualState(false, false, false);
 	bDragVisualMode = false;
 	SetRenderOpacity(WacomDeckCardNormalOpacity);
 	SetProjectedFromBadgeText(FText::GetEmpty());
 	SetRightClickToggleEnabled(false);
 	ApplyDragSourceVisualState(false);
+}
+
+void UWacomDeckCardWidget::SetWorkspaceInputOwned(bool bOwned)
+{
+	bWorkspaceInputOwned = bOwned;
+	if (!bOwned)
+	{
+		OnWorkspacePointerDownNative.Unbind();
+		OnWorkspacePointerMoveNative.Unbind();
+		OnWorkspacePointerUpNative.Unbind();
+	}
+}
+
+void UWacomDeckCardWidget::SetWorkspaceVisualState(bool bSelected, bool bCurrent, bool bReadOnly)
+{
+	bWorkspaceSelected = bSelected;
+	bWorkspaceCurrent = bCurrent;
+	FWacomBackpackWorkspaceCardVisualState State;
+	State.Opacity = bReadOnly ? 0.72f : 1.0f;
+	State.Scale = bCurrent ? 1.035f : 1.0f;
+	State.Tint = bSelected ? FLinearColor(0.65f, 0.88f, 1.0f, 1.0f) : FLinearColor::White;
+	ApplyWorkspaceVisualState(State);
+}
+
+void UWacomDeckCardWidget::ApplyWorkspaceVisualState(
+	const FWacomBackpackWorkspaceCardVisualState& VisualState)
+{
+	SetRenderOpacity(VisualState.Opacity);
+	SetRenderScale(FVector2D(VisualState.Scale, VisualState.Scale));
+	if (CardBody)
+	{
+		CardBody->SetBrushColor(VisualState.Tint);
+	}
 }
 
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
@@ -147,6 +183,10 @@ FReply UWacomDeckCardWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 	{
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 	}
+	if (bWorkspaceInputOwned && OnWorkspacePointerDownNative.IsBound())
+	{
+		return OnWorkspacePointerDownNative.Execute(this, InGeometry, InMouseEvent);
+	}
 
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton && bCardInteractionEnabled && InstanceId.IsValid())
 	{
@@ -157,6 +197,24 @@ FReply UWacomDeckCardWidget::NativeOnMouseButtonDown(const FGeometry& InGeometry
 		return FReply::Handled();
 	}
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+FReply UWacomDeckCardWidget::NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (bWorkspaceInputOwned && OnWorkspacePointerMoveNative.IsBound())
+	{
+		return OnWorkspacePointerMoveNative.Execute(this, InGeometry, InMouseEvent);
+	}
+	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
+}
+
+FReply UWacomDeckCardWidget::NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	if (bWorkspaceInputOwned && OnWorkspacePointerUpNative.IsBound())
+	{
+		return OnWorkspacePointerUpNative.Execute(this, InGeometry, InMouseEvent);
+	}
+	return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
 }
 
 void UWacomDeckCardWidget::NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation)
@@ -182,7 +240,7 @@ void UWacomDeckCardWidget::NativeOnDragCancelled(const FDragDropEvent& InDragDro
 
 UDragDropOperation* UWacomDeckCardWidget::BuildDragOperation()
 {
-	if (bDragVisualMode || !bCardInteractionEnabled || !Card || !InstanceId.IsValid())
+	if (bWorkspaceInputOwned || bDragVisualMode || !bCardInteractionEnabled || !Card || !InstanceId.IsValid())
 	{
 		return nullptr;
 	}

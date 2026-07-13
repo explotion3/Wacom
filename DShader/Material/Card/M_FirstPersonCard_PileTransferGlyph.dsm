@@ -38,6 +38,36 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
             SortPriority=70;
             Description="描边和中央方印的额外自发光强度；默认 0.65，推荐 0.2 到 1.4。";
         ];
+        ScalarParameter EchoDitherColumns = 8.0 [
+            Group="第一人称牌堆迁移|历史拖尾";
+            SortPriority=80;
+            Description="历史路径残影的 Bayer 像素列数；默认 8，推荐 6 到 14。";
+        ];
+        ScalarParameter EchoPixelRetention = 0.82 [
+            Group="第一人称牌堆迁移|历史拖尾";
+            SortPriority=90;
+            Description="历史路径残影保留的硬像素比例；默认 0.82，推荐 0.60 到 0.95。";
+        ];
+        VectorParameter EchoColorMultiplier = float4(0.80, 0.92, 1.0, 0.95) [
+            Group="第一人称牌堆迁移|历史拖尾";
+            SortPriority=100;
+            Description="历史路径残影相对主体的颜色与透明度倍率。";
+        ];
+        VectorParameter MotePrimaryColor = float4(0.62, 0.82, 1.0, 1.0) [
+            Group="第一人称牌堆迁移|飘散像素";
+            SortPriority=110;
+            Description="大多数飘散像素的主颜色和透明度。";
+        ];
+        VectorParameter MoteAccentColor = float4(1.0, 0.82, 0.42, 1.0) [
+            Group="第一人称牌堆迁移|飘散像素";
+            SortPriority=120;
+            Description="少量飘散像素的强调颜色和透明度。";
+        ];
+        ScalarParameter MoteGlowStrength = 0.55 [
+            Group="第一人称牌堆迁移|飘散像素";
+            SortPriority=130;
+            Description="飘散像素出生阶段的额外亮度；默认 0.55，推荐 0 到 1.2。";
+        ];
     }
 
     Settings = {
@@ -56,8 +86,10 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
 
     Graph = {
         float2 uv = UE.TexCoord(Index=0);
-        WacomFirstPersonCard_ComputePileTransferGlyph(
+        float2 shapeData = UE.TexCoord(Index=1);
+        WacomFirstPersonCard_ComputePileTransferVisual(
             uv,
+            shapeData,
             GlyphPixelColumns,
             GlyphBorderWidth,
             GlyphCenterMarkSize,
@@ -65,6 +97,12 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_PileTransferGlyph")
             GlyphFillColor,
             GlyphCenterColor,
             GlyphGlowStrength,
+            EchoDitherColumns,
+            EchoPixelRetention,
+            EchoColorMultiplier,
+            MotePrimaryColor,
+            MoteAccentColor,
+            MoteGlowStrength,
             Color,
             Alpha);
     }

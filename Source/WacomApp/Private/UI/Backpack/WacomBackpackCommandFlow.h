@@ -4,14 +4,17 @@
 
 #include "CoreMinimal.h"
 #include "RunStateTypes.h"
+#include "Deck/RunDeckBatchTypes.h"
+#include "WacomBackpackWorkspaceTypes.h"
 
 class UCardDefinition;
 class URunSession;
 class UWacomAppToastSubsystem;
 class UWacomBackpackScreen;
 class UWacomCardDragOperation;
+struct FWacomBackpackWorkspaceStateStore;
 
-class FWacomBackpackCommandFlow
+class WACOMAPP_API FWacomBackpackCommandFlow
 {
 public:
 	static FRunDeckOperationValidation ValidateZoneDropPreview(
@@ -46,6 +49,39 @@ public:
 		UWacomBackpackScreen& Screen,
 		URunSession* Run,
 		FGuid InstanceId);
+
+	/** 纯布局整理：不调用 Run move API，不改变卡牌物理顺序或 storage revision。 */
+	static void ArrangeAll(
+		FWacomBackpackWorkspaceStateStore& StateStore,
+		const FWacomBackpackZoneKey& ZoneKey);
+
+	/** 同区放回牌匣等价于清除这些卡的手动布局；跨区意图必须走 Run batch command。 */
+	static bool CollectSameZone(
+		FWacomBackpackWorkspaceStateStore& StateStore,
+		const FWacomBackpackZoneKey& SourceZone,
+		const FWacomBackpackZoneKey& TargetZone,
+		TConstArrayView<FGuid> InstanceIds);
+
+	static FRunDeckBatchMoveRequest BuildBatchMoveRequest(
+		const FWacomBackpackWorkspaceCarryState& Carry,
+		const FWacomBackpackZoneKey& TargetZone,
+		TConstArrayView<FGuid> InstanceIds);
+
+	static FRunDeckBatchOperationResult SubmitBatchMove(
+		UWacomBackpackScreen& Screen,
+		URunSession* Run,
+		const FRunDeckBatchMoveRequest& Request);
+
+	static FRunDeckBatchDeleteRequest BuildBatchDeleteRequest(
+		const FWacomBackpackWorkspaceCarryState& Carry,
+		TConstArrayView<FGuid> InstanceIds);
+	static FRunDeckBatchDeletePreview PreviewBatchDelete(
+		URunSession* Run,
+		const FRunDeckBatchDeleteRequest& Request);
+	static FRunDeckBatchOperationResult SubmitBatchDelete(
+		UWacomBackpackScreen& Screen,
+		URunSession* Run,
+		const FRunDeckBatchDeleteRequest& Request);
 
 private:
 	static FText GetCardDisplayName(const UCardDefinition* Card);

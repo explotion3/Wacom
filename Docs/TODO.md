@@ -51,6 +51,13 @@ tags:
 
 ## P1 近期实现候选
 
+- [ ] **背包 Workspace 重构：规则与 C++ 交互完成，正式资产/PIE 待收口**
+  - 状态：`In Progress: C++ + automation complete; WBP/material/PIE pending`
+  - 归属：Run / App / UI / Tests
+  - 入口：`specs/003-backpack-workspace-refactor/`
+  - 说明：已完成单活动 Workspace、常驻 ZoneRack、同 Run 瞬态布局、框选、持续扇形携带、首次释放守卫、滚轮当前牌、原子批量移动/销毁、确认取消/失败恢复和 C++ fallback。2026-07-13 已通过 `WacomEditor`、`Wacom.Run.Backpack` 2/2、`Wacom.UI.Backpack` 66/66 以及 `CompileAllBlueprints`（0 error；1 个既有 deprecated Blueprint warning）。剩余是正式 WBP/Style/反馈材质资产、旧 drag/drop 兼容类清理和完整 PIE 手感验收。本线程按协作边界不修改 DreamShader 卡牌表现文件。
+  - 全量回归证据：`Automation RunTests Wacom` 找到 1302 项后，在背包范围外失败并中止：`Wacom.UI.Battle.BattleHUD.HandPresentation.ShortcutStartsDragByHandIndex`、`Wacom.UI.Battle.FirstPersonTargetPreview.NoTargetCommitShowsPlayerActionPreview` 失败，随后 `BattlePresentationQueueSpec.cpp:259` 发生 `Array index out of bounds: 1 into an array of size 1`。该组属于暂停的 Battle/first-person 卡牌表现线程，本切片未越界修改。
+
 - [x] **敌人系统重构：稳定身份、行为数据化、场景表现拆分**
   - 状态：`Done: 主链路已落地`
   - 归属：Data / Battle / Run / App / Editor
@@ -142,10 +149,10 @@ tags:
   - 入口：[Roadmap: 商店](./Roadmap.md#roadmap-shop)
 
 - [ ] **背包正式 WBP、拖拽 polish、必要时做虚拟列表**
-  - 状态：`Ready: 美术 / WBP 工作`
+  - 状态：`In Progress: Workspace 绑定资产与材质待制作`
   - 归属：UI / Run
   - 入口：[Roadmap: 背包 UI](./Roadmap.md#roadmap-backpack-ui)
-  - 说明：稳定刷新和 revision gate 事实见 Run / UI 专题；TODO 只追踪正式 WBP、拖拽表现、Shop 卡面预览和虚拟列表。
+  - 说明：正式资产需绑定 `WorkspaceHost / ZoneRackHost / DeleteTargetHost / DeleteConfirmHost / ArrangeAllButton`，创建 Workspace、ZoneRack、Entry、DeleteConfirm 和 Style 资产，再移除旧 drag/drop 输入 owner。虚拟列表仅在 20–100 卡 PIE 证明需要后实施。
 
 - [ ] **卡牌详情 token：ConditionTokenBuilder**
   - 状态：`Ready: 详情表现继续收口`
@@ -187,6 +194,12 @@ tags:
   - 归属：UI / 战斗表现
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
   - 说明：后续按美术反馈微调扇形参数、卡面采样、Retainer 外元素、slot motion、commit pulse 和 drag / aim 读牌姿态。
+
+- [ ] **牌堆牌印表现第二切片：接收脉冲与弃牌化牌印**
+  - 状态：`Ready: 飞行核心已完成，等待下一轮表现实现`
+  - 归属：UI / 战斗表现
+  - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)
+  - 说明：在现有安全内收弧线、历史路径残影和确定性飘散像素之上，为抽牌堆增加逐枚吸收 / 最终收束脉冲；再新增 `Discarded` 的“实体卡收束为牌印并飞向弃牌堆”语义适配。继续复用批量 Slate renderer，不让普通手牌承担粒子 Tick，也不改变规则去向。
 
 - [ ] **单一玩家档案与旅程存档：活动旅程、滚动备份、历史摘要**
   - 状态：`Ready: 产品口径已确认，等待独立规格与实现`

@@ -65,6 +65,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | UI Style 资产命名 V0 | 通用样式资产已迁到 `/Game/Wacom/UI/Style/`，但仍保留 `tiny_menu_Button`、`MyCommonTextStyle` 等原型命名 | 后续设计系统整理时统一命名为语义化 Style asset，例如 `WBPStyle_Button_CommandPrimary` / `TextStyle_CommandButton`，并通过资产审计确认没有旧路径引用后再重命名 |
 | Backpack UI C++ 默认布局 | 拖拽模型已接入，fallback 布局 / 运行时区域构建已抽到私有 helper；缺席的嵌套 SpecialZone WBP 会静默回 C++ `UWacomSpecialZoneWidget`，不再作为硬路径加载；视觉仍主要由 C++ 构造 | 正式 `WBP_BackpackScreen`、局部 Zone WBP 和可选 `WBP_WacomSpecialZoneWidget` 替换视觉 |
+| Backpack Workspace 资产迁移 | C++ Workspace/ZoneRack、框选/扇形携带、原子批量移动/销毁和确认恢复已落地；旧 drag/drop 类仅为当前未迁移 `WBP_BackpackScreen` 与回归测试保留，fallback 中旧 Host 已折叠 | 同一次资产切片完成 WBP 绑定和 Backpack 专用反馈材质后，删除 `WacomCardDragOperation` / ZoneDropTarget / DeleteZoneDropTarget 旧输入 owner 与相应旧测试 |
 | Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile；Backpack 的 snapshot refresh gate、普通卡列表 reconcile 和 SpecialZone section reconcile 已抽到 App-private helper，Shop 的 snapshot / offer dirty gate 和 offer row reconcile 已抽到 App-private helper，但列表仍是 WrapBox / VerticalBox | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |
 | 像素风 UI 分辨率适配 | 背包卡牌等像素图控件依赖固定 SizeBox 和 `DPI Scale = 1.0`；非整数 DPI 缩放会导致像素点显示不均匀 | 统一设计像素安全缩放档位，并配合 WrapBox / ScrollBox 做布局重排 |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |

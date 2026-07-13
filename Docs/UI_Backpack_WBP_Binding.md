@@ -22,6 +22,19 @@ tags:
 
 父类：`UWacomBackpackScreen`
 
+> 新正式结构以以下 Workspace 合同为准；下文旧 simultaneous-zone Host 仅用于尚未迁移资产的折叠兼容，不得继续作为可见输入 owner。
+
+| 必选/推荐绑定 | 类型 | 合同 |
+|---|---|---|
+| `WorkspaceHost` | `PanelWidget` | 中央唯一活动区域，容纳 `UWacomBackpackWorkspaceWidget` |
+| `ZoneRackHost` | `PanelWidget` | 右侧常驻区域牌匣 |
+| `DeleteTargetHost` | `PanelWidget` | 批量销毁目标，仅接收 Screen 已验证的携带释放 |
+| `DeleteConfirmHost` | `PanelWidget` | 批量确认 modal host，默认 Collapsed |
+| `ArrangeAllButton` | `Button` | 只重置当前区布局，不调用 Run move API |
+| `CardDetailLayer` | `CanvasPanel` | 非携带期详情覆盖层 |
+
+推荐子资产父类分别为 `UWacomBackpackWorkspaceWidget`、`UWacomBackpackZoneRackWidget`、`UWacomBackpackZoneRackEntryWidget`、`UWacomBackpackDeleteConfirmWidget`。这些 WBP 必须保持被动，不访问 `URunSession`，不显示携带索引/数量文字；目标 preview、批量提交、Toast 和确认恢复都由 Screen flow 负责。
+
 推荐资产：`WBP_BackpackScreen`
 
 注册方式：
@@ -30,7 +43,9 @@ tags:
 - 在 `WidgetClasses` 中添加 `UI.Widget.BackpackScreen`，Class 指向正式 `WBP_BackpackScreen`。
 - 未注册、软类加载失败或类型不匹配时，回退 C++ `UWacomBackpackScreen`。
 
-推荐绑定：
+### 迁移兼容绑定（非正式制作合同）
+
+以下槽位只为当前尚未完成资产迁移的 `WBP_BackpackScreen` 保留。它们必须保持折叠，不能与 `WorkspaceHost / ZoneRackHost / DeleteTargetHost` 同时成为可见输入路径；新资产不得继续添加这些绑定。
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
@@ -41,7 +56,7 @@ tags:
 | `BurdenZoneHost` | `PanelWidget` | C++ 填充负重区标题和卡牌列表；正式 UI 不暴露主动拖入负重区的 DropTarget，无负重卡时折叠 |
 | `CardDetailLayer` | `CanvasPanel` | C++ 填充悬浮卡牌详情面板 |
 
-可选绑定：
+迁移兼容可选绑定：
 
 | 控件名 | 推荐类型 | 缺省行为 |
 |---|---|---|
@@ -61,7 +76,7 @@ WBP 不应做：
 - 不在 WBP 图里判断容量、删牌金币、负重、SpecialZone 入战或拖拽目标是否合法；DropTarget hover preview、drop 提交、删牌奖励、入战 toggle validation 和移动 / 删牌 / 入战 Toast 文案由 `UWacomBackpackScreen` 私有 command flow / presentation helper 统一处理。
 - 不绑定旧 `FluxZoneHost / BackpackCardsBox` 混合布局槽位；这些旧槽位不再是制作合同。
 
-最小验收：
+兼容路径最小验收（只用于迁移期回归）：
 
 - 推荐 Host 绑定后，删牌、备战、通量内容、SpecialZone 和负重区都能显示 C++ 动态填充内容。
 - `CardDetailLayer` 覆盖背包界面可见区域，位于卡牌区域上方，详情面板不抢拖拽或右键输入。

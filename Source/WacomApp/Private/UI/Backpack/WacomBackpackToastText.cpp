@@ -32,6 +32,16 @@ FText FWacomBackpackToastText::FormatMoveFailureReasonForToast(FName DisabledRea
 	{
 		return LOCTEXT("MoveFailCardNotFound", "无法移动：找不到这张卡牌。");
 	}
+	if (DisabledReason == DeckReasons::EmptyBatchRequest()
+		|| DisabledReason == DeckReasons::DuplicateInstanceId())
+	{
+		return LOCTEXT("MoveFailInvalidBatch", "无法移动：选择的卡牌集合无效。");
+	}
+	if (DisabledReason == DeckReasons::SourceZoneMismatch()
+		|| DisabledReason == DeckReasons::StaleStorageRevision())
+	{
+		return LOCTEXT("MoveFailStale", "无法移动：背包状态已经变化，请重新选择卡牌。");
+	}
 	if (DisabledReason == DeckReasons::FluxFull())
 	{
 		return LOCTEXT("MoveFailFluxFull", "无法移动：通量区已满。");
@@ -69,6 +79,16 @@ FText FWacomBackpackToastText::FormatMoveFailureReasonForToast(FName DisabledRea
 
 FText FWacomBackpackToastText::FormatDeleteFailureReasonForToast(FName DisabledReason)
 {
+	if (DisabledReason == DeckReasons::EmptyBatchRequest()
+		|| DisabledReason == DeckReasons::DuplicateInstanceId())
+	{
+		return LOCTEXT("DeleteFailInvalidBatch", "无法销毁：选择的卡牌集合无效。");
+	}
+	if (DisabledReason == DeckReasons::SourceZoneMismatch()
+		|| DisabledReason == DeckReasons::StaleStorageRevision())
+	{
+		return LOCTEXT("DeleteFailStale", "无法销毁：背包状态已经变化，请重新选择卡牌。");
+	}
 	if (DisabledReason == DeckReasons::MissingCard())
 	{
 		return LOCTEXT("DeleteFailMissingCard", "无法销毁：没有卡牌数据。");

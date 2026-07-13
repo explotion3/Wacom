@@ -5,8 +5,110 @@
 #include "Cards/CardDefinition.h"
 #include "Components/SlateWrapperTypes.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
+#include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 
 #define LOCTEXT_NAMESPACE "WacomBackpackScreenPresenter"
+
+FWacomBackpackWorkspaceCardVisualState UWacomBackpackScreenPresenter::BuildWorkspaceCardVisualState(
+	const UWacomBackpackWorkspaceStyle* Style,
+	bool bSelected,
+	bool bCurrent,
+	bool bReadOnly,
+	bool bValidTarget,
+	bool bRejectedTarget)
+{
+	const UWacomBackpackWorkspaceStyle* ResolvedStyle = Style
+		? Style
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	FWacomBackpackWorkspaceCardVisualState State;
+	State.Opacity = bReadOnly ? 0.72f : 1.0f;
+	State.Scale = bCurrent ? 1.035f : 1.0f;
+	if (bRejectedTarget)
+	{
+		State.Tint = ResolvedStyle->RejectedTargetColor;
+	}
+	else if (bValidTarget)
+	{
+		State.Tint = ResolvedStyle->ValidTargetColor;
+	}
+	else if (bSelected)
+	{
+		State.Tint = ResolvedStyle->SelectionColor;
+	}
+	return State;
+}
+
+FText UWacomBackpackScreenPresenter::BuildBatchDeleteSummaryText(int32 CardCount, int32 TotalGoldReward)
+{
+	return FText::Format(
+		LOCTEXT("BatchDeleteSummary", "永久销毁 {0} 张卡牌，获得 {1} 金币"),
+		FText::AsNumber(FMath::Max(0, CardCount)),
+		FText::AsNumber(FMath::Max(0, TotalGoldReward)));
+}
+
+TArray<FWacomBackpackZoneRackEntryView> UWacomBackpackScreenPresenter::BuildZoneRackEntries(
+	const FRunBackpackStorageSnapshot& Snapshot,
+	EZoneKind ActiveZone,
+	FGuid ActiveZoneOwnerInstanceId)
+{
+	const FGuid NormalizedActiveOwner = ActiveZone == EZoneKind::SpecialZone
+		? ActiveZoneOwnerInstanceId
+		: FGuid();
+	auto IsActive = [ActiveZone, NormalizedActiveOwner](EZoneKind Zone, FGuid OwnerInstanceId)
+	{
+		const FGuid NormalizedOwner = Zone == EZoneKind::SpecialZone ? OwnerInstanceId : FGuid();
+		return Zone == ActiveZone && NormalizedOwner == NormalizedActiveOwner;
+	};
+
+	TArray<FWacomBackpackZoneRackEntryView> Entries;
+	FWacomBackpackZoneRackEntryView FluxEntry;
+	FluxEntry.Zone = EZoneKind::Backpack;
+	FluxEntry.Title = LOCTEXT("FluxRackTitle", "通量内容");
+	FluxEntry.CardCount = Snapshot.FluxContentCount;
+	FluxEntry.Capacity = Snapshot.FluxCapacity;
+	FluxEntry.bHasCapacity = true;
+	FluxEntry.bActive = IsActive(FluxEntry.Zone, FGuid());
+	Entries.Add(MoveTemp(FluxEntry));
+
+	FWacomBackpackZoneRackEntryView BattleEntry;
+	BattleEntry.Zone = EZoneKind::BattleDeck;
+	BattleEntry.Title = LOCTEXT("BattleRackTitle", "备战区");
+	BattleEntry.CardCount = Snapshot.BattleDeckPhysicalCount;
+	BattleEntry.Capacity = Snapshot.BattleDeckCapacity;
+	BattleEntry.bHasCapacity = true;
+	BattleEntry.bActive = IsActive(BattleEntry.Zone, FGuid());
+	Entries.Add(MoveTemp(BattleEntry));
+
+	for (const FRunSpecialStorageView& SpecialZone : Snapshot.SpecialZones)
+	{
+		if (!SpecialZone.OwnerCard.Instance.InstanceId.IsValid())
+		{
+			continue;
+		}
+		FWacomBackpackZoneRackEntryView SpecialEntry;
+		SpecialEntry.Zone = EZoneKind::SpecialZone;
+		SpecialEntry.OwnerInstanceId = SpecialZone.OwnerCard.Instance.InstanceId;
+		SpecialEntry.Title = SpecialZone.OwnerCard.Instance.Definition
+			? SpecialZone.OwnerCard.Instance.Definition->DisplayName
+			: LOCTEXT("UnknownSpecialRackTitle", "特殊存放区");
+		SpecialEntry.CardCount = SpecialZone.ContentCards.Num();
+		SpecialEntry.Capacity = SpecialZone.Capacity;
+		SpecialEntry.bHasCapacity = true;
+		SpecialEntry.bActive = IsActive(SpecialEntry.Zone, SpecialEntry.OwnerInstanceId);
+		Entries.Add(MoveTemp(SpecialEntry));
+	}
+
+	if (Snapshot.BurdenCount > 0)
+	{
+		FWacomBackpackZoneRackEntryView BurdenEntry;
+		BurdenEntry.Zone = EZoneKind::BurdenZone;
+		BurdenEntry.Title = LOCTEXT("BurdenRackTitle", "负重区");
+		BurdenEntry.CardCount = Snapshot.BurdenCount;
+		BurdenEntry.bActive = IsActive(BurdenEntry.Zone, FGuid());
+		Entries.Add(MoveTemp(BurdenEntry));
+	}
+	return Entries;
+}
 
 FText UWacomBackpackScreenPresenter::BuildBattleDeckTitleText(int32 Count, int32 Capacity)
 {

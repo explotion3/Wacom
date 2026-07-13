@@ -168,6 +168,19 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 			DetailLayerSlot->SetZOrder(10);
 		}
 	}
+	if (Context.DeleteConfirmHost)
+	{
+		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("DeleteConfirmHost"));
+		Host->SetVisibility(ESlateVisibility::Collapsed);
+		if (UCanvasPanelSlot* ConfirmSlot = Root->AddChildToCanvas(Host))
+		{
+			ConfirmSlot->SetAnchors(FAnchors(0.5f, 0.5f));
+			ConfirmSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			ConfirmSlot->SetAutoSize(true);
+			ConfirmSlot->SetZOrder(20);
+		}
+		*Context.DeleteConfirmHost = Host;
+	}
 
 	UVerticalBox* MainVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MainVBox"));
 	MainPanel->AddChild(MainVBox);
@@ -199,6 +212,20 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		}
 	}
 
+	if (Context.ArrangeAllButton && !*Context.ArrangeAllButton)
+	{
+		*Context.ArrangeAllButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("ArrangeAllButton"));
+		UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		Label->SetText(LOCTEXT("ArrangeAll", "整理全部"));
+		Label->SetJustification(ETextJustify::Center);
+		(*Context.ArrangeAllButton)->AddChild(Label);
+		if (UHorizontalBoxSlot* Slot = TopRow->AddChildToHorizontalBox(Context.ArrangeAllButton->Get()))
+		{
+			Slot->SetPadding(FMargin(8.f, 4.f));
+			Slot->SetVerticalAlignment(VAlign_Center);
+		}
+	}
+
 	if (Context.CloseButton && !*Context.CloseButton)
 	{
 		*Context.CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CloseButton"));
@@ -218,19 +245,88 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		}
 	}
 
+	UHorizontalBox* WorkspaceRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("WorkspaceRow"));
+	if (UVerticalBoxSlot* WorkspaceRowSlot = MainVBox->AddChildToVerticalBox(WorkspaceRow))
+	{
+		WorkspaceRowSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+	}
+
+	UBorder* WorkspaceBorder = CreateBackpackSectionBorder(
+		WidgetTree,
+		TEXT("WorkspaceBorder"),
+		FLinearColor(0.055f, 0.075f, 0.105f, 0.95f));
+	if (UHorizontalBoxSlot* Slot = WorkspaceRow->AddChildToHorizontalBox(WorkspaceBorder))
+	{
+		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		Slot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
+	}
+	if (Context.WorkspaceHost)
+	{
+		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("WorkspaceHost"));
+		WorkspaceBorder->AddChild(Host);
+		*Context.WorkspaceHost = Host;
+	}
+
+	UBorder* RackBorder = CreateBackpackSectionBorder(
+		WidgetTree,
+		TEXT("ZoneRackBorder"),
+		FLinearColor(0.07f, 0.09f, 0.13f, 0.98f));
+	USizeBox* RackSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ZoneRackSize"));
+	RackSize->SetWidthOverride(250.f);
+	RackSize->AddChild(RackBorder);
+	if (UHorizontalBoxSlot* Slot = WorkspaceRow->AddChildToHorizontalBox(RackSize))
+	{
+		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+	}
+	UVerticalBox* RackColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ZoneRackColumn"));
+	RackBorder->AddChild(RackColumn);
+	if (Context.ZoneRackHost)
+	{
+		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ZoneRackHost"));
+		if (UVerticalBoxSlot* RackHostSlot = RackColumn->AddChildToVerticalBox(Host))
+		{
+			RackHostSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+		*Context.ZoneRackHost = Host;
+	}
+	if (Context.DeleteTargetHost)
+	{
+		UBorder* DeleteBorder = CreateBackpackSectionBorder(
+			WidgetTree,
+			TEXT("DeleteTargetBorder"),
+			FLinearColor(0.32f, 0.07f, 0.07f, 0.95f));
+		if (UVerticalBoxSlot* DeleteSlot = RackColumn->AddChildToVerticalBox(DeleteBorder))
+		{
+			DeleteSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+			DeleteSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
+		}
+		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("DeleteTargetHost"));
+		DeleteBorder->AddChild(Host);
+		Host->AddChildToVerticalBox(CreateBackpackText(WidgetTree, TEXT("DeleteTargetText"), LOCTEXT("DeleteTarget", "销毁卡牌"), 16));
+		*Context.DeleteTargetHost = Host;
+	}
+
+	// 迁移期间保留旧 Host 供现有测试和详情链路复用，但不再作为可见的第二套区域 UI。
+	UVerticalBox* LegacyZones = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("LegacyZones"));
+	LegacyZones->SetVisibility(ESlateVisibility::Collapsed);
+	if (UVerticalBoxSlot* LegacySlot = MainVBox->AddChildToVerticalBox(LegacyZones))
+	{
+		LegacySlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+	}
+
 	if (Context.DeleteZoneHost)
 	{
 		*Context.DeleteZoneHost = AddZoneSectionWidget(
 			Context.Owner,
 			WidgetTree,
-			MainVBox,
+			LegacyZones,
 			Context.DeleteZoneSectionWidgetClass,
 			LOCTEXT("DeleteZoneTitle", "[ 删牌区 ]"),
 			FMargin(0.f, 0.f, 0.f, 8.f));
 	}
 
 	UScrollBox* ContentScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("BackpackContentScroll"));
-	if (UVerticalBoxSlot* Slot = MainVBox->AddChildToVerticalBox(ContentScroll))
+	if (UVerticalBoxSlot* Slot = LegacyZones->AddChildToVerticalBox(ContentScroll))
 	{
 		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	}

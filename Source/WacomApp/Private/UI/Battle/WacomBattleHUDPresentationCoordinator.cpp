@@ -798,6 +798,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 	bWaitingForPresentationPlanEventQueue = false;
 	ActivePileTransferEventSequence = INDEX_NONE;
 	ActivePileTransferTotalCount = 0;
+	ActivePileTransferExpectedDurationSeconds = 0.0f;
 	HandleQueueStarted();
 	RefreshCommandBar();
 	StartNextPresentationPlanPhase();
@@ -815,6 +816,9 @@ void FWacomBattleHUDPresentationCoordinator::HandlePileTransferProgress(
 	}
 	const int32 Total = FMath::Max(0, ActivePileTransferTotalCount);
 	const int32 Arrived = FMath::Clamp(Progress.ArrivedCount, 0, Total);
+	ActivePileTransferExpectedDurationSeconds = FMath::Max(
+		ActivePileTransferExpectedDurationSeconds,
+		FMath::Max(0.0f, Progress.ExpectedDurationSeconds));
 	if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
 	{
 		DrawPileView->SetCount(Arrived);
@@ -1025,6 +1029,7 @@ void FWacomBattleHUDPresentationCoordinator::ClearPresentationPlan()
 	bWaitingForPresentationPlanEventQueue = false;
 	ActivePileTransferEventSequence = INDEX_NONE;
 	ActivePileTransferTotalCount = 0;
+	ActivePileTransferExpectedDurationSeconds = 0.0f;
 #if WITH_AUTOMATION_TESTS
 	StartedPresentationPlanPhaseNamesForTest.Reset();
 	SubmittedPresentationPlanFeedbackHintsForTest.Reset();
@@ -1086,12 +1091,14 @@ void FWacomBattleHUDPresentationCoordinator::StartHandPresentationPlanPhase(
 	{
 		ActivePileTransferEventSequence = Phase.PileTransferHints[0].EventSequence;
 		ActivePileTransferTotalCount = Phase.PileTransferHints[0].CardInstanceIds.Num();
+		ActivePileTransferExpectedDurationSeconds = 0.0f;
 		Runtime.GetFirstPersonHandBridge().ApplyPileTransferHints(Phase.PileTransferHints);
 	}
 	else
 	{
 		ActivePileTransferEventSequence = INDEX_NONE;
 		ActivePileTransferTotalCount = 0;
+		ActivePileTransferExpectedDurationSeconds = 0.0f;
 	}
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
 	{
@@ -1158,8 +1165,14 @@ void FWacomBattleHUDPresentationCoordinator::PollActivePresentationPlanPhase()
 	const bool bPlaybackFinished =
 		!HasActiveFirstPersonHandPresentationPlayback()
 		&& !HasPendingFirstPersonHandPresentationFrame();
-	const bool bTimedOut =
-		ActivePresentationPlanPhaseElapsedSeconds >= BattlePresentationPlanHandPhaseTimeoutSeconds;
+	const float PhaseTimeoutSeconds =
+		ActivePresentationPlanPhaseKind == EWacomBattlePresentationPhaseKind::DeckReshuffle
+			&& ActivePileTransferExpectedDurationSeconds > 0.0f
+		? FMath::Max(
+			BattlePresentationPlanHandPhaseTimeoutSeconds,
+			ActivePileTransferExpectedDurationSeconds + 1.0f)
+		: BattlePresentationPlanHandPhaseTimeoutSeconds;
+	const bool bTimedOut = ActivePresentationPlanPhaseElapsedSeconds >= PhaseTimeoutSeconds;
 	if (bPlaybackFinished || bTimedOut)
 	{
 		if (bTimedOut)
@@ -1186,6 +1199,7 @@ void FWacomBattleHUDPresentationCoordinator::FinishPresentationPlan()
 	bWaitingForPresentationPlanEventQueue = false;
 	ActivePileTransferEventSequence = INDEX_NONE;
 	ActivePileTransferTotalCount = 0;
+	ActivePileTransferExpectedDurationSeconds = 0.0f;
 
 	if (UBattleSession* CurrentSession = Runtime.GetSession())
 	{

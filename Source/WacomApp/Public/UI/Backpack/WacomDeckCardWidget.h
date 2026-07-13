@@ -13,6 +13,7 @@ class UTextBlock;
 class UCardDefinition;
 class UDragDropOperation;
 class UWacomCardView;
+struct FWacomBackpackWorkspaceCardVisualState;
 
 enum class EWacomBackpackDeckCardListReuseRole : uint8
 {
@@ -82,6 +83,24 @@ public:
 	 * - false：禁用（如备战区已满，再点 Backpack 卡也不让加）
 	 */
 	void SetMoveEnabled(bool bEnabled);
+	bool IsMoveEnabled() const { return bCardInteractionEnabled; }
+
+	/** Workspace 模式由唯一输入 owner 接管；卡牌只转发指针事件，不启动 UDragDropOperation。 */
+	void SetWorkspaceInputOwned(bool bOwned);
+	void SetWorkspaceVisualState(bool bSelected, bool bCurrent, bool bReadOnly);
+	void ApplyWorkspaceVisualState(const FWacomBackpackWorkspaceCardVisualState& VisualState);
+	bool IsWorkspaceSelected() const { return bWorkspaceSelected; }
+	bool IsWorkspaceCurrent() const { return bWorkspaceCurrent; }
+
+	DECLARE_DELEGATE_RetVal_ThreeParams(
+		FReply,
+		FOnWorkspacePointerEventNative,
+		UWacomDeckCardWidget*,
+		const FGeometry&,
+		const FPointerEvent&);
+	FOnWorkspacePointerEventNative OnWorkspacePointerDownNative;
+	FOnWorkspacePointerEventNative OnWorkspacePointerMoveNative;
+	FOnWorkspacePointerEventNative OnWorkspacePointerUpNative;
 
 	/** 构造当前卡片的拖拽 payload。返回 nullptr 表示当前卡片不能被拖拽。 */
 	UDragDropOperation* BuildDragOperation();
@@ -127,6 +146,8 @@ protected:
 	virtual void NativeOnMouseEnter(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
 	virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
@@ -153,6 +174,9 @@ private:
 	bool bRightClickToggleEnabled = false;
 	bool bCardInteractionEnabled = true;
 	bool bDragVisualMode = false;
+	bool bWorkspaceInputOwned = false;
+	bool bWorkspaceSelected = false;
+	bool bWorkspaceCurrent = false;
 	EWacomBackpackDeckCardListReuseRole BackpackListReuseRole = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 	FText ProjectedFromBadgeText;
 

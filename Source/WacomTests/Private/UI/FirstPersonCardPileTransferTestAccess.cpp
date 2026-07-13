@@ -14,6 +14,8 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 	FWacomFirstPersonCardPileTransferConfig Config;
 	Config.bEnabled = true;
 	Config.Style.GlyphMaterialInstance = NewObject<UMaterialInstanceConstant>();
+	Config.Style.SafeViewportPaddingPixels = 36.0f;
+	Config.Style.MaxMoteQuadCount = 240;
 	FWacomFirstPersonCardPileTransferHint Hint;
 	Hint.EventSequence = 91;
 	Hint.Seed = 12345;
@@ -22,24 +24,72 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 		Hint.CardInstanceIds.Add(FGuid(Index + 1, 2, 3, 4));
 	}
 
-	auto RunOnce = [&Config, &Hint](TArray<FVector2D>& OutMidPositions, float& OutSeconds)
+	const FVector2D ViewportSize(1000.0f, 600.0f);
+	auto RunOnce = [&Config, &Hint, &Result, &ViewportSize](
+		TArray<FVector2D>& OutMidPositions,
+		TArray<FVector2D>& OutMidAuxiliaryPositions,
+		float& OutSeconds,
+		bool bRecordMetrics)
 	{
 		FWacomFirstPersonCardPileTransferPlayback Playback;
-		if (!Playback.Start(Hint, Config, FVector2D(100.0f, 500.0f), FVector2D(900.0f, 120.0f)))
+		if (!Playback.Start(
+			Hint,
+			Config,
+			FVector2D(100.0f, 640.0f),
+			FVector2D(900.0f, 620.0f),
+			ViewportSize))
 		{
 			return FWacomFirstPersonCardPileTransferProgressView();
 		}
 		FWacomFirstPersonCardPileTransferProgressView Progress;
 		bool bCapturedMid = false;
-		while (Playback.IsActive() && OutSeconds < 2.0f)
+		while (Playback.IsActive() && OutSeconds < 8.0f)
 		{
 			Progress = Playback.Tick(0.01f);
 			OutSeconds += 0.01f;
+			if (bRecordMetrics)
+			{
+				Result.MaxMainGlyphCount = FMath::Max(Result.MaxMainGlyphCount, Playback.GetGlyphs().Num());
+				int32 EchoCount = 0;
+				int32 MoteCount = 0;
+				for (const FWacomFirstPersonCardPileTransferGlyphView& Shape : Playback.GetAuxiliaryShapes())
+				{
+					EchoCount += Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Echo ? 1 : 0;
+					MoteCount += Shape.ShapeKind == EWacomFirstPersonCardPileTransferShapeKind::Mote ? 1 : 0;
+				}
+				Result.MaxEchoCount = FMath::Max(Result.MaxEchoCount, EchoCount);
+				Result.MaxMoteCount = FMath::Max(Result.MaxMoteCount, MoteCount);
+				if (Progress.ArrivedCount == Progress.TotalCount && Progress.TotalCount > 0)
+				{
+					if (Result.AllMainGlyphsArrivedSeconds <= 0.0f)
+					{
+						Result.AllMainGlyphsArrivedSeconds = OutSeconds;
+					}
+					Result.bPlaybackRemainsActiveForTailDrain |= Playback.IsActive();
+					Result.MaxAuxiliaryCountAfterAllArrived = FMath::Max(
+						Result.MaxAuxiliaryCountAfterAllArrived,
+						Playback.GetAuxiliaryShapes().Num());
+				}
+				for (const FWacomFirstPersonCardPileTransferGlyphView& Glyph : Playback.GetGlyphs())
+				{
+					if (Glyph.Opacity > UE_KINDA_SMALL_NUMBER)
+					{
+						Result.bMainPathsInsideSafeViewport &= Glyph.Position.X >= 36.0f
+							&& Glyph.Position.X <= ViewportSize.X - 36.0f
+							&& Glyph.Position.Y >= 36.0f
+							&& Glyph.Position.Y <= ViewportSize.Y - 36.0f;
+					}
+				}
+			}
 			if (!bCapturedMid && OutSeconds >= 0.30f)
 			{
 				for (const FWacomFirstPersonCardPileTransferGlyphView& Glyph : Playback.GetGlyphs())
 				{
 					OutMidPositions.Add(Glyph.Position);
+				}
+				for (const FWacomFirstPersonCardPileTransferGlyphView& Shape : Playback.GetAuxiliaryShapes())
+				{
+					OutMidAuxiliaryPositions.Add(Shape.Position);
 				}
 				bCapturedMid = true;
 			}
@@ -49,9 +99,34 @@ FWacomFirstPersonCardPileTransferTestAccess::RunDeterministicPlayback(int32 Card
 
 	float FirstSeconds = 0.0f;
 	const FWacomFirstPersonCardPileTransferProgressView FirstProgress =
-		RunOnce(Result.FirstRunMidPositions, FirstSeconds);
+		RunOnce(
+			Result.FirstRunMidPositions,
+			Result.FirstRunMidAuxiliaryPositions,
+			FirstSeconds,
+			true);
 	float SecondSeconds = 0.0f;
-	RunOnce(Result.SecondRunMidPositions, SecondSeconds);
+	RunOnce(
+		Result.SecondRunMidPositions,
+		Result.SecondRunMidAuxiliaryPositions,
+		SecondSeconds,
+		false);
+
+	FWacomFirstPersonCardPileTransferConfig ReducedConfig = Config;
+	ReducedConfig.bReducedMotion = true;
+	FWacomFirstPersonCardPileTransferPlayback ReducedPlayback;
+	if (ReducedPlayback.Start(
+		Hint,
+		ReducedConfig,
+		FVector2D(100.0f, 640.0f),
+		FVector2D(900.0f, 620.0f),
+		ViewportSize))
+	{
+		while (ReducedPlayback.IsActive())
+		{
+			ReducedPlayback.Tick(0.01f);
+			Result.bReducedMotionHasNoAuxiliaryShapes &= ReducedPlayback.GetAuxiliaryShapes().IsEmpty();
+		}
+	}
 	Result.bStarted = FirstProgress.TotalCount == CardCount;
 	Result.CompletionSeconds = FirstSeconds;
 	Result.ArrivedCount = FirstProgress.ArrivedCount;

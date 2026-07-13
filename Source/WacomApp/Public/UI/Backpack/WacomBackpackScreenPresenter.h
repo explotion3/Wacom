@@ -5,10 +5,19 @@
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "RunStateTypes.h"
+#include "UI/Backpack/WacomBackpackZoneRackEntryWidget.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomBackpackScreenPresenter.generated.h"
 
 class UCardDefinition;
+class UWacomBackpackWorkspaceStyle;
+
+struct WACOMAPP_API FWacomBackpackWorkspaceCardVisualState
+{
+	FLinearColor Tint = FLinearColor::White;
+	float Opacity = 1.0f;
+	float Scale = 1.0f;
+};
 
 /**
  * Pure presentation helpers for BackpackScreen.
@@ -22,6 +31,20 @@ class WACOMAPP_API UWacomBackpackScreenPresenter : public UBlueprintFunctionLibr
 	GENERATED_BODY()
 
 public:
+	static FWacomBackpackWorkspaceCardVisualState BuildWorkspaceCardVisualState(
+		const UWacomBackpackWorkspaceStyle* Style,
+		bool bSelected,
+		bool bCurrent,
+		bool bReadOnly,
+		bool bValidTarget = false,
+		bool bRejectedTarget = false);
+	static FText BuildBatchDeleteSummaryText(int32 CardCount, int32 TotalGoldReward);
+	/** 从只读 Snapshot 构造右侧常驻牌匣；同一时刻至多一个 entry 为 active。 */
+	static TArray<FWacomBackpackZoneRackEntryView> BuildZoneRackEntries(
+		const FRunBackpackStorageSnapshot& Snapshot,
+		EZoneKind ActiveZone,
+		FGuid ActiveZoneOwnerInstanceId);
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Presentation")
 	static FText BuildBattleDeckTitleText(int32 Count, int32 Capacity);
 

@@ -1,0 +1,61 @@
+// Copyright Wacom. All Rights Reserved.
+
+#include "Misc/AutomationTest.h"
+
+#if WITH_AUTOMATION_TESTS
+
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackWorkspaceSelectionSpec,
+	"Wacom.UI.Backpack.Workspace.SelectionContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackWorkspaceSelectionSpec::RunTest(const FString& Parameters)
+{
+	const FGuid First(1, 1, 1, 1);
+	const FGuid Second(2, 2, 2, 2);
+	const FGuid ReadOnly(3, 3, 3, 3);
+	const FGuid Fourth(4, 4, 4, 4);
+	TArray<FWacomBackpackWorkspaceCardHitRecord> Cards = {
+		{ First, FVector2D(100.0f, 100.0f), 0, true },
+		{ Second, FVector2D(200.0f, 100.0f), 1, true },
+		{ ReadOnly, FVector2D(300.0f, 100.0f), 2, false },
+		{ Fourth, FVector2D(400.0f, 100.0f), 3, true },
+	};
+
+	FWacomBackpackWorkspaceInteractionModel Model;
+	Model.ReconcileCards(FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck), Cards);
+	Model.ClickCard(First, false);
+	TestEqual(TEXT("Plain click replaces selection"), Model.GetSelection().OrderedSelectedInstanceIds, TArray<FGuid>{ First });
+	Model.ClickCard(Second, true);
+	TestEqual(TEXT("Ctrl click adds movable card"), Model.GetSelection().OrderedSelectedInstanceIds, TArray<FGuid>({ First, Second }));
+	Model.ClickCard(First, true);
+	TestEqual(TEXT("Ctrl click toggles selected card off"), Model.GetSelection().OrderedSelectedInstanceIds, TArray<FGuid>{ Second });
+	Model.ClickCard(ReadOnly, false);
+	TestEqual(TEXT("Read-only click cannot enter selection"), Model.GetSelection().OrderedSelectedInstanceIds, TArray<FGuid>{ Second });
+	Model.ClickBlank();
+	TestTrue(TEXT("Blank click clears selection"), Model.GetSelection().OrderedSelectedInstanceIds.IsEmpty());
+
+	Model.BeginMarquee(FVector2D(50.0f, 50.0f), false);
+	Model.UpdateMarquee(FVector2D(350.0f, 150.0f));
+	Model.CompleteMarquee();
+	TestEqual(TEXT("Marquee uses card centers and excludes read-only cards"),
+		Model.GetSelection().OrderedSelectedInstanceIds,
+		TArray<FGuid>({ First, Second }));
+
+	Model.BeginMarquee(FVector2D(150.0f, 50.0f), true);
+	Model.UpdateMarquee(FVector2D(450.0f, 150.0f));
+	Model.CompleteMarquee();
+	TestEqual(TEXT("Ctrl marquee toggles against drag-start selection"),
+		Model.GetSelection().OrderedSelectedInstanceIds,
+		TArray<FGuid>({ First, Fourth }));
+
+	Model.SelectAllMovable();
+	TestEqual(TEXT("Ctrl+A selects all and only movable physical cards"),
+		Model.GetSelection().OrderedSelectedInstanceIds,
+		TArray<FGuid>({ First, Second, Fourth }));
+	return true;
+}
+
+#endif

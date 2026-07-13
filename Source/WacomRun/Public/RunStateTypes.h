@@ -178,6 +178,11 @@ namespace WacomRunDeckOperationReasons
 	WACOMRUN_API const FName& TypeBInBurdenZone();
 	WACOMRUN_API const FName& InvalidTargetZone();
 	WACOMRUN_API const FName& RunSessionMissing();
+	WACOMRUN_API const FName& EmptyBatchRequest();
+	WACOMRUN_API const FName& DuplicateInstanceId();
+	WACOMRUN_API const FName& SourceZoneMismatch();
+	WACOMRUN_API const FName& SameZoneBatch();
+	WACOMRUN_API const FName& StaleStorageRevision();
 
 	WACOMRUN_API bool IsLastCapacityProvider(FName DisabledReason);
 }
