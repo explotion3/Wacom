@@ -67,15 +67,21 @@ namespace
 				SourceCardId);
 		}
 
+		const int32 BatchSequence = Events.GetNextSequence();
+		const int32 DiscardPileCountAfter = State.Cards.DiscardPile.Num();
+
 		for (const FGuid& CardInstanceId : DiscardedCardIds)
 		{
 			FBattleEvent Event;
 			Event.Type = EBattleEventType::CardDiscarded;
 			Event.CardInstanceId = CardInstanceId;
+			Event.CardInstanceIds = DiscardedCardIds;
 			Event.ActorInstanceId = SourceCardId;
 			Event.Tag = EffectTag;
+			Event.DiscardPileCountAfter = DiscardPileCountAfter;
 			Event.HandCardZoneMoveReason = Reason;
 			Event.HandLimitDiscardSource = HandLimitSource;
+			Event.HandCardZoneMoveBatchSequence = BatchSequence;
 			Events.Emit(Event);
 			FPassiveDispatcher::RunOnDiscard(State, Events, CardInstanceId, OperationAdapter);
 		}

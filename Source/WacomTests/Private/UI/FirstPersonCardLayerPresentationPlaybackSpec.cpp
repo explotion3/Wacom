@@ -633,4 +633,107 @@ bool FWacomFirstPersonCardLayerGainedAndRetainedPlaybackTest::RunTest(const FStr
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerEnterStartedEdgeTest,
+	"Wacom.UI.FirstPersonCardLayer.DrawTransition.EnterStartedUsesActualPlaybackEdge",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerEnterStartedEdgeTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World)) return false;
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!TestNotNull(TEXT("Layer"), Layer)) return false;
+
+	TArray<FWacomFirstPersonCardEnterTransitionStartedView> StartedViews;
+	Layer->OnEnterTransitionStartedNative.AddLambda(
+		[&StartedViews](const FWacomFirstPersonCardEnterTransitionStartedView& View)
+		{
+			StartedViews.Add(View);
+		});
+	FWacomFirstPersonCardSlotMotionConfig Motion = MakeMotionConfig();
+	Motion.DrawnEnterStaggerSeconds = 0.0f;
+	Layer->SetSlotMotionConfig(Motion);
+	const FGuid CardId = FGuid::NewGuid();
+	const FVector2D TargetPosition(320.0f, 240.0f);
+	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn) });
+	Layer->SetCardSlots({ MakeSlot(CardId, TargetPosition) });
+
+	TestEqual(TEXT("zero-delay Enter notifies once at BeginEnter"), StartedViews.Num(), 1);
+	if (StartedViews.Num() == 1)
+	{
+		TestEqual(TEXT("started view keeps card identity"), StartedViews[0].CardInstanceId, CardId);
+		TestEqual(TEXT("started view keeps semantic kind"), StartedViews[0].TransitionKind,
+			EWacomFirstPersonCardSlotTransitionKind::Drawn);
+		TestTrue(TEXT("started view carries the live target position"),
+			StartedViews[0].TargetWidgetPosition.Equals(TargetPosition, 0.001f));
+		TestFalse(TEXT("started view carries the authored enter origin"),
+			StartedViews[0].StartWidgetPosition.Equals(TargetPosition, 0.001f));
+	}
+	Layer->SetCardSlots({ MakeSlot(CardId, TargetPosition) });
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.05f);
+	TestEqual(TEXT("ordinary refresh does not replay the start edge"), StartedViews.Num(), 1);
+
+	PC->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardLayerDelayedEnterStartedEdgeTest,
+	"Wacom.UI.FirstPersonCardLayer.DrawTransition.DelayedEnterStartsOnceAndCanBeCancelled",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardLayerDelayedEnterStartedEdgeTest::RunTest(const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerPresentationPlaybackSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!World) return false;
+	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(PC);
+	if (!Layer) return false;
+
+	int32 StartedCount = 0;
+	Layer->OnEnterTransitionStartedNative.AddLambda(
+		[&StartedCount](const FWacomFirstPersonCardEnterTransitionStartedView&)
+		{
+			++StartedCount;
+		});
+	FWacomFirstPersonCardSlotMotionConfig Motion = MakeMotionConfig();
+	Motion.DrawnEnterStaggerSeconds = 0.10f;
+	Layer->SetSlotMotionConfig(Motion);
+	const FGuid FirstCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerTransitionHint DelayedHint =
+		MakeTransitionHint(FirstCardId, EWacomFirstPersonCardSlotTransitionKind::Drawn);
+	DelayedHint.SequenceIndex = 1;
+	DelayedHint.SequenceCount = 2;
+	Layer->SetCardTransitionHints({ DelayedHint });
+	Layer->SetCardSlots({ MakeSlot(FirstCardId, FVector2D(420.0f, 260.0f)) });
+	TestEqual(TEXT("delayed Enter does not notify during authored wait"), StartedCount, 0);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.05f);
+	TestEqual(TEXT("partial delay still has no start edge"), StartedCount, 0);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.06f);
+	TestEqual(TEXT("crossing delay emits exactly one start edge"), StartedCount, 1);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.05f);
+	TestEqual(TEXT("running Enter does not repeat the edge"), StartedCount, 1);
+
+	const FGuid CancelledCardId = FGuid::NewGuid();
+	FWacomFirstPersonCardLayerTransitionHint CancelledHint =
+		MakeTransitionHint(CancelledCardId, EWacomFirstPersonCardSlotTransitionKind::Drawn);
+	CancelledHint.SequenceIndex = 1;
+	CancelledHint.SequenceCount = 2;
+	Layer->SetCardTransitionHints({ CancelledHint });
+	Layer->SetCardSlots({ MakeSlot(CancelledCardId, FVector2D(520.0f, 260.0f)) });
+	if (UWacomFirstPersonCardLayerSlotWidget* Slot = Layer->GetSlotWidgetAt(0))
+	{
+		Slot->ForceCompletePresentationPlayback();
+	}
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Layer, 0.20f);
+	TestEqual(TEXT("force completion before delay does not emit a false start"), StartedCount, 1);
+
+	PC->Destroy();
+	return true;
+}
+
 #endif

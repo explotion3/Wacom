@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UI/FirstPersonCardPileTransferTestAccess.h"
 
 #if WITH_AUTOMATION_TESTS
@@ -14,6 +15,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomFirstPersonCardPileTransferPlaybackSpec::RunTest(const FString&)
 {
+	const FWacomFirstPersonCardPileTransferStyleData DefaultStyle;
+	TestTrue(TEXT("reshuffle impact defaults to a short 0.10 second lifetime"),
+		FMath::IsNearlyEqual(DefaultStyle.ReshuffleImpactSeconds, 0.10f));
+	TestTrue(TEXT("reshuffle impact defaults to 1.35 scale"),
+		FMath::IsNearlyEqual(DefaultStyle.ReshuffleImpactScale, 1.35f));
+	TestTrue(TEXT("final reshuffle impact defaults to 1.18 strength"),
+		FMath::IsNearlyEqual(DefaultStyle.ReshuffleFinalImpactStrengthMultiplier, 1.18f));
 	for (const int32 Count : { 1, 5, 20, 40 })
 	{
 		const FWacomFirstPersonCardPileTransferTestResult Result =
@@ -39,8 +47,23 @@ bool FWacomFirstPersonCardPileTransferPlaybackSpec::RunTest(const FString&)
 			Result.MaxMoteCount <= 240);
 		TestTrue(FString::Printf(TEXT("%d glyph trails respect the quad budget"), Count),
 			Result.MaxTrailCount <= 120);
-		TestTrue(FString::Printf(TEXT("%d glyph playback only uses trail or mote auxiliaries"), Count),
-			Result.bAuxiliaryShapesAreTrailsOrMotes);
+		TestTrue(FString::Printf(TEXT("%d glyph playback only uses supported auxiliary shapes"), Count),
+			Result.bAuxiliaryShapesAreSupportedKinds);
+		TestTrue(FString::Printf(TEXT("%d glyph launch and arrival counts remain monotonic"), Count),
+			Result.bLaunchAndArrivalCountsAreMonotonic);
+		TestTrue(FString::Printf(TEXT("%d glyph launch always precedes arrival"), Count),
+			Result.bLaunchPrecedesArrival);
+		TestTrue(FString::Printf(TEXT("%d glyph launch reports a valid Bezier direction"), Count),
+			Result.bLaunchDirectionIsValid);
+		if (Count >= 5)
+		{
+			TestTrue(FString::Printf(TEXT("%d glyph low-frame tick aggregates multiple launches"), Count),
+				Result.MaxLaunchedInSingleTick > 1);
+		}
+		TestTrue(FString::Printf(TEXT("%d glyph reshuffle emits target impacts"), Count),
+			Result.MaxImpactCount > 0);
+		TestTrue(FString::Printf(TEXT("%d glyph final arrival emits the enhanced impact variant"), Count),
+			Result.bFinalImpactObserved);
 		TestTrue(FString::Printf(TEXT("%d glyph trails taper by age"), Count),
 			Result.bTrailsTaperWithAge);
 		TestTrue(FString::Printf(TEXT("%d glyph trails remain narrower than a card glyph"), Count),
@@ -59,6 +82,8 @@ bool FWacomFirstPersonCardPileTransferPlaybackSpec::RunTest(const FString&)
 			Result.LastTrailVisibleSeconds - Result.AllMainGlyphsArrivedSeconds <= 0.07f);
 		TestTrue(FString::Printf(TEXT("%d glyph force-complete clears trail and mote shapes"), Count),
 			Result.bForceCompleteClearsAuxiliaryShapes);
+		TestTrue(FString::Printf(TEXT("%d glyph force-complete reports all launched and arrived"), Count),
+			Result.bForceCompleteReportsBothCounts);
 		TestTrue(FString::Printf(TEXT("%d glyph reset clears trail and mote shapes"), Count),
 			Result.bResetClearsAuxiliaryShapes);
 		if (Count == 1)
@@ -68,8 +93,8 @@ bool FWacomFirstPersonCardPileTransferPlaybackSpec::RunTest(const FString&)
 			TestTrue(TEXT("high-detail playback keeps several motes visible at once"),
 				Result.MaxMoteCount >= 5);
 		}
-		TestTrue(FString::Printf(TEXT("%d glyph reduced motion has no travel auxiliaries"), Count),
-			Result.bReducedMotionHasNoAuxiliaryShapes);
+		TestTrue(FString::Printf(TEXT("%d glyph reduced motion keeps one aggregate impact only"), Count),
+			Result.bReducedMotionHasAggregateImpactOnly);
 	}
 
 	const int32 HighDetailTrailCount =
@@ -110,6 +135,11 @@ bool FWacomFirstPersonCardPileTransferDreamShaderContractSpec::RunTest(const FSt
 		&& MaterialSource.Contains(TEXT("TrailAccentColor")));
 	TestTrue(TEXT("trail helper has a dedicated shape branch"),
 		HelperSource.Contains(TEXT("isTrail")));
+	TestTrue(TEXT("impact material exposes the discard-pile palette"),
+		MaterialSource.Contains(TEXT("ImpactPrimaryColor"))
+		&& MaterialSource.Contains(TEXT("ImpactAccentColor")));
+	TestTrue(TEXT("impact helper has a dedicated stable shape branch"),
+		HelperSource.Contains(TEXT("isImpact")));
 	TestTrue(TEXT("trail material keeps the UI premultiplied-alpha contract"),
 		MaterialSource.Contains(TEXT("Domain = \"UI\""))
 		&& MaterialSource.Contains(TEXT("BlendMode = \"PremultipliedAlpha\"")));
@@ -118,6 +148,31 @@ bool FWacomFirstPersonCardPileTransferDreamShaderContractSpec::RunTest(const FSt
 	TestFalse(TEXT("trail material does not sample a noise texture"),
 		MaterialSource.Contains(TEXT("TextureParameter"))
 		|| HelperSource.Contains(TEXT("Texture.Sample")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardDiscardGlyphTransferPlaybackSpec,
+	"Wacom.UI.FirstPersonCardLayer.PileTransfer.DiscardToPileUsesCardSourcesAndImpact",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardDiscardGlyphTransferPlaybackSpec::RunTest(const FString&)
+{
+	const FWacomFirstPersonCardPileTransferTestAccess::FDiscardPlaybackResult Result =
+		FWacomFirstPersonCardPileTransferTestAccess::RunDiscardToPilePlayback();
+	TestTrue(TEXT("discard glyph playback starts"), Result.bStarted);
+	TestTrue(TEXT("each discarded card keeps its own source position"), Result.bUsesDistinctCardSources);
+	TestTrue(TEXT("glyph reveal overlaps the outgoing-card collapse"), Result.bRevealOverlapsCollapse);
+	TestTrue(TEXT("discard progress retains its transfer kind"), Result.bProgressKeepsDiscardKind);
+	TestEqual(TEXT("three discarded cards keep three main glyphs"), Result.MaxMainGlyphCount, 3);
+	TestEqual(TEXT("all discard glyphs arrive once"), Result.ArrivedCount, 3);
+	TestTrue(TEXT("discard pile impact is emitted"), Result.bImpactObserved);
+	TestTrue(TEXT("reduced-motion progress is explicitly identified"),
+		Result.bReducedMotionProgressReported);
+	TestTrue(TEXT("force-complete progress is explicitly identified"),
+		Result.bForceCompleteProgressReported);
+	TestTrue(TEXT("reduced motion keeps only the static impact auxiliary"),
+		Result.bReducedMotionHasStaticImpactOnly);
 	return true;
 }
 

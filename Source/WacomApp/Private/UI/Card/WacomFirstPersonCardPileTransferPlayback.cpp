@@ -24,7 +24,7 @@ namespace
 bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	const FWacomFirstPersonCardPileTransferHint& Hint,
 	const FWacomFirstPersonCardPileTransferConfig& Config,
-	const FVector2D& SourcePosition,
+	const TArray<FVector2D>& SourcePositions,
 	const FVector2D& TargetPosition,
 	const FVector2D& InViewportSize)
 {
@@ -32,12 +32,18 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	if (!Config.bEnabled
 		|| !Config.Style.GlyphMaterialInstance
 		|| Hint.CardInstanceIds.IsEmpty()
-		|| !FMath::IsFinite(SourcePosition.X)
-		|| !FMath::IsFinite(SourcePosition.Y)
+		|| SourcePositions.Num() != Hint.CardInstanceIds.Num()
 		|| !FMath::IsFinite(TargetPosition.X)
 		|| !FMath::IsFinite(TargetPosition.Y))
 	{
 		return false;
+	}
+	for (const FVector2D& SourcePosition : SourcePositions)
+	{
+		if (!FMath::IsFinite(SourcePosition.X) || !FMath::IsFinite(SourcePosition.Y))
+		{
+			return false;
+		}
 	}
 
 	Style = Config.Style;
@@ -50,6 +56,20 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	Style.SettleSeconds = FMath::Max(0.0f, Style.SettleSeconds);
 	Style.MinArcHeightPixels = FMath::Max(0.0f, Style.MinArcHeightPixels);
 	Style.MaxArcHeightPixels = FMath::Max(Style.MinArcHeightPixels, Style.MaxArcHeightPixels);
+	Style.DiscardCollapseSeconds = FMath::Max(0.01f, Style.DiscardCollapseSeconds);
+	Style.DiscardGlyphRevealStartSeconds = FMath::Clamp(
+		Style.DiscardGlyphRevealStartSeconds,
+		0.0f,
+		Style.DiscardCollapseSeconds);
+	Style.DiscardFlightSeconds = FMath::Max(0.01f, Style.DiscardFlightSeconds);
+	Style.DiscardStaggerSeconds = FMath::Max(0.0f, Style.DiscardStaggerSeconds);
+	Style.DiscardImpactSeconds = FMath::Max(0.01f, Style.DiscardImpactSeconds);
+	Style.DiscardImpactScale = FMath::Max(1.0f, Style.DiscardImpactScale);
+	Style.ReshuffleImpactSeconds = FMath::Max(0.01f, Style.ReshuffleImpactSeconds);
+	Style.ReshuffleImpactScale = FMath::Max(1.0f, Style.ReshuffleImpactScale);
+	Style.ReshuffleFinalImpactStrengthMultiplier = FMath::Max(
+		1.0f,
+		Style.ReshuffleFinalImpactStrengthMultiplier);
 	Style.TrailSampleIntervalSeconds = FMath::Max(0.001f, Style.TrailSampleIntervalSeconds);
 	Style.HighDetailTrailSegmentsPerGlyph = FMath::Clamp(Style.HighDetailTrailSegmentsPerGlyph, 0, 16);
 	Style.MediumDetailTrailSegmentsPerGlyph = FMath::Clamp(Style.MediumDetailTrailSegmentsPerGlyph, 0, 16);
@@ -85,20 +105,34 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 		Style.SettleSeconds,
 		Style.MoteLifetimeSeconds,
 		TrailDrainSeconds);
+	Style.SettleSeconds = FMath::Max(Style.SettleSeconds, Style.DiscardImpactSeconds);
+	Style.SettleSeconds = FMath::Max(Style.SettleSeconds, Style.ReshuffleImpactSeconds);
 
 	CardInstanceIds = Hint.CardInstanceIds;
 	ViewportSize = InViewportSize;
-	Source = ClampToSafeViewport(SourcePosition, Style.GlyphSize * 0.5f);
+	Sources.Reserve(SourcePositions.Num());
+	for (const FVector2D& SourcePosition : SourcePositions)
+	{
+		Sources.Add(ClampToSafeViewport(SourcePosition, Style.GlyphSize * 0.5f));
+	}
 	Target = ClampToSafeViewport(TargetPosition, Style.GlyphSize * 0.5f);
 	BaseSeed = Hint.Seed != 0 ? Hint.Seed : HashCombineFast(GetTypeHash(Hint.EventSequence), CardInstanceIds.Num());
 	EventSequence = Hint.EventSequence;
+	TransferKind = Hint.TransferKind;
 	bReducedMotion = Config.bReducedMotion;
 	const int32 IntervalCount = FMath::Max(0, CardInstanceIds.Num() - 1);
-	StaggerSeconds = IntervalCount > 0 ? Style.BaseStaggerSeconds : 0.0f;
+	StaggerSeconds = IntervalCount > 0
+		? (TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+			? Style.DiscardStaggerSeconds
+			: Style.BaseStaggerSeconds)
+		: 0.0f;
+	const float FlightSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+		? Style.DiscardFlightSeconds
+		: Style.FlightSeconds;
 	DetailReferenceActiveGlyphCount = StaggerSeconds <= UE_SMALL_NUMBER
 		? CardInstanceIds.Num()
 		: FMath::Clamp(
-			FMath::CeilToInt(Style.FlightSeconds / StaggerSeconds) + 1,
+			FMath::CeilToInt(FlightSeconds / StaggerSeconds) + 1,
 			1,
 			CardInstanceIds.Num());
 	if (bReducedMotion)
@@ -107,9 +141,12 @@ bool FWacomFirstPersonCardPileTransferPlayback::Start(
 	}
 	else
 	{
-		TotalSeconds = Style.StartChargeSeconds
+		const float StartSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+			? Style.DiscardCollapseSeconds
+			: Style.StartChargeSeconds;
+		TotalSeconds = StartSeconds
 			+ StaggerSeconds * IntervalCount
-			+ Style.FlightSeconds
+			+ FlightSeconds
 			+ Style.SettleSeconds;
 	}
 
@@ -124,22 +161,38 @@ FWacomFirstPersonCardPileTransferProgressView FWacomFirstPersonCardPileTransferP
 {
 	FWacomFirstPersonCardPileTransferProgressView View;
 	View.EventSequence = EventSequence;
+	View.TransferKind = TransferKind;
 	View.TotalCount = CardInstanceIds.Num();
 	View.ExpectedDurationSeconds = TotalSeconds;
+	View.bReducedMotion = bReducedMotion;
 	if (!bActive)
 	{
+		View.LaunchedCount = LaunchedCount;
 		View.ArrivedCount = ArrivedCount;
 		View.bCompleted = View.TotalCount > 0 && ArrivedCount >= View.TotalCount;
 		return View;
 	}
 
+	const int32 PreviousLaunchedCount = LaunchedCount;
 	ElapsedSeconds = FMath::Min(TotalSeconds, ElapsedSeconds + FMath::Max(0.0f, DeltaSeconds));
 	UpdateGlyphs();
+	View.LaunchedCount = LaunchedCount;
 	View.ArrivedCount = ArrivedCount;
+	if (LaunchedCount > PreviousLaunchedCount)
+	{
+		FVector2D DirectionSum = FVector2D::ZeroVector;
+		for (int32 Index = PreviousLaunchedCount; Index < LaunchedCount; ++Index)
+		{
+			DirectionSum += MakeInitialLaunchDirection(Index);
+		}
+		View.LaunchDirection = DirectionSum.GetSafeNormal();
+	}
 	View.bCompleted = ElapsedSeconds >= TotalSeconds;
 	if (View.bCompleted)
 	{
+		LaunchedCount = CardInstanceIds.Num();
 		ArrivedCount = CardInstanceIds.Num();
+		View.LaunchedCount = LaunchedCount;
 		View.ArrivedCount = ArrivedCount;
 		bActive = false;
 		bCompleteSoundRequested = true;
@@ -152,10 +205,15 @@ FWacomFirstPersonCardPileTransferProgressView FWacomFirstPersonCardPileTransferP
 {
 	FWacomFirstPersonCardPileTransferProgressView View;
 	View.EventSequence = EventSequence;
+	View.TransferKind = TransferKind;
 	View.TotalCount = CardInstanceIds.Num();
 	View.ExpectedDurationSeconds = TotalSeconds;
+	View.LaunchedCount = CardInstanceIds.Num();
 	View.ArrivedCount = CardInstanceIds.Num();
 	View.bCompleted = !CardInstanceIds.IsEmpty();
+	View.bReducedMotion = bReducedMotion;
+	View.bWasForceCompleted = true;
+	LaunchedCount = View.LaunchedCount;
 	ArrivedCount = View.ArrivedCount;
 	bActive = false;
 	Glyphs.Reset();
@@ -170,7 +228,7 @@ void FWacomFirstPersonCardPileTransferPlayback::Reset()
 	Glyphs.Reset();
 	AuxiliaryShapes.Reset();
 	Style = FWacomFirstPersonCardPileTransferStyleData();
-	Source = FVector2D::ZeroVector;
+	Sources.Reset();
 	Target = FVector2D::ZeroVector;
 	ViewportSize = FVector2D::ZeroVector;
 	ElapsedSeconds = 0.0f;
@@ -178,9 +236,11 @@ void FWacomFirstPersonCardPileTransferPlayback::Reset()
 	TotalSeconds = 0.0f;
 	CompletionPulse = 0.0f;
 	BaseSeed = 0;
+	LaunchedCount = 0;
 	ArrivedCount = 0;
 	DetailReferenceActiveGlyphCount = 1;
 	EventSequence = INDEX_NONE;
+	TransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
 	bActive = false;
 	bReducedMotion = false;
 	bStartSoundRequested = false;
@@ -214,6 +274,12 @@ uint32 FWacomFirstPersonCardPileTransferPlayback::MakeGlyphSeed(int32 Index) con
 	return HashCombineFast(BaseSeed, HashCombineFast(GetTypeHash(CardInstanceIds[Index]), GetTypeHash(Index)));
 }
 
+const FVector2D& FWacomFirstPersonCardPileTransferPlayback::GetSource(int32 Index) const
+{
+	check(Sources.IsValidIndex(Index));
+	return Sources[Index];
+}
+
 FVector2D FWacomFirstPersonCardPileTransferPlayback::ClampToSafeViewport(
 	const FVector2D& Position,
 	const FVector2D& HalfSize) const
@@ -234,6 +300,7 @@ FVector2D FWacomFirstPersonCardPileTransferPlayback::ClampToSafeViewport(
 
 FVector2D FWacomFirstPersonCardPileTransferPlayback::MakeLaneControlPoint(int32 Index) const
 {
+	const FVector2D& Source = GetSource(Index);
 	const FVector2D Delta = Target - Source;
 	const float Distance = Delta.Size();
 	const FVector2D Direction = Distance > UE_SMALL_NUMBER ? Delta / Distance : FVector2D(1.0f, 0.0f);
@@ -259,14 +326,35 @@ FVector2D FWacomFirstPersonCardPileTransferPlayback::MakeLaneControlPoint(int32 
 	return ClampToSafeViewport(ControlPoint, Style.GlyphSize * 0.5f);
 }
 
+FVector2D FWacomFirstPersonCardPileTransferPlayback::MakeInitialLaunchDirection(int32 Index) const
+{
+	if (!Sources.IsValidIndex(Index))
+	{
+		return FVector2D::ZeroVector;
+	}
+
+	FVector2D Direction = MakeLaneControlPoint(Index) - GetSource(Index);
+	if (Direction.IsNearlyZero())
+	{
+		Direction = Target - GetSource(Index);
+	}
+	return Direction.GetSafeNormal();
+}
+
 bool FWacomFirstPersonCardPileTransferPlayback::EvaluateGlyphAtTime(
 	int32 Index,
 	float SampleTimeSeconds,
 	FWacomFirstPersonCardPileTransferGlyphView& OutGlyph,
 	FVector2D* OutTangent) const
 {
-	const float LaunchTime = Style.StartChargeSeconds + StaggerSeconds * Index;
-	const float RawProgress = (SampleTimeSeconds - LaunchTime) / Style.FlightSeconds;
+	const float StartSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+		? Style.DiscardCollapseSeconds
+		: Style.StartChargeSeconds;
+	const float FlightSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+		? Style.DiscardFlightSeconds
+		: Style.FlightSeconds;
+	const float EffectiveLaunchTime = StartSeconds + StaggerSeconds * Index;
+	const float RawProgress = (SampleTimeSeconds - EffectiveLaunchTime) / FlightSeconds;
 	if (RawProgress <= 0.0f || RawProgress >= 1.0f)
 	{
 		return false;
@@ -275,6 +363,7 @@ bool FWacomFirstPersonCardPileTransferPlayback::EvaluateGlyphAtTime(
 	const float Progress = FMath::Clamp(RawProgress, 0.0f, 1.0f);
 	const FVector2D ControlPoint = MakeLaneControlPoint(Index);
 	const float Inverse = 1.0f - Progress;
+	const FVector2D& Source = GetSource(Index);
 	OutGlyph.Position = Source * (Inverse * Inverse)
 		+ ControlPoint * (2.0f * Inverse * Progress)
 		+ Target * (Progress * Progress);
@@ -377,14 +466,20 @@ void FWacomFirstPersonCardPileTransferPlayback::BuildAuxiliaryShapes()
 	int32 MoteQuadCount = 0;
 	for (int32 Index = 0; Index < Glyphs.Num() && MoteQuadCount < Style.MaxMoteQuadCount; ++Index)
 	{
-		const float LaunchTime = Style.StartChargeSeconds + StaggerSeconds * Index;
+		const float StartSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+			? Style.DiscardCollapseSeconds
+			: Style.StartChargeSeconds;
+		const float FlightSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+			? Style.DiscardFlightSeconds
+			: Style.FlightSeconds;
+		const float LaunchTime = StartSeconds + StaggerSeconds * Index;
 		for (int32 MoteIndex = 0;
 			MoteIndex < MoteSlotsPerGlyph && MoteQuadCount < Style.MaxMoteQuadCount;
 			++MoteIndex)
 		{
 			const uint32 Seed = HashCombineFast(MakeGlyphSeed(Index), GetTypeHash(MoteIndex + 1));
 			const float SpawnProgress = FMath::Lerp(0.06f, 0.92f, Hash01(Seed ^ 0x27d4eb2du));
-			const float SpawnTime = LaunchTime + SpawnProgress * Style.FlightSeconds;
+			const float SpawnTime = LaunchTime + SpawnProgress * FlightSeconds;
 			const float Age = (ElapsedSeconds - SpawnTime) / Style.MoteLifetimeSeconds;
 			if (Age < 0.0f || Age >= 1.0f)
 			{
@@ -436,10 +531,52 @@ void FWacomFirstPersonCardPileTransferPlayback::BuildAuxiliaryShapes()
 			++MoteQuadCount;
 		}
 	}
+
+	const bool bDiscardToPile = TransferKind
+		== FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile;
+	const float ImpactSeconds = bDiscardToPile
+		? Style.DiscardImpactSeconds
+		: Style.ReshuffleImpactSeconds;
+	const float ImpactScale = bDiscardToPile
+		? Style.DiscardImpactScale
+		: Style.ReshuffleImpactScale;
+	const float ArrivalStartSeconds = bDiscardToPile
+		? Style.DiscardCollapseSeconds
+		: Style.StartChargeSeconds;
+	const float ArrivalFlightSeconds = bDiscardToPile
+		? Style.DiscardFlightSeconds
+		: Style.FlightSeconds;
+	for (int32 Index = 0; Index < CardInstanceIds.Num(); ++Index)
+	{
+		const float ArrivalTime = ArrivalStartSeconds
+			+ StaggerSeconds * Index
+			+ ArrivalFlightSeconds;
+		const float ImpactAge = (ElapsedSeconds - ArrivalTime) / ImpactSeconds;
+		if (ImpactAge < 0.0f || ImpactAge >= 1.0f)
+		{
+			continue;
+		}
+		const bool bFinal = Index == CardInstanceIds.Num() - 1;
+		const float FinalBoost = bFinal
+			? (bDiscardToPile ? 1.18f : Style.ReshuffleFinalImpactStrengthMultiplier)
+			: 1.0f;
+		FWacomFirstPersonCardPileTransferGlyphView Impact;
+		Impact.Position = Target;
+		Impact.Size = Style.GlyphSize * FMath::Lerp(
+			0.72f,
+			ImpactScale * FinalBoost,
+			EaseOutCubic(ImpactAge));
+		Impact.Opacity = 0.82f * FMath::Square(1.0f - ImpactAge);
+		Impact.ShapeAge = ImpactAge;
+		Impact.ShapeVariant = bFinal ? 1.0f : 0.0f;
+		Impact.ShapeKind = EWacomFirstPersonCardPileTransferShapeKind::Impact;
+		AuxiliaryShapes.Add(Impact);
+	}
 }
 
 void FWacomFirstPersonCardPileTransferPlayback::UpdateGlyphs()
 {
+	LaunchedCount = 0;
 	ArrivedCount = 0;
 	CompletionPulse = 0.0f;
 	AuxiliaryShapes.Reset();
@@ -451,7 +588,7 @@ void FWacomFirstPersonCardPileTransferPlayback::UpdateGlyphs()
 			FWacomFirstPersonCardPileTransferGlyphView& Glyph = Glyphs[Index];
 			const float JitterX = (Hash01(MakeGlyphSeed(Index)) - 0.5f) * 18.0f;
 			const float JitterY = (Hash01(MakeGlyphSeed(Index) ^ 0x9e3779b9u) - 0.5f) * 12.0f;
-			Glyph.Position = Progress < 0.55f ? Source + FVector2D(JitterX, JitterY) : Target;
+			Glyph.Position = Progress < 0.55f ? GetSource(Index) + FVector2D(JitterX, JitterY) : Target;
 			Glyph.Size = Style.GlyphSize;
 			Glyph.RotationRadians = 0.0f;
 			Glyph.Opacity = 1.0f - FMath::SmoothStep(0.45f, 0.62f, Progress);
@@ -461,28 +598,60 @@ void FWacomFirstPersonCardPileTransferPlayback::UpdateGlyphs()
 		}
 		if (Progress >= 0.55f)
 		{
+			LaunchedCount = CardInstanceIds.Num();
 			ArrivedCount = CardInstanceIds.Num();
 			CompletionPulse = 1.0f - FMath::SmoothStep(0.55f, 1.0f, Progress);
+			FWacomFirstPersonCardPileTransferGlyphView Impact;
+			Impact.Position = Target;
+			Impact.Size = Style.GlyphSize * (TransferKind
+				== FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+				? Style.DiscardImpactScale
+				: Style.ReshuffleImpactScale * Style.ReshuffleFinalImpactStrengthMultiplier);
+			Impact.Opacity = CompletionPulse;
+			Impact.ShapeAge = Progress;
+			Impact.ShapeVariant = 1.0f;
+			Impact.ShapeKind = EWacomFirstPersonCardPileTransferShapeKind::Impact;
+			AuxiliaryShapes.Add(Impact);
 		}
 		return;
 	}
 
 	for (int32 Index = 0; Index < Glyphs.Num(); ++Index)
 	{
-		const float LaunchTime = Style.StartChargeSeconds + StaggerSeconds * Index;
-		const float RawProgress = (ElapsedSeconds - LaunchTime) / Style.FlightSeconds;
+		const float StartSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+			? Style.DiscardCollapseSeconds
+			: Style.StartChargeSeconds;
+		const float FlightSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+			? Style.DiscardFlightSeconds
+			: Style.FlightSeconds;
+		const float LaunchTime = StartSeconds + StaggerSeconds * Index;
+		const float RawProgress = (ElapsedSeconds - LaunchTime) / FlightSeconds;
 		FWacomFirstPersonCardPileTransferGlyphView& Glyph = Glyphs[Index];
 		Glyph.Size = Style.GlyphSize;
 		if (RawProgress <= 0.0f)
 		{
-			Glyph.Position = Source;
+			Glyph.Position = GetSource(Index);
 			Glyph.RotationRadians = 0.0f;
-			Glyph.Opacity = 0.0f;
+			if (TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile)
+			{
+				const float RevealDuration = FMath::Max(
+					0.01f,
+					Style.DiscardCollapseSeconds - Style.DiscardGlyphRevealStartSeconds);
+				Glyph.Opacity = FMath::SmoothStep(
+					0.0f,
+					1.0f,
+					(ElapsedSeconds - Style.DiscardGlyphRevealStartSeconds) / RevealDuration);
+			}
+			else
+			{
+				Glyph.Opacity = 0.0f;
+			}
 			Glyph.ShapeAge = 0.0f;
 			Glyph.ShapeVariant = 0.0f;
 			Glyph.ShapeKind = EWacomFirstPersonCardPileTransferShapeKind::MainGlyph;
 			continue;
 		}
+		++LaunchedCount;
 		if (RawProgress >= 1.0f)
 		{
 			Glyph.Position = Target;
@@ -503,9 +672,15 @@ void FWacomFirstPersonCardPileTransferPlayback::UpdateGlyphs()
 	}
 	BuildAuxiliaryShapes();
 
-	const float LastArrivalTime = Style.StartChargeSeconds
+	const float StartSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+		? Style.DiscardCollapseSeconds
+		: Style.StartChargeSeconds;
+	const float FlightSeconds = TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile
+		? Style.DiscardFlightSeconds
+		: Style.FlightSeconds;
+	const float LastArrivalTime = StartSeconds
 		+ StaggerSeconds * FMath::Max(0, CardInstanceIds.Num() - 1)
-		+ Style.FlightSeconds;
+		+ FlightSeconds;
 	if (ElapsedSeconds > LastArrivalTime)
 	{
 		CompletionPulse = 1.0f - FMath::Clamp(

@@ -139,6 +139,9 @@ private:
 	void ApplyCardUseEffectParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardUseEffectView& View) const;
+	void ApplyHandTargetImpactParameters(
+		UMaterialInstanceDynamic& Material,
+		const FWacomFirstPersonCardHandTargetImpactView& View) const;
 	void ApplyPlayedDissolveParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardPlayedDissolveView& View) const;

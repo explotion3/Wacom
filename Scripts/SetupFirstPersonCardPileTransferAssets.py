@@ -50,6 +50,7 @@ for name, value in {
     "TrailTailPixelRetention": 0.20,
     "TrailGlowStrength": 0.45,
     "MoteGlowStrength": 0.55,
+    "ImpactGlowStrength": 0.85,
 }.items():
     unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(
         material_instance, name, value)
@@ -62,6 +63,8 @@ for name, value in {
     "TrailAccentColor": unreal.LinearColor(0.88, 0.30, 0.72, 1.0),
     "MotePrimaryColor": unreal.LinearColor(0.62, 0.82, 1.0, 1.0),
     "MoteAccentColor": unreal.LinearColor(1.0, 0.82, 0.42, 1.0),
+    "ImpactPrimaryColor": unreal.LinearColor(0.58, 0.80, 1.0, 1.0),
+    "ImpactAccentColor": unreal.LinearColor(0.96, 0.82, 0.42, 1.0),
 }.items():
     unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(
         material_instance, name, value)
@@ -82,7 +85,7 @@ if not style_asset:
 
 style = style_asset.get_editor_property("style")
 style.set_editor_property("glyph_material_instance", material_instance)
-style.set_editor_property("glyph_size", unreal.Vector2D(14.0, 22.0))
+style.set_editor_property("glyph_size", unreal.Vector2D(42.0, 66.0))
 style.set_editor_property("start_charge_seconds", 0.08)
 style.set_editor_property("flight_seconds", 0.36)
 style.set_editor_property("lane_count", 3)
@@ -91,19 +94,25 @@ style.set_editor_property("settle_seconds", 0.24)
 style.set_editor_property("arc_height_ratio", 0.18)
 style.set_editor_property("min_arc_height_pixels", 48.0)
 style.set_editor_property("max_arc_height_pixels", 128.0)
+style.set_editor_property("discard_collapse_seconds", 0.11)
+style.set_editor_property("discard_glyph_reveal_start_seconds", 0.06)
+style.set_editor_property("discard_flight_seconds", 0.28)
+style.set_editor_property("discard_stagger_seconds", 0.055)
+style.set_editor_property("discard_impact_seconds", 0.12)
+style.set_editor_property("discard_impact_scale", 1.55)
 style.set_editor_property("enable_trail", True)
 style.set_editor_property("trail_sample_interval_seconds", 0.007)
 style.set_editor_property("high_detail_trail_segments_per_glyph", 7)
 style.set_editor_property("medium_detail_trail_segments_per_glyph", 5)
 style.set_editor_property("low_detail_trail_segments_per_glyph", 3)
-style.set_editor_property("trail_head_width_pixels", 3.5)
-style.set_editor_property("trail_tail_width_pixels", 1.0)
+style.set_editor_property("trail_head_width_pixels", 10.5)
+style.set_editor_property("trail_tail_width_pixels", 3.0)
 style.set_editor_property("trail_head_opacity", 0.44)
 style.set_editor_property("trail_tail_opacity", 0.04)
 style.set_editor_property("max_trail_quad_count", 120)
 style.set_editor_property("mote_lifetime_seconds", 0.24)
-style.set_editor_property("mote_min_size_pixels", 2.0)
-style.set_editor_property("mote_max_size_pixels", 4.5)
+style.set_editor_property("mote_min_size_pixels", 6.0)
+style.set_editor_property("mote_max_size_pixels", 13.5)
 style.set_editor_property("mote_backward_distance_pixels", 28.0)
 style.set_editor_property("mote_lateral_distance_pixels", 14.0)
 style.set_editor_property("high_detail_max_active_glyphs", 6)
@@ -123,6 +132,7 @@ anchor = player_cdo.get_editor_property("first_person_card_anchor_component")
 if not anchor:
     raise RuntimeError("FirstPersonCardAnchorComponent is missing on player CDO")
 anchor.set_editor_property("enable_card_pile_transfer", True)
+anchor.set_editor_property("enable_card_discard_glyph_transfer", True)
 anchor.set_editor_property("card_pile_transfer_style", style_asset)
 unreal.EditorAssetLibrary.save_loaded_asset(player_bp)
 unreal.log("Wacom first-person pile-transfer pixel glyph assets configured")

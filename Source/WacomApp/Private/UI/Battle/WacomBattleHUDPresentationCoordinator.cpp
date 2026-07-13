@@ -12,6 +12,7 @@
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
+#include "UI/Battle/WacomBattlePileCountPresentation.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Common/PileCountView.h"
 
@@ -37,6 +38,8 @@ namespace
 			return TEXT("TurnStartHandAnchorEnter");
 		case EWacomBattlePresentationPhaseKind::CommandHandResolution:
 			return TEXT("CommandHandResolution");
+		case EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer:
+			return TEXT("HandDiscardGlyphTransfer");
 		case EWacomBattlePresentationPhaseKind::DeckReshuffle:
 			return TEXT("DeckReshuffle");
 		case EWacomBattlePresentationPhaseKind::None:
@@ -253,6 +256,104 @@ namespace
 		return Hints;
 	}
 
+	bool IsGlyphTransferPhase(EWacomBattlePresentationPhaseKind Kind)
+	{
+		return Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle
+			|| Kind == EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer
+			|| Kind == EWacomBattlePresentationPhaseKind::TurnEndDiscard;
+	}
+
+	struct FHandDiscardPresentationBatch
+	{
+		int32 Sequence = INDEX_NONE;
+		TArray<FGuid> CardInstanceIds;
+		int32 DiscardPileCountAfter = 0;
+	};
+
+	TArray<FHandDiscardPresentationBatch> BuildHandDiscardPresentationBatches(
+		const TArray<FBattleEvent>& Events)
+	{
+		TArray<FHandDiscardPresentationBatch> Result;
+		TSet<int32> SeenSequences;
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type != EBattleEventType::CardDiscarded || !Event.CardInstanceId.IsValid())
+			{
+				continue;
+			}
+			const int32 BatchSequence = Event.HandCardZoneMoveBatchSequence != INDEX_NONE
+				? Event.HandCardZoneMoveBatchSequence
+				: Event.Sequence;
+			if (BatchSequence == INDEX_NONE || SeenSequences.Contains(BatchSequence))
+			{
+				continue;
+			}
+			SeenSequences.Add(BatchSequence);
+			FHandDiscardPresentationBatch Batch;
+			Batch.Sequence = BatchSequence;
+			Batch.CardInstanceIds = Event.CardInstanceIds.IsEmpty()
+				? TArray<FGuid>({ Event.CardInstanceId })
+				: Event.CardInstanceIds;
+			Batch.CardInstanceIds = BuildUniqueValidCardIds(
+				Batch.CardInstanceIds,
+				[](const FGuid&) { return true; });
+			Batch.DiscardPileCountAfter = FMath::Max(0, Event.DiscardPileCountAfter);
+			if (!Batch.CardInstanceIds.IsEmpty())
+			{
+				Result.Add(MoveTemp(Batch));
+			}
+		}
+		Result.Sort([](const FHandDiscardPresentationBatch& A, const FHandDiscardPresentationBatch& B)
+		{
+			return A.Sequence < B.Sequence;
+		});
+		return Result;
+	}
+
+	void RemoveHandCards(FBattleSnapshot& Snapshot, const TArray<FGuid>& CardInstanceIds)
+	{
+		TSet<FGuid> RemovedIds;
+		for (const FGuid& CardInstanceId : CardInstanceIds)
+		{
+			RemovedIds.Add(CardInstanceId);
+		}
+		Snapshot.Hand.Cards.RemoveAll([&RemovedIds](const FHandCardSnapshot& Card)
+		{
+			return RemovedIds.Contains(Card.InstanceId);
+		});
+		Snapshot.Hand.NormalCardCount = 0;
+		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)
+		{
+			if (!Card.bIsHandAnchor)
+			{
+				++Snapshot.Hand.NormalCardCount;
+			}
+		}
+	}
+
+	FWacomBattlePresentationPhase MakeHandDiscardGlyphPhase(
+		const FHandDiscardPresentationBatch& Batch,
+		const FBattleSnapshot& Snapshot)
+	{
+		FWacomBattlePresentationPhase Phase;
+		Phase.Kind = EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer;
+		Phase.Snapshot = Snapshot;
+		Phase.TransitionHints = BuildTransitionHintsForCardIds(
+			Batch.CardInstanceIds,
+			EWacomFirstPersonCardSlotTransitionKind::Discarded);
+		Phase.PileTransferInitialDiscardCount = FMath::Max(
+			0,
+			Batch.DiscardPileCountAfter - Batch.CardInstanceIds.Num());
+		FWacomFirstPersonCardPileTransferHint Hint;
+		Hint.EventSequence = Batch.Sequence;
+		Hint.CardInstanceIds = Batch.CardInstanceIds;
+		Hint.TransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile;
+		Hint.TargetAnchorKind = EWacomFirstPersonCardPresentationAnchorKind::DiscardPile;
+		Hint.Seed = HashCombineFast(GetTypeHash(Batch.Sequence), GetTypeHash(Batch.CardInstanceIds.Num()));
+		Phase.PileTransferHints.Add(MoveTemp(Hint));
+		return Phase;
+	}
+
 	TArray<FBattleEvent> FilterEventsBySequenceRange(
 		const TArray<FBattleEvent>& Events,
 		int32 FirstSequence,
@@ -344,6 +445,12 @@ namespace
 					EWacomFirstPersonCardSlotTransitionKind::Drawn);
 				if (!Phase.TransitionHints.IsEmpty())
 				{
+					FWacomBattleDrawPileFeedbackBatch DrawPileFeedbackBatch;
+					DrawPileFeedbackBatch.EventSequence = Step.EventSequence;
+					DrawPileFeedbackBatch.CardInstanceIds = Step.CardInstanceIds;
+					DrawPileFeedbackBatch.DrawPileCountBefore = CurrentDrawCount;
+					DrawPileFeedbackBatch.DrawPileCountAfter = Step.DrawPileCountAfter;
+					Phase.DrawPileFeedbackBatch = MoveTemp(DrawPileFeedbackBatch);
 					Plan.Phases.Add(MoveTemp(Phase));
 				}
 				CurrentDrawCount = Step.DrawPileCountAfter;
@@ -360,9 +467,13 @@ namespace
 			Phase.Snapshot.PileCounts.DiscardCount = CurrentDiscardCount;
 			Phase.PileTransferInitialDrawCount = CurrentDrawCount;
 			Phase.PileTransferInitialDiscardCount = CurrentDiscardCount;
+			Phase.PileTransferFinalDrawCount = Step.DrawPileCountAfter;
+			Phase.PileTransferFinalDiscardCount = Step.DiscardPileCountAfter;
+			Phase.PileTransferPlayedCount = Phase.Snapshot.PileCounts.PlayedCount;
 			FWacomFirstPersonCardPileTransferHint Hint;
 			Hint.EventSequence = Step.EventSequence;
 			Hint.CardInstanceIds = Step.CardInstanceIds;
+			Hint.TransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
 			Hint.Seed = HashCombineFast(
 				GetTypeHash(Step.EventSequence),
 				GetTypeHash(Step.CardInstanceIds.Num()));
@@ -416,6 +527,29 @@ namespace
 				Phase.TransitionHints = BuildTransitionHintsForCardIds(
 					DiscardedCardIds,
 					EWacomFirstPersonCardSlotTransitionKind::Discarded);
+				const TArray<FHandDiscardPresentationBatch> DiscardBatches =
+					BuildHandDiscardPresentationBatches(Events);
+				FHandDiscardPresentationBatch Batch;
+				if (!DiscardBatches.IsEmpty())
+				{
+					Batch = DiscardBatches[0];
+				}
+				else
+				{
+					Batch.Sequence = DiscardCheckpoint->FirstEventSequence;
+					Batch.CardInstanceIds = DiscardedCardIds;
+					Batch.DiscardPileCountAfter = DiscardCheckpoint->Snapshot.PileCounts.DiscardCount;
+				}
+				Phase.PileTransferInitialDiscardCount = FMath::Max(
+					0,
+					Batch.DiscardPileCountAfter - DiscardedCardIds.Num());
+				FWacomFirstPersonCardPileTransferHint Hint;
+				Hint.EventSequence = Batch.Sequence;
+				Hint.CardInstanceIds = DiscardedCardIds;
+				Hint.TransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile;
+				Hint.TargetAnchorKind = EWacomFirstPersonCardPresentationAnchorKind::DiscardPile;
+				Hint.Seed = HashCombineFast(GetTypeHash(Batch.Sequence), GetTypeHash(DiscardedCardIds.Num()));
+				Phase.PileTransferHints.Add(MoveTemp(Hint));
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}
@@ -739,7 +873,9 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 	const FBattleSnapshot& PostCommandSnapshot,
 	int32 PresentationStackEntryId)
 {
-	if (Journal.DeckSteps.IsEmpty() || bProcessingPresentationPlan)
+	const TArray<FHandDiscardPresentationBatch> DiscardBatches =
+		BuildHandDiscardPresentationBatches(Events);
+	if ((Journal.DeckSteps.IsEmpty() && DiscardBatches.IsEmpty()) || bProcessingPresentationPlan)
 	{
 		return false;
 	}
@@ -756,7 +892,13 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 		PostCommandSnapshot,
 		FutureDrawnIds);
 	const TArray<FBattleEvent> NonDeckEvents = FilterNonDeckPresentationEvents(Events);
-	Runtime.StoreFirstPersonCardTransitionEvents(NonDeckEvents);
+	const TArray<FBattleEvent> HandResolutionEvents = NonDeckEvents.FilterByPredicate(
+		[](const FBattleEvent& Event)
+		{
+			return Event.Type != EBattleEventType::CardDiscarded
+				&& Event.Type != EBattleEventType::HandLimitDiscarded;
+		});
+	Runtime.StoreFirstPersonCardTransitionEvents(HandResolutionEvents);
 
 	FWacomBattlePresentationPlan NewPlan;
 	FWacomBattlePresentationPhase HandPhase;
@@ -767,7 +909,48 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 		BaseSnapshot);
 	HandPhase.FeedbackHints = Runtime.BuildFirstPersonCardFeedbackHints(BaseSnapshot);
 	Runtime.ClearPendingFirstPersonCardTransitionEvents();
-	NewPlan.Phases.Add(MoveTemp(HandPhase));
+	const FGuid HandTargetImpactCardId = [&HandPhase]()
+	{
+		for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : HandPhase.FeedbackHints)
+		{
+			if (Hint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::HandTargetImpact
+				&& Hint.CardInstanceId.IsValid())
+			{
+				return Hint.CardInstanceId;
+			}
+		}
+		return FGuid();
+	}();
+	const bool bHasHandPhase = !HandPhase.TransitionHints.IsEmpty()
+		|| !HandPhase.FeedbackHints.IsEmpty()
+		|| DiscardBatches.IsEmpty();
+	bool bHandPhaseAdded = false;
+	FBattleSnapshot DiscardSnapshot = PreCommandSnapshot;
+	for (const FHandDiscardPresentationBatch& Batch : DiscardBatches)
+	{
+		RemoveHandCards(DiscardSnapshot, Batch.CardInstanceIds);
+		DiscardSnapshot.PileCounts.DiscardCount = Batch.DiscardPileCountAfter;
+		FWacomBattlePresentationPhase DiscardPhase =
+			MakeHandDiscardGlyphPhase(Batch, DiscardSnapshot);
+		const bool bContainsImpactedTarget = HandTargetImpactCardId.IsValid()
+			&& Batch.CardInstanceIds.Contains(HandTargetImpactCardId);
+		if (bContainsImpactedTarget && !bHandPhaseAdded)
+		{
+			DiscardPhase.Snapshot = BaseSnapshot;
+			DiscardPhase.TransitionHints.Append(HandPhase.TransitionHints);
+			DiscardPhase.FeedbackHints = HandPhase.FeedbackHints;
+			NewPlan.Phases.Add(MoveTemp(DiscardPhase));
+			bHandPhaseAdded = true;
+		}
+		else
+		{
+			NewPlan.Phases.Add(MoveTemp(DiscardPhase));
+		}
+	}
+	if (bHasHandPhase && !bHandPhaseAdded)
+	{
+		NewPlan.Phases.Add(MoveTemp(HandPhase));
+	}
 
 	if (!NonDeckEvents.IsEmpty())
 	{
@@ -799,6 +982,14 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 	ActivePileTransferEventSequence = INDEX_NONE;
 	ActivePileTransferTotalCount = 0;
 	ActivePileTransferExpectedDurationSeconds = 0.0f;
+	ActivePileTransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
+	ActivePileTransferInitialDrawCount = 0;
+	ActivePileTransferInitialDiscardCount = 0;
+	ActivePileTransferFinalDrawCount = 0;
+	ActivePileTransferFinalDiscardCount = 0;
+	ActivePileTransferPlayedCount = 0;
+	ActivePileTransferLastLaunchedCount = 0;
+	ActivePileTransferLastArrivedCount = 0;
 	HandleQueueStarted();
 	RefreshCommandBar();
 	StartNextPresentationPlanPhase();
@@ -809,25 +1000,105 @@ void FWacomBattleHUDPresentationCoordinator::HandlePileTransferProgress(
 	const FWacomFirstPersonCardPileTransferProgressView& Progress)
 {
 	if (!bProcessingPresentationPlan
-		|| ActivePresentationPlanPhaseKind != EWacomBattlePresentationPhaseKind::DeckReshuffle
-		|| Progress.EventSequence != ActivePileTransferEventSequence)
+		|| !IsGlyphTransferPhase(ActivePresentationPlanPhaseKind)
+		|| Progress.EventSequence != ActivePileTransferEventSequence
+		|| Progress.TransferKind != ActivePileTransferKind)
 	{
 		return;
 	}
 	const int32 Total = FMath::Max(0, ActivePileTransferTotalCount);
+	const int32 Launched = FMath::Clamp(Progress.LaunchedCount, 0, Total);
 	const int32 Arrived = FMath::Clamp(Progress.ArrivedCount, 0, Total);
 	ActivePileTransferExpectedDurationSeconds = FMath::Max(
 		ActivePileTransferExpectedDurationSeconds,
 		FMath::Max(0.0f, Progress.ExpectedDurationSeconds));
-	if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
+	if (Progress.TransferKind == FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile)
 	{
-		DrawPileView->SetCount(Arrived);
+		if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
+		{
+			const int32 MonotonicArrived = FMath::Max(
+				ActivePileTransferLastArrivedCount,
+				Arrived);
+			const int32 NewlyArrived = MonotonicArrived - ActivePileTransferLastArrivedCount;
+			const int32 Count = ActivePileTransferInitialDiscardCount + MonotonicArrived;
+			DiscardPileView->SetCount(Count);
+			DiscardPileView->SetCountDisplayText(FText::AsNumber(Count));
+			if (Progress.bWasForceCompleted)
+			{
+				DiscardPileView->ResetReceiveFeedback();
+			}
+			else if (NewlyArrived > 0)
+			{
+				DiscardPileView->PlayReceiveFeedback(
+					NewlyArrived,
+					MonotonicArrived >= Total,
+					Progress.bReducedMotion);
+			}
+			ActivePileTransferLastArrivedCount = MonotonicArrived;
+		}
+		return;
 	}
+
+	const int32 MonotonicLaunched = FMath::Max(ActivePileTransferLastLaunchedCount, Launched);
+	const int32 MonotonicArrived = FMath::Max(ActivePileTransferLastArrivedCount, Arrived);
+	const int32 NewlyLaunched = MonotonicLaunched - ActivePileTransferLastLaunchedCount;
+	const int32 NewlyArrived = MonotonicArrived - ActivePileTransferLastArrivedCount;
+	if (Progress.bWasForceCompleted)
+	{
+		if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
+		{
+			DiscardPileView->SetCount(ActivePileTransferFinalDiscardCount);
+			DiscardPileView->SetCountDisplayText(
+				WacomBattlePileCountPresentation::BuildDiscardPileCountDisplayText(
+					ActivePileTransferFinalDiscardCount,
+					ActivePileTransferPlayedCount));
+			DiscardPileView->ResetSendFeedback();
+		}
+		if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
+		{
+			DrawPileView->SetCount(ActivePileTransferFinalDrawCount);
+			DrawPileView->ResetReceiveFeedback();
+		}
+		ActivePileTransferLastLaunchedCount = Total;
+		ActivePileTransferLastArrivedCount = Total;
+		return;
+	}
+
 	if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
 	{
-		DiscardPileView->SetCount(Total - Arrived);
-		DiscardPileView->SetCountDisplayText(FText::AsNumber(Total - Arrived));
+		const int32 Count = FMath::Max(
+			ActivePileTransferFinalDiscardCount,
+			ActivePileTransferInitialDiscardCount - MonotonicLaunched);
+		DiscardPileView->SetCount(Count);
+		DiscardPileView->SetCountDisplayText(
+			WacomBattlePileCountPresentation::BuildDiscardPileCountDisplayText(
+				Count,
+				ActivePileTransferPlayedCount));
+		if (NewlyLaunched > 0)
+		{
+			DiscardPileView->PlaySendFeedback(
+				NewlyLaunched,
+				MonotonicLaunched >= Total,
+				Progress.LaunchDirection,
+				Progress.bReducedMotion);
+		}
 	}
+	if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
+	{
+		const int32 Count = FMath::Min(
+			ActivePileTransferFinalDrawCount,
+			ActivePileTransferInitialDrawCount + MonotonicArrived);
+		DrawPileView->SetCount(Count);
+		if (NewlyArrived > 0)
+		{
+			DrawPileView->PlayReceiveFeedback(
+				NewlyArrived,
+				MonotonicArrived >= Total,
+				Progress.bReducedMotion);
+		}
+	}
+	ActivePileTransferLastLaunchedCount = MonotonicLaunched;
+	ActivePileTransferLastArrivedCount = MonotonicArrived;
 }
 
 void FWacomBattleHUDPresentationCoordinator::ClearQueue()
@@ -1001,6 +1272,50 @@ void FWacomBattleHUDPresentationCoordinator::AdvancePresentationPlanOnce()
 {
 	PollActivePresentationPlanPhase();
 }
+
+void FWacomBattleHUDPresentationCoordinator::PrimeDiscardPileReceiveFeedbackForTest(
+	int32 EventSequence,
+	int32 TotalCount,
+	int32 InitialDiscardCount)
+{
+	bProcessingPresentationPlan = true;
+	ActivePresentationPlanPhaseKind = EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer;
+	ActivePileTransferEventSequence = EventSequence;
+	ActivePileTransferTotalCount = FMath::Max(0, TotalCount);
+	ActivePileTransferExpectedDurationSeconds = 0.0f;
+	ActivePileTransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile;
+	ActivePileTransferInitialDrawCount = 0;
+	ActivePileTransferInitialDiscardCount = FMath::Max(0, InitialDiscardCount);
+	ActivePileTransferFinalDrawCount = 0;
+	ActivePileTransferFinalDiscardCount = ActivePileTransferInitialDiscardCount + ActivePileTransferTotalCount;
+	ActivePileTransferPlayedCount = 0;
+	ActivePileTransferLastLaunchedCount = 0;
+	ActivePileTransferLastArrivedCount = 0;
+}
+
+void FWacomBattleHUDPresentationCoordinator::PrimeReshufflePileFeedbackForTest(
+	int32 EventSequence,
+	int32 TotalCount,
+	int32 InitialDrawCount,
+	int32 FinalDrawCount,
+	int32 InitialDiscardCount,
+	int32 FinalDiscardCount,
+	int32 PlayedCount)
+{
+	bProcessingPresentationPlan = true;
+	ActivePresentationPlanPhaseKind = EWacomBattlePresentationPhaseKind::DeckReshuffle;
+	ActivePileTransferEventSequence = EventSequence;
+	ActivePileTransferTotalCount = FMath::Max(0, TotalCount);
+	ActivePileTransferExpectedDurationSeconds = 0.0f;
+	ActivePileTransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
+	ActivePileTransferInitialDrawCount = FMath::Max(0, InitialDrawCount);
+	ActivePileTransferInitialDiscardCount = FMath::Max(0, InitialDiscardCount);
+	ActivePileTransferFinalDrawCount = FMath::Max(0, FinalDrawCount);
+	ActivePileTransferFinalDiscardCount = FMath::Max(0, FinalDiscardCount);
+	ActivePileTransferPlayedCount = FMath::Max(0, PlayedCount);
+	ActivePileTransferLastLaunchedCount = 0;
+	ActivePileTransferLastArrivedCount = 0;
+}
 #endif
 
 void FWacomBattleHUDPresentationCoordinator::SyncStackWidget()
@@ -1011,16 +1326,55 @@ void FWacomBattleHUDPresentationCoordinator::SyncStackWidget()
 	}
 }
 
+void FWacomBattleHUDPresentationCoordinator::RestoreActiveReshufflePileCounts()
+{
+	if (!bProcessingPresentationPlan
+		|| ActivePileTransferKind
+			!= FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw
+		|| !IsGlyphTransferPhase(ActivePresentationPlanPhaseKind))
+	{
+		return;
+	}
+
+	if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
+	{
+		DiscardPileView->SetCount(ActivePileTransferFinalDiscardCount);
+		DiscardPileView->SetCountDisplayText(
+			WacomBattlePileCountPresentation::BuildDiscardPileCountDisplayText(
+				ActivePileTransferFinalDiscardCount,
+				ActivePileTransferPlayedCount));
+	}
+	if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
+	{
+		DrawPileView->SetCount(ActivePileTransferFinalDrawCount);
+	}
+}
+
+void FWacomBattleHUDPresentationCoordinator::ResetActivePileTransferFeedback()
+{
+	if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
+	{
+		DiscardPileView->ResetReceiveFeedback();
+		DiscardPileView->ResetSendFeedback();
+	}
+	if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
+	{
+		DrawPileView->ResetReceiveFeedback();
+	}
+}
+
 void FWacomBattleHUDPresentationCoordinator::ClearPresentationPlan()
 {
-	if (bProcessingPresentationPlan
-		&& ActivePresentationPlanPhaseKind == EWacomBattlePresentationPhaseKind::DeckReshuffle)
+	Runtime.CompleteActiveDrawPileFeedbackBatch();
+	if (bProcessingPresentationPlan && IsGlyphTransferPhase(ActivePresentationPlanPhaseKind))
 	{
 		if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
 		{
 			Anchor->ForceSettleCardLayerPresentationPlayback();
 		}
 	}
+	RestoreActiveReshufflePileCounts();
+	ResetActivePileTransferFeedback();
 	StopPresentationPlanTimer();
 	PresentationPlan = FWacomBattlePresentationPlan();
 	ActivePresentationPlanPhaseKind = EWacomBattlePresentationPhaseKind::None;
@@ -1030,6 +1384,14 @@ void FWacomBattleHUDPresentationCoordinator::ClearPresentationPlan()
 	ActivePileTransferEventSequence = INDEX_NONE;
 	ActivePileTransferTotalCount = 0;
 	ActivePileTransferExpectedDurationSeconds = 0.0f;
+	ActivePileTransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
+	ActivePileTransferInitialDrawCount = 0;
+	ActivePileTransferInitialDiscardCount = 0;
+	ActivePileTransferFinalDrawCount = 0;
+	ActivePileTransferFinalDiscardCount = 0;
+	ActivePileTransferPlayedCount = 0;
+	ActivePileTransferLastLaunchedCount = 0;
+	ActivePileTransferLastArrivedCount = 0;
 #if WITH_AUTOMATION_TESTS
 	StartedPresentationPlanPhaseNamesForTest.Reset();
 	SubmittedPresentationPlanFeedbackHintsForTest.Reset();
@@ -1038,6 +1400,15 @@ void FWacomBattleHUDPresentationCoordinator::ClearPresentationPlan()
 
 void FWacomBattleHUDPresentationCoordinator::StartNextPresentationPlanPhase()
 {
+	if (ActivePresentationPlanPhaseKind == EWacomBattlePresentationPhaseKind::TurnStartDraw)
+	{
+		Runtime.CompleteActiveDrawPileFeedbackBatch();
+	}
+	if (IsGlyphTransferPhase(ActivePresentationPlanPhaseKind))
+	{
+		RestoreActiveReshufflePileCounts();
+		ResetActivePileTransferFeedback();
+	}
 	StopPresentationPlanTimer();
 	ActivePresentationPlanPhaseElapsedSeconds = 0.0f;
 	ActivePresentationPlanPhaseKind = EWacomBattlePresentationPhaseKind::None;
@@ -1082,16 +1453,55 @@ void FWacomBattleHUDPresentationCoordinator::StartHandPresentationPlanPhase(
 #if WITH_AUTOMATION_TESTS
 	SubmittedPresentationPlanFeedbackHintsForTest.Append(Phase.FeedbackHints);
 #endif
+	if (Phase.DrawPileFeedbackBatch.IsSet())
+	{
+		Runtime.QueueDrawPileFeedbackBatch(Phase.DrawPileFeedbackBatch.GetValue());
+	}
 	Runtime.RefreshFromPresentationPhase(
 		Phase.Snapshot,
 		Phase.TransitionHints,
 		Phase.FeedbackHints);
-	if (Phase.Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle
-		&& !Phase.PileTransferHints.IsEmpty())
+	if (IsGlyphTransferPhase(Phase.Kind) && !Phase.PileTransferHints.IsEmpty())
 	{
 		ActivePileTransferEventSequence = Phase.PileTransferHints[0].EventSequence;
 		ActivePileTransferTotalCount = Phase.PileTransferHints[0].CardInstanceIds.Num();
 		ActivePileTransferExpectedDurationSeconds = 0.0f;
+		ActivePileTransferKind = Phase.PileTransferHints[0].TransferKind;
+		ActivePileTransferInitialDrawCount = Phase.PileTransferInitialDrawCount;
+		ActivePileTransferInitialDiscardCount = Phase.PileTransferInitialDiscardCount;
+		ActivePileTransferFinalDrawCount = Phase.PileTransferFinalDrawCount;
+		ActivePileTransferFinalDiscardCount = Phase.PileTransferFinalDiscardCount;
+		ActivePileTransferPlayedCount = Phase.PileTransferPlayedCount;
+		ActivePileTransferLastLaunchedCount = 0;
+		ActivePileTransferLastArrivedCount = 0;
+		if (ActivePileTransferKind
+			== FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile)
+		{
+			if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
+			{
+				DiscardPileView->ResetReceiveFeedback();
+				DiscardPileView->SetCount(ActivePileTransferInitialDiscardCount);
+				DiscardPileView->SetCountDisplayText(
+					FText::AsNumber(ActivePileTransferInitialDiscardCount));
+			}
+		}
+		else
+		{
+			if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
+			{
+				DiscardPileView->ResetSendFeedback();
+				DiscardPileView->SetCount(ActivePileTransferInitialDiscardCount);
+				DiscardPileView->SetCountDisplayText(
+					WacomBattlePileCountPresentation::BuildDiscardPileCountDisplayText(
+						ActivePileTransferInitialDiscardCount,
+						ActivePileTransferPlayedCount));
+			}
+			if (UPileCountView* DrawPileView = Runtime.Host().GetDrawPileView())
+			{
+				DrawPileView->ResetReceiveFeedback();
+				DrawPileView->SetCount(ActivePileTransferInitialDrawCount);
+			}
+		}
 		Runtime.GetFirstPersonHandBridge().ApplyPileTransferHints(Phase.PileTransferHints);
 	}
 	else
@@ -1099,6 +1509,14 @@ void FWacomBattleHUDPresentationCoordinator::StartHandPresentationPlanPhase(
 		ActivePileTransferEventSequence = INDEX_NONE;
 		ActivePileTransferTotalCount = 0;
 		ActivePileTransferExpectedDurationSeconds = 0.0f;
+		ActivePileTransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
+		ActivePileTransferInitialDrawCount = 0;
+		ActivePileTransferInitialDiscardCount = 0;
+		ActivePileTransferFinalDrawCount = 0;
+		ActivePileTransferFinalDiscardCount = 0;
+		ActivePileTransferPlayedCount = 0;
+		ActivePileTransferLastLaunchedCount = 0;
+		ActivePileTransferLastArrivedCount = 0;
 	}
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
 	{
@@ -1166,7 +1584,7 @@ void FWacomBattleHUDPresentationCoordinator::PollActivePresentationPlanPhase()
 		!HasActiveFirstPersonHandPresentationPlayback()
 		&& !HasPendingFirstPersonHandPresentationFrame();
 	const float PhaseTimeoutSeconds =
-		ActivePresentationPlanPhaseKind == EWacomBattlePresentationPhaseKind::DeckReshuffle
+		IsGlyphTransferPhase(ActivePresentationPlanPhaseKind)
 			&& ActivePileTransferExpectedDurationSeconds > 0.0f
 		? FMath::Max(
 			BattlePresentationPlanHandPhaseTimeoutSeconds,
@@ -1200,6 +1618,15 @@ void FWacomBattleHUDPresentationCoordinator::FinishPresentationPlan()
 	ActivePileTransferEventSequence = INDEX_NONE;
 	ActivePileTransferTotalCount = 0;
 	ActivePileTransferExpectedDurationSeconds = 0.0f;
+	ActivePileTransferKind = FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
+	ActivePileTransferInitialDrawCount = 0;
+	ActivePileTransferInitialDiscardCount = 0;
+	ActivePileTransferFinalDrawCount = 0;
+	ActivePileTransferFinalDiscardCount = 0;
+	ActivePileTransferPlayedCount = 0;
+	ActivePileTransferLastLaunchedCount = 0;
+	ActivePileTransferLastArrivedCount = 0;
+	ResetActivePileTransferFeedback();
 
 	if (UBattleSession* CurrentSession = Runtime.GetSession())
 	{

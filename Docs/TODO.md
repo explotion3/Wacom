@@ -91,11 +91,11 @@ tags:
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
   - 说明：后续只追踪表现体验，如 cue 合并、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
-- [ ] **First-person hand 动效第二阶段：Played 目标命中反馈与整体 PIE polish**
-  - 状态：`In Progress: Card Use 像素翻面收牌与 Exhausted 消耗消散已接线，待 PIE polish`
+- [ ] **First-person hand 动效第二阶段：世界目标命中反馈与整体 PIE polish**
+  - 状态：`In Progress: 手牌目标像素刻印已接线，待世界目标与 PIE polish`
   - 归属：App / First-person Card Layer
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、弃牌 stagger、phase timeout force-settle、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup、普通 Played 像素翻面收牌、仍留在 Hand 的成功使用牌“翻到侧边—隐藏换位—反向展开”，以及 Exhausted 独立语义下可切换的 PixelAsh / OrderedDither 消耗消散。旧 DiamondWave Style 完整保留为可切换回退。Played 仍保留真实目标 / PlayTarget 坐标但启用 Surface Effect 时不移动源卡；下一切片应消费该坐标制作独立目标命中反馈，并继续做音效预热、reduced-motion / 全局速度策略和 PIE 调参。不复制第三方代码、shader 或资产。
+  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup、普通 Played 像素翻面收牌、回手重构、Exhausted 消耗消散，以及成功 HandCard 目标的“弱刻印 Preview → 延迟压印 → 留手归位 / 弃牌 / 消耗”结果衔接。旧 DiamondWave 与 PixelAsh Style 均保留。Played 仍保留真实世界目标 / PlayTarget 坐标；下一切片只需消费该坐标制作场景目标命中反馈，并继续做音效预热、reduced-motion / 全局速度策略和 PIE 调参。不复制第三方代码、shader 或资产。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 内容扩展`
@@ -201,11 +201,11 @@ tags:
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
   - 说明：后续按美术反馈微调扇形参数、卡面采样、Retainer 外元素、slot motion、commit pulse 和 drag / aim 读牌姿态。
 
-- [ ] **牌堆牌印表现第二切片：接收脉冲与弃牌化牌印**
-  - 状态：`Ready: 飞行核心已完成，等待下一轮表现实现`
+- [x] **牌堆牌印表现第二切片：接收脉冲与弃牌化牌印**
+  - 状态：`Completed: 普通弃牌与弃牌堆接收反馈已落地`
   - 归属：UI / 战斗表现
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)
-  - 说明：在现有安全内收弧线和确定性飘散像素之上，为抽牌堆增加逐枚吸收 / 最终收束脉冲；再新增 `Discarded` 的“实体卡收束为牌印并飞向弃牌堆”语义适配。不要重新引入具有完整卡背轮廓的牌影，继续复用批量 Slate renderer，不让普通手牌承担粒子 Tick，也不改变规则去向。
+  - 说明：2026-07-13 已完成普通 `CardDiscarded` 的实体卡原地收束、逐卡真实起点、牌印飞向弃牌堆、逐枚计数、像素 Impact 与真实 `DiscardPileView` 接收回弹；弃牌堆洗回继续复用同一批量 Slate renderer。两种传输按 Kind+Sequence 去重并 FIFO 播放，普通弃牌不复用洗牌音效，失效配置回退旧 Exit，Reduced Motion 不跨屏飞行或修改 PileView Transform。接收反馈由通用 `UPileCountView` 管理可叠加脉冲并精确恢复 authored Transform，当前只连接 `DiscardToPile`；未来可按同一接口扩展 DrawPileView / ExhaustPileView。
 
 - [ ] **单一玩家档案与旅程存档：活动旅程、滚动备份、历史摘要**
   - 状态：`Ready: 产品口径已确认，等待独立规格与实现`

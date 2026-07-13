@@ -505,6 +505,11 @@ private:
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PostCommandSnapshot);
+	bool EnqueueCommandPresentationPlanForTest(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot);
 	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
 		const FBattleSnapshot& NextSnapshot) const;
@@ -520,7 +525,25 @@ private:
 		class UBattleSession* SourceSession,
 		const FWacomBattleCombatLogCommandContext& LogContext,
 		const FBattleSnapshot& PreCommandSnapshot,
-		const FBattleResolution& Resolution);
+		const FBattleResolution& Resolution,
+		const FGuid& PlayCommitCardInstanceId = FGuid());
+	void PrimeDiscardPileReceiveFeedbackForAutomationTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDiscardCount);
+	void PrimeReshufflePileFeedbackForAutomationTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDrawCount,
+		int32 FinalDrawCount,
+		int32 InitialDiscardCount,
+		int32 FinalDiscardCount,
+		int32 PlayedCount);
+	void PrepareDrawPileFeedbackForAutomationTest(
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+	void DispatchEnterTransitionStartedForAutomationTest(
+		const FWacomFirstPersonCardEnterTransitionStartedView& View);
+	void ResetDrawPileFeedbackForAutomationTest(int32 AuthoritativeDrawPileCount);
 #endif
 
 	void HideCardDetailPanel();
@@ -585,6 +608,8 @@ private:
 	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerPileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
+	void HandleFirstPersonCardLayerEnterTransitionStarted(
+		const FWacomFirstPersonCardEnterTransitionStartedView& View);
 	void UpdateFirstPersonCardDragTargetFeedback(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);

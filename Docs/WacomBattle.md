@@ -477,7 +477,7 @@ BattleState
 | `TurnEnded` | 玩家结束回合 |
 | `PassiveTriggered` | 被动触发通知；部分被动只发事件不改数值 |
 | `HandLimitDiscarded` | 普通手牌上限导致某张卡弃掉 |
-| `CardDiscarded` | 卡牌因弃牌规则从手牌进入弃牌堆 |
+| `CardDiscarded` | 卡牌因弃牌规则从手牌进入弃牌堆；同一迁移批次的逐张事件共享完整有序 `CardInstanceIds`、稳定 `HandCardZoneMoveBatchSequence` 与批次后 `DiscardPileCountAfter`，逐张事件和 `OnDiscard` 顺序不变 |
 | `CardExhausted` | 卡牌因消耗规则从手牌进入消耗牌堆 |
 | `CardGained` | 战斗中获得新卡 |
 | `BattleEnded` | 战斗进入结束态 |

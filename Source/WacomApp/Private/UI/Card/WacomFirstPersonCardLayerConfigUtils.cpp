@@ -296,6 +296,32 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 		Config.PlayedDissolve.Style.StartSoundPitchVariation,
 		0.0f,
 		0.99f);
+	FWacomFirstPersonCardHandTargetImpactStyleData& HandTargetStyle =
+		Config.HandTargetImpact.Style;
+	HandTargetStyle.PreviewFadeInSeconds = FMath::Max(0.0f, HandTargetStyle.PreviewFadeInSeconds);
+	HandTargetStyle.PreviewPeriodSeconds = FMath::Max(0.01f, HandTargetStyle.PreviewPeriodSeconds);
+	HandTargetStyle.CommitDelaySeconds = FMath::Max(0.0f, HandTargetStyle.CommitDelaySeconds);
+	HandTargetStyle.DepartureGateSeconds = FMath::Max(
+		HandTargetStyle.CommitDelaySeconds,
+		HandTargetStyle.DepartureGateSeconds);
+	HandTargetStyle.ReboundPeakSeconds = FMath::Max(
+		HandTargetStyle.DepartureGateSeconds,
+		HandTargetStyle.ReboundPeakSeconds);
+	HandTargetStyle.CommitDurationSeconds = FMath::Max(
+		HandTargetStyle.ReboundPeakSeconds,
+		HandTargetStyle.CommitDurationSeconds);
+	HandTargetStyle.CompressionScale = FMath::Max(0.01f, HandTargetStyle.CompressionScale);
+	HandTargetStyle.CompressionTranslationPixels = FMath::Max(
+		0.0f, HandTargetStyle.CompressionTranslationPixels);
+	HandTargetStyle.ReboundScale = FMath::Max(0.01f, HandTargetStyle.ReboundScale);
+	HandTargetStyle.ReboundLiftPixels = FMath::Max(0.0f, HandTargetStyle.ReboundLiftPixels);
+	HandTargetStyle.ZOrderBoost = FMath::Max(0, HandTargetStyle.ZOrderBoost);
+	HandTargetStyle.ImpactSoundVolumeMultiplier = FMath::Max(
+		0.0f, HandTargetStyle.ImpactSoundVolumeMultiplier);
+	HandTargetStyle.ImpactSoundPitchMultiplier = FMath::Max(
+		0.01f, HandTargetStyle.ImpactSoundPitchMultiplier);
+	HandTargetStyle.ImpactSoundPitchVariation = FMath::Clamp(
+		HandTargetStyle.ImpactSoundPitchVariation, 0.0f, 0.99f);
 	Config.Selection.Style.EnterDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.EnterDurationSeconds);
 	Config.Selection.Style.ExitDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.ExitDurationSeconds);
 	Config.Selection.Style.SustainPeriodSeconds = FMath::Max(0.01f, Config.Selection.Style.SustainPeriodSeconds);
@@ -418,6 +444,25 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.StartSoundVolumeMultiplier, B.PlayedDissolve.Style.StartSoundVolumeMultiplier)
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.StartSoundPitchMultiplier, B.PlayedDissolve.Style.StartSoundPitchMultiplier)
 		&& AreFloatsEquivalent(A.PlayedDissolve.Style.StartSoundPitchVariation, B.PlayedDissolve.Style.StartSoundPitchVariation)
+		&& A.HandTargetImpact.bEnabled == B.HandTargetImpact.bEnabled
+		&& A.HandTargetImpact.bReducedMotion == B.HandTargetImpact.bReducedMotion
+		&& A.HandTargetImpact.Style.SurfaceEffectMaterialInstance
+			== B.HandTargetImpact.Style.SurfaceEffectMaterialInstance
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.PreviewFadeInSeconds, B.HandTargetImpact.Style.PreviewFadeInSeconds)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.PreviewPeriodSeconds, B.HandTargetImpact.Style.PreviewPeriodSeconds)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.CommitDelaySeconds, B.HandTargetImpact.Style.CommitDelaySeconds)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.DepartureGateSeconds, B.HandTargetImpact.Style.DepartureGateSeconds)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ReboundPeakSeconds, B.HandTargetImpact.Style.ReboundPeakSeconds)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.CommitDurationSeconds, B.HandTargetImpact.Style.CommitDurationSeconds)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.CompressionScale, B.HandTargetImpact.Style.CompressionScale)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.CompressionTranslationPixels, B.HandTargetImpact.Style.CompressionTranslationPixels)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ReboundScale, B.HandTargetImpact.Style.ReboundScale)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ReboundLiftPixels, B.HandTargetImpact.Style.ReboundLiftPixels)
+		&& A.HandTargetImpact.Style.ZOrderBoost == B.HandTargetImpact.Style.ZOrderBoost
+		&& A.HandTargetImpact.Style.ImpactSound == B.HandTargetImpact.Style.ImpactSound
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ImpactSoundVolumeMultiplier, B.HandTargetImpact.Style.ImpactSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ImpactSoundPitchMultiplier, B.HandTargetImpact.Style.ImpactSoundPitchMultiplier)
+		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ImpactSoundPitchVariation, B.HandTargetImpact.Style.ImpactSoundPitchVariation)
 		&& A.Selection.bEnabled == B.Selection.bEnabled
 		&& A.Selection.bReducedMotion == B.Selection.bReducedMotion
 		&& AreColorsEquivalent(A.Selection.Style.PrimaryColor, B.Selection.Style.PrimaryColor)

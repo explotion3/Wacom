@@ -20,6 +20,7 @@
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
 #include "UI/Battle/WacomBattleHUDCommandController.h"
 #include "UI/Battle/WacomBattleHUDCommandBarPresenter.h"
+#include "UI/Battle/WacomBattleDrawPileFeedbackController.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
@@ -615,6 +616,15 @@ const FWacomBattleHUDPresentationCoordinator& FWacomBattleHUDRuntime::GetPresent
 	return const_cast<FWacomBattleHUDRuntime*>(this)->GetPresentationCoordinator();
 }
 
+FWacomBattleDrawPileFeedbackController& FWacomBattleHUDRuntime::GetDrawPileFeedbackController()
+{
+	if (!DrawPileFeedbackController)
+	{
+		DrawPileFeedbackController = MakeUnique<FWacomBattleDrawPileFeedbackController>(*this);
+	}
+	return *DrawPileFeedbackController;
+}
+
 FWacomBattleHUDSceneEnemyTargetCoordinator& FWacomBattleHUDRuntime::GetSceneEnemyTargetCoordinator()
 {
 	if (!SceneEnemyTargetCoordinator)
@@ -779,7 +789,30 @@ void FWacomBattleHUDRuntime::AppendBattleCombatLogBlock(
 void FWacomBattleHUDRuntime::StoreFirstPersonCardTransitionEvents(
 	const TArray<FBattleEvent>& Events)
 {
+	GetDrawPileFeedbackController().QueueBatchesFromEvents(Events);
 	GetFirstPersonHandBridge().StoreTransitionEvents(Events);
+}
+
+void FWacomBattleHUDRuntime::QueueDrawPileFeedbackBatch(
+	const FWacomBattleDrawPileFeedbackBatch& Batch)
+{
+	GetDrawPileFeedbackController().QueueBatch(Batch);
+}
+
+void FWacomBattleHUDRuntime::PrepareDrawPileFeedbackForPresentationFrame(
+	const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints)
+{
+	GetDrawPileFeedbackController().PrepareForPresentationFrame(TransitionHints);
+}
+
+void FWacomBattleHUDRuntime::CompleteActiveDrawPileFeedbackBatch()
+{
+	GetDrawPileFeedbackController().CompleteActiveBatch();
+}
+
+void FWacomBattleHUDRuntime::ResetDrawPileFeedback(int32 AuthoritativeDrawPileCount)
+{
+	GetDrawPileFeedbackController().Reset(AuthoritativeDrawPileCount);
 }
 
 void FWacomBattleHUDRuntime::ClearPendingFirstPersonCardTransitionEvents()
@@ -961,6 +994,44 @@ void FWacomBattleHUDRuntime::AdvanceBattlePresentationQueueOnce()
 #endif
 }
 
+void FWacomBattleHUDRuntime::RecordFirstPersonHandTargetImpact(
+	const FGuid& TargetCardInstanceId)
+{
+	GetFirstPersonHandBridge().RecordHandTargetImpact(TargetCardInstanceId);
+}
+
+#if WITH_AUTOMATION_TESTS
+void FWacomBattleHUDRuntime::PrimeDiscardPileReceiveFeedbackForTest(
+	int32 EventSequence,
+	int32 TotalCount,
+	int32 InitialDiscardCount)
+{
+	GetPresentationCoordinator().PrimeDiscardPileReceiveFeedbackForTest(
+		EventSequence,
+		TotalCount,
+		InitialDiscardCount);
+}
+
+void FWacomBattleHUDRuntime::PrimeReshufflePileFeedbackForTest(
+	int32 EventSequence,
+	int32 TotalCount,
+	int32 InitialDrawCount,
+	int32 FinalDrawCount,
+	int32 InitialDiscardCount,
+	int32 FinalDiscardCount,
+	int32 PlayedCount)
+{
+	GetPresentationCoordinator().PrimeReshufflePileFeedbackForTest(
+		EventSequence,
+		TotalCount,
+		InitialDrawCount,
+		FinalDrawCount,
+		InitialDiscardCount,
+		FinalDiscardCount,
+		PlayedCount);
+}
+#endif
+
 void FWacomBattleHUDRuntime::SetBattleSceneEnemyHosts(
 	const TArray<AWacomBattleEnemyActor*>& InHosts)
 {
@@ -1095,6 +1166,12 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerPileTransferProgress(
 	const FWacomFirstPersonCardPileTransferProgressView& Progress)
 {
 	GetPresentationCoordinator().HandlePileTransferProgress(Progress);
+}
+
+void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerEnterTransitionStarted(
+	const FWacomFirstPersonCardEnterTransitionStartedView& View)
+{
+	GetDrawPileFeedbackController().HandleEnterTransitionStarted(View);
 }
 
 void FWacomBattleHUDRuntime::SyncFirstPersonBattleHandLayer(
@@ -1307,6 +1384,20 @@ bool FWacomBattleHUDRuntime::EnqueueEndTurnPresentationPlanForTest(
 		Journal,
 		Events,
 		PostCommandSnapshot);
+}
+
+bool FWacomBattleHUDRuntime::EnqueueCommandPresentationPlanForTest(
+	const FBattlePresentationJournal& Journal,
+	const TArray<FBattleEvent>& Events,
+	const FBattleSnapshot& PreCommandSnapshot,
+	const FBattleSnapshot& PostCommandSnapshot)
+{
+	return GetPresentationCoordinator().EnqueueDeckPresentationPlan(
+		Journal,
+		Events,
+		PreCommandSnapshot,
+		PostCommandSnapshot,
+		INDEX_NONE);
 }
 
 FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewForTest() const

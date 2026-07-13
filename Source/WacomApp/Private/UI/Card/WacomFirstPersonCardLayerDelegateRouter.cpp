@@ -38,6 +38,9 @@ void FWacomFirstPersonCardLayerDelegateRouter::Bind(UWacomFirstPersonCardLayerWi
 	LayerWidget->OnCardDragCancelledNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandleDragCancelled);
 	LayerWidget->OnCardPointerMovedNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandlePointerMoved);
 	LayerWidget->OnCardPointerLeftNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandlePointerLeft);
+	LayerWidget->OnEnterTransitionStartedNative.AddRaw(
+		this,
+		&FWacomFirstPersonCardLayerDelegateRouter::HandleEnterTransitionStarted);
 	LayerWidget->OnPileTransferProgressNative.AddRaw(
 		this,
 		&FWacomFirstPersonCardLayerDelegateRouter::HandlePileTransferProgress);
@@ -62,6 +65,7 @@ void FWacomFirstPersonCardLayerDelegateRouter::Unbind(UWacomFirstPersonCardLayer
 	LayerWidget->OnCardDragCancelledNative.RemoveAll(this);
 	LayerWidget->OnCardPointerMovedNative.RemoveAll(this);
 	LayerWidget->OnCardPointerLeftNative.RemoveAll(this);
+	LayerWidget->OnEnterTransitionStartedNative.RemoveAll(this);
 	LayerWidget->OnPileTransferProgressNative.RemoveAll(this);
 }
 
@@ -223,6 +227,15 @@ void FWacomFirstPersonCardLayerDelegateRouter::HandlePointerLeft()
 	if (Callbacks.PointerLeft)
 	{
 		Callbacks.PointerLeft();
+	}
+}
+
+void FWacomFirstPersonCardLayerDelegateRouter::HandleEnterTransitionStarted(
+	const FWacomFirstPersonCardEnterTransitionStartedView& View)
+{
+	if (Callbacks.EnterTransitionStarted)
+	{
+		Callbacks.EnterTransitionStarted(View);
 	}
 }
 

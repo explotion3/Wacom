@@ -187,9 +187,24 @@ void UWacomFirstPersonCardPileTransferWidget::SetConfig(
 
 bool UWacomFirstPersonCardPileTransferWidget::Play(
 	const FWacomFirstPersonCardPileTransferHint& Hint,
-	const FVector2D& SourcePosition,
+	const TArray<FVector2D>& SourcePositions,
 	const FVector2D& TargetPosition)
 {
+	FQueuedTransfer Transfer;
+	Transfer.Hint = Hint;
+	Transfer.SourcePositions = SourcePositions;
+	Transfer.TargetPosition = TargetPosition;
+	if (Playback->IsActive())
+	{
+		PendingTransfers.Add(MoveTemp(Transfer));
+		return true;
+	}
+	return StartTransfer(Transfer);
+}
+
+bool UWacomFirstPersonCardPileTransferWidget::StartTransfer(const FQueuedTransfer& Transfer)
+{
+	LastBroadcastLaunchedCount = INDEX_NONE;
 	LastBroadcastArrivedCount = INDEX_NONE;
 	bCompletionBroadcast = false;
 	FVector2D ViewportSize = GetCachedGeometry().GetLocalSize();
@@ -198,7 +213,12 @@ bool UWacomFirstPersonCardPileTransferWidget::Play(
 		const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
 		ViewportSize = UWidgetLayoutLibrary::GetViewportSize(this) / ViewportScale;
 	}
-	if (!Playback->Start(Hint, Config, SourcePosition, TargetPosition, ViewportSize))
+	if (!Playback->Start(
+		Transfer.Hint,
+		Config,
+		Transfer.SourcePositions,
+		Transfer.TargetPosition,
+		ViewportSize))
 	{
 		return false;
 	}
@@ -222,11 +242,33 @@ void UWacomFirstPersonCardPileTransferWidget::TickPlayback(float DeltaSeconds)
 	{
 		SlateWidget->Invalidate(EInvalidateWidgetReason::Paint);
 	}
-	if (Progress.ArrivedCount != LastBroadcastArrivedCount || (Progress.bCompleted && !bCompletionBroadcast))
+	if (Progress.LaunchedCount != LastBroadcastLaunchedCount
+		|| Progress.ArrivedCount != LastBroadcastArrivedCount
+		|| (Progress.bCompleted && !bCompletionBroadcast))
 	{
+		LastBroadcastLaunchedCount = Progress.LaunchedCount;
 		LastBroadcastArrivedCount = Progress.ArrivedCount;
 		bCompletionBroadcast |= Progress.bCompleted;
 		OnProgressNative.Broadcast(Progress);
+	}
+	while (Progress.bCompleted && !PendingTransfers.IsEmpty())
+	{
+		FQueuedTransfer NextTransfer = MoveTemp(PendingTransfers[0]);
+		PendingTransfers.RemoveAt(0);
+		if (StartTransfer(NextTransfer))
+		{
+			break;
+		}
+		FWacomFirstPersonCardPileTransferProgressView FailedProgress;
+		FailedProgress.EventSequence = NextTransfer.Hint.EventSequence;
+		FailedProgress.TransferKind = NextTransfer.Hint.TransferKind;
+		FailedProgress.LaunchedCount = NextTransfer.Hint.CardInstanceIds.Num();
+		FailedProgress.ArrivedCount = NextTransfer.Hint.CardInstanceIds.Num();
+		FailedProgress.TotalCount = NextTransfer.Hint.CardInstanceIds.Num();
+		FailedProgress.bCompleted = true;
+		FailedProgress.bReducedMotion = Config.bReducedMotion;
+		FailedProgress.bWasForceCompleted = true;
+		OnProgressNative.Broadcast(FailedProgress);
 	}
 }
 
@@ -237,7 +279,9 @@ void UWacomFirstPersonCardPileTransferWidget::ForceComplete()
 		return;
 	}
 	const FWacomFirstPersonCardPileTransferProgressView Progress = Playback->ForceComplete();
+	PendingTransfers.Reset();
 	bCompletionBroadcast = true;
+	LastBroadcastLaunchedCount = Progress.LaunchedCount;
 	LastBroadcastArrivedCount = Progress.ArrivedCount;
 	OnProgressNative.Broadcast(Progress);
 	if (SlateWidget)
@@ -249,6 +293,8 @@ void UWacomFirstPersonCardPileTransferWidget::ForceComplete()
 void UWacomFirstPersonCardPileTransferWidget::ResetPlayback()
 {
 	Playback->Reset();
+	PendingTransfers.Reset();
+	LastBroadcastLaunchedCount = INDEX_NONE;
 	LastBroadcastArrivedCount = INDEX_NONE;
 	bCompletionBroadcast = false;
 	if (SlateWidget)
@@ -282,6 +328,15 @@ void UWacomFirstPersonCardPileTransferWidget::PlayRequestedSounds()
 		return;
 	}
 	const FWacomFirstPersonCardPileTransferStyleData& Style = Playback->GetStyle();
+	if (Playback->GetTransferKind()
+		== FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardToPile)
+	{
+		// Ordinary discard deliberately stays silent; reshuffle owns the authored three-stage sounds.
+		Playback->ConsumeStartSoundRequest();
+		Playback->ConsumeTravelSoundRequest();
+		Playback->ConsumeCompleteSoundRequest();
+		return;
+	}
 	auto Play = [World, &Style](USoundBase* Sound)
 	{
 		if (Sound)

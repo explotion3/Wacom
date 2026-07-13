@@ -17,6 +17,7 @@
 #include "UI/Card/WacomFirstPersonCardAnchorRuntimeState.h"
 #include "UI/Card/WacomFirstPersonCardLayerDelegateRouter.h"
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
+#include "UI/Card/WacomFirstPersonCardHandTargetImpactStyle.h"
 #include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 #include "UI/Card/WacomFirstPersonCardPileTransferStyle.h"
 #include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
@@ -243,7 +244,23 @@ namespace
 			Config.PlayedDissolve.Style.DurationSeconds =
 				Anchor.CardPlayedDissolveDurationOverrideSeconds;
 		}
+		Config.HandTargetImpact.bEnabled = Anchor.bEnableCardHandTargetImpact;
+		Config.HandTargetImpact.bReducedMotion = Anchor.bReduceCardHandTargetImpactMotion;
+		Config.HandTargetImpact.Style = Anchor.CardHandTargetImpactStyle
+			? Anchor.CardHandTargetImpactStyle->Style
+			: FWacomFirstPersonCardHandTargetImpactStyleData();
+		if (Anchor.CardHandTargetImpactPreviewPeriodOverrideSeconds >= 0.0f)
+		{
+			Config.HandTargetImpact.Style.PreviewPeriodSeconds =
+				Anchor.CardHandTargetImpactPreviewPeriodOverrideSeconds;
+		}
+		if (Anchor.CardHandTargetImpactCommitDurationOverrideSeconds >= 0.0f)
+		{
+			Config.HandTargetImpact.Style.CommitDurationSeconds =
+				Anchor.CardHandTargetImpactCommitDurationOverrideSeconds;
+		}
 		Config.PileTransfer.bEnabled = Anchor.bEnableCardPileTransfer;
+		Config.PileTransfer.bDiscardToPileEnabled = Anchor.bEnableCardDiscardGlyphTransfer;
 		Config.PileTransfer.bReducedMotion = Anchor.bReduceCardPileTransferMotion;
 		Config.PileTransfer.Style = Anchor.CardPileTransferStyle
 			? Anchor.CardPileTransferStyle->Style
@@ -392,6 +409,7 @@ namespace
 		VisualConfig.Selection = Config.Selection;
 		VisualConfig.CardUseEffect = Config.CardUseEffect;
 		VisualConfig.PlayedDissolve = Config.PlayedDissolve;
+		VisualConfig.HandTargetImpact = Config.HandTargetImpact;
 		return VisualConfig;
 	}
 
@@ -741,7 +759,26 @@ namespace
 		AddFloat(Config.PlayedDissolve.Style.StartSoundVolumeMultiplier);
 		AddFloat(Config.PlayedDissolve.Style.StartSoundPitchMultiplier);
 		AddFloat(Config.PlayedDissolve.Style.StartSoundPitchVariation);
+		AddBool(Config.HandTargetImpact.bEnabled);
+		AddBool(Config.HandTargetImpact.bReducedMotion);
+		Combine(GetTypeHash(Config.HandTargetImpact.Style.SurfaceEffectMaterialInstance.Get()));
+		AddFloat(Config.HandTargetImpact.Style.PreviewFadeInSeconds);
+		AddFloat(Config.HandTargetImpact.Style.PreviewPeriodSeconds);
+		AddFloat(Config.HandTargetImpact.Style.CommitDelaySeconds);
+		AddFloat(Config.HandTargetImpact.Style.DepartureGateSeconds);
+		AddFloat(Config.HandTargetImpact.Style.ReboundPeakSeconds);
+		AddFloat(Config.HandTargetImpact.Style.CommitDurationSeconds);
+		AddFloat(Config.HandTargetImpact.Style.CompressionScale);
+		AddFloat(Config.HandTargetImpact.Style.CompressionTranslationPixels);
+		AddFloat(Config.HandTargetImpact.Style.ReboundScale);
+		AddFloat(Config.HandTargetImpact.Style.ReboundLiftPixels);
+		AddInt(Config.HandTargetImpact.Style.ZOrderBoost);
+		Combine(GetTypeHash(Config.HandTargetImpact.Style.ImpactSound.Get()));
+		AddFloat(Config.HandTargetImpact.Style.ImpactSoundVolumeMultiplier);
+		AddFloat(Config.HandTargetImpact.Style.ImpactSoundPitchMultiplier);
+		AddFloat(Config.HandTargetImpact.Style.ImpactSoundPitchVariation);
 		AddBool(Config.PileTransfer.bEnabled);
+		AddBool(Config.PileTransfer.bDiscardToPileEnabled);
 		AddBool(Config.PileTransfer.bReducedMotion);
 		Combine(GetTypeHash(Config.PileTransfer.Style.GlyphMaterialInstance.Get()));
 		AddFloat(Config.PileTransfer.Style.GlyphSize.X);
@@ -754,6 +791,15 @@ namespace
 		AddFloat(Config.PileTransfer.Style.ArcHeightRatio);
 		AddFloat(Config.PileTransfer.Style.MinArcHeightPixels);
 		AddFloat(Config.PileTransfer.Style.MaxArcHeightPixels);
+		AddFloat(Config.PileTransfer.Style.DiscardCollapseSeconds);
+		AddFloat(Config.PileTransfer.Style.DiscardGlyphRevealStartSeconds);
+		AddFloat(Config.PileTransfer.Style.DiscardFlightSeconds);
+		AddFloat(Config.PileTransfer.Style.DiscardStaggerSeconds);
+		AddFloat(Config.PileTransfer.Style.DiscardImpactSeconds);
+		AddFloat(Config.PileTransfer.Style.DiscardImpactScale);
+		AddFloat(Config.PileTransfer.Style.ReshuffleImpactSeconds);
+		AddFloat(Config.PileTransfer.Style.ReshuffleImpactScale);
+		AddFloat(Config.PileTransfer.Style.ReshuffleFinalImpactStrengthMultiplier);
 		AddBool(Config.PileTransfer.Style.bEnableTrail);
 		AddFloat(Config.PileTransfer.Style.TrailSampleIntervalSeconds);
 		AddInt(Config.PileTransfer.Style.HighDetailTrailSegmentsPerGlyph);
@@ -2183,6 +2229,11 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureCardLayerDelegateRouter()
 	Callbacks.PointerLeft = [this]()
 	{
 		OnFirstPersonCardLayerPointerLeft.Broadcast();
+	};
+	Callbacks.EnterTransitionStarted = [this](
+		const FWacomFirstPersonCardEnterTransitionStartedView& View)
+	{
+		OnFirstPersonCardLayerEnterTransitionStarted.Broadcast(View);
 	};
 	Callbacks.PileTransferProgress = [this](const FWacomFirstPersonCardPileTransferProgressView& Progress)
 	{

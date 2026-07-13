@@ -3,27 +3,10 @@
 #include "UI/Battle/WacomBattleHUDSnapshotPresenter.h"
 
 #include "Snapshots/BattleSnapshot.h"
+#include "UI/Battle/WacomBattlePileCountPresentation.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Common/PileCountView.h"
-
-#define LOCTEXT_NAMESPACE "WacomBattleHUDRuntime"
-
-namespace
-{
-	FText BuildDiscardPileCountDisplayText(const FPileCountsSnapshot& PileCounts)
-	{
-		if (PileCounts.PlayedCount <= 0)
-		{
-			return FText::AsNumber(PileCounts.DiscardCount);
-		}
-
-		return FText::Format(
-			LOCTEXT("DiscardPileWithPlayedCountFormat", "{0}+{1}"),
-			FText::AsNumber(PileCounts.DiscardCount),
-			FText::AsNumber(PileCounts.PlayedCount));
-	}
-}
 
 FWacomBattleHUDSnapshotPresenter::FWacomBattleHUDSnapshotPresenter(
 	FWacomBattleHUDRuntime& InRuntime)
@@ -36,6 +19,7 @@ void FWacomBattleHUDSnapshotPresenter::RefreshFromSnapshot(
 {
 	Runtime.HideCardDetailPanel();
 	Runtime.SetLastBattleSnapshot(Snapshot);
+	RefreshPileViews(Snapshot);
 	Runtime.SyncFirstPersonBattleHandLayer(Snapshot);
 
 	if (Snapshot.Phase == EBattlePhase::BattleEnd)
@@ -46,10 +30,10 @@ void FWacomBattleHUDSnapshotPresenter::RefreshFromSnapshot(
 		Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
 		Runtime.ClearLastBattleSnapshot();
 		Runtime.GetFirstPersonHandBridge().ClearTransitionSnapshot();
+		Runtime.ResetDrawPileFeedback(Snapshot.PileCounts.DrawCount);
 		Runtime.SetUIState(EBattleUIState::BattleEnd);
 	}
 
-	RefreshPileViews(Snapshot);
 	RefreshBoundBattleWidgets(Snapshot);
 	Runtime.RefreshCommandBarFromSnapshot(Snapshot);
 	Runtime.SyncBattleEnemyPartWorldTargets(Snapshot);
@@ -79,7 +63,10 @@ void FWacomBattleHUDSnapshotPresenter::RefreshPileViews(
 	if (UPileCountView* DiscardPileView = Runtime.Host().GetDiscardPileView())
 	{
 		DiscardPileView->SetCount(Snapshot.PileCounts.DiscardCount);
-		DiscardPileView->SetCountDisplayText(BuildDiscardPileCountDisplayText(Snapshot.PileCounts));
+		DiscardPileView->SetCountDisplayText(
+			WacomBattlePileCountPresentation::BuildDiscardPileCountDisplayText(
+				Snapshot.PileCounts.DiscardCount,
+				Snapshot.PileCounts.PlayedCount));
 	}
 	if (UPileCountView* ExhaustPileView = Runtime.Host().GetExhaustPileView())
 	{
@@ -92,5 +79,3 @@ void FWacomBattleHUDSnapshotPresenter::RefreshBoundBattleWidgets(
 {
 	Runtime.Host().RefreshChildBattleWidgetsFromSnapshot(Snapshot);
 }
-
-#undef LOCTEXT_NAMESPACE

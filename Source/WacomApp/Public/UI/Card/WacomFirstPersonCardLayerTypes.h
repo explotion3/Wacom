@@ -122,7 +122,8 @@ enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
 {
 	None UMETA(DisplayName = "None"),
 	Retained UMETA(DisplayName = "Retained"),
-	CardUseReform UMETA(DisplayName = "Card Use Reform")
+	CardUseReform UMETA(DisplayName = "Card Use Reform"),
+	HandTargetImpact UMETA(DisplayName = "Hand Target Impact")
 };
 
 USTRUCT(BlueprintType)
@@ -522,10 +523,94 @@ struct WACOMAPP_API FWacomFirstPersonCardPlayedDissolveView
 	FWacomFirstPersonCardPlayedDissolveStyleData Style;
 };
 
-/** Card-surface material state. Selection remains dormant; PlayedDissolve is the first production channel. */
+/** Playback and physical-response authoring for a successful hand-card target impact. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardHandTargetImpactStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact", meta = (ToolTip = "手牌目标预演和成功刻印期间临时绑定到唯一 Retainer 的 UI 材质实例；必须保留 Texture 参数合同。颜色、网格和刻线外观在材质实例中调整。"))
+	TObjectPtr<UMaterialInstance> SurfaceEffectMaterialInstance = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Preview", meta = (Units = "s", ToolTip = "有效手牌目标刻印从无到完整弱预演的淡入时长，单位为秒；默认 0.10，推荐 0.06 到 0.16。"))
+	float PreviewFadeInSeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Preview", meta = (Units = "s", ToolTip = "弱刻印亮度呼吸周期，单位为秒；默认 0.90，推荐 0.70 到 1.30。只改变材质亮度，不改变尺寸或位置。"))
+	float PreviewPeriodSeconds = 0.90f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Commit", meta = (Units = "s", ToolTip = "成功提交后等待目标刻印开始压下的时间，单位为秒；默认 0.07，推荐 0.04 到 0.10，让源卡表现先启动。"))
+	float CommitDelaySeconds = 0.07f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Commit", meta = (Units = "s", ToolTip = "从成功提交到刻印峰值和离场 Gate 打开的时间，单位为秒；默认 0.11，推荐 0.09 到 0.14。"))
+	float DepartureGateSeconds = 0.11f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Commit", meta = (Units = "s", ToolTip = "从成功提交到实体回弹峰值的时间，单位为秒；默认 0.16，推荐 0.13 到 0.20。"))
+	float ReboundPeakSeconds = 0.16f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Commit", meta = (Units = "s", ToolTip = "成功刻印完整播放时长，单位为秒；默认 0.29，推荐 0.24 到 0.38。目标留手时在此时归入最新手牌布局。"))
+	float CommitDurationSeconds = 0.29f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Motion", meta = (ToolTip = "刻印峰值时目标卡的压缩倍率；默认 0.96，推荐 0.93 到 0.98，不改变命中区域。"))
+	float CompressionScale = 0.96f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Motion", meta = (ToolTip = "刻印峰值前目标卡向下压入的距离，单位为 UMG 逻辑像素；默认 4，推荐 2 到 7，不影响布局。"))
+	float CompressionTranslationPixels = 4.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Motion", meta = (ToolTip = "目标卡实体回弹峰值倍率；默认 1.05，推荐 1.03 到 1.08，不改变命中区域。"))
+	float ReboundScale = 1.05f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Motion", meta = (ToolTip = "目标卡实体回弹时向上提起的距离，单位为 UMG 逻辑像素；默认 5，推荐 3 到 9，不影响布局。"))
+	float ReboundLiftPixels = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Motion", meta = (ToolTip = "刻印播放期间额外增加的绘制层级；默认 900，推荐 700 到 1200，只影响表现，不改变手牌顺序。"))
+	int32 ZOrderBoost = 900;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Audio", meta = (ToolTip = "刻印峰值播放的一次性纸面压印或轻扣 UI 2D 音效；Preview 不播放，留空表示静音。"))
+	TObjectPtr<USoundBase> ImpactSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Audio", meta = (ToolTip = "刻印音效音量倍率；1 为资产原始音量，推荐 0.5 到 1.2。"))
+	float ImpactSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Audio", meta = (ToolTip = "刻印音效基础音高倍率；1 为资产原始音高，推荐 0.85 到 1.15。"))
+	float ImpactSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Hand Target Impact|Audio", meta = (ToolTip = "每次刻印音高在基础值附近的随机比例；0.03 表示约正负 3%。"))
+	float ImpactSoundPitchVariation = 0.03f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardHandTargetImpactConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Hand Target Impact")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Hand Target Impact")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Hand Target Impact")
+	FWacomFirstPersonCardHandTargetImpactStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardHandTargetImpactView
+{
+	bool bActive = false;
+	bool bPreview = false;
+	bool bCommitted = false;
+	bool bReducedMotion = false;
+	float PreviewAmount = 0.0f;
+	float CommitProgress = 0.0f;
+	float TimeSeconds = 0.0f;
+	float Seed = 0.0f;
+	FWacomFirstPersonCardHandTargetImpactStyleData Style;
+};
+
+/** Card-surface material state shared by mutually exclusive Retainer effects. */
 struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 {
 	FWacomFirstPersonCardSelectionView Selection;
+	FWacomFirstPersonCardHandTargetImpactView HandTargetImpact;
 	FWacomFirstPersonCardUseEffectView CardUse;
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolve;
 };
@@ -539,8 +624,8 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (ToolTip = "像素牌印使用的 UI 材质实例；材质负责卡背图案，位置、旋转、缩放和透明度由 Slate 批量顶点驱动。留空时不播放跨牌堆迁移。"))
 	TObjectPtr<UMaterialInstance> GlyphMaterialInstance = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (ToolTip = "单枚牌印尺寸，单位为 UMG 逻辑像素；默认 14×22，推荐宽 10 到 20、高 16 到 30，不影响手牌布局或命中。"))
-	FVector2D GlyphSize = FVector2D(14.0f, 22.0f);
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (ToolTip = "单枚牌印尺寸，单位为 UMG 逻辑像素；默认 42×66，推荐宽 30 到 60、高 48 到 90，不影响手牌布局或命中。"))
+	FVector2D GlyphSize = FVector2D(42.0f, 66.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (Units = "s", ToolTip = "牌印从弃牌堆蓄力后开始发射的等待时间，单位为秒；默认 0.08，推荐 0.04 到 0.12。"))
 	float StartChargeSeconds = 0.08f;
@@ -566,6 +651,33 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer", meta = (ToolTip = "最大弧高，单位为 UMG 逻辑像素；默认 128，推荐 96 到 180。"))
 	float MaxArcHeightPixels = 128.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Discard", meta = (Units = "s", ToolTip = "普通弃牌从完整卡面收束为牌印的总时长，单位为秒；默认 0.11，推荐 0.08 到 0.16。只影响离场表现，不改变规则结算。"))
+	float DiscardCollapseSeconds = 0.11f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Discard", meta = (Units = "s", ToolTip = "普通弃牌收束开始后，牌印开始与卡面交叉显现的时间，单位为秒；默认 0.06，推荐为收束总时长的 45% 到 70%。"))
+	float DiscardGlyphRevealStartSeconds = 0.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Discard", meta = (Units = "s", ToolTip = "普通弃牌牌印从卡牌原位飞入弃牌堆的单枚飞行时间，单位为秒；默认 0.28，推荐 0.20 到 0.38。"))
+	float DiscardFlightSeconds = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Discard", meta = (Units = "s", ToolTip = "同批普通弃牌相邻牌印的发射间隔，单位为秒；默认 0.055，推荐 0.035 到 0.08。"))
+	float DiscardStaggerSeconds = 0.055f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Discard", meta = (Units = "s", ToolTip = "每枚普通弃牌牌印抵达弃牌堆后，像素方印扩散的存活时间，单位为秒；默认 0.12，推荐 0.08 到 0.18。"))
+	float DiscardImpactSeconds = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Discard", meta = (ToolTip = "弃牌堆接收方印相对牌印尺寸的峰值倍率；默认 1.55，推荐 1.2 到 2.2，不影响真实牌堆控件布局。"))
+	float DiscardImpactScale = 1.55f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Reshuffle", meta = (Units = "s", ToolTip = "洗牌牌印逐枚抵达抽牌堆时，像素方印扩散的存活时间，单位为秒；默认 0.10，推荐 0.07 到 0.15。只影响接收反馈，不改变迁移计数或飞行时间。"))
+	float ReshuffleImpactSeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Reshuffle", meta = (ToolTip = "洗牌牌印抵达抽牌堆时，像素方印相对牌印尺寸的峰值倍率；默认 1.35，推荐 1.1 到 1.8，不影响真实牌堆控件布局。"))
+	float ReshuffleImpactScale = 1.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Reshuffle", meta = (ToolTip = "最后一枚洗牌牌印抵达时的方印强度倍率；默认 1.18，推荐 1.0 到 1.4。只增强最后一次收束，不增加额外牌印。"))
+	float ReshuffleFinalImpactStrengthMultiplier = 1.18f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "是否启用牌印后方的多色像素抖动拖尾；关闭后只保留牌印主体与飘散粒子，不改变卡牌数量、路径或抵达计数。"))
 	bool bEnableTrail = true;
 
@@ -581,11 +693,11 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "低细节档每枚活动牌印的拖尾段数；默认 3，推荐 1 到 5。"))
 	int32 LowDetailTrailSegmentsPerGlyph = 3;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾靠近牌印一端的宽度，单位为 UMG 逻辑像素；默认 3.5，推荐 2 到 6，不影响布局或命中。"))
-	float TrailHeadWidthPixels = 3.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾靠近牌印一端的宽度，单位为 UMG 逻辑像素；默认 10.5，推荐 6 到 18，不影响布局或命中。"))
+	float TrailHeadWidthPixels = 10.5f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾末端宽度，单位为 UMG 逻辑像素；默认 1，推荐 0.5 到 2。"))
-	float TrailTailWidthPixels = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾末端宽度，单位为 UMG 逻辑像素；默认 3，推荐 1.5 到 6。"))
+	float TrailTailWidthPixels = 3.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Trail", meta = (ToolTip = "拖尾靠近牌印一端的透明度倍率；默认 0.44，推荐 0.2 到 0.7。"))
 	float TrailHeadOpacity = 0.44f;
@@ -599,11 +711,11 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferStyleData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (Units = "s", ToolTip = "单枚飘散像素的存活时间，单位为秒；默认 0.24，推荐 0.16 到 0.32。只影响辅助粒子与尾部排空时间，不改变牌印数量或抵达计数。"))
 	float MoteLifetimeSeconds = 0.24f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "飘散像素的最小边长，单位为 UMG 逻辑像素；默认 2，推荐 1.5 到 3，不影响布局或命中。"))
-	float MoteMinSizePixels = 2.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "飘散像素的最小边长，单位为 UMG 逻辑像素；默认 6，推荐 4.5 到 9，不影响布局或命中。"))
+	float MoteMinSizePixels = 6.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "飘散像素的最大边长，单位为 UMG 逻辑像素；默认 4.5，推荐 3 到 6，不影响布局或命中。"))
-	float MoteMaxSizePixels = 4.5f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "飘散像素的最大边长，单位为 UMG 逻辑像素；默认 13.5，推荐 9 到 18，不影响布局或命中。"))
+	float MoteMaxSizePixels = 13.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Pile Transfer|Particles", meta = (ToolTip = "多数粒子沿牌印飞行反方向拉开的最大距离，单位为 UMG 逻辑像素；默认 28，推荐 18 到 42。粒子使用先快后慢的三次缓出运动，不改变牌印主体路径。"))
 	float MoteBackwardDistancePixels = 28.0f;
@@ -658,6 +770,9 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pile Transfer")
 	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pile Transfer")
+	bool bDiscardToPileEnabled = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Pile Transfer")
 	bool bReducedMotion = false;
@@ -987,10 +1102,18 @@ struct WACOMAPP_API FWacomFirstPersonCardPresentationAnchorSet
 	}
 };
 
-struct WACOMAPP_API FWacomFirstPersonCardPileTransferHint
+/** One batch for the generic card-glyph renderer. Reflected Style assets retain their PileTransfer names. */
+struct WACOMAPP_API FWacomFirstPersonCardGlyphTransferHint
 {
+	enum class ETransferKind : uint8
+	{
+		DiscardPileToDraw,
+		DiscardToPile
+	};
+
 	int32 EventSequence = INDEX_NONE;
 	TArray<FGuid> CardInstanceIds;
+	ETransferKind TransferKind = ETransferKind::DiscardPileToDraw;
 	EWacomFirstPersonCardPresentationAnchorKind SourceAnchorKind =
 		EWacomFirstPersonCardPresentationAnchorKind::DiscardPile;
 	EWacomFirstPersonCardPresentationAnchorKind TargetAnchorKind =
@@ -998,14 +1121,25 @@ struct WACOMAPP_API FWacomFirstPersonCardPileTransferHint
 	uint32 Seed = 0;
 };
 
-struct WACOMAPP_API FWacomFirstPersonCardPileTransferProgressView
+struct WACOMAPP_API FWacomFirstPersonCardGlyphTransferProgressView
 {
 	int32 EventSequence = INDEX_NONE;
+	FWacomFirstPersonCardGlyphTransferHint::ETransferKind TransferKind =
+		FWacomFirstPersonCardGlyphTransferHint::ETransferKind::DiscardPileToDraw;
+	int32 LaunchedCount = 0;
 	int32 ArrivedCount = 0;
 	int32 TotalCount = 0;
+	FVector2D LaunchDirection = FVector2D::ZeroVector;
 	float ExpectedDurationSeconds = 0.0f;
 	bool bCompleted = false;
+	bool bReducedMotion = false;
+	bool bWasForceCompleted = false;
 };
+
+// Compatibility aliases keep the existing reflected asset/lifecycle surface stable while the
+// runtime renderer now serves both hand-to-discard and discard-to-draw transfers.
+using FWacomFirstPersonCardPileTransferHint = FWacomFirstPersonCardGlyphTransferHint;
+using FWacomFirstPersonCardPileTransferProgressView = FWacomFirstPersonCardGlyphTransferProgressView;
 
 struct WACOMAPP_API FWacomFirstPersonCardLayerSourceLifecycleFrame
 {
@@ -1273,8 +1407,18 @@ struct WACOMAPP_API FWacomFirstPersonCardTransitionMotionProfile
 	float StartSoundPitchMultiplier = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
+};
+
+/** One-shot native presentation fact emitted when a semantic card enter actually starts. */
+struct WACOMAPP_API FWacomFirstPersonCardEnterTransitionStartedView
+{
+	FGuid CardInstanceId;
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind =
+		EWacomFirstPersonCardSlotTransitionKind::Default;
+	FVector2D StartWidgetPosition = FVector2D::ZeroVector;
+	FVector2D TargetWidgetPosition = FVector2D::ZeroVector;
 };
 
 USTRUCT(BlueprintType)
@@ -1381,6 +1525,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardPlayedDissolveConfig PlayedDissolve;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardHandTargetImpactConfig HandTargetImpact;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState

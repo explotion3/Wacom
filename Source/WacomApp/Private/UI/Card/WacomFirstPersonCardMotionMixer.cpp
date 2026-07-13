@@ -176,7 +176,8 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 	const FWacomFirstPersonCardSlotFeedbackConfig& FeedbackConfig = *Input.FeedbackConfig;
 	const bool bRetainedTransformActive = Input.RetainedAlpha > 0.0f;
 	Result.ZOrder = SlotView.ZOrder
-		+ (bRetainedTransformActive ? FeedbackConfig.RetainedFeedbackZOrderBoost : 0);
+		+ (bRetainedTransformActive ? FeedbackConfig.RetainedFeedbackZOrderBoost : 0)
+		+ FMath::Max(0, Input.HandTargetImpactZOrderBoost);
 
 	const bool bDenyActive = FeedbackConfig.bEnabled
 		&& Input.DenyFeedbackElapsedSeconds < FeedbackConfig.DenyDuration;
@@ -208,14 +209,16 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 		-(bRetainedTransformActive
 			? FeedbackConfig.RetainedFeedbackLiftPixels * Input.RetainedAlpha
 			: 0.0f)
-			- FeedbackConfig.DragPickupLiftPixels * DragPickupAlpha);
+			- FeedbackConfig.DragPickupLiftPixels * DragPickupAlpha
+			+ Input.HandTargetImpactTranslationYPixels);
 	Result.RenderTransform.Scale = FVector2D(FMath::Max(
 		0.01f,
 		SlotView.RenderScale
 			* PressedScale
 			* CommitScale
 			* RetainedScale
-			* DragPickupScale));
+			* DragPickupScale
+			* FMath::Max(0.01f, Input.HandTargetImpactScaleMultiplier)));
 	Result.RenderTransform.Angle = SlotView.RenderAngleDegrees;
 	return Result;
 }

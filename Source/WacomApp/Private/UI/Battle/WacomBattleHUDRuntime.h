@@ -31,6 +31,7 @@ class FWacomBattleHUDCardDetailController;
 class FWacomBattleHUDCombatLogController;
 class FWacomBattleHUDCommandController;
 class FWacomBattleHUDCommandBarPresenter;
+class FWacomBattleDrawPileFeedbackController;
 class FWacomBattleHUDFirstPersonHandBridge;
 class FWacomBattleHUDPresentationCoordinator;
 class FWacomBattleHUDResultApplicator;
@@ -48,6 +49,7 @@ struct FWacomCardDetailViewData;
 struct FWacomFirstPersonCardDragView;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardPointerView;
+struct FWacomBattleDrawPileFeedbackBatch;
 
 enum class EWacomBattleHUDCardDetailHost : uint8
 {
@@ -214,11 +216,17 @@ public:
 
 	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
 	void StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events);
+	void QueueDrawPileFeedbackBatch(const FWacomBattleDrawPileFeedbackBatch& Batch);
+	void PrepareDrawPileFeedbackForPresentationFrame(
+		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints);
+	void CompleteActiveDrawPileFeedbackBatch();
+	void ResetDrawPileFeedback(int32 AuthoritativeDrawPileCount = INDEX_NONE);
 	void ClearPendingFirstPersonCardTransitionEvents();
 	void RecordFirstPersonPlayCommit(
 		const FGuid& CardInstanceId,
 		const FBattlePartSlotIdentity& TargetPartKey,
 		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
+	void RecordFirstPersonHandTargetImpact(const FGuid& TargetCardInstanceId);
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHints(
 		const FBattleSnapshot& PreviousSnapshot,
 		const FBattleSnapshot& NextSnapshot) const;
@@ -296,6 +304,8 @@ public:
 	void HandleFirstPersonCardLayerHoveredCardTargetUpdated(const FWacomInteractionTargetHandle& CardTargetHandle, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerPointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
 	void HandleFirstPersonCardLayerPileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
+	void HandleFirstPersonCardLayerEnterTransitionStarted(
+		const FWacomFirstPersonCardEnterTransitionStartedView& View);
 	void HandleFirstPersonCardLayerPointerLeft();
 	void HandleFirstPersonCardLayerDragStarted(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
@@ -333,6 +343,7 @@ public:
 	FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator();
 	const FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator() const;
 	FWacomBattleHUDCommandController& GetCommandController();
+	FWacomBattleDrawPileFeedbackController& GetDrawPileFeedbackController();
 	FWacomBattleHUDResultApplicator& GetResultApplicator();
 	FWacomBattleHUDCommandBarPresenter& GetCommandBarPresenter();
 	FWacomBattleHUDTargetingController& GetTargetingController();
@@ -345,18 +356,36 @@ public:
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PostCommandSnapshot);
+	bool EnqueueCommandPresentationPlanForTest(
+		const FBattlePresentationJournal& Journal,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot);
 	FWacomBattleHUDAutomationTestView GetAutomationTestViewForTest() const;
 	TArray<FWacomFirstPersonCardLayerTransitionHint> BuildFirstPersonCardTransitionHintsForRefreshForTest(
 		const FBattleSnapshot& NextSnapshot) const;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildFirstPersonCardFeedbackHintsForTest(
 		const FBattleSnapshot& NextSnapshot) const;
 	void SetFirstPersonCardTransitionSnapshotForTest(const FBattleSnapshot& Snapshot);
+	void PrimeDiscardPileReceiveFeedbackForTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDiscardCount);
+	void PrimeReshufflePileFeedbackForTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDrawCount,
+		int32 FinalDrawCount,
+		int32 InitialDiscardCount,
+		int32 FinalDiscardCount,
+		int32 PlayedCount);
 #endif
 
 private:
 	FWacomBattleHUDRuntimeHost RuntimeHost;
 	TUniquePtr<FWacomBattleHUDSnapshotPresenter> SnapshotPresenter;
 	TUniquePtr<FWacomBattleHUDCommandController> CommandController;
+	TUniquePtr<FWacomBattleDrawPileFeedbackController> DrawPileFeedbackController;
 	TUniquePtr<FWacomBattleHUDResultApplicator> ResultApplicator;
 	TUniquePtr<FWacomBattleHUDCommandBarPresenter> CommandBarPresenter;
 	TUniquePtr<FWacomBattleHUDTargetingController> TargetingController;

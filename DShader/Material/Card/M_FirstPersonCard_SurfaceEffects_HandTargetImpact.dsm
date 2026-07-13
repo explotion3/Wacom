@@ -1,0 +1,101 @@
+import "Shared/WacomFirstPersonCardSurface.dsh";
+import "Shared/WacomFirstPersonCardHandTargetImpact.dsh";
+
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpact")
+{
+    Properties = {
+        TextureSampleParameter2D Texture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="手牌目标刻印|Retainer"; SortPriority=0; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+
+        ScalarParameter TiltX = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=10; ];
+        ScalarParameter TiltY = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=11; ];
+        ScalarParameter PerspectiveStrength = 0.12 [ Group="手牌目标刻印|运行时"; SortPriority=12; ];
+        ScalarParameter ContactShadowEnabled = 1.0 [ Group="手牌目标刻印|运行时"; SortPriority=13; ];
+        ScalarParameter ContactShadowLift = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=14; ];
+        ScalarParameter HandTargetImpactEnabled = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=20; ];
+        ScalarParameter HandTargetImpactPreviewAmount = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=21; ];
+        ScalarParameter HandTargetImpactCommitProgress = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=22; ];
+        ScalarParameter HandTargetImpactTime = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=23; ];
+        ScalarParameter HandTargetImpactSeed = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=24; ];
+        ScalarParameter HandTargetImpactReducedMotion = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=25; ];
+        VectorParameter SurfaceInvSize = float4(0.00277778, 0.00206612, 0.0, 0.0) [ Group="手牌目标刻印|运行时"; SortPriority=26; ];
+
+        VectorParameter TargetImpactPrimaryColor = float4(0.58, 0.80, 1.0, 1.0) [ Group="手牌目标刻印|材质实例"; SortPriority=30; ];
+        VectorParameter TargetImpactSecondaryColor = float4(0.96, 0.82, 0.42, 1.0) [ Group="手牌目标刻印|材质实例"; SortPriority=31; ];
+        VectorParameter TargetImpactAccentColor = float4(0.88, 0.30, 0.72, 1.0) [ Group="手牌目标刻印|材质实例"; SortPriority=32; ];
+        ScalarParameter TargetImpactGridColumns = 72.0 [ Group="手牌目标刻印|材质实例"; SortPriority=33; ];
+        ScalarParameter TargetImpactLineWidth = 0.009 [ Group="手牌目标刻印|材质实例"; SortPriority=34; ];
+        ScalarParameter TargetImpactFragmentDensity = 0.16 [ Group="手牌目标刻印|材质实例"; SortPriority=35; ];
+        ScalarParameter TargetImpactGlowStrength = 1.20 [ Group="手牌目标刻印|材质实例"; SortPriority=36; ];
+        ScalarParameter TargetImpactPreviewStrength = 0.30 [ Group="手牌目标刻印|材质实例"; SortPriority=37; ];
+
+        ScalarParameter ReferenceTiltDegrees = 9.0 [ Group="手牌目标刻印|投影制作"; SortPriority=50; ];
+        ScalarParameter ForeshortenStrength = 0.025 [ Group="手牌目标刻印|投影制作"; SortPriority=51; ];
+        ScalarParameter EdgeFadeUV = 0.0025 [ Group="手牌目标刻印|投影制作"; SortPriority=52; ];
+        VectorParameter ContactShadowColor = float4(0.008, 0.006, 0.004, 1.0) [ Group="手牌目标刻印|阴影制作"; SortPriority=60; ];
+        ScalarParameter ContactShadowBaseOffsetXUV = 0.0 [ Group="手牌目标刻印|阴影制作"; SortPriority=61; ];
+        ScalarParameter ContactShadowBaseOffsetYUV = 0.0039 [ Group="手牌目标刻印|阴影制作"; SortPriority=62; ];
+        ScalarParameter ContactShadowLiftOffsetXUV = 0.0 [ Group="手牌目标刻印|阴影制作"; SortPriority=63; ];
+        ScalarParameter ContactShadowLiftOffsetYUV = 0.0100 [ Group="手牌目标刻印|阴影制作"; SortPriority=64; ];
+        ScalarParameter ContactShadowBaseSoftnessUV = 0.0025 [ Group="手牌目标刻印|阴影制作"; SortPriority=65; ];
+        ScalarParameter ContactShadowLiftSoftnessUV = 0.0065 [ Group="手牌目标刻印|阴影制作"; SortPriority=66; ];
+        ScalarParameter ContactShadowBaseOpacity = 0.22 [ Group="手牌目标刻印|阴影制作"; SortPriority=67; ];
+        ScalarParameter ContactShadowLiftOpacity = 0.09 [ Group="手牌目标刻印|阴影制作"; SortPriority=68; ];
+        ScalarParameter ContactShadowAlphaThreshold = 0.18 [ Group="手牌目标刻印|阴影制作"; SortPriority=69; ];
+        ScalarParameter ContactShadowAlphaFeather = 0.12 [ Group="手牌目标刻印|阴影制作"; SortPriority=70; ];
+    }
+
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "PremultipliedAlpha"; TwoSided = true; }
+    Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 projectedUVAndMask;
+        WacomFirstPersonCard_ProjectSurface(uv, TiltX, TiltY, PerspectiveStrength, ReferenceTiltDegrees, ForeshortenStrength, EdgeFadeUV, projectedUVAndMask);
+        float2 projectedUV = UE.Expression(Class="ComponentMask", OutputType="float2", Input=projectedUVAndMask, R=true, G=true, B=false, A=false);
+        float insideMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=projectedUVAndMask, R=false, G=false, B=true, A=false);
+        float4 surface = Texture(Coordinates=projectedUV);
+        float3 surfaceColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=surface, R=true, G=true, B=true, A=false);
+        float surfaceAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=surface, R=false, G=false, B=false, A=true);
+        float2 surfaceInvSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=SurfaceInvSize, R=true, G=true, B=false, A=false);
+
+        float primaryMask;
+        float secondaryMask;
+        float fragmentMask;
+        WacomFirstPersonCard_ComputeHandTargetImpact(projectedUV, surfaceInvSize, HandTargetImpactPreviewAmount, HandTargetImpactCommitProgress, HandTargetImpactReducedMotion, HandTargetImpactSeed, TargetImpactGridColumns, TargetImpactLineWidth, TargetImpactFragmentDensity, primaryMask, secondaryMask, fragmentMask);
+        float effectEnabled = saturate(HandTargetImpactEnabled);
+        float previewWeight = lerp(max(TargetImpactPreviewStrength, 0.0), 1.0, saturate(HandTargetImpactCommitProgress));
+        float stampMask = saturate(primaryMask * previewWeight + secondaryMask + fragmentMask) * surfaceAlpha * insideMask * effectEnabled;
+        float3 primaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=TargetImpactPrimaryColor, R=true, G=true, B=true, A=false);
+        float3 secondaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=TargetImpactSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 accentColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=TargetImpactAccentColor, R=true, G=true, B=true, A=false);
+        float3 stampColor = primaryColor * primaryMask + secondaryColor * secondaryMask + accentColor * fragmentMask;
+
+        float safeLift = clamp(ContactShadowLift, 0.0, 1.0);
+        float2 shadowOffset = float2(lerp(ContactShadowBaseOffsetXUV, ContactShadowLiftOffsetXUV, safeLift), lerp(ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetYUV, safeLift));
+        float shadowSoftness = lerp(ContactShadowBaseSoftnessUV, ContactShadowLiftSoftnessUV, safeLift);
+        float2 shadowUV = projectedUV - shadowOffset;
+        float2 sx = float2(shadowSoftness, 0.0);
+        float2 sy = float2(0.0, shadowSoftness);
+        float4 c0 = Texture(Coordinates=shadowUV); float4 c1 = Texture(Coordinates=shadowUV-sx); float4 c2 = Texture(Coordinates=shadowUV+sx);
+        float4 c3 = Texture(Coordinates=shadowUV-sy); float4 c4 = Texture(Coordinates=shadowUV+sy); float4 c5 = Texture(Coordinates=shadowUV-sx-sy);
+        float4 c6 = Texture(Coordinates=shadowUV+sx-sy); float4 c7 = Texture(Coordinates=shadowUV-sx+sy); float4 c8 = Texture(Coordinates=shadowUV+sx+sy);
+        float a0 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c0, R=false,G=false,B=false,A=true);
+        float a1 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c1, R=false,G=false,B=false,A=true);
+        float a2 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c2, R=false,G=false,B=false,A=true);
+        float a3 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c3, R=false,G=false,B=false,A=true);
+        float a4 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c4, R=false,G=false,B=false,A=true);
+        float a5 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c5, R=false,G=false,B=false,A=true);
+        float a6 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c6, R=false,G=false,B=false,A=true);
+        float a7 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c7, R=false,G=false,B=false,A=true);
+        float a8 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c8, R=false,G=false,B=false,A=true);
+        float shadowMask;
+        WacomFirstPersonCard_CombineContactShadowAlpha(a0,a1,a2,a3,a4,a5,a6,a7,a8,ContactShadowAlphaThreshold,ContactShadowAlphaFeather,shadowMask);
+        float3 shadowColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ContactShadowColor, R=true,G=true,B=true,A=false);
+        float shadowOpacity = lerp(ContactShadowBaseOpacity, ContactShadowLiftOpacity, safeLift);
+        float cardAlpha = surfaceAlpha * insideMask;
+        float shadowAlpha = shadowMask * shadowOpacity * clamp(ContactShadowEnabled,0.0,1.0) * insideMask * (1.0-cardAlpha);
+
+        Color = surfaceColor * insideMask + stampColor * stampMask * max(TargetImpactGlowStrength, 0.0) + shadowColor * shadowAlpha;
+        Alpha = saturate(cardAlpha + shadowAlpha);
+    }
+}

@@ -27,7 +27,7 @@ public:
 	void SetConfig(const FWacomFirstPersonCardPileTransferConfig& InConfig);
 	bool Play(
 		const FWacomFirstPersonCardPileTransferHint& Hint,
-		const FVector2D& SourcePosition,
+		const TArray<FVector2D>& SourcePositions,
 		const FVector2D& TargetPosition);
 	void TickPlayback(float DeltaSeconds);
 	void ForceComplete();
@@ -44,8 +44,17 @@ private:
 	TUniquePtr<FWacomFirstPersonCardPileTransferPlayback> Playback;
 	TSharedPtr<SFirstPersonCardPileTransfer> SlateWidget;
 	FWacomFirstPersonCardPileTransferConfig Config;
+	int32 LastBroadcastLaunchedCount = INDEX_NONE;
 	int32 LastBroadcastArrivedCount = INDEX_NONE;
 	bool bCompletionBroadcast = false;
+	struct FQueuedTransfer
+	{
+		FWacomFirstPersonCardPileTransferHint Hint;
+		TArray<FVector2D> SourcePositions;
+		FVector2D TargetPosition = FVector2D::ZeroVector;
+	};
+	TArray<FQueuedTransfer> PendingTransfers;
 
 	void PlayRequestedSounds();
+	bool StartTransfer(const FQueuedTransfer& Transfer);
 };

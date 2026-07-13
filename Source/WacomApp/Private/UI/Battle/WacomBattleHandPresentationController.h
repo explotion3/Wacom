@@ -16,6 +16,7 @@ public:
 	void RecordPlayCommit(
 		const FGuid& CardInstanceId,
 		const TOptional<FVector2D>& TargetWidgetPosition = TOptional<FVector2D>());
+	void RecordHandTargetImpact(const FGuid& TargetCardInstanceId);
 	bool HasPendingTransitionPresentation() const;
 	void PreservePendingEntryRevealForNextRefresh();
 	void DiscardSubmittedTransitionFrame();
@@ -65,8 +66,10 @@ private:
 	FBattleSnapshot PendingHandAnchorEnterSnapshot;
 	TArray<FBattleEvent> PendingTransitionEvents;
 	TArray<FPlayCommitHint> PendingPlayCommitHints;
+	TArray<FGuid> PendingHandTargetImpactIds;
 	TArray<FBattleEvent> SubmittedTransitionEvents;
 	TArray<FPlayCommitHint> SubmittedPlayCommitHints;
+	TArray<FGuid> SubmittedHandTargetImpactIds;
 	TArray<FGuid> PendingHandAnchorEnterCardIds;
 	bool bHasLastPresentedSnapshot = false;
 	bool bHasTransitionSnapshot = false;

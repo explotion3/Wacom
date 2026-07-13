@@ -47,6 +47,7 @@ public:
 	FWacomFirstPersonCardTransitionTickResult Tick(
 		float DeltaTime,
 		const FWacomFirstPersonCardLayerSlotView& DynamicEnterTargetSlotView);
+	TOptional<EWacomFirstPersonCardSlotTransitionKind> ConsumePendingStartRequest();
 	TOptional<FWacomFirstPersonCardTransitionSoundRequest> ConsumePendingSoundRequest();
 
 	bool IsActive() const { return Mode != EWacomFirstPersonCardTransitionPlaybackMode::None; }
@@ -58,8 +59,9 @@ public:
 	float GetDurationSeconds() const { return DurationSeconds; }
 
 private:
+	void QueueStartRequests();
 	void QueueStartSoundRequest();
-	void ClearActiveStatePreservingPendingSound();
+	void ClearActiveStatePreservingPendingRequests();
 
 	EWacomFirstPersonCardTransitionPlaybackMode Mode =
 		EWacomFirstPersonCardTransitionPlaybackMode::None;
@@ -74,8 +76,9 @@ private:
 	TSoftObjectPtr<USoundBase> StartSound;
 	float StartSoundVolumeMultiplier = 1.0f;
 	float StartSoundPitchMultiplier = 1.0f;
-	EWacomFirstPersonCardSlotTransitionKind SoundTransitionKind =
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
-	bool bStartSoundRequested = false;
+	bool bStartRequested = false;
+	TOptional<EWacomFirstPersonCardSlotTransitionKind> PendingStartRequest;
 	TOptional<FWacomFirstPersonCardTransitionSoundRequest> PendingSoundRequest;
 };

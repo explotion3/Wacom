@@ -84,6 +84,18 @@ public:
 #if WITH_AUTOMATION_TESTS
 	void AdvanceQueueOnce();
 	void AdvancePresentationPlanOnce();
+	void PrimeDiscardPileReceiveFeedbackForTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDiscardCount);
+	void PrimeReshufflePileFeedbackForTest(
+		int32 EventSequence,
+		int32 TotalCount,
+		int32 InitialDrawCount,
+		int32 FinalDrawCount,
+		int32 InitialDiscardCount,
+		int32 FinalDiscardCount,
+		int32 PlayedCount);
 	const TArray<FName>& GetStartedPresentationPlanPhaseNamesForTest() const
 	{
 		return StartedPresentationPlanPhaseNamesForTest;
@@ -113,6 +125,15 @@ private:
 	int32 ActivePileTransferEventSequence = INDEX_NONE;
 	int32 ActivePileTransferTotalCount = 0;
 	float ActivePileTransferExpectedDurationSeconds = 0.0f;
+	FWacomFirstPersonCardPileTransferHint::ETransferKind ActivePileTransferKind =
+		FWacomFirstPersonCardPileTransferHint::ETransferKind::DiscardPileToDraw;
+	int32 ActivePileTransferInitialDrawCount = 0;
+	int32 ActivePileTransferInitialDiscardCount = 0;
+	int32 ActivePileTransferFinalDrawCount = 0;
+	int32 ActivePileTransferFinalDiscardCount = 0;
+	int32 ActivePileTransferPlayedCount = 0;
+	int32 ActivePileTransferLastLaunchedCount = 0;
+	int32 ActivePileTransferLastArrivedCount = 0;
 #if WITH_AUTOMATION_TESTS
 	TArray<FName> StartedPresentationPlanPhaseNamesForTest;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> SubmittedPresentationPlanFeedbackHintsForTest;
@@ -122,6 +143,8 @@ private:
 	void ExecuteTurnBoundaryCommandNow(EWacomBattleHUDTurnBoundaryCommand Command);
 	void RefreshCommandBarOnly();
 	void RefreshCommandBar();
+	void RestoreActiveReshufflePileCounts();
+	void ResetActivePileTransferFeedback();
 	void ClearPresentationPlan();
 	void StartNextPresentationPlanPhase();
 	void StartHandPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);
