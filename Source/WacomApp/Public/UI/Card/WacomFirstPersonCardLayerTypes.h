@@ -756,19 +756,6 @@ struct WACOMAPP_API FWacomFirstPersonCardDragConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Drag")
 	float SelectedSourceAngleBlend = 0.75f;
-
-#if WITH_AUTOMATION_TESTS
-	// Removed authoring options retained only as inert compile fixtures while the
-	// legacy giant spec is split into focused contract tests.
-	float DragTargetFeedbackOpacity = 0.0f;
-	FLinearColor DragValidTargetColor = FLinearColor::Transparent;
-	FLinearColor DragInvalidTargetColor = FLinearColor::Transparent;
-	FLinearColor DragCardProbeTargetColor = FLinearColor::Transparent;
-	float DragCommitReadyScale = 1.0f;
-	float DragCardTargetProbeScale = 1.0f;
-	bool bSnapAimArrowToValidWorldTarget = false;
-	float DragAimArrowSnapBlend = 0.0f;
-#endif
 };
 
 USTRUCT(BlueprintType)

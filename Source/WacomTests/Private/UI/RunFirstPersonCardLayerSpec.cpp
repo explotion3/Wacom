@@ -980,11 +980,11 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionClearsDefaultSpec::RunTest(const F
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIRunFirstPersonMenuSuppressionBlocksDevelopmentPreviewSpec,
-	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.GameMenuSuppressionBlocksDevelopmentPreview",
+	FWacomUIRunFirstPersonMenuSuppressionOwnsEmptyRuntimeLayerSpec,
+	"Wacom.UI.RunFirstPersonCardLayer.MenuContext.GameMenuSuppressionOwnsEmptyRuntimeLayer",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIRunFirstPersonMenuSuppressionBlocksDevelopmentPreviewSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIRunFirstPersonMenuSuppressionOwnsEmptyRuntimeLayerSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
 	UCardDefinition* Card = WacomRunFirstPersonCardLayerSpec::MakeNamedNoopCard(
@@ -997,12 +997,6 @@ bool FWacomUIRunFirstPersonMenuSuppressionBlocksDevelopmentPreviewSpec::RunTest(
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
-	Anchor->bDrawPreviewCardLayer = true;
-	Anchor->PreviewCardCountFallback = 3;
-	TestEqual(TEXT("Development preview is configured with placeholder cards"),
-		Anchor->PreviewCardCountFallback,
-		3);
-
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
 	Source->AnchorForTest = Anchor.Get();
@@ -1015,12 +1009,9 @@ bool FWacomUIRunFirstPersonMenuSuppressionBlocksDevelopmentPreviewSpec::RunTest(
 	Source->SetRunFirstPersonCardLayerSuppressedByGameMenu(true);
 	TestTrue(TEXT("Suppressed layer still has runtime data ownership"),
 		Anchor->HasRuntimeCardLayerData());
-	TestEqual(TEXT("Suppressed runtime entries are empty instead of exposing preview data"),
+	TestEqual(TEXT("Suppressed runtime entries are empty"),
 		Anchor->GetRuntimeCardLayerEntries().Num(),
 		0);
-	TestEqual(TEXT("Development preview is still configured, proving runtime ownership blocks preview data"),
-		Anchor->PreviewCardCountFallback,
-		3);
 
 	return true;
 }

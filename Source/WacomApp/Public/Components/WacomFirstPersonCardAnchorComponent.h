@@ -383,7 +383,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|99 Debug", meta = (ToolTip = "是否在第一人称卡牌层检测到槽位生命周期异常时输出简短日志；默认关闭，仅用于排查幽灵 Widget、outgoing 泄漏或重复槽位。"))
 	bool bLogCardLayerMotionDiagnostics = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ToolTip = "第一人称卡牌层使用的 Layer Widget 类；同时服务 Battle / Run runtime hand 与 PIE 预览。空值时使用 C++ 默认层 Widget。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ToolTip = "第一人称卡牌层使用的 Layer Widget 类；同时服务 Battle / Run runtime hand。空值时使用 C++ 默认层 Widget。"))
 	TSubclassOf<UWacomFirstPersonCardLayerWidget> CardLayerWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ToolTip = "第一人称卡牌层使用的卡面包装 Widget 类；正式验证建议设置为 /Game/Wacom/UI/Card/WBP_FPCardView。为空时使用原生 UWacomFirstPersonCardViewWidget 调试视图。"))
@@ -407,7 +407,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|04 Hand Shape", meta = (EditCondition = "bScaleEdgeDropByHandCount", ClampMin = "1", UIMin = "1", UIMax = "32", ToolTip = "手牌数量大于等于该值时，边缘下坠使用 HandMaxEdgeDropPixels；中间数量平滑过渡。"))
 	int32 EdgeDropScaleMaxCardCount = 12;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称卡牌层 Widget 添加到 Viewport 时使用的层级；同时影响 Battle / Run runtime hand 与 PIE 预览。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|01 Card View", meta = (ClampMin = "0", UIMin = "0", UIMax = "20000", ToolTip = "第一人称卡牌层 Widget 添加到 Viewport 时使用的层级；同时影响 Battle / Run runtime hand。"))
 	int32 CardLayerZOrder = 9996;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|08 Targeting State", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "160.0", ToolTip = "正在等待目标选择的卡牌额外上浮距离，单位为 UMG 布局像素。"))
@@ -822,11 +822,9 @@ private:
 public:
 	// Test-only layout fixtures. These do not create a PIE preview widget and are
 	// intentionally excluded from reflected authoring API.
-	bool bDrawPreviewCardLayer = false;
-	int32 PreviewCardCountFallback = 5;
-	TArray<TSoftObjectPtr<UCardDefinition>> PreviewCardDefinitions;
-	TArray<FWacomFirstPersonCardLayerSlotView> BuildPreviewCardSlotViews() const;
-	bool IsCardLayerWidgetActive() const;
+	int32 LayoutFixtureCardCount = 5;
+	TArray<TSoftObjectPtr<UCardDefinition>> LayoutFixtureCardDefinitions;
+	TArray<FWacomFirstPersonCardLayerSlotView> BuildLayoutFixtureCardSlotViews() const;
 	FWacomFirstPersonCardAnchorAutomationTestView GetAutomationTestViewForTest() const;
 	void SetCardLayerWidgetForTest(UWacomFirstPersonCardLayerWidget* LayerWidget);
 	void SetHoveredCardInstanceIdForTest(const FGuid& CardInstanceId);

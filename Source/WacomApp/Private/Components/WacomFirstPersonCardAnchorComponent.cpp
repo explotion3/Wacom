@@ -1497,25 +1497,20 @@ void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardLayerInteractionEna
 }
 
 #if WITH_AUTOMATION_TESTS
-bool UWacomFirstPersonCardAnchorComponent::IsCardLayerWidgetActive() const
-{
-	return CardLayerWidget && CardLayerWidget->IsInViewport();
-}
-
 TArray<FWacomFirstPersonCardLayerSlotView>
-UWacomFirstPersonCardAnchorComponent::BuildPreviewCardSlotViews() const
+UWacomFirstPersonCardAnchorComponent::BuildLayoutFixtureCardSlotViews() const
 {
-	const int32 DesiredCount = PreviewCardDefinitions.IsEmpty()
-		? PreviewCardCountFallback
-		: PreviewCardDefinitions.Num();
+	const int32 DesiredCount = LayoutFixtureCardDefinitions.IsEmpty()
+		? LayoutFixtureCardCount
+		: LayoutFixtureCardDefinitions.Num();
 	TArray<FWacomCardViewData> CardData;
 	CardData.Reserve(FMath::Clamp(DesiredCount, 0, 32));
 	for (int32 Index = 0; Index < FMath::Clamp(DesiredCount, 0, 32); ++Index)
 	{
 		FWacomCardViewData Data;
-		if (PreviewCardDefinitions.IsValidIndex(Index))
+		if (LayoutFixtureCardDefinitions.IsValidIndex(Index))
 		{
-			if (const UCardDefinition* Card = PreviewCardDefinitions[Index].LoadSynchronous())
+			if (const UCardDefinition* Card = LayoutFixtureCardDefinitions[Index].LoadSynchronous())
 			{
 				Data = UWacomCardPresentationBuilder::BuildCardViewData(Card);
 			}
