@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-06-15
+updated: 2026-07-13
 tags:
   - wacom/todo
   - wacom/docs
@@ -50,6 +50,12 @@ tags:
   - 说明：先规划 `Docs/WacomMap.md` 的职责边界，明确 WacomMap 管逻辑地图、节点状态、边 / 通道可达性、迷雾、撤离回路、地图运行时状态和 SaveGame 口径；RunTunnel 继续作为 App 表现 / 输入层，不把 Spline、Actor 或 UI 写进地图规则。
 
 ## P1 近期实现候选
+
+- [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
+  - 状态：`Ready: worktree 本地依赖层已建立`
+  - 归属：Content / Editor / Build
+  - 入口：[Worktree Development](./Worktree_Development.md) / [Content Organization](./Content_Organization.md)
+  - 说明：使用 AssetRegistry 找出 `/Game/Wacom` 与正式地图对 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials`、`/Game/L_TestBattle` 的真实引用；自有出货资产经编辑器迁入 `/Game/Wacom`，第三方内容建立版本化安装清单。完成前由每个 worktree 的独立 D 盘本地依赖层支持编译和 PIE。
 
 - [ ] **背包 Workspace 重构：规则与 C++ 交互完成，正式资产/PIE 待收口**
   - 状态：`In Progress: C++ + automation complete; WBP/material/PIE pending`

@@ -2,7 +2,7 @@
 type: content-guideline
 scope: wacom-content
 status: active
-updated: 2026-06-07
+updated: 2026-07-13
 tags:
   - wacom/content
   - wacom/assets
@@ -66,3 +66,15 @@ Run Tunnel authoring 蓝图归档到：
 - 迁移后执行 Fix Up Redirectors 并 Save All。
 - Commandlet 生成路径先于资产迁移更新，避免新旧目录继续分叉。
 - 不用 Core Redirect 处理资产路径迁移；Core Redirect 只处理 C++ 类型、属性、函数重命名。
+
+## Worktree 本地依赖
+
+Git worktree 只保证受版本管理内容完整。当前 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials` 和 `/Game/L_TestBattle` 仍受 `Content/*` ignore policy 排除，但部分正式或验证资产仍会引用它们。
+
+多 worktree 开发使用 [`Worktree_Development.md`](./Worktree_Development.md) 记录的独立本地依赖层：每个 worktree 拥有自己的 D 盘 backing directory，通过 Content 子目录 Junction 暴露给 UE。该机制只是开发期补水，不把 ignored 目录提升为规则或资产真相。
+
+长期迁移规则保持不变：
+
+- Wacom 自有并会随游戏出货的资产，通过 Content Browser 迁入 `/Game/Wacom` 并由 Git LFS 管理。
+- 第三方或授权上不适合进入主仓库的内容，建立带版本与安装清单的本地依赖包。
+- DreamShader 生成 `.uasset` 以 `.dsm`、`.dsh` 和生成脚本为真源，不依赖某个 worktree 的生成结果作为唯一副本。

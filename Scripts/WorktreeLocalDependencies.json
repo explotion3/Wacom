@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "readOnlySeedDirectories": [
+    "Content/Art",
+    "Content/Asset"
+  ],
+  "editableSeedDirectories": [
+    "Content/DreamMaterials"
+  ],
+  "seedFiles": [
+    "Content/L_TestBattle.umap"
+  ],
+  "generatedDirectories": [
+    "Binaries",
+    "Intermediate",
+    "Saved",
+    "DerivedDataCache",
+    "Plugins/DreamShader/Binaries",
+    "Plugins/DreamShader/Intermediate"
+  ]
+}
