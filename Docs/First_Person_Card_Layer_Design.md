@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-07-11
+updated: 2026-07-13
 tags:
   - wacom/ui
   - wacom/cards
@@ -192,6 +192,8 @@ Run 探索期默认手牌和 provider-backed menu lease 的卡牌进入使用 `R
 BattleHUD 每次提交 BattleHand presentation frame 时，把当前 UMG 几何中心转成 DPI-aware 逻辑 viewport 坐标，并随同一 source lifecycle frame 写入 `DrawPile / DiscardPile / PlayTarget` presentation anchors；Anchor runtime state 按 source 保存，source 切换、runtime clear 或 visual suppression 时清理。`Drawn` 使用 DrawPile 完整坐标作为起点，`Discarded` 使用 DiscardPile 完整坐标作为终点，二者不再叠加旧 authored offset；`RunHandEntered / Gained / HandAnchorEntered` 暂不使用这些 Battle 锚点。真实 Played target 与 PlayTarget 坐标合同继续保留：启用有效消散时不再驱动卡牌位移，供后续目标命中反馈消费；消散回退时仍按“真实目标 -> PlayTarget -> 旧 origin / offset”解析旧空间终点。Layer 只消费这些表现坐标，不重新判断目标是否合法。连续 `CardDiscarded / HandLimitDiscarded / CardExhausted` loose events 和 EndTurn discard phase 都携带稳定 `SequenceIndex / SequenceCount`；`DiscardedCardExitStaggerSeconds`（默认 `0.06s`）据此错峰启动，`CardSlotExitDuration` 控制单张离场时长。表现计划 phase 超时时必须先调用 Anchor / Layer force-settle，清除未应用 hint、把 active slot 收到最终目标并移除 outgoing slot，再进入下一 phase，不能让旧阶段动画与新阶段重叠。
 
 `bEnableReadableTransitionOrigins` 控制没有有效 presentation anchor 时的旧 origin / offset fallback，不关闭有限时长播放、错峰和弧线；有效的 Battle MotionAnchor 或真实 Played target 始终是完整空间事实。需要在 PIE 中验证抽牌、Run 手牌入场、战斗奖励卡或左右手生成手感时，优先调整 WBP MotionAnchor 位置和 `06 Transition Motion` 的非位置参数；不应在 BattleHUD、Run source 或 BattleSession 中硬编码动画位置、延迟或曲线。
+
+全局 Local Settings 只在 Anchor 已解析制作参数之后合并运行时有效配置，不回写 Anchor 或 Style DataAsset。合并顺序固定为 `Anchor / DataAsset authoring -> local accessibility policy -> OwnerConfig`：`UIMotion=Simplified` 把 Card Use、Exhausted Dissolve、Pile Transfer、Selection 和 Drag Pickup 的现有 reduced-motion 标记强制为 true；资产本身已启用的 reduced-motion 仍然保留。`Flash=Reduced` 只把装饰性扫光、持续高亮、消散亮边 / 残片和牌堆拖尾强度乘 `0.35`；`Flash=Off` 将这些装饰强度归零并关闭 pile-transfer 拖尾 / motes，但保留卡牌真实转场、源到目标的语义牌印、可打 / 不可打颜色和必要反馈。默认 `Full / Full` 完全保持现有制作结果。
 
 本项目可以参考本地 Godot Fake3D Card Game UI Demo 0.2 的行为目标，例如真实牌堆起终点、批次 stagger、两段式出牌、翻面、tilt / shadow depth 和可中断通道；该参考项目采用 GPL-3.0，因此 Wacom 只吸收动作语义和节奏判断，必须以现有 UE / UMG / Material 架构独立实现，不复制其代码、shader、资产或工程结构。
 

@@ -11,6 +11,7 @@
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/Settings/WacomSettingsScreen.h"
 #include "UI/Shop/WacomShopScreen.h"
 
 #include "UObject/SoftObjectPath.h"
@@ -43,6 +44,10 @@ namespace
 		if (WidgetTag == WacomUITags::UI_Widget_PauseMenuScreen.GetTag())
 		{
 			return UWacomPauseMenuScreen::StaticClass();
+		}
+		if (WidgetTag == WacomUITags::UI_Widget_SettingsScreen.GetTag())
+		{
+			return UWacomSettingsScreen::StaticClass();
 		}
 		return UWacomActivatableWidget::StaticClass();
 	}

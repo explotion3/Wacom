@@ -2,14 +2,19 @@
 
 #pragma once
 
+#include "Containers/Ticker.h"
 #include "CoreMinimal.h"
 #include "UI/Foundation/WacomButtonBase.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "WacomMainMenuScreen.generated.h"
 
+class UBorder;
+class UCommonTextBlock;
 class UTextBlock;
 class UWidget;
 struct FWacomMainMenuScreenTestAccess;
+struct FWacomLocalSettingsSnapshot;
+enum class EWacomRuntimeSettingsChangeReason : uint8;
 
 /**
  * 主菜单导航按钮的 CommonUI 制作入口。
@@ -25,8 +30,53 @@ class WACOMAPP_API UWacomMainMenuButtonWidget : public UWacomButtonBase
 public:
 	UWacomMainMenuButtonWidget(const FObjectInitializer& ObjectInitializer);
 
+	/** CommonUI interactability 由 Screen 改变后刷新本按钮的纯表现状态。 */
+	void RefreshPresentationState();
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+	virtual FReply NativeOnFocusReceived(const FGeometry& InGeometry, const FFocusEvent& InFocusEvent) override;
+	virtual void NativeOnFocusLost(const FFocusEvent& InFocusEvent) override;
+	virtual void NativeOnHovered() override;
+	virtual void NativeOnUnhovered() override;
+	virtual void NativeOnPressed() override;
+	virtual void NativeOnReleased() override;
+	virtual void NativeOnEnabled() override;
+	virtual void NativeOnDisabled() override;
+
+	/** WBP_MainMenuNavButton 的底板；由 C++ 统一驱动 hover / focus / pressed 色彩。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> ButtonBackdrop;
+
+	/** WBP_MainMenuNavButton 的左侧像素强调条。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> ButtonAccent;
+
+	/** WBP_MainMenuNavButton 的焦点箭头。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCommonTextBlock> ButtonGlyph;
+
+private:
+	void RefreshPresentationTarget(bool bApplyImmediately = false);
+	void ApplyPresentation(float Emphasis, float PressedAmount);
+	bool TickPresentation(float DeltaTime);
+	void StopPresentationTicker();
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
+
+	FTSTicker::FDelegateHandle PresentationTickerHandle;
+	float CurrentEmphasis = 0.0f;
+	float TargetEmphasis = 0.0f;
+	float CurrentPressedAmount = 0.0f;
+	float TargetPressedAmount = 0.0f;
+	bool bPresentationPressed = false;
+	bool bRuntimeSimplifiedMotion = false;
+	FDelegateHandle RuntimeSettingsChangedHandle;
 };
 
 /** 主菜单能够上报给 App flow 的玩家意图。 */
@@ -136,6 +186,8 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void NativeOnActivated() override;
+	virtual void NativeOnDeactivated() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
 
 	/** ViewData 应用后的 WBP 表现钩子；不能在这里提交存档、Run 或 travel 操作。 */
@@ -184,10 +236,32 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> ActiveJourneySummaryText;
 
+	/** 正式 WBP 与 fallback 共用的主内容动画根。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> MenuContentRoot;
+
+	/** 正式 WBP 与 fallback 共用的旅程摘要动画根。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> JourneySummaryPanel;
+
 private:
 	void RefreshFromViewData();
 	bool IsActionAvailable(EWacomMainMenuAction Action) const;
+	void StartIntroPresentation();
+	void FinishIntroPresentation();
+	void StopIntroPresentation();
+	bool TickIntroPresentation(float DeltaTime);
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
 
 	UPROPERTY(Transient)
 	FWacomMainMenuViewData ViewData;
+
+	FTSTicker::FDelegateHandle IntroTickerHandle;
+	float IntroElapsedSeconds = 0.0f;
+	bool bRuntimeSimplifiedMotion = false;
+	FDelegateHandle RuntimeSettingsChangedHandle;
 };

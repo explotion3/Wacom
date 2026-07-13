@@ -213,11 +213,17 @@ tags:
   - 入口：[Roadmap: 存档恢复](./Roadmap.md#roadmap-save)
   - 说明：采用一个玩家档案、一个活动旅程、若干不可见滚动备份；结束旅程生成只读历史摘要。该切片负责恢复 Bootstrap / PauseMenu Save / MainMenu Continue，不把 slot 语义写回 MainMenu Screen。
 
-- [ ] **MainMenu 正式表现：WBP、实时场景与子页面**
-  - 状态：`Ready: C++ ViewData / Action 契约已完成`
+- [ ] **MainMenu 正式表现：实时场景与剩余子页面**
+  - 状态：`In Progress: 正式 WBP 壳层与导航按钮已完成，等待 PIE 视觉验收和场景切片`
   - 归属：App / UI
   - 入口：[Roadmap: App 壳层与菜单](./Roadmap.md#roadmap-app-shell-and-menus)
-  - 说明：`WBP_MainMenuScreen` 已进入制作阶段，六个导航入口合同已统一为 `UWacomMainMenuButtonWidget`；后续先创建其视觉子类 `WBP_MainMenuNavButton`，再完成正式像素视觉、`L_MainMenu` 实时场景和固定镜头，并依次接入旅程准备、旅程记录、设置与制作人员页面。当前 C++ fallback 继续保证主菜单可玩。
+  - 说明：`WBP_MainMenuScreen + WBP_MainMenuNavButton` 已建立第一版正式壳层，Settings Screen 与主菜单 / Pause 双入口也已完成。剩余工作是 `L_MainMenu` 实时场景、固定镜头、音频 / 字体 / 像素纹理美术验收，以及 Journey History / Credits 子页面。
+
+- [x] **Settings Screen：WBP、视频确认 Modal 与双入口**
+  - 状态：`Done: 五分类页面、token 事务、双入口和 Run Tunnel CameraShake 已落地`
+  - 归属：App / UI
+  - 入口：[WacomApp.md](./WacomApp.md) / [WacomUIFoundation.md](./WacomUIFoundation.md)
+  - 说明：`WBP_SettingsScreen / OptionRow / Button / ConfirmationDialog` 与 C++ fallback 已完成；主菜单和暂停菜单统一走 `FWacomSettingsScreenFlow`。Apply 后留在页面，视频模式使用 15 秒确认，脏返回确认放弃，外部 teardown 安全 Cancel / Revert。项目平衡档统一首次启动与“恢复默认”，恢复按钮只装入可撤销 Draft，仍需 Apply。`BP_WacomPlayerCharacter` 正式启用 CameraShake 并关闭 WalkBob。
 
 - [ ] **清理 UI MVVM 迁移尾项：WBP ViewBinding、逐步移除 C++ 手动 SetText fallback**
   - 状态：`Ready: WBP 化后清理`

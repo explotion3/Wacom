@@ -28,6 +28,22 @@
 #endif
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UI/Card/WacomFirstPersonCardSlotLayoutBuilder.h"
+#include "Engine/GameInstance.h"
+#include "Settings/WacomPresentationAccessibilityPolicy.h"
+#include "Settings/WacomSettingsSubsystem.h"
+
+struct FWacomFirstPersonCardAccessibilityBridge
+{
+	static void Apply(
+		const UWacomFirstPersonCardAnchorComponent& Anchor,
+		FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
+		FWacomPresentationAccessibilityPolicy::ApplyToFirstPersonCardConfig(
+			Config,
+			Anchor.RuntimeDecorativeFlashIntensityScale,
+			Anchor.bRuntimeSimplifiedMotion);
+	}
+};
 
 namespace
 {
@@ -299,6 +315,7 @@ namespace
 		BuildHandShapeConfigFromAnchor(Anchor, Config);
 		BuildMotionConfigFromAnchor(Anchor, Config);
 		BuildInteractionConfigFromAnchor(Anchor, Config);
+		FWacomFirstPersonCardAccessibilityBridge::Apply(Anchor, Config);
 		return Config;
 	}
 
@@ -863,6 +880,7 @@ UWacomFirstPersonCardAnchorComponent::~UWacomFirstPersonCardAnchorComponent() = 
 void UWacomFirstPersonCardAnchorComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	BindRuntimeSettings();
 	bFirstPersonCardLayerInteractionEnabled = bEnableBattleHandInteraction;
 	ConfigureTickPrerequisites();
 	SetComponentTickEnabled(true);
@@ -870,10 +888,57 @@ void UWacomFirstPersonCardAnchorComponent::BeginPlay()
 
 void UWacomFirstPersonCardAnchorComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	UnbindRuntimeSettings();
 	SetFirstPersonCardLayerInteractionEnabled(false);
 	ResetAnchorScreenSmoothing();
 	RemoveCardLayer();
 	Super::EndPlay(EndPlayReason);
+}
+
+void UWacomFirstPersonCardAnchorComponent::BindRuntimeSettings()
+{
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (!SettingsSubsystem)
+	{
+		return;
+	}
+
+	RuntimeSettingsChangedHandle = SettingsSubsystem->OnRuntimeSettingsChangedNative().AddUObject(
+		this,
+		&UWacomFirstPersonCardAnchorComponent::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		SettingsSubsystem->GetCurrentSnapshot(),
+		EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomFirstPersonCardAnchorComponent::UnbindRuntimeSettings()
+{
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	if (UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr)
+	{
+		SettingsSubsystem->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+	}
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomFirstPersonCardAnchorComponent::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	RuntimeDecorativeFlashIntensityScale =
+		FWacomPresentationAccessibilityPolicy::GetDecorativeFlashIntensityScale(
+			Snapshot.FlashEffectMode);
+	bRuntimeSimplifiedMotion =
+		FWacomPresentationAccessibilityPolicy::UsesSimplifiedMotion(Snapshot.UIMotionMode);
+	bHasCachedOwnerConfig = false;
+	InvalidateResolvedCardLayoutRuntimeState();
 }
 
 void UWacomFirstPersonCardAnchorComponent::TickComponent(

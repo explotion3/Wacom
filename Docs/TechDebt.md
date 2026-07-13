@@ -71,6 +71,8 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast C++ fallback 表现 | 未配置 settings 时仍使用文字 fallback；viewport 创建已受真实本地玩家 / `LocalPlayer` 条件保护，离屏自动化注入 Widget 不进入 viewport | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
 | PrimaryLayout 固定路径 fallback | PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
+| Local Settings 音频分类 | `SC_Wacom_Master / Music / SFX / UI` 和用户 SoundMix 已建立，项目当前没有可明确迁移的 `/Game/Wacom` 音频源资产；未设置 SoundClass 的声音只受 Master 控制，第三方 / 来源不明资产未修改 | 正式音乐、UI 和玩法音效进入 `/Game/Wacom/Audio` 后在导入 / 制作校验中要求显式 SoundClass；用 AssetRegistry 审计存量声音，再按所有权分批迁移，不批改第三方资产 |
+| Local Settings 世界材质闪光覆盖 | 全局 Flash 策略当前覆盖 first-person 卡牌的装饰扫光、亮边、残片、牌堆拖尾与 motes；世界材质、场景 Niagara 和未来敌人受击闪光尚未接入统一语义标记 | 为世界表现建立 decorative / semantic 分类和统一参数入口，再订阅 Local Settings；接入前不得用全局材质扫描或粗暴关闭所有 emissive，以免隐藏可打 / 不可打和伤害等语义反馈 |
 
 <a id="techdebt-run-session"></a>
 ## RunSession 结构债

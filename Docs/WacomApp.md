@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-07-08
+updated: 2026-07-13
 tags:
   - wacom/app
   - wacom/gameflow
@@ -58,6 +58,20 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`，自动存档和读取路径会静默 no-op。SaveGame schema 与恢复边界见 [WacomRun.md](./WacomRun.md)。
 
+### Local Settings 启动与事务
+
+本地机器设置由 `UWacomGameUserSettings` 持久化到 UE 的 `GameUserSettings.ini`，与玩家档案、活动旅程、滚动备份和 `WacomRunSaveGame` 完全分离。`DefaultEngine.ini` 通过 `GameUserSettingsClassName` 注册该类型；Wacom 自定义 schema 当前为 `1`。项目平衡档是首次启动和显式恢复默认的唯一来源：当前显示器桌面分辨率、无边框窗口、VSync 开、60 FPS、高画质、四路音量 / 视角响应 / 镜头运动 100%、不反转 Y、完整闪光与完整 UI 动效；无法取得桌面分辨率时先保留当前有效分辨率，再回退 `1280 × 720`。已有有效 ini 不会在启动时被覆盖；自定义 schema 无法迁移时只重置音量、视角响应、镜头运动和表现辅助字段，不清空 UE 持有的分辨率、窗口模式或画质数据。
+
+`UWacomSettingsSubsystem` 是唯一编辑事务 owner：`BeginEdit()` 返回唯一 token 和当前 snapshot；`Preview()` 只即时应用四路音量、视角响应 / Y 反转、镜头运动、闪光模式和 UI 动效模式；显示、VSync、帧率上限与整体画质只在 `Apply()` 时生效。错误 token、过期 token、重复编辑、重复确认和重复撤销都被拒绝且无副作用。`Cancel()` 恢复编辑前的即时预览值且不写盘。
+
+分辨率或窗口模式变化后进入 15 秒确认态。此时引擎已应用候选视频模式，但不会调用 `SaveSettings()`；`ConfirmVideoMode()` 才确认并保存，`RevertVideoMode()` 或超时会恢复最后确认的视频模式，再保存同批次的其它设置。因此崩溃或强退不会把未确认的不可用分辨率写成下次启动配置。
+
+Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，并在 Game / PIE World 就绪时应用音频总线；运行时消费者通过 native settings-changed delegate 订阅并在 teardown 时反订阅，不使用 Tick 查询设置。Run Tunnel 仍使用鼠标位置驱动视角，只叠加响应倍率和 Y 反转；镜头运动倍率同时缩放 Walk Bob 与 Camera Shake，`0` 会输出零 Bob 并停止已启动 Shake。`BP_WacomPlayerCharacter` 当前正式启用已有 `BP_RunTunnelWalkCameraShake`，并保持 `WalkBobComponent.bEnableWalkBob=false`，因此默认、半强度和关闭三档都作用于唯一的 CameraShake 路径，不叠加两套晃动。
+
+`UWacomSettingsScreen` 是这套事务的唯一 CommonUI 页面协调器。页面覆盖显示、图形、音频、视角、辅助五类字段；App-private 字段描述表统一标签、离散 / 连续类型、格式与 Preview 白名单。无边框窗口下分辨率仍显示，但禁用并标注“跟随桌面”。“恢复默认”从 Subsystem 获取完整项目平衡档，使用当前 token 只预览允许即时预览的字段并装入 Draft，不弹额外确认框、不会直接写盘；玩家仍需 Apply，视频变化继续走 15 秒确认。Apply 无视频模式变化时保存后留在页面并开启新 token；有视频模式变化时 Push `UWacomSettingsConfirmationDialog`，保留、恢复、超时和 Modal Push 失败都回到实际 Snapshot 并开启新 token。脏状态返回会先确认放弃；外部 teardown 会 Cancel 活动 edit 或 Revert 待确认视频模式。
+
+主菜单与暂停菜单都只调用 App-private `FWacomSettingsScreenFlow`。该 flow 统一解析 `UI.Widget.SettingsScreen` 的软类、异步 Push 到 `UI.Layer.GameMenu`、拒绝重复打开，并在资产缺失时回退 `UWacomSettingsScreen`。主菜单 ViewData 现在开放 Settings，Journey History / Credits 仍隐藏；暂停菜单使用同一 Screen，关闭后由 CommonUI focus restoration 回到原入口。Screen、选项行和确认 Modal 均不访问 SaveGame。
+
 主菜单继续使用 `L_MainMenu + AWacomMenuGameMode + UWacomMainMenuScreen`。菜单 travel 目标必须使用 UE package path：
 
 - Exploration：`/Game/Wacom/Maps/L_Exploration`
@@ -65,7 +79,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 不要把 travel 目标写成 `/Game/Wacom/Maps/L_Exploration.L_Exploration` 这类 ObjectPath。UE PIE 下 ObjectPath travel 曾触发 `FPackagePath::TryFromMountedName was passed an ObjectPath` 和 `!NewPIEWorld->bIsWorldInitialized` ensure。
 
-主菜单采用 App flow 与 Screen 分离：`AWacomMenuGameMode` 构造 `FWacomMainMenuViewData`，绑定 `UWacomMainMenuScreen::OnActionRequestedNative`，并处理 `EWacomMainMenuAction`；Screen 只应用 ViewData、刷新 fallback / WBP 和上报玩家意图，不读取或删除 SaveGame，不调用 `OpenLevel()` 或退出 API。Screen class 配置已收紧为 `TSubclassOf<UWacomMainMenuScreen>`，travel 前和 `EndPlay` 都会显式解绑。当前存档总开关关闭，因此 GameMode 不访问磁盘，Continue、Journey History、Settings、Credits 保持隐藏；Start New Journey 仍直接走 `/Game/Wacom/Maps/L_Exploration`。未来档案服务接入后，只替换 GameMode 的 ViewData 构建与 Action flow，不让 Screen 重新拥有 slot 语义。
+主菜单采用 App flow 与 Screen 分离：`AWacomMenuGameMode` 构造 `FWacomMainMenuViewData`，绑定 `UWacomMainMenuScreen::OnActionRequestedNative`，并处理 `EWacomMainMenuAction`；Screen 只应用 ViewData、刷新 fallback / WBP 和上报玩家意图，不读取或删除 SaveGame，不调用 `OpenLevel()` 或退出 API。Screen class 配置已收紧为 `TSubclassOf<UWacomMainMenuScreen>`，C++ 默认加载 `/Game/Wacom/UI/Menus/WBP_MainMenuScreen`，资产缺失或加载失败时回退到原生 `UWacomMainMenuScreen`；travel 前和 `EndPlay` 都会显式解绑。当前存档总开关关闭，因此 GameMode 不访问磁盘，Continue、Journey History、Credits 保持隐藏；Settings 已开放并进入统一 Settings Screen flow，Start New Journey 仍直接走 `/Game/Wacom/Maps/L_Exploration`。未来档案服务接入后，只替换 GameMode 的 ViewData 构建与 Action flow，不让 Screen 重新拥有 slot 语义。
 
 ---
 
@@ -124,7 +138,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 PlayerController 上的 `PushMappingContext / PopMappingContext` helper 仍保留为兼容 / 调试入口；正式流程由 coordinator 管理。PlayerController BeginPlay、MenuGameMode BeginPlay 和 GameMode BeginPlay 都会初始化或重设 coordinator，防止 PIE 复用 Controller 时输入状态停留在上一关。
 
-Run Tunnel 是探索期默认移动模型，不再有正式普通 FPS FreeLook 探索 profile。进入战斗时 `UWacomRunTunnelMovementComponent` 只 `Suspend`，保留当前 Segment / Distance；战斗结束后先停用 Battle camera look，再让 coordinator 回到 `Exploration`，Run Tunnel `Resume` 后继续沿原 tunnel path 移动。探索期 hover 或拖动 first-person 卡牌时，UMG 仍可处理 / 捕获鼠标；PlayerController 会把卡牌指针的归一化视口坐标临时写入 Run Tunnel cursor look override，让鼠标在卡牌上移动时视角也继续跟随。pointer leave、release、cancel 或清理卡层时恢复普通 cursor look。Run Tunnel 的 walking bob 是纯 App 表现层：优先可通过 UE `CameraShakeBase` 播放走路晃动；打开 `bUseWalkCameraShake` 并配置 `WalkCameraShakeClass` 后，真实样条移动会启动对应 shake，停步或卡在样条末端会在 `WalkCameraShakeStopGraceSeconds` 宽限后停止并走 shake blend out；suspend / segment switch / deactivate 会立即停止。该模式会替代自定义 WalkBob offset，不与其叠加；推荐用 `DefaultCameraShake` BP 调整走路 Loc Z / Rot Pitch 等表现。未启用 CameraShake 或未配置 class 时，fallback 为 `UWacomFirstPersonWalkBobComponent` 输出本地位置 / 旋转偏移，RunTunnel 在 active 且未 suspended 的移动帧叠加到当前样条 view pose；它由本帧实际 `DistanceAlongSpline` 变化推进内置脚步曲线，`StepDistanceCm` 控制脚步周期，`FootPlantDropCm` 控制落脚下沉。若 PIE 中看不到 CameraShake 效果，可临时勾选 `bDebugWalkCameraShake`，屏幕左上角会显示运行时 class、scale、真实移动 delta、dead zone、grace、PlayerController / PlayerCameraManager 和 Start 返回实例。walking bob 不改变 `DistanceAlongSpline`、分支规则、trace 合法性或 Run 规则状态，suspend / segment switch / deactivate 会清理残留偏移。
+Run Tunnel 是探索期默认移动模型，不再有正式普通 FPS FreeLook 探索 profile。进入战斗时 `UWacomRunTunnelMovementComponent` 只 `Suspend`，保留当前 Segment / Distance；战斗结束后先停用 Battle camera look，再让 coordinator 回到 `Exploration`，Run Tunnel `Resume` 后继续沿原 tunnel path 移动。探索期 hover 或拖动 first-person 卡牌时，UMG 仍可处理 / 捕获鼠标；PlayerController 会把卡牌指针的归一化视口坐标临时写入 Run Tunnel cursor look override，让鼠标在卡牌上移动时视角也继续跟随。pointer leave、release、cancel 或清理卡层时恢复普通 cursor look。Run Tunnel 的 walking bob 是纯 App 表现层：正式玩家资产启用 UE `CameraShakeBase` 走路晃动，真实样条移动会启动 `BP_RunTunnelWalkCameraShake`，停步或卡在样条末端会在 `WalkCameraShakeStopGraceSeconds` 宽限后停止并走 shake blend out；suspend / segment switch / deactivate 会立即停止。该模式替代自定义 WalkBob offset，不与其叠加；镜头运动设置作为运行时倍率传给 shake，`1 / 0.5 / 0` 对应完整、半强度和完全关闭。组件仍保留“未启用 CameraShake 或未配置 class 时使用 `UWacomFirstPersonWalkBobComponent`”的通用 fallback，但 `BP_WacomPlayerCharacter` 明确关闭该 fallback，避免正式资产误叠加。若 PIE 中看不到 CameraShake 效果，可临时勾选 `bDebugWalkCameraShake`，屏幕左上角会显示运行时 class、scale、真实移动 delta、dead zone、grace、PlayerController / PlayerCameraManager 和 Start 返回实例。walking bob 不改变 `DistanceAlongSpline`、分支规则、trace 合法性或 Run 规则状态，suspend / segment switch / deactivate 会清理残留偏移。
 
 当前 IA 口径：
 

@@ -12,6 +12,8 @@ class AWacomPlayerCharacter;
 class UCameraShakeBase;
 class UWacomCursorLookDriverComponent;
 class UWacomFirstPersonWalkBobComponent;
+struct FWacomLocalSettingsSnapshot;
+enum class EWacomRuntimeSettingsChangeReason : uint8;
 
 /**
  * Movement driver for paper-tunnel Run exploration.
@@ -146,9 +148,19 @@ private:
 	void ApplyInputProfile();
 	void UpdateCursorLook(float DeltaTime);
 	void ApplyTunnelTransform(float DeltaTime = 0.0f, float ActualDistanceDeltaCm = 0.0f);
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
 
 	float WalkCameraShakeStopGraceRemainingSeconds = 0.0f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCameraShakeBase> ActiveWalkCameraShakeInstance = nullptr;
+
+	FDelegateHandle RuntimeSettingsChangedHandle;
+	float RuntimeLookResponseStrength = 1.0f;
+	float RuntimeCameraMotionStrength = 1.0f;
+	bool bRuntimeInvertLookY = false;
 };

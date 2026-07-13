@@ -8,6 +8,7 @@
 
 void FWacomMainMenuScreenTestAccess::Build(UWacomMainMenuScreen& Screen)
 {
+	Screen.Initialize();
 	Screen.TakeWidget();
 }
 
@@ -73,6 +74,86 @@ bool FWacomMainMenuScreenTestAccess::HasCompleteFocusableCommonUIButtonSet(
 		if (!Button || !Button->GetIsFocusable())
 		{
 			return false;
+		}
+	}
+	return true;
+}
+
+bool FWacomMainMenuScreenTestAccess::UsesAuthoredMainMenuWidgets(
+	const UWacomMainMenuScreen& Screen,
+	const UClass* ExpectedButtonClass)
+{
+	if (!ExpectedButtonClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MainMenuScreenTestAccess] Missing expected button class"));
+		return false;
+	}
+
+	if (!Screen.MenuContentRoot)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MainMenuScreenTestAccess] Missing Screen binding: MenuContentRoot"));
+		return false;
+	}
+	if (!Screen.JourneySummaryPanel)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MainMenuScreenTestAccess] Missing Screen binding: JourneySummaryPanel"));
+		return false;
+	}
+	if (!Screen.ActiveJourneyTitleText)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MainMenuScreenTestAccess] Missing Screen binding: ActiveJourneyTitleText"));
+		return false;
+	}
+	if (!Screen.ActiveJourneySummaryText)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[MainMenuScreenTestAccess] Missing Screen binding: ActiveJourneySummaryText"));
+		return false;
+	}
+
+	const UWacomMainMenuButtonWidget* Buttons[] = {
+		Screen.ContinueButton,
+		Screen.NewJourneyButton,
+		Screen.JourneyHistoryButton,
+		Screen.SettingsButton,
+		Screen.CreditsButton,
+		Screen.QuitButton
+	};
+	for (int32 ButtonIndex = 0; ButtonIndex < UE_ARRAY_COUNT(Buttons); ++ButtonIndex)
+	{
+		const UWacomMainMenuButtonWidget* Button = Buttons[ButtonIndex];
+		if (!Button)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[MainMenuScreenTestAccess] Missing nav button binding at index %d"),
+				ButtonIndex);
+			return false;
+		}
+		if (Button->GetClass() != ExpectedButtonClass)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[MainMenuScreenTestAccess] Nav button %s has class %s, expected %s"),
+				*Button->GetName(),
+				*GetNameSafe(Button->GetClass()),
+				*GetNameSafe(ExpectedButtonClass));
+			return false;
+		}
+
+		const FName RequiredButtonWidgets[] = {
+			TEXT("ButtonBackdrop"),
+			TEXT("ButtonAccent"),
+			TEXT("ButtonGlyph"),
+			TEXT("ButtonText")
+		};
+		for (const FName RequiredWidgetName : RequiredButtonWidgets)
+		{
+			if (!Button->GetWidgetFromName(RequiredWidgetName))
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[MainMenuScreenTestAccess] Nav button %s is missing %s"),
+					*Button->GetName(),
+					*RequiredWidgetName.ToString());
+				return false;
+			}
 		}
 	}
 	return true;

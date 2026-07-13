@@ -34,10 +34,6 @@ bool RunMenuBackRequestedHookTest(FAutomationTestBase& Test, TFunctionRef<FReply
 	Widget->OnBackRequestedNative.AddRaw(&Probe, &FWacomMenuBackDelegateProbe::HandleBackRequested);
 	Widget->OnDeactivated().AddRaw(&Probe, &FWacomMenuBackDelegateProbe::HandleDeactivated);
 
-	Test.AddExpectedErrorPlain(
-		TEXT("PlayerController并非有效的本地玩家，因此它无法聚焦"),
-		EAutomationExpectedErrorFlags::Contains,
-		1);
 	Widget->ActivateWidget();
 
 	Test.TestTrue(TEXT("Widget activates before back request"), Widget->IsActivated());
@@ -100,10 +96,6 @@ bool FWacomUIMenuBackRequestedConfirmDialogGamepadCancelsSpec::RunTest(const FSt
 		++CancelCount;
 	});
 
-	AddExpectedErrorPlain(
-		TEXT("PlayerController并非有效的本地玩家，因此它无法聚焦"),
-		EAutomationExpectedErrorFlags::Contains,
-		1);
 	Dialog->ActivateWidget();
 
 	const FReply Reply = Dialog->SendGamepadBackKeyDown();
@@ -128,10 +120,6 @@ bool FWacomUIMenuBackRequestedKnockdownGamepadBlockedSpec::RunTest(const FString
 		++BackRequestedCount;
 	});
 
-	AddExpectedErrorPlain(
-		TEXT("PlayerController并非有效的本地玩家，因此它无法聚焦"),
-		EAutomationExpectedErrorFlags::Contains,
-		1);
 	Dialog->ActivateWidget();
 
 	const FReply Reply = Dialog->SendGamepadBackKeyDown();

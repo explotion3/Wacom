@@ -3,6 +3,7 @@
 #include "UI/Foundation/WacomMenuWidgetBase.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "CommonButtonBase.h"
 #include "Components/Button.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Input/Events.h"
@@ -141,12 +142,35 @@ void UWacomMenuWidgetBase::NativeOnDeactivated()
 
 void UWacomMenuWidgetBase::FocusFirstButton()
 {
+	if (UWidget* DesiredTarget = NativeGetDesiredFocusTarget())
+	{
+		if (DesiredTarget->GetIsEnabled()
+			&& DesiredTarget->GetVisibility() != ESlateVisibility::Collapsed
+			&& DesiredTarget->GetVisibility() != ESlateVisibility::Hidden)
+		{
+			DesiredTarget->SetKeyboardFocus();
+			return;
+		}
+	}
+
 	if (WidgetTree)
 	{
+		UCommonButtonBase* FirstCommonButton = nullptr;
 		UButton* FirstButton = nullptr;
-		WidgetTree->ForEachWidget([&FirstButton](UWidget* W)
+		WidgetTree->ForEachWidget([&FirstCommonButton, &FirstButton](UWidget* W)
 		{
-			if (FirstButton) { return; }
+			if (FirstCommonButton || FirstButton) { return; }
+			if (UCommonButtonBase* CommonButton = Cast<UCommonButtonBase>(W))
+			{
+				if (CommonButton->GetIsEnabled()
+					&& CommonButton->IsInteractionEnabled()
+					&& CommonButton->GetVisibility() != ESlateVisibility::Collapsed
+					&& CommonButton->GetVisibility() != ESlateVisibility::Hidden)
+				{
+					FirstCommonButton = CommonButton;
+				}
+				return;
+			}
 			if (UButton* Btn = Cast<UButton>(W))
 			{
 				if (Btn->GetIsEnabled())
@@ -156,6 +180,11 @@ void UWacomMenuWidgetBase::FocusFirstButton()
 			}
 		});
 
+		if (FirstCommonButton)
+		{
+			FirstCommonButton->SetKeyboardFocus();
+			return;
+		}
 		if (FirstButton)
 		{
 			FirstButton->SetKeyboardFocus();

@@ -5,7 +5,6 @@
 #define LOCTEXT_NAMESPACE "WacomPauseMenu"
 
 #include "Blueprint/WidgetTree.h"
-#include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/TextBlock.h"
@@ -19,19 +18,19 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomMenuButtonWidget.h"
 #include "UI/Menus/WacomConfirmDialog.h"
+#include "UI/Settings/WacomSettingsScreenFlow.h"
 
 namespace
 {
 	const FName WacomMainMenuLevelPackagePath(TEXT("/Game/Wacom/Maps/L_MainMenu"));
 
-	UButton* MakePauseButton(UWidgetTree* Tree, FName Name, const FText& Label, UVerticalBox* Parent)
+	UWacomMenuButtonWidget* MakePauseButton(UWidgetTree* Tree, FName Name, const FText& Label, UVerticalBox* Parent)
 	{
-		UButton* Btn = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-		UTextBlock* Text = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		Text->SetText(Label);
-		Text->SetJustification(ETextJustify::Center);
-		Btn->AddChild(Text);
+		UWacomMenuButtonWidget* Btn = Tree->ConstructWidget<UWacomMenuButtonWidget>(
+			UWacomMenuButtonWidget::StaticClass(), Name);
+		Btn->SetButtonText(Label);
 		if (UVerticalBoxSlot* BtnSlot = Parent->AddChildToVerticalBox(Btn))
 		{
 			BtnSlot->SetPadding(FMargin(0.f, 6.f));
@@ -39,6 +38,12 @@ namespace
 		}
 		return Btn;
 	}
+}
+
+UWacomPauseMenuScreen::UWacomPauseMenuScreen(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	bAutoRestoreFocus = true;
 }
 
 FName UWacomPauseMenuScreen::GetMainMenuLevelPackagePathForTravel()
@@ -85,6 +90,7 @@ TSharedRef<SWidget> UWacomPauseMenuScreen::RebuildWidget()
 		{
 			SaveButton = MakePauseButton(WidgetTree, TEXT("SaveButton"), LOCTEXT("Save", "保存"), VBox);
 		}
+		if (!SettingsButton)   { SettingsButton   = MakePauseButton(WidgetTree, TEXT("SettingsButton"),   LOCTEXT("Settings", "设置"),       VBox); }
 		if (!QuitToMenuButton) { QuitToMenuButton = MakePauseButton(WidgetTree, TEXT("QuitToMenuButton"), LOCTEXT("QuitToMenu", "回到主菜单"), VBox); }
 	}
 	return Super::RebuildWidget();
@@ -94,9 +100,19 @@ void UWacomPauseMenuScreen::NativeConstruct()
 {
 	Super::NativeConstruct();
 
-	if (ResumeButton)     { ResumeButton    ->OnClicked.AddUniqueDynamic(this, &UWacomPauseMenuScreen::HandleResumeClicked); }
-	if (SaveButton)       { SaveButton      ->OnClicked.AddUniqueDynamic(this, &UWacomPauseMenuScreen::HandleSaveClicked); }
-	if (QuitToMenuButton) { QuitToMenuButton->OnClicked.AddUniqueDynamic(this, &UWacomPauseMenuScreen::HandleQuitToMenuClicked); }
+	if (ResumeButton)     { ResumeButton    ->OnClicked().RemoveAll(this); ResumeButton    ->OnClicked().AddUObject(this, &UWacomPauseMenuScreen::HandleResumeClicked); }
+	if (SaveButton)       { SaveButton      ->OnClicked().RemoveAll(this); SaveButton      ->OnClicked().AddUObject(this, &UWacomPauseMenuScreen::HandleSaveClicked); }
+	if (SettingsButton)   { SettingsButton  ->OnClicked().RemoveAll(this); SettingsButton  ->OnClicked().AddUObject(this, &UWacomPauseMenuScreen::HandleSettingsClicked); }
+	if (QuitToMenuButton) { QuitToMenuButton->OnClicked().RemoveAll(this); QuitToMenuButton->OnClicked().AddUObject(this, &UWacomPauseMenuScreen::HandleQuitToMenuClicked); }
+}
+
+void UWacomPauseMenuScreen::NativeDestruct()
+{
+	if (ResumeButton)     { ResumeButton->OnClicked().RemoveAll(this); }
+	if (SaveButton)       { SaveButton->OnClicked().RemoveAll(this); }
+	if (SettingsButton)   { SettingsButton->OnClicked().RemoveAll(this); }
+	if (QuitToMenuButton) { QuitToMenuButton->OnClicked().RemoveAll(this); }
+	Super::NativeDestruct();
 }
 
 void UWacomPauseMenuScreen::HandleResumeClicked()
@@ -167,6 +183,14 @@ void UWacomPauseMenuScreen::HandleQuitToMenuClicked()
 					}));
 			}
 		});
+}
+
+void UWacomPauseMenuScreen::HandleSettingsClicked()
+{
+	if (APlayerController* PC = GetOwningPlayer())
+	{
+		FWacomSettingsScreenFlow::Open(*PC);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

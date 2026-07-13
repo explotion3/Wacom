@@ -68,11 +68,16 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Camera|Walk Bob", meta = (ToolTip = "当前镜头旋转偏移，只用于最终 ControlRotation，不改变角色根朝向。"))
 	FRotator GetCurrentRotationOffset() const { return CurrentRotationOffset; }
 
+	/** Applies the local accessibility multiplier without changing any authored amplitude. */
+	void SetRuntimeMotionStrength(float InStrength);
+	float GetRuntimeMotionStrength() const { return RuntimeMotionStrength; }
+
 private:
 	float StepPhaseNormalized = 0.0f;
 	float CurrentStrength = 0.0f;
 	FVector CurrentLocationOffset = FVector::ZeroVector;
 	FRotator CurrentRotationOffset = FRotator::ZeroRotator;
+	float RuntimeMotionStrength = 1.0f;
 
 	void RecalculateOffsets();
 	void ClearOffsets();

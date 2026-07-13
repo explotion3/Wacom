@@ -5,6 +5,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
 #include "GameFramework/PlayerController.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/PackageName.h"
@@ -18,6 +19,7 @@
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomConfirmDialog.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
+#include "UI/Settings/WacomSettingsScreenFlow.h"
 
 #define LOCTEXT_NAMESPACE "WacomMenuGameMode"
 
@@ -26,6 +28,15 @@ AWacomMenuGameMode::AWacomMenuGameMode()
 	// 菜单关不生成可移动 Pawn。
 	DefaultPawnClass      = nullptr;
 	PlayerControllerClass = AWacomPlayerController::StaticClass();
+	MainMenuScreenClass = UWacomMainMenuScreen::StaticClass();
+
+	// 正式 WBP 是默认制作入口；资产缺失或损坏时仍保留 native fallback。
+	static ConstructorHelpers::FClassFinder<UWacomMainMenuScreen> MainMenuScreenFinder(
+		TEXT("/Game/Wacom/UI/Menus/WBP_MainMenuScreen"));
+	if (MainMenuScreenFinder.Succeeded())
+	{
+		MainMenuScreenClass = MainMenuScreenFinder.Class;
+	}
 }
 
 void AWacomMenuGameMode::BeginPlay()
@@ -117,7 +128,7 @@ FWacomMainMenuViewData AWacomMenuGameMode::BuildMainMenuViewData() const
 
 	// 对应页面尚未落地。本轮只建立合同，不向玩家展示死入口。
 	ViewData.bShowJourneyHistory = false;
-	ViewData.bShowSettings = false;
+	ViewData.bShowSettings = true;
 	ViewData.bShowCredits = false;
 	return ViewData;
 }
@@ -194,8 +205,14 @@ void AWacomMenuGameMode::HandleMainMenuAction(EWacomMainMenuAction Action)
 		RequestQuitGame();
 		return;
 
-	case EWacomMainMenuAction::JourneyHistory:
 	case EWacomMainMenuAction::Settings:
+		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+		{
+			FWacomSettingsScreenFlow::Open(*PC);
+		}
+		return;
+
+	case EWacomMainMenuAction::JourneyHistory:
 	case EWacomMainMenuAction::Credits:
 	default:
 		UE_LOG(LogTemp, Warning,

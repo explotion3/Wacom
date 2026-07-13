@@ -80,6 +80,10 @@ _Avoid_: 名义伤害等于扣血、用 Combat Log 反推护盾吸收
 一次新战斗初始化 commit 的显式原子结果，绑定 status、开场 events 和 post snapshot；失败时保留 Session 当前旧战斗且不发布事件。
 _Avoid_: 初始化事件队列、Session 开场事件拉取
 
+**Local Settings（本地设置）**:
+由 `UWacomGameUserSettings` 持久化、只属于当前设备的显示、图形、音频、视角响应和表现辅助配置；编辑通过 `UWacomSettingsSubsystem` 的 token 化 Preview / Apply / Cancel 事务完成，不进入玩家档案、活动旅程或滚动备份。
+_Avoid_: 玩家设置存档、旅程设置、Settings Screen 状态
+
 ## Relationships
 
 - **Target Probe** 和 Target Preview 使用同一份 **PlayCard Evaluation** 目标规则，但前者要求一个具体显式目标。
@@ -103,6 +107,7 @@ _Avoid_: 初始化事件队列、Session 开场事件拉取
 - **Status Semantics** 在出牌开始时捕获敌方 Freeze，确保当前卡新施加的 Freeze 只拦截下一次真实先机推进。
 - 一次伤害 **Combatant Mutation** 产生一份 **Damage Facts**；事件、Combat Log 和 Action Preview 共享其中的实际 HP 损失。
 - **Battle Initialization Result** 与单次命令的 `FBattleResolution` 分别拥有自己的事件批次；BattleSession 不提供跨调用累积输出队列。
+- **Local Settings** 可以在旅程加载前生效；它与玩家档案、活动旅程和 Battle / Run Snapshot 没有序列化或同步关系。
 
 ## Example dialogue
 

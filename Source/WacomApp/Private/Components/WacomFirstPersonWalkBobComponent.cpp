@@ -140,6 +140,12 @@ void UWacomFirstPersonWalkBobComponent::ResetWalkBob(bool bSnapToZero)
 	RecalculateOffsets();
 }
 
+void UWacomFirstPersonWalkBobComponent::SetRuntimeMotionStrength(float InStrength)
+{
+	RuntimeMotionStrength = FMath::Clamp(InStrength, 0.0f, 1.0f);
+	RecalculateOffsets();
+}
+
 void UWacomFirstPersonWalkBobComponent::RecalculateOffsets()
 {
 	if (CurrentStrength <= KINDA_SMALL_NUMBER)
@@ -148,19 +154,26 @@ void UWacomFirstPersonWalkBobComponent::RecalculateOffsets()
 		return;
 	}
 
+	const float EffectiveStrength = CurrentStrength * RuntimeMotionStrength;
+	if (EffectiveStrength <= KINDA_SMALL_NUMBER)
+	{
+		ClearOffsets();
+		return;
+	}
+
 	const float Vertical = EvaluateFootstepVerticalOffset(
 		StepPhaseNormalized,
 		VerticalAmplitudeCm,
-		FootPlantDropCm) * CurrentStrength;
+		FootPlantDropCm) * EffectiveStrength;
 	const float Lateral = FMath::Sin(StepPhaseNormalized * UE_PI * 2.0f)
 		* FMath::Max(0.0f, LateralAmplitudeCm)
-		* CurrentStrength;
+		* EffectiveStrength;
 	const float Pitch = EvaluateFootstepPitchUnit(StepPhaseNormalized)
 		* FMath::Max(0.0f, PitchAmplitudeDegrees)
-		* CurrentStrength;
+		* EffectiveStrength;
 	const float Roll = FMath::Sin(StepPhaseNormalized * UE_PI * 2.0f)
 		* FMath::Max(0.0f, RollAmplitudeDegrees)
-		* CurrentStrength;
+		* EffectiveStrength;
 
 	CurrentLocationOffset = FVector(0.0f, Lateral, Vertical);
 	CurrentRotationOffset = FRotator(Pitch, 0.0f, Roll);

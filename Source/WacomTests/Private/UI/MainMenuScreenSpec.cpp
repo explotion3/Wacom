@@ -5,6 +5,7 @@
 #if WITH_AUTOMATION_TESTS
 
 #include "UI/MainMenuScreenTestAccess.h"
+#include "GameFramework/WacomMenuGameMode.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
 #include "Components/Widget.h"
 #include "UObject/UnrealType.h"
@@ -17,6 +18,56 @@ namespace
 		FWacomMainMenuScreenTestAccess::Build(*Screen);
 		return Screen;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIMainMenuAuthoredWidgetBlueprintContractSpec,
+	"Wacom.UI.MainMenu.Screen.AuthoredWidgetBlueprintContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIMainMenuAuthoredWidgetBlueprintContractSpec::RunTest(const FString& /*Parameters*/)
+{
+	UClass* ScreenClass = LoadClass<UWacomMainMenuScreen>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Menus/WBP_MainMenuScreen.WBP_MainMenuScreen_C"));
+	UClass* NavButtonClass = LoadClass<UWacomMainMenuButtonWidget>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Menus/WBP_MainMenuNavButton.WBP_MainMenuNavButton_C"));
+	if (!TestNotNull(TEXT("Authored main menu Screen class"), ScreenClass)
+		|| !TestNotNull(TEXT("Authored main menu navigation button class"), NavButtonClass))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomMainMenuScreen> Screen(
+		NewObject<UWacomMainMenuScreen>(GetTransientPackage(), ScreenClass));
+	FWacomMainMenuScreenTestAccess::Build(*Screen);
+	TestTrue(
+		TEXT("Authored Screen binds the required presentation widgets and six nav button instances"),
+		FWacomMainMenuScreenTestAccess::UsesAuthoredMainMenuWidgets(*Screen, NavButtonClass));
+
+	Screen->ApplyViewData(FWacomMainMenuViewData());
+	const FWacomMainMenuScreenAutomationTestView View =
+		FWacomMainMenuScreenTestAccess::View(*Screen);
+	TestEqual(TEXT("Authored New Journey label survives nested WBP serialization"),
+		Screen->GetWidgetFromName(TEXT("NewJourneyButton"))
+			? CastChecked<UWacomMainMenuButtonWidget>(
+				Screen->GetWidgetFromName(TEXT("NewJourneyButton")))->GetButtonText().ToString()
+			: FString(),
+		FString(TEXT("开始新旅程")));
+	TestEqual(TEXT("Authored no-journey summary title"),
+		View.SummaryTitle.ToString(),
+		FString(TEXT("准备启程")));
+
+	const AWacomMenuGameMode* MenuGameMode = GetDefault<AWacomMenuGameMode>();
+	TestNotNull(TEXT("MenuGameMode defaults to authored main menu Screen"), MenuGameMode);
+	if (MenuGameMode)
+	{
+		TestEqual(TEXT("MenuGameMode authored Screen class"),
+			MenuGameMode->MainMenuScreenClass.Get(),
+			ScreenClass);
+	}
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

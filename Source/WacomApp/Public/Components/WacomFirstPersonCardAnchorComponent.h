@@ -25,6 +25,9 @@ class FWacomFirstPersonCardLayerOwner;
 class FWacomFirstPersonCardAnchorRuntimeState;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardLayerTestAccess;
+struct FWacomFirstPersonCardAccessibilityBridge;
+struct FWacomLocalSettingsSnapshot;
+enum class EWacomRuntimeSettingsChangeReason : uint8;
 
 struct FWacomFirstPersonCardAnchorRuntimeStateDeleter
 {
@@ -873,6 +876,7 @@ private:
 	mutable FWacomFirstPersonCardSlotMotionConfig CachedSlotMotionConfig;
 
 	friend struct FWacomFirstPersonCardLayerTestAccess;
+	friend struct FWacomFirstPersonCardAccessibilityBridge;
 
 	void ApplyRuntimeCardLayerPresentationFrame(
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
@@ -886,6 +890,9 @@ private:
 	mutable bool CachedLogDiagnostics = false;
 	mutable bool bHasCachedOwnerConfig = false;
 	bool bFirstPersonCardLayerInteractionEnabled = false;
+	FDelegateHandle RuntimeSettingsChangedHandle;
+	float RuntimeDecorativeFlashIntensityScale = 1.0f;
+	bool bRuntimeSimplifiedMotion = false;
 
 	TUniquePtr<
 		FWacomFirstPersonCardAnchorRuntimeState,
@@ -903,6 +910,11 @@ private:
 	void ConfigureTickPrerequisites();
 	bool RefreshResolvedCardLayoutRuntimeState() const;
 	void InvalidateResolvedCardLayoutRuntimeState() const;
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
 	void ResetAnchorScreenSmoothing() const;
 	void ApplyAnchorScreenSmoothing(FWacomFirstPersonCardProjectedPoint& AnchorPoint) const;
 	static TArray<FWacomFirstPersonCardLayerEntry> BuildCardLayerEntriesFromData(

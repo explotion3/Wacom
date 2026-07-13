@@ -16,6 +16,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
+#include "Engine/GameInstance.h"
+#include "Settings/WacomSettingsSubsystem.h"
 
 UWacomRunTunnelMovementComponent::UWacomRunTunnelMovementComponent()
 {
@@ -26,11 +28,13 @@ UWacomRunTunnelMovementComponent::UWacomRunTunnelMovementComponent()
 void UWacomRunTunnelMovementComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	BindRuntimeSettings();
 	SetComponentTickEnabled(false);
 }
 
 void UWacomRunTunnelMovementComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	UnbindRuntimeSettings();
 	DeactivateRunTunnel();
 	Super::EndPlay(EndPlayReason);
 }
@@ -300,7 +304,9 @@ void UWacomRunTunnelMovementComponent::ResetWalkBob(bool bSnapToZero)
 
 bool UWacomRunTunnelMovementComponent::ShouldUseWalkCameraShake() const
 {
-	return bUseWalkCameraShake && WalkCameraShakeClass != nullptr;
+	return bUseWalkCameraShake
+		&& WalkCameraShakeClass != nullptr
+		&& RuntimeCameraMotionStrength > KINDA_SMALL_NUMBER;
 }
 
 bool UWacomRunTunnelMovementComponent::IsWalkCameraShakeMovementActive(float ActualDistanceDeltaCm) const
@@ -366,7 +372,7 @@ void UWacomRunTunnelMovementComponent::UpdateWalkCameraShake(float DeltaTime, fl
 
 	ActiveWalkCameraShakeInstance = PC->PlayerCameraManager->StartCameraShake(
 		WalkCameraShakeClass,
-		FMath::Max(0.0f, WalkCameraShakeScale));
+		FMath::Max(0.0f, WalkCameraShakeScale) * RuntimeCameraMotionStrength);
 	ShowWalkCameraShakeDebug(
 		ActiveWalkCameraShakeInstance ? TEXT("StartOK") : TEXT("StartReturnedNull"),
 		ActualDistanceDeltaCm,
@@ -379,7 +385,7 @@ void UWacomRunTunnelMovementComponent::UpdateWalkCameraShake(float DeltaTime, fl
 			TEXT("[WacomRunTunnel][WalkCameraShake] Start Status=%s Class=%s Scale=%.3f Delta=%.3f Instance=%s PC=%s PCM=%s"),
 			ActiveWalkCameraShakeInstance ? TEXT("OK") : TEXT("Null"),
 			*GetNameSafe(WalkCameraShakeClass.Get()),
-			FMath::Max(0.0f, WalkCameraShakeScale),
+			FMath::Max(0.0f, WalkCameraShakeScale) * RuntimeCameraMotionStrength,
 			ActualDistanceDeltaCm,
 			*GetNameSafe(ActiveWalkCameraShakeInstance),
 			*GetNameSafe(PC),
@@ -491,7 +497,9 @@ void UWacomRunTunnelMovementComponent::UpdateCursorLook(float DeltaTime)
 
 	if (bHasCursorLookOverride)
 	{
-		const float Scale = FMath::Max(0.0f, CursorLookOverrideScale);
+		const float Scale = FMath::Max(0.0f, CursorLookOverrideScale)
+			* RuntimeLookResponseStrength;
+		const float PitchDirection = bRuntimeInvertLookY ? -1.0f : 1.0f;
 		const float InterpSpeed = CursorLookOverrideInterpSpeed >= 0.0f
 			? CursorLookOverrideInterpSpeed
 			: LookInterpSpeed;
@@ -501,7 +509,7 @@ void UWacomRunTunnelMovementComponent::UpdateCursorLook(float DeltaTime)
 			YawClampDegrees,
 			PitchClampDegrees,
 			LookYawScale * Scale,
-			LookPitchScale * Scale,
+			LookPitchScale * Scale * PitchDirection,
 			InterpSpeed);
 		return;
 	}
@@ -511,9 +519,66 @@ void UWacomRunTunnelMovementComponent::UpdateCursorLook(float DeltaTime)
 		DeltaTime,
 		YawClampDegrees,
 		PitchClampDegrees,
-		LookYawScale,
-		LookPitchScale,
+		LookYawScale * RuntimeLookResponseStrength,
+		LookPitchScale * RuntimeLookResponseStrength * (bRuntimeInvertLookY ? -1.0f : 1.0f),
 		LookInterpSpeed);
+}
+
+void UWacomRunTunnelMovementComponent::BindRuntimeSettings()
+{
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (!SettingsSubsystem)
+	{
+		return;
+	}
+
+	RuntimeSettingsChangedHandle = SettingsSubsystem->OnRuntimeSettingsChangedNative().AddUObject(
+		this,
+		&UWacomRunTunnelMovementComponent::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		SettingsSubsystem->GetCurrentSnapshot(),
+		EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomRunTunnelMovementComponent::UnbindRuntimeSettings()
+{
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	if (UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr)
+	{
+		SettingsSubsystem->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+	}
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomRunTunnelMovementComponent::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	const float PreviousMotionStrength = RuntimeCameraMotionStrength;
+	RuntimeLookResponseStrength = FMath::Clamp(Snapshot.LookResponseStrength, 0.0f, 3.0f);
+	bRuntimeInvertLookY = Snapshot.bInvertLookY;
+	RuntimeCameraMotionStrength = FMath::Clamp(Snapshot.CameraMotionStrength, 0.0f, 1.0f);
+	if (UWacomFirstPersonWalkBobComponent* WalkBob = GetWalkBob())
+	{
+		WalkBob->SetRuntimeMotionStrength(RuntimeCameraMotionStrength);
+	}
+	if (!FMath::IsNearlyEqual(PreviousMotionStrength, RuntimeCameraMotionStrength))
+	{
+		// Camera shake scale is captured when the instance starts. Restart it on the
+		// next movement update so a changed accessibility value takes effect atomically.
+		StopWalkCameraShake(/*bImmediately*/true);
+		if (RuntimeCameraMotionStrength <= KINDA_SMALL_NUMBER)
+		{
+			ResetWalkBob(/*bSnapToZero*/true);
+		}
+	}
 }
 
 void UWacomRunTunnelMovementComponent::ApplyTunnelTransform(

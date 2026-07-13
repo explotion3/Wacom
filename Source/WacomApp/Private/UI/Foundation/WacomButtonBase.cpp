@@ -39,6 +39,15 @@ void UWacomButtonBase::NativeOnUnhovered()
 	BP_OnHoverChanged(false);
 }
 
+void UWacomButtonBase::SynchronizeProperties()
+{
+	Super::SynchronizeProperties();
+	if (ButtonText)
+	{
+		ButtonText->SetText(ButtonText_Cached);
+	}
+}
+
 void UWacomButtonBase::SetButtonText(FText InText)
 {
 	ButtonText_Cached = InText;

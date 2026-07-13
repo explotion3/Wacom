@@ -14,6 +14,9 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Containers/Ticker.h"
+#include "Engine/GameInstance.h"
+#include "Settings/WacomSettingsSubsystem.h"
 
 namespace
 {
@@ -39,6 +42,7 @@ namespace
 
 		Button->SetIsInteractionEnabled(bEnabled);
 		Button->BP_OnInteractabilityChanged(bEnabled);
+		Button->RefreshPresentationState();
 	}
 
 	UWacomMainMenuButtonWidget* MakeLabelButton(
@@ -68,6 +72,11 @@ UWacomMainMenuButtonWidget::UWacomMainMenuButtonWidget(
 	SetIsFocusable(true);
 }
 
+void UWacomMainMenuButtonWidget::RefreshPresentationState()
+{
+	RefreshPresentationTarget();
+}
+
 TSharedRef<SWidget> UWacomMainMenuButtonWidget::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
@@ -77,22 +86,232 @@ TSharedRef<SWidget> UWacomMainMenuButtonWidget::RebuildWidget()
 			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
 		}
 
-		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(
+		ButtonBackdrop = WidgetTree->ConstructWidget<UBorder>(
 			UBorder::StaticClass(),
-			TEXT("Root"));
-		Root->SetPadding(FMargin(14.0f, 8.0f));
-		Root->SetBrushColor(FLinearColor(0.06f, 0.07f, 0.09f, 0.88f));
-		WidgetTree->RootWidget = Root;
+			TEXT("ButtonBackdrop"));
+		ButtonBackdrop->SetPadding(FMargin(14.0f, 8.0f));
+		WidgetTree->RootWidget = ButtonBackdrop;
 
 		ButtonText = WidgetTree->ConstructWidget<UCommonTextBlock>(
 			UCommonTextBlock::StaticClass(),
 			TEXT("ButtonText"));
 		ButtonText->SetText(GetButtonText());
 		ButtonText->SetJustification(ETextJustify::Left);
-		Root->AddChild(ButtonText);
+		ButtonBackdrop->AddChild(ButtonText);
 	}
 
 	return Super::RebuildWidget();
+}
+
+void UWacomMainMenuButtonWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	BindRuntimeSettings();
+	SetRenderTransformPivot(FVector2D(0.0f, 0.5f));
+	RefreshPresentationTarget(/*bApplyImmediately*/true);
+}
+
+void UWacomMainMenuButtonWidget::NativeDestruct()
+{
+	UnbindRuntimeSettings();
+	StopPresentationTicker();
+	Super::NativeDestruct();
+}
+
+FReply UWacomMainMenuButtonWidget::NativeOnFocusReceived(
+	const FGeometry& InGeometry,
+	const FFocusEvent& InFocusEvent)
+{
+	FReply Reply = Super::NativeOnFocusReceived(InGeometry, InFocusEvent);
+	RefreshPresentationTarget();
+	return Reply;
+}
+
+void UWacomMainMenuButtonWidget::NativeOnFocusLost(const FFocusEvent& InFocusEvent)
+{
+	Super::NativeOnFocusLost(InFocusEvent);
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::NativeOnHovered()
+{
+	Super::NativeOnHovered();
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::NativeOnUnhovered()
+{
+	Super::NativeOnUnhovered();
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::NativeOnPressed()
+{
+	Super::NativeOnPressed();
+	bPresentationPressed = true;
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::NativeOnReleased()
+{
+	Super::NativeOnReleased();
+	bPresentationPressed = false;
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::NativeOnEnabled()
+{
+	Super::NativeOnEnabled();
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::NativeOnDisabled()
+{
+	Super::NativeOnDisabled();
+	bPresentationPressed = false;
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::RefreshPresentationTarget(bool bApplyImmediately)
+{
+	const bool bEmphasized = IsInteractionEnabled()
+		&& (IsHovered() || HasAnyUserFocus() || GetSelected());
+	TargetEmphasis = bEmphasized ? 1.0f : 0.0f;
+	TargetPressedAmount = IsInteractionEnabled() && bPresentationPressed ? 1.0f : 0.0f;
+
+	if (bApplyImmediately || bRuntimeSimplifiedMotion)
+	{
+		CurrentEmphasis = TargetEmphasis;
+		CurrentPressedAmount = TargetPressedAmount;
+		ApplyPresentation(CurrentEmphasis, CurrentPressedAmount);
+		return;
+	}
+
+	if (!PresentationTickerHandle.IsValid())
+	{
+		PresentationTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+			FTickerDelegate::CreateWeakLambda(this, [this](float DeltaTime)
+			{
+				return TickPresentation(DeltaTime);
+			}));
+	}
+}
+
+void UWacomMainMenuButtonWidget::BindRuntimeSettings()
+{
+	UGameInstance* GameInstance = GetGameInstance();
+	UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (!SettingsSubsystem)
+	{
+		return;
+	}
+	RuntimeSettingsChangedHandle = SettingsSubsystem->OnRuntimeSettingsChangedNative().AddUObject(
+		this,
+		&UWacomMainMenuButtonWidget::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		SettingsSubsystem->GetCurrentSnapshot(),
+		EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomMainMenuButtonWidget::UnbindRuntimeSettings()
+{
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UWacomSettingsSubsystem* SettingsSubsystem =
+			GameInstance->GetSubsystem<UWacomSettingsSubsystem>())
+		{
+			SettingsSubsystem->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+		}
+	}
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomMainMenuButtonWidget::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	bRuntimeSimplifiedMotion = Snapshot.UIMotionMode == EWacomUIMotionMode::Simplified;
+	if (bRuntimeSimplifiedMotion)
+	{
+		StopPresentationTicker();
+		RefreshPresentationTarget(/*bApplyImmediately*/true);
+	}
+}
+
+bool UWacomMainMenuButtonWidget::TickPresentation(float DeltaTime)
+{
+	CurrentEmphasis = FMath::FInterpConstantTo(
+		CurrentEmphasis, TargetEmphasis, DeltaTime, 7.5f);
+	CurrentPressedAmount = FMath::FInterpConstantTo(
+		CurrentPressedAmount, TargetPressedAmount, DeltaTime, 12.0f);
+	ApplyPresentation(CurrentEmphasis, CurrentPressedAmount);
+
+	const bool bSettled = FMath::IsNearlyEqual(CurrentEmphasis, TargetEmphasis, 0.001f)
+		&& FMath::IsNearlyEqual(CurrentPressedAmount, TargetPressedAmount, 0.001f);
+	if (bSettled)
+	{
+		PresentationTickerHandle.Reset();
+		return false;
+	}
+	return true;
+}
+
+void UWacomMainMenuButtonWidget::ApplyPresentation(float Emphasis, float PressedAmount)
+{
+	const bool bInteractable = IsInteractionEnabled();
+	const FLinearColor RestingBackdrop(0.025f, 0.035f, 0.055f, 0.84f);
+	const FLinearColor FocusedBackdrop(0.075f, 0.115f, 0.145f, 0.96f);
+	const FLinearColor DisabledBackdrop(0.02f, 0.025f, 0.035f, 0.58f);
+	const FLinearColor RestingText(0.72f, 0.76f, 0.78f, 1.0f);
+	const FLinearColor FocusedText(0.98f, 0.91f, 0.61f, 1.0f);
+	const FLinearColor DisabledText(0.36f, 0.39f, 0.42f, 1.0f);
+	const FLinearColor AccentColor(0.30f, 0.88f, 0.82f, 1.0f);
+
+	FLinearColor BackdropColor = bInteractable
+		? FMath::Lerp(RestingBackdrop, FocusedBackdrop, Emphasis)
+		: DisabledBackdrop;
+	BackdropColor *= 1.0f - PressedAmount * 0.14f;
+	BackdropColor.A = bInteractable
+		? FMath::Lerp(RestingBackdrop.A, FocusedBackdrop.A, Emphasis)
+		: DisabledBackdrop.A;
+	if (ButtonBackdrop)
+	{
+		ButtonBackdrop->SetBrushColor(BackdropColor);
+	}
+
+	if (ButtonAccent)
+	{
+		ButtonAccent->SetBrushColor(AccentColor);
+		ButtonAccent->SetRenderOpacity(bInteractable ? 0.22f + 0.78f * Emphasis : 0.10f);
+	}
+
+	const FLinearColor TextColor = bInteractable
+		? FMath::Lerp(RestingText, FocusedText, Emphasis)
+		: DisabledText;
+	if (ButtonText)
+	{
+		ButtonText->SetColorAndOpacity(FSlateColor(TextColor));
+	}
+	if (ButtonGlyph)
+	{
+		ButtonGlyph->SetColorAndOpacity(FSlateColor(AccentColor));
+		ButtonGlyph->SetRenderOpacity(bInteractable ? 0.18f + 0.82f * Emphasis : 0.08f);
+	}
+
+	SetRenderTranslation(FVector2D(10.0f * Emphasis, 1.5f * PressedAmount));
+	const float PressedScale = 1.0f - 0.012f * PressedAmount;
+	SetRenderScale(FVector2D(PressedScale));
+}
+
+void UWacomMainMenuButtonWidget::StopPresentationTicker()
+{
+	if (PresentationTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(PresentationTickerHandle);
+		PresentationTickerHandle.Reset();
+	}
 }
 
 UWacomMainMenuScreen::UWacomMainMenuScreen(const FObjectInitializer& ObjectInitializer)
@@ -114,7 +333,8 @@ TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
 		WidgetTree->RootWidget = Root;
 
 		UHorizontalBox* Content = WidgetTree->ConstructWidget<UHorizontalBox>(
-			UHorizontalBox::StaticClass(), TEXT("MainMenuContent"));
+			UHorizontalBox::StaticClass(), TEXT("MenuContentRoot"));
+		MenuContentRoot = Content;
 		if (UCanvasPanelSlot* ContentSlot = Root->AddChildToCanvas(Content))
 		{
 			ContentSlot->SetAnchors(FAnchors(0.08f, 0.15f, 0.92f, 0.85f));
@@ -159,7 +379,8 @@ TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
 			WidgetTree, TEXT("QuitButton"), LOCTEXT("Quit", "退出游戏"), NavigationBox);
 
 		UVerticalBox* Summary = WidgetTree->ConstructWidget<UVerticalBox>(
-			UVerticalBox::StaticClass(), TEXT("JourneySummary"));
+			UVerticalBox::StaticClass(), TEXT("JourneySummaryPanel"));
+		JourneySummaryPanel = Summary;
 		if (UHorizontalBoxSlot* SummarySlot = Content->AddChildToHorizontalBox(Summary))
 		{
 			SummarySlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
@@ -190,6 +411,7 @@ TSharedRef<SWidget> UWacomMainMenuScreen::RebuildWidget()
 void UWacomMainMenuScreen::NativeConstruct()
 {
 	Super::NativeConstruct();
+	BindRuntimeSettings();
 
 	if (ContinueButton)
 	{
@@ -227,6 +449,8 @@ void UWacomMainMenuScreen::NativeConstruct()
 
 void UWacomMainMenuScreen::NativeDestruct()
 {
+	UnbindRuntimeSettings();
+	StopIntroPresentation();
 	if (ContinueButton)
 	{
 		ContinueButton->OnClicked().RemoveAll(this);
@@ -253,6 +477,146 @@ void UWacomMainMenuScreen::NativeDestruct()
 	}
 
 	Super::NativeDestruct();
+}
+
+void UWacomMainMenuScreen::NativeOnActivated()
+{
+	Super::NativeOnActivated();
+	StartIntroPresentation();
+}
+
+void UWacomMainMenuScreen::NativeOnDeactivated()
+{
+	StopIntroPresentation();
+	FinishIntroPresentation();
+	Super::NativeOnDeactivated();
+}
+
+void UWacomMainMenuScreen::StartIntroPresentation()
+{
+	StopIntroPresentation();
+	IntroElapsedSeconds = 0.0f;
+	if (bRuntimeSimplifiedMotion)
+	{
+		FinishIntroPresentation();
+		return;
+	}
+
+	if (!MenuContentRoot && !JourneySummaryPanel)
+	{
+		return;
+	}
+
+	if (MenuContentRoot)
+	{
+		MenuContentRoot->SetRenderOpacity(0.0f);
+		MenuContentRoot->SetRenderTranslation(FVector2D(-42.0f, 0.0f));
+	}
+	if (JourneySummaryPanel)
+	{
+		JourneySummaryPanel->SetRenderOpacity(0.0f);
+		JourneySummaryPanel->SetRenderTranslation(FVector2D(28.0f, 0.0f));
+	}
+
+	IntroTickerHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateWeakLambda(this, [this](float DeltaTime)
+		{
+			return TickIntroPresentation(DeltaTime);
+		}));
+}
+
+void UWacomMainMenuScreen::BindRuntimeSettings()
+{
+	UGameInstance* GameInstance = GetGameInstance();
+	UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (!SettingsSubsystem)
+	{
+		return;
+	}
+	RuntimeSettingsChangedHandle = SettingsSubsystem->OnRuntimeSettingsChangedNative().AddUObject(
+		this,
+		&UWacomMainMenuScreen::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		SettingsSubsystem->GetCurrentSnapshot(),
+		EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomMainMenuScreen::UnbindRuntimeSettings()
+{
+	if (UGameInstance* GameInstance = GetGameInstance())
+	{
+		if (UWacomSettingsSubsystem* SettingsSubsystem =
+			GameInstance->GetSubsystem<UWacomSettingsSubsystem>())
+		{
+			SettingsSubsystem->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+		}
+	}
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomMainMenuScreen::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	bRuntimeSimplifiedMotion = Snapshot.UIMotionMode == EWacomUIMotionMode::Simplified;
+	if (bRuntimeSimplifiedMotion)
+	{
+		StopIntroPresentation();
+		FinishIntroPresentation();
+	}
+}
+
+bool UWacomMainMenuScreen::TickIntroPresentation(float DeltaTime)
+{
+	IntroElapsedSeconds += DeltaTime;
+	const float ContentAlpha = FMath::Clamp(IntroElapsedSeconds / 0.38f, 0.0f, 1.0f);
+	const float SummaryAlpha = FMath::Clamp((IntroElapsedSeconds - 0.10f) / 0.38f, 0.0f, 1.0f);
+	const float ContentEase = 1.0f - FMath::Pow(1.0f - ContentAlpha, 3.0f);
+	const float SummaryEase = 1.0f - FMath::Pow(1.0f - SummaryAlpha, 3.0f);
+
+	if (MenuContentRoot)
+	{
+		MenuContentRoot->SetRenderOpacity(ContentEase);
+		MenuContentRoot->SetRenderTranslation(FVector2D(-42.0f * (1.0f - ContentEase), 0.0f));
+	}
+	if (JourneySummaryPanel)
+	{
+		JourneySummaryPanel->SetRenderOpacity(SummaryEase);
+		JourneySummaryPanel->SetRenderTranslation(FVector2D(28.0f * (1.0f - SummaryEase), 0.0f));
+	}
+
+	if (ContentAlpha >= 1.0f && SummaryAlpha >= 1.0f)
+	{
+		FinishIntroPresentation();
+		IntroTickerHandle.Reset();
+		return false;
+	}
+	return true;
+}
+
+void UWacomMainMenuScreen::FinishIntroPresentation()
+{
+	if (MenuContentRoot)
+	{
+		MenuContentRoot->SetRenderOpacity(1.0f);
+		MenuContentRoot->SetRenderTranslation(FVector2D::ZeroVector);
+	}
+	if (JourneySummaryPanel)
+	{
+		JourneySummaryPanel->SetRenderOpacity(1.0f);
+		JourneySummaryPanel->SetRenderTranslation(FVector2D::ZeroVector);
+	}
+}
+
+void UWacomMainMenuScreen::StopIntroPresentation()
+{
+	if (IntroTickerHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(IntroTickerHandle);
+		IntroTickerHandle.Reset();
+	}
 }
 
 void UWacomMainMenuScreen::ApplyViewData(const FWacomMainMenuViewData& InViewData)

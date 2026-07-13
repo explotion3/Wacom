@@ -78,12 +78,14 @@ protected:
 	virtual void NativeOnClicked() override;
 	virtual void NativeOnHovered() override;
 	virtual void NativeOnUnhovered() override;
+	virtual void SynchronizeProperties() override;
 
 	/** WBP 里可选的文本控件。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCommonTextBlock> ButtonText;
 
 private:
-	UPROPERTY(Transient)
+	/** WBP 实例可保存的初始按钮文案；运行时 SetButtonText 会同步更新它。 */
+	UPROPERTY(EditAnywhere, Category = "Wacom|UI Foundation|Button Text", meta = (ToolTip = "按钮的可序列化显示文案。用于 WBP 内嵌按钮实例保存各自标签；运行时仍可由 SetButtonText 覆盖。"))
 	FText ButtonText_Cached;
 };

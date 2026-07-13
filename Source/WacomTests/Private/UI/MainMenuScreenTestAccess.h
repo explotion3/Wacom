@@ -15,6 +15,9 @@ struct FWacomMainMenuScreenTestAccess
 	static void Destruct(UWacomMainMenuScreen& Screen);
 	static void Click(UWacomMainMenuScreen& Screen, EWacomMainMenuAction Action);
 	static bool HasCompleteFocusableCommonUIButtonSet(const UWacomMainMenuScreen& Screen);
+	static bool UsesAuthoredMainMenuWidgets(
+		const UWacomMainMenuScreen& Screen,
+		const UClass* ExpectedButtonClass);
 	static TArray<FName> WidgetNames(const UWacomMainMenuScreen& Screen);
 	static FWacomMainMenuScreenAutomationTestView View(const UWacomMainMenuScreen& Screen);
 };
