@@ -24,7 +24,7 @@ UI 不直接修改战斗或 Run 状态。Widget 读取 Snapshot、ViewData 或 V
 | 领域 | 数据来源 | 命令出口 |
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 只读显示探索状态和交互提示 |
-| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；DropTarget 只维护 hover/drop 视觉状态，hover preview、drop 提交、Toast 文案和 Confirm 都经私有 command flow / presentation helper 调用 RunSession、Toast 和 Confirm；负重区只渲染 Run snapshot 中的卡牌，不创建 Burden DropTarget；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
+| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；中央 `Workspace` 是唯一选择/携带输入 owner，右侧 `ZoneRack` 与销毁目标只转发 Screen 已验证的批量释放意图；preview、批量提交、Toast 和 Confirm 都经私有 command flow / presentation helper 调用 RunSession、Toast 和 Confirm；旧 simultaneous-zone Host 仅保留只读 fallback，不再创建 UMG DragDrop owner；负重区只渲染 Run snapshot 中的卡牌；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
 | Shop | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 flow 编排购买、关闭访问和 Toast |
 | RunEvent | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 flow 编排选项提交、支付、关闭和 Toast |
 | Battle | `FBattleSnapshot`、`FBattleEvent`、Battle ViewData | `UBattleHUD` 是唯一战斗 UI 命令出口 |

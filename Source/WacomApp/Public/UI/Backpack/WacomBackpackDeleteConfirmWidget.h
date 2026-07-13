@@ -22,6 +22,8 @@ public:
 	FOnCancelNative OnCancelNative;
 
 	void SetPreview(int32 CardCount, int32 TotalGoldReward);
+	/** 确认层显示后把焦点交给默认确认按钮；按钮缺失时回退到 Widget 本身。 */
+	void FocusDefaultAction();
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;

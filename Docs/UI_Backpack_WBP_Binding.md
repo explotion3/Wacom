@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-backpack
 status: active
-updated: 2026-07-08
+updated: 2026-07-13
 tags:
   - wacom/ui
   - wacom/wbp
@@ -16,7 +16,7 @@ tags:
 > 本文只记录背包、卡牌显示和卡牌详情相关 WBP 制作合约。背包规则、容量、删牌、负重和持有区事务见 [`WacomRun.md`](WacomRun.md)；卡牌字段见 [`WacomData.md`](WacomData.md)；UI 数据流和交互入口见 [`WacomUI.md`](WacomUI.md)。
 
 > [!warning] 合同边界
-> WBP 只负责布局、样式、拖拽视觉和展示层表现，不直接调用 `URunSession`，不定义移动、删牌、容量、负重或入战规则。
+> WBP 只负责布局、样式、Workspace 指针表现和展示层表现，不直接调用 `URunSession`，不定义移动、删牌、容量、负重或入战规则。
 
 ## WBP_BackpackScreen
 
@@ -35,7 +35,29 @@ tags:
 
 推荐子资产父类分别为 `UWacomBackpackWorkspaceWidget`、`UWacomBackpackZoneRackWidget`、`UWacomBackpackZoneRackEntryWidget`、`UWacomBackpackDeleteConfirmWidget`。这些 WBP 必须保持被动，不访问 `URunSession`，不显示携带索引/数量文字；目标 preview、批量提交、Toast 和确认恢复都由 Screen flow 负责。
 
-推荐资产：`WBP_BackpackScreen`
+正式资产：
+
+| 资产 | 父类 / 职责 |
+|---|---|
+| `WBP_BackpackScreen` | `UWacomBackpackScreen`；CommonUI Screen 与正式 Host |
+| `WBP_BackpackWorkspace` | `UWacomBackpackWorkspaceWidget`；中央 Canvas、框选层和空状态 |
+| `WBP_BackpackZoneRack` | `UWacomBackpackZoneRackWidget`；右侧常驻区域列表 |
+| `WBP_BackpackZoneRackEntry` | `UWacomBackpackZoneRackEntryWidget`；激活、合法目标和拒绝目标表现 |
+| `WBP_BackpackDeleteConfirm` | `UWacomBackpackDeleteConfirmWidget`；批量数量/奖励和 modal 焦点 |
+| `DA_BackpackWorkspaceStyle` | 卡牌尺寸、边界、扇形、lift、运动时间、状态颜色和 `M_BackpackWorkspaceCardFeedback`；材质未加载时自动退回纯色边框 |
+
+上述资产由 WacomEditor builder 重建；同一 builder 也会把 `WBP_WacomDeckCardWidget.CardView` 校准为已完成新版排版的 `WBP_FirstPersonCardView`，并建立 `CardFaceScaleBox` 等比缩放层。禁止在生成资产里复制 Run 规则或增加并行输入 owner：
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomBuildBackpackUI -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
+```
+
+当前像素安全制作基准为 1600×900、DPI 1.0；跨分辨率缩放仍按 `Docs/TechDebt.md` 的像素安全适配项处理，不在 WBP 内复制规则布局。
+`ScreenSize -> Root -> MainLayout` 的槽位必须显式水平/垂直 Fill；只设置 `SizeBox` 宽高而不设置子槽 Fill，会让内部布局退回最小 Desired Size。进入持续携带状态后，卡牌详情层必须保持隐藏，避免遮挡扇形和鼠标目标。
+Screen 在运行时向 `WorkspaceHost`、`ZoneRackHost`、`DeleteConfirmHost` 插入子控件时，必须按宿主实际 Slot 类型显式配置 Fill，不能依赖 `UPanelWidget::AddChild` 的默认槽位参数；尤其 `OverlaySlot` 默认 Left/Top，会把 Desired Size 为零的 Canvas Workspace 压缩到零尺寸。`WorkspaceWidget` 还必须保持 `Visible`，不能使用 `SelfHitTestInvisible`，因为中央空白区域需要由它接收左键并开始框选。
+正式 Screen 把 `ArrangeAllButton` 放在顶部命令栏，不占用中央自由工作台的安全边界。默认整理在行数超出可用高度时压缩行距，保持每行坐标可辨识；手动位置、角度和 ZOrder 不受该默认布局算法影响。
+
+Editor build 可执行 `Wacom.Backpack.SeedPIEValidation`，通过正常 Run 获牌入口把当前 Run 补到至少 24 张实体牌和 2 个 SpecialZone，用于正式 WBP 的结构、密集布局、框选和携带 PIE。该命令不自动保存，也不伪造 SpecialZone 内容、Burden 或事务拒绝条件。
 
 注册方式：
 
@@ -45,14 +67,14 @@ tags:
 
 ### 迁移兼容绑定（非正式制作合同）
 
-以下槽位只为当前尚未完成资产迁移的 `WBP_BackpackScreen` 保留。它们必须保持折叠，不能与 `WorkspaceHost / ZoneRackHost / DeleteTargetHost` 同时成为可见输入路径；新资产不得继续添加这些绑定。
+以下槽位已经从正式 `WBP_BackpackScreen` 移除，只为 C++ fallback 和迁移期旧测试保留。它们是只读展示路径，不拥有拖拽、移动或销毁输入；新资产不得继续添加这些绑定。
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `DeleteZoneHost` | `PanelWidget` | C++ 填充删牌 DropTarget |
-| `BattleDeckZoneHost` | `PanelWidget` | C++ 填充备战区 DropTarget 和卡牌列表 |
-| `FluxContentDropTargetHost` | `PanelWidget` | C++ 填充通量内容 DropTarget 和内容卡列表 |
-| `SpecialZonesHost` | `PanelWidget` | C++ 动态填充 `UWacomSpecialZoneWidget` |
+| `DeleteZoneHost` | `PanelWidget` | C++ 填充只读迁移提示，不接收销毁输入 |
+| `BattleDeckZoneHost` | `PanelWidget` | C++ 填充只读备战区卡牌列表 |
+| `FluxContentDropTargetHost` | `PanelWidget` | C++ 填充只读通量内容卡列表 |
+| `SpecialZonesHost` | `PanelWidget` | C++ 动态填充只读 `UWacomSpecialZoneWidget` 区块；内容卡右键入战仍经 Screen command flow |
 | `BurdenZoneHost` | `PanelWidget` | C++ 填充负重区标题和卡牌列表；正式 UI 不暴露主动拖入负重区的 DropTarget，无负重卡时折叠 |
 | `CardDetailLayer` | `CanvasPanel` | C++ 填充悬浮卡牌详情面板 |
 
@@ -73,14 +95,14 @@ WBP 不应做：
 
 - 不直接调用 `URunSession` 或背包命令 API。
 - 不预放运行时卡牌；Host 内容由 C++ 根据 snapshot 填充。
-- 不在 WBP 图里判断容量、删牌金币、负重、SpecialZone 入战或拖拽目标是否合法；DropTarget hover preview、drop 提交、删牌奖励、入战 toggle validation 和移动 / 删牌 / 入战 Toast 文案由 `UWacomBackpackScreen` 私有 command flow / presentation helper 统一处理。
+- 不在 WBP 图里判断容量、删牌金币、负重、SpecialZone 入战或携带目标是否合法；Workspace/ZoneRack/DeleteTarget preview、批量提交、删牌奖励、入战 toggle validation 和移动 / 删牌 / 入战 Toast 文案由 `UWacomBackpackScreen` 私有 command flow / presentation helper 统一处理。
 - 不绑定旧 `FluxZoneHost / BackpackCardsBox` 混合布局槽位；这些旧槽位不再是制作合同。
 
 兼容路径最小验收（只用于迁移期回归）：
 
-- 推荐 Host 绑定后，删牌、备战、通量内容、SpecialZone 和负重区都能显示 C++ 动态填充内容。
-- `CardDetailLayer` 覆盖背包界面可见区域，位于卡牌区域上方，详情面板不抢拖拽或右键输入。
-- 拖拽 hover preview、最终 drop 提交和 SpecialZone 内容卡右键入战使用 Screen flow validation；WBP / DropTarget / DeckCard 不自行复制容量、删牌奖励、入战归属规则或 Toast 文案映射。
+- 推荐 Host 绑定后，删牌提示、备战、通量内容、SpecialZone 和负重区都能显示 C++ 动态填充的只读内容。
+- `CardDetailLayer` 覆盖背包界面可见区域，位于卡牌区域上方，详情面板不抢 Workspace 指针或右键输入。
+- 迁移 Host 不支持单卡 drag/drop；正式 Workspace 的目标 preview、最终批量提交和 SpecialZone 内容卡右键入战使用 Screen flow validation，WBP / DeckCard 不自行复制容量、删牌奖励、入战归属规则或 Toast 文案映射。
 - 推荐 Host 未绑定时，对应区域缺失运行时内容，C++ 只作为兼容路径输出 warning 或使用默认外壳。
 
 ## 局部 Zone WBP
@@ -102,7 +124,7 @@ WBP 不应做：
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
 | `TitleText` | `TextBlock` | C++ 写入区块标题 |
-| `ContentHost` | `PanelWidget` | C++ 填充 DropTarget、WrapBox、动态卡牌或 SpecialZone 列表 |
+| `ContentHost` | `PanelWidget` | C++ 填充只读 WrapBox、动态卡牌或 SpecialZone 列表 |
 
 WBP 不应做：
 
@@ -114,7 +136,7 @@ WBP 不应做：
 
 - `ContentHost` 是容器控件，例如 `VerticalBox`、`Overlay`、`CanvasPanel`。
 - 局部 WBP 缺少 `ContentHost` 时，仅该区块回退到 C++ 默认外壳。
-- 运行时 DropTarget、WrapBox、动态卡牌或 SpecialZone 列表由 C++ 填入。
+- 运行时只读 WrapBox、动态卡牌或 SpecialZone 列表由 C++ 填入。
 
 ## WBP_WacomSpecialZoneWidget
 
@@ -131,23 +153,23 @@ WBP 不应做：
 | `TitleText` | `TextBlock` | C++ 写入特殊区标题 |
 | `BattleReadyBadge` | `TextBlock` | 显示 B 主卡已入战标记 |
 | `OwnerCardHost` | `PanelWidget` | C++ 填充 B 主卡 |
-| `ContentDropTargetHost` | `PanelWidget` | C++ 填充 SpecialZone DropTarget |
+| `ContentDropTargetHost` | `PanelWidget` | 历史命名的只读内容 Host；C++ 填充内容卡列表，不创建 DropTarget |
 
 可选绑定：
 
 | 控件名 | 推荐类型 | 缺省行为 |
 |---|---|---|
-| `ContentCardsBox` | `WrapBox` | 不绑则 C++ 在 DropTarget 中创建 |
+| `ContentCardsBox` | `WrapBox` | 不绑则 C++ 在只读内容 Host 中创建 |
 
 WBP 不应做：
 
 - 不直接改 Run 状态。
 - 不自行判定 B 主卡是否可入战或内容卡是否可右键入战。
-- 不在 `ContentDropTargetHost` 中预放正式 DropTarget；C++ 会创建 `UWacomZoneDropTarget`。
+- 不在 `ContentDropTargetHost` 中预放输入控件；该字段只因旧资产兼容保留名称，移动输入统一属于正式 Workspace。
 
 最小验收：
 
-- B 主卡、内容 DropTarget 和内容卡列表能按 snapshot 显示。
+- B 主卡和内容卡列表能按 snapshot 显示。
 - 内容卡右键入战请求由 `UWacomSpecialZoneWidget` 转发给 `UWacomBackpackScreen`。
 - `BattleReadyBadge` 只显示入战标记，不提交入战命令。
 
@@ -161,7 +183,9 @@ WBP 不应做：
 
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `CardView` | `UWacomCardView` | 通用卡面显示 |
+| `CardFaceScaleBox` | `ScaleBox` | 保留卡面 `360×424` 设计坐标系，使用固定 `UserSpecified = 0.75` 统一缩放；子槽必须水平/垂直居中，不能 Fill 后重排卡面 |
+| `CardView` | `WBP_FirstPersonCardView`（父类 `UWacomCardView`） | 复用新版卡面排版；由背包外层统一缩放和输入，不使用旧 `WBP_CardView` |
+| `WorkspaceFeedbackOverlay` | `Border` | 位于卡面上方、角标下方的纯表现反馈层；选中、合法目标和拒绝状态使用 Style 颜色与不透明度，显示时必须为 `HitTestInvisible` |
 
 可选绑定：
 
@@ -177,10 +201,16 @@ WBP 不应做：
 - 不直接修改卡牌所在持有区。
 - 不自行构造拖拽 payload。
 - 不根据所在列表、`PhysicalZone` 或 `bBattleEnabledInSpecialZone` 自行判定右键入战是否可用；该 affordance 由 C++ ViewData 写入。
+- 不改用 `WBP_FPCardView`：它是第一人称手牌的 Retainer/反馈 wrapper；背包只复用其内部同源卡面资产 `WBP_FirstPersonCardView`。
+- 不把 `CardView` 直接放进 Fill 槽后依靠外层 `CanvasSlot.SetSize()` 压缩；这会让固定坐标卡面重新布局并造成费用、名称、耐久和徽章错位。
+- 不根据 Workspace 卡牌高度动态改写 `CardFaceScaleBox`。正式资产统一使用 `0.75` 基础缩放，`ApplyCardLayout()` 只写逻辑尺寸、整数像素位置、角度和 ZOrder，并启用 Widget 像素对齐；当前牌只通过扇形上抬表达，不再额外放大卡面。
+- 不用透明的 `CardBody` Brush 承载选中提示。`WorkspaceFeedbackOverlay` 独立覆盖卡面，不参与卡面缩放、布局和命中。
+- 携带状态的指针位置由 Workspace 的 carry-only ActiveTimer 从 Slate cursor 持续采样；卡牌移出自身命中范围后仍应跟随。卡牌 PointerMove 只作为同一输入 owner 的事件入口，不是持续跟随的唯一数据源。
 
 最小验收：
 
-- `CardView` 能显示 `FWacomCardViewData`。
+- `CardView` 的实际类为 `WBP_FirstPersonCardView`，并由 `CardFaceScaleBox` 以固定 `0.75` 承载；`360×424` 设计根面对应 `270×318`，可见卡体约为 `222×315`，卡框、费用、名称、卡图、类型和效果徽章保持同一设计坐标系，横向出血不被压入 `220×320` 逻辑命中主体。
+- 选中卡牌可见 `WorkspaceFeedbackOverlay`，中性卡牌该层为 `Collapsed`；反馈层不会截获鼠标，也不会改变固定缩放。
 - 绑定 `CardBody` 后，拖拽源透明度变化可见。
 - 未绑定 `CardView` 时仍能生成拖拽 payload，但没有正式卡面显示。
 - SpecialZone 内容卡和 BattleDeck 投影卡是否可右键切换入战，只由 `FRunStorageCardView.bCanToggleBattleEnabledInSpecialZone` 驱动。

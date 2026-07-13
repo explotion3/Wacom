@@ -110,8 +110,14 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	Instance.Definition = Definition.Get();
 	TStrongObjectPtr<UWacomDeckCardWidget> PassiveCard(NewObject<UWacomDeckCardWidget>());
 	PassiveCard->SetCard(Instance, EZoneKind::Backpack, FGuid());
-	PassiveCard->SetWorkspaceInputOwned(true);
-	TestNull(TEXT("Workspace-owned card never starts independent UDragDropOperation"), PassiveCard->BuildDragOperation());
+	Workspace->SetInteractionModel(MakeShared<FWacomBackpackWorkspaceInteractionModel>(), nullptr);
+	TArray<TObjectPtr<UWacomDeckCardWidget>> BoundCards{ PassiveCard.Get() };
+	Workspace->BindWorkspaceCards(BoundCards, 1);
+	TestTrue(TEXT("Workspace installs the only pointer-down owner"), PassiveCard->OnWorkspacePointerDownNative.IsBound());
+	TestTrue(TEXT("Workspace installs the only pointer-move owner"), PassiveCard->OnWorkspacePointerMoveNative.IsBound());
+	TestTrue(TEXT("Workspace installs the only pointer-up owner"), PassiveCard->OnWorkspacePointerUpNative.IsBound());
+	PassiveCard->UnbindWorkspacePointerEvents();
+	TestFalse(TEXT("Card can release all workspace input forwarding on reuse"), PassiveCard->OnWorkspacePointerDownNative.IsBound());
 	return true;
 }
 

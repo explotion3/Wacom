@@ -9,18 +9,16 @@
 
 class UPanelWidget;
 class UTextBlock;
-class UDragDropOperation;
 class UWrapBox;
 class UWacomBackpackScreen;
 class UWacomDeckCardWidget;
-class UWacomZoneDropTarget;
 struct FWacomBackpackScreenTestAccess;
 
 /**
  * 单个 B 类特殊存放区 UI。
  *
  * 数据源：父 BackpackScreen 传入的 FRunSpecialStorageView，只读。
- * 命令出口：DropTarget 仍通过父 BackpackScreen 访问 RunSession；右键入战 toggle 以 delegate 回传。
+ * 命令出口：右键入战 toggle 以 delegate 回传；移动和销毁只由父 Workspace/Screen 处理。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomSpecialZoneWidget : public UUserWidget
@@ -70,8 +68,6 @@ private:
 #if WITH_AUTOMATION_TESTS
 	FText GetZoneTitleTextForTest() const;
 	bool IsBattleReadyBadgeVisibleForTest() const;
-	UDragDropOperation* BuildOwnerCardDragOperationForTest() const;
-	UDragDropOperation* BuildContentCardDragOperationForTest(int32 Index) const;
 	bool RequestContentCardBattleEnabledToggleForTest(int32 Index) const;
 	UWacomDeckCardWidget* GetOwnerCardWidgetForTest() const { return OwnerCardWidget; }
 	UWacomDeckCardWidget* GetContentCardWidgetForTest(int32 Index) const;
@@ -82,9 +78,6 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomBackpackScreen> OwnerScreen;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomZoneDropTarget> ContentDropTarget;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomDeckCardWidget> OwnerCardWidget;

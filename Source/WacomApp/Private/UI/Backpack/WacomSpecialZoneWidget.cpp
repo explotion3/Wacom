@@ -4,7 +4,6 @@
 
 #define LOCTEXT_NAMESPACE "WacomSpecialZone"
 
-#include "Blueprint/DragDropOperation.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/HorizontalBox.h"
@@ -21,7 +20,6 @@
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
-#include "UI/Backpack/WacomZoneDropTarget.h"
 
 namespace
 {
@@ -77,18 +75,6 @@ FText UWacomSpecialZoneWidget::GetZoneTitleTextForTest() const
 bool UWacomSpecialZoneWidget::IsBattleReadyBadgeVisibleForTest() const
 {
 	return BattleReadyBadge && BattleReadyBadge->GetVisibility() != ESlateVisibility::Collapsed;
-}
-
-UDragDropOperation* UWacomSpecialZoneWidget::BuildOwnerCardDragOperationForTest() const
-{
-	return OwnerCardWidget ? OwnerCardWidget->BuildDragOperation() : nullptr;
-}
-
-UDragDropOperation* UWacomSpecialZoneWidget::BuildContentCardDragOperationForTest(int32 Index) const
-{
-	return ContentCardWidgets.IsValidIndex(Index) && ContentCardWidgets[Index]
-		? ContentCardWidgets[Index]->BuildDragOperation()
-		: nullptr;
 }
 
 bool UWacomSpecialZoneWidget::RequestContentCardBattleEnabledToggleForTest(int32 Index) const
@@ -281,27 +267,16 @@ void UWacomSpecialZoneWidget::EnsureRuntimeWidgets()
 		}
 	}
 
-	if (!ContentDropTarget && ContentDropTargetHost)
+	if (!ContentCardsBox && ContentDropTargetHost)
 	{
 		ContentDropTargetHost->ClearChildren();
-		ContentDropTarget = WidgetTree->ConstructWidget<UWacomZoneDropTarget>(UWacomZoneDropTarget::StaticClass(), TEXT("SpecialZoneDropTarget"));
-		ContentDropTarget->SetOwnerScreen(OwnerScreen.Get());
+		ContentCardsBox = WidgetTree->ConstructWidget<UWrapBox>(UWrapBox::StaticClass(), TEXT("ContentCardsBox"));
+		ContentCardsBox->SetInnerSlotPadding(FVector2D(8.f, 8.f));
 
-		if (!ContentCardsBox)
-		{
-			ContentCardsBox = WidgetTree->ConstructWidget<UWrapBox>(UWrapBox::StaticClass(), TEXT("ContentCardsBox"));
-			ContentCardsBox->SetInnerSlotPadding(FVector2D(8.f, 8.f));
-		}
-
-		USizeBox* SpecialSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("SpecialZoneDropContent"));
+		USizeBox* SpecialSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("SpecialZoneReadOnlyContent"));
 		SpecialSize->SetMinDesiredHeight(220.f);
 		SpecialSize->AddChild(ContentCardsBox);
-		ContentDropTarget->SetDropContent(SpecialSize);
-		ContentDropTargetHost->AddChild(ContentDropTarget);
-	}
-	else if (ContentDropTarget)
-	{
-		ContentDropTarget->SetOwnerScreen(OwnerScreen.Get());
+		ContentDropTargetHost->AddChild(SpecialSize);
 	}
 }
 
@@ -322,12 +297,6 @@ void UWacomSpecialZoneWidget::RebuildFromCurrentView()
 	if (BattleReadyBadge)
 	{
 		BattleReadyBadge->SetVisibility(UWacomBackpackScreenPresenter::GetSpecialZoneBattleReadyBadgeVisibility(CurrentView.OwnerCard.PhysicalZone));
-	}
-
-	if (ContentDropTarget)
-	{
-		ContentDropTarget->Configure(EZoneKind::SpecialZone, CurrentView.OwnerCard.Instance.InstanceId);
-		ContentDropTarget->SetOwnerScreen(OwnerScreen.Get());
 	}
 
 	TArray<FWacomBackpackDeckCardListItem> OwnerItems;

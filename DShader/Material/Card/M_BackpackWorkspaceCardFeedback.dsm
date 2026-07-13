@@ -1,0 +1,75 @@
+import "Shared/WacomBackpackWorkspaceCardFeedback.dsh";
+
+Shader(Name="Wacom/UI/Backpack/Materials/M_BackpackWorkspaceCardFeedback")
+{
+    Properties = {
+        ScalarParameter EdgeWidth = 0.020 [
+            Group="背包工作台反馈|边缘";
+            SortPriority=0;
+            Description="卡牌反馈描边宽度，使用 UV 单位；推荐 0.012 到 0.035。";
+        ];
+
+        ScalarParameter EdgeSoftness = 0.010 [
+            Group="背包工作台反馈|边缘";
+            SortPriority=10;
+            Description="描边向内淡出的柔和宽度，使用 UV 单位；推荐 0.006 到 0.020。";
+        ];
+
+        ScalarParameter CornerRadius = 0.070 [
+            Group="背包工作台反馈|轮廓";
+            SortPriority=20;
+            Description="角部强调区域半径，使用 UV 单位；只改变视觉透明度，不改变命中几何。";
+        ];
+
+        ScalarParameter CornerSoftness = 0.030 [
+            Group="背包工作台反馈|轮廓";
+            SortPriority=30;
+            Description="角部强调的柔和宽度，使用 UV 单位。";
+        ];
+
+        ScalarParameter CornerAccent = 0.18 [
+            Group="背包工作台反馈|轮廓";
+            SortPriority=40;
+            Description="角部对描边透明度的轻微增强；推荐 0 到 0.35。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float4 vertexColor = UE.VertexColor();
+        float edgeMask;
+        float cornerAccentMask;
+        WacomBackpackWorkspaceCardFeedback_ComputeMasks(
+            uv,
+            EdgeWidth,
+            EdgeSoftness,
+            CornerRadius,
+            CornerSoftness,
+            edgeMask,
+            cornerAccentMask);
+
+        float alphaRaw = edgeMask * (1.0 + cornerAccentMask * CornerAccent);
+        float alpha = UE.Expression(
+            Class="Saturate",
+            OutputType="float1",
+            Input=alphaRaw
+        );
+
+        Color = float3(vertexColor.x, vertexColor.y, vertexColor.z);
+        Alpha = alpha * vertexColor.w;
+    }
+}

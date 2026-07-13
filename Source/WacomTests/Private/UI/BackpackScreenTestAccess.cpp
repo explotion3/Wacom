@@ -5,6 +5,11 @@
 #if WITH_AUTOMATION_TESTS
 
 #include "RunSession.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/OverlaySlot.h"
+#include "Components/VerticalBoxSlot.h"
+#include "Input/Events.h"
+#include "InputCoreTypes.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
@@ -14,7 +19,21 @@
 
 UWacomBackpackScreen* FWacomBackpackScreenTestAccess::Create(UObject* Outer, URunSession* RunSession)
 {
-	UWacomBackpackScreen* Screen = NewObject<UWacomBackpackScreen>(Outer);
+	return CreateWithClass(Outer, RunSession, UWacomBackpackScreen::StaticClass());
+}
+
+UWacomBackpackScreen* FWacomBackpackScreenTestAccess::CreateWithClass(
+	UObject* Outer,
+	URunSession* RunSession,
+	UClass* ScreenClass)
+{
+	UWacomBackpackScreen* Screen = ScreenClass && ScreenClass->IsChildOf(UWacomBackpackScreen::StaticClass())
+		? NewObject<UWacomBackpackScreen>(Outer, ScreenClass)
+		: nullptr;
+	if (!Screen)
+	{
+		return nullptr;
+	}
 	SetRunSession(*Screen, RunSession);
 	Screen->TakeWidget();
 	Refresh(*Screen);
@@ -34,11 +53,6 @@ void FWacomBackpackScreenTestAccess::SetRunSession(UWacomBackpackScreen& Screen,
 FWacomBackpackScreenAutomationTestView FWacomBackpackScreenTestAccess::View(const UWacomBackpackScreen& Screen)
 {
 	return Screen.GetAutomationTestViewForTest();
-}
-
-FGuid FWacomBackpackScreenTestAccess::ResolveDeleteRequestInstanceId(const UWacomCardDragOperation& CardOp)
-{
-	return UWacomBackpackScreen::ResolveDeleteRequestInstanceIdForTest(CardOp);
 }
 
 FText FWacomBackpackScreenTestAccess::BuildMoveZoneNameText(EZoneKind Zone)
@@ -104,6 +118,111 @@ int32 FWacomBackpackScreenTestAccess::ZoneRackEntryCount(const UWacomBackpackScr
 int32 FWacomBackpackScreenTestAccess::WorkspaceCardCount(const UWacomBackpackScreen& Screen)
 {
 	return View(Screen).WorkspaceCardCount;
+}
+
+bool FWacomBackpackScreenTestAccess::WorkspaceChildFillsHost(const UWacomBackpackScreen& Screen)
+{
+	if (!Screen.WorkspaceWidget || Screen.WorkspaceWidget->GetParent() != Screen.WorkspaceHost)
+	{
+		return false;
+	}
+	if (const UOverlaySlot* OverlaySlot = Cast<UOverlaySlot>(Screen.WorkspaceWidget->Slot))
+	{
+		return OverlaySlot->GetHorizontalAlignment() == HAlign_Fill
+			&& OverlaySlot->GetVerticalAlignment() == VAlign_Fill;
+	}
+	if (const UVerticalBoxSlot* VerticalSlot = Cast<UVerticalBoxSlot>(Screen.WorkspaceWidget->Slot))
+	{
+		return VerticalSlot->GetHorizontalAlignment() == HAlign_Fill
+			&& VerticalSlot->GetSize().SizeRule == ESlateSizeRule::Fill;
+	}
+	return false;
+}
+
+bool FWacomBackpackScreenTestAccess::WorkspaceOwnsPointerInput(const UWacomBackpackScreen& Screen)
+{
+	return Screen.WorkspaceWidget
+		&& Screen.WorkspaceWidget->GetVisibility() == ESlateVisibility::Visible;
+}
+
+TArray<FVector2D> FWacomBackpackScreenTestAccess::WorkspaceCardPositions(const UWacomBackpackScreen& Screen)
+{
+	TArray<FVector2D> Positions;
+	Positions.Reserve(Screen.ActiveWorkspaceCardWidgets.Num());
+	for (const UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	{
+		const UCanvasPanelSlot* CanvasSlot = CardWidget
+			? Cast<UCanvasPanelSlot>(CardWidget->Slot)
+			: nullptr;
+		Positions.Add(CanvasSlot ? CanvasSlot->GetPosition() : FVector2D(-FLT_MAX, -FLT_MAX));
+	}
+	return Positions;
+}
+
+bool FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(
+	UWacomBackpackScreen& Screen,
+	int32 CardIndex)
+{
+	if (!Screen.WorkspaceWidget || !Screen.WorkspaceInteractionModel
+		|| !Screen.ActiveWorkspaceCardWidgets.IsValidIndex(CardIndex)
+		|| !Screen.ActiveWorkspaceCardWidgets[CardIndex])
+	{
+		return false;
+	}
+
+	Screen.WorkspaceInteractionModel->BeginMarquee(FVector2D(10.0f, 10.0f), false);
+	const TSharedRef<SWidget> WorkspaceSlateWidget = Screen.WorkspaceWidget->TakeWidget();
+	TSet<FKey> PressedButtons{ EKeys::LeftMouseButton };
+	const FPointerEvent PointerMove(
+		0,
+		FVector2D(150.0f, 150.0f),
+		FVector2D(10.0f, 10.0f),
+		PressedButtons,
+		EKeys::LeftMouseButton,
+		0.0f,
+		FModifierKeysState());
+	const FReply Reply = Screen.WorkspaceWidget->HandleCardPointerMove(
+		Screen.ActiveWorkspaceCardWidgets[CardIndex],
+		FGeometry(),
+		PointerMove);
+	const bool bPreserved = Screen.WorkspaceInteractionModel->IsMarqueeActive()
+		&& Screen.WorkspaceInteractionModel->IsMouseCaptured()
+		&& !Reply.ShouldReleaseMouse()
+		&& Reply.GetMouseCaptor().IsValid();
+	Screen.WorkspaceWidget->CancelInteraction();
+	return bPreserved;
+}
+
+bool FWacomBackpackScreenTestAccess::MarqueeCompletesWhenReleasedOverCard(
+	UWacomBackpackScreen& Screen,
+	int32 CardIndex)
+{
+	if (!Screen.WorkspaceWidget || !Screen.WorkspaceInteractionModel
+		|| !Screen.ActiveWorkspaceCardWidgets.IsValidIndex(CardIndex)
+		|| !Screen.ActiveWorkspaceCardWidgets[CardIndex])
+	{
+		return false;
+	}
+
+	Screen.WorkspaceInteractionModel->BeginMarquee(FVector2D(10.0f, 10.0f), false);
+	TSet<FKey> PressedButtons;
+	const FPointerEvent PointerUp(
+		0,
+		FVector2D(150.0f, 150.0f),
+		FVector2D(140.0f, 140.0f),
+		PressedButtons,
+		EKeys::LeftMouseButton,
+		0.0f,
+		FModifierKeysState());
+	const FReply Reply = Screen.WorkspaceWidget->HandleCardPointerUp(
+		Screen.ActiveWorkspaceCardWidgets[CardIndex],
+		FGeometry(),
+		PointerUp);
+	const bool bCompleted = !Screen.WorkspaceInteractionModel->IsMarqueeActive()
+		&& !Screen.WorkspaceInteractionModel->IsMouseCaptured()
+		&& Reply.ShouldReleaseMouse();
+	Screen.WorkspaceWidget->CancelInteraction();
+	return bCompleted;
 }
 
 EZoneKind FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(const UWacomBackpackScreen& Screen)
@@ -229,18 +348,6 @@ FText FWacomBackpackScreenTestAccess::ZoneTitleText(const UWacomSpecialZoneWidge
 bool FWacomBackpackScreenTestAccess::IsBattleReadyBadgeVisible(const UWacomSpecialZoneWidget& Zone)
 {
 	return Zone.IsBattleReadyBadgeVisibleForTest();
-}
-
-UDragDropOperation* FWacomBackpackScreenTestAccess::BuildOwnerCardDragOperation(const UWacomSpecialZoneWidget& Zone)
-{
-	return Zone.BuildOwnerCardDragOperationForTest();
-}
-
-UDragDropOperation* FWacomBackpackScreenTestAccess::BuildContentCardDragOperation(
-	const UWacomSpecialZoneWidget& Zone,
-	int32 Index)
-{
-	return Zone.BuildContentCardDragOperationForTest(Index);
 }
 
 bool FWacomBackpackScreenTestAccess::RequestContentCardBattleEnabledToggle(

@@ -92,30 +92,40 @@ Prepare a test Run with:
 
 Open the backpack through the normal PlayerController/CommonUI route, not by constructing a standalone Widget in Level Blueprint.
 
+编辑器内可先用以下命令建立可重复的结构/框选/携带基线：
+
+```text
+Wacom.Backpack.SeedPIEValidation
+```
+
+该命令只在 Editor build 注册，使用正常 `URunSession::AcquireCardToRun()` 把当前 Run 补到至少 24 张实体牌和 2 个 SpecialZone，不绕过 Run 规则，也不会自动保存。它不会伪造 SpecialZone 内容、Burden 或拒绝条件；事务拒绝、确认恢复和特殊区内容仍需按本节清单准备。
+
 ## PIE Checklist — Structure and Layout
 
-- [ ] Right-side zone rack remains visible while switching zones.
-- [ ] Central workspace displays exactly one active zone.
+- [x] Right-side zone rack remains visible while switching zones.
+- [x] Central workspace displays exactly one active zone.
 - [ ] With at least 20 cards and 4 available zones, a fresh tester can switch zones and identify the sole central active workspace within 10 seconds; record the measured time.
-- [ ] Each rack entry shows correct title/count/capacity/active feedback.
+- [x] Each rack entry shows correct title/count/capacity/active feedback.
 - [ ] Manual positions, angles and ZOrder survive zone switch and same-Run close/reopen.
 - [ ] New Run starts without the previous Run's manual layout.
-- [ ] New cards enter a readable default layout; removed/moved cards leave no ghost entry.
+- [x] New cards enter a readable default layout; removed/moved cards leave no ghost entry.
+- [ ] Backpack cards embed `WBP_FirstPersonCardView`; the automated asset contract confirms fixed `0.75` ScaleBox scaling, pixel snapping and the dedicated feedback overlay, but face content and bleed badges still need final PIE visual comparison against the authored layout.
 - [ ] Cards cannot be placed with more than about 70% outside the workspace.
-- [ ] Arrange All restores upright readable default layout.
+- [x] Arrange All restores upright readable default layout.
 - [ ] Dropping onto the active zone rack collects cards without changing Run rule order/revision.
 
 ## PIE Checklist — Selection and Carry Feel
 
-- [ ] Blank drag draws a selection rectangle and selects cards by center point.
+- [x] Blank drag draws a selection rectangle and selects cards by center point.
 - [ ] Normal click, Ctrl click, Ctrl marquee, blank click and Ctrl+A match the contract.
-- [ ] Projection/read-only cards never enter the selection.
-- [ ] Pickup release only enters carry and never drops a card.
-- [ ] Carried cards form a stable fan following the cursor.
+- [x] Projection/read-only cards never enter the selection.
+- [x] Pickup release only enters carry and never drops a card.
+- [x] Carried cards form a stable fan following the cursor.
+- [ ] Start carry, then move the cursor rapidly outside the pressed card and across the Workspace/rack; the fan continues following without requiring the cursor to re-enter a card.
 - [ ] Rightmost/highest-Z card is default current and has no lift.
 - [ ] Wheel up/down changes current; only a non-default current card lifts.
 - [ ] Wheel stops at both ends without wrapping.
-- [ ] No `3 / 8`, index or count indicator appears near cursor or screen top.
+- [x] No `3 / 8`, index or count indicator appears near cursor or screen top.
 - [ ] Later left click/release drops one current card and keeps the rest carried.
 - [ ] Right click/release drops all remaining cards.
 - [ ] Fan closes smoothly and keeps stable order after each single release.
@@ -141,11 +151,11 @@ Open the backpack through the normal PlayerController/CommonUI route, not by con
 
 ## PIE Checklist — Visual and DreamShader Layer
 
-- [ ] Workspace remains fully functional with optional material effects disabled.
-- [ ] Selection, current-card lift, valid target and rejected target are visually distinguishable.
+- [x] Workspace remains fully functional with optional material effects disabled.
+- [ ] Selection overlay, current-card lift, valid target and rejected target are visually distinguishable; overlay color never changes card scale or hit geometry.
 - [ ] Fake-3D/material response does not move hit geometry or change drop targeting.
-- [ ] Motion values come from presentation style/WBP defaults rather than Run rules.
-- [ ] DreamShader source is Wacom-native `.dsm`/`.dsh`; no Godot Demo code, shader or asset was copied.
+- [x] Motion values come from presentation style/WBP defaults rather than Run rules.
+- [x] DreamShader source is Wacom-native `.dsm`/`.dsh`; no Godot Demo code, shader or asset was copied.
 - [ ] 20–100 cards do not cause obvious idle Tick cost or per-frame Snapshot rebuilds.
 
 ## Migration Search
@@ -164,11 +174,11 @@ Expected:
 
 ## Final Documentation Check
 
-- [ ] `Docs/WacomRun.md` describes batch transaction semantics.
-- [ ] `Docs/WacomUI.md` describes Snapshot → workspace → intent → Screen flow → Run batch command.
-- [ ] `Docs/WacomApp.md` describes transient Run-scoped layout owner and lifecycle.
-- [ ] `Docs/UI_Backpack_WBP_Binding.md` describes Workspace/ZoneRack/confirmation assets and passive WBP rules.
-- [ ] Any deferred WBP/material/controller work is in `Docs/TODO.md`; any unavoidable dual-path debt is in `Docs/TechDebt.md`.
+- [x] `Docs/WacomRun.md` describes batch transaction semantics.
+- [x] `Docs/WacomUI.md` describes Snapshot → workspace → intent → Screen flow → Run batch command.
+- [x] `Docs/WacomApp.md` describes transient Run-scoped layout owner and lifecycle.
+- [x] `Docs/UI_Backpack_WBP_Binding.md` describes Workspace/ZoneRack/confirmation assets and passive WBP rules.
+- [x] Any deferred WBP/material/controller work is in `Docs/TODO.md`; any unavoidable dual-path debt is in `Docs/TechDebt.md`.
 
 ## Full Suite (Optional Final Confidence)
 

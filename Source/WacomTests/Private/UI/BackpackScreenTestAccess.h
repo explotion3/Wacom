@@ -6,9 +6,7 @@
 
 #if WITH_AUTOMATION_TESTS
 
-class UDragDropOperation;
 class URunSession;
-class UWacomCardDragOperation;
 class UWacomBackpackScreen;
 class UWacomDeckCardWidget;
 class UWacomSpecialZoneWidget;
@@ -19,10 +17,10 @@ struct FWacomBackpackWorkspaceAutomationTestView;
 struct FWacomBackpackScreenTestAccess
 {
 	static UWacomBackpackScreen* Create(UObject* Outer, URunSession* RunSession);
+	static UWacomBackpackScreen* CreateWithClass(UObject* Outer, URunSession* RunSession, UClass* ScreenClass);
 	static void Refresh(UWacomBackpackScreen& Screen);
 	static void SetRunSession(UWacomBackpackScreen& Screen, URunSession* RunSession);
 	static FWacomBackpackScreenAutomationTestView View(const UWacomBackpackScreen& Screen);
-	static FGuid ResolveDeleteRequestInstanceId(const UWacomCardDragOperation& CardOp);
 	static FText BuildMoveZoneNameText(EZoneKind Zone);
 	static FText BuildMoveFailureToastText(FName DisabledReason);
 	static FText BuildDeleteFailureToastText(FName DisabledReason);
@@ -38,6 +36,11 @@ struct FWacomBackpackScreenTestAccess
 	static int32 SnapshotRevisionSkipCount(const UWacomBackpackScreen& Screen);
 	static int32 ZoneRackEntryCount(const UWacomBackpackScreen& Screen);
 	static int32 WorkspaceCardCount(const UWacomBackpackScreen& Screen);
+	static bool WorkspaceChildFillsHost(const UWacomBackpackScreen& Screen);
+	static bool WorkspaceOwnsPointerInput(const UWacomBackpackScreen& Screen);
+	static TArray<FVector2D> WorkspaceCardPositions(const UWacomBackpackScreen& Screen);
+	static bool MarqueeCrossingCardPreservesMouseCapture(UWacomBackpackScreen& Screen, int32 CardIndex = 0);
+	static bool MarqueeCompletesWhenReleasedOverCard(UWacomBackpackScreen& Screen, int32 CardIndex = 0);
 	static EZoneKind ActiveWorkspaceZone(const UWacomBackpackScreen& Screen);
 	static FGuid ActiveWorkspaceOwnerInstanceId(const UWacomBackpackScreen& Screen);
 	static void ActivateZone(UWacomBackpackScreen& Screen, EZoneKind Zone, FGuid OwnerInstanceId = FGuid());
@@ -59,8 +62,6 @@ struct FWacomBackpackScreenTestAccess
 
 	static FText ZoneTitleText(const UWacomSpecialZoneWidget& Zone);
 	static bool IsBattleReadyBadgeVisible(const UWacomSpecialZoneWidget& Zone);
-	static UDragDropOperation* BuildOwnerCardDragOperation(const UWacomSpecialZoneWidget& Zone);
-	static UDragDropOperation* BuildContentCardDragOperation(const UWacomSpecialZoneWidget& Zone, int32 Index);
 	static bool RequestContentCardBattleEnabledToggle(const UWacomSpecialZoneWidget& Zone, int32 Index);
 	static UWacomDeckCardWidget* OwnerCard(const UWacomSpecialZoneWidget& Zone);
 	static UWacomDeckCardWidget* ContentCard(const UWacomSpecialZoneWidget& Zone, int32 Index);

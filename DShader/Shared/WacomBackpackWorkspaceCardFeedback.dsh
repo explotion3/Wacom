@@ -1,0 +1,31 @@
+Function SelfContained WacomBackpackWorkspaceCardFeedback_ComputeMasks(
+    in float2 uv,
+    in float edgeWidth,
+    in float edgeSoftness,
+    in float cornerRadius,
+    in float cornerSoftness,
+    out float edgeMask,
+    out float cornerAccentMask)
+{
+    float safeEdgeWidth = clamp(edgeWidth, 0.0001, 0.49);
+    float safeEdgeSoftness = max(edgeSoftness, 0.0001);
+    float2 edgeDistance = min(uv, 1.0 - uv);
+    float nearestEdge = min(edgeDistance.x, edgeDistance.y);
+    edgeMask = 1.0 - smoothstep(
+        safeEdgeWidth,
+        safeEdgeWidth + safeEdgeSoftness,
+        nearestEdge);
+
+    float safeCornerRadius = clamp(cornerRadius, 0.0001, 0.49);
+    float safeCornerSoftness = max(cornerSoftness, 0.0001);
+    float2 centered = abs(uv - float2(0.5, 0.5));
+    float cornerX = smoothstep(
+        0.5 - safeCornerRadius - safeCornerSoftness,
+        0.5 - safeCornerRadius,
+        centered.x);
+    float cornerY = smoothstep(
+        0.5 - safeCornerRadius - safeCornerSoftness,
+        0.5 - safeCornerRadius,
+        centered.y);
+    cornerAccentMask = cornerX * cornerY;
+}

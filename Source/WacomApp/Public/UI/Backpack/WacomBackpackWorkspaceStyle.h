@@ -64,6 +64,10 @@ public:
 	FLinearColor SelectionColor = FLinearColor(0.2f, 0.72f, 1.0f, 0.9f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Color",
+		meta = (ToolTip = "卡牌选中、合法目标或拒绝状态覆盖层的不透明度。合法范围 0–1，推荐 0.18–0.28；不改变卡面固定缩放、命中范围或布局。", ClampMin = "0.0", ClampMax = "1.0"))
+	float CardStateOverlayOpacity = 0.22f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Color",
 		meta = (ToolTip = "合法牌匣目标预览颜色。建议使用明确的正向颜色；只影响表现。"))
 	FLinearColor ValidTargetColor = FLinearColor(0.25f, 0.9f, 0.45f, 0.9f);
 

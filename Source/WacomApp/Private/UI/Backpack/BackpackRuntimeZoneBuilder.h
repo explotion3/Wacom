@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "RunStateTypes.h"
 
 class UCanvasPanel;
 class UPanelWidget;
@@ -12,8 +11,6 @@ class UVerticalBox;
 class UWidgetTree;
 class UWrapBox;
 class UWacomBackpackScreen;
-class UWacomDeleteZoneDropTarget;
-class UWacomZoneDropTarget;
 
 struct FBackpackRuntimeZoneBuilderContext
 {
@@ -33,16 +30,12 @@ struct FBackpackRuntimeZoneBuilderContext
 	TObjectPtr<UWrapBox>* FluxContentCardsBox = nullptr;
 	TObjectPtr<UVerticalBox>* SpecialZonesPanel = nullptr;
 	TObjectPtr<UWrapBox>* BurdenCardsBox = nullptr;
-
-	TObjectPtr<UWacomDeleteZoneDropTarget>* DeleteDropTarget = nullptr;
-	TObjectPtr<UWacomZoneDropTarget>* BattleDeckDropTarget = nullptr;
-	TObjectPtr<UWacomZoneDropTarget>* BackpackDropTarget = nullptr;
 };
 
 /**
- * BackpackScreen 的运行时区域控件 builder。
+ * 旧 C++ fallback 的只读区域 builder。
  *
- * 只创建 DropTarget、WrapBox、详情层等运行时子控件，并回填给 Screen。
+ * 正式交互只有 Workspace/Screen 一条路径；这里仅补齐详情层和迁移期只读列表，绝不创建 DragDrop owner。
  */
 struct FBackpackRuntimeZoneBuilder
 {
