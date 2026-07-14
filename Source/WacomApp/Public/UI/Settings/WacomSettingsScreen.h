@@ -56,6 +56,7 @@ struct FWacomSettingsScreenAutomationTestView
 	FWacomLocalSettingsSnapshot Baseline;
 	FWacomLocalSettingsSnapshot Draft;
 	FWacomLocalSettingsSnapshot DefaultSnapshot;
+	FWacomScreenResolutionOptions ScreenResolutionOptions;
 };
 #endif
 
@@ -118,6 +119,8 @@ private:
 	void RefreshFromDraft();
 	void RefreshOptionRows();
 	void RefreshInteractionState();
+	bool RefreshScreenResolutionOptions(bool bNormalizeDraft);
+	bool NormalizeDraftResolutionForCurrentMode();
 	void SelectCategory(EWacomSettingsCategory Category, bool bMoveFocusToFirstRow = false);
 	void HandleOptionStep(EWacomSettingsField Field, int32 Direction);
 	void HandleOptionNormalizedValue(EWacomSettingsField Field, float NormalizedValue);
@@ -155,7 +158,7 @@ private:
 
 	TMap<EWacomSettingsField, TWeakObjectPtr<UWacomSettingsOptionRow>> OptionRowsByField;
 	TArray<FDelegateHandle> CategoryButtonDelegateHandles;
-	TArray<FIntPoint> SupportedResolutions;
+	FWacomScreenResolutionOptions ScreenResolutionOptions;
 	FGuid EditToken;
 	FWacomLocalSettingsSnapshot Baseline;
 	FWacomLocalSettingsSnapshot Draft;

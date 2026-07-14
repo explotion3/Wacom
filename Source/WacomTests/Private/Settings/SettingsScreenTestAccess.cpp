@@ -61,18 +61,6 @@ void FWacomSettingsScreenTestAccess::RestoreDefaults(UWacomSettingsScreen& Scree
 	Screen.HandleRestoreDefaultsClicked();
 }
 
-void FWacomSettingsScreenTestAccess::SetSupportedResolutions(
-	UWacomSettingsScreen& Screen,
-	const TArray<FIntPoint>& Resolutions)
-{
-	Screen.SupportedResolutions = Resolutions;
-	Screen.SupportedResolutions.AddUnique(Screen.Draft.ScreenResolution);
-	Screen.SupportedResolutions.Sort([](const FIntPoint& A, const FIntPoint& B)
-	{
-		return A.X == B.X ? A.Y < B.Y : A.X < B.X;
-	});
-}
-
 FWacomSettingsOptionRowViewData FWacomSettingsScreenTestAccess::Row(
 	const UWacomSettingsScreen& Screen,
 	EWacomSettingsField Field)

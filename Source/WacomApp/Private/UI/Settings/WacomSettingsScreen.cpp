@@ -159,12 +159,28 @@ namespace
 		}
 	}
 
-	FText FormatFieldValue(EWacomSettingsField Field, const FWacomLocalSettingsSnapshot& Draft)
+	bool IsResolutionLess(const FIntPoint& A, const FIntPoint& B)
+	{
+		return A.X == B.X ? A.Y < B.Y : A.X < B.X;
+	}
+
+	FText FormatFieldValue(
+		EWacomSettingsField Field,
+		const FWacomLocalSettingsSnapshot& Draft,
+		const FWacomScreenResolutionOptions& ResolutionOptions)
 	{
 		switch (Field)
 		{
 		case EWacomSettingsField::ScreenResolution:
-			return FormatResolution(Draft.ScreenResolution, Draft.WindowMode == EWindowMode::WindowedFullscreen);
+		{
+			const bool bDesktopManaged = Draft.WindowMode == EWindowMode::WindowedFullscreen;
+			const FIntPoint DisplayResolution = bDesktopManaged
+				&& ResolutionOptions.DesktopResolution.X > 0
+				&& ResolutionOptions.DesktopResolution.Y > 0
+				? ResolutionOptions.DesktopResolution
+				: Draft.ScreenResolution;
+			return FormatResolution(DisplayResolution, bDesktopManaged);
+		}
 		case EWacomSettingsField::WindowMode:
 			return FormatWindowMode(Draft.WindowMode);
 		case EWacomSettingsField::VSync:
@@ -548,12 +564,12 @@ void UWacomSettingsScreen::RefreshOptionRows()
 		const FSettingsFieldDescriptor Descriptor = GetFieldDescriptor(Pair.Key);
 		FWacomSettingsOptionRowViewData ViewData;
 		ViewData.Label = Descriptor.Label;
-		ViewData.Value = FormatFieldValue(Pair.Key, Draft);
+		ViewData.Value = FormatFieldValue(Pair.Key, Draft, ScreenResolutionOptions);
 		ViewData.Kind = Descriptor.Kind;
 		ViewData.NormalizedValue = GetNormalizedFieldValue(Pair.Key, Draft);
 		ViewData.bEnabled = bScreenAllowsInteraction
-			&& !(Pair.Key == EWacomSettingsField::ScreenResolution
-				&& Draft.WindowMode == EWindowMode::WindowedFullscreen);
+			&& (Pair.Key != EWacomSettingsField::ScreenResolution
+				|| ScreenResolutionOptions.bCanSelectResolution);
 		Row->ApplyViewData(ViewData);
 	}
 }
@@ -599,6 +615,64 @@ void UWacomSettingsScreen::RefreshInteractionState()
 	RefreshOptionRows();
 }
 
+bool UWacomSettingsScreen::RefreshScreenResolutionOptions(bool bNormalizeDraft)
+{
+	if (!SettingsSubsystem)
+	{
+		ScreenResolutionOptions = FWacomScreenResolutionOptions();
+		return false;
+	}
+
+	ScreenResolutionOptions = SettingsSubsystem->GetScreenResolutionOptions(
+		Draft.WindowMode,
+		Draft.ScreenResolution);
+	return bNormalizeDraft && NormalizeDraftResolutionForCurrentMode();
+}
+
+bool UWacomSettingsScreen::NormalizeDraftResolutionForCurrentMode()
+{
+	FIntPoint NormalizedResolution = Draft.ScreenResolution;
+	if (Draft.WindowMode == EWindowMode::WindowedFullscreen)
+	{
+		if (ScreenResolutionOptions.DesktopResolution.X <= 0
+			|| ScreenResolutionOptions.DesktopResolution.Y <= 0)
+		{
+			return false;
+		}
+		NormalizedResolution = ScreenResolutionOptions.DesktopResolution;
+	}
+	else
+	{
+		const TArray<FIntPoint>& Resolutions = ScreenResolutionOptions.SelectableResolutions;
+		if (!ScreenResolutionOptions.bCanSelectResolution
+			|| Resolutions.Contains(Draft.ScreenResolution))
+		{
+			return false;
+		}
+
+		int64 BestDistance = MAX_int64;
+		for (const FIntPoint Resolution : Resolutions)
+		{
+			const int64 DeltaX = static_cast<int64>(Resolution.X) - Draft.ScreenResolution.X;
+			const int64 DeltaY = static_cast<int64>(Resolution.Y) - Draft.ScreenResolution.Y;
+			const int64 Distance = DeltaX * DeltaX + DeltaY * DeltaY;
+			if (Distance < BestDistance
+				|| (Distance == BestDistance && IsResolutionLess(Resolution, NormalizedResolution)))
+			{
+				BestDistance = Distance;
+				NormalizedResolution = Resolution;
+			}
+		}
+	}
+
+	if (NormalizedResolution == Draft.ScreenResolution)
+	{
+		return false;
+	}
+	Draft.ScreenResolution = NormalizedResolution;
+	return true;
+}
+
 void UWacomSettingsScreen::SelectCategory(
 	EWacomSettingsCategory Category,
 	bool bMoveFocusToFirstRow)
@@ -624,23 +698,41 @@ void UWacomSettingsScreen::HandleOptionStep(EWacomSettingsField Field, int32 Dir
 	}
 	const FWacomLocalSettingsSnapshot PreviousDraft = Draft;
 	const int32 Step = Direction < 0 ? -1 : 1;
+	bool bResolutionAdjustedForMode = false;
 	if (Field == EWacomSettingsField::ScreenResolution)
 	{
-		if (Draft.WindowMode == EWindowMode::WindowedFullscreen)
+		const TArray<FIntPoint>& Resolutions = ScreenResolutionOptions.SelectableResolutions;
+		if (!ScreenResolutionOptions.bCanSelectResolution || Resolutions.IsEmpty())
 		{
 			return;
 		}
-		SupportedResolutions.AddUnique(Draft.ScreenResolution);
-		SupportedResolutions.Sort([](const FIntPoint& A, const FIntPoint& B)
+		const int32 CurrentIndex = Resolutions.IndexOfByKey(Draft.ScreenResolution);
+		int32 NextIndex = CurrentIndex;
+		if (CurrentIndex != INDEX_NONE)
 		{
-			return A.X == B.X ? A.Y < B.Y : A.X < B.X;
-		});
-		const int32 CurrentIndex = SupportedResolutions.IndexOfByKey(Draft.ScreenResolution);
-		if (!SupportedResolutions.IsEmpty())
-		{
-			Draft.ScreenResolution = SupportedResolutions[
-				FMath::Clamp(CurrentIndex + Step, 0, SupportedResolutions.Num() - 1)];
+			NextIndex = FMath::Clamp(CurrentIndex + Step, 0, Resolutions.Num() - 1);
 		}
+		else if (Step > 0)
+		{
+			NextIndex = Resolutions.IndexOfByPredicate([this](const FIntPoint Resolution)
+			{
+				return IsResolutionLess(Draft.ScreenResolution, Resolution);
+			});
+			if (NextIndex == INDEX_NONE)
+			{
+				NextIndex = Resolutions.Num() - 1;
+			}
+		}
+		else
+		{
+			NextIndex = Resolutions.Num() - 1;
+			while (NextIndex > 0
+				&& !IsResolutionLess(Resolutions[NextIndex], Draft.ScreenResolution))
+			{
+				--NextIndex;
+			}
+		}
+		Draft.ScreenResolution = Resolutions[NextIndex];
 	}
 	else if (Field == EWacomSettingsField::WindowMode)
 	{
@@ -648,6 +740,10 @@ void UWacomSettingsScreen::HandleOptionStep(EWacomSettingsField Field, int32 Dir
 			EWindowMode::WindowedFullscreen, EWindowMode::Fullscreen, EWindowMode::Windowed };
 		const int32 CurrentIndex = FMath::Max(0, Modes.IndexOfByKey(Draft.WindowMode));
 		Draft.WindowMode = Modes[FMath::Clamp(CurrentIndex + Step, 0, Modes.Num() - 1)];
+		if (Draft.WindowMode != PreviousDraft.WindowMode)
+		{
+			bResolutionAdjustedForMode = RefreshScreenResolutionOptions(true);
+		}
 	}
 	else if (Field == EWacomSettingsField::VSync)
 	{
@@ -707,6 +803,13 @@ void UWacomSettingsScreen::HandleOptionStep(EWacomSettingsField Field, int32 Dir
 	}
 	Draft.Sanitize();
 	CommitDraftMutation(Field, PreviousDraft);
+	if (bResolutionAdjustedForMode)
+	{
+		StatusMessage = LOCTEXT(
+			"ResolutionAdjustedForMode",
+			"已调整为当前窗口模式可用的分辨率。");
+		RefreshFromDraft();
+	}
 }
 
 void UWacomSettingsScreen::HandleOptionNormalizedValue(
@@ -818,6 +921,7 @@ void UWacomSettingsScreen::HandleRestoreDefaultsClicked()
 	}
 
 	Draft = DefaultSnapshot;
+	RefreshScreenResolutionOptions(true);
 	StatusMessage = LOCTEXT(
 		"DefaultsLoaded",
 		"已载入默认设置，选择应用以保存。");
@@ -884,13 +988,7 @@ bool UWacomSettingsScreen::BeginEditSession()
 	Baseline = Session.Snapshot;
 	Draft = Session.Snapshot;
 	DefaultSnapshot = SettingsSubsystem->GetDefaultSnapshot();
-	SupportedResolutions = SettingsSubsystem->GetSupportedScreenResolutions();
-	SupportedResolutions.AddUnique(Draft.ScreenResolution);
-	SupportedResolutions.RemoveAll([](const FIntPoint& Value) { return Value.X <= 0 || Value.Y <= 0; });
-	SupportedResolutions.Sort([](const FIntPoint& A, const FIntPoint& B)
-	{
-		return A.X == B.X ? A.Y < B.Y : A.X < B.X;
-	});
+	RefreshScreenResolutionOptions(false);
 	StatusMessage = FText::GetEmpty();
 	RebuildOptionRows();
 	RefreshFromDraft();
@@ -913,8 +1011,7 @@ void UWacomSettingsScreen::RestartEditSession(const FText& SuccessMessage)
 	Baseline = Session.Snapshot;
 	Draft = Session.Snapshot;
 	DefaultSnapshot = SettingsSubsystem->GetDefaultSnapshot();
-	SupportedResolutions = SettingsSubsystem->GetSupportedScreenResolutions();
-	SupportedResolutions.AddUnique(Draft.ScreenResolution);
+	RefreshScreenResolutionOptions(false);
 	StatusMessage = SuccessMessage;
 	RebuildOptionRows();
 	RefreshFromDraft();
@@ -1123,6 +1220,7 @@ FWacomSettingsScreenAutomationTestView UWacomSettingsScreen::GetAutomationTestVi
 	View.Baseline = Baseline;
 	View.Draft = Draft;
 	View.DefaultSnapshot = DefaultSnapshot;
+	View.ScreenResolutionOptions = ScreenResolutionOptions;
 	return View;
 }
 #endif

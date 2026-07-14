@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-ui-foundation
 status: active
-updated: 2026-07-08
+updated: 2026-07-14
 tags:
   - wacom/ui
   - wacom/commonui
@@ -153,7 +153,11 @@ Continue 只有在 `bHasActiveJourney` 时显示，并由 `bCanContinueJourney` 
 
 `/Game/Wacom/UI/Menus/WBP_MainMenuScreen` 已完成第一版正式壳层：透明的深色像素遮罩保留 `L_MainMenu` 实时场景，左侧为品牌与六个导航入口，右侧为活动旅程摘要。六个可选按钮绑定 `ContinueButton / NewJourneyButton / JourneyHistoryButton / SettingsButton / CreditsButton / QuitButton` 均使用 `WBP_MainMenuNavButton`；摘要绑定为 `ActiveJourneyTitleText / ActiveJourneySummaryText`，表现根绑定为 `MenuContentRoot / JourneySummaryPanel`。Screen 激活时由原生表现驱动执行一次左右错峰淡入位移，不改变 ViewData 或 Action 合同。交互可用性统一通过 CommonUI `SetIsInteractionEnabled` 应用。C++ fallback 提供相同 CommonUI 按钮、左侧导航和右侧旅程摘要，确保资产缺失或损坏时仍可键鼠 / 手柄操作。
 
-`UWacomSettingsScreen` 的数据源固定为 `UWacomSettingsSubsystem`，而不是直接编辑 `UWacomGameUserSettings`：Screen 激活时持有一次 `FWacomSettingsEditSession`，选项行只上报步进 / Slider 意图，Screen 修改本地 draft 并提交 `Preview / Apply / Cancel`。显示、图形、音频、视角和辅助五类由一个 App-private 字段描述表统一；无边框窗口仍显示分辨率但禁用并说明跟随桌面，当前自定义分辨率和帧率会加入可选序列而不会丢失。`GetDefaultSnapshot()` 返回与首次启动相同的项目平衡档；Screen 底部“恢复默认”一次恢复全部分类，只装入并预览当前 Draft，仍需 Apply 才保存，Cancel 可完整回到 Baseline。
+`UWacomSettingsScreen` 的数据源固定为 `UWacomSettingsSubsystem`，而不是直接编辑 `UWacomGameUserSettings`：Screen 激活时持有一次 `FWacomSettingsEditSession`，选项行只上报步进 / Slider 意图，Screen 修改本地 draft 并提交 `Preview / Apply / Cancel`。显示、图形、音频、视角和辅助五类由一个 App-private 字段描述表统一；分辨率行消费 Subsystem 返回的 `FWacomScreenResolutionOptions`，不会自行查询平台或合成任意候选项。无边框窗口仍显示当前桌面分辨率但禁用，独占全屏和窗口模式只展示符合项目白名单及平台限制的档位；合法的桌面原生 / 当前自定义分辨率可以作为例外保留。`GetDefaultSnapshot()` 返回与首次启动相同的项目平衡档；Screen 底部“恢复默认”一次恢复全部分类，只装入并预览当前 Draft，仍需 Apply 才保存，Cancel 可完整回到 Baseline。
+
+全局 UMG DPI 使用 `UIScaleRule=Custom` 和 `UWacomCappedDesignDPIScalingRule`，设计基准固定为 `1920 × 1080`，`ApplicationScale=1.0`。规则按 `min(1, ViewportWidth / 1920, ViewportHeight / 1080)` 计算缩放：`1280 × 720` 约为 `0.667`、`1920 × 1080` 为 `1.0`，`2560 × 1440` 与 `3840 × 2160` 仍为 `1.0`。因此较小视口会完整容纳基准画布，而较高分辨率不会再次放大主菜单、Settings、暂停菜单、Run / Battle HUD 框架等按设计单位制作的固定尺寸元素；16:10 和超宽屏同样按较短比例适配并封顶。`UIScaleCurve` 与引擎 `ScaleToFit` 不再作为其它缩放来源；WBP 与 C++ fallback 都继承这一全局结果。本阶段最低视口为 `1280 × 720`，不增加 Settings 行或 Footer 的响应式重排，也不嵌套额外 `ScaleBox`。
+
+First-person 卡牌是明确的局部表现例外，不是第二套全局 DPI。美术真源 `148 × 210`、WBP 制作画布 `296 × 420` 均保持不变；Anchor 的 App-private 策略在全局 DPI 之后追加以 `2560 × 1440` 为参照、`0.5–1.0` 物理封顶的 `PresentationScale`。720p / 1080p / 1440p 的最终物理倍率分别为 `0.5 / 0.75 / 1.0`，4K 不继续放大。该倍率只服务 Battle / Run first-person 手牌、first-person 详情和相关空间特效；背包详情及其它 HUD 不消费它。
 
 视频变化使用同一 token Push `UWacomSettingsConfirmationDialog` 到 Modal layer；Modal 只上报“保留 / 恢复 / 超时”，由 Screen 调用 `ConfirmVideoMode / RevertVideoMode`。Apply 完成后页面保持打开并开启新 token；未保存返回先确认放弃；Deactivate / Destruct 对 edit、视频确认、ticker 和 delegate 做对称清理。`FWacomSettingsScreenFlow` 是主菜单与暂停菜单的共享打开 seam，负责 `UI.Widget.SettingsScreen` 软类解析、异步 Push 和重复打开保护。Screen、行和 Modal 不接触玩家档案或旅程 SaveGame，也不自行保存 ini。
 

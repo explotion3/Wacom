@@ -35,6 +35,7 @@ TArray<FWacomFirstPersonCardLayerSlotView> FWacomFirstPersonCardSlotLayoutBuilde
 		Slot.Entry.bIsPlayable = Slot.Entry.bIsPlayable && !Slot.Entry.CardViewData.bDisabled;
 		Slot.Entry.CardViewData.bDisabled = !Slot.Entry.bIsPlayable;
 		Slot.RenderScale = FMath::Max(0.01f, Config.HandCardRenderScale);
+		Slot.PresentationScale = FMath::Clamp(Config.PresentationScale, 0.5f, 1.0f);
 		Slot.RenderOpacity = Slot.Entry.bIsPlayable
 			? 1.0f
 			: FMath::Clamp(Config.DisabledRenderOpacity, 0.0f, 1.0f);

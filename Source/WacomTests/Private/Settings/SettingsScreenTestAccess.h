@@ -38,9 +38,6 @@ struct FWacomSettingsScreenTestAccess
 		float Value);
 	static void Apply(UWacomSettingsScreen& Screen);
 	static void RestoreDefaults(UWacomSettingsScreen& Screen);
-	static void SetSupportedResolutions(
-		UWacomSettingsScreen& Screen,
-		const TArray<FIntPoint>& Resolutions);
 	static FWacomSettingsOptionRowViewData Row(
 		const UWacomSettingsScreen& Screen,
 		EWacomSettingsField Field);

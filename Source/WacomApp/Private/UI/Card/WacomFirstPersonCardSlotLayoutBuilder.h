@@ -7,6 +7,8 @@
 
 struct FWacomFirstPersonCardResolvedLayoutConfig
 {
+	float TargetPhysicalScale = 1.0f;
+	float PresentationScale = 1.0f;
 	EWacomFirstPersonCardProjectionMode ProjectionMode = EWacomFirstPersonCardProjectionMode::BodyLocked;
 	EWacomFirstPersonCardViewportClampMode ViewportClampMode = EWacomFirstPersonCardViewportClampMode::SoftClampToViewport;
 	float LookInfluenceYaw = 0.25f;

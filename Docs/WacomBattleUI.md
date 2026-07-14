@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-07-11
+updated: 2026-07-14
 tags:
   - wacom/ui
   - wacom/battle
@@ -186,9 +186,13 @@ Battle / Run hand 共用 Card Depth。`FWacomFirstPersonCardDepthMotion` 在 Hov
 
 Battle / Run 共用的 first-person Slot 不再执行单卡视口底边钳制。卡面靠近屏幕边缘时的文字连续绘制由 `Fake3DSurfaceRetainer` 直接内容根的 `Clip To Bounds - Without Intersecting` 合同保证；该合同只修正 Retainer 内部 culling，不改变手牌扇形、卡牌位置或输入命中。
 
+Battle hand 与 Run hand 共用 App-private `FWacomFirstPersonCardPresentationScalePolicy`。全局 UI 仍参照 `1920 × 1080`，但 first-person 卡牌表现参照 `2560 × 1440`：720p 目标物理倍率 `0.5`、1080p 为 `0.75`、1440p 及以上封顶 `1.0`。倍率由 Anchor 写入 resolved runtime config 与 Slot view；BattleHUD 不自行计算或覆盖。卡牌 `296 × 420` 主体、手牌布局、语义转场、反馈位移、Aim Arrow 和 Card Glyph Transfer 使用同一局部空间倍率，时序和输入阈值不变。
+
 First-person hand 卡面和 first-person viewport 详情都从 `FHandCardSnapshot` 派生 `FWacomCardPresentationRuntimeContext`，再交给 `UWacomCardPresentationBuilder` 生成 ViewData。基础 runtime context 覆盖本场 `RuntimeCost` 与 `bIsPlayable`：卡面 Cost、disabled overlay、RuntimeCost-based 效果徽章和详情 `Sections` 会显示当前战斗事实；`Magnitude.Source.RuntimeCost` 一类数值来源会在 value run 中保留“相当于当前费用”等来源短语。详情面板正式渲染来源是 `FWacomCardDetailViewData.Sections`：Builder 按卡牌详情文档顺序组装 section，App-private `WacomCardExplanationCompiler` 从效果 / 被动 tag、runtime preview 和 `UWacomCardExplanationLexicon` 编译语义 `Blocks / Runs`；`UWacomCardDetailPanel` 只按 section 顺序渲染，不再按原始 `Passive.DisplayText` 或 token kind 推断分区。旧平行 `Description`、`ChangeLines`、`PassiveLines`、`TaskLines`、扁平 `TokenLines` 和旧 token flow 已从详情合同删除；`UCardDefinition::Description` 仅在该卡没有任何结构化详情 section 时作为普通正文回退，不解析旧 `{Effect.0}` 占位。费用变化、目标手牌 cost preview、被动正文和后续任务 / 预览内容都应反映到对应卡面数值或正式 `Sections` document。Battle 详情的数据来源和 source guard 仍由 `FWacomBattleHUDCardDetailController` 负责；预热、详情数据缓存、淡入淡出 / scale / follow motion 和稳定换边由 App-private `FWacomFirstPersonCardDetailMotionController` 与 Run first-person 详情共用。
 
 First-person 详情面板的 viewport 生命周期由 `FWacomFirstPersonCardDetailPanelHost` 统一处理：只有拥有真实 local player / LocalPlayer 的 context 才允许 `AddToViewport`，HUD-only 自动化或离屏预热只构建面板对象并验证 ViewData / motion state。详情面板内部的 section 动态创建收口在 App-private `WacomCardDetailWidgetFactory`；section 内正文由 `UWacomCardDetailRichTextBlock` 渲染 RichText，并自动注册详情 inline icon decorator。战斗详情与背包详情共用 `CardDetailTheme.StatusBrushes / IconBrushes`：状态 run 显示状态图标和中文名，显式 `{icon:EffectIcon}` 才显示效果图标。详情 Widget 不应直接用 `GetWorld()` 判断创建路径，避免无 World 的离屏场景污染日志。
+
+Battle first-person 详情与 Run first-person 详情都由 `FWacomFirstPersonCardDetailMotionController` 消费 Slot 的只读 `PresentationScale`；`360 × 420` 内部制作布局保持不变，RenderTransform 整体缩放并与淡入出现倍率相乘。左右换边、边缘 clamp、Padding、换边滞后和位置重置按缩放后的视觉边界计算；分辨率变化只更新已显示面板的位置与倍率，不重新应用详情数据。背包详情面板不进入此合同。
 
 被动详情正文的分类由“被动”区块标题承载，正文不再读取 `Passive.DisplayText`。被动触发说明由 `Passive.TriggerTemplates` 生成；`PassiveOutcomeTemplates` 描述 `OnCompanionCount` 这类规则专用结果，例如“使此牌回到手中”。可执行 `Passive.Effects` 继续复用效果模板；`OnCompanionCount` 和 `OnTwilightTriggered` 当前不展示 `Passive.Effects`，因为运行时不执行这些 Effects。没有 outcome / effects 的被动不会只显示一个悬空触发句。
 

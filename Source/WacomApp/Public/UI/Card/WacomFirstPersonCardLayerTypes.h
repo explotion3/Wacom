@@ -1241,6 +1241,10 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSlotView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float RenderScale = 1.0f;
 
+	/** Runtime-only card presentation multiplier resolved from viewport pixels and global UI DPI. */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float PresentationScale = 1.0f;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float RenderOpacity = 1.0f;
 

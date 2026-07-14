@@ -22,6 +22,15 @@
 
 namespace
 {
+	const TArray<FIntPoint>& GetTestFullscreenResolutions()
+	{
+		static const TArray<FIntPoint> Resolutions = {
+			FIntPoint(1280, 720), FIntPoint(1366, 768), FIntPoint(1600, 900),
+			FIntPoint(1920, 1080), FIntPoint(2560, 1440), FIntPoint(3840, 2160)
+		};
+		return Resolutions;
+	}
+
 	struct FSettingsScreenFixture
 	{
 		TStrongObjectPtr<UWacomGameUserSettings> Settings;
@@ -42,6 +51,11 @@ namespace
 		{
 			Settings->SetFromSnapshot(Snapshot);
 			FWacomSettingsSubsystemTestAccess::ConfigureIsolatedSettings(*Subsystem, *Settings);
+			FWacomSettingsSubsystemTestAccess::ConfigureScreenResolutionEnvironment(
+				*Subsystem,
+				Subsystem->GetDefaultSnapshot().ScreenResolution,
+				FIntPoint(3840, 2160),
+				GetTestFullscreenResolutions());
 			FWacomSettingsScreenTestAccess::BuildAndConstruct(*Screen);
 			return FWacomSettingsScreenTestAccess::BeginWithSubsystem(*Screen, *Subsystem);
 		}
@@ -333,8 +347,6 @@ bool FWacomUISettingsTransactionCoordinatorSpec::RunTest(const FString& /*Parame
 	TestEqual(TEXT("Apply commits the deferred graphics draft"),
 		Fixture.Subsystem->GetCurrentSnapshot().GraphicsQuality, 2);
 
-	FWacomSettingsScreenTestAccess::SetSupportedResolutions(
-		*Fixture.Screen, { FIntPoint(1280, 720), FIntPoint(1920, 1080) });
 	FWacomSettingsScreenTestAccess::Step(
 		*Fixture.Screen, EWacomSettingsField::ScreenResolution, 1);
 	FWacomSettingsScreenTestAccess::Apply(*Fixture.Screen);

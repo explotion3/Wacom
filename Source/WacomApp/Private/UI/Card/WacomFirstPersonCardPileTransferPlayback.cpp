@@ -14,7 +14,7 @@ namespace
 		return static_cast<float>(Value & 0x00ffffffu) / static_cast<float>(0x01000000u);
 	}
 
-	float EaseOutCubic(float Value)
+	float EaseOutCubicPileTransfer(float Value)
 	{
 		const float Inverse = 1.0f - FMath::Clamp(Value, 0.0f, 1.0f);
 		return 1.0f - Inverse * Inverse * Inverse;
@@ -514,7 +514,7 @@ void FWacomFirstPersonCardPileTransferPlayback::BuildAuxiliaryShapes()
 			}
 
 			FWacomFirstPersonCardPileTransferGlyphView Mote;
-			Mote.Position = SpawnGlyph.Position + Travel * EaseOutCubic(Age);
+			Mote.Position = SpawnGlyph.Position + Travel * EaseOutCubicPileTransfer(Age);
 			const float Size = FMath::Lerp(
 				Style.MoteMinSizePixels,
 				Style.MoteMaxSizePixels,
@@ -565,7 +565,7 @@ void FWacomFirstPersonCardPileTransferPlayback::BuildAuxiliaryShapes()
 		Impact.Size = Style.GlyphSize * FMath::Lerp(
 			0.72f,
 			ImpactScale * FinalBoost,
-			EaseOutCubic(ImpactAge));
+			EaseOutCubicPileTransfer(ImpactAge));
 		Impact.Opacity = 0.82f * FMath::Square(1.0f - ImpactAge);
 		Impact.ShapeAge = ImpactAge;
 		Impact.ShapeVariant = bFinal ? 1.0f : 0.0f;

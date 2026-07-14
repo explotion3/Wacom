@@ -21,6 +21,9 @@ namespace
 {
 	const FVector2D CardAlignment(0.5f, 0.5f);
 	constexpr float SlotRefreshFloatTolerance = 0.01f;
+	constexpr float AuthoredAimArrowLineThickness = 3.0f;
+	constexpr float AuthoredAimArrowHeadLength = 18.0f;
+	constexpr float AuthoredAimArrowHeadWidth = 9.0f;
 
 	bool IsValidPresentationAnchorPoint(
 		const FWacomFirstPersonCardPresentationAnchorPoint& AnchorPoint)
@@ -1277,6 +1280,7 @@ bool UWacomFirstPersonCardLayerWidget::AreSlotViewsEquivalentForRefresh(
 		&& AreFirstPersonSlotFloatsEquivalent(A.NormalizedHandOffset, B.NormalizedHandOffset)
 		&& AreFirstPersonSlotFloatsEquivalent(A.RenderAngleDegrees, B.RenderAngleDegrees)
 		&& AreFirstPersonSlotFloatsEquivalent(A.RenderScale, B.RenderScale)
+		&& AreFirstPersonSlotFloatsEquivalent(A.PresentationScale, B.PresentationScale)
 		&& AreFirstPersonSlotFloatsEquivalent(A.RenderOpacity, B.RenderOpacity)
 		&& A.ZOrder == B.ZOrder
 		&& AreFirstPersonSlotFloatsEquivalent(A.ViewportScale, B.ViewportScale)
@@ -1446,6 +1450,10 @@ FWacomFirstPersonCardLayerAutomationTestView UWacomFirstPersonCardLayerWidget::G
 	View.AimArrowColor = ResolveAimArrowColor();
 	View.AimArrowStart = ResolveAimArrowStart();
 	View.AimArrowEnd = ResolveAimArrowEnd();
+	const float AimArrowScale = ResolveAimArrowPresentationScale();
+	View.AimArrowLineThickness = AuthoredAimArrowLineThickness * AimArrowScale;
+	View.AimArrowHeadLength = AuthoredAimArrowHeadLength * AimArrowScale;
+	View.AimArrowHeadWidth = AuthoredAimArrowHeadWidth * AimArrowScale;
 	View.CardViewClass = CardViewClass;
 	return View;
 }
@@ -1710,8 +1718,10 @@ int32 UWacomFirstPersonCardLayerWidget::NativePaint(
 	const FLinearColor LineColor = ResolveAimArrowColor();
 	const FVector2D UnitDirection = Direction.GetSafeNormal();
 	const FVector2D Perpendicular(-UnitDirection.Y, UnitDirection.X);
-	const float ArrowLength = 18.0f;
-	const float ArrowWidth = 9.0f;
+	const float PresentationScale = ResolveAimArrowPresentationScale();
+	const float ArrowLength = AuthoredAimArrowHeadLength * PresentationScale;
+	const float ArrowWidth = AuthoredAimArrowHeadWidth * PresentationScale;
+	const float LineThickness = AuthoredAimArrowLineThickness * PresentationScale;
 	TArray<FVector2D> MainLine;
 	MainLine.Add(Start);
 	MainLine.Add(End);
@@ -1723,7 +1733,7 @@ int32 UWacomFirstPersonCardLayerWidget::NativePaint(
 		ESlateDrawEffect::None,
 		LineColor,
 		true,
-		3.0f);
+		LineThickness);
 
 	TArray<FVector2D> HeadLeft;
 	HeadLeft.Add(End);
@@ -1736,7 +1746,7 @@ int32 UWacomFirstPersonCardLayerWidget::NativePaint(
 		ESlateDrawEffect::None,
 		LineColor,
 		true,
-		3.0f);
+		LineThickness);
 
 	TArray<FVector2D> HeadRight;
 	HeadRight.Add(End);
@@ -1749,7 +1759,7 @@ int32 UWacomFirstPersonCardLayerWidget::NativePaint(
 		ESlateDrawEffect::None,
 		LineColor,
 		true,
-		3.0f);
+		LineThickness);
 
 	return MaxLayerId + 2;
 }
@@ -3578,5 +3588,21 @@ FVector2D UWacomFirstPersonCardLayerWidget::ResolveAimArrowStart() const
 FVector2D UWacomFirstPersonCardLayerWidget::ResolveAimArrowEnd() const
 {
 	return CurrentDragView.CurrentScreenPosition;
+}
+
+float UWacomFirstPersonCardLayerWidget::ResolveAimArrowPresentationScale() const
+{
+	if (const UWacomFirstPersonCardLayerSlotWidget* ActiveGestureSlot = FindActiveGestureSlot())
+	{
+		if (ActiveGestureSlot->GetSlotView().Entry.CardInstanceId == CurrentDragView.CardInstanceId)
+		{
+			return FMath::Clamp(
+				ActiveGestureSlot->GetVisualSlotView().PresentationScale,
+				0.5f,
+				1.0f);
+		}
+	}
+
+	return FMath::Clamp(CurrentDragView.SourceSlotView.PresentationScale, 0.5f, 1.0f);
 }
 

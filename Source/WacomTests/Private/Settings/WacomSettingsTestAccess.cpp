@@ -35,6 +35,18 @@ void FWacomSettingsSubsystemTestAccess::ConfigureIsolatedSettings(
 	Subsystem.bSuppressEngineApplicationAndPersistenceForTest = true;
 }
 
+void FWacomSettingsSubsystemTestAccess::ConfigureScreenResolutionEnvironment(
+	UWacomSettingsSubsystem& Subsystem,
+	FIntPoint DesktopResolution,
+	FIntPoint WindowWorkArea,
+	const TArray<FIntPoint>& FullscreenResolutions)
+{
+	Subsystem.bHasScreenResolutionEnvironmentOverrideForTest = true;
+	Subsystem.DesktopResolutionOverrideForTest = DesktopResolution;
+	Subsystem.WindowWorkAreaOverrideForTest = WindowWorkArea;
+	Subsystem.FullscreenResolutionsOverrideForTest = FullscreenResolutions;
+}
+
 bool FWacomSettingsSubsystemTestAccess::ExpirePendingVideoMode(
 	UWacomSettingsSubsystem& Subsystem)
 {

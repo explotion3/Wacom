@@ -27,6 +27,7 @@ class FWacomFirstPersonCardAnchorRuntimeState;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardLayerTestAccess;
 struct FWacomFirstPersonCardAccessibilityBridge;
+struct FWacomFirstPersonCardPresentationScaleBridge;
 struct FWacomLocalSettingsSnapshot;
 enum class EWacomRuntimeSettingsChangeReason : uint8;
 
@@ -51,6 +52,17 @@ DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerAnchorTargetNativ
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomFirstPersonCardAnchorAutomationTestView
 {
+	float TargetPhysicalScale = 1.0f;
+	float PresentationScale = 1.0f;
+	float ResolvedHandCardRenderScale = 1.0f;
+	float ResolvedCardSpacingPixels = 0.0f;
+	float ResolvedHoverLiftPixels = 0.0f;
+	float ResolvedDragPickupLiftPixels = 0.0f;
+	float ResolvedDenyShakePixels = 0.0f;
+	float ResolvedRetainedLiftPixels = 0.0f;
+	FVector2D ResolvedDrawnEnterOffsetPixels = FVector2D::ZeroVector;
+	float ResolvedDrawnEnterArcLiftPixels = 0.0f;
+	FWacomFirstPersonCardPileTransferStyleData ResolvedPileTransferStyle;
 	bool bHasValidAnchor = false;
 	EWacomFirstPersonCardAnchorMode Mode = EWacomFirstPersonCardAnchorMode::Invalid;
 	FTransform AnchorTransform = FTransform::Identity;
@@ -895,11 +907,14 @@ private:
 	mutable float LastAnchorScreenSmoothingDistancePixels = 0.0f;
 	mutable bool bHasResolvedCardLayoutConfigHash = false;
 	mutable uint32 LastResolvedCardLayoutConfigHash = 0;
+	mutable bool bHasResolvedCardBaseConfigHash = false;
+	mutable uint32 LastResolvedCardBaseConfigHash = 0;
 
 	mutable FWacomFirstPersonCardSlotMotionConfig CachedSlotMotionConfig;
 
 	friend struct FWacomFirstPersonCardLayerTestAccess;
 	friend struct FWacomFirstPersonCardAccessibilityBridge;
+	friend struct FWacomFirstPersonCardPresentationScaleBridge;
 
 	void ApplyRuntimeCardLayerPresentationFrame(
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
@@ -932,7 +947,8 @@ private:
 	bool ResolveBaseAnchor(FTransform& OutBaseTransform, EWacomFirstPersonCardAnchorMode& OutMode, FName& OutFallbackReason) const;
 	void ConfigureTickPrerequisites();
 	bool RefreshResolvedCardLayoutRuntimeState() const;
-	void InvalidateResolvedCardLayoutRuntimeState() const;
+	void InvalidateResolvedCardLayoutRuntimeState(
+		bool bPreservePresentationPlayback = false) const;
 	void BindRuntimeSettings();
 	void UnbindRuntimeSettings();
 	void HandleRuntimeSettingsChanged(

@@ -44,7 +44,9 @@ public:
 
 	FWacomLocalSettingsSnapshot GetCurrentSnapshot() const;
 	FWacomLocalSettingsSnapshot GetDefaultSnapshot() const;
-	TArray<FIntPoint> GetSupportedScreenResolutions() const;
+	FWacomScreenResolutionOptions GetScreenResolutionOptions(
+		EWindowMode::Type WindowMode,
+		FIntPoint CurrentResolution) const;
 	bool HasActiveEdit() const { return bHasActiveEdit; }
 	bool IsVideoModeConfirmationPending() const { return PendingVideoModeToken.IsValid(); }
 	float GetRemainingVideoModeConfirmationSeconds() const;
@@ -86,5 +88,9 @@ private:
 	UWacomGameUserSettings* SettingsOverrideForTest = nullptr;
 	bool bSuppressEngineApplicationAndPersistenceForTest = false;
 	int32 PersistenceRequestCountForTest = 0;
+	bool bHasScreenResolutionEnvironmentOverrideForTest = false;
+	FIntPoint DesktopResolutionOverrideForTest = FIntPoint::ZeroValue;
+	FIntPoint WindowWorkAreaOverrideForTest = FIntPoint::ZeroValue;
+	TArray<FIntPoint> FullscreenResolutionsOverrideForTest;
 #endif
 };

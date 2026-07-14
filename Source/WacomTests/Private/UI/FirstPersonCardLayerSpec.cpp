@@ -2376,7 +2376,10 @@ bool FWacomFirstPersonCardLayerAuthoredProjectionTest::RunTest(const FString& Pa
 		TestEqual(TEXT("Right slot uses projected hand center"), InitialSlots[4].AnchorWidgetPosition, InitialSlots[2].AnchorWidgetPosition);
 		TestEqual(TEXT("Old 3D CardSpacing does not affect authored screen position"), ChangedLegacySpacingSlots[4].ScreenPosition, InitialSlots[4].ScreenPosition);
 		TestTrue(TEXT("Authored spacing controls screen offset"),
-			FMath::IsNearlyEqual(InitialSlots[4].ScreenPosition.X - InitialSlots[2].ScreenPosition.X, 200.0f, 0.001f));
+			FMath::IsNearlyEqual(
+				InitialSlots[4].ScreenPosition.X - InitialSlots[2].ScreenPosition.X,
+				200.0f * InitialSlots[2].PresentationScale,
+				0.001f));
 	}
 
 	Anchor->DestroyComponent();
@@ -2716,7 +2719,10 @@ bool FWacomFirstPersonCardLayerAuthoredSpacingTest::RunTest(const FString& Param
 				Slots[Index].ScreenPosition.X > Slots[Index - 1].ScreenPosition.X);
 		}
 		TestTrue(TEXT("Authored max hand width compresses layout"),
-			FMath::IsNearlyEqual(Slots.Last().ScreenPosition.X - Slots[0].ScreenPosition.X, 480.0f, 0.001f));
+			FMath::IsNearlyEqual(
+				Slots.Last().ScreenPosition.X - Slots[0].ScreenPosition.X,
+				480.0f * Slots[0].PresentationScale,
+				0.001f));
 		TestTrue(TEXT("Per-card spacing is compressed below authored spacing"),
 			(Slots[4].ScreenPosition.X - Slots[3].ScreenPosition.X) < 160.0f);
 	}
@@ -2784,11 +2790,11 @@ bool FWacomFirstPersonCardLayerAuthoredEdgeDropHandCountScaleTest::RunTest(const
 		const float EightAlpha = FMath::SmoothStep(0.0f, 1.0f, 3.0f / 7.0f);
 		const float ExpectedEightDrop = FMath::Lerp(64.0f, 110.0f, EightAlpha);
 		TestTrue(TEXT("Five-card edge uses short-hand drop"),
-			FMath::IsNearlyEqual(FiveSlots[0].AuthoredLayoutOffset.Y, 64.0f, 0.001f));
+			FMath::IsNearlyEqual(FiveSlots[0].AuthoredLayoutOffset.Y, 64.0f * FiveSlots[0].PresentationScale, 0.001f));
 		TestTrue(TEXT("Eight-card edge uses smooth interpolated drop"),
-			FMath::IsNearlyEqual(EightSlots[0].AuthoredLayoutOffset.Y, ExpectedEightDrop, 0.001f));
+			FMath::IsNearlyEqual(EightSlots[0].AuthoredLayoutOffset.Y, ExpectedEightDrop * EightSlots[0].PresentationScale, 0.001f));
 		TestTrue(TEXT("Twelve-card edge uses max drop"),
-			FMath::IsNearlyEqual(TwelveSlots[0].AuthoredLayoutOffset.Y, 110.0f, 0.001f));
+			FMath::IsNearlyEqual(TwelveSlots[0].AuthoredLayoutOffset.Y, 110.0f * TwelveSlots[0].PresentationScale, 0.001f));
 		TestTrue(TEXT("Interpolated drop is between short and max"),
 			EightSlots[0].AuthoredLayoutOffset.Y > FiveSlots[0].AuthoredLayoutOffset.Y
 			&& EightSlots[0].AuthoredLayoutOffset.Y < TwelveSlots[0].AuthoredLayoutOffset.Y);
@@ -2800,7 +2806,10 @@ bool FWacomFirstPersonCardLayerAuthoredEdgeDropHandCountScaleTest::RunTest(const
 	if (UnscaledFiveSlots.Num() == 5)
 	{
 		TestTrue(TEXT("Disabled scaling keeps full edge drop"),
-			FMath::IsNearlyEqual(UnscaledFiveSlots[0].AuthoredLayoutOffset.Y, 110.0f, 0.001f));
+			FMath::IsNearlyEqual(
+				UnscaledFiveSlots[0].AuthoredLayoutOffset.Y,
+				110.0f * UnscaledFiveSlots[0].PresentationScale,
+				0.001f));
 	}
 
 	Anchor->bScaleEdgeDropByHandCount = true;
@@ -2895,19 +2904,19 @@ bool FWacomFirstPersonCardLayerAuthoredHandAnchorNormalLayoutTest::RunTest(const
 		TestFalse(TEXT("Comparison left card is normal"), NormalEdgeSlots[0].Entry.bIsHandAnchor);
 		TestFalse(TEXT("Comparison right card is normal"), NormalEdgeSlots[4].Entry.bIsHandAnchor);
 		TestTrue(TEXT("Left hand anchor uses normal edge drop"),
-			FMath::IsNearlyEqual(AnchorEdgeSlots[0].AuthoredLayoutOffset.Y, 100.0f, 0.001f));
+			FMath::IsNearlyEqual(AnchorEdgeSlots[0].AuthoredLayoutOffset.Y, 100.0f * AnchorEdgeSlots[0].PresentationScale, 0.001f));
 		TestTrue(TEXT("Right hand anchor uses normal edge drop"),
-			FMath::IsNearlyEqual(AnchorEdgeSlots[4].AuthoredLayoutOffset.Y, 100.0f, 0.001f));
+			FMath::IsNearlyEqual(AnchorEdgeSlots[4].AuthoredLayoutOffset.Y, 100.0f * AnchorEdgeSlots[4].PresentationScale, 0.001f));
 		TestTrue(TEXT("Normal edge card applies same edge drop"),
-			FMath::IsNearlyEqual(NormalEdgeSlots[4].AuthoredLayoutOffset.Y, 100.0f, 0.001f));
+			FMath::IsNearlyEqual(NormalEdgeSlots[4].AuthoredLayoutOffset.Y, 100.0f * NormalEdgeSlots[4].PresentationScale, 0.001f));
 		TestEqual(TEXT("Left hand anchor matches normal slot position"),
 			AnchorEdgeSlots[0].AuthoredLayoutOffset,
 			NormalEdgeSlots[0].AuthoredLayoutOffset);
 		TestEqual(TEXT("Right hand anchor matches normal slot position"),
 			AnchorEdgeSlots[4].AuthoredLayoutOffset,
 			NormalEdgeSlots[4].AuthoredLayoutOffset);
-		TestEqual(TEXT("Left hand anchor uses normal render scale"), AnchorEdgeSlots[0].RenderScale, 0.5f);
-		TestEqual(TEXT("Right hand anchor uses normal render scale"), AnchorEdgeSlots[4].RenderScale, 0.5f);
+		TestEqual(TEXT("Left hand anchor uses normal render scale"), AnchorEdgeSlots[0].RenderScale, 0.5f * AnchorEdgeSlots[0].PresentationScale);
+		TestEqual(TEXT("Right hand anchor uses normal render scale"), AnchorEdgeSlots[4].RenderScale, 0.5f * AnchorEdgeSlots[4].PresentationScale);
 		TestEqual(TEXT("Left hand anchor matches normal render angle"),
 			AnchorEdgeSlots[0].RenderAngleDegrees,
 			NormalEdgeSlots[0].RenderAngleDegrees);
@@ -2966,7 +2975,10 @@ bool FWacomFirstPersonCardLayerAuthoredCurveTest::RunTest(const FString& Paramet
 	{
 		TestTrue(TEXT("Edge card drops lower than center"), SquareSlots[0].ScreenPosition.Y > SquareSlots[2].ScreenPosition.Y);
 		TestTrue(TEXT("Center lift is applied"),
-			FMath::IsNearlyEqual(SquareSlots[2].AuthoredLayoutOffset.Y, -20.0f, 0.001f));
+			FMath::IsNearlyEqual(
+				SquareSlots[2].AuthoredLayoutOffset.Y,
+				-20.0f * SquareSlots[2].PresentationScale,
+				0.001f));
 		TestTrue(TEXT("Drop exponent changes inner-card curve"),
 			LinearSlots[1].ScreenPosition.Y > SquareSlots[1].ScreenPosition.Y);
 	}
@@ -3072,8 +3084,8 @@ bool FWacomFirstPersonCardLayerAuthoredScaleTest::RunTest(const FString& Paramet
 	TestEqual(TEXT("Far slot count"), FarSlots.Num(), 2);
 	if (NearSlots.Num() == 2 && FarSlots.Num() == 2)
 	{
-		TestEqual(TEXT("Pending base scale stays stable"), NearSlots[0].RenderScale, 1.0f);
-		TestEqual(TEXT("Hovered base scale stays stable"), NearSlots[1].RenderScale, 1.0f);
+		TestEqual(TEXT("Pending base scale stays stable"), NearSlots[0].RenderScale, NearSlots[0].PresentationScale);
+		TestEqual(TEXT("Hovered base scale stays stable"), NearSlots[1].RenderScale, NearSlots[1].PresentationScale);
 		TestTrue(TEXT("Pending slot keeps pending marker"), NearSlots[0].Entry.bIsPendingTargeting);
 		TestTrue(TEXT("Hovered slot keeps hover marker"), NearSlots[1].bIsHovered);
 		TestEqual(TEXT("Changing projection distance does not change pending base scale"), FarSlots[0].RenderScale, NearSlots[0].RenderScale);
@@ -7183,7 +7195,7 @@ bool FWacomFirstPersonCardLayerHoverVisualStateTest::RunTest(const FString& Para
 			TestTrue(TEXT("Hover slot is marked for presentation updates"), HoverSlots[0].bIsHovered);
 			const FWacomFirstPersonCardLayerSlotView& HoverVisualSlot = SlotWidget->GetVisualSlotView();
 			TestEqual(TEXT("Hover visual scales card"), HoverVisualSlot.RenderScale, BaseSlots[0].RenderScale * 1.1f);
-			TestEqual(TEXT("Hover visual lifts card"), HoverVisualSlot.ScreenPosition.Y, BaseSlots[0].ScreenPosition.Y - 30.0f);
+			TestEqual(TEXT("Hover visual lifts card"), HoverVisualSlot.ScreenPosition.Y, BaseSlots[0].ScreenPosition.Y - 30.0f * BaseSlots[0].PresentationScale);
 			TestEqual(TEXT("Hover visual raises z-order"), HoverVisualSlot.ZOrder, BaseSlots[0].ZOrder + 250);
 		}
 
@@ -8638,7 +8650,7 @@ bool FWacomFirstPersonCardLayerPlayableHoverFeedbackTest::RunTest(const FString&
 		SlotWidget->SetSlotViewImmediate(HoverSlots[0]);
 		TestTrue(TEXT("Playable hover request succeeds"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*SlotWidget));
 		TestTrue(TEXT("Playable hover visual raises card"), SlotWidget->GetVisualSlotView().ScreenPosition.Y < BaseSlots[0].ScreenPosition.Y);
-		TestEqual(TEXT("Playable hover visual applies scale"), SlotWidget->GetVisualSlotView().RenderScale, 1.1f);
+		TestEqual(TEXT("Playable hover visual applies scale"), SlotWidget->GetVisualSlotView().RenderScale, HoverSlots[0].RenderScale * 1.1f);
 		TestTrue(TEXT("Playable hover visual boosts z-order"), SlotWidget->GetVisualSlotView().ZOrder > BaseSlots[0].ZOrder);
 		TestEqual(TEXT("Playable hover tint opacity"), FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget).FeedbackOverlayOpacity, 0.2f);
 	}
@@ -9341,9 +9353,9 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 	{
 		TestTrue(TEXT("All slots know target-select is active"), Slots[0].bHasPendingTargetingCardInHand);
 		TestTrue(TEXT("Pending card keeps pending state marker"), Slots[1].Entry.bIsPendingTargeting);
-		TestEqual(TEXT("Pending card keeps base scale in anchor slot"), Slots[1].RenderScale, 0.5f);
+		TestEqual(TEXT("Pending card keeps base scale in anchor slot"), Slots[1].RenderScale, 0.5f * Slots[1].PresentationScale);
 		TestEqual(TEXT("Non-pending keeps base opacity in anchor slot"), Slots[0].RenderOpacity, 1.0f);
-		TestEqual(TEXT("Disabled anchor keeps normal card scale"), Slots[2].RenderScale, 0.5f);
+		TestEqual(TEXT("Disabled anchor keeps normal card scale"), Slots[2].RenderScale, 0.5f * Slots[2].PresentationScale);
 		TestEqual(TEXT("Disabled card keeps disabled base opacity in anchor slot"), Slots[2].RenderOpacity, 0.6f);
 		TestTrue(TEXT("Disabled card view data stays disabled"), Slots[2].Entry.CardViewData.bDisabled);
 	}
@@ -9365,7 +9377,7 @@ bool FWacomFirstPersonCardLayerVisualStateSlotTest::RunTest(const FString& Param
 		if (TestNotNull(TEXT("Pending card view exists"), Layer->GetCardViewAt(1)))
 		{
 			TestTrue(TEXT("Pending visual lifts above normal card"), Layer->GetSlotWidgetAt(1)->GetVisualSlotView().ScreenPosition.Y < Slots[1].ScreenPosition.Y);
-			TestEqual(TEXT("Pending widget scale uses visual presentation"), Layer->GetCardRenderTransformAt(1).Scale, FVector2D(0.5f * 1.2f));
+			TestEqual(TEXT("Pending widget scale uses visual presentation"), Layer->GetCardRenderTransformAt(1).Scale, FVector2D(Slots[1].RenderScale * 1.2f));
 			TestTrue(TEXT("Pending widget z-order is raised"), Layer->GetCardZOrderAt(1) > Layer->GetCardZOrderAt(2));
 		}
 		if (TestNotNull(TEXT("Normal card view exists"), Layer->GetCardViewAt(0)))
@@ -9524,7 +9536,7 @@ bool FWacomFirstPersonCardLayerPendingHoverPriorityTest::RunTest(const FString& 
 			SlotWidget->SetSlotVisualConfig(VisualConfig);
 			SlotWidget->SetCardLayerInteractionEnabled(true);
 			SlotWidget->SetSlotViewImmediate(PendingHoverSlots[0]);
-			TestEqual(TEXT("Pending visual does not add hover scale"), SlotWidget->GetVisualSlotView().RenderScale, 1.2f);
+			TestEqual(TEXT("Pending visual does not add hover scale"), SlotWidget->GetVisualSlotView().RenderScale, PendingSlots[0].RenderScale * 1.2f);
 			TestEqual(TEXT("Pending visual does not add hover lift"), SlotWidget->GetVisualSlotView().ScreenPosition.Y, PendingSlots[0].ScreenPosition.Y - 40.0f);
 			TestEqual(TEXT("Pending visual does not add hover z-order"), SlotWidget->GetVisualSlotView().ZOrder, PendingSlots[0].ZOrder + 1000);
 		}

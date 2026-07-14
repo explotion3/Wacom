@@ -23,7 +23,7 @@ struct FWacomFirstPersonCardDetailMotionConfig
 	float SideSwitchHysteresisPixels = 72.0f;
 };
 
-class FWacomFirstPersonCardDetailMotionController
+class WACOMAPP_API FWacomFirstPersonCardDetailMotionController
 {
 public:
 	bool IsVisible(const UWacomCardDetailPanel* Panel) const;
@@ -90,6 +90,10 @@ public:
 	bool IsPendingShowForTest() const { return MotionState.bPendingShow; }
 	float GetPanelOpacityForTest() const { return MotionState.VisualOpacity; }
 	int32 GetDetailDataApplyCountForTest() const { return DetailDataApplyCountForTest; }
+	FVector2D GetLastAppliedPanelLayoutPositionForTest() const
+	{
+		return LastAppliedPanelLayoutPositionForTest;
+	}
 #endif
 
 private:
@@ -139,7 +143,8 @@ private:
 		UWacomCardDetailPanel& Panel,
 		const FVector2D& Position,
 		float Opacity,
-		const FWacomFirstPersonCardDetailMotionConfig& Config);
+		const FWacomFirstPersonCardDetailMotionConfig& Config,
+		float PresentationScale);
 	void CollapsePanel(UWacomCardDetailPanel* Panel);
 
 	FGuid CurrentSourceId;
@@ -148,5 +153,6 @@ private:
 
 #if WITH_AUTOMATION_TESTS
 	int32 DetailDataApplyCountForTest = 0;
+	FVector2D LastAppliedPanelLayoutPositionForTest = FVector2D::ZeroVector;
 #endif
 };

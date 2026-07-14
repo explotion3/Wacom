@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-07-13
+updated: 2026-07-14
 tags:
   - wacom/ui
   - wacom/cards
@@ -43,6 +43,7 @@ Battle / Run snapshot
 | `WacomFirstPersonCardLayerTypes.h` | 第一人称卡牌层公共 UI 协议：entry、slot view、drag / pointer view、transition hint、motion / visual / feedback config；`FWacomFirstPersonCardLayerEntry::InteractionIntent` 是 SlotWidget 消费的手势意图 | 不包含 AnchorComponent 制作参数或运行时实现，不把 Battle / Run 规则枚举作为 Widget 手势判断入口 |
 | `FWacomFirstPersonCardAnchorRuntimeState` | Anchor 私有 runtime source 状态：entries、view data、transition hints、presentation frame hints、presentation gate、hovered card / card target handle | 不暴露 Blueprint API，不负责布局或 widget 生命周期 |
 | `FWacomFirstPersonCardSlotLayoutBuilder` | Anchor 私有布局构建器：根据 resolved config、投影后 hand anchor 和 viewport size 生成基础 slot view / input hit 几何 | 不依赖 `UWacomFirstPersonCardAnchorComponent`，不处理 hover 视觉合成或命令 |
+| `FWacomFirstPersonCardPresentationScalePolicy` | App-private 固定表现策略：根据物理 Viewport 与全局 DPI 解析 first-person 卡牌目标物理倍率和 UMG 局部倍率 | 不修改全局 DPI、Anchor / DataAsset 制作参数或玩家设置 |
 | `FWacomFirstPersonCardLayerOwner` | Anchor 私有 CardLayerWidget 生命周期 owner：创建 / 移除 widget、应用 layer config、推送 presentation frame / transition hints 和 slots | 不解析 anchor / viewport，不读取 runtime source，不转发 Battle / Run 命令 |
 | `FWacomFirstPersonCardLayerDelegateRouter` | Anchor 私有 LayerWidget 事件 router：绑定 / 解绑 native delegates、同步 hovered runtime state、转发 Anchor 对外 delegates | 不创建 widget，不解析布局，不提交 Battle / Run 命令 |
 | `UWacomFirstPersonCardLayerWidget` | 按 entries 的正式 UI facts reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback；dirty gate 只把 `InteractionIntent` 当手势差异 | 不读取 Battle / Run 规则状态 |
@@ -61,6 +62,25 @@ Battle / Run snapshot
 | `FWacomBattleHUDCardDetailController` | Battle first-person 详情 adapter：从 Battle hand snapshot / preview 构建详情数据、维护 source guard，并委托共享 detail motion core | 不改变卡牌规则，不接管 Run source |
 
 ## §3 Authoring 默认
+
+### 卡牌制作尺寸与运行时表现缩放
+
+卡牌有三层彼此独立的尺寸语义：美术真源是 `148 × 210`；`WBP_FPCardView / CardSizeBox` 使用放大一倍的 `296 × 420` 制作画布；运行时 `PresentationScale` 只调整游戏内 first-person 表现，不改变前两者。禁止为了某个分辨率直接改贴图、`CardSizeBox`、Anchor 制作值或 DataAsset Style。
+
+全局 UI 继续以 `1920 × 1080` 为基准并在 `1.0` 封顶；first-person 卡牌表现单独以 `2560 × 1440` 为基准。App-private `FWacomFirstPersonCardPresentationScalePolicy` 使用物理 Viewport 和当前全局 DPI：
+
+```text
+TargetPhysicalScale = clamp(min(ViewportWidth / 2560, ViewportHeight / 1440), 0.5, 1.0)
+PresentationScale = clamp(TargetPhysicalScale / GlobalUIScale, 0.5, 1.0)
+```
+
+结果按 `0.001` 稳定；无效 Viewport 或 DPI 回退 `1.0`。`1280 × 720` 的目标物理倍率为 `0.5`、局部倍率约 `0.75`；`1920 × 1080` 为 `0.75 / 0.75`；`2560 × 1440` 及更高分辨率封顶 `1.0`。720p 使用严格等比，不额外放大可读性；16:10 和超宽屏按较短边解析。Anchor 在既有更新周期内把倍率写入 resolved-config hash 和只读 Slot view，分辨率变化只刷新表现配置，不产生新 Tick、设置项或 transition hint。
+
+局部倍率只作用于运行时配置副本。它统一缩放卡牌基础 `RenderScale`、手牌间距 / 最大宽度 / 整体偏移 / 中心抬升 / 边缘下坠，Hover / Pending / Drag target focus、拾牌 / 拒绝 / Retained 位移，`Drawn / Gained / HandAnchor / Played / Discarded` 空间偏移与弧高，以及 Aim Arrow 的线宽和箭头尺寸。Card Glyph Transfer 同步缩放牌印、拖尾宽度、粒子尺寸 / 漂移、弧高上下限；播放开始时复制 resolved Style，因此活动中的迁移保持启动倍率，后续迁移使用新倍率，原 DataAsset 不被回写。卡内 Retainer、fake-3D、压印、消散和 Interaction Overlay 继承卡牌 `RenderScale`，不得再缩放材质 UV、归一化参数或强度。
+
+动画时长、错峰、速度、透明度、角度、ZOrder 和声音不缩放。Drag 阈值、无目标提交距离、Hover 命中滞后、Inspect 区域、Viewport 安全边距、投影 clamp、Anchor 平滑重置距离和表现辅助策略也保持原合同。
+
+Battle / Run first-person 详情共用 Slot 的 `PresentationScale`。详情仍以 `360 × 420` 制作，使用 RenderTransform 整体缩放字体、图标与间距，并与出现动画 scale 相乘；背包详情不受影响。定位、左右换边和 Viewport clamp 使用缩放后的视觉边界，Detail Padding、换边滞后和详情位置重置距离随局部倍率缩放。卡牌锚点尺寸仍只使用 `296 × 420 × Slot.RenderScale`，不能再乘一次局部倍率。
 
 默认 first-person hand authoring surface 是：
 

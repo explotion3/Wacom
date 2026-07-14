@@ -10,7 +10,7 @@
 
 namespace
 {
-	bool IsTransformEqual(
+	bool IsSendFeedbackTransformEqual(
 		const FWidgetTransform& Actual,
 		const FWidgetTransform& Expected,
 		float Tolerance = 0.001f)
@@ -59,7 +59,7 @@ bool FWacomPileCountViewSendFeedbackCurveSpec::RunTest(const FString&)
 
 	FWacomPileCountViewTestAccess::Tick(*Widget, 0.10f);
 	TestTrue(TEXT("completed send feedback restores authored transform"),
-		IsTransformEqual(Widget->GetRenderTransform(), AuthoredTransform));
+		IsSendFeedbackTransformEqual(Widget->GetRenderTransform(), AuthoredTransform));
 	return true;
 }
 
@@ -89,15 +89,15 @@ bool FWacomPileCountViewSendFeedbackCompositionSpec::RunTest(const FString&)
 	Widget->PlaySendFeedback(1, false, FVector2D(0.0f, -1.0f), false);
 	Widget->ResetSendFeedback();
 	TestTrue(TEXT("resetting send preserves the active receive pulse"),
-		IsTransformEqual(Widget->GetRenderTransform(), ReceiveOnlyTransform));
+		IsSendFeedbackTransformEqual(Widget->GetRenderTransform(), ReceiveOnlyTransform));
 	Widget->ResetReceiveFeedback();
 	TestTrue(TEXT("resetting both channels restores authored transform"),
-		IsTransformEqual(Widget->GetRenderTransform(), FWidgetTransform()));
+		IsSendFeedbackTransformEqual(Widget->GetRenderTransform(), FWidgetTransform()));
 
 	Widget->PlaySendFeedback(1, false, FVector2D::ZeroVector, true);
 	FWacomPileCountViewTestAccess::Tick(*Widget, 0.075f);
 	TestTrue(TEXT("reduced motion produces no pile transform"),
-		IsTransformEqual(Widget->GetRenderTransform(), FWidgetTransform()));
+		IsSendFeedbackTransformEqual(Widget->GetRenderTransform(), FWidgetTransform()));
 	return true;
 }
 

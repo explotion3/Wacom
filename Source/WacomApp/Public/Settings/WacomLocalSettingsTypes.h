@@ -57,6 +57,14 @@ struct WACOMAPP_API FWacomLocalSettingsSnapshot
 	bool IsEquivalentTo(const FWacomLocalSettingsSnapshot& Other) const;
 };
 
+/** Mode-specific display resolution choices resolved from project policy and the current desktop. */
+struct WACOMAPP_API FWacomScreenResolutionOptions
+{
+	FIntPoint DesktopResolution = FIntPoint::ZeroValue;
+	TArray<FIntPoint> SelectableResolutions;
+	bool bCanSelectResolution = false;
+};
+
 struct WACOMAPP_API FWacomSettingsEditSession
 {
 	FGuid Token;

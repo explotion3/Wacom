@@ -223,7 +223,13 @@ tags:
   - 状态：`Done: 五分类页面、token 事务、双入口和 Run Tunnel CameraShake 已落地`
   - 归属：App / UI
   - 入口：[WacomApp.md](./WacomApp.md) / [WacomUIFoundation.md](./WacomUIFoundation.md)
-  - 说明：`WBP_SettingsScreen / OptionRow / Button / ConfirmationDialog` 与 C++ fallback 已完成；主菜单和暂停菜单统一走 `FWacomSettingsScreenFlow`。Apply 后留在页面，视频模式使用 15 秒确认，脏返回确认放弃，外部 teardown 安全 Cancel / Revert。项目平衡档统一首次启动与“恢复默认”，恢复按钮只装入可撤销 Draft，仍需 Apply。`BP_WacomPlayerCharacter` 正式启用 CameraShake 并关闭 WalkBob。
+  - 说明：`WBP_SettingsScreen / OptionRow / Button / ConfirmationDialog` 与 C++ fallback 已完成；主菜单和暂停菜单统一走 `FWacomSettingsScreenFlow`。Apply 后留在页面，视频模式使用 15 秒确认，脏返回确认放弃，外部 teardown 安全 Cancel / Revert。项目平衡档统一首次启动与“恢复默认”，恢复按钮只装入可撤销 Draft，仍需 Apply。分辨率已收敛为最低 `1280 × 720` 的常用档位与模式专属平台过滤；全局 UI 使用 `1920 × 1080` 设计基准的封顶 DPI 规则，只在较小视口缩小，高分辨率不放大固定 HUD 元素。`BP_WacomPlayerCharacter` 正式启用 CameraShake 并关闭 WalkBob。
+
+- [ ] **低于 1280 × 720 的紧凑 UI 重排**
+  - 状态：`Deferred: 当前桌面最低支持分辨率不需要该能力`
+  - 归属：App / UI
+  - 入口：[WacomUIFoundation.md](./WacomUIFoundation.md)
+  - 说明：只有未来降低最低分辨率、支持更窄设备或横向空间不足的输入场景时，才为 Settings、主菜单与共享 Footer 设计正式断点和重排；当前不以额外 ScaleBox 或隐藏功能绕过布局合同。
 
 - [ ] **清理 UI MVVM 迁移尾项：WBP ViewBinding、逐步移除 C++ 手动 SetText fallback**
   - 状态：`Ready: WBP 化后清理`

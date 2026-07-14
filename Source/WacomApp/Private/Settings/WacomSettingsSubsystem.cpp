@@ -3,6 +3,7 @@
 #include "Settings/WacomSettingsSubsystem.h"
 
 #include "Engine/Engine.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/GameUserSettings.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -18,6 +19,47 @@ DEFINE_LOG_CATEGORY_STATIC(LogWacomLocalSettings, Log, All);
 
 namespace
 {
+	const FIntPoint MinimumSupportedResolution(1280, 720);
+
+	const TArray<FIntPoint>& GetCuratedScreenResolutions()
+	{
+		static const TArray<FIntPoint> Resolutions = {
+			FIntPoint(1280, 720),
+			FIntPoint(1366, 768),
+			FIntPoint(1600, 900),
+			FIntPoint(1920, 1080),
+			FIntPoint(2560, 1440),
+			FIntPoint(3840, 2160)
+		};
+		return Resolutions;
+	}
+
+	bool IsUsableResolution(const FIntPoint Resolution)
+	{
+		return Resolution.X > 0 && Resolution.Y > 0;
+	}
+
+	bool MeetsMinimumResolution(const FIntPoint Resolution)
+	{
+		return Resolution.X >= MinimumSupportedResolution.X
+			&& Resolution.Y >= MinimumSupportedResolution.Y;
+	}
+
+	bool FitsWithin(const FIntPoint Resolution, const FIntPoint Bounds)
+	{
+		return IsUsableResolution(Bounds)
+			&& Resolution.X <= Bounds.X
+			&& Resolution.Y <= Bounds.Y;
+	}
+
+	void SortResolutions(TArray<FIntPoint>& Resolutions)
+	{
+		Resolutions.Sort([](const FIntPoint& A, const FIntPoint& B)
+		{
+			return A.X == B.X ? A.Y < B.Y : A.X < B.X;
+		});
+	}
+
 	bool IsGameAudioWorld(const UWorld* World)
 	{
 		return World
@@ -264,15 +306,94 @@ FWacomLocalSettingsSnapshot UWacomSettingsSubsystem::GetDefaultSnapshot() const
 	return FWacomLocalSettingsDefaults::Build(GetSettings());
 }
 
-TArray<FIntPoint> UWacomSettingsSubsystem::GetSupportedScreenResolutions() const
+FWacomScreenResolutionOptions UWacomSettingsSubsystem::GetScreenResolutionOptions(
+	EWindowMode::Type WindowMode,
+	FIntPoint CurrentResolution) const
 {
-	TArray<FIntPoint> Resolutions;
-	UKismetSystemLibrary::GetSupportedFullscreenResolutions(Resolutions);
-	Resolutions.Sort([](const FIntPoint& A, const FIntPoint& B)
+	FIntPoint DesktopResolution = FIntPoint::ZeroValue;
+	FIntPoint WindowWorkArea = FIntPoint::ZeroValue;
+	TArray<FIntPoint> FullscreenResolutions;
+
+#if WITH_AUTOMATION_TESTS
+	if (bHasScreenResolutionEnvironmentOverrideForTest)
 	{
-		return A.X == B.X ? A.Y < B.Y : A.X < B.X;
-	});
-	return Resolutions;
+		DesktopResolution = DesktopResolutionOverrideForTest;
+		WindowWorkArea = WindowWorkAreaOverrideForTest;
+		FullscreenResolutions = FullscreenResolutionsOverrideForTest;
+	}
+	else
+#endif
+	{
+		if (const UWacomGameUserSettings* Settings = GetSettings())
+		{
+			DesktopResolution = Settings->GetDesktopResolution();
+		}
+		if (FSlateApplication::IsInitialized())
+		{
+			const FSlateRect WorkArea = FSlateApplication::Get().GetPreferredWorkArea();
+			WindowWorkArea = FIntPoint(
+				FMath::RoundToInt(WorkArea.Right - WorkArea.Left),
+				FMath::RoundToInt(WorkArea.Bottom - WorkArea.Top));
+		}
+		if (WindowMode == EWindowMode::Fullscreen)
+		{
+			UKismetSystemLibrary::GetSupportedFullscreenResolutions(FullscreenResolutions);
+		}
+	}
+
+	if (!IsUsableResolution(DesktopResolution))
+	{
+		DesktopResolution = IsUsableResolution(CurrentResolution)
+			? CurrentResolution
+			: MinimumSupportedResolution;
+	}
+	if (!IsUsableResolution(WindowWorkArea))
+	{
+		WindowWorkArea = DesktopResolution;
+	}
+
+	FWacomScreenResolutionOptions Options;
+	Options.DesktopResolution = DesktopResolution;
+	if (WindowMode == EWindowMode::WindowedFullscreen)
+	{
+		return Options;
+	}
+
+	auto IsValidForMode = [&](const FIntPoint Resolution)
+	{
+		if (!MeetsMinimumResolution(Resolution))
+		{
+			return false;
+		}
+		if (WindowMode == EWindowMode::Fullscreen)
+		{
+			return FullscreenResolutions.Contains(Resolution);
+		}
+		if (WindowMode == EWindowMode::Windowed)
+		{
+			return FitsWithin(Resolution, WindowWorkArea);
+		}
+		return false;
+	};
+
+	for (const FIntPoint Resolution : GetCuratedScreenResolutions())
+	{
+		if (IsValidForMode(Resolution))
+		{
+			Options.SelectableResolutions.AddUnique(Resolution);
+		}
+	}
+	if (IsValidForMode(DesktopResolution))
+	{
+		Options.SelectableResolutions.AddUnique(DesktopResolution);
+	}
+	if (IsValidForMode(CurrentResolution))
+	{
+		Options.SelectableResolutions.AddUnique(CurrentResolution);
+	}
+	SortResolutions(Options.SelectableResolutions);
+	Options.bCanSelectResolution = !Options.SelectableResolutions.IsEmpty();
+	return Options;
 }
 
 float UWacomSettingsSubsystem::GetRemainingVideoModeConfirmationSeconds() const

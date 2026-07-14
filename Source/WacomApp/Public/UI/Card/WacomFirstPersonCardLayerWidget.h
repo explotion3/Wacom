@@ -115,6 +115,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 	FLinearColor AimArrowColor = FLinearColor::White;
 	FVector2D AimArrowStart = FVector2D::ZeroVector;
 	FVector2D AimArrowEnd = FVector2D::ZeroVector;
+	float AimArrowLineThickness = 3.0f;
+	float AimArrowHeadLength = 18.0f;
+	float AimArrowHeadWidth = 9.0f;
 	TSubclassOf<UWacomFirstPersonCardViewWidget> CardViewClass;
 };
 #endif
@@ -416,4 +419,5 @@ private:
 	FLinearColor ResolveAimArrowColor() const;
 	FVector2D ResolveAimArrowStart() const;
 	FVector2D ResolveAimArrowEnd() const;
+	float ResolveAimArrowPresentationScale() const;
 };

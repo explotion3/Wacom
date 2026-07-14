@@ -23,6 +23,7 @@
 #include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
 #include "UI/Card/WacomFirstPersonCardSelectionStyle.h"
 #include "UI/Card/WacomFirstPersonCardLayerWidget.h"
+#include "UI/Card/WacomFirstPersonCardPresentationScalePolicy.h"
 #if WITH_AUTOMATION_TESTS
 #include "Cards/CardDefinition.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
@@ -43,6 +44,69 @@ struct FWacomFirstPersonCardAccessibilityBridge
 			Config,
 			Anchor.RuntimeDecorativeFlashIntensityScale,
 			Anchor.bRuntimeSimplifiedMotion);
+	}
+};
+
+struct FWacomFirstPersonCardPresentationScaleBridge
+{
+	static void Apply(
+		const UWacomFirstPersonCardAnchorComponent& Anchor,
+		FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
+		FVector2D ViewportPixelSize = FVector2D::ZeroVector;
+		if (!Anchor.GetViewportSizeForAnchor(ViewportPixelSize))
+		{
+			ViewportPixelSize = FVector2D::ZeroVector;
+		}
+
+		const FWacomFirstPersonCardPresentationScaleResult ScaleResult =
+			FWacomFirstPersonCardPresentationScalePolicy::Resolve(
+				ViewportPixelSize,
+				Anchor.GetViewportScaleForAnchor());
+		Config.TargetPhysicalScale = ScaleResult.TargetPhysicalScale;
+		Config.PresentationScale = ScaleResult.PresentationScale;
+		const float Scale = Config.PresentationScale;
+
+		// Hand geometry and the card body share one runtime-only presentation space.
+		Config.HandCardRenderScale *= Scale;
+		Config.AuthoredCardSpacingPixels *= Scale;
+		Config.AuthoredMaxHandWidthPixels *= Scale;
+		Config.AuthoredHandScreenOffset *= Scale;
+		Config.AuthoredCenterLiftPixels *= Scale;
+		Config.HandMaxEdgeDropPixels *= Scale;
+		Config.ShortHandEdgeDropPixels *= Scale;
+
+		// Only spatial motion values scale. Timing, opacity, angle and input contracts stay authored.
+		Config.CardSlotEnterOffsetPixels *= Scale;
+		Config.CardSlotExitOffsetPixels *= Scale;
+		Config.DrawnCardEnterOffsetPixels *= Scale;
+		Config.DrawnCardEnterArcLiftPixels *= Scale;
+		Config.GainedCardEnterOffsetPixels *= Scale;
+		Config.GainedCardEnterArcLiftPixels *= Scale;
+		Config.HandAnchorCardEnterOffsetPixels *= Scale;
+		Config.HandAnchorCardEnterArcLiftPixels *= Scale;
+		Config.PlayedCardExitOffsetPixels *= Scale;
+		Config.DiscardedCardExitOffsetPixels *= Scale;
+
+		Config.PendingTargetingLiftPixels *= Scale;
+		Config.HoverLiftPixels *= Scale;
+		Config.DragCardTargetFocusLiftPixels *= Scale;
+		Config.DragPickupLiftPixels *= Scale;
+		Config.DenyFeedbackShakePixels *= Scale;
+		Config.RetainedFeedbackLiftPixels *= Scale;
+
+		// Playback copies this style at launch, so an active transfer keeps its
+		// starting multiplier while later transfers consume the current one.
+		FWacomFirstPersonCardPileTransferStyleData& PileStyle = Config.PileTransfer.Style;
+		PileStyle.GlyphSize *= Scale;
+		PileStyle.MinArcHeightPixels *= Scale;
+		PileStyle.MaxArcHeightPixels *= Scale;
+		PileStyle.TrailHeadWidthPixels *= Scale;
+		PileStyle.TrailTailWidthPixels *= Scale;
+		PileStyle.MoteMinSizePixels *= Scale;
+		PileStyle.MoteMaxSizePixels *= Scale;
+		PileStyle.MoteBackwardDistancePixels *= Scale;
+		PileStyle.MoteLateralDistancePixels *= Scale;
 	}
 };
 
@@ -324,7 +388,7 @@ namespace
 		Config.DragCardTargetFocusZOrderBoost = Anchor.DragCardTargetFocusZOrderBoost;
 	}
 
-	FWacomFirstPersonCardResolvedLayoutConfig BuildResolvedLayoutConfigFromComponent(
+	FWacomFirstPersonCardResolvedLayoutConfig BuildBaseResolvedLayoutConfigFromComponent(
 		const UWacomFirstPersonCardAnchorComponent& Anchor)
 	{
 		FWacomFirstPersonCardResolvedLayoutConfig Config;
@@ -333,6 +397,15 @@ namespace
 		BuildMotionConfigFromAnchor(Anchor, Config);
 		BuildInteractionConfigFromAnchor(Anchor, Config);
 		FWacomFirstPersonCardAccessibilityBridge::Apply(Anchor, Config);
+		return Config;
+	}
+
+	FWacomFirstPersonCardResolvedLayoutConfig BuildResolvedLayoutConfigFromComponent(
+		const UWacomFirstPersonCardAnchorComponent& Anchor)
+	{
+		FWacomFirstPersonCardResolvedLayoutConfig Config =
+			BuildBaseResolvedLayoutConfigFromComponent(Anchor);
+		FWacomFirstPersonCardPresentationScaleBridge::Apply(Anchor, Config);
 		return Config;
 	}
 
@@ -581,6 +654,8 @@ namespace
 			Combine(GetTypeHash(Value.ToString()));
 		};
 
+		AddFloat(Config.TargetPhysicalScale);
+		AddFloat(Config.PresentationScale);
 		AddInt(static_cast<int32>(Config.ProjectionMode));
 		AddInt(static_cast<int32>(Config.ViewportClampMode));
 		AddFloat(Config.LookInfluenceYaw);
@@ -1650,7 +1725,19 @@ UWacomFirstPersonCardAnchorComponent::BuildLayoutFixtureCardSlotViews() const
 FWacomFirstPersonCardAnchorAutomationTestView UWacomFirstPersonCardAnchorComponent::GetAutomationTestViewForTest() const
 {
 	RefreshResolvedCardLayoutRuntimeState();
+	const FWacomFirstPersonCardResolvedLayoutConfig ResolvedConfig = ResolveLayoutConfig(*this);
 	FWacomFirstPersonCardAnchorAutomationTestView View;
+	View.TargetPhysicalScale = ResolvedConfig.TargetPhysicalScale;
+	View.PresentationScale = ResolvedConfig.PresentationScale;
+	View.ResolvedHandCardRenderScale = ResolvedConfig.HandCardRenderScale;
+	View.ResolvedCardSpacingPixels = ResolvedConfig.AuthoredCardSpacingPixels;
+	View.ResolvedHoverLiftPixels = ResolvedConfig.HoverLiftPixels;
+	View.ResolvedDragPickupLiftPixels = ResolvedConfig.DragPickupLiftPixels;
+	View.ResolvedDenyShakePixels = ResolvedConfig.DenyFeedbackShakePixels;
+	View.ResolvedRetainedLiftPixels = ResolvedConfig.RetainedFeedbackLiftPixels;
+	View.ResolvedDrawnEnterOffsetPixels = ResolvedConfig.DrawnCardEnterOffsetPixels;
+	View.ResolvedDrawnEnterArcLiftPixels = ResolvedConfig.DrawnCardEnterArcLiftPixels;
+	View.ResolvedPileTransferStyle = ResolvedConfig.PileTransfer.Style;
 	View.bHasValidAnchor = bHasValidAnchor;
 	View.Mode = CurrentMode;
 	View.AnchorTransform = CurrentAnchorTransform;
@@ -1848,7 +1935,10 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureTickPrerequisites()
 
 bool UWacomFirstPersonCardAnchorComponent::RefreshResolvedCardLayoutRuntimeState() const
 {
+	const FWacomFirstPersonCardResolvedLayoutConfig BaseConfig =
+		BuildBaseResolvedLayoutConfigFromComponent(*this);
 	const FWacomFirstPersonCardResolvedLayoutConfig Config = ResolveLayoutConfig(*this);
+	const uint32 BaseConfigHash = BuildResolvedLayoutConfigHash(BaseConfig);
 	const uint32 ConfigHash = BuildResolvedLayoutConfigHash(Config);
 	const bool bConfigChanged =
 		!bHasResolvedCardLayoutConfigHash
@@ -1858,17 +1948,24 @@ bool UWacomFirstPersonCardAnchorComponent::RefreshResolvedCardLayoutRuntimeState
 		return false;
 	}
 
+	const bool bPresentationScaleOnlyChange =
+		bHasResolvedCardLayoutConfigHash
+		&& bHasResolvedCardBaseConfigHash
+		&& LastResolvedCardBaseConfigHash == BaseConfigHash;
 	bHasResolvedCardLayoutConfigHash = true;
+	bHasResolvedCardBaseConfigHash = true;
+	LastResolvedCardBaseConfigHash = BaseConfigHash;
 	LastResolvedCardLayoutConfigHash = ConfigHash;
-	InvalidateResolvedCardLayoutRuntimeState();
+	InvalidateResolvedCardLayoutRuntimeState(bPresentationScaleOnlyChange);
 	return true;
 }
 
-void UWacomFirstPersonCardAnchorComponent::InvalidateResolvedCardLayoutRuntimeState() const
+void UWacomFirstPersonCardAnchorComponent::InvalidateResolvedCardLayoutRuntimeState(
+	bool bPreservePresentationPlayback) const
 {
 	bHasCachedOwnerConfig = false;
 	ResetAnchorScreenSmoothing();
-	if (CardLayerWidget)
+	if (CardLayerWidget && !bPreservePresentationPlayback)
 	{
 		CardLayerWidget->ClearSlotMotionState();
 	}

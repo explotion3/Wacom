@@ -6,6 +6,11 @@
 
 namespace
 {
+	float ResolveDetailPresentationScale(const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		return FMath::Clamp(SlotView.PresentationScale, 0.5f, 1.0f);
+	}
+
 	bool AreDetailTextsEquivalent(const FText& Left, const FText& Right)
 	{
 		return Left.ToString() == Right.ToString();
@@ -200,7 +205,6 @@ bool FWacomFirstPersonCardDetailMotionController::ShowAtSlot(
 	if (!Config.bEnableReadabilityPolish)
 	{
 		Panel.SetRenderOpacity(1.0f);
-		Panel.SetRenderTransform(FWidgetTransform());
 		Panel.SetVisibility(ESlateVisibility::HitTestInvisible);
 		return true;
 	}
@@ -311,7 +315,10 @@ void FWacomFirstPersonCardDetailMotionController::TickMotion(
 
 	const FVector2D TargetPosition =
 		MotionState.bHasTargetPosition ? MotionState.TargetPosition : FVector2D::ZeroVector;
-	const float ResetDistance = FMath::Max(0.0f, Config.PositionResetDistancePixels);
+	const float PresentationScale = ResolveDetailPresentationScale(MotionState.ActiveSlot);
+	const float ResetDistance = FMath::Max(
+		0.0f,
+		Config.PositionResetDistancePixels * PresentationScale);
 	if (!MotionState.bHasVisualPosition
 		|| MotionState.bResetPosition
 		|| (ResetDistance > 0.0f
@@ -350,7 +357,12 @@ void FWacomFirstPersonCardDetailMotionController::TickMotion(
 		return;
 	}
 
-	ApplyMotionVisual(*Panel, MotionState.VisualPosition, MotionState.VisualOpacity, Config);
+	ApplyMotionVisual(
+		*Panel,
+		MotionState.VisualPosition,
+		MotionState.VisualOpacity,
+		Config,
+		PresentationScale);
 }
 
 void FWacomFirstPersonCardDetailMotionController::SetCurrentSource(
@@ -402,23 +414,27 @@ void FWacomFirstPersonCardDetailMotionController::PositionBesideSlot(
 	const FWacomFirstPersonCardDetailMotionConfig& Config,
 	const FVector2D& ViewportSize)
 {
+	const float PresentationScale = ResolveDetailPresentationScale(SlotView);
 	const FVector2D AnchorSize =
 		Config.AnchorBaseSize * FMath::Max(0.01f, SlotView.RenderScale);
 	const FVector2D AnchorPosition = SlotView.ScreenPosition - AnchorSize * 0.5f;
+	const FVector2D VisualPanelSize = Config.PanelEstimatedSize * PresentationScale;
+	const float ScaledPadding = Config.DetailPadding * PresentationScale;
+	const float ScaledHysteresis = Config.SideSwitchHysteresisPixels * PresentationScale;
 	const FVector2D Position = Config.bEnableReadabilityPolish
 		? ComputeStablePosition(
 			AnchorPosition,
 			AnchorSize,
 			ViewportSize,
-			Config.PanelEstimatedSize,
-			Config.DetailPadding,
-			Config.SideSwitchHysteresisPixels)
+			VisualPanelSize,
+			ScaledPadding,
+			ScaledHysteresis)
 		: ComputeImmediatePosition(
 			AnchorPosition,
 			AnchorSize,
 			ViewportSize,
-			Config.PanelEstimatedSize,
-			Config.DetailPadding);
+			VisualPanelSize,
+			ScaledPadding);
 
 	Panel.SetDesiredSizeInViewport(Config.PanelEstimatedSize);
 	Panel.SetAlignmentInViewport(FVector2D::ZeroVector);
@@ -429,7 +445,7 @@ void FWacomFirstPersonCardDetailMotionController::PositionBesideSlot(
 		return;
 	}
 
-	Panel.SetPositionInViewport(Position, false);
+	ApplyMotionVisual(Panel, Position, 1.0f, Config, PresentationScale);
 	LastPanelPosition = Position;
 }
 
@@ -536,13 +552,14 @@ bool FWacomFirstPersonCardDetailMotionController::ComputeTarget(
 	const FVector2D AnchorSize =
 		Config.AnchorBaseSize * FMath::Max(0.01f, SlotView.RenderScale);
 	const FVector2D AnchorPosition = SlotView.ScreenPosition - AnchorSize * 0.5f;
+	const float PresentationScale = ResolveDetailPresentationScale(SlotView);
 	OutPosition = ComputeStablePosition(
 		AnchorPosition,
 		AnchorSize,
 		ViewportSize,
-		Config.PanelEstimatedSize,
-		Config.DetailPadding,
-		Config.SideSwitchHysteresisPixels);
+		Config.PanelEstimatedSize * PresentationScale,
+		Config.DetailPadding * PresentationScale,
+		Config.SideSwitchHysteresisPixels * PresentationScale);
 	return true;
 }
 
@@ -607,20 +624,28 @@ void FWacomFirstPersonCardDetailMotionController::ApplyMotionVisual(
 	UWacomCardDetailPanel& Panel,
 	const FVector2D& Position,
 	float Opacity,
-	const FWacomFirstPersonCardDetailMotionConfig& Config)
+	const FWacomFirstPersonCardDetailMotionConfig& Config,
+	float PresentationScale)
 {
 	const float ClampedOpacity = FMath::Clamp(Opacity, 0.0f, 1.0f);
 	Panel.SetVisibility(ESlateVisibility::HitTestInvisible);
 	Panel.SetRenderOpacity(ClampedOpacity);
 	const float StartScale = FMath::Clamp(Config.AppearStartScale, 0.5f, 1.0f);
-	const float Scale = FMath::Lerp(StartScale, 1.0f, ClampedOpacity);
+	const float AppearScale = FMath::Lerp(StartScale, 1.0f, ClampedOpacity);
+	const float StablePresentationScale = FMath::Clamp(PresentationScale, 0.5f, 1.0f);
+	const float Scale = StablePresentationScale * AppearScale;
 	FWidgetTransform Transform = Panel.GetRenderTransform();
 	Transform.Scale = FVector2D(Scale, Scale);
 	Panel.SetRenderTransform(Transform);
 	Panel.SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	Panel.SetDesiredSizeInViewport(Config.PanelEstimatedSize);
 	Panel.SetAlignmentInViewport(FVector2D::ZeroVector);
-	Panel.SetPositionInViewport(Position, false);
+	const FVector2D Pivot(0.5f, 0.5f);
+	const FVector2D VisualInset = Config.PanelEstimatedSize * (1.0f - Scale) * Pivot;
+	Panel.SetPositionInViewport(Position - VisualInset, false);
+#if WITH_AUTOMATION_TESTS
+	LastAppliedPanelLayoutPositionForTest = Position - VisualInset;
+#endif
 	LastPanelPosition = Position;
 }
 

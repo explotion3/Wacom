@@ -39,6 +39,11 @@ struct FWacomSettingsSubsystemTestAccess
 	static void ConfigureIsolatedSettings(
 		UWacomSettingsSubsystem& Subsystem,
 		UWacomGameUserSettings& Settings);
+	static void ConfigureScreenResolutionEnvironment(
+		UWacomSettingsSubsystem& Subsystem,
+		FIntPoint DesktopResolution,
+		FIntPoint WindowWorkArea,
+		const TArray<FIntPoint>& FullscreenResolutions);
 	static bool ExpirePendingVideoMode(UWacomSettingsSubsystem& Subsystem);
 	static int32 GetPersistenceRequestCount(const UWacomSettingsSubsystem& Subsystem);
 	static FWacomLocalSettingsSnapshot BuildFallbackDefaultSnapshot();
