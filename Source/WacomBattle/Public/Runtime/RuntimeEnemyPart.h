@@ -51,11 +51,9 @@ struct WACOMBATTLE_API FRuntimeEnemyPart
 	UPROPERTY()
 	FIntentDefinition CurrentIntent;
 
+	/** Sequence selector 下一次查找候选意图时使用的起始索引。 */
 	UPROPERTY()
 	int32 BehaviorSequenceCursor = 0;
-
-	UPROPERTY()
-	int32 BehaviorSelectionCounter = 0;
 
 	UPROPERTY()
 	TMap<FName, int32> IntentCooldownSelectionsRemaining;

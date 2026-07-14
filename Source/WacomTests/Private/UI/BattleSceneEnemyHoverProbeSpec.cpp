@@ -259,7 +259,6 @@ bool FWacomUIBattleSceneEnemyPartHoverScalePrioritySpec::RunTest(const FString& 
 	Presentation->VisualTargetComponent = Primitive;
 	Presentation->HoverProbeScale = 1.04f;
 	Presentation->TargetableAffordanceScale = 1.10f;
-	Presentation->DragTargetPreviewScale = 1.20f;
 
 	const FVector BaseScale = Primitive->GetRelativeScale3D();
 	const FGuid WorldTargetId = FGuid::NewGuid();
@@ -280,7 +279,7 @@ bool FWacomUIBattleSceneEnemyPartHoverScalePrioritySpec::RunTest(const FString& 
 	TestEqual(TEXT("Targetable overrides hover scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.10f);
 
 	Presentation->SetDragTargetPreviewState(EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
-	TestEqual(TEXT("Drag preview overrides targetable and hover"), Primitive->GetRelativeScale3D(), BaseScale * 1.20f);
+	TestEqual(TEXT("Drag preview suppresses targetable and hover scale"), Primitive->GetRelativeScale3D(), BaseScale);
 
 	Presentation->ClearDragTargetPreviewState();
 	TestEqual(TEXT("Clearing drag restores targetable scale"), Primitive->GetRelativeScale3D(), BaseScale * 1.10f);

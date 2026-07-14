@@ -9,8 +9,19 @@
 namespace
 {
 	constexpr float EnemyPartHpEmptiedExtraDelay = 0.45f;
-	constexpr float DamageTargetCueDelay = 0.18f;
+	constexpr float DamageTargetCueDuration = 0.30f;
+	constexpr float DamageTargetCueConfirmationLeadSeconds = 0.14f;
 	constexpr float EnemyPartDestroyedTargetCueDelay = 0.30f;
+
+	int32 BuildTargetCueSeed(
+		int32 EventSequence,
+		const FBattlePartSlotIdentity& TargetPartKey,
+		int32 Amount)
+	{
+		uint32 Hash = HashCombineFast(GetTypeHash(EventSequence), GetTypeHash(TargetPartKey));
+		Hash = HashCombineFast(Hash, GetTypeHash(Amount));
+		return static_cast<int32>(Hash & 0x7FFFFFFFu);
+	}
 }
 
 FWacomBattleEventPresentationQueue::FWacomBattleEventPresentationQueue(
@@ -40,8 +51,22 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 	}
 
 	bool bAddedPresentationStep = false;
+	bool bAddedDamageConfirmationLead = false;
 	for (const FBattleEvent& Event : Events)
 	{
+		if (!bAddedDamageConfirmationLead
+			&& Event.Type == EBattleEventType::DamageDealt
+			&& Event.ActorEnemyPartKey.IsValidKey())
+		{
+			FWacomBattlePresentationStep LeadStep;
+			LeadStep.Type = EWacomBattlePresentationStepType::Delay;
+			LeadStep.EventSequence = Event.Sequence;
+			LeadStep.SourceEventType = Event.Type;
+			LeadStep.Duration = DamageTargetCueConfirmationLeadSeconds;
+			Steps.Add(MoveTemp(LeadStep));
+			bAddedPresentationStep = true;
+			bAddedDamageConfirmationLead = true;
+		}
 		bAddedPresentationStep |= BuildStepsForEvent(Event);
 	}
 
@@ -129,11 +154,18 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 		CueStep.EventSequence = Event.Sequence;
 		CueStep.SourceEventType = Event.Type;
 		CueStep.TargetCue.SourceEventType = Event.Type;
+		CueStep.TargetCue.CueKind = Event.Type == EBattleEventType::EnemyPartHpEmptied
+			? EWacomBattlePresentationTargetCueKind::EnemyPartHpEmptied
+			: EWacomBattlePresentationTargetCueKind::DamageDealt;
 		CueStep.TargetCue.TargetPartKey = FBattlePartSlotIdentity::FromEnemyPartKey(Event.ActorEnemyPartKey);
 		CueStep.TargetCue.Amount = Event.Amount;
 		CueStep.TargetCue.Duration = Event.Type == EBattleEventType::EnemyPartHpEmptied
 			? EnemyPartDestroyedTargetCueDelay
-			: DamageTargetCueDelay;
+			: DamageTargetCueDuration;
+		CueStep.TargetCue.Seed = BuildTargetCueSeed(
+			Event.Sequence,
+			CueStep.TargetCue.TargetPartKey,
+			Event.Amount);
 		Steps.Add(MoveTemp(CueStep));
 		bAddedStep = true;
 	}

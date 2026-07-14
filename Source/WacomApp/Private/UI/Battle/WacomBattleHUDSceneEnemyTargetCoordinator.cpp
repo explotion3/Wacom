@@ -313,13 +313,6 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
 		{
 			Host->RefreshAttachedPartBadgeLayout();
-		}
-	}
-	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& WeakHost : SceneEnemyHosts)
-	{
-		if (AWacomBattleEnemyActor* Host = WeakHost.Get())
-		{
-			Host->RefreshAttachedPartBadgeLayout();
 			const FEnemySnapshot* MatchedEnemy = Snapshot.Enemies.FindByPredicate(
 				[Host](const FEnemySnapshot& Enemy)
 				{

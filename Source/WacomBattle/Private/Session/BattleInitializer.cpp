@@ -251,7 +251,7 @@ FWacomStatus FBattleInitializer::Initialize(
 
 	for (FRuntimeEnemyPart& Part : State.Enemy.Parts)
 	{
-		FEnemyIntentSelector::RefreshIntentForPart(State, Part, /*bAdvanceSequence*/false);
+		FEnemyIntentSelector::RefreshIntentForPart(State, Part);
 	}
 
 	// ---- 应用预先破坏部位（撤离重入）----

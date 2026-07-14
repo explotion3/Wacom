@@ -3,6 +3,8 @@
 #include "Actors/WacomBattleEnemyPartActor.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomBattleEnemyPartImpactStyle.h"
+#include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
 #include "Actors/WacomBattleEnemyPartTargetAuthoringHelpers.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
@@ -29,6 +31,13 @@ AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
 	VisualLayersRoot->SetRelativeRotation(FRotator::ZeroRotator);
 	VisualLayersRoot->SetRelativeScale3D(FVector::OneVector);
 	VisualLayersRoot->bEditableWhenInherited = false;
+
+	ImpactAnchor = CreateDefaultSubobject<USceneComponent>(TEXT("ImpactAnchor"));
+	ImpactAnchor->SetupAttachment(RootComponent);
+	ImpactAnchor->SetRelativeLocation(ImpactAnchorRelativeLocation);
+	ImpactAnchor->SetRelativeRotation(FRotator::ZeroRotator);
+	ImpactAnchor->SetRelativeScale3D(FVector::OneVector);
+	ImpactAnchor->bEditableWhenInherited = false;
 
 	InteractionTargetComponent =
 		CreateDefaultSubobject<UWacomInteractionTargetComponent>(TEXT("InteractionTarget"));
@@ -85,16 +94,22 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 
 	if (PresentationComponent)
 	{
+		if (ImpactAnchor)
+		{
+			ImpactAnchor->SetRelativeLocation(ImpactAnchorRelativeLocation);
+		}
 		PresentationComponent->VisualTargetComponent = nullptr;
-		PresentationComponent->FeedbackTargetComponent = VisualLayersRoot;
+		PresentationComponent->SetPresentationTargets(VisualLayersRoot, ImpactAnchor, HitBounds);
+		PresentationComponent->SetImpactFeedbackStyle(
+			ResolveImpactStyle(),
+			bEnableImpactFeedback);
+		PresentationComponent->SetTargetPreviewFeedbackStyle(
+			ResolveTargetPreviewStyle(),
+			bEnableTargetPreviewFeedback);
 		PresentationComponent->bEnablePredictionDisplay = bEnablePredictionWidget;
 		PresentationComponent->PredictionBadgeScale = PredictionBadgeScale;
 		PresentationComponent->PredictionBadgeZOffsetWhenVisible = PredictionBadgeZOffsetWhenVisible;
-		PresentationComponent->TargetConfirmPulseScale = TargetConfirmPulseScale;
-		PresentationComponent->DamagePulseScale = DamagePulseScale;
-		PresentationComponent->DestroyedPulseScale = DestroyedPulseScale;
 		PresentationComponent->TargetableAffordanceScale = TargetableAffordanceScale;
-		PresentationComponent->DragTargetPreviewScale = DragTargetPreviewScale;
 		PresentationComponent->HoverProbeScale = HoverProbeScale;
 		PresentationComponent->CueHoldSeconds = CueHoldSeconds;
 	}
@@ -150,6 +165,42 @@ void AWacomBattleEnemyPartActor::SetHostVisualContext(bool bInHostVisualActive)
 
 	bHostVisualContextActive = bInHostVisualActive;
 	RefreshAuthoringState();
+}
+
+void AWacomBattleEnemyPartActor::SetHostImpactStyle(
+	UWacomBattleEnemyPartImpactStyle* InHostImpactStyle)
+{
+	if (HostImpactStyle == InHostImpactStyle)
+	{
+		return;
+	}
+
+	HostImpactStyle = InHostImpactStyle;
+	RefreshAuthoringState();
+}
+
+UWacomBattleEnemyPartImpactStyle* AWacomBattleEnemyPartActor::ResolveImpactStyle() const
+{
+	return ImpactStyleOverride ? ImpactStyleOverride.Get() : HostImpactStyle.Get();
+}
+
+void AWacomBattleEnemyPartActor::SetHostTargetPreviewStyle(
+	UWacomBattleEnemyPartTargetPreviewStyle* InHostTargetPreviewStyle)
+{
+	if (HostTargetPreviewStyle == InHostTargetPreviewStyle)
+	{
+		return;
+	}
+
+	HostTargetPreviewStyle = InHostTargetPreviewStyle;
+	RefreshAuthoringState();
+}
+
+UWacomBattleEnemyPartTargetPreviewStyle* AWacomBattleEnemyPartActor::ResolveTargetPreviewStyle() const
+{
+	return TargetPreviewStyleOverride
+		? TargetPreviewStyleOverride.Get()
+		: HostTargetPreviewStyle.Get();
 }
 
 FName AWacomBattleEnemyPartActor::GetEffectivePartSlotId() const
@@ -257,6 +308,25 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.MissingVisualLayerSpriteCount = VisualLayerView.MissingVisualLayerSpriteCount;
 	View.MissingVisualLayerFlipbookCount = VisualLayerView.MissingVisualLayerFlipbookCount;
 	View.FeedbackTargetName = VisualLayersRoot ? FName(*VisualLayersRoot->GetName()) : NAME_None;
+	View.bImpactAnchorReady = IsValid(ImpactAnchor)
+		&& !ImpactAnchor->GetComponentLocation().ContainsNaN();
+	View.ImpactAnchorName = ImpactAnchor ? FName(*ImpactAnchor->GetName()) : NAME_None;
+	View.ImpactAnchorRelativeLocation = ImpactAnchor
+		? ImpactAnchor->GetRelativeLocation()
+		: ImpactAnchorRelativeLocation;
+	View.ImpactAnchorWorldLocation = ImpactAnchor
+		? ImpactAnchor->GetComponentLocation()
+		: GetActorLocation();
+	View.bImpactFeedbackEnabled = bEnableImpactFeedback;
+	if (UWacomBattleEnemyPartImpactStyle* ResolvedStyle = ResolveImpactStyle())
+	{
+		View.ResolvedImpactStyleName = FName(*ResolvedStyle->GetName());
+	}
+	View.bTargetPreviewFeedbackEnabled = bEnableTargetPreviewFeedback;
+	if (UWacomBattleEnemyPartTargetPreviewStyle* ResolvedStyle = ResolveTargetPreviewStyle())
+	{
+		View.ResolvedTargetPreviewStyleName = FName(*ResolvedStyle->GetName());
+	}
 	View.PredictionWidgetName = PredictionWidgetComponent
 		? FName(*PredictionWidgetComponent->GetName())
 		: NAME_None;
@@ -316,6 +386,11 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringStatusPreview()
 	AuthoringMissingVisualLayerAssetCount = View.MissingVisualLayerAssetCount;
 	AuthoringDuplicateVisualLayerIds = View.DuplicateVisualLayerIds;
 	AuthoringFeedbackTargetName = View.FeedbackTargetName;
+	bAuthoringImpactAnchorReady = View.bImpactAnchorReady;
+	AuthoringImpactAnchorName = View.ImpactAnchorName;
+	AuthoringImpactAnchorWorldLocation = View.ImpactAnchorWorldLocation;
+	AuthoringResolvedImpactStyleName = View.ResolvedImpactStyleName;
+	AuthoringResolvedTargetPreviewStyleName = View.ResolvedTargetPreviewStyleName;
 	AuthoringDebugSummary = GetBattleSceneEnemyPartDebugSummary();
 }
 
@@ -329,10 +404,17 @@ void AWacomBattleEnemyPartActor::PostEditChangeProperty(FPropertyChangedEvent& P
 EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 	FDataValidationContext& Context) const
 {
-	return WacomBattleSceneEnemyAuthoring::ValidatePartPlacement(
+	EDataValidationResult Result = WacomBattleSceneEnemyAuthoring::ValidatePartPlacement(
 		*this,
 		Context,
 		Super::IsDataValid(Context));
+	if (ImpactAnchorRelativeLocation.ContainsNaN())
+	{
+		Context.AddError(FText::FromString(
+			TEXT("ImpactAnchorRelativeLocation 包含非有限值，无法作为世界命中特效锚点。")));
+		Result = EDataValidationResult::Invalid;
+	}
+	return Result;
 }
 #endif
 

@@ -357,7 +357,6 @@ bool FWacomUIBattleEnemyPartWorldTargetBridgeRoutesCueSpec::RunTest(const FStrin
 	Presentation->RegisterComponent();
 	Bridge->SetPartId(TEXT("Test.Part.Body"));
 	Presentation->VisualTargetComponent = Primitive;
-	Presentation->TargetConfirmPulseScale = 1.25f;
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
 	HUD->SetWorldForTest(World);
@@ -375,7 +374,8 @@ bool FWacomUIBattleEnemyPartWorldTargetBridgeRoutesCueSpec::RunTest(const FStrin
 	TestEqual(TEXT("Presentation receives target confirm cue"), View.CuePlayCount, 1);
 	TestEqual(TEXT("Presentation records target confirm kind"), View.LastCueKind, FName(TEXT("TargetConfirmed")));
 	TestEqual(TEXT("Presentation does not mark target confirm as damage"), View.LastCueType, EBattleEventType::None);
-	TestEqual(TEXT("Target confirm scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.25f);
+	TestTrue(TEXT("Target confirm playback is active"), View.bCuePlaybackActive);
+	TestEqual(TEXT("Target confirm does not scale primitive"), Primitive->GetRelativeScale3D(), BaseScale);
 
 	return true;
 }
@@ -422,7 +422,6 @@ bool FWacomUIBattleEnemyPartWorldTargetBridgeDragPreviewSpec::RunTest(const FStr
 	Owner->AddInstanceComponent(Presentation);
 	Presentation->RegisterComponent();
 	Presentation->VisualTargetComponent = Primitive;
-	Presentation->DragTargetPreviewScale = 1.15f;
 
 	const FVector BaseScale = Primitive->GetRelativeScale3D();
 	Presentation->SetDragTargetPreviewState(EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
@@ -432,7 +431,7 @@ bool FWacomUIBattleEnemyPartWorldTargetBridgeDragPreviewSpec::RunTest(const FStr
 	TestEqual(TEXT("Drag preview state recorded"),
 		View.DragPreviewState,
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
-	TestEqual(TEXT("Drag preview scales primitive"), Primitive->GetRelativeScale3D(), BaseScale * 1.15f);
+	TestEqual(TEXT("Drag preview keeps authored primitive scale"), Primitive->GetRelativeScale3D(), BaseScale);
 	TestEqual(TEXT("Drag preview does not count as battle cue"), View.CuePlayCount, 0);
 
 	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;

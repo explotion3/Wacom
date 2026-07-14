@@ -32,6 +32,7 @@ public class WacomTests : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"InputCore",
+			"Niagara",
 			"Slate",
 			"SlateCore"
 		});

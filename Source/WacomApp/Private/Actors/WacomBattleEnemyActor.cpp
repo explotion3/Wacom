@@ -435,6 +435,8 @@ void AWacomBattleEnemyActor::SyncHostIdentityToPartActors() const
 		{
 			PartActor->SetEnemySlotId(EffectiveEnemySlotId);
 			PartActor->SetHostVisualContext(bHostVisualActive);
+			PartActor->SetHostImpactStyle(DefaultImpactStyle);
+			PartActor->SetHostTargetPreviewStyle(DefaultTargetPreviewStyle);
 		}
 	}
 }

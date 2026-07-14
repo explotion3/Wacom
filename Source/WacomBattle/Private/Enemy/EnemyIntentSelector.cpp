@@ -210,7 +210,6 @@ namespace
 void FEnemyIntentSelector::RefreshIntentForPart(
 	FBattleState& State,
 	FRuntimeEnemyPart& Part,
-	bool bAdvanceSequence,
 	FBattleEventBus* Events)
 {
 	if (Part.bDestroyed)

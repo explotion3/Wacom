@@ -19,6 +19,8 @@ class UPaperSpriteComponent;
 class USceneComponent;
 class UWidgetComponent;
 class UWacomBattleEnemyHostVisualComponent;
+class UWacomBattleEnemyPartImpactStyle;
+class UWacomBattleEnemyPartTargetPreviewStyle;
 class UWacomBattleEnemyPanelWidget;
 struct FWacomBattleEnemyPartEntryViewData;
 struct FWacomBattleEnemyPanelViewData;
@@ -153,6 +155,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
 		meta = (ToolTip = "Host 默认敌人槽位 ID。单敌人通常为 Enemy；关卡 BattleTrigger.SceneEnemyHostSlots 会在进入战斗前按 Encounter enemy slot 注入或覆盖它。"))
 	FName EnemySlotId = TEXT("Enemy");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Impact",
+		meta = (ToolTip = "Host 下所有部位默认使用的世界像素命中特效 Style。单个 PartActor 的 ImpactStyleOverride 优先；为空时仍消费 Cue，但不播放 Niagara。"))
+	TObjectPtr<UWacomBattleEnemyPartImpactStyle> DefaultImpactStyle = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Target Preview",
+		meta = (ToolTip = "Host 下所有部位默认使用的拖卡世界目标像素预演 Style。单个 PartActor 的 TargetPreviewStyleOverride 优先；为空时保留规则和预测 Badge，但不播放目标框。"))
+	TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle> DefaultTargetPreviewStyle = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual",
 		meta = (ToolTip = "Host 整体视觉类型。普通小怪推荐在 Host 上放一张整体 Sprite 或 Flipbook；部位命中仍由子 PartActor.HitBounds 决定。"))

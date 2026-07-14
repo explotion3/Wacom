@@ -1458,7 +1458,10 @@ void FWacomBattleHUDFirstPersonHandBridge::RecordPlayCommit(
 		FWacomBattlePresentationTargetCue Cue;
 		Cue.CueKind = EWacomBattlePresentationTargetCueKind::TargetConfirmed;
 		Cue.TargetPartKey = TargetPartKey;
-		Cue.Duration = 0.10f;
+		Cue.Duration = 0.24f;
+		Cue.Seed = static_cast<int32>(HashCombineFast(
+			GetTypeHash(CardInstanceId),
+			GetTypeHash(TargetPartKey)) & 0x7FFFFFFFu);
 		Runtime.PlayBattlePresentationCue(Cue);
 	}
 

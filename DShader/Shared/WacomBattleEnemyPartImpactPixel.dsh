@@ -1,0 +1,125 @@
+// Copyright Wacom. All Rights Reserved.
+// Procedural hard-pixel shapes shared by the world-space enemy impact material.
+
+Function SelfContained WacomBattleEnemyPartImpact_ComputeShape(
+    in float2 uv,
+    in float shapeKind,
+    in float normalizedAge,
+    in float pixelColumns,
+    in float outlineWidth,
+    in float previewValidity,
+    out float shapeMask,
+    out float coreMask)
+{
+    float safeColumns = max(4.0, pixelColumns);
+    float2 pixelUV = (floor(uv * safeColumns) + float2(0.5, 0.5)) / safeColumns;
+    float2 centered = pixelUV - float2(0.5, 0.5);
+    float2 absoluteCentered = abs(centered);
+    float safeWidth = max(0.01, outlineWidth);
+    float age = saturate(normalizedAge);
+
+    float square = step(max(absoluteCentered.x, absoluteCentered.y), 0.42);
+
+    float cornerHorizontal = step(absoluteCentered.x, 0.42)
+        * step(0.30, absoluteCentered.x)
+        * step(abs(absoluteCentered.y - 0.36), safeWidth);
+    float cornerVertical = step(absoluteCentered.y, 0.42)
+        * step(0.24, absoluteCentered.y)
+        * step(abs(absoluteCentered.x - 0.36), safeWidth);
+    float corner = saturate(cornerHorizontal + cornerVertical);
+
+    float diamondDistance = absoluteCentered.x + absoluteCentered.y;
+    float expandingRadius = lerp(0.12, 0.72, age);
+    float ring = step(abs(diamondDistance - expandingRadius), safeWidth);
+
+    float coreSize = lerp(0.28, 0.08, age);
+    float core = step(max(absoluteCentered.x, absoluteCentered.y), coreSize);
+    float mote = square;
+
+    float previewFrameRadius = lerp(0.46, 0.38, age);
+    float previewArmLength = 0.16;
+    float previewHorizontal = step(abs(absoluteCentered.y - previewFrameRadius), safeWidth)
+        * step(previewFrameRadius - previewArmLength, absoluteCentered.x)
+        * step(absoluteCentered.x, previewFrameRadius);
+    float previewVertical = step(abs(absoluteCentered.x - previewFrameRadius), safeWidth)
+        * step(previewFrameRadius - previewArmLength, absoluteCentered.y)
+        * step(absoluteCentered.y, previewFrameRadius);
+    float2 previewPixelIndex = floor(pixelUV * safeColumns);
+    float brokenCell = step(0.42, frac((previewPixelIndex.x * 0.754877666 + previewPixelIndex.y * 0.569840296)));
+    float previewFrame = saturate(previewHorizontal + previewVertical)
+        * lerp(brokenCell, 1.0, saturate(previewValidity));
+
+    float previewDiamondDistance = absoluteCentered.x + absoluteCentered.y;
+    float previewCore = step(abs(previewDiamondDistance - 0.24), safeWidth * 1.35)
+        * saturate(previewValidity);
+
+    float isMote = 1.0 - step(0.5, abs(shapeKind - 0.0));
+    float isCorner = 1.0 - step(0.5, abs(shapeKind - 1.0));
+    float isRing = 1.0 - step(0.5, abs(shapeKind - 2.0));
+    float isCore = 1.0 - step(0.5, abs(shapeKind - 3.0));
+    float isPreviewFrame = 1.0 - step(0.5, abs(shapeKind - 4.0));
+    float isPreviewCore = 1.0 - step(0.5, abs(shapeKind - 5.0));
+    shapeMask = saturate(
+        mote * isMote
+        + corner * isCorner
+        + ring * isRing
+        + core * isCore
+        + previewFrame * isPreviewFrame
+        + previewCore * isPreviewCore);
+    coreMask = saturate(core * isCore + previewCore * isPreviewCore);
+}
+
+Function SelfContained WacomBattleEnemyPartImpact_SelectPalette(
+    in float stableVariant,
+    in float3 primaryColor,
+    in float3 secondaryColor,
+    in float3 accentColor,
+    in float primaryWeight,
+    in float secondaryWeight,
+    out float3 paletteColor)
+{
+    float variant = frac(stableVariant);
+    float primaryThreshold = saturate(primaryWeight);
+    float secondaryThreshold = saturate(primaryThreshold + max(0.0, secondaryWeight));
+    float useSecondary = step(primaryThreshold, variant);
+    float useAccent = step(secondaryThreshold, variant);
+    paletteColor = lerp(primaryColor, secondaryColor, useSecondary);
+    paletteColor = lerp(paletteColor, accentColor, useAccent);
+}
+
+Function SelfContained WacomBattleEnemyPartImpact_ComposeAppearance(
+    in float shapeKind,
+    in float normalizedAge,
+    in float previewValidity,
+    in float decorativeClass,
+    in float shapeMask,
+    in float coreMask,
+    in float particleAlpha,
+    in float3 impactPaletteColor,
+    in float3 primaryColor,
+    in float3 secondaryColor,
+    in float3 invalidTargetColor,
+    in float impactDecorativeGlow,
+    in float previewGlow,
+    in float coreBrightness,
+    out float3 finalColor,
+    out float finalAlpha)
+{
+    float isPreview = step(3.5, shapeKind);
+    float isPreviewCore = 1.0 - step(0.5, abs(shapeKind - 5.0));
+    float validity = saturate(previewValidity);
+    float3 validPreviewColor = lerp(primaryColor, secondaryColor, isPreviewCore);
+    float3 previewColor = lerp(invalidTargetColor, validPreviewColor, validity);
+    float3 paletteColor = lerp(impactPaletteColor, previewColor, isPreview);
+
+    // Impact particles pass normalized age (0 -> 1). Preview particles pass the
+    // authored playback amount so their frame follows enter/hold/exit directly.
+    float lifeFade = lerp(1.0 - saturate(normalizedAge), saturate(normalizedAge), isPreview);
+    float impactBrightness = lerp(1.0, max(0.0, impactDecorativeGlow), saturate(decorativeClass));
+    float previewBrightness = 1.0 + max(0.0, previewGlow) * saturate(decorativeClass);
+    float decorativeBrightness = lerp(impactBrightness, previewBrightness, isPreview);
+    float brightness = decorativeBrightness + coreMask * max(0.0, coreBrightness - 1.0);
+
+    finalAlpha = saturate(shapeMask * lifeFade * particleAlpha);
+    finalColor = paletteColor * brightness * finalAlpha;
+}

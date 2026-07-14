@@ -4,7 +4,7 @@
 
 namespace
 {
-	float EaseOutCubic(float Alpha)
+	float EaseOutCubicHandTargetImpact(float Alpha)
 	{
 		const float Inverse = 1.0f - FMath::Clamp(Alpha, 0.0f, 1.0f);
 		return 1.0f - Inverse * Inverse * Inverse;
@@ -170,7 +170,7 @@ FWacomFirstPersonCardHandTargetImpactPlayback::BuildView() const
 			}
 			else if (ElapsedSeconds < Rebound)
 			{
-				const float Alpha = EaseOutCubic((ElapsedSeconds - Gate) / (Rebound - Gate));
+				const float Alpha = EaseOutCubicHandTargetImpact((ElapsedSeconds - Gate) / (Rebound - Gate));
 				View.ScaleMultiplier = FMath::Lerp(
 					Config.Style.CompressionScale, Config.Style.ReboundScale, Alpha);
 				View.TranslationYPixels = FMath::Lerp(
@@ -178,7 +178,7 @@ FWacomFirstPersonCardHandTargetImpactPlayback::BuildView() const
 			}
 			else
 			{
-				const float Alpha = EaseOutCubic(
+				const float Alpha = EaseOutCubicHandTargetImpact(
 					(ElapsedSeconds - Rebound) / FMath::Max(KINDA_SMALL_NUMBER, Duration - Rebound));
 				View.ScaleMultiplier = FMath::Lerp(Config.Style.ReboundScale, 1.0f, Alpha);
 				View.TranslationYPixels = FMath::Lerp(-Config.Style.ReboundLiftPixels, 0.0f, Alpha);
