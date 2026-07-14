@@ -220,11 +220,13 @@ namespace
 		Root->AddChild(Overlay);
 		UBorder* Backdrop = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("ButtonBackdrop"));
 		Backdrop->SetBrushColor(PanelSoft);
+		MarkVariable(*Asset.Blueprint, *Backdrop);
 		Overlay->AddChildToOverlay(Backdrop);
 		USizeBox* AccentSize = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("AccentSize"));
 		AccentSize->SetWidthOverride(4.0f);
 		UBorder* Accent = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Accent"));
 		Accent->SetBrushColor(Amber);
+		MarkVariable(*Asset.Blueprint, *Accent);
 		AccentSize->AddChild(Accent);
 		if (UOverlaySlot* AccentSlot = Overlay->AddChildToOverlay(AccentSize))
 		{
@@ -252,6 +254,7 @@ namespace
 		UBorder* Root = Tree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("RowBackdrop"));
 		Root->SetBrushColor(PanelSoft);
 		Root->SetPadding(FMargin(14.0f, 8.0f));
+		MarkVariable(*Asset.Blueprint, *Root);
 		Tree->RootWidget = Root;
 		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Row"));
 		Root->AddChild(Row);

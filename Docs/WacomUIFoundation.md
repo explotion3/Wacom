@@ -159,7 +159,9 @@ Continue 只有在 `bHasActiveJourney` 时显示，并由 `bCanContinueJourney` 
 
 全局 UMG DPI 使用 `UIScaleRule=Custom` 和 `UWacomCappedDesignDPIScalingRule`，设计基准固定为 `1920 × 1080`，`ApplicationScale=1.0`。规则按 `min(1, ViewportWidth / 1920, ViewportHeight / 1080)` 计算缩放：`1280 × 720` 约为 `0.667`、`1920 × 1080` 为 `1.0`，`2560 × 1440` 与 `3840 × 2160` 仍为 `1.0`。因此较小视口会完整容纳基准画布，而较高分辨率不会再次放大主菜单、Settings、暂停菜单、Run / Battle HUD 框架等按设计单位制作的固定尺寸元素；16:10 和超宽屏同样按较短比例适配并封顶。`UIScaleCurve` 与引擎 `ScaleToFit` 不再作为其它缩放来源；WBP 与 C++ fallback 都继承这一全局结果。本阶段最低视口为 `1280 × 720`，不增加 Settings 行或 Footer 的响应式重排，也不嵌套额外 `ScaleBox`。
 
-CommonUI 继续拥有键盘和手柄的焦点导航。主菜单导航按钮在 Construct / Destruct 中对称订阅 `UCommonButtonBase::OnFocusReceived / OnFocusLost`，将 CommonButton 内部 Slate 焦点与鼠标 Hover 合并为同一个强调状态，因此鼠标、键盘和手柄使用相同的底板、强调条、箭头和文字动画；`UWacomGameViewportClient` 只在当前焦点属于 `UWacomMainMenuButtonWidget` 时抑制 UE 通用蓝色 `FocusRectangle`，避免在项目动画上重复绘制第二套反馈。该策略不关闭全局 `RenderFocusRule`，Settings、暂停菜单和其他尚未声明自有焦点皮肤的控件仍保留引擎默认可见焦点；同时不改变控件 focusability、CommonUI 导航、确认或焦点恢复所有权。
+CommonUI 继续拥有键盘和手柄的焦点导航。主菜单导航按钮与通用 `UWacomMenuButtonWidget` 都在 Construct / Destruct 中对称订阅 `UCommonButtonBase::OnFocusReceived / OnFocusLost`，将 CommonButton 内部 Slate 焦点与鼠标 Hover 合并为同一个强调状态；主菜单继续使用自己的底板、强调条、箭头和插值动画，Settings / Pause / Modal 共用按钮则使用深色底板、琥珀强调条和文字色反馈。`UWacomSettingsOptionRow` 额外通过 focus-path 事件统一处理“焦点在行本身、左右步进按钮或 Slider 内”的整行高亮，因此切换分类后落到选项行也有明确反馈。
+
+`UWacomGameViewportClient` 只在当前焦点属于已经声明项目焦点皮肤的 `UWacomMainMenuButtonWidget`、`UWacomMenuButtonWidget` 或 `UWacomSettingsOptionRow` 时抑制 UE 通用蓝色 `FocusRectangle`，避免同一控件同时绘制两套选中反馈。该策略不关闭全局 `RenderFocusRule`；其它尚未拥有自绘焦点反馈的控件仍保留引擎默认焦点框，同时不改变控件 focusability、CommonUI 导航、确认或焦点恢复所有权。
 
 First-person 卡牌是明确的局部表现例外，不是第二套全局 DPI。美术真源 `148 × 210`、WBP 制作画布 `296 × 420` 均保持不变；Anchor 的 App-private 策略在全局 DPI 之后追加以 `2560 × 1440` 为参照、`0.5–1.0` 物理封顶的 `PresentationScale`。720p / 1080p / 1440p 的最终物理倍率分别为 `0.5 / 0.75 / 1.0`，4K 不继续放大。该倍率只服务 Battle / Run first-person 手牌、first-person 详情和相关空间特效；背包详情及其它 HUD 不消费它。
 

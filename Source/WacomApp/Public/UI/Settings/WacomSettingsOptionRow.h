@@ -7,8 +7,10 @@
 #include "WacomSettingsOptionRow.generated.h"
 
 class UCommonTextBlock;
+class UBorder;
 class USlider;
 class UWacomMenuButtonWidget;
+struct FWacomSettingsFocusPresentationTestAccess;
 
 enum class EWacomSettingsOptionKind : uint8
 {
@@ -48,6 +50,15 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual void NativeOnAddedToFocusPath(const FFocusEvent& InFocusEvent) override;
+	virtual void NativeOnRemovedFromFocusPath(const FFocusEvent& InFocusEvent) override;
+	virtual void NativeOnMouseEnter(
+		const FGeometry& InGeometry,
+		const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> RowBackdrop;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCommonTextBlock> LabelText;
@@ -65,6 +76,7 @@ protected:
 	TObjectPtr<USlider> ValueSlider;
 
 private:
+	void RefreshPresentationState();
 	void HandleDecreaseClicked();
 	void HandleIncreaseClicked();
 
@@ -73,4 +85,8 @@ private:
 
 	FWacomSettingsOptionRowViewData ViewData;
 	bool bApplyingViewData = false;
+	bool bFocusWithin = false;
+	bool bPointerHovered = false;
+
+	friend struct FWacomSettingsFocusPresentationTestAccess;
 };

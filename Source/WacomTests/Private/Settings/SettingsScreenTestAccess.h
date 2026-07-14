@@ -10,6 +10,28 @@
 #include "UI/Settings/WacomSettingsScreen.h"
 
 class UWacomSettingsSubsystem;
+class UWacomMenuButtonWidget;
+
+struct FWacomSettingsFocusPresentationTestAccess
+{
+	static void Construct(UWacomMenuButtonWidget& Button);
+	static void Destruct(UWacomMenuButtonWidget& Button);
+	static void Hover(UWacomMenuButtonWidget& Button);
+	static void Unhover(UWacomMenuButtonWidget& Button);
+	static void Focus(UWacomMenuButtonWidget& Button);
+	static void Unfocus(UWacomMenuButtonWidget& Button);
+	static FLinearColor ButtonBackdropColor(const UWacomMenuButtonWidget& Button);
+	static bool ButtonHasFocusPresentation(const UWacomMenuButtonWidget& Button);
+	static bool ButtonHasAuthoredVisualBindings(const UWacomMenuButtonWidget& Button);
+
+	static void Construct(UWacomSettingsOptionRow& Row);
+	static void Destruct(UWacomSettingsOptionRow& Row);
+	static void Focus(UWacomSettingsOptionRow& Row);
+	static void Unfocus(UWacomSettingsOptionRow& Row);
+	static FLinearColor RowBackdropColor(const UWacomSettingsOptionRow& Row);
+	static bool RowHasFocusPresentation(const UWacomSettingsOptionRow& Row);
+	static bool RowHasAuthoredVisualBindings(const UWacomSettingsOptionRow& Row);
+};
 
 struct FWacomSettingsScreenClassView
 {

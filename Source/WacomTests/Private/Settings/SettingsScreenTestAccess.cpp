@@ -5,8 +5,114 @@
 #if WITH_AUTOMATION_TESTS
 
 #include "Settings/WacomSettingsSubsystem.h"
+#include "Components/Border.h"
+#include "Input/Events.h"
 #include "UI/Foundation/WacomMenuButtonWidget.h"
 #include "UI/Settings/WacomSettingsConfirmationDialog.h"
+
+void FWacomSettingsFocusPresentationTestAccess::Construct(
+	UWacomMenuButtonWidget& Button)
+{
+	Button.Initialize();
+	Button.TakeWidget();
+	Button.NativeConstruct();
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Destruct(
+	UWacomMenuButtonWidget& Button)
+{
+	Button.NativeDestruct();
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Hover(
+	UWacomMenuButtonWidget& Button)
+{
+	Button.NativeOnHovered();
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Unhover(
+	UWacomMenuButtonWidget& Button)
+{
+	Button.NativeOnUnhovered();
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Focus(
+	UWacomMenuButtonWidget& Button)
+{
+	Button.OnFocusReceived().Broadcast();
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Unfocus(
+	UWacomMenuButtonWidget& Button)
+{
+	Button.OnFocusLost().Broadcast();
+}
+
+FLinearColor FWacomSettingsFocusPresentationTestAccess::ButtonBackdropColor(
+	const UWacomMenuButtonWidget& Button)
+{
+	return Button.ButtonBackdrop
+		? Button.ButtonBackdrop->GetBrushColor()
+		: FLinearColor::Transparent;
+}
+
+bool FWacomSettingsFocusPresentationTestAccess::ButtonHasFocusPresentation(
+	const UWacomMenuButtonWidget& Button)
+{
+	return Button.bPresentationFocused;
+}
+
+bool FWacomSettingsFocusPresentationTestAccess::ButtonHasAuthoredVisualBindings(
+	const UWacomMenuButtonWidget& Button)
+{
+	return Button.ButtonBackdrop && Button.Accent;
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Construct(
+	UWacomSettingsOptionRow& Row)
+{
+	Row.Initialize();
+	Row.TakeWidget();
+	Row.NativeConstruct();
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Destruct(
+	UWacomSettingsOptionRow& Row)
+{
+	Row.NativeDestruct();
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Focus(
+	UWacomSettingsOptionRow& Row)
+{
+	Row.NativeOnAddedToFocusPath(FFocusEvent(EFocusCause::Navigation, 0));
+}
+
+void FWacomSettingsFocusPresentationTestAccess::Unfocus(
+	UWacomSettingsOptionRow& Row)
+{
+	Row.NativeOnRemovedFromFocusPath(FFocusEvent(EFocusCause::Navigation, 0));
+}
+
+FLinearColor FWacomSettingsFocusPresentationTestAccess::RowBackdropColor(
+	const UWacomSettingsOptionRow& Row)
+{
+	return Row.RowBackdrop
+		? Row.RowBackdrop->GetBrushColor()
+		: FLinearColor::Transparent;
+}
+
+bool FWacomSettingsFocusPresentationTestAccess::RowHasFocusPresentation(
+	const UWacomSettingsOptionRow& Row)
+{
+	return Row.bFocusWithin;
+}
+
+bool FWacomSettingsFocusPresentationTestAccess::RowHasAuthoredVisualBindings(
+	const UWacomSettingsOptionRow& Row)
+{
+	return Row.RowBackdrop && Row.LabelText && Row.ValueText;
+}
 
 void FWacomSettingsScreenTestAccess::BuildAndConstruct(UWacomSettingsScreen& Screen)
 {

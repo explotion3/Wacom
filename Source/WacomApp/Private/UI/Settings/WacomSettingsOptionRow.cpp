@@ -46,14 +46,14 @@ TSharedRef<SWidget> UWacomSettingsOptionRow::RebuildWidget()
 	}
 	if (!WidgetTree->RootWidget)
 	{
-		UBorder* Root = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("RowBackdrop"));
-		Root->SetBrushColor(FLinearColor(0.025f, 0.038f, 0.060f, 0.88f));
-		Root->SetPadding(FMargin(12.0f, 7.0f));
-		WidgetTree->RootWidget = Root;
+		RowBackdrop = WidgetTree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(), TEXT("RowBackdrop"));
+		RowBackdrop->SetPadding(FMargin(12.0f, 7.0f));
+		WidgetTree->RootWidget = RowBackdrop;
 
 		UHorizontalBox* Row = WidgetTree->ConstructWidget<UHorizontalBox>(
 			UHorizontalBox::StaticClass(), TEXT("Row"));
-		Root->AddChild(Row);
+		RowBackdrop->AddChild(Row);
 
 		LabelText = WidgetTree->ConstructWidget<UCommonTextBlock>(
 			UCommonTextBlock::StaticClass(), TEXT("LabelText"));
@@ -86,6 +86,8 @@ TSharedRef<SWidget> UWacomSettingsOptionRow::RebuildWidget()
 void UWacomSettingsOptionRow::NativeConstruct()
 {
 	Super::NativeConstruct();
+	bFocusWithin = false;
+	bPointerHovered = false;
 	if (DecreaseButton)
 	{
 		DecreaseButton->OnClicked().RemoveAll(this);
@@ -102,6 +104,7 @@ void UWacomSettingsOptionRow::NativeConstruct()
 		ValueSlider->OnValueChanged.AddDynamic(this, &UWacomSettingsOptionRow::HandleSliderValueChanged);
 	}
 	ApplyViewData(ViewData);
+	RefreshPresentationState();
 }
 
 void UWacomSettingsOptionRow::NativeDestruct()
@@ -120,6 +123,8 @@ void UWacomSettingsOptionRow::NativeDestruct()
 	}
 	OnStepRequestedNative.Clear();
 	OnNormalizedValueRequestedNative.Clear();
+	bFocusWithin = false;
+	bPointerHovered = false;
 	Super::NativeDestruct();
 }
 
@@ -146,13 +151,74 @@ void UWacomSettingsOptionRow::ApplyViewData(const FWacomSettingsOptionRowViewDat
 	if (DecreaseButton)
 	{
 		DecreaseButton->SetIsInteractionEnabled(ViewData.bEnabled);
+		DecreaseButton->RefreshPresentationState();
 	}
 	if (IncreaseButton)
 	{
 		IncreaseButton->SetIsInteractionEnabled(ViewData.bEnabled);
+		IncreaseButton->RefreshPresentationState();
 	}
 	SetIsEnabled(ViewData.bEnabled);
 	bApplyingViewData = false;
+	RefreshPresentationState();
+}
+
+void UWacomSettingsOptionRow::NativeOnAddedToFocusPath(
+	const FFocusEvent& InFocusEvent)
+{
+	Super::NativeOnAddedToFocusPath(InFocusEvent);
+	bFocusWithin = true;
+	RefreshPresentationState();
+}
+
+void UWacomSettingsOptionRow::NativeOnRemovedFromFocusPath(
+	const FFocusEvent& InFocusEvent)
+{
+	Super::NativeOnRemovedFromFocusPath(InFocusEvent);
+	bFocusWithin = false;
+	RefreshPresentationState();
+}
+
+void UWacomSettingsOptionRow::NativeOnMouseEnter(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseEnter(InGeometry, InMouseEvent);
+	bPointerHovered = true;
+	RefreshPresentationState();
+}
+
+void UWacomSettingsOptionRow::NativeOnMouseLeave(
+	const FPointerEvent& InMouseEvent)
+{
+	Super::NativeOnMouseLeave(InMouseEvent);
+	bPointerHovered = false;
+	RefreshPresentationState();
+}
+
+void UWacomSettingsOptionRow::RefreshPresentationState()
+{
+	const bool bInteractable = ViewData.bEnabled && GetIsEnabled();
+	const bool bEmphasized = bInteractable && (bFocusWithin || bPointerHovered);
+	const FLinearColor RestingBackdrop(0.025f, 0.038f, 0.060f, 0.88f);
+	const FLinearColor EmphasizedBackdrop(0.055f, 0.090f, 0.115f, 0.96f);
+	const FLinearColor DisabledBackdrop(0.020f, 0.026f, 0.036f, 0.58f);
+	const FLinearColor RestingLabel(0.91f, 0.90f, 0.82f, 1.0f);
+	const FLinearColor EmphasizedLabel(0.98f, 0.78f, 0.32f, 1.0f);
+	const FLinearColor DisabledLabel(0.38f, 0.41f, 0.43f, 1.0f);
+
+	if (RowBackdrop)
+	{
+		RowBackdrop->SetBrushColor(!bInteractable
+			? DisabledBackdrop
+			: (bEmphasized ? EmphasizedBackdrop : RestingBackdrop));
+	}
+	if (LabelText)
+	{
+		LabelText->SetColorAndOpacity(FSlateColor(!bInteractable
+			? DisabledLabel
+			: (bEmphasized ? EmphasizedLabel : RestingLabel)));
+	}
 }
 
 FReply UWacomSettingsOptionRow::NativeOnKeyDown(

@@ -58,8 +58,8 @@ bool FWacomUIMainMenuUsesProjectFocusPresentationSpec::RunTest(const FString& /*
 	TStrongObjectPtr<UWacomMenuButtonWidget> GenericButton(
 		NewObject<UWacomMenuButtonWidget>());
 	GenericButton->Initialize();
-	TestFalse(
-		TEXT("Generic menu button keeps the engine focus brush until it declares a custom focus skin"),
+	TestTrue(
+		TEXT("Generic project menu buttons now own a reusable focus skin"),
 		FWacomGameViewportClientTestAccess::HasProjectOwnedFocusPresentation(
 			GenericButton->TakeWidget()));
 	return true;

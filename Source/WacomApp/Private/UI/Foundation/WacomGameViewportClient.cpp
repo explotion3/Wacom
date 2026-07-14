@@ -11,7 +11,10 @@
 #include "Input/Reply.h"
 #include "InputCoreTypes.h"
 #include "Layout/WidgetPath.h"
+#include "Types/ReflectionMetadata.h"
+#include "UI/Foundation/WacomMenuButtonWidget.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
+#include "UI/Settings/WacomSettingsOptionRow.h"
 #include "Widgets/SViewport.h"
 
 class FWacomFirstPersonCardInputPreprocessor final : public IInputProcessor
@@ -86,6 +89,15 @@ bool UWacomGameViewportClient::HasProjectOwnedFocusPresentation(
 		Widget.IsValid();
 		Widget = Widget->GetParentWidget())
 	{
+		const TSharedPtr<FReflectionMetaData> ReflectionMetaData =
+			Widget->GetMetaData<FReflectionMetaData>();
+		if (ReflectionMetaData.IsValid()
+			&& ReflectionMetaData->SourceObject.IsValid()
+			&& ReflectionMetaData->SourceObject->IsA<UWacomSettingsOptionRow>())
+		{
+			return true;
+		}
+
 		const TSharedPtr<FCommonButtonMetaData> ButtonMetaData =
 			Widget->GetMetaData<FCommonButtonMetaData>();
 		const UCommonButtonBase* CommonButton = ButtonMetaData.IsValid()
@@ -93,7 +105,8 @@ bool UWacomGameViewportClient::HasProjectOwnedFocusPresentation(
 			: nullptr;
 		if (CommonButton)
 		{
-			return CommonButton->IsA<UWacomMainMenuButtonWidget>();
+			return CommonButton->IsA<UWacomMainMenuButtonWidget>()
+				|| CommonButton->IsA<UWacomMenuButtonWidget>();
 		}
 	}
 

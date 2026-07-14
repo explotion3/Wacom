@@ -585,19 +585,23 @@ void UWacomSettingsScreen::RefreshInteractionState()
 		}
 		CategoryButtons[Index]->SetIsInteractionEnabled(bCanInteract);
 		CategoryButtons[Index]->SetIsSelected(Index == static_cast<int32>(SelectedCategory));
+		CategoryButtons[Index]->RefreshPresentationState();
 	}
 	if (ApplyButton)
 	{
 		ApplyButton->SetIsInteractionEnabled(bCanInteract && IsDirty());
+		ApplyButton->RefreshPresentationState();
 	}
 	if (RestoreDefaultsButton)
 	{
 		RestoreDefaultsButton->SetIsInteractionEnabled(
 			bCanInteract && !Draft.IsEquivalentTo(DefaultSnapshot));
+		RestoreDefaultsButton->RefreshPresentationState();
 	}
 	if (BackButton)
 	{
 		BackButton->SetIsInteractionEnabled(!bAwaitingVideoConfirmation && !bTearingDown);
+		BackButton->RefreshPresentationState();
 	}
 	if (StatusText)
 	{
