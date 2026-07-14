@@ -5,7 +5,10 @@
 #if WITH_AUTOMATION_TESTS
 
 #include "UI/MainMenuScreenTestAccess.h"
+#include "UI/GameViewportClientTestAccess.h"
+#include "Engine/UserInterfaceSettings.h"
 #include "GameFramework/WacomMenuGameMode.h"
+#include "UI/Foundation/WacomMenuButtonWidget.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
 #include "Components/Widget.h"
 #include "UObject/UnrealType.h"
@@ -18,6 +21,85 @@ namespace
 		FWacomMainMenuScreenTestAccess::Build(*Screen);
 		return Screen;
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIMainMenuUsesProjectFocusPresentationSpec,
+	"Wacom.UI.MainMenu.Screen.UsesProjectFocusPresentation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIMainMenuUsesProjectFocusPresentationSpec::RunTest(const FString& /*Parameters*/)
+{
+	const UUserInterfaceSettings* UISettings = GetDefault<UUserInterfaceSettings>();
+	TestNotNull(TEXT("Project UI settings are available"), UISettings);
+	if (UISettings)
+	{
+		TestNotEqual(
+			TEXT("Engine focus brush remains available outside project-owned focus widgets"),
+			UISettings->RenderFocusRule,
+			ERenderFocusRule::Never);
+	}
+
+	TStrongObjectPtr<UWacomMainMenuScreen> Screen = MakeMainMenuScreen();
+	TestTrue(
+		TEXT("Main menu keeps focusable CommonUI buttons for keyboard and gamepad navigation"),
+		FWacomMainMenuScreenTestAccess::HasCompleteFocusableCommonUIButtonSet(*Screen));
+
+	UWacomMainMenuButtonWidget* MainMenuButton = Cast<UWacomMainMenuButtonWidget>(
+		Screen->GetWidgetFromName(TEXT("NewJourneyButton")));
+	if (TestNotNull(TEXT("Main menu button is available"), MainMenuButton))
+	{
+		TestTrue(
+			TEXT("Main menu button owns its focus presentation"),
+			FWacomGameViewportClientTestAccess::HasProjectOwnedFocusPresentation(
+				MainMenuButton->TakeWidget()));
+	}
+
+	TStrongObjectPtr<UWacomMenuButtonWidget> GenericButton(
+		NewObject<UWacomMenuButtonWidget>());
+	GenericButton->Initialize();
+	TestFalse(
+		TEXT("Generic menu button keeps the engine focus brush until it declares a custom focus skin"),
+		FWacomGameViewportClientTestAccess::HasProjectOwnedFocusPresentation(
+			GenericButton->TakeWidget()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIMainMenuCommonButtonFocusDrivesHoverPresentationSpec,
+	"Wacom.UI.MainMenu.Screen.CommonButtonFocusDrivesHoverPresentation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIMainMenuCommonButtonFocusDrivesHoverPresentationSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomMainMenuScreen> Screen = MakeMainMenuScreen();
+	UWacomMainMenuButtonWidget* Button = Cast<UWacomMainMenuButtonWidget>(
+		Screen->GetWidgetFromName(TEXT("NewJourneyButton")));
+	if (!TestNotNull(TEXT("Main menu button is available"), Button))
+	{
+		return false;
+	}
+
+	FWacomMainMenuScreenTestAccess::Construct(*Button);
+	TestEqual(
+		TEXT("Button starts without keyboard emphasis"),
+		FWacomMainMenuScreenTestAccess::TargetEmphasis(*Button),
+		0.0f);
+
+	FWacomMainMenuScreenTestAccess::BroadcastFocusReceived(*Button);
+	TestEqual(
+		TEXT("CommonButton focus uses the same emphasis target as mouse hover"),
+		FWacomMainMenuScreenTestAccess::TargetEmphasis(*Button),
+		1.0f);
+
+	FWacomMainMenuScreenTestAccess::BroadcastFocusLost(*Button);
+	TestEqual(
+		TEXT("CommonButton focus loss clears emphasis when the mouse is not hovering"),
+		FWacomMainMenuScreenTestAccess::TargetEmphasis(*Button),
+		0.0f);
+	FWacomMainMenuScreenTestAccess::Destruct(*Button);
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -81,6 +163,38 @@ bool FWacomUIMainMenuCommonUIButtonContractSpec::RunTest(const FString& /*Parame
 	TestTrue(
 		TEXT("Fallback provides six focusable CommonUI navigation buttons"),
 		FWacomMainMenuScreenTestAccess::HasCompleteFocusableCommonUIButtonSet(*Screen));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIMainMenuRootBackCannotEmptyLayerSpec,
+	"Wacom.UI.MainMenu.Screen.RootBackCannotEmptyLayer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIMainMenuRootBackCannotEmptyLayerSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomMainMenuScreen> Screen = MakeMainMenuScreen();
+	int32 ReturnToTitleRequestCount = 0;
+	Screen->OnActionRequestedNative.AddLambda(
+		[&ReturnToTitleRequestCount](EWacomMainMenuAction Action)
+		{
+			if (Action == EWacomMainMenuAction::ReturnToTitle)
+			{
+				++ReturnToTitleRequestCount;
+			}
+		});
+	Screen->ActivateWidget();
+	TestTrue(TEXT("Main menu starts active"), Screen->IsActivated());
+
+	const FReply Reply = FWacomMainMenuScreenTestAccess::SendEscapeKeyDown(*Screen);
+	TestTrue(TEXT("Main menu handles Escape"), Reply.IsEventHandled());
+	TestTrue(
+		TEXT("Main menu cannot deactivate itself when no title flow consumes Back"),
+		Screen->IsActivated());
+	TestEqual(
+		TEXT("Main menu routes Escape to the app-owned ReturnToTitle action"),
+		ReturnToTitleRequestCount,
+		1);
 	return true;
 }
 

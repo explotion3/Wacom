@@ -37,8 +37,6 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
-	virtual FReply NativeOnFocusReceived(const FGeometry& InGeometry, const FFocusEvent& InFocusEvent) override;
-	virtual void NativeOnFocusLost(const FFocusEvent& InFocusEvent) override;
 	virtual void NativeOnHovered() override;
 	virtual void NativeOnUnhovered() override;
 	virtual void NativeOnPressed() override;
@@ -63,6 +61,8 @@ private:
 	void ApplyPresentation(float Emphasis, float PressedAmount);
 	bool TickPresentation(float DeltaTime);
 	void StopPresentationTicker();
+	void HandleCommonButtonFocusReceived();
+	void HandleCommonButtonFocusLost();
 	void BindRuntimeSettings();
 	void UnbindRuntimeSettings();
 	void HandleRuntimeSettingsChanged(
@@ -75,8 +75,11 @@ private:
 	float CurrentPressedAmount = 0.0f;
 	float TargetPressedAmount = 0.0f;
 	bool bPresentationPressed = false;
+	bool bPresentationFocused = false;
 	bool bRuntimeSimplifiedMotion = false;
 	FDelegateHandle RuntimeSettingsChangedHandle;
+
+	friend struct FWacomMainMenuScreenTestAccess;
 };
 
 /** 主菜单能够上报给 App flow 的玩家意图。 */
@@ -88,7 +91,8 @@ enum class EWacomMainMenuAction : uint8
 	JourneyHistory,
 	Settings,
 	Credits,
-	Quit
+	Quit,
+	ReturnToTitle
 };
 
 /** 主菜单的只读显示数据；不包含存档对象或可写 Run 状态。 */
@@ -189,6 +193,7 @@ protected:
 	virtual void NativeOnActivated() override;
 	virtual void NativeOnDeactivated() override;
 	virtual UWidget* NativeGetDesiredFocusTarget() const override;
+	virtual FReply NativeHandleBackRequested() override;
 
 	/** ViewData 应用后的 WBP 表现钩子；不能在这里提交存档、Run 或 travel 操作。 */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Main Menu", DisplayName = "On Main Menu View Data Applied", meta = (ToolTip = "主菜单 ViewData 应用后的 WBP 表现钩子。仅用于刷新视觉，不应提交存档、Run 或 travel 操作。"))

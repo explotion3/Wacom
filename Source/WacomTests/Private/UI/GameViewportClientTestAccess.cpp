@@ -59,4 +59,10 @@ void FWacomGameViewportClientTestAccess::SetRouteOverrides(
 	ViewportClient.PlayerControllerOverrideForAutomation = PlayerController;
 }
 
+bool FWacomGameViewportClientTestAccess::HasProjectOwnedFocusPresentation(
+	const TSharedPtr<SWidget>& FocusedWidget)
+{
+	return UWacomGameViewportClient::HasProjectOwnedFocusPresentation(FocusedWidget);
+}
+
 #endif

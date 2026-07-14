@@ -8,6 +8,7 @@ namespace Wacom::ContentBuilder
 	 * 重建主菜单正式 Widget Blueprint 资产。
 	 *
 	 * 生成：
+	 * - /Game/Wacom/UI/Menus/WBP_TitleScreen
 	 * - /Game/Wacom/UI/Menus/WBP_MainMenuNavButton
 	 * - /Game/Wacom/UI/Menus/WBP_MainMenuScreen
 	 *

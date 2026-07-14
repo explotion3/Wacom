@@ -8,6 +8,7 @@
 class AWacomPlayerController;
 class FSlateApplication;
 class IInputProcessor;
+class SWidget;
 struct FPointerEvent;
 struct FWacomGameViewportClientTestAccess;
 
@@ -30,6 +31,7 @@ public:
 		bool bCreateNewAudioDevice = true) override;
 	virtual void DetachViewportClient() override;
 	virtual void BeginDestroy() override;
+	virtual TOptional<bool> QueryShowFocus(EFocusCause InFocusCause) const override;
 
 	virtual void HandleRerouteInput(
 		FInputDeviceId DeviceId,
@@ -47,6 +49,8 @@ private:
 		FSlateApplication& SlateApp,
 		const FPointerEvent& PointerEvent) const;
 	AWacomPlayerController* ResolveWacomPlayerController(FInputDeviceId DeviceId) const;
+	static bool HasProjectOwnedFocusPresentation(
+		const TSharedPtr<SWidget>& FocusedWidget);
 
 	TSharedPtr<IInputProcessor> FirstPersonCardInputPreProcessor;
 

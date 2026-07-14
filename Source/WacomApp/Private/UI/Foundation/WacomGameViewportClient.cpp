@@ -2,6 +2,7 @@
 
 #include "UI/Foundation/WacomGameViewportClient.h"
 
+#include "CommonButtonBase.h"
 #include "Engine/GameInstance.h"
 #include "Engine/LocalPlayer.h"
 #include "Framework/Application/IInputProcessor.h"
@@ -10,6 +11,7 @@
 #include "Input/Reply.h"
 #include "InputCoreTypes.h"
 #include "Layout/WidgetPath.h"
+#include "UI/Menus/WacomMainMenuScreen.h"
 #include "Widgets/SViewport.h"
 
 class FWacomFirstPersonCardInputPreprocessor final : public IInputProcessor
@@ -62,6 +64,40 @@ void UWacomGameViewportClient::BeginDestroy()
 {
 	UnregisterFirstPersonCardInputPreProcessor();
 	Super::BeginDestroy();
+}
+
+TOptional<bool> UWacomGameViewportClient::QueryShowFocus(
+	EFocusCause InFocusCause) const
+{
+	if (FSlateApplication::IsInitialized()
+		&& HasProjectOwnedFocusPresentation(
+			FSlateApplication::Get().GetUserFocusedWidget(/*UserIndex*/0)))
+	{
+		return false;
+	}
+
+	return Super::QueryShowFocus(InFocusCause);
+}
+
+bool UWacomGameViewportClient::HasProjectOwnedFocusPresentation(
+	const TSharedPtr<SWidget>& FocusedWidget)
+{
+	for (TSharedPtr<SWidget> Widget = FocusedWidget;
+		Widget.IsValid();
+		Widget = Widget->GetParentWidget())
+	{
+		const TSharedPtr<FCommonButtonMetaData> ButtonMetaData =
+			Widget->GetMetaData<FCommonButtonMetaData>();
+		const UCommonButtonBase* CommonButton = ButtonMetaData.IsValid()
+			? ButtonMetaData->OwningCommonButton.Get()
+			: nullptr;
+		if (CommonButton)
+		{
+			return CommonButton->IsA<UWacomMainMenuButtonWidget>();
+		}
+	}
+
+	return false;
 }
 
 void UWacomGameViewportClient::RegisterFirstPersonCardInputPreProcessor()

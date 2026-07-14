@@ -68,20 +68,24 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 分辨率选项由 `UWacomSettingsSubsystem::GetScreenResolutionOptions()` 统一生成，Screen 不直接查询平台显示模式，也不把任意当前值无条件塞回列表。项目最低支持 `1280 × 720`，固定常用档位为 `1280 × 720 / 1366 × 768 / 1600 × 900 / 1920 × 1080 / 2560 × 1440 / 3840 × 2160`：独占全屏只保留显卡和显示器实际报告支持的档位，窗口模式只保留不超过当前桌面工作区的档位；桌面原生分辨率和当前有效自定义分辨率只有在满足最低尺寸及对应模式限制时才作为额外选项保留。无边框窗口固定跟随当前桌面并禁用分辨率行；没有合法候选项时只禁用该行，不阻断其它设置。旧配置低于最低尺寸时可以显示原值，但不会继续作为选择目标，玩家首次步进会进入合法档位。
 
+正式游戏窗口禁止玩家使用窗口边框任意缩放，也不提供最大化按钮；最小化和关闭按钮保留，窗口最小尺寸与项目最低支持视口统一为 `1280 × 720`。普通窗口的尺寸只能通过 Settings 的分辨率目录与 Apply 流程改变，无边框和独占全屏继续遵循各自的视频模式语义，因此鼠标拖拽、系统最大化不会绕过白名单或 15 秒确认事务。该项目级 Slate 窗口合同不覆盖编辑器拥有的 PIE 窗口。
+
 Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，并在 Game / PIE World 就绪时应用音频总线；运行时消费者通过 native settings-changed delegate 订阅并在 teardown 时反订阅，不使用 Tick 查询设置。Run Tunnel 仍使用鼠标位置驱动视角，只叠加响应倍率和 Y 反转；镜头运动倍率同时缩放 Walk Bob 与 Camera Shake，`0` 会输出零 Bob 并停止已启动 Shake。`BP_WacomPlayerCharacter` 当前正式启用已有 `BP_RunTunnelWalkCameraShake`，并保持 `WalkBobComponent.bEnableWalkBob=false`，因此默认、半强度和关闭三档都作用于唯一的 CameraShake 路径，不叠加两套晃动。
 
 `UWacomSettingsScreen` 是这套事务的唯一 CommonUI 页面协调器。页面覆盖显示、图形、音频、视角、辅助五类字段；App-private 字段描述表统一标签、离散 / 连续类型、格式与 Preview 白名单。Screen 在事务开始、窗口模式变化、恢复默认以及确认 / 回滚后的新事务中重新取得模式专属分辨率目录；切换模式时若当前 Draft 不合法，会在本地选择宽高距离最近的合法档位，不提前应用引擎视频模式。无边框窗口下分辨率仍显示，但禁用并标注“跟随桌面”。“恢复默认”从 Subsystem 获取完整项目平衡档，使用当前 token 只预览允许即时预览的字段并装入 Draft，不弹额外确认框、不会直接写盘；玩家仍需 Apply，视频变化继续走 15 秒确认。Apply 无视频模式变化时保存后留在页面并开启新 token；有视频模式变化时 Push `UWacomSettingsConfirmationDialog`，保留、恢复、超时和 Modal Push 失败都回到实际 Snapshot 并开启新 token。脏状态返回会先确认放弃；外部 teardown 会 Cancel 活动 edit 或 Revert 待确认视频模式。
 
 主菜单与暂停菜单都只调用 App-private `FWacomSettingsScreenFlow`。该 flow 统一解析 `UI.Widget.SettingsScreen` 的软类、异步 Push 到 `UI.Layer.GameMenu`、拒绝重复打开，并在资产缺失时回退 `UWacomSettingsScreen`。主菜单 ViewData 现在开放 Settings，Journey History / Credits 仍隐藏；暂停菜单使用同一 Screen，关闭后由 CommonUI focus restoration 回到原入口。Screen、选项行和确认 Modal 均不访问 SaveGame。
 
-主菜单继续使用 `L_MainMenu + AWacomMenuGameMode + UWacomMainMenuScreen`。菜单 travel 目标必须使用 UE package path：
+主菜单继续使用 `L_MainMenu + AWacomMenuGameMode + UWacomTitleScreen + UWacomMainMenuScreen`。菜单 travel 目标必须使用 UE package path：
 
 - Exploration：`/Game/Wacom/Maps/L_Exploration`
 - MainMenu：`/Game/Wacom/Maps/L_MainMenu`
 
 不要把 travel 目标写成 `/Game/Wacom/Maps/L_Exploration.L_Exploration` 这类 ObjectPath。UE PIE 下 ObjectPath travel 曾触发 `FPackagePath::TryFromMountedName was passed an ObjectPath` 和 `!NewPIEWorld->bIsWorldInitialized` ensure。
 
-主菜单采用 App flow 与 Screen 分离：`AWacomMenuGameMode` 构造 `FWacomMainMenuViewData`，绑定 `UWacomMainMenuScreen::OnActionRequestedNative`，并处理 `EWacomMainMenuAction`；Screen 只应用 ViewData、刷新 fallback / WBP 和上报玩家意图，不读取或删除 SaveGame，不调用 `OpenLevel()` 或退出 API。Screen class 配置已收紧为 `TSubclassOf<UWacomMainMenuScreen>`，C++ 默认加载 `/Game/Wacom/UI/Menus/WBP_MainMenuScreen`，资产缺失或加载失败时回退到原生 `UWacomMainMenuScreen`；travel 前和 `EndPlay` 都会显式解绑。当前存档总开关关闭，因此 GameMode 不访问磁盘，Continue、Journey History、Credits 保持隐藏；Settings 已开放并进入统一 Settings Screen flow，Start New Journey 仍直接走 `/Game/Wacom/Maps/L_Exploration`。未来档案服务接入后，只替换 GameMode 的 ViewData 构建与 Action flow，不让 Screen 重新拥有 slot 语义。
+主菜单采用 App flow 与 Screen 分离。`AWacomMenuGameMode` 进入 `L_MainMenu` 时先把 `UWacomTitleScreen` Push 到 `UI.Layer.GameMenu` 作为稳定栈底；标题页只把键盘按键、鼠标左键和手柄按键转换为继续意图，ESC / Gamepad B 在根页面被消费。继续意图成功后 GameMode 再 Push `UWacomMainMenuScreen`；主菜单 ESC / B 上报 `EWacomMainMenuAction::ReturnToTitle`，GameMode 只有确认 TitleScreen 仍存在于同一 Stack 时才 Pop 主菜单，避免根页面缺失时产生空 UI 栈。每次进入主菜单关都重新从 TitleScreen 开始；Settings / Modal 仍叠在 MainMenu 上方并使用 CommonUI 焦点恢复。
+
+`AWacomMenuGameMode` 构造 `FWacomMainMenuViewData`，绑定 `UWacomMainMenuScreen::OnActionRequestedNative`，并处理其余 `EWacomMainMenuAction`；Screen 只应用 ViewData、刷新 fallback / WBP 和上报玩家意图，不读取或删除 SaveGame，不调用 `OpenLevel()` 或退出 API。Title / MainMenu class 分别收紧为 `TSubclassOf<UWacomTitleScreen>` 与 `TSubclassOf<UWacomMainMenuScreen>`，C++ 默认加载 `/Game/Wacom/UI/Menus/WBP_TitleScreen` 和 `/Game/Wacom/UI/Menus/WBP_MainMenuScreen`，资产缺失或加载失败时回退对应原生 Screen；travel 前和 `EndPlay` 都会显式解绑。当前存档总开关关闭，因此 GameMode 不访问磁盘，Continue、Journey History、Credits 保持隐藏；Settings 已开放并进入统一 Settings Screen flow，Start New Journey 仍直接走 `/Game/Wacom/Maps/L_Exploration`。未来档案服务接入后，只替换 GameMode 的 ViewData 构建与 Action flow，不让 Screen 重新拥有 slot 语义。
 
 ---
 

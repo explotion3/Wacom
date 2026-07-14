@@ -22,6 +22,47 @@ void FWacomMainMenuScreenTestAccess::Destruct(UWacomMainMenuScreen& Screen)
 	Screen.NativeDestruct();
 }
 
+void FWacomMainMenuScreenTestAccess::Construct(UWacomMainMenuButtonWidget& Button)
+{
+	Button.NativeConstruct();
+}
+
+void FWacomMainMenuScreenTestAccess::Destruct(UWacomMainMenuButtonWidget& Button)
+{
+	Button.NativeDestruct();
+}
+
+void FWacomMainMenuScreenTestAccess::BroadcastFocusReceived(
+	UWacomMainMenuButtonWidget& Button)
+{
+	Button.OnFocusReceived().Broadcast();
+}
+
+void FWacomMainMenuScreenTestAccess::BroadcastFocusLost(
+	UWacomMainMenuButtonWidget& Button)
+{
+	Button.OnFocusLost().Broadcast();
+}
+
+FReply FWacomMainMenuScreenTestAccess::SendEscapeKeyDown(
+	UWacomMainMenuScreen& Screen)
+{
+	const FKeyEvent KeyEvent(
+		EKeys::Escape,
+		FModifierKeysState(),
+		0,
+		false,
+		0,
+		0);
+	return Screen.NativeOnKeyDown(FGeometry(), KeyEvent);
+}
+
+float FWacomMainMenuScreenTestAccess::TargetEmphasis(
+	const UWacomMainMenuButtonWidget& Button)
+{
+	return Button.TargetEmphasis;
+}
+
 void FWacomMainMenuScreenTestAccess::Click(
 	UWacomMainMenuScreen& Screen,
 	EWacomMainMenuAction Action)

@@ -8,6 +8,7 @@
 #include "WacomMenuGameMode.generated.h"
 
 class UWacomMainMenuScreen;
+class UWacomTitleScreen;
 enum class EWacomMainMenuAction : uint8;
 struct FWacomMainMenuViewData;
 
@@ -92,6 +93,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI", meta = (ToolTip = "L_MainMenu Push 到 GameMenu layer 的主菜单 Screen 类。必须继承 UWacomMainMenuScreen；正式 WBP 可以在这里覆盖。"))
 	TSubclassOf<UWacomMainMenuScreen> MainMenuScreenClass;
 
+	/** L_MainMenu 的稳定标题根页面。默认优先使用 WBP_TitleScreen。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI", meta = (ToolTip = "L_MainMenu 启动时 Push 到 GameMenu layer 栈底的 Press Any Key 页面。必须继承 UWacomTitleScreen；资产失败时回退原生页面。"))
+	TSubclassOf<UWacomTitleScreen> TitleScreenClass;
+
 	/**
 	 * 开新游戏：存档启用时清存档，然后拆 UI 并在下一帧切到探索关。
 	 * 由 MainMenuScreen 的按钮回调调用——让 GameMode 控制切关卡更可靠。
@@ -137,9 +142,16 @@ private:
 	void RequestTravelToLevel(FName LevelName, FName Reason);
 	void ExecutePendingTravel();
 	FWacomMainMenuViewData BuildMainMenuViewData() const;
+	bool PushTitleScreen();
+	bool PushMainMenuScreen();
+	void BindTitleScreen(UWacomTitleScreen* Screen);
+	void UnbindTitleScreen();
 	void BindMainMenuScreen(UWacomMainMenuScreen* Screen);
 	void UnbindMainMenuScreen();
+	void HandleTitleAdvanceRequested();
 	void HandleMainMenuAction(EWacomMainMenuAction Action);
+	void ReturnToTitleScreen();
+	bool IsTitleScreenInGameMenuStack() const;
 	void RequestQuitGame();
 
 	UPROPERTY(Transient)
@@ -153,6 +165,9 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWacomMainMenuScreen> ActiveMainMenuScreen;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomTitleScreen> ActiveTitleScreen;
 
 	int32 LastMenuTravelOrderCounter = 0;
 	bool bSuppressActualTravelForAutomation = false;

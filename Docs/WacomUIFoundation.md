@@ -133,7 +133,7 @@ CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。
 
 战斗 HUD 和探索 HUD 仍声明自身期望的 UI input config，但底层 gameplay profile 由 `UWacomInputContextCoordinatorSubsystem` 统一应用。探索期固定使用 Run Tunnel 输入模型：Coordinator 切到 `All + NoCapture`、显示鼠标并保持探索 IMC。
 
-`UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`。子类只在语义不同，例如 ConfirmDialog 把 Back 当 Cancel 时覆盖。激活后的延迟焦点会优先使用 `NativeGetDesiredFocusTarget()`，再寻找第一个可交互 `UCommonButtonBase`，最后才兼容旧 `UButton`，因此主菜单、暂停菜单和 Settings fallback 都保持键盘 / 手柄可用。
+`UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`。子类只在语义不同，例如 ConfirmDialog 把 Back 当 Cancel、MainMenu 把 Back 交给 App flow、TitleScreen 作为稳定根消费 Back 时覆盖。激活后的延迟焦点会优先使用 `NativeGetDesiredFocusTarget()`，再寻找第一个可交互 `UCommonButtonBase`，最后才兼容旧 `UButton`，因此标题页、主菜单、暂停菜单和 Settings fallback 都保持键盘 / 手柄可用。
 
 当前兼容例外：`UWacomMenuWidgetBase` 仍保留 deprecated Run first-person menu lease / drop Blueprint 钩子，用于旧资产节点编译和过渡；这些旧钩子只转发到 `UWacomRunMenuWidgetBase`，普通 MainMenu / Pause / Confirm 等 Foundation 菜单不会拥有 Run menu lease。lease / drop 数据 contract 位于 `UI/Run/`，具体规则仍由 `AWacomPlayerController`、Run menu drop coordinator 或 owning menu flow 提交。后续资产清理方向见 `Docs/TechDebt.md`，不要把新的 Run 规则或一次性菜单状态继续加到 Foundation 基类。
 
@@ -147,15 +147,19 @@ CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。
 | `UWacomModalDialog::Show / CloseDialog` | `Wacom|Common UI|Modal Dialog` | Push 到 Modal layer 或关闭当前 dialog |
 | `UWacomConfirmDialog` | 无额外分类 | 二按钮确认对话框，Confirm / Cancel 由调用方解释 |
 
-`UWacomMainMenuScreen` 是 `L_MainMenu` 的被动顶层菜单 Screen。它只接收 `FWacomMainMenuViewData`，并通过 `EWacomMainMenuAction + OnActionRequestedNative` 上报 Continue Journey、Start New Journey、Journey History、Settings、Credits 和 Quit 意图；不直接读取 SaveGame、查找 GameMode、切关卡或退出游戏。`AWacomMenuGameMode` 是当前 ViewData producer 和 Action consumer，负责磁盘可用性检查、确认对话框、退出与 travel。
+`UWacomTitleScreen` 是 `L_MainMenu` 的稳定栈底页面。它没有存档或旅程数据，只通过 `OnAdvanceRequestedNative` 上报进入主菜单意图；键盘按键、鼠标左键和手柄按键可以继续，ESC / Gamepad B 始终被消费且不会关闭页面。`AWacomMenuGameMode` 在每次进入主菜单关时先 Push TitleScreen，继续后才在同一 `UI.Layer.GameMenu` Stack 上 Push MainMenu；MainMenu 的 `ReturnToTitle` 由 GameMode 校验栈底仍存在后再 Pop。标题 WBP 加载失败时回退原生 TitleScreen，主菜单 flow 失败时标题页保持 active 并允许玩家再次输入重试。
+
+`UWacomMainMenuScreen` 是 `L_MainMenu` 的被动导航 Screen。它只接收 `FWacomMainMenuViewData`，并通过 `EWacomMainMenuAction + OnActionRequestedNative` 上报 Continue Journey、Start New Journey、Journey History、Settings、Credits、Quit 和 ReturnToTitle 意图；不直接读取 SaveGame、查找 GameMode、切关卡、Pop 页面或退出游戏。`AWacomMenuGameMode` 是当前 ViewData producer 和 Action consumer，负责页面栈、磁盘可用性检查、确认对话框、退出与 travel。没有有效 GameMode consumer 时 MainMenu Back 只会上报意图并保持 active，不能自行弹出空栈。
 
 Continue 只有在 `bHasActiveJourney` 时显示，并由 `bCanContinueJourney` 决定是否可交互；Settings 已开放，History、Credits 在对应页面未接入时保持 `Collapsed`，不产生死入口。CommonUI 默认焦点优先可用 Continue，否则落到 Start New Journey；Screen 打开 `bAutoRestoreFocus`，Modal 或 Settings Screen 关闭后恢复原菜单焦点。按钮 delegate 在 `NativeConstruct / NativeDestruct` 对称绑定和解绑，重复构建不会重复上报。
 
-`/Game/Wacom/UI/Menus/WBP_MainMenuScreen` 已完成第一版正式壳层：透明的深色像素遮罩保留 `L_MainMenu` 实时场景，左侧为品牌与六个导航入口，右侧为活动旅程摘要。六个可选按钮绑定 `ContinueButton / NewJourneyButton / JourneyHistoryButton / SettingsButton / CreditsButton / QuitButton` 均使用 `WBP_MainMenuNavButton`；摘要绑定为 `ActiveJourneyTitleText / ActiveJourneySummaryText`，表现根绑定为 `MenuContentRoot / JourneySummaryPanel`。Screen 激活时由原生表现驱动执行一次左右错峰淡入位移，不改变 ViewData 或 Action 合同。交互可用性统一通过 CommonUI `SetIsInteractionEnabled` 应用。C++ fallback 提供相同 CommonUI 按钮、左侧导航和右侧旅程摘要，确保资产缺失或损坏时仍可键鼠 / 手柄操作。
+`/Game/Wacom/UI/Menus/WBP_TitleScreen` 与 `/Game/Wacom/UI/Menus/WBP_MainMenuScreen` 共用 `L_MainMenu` 实时场景。TitleScreen 提供 `TitleContentRoot / PressAnyKeyText` 固定绑定、中央品牌和输入提示；Full UI Motion 下提示执行轻量呼吸透明度，Simplified 下固定显示。MainMenu 使用透明深色像素遮罩，左侧为品牌与六个导航入口，右侧为活动旅程摘要。六个可选按钮绑定 `ContinueButton / NewJourneyButton / JourneyHistoryButton / SettingsButton / CreditsButton / QuitButton` 均使用 `WBP_MainMenuNavButton`；摘要绑定为 `ActiveJourneyTitleText / ActiveJourneySummaryText`，表现根绑定为 `MenuContentRoot / JourneySummaryPanel`。Screen 激活时由原生表现驱动执行一次左右错峰淡入位移，不改变 ViewData 或 Action 合同。交互可用性统一通过 CommonUI `SetIsInteractionEnabled` 应用。C++ fallback 提供相同核心绑定与行为，确保资产缺失或损坏时仍可键鼠 / 手柄操作。
 
 `UWacomSettingsScreen` 的数据源固定为 `UWacomSettingsSubsystem`，而不是直接编辑 `UWacomGameUserSettings`：Screen 激活时持有一次 `FWacomSettingsEditSession`，选项行只上报步进 / Slider 意图，Screen 修改本地 draft 并提交 `Preview / Apply / Cancel`。显示、图形、音频、视角和辅助五类由一个 App-private 字段描述表统一；分辨率行消费 Subsystem 返回的 `FWacomScreenResolutionOptions`，不会自行查询平台或合成任意候选项。无边框窗口仍显示当前桌面分辨率但禁用，独占全屏和窗口模式只展示符合项目白名单及平台限制的档位；合法的桌面原生 / 当前自定义分辨率可以作为例外保留。`GetDefaultSnapshot()` 返回与首次启动相同的项目平衡档；Screen 底部“恢复默认”一次恢复全部分类，只装入并预览当前 Draft，仍需 Apply 才保存，Cancel 可完整回到 Baseline。
 
 全局 UMG DPI 使用 `UIScaleRule=Custom` 和 `UWacomCappedDesignDPIScalingRule`，设计基准固定为 `1920 × 1080`，`ApplicationScale=1.0`。规则按 `min(1, ViewportWidth / 1920, ViewportHeight / 1080)` 计算缩放：`1280 × 720` 约为 `0.667`、`1920 × 1080` 为 `1.0`，`2560 × 1440` 与 `3840 × 2160` 仍为 `1.0`。因此较小视口会完整容纳基准画布，而较高分辨率不会再次放大主菜单、Settings、暂停菜单、Run / Battle HUD 框架等按设计单位制作的固定尺寸元素；16:10 和超宽屏同样按较短比例适配并封顶。`UIScaleCurve` 与引擎 `ScaleToFit` 不再作为其它缩放来源；WBP 与 C++ fallback 都继承这一全局结果。本阶段最低视口为 `1280 × 720`，不增加 Settings 行或 Footer 的响应式重排，也不嵌套额外 `ScaleBox`。
+
+CommonUI 继续拥有键盘和手柄的焦点导航。主菜单导航按钮在 Construct / Destruct 中对称订阅 `UCommonButtonBase::OnFocusReceived / OnFocusLost`，将 CommonButton 内部 Slate 焦点与鼠标 Hover 合并为同一个强调状态，因此鼠标、键盘和手柄使用相同的底板、强调条、箭头和文字动画；`UWacomGameViewportClient` 只在当前焦点属于 `UWacomMainMenuButtonWidget` 时抑制 UE 通用蓝色 `FocusRectangle`，避免在项目动画上重复绘制第二套反馈。该策略不关闭全局 `RenderFocusRule`，Settings、暂停菜单和其他尚未声明自有焦点皮肤的控件仍保留引擎默认可见焦点；同时不改变控件 focusability、CommonUI 导航、确认或焦点恢复所有权。
 
 First-person 卡牌是明确的局部表现例外，不是第二套全局 DPI。美术真源 `148 × 210`、WBP 制作画布 `296 × 420` 均保持不变；Anchor 的 App-private 策略在全局 DPI 之后追加以 `2560 × 1440` 为参照、`0.5–1.0` 物理封顶的 `PresentationScale`。720p / 1080p / 1440p 的最终物理倍率分别为 `0.5 / 0.75 / 1.0`，4K 不继续放大。该倍率只服务 Battle / Run first-person 手牌、first-person 详情和相关空间特效；背包详情及其它 HUD 不消费它。
 
@@ -163,9 +167,9 @@ First-person 卡牌是明确的局部表现例外，不是第二套全局 DPI。
 
 正式可重建资产位于 `/Game/Wacom/UI/Settings/`：`WBP_SettingsScreen`、`WBP_SettingsOptionRow`、`WBP_SettingsButton`、`WBP_SettingsConfirmationDialog`。它们沿用主菜单的深色像素面板、青色数值和琥珀色焦点语义；C++ fallback 提供相同绑定与行为合同。Settings footer 固定为状态文本、`RestoreDefaultsButton`、`ApplyButton`、`BackButton`；恢复成功后焦点转到 Apply，若无需应用则转到 Back，避免手柄焦点滞留在已禁用的恢复按钮。暂停菜单按钮已迁到 `UWacomMenuButtonWidget`，Construct / Destruct 对称绑定，并通过同一 flow 打开 Settings。
 
-`EWacomUIMotionMode::Simplified` 是全局运行时表现策略，不修改 WBP 或 Anchor 制作参数。当前它让主菜单 Screen 入场和导航按钮状态插值立即完成，并强制 first-person 卡牌使用已有 reduced-motion 路径；默认 `Full` 下现有主菜单和卡牌节奏不变。
+`EWacomUIMotionMode::Simplified` 是全局运行时表现策略，不修改 WBP 或 Anchor 制作参数。当前它让 TitleScreen 输入提示停止呼吸、主菜单 Screen 入场和导航按钮状态插值立即完成，并强制 first-person 卡牌使用已有 reduced-motion 路径；默认 `Full` 下现有标题、主菜单和卡牌节奏不变。
 
-主菜单两份 WBP 可以在编辑器关闭时通过 `UnrealEditor-Cmd.exe Wacom.uproject -run=WacomBuildMainMenuAssets` 重建；Settings 四份 WBP、音频总线资产和玩家 CameraShake / WalkBob 制作开关通过 `-run=WacomBuildSettingsAssets` 重建与校验。构建器位于 `WacomEditor` Private，只负责项目内固定资产的制作树、编译和保存，不进入运行时模块；手工在 Designer 调整资产前应先确认是否还需要保留“可重建”合同，避免下一次运行构建器覆盖视觉改动。
+主菜单三份 WBP（`WBP_TitleScreen / WBP_MainMenuScreen / WBP_MainMenuNavButton`）可以在编辑器关闭时通过 `UnrealEditor-Cmd.exe Wacom.uproject -run=WacomBuildMainMenuAssets` 重建；Settings 四份 WBP、音频总线资产和玩家 CameraShake / WalkBob 制作开关通过 `-run=WacomBuildSettingsAssets` 重建与校验。构建器位于 `WacomEditor` Private，只负责项目内固定资产的制作树、编译和保存，不进入运行时模块；手工在 Designer 调整资产前应先确认是否还需要保留“可重建”合同，避免下一次运行构建器覆盖视觉改动。
 
 菜单按钮不直接 `OpenLevel`；切关卡由 GameMode 或 PlayerController 执行。主菜单和暂停菜单切关前先 `TearDownPrimaryLayout()`，再在下一帧 `OpenLevel()`，避免在 CommonUI deactivate 链中立即切关。
 

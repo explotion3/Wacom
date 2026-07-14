@@ -4,6 +4,7 @@
 
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
+#include "Widgets/CommonActivatableWidgetContainer.h"
 #include "GameFramework/PlayerController.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Kismet/GameplayStatics.h"
@@ -16,9 +17,11 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
+#include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomConfirmDialog.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
+#include "UI/Menus/WacomTitleScreen.h"
 #include "UI/Settings/WacomSettingsScreenFlow.h"
 
 #define LOCTEXT_NAMESPACE "WacomMenuGameMode"
@@ -29,6 +32,7 @@ AWacomMenuGameMode::AWacomMenuGameMode()
 	DefaultPawnClass      = nullptr;
 	PlayerControllerClass = AWacomPlayerController::StaticClass();
 	MainMenuScreenClass = UWacomMainMenuScreen::StaticClass();
+	TitleScreenClass = UWacomTitleScreen::StaticClass();
 
 	// 正式 WBP 是默认制作入口；资产缺失或损坏时仍保留 native fallback。
 	static ConstructorHelpers::FClassFinder<UWacomMainMenuScreen> MainMenuScreenFinder(
@@ -36,6 +40,13 @@ AWacomMenuGameMode::AWacomMenuGameMode()
 	if (MainMenuScreenFinder.Succeeded())
 	{
 		MainMenuScreenClass = MainMenuScreenFinder.Class;
+	}
+
+	static ConstructorHelpers::FClassFinder<UWacomTitleScreen> TitleScreenFinder(
+		TEXT("/Game/Wacom/UI/Menus/WBP_TitleScreen"));
+	if (TitleScreenFinder.Succeeded())
+	{
+		TitleScreenClass = TitleScreenFinder.Class;
 	}
 }
 
@@ -47,6 +58,10 @@ void AWacomMenuGameMode::BeginPlay()
 	if (!MainMenuScreenClass)
 	{
 		MainMenuScreenClass = UWacomMainMenuScreen::StaticClass();
+	}
+	if (!TitleScreenClass)
+	{
+		TitleScreenClass = UWacomTitleScreen::StaticClass();
 	}
 
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
@@ -84,26 +99,20 @@ void AWacomMenuGameMode::BeginPlay()
 	// 清掉任何残留 Widget（比如切回主菜单时，Battle HUD 残留）
 	UIManager->ClearAllLayers();
 
-	// 切关卡时保留 Subsystem 但 Widget Tree 会被清空
-	// （World 销毁时 Activatable Widget 跟随消失）。重新 Push MainMenu。
-	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
-		WacomUITags::UI_Layer_GameMenu.GetTag(), MainMenuScreenClass);
-
-	UWacomMainMenuScreen* MainMenuScreen = Cast<UWacomMainMenuScreen>(Pushed);
-	if (!MainMenuScreen)
+	// TitleScreen 是稳定栈底；MainMenu 只在标题页接收到继续意图后 Push。
+	if (!PushTitleScreen())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[MenuGameMode] Push MainMenuScreen 失败"));
+		UE_LOG(LogTemp, Error, TEXT("[MenuGameMode] Push TitleScreen 及原生 fallback 均失败"));
 		return;
 	}
 
-	BindMainMenuScreen(MainMenuScreen);
-
-	UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] BeginPlay 完成，MainMenu 已 Push 到 GameMenu 层"));
+	UE_LOG(LogTemp, Display, TEXT("[MenuGameMode] BeginPlay 完成，TitleScreen 已 Push 到 GameMenu 栈底"));
 }
 
 void AWacomMenuGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	UnbindMainMenuScreen();
+	UnbindTitleScreen();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -133,6 +142,115 @@ FWacomMainMenuViewData AWacomMenuGameMode::BuildMainMenuViewData() const
 	return ViewData;
 }
 
+bool AWacomMenuGameMode::PushTitleScreen()
+{
+	if (ActiveTitleScreen.IsValid())
+	{
+		return true;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager = GameInstance
+		? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>()
+		: nullptr;
+	if (!UIManager)
+	{
+		return false;
+	}
+
+	auto TryPush = [UIManager](TSubclassOf<UWacomTitleScreen> ScreenClass)
+		-> UWacomTitleScreen*
+	{
+		return Cast<UWacomTitleScreen>(UIManager->PushContentToLayer(
+			WacomUITags::UI_Layer_GameMenu.GetTag(),
+			ScreenClass));
+	};
+
+	UWacomTitleScreen* Screen = TryPush(TitleScreenClass);
+	if (!Screen && TitleScreenClass != UWacomTitleScreen::StaticClass())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[MenuGameMode] 配置的 TitleScreen Push 失败，尝试原生 fallback"));
+		Screen = TryPush(UWacomTitleScreen::StaticClass());
+	}
+	if (!Screen)
+	{
+		return false;
+	}
+
+	BindTitleScreen(Screen);
+	return true;
+}
+
+bool AWacomMenuGameMode::PushMainMenuScreen()
+{
+	if (ActiveMainMenuScreen.IsValid())
+	{
+		return true;
+	}
+	if (!IsTitleScreenInGameMenuStack())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[MenuGameMode] Refuse MainMenu push because TitleScreen is not the stable stack root"));
+		return false;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager = GameInstance
+		? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>()
+		: nullptr;
+	if (!UIManager)
+	{
+		return false;
+	}
+
+	auto TryPush = [UIManager](TSubclassOf<UWacomMainMenuScreen> ScreenClass)
+		-> UWacomMainMenuScreen*
+	{
+		return Cast<UWacomMainMenuScreen>(UIManager->PushContentToLayer(
+			WacomUITags::UI_Layer_GameMenu.GetTag(),
+			ScreenClass));
+	};
+
+	UWacomMainMenuScreen* Screen = TryPush(MainMenuScreenClass);
+	if (!Screen && MainMenuScreenClass != UWacomMainMenuScreen::StaticClass())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[MenuGameMode] 配置的 MainMenuScreen Push 失败，尝试原生 fallback"));
+		Screen = TryPush(UWacomMainMenuScreen::StaticClass());
+	}
+	if (!Screen)
+	{
+		return false;
+	}
+
+	BindMainMenuScreen(Screen);
+	return true;
+}
+
+void AWacomMenuGameMode::BindTitleScreen(UWacomTitleScreen* Screen)
+{
+	UnbindTitleScreen();
+	if (!Screen)
+	{
+		return;
+	}
+
+	ActiveTitleScreen = Screen;
+	Screen->OnAdvanceRequestedNative.AddUObject(
+		this,
+		&AWacomMenuGameMode::HandleTitleAdvanceRequested);
+}
+
+void AWacomMenuGameMode::UnbindTitleScreen()
+{
+	if (UWacomTitleScreen* Screen = ActiveTitleScreen.Get())
+	{
+		Screen->OnAdvanceRequestedNative.RemoveAll(this);
+	}
+	ActiveTitleScreen.Reset();
+}
+
 void AWacomMenuGameMode::BindMainMenuScreen(UWacomMainMenuScreen* Screen)
 {
 	UnbindMainMenuScreen();
@@ -153,6 +271,15 @@ void AWacomMenuGameMode::UnbindMainMenuScreen()
 		Screen->OnActionRequestedNative.RemoveAll(this);
 	}
 	ActiveMainMenuScreen.Reset();
+}
+
+void AWacomMenuGameMode::HandleTitleAdvanceRequested()
+{
+	if (!PushMainMenuScreen())
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[MenuGameMode] Title advance could not push MainMenu; Title remains active for retry"));
+	}
 }
 
 void AWacomMenuGameMode::HandleMainMenuAction(EWacomMainMenuAction Action)
@@ -205,6 +332,10 @@ void AWacomMenuGameMode::HandleMainMenuAction(EWacomMainMenuAction Action)
 		RequestQuitGame();
 		return;
 
+	case EWacomMainMenuAction::ReturnToTitle:
+		ReturnToTitleScreen();
+		return;
+
 	case EWacomMainMenuAction::Settings:
 		if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
 		{
@@ -220,6 +351,51 @@ void AWacomMenuGameMode::HandleMainMenuAction(EWacomMainMenuAction Action)
 			static_cast<int32>(Action));
 		return;
 	}
+}
+
+void AWacomMenuGameMode::ReturnToTitleScreen()
+{
+	UWacomMainMenuScreen* MainMenuScreen = ActiveMainMenuScreen.Get();
+	if (!MainMenuScreen)
+	{
+		return;
+	}
+	if (!IsTitleScreenInGameMenuStack())
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[MenuGameMode] Refuse MainMenu pop: stable TitleScreen root is missing"));
+		return;
+	}
+
+	UGameInstance* GameInstance = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager = GameInstance
+		? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>()
+		: nullptr;
+	if (!UIManager)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[MenuGameMode] Refuse MainMenu pop: UI manager is unavailable"));
+		return;
+	}
+
+	UnbindMainMenuScreen();
+	UIManager->PopContentFromLayer(MainMenuScreen);
+}
+
+bool AWacomMenuGameMode::IsTitleScreenInGameMenuStack() const
+{
+	const UWacomTitleScreen* TitleScreen = ActiveTitleScreen.Get();
+	UGameInstance* GameInstance = GetGameInstance();
+	const UWacomGameUIManagerSubsystem* UIManager = GameInstance
+		? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>()
+		: nullptr;
+	const UWacomPrimaryGameLayout* PrimaryLayout = UIManager
+		? UIManager->GetPrimaryLayout()
+		: nullptr;
+	const UCommonActivatableWidgetStack* Stack = PrimaryLayout
+		? PrimaryLayout->GetLayerStack(WacomUITags::UI_Layer_GameMenu.GetTag())
+		: nullptr;
+	return TitleScreen && Stack && Stack->GetWidgetList().Contains(TitleScreen);
 }
 
 void AWacomMenuGameMode::RequestQuitGame()

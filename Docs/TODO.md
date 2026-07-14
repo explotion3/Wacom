@@ -214,10 +214,10 @@ tags:
   - 说明：采用一个玩家档案、一个活动旅程、若干不可见滚动备份；结束旅程生成只读历史摘要。该切片负责恢复 Bootstrap / PauseMenu Save / MainMenu Continue，不把 slot 语义写回 MainMenu Screen。
 
 - [ ] **MainMenu 正式表现：实时场景与剩余子页面**
-  - 状态：`In Progress: 正式 WBP 壳层与导航按钮已完成，等待 PIE 视觉验收和场景切片`
+  - 状态：`In Progress: Title / MainMenu 两层栈与正式 WBP 已完成，等待 PIE 视觉验收和场景切片`
   - 归属：App / UI
   - 入口：[Roadmap: App 壳层与菜单](./Roadmap.md#roadmap-app-shell-and-menus)
-  - 说明：`WBP_MainMenuScreen + WBP_MainMenuNavButton` 已建立第一版正式壳层，Settings Screen 与主菜单 / Pause 双入口也已完成。剩余工作是 `L_MainMenu` 实时场景、固定镜头、音频 / 字体 / 像素纹理美术验收，以及 Journey History / Credits 子页面。
+  - 说明：`WBP_TitleScreen + WBP_MainMenuScreen + WBP_MainMenuNavButton` 已建立第一版正式壳层；每次进入 `L_MainMenu` 先显示 Press Any Key，主菜单 ESC / B 返回稳定 Title 根且不会弹空 UI 栈。Settings Screen 与主菜单 / Pause 双入口也已完成。剩余工作是 `L_MainMenu` 实时场景、固定镜头、音频 / 字体 / 像素纹理美术验收，以及 Journey History / Credits 子页面。
 
 - [x] **Settings Screen：WBP、视频确认 Modal 与双入口**
   - 状态：`Done: 五分类页面、token 事务、双入口和 Run Tunnel CameraShake 已落地`

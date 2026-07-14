@@ -27,6 +27,7 @@
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
+#include "UI/Menus/WacomTitleScreen.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
 
@@ -37,6 +38,7 @@ namespace
 	constexpr const TCHAR* MainMenuAssetRoot = TEXT("/Game/Wacom/UI/Menus");
 	constexpr const TCHAR* NavButtonAssetName = TEXT("WBP_MainMenuNavButton");
 	constexpr const TCHAR* ScreenAssetName = TEXT("WBP_MainMenuScreen");
+	constexpr const TCHAR* TitleScreenAssetName = TEXT("WBP_TitleScreen");
 
 	const FLinearColor Ink(0.018f, 0.025f, 0.040f, 0.96f);
 	const FLinearColor Panel(0.025f, 0.038f, 0.060f, 0.88f);
@@ -319,6 +321,106 @@ namespace
 		return CompileAndSaveWidgetBlueprint(Asset);
 	}
 
+	bool BuildTitleScreenBlueprint(FWidgetBlueprintAsset& Asset)
+	{
+		ResetWidgetBlueprint(
+			Asset.Blueprint,
+			TEXT("L_MainMenu 的稳定 Press Any Key 栈底页面。只上报继续意图。"));
+		UWidgetTree* Tree = Asset.Blueprint->WidgetTree;
+
+		UCanvasPanel* Root = Tree->ConstructWidget<UCanvasPanel>(
+			UCanvasPanel::StaticClass(), TEXT("Root"));
+		Tree->RootWidget = Root;
+
+		UBorder* SceneShade = Tree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(), TEXT("TitleSceneShade"));
+		SceneShade->SetBrushColor(FLinearColor(Ink.R, Ink.G, Ink.B, 0.42f));
+		if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(SceneShade))
+		{
+			StretchCanvasWidget(Slot, FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		}
+
+		UBorder* TopRule = Tree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(), TEXT("TitleTopPixelRule"));
+		TopRule->SetBrushColor(FLinearColor(Cyan.R, Cyan.G, Cyan.B, 0.72f));
+		if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(TopRule))
+		{
+			Slot->SetAnchors(FAnchors(0.18f, 0.13f, 0.82f, 0.13f));
+			Slot->SetOffsets(FMargin(0.0f, 0.0f, 0.0f, 3.0f));
+		}
+
+		UVerticalBox* Content = Tree->ConstructWidget<UVerticalBox>(
+			UVerticalBox::StaticClass(), TEXT("TitleContentRoot"));
+		MarkWidgetVariable(Asset.Blueprint, Content);
+		if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Content))
+		{
+			Slot->SetAnchors(FAnchors(0.5f, 0.47f));
+			Slot->SetAlignment(FVector2D(0.5f, 0.5f));
+			Slot->SetAutoSize(true);
+		}
+
+		UTextBlock* Eyebrow = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("TitleEyebrowText"));
+		StyleText(Eyebrow, FText::FromString(TEXT("FIRST-PERSON CARD ADVENTURE")),
+			15, Cyan, TEXT("Bold"));
+		Eyebrow->SetJustification(ETextJustify::Center);
+		Content->AddChildToVerticalBox(Eyebrow);
+
+		UTextBlock* GameTitle = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("TitleGameNameText"));
+		StyleText(GameTitle, FText::FromString(TEXT("WACOM")),
+			86, Paper, TEXT("Bold"));
+		GameTitle->SetJustification(ETextJustify::Center);
+		if (UVerticalBoxSlot* Slot = Content->AddChildToVerticalBox(GameTitle))
+		{
+			Slot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 4.0f));
+		}
+
+		UTextBlock* Subtitle = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("TitleSubtitleText"));
+		StyleText(Subtitle, FText::FromString(TEXT("失落虫巢 · 旅程档案")),
+			20, Amber, TEXT("Bold"));
+		Subtitle->SetJustification(ETextJustify::Center);
+		if (UVerticalBoxSlot* Slot = Content->AddChildToVerticalBox(Subtitle))
+		{
+			Slot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 24.0f));
+		}
+
+		USizeBox* BrandRuleSize = Tree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(), TEXT("TitleBrandRuleSize"));
+		BrandRuleSize->SetWidthOverride(360.0f);
+		BrandRuleSize->SetHeightOverride(3.0f);
+		UBorder* BrandRule = Tree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(), TEXT("TitleBrandRule"));
+		BrandRule->SetBrushColor(Amber);
+		BrandRuleSize->AddChild(BrandRule);
+		if (UVerticalBoxSlot* Slot = Content->AddChildToVerticalBox(BrandRuleSize))
+		{
+			Slot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 48.0f));
+			Slot->SetHorizontalAlignment(HAlign_Center);
+		}
+
+		UTextBlock* PressAnyKey = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("PressAnyKeyText"));
+		StyleText(PressAnyKey, FText::FromString(TEXT("按任意键继续")),
+			20, Paper, TEXT("Bold"));
+		PressAnyKey->SetJustification(ETextJustify::Center);
+		MarkWidgetVariable(Asset.Blueprint, PressAnyKey);
+		Content->AddChildToVerticalBox(PressAnyKey);
+
+		UTextBlock* BuildLabel = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("TitleBuildLabel"));
+		StyleText(BuildLabel, FText::FromString(TEXT("PRE-ALPHA // LOCAL PROFILE")),
+			11, Muted, TEXT("Bold"));
+		BuildLabel->SetJustification(ETextJustify::Center);
+		if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(BuildLabel))
+		{
+			StretchCanvasWidget(Slot, FAnchors(0.25f, 0.91f, 0.75f, 0.95f));
+		}
+
+		return CompileAndSaveWidgetBlueprint(Asset);
+	}
+
 	UWacomMainMenuButtonWidget* AddMenuButton(
 		UWidgetBlueprint* ScreenBlueprint,
 		UVerticalBox* Parent,
@@ -576,6 +678,14 @@ namespace Wacom::ContentBuilder
 {
 	bool BuildMainMenuWidgetBlueprintContent()
 	{
+		FWidgetBlueprintAsset TitleScreen = LoadOrCreateWidgetBlueprint(
+			TitleScreenAssetName,
+			UWacomTitleScreen::StaticClass());
+		if (!TitleScreen.Blueprint || !BuildTitleScreenBlueprint(TitleScreen))
+		{
+			return false;
+		}
+
 		FWidgetBlueprintAsset NavButton = LoadOrCreateWidgetBlueprint(
 			NavButtonAssetName,
 			UWacomMainMenuButtonWidget::StaticClass());
@@ -594,7 +704,8 @@ namespace Wacom::ContentBuilder
 		}
 
 		UE_LOG(LogTemp, Display,
-			TEXT("[MainMenuWidgetBlueprintBuilder] Built %s and %s"),
+			TEXT("[MainMenuWidgetBlueprintBuilder] Built %s, %s and %s"),
+			TitleScreenAssetName,
 			NavButtonAssetName,
 			ScreenAssetName);
 		return true;

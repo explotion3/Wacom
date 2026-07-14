@@ -106,6 +106,15 @@ TSharedRef<SWidget> UWacomMainMenuButtonWidget::RebuildWidget()
 void UWacomMainMenuButtonWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	OnFocusReceived().RemoveAll(this);
+	OnFocusReceived().AddUObject(
+		this,
+		&UWacomMainMenuButtonWidget::HandleCommonButtonFocusReceived);
+	OnFocusLost().RemoveAll(this);
+	OnFocusLost().AddUObject(
+		this,
+		&UWacomMainMenuButtonWidget::HandleCommonButtonFocusLost);
+	bPresentationFocused = false;
 	BindRuntimeSettings();
 	SetRenderTransformPivot(FVector2D(0.0f, 0.5f));
 	RefreshPresentationTarget(/*bApplyImmediately*/true);
@@ -113,24 +122,12 @@ void UWacomMainMenuButtonWidget::NativeConstruct()
 
 void UWacomMainMenuButtonWidget::NativeDestruct()
 {
+	OnFocusReceived().RemoveAll(this);
+	OnFocusLost().RemoveAll(this);
+	bPresentationFocused = false;
 	UnbindRuntimeSettings();
 	StopPresentationTicker();
 	Super::NativeDestruct();
-}
-
-FReply UWacomMainMenuButtonWidget::NativeOnFocusReceived(
-	const FGeometry& InGeometry,
-	const FFocusEvent& InFocusEvent)
-{
-	FReply Reply = Super::NativeOnFocusReceived(InGeometry, InFocusEvent);
-	RefreshPresentationTarget();
-	return Reply;
-}
-
-void UWacomMainMenuButtonWidget::NativeOnFocusLost(const FFocusEvent& InFocusEvent)
-{
-	Super::NativeOnFocusLost(InFocusEvent);
-	RefreshPresentationTarget();
 }
 
 void UWacomMainMenuButtonWidget::NativeOnHovered()
@@ -175,7 +172,7 @@ void UWacomMainMenuButtonWidget::NativeOnDisabled()
 void UWacomMainMenuButtonWidget::RefreshPresentationTarget(bool bApplyImmediately)
 {
 	const bool bEmphasized = IsInteractionEnabled()
-		&& (IsHovered() || HasAnyUserFocus() || GetSelected());
+		&& (IsHovered() || bPresentationFocused || GetSelected());
 	TargetEmphasis = bEmphasized ? 1.0f : 0.0f;
 	TargetPressedAmount = IsInteractionEnabled() && bPresentationPressed ? 1.0f : 0.0f;
 
@@ -195,6 +192,18 @@ void UWacomMainMenuButtonWidget::RefreshPresentationTarget(bool bApplyImmediatel
 				return TickPresentation(DeltaTime);
 			}));
 	}
+}
+
+void UWacomMainMenuButtonWidget::HandleCommonButtonFocusReceived()
+{
+	bPresentationFocused = true;
+	RefreshPresentationTarget();
+}
+
+void UWacomMainMenuButtonWidget::HandleCommonButtonFocusLost()
+{
+	bPresentationFocused = false;
+	RefreshPresentationTarget();
 }
 
 void UWacomMainMenuButtonWidget::BindRuntimeSettings()
@@ -492,6 +501,15 @@ void UWacomMainMenuScreen::NativeOnDeactivated()
 	Super::NativeOnDeactivated();
 }
 
+FReply UWacomMainMenuScreen::NativeHandleBackRequested()
+{
+	// MainMenu 不拥有栈切换。把 Back 作为玩家意图交给 GameMode；如果没有
+	// flow consumer，页面保持 active，绝不能像普通子菜单一样把根栈弹空。
+	OnBackRequestedNative.Broadcast();
+	RequestAction(EWacomMainMenuAction::ReturnToTitle);
+	return FReply::Handled();
+}
+
 void UWacomMainMenuScreen::StartIntroPresentation()
 {
 	StopIntroPresentation();
@@ -700,6 +718,7 @@ bool UWacomMainMenuScreen::IsActionAvailable(EWacomMainMenuAction Action) const
 		return ViewData.bHasActiveJourney && ViewData.bCanContinueJourney;
 	case EWacomMainMenuAction::StartNewJourney:
 	case EWacomMainMenuAction::Quit:
+	case EWacomMainMenuAction::ReturnToTitle:
 		return true;
 	case EWacomMainMenuAction::JourneyHistory:
 		return ViewData.bShowJourneyHistory;

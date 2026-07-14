@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 
 class AWacomPlayerController;
+class SWidget;
 class UWacomGameViewportClient;
 struct FPointerEvent;
 
@@ -25,6 +26,8 @@ struct FWacomGameViewportClientTestAccess
 		UWacomGameViewportClient& ViewportClient,
 		TOptional<bool> bPointerInsideViewport,
 		AWacomPlayerController* PlayerController);
+	static bool HasProjectOwnedFocusPresentation(
+		const TSharedPtr<SWidget>& FocusedWidget);
 };
 
 #endif
