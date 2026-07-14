@@ -23,6 +23,8 @@ public class WacomEditor : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[]
 		{
 			"UnrealEd",
+			"UMG",
+			"UMGEditor",
 			"AssetTools",
 			"AssetRegistry",
 			"EditorStyle",

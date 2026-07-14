@@ -32,7 +32,7 @@ void UWacomBackpackWorkspaceWidget::NativeDestruct()
 	{
 		if (CardWidget.IsValid())
 		{
-			CardWidget->SetWorkspaceInputOwned(false);
+			CardWidget->UnbindWorkspacePointerEvents();
 		}
 	}
 	BoundCardWidgets.Reset();
@@ -57,6 +57,13 @@ void UWacomBackpackWorkspaceWidget::BindWorkspaceCards(
 	uint64 StorageRevision)
 {
 	CurrentStorageRevision = StorageRevision;
+	for (TWeakObjectPtr<UWacomDeckCardWidget>& CardWidget : BoundCardWidgets)
+	{
+		if (CardWidget.IsValid())
+		{
+			CardWidget->UnbindWorkspacePointerEvents();
+		}
+	}
 	BoundCardWidgets.Reset();
 	TArray<FWacomBackpackWorkspaceCardHitRecord> HitRecords;
 	for (UWacomDeckCardWidget* CardWidget : CardWidgets)
@@ -65,7 +72,6 @@ void UWacomBackpackWorkspaceWidget::BindWorkspaceCards(
 		{
 			continue;
 		}
-		CardWidget->SetWorkspaceInputOwned(true);
 		CardWidget->OnWorkspacePointerDownNative.BindUObject(this, &UWacomBackpackWorkspaceWidget::HandleCardPointerDown);
 		CardWidget->OnWorkspacePointerMoveNative.BindUObject(this, &UWacomBackpackWorkspaceWidget::HandleCardPointerMove);
 		CardWidget->OnWorkspacePointerUpNative.BindUObject(this, &UWacomBackpackWorkspaceWidget::HandleCardPointerUp);
@@ -128,28 +134,24 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerMove(
 		return FReply::Unhandled();
 	}
 	const FVector2D Pointer = ToLocalPointer(Event);
+	if (InteractionModel->IsMarqueeActive())
+	{
+		InteractionModel->UpdateMarquee(Pointer);
+		RefreshInteractionPresentation();
+		return BuildHandledPointerReply();
+	}
 	if (InteractionModel->IsCarrying())
 	{
 		InteractionModel->UpdateCarryPointer(Pointer);
 		StartCarryInterpolation();
 		OnInteractionChangedNative.Broadcast();
-		return FReply::Handled();
+		return BuildHandledPointerReply();
 	}
-	if (bPendingCardPress && FVector2D::Distance(PendingPressPosition, Pointer) >= 5.0f)
+	if (TryBeginCarryFromPendingPress(Pointer))
 	{
-		if (!InteractionModel->IsSelected(PendingCardPressId))
-		{
-			InteractionModel->ClickCard(PendingCardPressId, false);
-		}
-		InteractionModel->BeginCarry(PendingCardPressId, Pointer, CurrentStorageRevision);
-		DisplayedCarryPointer = Pointer;
-		bHasDisplayedCarryPointer = true;
-		bPendingCardPress = false;
-		RefreshInteractionPresentation();
-		OnInteractionChangedNative.Broadcast();
-		return FReply::Handled();
+		return BuildHandledPointerReply();
 	}
-	return FReply::Handled();
+	return BuildHandledPointerReply();
 }
 
 FReply UWacomBackpackWorkspaceWidget::HandleCardPointerUp(
@@ -161,10 +163,18 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerUp(
 	{
 		return FReply::Unhandled();
 	}
+	if (InteractionModel->IsMarqueeActive() && Event.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		InteractionModel->UpdateMarquee(ToLocalPointer(Event));
+		InteractionModel->CompleteMarquee();
+		RefreshInteractionPresentation();
+		OnInteractionChangedNative.Broadcast();
+		return FReply::Handled().ReleaseMouseCapture();
+	}
 	if (InteractionModel->IsCarrying())
 	{
 		BroadcastRelease(Event.GetEffectingButton() == EKeys::RightMouseButton);
-		return FReply::Handled();
+		return BuildHandledPointerReply();
 	}
 	if (bPendingCardPress && Event.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
@@ -190,6 +200,47 @@ void UWacomBackpackWorkspaceWidget::BroadcastRelease(bool bReleaseAll)
 	}
 	RefreshInteractionPresentation();
 	OnInteractionChangedNative.Broadcast();
+}
+
+bool UWacomBackpackWorkspaceWidget::TryBeginCarryFromPendingPress(FVector2D Pointer)
+{
+	if (!InteractionModel || !bPendingCardPress
+		|| FVector2D::Distance(PendingPressPosition, Pointer) < 5.0f)
+	{
+		return false;
+	}
+
+	if (!InteractionModel->IsSelected(PendingCardPressId))
+	{
+		InteractionModel->ClickCard(PendingCardPressId, false);
+	}
+	const bool bStarted = InteractionModel->BeginCarry(
+		PendingCardPressId,
+		Pointer,
+		CurrentStorageRevision);
+	bPendingCardPress = false;
+	if (!bStarted)
+	{
+		return false;
+	}
+
+	DisplayedCarryPointer = Pointer;
+	bHasDisplayedCarryPointer = true;
+	StartCarryInterpolation();
+	RefreshInteractionPresentation();
+	OnInteractionChangedNative.Broadcast();
+	return true;
+}
+
+FReply UWacomBackpackWorkspaceWidget::BuildHandledPointerReply()
+{
+	FReply Reply = FReply::Handled();
+	if ((InteractionModel && (InteractionModel->IsCarrying() || InteractionModel->IsMarqueeActive()))
+		|| bPendingCardPress)
+	{
+		return Reply.CaptureMouse(TakeWidget()).SetUserFocus(TakeWidget());
+	}
+	return Reply.ReleaseMouseCapture();
 }
 
 FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonDown(
@@ -227,13 +278,17 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseMove(
 		InteractionModel->UpdateCarryPointer(ToLocalPointer(InMouseEvent));
 		StartCarryInterpolation();
 		OnInteractionChangedNative.Broadcast();
-		return FReply::Handled();
+		return BuildHandledPointerReply();
+	}
+	if (TryBeginCarryFromPendingPress(ToLocalPointer(InMouseEvent)))
+	{
+		return BuildHandledPointerReply();
 	}
 	if (InteractionModel->IsMarqueeActive())
 	{
 		InteractionModel->UpdateMarquee(ToLocalPointer(InMouseEvent));
 		RefreshInteractionPresentation();
-		return FReply::Handled();
+		return BuildHandledPointerReply();
 	}
 	return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 }
@@ -252,7 +307,7 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonUp(
 			|| InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
 		{
 			BroadcastRelease(InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton);
-			return FReply::Handled();
+			return BuildHandledPointerReply();
 		}
 		return FReply::Unhandled();
 	}
@@ -379,6 +434,10 @@ void UWacomBackpackWorkspaceWidget::RefreshInteractionPresentation()
 			}
 		}
 	}
+	if (InteractionModel->IsCarrying() && !bCarryInterpolationActive)
+	{
+		StartCarryInterpolation();
+	}
 }
 
 void UWacomBackpackWorkspaceWidget::CancelInteraction()
@@ -416,7 +475,6 @@ void UWacomBackpackWorkspaceWidget::StartCarryInterpolation()
 	if (!CachedWidget.IsValid())
 	{
 		DisplayedCarryPointer = InteractionModel->GetCarry().PointerPosition;
-		RefreshInteractionPresentation();
 		return;
 	}
 	bCarryInterpolationActive = true;
@@ -436,20 +494,31 @@ void UWacomBackpackWorkspaceWidget::StartCarryInterpolation()
 					}
 					return EActiveTimerReturnType::Stop;
 				}
-				const FVector2D Target = Self->InteractionModel->GetCarry().PointerPosition;
+				FVector2D Target = Self->InteractionModel->GetCarry().PointerPosition;
+				if (FSlateApplication::IsInitialized())
+				{
+					const FVector2D LatestPointer = Self->GetCachedGeometry().AbsoluteToLocal(
+						FSlateApplication::Get().GetCursorPos());
+					if (!LatestPointer.Equals(Target, 0.1f))
+					{
+						Self->InteractionModel->UpdateCarryPointer(LatestPointer);
+						Target = LatestPointer;
+						Self->OnInteractionChangedNative.Broadcast();
+					}
+				}
 				const UWacomBackpackWorkspaceStyle* Style = Self->InteractionStyle.IsValid()
 					? Self->InteractionStyle.Get()
 					: GetDefault<UWacomBackpackWorkspaceStyle>();
 				const float FollowSeconds = FMath::Max(0.001f, Style->PointerFollowSeconds);
 				const float Alpha = 1.0f - FMath::Exp(-DeltaTime / FollowSeconds);
-				Self->DisplayedCarryPointer = FMath::Lerp(Self->DisplayedCarryPointer, Target, Alpha);
-				Self->RefreshInteractionPresentation();
-				if (FVector2D::Distance(Self->DisplayedCarryPointer, Target) <= 0.5f)
+				if (!Self->DisplayedCarryPointer.Equals(Target, 0.1f))
 				{
-					Self->DisplayedCarryPointer = Target;
-					Self->bCarryInterpolationActive = false;
+					Self->DisplayedCarryPointer = FMath::Lerp(Self->DisplayedCarryPointer, Target, Alpha);
+					if (FVector2D::Distance(Self->DisplayedCarryPointer, Target) <= 0.5f)
+					{
+						Self->DisplayedCarryPointer = Target;
+					}
 					Self->RefreshInteractionPresentation();
-					return EActiveTimerReturnType::Stop;
 				}
 				return EActiveTimerReturnType::Continue;
 			}));
@@ -528,9 +597,13 @@ void UWacomBackpackWorkspaceWidget::ApplyCardLayout(
 	}
 	CanvasSlot->SetAnchors(FAnchors(0.0f, 0.0f));
 	CanvasSlot->SetAlignment(FVector2D::ZeroVector);
-	CanvasSlot->SetPosition(CardCenter - CardSize * 0.5f);
+	const FVector2D PixelAlignedPosition(
+		FMath::RoundToFloat(CardCenter.X - CardSize.X * 0.5f),
+		FMath::RoundToFloat(CardCenter.Y - CardSize.Y * 0.5f));
+	CanvasSlot->SetPosition(PixelAlignedPosition);
 	CanvasSlot->SetSize(CardSize);
 	CanvasSlot->SetZOrder(ZOrder);
+	CardWidget.SetPixelSnapping(EWidgetPixelSnapping::SnapToPixel);
 	CardWidget.SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	CardWidget.SetRenderTransformAngle(AngleDegrees);
 }

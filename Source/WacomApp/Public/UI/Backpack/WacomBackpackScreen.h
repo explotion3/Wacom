@@ -15,15 +15,12 @@ class UWrapBox;
 class UVerticalBox;
 class UCardDefinition;
 class URunSession;
-class UWacomDeleteZoneDropTarget;
 class UWacomCardDetailPanel;
 class UWacomDeckCardWidget;
 class UWacomBackpackZoneSectionWidget;
 class UWacomSpecialZoneWidget;
-class UWacomZoneDropTarget;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
-class UWacomCardDragOperation;
 class UWacomBackpackWorkspaceStyle;
 class UWacomBackpackWorkspaceWidget;
 class UWacomBackpackZoneRackWidget;
@@ -89,18 +86,6 @@ public:
 		FVector2D LayerSize,
 		FVector2D PanelSize,
 		float Padding = 12.f);
-
-	/** DropTarget 命令出口：移动卡牌。DropTarget 只转发拖拽意图，规则提交和 Toast 由 Private command flow 处理。 */
-	bool HandleZoneDropRequested(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId);
-
-	/** DropTarget 命令出口：请求销毁卡牌。确认框和 Run 命令提交由 Private command flow 处理。 */
-	bool HandleDeleteDropRequested(const UWacomCardDragOperation& CardOp);
-
-	/** DropTarget 预览出口：只读判断移动意图是否可提交；Widget 不直接读取 RunSession。 */
-	bool CanPreviewZoneDrop(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId) const;
-
-	/** DropTarget 预览出口：只读判断删牌意图是否可提交；Widget 不直接读取 RunSession。 */
-	bool CanPreviewDeleteDrop(const UWacomCardDragOperation& CardOp) const;
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -191,15 +176,6 @@ protected:
 	TObjectPtr<UWrapBox> FluxContentCardsBox;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UWacomZoneDropTarget> BattleDeckDropTarget;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomZoneDropTarget> BackpackDropTarget;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UWacomDeleteZoneDropTarget> DeleteDropTarget;
-
-	UPROPERTY(Transient)
 	TObjectPtr<UVerticalBox> SpecialZonesPanel;
 
 	UPROPERTY(Transient)
@@ -237,7 +213,7 @@ private:
 	/** 销毁现有 WrapBox 子项。 */
 	void ClearCardBoxes();
 
-	/** 默认 C++ 布局只负责搭出三大区和 Host，实际 DropTarget 由 EnsureRuntimeZoneWidgets 填充。 */
+	/** 为旧 fallback 布局补齐只读列表和详情层；正式输入只由 Workspace 接管。 */
 	void EnsureRuntimeZoneWidgets();
 	void EnsureWorkspaceWidgets();
 
@@ -352,7 +328,6 @@ private:
 	UWacomSpecialZoneWidget* GetSpecialZoneWidgetForTest(int32 Index) const;
 	void RebuildAllForTest() { RebuildAll(); }
 	FWacomBackpackScreenAutomationTestView GetAutomationTestViewForTest() const;
-	static FGuid ResolveDeleteRequestInstanceIdForTest(const UWacomCardDragOperation& CardOp);
 	static FText BuildMoveZoneNameTextForTest(EZoneKind Zone);
 	static FText BuildMoveFailureToastTextForTest(FName DisabledReason);
 	static FText BuildDeleteFailureToastTextForTest(FName DisabledReason);

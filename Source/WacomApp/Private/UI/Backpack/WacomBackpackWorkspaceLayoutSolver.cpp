@@ -27,9 +27,17 @@ TArray<FWacomBackpackResolvedLayout> FWacomBackpackWorkspaceLayoutSolver::BuildD
 		1,
 		FMath::FloorToInt((AvailableWidth + Spacing.X) / (CardSize.X + Spacing.X)));
 	const int32 UsedColumns = FMath::Min(CardCount, Columns);
+	const int32 Rows = FMath::DivideAndRoundUp(CardCount, Columns);
 	const float UsedWidth = UsedColumns * CardSize.X + FMath::Max(0, UsedColumns - 1) * Spacing.X;
 	const float StartX = FMath::Max(Padding.X, (WorkspaceSize.X - UsedWidth) * 0.5f) + CardSize.X * 0.5f;
-	const float StartY = Padding.Y + CardSize.Y * 0.5f;
+	const float AvailableHeight = FMath::Max(CardSize.Y, WorkspaceSize.Y - Padding.Y * 2.0f);
+	const float DesiredRowStep = CardSize.Y + Spacing.Y;
+	const float FittingRowStep = Rows > 1
+		? FMath::Max(0.0f, (AvailableHeight - CardSize.Y) / static_cast<float>(Rows - 1))
+		: 0.0f;
+	const float RowStep = Rows > 1 ? FMath::Min(DesiredRowStep, FittingRowStep) : 0.0f;
+	const float UsedHeight = CardSize.Y + FMath::Max(0, Rows - 1) * RowStep;
+	const float StartY = FMath::Max(Padding.Y, (WorkspaceSize.Y - UsedHeight) * 0.5f) + CardSize.Y * 0.5f;
 
 	Layouts.Reserve(CardCount);
 	for (int32 Index = 0; Index < CardCount; ++Index)
@@ -39,7 +47,7 @@ TArray<FWacomBackpackResolvedLayout> FWacomBackpackWorkspaceLayoutSolver::BuildD
 		FWacomBackpackResolvedLayout Layout;
 		Layout.CardCenter = FVector2D(
 			StartX + Column * (CardSize.X + Spacing.X),
-			StartY + Row * (CardSize.Y + Spacing.Y));
+			StartY + Row * RowStep);
 		Layout.CardCenter = ClampCardCenterToVisibleBounds(
 			Layout.CardCenter,
 			WorkspaceSize,

@@ -157,12 +157,12 @@ Docs/
 
 ## Migration Audit — T067 (2026-07-13)
 
-已按 `quickstart.md` 运行完整旧路径 `rg`。新 Workspace/ZoneRack/批量 command flow 已是 C++ fallback 的唯一可见输入路径，但以下生产符号仍有意保留：
+已按 `quickstart.md` 运行完整旧路径 `rg`，并在 T059–T062 完成后再次复核。新 Workspace/ZoneRack/批量 command flow 是唯一输入路径；旧 UMG DragDrop 生产 owner 已删除。剩余旧 Host 名仅为资产字段兼容和只读 fallback：
 
-| Remaining match | Why it remains | Removal gate |
+| Remaining match | Why it remains | Current boundary |
 |---|---|---|
-| `DeleteZoneHost`、`BattleDeckZoneHost`、`FluxContentDropTargetHost`、`SpecialZonesHost`、`BurdenZoneHost` | 当前 `Content/Wacom/UI/Backpack/WBP_BackpackScreen.uasset` 仍按旧 simultaneous-zone Host 制作；fallback 会折叠这些 Host，正式文档已降级为迁移兼容合同 | T055–T058 完成新 WBP/Style 资产并通过 PIE 后移除 |
-| `UWacomCardDragOperation`、`NativeOnDragDetected`、`UWacomZoneDropTarget`、`UWacomDeleteZoneDropTarget` | 旧 WBP/SpecialZone 资产和 `BackpackScreenSpec.cpp` 仍依赖单卡 drag/drop 回归路径；直接删除会让现有资产失去内容或造成编译破坏 | 新资产注册并验证 Workspace 单卡/批量移动与销毁后，执行 T061–T062 一次性删除生产 owner 和旧测试 |
-| `BackpackRuntimeZoneBuilder` 与旧 Screen command wrapper | 为上述旧资产提供无状态兼容桥；新 Workspace 不调用这些 wrapper，批量路径只走 `FWacomBackpackCommandFlow` 的 atomic API | 与旧 Host/drag 类同批移除，避免双输入 owner 长期并存 |
+| `DeleteZoneHost`、`BattleDeckZoneHost`、`FluxContentDropTargetHost`、`SpecialZonesHost`、`BurdenZoneHost` | 旧资产字段和 fallback 测试仍需要稳定绑定名 | `BackpackRuntimeZoneBuilder` 只创建提示、WrapBox 和只读卡牌；不创建 DragDrop target，不提交 move/delete |
+| `ContentDropTargetHost` | `WBP_WacomSpecialZoneWidget` 的历史 UPROPERTY 名称，改名会无谓破坏旧资产绑定 | 运行时仅填充普通内容容器；右键入战仍转发给 Screen flow，跨区移动只走 Workspace |
+| 历史文档中的旧类名 | 研究审计和迁移搜索命令需要说明被移除对象 | 不属于生产引用；当前制作合同明确禁止第二输入 owner |
 
-本次审计没有把任何剩余匹配误判为正式新合同；对应清理已记录在 `Docs/TechDebt.md` 和 `Docs/TODO.md`。由于当前协作边界禁止修改 FirstPersonCard/PileTransfer/DreamShader 卡牌表现文件，T059–T060 也不能在本线程执行。
+最终生产源码搜索不再命中 `UWacomCardDragOperation`、`NativeOnDragDetected`、`UWacomZoneDropTarget`、`UWacomDeleteZoneDropTarget`、`BuildDragOperation` 或旧 preview wrapper。Graph-first 反馈材质由 Wacom 自有 `.dsm` / `.dsh` 生成并通过 Style 注入，未复制 Godot Demo 代码、shader 或资产。

@@ -11,7 +11,7 @@
 class UBorder;
 class UTextBlock;
 class UCardDefinition;
-class UDragDropOperation;
+class UScaleBox;
 class UWacomCardView;
 struct FWacomBackpackWorkspaceCardVisualState;
 
@@ -26,9 +26,7 @@ enum class EWacomBackpackDeckCardListReuseRole : uint8
 /**
  * 单张卡的 UI 表示（背包系统用）。
  *
- * 拖拽源：
- *   - 纯展示 / 拖拽热区，不触发点击移动
- *   - 删牌不在卡牌本体上处理；拖到 DeleteZone 后由 DropTarget 转发给 BackpackScreen
+ * 输入边界：卡牌只转发指针事件；选择、携带、跨区移动和销毁均由父 Workspace/Screen 处理。
  *
  * 由 UWacomBackpackZoneWidget 创建并管理生命周期。
  *
@@ -85,8 +83,8 @@ public:
 	void SetMoveEnabled(bool bEnabled);
 	bool IsMoveEnabled() const { return bCardInteractionEnabled; }
 
-	/** Workspace 模式由唯一输入 owner 接管；卡牌只转发指针事件，不启动 UDragDropOperation。 */
-	void SetWorkspaceInputOwned(bool bOwned);
+	/** 清理父 Workspace 安装的指针转发，供复用和生命周期收口使用。 */
+	void UnbindWorkspacePointerEvents();
 	void SetWorkspaceVisualState(bool bSelected, bool bCurrent, bool bReadOnly);
 	void ApplyWorkspaceVisualState(const FWacomBackpackWorkspaceCardVisualState& VisualState);
 	bool IsWorkspaceSelected() const { return bWorkspaceSelected; }
@@ -101,13 +99,6 @@ public:
 	FOnWorkspacePointerEventNative OnWorkspacePointerDownNative;
 	FOnWorkspacePointerEventNative OnWorkspacePointerMoveNative;
 	FOnWorkspacePointerEventNative OnWorkspacePointerUpNative;
-
-	/** 构造当前卡片的拖拽 payload。返回 nullptr 表示当前卡片不能被拖拽。 */
-	UDragDropOperation* BuildDragOperation();
-
-	/** 标记当前 widget 是否只作为拖拽视觉使用。拖拽视觉不再响应交互。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Backpack|Drag")
-	void SetDragVisualMode(bool bInDragVisualMode);
 
 	/** 测试/诊断用：主按钮是否仍绑定了点击移动语义。 */
 	bool HasMoveButtonClickBindings() const;
@@ -130,9 +121,6 @@ public:
 	/** 测试/诊断用：模拟卡牌移出。返回 false 表示当前卡片不会广播 unhover。 */
 	bool RequestCardUnhover();
 
-	/** 测试/诊断用：模拟开始拖拽时的详情隐藏通知。 */
-	bool RequestDragStartedForDetail();
-
 	/** 右键请求切换 SpecialZone 入战标记。Payload 是 instance id。 */
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEnabledToggleRequestedNative, FGuid);
 	FOnBattleEnabledToggleRequestedNative OnBattleEnabledToggleRequestedNative;
@@ -148,14 +136,18 @@ protected:
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
-	virtual void NativeOnDragDetected(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent, UDragDropOperation*& OutOperation) override;
-	virtual void NativeOnDragCancelled(const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
-
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> CardBody;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWacomCardView> CardView;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScaleBox> CardFaceScaleBox;
+
+	/** 不参与布局和命中的纯色反馈层；正式 WBP 将它放在卡面上方、角标下方。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> WorkspaceFeedbackOverlay;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> BattleEnabledBadge;
@@ -173,18 +165,12 @@ private:
 	bool bBattleEnabledBadgeVisible = false;
 	bool bRightClickToggleEnabled = false;
 	bool bCardInteractionEnabled = true;
-	bool bDragVisualMode = false;
-	bool bWorkspaceInputOwned = false;
 	bool bWorkspaceSelected = false;
 	bool bWorkspaceCurrent = false;
 	EWacomBackpackDeckCardListReuseRole BackpackListReuseRole = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 	FText ProjectedFromBadgeText;
 
-	UFUNCTION()
-	void HandleDragOperationFinished(UDragDropOperation* Operation);
-
 	void SetRightClickToggleEnabled(bool bEnabled);
 	void RefreshContentFromCard();
 	FWacomCardViewData BuildCurrentCardViewData() const;
-	void ApplyDragSourceVisualState(bool bDragging);
 };

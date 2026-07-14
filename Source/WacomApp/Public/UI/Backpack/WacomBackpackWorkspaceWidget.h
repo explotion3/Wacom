@@ -16,6 +16,7 @@ class FWacomBackpackWorkspaceInteractionModel;
 struct FWacomBackpackWorkspaceReleaseIntent;
 #if WITH_AUTOMATION_TESTS
 struct FWacomBackpackWorkspaceAutomationTestView;
+struct FWacomBackpackScreenTestAccess;
 #endif
 
 /**
@@ -84,12 +85,17 @@ private:
 	FReply HandleCardPointerMove(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FReply HandleCardPointerUp(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FVector2D ToLocalPointer(const FPointerEvent& Event) const;
+	bool TryBeginCarryFromPendingPress(FVector2D Pointer);
+	FReply BuildHandledPointerReply();
 	void BroadcastRelease(bool bReleaseAll);
 	void StartCarryInterpolation();
 
 #if WITH_AUTOMATION_TESTS
 public:
 	FWacomBackpackWorkspaceAutomationTestView GetAutomationTestView() const;
+
+private:
+	friend struct FWacomBackpackScreenTestAccess;
 #endif
 };
 

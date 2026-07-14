@@ -6,10 +6,16 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/BorderSlot.h"
 #include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBoxSlot.h"
+#include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
+#include "Components/SizeBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
 #include "Engine/GameInstance.h"
 #include "Misc/PackageName.h"
@@ -34,7 +40,6 @@
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomBackpackZoneRackWidget.h"
 #include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
-#include "UI/Backpack/WacomCardDragOperation.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
@@ -46,6 +51,50 @@ namespace
 {
 template <typename TWidget>
 TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath);
+
+void AttachChildToHostAndFill(UPanelWidget& Host, UWidget& Child)
+{
+	if (Child.GetParent() != &Host)
+	{
+		Child.RemoveFromParent();
+		Host.AddChild(&Child);
+	}
+
+	if (UOverlaySlot* OverlaySlot = Cast<UOverlaySlot>(Child.Slot))
+	{
+		OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+		OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	else if (UVerticalBoxSlot* VerticalSlot = Cast<UVerticalBoxSlot>(Child.Slot))
+	{
+		VerticalSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		VerticalSlot->SetHorizontalAlignment(HAlign_Fill);
+		VerticalSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	else if (UHorizontalBoxSlot* HorizontalSlot = Cast<UHorizontalBoxSlot>(Child.Slot))
+	{
+		HorizontalSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		HorizontalSlot->SetHorizontalAlignment(HAlign_Fill);
+		HorizontalSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	else if (UBorderSlot* BorderSlot = Cast<UBorderSlot>(Child.Slot))
+	{
+		BorderSlot->SetHorizontalAlignment(HAlign_Fill);
+		BorderSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	else if (USizeBoxSlot* SizeSlot = Cast<USizeBoxSlot>(Child.Slot))
+	{
+		SizeSlot->SetHorizontalAlignment(HAlign_Fill);
+		SizeSlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	else if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Child.Slot))
+	{
+		CanvasSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		CanvasSlot->SetOffsets(FMargin(0.0f));
+		CanvasSlot->SetAlignment(FVector2D::ZeroVector);
+		CanvasSlot->SetAutoSize(false);
+	}
+}
 }
 
 UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectInitializer)
@@ -181,6 +230,10 @@ void UWacomBackpackScreen::NativeConstruct()
 	{
 		CloseButton->OnClicked.AddUniqueDynamic(this, &UWacomBackpackScreen::HandleCloseClicked);
 	}
+	if (ArrangeAllButton)
+	{
+		ArrangeAllButton->OnClicked.AddUniqueDynamic(this, &UWacomBackpackScreen::HandleArrangeAllClicked);
+	}
 
 	TrySubscribeAndRefresh();
 }
@@ -193,10 +246,6 @@ void UWacomBackpackScreen::NativeDestruct()
 		CardDetailController->Hide();
 		CardDetailController.Reset();
 	}
-	if (ArrangeAllButton)
-	{
-		ArrangeAllButton->OnClicked.AddUniqueDynamic(this, &UWacomBackpackScreen::HandleArrangeAllClicked);
-	}
 	else
 	{
 		if (CardDetailPanel)
@@ -204,6 +253,14 @@ void UWacomBackpackScreen::NativeDestruct()
 			CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
 		}
 		CardDetailSourceWidget = nullptr;
+	}
+	if (CloseButton)
+	{
+		CloseButton->OnClicked.RemoveDynamic(this, &UWacomBackpackScreen::HandleCloseClicked);
+	}
+	if (ArrangeAllButton)
+	{
+		ArrangeAllButton->OnClicked.RemoveDynamic(this, &UWacomBackpackScreen::HandleArrangeAllClicked);
 	}
 
 	if (UWacomRunViewModelProvider* Provider = SubscribedProvider.Get())
@@ -331,38 +388,6 @@ FText UWacomBackpackScreen::GetCardDetailPanelNameText() const
 	return GetCardDetailController().GetNameText();
 }
 
-bool UWacomBackpackScreen::HandleZoneDropRequested(const UWacomCardDragOperation& CardOp, EZoneKind TargetZone, FGuid TargetZoneOwnerInstanceId)
-{
-	return FWacomBackpackCommandFlow::HandleZoneDropRequested(
-		*this,
-		GetRunSession(),
-		CardOp,
-		TargetZone,
-		TargetZoneOwnerInstanceId);
-}
-
-bool UWacomBackpackScreen::HandleDeleteDropRequested(const UWacomCardDragOperation& CardOp)
-{
-	return FWacomBackpackCommandFlow::HandleDeleteDropRequested(*this, GetRunSession(), CardOp);
-}
-
-bool UWacomBackpackScreen::CanPreviewZoneDrop(
-	const UWacomCardDragOperation& CardOp,
-	EZoneKind TargetZone,
-	FGuid TargetZoneOwnerInstanceId) const
-{
-	return FWacomBackpackCommandFlow::ValidateZoneDropPreview(
-		GetRunSession(),
-		CardOp,
-		TargetZone,
-		TargetZoneOwnerInstanceId).bCanExecute;
-}
-
-bool UWacomBackpackScreen::CanPreviewDeleteDrop(const UWacomCardDragOperation& CardOp) const
-{
-	return FWacomBackpackCommandFlow::ValidateDeleteDropPreview(GetRunSession(), CardOp).bCanExecute;
-}
-
 void UWacomBackpackScreen::EnsureRuntimeZoneWidgets()
 {
 	FBackpackRuntimeZoneBuilder::Ensure(FBackpackRuntimeZoneBuilderContext{
@@ -379,10 +404,7 @@ void UWacomBackpackScreen::EnsureRuntimeZoneWidgets()
 		&BattleDeckCardsBox,
 		&FluxContentCardsBox,
 		&SpecialZonesPanel,
-		&BurdenCardsBox,
-		&DeleteDropTarget,
-		&BattleDeckDropTarget,
-		&BackpackDropTarget
+		&BurdenCardsBox
 	});
 }
 
@@ -399,13 +421,13 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 			: UWacomBackpackWorkspaceWidget::StaticClass();
 		WorkspaceWidget = CreateWidget<UWacomBackpackWorkspaceWidget>(this, ClassToUse);
 	}
-	if (WorkspaceHost && WorkspaceWidget && WorkspaceWidget->GetParent() != WorkspaceHost)
+	if (WorkspaceHost && WorkspaceWidget)
 	{
-		WorkspaceWidget->RemoveFromParent();
-		WorkspaceHost->AddChild(WorkspaceWidget);
+		AttachChildToHostAndFill(*WorkspaceHost, *WorkspaceWidget);
 	}
 	if (WorkspaceWidget)
 	{
+		WorkspaceWidget->SetVisibility(ESlateVisibility::Visible);
 		WorkspaceWidget->SetInteractionModel(WorkspaceInteractionModel, WorkspaceStyle);
 		WorkspaceWidget->OnReleaseIntentNative.RemoveAll(this);
 		WorkspaceWidget->OnReleaseIntentNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceReleaseIntent);
@@ -425,10 +447,9 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 		ZoneRackWidget->OnZoneActivatedNative.RemoveAll(this);
 		ZoneRackWidget->OnZoneActivatedNative.AddUObject(this, &UWacomBackpackScreen::HandleZoneActivated);
 	}
-	if (ZoneRackHost && ZoneRackWidget && ZoneRackWidget->GetParent() != ZoneRackHost)
+	if (ZoneRackHost && ZoneRackWidget)
 	{
-		ZoneRackWidget->RemoveFromParent();
-		ZoneRackHost->AddChild(ZoneRackWidget);
+		AttachChildToHostAndFill(*ZoneRackHost, *ZoneRackWidget);
 	}
 	if (DeleteConfirmHost && !DeleteConfirmWidget)
 	{
@@ -440,7 +461,7 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 		{
 			DeleteConfirmWidget->OnConfirmNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceDeleteConfirmed);
 			DeleteConfirmWidget->OnCancelNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceDeleteCancelled);
-			DeleteConfirmHost->AddChild(DeleteConfirmWidget);
+			AttachChildToHostAndFill(*DeleteConfirmHost, *DeleteConfirmWidget);
 		}
 	}
 }
@@ -499,11 +520,6 @@ UWacomSpecialZoneWidget* UWacomBackpackScreen::GetSpecialZoneWidgetForTest(int32
 	return SpecialZonesPanel && Index >= 0 && SpecialZonesPanel->GetChildrenCount() > Index
 		? Cast<UWacomSpecialZoneWidget>(SpecialZonesPanel->GetChildAt(Index))
 		: nullptr;
-}
-
-FGuid UWacomBackpackScreen::ResolveDeleteRequestInstanceIdForTest(const UWacomCardDragOperation& CardOp)
-{
-	return FWacomBackpackCommandFlow::ResolveDeleteRequestInstanceId(CardOp);
 }
 
 FText UWacomBackpackScreen::BuildMoveZoneNameTextForTest(EZoneKind Zone)
@@ -799,7 +815,7 @@ void UWacomBackpackScreen::BeginWorkspaceDeleteConfirmation(TConstArrayView<FGui
 	}
 	if (DeleteConfirmWidget)
 	{
-		DeleteConfirmWidget->SetKeyboardFocus();
+		DeleteConfirmWidget->FocusDefaultAction();
 	}
 }
 
@@ -1123,6 +1139,11 @@ void UWacomBackpackScreen::HandleCardUnhovered(UWacomDeckCardWidget* SourceWidge
 
 bool UWacomBackpackScreen::ShowCardDetailForCardWidget(UWacomDeckCardWidget* SourceWidget)
 {
+	if (WorkspaceInteractionModel && WorkspaceInteractionModel->IsCarrying())
+	{
+		HideCardDetailPanel();
+		return false;
+	}
 	return GetCardDetailController().ShowForCardWidget(SourceWidget);
 }
 

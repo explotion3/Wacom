@@ -21,19 +21,22 @@ FWacomBackpackWorkspaceCardVisualState UWacomBackpackScreenPresenter::BuildWorks
 		? Style
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
 	FWacomBackpackWorkspaceCardVisualState State;
+	State.FeedbackMaterial = ResolvedStyle->CardFeedbackMaterial;
 	State.Opacity = bReadOnly ? 0.72f : 1.0f;
-	State.Scale = bCurrent ? 1.035f : 1.0f;
 	if (bRejectedTarget)
 	{
 		State.Tint = ResolvedStyle->RejectedTargetColor;
+		State.FeedbackOpacity = ResolvedStyle->CardStateOverlayOpacity;
 	}
 	else if (bValidTarget)
 	{
 		State.Tint = ResolvedStyle->ValidTargetColor;
+		State.FeedbackOpacity = ResolvedStyle->CardStateOverlayOpacity;
 	}
 	else if (bSelected)
 	{
 		State.Tint = ResolvedStyle->SelectionColor;
+		State.FeedbackOpacity = ResolvedStyle->CardStateOverlayOpacity;
 	}
 	return State;
 }

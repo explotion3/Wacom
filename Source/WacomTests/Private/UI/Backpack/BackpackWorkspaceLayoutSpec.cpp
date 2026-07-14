@@ -44,6 +44,32 @@ bool FWacomUIBackpackWorkspaceLayoutContractSpec::RunTest(const FString& Paramet
 		TestTrue(TEXT("Default card center remains inside workspace Y"), Layout.CardCenter.Y >= 0.0f && Layout.CardCenter.Y <= WorkspaceSize.Y);
 	}
 
+	const FVector2D DenseWorkspaceSize(1164.0f, 693.0f);
+	const TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> DenseLayouts =
+		FWacomBackpackWorkspaceModelTestAccess::BuildDefaultLayout(
+			15,
+			DenseWorkspaceSize,
+			CardSize,
+			FVector2D(36.0f, 44.0f),
+			FVector2D(56.0f, 56.0f));
+	TestEqual(TEXT("Dense layout returns every card"), DenseLayouts.Num(), 15);
+	for (const FWacomBackpackWorkspaceResolvedLayoutTestView& Layout : DenseLayouts)
+	{
+		TestTrue(TEXT("Dense layout keeps the full card inside horizontally"),
+			Layout.CardCenter.X >= CardSize.X * 0.5f - KINDA_SMALL_NUMBER
+			&& Layout.CardCenter.X <= DenseWorkspaceSize.X - CardSize.X * 0.5f + KINDA_SMALL_NUMBER);
+		TestTrue(TEXT("Dense layout keeps the full card inside vertically"),
+			Layout.CardCenter.Y >= CardSize.Y * 0.5f - KINDA_SMALL_NUMBER
+			&& Layout.CardCenter.Y <= DenseWorkspaceSize.Y - CardSize.Y * 0.5f + KINDA_SMALL_NUMBER);
+	}
+	if (DenseLayouts.Num() == 15)
+	{
+		TestTrue(TEXT("Dense rows remain individually identifiable after vertical compression"),
+			DenseLayouts[0].CardCenter.Y < DenseLayouts[4].CardCenter.Y
+			&& DenseLayouts[4].CardCenter.Y < DenseLayouts[8].CardCenter.Y
+			&& DenseLayouts[8].CardCenter.Y < DenseLayouts[12].CardCenter.Y);
+	}
+
 	const FWacomBackpackWorkspaceResolvedLayoutTestView ManualLayout =
 		FWacomBackpackWorkspaceModelTestAccess::ResolveManualLayout(
 			FVector2D(-2.0f, 3.0f),

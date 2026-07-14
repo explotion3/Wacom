@@ -57,11 +57,11 @@ tags:
   - 入口：[Worktree Development](./Worktree_Development.md) / [Content Organization](./Content_Organization.md)
   - 说明：使用 AssetRegistry 找出 `/Game/Wacom` 与正式地图对 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials`、`/Game/L_TestBattle` 的真实引用；自有出货资产经编辑器迁入 `/Game/Wacom`，第三方内容建立版本化安装清单。完成前由每个 worktree 的独立 D 盘本地依赖层支持编译和 PIE。
 
-- [ ] **背包 Workspace 重构：规则与 C++ 交互完成，正式资产/PIE 待收口**
-  - 状态：`In Progress: C++ + automation complete; WBP/material/PIE pending`
+- [ ] **背包 Workspace 重构：自动化制作与旧路径迁移完成，统一 PIE 验收待收口**
+  - 状态：`In Progress: C++ + formal WBP + DreamShader + legacy cleanup complete; final PIE pending`
   - 归属：Run / App / UI / Tests
   - 入口：`specs/003-backpack-workspace-refactor/`
-  - 说明：已完成单活动 Workspace、常驻 ZoneRack、同 Run 瞬态布局、框选、持续扇形携带、首次释放守卫、滚轮当前牌、原子批量移动/销毁、确认取消/失败恢复和 C++ fallback。2026-07-13 已通过 `WacomEditor`、`Wacom.Run.Backpack` 2/2、`Wacom.UI.Backpack` 66/66 以及 `CompileAllBlueprints`（0 error；1 个既有 deprecated Blueprint warning）。剩余是正式 WBP/Style/反馈材质资产、旧 drag/drop 兼容类清理和完整 PIE 手感验收。本线程按协作边界不修改 DreamShader 卡牌表现文件。
+  - 说明：已完成单活动 Workspace、常驻 ZoneRack、同 Run 瞬态布局、框选、持续扇形携带、首次释放守卫、滚轮当前牌、原子批量移动/销毁、确认取消/失败恢复、C++ fallback，以及正式 Screen/Workspace/ZoneRack/Entry/DeleteConfirm/Style 资产。资产由 `WacomBuildBackpackUI` 可重复生成，连续生成无 GUID ensure；builder 保证 `WBP_WacomDeckCardWidget` 嵌入新版 `WBP_FirstPersonCardView`，并通过独立 `CardFaceScaleBox` 使用固定 `0.75` 缩放和整数像素对齐，避免卡牌高度变化触发重新缩放或直接压缩布局导致费用、名称、耐久和效果徽章错位。卡面上方已增加不参与命中/布局的 `WorkspaceFeedbackOverlay`，选中、合法目标和拒绝状态由 Style 驱动；携带 ActiveTimer 会持续采样 Slate cursor，快速移出卡牌自身范围后不再依赖卡牌 PointerMove。首轮运行截图发现并修复 Screen 只按最小 Desired Size 占半屏的问题，实际 1600×900 窗口已确认完整工作台/牌匣几何。`整理当前区域` 的 Construct/Destruct 绑定错误已修复并移到顶部命令栏；密集默认布局会压缩行距，不再把超高行 Clamp 到同一底边。框选输入现在由 Workspace 在完整事务期间持续持有：指针经过卡牌不会释放捕获，左键在卡牌上松开也会正常完成框选；正式 WBP 与 C++ fallback 均覆盖该回归。区域切换回归同时验证 7 张备战牌在两条路径上获得互不重叠的 Canvas 槽位。PIE 进一步定位并修复了运行时 Workspace 子控件继承 `OverlaySlot` Left/Top 默认值、导致几何压缩为零或 `190×33` 的根因；Screen 现统一为动态 Host 子控件配置 Fill，并让 Workspace 以 `Visible` 接管空白区域输入，用户已确认切区铺牌和框选均正常。Editor 命令 `Wacom.Backpack.SeedPIEValidation` 已通过正常 Run 获牌入口建立 24 张实体牌/2 个 SpecialZone 的可重复基线；PIE 已确认 4 个牌匣条目、15 张可移动牌框选、首次松开持续携带、无详情遮挡和无索引 UI。2026-07-13 当前切片已通过最终 `WacomEditor`、`Wacom.Run.Backpack` 2/2、`Wacom.UI.Backpack` 59/59、`CompileAllBlueprints`（0 error；1 个既有 deprecated Blueprint warning）以及正式 7/7 生成资产二次生成 SHA-256 稳定性检查。当前已新增 Graph-first DreamShader 反馈材质并由 Style 绑定，删除旧 `WacomCardDragOperation` / ZoneDropTarget / DeleteZoneDropTarget 及其旧测试 access，迁移 Host 只保留只读 fallback；59 项 UI 用例覆盖新 Workspace 合同，较旧 68 项减少的 9 项均为已移除 drag/drop owner 的过时断言。固定 ScaleBox、材质绑定与 Workspace 输入合同由自动化覆盖；快速移出仍跟随属于真实 Slate cursor/capture 行为，最终视觉与手感需进入统一 PIE 对照。T037/T070 仍缺可靠的滚轮手感、左右释放、快速移出跟随、选中反馈、SpecialZone/Burden/拒绝、确认恢复、完整 CommonUI 生命周期和 DreamShader-disabled fallback 人工证据。
   - 全量回归证据：`Automation RunTests Wacom` 找到 1302 项后，在背包范围外失败并中止：`Wacom.UI.Battle.BattleHUD.HandPresentation.ShortcutStartsDragByHandIndex`、`Wacom.UI.Battle.FirstPersonTargetPreview.NoTargetCommitShowsPlayerActionPreview` 失败，随后 `BattlePresentationQueueSpec.cpp:259` 发生 `Array index out of bounds: 1 into an array of size 1`。该组属于暂停的 Battle/first-person 卡牌表现线程，本切片未越界修改。
 
 - [x] **敌人系统重构：稳定身份、行为数据化、场景表现拆分**
@@ -154,11 +154,11 @@ tags:
   - 归属：Run / Data / App
   - 入口：[Roadmap: 商店](./Roadmap.md#roadmap-shop)
 
-- [ ] **背包正式 WBP、拖拽 polish、必要时做虚拟列表**
-  - 状态：`In Progress: Workspace 绑定资产与材质待制作`
+- [ ] **背包正式 WBP、交互 polish、必要时做虚拟列表**
+  - 状态：`In Progress: Workspace/材质/旧路径清理完成；统一 PIE polish 待完成`
   - 归属：UI / Run
   - 入口：[Roadmap: 背包 UI](./Roadmap.md#roadmap-backpack-ui)
-  - 说明：正式资产需绑定 `WorkspaceHost / ZoneRackHost / DeleteTargetHost / DeleteConfirmHost / ArrangeAllButton`，创建 Workspace、ZoneRack、Entry、DeleteConfirm 和 Style 资产，再移除旧 drag/drop 输入 owner。虚拟列表仅在 20–100 卡 PIE 证明需要后实施。
+  - 说明：正式 Screen、Workspace、ZoneRack、Entry、DeleteConfirm、Style 和反馈材质已生成并由资产合同自动化覆盖；旧单卡 UMG drag/drop input owner 已删除。剩余统一处理真实鼠标 PIE 观感/手感；虚拟列表仅在 20–100 卡 PIE 证明需要后实施。
 
 - [ ] **卡牌详情 token：ConditionTokenBuilder**
   - 状态：`Ready: 详情表现继续收口`

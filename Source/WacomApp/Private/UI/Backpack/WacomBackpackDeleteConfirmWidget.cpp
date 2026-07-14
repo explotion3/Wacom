@@ -12,6 +12,7 @@
 
 TSharedRef<SWidget> UWacomBackpackDeleteConfirmWidget::RebuildWidget()
 {
+	SetIsFocusable(true);
 	if (!WidgetTree)
 	{
 		WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
@@ -37,6 +38,16 @@ TSharedRef<SWidget> UWacomBackpackDeleteConfirmWidget::RebuildWidget()
 	}
 	ApplyPreview();
 	return Super::RebuildWidget();
+}
+
+void UWacomBackpackDeleteConfirmWidget::FocusDefaultAction()
+{
+	if (ConfirmButton)
+	{
+		ConfirmButton->SetKeyboardFocus();
+		return;
+	}
+	SetKeyboardFocus();
 }
 
 void UWacomBackpackDeleteConfirmWidget::NativeConstruct()

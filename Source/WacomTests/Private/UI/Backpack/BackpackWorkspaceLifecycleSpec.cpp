@@ -50,7 +50,11 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 
 	UCharacterDefinition* Character = NewObject<UCharacterDefinition>(Outer);
 	Character->CharacterId = TEXT("Backpack.Workspace.Character");
-	Character->StarterDeck = { CapacityCard, BattleCard };
+	Character->StarterDeck.Add(CapacityCard);
+	for (int32 Index = 0; Index < 7; ++Index)
+	{
+		Character->StarterDeck.Add(BattleCard);
+	}
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Workspace composition Run initializes"), Run->Initialize(Character));
 	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
@@ -63,6 +67,14 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen), EZoneKind::Backpack);
 	TestEqual(TEXT("Initial workspace contains only active flux cards"),
 		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen), Snapshot.Flux.ContentCards.Num());
+	TestTrue(TEXT("Fallback workspace child fills its runtime host"),
+		FWacomBackpackScreenTestAccess::WorkspaceChildFillsHost(*Screen));
+	TestTrue(TEXT("Fallback workspace owns blank-area pointer input"),
+		FWacomBackpackScreenTestAccess::WorkspaceOwnsPointerInput(*Screen));
+	TestTrue(TEXT("Marquee keeps capture when its route crosses a card"),
+		FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(*Screen));
+	TestTrue(TEXT("Marquee completes when left release occurs over a card"),
+		FWacomBackpackScreenTestAccess::MarqueeCompletesWhenReleasedOverCard(*Screen));
 	TestTrue(TEXT("Screen-level carry can begin in active workspace"),
 		FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(*Screen));
 	TestTrue(TEXT("Screen-level carry owns capture"),
@@ -78,6 +90,48 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 	TestEqual(TEXT("Battle workspace includes physical and read-only projected cards"),
 		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen),
 		Snapshot.BattleDeckPhysicalCards.Num() + Snapshot.BattleDeckProjectedCards.Num());
+	const TArray<FVector2D> BattleCardPositions =
+		FWacomBackpackScreenTestAccess::WorkspaceCardPositions(*Screen);
+	TSet<FIntPoint> DistinctBattleCardPositions;
+	for (const FVector2D& Position : BattleCardPositions)
+	{
+		DistinctBattleCardPositions.Add(FIntPoint(
+			FMath::RoundToInt(Position.X),
+			FMath::RoundToInt(Position.Y)));
+	}
+	TestEqual(TEXT("Zone switch assigns a distinct default slot to every battle card"),
+		DistinctBattleCardPositions.Num(), BattleCardPositions.Num());
+
+	UClass* FormalScreenClass = LoadClass<UWacomBackpackScreen>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackScreen.WBP_BackpackScreen_C"));
+	TestNotNull(TEXT("Formal Backpack screen class loads for zone-switch regression"), FormalScreenClass);
+	TStrongObjectPtr<UWacomBackpackScreen> FormalScreen(
+		FWacomBackpackScreenTestAccess::CreateWithClass(Outer, Run.Get(), FormalScreenClass));
+	TestNotNull(TEXT("Formal Backpack screen instantiates for zone-switch regression"), FormalScreen.Get());
+	if (FormalScreen)
+	{
+		TestTrue(TEXT("Formal WBP workspace child fills its overlay host"),
+			FWacomBackpackScreenTestAccess::WorkspaceChildFillsHost(*FormalScreen));
+		TestTrue(TEXT("Formal WBP workspace owns blank-area pointer input"),
+			FWacomBackpackScreenTestAccess::WorkspaceOwnsPointerInput(*FormalScreen));
+		FWacomBackpackScreenTestAccess::ActivateZone(*FormalScreen, EZoneKind::BattleDeck);
+		const TArray<FVector2D> FormalBattlePositions =
+			FWacomBackpackScreenTestAccess::WorkspaceCardPositions(*FormalScreen);
+		TSet<FIntPoint> DistinctFormalBattlePositions;
+		for (const FVector2D& Position : FormalBattlePositions)
+		{
+			DistinctFormalBattlePositions.Add(FIntPoint(
+				FMath::RoundToInt(Position.X),
+				FMath::RoundToInt(Position.Y)));
+		}
+		TestEqual(TEXT("Formal WBP zone switch assigns distinct battle-card slots"),
+			DistinctFormalBattlePositions.Num(), FormalBattlePositions.Num());
+		TestTrue(TEXT("Formal WBP marquee keeps capture while crossing a card"),
+			FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(*FormalScreen));
+		TestTrue(TEXT("Formal WBP marquee completes when released over a card"),
+			FWacomBackpackScreenTestAccess::MarqueeCompletesWhenReleasedOverCard(*FormalScreen));
+	}
 	TestTrue(TEXT("Carry restarts before deactivation"),
 		FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(*Screen));
 	FWacomBackpackScreenTestAccess::DeactivateWorkspaceScreen(*Screen);

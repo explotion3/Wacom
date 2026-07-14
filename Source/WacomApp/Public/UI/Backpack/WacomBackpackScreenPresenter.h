@@ -10,13 +10,15 @@
 #include "WacomBackpackScreenPresenter.generated.h"
 
 class UCardDefinition;
+class UMaterialInterface;
 class UWacomBackpackWorkspaceStyle;
 
 struct WACOMAPP_API FWacomBackpackWorkspaceCardVisualState
 {
 	FLinearColor Tint = FLinearColor::White;
 	float Opacity = 1.0f;
-	float Scale = 1.0f;
+	float FeedbackOpacity = 0.0f;
+	UMaterialInterface* FeedbackMaterial = nullptr;
 };
 
 /**
