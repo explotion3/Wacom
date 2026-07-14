@@ -34,7 +34,7 @@ namespace
 		return Resolutions;
 	}
 
-	bool IsUsableResolution(const FIntPoint Resolution)
+	bool IsUsableDisplayResolution(const FIntPoint Resolution)
 	{
 		return Resolution.X > 0 && Resolution.Y > 0;
 	}
@@ -47,7 +47,7 @@ namespace
 
 	bool FitsWithin(const FIntPoint Resolution, const FIntPoint Bounds)
 	{
-		return IsUsableResolution(Bounds)
+		return IsUsableDisplayResolution(Bounds)
 			&& Resolution.X <= Bounds.X
 			&& Resolution.Y <= Bounds.Y;
 	}
@@ -341,13 +341,13 @@ FWacomScreenResolutionOptions UWacomSettingsSubsystem::GetScreenResolutionOption
 		}
 	}
 
-	if (!IsUsableResolution(DesktopResolution))
+	if (!IsUsableDisplayResolution(DesktopResolution))
 	{
-		DesktopResolution = IsUsableResolution(CurrentResolution)
+		DesktopResolution = IsUsableDisplayResolution(CurrentResolution)
 			? CurrentResolution
 			: MinimumSupportedResolution;
 	}
-	if (!IsUsableResolution(WindowWorkArea))
+	if (!IsUsableDisplayResolution(WindowWorkArea))
 	{
 		WindowWorkArea = DesktopResolution;
 	}
