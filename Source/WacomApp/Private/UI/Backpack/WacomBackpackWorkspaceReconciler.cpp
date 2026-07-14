@@ -106,11 +106,7 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		OnRemovedWidget,
 		&OrderedWidgets);
 
-	FVector2D WorkspaceSize = Workspace.GetCachedGeometry().GetLocalSize();
-	if (WorkspaceSize.X <= 1.0f || WorkspaceSize.Y <= 1.0f)
-	{
-		WorkspaceSize = FVector2D(1280.0f, 720.0f);
-	}
+	const FVector2D WorkspaceSize = Workspace.GetLayoutSpaceSize();
 	const TArray<FWacomBackpackResolvedLayout> Defaults = FWacomBackpackWorkspaceLayoutSolver::BuildDefaultLayout(
 		OrderedWidgets.Num(),
 		WorkspaceSize,

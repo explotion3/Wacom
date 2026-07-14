@@ -253,6 +253,14 @@ void FWacomBackpackWorkspaceInteractionModel::StepCurrentByWheel(float WheelDelt
 		Carry.RemainingInstanceIds.Num() - 1);
 }
 
+void FWacomBackpackWorkspaceInteractionModel::NotifyReleaseGestureStarted()
+{
+	if (IsCarrying())
+	{
+		Carry.bInitialReleaseGuardArmed = false;
+	}
+}
+
 FWacomBackpackWorkspaceReleaseIntent FWacomBackpackWorkspaceInteractionModel::BuildReleaseIntent(
 	bool bReleaseAll)
 {
@@ -309,6 +317,26 @@ void FWacomBackpackWorkspaceInteractionModel::CommitReleasedCards(
 	bMouseCaptured = true;
 	Selection.OrderedSelectedInstanceIds = Carry.RemainingInstanceIds;
 	Selection.AnchorInstanceId = Carry.RemainingInstanceIds[Carry.CurrentIndex];
+}
+
+void FWacomBackpackWorkspaceInteractionModel::UpdateCarrySourceStorageRevision(
+	uint64 SourceStorageRevision)
+{
+	if (IsCarrying())
+	{
+		Carry.SourceStorageRevision = SourceStorageRevision;
+	}
+}
+
+void FWacomBackpackWorkspaceInteractionModel::SetCarryInputSuspended(bool bSuspended)
+{
+	if (!IsCarrying())
+	{
+		bMouseCaptured = false;
+		return;
+	}
+	Carry.bMouseCaptured = !bSuspended;
+	bMouseCaptured = !bSuspended;
 }
 
 void FWacomBackpackWorkspaceInteractionModel::CancelTransientState()

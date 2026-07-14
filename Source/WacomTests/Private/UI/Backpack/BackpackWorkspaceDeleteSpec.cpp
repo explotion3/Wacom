@@ -85,4 +85,87 @@ bool FWacomUIBackpackWorkspaceDeleteRestoreSpec::RunTest(const FString& Paramete
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackWorkspacePartialDeletePreservesCarrySpec,
+	"Wacom.UI.Backpack.Workspace.PartialDeletePreservesCarry",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackWorkspacePartialDeletePreservesCarrySpec::RunTest(const FString& Parameters)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Bag = NewObject<UCardDefinition>(Outer);
+	Bag->CardId = TEXT("WorkspacePartialDelete.Bag");
+	Bag->Physique.Capacity = 5;
+	UCardDefinition* FirstCard = NewObject<UCardDefinition>(Outer);
+	FirstCard->CardId = TEXT("WorkspacePartialDelete.First");
+	FirstCard->Rarity = WacomTags::Card_Rarity_White;
+	UCardDefinition* SecondCard = NewObject<UCardDefinition>(Outer);
+	SecondCard->CardId = TEXT("WorkspacePartialDelete.Second");
+	SecondCard->Rarity = WacomTags::Card_Rarity_Blue;
+	UCharacterDefinition* Character = NewObject<UCharacterDefinition>(Outer);
+	Character->CharacterId = TEXT("WorkspacePartialDelete.Character");
+	Character->StarterDeck.Add(Bag);
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
+	TestTrue(TEXT("Partial delete Run initializes"), Run->Initialize(Character));
+	Run->AcquireCardToRun(FirstCard);
+	Run->AcquireCardToRun(SecondCard);
+
+	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
+	const FRunStorageCardView* FirstView = Snapshot.Flux.ContentCards.FindByPredicate(
+		[FirstCard](const FRunStorageCardView& View)
+		{
+			return View.Instance.Definition == FirstCard;
+		});
+	const FRunStorageCardView* SecondView = Snapshot.Flux.ContentCards.FindByPredicate(
+		[SecondCard](const FRunStorageCardView& View)
+		{
+			return View.Instance.Definition == SecondCard;
+		});
+	TestTrue(TEXT("Two delete candidates exist"), FirstView && SecondView);
+	if (!FirstView || !SecondView)
+	{
+		return false;
+	}
+	const TArray<FGuid> SourceIds = {
+		FirstView->Instance.InstanceId,
+		SecondView->Instance.InstanceId,
+	};
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(
+		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
+	TestTrue(TEXT("Two delete candidates enter carry"),
+		FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(*Screen, SourceIds));
+	const FWacomBackpackWorkspaceAutomationTestView BeforeConfirm =
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
+	const FGuid CurrentId = BeforeConfirm.CarriedInstanceIds.IsValidIndex(BeforeConfirm.CurrentCarryIndex)
+		? BeforeConfirm.CarriedInstanceIds[BeforeConfirm.CurrentCarryIndex]
+		: FGuid();
+	const TArray<FGuid> CurrentOnly{ CurrentId };
+	TestTrue(TEXT("Left delete release opens confirmation for the current card only"),
+		FWacomBackpackScreenTestAccess::BeginDeleteConfirmationForIds(*Screen, CurrentOnly));
+	TestEqual(TEXT("Single-card delete confirmation previews one card"),
+		FWacomBackpackScreenTestAccess::DeletePreviewCardCount(*Screen), 1);
+	const FWacomBackpackWorkspaceAutomationTestView DuringConfirm =
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
+	TestEqual(TEXT("The carried fan stays visible while delete input is suspended"),
+		DuringConfirm.CarriedInstanceIds, BeforeConfirm.CarriedInstanceIds);
+	TestFalse(TEXT("Delete confirmation releases Workspace mouse capture"),
+		DuringConfirm.bMouseCaptured);
+	FWacomBackpackScreenTestAccess::ConfirmDelete(*Screen);
+
+	const FWacomBackpackWorkspaceAutomationTestView AfterConfirm =
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
+	TestEqual(TEXT("The unreleased card resumes carry after current-card deletion"),
+		AfterConfirm.CarriedInstanceIds.Num(), 1);
+	TestFalse(TEXT("The deleted current card is removed from carry"),
+		AfterConfirm.CarriedInstanceIds.Contains(CurrentId));
+	TestFalse(TEXT("The confirmed current card is removed from storage"),
+		Run->BuildBackpackStorageSnapshot().Flux.ContentCards.ContainsByPredicate(
+			[CurrentId](const FRunStorageCardView& View)
+			{
+				return View.Instance.InstanceId == CurrentId;
+			}));
+	return true;
+}
+
 #endif

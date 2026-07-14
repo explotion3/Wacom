@@ -12,7 +12,7 @@ class UBorder;
 class UTextBlock;
 class UCardDefinition;
 class UScaleBox;
-class UWacomCardView;
+class UWacomRetainedCardViewWidget;
 struct FWacomBackpackWorkspaceCardVisualState;
 
 enum class EWacomBackpackDeckCardListReuseRole : uint8
@@ -87,6 +87,8 @@ public:
 	void UnbindWorkspacePointerEvents();
 	void SetWorkspaceVisualState(bool bSelected, bool bCurrent, bool bReadOnly);
 	void ApplyWorkspaceVisualState(const FWacomBackpackWorkspaceCardVisualState& VisualState);
+	void RequestBackpackCardFaceRender();
+	void SetBackpackCardFaceRetainedRenderingEnabled(bool bEnabled);
 	bool IsWorkspaceSelected() const { return bWorkspaceSelected; }
 	bool IsWorkspaceCurrent() const { return bWorkspaceCurrent; }
 
@@ -140,7 +142,7 @@ protected:
 	TObjectPtr<UBorder> CardBody;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UWacomCardView> CardView;
+	TObjectPtr<UWacomRetainedCardViewWidget> BackpackCardView;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UScaleBox> CardFaceScaleBox;

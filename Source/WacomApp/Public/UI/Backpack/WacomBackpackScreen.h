@@ -25,6 +25,7 @@ class UWacomBackpackWorkspaceStyle;
 class UWacomBackpackWorkspaceWidget;
 class UWacomBackpackZoneRackWidget;
 class UWacomBackpackDeleteConfirmWidget;
+class UWacomPrimaryGameLayout;
 class FWacomBackpackCardDetailController;
 class FWacomBackpackStorageRefreshGate;
 class FWacomBackpackWorkspaceInteractionModel;
@@ -293,7 +294,15 @@ private:
 	void RebuildWorkspaceFromCachedSnapshot();
 	void HandleZoneActivated(EZoneKind Zone, FGuid OwnerInstanceId);
 	void HandleWorkspaceReleaseIntent(const FWacomBackpackWorkspaceReleaseIntent& Intent);
+	void HandleWorkspaceRackReleaseIntent(
+		const FWacomBackpackWorkspaceReleaseIntent& Intent,
+		const FWacomBackpackZoneKey& RackTarget);
 	void HandleWorkspaceInteractionChanged();
+	void HandleWorkspaceLayoutGeometryReady(FVector2D LayoutSize);
+	void ApplyOwningLayerTransitionState(bool bTransitioning);
+	void BindOwningLayerTransition();
+	void UnbindOwningLayerTransition();
+	void HandleOwningLayerTransitioningChanged(FGameplayTag LayerTag, bool bTransitioning);
 	void CancelWorkspaceInteraction();
 	bool ResolveWorkspaceRackTarget(FWacomBackpackZoneKey& OutTarget) const;
 	bool IsWorkspaceDeleteTarget() const;
@@ -302,6 +311,8 @@ private:
 	void HandleWorkspaceDeleteCancelled();
 	FWacomBackpackWorkspaceStateStore& GetWorkspaceStateStore(URunSession* Run);
 	void ResetBackpackRefreshDirtyGate();
+	void BeginWorkspaceMutationRefreshDeferral();
+	void EndWorkspaceMutationRefreshDeferral(bool bForceRefresh);
 
 	void HandleCardHovered(UWacomDeckCardWidget* SourceWidget);
 	void HandleCardUnhovered(UWacomDeckCardWidget* SourceWidget);
@@ -346,9 +357,13 @@ private:
 	TSharedPtr<FWacomBackpackWorkspaceStateStore> WorkspaceStateFallback;
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> WorkspaceInteractionModel;
 	TSharedPtr<FWacomBackpackPendingDeleteConfirmation> PendingDeleteConfirmation;
+	TWeakObjectPtr<UWacomPrimaryGameLayout> BoundPrimaryLayout;
+	bool bOwningLayerTransitioning = false;
 
 	FRunBackpackStorageSnapshot LastAppliedStorageSnapshot;
 	bool bHasLastAppliedStorageSnapshot = false;
+	int32 WorkspaceMutationRefreshDeferralDepth = 0;
+	bool bWorkspaceMutationRefreshDeferred = false;
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UWacomDeckCardWidget>> ActiveWorkspaceCardWidgets;

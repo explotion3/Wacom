@@ -404,12 +404,42 @@ bool UWacomCardView::IsLocalPositionInsideCardBodyWithBoundsForTest(
 }
 #endif
 
+#if WITH_AUTOMATION_TESTS
+FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() const
+{
+	FWacomCardViewAutomationTestView View;
+	View.bSurfaceFoilEnabled = bSurfaceFoilEnabled;
+	View.bHasSurfaceFoilOverlay = SurfaceFoilOverlay != nullptr;
+	View.bSurfaceFoilVisible = SurfaceFoilOverlay
+		&& SurfaceFoilOverlay->GetVisibility() != ESlateVisibility::Collapsed;
+	View.bSurfaceFoilBrushConfigured = SurfaceFoilOverlay
+		&& SurfaceFoilOverlay->GetBrush().GetResourceObject() != nullptr;
+	View.RenderCacheInvalidationCount = RenderCacheInvalidationCountForTest;
+	View.LastRetainerRenderRequestCount = LastRetainerRenderRequestCountForTest;
+	View.TextDisplayUpdateCount = TextDisplayUpdateCountForTest;
+	View.CostDisplayUpdateCount = CostDisplayUpdateCountForTest;
+	View.DurabilityDisplayUpdateCount = DurabilityDisplayUpdateCountForTest;
+	View.RarityDisplayUpdateCount = RarityDisplayUpdateCountForTest;
+	View.ArtDisplayUpdateCount = ArtDisplayUpdateCountForTest;
+	View.DisabledDisplayUpdateCount = DisabledDisplayUpdateCountForTest;
+	View.EffectBadgeDisplayUpdateCount = EffectBadgeDisplayUpdateCountForTest;
+	return View;
+}
+#endif
+
 void UWacomCardView::NativeConstruct()
 {
 	Super::NativeConstruct();
 	ApplySurfaceFoilOverlay();
 	bCardViewDataAppliedToWidgets = false;
 	ApplyCurrentDataToWidgets();
+}
+
+void UWacomCardView::SetSurfaceFoilEnabled(bool bEnabled)
+{
+	bSurfaceFoilEnabled = bEnabled;
+	ApplySurfaceFoilOverlay();
+	InvalidateCardViewRenderCache();
 }
 
 void UWacomCardView::SetCardViewData(const FWacomCardViewData& InData)
@@ -586,6 +616,14 @@ void UWacomCardView::ApplySurfaceFoilOverlay()
 {
 	if (!SurfaceFoilOverlay)
 	{
+		return;
+	}
+	if (!bSurfaceFoilEnabled)
+	{
+		FSlateBrush Brush = SurfaceFoilOverlay->GetBrush();
+		Brush.SetResourceObject(nullptr);
+		SurfaceFoilOverlay->SetBrush(Brush);
+		SurfaceFoilOverlay->SetVisibility(ESlateVisibility::Collapsed);
 		return;
 	}
 

@@ -109,26 +109,31 @@ Wacom.Backpack.SeedPIEValidation
 - [ ] Manual positions, angles and ZOrder survive zone switch and same-Run close/reopen.
 - [ ] New Run starts without the previous Run's manual layout.
 - [x] New cards enter a readable default layout; removed/moved cards leave no ghost entry.
-- [ ] Backpack cards embed `WBP_FirstPersonCardView`; the automated asset contract confirms fixed `0.75` ScaleBox scaling, pixel snapping and the dedicated feedback overlay, but face content and bleed badges still need final PIE visual comparison against the authored layout.
+- [ ] Backpack cards embed `WBP_BackpackCardView -> invalidation-only Retainer -> WBP_FirstPersonCardView`; the automated asset/runtime contracts confirm fixed `0.75` ScaleBox scaling, no phase/effect material, disabled-and-cleared inner `SurfaceFoilOverlay`, and the dedicated external feedback overlay. PIE must confirm there is no frozen foil frame while face content, antialiasing and bleed badges still match the authored layout.
 - [ ] Cards cannot be placed with more than about 70% outside the workspace.
 - [x] Arrange All restores upright readable default layout.
 - [ ] Dropping onto the active zone rack collects cards without changing Run rule order/revision.
 
+PIE note (2026-07-14): first entry exposed fallback positions and a stale semi-transparent retained face until pickup. The Workspace now hides its card canvas until Slate geometry is stable and then reflows. While the owning GameMenu CommonUI layer is transitioning, retained card faces switch to pass-through rendering so the inherited fade alpha cannot be baked into their static cache; transition completion restores retained rendering and requests a final redraw. Redraw requests made before `NativeConstruct()` remain queued. Automated Screen composition and the full focused UI suite pass, pending the repeated PIE visual check below.
+
 ## PIE Checklist — Selection and Carry Feel
 
 - [x] Blank drag draws a selection rectangle and selects cards by center point.
-- [ ] Normal click, Ctrl click, Ctrl marquee, blank click and Ctrl+A match the contract.
+- [x] Normal click, Ctrl click, Ctrl marquee, blank click and Ctrl+A match the contract.
+- [x] After selection/marquee, pressing an already-selected card shows the carried fan immediately without requiring pointer movement; the matching pickup release keeps carry active.
 - [x] Projection/read-only cards never enter the selection.
 - [x] Pickup release only enters carry and never drops a card.
 - [x] Carried cards form a stable fan following the cursor.
-- [ ] Start carry, then move the cursor rapidly outside the pressed card and across the Workspace/rack; the fan continues following without requiring the cursor to re-enter a card.
-- [ ] Rightmost/highest-Z card is default current and has no lift.
-- [ ] Wheel up/down changes current; only a non-default current card lifts.
-- [ ] Wheel stops at both ends without wrapping.
+- [x] Start carry, then move the cursor rapidly outside the pressed card and across the Workspace/rack; the fan continues following without requiring the cursor to re-enter a card.
+- [x] Rightmost/highest-Z card is default current and has no lift.
+- [x] Wheel up/down changes current; only a non-default current card lifts.
+- [x] Wheel stops at both ends without wrapping.
 - [x] No `3 / 8`, index or count indicator appears near cursor or screen top.
-- [ ] Later left click/release drops one current card and keeps the rest carried.
-- [ ] Right click/release drops all remaining cards.
-- [ ] Fan closes smoothly and keeps stable order after each single release.
+- [x] Later left click/release drops one current card and keeps the rest carried.
+- [x] Right click/release drops all remaining cards.
+- [x] Fan closes smoothly and keeps stable order after each single release.
+
+PIE result (2026-07-14, current `0b47` worktree): the complete selection/carry checklist passed user verification after the focused automation and editor compile checkpoint.
 
 ## PIE Checklist — Transactions and Confirmation
 
@@ -156,6 +161,7 @@ Wacom.Backpack.SeedPIEValidation
 - [ ] Fake-3D/material response does not move hit geometry or change drop targeting.
 - [x] Motion values come from presentation style/WBP defaults rather than Run rules.
 - [x] DreamShader source is Wacom-native `.dsm`/`.dsh`; no Godot Demo code, shader or asset was copied.
+- [x] `M_BackpackWorkspaceCardFeedback` force-generates from its `.dsm`, recompiles through UE with no SM6 errors, consumes VertexColor RGB output 0 and Alpha output 4 directly, and never applies an A mask to RGB output 0; DreamShader graph generation alone is not treated as shader compilation evidence.
 - [ ] 20–100 cards do not cause obvious idle Tick cost or per-frame Snapshot rebuilds.
 
 ## Migration Search

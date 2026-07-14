@@ -50,7 +50,6 @@ Shader(Name="Wacom/UI/Backpack/Materials/M_BackpackWorkspaceCardFeedback")
 
     Graph = {
         float2 uv = UE.TexCoord(Index=0);
-        float4 vertexColor = UE.VertexColor();
         float edgeMask;
         float cornerAccentMask;
         WacomBackpackWorkspaceCardFeedback_ComputeMasks(
@@ -69,7 +68,18 @@ Shader(Name="Wacom/UI/Backpack/Materials/M_BackpackWorkspaceCardFeedback")
             Input=alphaRaw
         );
 
-        Color = float3(vertexColor.x, vertexColor.y, vertexColor.z);
-        Alpha = alpha * vertexColor.w;
+        float3 vertexColorRGB = UE.Expression(
+            Class="VertexColor",
+            OutputType="float3",
+            OutputIndex=0
+        );
+        float vertexColorAlpha = UE.Expression(
+            Class="VertexColor",
+            OutputType="float1",
+            OutputIndex=4
+        );
+
+        Color = vertexColorRGB;
+        Alpha = alpha * vertexColorAlpha;
     }
 }

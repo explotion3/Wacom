@@ -21,6 +21,10 @@ class UPaperSprite;
 #if WITH_AUTOMATION_TESTS
 struct FWacomCardViewAutomationTestView
 {
+	bool bSurfaceFoilEnabled = true;
+	bool bHasSurfaceFoilOverlay = false;
+	bool bSurfaceFoilVisible = false;
+	bool bSurfaceFoilBrushConfigured = false;
 	int32 RenderCacheInvalidationCount = 0;
 	int32 LastRetainerRenderRequestCount = 0;
 	int32 TextDisplayUpdateCount = 0;
@@ -64,6 +68,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	const FWacomCardViewData& GetCardViewData() const { return CurrentData; }
 
+	/** Enables or fully removes the optional animated surface-foil overlay for this view instance. */
+	void SetSurfaceFoilEnabled(bool bEnabled);
+	bool IsSurfaceFoilEnabled() const { return bSurfaceFoilEnabled; }
+
 	FVector2D GetCardBodyHitSize() const;
 	bool HasCardBodyHitGeometry() const;
 	bool IsScreenPositionInsideCardBody(const FVector2D& ScreenPosition) const;
@@ -75,20 +83,7 @@ public:
 	bool IsLocalPositionInsideCardBodyWithBoundsForTest(
 		const FVector2D& LocalPosition,
 		const FVector2D& SimulatedCardSizeBoxLocalSize) const;
-	FWacomCardViewAutomationTestView GetAutomationTestViewForTest() const
-	{
-		FWacomCardViewAutomationTestView View;
-		View.RenderCacheInvalidationCount = RenderCacheInvalidationCountForTest;
-		View.LastRetainerRenderRequestCount = LastRetainerRenderRequestCountForTest;
-		View.TextDisplayUpdateCount = TextDisplayUpdateCountForTest;
-		View.CostDisplayUpdateCount = CostDisplayUpdateCountForTest;
-		View.DurabilityDisplayUpdateCount = DurabilityDisplayUpdateCountForTest;
-		View.RarityDisplayUpdateCount = RarityDisplayUpdateCountForTest;
-		View.ArtDisplayUpdateCount = ArtDisplayUpdateCountForTest;
-		View.DisabledDisplayUpdateCount = DisabledDisplayUpdateCountForTest;
-		View.EffectBadgeDisplayUpdateCount = EffectBadgeDisplayUpdateCountForTest;
-		return View;
-	}
+	FWacomCardViewAutomationTestView GetAutomationTestViewForTest() const;
 #endif
 
 protected:
@@ -192,6 +187,7 @@ private:
 	bool bSpriteIconCachesBuilt = false;
 	bool bCardViewDataAppliedToWidgets = false;
 	bool bHasLastAppliedData = false;
+	bool bSurfaceFoilEnabled = true;
 
 #if WITH_AUTOMATION_TESTS
 	int32 RenderCacheInvalidationCountForTest = 0;

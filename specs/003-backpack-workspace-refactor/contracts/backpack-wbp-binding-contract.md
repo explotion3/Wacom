@@ -50,7 +50,10 @@ Parent classes: `UWacomBackpackZoneRackWidget` and `UWacomBackpackZoneRackEntryW
 
 Reuse/refactor `UWacomDeckCardWidget` or a focused workspace subclass:
 
-- display existing `UWacomCardView` and badges;
+- bind `BackpackCardView` to `WBP_BackpackCardView`, a passive `UWacomRetainedCardViewWidget` containing one invalidation-driven, non-phase Retainer and the authored `WBP_FirstPersonCardView`;
+- disable the inner `SurfaceFoilOverlay` for this static-retained instance, collapse it and release its material brush; the shared battle/first-person card face keeps its normal default policy;
+- keep fake-3D, first-person surface effects and gesture semantics out of the backpack wrapper;
+- display workspace feedback and badges outside the retained card face;
 - expose selected/current/read-only visual state;
 - emit pointer down/hover intent;
 - never construct the old persistent-operation replacement itself;

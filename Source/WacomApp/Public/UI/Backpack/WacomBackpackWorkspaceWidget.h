@@ -31,8 +31,10 @@ class WACOMAPP_API UWacomBackpackWorkspaceWidget : public UUserWidget
 public:
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnReleaseIntentNative, const FWacomBackpackWorkspaceReleaseIntent&);
 	DECLARE_MULTICAST_DELEGATE(FOnInteractionChangedNative);
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnLayoutGeometryReadyNative, FVector2D);
 	FOnReleaseIntentNative OnReleaseIntentNative;
 	FOnInteractionChangedNative OnInteractionChangedNative;
+	FOnLayoutGeometryReadyNative OnLayoutGeometryReadyNative;
 
 	void SetActiveZone(EZoneKind Zone, FGuid OwnerInstanceId);
 	void SetInteractionModel(
@@ -40,14 +42,19 @@ public:
 		UWacomBackpackWorkspaceStyle* InStyle);
 	void BindWorkspaceCards(TConstArrayView<TObjectPtr<UWacomDeckCardWidget>> CardWidgets, uint64 StorageRevision);
 	void RefreshInteractionPresentation();
+	void SetCardFaceRetainedRenderingEnabled(bool bEnabled);
+	void SetCarryInputSuspended(bool bSuspended);
 	void CancelInteraction();
 	void ApplyCardLayout(UWidget& CardWidget, FVector2D CardCenter, FVector2D CardSize, float AngleDegrees, int32 ZOrder);
 	void SetEmptyStateVisible(bool bVisible);
 	void SetManualLayoutCount(int32 Count) { ManualLayoutCount = FMath::Max(0, Count); }
 	UCanvasPanel* GetCardCanvas();
+	FVector2D GetLayoutSpaceSize() const;
+	void RequestLayoutGeometryRefresh();
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
@@ -79,6 +86,16 @@ private:
 	FVector2D DisplayedCarryPointer = FVector2D::ZeroVector;
 	bool bHasDisplayedCarryPointer = false;
 	bool bCarryInterpolationActive = false;
+	bool bCarryInputSuspended = false;
+	FVector2D StableLayoutSize = FVector2D::ZeroVector;
+	FVector2D PendingLayoutSize = FVector2D::ZeroVector;
+	int32 StableLayoutSampleCount = 0;
+	bool bHasStableLayoutSize = false;
+	bool bLayoutGeometryRefreshActive = false;
+	bool bDeferredCardFaceRenderRequested = false;
+	bool bDeferredCardFaceRenderActive = false;
+	int32 DeferredCardFaceRenderPassCount = 0;
+	bool bCardFaceRetainedRenderingEnabled = true;
 
 	void EnsureFallbackTree();
 	FReply HandleCardPointerDown(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
@@ -89,6 +106,10 @@ private:
 	FReply BuildHandledPointerReply();
 	void BroadcastRelease(bool bReleaseAll);
 	void StartCarryInterpolation();
+	void RequestBoundCardFaceRenders();
+	void ScheduleBoundCardFaceRender();
+	void FlushDeferredCardFaceRender();
+	bool AcceptStableLayoutGeometry(FVector2D LayoutSize);
 
 #if WITH_AUTOMATION_TESTS
 public:
@@ -120,6 +141,9 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	bool bInitialReleaseGuardArmed = false;
 	bool bMouseCaptured = false;
 	bool bDeleteConfirmationPending = false;
+	bool bDeferredCardFaceRenderPending = false;
+	int32 DeferredCardFaceRenderPassCount = 0;
+	bool bCardFaceRetainedRenderingEnabled = true;
 };
 
 #endif

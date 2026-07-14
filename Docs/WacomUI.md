@@ -105,7 +105,7 @@ Run Snapshot / revision
   -> one notification -> reconcile
 ```
 
-Screen 持有输入租约和纯 interaction model；Workspace 统一处理框选、拖动阈值、滚轮、按键和鼠标捕获；DeckCard 在 Workspace 模式只发指针意图，不创建独立 `UDragDropOperation`。区域切换、Deactivate、Destruct、不同 Run 或使携带身份失效的 Snapshot 会清选择/携带并释放捕获。确认框暂停不可变 carry snapshot，取消或提交失败原样恢复；成功才退出携带。
+Screen 持有输入租约和纯 interaction model；Workspace 统一处理框选、拖动阈值、滚轮、按键和鼠标捕获；DeckCard 在 Workspace 模式只发指针意图，不创建独立 `UDragDropOperation`。首次显示时 Workspace 用一次性 ActiveTimer 等待 Slate 几何连续稳定，再以同一 Snapshot 重排；稳定前隐藏 CardCanvas，最终布局与交互表现落定后在下一次 Slate 更新补绘静态卡面，且不会丢失构造前请求。GameMenu CommonUI 过渡期间，Screen 根据 PrimaryLayout 的层过渡事件让卡面 Retainer 暂停缓存并直绘，过渡结束后恢复 retained rendering 并请求最终重绘，防止淡入 Alpha 被烘入静态缓存；该路径无固定延迟和空闲 Tick。区域切换、Deactivate、Destruct、不同 Run 或使携带身份失效的 Snapshot 会清选择/携带并释放捕获。确认框暂停不可变 carry snapshot，取消或提交失败原样恢复；成功才退出携带。
 
 `UWacomShopScreen` 保留 Screen 生命周期、WBP 绑定、cached shop snapshot、商品行创建和购买意图入口；shop snapshot revision / offer row signature dirty gate 由 `FWacomShopRefreshGate` 承接，商品行的 identity reconcile、排序和移除由 `FWacomShopOfferRowListReconciler` 承接，金币变化仍通过 `CurrentGold` 进入 signature 来刷新购买可用状态。
 

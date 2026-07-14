@@ -18,6 +18,12 @@
 
 #define LOCTEXT_NAMESPACE "WacomBackpackWorkspace"
 
+namespace
+{
+constexpr float LayoutGeometryTolerance = 0.5f;
+constexpr int32 RequiredStableLayoutSamples = 2;
+}
+
 TSharedRef<SWidget> UWacomBackpackWorkspaceWidget::RebuildWidget()
 {
 	EnsureFallbackTree();
@@ -25,8 +31,25 @@ TSharedRef<SWidget> UWacomBackpackWorkspaceWidget::RebuildWidget()
 	return Super::RebuildWidget();
 }
 
+void UWacomBackpackWorkspaceWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	if (CardCanvas && !bHasStableLayoutSize)
+	{
+		CardCanvas->SetVisibility(ESlateVisibility::Hidden);
+	}
+	RequestLayoutGeometryRefresh();
+	if (bDeferredCardFaceRenderRequested)
+	{
+		ScheduleBoundCardFaceRender();
+	}
+}
+
 void UWacomBackpackWorkspaceWidget::NativeDestruct()
 {
+	bLayoutGeometryRefreshActive = false;
+	bDeferredCardFaceRenderRequested = false;
+	bDeferredCardFaceRenderActive = false;
 	CancelInteraction();
 	for (TWeakObjectPtr<UWacomDeckCardWidget>& CardWidget : BoundCardWidgets)
 	{
@@ -45,6 +68,67 @@ void UWacomBackpackWorkspaceWidget::SetInteractionModel(
 {
 	InteractionModel = MoveTemp(InModel);
 	InteractionStyle = InStyle;
+}
+
+FVector2D UWacomBackpackWorkspaceWidget::GetLayoutSpaceSize() const
+{
+	return bHasStableLayoutSize
+		? StableLayoutSize
+		: FVector2D(1280.0f, 720.0f);
+}
+
+void UWacomBackpackWorkspaceWidget::RequestLayoutGeometryRefresh()
+{
+	if (bLayoutGeometryRefreshActive)
+	{
+		return;
+	}
+
+	const TSharedPtr<SWidget> CachedWidget = GetCachedWidget();
+	if (!CachedWidget.IsValid())
+	{
+		return;
+	}
+
+	PendingLayoutSize = FVector2D::ZeroVector;
+	StableLayoutSampleCount = 0;
+	bLayoutGeometryRefreshActive = true;
+	const TWeakObjectPtr<UWacomBackpackWorkspaceWidget> WeakThis(this);
+	CachedWidget->RegisterActiveTimer(
+		0.0f,
+		FWidgetActiveTimerDelegate::CreateLambda(
+			[WeakThis](double CurrentTime, float DeltaTime)
+			{
+				UWacomBackpackWorkspaceWidget* Self = WeakThis.Get();
+				if (!Self || !Self->bLayoutGeometryRefreshActive)
+				{
+					return EActiveTimerReturnType::Stop;
+				}
+
+				const FVector2D LayoutSize = Self->GetCachedGeometry().GetLocalSize();
+				if (LayoutSize.X <= 1.0f || LayoutSize.Y <= 1.0f
+					|| !FMath::IsFinite(LayoutSize.X) || !FMath::IsFinite(LayoutSize.Y))
+				{
+					return EActiveTimerReturnType::Continue;
+				}
+
+				if (!LayoutSize.Equals(Self->PendingLayoutSize, LayoutGeometryTolerance))
+				{
+					Self->PendingLayoutSize = LayoutSize;
+					Self->StableLayoutSampleCount = 1;
+					return EActiveTimerReturnType::Continue;
+				}
+
+				++Self->StableLayoutSampleCount;
+				if (Self->StableLayoutSampleCount < RequiredStableLayoutSamples)
+				{
+					return EActiveTimerReturnType::Continue;
+				}
+
+				Self->bLayoutGeometryRefreshActive = false;
+				Self->AcceptStableLayoutGeometry(LayoutSize);
+				return EActiveTimerReturnType::Stop;
+			}));
 }
 
 FVector2D UWacomBackpackWorkspaceWidget::ToLocalPointer(const FPointerEvent& Event) const
@@ -75,6 +159,7 @@ void UWacomBackpackWorkspaceWidget::BindWorkspaceCards(
 		CardWidget->OnWorkspacePointerDownNative.BindUObject(this, &UWacomBackpackWorkspaceWidget::HandleCardPointerDown);
 		CardWidget->OnWorkspacePointerMoveNative.BindUObject(this, &UWacomBackpackWorkspaceWidget::HandleCardPointerMove);
 		CardWidget->OnWorkspacePointerUpNative.BindUObject(this, &UWacomBackpackWorkspaceWidget::HandleCardPointerUp);
+		CardWidget->SetBackpackCardFaceRetainedRenderingEnabled(bCardFaceRetainedRenderingEnabled);
 		BoundCardWidgets.Add(CardWidget);
 
 		FWacomBackpackWorkspaceCardHitRecord Hit;
@@ -92,6 +177,30 @@ void UWacomBackpackWorkspaceWidget::BindWorkspaceCards(
 		InteractionModel->ReconcileCards(FWacomBackpackZoneKey::Make(ActiveZone, ActiveZoneOwnerInstanceId), HitRecords);
 	}
 	RefreshInteractionPresentation();
+	if (CardCanvas)
+	{
+		CardCanvas->SetVisibility(
+			bHasStableLayoutSize
+				? ESlateVisibility::SelfHitTestInvisible
+				: ESlateVisibility::Hidden);
+	}
+	if (bHasStableLayoutSize)
+	{
+		ScheduleBoundCardFaceRender();
+	}
+	RequestLayoutGeometryRefresh();
+}
+
+void UWacomBackpackWorkspaceWidget::SetCardFaceRetainedRenderingEnabled(bool bEnabled)
+{
+	bCardFaceRetainedRenderingEnabled = bEnabled;
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCardWidget : BoundCardWidgets)
+	{
+		if (UWacomDeckCardWidget* CardWidget = WeakCardWidget.Get())
+		{
+			CardWidget->SetBackpackCardFaceRetainedRenderingEnabled(bEnabled);
+		}
+	}
 }
 
 FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
@@ -99,7 +208,7 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
 	const FGeometry& Geometry,
 	const FPointerEvent& Event)
 {
-	if (!InteractionModel || !CardWidget)
+	if (!InteractionModel || !CardWidget || bCarryInputSuspended)
 	{
 		return FReply::Unhandled();
 	}
@@ -107,6 +216,7 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
 		&& (Event.GetEffectingButton() == EKeys::LeftMouseButton
 			|| Event.GetEffectingButton() == EKeys::RightMouseButton))
 	{
+		InteractionModel->NotifyReleaseGestureStarted();
 		return FReply::Handled().CaptureMouse(TakeWidget());
 	}
 	if (Event.GetEffectingButton() == EKeys::RightMouseButton)
@@ -117,9 +227,27 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
 	{
 		return FReply::Unhandled();
 	}
+	const FVector2D Pointer = ToLocalPointer(Event);
+	if (!Event.IsControlDown() && InteractionModel->IsSelected(CardWidget->GetCardInstanceId()))
+	{
+		const bool bStarted = InteractionModel->BeginCarry(
+			CardWidget->GetCardInstanceId(),
+			Pointer,
+			CurrentStorageRevision);
+		if (bStarted)
+		{
+			bPendingCardPress = false;
+			DisplayedCarryPointer = Pointer;
+			bHasDisplayedCarryPointer = true;
+			StartCarryInterpolation();
+			RefreshInteractionPresentation();
+			OnInteractionChangedNative.Broadcast();
+			return BuildHandledPointerReply();
+		}
+	}
 	bPendingCardPress = true;
 	PendingCardPressId = CardWidget->GetCardInstanceId();
-	PendingPressPosition = ToLocalPointer(Event);
+	PendingPressPosition = Pointer;
 	bPendingControlDown = Event.IsControlDown();
 	return FReply::Handled().CaptureMouse(TakeWidget());
 }
@@ -129,7 +257,7 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerMove(
 	const FGeometry& Geometry,
 	const FPointerEvent& Event)
 {
-	if (!InteractionModel)
+	if (!InteractionModel || bCarryInputSuspended)
 	{
 		return FReply::Unhandled();
 	}
@@ -159,7 +287,7 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerUp(
 	const FGeometry& Geometry,
 	const FPointerEvent& Event)
 {
-	if (!InteractionModel)
+	if (!InteractionModel || bCarryInputSuspended)
 	{
 		return FReply::Unhandled();
 	}
@@ -235,6 +363,10 @@ bool UWacomBackpackWorkspaceWidget::TryBeginCarryFromPendingPress(FVector2D Poin
 FReply UWacomBackpackWorkspaceWidget::BuildHandledPointerReply()
 {
 	FReply Reply = FReply::Handled();
+	if (bCarryInputSuspended)
+	{
+		return Reply.ReleaseMouseCapture();
+	}
 	if ((InteractionModel && (InteractionModel->IsCarrying() || InteractionModel->IsMarqueeActive()))
 		|| bPendingCardPress)
 	{
@@ -247,10 +379,15 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonDown(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
+	if (bCarryInputSuspended)
+	{
+		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+	}
 	if (InteractionModel && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		if (InteractionModel->IsCarrying())
 		{
+			InteractionModel->NotifyReleaseGestureStarted();
 			return FReply::Handled().CaptureMouse(TakeWidget()).SetUserFocus(TakeWidget());
 		}
 		InteractionModel->BeginMarquee(ToLocalPointer(InMouseEvent), InMouseEvent.IsControlDown());
@@ -260,6 +397,7 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonDown(
 	if (InteractionModel && InteractionModel->IsCarrying()
 		&& InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton)
 	{
+		InteractionModel->NotifyReleaseGestureStarted();
 		return FReply::Handled().CaptureMouse(TakeWidget()).SetUserFocus(TakeWidget());
 	}
 	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
@@ -269,7 +407,7 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseMove(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
-	if (!InteractionModel)
+	if (!InteractionModel || bCarryInputSuspended)
 	{
 		return Super::NativeOnMouseMove(InGeometry, InMouseEvent);
 	}
@@ -297,7 +435,7 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonUp(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
-	if (!InteractionModel)
+	if (!InteractionModel || bCarryInputSuspended)
 	{
 		return Super::NativeOnMouseButtonUp(InGeometry, InMouseEvent);
 	}
@@ -326,7 +464,7 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseWheel(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
-	if (InteractionModel && InteractionModel->IsCarrying())
+	if (!bCarryInputSuspended && InteractionModel && InteractionModel->IsCarrying())
 	{
 		InteractionModel->StepCurrentByWheel(InMouseEvent.GetWheelDelta());
 		RefreshInteractionPresentation();
@@ -434,16 +572,38 @@ void UWacomBackpackWorkspaceWidget::RefreshInteractionPresentation()
 			}
 		}
 	}
-	if (InteractionModel->IsCarrying() && !bCarryInterpolationActive)
+	if (InteractionModel->IsCarrying() && !bCarryInputSuspended && !bCarryInterpolationActive)
 	{
 		StartCarryInterpolation();
 	}
+}
+
+void UWacomBackpackWorkspaceWidget::SetCarryInputSuspended(bool bSuspended)
+{
+	bCarryInputSuspended = bSuspended;
+	if (InteractionModel)
+	{
+		InteractionModel->SetCarryInputSuspended(bSuspended);
+	}
+	if (bSuspended)
+	{
+		if (FSlateApplication::IsInitialized())
+		{
+			FSlateApplication::Get().ReleaseAllPointerCapture(0);
+		}
+	}
+	else if (InteractionModel && InteractionModel->IsCarrying())
+	{
+		StartCarryInterpolation();
+	}
+	RefreshInteractionPresentation();
 }
 
 void UWacomBackpackWorkspaceWidget::CancelInteraction()
 {
 	bPendingCardPress = false;
 	PendingCardPressId.Invalidate();
+	bCarryInputSuspended = false;
 	if (InteractionModel)
 	{
 		InteractionModel->CancelTransientState();
@@ -458,7 +618,7 @@ void UWacomBackpackWorkspaceWidget::CancelInteraction()
 
 void UWacomBackpackWorkspaceWidget::StartCarryInterpolation()
 {
-	if (!InteractionModel || !InteractionModel->IsCarrying())
+	if (!InteractionModel || !InteractionModel->IsCarrying() || bCarryInputSuspended)
 	{
 		return;
 	}
@@ -485,6 +645,11 @@ void UWacomBackpackWorkspaceWidget::StartCarryInterpolation()
 			[WeakThis](double CurrentTime, float DeltaTime)
 			{
 				UWacomBackpackWorkspaceWidget* Self = WeakThis.Get();
+				if (Self && Self->bCarryInputSuspended)
+				{
+					Self->bCarryInterpolationActive = false;
+					return EActiveTimerReturnType::Stop;
+				}
 				if (!Self || !Self->InteractionModel || !Self->InteractionModel->IsCarrying())
 				{
 					if (Self)
@@ -522,6 +687,91 @@ void UWacomBackpackWorkspaceWidget::StartCarryInterpolation()
 				}
 				return EActiveTimerReturnType::Continue;
 			}));
+}
+
+bool UWacomBackpackWorkspaceWidget::AcceptStableLayoutGeometry(FVector2D LayoutSize)
+{
+	if (LayoutSize.X <= 1.0f || LayoutSize.Y <= 1.0f
+		|| !FMath::IsFinite(LayoutSize.X) || !FMath::IsFinite(LayoutSize.Y)
+		|| (bHasStableLayoutSize && StableLayoutSize.Equals(LayoutSize, LayoutGeometryTolerance)))
+	{
+		return false;
+	}
+
+	StableLayoutSize = LayoutSize;
+	bHasStableLayoutSize = true;
+	if (CardCanvas)
+	{
+		CardCanvas->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	}
+	OnLayoutGeometryReadyNative.Broadcast(StableLayoutSize);
+	RefreshInteractionPresentation();
+	ScheduleBoundCardFaceRender();
+	return true;
+}
+
+void UWacomBackpackWorkspaceWidget::RequestBoundCardFaceRenders()
+{
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCardWidget : BoundCardWidgets)
+	{
+		if (UWacomDeckCardWidget* CardWidget = WeakCardWidget.Get())
+		{
+			CardWidget->RequestBackpackCardFaceRender();
+		}
+	}
+}
+
+void UWacomBackpackWorkspaceWidget::ScheduleBoundCardFaceRender()
+{
+	bDeferredCardFaceRenderRequested = true;
+	if (bDeferredCardFaceRenderActive)
+	{
+		return;
+	}
+
+	const TSharedPtr<SWidget> CachedWidget = GetCachedWidget();
+	if (!CachedWidget.IsValid())
+	{
+		return;
+	}
+
+	bDeferredCardFaceRenderRequested = false;
+	bDeferredCardFaceRenderActive = true;
+	const TWeakObjectPtr<UWacomBackpackWorkspaceWidget> WeakThis(this);
+	CachedWidget->RegisterActiveTimer(
+		0.0f,
+		FWidgetActiveTimerDelegate::CreateLambda(
+			[WeakThis](double CurrentTime, float DeltaTime)
+			{
+				UWacomBackpackWorkspaceWidget* Self = WeakThis.Get();
+				if (!Self || !Self->bDeferredCardFaceRenderActive)
+				{
+					return EActiveTimerReturnType::Stop;
+				}
+				Self->FlushDeferredCardFaceRender();
+				return EActiveTimerReturnType::Stop;
+			}));
+}
+
+void UWacomBackpackWorkspaceWidget::FlushDeferredCardFaceRender()
+{
+	if (!bDeferredCardFaceRenderRequested && !bDeferredCardFaceRenderActive)
+	{
+		return;
+	}
+
+	bDeferredCardFaceRenderRequested = false;
+	bDeferredCardFaceRenderActive = false;
+	if (!bHasStableLayoutSize || !CardCanvas
+		|| CardCanvas->GetVisibility() == ESlateVisibility::Hidden
+		|| CardCanvas->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		return;
+	}
+
+	RefreshInteractionPresentation();
+	RequestBoundCardFaceRenders();
+	++DeferredCardFaceRenderPassCount;
 }
 
 void UWacomBackpackWorkspaceWidget::EnsureFallbackTree()
@@ -625,6 +875,10 @@ FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAuto
 	View.ActiveZone = ActiveZone;
 	View.ActiveZoneOwnerInstanceId = ActiveZoneOwnerInstanceId;
 	View.ManualLayoutCount = ManualLayoutCount;
+	View.bDeferredCardFaceRenderPending =
+		bDeferredCardFaceRenderRequested || bDeferredCardFaceRenderActive;
+	View.DeferredCardFaceRenderPassCount = DeferredCardFaceRenderPassCount;
+	View.bCardFaceRetainedRenderingEnabled = bCardFaceRetainedRenderingEnabled;
 	if (InteractionModel)
 	{
 		View.SelectedInstanceIds = InteractionModel->GetSelection().OrderedSelectedInstanceIds;

@@ -159,6 +159,42 @@ TArray<FVector2D> FWacomBackpackScreenTestAccess::WorkspaceCardPositions(const U
 	return Positions;
 }
 
+TArray<float> FWacomBackpackScreenTestAccess::WorkspaceCardRenderOpacities(
+	const UWacomBackpackScreen& Screen)
+{
+	TArray<float> Opacities;
+	Opacities.Reserve(Screen.ActiveWorkspaceCardWidgets.Num());
+	for (const UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	{
+		Opacities.Add(CardWidget ? CardWidget->GetRenderOpacity() : -1.0f);
+	}
+	return Opacities;
+}
+
+bool FWacomBackpackScreenTestAccess::ApplyStableWorkspaceGeometry(
+	UWacomBackpackScreen& Screen,
+	FVector2D LayoutSize)
+{
+	return Screen.WorkspaceWidget
+		&& Screen.WorkspaceWidget->AcceptStableLayoutGeometry(LayoutSize);
+}
+
+void FWacomBackpackScreenTestAccess::FlushDeferredWorkspaceCardFaceRender(
+	UWacomBackpackScreen& Screen)
+{
+	if (Screen.WorkspaceWidget)
+	{
+		Screen.WorkspaceWidget->FlushDeferredCardFaceRender();
+	}
+}
+
+void FWacomBackpackScreenTestAccess::ApplyWorkspaceLayerTransition(
+	UWacomBackpackScreen& Screen,
+	bool bTransitioning)
+{
+	Screen.ApplyOwningLayerTransitionState(bTransitioning);
+}
+
 bool FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(
 	UWacomBackpackScreen& Screen,
 	int32 CardIndex)
@@ -225,6 +261,102 @@ bool FWacomBackpackScreenTestAccess::MarqueeCompletesWhenReleasedOverCard(
 	return bCompleted;
 }
 
+FWacomBackpackPickupPointerSequenceProbe
+FWacomBackpackScreenTestAccess::ProbeSelectedCardPickupPointerSequence(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	UWacomDeckCardWidget& CardWidget)
+{
+	FWacomBackpackPickupPointerSequenceProbe Probe;
+	if (!Workspace.InteractionModel || !CardWidget.GetCardInstanceId().IsValid())
+	{
+		return Probe;
+	}
+
+	Probe.bCardMovable = CardWidget.IsMoveEnabled();
+	Workspace.InteractionModel->ClickCard(CardWidget.GetCardInstanceId(), false);
+	Probe.bSelectedBeforePointerDown =
+		Workspace.InteractionModel->IsSelected(CardWidget.GetCardInstanceId());
+	TSet<FKey> PressedButtons{ EKeys::LeftMouseButton };
+	const FPointerEvent PointerDown(
+		0,
+		FVector2D(240.0f, 180.0f),
+		FVector2D(240.0f, 180.0f),
+		PressedButtons,
+		EKeys::LeftMouseButton,
+		0.0f,
+		FModifierKeysState());
+	Probe.bPointerEventIsLeftMouseButton =
+		PointerDown.GetEffectingButton() == EKeys::LeftMouseButton;
+	Probe.bPointerEventControlDown = PointerDown.IsControlDown();
+	Probe.bCarryingBeforePointerDown = Workspace.InteractionModel->IsCarrying();
+	const FReply PointerDownReply =
+		Workspace.HandleCardPointerDown(&CardWidget, FGeometry(), PointerDown);
+	Probe.bPointerDownHandled = PointerDownReply.IsEventHandled();
+	Probe.bCarryStartedOnPointerDown = Workspace.InteractionModel->IsCarrying();
+
+	PressedButtons.Reset();
+	const FPointerEvent PointerUp(
+		0,
+		FVector2D(240.0f, 180.0f),
+		FVector2D(240.0f, 180.0f),
+		PressedButtons,
+		EKeys::LeftMouseButton,
+		0.0f,
+		FModifierKeysState());
+	Workspace.HandleCardPointerUp(&CardWidget, FGeometry(), PointerUp);
+	Probe.bPickupReleaseKeptCarry = Workspace.InteractionModel->IsCarrying();
+	Probe.bInitialReleaseGuardCleared = Workspace.InteractionModel->IsCarrying()
+		&& !Workspace.InteractionModel->GetCarry().bInitialReleaseGuardArmed;
+
+	const FWacomBackpackWorkspaceReleaseIntent LeftIntent =
+		Workspace.InteractionModel->BuildReleaseIntent(false);
+	Probe.NextLeftReleaseCount = LeftIntent.InstanceIds.Num();
+	const FWacomBackpackWorkspaceReleaseIntent RightIntent =
+		Workspace.InteractionModel->BuildReleaseIntent(true);
+	Probe.NextRightReleaseCount = RightIntent.InstanceIds.Num();
+	Workspace.CancelInteraction();
+
+	int32 BroadcastReleaseCount = 0;
+	Workspace.OnReleaseIntentNative.AddLambda(
+		[&BroadcastReleaseCount](const FWacomBackpackWorkspaceReleaseIntent& Intent)
+		{
+			BroadcastReleaseCount += Intent.InstanceIds.Num();
+		});
+	Workspace.InteractionModel->ClickCard(CardWidget.GetCardInstanceId(), false);
+	Workspace.HandleCardPointerDown(&CardWidget, FGeometry(), PointerDown);
+	Workspace.HandleCardPointerDown(&CardWidget, FGeometry(), PointerDown);
+	Workspace.HandleCardPointerUp(&CardWidget, FGeometry(), PointerUp);
+	Probe.FirstLeftReleaseAfterMissedPickupUpCount = BroadcastReleaseCount;
+	Workspace.CancelInteraction();
+
+	BroadcastReleaseCount = 0;
+	Workspace.InteractionModel->ClickCard(CardWidget.GetCardInstanceId(), false);
+	Workspace.HandleCardPointerDown(&CardWidget, FGeometry(), PointerDown);
+	TSet<FKey> RightPressedButtons{ EKeys::RightMouseButton };
+	const FPointerEvent RightPointerDown(
+		0,
+		FVector2D(240.0f, 180.0f),
+		FVector2D(240.0f, 180.0f),
+		RightPressedButtons,
+		EKeys::RightMouseButton,
+		0.0f,
+		FModifierKeysState());
+	const FPointerEvent RightPointerUp(
+		0,
+		FVector2D(240.0f, 180.0f),
+		FVector2D(240.0f, 180.0f),
+		TSet<FKey>(),
+		EKeys::RightMouseButton,
+		0.0f,
+		FModifierKeysState());
+	Workspace.HandleCardPointerDown(&CardWidget, FGeometry(), RightPointerDown);
+	Workspace.HandleCardPointerUp(&CardWidget, FGeometry(), RightPointerUp);
+	Probe.FirstRightReleaseAfterMissedPickupUpCount = BroadcastReleaseCount;
+	Workspace.OnReleaseIntentNative.Clear();
+	Workspace.CancelInteraction();
+	return Probe;
+}
+
 EZoneKind FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(const UWacomBackpackScreen& Screen)
 {
 	return View(Screen).ActiveWorkspaceZone;
@@ -283,6 +415,36 @@ bool FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(
 	return bStarted;
 }
 
+bool FWacomBackpackScreenTestAccess::ReleaseCurrentToRackWithSynchronousRefresh(
+	UWacomBackpackScreen& Screen,
+	EZoneKind TargetZone,
+	FGuid TargetOwnerInstanceId)
+{
+	URunSession* Run = Screen.GetRunSession();
+	if (!Run || !Screen.WorkspaceInteractionModel || !Screen.WorkspaceInteractionModel->IsCarrying())
+	{
+		return false;
+	}
+
+	FWacomBackpackWorkspaceReleaseIntent Intent =
+		Screen.WorkspaceInteractionModel->BuildReleaseIntent(false);
+	if (Intent.bConsumedByInitialReleaseGuard)
+	{
+		Intent = Screen.WorkspaceInteractionModel->BuildReleaseIntent(false);
+	}
+	if (Intent.InstanceIds.IsEmpty())
+	{
+		return false;
+	}
+
+	Run->OnRunStateChangedNative.AddUObject(&Screen, &UWacomBackpackScreen::HandleViewModelRefreshed);
+	Screen.HandleWorkspaceRackReleaseIntent(
+		Intent,
+		FWacomBackpackZoneKey::Make(TargetZone, TargetOwnerInstanceId));
+	Run->OnRunStateChangedNative.RemoveAll(&Screen);
+	return true;
+}
+
 void FWacomBackpackScreenTestAccess::DeactivateWorkspaceScreen(UWacomBackpackScreen& Screen)
 {
 	Screen.NativeOnDeactivated();
@@ -300,6 +462,19 @@ bool FWacomBackpackScreenTestAccess::BeginDeleteConfirmation(UWacomBackpackScree
 {
 	if (!Screen.WorkspaceInteractionModel || !Screen.WorkspaceInteractionModel->IsCarrying()) return false;
 	Screen.BeginWorkspaceDeleteConfirmation(Screen.WorkspaceInteractionModel->GetCarry().RemainingInstanceIds);
+	return IsDeleteConfirmationPending(Screen);
+}
+
+bool FWacomBackpackScreenTestAccess::BeginDeleteConfirmationForIds(
+	UWacomBackpackScreen& Screen,
+	TConstArrayView<FGuid> InstanceIds)
+{
+	if (!Screen.WorkspaceInteractionModel || !Screen.WorkspaceInteractionModel->IsCarrying()
+		|| InstanceIds.IsEmpty())
+	{
+		return false;
+	}
+	Screen.BeginWorkspaceDeleteConfirmation(InstanceIds);
 	return IsDeleteConfirmationPending(Screen);
 }
 

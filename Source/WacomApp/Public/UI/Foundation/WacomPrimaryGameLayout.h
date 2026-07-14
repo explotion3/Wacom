@@ -9,6 +9,7 @@
 
 class UCommonActivatableWidgetStack;
 class UCommonActivatableWidget;
+class UCommonActivatableWidgetContainerBase;
 
 /**
  * Wacom 的 PrimaryGameLayout。
@@ -28,6 +29,9 @@ class WACOMAPP_API UWacomPrimaryGameLayout : public UCommonUserWidget
 	GENERATED_BODY()
 
 public:
+	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnLayerTransitioningChangedNative, FGameplayTag, bool);
+	FOnLayerTransitioningChangedNative OnLayerTransitioningChangedNative;
+
 	/** 根据 Layer Tag 把一个 Widget 类实例化并 Push 到对应 Stack。返回实例。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|UI Foundation|Primary Layout", meta = (ToolTip = "根据 Layer Tag 把 Widget 类实例化并推入对应 CommonUI Stack。只处理 UI 层级，不提交业务命令。"))
 	UCommonActivatableWidget* PushWidgetToLayer(const FGameplayTag& LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass);
@@ -35,11 +39,16 @@ public:
 	/** 根据 Layer Tag 找到对应 Stack。 */
 	UCommonActivatableWidgetStack* GetLayerStack(const FGameplayTag& LayerTag) const;
 
+	/** CommonUI Layer 当前是否正在执行进入或退出过渡。 */
+	bool IsLayerTransitioning(const FGameplayTag& LayerTag) const;
+
 	/** 获取当前 Layout 实例（从 PlayerController 的 Viewport 上找）。 */
 	static UWacomPrimaryGameLayout* GetPrimaryLayout(APlayerController* PC);
 
 protected:
 	virtual void NativeOnInitialized() override;
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UCommonActivatableWidgetStack> GameLayerStack;
@@ -59,6 +68,11 @@ private:
 	{
 		FGameplayTag Tag;
 		TObjectPtr<UCommonActivatableWidgetStack> Stack = nullptr;
+		bool bIsTransitioning = false;
 	};
 	TArray<FLayerEntry> LayerEntries;
+
+	void HandleLayerTransitioningChanged(
+		UCommonActivatableWidgetContainerBase* Container,
+		bool bIsTransitioning);
 };

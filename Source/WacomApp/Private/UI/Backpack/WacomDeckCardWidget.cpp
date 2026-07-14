@@ -10,7 +10,7 @@
 #include "Cards/CardDefinition.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
-#include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomRetainedCardViewWidget.h"
 
 void UWacomDeckCardWidget::NativeConstruct()
 {
@@ -95,6 +95,22 @@ void UWacomDeckCardWidget::ApplyWorkspaceVisualState(
 	}
 }
 
+void UWacomDeckCardWidget::RequestBackpackCardFaceRender()
+{
+	if (BackpackCardView)
+	{
+		BackpackCardView->RequestCardFaceRender();
+	}
+}
+
+void UWacomDeckCardWidget::SetBackpackCardFaceRetainedRenderingEnabled(bool bEnabled)
+{
+	if (BackpackCardView)
+	{
+		BackpackCardView->SetRetainedRenderingEnabled(bEnabled);
+	}
+}
+
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
 {
 	bCardInteractionEnabled = bEnabled;
@@ -127,7 +143,7 @@ void UWacomDeckCardWidget::SetRightClickToggleEnabled(bool bEnabled)
 
 void UWacomDeckCardWidget::RefreshContentFromCard()
 {
-	if (!CardView)
+	if (!BackpackCardView)
 	{
 		return;
 	}
@@ -138,11 +154,11 @@ void UWacomDeckCardWidget::RefreshContentFromCard()
 		EmptyData.Name = LOCTEXT("EmptyCard", "(none)");
 		EmptyData.bShowCost = false;
 		EmptyData.bDisabled = true;
-		CardView->SetCardViewData(EmptyData);
+		BackpackCardView->SetCardViewData(EmptyData);
 		return;
 	}
 
-	CardView->SetCardViewData(BuildCurrentCardViewData());
+	BackpackCardView->SetCardViewData(BuildCurrentCardViewData());
 }
 
 FWacomCardViewData UWacomDeckCardWidget::BuildCurrentCardViewData() const

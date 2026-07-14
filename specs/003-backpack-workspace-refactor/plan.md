@@ -162,6 +162,7 @@ WacomTests -> WacomRun / WacomApp as test harness
 
 - 制作/重构 `WBP_BackpackScreen`、Workspace、ZoneRack entry、Delete confirm 与 selection rectangle。
 - 用 presentation style 资产统一卡片尺寸、扇形角度/间距、非默认 lift、高度、跟随/回弹时间、选中状态和区域牌匣样式。
+- 背包卡面使用独立 `WBP_BackpackCardView`：固定缩放外包一层 invalidation-only Retainer，内部复用 authored `WBP_FirstPersonCardView`；背包实例关闭并释放内层动态 `SurfaceFoilOverlay` 的材质 Brush，不改变共享战斗卡面默认值，也不复用 first-person `WBP_FPCardView` 的 fake-3D、战斗反馈或手势层。
 - 复用现有 `UWacomCardView` 与 Wacom DreamShader card material 管线；如需新效果，使用 `.dsm` Graph-first 与 `DShader/Shared` helper，保持 hover/carry/material 层独立。
 - PIE 调整手感；不把 Demo 数值写入 Run 或 Screen command flow。
 

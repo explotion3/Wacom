@@ -10,6 +10,7 @@
 #include "Cards/CardDefinition.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
+#include "../BackpackScreenTestAccess.h"
 
 namespace
 {
@@ -100,7 +101,7 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	TestFalse(TEXT("Successful all release exits carry"), Model.IsCarrying());
 
 	TStrongObjectPtr<UWacomBackpackWorkspaceWidget> Workspace(NewObject<UWacomBackpackWorkspaceWidget>());
-	Workspace->TakeWidget();
+	const TSharedRef<SWidget> WorkspaceSlateWidget = Workspace->TakeWidget();
 	TestNull(TEXT("Workspace exposes no carry index/count label"), Workspace->WidgetTree->FindWidget(TEXT("CarryIndexText")));
 
 	TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
@@ -116,6 +117,29 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	TestTrue(TEXT("Workspace installs the only pointer-down owner"), PassiveCard->OnWorkspacePointerDownNative.IsBound());
 	TestTrue(TEXT("Workspace installs the only pointer-move owner"), PassiveCard->OnWorkspacePointerMoveNative.IsBound());
 	TestTrue(TEXT("Workspace installs the only pointer-up owner"), PassiveCard->OnWorkspacePointerUpNative.IsBound());
+	const FWacomBackpackPickupPointerSequenceProbe PickupProbe =
+		FWacomBackpackScreenTestAccess::ProbeSelectedCardPickupPointerSequence(*Workspace, *PassiveCard);
+	TestTrue(TEXT("Pickup fixture card is movable"), PickupProbe.bCardMovable);
+	TestTrue(TEXT("Pickup fixture card is selected before pointer down"),
+		PickupProbe.bSelectedBeforePointerDown);
+	TestTrue(TEXT("Pickup fixture sends a left-button pointer event"),
+		PickupProbe.bPointerEventIsLeftMouseButton);
+	TestFalse(TEXT("Pickup fixture does not hold Control"), PickupProbe.bPointerEventControlDown);
+	TestFalse(TEXT("Pickup fixture starts outside carry"), PickupProbe.bCarryingBeforePointerDown);
+	TestTrue(TEXT("Workspace handles pointer down on the selected card"), PickupProbe.bPointerDownHandled);
+	TestTrue(TEXT("Pressing an already-selected card starts carry without pointer movement"),
+		PickupProbe.bCarryStartedOnPointerDown);
+	TestTrue(TEXT("Pickup release keeps the selected fan carried"), PickupProbe.bPickupReleaseKeptCarry);
+	TestTrue(TEXT("Pickup release consumes the initial release guard"),
+		PickupProbe.bInitialReleaseGuardCleared);
+	TestEqual(TEXT("The next left release immediately targets the current card"),
+		PickupProbe.NextLeftReleaseCount, 1);
+	TestEqual(TEXT("The next right release immediately targets every carried card"),
+		PickupProbe.NextRightReleaseCount, 1);
+	TestEqual(TEXT("A new left click releases immediately even when pickup-up was lost"),
+		PickupProbe.FirstLeftReleaseAfterMissedPickupUpCount, 1);
+	TestEqual(TEXT("A new right click releases immediately even when pickup-up was lost"),
+		PickupProbe.FirstRightReleaseAfterMissedPickupUpCount, 1);
 	PassiveCard->UnbindWorkspacePointerEvents();
 	TestFalse(TEXT("Card can release all workspace input forwarding on reuse"), PassiveCard->OnWorkspacePointerDownNative.IsBound());
 	return true;
