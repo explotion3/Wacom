@@ -71,6 +71,9 @@ struct FWacomBackpackScreenTestAccess
 	static void ActivateZone(UWacomBackpackScreen& Screen, EZoneKind Zone, FGuid OwnerInstanceId = FGuid());
 	static bool BeginWorkspaceCarry(UWacomBackpackScreen& Screen, int32 CardIndex = 0);
 	static bool BeginWorkspaceCarryForIds(UWacomBackpackScreen& Screen, TConstArrayView<FGuid> InstanceIds);
+	static bool BeginWorkspaceMarquee(UWacomBackpackScreen& Screen);
+	static bool IsWorkspaceMarqueeActive(const UWacomBackpackScreen& Screen);
+	static bool PressWorkspaceEscape(UWacomBackpackScreen& Screen);
 	static bool ReleaseCurrentToRackWithSynchronousRefresh(
 		UWacomBackpackScreen& Screen,
 		EZoneKind TargetZone,

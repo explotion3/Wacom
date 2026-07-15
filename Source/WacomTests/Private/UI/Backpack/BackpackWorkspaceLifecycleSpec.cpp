@@ -90,6 +90,24 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 	TestEqual(TEXT("Battle workspace includes physical and read-only projected cards"),
 		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen),
 		Snapshot.BattleDeckPhysicalCards.Num() + Snapshot.BattleDeckProjectedCards.Num());
+	TestFalse(TEXT("Idle Workspace leaves Escape unhandled for CommonUI Back"),
+		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestTrue(TEXT("Carry starts before layered Escape cancellation"),
+		FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(*Screen));
+	TestTrue(TEXT("Workspace handles Escape while carrying"),
+		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestTrue(TEXT("Carry Escape clears the carried fan"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
+	TestFalse(TEXT("Carry Escape releases mouse capture"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);
+	TestTrue(TEXT("Marquee starts before layered Escape cancellation"),
+		FWacomBackpackScreenTestAccess::BeginWorkspaceMarquee(*Screen));
+	TestTrue(TEXT("Workspace handles Escape while marquee is active"),
+		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestFalse(TEXT("Marquee Escape clears the active marquee"),
+		FWacomBackpackScreenTestAccess::IsWorkspaceMarqueeActive(*Screen));
+	TestFalse(TEXT("Marquee Escape releases mouse capture"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);
 	const TArray<FVector2D> BattleCardPositions =
 		FWacomBackpackScreenTestAccess::WorkspaceCardPositions(*Screen);
 	TSet<FIntPoint> DistinctBattleCardPositions;

@@ -104,17 +104,19 @@ Wacom.Backpack.SeedPIEValidation
 
 - [x] Right-side zone rack remains visible while switching zones.
 - [x] Central workspace displays exactly one active zone.
-- [ ] With at least 20 cards and 4 available zones, a fresh tester can switch zones and identify the sole central active workspace within 10 seconds; record the measured time.
+- [x] With at least 20 cards and 4 available zones, a fresh tester can switch zones and identify the sole central active workspace within 10 seconds; the user explicitly waived stopwatch recording on 2026-07-15 and accepted the observed "no perceptible delay" result in lieu of a fabricated measurement.
 - [x] Each rack entry shows correct title/count/capacity/active feedback.
-- [ ] Manual positions, angles and ZOrder survive zone switch and same-Run close/reopen.
-- [ ] New Run starts without the previous Run's manual layout.
+- [x] Manual positions, angles and ZOrder survive zone switch and same-Run close/reopen.
+- [x] New Run starts without the previous Run's manual layout.
 - [x] New cards enter a readable default layout; removed/moved cards leave no ghost entry.
-- [ ] Backpack cards embed `WBP_BackpackCardView -> invalidation-only Retainer -> WBP_FirstPersonCardView`; the automated asset/runtime contracts confirm fixed `0.75` ScaleBox scaling, no phase/effect material, disabled-and-cleared inner `SurfaceFoilOverlay`, and the dedicated external feedback overlay. PIE must confirm there is no frozen foil frame while face content, antialiasing and bleed badges still match the authored layout.
-- [ ] Cards cannot be placed with more than about 70% outside the workspace.
+- [x] Backpack cards embed `WBP_BackpackCardView -> invalidation-only Retainer -> WBP_FirstPersonCardView`; the automated asset/runtime contracts confirm fixed `0.75` ScaleBox scaling, no phase/effect material, disabled-and-cleared inner `SurfaceFoilOverlay`, and the dedicated external feedback overlay. PIE must confirm there is no frozen foil frame while face content, antialiasing and bleed badges still match the authored layout.
+- [x] Cards cannot be placed with more than about 70% outside the workspace.
 - [x] Arrange All restores upright readable default layout.
-- [ ] Dropping onto the active zone rack collects cards without changing Run rule order/revision.
+- [x] Dropping onto the active zone rack collects cards without changing Run rule order/revision.
 
 PIE note (2026-07-14): first entry exposed fallback positions and a stale semi-transparent retained face until pickup. The Workspace now hides its card canvas until Slate geometry is stable and then reflows. While the owning GameMenu CommonUI layer is transitioning, retained card faces switch to pass-through rendering so the inherited fade alpha cannot be baked into their static cache; transition completion restores retained rendering and requests a final redraw. Redraw requests made before `NativeConstruct()` remain queued. Automated Screen composition and the full focused UI suite pass, pending the repeated PIE visual check below.
+
+PIE result (2026-07-15, current `0b47` worktree): with the seeded 24-card / four-rack baseline, the user reported no perceptible delay identifying the sole central workspace and active rack. The user later explicitly waived stopwatch recording and accepted that qualitative result; no numeric time is invented. Zone switch plus same-Run close/reopen preserved a deliberately placed three-card fan including position, angle and ZOrder; a fresh PIE Run discarded it and restored the default layout. Releasing beyond the Workspace kept about 30% of the card body visible. A static visual check confirmed full opacity, stable authored face fields and bleed badges, no frozen foil frame and no sampling change.
 
 ## PIE Checklist — Selection and Carry Feel
 
@@ -137,32 +139,38 @@ PIE result (2026-07-14, current `0b47` worktree): the complete selection/carry c
 
 ## PIE Checklist — Transactions and Confirmation
 
-- [ ] Valid cross-zone single release moves only current card.
-- [ ] Valid cross-zone group release moves all cards in one visible refresh.
-- [ ] Capacity/Owner/stale rejection moves zero cards, keeps carry and shows one understandable Toast/feedback.
-- [ ] Delete target shows one confirmation with card count and total reward.
-- [ ] Cancel restores the exact carry set and current card.
-- [ ] Confirm success deletes all and grants exact total gold once.
-- [ ] State change during confirmation causes atomic failure and restores carry.
+- [x] Valid cross-zone single release moves only current card.
+- [x] Valid cross-zone group release moves all cards in one visible refresh.
+- [x] Capacity/Owner/stale rejection moves zero cards, keeps carry and shows one understandable Toast/feedback.
+- [x] Delete target shows one confirmation with card count and total reward.
+- [x] Cancel restores the exact carry set and current card.
+- [x] Confirm success deletes all and grants exact total gold once.
+- [x] State change during confirmation causes atomic failure and restores carry.
+
+PIE result (2026-07-15, current `0b47` worktree): valid single/group moves, active-rack collect, capacity rejection, delete confirm/cancel/success and stale-confirm rejection all passed user verification. Rejected or stale transactions moved zero cards and retained/restored the expected carry state; successful batch transactions produced one visible refresh/reward.
 
 ## PIE Checklist — CommonUI Lifecycle
 
-- [ ] Escape/Back closes the screen with no stuck cursor capture.
-- [ ] Switching zone during selection/carry cancels safely and preserves completed layouts.
-- [ ] Deactivate/reactivate does not duplicate provider subscriptions or state-change callbacks.
-- [ ] Detail panel does not block marquee, carry, rack drop or confirmation input.
-- [ ] Confirmation modal owns focus and returns focus correctly on cancel.
-- [ ] Controller/keyboard can still navigate rack and close/back, even though free placement is mouse-first.
+- [x] Layered Back: Escape cancels an active carry/marquee/pending card press without closing; the next idle Escape closes through CommonUI, while B always closes directly. Neither path leaves cursor capture or stale interaction state.
+- [x] Switching zone during selection/carry cancels safely and preserves completed layouts.
+- [x] Deactivate/reactivate does not duplicate provider subscriptions or state-change callbacks.
+- [x] Detail panel does not block marquee, carry, rack drop or confirmation input.
+- [x] Confirmation modal owns focus and returns focus correctly on cancel.
+- [x] Controller/keyboard can still navigate rack and close/back, even though free placement is mouse-first.
+
+PIE result (2026-07-15, current `0b47` worktree): lifecycle cleanup passed for zone switch, B-key close, deactivate/reactivate, detail/confirmation focus and reopen. Closing with B while carrying left no mouse capture or fan; reopening had no stale selection/carry, and mouse, marquee and card click worked immediately. The layered-Back contract is finalized and fully verified in PIE: active pointer interaction consumes Escape to cancel, the next idle Escape closes through CommonUI, and B always closes directly. `WacomEditor`, `Wacom.UI.Backpack` 63/63 and `Wacom.Run.Backpack` 2/2 pass after the focused input regression was added.
 
 ## PIE Checklist — Visual and DreamShader Layer
 
 - [x] Workspace remains fully functional with optional material effects disabled.
-- [ ] Selection overlay, current-card lift, valid target and rejected target are visually distinguishable; overlay color never changes card scale or hit geometry.
-- [ ] Fake-3D/material response does not move hit geometry or change drop targeting.
+- [x] Selection overlay, current-card lift, valid target and rejected target are visually distinguishable; overlay color never changes card scale or hit geometry.
+- [x] Fake-3D/material response does not move hit geometry or change drop targeting.
 - [x] Motion values come from presentation style/WBP defaults rather than Run rules.
 - [x] DreamShader source is Wacom-native `.dsm`/`.dsh`; no Godot Demo code, shader or asset was copied.
 - [x] `M_BackpackWorkspaceCardFeedback` force-generates from its `.dsm`, recompiles through UE with no SM6 errors, consumes VertexColor RGB output 0 and Alpha output 4 directly, and never applies an A mask to RGB output 0; DreamShader graph generation alone is not treated as shader compilation evidence.
-- [ ] 20–100 cards do not cause obvious idle Tick cost or per-frame Snapshot rebuilds.
+- [x] 20–100 cards do not cause obvious idle Tick cost or per-frame Snapshot rebuilds.
+
+PIE result (2026-07-15, current `0b47` worktree): selection/current/valid/rejected feedback, stable hit geometry and idle behavior all passed user verification; no obvious per-frame Snapshot rebuild or idle-cost symptom was observed.
 
 ## Migration Search
 

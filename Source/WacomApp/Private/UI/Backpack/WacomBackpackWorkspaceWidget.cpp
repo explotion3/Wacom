@@ -485,7 +485,11 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnKeyDown(
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled();
 	}
-	if (InteractionModel && InKeyEvent.GetKey() == EKeys::Escape)
+	const bool bHasCancelablePointerInteraction =
+		(InteractionModel
+			&& (InteractionModel->IsCarrying() || InteractionModel->IsMarqueeActive()))
+		|| bPendingCardPress;
+	if (InKeyEvent.GetKey() == EKeys::Escape && bHasCancelablePointerInteraction)
 	{
 		CancelInteraction();
 		OnInteractionChangedNative.Broadcast();

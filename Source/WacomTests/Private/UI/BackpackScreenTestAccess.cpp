@@ -415,6 +415,42 @@ bool FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(
 	return bStarted;
 }
 
+bool FWacomBackpackScreenTestAccess::BeginWorkspaceMarquee(UWacomBackpackScreen& Screen)
+{
+	if (!Screen.WorkspaceInteractionModel || !Screen.WorkspaceWidget)
+	{
+		return false;
+	}
+
+	Screen.WorkspaceInteractionModel->BeginMarquee(FVector2D(20.0f, 20.0f), false);
+	Screen.WorkspaceWidget->RefreshInteractionPresentation();
+	return Screen.WorkspaceInteractionModel->IsMarqueeActive();
+}
+
+bool FWacomBackpackScreenTestAccess::IsWorkspaceMarqueeActive(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.WorkspaceInteractionModel
+		&& Screen.WorkspaceInteractionModel->IsMarqueeActive();
+}
+
+bool FWacomBackpackScreenTestAccess::PressWorkspaceEscape(UWacomBackpackScreen& Screen)
+{
+	if (!Screen.WorkspaceWidget)
+	{
+		return false;
+	}
+
+	const FKeyEvent EscapeEvent(
+		EKeys::Escape,
+		FModifierKeysState(),
+		/*UserIndex*/ 0,
+		/*bIsRepeat*/ false,
+		/*CharacterCode*/ 0,
+		/*KeyCode*/ 0);
+	return Screen.WorkspaceWidget->NativeOnKeyDown(FGeometry(), EscapeEvent).IsEventHandled();
+}
+
 bool FWacomBackpackScreenTestAccess::ReleaseCurrentToRackWithSynchronousRefresh(
 	UWacomBackpackScreen& Screen,
 	EZoneKind TargetZone,
