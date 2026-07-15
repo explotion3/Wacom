@@ -10,14 +10,18 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "RunState.h"
+#include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Events/WacomRunEventScreen.h"
+#include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/Map/WacomRunMapScreen.h"
+#include "UI/Map/WacomRunMapOpenGuard.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
@@ -328,17 +332,48 @@ namespace
 	{
 		AWacomPlayerController* PC = WeakPC.Get();
 		URunSession* RunSession = PC ? PC->GetRunSession() : nullptr;
-		if (!RunSession || !RunSession->BeginShopVisit(ShopId, Offers))
+		if (!RunSession)
 		{
 			OutFailureReason = TEXT("BeginShopVisitFailed");
 			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop.AsyncPush: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
 			return false;
 		}
-		OutVisitToken = RunSession->GetActiveShopVisitToken();
+
+		const FRunShopVisitResult VisitResult =
+			RunSession->BeginShopVisitWithResult(ShopId, Offers);
+		if (!VisitResult.bSucceeded)
+		{
+			OutFailureReason = VisitResult.DisabledReason.IsNone()
+				? FName(TEXT("BeginShopVisitFailed"))
+				: VisitResult.DisabledReason;
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] OpenShop.AsyncPush: BeginShopVisit 失败 ShopId=%s Detail=%s"),
+				*ShopId.ToString(),
+				*OutFailureReason.ToString());
+			return false;
+		}
+
+		OutVisitToken = VisitResult.VisitToken;
 		if (!OutVisitToken.IsValid())
 		{
 			OutFailureReason = TEXT("MissingShopVisitToken");
-			RunSession->EndShopVisit();
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomPlayerController] OpenShop.AsyncPush: 成功结果违反 visit token 合同 ShopId=%s"),
+				*ShopId.ToString());
+			return false;
+		}
+		if (!PC->ApplyRunNodeActivityResolutionForPresentation(
+			VisitResult.ExplorationResolution))
+		{
+			OutFailureReason = TEXT("ShopBeginPresentationSyncFailed");
+			const FRunShopVisitResult Rollback =
+				RunSession->EndShopVisitIfOwnedWithResult(OutVisitToken);
+			if (Rollback.bSucceeded)
+			{
+				PC->ApplyRunNodeActivityResolutionForPresentation(
+					Rollback.ExplorationResolution);
+			}
+			OutVisitToken.Invalidate();
 			return false;
 		}
 		return true;
@@ -365,7 +400,13 @@ namespace
 		{
 			if (URunSession* RunSession = PC->GetRunSession())
 			{
-				RunSession->EndShopVisitIfOwned(VisitToken);
+				const FRunShopVisitResult Result =
+					RunSession->EndShopVisitIfOwnedWithResult(VisitToken);
+				if (Result.bSucceeded)
+				{
+					PC->ApplyRunNodeActivityResolutionForPresentation(
+						Result.ExplorationResolution);
+				}
 			}
 		}
 	}
@@ -569,6 +610,135 @@ namespace
 		};
 		UIManager.PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
 	}
+}
+
+bool FWacomExplorationScreenRouter::ToggleMap(AWacomPlayerController& PC)
+{
+	if (!IsExplorationState(PC, TEXT("ToggleMap")))
+	{
+		return false;
+	}
+
+	UWacomGameUIManagerSubsystem* UIManager = GetUIManager(PC, TEXT("ToggleMap"));
+	if (!UIManager)
+	{
+		return false;
+	}
+	UIManager->EnsurePrimaryLayout(&PC);
+	if (!IsValid(UIManager->GetPrimaryLayout()))
+	{
+		return false;
+	}
+
+	if (UCommonActivatableWidget* ActiveWidget = GetActiveGameMenuWidget(*UIManager))
+	{
+		if (UWacomRunMapScreen* ActiveMap = Cast<UWacomRunMapScreen>(ActiveWidget))
+		{
+			ActiveMap->DeactivateWidget();
+			return true;
+		}
+		if (!FWacomRunMapOpenGuard::IsGameMenuSlotAvailable(true, false))
+		{
+			UE_LOG(LogTemp, Display,
+				TEXT("[WacomPlayerController] ToggleMap: 已有其它 GameMenu，拒绝替换"));
+			return false;
+		}
+	}
+
+	const bool bHasPendingGameMenu = UIManager->HasPendingAsyncPushToLayer(
+		WacomUITags::UI_Layer_GameMenu.GetTag());
+	if (!FWacomRunMapOpenGuard::IsGameMenuSlotAvailable(
+		false,
+		bHasPendingGameMenu))
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("[WacomPlayerController] ToggleMap: GameMenu 正在异步打开，忽略请求"));
+		return false;
+	}
+
+	bool bPreferRecommendedTarget = false;
+	FName GuardRejectDetail = NAME_None;
+	if (!PC.CanPresentRunMapScreen(
+		bPreferRecommendedTarget,
+		&GuardRejectDetail))
+	{
+		if (UWacomAppToastSubsystem* Toast = PC.ResolveAppToastSubsystem())
+		{
+			if (GuardRejectDetail == TEXT("TraversalNotAnchored")
+				|| GuardRejectDetail == TEXT("TraversalTransactionActive"))
+			{
+				Toast->ShowWarning(
+					NSLOCTEXT("WacomRunMap", "ReachNodeBeforeMap", "请先到达节点再打开地图"));
+			}
+		}
+		UE_LOG(LogTemp, Display,
+			TEXT("[WacomPlayerController] ToggleMap: 打开条件被拒绝 Detail=%s"),
+			*GuardRejectDetail.ToString());
+		return false;
+	}
+
+	const int32 RequestGeneration = PC.BeginRunMapScreenOpenRequest();
+	if (RequestGeneration <= 0)
+	{
+		UE_LOG(LogTemp, Display,
+			TEXT("[WacomPlayerController] ToggleMap: 地图 Flow 正在打开或已经激活"));
+		return false;
+	}
+
+	TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
+	TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(UIManager);
+	BeginGameMenuTransitionSuppression(PC);
+
+	FWacomAsyncWidgetPushRequest Request;
+	Request.LayerTag = WacomUITags::UI_Layer_GameMenu.GetTag();
+	Request.WidgetTag = WacomTags::UI_Widget_RunMapScreen.GetTag();
+	Request.FallbackClass = UWacomRunMapScreen::StaticClass();
+	Request.OwningPlayer = &PC;
+	Request.bLogMissingEntry = true;
+	Request.CanPush = [WeakPC, WeakUIManager, RequestGeneration]()
+	{
+		AWacomPlayerController* StrongPC = WeakPC.Get();
+		return StrongPC
+			&& CanPushExplorationGameMenu(
+				WeakPC, WeakUIManager, TEXT("ToggleMap.AsyncPush"))
+			&& StrongPC->IsRunMapScreenOpenRequestCurrent(RequestGeneration);
+	};
+	Request.AfterPush = [WeakPC, RequestGeneration](
+		UCommonActivatableWidget& PushedWidget,
+		FName& OutFailureReason)
+	{
+		AWacomPlayerController* StrongPC = WeakPC.Get();
+		UWacomRunMapScreen* MapScreen = Cast<UWacomRunMapScreen>(&PushedWidget);
+		if (!StrongPC || !MapScreen)
+		{
+			OutFailureReason = TEXT("InvalidRunMapScreen");
+			return false;
+		}
+		if (!StrongPC->AttachRunMapScreen(*MapScreen, RequestGeneration))
+		{
+			OutFailureReason = TEXT("RunMapScreenAttachRejected");
+			return false;
+		}
+		return true;
+	};
+	Request.OnComplete = [WeakPC, RequestGeneration](
+		const FWacomAsyncWidgetPushResult& Result)
+	{
+		if (AWacomPlayerController* StrongPC = WeakPC.Get())
+		{
+			if (!Result.bSucceeded)
+			{
+				StrongPC->CancelRunMapScreenOpenRequest(RequestGeneration);
+			}
+		}
+		EndGameMenuTransitionSuppressionOnFailure(WeakPC, Result);
+		LogAsyncPushResult(
+			Result,
+			TEXT("M / View: 打开地图"),
+			TEXT("ToggleMap: Push RunMapScreen"));
+	};
+	UIManager->PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
+	return true;
 }
 
 void FWacomExplorationScreenRouter::OpenBackpack(AWacomPlayerController& PC)

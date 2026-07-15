@@ -162,6 +162,7 @@ FWacomRunSceneBindingValidationReport FWacomRunSceneBindingValidation::ValidateL
 				*Edge.EdgeId.ToString(), Count));
 		}
 	}
+	TMap<FName, int32> BranchCounts;
 	for (TActorIterator<AWacomRunPathBranchTargetActor> It(const_cast<UWorld*>(World)); It; ++It)
 	{
 		if (It->EdgeId.IsNone() || !FloorDefinition->FindEdge(It->EdgeId))
@@ -169,6 +170,26 @@ FWacomRunSceneBindingValidationReport FWacomRunSceneBindingValidation::ValidateL
 			AddError(Report, FString::Printf(
 				TEXT("BranchTarget %s 使用未声明 EdgeId：%s。"),
 				*It->GetName(), *It->EdgeId.ToString()));
+			continue;
+		}
+		++BranchCounts.FindOrAdd(It->EdgeId);
+	}
+
+	TMap<FName, int32> DeclaredOutgoingEdgeCounts;
+	for (const FWacomMapEdgeDefinition& Edge : FloorDefinition->Edges)
+	{
+		++DeclaredOutgoingEdgeCounts.FindOrAdd(Edge.FromNodeId);
+	}
+	for (const FWacomMapEdgeDefinition& Edge : FloorDefinition->Edges)
+	{
+		const int32 ExpectedCount =
+			DeclaredOutgoingEdgeCounts.FindRef(Edge.FromNodeId) >= 2 ? 1 : 0;
+		const int32 ActualCount = BranchCounts.FindRef(Edge.EdgeId);
+		if (ActualCount != ExpectedCount)
+		{
+			AddError(Report, FString::Printf(
+				TEXT("Floor Edge %s 的 BranchTarget 数量应为 %d，当前数量=%d；只有静态多出口节点需要入口目标。"),
+				*Edge.EdgeId.ToString(), ExpectedCount, ActualCount));
 		}
 	}
 

@@ -126,4 +126,8 @@ namespace WacomTags
 	// 其 Effect.Damage 最终结算 +3。
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_CapacityEffect_Placeholder);
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_CapacityEffect_WeaponDamagePlus3);
+
+	// -------- UI.Widget --------
+	// Run 当前 Floor 地图 Screen 的软类注册身份。
+	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(UI_Widget_RunMapScreen);
 }

@@ -16,11 +16,19 @@ Actor 不保存 Floor 图、目标 NodeId、行动成本、内容完成状态或
 Inactive | Anchored | Traversing | Suspended
 ```
 
-- 只有 Traversing 消费 W/S 轴并改变 Spline distance。
+- Anchored 消费越过阈值的一次性导航意图：W 请求自动前进或提示选择，A/D / 左摇杆请求左右切换；按住期间不重复，释放后才能再次触发。
+- 只有 Traversing 把 W/S 轴解释为连续移动并改变 Spline distance。Anchored Tick 只更新 Cursor Look / View Transform，不修改路径距离或启动移动镜头反馈。
 - 到达 start/end 使用 hysteresis/one-shot latch，每次 traversal 每个边界最多广播一次。
 - Suspended 保留 path/distance，停止移动和 CameraShake；Resume 不重建规则 ticket。
 - 组件提供当前 View Transform 与 ViewStage return request，不拥有 RunSession 或 Map legality。
 - Cursor look 继续委托现有 CursorLookDriver；Camera motion 继续消费 Local Settings delegate，无新增 Tick 轮询设置。
+
+## Route choice presentation
+
+- `OutgoingEdges` 为空为 `DeadEnd`；有结构出口但没有 `bCanTraverse=true` 为 `Unavailable`；1 条合法 Edge 为 `Automatic`；2 条以上为 `ChoiceRequired`。
+- `Automatic` 在首次 W 时复用正式 Begin traversal；`ChoiceRequired` 的 W 没有规则副作用，只提示并脉冲合法入口。
+- BranchTarget 只为静态多出口节点制作。运行时只有当前 Snapshot 合法 Edge 的目标进入 Available/Focused；离开 Anchored、Suspend、开始移动或普通 Session 重绑时隐藏。
+- BranchTarget Blueprint 只能消费 Hidden/Available/Focused 视觉事件，不能决定合法性或直接调用 RunSession。
 
 ## Scene binding registry
 

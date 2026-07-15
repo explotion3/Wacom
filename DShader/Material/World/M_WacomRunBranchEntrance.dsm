@@ -1,0 +1,68 @@
+Function WacomRunBranchEntrance_Evaluate(
+    in float time,
+    in float4 tint,
+    in float glowStrength,
+    in float pulseStrength,
+    in float attentionPulse,
+    out float3 color,
+    out float alpha)
+{
+    float stableGlow = max(glowStrength, 0.0);
+    float decorativeWave = 0.5 + 0.5 * sin(time * 3.25);
+    float decorativeBoost = decorativeWave * 0.32 * saturate(pulseStrength);
+    float attentionBoost = saturate(attentionPulse) * 0.75;
+    color = tint.rgb * stableGlow * (1.0 + decorativeBoost + attentionBoost);
+    alpha = saturate(tint.a) * 0.82;
+}
+
+Shader(Name="DreamMaterials/World/M_WacomRunBranchEntrance")
+{
+    Properties = {
+        VectorParameter Tint = float4(0.08, 0.78, 0.88, 1.0) [
+            Group="Run 道路入口";
+            SortPriority=0;
+            Description="道路入口的稳定语义颜色；由运行时 Available / Focused 状态覆盖。";
+        ];
+        ScalarParameter GlowStrength = 3.0 [
+            Group="Run 道路入口";
+            SortPriority=10;
+            Description="基础自发光强度；关闭闪光辅助设置时仍保留。";
+        ];
+        ScalarParameter PulseStrength = 1.0 [
+            Group="Run 道路入口";
+            SortPriority=20;
+            Description="装饰性循环脉冲强度；运行时按 Full / Reduced / Off 写入 1 / 0.35 / 0。";
+        ];
+        ScalarParameter AttentionPulse = 0.0 [
+            Group="Run 道路入口";
+            SortPriority=30;
+            Description="玩家在多出口节点按 W 时的一次性注意力增强；运行时短暂写入。";
+        ];
+    }
+
+    Settings = {
+        Domain = "Surface";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float time = UE.Time();
+        WacomRunBranchEntrance_Evaluate(
+            time,
+            Tint,
+            GlowStrength,
+            PulseStrength,
+            AttentionPulse,
+            Color,
+            Alpha);
+    }
+}

@@ -93,6 +93,12 @@ bool FWacomRunSceneBindingValidationSpec::RunTest(const FString& Parameters)
 	SpawnHost(*Fixture.World, TEXT("Event"), EWacomMapNodeType::RunEvent);
 	TestTrue(TEXT("Complete matching bindings pass"),
 		FWacomRunSceneBindingValidation::ValidateLoadedWorld(Fixture.World, Fixture.Floor).IsValid());
+	AWacomRunPathBranchTargetActor* RedundantSingleExitBranch =
+		Fixture.World->SpawnActor<AWacomRunPathBranchTargetActor>();
+	RedundantSingleExitBranch->EdgeId = TEXT("EntryToEvent");
+	TestFalse(TEXT("Single-exit Edge rejects a redundant BranchTarget"),
+		FWacomRunSceneBindingValidation::ValidateLoadedWorld(Fixture.World, Fixture.Floor).IsValid());
+	Fixture.World->DestroyActor(RedundantSingleExitBranch);
 
 	SpawnAnchor(*Fixture.World, TEXT("Entry"));
 	SpawnHost(*Fixture.World, TEXT("Event"), EWacomMapNodeType::Shop);
@@ -103,6 +109,61 @@ bool FWacomRunSceneBindingValidationSpec::RunTest(const FString& Parameters)
 		FWacomRunSceneBindingValidation::ValidateLoadedWorld(Fixture.World, Fixture.Floor);
 	TestTrue(TEXT("Duplicate anchor/host, wrong host type and unknown Branch Edge fail"),
 		Broken.Errors.Num() >= 4);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunSceneBranchDecisionGateValidationSpec,
+	"Wacom.UI.RunSceneBinding.Validation.MultiExitDecisionGateCounts",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunSceneBranchDecisionGateValidationSpec::RunTest(const FString& Parameters)
+{
+	FSceneFixture Fixture;
+	if (!TestNotNull(TEXT("Transient World created"), Fixture.World))
+	{
+		return false;
+	}
+
+	Fixture.Floor->Nodes[1].NodeType = EWacomMapNodeType::Navigation;
+	FWacomMapNodeDefinition& RightNode = Fixture.Floor->Nodes.AddDefaulted_GetRef();
+	RightNode.NodeId = TEXT("Right");
+	RightNode.NodeType = EWacomMapNodeType::Navigation;
+	Fixture.Floor->Edges[0].ToNodeId = TEXT("Event");
+	FWacomMapEdgeDefinition& RightEdge = Fixture.Floor->Edges.AddDefaulted_GetRef();
+	RightEdge.EdgeId = TEXT("EntryToRight");
+	RightEdge.FromNodeId = TEXT("Entry");
+	RightEdge.ToNodeId = TEXT("Right");
+
+	SpawnAnchor(*Fixture.World, TEXT("Entry"));
+	SpawnAnchor(*Fixture.World, TEXT("Event"));
+	SpawnAnchor(*Fixture.World, TEXT("Right"));
+	AWacomRunPathSegmentActor* LeftPath =
+		Fixture.World->SpawnActor<AWacomRunPathSegmentActor>();
+	LeftPath->EdgeId = TEXT("EntryToEvent");
+	AWacomRunPathSegmentActor* RightPath =
+		Fixture.World->SpawnActor<AWacomRunPathSegmentActor>();
+	RightPath->EdgeId = TEXT("EntryToRight");
+
+	TestFalse(TEXT("Multi-exit node requires one BranchTarget per Edge"),
+		FWacomRunSceneBindingValidation::ValidateLoadedWorld(
+			Fixture.World, Fixture.Floor).IsValid());
+	AWacomRunPathBranchTargetActor* LeftBranch =
+		Fixture.World->SpawnActor<AWacomRunPathBranchTargetActor>();
+	LeftBranch->EdgeId = TEXT("EntryToEvent");
+	AWacomRunPathBranchTargetActor* RightBranch =
+		Fixture.World->SpawnActor<AWacomRunPathBranchTargetActor>();
+	RightBranch->EdgeId = TEXT("EntryToRight");
+	TestTrue(TEXT("Exactly one BranchTarget per multi-exit Edge passes"),
+		FWacomRunSceneBindingValidation::ValidateLoadedWorld(
+			Fixture.World, Fixture.Floor).IsValid());
+
+	AWacomRunPathBranchTargetActor* DuplicateBranch =
+		Fixture.World->SpawnActor<AWacomRunPathBranchTargetActor>();
+	DuplicateBranch->EdgeId = TEXT("EntryToRight");
+	TestFalse(TEXT("Duplicate multi-exit BranchTarget fails"),
+		FWacomRunSceneBindingValidation::ValidateLoadedWorld(
+			Fixture.World, Fixture.Floor).IsValid());
 	return true;
 }
 

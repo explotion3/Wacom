@@ -42,6 +42,12 @@ void UWacomRunPathTraversalComponent::TickComponent(
 	FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (State == EWacomRunPathTraversalState::Anchored)
+	{
+		UpdateCursorLook(DeltaTime);
+		ApplyViewTransform(DeltaTime, 0.0f);
+		return;
+	}
 	if (State != EWacomRunPathTraversalState::Traversing)
 	{
 		return;
@@ -79,9 +85,10 @@ bool UWacomRunPathTraversalComponent::AnchorAtTransform(const FTransform& Anchor
 	bEndBoundaryBroadcast = false;
 	bLeftStartBoundary = false;
 	ResetMotionFeedback();
-	SetComponentTickEnabled(false);
+	SetComponentTickEnabled(true);
 	ApplyInputProfile();
 	TakeCharacterMovementOwnership();
+	UpdateCursorLook(0.0f);
 	ApplyViewTransform(0.0f, 0.0f);
 	return true;
 }
@@ -115,12 +122,15 @@ void UWacomRunPathTraversalComponent::DeactivateTraversal()
 	ActivePath.Reset();
 	DistanceAlongSpline = 0.0f;
 	MoveAxis = 0.0f;
+	bAnchoredForwardInputLatched = false;
+	bAnchoredHorizontalInputLatched = false;
 	ClearCursorLookOverride();
 	ResetMotionFeedback();
 	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
 	{
 		Driver->ResetLookOffset();
 	}
+	ReleaseCharacterMovementOwnership();
 	SetComponentTickEnabled(false);
 	ApplyInputProfile();
 }
@@ -157,7 +167,9 @@ bool UWacomRunPathTraversalComponent::ResumeTraversal(const bool bPreserveCursor
 			Driver->ResetLookOffset();
 		}
 	}
-	SetComponentTickEnabled(State == EWacomRunPathTraversalState::Traversing);
+	SetComponentTickEnabled(
+		State == EWacomRunPathTraversalState::Anchored
+		|| State == EWacomRunPathTraversalState::Traversing);
 	ApplyInputProfile();
 	ApplyViewTransform(0.0f, 0.0f);
 	return true;
@@ -165,6 +177,36 @@ bool UWacomRunPathTraversalComponent::ResumeTraversal(const bool bPreserveCursor
 
 bool UWacomRunPathTraversalComponent::HandleMoveInput(const FVector2D& Input)
 {
+	constexpr float PressThreshold = 0.5f;
+	constexpr float ReleaseThreshold = 0.25f;
+	if (Input.Y <= ReleaseThreshold)
+	{
+		bAnchoredForwardInputLatched = false;
+	}
+	if (FMath::Abs(Input.X) <= ReleaseThreshold)
+	{
+		bAnchoredHorizontalInputLatched = false;
+	}
+
+	if (State == EWacomRunPathTraversalState::Anchored)
+	{
+		if (!bAnchoredHorizontalInputLatched && FMath::Abs(Input.X) >= PressThreshold)
+		{
+			bAnchoredHorizontalInputLatched = true;
+			AnchoredHorizontalIntentNative.Broadcast(Input.X < 0.0f ? -1 : 1);
+		}
+		if (!bAnchoredForwardInputLatched && Input.Y >= PressThreshold)
+		{
+			bAnchoredForwardInputLatched = true;
+			AnchoredForwardIntentNative.Broadcast();
+		}
+		if (State == EWacomRunPathTraversalState::Traversing)
+		{
+			MoveAxis = FMath::Clamp(Input.Y, -1.0f, 1.0f);
+		}
+		return true;
+	}
+
 	if (State != EWacomRunPathTraversalState::Traversing)
 	{
 		return false;
@@ -216,7 +258,28 @@ bool UWacomRunPathTraversalComponent::TryGetCurrentViewTransform(FTransform& Out
 	{
 		if (const AWacomRunPathSegmentActor* Path = ActivePath.Get())
 		{
-			OutViewTransform = Path->GetSplineTransformAtDistance(DistanceAlongSpline);
+			const FTransform PathTransform =
+				Path->GetSplineTransformAtDistance(DistanceAlongSpline);
+			const float AlignmentDistance = FMath::Min(
+				FMath::Max(0.0f, PathEntryViewAlignmentDistance),
+				Path->GetSplineLength());
+			if (AlignmentDistance > UE_SMALL_NUMBER
+				&& DistanceAlongSpline < AlignmentDistance)
+			{
+				const float LinearAlpha = FMath::Clamp(
+					DistanceAlongSpline / AlignmentDistance,
+					0.0f,
+					1.0f);
+				const float SmoothAlpha = FMath::SmoothStep(0.0f, 1.0f, LinearAlpha);
+				OutViewTransform.Blend(
+					AnchoredViewTransform,
+					PathTransform,
+					SmoothAlpha);
+			}
+			else
+			{
+				OutViewTransform = PathTransform;
+			}
 			return true;
 		}
 		return false;
@@ -309,12 +372,34 @@ void UWacomRunPathTraversalComponent::TakeCharacterMovementOwnership()
 {
 	if (AWacomPlayerCharacter* Character = GetOwnerCharacter())
 	{
+		if (!bOwnsCharacterBaseRotation)
+		{
+			bUseControllerRotationYawBeforeOwnership =
+				Character->bUseControllerRotationYaw;
+			bOwnsCharacterBaseRotation = true;
+		}
+		// RunPath owns the base yaw. ControlRotation additionally carries the
+		// cursor-look offset, so letting ACharacter copy it back to ActorRotation
+		// would make the two systems fight every frame.
+		Character->bUseControllerRotationYaw = false;
 		if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
 		{
 			Movement->StopMovementImmediately();
 			Movement->DisableMovement();
 		}
 	}
+}
+
+void UWacomRunPathTraversalComponent::ReleaseCharacterMovementOwnership()
+{
+	AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	if (!Character || !bOwnsCharacterBaseRotation)
+	{
+		return;
+	}
+	Character->bUseControllerRotationYaw =
+		bUseControllerRotationYawBeforeOwnership;
+	bOwnsCharacterBaseRotation = false;
 }
 
 void UWacomRunPathTraversalComponent::UpdateCursorLook(const float DeltaTime)

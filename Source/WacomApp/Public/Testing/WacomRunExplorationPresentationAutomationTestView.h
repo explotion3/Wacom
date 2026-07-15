@@ -12,6 +12,7 @@ class AActor;
 class URunSession;
 class UWacomRunPathTraversalComponent;
 enum class EWacomMapNodeType : uint8;
+struct FRunExplorationResolution;
 
 /**
  * Narrow, non-reflected automation seam for the App-private exploration presentation flow.
@@ -39,10 +40,15 @@ struct WACOMAPP_API FWacomRunExplorationPresentationAutomationTestView
 		UWacomRunPathTraversalComponent& TraversalComponent);
 	void Shutdown();
 	bool HandleBranchIntent(FName EdgeId);
+	FName HandleForwardIntent();
+	bool ApplyNodeActivityResolution(const FRunExplorationResolution& Resolution);
 
 	bool HasActiveTraversal() const;
 	int32 GetLastAppliedVersion() const;
 	FName GetLastErrorDetail() const;
+	FName GetRouteChoiceModeName() const;
+	TArray<FName> GetLegalRouteEdgeIds() const;
+	int32 GetRouteChoiceSnapshotVersion() const;
 
 private:
 	struct FImpl;

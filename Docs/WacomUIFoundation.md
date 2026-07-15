@@ -173,7 +173,7 @@ First-person 卡牌是明确的局部表现例外，不是第二套全局 DPI。
 
 `EWacomUIMotionMode::Simplified` 是全局运行时表现策略，不修改 WBP 或 Anchor 制作参数。当前它让 TitleScreen 输入提示停止呼吸、主菜单 Screen 入场和导航按钮状态插值立即完成，并强制 first-person 卡牌使用已有 reduced-motion 路径；默认 `Full` 下现有标题、主菜单和卡牌节奏不变。
 
-主菜单三份 WBP（`WBP_TitleScreen / WBP_MainMenuScreen / WBP_MainMenuNavButton`）可以在编辑器关闭时通过 `UnrealEditor-Cmd.exe Wacom.uproject -run=WacomBuildMainMenuAssets` 重建；Settings 四份 WBP、音频总线资产和玩家 CameraShake / WalkBob 制作开关通过 `-run=WacomBuildSettingsAssets` 重建与校验。构建器位于 `WacomEditor` Private，只负责项目内固定资产的制作树、编译和保存，不进入运行时模块；手工在 Designer 调整资产前应先确认是否还需要保留“可重建”合同，避免下一次运行构建器覆盖视觉改动。
+主菜单三份 WBP（`WBP_TitleScreen / WBP_MainMenuScreen / WBP_MainMenuNavButton`）可以在编辑器关闭时通过 `UnrealEditor-Cmd.exe Wacom.uproject -run=WacomBuildMainMenuAssets` 重建；Settings 四份 WBP、音频总线资产和玩家 CameraShake / WalkBob 制作开关通过 `-run=WacomBuildSettingsAssets` 重建与校验；Run Map 的 `WBP_RunMapScreen / WBP_RunMapNode` 通过 `-run=WacomBuildRunMapUIAssets` 重建。Run Map 使用 `UI.Widget.RunMapScreen` 软类注册，具体父类必须是 `UWacomRunMapScreen`，缺失或加载失败时保留完整 C++ fallback。构建器位于 `WacomEditor` Private，只负责项目内固定资产的制作树、编译和保存，不进入运行时模块；手工在 Designer 调整资产前应先确认是否还需要保留“可重建”合同，避免下一次运行构建器覆盖视觉改动。
 
 菜单按钮不直接 `OpenLevel`；切关卡由 GameMode 或 PlayerController 执行。主菜单和暂停菜单切关前先 `TearDownPrimaryLayout()`，再在下一帧 `OpenLevel()`，避免在 CommonUI deactivate 链中立即切关。
 

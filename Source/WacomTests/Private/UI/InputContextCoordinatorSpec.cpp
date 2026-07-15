@@ -334,6 +334,11 @@ bool FWacomExplorationInputMappingAssetContractTest::RunTest(const FString& Para
 		WacomInputContextSpec::HasMapping(ExplorationIMC, TEXT("IA_OpenBackpack"), EKeys::B));
 	TestTrue(TEXT("Escape maps to IA_OpenMenu"),
 		WacomInputContextSpec::HasMapping(ExplorationIMC, TEXT("IA_OpenMenu"), EKeys::Escape));
+	TestTrue(TEXT("M maps to IA_OpenMap"),
+		WacomInputContextSpec::HasMapping(ExplorationIMC, TEXT("IA_OpenMap"), EKeys::M));
+	TestTrue(TEXT("Gamepad View maps to IA_OpenMap"),
+		WacomInputContextSpec::HasMapping(
+			ExplorationIMC, TEXT("IA_OpenMap"), EKeys::Gamepad_Special_Left));
 
 	return true;
 }

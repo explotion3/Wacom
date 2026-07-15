@@ -77,6 +77,30 @@ bool FWacomRunExplorationPresentationAutomationTestView::HandleBranchIntent(cons
 	return Impl->Coordinator.HandleBranchIntent(EdgeId);
 }
 
+FName FWacomRunExplorationPresentationAutomationTestView::HandleForwardIntent()
+{
+	switch (Impl->Coordinator.HandleForwardIntent())
+	{
+	case EWacomRunForwardIntentResult::Started:
+		return TEXT("Started");
+	case EWacomRunForwardIntentResult::ChoiceRequired:
+		return TEXT("ChoiceRequired");
+	case EWacomRunForwardIntentResult::DeadEnd:
+		return TEXT("DeadEnd");
+	case EWacomRunForwardIntentResult::Unavailable:
+		return TEXT("Unavailable");
+	case EWacomRunForwardIntentResult::Rejected:
+	default:
+		return TEXT("Rejected");
+	}
+}
+
+bool FWacomRunExplorationPresentationAutomationTestView::ApplyNodeActivityResolution(
+	const FRunExplorationResolution& Resolution)
+{
+	return Impl->Coordinator.ApplyNodeActivityResolution(Resolution);
+}
+
 bool FWacomRunExplorationPresentationAutomationTestView::HasActiveTraversal() const
 {
 	return Impl->Coordinator.HasActiveTraversal();
@@ -90,6 +114,34 @@ int32 FWacomRunExplorationPresentationAutomationTestView::GetLastAppliedVersion(
 FName FWacomRunExplorationPresentationAutomationTestView::GetLastErrorDetail() const
 {
 	return Impl->Coordinator.GetLastErrorDetail();
+}
+
+FName FWacomRunExplorationPresentationAutomationTestView::GetRouteChoiceModeName() const
+{
+	switch (Impl->Coordinator.GetRouteChoiceState().Mode)
+	{
+	case EWacomRunRouteChoiceMode::DeadEnd:
+		return TEXT("DeadEnd");
+	case EWacomRunRouteChoiceMode::Automatic:
+		return TEXT("Automatic");
+	case EWacomRunRouteChoiceMode::ChoiceRequired:
+		return TEXT("ChoiceRequired");
+	case EWacomRunRouteChoiceMode::Unavailable:
+	default:
+		return TEXT("Unavailable");
+	}
+}
+
+TArray<FName>
+FWacomRunExplorationPresentationAutomationTestView::GetLegalRouteEdgeIds() const
+{
+	return Impl->Coordinator.GetRouteChoiceState().LegalEdgeIds;
+}
+
+int32 FWacomRunExplorationPresentationAutomationTestView::
+	GetRouteChoiceSnapshotVersion() const
+{
+	return Impl->Coordinator.GetRouteChoiceState().SnapshotVersion;
 }
 
 #endif

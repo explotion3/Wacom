@@ -15,10 +15,12 @@ FRunInitializationResult InitializeRunSessionForTest(
 	UWacomFloorMapDefinition* Floor =
 		NewObject<UWacomFloorMapDefinition>(&Session);
 	Floor->FloorId = TEXT("Test.Floor.LegacyFixture");
+	Floor->DisplayName = NSLOCTEXT("WacomTests", "LegacyFixtureFloor", "测试区域");
 	Floor->EntryNodeId = TEXT("Node.Entry");
 
 	FWacomMapNodeDefinition& EntryNode = Floor->Nodes.AddDefaulted_GetRef();
 	EntryNode.NodeId = Floor->EntryNodeId;
+	EntryNode.DisplayName = NSLOCTEXT("WacomTests", "LegacyFixtureEntry", "入口");
 	EntryNode.NodeType = EntryNodeType;
 	EntryNode.bAllowsCamp = true;
 
@@ -55,14 +57,23 @@ UWacomFloorMapDefinition* FWacomRunExplorationFixture::MakeLinearFloor(
 	UWacomFloorMapDefinition* Floor =
 		Hold(NewObject<UWacomFloorMapDefinition>(GetTransientPackage()));
 	Floor->FloorId = FloorId;
+	Floor->DisplayName = FText::Format(
+		NSLOCTEXT("WacomTests", "FixtureFloorFormat", "测试区域 {0}"),
+		FText::FromName(FloorId));
 
 	const int32 SafeNodeCount = FMath::Max(1, NodeCount);
 	for (int32 NodeIndex = 0; NodeIndex < SafeNodeCount; ++NodeIndex)
 	{
 		FWacomMapNodeDefinition& Node = Floor->Nodes.AddDefaulted_GetRef();
 		Node.NodeId = FName(*FString::Printf(TEXT("Node.%02d"), NodeIndex + 1));
+		Node.DisplayName = FText::Format(
+			NSLOCTEXT("WacomTests", "FixtureNodeFormat", "测试节点 {0}"),
+			FText::AsNumber(NodeIndex + 1));
 		Node.NodeType = EWacomMapNodeType::Navigation;
-		Node.MapPosition = FVector2D(0.0, -180.0 * NodeIndex);
+		const double NormalizedY = SafeNodeCount > 1
+			? static_cast<double>(NodeIndex) / static_cast<double>(SafeNodeCount - 1)
+			: 0.5;
+		Node.MapPosition = FVector2D(960.0, 80.0 + 920.0 * NormalizedY);
 		Node.bAllowsCamp = true;
 
 		if (NodeIndex > 0)
@@ -74,6 +85,25 @@ UWacomFloorMapDefinition* FWacomRunExplorationFixture::MakeLinearFloor(
 		}
 	}
 	Floor->EntryNodeId = Floor->Nodes[0].NodeId;
+	return Floor;
+}
+
+UWacomFloorMapDefinition* FWacomRunExplorationFixture::MakeFloor(
+	const FName FloorId,
+	const FText& DisplayName,
+	const TArray<FWacomMapNodeDefinition>& Nodes,
+	const TArray<FWacomMapEdgeDefinition>& Edges,
+	const FName EntryNodeId)
+{
+	UWacomFloorMapDefinition* Floor =
+		Hold(NewObject<UWacomFloorMapDefinition>(GetTransientPackage()));
+	Floor->FloorId = FloorId;
+	Floor->DisplayName = DisplayName;
+	Floor->Nodes = Nodes;
+	Floor->Edges = Edges;
+	Floor->EntryNodeId = !EntryNodeId.IsNone()
+		? EntryNodeId
+		: (Nodes.IsEmpty() ? NAME_None : Nodes[0].NodeId);
 	return Floor;
 }
 

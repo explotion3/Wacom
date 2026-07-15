@@ -282,3 +282,13 @@ Data contracts
 - 本任务列表不使用 `$speckit-implement` 一次性执行；主会话应逐阶段读取 live 文件、检查 dirty workspace、编译并验证。
 - 用户确认的 Withdraw 口径覆盖旧文档：0 Action Point、保留进度/经验/卡牌、仅沿用现有 Fatigue/Wound 规则。
 - 正式 Map/Camp UI、Camp 具体收益、正式 Floor 数量与地图 SaveGame 必须另开后续切片，不得在本轮临时补齐。
+
+## Refinement Tasks: route choice and Anchored look (2026-07-15)
+
+- [x] R001 在 App-private Coordinator 派生并发布 0/1/多合法出口路线状态。
+- [x] R002 在 PathTraversal 增加 Anchored W/A/D one-shot intent，并保持 Anchored cursor look Tick。
+- [x] R003 新增 App-private BranchSelectionController，统一鼠标、键盘和手柄选择语义。
+- [x] R004 修正初始 Anchored cursor look 的无点击坐标回退、RunPath 基础 Yaw 所有权和 NodeAnchor 到 PathSpline 的起步视角连续性，并增加稳定地图门控诊断。
+- [x] R004 将 BranchTarget 收敛为 Hidden/Available/Focused 表现 Actor，并增加可重建发光材质真源。
+- [x] R005 更新 Debug builder 与 scene validation，使单出口无 BranchTarget、多出口每 Edge 恰好一个。
+- [ ] R006 完成 focused automation、资产重建、Blueprint 编译与 PIE 验收。（自动化、资产重建与 Blueprint 编译已完成；等待人工 PIE 表现验收。）

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Exploration/RunExplorationResolution.h"
+#include "Map/WacomMapTypes.h"
 #include "UObject/StrongObjectPtr.h"
 
 class UCharacterDefinition;
@@ -36,6 +37,14 @@ public:
 	UWacomFloorMapDefinition* MakeLinearFloor(
 		FName FloorId = TEXT("Test.Floor.1"),
 		int32 NodeCount = 3);
+
+	/** 创建完全由测试提供节点/边/文案/坐标/landmark 的 transient Floor。 */
+	UWacomFloorMapDefinition* MakeFloor(
+		FName FloorId,
+		const FText& DisplayName,
+		const TArray<FWacomMapNodeDefinition>& Nodes,
+		const TArray<FWacomMapEdgeDefinition>& Edges,
+		FName EntryNodeId = NAME_None);
 
 	UWacomJourneyDefinition* MakeJourney(
 		const TArray<UWacomFloorMapDefinition*>& Floors,

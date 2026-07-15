@@ -11,6 +11,7 @@
 #include "Events/RunEventDefinition.h"
 #include "Exploration/RunCampModule.h"
 #include "Exploration/RunExplorationCommandResolver.h"
+#include "Exploration/RunFloorMapSnapshotBuilder.h"
 #include "Exploration/RunNodeActivityModule.h"
 #include "Exploration/RunMapModule.h"
 #include "Map/WacomFloorMapDefinition.h"
@@ -671,6 +672,11 @@ FRunInitializationResult URunSession::Initialize(const FRunInitializationParams&
 FRunExplorationSnapshot URunSession::BuildExplorationSnapshot() const
 {
 	return FRunMapModule::BuildSnapshot(RunState);
+}
+
+FRunFloorMapSnapshot URunSession::BuildCurrentFloorMapSnapshot() const
+{
+	return FRunFloorMapSnapshotBuilder::Build(RunState);
 }
 
 FRunExplorationResolution URunSession::BeginCurrentNodeActivity(
@@ -2164,16 +2170,37 @@ FRunTreasureSettlementResult URunSession::SubmitRunWorldCardInteraction(
 
 bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers)
 {
+	return BeginShopVisitWithResult(ShopId, Offers).bSucceeded;
+}
+
+FRunShopVisitResult URunSession::BeginShopVisitWithResult(
+	const FName ShopId,
+	const TArray<FRunShopOfferInput>& Offers)
+{
+	FRunShopVisitResult Result;
+	Result.ExplorationResolution.VersionBefore =
+		RunState.ExplorationState.ExplorationStateVersion;
+	Result.ExplorationResolution.VersionAfter =
+		Result.ExplorationResolution.VersionBefore;
+	Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
 	if (IsShopVisitActive())
 	{
-		return false;
+		Result.DisabledReason = TEXT("ShopVisitAlreadyActive");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		return Result;
 	}
 
 	const FGuid NewVisitToken = FGuid::NewGuid();
 	if (!NewVisitToken.IsValid())
 	{
 		UE_LOG(LogTemp, Error, TEXT("[RunSession] BeginShopVisit: 生成访问 token 失败"));
-		return false;
+		Result.DisabledReason = TEXT("ShopVisitTokenGenerationFailed");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		return Result;
 	}
 
 	FRunState WorkingState = RunState;
@@ -2184,30 +2211,47 @@ bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>&
 	if (bUsesFormalExploration)
 	{
 		FRunNodeActivityTicket ActivityTicket;
-		TArray<FRunExplorationEvent> Events;
-		const FWacomStatus BeginStatus = FRunNodeActivityModule::Begin(
+		Result.ExplorationResolution.Status = FRunNodeActivityModule::Begin(
 			WorkingState,
 			WorkingActivity,
 			ERunNodeActivityKind::Shop,
 			/*ReservedActionPoints=*/0,
 			ActivityTicket,
-			Events);
-		if (!BeginStatus.IsOk())
+			Result.ExplorationResolution.Events);
+		if (!Result.ExplorationResolution.IsOk())
 		{
-			return false;
+			Result.DisabledReason = Result.ExplorationResolution.Status.Detail;
+			Result.ExplorationResolution.Events.Reset();
+			return Result;
 		}
 	}
-
-	if (FRunShopTransaction::BeginVisit(WorkingState, ShopId, Offers))
+	else
 	{
-		RunState = MoveTemp(WorkingState);
-		ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
-		ActiveShopVisitToken = NewVisitToken;
-		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
-		NotifyRunStateChanged();
-		return true;
+		Result.ExplorationResolution.Status = FWacomStatus::Ok();
 	}
-	return false;
+
+	if (!FRunShopTransaction::BeginVisit(WorkingState, ShopId, Offers))
+	{
+		Result.DisabledReason = TEXT("ShopVisitBeginFailed");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidArgument,
+			Result.DisabledReason);
+		Result.ExplorationResolution.Events.Reset();
+		return Result;
+	}
+
+	Result.ExplorationResolution.VersionAfter =
+		WorkingState.ExplorationState.ExplorationStateVersion;
+	Result.ExplorationResolution.PostSnapshot =
+		FRunMapModule::BuildSnapshot(WorkingState);
+	RunState = MoveTemp(WorkingState);
+	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
+	ActiveShopVisitToken = NewVisitToken;
+	Result.bSucceeded = true;
+	Result.VisitToken = NewVisitToken;
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
+	NotifyRunStateChanged();
+	return Result;
 }
 
 FRunDeckBatchDeletePreview URunSession::ValidateDeleteCardsForGoldAtomic(
@@ -2292,48 +2336,90 @@ FRunDeckBatchOperationResult URunSession::MoveInstancesAtomic(
 
 bool URunSession::EndShopVisitIfOwned(FGuid VisitToken)
 {
+	return EndShopVisitIfOwnedWithResult(VisitToken).bSucceeded;
+}
+
+FRunShopVisitResult URunSession::EndShopVisitIfOwnedWithResult(
+	const FGuid VisitToken)
+{
 	if (!VisitToken.IsValid() || VisitToken != ActiveShopVisitToken)
 	{
-		return false;
+		FRunShopVisitResult Result;
+		Result.DisabledReason = TEXT("ShopVisitTokenMismatch");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		Result.ExplorationResolution.VersionBefore =
+			RunState.ExplorationState.ExplorationStateVersion;
+		Result.ExplorationResolution.VersionAfter =
+			Result.ExplorationResolution.VersionBefore;
+		Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
 	}
 
-	EndShopVisit();
-	return true;
+	return EndShopVisitWithResult();
 }
 
 void URunSession::EndShopVisit()
 {
+	EndShopVisitWithResult();
+}
+
+FRunShopVisitResult URunSession::EndShopVisitWithResult()
+{
+	FRunShopVisitResult Result;
+	Result.ExplorationResolution.VersionBefore =
+		RunState.ExplorationState.ExplorationStateVersion;
+	Result.ExplorationResolution.VersionAfter =
+		Result.ExplorationResolution.VersionBefore;
+	Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
 	if (!IsShopVisitActive())
 	{
 		ActiveShopVisitToken.Invalidate();
-		return;
+		Result.DisabledReason = TEXT("ShopVisitNotActive");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		return Result;
 	}
 
 	FRunState WorkingState = RunState;
 	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
 	if (!FRunShopTransaction::EndVisit(WorkingState))
 	{
-		return;
+		Result.DisabledReason = TEXT("ShopVisitEndFailed");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		return Result;
 	}
+	Result.ExplorationResolution.Status = FWacomStatus::Ok();
 	if (WorkingActivity.IsSet()
 		&& WorkingActivity->Kind == ERunNodeActivityKind::Shop)
 	{
-		TArray<FRunExplorationEvent> Events;
-		const FWacomStatus CancelStatus = FRunNodeActivityModule::Cancel(
+		Result.ExplorationResolution.Status = FRunNodeActivityModule::Cancel(
 			WorkingState,
 			WorkingActivity,
 			WorkingActivity.GetValue(),
-			Events);
-		if (!CancelStatus.IsOk())
+			Result.ExplorationResolution.Events);
+		if (!Result.ExplorationResolution.IsOk())
 		{
-			return;
+			Result.DisabledReason = Result.ExplorationResolution.Status.Detail;
+			Result.ExplorationResolution.Events.Reset();
+			return Result;
 		}
 	}
+	Result.ExplorationResolution.VersionAfter =
+		WorkingState.ExplorationState.ExplorationStateVersion;
+	Result.ExplorationResolution.PostSnapshot =
+		FRunMapModule::BuildSnapshot(WorkingState);
 	RunState = MoveTemp(WorkingState);
 	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
 	ActiveShopVisitToken.Invalidate();
+	Result.bSucceeded = true;
 	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Shop));
 	NotifyRunStateChanged();
+	return Result;
 }
 
 FRunShopSnapshot URunSession::BuildCurrentShopSnapshot() const

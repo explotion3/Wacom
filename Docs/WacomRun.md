@@ -94,6 +94,8 @@ Camp 不是地图节点，而是 Night 从当前或同 Floor 最近合法节点�
 
 Run Path、first-person hand、鼠标 hover / click、Run world card drop 和 Run menu zone drop 的输入 / target 路由见 [WacomApp.md](./WacomApp.md)、[WacomWorldInteraction.md](./WacomWorldInteraction.md) 和 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。早期轨道探索文档只保留为 historical background，不作为当前 Run 规则真相或实现规格。
 
+当前 Floor 地图使用独立 `FRunFloorMapSnapshot`，不扩大每条探索命令都携带的 `FRunExplorationSnapshot`。该查询只投影整层已知节点、边、显示文本、生命周期、传送事实和死胡同推荐目标；Screen 不读取 `FRunState`。传送提交仍只有 `ResolveExplorationCommand(MapTravel)` 一条规则入口，同层传送不消费 Action Point、不推进时段、不增加压力或 Floor Exposure。
+
 ## §4 压力系统
 
 压力是战外血量。八条压力各自为 0 到 100 的百分比，总和达到 100 时 Run 失败。
@@ -226,6 +228,8 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 商店运行态以场景入口的 `PersistentId` 为 key，而不是以 `UShopDefinition.ShopId` 为 key。
 
 `AWacomShopTriggerActor.PersistentId` 传给 `URunSession::BeginShopVisit(ShopId, Offers)`。第一次打开该 `ShopId` 时，用传入 Offers 建库存；再次打开同一 `ShopId` 时保留库存和已购买状态，忽略新 Offers。
+
+正式 C++ UI 路径使用 `BeginShopVisitWithResult()` / `EndShopVisitIfOwnedWithResult()`。二者返回 `FRunShopVisitResult`，同时携带 visit ownership token 和本次节点活动的 `FRunExplorationResolution`；购买继续由 `FRunShopPurchaseResult.ExplorationResolution` 携带同一规则结果。App 必须按 Begin、每次成功 Purchase、End / rollback 的实际提交顺序消费这些结果，不能只观察 `RunStateChanged` 后拉取最新 Snapshot 来推断版本。
 
 `UShopDefinition.ShopId` 是静态内容 ID。多个场景商店可以引用同一份 `UShopDefinition`，但只要 Actor `PersistentId` 不同，它们就是不同库存。
 

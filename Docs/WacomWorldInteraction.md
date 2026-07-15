@@ -51,6 +51,7 @@ Actor 和 Widget 可以提供 target handle、debug view、hover prompt 和 prev
 
 - 正式关卡推荐使用 Definition 驱动的入口：`ABattleTriggerActor.EncounterDefinition`、`AWacomShopTriggerActor.ShopDefinition`、`AWacomRunEventTriggerActor.EventDefinition`、`AWacomRunRewardPickupActor.PickupDefinition`、`AWacomRunKeyChestActor.CardInteractionDefinition`。
 - 当 Actor 绑定 Logical Map Node 时，上述 Definition 是复用现有 Trigger / Screen flow 的 façade mirror；`UWacomFloorMapDefinition` typed payload 是规则真相，Scene Validator 会阻止两者不一致。
+- 带 `UWacomRunMapNodeBindingComponent` 的世界交互 Actor 只有在绑定 `NodeId` 已成为 Run Snapshot 的当前节点，且节点类型与绑定类型一致时才参与 E 键、hover 和左键路由。未抵达或已经离开的节点 Actor 不显示可交互高亮、不消费点击，也不得启动 Shop / RunEvent 等镜头 staging。没有该绑定的独立原型 Actor 暂时保持原有直接交互语义。
 - `ABattleTriggerActor` 必须通过 `EncounterDefinition` 进入战斗，并用 `SceneEnemyHostSlots` 完成 Encounter enemy slot 到场景 Host 的映射。
 - `AWacomShopTriggerActor` 可选配置 `ShopEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到商店第一人称 View Pose，再打开 ShopScreen；关闭后先退 UI，再回当前 Run Path View。它不改变 `PersistentId`、`ShopDefinition`、`Offers`、库存持久化或购买规则。
 - `AWacomRunEventTriggerActor` 可选配置 `RunEventEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到事件第一人称 View Pose，再打开 RunEventScreen；关闭后先退 UI，再回当前 Run Path View。已完成事件仍只显示完成提示，不会触发 staging；该字段不改变 `PersistentId`、`EventDefinition`、完成状态或选项结算规则。
@@ -75,7 +76,7 @@ Run world click / hover 使用显式 opt-in：
 - Actor 必须同时实现 `IWacomWorldInteractable` 和 `UWacomRunWorldClickableInteractable`。
 - Actor 必须通过 `UWacomInteractionTargetComponent + UWacomRunWorldInteractionTargetBridgeComponent` 暴露 `Interaction.Target.Run.Object`。
 - `ClickBounds` 只阻挡 `Visibility` trace，不产生 overlap；`TriggerSphere` 仍只服务 E 键近距离候选注册。
-- `FWacomRunWorldInteractionRouter` 会校验 handle、source actor、clickable contract、world interactable contract 和 bridge，再把左键命中转回现有 `TryInteract()`。`AWacomPlayerController` 只保留输入 façade、timer、trace seam、E 键 candidate list 和 debug / WBP 入口。
+- `FWacomRunWorldInteractionRouter` 会校验 handle、source actor、当前 Map Node 资格、clickable contract、world interactable contract 和 bridge，再把左键命中转回现有 `TryInteract()`。节点资格拒绝发生在 Actor 交互入口和任何 viewpoint staging 之前；E 键候选和直接 `TryInteractWithActor()` 使用同一资格 helper。`AWacomPlayerController` 只保留输入 façade、timer、trace seam、E 键 candidate list 和 debug / WBP 入口。
 
 打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，Run world hover/click 不穿透场景。菜单 first-person card drag/drop 正在处理时，也会清理普通 Run world hover prompt 和 probe preview。
 

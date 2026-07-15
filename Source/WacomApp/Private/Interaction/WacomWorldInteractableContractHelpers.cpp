@@ -2,9 +2,12 @@
 
 #include "Interaction/WacomWorldInteractableContractHelpers.h"
 
+#include "Components/WacomRunMapNodeBindingComponent.h"
+#include "Exploration/RunExplorationTypes.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Interaction/WacomWorldInteractable.h"
+#include "RunSession.h"
 
 namespace WacomWorldInteractableContractHelpers
 {
@@ -18,6 +21,70 @@ namespace WacomWorldInteractableContractHelpers
 		return Actor
 			&& Actor->GetClass()->ImplementsInterface(
 				UWacomRunWorldClickableInteractable::StaticClass());
+	}
+
+	bool IsAvailableAtBoundRunMapNode(
+		const AActor* Actor,
+		AWacomPlayerController* PC,
+		FName* OutRejectReason)
+	{
+		auto Reject = [OutRejectReason](const FName Reason)
+		{
+			if (OutRejectReason)
+			{
+				*OutRejectReason = Reason;
+			}
+			return false;
+		};
+
+		if (OutRejectReason)
+		{
+			*OutRejectReason = NAME_None;
+		}
+		if (!Actor)
+		{
+			return Reject(TEXT("MissingActor"));
+		}
+
+		const UWacomRunMapNodeBindingComponent* Binding =
+			Actor->FindComponentByClass<UWacomRunMapNodeBindingComponent>();
+		if (!Binding)
+		{
+			// Standalone prototypes remain usable until they opt into the authoritative map binding.
+			return true;
+		}
+		if (Binding->NodeId.IsNone() || Binding->NodeType == EWacomMapNodeType::Navigation)
+		{
+			return Reject(TEXT("InvalidRunMapNodeBinding"));
+		}
+		if (!PC)
+		{
+			return Reject(TEXT("MissingPlayerController"));
+		}
+
+		URunSession* Run = PC->GetRunSession();
+		if (!Run)
+		{
+			return Reject(TEXT("MissingRunSession"));
+		}
+
+		const FRunExplorationSnapshot Snapshot = Run->BuildExplorationSnapshot();
+		if (!Snapshot.CurrentNode.IsValid() || Snapshot.CurrentNode.NodeId != Binding->NodeId)
+		{
+			return Reject(TEXT("BoundNodeNotCurrent"));
+		}
+
+		const FRunMapNodeSnapshot* CurrentNode = Snapshot.Nodes.FindByPredicate(
+			[&Snapshot](const FRunMapNodeSnapshot& Node)
+			{
+				return Node.Handle == Snapshot.CurrentNode;
+			});
+		if (!CurrentNode || CurrentNode->NodeType != Binding->NodeType)
+		{
+			return Reject(TEXT("BoundNodeTypeMismatch"));
+		}
+
+		return true;
 	}
 
 	FText GetInteractPromptTextFromActor(AActor* Actor, AWacomPlayerController* PC)
@@ -50,6 +117,10 @@ namespace WacomWorldInteractableContractHelpers
 
 	bool CanInteractWithActor(AActor* Actor, AWacomPlayerController* PC)
 	{
+		if (!IsAvailableAtBoundRunMapNode(Actor, PC))
+		{
+			return false;
+		}
 		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
 		{
 			if (Actor->GetClass()->IsNative())
@@ -63,6 +134,10 @@ namespace WacomWorldInteractableContractHelpers
 
 	bool TryInteractWithActor(AActor* Actor, AWacomPlayerController* PC)
 	{
+		if (!IsAvailableAtBoundRunMapNode(Actor, PC))
+		{
+			return false;
+		}
 		if (IWacomWorldInteractable* Native = Cast<IWacomWorldInteractable>(Actor))
 		{
 			if (Actor->GetClass()->IsNative())

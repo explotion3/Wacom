@@ -10,6 +10,7 @@
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
+#include "Tags/WacomGameplayTags.h"
 #include "UI/WacomUITestAccess.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "UI/WacomUISettingsTestProbes.h"
@@ -1139,6 +1140,9 @@ bool FWacomUISettingsValidationValidDefaultsSpec::RunTest(const FString& /*Param
 	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
 		WacomUITags::UI_Widget_PauseMenuScreen.GetTag(),
 		UWacomUISettingsPauseMenuScreenProbe::StaticClass()));
+	SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+		WacomTags::UI_Widget_RunMapScreen.GetTag(),
+		UWacomUISettingsRunMapScreenProbe::StaticClass()));
 
 	return TestSettingsValid(
 		*this,
@@ -1347,6 +1351,36 @@ bool FWacomUISettingsValidationWidgetEntryWrongScreenParentFallbackSpec::RunTest
 		ResolvedClass.Get(),
 		UWacomShopScreen::StaticClass());
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUISettingsValidationRunMapParentSpec,
+	"Wacom.UI.Settings.Validation.RunMapScreenParent",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUISettingsValidationRunMapParentSpec::RunTest(const FString& Parameters)
+{
+	{
+		FWacomScopedUISettingsOverride SettingsOverride;
+		SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+			WacomTags::UI_Widget_RunMapScreen.GetTag(),
+			UWacomUISettingsRunMapScreenProbe::StaticClass()));
+		TestSettingsValid(
+			*this,
+			SettingsOverride.Get(),
+			TEXT("RunMap tag accepts UWacomRunMapScreen subclasses"));
+	}
+	{
+		FWacomScopedUISettingsOverride SettingsOverride;
+		SettingsOverride.Get().WidgetClasses.Add(MakeWidgetEntry(
+			WacomTags::UI_Widget_RunMapScreen.GetTag(),
+			UWacomUISettingsConfiguredWidgetProbe::StaticClass()));
+		TestSettingsInvalid(
+			*this,
+			SettingsOverride.Get(),
+			TEXT("RunMap tag rejects a generic activatable widget"));
+	}
 	return true;
 }
 

@@ -15,6 +15,7 @@ class AWacomPlayerControllerProbe;
 class UPrimitiveComponent;
 class URunSession;
 class UWacomAppToastSubsystem;
+class UWacomMenuWidgetBase;
 class UWacomRunMenuDropTargetWidget;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunWorldCardDropReceiverComponent;
@@ -33,6 +34,13 @@ struct FWacomPlayerControllerRunInteractionTestAccess
 	static void SetRunProbeExplorationFlow(AWacomPlayerControllerProbe* PC, bool bInExploration);
 	static bool RouteRunWorldInteractableClick(AWacomPlayerControllerProbe* PC);
 	static bool InputLeftMouseReleased(AWacomPlayerControllerProbe* PC);
+	static bool CanRouteRunScenePointerInput(const AWacomPlayerControllerProbe* PC);
+	static void RegisterActiveGameMenu(
+		AWacomPlayerControllerProbe* PC,
+		UWacomMenuWidgetBase* Menu);
+	static void UnregisterActiveGameMenu(
+		AWacomPlayerControllerProbe* PC,
+		UWacomMenuWidgetBase* Menu);
 	static bool ProbeRunSceneTarget(
 		const AWacomPlayerControllerProbe* PC,
 		FWacomInteractionTargetHandle& OutHandle);
@@ -122,6 +130,7 @@ struct FWacomPlayerControllerRunInteractionTestAccess
 	static FString RunWorldCardDropDebugSummary(const AWacomPlayerControllerProbe* PC);
 
 	static void SetRunSession(AWacomPlayerControllerProbe* PC, URunSession* RunSession);
+	static bool RefreshRunExplorationPresentationBinding(AWacomPlayerControllerProbe* PC);
 	static void PrepareExplorationRunFirstPersonCardLayer(AWacomPlayerControllerProbe* PC);
 	static void SetRunFirstPersonMenuLease(
 		AWacomPlayerControllerProbe* PC,

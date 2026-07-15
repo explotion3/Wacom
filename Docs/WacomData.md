@@ -416,7 +416,7 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 
 ## §10 Logical Map Graph
 
-Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorMapDefinition` 保存。`MapPosition` 只服务地图 UI 排版；世界坐标、Spline、Actor 和 Widget 不进入数据合同。
+Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorMapDefinition` 保存。Floor `DisplayName` 与 Node `DisplayName / ShortDescription` 是玩家可读地图文案；`ShortDescription` 可空。`MapPosition` 是 1920×1080 设计画布坐标，只服务地图 UI 排版；世界坐标、Spline、Actor 和 Widget 不进入数据合同。
 
 - `FWacomMapNodeHandle = FloorId + NodeId`，跨 Floor 唯一。
 - `FWacomMapEdgeHandle = FloorId + EdgeId`；单独 `EdgeId` 只在所属 Floor 内唯一。

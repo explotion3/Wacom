@@ -217,3 +217,12 @@
 - 地图传送目标在提交规则请求前由 App 验证存在场景 Anchor。
 - 调试 Journey 不参与正式内容平衡，也不决定未来多角色旅程可用性。
 - 当前 SaveGame 保持关闭；新地图状态不写盘，旧存档兼容不约束本轮规则结构。
+
+## Refinement: Run Path route choice and Anchored look (2026-07-15)
+
+- 单一合法出口不再依赖 BranchTarget；玩家首次按 W 时 App 自动选择唯一 Edge，并通过原有 traversal ticket 开始移动。
+- 多个合法出口才进入显式选择状态。A/D 或左摇杆按道路世界方向切换，E / 手柄 A 或鼠标点击确认，确认后立即开始移动。
+- 结构死胡同与暂时锁定出口必须区分提示；本 refinement 不实现 Map Screen，但保留免费返回已完成节点的既定扩展入口。
+- Anchored 持续更新 cursor look / view transform，且只消费一次性导航意图；只有 Traversing 修改 Spline distance、Walk CameraShake 或移动反馈。
+- 首次进入 Anchored 不依赖 viewport 点击；RunPath 独占基础 Yaw，cursor look 只叠加到 ControlRotation。开始 Traversal 时从 NodeAnchor View 平滑对齐 PathSpline，不允许入口朝向差异造成首帧瞬跳或逐帧朝向争夺。
+- BranchTarget 是静态多出口 Decision Gate 的 App 表现绑定，只保存 EdgeId，并以 Hidden / Available / Focused 只读状态驱动可重建发光入口。

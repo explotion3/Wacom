@@ -66,6 +66,32 @@ bool FWacomPlayerControllerRunInteractionTestAccess::InputLeftMouseReleased(
 	return PC ? PC->InputLeftMouseReleasedForTest() : false;
 }
 
+bool FWacomPlayerControllerRunInteractionTestAccess::CanRouteRunScenePointerInput(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC ? PC->CanRouteRunScenePointerInput() : false;
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::RegisterActiveGameMenu(
+	AWacomPlayerControllerProbe* PC,
+	UWacomMenuWidgetBase* Menu)
+{
+	if (PC)
+	{
+		PC->RegisterActiveGameMenuWidget(Menu);
+	}
+}
+
+void FWacomPlayerControllerRunInteractionTestAccess::UnregisterActiveGameMenu(
+	AWacomPlayerControllerProbe* PC,
+	UWacomMenuWidgetBase* Menu)
+{
+	if (PC)
+	{
+		PC->UnregisterActiveGameMenuWidget(Menu);
+	}
+}
+
 bool FWacomPlayerControllerRunInteractionTestAccess::ProbeRunSceneTarget(
 	const AWacomPlayerControllerProbe* PC,
 	FWacomInteractionTargetHandle& OutHandle)
@@ -360,8 +386,15 @@ void FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(
 {
 	if (PC)
 	{
+		PC->RunSession = RunSession;
 		PC->SetRunSessionForTest(RunSession);
 	}
+}
+
+bool FWacomPlayerControllerRunInteractionTestAccess::RefreshRunExplorationPresentationBinding(
+	AWacomPlayerControllerProbe* PC)
+{
+	return PC && PC->RefreshRunExplorationPresentationBindingForTest();
 }
 
 void FWacomPlayerControllerRunInteractionTestAccess::PrepareExplorationRunFirstPersonCardLayer(

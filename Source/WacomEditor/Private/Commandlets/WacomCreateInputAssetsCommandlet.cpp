@@ -178,6 +178,10 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 		FEnhancedActionKeyMapping& S_Map = IMC_Exploration->MapKey(IA_Move, EKeys::S);
 		S_Map.Modifiers.Add(MakeNegate(IMC_Exploration, /*X*/true, false, false));
 		S_Map.Modifiers.Add(MakeSwizzleYXZ(IMC_Exploration));
+
+		// 左摇杆与 WASD 共用 Axis2D；Anchored 时 X 只作为一次性选路意图，
+		// Traversing 时仍只消费 Y 作为 Spline 前后移动。
+		IMC_Exploration->MapKey(IA_Move, EKeys::Gamepad_Left2D);
 	}
 
 	// ---- IA_Look: Mouse XY -> Axis2D ----
@@ -212,9 +216,20 @@ int32 UWacomCreateInputAssetsCommandlet::Main(const FString& /*Params*/)
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IA_OpenBackpack"));
 
+	UInputAction* IA_OpenMap = CreateBoolIA(BasePath, TEXT("IA_OpenMap"));
+	if (!IA_OpenMap)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[WacomCreateInputAssets] Failed to create IA_OpenMap"));
+		return 10;
+	}
+	UE_LOG(LogTemp, Display, TEXT("[WacomCreateInputAssets] Created IA_OpenMap"));
+
 	IMC_Exploration->MapKey(IA_OpenMenu, EKeys::Escape);
 	IMC_Exploration->MapKey(IA_Interact, EKeys::E);
+	IMC_Exploration->MapKey(IA_Interact, EKeys::Gamepad_FaceButton_Bottom);
 	IMC_Exploration->MapKey(IA_OpenBackpack, EKeys::B);
+	IMC_Exploration->MapKey(IA_OpenMap, EKeys::M);
+	IMC_Exploration->MapKey(IA_OpenMap, EKeys::Gamepad_Special_Left);
 
 	// 也加到 IMC_Battle（战斗中也能 ESC 暂停）
 	IMC_Battle->MapKey(IA_OpenMenu, EKeys::Escape);

@@ -316,6 +316,11 @@ private:
 		RunSessionForTest = InRunSession;
 	}
 
+	bool RefreshRunExplorationPresentationBindingForTest()
+	{
+		return RefreshRunExplorationPresentationBinding();
+	}
+
 	void SetRunFirstPersonMenuLeaseForTest(FName LeaseId = TEXT("Test.MenuLease"))
 	{
 		FWacomRunMenuCardLeaseRequest Request;

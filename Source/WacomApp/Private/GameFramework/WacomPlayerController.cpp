@@ -24,6 +24,7 @@
 #include "GameFramework/WacomBattleSceneInteractionRouter.h"
 #include "GameFramework/WacomRunWorldInteractionRouter.h"
 #include "GameFramework/WacomRunExplorationPresentationCoordinator.h"
+#include "GameFramework/WacomRunPathBranchSelectionController.h"
 #include "GameFramework/WacomRunSceneBindingRegistry.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
@@ -53,6 +54,9 @@
 #include "UI/Run/WacomRunFirstPersonCardDragController.h"
 #include "UI/Run/WacomRunMenuDropTargetWidget.h"
 #include "UI/Run/WacomRunMenuWidgetBase.h"
+#include "UI/Map/WacomRunMapScreen.h"
+#include "UI/Map/WacomRunMapScreenFlow.h"
+#include "UI/Map/WacomRunMapOpenGuard.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Framework/Application/SlateApplication.h"
@@ -280,6 +284,20 @@ void AWacomPlayerController::SetPawn(APawn* InPawn)
 void AWacomPlayerController::PlayerTick(float DeltaTime)
 {
 	Super::PlayerTick(DeltaTime);
+	if (RunPathBranchSelectionController)
+	{
+		const AWacomPlayerCharacter* WacomCharacter =
+			Cast<AWacomPlayerCharacter>(GetPawn());
+		const UWacomRunPathTraversalComponent* Traversal = WacomCharacter
+			? WacomCharacter->GetRunPathTraversalComponent()
+			: nullptr;
+		RunPathBranchSelectionController->SetPresentationEnabled(
+			CanRouteRunScenePointerInput()
+			&& Traversal
+			&& Traversal->GetTraversalState()
+				== EWacomRunPathTraversalState::Anchored);
+		RunPathBranchSelectionController->TickPointerHover();
+	}
 	if (RunFirstPersonCardDetailController)
 	{
 		RunFirstPersonCardDetailController->TickMotion(DeltaTime);
@@ -311,6 +329,7 @@ void AWacomPlayerController::SetupInputComponent()
 	LazyLoadIA(IA_EndTurn,    TEXT("/Game/Wacom/Input/IA_EndTurn.IA_EndTurn"));
 	LazyLoadIA(IA_OpenMenu,   TEXT("/Game/Wacom/Input/IA_OpenMenu.IA_OpenMenu"));
 	LazyLoadIA(IA_OpenBackpack, TEXT("/Game/Wacom/Input/IA_OpenBackpack.IA_OpenBackpack"));
+	LazyLoadIA(IA_OpenMap,      TEXT("/Game/Wacom/Input/IA_OpenMap.IA_OpenMap"));
 	LazyLoadIA(IA_Interact,     TEXT("/Game/Wacom/Input/IA_Interact.IA_Interact"));
 
 	if (IA_PlayCard1) { EIC->BindAction(IA_PlayCard1, ETriggerEvent::Started, this, &AWacomPlayerController::OnPlayCard1); }
@@ -325,6 +344,7 @@ void AWacomPlayerController::SetupInputComponent()
 	if (IA_EndTurn)    { EIC->BindAction(IA_EndTurn,    ETriggerEvent::Started, this, &AWacomPlayerController::OnEndTurnPressed); }
 	if (IA_OpenMenu)   { EIC->BindAction(IA_OpenMenu,   ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenMenuPressed); }
 	if (IA_OpenBackpack) { EIC->BindAction(IA_OpenBackpack, ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenBackpackPressed); }
+	if (IA_OpenMap)      { EIC->BindAction(IA_OpenMap,      ETriggerEvent::Started, this, &AWacomPlayerController::OnOpenMapPressed); }
 	if (IA_Interact)     { EIC->BindAction(IA_Interact,     ETriggerEvent::Started, this, &AWacomPlayerController::OnInteractPressed); }
 }
 
@@ -356,7 +376,6 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 	}
 	if (Params.Key == EKeys::LeftMouseButton
 		&& Params.Event == IE_Released
-		&& !bGameMenuViewpointStageTransitionActive
 		&& TryRouteRunWorldInteractableClick())
 	{
 		return true;
@@ -1090,7 +1109,8 @@ bool AWacomPlayerController::TryProbeRunSceneInteractionTargetAtWidgetPosition(
 
 bool AWacomPlayerController::TryRouteRunWorldInteractableClick()
 {
-	return GetRunWorldInteractionRouter().TryRouteInteractableClick();
+	return CanRouteRunScenePointerInput()
+		&& GetRunWorldInteractionRouter().TryRouteInteractableClick();
 }
 
 FString AWacomPlayerController::GetRunWorldInteractableHoverDebugSummary() const
@@ -1164,37 +1184,52 @@ bool AWacomPlayerController::BuildRunSceneInteractionTargetHitResultAtWidgetPosi
 
 bool AWacomPlayerController::TryRouteRunPathBranchClick()
 {
-	FHitResult HitResult;
-	if (!BuildRunPathBranchClickHitResult(HitResult))
+	if (!CanRouteRunScenePointerInput()
+		|| !RunPathBranchSelectionController
+		|| !RunPathBranchSelectionController->IsChoiceRequired())
 	{
 		return false;
 	}
 
-	AWacomRunPathBranchTargetActor* PathBranchTarget =
-		Cast<AWacomRunPathBranchTargetActor>(HitResult.GetActor());
-	if (!PathBranchTarget && HitResult.GetComponent())
+	FHitResult HitResult;
+	if (!BuildRunPathBranchClickHitResult(HitResult))
 	{
-		PathBranchTarget = Cast<AWacomRunPathBranchTargetActor>(HitResult.GetComponent()->GetOwner());
-	}
-	if (PathBranchTarget)
-	{
-		const AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
-		const UWacomRunPathTraversalComponent* PathTraversal = WacomCharacter
-			? WacomCharacter->GetRunPathTraversalComponent()
-			: nullptr;
-		const bool bIsBoundTarget = BoundRunPathBranchTargets.ContainsByPredicate(
-			[PathBranchTarget](const TWeakObjectPtr<AWacomRunPathBranchTargetActor>& Candidate)
-			{
-				return Candidate.Get() == PathBranchTarget;
-			});
-		return IsInExplorationFlow()
-			&& PathTraversal
-			&& PathTraversal->GetTraversalState() == EWacomRunPathTraversalState::Anchored
-			&& RunExplorationPresentationCoordinator.IsValid()
-			&& bIsBoundTarget
-			&& PathBranchTarget->RequestBranch();
+		RunPathBranchSelectionController->PulseAvailable();
+		return true;
 	}
 
+	AActor* HitActor = HitResult.GetActor();
+	if (!Cast<AWacomRunPathBranchTargetActor>(HitActor)
+		&& HitResult.GetComponent())
+	{
+		HitActor = HitResult.GetComponent()->GetOwner();
+	}
+	RunPathBranchSelectionController->TrySelectHitActor(HitActor);
+	// ChoiceRequired 下场景点击始终由道路选择消费，避免穿透到节点内容 Actor。
+	return true;
+}
+
+bool AWacomPlayerController::ApplyRunNodeActivityResolutionForPresentation(
+	const FRunExplorationResolution& Resolution)
+{
+	if (RunExplorationPresentationCoordinator
+		&& RunExplorationPresentationCoordinator->ApplyNodeActivityResolution(Resolution))
+	{
+		return true;
+	}
+
+	const FName FailureDetail = RunExplorationPresentationCoordinator
+		? RunExplorationPresentationCoordinator->GetLastErrorDetail()
+		: FName(TEXT("RunExplorationPresentationCoordinatorMissing"));
+	UE_LOG(LogTemp, Error,
+		TEXT("[WacomPlayerController] Run 节点活动结果表现应用失败，重建当前 Session 绑定。Detail=%s Before=%d After=%d"),
+		*FailureDetail.ToString(),
+		Resolution.VersionBefore,
+		Resolution.VersionAfter);
+
+	const bool bRecovered = RefreshRunExplorationPresentationBinding();
+	UE_CLOG(!bRecovered, LogTemp, Error,
+		TEXT("[WacomPlayerController] Run 探索表现绑定恢复失败"));
 	return false;
 }
 
@@ -1275,11 +1310,49 @@ bool AWacomPlayerController::RefreshRunExplorationPresentationBinding()
 			&AWacomPlayerController::HandleRunPathBranchRequested);
 		BoundRunPathBranchTargets.Add(*It);
 	}
+	BoundRunPathTraversal = Traversal;
+	Traversal->OnAnchoredForwardIntentNative().AddUObject(
+		this,
+		&AWacomPlayerController::HandleRunPathAnchoredForwardIntent);
+	Traversal->OnAnchoredHorizontalIntentNative().AddUObject(
+		this,
+		&AWacomPlayerController::HandleRunPathAnchoredHorizontalIntent);
+	RunExplorationPresentationCoordinator->OnRouteChoiceStateChangedNative().AddUObject(
+		this,
+		&AWacomPlayerController::HandleRunRouteChoiceStateChanged);
+
+	RunPathBranchSelectionController =
+		MakeShared<FWacomRunPathBranchSelectionController>();
+	RunPathBranchSelectionController->Initialize(*this, BoundRunPathBranchTargets);
+	RunPathBranchSelectionController->ApplyRouteChoiceState(
+		RunExplorationPresentationCoordinator->GetRouteChoiceState());
+	RunPathBranchSelectionController->SetPresentationEnabled(
+		CanRouteRunScenePointerInput());
+	RunMapScreenFlow = MakeShared<FWacomRunMapScreenFlow>();
+	RunMapScreenFlow->Initialize(*this, *RunExplorationPresentationCoordinator);
+	RefreshInteractToast();
 	return true;
 }
 
 void AWacomPlayerController::TeardownRunExplorationPresentationBinding()
 {
+	if (RunMapScreenFlow)
+	{
+		RunMapScreenFlow->Shutdown();
+		RunMapScreenFlow.Reset();
+	}
+	if (RunPathBranchSelectionController)
+	{
+		RunPathBranchSelectionController->Shutdown();
+		RunPathBranchSelectionController.Reset();
+	}
+	UWacomRunPathTraversalComponent* const BoundTraversal =
+		BoundRunPathTraversal.Get();
+	if (BoundTraversal)
+	{
+		BoundTraversal->OnAnchoredForwardIntentNative().RemoveAll(this);
+		BoundTraversal->OnAnchoredHorizontalIntentNative().RemoveAll(this);
+	}
 	for (const TWeakObjectPtr<AWacomRunPathBranchTargetActor>& Target : BoundRunPathBranchTargets)
 	{
 		if (AWacomRunPathBranchTargetActor* StrongTarget = Target.Get())
@@ -1290,17 +1363,103 @@ void AWacomPlayerController::TeardownRunExplorationPresentationBinding()
 	BoundRunPathBranchTargets.Reset();
 	if (RunExplorationPresentationCoordinator)
 	{
+		RunExplorationPresentationCoordinator->OnRouteChoiceStateChangedNative().RemoveAll(this);
 		RunExplorationPresentationCoordinator->Shutdown();
 		RunExplorationPresentationCoordinator.Reset();
 	}
-	RunExplorationSceneBindingRegistry.Reset();
-	if (AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn()))
+	if (BoundTraversal)
 	{
-		if (UWacomRunPathTraversalComponent* Traversal =
-			WacomCharacter->GetRunPathTraversalComponent())
-		{
-			Traversal->DeactivateTraversal();
-		}
+		BoundTraversal->DeactivateTraversal();
+	}
+	BoundRunPathTraversal.Reset();
+	RunExplorationSceneBindingRegistry.Reset();
+}
+
+bool AWacomPlayerController::CanPresentRunMapScreen(
+	bool& bOutPreferRecommendedTarget,
+	FName* OutRejectDetail) const
+{
+	const UWacomRunPathTraversalComponent* Traversal = BoundRunPathTraversal.Get();
+	const FRunFloorMapSnapshot Snapshot = RunSession
+		? RunSession->BuildCurrentFloorMapSnapshot()
+		: FRunFloorMapSnapshot();
+
+	FWacomRunMapOpenGuardFacts Facts;
+	Facts.bExplorationFlow = IsInExplorationFlow();
+	Facts.bHasSession = RunSession != nullptr;
+	Facts.bHasCoordinator = RunExplorationPresentationCoordinator.IsValid();
+	Facts.bHasFlow = RunMapScreenFlow.IsValid();
+	Facts.bHasTraversal = Traversal != nullptr;
+	Facts.bTraversalAnchored = Traversal
+		&& Traversal->GetTraversalState() == EWacomRunPathTraversalState::Anchored;
+	Facts.bCoordinatorTraversalActive = RunExplorationPresentationCoordinator
+		&& RunExplorationPresentationCoordinator->HasActiveTraversal();
+	Facts.bSnapshotValid = Snapshot.IsValid();
+	Facts.bActiveActivity =
+		Snapshot.ActiveActivityKind != ERunExplorationActivityKind::None;
+	Facts.bVersionsMatch = RunExplorationPresentationCoordinator
+		&& Snapshot.StateVersion
+			== RunExplorationPresentationCoordinator->GetLastAppliedVersion();
+	Facts.bDeadEnd = RunExplorationPresentationCoordinator
+		&& RunExplorationPresentationCoordinator->GetRouteChoiceState().Mode
+			== EWacomRunRouteChoiceMode::DeadEnd;
+
+	const FWacomRunMapOpenGuardDecision Decision =
+		FWacomRunMapOpenGuard::Evaluate(Facts);
+	bOutPreferRecommendedTarget = Decision.bPreferRecommendedTarget;
+	if (OutRejectDetail)
+	{
+		*OutRejectDetail = Decision.RejectDetail;
+	}
+	return Decision.bCanOpen;
+}
+
+int32 AWacomPlayerController::BeginRunMapScreenOpenRequest()
+{
+	bool bPreferRecommended = false;
+	if (!CanPresentRunMapScreen(bPreferRecommended)
+		|| RunMapScreenFlow->IsActive()
+		|| RunMapScreenFlow->IsOpening())
+	{
+		return 0;
+	}
+	return RunMapScreenFlow->BeginOpenRequest();
+}
+
+bool AWacomPlayerController::IsRunMapScreenOpenRequestCurrent(
+	const int32 RequestGeneration) const
+{
+	bool bPreferRecommended = false;
+	return RunMapScreenFlow
+		&& RunMapScreenFlow->IsOpenRequestCurrent(RequestGeneration)
+		&& CanPresentRunMapScreen(bPreferRecommended);
+}
+
+bool AWacomPlayerController::AttachRunMapScreen(
+	UWacomRunMapScreen& Screen,
+	const int32 RequestGeneration)
+{
+	bool bPreferRecommended = false;
+	if (!RunMapScreenFlow
+		|| !RunSession
+		|| !RunMapScreenFlow->IsOpenRequestCurrent(RequestGeneration)
+		|| !CanPresentRunMapScreen(bPreferRecommended))
+	{
+		return false;
+	}
+	return RunMapScreenFlow->AttachScreen(
+		*RunSession,
+		Screen,
+		bPreferRecommended,
+		RequestGeneration);
+}
+
+void AWacomPlayerController::CancelRunMapScreenOpenRequest(
+	const int32 RequestGeneration)
+{
+	if (RunMapScreenFlow)
+	{
+		RunMapScreenFlow->CancelOpenRequest(RequestGeneration);
 	}
 }
 
@@ -1318,6 +1477,65 @@ void AWacomPlayerController::HandleRunPathBranchRequested(const FName EdgeId)
 	}
 }
 
+void AWacomPlayerController::HandleRunPathAnchoredForwardIntent()
+{
+	if (!RunExplorationPresentationCoordinator || !CanRouteRunScenePointerInput())
+	{
+		return;
+	}
+
+	switch (RunExplorationPresentationCoordinator->HandleForwardIntent())
+	{
+	case EWacomRunForwardIntentResult::Started:
+		break;
+	case EWacomRunForwardIntentResult::ChoiceRequired:
+		if (RunPathBranchSelectionController)
+		{
+			RunPathBranchSelectionController->PulseAvailable();
+		}
+		break;
+	case EWacomRunForwardIntentResult::DeadEnd:
+		if (UWacomAppToastSubsystem* Toast = ResolveAppToastSubsystem())
+		{
+			Toast->ShowWarning(
+				LOCTEXT("RunPathDeadEnd", "此路不通，按 M / 手柄 View 打开地图"));
+		}
+		break;
+	case EWacomRunForwardIntentResult::Unavailable:
+		if (UWacomAppToastSubsystem* Toast = ResolveAppToastSubsystem())
+		{
+			Toast->ShowWarning(
+				LOCTEXT("RunPathUnavailable", "当前道路尚不可通行"));
+		}
+		break;
+	case EWacomRunForwardIntentResult::Rejected:
+	default:
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerController] Run Path 前进意图被拒绝：%s"),
+			*RunExplorationPresentationCoordinator->GetLastErrorDetail().ToString());
+		break;
+	}
+}
+
+void AWacomPlayerController::HandleRunPathAnchoredHorizontalIntent(
+	const int32 Direction)
+{
+	if (RunPathBranchSelectionController && CanRouteRunScenePointerInput())
+	{
+		RunPathBranchSelectionController->ShiftFocus(Direction);
+	}
+}
+
+void AWacomPlayerController::HandleRunRouteChoiceStateChanged(
+	const FWacomRunRouteChoiceState& State)
+{
+	if (RunPathBranchSelectionController)
+	{
+		RunPathBranchSelectionController->ApplyRouteChoiceState(State);
+	}
+	RefreshInteractToast();
+}
+
 bool AWacomPlayerController::BuildRunPathBranchClickHitResult(FHitResult& OutHitResult) const
 {
 	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
@@ -1329,6 +1547,12 @@ bool AWacomPlayerController::IsInExplorationFlow() const
 	return GM
 		&& GM->GetGameFlowState() == EGameFlowState::Exploration
 		&& !bGameMenuViewpointStageTransitionActive;
+}
+
+bool AWacomPlayerController::CanRouteRunScenePointerInput() const
+{
+	return IsInExplorationFlow()
+		&& !HasActiveRunGameMenuOrTransitionSuppression();
 }
 
 void AWacomPlayerController::StartRunWorldTargetProbePreviewLoop()
@@ -1724,6 +1948,11 @@ void AWacomPlayerController::OnOpenBackpackPressed()
 	TryOpenBackpackFromConsole();
 }
 
+void AWacomPlayerController::OnOpenMapPressed()
+{
+	TryToggleRunMapFromConsole();
+}
+
 // ================ 候选世界交互对象（use-key 模型）================
 
 void AWacomPlayerController::RegisterCandidateInteractable(AActor* InteractableActor)
@@ -1801,6 +2030,16 @@ AActor* AWacomPlayerController::PickClosestInteractable() const
 
 FText AWacomPlayerController::BuildCurrentInteractPrompt() const
 {
+	if (RunPathBranchSelectionController)
+	{
+		const FText RouteChoicePrompt =
+			RunPathBranchSelectionController->BuildInteractionPrompt();
+		if (!RouteChoicePrompt.IsEmpty())
+		{
+			return RouteChoicePrompt;
+		}
+	}
+
 	const FText HoverPrompt = RunWorldInteractionRouter
 		? RunWorldInteractionRouter->GetHoverPrompt()
 		: FText::GetEmpty();
@@ -1852,8 +2091,14 @@ void AWacomPlayerController::OnInteractPressed()
 
 void AWacomPlayerController::TryInteractFromConsole()
 {
-	if (!IsInExplorationFlow())
+	if (!CanRouteRunScenePointerInput())
 	{
+		return;
+	}
+	if (RunPathBranchSelectionController
+		&& RunPathBranchSelectionController->IsChoiceRequired())
+	{
+		RunPathBranchSelectionController->ConfirmFocused();
 		return;
 	}
 
@@ -1958,6 +2203,11 @@ void AWacomPlayerController::TryOpenBackpackFromConsole()
 	FWacomExplorationScreenRouter::OpenBackpack(*this);
 }
 
+void AWacomPlayerController::TryToggleRunMapFromConsole()
+{
+	FWacomExplorationScreenRouter::ToggleMap(*this);
+}
+
 // ---- Console Commands（调试入口）----
 
 static FAutoConsoleCommandWithWorld GWacomOpenBackpackCmd(
@@ -1987,6 +2237,21 @@ static FAutoConsoleCommandWithWorld GWacomCloseBackpackCmd(
 		else
 		{
 			UE_LOG(LogTemp, Warning, TEXT("[Wacom.CloseBackpack] 找不到 AWacomPlayerController"));
+		}
+	}));
+
+static FAutoConsoleCommandWithWorld GWacomToggleRunMapCmd(
+	TEXT("Wacom.ToggleRunMap"),
+	TEXT("打开或关闭当前 Floor 地图（探索 Anchored 状态才生效）。"),
+	FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
+	{
+		if (AWacomPlayerController* WPC = FindLocalWacomPC(World))
+		{
+			WPC->TryToggleRunMapFromConsole();
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[Wacom.ToggleRunMap] 找不到 AWacomPlayerController"));
 		}
 	}));
 

@@ -11,6 +11,7 @@
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Menus/WacomPauseMenuScreen.h"
+#include "UI/Map/WacomRunMapScreen.h"
 #include "UI/Shop/WacomShopScreen.h"
 #include "WacomUISettingsTestProbes.generated.h"
 
@@ -72,6 +73,12 @@ public:
 		: Super(ObjectInitializer)
 	{
 	}
+};
+
+UCLASS()
+class UWacomUISettingsRunMapScreenProbe : public UWacomRunMapScreen
+{
+	GENERATED_BODY()
 };
 
 UCLASS()

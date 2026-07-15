@@ -25,6 +25,8 @@ enum class EWacomRunPathTraversalState : uint8
 };
 
 DECLARE_MULTICAST_DELEGATE(FWacomRunPathBoundaryReachedNative);
+DECLARE_MULTICAST_DELEGATE(FWacomRunPathAnchoredForwardIntentNative);
+DECLARE_MULTICAST_DELEGATE_OneParam(FWacomRunPathAnchoredHorizontalIntentNative, int32);
 
 /**
  * 只负责局部 Spline 移动、View Source 和镜头反馈。
@@ -65,6 +67,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run Path|Look",
 		meta = (ToolTip = "视角追随插值速度，单位 1/秒。0 表示立即到达，推荐 8-18。"))
 	float LookInterpSpeed = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run Path|Look",
+		meta = (ClampMin = "0.0", Units = "cm", ToolTip = "从节点 Anchor 朝向平滑对齐到 PathSpline 朝向的行进距离，单位厘米。推荐 80-200；0 表示立即对齐，只影响视角基准，不改变规则进度或移动输入。"))
+	float PathEntryViewAlignmentDistance = 120.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run Path|Camera Shake",
 		meta = (ToolTip = "Traversing 且发生真实位移时是否播放 CameraShake。仍受镜头运动强度设置控制。"))
@@ -117,6 +123,14 @@ public:
 
 	FWacomRunPathBoundaryReachedNative& OnReachedStartNative() { return ReachedStartNative; }
 	FWacomRunPathBoundaryReachedNative& OnReachedEndNative() { return ReachedEndNative; }
+	FWacomRunPathAnchoredForwardIntentNative& OnAnchoredForwardIntentNative()
+	{
+		return AnchoredForwardIntentNative;
+	}
+	FWacomRunPathAnchoredHorizontalIntentNative& OnAnchoredHorizontalIntentNative()
+	{
+		return AnchoredHorizontalIntentNative;
+	}
 
 protected:
 	virtual void BeginPlay() override;
@@ -140,6 +154,10 @@ private:
 	bool bStartBoundaryBroadcast = false;
 	bool bEndBoundaryBroadcast = false;
 	bool bLeftStartBoundary = false;
+	bool bAnchoredForwardInputLatched = false;
+	bool bAnchoredHorizontalInputLatched = false;
+	bool bOwnsCharacterBaseRotation = false;
+	bool bUseControllerRotationYawBeforeOwnership = true;
 
 	bool bHasCursorLookOverride = false;
 	FVector2D CursorLookOverrideNormalized = FVector2D::ZeroVector;
@@ -148,12 +166,15 @@ private:
 
 	FWacomRunPathBoundaryReachedNative ReachedStartNative;
 	FWacomRunPathBoundaryReachedNative ReachedEndNative;
+	FWacomRunPathAnchoredForwardIntentNative AnchoredForwardIntentNative;
+	FWacomRunPathAnchoredHorizontalIntentNative AnchoredHorizontalIntentNative;
 
 	AWacomPlayerCharacter* GetOwnerCharacter() const;
 	APlayerController* GetOwnerPlayerController() const;
 	UWacomCursorLookDriverComponent* GetCursorLookDriver() const;
 	UWacomFirstPersonWalkBobComponent* GetWalkBob() const;
 	void TakeCharacterMovementOwnership();
+	void ReleaseCharacterMovementOwnership();
 	void ApplyInputProfile();
 	void UpdateCursorLook(float DeltaTime);
 	void ApplyViewTransform(float DeltaTime, float ActualDistanceDeltaCm);

@@ -19,6 +19,10 @@ public:
 	FName FloorId = NAME_None;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Map",
+		meta = (ToolTip = "Floor 的玩家可读标题。用于地图界面和本地化，不参与身份、查找或规则判断；正式内容必须非空。"))
+	FText DisplayName;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Map",
 		meta = (ToolTip = "首次进入 Floor 时使用的 NodeId。必须存在于 Nodes。"))
 	FName EntryNodeId = NAME_None;
 

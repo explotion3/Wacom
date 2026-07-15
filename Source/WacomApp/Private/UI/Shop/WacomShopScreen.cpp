@@ -144,6 +144,7 @@ void UWacomShopScreen::NativeOnDeactivated()
 {
 	UnsubscribeRunSession();
 	FWacomShopScreenFlow::EndShopVisitOnDeactivate(
+		Cast<AWacomPlayerController>(GetOwningPlayer()),
 		ResolveRunSession(),
 		OwnedShopVisitToken,
 		bDidEndShopVisit);
@@ -393,7 +394,13 @@ bool UWacomShopScreen::PurchaseOffer(FGuid OfferId)
 		return false;
 	}
 
-	return FWacomShopScreenFlow::PurchaseOffer(*this, Run, ResolveToastSubsystem(), OfferId, CachedOfferViews);
+	return FWacomShopScreenFlow::PurchaseOffer(
+		*this,
+		Cast<AWacomPlayerController>(GetOwningPlayer()),
+		Run,
+		ResolveToastSubsystem(),
+		OfferId,
+		CachedOfferViews);
 }
 
 UWacomAppToastSubsystem* UWacomShopScreen::ResolveToastSubsystem() const

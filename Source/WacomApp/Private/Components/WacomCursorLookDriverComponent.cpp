@@ -2,7 +2,64 @@
 
 #include "Components/WacomCursorLookDriverComponent.h"
 
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
+
+namespace
+{
+	bool TryResolveSlateViewportCursor(
+		APlayerController& PlayerController,
+		FVector2D& OutViewportSize,
+		FVector2D& OutCursorPosition)
+	{
+		if (!FSlateApplication::IsInitialized())
+		{
+			return false;
+		}
+
+		const FGeometry ViewportGeometry =
+			UWidgetLayoutLibrary::GetViewportWidgetGeometry(&PlayerController);
+		const FVector2D ViewportSize = ViewportGeometry.GetLocalSize();
+		const FVector2D CursorPosition = ViewportGeometry.AbsoluteToLocal(
+			FSlateApplication::Get().GetCursorPos());
+		if (ViewportSize.X <= 0.0f
+			|| ViewportSize.Y <= 0.0f
+			|| CursorPosition.X < 0.0f
+			|| CursorPosition.Y < 0.0f
+			|| CursorPosition.X > ViewportSize.X
+			|| CursorPosition.Y > ViewportSize.Y)
+		{
+			return false;
+		}
+
+		OutViewportSize = ViewportSize;
+		OutCursorPosition = CursorPosition;
+		return true;
+	}
+
+	bool TryResolvePlayerControllerCursor(
+		APlayerController& PlayerController,
+		FVector2D& OutViewportSize,
+		FVector2D& OutCursorPosition)
+	{
+		int32 ViewportSizeX = 0;
+		int32 ViewportSizeY = 0;
+		PlayerController.GetViewportSize(ViewportSizeX, ViewportSizeY);
+		float MouseX = 0.0f;
+		float MouseY = 0.0f;
+		if (ViewportSizeX <= 0
+			|| ViewportSizeY <= 0
+			|| !PlayerController.GetMousePosition(MouseX, MouseY))
+		{
+			return false;
+		}
+
+		OutViewportSize = FVector2D(ViewportSizeX, ViewportSizeY);
+		OutCursorPosition = FVector2D(MouseX, MouseY);
+		return true;
+	}
+}
 
 UWacomCursorLookDriverComponent::UWacomCursorLookDriverComponent()
 {
@@ -24,22 +81,31 @@ bool UWacomCursorLookDriverComponent::UpdateFromPlayerCursor(
 		return false;
 	}
 
-	int32 ViewportSizeX = 0;
-	int32 ViewportSizeY = 0;
-	PlayerController->GetViewportSize(ViewportSizeX, ViewportSizeY);
-	float MouseX = 0.0f;
-	float MouseY = 0.0f;
-	if (ViewportSizeX <= 0
-		|| ViewportSizeY <= 0
-		|| !PlayerController->GetMousePosition(MouseX, MouseY))
+	FVector2D ViewportSize = FVector2D::ZeroVector;
+	FVector2D CursorPosition = FVector2D::ZeroVector;
+	// Embedded PIE can report a successful but stale PlayerController mouse
+	// position until the viewport receives its first key or mouse event. Slate's
+	// absolute cursor is live before that activation, so prefer it whenever it is
+	// currently inside the game viewport. The PlayerController path remains the
+	// fallback for platforms or runtime contexts without a usable Slate geometry.
+	const bool bHasCursorPosition = TryResolveSlateViewportCursor(
+		*PlayerController,
+		ViewportSize,
+		CursorPosition)
+		|| TryResolvePlayerControllerCursor(
+			*PlayerController,
+			ViewportSize,
+			CursorPosition);
+
+	if (!bHasCursorPosition)
 	{
 		ResetLookOffset();
 		return false;
 	}
 
 	const FVector2D NormalizedCursor(
-		FMath::Clamp((MouseX / static_cast<float>(ViewportSizeX)) * 2.0f - 1.0f, -1.0f, 1.0f),
-		FMath::Clamp((MouseY / static_cast<float>(ViewportSizeY)) * 2.0f - 1.0f, -1.0f, 1.0f));
+		FMath::Clamp((CursorPosition.X / ViewportSize.X) * 2.0f - 1.0f, -1.0f, 1.0f),
+		FMath::Clamp((CursorPosition.Y / ViewportSize.Y) * 2.0f - 1.0f, -1.0f, 1.0f));
 	UpdateFromNormalizedCursor(
 		NormalizedCursor,
 		DeltaTime,

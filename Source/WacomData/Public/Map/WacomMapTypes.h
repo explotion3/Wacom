@@ -215,6 +215,14 @@ struct WACOMDATA_API FWacomMapNodeDefinition
 	FName NodeId = NAME_None;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Map",
+		meta = (ToolTip = "节点的玩家可读标题。用于地图界面和本地化，不替代 NodeId；正式内容必须非空。"))
+	FText DisplayName;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Map",
+		meta = (ToolTip = "节点已揭示后显示的可选简述。留空表示不显示说明，不产生制作错误。"))
+	FText ShortDescription;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Map",
 		meta = (ToolTip = "节点的规则类型。决定 Content 中唯一允许使用的 typed payload。"))
 	EWacomMapNodeType NodeType = EWacomMapNodeType::Navigation;
 

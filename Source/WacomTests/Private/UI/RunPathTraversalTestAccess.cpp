@@ -39,3 +39,9 @@ FVector2D FWacomRunPathTraversalTestAccess::GetCursorLookOverrideNormalized(
 {
 	return Component.CursorLookOverrideNormalized;
 }
+
+float FWacomRunPathTraversalTestAccess::GetMoveAxis(
+	const UWacomRunPathTraversalComponent& Component)
+{
+	return Component.MoveAxis;
+}

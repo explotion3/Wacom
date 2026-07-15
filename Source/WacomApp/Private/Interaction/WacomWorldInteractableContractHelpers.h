@@ -12,6 +12,10 @@ namespace WacomWorldInteractableContractHelpers
 {
 	bool IsWorldInteractableActor(const AActor* Actor);
 	bool IsRunWorldClickableInteractableActor(const AActor* Actor);
+	bool IsAvailableAtBoundRunMapNode(
+		const AActor* Actor,
+		AWacomPlayerController* PC,
+		FName* OutRejectReason = nullptr);
 
 	FText GetInteractPromptTextFromActor(AActor* Actor, AWacomPlayerController* PC);
 	FVector GetInteractLocationFromActor(AActor* Actor, AWacomPlayerController* PC);

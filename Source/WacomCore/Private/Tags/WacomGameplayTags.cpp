@@ -107,4 +107,7 @@ namespace WacomTags
 	// -------- Card.CapacityEffect --------
 	UE_DEFINE_GAMEPLAY_TAG(Card_CapacityEffect_Placeholder, "Card.CapacityEffect.Placeholder");
 	UE_DEFINE_GAMEPLAY_TAG(Card_CapacityEffect_WeaponDamagePlus3, "Card.CapacityEffect.WeaponDamagePlus3");
+
+	// -------- UI.Widget --------
+	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_RunMapScreen, "UI.Widget.RunMapScreen");
 }

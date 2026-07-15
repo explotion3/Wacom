@@ -43,11 +43,17 @@ tags:
 
 ## P0.5 近期架构规划
 
-- [ ] **WacomMap 总体规划：新建地图 / 节点 / 通道规则文档入口**
-  - 状态：`Done: 规则核心、Run Path、制作校验与 Debug 资产迁移已落地`
+- [x] **WacomMap 总体规划：新建地图 / 节点 / 通道规则文档入口**
+	- 状态：`Done: 规则核心、Run Path、当前 Floor Map Screen、制作校验与 Debug 资产迁移已落地`
   - 归属：Map / Run / App
   - 入口：[WacomMap.md](./WacomMap.md) / [Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-  - 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、Debug Journey/Floor builder、地图/场景 Validator 和 `L_Exploration` 资产迁移已经落地。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 Map Screen、正式 Camp handler/UI、多 Floor 内容和旅程规模填充，不恢复已删除的原型轨道路径。
+	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Debug Journey/Floor builder、地图/场景 Validator 和 `L_Exploration` 资产迁移已经落地。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是正式 Camp handler/UI、多 Floor 内容和旅程规模填充，不恢复已删除的原型轨道路径。
+	- 2026-07-15 地图闭环：单合法出口 W 自动前进，多合法出口使用道路入口选择，Anchored 无需点击 Actor 即可持续 cursor look；M / 手柄 View 打开当前 Floor 地图，死胡同默认聚焦最近的已完成节点，并可免费同层返回。
+
+- [ ] **Run Map 后续页面与交互扩展**
+	- 状态：`Backlog`
+	- 归属：Map / UI
+	- 说明：旧 Floor 只读历史页签、地图缩放/拖拽、多 Floor Transition 页面和更复杂的迷雾表现后续独立规划；首版当前 Floor Screen 不预留隐藏按钮或半实现状态。
 
 ## P1 近期实现候选
 

@@ -102,7 +102,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
 | `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
 | `UWacomRunWorldCardInteractionDefinitionValidator` | `UWacomRunWorldCardInteractionDefinition` | `FWacomRunWorldCardInteractionDefinitionValidation::Validate()` |
-| `UWacomMapDefinitionValidator` | `UWacomJourneyDefinition`、`UWacomFloorMapDefinition` | `FWacomMapDefinitionValidationReport`；检查身份、端点、可达性、typed payload 和入口条件 |
+| `UWacomMapDefinitionValidator` | `UWacomJourneyDefinition`、`UWacomFloorMapDefinition` | `FWacomMapDefinitionValidationReport`；检查身份、端点、可达性、typed payload、入口条件、必填 DisplayName 与 MapPosition 制作边界 |
 
 当前校验边界：
 
@@ -115,6 +115,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - RunPickupDefinition 校验固定单一奖励配置：`PickupId`、奖励类型、金币数量或卡牌引用。
 - RunWorldCardInteractionDefinition 校验 `InteractionId`、至少一个正向卡牌筛选和有效奖励项。
 - Actor 摆放实例的 `PersistentId`、重复 ID、receiver 和 facade 配置属于 map / level validation，见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#2-run-world-interactable-actor)。
+- Map Floor 与每个 Node 的 `DisplayName` 必填；`ShortDescription` 可空。`MapPosition` 合法闭区间是 `[0,1920] × [0,1080]`，越界或完全重合为 error，节点中心距离小于 `48 px` 为 warning；这些坐标不参与规则距离或合法性。
 
 不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
 
@@ -127,6 +128,14 @@ Run 探索 Debug 内容由 `UWacomBuildRunExplorationAssetsCommandlet` 可重复
 ```
 
 命令创建或更新 `/Game/Wacom/Data/Map/DA_Journey_Debug`、`DA_Floor_Debug_01` 和 `/Game/Wacom/Run/Path/Blueprints` 下的 Path / Branch / Anchor 蓝图，编译并保存 `GM_Wacom`、`BP_WacomPlayerCharacter` 与 `L_Exploration` 绑定，再执行 Map 和 loaded-world Scene validation。它只迁移可识别的正式内容引用，不从关卡 Actor 连接反向生成第二份 Logical Map Graph。
+
+Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomBuildRunMapUIAssets -NoSplash -Unattended
+```
+
+它幂等生成并编译 `/Game/Wacom/UI/Map/WBP_RunMapNode` 与 `WBP_RunMapScreen`。应先运行探索 Debug builder 迁移 Floor 文案，再运行 UI builder；两者都要求连续运行两次结果稳定。
 
 ## §5 生成内容自动化
 

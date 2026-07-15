@@ -327,6 +327,13 @@ bool FWacomRunWorldInteractionRouter::ResolveClickableInteractableFromHandle(
 		OutRejectReason = TEXT("MissingSourceActor");
 		return false;
 	}
+	if (!WacomWorldInteractableContractHelpers::IsAvailableAtBoundRunMapNode(
+		OutInteractableActor,
+		&PlayerController,
+		&OutRejectReason))
+	{
+		return false;
+	}
 
 	OutBridge = ResolveTargetBridgeFromHandle(Handle);
 	if (!WacomWorldInteractableContractHelpers::IsWorldInteractableActor(OutInteractableActor))

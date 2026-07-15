@@ -56,7 +56,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 - `Exploration`：允许 Run Path 移动、世界交互、打开暂停 / 背包 / 商店 / RunEvent 等 GameMenu。
 - `Battle`：暂停 Run Path 移动，启用 Battle camera look，切换输入 profile，并 Push `UBattleHUD` 到 Game 层。
 
-`UWacomExplorationHUD` 使用 `GameAndUI + NoCapture` 保持鼠标可见和世界点击；每次激活后会等待 CommonUI 完成本轮 input config，再在下一帧把 Slate 焦点交给游戏视口。失活或销毁会取消待执行请求，因此首次进入嵌入式 PIE、战斗返回探索或关闭 GameMenu 后都不需要额外点击视口才能收到 W/S 与鼠标视角输入，也不会让过期 HUD 在页面切换后抢回焦点。
+`UWacomExplorationHUD` 使用 `GameAndUI + NoCapture` 保持鼠标可见和世界点击；每次激活后会等待 CommonUI 完成本轮 input config，再在下一帧把 Slate 焦点交给游戏视口。失活或销毁会取消待执行请求，因此首次进入嵌入式 PIE、战斗返回探索或关闭 GameMenu 后都不需要额外点击视口才能收到 W/S 与鼠标视角输入，也不会让过期 HUD 在页面切换后抢回焦点。Cursor Look 优先使用 PlayerController 的视口鼠标坐标；嵌入式 PIE 尚未产生第一次 viewport mouse event 时，回退到 Slate 光标与 viewport geometry 的相对坐标，不以一次点击作为视角激活条件。
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`，自动存档和读取路径会静默 no-op。SaveGame schema 与恢复边界见 [WacomRun.md](./WacomRun.md)。
 
@@ -100,7 +100,7 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 - BeginPlay 创建并持有 `URunSession`。
 - 新探索状态有效时，构建当前 Floor scoped `FWacomRunSceneBindingRegistry`，并由 App-private `FWacomRunExplorationPresentationCoordinator` 将 EdgeId 意图转换为显式 Begin / Complete / Cancel Resolution；Coordinator 只应用结果，不自行判断地图合法性。
 - 初始化 `UWacomInputContextCoordinatorSubsystem`，提供探索 / 战斗 mapping context 给 coordinator。
-- 处理探索交互、暂停菜单、背包、商店、RunEvent 打开请求；具体 GameMenu 打开、关闭、异步 Push 和 Shop / RunEvent rollback 由私有 `FWacomExplorationScreenRouter` 承接。
+- 处理探索交互、地图、暂停菜单、背包、商店、RunEvent 打开请求；具体 GameMenu 打开、关闭、异步 Push 和 Shop / RunEvent rollback 由私有 `FWacomExplorationScreenRouter` 承接。
 - 转发战斗快捷键到当前 `UBattleHUD / UBattleSession`；Battle scene target click / probe 由 App-private `FWacomBattleSceneInteractionRouter` 承接，`AWacomPlayerController` 只保留 public façade、trace / flow protected seam 和输入入口。
 - Run world hover / click / probe 由 App-private `FWacomRunWorldInteractionRouter` 承接；`AWacomPlayerController` 保留 timer、InputKey 顺序、trace protected seam、E 键 candidate list 和与 Run card drop coordinator 的 context 注入。
 - 维护探索期 first-person Run Card Workspace source；默认 workspace 当前来自 Run `BattleDeck` 物理卡和可选投影入战卡，GameMenu 可通过 owned menu lease 临时接管候选持有卡显示和 Zone drop。
@@ -111,11 +111,12 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 - `RequestEnterBattle()` 只转发玩家意图，不提前清理手牌、详情或 drop probe。只有 GameMode 成功取得 Encounter NodeActivity、成功创建 BattleSession 并 Push BattleHUD 后，才一次性清理 Run first-person source；任一校验或 Push 失败都完整保留 Run HUD、手牌和交互状态。
 - 在成功进入战斗、Controller EndPlay 或菜单 lease 结束时清理对应 first-person source / lease，避免 Run 展示层和 BattleHUD runtime hand 抢占同一 layer。
 - GameMenu 可选走 first-person viewpoint staging：当前 Shop 和 RunEvent 使用该通用流程，Trigger 生成 entry stage request，PlayerController / router 在 UI 出现前锁定探索输入并清空 Run first-person hand，到位后再开始对应 `URunSession` 事务并 Push Screen；菜单关闭后 staged return 到当前 Run Path View，完成后恢复手牌和交互提示。
+- 当前 Floor 地图走非破坏性 GameMenu 路径：`IA_OpenMap` 只在 Exploration + Anchored + 无活动探索事务、Traversal 或其它 active/pending GameMenu 时接受。行进中按 M / 手柄 View 不会中断 Traversal Ticket，而是提示先到达节点；其它门控拒绝记录稳定 Detail，避免把 Snapshot、版本或 Flow 故障误判为按键失效。PlayerController 独占 App-private `FWacomRunMapScreenFlow`；Flow 用 generation 拒绝过期 async callback，绑定 Screen / Session delegate，应用完整 Map ViewData，并经唯一 Coordinator seam 提交同层 MapTravel。关闭、Push 失败、Session/Pawn 重绑和 EndPlay 都会对称清理并把焦点还给游戏视口。地图不使用 Shop/RunEvent 的镜头 staging。
 
 `AWacomPlayerCharacter` 是第一人称探索 Pawn：
 
 - 持有 Camera、CharacterMovement、唯一正式 `UWacomRunPathTraversalComponent`、cursor look driver、Battle camera look 和 `UWacomFirstPersonCardAnchorComponent`。
-- Run Path component 独占探索移动、Pawn Transform、View Source、cursor look、CameraShake 和 Suspend / Resume。`Anchored` 与 `Traversing` 都会停止并禁用 `CharacterMovement`，因此角色不受重力或旧移动速度影响；Anchored 状态也不会把 W/S 泄漏给 CharacterMovement。地图状态或场景绑定未就绪时保持安全锚定 / 停止，不回退到第二套移动实现。战斗和 GameMenu staging 只 Suspend 当前移动而不 UnPossess。
+- Run Path component 独占探索移动、Pawn Transform、基础 Yaw、View Source、cursor look、CameraShake 和 Suspend / Resume。`Anchored` 与 `Traversing` 都会停止并禁用 `CharacterMovement`，并在持有 Run Path 时关闭 Character 的 `bUseControllerRotationYaw`：ActorRotation 只表达 Anchor / Spline 基础朝向，ControlRotation 才叠加 cursor look，避免两套系统逐帧争夺朝向。Deactivate 时恢复进入 Run Path 前的 Yaw 所有权设置。Anchored 状态也不会把 W/S 泄漏给 CharacterMovement。地图状态或场景绑定未就绪时保持安全锚定 / 停止，不回退到第二套移动实现。战斗和 GameMenu staging 只 Suspend 当前移动而不 UnPossess。
 - 战斗期启用 Battle camera look，在战斗 base rotation 上叠加共享 cursor look offset。
 - first-person anchor 只负责给 HUD / card layer 提供稳定锚点；projection/layout 细节见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
@@ -129,11 +130,14 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 
 - Registry 每次只对应当前 Floor，建立 `EdgeId -> PathSegment`、`NodeId -> NodeAnchor`、`NodeId + NodeType -> content host` 映射；重复或缺失绑定使相关意图在规则提交前失败。
 - 带 `UWacomRunMapNodeBindingComponent` 的 BattleTrigger 只有在绑定 NodeId 已成为 Snapshot 的正式 current node、该节点为 `Visited Encounter` 且当前没有 Traversal / NodeActivity / Camp / FloorTransition 事务时才可交互。未抵达、移动途中、已解决或绑定错误时只显示不可用原因，不提交战斗意图。未迁移绑定的独立旧 BattleTrigger 暂时保留原有直接交互语义。
-- `AWacomRunPathBranchTargetActor` 只广播 EdgeId。PlayerController 绑定 native intent 后交给 Coordinator，不允许 Branch Actor 保存 target Segment / Node 或直接移动玩家。
+- `FWacomRunExplorationPresentationCoordinator` 依据显式 Snapshot 维护 App-private route-choice state。Anchored 首次正向越阈值时：唯一合法 Edge 自动复用正式 Begin 路径；多条合法 Edge 只提示选择且不提交规则；结构死胡同和暂时锁定分别使用明确 AppToast，均不改变版本。
+- `FWacomRunPathBranchSelectionController` 由 PlayerController 独占，只在 `ChoiceRequired + Exploration + Anchored + 无 active/pending GameMenu` 时显示合法 BranchTarget。鼠标 hover/click、A/D 或左摇杆左右移动焦点、E/手柄 A 确认都走同一 EdgeId 意图；多出口状态下只在场景输入拥有权有效时消费 E 与场景点击，GameMenu 激活或镜头过渡期间必须把鼠标完整交给 CommonUI。
+- `AWacomRunPathBranchTargetActor` 只广播 EdgeId，并且只有 `Available / Focused` 能广播。Hidden 同时关闭视觉和 Visibility collision；Blueprint 只能响应只读表现状态，不能决定合法性、保存 target Segment / Node 或直接移动玩家。
 - Begin 成功后规则位置仍是 source；W/S 只改变局部 Spline distance。回到起点提交 Cancel；到达终点重新验证 target/host，再提交 Complete。
-- Coordinator 严格接受连续 `VersionBefore -> VersionAfter` 的 Resolution。过期、跳版本或重复结果关闭当前场景移动且不合成 UI 状态。
+- Coordinator 严格接受连续 `VersionBefore -> VersionAfter` 的 Resolution。Traversal 与 MapTravel 由 Coordinator 自己提交；Encounter 等由 GameMode 持有的节点活动必须把 Begin、Settlement 或 Cancel 的显式 `FRunExplorationResolution` 交给 `ApplyNodeActivityResolution()`，同步版本并刷新路线选择状态。过期、跳版本、重复结果或 Session/PostSnapshot 不匹配都会被拒绝，不允许通过拉取最新状态掩盖正常通道的遗漏；PlayerController 只在该通道异常时重建当前 Session 场景绑定作为可玩性恢复。
 - target/host 在 Complete 前失效时先 Cancel 并回到缓存 source；Complete 规则失败也显式补偿 Cancel。Complete 成功后绝不回源，目标 Actor 同帧失效时使用 Begin 缓存 target Transform。
 - first-person card Anchor 与 ViewStage return 只消费 Run Path 的当前 View Transform；`EWacomFirstPersonCardAnchorMode::RunPath` 是唯一探索锚点模式。
+- `Anchored` 与 `Traversing` 都保持 Run Path component Tick：Anchored 只更新 cursor look 和 view transform，不修改 Spline distance、不启动 Walk CameraShake 或 Bob；Traversing 才沿 Spline 移动。cursor look 在 Slate 可用且指针位于游戏视口内时优先读取 Slate 的实时绝对指针并按 viewport geometry 归一化，`APlayerController` 鼠标坐标只作为后备；因此嵌入式 PIE 尚未收到第一次点击或按键时也不得冻结初始节点视角。首次 W 开始 Traversal 时，distance 0 仍使用当前 NodeAnchor View；随后在 `PathEntryViewAlignmentDistance`（默认 120 cm，且不超过 Path 长度）内以 SmoothStep 将位置与基础朝向对齐到 Spline，入口 Anchor 与通道切线不一致也不会瞬间改中心。Anchored 导航输入使用按压/释放 latch，抵达新节点时持续按住 W 不会自动进入下一条 Edge。
 
 ---
 
@@ -158,7 +162,7 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 
 PlayerController 上的 `PushMappingContext / PopMappingContext` helper 仍保留为兼容 / 调试入口；正式流程由 coordinator 管理。PlayerController BeginPlay、MenuGameMode BeginPlay 和 GameMode BeginPlay 都会初始化或重设 coordinator，防止 PIE 复用 Controller 时输入状态停留在上一关。
 
-Run Path 是正式探索移动模型，不提供普通 FPS FreeLook 探索 profile。`UWacomRunPathTraversalComponent` 只在 Traversing 消费 W/S，Anchored 可消费 cursor look，Suspended 保留 Path / distance 并停止移动和 CameraShake；Resume 不重建规则 Ticket。first-person card hover / drag 的归一化指针继续驱动同一 cursor look override。CameraShake、设置中的镜头运动倍率与 stop grace 保持已验证语义。`L_Exploration` 与 `BP_WacomPlayerCharacter` 已迁移到唯一的 Run Path 实现，不再保留旧移动 fallback。
+Run Path 是正式探索移动模型，不提供普通 FPS FreeLook 探索 profile。`UWacomRunPathTraversalComponent` 在 Traversing 把 W/S 作为连续路径轴；Anchored 持续消费 cursor look，并把 W/A/D 作为带释放重置的一次性导航意图，绝不直接修改 Spline distance。Suspended 保留 Path / distance 并停止移动和 CameraShake；Resume 不重建规则 Ticket。first-person card hover / drag 的归一化指针继续驱动同一 cursor look override。CameraShake、设置中的镜头运动倍率与 stop grace 保持已验证语义。`L_Exploration` 与 `BP_WacomPlayerCharacter` 已迁移到唯一的 Run Path 实现，不再保留旧移动 fallback。
 
 当前 IA 口径：
 
@@ -183,13 +187,15 @@ Run Path 是正式探索移动模型，不提供普通 FPS FreeLook 探索 profi
 |---|---|---|
 | E 键近距离交互 | overlap 候选 -> 最近 `IWacomWorldInteractable::TryInteract()` | 对应 Actor 请求 PlayerController / GameMode / RunSession |
 | 鼠标 hover | cursor trace -> interaction target provider -> `FWacomRunWorldInteractionRouter` 或 `FWacomBattleSceneInteractionRouter` probe | 只更新提示 / 预览，不提交规则 |
-| 探索左键点击 | Battle scene router target click -> Run Path branch click -> Run world interaction router click -> `Super::InputKey()` | click 命中后仍回到 `TryInteract()` 或 BattleHUD target command |
+| 探索左键点击 | GameMenu pointer gate -> Battle scene router target click -> Run Path branch click -> Run world interaction router click -> `Super::InputKey()` | active/pending GameMenu 与其镜头过渡优先拥有左键；只有纯场景输入期才回到 `TryInteract()` 或道路选择 |
 | Run world card drop | first-person drag release -> Run world target probe -> `UWacomRunWorldCardDropReceiverComponent` | `URunSession::Validate/SubmitRunWorldCardInteraction()` |
 | Run menu zone drop | active GameMenu + active menu lease -> `UWacomRunMenuDropTargetWidget` Zone probe | owning menu 决定 probe、prototype destroy 或 RunEvent payment submit |
 
 正式 opt-in Run world clickable 对象包括 RunEventTrigger、ShopTrigger、BattleTrigger、RunPickup、RunCardPickup、RunRewardPickup 和 KeyChest。Actor 制作字段、debug summary、prototype sample button、Data Validation 和 target handle 细节见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
-打开 Backpack / Pause / Shop / RunEvent 等 GameMenu 时，不穿透点击场景目标；菜单 first-person card drag/drop 正在处理时，也会清理或抑制普通 Run world hover/click。
+带 `UWacomRunMapNodeBindingComponent` 的 Run world Actor 会在共享交互资格层验证其 `NodeId / NodeType` 与当前 Run Snapshot 一致。该验证同时约束 E 键候选、hover / probe 和左键点击，并且早于 Actor `TryInteract()`、Shop / RunEvent viewpoint staging 与 GameMenu async push；因此已经离开的节点内容不会造成镜头先移向旧 Actor 再返回。未绑定节点的独立原型 Actor 继续保持既有行为。
+
+打开 Map / Backpack / Pause / Shop / RunEvent 等 GameMenu 时，PlayerController 使用同一 `CanRouteRunScenePointerInput()` 门控关闭 BranchTarget hover/click、Run world hover/click 和 Anchored 导航意图，避免 CommonUI 按钮的左键释放被场景路由截走；菜单关闭且回程过渡结束后才恢复。菜单 first-person card drag/drop 继续走自己的 menu lease / drop seam，不依赖普通场景点击路由。
 
 ---
 
@@ -201,10 +207,10 @@ WacomApp 负责调用 UI shell，但不在本文定义具体 UI 视觉和刷新�
 
 - `UWacomGameUIManagerSubsystem` 持有 `UWacomPrimaryGameLayout`，负责 Ensure / TearDown PrimaryLayout 和按 layer Push / Pop。
 - `UWacomUIDeveloperSettings` 是顶层 UI WBP 的项目级软类注册表。
-- `FWacomExplorationScreenRouter` 统一背包、暂停菜单、商店和 RunEvent 的 GameMenu 打开 / 关闭 / async push / rollback。
+- `FWacomExplorationScreenRouter` 统一地图、背包、暂停菜单、商店和 RunEvent 的 GameMenu 打开 / 关闭 / async push / rollback。地图不会为了打开而关闭已有其它 GameMenu；M / 手柄 View 的 pending 或重复请求无副作用。
 - `UBattleHUD` 是战斗 UI 命令出口、WBP 绑定 owner、配置 owner 和 GC 引用 owner。
 
-顶层 Screen / Toast 不再通过 `AWacomPlayerController` 暴露 ScreenClass 覆盖入口。Backpack / PauseMenu / Shop / RunEvent 通过 `UWacomUIDeveloperSettings.WidgetClasses` 的 `UI.Widget.*` tag 注册；缺失或加载失败时回到对应 C++ fallback。UI 数据流见 [WacomUI.md](./WacomUI.md)，CommonUI 层级 / Settings / Toast 见 [WacomUIFoundation.md](./WacomUIFoundation.md)，BattleHUD helper 和 Battle UI surface 见 [WacomBattleUI.md](./WacomBattleUI.md)。
+顶层 Screen / Toast 不再通过 `AWacomPlayerController` 暴露 ScreenClass 覆盖入口。RunMap / Backpack / PauseMenu / Shop / RunEvent 通过 `UWacomUIDeveloperSettings.WidgetClasses` 的 `UI.Widget.*` tag 注册；地图 tag 为 Core 中的 `UI.Widget.RunMapScreen`，并要求父类 `UWacomRunMapScreen`。缺失或加载失败时回到对应 C++ fallback。UI 数据流见 [WacomUI.md](./WacomUI.md)，CommonUI 层级 / Settings / Toast 见 [WacomUIFoundation.md](./WacomUIFoundation.md)，BattleHUD helper 和 Battle UI surface 见 [WacomBattleUI.md](./WacomBattleUI.md)。
 
 菜单按钮不直接 OpenLevel；切关卡委托给 GameMode 或 PlayerController。主菜单和暂停菜单切关前先 `TearDownPrimaryLayout()`，再在下一帧 `OpenLevel()`，避免在按钮点击 / CommonUI deactivate 链中立即切关。
 
@@ -212,7 +218,7 @@ WacomApp 负责调用 UI shell，但不在本文定义具体 UI 视觉和刷新�
 
 GameMenu viewpoint staging 是 Exploration GameMenu 的通用临时镜头站位流程，当前接入者是 Shop 和 RunEvent，共用同一套 PlayerController 状态和 Run Path return flow。`AWacomShopTriggerActor.ShopEntryViewpoint` 是商店入口的可选第一人称镜头站位；`AWacomRunEventTriggerActor.RunEventEntryViewpoint` 是事件入口的可选第一人称镜头站位。未配置时沿用普通路径：Shop 为 `BeginShopVisit -> Push ShopScreen`，RunEvent 为 `BeginRunEvent -> Push RunEventScreen`。配置后，Trigger 会构造 `FWacomFirstPersonViewStageRequest`：Shop 使用 `Reason=ShopEntry`，RunEvent 使用 `Reason=RunEventEntry`，`DebugSource` 优先使用 `PersistentId`，并复制 viewpoint 的 View Transform、blend 时间、曲线和 ease power。
 
-staged GameMenu 打开时，`FWacomExplorationScreenRouter` 先锁定探索输入、清空 / suppress Run first-person hand，并通过 `FWacomFirstPersonViewStageCoordinator` 移动到目标 View Pose；到位后才执行对应 Screen 的 async push。ShopScreen / RunEventScreen 关闭时仍由自身 deactivate 流程执行 `EndShopVisit` / `EndRunEvent`，UI 立即退场；PlayerController 识别该 staged GameMenu 后保持手牌 suppression，调用 `FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath()`，回到当前 Run Path View 后恢复探索输入、刷新 Run first-person hand 和 interact toast。push / refresh 失败时走现有 rollback，并立即 return to Run Path。
+staged GameMenu 打开时，`FWacomExplorationScreenRouter` 先锁定探索输入、清空 / suppress Run first-person hand，并通过 `FWacomFirstPersonViewStageCoordinator` 移动到目标 View Pose；到位后才执行对应 Screen 的 async push。Shop 的 Begin、成功 Purchase、正常 End 和 async push rollback 都必须把显式 `FRunExplorationResolution` 交给 PlayerController 的唯一节点活动表现入口，保证 Coordinator 版本在回程前已经与 Session 对齐；空手关闭仍只取消本次节点活动，商店可以再次进入。ShopScreen / RunEventScreen 关闭时仍由自身 deactivate 流程执行 `EndShopVisit` / `EndRunEvent`，UI 立即退场；PlayerController 识别该 staged GameMenu 后保持手牌 suppression，调用 `FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath()`，回到当前 Run Path View 后恢复探索输入、刷新 Run first-person hand 和 interact toast。push / refresh 失败时走现有 rollback，并立即 return to Run Path。
 
 Router 内部用共享私有 helper 承接 “stage first-person view -> open GameMenu -> arm return” 的握手；Shop / RunEvent 只提供各自的 async push 和 RunSession 事务，后续新 GameMenu viewpoint staging 应复用这条路径，不再复制 staging 生命周期。
 
@@ -239,9 +245,10 @@ GameMode 进入战斗时：
 3. Suspend PlayerCharacter 的 Run Path 探索移动；若 Trigger 配置了 battle entry viewpoint，则先把第一人称摄像机 View Pose 对齐到该站位，再启用 Battle camera look。Viewpoint 可配置过渡时间，默认 0 秒立即对齐。
 4. 由 RunSession 构造战斗玩家侧参数（角色、随机种子、备战卡组、撤离重入进度），由 Trigger 的 `EncounterDefinition` 构造敌人槽；若 RunSession 缺失或无法构造参数，GameMode 会拒绝进入战斗，不再用 `DefaultCharacter / DefaultRandomSeed` 拼 fallback 战斗。
 5. 创建 / 初始化 `UBattleSession`。
-6. 通过 UIManager Push `UBattleHUD` 到 Game 层。
-7. 将 input coordinator 切到 `Battle` profile。
-8. 记录触发战斗的 Trigger Actor，并把 Trigger 的 `SceneEnemyHostSlots` 映射传给 BattleHUD 场景目标 registry。
+6. 取得 Encounter NodeActivity ticket，并把成功 Begin 的显式 Resolution 应用到 Run 表现 Coordinator；失败或后续 HUD Push 失败时同样显式应用 Cancel 结果，不能遗留版本漂移。
+7. 通过 UIManager Push `UBattleHUD` 到 Game 层。
+8. 将 input coordinator 切到 `Battle` profile。
+9. 记录触发战斗的 Trigger Actor，并把 Trigger 的 `SceneEnemyHostSlots` 映射传给 BattleHUD 场景目标 registry。
 
 敌人入口只走 `EncounterDefinition + SceneEnemyHostSlots`。`EncounterDefinition.EnemySlots` 负责规则敌人槽，`SceneEnemyHostSlots` 负责 `EnemySlotId -> SceneEnemyHost` 的场景表现绑定；缺 Host、漏 slot 或多余 slot 会被编辑器验证阻止。场景敌人点击、hover 和拖卡目标路由只认当前 BattleHUD registry 中的 `EncounterId + EnemySlotId + PartSlotId`，不通过 Actor 名称、单 Host 缓存或旧第一敌人入口推断身份。
 
@@ -268,7 +275,7 @@ GameMode 退出战斗时：
 5. 从当前 suspended Run Path 构造 `RunPathReturn` stage request。
 6. 通过 `FWacomFirstPersonViewStageReturnFlow` 将第一人称视角移动回 Run Path View Pose。
 7. stage 完成后恢复 PlayerCharacter 探索移动；若回程 blend 为 0 或无法构造 request，则同步恢复。
-8. 从 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket`，使用进入战斗前取得的 `FRunNodeActivityTicket` 调 RunSession 原子结算战斗结果、Action Point、撤离进度和节点 lifecycle。GameMode 判断撤离异常全灭时只统计 packet 中有效的 `DestroyedPartKeys` / `EnemyResults.DestroyedPartKeys`，不再用 legacy `DestroyedParts` projection 触发场景 Trigger 销毁。
+8. 从 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket`，使用进入战斗前取得的 `FRunNodeActivityTicket` 调 RunSession 原子结算战斗结果、Action Point、撤离进度和节点 lifecycle，并在恢复输入前把 Settlement 或 Cancel 的显式 Resolution 应用到同一个 Run 表现 Coordinator。GameMode 判断撤离异常全灭时只统计 packet 中有效的 `DestroyedPartKeys` / `EnemyResults.DestroyedPartKeys`，不再用 legacy `DestroyedParts` projection 触发场景 Trigger 销毁。
 9. 真胜利时由节点结算结果驱动场景 Trigger 完成表现；撤离保留 Trigger 和按 MapNodeHandle 保存的部位进度，允许玩家重入。
 10. `EGameFlowState` 回到 `Exploration` 后，等待 return staging completion，再重新激活并刷新 Run first-person hand，同时刷新交互 Toast。
 

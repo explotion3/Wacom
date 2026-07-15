@@ -39,6 +39,7 @@ bool FWacomRunExplorationPresentationCoordinator::Initialize(
 	LastErrorDetail = NAME_None;
 	InTraversal.OnReachedStartNative().AddRaw(this, &FWacomRunExplorationPresentationCoordinator::HandleReachedStart);
 	InTraversal.OnReachedEndNative().AddRaw(this, &FWacomRunExplorationPresentationCoordinator::HandleReachedEnd);
+	RefreshRouteChoiceState(Snapshot);
 	return true;
 }
 
@@ -59,14 +60,62 @@ void FWacomRunExplorationPresentationCoordinator::Shutdown()
 	ActiveTicket.Reset();
 	ActiveSceneBinding.Reset();
 	LastAppliedVersion = 0;
+	RouteChoiceState = {};
 	NodeContentPresentationRequestedNative.Clear();
+	RouteChoiceStateChangedNative.Clear();
+#if WITH_DEV_AUTOMATION_TESTS
+	bForceMapTravelTransformInvalidForAutomation = false;
+	bForceMapTravelAnchorApplyFailureForAutomation = false;
+#endif
+}
+
+EWacomRunForwardIntentResult FWacomRunExplorationPresentationCoordinator::HandleForwardIntent()
+{
+	URunSession* RunSession = Session.Get();
+	UWacomRunPathTraversalComponent* TraversalComponent = Traversal.Get();
+	if (!RunSession || !TraversalComponent || ActiveTicket.IsSet()
+		|| TraversalComponent->GetTraversalState() != EWacomRunPathTraversalState::Anchored)
+	{
+		LastErrorDetail = TEXT("CoordinatorUnavailableOrBusy");
+		return EWacomRunForwardIntentResult::Rejected;
+	}
+
+	const FRunExplorationSnapshot Snapshot = RunSession->BuildExplorationSnapshot();
+	if (Snapshot.StateVersion != LastAppliedVersion)
+	{
+		DisableTraversal(TEXT("CoordinatorVersionDrift"));
+		return EWacomRunForwardIntentResult::Rejected;
+	}
+	RefreshRouteChoiceState(Snapshot);
+	switch (RouteChoiceState.Mode)
+	{
+	case EWacomRunRouteChoiceMode::Automatic:
+		if (RouteChoiceState.LegalEdgeIds.Num() == 1
+			&& HandleBranchIntent(RouteChoiceState.LegalEdgeIds[0]))
+		{
+			return EWacomRunForwardIntentResult::Started;
+		}
+		return EWacomRunForwardIntentResult::Rejected;
+	case EWacomRunRouteChoiceMode::ChoiceRequired:
+		LastErrorDetail = TEXT("RouteChoiceRequired");
+		return EWacomRunForwardIntentResult::ChoiceRequired;
+	case EWacomRunRouteChoiceMode::DeadEnd:
+		LastErrorDetail = TEXT("RouteDeadEnd");
+		return EWacomRunForwardIntentResult::DeadEnd;
+	case EWacomRunRouteChoiceMode::Unavailable:
+	default:
+		LastErrorDetail = TEXT("RouteUnavailable");
+		return EWacomRunForwardIntentResult::Unavailable;
+	}
 }
 
 bool FWacomRunExplorationPresentationCoordinator::HandleBranchIntent(const FName EdgeId)
 {
 	URunSession* RunSession = Session.Get();
 	UWacomRunPathTraversalComponent* TraversalComponent = Traversal.Get();
-	if (!RunSession || !TraversalComponent || !Registry || ActiveTicket.IsSet())
+	if (!RunSession || !TraversalComponent || !Registry || ActiveTicket.IsSet()
+		|| TraversalComponent->GetTraversalState()
+			!= EWacomRunPathTraversalState::Anchored)
 	{
 		LastErrorDetail = TEXT("CoordinatorUnavailableOrBusy");
 		return false;
@@ -76,6 +125,12 @@ bool FWacomRunExplorationPresentationCoordinator::HandleBranchIntent(const FName
 	if (Snapshot.StateVersion != LastAppliedVersion)
 	{
 		DisableTraversal(TEXT("CoordinatorVersionDrift"));
+		return false;
+	}
+	RefreshRouteChoiceState(Snapshot);
+	if (!RouteChoiceState.LegalEdgeIds.Contains(EdgeId))
+	{
+		LastErrorDetail = TEXT("RouteEdgeNotCurrentlyLegal");
 		return false;
 	}
 	FWacomRunTraversalSceneBinding SceneBinding = Registry->PreflightTraversal(Snapshot, EdgeId);
@@ -99,36 +154,126 @@ bool FWacomRunExplorationPresentationCoordinator::HandleBranchIntent(const FName
 		CancelActiveTraversal(TEXT("PathTraversalStartFailed"));
 		return false;
 	}
+	HideRouteChoices(LastAppliedVersion);
 	LastErrorDetail = NAME_None;
 	return true;
 }
 
-bool FWacomRunExplorationPresentationCoordinator::ApplyMapTravel(
+bool FWacomRunExplorationPresentationCoordinator::ApplyNodeActivityResolution(
+	const FRunExplorationResolution& Resolution)
+{
+	URunSession* RunSession = Session.Get();
+	UWacomRunPathTraversalComponent* TraversalComponent = Traversal.Get();
+	if (!RunSession || !TraversalComponent || !Registry || ActiveTicket.IsSet())
+	{
+		LastErrorDetail = TEXT("NodeActivityPresentationUnavailableOrBusy");
+		return false;
+	}
+
+	const EWacomRunPathTraversalState TraversalState =
+		TraversalComponent->GetTraversalState();
+	if (TraversalState != EWacomRunPathTraversalState::Anchored
+		&& TraversalState != EWacomRunPathTraversalState::Suspended)
+	{
+		LastErrorDetail = TEXT("NodeActivityTraversalStateMismatch");
+		return false;
+	}
+
+	const FRunExplorationSnapshot CurrentSnapshot =
+		RunSession->BuildExplorationSnapshot();
+	if (CurrentSnapshot.StateVersion != Resolution.VersionAfter
+		|| !(CurrentSnapshot.CurrentNode == Resolution.PostSnapshot.CurrentNode))
+	{
+		DisableTraversal(TEXT("NodeActivitySessionResultMismatch"));
+		return false;
+	}
+	if (Resolution.IsOk() && Resolution.VersionAfter == Resolution.VersionBefore)
+	{
+		if (Resolution.VersionAfter != LastAppliedVersion)
+		{
+			DisableTraversal(TEXT("NodeActivityNoOpVersionMismatch"));
+			return false;
+		}
+		LastErrorDetail = NAME_None;
+		return true;
+	}
+	if (!ApplyResolution(Resolution))
+	{
+		return false;
+	}
+
+	RefreshRouteChoiceState(Resolution.PostSnapshot);
+	LastErrorDetail = NAME_None;
+	return true;
+}
+
+FWacomRunMapTravelPresentationResult
+FWacomRunExplorationPresentationCoordinator::ApplyMapTravel(
 	const FWacomMapNodeHandle& TargetNode)
 {
+	FWacomRunMapTravelPresentationResult Result;
 	URunSession* RunSession = Session.Get();
 	UWacomRunPathTraversalComponent* TraversalComponent = Traversal.Get();
 	AWacomRunMapNodeAnchorActor* TargetAnchor = Registry
 		? Registry->FindNodeAnchor(TargetNode.NodeId)
 		: nullptr;
-	if (!RunSession || !TraversalComponent || !Registry || !TargetAnchor || ActiveTicket.IsSet())
+	if (!RunSession || !TraversalComponent || !Registry || ActiveTicket.IsSet()
+		|| TraversalComponent->GetTraversalState() != EWacomRunPathTraversalState::Anchored)
 	{
-		LastErrorDetail = TEXT("MapTravelSceneBindingMissing");
-		return false;
+		LastErrorDetail = TEXT("MapTravelCoordinatorUnavailableOrBusy");
+		Result.Detail = LastErrorDetail;
+		return Result;
+	}
+	if (!TargetNode.IsValid() || TargetNode.FloorId != Registry->GetFloorId())
+	{
+		LastErrorDetail = TEXT("MapTravelFloorMismatch");
+		Result.Detail = LastErrorDetail;
+		return Result;
+	}
+	if (!TargetAnchor)
+	{
+		LastErrorDetail = TEXT("MapTravelTargetAnchorMissing");
+		Result.Detail = LastErrorDetail;
+		return Result;
 	}
 	const FTransform CachedTarget = TargetAnchor->GetViewTransform();
+	if (CachedTarget.ContainsNaN()
+#if WITH_DEV_AUTOMATION_TESTS
+		|| bForceMapTravelTransformInvalidForAutomation
+#endif
+		)
+	{
+		LastErrorDetail = TEXT("MapTravelTargetTransformInvalid");
+		Result.Detail = LastErrorDetail;
+		return Result;
+	}
 	const FRunExplorationResolution Resolution = RunSession->ResolveExplorationCommand(
 		FRunExplorationCommand::MapTravel(TargetNode, LastAppliedVersion));
 	if (!ApplyResolution(Resolution))
 	{
-		return false;
+		Result.Detail = LastErrorDetail;
+		Result.AppliedVersion = LastAppliedVersion;
+		return Result;
 	}
-	if (!TraversalComponent->AnchorAtTransform(CachedTarget))
+	const bool bAnchorApplied =
+#if WITH_DEV_AUTOMATION_TESTS
+		!bForceMapTravelAnchorApplyFailureForAutomation
+		&&
+#endif
+		TraversalComponent->AnchorAtTransform(CachedTarget);
+	if (!bAnchorApplied)
 	{
 		DisableTraversal(TEXT("MapTravelAnchorApplyFailed"));
-		return false;
+		Result.Outcome = EWacomRunMapTravelPresentationOutcome::CommittedPresentationFailed;
+		Result.Detail = LastErrorDetail;
+		Result.AppliedVersion = LastAppliedVersion;
+		return Result;
 	}
-	return true;
+	RefreshRouteChoiceState(Resolution.PostSnapshot);
+	LastErrorDetail = NAME_None;
+	Result.Outcome = EWacomRunMapTravelPresentationOutcome::Applied;
+	Result.AppliedVersion = LastAppliedVersion;
+	return Result;
 }
 
 void FWacomRunExplorationPresentationCoordinator::HandleSessionChanged(URunSession* NewSession)
@@ -221,6 +366,7 @@ void FWacomRunExplorationPresentationCoordinator::HandleReachedEnd()
 		DisableTraversal(TEXT("CommittedTargetAnchorApplyFailed"));
 		return;
 	}
+	RefreshRouteChoiceState(Resolution.PostSnapshot);
 	if (ContentHost)
 	{
 		NodeContentPresentationRequestedNative.Broadcast(CommittedTarget, ContentHost);
@@ -243,6 +389,12 @@ bool FWacomRunExplorationPresentationCoordinator::CancelActiveTraversal(const FN
 		return false;
 	}
 	RecoverToSource();
+	if (UWacomRunPathTraversalComponent* TraversalComponent = Traversal.Get();
+		TraversalComponent
+		&& TraversalComponent->GetTraversalState() == EWacomRunPathTraversalState::Anchored)
+	{
+		RefreshRouteChoiceState(Resolution.PostSnapshot);
+	}
 	LastErrorDetail = FailureDetail;
 	return true;
 }
@@ -269,4 +421,62 @@ void FWacomRunExplorationPresentationCoordinator::DisableTraversal(const FName F
 	{
 		TraversalComponent->DeactivateTraversal();
 	}
+	HideRouteChoices(LastAppliedVersion);
+}
+
+void FWacomRunExplorationPresentationCoordinator::RefreshRouteChoiceState(
+	const FRunExplorationSnapshot& Snapshot)
+{
+	FWacomRunRouteChoiceState NewState;
+	NewState.SnapshotVersion = Snapshot.StateVersion;
+	for (const FRunMapEdgeSnapshot& Edge : Snapshot.OutgoingEdges)
+	{
+		if (Edge.bCanTraverse && !Edge.Handle.EdgeId.IsNone())
+		{
+			NewState.LegalEdgeIds.AddUnique(Edge.Handle.EdgeId);
+		}
+	}
+	NewState.LegalEdgeIds.Sort(
+		[](const FName Left, const FName Right)
+		{
+			return Left.LexicalLess(Right);
+		});
+
+	if (Snapshot.OutgoingEdges.IsEmpty())
+	{
+		NewState.Mode = EWacomRunRouteChoiceMode::DeadEnd;
+	}
+	else if (NewState.LegalEdgeIds.IsEmpty())
+	{
+		NewState.Mode = EWacomRunRouteChoiceMode::Unavailable;
+	}
+	else if (NewState.LegalEdgeIds.Num() == 1)
+	{
+		NewState.Mode = EWacomRunRouteChoiceMode::Automatic;
+	}
+	else
+	{
+		NewState.Mode = EWacomRunRouteChoiceMode::ChoiceRequired;
+	}
+	SetRouteChoiceState(MoveTemp(NewState));
+}
+
+void FWacomRunExplorationPresentationCoordinator::HideRouteChoices(
+	const int32 SnapshotVersion)
+{
+	FWacomRunRouteChoiceState Hidden;
+	Hidden.SnapshotVersion = SnapshotVersion;
+	Hidden.Mode = EWacomRunRouteChoiceMode::Unavailable;
+	SetRouteChoiceState(MoveTemp(Hidden));
+}
+
+void FWacomRunExplorationPresentationCoordinator::SetRouteChoiceState(
+	FWacomRunRouteChoiceState NewState)
+{
+	if (RouteChoiceState == NewState)
+	{
+		return;
+	}
+	RouteChoiceState = MoveTemp(NewState);
+	RouteChoiceStateChangedNative.Broadcast(RouteChoiceState);
 }

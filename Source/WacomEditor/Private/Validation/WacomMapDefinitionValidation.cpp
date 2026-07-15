@@ -189,10 +189,29 @@ namespace
 		{
 			AddError(Report, TEXT("FloorId 不能为空。"));
 		}
+		if (Floor.DisplayName.IsEmptyOrWhitespace())
+		{
+			AddError(Report, TEXT("Floor DisplayName 不能为空。"));
+		}
 
 		TSet<FName> NodeIds;
 		for (const FWacomMapNodeDefinition& Node : Floor.Nodes)
 		{
+			if (Node.DisplayName.IsEmptyOrWhitespace())
+			{
+				AddError(Report, FString::Printf(
+					TEXT("Floor 节点 %s 的 DisplayName 不能为空。"),
+					*Node.NodeId.ToString()));
+			}
+			if (!FMath::IsFinite(Node.MapPosition.X)
+				|| !FMath::IsFinite(Node.MapPosition.Y)
+				|| Node.MapPosition.X < 0.0f || Node.MapPosition.X > 1920.0f
+				|| Node.MapPosition.Y < 0.0f || Node.MapPosition.Y > 1080.0f)
+			{
+				AddError(Report, FString::Printf(
+					TEXT("Floor 节点 %s 的 MapPosition 必须位于闭区间 [0,1920] x [0,1080]。"),
+					*Node.NodeId.ToString()));
+			}
 			if (Node.NodeId.IsNone())
 			{
 				AddError(Report, TEXT("NodeId 不能为空。"));
@@ -268,6 +287,28 @@ namespace
 			default:
 				AddError(Report, FString::Printf(TEXT("节点 %s 包含未知 NodeType。"), *Node.NodeId.ToString()));
 				break;
+			}
+		}
+
+		for (int32 LeftIndex = 0; LeftIndex < Floor.Nodes.Num(); ++LeftIndex)
+		{
+			for (int32 RightIndex = LeftIndex + 1; RightIndex < Floor.Nodes.Num(); ++RightIndex)
+			{
+				const FWacomMapNodeDefinition& Left = Floor.Nodes[LeftIndex];
+				const FWacomMapNodeDefinition& Right = Floor.Nodes[RightIndex];
+				if (Left.MapPosition.Equals(Right.MapPosition, 0.0f))
+				{
+					AddError(Report, FString::Printf(
+						TEXT("Floor 节点 %s 与 %s 的 MapPosition 完全重合。"),
+						*Left.NodeId.ToString(), *Right.NodeId.ToString()));
+					continue;
+				}
+				if (FVector2D::Distance(Left.MapPosition, Right.MapPosition) < 48.0f)
+				{
+					AddWarning(Report, FString::Printf(
+						TEXT("Floor 节点 %s 与 %s 的地图中心距离小于 48 px，可能发生视觉重叠。"),
+						*Left.NodeId.ToString(), *Right.NodeId.ToString()));
+				}
 			}
 		}
 

@@ -2,6 +2,7 @@
 
 #include "UI/Shop/WacomShopScreenFlow.h"
 
+#include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
@@ -47,6 +48,7 @@ namespace
 }
 
 void FWacomShopScreenFlow::EndShopVisitOnDeactivate(
+	AWacomPlayerController* PlayerController,
 	URunSession* Run,
 	FGuid VisitToken,
 	bool& bDidEndShopVisit)
@@ -58,13 +60,22 @@ void FWacomShopScreenFlow::EndShopVisitOnDeactivate(
 
 	if (Run)
 	{
-		Run->EndShopVisitIfOwned(VisitToken);
+		const FRunShopVisitResult Result =
+			Run->EndShopVisitIfOwnedWithResult(VisitToken);
+		if (Result.bSucceeded && PlayerController
+			&& !PlayerController->ApplyRunNodeActivityResolutionForPresentation(
+				Result.ExplorationResolution))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomShopScreenFlow] Shop End 结果未按序应用到 Run 表现"));
+		}
 	}
 	bDidEndShopVisit = true;
 }
 
 bool FWacomShopScreenFlow::PurchaseOffer(
 	UWacomShopScreen& Screen,
+	AWacomPlayerController* PlayerController,
 	URunSession* Run,
 	UWacomAppToastSubsystem* ToastSubsystem,
 	FGuid OfferId,
@@ -80,6 +91,14 @@ bool FWacomShopScreenFlow::PurchaseOffer(
 	const bool bPurchased = PurchaseResult.bSucceeded;
 	if (bPurchased)
 	{
+		if (PurchaseResult.ExplorationResolution.IsOk()
+			&& PlayerController
+			&& !PlayerController->ApplyRunNodeActivityResolutionForPresentation(
+				PurchaseResult.ExplorationResolution))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomShopScreenFlow] Shop Purchase 结果未按序应用到 Run 表现"));
+		}
 		ShowPurchaseSuccessToast(ToastSubsystem, OfferView);
 		if (PurchaseResult.bVisitClosedAfterPurchase || !Run->IsShopVisitActive())
 		{

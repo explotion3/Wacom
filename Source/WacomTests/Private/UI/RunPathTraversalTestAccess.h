@@ -17,4 +17,5 @@ struct FWacomRunPathTraversalTestAccess
 	static bool HasCursorLookOverride(const UWacomRunPathTraversalComponent& Component);
 	static FVector2D GetCursorLookOverrideNormalized(
 		const UWacomRunPathTraversalComponent& Component);
+	static float GetMoveAxis(const UWacomRunPathTraversalComponent& Component);
 };

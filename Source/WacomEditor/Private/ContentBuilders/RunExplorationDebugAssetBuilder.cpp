@@ -73,6 +73,7 @@ namespace
 	{
 		FWacomMapNodeDefinition Node;
 		Node.NodeId = NodeId;
+		Node.DisplayName = FText::FromString(NodeId);
 		Node.NodeType = NodeType;
 		Node.MapPosition = Position;
 		Node.bAllowsCamp = bAllowsCamp;
@@ -390,7 +391,11 @@ namespace
 			Anchors.Add(Node.NodeId, Anchor);
 		}
 
-		TMap<FName, int32> OutgoingEdgeIndex;
+		TMap<FName, int32> DeclaredOutgoingEdgeCounts;
+		for (const FWacomMapEdgeDefinition& Edge : Floor.Edges)
+		{
+			++DeclaredOutgoingEdgeCounts.FindOrAdd(Edge.FromNodeId);
+		}
 		for (const FWacomMapEdgeDefinition& Edge : Floor.Edges)
 		{
 			AWacomRunMapNodeAnchorActor* const* SourceAnchor = Anchors.Find(Edge.FromNodeId);
@@ -416,9 +421,18 @@ namespace
 			Spline->SetSplinePointType(1, ESplinePointType::Curve, false);
 			Spline->UpdateSpline();
 
-			const int32 BranchIndex = OutgoingEdgeIndex.FindOrAdd(Edge.FromNodeId)++;
+			if (DeclaredOutgoingEdgeCounts.FindRef(Edge.FromNodeId) < 2)
+			{
+				continue;
+			}
+
+			const FVector InitialDirection =
+				Spline->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World)
+					.GetSafeNormal();
 			FTransform BranchTransform = (*SourceAnchor)->GetActorTransform();
-			BranchTransform.AddToTranslation(FVector(80.f, (BranchIndex - 1) * 90.f, 0.f));
+			BranchTransform.SetLocation(
+				(*SourceAnchor)->GetActorLocation() + InitialDirection * 160.0f);
+			BranchTransform.SetRotation(InitialDirection.Rotation().Quaternion());
 			AWacomRunPathBranchTargetActor* Branch = Cast<AWacomRunPathBranchTargetActor>(
 				World->SpawnActor<AActor>(BranchBlueprint->GeneratedClass, BranchTransform));
 			if (!Branch)
@@ -478,28 +492,45 @@ namespace Wacom::ContentBuilder
 		}
 
 		Result.Floor->FloorId = TEXT("Floor.Debug.01");
+		Result.Floor->DisplayName = FText::FromString(TEXT("蛇巢浅层"));
 		Result.Floor->EntryNodeId = TEXT("Entry");
 		FWacomMapNodeDefinition Entry = MakeNode(
 			TEXT("Entry"), EWacomMapNodeType::Navigation, FVector2D(960.f, 980.f), true);
+		Entry.DisplayName = FText::FromString(TEXT("林地入口"));
+		Entry.ShortDescription = FText::FromString(TEXT("进入蛇巢浅层的安全落脚点。"));
 		FWacomMapNodeDefinition Battle = MakeNode(
 			TEXT("Battle.Snake"), EWacomMapNodeType::Encounter, FVector2D(960.f, 840.f));
+		Battle.DisplayName = FText::FromString(TEXT("伏蛇草径"));
+		Battle.ShortDescription = FText::FromString(TEXT("草丛中传来持续的窸窣声。"));
 		Battle.Content.Encounter.EncounterDefinition = Encounter;
 		FWacomMapNodeDefinition ShopNode = MakeNode(
 			TEXT("Shop.Snake"), EWacomMapNodeType::Shop, FVector2D(960.f, 700.f));
+		ShopNode.DisplayName = FText::FromString(TEXT("行商营帐"));
+		ShopNode.ShortDescription = FText::FromString(TEXT("一处临时搭起的补给点。"));
 		ShopNode.Content.Shop.ShopDefinition = Shop;
 		FWacomMapNodeDefinition EventSnakeNode = MakeNode(
 			TEXT("Event.SnakeGift"), EWacomMapNodeType::RunEvent, FVector2D(960.f, 560.f));
+		EventSnakeNode.DisplayName = FText::FromString(TEXT("蛇蜕空地"));
+		EventSnakeNode.ShortDescription = FText::FromString(TEXT("残留的蛇蜕似乎掩盖着什么。"));
 		EventSnakeNode.Content.RunEvent.RunEventDefinition = EventSnake;
 		FWacomMapNodeDefinition Junction = MakeNode(
 			TEXT("Junction"), EWacomMapNodeType::Navigation, FVector2D(960.f, 420.f), true);
+		Junction.DisplayName = FText::FromString(TEXT("三岔旧路"));
+		Junction.ShortDescription = FText::FromString(TEXT("道路在这里分向三处。"));
 		FWacomMapNodeDefinition PickupNode = MakeNode(
 			TEXT("Treasure.PoisonFang"), EWacomMapNodeType::Treasure, FVector2D(650.f, 260.f), true);
+		PickupNode.DisplayName = FText::FromString(TEXT("毒牙遗落处"));
+		PickupNode.ShortDescription = FText::FromString(TEXT("一枚仍带毒性的断牙落在泥里。"));
 		PickupNode.Content.Treasure.PickupDefinition = Pickup;
 		FWacomMapNodeDefinition ChestNode = MakeNode(
 			TEXT("Treasure.KeyChest"), EWacomMapNodeType::Treasure, FVector2D(1270.f, 260.f), true);
+		ChestNode.DisplayName = FText::FromString(TEXT("封锁宝箱"));
+		ChestNode.ShortDescription = FText::FromString(TEXT("沉重的箱锁需要合适的钥匙。"));
 		ChestNode.Content.Treasure.WorldCardInteractionDefinition = Chest;
 		FWacomMapNodeDefinition EventFlagNode = MakeNode(
 			TEXT("Event.FlagReward"), EWacomMapNodeType::RunEvent, FVector2D(960.f, 120.f), true);
+		EventFlagNode.DisplayName = FText::FromString(TEXT("褪色路标"));
+		EventFlagNode.ShortDescription = FText::FromString(TEXT("一面褪色标记指向更深的林地。"));
 		EventFlagNode.Content.RunEvent.RunEventDefinition = EventFlag;
 		Result.Floor->Nodes =
 		{

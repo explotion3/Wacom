@@ -148,11 +148,24 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - 静态地图 DataAsset 类型属于 `WacomData`；Map Node Lifecycle、Action Point、Map Travel、Floor Transition 与 Floor Exposure 的运行时规则属于 `WacomRun` 内部的深层地图 Module，不新增 UE `.Build.cs` 模块。
 - 场景 Actor / Component 只提供 `NodeId / EdgeId / NodeAnchor / content host` 映射；Actor 连线和关卡坐标不能成为 Logical Map Graph 的规则真相。`AWacomRunPathBranchTargetActor` 只广播 EdgeId，`AWacomRunPathSegmentActor` 只保存 EdgeId + Spline，`UWacomRunMapNodeBindingComponent` 只声明 Host 的 NodeId + NodeType。
 - 现有 Battle / Shop / RunEvent / Treasure Host 为复用外围 flow 可以保留 Definition 字段作为 façade mirror；Scene Validator 要求它与 Floor typed payload 一致。规则层只认 Floor DataAsset，Host 不得反向生成或覆盖地图内容。
+- 玩家锚定在节点时，App 只消费 `OutgoingEdges[].bCanTraverse` 构建路线选择状态：0 条结构出口为死胡同，存在出口但 0 条合法路线为暂时不可通行，1 条合法路线在首次 W 时自动 Begin，多条合法路线必须先明确选择 Edge。路线选择不增加 Run 命令或 Snapshot 字段。
+- BranchTarget 是多出口 Decision Gate 的表现映射，不是移动开关。静态声明出度大于等于 2 的节点才为每条 Edge 制作一个 BranchTarget；单出口节点只制作 PathSegment。运行时只显示当前节点合法 Edge 对应的入口，开始移动、取消、抵达、地图传送或 Session 重绑后按最新显式 Snapshot 重建。
+- 多出口入口按道路初始方向从左到右排序，鼠标 hover / click 或 A/D、左摇杆、E / 手柄 A 只上报 EdgeId；Branch Actor 不保存目标节点、规则门槛或 Segment 引用。单出口不要求玩家寻找或点击场景 Actor。
+- NodeAnchor 的 View 朝向可以面向节点内容，PathSpline 起始切线可以面向道路方向；二者不要求制作时完全相同。开始 Traversal 的首帧保持 NodeAnchor View，App 在短距离内平滑对齐到 PathSpline，禁止用瞬时切换或 Character controller yaw 反写制造镜头中心跳变。
+- 首版入口视觉由 `DShader/Material/World/M_WacomRunBranchEntrance.dsm` 生成 `/Game/DreamMaterials/World/M_WacomRunBranchEntrance`：Available 使用稳定青色，Focused 使用稳定琥珀色；Full / Reduced / Off 只改变装饰脉冲，Off 仍保留合法选择的语义颜色。
 - `WacomEditor` 已提供 Journey/Floor Data Validation、loaded-world Scene Binding Validation 和可重复 Debug builder；未来图形 authoring Adapter 仍必须编辑同一份 DataAsset，不能维护第二份图数据。
 - Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性，但本阶段不启用 SaveGame schema。
-- Editor 验证覆盖重复身份、无效连接、不可达强制节点、无法满足的 Floor Entrance、typed payload、NodeAnchor / EdgePath / content host 缺失、重复与错类型。
+- Editor 验证覆盖重复身份、无效连接、不可达强制节点、无法满足的 Floor Entrance、typed payload、NodeAnchor / EdgePath / content host 缺失、重复与错类型，以及多出口 Edge 缺失/重复 BranchTarget、单出口 Edge 残留 BranchTarget。
 - Debug builder 生成稳定的 `DA_Journey_Debug`、`DA_Floor_Debug_01` 和三个 Run Path Blueprint，并迁移 `GM_Wacom`、玩家蓝图与 `L_Exploration`；连续运行必须保持 JourneyId、FloorId、NodeId、EdgeId 和内容引用稳定。
 - 地图规则 Module 应提供较小 Interface；场景 Actor、Spline、地图 Widget 和关卡 travel 只作为 App Adapter，不进入地图规则 Implementation。
+
+### 当前 Floor 地图 Screen
+
+`URunSession::BuildCurrentFloorMapSnapshot()` 是地图页面唯一的整层只读规则投影。它返回当前探索版本、Floor 标题、玩家可见节点/有向边、生命周期、同层传送可用性和 `RecommendedTravelTarget`；不包含 Actor、Spline、世界坐标或可写 DataAsset 指针，也不会广播状态变化。普通 `Hidden` 节点及关联边不显示；具有 landmark 语义的入口 / Boss 可以显示无标题、无路径、不可传送的轮廓。
+
+同层地图传送继续遵循“免费且只到非当前 `Resolved` 节点”。确认前 App 必须让 Screen、最新 Map Snapshot 与 Coordinator 的版本一致，并由 Coordinator 预检同 Floor NodeAnchor 和有限 Transform；之后只调用既有 `MapTravel` 规则命令。提交前拒绝保持页面并刷新真实状态；规则已经提交但场景定位失败时关闭过期页面并记录严重诊断，禁止重试同一结果。
+
+推荐落点只用于死胡同打开地图时的瞬时默认焦点：将当前 Floor 静态有向边视作无向邻接，选择图距离最近的合法 `Resolved` 节点，平局按 NodeId。它不写入 RunState、SaveGame 或最近访问历史。
 
 ## §9 尚待确认
 

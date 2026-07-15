@@ -24,6 +24,7 @@ UI 不直接修改战斗或 Run 状态。Widget 读取 Snapshot、ViewData 或 V
 | 领域 | 数据来源 | 命令出口 |
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 只读显示探索状态和交互提示 |
+| Run Map | `URunSession::BuildCurrentFloorMapSnapshot()` 经 App-private ViewData builder | `UWacomRunMapScreen` 只上报 Select / ConfirmTravel / Close；PlayerController-owned Flow 重验并调用唯一 Coordinator MapTravel seam |
 | Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；中央 `Workspace` 是唯一选择/携带输入 owner，右侧 `ZoneRack` 与销毁目标只转发 Screen 已验证的批量释放意图；preview、批量提交、Toast 和 Confirm 都经私有 command flow / presentation helper 调用 RunSession、Toast 和 Confirm；旧 simultaneous-zone Host 仅保留只读 fallback，不再创建 UMG DragDrop owner；负重区只渲染 Run snapshot 中的卡牌；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
 | Shop | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 flow 编排购买、关闭访问和 Toast |
 | RunEvent | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 flow 编排选项提交、支付、关闭和 Toast |
@@ -50,7 +51,7 @@ Wacom UI 采用“Shell 集中 + Screen coordinator 分域负责”的结构，�
 | UI Shell | `UWacomGameUIManagerSubsystem + UWacomPrimaryGameLayout` | 创建 / 重建根布局，按 Game / GameMenu / Modal / Overlay 管理 CommonUI stack | 不解释战斗、Run 或菜单业务规则 |
 | 顶层配置 | `UWacomUIDeveloperSettings` | 注册 PrimaryLayout、AppToast 和 `UI.Widget.*` 顶层 WBP 覆盖 | 不作为运行时状态来源 |
 | App 流程 | `AWacomGameMode / AWacomMenuGameMode / AWacomPlayerController` | 进入 / 退出战斗，主菜单 travel，探索交互，目标输入路由 | 不把 Screen 内部布局写进流程类 |
-| GameMenu 路由 | `FWacomExplorationScreenRouter` | 统一背包、暂停菜单、商店、RunEvent 的打开、关闭、异步 Push 和访问 rollback | 不提交具体 Run 规则效果 |
+| GameMenu 路由 | `FWacomExplorationScreenRouter` | 统一地图、背包、暂停菜单、商店、RunEvent 的打开、关闭、异步 Push 和访问 rollback | 不提交具体 Run 规则效果 |
 | 输入上下文 | `UWacomInputContextCoordinatorSubsystem` | 统一 CommonUI input config、鼠标显隐 / capture、Enhanced Input profile 和 click / mouse-over lease | 不读取具体 Widget 业务状态 |
 | Screen coordinator | `UBattleHUD / UWacomBackpackScreen / UWacomShopScreen / UWacomRunEventScreen` | 持有 Screen 生命周期、WBP 绑定、ViewData 刷新和玩家意图入口 | 子 Widget 不直接写领域状态 |
 | Passive Widget | 卡牌、列表项、Badge、Panel、Button 等 | 显示 ViewData 并通过委托上报玩家意图 | 不直接调用 `UBattleSession` 或 `URunSession` 写 API |
@@ -83,6 +84,7 @@ Run UI 只显示 RunSession 的当前事实和 presentation view，不直接改 
 | Screen / Widget | 层级 | 当前职责 |
 |---|---|---|
 | `UWacomExplorationHUD` | Game | 显示探索时段、剩余节点、交互提示；读取 Run ViewModel |
+| `UWacomRunMapScreen` | GameMenu | 显示当前 Floor 已知节点/边与同层传送候选；只维护瞬时选择并广播意图，完整生命周期和提交由 `FWacomRunMapScreenFlow` 承接 |
 | `UWacomBackpackScreen` | GameMenu | 展示背包、备战区、负重区和 SpecialZone；拖拽 hover preview、drop 提交或按钮意图经 Screen flow 进入 RunSession；Screen 不复制负重区规则，目标合法性由 RunSession 决定 |
 | `UWacomShopScreen` | GameMenu | 展示当前商店 snapshot、金币、商品状态；购买和关闭访问经 Screen flow 提交 |
 | `UWacomRunEventScreen` | GameMenu | 展示当前事件节点、选项、支付需求和后果预览；选项提交和卡牌支付经 Screen flow 提交 |
@@ -144,5 +146,6 @@ Binding 文档只记录 WBP 制作合约，不写规则真相。
 | [UI_Backpack_WBP_Binding.md](./UI_Backpack_WBP_Binding.md) | 背包、局部 Zone、SpecialZone、DeckCard、CardView、CardDetail、EffectBadge 的父类、路径、绑定槽位和 PIE 检查 |
 | [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md) | BattleHUD、手牌、CombatLogFeed、PresentationStack、场景敌人状态 Badge 和 first-person card view 的 WBP 绑定协议 |
 | [UI_RunEvent_WBP_Binding.md](./UI_RunEvent_WBP_Binding.md) | RunEventScreen、ChoiceButton、PaymentDropTarget 的父类、路径、绑定槽位和 PIE 检查 |
+| [UI_RunMap_WBP_Binding.md](./UI_RunMap_WBP_Binding.md) | Run Map Screen、动态节点、1920×1080 画布和像素风状态合同 |
 
 需要知道“为什么这样做”时，回到本文和对应专题文档；需要知道“绑定哪个槽位”时，读 Binding 文档。

@@ -18,6 +18,7 @@ struct FRunShopOfferInput;
 struct FWacomExplorationScreenRouter
 {
 	static void OpenBackpack(AWacomPlayerController& PC);
+	static bool ToggleMap(AWacomPlayerController& PC);
 	static void TogglePauseMenu(AWacomPlayerController& PC);
 	static void CloseTopGameMenu(AWacomPlayerController& PC);
 	static bool OpenShop(AWacomPlayerController& PC, FName ShopId, const TArray<FRunShopOfferInput>& Offers);

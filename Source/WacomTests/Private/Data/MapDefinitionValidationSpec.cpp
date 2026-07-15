@@ -15,10 +15,20 @@
 
 namespace
 {
+	FVector2D MakeStableMapPosition(const TCHAR* NodeId)
+	{
+		const uint32 Hash = GetTypeHash(FString(NodeId));
+		return FVector2D(
+			100.0f + static_cast<float>(Hash % 17u) * 100.0f,
+			100.0f + static_cast<float>((Hash / 17u) % 9u) * 100.0f);
+	}
+
 	FWacomMapNodeDefinition MakeNavigationNode(const TCHAR* NodeId)
 	{
 		FWacomMapNodeDefinition Node;
 		Node.NodeId = NodeId;
+		Node.DisplayName = FText::FromString(NodeId);
+		Node.MapPosition = MakeStableMapPosition(NodeId);
 		Node.NodeType = EWacomMapNodeType::Navigation;
 		return Node;
 	}
@@ -27,6 +37,8 @@ namespace
 	{
 		FWacomMapNodeDefinition Node;
 		Node.NodeId = NodeId;
+		Node.DisplayName = FText::FromString(NodeId);
+		Node.MapPosition = MakeStableMapPosition(NodeId);
 		Node.NodeType = EWacomMapNodeType::FloorEntrance;
 		Node.Content.FloorEntrance.TargetFloorId = TargetFloorId;
 		return Node;
@@ -55,11 +67,13 @@ namespace
 			Journey->SupportedCharacters.Add(Character);
 
 			Floor1->FloorId = TEXT("Floor.Validation.01");
+			Floor1->DisplayName = FText::FromString(TEXT("Validation Floor 1"));
 			Floor1->EntryNodeId = TEXT("Entry");
 			Floor1->Nodes = {MakeNavigationNode(TEXT("Entry")), MakeEntranceNode(TEXT("Exit"), TEXT("Floor.Validation.02"))};
 			Floor1->Edges = {MakeEdge(TEXT("EntryToExit"), TEXT("Entry"), TEXT("Exit"))};
 
 			Floor2->FloorId = TEXT("Floor.Validation.02");
+			Floor2->DisplayName = FText::FromString(TEXT("Validation Floor 2"));
 			Floor2->EntryNodeId = TEXT("Entry2");
 			Floor2->Nodes = {MakeNavigationNode(TEXT("Entry2"))};
 			Journey->Floors = {Floor1, Floor2};
@@ -94,9 +108,12 @@ bool FWacomMapDefinitionValidationGraphSpec::RunTest(const FString& Parameters)
 
 	UWacomFloorMapDefinition* TreasureFloor = NewObject<UWacomFloorMapDefinition>();
 	TreasureFloor->FloorId = TEXT("Floor.Treasure");
+	TreasureFloor->DisplayName = FText::FromString(TEXT("Treasure Floor"));
 	TreasureFloor->EntryNodeId = TEXT("Treasure");
 	FWacomMapNodeDefinition Treasure;
 	Treasure.NodeId = TEXT("Treasure");
+	Treasure.DisplayName = FText::FromString(TEXT("Treasure"));
+	Treasure.MapPosition = FVector2D(960.0f, 540.0f);
 	Treasure.NodeType = EWacomMapNodeType::Treasure;
 	TreasureFloor->Nodes.Add(Treasure);
 	TestFalse(TEXT("Treasure without either payload fails"),
@@ -122,6 +139,8 @@ bool FWacomMapDefinitionValidationReachabilitySpec::RunTest(const FString& Param
 	Fixture.Floor1->Nodes.Add(Optional);
 	FWacomMapNodeDefinition Boss;
 	Boss.NodeId = TEXT("BossUnreachable");
+	Boss.DisplayName = FText::FromString(TEXT("Boss"));
+	Boss.MapPosition = MakeStableMapPosition(TEXT("BossUnreachable"));
 	Boss.NodeType = EWacomMapNodeType::Encounter;
 	Boss.Content.Encounter.EncounterDefinition = NewObject<UEncounterDefinition>(Fixture.Floor1);
 	Boss.Content.Encounter.bBoss = true;
@@ -169,6 +188,52 @@ bool FWacomMapDefinitionValidationRequirementSpec::RunTest(const FString& Parame
 	const TArray<const UWacomJourneyDefinition*> Journeys = {Fixture.Journey, DuplicateJourney};
 	TestTrue(TEXT("Duplicate JourneyId is rejected across the supplied catalog"),
 		FWacomMapDefinitionValidation::ValidateJourneyIds(Journeys).HasErrors());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomMapDefinitionValidationPresentationFieldsSpec,
+	"Wacom.Data.Map.Validation.PresentationFieldsAndMapPositions",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomMapDefinitionValidationPresentationFieldsSpec::RunTest(const FString& Parameters)
+{
+	UWacomFloorMapDefinition* Floor = NewObject<UWacomFloorMapDefinition>();
+	Floor->FloorId = TEXT("Floor.Validation.Presentation");
+	Floor->DisplayName = FText::FromString(TEXT("Presentation Floor"));
+	Floor->EntryNodeId = TEXT("LeftBoundary");
+	FWacomMapNodeDefinition Left = MakeNavigationNode(TEXT("LeftBoundary"));
+	Left.MapPosition = FVector2D(0.0f, 0.0f);
+	Left.ShortDescription = FText::GetEmpty();
+	FWacomMapNodeDefinition Right = MakeNavigationNode(TEXT("RightBoundary"));
+	Right.MapPosition = FVector2D(1920.0f, 1080.0f);
+	Floor->Nodes = {Left, Right};
+	Floor->Edges = {MakeEdge(TEXT("BoundaryEdge"), TEXT("LeftBoundary"), TEXT("RightBoundary"))};
+
+	TestTrue(TEXT("Closed interval boundaries and optional empty description pass"),
+		FWacomMapDefinitionValidation::ValidateFloor(Floor).IsValid());
+
+	Floor->DisplayName = FText::GetEmpty();
+	TestTrue(TEXT("Empty Floor DisplayName is an error"),
+		FWacomMapDefinitionValidation::ValidateFloor(Floor).HasErrors());
+	Floor->DisplayName = FText::FromString(TEXT("Presentation Floor"));
+	Floor->Nodes[1].DisplayName = FText::GetEmpty();
+	TestTrue(TEXT("Empty Node DisplayName is an error"),
+		FWacomMapDefinitionValidation::ValidateFloor(Floor).HasErrors());
+	Floor->Nodes[1].DisplayName = FText::FromString(TEXT("Right Boundary"));
+
+	Floor->Nodes[1].MapPosition = FVector2D(0.0f, 0.0f);
+	TestTrue(TEXT("Exact overlap is an error"),
+		FWacomMapDefinitionValidation::ValidateFloor(Floor).HasErrors());
+	Floor->Nodes[1].MapPosition = FVector2D(40.0f, 0.0f);
+	const FWacomMapDefinitionValidationReport NearReport =
+		FWacomMapDefinitionValidation::ValidateFloor(Floor);
+	TestTrue(TEXT("Less than 48 px emits a warning"), NearReport.HasWarnings());
+	TestFalse(TEXT("Near but distinct positions remain valid"), NearReport.HasErrors());
+
+	Floor->Nodes[1].MapPosition = FVector2D(1920.01f, 1080.0f);
+	TestTrue(TEXT("Out-of-range position is an error"),
+		FWacomMapDefinitionValidation::ValidateFloor(Floor).HasErrors());
 	return true;
 }
 

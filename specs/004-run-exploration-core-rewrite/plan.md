@@ -217,3 +217,11 @@ Source/WacomTests/
 ## Complexity Tracking
 
 无 Constitution 违规。大型迁移通过五个可编译切片控制风险，不引入临时兼容层或第二份地图真相。
+
+## Refinement Plan: route choice and Anchored look (2026-07-15)
+
+- 保持 WacomRun Snapshot / Command / Resolution 不变，在 WacomApp private Coordinator 内从 `OutgoingEdges[].bCanTraverse` 派生 DeadEnd / Unavailable / Automatic / ChoiceRequired。
+- `UWacomRunPathTraversalComponent` 在 Anchored 中只提供带 latch 的导航意图和 cursor look Tick；同步 Begin 成功后将当前 W 轴交给既有 Traversing 移动。
+- PlayerController 独占 private BranchSelectionController；BranchTarget 只提供 EdgeId、只读表现状态和 native intent，不成为规则或移动 owner。
+- WacomEditor builder 只在静态多出口节点生成按路径初始方向对齐的入口，并由 loaded-world validator 执行 0/1 数量合同。
+- 新增小型 route-choice / branch-presentation specs，并继续运行 `Wacom.UI.RunPathTraversal`、scene validation、Battle entry 与 Blueprint/PIE 回归。

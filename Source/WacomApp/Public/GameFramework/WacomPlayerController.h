@@ -23,11 +23,15 @@ class UBattleHUD;
 class UWacomRunEventDefinition;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunWorldCardDropReceiverComponent;
+class UWacomRunPathTraversalComponent;
 class UWacomGameViewportClient;
 class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
 class FWacomRunExplorationPresentationCoordinator;
+class FWacomRunPathBranchSelectionController;
+class FWacomRunMapScreenFlow;
 class FWacomRunSceneBindingRegistry;
+class UWacomRunMapScreen;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomRunFirstPersonCardSourceComponent;
 class UWacomCardDetailPanel;
@@ -45,6 +49,8 @@ struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
 struct FInputKeyEventArgs;
 struct FHitResult;
+struct FWacomExplorationScreenRouter;
+struct FRunExplorationResolution;
 
 /**
  * Wacom PlayerController。
@@ -131,6 +137,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input")
 	TObjectPtr<UInputAction> IA_OpenBackpack;
 
+	/** 打开当前 Floor 地图（默认 M / 手柄 View）；仅在 Exploration Anchored 且没有互斥菜单或事务时生效。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Input",
+		meta = (ToolTip = "打开当前 Floor 地图的输入动作。默认映射 M 与手柄 View；地图开启期间由 CommonUI 直接处理关闭和确认。"))
+	TObjectPtr<UInputAction> IA_OpenMap;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Battle Debug", meta = (ToolTip = "开启后，战斗场景目标点击路由会输出 cursor trace 和句柄转发日志。默认关闭，不显示屏幕调试输出。"))
 	bool bLogBattleSceneTargetClickRouting = false;
 
@@ -200,6 +211,9 @@ public:
 	/** Console command / IA 共用入口（等同于按 B）。 */
 	void TryOpenBackpackFromConsole();
 
+	/** Console command / IA 共用入口（等同于按 M）。 */
+	void TryToggleRunMapFromConsole();
+
 	/** IMC 切换统一入口。GameMode 在 EnterBattle / ExitBattle 时调用。 */
 	void PushMappingContext(UInputMappingContext* IMC, int32 Priority = 0);
 	void PopMappingContext(UInputMappingContext* IMC);
@@ -207,6 +221,13 @@ public:
 	/** 当前 Run 的 Session。BeginPlay 时自动创建并 Initialize。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
 	URunSession* GetRunSession() const { return RunSession; }
+
+	/**
+	 * 将 GameMode 持有的节点活动规则结果显式交给 Run 表现协调器。
+	 * 返回 false 表示结果未按顺序应用；此时函数会重建绑定作为可玩性恢复，但调用方仍应处理失败。
+	 */
+	bool ApplyRunNodeActivityResolutionForPresentation(
+		const FRunExplorationResolution& Resolution);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|First Person Cards")
 	UWacomRunFirstPersonCardSourceComponent* GetRunFirstPersonCardSourceComponent() const
@@ -329,6 +350,7 @@ protected:
 	void OnEndTurnPressed();
 	void OnOpenMenuPressed();
 	void OnOpenBackpackPressed();
+	void OnOpenMapPressed();
 	void OnInteractPressed();
 
 	virtual bool CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const;
@@ -342,6 +364,8 @@ protected:
 		FHitResult& OutHitResult) const;
 	virtual bool BuildRunPathBranchClickHitResult(FHitResult& OutHitResult) const;
 	virtual bool IsInExplorationFlow() const;
+	/** Run 场景指针路由是否拥有当前左键；GameMenu 与其过渡阶段必须优先。 */
+	bool CanRouteRunScenePointerInput() const;
 	void UpdateRunWorldTargetProbePreview();
 	void ClearRunWorldTargetProbePreview();
 	void ClearRunMenuDropTargetProbe();
@@ -374,6 +398,16 @@ private:
 	bool RefreshRunExplorationPresentationBinding();
 	void TeardownRunExplorationPresentationBinding();
 	void HandleRunPathBranchRequested(FName EdgeId);
+	void HandleRunPathAnchoredForwardIntent();
+	void HandleRunPathAnchoredHorizontalIntent(int32 Direction);
+	void HandleRunRouteChoiceStateChanged(const struct FWacomRunRouteChoiceState& State);
+	bool CanPresentRunMapScreen(
+		bool& bOutPreferRecommendedTarget,
+		FName* OutRejectDetail = nullptr) const;
+	int32 BeginRunMapScreenOpenRequest();
+	bool IsRunMapScreenOpenRequestCurrent(int32 RequestGeneration) const;
+	bool AttachRunMapScreen(UWacomRunMapScreen& Screen, int32 RequestGeneration);
+	void CancelRunMapScreenOpenRequest(int32 RequestGeneration);
 
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
 	UBattleHUD* GetActiveBattleHUD() const;
@@ -489,6 +523,9 @@ private:
 	TSharedPtr<FWacomRunFirstPersonCardDropCoordinator> RunFirstPersonCardDropCoordinator;
 	TSharedPtr<FWacomRunSceneBindingRegistry> RunExplorationSceneBindingRegistry;
 	TSharedPtr<FWacomRunExplorationPresentationCoordinator> RunExplorationPresentationCoordinator;
+	TSharedPtr<FWacomRunPathBranchSelectionController> RunPathBranchSelectionController;
+	TSharedPtr<FWacomRunMapScreenFlow> RunMapScreenFlow;
+	TWeakObjectPtr<UWacomRunPathTraversalComponent> BoundRunPathTraversal;
 	TArray<TWeakObjectPtr<AWacomRunPathBranchTargetActor>> BoundRunPathBranchTargets;
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
@@ -502,6 +539,7 @@ private:
 	friend class FWacomRunFirstPersonCardDetailController;
 	friend class FWacomRunFirstPersonCardDragController;
 	friend class UWacomGameViewportClient;
+	friend struct FWacomExplorationScreenRouter;
 #if WITH_AUTOMATION_TESTS
 	friend class AWacomPlayerControllerProbe;
 	friend struct FWacomPlayerControllerRunInteractionTestAccess;

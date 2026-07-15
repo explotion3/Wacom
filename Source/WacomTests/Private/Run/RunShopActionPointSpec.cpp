@@ -53,8 +53,19 @@ bool FWacomRunShopFirstPurchaseActionPointTest::RunTest(const FString& /*Paramet
 	FRunShopOfferInput Second;
 	Second.CardDefinition = Fixture.MakeCard(TEXT("Shop.Policy.CardB"));
 	Second.Price = 1;
-	TestTrue(TEXT("Shop begins"),
-		Fixture.Session->BeginShopVisit(TEXT("Shop.Policy.Actor"), { First, Second }));
+	const int32 VersionBeforeVisit =
+		Fixture.Session->BuildExplorationSnapshot().StateVersion;
+	const FRunShopVisitResult BeginVisit =
+		Fixture.Session->BeginShopVisitWithResult(
+			TEXT("Shop.Policy.Actor"), { First, Second });
+	TestTrue(TEXT("Shop begins"), BeginVisit.bSucceeded);
+	TestTrue(TEXT("Shop begin exposes an explicit exploration result"),
+		BeginVisit.ExplorationResolution.IsOk());
+	TestEqual(TEXT("Shop begin advances the exploration version once"),
+		BeginVisit.ExplorationResolution.VersionAfter,
+		VersionBeforeVisit + 1);
+	TestTrue(TEXT("Shop begin returns visit ownership"),
+		BeginVisit.VisitToken.IsValid());
 	const FRunShopSnapshot OpenSnapshot = Fixture.Session->BuildCurrentShopSnapshot();
 	TestEqual(TEXT("Browsing is free"),
 		Fixture.Session->BuildExplorationSnapshot().Time.RemainingActionPoints,
@@ -83,7 +94,11 @@ bool FWacomRunShopFirstPurchaseActionPointTest::RunTest(const FString& /*Paramet
 		Fixture.Session->BuildExplorationSnapshot().Time.RemainingActionPoints,
 		2);
 
-	Fixture.Session->EndShopVisit();
+	const FRunShopVisitResult EndVisit =
+		Fixture.Session->EndShopVisitIfOwnedWithResult(BeginVisit.VisitToken);
+	TestTrue(TEXT("Owned Shop end succeeds"), EndVisit.bSucceeded);
+	TestTrue(TEXT("Shop end exposes an explicit exploration result"),
+		EndVisit.ExplorationResolution.IsOk());
 	TestFalse(TEXT("End closes visit"), Fixture.Session->IsShopVisitActive());
 	TestEqual(TEXT("End visit adds no delayed AP cost"),
 		Fixture.Session->BuildExplorationSnapshot().Time.RemainingActionPoints,

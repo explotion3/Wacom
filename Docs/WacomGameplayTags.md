@@ -161,6 +161,14 @@ tags:
 | `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡被抽到手牌时；dispatcher 方法存在，主流程未接入 |
 | `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被真正弃掉时；打出后自然进弃牌堆不触发 |
 
+## UI Widget Registry
+
+UI Widget tag 只作为 CommonUI 顶层软类注册身份，不进入规则状态或 DataAsset 效果制作。
+
+| Tag | 代码名 | 说明 |
+|---|---|---|
+| `UI.Widget.RunMapScreen` | `UI_Widget_RunMapScreen` | 当前 Floor 地图 Screen；注册类必须继承 `UWacomRunMapScreen`，缺失时回退 C++ Screen |
+
 ## §13 CardLocation
 
 `Effect.Draw` 使用 `FCardEffect::TargetZone` 指定源区域。未设置时默认抽牌堆。当前可制作源区域只有 Draw / Discard / Exhaust；`CardLocation.Hand` 是保留 tag，不是当前 Draw authoring contract 的合法源。

@@ -7,6 +7,7 @@
 #include "Exploration/RunCampActivity.h"
 #include "Exploration/RunExplorationCommand.h"
 #include "Exploration/RunExplorationResolution.h"
+#include "Exploration/RunFloorMapSnapshot.h"
 #include "UObject/Object.h"
 #include "Types/WacomEnums.h"
 #include "RunState.h"
@@ -76,6 +77,9 @@ public:
 
 	/** 构建当前探索只读事实；不改变状态、不广播。 */
 	FRunExplorationSnapshot BuildExplorationSnapshot() const;
+
+	/** 构建当前 Floor 的完整地图只读事实；不改变状态、不广播。 */
+	FRunFloorMapSnapshot BuildCurrentFloorMapSnapshot() const;
 
 	/** 为当前 typed Map Node 开始唯一 NodeActivity；成本由规则类型决定，调用方不能提供。 */
 	FRunExplorationResolution BeginCurrentNodeActivity(ERunNodeActivityKind Kind);
@@ -603,11 +607,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	bool BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
 
+	/** C++ 正式入口：同时返回 visit ownership 与探索版本结果。 */
+	FRunShopVisitResult BeginShopVisitWithResult(
+		FName ShopId,
+		const TArray<FRunShopOfferInput>& Offers);
+
 	/** C++ UI ownership token for the currently active shop visit. */
 	FGuid GetActiveShopVisitToken() const { return ActiveShopVisitToken; }
 
 	/** Ends the shop visit only when the caller still owns the active visit token. */
 	bool EndShopVisitIfOwned(FGuid VisitToken);
+
+	/** C++ 正式入口：只结束调用方仍拥有的 visit，并显式返回探索版本结果。 */
+	FRunShopVisitResult EndShopVisitIfOwnedWithResult(FGuid VisitToken);
 
 	/**
 	 * 结束当前商店访问并清理访问标记。
@@ -828,6 +840,9 @@ private:
 	FRunEventChoiceResult ResolveRunEventChoiceInternal(
 		FName ChoiceId,
 		TOptional<FGuid> PaidCardInstanceId);
+
+	/** 商店关闭的无 ownership 内部实现；公开 UI 路径应使用 owned result 入口。 */
+	FRunShopVisitResult EndShopVisitWithResult();
 
 	/** 私有路径：AcquireCardToRun 的"不广播"版本，供复合 Run 操作统一尾部广播。 */
 	bool AcquireCardToRunInternal(UCardDefinition* Card);

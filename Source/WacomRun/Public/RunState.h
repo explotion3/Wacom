@@ -127,6 +127,15 @@ struct WACOMRUN_API FRunShopPurchaseResult
 	FRunExplorationResolution ExplorationResolution;
 };
 
+/** 商店访问 Begin / End 的显式结果；UI 必须把其中的探索结果交给表现协调器。 */
+struct WACOMRUN_API FRunShopVisitResult
+{
+	bool bSucceeded = false;
+	FName DisabledReason = NAME_None;
+	FGuid VisitToken;
+	FRunExplorationResolution ExplorationResolution;
+};
+
 /** 一次宝藏/拾取交互的显式原子结算结果。 */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunTreasureSettlementResult

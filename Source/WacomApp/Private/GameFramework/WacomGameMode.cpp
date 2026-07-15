@@ -427,6 +427,26 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		PendingBattleTotalPartCount = 0;
 		return;
 	}
+	if (!WacomPC->ApplyRunNodeActivityResolutionForPresentation(EncounterBegin))
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] EnterBattle: Encounter Begin 未能同步到 Run 表现，取消活动并拒绝进入战斗"));
+		const FRunExplorationResolution Cancellation =
+			Run->CancelNodeActivity(EncounterBegin.NodeActivityTicket.GetValue());
+		if (Cancellation.IsOk())
+		{
+			WacomPC->ApplyRunNodeActivityResolutionForPresentation(Cancellation);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomGameMode] EnterBattle: Encounter Begin 回滚失败。Detail=%s"),
+				*Cancellation.Status.Detail.ToString());
+		}
+		ActiveSession = nullptr;
+		PendingBattleTotalPartCount = 0;
+		return;
+	}
 	PendingEncounterActivity = EncounterBegin.NodeActivityTicket.GetValue();
 
 	// 2) 确保 PrimaryLayout 就位（跨场景长存，Subsystem 负责生命周期）
@@ -439,7 +459,18 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	if (!BattleHUD)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] Push BattleHUD 失败"));
-		Run->CancelNodeActivity(PendingEncounterActivity.GetValue());
+		const FRunExplorationResolution Cancellation =
+			Run->CancelNodeActivity(PendingEncounterActivity.GetValue());
+		if (Cancellation.IsOk())
+		{
+			WacomPC->ApplyRunNodeActivityResolutionForPresentation(Cancellation);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomGameMode] Push BattleHUD 失败后的 Encounter 取消失败。Detail=%s"),
+				*Cancellation.Status.Detail.ToString());
+		}
 		PendingEncounterActivity.Reset();
 		ActiveSession = nullptr;
 		PendingBattleTotalPartCount = 0;
@@ -594,13 +625,22 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 				UE_LOG(LogTemp, Error,
 					TEXT("[WacomGameMode] Encounter 战果提交失败，取消活动以解除探索锁。Detail=%s"),
 					*EncounterResult.Status.Detail.ToString());
-				Run->CancelNodeActivity(PendingEncounterActivity.GetValue());
+				EncounterResult = Run->CancelNodeActivity(
+					PendingEncounterActivity.GetValue());
 			}
 		}
-		if (!EncounterResult.IsOk() && Packet.Outcome == EBattleOutcome::Undetermined)
+		if (EncounterResult.IsOk())
 		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[WacomGameMode] 未定 Battle 结果的 Encounter 取消失败。Detail=%s"),
+			if (!WacomPC->ApplyRunNodeActivityResolutionForPresentation(EncounterResult))
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[WacomGameMode] ExitBattle: Encounter 结果未按序应用到 Run 表现；已尝试恢复当前 Session 绑定"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomGameMode] Encounter 结算与取消均失败，探索活动仍可能被锁定。Detail=%s"),
 				*EncounterResult.Status.Detail.ToString());
 		}
 	}
