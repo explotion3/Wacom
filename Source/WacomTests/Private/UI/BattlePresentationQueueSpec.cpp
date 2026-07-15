@@ -229,6 +229,8 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestEqual(TEXT("HUD stays idle while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
 	TestTrue(TEXT("Command bar wait stays enabled while presenting"), CommandBar->IsWaitCommandEnabledForTest());
 	TestTrue(TEXT("Command bar end turn stays enabled while presenting"), CommandBar->IsEndTurnCommandEnabledForTest());
+	TestTrue(TEXT("Player action command gate remains open while only the event queue is busy"),
+		HUD->CanSubmitPlayerActionCommand());
 
 	const int32 CombatLogCountBeforeTargetSelect = HUD->GetBattleCombatLogBlockCount();
 	HUD->SetTargetSelectionStateForTest(TargetCardId);
@@ -251,53 +253,64 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestTrue(TEXT("Target submit block uses PlayCard header"),
 		HUD->GetBattleCombatLogHistoryForTest().Last().HeaderText.ToString().Contains(TEXT("打出")));
 
-	TestTrue(TEXT("Player action command gate remains open while only the event queue is busy"),
+	TestFalse(TEXT("PlayCard presentation plan closes the player action command gate"),
 		HUD->CanSubmitPlayerActionCommand());
+	const int32 VersionBeforeBlockedNoTarget = Session->BuildSnapshot().Version;
 	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, NoTargetCardId);
-	TestEqual(TEXT("No-target release can submit while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
-	TestFalse(TEXT("No-target release clears pending while presenting"), HUD->GetPendingTargetingCardId().IsValid());
-	TestTrue(TEXT("Presentation queue still has appended events after no-target card"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("PlayCard presentation plan blocks overlapping card command"),
+		Session->BuildSnapshot().Version,
+		VersionBeforeBlockedNoTarget);
+	TestEqual(TEXT("Blocked overlapping card does not append a stack entry"),
+		HUD->GetPresentationStackEntryCountForTest(),
+		1);
+	TestEqual(TEXT("Blocked overlapping card does not append combat log"),
+		HUD->GetBattleCombatLogBlockCount(),
+		CombatLogCountBeforeTargetSelect + 1);
+
+	Harness->SettlePresentationQueueAndExitStack();
+	TestFalse(TEXT("Target PlayCard presentation plan settles"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("Target PlayCard stack entry drains"), HUD->GetPresentationStackEntryCountForTest(), 0);
+	TestTrue(TEXT("Player action command gate reopens after PlayCard presentation"),
+		HUD->CanSubmitPlayerActionCommand());
+
+	const int32 VersionBeforeNoTargetSubmit = Session->BuildSnapshot().Version;
+	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, NoTargetCardId);
+	TestTrue(TEXT("No-target release submits after the previous plan settles"),
+		Session->BuildSnapshot().Version > VersionBeforeNoTargetSubmit);
+	TestEqual(TEXT("No-target submit appends its presentation stack entry"),
+		HUD->GetPresentationStackEntryCountForTest(),
+		1);
 	const auto& StackAfterNoTargetSubmit = HUD->GetPresentationStackEntriesForTest();
-	if (TestEqual(TEXT("No-target submit appends second presentation stack entry"), StackAfterNoTargetSubmit.Num(), 2)
-		&& StackAfterNoTargetSubmit.IsValidIndex(1))
+	if (StackAfterNoTargetSubmit.IsValidIndex(0))
 	{
-		TestEqual(TEXT("Second stack entry is newest card"),
-			StackAfterNoTargetSubmit[1].CardInstanceId,
+		TestEqual(TEXT("No-target stack entry uses the submitted card"),
+			StackAfterNoTargetSubmit[0].CardInstanceId,
 			NoTargetCardId);
+		TestTrue(TEXT("No-outcome PlayCard stack entry begins its visual exit immediately"),
+			StackAfterNoTargetSubmit[0].bIsExiting);
 	}
 	TestEqual(TEXT("No-target submit appends one more combat log block"),
 		HUD->GetBattleCombatLogBlockCount(),
 		CombatLogCountBeforeTargetSelect + 2);
+	TestTrue(TEXT("Input reopens after the no-outcome PlayCard semantic plan completes"),
+		HUD->CanSubmitPlayerActionCommand());
+
+	Harness->SettlePresentationQueueAndExitStack();
+	TestFalse(TEXT("No-target PlayCard presentation plan settles"), HUD->IsBattlePresentationBusy());
+	TestEqual(TEXT("No-target PlayCard stack entry drains"), HUD->GetPresentationStackEntryCountForTest(), 0);
+	TestTrue(TEXT("Player action command gate reopens after no-target presentation"),
+		HUD->CanSubmitPlayerActionCommand());
 
 	const int32 WaitValueBefore = Session->BuildSnapshot().CurrentWaitValue;
 	HUD->OnWaitRequested();
-	TestEqual(TEXT("Wait does not resolve while presentation stack has cards"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore);
-	TestTrue(TEXT("Wait becomes pending"), HUD->HasPendingTurnBoundaryCommandForTest());
-	TestFalse(TEXT("Command bar wait disabled while pending"), CommandBar->IsWaitCommandEnabledForTest());
-	TestFalse(TEXT("Command bar end turn disabled while pending"), CommandBar->IsEndTurnCommandEnabledForTest());
-
-	const int32 VersionBeforeBlockedCard = Session->BuildSnapshot().Version;
-	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, NoTargetCardId);
-	TestEqual(TEXT("Pending turn boundary blocks further card releases"), Session->BuildSnapshot().Version, VersionBeforeBlockedCard);
-	TestEqual(TEXT("Pending turn boundary does not append another stack entry"), HUD->GetPresentationStackEntryCountForTest(), 2);
-
-	while (HUD->IsBattlePresentationBusy() && !HUD->GetPresentationStackEntriesForTest().IsEmpty()
-		&& !HUD->GetPresentationStackEntriesForTest()[0].bIsExiting)
-	{
-		HUD->AdvanceBattlePresentationQueueForTest();
-	}
-	TestTrue(TEXT("Boundary marks oldest stack entry exiting"), HUD->GetPresentationStackEntriesForTest()[0].bIsExiting);
-	TestTrue(TEXT("Pending wait remains while exit motion plays"), HUD->HasPendingTurnBoundaryCommandForTest());
-	TestEqual(TEXT("Pending wait still does not mutate during exit motion"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore);
-
-	HUD->FinishPresentationStackEntryExitForTest(HUD->GetPresentationStackEntriesForTest()[0].EntryId);
-	Harness->SettlePresentationQueueAndExitStack();
-	TestFalse(TEXT("Pending wait runs after stack drains"), HUD->HasPendingTurnBoundaryCommandForTest());
-	TestEqual(TEXT("Wait resolves after stack drains"), Session->BuildSnapshot().CurrentWaitValue, WaitValueBefore + 1);
-	TestEqual(TEXT("Wait appends after stack drains"),
+	TestEqual(TEXT("Wait resolves immediately after PlayCard plans drain"),
+		Session->BuildSnapshot().CurrentWaitValue,
+		WaitValueBefore + 1);
+	TestFalse(TEXT("Resolved wait does not leave a pending boundary command"),
+		HUD->HasPendingTurnBoundaryCommandForTest());
+	TestEqual(TEXT("Wait appends after PlayCard plans drain"),
 		HUD->GetBattleCombatLogBlockCount(),
 		CombatLogCountBeforeTargetSelect + 3);
-	TestEqual(TEXT("Presentation stack drained"), HUD->GetPresentationStackEntryCountForTest(), 0);
 
 	const int32 VersionBeforeEndTurn = Session->BuildSnapshot().Version;
 	HUD->OnEndTurnRequested();

@@ -1773,6 +1773,18 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 	}
 
 	WacomFirstPersonCardLayerDropIntentSpec::PrimeBattleHUDWithCharacter(HUD, PC, Character, World);
+	UWacomFirstPersonCardAnchorComponent* DefaultAnchor = Character->GetFirstPersonCardAnchorComponent();
+	UWacomFirstPersonCardLayerWidget* RuntimeLayer = NewObject<UWacomFirstPersonCardLayerWidget>(HUD);
+	if (!TestNotNull(TEXT("Default first-person anchor"), DefaultAnchor)
+		|| !TestNotNull(TEXT("Runtime first-person layer"), RuntimeLayer))
+	{
+		Character->Destroy();
+		PC->Destroy();
+		return false;
+	}
+	RuntimeLayer->TakeWidget();
+	RuntimeLayer->SetCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetCardLayer(*DefaultAnchor, RuntimeLayer);
 	HUD->TakeWidget();
 	HUD->SetSession(Session);
 	WacomFirstPersonCardLayerDropIntentSpec::SettleBattlePresentationQueue(*HUD);
@@ -1796,14 +1808,19 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		CardEntries.Add(MoveTemp(Entry));
 	}
 
-	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerDropIntentSpec::AddProbe(Character);
-	if (!TestNotNull(TEXT("Anchor probe"), Anchor))
+	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor =
+		WacomFirstPersonCardLayerDropIntentSpec::AddProbe(Character);
+	UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(HUD);
+	if (!TestNotNull(TEXT("Anchor probe"), Anchor)
+		|| !TestNotNull(TEXT("Gesture first-person layer"), Layer))
 	{
 		Character->Destroy();
 		PC->Destroy();
 		return false;
 	}
-
+	Layer->TakeWidget();
+	Layer->SetCardLayerInteractionEnabled(true);
+	FWacomFirstPersonCardLayerTestAccess::SetCardLayer(*Anchor, Layer);
 	FWacomFirstPersonCardLayerTestAccess::SetFirstPersonCardLayerInteractionEnabled(*Anchor, true);
 	FWacomFirstPersonCardLayerTestAccess::SetRuntimeCardLayerEntries(*Anchor, WacomFirstPersonCardLayerSourceIds::BattleHand(), CardEntries);
 	HUD->SetFirstPersonCardAnchorForTest(Anchor);
@@ -1813,14 +1830,6 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		LEVELTICK_All,
 		ENamedThreads::GameThread,
 		FGraphEventRef());
-	UWacomFirstPersonCardLayerWidget* Layer = FWacomFirstPersonCardLayerTestAccess::CardLayer(*Anchor);
-	if (!TestNotNull(TEXT("First-person layer"), Layer))
-	{
-		Character->Destroy();
-		PC->Destroy();
-		return false;
-	}
-
 	UWacomFirstPersonCardLayerSlotWidget* SourceWidget = nullptr;
 	UWacomFirstPersonCardLayerSlotWidget* TargetWidget = nullptr;
 	for (int32 Index = 0; Index < Snapshot.Hand.Cards.Num(); ++Index)

@@ -206,7 +206,7 @@ namespace
 	{
 		FWacomFirstPersonCardDragView DragView;
 		DragView.CardInstanceId = CardInstanceId;
-		DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::ArmedForCommit;
 		DragView.bCommitArmed = true;
 		DragView.SourceSlotView =
 			MakeProjectedSlotForTargetPreviewPresentation(CardInstanceId, SourceSlotPosition);

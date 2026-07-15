@@ -38,18 +38,18 @@
 
 namespace
 {
-UClass* LoadWidgetClass(const TCHAR* ObjectPath)
+UClass* LoadBackpackWorkspaceWidgetClass(const TCHAR* ObjectPath)
 {
 	return LoadObject<UClass>(nullptr, ObjectPath);
 }
 
-UWidgetTree* GetWidgetTree(UClass* WidgetClass)
+UWidgetTree* GetBackpackWorkspaceWidgetTree(UClass* WidgetClass)
 {
 	const UWidgetBlueprintGeneratedClass* GeneratedClass = Cast<UWidgetBlueprintGeneratedClass>(WidgetClass);
 	return GeneratedClass ? GeneratedClass->GetWidgetTreeArchetype() : nullptr;
 }
 
-UObject* ReadObjectDefault(UClass* WidgetClass, FName PropertyName)
+UObject* ReadBackpackWorkspaceObjectDefault(UClass* WidgetClass, FName PropertyName)
 {
 	UObject* CDO = WidgetClass ? WidgetClass->GetDefaultObject() : nullptr;
 	const FObjectPropertyBase* Property = CDO
@@ -66,17 +66,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Parameters)
 {
-	UClass* ScreenClass = LoadWidgetClass(
+	UClass* ScreenClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackScreen.WBP_BackpackScreen_C"));
-	UClass* WorkspaceClass = LoadWidgetClass(
+	UClass* WorkspaceClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackWorkspace.WBP_BackpackWorkspace_C"));
-	UClass* ConfirmClass = LoadWidgetClass(
+	UClass* ConfirmClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackDeleteConfirm.WBP_BackpackDeleteConfirm_C"));
-	UClass* DeckCardClass = LoadWidgetClass(
+	UClass* DeckCardClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget_C"));
-	UClass* BackpackCardFaceClass = LoadWidgetClass(
+	UClass* BackpackCardFaceClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Card/WBP_BackpackCardView.WBP_BackpackCardView_C"));
-	UClass* FirstPersonCardFaceClass = LoadWidgetClass(
+	UClass* FirstPersonCardFaceClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C"));
 	UWacomBackpackWorkspaceStyle* Style = LoadObject<UWacomBackpackWorkspaceStyle>(
 		nullptr,
@@ -110,7 +110,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		return false;
 	}
 
-	UWidgetTree* ScreenTree = GetWidgetTree(ScreenClass);
+	UWidgetTree* ScreenTree = GetBackpackWorkspaceWidgetTree(ScreenClass);
 	TestNotNull(TEXT("Formal screen has compiled widget tree"), ScreenTree);
 	if (ScreenTree)
 	{
@@ -203,7 +203,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TestNull(TEXT("Formal screen removes old SpecialZonesHost"), ScreenTree->FindWidget(TEXT("SpecialZonesHost")));
 	}
 
-	UWidgetTree* WorkspaceTree = GetWidgetTree(WorkspaceClass);
+	UWidgetTree* WorkspaceTree = GetBackpackWorkspaceWidgetTree(WorkspaceClass);
 	TestNotNull(TEXT("Workspace binds its sole unified WorkspaceCanvas"),
 		WorkspaceTree ? Cast<UCanvasPanel>(WorkspaceTree->FindWidget(TEXT("WorkspaceCanvas"))) : nullptr);
 	TestNotNull(TEXT("Workspace binds SelectionMarquee"),
@@ -211,7 +211,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestNotNull(TEXT("Workspace binds EmptyStateText"),
 		WorkspaceTree ? Cast<UTextBlock>(WorkspaceTree->FindWidget(TEXT("EmptyStateText"))) : nullptr);
 
-	UWidgetTree* ConfirmTree = GetWidgetTree(ConfirmClass);
+	UWidgetTree* ConfirmTree = GetBackpackWorkspaceWidgetTree(ConfirmClass);
 	TestNotNull(TEXT("Confirm binds summary"),
 		ConfirmTree ? Cast<UTextBlock>(ConfirmTree->FindWidget(TEXT("SummaryText"))) : nullptr);
 	TestNotNull(TEXT("Confirm binds confirm button"),
@@ -219,7 +219,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestNotNull(TEXT("Confirm binds cancel button"),
 		ConfirmTree ? Cast<UButton>(ConfirmTree->FindWidget(TEXT("CancelButton"))) : nullptr);
 
-	UWidgetTree* DeckCardTree = GetWidgetTree(DeckCardClass);
+	UWidgetTree* DeckCardTree = GetBackpackWorkspaceWidgetTree(DeckCardClass);
 	const UWidgetBlueprintGeneratedClass* DeckCardGeneratedClass =
 		Cast<UWidgetBlueprintGeneratedClass>(DeckCardClass);
 	TestNotNull(TEXT("Backpack card has a generated widget class"), DeckCardGeneratedClass);
@@ -332,7 +332,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			BackpackCardFaceClass);
 	}
 
-	UWidgetTree* BackpackCardFaceTree = GetWidgetTree(BackpackCardFaceClass);
+	UWidgetTree* BackpackCardFaceTree = GetBackpackWorkspaceWidgetTree(BackpackCardFaceClass);
 	int32 RetainerSurfaceCount = 0;
 	if (BackpackCardFaceTree)
 	{
@@ -392,7 +392,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		}
 	}
 
-	UWidgetTree* FirstPersonCardFaceTree = GetWidgetTree(FirstPersonCardFaceClass);
+	UWidgetTree* FirstPersonCardFaceTree = GetBackpackWorkspaceWidgetTree(FirstPersonCardFaceClass);
 	USizeBox* FirstPersonFaceRoot = FirstPersonCardFaceTree
 		? Cast<USizeBox>(FirstPersonCardFaceTree->FindWidget(TEXT("SizeBox_0")))
 		: nullptr;
@@ -406,18 +406,18 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	}
 
 	TestEqual(TEXT("Screen CDO selects formal Workspace class"),
-		ReadObjectDefault(ScreenClass, TEXT("WorkspaceWidgetClass")), static_cast<UObject*>(WorkspaceClass));
+		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("WorkspaceWidgetClass")), static_cast<UObject*>(WorkspaceClass));
 	TestNull(TEXT("Screen class no longer exposes a ZoneRackWidgetClass dependency"),
 		FindFProperty<FProperty>(ScreenClass, TEXT("ZoneRackWidgetClass")));
 	TestEqual(TEXT("Screen CDO selects formal confirmation class"),
-		ReadObjectDefault(ScreenClass, TEXT("DeleteConfirmWidgetClass")), static_cast<UObject*>(ConfirmClass));
+		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("DeleteConfirmWidgetClass")), static_cast<UObject*>(ConfirmClass));
 	TestEqual(TEXT("Screen CDO selects formal workspace style"),
-		ReadObjectDefault(ScreenClass, TEXT("WorkspaceStyle")), static_cast<UObject*>(Style));
+		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("WorkspaceStyle")), static_cast<UObject*>(Style));
 	TestEqual(TEXT("Workspace CDO selects the passive embedded pile class"),
-		ReadObjectDefault(WorkspaceClass, TEXT("PileWidgetClass")),
+		ReadBackpackWorkspaceObjectDefault(WorkspaceClass, TEXT("PileWidgetClass")),
 		static_cast<UObject*>(UWacomBackpackZonePileWidget::StaticClass()));
 	TestEqual(TEXT("Workspace CDO selects the simplified preview class"),
-		ReadObjectDefault(WorkspaceClass, TEXT("PilePreviewWidgetClass")),
+		ReadBackpackWorkspaceObjectDefault(WorkspaceClass, TEXT("PilePreviewWidgetClass")),
 		static_cast<UObject*>(UWacomBackpackPilePreviewWidget::StaticClass()));
 	UMaterialInterface* FeedbackMaterial = LoadObject<UMaterialInterface>(
 		nullptr,
@@ -427,9 +427,9 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestEqual(TEXT("Style keeps 30 percent minimum visibility"), Style->MinimumVisibleFraction, 0.3f);
 	TestEqual(TEXT("Style keeps default current lift"), Style->CurrentCardLiftPixels, 56.0f);
 
-	UClass* PrimaryLayoutClass = LoadWidgetClass(
+	UClass* PrimaryLayoutClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C"));
-	UWidgetTree* PrimaryTree = GetWidgetTree(PrimaryLayoutClass);
+	UWidgetTree* PrimaryTree = GetBackpackWorkspaceWidgetTree(PrimaryLayoutClass);
 	UCommonActivatableWidgetStack* GameMenuStack = PrimaryTree
 		? Cast<UCommonActivatableWidgetStack>(PrimaryTree->FindWidget(TEXT("GameMenuLayerStack")))
 		: nullptr;

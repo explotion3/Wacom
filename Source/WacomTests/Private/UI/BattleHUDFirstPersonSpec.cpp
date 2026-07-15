@@ -123,7 +123,7 @@ namespace WacomBattleHUDFirstPersonSpec
 		Slot.Index = Index;
 		Slot.Entry.CardInstanceId = CardInstanceId;
 		Slot.Entry.bIsPlayable = true;
-		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::InspectOnly;
+		Slot.Entry.InteractionIntent = EWacomFirstPersonCardInteractionIntent::AimWorldTarget;
 		Slot.ScreenPosition = FVector2D(500.0f + 42.0f * static_cast<float>(Index), 600.0f);
 		Slot.WidgetPosition = Slot.ScreenPosition;
 		Slot.SnappedWidgetPosition = Slot.ScreenPosition;
