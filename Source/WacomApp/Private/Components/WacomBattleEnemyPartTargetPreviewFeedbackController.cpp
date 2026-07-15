@@ -12,7 +12,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 
-namespace
+namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate
 {
 	const FName EffectKindParameter(TEXT("User.EffectKind"));
 	const FName DurationParameter(TEXT("User.Duration"));
@@ -30,6 +30,8 @@ namespace
 	const FName PreviewValidityParameter(TEXT("User.PreviewValidity"));
 	const FName PreviewPulseParameter(TEXT("User.PreviewPulse"));
 }
+
+using namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate;
 
 bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	UActorComponent& OwnerComponent,

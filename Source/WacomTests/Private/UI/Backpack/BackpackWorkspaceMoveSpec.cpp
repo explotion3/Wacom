@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -81,7 +82,7 @@ bool FWacomUIBackpackWorkspacePartialRackReleaseSpec::RunTest(const FString& Par
 	Character->CharacterId = TEXT("WorkspaceMove.Character");
 	Character->StarterDeck.Add(Bag);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
-	TestTrue(TEXT("Partial rack release Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Partial rack release Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(FirstCard);
 	Run->AcquireCardToRun(SecondCard);
 

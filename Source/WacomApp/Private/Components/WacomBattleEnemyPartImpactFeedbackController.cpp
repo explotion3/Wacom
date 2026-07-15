@@ -13,7 +13,7 @@
 #include "NiagaraSystem.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
-namespace
+namespace WacomBattleEnemyPartImpactFeedbackPrivate
 {
 	const FName EffectKindParameter(TEXT("User.EffectKind"));
 	const FName DurationParameter(TEXT("User.Duration"));
@@ -26,6 +26,8 @@ namespace
 	const FName PlaneUpParameter(TEXT("User.PlaneUp"));
 	const FName TargetDiameterParameter(TEXT("User.TargetDiameter"));
 }
+
+using namespace WacomBattleEnemyPartImpactFeedbackPrivate;
 
 FWacomBattleEnemyPartImpactRequest
 FWacomBattleEnemyPartImpactFeedbackController::BuildRequest(

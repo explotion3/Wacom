@@ -107,7 +107,7 @@ bool FWacomUIBackpackWorkspacePartialDeletePreservesCarrySpec::RunTest(const FSt
 	Character->CharacterId = TEXT("WorkspacePartialDelete.Character");
 	Character->StarterDeck.Add(Bag);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
-	TestTrue(TEXT("Partial delete Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Partial delete Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(FirstCard);
 	Run->AcquireCardToRun(SecondCard);
 
