@@ -79,6 +79,7 @@ class UCardDefinition : public UPrimaryDataAsset
     FName CardId;
     FText DisplayName;
     FText Description;
+    TObjectPtr<UTexture2D> CardIllustration;
     int32 BaseCost = 0;
     FGameplayTag Rarity;
     FGameplayTagContainer Keywords;
@@ -98,6 +99,7 @@ class UCardDefinition : public UPrimaryDataAsset
 |---|---|
 | `CardId` | 内容稳定 ID；用于 debug、测试和运行时实例引用来源，不是 UObject path |
 | `DisplayName / Description` | UI 展示文本；规则不从中文自然语言解析效果。`Description` 仍可服务小卡紧凑描述或其它旧 UI；expanded detail 只在没有任何结构化 `Effects / Passives / outcome` section 时把它作为普通正文回退，不解析旧占位。常规详情正文由 `Effects / Passives` 通过 WacomApp 的 semantic explanation document 生成 |
+| `CardIllustration` | 卡牌主题插画 `Texture2D`。第一人称卡面复合材质优先使用该纹理；旧卡为空时沿用 `WBP_CardView.CardArt` authored Brush。稀有度边框不使用本字段，继续由 CardView 的 `RarityBorderSprites` 以 `PaperSprite` 图集区域解析 |
 | `BaseCost` | 基础费用；Battle 会叠加 runtime modifier 后 clamp |
 | `Rarity / Keywords` | 静态标签；标签定义见 [WacomGameplayTags.md](./WacomGameplayTags.md) |
 | `Physique` | 入战 HP、容量和后续耐久相关静态字段 |

@@ -14,7 +14,9 @@
 #include "CardViewSpecReceiver.generated.h"
 
 class UImage;
+class UMaterialInterface;
 class UPanelWidget;
+class UTexture2D;
 
 UCLASS()
 class UWacomCardEffectBadgeSpecProbe : public UWacomCardEffectBadgeWidget
@@ -69,6 +71,21 @@ public:
 	void SetRarityBorderSpriteForTest(const FGameplayTag& Rarity, UPaperSprite* Sprite)
 	{
 		RarityBorderSprites.Add(Rarity, TSoftObjectPtr<UPaperSprite>(Sprite));
+	}
+
+	void SetCardSurfaceMaterialForTest(UMaterialInterface* Material)
+	{
+		CardSurfaceMaterial = Material;
+	}
+
+	void SetAuthoredCardArtTextureForTest(UTexture2D* Texture)
+	{
+		if (CardArt)
+		{
+			CardArt->SetBrushFromTexture(Texture);
+		}
+		AuthoredCardArtTexture = Texture;
+		bAuthoredCardArtTextureCached = true;
 	}
 
 	UImage* GetCostDigitImageForTest() const { return CostDigitImage; }
@@ -198,6 +215,52 @@ protected:
 			Retainer->AddChild(Body);
 		}
 
+		return Super::RebuildWidget();
+	}
+};
+
+UCLASS()
+class UWacomCardSurfaceParallaxProbe : public UWacomCardViewSpecProbe
+{
+	GENERATED_BODY()
+
+public:
+	UWidget* GetAttachmentParallaxHostForTest() const { return AttachmentParallaxHost; }
+
+protected:
+	virtual TSharedRef<SWidget> RebuildWidget() override
+	{
+		if (!WidgetTree)
+		{
+			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_SurfaceParallaxProbe"));
+		}
+		if (!WidgetTree->RootWidget)
+		{
+			UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("CardOverlay"));
+			WidgetTree->RootWidget = Root;
+			CardOverlay = Root;
+
+			CardSurfaceImage = WidgetTree->ConstructWidget<UImage>(
+				UImage::StaticClass(),
+				TEXT("CardSurfaceImage"));
+			Root->AddChild(CardSurfaceImage);
+
+			CardArt = WidgetTree->ConstructWidget<UImage>(
+				UImage::StaticClass(),
+				TEXT("CardArt"));
+			Root->AddChild(CardArt);
+
+			UOverlay* AttachmentHost = WidgetTree->ConstructWidget<UOverlay>(
+				UOverlay::StaticClass(),
+				TEXT("AttachmentParallaxHost"));
+			FWidgetTransform AuthoredTransform;
+			AuthoredTransform.Translation = FVector2D(3.0f, -2.0f);
+			AttachmentHost->SetRenderTransform(AuthoredTransform);
+			AttachmentParallaxHost = AttachmentHost;
+			Root->AddChild(AttachmentHost);
+		}
 		return Super::RebuildWidget();
 	}
 };

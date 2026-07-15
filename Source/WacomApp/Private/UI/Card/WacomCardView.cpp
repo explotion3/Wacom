@@ -16,6 +16,7 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
 #include "Engine/Texture2D.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "PaperSprite.h"
 #include "UObject/ConstructorHelpers.h"
@@ -27,6 +28,16 @@ namespace
 {
 	constexpr float DefaultCardWidth = 260.f;
 	constexpr float DefaultCardHeight = 380.f;
+	const FName ArtTextureParameterName(TEXT("ArtTexture"));
+	const FName FrameTextureParameterName(TEXT("FrameTexture"));
+	const FName RarityTextureParameterName(TEXT("RarityTexture"));
+	const FName BackColorParameterName(TEXT("BackColor"));
+	const FName RarityUVScaleBiasParameterName(TEXT("RarityUVScaleBias"));
+	const FName RarityEnabledParameterName(TEXT("RarityEnabled"));
+	const FName CardSourceInvSizeParameterName(TEXT("CardSourceInvSize"));
+	const FName SurfaceTiltXParameterName(TEXT("TiltX"));
+	const FName SurfaceTiltYParameterName(TEXT("TiltY"));
+	const FName SurfaceParallaxStrengthParameterName(TEXT("ParallaxStrength"));
 
 	void SetOptionalText(UTextBlock* TextBlock, const FText& Text)
 	{
@@ -423,6 +434,10 @@ FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() 
 	View.ArtDisplayUpdateCount = ArtDisplayUpdateCountForTest;
 	View.DisabledDisplayUpdateCount = DisabledDisplayUpdateCountForTest;
 	View.EffectBadgeDisplayUpdateCount = EffectBadgeDisplayUpdateCountForTest;
+	View.bSurfaceCompositeActive = bCardSurfaceCompositeActive;
+	View.AppliedAttachmentOffsetPixels = AppliedAttachmentOffsetPixels;
+	View.SurfacePerspectiveView = CardSurfacePerspectiveView;
+	View.ResolvedSurfaceArt = ResolveCardSurfaceArtTexture();
 	return View;
 }
 #endif
@@ -430,9 +445,72 @@ FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() 
 void UWacomCardView::NativeConstruct()
 {
 	Super::NativeConstruct();
+	CacheAuthoredCardArtTexture();
+	EnsureCardSurfaceImage();
+	CacheLegacySurfaceVisibility();
+	CacheAttachmentAuthoredTransforms();
 	ApplySurfaceFoilOverlay();
 	bCardViewDataAppliedToWidgets = false;
 	ApplyCurrentDataToWidgets();
+	ApplyCardSurfacePerspective();
+}
+
+void UWacomCardView::EnsureCardSurfaceImage()
+{
+	if (CardSurfaceImage || !WidgetTree || !CardOverlay)
+	{
+		return;
+	}
+	CardSurfaceImage = WidgetTree->ConstructWidget<UImage>(
+		UImage::StaticClass(),
+		TEXT("CardSurfaceImage_Runtime"));
+	if (!CardSurfaceImage)
+	{
+		return;
+	}
+	CardSurfaceImage->SetVisibility(ESlateVisibility::Collapsed);
+	if (UPanelSlot* SurfaceSlot = CardOverlay->InsertChildAt(0, CardSurfaceImage))
+	{
+		if (UOverlaySlot* OverlaySlot = Cast<UOverlaySlot>(SurfaceSlot))
+		{
+			OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+			OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+		}
+	}
+}
+
+void UWacomCardView::NativeDestruct()
+{
+	ResetCardSurfacePerspectiveView();
+	RestoreAttachmentAuthoredTransforms();
+	bCardSurfaceCompositeActive = false;
+	SetLegacySurfaceVisibility(true);
+	if (CardSurfaceImage)
+	{
+		CardSurfaceImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	CardSurfaceMaterialInstance = nullptr;
+	Super::NativeDestruct();
+}
+
+void UWacomCardView::SetCardSurfacePerspectiveView(
+	const FWacomCardSurfacePerspectiveView& InView)
+{
+	CardSurfacePerspectiveView = InView;
+	CardSurfacePerspectiveView.Strength = FMath::Max(0.0f, InView.Strength);
+	if (!CardSurfacePerspectiveView.bEnabled || CardSurfacePerspectiveView.bReducedMotion)
+	{
+		CardSurfacePerspectiveView.TiltDegrees = FVector2D::ZeroVector;
+		CardSurfacePerspectiveView.AttachmentOffsetPixels = FVector2D::ZeroVector;
+		CardSurfacePerspectiveView.Strength = 0.0f;
+	}
+	ApplyCardSurfacePerspective();
+}
+
+void UWacomCardView::ResetCardSurfacePerspectiveView()
+{
+	CardSurfacePerspectiveView = FWacomCardSurfacePerspectiveView();
+	ApplyCardSurfacePerspective();
 }
 
 void UWacomCardView::SetSurfaceFoilEnabled(bool bEnabled)
@@ -635,6 +713,10 @@ void UWacomCardView::ApplySurfaceFoilOverlay()
 
 	const bool bHasFoilBrush = SurfaceFoilOverlay->GetBrush().GetResourceObject() != nullptr;
 	SurfaceFoilOverlay->SetVisibility(bHasFoilBrush ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	if (bCardSurfaceCompositeActive)
+	{
+		SurfaceFoilOverlay->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomCardView::UpdateCostDisplay()
@@ -806,6 +888,12 @@ void UWacomCardView::UpdateArtDisplay()
 		CardArt->SetBrushFromTexture(CurrentData.Art);
 		CardArt->SetColorAndOpacity(FLinearColor::White);
 	}
+	else if (CardArt && AuthoredCardArtTexture)
+	{
+		CardArt->SetBrushFromTexture(AuthoredCardArtTexture);
+		CardArt->SetColorAndOpacity(FLinearColor::White);
+	}
+	RefreshCardSurfaceComposite();
 
 #if WITH_AUTOMATION_TESTS
 	++ArtDisplayUpdateCountForTest;
@@ -833,10 +921,244 @@ void UWacomCardView::UpdateRarityBorderDisplay()
 			RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
+	RefreshCardSurfaceComposite();
 
 #if WITH_AUTOMATION_TESTS
 	++RarityDisplayUpdateCountForTest;
 #endif
+}
+
+void UWacomCardView::RefreshCardSurfaceComposite()
+{
+	UTexture2D* SurfaceArtTexture = ResolveCardSurfaceArtTexture();
+	const bool bCanUseComposite = CardSurfaceImage
+		&& CardSurfaceMaterial
+		&& SurfaceArtTexture;
+	if (bCanUseComposite && !CardSurfaceMaterialInstance)
+	{
+		CardSurfaceMaterialInstance = UMaterialInstanceDynamic::Create(CardSurfaceMaterial, this);
+	}
+
+	bCardSurfaceCompositeActive = bCanUseComposite && CardSurfaceMaterialInstance;
+	if (!bCardSurfaceCompositeActive)
+	{
+		if (CardSurfaceImage)
+		{
+			CardSurfaceImage->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		SetLegacySurfaceVisibility(true);
+		return;
+	}
+
+	CardSurfaceMaterialInstance->SetTextureParameterValue(ArtTextureParameterName, SurfaceArtTexture);
+	if (CardSurfaceFrameTexture)
+	{
+		CardSurfaceMaterialInstance->SetTextureParameterValue(
+			FrameTextureParameterName,
+			CardSurfaceFrameTexture);
+	}
+	CardSurfaceMaterialInstance->SetVectorParameterValue(BackColorParameterName, CardSurfaceBackColor);
+	const float SourceWidth = FMath::Max(1.0f, static_cast<float>(SurfaceArtTexture->GetSizeX()));
+	const float SourceHeight = FMath::Max(1.0f, static_cast<float>(SurfaceArtTexture->GetSizeY()));
+	CardSurfaceMaterialInstance->SetVectorParameterValue(
+		CardSourceInvSizeParameterName,
+		FLinearColor(1.0f / SourceWidth, 1.0f / SourceHeight, SourceWidth, SourceHeight));
+	ApplyRarityToCardSurfaceMaterial();
+	ApplyCardSurfacePerspective();
+	CardSurfaceImage->SetBrushFromMaterial(CardSurfaceMaterialInstance);
+	CardSurfaceImage->SetColorAndOpacity(FLinearColor::White);
+	CardSurfaceImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	SetLegacySurfaceVisibility(false);
+}
+
+void UWacomCardView::CacheAuthoredCardArtTexture()
+{
+	if (bAuthoredCardArtTextureCached)
+	{
+		return;
+	}
+	AuthoredCardArtTexture = CardArt
+		? Cast<UTexture2D>(CardArt->GetBrush().GetResourceObject())
+		: nullptr;
+	bAuthoredCardArtTextureCached = true;
+}
+
+UTexture2D* UWacomCardView::ResolveCardSurfaceArtTexture() const
+{
+	return CurrentData.Art ? CurrentData.Art.Get() : AuthoredCardArtTexture.Get();
+}
+
+void UWacomCardView::ApplyCardSurfacePerspective()
+{
+	const FVector2D AppliedTilt = CardSurfacePerspectiveView.bEnabled
+		&& !CardSurfacePerspectiveView.bReducedMotion
+		? CardSurfacePerspectiveView.TiltDegrees
+		: FVector2D::ZeroVector;
+	const float AppliedStrength = CardSurfacePerspectiveView.bEnabled
+		&& !CardSurfacePerspectiveView.bReducedMotion
+		? FMath::Max(0.0f, CardSurfacePerspectiveView.Strength)
+		: 0.0f;
+	if (CardSurfaceMaterialInstance)
+	{
+		CardSurfaceMaterialInstance->SetScalarParameterValue(SurfaceTiltXParameterName, AppliedTilt.X);
+		CardSurfaceMaterialInstance->SetScalarParameterValue(SurfaceTiltYParameterName, AppliedTilt.Y);
+		CardSurfaceMaterialInstance->SetScalarParameterValue(
+			SurfaceParallaxStrengthParameterName,
+			AppliedStrength);
+	}
+
+	const FVector2D Offset = AppliedStrength > 0.0f
+		? CardSurfacePerspectiveView.AttachmentOffsetPixels
+		: FVector2D::ZeroVector;
+	ApplyAttachmentParallaxOffset(Offset);
+}
+
+void UWacomCardView::CacheLegacySurfaceVisibility()
+{
+	AuthoredLegacySurfaceVisibilities.Reset();
+	for (UWidget* Widget : { Cast<UWidget>(BackColor), Cast<UWidget>(CardArt), Cast<UWidget>(Frame),
+		Cast<UWidget>(RarityBorder), Cast<UWidget>(SurfaceFoilOverlay) })
+	{
+		if (Widget)
+		{
+			AuthoredLegacySurfaceVisibilities.Add(Widget, Widget->GetVisibility());
+		}
+	}
+	bLegacySurfaceVisibilityCached = true;
+}
+
+void UWacomCardView::SetLegacySurfaceVisibility(bool bVisible)
+{
+	if (!bLegacySurfaceVisibilityCached)
+	{
+		CacheLegacySurfaceVisibility();
+	}
+	for (const TPair<TWeakObjectPtr<UWidget>, ESlateVisibility>& Pair : AuthoredLegacySurfaceVisibilities)
+	{
+		if (UWidget* Widget = Pair.Key.Get())
+		{
+			Widget->SetVisibility(bVisible ? Pair.Value : ESlateVisibility::Collapsed);
+		}
+	}
+
+	if (!bVisible)
+	{
+		return;
+	}
+	if (RarityBorder)
+	{
+		UPaperSprite* Sprite = CurrentData.Rarity.IsValid()
+			? ResolvedRarityBorderSprites.FindRef(CurrentData.Rarity)
+			: nullptr;
+		if (Sprite)
+		{
+			RarityBorder->SetBrushResourceObject(Sprite);
+			RarityBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			RarityBorder->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+	ApplySurfaceFoilOverlay();
+}
+
+void UWacomCardView::CacheAttachmentAuthoredTransforms()
+{
+	AuthoredAttachmentTransforms.Reset();
+	if (AttachmentParallaxHost)
+	{
+		AuthoredAttachmentTransforms.Add(
+			AttachmentParallaxHost,
+			AttachmentParallaxHost->GetRenderTransform());
+		return;
+	}
+	const TArray<UWidget*> AttachmentWidgets = {
+		EffectBadgeSlot1.Get(),
+		EffectBadgeSlot2.Get(),
+		EffectBadgeSlot3.Get(),
+		EffectBadgeSlot4.Get(),
+		DurabilityHost.Get()
+	};
+	for (UWidget* Widget : AttachmentWidgets)
+	{
+		if (Widget)
+		{
+			AuthoredAttachmentTransforms.Add(Widget, Widget->GetRenderTransform());
+		}
+	}
+}
+
+void UWacomCardView::RestoreAttachmentAuthoredTransforms()
+{
+	for (const TPair<TWeakObjectPtr<UWidget>, FWidgetTransform>& Pair : AuthoredAttachmentTransforms)
+	{
+		if (UWidget* Widget = Pair.Key.Get())
+		{
+			Widget->SetRenderTransform(Pair.Value);
+		}
+	}
+	AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
+}
+
+void UWacomCardView::ApplyAttachmentParallaxOffset(const FVector2D& OffsetPixels)
+{
+	if (AuthoredAttachmentTransforms.IsEmpty())
+	{
+		CacheAttachmentAuthoredTransforms();
+	}
+	for (const TPair<TWeakObjectPtr<UWidget>, FWidgetTransform>& Pair : AuthoredAttachmentTransforms)
+	{
+		if (UWidget* Widget = Pair.Key.Get())
+		{
+			FWidgetTransform Transform = Pair.Value;
+			Transform.Translation += OffsetPixels;
+			Widget->SetRenderTransform(Transform);
+		}
+	}
+	AppliedAttachmentOffsetPixels = OffsetPixels;
+}
+
+bool UWacomCardView::ApplyRarityToCardSurfaceMaterial()
+{
+	if (!CardSurfaceMaterialInstance)
+	{
+		return false;
+	}
+	CardSurfaceMaterialInstance->SetScalarParameterValue(RarityEnabledParameterName, 0.0f);
+	UPaperSprite* Sprite = CurrentData.Rarity.IsValid()
+		? ResolvedRarityBorderSprites.FindRef(CurrentData.Rarity)
+		: nullptr;
+	UTexture2D* Texture = Sprite ? Sprite->GetBakedTexture() : nullptr;
+	if (!Sprite || !Texture || Texture->GetSizeX() <= 0 || Texture->GetSizeY() <= 0)
+	{
+		return false;
+	}
+
+	const FVector2D SourceUV = Sprite->GetSourceUV();
+	const FVector2D SourceSize = Sprite->GetSourceSize();
+	if (SourceSize.X <= 0.0f || SourceSize.Y <= 0.0f)
+	{
+		return false;
+	}
+	const FVector2D TextureSize(Texture->GetSizeX(), Texture->GetSizeY());
+	const FVector2D Scale(SourceSize.X / TextureSize.X, SourceSize.Y / TextureSize.Y);
+	const FVector2D Bias(SourceUV.X / TextureSize.X, SourceUV.Y / TextureSize.Y);
+	if (!FMath::IsFinite(Scale.X) || !FMath::IsFinite(Scale.Y)
+		|| !FMath::IsFinite(Bias.X) || !FMath::IsFinite(Bias.Y)
+		|| Scale.X <= 0.0f || Scale.Y <= 0.0f
+		|| Bias.X < 0.0f || Bias.Y < 0.0f
+		|| Bias.X + Scale.X > 1.001f || Bias.Y + Scale.Y > 1.001f)
+	{
+		return false;
+	}
+
+	CardSurfaceMaterialInstance->SetTextureParameterValue(RarityTextureParameterName, Texture);
+	CardSurfaceMaterialInstance->SetVectorParameterValue(
+		RarityUVScaleBiasParameterName,
+		FLinearColor(Scale.X, Scale.Y, Bias.X, Bias.Y));
+	CardSurfaceMaterialInstance->SetScalarParameterValue(RarityEnabledParameterName, 1.0f);
+	return true;
 }
 
 void UWacomCardView::UpdateDisabledDisplay()

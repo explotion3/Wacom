@@ -48,7 +48,8 @@ Battle / Run snapshot
 | `FWacomFirstPersonCardLayerDelegateRouter` | Anchor 私有 LayerWidget 事件 router：绑定 / 解绑 native delegates、同步 hovered runtime state、转发 Anchor 对外 delegates | 不创建 widget，不解析布局，不提交 Battle / Run 命令 |
 | `UWacomFirstPersonCardLayerWidget` | 按 entries 的正式 UI facts reconcile slot widget，维护 active / outgoing slot，绘制 drag arrow 和 layer-level feedback；dirty gate 只把 `InteractionIntent` 当手势差异 | 不读取 Battle / Run 规则状态 |
 | `UWacomFirstPersonCardLayerSlotWidget` | 持有单卡 `UWacomFirstPersonCardViewWidget`，处理 hover / press / drag gesture、visual slot motion，并向 Card Depth 提供指针与交互语义输入 | 不直接调用 BattleSession 或 RunSession，不直接创建卡面反馈 Image / 材质控件 |
-| `FWacomFirstPersonCardDepthMotion` | App-private 深度运动器：Hover 解析卡内指针位置，Drag 过滤指针速度，并平滑输出倾角、透视强度和材质接触阴影 lift | 不持有 Widget，不加载材质资产，不生成外部宽泛阴影 |
+| `FWacomFirstPersonCardDepthMotion` | App-private 深度运动器：Hover 解析卡内指针位置，Drag 过滤指针速度，并平滑输出倾角、透视强度、材质接触阴影 lift 与卡面分层视差 view | 不持有 Widget，不加载材质资产，不生成外部宽泛阴影 |
+| `UWacomCardView` | 通用卡面内容 owner：显示卡牌数据，并在 first-person 提供视差 view 时驱动内层核心表面 MID 与实体出血装饰位移；非 first-person 使用零视差 | 不读取 Battle / Run 规则，不采样鼠标，不创建第二个 Retainer |
 | `UWacomFirstPersonCardViewWidget` | 第一人称卡面 wrapper：组合通用 `UWacomCardView`、first-person 反馈层和承载 fake-3D / 接触阴影的单 Retainer | 不处理 hover / drag 手势，不提交 Battle / Run 命令，不创建外部独立阴影 Image |
 | `FWacomFirstPersonCardLayerPresentationFrame` | Battle / Run 共用的 C++ 表现帧 contract：`SourceId + entries + transition hints + CommitMode` | 不读取规则状态，不决定 hints 来自哪个领域事件 |
 | `WacomFirstPersonCardLayerSourceIds` | Battle / Run 共用的保留 runtime source id：`BattleHand`、`RunFirstPersonBattleDeck`、`RunFirstPersonMenuSuppressed` | 不生成菜单 lease 的自定义 source id，不读取 Anchor 状态 |
@@ -122,7 +123,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `08 Targeting State` | pending targeting、target select deemphasis |
 | `09 Gesture` | 按住读牌、拖出提交、快捷键拿起卡牌、inspect 姿态、aim arrow |
 | `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit、正式 Drag 拾牌反馈与音效 |
-| `11 Card Depth` | Hover / Drag tilt、pointer velocity filter、perspective strength、Retainer 实时轮廓接触阴影开关与 lift |
+| `11 Card Depth` | Hover / Drag tilt、pointer velocity filter、perspective strength、Retainer 实时轮廓接触阴影，以及核心卡面 UV 分层与实体出血装饰视差 |
 | `12 Card Use Effect` | 普通成功使用牌的像素翻面收牌（可切回菱形波）、Reduced Motion、时长覆盖与一次性音效 |
 | `13 Card Exhausted Dissolve` | 实际进入 Exhaust 的 PixelAsh / OrderedDither Style、Reduced Motion 与时长覆盖；C++ 旧字段名暂为资产兼容保留 |
 | `14 Card Pile Transfer` | 普通弃牌与洗牌牌印迁移的开关、Style、路径、拖尾、粒子和 Impact 制作参数 |
@@ -226,6 +227,12 @@ Card Depth 是独立于 slot layout / semantic transition / local feedback 的�
 Anchor `11 Card Depth` 是 Battle / Run 共用的数值制作入口。默认采用克制纸牌实体感：Hover 最大 `6°`、Drag 最大 `9°`、Drag 达到最大倾角速度 `1400 UMG px/s`。接触阴影使用同一帧率无关深度通道，静止 lift 为 `0`、Hover 默认目标 `0.55`、Drag 默认目标 `1`；数值越高，DreamShader 内的实时轮廓阴影越软、越淡、离卡面越远。`bEnableCardFake3D` 与 `bEnableCardContactShadow` 可独立关闭，二者都不改变卡面内容、296 x 420 主体命中或手牌扇形。Retainer Effect Material 由 WBP 持有并随 Widget 资产加载，运行时不通过软引用同步加载。
 
 Card Depth 材质采用 DreamShader 1.4.1 制作：`DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm` 生成 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，并作为同一个 Retainer 的常态 Effect Material。动态采样名固定为 `Texture`，Blend Mode 使用 `AlphaComposite`（DreamShader `PremultipliedAlpha`），C++ 每帧写入 `TiltX / TiltY / PerspectiveStrength / ContactShadowEnabled / ContactShadowLift`。材质以 3 x 3、9 次 Alpha 采样从实时 CardView 捕获生成接触阴影，因此实体出血卡框会进入投影轮廓；`ContactShadowAlphaThreshold / ContactShadowAlphaFeather` 负责过滤低透明度光效并保留实体装饰抗锯齿边缘。只有 Played / Exhausted Surface 离场活动期间会在该 Retainer 上临时切换专用 MID；当前生产链不创建或驱动外部 `CardShadowImage`。`.dsm` 是可版本管理的材质真源，生成 `.uasset` 只作为 WBP 制作结果。
+
+核心卡面分层视差位于唯一 Retainer 内侧，不与外层 Fake-3D 重复投影。`UWacomCardView` 使用 `DShader/Material/Card/M_WacomCardSurfaceComposite.dsm` 生成的 `/Game/DreamMaterials/Card/MI_WacomCardSurfaceComposite_Default`，在一个 UI MID 中合成 `BackColor + ArtTexture + FrameTexture + RarityTexture`。`ArtTexture` 优先来自 `UCardDefinition.CardIllustration`；旧卡未配置时读取 `WBP_CardView.CardArt` authored Brush 中的 `Texture2D`，Widget 重用时不会沿用上一张卡的动态插画。默认源像素深度为插画 `-2px`、实体卡框 `0px`、稀有度饰条 `+1.5px`；材质只消费同一帧平滑后的 `TiltX / TiltY / ParallaxStrength`，不读取 Time 或 Noise。稀有度仍由 `RarityBorderSprites` 的 `PaperSprite` 提供，先通过 `GetBakedTexture / GetSourceUV / GetSourceSize` 取得局部图集区域，再在局部 `0..1` UV 内位移和边界裁切，最后映射到 `RarityUVScaleBias`，因此四格横向图集不会串到相邻稀有度。
+
+实体出血装饰不进入核心表面纹理。`EffectBadgeSlot1..4` 与 `DurabilityHost` 优先由可选 `AttachmentParallaxHost` 统一移动；绑定缺失时 `UWacomCardView` 逐个叠加相同 RenderTransform translation，并在 reset / destruct 精确恢复 authored transform。默认最大参考倾角下位移约 `5 UMG px`，由 `AttachmentParallaxMaxOffsetPixels=7` 限幅。`bReduceCardSurfaceParallaxMotion` 只把内层 UV 与附件位移归零，不关闭外层 Fake-3D、接触阴影、Hover / Drag 或命中。普通 Backpack / Shop 卡面没有 first-person depth view，因此保持零视差。
+
+`CardSurfaceImage` 可由 `WBP_CardView` 显式绑定；当前运行时也会在检测到既有 `CardOverlay` 且绑定缺失时，把一个 `HitTestInvisible` Image 插入 Overlay 底层，避免必须立即重排 WBP。核心材质或插画无效时自动隐藏该 Image，并恢复旧 `BackColor / CardArt / Frame / RarityBorder / SurfaceFoilOverlay` 路径。复合材质活动时旧表面层会折叠，避免双重卡框或流光；文本、费用、类型、耐久数字与效果徽章仍由 UMG 保持清晰。
 
 Card Depth `.dsm` 对 UV、颜色和透明度通道使用显式 `UE.Expression(ComponentMask)`，避免仅从 Named Reroute 的上游 `RGBA` 标签误判实际消费通道。正式生成图中 Fake3D 主卡面路径保留 `RG / B / RGB / A` 四个 mask，接触阴影另有 9 个实时纹理 `A` mask 与一个 `ContactShadowColor RGB` mask。DreamShader 的跨区布局 reroute 会把完整值接到 declaration，并把普通 `.xy / .z / .rgb / .a` swizzle 保存在消费端 `FExpressionInput`；检查生成器正确性时必须穿透 reroute 读取消费端 mask。项目内 DreamShader 1.4.1 已补齐 `UE.Expression(ComponentMask)` 的初始化语义：新节点先清空 Unreal 默认启用的 R/G，再应用 DSL 明确指定的通道；`DreamShader.Gen.Graph.SwizzleInputMasks` 与 `DreamShader.Gen.Graph.ExplicitComponentMaskChannels` 负责回归该合同。
 

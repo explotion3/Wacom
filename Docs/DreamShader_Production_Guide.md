@@ -1,0 +1,315 @@
+---
+type: production-guide
+scope: wacom-dreamshader
+status: active
+updated: 2026-07-15
+tags:
+  - wacom/materials
+  - dreamshader
+  - unreal
+---
+
+# DreamShader 生产实践与排错指南
+
+> [!info] 本文职责
+> 本文记录 Wacom 项目实际使用 DreamShader 1.4.1 制作 UI、卡牌与 Niagara 材质时验证过的工作流、常见陷阱和长期维护约定。具体卡牌表现合同仍以 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) 和 [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md) 为准；插件兼容债见 [TechDebt.md](./TechDebt.md)。
+
+## 1. 真源与职责划分
+
+DreamShader 材质应拆成四层，各自只保存一种事实：
+
+| 层 | 位置 | 负责内容 |
+|---|---|---|
+| Material source | `DShader/Material/**/*.dsm` | 材质 Domain、Blend Mode、纹理与参数声明、Graph 接线、生成资产路径 |
+| Shared helper | `DShader/Shared/*.dsh` | 可复用的 UV、Mask、像素图案、合成和数学函数 |
+| Material Instance | `/Game/DreamMaterials/**/MI_*` | 颜色、亮度、线宽、深度、密度等审美调参 |
+| Runtime / Style | C++、WBP、DataAsset | 语义进度、卡牌身份、持续时间、音效、资源选择和生命周期 |
+
+`.dsm`、`.dsh` 和对应设置脚本是可版本管理的长期真源。`/Game/DreamMaterials` 下的生成 `.uasset` 是 worktree-local 制作结果，不能成为唯一来源。
+
+参数归属原则：
+
+- 颜色、箔片强度、像素密度、描边宽度、金属对比度等视觉参数放 Material Instance。
+- `Amount`、`Time`、`Tilt`、`Seed`、`EffectKind` 等运行时状态由 C++ 写入 MID。
+- 总时长、音效、选择哪套材质等表现编排可以放 Style DataAsset。
+- 不要在 DataAsset、MI 和 C++ 默认值中复制同一组颜色或算法参数。
+- 不要在生成材质图中手工修改无法回写到 `.dsm` 的节点；下次 `-Force` 会覆盖这些修改。
+
+## 2. 推荐目录与命名
+
+```text
+DShader/
+  Material/
+    Card/M_FirstPersonCard_Fake3D.dsm
+    UI/M_Wacom_SimplePulse_UI.dsm
+    World/M_WacomBattleEnemyPartImpactPixel.dsm
+  Shared/
+    WacomFirstPersonCardSurface.dsh
+    WacomCardSurfaceParallax.dsh
+  Texture/
+    Card/...
+Scripts/
+  Setup<Feature>Assets.py
+```
+
+约定：
+
+- Wacom 自有 helper 使用 `Wacom` 前缀，降低与插件样例或第三方函数重名的风险。
+- `.dsm` 的 `Shader(Name="DreamMaterials/<Category>/<Name>")` 决定生成资产路径。移动源文件时不要顺手改变 `Name`，否则会生成第二份资产并破坏现有引用。
+- 通用数学拆到 `.dsh`；材质的纹理、参数、Domain 和最终 Outputs 留在 `.dsm`。
+- 一个 setup 脚本只处理一项功能的 MI、纹理导入、Style 和默认引用。不要用全量脚本覆盖已经由美术手调的其它资产。
+
+## 3. 三类常用材质合同
+
+### 3.1 RetainerBox UI 效果
+
+```dshader
+TextureSampleParameter2D Texture = Path(Engine, "/EngineResources/DefaultTexture") [
+    SamplerType="Color";
+    SamplerSource="FromTextureAsset";
+];
+
+Settings = {
+    Domain = "UI";
+    ShadingModel = "Unlit";
+    BlendMode = "PremultipliedAlpha";
+    TwoSided = true;
+}
+```
+
+必须同时满足：
+
+- Retainer 输入参数名精确为 `Texture`，并与 RetainerBox 的 Texture Parameter 配置一致。
+- DreamShader 的 `PremultipliedAlpha` 会生成 Unreal 的 `AlphaComposite`；不要误改成普通 Translucent。
+- 输出使用 `Base.EmissiveColor` 与 `Base.Opacity`。
+- 裁切或消散时 RGB 与 Alpha 必须一起处理。只清 Alpha、保留黑色 RGB，容易产生黑块、暗边或只剩阴影的假象。
+- 光效、消散前沿和残片通常不应写入接触阴影 caster；阴影应读取仍存在的原始卡面 Alpha。
+
+### 3.2 普通 UMG Image 材质
+
+仍使用 `UI + Unlit + PremultipliedAlpha`，但没有 Retainer 注入的 `Texture` 合同。卡面核心复合材质可以声明 `ArtTexture / FrameTexture / RarityTexture`，由每个 Widget 的独立 MID 写入。
+
+不要让多个卡牌 Widget 共享同一个可变 MID，否则一张牌更新插画、稀有度或倾斜时会污染其他卡牌。
+
+### 3.3 Niagara Sprite 材质
+
+- 使用 `Surface / Unlit / Translucent / TwoSided`。
+- 开启 `Used With Niagara Sprites`。
+- Dynamic Material Parameter 四通道应先在 Niagara 中写入 `Particles.DynamicMaterialParameter`，再在 Sprite Renderer 的动态材质绑定中绑定同一变量。
+- Wacom 当前约定常用 `X=ShapeKind`、`Y=NormalizedAge`、`Z=PaletteVariant`、`W=Semantic/Decorative`；具体效果以对应领域文档为准。
+- Material Instance 的球体预览不能代表 Sprite 最终效果。应在 Niagara 预览和 PIE 中检查朝向、尺寸、透明度、Fixed Bounds 与摄像机遮挡。
+
+## 4. `.dsh` 的使用技巧
+
+复杂算法优先写成 `Function SelfContained`：
+
+```dshader
+Function SelfContained WacomExample_ComputeMask(
+    in float2 uv,
+    in float amount,
+    out float mask)
+{
+    float2 centered = uv - float2(0.5, 0.5);
+    mask = step(length(centered), saturate(amount));
+}
+```
+
+实践要点：
+
+- helper 只处理数值，不直接拥有项目资产路径或具体 Style。
+- 输出数量保持少而明确；多个相关标量可打包为 `float3/float4`，但消费端 ComponentMask 必须与真实维度一致。
+- 像素效果使用局部 UV、源像素尺寸倒数和稳定 Seed；不要使用逐帧随机值，否则帧率变化会导致图案游动或闪烁。
+- 只有明确需要持续动画时才读取 Time。一次性效果优先由 Playback 写入归一化进度和确定性 Seed。
+- 重复的 3×3 Alpha 邻域、Bayer 阈值或 UV 投影只计算一次并复用，避免每增加一个表现模块就复制整组纹理采样。
+- 对图集 Sprite：先在局部 `0..1` UV 中做位移、inside mask 和裁切，再映射到 atlas scale/bias。直接在图集 UV 上视差会采样到相邻稀有度边框。
+
+## 5. 已经踩过的坑
+
+### 5.1 Masks sampler 与默认纹理不匹配
+
+典型错误：
+
+```text
+Sampler type is Masks, should be Color for /Engine/EngineResources/DefaultTexture
+```
+
+原因是参数声明为 `SamplerType="Masks"`，默认资产却是 Color 类型的 Engine DefaultTexture。即使运行时稍后会写入正确纹理，材质初次编译仍会失败。
+
+正确做法：
+
+- Masks 参数的默认 Path 直接指向已经按 Masks 导入的项目纹理。
+- 纹理设置使用 `Compression=Masks`、`sRGB=false`、`Filter=Nearest`；像素 UI 通常再使用 `NoMipmaps + UI LOD Group`。
+- Color 参数才使用 Engine DefaultTexture 作为安全默认值。
+
+### 5.2 ComponentMask 默认通道与维度错误
+
+项目使用的 DreamShader 1.4.1 曾出现 `UE.Expression(ComponentMask)` 新节点保留 Unreal 默认 R/G，再叠加 DSL 指定通道的问题，导致期望的单通道 B/A 变成 RGB 或 RGA。项目插件已做本地修复：创建节点后先清空默认通道，再应用 DSL 参数。
+
+仍需遵守：
+
+- 明确写 `OutputType="float1/float2/float3"` 和 R/G/B/A 开关。
+- 不要从 `float3` 读取 A；这会产生 `Not enough components ... for component mask 0001`。
+- Named Reroute 显示的是上游类型，人工检查生成图时要看最终消费端 `FExpressionInput` 的 mask。
+- 更新 DreamShader 插件后必须重新验证本地 ComponentMask 补丁并强制生成关键材质。
+
+### 5.3 Retainer 首帧 MID 生命周期
+
+嵌套 Retainer 的运行时 MID 可能晚于 `NativeConstruct` 创建。把首帧空 MID 缓存成“已经初始化”会造成 Hover/Drag 倾斜永久不更新，或切换 Surface Effect 后无法恢复。
+
+正确做法：
+
+- 分别缓存 WBP 创作源 Effect Material 和当前 Slate 运行时 MID。
+- 切换效果时只切一次源材质，再重新获取 Retainer 实际 MID。
+- Reset、ForceComplete、Slot 复用和 Destruct 都恢复创作源并清零运行时参数。
+- 不要长期持有另一个 Widget 的动态材质强引用。
+
+### 5.4 消散后只剩阴影或黑色矩形
+
+常见原因：
+
+- 材质裁切了卡面 Alpha，却仍用未裁切的矩形或旧 Alpha 生成接触阴影。
+- 外部 `CardShadowImage` 与 Retainer 内实时 Alpha 阴影同时存在。
+- 输出不符合预乘 Alpha，透明区域 RGB 污染背景。
+
+当前约定：
+
+- `Fake3DSurfaceRetainer` 的实时 Alpha 接触阴影是卡牌唯一阴影来源。
+- caster visibility 必须乘入当前消散可见度；残片和发光不参与 caster。
+- 先验证 `Texture.A`、inside mask、caster mask，再调阴影颜色和软硬度。
+
+### 5.5 生成成功不等于资产接线完成
+
+DreamShader commandlet 只负责根据 `.dsm/.dsh` 生成基础 Material。它不会自动：
+
+- 创建或更新 Material Instance。
+- 导入纹理并修正 Compression / sRGB / Filter。
+- 填 Style DataAsset。
+- 把资产引用写入 WBP、Actor 或 Anchor。
+
+因此每项正式效果都应有幂等 `Scripts/Setup<Feature>Assets.py`。脚本应：
+
+- 缺失必要输入时明确失败。
+- 只更新自己拥有的资产和字段。
+- 保存被修改资产。
+- 不重建或覆盖无关 MI/DA 的人工参数。
+
+### 5.6 `-AllowCommandletRendering` 的全局错误会误导定位
+
+允许命令行渲染后，Editor 会加载并编译其它已引用材质。当前项目的 `M_CardSurface_CosmicFoil` 与 `M_CosmicBlob` 仍缓存失效的 `/DreamShaderGenerated/*.ush` 路径，因此命令整体可能返回失败，即使本次目标材质已经生成且没有自身 SM6 错误。
+
+排错时必须：
+
+1. 搜索目标材质名对应的 `Missing cached shadermap`、`Error` 和 `Generated` 行。
+2. 区分目标材质错误与其它资产的全局启动错误。
+3. 不能仅凭进程 Exit Code 判断目标材质失败。
+4. 旧 include 问题应单独强制重生成并保存对应旧材质，不要通过修改新材质绕过。
+
+### 5.7 Worktree 中生成资产不是 Git 真源
+
+`Content/DreamMaterials` 当前位于每个 worktree 的本地依赖层并受 ignore policy 影响。切换 worktree 后看不到某个 MI，不代表 `.dsm` 丢失；需要在当前 worktree 重新运行生成与 setup 脚本。
+
+提交前应确认至少包含：
+
+- `.dsm`
+- 被 import 的 `.dsh`
+- 必要的确定性源纹理
+- setup 脚本
+- C++ 参数合同与领域文档
+
+不要只交付本机生成的 `.uasset`。
+
+### 5.8 材质预览不等于真实宿主
+
+- UI 材质在球体预览中可能只显示灰色或透明，Retainer 输入也不会自动存在。
+- Niagara 材质第一帧预览不代表 Burst 条件、User Parameter 或 Dynamic Material Parameter 正确。
+- 像素卡面最终还会经过 UMG 缩放、DPI、Retainer、Nearest 过滤和 authored clipping。
+
+审美与空间表现必须在真实 WBP、Niagara System 和 PIE 中验收。
+
+## 6. 推荐生成流程
+
+在项目根目录执行：
+
+```powershell
+$ProjectDir = (Get-Location).Path
+$EditorCmd = 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe'
+$Source = Join-Path $ProjectDir 'DShader\Material\Card\M_WacomCardSurfaceComposite.dsm'
+
+& $EditorCmd (Join-Path $ProjectDir 'Wacom.uproject') `
+  -run=DreamShader compile `
+  "-Source=$Source" `
+  -Force -Unattended -NoPause -NoSplash
+```
+
+需要验证 SM6 时增加 `-AllowCommandletRendering`，随后检查 `Saved/Logs/Wacom.log`：
+
+```powershell
+rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: Error|LogShaders: Error|LogDreamShader: Error" Saved/Logs/Wacom.log
+```
+
+基础 Material 成功后再运行该功能的 setup 脚本：
+
+```powershell
+& $EditorCmd (Join-Path $ProjectDir 'Wacom.uproject') `
+  "-ExecutePythonScript=$ProjectDir\Scripts\SetupCardSurfacePerspectiveAssets.py" `
+  -Unattended -NoPause -NoSplash
+```
+
+如果脚本会修改 WBP、Blueprint CDO、DataAsset 或纹理，运行前关闭 Unreal Editor，避免编辑器内存中的旧资产在退出时覆盖脚本结果。
+
+## 7. 参数设计技巧
+
+- 参数名是运行时合同，命名后不要随意改。C++ 的 `FName`、DreamShader 参数和 MI 必须一致。
+- 参数按 `Group / SortPriority / Description` 分类；Description 使用中文说明单位、效果和建议区间。
+- Runtime 参数与 MI 调参分组，避免美术误改 `Amount / Time / Seed`。
+- 对像素效果同时暴露逻辑密度和实际源像素尺寸；只写固定 UV 宽度会随分辨率和 DPI 改变视觉粗细。
+- 使用 `SurfaceInvSize` 或 `CardSourceInvSize` 把像素位移换成 UV，不在 C++ 中复制材质内部尺寸假设。
+- Seed 必须来自稳定语义（Card ID、Event Sequence、目标 ID），不能来自当前帧时间。
+- Reduced Motion 不等于关闭语义反馈：保留静态标记、中心方印或短淡出，只关闭方向传播、粒子位移和循环动画。
+- 卡牌插画与稀有度边框不是同一种资产合同：插画使用 `UTexture2D`；`RarityBorder` 使用 `UPaperSprite`，必须从 baked atlas texture 与 source rect 计算局部 UV，不能直接把 Sprite 当成整张 Texture 采样。
+
+## 8. 性能原则
+
+- 普通手牌常驻材质只保留 Fake3D、必要接触阴影和已确认的核心表面能力。
+- 昂贵的消散、刻印或更新效果只在活动 outgoing/target Slot 上临时切换 MID。
+- 不要为了一个短效果增加第二个 Retainer。
+- 纹理邻域采样集中在 shared helper 中复用；先评估是否能复用已有 Alpha 结果。
+- 不启用的效果不要仅靠 `Amount=0` 长期留在生产材质里承担采样成本。
+- 多个小 Sprite/牌印优先批量 Slate CustomVerts 或 Niagara Burst，不创建逐粒子 UWidget。
+
+## 9. 验证边界
+
+自动化测试适合保护稳定合同：
+
+- `.dsm` 的 Domain、Blend Mode、参数名和必要 import。
+- Retainer 参数名是否为 `Texture`。
+- 材质源是否意外读取 Time/Noise。
+- C++ 是否把正确的语义进度、Tilt、Seed 写入视图合同。
+- Reset、ForceComplete、Widget 复用是否恢复基础材质。
+- 纹理导入设置和 MI/Style 引用是否有效。
+
+PIE 负责判断审美与手感：
+
+- 颜色、亮度、线宽、像素密度、拖尾长度。
+- Hover/Drag 是否自然，DPI 下像素是否稳定。
+- 卡面透明边缘、实体出血装饰和接触阴影是否正确。
+- 明暗背景、16:9/21:9、连续快速触发和低帧率表现。
+
+测试材质合同不是为了替代材质实例预览，而是防止参数改名、Domain 变化、Retainer 合同破坏、错误采样器和清理失败等无法靠一次人工观察稳定发现的回归。
+
+## 10. 新材质提交检查表
+
+- [ ] `.dsm` 生成路径与预期 `/Game/DreamMaterials/<Category>` 一致。
+- [ ] 可复用算法已放入带 `Wacom` 前缀的 `.dsh`。
+- [ ] UI/Retainer/Niagara Domain 与 Blend Mode 正确。
+- [ ] Retainer 采样参数精确命名为 `Texture`。
+- [ ] Color/Masks sampler 与默认纹理资产类型一致。
+- [ ] ComponentMask 的输入维度和通道开关一致。
+- [ ] 透明区域同时正确处理 RGB 与 Alpha。
+- [ ] 图集先做局部 UV 裁切，再映射 atlas。
+- [ ] Runtime、MI 和 Style 参数没有重复所有权。
+- [ ] setup 脚本幂等且不会覆盖无关人工资产。
+- [ ] Reset、ForceComplete、Slot 复用和 teardown 能恢复基础材质。
+- [ ] DreamShader 强制生成成功，目标材质无自身 SM6 错误。
+- [ ] 相关 C++ 编译和合同测试通过。
+- [ ] 在真实 WBP/Niagara/PIE 中完成视觉验收。

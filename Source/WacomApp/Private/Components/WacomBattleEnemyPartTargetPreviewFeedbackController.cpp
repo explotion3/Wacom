@@ -12,6 +12,8 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 
+// Use a named private namespace so adaptive unity builds cannot merge these
+// generic Niagara parameter constants with another controller's constants.
 namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate
 {
 	const FName EffectKindParameter(TEXT("User.EffectKind"));

@@ -194,6 +194,10 @@ void UWacomFirstPersonCardViewWidget::SetCardDepthView(const FWacomFirstPersonCa
 	LastCardDepthView = View;
 	LastCardDepthView.PerspectiveStrength = FMath::Max(0.0f, LastCardDepthView.PerspectiveStrength);
 	LastCardDepthView.ContactShadowLift = FMath::Clamp(LastCardDepthView.ContactShadowLift, 0.0f, 1.0f);
+	if (CardView)
+	{
+		CardView->SetCardSurfacePerspectiveView(LastCardDepthView.SurfacePerspective);
+	}
 
 	if (Fake3DSurfaceRetainer)
 	{
@@ -340,6 +344,10 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 
 void UWacomFirstPersonCardViewWidget::NativeDestruct()
 {
+	if (CardView)
+	{
+		CardView->ResetCardSurfacePerspectiveView();
+	}
 	RestoreBaseSurfaceEffectMaterial();
 	ActiveSurfaceEffectMaterialInstance = nullptr;
 	ActiveSurfaceEffectMaterialSource = nullptr;

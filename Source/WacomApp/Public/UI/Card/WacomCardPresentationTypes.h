@@ -8,6 +8,21 @@
 
 class UTexture2D;
 
+/**
+ * Visual-only perspective state consumed by a reusable card surface.
+ *
+ * First-person hands provide live tilt and attachment displacement. Other card
+ * contexts keep the default neutral view and therefore pay no per-frame cost.
+ */
+struct WACOMAPP_API FWacomCardSurfacePerspectiveView
+{
+	bool bEnabled = false;
+	FVector2D TiltDegrees = FVector2D::ZeroVector;
+	float Strength = 0.0f;
+	FVector2D AttachmentOffsetPixels = FVector2D::ZeroVector;
+	bool bReducedMotion = false;
+};
+
 UENUM(BlueprintType)
 enum class EWacomCardDetailRunKind : uint8
 {
