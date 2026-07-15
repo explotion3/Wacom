@@ -123,7 +123,26 @@ enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
 	None UMETA(DisplayName = "None"),
 	Retained UMETA(DisplayName = "Retained"),
 	CardUseReform UMETA(DisplayName = "Card Use Reform"),
-	HandTargetImpact UMETA(DisplayName = "Hand Target Impact")
+	HandTargetImpact UMETA(DisplayName = "Hand Target Impact"),
+	CardDataRewrite UMETA(DisplayName = "Card Data Rewrite"),
+	CardUseReformOut UMETA(DisplayName = "Card Use Reform Out"),
+	CardUseReformIn UMETA(DisplayName = "Card Use Reform In")
+};
+
+UENUM(BlueprintType, meta = (Bitflags))
+enum class EWacomFirstPersonCardDataRewriteField : uint8
+{
+	None = 0 UMETA(Hidden),
+	Cost = 1 << 0 UMETA(DisplayName = "Cost")
+};
+ENUM_CLASS_FLAGS(EWacomFirstPersonCardDataRewriteField)
+
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardDataRewriteTone : uint8
+{
+	Neutral UMETA(DisplayName = "Neutral"),
+	Beneficial UMETA(DisplayName = "Beneficial"),
+	Detrimental UMETA(DisplayName = "Detrimental")
 };
 
 USTRUCT(BlueprintType)
@@ -606,6 +625,107 @@ struct WACOMAPP_API FWacomFirstPersonCardHandTargetImpactView
 	FWacomFirstPersonCardHandTargetImpactStyleData Style;
 };
 
+/** Playback and material authoring for explicit card-face data rewrites. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardDataRewriteStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite", meta = (ToolTip = "费用变化期间临时绑定到 CostDigitImage 的 UI 材质实例；材质需要支持旧、新 PaperSprite 图集纹理与 UV Rect。它不替换整张卡牌的 Retainer 材质。"))
+	TObjectPtr<UMaterialInstance> DigitRewriteMaterialInstance = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Preview", meta = (Units = "s", ToolTip = "手牌目标费用预测的呼吸周期，单位为秒；默认 0.85，推荐 0.65 到 1.10。预览只作用于 CostDigitImage，不修改权威费用。"))
+	float PreviewPulsePeriodSeconds = 0.85f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Preview", meta = (ToolTip = "费用预测呼吸最低透明度；默认 0.38，推荐 0.25 到 0.55。只影响材质输出，不影响布局。"))
+	float PreviewMinimumOpacity = 0.38f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Preview", meta = (ToolTip = "费用预测呼吸最高透明度；默认 0.90，推荐 0.75 到 1.0。"))
+	float PreviewMaximumOpacity = 0.90f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Preview", meta = (ToolTip = "费用预测呼吸峰值亮度倍率；默认 1.45，推荐 1.15 到 1.80。颜色由材质实例中的增益/减益色板控制。"))
+	float PreviewPeakBrightness = 1.45f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Timing", meta = (Units = "s", ToolTip = "一次费用数字消散重组的完整时长，单位为秒；默认 0.34，推荐 0.28 到 0.42。只影响 CostDigitImage，不阻塞规则或输入。"))
+	float DurationSeconds = 0.34f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Timing", meta = (Units = "s", ToolTip = "旧费用数字完成像素消散的时刻，单位为秒；默认 0.10，推荐 0.07 到 0.14。"))
+	float OldDissolveEndSeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Timing", meta = (Units = "s", ToolTip = "新费用数字开始从中心重组的时刻，单位为秒；默认 0.12，推荐 0.09 到 0.17，应不早于旧数字消散结束。"))
+	float NewRevealStartSeconds = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Timing", meta = (Units = "s", ToolTip = "新费用数字完成像素重组的时刻，单位为秒；默认 0.25，推荐 0.20 到 0.31，应小于完整时长。"))
+	float NewRevealEndSeconds = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Motion", meta = (ToolTip = "旧数字消散完成及新数字开始重组时的最小缩放倍率；默认 0.88，推荐 0.82 到 0.94。只写 CostDigitImage RenderTransform，不改变布局。"))
+	float MinimumScale = 0.88f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Motion", meta = (ToolTip = "新数字重组后的回弹峰值缩放倍率；默认 1.10，推荐 1.04 到 1.16。随后在完整时长内缓出归位。"))
+	float OvershootScale = 1.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Motion", meta = (Units = "s", ToolTip = "新数字到达回弹峰值的时刻，单位为秒；默认 0.26，推荐 0.22 到 0.30，应不早于新数字重组结束。"))
+	float OvershootPeakSeconds = 0.26f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Timing", meta = (Units = "s", ToolTip = "同一批多张卡费用变化时相邻卡开始重写的错峰间隔，单位为秒；默认 0.045，推荐 0.02 到 0.06。"))
+	float SequenceStaggerSeconds = 0.045f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Timing", meta = (Units = "s", ToolTip = "同一批多张卡重写允许的最大起播等待，单位为秒；默认 0.14，避免大手牌让反馈拖得过长。"))
+	float MaxSequenceDelaySeconds = 0.14f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Audio", meta = (ToolTip = "费用新值开始显露时播放的一次性短促像素印刷 UI 2D 音效；同一批只由第一张卡请求，留空表示静音。"))
+	TObjectPtr<USoundBase> RewriteSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Audio", meta = (ToolTip = "重写音效音量倍率；1 为资产原始音量，推荐 0.4 到 1.0。"))
+	float RewriteSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Audio", meta = (ToolTip = "重写音效基础音高倍率；1 为资产原始音高，推荐 0.9 到 1.15。"))
+	float RewriteSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Data Rewrite|Audio", meta = (ToolTip = "每批重写音高在基础值附近的随机比例；0.03 表示约正负 3%。"))
+	float RewriteSoundPitchVariation = 0.03f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardDataRewriteConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	FWacomFirstPersonCardDataRewriteStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardDataRewriteView
+{
+	bool bActive = false;
+	bool bReducedMotion = false;
+	int32 FieldMask = 0;
+	EWacomFirstPersonCardDataRewriteTone Tone = EWacomFirstPersonCardDataRewriteTone::Neutral;
+	float Progress = 0.0f;
+	float OldDissolveAmount = 0.0f;
+	float NewRevealAmount = 0.0f;
+	float DigitScale = 1.0f;
+	float Seed = 0.0f;
+	FWacomFirstPersonCardDataRewriteStyleData Style;
+};
+
+/** Direct CostDigitImage preview; independent from the card Retainer surface. */
+struct WACOMAPP_API FWacomFirstPersonCardCostPreviewView
+{
+	bool bActive = false;
+	float PreviewAmount = 0.0f;
+	float PulseAmount = 0.0f;
+	EWacomFirstPersonCardDataRewriteTone Tone = EWacomFirstPersonCardDataRewriteTone::Neutral;
+	int32 Seed = 0;
+	FWacomFirstPersonCardDataRewriteStyleData Style;
+};
+
 /** Card-surface material state shared by mutually exclusive Retainer effects. */
 struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 {
@@ -798,6 +918,34 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerFeedbackHint
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	int32 SequenceCount = 1;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite", meta = (Bitmask, BitmaskEnum = "/Script/WacomApp.EWacomFirstPersonCardDataRewriteField"))
+	int32 DataRewriteFieldMask = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	EWacomFirstPersonCardDataRewriteTone DataRewriteTone =
+		EWacomFirstPersonCardDataRewriteTone::Neutral;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	int32 DataRewriteSeed = 0;
+
+	/**
+	 * Explicit authoritative values for the cost rewrite. Target preview may already render the
+	 * post-change value before this semantic hint arrives, so the digit animation must not infer
+	 * its old value from the current brush.
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	bool bHasDataRewriteCostValues = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	int32 DataRewriteCostBefore = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	int32 DataRewriteCostAfter = 0;
+
+	/** Command presentation phases may opt into waiting for this otherwise decorative playback. */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
+	bool bBlocksPresentationPhase = false;
 };
 
 USTRUCT(BlueprintType)
@@ -1548,6 +1696,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardHandTargetImpactConfig HandTargetImpact;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardDataRewriteConfig DataRewrite;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState

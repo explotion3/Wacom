@@ -19,6 +19,8 @@ class UTexture2D;
 class UWidget;
 class UWacomCardEffectBadgeWidget;
 class UPaperSprite;
+struct FWacomFirstPersonCardDataRewriteView;
+struct FWacomFirstPersonCardCostPreviewView;
 
 #if WITH_AUTOMATION_TESTS
 struct FWacomCardViewAutomationTestView
@@ -43,6 +45,12 @@ struct FWacomCardViewAutomationTestView
 	FVector2D AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
 	FWacomCardSurfacePerspectiveView SurfacePerspectiveView;
 	UTexture2D* ResolvedSurfaceArt = nullptr;
+	bool bCostDigitRewritePrepared = false;
+	bool bCostDigitRewriteMaterialActive = false;
+	bool bCostDigitPreviewMaterialActive = false;
+	UPaperSprite* CostDigitRewriteOldSprite = nullptr;
+	UPaperSprite* CostDigitRewriteNewSprite = nullptr;
+	FWidgetTransform CostDigitRewriteRenderTransform;
 };
 #endif
 
@@ -84,6 +92,22 @@ public:
 	/** Applies visual-only perspective supplied by the first-person card layer. */
 	void SetCardSurfacePerspectiveView(const FWacomCardSurfacePerspectiveView& InView);
 	void ResetCardSurfacePerspectiveView();
+	/** Locks the current one-digit PaperSprite before a semantic cost rewrite updates ViewData. */
+	bool PrepareCostDigitRewrite(const FWacomCardViewData& InNewData);
+	/**
+	 * Locks an explicit authoritative before/after pair. This is required when target preview has
+	 * already rendered the post-change value before the committed presentation frame arrives.
+	 */
+	bool PrepareCostDigitRewrite(
+		const FWacomCardViewData& InOldData,
+		const FWacomCardViewData& InNewData);
+	/** Drives the transient CostDigitImage material without taking Retainer surface ownership. */
+	void SetCostDigitRewriteView(const FWacomFirstPersonCardDataRewriteView& InView);
+	/** Uses the same direct CostDigitImage MID to show a predicted one-digit cost. */
+	void SetCostDigitPreviewView(const FWacomFirstPersonCardCostPreviewView& InView);
+	void ResetCostDigitPreview();
+	/** Restores the authoritative cost PaperSprite and authored transform. */
+	void ResetCostDigitRewrite();
 
 	FVector2D GetCardBodyHitSize() const;
 	bool HasCardBodyHitGeometry() const;
@@ -232,6 +256,18 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UTexture2D> AuthoredCardArtTexture;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UPaperSprite> CostDigitRewriteOldSprite;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPaperSprite> CostDigitRewriteNewSprite;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> CostDigitRewriteMaterialInstance;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> CostDigitRewriteMaterialSource;
+
 	FWacomCardSurfacePerspectiveView CardSurfacePerspectiveView;
 	FVector2D AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
 	TMap<TWeakObjectPtr<UWidget>, FWidgetTransform> AuthoredAttachmentTransforms;
@@ -244,6 +280,12 @@ private:
 	bool bCardViewDataAppliedToWidgets = false;
 	bool bHasLastAppliedData = false;
 	bool bSurfaceFoilEnabled = true;
+	bool bCostDigitRewritePrepared = false;
+	bool bCostDigitRewriteMaterialActive = false;
+	bool bCostDigitPreviewMaterialActive = false;
+	bool bCostDigitAuthoredTransformCached = false;
+	FWidgetTransform CostDigitAuthoredTransform;
+	FVector2D CostDigitAuthoredPivot = FVector2D(0.5f, 0.5f);
 
 #if WITH_AUTOMATION_TESTS
 	int32 RenderCacheInvalidationCountForTest = 0;
@@ -260,6 +302,12 @@ private:
 	void ApplyCurrentDataToWidgets();
 	void UpdateEffectBadgeDisplays();
 	void UpdateCostDisplay();
+	UPaperSprite* ResolveSingleCostDigitSprite(const FWacomCardViewData& Data) const;
+	bool EnsureCostDigitRewriteMaterial(const FWacomFirstPersonCardDataRewriteView& View);
+	bool EnsureCostDigitPreviewMaterial(const FWacomFirstPersonCardCostPreviewView& View);
+	void ApplyCostDigitRewriteMaterialParameters(const FWacomFirstPersonCardDataRewriteView& View);
+	void CacheCostDigitAuthoredTransform();
+	void RestoreCostDigitAuthoredTransform();
 	void UpdateDurabilityDisplay();
 	UImage* EnsureDurabilityDigitImage(UPanelWidget& Host);
 	void UpdateTextDisplays();

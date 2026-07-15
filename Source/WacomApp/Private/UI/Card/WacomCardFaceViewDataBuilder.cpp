@@ -305,6 +305,8 @@ namespace WacomCardFaceViewDataBuilder
 		Data.Description = BuildCompactDescriptionText(Card);
 		Data.Cost = RuntimeContext.bHasRuntimeCost ? RuntimeContext.RuntimeCost : (Card ? Card->BaseCost : 0);
 		Data.bShowCost = Card != nullptr;
+		Data.bHasCostPreview = RuntimeContext.bHasRuntimeCostPreview;
+		Data.PreviewCost = RuntimeContext.RuntimeCostPreview;
 		Data.Art = Card ? Card->CardIllustration : nullptr;
 		Data.Rarity = Card ? Card->Rarity : FGameplayTag();
 		Data.Value = GetDeleteValueFromRarity(Card);

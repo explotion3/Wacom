@@ -4,6 +4,7 @@
 
 #include "BattleHUDTestHarness.h"
 #include "Cards/CardDefinition.h"
+#include "Commands/BattleCommand.h"
 #include "Engine/Engine.h"
 #include "Events/BattleEvent.h"
 #include "Fixtures/BattleTestFixtures.h"
@@ -148,13 +149,17 @@ bool FWacomUIBattleCommandDeckPlanPreservesCardUseReformFeedbackTest::RunTest(
 		LogContext,
 		PreSnapshot,
 		Resolution,
-		Initialized.Session);
+		Initialized.Session,
+		PlayedCardId);
 
 	const TArray<FName> StartedPhases =
 		HUD->GetStartedPresentationPlanPhaseNamesForTest();
 	TestTrue(
-		TEXT("Deck-step command enters CommandHandResolution"),
-		StartedPhases.Contains(FName(TEXT("CommandHandResolution"))));
+		TEXT("PlayCard command starts with source-out"),
+		StartedPhases.Contains(FName(TEXT("CommandSourceOut"))));
+	TestTrue(
+		TEXT("Retained source reforms only after deck outcomes"),
+		StartedPhases.Contains(FName(TEXT("CommandSourceReturn"))));
 	const TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints =
 		HUD->GetSubmittedPresentationPlanFeedbackHintsForTest();
 	const FWacomFirstPersonCardLayerFeedbackHint* ReformHint = FeedbackHints.FindByPredicate(
@@ -162,11 +167,122 @@ bool FWacomUIBattleCommandDeckPlanPreservesCardUseReformFeedbackTest::RunTest(
 		{
 			return Hint.CardInstanceId == PlayedCardId
 				&& Hint.FeedbackKind ==
-					EWacomFirstPersonCardLayerFeedbackKind::CardUseReform;
+					EWacomFirstPersonCardLayerFeedbackKind::CardUseReformOut;
 		});
 	TestNotNull(
-		TEXT("Command hand phase preserves CardUseReform while deck steps are deferred"),
+		TEXT("Source-out phase converts CardUseReform into its outbound half"),
 		ReformHint);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCommandCostRewritePhaseOrderTest,
+	"Wacom.UI.Battle.CommandPresentation.HandTargetCostRewritePhaseOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCommandCostRewritePhaseOrderTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleCommandHandFeedbackPresentationSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UCardDefinition* SourceDefinition = Fixture.MakeHandCardCostModifierCard(
+		/*Cost*/ 0,
+		/*Magnitude*/ 2,
+		/*bReduceCost*/ false);
+	UCardDefinition* TargetDefinition = Fixture.MakeNoopCard(/*Cost*/ 3);
+	const FWacomInitializedBattleSession Initialized = Fixture.CreateInitializedSession(
+		Fixture.MakeCharacter(
+			Fixture.MakeNoopCard(0),
+			Fixture.MakeNoopCard(0),
+			{ SourceDefinition, TargetDefinition, Fixture.MakeNoopCard(0),
+				Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) }),
+		Fixture.MakeSinglePartEnemy(20, 50, 0),
+		43);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Initialized session"), Initialized.Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	Harness->SetInitializedSession(Initialized);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot PreSnapshot = Initialized.Session->BuildSnapshot();
+	const FGuid SourceCardId = FWacomBattleFixture::FindHandInstanceByCardId(
+		PreSnapshot,
+		SourceDefinition->CardId);
+	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(
+		PreSnapshot,
+		TargetDefinition->CardId);
+	const FBattleResolution Resolution = Initialized.Session->ResolveCommand(
+		FBattleCommand::MakePlayCardOnHandCard(SourceCardId, TargetCardId));
+	if (!TestTrue(TEXT("Cost-modifier hand target command succeeds"), Resolution.IsOk()))
+	{
+		return false;
+	}
+
+	FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
+			PreSnapshot,
+			SourceCardId,
+			FBattlePartSlotIdentity(),
+			TargetCardId);
+	LogContext.CardTargetPreview.bHasPreview = true;
+	LogContext.CardTargetPreview.TargetKind = EWacomBattleCardPreviewTargetKind::HandCard;
+	LogContext.CardTargetPreview.SourceCardInstanceId = SourceCardId;
+	LogContext.CardTargetPreview.TargetHandCardInstanceId = TargetCardId;
+	HUD->ApplyCommandResolutionForTest(
+		LogContext,
+		PreSnapshot,
+		Resolution,
+		Initialized.Session,
+		SourceCardId);
+
+	for (int32 Step = 0; Step < 12 && HUD->IsPresentationPlanActiveForTest(); ++Step)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+
+	const TArray<FName> StartedPhases =
+		HUD->GetStartedPresentationPlanPhaseNamesForTest();
+	const int32 SourceIndex = StartedPhases.IndexOfByKey(FName(TEXT("CommandSourceOut")));
+	const int32 TargetIndex = StartedPhases.IndexOfByKey(FName(TEXT("CommandPrimaryTarget")));
+	const int32 OutcomeIndex = StartedPhases.IndexOfByKey(FName(TEXT("CommandOutcome")));
+	TestTrue(
+		TEXT("Cost rewrite follows source-out then primary-target"),
+		SourceIndex != INDEX_NONE
+			&& TargetIndex > SourceIndex
+			&& OutcomeIndex > TargetIndex);
+
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints =
+		HUD->GetSubmittedPresentationPlanFeedbackHintsForTest();
+	const FWacomFirstPersonCardLayerFeedbackHint* RewriteHint =
+		FeedbackHints.FindByPredicate(
+			[&TargetCardId](const FWacomFirstPersonCardLayerFeedbackHint& Hint)
+			{
+				return Hint.CardInstanceId == TargetCardId
+					&& Hint.FeedbackKind
+						== EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite;
+			});
+	if (!TestNotNull(TEXT("Outcome contains the target cost rewrite"), RewriteHint))
+	{
+		return false;
+	}
+	TestTrue(
+		TEXT("Command-owned cost rewrite blocks source return until complete"),
+		RewriteHint->bBlocksPresentationPhase);
 	return true;
 }
 

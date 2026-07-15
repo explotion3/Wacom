@@ -52,6 +52,7 @@ enum class EBattleEventType : uint8
 	// Append-only presentation fact. Keep existing serialized enum values stable.
 	CardPlayDestinationResolved UMETA(DisplayName = "CardPlayDestinationResolved"),
 	DiscardPileReshuffledIntoDraw UMETA(DisplayName = "DiscardPileReshuffledIntoDraw"),
+	CardRuntimeCostChanged UMETA(DisplayName = "CardRuntimeCostChanged"),
 };
 
 /**
@@ -94,6 +95,7 @@ enum class EHandCardZoneMoveReason : uint8
  * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；全盾吸收为 0，overkill 只记剩余 HP，玩家目标时 key 为空
  * - StatusApplied       ：ActorEnemyPartKey、Tag = Status.*、Amount = 层数；玩家目标时 key 为空
  * - CardStatusChanged   ：CardInstanceId = 目标卡，Tag = Status.*、Amount = 本次 delta、Count = 变更后层数
+ * - CardRuntimeCostChanged：CardInstanceId = 目标卡、ActorInstanceId = 来源卡、Tag = 来源效果、Amount = RuntimeCostModifier delta、Count = 变更后实际 RuntimeCost
  * - EnemyInitiativeChanged：ActorEnemyPartKey、Tag = 原因、Amount = 实际 delta、Count = 变更后倒计时
  * - InitiativePushed    ：Amount = 本次尝试推进量（RuntimeCost）；冻结可能使部分部位实际变化为 0
  * - WaitPerformed       ：Amount = 本次等待值

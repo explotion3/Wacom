@@ -161,11 +161,13 @@ bool FWacomBattleHandTargetImpactSharesDiscardPhaseTest::RunTest(
 	const TArray<FName> StartedPhases =
 		HUD->GetStartedPresentationPlanPhaseNamesForTest();
 	TestTrue(
-		TEXT("Target impact starts in the discard glyph phase"),
-		StartedPhases.Contains(FName(TEXT("HandDiscardGlyphTransfer"))));
-	TestFalse(
-		TEXT("Target discard does not defer impact to a later hand phase"),
-		StartedPhases.Contains(FName(TEXT("CommandHandResolution"))));
+		TEXT("Target impact owns a dedicated target phase"),
+		StartedPhases.Contains(FName(TEXT("CommandPrimaryTarget"))));
+	const int32 SourceIndex = StartedPhases.IndexOfByKey(FName(TEXT("CommandSourceOut")));
+	const int32 TargetIndex = StartedPhases.IndexOfByKey(FName(TEXT("CommandPrimaryTarget")));
+	const int32 DiscardIndex = StartedPhases.IndexOfByKey(FName(TEXT("HandDiscardGlyphTransfer")));
+	TestTrue(TEXT("Source plays before target"), SourceIndex != INDEX_NONE && SourceIndex < TargetIndex);
+	TestTrue(TEXT("Target plays before discard result"), TargetIndex < DiscardIndex);
 	return true;
 }
 

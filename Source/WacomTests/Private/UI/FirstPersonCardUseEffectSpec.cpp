@@ -337,6 +337,30 @@ bool FWacomFirstPersonCardUseReformLifecycleTest::RunTest(
 		TEXT("Missing hand anchors reforms at the original slot"),
 		SameSlotWidget->GetVisualSlotView().ScreenPosition,
 		SameSlotPosition);
+
+	UWacomFirstPersonCardLayerSlotWidget* StagedWidget = MakeWidget(
+		MakeUseConfig(MaterialInstance));
+	FWacomFirstPersonCardLayerSlotView StagedTarget = StagedWidget->GetSlotView();
+	StagedTarget.ScreenPosition += FVector2D(90.0f, 15.0f);
+	StagedTarget.WidgetPosition = StagedTarget.ScreenPosition;
+	StagedTarget.SnappedWidgetPosition = StagedTarget.ScreenPosition;
+	StagedWidget->BeginSlotMotion(StagedTarget, false);
+	StagedWidget->TriggerCardUseReformOutFeedback();
+	Tick(*StagedWidget, 0.29f);
+	FWacomFirstPersonCardSlotAutomationTestView StagedView =
+		FWacomFirstPersonCardLayerTestAccess::View(*StagedWidget);
+	TestTrue(TEXT("Outbound-only reform remains held hidden"), StagedView.bCardUseReformPlaybackActive);
+	TestFalse(TEXT("Held-hidden reform no longer blocks a command phase"), StagedWidget->HasActivePresentationPlayback());
+	const float HeldAmount = StagedView.CardUseEffectView.Amount;
+	Tick(*StagedWidget, 0.50f);
+	StagedView = FWacomFirstPersonCardLayerTestAccess::View(*StagedWidget);
+	TestTrue(TEXT("Held-hidden reform does not advance on time"),
+		FMath::IsNearlyEqual(StagedView.CardUseEffectView.Amount, HeldAmount));
+	StagedWidget->TriggerCardUseReformInFeedback();
+	TestTrue(TEXT("Explicit inbound resumes command blocking"), StagedWidget->HasActivePresentationPlayback());
+	Tick(*StagedWidget, 0.40f);
+	TestFalse(TEXT("Explicit inbound finishes and clears"),
+		FWacomFirstPersonCardLayerTestAccess::View(*StagedWidget).bCardUseReformPlaybackActive);
 	return true;
 }
 

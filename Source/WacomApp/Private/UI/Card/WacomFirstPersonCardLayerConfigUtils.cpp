@@ -327,6 +327,57 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 		0.01f, HandTargetStyle.ImpactSoundPitchMultiplier);
 	HandTargetStyle.ImpactSoundPitchVariation = FMath::Clamp(
 		HandTargetStyle.ImpactSoundPitchVariation, 0.0f, 0.99f);
+	FWacomFirstPersonCardDataRewriteStyleData& DataRewriteStyle =
+		Config.DataRewrite.Style;
+	DataRewriteStyle.PreviewPulsePeriodSeconds = FMath::Max(
+		0.01f,
+		DataRewriteStyle.PreviewPulsePeriodSeconds);
+	DataRewriteStyle.PreviewMinimumOpacity = FMath::Clamp(
+		DataRewriteStyle.PreviewMinimumOpacity, 0.0f, 1.0f);
+	DataRewriteStyle.PreviewMaximumOpacity = FMath::Clamp(
+		DataRewriteStyle.PreviewMaximumOpacity,
+		DataRewriteStyle.PreviewMinimumOpacity,
+		1.0f);
+	DataRewriteStyle.PreviewPeakBrightness = FMath::Max(
+		0.0f,
+		DataRewriteStyle.PreviewPeakBrightness);
+	DataRewriteStyle.DurationSeconds = FMath::Max(
+		0.0f,
+		DataRewriteStyle.DurationSeconds);
+	DataRewriteStyle.OldDissolveEndSeconds = FMath::Clamp(
+		DataRewriteStyle.OldDissolveEndSeconds,
+		0.0f,
+		DataRewriteStyle.DurationSeconds);
+	DataRewriteStyle.NewRevealStartSeconds = FMath::Clamp(
+		DataRewriteStyle.NewRevealStartSeconds,
+		DataRewriteStyle.OldDissolveEndSeconds,
+		DataRewriteStyle.DurationSeconds);
+	DataRewriteStyle.NewRevealEndSeconds = FMath::Clamp(
+		DataRewriteStyle.NewRevealEndSeconds,
+		DataRewriteStyle.NewRevealStartSeconds,
+		DataRewriteStyle.DurationSeconds);
+	DataRewriteStyle.OvershootPeakSeconds = FMath::Clamp(
+		DataRewriteStyle.OvershootPeakSeconds,
+		DataRewriteStyle.NewRevealEndSeconds,
+		DataRewriteStyle.DurationSeconds);
+	DataRewriteStyle.MinimumScale = FMath::Max(0.01f, DataRewriteStyle.MinimumScale);
+	DataRewriteStyle.OvershootScale = FMath::Max(0.01f, DataRewriteStyle.OvershootScale);
+	DataRewriteStyle.SequenceStaggerSeconds = FMath::Max(
+		0.0f,
+		DataRewriteStyle.SequenceStaggerSeconds);
+	DataRewriteStyle.MaxSequenceDelaySeconds = FMath::Max(
+		0.0f,
+		DataRewriteStyle.MaxSequenceDelaySeconds);
+	DataRewriteStyle.RewriteSoundVolumeMultiplier = FMath::Max(
+		0.0f,
+		DataRewriteStyle.RewriteSoundVolumeMultiplier);
+	DataRewriteStyle.RewriteSoundPitchMultiplier = FMath::Max(
+		0.01f,
+		DataRewriteStyle.RewriteSoundPitchMultiplier);
+	DataRewriteStyle.RewriteSoundPitchVariation = FMath::Clamp(
+		DataRewriteStyle.RewriteSoundPitchVariation,
+		0.0f,
+		0.99f);
 	Config.Selection.Style.EnterDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.EnterDurationSeconds);
 	Config.Selection.Style.ExitDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.ExitDurationSeconds);
 	Config.Selection.Style.SustainPeriodSeconds = FMath::Max(0.01f, Config.Selection.Style.SustainPeriodSeconds);
@@ -491,6 +542,59 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ImpactSoundVolumeMultiplier, B.HandTargetImpact.Style.ImpactSoundVolumeMultiplier)
 		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ImpactSoundPitchMultiplier, B.HandTargetImpact.Style.ImpactSoundPitchMultiplier)
 		&& AreFloatsEquivalent(A.HandTargetImpact.Style.ImpactSoundPitchVariation, B.HandTargetImpact.Style.ImpactSoundPitchVariation)
+		&& A.DataRewrite.bEnabled == B.DataRewrite.bEnabled
+		&& A.DataRewrite.bReducedMotion == B.DataRewrite.bReducedMotion
+		&& A.DataRewrite.Style.DigitRewriteMaterialInstance
+			== B.DataRewrite.Style.DigitRewriteMaterialInstance
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.PreviewPulsePeriodSeconds,
+			B.DataRewrite.Style.PreviewPulsePeriodSeconds)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.PreviewMinimumOpacity,
+			B.DataRewrite.Style.PreviewMinimumOpacity)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.PreviewMaximumOpacity,
+			B.DataRewrite.Style.PreviewMaximumOpacity)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.PreviewPeakBrightness,
+			B.DataRewrite.Style.PreviewPeakBrightness)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.DurationSeconds,
+			B.DataRewrite.Style.DurationSeconds)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.OldDissolveEndSeconds,
+			B.DataRewrite.Style.OldDissolveEndSeconds)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.NewRevealStartSeconds,
+			B.DataRewrite.Style.NewRevealStartSeconds)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.NewRevealEndSeconds,
+			B.DataRewrite.Style.NewRevealEndSeconds)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.MinimumScale,
+			B.DataRewrite.Style.MinimumScale)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.OvershootScale,
+			B.DataRewrite.Style.OvershootScale)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.OvershootPeakSeconds,
+			B.DataRewrite.Style.OvershootPeakSeconds)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.SequenceStaggerSeconds,
+			B.DataRewrite.Style.SequenceStaggerSeconds)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.MaxSequenceDelaySeconds,
+			B.DataRewrite.Style.MaxSequenceDelaySeconds)
+		&& A.DataRewrite.Style.RewriteSound == B.DataRewrite.Style.RewriteSound
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.RewriteSoundVolumeMultiplier,
+			B.DataRewrite.Style.RewriteSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.RewriteSoundPitchMultiplier,
+			B.DataRewrite.Style.RewriteSoundPitchMultiplier)
+		&& AreFloatsEquivalent(
+			A.DataRewrite.Style.RewriteSoundPitchVariation,
+			B.DataRewrite.Style.RewriteSoundPitchVariation)
 		&& A.Selection.bEnabled == B.Selection.bEnabled
 		&& A.Selection.bReducedMotion == B.Selection.bReducedMotion
 		&& AreColorsEquivalent(A.Selection.Style.PrimaryColor, B.Selection.Style.PrimaryColor)

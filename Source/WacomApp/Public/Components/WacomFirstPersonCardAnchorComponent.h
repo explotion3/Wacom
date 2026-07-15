@@ -16,6 +16,7 @@ class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class UWacomFirstPersonCardHandTargetImpactStyle;
+class UWacomFirstPersonCardDataRewriteStyle;
 class UWacomFirstPersonCardPlayedDissolveStyle;
 class UWacomFirstPersonCardPileTransferStyle;
 class UWacomFirstPersonCardUseEffectStyle;
@@ -570,6 +571,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|15 Card Hand Target Impact", meta = (Units = "s", ToolTip = "成功刻印完整播放时长覆盖，单位为秒；负值表示使用 Style，默认 0.29，推荐 0.24 到 0.38。"))
 	float CardHandTargetImpactCommitDurationOverrideSeconds = -1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Card Data Rewrite", meta = (ToolTip = "是否让 Battle 中真实可见的卡牌费用变化播放局部像素重写；只改变表现，不修改 RuntimeCost、命中区域或卡牌布局。"))
+	bool bEnableCardDataRewrite = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Card Data Rewrite", meta = (ToolTip = "费用数字消散重组的可复用预设；材质实例只作用于 CostDigitImage，DataAsset 控制时序、回弹、错峰与可选音效。为空或材质无效时费用立即刷新但不播放效果。"))
+	TObjectPtr<UWacomFirstPersonCardDataRewriteStyle> CardDataRewriteStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Card Data Rewrite", meta = (ToolTip = "弱化费用数字动态：使用约 0.12 秒旧、新数字交叉淡化与静态轮廓短闪，不播放逐格消散、重组或缩放回弹。"))
+	bool bReduceCardDataRewriteMotion = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Card Data Rewrite", meta = (Units = "s", ToolTip = "费用数字消散重组总时长覆盖，单位为秒；负值表示使用 Style，默认 0.34，推荐 0.28 到 0.42。"))
+	float CardDataRewriteDurationOverrideSeconds = -1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜 Surface Effect 制作开关；当前拖拽流程不会激活它，默认关闭。后续只允许由明确的卡面数据更新或升级表现语义驱动。"))
 	bool bEnableCardSelectionEffect = false;
 
@@ -585,22 +598,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜退出时长覆盖，单位为秒；当前拖拽流程不读取该参数。"))
 	float CardSelectionExitDurationOverrideSeconds = -1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Camera Look While UI", meta = (ToolTip = "Inspect 或拖拽第一人称卡牌时，是否让当前 Battle / Run 第一人称镜头持续跟随鼠标偏转。只影响镜头表现，不改变鼠标捕获、Inspect 滑选、目标校验或出牌结果。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|17 Camera Look While UI", meta = (ToolTip = "Inspect 或拖拽第一人称卡牌时，是否让当前 Battle / Run 第一人称镜头持续跟随鼠标偏转。只影响镜头表现，不改变鼠标捕获、Inspect 滑选、目标校验或出牌结果。"))
 	bool bAllowCameraLookDuringCardDrag = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Camera Look While UI", meta = (ToolTip = "Inspect / Drag 期间传给当前 first-person cursor look 的强度倍率；1 表示使用镜头自身 LookYawScale / LookPitchScale，0 表示不推动镜头。推荐 0.35 到 1.0，不影响卡牌布局。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|17 Camera Look While UI", meta = (ToolTip = "Inspect / Drag 期间传给当前 first-person cursor look 的强度倍率；1 表示使用镜头自身 LookYawScale / LookPitchScale，0 表示不推动镜头。推荐 0.35 到 1.0，不影响卡牌布局。"))
 	float CardDragCameraLookScale = 1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Camera Look While UI", meta = (ToolTip = "Inspect / Drag 期间镜头追向鼠标的插值速度覆盖值，单位为每秒；小于 0 时沿用当前镜头 LookInterpSpeed，0 表示立即贴合。推荐 -1 或 8 到 18。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|17 Camera Look While UI", meta = (ToolTip = "Inspect / Drag 期间镜头追向鼠标的插值速度覆盖值，单位为每秒；小于 0 时沿用当前镜头 LookInterpSpeed，0 表示立即贴合。推荐 -1 或 8 到 18。"))
 	float CardDragCameraLookInterpSpeedOverride = -1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Camera Look While UI", meta = (ToolTip = "Hover 第一人称卡牌时，是否让当前 Battle / Run 第一人称镜头跟随鼠标轻微偏转。进入 Inspect / Drag 后由 Card Drag Camera Look 参数继续接管。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|17 Camera Look While UI", meta = (ToolTip = "Hover 第一人称卡牌时，是否让当前 Battle / Run 第一人称镜头跟随鼠标轻微偏转。进入 Inspect / Drag 后由 Card Drag Camera Look 参数继续接管。"))
 	bool bAllowCameraLookDuringCardPointer = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Camera Look While UI", meta = (ToolTip = "Hover 卡牌时传给当前第一人称 cursor look 的强度倍率；1 表示使用镜头自身的 LookYawScale / LookPitchScale，0 表示不推动镜头。推荐 0.35 到 1.0，不影响卡牌布局。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|17 Camera Look While UI", meta = (ToolTip = "Hover 卡牌时传给当前第一人称 cursor look 的强度倍率；1 表示使用镜头自身的 LookYawScale / LookPitchScale，0 表示不推动镜头。推荐 0.35 到 1.0，不影响卡牌布局。"))
 	float CardPointerCameraLookScale = 1.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Camera Look While UI", meta = (ToolTip = "Hover 卡牌时镜头追向鼠标的插值速度覆盖值，单位为每秒；小于 0 时沿用当前镜头的 LookInterpSpeed，0 表示立即贴合。推荐 -1 或 8 到 18。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|17 Camera Look While UI", meta = (ToolTip = "Hover 卡牌时镜头追向鼠标的插值速度覆盖值，单位为每秒；小于 0 时沿用当前镜头的 LookInterpSpeed，0 表示立即贴合。推荐 -1 或 8 到 18。"))
 	float CardPointerCameraLookInterpSpeedOverride = -1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量交互反馈；只影响 hover、按下、确认和不可用点击的 UMG 表现，不改变出牌命令路径。"))
@@ -782,6 +795,7 @@ public:
 
 	bool HasRuntimeCardLayerPendingPresentationFrame(FName SourceId) const;
 	bool HasActiveCardLayerPresentationPlayback() const;
+	bool HasHandTargetImpactReachedPeak(const FGuid& CardInstanceId) const;
 	void ForceSettleCardLayerPresentationPlayback();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|99 Debug")

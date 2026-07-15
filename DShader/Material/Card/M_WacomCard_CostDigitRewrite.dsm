@@ -1,0 +1,89 @@
+import "Shared/WacomCardCostDigitRewrite.dsh";
+
+Shader(Name="DreamMaterials/Card/M_WacomCard_CostDigitRewrite")
+{
+    Properties = {
+        TextureSampleParameter2D OldDigitTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="费用数字重组|运行时"; SortPriority=0; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+        TextureSampleParameter2D NewDigitTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="费用数字重组|运行时"; SortPriority=1; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+        VectorParameter OldDigitUVRect = float4(0.0, 0.0, 1.0, 1.0) [ Group="费用数字重组|运行时"; SortPriority=2; ];
+        VectorParameter NewDigitUVRect = float4(0.0, 0.0, 1.0, 1.0) [ Group="费用数字重组|运行时"; SortPriority=3; ];
+        ScalarParameter CostRewriteOldDissolve = 0.0 [ Group="费用数字重组|运行时"; SortPriority=4; ];
+        ScalarParameter CostRewriteNewReveal = 0.0 [ Group="费用数字重组|运行时"; SortPriority=5; ];
+        ScalarParameter CostRewriteTone = 0.0 [ Group="费用数字重组|运行时"; SortPriority=6; ];
+        ScalarParameter CostRewriteSeed = 0.0 [ Group="费用数字重组|运行时"; SortPriority=7; ];
+        ScalarParameter CostRewriteReducedMotion = 0.0 [ Group="费用数字重组|运行时"; SortPriority=8; ];
+        ScalarParameter DigitEffectMode = 2.0 [ Group="费用数字重组|运行时"; SortPriority=9; ];
+        ScalarParameter CostPreviewAmount = 0.0 [ Group="费用数字重组|运行时"; SortPriority=10; ];
+        ScalarParameter CostPreviewPulse = 0.0 [ Group="费用数字重组|运行时"; SortPriority=11; ];
+        ScalarParameter CostPreviewMinimumOpacity = 0.38 [ Group="费用数字重组|运行时"; SortPriority=12; ];
+        ScalarParameter CostPreviewMaximumOpacity = 0.90 [ Group="费用数字重组|运行时"; SortPriority=13; ];
+        ScalarParameter CostPreviewPeakBrightness = 1.45 [ Group="费用数字重组|运行时"; SortPriority=14; ];
+
+        VectorParameter CostRewriteNeutralPrimaryColor = float4(0.90, 0.88, 0.72, 1.0) [ Group="费用数字重组|材质实例"; SortPriority=20; ];
+        VectorParameter CostRewriteNeutralSecondaryColor = float4(0.48, 0.68, 0.86, 1.0) [ Group="费用数字重组|材质实例"; SortPriority=21; ];
+        VectorParameter CostRewriteBeneficialPrimaryColor = float4(0.58, 0.82, 1.0, 1.0) [ Group="费用数字重组|材质实例"; SortPriority=22; ];
+        VectorParameter CostRewriteBeneficialSecondaryColor = float4(0.98, 0.82, 0.42, 1.0) [ Group="费用数字重组|材质实例"; SortPriority=23; ];
+        VectorParameter CostRewriteDetrimentalPrimaryColor = float4(0.92, 0.26, 0.68, 1.0) [ Group="费用数字重组|材质实例"; SortPriority=24; ];
+        VectorParameter CostRewriteDetrimentalSecondaryColor = float4(0.10, 0.16, 0.34, 1.0) [ Group="费用数字重组|材质实例"; SortPriority=25; ];
+        ScalarParameter CostRewriteGridColumns = 14.0 [ Group="费用数字重组|材质实例"; SortPriority=26; ];
+        ScalarParameter CostRewriteEdgeWidth = 0.09 [ Group="费用数字重组|材质实例"; SortPriority=27; ];
+        ScalarParameter CostRewriteEdgeBrightness = 1.20 [ Group="费用数字重组|材质实例"; SortPriority=28; ];
+    }
+
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "PremultipliedAlpha"; TwoSided = true; }
+    Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float2 oldRectMin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OldDigitUVRect, R=true, G=true, B=false, A=false);
+        float2 oldRectSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OldDigitUVRect, R=false, G=false, B=true, A=true);
+        float2 newRectMin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=NewDigitUVRect, R=true, G=true, B=false, A=false);
+        float2 newRectSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=NewDigitUVRect, R=false, G=false, B=true, A=true);
+        float2 oldAtlasUV = oldRectMin + uv * oldRectSize;
+        float2 newAtlasUV = newRectMin + uv * newRectSize;
+        float4 oldDigit = OldDigitTexture(Coordinates=oldAtlasUV);
+        float4 newDigit = NewDigitTexture(Coordinates=newAtlasUV);
+        float3 oldColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=oldDigit, R=true, G=true, B=true, A=false);
+        float oldAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=oldDigit, R=false, G=false, B=false, A=true);
+        float3 newColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=newDigit, R=true, G=true, B=true, A=false);
+        float newAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=newDigit, R=false, G=false, B=false, A=true);
+
+        float oldVisibility;
+        float newVisibility;
+        float oldEdge;
+        float newEdge;
+        float paletteVariant;
+        WacomCard_ComputeCostDigitRewriteMasks(uv, CostRewriteOldDissolve, CostRewriteNewReveal, CostRewriteSeed, CostRewriteReducedMotion, CostRewriteGridColumns, CostRewriteEdgeWidth, oldVisibility, newVisibility, oldEdge, newEdge, paletteVariant);
+
+        float3 neutralPrimary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=CostRewriteNeutralPrimaryColor, R=true, G=true, B=true, A=false);
+        float3 neutralSecondary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=CostRewriteNeutralSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 beneficialPrimary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=CostRewriteBeneficialPrimaryColor, R=true, G=true, B=true, A=false);
+        float3 beneficialSecondary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=CostRewriteBeneficialSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 detrimentalPrimary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=CostRewriteDetrimentalPrimaryColor, R=true, G=true, B=true, A=false);
+        float3 detrimentalSecondary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=CostRewriteDetrimentalSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 primaryColor;
+        float3 secondaryColor;
+        WacomCard_SelectCostDigitRewritePalette(CostRewriteTone, neutralPrimary, neutralSecondary, beneficialPrimary, beneficialSecondary, detrimentalPrimary, detrimentalSecondary, primaryColor, secondaryColor);
+
+        float visibleOldAlpha = oldAlpha * saturate(oldVisibility);
+        float visibleNewAlpha = newAlpha * saturate(newVisibility);
+        float rewriteAlpha = saturate(visibleOldAlpha + visibleNewAlpha);
+        float3 rewriteColor = oldColor * visibleOldAlpha + newColor * visibleNewAlpha;
+        float3 edgeColor = lerp(primaryColor, secondaryColor, paletteVariant);
+        float edgeMask = saturate(oldEdge * oldAlpha + newEdge * newAlpha) * rewriteAlpha;
+        rewriteColor = rewriteColor + edgeColor * edgeMask * max(CostRewriteEdgeBrightness, 0.0);
+
+        float previewOpacity = lerp(
+            saturate(CostPreviewMinimumOpacity),
+            saturate(CostPreviewMaximumOpacity),
+            saturate(CostPreviewPulse)) * saturate(CostPreviewAmount);
+        float previewBrightness = lerp(1.0, max(CostPreviewPeakBrightness, 0.0), saturate(CostPreviewPulse));
+        float previewAlpha = newAlpha * previewOpacity;
+        float3 previewColor = lerp(primaryColor, secondaryColor, paletteVariant)
+            * previewBrightness * previewAlpha;
+        float usePreview;
+        WacomCard_SelectCostDigitEffectMode(DigitEffectMode, usePreview);
+        Color = lerp(rewriteColor, previewColor, usePreview);
+        Alpha = lerp(rewriteAlpha, previewAlpha, usePreview);
+    }
+}

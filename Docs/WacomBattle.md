@@ -467,6 +467,7 @@ BattleState
 | `DamageDealt` | 实际扣血 |
 | `StatusApplied` | 状态层数施加 |
 | `CardStatusChanged` | 单卡状态物化、消费或清理；Amount=delta，Count=变更后层数 |
+| `CardRuntimeCostChanged` | 单卡运行时费用修正已提交；`CardInstanceId` 为目标卡，`ActorInstanceId` 为来源卡或规则主体，`Tag` 为来源效果，`Amount` 为本次原始 modifier delta，`Count` 为变更后的有效 `RuntimeCost` |
 | `EnemyInitiativeChanged` | 单个敌方部位实际先机变化或 Freeze 抑制事实 |
 | `InitiativePushed` | 非迅捷卡的 RuntimeCost 推进尝试摘要 |
 | `WaitPerformed` | 玩家等待 |
@@ -487,6 +488,8 @@ BattleState
 App 层的世界伤害像素反馈只读取上述 `DamageDealt.Amount`，并按平方根映射视觉强度；不会把粒子强度、Cue 时长或表现 Seed 写回 BattleState。`FWacomBattlePresentationTargetCue.Seed` 是 App presentation 的稳定装饰随机合同：Damage 由事件 Sequence、目标稳定部位 key 和 Amount 构造，TargetConfirmed 由来源卡实例和目标稳定部位 key 构造；不得复用为规则 RNG、伤害方向或存档事实。`EnemyPartHpEmptied` 仍只占用 Destroyed 高优先级 Cue，本轮不新增规则事件。
 
 伤害导致部位破坏时，事件顺序固定为 `DamageDealt -> EnemyPartHpEmptied`；击倒请求由命令管线稍后追加。`StatusApplied.Amount` 仍表示本次新增层数，普通 Effect ApplyStatus 保持空来源卡，Resistance Stun 保持 `ResistanceResolved -> StatusApplied` 并携带来源卡。Combatant 状态移除继续静默；Card Status 的物化、减半、解冻与清理统一使用 `CardStatusChanged`。
+
+`CardRuntimeCostChanged` 是“费用 modifier 已成功写入”的显式规则事实，不替代 Snapshot。Clamp 后可见费用可能没有变化，因此 App 只有在同时看到该事件（或确实可能改费的 `CardStatusChanged`）以及前后已展示 Snapshot 的 `RuntimeCost` 差异时，才播放费用重写反馈。普通 Snapshot 刷新、Target Preview 和取消 Preview 不得从数值差异单独反推这项语义；Target Preview 仍可显示预测后的费用，因此正式重写 Hint 必须保存前后 Snapshot 的权威费用对，不能依赖提交时屏幕上恰好显示的 Sprite。
 
 `CardsDrawn` 的公共合同是“本批真实入手卡实例列表”：`CardInstanceIds` 按规则抽取 / 从弃牌堆或消耗牌堆移入手牌的顺序记录卡实例 ID，`Count` 始终等于 `CardInstanceIds.Num()`，仅作为旧 debug / 测试读取的兼容计数字段。因普通手牌容量不足而未移动的卡不会进入 `CardInstanceIds`，也不会触发 `CardsDrawn`。单卡事件继续使用 `CardInstanceId`，批量抽牌不要让 UI 再从前后 `FBattleSnapshot` 差异猜测抽到的是哪几张牌。
 

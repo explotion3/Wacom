@@ -142,6 +142,20 @@ namespace
 
 		return Result;
 	}
+
+	const FHandCardSnapshot* FindNormalHandCardSnapshotForPresentation(
+		const FBattleSnapshot& Snapshot,
+		const FGuid& CardInstanceId)
+	{
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (CardSnapshot.InstanceId == CardInstanceId && !CardSnapshot.bIsHandAnchor)
+			{
+				return &CardSnapshot;
+			}
+		}
+		return nullptr;
+	}
 }
 
 void FWacomBattleHandPresentationController::Reset()
@@ -149,6 +163,7 @@ void FWacomBattleHandPresentationController::Reset()
 	LastPresentedSnapshot = FBattleSnapshot();
 	LastTransitionSnapshot = FBattleSnapshot();
 	PendingTransitionEvents.Reset();
+	PendingCardDataChangeEvents.Reset();
 	PendingPlayCommitHints.Reset();
 	PendingHandTargetImpactIds.Reset();
 	SubmittedTransitionEvents.Reset();
@@ -163,6 +178,7 @@ void FWacomBattleHandPresentationController::Reset()
 void FWacomBattleHandPresentationController::ClearPendingTransitionEvents()
 {
 	PendingTransitionEvents.Reset();
+	PendingCardDataChangeEvents.Reset();
 	PendingPlayCommitHints.Reset();
 	PendingHandTargetImpactIds.Reset();
 	ClearPendingHandAnchorEnterFrame();
@@ -173,6 +189,11 @@ void FWacomBattleHandPresentationController::StoreTransitionEvents(const TArray<
 {
 	for (const FBattleEvent& Event : Events)
 	{
+		if (Event.Type == EBattleEventType::CardRuntimeCostChanged
+			|| Event.Type == EBattleEventType::CardStatusChanged)
+		{
+			PendingCardDataChangeEvents.Add(Event);
+		}
 		switch (Event.Type)
 		{
 		case EBattleEventType::CardsDrawn:
@@ -218,6 +239,7 @@ void FWacomBattleHandPresentationController::RecordHandTargetImpact(
 bool FWacomBattleHandPresentationController::HasPendingTransitionPresentation() const
 {
 	return !PendingTransitionEvents.IsEmpty()
+		|| !PendingCardDataChangeEvents.IsEmpty()
 		|| !PendingPlayCommitHints.IsEmpty()
 		|| !PendingHandTargetImpactIds.IsEmpty();
 }
@@ -306,6 +328,7 @@ FWacomFirstPersonCardLayerPresentationFrame FWacomBattleHandPresentationControll
 		}
 		MarkSnapshotPresented(FrameSnapshot);
 		PendingTransitionEvents.Reset();
+		PendingCardDataChangeEvents.Reset();
 		PendingPlayCommitHints.Reset();
 		PendingHandTargetImpactIds.Reset();
 		bUseEmptyHandSnapshotForNextTransitionRefresh = false;
@@ -633,6 +656,68 @@ FWacomBattleHandPresentationController::BuildFeedbackHints(
 		Hint.SequenceIndex = Index;
 		Hint.SequenceCount = FMath::Max(1, RetainedCardIds.Num());
 		Hints.Add(Hint);
+	}
+
+	if (bHasLastPresentedSnapshot && !PendingCardDataChangeEvents.IsEmpty())
+	{
+		TMap<FGuid, int32> LastRelevantSequenceByCard;
+		for (const FBattleEvent& Event : PendingCardDataChangeEvents)
+		{
+			if (Event.CardInstanceId.IsValid())
+			{
+				int32& LastSequence = LastRelevantSequenceByCard.FindOrAdd(Event.CardInstanceId);
+				LastSequence = FMath::Max(LastSequence, Event.Sequence);
+			}
+		}
+
+		TArray<const FHandCardSnapshot*> ChangedCards;
+		for (const FHandCardSnapshot& NextCard : NextSnapshot.Hand.Cards)
+		{
+			if (NextCard.bIsHandAnchor
+				|| !LastRelevantSequenceByCard.Contains(NextCard.InstanceId)
+				|| SeenCardUseReformIds.Contains(NextCard.InstanceId))
+			{
+				continue;
+			}
+			const FHandCardSnapshot* PreviousCard =
+				FindNormalHandCardSnapshotForPresentation(LastPresentedSnapshot, NextCard.InstanceId);
+			if (PreviousCard && PreviousCard->RuntimeCost != NextCard.RuntimeCost)
+			{
+				ChangedCards.Add(&NextCard);
+			}
+		}
+
+		for (int32 Index = 0; Index < ChangedCards.Num(); ++Index)
+		{
+			const FHandCardSnapshot& NextCard = *ChangedCards[Index];
+			const FHandCardSnapshot* PreviousCard =
+				FindNormalHandCardSnapshotForPresentation(LastPresentedSnapshot, NextCard.InstanceId);
+			if (!PreviousCard)
+			{
+				continue;
+			}
+
+			FWacomFirstPersonCardLayerFeedbackHint Hint;
+			Hint.CardInstanceId = NextCard.InstanceId;
+			Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite;
+			Hint.SequenceIndex = Index;
+			Hint.SequenceCount = FMath::Max(1, ChangedCards.Num());
+			Hint.DataRewriteFieldMask =
+				static_cast<int32>(EWacomFirstPersonCardDataRewriteField::Cost);
+			Hint.DataRewriteTone = NextCard.RuntimeCost < PreviousCard->RuntimeCost
+				? EWacomFirstPersonCardDataRewriteTone::Beneficial
+				: EWacomFirstPersonCardDataRewriteTone::Detrimental;
+			Hint.bHasDataRewriteCostValues = true;
+			Hint.DataRewriteCostBefore = PreviousCard->RuntimeCost;
+			Hint.DataRewriteCostAfter = NextCard.RuntimeCost;
+			const int32 LastSequence = LastRelevantSequenceByCard.FindRef(NextCard.InstanceId);
+			Hint.DataRewriteSeed = static_cast<int32>(HashCombineFast(
+				GetTypeHash(NextCard.InstanceId),
+				HashCombineFast(
+					GetTypeHash(LastSequence),
+					GetTypeHash(Hint.DataRewriteFieldMask))));
+			Hints.Add(Hint);
+		}
 	}
 	return Hints;
 }

@@ -94,6 +94,19 @@ struct FWacomFirstPersonCardLayerResolvedFeedbackHint
 	EWacomFirstPersonCardLayerFeedbackKind FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::None;
 	int32 SequenceIndex = 0;
 	int32 SequenceCount = 1;
+	int32 DataRewriteFieldMask = 0;
+	EWacomFirstPersonCardDataRewriteTone DataRewriteTone =
+		EWacomFirstPersonCardDataRewriteTone::Neutral;
+	int32 DataRewriteSeed = 0;
+	bool bHasDataRewriteCostValues = false;
+	int32 DataRewriteCostBefore = 0;
+	int32 DataRewriteCostAfter = 0;
+	bool bBlocksPresentationPhase = false;
+};
+
+struct FWacomFirstPersonCardLayerResolvedFeedbackBundle
+{
+	TArray<FWacomFirstPersonCardLayerResolvedFeedbackHint> Hints;
 };
 
 #if WITH_AUTOMATION_TESTS
@@ -166,6 +179,7 @@ public:
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 	bool HasActivePresentationPlayback() const;
+	bool HasHandTargetImpactReachedPeak(const FGuid& CardInstanceId) const;
 	void ForceSettlePresentationPlayback();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
@@ -275,7 +289,7 @@ private:
 	bool bHasCurrentPointerView = false;
 	FString CurrentDragResolvedIntentDebugSummary;
 	TMap<FString, FWacomFirstPersonCardLayerResolvedTransitionHint> PendingTransitionHintsByKey;
-	TMap<FString, FWacomFirstPersonCardLayerResolvedFeedbackHint> PendingFeedbackHintsByKey;
+	TMap<FString, FWacomFirstPersonCardLayerResolvedFeedbackBundle> PendingFeedbackHintsByKey;
 	TSet<uint64> PlayedPileTransferKeys;
 	TArray<FWacomFirstPersonCardPileTransferHint> DeferredPileTransferHints;
 	bool bCardLayerInteractionEnabled = false;

@@ -247,6 +247,8 @@ struct WACOMAPP_API FWacomCardPresentationRuntimeContext
 
 	bool bHasRuntimeCost = false;
 	int32 RuntimeCost = 0;
+	bool bHasRuntimeCostPreview = false;
+	int32 RuntimeCostPreview = 0;
 
 	bool bHasPlayableState = false;
 	bool bIsPlayable = true;
@@ -281,6 +283,10 @@ struct WACOMAPP_API FWacomCardViewData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	bool bShowCost = true;
+
+	/** UI-only target preview. It never replaces the authoritative Cost field. */
+	bool bHasCostPreview = false;
+	int32 PreviewCost = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	FGameplayTag Rarity;

@@ -19,8 +19,10 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "PaperSprite.h"
+#include "Slate/SlateTextureAtlasInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardView"
 
@@ -38,6 +40,21 @@ namespace
 	const FName SurfaceTiltXParameterName(TEXT("TiltX"));
 	const FName SurfaceTiltYParameterName(TEXT("TiltY"));
 	const FName SurfaceParallaxStrengthParameterName(TEXT("ParallaxStrength"));
+	const FName OldDigitTextureParameterName(TEXT("OldDigitTexture"));
+	const FName NewDigitTextureParameterName(TEXT("NewDigitTexture"));
+	const FName OldDigitUVRectParameterName(TEXT("OldDigitUVRect"));
+	const FName NewDigitUVRectParameterName(TEXT("NewDigitUVRect"));
+	const FName CostRewriteOldDissolveParameterName(TEXT("CostRewriteOldDissolve"));
+	const FName CostRewriteNewRevealParameterName(TEXT("CostRewriteNewReveal"));
+	const FName CostRewriteToneParameterName(TEXT("CostRewriteTone"));
+	const FName CostRewriteSeedParameterName(TEXT("CostRewriteSeed"));
+	const FName CostRewriteReducedMotionParameterName(TEXT("CostRewriteReducedMotion"));
+	const FName DigitEffectModeParameterName(TEXT("DigitEffectMode"));
+	const FName CostPreviewAmountParameterName(TEXT("CostPreviewAmount"));
+	const FName CostPreviewPulseParameterName(TEXT("CostPreviewPulse"));
+	const FName CostPreviewMinimumOpacityParameterName(TEXT("CostPreviewMinimumOpacity"));
+	const FName CostPreviewMaximumOpacityParameterName(TEXT("CostPreviewMaximumOpacity"));
+	const FName CostPreviewPeakBrightnessParameterName(TEXT("CostPreviewPeakBrightness"));
 
 	void SetOptionalText(UTextBlock* TextBlock, const FText& Text)
 	{
@@ -93,6 +110,8 @@ namespace
 			&& AreCardViewTextViewsEquivalent(A.Description, B.Description)
 			&& A.Cost == B.Cost
 			&& A.bShowCost == B.bShowCost
+			&& A.bHasCostPreview == B.bHasCostPreview
+			&& A.PreviewCost == B.PreviewCost
 			&& A.Rarity == B.Rarity
 			&& A.Value == B.Value
 			&& A.bShowValue == B.bShowValue
@@ -116,7 +135,9 @@ namespace
 	bool AreCostDisplayFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
 	{
 		return A.Cost == B.Cost
-			&& A.bShowCost == B.bShowCost;
+			&& A.bShowCost == B.bShowCost
+			&& A.bHasCostPreview == B.bHasCostPreview
+			&& A.PreviewCost == B.PreviewCost;
 	}
 
 	bool AreDurabilityDisplayFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
@@ -441,6 +462,14 @@ FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() 
 	View.AppliedAttachmentOffsetPixels = AppliedAttachmentOffsetPixels;
 	View.SurfacePerspectiveView = CardSurfacePerspectiveView;
 	View.ResolvedSurfaceArt = ResolveCardSurfaceArtTexture();
+	View.bCostDigitRewritePrepared = bCostDigitRewritePrepared;
+	View.bCostDigitRewriteMaterialActive = bCostDigitRewriteMaterialActive;
+	View.bCostDigitPreviewMaterialActive = bCostDigitPreviewMaterialActive;
+	View.CostDigitRewriteOldSprite = CostDigitRewriteOldSprite;
+	View.CostDigitRewriteNewSprite = CostDigitRewriteNewSprite;
+	View.CostDigitRewriteRenderTransform = CostDigitImage
+		? CostDigitImage->GetRenderTransform()
+		: FWidgetTransform();
 	return View;
 }
 #endif
@@ -452,6 +481,7 @@ void UWacomCardView::NativeConstruct()
 	EnsureCardSurfaceImage();
 	CacheLegacySurfaceVisibility();
 	CacheAttachmentAuthoredTransforms();
+	CacheCostDigitAuthoredTransform();
 	ApplySurfaceFoilOverlay();
 	bCardViewDataAppliedToWidgets = false;
 	ApplyCurrentDataToWidgets();
@@ -484,6 +514,7 @@ void UWacomCardView::EnsureCardSurfaceImage()
 
 void UWacomCardView::NativeDestruct()
 {
+	ResetCostDigitRewrite();
 	ResetCardSurfacePerspectiveView();
 	RestoreAttachmentAuthoredTransforms();
 	bCardSurfaceCompositeActive = false;
@@ -521,6 +552,148 @@ void UWacomCardView::SetSurfaceFoilEnabled(bool bEnabled)
 	bSurfaceFoilEnabled = bEnabled;
 	ApplySurfaceFoilOverlay();
 	InvalidateCardViewRenderCache();
+}
+
+bool UWacomCardView::PrepareCostDigitRewrite(const FWacomCardViewData& InNewData)
+{
+	return PrepareCostDigitRewrite(CurrentData, InNewData);
+}
+
+bool UWacomCardView::PrepareCostDigitRewrite(
+	const FWacomCardViewData& InOldData,
+	const FWacomCardViewData& InNewData)
+{
+	EnsureSpriteIconCachesBuilt();
+	if (!CostDigitImage)
+	{
+		return false;
+	}
+
+	UPaperSprite* OldSprite = ResolveSingleCostDigitSprite(InOldData);
+	UPaperSprite* NewSprite = ResolveSingleCostDigitSprite(InNewData);
+	if (!OldSprite || !NewSprite || OldSprite == NewSprite || InOldData.Cost == InNewData.Cost)
+	{
+		return false;
+	}
+
+	CacheCostDigitAuthoredTransform();
+	RestoreCostDigitAuthoredTransform();
+	CostDigitRewriteMaterialInstance = nullptr;
+	CostDigitRewriteMaterialSource = nullptr;
+	CostDigitRewriteOldSprite = OldSprite;
+	CostDigitRewriteNewSprite = NewSprite;
+	bCostDigitRewritePrepared = true;
+	bCostDigitRewriteMaterialActive = false;
+	SetDigitImageBrush(*CostDigitImage, *OldSprite, CostDigitSize);
+	CostDigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	return true;
+}
+
+void UWacomCardView::SetCostDigitRewriteView(
+	const FWacomFirstPersonCardDataRewriteView& InView)
+{
+	if (!InView.bActive)
+	{
+		return;
+	}
+	if (!EnsureCostDigitRewriteMaterial(InView))
+	{
+		ResetCostDigitRewrite();
+		return;
+	}
+	ApplyCostDigitRewriteMaterialParameters(InView);
+}
+
+void UWacomCardView::SetCostDigitPreviewView(
+	const FWacomFirstPersonCardCostPreviewView& InView)
+{
+	if (!InView.bActive || InView.PreviewAmount <= KINDA_SMALL_NUMBER)
+	{
+		ResetCostDigitPreview();
+		return;
+	}
+	if (!EnsureCostDigitPreviewMaterial(InView))
+	{
+		ResetCostDigitPreview();
+		return;
+	}
+
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(DigitEffectModeParameterName, 1.0f);
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostPreviewAmountParameterName,
+		FMath::Clamp(InView.PreviewAmount, 0.0f, 1.0f));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostPreviewPulseParameterName,
+		FMath::Clamp(InView.PulseAmount, 0.0f, 1.0f));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteToneParameterName,
+		static_cast<float>(InView.Tone));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteSeedParameterName,
+		static_cast<float>(InView.Seed));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostPreviewMinimumOpacityParameterName,
+		FMath::Clamp(InView.Style.PreviewMinimumOpacity, 0.0f, 1.0f));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostPreviewMaximumOpacityParameterName,
+		FMath::Clamp(InView.Style.PreviewMaximumOpacity, 0.0f, 1.0f));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostPreviewPeakBrightnessParameterName,
+		FMath::Max(0.0f, InView.Style.PreviewPeakBrightness));
+	bCostDigitPreviewMaterialActive = true;
+}
+
+void UWacomCardView::ResetCostDigitPreview()
+{
+	if (!bCostDigitPreviewMaterialActive)
+	{
+		return;
+	}
+	bCostDigitPreviewMaterialActive = false;
+	bCostDigitRewriteMaterialActive = false;
+	bCostDigitRewritePrepared = false;
+	CostDigitRewriteMaterialInstance = nullptr;
+	CostDigitRewriteMaterialSource = nullptr;
+	CostDigitRewriteOldSprite = nullptr;
+	CostDigitRewriteNewSprite = nullptr;
+	RestoreCostDigitAuthoredTransform();
+	if (CostDigitImage)
+	{
+		if (UPaperSprite* CurrentSprite = ResolveSingleCostDigitSprite(CurrentData))
+		{
+			SetDigitImageBrush(*CostDigitImage, *CurrentSprite, CostDigitSize);
+			CostDigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			CostDigitImage->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
+}
+
+void UWacomCardView::ResetCostDigitRewrite()
+{
+	RestoreCostDigitAuthoredTransform();
+	CostDigitRewriteMaterialInstance = nullptr;
+	CostDigitRewriteMaterialSource = nullptr;
+	bCostDigitRewriteMaterialActive = false;
+	bCostDigitPreviewMaterialActive = false;
+	bCostDigitRewritePrepared = false;
+	CostDigitRewriteOldSprite = nullptr;
+	CostDigitRewriteNewSprite = nullptr;
+	if (!CostDigitImage)
+	{
+		return;
+	}
+	if (UPaperSprite* CurrentSprite = ResolveSingleCostDigitSprite(CurrentData))
+	{
+		SetDigitImageBrush(*CostDigitImage, *CurrentSprite, CostDigitSize);
+		CostDigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	else
+	{
+		CostDigitImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomCardView::SetCardViewData(const FWacomCardViewData& InData)
@@ -729,6 +902,23 @@ void UWacomCardView::UpdateCostDisplay()
 #endif
 
 	EnsureSpriteIconCachesBuilt();
+	if (bCostDigitRewritePrepared && CostDigitRewriteOldSprite && CostDigitRewriteNewSprite)
+	{
+		UPaperSprite* RequestedSprite = ResolveSingleCostDigitSprite(CurrentData);
+		if (RequestedSprite == CostDigitRewriteNewSprite && CostDigitImage)
+		{
+			SetDigitImageBrush(*CostDigitImage, *CostDigitRewriteOldSprite, CostDigitSize);
+			CostDigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+			return;
+		}
+		bCostDigitRewritePrepared = false;
+		bCostDigitRewriteMaterialActive = false;
+		CostDigitRewriteOldSprite = nullptr;
+		CostDigitRewriteNewSprite = nullptr;
+		CostDigitRewriteMaterialInstance = nullptr;
+		CostDigitRewriteMaterialSource = nullptr;
+		RestoreCostDigitAuthoredTransform();
+	}
 
 	if (CostDigitImage)
 	{
@@ -756,6 +946,169 @@ void UWacomCardView::UpdateCostDisplay()
 		return;
 	}
 
+}
+
+UPaperSprite* UWacomCardView::ResolveSingleCostDigitSprite(
+	const FWacomCardViewData& Data) const
+{
+	if (!Data.bShowCost)
+	{
+		return nullptr;
+	}
+	const TArray<int32> Digits = SplitIntoDigits(Data.Cost);
+	return Digits.Num() == 1 ? ResolvedCostDigitIcons.FindRef(Digits[0]) : nullptr;
+}
+
+bool UWacomCardView::EnsureCostDigitRewriteMaterial(
+	const FWacomFirstPersonCardDataRewriteView& View)
+{
+	if (!bCostDigitRewritePrepared
+		|| !CostDigitImage
+		|| !CostDigitRewriteOldSprite
+		|| !CostDigitRewriteNewSprite
+		|| !View.Style.DigitRewriteMaterialInstance)
+	{
+		return false;
+	}
+	const FSlateAtlasData OldAtlas = CostDigitRewriteOldSprite->GetSlateAtlasData();
+	const FSlateAtlasData NewAtlas = CostDigitRewriteNewSprite->GetSlateAtlasData();
+	if (!OldAtlas.AtlasTexture
+		|| !NewAtlas.AtlasTexture
+		|| OldAtlas.SizeUV.X <= 0.0f
+		|| OldAtlas.SizeUV.Y <= 0.0f
+		|| NewAtlas.SizeUV.X <= 0.0f
+		|| NewAtlas.SizeUV.Y <= 0.0f)
+	{
+		return false;
+	}
+	if (!CostDigitRewriteMaterialInstance
+		|| CostDigitRewriteMaterialSource != View.Style.DigitRewriteMaterialInstance)
+	{
+		CostDigitRewriteMaterialSource = View.Style.DigitRewriteMaterialInstance;
+		CostDigitRewriteMaterialInstance = UMaterialInstanceDynamic::Create(
+			View.Style.DigitRewriteMaterialInstance,
+			this);
+	}
+	if (!CostDigitRewriteMaterialInstance)
+	{
+		return false;
+	}
+	FSlateBrush DigitBrush = CostDigitImage->GetBrush();
+	DigitBrush.SetResourceObject(CostDigitRewriteMaterialInstance);
+	DigitBrush.SetImageSize(FVector2f(
+		FMath::Max(1.0f, CostDigitSize.X),
+		FMath::Max(1.0f, CostDigitSize.Y)));
+	CostDigitImage->SetBrush(DigitBrush);
+	CostDigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	CostDigitRewriteMaterialInstance->SetTextureParameterValue(
+		OldDigitTextureParameterName,
+		OldAtlas.AtlasTexture);
+	CostDigitRewriteMaterialInstance->SetTextureParameterValue(
+		NewDigitTextureParameterName,
+		NewAtlas.AtlasTexture);
+	CostDigitRewriteMaterialInstance->SetVectorParameterValue(
+		OldDigitUVRectParameterName,
+		FLinearColor(
+			OldAtlas.StartUV.X,
+			OldAtlas.StartUV.Y,
+			OldAtlas.SizeUV.X,
+			OldAtlas.SizeUV.Y));
+	CostDigitRewriteMaterialInstance->SetVectorParameterValue(
+		NewDigitUVRectParameterName,
+		FLinearColor(
+			NewAtlas.StartUV.X,
+			NewAtlas.StartUV.Y,
+			NewAtlas.SizeUV.X,
+			NewAtlas.SizeUV.Y));
+	bCostDigitRewriteMaterialActive = true;
+	bCostDigitPreviewMaterialActive = false;
+	return true;
+}
+
+bool UWacomCardView::EnsureCostDigitPreviewMaterial(
+	const FWacomFirstPersonCardCostPreviewView& View)
+{
+	if (!CostDigitImage
+		|| !CurrentData.bShowCost
+		|| !CurrentData.bHasCostPreview
+		|| CurrentData.Cost == CurrentData.PreviewCost
+		|| !View.Style.DigitRewriteMaterialInstance)
+	{
+		return false;
+	}
+	EnsureSpriteIconCachesBuilt();
+	FWacomCardViewData PreviewData = CurrentData;
+	PreviewData.Cost = CurrentData.PreviewCost;
+	PreviewData.bHasCostPreview = false;
+	UPaperSprite* CurrentSprite = ResolveSingleCostDigitSprite(CurrentData);
+	UPaperSprite* PreviewSprite = ResolveSingleCostDigitSprite(PreviewData);
+	if (!CurrentSprite || !PreviewSprite)
+	{
+		return false;
+	}
+
+	CostDigitRewriteOldSprite = CurrentSprite;
+	CostDigitRewriteNewSprite = PreviewSprite;
+	bCostDigitRewritePrepared = true;
+	FWacomFirstPersonCardDataRewriteView RewriteMaterialView;
+	RewriteMaterialView.bActive = true;
+	RewriteMaterialView.Style = View.Style;
+	return EnsureCostDigitRewriteMaterial(RewriteMaterialView);
+}
+
+void UWacomCardView::ApplyCostDigitRewriteMaterialParameters(
+	const FWacomFirstPersonCardDataRewriteView& View)
+{
+	if (!CostDigitRewriteMaterialInstance || !CostDigitImage)
+	{
+		return;
+	}
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteOldDissolveParameterName,
+		FMath::Clamp(View.OldDissolveAmount, 0.0f, 1.0f));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteNewRevealParameterName,
+		FMath::Clamp(View.NewRevealAmount, 0.0f, 1.0f));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteToneParameterName,
+		static_cast<float>(View.Tone));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteSeedParameterName,
+		View.Seed);
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteReducedMotionParameterName,
+		View.bReducedMotion ? 1.0f : 0.0f);
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(DigitEffectModeParameterName, 2.0f);
+	CacheCostDigitAuthoredTransform();
+	FWidgetTransform Transform = CostDigitAuthoredTransform;
+	const float Scale = View.bReducedMotion
+		? 1.0f
+		: FMath::Max(0.01f, View.DigitScale);
+	Transform.Scale.X *= Scale;
+	Transform.Scale.Y *= Scale;
+	CostDigitImage->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+	CostDigitImage->SetRenderTransform(Transform);
+}
+
+void UWacomCardView::CacheCostDigitAuthoredTransform()
+{
+	if (!CostDigitImage || bCostDigitAuthoredTransformCached)
+	{
+		return;
+	}
+	CostDigitAuthoredTransform = CostDigitImage->GetRenderTransform();
+	CostDigitAuthoredPivot = CostDigitImage->GetRenderTransformPivot();
+	bCostDigitAuthoredTransformCached = true;
+}
+
+void UWacomCardView::RestoreCostDigitAuthoredTransform()
+{
+	if (!CostDigitImage || !bCostDigitAuthoredTransformCached)
+	{
+		return;
+	}
+	CostDigitImage->SetRenderTransformPivot(CostDigitAuthoredPivot);
+	CostDigitImage->SetRenderTransform(CostDigitAuthoredTransform);
 }
 
 TArray<int32> UWacomCardView::SplitIntoDigits(int32 Value)

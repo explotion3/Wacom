@@ -99,7 +99,7 @@ tags:
   - 状态：`In Progress: 手牌目标像素刻印已接线，待世界目标与 PIE polish`
   - 归属：App / First-person Card Layer
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup、普通 Played 像素翻面收牌、回手重构、Exhausted 消耗消散，以及成功 HandCard 目标的“弱刻印 Preview → 延迟压印 → 留手归位 / 弃牌 / 消耗”结果衔接。旧 DiamondWave 与 PixelAsh Style 均保留。Played 仍保留真实世界目标 / PlayTarget 坐标；下一切片只需消费该坐标制作场景目标命中反馈，并继续做音效预热、reduced-motion / 全局速度策略和 PIE 调参。不复制第三方代码、shader 或资产。
+  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup、普通 Played 像素翻面收牌、Exhausted 消耗消散与成功 HandCard 目标刻印。所有 Battle PlayCard 已收口为 `SourceOut → PrimaryTarget → Outcome → SourceReturn` 命令编排，留手源卡可在结果期间保持隐藏；费用 Preview/Rewrite 复用现有 `CostDigitImage` 临时 MID，Preview 不写正式 RuntimeCost，命令 Outcome 重写完成后才允许源卡回生。旧 DiamondWave 与 PixelAsh Style 均保留。下一步继续做整体 PIE 调参、音效预热和 reduced-motion / 全局速度策略；卡名、耐久、效果徽章、插画、稀有度与 Run 升级等非费用变化仍需等各自权威数据变化事实后独立接入。不复制第三方代码、shader 或资产。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 内容扩展`

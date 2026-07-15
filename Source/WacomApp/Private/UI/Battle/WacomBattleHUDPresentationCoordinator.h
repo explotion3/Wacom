@@ -12,7 +12,9 @@ struct FBattleEvent;
 struct FBattlePresentationJournal;
 struct FBattleSnapshot;
 struct FWacomBattleCombatLogCommandContext;
+struct FWacomBattleCommandPresentationContext;
 struct FWacomBattlePresentationTargetCue;
+struct FBattleResolution;
 class FWacomBattleHUDRuntime;
 
 class FWacomBattleHUDPresentationCoordinator
@@ -35,7 +37,10 @@ public:
 		return BattlePresentationStackEntries;
 	}
 
-	void EnqueueEvents(const TArray<FBattleEvent>& Events, int32 PresentationStackEntryId = INDEX_NONE);
+	void EnqueueEvents(
+		const TArray<FBattleEvent>& Events,
+		int32 PresentationStackEntryId = INDEX_NONE,
+		bool bTargetAlreadyConfirmed = false);
 	bool EnqueueEndTurnPresentationPlan(
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
@@ -46,6 +51,10 @@ public:
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot,
 		int32 PresentationStackEntryId = INDEX_NONE);
+	bool EnqueuePlayCardPresentationPlan(
+		const FWacomBattleCommandPresentationContext& Context,
+		const FBattleResolution& Resolution,
+		int32 PresentationStackEntryId);
 	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void ClearQueue();
 	bool IsQueueBusy() const;
@@ -116,6 +125,10 @@ private:
 	FWacomBattlePresentationPlan PresentationPlan;
 	EWacomBattlePresentationPhaseKind ActivePresentationPlanPhaseKind =
 		EWacomBattlePresentationPhaseKind::None;
+	EWacomBattlePresentationPhaseCompletionPolicy ActivePresentationPlanCompletionPolicy =
+		EWacomBattlePresentationPhaseCompletionPolicy::PlaybackIdle;
+	FGuid ActivePresentationPlanCompletionCardId;
+	int32 ActivePresentationPlanCompletionStackEntryId = INDEX_NONE;
 	float ActivePresentationPlanPhaseElapsedSeconds = 0.0f;
 	int32 NextBattlePresentationStackEntryId = 1;
 	EWacomBattleHUDTurnBoundaryCommand PendingTurnBoundaryCommand =
@@ -149,6 +162,7 @@ private:
 	void StartNextPresentationPlanPhase();
 	void StartHandPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);
 	void StartEventPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);
+	void StartTargetCuePresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);
 	void SchedulePresentationPlanPoll(float DelaySeconds);
 	void StopPresentationPlanTimer();
 	void PollActivePresentationPlanPhase();

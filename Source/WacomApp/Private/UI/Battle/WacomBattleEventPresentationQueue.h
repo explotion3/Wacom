@@ -34,7 +34,12 @@ public:
 	~FWacomBattleEventPresentationQueue();
 
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
-	void EnqueueEvents(const TArray<FBattleEvent>& Events, int32 PresentationStackEntryId, float MinimumStackHoldSeconds);
+	void EnqueueEvents(
+		const TArray<FBattleEvent>& Events,
+		int32 PresentationStackEntryId,
+		float MinimumStackHoldSeconds,
+		bool bTargetAlreadyConfirmed = false);
+	void EnqueueTargetCue(const FWacomBattlePresentationTargetCue& Cue);
 	void Clear();
 	void AbandonWithoutWorldAccess();
 

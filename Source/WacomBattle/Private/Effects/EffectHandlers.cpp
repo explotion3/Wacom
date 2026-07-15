@@ -212,8 +212,11 @@ FEffectApplyResult HandleCardAddCost(FEffectExecutionContext& Ctx)
 	return FEffectApplyResult::FromBool(
 		FBattleCardRuntimeStateModule::ApplyRuntimeCostModifier(
 			*Ctx.State,
+			*Ctx.Events,
 			Ctx.TargetInstanceId,
-			Ctx.Magnitude));
+			Ctx.Magnitude,
+			Ctx.SourceInstanceId,
+			Ctx.EffectTag));
 }
 
 FEffectApplyResult HandleCardReduceCost(FEffectExecutionContext& Ctx)
@@ -225,8 +228,11 @@ FEffectApplyResult HandleCardReduceCost(FEffectExecutionContext& Ctx)
 	return FEffectApplyResult::FromBool(
 		FBattleCardRuntimeStateModule::ApplyRuntimeCostModifier(
 			*Ctx.State,
+			*Ctx.Events,
 			Ctx.TargetInstanceId,
-			-Ctx.Magnitude));
+			-Ctx.Magnitude,
+			Ctx.SourceInstanceId,
+			Ctx.EffectTag));
 }
 
 FEffectApplyResult HandleCardDiscardSelected(FEffectExecutionContext& Ctx)

@@ -1,0 +1,77 @@
+Function SelfContained WacomCard_ComputeCostDigitRewriteMasks(
+    in float2 localUV,
+    in float oldDissolve,
+    in float newReveal,
+    in float seed,
+    in float reducedMotion,
+    in float gridColumns,
+    in float edgeWidth,
+    out float oldVisibility,
+    out float newVisibility,
+    out float oldEdge,
+    out float newEdge,
+    out float paletteVariant)
+{
+    float safeColumns = max(gridColumns, 4.0);
+    float safeRows = max(round(safeColumns * 54.0 / 42.0), 4.0);
+    float2 gridSize = float2(safeColumns, safeRows);
+    float2 cell = floor(saturate(localUV) * gridSize);
+    float2 cellUV = (cell + 0.5) / gridSize;
+
+    float stableHash = frac(sin(dot(
+        cell + float2(seed * 131.17, seed * 47.31),
+        float2(12.9898, 78.233))) * 43758.5453);
+    float2 bit0 = fmod(cell, 2.0);
+    float orderedIndex = bit0.x * 2.0 + bit0.y * 3.0 - bit0.x * bit0.y * 4.0;
+    float orderedThreshold = (orderedIndex + 0.5) / 4.0;
+    float oldThreshold = frac(orderedThreshold * 0.72 + stableHash * 0.28);
+
+    float2 centered = abs(cellUV - float2(0.5, 0.5)) * 2.0;
+    float centerDistance = max(centered.x, centered.y);
+    float newThreshold = saturate(centerDistance * 0.82 + orderedThreshold * 0.18);
+    float safeEdgeWidth = max(edgeWidth, 0.01);
+    float useReducedMotion = step(0.5, reducedMotion);
+
+    float orderedOldVisibility = 1.0 - step(oldThreshold, saturate(oldDissolve));
+    float orderedNewVisibility = step(newThreshold, saturate(newReveal));
+    oldVisibility = lerp(orderedOldVisibility, 1.0 - saturate(oldDissolve), useReducedMotion);
+    newVisibility = lerp(orderedNewVisibility, saturate(newReveal), useReducedMotion);
+    oldEdge = (1.0 - useReducedMotion) * (1.0 - smoothstep(
+        safeEdgeWidth,
+        safeEdgeWidth * 1.8,
+        abs(oldThreshold - saturate(oldDissolve))));
+    newEdge = (1.0 - useReducedMotion) * (1.0 - smoothstep(
+        safeEdgeWidth,
+        safeEdgeWidth * 1.8,
+        abs(newThreshold - saturate(newReveal))));
+    paletteVariant = step(0.5, stableHash);
+}
+
+Function SelfContained WacomCard_SelectCostDigitRewritePalette(
+    in float tone,
+    in float3 neutralPrimary,
+    in float3 neutralSecondary,
+    in float3 beneficialPrimary,
+    in float3 beneficialSecondary,
+    in float3 detrimentalPrimary,
+    in float3 detrimentalSecondary,
+    out float3 primaryColor,
+    out float3 secondaryColor)
+{
+    float useBeneficial = step(0.5, tone) * (1.0 - step(1.5, tone));
+    float useDetrimental = step(1.5, tone);
+    float useNeutral = 1.0 - saturate(useBeneficial + useDetrimental);
+    primaryColor = neutralPrimary * useNeutral
+        + beneficialPrimary * useBeneficial
+        + detrimentalPrimary * useDetrimental;
+    secondaryColor = neutralSecondary * useNeutral
+        + beneficialSecondary * useBeneficial
+        + detrimentalSecondary * useDetrimental;
+}
+
+Function SelfContained WacomCard_SelectCostDigitEffectMode(
+    in float effectMode,
+    out float usePreview)
+{
+    usePreview = step(0.5, effectMode) * (1.0 - step(1.5, effectMode));
+}

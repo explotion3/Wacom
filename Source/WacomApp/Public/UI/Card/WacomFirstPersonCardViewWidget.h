@@ -33,6 +33,7 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	bool bInteractionFeedbackLayerAboveFeedbackOverlay = false;
 	FWacomFirstPersonCardDepthView CardDepthView;
 	FWacomFirstPersonCardSurfaceEffectView SurfaceEffectView;
+	FWacomFirstPersonCardDataRewriteView DataRewriteView;
 	bool bHasFake3DSurfaceRetainer = false;
 	bool bFake3DEffectMaterialReady = false;
 	bool bUsingSurfaceEffectMaterial = false;
@@ -69,6 +70,14 @@ public:
 	void ClearInteractionFeedbackView();
 	void SetCardDepthView(const FWacomFirstPersonCardDepthView& View);
 	void SetCardSurfaceEffectView(const FWacomFirstPersonCardSurfaceEffectView& View);
+	bool PrepareCostDigitRewrite(const FWacomCardViewData& InNewData);
+	bool PrepareCostDigitRewrite(
+		const FWacomCardViewData& InOldData,
+		const FWacomCardViewData& InNewData);
+	void SetCardDataRewriteView(const FWacomFirstPersonCardDataRewriteView& View);
+	void ResetCardDataRewriteView();
+	void SetCostDigitPreviewView(const FWacomFirstPersonCardCostPreviewView& View);
+	void ResetCostDigitPreviewView();
 
 #if WITH_AUTOMATION_TESTS
 	FWacomFirstPersonCardViewAutomationTestView GetAutomationTestViewForTest() const;
@@ -126,6 +135,7 @@ private:
 	float LastInteractionFeedbackOpacity = 0.0f;
 	FWacomFirstPersonCardDepthView LastCardDepthView;
 	FWacomFirstPersonCardSurfaceEffectView LastSurfaceEffectView;
+	FWacomFirstPersonCardDataRewriteView LastDataRewriteView;
 	bool bLastInteractionFeedbackUsedOverrideMaterial = false;
 	bool bLastInteractionFeedbackUsedBrushMaterial = false;
 	bool bBaseSurfaceEffectMaterialCached = false;
