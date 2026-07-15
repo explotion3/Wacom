@@ -435,6 +435,9 @@ FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() 
 	View.DisabledDisplayUpdateCount = DisabledDisplayUpdateCountForTest;
 	View.EffectBadgeDisplayUpdateCount = EffectBadgeDisplayUpdateCountForTest;
 	View.bSurfaceCompositeActive = bCardSurfaceCompositeActive;
+	View.bHasCardOverlay = CardOverlay != nullptr;
+	View.bHasCardSurfaceImage = CardSurfaceImage != nullptr;
+	View.bHasCardSurfaceMaterial = CardSurfaceMaterial != nullptr;
 	View.AppliedAttachmentOffsetPixels = AppliedAttachmentOffsetPixels;
 	View.SurfacePerspectiveView = CardSurfacePerspectiveView;
 	View.ResolvedSurfaceArt = ResolveCardSurfaceArtTexture();
@@ -930,6 +933,8 @@ void UWacomCardView::UpdateRarityBorderDisplay()
 
 void UWacomCardView::RefreshCardSurfaceComposite()
 {
+	EnsureCardSurfaceImage();
+	CacheAuthoredCardArtTexture();
 	UTexture2D* SurfaceArtTexture = ResolveCardSurfaceArtTexture();
 	const bool bCanUseComposite = CardSurfaceImage
 		&& CardSurfaceMaterial
@@ -977,9 +982,12 @@ void UWacomCardView::CacheAuthoredCardArtTexture()
 	{
 		return;
 	}
-	AuthoredCardArtTexture = CardArt
-		? Cast<UTexture2D>(CardArt->GetBrush().GetResourceObject())
-		: nullptr;
+	if (!CardArt)
+	{
+		return;
+	}
+
+	AuthoredCardArtTexture = Cast<UTexture2D>(CardArt->GetBrush().GetResourceObject());
 	bAuthoredCardArtTextureCached = true;
 }
 

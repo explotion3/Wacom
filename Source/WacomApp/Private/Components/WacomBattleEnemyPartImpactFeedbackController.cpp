@@ -27,8 +27,6 @@ namespace WacomBattleEnemyPartImpactFeedbackPrivate
 	const FName TargetDiameterParameter(TEXT("User.TargetDiameter"));
 }
 
-using namespace WacomBattleEnemyPartImpactFeedbackPrivate;
-
 FWacomBattleEnemyPartImpactRequest
 FWacomBattleEnemyPartImpactFeedbackController::BuildRequest(
 	const UWacomBattleEnemyPartImpactStyle& Style,
@@ -163,17 +161,33 @@ bool FWacomBattleEnemyPartImpactFeedbackController::PlayAcceptedCue(
 	Component->SetWorldLocation(
 		ImpactAnchor->GetComponentLocation()
 		+ CameraDirection * Request.CameraDepthOffsetCentimeters);
-	Component->SetVariableInt(EffectKindParameter,
+	Component->SetVariableInt(WacomBattleEnemyPartImpactFeedbackPrivate::EffectKindParameter,
 		Request.EffectKind == EWacomBattleEnemyPartImpactEffectKind::Damage ? 1 : 0);
-	Component->SetVariableFloat(DurationParameter, Request.DurationSeconds);
-	Component->SetVariableFloat(IntensityParameter, Request.Intensity);
-	Component->SetVariableInt(SeedParameter, Request.Seed);
-	Component->SetVariableFloat(DecorativeIntensityParameter, Request.DecorativeIntensity);
-	Component->SetVariableBool(ReducedMotionParameter, Request.bReducedMotion);
-	Component->SetVariableMaterial(ImpactMaterialParameter, Style->ImpactMaterialInstance);
-	Component->SetVariableVec3(PlaneRightParameter, PlaneRight);
-	Component->SetVariableVec3(PlaneUpParameter, PlaneUp);
-	Component->SetVariableFloat(TargetDiameterParameter, Request.TargetDiameterCentimeters);
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartImpactFeedbackPrivate::DurationParameter,
+		Request.DurationSeconds);
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartImpactFeedbackPrivate::IntensityParameter,
+		Request.Intensity);
+	Component->SetVariableInt(WacomBattleEnemyPartImpactFeedbackPrivate::SeedParameter, Request.Seed);
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartImpactFeedbackPrivate::DecorativeIntensityParameter,
+		Request.DecorativeIntensity);
+	Component->SetVariableBool(
+		WacomBattleEnemyPartImpactFeedbackPrivate::ReducedMotionParameter,
+		Request.bReducedMotion);
+	Component->SetVariableMaterial(
+		WacomBattleEnemyPartImpactFeedbackPrivate::ImpactMaterialParameter,
+		Style->ImpactMaterialInstance);
+	Component->SetVariableVec3(
+		WacomBattleEnemyPartImpactFeedbackPrivate::PlaneRightParameter,
+		PlaneRight);
+	Component->SetVariableVec3(
+		WacomBattleEnemyPartImpactFeedbackPrivate::PlaneUpParameter,
+		PlaneUp);
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartImpactFeedbackPrivate::TargetDiameterParameter,
+		Request.TargetDiameterCentimeters);
 	Component->Activate(true);
 
 	DebugView.bNiagaraReady = true;

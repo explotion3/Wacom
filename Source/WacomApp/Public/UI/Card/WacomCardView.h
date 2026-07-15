@@ -37,6 +37,9 @@ struct FWacomCardViewAutomationTestView
 	int32 DisabledDisplayUpdateCount = 0;
 	int32 EffectBadgeDisplayUpdateCount = 0;
 	bool bSurfaceCompositeActive = false;
+	bool bHasCardOverlay = false;
+	bool bHasCardSurfaceImage = false;
+	bool bHasCardSurfaceMaterial = false;
 	FVector2D AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
 	FWacomCardSurfacePerspectiveView SurfacePerspectiveView;
 	UTexture2D* ResolvedSurfaceArt = nullptr;

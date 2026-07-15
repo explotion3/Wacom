@@ -122,6 +122,8 @@ Function SelfContained WacomExample_ComputeMask(
 - 只有明确需要持续动画时才读取 Time。一次性效果优先由 Playback 写入归一化进度和确定性 Seed。
 - 重复的 3×3 Alpha 邻域、Bayer 阈值或 UV 投影只计算一次并复用，避免每增加一个表现模块就复制整组纹理采样。
 - 对图集 Sprite：先在局部 `0..1` UV 中做位移、inside mask 和裁切，再映射到 atlas scale/bias。直接在图集 UV 上视差会采样到相邻稀有度边框。
+- 卡面 `BackColor` 一类插画底板不能以 Alpha=1 的全屏颜色直接参与最终合成，否则会把透明圆角重新填成矩形，并污染 Retainer 实时 Alpha 阴影。应先通过局部 UV 生成居中缩放遮罩（当前默认 `BackColorScale=0.96`），再作为插画下层合成。
+- 卡面材质中的“层深”和“表面反光”是两个独立合同：Art、Frame、Rarity 都可以拥有不同 UV 深度，并分别使用标量开关控制角度反光。当前默认 `ArtReflectionEnabled=0 / FrameReflectionEnabled=0 / RarityReflectionEnabled=1`；反光关闭时必须精确恢复源 RGB，但不能顺带关闭该层 UV 视差。插画使用宽幅柔和覆膜高光，实体 Frame 使用方向金属高光，只有 Rarity 使用 foil / iridescence。
 
 ## 5. 已经踩过的坑
 
@@ -254,6 +256,8 @@ rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: E
   "-ExecutePythonScript=$ProjectDir\Scripts\SetupCardSurfacePerspectiveAssets.py" `
   -Unattended -NoPause -NoSplash
 ```
+
+该脚本必须写入实际运行时使用的宿主，而不只是名称相近的通用资产。当前第一人称链是 `WBP_FPCardView -> WBP_FirstPersonCardView`，因此脚本会同时配置 `WBP_FirstPersonCardView` 与通用 `WBP_CardView`。如果只有出血装饰位移、核心插画/实体卡框/稀有度边框完全静止，优先检查实际嵌套 CardView 的 `CardSurfaceMaterial`，不要继续放大 Parallax Strength。
 
 如果脚本会修改 WBP、Blueprint CDO、DataAsset 或纹理，运行前关闭 Unreal Editor，避免编辑器内存中的旧资产在退出时覆盖脚本结果。
 

@@ -49,6 +49,45 @@ Function SelfContained WacomCardSurface_ApplyLayerMask(
     maskedLayer = float4(layer.rgb, layer.a * saturate(layerMask));
 }
 
+Function SelfContained WacomCardSurface_ApplyCenteredBackplate(
+    in float4 backColor,
+    in float2 uv,
+    in float scale,
+    out float4 backplate)
+{
+    float safeScale = max(scale, 0.0);
+    float2 halfExtent = float2(0.5, 0.5) * safeScale;
+    float2 distanceFromCenter = abs(uv - float2(0.5, 0.5));
+    float backplateMask = step(distanceFromCenter.x, halfExtent.x)
+        * step(distanceFromCenter.y, halfExtent.y);
+    backplate = float4(backColor.rgb, backColor.a * backplateMask);
+}
+
+Function SelfContained WacomCardSurface_ApplyArtReflection(
+    in float4 layer,
+    in float2 uv,
+    in float2 tiltDegrees,
+    in float referenceTiltDegrees,
+    in float layerMask,
+    in float reflectionStrength,
+    out float4 finishedLayer)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        tiltDegrees / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+    float tiltAmount = saturate(length(normalizedTilt));
+    float2 lightDirection = float2(normalizedTilt.y, -normalizedTilt.x)
+        / max(length(normalizedTilt), 0.001);
+    float directional = dot((uv - float2(0.5, 0.5)) * 2.0, lightDirection);
+    float broadBand = saturate(1.0 - abs(directional - 0.18) * 1.35);
+    float highlight = broadBand * broadBand * tiltAmount * max(reflectionStrength, 0.0);
+    finishedLayer = float4(
+        max(layer.rgb + highlight, float3(0.0, 0.0, 0.0)),
+        layer.a * saturate(layerMask));
+}
+
 Function SelfContained WacomCardSurface_ApplyFrameFinish(
     in float4 layer,
     in float2 uv,

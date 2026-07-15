@@ -33,8 +33,6 @@ namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate
 	const FName PreviewPulseParameter(TEXT("User.PreviewPulse"));
 }
 
-using namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate;
-
 bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	UActorComponent& OwnerComponent,
 	USceneComponent* ImpactAnchor,
@@ -89,25 +87,45 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	Component->SetWorldLocation(
 		ImpactAnchor->GetComponentLocation()
 		+ CameraDirection * FMath::Max(0.0f, Style->CameraDepthOffsetCentimeters));
-	Component->SetVariableInt(EffectKindParameter, 2);
-	Component->SetVariableFloat(DurationParameter, 3600.0f);
-	Component->SetVariableFloat(IntensityParameter, 1.0f);
-	Component->SetVariableInt(SeedParameter, GetTypeHash(OwnerComponent.GetOwner()));
+	Component->SetVariableInt(WacomBattleEnemyPartTargetPreviewFeedbackPrivate::EffectKindParameter, 2);
+	Component->SetVariableFloat(WacomBattleEnemyPartTargetPreviewFeedbackPrivate::DurationParameter, 3600.0f);
+	Component->SetVariableFloat(WacomBattleEnemyPartTargetPreviewFeedbackPrivate::IntensityParameter, 1.0f);
+	Component->SetVariableInt(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::SeedParameter,
+		GetTypeHash(OwnerComponent.GetOwner()));
 	Component->SetVariableFloat(
-		DecorativeIntensityParameter,
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::DecorativeIntensityParameter,
 		FMath::Clamp(DecorativeIntensity, 0.0f, 1.0f));
-	Component->SetVariableBool(ReducedMotionParameter, PlaybackView.bReducedMotion);
-	Component->SetVariableMaterial(ImpactMaterialParameter, Style->PreviewMaterialInstance);
-	Component->SetVariableVec3(PlaneRightParameter, PlaneRight);
-	Component->SetVariableVec3(PlaneUpParameter, PlaneUp);
-	Component->SetVariableFloat(TargetDiameterParameter, FMath::Max(TargetSize.X, TargetSize.Y));
-	Component->SetVariableFloat(TargetWidthParameter, TargetSize.X);
-	Component->SetVariableFloat(TargetHeightParameter, TargetSize.Y);
-	Component->SetVariableFloat(PreviewAmountParameter, FMath::Clamp(PlaybackView.Amount, 0.0f, 1.0f));
+	Component->SetVariableBool(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::ReducedMotionParameter,
+		PlaybackView.bReducedMotion);
+	Component->SetVariableMaterial(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::ImpactMaterialParameter,
+		Style->PreviewMaterialInstance);
+	Component->SetVariableVec3(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PlaneRightParameter,
+		PlaneRight);
+	Component->SetVariableVec3(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PlaneUpParameter,
+		PlaneUp);
 	Component->SetVariableFloat(
-		PreviewValidityParameter,
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::TargetDiameterParameter,
+		FMath::Max(TargetSize.X, TargetSize.Y));
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::TargetWidthParameter,
+		TargetSize.X);
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::TargetHeightParameter,
+		TargetSize.Y);
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PreviewAmountParameter,
+		FMath::Clamp(PlaybackView.Amount, 0.0f, 1.0f));
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PreviewValidityParameter,
 		PlaybackView.Kind == EWacomBattleEnemyPartTargetPreviewKind::Valid ? 1.0f : 0.0f);
-	Component->SetVariableFloat(PreviewPulseParameter, FMath::Clamp(PlaybackView.Pulse, 0.0f, 1.0f));
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PreviewPulseParameter,
+		FMath::Clamp(PlaybackView.Pulse, 0.0f, 1.0f));
 	if (!bWasActive)
 	{
 		Component->Activate(true);
