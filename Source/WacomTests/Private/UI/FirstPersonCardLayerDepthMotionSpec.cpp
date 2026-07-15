@@ -52,6 +52,10 @@ namespace WacomFirstPersonCardLayerDepthMotionSpec
 		VisualConfig.CardDepth.DragVelocityForMaxTiltPixelsPerSecond = 1400.0f;
 		VisualConfig.CardDepth.HoverContactShadowLift = 0.55f;
 		VisualConfig.CardDepth.DragContactShadowLift = 1.0f;
+		VisualConfig.CardDepth.bEnableSurfaceParallax = true;
+		VisualConfig.CardDepth.SurfaceParallaxStrength = 1.0f;
+		VisualConfig.CardDepth.AttachmentParallaxDepthPixels = 5.0f;
+		VisualConfig.CardDepth.AttachmentParallaxMaxOffsetPixels = 7.0f;
 		Widget->SetSlotVisualConfig(VisualConfig);
 
 		FWacomFirstPersonCardDragConfig DragConfig;
@@ -99,6 +103,13 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 	TestTrue(TEXT("Centered vertical pointer keeps pitch restrained"), FMath::Abs(HoverDepth.TiltDegrees.X) < 0.25f);
 	TestTrue(TEXT("Material contact shadow is enabled"), HoverDepth.bContactShadowEnabled);
 	TestTrue(TEXT("Hover lifts the material contact shadow"), HoverDepth.ContactShadowLift > 0.35f);
+	TestTrue(TEXT("Hover enables the inner card-surface parallax"), HoverDepth.SurfacePerspective.bEnabled);
+	TestTrue(
+		TEXT("Inner surface consumes the same smoothed tilt"),
+		HoverDepth.SurfacePerspective.TiltDegrees.Equals(HoverDepth.TiltDegrees, 0.001f));
+	TestTrue(
+		TEXT("Foreground attachment moves with horizontal tilt"),
+		HoverDepth.SurfacePerspective.AttachmentOffsetPixels.X > 1.0f);
 
 	TestTrue(TEXT("Hovered card accepts pressed feedback"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*Widget));
 	Tick(*Widget, 20);
@@ -115,6 +126,9 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
 	TestTrue(TEXT("Leaving the card returns tilt to neutral"), RestDepth.TiltDegrees.IsNearlyZero(0.05f));
 	TestTrue(TEXT("Rest returns material shadow to contact"), RestDepth.ContactShadowLift < 0.01f);
+	TestTrue(
+		TEXT("Rest returns attachment parallax to neutral"),
+		RestDepth.SurfacePerspective.AttachmentOffsetPixels.IsNearlyZero(0.05f));
 
 	const FWacomFirstPersonCardViewAutomationTestView NativeView =
 		Widget->GetCardView()->GetAutomationTestViewForTest();

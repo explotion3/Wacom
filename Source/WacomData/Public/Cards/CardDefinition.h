@@ -12,6 +12,8 @@
 #include "Cards/CardPassive.h"
 #include "CardDefinition.generated.h"
 
+class UTexture2D;
+
 /** TargetMode=HandCard 时的手牌目标基础筛选。 */
 USTRUCT(BlueprintType)
 struct WACOMDATA_API FWacomHandCardTargetFilter
@@ -54,6 +56,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card", meta = (MultiLine = true))
 	FText Description;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Presentation", meta = (ToolTip = "卡牌主题插画纹理。推荐使用带透明通道的像素卡面 Texture2D；为空时 CardView 沿用 WBP 中 authored CardArt Brush，便于旧卡牌渐进迁移。RarityBorder 仍独立使用 PaperSprite 图集，不由本字段承载。"))
+	TObjectPtr<UTexture2D> CardIllustration = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	int32 BaseCost = 0;

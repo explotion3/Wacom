@@ -127,6 +127,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | DreamShader 旧材质 generated include 失效 | 允许 commandlet rendering 的全工程 shader 检查会因 `M_CardSurface_CosmicFoil` 与 `M_CosmicBlob` 引用已失效的 `/DreamShaderGenerated/*.ush` 失败；新 first-person OrderedDither 已单独完成 PCD3D_SM6 生成且没有自身编译错误 | 对两个旧 `.dsm` 执行 clean generated shaders + 强制重生成，确认资产不再缓存旧虚拟 include；随后恢复全工程 AllowCommandletRendering shader gate |
 | Exhausted 消散旧 `PlayedDissolve` C++ 命名 | 为避免破坏已制作 DataAsset 的反射字段和序列化数据，`CardPlayedDissolveStyle`、相关 Style 类型及资产名暂保留；运行时已经只由 `Exhausted` 语义驱动 | 后续完成资产重命名 / redirector / Blueprint compile audit 后，统一迁移为 `CardExhaustedDissolve*`，再删除兼容名称；不得在此之前复制第二套 Style 数据 |
 | Worktree 依赖 ignored Content | 正式 / 验证路径仍会加载被 `Content/*` 排除的 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials` 和 `/Game/L_TestBattle`；开发期由 `InitializeWacomWorktree.ps1` 为每个 worktree 建立独立 D 盘本地依赖层 | 用 AssetRegistry 审计正式引用；Wacom 自有出货资产经 Content Browser 迁入 `/Game/Wacom` 并由 Git LFS 管理，第三方资产改为带版本和安装清单的本地依赖包，最终删除对主工程目录作为 seed source 的依赖 |
+| 卡牌核心表面缺少独立 Finish Mask | 第一版分层视差使用现有插画 / Frame / Rarity 的 RGB 与 Alpha 程序化计算高光、金属明暗和虹彩，不要求内容团队补贴图 | 美术资产稳定后评估一张可选的打包 Mask（例如 R=金属、G=箔片、B=凹凸、A=虹彩）；只在能显著提升不同主题复用时加入 MI，不把单一卡牌特例写进规则数据 |
 
 ---
 

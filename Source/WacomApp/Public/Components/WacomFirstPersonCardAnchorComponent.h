@@ -492,6 +492,21 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "Drag 状态传给材质接触阴影的抬升归一化值；0 表示紧贴轮廓，1 表示最软最淡端点。推荐 0.85 到 1.0。"))
 	float CardDragContactShadowLift = 1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "是否让卡面插画、实体边框和稀有度饰条根据 Hover / Drag 倾角产生分层 UV 视差。仅影响表现，不改变卡牌命中区域。"))
+	bool bEnableCardSurfaceParallax = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "卡面分层 UV 视差的整体强度倍率；1 使用材质实例中的 authored 深度，推荐 0.65 到 1.35。0 会关闭材质层间位移，但不关闭外层 Fake-3D。"))
+	float CardSurfaceParallaxStrength = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "实体出血装饰在最大参考倾角时的目标位移，单位为 UMG 布局像素；推荐 3 到 7。不会改变布局或命中区域。"))
+	float AttachmentParallaxDepthPixels = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "实体出血装饰视差位移的安全上限，单位为 UMG 布局像素；推荐 5 到 10，用于避免装饰滑出 Retainer bleed。"))
+	float AttachmentParallaxMaxOffsetPixels = 7.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "是否弱化卡面分层视差运动。开启后内层材质和实体出血装饰保持零位移，但外层 Fake-3D 与接触阴影仍按各自开关工作。"))
+	bool bReduceCardSurfaceParallaxMotion = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|12 Card Use Effect", meta = (ToolTip = "是否让普通使用并离开手牌的卡牌播放原地 Surface Effect；只改变 outgoing 表现，不改变规则结算。"))
 	bool bEnableCardUseEffect = true;
 

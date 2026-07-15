@@ -12,7 +12,9 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 
-namespace
+// Use a named private namespace so adaptive unity builds cannot merge these
+// generic Niagara parameter constants with another controller's constants.
+namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate
 {
 	const FName EffectKindParameter(TEXT("User.EffectKind"));
 	const FName DurationParameter(TEXT("User.Duration"));
@@ -30,6 +32,8 @@ namespace
 	const FName PreviewValidityParameter(TEXT("User.PreviewValidity"));
 	const FName PreviewPulseParameter(TEXT("User.PreviewPulse"));
 }
+
+using namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate;
 
 bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	UActorComponent& OwnerComponent,

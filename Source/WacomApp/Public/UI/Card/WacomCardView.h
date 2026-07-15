@@ -9,11 +9,13 @@
 
 class UBorder;
 class UImage;
+class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UPanelWidget;
 class URetainerBox;
 class USizeBox;
 class UTextBlock;
+class UTexture2D;
 class UWidget;
 class UWacomCardEffectBadgeWidget;
 class UPaperSprite;
@@ -30,6 +32,10 @@ struct FWacomCardViewAutomationTestView
 	int32 ArtDisplayUpdateCount = 0;
 	int32 DisabledDisplayUpdateCount = 0;
 	int32 EffectBadgeDisplayUpdateCount = 0;
+	bool bSurfaceCompositeActive = false;
+	FVector2D AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
+	FWacomCardSurfacePerspectiveView SurfacePerspectiveView;
+	UTexture2D* ResolvedSurfaceArt = nullptr;
 };
 #endif
 
@@ -64,6 +70,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	const FWacomCardViewData& GetCardViewData() const { return CurrentData; }
 
+	/** Applies visual-only perspective supplied by the first-person card layer. */
+	void SetCardSurfacePerspectiveView(const FWacomCardSurfacePerspectiveView& InView);
+	void ResetCardSurfacePerspectiveView();
+
 	FVector2D GetCardBodyHitSize() const;
 	bool HasCardBodyHitGeometry() const;
 	bool IsScreenPositionInsideCardBody(const FVector2D& ScreenPosition) const;
@@ -87,6 +97,10 @@ public:
 		View.ArtDisplayUpdateCount = ArtDisplayUpdateCountForTest;
 		View.DisabledDisplayUpdateCount = DisabledDisplayUpdateCountForTest;
 		View.EffectBadgeDisplayUpdateCount = EffectBadgeDisplayUpdateCountForTest;
+		View.bSurfaceCompositeActive = bCardSurfaceCompositeActive;
+		View.AppliedAttachmentOffsetPixels = AppliedAttachmentOffsetPixels;
+		View.SurfacePerspectiveView = CardSurfacePerspectiveView;
+		View.ResolvedSurfaceArt = ResolveCardSurfaceArtTexture();
 		return View;
 	}
 #endif
@@ -94,6 +108,7 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	static constexpr float DefaultCardBodyHitWidth = 296.f;
 	static constexpr float DefaultCardBodyHitHeight = 420.f;
@@ -129,6 +144,18 @@ protected:
 	TObjectPtr<UImage> CardArt;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> BackColor;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> Frame;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> CardSurfaceImage;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> CardOverlay;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> SurfaceFoilOverlay;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -159,6 +186,9 @@ protected:
 	TObjectPtr<UWidget> DurabilityHost;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> AttachmentParallaxHost;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> DurabilityDigitsHost;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Durability", meta = (ClampMin = "1", UIMin = "8", UIMax = "64", ToolTip = "耐久数字 Icon 的单个尺寸，单位为 UMG 布局像素。"))
@@ -168,6 +198,10 @@ protected:
 	TMap<int32, TSoftObjectPtr<UPaperSprite>> DurabilityDigitIcons;
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend class UWacomCardViewSpecProbe;
+#endif
+
 	UPROPERTY(Transient)
 	FWacomCardViewData CurrentData;
 
@@ -188,6 +222,29 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface", meta = (ToolTip = "卡牌表面弱流光覆盖材质。仅在 WBP 或 C++ fallback 显式提供 SurfaceFoilOverlay 时生效；未绑定 SurfaceFoilOverlay 时不会自动创建覆盖层。"))
 	TObjectPtr<UMaterialInterface> SurfaceFoilMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface Perspective", meta = (ToolTip = "卡牌核心表面复合材质实例。它在单个 CardSurfaceImage 中合成底色、插画、实体卡框和稀有度饰条；为空或 CardSurfaceImage 未绑定时自动保留旧 UMG 分层。"))
+	TObjectPtr<UMaterialInterface> CardSurfaceMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface Perspective", meta = (ToolTip = "核心表面复合材质使用的实体卡框纹理。推荐使用 148×210 原始像素纹理并保持 Nearest 采样；为空时沿用材质实例中的 FrameTexture。"))
+	TObjectPtr<UTexture2D> CardSurfaceFrameTexture;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Surface Perspective", meta = (ToolTip = "核心表面复合材质的卡底颜色。用于插画透明像素下方，不改变文本、费用或实体出血装饰。"))
+	FLinearColor CardSurfaceBackColor = FLinearColor(0.08f, 0.075f, 0.065f, 1.0f);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> CardSurfaceMaterialInstance;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> AuthoredCardArtTexture;
+
+	FWacomCardSurfacePerspectiveView CardSurfacePerspectiveView;
+	FVector2D AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
+	TMap<TWeakObjectPtr<UWidget>, FWidgetTransform> AuthoredAttachmentTransforms;
+	TMap<TWeakObjectPtr<UWidget>, ESlateVisibility> AuthoredLegacySurfaceVisibilities;
+	bool bCardSurfaceCompositeActive = false;
+	bool bLegacySurfaceVisibilityCached = false;
+	bool bAuthoredCardArtTextureCached = false;
 
 	bool bSpriteIconCachesBuilt = false;
 	bool bCardViewDataAppliedToWidgets = false;
@@ -215,6 +272,17 @@ private:
 	void UpdateRarityBorderDisplay();
 	void UpdateDisabledDisplay();
 	void ApplySurfaceFoilOverlay();
+	void CacheAuthoredCardArtTexture();
+	UTexture2D* ResolveCardSurfaceArtTexture() const;
+	void EnsureCardSurfaceImage();
+	void RefreshCardSurfaceComposite();
+	void ApplyCardSurfacePerspective();
+	void CacheLegacySurfaceVisibility();
+	void SetLegacySurfaceVisibility(bool bVisible);
+	void CacheAttachmentAuthoredTransforms();
+	void RestoreAttachmentAuthoredTransforms();
+	void ApplyAttachmentParallaxOffset(const FVector2D& OffsetPixels);
+	bool ApplyRarityToCardSurfaceMaterial();
 	void EnsureSpriteIconCachesBuilt();
 	void RebuildSpriteIconCaches();
 	void InvalidateCardViewRenderCache();

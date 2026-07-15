@@ -1,0 +1,117 @@
+Function SelfContained WacomCardSurface_ComputeLayerUV(
+    in float2 uv,
+    in float2 sourceInvSize,
+    in float2 tiltDegrees,
+    in float referenceTiltDegrees,
+    in float parallaxStrength,
+    in float depthPixels,
+    in float overscan,
+    in float pixelQuantization,
+    out float3 layerUVAndMask)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        tiltDegrees / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+    float2 parallaxDirection = float2(normalizedTilt.y, -normalizedTilt.x);
+    float2 safeInvSize = max(sourceInvSize, float2(0.000001, 0.000001));
+    float safeOverscan = max(overscan, 0.0);
+    float2 centeredUV = (uv - float2(0.5, 0.5)) / (1.0 + safeOverscan);
+    float2 displacedUV = centeredUV + float2(0.5, 0.5)
+        - parallaxDirection * depthPixels * max(parallaxStrength, 0.0) * safeInvSize;
+    float2 quantizedUV = (floor(displacedUV / safeInvSize) + float2(0.5, 0.5)) * safeInvSize;
+    float2 sampledUV = lerp(displacedUV, quantizedUV, saturate(pixelQuantization));
+    float insideMask = step(0.0, sampledUV.x)
+        * step(sampledUV.x, 1.0)
+        * step(0.0, sampledUV.y)
+        * step(sampledUV.y, 1.0);
+    layerUVAndMask = float3(sampledUV.x, sampledUV.y, insideMask);
+}
+
+Function SelfContained WacomCardSurface_MapAtlasUV(
+    in float3 localUVAndMask,
+    in float4 atlasScaleBias,
+    out float3 atlasUVAndMask)
+{
+    float2 localUV = float2(localUVAndMask.x, localUVAndMask.y);
+    float2 atlasScale = max(float2(atlasScaleBias.x, atlasScaleBias.y), float2(0.000001, 0.000001));
+    float2 atlasBias = float2(atlasScaleBias.z, atlasScaleBias.w);
+    float2 atlasUV = atlasBias + localUV * atlasScale;
+    atlasUVAndMask = float3(atlasUV.x, atlasUV.y, localUVAndMask.z);
+}
+
+Function SelfContained WacomCardSurface_ApplyLayerMask(
+    in float4 layer,
+    in float layerMask,
+    out float4 maskedLayer)
+{
+    maskedLayer = float4(layer.rgb, layer.a * saturate(layerMask));
+}
+
+Function SelfContained WacomCardSurface_ApplyFrameFinish(
+    in float4 layer,
+    in float2 uv,
+    in float2 tiltDegrees,
+    in float referenceTiltDegrees,
+    in float layerMask,
+    in float highlightStrength,
+    in float metalContrast,
+    out float4 finishedLayer)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        tiltDegrees / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+    float2 lightDirection = float2(normalizedTilt.y, -normalizedTilt.x);
+    float directional = dot((uv - float2(0.5, 0.5)) * 2.0, lightDirection);
+    float luminance = dot(layer.rgb, float3(0.299, 0.587, 0.114));
+    float3 contrasted = lerp(float3(luminance, luminance, luminance), layer.rgb, max(metalContrast, 0.0));
+    float highlight = directional * max(highlightStrength, 0.0);
+    finishedLayer = float4(max(contrasted + highlight, float3(0.0, 0.0, 0.0)), layer.a * saturate(layerMask));
+}
+
+Function SelfContained WacomCardSurface_ApplyRarityFinish(
+    in float4 layer,
+    in float2 uv,
+    in float2 tiltDegrees,
+    in float referenceTiltDegrees,
+    in float layerMask,
+    in float bevelStrength,
+    in float foilStrength,
+    in float iridescenceStrength,
+    in float glowStrength,
+    out float4 finishedLayer)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        tiltDegrees / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+    float2 lightDirection = float2(normalizedTilt.y, -normalizedTilt.x);
+    float directional = dot((uv - float2(0.5, 0.5)) * 2.0, lightDirection);
+    float foilBand = 0.5 + 0.5 * cos((uv.x + uv.y + directional * 0.18) * 18.8495559);
+    float3 iridescence = float3(
+        0.45 + 0.55 * foilBand,
+        0.68 + 0.32 * (1.0 - foilBand),
+        0.78 + 0.22 * abs(directional));
+    float light = directional * max(bevelStrength, 0.0) + foilBand * max(foilStrength, 0.0);
+    float3 color = layer.rgb + light + iridescence * max(iridescenceStrength, 0.0);
+    color += layer.rgb * max(glowStrength, 0.0) * (0.35 + 0.65 * foilBand);
+    finishedLayer = float4(max(color, float3(0.0, 0.0, 0.0)), layer.a * saturate(layerMask));
+}
+
+Function SelfContained WacomCardSurface_AlphaComposite(
+    in float4 underLayer,
+    in float4 overLayer,
+    out float4 compositeLayer)
+{
+    float underAlpha = saturate(underLayer.a);
+    float overAlpha = saturate(overLayer.a);
+    float outAlpha = overAlpha + underAlpha * (1.0 - overAlpha);
+    float3 premultiplied = overLayer.rgb * overAlpha
+        + underLayer.rgb * underAlpha * (1.0 - overAlpha);
+    float3 outColor = premultiplied / max(outAlpha, 0.000001);
+    compositeLayer = float4(outColor, outAlpha);
+}

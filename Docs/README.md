@@ -2,7 +2,7 @@
 type: docs-index
 scope: wacom-docs
 status: active
-updated: 2026-06-05
+updated: 2026-07-15
 tags:
   - wacom/docs
   - wacom/navigation
@@ -47,6 +47,7 @@ tags:
 | 战斗规则    | [`WacomBattle.md`](WacomBattle.md)                                                                     | 战后结算 [`WacomRun §10`](WacomRun.md#wacomrun-battle-settlement)，战斗 UI [`WacomBattleUI.md`](WacomBattleUI.md)，WBP 合约 [`UI_Battle_WBP_Binding.md`](UI_Battle_WBP_Binding.md)    |
 | 击倒与奖励卡  | [`WacomBattle §12`](WacomBattle.md#wacombattle-result)                                                 | 部位奖励字段 [`WacomData §4`](WacomData.md#wacomdata-enemy-part)，Run 入包 [`WacomRun §10`](WacomRun.md#wacomrun-battle-settlement)，后续方向 [`Roadmap: 击倒事件扩展`](Roadmap.md#roadmap-knockdown) |
 | 战斗表现    | [`WacomBattleUI.md`](WacomBattleUI.md)                                                                 | 第一人称卡牌层 [`First_Person_Card_Layer_Design.md`](First_Person_Card_Layer_Design.md)，UI 技术债 [`TechDebt: UI 层技术债`](TechDebt.md#techdebt-ui)，后续表现 [`Roadmap: 战斗 UI`](Roadmap.md#roadmap-battle-ui) |
+| DreamShader 材质 | [`DreamShader_Production_Guide.md`](DreamShader_Production_Guide.md) | 卡牌材质合同 [`First_Person_Card_Layer_Design.md`](First_Person_Card_Layer_Design.md)，WBP 绑定 [`UI_Battle_WBP_Binding.md`](UI_Battle_WBP_Binding.md)，插件与生成债 [`TechDebt.md`](TechDebt.md) |
 | 背包构筑    | [`WacomRun.md`](WacomRun.md)                                                                           | 背包 UI [`WacomUI.md`](WacomUI.md)，WBP 合约 [`UI_Backpack_WBP_Binding.md`](UI_Backpack_WBP_Binding.md)，后续表现 [`Roadmap: 背包 UI`](Roadmap.md#roadmap-backpack-ui)                       |
 | 商店与探索事件 | [`WacomRun.md`](WacomRun.md)                                                                           | 静态定义 [`WacomData.md`](WacomData.md)，内容制作 [`WacomDataAuthoring.md`](WacomDataAuthoring.md)，世界交互 [`WacomWorldInteraction.md`](WacomWorldInteraction.md)，后续方向 [`Roadmap: 商店`](Roadmap.md#roadmap-shop) / [`Roadmap: 探索事件`](Roadmap.md#roadmap-runevent)             |
 | 静态数据制作 | [`WacomData.md`](WacomData.md) | 内容生成 / 校验 [`WacomDataAuthoring.md`](WacomDataAuthoring.md)，GameplayTag [`WacomGameplayTags.md`](WacomGameplayTags.md)，内容目录 [`Content_Organization.md`](Content_Organization.md) |
@@ -73,6 +74,7 @@ tags:
 | [`WacomUIFoundation.md`](WacomUIFoundation.md) | CommonUI shell、PrimaryLayout、UI Settings、Widget registry、Modal / MainMenu、Run MVVM 和 AppToast 例外路径。 |
 | [`WacomBattleUI.md`](WacomBattleUI.md) | BattleHUD、命令出口、targeting、presentation flow、Combat Log、Presentation Stack 和当前 Battle UI surface。 |
 | [`First_Person_Card_Layer_Design.md`](First_Person_Card_Layer_Design.md) | 第一人称卡牌层 authoring / runtime contract，包括 Battle / Run source、hover / drag / drop 和 WBP_FPCardView。 |
+| [`DreamShader_Production_Guide.md`](DreamShader_Production_Guide.md) | DreamShader 源码组织、UI/Retainer/Niagara 材质合同、生成流程、常见编译与采样陷阱、性能和验证清单。 |
 | [`Run_Tunnel_Exploration_Spike_V0.md`](Run_Tunnel_Exploration_Spike_V0.md) / [`Run_Tunnel_Presentation_Discussion.md`](Run_Tunnel_Presentation_Discussion.md) | Run Tunnel archived historical background；只用于理解历史 Spike / 表现讨论，当前 movement / input / Run 规则 / world interaction / first-person hand 事实分别看 `WacomApp.md`、`WacomRun.md`、`WacomWorldInteraction.md` 和 `First_Person_Card_Layer_Design.md`。 |
 | [`UI_Backpack_WBP_Binding.md`](UI_Backpack_WBP_Binding.md) | 背包、卡牌详情、卡牌显示等 WBP 的绑定槽位和制作约束。 |
 | [`UI_Battle_WBP_Binding.md`](UI_Battle_WBP_Binding.md) | BattleHUD、first-person card view、Combat Log、Presentation Stack、shared widgets 和当前 Battle UI 的 WBP 绑定协议。 |

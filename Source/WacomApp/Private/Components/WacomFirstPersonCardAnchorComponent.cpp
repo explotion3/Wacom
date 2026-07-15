@@ -224,6 +224,13 @@ namespace
 		Config.CardDepth.bEnableContactShadow = Anchor.bEnableCardContactShadow;
 		Config.CardDepth.HoverContactShadowLift = Anchor.CardHoverContactShadowLift;
 		Config.CardDepth.DragContactShadowLift = Anchor.CardDragContactShadowLift;
+		Config.CardDepth.bEnableSurfaceParallax = Anchor.bEnableCardSurfaceParallax;
+		Config.CardDepth.SurfaceParallaxStrength = Anchor.CardSurfaceParallaxStrength;
+		Config.CardDepth.AttachmentParallaxDepthPixels = Anchor.AttachmentParallaxDepthPixels;
+		Config.CardDepth.AttachmentParallaxMaxOffsetPixels =
+			Anchor.AttachmentParallaxMaxOffsetPixels;
+		Config.CardDepth.bReduceSurfaceParallaxMotion =
+			Anchor.bReduceCardSurfaceParallaxMotion;
 		Config.CardUseEffect.bEnabled = Anchor.bEnableCardUseEffect;
 		Config.CardUseEffect.bReducedMotion = Anchor.bReduceCardUseEffectMotion;
 		Config.CardUseEffect.Style = Anchor.CardUseEffectStyle
@@ -707,6 +714,11 @@ namespace
 		AddBool(Config.CardDepth.bEnableContactShadow);
 		AddFloat(Config.CardDepth.HoverContactShadowLift);
 		AddFloat(Config.CardDepth.DragContactShadowLift);
+		AddBool(Config.CardDepth.bEnableSurfaceParallax);
+		AddFloat(Config.CardDepth.SurfaceParallaxStrength);
+		AddFloat(Config.CardDepth.AttachmentParallaxDepthPixels);
+		AddFloat(Config.CardDepth.AttachmentParallaxMaxOffsetPixels);
+		AddBool(Config.CardDepth.bReduceSurfaceParallaxMotion);
 		AddBool(Config.CardUseEffect.bEnabled);
 		AddBool(Config.CardUseEffect.bReducedMotion);
 		Combine(GetTypeHash(Config.CardUseEffect.Style.SurfaceEffectMaterialInstance.Get()));

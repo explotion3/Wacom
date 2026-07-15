@@ -211,6 +211,11 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.CardDepth.ReturnSpeed = FMath::Max(0.0f, Config.CardDepth.ReturnSpeed);
 	Config.CardDepth.HoverContactShadowLift = FMath::Clamp(Config.CardDepth.HoverContactShadowLift, 0.0f, 1.0f);
 	Config.CardDepth.DragContactShadowLift = FMath::Clamp(Config.CardDepth.DragContactShadowLift, 0.0f, 1.0f);
+	Config.CardDepth.SurfaceParallaxStrength = FMath::Max(0.0f, Config.CardDepth.SurfaceParallaxStrength);
+	Config.CardDepth.AttachmentParallaxDepthPixels =
+		FMath::Max(0.0f, Config.CardDepth.AttachmentParallaxDepthPixels);
+	Config.CardDepth.AttachmentParallaxMaxOffsetPixels =
+		FMath::Max(0.0f, Config.CardDepth.AttachmentParallaxMaxOffsetPixels);
 	Config.CardUseEffect.Style.DurationSeconds = FMath::Max(
 		0.0f,
 		Config.CardUseEffect.Style.DurationSeconds);
@@ -355,11 +360,34 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.DragCardTargetFocusLiftPixels, B.DragCardTargetFocusLiftPixels)
 		&& AreFloatsEquivalent(A.DragCardTargetFocusScale, B.DragCardTargetFocusScale)
 		&& A.DragCardTargetFocusZOrderBoost == B.DragCardTargetFocusZOrderBoost
+		&& A.CardDepth.bEnableFake3D == B.CardDepth.bEnableFake3D
+		&& AreFloatsEquivalent(A.CardDepth.HoverMaxTiltDegrees, B.CardDepth.HoverMaxTiltDegrees)
+		&& AreFloatsEquivalent(A.CardDepth.DragMaxTiltDegrees, B.CardDepth.DragMaxTiltDegrees)
+		&& AreFloatsEquivalent(A.CardDepth.PressedTiltMultiplier, B.CardDepth.PressedTiltMultiplier)
+		&& AreFloatsEquivalent(A.CardDepth.PerspectiveStrength, B.CardDepth.PerspectiveStrength)
+		&& AreFloatsEquivalent(
+			A.CardDepth.DragVelocityFilterSpeed,
+			B.CardDepth.DragVelocityFilterSpeed)
+		&& AreFloatsEquivalent(
+			A.CardDepth.DragVelocityForMaxTiltPixelsPerSecond,
+			B.CardDepth.DragVelocityForMaxTiltPixelsPerSecond)
 		&& A.CardDepth.bEnableContactShadow == B.CardDepth.bEnableContactShadow
 		&& AreFloatsEquivalent(A.CardDepth.ResponseSpeed, B.CardDepth.ResponseSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.ReturnSpeed, B.CardDepth.ReturnSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.HoverContactShadowLift, B.CardDepth.HoverContactShadowLift)
 		&& AreFloatsEquivalent(A.CardDepth.DragContactShadowLift, B.CardDepth.DragContactShadowLift)
+		&& A.CardDepth.bEnableSurfaceParallax == B.CardDepth.bEnableSurfaceParallax
+		&& AreFloatsEquivalent(
+			A.CardDepth.SurfaceParallaxStrength,
+			B.CardDepth.SurfaceParallaxStrength)
+		&& AreFloatsEquivalent(
+			A.CardDepth.AttachmentParallaxDepthPixels,
+			B.CardDepth.AttachmentParallaxDepthPixels)
+		&& AreFloatsEquivalent(
+			A.CardDepth.AttachmentParallaxMaxOffsetPixels,
+			B.CardDepth.AttachmentParallaxMaxOffsetPixels)
+		&& A.CardDepth.bReduceSurfaceParallaxMotion
+			== B.CardDepth.bReduceSurfaceParallaxMotion
 		&& A.CardUseEffect.bEnabled == B.CardUseEffect.bEnabled
 		&& A.CardUseEffect.bReducedMotion == B.CardUseEffect.bReducedMotion
 		&& A.CardUseEffect.Style.SurfaceEffectMaterialInstance

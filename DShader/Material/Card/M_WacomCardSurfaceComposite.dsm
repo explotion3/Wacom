@@ -1,0 +1,75 @@
+import "Shared/WacomCardSurfaceParallax.dsh";
+
+Shader(Name="DreamMaterials/Card/M_WacomCardSurfaceComposite")
+{
+    Properties = {
+        TextureSampleParameter2D ArtTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="卡牌核心表面|纹理"; SortPriority=0; Description="由 CardView 按卡牌实例写入的主题插画。"; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+        TextureSampleParameter2D FrameTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="卡牌核心表面|纹理"; SortPriority=1; Description="实体卡框纹理；推荐 148×210、Nearest。"; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+        TextureSampleParameter2D RarityTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="卡牌核心表面|纹理"; SortPriority=2; Description="稀有度 Sprite 使用的图集纹理。"; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+
+        VectorParameter BackColor = float4(0.08, 0.075, 0.065, 1.0) [ Group="卡牌核心表面|制作"; SortPriority=10; ];
+        VectorParameter RarityUVScaleBias = float4(1.0, 1.0, 0.0, 0.0) [ Group="卡牌核心表面|运行时"; SortPriority=11; Description="稀有度图集区域：ScaleX、ScaleY、BiasX、BiasY。"; ];
+        VectorParameter CardSourceInvSize = float4(0.00675676, 0.00476190, 148.0, 210.0) [ Group="卡牌核心表面|运行时"; SortPriority=12; Description="卡面源像素尺寸倒数与尺寸；默认 148×210。"; ];
+        ScalarParameter RarityEnabled = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=13; ];
+        ScalarParameter TiltX = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=14; ];
+        ScalarParameter TiltY = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=15; ];
+        ScalarParameter ParallaxStrength = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=16; ];
+
+        ScalarParameter ReferenceTiltDegrees = 9.0 [ Group="卡牌核心表面|材质实例"; SortPriority=30; Description="达到 authored 层深的参考倾角，单位为度；推荐与 Drag 最大倾角一致。"; ];
+        ScalarParameter ArtDepthPixels = -2.0 [ Group="卡牌核心表面|材质实例"; SortPriority=31; Description="插画相对卡框的源像素深度；负值表示位于卡框后方，推荐 -1 到 -3。"; ];
+        ScalarParameter FrameDepthPixels = 0.0 [ Group="卡牌核心表面|材质实例"; SortPriority=32; ];
+        ScalarParameter RarityDepthPixels = 1.5 [ Group="卡牌核心表面|材质实例"; SortPriority=33; Description="稀有度饰条相对卡框的源像素深度；推荐 0.5 到 2。"; ];
+        ScalarParameter ArtOverscan = 0.035 [ Group="卡牌核心表面|材质实例"; SortPriority=34; Description="插画为视差位移预留的内缩采样比例；推荐 0.02 到 0.06。"; ];
+        ScalarParameter PixelQuantization = 1.0 [ Group="卡牌核心表面|材质实例"; SortPriority=35; Description="源像素量化强度；1 保持硬像素采样，0 使用连续 UV。"; ];
+        ScalarParameter FrameHighlightStrength = 0.10 [ Group="卡牌核心表面|材质实例"; SortPriority=40; ];
+        ScalarParameter RarityBevelStrength = 0.16 [ Group="卡牌核心表面|材质实例"; SortPriority=41; ];
+        ScalarParameter FoilStrength = 0.08 [ Group="卡牌核心表面|材质实例"; SortPriority=42; ];
+        ScalarParameter MetalContrast = 1.10 [ Group="卡牌核心表面|材质实例"; SortPriority=43; ];
+        ScalarParameter IridescenceStrength = 0.05 [ Group="卡牌核心表面|材质实例"; SortPriority=44; ];
+        ScalarParameter GlowStrength = 0.04 [ Group="卡牌核心表面|材质实例"; SortPriority=45; ];
+    }
+
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "PremultipliedAlpha"; TwoSided = true; }
+    Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float2 sourceInvSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=CardSourceInvSize, R=true, G=true, B=false, A=false);
+        float2 tilt = float2(TiltX, TiltY);
+
+        float3 artUVAndMask;
+        WacomCardSurface_ComputeLayerUV(uv, sourceInvSize, tilt, ReferenceTiltDegrees, ParallaxStrength, ArtDepthPixels, ArtOverscan, PixelQuantization, artUVAndMask);
+        float2 artUV = UE.Expression(Class="ComponentMask", OutputType="float2", Input=artUVAndMask, R=true, G=true, B=false, A=false);
+        float artMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=artUVAndMask, R=false, G=false, B=true, A=false);
+        float4 artSample = ArtTexture(Coordinates=artUV);
+        float4 artLayer;
+        WacomCardSurface_ApplyLayerMask(artSample, artMask, artLayer);
+
+        float3 frameUVAndMask;
+        WacomCardSurface_ComputeLayerUV(uv, sourceInvSize, tilt, ReferenceTiltDegrees, ParallaxStrength, FrameDepthPixels, 0.0, PixelQuantization, frameUVAndMask);
+        float2 frameUV = UE.Expression(Class="ComponentMask", OutputType="float2", Input=frameUVAndMask, R=true, G=true, B=false, A=false);
+        float frameMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=frameUVAndMask, R=false, G=false, B=true, A=false);
+        float4 frameSample = FrameTexture(Coordinates=frameUV);
+        float4 frameLayer;
+        WacomCardSurface_ApplyFrameFinish(frameSample, frameUV, tilt, ReferenceTiltDegrees, frameMask, FrameHighlightStrength, MetalContrast, frameLayer);
+
+        float3 rarityLocalUVAndMask;
+        WacomCardSurface_ComputeLayerUV(uv, sourceInvSize, tilt, ReferenceTiltDegrees, ParallaxStrength, RarityDepthPixels, 0.0, PixelQuantization, rarityLocalUVAndMask);
+        float3 rarityAtlasUVAndMask;
+        WacomCardSurface_MapAtlasUV(rarityLocalUVAndMask, RarityUVScaleBias, rarityAtlasUVAndMask);
+        float2 rarityUV = UE.Expression(Class="ComponentMask", OutputType="float2", Input=rarityAtlasUVAndMask, R=true, G=true, B=false, A=false);
+        float rarityMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=rarityAtlasUVAndMask, R=false, G=false, B=true, A=false);
+        float4 raritySample = RarityTexture(Coordinates=rarityUV);
+        float4 rarityLayer;
+        WacomCardSurface_ApplyRarityFinish(raritySample, uv, tilt, ReferenceTiltDegrees, rarityMask * saturate(RarityEnabled), RarityBevelStrength, FoilStrength, IridescenceStrength, GlowStrength, rarityLayer);
+
+        float4 baseAndArt;
+        float4 baseArtFrame;
+        float4 finalSurface;
+        WacomCardSurface_AlphaComposite(BackColor, artLayer, baseAndArt);
+        WacomCardSurface_AlphaComposite(baseAndArt, frameLayer, baseArtFrame);
+        WacomCardSurface_AlphaComposite(baseArtFrame, rarityLayer, finalSurface);
+        Color = UE.Expression(Class="ComponentMask", OutputType="float3", Input=finalSurface, R=true, G=true, B=true, A=false);
+        Alpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=finalSurface, R=false, G=false, B=false, A=true);
+    }
+}
