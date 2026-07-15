@@ -5,7 +5,7 @@
 #if WITH_AUTOMATION_TESTS
 
 #include "Components/WacomFirstPersonWalkBobComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "Settings/SettingsScreenTestAccess.h"
@@ -384,11 +384,11 @@ bool FWacomUISettingsPauseMenuEntryContractSpec::RunTest(const FString& /*Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomSettingsRunTunnelCameraShakeAssetSpec,
-	"Wacom.Settings.RunTunnelCameraShakeAssetContract",
+	FWacomSettingsRunPathCameraShakeAssetSpec,
+	"Wacom.Settings.RunPathCameraShakeAssetContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomSettingsRunTunnelCameraShakeAssetSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomSettingsRunPathCameraShakeAssetSpec::RunTest(const FString& /*Parameters*/)
 {
 	UClass* PlayerClass = LoadClass<AWacomPlayerCharacter>(
 		nullptr,
@@ -399,20 +399,20 @@ bool FWacomSettingsRunTunnelCameraShakeAssetSpec::RunTest(const FString& /*Param
 	}
 	const AWacomPlayerCharacter* PlayerCDO = Cast<AWacomPlayerCharacter>(
 		PlayerClass->GetDefaultObject());
-	const UWacomRunTunnelMovementComponent* RunTunnel = PlayerCDO
-		? PlayerCDO->GetRunTunnelMovementComponent()
+	const UWacomRunPathTraversalComponent* RunPath = PlayerCDO
+		? PlayerCDO->GetRunPathTraversalComponent()
 		: nullptr;
 	const UWacomFirstPersonWalkBobComponent* WalkBob = PlayerCDO
 		? PlayerCDO->GetWalkBobComponent()
 		: nullptr;
-	TestNotNull(TEXT("Run Tunnel movement component"), RunTunnel);
+	TestNotNull(TEXT("Run Path traversal component"), RunPath);
 	TestNotNull(TEXT("Walk Bob component"), WalkBob);
-	if (RunTunnel)
+	if (RunPath)
 	{
-		TestTrue(TEXT("Authored player enables Run Tunnel CameraShake"),
-			RunTunnel->bUseWalkCameraShake);
+		TestTrue(TEXT("Authored player enables Run Path CameraShake"),
+			RunPath->bUseWalkCameraShake);
 		TestNotNull(TEXT("Authored player retains its Walk CameraShake class"),
-			RunTunnel->WalkCameraShakeClass.Get());
+			RunPath->WalkCameraShakeClass.Get());
 	}
 	if (WalkBob)
 	{

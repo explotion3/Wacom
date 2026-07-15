@@ -1,14 +1,18 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "RunSession.h"
 #include "RunState.h"
 #include "RunStateTypes.h"
+#include "Testing/WacomRunTimeAutomationTestView.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
+#include "Map/WacomFloorMapDefinition.h"
+#include "Map/WacomJourneyDefinition.h"
 
 #include "UObject/StrongObjectPtr.h"
 
@@ -31,8 +35,28 @@ namespace
 			{ Fx.MakeNoopCard(0) });
 
 		RunPtr = TStrongObjectPtr<URunSession>(NewObject<URunSession>());
-		RunPtr->Initialize(Char);
+		UWacomFloorMapDefinition* Floor = NewObject<UWacomFloorMapDefinition>(RunPtr.Get());
+		Floor->FloorId = TEXT("Pressure.Floor");
+		Floor->EntryNodeId = TEXT("Pressure.Node");
+		FWacomMapNodeDefinition& Node = Floor->Nodes.AddDefaulted_GetRef();
+		Node.NodeId = Floor->EntryNodeId;
+		Node.NodeType = EWacomMapNodeType::Navigation;
+		Node.bAllowsCamp = true;
+		UWacomJourneyDefinition* Journey = NewObject<UWacomJourneyDefinition>(RunPtr.Get());
+		Journey->JourneyId = TEXT("Pressure.Journey");
+		Journey->Floors.Add(Floor);
+		FRunInitializationParams Params;
+		Params.Character = Char;
+		Params.Journey = Journey;
+		RunPtr->Initialize(Params);
 		return RunPtr.Get();
+	}
+
+	FWacomStatus AdvancePressurePhase(URunSession& Run, TArray<FRunExplorationEvent>& Events)
+	{
+		return FWacomRunTimeAutomationTestView::AdvanceToNextPhase(
+			FWacomRunSessionTestAccess::GetMutableRunState(Run),
+			Events);
 	}
 }
 
@@ -66,13 +90,14 @@ bool FWacomRunPressureEnterDuskAddsHungerSpec::RunTest(const FString& /*Paramete
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
 	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
+	TArray<FRunExplorationEvent> Events;
 
 	// Morning → Day（无副作用）→ Dusk（饥饿 +5）
-	Run->AdvanceToNextPhase();  // Day
+	TestTrue(TEXT("Advance to Day"), AdvancePressurePhase(*Run, Events).IsOk());
 	TestEqual(TEXT("Hunger=0 entering Day"),
 		Run->GetPressureValue(EWacomPressureType::Hunger), 0);
 
-	Run->AdvanceToNextPhase();  // Dusk
+	TestTrue(TEXT("Advance to Dusk"), AdvancePressurePhase(*Run, Events).IsOk());
 	TestEqual(TEXT("Hunger +5 entering Dusk"),
 		Run->GetPressureValue(EWacomPressureType::Hunger), 5);
 
@@ -89,15 +114,19 @@ bool FWacomRunPressureEnterSunriseAddsFatigueSpec::RunTest(const FString& /*Para
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
 	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
+	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
+	TArray<FRunExplorationEvent> Events;
 
 	// Morning → Day → Dusk → Night → Sunrise
-	Run->AdvanceToNextPhase();  // Day
-	Run->AdvanceToNextPhase();  // Dusk
-	Run->AdvanceToNextPhase();  // Night
+	TestTrue(TEXT("Advance to Day"), AdvancePressurePhase(*Run, Events).IsOk());
+	TestTrue(TEXT("Advance to Dusk"), AdvancePressurePhase(*Run, Events).IsOk());
+	TestTrue(TEXT("Advance to Night"), AdvancePressurePhase(*Run, Events).IsOk());
 	TestEqual(TEXT("Fatigue=0 before Sunrise"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 0);
 
-	Run->AdvanceToNextPhase();  // Sunrise
+	TestTrue(TEXT("Choose Night exploration"),
+		FWacomRunTimeAutomationTestView::ChooseNightExploration(State, Events).IsOk());
+	TestTrue(TEXT("Advance to Sunrise"), AdvancePressurePhase(*Run, Events).IsOk());
 	TestEqual(TEXT("Fatigue +10 entering Sunrise"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 10);
 
@@ -114,18 +143,21 @@ bool FWacomRunPressureCompletingDayAddsDecayAndHungerSpec::RunTest(const FString
 	FWacomBattleFixture Fx;
 	TStrongObjectPtr<URunSession> RunPtr;
 	URunSession* Run = MakePressureRunWithCharacter(Fx, RunPtr);
+	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
+	TArray<FRunExplorationEvent> Events;
 
 	// 完整循环到次日 Morning
-	Run->AdvanceToNextPhase();  // Day
-	Run->AdvanceToNextPhase();  // Dusk         (Hunger +5)
-	Run->AdvanceToNextPhase();  // Night
-	Run->AdvanceToNextPhase();  // Sunrise      (Fatigue +10)
-	Run->AdvanceToNextPhase();  // Morning(Day=2) (Hunger +5, Decay +5)
+	TestTrue(TEXT("Advance to Day"), AdvancePressurePhase(*Run, Events).IsOk());
+	TestTrue(TEXT("Advance to Dusk"), AdvancePressurePhase(*Run, Events).IsOk());
+	TestTrue(TEXT("Advance to Night"), AdvancePressurePhase(*Run, Events).IsOk());
+	TestTrue(TEXT("Choose Night exploration"),
+		FWacomRunTimeAutomationTestView::ChooseNightExploration(State, Events).IsOk());
+	TestTrue(TEXT("Advance to Sunrise"), AdvancePressurePhase(*Run, Events).IsOk());
+	TestTrue(TEXT("Advance to new Morning"), AdvancePressurePhase(*Run, Events).IsOk());
 
-	const FRunState& State = Run->GetRunState();
-	TestEqual(TEXT("CurrentDayNumber=2"), State.CurrentDayNumber, 2);
+	TestEqual(TEXT("CurrentDayNumber=2"), State.TimeState.CurrentDayNumber, 2);
 	TestTrue(TEXT("Phase=Morning"),
-		State.CurrentTimePhase == ETimePhase::Morning);
+		State.TimeState.CurrentTimePhase == ETimePhase::Morning);
 
 	TestEqual(TEXT("Hunger 5+5=10"),
 		Run->GetPressureValue(EWacomPressureType::Hunger), 10);
@@ -240,7 +272,7 @@ bool FWacomRunPressureBurdenZeroWhenWithinCapacitySpec::RunTest(const FString& /
 		{ Fx.MakeNoopCard(0), BagCard });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// Initialize 自动 RecomputeBurden，应仍是 0（容器 Capacity=12 > 背包卡数 2）。
 	TestEqual(TEXT("Burden=0 within capacity"),
@@ -268,7 +300,7 @@ bool FWacomRunPressureBurdenSetByOverCountSpec::RunTest(const FString& /*Paramet
 		{ BagCard });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
 	const int32 Capacity = Run->GetFluxCapacity();

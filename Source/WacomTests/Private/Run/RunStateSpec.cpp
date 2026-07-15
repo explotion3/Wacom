@@ -1,11 +1,13 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "RunSession.h"
 #include "RunState.h"
 #include "RunStateTypes.h"
+#include "Testing/WacomRunTimeAutomationTestView.h"
 
 #include "Characters/CharacterDefinition.h"
 #include "Cards/CardDefinition.h"
@@ -24,7 +26,7 @@
  *   - 压力 8 条加和 ≥ 100% 触发 IsRunFailed
  *   - AddPressure clamp 到 [0, 100]
  *   - AddExperience 满 Capacity 入账技能并清零
- *   - ConsumeNode 自动推进时段
+ *   - Action Point 耗尽自动推进时段
  *   - AdvanceToNextPhase 五时段循环 + 跨日 +1
  */
 
@@ -45,8 +47,11 @@ bool FWacomRunStateInitializeSpec::RunTest(const FString& /*Parameters*/)
 	TArray<UCardDefinition*> Deck = { Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), BagCard };
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
 
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize succeeds"), Run->Initialize(Char));
+	FWacomRunExplorationFixture ExplorationFixture;
+	const FWacomInitializedRunExplorationSession Initialized =
+		ExplorationFixture.CreateInitializedSession(Char);
+	URunSession* Run = Initialized.Session;
+	TestTrue(TEXT("Initialize succeeds"), Initialized.Initialization.IsOk());
 
 	const FRunState& State = Run->GetRunState();
 	TestEqual(TEXT("FingerCount from character"), State.FingerCount, Char->FingerCount);
@@ -58,11 +63,12 @@ bool FWacomRunStateInitializeSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("BattleDeck contains only non-container cards"),
 		State.BattleDeck.Num(), Deck.Num() - 1);
 
-	TestEqual(TEXT("Initial day = 1"), State.CurrentDayNumber, 1);
+	TestEqual(TEXT("Initial day = 1"), State.TimeState.CurrentDayNumber, 1);
 	TestTrue(TEXT("Initial phase = Morning"),
-		State.CurrentTimePhase == ETimePhase::Morning);
-	TestEqual(TEXT("Initial node count = Morning init"),
-		State.RemainingNodeCount, State.InitialNodeCount_Morning);
+		State.TimeState.CurrentTimePhase == ETimePhase::Morning);
+	TestEqual(TEXT("Morning Planning consumes one Action Point"),
+		State.TimeState.RemainingActionPoints,
+		State.TimeState.PhaseBudgets.Morning - 1);
 
 	TestEqual(TEXT("Initial pressure total = 0"), State.Pressure.GetTotal(), 0);
 	TestEqual(TEXT("Initial exp = 0"), State.ExperienceCurrent, 0);
@@ -84,7 +90,7 @@ bool FWacomRunStateRemoveFingerSpec::RunTest(const FString& /*Parameters*/)
 		{ Fx.MakeNoopCard(0) });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	const int32 InitialFingers = Run->GetFingerCount();
 	TestEqual(TEXT("Initial Disability = 0"),
@@ -116,7 +122,7 @@ bool FWacomRunStateFingerDepletedFailsRunSpec::RunTest(const FString& /*Paramete
 		{ Fx.MakeNoopCard(0) });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestFalse(TEXT("Run not failed initially"), Run->IsRunFailed());
 	TestFalse(TEXT("Fingers not depleted initially"), Run->IsFingerDepleted());
@@ -146,7 +152,7 @@ bool FWacomRunStatePressureCapFailsRunSpec::RunTest(const FString& /*Parameters*
 		{ Fx.MakeNoopCard(0), BagCard });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestFalse(TEXT("Run not failed initially"), Run->IsRunFailed());
 	TestEqual(TEXT("Initial Burden=0"),
@@ -180,7 +186,7 @@ bool FWacomRunStatePressureClampSpec::RunTest(const FString& /*Parameters*/)
 		{ Fx.MakeNoopCard(0) });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// 上限 clamp 到 100
 	Run->AddPressure(EWacomPressureType::Wound, 200);
@@ -208,7 +214,7 @@ bool FWacomRunStateExperienceGrantsSkillSpec::RunTest(const FString& /*Parameter
 		{ Fx.MakeNoopCard(0) });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	const int32 Cap = Run->GetExperienceCapacity();
 	TestTrue(TEXT("Capacity > 0"), Cap > 0);
@@ -227,39 +233,28 @@ bool FWacomRunStateExperienceGrantsSkillSpec::RunTest(const FString& /*Parameter
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunStateConsumeNodeAdvancesPhaseSpec,
-	"Wacom.Run.State.ConsumeNodeAdvancesPhase",
+	FWacomRunStateActionPointsAdvancePhaseSpec,
+	"Wacom.Run.State.ActionPointsAdvancePhase",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunStateConsumeNodeAdvancesPhaseSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomRunStateActionPointsAdvancePhaseSpec::RunTest(const FString& /*Parameters*/)
 {
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Char = Fx.MakeCharacter(
-		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ Fx.MakeNoopCard(0) });
-
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
-
-	const FRunState& State = Run->GetRunState();
+	FWacomRunExplorationFixture Fixture;
+	const FWacomInitializedRunExplorationSession Initialized = Fixture.CreateInitializedSession();
+	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Initialized.Session);
 	TestTrue(TEXT("Start at Morning"),
-		State.CurrentTimePhase == ETimePhase::Morning);
-	const int32 MorningNodes = State.InitialNodeCount_Morning;
-	TestEqual(TEXT("Initial Morning nodes"), State.RemainingNodeCount, MorningNodes);
-
-	// 消耗一个节点：仍在 Morning。
-	Run->ConsumeNode(1);
-	TestTrue(TEXT("Still Morning after consuming 1"),
-		State.CurrentTimePhase == ETimePhase::Morning);
-	TestEqual(TEXT("Remaining nodes = MorningNodes - 1"),
-		State.RemainingNodeCount, MorningNodes - 1);
-
-	// 把剩下的节点全部消耗：自动推进到 Day。
-	Run->ConsumeNode(MorningNodes - 1);
+		State.TimeState.CurrentTimePhase == ETimePhase::Morning);
+	TestEqual(TEXT("Initial Morning Action Points reflect Planning"),
+		State.TimeState.RemainingActionPoints,
+		State.TimeState.PhaseBudgets.Morning - 1);
+	TArray<FRunExplorationEvent> Events;
+	TestTrue(TEXT("Spend the remaining Morning Action Point"),
+		FWacomRunTimeAutomationTestView::TrySpendActionPoints(
+			State, State.TimeState.RemainingActionPoints, Events).IsOk());
 	TestTrue(TEXT("Advanced to Day"),
-		State.CurrentTimePhase == ETimePhase::Day);
-	TestEqual(TEXT("Day initial nodes"),
-		State.RemainingNodeCount, State.InitialNodeCount_Day);
+		State.TimeState.CurrentTimePhase == ETimePhase::Day);
+	TestEqual(TEXT("Day Action Point budget"),
+		State.TimeState.RemainingActionPoints, State.TimeState.PhaseBudgets.Day);
 
 	return true;
 }
@@ -271,32 +266,29 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomRunStatePhaseCycleAdvancesDaySpec::RunTest(const FString& /*Parameters*/)
 {
-	FWacomBattleFixture Fx;
-	UCharacterDefinition* Char = Fx.MakeCharacter(
-		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ Fx.MakeNoopCard(0) });
-
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
-
-	const FRunState& State = Run->GetRunState();
-	TestEqual(TEXT("Start day = 1"), State.CurrentDayNumber, 1);
+	FWacomRunExplorationFixture Fixture;
+	const FWacomInitializedRunExplorationSession Initialized = Fixture.CreateInitializedSession();
+	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Initialized.Session);
+	TestEqual(TEXT("Start day = 1"), State.TimeState.CurrentDayNumber, 1);
+	TArray<FRunExplorationEvent> Events;
 
 	// 五次推进：Morning → Day → Dusk → Night → Sunrise → Morning（次日）。
-	Run->AdvanceToNextPhase();
-	TestTrue(TEXT("Now Day"),     State.CurrentTimePhase == ETimePhase::Day);
-	Run->AdvanceToNextPhase();
-	TestTrue(TEXT("Now Dusk"),    State.CurrentTimePhase == ETimePhase::Dusk);
-	Run->AdvanceToNextPhase();
-	TestTrue(TEXT("Now Night"),   State.CurrentTimePhase == ETimePhase::Night);
-	Run->AdvanceToNextPhase();
-	TestTrue(TEXT("Now Sunrise"), State.CurrentTimePhase == ETimePhase::Sunrise);
-	TestEqual(TEXT("Still day 1 at Sunrise"), State.CurrentDayNumber, 1);
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, Events);
+	TestTrue(TEXT("Now Day"), State.TimeState.CurrentTimePhase == ETimePhase::Day);
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, Events);
+	TestTrue(TEXT("Now Dusk"), State.TimeState.CurrentTimePhase == ETimePhase::Dusk);
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, Events);
+	TestTrue(TEXT("Now Night"), State.TimeState.CurrentTimePhase == ETimePhase::Night);
+	TestTrue(TEXT("Choose Night Exploration"),
+		FWacomRunTimeAutomationTestView::ChooseNightExploration(State, Events).IsOk());
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, Events);
+	TestTrue(TEXT("Now Sunrise"), State.TimeState.CurrentTimePhase == ETimePhase::Sunrise);
+	TestEqual(TEXT("Still day 1 at Sunrise"), State.TimeState.CurrentDayNumber, 1);
 
-	Run->AdvanceToNextPhase();
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, Events);
 	TestTrue(TEXT("Back to Morning"),
-		State.CurrentTimePhase == ETimePhase::Morning);
-	TestEqual(TEXT("Day = 2"), State.CurrentDayNumber, 2);
+		State.TimeState.CurrentTimePhase == ETimePhase::Morning);
+	TestEqual(TEXT("Day = 2"), State.TimeState.CurrentDayNumber, 2);
 
 	return true;
 }

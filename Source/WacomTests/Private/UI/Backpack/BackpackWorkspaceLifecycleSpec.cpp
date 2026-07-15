@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -56,7 +57,7 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 		Character->StarterDeck.Add(BattleCard);
 	}
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Workspace composition Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Workspace composition Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(

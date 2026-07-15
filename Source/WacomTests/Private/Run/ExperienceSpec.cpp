@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "RunSession.h"
@@ -12,6 +13,7 @@
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Map/WacomFloorMapDefinition.h"
 
 #include "UObject/StrongObjectPtr.h"
 
@@ -29,20 +31,32 @@
 
 namespace
 {
-	URunSession* MakeExperienceRunWithCharacter(FWacomBattleFixture& Fx, TStrongObjectPtr<URunSession>& RunPtr)
+	URunSession* MakeExperienceRunWithCharacter(
+		FWacomBattleFixture& Fx,
+		FWacomRunExplorationFixture& Exploration)
 	{
 		UCharacterDefinition* Char = Fx.MakeCharacter(
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 			{ Fx.MakeNoopCard(0) });
-
-		RunPtr = TStrongObjectPtr<URunSession>(NewObject<URunSession>());
-		RunPtr->Initialize(Char);
-		return RunPtr.Get();
+		UWacomFloorMapDefinition* Floor =
+			Exploration.MakeLinearFloor(TEXT("Experience.Floor"), 1);
+		Floor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+		return Exploration.CreateInitializedSession(
+			Char,
+			Exploration.MakeJourney({ Floor }, TEXT("Experience.Journey"))).Session;
 	}
 
-	void FinishExperienceBattleForTest(URunSession* Run, const FBattleResultPacket& Packet, const TCHAR* TriggerPersistentId)
+	FRunExplorationResolution FinishExperienceBattleForTest(
+		URunSession& Run,
+		const FBattleResultPacket& Packet)
 	{
-		Run->OnBattleFinishedFromTrigger(Packet, FName(TriggerPersistentId));
+		const FRunExplorationResolution Begin =
+			Run.BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+		if (!Begin.IsOk() || !Begin.NodeActivityTicket.IsSet())
+		{
+			return Begin;
+		}
+		return Run.SettleEncounterNodeActivity(Begin.NodeActivityTicket.GetValue(), Packet);
 	}
 
 	FKnockdownExpGain MakeGain(FName PartId, int32 Exp)
@@ -62,15 +76,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunExperienceVictoryGrantsExpSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
+	FWacomRunExplorationFixture Exploration;
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, Exploration);
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.A"), 3));
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.B"), 2));
 
-	FinishExperienceBattleForTest(Run, Packet, TEXT("Run.Experience.Victory"));
+	TestTrue(TEXT("Battle settlement succeeds"), FinishExperienceBattleForTest(*Run, Packet).IsOk());
 	TestEqual(TEXT("Experience accumulates 3+2=5"),
 		Run->GetExperienceCurrent(), 5);
 
@@ -85,14 +99,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunExperienceDefeatDoesNotGrantSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
+	FWacomRunExplorationFixture Exploration;
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, Exploration);
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Defeat;
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.A"), 5));
 
-	FinishExperienceBattleForTest(Run, Packet, TEXT("Run.Experience.Defeat"));
+	TestTrue(TEXT("Battle settlement succeeds"), FinishExperienceBattleForTest(*Run, Packet).IsOk());
 	TestEqual(TEXT("Defeat does not grant experience"),
 		Run->GetExperienceCurrent(), 0);
 	TestFalse(TEXT("bRunActive=false after Defeat"), Run->IsRunActive());
@@ -108,8 +122,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunExperienceMutualDestructionGrantsSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
+	FWacomRunExplorationFixture Exploration;
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, Exploration);
 
 	// 同归于尽：Outcome 仍判 Victory，经验正常发。
 	FBattleResultPacket Packet;
@@ -117,7 +131,7 @@ bool FWacomRunExperienceMutualDestructionGrantsSpec::RunTest(const FString& /*Pa
 	Packet.bMutualDestruction = true;
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.A"), 4));
 
-	FinishExperienceBattleForTest(Run, Packet, TEXT("Run.Experience.MutualDestruction"));
+	TestTrue(TEXT("Battle settlement succeeds"), FinishExperienceBattleForTest(*Run, Packet).IsOk());
 	TestEqual(TEXT("Mutual destruction still grants experience"),
 		Run->GetExperienceCurrent(), 4);
 	TestTrue(TEXT("bRunActive remains true after mutual destruction"),
@@ -134,8 +148,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunExperienceFullGrantsSkillSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
+	FWacomRunExplorationFixture Exploration;
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, Exploration);
 
 	const int32 Cap = Run->GetExperienceCapacity();
 
@@ -146,7 +160,7 @@ bool FWacomRunExperienceFullGrantsSkillSpec::RunTest(const FString& /*Parameters
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.B"), Cap));
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.C"), 3));
 
-	FinishExperienceBattleForTest(Run, Packet, TEXT("Run.Experience.FullSkill"));
+	TestTrue(TEXT("Battle settlement succeeds"), FinishExperienceBattleForTest(*Run, Packet).IsOk());
 
 	TestEqual(TEXT("2 skills granted from 2 caps"),
 		Run->GetAcquiredSkillCount(), 2);
@@ -164,8 +178,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunExperienceZeroRewardRecordsButGrantsZeroSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeExperienceRunWithCharacter(Fx, RunPtr);
+	FWacomRunExplorationFixture Exploration;
+	URunSession* Run = MakeExperienceRunWithCharacter(Fx, Exploration);
 
 	// ExperienceReward=0 的部位破坏时仍记一条（让 Run 层有完整破坏列表）
 	// 但累计 0 经验。
@@ -173,7 +187,7 @@ bool FWacomRunExperienceZeroRewardRecordsButGrantsZeroSpec::RunTest(const FStrin
 	Packet.Outcome = EBattleOutcome::Victory;
 	Packet.KnockdownExpGains.Add(MakeGain(TEXT("Test.Part.NoExp"), 0));
 
-	FinishExperienceBattleForTest(Run, Packet, TEXT("Run.Experience.ZeroReward"));
+	TestTrue(TEXT("Battle settlement succeeds"), FinishExperienceBattleForTest(*Run, Packet).IsOk());
 	TestEqual(TEXT("Zero exp parts grant nothing"),
 		Run->GetExperienceCurrent(), 0);
 	TestEqual(TEXT("No skill granted"),

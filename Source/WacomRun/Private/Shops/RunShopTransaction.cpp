@@ -68,10 +68,9 @@ bool FRunShopTransaction::EndVisit(FRunState& State)
 		return false;
 	}
 
-	const bool bShouldConsumeNode = State.bShopVisitHasPurchase;
 	State.ActiveShopId = NAME_None;
 	State.bShopVisitHasPurchase = false;
-	return bShouldConsumeNode;
+	return true;
 }
 
 FRunShopSnapshot FRunShopTransaction::BuildSnapshot(const FRunState& State)

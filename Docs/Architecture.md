@@ -2,7 +2,7 @@
 type: architecture
 scope: wacom-project
 status: active
-updated: 2026-07-10
+updated: 2026-07-14
 tags:
   - wacom/architecture
   - wacom/modules
@@ -24,9 +24,9 @@ tags:
 现有模块：
 
 - `WacomCore`：通用类型、GameplayTags、跨模块共享契约。
-- `WacomData`：卡牌、敌人、意图、角色、商店、探索事件等静态定义。
+- `WacomData`：卡牌、敌人、意图、角色、商店、探索事件、Logical Map Graph 等静态定义。
 - `WacomBattle`：战斗内核。
-- `WacomRun`：战斗之间的 Run 状态、背包、SpecialZone、负重、压力、经验、商店、探索事件、战斗结果回传和存档结构。
+- `WacomRun`：战斗之间的 Run 状态、背包、SpecialZone、负重、压力、经验、商店、探索事件、Logical Map Graph 运行时规则、战斗结果回传和存档结构。
 - `WacomApp`：游戏层、第一人称、输入绑定、世界交互，以及 UI 表现层的物理承载模块。具体 UI 数据流、Widget、Toast、ViewData 以 `WacomUI.md` 为准。
 - `WacomEditor`：内容生成、编辑器工具、数据校验（Editor-only target）。
 - `WacomTests`：自动化测试（DeveloperTool）。
@@ -85,12 +85,26 @@ WacomTests
 | 模块 | 职责 | 不应该负责 |
 | --- | --- | --- |
 | `WacomCore` | 通用类型、GameplayTags 声明、通用结果类型 | 战斗流程、UI、资产编辑器 |
-| `WacomData` | 卡牌、敌人、角色、商店、探索事件等静态定义 | 本场战斗状态、Run 库存、Widget、输入 |
+| `WacomData` | 卡牌、敌人、角色、商店、探索事件、地图 Floor / Node / Edge 等静态定义 | 本场战斗状态、Run 库存、地图运行时状态、Widget、输入 |
 | `WacomBattle` | 战斗生命周期、命令结算、手牌区域、卡牌效果、敌方部位行动、Snapshot/Event/ResultPacket | UI 展示、Run 探索、关卡交互 |
-| `WacomRun` | 战斗外状态、背包、压力、经验、商店、探索事件、战斗结果回传和 SaveGame schema | 单场战斗内规则细节、UI |
+| `WacomRun` | 战斗外状态、背包、压力、经验、商店、探索事件、地图节点生命周期 / 传送 / 跨层 / 行动点规则、战斗结果回传和 SaveGame schema | 单场战斗内规则细节、Spline / 场景 Actor、UI |
 | `WacomApp` | GameMode、PlayerController、世界交互、输入、UI 表现层、交互目标命中与桥接 | 修改 Battle / Run 状态真相 |
 | `WacomEditor` | 内容生成 Commandlet、Data Validation、开发辅助 | 运行时规则依赖 |
 | `WacomTests` | 自动化测试、测试 fixture | 运行时业务逻辑 |
+
+### Logical Map Graph 边界
+
+Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：
+
+- `WacomData/Public/Map`：反射的 Journey/Floor/Node/Edge 和 typed payload，只保存静态制作真相。
+- `WacomRun/Public/Exploration`：Snapshot、事件、C++-only Command/Result 与 opaque token；`FRunState` 组合持有 time/exploration runtime state。
+- `WacomRun/Private/Exploration`：lifecycle、traversal、AP、Camp、Floor transition 和内容活动事务实现。
+- `WacomApp`：Spline、NodeAnchor、ContentHost、输入、镜头和结果表现；不得把 Actor 或世界坐标回写成规则真相。
+- `WacomEditor`：Journey/Floor/Scene validation 与可重复调试内容 builder。
+
+`URunSession::Initialize(FRunInitializationParams)` 使用完整 working state，成功时一次提交角色持有区、Journey/Floor、时间、压力和探索版本并返回 `FRunInitializationResult`；失败时保留旧 Session。App 和测试都必须显式消费该结果，不保留只返回 bool 的初始化入口。
+
+需要资产制作、Details 面板或 Blueprint 只读绑定的数据类型使用反射；探索 Command、Resolution、一次性 token 和 resolver/module 保持普通 C++。`UWacomRunPathTraversalComponent` 是唯一场景移动组件，Segment / Branch / Anchor 只保存场景绑定身份，不形成第二份规则图。当前 SaveGame schema 3 不保存新探索状态，也不因公共 handle 已稳定而宣称支持地图恢复。
 
 ## 5. 目录结构
 

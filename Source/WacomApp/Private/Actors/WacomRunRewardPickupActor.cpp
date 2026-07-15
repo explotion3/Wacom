@@ -184,7 +184,7 @@ bool AWacomRunRewardPickupActor::TryCollectPickupReward(AWacomPlayerController* 
 	switch (PickupDefinition->RewardType)
 	{
 	case EWacomRunPickupRewardType::Gold:
-		if (!Run->CollectGoldPickup(PersistentId, PickupDefinition->GoldAmount))
+		if (!Run->CollectGoldPickup(PersistentId, PickupDefinition->GoldAmount).bSucceeded)
 		{
 			return false;
 		}
@@ -198,7 +198,7 @@ bool AWacomRunRewardPickupActor::TryCollectPickupReward(AWacomPlayerController* 
 		}
 		return true;
 	case EWacomRunPickupRewardType::Card:
-		if (!Run->CollectCardPickup(PersistentId, PickupDefinition->CardDefinition))
+		if (!Run->CollectCardPickup(PersistentId, PickupDefinition->CardDefinition).bSucceeded)
 		{
 			return false;
 		}

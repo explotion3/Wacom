@@ -32,13 +32,13 @@ class WACOMAPP_API UWacomRunViewModel : public UMVVMViewModelBase
 	GENERATED_BODY()
 
 public:
-	// ---- 时段 / 节点 / 天数（GDD §8）----
+	// ---- 时段 / Action Point / 天数（GDD §8）----
 
 	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Getter, meta=(AllowPrivateAccess))
 	FText PhaseDisplay;  // "清晨" / "日间" / ...
 
 	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Getter, meta=(AllowPrivateAccess))
-	int32 RemainingNodeCount = 0;
+	int32 RemainingActionPoints = 0;
 
 	UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Getter, meta=(AllowPrivateAccess))
 	int32 CurrentDayNumber = 1;
@@ -126,14 +126,14 @@ public:
 	}
 	FText GetPhaseDisplay() const { return PhaseDisplay; }
 
-	void SetRemainingNodeCount(int32 InValue)
+	void SetRemainingActionPoints(int32 InValue)
 	{
-		if (UE_MVVM_SET_PROPERTY_VALUE(RemainingNodeCount, InValue))
+		if (UE_MVVM_SET_PROPERTY_VALUE(RemainingActionPoints, InValue))
 		{
-			// RemainingNodeCount 没有派生函数，无需级联通知。
+			// RemainingActionPoints 没有派生函数，无需级联通知。
 		}
 	}
-	int32 GetRemainingNodeCount() const { return RemainingNodeCount; }
+	int32 GetRemainingActionPoints() const { return RemainingActionPoints; }
 
 	void SetCurrentDayNumber(int32 InValue)     { UE_MVVM_SET_PROPERTY_VALUE(CurrentDayNumber, InValue); }
 	int32 GetCurrentDayNumber() const           { return CurrentDayNumber; }

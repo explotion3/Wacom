@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -206,7 +207,7 @@ bool FWacomUIRunFirstPersonBuildsEntriesFromBattleDeckSpec::RunTest(const FStrin
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { First, Second, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
 		NewObject<UWacomRunFirstPersonCardSourceSpecProbeComponent>());
@@ -250,7 +251,7 @@ bool FWacomUIRunFirstPersonIncludesProjectedBattleDeckCardsSpec::RunTest(const F
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { TypeB, Stored });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	TestEqual(TEXT("Fixture starts with one TypeB special zone"), State.SpecialZones.Num(), 1);
@@ -297,7 +298,7 @@ bool FWacomUIRunFirstPersonRefreshWritesAnchorRuntimeSourceSpec::RunTest(const F
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -350,7 +351,7 @@ bool FWacomUIRunFirstPersonPawnReadyRefreshesInitialMissingAnchorSpec::RunTest(
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
@@ -407,7 +408,7 @@ bool FWacomUIRunFirstPersonSessionReadyRefreshesInitialMissingSessionSpec::RunTe
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -455,7 +456,7 @@ bool FWacomUIRunFirstPersonHoverShowsDefaultBattleDeckCardDetailSpec::RunTest(
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TestTrue(TEXT("Run has BattleDeck card"), Run->GetBattleDeck().IsValidIndex(0));
 	const FGuid CardInstanceId = Run->GetBattleDeck()[0].InstanceId;
 
@@ -537,7 +538,7 @@ bool FWacomUIRunFirstPersonHoverShowsMenuLeaseCardDetailSpec::RunTest(
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	const FGuid CardInstanceId = Run->GetBattleDeck().IsValidIndex(0)
 		? Run->GetBattleDeck()[0].InstanceId
 		: FGuid();
@@ -599,7 +600,7 @@ bool FWacomUIRunFirstPersonDetailRejectsInvalidSourcesAndHidesOnDragSpec::RunTes
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	const FGuid CardInstanceId = Run->GetBattleDeck().IsValidIndex(0)
 		? Run->GetBattleDeck()[0].InstanceId
 		: FGuid();
@@ -688,7 +689,7 @@ bool FWacomUIRunFirstPersonInspectKeepsAndScrubsCardDetailSpec::RunTest(
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { First, Second, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TestTrue(TEXT("Run has first BattleDeck card"), Run->GetBattleDeck().IsValidIndex(0));
 	TestTrue(TEXT("Run has second BattleDeck card"), Run->GetBattleDeck().IsValidIndex(1));
 	const FGuid FirstId = Run->GetBattleDeck().IsValidIndex(0)
@@ -835,7 +836,7 @@ bool FWacomUIRunFirstPersonRunStateUnchangedRevisionSkipsDefaultRewriteSpec::Run
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -911,7 +912,7 @@ bool FWacomUIRunFirstPersonMissingSessionOrAnchorClearsSpec::RunTest(const FStri
 	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes for missing anchor branch"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes for missing anchor branch"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Source->BindRunSession(Run.Get());
 
 	Source->ClearCount = 0;
@@ -941,7 +942,7 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionClearsDefaultSpec::RunTest(const F
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -993,7 +994,7 @@ bool FWacomUIRunFirstPersonMenuSuppressionOwnsEmptyRuntimeLayerSpec::RunTest(con
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1030,7 +1031,7 @@ bool FWacomUIRunFirstPersonGameMenuSuppressionReleaseRestoresSpec::RunTest(const
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1080,7 +1081,7 @@ bool FWacomUIRunFirstPersonPrepareExplorationClearsStaleMenuContextSpec::RunTest
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	WacomRunFirstPersonCardLayerSpec::AttachFirstPersonPawnForTest(PC.Get());
@@ -1137,7 +1138,7 @@ bool FWacomUIRunFirstPersonRunStateSuppressedDoesNotRewriteSpec::RunTest(const F
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1176,7 +1177,7 @@ bool FWacomUIRunFirstPersonMenuLeaseOverridesDefaultSpec::RunTest(const FString&
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { DefaultCard, LeaseCard, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1223,7 +1224,7 @@ bool FWacomUIRunFirstPersonSuppressionDoesNotDisableLeaseSpec::RunTest(const FSt
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1268,7 +1269,7 @@ bool FWacomUIRunFirstPersonLeaseReleaseRestoresStateSpec::RunTest(const FString&
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1328,7 +1329,7 @@ bool FWacomUIRunFirstPersonDifferentLeaseCannotStealSpec::RunTest(const FString&
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1376,7 +1377,7 @@ bool FWacomUIRunFirstPersonClearLayerClearsMenuContextSpec::RunTest(const FStrin
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1419,7 +1420,7 @@ bool FWacomUIRunFirstPersonDebugSummaryReportsMenuContextSpec::RunTest(const FSt
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1465,7 +1466,7 @@ bool FWacomUIRunFirstPersonMenuLeaseCanEnableDragProbeSpec::RunTest(const FStrin
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -1516,7 +1517,7 @@ bool FWacomUIRunFirstPersonRequestBuildsLeaseEntriesFromDefinitionsSpec::RunTest
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = {
@@ -1606,7 +1607,7 @@ bool FWacomUIRunFirstPersonRequestMatchesAllowedCardIdsSpec::RunTest(const FStri
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.BattleDeck = {
@@ -1650,7 +1651,7 @@ bool FWacomUIRunFirstPersonRequestMatchesExplicitInstanceIdsSpec::RunTest(const 
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Shared });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = {
@@ -1702,7 +1703,7 @@ bool FWacomUIRunFirstPersonRequestUsesKeywordsSpec::RunTest(const FString& /*Par
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Companion });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = {
@@ -1748,7 +1749,7 @@ bool FWacomUIRunFirstPersonAllHeldZonesNoProjectedDuplicatesSpec::RunTest(const 
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Match });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Match) };
@@ -1803,7 +1804,7 @@ bool FWacomUIRunFirstPersonNoMatchingClearsSameLeaseSpec::RunTest(const FString&
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Match });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Match) };
@@ -1856,7 +1857,7 @@ bool FWacomUIRunFirstPersonEmptyFilterRejectsUnlessAllowAllSpec::RunTest(const F
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { First });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = {
@@ -1904,7 +1905,7 @@ bool FWacomUIRunFirstPersonMenuWidgetOwnedLeaseClearsSpec::RunTest(const FString
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Fang) };
@@ -1948,7 +1949,7 @@ bool FWacomUIRunFirstPersonLeaseProviderPendingMissingAnchorSpec::RunTest(const 
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Fang) };
@@ -2000,7 +2001,7 @@ bool FWacomUIRunFirstPersonLeaseProviderDebugReportsSpec::RunTest(const FString&
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = { WacomRunFirstPersonCardLayerSpec::MakeRunCardInstance(Fang) };
@@ -2053,7 +2054,7 @@ bool FWacomUIRunFirstPersonDefaultBattleDeckEnablesRunWorldDragSpec::RunTest(con
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -2108,7 +2109,7 @@ bool FWacomUIRunFirstPersonDragReleaseOnMenuZoneProbeOnlySpec::RunTest(const FSt
 		Fx, TEXT("Test.RunEventLease.ProbeOnly"), TEXT("Lease"), 0);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	const FGuid LeaseCardInstanceId =
 		WacomRunFirstPersonCardLayerSpec::FindOwnedInstanceIdByDefinition(Run->GetRunState(), LeaseCard);
 	TestTrue(TEXT("Lease card instance is valid"), LeaseCardInstanceId.IsValid());
@@ -2169,7 +2170,7 @@ bool FWacomUIRunFirstPersonMenuDropProbeClearSpec::RunTest(const FString& /*Para
 		Fx, TEXT("Test.RunEventLease.ProbeClear"), TEXT("Lease"), 0);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { LeaseCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	const FGuid LeaseCardInstanceId =
 		WacomRunFirstPersonCardLayerSpec::FindOwnedInstanceIdByDefinition(Run->GetRunState(), LeaseCard);
 	TestTrue(TEXT("Lease card instance is valid"), LeaseCardInstanceId.IsValid());
@@ -2263,7 +2264,7 @@ bool FWacomUIRunMenuCardDropProbeOnlySpec::RunTest(const FString& /*Parameters*/
 		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
@@ -2318,7 +2319,7 @@ bool FWacomUIRunMenuCardDropAcceptedZoneSpec::RunTest(const FString& /*Parameter
 		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
@@ -2380,7 +2381,7 @@ bool FWacomUIRunMenuCardDropReleaseDestroysSpec::RunTest(const FString& /*Parame
 		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
@@ -2441,7 +2442,7 @@ bool FWacomUIRunMenuCardDropMenuHandledDoesNotDefaultDestroySpec::RunTest(const 
 		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
@@ -2513,7 +2514,7 @@ bool FWacomUIRunMenuCardDropMenuHandledFailureSpec::RunTest(const FString& /*Par
 		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
@@ -2582,7 +2583,7 @@ bool FWacomUIRunFirstPersonEconomyRevisionSkipsDefaultSnapshotSpec::RunTest(cons
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -2633,7 +2634,7 @@ bool FWacomUIRunFirstPersonDefaultSourceRefreshKeyBreaksSkipSpec::RunTest(const 
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -2704,7 +2705,7 @@ bool FWacomUIRunFirstPersonProviderLeaseUnchangedRevisionSkipsSpec::RunTest(cons
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -2765,7 +2766,7 @@ bool FWacomUIRunFirstPersonProviderLeaseRefreshKeyBreaksSkipSpec::RunTest(const 
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang, Other });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -2826,7 +2827,7 @@ bool FWacomUIRunFirstPersonProviderLeaseEconomyRevisionSkipsSpec::RunTest(const 
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -2880,7 +2881,7 @@ bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionRefreshesSpec::RunTest(co
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -2942,7 +2943,7 @@ bool FWacomUIRunFirstPersonProviderLeaseUnchangedCandidatesUseStateRefreshSpec::
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -3007,7 +3008,7 @@ bool FWacomUIRunFirstPersonProviderLeaseStorageRevisionCanClearSpec::RunTest(con
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -3067,8 +3068,8 @@ bool FWacomUIRunFirstPersonProviderLeaseRequestOrSessionResetsGateSpec::RunTest(
 
 	TStrongObjectPtr<URunSession> FirstRun(NewObject<URunSession>());
 	TStrongObjectPtr<URunSession> SecondRun(NewObject<URunSession>());
-	TestTrue(TEXT("First run initializes"), FirstRun->Initialize(FirstCharacter));
-	TestTrue(TEXT("Second run initializes"), SecondRun->Initialize(SecondCharacter));
+	TestTrue(TEXT("First run initializes"), InitializeRunSessionForTest(*FirstRun, FirstCharacter).IsOk());
+	TestTrue(TEXT("Second run initializes"), InitializeRunSessionForTest(*SecondRun, SecondCharacter).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -3138,7 +3139,7 @@ bool FWacomUIRunFirstPersonProviderLeaseManualAndSuppressionBypassSpec::RunTest(
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
 	TStrongObjectPtr<UWacomRunFirstPersonCardSourceSpecProbeComponent> Source(
@@ -3204,7 +3205,7 @@ bool FWacomUIRunFirstPersonStorageRevisionRefreshesDefaultSourceSpec::RunTest(co
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -3262,8 +3263,8 @@ bool FWacomUIRunFirstPersonRunSessionSwitchResetsRevisionGateSpec::RunTest(const
 
 	TStrongObjectPtr<URunSession> FirstRun(NewObject<URunSession>());
 	TStrongObjectPtr<URunSession> SecondRun(NewObject<URunSession>());
-	TestTrue(TEXT("First run initializes"), FirstRun->Initialize(FirstCharacter));
-	TestTrue(TEXT("Second run initializes"), SecondRun->Initialize(SecondCharacter));
+	TestTrue(TEXT("First run initializes"), InitializeRunSessionForTest(*FirstRun, FirstCharacter).IsOk());
+	TestTrue(TEXT("Second run initializes"), InitializeRunSessionForTest(*SecondRun, SecondCharacter).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -3302,7 +3303,7 @@ bool FWacomUIRunFirstPersonManualAndSuppressionBypassRevisionGateSpec::RunTest(c
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Card, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -3365,7 +3366,7 @@ bool FWacomUIRunFirstPersonNewDefaultCardGetsRunHandEnterSpec::RunTest(const FSt
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Initial, Pack });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor(
 		NewObject<UWacomFirstPersonCardAnchorComponent>());
@@ -3431,7 +3432,7 @@ bool FWacomUIRunMenuCardDropValidationFailsSpec::RunTest(const FString& /*Parame
 		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());
@@ -3495,7 +3496,7 @@ bool FWacomUIRunMenuCardDropRefreshesLeaseSpec::RunTest(const FString& /*Paramet
 	UCardDefinition* Pack = WacomRunFirstPersonCardLayerSpec::MakeTypeAContainerCard(Fx, 2);
 	UCharacterDefinition* Character = Fx.MakeCharacter(nullptr, nullptr, { Fang, Fang, Pack });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	WacomRunFirstPersonCardLayerSpec::ResetRunOwnedZones(State);
 	State.Backpack = {
@@ -3561,7 +3562,7 @@ bool FWacomUIRunMenuCardDropNoCandidatesClearsLeaseSpec::RunTest(const FString& 
 		Fx, TEXT("PoisonFang"), TEXT("Poison Fang"), 0);
 	UCharacterDefinition* Character = WacomRunFirstPersonCardLayerSpec::MakePaymentTestCharacter(Fx, Fang);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC.Get(), Run.Get());

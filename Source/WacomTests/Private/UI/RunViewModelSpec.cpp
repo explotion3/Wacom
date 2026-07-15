@@ -80,6 +80,7 @@ bool FWacomUIRunViewModelSetterBroadcastsSpec::RunTest(const FString& /*Paramete
 	TStrongObjectPtr<UWacomRunViewModel> VM(NewObject<UWacomRunViewModel>());
 
 	FFieldChangeCounter Wound(VM.Get(), TEXT("PressureWound"));
+	FFieldChangeCounter ActionPoints(VM.Get(), TEXT("RemainingActionPoints"));
 
 	TestEqual(TEXT("初始值"),  VM->GetPressureWound(), 0);
 	TestEqual(TEXT("初始 broadcast 0 次"), Wound.GetCount(), 0);
@@ -91,6 +92,11 @@ bool FWacomUIRunViewModelSetterBroadcastsSpec::RunTest(const FString& /*Paramete
 	VM->SetPressureWound(10);
 	TestEqual(TEXT("再次 Set 后值变 10"), VM->GetPressureWound(), 10);
 	TestEqual(TEXT("再次广播"), Wound.GetCount(), 2);
+
+	VM->SetRemainingActionPoints(4);
+	TestEqual(TEXT("Action Point setter updates the formal field"),
+		VM->GetRemainingActionPoints(), 4);
+	TestEqual(TEXT("Action Point field broadcasts once"), ActionPoints.GetCount(), 1);
 
 	return true;
 }

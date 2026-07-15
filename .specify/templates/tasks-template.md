@@ -181,13 +181,13 @@ without later stories]
 - [ ] TXXX Run compile validation:
 
 ```powershell
-& 'E:\UE_5.7\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
+& 'E:\UE_5.8\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
 ```
 
 - [ ] TXXX Run focused automation validation:
 
 ```powershell
-& 'E:\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests [PREFIX]; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests [PREFIX]; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
 - [ ] TXXX Run `specs/[###-feature-name]/quickstart.md` manual/editor

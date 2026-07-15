@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "RunSession.h"
@@ -67,7 +68,7 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 
 	// --- Session A：填数据，Save ---
 	TStrongObjectPtr<URunSession> A(NewObject<URunSession>());
-	A->Initialize(Char);
+	InitializeRunSessionForTest(*A, Char).IsOk();
 
 	FRunState& SA = FWacomRunSessionTestAccess::GetMutableRunState(*A.Get());
 	SA.BattleSeed = 4242;
@@ -83,6 +84,7 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	TestNotNull(TEXT("BuildSaveGameFromRunState non-null"), Sg);
 	if (!Sg) { return false; }
 
+	TestEqual(TEXT("Save schema remains version 3"), UWacomSaveGame::CurrentSaveVersion, 3);
 	TestEqual(TEXT("SaveVersion == Current"), Sg->SaveVersion, UWacomSaveGame::CurrentSaveVersion);
 	TestEqual(TEXT("BattleSeed passthrough"), Sg->BattleSeed, 4242);
 	TestTrue(TEXT("bRunActive passthrough"), Sg->bRunActive);
@@ -91,7 +93,7 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 
 	// Apply 回一个新 Session B（Transient 对象 FSoftObjectPath::TryLoad 走内存查找，能找到）
 	TStrongObjectPtr<URunSession> B(NewObject<URunSession>());
-	B->Initialize(Char);  // 先给 Character，不影响后续 Apply 会覆盖
+	InitializeRunSessionForTest(*B, Char).IsOk();  // 先给 Character，不影响后续 Apply 会覆盖
 
 	const bool bApplied = B->ApplySaveGameToRunState(Sg);
 	TestTrue(TEXT("ApplySaveGameToRunState ok"), bApplied);
@@ -109,13 +111,26 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	TestTrue(TEXT("PlayerTransform rotation roundtrip"),
 		SB.PlayerTransform.Rotator().Equals(FRotator(0, 90, 0)));
 
+	// Schema 3 明确不持久化正式探索图状态。读档只恢复旧 Run/卡牌字段；
+	// Journey/Floor/Node 必须由未来独立存档切片定义新 schema 后才能恢复。
+	TestNull(TEXT("Schema 3 does not restore Journey"),
+		SB.ExplorationState.JourneyDefinition.Get());
+	TestTrue(TEXT("Schema 3 does not restore FloorId"),
+		SB.ExplorationState.CurrentFloorId.IsNone());
+	TestTrue(TEXT("Schema 3 does not restore NodeId"),
+		SB.ExplorationState.CurrentNodeId.IsNone());
+	TestEqual(TEXT("Schema 3 does not restore floor progress"),
+		SB.ExplorationState.FloorProgress.Num(), 0);
+	TestEqual(TEXT("Schema 3 does not restore exploration version"),
+		SB.ExplorationState.ExplorationStateVersion, 0);
+
 	// ---- 版本拒绝：构造一个 SaveVersion > Current 的 SaveGame ----
 	{
 		UWacomSaveGame* FutureSg = A->BuildSaveGameFromRunState();
 		FutureSg->SaveVersion = UWacomSaveGame::CurrentSaveVersion + 1;
 
 		TStrongObjectPtr<URunSession> C(NewObject<URunSession>());
-		C->Initialize(Char);
+		InitializeRunSessionForTest(*C, Char).IsOk();
 		const bool bOk = C->ApplySaveGameToRunState(FutureSg);
 		TestFalse(TEXT("Future SaveVersion rejected"), bOk);
 	}
@@ -137,7 +152,7 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 		OldSg2->SaveVersion = 0;
 
 		TStrongObjectPtr<URunSession> MigSession(NewObject<URunSession>());
-		MigSession->Initialize(Char);
+		InitializeRunSessionForTest(*MigSession, Char).IsOk();
 		const bool bAppliedOld = MigSession->ApplySaveGameToRunState(OldSg2);
 		TestTrue(TEXT("ApplySaveGameToRunState accepts v0 via migration"), bAppliedOld);
 		TestEqual(TEXT("Migrated run state BattleSeed"),
@@ -427,7 +442,7 @@ bool FWacomRunSaveGameV2InstanceZoneRoundtripSpec::RunTest(const FString& /*Para
 		{ TypeA, TypeB, BattleNative });
 
 	TStrongObjectPtr<URunSession> Source(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize source"), Source->Initialize(Char));
+	TestTrue(TEXT("Initialize source"), InitializeRunSessionForTest(*Source, Char).IsOk());
 
 	const FGuid BOwnerId = Source->GetRunState().SpecialZones[0].OwnerInstanceId;
 	Source->AcquireCardToRun(BackpackOnly);

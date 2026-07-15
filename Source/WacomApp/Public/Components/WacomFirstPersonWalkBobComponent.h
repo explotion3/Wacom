@@ -20,7 +20,7 @@ class WACOMAPP_API UWacomFirstPersonWalkBobComponent : public UActorComponent
 public:
 	UWacomFirstPersonWalkBobComponent();
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Walk Bob", meta = (ToolTip = "是否启用第一人称走路晃动。关闭后组件始终输出零偏移，不影响 RunTunnel 移动轨迹。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Walk Bob", meta = (ToolTip = "是否启用第一人称走路晃动。关闭后组件始终输出零偏移，不影响 Run Path 移动轨迹。"))
 	bool bEnableWalkBob = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Walk Bob|Legacy", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "5.0", Units = "Hz", ToolTip = "兼容旧配置的参数，当前脚步曲线不再使用该值；脚步快慢由 StepDistanceCm 和实际样条移动距离决定。"))

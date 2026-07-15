@@ -157,12 +157,16 @@ bool UWacomRunWorldCardDropReceiverComponent::SubmitRunWorldCardDrop_Implementat
 		BuildRunWorldCardDropRequest_Implementation(
 			PersistentId,
 			SourceCardInstanceId);
-	const bool bSubmitted = Run->SubmitRunWorldCardInteraction(Request);
-	if (!bSubmitted)
+	const FRunTreasureSettlementResult Result =
+		Run->SubmitRunWorldCardInteraction(Request);
+	if (!Result.bSucceeded)
 	{
-		OutValidation = BuildReceiverReject(TEXT("SubmitFailed"));
+		OutValidation = BuildReceiverReject(
+			Result.DisabledReason.IsNone()
+				? FName(TEXT("SubmitFailed"))
+				: Result.DisabledReason);
 	}
-	return bSubmitted;
+	return Result.bSucceeded;
 }
 
 bool UWacomRunWorldCardDropReceiverComponent::HasPositiveCardFilter() const

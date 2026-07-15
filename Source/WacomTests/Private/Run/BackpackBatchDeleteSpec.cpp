@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -31,7 +32,7 @@ URunSession* MakeBatchDeleteRun(UObject* Outer, const TArray<UCardDefinition*>& 
 	Character->CharacterId = TEXT("Backpack.BatchDelete.Character");
 	Character->StarterDeck = Starter;
 	URunSession* Run = NewObject<URunSession>(Outer);
-	return Run->Initialize(Character) ? Run : nullptr;
+	return InitializeRunSessionForTest(*Run, Character).IsOk() ? Run : nullptr;
 }
 
 FGuid FindDeleteCardId(const FRunState& State, const UCardDefinition* Definition, EZoneKind* OutZone = nullptr)

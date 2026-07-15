@@ -2,12 +2,11 @@
 
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 
-#include "Actors/WacomRunTunnelSegmentActor.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomCursorLookDriverComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Engine/GameViewportClient.h"
 #include "GameFramework/PlayerController.h"
@@ -119,7 +118,7 @@ namespace
 
 	bool IsCameraStageAnchorMode(EWacomFirstPersonCardAnchorMode Mode)
 	{
-		return Mode == EWacomFirstPersonCardAnchorMode::RunTunnel
+		return Mode == EWacomFirstPersonCardAnchorMode::RunPath
 			|| Mode == EWacomFirstPersonCardAnchorMode::BattleCamera
 			|| Mode == EWacomFirstPersonCardAnchorMode::ViewStageBlend;
 	}
@@ -1881,14 +1880,16 @@ bool UWacomFirstPersonCardAnchorComponent::ResolveBaseAnchor(
 		}
 	}
 
-	if (const UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent())
+	if (const UWacomRunPathTraversalComponent* RunPath =
+		Character->GetRunPathTraversalComponent())
 	{
-		if (RunTunnel->IsRunTunnelActive() && !RunTunnel->IsRunTunnelSuspended())
+		const EWacomRunPathTraversalState PathState = RunPath->GetTraversalState();
+		if (PathState == EWacomRunPathTraversalState::Anchored
+			|| PathState == EWacomRunPathTraversalState::Traversing)
 		{
-			if (const AWacomRunTunnelSegmentActor* Segment = RunTunnel->GetActiveSegment())
+			if (RunPath->TryGetCurrentViewTransform(OutBaseTransform))
 			{
-				OutBaseTransform = Segment->GetSplineTransformAtDistance(RunTunnel->GetDistanceAlongSpline());
-				OutMode = EWacomFirstPersonCardAnchorMode::RunTunnel;
+				OutMode = EWacomFirstPersonCardAnchorMode::RunPath;
 				OutFallbackReason = NAME_None;
 				return true;
 			}
@@ -1917,9 +1918,9 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureTickPrerequisites()
 {
 	if (const AWacomPlayerCharacter* Character = GetOwnerCharacter())
 	{
-		if (UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent())
+		if (UWacomRunPathTraversalComponent* RunPath = Character->GetRunPathTraversalComponent())
 		{
-			PrimaryComponentTick.AddPrerequisite(RunTunnel, RunTunnel->PrimaryComponentTick);
+			PrimaryComponentTick.AddPrerequisite(RunPath, RunPath->PrimaryComponentTick);
 		}
 		if (UWacomBattleCameraLookComponent* BattleCamera = Character->GetBattleCameraLookComponent())
 		{
@@ -2385,8 +2386,8 @@ FString UWacomFirstPersonCardAnchorComponent::AnchorModeToString(EWacomFirstPers
 		return TEXT("BattleCamera");
 	case EWacomFirstPersonCardAnchorMode::ViewStageBlend:
 		return TEXT("ViewStageBlend");
-	case EWacomFirstPersonCardAnchorMode::RunTunnel:
-		return TEXT("RunTunnel");
+	case EWacomFirstPersonCardAnchorMode::RunPath:
+		return TEXT("RunPath");
 	case EWacomFirstPersonCardAnchorMode::CameraFallback:
 		return TEXT("CameraFallback");
 	case EWacomFirstPersonCardAnchorMode::Invalid:

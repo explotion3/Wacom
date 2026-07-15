@@ -14,7 +14,7 @@ enum class EWacomRunEventConditionType : uint8
 {
 	None,
 	MinGold,
-	MinNodeCount,
+	MinActionPoints,
 	MaxPressure,
 	HasCard,
 	MissingCard,
@@ -27,15 +27,26 @@ enum class EWacomRunEventConditionType : uint8
 UENUM(BlueprintType)
 enum class EWacomRunEventEffectType : uint8
 {
-	None,
-	GainCard,
-	AddGold,
-	AddPressure,
-	ConsumeNode,
-	RemoveCard,
-	MarkEventCompleted,
-	SetRunFlag,
-	ClearRunFlag,
+	None = 0,
+	GainCard = 1,
+	AddGold = 2,
+	AddPressure = 3,
+	RemoveCard = 5,
+	MarkEventCompleted = 6,
+	SetRunFlag = 7,
+	ClearRunFlag = 8,
+};
+
+/** RunEvent 选项对探索行动点的显式成本策略。 */
+UENUM(BlueprintType)
+enum class EWacomRunEventActionPointPolicy : uint8
+{
+	/** 终结选项消耗 1 点；非终结选项免费。 */
+	Automatic,
+	/** 无论是否终结事件都不消耗行动点。 */
+	Free,
+	/** 使用 FixedActionPointCost；正成本选项必须终结事件。 */
+	Fixed,
 };
 
 /** 轻量事件图选项条件。Run 层执行时按类型解释，DataAsset 只保存静态配置。 */
@@ -49,9 +60,9 @@ struct WACOMDATA_API FWacomRunEventConditionDefinition
 		meta = (ToolTip = "条件类型。None 表示该条条件被忽略。"))
 	EWacomRunEventConditionType Type = EWacomRunEventConditionType::None;
 
-	/** 条件数值。MinGold/MinNodeCount 表示至少需要的数量；MaxPressure 表示压力必须小于等于该值。 */
+	/** 条件数值。MinGold/MinActionPoints 表示至少需要的数量；MaxPressure 表示压力必须小于等于该值。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
-		meta = (ToolTip = "条件数值。MinGold/MinNodeCount 表示至少需要的数量；MaxPressure 表示压力必须小于等于该值。建议范围 0-100。",
+		meta = (ToolTip = "条件数值。MinGold/MinActionPoints 表示至少需要的数量；MaxPressure 表示压力必须小于等于该值。建议范围 0-100。",
 			ClampMin = "0", UIMin = "0", UIMax = "100"))
 	int32 Value = 0;
 
@@ -92,9 +103,9 @@ struct WACOMDATA_API FWacomRunEventEffectDefinition
 		meta = (ToolTip = "卡牌目标，仅 GainCard/RemoveCard 使用。GainCard 会获得该卡；RemoveCard 会从玩家拥有区永久移除一张该卡。"))
 	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
 
-	/** 效果数值。AddGold 可正可负；AddPressure 为压力增量；ConsumeNode 为消耗节点数。 */
+	/** 效果数值。AddGold 可正可负；AddPressure 为压力增量。行动点成本由 Choice 的 ActionPointPolicy 单独定义。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
-		meta = (ToolTip = "效果数值。AddGold 可正可负；AddPressure 为压力增量；ConsumeNode 为消耗节点数。建议范围 -100 到 100。",
+		meta = (ToolTip = "效果数值。AddGold 可正可负；AddPressure 为压力增量。行动点成本由 Choice 的 ActionPointPolicy 单独定义。建议范围 -100 到 100。",
 			ClampMin = "-100", ClampMax = "100", UIMin = "-10", UIMax = "10"))
 	int32 Value = 0;
 
@@ -177,9 +188,19 @@ struct WACOMDATA_API FWacomRunEventChoiceDefinition
 		meta = (ToolTip = "可选卡牌支付合同。开启后该选项必须通过 first-person 菜单卡拖拽提交，不能普通点击提交。"))
 	FWacomRunEventCardPaymentDefinition CardPayment;
 
+	/** 本选项的行动点成本策略。Automatic：终结事件消耗 1 点，非终结选项免费。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Action Points",
+		meta = (ToolTip = "本选项的行动点成本策略。Automatic：终结事件消耗 1 点，非终结选项免费；Free：始终免费；Fixed：使用 FixedActionPointCost。"))
+	EWacomRunEventActionPointPolicy ActionPointPolicy = EWacomRunEventActionPointPolicy::Automatic;
+
+	/** Fixed 策略的行动点成本。正成本选项必须关闭或完成事件，避免跨节点重复扣费。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent|Action Points",
+		meta = (ToolTip = "Fixed 策略的行动点成本，单位为行动点。建议 0-2；运行时要求非负，正成本选项必须关闭或完成事件。"))
+	int32 FixedActionPointCost = 1;
+
 	/** 选中后依次执行的效果。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|RunEvent",
-		meta = (ToolTip = "选中后依次执行的效果。支持获得/移除卡牌、金币变化、压力变化、消耗节点、标记事件完成和设置/清除 Run 标记。"))
+		meta = (ToolTip = "选中后依次执行的效果。支持获得/移除卡牌、金币变化、压力变化、标记事件完成和设置/清除 Run 标记。行动点成本由 ActionPointPolicy 定义。"))
 	TArray<FWacomRunEventEffectDefinition> Effects;
 
 	/** 执行后跳转到的 Node。为空且不关闭事件时，会留在当前 Node。 */

@@ -10,6 +10,9 @@ class UTextBlock;
 class UProgressBar;
 class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
+#if WITH_AUTOMATION_TESTS
+struct FWacomExplorationHUDInputTestAccess;
+#endif
 
 /**
  * 探索关卡 HUD（C++ fallback 布局 + 读 ViewModel）。
@@ -23,7 +26,8 @@ class UWacomRunViewModelProvider;
  *
  * WBP 子类可替代布局并通过 ViewBinding 绑定字段；C++ 保留 fallback 和输入协议。
  *
- * 输入：Game / CapturePermanently（探索期游戏输入）。
+ * 输入：GameAndUI / NoCapture；激活后下一帧把 Slate 焦点交给游戏视口，
+ * 保持可见鼠标的同时让移动与鼠标视角无需额外点击即可生效。
  */
 UCLASS(Blueprintable)
 class WACOMAPP_API UWacomExplorationHUD : public UWacomActivatableWidget
@@ -44,6 +48,7 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeOnActivated() override;
+	virtual void NativeOnDeactivated() override;
 
 	virtual TOptional<FUIInputConfig> GetDesiredInputConfig() const override;
 
@@ -57,11 +62,18 @@ protected:
 	void TrySubscribeAndRefresh();
 
 private:
+	void QueueGameViewportFocus();
+	void ApplyGameViewportFocus();
+	void CancelPendingGameViewportFocus();
+
 	UWacomRunViewModelProvider* GetProvider() const;
 	UWacomRunViewModel* GetViewModel() const;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomRunViewModelProvider> SubscribedProvider = nullptr;
+
+	FTimerHandle PendingGameViewportFocusTimerHandle;
+	bool bGameViewportFocusPending = false;
 
 	// ---- C++ 默认布局占位（WBP 可替代）----
 
@@ -88,4 +100,8 @@ private:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<class UBorder> InteractToastBg;
 	/** 交互 Toast 文字。BindWidgetOptional。 */
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> InteractToastText;
+
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomExplorationHUDInputTestAccess;
+#endif
 };

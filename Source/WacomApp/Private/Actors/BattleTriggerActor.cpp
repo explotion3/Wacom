@@ -7,6 +7,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
+#include "Components/WacomRunMapNodeBindingComponent.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
@@ -294,8 +295,21 @@ void ABattleTriggerActor::TryActivate(AWacomPlayerController* PC)
 	PC->RequestEnterBattle(this);
 }
 
-FText ABattleTriggerActor::GetInteractPromptText_Implementation(AWacomPlayerController* /*PC*/) const
+FText ABattleTriggerActor::GetInteractPromptText_Implementation(AWacomPlayerController* PC) const
 {
+	FName FailureReason;
+	if (!IsAvailableAtBoundRunMapNode(PC, &FailureReason))
+	{
+		if (FailureReason == TEXT("BoundNodeNotCurrent"))
+		{
+			return LOCTEXT("ReachBattleNodeInteractPrompt", "抵达该节点后可战斗");
+		}
+		if (FailureReason == TEXT("ExplorationActivityActive"))
+		{
+			return LOCTEXT("FinishCurrentActionInteractPrompt", "请先完成当前行动");
+		}
+		return LOCTEXT("BattleUnavailableInteractPrompt", "战斗暂不可用");
+	}
 	return LOCTEXT("InteractPrompt", "按 E 战斗");
 }
 
@@ -306,6 +320,23 @@ FText ABattleTriggerActor::GetHoverPromptText(AWacomPlayerController* PC) const
 		return DestroyedHoverPromptText.IsEmpty()
 			? LOCTEXT("FallbackDestroyedHoverPrompt", "战斗已结束")
 			: DestroyedHoverPromptText;
+	}
+	FName FailureReason;
+	if (!IsAvailableAtBoundRunMapNode(PC, &FailureReason))
+	{
+		if (FailureReason == TEXT("BoundNodeNotCurrent"))
+		{
+			return LOCTEXT("ReachBattleNodeHoverPrompt", "抵达该战斗节点后可进入战斗");
+		}
+		if (FailureReason == TEXT("ExplorationActivityActive"))
+		{
+			return LOCTEXT("FinishCurrentActionHoverPrompt", "请先完成当前行动");
+		}
+		if (FailureReason == TEXT("BoundNodeResolved"))
+		{
+			return LOCTEXT("ResolvedBattleNodeHoverPrompt", "战斗已结束");
+		}
+		return LOCTEXT("BattleUnavailableHoverPrompt", "战斗暂不可用");
 	}
 	return HoverPromptText.IsEmpty()
 		? LOCTEXT("FallbackHoverPrompt", "点击战斗")
@@ -649,7 +680,10 @@ FVector ABattleTriggerActor::GetInteractLocation_Implementation(AWacomPlayerCont
 
 bool ABattleTriggerActor::CanInteract_Implementation(AWacomPlayerController* PC) const
 {
-	return PC && HasConfiguredBattleDefinition();
+	return PC
+		&& HasConfiguredBattleDefinition()
+		&& !IsDestroyedFor(PC)
+		&& IsAvailableAtBoundRunMapNode(PC);
 }
 
 bool ABattleTriggerActor::TryInteract_Implementation(AWacomPlayerController* PC)
@@ -749,7 +783,15 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	}
 	else
 	{
-		View.LastDebugResult = TEXT("Ok");
+		FName BoundNodeFailureReason;
+		if (!IsAvailableAtBoundRunMapNode(PC, &BoundNodeFailureReason))
+		{
+			View.LastDebugResult = BoundNodeFailureReason;
+		}
+		else
+		{
+			View.LastDebugResult = TEXT("Ok");
+		}
 	}
 
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
@@ -944,6 +986,76 @@ bool ABattleTriggerActor::IsDestroyedFor(AWacomPlayerController* PC) const
 		return Run->IsTriggerDestroyed(PersistentId);
 	}
 	return false;
+}
+
+bool ABattleTriggerActor::IsAvailableAtBoundRunMapNode(
+	AWacomPlayerController* PC,
+	FName* OutFailureReason) const
+{
+	auto Reject = [OutFailureReason](const FName Reason)
+	{
+		if (OutFailureReason)
+		{
+			*OutFailureReason = Reason;
+		}
+		return false;
+	};
+
+	if (OutFailureReason)
+	{
+		*OutFailureReason = NAME_None;
+	}
+
+	const UWacomRunMapNodeBindingComponent* Binding =
+		FindComponentByClass<UWacomRunMapNodeBindingComponent>();
+	if (!Binding)
+	{
+		// Older standalone BattleTriggers remain usable until their scene is migrated
+		// to the authoritative Run map binding contract.
+		return true;
+	}
+	if (Binding->NodeId.IsNone() || Binding->NodeType != EWacomMapNodeType::Encounter)
+	{
+		return Reject(TEXT("InvalidRunMapNodeBinding"));
+	}
+	if (!PC)
+	{
+		return Reject(TEXT("MissingPlayerController"));
+	}
+	URunSession* Run = PC->GetRunSession();
+	if (!Run)
+	{
+		return Reject(TEXT("MissingRunSession"));
+	}
+
+	const FRunExplorationSnapshot Snapshot = Run->BuildExplorationSnapshot();
+	if (Snapshot.ActiveActivityKind != ERunExplorationActivityKind::None)
+	{
+		return Reject(TEXT("ExplorationActivityActive"));
+	}
+	if (!Snapshot.CurrentNode.IsValid() || Snapshot.CurrentNode.NodeId != Binding->NodeId)
+	{
+		return Reject(TEXT("BoundNodeNotCurrent"));
+	}
+
+	const FRunMapNodeSnapshot* CurrentNode = Snapshot.Nodes.FindByPredicate(
+		[&Snapshot](const FRunMapNodeSnapshot& Node)
+		{
+			return Node.Handle == Snapshot.CurrentNode;
+		});
+	if (!CurrentNode || CurrentNode->NodeType != EWacomMapNodeType::Encounter)
+	{
+		return Reject(TEXT("BoundNodeTypeMismatch"));
+	}
+	if (CurrentNode->Lifecycle == ERunMapNodeLifecycle::Resolved)
+	{
+		return Reject(TEXT("BoundNodeResolved"));
+	}
+	if (CurrentNode->Lifecycle != ERunMapNodeLifecycle::Visited)
+	{
+		return Reject(TEXT("BoundNodeNotVisited"));
+	}
+	return true;
 }
 
 #undef LOCTEXT_NAMESPACE

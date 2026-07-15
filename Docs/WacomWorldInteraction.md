@@ -50,9 +50,10 @@ Actor 和 Widget 可以提供 target handle、debug view、hover prompt 和 prev
 ### Authoring 口径
 
 - 正式关卡推荐使用 Definition 驱动的入口：`ABattleTriggerActor.EncounterDefinition`、`AWacomShopTriggerActor.ShopDefinition`、`AWacomRunEventTriggerActor.EventDefinition`、`AWacomRunRewardPickupActor.PickupDefinition`、`AWacomRunKeyChestActor.CardInteractionDefinition`。
+- 当 Actor 绑定 Logical Map Node 时，上述 Definition 是复用现有 Trigger / Screen flow 的 façade mirror；`UWacomFloorMapDefinition` typed payload 是规则真相，Scene Validator 会阻止两者不一致。
 - `ABattleTriggerActor` 必须通过 `EncounterDefinition` 进入战斗，并用 `SceneEnemyHostSlots` 完成 Encounter enemy slot 到场景 Host 的映射。
-- `AWacomShopTriggerActor` 可选配置 `ShopEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到商店第一人称 View Pose，再打开 ShopScreen；关闭后先退 UI，再回 RunTunnel。它不改变 `PersistentId`、`ShopDefinition`、`Offers`、库存持久化或购买规则。
-- `AWacomRunEventTriggerActor` 可选配置 `RunEventEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到事件第一人称 View Pose，再打开 RunEventScreen；关闭后先退 UI，再回 RunTunnel。已完成事件仍只显示完成提示，不会触发 staging；该字段不改变 `PersistentId`、`EventDefinition`、完成状态或选项结算规则。
+- `AWacomShopTriggerActor` 可选配置 `ShopEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到商店第一人称 View Pose，再打开 ShopScreen；关闭后先退 UI，再回当前 Run Path View。它不改变 `PersistentId`、`ShopDefinition`、`Offers`、库存持久化或购买规则。
+- `AWacomRunEventTriggerActor` 可选配置 `RunEventEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到事件第一人称 View Pose，再打开 RunEventScreen；关闭后先退 UI，再回当前 Run Path View。已完成事件仍只显示完成提示，不会触发 staging；该字段不改变 `PersistentId`、`EventDefinition`、完成状态或选项结算规则。
 - Definition 字段语义见 [WacomData.md](./WacomData.md)；生成样例和资产 validator 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)。
 - 专用 Pickup Actor 只作为快速验证入口保留；正式关卡优先使用 Definition 驱动入口，不把快速入口扩展成新的长期制作主线。
 - Blueprint 只放默认外观和可见 primitive，不写 EventGraph 规则逻辑、不直接调用 RunSession。
@@ -91,7 +92,7 @@ Run world click / hover 使用显式 opt-in：
 - receiver 提供正向筛选：`AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空。
 - `URunSession::ValidateRunWorldCardInteraction()` 接受精确 `SourceCardInstanceId`。
 
-成功提交由 `SubmitRunWorldCardInteraction()` 在 RunSession 事务内完成：可选消耗源卡，按 reward payload 发放 Gold / Card，写入 `CompletedRunWorldInteractionIds`，最后广播一次 Run state changed。
+成功提交由 `SubmitRunWorldCardInteraction()` 返回显式 `FRunTreasureSettlementResult`：在同一 working-state 事务内可选消耗源卡、发放 Gold / Card、写完成 ID、消费 1 Action Point 并 Resolve 当前 Treasure 节点，最后最多广播一次 Run state changed。校验失败或重复提交为 0 成本且全部状态不变；receiver 必须显式检查 result，不得只依赖粗粒度广播猜测成功。
 
 失败反馈属于 App 表现层：preview 阶段只更新轻量有效 / 无效反馈；release 命中过目标且提交失败时才发 AppToast。文案优先来自 receiver failure contract，没有 receiver 可询问时由 PlayerController 提供通用配置异常 fallback。
 

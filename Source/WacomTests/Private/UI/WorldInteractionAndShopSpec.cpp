@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
@@ -9,7 +10,7 @@
 #include "Actors/WacomRunRewardPickupActor.h"
 #include "Actors/WacomRunPickupActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
-#include "Actors/WacomRunTunnelSegmentActor.h"
+#include "Actors/WacomRunPathSegmentActor.h"
 #include "Actors/WacomShopTriggerActor.h"
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -19,7 +20,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
+#include "UI/RunPathTraversalTestAccess.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "Components/SplineComponent.h"
 #include "Encounters/EncounterDefinition.h"
@@ -210,14 +212,14 @@ namespace
 		Battle->SceneEnemyHostSlots = { HostSlot };
 	}
 
-	AWacomRunTunnelSegmentActor* SpawnUiRunTunnelSegment(
+	AWacomRunPathSegmentActor* SpawnUiRunPathSegment(
 		UWorld& World,
 		const FVector& Start,
 		const FVector& End)
 	{
-		AWacomRunTunnelSegmentActor* Segment =
-			World.SpawnActor<AWacomRunTunnelSegmentActor>(
-				AWacomRunTunnelSegmentActor::StaticClass(),
+		AWacomRunPathSegmentActor* Segment =
+			World.SpawnActor<AWacomRunPathSegmentActor>(
+				AWacomRunPathSegmentActor::StaticClass(),
 				FTransform::Identity);
 		if (!Segment || !Segment->GetPathSpline())
 		{
@@ -1390,7 +1392,7 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedVisualSpec::RunTest(
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
@@ -1416,7 +1418,7 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedVisualSpec::RunTest(
 	FRunWorldCardInteractionRequest Request =
 		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
 	TestTrue(TEXT("Submit opens chest"),
-		Run->SubmitRunWorldCardInteraction(Request));
+		Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 
 	TestEqual(TEXT("Completed visual scale"),
 		Chest->GetChestVisual()->GetRelativeScale3D(),
@@ -1445,7 +1447,7 @@ bool FWacomUIRunWorldCardDropKeyChestRunStateRefreshSpec::RunTest(
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
@@ -1463,7 +1465,7 @@ bool FWacomUIRunWorldCardDropKeyChestRunStateRefreshSpec::RunTest(
 		FVector(1.f, 1.f, 1.f));
 	FRunWorldCardInteractionRequest Request =
 		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
-	TestTrue(TEXT("Submit before bind"), Run->SubmitRunWorldCardInteraction(Request));
+	TestTrue(TEXT("Submit before bind"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	TestEqual(TEXT("Still closed until player entry binds"),
 		Chest->GetChestVisual()->GetRelativeScale3D(),
 		FVector(1.f, 1.f, 1.f));
@@ -1488,7 +1490,7 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedPromptSpec::RunTest(
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
@@ -1502,7 +1504,7 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedPromptSpec::RunTest(
 
 	FRunWorldCardInteractionRequest Request =
 		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
-	TestTrue(TEXT("Submit opens chest"), Run->SubmitRunWorldCardInteraction(Request));
+	TestTrue(TEXT("Submit opens chest"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 
 	TestTrue(TEXT("Can still interact for prompt"),
 		Chest->CanInteract_Implementation(PC.Get()));
@@ -1533,7 +1535,7 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedSummarySpec::RunTest(
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	InjectRunSession(PC.Get(), Run.Get());
@@ -1548,7 +1550,7 @@ bool FWacomUIRunWorldCardDropKeyChestCompletedSummarySpec::RunTest(
 
 	FRunWorldCardInteractionRequest Request =
 		MakeUiWorldDropChestRequest(*Run, Key.Get(), Chest->PersistentId);
-	TestTrue(TEXT("Submit opens chest"), Run->SubmitRunWorldCardInteraction(Request));
+	TestTrue(TEXT("Submit opens chest"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 
 	const FWacomRunKeyChestDebugView View =
 		Chest->GetRunKeyChestDebugView(PC.Get());
@@ -2217,7 +2219,7 @@ bool FWacomUIRunWorldCardDropPreviewAcceptsSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2269,7 +2271,7 @@ bool FWacomUIRunWorldCardDropPreviewRejectsSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2314,7 +2316,7 @@ bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2356,7 +2358,7 @@ bool FWacomUIRunWorldCardDropReleaseCardRewardToastSpec::RunTest(const FString& 
 	RewardCard->DisplayName = FText::FromString(TEXT("奖励卡"));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2404,7 +2406,7 @@ bool FWacomUIRunWorldCardDropWrongReleaseSpec::RunTest(const FString& /*Paramete
 	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2450,7 +2452,7 @@ bool FWacomUIRunWorldCardDropCompletedReleaseToastSpec::RunTest(const FString& /
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2493,7 +2495,7 @@ bool FWacomUIRunWorldCardDropInvalidReceiverToastSpec::RunTest(const FString& /*
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2539,7 +2541,7 @@ bool FWacomUIRunWorldCardDropMissingReceiverToastSpec::RunTest(
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2583,7 +2585,7 @@ bool FWacomUIRunWorldCardDropPreviewRejectsWithoutToastSpec::RunTest(const FStri
 	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2621,7 +2623,7 @@ bool FWacomUIRunWorldCardDropReleaseAwayNoToastSpec::RunTest(const FString& /*Pa
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2655,7 +2657,7 @@ bool FWacomUIRunWorldCardDropDebugFailureToastSpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<UCardDefinition> Wrong(MakeUiWorldDropCard(GetTransientPackage(), TEXT("WrongCard")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Wrong.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid WrongInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2696,7 +2698,7 @@ bool FWacomUIRunWorldCardDropMenuBlockedSpec::RunTest(const FString& /*Parameter
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2724,7 +2726,7 @@ bool FWacomUIRunWorldCardDropMenuBlockedSpec::RunTest(const FString& /*Parameter
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIRunCardInteractionCameraLookOverrideSpec,
-	"Wacom.UI.WorldInteraction.RunFirstPersonCardCameraLook.HoverInspectAndDragUseRunTunnelOverride",
+	"Wacom.UI.WorldInteraction.RunFirstPersonCardCameraLook.HoverInspectAndDragUseRunPathOverride",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*Parameters*/)
@@ -2740,7 +2742,7 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 	TStrongObjectPtr<UCharacterDefinition> CharacterDef(
 		MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(CharacterDef.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, CharacterDef.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -2751,8 +2753,8 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 	AWacomPlayerCharacter* Pawn = World->SpawnActor<AWacomPlayerCharacter>(
 		AWacomPlayerCharacter::StaticClass(),
 		FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment =
-		SpawnUiRunTunnelSegment(
+	AWacomRunPathSegmentActor* Segment =
+		SpawnUiRunPathSegment(
 			*World,
 			FVector::ZeroVector,
 			FVector(1000.0f, 0.0f, 0.0f));
@@ -2763,13 +2765,13 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 	}
 	PC->SetPawn(Pawn);
 
-	UWacomRunTunnelMovementComponent* Tunnel =
-		Pawn->GetRunTunnelMovementComponent();
-	if (!TestNotNull(TEXT("Run tunnel"), Tunnel))
+	UWacomRunPathTraversalComponent* Tunnel =
+		Pawn->GetRunPathTraversalComponent();
+	if (!TestNotNull(TEXT("Run Path"), Tunnel))
 	{
 		return false;
 	}
-	TestTrue(TEXT("Run tunnel activates"), Tunnel->ActivateRunTunnel(Segment, 0.0f));
+	TestTrue(TEXT("Run Path activates"), FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*Tunnel, Segment, 0.0f));
 
 	FWacomFirstPersonCardPointerView PointerView;
 	PointerView.CardInstanceId = KeyInstanceId;
@@ -2778,15 +2780,15 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerMoved(
 		PC.Get(),
 		PointerView);
-	TestTrue(TEXT("Hover pointer writes run tunnel camera look override"),
-		Tunnel->HasCursorLookOverrideForTest());
+	TestTrue(TEXT("Hover pointer writes Run Path camera look override"),
+		FWacomRunPathTraversalTestAccess::HasCursorLookOverride(*Tunnel));
 	TestEqual(
 		TEXT("Hover pointer override stores normalized pointer"),
-		Tunnel->GetCursorLookOverrideNormalizedForTest(),
+		FWacomRunPathTraversalTestAccess::GetCursorLookOverrideNormalized(*Tunnel),
 		FVector2D(0.25f, -0.35f));
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerPointerLeft(PC.Get());
-	TestFalse(TEXT("Hover pointer leave clears run tunnel camera look override"),
-		Tunnel->HasCursorLookOverrideForTest());
+	TestFalse(TEXT("Hover pointer leave clears Run Path camera look override"),
+		FWacomRunPathTraversalTestAccess::HasCursorLookOverride(*Tunnel));
 
 	FWacomFirstPersonCardDragView DragView =
 		MakeUiWorldDropDragView(FVector2D(100.0f, 100.0f));
@@ -2796,16 +2798,16 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 		PC.Get(),
 		PointerView);
 	TestTrue(TEXT("Hover pointer is active before drag starts"),
-		Tunnel->HasCursorLookOverrideForTest());
+		FWacomRunPathTraversalTestAccess::HasCursorLookOverride(*Tunnel));
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
 		PC.Get(),
 		KeyInstanceId,
 		DragView);
-	TestTrue(TEXT("Inspect keeps run tunnel camera look following the mouse"),
-		Tunnel->HasCursorLookOverrideForTest());
+	TestTrue(TEXT("Inspect keeps Run Path camera look following the mouse"),
+		FWacomRunPathTraversalTestAccess::HasCursorLookOverride(*Tunnel));
 	TestEqual(
 		TEXT("Inspect stores normalized drag pointer"),
-		Tunnel->GetCursorLookOverrideNormalizedForTest(),
+		FWacomRunPathTraversalTestAccess::GetCursorLookOverrideNormalized(*Tunnel),
 		FVector2D(0.40f, -0.20f));
 
 	DragView.GestureState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
@@ -2815,15 +2817,15 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 		KeyInstanceId,
 		DragView);
 	TestEqual(
-		TEXT("Formal drag refreshes run tunnel camera look"),
-		Tunnel->GetCursorLookOverrideNormalizedForTest(),
+		TEXT("Formal drag refreshes Run Path camera look"),
+		FWacomRunPathTraversalTestAccess::GetCursorLookOverrideNormalized(*Tunnel),
 		FVector2D(-0.30f, 0.45f));
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragReleased(
 		PC.Get(),
 		KeyInstanceId,
 		DragView);
-	TestFalse(TEXT("Drag release clears run tunnel camera look override"),
-		Tunnel->HasCursorLookOverrideForTest());
+	TestFalse(TEXT("Drag release clears Run Path camera look override"),
+		FWacomRunPathTraversalTestAccess::HasCursorLookOverride(*Tunnel));
 
 	UWacomFirstPersonCardAnchorComponent* Anchor = Pawn->GetFirstPersonCardAnchorComponent();
 	if (!TestNotNull(TEXT("First-person card anchor"), Anchor))
@@ -2835,7 +2837,7 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 		PC.Get(),
 		PointerView);
 	TestFalse(TEXT("Disabled hover camera look does not write an override"),
-		Tunnel->HasCursorLookOverrideForTest());
+		FWacomRunPathTraversalTestAccess::HasCursorLookOverride(*Tunnel));
 
 	Anchor->bAllowCameraLookDuringCardDrag = false;
 	FWacomPlayerControllerRunInteractionTestAccess::HandleRunFirstPersonCardLayerDragStarted(
@@ -2843,7 +2845,7 @@ bool FWacomUIRunCardInteractionCameraLookOverrideSpec::RunTest(const FString& /*
 		KeyInstanceId,
 		DragView);
 	TestFalse(TEXT("Disabled inspect and drag camera look does not write an override"),
-		Tunnel->HasCursorLookOverrideForTest());
+		FWacomRunPathTraversalTestAccess::HasCursorLookOverride(*Tunnel));
 
 	Segment->Destroy();
 	Pawn->Destroy();
@@ -2860,7 +2862,7 @@ bool FWacomUIRunWorldCardDropMenuLeasePrioritySpec::RunTest(const FString& /*Par
 	TStrongObjectPtr<UCardDefinition> Key(MakeUiWorldDropCard(GetTransientPackage(), TEXT("DebugKey")));
 	TStrongObjectPtr<UCharacterDefinition> Character(MakeUiWorldDropCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 	const FGuid KeyInstanceId = Run->GetRunState().BattleDeck[0].InstanceId;
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
@@ -6223,7 +6225,7 @@ bool FWacomUIRunEventHoverPromptIgnoredDuringRunMenuDragSpec::RunTest(const FStr
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeUiWorldDropCharacter(GetTransientPackage(), DragCard.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::RunEvent).IsOk());
 
 	TStrongObjectPtr<AWacomPlayerControllerProbe> PC(NewObject<AWacomPlayerControllerProbe>());
 	TStrongObjectPtr<AWacomRunEventTriggerClickProbe> Trigger(
@@ -8408,7 +8410,7 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("InsufficientGold")).ToString(),
 		FString(TEXT("金币不足")));
 	TestEqual(TEXT("Node reason text"),
-		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("InsufficientNode")).ToString(),
+		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("InsufficientActionPoints")).ToString(),
 		FString(TEXT("行动点不足")));
 	TestEqual(TEXT("Pressure reason text"),
 		UWacomRunEventPresentationBuilder::FormatDisabledReason(TEXT("PressureTooHigh")).ToString(),
@@ -8501,7 +8503,7 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 	GoldRequirement.RequiredValue = 3;
 	GoldRequirement.CurrentValue = 1;
 	FRunEventChoiceRequirementSnapshot NodeRequirement;
-	NodeRequirement.Kind = ERunEventChoiceRequirementKind::MinNodeCount;
+	NodeRequirement.Kind = ERunEventChoiceRequirementKind::MinActionPoints;
 	NodeRequirement.bSatisfied = true;
 	NodeRequirement.RequiredValue = 1;
 	NodeRequirement.CurrentValue = 2;
@@ -8577,6 +8579,7 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 
 	FRunEventChoiceSnapshot ConsequenceChoice;
 	ConsequenceChoice.ChoiceId = TEXT("ConsequencePreview");
+	ConsequenceChoice.ActionPointCost = 1;
 	FRunEventChoiceConsequenceSnapshot GainCardConsequence;
 	GainCardConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
 	GainCardConsequence.EffectType = EWacomRunEventEffectType::GainCard;
@@ -8594,10 +8597,6 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 	PressureConsequence.EffectType = EWacomRunEventEffectType::AddPressure;
 	PressureConsequence.Amount = 5;
 	PressureConsequence.PressureType = EWacomPressureType::Misdeed;
-	FRunEventChoiceConsequenceSnapshot NodeConsequence;
-	NodeConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
-	NodeConsequence.EffectType = EWacomRunEventEffectType::ConsumeNode;
-	NodeConsequence.Amount = 1;
 	FRunEventChoiceConsequenceSnapshot RemoveCardConsequence;
 	RemoveCardConsequence.Kind = ERunEventChoiceConsequenceKind::Effect;
 	RemoveCardConsequence.EffectType = EWacomRunEventEffectType::RemoveCard;
@@ -8625,7 +8624,6 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 		GoldGainConsequence,
 		GoldLossConsequence,
 		PressureConsequence,
-		NodeConsequence,
 		RemoveCardConsequence,
 		MarkEventConsequence,
 		SetFlagConsequence,
@@ -8637,21 +8635,21 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 	TestEqual(TEXT("Consequence item count"), ConsequenceView.ConsequenceItems.Num(), 11);
 	if (ConsequenceView.ConsequenceItems.Num() == 11)
 	{
-		TestEqual(TEXT("Gain card consequence text"),
+		TestEqual(TEXT("Action point consequence text"),
 			ConsequenceView.ConsequenceItems[0].Text.ToString(),
+			FString(TEXT("消耗行动点：1")));
+		TestEqual(TEXT("Gain card consequence text"),
+			ConsequenceView.ConsequenceItems[1].Text.ToString(),
 			FString(TEXT("获得卡牌：事件提示卡")));
 		TestEqual(TEXT("Gold gain consequence text"),
-			ConsequenceView.ConsequenceItems[1].Text.ToString(),
+			ConsequenceView.ConsequenceItems[2].Text.ToString(),
 			FString(TEXT("获得金币：3")));
 		TestEqual(TEXT("Gold loss consequence text"),
-			ConsequenceView.ConsequenceItems[2].Text.ToString(),
+			ConsequenceView.ConsequenceItems[3].Text.ToString(),
 			FString(TEXT("失去金币：2")));
 		TestEqual(TEXT("Pressure consequence text"),
-			ConsequenceView.ConsequenceItems[3].Text.ToString(),
-			FString(TEXT("恶行 +5")));
-		TestEqual(TEXT("Node consequence text"),
 			ConsequenceView.ConsequenceItems[4].Text.ToString(),
-			FString(TEXT("消耗行动点：1")));
+			FString(TEXT("恶行 +5")));
 		TestEqual(TEXT("Remove card consequence text"),
 			ConsequenceView.ConsequenceItems[5].Text.ToString(),
 			FString(TEXT("交出卡牌：事件提示卡")));
@@ -8674,6 +8672,7 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 
 	FRunEventChoiceResult Result;
 	Result.bSucceeded = true;
+	Result.ActionPointCost = 1;
 	Result.PaidCardDefinition = Card;
 	Result.bEventClosedAfterResolve = true;
 	FRunEventChoiceEffectResult GainCard;
@@ -8689,10 +8688,6 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 	Pressure.PressureType = EWacomPressureType::Misdeed;
 	Pressure.ActualDelta = 3;
 	Pressure.bApplied = true;
-	FRunEventChoiceEffectResult Node;
-	Node.EffectType = EWacomRunEventEffectType::ConsumeNode;
-	Node.ActualDelta = -1;
-	Node.bApplied = true;
 	FRunEventChoiceEffectResult RemoveCard;
 	RemoveCard.EffectType = EWacomRunEventEffectType::RemoveCard;
 	RemoveCard.CardDefinition = Card;
@@ -8702,7 +8697,7 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 	MarkEvent.EffectType = EWacomRunEventEffectType::MarkEventCompleted;
 	MarkEvent.ActualDelta = 1;
 	MarkEvent.bApplied = true;
-	Result.EffectResults = { GainCard, Gold, Pressure, Node, RemoveCard, MarkEvent };
+	Result.EffectResults = { GainCard, Gold, Pressure, RemoveCard, MarkEvent };
 
 	const TArray<FWacomAppToastView> Toasts =
 		UWacomRunEventPresentationBuilder::BuildToastViewsFromChoiceResult(Result);
@@ -8712,8 +8707,8 @@ bool FWacomUIRunEventPresentationBuilderSpec::RunTest(const FString& /*Parameter
 		TestEqual(TEXT("Card toast"), Toasts[0].MessageText.ToString(), FString(TEXT("获得卡牌：事件提示卡")));
 		TestEqual(TEXT("Gold toast"), Toasts[1].MessageText.ToString(), FString(TEXT("获得 2 金币")));
 		TestEqual(TEXT("Pressure toast"), Toasts[2].MessageText.ToString(), FString(TEXT("恶行 +3")));
-		TestEqual(TEXT("Node toast"), Toasts[3].MessageText.ToString(), FString(TEXT("消耗 1 行动点")));
-		TestEqual(TEXT("Remove card toast still works"), Toasts[4].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
+		TestEqual(TEXT("Remove card toast still works"), Toasts[3].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
+		TestEqual(TEXT("Action point toast"), Toasts[4].MessageText.ToString(), FString(TEXT("消耗 1 行动点")));
 		TestEqual(TEXT("Paid card toast appended"), Toasts[5].MessageText.ToString(), FString(TEXT("交出卡牌：事件提示卡")));
 		TestEqual(TEXT("Outcome toast appended"), Toasts[6].MessageText.ToString(), FString(TEXT("事件已结束")));
 	}
@@ -8901,11 +8896,7 @@ bool FWacomUIRunEventChoiceButtonPaymentStatusSpec::RunTest(const FString& /*Par
 	ZeroPressure.Kind = ERunEventChoiceConsequenceKind::Effect;
 	ZeroPressure.EffectType = EWacomRunEventEffectType::AddPressure;
 	ZeroPressure.Amount = 0;
-	FRunEventChoiceConsequenceSnapshot ZeroNode;
-	ZeroNode.Kind = ERunEventChoiceConsequenceKind::Effect;
-	ZeroNode.EffectType = EWacomRunEventEffectType::ConsumeNode;
-	ZeroNode.Amount = 0;
-	ZeroConsequenceChoice.Consequences = { ZeroGold, ZeroPressure, ZeroNode };
+	ZeroConsequenceChoice.Consequences = { ZeroGold, ZeroPressure };
 	Button->SetChoiceSnapshot(ZeroConsequenceChoice);
 	ButtonView = FWacomShopRunEventTestAccess::View(*Button);
 	TestEqual(TEXT("Zero amount consequences remain hidden in fallback list"),
@@ -8987,15 +8978,19 @@ bool FWacomUIRunEventScreenSnapshotAndChoiceSpec::RunTest(const FString& /*Param
 	TestTrue(TEXT("Event completed after choice"), Run->IsRunEventCompleted(TEXT("Event.UI.Screen")));
 	TestFalse(TEXT("Event no longer active after close choice"), Run->IsRunEventActive());
 	TestFalse(TEXT("Close choice deactivates event screen once flow ends"), Screen->IsActivated());
-	TestEqual(TEXT("Close choice emits event ended toast"), ToastWidget->GetVisibleToastCount(), 1);
+	TestEqual(TEXT("Close choice emits event outcome and action-point toasts"), ToastWidget->GetVisibleToastCount(), 2);
 	{
 		const TArray<FWacomAppToastView> Toasts = FWacomUITestAccess::GetCurrentToasts(*ToastWidget);
-		if (Toasts.IsValidIndex(0))
+		bool bFoundEventEndedToast = false;
+		bool bFoundActionPointToast = false;
+		for (const FWacomAppToastView& Toast : Toasts)
 		{
-			TestEqual(TEXT("Close outcome toast text"),
-				Toasts[0].MessageText.ToString(),
-				FString(TEXT("事件已结束")));
+			const FString Message = Toast.MessageText.ToString();
+			bFoundEventEndedToast |= Message == TEXT("事件已结束");
+			bFoundActionPointToast |= Message == TEXT("消耗 1 行动点");
 		}
+		TestTrue(TEXT("Close outcome toast is present"), bFoundEventEndedToast);
+		TestTrue(TEXT("Run-event action-point toast is present"), bFoundActionPointToast);
 	}
 
 	return true;
@@ -9018,7 +9013,7 @@ bool FWacomUIRunEventScreenWbpBindingAuthoringSpec::RunTest(const FString& /*Par
 		Fx.MakeNoopCard(1),
 		{ Bag, Fang });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::RunEvent).IsOk());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(
 		MakeUiRunEventCardPaymentEvent(Run.Get(), Fang));
 	TestTrue(TEXT("Begin payment UI event"),
@@ -9112,7 +9107,7 @@ bool FWacomUIRunEventScreenChoiceListReusesWidgetsSpec::RunTest(const FString& /
 		Fx.MakeNoopCard(1),
 		{ Bag, Fang });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::RunEvent).IsOk());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(
 		MakeUiRunEventCardPaymentEvent(Run.Get(), Fang));
 	TestTrue(TEXT("Begin payment UI event"),
@@ -9191,7 +9186,7 @@ bool FWacomUIRunEventScreenCardPaymentSpec::RunTest(const FString& /*Parameters*
 		Fx.MakeNoopCard(1),
 		{ Bag, Fang, Other });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::RunEvent).IsOk());
 	const FGuid FangId = FindUiStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Fang);
 	const FGuid OtherId = FindUiStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Other);
 	TestTrue(TEXT("Fang instance found"), FangId.IsValid());
@@ -9646,13 +9641,13 @@ bool FWacomUIShopScreenSnapshotAndPurchaseSpec::RunTest(const FString& /*Paramet
 		}));
 	TestTrue(TEXT("Shop visit has purchase"), Run->BuildCurrentShopSnapshot().bHasPurchaseThisVisit);
 
-	const int32 NodesBeforeClose = Run->GetRemainingNodeCount();
+	const int32 ActionPointsBeforeClose = Run->GetRemainingActionPoints();
 	Screen->DeactivateWidget();
 	TestFalse(TEXT("Shop visit closed"), Run->IsShopVisitActive());
 	TestFalse(TEXT("Shop screen deactivates after close flow"), Screen->IsActivated());
-	TestEqual(TEXT("Close after purchase consumes one node"), Run->GetRemainingNodeCount(), NodesBeforeClose - 1);
+	TestEqual(TEXT("Close after purchase adds no delayed cost"), Run->GetRemainingActionPoints(), ActionPointsBeforeClose);
 	Screen->DeactivateWidget();
-	TestEqual(TEXT("Duplicate deactivation does not consume another node"), Run->GetRemainingNodeCount(), NodesBeforeClose - 1);
+	TestEqual(TEXT("Duplicate deactivation remains free"), Run->GetRemainingActionPoints(), ActionPointsBeforeClose);
 
 	return true;
 }
@@ -9915,7 +9910,7 @@ bool FWacomUIShopScreenRunEventRefreshUpdatesPurchasedOfferSpec::RunTest(const F
 	const FGuid OfferId = FWacomShopRunEventTestAccess::OfferView(*Screen, 0).OfferId;
 	TestTrue(TEXT("Offer id valid"), OfferId.IsValid());
 
-	TestTrue(TEXT("Run purchase succeeds"), Run->PurchaseShopOffer(OfferId));
+	TestTrue(TEXT("Run purchase succeeds"), Run->PurchaseShopOffer(OfferId).bSucceeded);
 	FWacomShopScreenAutomationTestView EventRefreshView =
 		FWacomShopRunEventTestAccess::View(*Screen);
 	TestEqual(TEXT("Run event refresh applies purchased state once"), EventRefreshView.OfferRefreshApplyCount, BaselineApplyCount + 1);

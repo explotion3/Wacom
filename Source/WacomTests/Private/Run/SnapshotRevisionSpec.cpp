@@ -1,15 +1,19 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
+#include "Exploration/RunExplorationCommand.h"
+#include "Map/WacomFloorMapDefinition.h"
 #include "RunSession.h"
 #include "RunState.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Testing/WacomRunTimeAutomationTestView.h"
 
 #include "UObject/StrongObjectPtr.h"
 
@@ -204,7 +208,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 	UCharacterDefinition* Character = MakeRevisionCharacter(GetTransientPackage(), { Bag, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize bumps all tracked revisions"), Run->Initialize(Character));
+	TestTrue(TEXT("Initialize bumps all tracked revisions"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::Treasure).IsOk());
 	const FRunUiRevisionSnapshot Initial = CaptureRunUiRevisions(*Run);
 	TestTrue(TEXT("Backpack revision starts marked"), Initial.BackpackStorage > 0);
 	TestTrue(TEXT("Shop revision starts marked"), Initial.Shop > 0);
@@ -237,7 +241,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 	UCardDefinition* SpecialContent = MakeRevisionCard(Fx, TEXT("Revision.SpecialContent"));
 	UCharacterDefinition* SpecialCharacter = MakeRevisionCharacter(GetTransientPackage(), { TypeB, SpecialContent });
 	TStrongObjectPtr<URunSession> SpecialRun(NewObject<URunSession>());
-	TestTrue(TEXT("Special run initializes"), SpecialRun->Initialize(SpecialCharacter));
+	TestTrue(TEXT("Special run initializes"), InitializeRunSessionForTest(*SpecialRun, SpecialCharacter, EWacomMapNodeType::Treasure).IsOk());
 	const FGuid OwnerId = SpecialRun->GetBackpack().IsValidIndex(0)
 		? SpecialRun->GetBackpack()[0].InstanceId
 		: FGuid();
@@ -261,7 +265,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 
 	UCardDefinition* PickupCard = MakeRevisionCard(Fx, TEXT("Revision.PickupCard"));
 	const FRunUiRevisionSnapshot BeforePickup = CaptureRunUiRevisions(*Run);
-	TestTrue(TEXT("Card pickup succeeds"), Run->CollectCardPickup(TEXT("Revision.Pickup.Card"), PickupCard));
+	TestTrue(TEXT("Card pickup succeeds"), Run->CollectCardPickup(TEXT("Revision.Pickup.Card"), PickupCard).bSucceeded);
 	const FRunUiRevisionSnapshot AfterPickup = CaptureRunUiRevisions(*Run);
 	TestTrue(TEXT("Card pickup bumps backpack"), AfterPickup.BackpackStorage > BeforePickup.BackpackStorage);
 	TestEqual(TEXT("Card pickup leaves shop"), AfterPickup.Shop, BeforePickup.Shop);
@@ -272,7 +276,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 	UCardDefinition* WorldReward = MakeRevisionCard(Fx, TEXT("Revision.World.CardReward"));
 	UCharacterDefinition* WorldCharacter = MakeRevisionCharacter(GetTransientPackage(), { WorldBag, Key });
 	TStrongObjectPtr<URunSession> WorldRun(NewObject<URunSession>());
-	TestTrue(TEXT("World run initializes"), WorldRun->Initialize(WorldCharacter));
+	TestTrue(TEXT("World run initializes"), InitializeRunSessionForTest(*WorldRun, WorldCharacter, EWacomMapNodeType::Treasure).IsOk());
 	const FRunUiRevisionSnapshot BeforeWorld = CaptureRunUiRevisions(*WorldRun);
 	TestTrue(TEXT("World card interaction succeeds"),
 		WorldRun->SubmitRunWorldCardInteraction(
@@ -281,7 +285,7 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 				Key,
 				TEXT("Revision.World.Card"),
 				{ MakeCardReward(WorldReward) },
-				true)));
+				true)).bSucceeded);
 	const FRunUiRevisionSnapshot AfterWorld = CaptureRunUiRevisions(*WorldRun);
 	TestTrue(TEXT("World consume/card reward bumps backpack"),
 		AfterWorld.BackpackStorage > BeforeWorld.BackpackStorage);
@@ -290,15 +294,29 @@ bool FWacomRunSnapshotRevisionsBackpackStorageMutationPathsSpec::RunTest(const F
 
 	UCardDefinition* BattleReward = MakeRevisionCard(Fx, TEXT("Revision.BattleReward"));
 	UCharacterDefinition* BattleCharacter = MakeRevisionCharacter(GetTransientPackage(), { Bag });
-	TStrongObjectPtr<URunSession> BattleRun(NewObject<URunSession>());
-	TestTrue(TEXT("Battle run initializes"), BattleRun->Initialize(BattleCharacter));
+	FWacomRunExplorationFixture BattleExploration;
+	UWacomFloorMapDefinition* BattleFloor =
+		BattleExploration.MakeLinearFloor(TEXT("Revision.Battle.Floor"), 1);
+	BattleFloor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+	URunSession* BattleRun = BattleExploration.CreateInitializedSession(
+		BattleCharacter,
+		BattleExploration.MakeJourney({ BattleFloor }, TEXT("Revision.Battle.Journey"))).Session;
+	const FRunExplorationResolution BattleBegin =
+		BattleRun->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+	if (!TestTrue(TEXT("Battle activity begins"),
+		BattleBegin.IsOk() && BattleBegin.NodeActivityTicket.IsSet()))
+	{
+		return false;
+	}
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
 	FBattleGainedCard GainedCard;
 	GainedCard.Definition = BattleReward;
 	Packet.GainedCards.Add(GainedCard);
 	const FRunUiRevisionSnapshot BeforeBattle = CaptureRunUiRevisions(*BattleRun);
-	BattleRun->OnBattleFinishedFromTrigger(Packet, TEXT("Revision.Battle.Trigger"));
+	TestTrue(TEXT("Battle settlement succeeds"),
+		BattleRun->SettleEncounterNodeActivity(
+			BattleBegin.NodeActivityTicket.GetValue(), Packet).IsOk());
 	const FRunUiRevisionSnapshot AfterBattle = CaptureRunUiRevisions(*BattleRun);
 	TestTrue(TEXT("Battle gained card bumps backpack"),
 		AfterBattle.BackpackStorage > BeforeBattle.BackpackStorage);
@@ -333,7 +351,7 @@ bool FWacomRunSnapshotRevisionsEconomyMutationPathsSpec::RunTest(const FString& 
 	TestEqual(TEXT("RemoveGold leaves shop"), AfterRemoveGold.Shop, BeforeRemoveGold.Shop);
 
 	const FRunUiRevisionSnapshot BeforePickup = CaptureRunUiRevisions(*Run);
-	TestTrue(TEXT("Gold pickup succeeds"), Run->CollectGoldPickup(TEXT("Revision.Pickup.Gold"), 3));
+	TestTrue(TEXT("Gold pickup succeeds"), Run->CollectGoldPickup(TEXT("Revision.Pickup.Gold"), 3).bSucceeded);
 	const FRunUiRevisionSnapshot AfterPickup = CaptureRunUiRevisions(*Run);
 	TestTrue(TEXT("Gold pickup bumps economy"), AfterPickup.Economy > BeforePickup.Economy);
 	TestEqual(TEXT("Gold pickup leaves backpack"), AfterPickup.BackpackStorage, BeforePickup.BackpackStorage);
@@ -343,7 +361,7 @@ bool FWacomRunSnapshotRevisionsEconomyMutationPathsSpec::RunTest(const FString& 
 	UCardDefinition* WorldBag = MakeRevisionCard(Fx, TEXT("Revision.World.GoldBag"), 3);
 	UCharacterDefinition* Character = MakeRevisionCharacter(GetTransientPackage(), { WorldBag, Key });
 	TStrongObjectPtr<URunSession> WorldRun(NewObject<URunSession>());
-	TestTrue(TEXT("World economy run initializes"), WorldRun->Initialize(Character));
+	TestTrue(TEXT("World economy run initializes"), InitializeRunSessionForTest(*WorldRun, Character, EWacomMapNodeType::Treasure).IsOk());
 	const FRunUiRevisionSnapshot BeforeWorld = CaptureRunUiRevisions(*WorldRun);
 	TestTrue(TEXT("World gold interaction succeeds"),
 		WorldRun->SubmitRunWorldCardInteraction(
@@ -352,7 +370,7 @@ bool FWacomRunSnapshotRevisionsEconomyMutationPathsSpec::RunTest(const FString& 
 				Key,
 				TEXT("Revision.World.Gold"),
 				{ MakeGoldReward(4) },
-				false)));
+				false)).bSucceeded);
 	const FRunUiRevisionSnapshot AfterWorld = CaptureRunUiRevisions(*WorldRun);
 	TestTrue(TEXT("World gold reward bumps economy"), AfterWorld.Economy > BeforeWorld.Economy);
 	TestEqual(TEXT("World gold reward leaves backpack"), AfterWorld.BackpackStorage, BeforeWorld.BackpackStorage);
@@ -407,7 +425,7 @@ bool FWacomRunSnapshotRevisionsShopMutationPathsSpec::RunTest(const FString& /*P
 	TestEqual(TEXT("BeginShopVisit leaves economy"), AfterBegin.Economy, BeforeBegin.Economy);
 
 	const FRunUiRevisionSnapshot BeforeFailedPurchase = CaptureRunUiRevisions(*Run);
-	TestFalse(TEXT("Unknown offer purchase fails"), Run->PurchaseShopOffer(FGuid::NewGuid()));
+	TestFalse(TEXT("Unknown offer purchase fails"), Run->PurchaseShopOffer(FGuid::NewGuid()).bSucceeded);
 	const FRunUiRevisionSnapshot AfterFailedPurchase = CaptureRunUiRevisions(*Run);
 	TestEqual(TEXT("Failed purchase leaves backpack"),
 		AfterFailedPurchase.BackpackStorage,
@@ -419,14 +437,14 @@ bool FWacomRunSnapshotRevisionsShopMutationPathsSpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Shop has offer"), Snapshot.Offers.Num() == 1);
 	const FGuid OfferId = Snapshot.Offers.IsValidIndex(0) ? Snapshot.Offers[0].OfferId : FGuid();
 	const FRunUiRevisionSnapshot BeforePurchase = CaptureRunUiRevisions(*Run);
-	TestTrue(TEXT("PurchaseShopOffer succeeds"), Run->PurchaseShopOffer(OfferId));
+	TestTrue(TEXT("PurchaseShopOffer succeeds"), Run->PurchaseShopOffer(OfferId).bSucceeded);
 	const FRunUiRevisionSnapshot AfterPurchase = CaptureRunUiRevisions(*Run);
 	TestTrue(TEXT("Purchase bumps backpack"), AfterPurchase.BackpackStorage > BeforePurchase.BackpackStorage);
 	TestTrue(TEXT("Purchase bumps shop"), AfterPurchase.Shop > BeforePurchase.Shop);
 	TestTrue(TEXT("Purchase bumps economy"), AfterPurchase.Economy > BeforePurchase.Economy);
 
 	const FRunUiRevisionSnapshot BeforeRepeatPurchase = CaptureRunUiRevisions(*Run);
-	TestFalse(TEXT("Repeat purchase fails"), Run->PurchaseShopOffer(OfferId));
+	TestFalse(TEXT("Repeat purchase fails"), Run->PurchaseShopOffer(OfferId).bSucceeded);
 	const FRunUiRevisionSnapshot AfterRepeatPurchase = CaptureRunUiRevisions(*Run);
 	TestEqual(TEXT("Repeat purchase leaves backpack"),
 		AfterRepeatPurchase.BackpackStorage,
@@ -459,7 +477,7 @@ bool FWacomRunSnapshotRevisionsRunEventMutationPathsSpec::RunTest(const FString&
 	UCharacterDefinition* Character = MakeRevisionCharacter(GetTransientPackage(), { Bag, PaidCard, RemovedCard });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Event run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Event run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::RunEvent).IsOk());
 
 	FWacomRunEventChoiceDefinition PayChoice;
 	PayChoice.ChoiceId = TEXT("Pay");
@@ -535,16 +553,13 @@ bool FWacomRunSnapshotRevisionsRunEventMutationPathsSpec::RunTest(const FString&
 	AddPressure.Type = EWacomRunEventEffectType::AddPressure;
 	AddPressure.PressureType = TEXT("Wound");
 	AddPressure.Value = 1;
-	FWacomRunEventEffectDefinition ConsumeNode;
-	ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
-	ConsumeNode.Value = 1;
 	FWacomRunEventEffectDefinition SetFlag;
 	SetFlag.Type = EWacomRunEventEffectType::SetRunFlag;
 	SetFlag.FlagId = TEXT("Revision.Flag");
 	FWacomRunEventEffectDefinition ClearFlag;
 	ClearFlag.Type = EWacomRunEventEffectType::ClearRunFlag;
 	ClearFlag.FlagId = TEXT("Revision.Flag");
-	NonSnapshotChoice.Effects = { AddPressure, ConsumeNode, SetFlag, ClearFlag };
+	NonSnapshotChoice.Effects = { AddPressure, SetFlag, ClearFlag };
 	TStrongObjectPtr<UWacomRunEventDefinition> NonSnapshotEvent(
 		MakeRevisionSingleChoiceRunEvent(Run.Get(), NonSnapshotChoice));
 	const FRunUiRevisionSnapshot BeforeNonSnapshot = CaptureRunUiRevisions(*Run);
@@ -570,7 +585,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomRunSnapshotRevisionsNonSnapshotMutationsSpec::RunTest(const FString& /*Parameters*/)
 {
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
+	FWacomRunExplorationFixture Fixture;
+	UWacomFloorMapDefinition* Floor =
+		Fixture.MakeLinearFloor(TEXT("Revision.NonSnapshot.Floor"), 1);
+	Floor->Nodes[0].NodeType = EWacomMapNodeType::RunEvent;
+	const FWacomInitializedRunExplorationSession Initialized = Fixture.CreateInitializedSession(
+		nullptr,
+		Fixture.MakeJourney({ Floor }, TEXT("Revision.NonSnapshot.Journey")));
+	URunSession* Run = Initialized.Session;
 
 	FRunUiRevisionSnapshot Before = CaptureRunUiRevisions(*Run);
 	Run->AddPressure(EWacomPressureType::Wound, 1);
@@ -579,19 +601,23 @@ bool FWacomRunSnapshotRevisionsNonSnapshotMutationsSpec::RunTest(const FString& 
 	TestEqual(TEXT("AddPressure leaves shop"), After.Shop, Before.Shop);
 	TestEqual(TEXT("AddPressure leaves economy"), After.Economy, Before.Economy);
 
+	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
+	TArray<FRunExplorationEvent> TimeEvents;
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, TimeEvents);
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, TimeEvents);
+	FWacomRunTimeAutomationTestView::AdvanceToNextPhase(State, TimeEvents);
+	const int32 ExplorationVersionBefore = Run->BuildExplorationSnapshot().StateVersion;
 	Before = CaptureRunUiRevisions(*Run);
-	Run->ConsumeNode(1);
+	const FRunExplorationResolution ChooseNight = Run->ResolveExplorationCommand(
+		FRunExplorationCommand::ChooseNightExploration(ExplorationVersionBefore));
 	After = CaptureRunUiRevisions(*Run);
-	TestEqual(TEXT("ConsumeNode leaves backpack"), After.BackpackStorage, Before.BackpackStorage);
-	TestEqual(TEXT("ConsumeNode leaves shop"), After.Shop, Before.Shop);
-	TestEqual(TEXT("ConsumeNode leaves economy"), After.Economy, Before.Economy);
-
-	Before = CaptureRunUiRevisions(*Run);
-	Run->AdvanceToNextPhase();
-	After = CaptureRunUiRevisions(*Run);
-	TestEqual(TEXT("AdvanceToNextPhase leaves backpack"), After.BackpackStorage, Before.BackpackStorage);
-	TestEqual(TEXT("AdvanceToNextPhase leaves shop"), After.Shop, Before.Shop);
-	TestEqual(TEXT("AdvanceToNextPhase leaves economy"), After.Economy, Before.Economy);
+	TestTrue(TEXT("Exploration command succeeds"), ChooseNight.IsOk());
+	TestEqual(TEXT("Exploration command owns its own version"),
+		ChooseNight.VersionAfter, ExplorationVersionBefore + 1);
+	TestEqual(TEXT("Exploration command leaves backpack revision"),
+		After.BackpackStorage, Before.BackpackStorage);
+	TestEqual(TEXT("Exploration command leaves shop revision"), After.Shop, Before.Shop);
+	TestEqual(TEXT("Exploration command leaves economy revision"), After.Economy, Before.Economy);
 
 	Before = CaptureRunUiRevisions(*Run);
 	Run->MarkTriggerDestroyed(TEXT("Revision.Trigger"));
@@ -604,7 +630,7 @@ bool FWacomRunSnapshotRevisionsNonSnapshotMutationsSpec::RunTest(const FString& 
 	CloseChoice.ChoiceId = TEXT("Resolve");
 	CloseChoice.bCloseEventAfterResolve = true;
 	CloseChoice.bMarkEventCompleted = true;
-	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeRevisionSingleChoiceRunEvent(Run.Get(), CloseChoice));
+	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeRevisionSingleChoiceRunEvent(Run, CloseChoice));
 	Before = CaptureRunUiRevisions(*Run);
 	TestTrue(TEXT("BeginRunEvent succeeds"), Run->BeginRunEvent(TEXT("Revision.Event.OpenClose"), Event.Get()));
 	After = CaptureRunUiRevisions(*Run);

@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "RunSession.h"
@@ -52,7 +53,7 @@ namespace WacomRunCardWorkspaceSpec
 			Fx.MakeNoopCard(1),
 			Fx.MakeNoopCard(1),
 			{});
-		Run->Initialize(Character);
+		InitializeRunSessionForTest(*Run, Character).IsOk();
 		return Run;
 	}
 }

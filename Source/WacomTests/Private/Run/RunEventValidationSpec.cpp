@@ -190,14 +190,11 @@ bool FWacomDataRunEventValidationDiagnosticsSpec::RunTest(const FString& /*Param
 		ZeroPressure.Type = EWacomRunEventEffectType::AddPressure;
 		ZeroPressure.PressureType = TEXT("Misdeed");
 		ZeroPressure.Value = 0;
-		FWacomRunEventEffectDefinition ZeroNode;
-		ZeroNode.Type = EWacomRunEventEffectType::ConsumeNode;
-		ZeroNode.Value = 0;
-		Event->Nodes[1].Choices[0].Effects = { ZeroGold, ZeroPressure, ZeroNode };
+		Event->Nodes[1].Choices[0].Effects = { ZeroGold, ZeroPressure };
 		const FWacomRunEventDefinitionValidationReport Report =
 			BuildRunEventValidationReportForTest(Event.Get());
 		TestTrue(TEXT("Zero amount warnings keep asset valid"), Report.IsValid());
-		TestEqual(TEXT("Three zero warnings"), Report.Warnings.Num(), 3);
+		TestEqual(TEXT("Two zero warnings"), Report.Warnings.Num(), 2);
 		TestTrue(TEXT("Zero warning names AddGold index"),
 			TextArrayContains(Report.Warnings, TEXT("EffectIndex 0"))
 			&& TextArrayContains(Report.Warnings, TEXT("AddGold"))
@@ -205,9 +202,6 @@ bool FWacomDataRunEventValidationDiagnosticsSpec::RunTest(const FString& /*Param
 		TestTrue(TEXT("Zero warning names AddPressure index"),
 			TextArrayContains(Report.Warnings, TEXT("EffectIndex 1"))
 			&& TextArrayContains(Report.Warnings, TEXT("AddPressure")));
-		TestTrue(TEXT("Zero warning names ConsumeNode index"),
-			TextArrayContains(Report.Warnings, TEXT("EffectIndex 2"))
-			&& TextArrayContains(Report.Warnings, TEXT("ConsumeNode")));
 	}
 
 	{
@@ -405,12 +399,10 @@ bool FWacomDataRunEventValidationRequiredFieldsSpec::RunTest(const FString& /*Pa
 
 	{
 		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeValidRunEventForValidation(GetTransientPackage()));
-		FWacomRunEventEffectDefinition ConsumeNode;
-		ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
-		ConsumeNode.Value = -1;
-		Event->Nodes[1].Choices[0].Effects = { ConsumeNode };
-		TestFalse(TEXT("Negative ConsumeNode fails"), ValidateRunEventForTest(Event.Get(), Errors));
-		TestTrue(TEXT("Negative ConsumeNode has error"), Errors.Num() > 0);
+		Event->Nodes[1].Choices[0].ActionPointPolicy = EWacomRunEventActionPointPolicy::Fixed;
+		Event->Nodes[1].Choices[0].FixedActionPointCost = -1;
+		TestFalse(TEXT("Negative fixed AP cost fails"), ValidateRunEventForTest(Event.Get(), Errors));
+		TestTrue(TEXT("Negative fixed AP cost has error"), Errors.Num() > 0);
 	}
 
 	{

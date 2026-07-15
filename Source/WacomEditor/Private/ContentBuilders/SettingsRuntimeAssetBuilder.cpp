@@ -3,7 +3,7 @@
 #include "ContentBuilders/SettingsRuntimeAssetBuilder.h"
 
 #include "Components/WacomFirstPersonWalkBobComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
 #include "Engine/Blueprint.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "HAL/FileManager.h"
@@ -30,13 +30,13 @@ namespace Wacom::ContentBuilder
 
 		AWacomPlayerCharacter* PlayerCDO = Cast<AWacomPlayerCharacter>(
 			Blueprint->GeneratedClass->GetDefaultObject());
-		UWacomRunTunnelMovementComponent* RunTunnel = PlayerCDO
-			? PlayerCDO->GetRunTunnelMovementComponent()
+		UWacomRunPathTraversalComponent* RunPath = PlayerCDO
+			? PlayerCDO->GetRunPathTraversalComponent()
 			: nullptr;
 		UWacomFirstPersonWalkBobComponent* WalkBob = PlayerCDO
 			? PlayerCDO->GetWalkBobComponent()
 			: nullptr;
-		if (!PlayerCDO || !RunTunnel || !WalkBob || !RunTunnel->WalkCameraShakeClass)
+		if (!PlayerCDO || !RunPath || !WalkBob || !RunPath->WalkCameraShakeClass)
 		{
 			UE_LOG(LogTemp, Error,
 				TEXT("[SettingsRuntimeAssetBuilder] Player Blueprint is missing required components or WalkCameraShakeClass"));
@@ -45,9 +45,9 @@ namespace Wacom::ContentBuilder
 
 		Blueprint->Modify();
 		PlayerCDO->Modify();
-		RunTunnel->Modify();
+		RunPath->Modify();
 		WalkBob->Modify();
-		RunTunnel->bUseWalkCameraShake = true;
+		RunPath->bUseWalkCameraShake = true;
 		WalkBob->bEnableWalkBob = false;
 		FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
 
@@ -66,7 +66,7 @@ namespace Wacom::ContentBuilder
 		{
 			UE_LOG(LogTemp, Display,
 				TEXT("[SettingsRuntimeAssetBuilder] CameraShake=%s WalkBob=%s Asset=%s"),
-				RunTunnel->bUseWalkCameraShake ? TEXT("enabled") : TEXT("disabled"),
+				RunPath->bUseWalkCameraShake ? TEXT("enabled") : TEXT("disabled"),
 				WalkBob->bEnableWalkBob ? TEXT("enabled") : TEXT("disabled"),
 				*PackageName);
 		}

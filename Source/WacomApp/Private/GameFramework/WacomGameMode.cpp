@@ -414,6 +414,21 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		}
 	}
 
+	// Battle 表现启动前先取得 Encounter 活动所有权。规则层只预留 1 AP；
+	// Victory 在结果提交时消费，Withdraw/Defeat/启动失败会释放预留。
+	const FRunExplorationResolution EncounterBegin =
+		Run->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+	if (!EncounterBegin.IsOk() || !EncounterBegin.NodeActivityTicket.IsSet())
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] EnterBattle: 当前逻辑节点无法开始 Encounter，拒绝场景战斗。Detail=%s"),
+			*EncounterBegin.Status.Detail.ToString());
+		ActiveSession = nullptr;
+		PendingBattleTotalPartCount = 0;
+		return;
+	}
+	PendingEncounterActivity = EncounterBegin.NodeActivityTicket.GetValue();
+
 	// 2) 确保 PrimaryLayout 就位（跨场景长存，Subsystem 负责生命周期）
 	UIManager->EnsurePrimaryLayout(PC);
 
@@ -424,7 +439,10 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	if (!BattleHUD)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] Push BattleHUD 失败"));
+		Run->CancelNodeActivity(PendingEncounterActivity.GetValue());
+		PendingEncounterActivity.Reset();
 		ActiveSession = nullptr;
+		PendingBattleTotalPartCount = 0;
 		return;
 	}
 
@@ -527,6 +545,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
+	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
 	const TSharedRef<FExitBattleRunPresentationRestoreState> RunPresentationRestore =
 		MakeShared<FExitBattleRunPresentationRestoreState>(WacomPC);
 
@@ -554,6 +573,44 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		Packet.Outcome = Outcome;
 	}
 
+	// 在销毁场景 Trigger 或恢复探索表现前，先以 Begin 时票据原子提交战果。
+	// 无效/未定结果只取消预留，绝不回退到旧 no-token 结算或手工扣点。
+	bool bEncounterSettlementSucceeded = false;
+	if (Run && PendingEncounterActivity.IsSet())
+	{
+		FRunExplorationResolution EncounterResult;
+		if (Packet.Outcome == EBattleOutcome::Undetermined)
+		{
+			EncounterResult = Run->CancelNodeActivity(PendingEncounterActivity.GetValue());
+		}
+		else
+		{
+			EncounterResult = Run->SettleEncounterNodeActivity(
+				PendingEncounterActivity.GetValue(),
+				Packet);
+			bEncounterSettlementSucceeded = EncounterResult.IsOk();
+			if (!EncounterResult.IsOk())
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[WacomGameMode] Encounter 战果提交失败，取消活动以解除探索锁。Detail=%s"),
+					*EncounterResult.Status.Detail.ToString());
+				Run->CancelNodeActivity(PendingEncounterActivity.GetValue());
+			}
+		}
+		if (!EncounterResult.IsOk() && Packet.Outcome == EBattleOutcome::Undetermined)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomGameMode] 未定 Battle 结果的 Encounter 取消失败。Detail=%s"),
+				*EncounterResult.Status.Detail.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] ExitBattle 缺少 RunSession 或 Encounter 票据，战果不会结算"));
+	}
+	PendingEncounterActivity.Reset();
+
 	// 2) Pop HUD + 清理 Session
 	if (UIManager && BattleHUD)
 	{
@@ -563,10 +620,10 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	BattleHUD     = nullptr;
 	ActiveSession = nullptr;
 
-	// 2) 切回探索输入上下文；探索输入会在镜头回到 RunTunnel 后恢复。
+	// 2) 切回探索输入上下文；探索输入会在镜头回到 Run Path 后恢复。
 	if (WacomPC)
 	{
-		// 回 RunTunnel staging 期间清空探索手牌，避免卡牌跟着相机从战斗 Viewpoint 平移回样条。
+		// 回 Run Path staging 期间清空探索手牌，避免卡牌跟着相机从战斗 Viewpoint 平移回样条。
 		WacomPC->ClearRunFirstPersonCardLayer();
 		if (ULocalPlayer* LP = WacomPC->GetLocalPlayer())
 		{
@@ -590,7 +647,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 			}
 
 			bRunReturnFlowStarted = true;
-			FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+			FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 				*Pawn,
 				*PC,
 				[RunPresentationRestore]()
@@ -604,12 +661,9 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		RunPresentationRestore->MarkReturnCompleted();
 	}
 
-	// 3) 标记触发器为已销毁（在 Destroy 前读 PersistentId）+ Destroy 本身
-	const FName TriggerPersistentId = PendingTrigger ? PendingTrigger->PersistentId : NAME_None;
+	// 3) 真胜利且规则结算成功后，仅清理当前场景表现 Actor；完成真相是 Map Node lifecycle。
 	if (PendingTrigger)
 	{
-		URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
-
 		// 真胜利（非撤离）才标记已销毁 + Destroy。
 		// 若异常路径产生"撤离但所有部位都已毁"，也按胜利清理，避免留下空血敌人反复重入。
 		// 正常规则层会在最后一个存活部位被击倒时禁用撤离。
@@ -620,33 +674,14 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		const bool bRealVictory = (Packet.Outcome == EBattleOutcome::Victory)
 			&& (!Packet.bWithdrawn || bAllPartsDestroyed);
 
-		if (bRealVictory && Run && !TriggerPersistentId.IsNone())
-		{
-			Run->MarkTriggerDestroyed(TriggerPersistentId);
-		}
-
-		if (bRealVictory)
+		if (bEncounterSettlementSucceeded && bRealVictory)
 		{
 			PendingTrigger->Destroy();
 		}
 		PendingTrigger = nullptr;
 	}
 
-	// 4) 通知 RunSession 战斗结束，让它更新击败列表 / run active 状态 / 战外结算压力
-	//    + 撤离时持久化破坏部位、真胜利时清理。
-	if (WacomPC)
-	{
-		if (URunSession* Run = WacomPC->GetRunSession())
-		{
-			Run->OnBattleFinishedFromTrigger(Packet, TriggerPersistentId);
-
-			// 战斗结束统一结算 1 节点：胜利 / 失败 / 撤离都消耗。
-			if (Packet.Outcome != EBattleOutcome::Undetermined)
-			{
-				Run->ConsumeNode(1);
-			}
-		}
-	}
+	// 4) Run 规则结果已在上方通过 Encounter ticket 一次性提交。
 	PendingBattleTotalPartCount = 0;
 
 	// 5) 状态复位

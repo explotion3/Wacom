@@ -19,6 +19,7 @@ struct FWacomFirstPersonCardLayerTestAccess
 		const UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static FWacomFirstPersonCardAnchorAutomationTestView View(
 		const UWacomFirstPersonCardAnchorComponent& Anchor);
+	static void TickAnchor(UWacomFirstPersonCardAnchorComponent& Anchor, float DeltaTime);
 	static void SetCardViewRetainerEffectMaterialBeforeSlate(
 		UWacomFirstPersonCardViewWidget& CardView,
 		UMaterialInterface* Material);

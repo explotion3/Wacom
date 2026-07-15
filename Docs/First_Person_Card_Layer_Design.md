@@ -33,7 +33,7 @@ Battle / Run snapshot
 
 卡牌仍由 UMG 渲染，因此保留 HUD 级别清晰度、材质动画和 WBP 可迭代性。第一人称感来自 anchor 投影、身体 / tunnel / battle base rotation、soft clamp、hand center smoothing 和 slot motion，而不是把常驻手牌做成 `WidgetComponent`。
 
-2026-07-12 收口后，Anchor 不再承担 Development Preview 或 Debug Projection Widget，外部 `CardShadowImage`、旧 drag-target 颜色覆盖和箭头吸附仍保持移除。Hover / Drag fake-3D、Inspect scrub、Battle 无目标 drag-out commit、Hover / Inspect / Drag camera look、语义入场音频、`Gained` 入场、`Retained` 纯运动反馈以及手牌目标 lift / scale / ZOrder 均沿现有 first-person card layer 边界恢复；镜头路径直接使用 BattleCamera / RunTunnel，阴影继续使用 Retainer 内实时 Alpha 接触阴影。`Retained` 不恢复旧 Overlay 发光，未来由统一卡牌效果系统接管颜色、闪光、选中和溶解。
+2026-07-12 收口后，Anchor 不再承担 Development Preview 或 Debug Projection Widget，外部 `CardShadowImage`、旧 drag-target 颜色覆盖和箭头吸附仍保持移除。Hover / Drag fake-3D、Inspect scrub、Battle 无目标 drag-out commit、Hover / Inspect / Drag camera look、语义入场音频、`Gained` 入场、`Retained` 纯运动反馈以及手牌目标 lift / scale / ZOrder 均沿现有 first-person card layer 边界恢复；镜头路径直接使用 BattleCamera / RunPath，阴影继续使用 Retainer 内实时 Alpha 接触阴影。`Retained` 不恢复旧 Overlay 发光，未来由统一卡牌效果系统接管颜色、闪光、选中和溶解。
 
 ## §2 核心对象
 
@@ -90,7 +90,7 @@ Layout = fixed Authored2D
 ViewportClampMode = SoftClampToViewport
 ```
 
-`BodyLocked` 使用 Battle base rotation 或 Run Tunnel spline base 作为稳定身体基准，不让 cursor look 重新计算卡牌世界槽位。投影仍使用当前真实相机，因此鼠标移动镜头时仍有合理第一人称空间变化。
+`BodyLocked` 使用 Battle base rotation 或 Run Path spline base 作为稳定身体基准，不让 cursor look 重新计算卡牌世界槽位。投影仍使用当前真实相机，因此鼠标移动镜头时仍有合理第一人称空间变化。
 
 `Look Responsive Projected` 是保留的次级投影风格。它会把 `UWacomCursorLookDriverComponent` 的当前鼠标镜头偏移按 `LookInfluenceYaw / LookInfluencePitch` 混入手牌锚点，再使用当前真实相机投影。这样 look 同时影响 anchor 计算和相机投影，适合需要更强跟随感、空间漂移或视差感的手牌表现；代价是稳定性和可读性弱于 `BodyLocked`，需要按具体场景单独调参。C++ 枚举值仍叫 `LegacyWorldProjected`，只是为了蓝图 / 资产序列化兼容。
 
@@ -102,7 +102,7 @@ ViewportClampMode = SoftClampToViewport
 
 当前 first-person hand 的正式制作入口是 `UWacomFirstPersonCardAnchorComponent` Details 面板参数。`BP_WacomPlayerCharacter` 上的 AnchorComponent 直接承载卡面 Widget、锚点位置、投影、手牌形状、slot motion、hover、gesture、feedback、Card Depth 和 Hover Camera Look 调参；这些字段是当前 Battle / Run 手牌表现的主线来源。
 
-Anchor 空间优先级是 Battle camera look、active first-person view stage blend、active 且未 suspended 的 Run Tunnel，最后才是 camera fallback。进入战斗 viewpoint blend 时 Run Tunnel 会保留 Segment / Distance 但处于 suspended；此时它不能继续提供手牌锚点，否则 card layer 会停在探索样条位置直到 Battle camera look 激活。Stage blend 暴露当前 staged base View Pose 给 Anchor，鼠标 additive look 仍通过共享 cursor look / 当前相机投影体现，不把鼠标偏移写成新的 Viewpoint base。
+Anchor 空间优先级是 Battle camera look、active first-person view stage blend、active 且未 suspended 的 Run Path，最后才是 camera fallback。进入战斗 viewpoint blend 时 Run Path 会保留 Segment / Distance 但处于 suspended；此时它不能继续提供手牌锚点，否则 card layer 会停在探索样条位置直到 Battle camera look 激活。Stage blend 暴露当前 staged base View Pose 给 Anchor，鼠标 additive look 仍通过共享 cursor look / 当前相机投影体现，不把鼠标偏移写成新的 Viewpoint base。
 
 旧 `UWacomFirstPersonCardLayoutPreset` DataAsset、runtime override API、Anchor 内部 preset resolve、editor validator 和相关测试已经删除。战斗与探索手牌表现都应通过玩家 AnchorComponent Details 参数调节；如果后续需要共享调参模板，应重新设计新的数据合同，而不是恢复旧 preset 路径。
 
@@ -298,7 +298,7 @@ Battle 回合边界快捷键 `IA_Wait` / `IA_EndTurn` 在 PlayerController 入�
 
 Battle Action Preview 只在有效释放语义成立时由 BattleHUD / first-person hand bridge 请求：拖拽源卡压中合法 world enemy part、合法 hand-card target，或无目标卡已经达到 `ArmedForCommit` 提交距离后，bridge 调用 `UBattleSession::BuildCardActionPreview()`，再把只读 projected values 交给 BattleHUD runtime 更新卡面 / 详情 / 玩家状态条 / 敌人部位面板。规则层还要求当前阶段是 `PlayerAction` 并通过完整 PlayCard preflight；`PendingKnockdownChoice`、BattleEnd 或其它非玩家行动阶段即使目标本身仍合法，也不会生成 Action Preview。单纯拖出手牌区但尚未 armed、仍在寻找目标或目标无效时，first-person layer 只显示轻量候选目标提示，不显示玩家侧回血、护盾或敌人净结果。release、cancel、离开有效目标、退出无目标 armed 状态、snapshot version 变化或 BattleEnd 时，BattleHUD 必须清理 action preview，让 hand layer、玩家状态条和敌人面板恢复最近一次真实 Snapshot / ViewData。
 
-悬浮、Inspect 和拖拽期间，卡牌层记录 DPI-aware widget-space 指针和归一化视口坐标，用于 Card Depth、拖拽速度倾斜、提交距离、目标 probe 和 camera-look override。Hover 使用 `bAllowCameraLookDuringCardPointer / CardPointerCameraLookScale / CardPointerCameraLookInterpSpeedOverride`；进入 Inspect 或正式 Drag 后，改由 `bAllowCameraLookDuringCardDrag / CardDragCameraLookScale / CardDragCameraLookInterpSpeedOverride` 使用同一 `FWacomFirstPersonCardDragView` 的归一化指针无缝接管。BattleHUD bridge 写入已激活 BattleCamera，Run PlayerController 写入已激活且未 suspended 的 RunTunnel；release、cancel、source 解绑 / 清理时必须清除 override。该路径不恢复旧共享 camera-look bridge，也不改变鼠标捕获或规则提交。
+悬浮、Inspect 和拖拽期间，卡牌层记录 DPI-aware widget-space 指针和归一化视口坐标，用于 Card Depth、拖拽速度倾斜、提交距离、目标 probe 和 camera-look override。Hover 使用 `bAllowCameraLookDuringCardPointer / CardPointerCameraLookScale / CardPointerCameraLookInterpSpeedOverride`；进入 Inspect 或正式 Drag 后，改由 `bAllowCameraLookDuringCardDrag / CardDragCameraLookScale / CardDragCameraLookInterpSpeedOverride` 使用同一 `FWacomFirstPersonCardDragView` 的归一化指针无缝接管。BattleHUD bridge 写入已激活 BattleCamera，Run PlayerController 写入已激活且未 suspended 的 RunPath；release、cancel、source 解绑 / 清理时必须清除 override。该路径不恢复旧共享 camera-look bridge，也不改变鼠标捕获或规则提交。
 
 拖拽过程中仍保留 UMG mouse capture，并继续通过 `FWacomFirstPersonCardDragView` 传递拖拽指针。SlotWidget mouse capture 负责鼠标按下、Pressed 阶段拖拽阈值判断、Inspect 阶段、鼠标来源正式拖拽 pointer 更新和 release/cancel 路由；快捷键或程序化启动的 `ExternalPointer` 拖拽才由 PlayerController active-drag pointer pump 写入 `CurrentScreenPosition / PointerViewportPosition`。这样鼠标来源拖拽不会被同帧偏旧的全局 pump 坐标覆盖，external drag 又可以在没有真实 mouse capture 的情况下持续跟随全局 cursor。`Inspecting` 仍通过 `FWacomFirstPersonCardDragView` 更新读牌卡的视觉 slot 与详情位置，但不触发 menu / world / battle drop probe，松开也不提交。
 当 Layer 因 BattleEnd、菜单切换、source clear、Deactivate 或关闭交互而程序化取消手势时，必须由 Layer 释放它自己持有的 Slate pointer capture，再清理 Slot gesture state；不得依赖后续 mouse-up 返回 `ReleaseMouseCapture`，也不得无条件释放其他 UI 的 capture。

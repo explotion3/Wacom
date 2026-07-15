@@ -96,11 +96,11 @@ bool FWacomRunEventChoiceConditionFactsMatchSubmissionSpec::RunTest(
 	}
 	{
 		FWacomRunEventConditionDefinition Condition;
-		Condition.Type = EWacomRunEventConditionType::MinNodeCount;
+		Condition.Type = EWacomRunEventConditionType::MinActionPoints;
 		Condition.Value = 2;
-		AddCase(TEXT("MinNodeCount"), Condition, ERunEventChoiceRequirementKind::MinNodeCount,
-			TEXT("InsufficientNode"),
-			[](FRunState& State) { State.RemainingNodeCount = 0; });
+		AddCase(TEXT("MinActionPoints"), Condition, ERunEventChoiceRequirementKind::MinActionPoints,
+			TEXT("InsufficientActionPoints"),
+			[](FRunState& State) { State.TimeState.RemainingActionPoints = 0; });
 	}
 	{
 		FWacomRunEventConditionDefinition Condition;

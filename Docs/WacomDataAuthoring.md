@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-06-24
+updated: 2026-07-14
 tags:
   - wacom/data
   - wacom/authoring
@@ -28,6 +28,8 @@ tags:
 | 自动化测试 | 防止生成资产、validator 和 runtime resolver 漂移 | 正式内容设计审核 |
 
 静态 Definition 的 `EncounterDefinitionId / ShopId / EventId / PickupId / InteractionId` 是内容识别 ID。场景运行时状态使用 Actor `PersistentId`，不要用静态 ID 替代。
+
+Logical Map 使用另一套稳定身份：`JourneyId`、`FloorId`、`NodeId` 和 `EdgeId`。其中 Node/Edge ID 只要求 Floor 内唯一；跨层记录、校验和运行时结果必须使用带 `FloorId` 的 handle。图连接只能在 Floor DataAsset 中制作，不能从场景 Actor 连线反向生成规则图。
 
 ## §2 内容生成 Commandlet
 
@@ -75,7 +77,7 @@ Builder 当前职责：
 | 蛇部位 | Head / Body / Tail 配置 HP、经验和毒牙奖励；部位资产不承载行为，行为统一写入 `DA_Behavior_Snake` |
 | `DA_Encounter_SnakeSingle` | 正式单蛇 Encounter 样例，`EncounterDefinitionId=Encounter.Snake.Single`，`EnemySlots[0]=Enemy -> DA_Enemy_Snake` |
 | `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡和 badge 测试卡 |
-| `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力 / 节点效果 |
+| `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力与显式 Action Point policy |
 | `DA_Event_DebugFlagReward` | RunFlag 与 `MinGold + AddGold(-N)` 组合样例 |
 | `DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
 | `DA_Pickup_DebugPoisonFang` | 数据驱动固定卡牌 PickupDefinition，固定获得毒牙 |
@@ -100,6 +102,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
 | `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
 | `UWacomRunWorldCardInteractionDefinitionValidator` | `UWacomRunWorldCardInteractionDefinition` | `FWacomRunWorldCardInteractionDefinitionValidation::Validate()` |
+| `UWacomMapDefinitionValidator` | `UWacomJourneyDefinition`、`UWacomFloorMapDefinition` | `FWacomMapDefinitionValidationReport`；检查身份、端点、可达性、typed payload 和入口条件 |
 
 当前校验边界：
 
@@ -108,12 +111,22 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - EnemyBehavior 校验 `BehaviorId`、phase、intent set、intent、selector rule、condition、cooldown authoring 和敌人意图 effect contract；可选传入 owning EnemyDefinition 时，会额外校验 `AppliesToPartSlotId / PartDestroyed` 等部位槽引用。
 - Character 会校验 `StarterDeck` 不包含左右手卡。
 - Shop 校验 `ShopId`、`Offers`、Offer 卡牌和非负价格；不校验重复商品、价格平衡或商品池规则。
-- RunEvent 校验事件图结构、ID、引用、NextNode、卡牌条件 / 效果、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag、压力 ID、节点消耗。金币门槛 / 扣费组合中的 authoring 风险可以给 warning。
+- RunEvent 校验事件图结构、ID、引用、NextNode、卡牌条件 / 效果、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag、压力 ID，以及 `Automatic / Free / Fixed` Action Point policy。正成本非 terminal choice 是错误；早期由 effect 单独扣减探索预算的做法已删除。金币门槛 / 扣费组合中的 authoring 风险可以给 warning。
 - RunPickupDefinition 校验固定单一奖励配置：`PickupId`、奖励类型、金币数量或卡牌引用。
 - RunWorldCardInteractionDefinition 校验 `InteractionId`、至少一个正向卡牌筛选和有效奖励项。
 - Actor 摆放实例的 `PersistentId`、重复 ID、receiver 和 facade 配置属于 map / level validation，见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#2-run-world-interactable-actor)。
 
 不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
+
+Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
+
+Run 探索 Debug 内容由 `UWacomBuildRunExplorationAssetsCommandlet` 可重复构建：
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomBuildRunExplorationAssets -NoSplash -Unattended
+```
+
+命令创建或更新 `/Game/Wacom/Data/Map/DA_Journey_Debug`、`DA_Floor_Debug_01` 和 `/Game/Wacom/Run/Path/Blueprints` 下的 Path / Branch / Anchor 蓝图，编译并保存 `GM_Wacom`、`BP_WacomPlayerCharacter` 与 `L_Exploration` 绑定，再执行 Map 和 loaded-world Scene validation。它只迁移可识别的正式内容引用，不从关卡 Actor 连接反向生成第二份 Logical Map Graph。
 
 ## §5 生成内容自动化
 

@@ -1,14 +1,16 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
-#include "Actors/WacomRunTunnelSegmentActor.h"
+#include "Actors/WacomRunPathSegmentActor.h"
 #include "Camera/WacomFirstPersonViewStageCoordinator.h"
 #include "Camera/WacomFirstPersonViewpointPlacement.h"
 #include "Characters/CharacterDefinition.h"
 #include "Components/SplineComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
+#include "UI/RunPathTraversalTestAccess.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Events/RunEventDefinition.h"
@@ -122,14 +124,14 @@ namespace WacomGameMenuViewpointStagingFlowSpec
 		return Request;
 	}
 
-	AWacomRunTunnelSegmentActor* SpawnTestSegment(
+	AWacomRunPathSegmentActor* SpawnTestSegment(
 		UWorld& World,
 		const FVector& Start,
 		const FVector& End)
 	{
-		AWacomRunTunnelSegmentActor* Segment =
-			World.SpawnActor<AWacomRunTunnelSegmentActor>(
-				AWacomRunTunnelSegmentActor::StaticClass(),
+		AWacomRunPathSegmentActor* Segment =
+			World.SpawnActor<AWacomRunPathSegmentActor>(
+				AWacomRunPathSegmentActor::StaticClass(),
 				FTransform::Identity);
 		if (!Segment || !Segment->GetPathSpline())
 		{
@@ -152,7 +154,7 @@ namespace WacomGameMenuViewpointStagingFlowSpec
 		URunSession& Run,
 		FName PersistentId,
 		UWacomRunEventDefinition& Event,
-		bool bReturnToRunTunnelAfterClose,
+		bool bReturnToRunPathAfterClose,
 		int32& BeginRunEventCount,
 		FWacomAsyncWidgetPushResult& OutResult)
 	{
@@ -177,11 +179,11 @@ namespace WacomGameMenuViewpointStagingFlowSpec
 		};
 		Request.OnComplete = [
 			&PC,
-			bReturnToRunTunnelAfterClose,
+			bReturnToRunPathAfterClose,
 			&OutResult](const FWacomAsyncWidgetPushResult& Result)
 		{
 			OutResult = Result;
-			if (!bReturnToRunTunnelAfterClose)
+			if (!bReturnToRunPathAfterClose)
 			{
 				if (!Result.bSucceeded)
 				{
@@ -225,7 +227,7 @@ namespace WacomGameMenuViewpointStagingFlowSpec
 					Run,
 					PersistentId,
 					Event,
-					/*bReturnToRunTunnelAfterClose*/true,
+					/*bReturnToRunPathAfterClose*/true,
 					BeginRunEventCount,
 					OutResult);
 			};
@@ -300,7 +302,8 @@ bool FWacomUIGameMenuViewpointStagingDefersRunEventOpenSpec::RunTest(
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TStrongObjectPtr<UCharacterDefinition> RunCharacter(MakeRunCharacter(Run.Get()));
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeRunEvent(Run.Get()));
-	TestTrue(TEXT("Run initializes"), Run->Initialize(RunCharacter.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(
+		*Run, RunCharacter.Get(), EWacomMapNodeType::RunEvent).IsOk());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC, Run.Get());
 
 	const FName PersistentId(TEXT("Event.GameMenu.Viewpoint.Deferred"));
@@ -360,11 +363,11 @@ bool FWacomUIGameMenuViewpointStagingDefersRunEventOpenSpec::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunTunnelSpec,
-	"Wacom.UI.GameMenu.ViewpointStaging.MenuCloseReturnsToRunTunnel",
+	FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunPathSpec,
+	"Wacom.UI.GameMenu.ViewpointStaging.MenuCloseReturnsToRunPath",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunTunnelSpec::RunTest(
+bool FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunPathSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	using namespace WacomGameMenuViewpointStagingFlowSpec;
@@ -378,12 +381,12 @@ bool FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunTunnelSpec::RunTest(
 	AWacomPlayerControllerProbe* PC = World->SpawnActor<AWacomPlayerControllerProbe>();
 	AWacomPlayerCharacter* Character =
 		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment =
+	AWacomRunPathSegmentActor* Segment =
 		SpawnTestSegment(*World, FVector::ZeroVector, FVector(1000.0f, 0.0f, 0.0f));
 	TStrongObjectPtr<UWacomRunEventScreenProbe> Menu(NewObject<UWacomRunEventScreenProbe>());
 	if (!TestNotNull(TEXT("PlayerController"), PC)
 		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("RunTunnel segment"), Segment)
+		|| !TestNotNull(TEXT("RunPath segment"), Segment)
 		|| !TestNotNull(TEXT("Menu"), Menu.Get()))
 	{
 		if (Segment)
@@ -403,11 +406,11 @@ bool FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunTunnelSpec::RunTest(
 
 	PC->Possess(Character);
 	PC->SetPawn(Character);
-	UWacomRunTunnelMovementComponent* Tunnel =
-		Character->GetRunTunnelMovementComponent();
+	UWacomRunPathTraversalComponent* Tunnel =
+		Character->GetRunPathTraversalComponent();
 	UWacomFirstPersonViewStageBlendComponent* StageBlend =
 		Character->GetFirstPersonViewStageBlendComponent();
-	if (!TestNotNull(TEXT("Run tunnel"), Tunnel)
+	if (!TestNotNull(TEXT("Run Path"), Tunnel)
 		|| !TestNotNull(TEXT("Stage blend"), StageBlend))
 	{
 		Segment->Destroy();
@@ -417,11 +420,11 @@ bool FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunTunnelSpec::RunTest(
 	}
 
 	Tunnel->ReturnStageBlendTimeSeconds = 1.0f;
-	TestTrue(TEXT("Run tunnel activates"),
-		Tunnel->ActivateRunTunnel(Segment, 300.0f));
+	TestTrue(TEXT("Run Path activates"),
+		FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*Tunnel, Segment, 300.0f));
 	Character->SetExplorationInputEnabled(false);
-	TestTrue(TEXT("Run tunnel is suspended before menu return"),
-		Tunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path is suspended before menu return"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 	TestTrue(TEXT("Temporary menu viewpoint applies"),
 		WacomFirstPersonViewpointPlacement::ApplyViewTransform(
 			*Character,
@@ -442,16 +445,16 @@ bool FWacomUIGameMenuViewpointStagingMenuCloseReturnsToRunTunnelSpec::RunTest(
 		PC->IsGameMenuViewpointReturnArmed());
 	TestTrue(TEXT("Return blend starts"),
 		StageBlend->IsStageBlendActive());
-	TestTrue(TEXT("Run tunnel remains suspended during return"),
-		Tunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path remains suspended during return"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 
 	FWacomGameMenuViewpointStageReturnFlowTestAccess::Tick(*StageBlend, 1.0f);
 	TestFalse(TEXT("Return blend completes"),
 		StageBlend->IsStageBlendActive());
 	TestFalse(TEXT("Stage transition clears after return"),
 		PC->IsGameMenuViewpointStageTransitionActive());
-	TestFalse(TEXT("Run tunnel resumes after return"),
-		Tunnel->IsRunTunnelSuspended());
+	TestFalse(TEXT("Run Path resumes after return"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 
 	Segment->Destroy();
 	Character->Destroy();
@@ -479,11 +482,11 @@ bool FWacomUIGameMenuViewpointStagingFailedPushRollsBackAndReturnsSpec::RunTest(
 	AWacomPlayerControllerProbe* PC = World->SpawnActor<AWacomPlayerControllerProbe>();
 	AWacomPlayerCharacter* Character =
 		World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment =
+	AWacomRunPathSegmentActor* Segment =
 		SpawnTestSegment(*World, FVector::ZeroVector, FVector(1000.0f, 0.0f, 0.0f));
 	if (!TestNotNull(TEXT("PlayerController"), PC)
 		|| !TestNotNull(TEXT("Character"), Character)
-		|| !TestNotNull(TEXT("RunTunnel segment"), Segment))
+		|| !TestNotNull(TEXT("RunPath segment"), Segment))
 	{
 		if (Segment)
 		{
@@ -502,11 +505,11 @@ bool FWacomUIGameMenuViewpointStagingFailedPushRollsBackAndReturnsSpec::RunTest(
 
 	PC->Possess(Character);
 	PC->SetPawn(Character);
-	UWacomRunTunnelMovementComponent* Tunnel =
-		Character->GetRunTunnelMovementComponent();
+	UWacomRunPathTraversalComponent* Tunnel =
+		Character->GetRunPathTraversalComponent();
 	UWacomFirstPersonViewStageBlendComponent* StageBlend =
 		Character->GetFirstPersonViewStageBlendComponent();
-	if (!TestNotNull(TEXT("Run tunnel"), Tunnel)
+	if (!TestNotNull(TEXT("Run Path"), Tunnel)
 		|| !TestNotNull(TEXT("Stage blend"), StageBlend))
 	{
 		Segment->Destroy();
@@ -516,11 +519,11 @@ bool FWacomUIGameMenuViewpointStagingFailedPushRollsBackAndReturnsSpec::RunTest(
 	}
 
 	Tunnel->ReturnStageBlendTimeSeconds = 1.0f;
-	TestTrue(TEXT("Run tunnel activates"),
-		Tunnel->ActivateRunTunnel(Segment, 250.0f));
+	TestTrue(TEXT("Run Path activates"),
+		FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*Tunnel, Segment, 250.0f));
 	Character->SetExplorationInputEnabled(false);
-	TestTrue(TEXT("Run tunnel is suspended before staged open"),
-		Tunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path is suspended before staged open"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 
 	TStrongObjectPtr<UGameInstance> GameInstance(NewObject<UGameInstance>());
 	TStrongObjectPtr<UWacomUISettingsGameUIManagerProbe> UIManager(
@@ -533,7 +536,8 @@ bool FWacomUIGameMenuViewpointStagingFailedPushRollsBackAndReturnsSpec::RunTest(
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TStrongObjectPtr<UCharacterDefinition> RunCharacter(MakeRunCharacter(Run.Get()));
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeRunEvent(Run.Get()));
-	TestTrue(TEXT("Run initializes"), Run->Initialize(RunCharacter.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(
+		*Run, RunCharacter.Get(), EWacomMapNodeType::RunEvent).IsOk());
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSession(PC, Run.Get());
 
 	int32 BeginRunEventCount = 0;
@@ -573,8 +577,8 @@ bool FWacomUIGameMenuViewpointStagingFailedPushRollsBackAndReturnsSpec::RunTest(
 		StageBlend->IsStageBlendActive());
 	TestFalse(TEXT("Stage transition clears after failed push return"),
 		PC->IsGameMenuViewpointStageTransitionActive());
-	TestFalse(TEXT("Run tunnel resumes after failed push return"),
-		Tunnel->IsRunTunnelSuspended());
+	TestFalse(TEXT("Run Path resumes after failed push return"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 
 	Segment->Destroy();
 	Character->Destroy();

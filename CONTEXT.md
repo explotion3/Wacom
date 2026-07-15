@@ -84,6 +84,38 @@ _Avoid_: 初始化事件队列、Session 开场事件拉取
 由 `UWacomGameUserSettings` 持久化、只属于当前设备的显示、图形、音频、视角响应和表现辅助配置；编辑通过 `UWacomSettingsSubsystem` 的 token 化 Preview / Apply / Cancel 事务完成，不进入玩家档案、活动旅程或滚动备份。
 _Avoid_: 玩家设置存档、旅程设置、Settings Screen 状态
 
+**Logical Map Graph（逻辑地图图）**:
+一次活动旅程中由 Floor、离散 Map Node 和有向连接组成的探索规则真相；它维护节点揭示、完成、可达、同层传送和跨层推进事实，但不包含 Spline、场景 Actor、世界坐标或地图 UI 布局。
+_Avoid_: Run Tunnel 轨道图、关卡 Actor 连接、地图 Widget 节点
+
+**Map Node Lifecycle（地图节点生命周期）**:
+一个 Map Node 从 `Hidden → Revealed → Visited → Resolved` 的单向运行时状态；进入节点不等于完成节点，普通节点只有在内容规则成功结束后才 Resolved。安全且可重复的节点可以在首次安全进入后 Resolved，之后的重复行为仍由各自规则收费。
+_Avoid_: Widget 可见性、关卡 Actor BeginPlay、到达即完成所有节点
+
+**Action Point（时段行动点）**:
+当前时间阶段内可用于结算有意义探索行为的离散预算；移动、岔路选择、地图揭示和同层 Map Travel 不消耗，战斗、事件、搜刮、商店访问或其它规则事务按显式成本消费。正式运行态字段为 `RemainingActionPoints`；不再使用“节点数量”表达时间预算，也不存在可由外围直接扣减预算的公共入口。
+_Avoid_: Map Node 数量、移动体力、现实时间分钟
+
+**Map Travel（地图传送）**:
+探索空闲状态下，从当前位置免费迁移到当前 Floor 内一个已经完成的 Map Node；它不消耗时段节点或直接增加压力，也不能跨 Floor 或逃离尚未结束的战斗、RunEvent 与剧情事务。
+_Avoid_: 沿 Tunnel 步行、跨层推进、任意场景坐标传送
+
+**Floor Transition（楼层推进）**:
+满足入口条件后从当前 Floor 不可逆地进入下一 Floor 的规则事务；首版入口可以要求拥有指定卡牌或关键词，检查所有真实持有区、不消耗卡牌，并在首次成功后永久记录为已解锁。默认不能返回上一 Floor。
+_Avoid_: 同层 Map Travel、关卡 OpenLevel 调用、Run Tunnel 分支切换
+
+**Floor Exposure（楼层滞留）**:
+玩家在当前 Floor 连续停留天数产生的软时限事实；第一层前三天是探索宽限期，正常完整探索目标约为 1.5–2 天，第 3 天用于补漏和恢复，第 4 天开始通过可配置且封顶的增长曲线追加既有压力。进入下一 Floor 后重置滞留计数但不清除已经获得的压力。它不是第九种压力。
+_Avoid_: 实时时钟、移动距离惩罚、跨层后清空压力
+
+**Camp Action（扎营行动）**:
+玩家在 Night 从当前节点或同 Floor 最近的合法节点发起、并推进到次日 Morning 的时间事务；它是可在节点上执行的行为，不是 Map Node 类型。最近节点按 Logical Map Graph 距离求值，不按地图 UI 坐标或世界距离猜测。Dusk 保留 Picnic，不开放 Camp。
+_Avoid_: Camp 地图节点、任意时段随时睡眠、战斗或 RunEvent 中逃离
+
+**Camp Activity（露营活动）**:
+一次 Camp Action 中玩家选择并结算的一个主要活动；休息只是其中一种，未来可以扩展卡牌强化、特殊事件、背包调整或技能活动。活动使用 typed 结果接入各自规则，不把所有内容压成通用字符串效果。
+_Avoid_: Camp 等于休息、一次 Camp 免费执行全部活动、Widget 直接强化卡牌
+
 ## Relationships
 
 - **Target Probe** 和 Target Preview 使用同一份 **PlayCard Evaluation** 目标规则，但前者要求一个具体显式目标。
@@ -108,6 +140,17 @@ _Avoid_: 玩家设置存档、旅程设置、Settings Screen 状态
 - 一次伤害 **Combatant Mutation** 产生一份 **Damage Facts**；事件、Combat Log 和 Action Preview 共享其中的实际 HP 损失。
 - **Battle Initialization Result** 与单次命令的 `FBattleResolution` 分别拥有自己的事件批次；BattleSession 不提供跨调用累积输出队列。
 - **Local Settings** 可以在旅程加载前生效；它与玩家档案、活动旅程和 Battle / Run Snapshot 没有序列化或同步关系。
+- **Logical Map Graph** 决定 Map Node 是否可达、完成和可传送；Run Tunnel 只表现当前局部轨道，不读取卡牌门槛、Floor 或压力规则。
+- **Logical Map Graph** 的连接是有向的；Run Tunnel 内允许 W / S 后退只改变局部轨道位置，不构成反向 Map Node 迁移。
+- **Map Node Lifecycle** 只在规则事务成功后推进；没有活动战斗、RunEvent 或剧情事务时，玩家可以离开尚未 Resolved 的普通死胡同。
+- **Action Point** 只由成功规则事务消费；打开界面、失败检查、局部移动和同层 **Map Travel** 不消费。
+- **Map Travel** 只允许选择当前 Floor 内已经完成的 Map Node；目标场景装配和 Run Tunnel 激活属于 App 表现，不改变传送合法性。
+- **Floor Transition** 可以读取玩家真实持有卡牌事实，但不会消耗满足入口条件的卡牌；成功后结束当前 Floor 的 **Floor Exposure** 计数并开始下一 Floor 的计数。
+- **Floor Exposure** 在每日规则入口追加既有压力；同层 **Map Travel** 不重置计数，跨层后已有压力继续保留。
+- 每个新 Morning 的 Floor Exposure 结算在规则状态中按 Journey Day 幂等；初始 Day 1 不增加 Decay，Camp 跳过 Sunrise 也不会跳过次日 Morning 的 Decay。
+- Hunger 与 Fatigue 可以通过正式 Run 行为减少；Decay 的每日基础增量随旅程天数增长，并由 **Floor Exposure** 对同层超期停留进一步加速。
+- **Camp Action** 只负责编排扎营资格、节点落点、时间推进和正式活动结果；场景表现由 App Adapter 执行，不在地图规则中 Spawn 营地 Actor。
+- 一次 **Camp Action** 只提交一个 **Camp Activity**；活动可以通过独立 Adapter 进入卡牌强化等领域事务，但不会获得绕过对应规则的写入口。
 
 ## Example dialogue
 

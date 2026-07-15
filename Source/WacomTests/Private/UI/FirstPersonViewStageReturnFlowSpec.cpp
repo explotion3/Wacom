@@ -1,8 +1,9 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
-#include "Actors/WacomRunTunnelSegmentActor.h"
+#include "Actors/WacomRunPathSegmentActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/WacomFirstPersonViewStageReturnFlow.h"
 #include "Camera/WacomFirstPersonViewpointPlacement.h"
@@ -10,7 +11,8 @@
 #include "Characters/CharacterDefinition.h"
 #include "Components/SplineComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
+#include "UI/RunPathTraversalTestAccess.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -58,13 +60,13 @@ namespace WacomFirstPersonViewStageReturnFlowSpec
 		return A.Equals(B, Tolerance);
 	}
 
-	AWacomRunTunnelSegmentActor* SpawnTestSegment(
+	AWacomRunPathSegmentActor* SpawnTestSegment(
 		UWorld& World,
 		const FVector& Start,
 		const FVector& End)
 	{
-		AWacomRunTunnelSegmentActor* Segment = World.SpawnActor<AWacomRunTunnelSegmentActor>(
-			AWacomRunTunnelSegmentActor::StaticClass(),
+		AWacomRunPathSegmentActor* Segment = World.SpawnActor<AWacomRunPathSegmentActor>(
+			AWacomRunPathSegmentActor::StaticClass(),
 			FTransform::Identity);
 		if (!Segment || !Segment->GetPathSpline())
 		{
@@ -92,7 +94,7 @@ namespace WacomFirstPersonViewStageReturnFlowSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonViewStageReturnFlowDeferredSpec,
-	"Wacom.UI.Battle.FirstPersonViewStageReturnFlow.DeferredReturnResumesRunTunnel",
+	"Wacom.UI.Battle.FirstPersonViewStageReturnFlow.DeferredReturnResumesRunPath",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonViewStageReturnFlowDeferredSpec::RunTest(
@@ -108,7 +110,7 @@ bool FWacomFirstPersonViewStageReturnFlowDeferredSpec::RunTest(
 	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
 		AWacomPlayerCharacter::StaticClass(),
 		FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment =
+	AWacomRunPathSegmentActor* Segment =
 		WacomFirstPersonViewStageReturnFlowSpec::SpawnTestSegment(
 			*World,
 			FVector::ZeroVector,
@@ -133,12 +135,12 @@ bool FWacomFirstPersonViewStageReturnFlowDeferredSpec::RunTest(
 	}
 
 	PC->Possess(Character);
-	UWacomRunTunnelMovementComponent* Tunnel =
-		Character->GetRunTunnelMovementComponent();
+	UWacomRunPathTraversalComponent* Tunnel =
+		Character->GetRunPathTraversalComponent();
 	UWacomFirstPersonViewStageBlendComponent* StageBlend =
 		Character->GetFirstPersonViewStageBlendComponent();
 	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
-	if (!TestNotNull(TEXT("Run tunnel movement"), Tunnel)
+	if (!TestNotNull(TEXT("Run Path movement"), Tunnel)
 		|| !TestNotNull(TEXT("Stage blend"), StageBlend)
 		|| !TestNotNull(TEXT("First-person camera"), Camera))
 	{
@@ -149,12 +151,12 @@ bool FWacomFirstPersonViewStageReturnFlowDeferredSpec::RunTest(
 	}
 
 	Tunnel->ReturnStageBlendTimeSeconds = 1.0f;
-	TestTrue(TEXT("Run tunnel activates"), Tunnel->ActivateRunTunnel(Segment, 300.0f));
+	TestTrue(TEXT("Run Path activates"), FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*Tunnel, Segment, 300.0f));
 	const FVector TunnelCameraLocation = Camera->GetComponentLocation();
 	const FRotator TunnelControlRotation = PC->GetControlRotation();
 	Character->SetExplorationInputEnabled(false);
-	TestTrue(TEXT("Run tunnel is suspended before return flow"),
-		Tunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path is suspended before return flow"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 
 	const FVector StageLocation(760.0f, 240.0f, 200.0f);
 	TestTrue(TEXT("Temporary view applies before return flow"),
@@ -164,8 +166,8 @@ bool FWacomFirstPersonViewStageReturnFlowDeferredSpec::RunTest(
 			FTransform(FRotator(8.0f, 80.0f, 0.0f), StageLocation)));
 
 	bool bCompleted = false;
-	TestTrue(TEXT("Return flow defers when RunTunnel return blend is configured"),
-		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+	TestTrue(TEXT("Return flow defers when RunPath return blend is configured"),
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 			*Character,
 			*PC,
 			[&bCompleted]()
@@ -176,8 +178,8 @@ bool FWacomFirstPersonViewStageReturnFlowDeferredSpec::RunTest(
 	FWacomFirstPersonViewStageReturnFlowTestAccess::Tick(*StageBlend, 0.5f);
 	TestTrue(TEXT("Return blend remains active at half time"),
 		StageBlend->IsStageBlendActive());
-	TestTrue(TEXT("Run tunnel remains suspended at half time"),
-		Tunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path remains suspended at half time"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 	TestFalse(TEXT("Completion has not fired at half time"), bCompleted);
 	TestTrue(TEXT("Camera moved away from temporary view"),
 		FVector::Dist(Camera->GetComponentLocation(), StageLocation) > 1.0f);
@@ -187,7 +189,7 @@ bool FWacomFirstPersonViewStageReturnFlowDeferredSpec::RunTest(
 	FWacomFirstPersonViewStageReturnFlowTestAccess::Tick(*StageBlend, 0.5f);
 	TestFalse(TEXT("Return blend completes"), StageBlend->IsStageBlendActive());
 	TestTrue(TEXT("Completion fires after exploration resumes"), bCompleted);
-	TestFalse(TEXT("Run tunnel resumes after return flow"), Tunnel->IsRunTunnelSuspended());
+	TestFalse(TEXT("Run Path resumes after return flow"), Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 	TestTrue(TEXT("Camera returns to tunnel view"),
 		WacomFirstPersonViewStageReturnFlowSpec::IsNearlyEqual(
 			Camera->GetComponentLocation(),
@@ -221,7 +223,7 @@ bool FWacomFirstPersonViewStageReturnFlowInstantSpec::RunTest(
 	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
 		AWacomPlayerCharacter::StaticClass(),
 		FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment =
+	AWacomRunPathSegmentActor* Segment =
 		WacomFirstPersonViewStageReturnFlowSpec::SpawnTestSegment(
 			*World,
 			FVector::ZeroVector,
@@ -246,10 +248,10 @@ bool FWacomFirstPersonViewStageReturnFlowInstantSpec::RunTest(
 	}
 
 	PC->Possess(Character);
-	UWacomRunTunnelMovementComponent* Tunnel =
-		Character->GetRunTunnelMovementComponent();
+	UWacomRunPathTraversalComponent* Tunnel =
+		Character->GetRunPathTraversalComponent();
 	const UCameraComponent* Camera = Character->GetFirstPersonCamera();
-	if (!TestNotNull(TEXT("Run tunnel movement"), Tunnel)
+	if (!TestNotNull(TEXT("Run Path movement"), Tunnel)
 		|| !TestNotNull(TEXT("First-person camera"), Camera))
 	{
 		Segment->Destroy();
@@ -259,11 +261,11 @@ bool FWacomFirstPersonViewStageReturnFlowInstantSpec::RunTest(
 	}
 
 	Tunnel->ReturnStageBlendTimeSeconds = 0.0f;
-	TestTrue(TEXT("Run tunnel activates"), Tunnel->ActivateRunTunnel(Segment, 200.0f));
+	TestTrue(TEXT("Run Path activates"), FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*Tunnel, Segment, 200.0f));
 	const FVector TunnelCameraLocation = Camera->GetComponentLocation();
 	Character->SetExplorationInputEnabled(false);
-	TestTrue(TEXT("Run tunnel is suspended before instant return"),
-		Tunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path is suspended before instant return"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 
 	TestTrue(TEXT("Temporary view applies before instant return"),
 		WacomFirstPersonViewpointPlacement::ApplyViewTransform(
@@ -275,7 +277,7 @@ bool FWacomFirstPersonViewStageReturnFlowInstantSpec::RunTest(
 
 	bool bCompleted = false;
 	TestFalse(TEXT("Return flow completes synchronously when blend time is zero"),
-		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 			*Character,
 			*PC,
 			[&bCompleted]()
@@ -283,7 +285,7 @@ bool FWacomFirstPersonViewStageReturnFlowInstantSpec::RunTest(
 				bCompleted = true;
 			}));
 	TestTrue(TEXT("Synchronous completion fires"), bCompleted);
-	TestFalse(TEXT("Run tunnel resumes synchronously"), Tunnel->IsRunTunnelSuspended());
+	TestFalse(TEXT("Run Path resumes synchronously"), Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 	TestTrue(TEXT("Camera returns to tunnel immediately"),
 		WacomFirstPersonViewStageReturnFlowSpec::IsNearlyEqual(
 			Camera->GetComponentLocation(),
@@ -297,7 +299,7 @@ bool FWacomFirstPersonViewStageReturnFlowInstantSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonViewStageReturnFlowFallbackSpec,
-	"Wacom.UI.Battle.FirstPersonViewStageReturnFlow.MissingRunTunnelCompletesSynchronously",
+	"Wacom.UI.Battle.FirstPersonViewStageReturnFlow.MissingRunPathCompletesSynchronously",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonViewStageReturnFlowFallbackSpec::RunTest(
@@ -331,8 +333,8 @@ bool FWacomFirstPersonViewStageReturnFlowFallbackSpec::RunTest(
 	Character->SetExplorationInputEnabled(false);
 
 	bool bCompleted = false;
-	TestFalse(TEXT("Return flow falls back synchronously without active RunTunnel"),
-		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+	TestFalse(TEXT("Return flow falls back synchronously without active RunPath"),
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 			*Character,
 			*PC,
 			[&bCompleted]()
@@ -364,7 +366,7 @@ bool FWacomFirstPersonViewStageReturnFlowSuppressesRunHandSpec::RunTest(
 	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
 		AWacomPlayerCharacter::StaticClass(),
 		FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment =
+	AWacomRunPathSegmentActor* Segment =
 		WacomFirstPersonViewStageReturnFlowSpec::SpawnTestSegment(
 			*World,
 			FVector::ZeroVector,
@@ -396,7 +398,7 @@ bool FWacomFirstPersonViewStageReturnFlowSuppressesRunHandSpec::RunTest(
 	Card->DisplayName = FText::FromString(TEXT("Return Hand Card"));
 	UCharacterDefinition* RunCharacter = Fixture.MakeCharacter(nullptr, nullptr, { Card });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(RunCharacter));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, RunCharacter).IsOk());
 	FRunState& RunState = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
 	RunState.BattleDeck = {
 		WacomFirstPersonViewStageReturnFlowSpec::MakeRunCardInstance(Card)
@@ -405,12 +407,12 @@ bool FWacomFirstPersonViewStageReturnFlowSuppressesRunHandSpec::RunTest(
 
 	UWacomRunFirstPersonCardSourceComponent* Source =
 		PC->GetRunFirstPersonCardSourceComponent();
-	UWacomRunTunnelMovementComponent* Tunnel =
-		Character->GetRunTunnelMovementComponent();
+	UWacomRunPathTraversalComponent* Tunnel =
+		Character->GetRunPathTraversalComponent();
 	UWacomFirstPersonViewStageBlendComponent* StageBlend =
 		Character->GetFirstPersonViewStageBlendComponent();
 	if (!TestNotNull(TEXT("Run first-person source"), Source)
-		|| !TestNotNull(TEXT("Run tunnel movement"), Tunnel)
+		|| !TestNotNull(TEXT("Run Path movement"), Tunnel)
 		|| !TestNotNull(TEXT("Stage blend"), StageBlend))
 	{
 		Segment->Destroy();
@@ -425,10 +427,10 @@ bool FWacomFirstPersonViewStageReturnFlowSuppressesRunHandSpec::RunTest(
 		1);
 
 	Tunnel->ReturnStageBlendTimeSeconds = 1.0f;
-	TestTrue(TEXT("Run tunnel activates"), Tunnel->ActivateRunTunnel(Segment, 300.0f));
+	TestTrue(TEXT("Run Path activates"), FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*Tunnel, Segment, 300.0f));
 	Character->SetExplorationInputEnabled(false);
-	TestTrue(TEXT("Run tunnel is suspended before return"),
-		Tunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path is suspended before return"),
+		Tunnel->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 	TestTrue(TEXT("Temporary viewpoint applies"),
 		WacomFirstPersonViewpointPlacement::ApplyViewTransform(
 			*Character,
@@ -460,7 +462,7 @@ bool FWacomFirstPersonViewStageReturnFlowSuppressesRunHandSpec::RunTest(
 	};
 
 	TestTrue(TEXT("Return flow defers"),
-		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 			*Character,
 			*PC,
 			[&]()

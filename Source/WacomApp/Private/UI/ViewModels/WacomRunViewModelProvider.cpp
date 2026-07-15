@@ -137,10 +137,11 @@ void UWacomRunViewModelProvider::RefreshAllFields(URunSession* Run)
 	if (!Run || !RunViewModel) { return; }
 
 	const FRunState& State = Run->GetRunState();
+	const FRunExplorationSnapshot Exploration = Run->BuildExplorationSnapshot();
 
-	RunViewModel->SetPhaseDisplay(PhaseToText(Run->GetCurrentTimePhase()));
-	RunViewModel->SetRemainingNodeCount(Run->GetRemainingNodeCount());
-	RunViewModel->SetCurrentDayNumber(Run->GetCurrentDayNumber());
+	RunViewModel->SetPhaseDisplay(PhaseToText(Exploration.Time.CurrentTimePhase));
+	RunViewModel->SetRemainingActionPoints(Exploration.Time.RemainingActionPoints);
+	RunViewModel->SetCurrentDayNumber(Exploration.Time.CurrentDayNumber);
 
 	RunViewModel->SetFingerCount(State.FingerCount);
 	RunViewModel->SetExperienceCurrent(State.ExperienceCurrent);

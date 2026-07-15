@@ -282,6 +282,9 @@ private:
 	bool HasConfiguredBattleDefinition() const;
 	bool HasDuplicatePersistentIdInWorld() const;
 	bool IsDestroyedFor(AWacomPlayerController* PC) const;
+	bool IsAvailableAtBoundRunMapNode(
+		AWacomPlayerController* PC,
+		FName* OutFailureReason = nullptr) const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle",
 		meta = (AllowPrivateAccess = "true"))

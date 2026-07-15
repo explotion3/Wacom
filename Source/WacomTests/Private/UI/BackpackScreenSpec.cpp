@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "BackpackScreenTestAccess.h"
 
@@ -1417,7 +1418,7 @@ bool FWacomUIBackpackScreenRefreshReusesCardWidgetsSpec::RunTest(const FString& 
 	UCardDefinition* FluxCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Flux"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(FluxCard);
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
@@ -1446,7 +1447,7 @@ bool FWacomUIBackpackScreenRefreshDirtyGateSkipsEquivalentListReconcileSpec::Run
 	UCardDefinition* FluxCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Flux"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(FluxCard);
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
@@ -1485,7 +1486,7 @@ bool FWacomUIBackpackScreenRefreshCreatesAndRemovesOnlyChangedCardWidgetsSpec::R
 	UCardDefinition* NewFluxCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.NewFlux"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
 	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenTestAccess::BattleDeckCard(*Screen, 0);
@@ -1522,7 +1523,7 @@ bool FWacomUIBackpackScreenRefreshDirtyGateRefreshesMovedCardsSpec::RunTest(cons
 	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Move.Battle"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
 	UWacomDeckCardWidget* InitialBattle = FWacomBackpackScreenTestAccess::BattleDeckCard(*Screen, 0);
@@ -1559,7 +1560,7 @@ bool FWacomUIBackpackScreenProjectedDuplicateCardsDoNotShareWidgetSpec::RunTest(
 	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Content"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
 	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
@@ -1602,7 +1603,7 @@ bool FWacomUIBackpackScreenRefreshDirtyGateRefreshesProjectedAndSpecialZoneState
 	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Content"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
 	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
@@ -1642,7 +1643,7 @@ bool FWacomUIBackpackScreenReusableCardWidgetsResetStateSpec::RunTest(const FStr
 	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Content"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
 	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
@@ -1686,7 +1687,7 @@ bool FWacomUIBackpackSpecialZoneRefreshReusesWidgetsSpec::RunTest(const FString&
 	UCardDefinition* Content = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Content"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { TypeB, Content });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	const FGuid OwnerId = Run->GetBackpack().IsValidIndex(0) ? Run->GetBackpack()[0].InstanceId : FGuid();
 	const FGuid ContentId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
@@ -1721,7 +1722,7 @@ bool FWacomUIBackpackScreenRemovesHoveredSourceAndHidesDetailSpec::RunTest(const
 	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Battle"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
 	UWacomDeckCardWidget* BattleWidget = FWacomBackpackScreenTestAccess::BattleDeckCard(*Screen, 0);
@@ -1753,7 +1754,7 @@ bool FWacomUIBackpackScreenRefreshDirtyGateResetsAfterMissingRunOrWidgetRebuildS
 	UCardDefinition* BattleCard = MakeBackpackUiCardForTest(Outer, TEXT("Backpack.UI.Dirty.Reset.Battle"));
 	UCharacterDefinition* Character = MakeBackpackUiCharacterForTest(Outer, { Capacity, BattleCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(MakeBackpackUiScreenForTest(GetTransientPackage(), Run.Get()));
 	const int32 BaselineApplyCount = FWacomBackpackScreenTestAccess::RefreshApplyCount(*Screen);

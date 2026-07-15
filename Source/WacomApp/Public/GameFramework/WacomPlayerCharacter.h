@@ -13,7 +13,7 @@ class UWacomCursorLookDriverComponent;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomFirstPersonViewStageBlendComponent;
 class UWacomFirstPersonWalkBobComponent;
-class UWacomRunTunnelMovementComponent;
+class UWacomRunPathTraversalComponent;
 struct FInputActionValue;
 
 /**
@@ -21,7 +21,7 @@ struct FInputActionValue;
  *
  * 职责：
  *   - 第一人称摄像机（跟随 Controller 旋转）
- *   - Run Tunnel 探索移动输入（通过 IA_Move / IA_Look）
+	 *   - Run Path 探索移动输入（通过 IA_Move / IA_Look）
  *   - 战斗时保留 Possess 状态，只禁用移动输入
  *
  * 输入资产默认通过 ConstructorHelpers 挂载，Blueprint 可重写。
@@ -39,7 +39,7 @@ public:
 	UCameraComponent* GetFirstPersonCamera() const { return FirstPersonCamera; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
-	UWacomRunTunnelMovementComponent* GetRunTunnelMovementComponent() const { return RunTunnelMovementComponent; }
+	UWacomRunPathTraversalComponent* GetRunPathTraversalComponent() const { return RunPathTraversalComponent; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Components")
 	UWacomCursorLookDriverComponent* GetCursorLookDriverComponent() const { return CursorLookDriverComponent; }
@@ -78,10 +78,10 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
-	/** IA_Move 回调：WASD 产生 Vector2D，交给 Run Tunnel movement。 */
+	/** IA_Move 回调：WASD 产生 Vector2D，交给 Run Path traversal。 */
 	void HandleMoveInput(const FInputActionValue& Value);
 
-	/** IA_Look 回调：鼠标产生 Vector2D，交给 Run Tunnel movement。 */
+	/** IA_Look 回调：鼠标产生 Vector2D，交给 Run Path traversal。 */
 	void HandleLookInput(const FInputActionValue& Value);
 
 private:
@@ -90,8 +90,8 @@ private:
 	TObjectPtr<UCameraComponent> FirstPersonCamera = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
-		meta = (AllowPrivateAccess = "true", ToolTip = "Run Tunnel movement driver component. Tune movement values on the component's Wacom|Run Tunnel|Movement properties."))
-	TObjectPtr<UWacomRunTunnelMovementComponent> RunTunnelMovementComponent = nullptr;
+		meta = (AllowPrivateAccess = "true", ToolTip = "正式 Run Path 局部样条移动与 View Source。只消费场景 Path，不持有 RunSession 或地图规则。"))
+	TObjectPtr<UWacomRunPathTraversalComponent> RunPathTraversalComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Shared driver that converts the visible mouse cursor position into a smoothed camera look offset."))
@@ -102,7 +102,7 @@ private:
 	TObjectPtr<UWacomBattleCameraLookComponent> BattleCameraLookComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
-		meta = (AllowPrivateAccess = "true", ToolTip = "First-person card anchor component. It projects future HUD-rendered card slots from Run Tunnel or Battle camera base transforms."))
+		meta = (AllowPrivateAccess = "true", ToolTip = "第一人称卡牌锚点。它从 Run Path、战斗镜头或临时 View Stage 的基准视角投影 HUD 手牌。"))
 	TObjectPtr<UWacomFirstPersonCardAnchorComponent> FirstPersonCardAnchorComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
@@ -110,11 +110,11 @@ private:
 	TObjectPtr<UWacomFirstPersonViewStageBlendComponent> FirstPersonViewStageBlendComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Components",
-		meta = (AllowPrivateAccess = "true", ToolTip = "第一人称走路晃动组件。Run Tunnel 会读取它的轻量位置和旋转偏移，用来模拟沿样条移动时的脚步感。"))
+		meta = (AllowPrivateAccess = "true", ToolTip = "第一人称走路晃动组件。Run Path 会读取它的轻量位置和旋转偏移，用来模拟沿样条移动时的脚步感。"))
 	TObjectPtr<UWacomFirstPersonWalkBobComponent> WalkBobComponent = nullptr;
 
 	/** 当前是否接受探索输入。战斗期间置 false。 */
 	bool bExplorationInputEnabled = true;
-	bool bLoggedMissingRunTunnelMovementForMove = false;
-	bool bLoggedMissingRunTunnelMovementForLook = false;
+	bool bLoggedInactiveRunPathForMove = false;
+	bool bLoggedInactiveRunPathForLook = false;
 };

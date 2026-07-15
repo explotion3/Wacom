@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -8,6 +9,7 @@
 #include "Events/RunEventDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
+#include "Map/WacomFloorMapDefinition.h"
 #include "RunSession.h"
 #include "RunState.h"
 #include "RunStateTypes.h"
@@ -166,11 +168,7 @@ namespace
 		GainCard.Type = EWacomRunEventEffectType::GainCard;
 		GainCard.CardDefinition = RewardCard;
 
-		FWacomRunEventEffectDefinition Node;
-		Node.Type = EWacomRunEventEffectType::ConsumeNode;
-		Node.Value = 1;
-
-		Choice.Effects = { Gold, GainCard, Node };
+		Choice.Effects = { Gold, GainCard };
 		Choice.bMarkEventCompleted = true;
 		Choice.bCloseEventAfterResolve = true;
 
@@ -219,8 +217,19 @@ bool FWacomRunNotificationBattleSettlementCoalescesSpec::RunTest(const FString& 
 	UCardDefinition* Reward = MakeNotificationCard(Fx, TEXT("Notification.BattleReward"));
 	UCharacterDefinition* Character = MakeNotificationCharacter(GetTransientPackage(), { Starter });
 
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	FWacomRunExplorationFixture Exploration;
+	UWacomFloorMapDefinition* Floor =
+		Exploration.MakeLinearFloor(TEXT("Notification.Battle.Floor"), 1);
+	Floor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+	URunSession* Run = Exploration.CreateInitializedSession(
+		Character,
+		Exploration.MakeJourney({ Floor }, TEXT("Notification.Battle.Journey"))).Session;
+	const FRunExplorationResolution Begin =
+		Run->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+	if (!TestTrue(TEXT("Encounter begins"), Begin.IsOk() && Begin.NodeActivityTicket.IsSet()))
+	{
+		return false;
+	}
 
 	int32 BroadcastCount = 0;
 	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
@@ -243,7 +252,9 @@ bool FWacomRunNotificationBattleSettlementCoalescesSpec::RunTest(const FString& 
 	Packet.GainedCards.Add(GainedCard);
 
 	const FNotificationRevisionSnapshot Before = CaptureNotificationRevisions(*Run);
-	Run->OnBattleFinishedFromTrigger(Packet, TEXT("Notification.Battle.Trigger"));
+	const FRunExplorationResolution Settlement = Run->SettleEncounterNodeActivity(
+		Begin.NodeActivityTicket.GetValue(), Packet);
+	TestTrue(TEXT("Battle settlement succeeds"), Settlement.IsOk());
 	const FNotificationRevisionSnapshot After = CaptureNotificationRevisions(*Run);
 
 	TestEqual(TEXT("Composite battle settlement broadcasts once"), BroadcastCount, 1);
@@ -269,8 +280,19 @@ bool FWacomRunNotificationBattleUndeterminedSpec::RunTest(const FString& /*Param
 	UCardDefinition* Starter = MakeNotificationCard(Fx, TEXT("Notification.Undetermined.Starter"));
 	UCharacterDefinition* Character = MakeNotificationCharacter(GetTransientPackage(), { Starter });
 
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	FWacomRunExplorationFixture Exploration;
+	UWacomFloorMapDefinition* Floor =
+		Exploration.MakeLinearFloor(TEXT("Notification.Undetermined.Floor"), 1);
+	Floor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+	URunSession* Run = Exploration.CreateInitializedSession(
+		Character,
+		Exploration.MakeJourney({ Floor }, TEXT("Notification.Undetermined.Journey"))).Session;
+	const FRunExplorationResolution Begin =
+		Run->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+	if (!TestTrue(TEXT("Encounter begins"), Begin.IsOk() && Begin.NodeActivityTicket.IsSet()))
+	{
+		return false;
+	}
 
 	int32 BroadcastCount = 0;
 	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
@@ -281,7 +303,9 @@ bool FWacomRunNotificationBattleUndeterminedSpec::RunTest(const FString& /*Param
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Undetermined;
 	const FNotificationRevisionSnapshot Before = CaptureNotificationRevisions(*Run);
-	Run->OnBattleFinishedFromTrigger(Packet, TEXT("Notification.Battle.Undetermined"));
+	const FRunExplorationResolution Settlement = Run->SettleEncounterNodeActivity(
+		Begin.NodeActivityTicket.GetValue(), Packet);
+	TestFalse(TEXT("Undetermined settlement is rejected"), Settlement.IsOk());
 	const FNotificationRevisionSnapshot After = CaptureNotificationRevisions(*Run);
 
 	TestEqual(TEXT("Undetermined battle does not broadcast"), BroadcastCount, 0);
@@ -293,7 +317,7 @@ bool FWacomRunNotificationBattleUndeterminedSpec::RunTest(const FString& /*Param
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunNotificationEndShopVisitCoalescesSpec,
-	"Wacom.Run.NotificationCoalescing.EndShopVisitCoalescesShopAndConsumeNodeNotification",
+	"Wacom.Run.NotificationCoalescing.EndShopVisitBroadcastsOnceWithoutDelayedCost",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Parameters*/)
@@ -304,7 +328,7 @@ bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Pa
 	UCharacterDefinition* Character = MakeNotificationCharacter(GetTransientPackage(), { Bag });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::Shop).IsOk());
 	Run->AddGold(5);
 	TestTrue(TEXT("Begin shop succeeds"),
 		Run->BeginShopVisit(
@@ -313,7 +337,7 @@ bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Pa
 	const FRunShopSnapshot Snapshot = Run->BuildCurrentShopSnapshot();
 	TestTrue(TEXT("Shop has offer"), Snapshot.Offers.Num() == 1);
 	const FGuid OfferId = Snapshot.Offers.IsValidIndex(0) ? Snapshot.Offers[0].OfferId : FGuid();
-	TestTrue(TEXT("Purchase succeeds"), Run->PurchaseShopOffer(OfferId));
+	TestTrue(TEXT("Purchase succeeds"), Run->PurchaseShopOffer(OfferId).bSucceeded);
 
 	int32 BroadcastCount = 0;
 	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
@@ -321,13 +345,13 @@ bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Pa
 		++BroadcastCount;
 	});
 
-	const int32 BeforeNodes = Run->GetRemainingNodeCount();
+	const int32 BeforeActionPoints = Run->GetRemainingActionPoints();
 	const FNotificationRevisionSnapshot Before = CaptureNotificationRevisions(*Run);
 	Run->EndShopVisit();
 	const FNotificationRevisionSnapshot After = CaptureNotificationRevisions(*Run);
 
 	TestEqual(TEXT("EndShopVisit broadcasts once"), BroadcastCount, 1);
-	TestEqual(TEXT("EndShopVisit consumes one node"), Run->GetRemainingNodeCount(), BeforeNodes - 1);
+	TestEqual(TEXT("EndShopVisit adds no delayed cost"), Run->GetRemainingActionPoints(), BeforeActionPoints);
 	TestFalse(TEXT("Shop closed"), Run->IsShopVisitActive());
 	TestTrue(TEXT("EndShopVisit bumps shop revision"), After.Shop > Before.Shop);
 	TestEqual(TEXT("EndShopVisit leaves backpack revision"), After.BackpackStorage, Before.BackpackStorage);
@@ -348,7 +372,7 @@ bool FWacomRunNotificationRunEventChoiceSpec::RunTest(const FString& /*Parameter
 	UCharacterDefinition* Character = MakeNotificationCharacter(GetTransientPackage(), { Starter });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::RunEvent).IsOk());
 	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeNotificationRunEvent(Run.Get(), Reward));
 	TestTrue(TEXT("Begin event succeeds"), Run->BeginRunEvent(TEXT("Notification.Event.Actor"), Event.Get()));
 
@@ -386,7 +410,7 @@ bool FWacomRunNotificationWorldInteractionSpec::RunTest(const FString& /*Paramet
 	UCharacterDefinition* Character = MakeNotificationCharacter(GetTransientPackage(), { Key });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::Treasure).IsOk());
 
 	int32 BroadcastCount = 0;
 	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
@@ -398,7 +422,7 @@ bool FWacomRunNotificationWorldInteractionSpec::RunTest(const FString& /*Paramet
 	const FRunWorldCardInteractionRequest Request =
 		MakeNotificationWorldInteractionRequest(*Run, Key, Reward);
 	TestTrue(TEXT("Request has source card"), Request.SourceCardInstanceId.IsValid());
-	TestTrue(TEXT("World interaction succeeds"), Run->SubmitRunWorldCardInteraction(Request));
+	TestTrue(TEXT("World interaction succeeds"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	const FNotificationRevisionSnapshot After = CaptureNotificationRevisions(*Run);
 
 	TestEqual(TEXT("World interaction broadcasts once"), BroadcastCount, 1);

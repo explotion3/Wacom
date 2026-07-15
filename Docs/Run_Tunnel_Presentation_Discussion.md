@@ -124,7 +124,7 @@ CameraTransform = Spline transform + clamped look offset
 | 类型 | 历史职责 |
 |---|---|
 | `AWacomRunTunnelGraphActor` | 持有或索引 tunnel nodes / segments |
-| `AWacomRunTunnelSegmentActor` | 一条可移动通道，包含 `USplineComponent` 和若干贴图 layer |
+| 旧 Segment Actor 原型（已删除） | 一条可移动通道，包含 `USplineComponent` 和若干贴图 layer；正式实现见 `AWacomRunPathSegmentActor` |
 | `AWacomRunTunnelJunctionActor` | 岔路口，声明可选出口、交互 target 和选择条件 |
 | `AWacomRunRailPawn` 或现有 Character 扩展 | 沿 active Spline 移动摄像机 |
 

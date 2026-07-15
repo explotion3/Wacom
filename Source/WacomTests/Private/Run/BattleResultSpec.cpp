@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "RunSession.h"
@@ -11,6 +12,7 @@
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Map/WacomFloorMapDefinition.h"
 
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/UnrealType.h"
@@ -31,21 +33,37 @@
 
 namespace
 {
-	URunSession* MakeRunWithCharacter(FWacomBattleFixture& Fx, TStrongObjectPtr<URunSession>& RunPtr)
+	struct FRunResultFixture
 	{
-		UCharacterDefinition* Char = Fx.MakeCharacter(
-			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-			{ Fx.MakeNoopCard(0) });
+		FWacomRunExplorationFixture Exploration;
+		URunSession* Run = nullptr;
 
-		RunPtr = TStrongObjectPtr<URunSession>(NewObject<URunSession>());
-		RunPtr->Initialize(Char);
-		return RunPtr.Get();
-	}
+		explicit FRunResultFixture(FWacomBattleFixture& Fx)
+		{
+			UCharacterDefinition* Char = Fx.MakeCharacter(
+				Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
+				{ Fx.MakeNoopCard(0) });
+			UWacomFloorMapDefinition* Floor =
+				Exploration.MakeLinearFloor(TEXT("BattleResult.Floor"), 1);
+			Floor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+			Run = Exploration.CreateInitializedSession(
+				Char,
+				Exploration.MakeJourney({ Floor }, TEXT("BattleResult.Journey"))).Session;
+		}
 
-	void FinishBattleForTest(URunSession* Run, const FBattleResultPacket& Packet, const TCHAR* TriggerPersistentId)
-	{
-		Run->OnBattleFinishedFromTrigger(Packet, FName(TriggerPersistentId));
-	}
+		FRunExplorationResolution Settle(const FBattleResultPacket& Packet) const
+		{
+			const FRunExplorationResolution Begin =
+				Run->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+			if (!Begin.IsOk() || !Begin.NodeActivityTicket.IsSet())
+			{
+				return Begin;
+			}
+			return Run->SettleEncounterNodeActivity(
+				Begin.NodeActivityTicket.GetValue(),
+				Packet);
+		}
+	};
 
 	int32 CountCardInOwnedZones(const URunSession* Run, const UCardDefinition* Card)
 	{
@@ -81,17 +99,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomRunResultNoTriggerWrapperDeprecatedSpec::RunTest(const FString& /*Parameters*/)
 {
-	UFunction* Function = URunSession::StaticClass()->FindFunctionByName(
-		GET_FUNCTION_NAME_CHECKED(URunSession, OnBattleFinished));
-	if (!TestNotNull(TEXT("OnBattleFinished function exists"), Function))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("No-trigger wrapper is deprecated for Blueprint callers"),
-		Function->HasMetaData(TEXT("DeprecatedFunction")));
-	TestTrue(TEXT("Deprecation message points to trigger-aware entry"),
-		Function->GetMetaData(TEXT("DeprecationMessage")).Contains(TEXT("OnBattleFinishedFromTrigger")));
+	TestNull(TEXT("No-trigger settlement wrapper is removed"),
+		URunSession::StaticClass()->FindFunctionByName(TEXT("OnBattleFinished")));
+	TestNull(TEXT("Trigger-id settlement wrapper is removed"),
+		URunSession::StaticClass()->FindFunctionByName(TEXT("OnBattleFinishedFromTrigger")));
 
 	return true;
 }
@@ -104,16 +115,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunResultFatigueOnEveryBattleSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	FRunResultFixture Fixture(Fx);
+	URunSession* Run = Fixture.Run;
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
+	Packet.bWithdrawn = true;
 
 	TestEqual(TEXT("Initial Fatigue=0"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 0);
 
-	FinishBattleForTest(Run, Packet, TEXT("Run.Result.Fatigue.Victory"));
+	TestTrue(TEXT("Withdraw settlement succeeds"), Fixture.Settle(Packet).IsOk());
 
 	TestEqual(TEXT("Fatigue +1 after victory"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 1);
@@ -122,7 +134,7 @@ bool FWacomRunResultFatigueOnEveryBattleSpec::RunTest(const FString& /*Parameter
 	// 失败也加疲劳。
 	FBattleResultPacket DefeatPacket;
 	DefeatPacket.Outcome = EBattleOutcome::Defeat;
-	FinishBattleForTest(Run, DefeatPacket, TEXT("Run.Result.Fatigue.Defeat"));
+	TestTrue(TEXT("Defeat settlement succeeds"), Fixture.Settle(DefeatPacket).IsOk());
 	TestEqual(TEXT("Fatigue +1 after defeat"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 2);
 	TestFalse(TEXT("bRunActive false after defeat"), Run->IsRunActive());
@@ -138,14 +150,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunResultHighHpThresholdAddsWoundSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	FRunResultFixture Fixture(Fx);
+	URunSession* Run = Fixture.Run;
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
 	Packet.bCrossedHighHpThreshold = true;
 
-	FinishBattleForTest(Run, Packet, TEXT("Run.Result.HighHpThreshold"));
+	TestTrue(TEXT("Battle settlement succeeds"), Fixture.Settle(Packet).IsOk());
 	TestEqual(TEXT("Wound +1 from HighHpThreshold"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 1);
 
@@ -160,14 +172,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunResultLowHpThresholdAddsWoundSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	FRunResultFixture Fixture(Fx);
+	URunSession* Run = Fixture.Run;
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
 	Packet.bCrossedLowHpThreshold = true;
 
-	FinishBattleForTest(Run, Packet, TEXT("Run.Result.LowHpThreshold"));
+	TestTrue(TEXT("Battle settlement succeeds"), Fixture.Settle(Packet).IsOk());
 	TestEqual(TEXT("Wound +5 from LowHpThreshold"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 5);
 
@@ -182,8 +194,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunResultMutualDestructionAddsWoundSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	FRunResultFixture Fixture(Fx);
+	URunSession* Run = Fixture.Run;
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
@@ -191,7 +203,7 @@ bool FWacomRunResultMutualDestructionAddsWoundSpec::RunTest(const FString& /*Par
 
 	TestTrue(TEXT("bRunActive=true initially"), Run->IsRunActive());
 
-	FinishBattleForTest(Run, Packet, TEXT("Run.Result.MutualDestruction"));
+	TestTrue(TEXT("Battle settlement succeeds"), Fixture.Settle(Packet).IsOk());
 
 	TestEqual(TEXT("Wound +10 from MutualDestruction"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 10);
@@ -210,8 +222,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunResultAllFlagsAccumulateSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	FRunResultFixture Fixture(Fx);
+	URunSession* Run = Fixture.Run;
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Victory;
@@ -219,7 +231,7 @@ bool FWacomRunResultAllFlagsAccumulateSpec::RunTest(const FString& /*Parameters*
 	Packet.bCrossedLowHpThreshold = true;
 	Packet.bMutualDestruction = true;
 
-	FinishBattleForTest(Run, Packet, TEXT("Run.Result.AllFlags"));
+	TestTrue(TEXT("Battle settlement succeeds"), Fixture.Settle(Packet).IsOk());
 
 	TestEqual(TEXT("Wound +1+5+10=16"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 16);
@@ -237,8 +249,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunResultUndeterminedSkipsAccumulationSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	TStrongObjectPtr<URunSession> RunPtr;
-	URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+	FRunResultFixture Fixture(Fx);
+	URunSession* Run = Fixture.Run;
 
 	FBattleResultPacket Packet;
 	Packet.Outcome = EBattleOutcome::Undetermined;
@@ -246,7 +258,7 @@ bool FWacomRunResultUndeterminedSkipsAccumulationSpec::RunTest(const FString& /*
 	Packet.bCrossedHighHpThreshold = true;
 	Packet.bMutualDestruction = true;
 
-	FinishBattleForTest(Run, Packet, TEXT("Run.Result.Undetermined"));
+	TestFalse(TEXT("Undetermined settlement is rejected"), Fixture.Settle(Packet).IsOk());
 
 	TestEqual(TEXT("Fatigue unchanged on Undetermined"),
 		Run->GetPressureValue(EWacomPressureType::Fatigue), 0);
@@ -268,8 +280,8 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 1, 0);
 
 	{
-		TStrongObjectPtr<URunSession> RunPtr;
-		URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+		FRunResultFixture Fixture(Fx);
+		URunSession* Run = Fixture.Run;
 		UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
 
 		FBattleResultPacket Packet;
@@ -281,15 +293,15 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.GainedCards.Add(GainedCard);
 
 		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
-		FinishBattleForTest(Run, Packet, TEXT("Run.Result.Reward.Victory"));
+		TestTrue(TEXT("Victory settlement succeeds"), Fixture.Settle(Packet).IsOk());
 		TestEqual(TEXT("Victory settles gained reward card to Run ownership"),
 			CountCardInOwnedZones(Run, RewardCard),
 			Before + 1);
 	}
 
 	{
-		TStrongObjectPtr<URunSession> RunPtr;
-		URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+		FRunResultFixture Fixture(Fx);
+		URunSession* Run = Fixture.Run;
 		UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
 
 		FBattleResultPacket Packet;
@@ -302,15 +314,15 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.GainedCards.Add(GainedCard);
 
 		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
-		FinishBattleForTest(Run, Packet, TEXT("Run.Result.Reward.Withdraw"));
+		TestTrue(TEXT("Withdraw settlement succeeds"), Fixture.Settle(Packet).IsOk());
 		TestEqual(TEXT("Withdraw victory still settles already gained reward card"),
 			CountCardInOwnedZones(Run, RewardCard),
 			Before + 1);
 	}
 
 	{
-		TStrongObjectPtr<URunSession> RunPtr;
-		URunSession* Run = MakeRunWithCharacter(Fx, RunPtr);
+		FRunResultFixture Fixture(Fx);
+		URunSession* Run = Fixture.Run;
 		UCardDefinition* RewardCard = Fx.MakeNoopCard(/*Cost*/0);
 
 		FBattleResultPacket Packet;
@@ -322,7 +334,7 @@ bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Par
 		Packet.GainedCards.Add(GainedCard);
 
 		const int32 Before = CountCardInOwnedZones(Run, RewardCard);
-		FinishBattleForTest(Run, Packet, TEXT("Run.Result.Reward.Defeat"));
+		TestTrue(TEXT("Defeat settlement succeeds"), Fixture.Settle(Packet).IsOk());
 		TestEqual(TEXT("Defeat does not settle gained reward card"),
 			CountCardInOwnedZones(Run, RewardCard),
 			Before);

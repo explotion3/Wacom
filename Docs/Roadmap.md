@@ -78,8 +78,8 @@ tags:
 
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
-| 地图系统 | 地图设计语境见 [Game_Design §10](./Game_Design.md#game-design-run-map)；当前 Run 只维护时间 / 节点消耗事实，节点消耗统一口径仍见 [Questions: Run、探索与地图](./Questions.md#questions-run-map) | 新建 `WacomMap` 模块或放在 `WacomRun` 下；实现地图运行时状态和节点生成 |
-| 地图运行时状态 | 当前 Run 状态边界见 [WacomRun.md](./WacomRun.md)，地图语境见 [Game_Design §10](./Game_Design.md#game-design-run-map) | 后续引入地图节点状态，用于记录节点揭示、完成、重入和地图运行时状态 |
+| 地图系统 | 已确认合同见 [WacomMap.md](./WacomMap.md)；当前 Run 只维护时间 / 节点消耗事实，旧节点预算术语仍见 [Questions: Run、探索与地图](./Questions.md#questions-run-map) | 收口 UE Module 布局、行动点、节点类型和 authoring 后，实现 Logical Map Graph 与地图运行时状态 |
+| 地图运行时状态 | 当前 Run 状态边界见 [WacomRun.md](./WacomRun.md)，地图合同见 [WacomMap.md](./WacomMap.md) | 实现 Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure；未来再接 SaveGame |
 | 自由探索 Session 边界 | 仍复用 `RunSession` | 若自由探索规则明显区别于 Run，需确认是否新建区域探索 session |
 
 <a id="roadmap-runevent"></a>

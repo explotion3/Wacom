@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "Cards/CardDefinition.h"
@@ -8,6 +9,7 @@
 #include "Commands/BattleCommand.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Map/WacomFloorMapDefinition.h"
 #include "Resolution/BattleTargetValidationResult.h"
 #include "Runtime/BattleEnemyKeys.h"
 #include "RunSession.h"
@@ -296,8 +298,20 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 		return false;
 	}
 
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Fixture.Character);
+	FWacomRunExplorationFixture Exploration;
+	UWacomFloorMapDefinition* Floor =
+		Exploration.MakeLinearFloor(TEXT("TargetIdentity.Progress.Floor"), 1);
+	Floor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+	URunSession* Run = Exploration.CreateInitializedSession(
+		Fixture.Character.Get(),
+		Exploration.MakeJourney({ Floor }, TEXT("TargetIdentity.Progress.Journey"))).Session;
+	const FRunExplorationResolution EncounterBegin =
+		Run->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+	if (!TestTrue(TEXT("Encounter begins"),
+		EncounterBegin.IsOk() && EncounterBegin.NodeActivityTicket.IsSet()))
+	{
+		return false;
+	}
 
 	{
 		FBattleInitParams Params;
@@ -353,13 +367,14 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 				FName(TEXT("Core")));
 		}
 
-		Run->OnBattleFinishedFromTrigger(
-			Packet,
-			FName(TEXT("ProgressTrigger")));
+		TestTrue(TEXT("Withdraw settlement succeeds"),
+			Run->SettleEncounterNodeActivity(
+				EncounterBegin.NodeActivityTicket.GetValue(), Packet).IsOk());
 	}
 
 	const FBattleProgressSnapshot* Progress =
-		Run->GetRunState().BattleProgress.Find(FName(TEXT("ProgressTrigger")));
+		Run->GetRunState().BattleProgress.Find(
+			FWacomMapNodeHandle{ TEXT("TargetIdentity.Progress.Floor"), TEXT("Node.01") });
 	TestNotNull(TEXT("Run progress exists"), Progress);
 	if (!Progress)
 	{

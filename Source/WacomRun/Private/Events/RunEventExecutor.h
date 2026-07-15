@@ -27,6 +27,9 @@ struct FRunEventExecutor
 	static FRunEventChoiceResult ChooseOption(FRunState& State, FName ChoiceId);
 	static FRunDeckOperationValidation ValidateChoiceCardPayment(const FRunState& State, FName ChoiceId, FGuid PaidCardInstanceId);
 	static FRunEventChoiceResult ChooseOptionWithPaidCard(FRunState& State, FName ChoiceId, FGuid PaidCardInstanceId);
+	static int32 ResolveActionPointCost(
+		const FWacomRunEventChoiceDefinition& Choice,
+		bool bEventTerminal);
 
 	static bool IsEventCompleted(const FRunState& State, FName PersistentId);
 	static bool IsRunFlagSet(const FRunState& State, FName FlagId);

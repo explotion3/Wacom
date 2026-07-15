@@ -24,6 +24,13 @@ FWacomFirstPersonCardAnchorAutomationTestView FWacomFirstPersonCardLayerTestAcce
 	return Anchor.GetAutomationTestViewForTest();
 }
 
+void FWacomFirstPersonCardLayerTestAccess::TickAnchor(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	const float DeltaTime)
+{
+	Anchor.TickComponent(DeltaTime, LEVELTICK_All, nullptr);
+}
+
 void FWacomFirstPersonCardLayerTestAccess::SetCardViewRetainerEffectMaterialBeforeSlate(
 	UWacomFirstPersonCardViewWidget& CardView,
 	UMaterialInterface* Material)

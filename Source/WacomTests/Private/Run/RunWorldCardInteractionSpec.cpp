@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -94,7 +95,7 @@ bool FWacomRunWorldCardInteractionSuccessSpec::RunTest(const FString& /*Paramete
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	const FGuid KeyInstanceId = GetFirstBattleDeckInstanceId(*Run);
 	FRunWorldCardInteractionRequest Request = MakeChestRequest(*Run, Key.Get());
@@ -102,7 +103,7 @@ bool FWacomRunWorldCardInteractionSuccessSpec::RunTest(const FString& /*Paramete
 		Run->ValidateRunWorldCardInteraction(Request);
 	TestTrue(TEXT("Validation can submit"), Validation.bCanSubmit);
 
-	TestTrue(TEXT("Submit succeeds"), Run->SubmitRunWorldCardInteraction(Request));
+	TestTrue(TEXT("Submit succeeds"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	TestEqual(TEXT("Gold +3"), Run->GetGold(), 3);
 	TestTrue(TEXT("Completed marked"),
 		Run->IsRunWorldInteractionCompleted(TEXT("Chest.Debug.Test")));
@@ -126,7 +127,7 @@ bool FWacomRunWorldCardInteractionMultiRewardSpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	int32 BroadcastCount = 0;
 	Run->OnRunStateChangedNative.AddLambda(
@@ -149,7 +150,7 @@ bool FWacomRunWorldCardInteractionMultiRewardSpec::RunTest(const FString& /*Para
 			TEXT("Chest.MultiReward"));
 
 	const FGuid KeyInstanceId = Request.SourceCardInstanceId;
-	TestTrue(TEXT("Submit succeeds"), Run->SubmitRunWorldCardInteraction(Request));
+	TestTrue(TEXT("Submit succeeds"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	TestEqual(TEXT("Gold +3"), Run->GetGold(), 3);
 	TestTrue(TEXT("Completed marked"),
 		Run->IsRunWorldInteractionCompleted(TEXT("Chest.MultiReward")));
@@ -179,7 +180,7 @@ bool FWacomRunWorldCardInteractionWrongCardSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Wrong.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	FRunWorldCardInteractionRequest Request = MakeChestRequest(*Run, Key.Get());
 	Request.AllowedCardDefinitions = { Key.Get() };
@@ -188,7 +189,7 @@ bool FWacomRunWorldCardInteractionWrongCardSpec::RunTest(const FString& /*Parame
 		Run->ValidateRunWorldCardInteraction(Request);
 	TestFalse(TEXT("Wrong card rejected"), Validation.bCanSubmit);
 	TestEqual(TEXT("Wrong card reason"), Validation.DisabledReason, FName(TEXT("CardNotAccepted")));
-	TestFalse(TEXT("Submit rejected"), Run->SubmitRunWorldCardInteraction(Request));
+	TestFalse(TEXT("Submit rejected"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Request.PersistentId));
 	return true;
@@ -206,16 +207,16 @@ bool FWacomRunWorldCardInteractionRepeatSpec::RunTest(const FString& /*Parameter
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	FRunWorldCardInteractionRequest Request = MakeChestRequest(*Run, Key.Get());
 	Request.bConsumeCardOnSuccess = false;
-	TestTrue(TEXT("First submit"), Run->SubmitRunWorldCardInteraction(Request));
+	TestTrue(TEXT("First submit"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	const FRunWorldCardInteractionValidation RepeatValidation =
 		Run->ValidateRunWorldCardInteraction(Request);
 	TestFalse(TEXT("Repeat rejected"), RepeatValidation.bCanSubmit);
 	TestEqual(TEXT("Repeat reason"), RepeatValidation.DisabledReason, FName(TEXT("AlreadyCompleted")));
-	TestFalse(TEXT("Second submit rejected"), Run->SubmitRunWorldCardInteraction(Request));
+	TestFalse(TEXT("Second submit rejected"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	TestEqual(TEXT("Gold only once"), Run->GetGold(), 3);
 	return true;
 }
@@ -232,7 +233,7 @@ bool FWacomRunWorldCardInteractionMissingIdSpec::RunTest(const FString& /*Parame
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	FRunWorldCardInteractionRequest Request = MakeChestRequest(*Run, Key.Get(), NAME_None);
 	const FRunWorldCardInteractionValidation Validation =
@@ -256,7 +257,7 @@ bool FWacomRunWorldCardInteractionMissingSourceSpec::RunTest(const FString& /*Pa
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	FRunWorldCardInteractionRequest Request = MakeChestRequest(*Run, Key.Get());
 	Request.SourceCardInstanceId = FGuid();
@@ -281,7 +282,7 @@ bool FWacomRunWorldCardInteractionMissingRewardSpec::RunTest(const FString& /*Pa
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	FRunWorldCardInteractionRequest Request = MakeChestRequest(*Run, Key.Get());
 	Request.Rewards.Reset();
@@ -291,7 +292,7 @@ bool FWacomRunWorldCardInteractionMissingRewardSpec::RunTest(const FString& /*Pa
 	TestEqual(TEXT("Missing reward reason"),
 		Validation.DisabledReason,
 		FName(TEXT("MissingReward")));
-	TestFalse(TEXT("Submit rejected"), Run->SubmitRunWorldCardInteraction(Request));
+	TestFalse(TEXT("Submit rejected"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Request.PersistentId));
 	return true;
@@ -309,7 +310,7 @@ bool FWacomRunWorldCardInteractionInvalidGoldSpec::RunTest(const FString& /*Para
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	FRunWorldCardInteractionRequest Request = MakeChestRequest(*Run, Key.Get(), TEXT("Chest.BadGold"), 0);
 	const FRunWorldCardInteractionValidation Validation =
@@ -333,7 +334,7 @@ bool FWacomRunWorldCardInteractionMissingCardRewardSpec::RunTest(const FString& 
 	TStrongObjectPtr<UCharacterDefinition> Character(
 		MakeRunWorldInteractionCharacter(GetTransientPackage(), Key.Get()));
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character.Get()));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character.Get(), EWacomMapNodeType::Treasure).IsOk());
 
 	FWacomRunWorldCardInteractionReward CardReward;
 	CardReward.Type = EWacomRunWorldCardInteractionRewardType::Card;
@@ -350,7 +351,7 @@ bool FWacomRunWorldCardInteractionMissingCardRewardSpec::RunTest(const FString& 
 	TestEqual(TEXT("Missing card reward reason"),
 		Validation.DisabledReason,
 		FName(TEXT("MissingCardDefinition")));
-	TestFalse(TEXT("Submit rejected"), Run->SubmitRunWorldCardInteraction(Request));
+	TestFalse(TEXT("Submit rejected"), Run->SubmitRunWorldCardInteraction(Request).bSucceeded);
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("Not completed"), Run->IsRunWorldInteractionCompleted(Request.PersistentId));
 	return true;

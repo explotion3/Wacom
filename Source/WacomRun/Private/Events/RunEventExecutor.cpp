@@ -5,7 +5,6 @@
 #include "Cards/CardDefinition.h"
 #include "Deck/RunDeckRules.h"
 #include "Events/RunEventDefinition.h"
-#include "Time/RunTimeRules.h"
 
 namespace
 {
@@ -364,6 +363,9 @@ FRunEventSnapshot FRunEventExecutor::BuildSnapshot(const FRunState& State)
 		ChoiceSnapshot.ChoiceId = Choice.ChoiceId;
 		ChoiceSnapshot.LabelText = Choice.LabelText;
 		BuildConsequenceSnapshotsForChoice(EventDefinition, Choice, ChoiceSnapshot.Consequences);
+		ChoiceSnapshot.ActionPointCost = ResolveActionPointCost(
+			Choice,
+			Choice.bCloseEventAfterResolve || Choice.bMarkEventCompleted);
 
 		FChoiceEvaluation Evaluation = EvaluateChoice(State, Choice);
 		ChoiceSnapshot.bAvailable = Evaluation.bAvailable;
@@ -397,6 +399,23 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionWithPaidCard(
 	return ChooseOptionInternal(State, ChoiceId, PaidCardInstanceId);
 }
 
+int32 FRunEventExecutor::ResolveActionPointCost(
+	const FWacomRunEventChoiceDefinition& Choice,
+	const bool bEventTerminal)
+{
+	switch (Choice.ActionPointPolicy)
+	{
+	case EWacomRunEventActionPointPolicy::Automatic:
+		return bEventTerminal ? 1 : 0;
+	case EWacomRunEventActionPointPolicy::Free:
+		return 0;
+	case EWacomRunEventActionPointPolicy::Fixed:
+		return FMath::Max(0, Choice.FixedActionPointCost);
+	default:
+		return 0;
+	}
+}
+
 FRunDeckOperationValidation FRunEventExecutor::ValidateChoiceCardPayment(
 	const FRunState& State,
 	FName ChoiceId,
@@ -426,6 +445,13 @@ FRunDeckOperationValidation FRunEventExecutor::ValidateChoiceCardPayment(
 	if (!Choice)
 	{
 		Result.DisabledReason = TEXT("ChoiceNotFound");
+		return Result;
+	}
+	const bool bConfiguredTerminal = Choice->bCloseEventAfterResolve || Choice->bMarkEventCompleted;
+	const int32 ActionPointCost = ResolveActionPointCost(*Choice, bConfiguredTerminal);
+	if (ActionPointCost > 0 && !bConfiguredTerminal)
+	{
+		Result.DisabledReason = TEXT("PositiveActionPointCostRequiresTerminalChoice");
 		return Result;
 	}
 	if (!Choice->CardPayment.bRequiresOwnedCardPayment)
@@ -485,6 +511,13 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
 			TEXT("[RunSession] ChooseRunEventOption: 找不到 ChoiceId=%s"),
 			*ChoiceId.ToString());
 		Result.DisabledReason = TEXT("ChoiceNotFound");
+		return Result;
+	}
+	const bool bConfiguredTerminal = Choice->bCloseEventAfterResolve || Choice->bMarkEventCompleted;
+	const int32 ActionPointCost = ResolveActionPointCost(*Choice, bConfiguredTerminal);
+	if (ActionPointCost > 0 && !bConfiguredTerminal)
+	{
+		Result.DisabledReason = TEXT("PositiveActionPointCostRequiresTerminalChoice");
 		return Result;
 	}
 
@@ -609,6 +642,7 @@ FRunEventChoiceResult FRunEventExecutor::ChooseOptionInternal(
 	Result.bNodeChanged = PreviousNodeId != ResolvedNodeId;
 	Result.bEventClosedAfterResolve = bEventClosedAfterResolve;
 	Result.bEventCompletedAfterResolve = bEventCompletedAfterResolve;
+	Result.ActionPointCost = ActionPointCost;
 	Result.EffectResults = MoveTemp(PendingEffectResults);
 	Result.bSucceeded = true;
 	return Result;
@@ -648,11 +682,11 @@ FRunEventChoiceRequirementSnapshot FRunEventExecutor::EvaluateCondition(
 		Requirement.bSatisfied = State.Gold >= Condition.Value;
 		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("InsufficientGold"));
 		return Requirement;
-	case EWacomRunEventConditionType::MinNodeCount:
-		Requirement.Kind = ERunEventChoiceRequirementKind::MinNodeCount;
-		Requirement.CurrentValue = State.RemainingNodeCount;
-		Requirement.bSatisfied = State.RemainingNodeCount >= Condition.Value;
-		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("InsufficientNode"));
+	case EWacomRunEventConditionType::MinActionPoints:
+		Requirement.Kind = ERunEventChoiceRequirementKind::MinActionPoints;
+		Requirement.CurrentValue = State.TimeState.RemainingActionPoints;
+		Requirement.bSatisfied = Requirement.CurrentValue >= Condition.Value;
+		Requirement.DisabledReason = Requirement.bSatisfied ? NAME_None : FName(TEXT("InsufficientActionPoints"));
 		return Requirement;
 	case EWacomRunEventConditionType::MaxPressure:
 	{
@@ -973,24 +1007,6 @@ bool FRunEventExecutor::ApplyChoiceEffects(FRunState& State, const FWacomRunEven
 			State.Pressure.Add(PressureType, Effect.Value);
 			EffectResult.PressureType = PressureType;
 			EffectResult.ActualDelta = State.Pressure.Get(PressureType) - PressureBefore;
-			EffectResult.bApplied = true;
-			break;
-		}
-		case EWacomRunEventEffectType::ConsumeNode:
-		{
-			const int32 Count = FMath::Max(0, Effect.Value);
-			int32 ConsumedNodeCount = 0;
-			const bool bHadEnoughNode = FRunTimeRules::ConsumeNode(State, Count, &ConsumedNodeCount);
-			EffectResult.ActualDelta = -ConsumedNodeCount;
-			if (Count > 0)
-			{
-				if (!bHadEnoughNode)
-				{
-					UE_LOG(LogTemp, Warning,
-						TEXT("[RunSession] ApplyRunEventChoiceEffects: 节点不足但已推进时段 Count=%d"),
-						Count);
-				}
-			}
 			EffectResult.bApplied = true;
 			break;
 		}

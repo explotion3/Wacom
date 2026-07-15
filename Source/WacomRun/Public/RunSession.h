@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Deck/RunDeckBatchTypes.h"
+#include "Exploration/RunCampActivity.h"
+#include "Exploration/RunExplorationCommand.h"
+#include "Exploration/RunExplorationResolution.h"
 #include "UObject/Object.h"
 #include "Types/WacomEnums.h"
 #include "RunState.h"
@@ -63,20 +66,32 @@ public:
 	// ---- 生命周期 ----
 
 	/**
-	 * 初始化一次 Run。新开档时调用。
-	 * 失败时 bRunActive 仍置 true 但 Character 为空——调用方应检查返回值。
-	 *
-	 * 行为：
-	 *   - FingerCount / HpPerFinger 从 Character 字段读
-	 *   - 非容器卡默认进 BattleDeck，容器卡默认进 Backpack；原型特例暮色引虫灯默认进 BattleDeck
-	 *   - 时段重置为 Morning + 初始节点数
+	 * 以 Character + Journey 初始化完整 Run working state。
+	 * 成功后一次提交并返回版本 1 的显式 Snapshot/Events；失败时旧 Session 完全不变。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run")
-	bool Initialize(UCharacterDefinition* InCharacter);
+	FRunInitializationResult Initialize(const FRunInitializationParams& Params);
 
-	/** 重置为"新 Run"默认值（保留 Character）。死亡后重开用。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run")
-	void ResetRunState();
+	/** 唯一探索命令入口。命令结果不会暂存在 Session 输出队列。 */
+	FRunExplorationResolution ResolveExplorationCommand(const FRunExplorationCommand& Command);
+
+	/** 构建当前探索只读事实；不改变状态、不广播。 */
+	FRunExplorationSnapshot BuildExplorationSnapshot() const;
+
+	/** 为当前 typed Map Node 开始唯一 NodeActivity；成本由规则类型决定，调用方不能提供。 */
+	FRunExplorationResolution BeginCurrentNodeActivity(ERunNodeActivityKind Kind);
+
+	/** 仅持有同一票据的调用方可取消；取消释放逻辑预留且不消费 Action Point。 */
+	FRunExplorationResolution CancelNodeActivity(const FRunNodeActivityTicket& Ticket);
+
+	/** 完成一个类型化 Camp Activity；handler 只能读取上下文并返回 outcome。 */
+	FRunExplorationResolution CompleteCampActivity(
+		const FRunCampTicket& Ticket,
+		const IRunCampActivityHandler& Handler);
+
+	/** Encounter 战果、预留、压力/奖励和节点生命周期的唯一原子结算入口。 */
+	FRunExplorationResolution SettleEncounterNodeActivity(
+		const FRunNodeActivityTicket& Ticket,
+		const FBattleResultPacket& Packet);
 
 	// ---- 状态访问 ----
 
@@ -226,37 +241,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Skill")
 	void AddExperience(int32 Amount);
 
-	// ---- 时段 / 节点 ----
+	// ---- 时段 / Action Point ----
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Time")
-	ETimePhase GetCurrentTimePhase() const { return RunState.CurrentTimePhase; }
+	ETimePhase GetCurrentTimePhase() const { return RunState.TimeState.CurrentTimePhase; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Time")
-	int32 GetRemainingNodeCount() const { return RunState.RemainingNodeCount; }
+	int32 GetRemainingActionPoints() const { return RunState.TimeState.RemainingActionPoints; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Time")
-	int32 GetCurrentDayNumber() const { return RunState.CurrentDayNumber; }
-
-	/**
-	 * 消耗当前时段的节点数。
-	 *   - Count <= 0 时视为成功且不修改状态
-	 *   - 消耗后剩余 ≤ 0 时调用 AdvanceToNextPhase 自动推进
-	 *   - 返回是否成功消耗（节点不足时返回 false 但仍会扣到 0 + 推进）
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Time")
-	bool ConsumeNode(int32 Count = 1);
-
-	/**
-	 * 推进到下一时段。
-	 * 一般不该手动调用，由 ConsumeNode 自动触发；留 public 调试用。
-	 *
-	 * 当前推进规则：
-	 *   Morning → Day → Dusk → Night → Sunrise → Morning（次日，CurrentDayNumber++）
-	 *
-	 * 露营特殊推进（Night → Morning 跳过 Sunrise）等特殊节点效果后续单独接入。
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Time")
-	void AdvanceToNextPhase();
+	int32 GetCurrentDayNumber() const { return RunState.TimeState.CurrentDayNumber; }
 
 	// ---- 背包与备战卡组 ----
 
@@ -569,7 +563,7 @@ public:
 	 * 成功时同一事务内增加金币并标记 PersistentId 已拾取；重复拾取、空 ID 或非正数金币会拒绝且不广播。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pickup")
-	bool CollectGoldPickup(FName PersistentId, int32 GoldAmount);
+	FRunTreasureSettlementResult CollectGoldPickup(FName PersistentId, int32 GoldAmount);
 
 	/**
 	 * 拾取固定卡牌型世界拾取物。
@@ -577,7 +571,7 @@ public:
 	 * 成功时复用获得卡牌入 Run 的规则并标记 PersistentId 已拾取；重复拾取、空 ID 或空卡牌会拒绝且不广播。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pickup")
-	bool CollectCardPickup(FName PersistentId, UCardDefinition* CardDefinition);
+	FRunTreasureSettlementResult CollectCardPickup(FName PersistentId, UCardDefinition* CardDefinition);
 
 	/** 指定探索期世界卡牌交互是否已在当前 Run 中完成。当前只保存在内存态，不接 SaveGame。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|World Interaction")
@@ -594,7 +588,7 @@ public:
 	 * 成功时可选消耗精确 SourceCardInstanceId、增加金币奖励、标记 PersistentId 已完成，并统一广播一次。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|World Interaction")
-	bool SubmitRunWorldCardInteraction(const FRunWorldCardInteractionRequest& Request);
+	FRunTreasureSettlementResult SubmitRunWorldCardInteraction(const FRunWorldCardInteractionRequest& Request);
 
 	// ---- 商店购买 ----
 
@@ -604,7 +598,7 @@ public:
 	 * ShopId 使用场景商店/节点的 PersistentId。第一次打开该 ShopId 时用传入 Offers 初始化库存；
 	 * 之后重复打开同一 ShopId 会保留既有库存和已购买状态，忽略新的 Offers。
 	 * 已有 active shop visit 时拒绝重入，必须先结束当前访问。
-	 * 打开商店不消耗节点，关闭时若本次访问买过至少一件商品才消耗 1 节点。
+	 * 打开商店和浏览免费；本次 visit 第一次成功购买原子消耗 1 行动点，后续购买免费。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	bool BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
@@ -618,7 +612,7 @@ public:
 	/**
 	 * 结束当前商店访问并清理访问标记。
 	 *
-	 * 如果本次访问买过至少一件商品，则在关闭时消耗 1 节点；未购买则不消耗。
+	 * 关闭只结束访问；不会追加行动点成本。未购买时会取消 pending Shop activity。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	void EndShopVisit();
@@ -638,10 +632,10 @@ public:
 	/**
 	 * 购买当前商店中的一条商品。
 	 *
-	 * 成功后立即扣金币、获得卡牌并标记 Offer 已购买；节点消耗延迟到 EndShopVisit。
+	 * 成功后原子提交金币、卡牌、Offer 状态；本次 visit 第一次成功购买同时消耗 1 行动点。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
-	bool PurchaseShopOffer(FGuid OfferId);
+	FRunShopPurchaseResult PurchaseShopOffer(FGuid OfferId);
 
 	/**
 	 * 从商店购买一张卡。
@@ -745,42 +739,6 @@ public:
 	 */
 	bool BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const;
 
-	/**
-	 * 旧 no-trigger 兼容包装：等同于 OnBattleFinishedFromTrigger(Packet, NAME_None)。
-	 *
-	 * 正式 GameMode / C++ 测试必须使用 OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)，
-	 * 否则撤离进度和真胜利清理都无法绑定到场景 Trigger。
-	 *
-	 * 战斗结果回传处理：
-	 *   - Outcome 处理：
-	 *       Victory：清理对应 Trigger 的 BattleProgress；场景完成由 MarkTriggerDestroyed 记录
-	 *       Defeat ：标记 bRunActive = false
-	 *       Undetermined：不改变状态（用于异常或玩家取消）
-	 *   - 战斗结束疲劳压力 +1%（不分胜败）
-	 *   - bCrossedHighHpThreshold → 伤口压力 +1%
-	 *   - bCrossedLowHpThreshold  → 伤口压力 +5%
-	 *   - bMutualDestruction      → 伤口压力 +10%
-	 *
-	 * 同归于尽（Outcome=Victory + bMutualDestruction=true）：
-	 *   - 战外不触发失败（bRunActive 保持 true）
-	 *   - 仅累计伤口压力
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run",
-		meta = (DeprecatedFunction,
-			DeprecationMessage = "请改用 OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)。无 Trigger 的兼容入口会把战斗结算落到 NAME_None，无法记录或清理场景 Trigger 进度。"))
-	void OnBattleFinished(const FBattleResultPacket& Packet);
-
-	/**
-	 * 正式战斗结束入口：传入触发战斗的 Trigger 持久化 ID，让 Run 层能：
-	 *   - 撤离时写 RunState.BattleProgress[TriggerId]
-	 *   - 真胜利时清 RunState.BattleProgress[TriggerId]
-	 *
-	 * @param Packet                 战斗回传包
-	 * @param TriggerPersistentId    Trigger 持久化 ID。NAME_None 表示无 Trigger（如纯测试或调试战斗）
-	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Run")
-	void OnBattleFinishedFromTrigger(const FBattleResultPacket& Packet, FName TriggerPersistentId);
-
 	/** 场景：标记一个触发器已被永久销毁。 */
 	void MarkTriggerDestroyed(FName PersistentId);
 
@@ -866,6 +824,11 @@ private:
 	 */
 	void RecomputeBurdenInternal(bool bAllowBurdenRefill = true);
 
+	/** RunEvent 选项、卡牌支付、行动点与地图生命周期的单次 working-state 事务。 */
+	FRunEventChoiceResult ResolveRunEventChoiceInternal(
+		FName ChoiceId,
+		TOptional<FGuid> PaidCardInstanceId);
+
 	/** 私有路径：AcquireCardToRun 的"不广播"版本，供复合 Run 操作统一尾部广播。 */
 	bool AcquireCardToRunInternal(UCardDefinition* Card);
 
@@ -906,6 +869,10 @@ private:
 	uint64 EconomySnapshotRevision = 0;
 
 	/** Transient UI ownership; never serialized as RunState/SaveGame data. */
+	TOptional<FRunTraversalTicket> ActiveTraversalTicket;
+	TOptional<FRunNodeActivityTicket> ActiveNodeActivityTicket;
+	TOptional<FRunCampTicket> ActiveCampTicket;
+	TOptional<FRunFloorTransitionConfirmation> ActiveFloorTransitionConfirmation;
 	FGuid ActiveShopVisitToken;
 	FGuid ActiveRunEventVisitToken;
 

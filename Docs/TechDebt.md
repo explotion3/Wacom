@@ -78,7 +78,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 
 | 项 | 临时做法 / 当前决定 | 正式方案 / 处理方向 |
 |---|---|---|
-| `URunSession` 仍承担多个领域流程 | 背包 / 负重 / 永久移除规则、RunEvent 执行、商店事务、战斗回传结算、SaveGame 字段拷贝均已抽到私有 helper；Run UI snapshot revision dirty bitset 已收口为 typed 私有 contract；`RunSession.cpp` 仍保留 public 命令协调、slot IO、时间 / 压力等基础入口 | 暂不继续拆；后续若时间 / 压力或 slot IO 继续膨胀，再按低风险切片拆私有 helper |
+| `URunSession` 仍承担多个领域流程 | 背包 / 负重 / 永久移除规则、RunEvent、商店、战斗回传、SaveGame、时间、地图、节点活动、Camp 和跨层均已抽到私有 helper/module；初始化和探索命令使用显式 result，UI revision 使用 typed 私有 dirty contract；`RunSession.cpp` 仍是这些领域入口的 public façade 和事务提交 owner | 不再把新规则直接堆入 façade；后续按独立可测领域继续下沉私有 module，但保持 `URunSession` 作为 Run 聚合根和通知 owner |
 | Run→Battle 入口 legacy fallback | `AWacomGameMode::EnterBattle` 已拒绝缺失 / 无效 RunSession，不再用 `DefaultCharacter / DefaultRandomSeed` 拼脱离 RunState 的 fallback 战斗；C++ no-trigger `URunSession::BuildInitParamsForBattle(FBattleInitParams&)` 已移除，Run 侧测试改为显式 trigger-aware contract；BlueprintCallable `OnBattleFinished(Packet)` 包装和 `DefaultRandomSeed` 资产兼容字段仍保留，但均已标记 deprecated | 资产审计后再决定移除或重命名 `OnBattleFinished(Packet)` 包装与 GameMode legacy 随机种子字段；新增 C++ 测试默认调用 `OnBattleFinishedFromTrigger` / `BuildInitParamsForBattle(TriggerId, Params)` |
 
 <a id="techdebt-ui-architecture"></a>
@@ -133,6 +133,8 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 
 这些条目已写入正式领域文档，后续不要再作为 TODO 重复追踪：
 
+- Run 探索原型路径已收口：正式规则由 Journey/Floor Logical Map Graph、Action Point、节点 activity ticket、Camp 和 Floor Transition module 承接；App 只保留 `UWacomRunPathTraversalComponent`、Path Segment / Branch / NodeAnchor 与 Scene Registry。旧移动 / Segment / Branch 原生类、Blueprint 资产和 Config redirect 已删除，独立纸片美术 Actor 不参与移动规则。
+- Run 初始化兼容面已收口：PlayerController 和测试 fixture 统一提交 `FRunInitializationParams` 并消费 `FRunInitializationResult`，失败不破坏旧 Session；SaveGame schema 3 明确不序列化 exploration state。
 - 中毒穿透护盾，见 `WacomBattle.md §7`
 - 中毒触发时机，见 `WacomBattle.md §7`
 - 晕厥层数模型，见 `WacomBattle.md §9`

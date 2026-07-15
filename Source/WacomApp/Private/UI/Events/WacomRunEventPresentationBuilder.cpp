@@ -55,9 +55,9 @@ FText UWacomRunEventPresentationBuilder::FormatDisabledReason(FName DisabledReas
 	{
 		return LOCTEXT("InsufficientGold", "金币不足");
 	}
-	if (DisabledReason == TEXT("InsufficientNode"))
+	if (DisabledReason == TEXT("InsufficientActionPoints"))
 	{
-		return LOCTEXT("InsufficientNode", "行动点不足");
+		return LOCTEXT("InsufficientActionPoints", "行动点不足");
 	}
 	if (DisabledReason == TEXT("PressureTooHigh"))
 	{
@@ -217,9 +217,9 @@ FWacomRunEventChoiceRequirementView UWacomRunEventPresentationBuilder::BuildChoi
 				FText::AsNumber(Requirement.RequiredValue),
 				FText::AsNumber(Requirement.CurrentValue));
 			break;
-		case ERunEventChoiceRequirementKind::MinNodeCount:
+		case ERunEventChoiceRequirementKind::MinActionPoints:
 			Item.Text = FText::Format(
-				LOCTEXT("RequireNodeFmt", "需要行动点：{0} / 当前 {1}"),
+				LOCTEXT("RequireActionPointsFmt", "需要行动点：{0} / 当前 {1}"),
 				FText::AsNumber(Requirement.RequiredValue),
 				FText::AsNumber(Requirement.CurrentValue));
 			break;
@@ -335,6 +335,16 @@ FWacomRunEventChoiceConsequenceView UWacomRunEventPresentationBuilder::BuildChoi
 {
 	FWacomRunEventChoiceConsequenceView View;
 	View.ChoiceId = Choice.ChoiceId;
+	if (Choice.ActionPointCost > 0)
+	{
+		FWacomRunEventChoiceConsequenceItemView CostItem;
+		CostItem.Kind = ERunEventChoiceConsequenceKind::Effect;
+		CostItem.Text = FText::Format(
+			LOCTEXT("PreviewActionPointCostFmt", "消耗行动点：{0}"),
+			FText::AsNumber(Choice.ActionPointCost));
+		CostItem.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
+		View.ConsequenceItems.Add(MoveTemp(CostItem));
+	}
 
 	for (const FRunEventChoiceConsequenceSnapshot& Consequence : Choice.Consequences)
 	{
@@ -385,15 +395,6 @@ FWacomRunEventChoiceConsequenceView UWacomRunEventPresentationBuilder::BuildChoi
 					Item.Tone = Consequence.Amount > 0
 						? EWacomRunEventChoiceAvailabilityTone::Requirement
 						: EWacomRunEventChoiceAvailabilityTone::Ready;
-				}
-				break;
-			case EWacomRunEventEffectType::ConsumeNode:
-				if (Consequence.Amount > 0)
-				{
-					Item.Text = FText::Format(
-						LOCTEXT("PreviewConsumeNodeFmt", "消耗行动点：{0}"),
-						FText::AsNumber(Consequence.Amount));
-					Item.Tone = EWacomRunEventChoiceAvailabilityTone::Requirement;
 				}
 				break;
 			case EWacomRunEventEffectType::RemoveCard:
@@ -517,15 +518,6 @@ TArray<FWacomAppToastView> UWacomRunEventPresentationBuilder::BuildToastViewsFro
 					TEXT("PressureChanged")));
 			}
 			break;
-		case EWacomRunEventEffectType::ConsumeNode:
-			if (EffectResult.ActualDelta < 0)
-			{
-				Views.Add(MakeToast(
-					FText::Format(LOCTEXT("NodeConsumedFmt", "消耗 {0} 行动点"), FText::AsNumber(FMath::Abs(EffectResult.ActualDelta))),
-					EWacomAppToastTone::System,
-					TEXT("NodeConsumed")));
-			}
-			break;
 		case EWacomRunEventEffectType::RemoveCard:
 			Views.Add(MakeToast(
 				FText::Format(LOCTEXT("CardRemovedFmt", "交出卡牌：{0}"),
@@ -538,6 +530,16 @@ TArray<FWacomAppToastView> UWacomRunEventPresentationBuilder::BuildToastViewsFro
 		default:
 			break;
 		}
+	}
+
+	if (Result.ActionPointCost > 0)
+	{
+		Views.Add(MakeToast(
+			FText::Format(
+				LOCTEXT("ActionPointsSpentFmt", "消耗 {0} 行动点"),
+				FText::AsNumber(Result.ActionPointCost)),
+			EWacomAppToastTone::System,
+			TEXT("ActionPointsSpent")));
 	}
 
 	if (Result.PaidCardDefinition)

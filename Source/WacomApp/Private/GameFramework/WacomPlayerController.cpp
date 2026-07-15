@@ -15,11 +15,16 @@
 #include "Cards/CardDefinition.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
-#include "Actors/WacomRunTunnelBranchTargetActor.h"
+#include "Actors/WacomRunMapNodeAnchorActor.h"
+#include "Actors/WacomRunPathBranchTargetActor.h"
+#include "Actors/WacomRunPathSegmentActor.h"
+#include "Components/WacomRunMapNodeBindingComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
 #include "GameFramework/WacomBattleSceneInteractionRouter.h"
 #include "GameFramework/WacomRunWorldInteractionRouter.h"
+#include "GameFramework/WacomRunExplorationPresentationCoordinator.h"
+#include "GameFramework/WacomRunSceneBindingRegistry.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
@@ -51,6 +56,7 @@
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Framework/Application/SlateApplication.h"
+#include "EngineUtils.h"
 
 #define LOCTEXT_NAMESPACE "WacomPlayerController"
 
@@ -68,6 +74,44 @@ namespace
 	FString GetDebugObjectName(const UObject* Object)
 	{
 		return IsValid(Object) ? Object->GetName() : TEXT("None");
+	}
+
+	bool ApplyRunExplorationCursorLookOverride(
+		AWacomPlayerCharacter* Character,
+		const FVector2D NormalizedCursor,
+		const float Scale,
+		const float InterpSpeedOverride)
+	{
+		if (!Character)
+		{
+			return false;
+		}
+		if (UWacomRunPathTraversalComponent* RunPath =
+			Character->GetRunPathTraversalComponent())
+		{
+			const EWacomRunPathTraversalState State = RunPath->GetTraversalState();
+			if (State == EWacomRunPathTraversalState::Anchored
+				|| State == EWacomRunPathTraversalState::Traversing)
+			{
+				RunPath->SetCursorLookOverrideNormalized(
+					NormalizedCursor, Scale, InterpSpeedOverride);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void ClearRunExplorationCursorLookOverride(AWacomPlayerCharacter* Character)
+	{
+		if (!Character)
+		{
+			return;
+		}
+		if (UWacomRunPathTraversalComponent* RunPath =
+			Character->GetRunPathTraversalComponent())
+		{
+			RunPath->ClearCursorLookOverride();
+		}
 	}
 
 }
@@ -133,15 +177,23 @@ void AWacomPlayerController::BeginPlay()
 		if (!RunSession)
 		{
 			RunSession = NewObject<URunSession>(this);
-			if (!RunSession->Initialize(GM->DefaultCharacter))
+			FRunInitializationParams InitializationParams;
+			InitializationParams.Character = GM->DefaultCharacter;
+			InitializationParams.Journey = GM->DefaultJourneyDefinition;
+			const FRunInitializationResult Initialization =
+				RunSession->Initialize(InitializationParams);
+			if (!Initialization.IsOk())
 			{
 				UE_LOG(LogTemp, Warning,
-					TEXT("[WacomPlayerController] RunSession 初始化失败：DefaultCharacter 为空"));
+					TEXT("[WacomPlayerController] RunSession 初始化失败：Character=%s Journey=%s Detail=%s"),
+					*GetNameSafe(GM->DefaultCharacter),
+					*GetNameSafe(GM->DefaultJourneyDefinition),
+					*Initialization.Status.Detail.ToString());
 			}
 		}
 
 		// MVVM：把 RunSession 绑到 RunViewModelProvider Subsystem，
-		// ViewModel 立刻同步当前 RunState 字段。即便 RunSession::Initialize 失败也调，
+		// ViewModel 立刻同步当前 RunState 字段。即便 RunSession 初始化失败也调，
 		// Provider 内部会安全处理（找不到 RunSession 就跳过）。
 		if (UGameInstance* GI = GetGameInstance())
 		{
@@ -154,6 +206,7 @@ void AWacomPlayerController::BeginPlay()
 				ToastSubsystem->EnsureAppToastReady();
 			}
 		}
+		RefreshRunExplorationPresentationBinding();
 
 		if (RunFirstPersonCardSourceComponent)
 		{
@@ -171,6 +224,7 @@ void AWacomPlayerController::BeginPlay()
 
 void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	TeardownRunExplorationPresentationBinding();
 	ClearRunFirstPersonCardLayer();
 	if (RunFirstPersonCardDetailController)
 	{
@@ -205,6 +259,7 @@ void AWacomPlayerController::SetPawn(APawn* InPawn)
 	}
 
 	HideRunFirstPersonCardDetailPanel();
+	RefreshRunExplorationPresentationBinding();
 	RefreshRunFirstPersonCardDetailBinding();
 	RefreshRunFirstPersonMenuLeaseDragBinding();
 
@@ -295,7 +350,7 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 	}
 	if (Params.Key == EKeys::LeftMouseButton
 		&& Params.Event == IE_Released
-		&& TryRouteRunTunnelBranchClick())
+		&& TryRouteRunPathBranchClick())
 	{
 		return true;
 	}
@@ -314,9 +369,6 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 
 void AWacomPlayerController::RequestEnterBattle(ABattleTriggerActor* Trigger)
 {
-	ClearRunMenuDropTargetProbe();
-	HideRunFirstPersonCardDetailPanel();
-	ClearRunFirstPersonCardLayer();
 	if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
 	{
 		GM->EnterBattle(Trigger);
@@ -544,7 +596,7 @@ void AWacomPlayerController::UnregisterActiveGameMenuWidget(UWacomMenuWidgetBase
 	if (AWacomPlayerCharacter* WacomPawn = GetPawn<AWacomPlayerCharacter>())
 	{
 		const TWeakObjectPtr<AWacomPlayerController> WeakThis(this);
-		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 			*WacomPawn,
 			*this,
 			[WeakThis]()
@@ -1110,33 +1162,163 @@ bool AWacomPlayerController::BuildRunSceneInteractionTargetHitResultAtWidgetPosi
 	return GetWorld() && GetWorld()->LineTraceSingleByChannel(OutHitResult, WorldOrigin, TraceEnd, ECC_Visibility);
 }
 
-bool AWacomPlayerController::TryRouteRunTunnelBranchClick()
+bool AWacomPlayerController::TryRouteRunPathBranchClick()
 {
-	AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
-	UWacomRunTunnelMovementComponent* TunnelComponent =
-		WacomCharacter ? WacomCharacter->GetRunTunnelMovementComponent() : nullptr;
-	if (!TunnelComponent
-		|| !TunnelComponent->IsRunTunnelActive()
-		|| TunnelComponent->IsRunTunnelSuspended())
-	{
-		return false;
-	}
-
 	FHitResult HitResult;
-	if (!BuildRunTunnelBranchClickHitResult(HitResult))
+	if (!BuildRunPathBranchClickHitResult(HitResult))
 	{
 		return false;
 	}
 
-	AWacomRunTunnelBranchTargetActor* BranchTarget = Cast<AWacomRunTunnelBranchTargetActor>(HitResult.GetActor());
-	if (!BranchTarget && HitResult.GetComponent())
+	AWacomRunPathBranchTargetActor* PathBranchTarget =
+		Cast<AWacomRunPathBranchTargetActor>(HitResult.GetActor());
+	if (!PathBranchTarget && HitResult.GetComponent())
 	{
-		BranchTarget = Cast<AWacomRunTunnelBranchTargetActor>(HitResult.GetComponent()->GetOwner());
+		PathBranchTarget = Cast<AWacomRunPathBranchTargetActor>(HitResult.GetComponent()->GetOwner());
 	}
-	return BranchTarget && BranchTarget->RequestBranch(TunnelComponent);
+	if (PathBranchTarget)
+	{
+		const AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
+		const UWacomRunPathTraversalComponent* PathTraversal = WacomCharacter
+			? WacomCharacter->GetRunPathTraversalComponent()
+			: nullptr;
+		const bool bIsBoundTarget = BoundRunPathBranchTargets.ContainsByPredicate(
+			[PathBranchTarget](const TWeakObjectPtr<AWacomRunPathBranchTargetActor>& Candidate)
+			{
+				return Candidate.Get() == PathBranchTarget;
+			});
+		return IsInExplorationFlow()
+			&& PathTraversal
+			&& PathTraversal->GetTraversalState() == EWacomRunPathTraversalState::Anchored
+			&& RunExplorationPresentationCoordinator.IsValid()
+			&& bIsBoundTarget
+			&& PathBranchTarget->RequestBranch();
+	}
+
+	return false;
 }
 
-bool AWacomPlayerController::BuildRunTunnelBranchClickHitResult(FHitResult& OutHitResult) const
+bool AWacomPlayerController::RefreshRunExplorationPresentationBinding()
+{
+	TeardownRunExplorationPresentationBinding();
+	AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
+	UWacomRunPathTraversalComponent* Traversal = WacomCharacter
+		? WacomCharacter->GetRunPathTraversalComponent()
+		: nullptr;
+	if (!RunSession || !Traversal || !GetWorld())
+	{
+		return false;
+	}
+
+	const FRunExplorationSnapshot Snapshot = RunSession->BuildExplorationSnapshot();
+	if (Snapshot.StateVersion <= 0 || !Snapshot.CurrentNode.IsValid())
+	{
+		return false;
+	}
+
+	RunExplorationSceneBindingRegistry = MakeShared<FWacomRunSceneBindingRegistry>();
+	RunExplorationSceneBindingRegistry->Reset(Snapshot.CurrentNode.FloorId);
+	for (TActorIterator<AWacomRunPathSegmentActor> It(GetWorld()); It; ++It)
+	{
+		if (!RunExplorationSceneBindingRegistry->RegisterPath(**It))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] Run Path 注册失败或 EdgeId 重复：%s"),
+				*It->GetName());
+		}
+	}
+	for (TActorIterator<AWacomRunMapNodeAnchorActor> It(GetWorld()); It; ++It)
+	{
+		if (!RunExplorationSceneBindingRegistry->RegisterNodeAnchor(**It))
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] Run Node Anchor 注册失败或 NodeId 重复：%s"),
+				*It->GetName());
+		}
+	}
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		TInlineComponentArray<UWacomRunMapNodeBindingComponent*> Bindings;
+		It->GetComponents(Bindings);
+		for (UWacomRunMapNodeBindingComponent* Binding : Bindings)
+		{
+			if (Binding && !RunExplorationSceneBindingRegistry->RegisterContentHost(
+				Binding->NodeId, Binding->NodeType, **It))
+			{
+				UE_LOG(LogTemp, Warning,
+					TEXT("[WacomPlayerController] Run 内容 Host 注册失败：Actor=%s NodeId=%s"),
+					*It->GetName(), *Binding->NodeId.ToString());
+			}
+		}
+	}
+
+	RunExplorationPresentationCoordinator =
+		MakeShared<FWacomRunExplorationPresentationCoordinator>();
+	if (!RunExplorationPresentationCoordinator->Initialize(
+		*RunSession,
+		*Traversal,
+		*RunExplorationSceneBindingRegistry))
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerController] Run 探索场景绑定初始化失败：%s"),
+			*RunExplorationPresentationCoordinator->GetLastErrorDetail().ToString());
+		RunExplorationPresentationCoordinator.Reset();
+		RunExplorationSceneBindingRegistry.Reset();
+		Traversal->DeactivateTraversal();
+		return false;
+	}
+
+	for (TActorIterator<AWacomRunPathBranchTargetActor> It(GetWorld()); It; ++It)
+	{
+		It->OnBranchRequestedNative().AddUObject(
+			this,
+			&AWacomPlayerController::HandleRunPathBranchRequested);
+		BoundRunPathBranchTargets.Add(*It);
+	}
+	return true;
+}
+
+void AWacomPlayerController::TeardownRunExplorationPresentationBinding()
+{
+	for (const TWeakObjectPtr<AWacomRunPathBranchTargetActor>& Target : BoundRunPathBranchTargets)
+	{
+		if (AWacomRunPathBranchTargetActor* StrongTarget = Target.Get())
+		{
+			StrongTarget->OnBranchRequestedNative().RemoveAll(this);
+		}
+	}
+	BoundRunPathBranchTargets.Reset();
+	if (RunExplorationPresentationCoordinator)
+	{
+		RunExplorationPresentationCoordinator->Shutdown();
+		RunExplorationPresentationCoordinator.Reset();
+	}
+	RunExplorationSceneBindingRegistry.Reset();
+	if (AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn()))
+	{
+		if (UWacomRunPathTraversalComponent* Traversal =
+			WacomCharacter->GetRunPathTraversalComponent())
+		{
+			Traversal->DeactivateTraversal();
+		}
+	}
+}
+
+void AWacomPlayerController::HandleRunPathBranchRequested(const FName EdgeId)
+{
+	if (!RunExplorationPresentationCoordinator
+		|| !RunExplorationPresentationCoordinator->HandleBranchIntent(EdgeId))
+	{
+		const FName Detail = RunExplorationPresentationCoordinator
+			? RunExplorationPresentationCoordinator->GetLastErrorDetail()
+			: FName(TEXT("CoordinatorUnavailable"));
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerController] Run Path 分支请求被拒绝：EdgeId=%s Detail=%s"),
+			*EdgeId.ToString(), *Detail.ToString());
+	}
+}
+
+bool AWacomPlayerController::BuildRunPathBranchClickHitResult(FHitResult& OutHitResult) const
 {
 	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
 }
@@ -1392,35 +1574,20 @@ void AWacomPlayerController::ApplyRunFirstPersonCardPointerCameraLookOverride(
 	}
 
 	AWacomPlayerCharacter* PlayerCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
-	UWacomRunTunnelMovementComponent* RunTunnel = PlayerCharacter
-		? PlayerCharacter->GetRunTunnelMovementComponent()
-		: nullptr;
-	if (!RunTunnel
-		|| !RunTunnel->IsRunTunnelActive()
-		|| RunTunnel->IsRunTunnelSuspended())
-	{
-		if (RunTunnel)
-		{
-			RunTunnel->ClearCursorLookOverride();
-		}
-		return;
-	}
-
-	RunTunnel->SetCursorLookOverrideNormalized(
+	if (!ApplyRunExplorationCursorLookOverride(
+		PlayerCharacter,
 		PointerView.PointerNormalizedViewportPosition,
 		Anchor->CardPointerCameraLookScale,
-		Anchor->CardPointerCameraLookInterpSpeedOverride);
+		Anchor->CardPointerCameraLookInterpSpeedOverride))
+	{
+		ClearRunExplorationCursorLookOverride(PlayerCharacter);
+	}
 }
 
 void AWacomPlayerController::ClearRunFirstPersonCardPointerCameraLookOverride()
 {
 	AWacomPlayerCharacter* PlayerCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
-	if (UWacomRunTunnelMovementComponent* RunTunnel = PlayerCharacter
-		? PlayerCharacter->GetRunTunnelMovementComponent()
-		: nullptr)
-	{
-		RunTunnel->ClearCursorLookOverride();
-	}
+	ClearRunExplorationCursorLookOverride(PlayerCharacter);
 }
 
 void AWacomPlayerController::ApplyRunFirstPersonCardDragCameraLookOverride(
@@ -1443,24 +1610,14 @@ void AWacomPlayerController::ApplyRunFirstPersonCardDragCameraLookOverride(
 	}
 
 	AWacomPlayerCharacter* PlayerCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
-	UWacomRunTunnelMovementComponent* RunTunnel = PlayerCharacter
-		? PlayerCharacter->GetRunTunnelMovementComponent()
-		: nullptr;
-	if (!RunTunnel
-		|| !RunTunnel->IsRunTunnelActive()
-		|| RunTunnel->IsRunTunnelSuspended())
-	{
-		if (RunTunnel)
-		{
-			RunTunnel->ClearCursorLookOverride();
-		}
-		return;
-	}
-
-	RunTunnel->SetCursorLookOverrideNormalized(
+	if (!ApplyRunExplorationCursorLookOverride(
+		PlayerCharacter,
 		DragView.PointerNormalizedViewportPosition,
 		Anchor->CardDragCameraLookScale,
-		Anchor->CardDragCameraLookInterpSpeedOverride);
+		Anchor->CardDragCameraLookInterpSpeedOverride))
+	{
+		ClearRunExplorationCursorLookOverride(PlayerCharacter);
+	}
 }
 
 void AWacomPlayerController::ClearRunFirstPersonCardDragCameraLookOverride()
@@ -1759,7 +1916,7 @@ void AWacomPlayerController::ReturnFromGameMenuViewpointStageAfterFailedOpen()
 	if (AWacomPlayerCharacter* WacomPawn = GetPawn<AWacomPlayerCharacter>())
 	{
 		const TWeakObjectPtr<AWacomPlayerController> WeakThis(this);
-		FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+		FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 			*WacomPawn,
 			*this,
 			[WeakThis]()

@@ -10,8 +10,8 @@ class UCardDefinition;
 /**
  * 商店访问和购买事务的私有 helper。
  *
- * 只操作 FRunState，不广播、不访问 UI、不直接消耗节点。
- * URunSession 仍负责 public API、节点消耗和 NotifyRunStateChanged。
+ * 只操作 FRunState，不广播、不访问 UI、不消耗行动点。
+ * URunSession 负责将首次购买与行动点、地图活动合并为一次 working-state 事务。
  */
 struct FRunShopTransaction
 {

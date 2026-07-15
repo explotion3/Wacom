@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -62,7 +63,7 @@ bool FWacomRunDeckSpecialZoneBattleEnabledValidationSpec::RunTest(const FString&
 		{ TypeA, TypeB });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(Stored);
 
 	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
@@ -127,7 +128,7 @@ bool FWacomRunDeckSpecialZoneBattleEnabledViewDataSpec::RunTest(const FString& /
 		{ TypeA, TypeB });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(Stored);
 
 	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;

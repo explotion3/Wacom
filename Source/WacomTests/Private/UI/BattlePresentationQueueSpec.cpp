@@ -255,8 +255,14 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestEqual(TEXT("No-target release can submit while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
 	TestFalse(TEXT("No-target release clears pending while presenting"), HUD->GetPendingTargetingCardId().IsValid());
 	TestTrue(TEXT("Presentation queue still has appended events after no-target card"), HUD->IsBattlePresentationBusy());
-	TestEqual(TEXT("No-target submit appends second presentation stack entry"), HUD->GetPresentationStackEntryCountForTest(), 2);
-	TestEqual(TEXT("Second stack entry is newest card"), HUD->GetPresentationStackEntriesForTest()[1].CardInstanceId, NoTargetCardId);
+	const auto& StackAfterNoTargetSubmit = HUD->GetPresentationStackEntriesForTest();
+	if (TestEqual(TEXT("No-target submit appends second presentation stack entry"), StackAfterNoTargetSubmit.Num(), 2)
+		&& StackAfterNoTargetSubmit.IsValidIndex(1))
+	{
+		TestEqual(TEXT("Second stack entry is newest card"),
+			StackAfterNoTargetSubmit[1].CardInstanceId,
+			NoTargetCardId);
+	}
 	TestEqual(TEXT("No-target submit appends one more combat log block"),
 		HUD->GetBattleCombatLogBlockCount(),
 		CombatLogCountBeforeTargetSelect + 2);

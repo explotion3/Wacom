@@ -16,7 +16,7 @@ class UInputMappingContext;
 class UInputAction;
 class UWacomMenuWidgetBase;
 class UWacomRunMenuWidgetBase;
-class AWacomRunTunnelBranchTargetActor;
+class AWacomRunPathBranchTargetActor;
 class ABattleTriggerActor;
 class URunSession;
 class UBattleHUD;
@@ -26,7 +26,8 @@ class UWacomRunWorldCardDropReceiverComponent;
 class UWacomGameViewportClient;
 class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
-class UWacomRunTunnelMovementComponent;
+class FWacomRunExplorationPresentationCoordinator;
+class FWacomRunSceneBindingRegistry;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomRunFirstPersonCardSourceComponent;
 class UWacomCardDetailPanel;
@@ -264,8 +265,8 @@ public:
 		meta = (ToolTip = "把当前 Run world hover 提示诊断摘要写入日志。"))
 	void LogRunWorldInteractableHoverDebugSummary() const;
 
-	/** Run tunnel spike branch click route. Active only while the possessed Wacom character tunnel prototype is active. */
-	bool TryRouteRunTunnelBranchClick();
+	/** Run Path 分支点击路由；只有正式 Coordinator 绑定且当前锚定在节点时可提交。 */
+	bool TryRouteRunPathBranchClick();
 
 	// ---- 候选交互对象（use-key 模型）----
 
@@ -339,7 +340,7 @@ protected:
 	virtual bool BuildRunSceneInteractionTargetHitResultAtWidgetPosition(
 		const FVector2D& WidgetPosition,
 		FHitResult& OutHitResult) const;
-	virtual bool BuildRunTunnelBranchClickHitResult(FHitResult& OutHitResult) const;
+	virtual bool BuildRunPathBranchClickHitResult(FHitResult& OutHitResult) const;
 	virtual bool IsInExplorationFlow() const;
 	void UpdateRunWorldTargetProbePreview();
 	void ClearRunWorldTargetProbePreview();
@@ -370,6 +371,9 @@ private:
 	void ApplyRunFirstPersonCardDragCameraLookOverride(
 		const FWacomFirstPersonCardDragView& DragView);
 	void ClearRunFirstPersonCardDragCameraLookOverride();
+	bool RefreshRunExplorationPresentationBinding();
+	void TeardownRunExplorationPresentationBinding();
+	void HandleRunPathBranchRequested(FName EdgeId);
 
 	/** 从 GameMode 拿当前 BattleHUD；没战斗时返回 nullptr。 */
 	UBattleHUD* GetActiveBattleHUD() const;
@@ -483,6 +487,9 @@ private:
 	TSharedPtr<FWacomRunFirstPersonCardDetailController> RunFirstPersonCardDetailController;
 	TSharedPtr<FWacomRunFirstPersonCardDragController> RunFirstPersonCardDragController;
 	TSharedPtr<FWacomRunFirstPersonCardDropCoordinator> RunFirstPersonCardDropCoordinator;
+	TSharedPtr<FWacomRunSceneBindingRegistry> RunExplorationSceneBindingRegistry;
+	TSharedPtr<FWacomRunExplorationPresentationCoordinator> RunExplorationPresentationCoordinator;
+	TArray<TWeakObjectPtr<AWacomRunPathBranchTargetActor>> BoundRunPathBranchTargets;
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
 	bool bGameMenuViewpointStageTransitionActive = false;

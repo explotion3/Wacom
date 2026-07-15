@@ -62,7 +62,7 @@ bool FWacomRunPickupCollectGoldSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	const FName PickupId(TEXT("Pickup.Gold.Basic"));
 
-	TestTrue(TEXT("Gold pickup collects"), Run->CollectGoldPickup(PickupId, 3));
+	TestTrue(TEXT("Gold pickup collects"), Run->CollectGoldPickup(PickupId, 3).bSucceeded);
 	TestEqual(TEXT("Gold added"), Run->GetGold(), 3);
 	TestTrue(TEXT("Pickup marked collected"), Run->IsPickupCollected(PickupId));
 
@@ -78,7 +78,7 @@ bool FWacomRunPickupRejectsMissingIdSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 
-	TestFalse(TEXT("Missing id is rejected"), Run->CollectGoldPickup(NAME_None, 3));
+	TestFalse(TEXT("Missing id is rejected"), Run->CollectGoldPickup(NAME_None, 3).bSucceeded);
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("None id never reports collected"), Run->IsPickupCollected(NAME_None));
 
@@ -95,8 +95,8 @@ bool FWacomRunPickupRejectsRepeatSpec::RunTest(const FString& /*Parameters*/)
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	const FName PickupId(TEXT("Pickup.Gold.Repeat"));
 
-	TestTrue(TEXT("First pickup collects"), Run->CollectGoldPickup(PickupId, 2));
-	TestFalse(TEXT("Second pickup rejected"), Run->CollectGoldPickup(PickupId, 2));
+	TestTrue(TEXT("First pickup collects"), Run->CollectGoldPickup(PickupId, 2).bSucceeded);
+	TestFalse(TEXT("Second pickup rejected"), Run->CollectGoldPickup(PickupId, 2).bSucceeded);
 	TestEqual(TEXT("Gold added only once"), Run->GetGold(), 2);
 	TestTrue(TEXT("Pickup remains collected"), Run->IsPickupCollected(PickupId));
 
@@ -113,8 +113,8 @@ bool FWacomRunPickupRejectsNonPositiveGoldSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	const FName PickupId(TEXT("Pickup.Gold.Invalid"));
 
-	TestFalse(TEXT("Zero gold rejected"), Run->CollectGoldPickup(PickupId, 0));
-	TestFalse(TEXT("Negative gold rejected"), Run->CollectGoldPickup(PickupId, -1));
+	TestFalse(TEXT("Zero gold rejected"), Run->CollectGoldPickup(PickupId, 0).bSucceeded);
+	TestFalse(TEXT("Negative gold rejected"), Run->CollectGoldPickup(PickupId, -1).bSucceeded);
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 0);
 	TestFalse(TEXT("Invalid pickup not marked collected"), Run->IsPickupCollected(PickupId));
 
@@ -133,7 +133,7 @@ bool FWacomRunCardPickupCollectsSpec::RunTest(const FString& /*Parameters*/)
 	const FName PickupId(TEXT("Pickup.Card.Basic"));
 	Card->CardId = TEXT("Pickup.Card.Reward");
 
-	TestTrue(TEXT("Card pickup collects"), Run->CollectCardPickup(PickupId, Card.Get()));
+	TestTrue(TEXT("Card pickup collects"), Run->CollectCardPickup(PickupId, Card.Get()).bSucceeded);
 	TestEqual(TEXT("Reward card added to owned storage"),
 		CountOwnedStorageCardsByDefinition(Run->BuildBackpackStorageSnapshot(), Card.Get()), 1);
 	TestTrue(TEXT("Pickup marked collected"), Run->IsPickupCollected(PickupId));
@@ -151,7 +151,7 @@ bool FWacomRunCardPickupRejectsMissingIdSpec::RunTest(const FString& /*Parameter
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 
-	TestFalse(TEXT("Missing id is rejected"), Run->CollectCardPickup(NAME_None, Card.Get()));
+	TestFalse(TEXT("Missing id is rejected"), Run->CollectCardPickup(NAME_None, Card.Get()).bSucceeded);
 	TestEqual(TEXT("Backpack unchanged"), Run->GetBackpack().Num(), 0);
 	TestFalse(TEXT("None id never reports collected"), Run->IsPickupCollected(NAME_None));
 
@@ -168,7 +168,7 @@ bool FWacomRunCardPickupRejectsMissingCardSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	const FName PickupId(TEXT("Pickup.Card.Missing"));
 
-	TestFalse(TEXT("Missing card is rejected"), Run->CollectCardPickup(PickupId, nullptr));
+	TestFalse(TEXT("Missing card is rejected"), Run->CollectCardPickup(PickupId, nullptr).bSucceeded);
 	TestEqual(TEXT("Backpack unchanged"), Run->GetBackpack().Num(), 0);
 	TestFalse(TEXT("Invalid pickup not marked collected"), Run->IsPickupCollected(PickupId));
 
@@ -187,8 +187,8 @@ bool FWacomRunCardPickupRejectsRepeatSpec::RunTest(const FString& /*Parameters*/
 	const FName PickupId(TEXT("Pickup.Card.Repeat"));
 	Card->CardId = TEXT("Pickup.Card.RepeatReward");
 
-	TestTrue(TEXT("First pickup collects"), Run->CollectCardPickup(PickupId, Card.Get()));
-	TestFalse(TEXT("Second pickup rejected"), Run->CollectCardPickup(PickupId, Card.Get()));
+	TestTrue(TEXT("First pickup collects"), Run->CollectCardPickup(PickupId, Card.Get()).bSucceeded);
+	TestFalse(TEXT("Second pickup rejected"), Run->CollectCardPickup(PickupId, Card.Get()).bSucceeded);
 	TestEqual(TEXT("Card added only once"),
 		CountOwnedStorageCardsByDefinition(Run->BuildBackpackStorageSnapshot(), Card.Get()), 1);
 	TestTrue(TEXT("Pickup remains collected"), Run->IsPickupCollected(PickupId));
@@ -207,9 +207,9 @@ bool FWacomRunCardPickupSharesGoldPickupIdSpec::RunTest(const FString& /*Paramet
 	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
 	const FName PickupId(TEXT("Pickup.Shared.Id"));
 
-	TestTrue(TEXT("Gold pickup collects shared id"), Run->CollectGoldPickup(PickupId, 2));
+	TestTrue(TEXT("Gold pickup collects shared id"), Run->CollectGoldPickup(PickupId, 2).bSucceeded);
 	TestFalse(TEXT("Card pickup with shared id is rejected"),
-		Run->CollectCardPickup(PickupId, Card.Get()));
+		Run->CollectCardPickup(PickupId, Card.Get()).bSucceeded);
 	TestEqual(TEXT("Gold unchanged"), Run->GetGold(), 2);
 	TestEqual(TEXT("Backpack unchanged"), Run->GetBackpack().Num(), 0);
 	TestTrue(TEXT("Shared id is collected"), Run->IsPickupCollected(PickupId));

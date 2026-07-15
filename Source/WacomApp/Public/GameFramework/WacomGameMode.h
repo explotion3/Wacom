@@ -3,12 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Exploration/RunExplorationTypes.h"
 #include "GameFramework/GameModeBase.h"
 #include "Types/WacomEnums.h"
 #include "GameFramework/WacomGameFlowTypes.h"
 #include "WacomGameMode.generated.h"
 
 class UCharacterDefinition;
+class UWacomJourneyDefinition;
 class UBattleSession;
 class UWacomBattleWidgetBase;
 class UWacomExplorationHUD;
@@ -65,6 +67,11 @@ public:
 	/** 新 Run bootstrap 使用的默认玩家角色配置；正式进入战斗时角色来自 RunSession / RunState。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle")
 	TObjectPtr<UCharacterDefinition> DefaultCharacter;
+
+	/** 新 Run 使用的 Journey/Floor Logical Map Graph；规则初始化不从场景 Actor 反向生成图。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Run Map",
+		meta = (ToolTip = "新 Run 使用的 Journey 定义。必须配置有效 Floor 图；场景 Anchor/Path/Host 只映射这里的稳定 ID。"))
+	TObjectPtr<UWacomJourneyDefinition> DefaultJourneyDefinition = nullptr;
 
 	/** Deprecated legacy prototype field. 正式进入战斗时随机种子来自 RunSession / RunState。 */
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle",
@@ -142,6 +149,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<ABattleTriggerActor> PendingTrigger = nullptr;
+
+	/** 当前 Battle 唯一持有的 Encounter NodeActivity 票据；退出时必须提交或取消。 */
+	TOptional<FRunNodeActivityTicket> PendingEncounterActivity;
 
 	/** 本场战斗初始化后的总部位数，用于多敌人 Encounter 下判断撤离是否实际全灭。 */
 	int32 PendingBattleTotalPartCount = 0;

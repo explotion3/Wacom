@@ -19,7 +19,7 @@ tags:
 > Run Tunnel movement、输入协调、战斗 suspend / resume 见 [WacomApp.md](./WacomApp.md)。Run 规则边界见 [WacomRun.md](./WacomRun.md)。世界交互和 target routing 见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。first-person hand 表现见 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
 > [!note] 历史结论
-> 本 Spike 的核心操作模型已被吸收到正式探索路径：`UWacomRunTunnelMovementComponent` 是探索期默认移动组件，普通隐藏鼠标 FPS FreeLook 不再是正式玩家路径。鼠标位置到 yaw / pitch offset 的算法已抽到共享 `UWacomCursorLookDriverComponent`，供 Run Tunnel 和 Battle camera look 共同使用。
+> 本 Spike 的核心操作模型已被吸收到正式探索路径。本文描述的旧移动组件与 Segment / Branch Actor 均已删除；当前唯一运行路径是 `UWacomRunPathTraversalComponent + AWacomRunPathSegmentActor + AWacomRunPathBranchTargetActor`。普通隐藏鼠标 FPS FreeLook 不是正式玩家路径；鼠标位置到 yaw / pitch offset 由共享 `UWacomCursorLookDriverComponent` 提供给 Run Path 和 Battle camera look。
 
 ## 1. Historical Goal
 
@@ -67,7 +67,7 @@ Spike 只验证表现和输入手感，不定义正式 Run 规则。
 
 ## 4. Historical Class Sketch
 
-### `AWacomRunTunnelSegmentActor`
+### 旧 Segment Actor（已删除）
 
 历史用途：一段纸片隧道通道。
 
@@ -75,7 +75,7 @@ Spike 只验证表现和输入手感，不定义正式 Run 规则。
 
 它不负责玩家输入、Run 规则、分支选择或自动生成 Layer。
 
-### `AWacomRunTunnelBranchTargetActor`
+### 旧 Branch Target Actor（已删除）
 
 历史用途：岔路点击目标。
 
@@ -83,7 +83,7 @@ Spike 只验证表现和输入手感，不定义正式 Run 规则。
 
 它不判断 Run 节点是否可进入，不消耗节点，不打开事件 / 商店 / 战斗，也不直接操作 `URunSession`。
 
-### `UWacomRunTunnelMovementComponent`
+### 旧 Movement Component（已删除）
 
 当前正式探索移动组件，挂在 `AWacomPlayerCharacter` 上。
 
@@ -126,11 +126,11 @@ Segment_Start
 
 历史启用步骤：
 
-1. 在关卡中放置 `AWacomRunTunnelSegmentActor` 或蓝图子类作为起始通道。
+1. 在关卡中放置旧 Segment Actor 或蓝图子类作为起始通道（仅为历史步骤，当前不可执行）。
 2. 编辑 `PathSpline`，让它表示第一人称摄像机路径。
 3. 起始 Segment 可开启 `bAutoActivateOnBeginPlay` 并设置 `AutoActivateStartDistance`。
 4. 手摆纸片 Layer；Layer 只负责视觉，建议禁用 Visibility 碰撞。
-5. 为岔路出口放置 `AWacomRunTunnelBranchTargetActor` 或蓝图子类。
+5. 为岔路出口放置旧 Branch Target Actor 或蓝图子类（仅为历史步骤，当前不可执行）。
 6. 在 BranchTarget 上填写 `TargetSegment` 和 `TargetStartDistance`。
 7. PIE 后起始 Segment 寻找本地 `AWacomPlayerCharacter`，激活其 Run Tunnel movement component。
 
@@ -138,7 +138,7 @@ Segment_Start
 
 ## 7. Current Implementation Notes
 
-- `AWacomPlayerCharacter` 默认带 `UWacomRunTunnelMovementComponent`，组件默认 inactive，等待起始 Segment 或正式 Run flow 激活。
+- 当时的 `AWacomPlayerCharacter` 默认带旧 Movement Component，组件默认 inactive，等待起始 Segment 或正式 Run flow 激活；该实现已经由 Run Path 替换。
 - `AWacomPlayerCharacter` 同时带 `UWacomCursorLookDriverComponent`；Run Tunnel 和 Battle camera look 共享 cursor offset 状态。
 - Tunnel active 时，Character 普通自由移动不执行；`A/D` 输入被忽略。
 - 鼠标 look 使用屏幕绝对位置，不使用隐藏鼠标的增量输入。

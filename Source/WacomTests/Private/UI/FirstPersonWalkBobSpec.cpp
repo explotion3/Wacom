@@ -26,7 +26,7 @@ namespace WacomFirstPersonWalkBobSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonWalkBobMovementGeneratesOffsetSpec,
-	"Wacom.UI.RunTunnel.WalkBob.MovementGeneratesOffset",
+	"Wacom.UI.RunPathTraversal.WalkBob.MovementGeneratesOffset",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonWalkBobMovementGeneratesOffsetSpec::RunTest(
@@ -57,7 +57,7 @@ bool FWacomFirstPersonWalkBobMovementGeneratesOffsetSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonWalkBobFootPlantDropsSpec,
-	"Wacom.UI.RunTunnel.WalkBob.FootPlantDrops",
+	"Wacom.UI.RunPathTraversal.WalkBob.FootPlantDrops",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonWalkBobFootPlantDropsSpec::RunTest(
@@ -77,7 +77,7 @@ bool FWacomFirstPersonWalkBobFootPlantDropsSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonWalkBobDistanceDrivesCadenceSpec,
-	"Wacom.UI.RunTunnel.WalkBob.DistanceDrivesCadence",
+	"Wacom.UI.RunPathTraversal.WalkBob.DistanceDrivesCadence",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonWalkBobDistanceDrivesCadenceSpec::RunTest(
@@ -104,7 +104,7 @@ bool FWacomFirstPersonWalkBobDistanceDrivesCadenceSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonWalkBobZeroMovementDecaysSpec,
-	"Wacom.UI.RunTunnel.WalkBob.ZeroMovementDecaysToZero",
+	"Wacom.UI.RunPathTraversal.WalkBob.ZeroMovementDecaysToZero",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonWalkBobZeroMovementDecaysSpec::RunTest(
@@ -129,7 +129,7 @@ bool FWacomFirstPersonWalkBobZeroMovementDecaysSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonWalkBobDisabledOutputsZeroSpec,
-	"Wacom.UI.RunTunnel.WalkBob.DisabledOutputsZero",
+	"Wacom.UI.RunPathTraversal.WalkBob.DisabledOutputsZero",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonWalkBobDisabledOutputsZeroSpec::RunTest(
@@ -154,7 +154,7 @@ bool FWacomFirstPersonWalkBobDisabledOutputsZeroSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonWalkBobResetClearsStateSpec,
-	"Wacom.UI.RunTunnel.WalkBob.ResetClearsState",
+	"Wacom.UI.RunPathTraversal.WalkBob.ResetClearsState",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonWalkBobResetClearsStateSpec::RunTest(
@@ -179,7 +179,7 @@ bool FWacomFirstPersonWalkBobResetClearsStateSpec::RunTest(
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonWalkBobDeadZoneSuppressesOffsetSpec,
-	"Wacom.UI.RunTunnel.WalkBob.DeadZoneSuppressesOffset",
+	"Wacom.UI.RunPathTraversal.WalkBob.DeadZoneSuppressesOffset",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonWalkBobDeadZoneSuppressesOffsetSpec::RunTest(

@@ -9,7 +9,7 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
 #include "Components/WacomFirstPersonWalkBobComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputAction.h"
 #include "InputActionValue.h"
@@ -30,7 +30,7 @@ AWacomPlayerCharacter::AWacomPlayerCharacter()
 	FirstPersonCamera->bUsePawnControlRotation = true;
 
 	CursorLookDriverComponent = CreateDefaultSubobject<UWacomCursorLookDriverComponent>(TEXT("CursorLookDriverComponent"));
-	RunTunnelMovementComponent = CreateDefaultSubobject<UWacomRunTunnelMovementComponent>(TEXT("RunTunnelMovementComponent"));
+	RunPathTraversalComponent = CreateDefaultSubobject<UWacomRunPathTraversalComponent>(TEXT("RunPathTraversalComponent"));
 	BattleCameraLookComponent = CreateDefaultSubobject<UWacomBattleCameraLookComponent>(TEXT("BattleCameraLookComponent"));
 	FirstPersonCardAnchorComponent = CreateDefaultSubobject<UWacomFirstPersonCardAnchorComponent>(TEXT("FirstPersonCardAnchorComponent"));
 	FirstPersonViewStageBlendComponent = CreateDefaultSubobject<UWacomFirstPersonViewStageBlendComponent>(TEXT("FirstPersonViewStageBlendComponent"));
@@ -115,15 +115,15 @@ void AWacomPlayerCharacter::SetExplorationInputEnabled(
 	bool bEnabled,
 	bool bPreserveCursorLookOffset)
 {
-	if (RunTunnelMovementComponent)
+	if (RunPathTraversalComponent)
 	{
 		if (bEnabled)
 		{
-			RunTunnelMovementComponent->ResumeRunTunnel(bPreserveCursorLookOffset);
+			RunPathTraversalComponent->ResumeTraversal(bPreserveCursorLookOffset);
 		}
 		else
 		{
-			RunTunnelMovementComponent->SuspendRunTunnel();
+			RunPathTraversalComponent->SuspendTraversal();
 		}
 	}
 	bExplorationInputEnabled = bEnabled;
@@ -134,15 +134,17 @@ void AWacomPlayerCharacter::HandleMoveInput(const FInputActionValue& Value)
 	if (!bExplorationInputEnabled || !Controller) { return; }
 
 	const FVector2D Input = Value.Get<FVector2D>();
-	if (RunTunnelMovementComponent && RunTunnelMovementComponent->HandleMoveInput(Input))
+	if (RunPathTraversalComponent
+		&& RunPathTraversalComponent->GetTraversalState() != EWacomRunPathTraversalState::Inactive)
 	{
+		RunPathTraversalComponent->HandleMoveInput(Input);
 		return;
 	}
-	if (!bLoggedMissingRunTunnelMovementForMove)
+	if (!bLoggedInactiveRunPathForMove)
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[WacomPlayerCharacter] Ignored IA_Move because RunTunnelMovement is inactive or missing; normal FPS exploration fallback is disabled."));
-		bLoggedMissingRunTunnelMovementForMove = true;
+			TEXT("[WacomPlayerCharacter] Ignored IA_Move because RunPathTraversal is inactive; normal FPS exploration fallback is disabled."));
+		bLoggedInactiveRunPathForMove = true;
 	}
 }
 
@@ -151,14 +153,16 @@ void AWacomPlayerCharacter::HandleLookInput(const FInputActionValue& Value)
 	if (!bExplorationInputEnabled) { return; }
 
 	const FVector2D Input = Value.Get<FVector2D>();
-	if (RunTunnelMovementComponent && RunTunnelMovementComponent->HandleLookInput(Input))
+	if (RunPathTraversalComponent
+		&& RunPathTraversalComponent->GetTraversalState() != EWacomRunPathTraversalState::Inactive)
 	{
+		RunPathTraversalComponent->HandleLookInput(Input);
 		return;
 	}
-	if (!bLoggedMissingRunTunnelMovementForLook)
+	if (!bLoggedInactiveRunPathForLook)
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[WacomPlayerCharacter] Ignored IA_Look because RunTunnelMovement is inactive or missing; normal FPS exploration fallback is disabled."));
-		bLoggedMissingRunTunnelMovementForLook = true;
+			TEXT("[WacomPlayerCharacter] Ignored IA_Look because RunPathTraversal is inactive; normal FPS exploration fallback is disabled."));
+		bLoggedInactiveRunPathForLook = true;
 	}
 }

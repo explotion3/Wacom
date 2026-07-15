@@ -5,6 +5,7 @@
 #define LOCTEXT_NAMESPACE "WacomExplorationHUD"
 
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -15,8 +16,10 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "GameFramework/PlayerController.h"
+#include "Engine/World.h"
 #include "Input/CommonUIInputTypes.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
+#include "TimerManager.h"
 
 #include "UI/ViewModels/WacomRunViewModel.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
@@ -214,6 +217,7 @@ void UWacomExplorationHUD::NativeConstruct()
 
 void UWacomExplorationHUD::NativeDestruct()
 {
+	CancelPendingGameViewportFocus();
 	if (UWacomRunViewModelProvider* Provider = SubscribedProvider.Get())
 	{
 		Provider->OnRunViewModelRefreshedNative.RemoveAll(this);
@@ -228,6 +232,52 @@ void UWacomExplorationHUD::NativeOnActivated()
 	Super::NativeOnActivated();
 	// 战斗结束后被 Reactivate，可能在订阅外错过广播；无条件刷新一次保底。
 	TrySubscribeAndRefresh();
+	// CommonUI 在激活回调结束后才完成输入配置应用。延迟一帧恢复游戏视口焦点，
+	// 否则嵌入式 PIE 首次进入探索时必须先手动点击视口才能收到移动/鼠标输入。
+	QueueGameViewportFocus();
+}
+
+void UWacomExplorationHUD::NativeOnDeactivated()
+{
+	CancelPendingGameViewportFocus();
+	Super::NativeOnDeactivated();
+}
+
+void UWacomExplorationHUD::QueueGameViewportFocus()
+{
+	CancelPendingGameViewportFocus();
+	if (UWorld* World = GetWorld())
+	{
+		bGameViewportFocusPending = true;
+		PendingGameViewportFocusTimerHandle =
+			World->GetTimerManager().SetTimerForNextTick(
+				this,
+				&UWacomExplorationHUD::ApplyGameViewportFocus);
+	}
+}
+
+void UWacomExplorationHUD::ApplyGameViewportFocus()
+{
+	bGameViewportFocusPending = false;
+	PendingGameViewportFocusTimerHandle.Invalidate();
+	if (!IsActivated())
+	{
+		return;
+	}
+	UWidgetBlueprintLibrary::SetFocusToGameViewport();
+}
+
+void UWacomExplorationHUD::CancelPendingGameViewportFocus()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PendingGameViewportFocusTimerHandle);
+	}
+	else
+	{
+		PendingGameViewportFocusTimerHandle.Invalidate();
+	}
+	bGameViewportFocusPending = false;
 }
 
 void UWacomExplorationHUD::TrySubscribeAndRefresh()
@@ -289,8 +339,8 @@ void UWacomExplorationHUD::RefreshFromViewModel()
 	if (NodeText)
 	{
 		NodeText->SetText(FText::Format(
-			LOCTEXT("NodeFmt", "剩余节点：{0}"),
-			FText::AsNumber(VM->GetRemainingNodeCount())));
+			LOCTEXT("ActionPointFmt", "剩余行动点：{0}"),
+			FText::AsNumber(VM->GetRemainingActionPoints())));
 	}
 	if (DayText)
 	{

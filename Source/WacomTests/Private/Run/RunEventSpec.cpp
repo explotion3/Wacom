@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Events/RunEventDefinition.h"
@@ -55,7 +56,7 @@ namespace
 		NodeLocked.ChoiceId = TEXT("NodeLocked");
 		NodeLocked.LabelText = FText::FromString(TEXT("节点选项"));
 		FWacomRunEventConditionDefinition NodeCondition;
-		NodeCondition.Type = EWacomRunEventConditionType::MinNodeCount;
+		NodeCondition.Type = EWacomRunEventConditionType::MinActionPoints;
 		NodeCondition.Value = 3;
 		NodeLocked.Conditions.Add(NodeCondition);
 
@@ -87,10 +88,7 @@ namespace
 		Pressure.Type = EWacomRunEventEffectType::AddPressure;
 		Pressure.PressureType = TEXT("Misdeed");
 		Pressure.Value = 4;
-		FWacomRunEventEffectDefinition Node;
-		Node.Type = EWacomRunEventEffectType::ConsumeNode;
-		Node.Value = 1;
-		Resolve.Effects = { GainCard, Gold, Pressure, Node };
+		Resolve.Effects = { GainCard, Gold, Pressure };
 		Resolve.bMarkEventCompleted = true;
 		Resolve.bCloseEventAfterResolve = true;
 
@@ -369,7 +367,7 @@ bool FWacomRunEventGraphFlowSpec::RunTest(const FString& /*Parameters*/)
 	Snapshot = Run->BuildCurrentRunEventSnapshot();
 	TestEqual(TEXT("Jump reaches end node"), Snapshot.CurrentNodeId, FName(TEXT("End")));
 
-	const int32 NodesBefore = Run->GetRemainingNodeCount();
+	const int32 ActionPointsBefore = Run->GetRemainingActionPoints();
 	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Resolve"));
 	TestTrue(TEXT("Resolve succeeds"), Result.bSucceeded);
 	TestEqual(TEXT("Resolve records choice id"), Result.ChoiceId, FName(TEXT("Resolve")));
@@ -379,16 +377,16 @@ bool FWacomRunEventGraphFlowSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("Resolve records final node title"), Result.ResolvedNodeTitleText.ToString(), FString(TEXT("终点")));
 	TestTrue(TEXT("Resolve records event closed"), Result.bEventClosedAfterResolve);
 	TestTrue(TEXT("Resolve records event completed"), Result.bEventCompletedAfterResolve);
-	TestEqual(TEXT("Resolve records four effect results"), Result.EffectResults.Num(), 4);
-	if (Result.EffectResults.Num() == 4)
+	TestEqual(TEXT("Resolve records three effect results"), Result.EffectResults.Num(), 3);
+	if (Result.EffectResults.Num() == 3)
 	{
 		TestTrue(TEXT("Gain card result applied"), Result.EffectResults[0].bApplied);
 		TestTrue(TEXT("Gain card records card"), Result.EffectResults[0].CardDefinition.Get() == Reward);
 		TestEqual(TEXT("Gold result actual delta"), Result.EffectResults[1].ActualDelta, 3);
 		TestEqual(TEXT("Pressure result actual delta"), Result.EffectResults[2].ActualDelta, 4);
 		TestEqual(TEXT("Pressure result type"), Result.EffectResults[2].PressureType, EWacomPressureType::Misdeed);
-		TestEqual(TEXT("Node result actual consumed"), Result.EffectResults[3].ActualDelta, -1);
 	}
+	TestEqual(TEXT("Resolve records automatic AP cost"), Result.ActionPointCost, 1);
 	TestFalse(TEXT("Event closed after resolve"), Run->IsRunEventActive());
 	TestTrue(TEXT("Event marked completed"), Run->IsRunEventCompleted(TEXT("Event.Actor.1")));
 	TestFalse(TEXT("Completed event cannot reopen"), Run->BeginRunEvent(TEXT("Event.Actor.1"), Event.Get()));
@@ -404,7 +402,7 @@ bool FWacomRunEventGraphFlowSpec::RunTest(const FString& /*Parameters*/)
 		}));
 	TestEqual(TEXT("Gold gained"), Run->GetGold(), 3);
 	TestEqual(TEXT("Misdeed pressure gained"), Run->GetPressureValue(EWacomPressureType::Misdeed), 4);
-	TestEqual(TEXT("Node consumed"), Run->GetRemainingNodeCount(), NodesBefore - 1);
+	TestEqual(TEXT("Legacy session does not spend formal AP"), Run->GetRemainingActionPoints(), ActionPointsBefore);
 
 	return true;
 }
@@ -430,7 +428,7 @@ bool FWacomRunEventCardAndEventStateConditionsSpec::RunTest(const FString& /*Par
 		Fx.MakeNoopCard(1),
 		{ Bag, BackpackCard, BattleDeckCard, TypeB });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
+	TestTrue(TEXT("Initialize"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 
 	FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
 	const FGuid BackpackCardId = FindFirstBattleDeckInstanceIdByDefinition(Snapshot, BackpackCard);
@@ -541,7 +539,7 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* BackpackCard = Fx.MakeNoopCard(0);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, BackpackCard });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize backpack remove"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize backpack remove"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
 		const FGuid BackpackCardId = FindFirstBattleDeckInstanceIdByDefinition(Snapshot, BackpackCard);
 		TestTrue(TEXT("Backpack card starts in battle deck"), BackpackCardId.IsValid());
@@ -569,7 +567,7 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* BattleDeckCard = Fx.MakeNoopCard(0);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, BattleDeckCard });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize battle deck remove"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize battle deck remove"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		EZoneKind Zone = EZoneKind::Backpack;
 		TestTrue(TEXT("Battle deck card zone found"), FindStorageZoneByDefinition(Run->BuildBackpackStorageSnapshot(), BattleDeckCard, Zone));
 		TestEqual(TEXT("Battle deck card starts in battle deck"), Zone, EZoneKind::BattleDeck);
@@ -585,7 +583,7 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* BurdenCard = Fx.MakeNoopCard(0);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize burden remove"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize burden remove"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		Run->AcquireCardToRun(BurdenCard);
 		FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
 		const FGuid BurdenInstanceId = FindStorageInstanceIdByDefinition(Snapshot, BurdenCard);
@@ -607,7 +605,7 @@ bool FWacomRunEventRemoveCardEffectSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* SpecialCard = Fx.MakeNoopCard(0);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, TypeB });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize special remove"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize special remove"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
 		TestTrue(TEXT("Has special owner"), Snapshot.SpecialZones.Num() > 0);
 		const FGuid SpecialOwnerId = Snapshot.SpecialZones[0].OwnerCard.Instance.InstanceId;
@@ -644,7 +642,7 @@ bool FWacomRunEventRemoveCardDefinitionRemovesOneMatchingInstanceSpec::RunTest(c
 		Fx.MakeNoopCard(1),
 		{ Bag, SharedCard, SharedCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize same-definition remove run"), Run->Initialize(Char));
+	TestTrue(TEXT("Initialize same-definition remove run"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 
 	const FRunBackpackStorageSnapshot Before = Run->BuildBackpackStorageSnapshot();
 	TestEqual(TEXT("Two same-definition instances before RemoveCard"),
@@ -680,7 +678,7 @@ bool FWacomRunEventRemoveCardSafetySpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* OnlyBag = MakeRunEventTestTypeAContainer(Fx, 3);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { OnlyBag });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize only bag"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize only bag"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 
 		FWacomRunEventChoiceDefinition RemoveBag;
 		RemoveBag.ChoiceId = TEXT("RemoveBag");
@@ -703,7 +701,7 @@ bool FWacomRunEventRemoveCardSafetySpec::RunTest(const FString& /*Parameters*/)
 		Intrinsic->Rarity = WacomTags::Card_Rarity_Intrinsic;
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Intrinsic });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize intrinsic"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize intrinsic"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 
 		FWacomRunEventChoiceDefinition RemoveIntrinsic;
 		RemoveIntrinsic.ChoiceId = TEXT("RemoveIntrinsic");
@@ -726,7 +724,7 @@ bool FWacomRunEventRemoveCardSafetySpec::RunTest(const FString& /*Parameters*/)
 		Companion->Keywords.AddTag(WacomTags::Card_Keyword_Companion);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Companion });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize companion"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize companion"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 
 		FWacomRunEventChoiceDefinition RemoveCompanion;
 		RemoveCompanion.ChoiceId = TEXT("RemoveCompanion");
@@ -757,7 +755,7 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* Fang = Fx.MakeNoopCard(0);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Fang });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize payment run"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize payment run"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		const FGuid FangId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Fang);
 		TestTrue(TEXT("Fang instance found"), FangId.IsValid());
 
@@ -822,7 +820,7 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* Other = Fx.MakeNoopCard(0);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Fang, Other });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize wrong-card run"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize wrong-card run"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		const FGuid OtherId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Other);
 		TestTrue(TEXT("Other instance found"), OtherId.IsValid());
 		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeCardPaymentRunEvent(Run.Get(), Fang));
@@ -841,7 +839,7 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* OnlyBag = MakeRunEventTestTypeAContainer(Fx, 3);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { OnlyBag });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize protected payment run"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize protected payment run"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		const FGuid BagId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), OnlyBag);
 		TestTrue(TEXT("Bag instance found"), BagId.IsValid());
 		TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeCardPaymentRunEvent(Run.Get(), OnlyBag));
@@ -859,7 +857,7 @@ bool FWacomRunEventCardPaymentChoiceSpec::RunTest(const FString& /*Parameters*/)
 		UCardDefinition* Fang = Fx.MakeNoopCard(0);
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag, Fang });
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize rollback payment run"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize rollback payment run"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 		const FGuid FangId = FindStorageInstanceIdByDefinition(Run->BuildBackpackStorageSnapshot(), Fang);
 		TestTrue(TEXT("Rollback fang instance found"), FangId.IsValid());
 		FWacomRunEventEffectDefinition InvalidPressure;
@@ -951,16 +949,13 @@ bool FWacomRunEventChoiceConsequenceSnapshotSpec::RunTest(const FString& /*Param
 	Pressure.Type = EWacomRunEventEffectType::AddPressure;
 	Pressure.PressureType = TEXT("Misdeed");
 	Pressure.Value = 2;
-	FWacomRunEventEffectDefinition Node;
-	Node.Type = EWacomRunEventEffectType::ConsumeNode;
-	Node.Value = 1;
 	FWacomRunEventEffectDefinition RemoveCard;
 	RemoveCard.Type = EWacomRunEventEffectType::RemoveCard;
 	RemoveCard.CardDefinition = Card;
 	FWacomRunEventEffectDefinition MarkEvent;
 	MarkEvent.Type = EWacomRunEventEffectType::MarkEventCompleted;
 	MarkEvent.TargetPersistentId = TEXT("Event.Dependency");
-	PreviewChoice.Effects = { GainCard, Gold, Pressure, Node, RemoveCard, MarkEvent };
+	PreviewChoice.Effects = { GainCard, Gold, Pressure, RemoveCard, MarkEvent };
 	PreviewChoice.NextNodeId = TEXT("After");
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
@@ -986,29 +981,28 @@ bool FWacomRunEventChoiceConsequenceSnapshotSpec::RunTest(const FString& /*Param
 	}
 
 	const FRunEventChoiceSnapshot& Choice = Snapshot.Choices[0];
-	TestEqual(TEXT("Effect consequences plus node transition"), Choice.Consequences.Num(), 7);
-	if (Choice.Consequences.Num() == 7)
+	TestEqual(TEXT("Effect consequences plus node transition"), Choice.Consequences.Num(), 6);
+	if (Choice.Consequences.Num() == 6)
 	{
 		TestEqual(TEXT("Gain card consequence"), Choice.Consequences[0].EffectType, EWacomRunEventEffectType::GainCard);
 		TestEqual(TEXT("Gain card target"), Choice.Consequences[0].CardDefinition.Get(), Card);
 		TestEqual(TEXT("Gold consequence amount"), Choice.Consequences[1].Amount, -3);
 		TestEqual(TEXT("Pressure consequence type"), Choice.Consequences[2].PressureType, EWacomPressureType::Misdeed);
-		TestEqual(TEXT("Node consequence amount"), Choice.Consequences[3].Amount, 1);
-		TestEqual(TEXT("Remove card target"), Choice.Consequences[4].CardDefinition.Get(), Card);
-		TestEqual(TEXT("Mark event target"), Choice.Consequences[5].TargetPersistentId, FName(TEXT("Event.Dependency")));
-		TestEqual(TEXT("Node transition kind"), Choice.Consequences[6].Kind, ERunEventChoiceConsequenceKind::NodeTransition);
-		TestEqual(TEXT("Node transition id"), Choice.Consequences[6].ResolvedNodeId, FName(TEXT("After")));
-		TestEqual(TEXT("Node transition title"), Choice.Consequences[6].ResolvedNodeTitleText.ToString(), FString(TEXT("后续节点")));
+		TestEqual(TEXT("Remove card target"), Choice.Consequences[3].CardDefinition.Get(), Card);
+		TestEqual(TEXT("Mark event target"), Choice.Consequences[4].TargetPersistentId, FName(TEXT("Event.Dependency")));
+		TestEqual(TEXT("Node transition kind"), Choice.Consequences[5].Kind, ERunEventChoiceConsequenceKind::NodeTransition);
+		TestEqual(TEXT("Node transition id"), Choice.Consequences[5].ResolvedNodeId, FName(TEXT("After")));
+		TestEqual(TEXT("Node transition title"), Choice.Consequences[5].ResolvedNodeTitleText.ToString(), FString(TEXT("后续节点")));
 	}
 
 	PreviewChoice.bCloseEventAfterResolve = true;
 	Start.Choices = { PreviewChoice };
 	Event->Nodes[0] = Start;
 	const FRunEventSnapshot CloseSnapshot = Run->BuildCurrentRunEventSnapshot();
-	TestEqual(TEXT("Close choice consequences count"), CloseSnapshot.Choices[0].Consequences.Num(), 7);
-	if (CloseSnapshot.Choices[0].Consequences.Num() == 7)
+	TestEqual(TEXT("Close choice consequences count"), CloseSnapshot.Choices[0].Consequences.Num(), 6);
+	if (CloseSnapshot.Choices[0].Consequences.Num() == 6)
 	{
-		TestEqual(TEXT("Close outcome uses event ends"), CloseSnapshot.Choices[0].Consequences[6].Kind, ERunEventChoiceConsequenceKind::EventEnds);
+		TestEqual(TEXT("Close outcome uses event ends"), CloseSnapshot.Choices[0].Consequences[5].Kind, ERunEventChoiceConsequenceKind::EventEnds);
 	}
 
 	PreviewChoice.bCloseEventAfterResolve = false;
@@ -1016,7 +1010,7 @@ bool FWacomRunEventChoiceConsequenceSnapshotSpec::RunTest(const FString& /*Param
 	Start.Choices = { PreviewChoice };
 	Event->Nodes[0] = Start;
 	const FRunEventSnapshot InvalidNextSnapshot = Run->BuildCurrentRunEventSnapshot();
-	TestEqual(TEXT("Invalid NextNode does not create transition preview"), InvalidNextSnapshot.Choices[0].Consequences.Num(), 6);
+	TestEqual(TEXT("Invalid NextNode does not create transition preview"), InvalidNextSnapshot.Choices[0].Consequences.Num(), 5);
 
 	return true;
 }
@@ -1137,7 +1131,7 @@ bool FWacomRunEventTransactionRollbackAfterCardGainSpec::RunTest(const FString& 
 	UCardDefinition* MissingCard = Fx.MakeNoopCard(0);
 	UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), { Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize card transaction run"), Run->Initialize(Char));
+	TestTrue(TEXT("Initialize card transaction run"), InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::RunEvent).IsOk());
 	TestFalse(TEXT("Reward starts absent"), StorageContainsDefinition(Run->BuildBackpackStorageSnapshot(), Reward));
 
 	FWacomRunEventChoiceDefinition Transaction;
@@ -1165,50 +1159,6 @@ bool FWacomRunEventTransactionRollbackAfterCardGainSpec::RunTest(const FString& 
 	TestTrue(TEXT("Event remains active after card rollback"), Run->IsRunEventActive());
 	TestEqual(TEXT("Active card event id preserved"), After.PersistentId, Before.PersistentId);
 	TestEqual(TEXT("Card event node preserved"), After.CurrentNodeId, Before.CurrentNodeId);
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunEventTransactionRollbackAfterConsumeNodeSpec,
-	"Wacom.Run.Event.TransactionRollbackAfterConsumeNode",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomRunEventTransactionRollbackAfterConsumeNodeSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
-	State.CurrentTimePhase = ETimePhase::Day;
-	State.RemainingNodeCount = 1;
-
-	FWacomRunEventChoiceDefinition Transaction;
-	Transaction.ChoiceId = TEXT("Transaction");
-	FWacomRunEventEffectDefinition ConsumeNode;
-	ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
-	ConsumeNode.Value = 1;
-	FWacomRunEventEffectDefinition MarkMissingTarget;
-	MarkMissingTarget.Type = EWacomRunEventEffectType::MarkEventCompleted;
-	MarkMissingTarget.TargetPersistentId = NAME_None;
-	Transaction.Effects = { ConsumeNode, MarkMissingTarget };
-
-	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Transaction));
-	TestTrue(TEXT("Begin consume transaction event"), Run->BeginRunEvent(TEXT("Event.Transaction.ConsumeNode"), Event.Get()));
-	const FRunEventSnapshot Before = Run->BuildCurrentRunEventSnapshot();
-	const ETimePhase PhaseBefore = Run->GetCurrentTimePhase();
-	const int32 NodesBefore = Run->GetRemainingNodeCount();
-	const int32 HungerBefore = Run->GetPressureValue(EWacomPressureType::Hunger);
-
-	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Transaction"));
-	const FRunEventSnapshot After = Run->BuildCurrentRunEventSnapshot();
-
-	TestFalse(TEXT("Transaction fails on missing event target"), Result.bSucceeded);
-	TestEqual(TEXT("No effect results are committed after consume rollback"), Result.EffectResults.Num(), 0);
-	TestTrue(TEXT("Time phase rolled back"), Run->GetCurrentTimePhase() == PhaseBefore);
-	TestEqual(TEXT("Remaining nodes rolled back"), Run->GetRemainingNodeCount(), NodesBefore);
-	TestEqual(TEXT("Phase entry pressure rolled back"), Run->GetPressureValue(EWacomPressureType::Hunger), HungerBefore);
-	TestTrue(TEXT("Event remains active after consume rollback"), Run->IsRunEventActive());
-	TestEqual(TEXT("Consume event id preserved"), After.PersistentId, Before.PersistentId);
-	TestEqual(TEXT("Consume event node preserved"), After.CurrentNodeId, Before.CurrentNodeId);
 
 	return true;
 }
@@ -1457,44 +1407,6 @@ bool FWacomRunEventRunFlagSnapshotSpec::RunTest(const FString& /*Parameters*/)
 		TestEqual(TEXT("Clear flag consequence type"), Choice.Consequences[1].EffectType, EWacomRunEventEffectType::ClearRunFlag);
 		TestEqual(TEXT("Clear flag consequence id"), Choice.Consequences[1].FlagId, BlockedFlagId);
 	}
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec,
-	"Wacom.Run.Event.ConsumeNodeEffectEntersDuskWithPressure",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomRunEventConsumeNodeEffectEntersDuskWithPressureSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
-	State.CurrentTimePhase = ETimePhase::Day;
-	State.RemainingNodeCount = 1;
-
-	FWacomRunEventChoiceDefinition Consume;
-	Consume.ChoiceId = TEXT("Consume");
-	FWacomRunEventEffectDefinition ConsumeNode;
-	ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
-	ConsumeNode.Value = 1;
-	Consume.Effects.Add(ConsumeNode);
-
-	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), Consume));
-	TestTrue(TEXT("Begin consume event succeeds"), Run->BeginRunEvent(TEXT("Event.ConsumeNode.Dusk"), Event.Get()));
-	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("Consume"));
-
-	TestTrue(TEXT("Consume choice succeeds"), Result.bSucceeded);
-	TestEqual(TEXT("One consume effect recorded"), Result.EffectResults.Num(), 1);
-	if (Result.EffectResults.Num() == 1)
-	{
-		TestEqual(TEXT("Consume effect type"), Result.EffectResults[0].EffectType, EWacomRunEventEffectType::ConsumeNode);
-		TestEqual(TEXT("Consume effect actual delta"), Result.EffectResults[0].ActualDelta, -1);
-		TestTrue(TEXT("Consume effect applied"), Result.EffectResults[0].bApplied);
-	}
-	TestTrue(TEXT("Consume from Day remaining 1 enters Dusk"), Run->GetCurrentTimePhase() == ETimePhase::Dusk);
-	TestEqual(TEXT("Dusk nodes reset"), Run->GetRemainingNodeCount(), State.InitialNodeCount_Dusk);
-	TestEqual(TEXT("Entering Dusk adds Hunger"), Run->GetPressureValue(EWacomPressureType::Hunger), 5);
 
 	return true;
 }
@@ -1780,50 +1692,6 @@ bool FWacomRunEventDebugFlagRewardValidationSpec::RunTest(const FString& /*Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunEventConsumeNodeEffectInsufficientNodesStillAppliesSpec,
-	"Wacom.Run.Event.ConsumeNodeEffectInsufficientNodesStillApplies",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomRunEventConsumeNodeEffectInsufficientNodesStillAppliesSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
-	State.CurrentTimePhase = ETimePhase::Day;
-	State.RemainingNodeCount = 1;
-
-	FWacomRunEventChoiceDefinition ConsumeTooMuch;
-	ConsumeTooMuch.ChoiceId = TEXT("ConsumeTooMuch");
-	FWacomRunEventEffectDefinition ConsumeNode;
-	ConsumeNode.Type = EWacomRunEventEffectType::ConsumeNode;
-	ConsumeNode.Value = 3;
-	FWacomRunEventEffectDefinition Gold;
-	Gold.Type = EWacomRunEventEffectType::AddGold;
-	Gold.Value = 2;
-	ConsumeTooMuch.Effects = { ConsumeNode, Gold };
-
-	TStrongObjectPtr<UWacomRunEventDefinition> Event(MakeSingleChoiceRunEvent(Run.Get(), ConsumeTooMuch));
-	TestTrue(TEXT("Begin insufficient consume event succeeds"), Run->BeginRunEvent(TEXT("Event.ConsumeNode.Insufficient"), Event.Get()));
-	const FRunEventChoiceResult Result = Run->ChooseRunEventOptionWithResult(TEXT("ConsumeTooMuch"));
-
-	TestTrue(TEXT("Insufficient node choice still succeeds"), Result.bSucceeded);
-	TestTrue(TEXT("Insufficient node choice has no disabled reason"), Result.DisabledReason.IsNone());
-	TestEqual(TEXT("Two effects recorded"), Result.EffectResults.Num(), 2);
-	if (Result.EffectResults.Num() == 2)
-	{
-		TestEqual(TEXT("Consume effect actual delta clamps to available node"), Result.EffectResults[0].ActualDelta, -1);
-		TestTrue(TEXT("Consume effect applied despite insufficient nodes"), Result.EffectResults[0].bApplied);
-		TestEqual(TEXT("Following gold effect still applies"), Result.EffectResults[1].ActualDelta, 2);
-		TestTrue(TEXT("Gold effect applied"), Result.EffectResults[1].bApplied);
-	}
-	TestTrue(TEXT("Insufficient consume advances exactly once to Dusk"), Run->GetCurrentTimePhase() == ETimePhase::Dusk);
-	TestEqual(TEXT("Dusk nodes reset instead of consuming into next phase"), Run->GetRemainingNodeCount(), State.InitialNodeCount_Dusk);
-	TestEqual(TEXT("Dusk pressure side effect still applies"), Run->GetPressureValue(EWacomPressureType::Hunger), 5);
-	TestEqual(TEXT("Gold gained after insufficient consume"), Run->GetGold(), 2);
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunEventConditionsSpec,
 	"Wacom.Run.Event.Conditions",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -1867,15 +1735,15 @@ bool FWacomRunEventConditionsSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("Rejected choice reason"), RejectedResult.DisabledReason, FName(TEXT("InsufficientGold")));
 	TestEqual(TEXT("Rejected choice does not change gold"), Run->GetGold(), GoldBeforeRejectedChoice);
 	TestFalse(TEXT("Node condition disabled"), NodeLocked->bAvailable);
-	TestEqual(TEXT("Node disabled reason"), NodeLocked->DisabledReason, FName(TEXT("InsufficientNode")));
+	TestEqual(TEXT("Action-point disabled reason"), NodeLocked->DisabledReason, FName(TEXT("InsufficientActionPoints")));
 	TestEqual(TEXT("Node choice has one requirement"), NodeLocked->Requirements.Num(), 1);
 	if (NodeLocked->Requirements.Num() == 1)
 	{
-		TestEqual(TEXT("Node requirement kind"), NodeLocked->Requirements[0].Kind, ERunEventChoiceRequirementKind::MinNodeCount);
+		TestEqual(TEXT("Action-point requirement kind"), NodeLocked->Requirements[0].Kind, ERunEventChoiceRequirementKind::MinActionPoints);
 		TestFalse(TEXT("Node requirement unsatisfied"), NodeLocked->Requirements[0].bSatisfied);
-		TestEqual(TEXT("Node requirement current value"), NodeLocked->Requirements[0].CurrentValue, Run->GetRemainingNodeCount());
+		TestEqual(TEXT("Action-point requirement current value"), NodeLocked->Requirements[0].CurrentValue, 0);
 		TestEqual(TEXT("Node requirement required value"), NodeLocked->Requirements[0].RequiredValue, 3);
-		TestEqual(TEXT("Node requirement disabled reason"), NodeLocked->Requirements[0].DisabledReason, FName(TEXT("InsufficientNode")));
+		TestEqual(TEXT("Action-point requirement disabled reason"), NodeLocked->Requirements[0].DisabledReason, FName(TEXT("InsufficientActionPoints")));
 	}
 	TestTrue(TEXT("Pressure condition initially available"), PressureLocked->bAvailable);
 	TestEqual(TEXT("Pressure choice has one requirement"), PressureLocked->Requirements.Num(), 1);

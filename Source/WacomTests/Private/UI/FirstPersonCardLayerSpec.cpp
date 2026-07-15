@@ -2,7 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 
-#include "Actors/WacomRunTunnelSegmentActor.h"
+#include "Actors/WacomRunPathSegmentActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
 #include "Components/SplineComponent.h"
@@ -10,7 +10,8 @@
 #include "Components/WacomCursorLookDriverComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
+#include "UI/RunPathTraversalTestAccess.h"
 #include "Cards/CardDefinition.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
@@ -53,10 +54,10 @@ namespace WacomFirstPersonCardLayerSpec
 		return GWorld;
 	}
 
-	AWacomRunTunnelSegmentActor* SpawnTestSegment(UWorld& World, const FVector& Start, const FVector& End)
+	AWacomRunPathSegmentActor* SpawnTestSegment(UWorld& World, const FVector& Start, const FVector& End)
 	{
-		AWacomRunTunnelSegmentActor* Segment = World.SpawnActor<AWacomRunTunnelSegmentActor>(
-			AWacomRunTunnelSegmentActor::StaticClass(),
+		AWacomRunPathSegmentActor* Segment = World.SpawnActor<AWacomRunPathSegmentActor>(
+			AWacomRunPathSegmentActor::StaticClass(),
 			FTransform::Identity);
 		if (!Segment || !Segment->GetPathSpline())
 		{
@@ -629,11 +630,11 @@ bool FWacomFirstPersonCardLayerFallbackAnchorTest::RunTest(const FString& Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerRunTunnelAnchorTest,
-	"Wacom.UI.FirstPersonCardLayer.Anchor.RunTunnelAnchorUsesSplineBase",
+	FWacomFirstPersonCardLayerRunPathAnchorTest,
+	"Wacom.UI.FirstPersonCardLayer.Anchor.RunPathAnchorUsesSplineBase",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerRunTunnelAnchorTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerRunPathAnchorTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -642,7 +643,7 @@ bool FWacomFirstPersonCardLayerRunTunnelAnchorTest::RunTest(const FString& Param
 	}
 
 	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment = WacomFirstPersonCardLayerSpec::SpawnTestSegment(
+	AWacomRunPathSegmentActor* Segment = WacomFirstPersonCardLayerSpec::SpawnTestSegment(
 		*World,
 		FVector::ZeroVector,
 		FVector(1000.0f, 0.0f, 0.0f));
@@ -654,15 +655,15 @@ bool FWacomFirstPersonCardLayerRunTunnelAnchorTest::RunTest(const FString& Param
 		return false;
 	}
 
-	UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent();
-	TestTrue(TEXT("Run tunnel activates"), RunTunnel && RunTunnel->ActivateRunTunnel(Segment, 200.0f));
+	UWacomRunPathTraversalComponent* RunPath = Character->GetRunPathTraversalComponent();
+	TestTrue(TEXT("Run Path activates"), RunPath && FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*RunPath, Segment, 200.0f));
 	Anchor->RefreshAnchor(0.0f);
 	const FWacomFirstPersonCardAnchorAutomationTestView View = FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
-	TestTrue(TEXT("Run tunnel anchor is valid"), View.bHasValidAnchor);
-	TestEqual(TEXT("Run tunnel mode is selected"), View.Mode, EWacomFirstPersonCardAnchorMode::RunTunnel);
-	TestEqual(TEXT("Run tunnel anchor uses spline distance before layout offset"), Character->GetRunTunnelMovementComponent()->GetDistanceAlongSpline(), 200.0f);
-	TestEqual(TEXT("Run tunnel default projection is body locked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
-	TestFalse(TEXT("Run tunnel body locked layout ignores cursor look"), View.bLookOffsetAppliedToLayout);
+	TestTrue(TEXT("Run Path anchor is valid"), View.bHasValidAnchor);
+	TestEqual(TEXT("Run Path mode is selected"), View.Mode, EWacomFirstPersonCardAnchorMode::RunPath);
+	TestEqual(TEXT("Run Path anchor uses spline distance before layout offset"), Character->GetRunPathTraversalComponent()->GetDistanceAlongSpline(), 200.0f);
+	TestEqual(TEXT("Run Path default projection is body locked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
+	TestFalse(TEXT("Run Path body locked layout ignores cursor look"), View.bLookOffsetAppliedToLayout);
 
 	Anchor->DestroyComponent();
 	Segment->Destroy();
@@ -671,11 +672,11 @@ bool FWacomFirstPersonCardLayerRunTunnelAnchorTest::RunTest(const FString& Param
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest,
-	"Wacom.UI.FirstPersonCardLayer.Anchor.SuspendedRunTunnelDoesNotOwnAnchor",
+	FWacomFirstPersonCardLayerSuspendedRunPathFallbackAnchorTest,
+	"Wacom.UI.FirstPersonCardLayer.Anchor.SuspendedRunPathDoesNotOwnAnchor",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerSuspendedRunPathFallbackAnchorTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -689,7 +690,7 @@ bool FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest::RunTest(con
 	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(
 		AWacomPlayerCharacter::StaticClass(),
 		FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment = WacomFirstPersonCardLayerSpec::SpawnTestSegment(
+	AWacomRunPathSegmentActor* Segment = WacomFirstPersonCardLayerSpec::SpawnTestSegment(
 		*World,
 		FVector::ZeroVector,
 		FVector(1000.0f, 0.0f, 0.0f));
@@ -720,10 +721,10 @@ bool FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest::RunTest(con
 	}
 
 	PC->Possess(Character);
-	UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent();
-	TestTrue(TEXT("Run tunnel activates"), RunTunnel && RunTunnel->ActivateRunTunnel(Segment, 200.0f));
+	UWacomRunPathTraversalComponent* RunPath = Character->GetRunPathTraversalComponent();
+	TestTrue(TEXT("Run Path activates"), RunPath && FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*RunPath, Segment, 200.0f));
 	Character->SetExplorationInputEnabled(false);
-	TestTrue(TEXT("Run tunnel is suspended"), RunTunnel && RunTunnel->IsRunTunnelSuspended());
+	TestTrue(TEXT("Run Path is suspended"), RunPath && RunPath->GetTraversalState() == EWacomRunPathTraversalState::Suspended);
 
 	Anchor->ProbeCameraTransform = FTransform(
 		FRotator(4.0f, 33.0f, 0.0f),
@@ -732,8 +733,8 @@ bool FWacomFirstPersonCardLayerSuspendedRunTunnelFallbackAnchorTest::RunTest(con
 	Anchor->RefreshAnchor(0.0f);
 	const FWacomFirstPersonCardAnchorAutomationTestView View =
 		FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
-	TestTrue(TEXT("Suspended run tunnel keeps anchor valid through fallback"), View.bHasValidAnchor);
-	TestEqual(TEXT("Suspended run tunnel does not own anchor mode"),
+	TestTrue(TEXT("Suspended Run Path keeps anchor valid through fallback"), View.bHasValidAnchor);
+	TestEqual(TEXT("Suspended Run Path does not own anchor mode"),
 		View.Mode,
 		EWacomFirstPersonCardAnchorMode::CameraFallback);
 	TestEqual(TEXT("Fallback reason is recorded"),
@@ -1461,7 +1462,7 @@ bool FWacomFirstPersonCardLayerBattlePriorityTest::RunTest(const FString& Parame
 
 	APlayerController* PC = World->SpawnActor<APlayerController>(APlayerController::StaticClass(), FTransform::Identity);
 	AWacomPlayerCharacter* Character = World->SpawnActor<AWacomPlayerCharacter>(AWacomPlayerCharacter::StaticClass(), FTransform::Identity);
-	AWacomRunTunnelSegmentActor* Segment = WacomFirstPersonCardLayerSpec::SpawnTestSegment(
+	AWacomRunPathSegmentActor* Segment = WacomFirstPersonCardLayerSpec::SpawnTestSegment(
 		*World,
 		FVector::ZeroVector,
 		FVector(1000.0f, 0.0f, 0.0f));
@@ -1475,13 +1476,13 @@ bool FWacomFirstPersonCardLayerBattlePriorityTest::RunTest(const FString& Parame
 	}
 
 	PC->Possess(Character);
-	TestTrue(TEXT("Run tunnel activates"), Character->GetRunTunnelMovementComponent()->ActivateRunTunnel(Segment, 100.0f));
+	TestTrue(TEXT("Run Path activates"), FWacomRunPathTraversalTestAccess::BeginTraversalAtDistance(*Character->GetRunPathTraversalComponent(), Segment, 100.0f));
 	Character->SetExplorationInputEnabled(false);
 	PC->SetControlRotation(FRotator(2.0f, 55.0f, 0.0f));
 	TestTrue(TEXT("Battle camera activates"), Character->GetBattleCameraLookComponent()->ActivateBattleCameraLook());
 	Anchor->RefreshAnchor(0.0f);
 	const FWacomFirstPersonCardAnchorAutomationTestView View = FWacomFirstPersonCardLayerTestAccess::View(*Anchor);
-	TestEqual(TEXT("Battle camera mode takes priority over suspended run tunnel"), View.Mode, EWacomFirstPersonCardAnchorMode::BattleCamera);
+	TestEqual(TEXT("Battle camera mode takes priority over suspended Run Path"), View.Mode, EWacomFirstPersonCardAnchorMode::BattleCamera);
 	TestEqual(TEXT("Battle base yaw is used"), View.AnchorTransform.Rotator().Yaw, 55.0);
 	TestEqual(TEXT("Battle default projection is body locked"), View.ProjectionMode, EWacomFirstPersonCardProjectionMode::BodyLocked);
 	TestFalse(TEXT("Battle body locked layout ignores cursor look"), View.bLookOffsetAppliedToLayout);
@@ -2389,11 +2390,11 @@ bool FWacomFirstPersonCardLayerAuthoredProjectionTest::RunTest(const FString& Pa
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonCardLayerRunTunnelTickPrerequisiteTest,
-	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.AnchorTicksAfterRunTunnelMovement",
+	FWacomFirstPersonCardLayerRunPathTickPrerequisiteTest,
+	"Wacom.UI.FirstPersonCardLayer.AnchorMotionStability.AnchorTicksAfterRunPathMovement",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonCardLayerRunTunnelTickPrerequisiteTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonCardLayerRunPathTickPrerequisiteTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -2405,19 +2406,19 @@ bool FWacomFirstPersonCardLayerRunTunnelTickPrerequisiteTest::RunTest(const FStr
 	UWacomFirstPersonCardAnchorSpecProbeComponent* Anchor = WacomFirstPersonCardLayerSpec::AddProbe(Character);
 	if (!TestNotNull(TEXT("Character"), Character)
 		|| !TestNotNull(TEXT("Anchor probe"), Anchor)
-		|| !TestNotNull(TEXT("Run tunnel component"), Character ? Character->GetRunTunnelMovementComponent() : nullptr))
+		|| !TestNotNull(TEXT("Run Path component"), Character ? Character->GetRunPathTraversalComponent() : nullptr))
 	{
 		return false;
 	}
 
 	Anchor->BeginPlayForTest();
-	const UWacomRunTunnelMovementComponent* RunTunnel = Character->GetRunTunnelMovementComponent();
+	const UWacomRunPathTraversalComponent* RunPath = Character->GetRunPathTraversalComponent();
 	TestTrue(
-		TEXT("Anchor tick has RunTunnel movement prerequisite"),
+		TEXT("Anchor tick has RunPath movement prerequisite"),
 		WacomFirstPersonCardLayerSpec::HasTickPrerequisite(
 			Anchor->PrimaryComponentTick,
-			RunTunnel,
-			RunTunnel->PrimaryComponentTick));
+			RunPath,
+			RunPath->PrimaryComponentTick));
 
 	Anchor->DestroyComponent();
 	Character->Destroy();

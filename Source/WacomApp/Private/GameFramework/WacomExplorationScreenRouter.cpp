@@ -275,7 +275,7 @@ namespace
 			UE_LOG(LogTemp, Warning,
 				TEXT("[WacomPlayerController] %s: 找不到 WacomPlayerCharacter，回退到普通 GameMenu 打开路径"),
 				LogPrefix);
-			OpenMenuAfterStage(PC, UIManager, /*bReturnToRunTunnelAfterClose*/false);
+			OpenMenuAfterStage(PC, UIManager, /*bReturnToRunPathAfterClose*/false);
 			return true;
 		}
 
@@ -302,7 +302,7 @@ namespace
 				(*SharedOpenMenu)(
 					*PC,
 					*UIManager,
-					/*bReturnToRunTunnelAfterClose*/true);
+					/*bReturnToRunPathAfterClose*/true);
 			};
 
 		TFunction<void()> DeferredOpenAfterStage = OpenAfterStage;
@@ -383,7 +383,7 @@ namespace
 		UWacomGameUIManagerSubsystem& UIManager,
 		FName ShopId,
 		const TArray<FRunShopOfferInput>& Offers,
-		bool bReturnToRunTunnelAfterClose)
+		bool bReturnToRunPathAfterClose)
 	{
 		TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 		TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(&UIManager);
@@ -416,11 +416,11 @@ namespace
 		{
 			RollbackShopAsyncPush(WeakPC, *ShopVisitToken, FailureReason);
 		};
-		Request.OnComplete = [WeakPC, ShopId, bReturnToRunTunnelAfterClose](const FWacomAsyncWidgetPushResult& Result)
+		Request.OnComplete = [WeakPC, ShopId, bReturnToRunPathAfterClose](const FWacomAsyncWidgetPushResult& Result)
 		{
 			if (AWacomPlayerController* PC = WeakPC.Get())
 			{
-				if (bReturnToRunTunnelAfterClose)
+				if (bReturnToRunPathAfterClose)
 				{
 					if (Result.bSucceeded)
 					{
@@ -506,7 +506,7 @@ namespace
 		UWacomGameUIManagerSubsystem& UIManager,
 		FName PersistentId,
 		UWacomRunEventDefinition* EventDefinition,
-		bool bReturnToRunTunnelAfterClose)
+		bool bReturnToRunPathAfterClose)
 	{
 		TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
 		TWeakObjectPtr<UWacomGameUIManagerSubsystem> WeakUIManager(&UIManager);
@@ -545,11 +545,11 @@ namespace
 		{
 			RollbackRunEventAsyncPush(WeakPC, *RunEventVisitToken, FailureReason);
 		};
-		Request.OnComplete = [WeakPC, PersistentId, bReturnToRunTunnelAfterClose](const FWacomAsyncWidgetPushResult& Result)
+		Request.OnComplete = [WeakPC, PersistentId, bReturnToRunPathAfterClose](const FWacomAsyncWidgetPushResult& Result)
 		{
 			if (AWacomPlayerController* PC = WeakPC.Get())
 			{
-				if (bReturnToRunTunnelAfterClose)
+				if (bReturnToRunPathAfterClose)
 				{
 					if (Result.bSucceeded)
 					{
@@ -708,7 +708,7 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 		*UIManager,
 		ShopId,
 		Offers,
-		/*bReturnToRunTunnelAfterClose*/false);
+		/*bReturnToRunPathAfterClose*/false);
 	return true;
 }
 
@@ -738,14 +738,14 @@ bool FWacomExplorationScreenRouter::OpenShop(
 		[ShopId, Offers](
 			AWacomPlayerController& PC,
 			UWacomGameUIManagerSubsystem& UIManager,
-			bool bReturnToRunTunnelAfterClose)
+			bool bReturnToRunPathAfterClose)
 		{
 			PushShopScreenAsync(
 				PC,
 				UIManager,
 				ShopId,
 				Offers,
-				bReturnToRunTunnelAfterClose);
+				bReturnToRunPathAfterClose);
 		});
 }
 
@@ -762,7 +762,7 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(AWacomPlayerController& PC, FNa
 		*UIManager,
 		PersistentId,
 		EventDefinition,
-		/*bReturnToRunTunnelAfterClose*/false);
+		/*bReturnToRunPathAfterClose*/false);
 	return true;
 }
 
@@ -793,12 +793,12 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(
 		[PersistentId, WeakEventDefinition](
 			AWacomPlayerController& PC,
 			UWacomGameUIManagerSubsystem& UIManager,
-			bool bReturnToRunTunnelAfterClose)
+			bool bReturnToRunPathAfterClose)
 		{
 			UWacomRunEventDefinition* EventDefinition = WeakEventDefinition.Get();
 			if (!EventDefinition)
 			{
-				if (bReturnToRunTunnelAfterClose)
+				if (bReturnToRunPathAfterClose)
 				{
 					PC.ReturnFromGameMenuViewpointStageAfterFailedOpen();
 				}
@@ -810,6 +810,6 @@ bool FWacomExplorationScreenRouter::OpenRunEvent(
 				UIManager,
 				PersistentId,
 				EventDefinition,
-				bReturnToRunTunnelAfterClose);
+				bReturnToRunPathAfterClose);
 		});
 }

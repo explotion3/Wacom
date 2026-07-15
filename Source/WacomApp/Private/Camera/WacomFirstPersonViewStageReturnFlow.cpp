@@ -4,11 +4,11 @@
 
 #include "Camera/WacomFirstPersonViewStageCoordinator.h"
 #include "Camera/WacomFirstPersonViewStageRequest.h"
-#include "Components/WacomRunTunnelMovementComponent.h"
+#include "Components/WacomRunPathTraversalComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 
-bool FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
+bool FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 	AWacomPlayerCharacter& Pawn,
 	APlayerController& PlayerController,
 	TFunction<void()>&& OnCompleted)
@@ -16,10 +16,11 @@ bool FWacomFirstPersonViewStageReturnFlow::ReturnToRunTunnel(
 	FWacomFirstPersonViewStageCoordinator::CancelActiveStage(Pawn);
 
 	FWacomFirstPersonViewStageRequest ReturnRequest;
-	if (const UWacomRunTunnelMovementComponent* RunTunnel =
-		Pawn.GetRunTunnelMovementComponent())
+	bool bHasRunReturnRequest = false;
+	if (const UWacomRunPathTraversalComponent* RunPath =
+		Pawn.GetRunPathTraversalComponent())
 	{
-		RunTunnel->TryBuildReturnToRunTunnelStageRequest(ReturnRequest);
+		bHasRunReturnRequest = RunPath->TryBuildReturnToRunPathStageRequest(ReturnRequest);
 	}
 
 	const TWeakObjectPtr<AWacomPlayerCharacter> WeakPawn(&Pawn);

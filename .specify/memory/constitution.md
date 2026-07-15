@@ -1,23 +1,16 @@
 <!--
 Sync Impact Report
-Version change: template -> 1.0.0
+Version change: 1.0.0 -> 1.0.1
 Modified principles:
-- Template placeholders -> I. Docs and AGENTS Are the Rule Truth
-- Template placeholders -> II. Wacom Module Boundaries Are Mandatory
-- Template placeholders -> III. Domain Rules Before Presentation
-- Template placeholders -> IV. Data, GameplayTags, and Authoring Stay Explicit
-- Template placeholders -> V. Reusable Systems Over One-Off Work
-- Template placeholders -> VI. Validation Is Part of the Slice
+- Required Validation Commands: UE 5.7 tool paths -> UE 5.8 tool paths
 Added sections:
-- Wacom Domain Map
-- Spec Kit Usage Boundaries
-- Required Validation Commands
+- None
 Removed sections:
 - None
 Templates requiring updates:
-- updated: .specify/templates/plan-template.md
-- updated: .specify/templates/spec-template.md
-- updated: .specify/templates/tasks-template.md
+- updated: .specify/templates/plan-template.md (UE 5.8)
+- reviewed: .specify/templates/spec-template.md (no toolchain paths)
+- updated: .specify/templates/tasks-template.md (UE 5.8)
 - reviewed: AGENTS.md remains authoritative; agent-context extension is disabled
 Follow-up TODOs:
 - None
@@ -168,13 +161,13 @@ respect dirty user changes, update docs, and run validation.
 Compile command:
 
 ```powershell
-& 'E:\UE_5.7\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
+& 'E:\UE_5.8\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
 ```
 
 Full automation command:
 
 ```powershell
-& 'E:\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests Wacom; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests Wacom; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
 Plans SHOULD prefer focused automation prefixes when possible, for example
@@ -199,4 +192,4 @@ final implementation review. Reviewers MUST verify docs-first evidence, module
 ownership, passive UI boundaries, DataAsset/GameplayTag impacts, reusable
 system design, validation results, and any documented temporary debt.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-07 | **Last Amended**: 2026-06-07
+**Version**: 1.0.1 | **Ratified**: 2026-06-07 | **Last Amended**: 2026-07-14

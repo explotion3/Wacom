@@ -18,7 +18,7 @@ enum class EWacomFirstPersonCardAnchorMode : uint8
 {
 	Invalid = 0,
 	BattleCamera = 1,
-	RunTunnel = 2,
+	RunPath = 2,
 	CameraFallback = 3,
 	ViewStageBlend = 4
 };

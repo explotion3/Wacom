@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-06-08
+updated: 2026-07-14
 tags:
   - wacom/data
   - wacom/dataasset
@@ -18,7 +18,7 @@ tags:
 
 ## §1 模块职责
 
-`WacomData` 负责卡牌、敌人、Encounter、角色、商店、拾取物、Run world card interaction 和 RunEvent 等静态定义。它可以描述“内容是什么”，不能保存“当前 Run / 当前战斗发生了什么”。
+`WacomData` 负责卡牌、敌人、Encounter、角色、商店、拾取物、Run world card interaction、RunEvent 和 Logical Map Graph 等静态定义。它可以描述“内容是什么”，不能保存“当前 Run / 当前战斗发生了什么”。
 
 **负责：**
 - `UCardDefinition`、`UEnemyDefinition`、`UEnemyPartDefinition`、`UCharacterDefinition`
@@ -28,6 +28,8 @@ tags:
 - `UWacomRunPickupDefinition`
 - `UWacomRunWorldCardInteractionDefinition`
 - `UWacomRunEventDefinition`
+- `UWacomJourneyDefinition`、`UWacomFloorMapDefinition`
+- `FWacomMapNodeDefinition`、`FWacomMapEdgeDefinition` 和 typed node payload
 - `FIntentDefinition`、`FCardEffect`、`FCardZoneHook`、`FCardPassive`、`FEffectCondition`
 
 **不负责：**
@@ -61,6 +63,8 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 | `UWacomRunPickupDefinition` | `Source/WacomData/Public/Pickups` | 数据驱动拾取物奖励配置 | RunSession 使用场景 `PersistentId` 防重复拾取 |
 | `UWacomRunWorldCardInteractionDefinition` | `Source/WacomData/Public/Interactions` | Run world card drop 的卡牌筛选、奖励和反馈文案 | RunSession 提交事务，Actor receiver 读取制作定义 |
 | `UWacomRunEventDefinition` | `Source/WacomData/Public/Events` | 探索事件图、节点、选项、条件和效果 | RunSession 执行事件事务和回滚 |
+| `UWacomJourneyDefinition` | `Source/WacomData/Public/Map` | JourneyId、角色范围、有序 Floor、时段 AP 预算与 Decay 曲线 | RunSession 初始化探索 working state，并在 Morning 读取压力规则 |
+| `UWacomFloorMapDefinition` | `Source/WacomData/Public/Map` | FloorId、EntryNodeId、节点与有向边 | RunSession 执行 lifecycle、traversal、MapTravel 和跨层验证 |
 
 静态内容默认位于 `/Game/Wacom/Data`，完整目录约定见 [Content_Organization.md](./Content_Organization.md)。生成内容清单和 commandlet 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)。
 
@@ -408,7 +412,20 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 
 运行时提交流程和 Actor authoring 见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#4-run-world-card-drop)。
 
-## §10 RunEvent Definition
+## §10 Logical Map Graph
+
+Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorMapDefinition` 保存。`MapPosition` 只服务地图 UI 排版；世界坐标、Spline、Actor 和 Widget 不进入数据合同。
+
+- `FWacomMapNodeHandle = FloorId + NodeId`，跨 Floor 唯一。
+- `FWacomMapEdgeHandle = FloorId + EdgeId`；单独 `EdgeId` 只在所属 Floor 内唯一。
+- `FWacomMapEdgeDefinition` 是有向边；允许反向通行必须显式制作另一条边。
+- `FWacomMapNodeContent` 使用固定 typed payload。Encounter、RunEvent、Shop、Treasure 和 FloorEntrance 的规则引用只写在匹配字段中。
+- Camp 不是节点类型；`bAllowsCamp` 只声明某个已完成节点是否可以成为 Night Camp 的落点。
+- Floor Entrance 的持有卡条件读取真实卡牌实例，但静态合同只保存 Definition/CardId/keyword 筛选，不保存运行进度。
+
+这些类型需要 DataAsset、Details 面板和 Blueprint 只读检查，因此使用反射；节点 lifecycle、探索 token、运行时版本和事务结果属于 `WacomRun`。
+
+## §11 RunEvent Definition
 
 `UWacomRunEventDefinition` 是探索事件图的静态定义。RunSession 打开事件时读取当前节点，选择选项时在 working-state 事务中校验条件、应用效果、推进节点或关闭事件。
 
@@ -420,7 +437,7 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 | `FWacomRunEventNodeDefinition` | 节点 ID、标题、正文、选项列表 |
 | `FWacomRunEventChoiceDefinition` | 选项 ID、按钮文本、条件、效果、下一节点和关闭 / 完成语义 |
 | `FWacomRunEventConditionDefinition` | 选项可用条件，例如金币、卡牌、RunFlag、事件完成状态 |
-| `FWacomRunEventEffectDefinition` | 选项提交后的效果，例如金币、卡牌、压力、RunFlag、节点消耗 |
+| `FWacomRunEventEffectDefinition` | 选项提交后的效果，例如金币、卡牌、压力和 RunFlag；不再包含节点/行动点效果 |
 | `FWacomRunEventCardPaymentDefinition` | 单卡支付筛选和 payment zone authoring |
 
 字段口径：
@@ -429,9 +446,11 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 - RunFlag 使用 `FName FlagId`，不是 Gameplay tag，不做数值或计数。
 - 压力类型在 DataAsset 中使用稳定 `FName`，RunSession 执行时转换为运行时压力 ID。
 - `CardPayment` 当前是单卡支付合同。支付 UI、drop target 和 menu lease 见 [WacomUI.md](./WacomUI.md) 与 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target)。
+- 选项使用 `ActionPointPolicy = Automatic / Free / Fixed`。Automatic 对 terminal 选项为 1、非 terminal 为 0；`FixedActionPointCost` 只在 Fixed 时使用，正成本选项必须 terminal。
+- 条件字段使用 `MinActionPoints`，不再使用旧 NodeCount 术语。行动点属于 Run 事务，不通过 effect 让资产任意扣减。
 - 条件和效果的阻断 / warning 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#asset-validation)。
 
-## §11 Battle Effect Structs
+## §12 Battle Effect Structs
 
 卡牌、意图、ZoneHook 和 Passive 使用 Gameplay tag 表达效果类型、目标、条件、区域和触发点。tag 字典见 [WacomGameplayTags.md](./WacomGameplayTags.md)，但 tag 已声明不代表可写入正式资产；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
 
@@ -449,7 +468,7 @@ class UWacomRunWorldCardInteractionDefinition : public UPrimaryDataAsset
 
 `FCardPassive.DisplayText` 是旧展示文本，不是规则真相。正式卡牌详情面板不再把它作为输入；被动详情由 `Trigger / Condition / Effects / TriggerThreshold` 经 WacomApp explanation compiler 生成 semantic blocks/runs。`Passive.Trigger.OnCompanionCount` 的回手说明来自 WacomApp 的 `PassiveOutcomeTemplates`，不要求内容作者在 `Passive.Effects` 里配置不会执行的假效果。
 
-## §12 修改数据合同时的检查点
+## §13 修改数据合同时的检查点
 
 修改 DataAsset 字段或新增静态数据能力时，先确认：
 

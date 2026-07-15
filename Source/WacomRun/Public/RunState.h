@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "Runtime/BattleEnemyKeys.h"
 #include "Session/BattleSession.h"  // FBattleInitParams
+#include "Exploration/RunExplorationResolution.h"
 #include "RunStateTypes.h"
 #include "RunState.generated.h"
 
@@ -15,7 +16,7 @@ class UCardDefinition;
 class UWacomRunEventDefinition;
 
 /**
- * 单个战斗节点（Trigger）的进度快照。
+ * 单个 Encounter Map Node 的进度快照。
  *
  * 撤离时 Run 层用 packet.DestroyedPartKeys 写入 RunState.BattleProgress；
  * 下次进入同一 Trigger 时，BuildInitParamsForBattle 优先把 DestroyedPartKeys
@@ -102,6 +103,48 @@ struct WACOMRUN_API FRunShopSnapshot
 	TArray<FRunShopOffer> Offers;
 };
 
+/** 一次商店购买的显式事务结果。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopPurchaseResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	bool bSucceeded = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	bool bFirstPurchaseThisVisit = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	bool bVisitClosedAfterPurchase = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	int32 ActionPointCost = 0;
+
+	FRunExplorationResolution ExplorationResolution;
+};
+
+/** 一次宝藏/拾取交互的显式原子结算结果。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunTreasureSettlementResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Treasure")
+	bool bSucceeded = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Treasure")
+	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Treasure")
+	int32 ActionPointCost = 0;
+
+	FRunExplorationResolution ExplorationResolution;
+};
+
 /** 单个场景事件节点在当前 Run 内的状态。 */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunEventState
@@ -120,7 +163,7 @@ enum class ERunEventChoiceRequirementKind : uint8
 {
 	None,
 	MinGold,
-	MinNodeCount,
+	MinActionPoints,
 	MaxPressure,
 	HasCard,
 	MissingCard,
@@ -244,6 +287,10 @@ struct WACOMRUN_API FRunEventChoiceSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	FName PaymentDisabledReason = NAME_None;
 
+	/** 本选项按当前事件终结语义解析后的行动点成本。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 ActionPointCost = 0;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	TArray<FRunEventChoiceRequirementSnapshot> Requirements;
 
@@ -355,6 +402,13 @@ struct WACOMRUN_API FRunEventChoiceResult
 		meta = (ToolTip = "本次成功结算后事件是否被标记完成。用于展示事件结束提示，不作为规则输入。"))
 	bool bEventCompletedAfterResolve = false;
 
+	/** 本次成功事务实际消耗的行动点。失败结果始终为 0。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
+	int32 ActionPointCost = 0;
+
+	/** 正式探索 Session 中与事件结算同批次提交的地图/时间结果；旧 Session 保持空失败结果。 */
+	FRunExplorationResolution ExplorationResolution;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Event")
 	TArray<FRunEventChoiceEffectResult> EffectResults;
 };
@@ -364,7 +418,7 @@ struct WACOMRUN_API FRunEventChoiceResult
  *
  * 行为约束：
  *   - 本结构是数据容器，不做业务逻辑；业务逻辑放 URunSession
- *   - URunSession 只读字段对外提供方法（GetXxx / AddPressure / RemoveFinger / ConsumeNode 等）
+ *   - URunSession 只读字段对外提供方法；Action Point 只经正式探索事务消费
  *
  * 注意：FRunState 是内存数据层；磁盘格式见 UWacomSaveGame，两者之间做字段拷贝。
  */
@@ -467,33 +521,13 @@ struct WACOMRUN_API FRunState
 
 	// ---- 时间与昼夜 ----
 
-	/** 当前 Run 的天数（从 1 开始）。 */
+	/** Action Point 与 Night gate 的唯一运行时状态；当前 SaveGame schema 不保存。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	int32 CurrentDayNumber = 1;
+	FRunTimeState TimeState;
 
-	/** 当前时段。 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	ETimePhase CurrentTimePhase = ETimePhase::Morning;
-
-	/** 当前时段剩余可用节点数（资源点）。 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	int32 RemainingNodeCount = 2;
-
-	/** 五时段初始节点数。可被技能 / 事件改。 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	int32 InitialNodeCount_Morning = 2;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	int32 InitialNodeCount_Day = 6;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	int32 InitialNodeCount_Dusk = 2;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	int32 InitialNodeCount_Night = 2;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Time")
-	int32 InitialNodeCount_Sunrise = 1;
+	/** Journey、Floor、Node lifecycle 与探索版本；当前 SaveGame schema 不保存。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Map")
+	FRunExplorationState ExplorationState;
 
 	// ---- 背包与备战卡组 ----
 
@@ -569,7 +603,7 @@ struct WACOMRUN_API FRunState
 	 * 撤离写入 / 胜利清理 / 失败保留（Run 都结束了无意义保留与否）。
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
-	TMap<FName, FBattleProgressSnapshot> BattleProgress;
+	TMap<FWacomMapNodeHandle, FBattleProgressSnapshot> BattleProgress;
 
 	/** 商店节点库存状态。Key = 场景商店/节点 PersistentId；当前只在 Run 内存态保留，不接 SaveGame。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")

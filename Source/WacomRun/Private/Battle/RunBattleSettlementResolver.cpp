@@ -3,7 +3,9 @@
 #include "Battle/RunBattleSettlementResolver.h"
 
 #include "Cards/CardDefinition.h"
+#include "Deck/RunDeckRules.h"
 #include "RunState.h"
+#include "Tags/WacomGameplayTags.h"
 
 namespace
 {
@@ -51,13 +53,46 @@ namespace
 	{
 		return PartKey.IsValidKey() ? PartKey.ToDebugString() : FString(TEXT("<invalid>"));
 	}
+
+	bool GrantCard(FRunState& State, UCardDefinition* Card)
+	{
+		if (!Card)
+		{
+			return false;
+		}
+		FCardInstance Instance;
+		Instance.Definition = Card;
+		Instance.InstanceId = FGuid::NewGuid();
+		if (!Instance.InstanceId.IsValid())
+		{
+			return false;
+		}
+		State.Backpack.Add(Instance);
+		FRunDeckRules::EnsureSpecialZoneEntryFor(State, Instance);
+		FRunDeckRules::RecomputeBurden(State, true);
+		return true;
+	}
+
+	void AddExperience(FRunState& State, const int32 Amount)
+	{
+		if (Amount <= 0)
+		{
+			return;
+		}
+		State.ExperienceCurrent = FMath::Max(0, State.ExperienceCurrent + Amount);
+		const int32 Capacity = FMath::Max(1, State.ExperienceCapacity);
+		while (State.ExperienceCurrent >= Capacity)
+		{
+			State.ExperienceCurrent -= Capacity;
+			State.AcquiredSkills.Add(WacomTags::SkillSlot_Placeholder);
+		}
+	}
 }
 
 bool FRunBattleSettlementResolver::Resolve(
 	FRunState& State,
 	const FBattleResultPacket& Packet,
-	FName TriggerPersistentId,
-	const FCallbacks& Callbacks)
+	const FWacomMapNodeHandle& EncounterNode)
 {
 	// 1) Outcome 主分支
 	switch (Packet.Outcome)
@@ -68,27 +103,29 @@ bool FRunBattleSettlementResolver::Resolve(
 			// 撤离：节点不算完成。
 			// 持久化破坏部位列表，下次进入同一战斗 Trigger 时维持破坏态。
 			int32 PersistedDestroyedPartCount = 0;
-			if (!TriggerPersistentId.IsNone())
+			if (EncounterNode.IsValid())
 			{
 				FBattleProgressSnapshot Snapshot;
 				PersistedDestroyedPartCount = PopulateWithdrawnBattleProgressSnapshot(Packet, Snapshot);
-				State.BattleProgress.Add(TriggerPersistentId, MoveTemp(Snapshot));
+				State.BattleProgress.Add(EncounterNode, MoveTemp(Snapshot));
 			}
 			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Battle withdrawn (Trigger=%s, %d parts persisted destroyed)"),
-				*TriggerPersistentId.ToString(),
+				TEXT("[RunSession] Battle withdrawn (Node=%s/%s, %d parts persisted destroyed)"),
+				*EncounterNode.FloorId.ToString(),
+				*EncounterNode.NodeId.ToString(),
 				PersistedDestroyedPartCount);
 		}
 		else
 		{
 			// 真胜利：清理该 Trigger 的撤离进度；永久完成状态由 GameMode.MarkTriggerDestroyed 写入。
-			if (!TriggerPersistentId.IsNone())
+			if (EncounterNode.IsValid())
 			{
-				State.BattleProgress.Remove(TriggerPersistentId);
+				State.BattleProgress.Remove(EncounterNode);
 			}
 			UE_LOG(LogTemp, Display,
-				TEXT("[RunSession] Battle victory (Trigger=%s)"),
-				*TriggerPersistentId.ToString());
+				TEXT("[RunSession] Battle victory (Node=%s/%s)"),
+				*EncounterNode.FloorId.ToString(),
+				*EncounterNode.NodeId.ToString());
 		}
 		break;
 
@@ -107,24 +144,24 @@ bool FRunBattleSettlementResolver::Resolve(
 
 	// 2) 战外结算压力。
 	// 疲劳：每场战斗后 +1%（无论胜败）。
-	Callbacks.AddPressure(EWacomPressureType::Fatigue, 1);
+	State.Pressure.Add(EWacomPressureType::Fatigue, 1);
 
 	// 伤口阈值跨越。
 	if (Packet.bCrossedHighHpThreshold)
 	{
-		Callbacks.AddPressure(EWacomPressureType::Wound, 1);
+		State.Pressure.Add(EWacomPressureType::Wound, 1);
 	}
 	if (Packet.bCrossedLowHpThreshold)
 	{
-		Callbacks.AddPressure(EWacomPressureType::Wound, 5);
+		State.Pressure.Add(EWacomPressureType::Wound, 5);
 	}
 	// 同归于尽：+10% 伤口；不影响 bRunActive（Outcome 已是 Victory）。
 	if (Packet.bMutualDestruction)
 	{
-		Callbacks.AddPressure(EWacomPressureType::Wound, 10);
+		State.Pressure.Add(EWacomPressureType::Wound, 10);
 		UE_LOG(LogTemp, Display,
 			TEXT("[RunSession] Mutual destruction: Wound +10%%, total Wound=%d"),
-			Callbacks.GetPressureValue(EWacomPressureType::Wound));
+				State.Pressure.Get(EWacomPressureType::Wound));
 	}
 
 	// 3) 经验结算。
@@ -139,7 +176,7 @@ bool FRunBattleSettlementResolver::Resolve(
 		}
 		if (TotalExp > 0)
 		{
-			Callbacks.AddExperience(TotalExp);
+			AddExperience(State, TotalExp);
 			UE_LOG(LogTemp, Display,
 				TEXT("[RunSession] Exp granted: %d (from %d destroyed parts)"),
 				TotalExp, Packet.KnockdownExpGains.Num());
@@ -156,7 +193,10 @@ bool FRunBattleSettlementResolver::Resolve(
 			{
 				continue;
 			}
-			Callbacks.AcquireCardToRun(GainedCard.Definition.Get());
+			if (!GrantCard(State, GainedCard.Definition.Get()))
+			{
+				return false;
+			}
 			UE_LOG(LogTemp, Display,
 				TEXT("[RunSession] Gained card from battle: Card=%s, SourcePartKey=%s, Choice=%d"),
 				*GetNameSafe(GainedCard.Definition),

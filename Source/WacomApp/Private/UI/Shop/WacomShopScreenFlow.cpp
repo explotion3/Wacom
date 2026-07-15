@@ -76,10 +76,18 @@ bool FWacomShopScreenFlow::PurchaseOffer(
 	}
 
 	const FWacomShopOfferPresentationView* OfferView = FindCachedOfferView(OfferId, CachedOfferViews);
-	const bool bPurchased = Run->PurchaseShopOffer(OfferId);
+	const FRunShopPurchaseResult PurchaseResult = Run->PurchaseShopOffer(OfferId);
+	const bool bPurchased = PurchaseResult.bSucceeded;
 	if (bPurchased)
 	{
 		ShowPurchaseSuccessToast(ToastSubsystem, OfferView);
+		if (PurchaseResult.bVisitClosedAfterPurchase || !Run->IsShopVisitActive())
+		{
+			// 首次购买可能耗尽当前时段。规则结果已经关闭 visit；Screen 只负责
+			// 退出表现层，不能继续显示跨时段的过期库存。
+			Screen.DeactivateWidget();
+			return true;
+		}
 	}
 	else
 	{

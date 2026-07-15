@@ -118,7 +118,7 @@ FName AWacomRunCardPickupActor::GetRewardConfigWarningReason() const
 bool AWacomRunCardPickupActor::TryCollectPickupReward(AWacomPlayerController* PC)
 {
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
-	if (!Run || !Run->CollectCardPickup(PersistentId, CardDefinition))
+	if (!Run || !Run->CollectCardPickup(PersistentId, CardDefinition).bSucceeded)
 	{
 		return false;
 	}

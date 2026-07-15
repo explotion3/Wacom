@@ -96,7 +96,7 @@ FName AWacomRunPickupActor::GetRewardConfigWarningReason() const
 bool AWacomRunPickupActor::TryCollectPickupReward(AWacomPlayerController* PC)
 {
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
-	if (!Run || !Run->CollectGoldPickup(PersistentId, GoldAmount))
+	if (!Run || !Run->CollectGoldPickup(PersistentId, GoldAmount).bSucceeded)
 	{
 		return false;
 	}

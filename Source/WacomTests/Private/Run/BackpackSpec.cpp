@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "RunSession.h"
@@ -379,7 +380,7 @@ bool FWacomRunDeckInitializeA2Spec::RunTest(const FString& /*Parameters*/)
 		{ Normal1, Normal2, Bag });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	const FRunState& State = Run->GetRunState();
 	// GDD §11.4：一张卡同时只能在一个区。
@@ -424,7 +425,7 @@ bool FWacomRunDeckCapacitySumSpec::RunTest(const FString& /*Parameters*/)
 		{ Bag1, Bag2, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestEqual(TEXT("FluxCapacity=10+3=13"), Run->GetFluxCapacity(), 13);
 
@@ -451,7 +452,7 @@ bool FWacomRunDeckBackpackUiAvailabilitySpec::RunTest(const FString& /*Parameter
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Fx.MakeNoopCard(0) });
 	TStrongObjectPtr<URunSession> Run1(NewObject<URunSession>());
-	Run1->Initialize(CharNoProvider);
+	InitializeRunSessionForTest(*Run1, CharNoProvider).IsOk();
 	TestFalse(TEXT("UI not available without container capacity"),
 		Run1->IsBackpackUiAvailable());
 
@@ -461,7 +462,7 @@ bool FWacomRunDeckBackpackUiAvailabilitySpec::RunTest(const FString& /*Parameter
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag });
 	TStrongObjectPtr<URunSession> Run2(NewObject<URunSession>());
-	Run2->Initialize(CharWithProvider);
+	InitializeRunSessionForTest(*Run2, CharWithProvider).IsOk();
 	TestTrue(TEXT("UI available with BagProvider"),
 		Run2->IsBackpackUiAvailable());
 
@@ -471,7 +472,7 @@ bool FWacomRunDeckBackpackUiAvailabilitySpec::RunTest(const FString& /*Parameter
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Lantern });
 	TStrongObjectPtr<URunSession> Run3(NewObject<URunSession>());
-	Run3->Initialize(CharWithCapacityProvider);
+	InitializeRunSessionForTest(*Run3, CharWithCapacityProvider).IsOk();
 	TestTrue(TEXT("UI available with non-BagProvider capacity card"),
 		Run3->IsBackpackUiAvailable());
 
@@ -497,7 +498,7 @@ bool FWacomRunDeckAcquireCardToRunTriggersBurdenSpec::RunTest(const FString& /*P
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// 初始 Backpack 仅含 Bag = 1 张，BattleDeck=2 且容量=2 → Burden=0
 	TestEqual(TEXT("Init Backpack=1"), Run->GetBackpack().Num(), 1);
@@ -535,7 +536,7 @@ bool FWacomRunDeckDestroyIntrinsicRejectedSpec::RunTest(const FString& /*Paramet
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ IntrinsicCard, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	const int32 BefSize = Run->GetBackpack().Num();
 	TestFalse(TEXT("Destroy Intrinsic rejected"),
@@ -560,7 +561,7 @@ bool FWacomRunDeckDestroyLastCapacityProviderRejectedSpec::RunTest(const FString
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ OnlyBag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestFalse(TEXT("Destroy last capacity provider rejected"),
 		DestroyFirstOwnedDefinition(Run, OnlyBag));
@@ -585,7 +586,7 @@ bool FWacomRunDeckDestroyOneOfTwoCapacityProvidersAllowedSpec::RunTest(const FSt
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag1, Bag2 });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Destroy Bag1 allowed (Bag2 still provides capacity)"),
 		DestroyFirstOwnedDefinition(Run, Bag1));
@@ -615,7 +616,7 @@ bool FWacomRunDeckDestroyBugGirlBagAllowedWhenLanternProvidesCapacitySpec::RunTe
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Normal1, Normal2, Normal3, Bag, Lantern });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Lantern starts in BattleDeck"), BattleDeckContainsDefinition(Run->GetRunState(), Lantern));
 	TestTrue(TEXT("Bag starts in Backpack"), BackpackContainsDefinition(Run->GetRunState(), Bag));
@@ -660,7 +661,7 @@ bool FWacomRunDeckDestroyBugGirlBagOverflowUsesBurdenOnlyWhenFluxFullSpec::RunTe
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Normal1, Normal2, Normal3, Bag, Lantern });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
 	Run->AcquireCardToRun(Fx.MakeNoopCard(0));
@@ -695,7 +696,7 @@ bool FWacomRunDeckDestroyCompanionAddsBloodlustSpec::RunTest(const FString& /*Pa
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Companion, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestEqual(TEXT("Init Bloodlust=0"),
 		Run->GetPressureValue(EWacomPressureType::Bloodlust), 0);
@@ -724,7 +725,7 @@ bool FWacomRunDeckDestroyAlsoRemovesFromBattleDeckSpec::RunTest(const FString& /
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Card, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Card initially in BattleDeck (a2 rule)"),
 		BattleDeckContainsDefinition(Run->GetRunState(), Card));
@@ -764,7 +765,7 @@ bool FWacomRunDeckDestroyCardFromAllOwnedZonesSpec::RunTest(const FString& /*Par
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), Starter);
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		TestTrue(TEXT("Initialize all-zones destroy run"), Run->Initialize(Char));
+		TestTrue(TEXT("Initialize all-zones destroy run"), InitializeRunSessionForTest(*Run, Char).IsOk());
 
 		if (TargetZone != EZoneKind::BattleDeck)
 		{
@@ -837,7 +838,7 @@ bool FWacomRunDeckDestroyCardByInstanceRemovesExactInstanceSpec::RunTest(const F
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag, SharedCard, SharedCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Move first shared card to Backpack"), MoveFirstBattleDeckDefinitionToBackpack(Run, SharedCard));
 	const FGuid FirstId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::Backpack);
@@ -879,7 +880,7 @@ bool FWacomRunDeckDestroyCardByInstanceSafetySpec::RunTest(const FString& /*Para
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ OnlyBag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	if (!TestEqual(TEXT("Only capacity provider starts in Backpack"), Run->GetRunState().Backpack.Num(), 1))
 	{
@@ -939,7 +940,7 @@ bool FWacomRunDeckDestroyBMainInstanceClearsOnlyMatchingSpecialZoneSpec::RunTest
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ TypeA, SharedBMain, SharedBMain });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	if (!TestEqual(TEXT("Two SpecialZones for two same-definition B mains"), Run->GetRunState().SpecialZones.Num(), 2))
 	{
@@ -1005,7 +1006,7 @@ bool FWacomRunDeckDeleteCardForGoldByRaritySpec::RunTest(const FString& /*Parame
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ WhiteCard, BlueCard, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestEqual(TEXT("Init gold=0"), Run->GetGold(), 0);
 
@@ -1037,7 +1038,7 @@ bool FWacomRunDeckDeleteCardForGoldFromBurdenAndSpecialZoneSpec::RunTest(const F
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag, TypeB });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	Run->AcquireCardToRun(WhiteCard);
 	const FGuid WhiteId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), WhiteCard);
@@ -1086,7 +1087,7 @@ bool FWacomRunDeckDeleteCardForGoldValidationSpec::RunTest(const FString& /*Para
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ WhiteCard, IntrinsicCard, OnlyBag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	const FGuid WhiteId = FindFirstOwnedInstanceIdByDefinition(Run->GetRunState(), WhiteCard);
 	const FGuid IntrinsicId = FindFirstOwnedInstanceIdByDefinition(Run->GetRunState(), IntrinsicCard);
@@ -1122,7 +1123,7 @@ bool FWacomRunDeckDeleteCardForGoldByInstanceRemovesOnlyRequestedIdSpec::RunTest
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag, SharedCard, SharedCard });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Move first shared card to backpack"), MoveFirstBattleDeckDefinitionToBackpack(Run, SharedCard));
 	const FGuid FirstId = FindFirstOwnedInstanceIdByDefinitionInZone(Run->GetRunState(), SharedCard, EZoneKind::Backpack);
@@ -1178,7 +1179,7 @@ bool FWacomRunDeckDeleteSameDefinitionCapacityInstanceRulesSpec::RunTest(const F
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ SharedContainer, SharedContainer });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestEqual(TEXT("Two same-definition capacity instances owned"),
 		CountOwnedCardsByDefinition(Run->GetRunState(), SharedContainer), 2);
@@ -1220,7 +1221,7 @@ bool FWacomRunDeckDeleteBMainInstanceClearsOnlyMatchingSpecialZoneSpec::RunTest(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ TypeA, SharedBMain, SharedBMain });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	if (!TestEqual(TEXT("Two SpecialZones for two same-definition B mains"), Run->GetRunState().SpecialZones.Num(), 2))
 	{
@@ -1280,7 +1281,7 @@ bool FWacomRunDeckAddToBattleDeckRequiresBackpackSpec::RunTest(const FString& /*
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// OutOfBackpack 不在 backpack → 拒绝
 	TestFalse(TEXT("AddToBattleDeck rejected: not in backpack"),
@@ -1320,7 +1321,7 @@ bool FWacomRunDeckAddToBattleDeckRespectsCapacitySpec::RunTest(const FString& /*
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Normal1, Normal2, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestEqual(TEXT("BattleDeck has 2 (capacity)"),
 		Run->GetBattleDeck().Num(), 2);
@@ -1350,7 +1351,7 @@ bool FWacomRunDeckMoveIntrinsicFromBattleDeckUsesInstancePathSpec::RunTest(const
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ IntrinsicNormal, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// IntrinsicNormal 非容器卡 → 默认进 BattleDeck
 	TestTrue(TEXT("IntrinsicNormal initially in BattleDeck"),
@@ -1381,7 +1382,7 @@ bool FWacomRunDeckRemoveFromBattleDeckSucceedsSpec::RunTest(const FString& /*Par
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Card, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Card initially in BattleDeck"),
 		BattleDeckContainsDefinition(Run->GetRunState(), Card));
@@ -1414,7 +1415,7 @@ bool FWacomRunDeckBuildInitParamsUsesBattleDeckSpec::RunTest(const FString& /*Pa
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Normal, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// BattleDeck 应当只有 1 张（Normal）
 	TestEqual(TEXT("BattleDeck size=1"), Run->GetBattleDeck().Num(), 1);
@@ -1452,7 +1453,7 @@ bool FWacomRunDeckMoveInstanceValidationSpec::RunTest(const FString& /*Parameter
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Normal, SecondNormal, Bag, TypeB });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	const FGuid NormalId = Run->GetBattleDeck()[0].InstanceId;
 	const FGuid SecondNormalId = Run->GetBattleDeck()[1].InstanceId;
@@ -1530,7 +1531,7 @@ bool FWacomRunDeckRecomputeBurdenContractSpec::RunTest(const FString& /*Paramete
 		{ TypeA, TypeB });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
 	if (!TestEqual(TEXT("One SpecialZone"), State.SpecialZones.Num(), 1))
@@ -1605,7 +1606,7 @@ bool FWacomRunDeckRecomputeBurdenRefillPrioritySpec::RunTest(const FString& /*Pa
 		{ TypeA, TypeB });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
 	if (!TestEqual(TEXT("One SpecialZone"), State.SpecialZones.Num(), 1))
@@ -1653,7 +1654,7 @@ bool FWacomRunDeckBurdenPressureFormulaSpec::RunTest(const FString& /*Parameters
 			{});
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
 		for (int32 i = 0; i < Count; ++i)
@@ -1692,7 +1693,7 @@ bool FWacomRunDeckZoneBroadcastCountSpec::RunTest(const FString& /*Parameters*/)
 		{ TypeA, BattleFiller });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	int32 BroadcastCount = 0;
 	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
@@ -1733,7 +1734,7 @@ bool FWacomRunDeckSpecialZoneFlagResetSpec::RunTest(const FString& /*Parameters*
 		{ TypeA, TypeB });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 	Run->AcquireCardToRun(Stored);
 
 	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
@@ -1776,7 +1777,7 @@ bool FWacomRunDeckSpecialZoneSameZoneMovePreservesFlagSpec::RunTest(const FStrin
 		{ TypeA, TypeB });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 	Run->AcquireCardToRun(FirstStored);
 	const FGuid FirstStoredId = Run->GetBackpack().Last().InstanceId;
 	Run->AcquireCardToRun(SecondStored);
@@ -1834,7 +1835,7 @@ bool FWacomRunDeckMoveInstanceToBurdenUpdatesPressureSpec::RunTest(const FString
 		{ TypeA });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 	Run->AcquireCardToRun(Stored);
 
 	const FGuid StoredId = FindFirstBackpackInstanceIdByDefinition(Run->GetRunState(), Stored);
@@ -1877,7 +1878,7 @@ bool FWacomRunDeckSetSpecialZoneFlagOnlySpec::RunTest(const FString& /*Parameter
 		{ TypeA, TypeB });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 	Run->AcquireCardToRun(Stored);
 
 	const FGuid OwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
@@ -1937,7 +1938,7 @@ bool FWacomRunDeckBuildInitParamsIncludesEnabledSpecialZoneSpec::RunTest(const F
 		{ TypeA, TypeB, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
+	TestTrue(TEXT("Initialize"), InitializeRunSessionForTest(*Run, Char).IsOk());
 
 	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
 	Run->AcquireCardToRun(Weapon);
@@ -1992,7 +1993,7 @@ bool FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec::RunTest(const FS
 		Fx.MakeNoopCard(0),
 		{ TypeA, TypeB, Normal });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
+	TestTrue(TEXT("Initialize"), InitializeRunSessionForTest(*Run, Char).IsOk());
 
 	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
 	Run->AcquireCardToRun(Weapon);
@@ -2039,7 +2040,7 @@ bool FWacomRunDeckBContainerMoveKeepsSpecialZoneSpec::RunTest(const FString& /*P
 		{ TypeA, TypeB, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	TestTrue(TEXT("Initialize"), Run->Initialize(Char));
+	TestTrue(TEXT("Initialize"), InitializeRunSessionForTest(*Run, Char).IsOk());
 
 	const FGuid BOwnerId = Run->GetRunState().SpecialZones[0].OwnerInstanceId;
 	Run->AcquireCardToRun(Stored);
@@ -2085,7 +2086,7 @@ bool FWacomRunDeckGoldOpsSpec::RunTest(const FString& /*Parameters*/)
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
 		{ Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestEqual(TEXT("Init gold=0"), Run->GetGold(), 0);
 
@@ -2119,9 +2120,9 @@ bool FWacomRunDeckShopOffersInitializeSnapshotSpec::RunTest(const FString& /*Par
 		{ Bag });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::Shop).IsOk();
 
-	const int32 StartNodes = Run->GetRemainingNodeCount();
+	const int32 StartActionPoints = Run->GetRemainingActionPoints();
 	TArray<FRunShopOfferInput> Offers;
 	Offers.Add({ ShopCardA, 3 });
 	Offers.Add({ ShopCardB, 0 });
@@ -2140,11 +2141,11 @@ bool FWacomRunDeckShopOffersInitializeSnapshotSpec::RunTest(const FString& /*Par
 	TestFalse(TEXT("Offer A not purchased"), Snapshot.Offers[0].bPurchased);
 	TestEqual(TEXT("Offer B card"), Snapshot.Offers[1].CardDefinition.Get(), ShopCardB);
 	TestEqual(TEXT("Offer B free"), Snapshot.Offers[1].Price, 0);
-	TestEqual(TEXT("Nodes unchanged after entering shop"), Run->GetRemainingNodeCount(), StartNodes);
+	TestEqual(TEXT("Action Points unchanged after entering shop"), Run->GetRemainingActionPoints(), StartActionPoints);
 
 	Run->EndShopVisit();
 	TestFalse(TEXT("Shop visit closed"), Run->IsShopVisitActive());
-	TestEqual(TEXT("Closing without purchase does not consume node"), Run->GetRemainingNodeCount(), StartNodes);
+	TestEqual(TEXT("Closing without purchase does not consume Action Points"), Run->GetRemainingActionPoints(), StartActionPoints);
 	TestFalse(TEXT("Closed snapshot inactive"), Run->BuildCurrentShopSnapshot().bIsActive);
 
 	return true;
@@ -2166,10 +2167,10 @@ bool FWacomRunDeckShopOfferPurchaseSpec::RunTest(const FString& /*Parameters*/)
 		{ Bag });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::Shop).IsOk();
 	Run->AddGold(10);
 
-	const int32 StartNodes = Run->GetRemainingNodeCount();
+	const int32 StartActionPoints = Run->GetRemainingActionPoints();
 	const int32 StartBackpackCount = Run->GetBackpack().Num();
 	TArray<FRunShopOfferInput> Offers;
 	Offers.Add({ ShopCardA, 3 });
@@ -2180,25 +2181,28 @@ bool FWacomRunDeckShopOfferPurchaseSpec::RunTest(const FString& /*Parameters*/)
 	const FGuid OfferAId = Snapshot.Offers[0].OfferId;
 	const FGuid OfferBId = Snapshot.Offers[1].OfferId;
 
-	TestTrue(TEXT("Purchase offer A succeeds"), Run->PurchaseShopOffer(OfferAId));
+	TestTrue(TEXT("Purchase offer A succeeds"), Run->PurchaseShopOffer(OfferAId).bSucceeded);
 	TestEqual(TEXT("Gold reduced by A price"), Run->GetGold(), 7);
 	TestTrue(TEXT("Purchased card A enters backpack"), BackpackContainsDefinition(Run->GetRunState(), ShopCardA));
 	TestEqual(TEXT("Backpack gained one card"), Run->GetBackpack().Num(), StartBackpackCount + 1);
-	TestEqual(TEXT("Purchase does not consume node before close"), Run->GetRemainingNodeCount(), StartNodes);
+	TestEqual(TEXT("First purchase consumes one Action Point"),
+		Run->GetRemainingActionPoints(), StartActionPoints - 1);
 
 	Snapshot = Run->BuildCurrentShopSnapshot();
 	TestTrue(TEXT("Visit marked purchased"), Snapshot.bHasPurchaseThisVisit);
 	TestTrue(TEXT("Offer A marked purchased"), Snapshot.Offers[0].bPurchased);
 	TestFalse(TEXT("Offer B still unpurchased"), Snapshot.Offers[1].bPurchased);
 
-	TestTrue(TEXT("Purchase offer B succeeds"), Run->PurchaseShopOffer(OfferBId));
+	TestTrue(TEXT("Purchase offer B succeeds"), Run->PurchaseShopOffer(OfferBId).bSucceeded);
 	TestEqual(TEXT("Gold reduced by B price"), Run->GetGold(), 5);
 	TestTrue(TEXT("Purchased card B enters backpack"), BackpackContainsDefinition(Run->GetRunState(), ShopCardB));
 	TestEqual(TEXT("Backpack gained two cards"), Run->GetBackpack().Num(), StartBackpackCount + 2);
-	TestEqual(TEXT("Second purchase still does not consume node before close"), Run->GetRemainingNodeCount(), StartNodes);
+	TestEqual(TEXT("Second purchase in the same visit adds no Action Point cost"),
+		Run->GetRemainingActionPoints(), StartActionPoints - 1);
 
 	Run->EndShopVisit();
-	TestEqual(TEXT("Closing after purchases consumes exactly one node"), Run->GetRemainingNodeCount(), StartNodes - 1);
+	TestEqual(TEXT("Closing after purchases adds no delayed cost"),
+		Run->GetRemainingActionPoints(), StartActionPoints - 1);
 	TestFalse(TEXT("Shop closed"), Run->IsShopVisitActive());
 
 	return true;
@@ -2220,13 +2224,13 @@ bool FWacomRunDeckShopOfferRejectsInvalidCasesSpec::RunTest(const FString& /*Par
 		{ Bag });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::Shop).IsOk();
 	Run->AddGold(1);
 
 	const int32 StartGold = Run->GetGold();
-	const int32 StartNodes = Run->GetRemainingNodeCount();
+	const int32 StartActionPoints = Run->GetRemainingActionPoints();
 	const int32 StartBackpackCount = Run->GetBackpack().Num();
-	TestFalse(TEXT("Purchase without active shop fails"), Run->PurchaseShopOffer(FGuid::NewGuid()));
+	TestFalse(TEXT("Purchase without active shop fails"), Run->PurchaseShopOffer(FGuid::NewGuid()).bSucceeded);
 
 	TArray<FRunShopOfferInput> InvalidOffers;
 	InvalidOffers.Add({ nullptr, 0 });
@@ -2240,21 +2244,22 @@ bool FWacomRunDeckShopOfferRejectsInvalidCasesSpec::RunTest(const FString& /*Par
 	const FGuid ValidOfferId = Snapshot.Offers[0].OfferId;
 	TestEqual(TEXT("Kept offer card"), Snapshot.Offers[0].CardDefinition.Get(), ValidCard);
 
-	TestFalse(TEXT("Unknown offer fails"), Run->PurchaseShopOffer(FGuid::NewGuid()));
-	TestFalse(TEXT("Invalid offer id fails"), Run->PurchaseShopOffer(FGuid()));
-	TestFalse(TEXT("Insufficient gold fails"), Run->PurchaseShopOffer(ValidOfferId));
+	TestFalse(TEXT("Unknown offer fails"), Run->PurchaseShopOffer(FGuid::NewGuid()).bSucceeded);
+	TestFalse(TEXT("Invalid offer id fails"), Run->PurchaseShopOffer(FGuid()).bSucceeded);
+	TestFalse(TEXT("Insufficient gold fails"), Run->PurchaseShopOffer(ValidOfferId).bSucceeded);
 	TestEqual(TEXT("Gold unchanged on failures"), Run->GetGold(), StartGold);
 	TestEqual(TEXT("Backpack unchanged on failures"), Run->GetBackpack().Num(), StartBackpackCount);
-	TestEqual(TEXT("Nodes unchanged on failures"), Run->GetRemainingNodeCount(), StartNodes);
+	TestEqual(TEXT("Action Points unchanged on failures"), Run->GetRemainingActionPoints(), StartActionPoints);
 	TestFalse(TEXT("Failed purchase does not mark visit purchase"), Run->BuildCurrentShopSnapshot().bHasPurchaseThisVisit);
 
 	Run->AddGold(2);
-	TestTrue(TEXT("Purchase succeeds after adding gold"), Run->PurchaseShopOffer(ValidOfferId));
-	TestFalse(TEXT("Repeat purchase rejected"), Run->PurchaseShopOffer(ValidOfferId));
+	TestTrue(TEXT("Purchase succeeds after adding gold"), Run->PurchaseShopOffer(ValidOfferId).bSucceeded);
+	TestFalse(TEXT("Repeat purchase rejected"), Run->PurchaseShopOffer(ValidOfferId).bSucceeded);
 	TestEqual(TEXT("Repeat rejection keeps one purchased card"), Run->GetBackpack().Num(), StartBackpackCount + 1);
 
 	Run->EndShopVisit();
-	TestEqual(TEXT("One successful purchase consumes one node on close"), Run->GetRemainingNodeCount(), StartNodes - 1);
+	TestEqual(TEXT("One successful purchase consumes exactly one Action Point"),
+		Run->GetRemainingActionPoints(), StartActionPoints - 1);
 
 	return true;
 }
@@ -2277,7 +2282,7 @@ bool FWacomRunDeckShopNodeInventoryPersistsSpec::RunTest(const FString& /*Parame
 		{ Bag });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char, EWacomMapNodeType::Shop).IsOk();
 	Run->AddGold(10);
 
 	TArray<FRunShopOfferInput> ShopAOffers;
@@ -2287,10 +2292,10 @@ bool FWacomRunDeckShopNodeInventoryPersistsSpec::RunTest(const FString& /*Parame
 	FRunShopSnapshot SnapshotA = Run->BuildCurrentShopSnapshot();
 	const FGuid ShopAOffer1 = SnapshotA.Offers[0].OfferId;
 	const FGuid ShopAOffer2 = SnapshotA.Offers[1].OfferId;
-	TestTrue(TEXT("Buy first A offer"), Run->PurchaseShopOffer(ShopAOffer1));
+	TestTrue(TEXT("Buy first A offer"), Run->PurchaseShopOffer(ShopAOffer1).bSucceeded);
 	Run->EndShopVisit();
 
-	const int32 NodesAfterFirstVisit = Run->GetRemainingNodeCount();
+	const int32 ActionPointsAfterFirstVisit = Run->GetRemainingActionPoints();
 	TArray<FRunShopOfferInput> ReplacementOffers;
 	ReplacementOffers.Add({ ReplacementCard, 9 });
 	TestTrue(TEXT("Reopen shop A succeeds"), Run->BeginShopVisit(TEXT("Shop.A"), ReplacementOffers));
@@ -2300,10 +2305,12 @@ bool FWacomRunDeckShopNodeInventoryPersistsSpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Shop A preserves purchased flag"), SnapshotA.Offers[0].bPurchased);
 	TestFalse(TEXT("Shop A second offer still unpurchased"), SnapshotA.Offers[1].bPurchased);
 	TestEqual(TEXT("Shop A offer id stable after reopen"), SnapshotA.Offers[1].OfferId, ShopAOffer2);
-	TestTrue(TEXT("Buy second A offer on later visit"), Run->PurchaseShopOffer(ShopAOffer2));
+	TestTrue(TEXT("Buy second A offer on later visit"), Run->PurchaseShopOffer(ShopAOffer2).bSucceeded);
 	Run->EndShopVisit();
-	TestTrue(TEXT("Second paid visit can advance phase when nodes run out"), Run->GetCurrentTimePhase() == ETimePhase::Day);
-	TestEqual(TEXT("Day nodes reset after second paid visit"), Run->GetRemainingNodeCount(), Run->GetRunState().InitialNodeCount_Day);
+	TestTrue(TEXT("Shop close does not advance phase with remaining budget"),
+		Run->GetCurrentTimePhase() == ETimePhase::Morning);
+	TestEqual(TEXT("A later paid visit consumes one additional Action Point"),
+		Run->GetRemainingActionPoints(), ActionPointsAfterFirstVisit - 1);
 
 	TArray<FRunShopOfferInput> ShopBOffers;
 	ShopBOffers.Add({ ShopBCard, 0 });
@@ -2410,7 +2417,7 @@ bool FWacomRunDeckSpecialZoneCapacityForOwnerSpec::RunTest(const FString& /*Para
 		{ TypeA, TypeB4, TypeB1 });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	const FRunState& State = Run->GetRunState();
 	if (!TestEqual(TEXT("Two SpecialZones"), State.SpecialZones.Num(), 2))
@@ -2461,7 +2468,7 @@ bool FWacomRunDeckFluxCapacityOnlyCountsTypeASpec::RunTest(const FString& /*Para
 		{ TypeA, TypeB, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// FluxCapacity 只算 A 类容量：10；BattleDeckCapacity 统计 A+B：13
 	TestEqual(TEXT("FluxCapacity ignores TypeB and counts TypeA capacity"), Run->GetFluxCapacity(), 10);
@@ -2498,7 +2505,7 @@ bool FWacomRunDeckCapacityCountsAllPhysicalZonesSpec::RunTest(const FString& /*P
 		{ TypeAInBackpack, TypeBMaster, TypeAInSpecialZone, TypeAInBurdenZone });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	auto FindBackpackInstanceId = [RunPtr = Run.Get()](const UCardDefinition* Definition)
 	{
@@ -2561,7 +2568,7 @@ bool FWacomRunDeckBackpackStorageSnapshotSpec::RunTest(const FString& /*Paramete
 		{ TypeAMain, TypeBMaster, SpecialContainerContent, BurdenContainer });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 	Run->AcquireCardToRun(FluxContent);
 
 	auto FindBackpackInstanceId = [RunPtr = Run.Get()](const UCardDefinition* Definition)
@@ -2728,7 +2735,7 @@ bool FWacomRunDeckCollectTypeBContainersSpec::RunTest(const FString& /*Parameter
 		{ TypeA, TypeB1, TypeB2, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// Initialize 后 SpecialZones 已为两张 B 主卡各建空 entry（task 7.1 / R2.3）。
 	const FRunState& State = Run->GetRunState();
@@ -2784,7 +2791,7 @@ bool FWacomRunDeckCollectTypeBContainersEmptySpec::RunTest(const FString& /*Para
 		{ TypeA, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TArray<FGuid> Owners;
 	// 预填一些垃圾值确保被 Reset
@@ -2817,7 +2824,7 @@ bool FWacomRunDeckOnlyTypeBProvidersStillUnlockBackpackSpec::RunTest(const FStri
 		{ TypeBProvider, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Backpack UI available with B-only provider"), Run->IsBackpackUiAvailable());
 	TestEqual(TEXT("FluxCapacity = 0 (no A providers)"), Run->GetFluxCapacity(), 0);
@@ -2883,7 +2890,7 @@ bool FWacomRunDeckIsDeleteFunctionAvailableSpec::RunTest(const FString& /*Parame
 			{ Bag, Normal });
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		TestFalse(TEXT("Bag only → no delete function"), Run->IsDeleteFunctionAvailable());
 	}
@@ -2897,7 +2904,7 @@ bool FWacomRunDeckIsDeleteFunctionAvailableSpec::RunTest(const FString& /*Parame
 			{ Bag, Lantern });
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		TestTrue(TEXT("With DeleteProvider → available"), Run->IsDeleteFunctionAvailable());
 	}
@@ -2922,7 +2929,7 @@ bool FWacomRunDeckMuseiLanternStartsInBattleDeckSpec::RunTest(const FString& /*P
 		{ Lantern });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestFalse(TEXT("Lantern not initially in Backpack"), BackpackContainsDefinition(Run->GetRunState(), Lantern));
 	TestTrue(TEXT("Lantern initially in BattleDeck"), BattleDeckContainsDefinition(Run->GetRunState(), Lantern));
@@ -2950,7 +2957,7 @@ bool FWacomRunDeckDeleteFunctionLostAfterDestroySpec::RunTest(const FString& /*P
 		{ Bag, Lantern });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue(TEXT("Initially available"), Run->IsDeleteFunctionAvailable());
 
@@ -2979,7 +2986,7 @@ bool FWacomRunDeckBagAndDeleteProvidersIndependentSpec::RunTest(const FString& /
 		{ DeleteOnly, Normal });
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	// 只有 DeleteProvider 容器、无 BagProvider → 删牌功能和背包 UI 都可用。
 	TestTrue (TEXT("Delete function available"), Run->IsDeleteFunctionAvailable());
@@ -3013,7 +3020,7 @@ bool FWacomRunDeckBattleDeckCapacityCountsAllContainersSpec::RunTest(const FStri
 			{ TypeA, TypeB });
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		TestEqual(TEXT("FluxCapacity = 12 (A capacity)"), Run->GetFluxCapacity(), 12);
 		TestEqual(TEXT("BattleDeckCapacity = 16 (A+B)"), Run->GetBattleDeckCapacity(), 16);
@@ -3027,7 +3034,7 @@ bool FWacomRunDeckBattleDeckCapacityCountsAllContainersSpec::RunTest(const FStri
 			{ Normal });
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		TestEqual(TEXT("No container → FluxCapacity = 0"), Run->GetFluxCapacity(), 0);
 		TestEqual(TEXT("No container → BattleDeckCapacity = 0"), Run->GetBattleDeckCapacity(), 0);
@@ -3048,7 +3055,7 @@ bool FWacomRunDeckBattleDeckCapacityCountsAllContainersSpec::RunTest(const FStri
 			{ TypeB1, TypeB2 });
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		TestEqual(TEXT("All B → FluxCapacity = 0"), Run->GetFluxCapacity(), 0);
 		TestEqual(TEXT("All B → BattleDeckCapacity = 10"), Run->GetBattleDeckCapacity(), 10);
@@ -3153,7 +3160,7 @@ bool FWacomRunDeckPropertyInstanceIdUniqueSpec::RunTest(const FString& /*Paramet
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), StarterDeck);
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		// ---- 操作序列：0..15 次随机 AcquireCardToRun（含 nullptr 混入，验证 R1.5）----
 		const int32 NumAdds = Rng.RandRange(0, 15);
@@ -3303,7 +3310,7 @@ bool FWacomRunDeckPropertyMoveInstanceAtomicSpec::RunTest(const FString& /*Param
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), StarterDeck);
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		// ---- 选择本次迭代的场景；若前置条件不满足则降级到 FailRandomGuid ----
 		EScenario Scenario = static_cast<EScenario>(Rng.RandRange(0, 3));
@@ -3546,7 +3553,7 @@ bool FWacomRunDeckPropertyFindInstanceConsistencySpec::RunTest(const FString& /*
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), StarterDeck);
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		// ---- 随机 0..5 次 MoveInstance 让两区分布更杂 ----
 		const int32 NumShuffles = Rng.RandRange(0, 5);
@@ -3816,7 +3823,7 @@ bool FWacomRunDeckPropertyInstanceHelperFirstMatchSpec::RunTest(const FString& /
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), StarterDeck);
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		// 把 (BackpackInitial - BattleDeckTarget) 张 CardX 从 BattleDeck 拉回 Backpack；
 		// 若 BackpackInitial <= BattleDeckTarget 则不拉，BattleDeck 维持初始 BackpackInitial 张。
@@ -4141,7 +4148,7 @@ bool FWacomRunDeckInitializeNullCharacterFallbackSpec::RunTest(const FString& /*
 	//   - 通过 UE_LOG Warning 表明 fallback（不在自动化里直接断言日志，由代码 review 保证）
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 
-	const bool bResult = Run->Initialize(nullptr);
+	const bool bResult = InitializeRunSessionForTest(*Run, nullptr).IsOk();
 
 	TestFalse(TEXT("R1.4: Initialize(nullptr) 返回 false"),                  bResult);
 	TestEqual(TEXT("R1.4: nullptr Character 后 Backpack.Num() == 0"),       Run->GetBackpack().Num(),   0);
@@ -4173,7 +4180,7 @@ bool FWacomRunDeckInitializeEmptyStarterDeckFallbackSpec::RunTest(const FString&
 		/*StarterDeck=*/ {});
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	const bool bResult = Run->Initialize(Char);
+	const bool bResult = InitializeRunSessionForTest(*Run, Char).IsOk();
 
 	TestTrue (TEXT("R1.4: Initialize(空 StarterDeck Character) 返回 true（角色仍合法）"), bResult);
 	TestEqual(TEXT("R1.4: 空 StarterDeck 后 Backpack.Num() == 0"),                       Run->GetBackpack().Num(),   0);
@@ -4403,7 +4410,7 @@ bool FWacomRunDeckPropertyBContainerSpecialZoneBijectionSpec::RunTest(const FStr
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), StarterDeck);
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		// 初始状态校验（R2.3：B 主卡 instance 在 Initialize 路径上自动建空 SpecialZone entry）
 		if (!VerifyBijection(Run.Get(), Seed, Iter, /*OpStep*/0, TEXT("AfterInitialize")))
@@ -4599,7 +4606,7 @@ bool FWacomRunDeckPropertyBContainerDestroyRetrievalFlowSpec::RunTest(const FStr
 			Fx.MakeNoopCard(1), Fx.MakeNoopCard(1), StarterDeck);
 
 		TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-		Run->Initialize(Char);
+		InitializeRunSessionForTest(*Run, Char).IsOk();
 
 		// ---- 生成器后置校验：Initialize 应当把 BMaster + BagProvider 放进 Backpack
 		//      （a2 分流：容器卡只进 Backpack），ACap 张非容器卡进 BattleDeck。

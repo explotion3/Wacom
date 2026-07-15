@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-run
 status: active
-updated: 2026-07-10
+updated: 2026-07-14
 tags:
   - wacom/run
   - wacom/rules
@@ -57,7 +57,7 @@ Run 失败条件：
 
 `URunSession::AddExperience()` 会把经验累加到 `ExperienceCurrent`。经验达到 `ExperienceCapacity` 时循环扣减容量，并向 `AcquiredSkills` 追加 `SkillSlot.Placeholder`。当前技能只是占位计数，不挂实际效果；正式技能系统上线前，不要让战斗规则依赖该占位 tag。
 
-## §3 时间、节点与探索移动边界
+## §3 时间、Action Point 与探索移动边界
 
 一天按固定顺序推进：
 
@@ -65,32 +65,34 @@ Run 失败条件：
 Morning -> Day -> Dusk -> Night -> Sunrise -> Morning(次日)
 ```
 
-任一时段节点数消耗到 0 时，`URunSession::ConsumeNode()` 自动调用 `AdvanceToNextPhase()`。玩家移动本身不消耗节点；节点消耗只发生在战斗结束、事件效果或明确规则事务中。
+正式时间状态保存在 `FRunState::TimeState`。规则事务通过 private `FRunTimeModule::TrySpendActionPoints()` 原子消费 Action Point：成本不足、Night 尚未选择路线或存在其它活动时零修改；恰好耗尽时只推进一次时段并载入下一时段预算。移动、岔路选择、地图揭示和同层 Map Travel 不消耗 Action Point。
 
-当前初始节点数：
+当前初始 Action Point：
 
-| 时段 | 节点数 | 设计口径 |
+| 时段 | Action Point | 设计口径 |
 |---|---:|---|
-| Morning | 2 | 清晨规划事件会占用其中 1 点 |
+| Morning | 2 | 初始化及每个新 Morning 的清晨规划固定占用 1 点，因此正常可用 1 点 |
 | Day | 6 | 主流程、战斗、商店、休息等 |
 | Dusk | 2 | 可接野炊事件 |
 | Night | 2 | 可接露营或夜间探险 |
 | Sunrise | 1 | 夜探后的后置时段 |
 
-时段进入副作用：
+时段门控与进入副作用：
 
 | 进入时段 | 副作用 |
 |---|---|
 | Morning | 饥饿 +5 |
-| Morning 且前一时段是 Sunrise | 腐朽 +5 |
+| 新 Morning | 结算一次 `BaseDecay(JourneyDay) + OverstayDecay(FloorDay)` |
 | Dusk | 饥饿 +5 |
 | Sunrise | 疲劳 +10 |
 
-设计上露营会从 Night 直接进入次日 Morning，跳过 Sunrise。当前通用推进路径尚未实现这条特殊事件分支。
+Night 进入时设置 `AwaitingChoice`，普通行动在玩家选择“夜间探险”前被拒绝。选择夜间探险后才可消费该时段预算并进入 Sunrise。
 
-探索期正式玩家移动模型是 Run Tunnel，但它属于 `WacomApp` 表现 / 输入层：`UWacomRunTunnelMovementComponent` 负责 Pawn / Camera 对齐和输入消费，不写入 Run 规则状态。Run 规则只维护时段、节点、背包、商店、事件和战斗回传结算。
+Camp 不是地图节点，而是 Night 从当前或同 Floor 最近合法节点发起的时间事务；Dusk 保留 Picnic，不开放 Camp。`FRunCampModule` 按有向图最短距离选择 `Resolved + bAllowsCamp` 节点，同距离按 `NodeId` 决胜；Begin 预留 1 Action Point 但不提前扣除，Cancel 释放预留且不回滚已经发生的免费定位。一次 Camp 只完成一个 `Rest / CardUpgrade / SpecialEvent / Backpack / Skill` typed handler，handler 只能读取上下文并返回 outcome，不能获得可写 `FRunState`。成功后放弃 Night 剩余点、跳过 Sunrise 并进入次日 Morning。当前没有 production handler 或临时恢复数值，详细合同见 [WacomMap.md](./WacomMap.md)。
 
-Run Tunnel、first-person hand、鼠标 hover / click、Run world card drop 和 Run menu zone drop 的输入 / target 路由见 [WacomApp.md](./WacomApp.md)、[WacomWorldInteraction.md](./WacomWorldInteraction.md) 和 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。Run Tunnel 归档文档只保留为 historical background，不作为当前 Run 规则真相或实现规格。
+探索期正式玩家移动模型是 Run Path Traversal，但它属于 `WacomApp` 表现 / 输入层：`UWacomRunPathTraversalComponent` 负责局部 Spline 上的 Pawn / Camera 对齐、输入消费和镜头反馈，不写入 Run 规则状态。Run 规则只维护时段、节点、背包、商店、事件和战斗回传结算。
+
+Run Path、first-person hand、鼠标 hover / click、Run world card drop 和 Run menu zone drop 的输入 / target 路由见 [WacomApp.md](./WacomApp.md)、[WacomWorldInteraction.md](./WacomWorldInteraction.md) 和 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。早期轨道探索文档只保留为 historical background，不作为当前 Run 规则真相或实现规格。
 
 ## §4 压力系统
 
@@ -98,13 +100,15 @@ Run Tunnel、first-person hand、鼠标 hover / click、Run world card drop 和 
 
 压力不改变战内规则。它可以被 RunEvent 条件读取，用于限制选项、触发分支或驱动表现层提示。
 
+Hunger 与 Fatigue 可以通过 Run 行为减少。Decay 的唯一每日入口是进入新 Morning 时由 private `FRunFloorExposureModule` 计算 `BaseDecay + OverstayDecay`：首轮 BaseDecay 曲线在所有旅程天数都返回 +5，OverstayDecay 在同 Floor 超过三天后按 `+2 / +5 / +9 / +12 capped` 追加；普通 Camp 不能减少 Decay。`LastDailyDecayAppliedDayNumber` 保证同一 Journey Day 最多结算一次；初始 Day 1 只标记已结算，不增加 Decay。
+
 | 压力 | 当前来源 |
 |---|---|
 | 饥饿 | 进入 Morning / Dusk 各 +5 |
 | 伤口 | 战外右手破坏 +1；战内跨高 HP 阈值 +1；跨低 HP 阈值 +5；同归于尽 +10 |
 | 疲劳 | 进入 Sunrise +10；每场非 Undetermined 战斗后 +1 |
 | 负重 | `BurdenZone.Num()` 计算，公式 `n*(n+1)/2`，Clamp 到 100 |
-| 腐朽 | 从 Sunrise 进入次日 Morning +5 |
+| 腐朽 | 每个新 Morning：`BaseDecay(JourneyDay) + OverstayDecay(FloorDay)`；Day 1 初始化不增加 |
 | 劣迹 | 第 n 次偷窃完成时 `n*(n+1)/2 + 1` |
 | 嗜血 | 永久销毁 Companion 卡 +1 |
 | 残疾 | 每失去 1 根手指 +5 |
@@ -227,10 +231,11 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 
 购买规则：
 
-- 打开商店不消耗节点。
+- 打开商店不消耗 Action Point。
 - 成功购买会扣金币、获得卡牌、标记 Offer 已购买。
-- 关闭商店时，如果本次访问买过至少一件商品，统一消耗 1 节点。
-- 没买东西就关闭，不消耗节点。
+- 本次访问第一次成功购买与 1 Action Point 原子提交；同次访问后续购买为 0。
+- 浏览、失败购买和空手关闭为 0；`EndShopVisit` 不再补扣成本。
+- 第一次购买耗尽当前时段时，结果同时关闭 visit，App 立即关闭 Shop Screen。
 - `ShopId == NAME_None`、无效 Offer、重复购买、商品为空、负价格、金币不足等失败路径不修改 RunState。
 - 同一时刻只能存在一个 active shop visit；重入 Begin 会被 Run 层拒绝，不依赖旧 UI 先完成关闭。
 - App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；迟到的旧 Screen 不得结束新访问。token 不进入 RunState/SaveGame。
@@ -250,15 +255,16 @@ RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，�
 - `PersistentId == NAME_None` 或定义为空时拒绝打开。
 - 已完成事件拒绝重复打开。
 - 同一时刻只能存在一个 active RunEvent visit；重入 Begin 会被 Run 层拒绝。
-- 打开事件不消耗节点。
-- 只有选项 Effects 配置 `ConsumeNode` 时才消耗节点。
+- 打开事件不消耗 Action Point。
+- 选项使用 `Automatic / Free / Fixed` 行动点策略：普通 terminal 选项的 Automatic 成本为 1，非 terminal 为 0；Fixed 使用显式非负成本。
+- 正成本选项必须 terminal；effect、卡牌支付、行动点、事件状态和 Map Node lifecycle 使用同一 working-state 事务。
 - 关闭事件只清 active 标记，不改变完成状态。
 - App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；token 不进入 RunState/SaveGame。
 
 当前条件：
 
 - 金币不少于指定值。
-- 当前节点数不少于指定值。
+- 当前 Action Point 不少于指定值。
 - 指定压力不高于阈值。
 - 拥有 / 缺少指定卡。
 - 指定 `PersistentId` 事件已完成 / 未完成。
@@ -269,7 +275,7 @@ RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，�
 - 获得卡牌。
 - 增减金币，最低不低于 0。
 - 增减压力。
-- 消耗节点并可能推进时段。
+- Action Point 成本由 choice policy 统一结算，耗尽时可能推进时段；它不是 effect 条目。
 - 从玩家任意持有区永久移除一张卡。
 - 标记指定 `PersistentId` 事件完成。
 - 设置 / 清除当前 Run 标记。
@@ -358,7 +364,7 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 
 | 事务 / 路径 | BackpackStorage | Shop | Economy |
 |---|---:|---:|---:|
-| Initialize / ResetRunState / ApplySaveGameToRunState | 是 | 是 | 是 |
+| 正式 Run 初始化 / ApplySaveGameToRunState | 是 | 是 | 是 |
 | RecomputeBurden、MoveInstance、AcquireCardToRun、DestroyCardByInstance、BattleDeck 移动 | 是 | 否 | 否 |
 | SpecialZone 入战投影开关 | 是 | 否 | 否 |
 | CollectCardPickup、Run world card reward、Run world consume source card、Battle gained card | 是 | 否 | 否 |
@@ -368,7 +374,7 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 | PurchaseShopOffer | 是 | 是 | 是 |
 | RunEvent paid card、GainCard、RemoveCard | 是 | 否 | 否 |
 | RunEvent AddGold | 否 | 否 | 是 |
-| RunEvent AddPressure、ConsumeNode、MarkEventCompleted、SetRunFlag / ClearRunFlag、open / close event | 否 | 否 | 否 |
+| RunEvent AddPressure、Action Point、MarkEventCompleted、SetRunFlag / ClearRunFlag、open / close event | 否 | 否 | 否 |
 | 压力、时段、触发器销毁、Battle pressure / exp / defeated enemy / progress only | 否 | 否 | 否 |
 
 <a id="wacomrun-battle-settlement"></a>
@@ -384,18 +390,18 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 - HP 压力阈值 `HighHpThreshold / LowHpThreshold`。
 - `BattleDeck` 中的物理卡。
 - SpecialZone 中勾选入战的卡：只有 B 主卡位于 `BattleDeck`，且主卡有 `CapacityEffect`，其 SpecialZone 内 `bBattleEnabledInSpecialZone == true` 的卡才会入战，并携带主卡容量效果。
-- 若传入 `TriggerPersistentId`，`BuildInitParamsForBattle()` 会把 `Params.EncounterId` 设为该 PersistentId；若 `RunState.BattleProgress` 有记录，则优先把 `DestroyedPartKeys` 转换为 `PreDestroyedParts`，没有公开 key 时才读取 `DestroyedParts` 内部 identity 投影。
+- `BuildInitParamsForBattle()` 仍可使用场景 `TriggerPersistentId` 作为本场 Battle 的 `EncounterId`，但撤离进度按当前 `FWacomMapNodeHandle` 查找；若当前节点有记录，则优先把 `DestroyedPartKeys` 转换为 `PreDestroyedParts`，没有公开 key 时才读取 `DestroyedParts` 内部 identity 投影。
 
-运行态 `EncounterId` 仍来自场景 Trigger 的 `PersistentId`，不要用 `EncounterDefinitionId` 替代撤离重入进度 key。同一个 Encounter 资产可被多个 Trigger 复用；只要 Trigger `PersistentId` 不同，它们的 `BattleProgress` 就彼此独立。
+`EncounterId` 是 Battle 内部稳定身份；Run 的撤离重入真相则使用当前 `FloorId + NodeId`。同一个 Encounter 资产可以被多个 Map Node 复用而不会串进度。
 
-战斗结束时，GameMode 先处理战斗 UI 和场景 Trigger，再调用 `OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)` 做 Run 结算。旧 `OnBattleFinished(Packet)` 只作为 Blueprint / 调试兼容包装保留，并已标记 deprecated；它会以 `NAME_None` 结算，不能记录或清理具体 Trigger 的撤离进度。
+GameMode 开战前必须先取得 `Encounter` 的 `FRunNodeActivityTicket`；战斗 UI 启动失败时取消票据。结束时把 `FBattleResultPacket` 和同一票据交给 `SettleEncounterNodeActivity()`，Run 以 working state 原子结算预留、奖励、压力、撤离进度和节点生命周期。旧 `OnBattleFinished*` wrapper 已删除。
 
 Outcome 分支：
 
 | 结果 | Run 处理 |
 |---|---|
-| Victory 且 `bWithdrawn == true` | 撤离；不销毁 Trigger；写 `BattleProgress[TriggerId].DestroyedPartKeys`；仅无法从旧 / 手写 packet 派生有效 key 时保留 `DestroyedParts` fallback |
-| Victory 且未撤离 | 真胜利；清理 `BattleProgress[TriggerId]`；场景完成状态由 GameMode 调 `MarkTriggerDestroyed(TriggerId)` 写入 `DestroyedTriggerIds` |
+| Victory 且 `bWithdrawn == true` | 撤离；释放预留、消费 0，节点保持 Visited；写 `BattleProgress[MapNodeHandle].DestroyedPartKeys` |
+| Victory 且未撤离 | 真胜利；提交预留的 1 Action Point、清理该节点撤离进度并 Resolve Encounter 节点 |
 | Defeat | `bRunActive = false` |
 | Undetermined | 不做战外结算并返回 |
 
@@ -409,11 +415,9 @@ Outcome 分支：
 - Defeat / Undetermined 不结算经验和获得卡。
 - `KnockdownChoices[]` 当前只按 `PartKey` 记日志，后续事件分支再消费。
 
-节点消耗不在 `OnBattleFinishedFromTrigger()` 内部完成。当前 `AWacomGameMode::ExitBattle()` 在非 Undetermined 战斗结束后统一 `ConsumeNode(1)`，胜利、失败、撤离都消耗。
+GameMode 不再手工扣时段点或写 Trigger completion。真胜利只在正式 settlement 成功后销毁当前场景表现 Actor；撤离保留 Actor，允许从同一 Map Node 重入。Map Node lifecycle 是完成状态真相。
 
-战斗 Trigger 的场景销毁由 GameMode 处理。真胜利会调用 `MarkTriggerDestroyed(PersistentId)` 并 Destroy Actor；撤离不销毁，允许下次重入。若异常路径产生“撤离但全灭”的 packet，GameMode 判断全灭数量时只统计有效 `DestroyedPartKeys` / `EnemyResults.DestroyedPartKeys`；legacy `DestroyedParts` 只保留给 Run 侧旧数据 / 手写 packet 撤离重入兼容，不再驱动 App 层场景 Trigger 销毁。
-
-`BattleProgress.DestroyedPartKeys` 是撤离重入的规则真相，身份由 `EncounterId + EnemySlotId + PartSlotId` 匹配，避免多敌人 encounter 中同名部位互相串进度。`DestroyedParts` 只作为无法派生有效 key 的旧数据 / 手写测试 snapshot 内部 identity fallback；新撤离进度不再重复写入该投影。Run 构建战斗参数时不会按旧 PartId 宽匹配。当前 `BattleProgress` 仍不进入 SaveGame。
+`BattleProgress[MapNodeHandle].DestroyedPartKeys` 是撤离重入的规则真相，部位身份仍由 `EncounterId + EnemySlotId + PartSlotId` 匹配。`DestroyedParts` 只作为无法派生有效 key 的旧数据 / 手写测试 snapshot 内部 fallback。当前 `BattleProgress` 仍不进入 SaveGame。
 
 ## §11 PersistentId 规则
 
@@ -478,8 +482,7 @@ v3 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.B
 | `Pressure`、`TheftCount` | 不保存 | 压力全为 0，偷窃计数为 0 |
 | `HighHpThreshold`、`LowHpThreshold` | 不保存 | 使用默认 `0.5 / 0.2` |
 | `ExperienceCurrent`、`ExperienceCapacity`、`AcquiredSkills` | 不保存 | 经验为 0，上限默认 10，技能为空 |
-| `CurrentDayNumber`、`CurrentTimePhase`、`RemainingNodeCount` | 不保存 | 回到第 1 天 Morning，节点为默认值 |
-| 五时段初始节点数 | 不保存 | 使用默认 `2 / 6 / 2 / 2 / 1` |
+| `TimeState`（Day、Phase、RemainingActionPoints、NightGate） | 不保存 | 当前 schema 回到第 1 天 Morning；正式探索初始化应用 `2 / 6 / 2 / 2 / 1` 并占用 Morning Planning 1 点 |
 | `Gold` | 不保存 | 读档后为 0 |
 | `BattleProgress` | 不保存 | 撤离留下的已破坏部位不会跨磁盘读档保留 |
 | `ActiveShopId`、`bShopVisitHasPurchase` | 不保存 | 无 active shop |
@@ -504,7 +507,12 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | `Private/RunSession.cpp` | 时间、压力、商店 / RunEvent public 入口、战斗回传 public 入口、SaveGame slot IO、dirty revision 和通知广播的协调实现 |
 | `Private/Battle/RunBattleSettlementResolver.*` | 战斗结束回传包的 Run 结算流程 |
 | `Private/Deck/RunDeckRules.*` | 背包、备战区、SpecialZone、负重区的私有规则 helper；拥有已通过校验后的物理区移动 mutation |
-| `Private/Time/RunTimeRules.*` | 时间、节点消耗、时段推进与时段进入压力副作用 |
+| `Private/Exploration/RunTimeModule.*` | Action Point 原子消费、时段推进、Morning Planning、Night gate 与 Camp 特殊推进原语 |
+| `Private/Exploration/RunFloorExposureModule.*` | 新 Morning 的 Base/Overstay Decay 一次性结算 |
+| `Private/Exploration/RunNodeActivityModule.*` | Encounter/RunEvent/Shop/Treasure 的互斥活动票据、预留和原子完成/取消 |
+| `Private/Exploration/RunCampModule.*` | Camp 最近合法落点、预留、typed handler 和 Night→Morning 提交 |
+| `Private/Exploration/RunFloorTransitionModule.*` | 入口预览、持有卡门槛、确认/取消票据和不可逆跨层提交 |
+| `Private/Exploration/RunExplorationSnapshotBuilder.*` | Camp eligibility、Floor history、travelability 与 transition preview 的只读投影 |
 | `Private/Events/RunEventExecutor.*` | RunEvent 事件图解释、选项条件、效果执行和结果包生成 |
 | `Private/Save/RunSaveGameSerializer.*` | `FRunState <-> UWacomSaveGame` 字段拷贝、SaveEntry 写入和读档校验 |
 | `Private/Shops/RunShopTransaction.*` | 商店访问、库存快照和购买事务 helper |

@@ -42,7 +42,7 @@ WacomTests  -> runtime/app/editor validation as test harness
 
 ## Technical Context
 
-**Language/Engine**: C++17, Unreal Engine 5.7
+**Language/Engine**: C++, Unreal Engine 5.8
 
 **Primary UE Systems**: [GameplayTags / CommonUI / Enhanced Input /
 ModelViewViewModel / DataAssets / Automation Tests / Niagara / N/A]
@@ -177,13 +177,13 @@ each belongs there.]
 **Compile**:
 
 ```powershell
-& 'E:\UE_5.7\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
+& 'E:\UE_5.8\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
 ```
 
 **Focused Automation**:
 
 ```powershell
-& 'E:\UE_5.7\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests [PREFIX]; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests [PREFIX]; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
 **Suggested Prefixes**: `Wacom.UI.Event`, `Wacom.UI.Shop`,

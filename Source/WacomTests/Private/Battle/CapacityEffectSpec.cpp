@@ -271,12 +271,9 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 			return Effect.Type == EWacomRunEventEffectType::GainCard
 				&& Effect.CardDefinition.Get() == PoisonFang;
 		}));
-	TestTrue(TEXT("TakeGift consumes one node"),
-		TakeGift->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
-		{
-			return Effect.Type == EWacomRunEventEffectType::ConsumeNode
-				&& Effect.Value == 1;
-		}));
+	TestEqual(TEXT("TakeGift uses automatic AP policy"),
+		TakeGift->ActionPointPolicy,
+		EWacomRunEventActionPointPolicy::Automatic);
 
 	TestTrue(TEXT("PayRespect requires one gold"),
 		PayRespect->Conditions.ContainsByPredicate([](const FWacomRunEventConditionDefinition& Condition)
@@ -297,12 +294,9 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 				&& Effect.PressureType == TEXT("Misdeed")
 				&& Effect.Value == -1;
 		}));
-	TestTrue(TEXT("PayRespect consumes one node"),
-		PayRespect->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
-		{
-			return Effect.Type == EWacomRunEventEffectType::ConsumeNode
-				&& Effect.Value == 1;
-		}));
+	TestEqual(TEXT("PayRespect uses automatic AP policy"),
+		PayRespect->ActionPointPolicy,
+		EWacomRunEventActionPointPolicy::Automatic);
 
 	TestTrue(TEXT("HandOverFang requires PoisonFang"),
 		HandOverFang->Conditions.ContainsByPredicate([PoisonFang](const FWacomRunEventConditionDefinition& Condition)
@@ -322,12 +316,9 @@ bool FWacomDataRunEventDebugSnakeGiftAssetSpec::RunTest(const FString& /*Paramet
 		{
 			return Effect.Type == EWacomRunEventEffectType::RemoveCard;
 		}));
-	TestTrue(TEXT("HandOverFang consumes one node"),
-		HandOverFang->Effects.ContainsByPredicate([](const FWacomRunEventEffectDefinition& Effect)
-		{
-			return Effect.Type == EWacomRunEventEffectType::ConsumeNode
-				&& Effect.Value == 1;
-		}));
+	TestEqual(TEXT("HandOverFang uses automatic AP policy"),
+		HandOverFang->ActionPointPolicy,
+		EWacomRunEventActionPointPolicy::Automatic);
 
 	TestTrue(TEXT("Leave closes event"), Leave->bCloseEventAfterResolve);
 	TestTrue(TEXT("Close closes event"), Close->bCloseEventAfterResolve);

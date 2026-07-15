@@ -124,7 +124,7 @@ struct WACOMBATTLE_API FBattleEnemyResult
  *   - DestroyedPartKeys：本场战斗中被破坏的稳定部位 key 列表，撤离时持久化
  *
  * 由 UBattleSession::BuildResultPacket() 构造，
- * 正式 Run 结算入口为 URunSession::OnBattleFinishedFromTrigger(Packet, TriggerPersistentId)。
+ * 正式 Run 结算入口为 URunSession::SettleEncounterNodeActivity(Ticket, Packet)。
  */
 USTRUCT(BlueprintType)
 struct WACOMBATTLE_API FBattleResultPacket

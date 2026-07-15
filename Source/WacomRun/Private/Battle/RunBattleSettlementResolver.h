@@ -3,10 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Map/WacomMapTypes.h"
 #include "RunStateTypes.h"
 #include "Session/BattleResultPacket.h"
 
-class UCardDefinition;
 struct FRunState;
 
 /**
@@ -17,17 +17,8 @@ struct FRunState;
  */
 struct FRunBattleSettlementResolver
 {
-	struct FCallbacks
-	{
-		TFunctionRef<void(EWacomPressureType, int32)> AddPressure;
-		TFunctionRef<void(int32)> AddExperience;
-		TFunctionRef<void(UCardDefinition*)> AcquireCardToRun;
-		TFunctionRef<int32(EWacomPressureType)> GetPressureValue;
-	};
-
 	static bool Resolve(
 		FRunState& State,
 		const FBattleResultPacket& Packet,
-		FName TriggerPersistentId,
-		const FCallbacks& Callbacks);
+		const FWacomMapNodeHandle& EncounterNode);
 };

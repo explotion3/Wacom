@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
@@ -30,7 +31,7 @@ URunSession* MakeBatchMoveRun(UObject* Outer, UCardDefinition* CapacityCard)
 	Character->CharacterId = TEXT("Backpack.BatchMove.Character");
 	Character->StarterDeck.Add(CapacityCard);
 	URunSession* Run = NewObject<URunSession>(Outer);
-	return Run->Initialize(Character) ? Run : nullptr;
+	return InitializeRunSessionForTest(*Run, Character).IsOk() ? Run : nullptr;
 }
 
 FGuid FindCardId(const FRunState& State, const UCardDefinition* Definition, EZoneKind Zone)

@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Fixtures/BattleTestFixtures.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 #include "Misc/AutomationTest.h"
 
 #include "Cards/CardDefinition.h"
@@ -10,6 +11,7 @@
 #include "Events/BattleEvent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Map/WacomFloorMapDefinition.h"
 #include "Session/BattleSession.h"
 #include "Session/BattleResultPacket.h"
 #include "Runtime/BattleEnemyKeys.h"
@@ -612,9 +614,21 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 	UEnemyDefinition* Enemy = Fx.MakeThreePartEnemy(50, 50, 50, 7, 7, 7);
 
 	// 用 RunSession 接收战斗结果，模拟完整闭环
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
-	FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get()).BattleSeed = 1;
+	FWacomRunExplorationFixture Exploration;
+	UWacomFloorMapDefinition* Floor =
+		Exploration.MakeLinearFloor(TEXT("Knockdown.Progress.Floor"), 1);
+	Floor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+	URunSession* Run = Exploration.CreateInitializedSession(
+		Char,
+		Exploration.MakeJourney({ Floor }, TEXT("Knockdown.Progress.Journey"))).Session;
+	FWacomRunSessionTestAccess::GetMutableRunState(*Run).BattleSeed = 1;
+	const FRunExplorationResolution EncounterBegin =
+		Run->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+	if (!TestTrue(TEXT("Encounter begins"),
+		EncounterBegin.IsOk() && EncounterBegin.NodeActivityTicket.IsSet()))
+	{
+		return false;
+	}
 
 	// 第一场战斗：撤离前击倒 Head
 	{
@@ -652,11 +666,14 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 		TestTrue(TEXT("Packet outcome is Victory after withdraw"),
 			Packet.Outcome == EBattleOutcome::Victory);
 		TestTrue(TEXT("Packet is withdrawn"), Packet.bWithdrawn);
-		Run->OnBattleFinishedFromTrigger(Packet, TriggerId);
+		TestTrue(TEXT("Withdraw settlement succeeds"),
+			Run->SettleEncounterNodeActivity(
+				EncounterBegin.NodeActivityTicket.GetValue(), Packet).IsOk());
 
 		// BattleProgress 应该有 TestTrigger 的进度
 		const FBattleProgressSnapshot* Progress =
-			Run->GetRunState().BattleProgress.Find(FName(TEXT("TestTrigger")));
+			Run->GetRunState().BattleProgress.Find(
+				FWacomMapNodeHandle{ TEXT("Knockdown.Progress.Floor"), TEXT("Node.01") });
 		TestNotNull(TEXT("BattleProgress 含 TestTrigger"), Progress);
 		if (!Progress)
 		{
@@ -706,8 +723,20 @@ bool FWacomKnockdownChoiceVictoryClearsProgressSpec::RunTest(const FString& /*Pa
 	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
 	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(50, 7, 0);
 
-	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
-	Run->Initialize(Char);
+	FWacomRunExplorationFixture Exploration;
+	UWacomFloorMapDefinition* Floor =
+		Exploration.MakeLinearFloor(TEXT("Knockdown.Victory.Floor"), 1);
+	Floor->Nodes[0].NodeType = EWacomMapNodeType::Encounter;
+	URunSession* Run = Exploration.CreateInitializedSession(
+		Char,
+		Exploration.MakeJourney({ Floor }, TEXT("Knockdown.Victory.Journey"))).Session;
+	const FRunExplorationResolution EncounterBegin =
+		Run->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
+	if (!TestTrue(TEXT("Encounter begins"),
+		EncounterBegin.IsOk() && EncounterBegin.NodeActivityTicket.IsSet()))
+	{
+		return false;
+	}
 
 	// 先模拟一次撤离写入 BattleProgress
 	{
@@ -716,8 +745,10 @@ FakeProgress.DestroyedParts.Add(FBattlePartSlotIdentity::Make(
 	TEXT("TestTrigger"),
 	TEXT("Enemy"),
 	TEXT("Test.Part.Solo")));
-		FRunState& RunState = FWacomRunSessionTestAccess::GetMutableRunState(*Run.Get());
-		RunState.BattleProgress.Add(FName(TEXT("TestTrigger")), FakeProgress);
+		FRunState& RunState = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
+		RunState.BattleProgress.Add(
+			FWacomMapNodeHandle{ TEXT("Knockdown.Victory.Floor"), TEXT("Node.01") },
+			FakeProgress);
 	}
 
 	// 真胜利
@@ -731,9 +762,12 @@ FakeProgress.DestroyedParts.Add(FBattlePartSlotIdentity::Make(
 	const FBattleResultPacket Packet = S->BuildResultPacket();
 	TestFalse(TEXT("非撤离"), Packet.bWithdrawn);
 
-	Run->OnBattleFinishedFromTrigger(Packet, FName(TEXT("TestTrigger")));
+	TestTrue(TEXT("Victory settlement succeeds"),
+		Run->SettleEncounterNodeActivity(
+			EncounterBegin.NodeActivityTicket.GetValue(), Packet).IsOk());
 	TestFalse(TEXT("真胜利后 BattleProgress 清理"),
-		Run->GetRunState().BattleProgress.Contains(FName(TEXT("TestTrigger"))));
+		Run->GetRunState().BattleProgress.Contains(
+			FWacomMapNodeHandle{ TEXT("Knockdown.Victory.Floor"), TEXT("Node.01") }));
 
 	return true;
 }

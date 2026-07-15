@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Fixtures/WacomRunExplorationFixture.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -34,7 +35,7 @@ bool FWacomUIBackpackWorkspaceDeleteRestoreSpec::RunTest(const FString& Paramete
 	Character->CharacterId = TEXT("WorkspaceDelete.Character");
 	Character->StarterDeck.Add(Bag);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
-	TestTrue(TEXT("Delete restore Run initializes"), Run->Initialize(Character));
+	TestTrue(TEXT("Delete restore Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(White);
 	Run->AcquireCardToRun(Blue);
 	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();

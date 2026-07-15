@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-07-13
+updated: 2026-07-14
 tags:
   - wacom/todo
   - wacom/docs
@@ -44,10 +44,10 @@ tags:
 ## P0.5 近期架构规划
 
 - [ ] **WacomMap 总体规划：新建地图 / 节点 / 通道规则文档入口**
-  - 状态：`Ready: 优先规划`
+  - 状态：`Done: 规则核心、Run Path、制作校验与 Debug 资产迁移已落地`
   - 归属：Map / Run / App
-  - 入口：[Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-  - 说明：先规划 `Docs/WacomMap.md` 的职责边界，明确 WacomMap 管逻辑地图、节点状态、边 / 通道可达性、迷雾、撤离回路、地图运行时状态和 SaveGame 口径；RunTunnel 继续作为 App 表现 / 输入层，不把 Spline、Actor 或 UI 写进地图规则。
+  - 入口：[WacomMap.md](./WacomMap.md) / [Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
+  - 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、Debug Journey/Floor builder、地图/场景 Validator 和 `L_Exploration` 资产迁移已经落地。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 Map Screen、正式 Camp handler/UI、多 Floor 内容和旅程规模填充，不恢复已删除的原型轨道路径。
 
 ## P1 近期实现候选
 
@@ -208,10 +208,10 @@ tags:
   - 说明：2026-07-13 已完成普通 `CardDiscarded` 的实体卡原地收束、逐卡真实起点、牌印飞向弃牌堆、逐枚计数、像素 Impact 与真实 `DiscardPileView` 接收回弹；弃牌堆洗回继续复用同一批量 Slate renderer。两种传输按 Kind+Sequence 去重并 FIFO 播放，普通弃牌不复用洗牌音效，失效配置回退旧 Exit，Reduced Motion 不跨屏飞行或修改 PileView Transform。接收反馈由通用 `UPileCountView` 管理可叠加脉冲并精确恢复 authored Transform，当前只连接 `DiscardToPile`；未来可按同一接口扩展 DrawPileView / ExhaustPileView。
 
 - [ ] **单一玩家档案与旅程存档：活动旅程、滚动备份、历史摘要**
-  - 状态：`Ready: 产品口径已确认，等待独立规格与实现`
+  - 状态：`Deferred: 产品口径已确认，等待首版旅程闭环与核心内容稳定`
   - 归属：Run / App
   - 入口：[Roadmap: 存档恢复](./Roadmap.md#roadmap-save)
-  - 说明：采用一个玩家档案、一个活动旅程、若干不可见滚动备份；结束旅程生成只读历史摘要。该切片负责恢复 Bootstrap / PauseMenu Save / MainMenu Continue，不把 slot 语义写回 MainMenu Screen。
+  - 说明：采用一个玩家档案、一个活动旅程、若干不可见滚动备份；结束旅程生成只读历史摘要。当前不实施，避免在 Run 节点、角色、奖励、事件、商店和首版旅程闭环仍持续变化时过早固化 schema。待首版旅程的最小可玩闭环、必须持久化的 RunState 字段和恢复入口稳定后，再独立规划 schema / migration / atomic write / rolling backup / recovery Bootstrap / PauseMenu Save / MainMenu Continue；slot 语义不得写回 MainMenu Screen。
 
 - [ ] **MainMenu 正式表现：实时场景与剩余子页面**
   - 状态：`In Progress: Title / MainMenu 两层栈与正式 WBP 已完成，等待 PIE 视觉验收和场景切片`
@@ -220,7 +220,7 @@ tags:
   - 说明：`WBP_TitleScreen + WBP_MainMenuScreen + WBP_MainMenuNavButton` 已建立第一版正式壳层；每次进入 `L_MainMenu` 先显示 Press Any Key，主菜单 ESC / B 返回稳定 Title 根且不会弹空 UI 栈。Settings Screen 与主菜单 / Pause 双入口也已完成。剩余工作是 `L_MainMenu` 实时场景、固定镜头、音频 / 字体 / 像素纹理美术验收，以及 Journey History / Credits 子页面。
 
 - [x] **Settings Screen：WBP、视频确认 Modal 与双入口**
-  - 状态：`Done: 五分类页面、token 事务、双入口和 Run Tunnel CameraShake 已落地`
+  - 状态：`Done: 五分类页面、token 事务、双入口和 Run Path CameraShake 已落地`
   - 归属：App / UI
   - 入口：[WacomApp.md](./WacomApp.md) / [WacomUIFoundation.md](./WacomUIFoundation.md)
   - 说明：`WBP_SettingsScreen / OptionRow / Button / ConfirmationDialog` 与 C++ fallback 已完成；主菜单和暂停菜单统一走 `FWacomSettingsScreenFlow`。Apply 后留在页面，视频模式使用 15 秒确认，脏返回确认放弃，外部 teardown 安全 Cancel / Revert。项目平衡档统一首次启动与“恢复默认”，恢复按钮只装入可撤销 Draft，仍需 Apply。分辨率已收敛为最低 `1280 × 720` 的常用档位与模式专属平台过滤；全局 UI 使用 `1920 × 1080` 设计基准的封顶 DPI 规则，只在较小视口缩小，高分辨率不放大固定 HUD 元素。`BP_WacomPlayerCharacter` 正式启用 CameraShake 并关闭 WalkBob。

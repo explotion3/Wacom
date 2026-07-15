@@ -129,6 +129,44 @@ FWacomRunEventDefinitionValidationReport FWacomRunEventDefinitionValidation::Bui
 		TMap<FName, FName> PaymentZoneIdsToChoiceIds;
 		for (const FWacomRunEventChoiceDefinition& Choice : Node.Choices)
 		{
+			const bool bTerminalChoice =
+				Choice.bCloseEventAfterResolve || Choice.bMarkEventCompleted;
+			int32 ResolvedActionPointCost = 0;
+			switch (Choice.ActionPointPolicy)
+			{
+			case EWacomRunEventActionPointPolicy::Automatic:
+				ResolvedActionPointCost = bTerminalChoice ? 1 : 0;
+				break;
+			case EWacomRunEventActionPointPolicy::Free:
+				break;
+			case EWacomRunEventActionPointPolicy::Fixed:
+				if (Choice.FixedActionPointCost < 0)
+				{
+					AddValidationError(Report,
+						FormatValidationError(
+							TEXT("Node {0} / Choice {1} 的 FixedActionPointCost 不能为负数。"),
+							Node.NodeId.ToString(),
+							Choice.ChoiceId.ToString()));
+				}
+				ResolvedActionPointCost = FMath::Max(0, Choice.FixedActionPointCost);
+				break;
+			default:
+				AddValidationError(Report,
+					FormatValidationError(
+						TEXT("Node {0} / Choice {1} 包含未知 ActionPointPolicy。"),
+						Node.NodeId.ToString(),
+						Choice.ChoiceId.ToString()));
+				break;
+			}
+			if (ResolvedActionPointCost > 0 && !bTerminalChoice)
+			{
+				AddValidationError(Report,
+					FormatValidationError(
+						TEXT("Node {0} / Choice {1} 的正行动点成本要求该选项关闭或完成事件。"),
+						Node.NodeId.ToString(),
+						Choice.ChoiceId.ToString()));
+			}
+
 			if (Choice.ChoiceId.IsNone())
 			{
 				AddValidationError(Report,
@@ -218,7 +256,7 @@ FWacomRunEventDefinitionValidationReport FWacomRunEventDefinitionValidation::Bui
 				switch (Condition.Type)
 				{
 				case EWacomRunEventConditionType::None:
-				case EWacomRunEventConditionType::MinNodeCount:
+				case EWacomRunEventConditionType::MinActionPoints:
 					break;
 				case EWacomRunEventConditionType::MinGold:
 					bHasMinGoldCondition = true;
@@ -335,24 +373,6 @@ FWacomRunEventDefinitionValidationReport FWacomRunEventDefinitionValidation::Bui
 					{
 						AddValidationWarning(Report,
 							FormatValidationError(TEXT("Node {0} / Choice {1} / EffectIndex {2} 的 AddPressure 数值为 0：资产仍有效，但不会产生可见后果预览或有意义的压力变化。"),
-								Node.NodeId.ToString(),
-								Choice.ChoiceId.ToString(),
-								FString::FromInt(EffectIndex)));
-					}
-					break;
-				case EWacomRunEventEffectType::ConsumeNode:
-					if (Effect.Value < 0)
-					{
-						AddValidationError(Report,
-							FormatValidationError(TEXT("Node {0} / Choice {1} / EffectIndex {2} 的 ConsumeNode 不能为负数。"),
-								Node.NodeId.ToString(),
-								Choice.ChoiceId.ToString(),
-								FString::FromInt(EffectIndex)));
-					}
-					else if (Effect.Value == 0)
-					{
-						AddValidationWarning(Report,
-							FormatValidationError(TEXT("Node {0} / Choice {1} / EffectIndex {2} 的 ConsumeNode 数值为 0：资产仍有效，但不会产生可见后果预览或有意义的行动点变化。"),
 								Node.NodeId.ToString(),
 								Choice.ChoiceId.ToString(),
 								FString::FromInt(EffectIndex)));

@@ -53,14 +53,6 @@ namespace
 		return Effect;
 	}
 
-	FWacomRunEventEffectDefinition MakeConsumeNode(int32 Count)
-	{
-		FWacomRunEventEffectDefinition Effect;
-		Effect.Type = EWacomRunEventEffectType::ConsumeNode;
-		Effect.Value = Count;
-		return Effect;
-	}
-
 	FWacomRunEventEffectDefinition MakeSetRunFlag(FName FlagId)
 	{
 		FWacomRunEventEffectDefinition Effect;
@@ -125,14 +117,14 @@ namespace
 		FWacomRunEventChoiceDefinition TakeGift;
 		TakeGift.ChoiceId = TEXT("TakeGift");
 		TakeGift.LabelText = FText::FromString(TEXT("收下毒牙"));
-		TakeGift.Effects = { MakeGainCard(PoisonFang), MakeConsumeNode(1) };
+		TakeGift.Effects = { MakeGainCard(PoisonFang) };
 		TakeGift.NextNodeId = TEXT("End");
 
 		FWacomRunEventChoiceDefinition PayRespect;
 		PayRespect.ChoiceId = TEXT("PayRespect");
 		PayRespect.LabelText = FText::FromString(TEXT("留下 1 金币"));
 		PayRespect.Conditions = { MakeMinGold(1) };
-		PayRespect.Effects = { MakeAddGold(-1), MakeAddPressure(TEXT("Misdeed"), -1), MakeConsumeNode(1) };
+		PayRespect.Effects = { MakeAddGold(-1), MakeAddPressure(TEXT("Misdeed"), -1) };
 		PayRespect.NextNodeId = TEXT("End");
 
 		FWacomRunEventChoiceDefinition HandOverFang;
@@ -142,7 +134,7 @@ namespace
 		HandOverFang.CardPayment.bRequiresOwnedCardPayment = true;
 		HandOverFang.CardPayment.PaymentZoneId = TEXT("RunEvent.Pay.Fang");
 		HandOverFang.CardPayment.AllowedCardDefinitions.Add(PoisonFang);
-		HandOverFang.Effects = { MakeConsumeNode(1) };
+		HandOverFang.Effects.Reset();
 		HandOverFang.NextNodeId = TEXT("End");
 
 		FWacomRunEventChoiceDefinition Leave;
