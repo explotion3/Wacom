@@ -15,8 +15,20 @@
 class UPrimitiveComponent;
 class USceneComponent;
 class UWidgetComponent;
+class UWacomBattleEnemyPartImpactStyle;
+class UWacomBattleEnemyPartTargetPreviewStyle;
+class UWacomSettingsSubsystem;
+class FWacomBattleEnemyPartCuePlayback;
+class FWacomBattleEnemyPartImpactFeedbackController;
+class FWacomBattleEnemyPartTargetPreviewPlayback;
+class FWacomBattleEnemyPartTargetPreviewFeedbackController;
 struct FEnemyPartSnapshot;
+struct FWacomLocalSettingsSnapshot;
 struct FWacomInteractionTargetHandle;
+enum class EWacomRuntimeSettingsChangeReason : uint8;
+#if WITH_AUTOMATION_TESTS
+struct FWacomBattleEnemyPartPresentationTestAccess;
+#endif
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleEnemyPartPresentationDebugView
@@ -49,6 +61,87 @@ struct WACOMAPP_API FWacomBattleEnemyPartPresentationDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	int32 CuePlayCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FName ActiveCueKind = TEXT("None");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bCuePlaybackActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	float CuePlaybackProgress = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	float CuePlaybackDurationSeconds = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bImpactAnchorReady = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FName ImpactAnchorName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FVector ImpactAnchorWorldLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FName ResolvedImpactStyleName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bImpactFeedbackEnabled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bImpactNiagaraReady = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bImpactEffectActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	float LastImpactIntensity = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	float LastImpactTargetDiameterCentimeters = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FName LastImpactEffectKind = TEXT("None");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	int32 LastImpactSeed = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	int32 ImpactEffectPlayCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	int32 ImpactSoundRequestCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bImpactReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	float ImpactDecorativeIntensity = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FName ResolvedTargetPreviewStyleName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bTargetPreviewFeedbackEnabled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bTargetPreviewNiagaraReady = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bTargetPreviewEffectActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	float TargetPreviewAmount = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	float TargetPreviewPulse = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	FVector2D TargetPreviewSizeCentimeters = FVector2D::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	int32 TargetPreviewActivationCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
@@ -112,16 +205,17 @@ struct WACOMAPP_API FWacomBattleEnemyPartPresentationDebugView
 /**
  * 场景敌人部位表现组件。
  *
- * 只负责视觉 cue、hover/drag preview 缩放和预测 widget。
+ * 只负责语义 cue 生命周期、hover/drag preview 缩放和预测 widget。
  * 不负责 Battle 目标身份绑定，也不向 BattleSession 提交命令。
  */
-UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent, ToolTip = "负责场景敌人部位的表现层：cue 缩放、hover/拖卡预览和预测 Widget。"))
+UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent, ToolTip = "负责场景敌人部位的表现层：语义 Cue 生命周期、hover/拖卡预览和预测 Widget。"))
 class WACOMAPP_API UWacomBattleEnemyPartPresentationComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
 	UWacomBattleEnemyPartPresentationComponent();
+	virtual ~UWacomBattleEnemyPartPresentationComponent() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "用于播放确认、伤害、破坏和可选目标提示的 Primitive；为空时自动使用 Owner 上第一个 PrimitiveComponent。"))
 	TObjectPtr<UPrimitiveComponent> VisualTargetComponent;
@@ -129,20 +223,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "用于播放确认、伤害、破坏和可选目标提示的场景组件。优先于 VisualTargetComponent；适合把多个 2D 视觉层作为一组缩放。"))
 	TObjectPtr<USceneComponent> FeedbackTargetComponent;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "目标确认 cue 的缩放倍率。", ClampMin = "1.0", ClampMax = "2.0", UIMin = "1.0", UIMax = "1.3"))
-	float TargetConfirmPulseScale = 1.10f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "伤害 cue 的缩放倍率。", ClampMin = "1.0", ClampMax = "2.0", UIMin = "1.0", UIMax = "1.4"))
-	float DamagePulseScale = 1.18f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "破坏 cue 的缩放倍率。", ClampMin = "1.0", ClampMax = "2.5", UIMin = "1.0", UIMax = "1.6"))
-	float DestroyedPulseScale = 1.32f;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "TargetSelect 中可选部位的轻量提示缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
 	float TargetableAffordanceScale = 1.06f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "第一人称卡牌拖拽指向该部位时的轻量预览缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
-	float DragTargetPreviewScale = 1.08f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation", meta = (ToolTip = "鼠标悬停该部位时的轻量探测缩放倍率。只表示当前 hover 目标，不影响战斗规则。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.15"))
 	float HoverProbeScale = 1.04f;
@@ -165,6 +247,18 @@ public:
 	void CacheRuntimePartFacts(FName InPartId, const FEnemyPartSnapshot& Part);
 	void ClearRuntimePartFacts();
 	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);
+	void ForceCompleteBattlePresentationCue();
+	void ResetBattlePresentationFeedback();
+	void SetPresentationTargets(
+		USceneComponent* InFeedbackTarget,
+		USceneComponent* InImpactAnchor,
+		UPrimitiveComponent* InImpactExtentSource);
+	void SetImpactFeedbackStyle(
+		UWacomBattleEnemyPartImpactStyle* InImpactStyle,
+		bool bInImpactFeedbackEnabled);
+	void SetTargetPreviewFeedbackStyle(
+		UWacomBattleEnemyPartTargetPreviewStyle* InTargetPreviewStyle,
+		bool bInTargetPreviewFeedbackEnabled);
 	void SetTargetableAffordance(bool bInTargetable);
 	void SetDragTargetPreviewState(
 		EWacomFirstPersonCardDragTargetFeedbackState PreviewState,
@@ -187,10 +281,41 @@ public:
 	FWacomBattleEnemyPartPresentationDebugView GetBattleEnemyPartPresentationDebugView() const;
 
 protected:
+	virtual void BeginPlay() override;
+	virtual void TickComponent(
+		float DeltaTime,
+		ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomBattleEnemyPartPresentationTestAccess;
+#endif
+
+	struct FCuePlaybackDeleter
+	{
+		void operator()(FWacomBattleEnemyPartCuePlayback* Playback) const;
+	};
+
+	struct FImpactFeedbackControllerDeleter
+	{
+		void operator()(FWacomBattleEnemyPartImpactFeedbackController* Controller) const;
+	};
+
+	struct FTargetPreviewPlaybackDeleter
+	{
+		void operator()(FWacomBattleEnemyPartTargetPreviewPlayback* Playback) const;
+	};
+
+	struct FTargetPreviewFeedbackControllerDeleter
+	{
+		void operator()(FWacomBattleEnemyPartTargetPreviewFeedbackController* Controller) const;
+	};
+
 	USceneComponent* ResolveFeedbackTargetComponent() const;
+	USceneComponent* ResolveImpactAnchorComponent() const;
+	UPrimitiveComponent* ResolveImpactExtentSourceComponent() const;
 	UPrimitiveComponent* ResolveVisualTargetComponent() const;
 	void RefreshPredictionDisplay();
 	void ApplyPredictionViewToWidget();
@@ -198,10 +323,16 @@ private:
 		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput) const;
 	FWacomBattleEnemyPartPredictionView BuildActionPreviewPredictionView() const;
 	void ApplyPersistentScaleState();
-	void BeginScaleFeedback(float ScaleMultiplier, float HoldSeconds);
-	void ClearScaleFeedback();
+	void ApplyPersistentScaleMultiplier(float ScaleMultiplier);
+	void ResetCuePlayback();
+	void ResetTargetPreviewPlayback(bool bDestroyComponent);
+	void RefreshComponentTickEnabled();
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
 	void RestoreBaseScaleIfNeeded();
-	void StopFeedbackTimer();
 
 	UPROPERTY(Transient)
 	FGuid RuntimePartInstanceId;
@@ -211,6 +342,18 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<USceneComponent> CachedFeedbackTarget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<USceneComponent> ImpactAnchorComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPrimitiveComponent> ImpactExtentSourceComponent;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleEnemyPartImpactStyle> ImpactFeedbackStyle;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle> TargetPreviewFeedbackStyle;
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UWidgetComponent> PredictionWidgetComponent;
@@ -244,5 +387,16 @@ private:
 	EBattleEventType LastCueType = EBattleEventType::None;
 	int32 LastCueAmount = 0;
 	int32 CuePlayCount = 0;
-	FTimerHandle FeedbackTimerHandle;
+	bool bImpactFeedbackEnabled = false;
+	bool bTargetPreviewFeedbackEnabled = false;
+	float RuntimeDecorativeFlashIntensityScale = 1.0f;
+	bool bRuntimeSimplifiedMotion = false;
+	FDelegateHandle RuntimeSettingsChangedHandle;
+	TUniquePtr<FWacomBattleEnemyPartCuePlayback, FCuePlaybackDeleter> CuePlayback;
+	TUniquePtr<FWacomBattleEnemyPartImpactFeedbackController, FImpactFeedbackControllerDeleter>
+		ImpactFeedbackController;
+	TUniquePtr<FWacomBattleEnemyPartTargetPreviewPlayback, FTargetPreviewPlaybackDeleter>
+		TargetPreviewPlayback;
+	TUniquePtr<FWacomBattleEnemyPartTargetPreviewFeedbackController, FTargetPreviewFeedbackControllerDeleter>
+		TargetPreviewFeedbackController;
 };

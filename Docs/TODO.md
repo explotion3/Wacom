@@ -117,7 +117,19 @@ tags:
   - 状态：`Ready: 美术 / 表现 polish`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。后续只追踪正式蛇 Host prefab 美术保存、正式 sprite/flipbook 样式、材质描边、贴近部位 tooltip、风险动效、PaperZD / Animator 状态机和 Status Badge 美术替换。
+  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。语义 Cue 生命周期已收敛为互斥 Playback，每个 PartActor 已提供可调 ImpactAnchor；旧确认、伤害、破坏缩放脉冲已删除。后续追踪正式蛇 Host prefab 美术保存、正式 sprite/flipbook 样式、材质描边、贴近部位 tooltip、风险动效、PaperZD / Animator 状态机和 Status Badge 美术替换。
+
+- [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
+  - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`
+  - 归属：App / Battle World Presentation
+  - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
+  - 说明：`TargetConfirmed / Damage` 已接入共用的 Niagara 像素反馈，读取统一 Playback、ImpactAnchor、稳定 Seed、Reduced Motion 与 semantic / decorative flash 分类；不恢复旧缩放脉冲。`Destroyed` 保留高优先级 Cue，作为后续独立破坏切片。
+
+- [ ] **Battle 世界目标 Destroyed 正式破坏反馈**
+  - 状态：`Ready: 后续表现切片`
+  - 归属：App / Battle World Presentation
+  - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
+  - 说明：消费既有最高优先级 `Destroyed` Cue 与 ImpactAnchor，制作部位破坏而非普通受击的独立视觉；不得恢复旧缩放脉冲。攻击方向、局部材质闪白和镜头震动也留在本项或后续独立切片评估。
 
 - [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
 	- 状态：`Done: Trigger 已接线`
@@ -183,6 +195,12 @@ tags:
   - 说明：只替换外观、布局和 preview 表现；C++ fallback 继续负责动态选项、ZoneId、menu lease、drop intent 和 RunEvent 事务。
 
 ## P2 后续清理
+
+- [ ] **场景敌人像素命中 Niagara PIE 调参与正式音效**
+  - 状态：`Ready: Graph/Style 已完成，等待手感验收`
+  - 归属：App / Battle 表现 / VFX
+  - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
+  - 说明：`NS_WacomBattleEnemyPartImpact_Pixel` 的三个 CPU Burst Emitter、四通道 Dynamic Material Parameter、默认 MI/Style 与 Debug Snake Host 绑定均已由 WacomEditor 生成流程完成；尺寸已改为读取单个部位 `HitBounds` 的摄像机平面投影，默认约 `1.2x` 覆盖。剩余工作是 PIE 验收 `0.24s` 确认、`0.30s` 伤害、单次/多段/高低伤害、HitOnly/VisualLayers、遮挡和 Accessibility，并在 Style 中指定正式 TargetConfirmed/Damage 音效。Destroyed、攻击方向、局部材质闪白和镜头震动留给后续切片。
 
 - [x] **用编辑器迁移旧内容目录并清理 `_GAME` 临时蓝图目录**
   - 状态：`Done: Content Organization V1-A`

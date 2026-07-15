@@ -107,7 +107,7 @@ namespace
 		}
 		if (bShouldRefreshIntent)
 		{
-			FEnemyIntentSelector::RefreshIntentForPart(State, Part, /*bAdvanceSequence*/true, &Events);
+			FEnemyIntentSelector::RefreshIntentForPart(State, Part, &Events);
 		}
 		else
 		{

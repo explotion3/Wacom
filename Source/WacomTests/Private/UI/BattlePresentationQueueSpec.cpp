@@ -86,7 +86,7 @@ namespace WacomBattlePresentationQueueSpec
 	{
 		FWacomFirstPersonCardDragView DragView;
 		DragView.CardInstanceId = CardInstanceId;
-		DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
+		DragView.GestureState = EWacomFirstPersonCardGestureState::ArmedForCommit;
 		DragView.bCommitArmed = true;
 		DragView.PressScreenPosition = FVector2D(500.0f, 600.0f);
 		DragView.CurrentScreenPosition = FVector2D(540.0f, 590.0f);
@@ -251,6 +251,8 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestTrue(TEXT("Target submit block uses PlayCard header"),
 		HUD->GetBattleCombatLogHistoryForTest().Last().HeaderText.ToString().Contains(TEXT("打出")));
 
+	TestTrue(TEXT("Player action command gate remains open while only the event queue is busy"),
+		HUD->CanSubmitPlayerActionCommand());
 	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, NoTargetCardId);
 	TestEqual(TEXT("No-target release can submit while presenting"), HUD->GetUIState(), EBattleUIState::Idle);
 	TestFalse(TEXT("No-target release clears pending while presenting"), HUD->GetPendingTargetingCardId().IsValid());
@@ -442,12 +444,19 @@ bool FWacomUIBattlePresentationQueueDamageCueSpec::RunTest(const FString& /*Para
 	HUD->EnqueueBattlePresentationEventsForTest({ Event });
 
 	World->GetTimerManager().Tick(0.01f);
-	const FWacomBattleEnemyPartPresentationDebugView View =
+	FWacomBattleEnemyPartPresentationDebugView View =
 		SceneEnemy.Parts[0]->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+	TestEqual(TEXT("Damage waits for the short TargetConfirmed readability lead"), View.CuePlayCount, 0);
+	TestTrue(TEXT("Queue stays busy during the confirmation lead"), HUD->IsBattlePresentationBusy());
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	View = SceneEnemy.Parts[0]->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
 	TestEqual(TEXT("Target cue plays for damage event"), View.CuePlayCount, 1);
-	TestEqual(TEXT("Target cue kind is damage"), View.LastCueKind, FName(TEXT("DamageDealt")));
+	TestEqual(TEXT("Target cue playback kind is damage"), View.LastCueKind, FName(TEXT("Damage")));
 	TestEqual(TEXT("Target cue type is damage"), View.LastCueType, EBattleEventType::DamageDealt);
 	TestEqual(TEXT("Target cue carries damage amount"), View.LastCueAmount, 7);
+	TestTrue(TEXT("Damage cue uses the more readable 0.30 second duration"),
+		FMath::IsNearlyEqual(View.CuePlaybackDurationSeconds, 0.30f));
 
 	HUD->AdvanceBattlePresentationQueueForTest();
 	TestFalse(TEXT("Queue finishes after target cue pacing"), HUD->IsBattlePresentationBusy());
@@ -783,7 +792,11 @@ bool FWacomUIBattlePresentationQueueKnockdownDialogDelayedAndGuardedSpec::RunTes
 	HUD->EnqueueBattlePresentationEventsForTest({ IntroCue, KnockdownRequest });
 
 	World->GetTimerManager().Tick(0.01f);
-	TestTrue(TEXT("Target cue delays knockdown modal step"), HUD->IsBattlePresentationBusy());
+	TestTrue(TEXT("Target confirmation lead delays knockdown modal step"), HUD->IsBattlePresentationBusy());
+
+	HUD->AdvanceBattlePresentationQueueForTest();
+	TestTrue(TEXT("Damage cue still paces the knockdown modal after the confirmation lead"),
+		HUD->IsBattlePresentationBusy());
 
 	HUD->AdvanceBattlePresentationQueueForTest();
 	TestFalse(TEXT("Knockdown step is consumed after the pacing delay"), HUD->IsBattlePresentationBusy());

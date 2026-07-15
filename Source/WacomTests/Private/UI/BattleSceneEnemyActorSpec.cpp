@@ -491,11 +491,8 @@ bool FWacomUIBattleSceneEnemyPartActorRefreshesFacadeSpec::RunTest(const FString
 	PartActor->PartId = TEXT("Test.Part.Head");
 	PartActor->PartSlotId = TEXT("Test.Part.Head");
 	PartActor->HitBoundsExtent = FVector(71.f, 53.f, 41.f);
-	PartActor->TargetConfirmPulseScale = 1.21f;
-	PartActor->DamagePulseScale = 1.31f;
-	PartActor->DestroyedPulseScale = 1.41f;
+	PartActor->ImpactAnchorRelativeLocation = FVector(7.f, -3.f, 11.f);
 	PartActor->TargetableAffordanceScale = 1.07f;
-	PartActor->DragTargetPreviewScale = 1.09f;
 	PartActor->CueHoldSeconds = 0.22f;
 	PartActor->RefreshAuthoringState();
 
@@ -531,11 +528,11 @@ bool FWacomUIBattleSceneEnemyPartActorRefreshesFacadeSpec::RunTest(const FString
 		Presentation && Presentation->FeedbackTargetComponent == PartActor->GetVisualLayersRoot());
 	TestNull(TEXT("Presentation primitive target no longer uses legacy visual"),
 		Presentation ? Presentation->VisualTargetComponent.Get() : nullptr);
-	TestEqual(TEXT("Presentation target confirm scale"), Presentation ? Presentation->TargetConfirmPulseScale : 0.0f, 1.21f);
-	TestEqual(TEXT("Presentation damage scale"), Presentation ? Presentation->DamagePulseScale : 0.0f, 1.31f);
-	TestEqual(TEXT("Presentation destroyed scale"), Presentation ? Presentation->DestroyedPulseScale : 0.0f, 1.41f);
+	TestNotNull(TEXT("Impact anchor exists"), PartActor->GetImpactAnchorComponent());
+	TestEqual(TEXT("Impact anchor facade location"),
+		PartActor->GetImpactAnchorComponent()->GetRelativeLocation(),
+		FVector(7.f, -3.f, 11.f));
 	TestEqual(TEXT("Presentation targetable scale"), Presentation ? Presentation->TargetableAffordanceScale : 0.0f, 1.07f);
-	TestEqual(TEXT("Presentation drag preview scale"), Presentation ? Presentation->DragTargetPreviewScale : 0.0f, 1.09f);
 	TestEqual(TEXT("Presentation hover scale"), Presentation ? Presentation->HoverProbeScale : 0.0f, 1.04f);
 	TestEqual(TEXT("Presentation hold seconds"), Presentation ? Presentation->CueHoldSeconds : 0.0f, 0.22f);
 	TestTrue(TEXT("Prediction widget component exists"),
@@ -557,6 +554,11 @@ bool FWacomUIBattleSceneEnemyPartActorRefreshesFacadeSpec::RunTest(const FString
 		PartActor->GetBattleSceneEnemyPartDebugView();
 	TestEqual(TEXT("Debug part id"), DebugView.PartId, FName(TEXT("Test.Part.Head")));
 	TestTrue(TEXT("Debug interaction configured"), DebugView.bInteractionTargetConfigured);
+	TestTrue(TEXT("Debug impact anchor ready"), DebugView.bImpactAnchorReady);
+	TestEqual(TEXT("Debug impact anchor name"), DebugView.ImpactAnchorName, FName(TEXT("ImpactAnchor")));
+	TestEqual(TEXT("Debug impact anchor relative location"),
+		DebugView.ImpactAnchorRelativeLocation,
+		FVector(7.f, -3.f, 11.f));
 	TestEqual(TEXT("Details authoring state mirrors debug view"),
 		PartActor->AuthoringState,
 		DebugView.AuthoringState);
@@ -739,8 +741,6 @@ bool FWacomUIBattleSceneEnemyPartActorCueAndDragPreviewSpec::RunTest(const FStri
 			PartActor->Destroy();
 		}
 	};
-	PartActor->TargetConfirmPulseScale = 1.25f;
-	PartActor->DragTargetPreviewScale = 1.15f;
 	PartActor->RefreshAuthoringState();
 
 	const FVector BaseScale = PartActor->GetVisualLayersRoot()->GetRelativeScale3D();
@@ -753,17 +753,19 @@ bool FWacomUIBattleSceneEnemyPartActorCueAndDragPreviewSpec::RunTest(const FStri
 	FWacomBattleEnemyPartPresentationDebugView View =
 		PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
 	TestEqual(TEXT("Target confirm cue count"), View.CuePlayCount, 1);
-	TestEqual(TEXT("Target confirm scales visual layer root"),
+	TestTrue(TEXT("Target confirm playback active"), View.bCuePlaybackActive);
+	TestEqual(TEXT("Target confirm playback kind"), View.ActiveCueKind, FName(TEXT("TargetConfirmed")));
+	TestEqual(TEXT("Target confirm does not scale visual layer root"),
 		PartActor->GetVisualLayersRoot()->GetRelativeScale3D(),
-		BaseScale * 1.25f);
+		BaseScale);
 
 	PartActor->GetPresentationComponent()->SetDragTargetPreviewState(
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
 	View = PartActor->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
 	TestTrue(TEXT("Drag preview active"), View.bDragPreviewActive);
-	TestEqual(TEXT("Drag preview scales visual layer root"),
+	TestEqual(TEXT("Drag preview keeps visual layer root authored scale"),
 		PartActor->GetVisualLayersRoot()->GetRelativeScale3D(),
-		BaseScale * 1.15f);
+		BaseScale);
 
 	PartActor->GetPresentationComponent()->ClearDragTargetPreviewState();
 	TestEqual(TEXT("Drag preview restores visual layer root"),
@@ -1803,7 +1805,7 @@ bool FWacomUIBattleSceneEnemyHostVisualKeepsPartVisualLayersSpec::RunTest(const 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleSceneEnemyHostVisualPartFeedbackStaysPerPartSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostVisualPartFeedbackScalesPartVisualLayersRoot",
+	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostVisualPartCueDoesNotScaleHostOrPartVisual",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleSceneEnemyHostVisualPartFeedbackStaysPerPartSpec::RunTest(const FString& /*Parameters*/)
@@ -1839,7 +1841,6 @@ bool FWacomUIBattleSceneEnemyHostVisualPartFeedbackStaysPerPartSpec::RunTest(con
 	Layer.LayerId = TEXT("Head.Main");
 	Layer.Sprite = NewObject<UPaperSprite>(PartActor);
 	PartActor->VisualLayers = { Layer };
-	PartActor->TargetConfirmPulseScale = 1.22f;
 	SceneEnemy.Host->RefreshBattleEnemyPartAuthoringState();
 
 	UPaperSpriteComponent* HostVisual = SceneEnemy.Host->GetGeneratedHostSpriteVisualComponent();
@@ -1855,12 +1856,15 @@ bool FWacomUIBattleSceneEnemyHostVisualPartFeedbackStaysPerPartSpec::RunTest(con
 	Cue.SourceEventType = EBattleEventType::None;
 	PartActor->GetPresentationComponent()->PlayBattlePresentationCue(Cue);
 
-	TestEqual(TEXT("Part feedback scales visual layers root"),
+	TestEqual(TEXT("Semantic cue does not scale part visual layers root"),
 		PartActor->GetVisualLayersRoot()->GetRelativeScale3D(),
-		PartBaseScale * PartActor->TargetConfirmPulseScale);
-	TestEqual(TEXT("Part feedback does not scale host visual"),
+		PartBaseScale);
+	TestEqual(TEXT("Semantic cue does not scale host visual"),
 		HostVisual->GetRelativeScale3D(),
 		HostBaseScale);
+	TestTrue(TEXT("Semantic cue playback remains active for future effect consumers"),
+		PartActor->GetPresentationComponent()
+			->GetBattleEnemyPartPresentationDebugView().bCuePlaybackActive);
 
 	PartActor->GetPresentationComponent()->ClearDragTargetPreviewState();
 	PartActor->GetPresentationComponent()->ClearHoverProbeState(TEXT("Test"));

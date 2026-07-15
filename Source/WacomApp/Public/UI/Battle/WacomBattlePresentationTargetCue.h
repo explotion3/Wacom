@@ -24,7 +24,7 @@ struct WACOMAPP_API FWacomBattlePresentationTargetCue
 	GENERATED_BODY()
 
 	UPROPERTY()
-	EWacomBattlePresentationTargetCueKind CueKind = EWacomBattlePresentationTargetCueKind::DamageDealt;
+	EWacomBattlePresentationTargetCueKind CueKind = EWacomBattlePresentationTargetCueKind::BattleEvent;
 
 	UPROPERTY()
 	FBattlePartSlotIdentity TargetPartKey;
@@ -37,6 +37,10 @@ struct WACOMAPP_API FWacomBattlePresentationTargetCue
 
 	UPROPERTY()
 	float Duration = 0.0f;
+
+	/** 只用于表现随机的稳定种子；不得作为规则 RNG 或目标身份。 */
+	UPROPERTY()
+	int32 Seed = 0;
 };
 
 inline FName WacomBattlePresentationTargetCueKindToName(EWacomBattlePresentationTargetCueKind Kind)

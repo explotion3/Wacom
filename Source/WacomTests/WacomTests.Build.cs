@@ -33,6 +33,7 @@ public class WacomTests : ModuleRules
 		{
 			"InputCore",
 			"MaterialEditor",
+			"Niagara",
 			"Slate",
 			"SlateCore"
 		});

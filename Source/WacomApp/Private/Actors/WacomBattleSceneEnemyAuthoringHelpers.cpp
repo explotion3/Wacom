@@ -380,7 +380,7 @@ namespace WacomBattleSceneEnemyAuthoring
 		const FWacomBattleEnemyPartWorldTargetDebugView& BridgeView = View.BridgeDebugView;
 		const FWacomBattleEnemyPartPresentationDebugView& PresentationView = View.PresentationDebugView;
 		return FString::Printf(
-			TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s AuthoringState=%s AuthoringReady=%s VisualAuthoringMode=%s UsingHostVisual=%s HitOnlyVisual=%s HitBounds=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d RegisteredVisualLayerComponents=%d RegisteredStaticVisualLayerComponents=%d RegisteredFlipbookVisualLayerComponents=%d VisibleVisualLayerComponents=%d VisibleStaticVisualLayerComponents=%d VisibleFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s PredictionWidget=%s PredictionBadgeLocation=%s PredictionBadgeDrawSize=%s PredictionBadgeScale=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s Initiative=%d Destroyed=%s Intent=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s}"),
+			TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s AuthoringState=%s AuthoringReady=%s VisualAuthoringMode=%s UsingHostVisual=%s HitOnlyVisual=%s HitBounds=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d RegisteredVisualLayerComponents=%d RegisteredStaticVisualLayerComponents=%d RegisteredFlipbookVisualLayerComponents=%d VisibleVisualLayerComponents=%d VisibleStaticVisualLayerComponents=%d VisibleFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s ImpactAnchorReady=%s ImpactAnchor=%s ImpactAnchorWorld=%s PredictionWidget=%s PredictionBadgeLocation=%s PredictionBadgeDrawSize=%s PredictionBadgeScale=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s Initiative=%d Destroyed=%s Intent=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d ActiveCue=%s CueActive=%s CueProgress=%.3f CueDuration=%.3f DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s}"),
 			*View.ActorName,
 			*View.EnemySlotId.ToString(),
 			*View.PartSlotId.ToString(),
@@ -409,6 +409,9 @@ namespace WacomBattleSceneEnemyAuthoring
 			*JoinNames(View.VisualLayerIds, TEXT("|")),
 			*JoinNames(View.VisualLayerAssetNames, TEXT("|")),
 			*View.FeedbackTargetName.ToString(),
+			View.bImpactAnchorReady ? TEXT("true") : TEXT("false"),
+			*View.ImpactAnchorName.ToString(),
+			*View.ImpactAnchorWorldLocation.ToCompactString(),
 			*View.PredictionWidgetName.ToString(),
 			*View.PredictionBadgeRelativeLocation.ToCompactString(),
 			*View.PredictionBadgeDrawSize.ToString(),
@@ -432,6 +435,10 @@ namespace WacomBattleSceneEnemyAuthoring
 			static_cast<int32>(PresentationView.LastCueType),
 			PresentationView.LastCueAmount,
 			PresentationView.CuePlayCount,
+			*PresentationView.ActiveCueKind.ToString(),
+			PresentationView.bCuePlaybackActive ? TEXT("true") : TEXT("false"),
+			PresentationView.CuePlaybackProgress,
+			PresentationView.CuePlaybackDurationSeconds,
 			static_cast<int32>(PresentationView.DragPreviewState),
 			PresentationView.bDragPreviewActive ? TEXT("true") : TEXT("false"),
 			*PresentationView.LastDragPredictionDebugInput.SourceCardInstanceId.ToString(

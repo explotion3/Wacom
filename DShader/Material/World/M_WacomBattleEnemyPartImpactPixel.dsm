@@ -1,0 +1,76 @@
+import "Shared/WacomBattleEnemyPartImpactPixel.dsh";
+
+Shader(Name="DreamMaterials/World/M_WacomBattleEnemyPartImpactPixel")
+{
+    Properties = {
+        DynamicParameter ParticleData = float4(0.0, 0.0, 0.0, 0.0);
+
+        VectorParameter ImpactPrimaryColor = float4(0.58, 0.80, 1.0, 1.0) [ Group="敌人像素命中|材质实例"; SortPriority=0; ];
+        VectorParameter ImpactSecondaryColor = float4(0.96, 0.82, 0.42, 1.0) [ Group="敌人像素命中|材质实例"; SortPriority=1; ];
+        VectorParameter ImpactAccentColor = float4(0.88, 0.30, 0.72, 1.0) [ Group="敌人像素命中|材质实例"; SortPriority=2; ];
+        VectorParameter ImpactInvalidTargetColor = float4(0.68, 0.12, 0.30, 1.0) [ Group="敌人像素命中|目标预演"; SortPriority=0; ];
+        ScalarParameter ImpactPrimaryWeight = 0.50 [ Group="敌人像素命中|材质实例"; SortPriority=3; ];
+        ScalarParameter ImpactSecondaryWeight = 0.32 [ Group="敌人像素命中|材质实例"; SortPriority=4; ];
+        ScalarParameter ImpactPixelColumns = 12.0 [ Group="敌人像素命中|材质实例"; SortPriority=5; ];
+        ScalarParameter ImpactOutlineWidth = 0.055 [ Group="敌人像素命中|材质实例"; SortPriority=6; ];
+        ScalarParameter ImpactCoreBrightness = 1.35 [ Group="敌人像素命中|材质实例"; SortPriority=7; ];
+        ScalarParameter ImpactDecorativeGlow = 0.85 [ Group="敌人像素命中|材质实例"; SortPriority=8; ];
+        ScalarParameter ImpactPreviewGlow = 0.28 [ Group="敌人像素命中|目标预演"; SortPriority=1; ];
+    }
+
+    Settings = { Domain = "Surface"; ShadingModel = "Unlit"; BlendMode = "Translucent"; TwoSided = true; }
+    Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float shapeKind = UE.Expression(Class="ComponentMask", OutputType="float1", Input=ParticleData, R=true, G=false, B=false, A=false);
+        float normalizedAge = UE.Expression(Class="ComponentMask", OutputType="float1", Input=ParticleData, R=false, G=true, B=false, A=false);
+        float paletteVariant = UE.Expression(Class="ComponentMask", OutputType="float1", Input=ParticleData, R=false, G=false, B=true, A=false);
+        float decorativeClass = UE.Expression(Class="ComponentMask", OutputType="float1", Input=ParticleData, R=false, G=false, B=false, A=true);
+        float particleAlpha = UE.Expression(Class="ParticleColor", OutputType="float1", Output="A");
+
+        float shapeMask;
+        float coreMask;
+        WacomBattleEnemyPartImpact_ComputeShape(
+            uv,
+            shapeKind,
+            normalizedAge,
+            ImpactPixelColumns,
+            ImpactOutlineWidth,
+            paletteVariant,
+            shapeMask,
+            coreMask);
+
+        float3 primaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ImpactPrimaryColor, R=true, G=true, B=true, A=false);
+        float3 secondaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ImpactSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 accentColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ImpactAccentColor, R=true, G=true, B=true, A=false);
+        float3 invalidTargetColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ImpactInvalidTargetColor, R=true, G=true, B=true, A=false);
+        float3 paletteColor;
+        WacomBattleEnemyPartImpact_SelectPalette(
+            paletteVariant,
+            primaryColor,
+            secondaryColor,
+            accentColor,
+            ImpactPrimaryWeight,
+            ImpactSecondaryWeight,
+            paletteColor);
+
+        WacomBattleEnemyPartImpact_ComposeAppearance(
+            shapeKind,
+            normalizedAge,
+            paletteVariant,
+            decorativeClass,
+            shapeMask,
+            coreMask,
+            particleAlpha,
+            paletteColor,
+            primaryColor,
+            secondaryColor,
+            invalidTargetColor,
+            ImpactDecorativeGlow,
+            ImpactPreviewGlow,
+            ImpactCoreBrightness,
+            Color,
+            Alpha);
+    }
+}

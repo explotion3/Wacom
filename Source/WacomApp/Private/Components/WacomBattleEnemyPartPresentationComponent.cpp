@@ -2,12 +2,22 @@
 
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
 
+#include "Actors/WacomBattleEnemyPartImpactStyle.h"
+#include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
+#include "Components/WacomBattleEnemyPartCuePlayback.h"
+#include "Components/WacomBattleEnemyPartImpactFeedbackController.h"
+#include "Components/WacomBattleEnemyPartTargetPreviewFeedbackController.h"
+#include "Components/WacomBattleEnemyPartTargetPreviewPlayback.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "GameFramework/Actor.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
 #include "Snapshots/EnemySnapshot.h"
+#include "Settings/WacomPresentationAccessibilityPolicy.h"
+#include "Settings/WacomSettingsSubsystem.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
@@ -58,9 +68,47 @@ namespace
 	}
 }
 
-UWacomBattleEnemyPartPresentationComponent::UWacomBattleEnemyPartPresentationComponent()
+void UWacomBattleEnemyPartPresentationComponent::FCuePlaybackDeleter::operator()(
+	FWacomBattleEnemyPartCuePlayback* Playback) const
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	delete Playback;
+}
+
+void UWacomBattleEnemyPartPresentationComponent::FImpactFeedbackControllerDeleter::operator()(
+	FWacomBattleEnemyPartImpactFeedbackController* Controller) const
+{
+	delete Controller;
+}
+
+void UWacomBattleEnemyPartPresentationComponent::FTargetPreviewPlaybackDeleter::operator()(
+	FWacomBattleEnemyPartTargetPreviewPlayback* Playback) const
+{
+	delete Playback;
+}
+
+void UWacomBattleEnemyPartPresentationComponent::FTargetPreviewFeedbackControllerDeleter::operator()(
+	FWacomBattleEnemyPartTargetPreviewFeedbackController* Controller) const
+{
+	delete Controller;
+}
+
+UWacomBattleEnemyPartPresentationComponent::UWacomBattleEnemyPartPresentationComponent()
+	: CuePlayback(new FWacomBattleEnemyPartCuePlayback())
+	, ImpactFeedbackController(new FWacomBattleEnemyPartImpactFeedbackController())
+	, TargetPreviewPlayback(new FWacomBattleEnemyPartTargetPreviewPlayback())
+	, TargetPreviewFeedbackController(new FWacomBattleEnemyPartTargetPreviewFeedbackController())
+{
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+	SetComponentTickEnabled(false);
+}
+
+UWacomBattleEnemyPartPresentationComponent::~UWacomBattleEnemyPartPresentationComponent() = default;
+
+void UWacomBattleEnemyPartPresentationComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	BindRuntimeSettings();
 }
 
 void UWacomBattleEnemyPartPresentationComponent::CacheRuntimePartFacts(
@@ -78,6 +126,7 @@ void UWacomBattleEnemyPartPresentationComponent::CacheRuntimePartFacts(
 
 void UWacomBattleEnemyPartPresentationComponent::ClearRuntimePartFacts()
 {
+	ResetBattlePresentationFeedback();
 	RuntimePartInstanceId.Invalidate();
 	bHasRuntimePartFacts = false;
 	CurrentInitiative = 0;
@@ -89,29 +138,129 @@ void UWacomBattleEnemyPartPresentationComponent::ClearRuntimePartFacts()
 void UWacomBattleEnemyPartPresentationComponent::PlayBattlePresentationCue(
 	const FWacomBattlePresentationTargetCue& Cue)
 {
-	if (Cue.CueKind == EWacomBattlePresentationTargetCueKind::BattleEvent
-		&& Cue.SourceEventType != EBattleEventType::DamageDealt
-		&& Cue.SourceEventType != EBattleEventType::EnemyPartHpEmptied)
+	if (!CuePlayback || !CuePlayback->Begin(Cue, CueHoldSeconds))
 	{
 		return;
 	}
 
-	LastCueKind = WacomBattlePresentationTargetCueKindToName(Cue.CueKind);
+	LastCueKind = FWacomBattleEnemyPartCuePlayback::KindToName(CuePlayback->GetView().Kind);
 	LastCueType = Cue.SourceEventType;
 	LastCueAmount = Cue.Amount;
 	++CuePlayCount;
 
-	float ScaleMultiplier = DamagePulseScale;
-	if (Cue.CueKind == EWacomBattlePresentationTargetCueKind::TargetConfirmed)
+	const FWacomBattleEnemyPartCuePlaybackView& CueView = CuePlayback->GetView();
+	if (ImpactFeedbackController)
 	{
-		ScaleMultiplier = TargetConfirmPulseScale;
+		if (CueView.Kind == EWacomBattleEnemyPartCuePlaybackKind::Destroyed)
+		{
+			// Destroyed owns the semantic priority but has no authored visual this round.
+			ImpactFeedbackController->ResetImmediate(false);
+		}
+		else if (bImpactFeedbackEnabled && IsValid(ImpactFeedbackStyle))
+		{
+			FWacomBattlePresentationTargetCue EffectiveCue = Cue;
+			EffectiveCue.Duration = CueView.DurationSeconds;
+			ImpactFeedbackController->PlayAcceptedCue(
+				*this,
+				ResolveImpactAnchorComponent(),
+				ResolveImpactExtentSourceComponent(),
+				ImpactFeedbackStyle,
+				CueView.Kind,
+				EffectiveCue,
+				RuntimeDecorativeFlashIntensityScale,
+				bRuntimeSimplifiedMotion);
+		}
 	}
-	else if (Cue.SourceEventType == EBattleEventType::EnemyPartHpEmptied)
+	RefreshComponentTickEnabled();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::ForceCompleteBattlePresentationCue()
+{
+	if (CuePlayback)
 	{
-		ScaleMultiplier = DestroyedPulseScale;
+		CuePlayback->ForceComplete();
+	}
+	if (ImpactFeedbackController)
+	{
+		ImpactFeedbackController->ResetImmediate(false);
+	}
+	RefreshComponentTickEnabled();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::ResetBattlePresentationFeedback()
+{
+	ResetCuePlayback();
+	bTargetable = false;
+	bDragPreviewActive = false;
+	bHoverProbeActive = false;
+	bActionPreviewPartActive = false;
+	DragPreviewState = EWacomFirstPersonCardDragTargetFeedbackState::None;
+	LastDragPredictionDebugInput = FWacomBattleEnemyPartDragPredictionDebugInput();
+	LastHoverPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
+	ActionPreviewPartView = FWacomBattleEnemyPartEntryViewData();
+	HoverReason = NAME_None;
+	HoverStableId = NAME_None;
+	HoverWorldTargetId.Invalidate();
+	HoverScreenPosition = FVector2D::ZeroVector;
+	ClearPredictionDisplay(TEXT("PresentationReset"));
+	ResetTargetPreviewPlayback(false);
+	RestoreBaseScaleIfNeeded();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::SetPresentationTargets(
+	USceneComponent* InFeedbackTarget,
+	USceneComponent* InImpactAnchor,
+	UPrimitiveComponent* InImpactExtentSource)
+{
+	if (FeedbackTargetComponent != InFeedbackTarget)
+	{
+		RestoreBaseScaleIfNeeded();
+		FeedbackTargetComponent = InFeedbackTarget;
+		ApplyPersistentScaleState();
+	}
+	const bool bTargetsChanged = ImpactAnchorComponent != InImpactAnchor
+		|| ImpactExtentSourceComponent != InImpactExtentSource;
+	if (bTargetsChanged && ImpactFeedbackController)
+	{
+		ImpactFeedbackController->ResetImmediate(true);
+	}
+	if (bTargetsChanged && TargetPreviewFeedbackController)
+	{
+		TargetPreviewFeedbackController->ResetImmediate(true);
+	}
+	ImpactAnchorComponent = InImpactAnchor;
+	ImpactExtentSourceComponent = InImpactExtentSource;
+}
+
+void UWacomBattleEnemyPartPresentationComponent::SetTargetPreviewFeedbackStyle(
+	UWacomBattleEnemyPartTargetPreviewStyle* InTargetPreviewStyle,
+	bool bInTargetPreviewFeedbackEnabled)
+{
+	if (TargetPreviewFeedbackStyle == InTargetPreviewStyle
+		&& bTargetPreviewFeedbackEnabled == bInTargetPreviewFeedbackEnabled)
+	{
+		return;
 	}
 
-	BeginScaleFeedback(ScaleMultiplier, Cue.Duration > 0.0f ? Cue.Duration : CueHoldSeconds);
+	ResetTargetPreviewPlayback(true);
+	TargetPreviewFeedbackStyle = InTargetPreviewStyle;
+	bTargetPreviewFeedbackEnabled = bInTargetPreviewFeedbackEnabled;
+}
+
+void UWacomBattleEnemyPartPresentationComponent::SetImpactFeedbackStyle(
+	UWacomBattleEnemyPartImpactStyle* InImpactStyle,
+	bool bInImpactFeedbackEnabled)
+{
+	if (ImpactFeedbackStyle != InImpactStyle
+		|| bImpactFeedbackEnabled != bInImpactFeedbackEnabled)
+	{
+		if (ImpactFeedbackController)
+		{
+			ImpactFeedbackController->ResetImmediate(true);
+		}
+		ImpactFeedbackStyle = InImpactStyle;
+		bImpactFeedbackEnabled = bInImpactFeedbackEnabled;
+	}
 }
 
 void UWacomBattleEnemyPartPresentationComponent::SetTargetableAffordance(bool bInTargetable)
@@ -141,6 +290,39 @@ void UWacomBattleEnemyPartPresentationComponent::SetDragTargetPreviewState(
 	bDragPreviewActive = true;
 	ApplyPersistentScaleState();
 	RefreshPredictionDisplay();
+
+	if (TargetPreviewPlayback
+		&& bTargetPreviewFeedbackEnabled
+		&& IsValid(TargetPreviewFeedbackStyle)
+		&& TargetPreviewFeedbackStyle->HasValidVisualAssets())
+	{
+		const EWacomBattleEnemyPartTargetPreviewKind PreviewKind =
+			PreviewState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
+				? EWacomBattleEnemyPartTargetPreviewKind::Valid
+				: EWacomBattleEnemyPartTargetPreviewKind::Invalid;
+		const UWacomBattleEnemyPartTargetPreviewStyle* Style = TargetPreviewFeedbackStyle;
+		TargetPreviewPlayback->Begin(
+			PreviewKind,
+			Style ? Style->EnterSeconds : 0.18f,
+			Style ? Style->ExitSeconds : 0.10f,
+			Style ? Style->PulsePeriodSeconds : 0.95f,
+			bRuntimeSimplifiedMotion);
+		if (TargetPreviewFeedbackController)
+		{
+			TargetPreviewFeedbackController->BeginOrUpdate(
+				*this,
+				ResolveImpactAnchorComponent(),
+				ResolveImpactExtentSourceComponent(),
+				Style,
+				TargetPreviewPlayback->GetView(),
+				RuntimeDecorativeFlashIntensityScale);
+		}
+	}
+	else
+	{
+		ResetTargetPreviewPlayback(false);
+	}
+	RefreshComponentTickEnabled();
 }
 
 void UWacomBattleEnemyPartPresentationComponent::ClearDragTargetPreviewState()
@@ -155,6 +337,11 @@ void UWacomBattleEnemyPartPresentationComponent::ClearDragTargetPreviewState()
 	LastDragPredictionDebugInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 	ApplyPersistentScaleState();
 	RefreshPredictionDisplay();
+	if (TargetPreviewPlayback)
+	{
+		TargetPreviewPlayback->BeginExit();
+	}
+	RefreshComponentTickEnabled();
 }
 
 void UWacomBattleEnemyPartPresentationComponent::SetHoverProbeState(
@@ -263,6 +450,62 @@ UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugV
 	View.LastCueType = LastCueType;
 	View.LastCueAmount = LastCueAmount;
 	View.CuePlayCount = CuePlayCount;
+	if (CuePlayback)
+	{
+		const FWacomBattleEnemyPartCuePlaybackView& CueView = CuePlayback->GetView();
+		View.ActiveCueKind = CueView.bActive
+			? FWacomBattleEnemyPartCuePlayback::KindToName(CueView.Kind)
+			: FName(TEXT("None"));
+		View.bCuePlaybackActive = CueView.bActive;
+		View.CuePlaybackProgress = CueView.Progress;
+		View.CuePlaybackDurationSeconds = CueView.DurationSeconds;
+	}
+	if (const USceneComponent* ImpactAnchor = ResolveImpactAnchorComponent())
+	{
+		View.bImpactAnchorReady = true;
+		View.ImpactAnchorName = FName(*ImpactAnchor->GetName());
+		View.ImpactAnchorWorldLocation = ImpactAnchor->GetComponentLocation();
+	}
+	else if (const AActor* Owner = GetOwner())
+	{
+		View.bImpactAnchorReady = true;
+		View.ImpactAnchorName = FName(*Owner->GetName());
+		View.ImpactAnchorWorldLocation = Owner->GetActorLocation();
+	}
+	View.ResolvedImpactStyleName = ImpactFeedbackStyle
+		? FName(*ImpactFeedbackStyle->GetName())
+		: NAME_None;
+	View.bImpactFeedbackEnabled = bImpactFeedbackEnabled;
+	if (ImpactFeedbackController)
+	{
+		const FWacomBattleEnemyPartImpactFeedbackDebugView& ImpactView =
+			ImpactFeedbackController->GetDebugView();
+		View.bImpactNiagaraReady = ImpactView.bNiagaraReady;
+		View.bImpactEffectActive = ImpactView.bEffectActive;
+		View.LastImpactIntensity = ImpactView.LastIntensity;
+		View.LastImpactTargetDiameterCentimeters = ImpactView.LastTargetDiameterCentimeters;
+		View.LastImpactEffectKind = ImpactView.LastEffectKind;
+		View.LastImpactSeed = ImpactView.LastSeed;
+		View.ImpactEffectPlayCount = ImpactView.EffectPlayCount;
+		View.ImpactSoundRequestCount = ImpactView.SoundRequestCount;
+		View.bImpactReducedMotion = ImpactView.bLastReducedMotion;
+	View.ImpactDecorativeIntensity = ImpactView.LastDecorativeIntensity;
+	}
+	View.ResolvedTargetPreviewStyleName = TargetPreviewFeedbackStyle
+		? FName(*TargetPreviewFeedbackStyle->GetName())
+		: NAME_None;
+	View.bTargetPreviewFeedbackEnabled = bTargetPreviewFeedbackEnabled;
+	if (TargetPreviewFeedbackController)
+	{
+		const FWacomBattleEnemyPartTargetPreviewFeedbackDebugView& PreviewView =
+			TargetPreviewFeedbackController->GetDebugView();
+		View.bTargetPreviewNiagaraReady = PreviewView.bNiagaraReady;
+		View.bTargetPreviewEffectActive = PreviewView.bEffectActive;
+		View.TargetPreviewAmount = PreviewView.Amount;
+		View.TargetPreviewPulse = PreviewView.Pulse;
+		View.TargetPreviewSizeCentimeters = PreviewView.TargetSizeCentimeters;
+		View.TargetPreviewActivationCount = PreviewView.ActivationCount;
+	}
 	View.DragPreviewState = DragPreviewState;
 	View.bDragPreviewActive = bDragPreviewActive;
 	View.LastDragPredictionDebugInput = LastDragPredictionDebugInput;
@@ -288,9 +531,57 @@ UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugV
 	return View;
 }
 
+void UWacomBattleEnemyPartPresentationComponent::TickComponent(
+	float DeltaTime,
+	ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (CuePlayback && CuePlayback->GetView().bActive)
+	{
+		const FWacomBattleEnemyPartCuePlaybackView CueView = CuePlayback->Tick(DeltaTime);
+		if (!CueView.bActive && ImpactFeedbackController)
+		{
+			ImpactFeedbackController->FinishNaturally();
+		}
+	}
+
+	if (TargetPreviewPlayback && TargetPreviewPlayback->GetView().bActive)
+	{
+		const FWacomBattleEnemyPartTargetPreviewPlaybackView PreviewView =
+			TargetPreviewPlayback->Tick(DeltaTime);
+		if (PreviewView.bActive)
+		{
+			if (bTargetPreviewFeedbackEnabled
+				&& IsValid(TargetPreviewFeedbackStyle)
+				&& TargetPreviewFeedbackController)
+			{
+				TargetPreviewFeedbackController->BeginOrUpdate(
+					*this,
+					ResolveImpactAnchorComponent(),
+					ResolveImpactExtentSourceComponent(),
+					TargetPreviewFeedbackStyle,
+					PreviewView,
+					RuntimeDecorativeFlashIntensityScale);
+			}
+		}
+		else if (TargetPreviewFeedbackController)
+		{
+			TargetPreviewFeedbackController->FinishNaturally();
+		}
+	}
+	RefreshComponentTickEnabled();
+}
+
 void UWacomBattleEnemyPartPresentationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	StopFeedbackTimer();
+	UnbindRuntimeSettings();
+	ResetBattlePresentationFeedback();
+	if (ImpactFeedbackController)
+	{
+		ImpactFeedbackController->ResetImmediate(true);
+	}
+	ResetTargetPreviewPlayback(true);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -312,6 +603,29 @@ USceneComponent* UWacomBattleEnemyPartPresentationComponent::ResolveFeedbackTarg
 		return FeedbackTargetComponent;
 	}
 
+	return ResolveVisualTargetComponent();
+}
+
+USceneComponent* UWacomBattleEnemyPartPresentationComponent::ResolveImpactAnchorComponent() const
+{
+	if (IsValid(ImpactAnchorComponent))
+	{
+		return ImpactAnchorComponent;
+	}
+
+	if (const AActor* Owner = GetOwner())
+	{
+		return Owner->GetRootComponent();
+	}
+	return nullptr;
+}
+
+UPrimitiveComponent* UWacomBattleEnemyPartPresentationComponent::ResolveImpactExtentSourceComponent() const
+{
+	if (IsValid(ImpactExtentSourceComponent))
+	{
+		return ImpactExtentSourceComponent;
+	}
 	return ResolveVisualTargetComponent();
 }
 
@@ -475,64 +789,138 @@ void UWacomBattleEnemyPartPresentationComponent::ApplyPersistentScaleState()
 {
 	if (bDragPreviewActive)
 	{
-		BeginScaleFeedback(DragTargetPreviewScale, 0.0f);
+		// Drag Preview uses the dedicated pixel lock frame. Suppress the broader
+		// targetable scale while the pointer owns a concrete part target.
+		RestoreBaseScaleIfNeeded();
 		return;
 	}
 	if (bTargetable)
 	{
-		BeginScaleFeedback(TargetableAffordanceScale, 0.0f);
+		ApplyPersistentScaleMultiplier(TargetableAffordanceScale);
 		return;
 	}
 	if (bHoverProbeActive)
 	{
-		BeginScaleFeedback(HoverProbeScale, 0.0f);
+		ApplyPersistentScaleMultiplier(HoverProbeScale);
 		return;
 	}
 	RestoreBaseScaleIfNeeded();
 }
 
-void UWacomBattleEnemyPartPresentationComponent::BeginScaleFeedback(
-	float ScaleMultiplier,
-	float HoldSeconds)
+void UWacomBattleEnemyPartPresentationComponent::ApplyPersistentScaleMultiplier(
+	float ScaleMultiplier)
 {
 	USceneComponent* FeedbackTarget = ResolveFeedbackTargetComponent();
 	if (!FeedbackTarget)
 	{
+		RestoreBaseScaleIfNeeded();
 		return;
 	}
 
 	if (!bHasCachedBaseScale || CachedFeedbackTarget.Get() != FeedbackTarget)
 	{
+		RestoreBaseScaleIfNeeded();
 		CachedFeedbackTarget = FeedbackTarget;
 		CachedBaseScale = FeedbackTarget->GetRelativeScale3D();
 		bHasCachedBaseScale = true;
 	}
 
 	FeedbackTarget->SetRelativeScale3D(CachedBaseScale * FMath::Max(1.0f, ScaleMultiplier));
-
-	if (HoldSeconds > 0.0f)
-	{
-		if (UWorld* World = GetWorld())
-		{
-			World->GetTimerManager().SetTimer(
-				FeedbackTimerHandle,
-				this,
-				&UWacomBattleEnemyPartPresentationComponent::ClearScaleFeedback,
-				HoldSeconds,
-				false);
-		}
-	}
 }
 
-void UWacomBattleEnemyPartPresentationComponent::ClearScaleFeedback()
+void UWacomBattleEnemyPartPresentationComponent::ResetCuePlayback()
 {
-	StopFeedbackTimer();
-	ApplyPersistentScaleState();
+	if (CuePlayback)
+	{
+		CuePlayback->Reset();
+	}
+	if (ImpactFeedbackController)
+	{
+		ImpactFeedbackController->ResetImmediate(false);
+	}
+	RefreshComponentTickEnabled();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::ResetTargetPreviewPlayback(bool bDestroyComponent)
+{
+	if (TargetPreviewPlayback)
+	{
+		TargetPreviewPlayback->Reset();
+	}
+	if (TargetPreviewFeedbackController)
+	{
+		TargetPreviewFeedbackController->ResetImmediate(bDestroyComponent);
+	}
+	RefreshComponentTickEnabled();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::RefreshComponentTickEnabled()
+{
+	const bool bCueActive = CuePlayback && CuePlayback->GetView().bActive;
+	const bool bTargetPreviewActive = TargetPreviewPlayback
+		&& TargetPreviewPlayback->GetView().bActive;
+	SetComponentTickEnabled(bCueActive || bTargetPreviewActive);
+}
+
+void UWacomBattleEnemyPartPresentationComponent::BindRuntimeSettings()
+{
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (!SettingsSubsystem)
+	{
+		return;
+	}
+
+	RuntimeSettingsChangedHandle = SettingsSubsystem->OnRuntimeSettingsChangedNative().AddUObject(
+		this,
+		&UWacomBattleEnemyPartPresentationComponent::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		SettingsSubsystem->GetCurrentSnapshot(),
+		EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomBattleEnemyPartPresentationComponent::UnbindRuntimeSettings()
+{
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	if (UWacomSettingsSubsystem* SettingsSubsystem = GameInstance
+		? GameInstance->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr)
+	{
+		SettingsSubsystem->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+	}
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	RuntimeDecorativeFlashIntensityScale =
+		FWacomPresentationAccessibilityPolicy::GetDecorativeFlashIntensityScale(
+			Snapshot.FlashEffectMode);
+	bRuntimeSimplifiedMotion =
+		FWacomPresentationAccessibilityPolicy::UsesSimplifiedMotion(Snapshot.UIMotionMode);
+
+	if (TargetPreviewPlayback && TargetPreviewPlayback->GetView().bActive)
+	{
+		const FWacomBattleEnemyPartTargetPreviewPlaybackView CurrentView =
+			TargetPreviewPlayback->GetView();
+		const UWacomBattleEnemyPartTargetPreviewStyle* Style = TargetPreviewFeedbackStyle;
+		TargetPreviewPlayback->Begin(
+			CurrentView.Kind,
+			Style ? Style->EnterSeconds : 0.18f,
+			Style ? Style->ExitSeconds : 0.10f,
+			Style ? Style->PulsePeriodSeconds : 0.95f,
+			bRuntimeSimplifiedMotion);
+	}
 }
 
 void UWacomBattleEnemyPartPresentationComponent::RestoreBaseScaleIfNeeded()
 {
-	StopFeedbackTimer();
 	if (bHasCachedBaseScale)
 	{
 		if (USceneComponent* FeedbackTarget = CachedFeedbackTarget.Get())
@@ -540,15 +928,9 @@ void UWacomBattleEnemyPartPresentationComponent::RestoreBaseScaleIfNeeded()
 			FeedbackTarget->SetRelativeScale3D(CachedBaseScale);
 		}
 	}
-}
-
-void UWacomBattleEnemyPartPresentationComponent::StopFeedbackTimer()
-{
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(FeedbackTimerHandle);
-	}
-	FeedbackTimerHandle = FTimerHandle();
+	CachedFeedbackTarget.Reset();
+	CachedBaseScale = FVector::OneVector;
+	bHasCachedBaseScale = false;
 }
 
 #undef LOCTEXT_NAMESPACE

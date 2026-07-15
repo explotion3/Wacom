@@ -26,7 +26,8 @@ public class WacomApp : ModuleRules
 			"WacomData",
 			"WacomBattle",
 			"WacomRun",
-			"Paper2D"
+			"Paper2D",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]

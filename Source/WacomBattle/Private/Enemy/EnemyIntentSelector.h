@@ -17,7 +17,6 @@ public:
 	static void RefreshIntentForPart(
 		FBattleState& State,
 		FRuntimeEnemyPart& Part,
-		bool bAdvanceSequence,
 		FBattleEventBus* Events = nullptr);
 	static void ApplySelectedIntent(
 		FRuntimeEnemyPart& Part,

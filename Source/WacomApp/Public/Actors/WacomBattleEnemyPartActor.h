@@ -19,6 +19,8 @@ class UWidgetComponent;
 class UPaperFlipbook;
 class UPaperSprite;
 class UWacomBattleEnemyPartVisualLayerComponent;
+class UWacomBattleEnemyPartImpactStyle;
+class UWacomBattleEnemyPartTargetPreviewStyle;
 class UWacomBattleEnemyPartPredictionWidget;
 class UWacomInteractionTargetComponent;
 
@@ -129,6 +131,38 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName FeedbackTargetName = NAME_None;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前部位是否具有可供世界命中特效使用的 ImpactAnchor。"))
+	bool bImpactAnchorReady = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 ImpactAnchor 组件名。"))
+	FName ImpactAnchorName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "ImpactAnchor 相对 HitBounds 中心的位置，单位：厘米。"))
+	FVector ImpactAnchorRelativeLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 ImpactAnchor 世界位置，单位：厘米。"))
+	FVector ImpactAnchorWorldLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前部位是否启用世界目标确认/伤害像素反馈。"))
+	bool bImpactFeedbackEnabled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "按 Part Override → Host Default 解析后的命中特效 Style。"))
+	FName ResolvedImpactStyleName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前部位是否启用拖卡世界目标像素预演。"))
+	bool bTargetPreviewFeedbackEnabled = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "按 Part Override → Host Default 解析后的拖卡目标预演 Style。"))
+	FName ResolvedTargetPreviewStyleName = NAME_None;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	bool bInteractionTargetConfigured = false;
 
@@ -202,24 +236,28 @@ public:
 	TArray<FWacomBattleEnemyPartVisualLayer> VisualLayers;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
-		meta = (ToolTip = "目标确认 cue 的缩放倍率。", ClampMin = "1.0", ClampMax = "2.0", UIMin = "1.0", UIMax = "1.3"))
-	float TargetConfirmPulseScale = 1.10f;
+		meta = (ToolTip = "世界命中特效锚点相对 HitBounds 中心的位置。单位：厘米；推荐按部位视觉中心微调，不影响命中、布局或战斗规则。"))
+	FVector ImpactAnchorRelativeLocation = FVector::ZeroVector;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
-		meta = (ToolTip = "伤害 cue 的缩放倍率。", ClampMin = "1.0", ClampMax = "2.0", UIMin = "1.0", UIMax = "1.4"))
-	float DamagePulseScale = 1.18f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback|Impact",
+		meta = (ToolTip = "是否为本部位启用 TargetConfirmed / Damage 世界像素命中反馈。关闭后仍消费语义 Cue，但不创建 Niagara 或播放命中声音。"))
+	bool bEnableImpactFeedback = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
-		meta = (ToolTip = "破坏 cue 的缩放倍率。", ClampMin = "1.0", ClampMax = "2.5", UIMin = "1.0", UIMax = "1.6"))
-	float DestroyedPulseScale = 1.32f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback|Impact",
+		meta = (ToolTip = "本部位专用的命中特效 Style。为空时使用 Host 的 DefaultImpactStyle；只影响表现。"))
+	TObjectPtr<UWacomBattleEnemyPartImpactStyle> ImpactStyleOverride = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback|Target Preview",
+		meta = (ToolTip = "是否为本部位启用拖卡世界目标像素锁定框。关闭后仍保留目标验证和预测 Badge，但不创建预演 Niagara。"))
+	bool bEnableTargetPreviewFeedback = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback|Target Preview",
+		meta = (ToolTip = "本部位专用的拖卡目标预演 Style。为空时使用 Host 的 DefaultTargetPreviewStyle；只影响表现。"))
+	TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle> TargetPreviewStyleOverride = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
 		meta = (ToolTip = "TargetSelect 中可选部位的轻量提示缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
 	float TargetableAffordanceScale = 1.06f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
-		meta = (ToolTip = "第一人称卡牌拖拽指向该部位时的轻量预览缩放倍率。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.2"))
-	float DragTargetPreviewScale = 1.08f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
 		meta = (ToolTip = "鼠标悬停该部位时的轻量探测缩放倍率。只表示当前 hover 目标，不影响战斗规则。", ClampMin = "1.0", ClampMax = "1.5", UIMin = "1.0", UIMax = "1.15"))
@@ -312,6 +350,26 @@ public:
 	FName AuthoringFeedbackTargetName = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 ImpactAnchor 是否有效。下一轮世界命中特效将以此位置作为首选生成点。"))
+	bool bAuthoringImpactAnchorReady = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 ImpactAnchor 组件名。"))
+	FName AuthoringImpactAnchorName = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前 ImpactAnchor 世界位置，单位：厘米。"))
+	FVector AuthoringImpactAnchorWorldLocation = FVector::ZeroVector;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前解析后的世界目标命中特效 Style；None 表示 Cue 仍会消费但没有 Niagara 表现。"))
+	FName AuthoringResolvedImpactStyleName = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "当前解析后的拖卡世界目标预演 Style；None 表示仍保留规则和预测 Badge，但没有像素锁定框。"))
+	FName AuthoringResolvedTargetPreviewStyleName = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
 		meta = (MultiLine = "true", ToolTip = "当前 PartActor 的一行诊断摘要缓存。手动执行刷新按钮或修改 Details 后会更新。"))
 	FString AuthoringDebugSummary;
 
@@ -320,6 +378,10 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
 	USceneComponent* GetVisualLayersRoot() const { return VisualLayersRoot; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part",
+		meta = (ToolTip = "返回该部位的世界命中特效锚点。只读；位置由 ImpactAnchorRelativeLocation 制作字段控制。"))
+	USceneComponent* GetImpactAnchorComponent() const { return ImpactAnchor; }
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Part")
 	UWacomInteractionTargetComponent* GetInteractionTargetComponent() const { return InteractionTargetComponent; }
@@ -360,6 +422,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "由 Host 调用：说明 Host 是否提供整体视觉。为 true 且本部位没有 VisualLayers 时，部位进入 HitOnly 命中区模式。"))
 	void SetHostVisualContext(bool bInHostVisualActive);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
+		meta = (ToolTip = "由 Host 调用：设置 Host 默认命中特效 Style。Part 的 ImpactStyleOverride 始终优先。只影响表现。"))
+	void SetHostImpactStyle(UWacomBattleEnemyPartImpactStyle* InHostImpactStyle);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
+		meta = (ToolTip = "由 Host 调用：设置 Host 默认拖卡目标预演 Style。Part 的 TargetPreviewStyleOverride 始终优先。只影响表现。"))
+	void SetHostTargetPreviewStyle(UWacomBattleEnemyPartTargetPreviewStyle* InHostTargetPreviewStyle);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Feedback",
+		meta = (ToolTip = "返回 Part Override → Host Default 解析后的命中特效 Style。"))
+	UWacomBattleEnemyPartImpactStyle* ResolveImpactStyle() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Feedback",
+		meta = (ToolTip = "返回 Part Override → Host Default 解析后的拖卡目标预演 Style。"))
+	UWacomBattleEnemyPartTargetPreviewStyle* ResolveTargetPreviewStyle() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "返回 Host 是否为该部位提供整体视觉语境。只影响视觉诊断，不影响 HitBounds 或 BattleSession。"))
@@ -439,6 +517,10 @@ private:
 	TObjectPtr<USceneComponent> VisualLayersRoot = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
+		meta = (AllowPrivateAccess = "true", ToolTip = "世界命中特效锚点。默认位于 HitBounds 中心；无碰撞且不参与目标身份或战斗规则。"))
+	TObjectPtr<USceneComponent> ImpactAnchor = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
 		meta = (AllowPrivateAccess = "true", ToolTip = "部位默认携带的通用交互目标身份组件。"))
 	TObjectPtr<UWacomInteractionTargetComponent> InteractionTargetComponent = nullptr;
 
@@ -447,7 +529,7 @@ private:
 	TObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> WorldTargetBridgeComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
-		meta = (AllowPrivateAccess = "true", ToolTip = "场景敌人部位表现组件，负责 cue 缩放、hover/拖卡预览、预测 Widget 和状态 Badge。"))
+		meta = (AllowPrivateAccess = "true", ToolTip = "场景敌人部位表现组件，负责语义 Cue 生命周期、hover/拖卡预览、预测 Widget 和状态 Badge。"))
 	TObjectPtr<UWacomBattleEnemyPartPresentationComponent> PresentationComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
@@ -457,6 +539,12 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Part",
 		meta = (AllowPrivateAccess = "true", ToolTip = "部位上方的只读先机预测 Widget。不要直接编辑内部组件，请改 Actor facade 字段。"))
 	TObjectPtr<UWidgetComponent> PredictionWidgetComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleEnemyPartImpactStyle> HostImpactStyle = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle> HostTargetPreviewStyle = nullptr;
 
 	bool bHostVisualContextActive = false;
 
