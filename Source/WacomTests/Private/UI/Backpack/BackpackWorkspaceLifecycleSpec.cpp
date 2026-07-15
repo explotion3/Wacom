@@ -10,6 +10,7 @@
 #include "Characters/CharacterDefinition.h"
 #include "RunSession.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/BackpackWorkspaceModelTestAccess.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
@@ -25,11 +26,13 @@ bool FWacomUIBackpackWorkspaceRunScopedLifecycleSpec::RunTest(const FString& Par
 	const FWacomBackpackWorkspaceStateLifecycleTestView View =
 		FWacomBackpackWorkspaceModelTestAccess::RunStateLifecycleScenario();
 	TestTrue(TEXT("Rebinding the same Run preserves manual layout"), View.bSameRunPreservedLayout);
-	TestTrue(TEXT("Rebinding the same Run preserves active zone"), View.bActiveZonePreservedForSameRun);
+	TestTrue(TEXT("Rebinding the same Run preserves expanded pile"), View.bExpandedPilePreservedForSameRun);
+	TestTrue(TEXT("Rebinding the same Run preserves pile layout"), View.bPileLayoutPreservedForSameRun);
 	TestTrue(TEXT("Snapshot reconcile prunes removed card layout"), View.bRemovedCardLayoutPruned);
 	TestTrue(TEXT("Snapshot reconcile does not invent layout for new card"), View.bNewCardHasNoManualLayout);
 	TestTrue(TEXT("Binding a new Run clears all old layouts"), View.bNewRunClearedLayouts);
-	TestTrue(TEXT("Binding a new Run clears old active zone"), View.bActiveZoneResetForNewRun);
+	TestTrue(TEXT("Binding a new Run clears old expanded pile"), View.bExpandedPileResetForNewRun);
+	TestTrue(TEXT("Binding a new Run clears old pile layout"), View.bPileLayoutResetForNewRun);
 	return true;
 }
 
@@ -62,8 +65,10 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(
 		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
-	TestEqual(TEXT("Fallback builds persistent flux and battle rack entries"),
-		FWacomBackpackScreenTestAccess::ZoneRackEntryCount(*Screen), 2);
+	const int32 ExpectedPileCount = UWacomBackpackScreenPresenter::BuildWorkspacePileViews(
+		Snapshot, EZoneKind::Backpack, FGuid(), false).Num();
+	TestEqual(TEXT("Fallback builds the Snapshot-derived embedded piles"),
+		FWacomBackpackScreenTestAccess::WorkspacePileCount(*Screen), ExpectedPileCount);
 	TestEqual(TEXT("Flux workspace is the deterministic initial active zone"),
 		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen), EZoneKind::Backpack);
 	TestEqual(TEXT("Initial workspace contains only active flux cards"),
@@ -82,17 +87,25 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);
 
 	FWacomBackpackScreenTestAccess::ActivateZone(*Screen, EZoneKind::BattleDeck);
-	TestTrue(TEXT("Zone switch clears screen-owned carry"),
+	TestFalse(TEXT("Target pile auto-expansion preserves screen-owned carry"),
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
-	TestFalse(TEXT("Zone switch releases screen-owned capture"),
+	TestTrue(TEXT("Target pile auto-expansion preserves carry capture"),
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);
-	TestEqual(TEXT("Rack activation switches the sole active workspace"),
+	TestEqual(TEXT("Pile expansion selects the sole expanded content source"),
 		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen), EZoneKind::BattleDeck);
-	TestEqual(TEXT("Battle workspace includes physical and read-only projected cards"),
+	TestEqual(TEXT("Unified workspace keeps flux cards beside expanded battle cards"),
 		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen),
-		Snapshot.BattleDeckPhysicalCards.Num() + Snapshot.BattleDeckProjectedCards.Num());
-	TestFalse(TEXT("Idle Workspace leaves Escape unhandled for CommonUI Back"),
+		Snapshot.Flux.ContentCards.Num()
+			+ Snapshot.BattleDeckPhysicalCards.Num()
+			+ Snapshot.BattleDeckProjectedCards.Num());
+	TestTrue(TEXT("Workspace handles Escape while carrying"),
 		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestTrue(TEXT("First Escape cancels carry before collapsing the pile"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
+	TestTrue(TEXT("Second Escape collapses the expanded pile"),
+		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestEqual(TEXT("Collapsed workspace returns to the flux interaction source"),
+		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen), EZoneKind::Backpack);
 	TestTrue(TEXT("Carry starts before layered Escape cancellation"),
 		FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(*Screen));
 	TestTrue(TEXT("Workspace handles Escape while carrying"),
@@ -203,6 +216,29 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 			TEXT("Retained card-face rendering resumes only after the CommonUI layer transition"),
 			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen)
 				.bCardFaceRetainedRenderingEnabled);
+		FWacomBackpackScreenTestAccess::ActivateZone(*FormalScreen, EZoneKind::Backpack);
+		FWacomBackpackScreenTestAccess::FlushDeferredWorkspaceCardFaceRender(*FormalScreen);
+		for (const float Opacity :
+			FWacomBackpackScreenTestAccess::WorkspaceCardRenderOpacities(*FormalScreen))
+		{
+			TestTrue(
+				TEXT("Zone switch redraw keeps every replacement card fully opaque"),
+				FMath::IsNearlyEqual(Opacity, 1.0f));
+		}
+		FWacomBackpackScreenTestAccess::DeactivateWorkspaceScreen(*FormalScreen);
+		FWacomBackpackScreenTestAccess::ActivateWorkspaceScreen(*FormalScreen);
+		FWacomBackpackScreenTestAccess::FlushDeferredWorkspaceCardFaceRender(*FormalScreen);
+		TestTrue(
+			TEXT("Reactivation restores static retained rendering without a Tick-based repair"),
+			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen)
+				.bCardFaceRetainedRenderingEnabled);
+		for (const float Opacity :
+			FWacomBackpackScreenTestAccess::WorkspaceCardRenderOpacities(*FormalScreen))
+		{
+			TestTrue(
+				TEXT("Reactivated Workspace cards remain fully opaque"),
+				FMath::IsNearlyEqual(Opacity, 1.0f));
+		}
 		TestTrue(TEXT("Formal WBP marquee keeps capture while crossing a card"),
 			FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(*FormalScreen));
 		TestTrue(TEXT("Formal WBP marquee completes when released over a card"),

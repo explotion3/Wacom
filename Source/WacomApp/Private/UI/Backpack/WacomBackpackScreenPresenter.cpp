@@ -49,68 +49,98 @@ FText UWacomBackpackScreenPresenter::BuildBatchDeleteSummaryText(int32 CardCount
 		FText::AsNumber(FMath::Max(0, TotalGoldReward)));
 }
 
-TArray<FWacomBackpackZoneRackEntryView> UWacomBackpackScreenPresenter::BuildZoneRackEntries(
+TArray<FWacomBackpackZonePileView> UWacomBackpackScreenPresenter::BuildWorkspacePileViews(
 	const FRunBackpackStorageSnapshot& Snapshot,
-	EZoneKind ActiveZone,
-	FGuid ActiveZoneOwnerInstanceId)
+	EZoneKind ExpandedZone,
+	FGuid ExpandedOwnerInstanceId,
+	bool bHasExpandedPile)
 {
-	const FGuid NormalizedActiveOwner = ActiveZone == EZoneKind::SpecialZone
-		? ActiveZoneOwnerInstanceId
-		: FGuid();
-	auto IsActive = [ActiveZone, NormalizedActiveOwner](EZoneKind Zone, FGuid OwnerInstanceId)
+	auto IsExpanded = [=](EZoneKind Zone, FGuid Owner)
 	{
-		const FGuid NormalizedOwner = Zone == EZoneKind::SpecialZone ? OwnerInstanceId : FGuid();
-		return Zone == ActiveZone && NormalizedOwner == NormalizedActiveOwner;
+		return bHasExpandedPile
+			&& Zone == ExpandedZone
+			&& (Zone != EZoneKind::SpecialZone || Owner == ExpandedOwnerInstanceId);
+	};
+	auto AddPreview = [](TArray<FWacomBackpackPilePreviewCardView>& Out,
+		const FRunStorageCardView& Card,
+		bool bOwner,
+		bool bProjected)
+	{
+		if (Out.Num() >= 3 || !Card.Instance.Definition)
+		{
+			return;
+		}
+		FWacomBackpackPilePreviewCardView Preview;
+		Preview.Definition = Card.Instance.Definition.Get();
+		Preview.bOwnerIdentity = bOwner;
+		Preview.bProjected = bProjected;
+		Out.Add(MoveTemp(Preview));
 	};
 
-	TArray<FWacomBackpackZoneRackEntryView> Entries;
-	FWacomBackpackZoneRackEntryView FluxEntry;
-	FluxEntry.Zone = EZoneKind::Backpack;
-	FluxEntry.Title = LOCTEXT("FluxRackTitle", "通量内容");
-	FluxEntry.CardCount = Snapshot.FluxContentCount;
-	FluxEntry.Capacity = Snapshot.FluxCapacity;
-	FluxEntry.bHasCapacity = true;
-	FluxEntry.bActive = IsActive(FluxEntry.Zone, FGuid());
-	Entries.Add(MoveTemp(FluxEntry));
-
-	FWacomBackpackZoneRackEntryView BattleEntry;
-	BattleEntry.Zone = EZoneKind::BattleDeck;
-	BattleEntry.Title = LOCTEXT("BattleRackTitle", "备战区");
-	BattleEntry.CardCount = Snapshot.BattleDeckPhysicalCount;
-	BattleEntry.Capacity = Snapshot.BattleDeckCapacity;
-	BattleEntry.bHasCapacity = true;
-	BattleEntry.bActive = IsActive(BattleEntry.Zone, FGuid());
-	Entries.Add(MoveTemp(BattleEntry));
-
-	for (const FRunSpecialStorageView& SpecialZone : Snapshot.SpecialZones)
+	TArray<FWacomBackpackZonePileView> Result;
+	FWacomBackpackZonePileView Battle;
+	Battle.Zone = EZoneKind::BattleDeck;
+	Battle.Title = LOCTEXT("WorkspaceBattlePile", "备战区");
+	Battle.CardCount = Snapshot.BattleDeckPhysicalCards.Num();
+	Battle.Capacity = Snapshot.BattleDeckCapacity;
+	Battle.ProjectedCount = Snapshot.BattleDeckProjectedCards.Num();
+	Battle.bHasCapacity = true;
+	Battle.bExpanded = IsExpanded(Battle.Zone, FGuid());
+	for (const FRunStorageCardView& Card : Snapshot.BattleDeckPhysicalCards)
 	{
-		if (!SpecialZone.OwnerCard.Instance.InstanceId.IsValid())
+		AddPreview(Battle.PreviewCards, Card, false, false);
+	}
+	if (!Snapshot.BattleDeckProjectedCards.IsEmpty())
+	{
+		if (Battle.PreviewCards.Num() >= 3)
+		{
+			Battle.PreviewCards.SetNum(2);
+		}
+		AddPreview(Battle.PreviewCards, Snapshot.BattleDeckProjectedCards[0], false, true);
+	}
+	Result.Add(MoveTemp(Battle));
+
+	for (const FRunSpecialStorageView& Special : Snapshot.SpecialZones)
+	{
+		const FGuid OwnerId = Special.OwnerCard.Instance.InstanceId;
+		if (!OwnerId.IsValid())
 		{
 			continue;
 		}
-		FWacomBackpackZoneRackEntryView SpecialEntry;
-		SpecialEntry.Zone = EZoneKind::SpecialZone;
-		SpecialEntry.OwnerInstanceId = SpecialZone.OwnerCard.Instance.InstanceId;
-		SpecialEntry.Title = SpecialZone.OwnerCard.Instance.Definition
-			? SpecialZone.OwnerCard.Instance.Definition->DisplayName
-			: LOCTEXT("UnknownSpecialRackTitle", "特殊存放区");
-		SpecialEntry.CardCount = SpecialZone.ContentCards.Num();
-		SpecialEntry.Capacity = SpecialZone.Capacity;
-		SpecialEntry.bHasCapacity = true;
-		SpecialEntry.bActive = IsActive(SpecialEntry.Zone, SpecialEntry.OwnerInstanceId);
-		Entries.Add(MoveTemp(SpecialEntry));
+		FWacomBackpackZonePileView Pile;
+		Pile.Zone = EZoneKind::SpecialZone;
+		Pile.OwnerInstanceId = OwnerId;
+		Pile.Title = Special.OwnerCard.Instance.Definition
+			? Special.OwnerCard.Instance.Definition->DisplayName
+			: LOCTEXT("UnknownSpecialPile", "特殊存放区");
+		Pile.CardCount = Special.ContentCards.Num();
+		Pile.Capacity = Special.Capacity;
+		Pile.bHasCapacity = true;
+		Pile.bExpanded = IsExpanded(Pile.Zone, OwnerId);
+		AddPreview(Pile.PreviewCards, Special.OwnerCard, true, false);
+		for (const FRunStorageCardView& Card : Special.ContentCards)
+		{
+			AddPreview(Pile.PreviewCards, Card, false, false);
+		}
+		Result.Add(MoveTemp(Pile));
 	}
 
-	if (Snapshot.BurdenCount > 0)
+	if (!Snapshot.BurdenCards.IsEmpty())
 	{
-		FWacomBackpackZoneRackEntryView BurdenEntry;
-		BurdenEntry.Zone = EZoneKind::BurdenZone;
-		BurdenEntry.Title = LOCTEXT("BurdenRackTitle", "负重区");
-		BurdenEntry.CardCount = Snapshot.BurdenCount;
-		BurdenEntry.bActive = IsActive(BurdenEntry.Zone, FGuid());
-		Entries.Add(MoveTemp(BurdenEntry));
+		FWacomBackpackZonePileView Burden;
+		Burden.Zone = EZoneKind::BurdenZone;
+		Burden.Title = LOCTEXT("WorkspaceBurdenPile", "负重区");
+		Burden.CardCount = Snapshot.BurdenCards.Num();
+		Burden.bMovable = false;
+		Burden.bWarning = true;
+		Burden.bExpanded = IsExpanded(Burden.Zone, FGuid());
+		for (const FRunStorageCardView& Card : Snapshot.BurdenCards)
+		{
+			AddPreview(Burden.PreviewCards, Card, false, false);
+		}
+		Result.Add(MoveTemp(Burden));
 	}
-	return Entries;
+	return Result;
 }
 
 FText UWacomBackpackScreenPresenter::BuildBattleDeckTitleText(int32 Count, int32 Capacity)

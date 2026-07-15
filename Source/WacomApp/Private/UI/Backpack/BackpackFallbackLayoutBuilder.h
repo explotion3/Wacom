@@ -27,10 +27,10 @@ struct FBackpackFallbackLayoutBuilderContext
 	TObjectPtr<UTextBlock>* GoldText = nullptr;
 	TObjectPtr<UTextBlock>* BackpackTitleText = nullptr;
 	TObjectPtr<UPanelWidget>* WorkspaceHost = nullptr;
-	TObjectPtr<UPanelWidget>* ZoneRackHost = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteTargetHost = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteConfirmHost = nullptr;
 	TObjectPtr<UButton>* ArrangeAllButton = nullptr;
+	TObjectPtr<UButton>* ResetPilePositionsButton = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteZoneHost = nullptr;
 	TObjectPtr<UPanelWidget>* BattleDeckZoneHost = nullptr;
 	TObjectPtr<UPanelWidget>* FluxContentDropTargetHost = nullptr;

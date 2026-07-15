@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "RunStateTypes.h"
-#include "UI/Backpack/WacomBackpackZoneRackEntryWidget.h"
+#include "UI/Backpack/WacomBackpackPilePreviewWidget.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomBackpackScreenPresenter.generated.h"
 
@@ -41,11 +41,12 @@ public:
 		bool bValidTarget = false,
 		bool bRejectedTarget = false);
 	static FText BuildBatchDeleteSummaryText(int32 CardCount, int32 TotalGoldReward);
-	/** 从只读 Snapshot 构造右侧常驻牌匣；同一时刻至多一个 entry 为 active。 */
-	static TArray<FWacomBackpackZoneRackEntryView> BuildZoneRackEntries(
+	/** 从同一只读 Snapshot 构造工作台内嵌牌堆；通量卡不生成牌堆。 */
+	static TArray<FWacomBackpackZonePileView> BuildWorkspacePileViews(
 		const FRunBackpackStorageSnapshot& Snapshot,
-		EZoneKind ActiveZone,
-		FGuid ActiveZoneOwnerInstanceId);
+		EZoneKind ExpandedZone,
+		FGuid ExpandedOwnerInstanceId,
+		bool bHasExpandedPile);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Backpack|Presentation")
 	static FText BuildBattleDeckTitleText(int32 Count, int32 Capacity);

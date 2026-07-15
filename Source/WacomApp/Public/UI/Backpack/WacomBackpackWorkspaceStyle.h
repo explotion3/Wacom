@@ -31,6 +31,34 @@ public:
 		meta = (ToolTip = "默认整理布局距工作台边缘的安全边距，单位为像素。推荐 32–96；会影响可用布局面积。"))
 	FVector2D WorkspacePadding = FVector2D(56.0f, 56.0f);
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "折叠区域牌堆的逻辑尺寸，单位为像素。默认 260×220；影响牌堆命中、吸附与通量整理避让，不缩放完整卡面。"))
+	FVector2D PileCollapsedSize = FVector2D(260.0f, 220.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "整堆移动释放后的吸附网格尺寸，单位为像素。推荐 8–24；只影响牌堆布局，不改变规则。"))
+	float PileSnapGridPixels = 16.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "牌堆标题拖柄距工作台边缘的最小安全距离，单位为像素。推荐 16–40；保证牌堆始终可找回。"))
+	float PileEdgeMarginPixels = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "自适应手风琴相邻卡牌最小露出宽度，单位为像素。默认 32；卡牌较多或可用宽度较小时使用。"))
+	float AccordionMinimumExposurePixels = 32.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "自适应手风琴相邻卡牌最大露出宽度，单位为像素。默认 72；不会改变卡牌固定渲染尺寸。"))
+	float AccordionMaximumExposurePixels = 72.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "自适应手风琴从最左到最右的最大总角度，单位为度。推荐 8–18；仅影响展开表现。"))
+	float AccordionMaximumAngleDegrees = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "展开牌堆中悬停卡牌的上抬距离，单位为像素。推荐 32–64；不缩放卡面。"))
+	float AccordionHoverLiftPixels = 48.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Carry",
 		meta = (ToolTip = "携带扇形从最左到最右的最大总角度，单位为度。推荐 24–48；卡牌较少时实际角度会自动收紧。"))
 	float FanMaximumAngleDegrees = 36.0f;
@@ -58,6 +86,18 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
 		meta = (ToolTip = "无效释放反馈持续时间，单位为秒。推荐 0.12–0.25；不改变失败事务的携带恢复语义。"))
 	float RejectedFeedbackSeconds = 0.16f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
+		meta = (ToolTip = "携带卡牌悬停在合法折叠牌堆后自动展开的延迟，单位为秒。推荐 0.25–0.5；离开或目标失效时取消。"))
+	float PileHoverExpandDelaySeconds = 0.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
+		meta = (ToolTip = "牌堆展开和收起的位移/角度动画时间，单位为秒。默认 0.18；简化动效模式会直接完成。"))
+	float PileExpandSeconds = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
+		meta = (ToolTip = "整堆释放后收敛到吸附位置的时间，单位为秒。默认 0.12；直接拖动阶段保持一比一跟随。"))
+	float PileSnapSeconds = 0.12f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Color",
 		meta = (ToolTip = "框选矩形和已选卡牌的主色。建议保持与背景有明显对比；只影响表现。"))

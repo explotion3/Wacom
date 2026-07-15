@@ -20,8 +20,10 @@ struct FWacomBackpackWorkspaceStateLifecycleTestView
 	bool bRemovedCardLayoutPruned = false;
 	bool bNewCardHasNoManualLayout = false;
 	bool bNewRunClearedLayouts = false;
-	bool bActiveZonePreservedForSameRun = false;
-	bool bActiveZoneResetForNewRun = false;
+	bool bExpandedPilePreservedForSameRun = false;
+	bool bPileLayoutPreservedForSameRun = false;
+	bool bExpandedPileResetForNewRun = false;
+	bool bPileLayoutResetForNewRun = false;
 };
 
 struct FWacomBackpackWorkspaceModelTestAccess
@@ -33,6 +35,10 @@ struct FWacomBackpackWorkspaceModelTestAccess
 		FVector2D CardSize,
 		FVector2D Spacing,
 		FVector2D Padding);
+	static TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> BuildAccordionLayout(
+		int32 CardCount,
+		FVector2D PileTopLeft,
+		FVector2D WorkspaceSize);
 	static FWacomBackpackWorkspaceResolvedLayoutTestView ResolveManualLayout(
 		FVector2D NormalizedPosition,
 		float AngleDegrees,

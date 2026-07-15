@@ -25,7 +25,7 @@ UI 不直接修改战斗或 Run 状态。Widget 读取 Snapshot、ViewData 或 V
 |---|---|---|
 | ExplorationHUD | `UWacomRunViewModelProvider -> UWacomRunViewModel` | 只读显示探索状态和交互提示 |
 | Run Map | `URunSession::BuildCurrentFloorMapSnapshot()` 经 App-private ViewData builder | `UWacomRunMapScreen` 只上报 Select / ConfirmTravel / Close；PlayerController-owned Flow 重验并调用唯一 Coordinator MapTravel seam |
-| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；中央 `Workspace` 是唯一选择/携带输入 owner，右侧 `ZoneRack` 与销毁目标只转发 Screen 已验证的批量释放意图；preview、批量提交、Toast 和 Confirm 都经私有 command flow / presentation helper 调用 RunSession、Toast 和 Confirm；旧 simultaneous-zone Host 仅保留只读 fallback，不再创建 UMG DragDrop owner；负重区只渲染 Run snapshot 中的卡牌；卡牌详情面板生命周期和定位由 App-private detail controller 承接 |
+| Backpack | `URunSession::BuildBackpackStorageSnapshot()` 与 Run ViewModel 标量 | `UWacomBackpackScreen` 接收 UI 意图；统一 `Workspace` 是卡牌、框选、携带和牌堆移动的唯一输入 owner，备战/特殊/负重以被动内嵌牌堆消费 Scene ViewData；销毁目标、preview、批量提交、Toast 和 Confirm 都经 Screen 私有 command flow / presentation helper 进入 RunSession；旧 Zone Host 只保留只读 fallback，不再创建 UMG DragDrop owner；卡牌详情生命周期和定位由 App-private detail controller 承接 |
 | Shop | `URunSession::BuildCurrentShopSnapshot()` | `UWacomShopScreen` 接收 UI 意图，私有 flow 编排购买、关闭访问和 Toast |
 | RunEvent | `URunSession::BuildCurrentRunEventSnapshot()` | `UWacomRunEventScreen` 接收 UI 意图，私有 flow 编排选项提交、支付、关闭和 Toast |
 | Battle | `FBattleSnapshot`、`FBattleEvent`、Battle ViewData | `UBattleHUD` 是唯一战斗 UI 命令出口 |
@@ -95,19 +95,21 @@ Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.
 
 ### Backpack Workspace 输入与事务流
 
-正式结构是一个中央 `UWacomBackpackWorkspaceWidget` 加右侧常驻 `UWacomBackpackZoneRackWidget`。`FRunBackpackStorageSnapshot` 每次只投影一个活动区域；卡牌按 InstanceId reconcile，BattleDeck projection 只读且不进入选择。
+正式结构是一个填满 GameMenu 的 `UWacomBackpackWorkspaceWidget`。通量区就是自由工作台；备战区、特殊区和非空负重区由 Scene Reconciler 投影为工作台内嵌牌堆，同时只展开一个。右侧 Rack 运行时链路、类和 WBP 已删除。卡牌按 InstanceId reconcile；BattleDeck projection 只读且不进入选择，SpecialZone 主卡只作为缩略身份封面，展开区只生成内容卡。
 
 ```text
 Run Snapshot / revision
   -> BackpackScreen coordinator
-  -> passive Workspace / ZoneRack / DeleteConfirm
+  -> passive Workspace scene / ZonePile / PilePreview / DeleteConfirm
   -> selection / carry intent
   -> BackpackCommandFlow
   -> Run atomic batch command
   -> one notification -> reconcile
 ```
 
-Screen 持有输入租约和纯 interaction model；Workspace 统一处理框选、拖动阈值、滚轮、按键和鼠标捕获；DeckCard 在 Workspace 模式只发指针意图，不创建独立 `UDragDropOperation`。首次显示时 Workspace 用一次性 ActiveTimer 等待 Slate 几何连续稳定，再以同一 Snapshot 重排；稳定前隐藏 CardCanvas，最终布局与交互表现落定后在下一次 Slate 更新补绘静态卡面，且不会丢失构造前请求。GameMenu CommonUI 过渡期间，Screen 根据 PrimaryLayout 的层过渡事件让卡面 Retainer 暂停缓存并直绘，过渡结束后恢复 retained rendering 并请求最终重绘，防止淡入 Alpha 被烘入静态缓存；该路径无固定延迟和空闲 Tick。背包采用分层 Back：携带、框选或待决卡牌按压进行中时，Workspace 消费第一次 Escape 并取消当前指针事务；空闲时不消费 Escape，由 Screen/CommonUI Back 关闭；B 始终由 Screen 直接关闭并走统一清理。确认框拥有独立焦点，Escape 优先取消确认。区域切换、Deactivate、Destruct、不同 Run 或使携带身份失效的 Snapshot 会清选择/携带并释放捕获。确认框暂停不可变 carry snapshot，取消或提交失败原样恢复；成功才退出携带。
+Screen 持有输入租约和纯 interaction model；Workspace 用互斥的 `Idle / CardPress / Marquee / Carry / PileMove / Suspended` 统一处理单来源框选、拖动阈值、滚轮、按键、标题拖堆和鼠标捕获；DeckCard 只发指针意图，不创建独立 `UDragDropOperation`。牌堆位置、ZOrder、单一展开项和通量自由布局保存在 GameInstance Workspace State Store：同一 Run 重开保留，新 Run 清空，不进入 SaveGame。普通牌堆只允许标题拖动，释放按 16px 网格/边缘吸附并保证标题不重叠；通量整理避让牌堆、固定负重区和销毁区。展开使用固定 `220×320` 卡牌和 32–72px 自适应手风琴，Full Motion 只动画位置/角度，Simplified 立即完成；Hover 只上抬和置顶，不缩放或改透明度。携带在合法折叠目标停留约 0.35s 后自动展开，失败保持完整携带，不产生部分提交。
+
+正式 Screen 直接 Fill 全局 `1920×1080` DPI 设计空间，不再拥有固定 `1600×900` 子画布或第二套全屏缩放；Header Auto、Workspace Fill、右下 DeleteTarget 覆盖层组成唯一布局合同。背包卡面继续固定 `CardFaceScaleBox=0.75` 与 `CardRenderSize=220×320`，不消费 Battle/Run first-person `PresentationScale`。首次显示时 Workspace 用一次性 ActiveTimer 等待 Slate 几何连续稳定，再以同一 Snapshot 重排；稳定前隐藏统一 Canvas，最终布局与交互表现落定后在下一次 Slate 更新补绘静态卡面。GameMenu CommonUI 过渡期间，Screen 根据 PrimaryLayout 层过渡事件暂停卡面 Retainer 缓存并直绘，结束后恢复和补绘，避免把淡入 Alpha 烘入静态缓存。背包采用分层 Back：Escape 依次取消确认或瞬态交互、收起展开牌堆，再交给 CommonUI 关闭；B 始终直接关闭并统一清理。确认框暂停不可变 carry snapshot，取消或提交失败原样恢复；成功才退出相应携带项。
 
 `UWacomShopScreen` 保留 Screen 生命周期、WBP 绑定、cached shop snapshot、商品行创建和购买意图入口；shop snapshot revision / offer row signature dirty gate 由 `FWacomShopRefreshGate` 承接，商品行的 identity reconcile、排序和移除由 `FWacomShopOfferRowListReconciler` 承接，金币变化仍通过 `CurrentGold` 进入 signature 来刷新购买可用状态。
 

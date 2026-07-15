@@ -9,6 +9,8 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
@@ -226,6 +228,22 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		}
 	}
 
+	if (Context.ResetPilePositionsButton && !*Context.ResetPilePositionsButton)
+	{
+		*Context.ResetPilePositionsButton = WidgetTree->ConstructWidget<UButton>(
+			UButton::StaticClass(), TEXT("ResetPilePositionsButton"));
+		UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		Label->SetText(LOCTEXT("ResetPiles", "重置牌堆位置"));
+		Label->SetJustification(ETextJustify::Center);
+		(*Context.ResetPilePositionsButton)->AddChild(Label);
+		if (UHorizontalBoxSlot* ButtonSlot = TopRow->AddChildToHorizontalBox(
+			Context.ResetPilePositionsButton->Get()))
+		{
+			ButtonSlot->SetPadding(FMargin(8.f, 4.f));
+			ButtonSlot->SetVerticalAlignment(VAlign_Center);
+		}
+	}
+
 	if (Context.CloseButton && !*Context.CloseButton)
 	{
 		*Context.CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CloseButton"));
@@ -258,48 +276,37 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 	if (UHorizontalBoxSlot* Slot = WorkspaceRow->AddChildToHorizontalBox(WorkspaceBorder))
 	{
 		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		Slot->SetPadding(FMargin(0.f, 0.f, 12.f, 0.f));
 	}
+	UOverlay* WorkspaceOverlay = WidgetTree->ConstructWidget<UOverlay>(
+		UOverlay::StaticClass(), TEXT("WorkspaceOverlay"));
+	WorkspaceBorder->AddChild(WorkspaceOverlay);
 	if (Context.WorkspaceHost)
 	{
-		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("WorkspaceHost"));
-		WorkspaceBorder->AddChild(Host);
-		*Context.WorkspaceHost = Host;
-	}
-
-	UBorder* RackBorder = CreateBackpackSectionBorder(
-		WidgetTree,
-		TEXT("ZoneRackBorder"),
-		FLinearColor(0.07f, 0.09f, 0.13f, 0.98f));
-	USizeBox* RackSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("ZoneRackSize"));
-	RackSize->SetWidthOverride(250.f);
-	RackSize->AddChild(RackBorder);
-	if (UHorizontalBoxSlot* Slot = WorkspaceRow->AddChildToHorizontalBox(RackSize))
-	{
-		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-	}
-	UVerticalBox* RackColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ZoneRackColumn"));
-	RackBorder->AddChild(RackColumn);
-	if (Context.ZoneRackHost)
-	{
-		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ZoneRackHost"));
-		if (UVerticalBoxSlot* RackHostSlot = RackColumn->AddChildToVerticalBox(Host))
+		UOverlay* Host = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("WorkspaceHost"));
+		if (UOverlaySlot* WorkspaceSlot = WorkspaceOverlay->AddChildToOverlay(Host))
 		{
-			RackHostSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			WorkspaceSlot->SetHorizontalAlignment(HAlign_Fill);
+			WorkspaceSlot->SetVerticalAlignment(VAlign_Fill);
 		}
-		*Context.ZoneRackHost = Host;
+		*Context.WorkspaceHost = Host;
 	}
 	if (Context.DeleteTargetHost)
 	{
+		USizeBox* DeleteSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(), TEXT("DeleteTargetSize"));
+		DeleteSize->SetWidthOverride(220.f);
+		DeleteSize->SetHeightOverride(120.f);
+		if (UOverlaySlot* DeleteOverlaySlot = WorkspaceOverlay->AddChildToOverlay(DeleteSize))
+		{
+			DeleteOverlaySlot->SetHorizontalAlignment(HAlign_Right);
+			DeleteOverlaySlot->SetVerticalAlignment(VAlign_Bottom);
+			DeleteOverlaySlot->SetPadding(FMargin(0.f, 0.f, 12.f, 12.f));
+		}
 		UBorder* DeleteBorder = CreateBackpackSectionBorder(
 			WidgetTree,
 			TEXT("DeleteTargetBorder"),
 			FLinearColor(0.32f, 0.07f, 0.07f, 0.95f));
-		if (UVerticalBoxSlot* DeleteSlot = RackColumn->AddChildToVerticalBox(DeleteBorder))
-		{
-			DeleteSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-			DeleteSlot->SetPadding(FMargin(0.f, 8.f, 0.f, 0.f));
-		}
+		DeleteSize->AddChild(DeleteBorder);
 		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("DeleteTargetHost"));
 		DeleteBorder->AddChild(Host);
 		Host->AddChildToVerticalBox(CreateBackpackText(WidgetTree, TEXT("DeleteTargetText"), LOCTEXT("DeleteTarget", "销毁卡牌"), 16));

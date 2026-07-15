@@ -17,9 +17,19 @@ struct WACOMAPP_API FWacomBackpackWorkspaceStateStore
 	void Reset();
 
 	URunSession* GetBoundRun() const { return BoundRun.Get(); }
-	bool HasActiveZone() const { return ActiveZone.IsSet(); }
-	FWacomBackpackZoneKey GetActiveZone() const;
-	void SetActiveZone(const FWacomBackpackZoneKey& ZoneKey);
+	const TOptional<FWacomBackpackZoneKey>& GetExpandedPile() const { return ExpandedPile; }
+	bool IsPileExpanded(const FWacomBackpackZoneKey& ZoneKey) const;
+	void SetExpandedPile(const TOptional<FWacomBackpackZoneKey>& ZoneKey);
+	void ToggleExpandedPile(const FWacomBackpackZoneKey& ZoneKey);
+
+	const FWacomBackpackWorkspacePileLayoutEntry* FindPileLayout(
+		const FWacomBackpackZoneKey& ZoneKey) const;
+	void SetPileLayout(
+		const FWacomBackpackZoneKey& ZoneKey,
+		const FWacomBackpackWorkspacePileLayoutEntry& Entry);
+	int32 BringPileToFront(const FWacomBackpackZoneKey& ZoneKey);
+	void ResetPileLayouts();
+	void ReconcilePiles(TConstArrayView<FWacomBackpackZoneKey> VisiblePileKeys);
 
 	const FWacomBackpackWorkspaceLayoutEntry* FindLayout(
 		const FWacomBackpackZoneKey& ZoneKey,
@@ -39,8 +49,10 @@ struct WACOMAPP_API FWacomBackpackWorkspaceStateStore
 
 private:
 	TWeakObjectPtr<URunSession> BoundRun;
-	TOptional<FWacomBackpackZoneKey> ActiveZone;
+	TOptional<FWacomBackpackZoneKey> ExpandedPile;
 	TMap<FWacomBackpackZoneKey, TMap<FGuid, FWacomBackpackWorkspaceLayoutEntry>> LayoutsByZone;
+	TMap<FWacomBackpackZoneKey, FWacomBackpackWorkspacePileLayoutEntry> PileLayouts;
+	int32 NextPileLayerRank = 1;
 };
 
 /** 当前 GameInstance 内唯一的背包工作台瞬态状态 owner；不序列化。 */

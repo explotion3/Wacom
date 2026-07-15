@@ -18,16 +18,25 @@ bool FWacomBackpackWorkspaceInteractionModel::IsMovable(FGuid InstanceId) const
 	return Card && Card->bMovable;
 }
 
-void FWacomBackpackWorkspaceInteractionModel::ReplaceSelection(
-	TConstArrayView<FGuid> InstanceIds)
+void FWacomBackpackWorkspaceInteractionModel::ReplaceSelection(TConstArrayView<FGuid> InstanceIds)
 {
 	Selection.OrderedSelectedInstanceIds.Reset();
+	Selection.bHasSourceZone = false;
 	for (const FGuid InstanceId : InstanceIds)
 	{
-		if (IsMovable(InstanceId) && !Selection.OrderedSelectedInstanceIds.Contains(InstanceId))
+		const FWacomBackpackWorkspaceCardHitRecord* Card = FindCard(InstanceId);
+		if (!Card || !Card->bMovable
+			|| (Selection.bHasSourceZone && !(Card->SourceZone == Selection.SourceZone))
+			|| Selection.OrderedSelectedInstanceIds.Contains(InstanceId))
 		{
-			Selection.OrderedSelectedInstanceIds.Add(InstanceId);
+			continue;
 		}
+		if (!Selection.bHasSourceZone)
+		{
+			Selection.SourceZone = Card->SourceZone;
+			Selection.bHasSourceZone = true;
+		}
+		Selection.OrderedSelectedInstanceIds.Add(InstanceId);
 	}
 	Selection.AnchorInstanceId = Selection.OrderedSelectedInstanceIds.IsEmpty()
 		? FGuid()
@@ -39,8 +48,14 @@ void FWacomBackpackWorkspaceInteractionModel::NormalizeSelection()
 	Selection.OrderedSelectedInstanceIds.RemoveAll(
 		[this](FGuid InstanceId)
 		{
-			return !IsMovable(InstanceId);
+			const FWacomBackpackWorkspaceCardHitRecord* Card = FindCard(InstanceId);
+			return !Card || !Card->bMovable
+				|| (Selection.bHasSourceZone && !(Card->SourceZone == Selection.SourceZone));
 		});
+	if (Selection.OrderedSelectedInstanceIds.IsEmpty())
+	{
+		Selection.bHasSourceZone = false;
+	}
 	if (!Selection.OrderedSelectedInstanceIds.Contains(Selection.AnchorInstanceId))
 	{
 		Selection.AnchorInstanceId = Selection.OrderedSelectedInstanceIds.IsEmpty()
@@ -50,28 +65,35 @@ void FWacomBackpackWorkspaceInteractionModel::NormalizeSelection()
 }
 
 void FWacomBackpackWorkspaceInteractionModel::ReconcileCards(
-	const FWacomBackpackZoneKey& InActiveZone,
 	TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards)
 {
-	const bool bZoneChanged = !(ActiveZone == InActiveZone);
-	if (bZoneChanged)
-	{
-		CancelTransientState();
-	}
-	ActiveZone = InActiveZone;
 	AvailableCards = TArray<FWacomBackpackWorkspaceCardHitRecord>(Cards);
 	NormalizeSelection();
-
 	if (IsCarrying())
 	{
-		const bool bCarryInvalid = !(Carry.SourceZone == ActiveZone)
-			|| Carry.RemainingInstanceIds.ContainsByPredicate(
-				[this](FGuid InstanceId) { return !IsMovable(InstanceId); });
+		const bool bCarryInvalid = Carry.RemainingInstanceIds.ContainsByPredicate(
+			[this](FGuid InstanceId)
+			{
+				const FWacomBackpackWorkspaceCardHitRecord* Card = FindCard(InstanceId);
+				return !Card || !Card->bMovable || !(Card->SourceZone == Carry.SourceZone);
+			});
 		if (bCarryInvalid)
 		{
 			CancelTransientState();
 		}
 	}
+}
+
+void FWacomBackpackWorkspaceInteractionModel::ReconcileCards(
+	const FWacomBackpackZoneKey& InActiveZone,
+	TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards)
+{
+	TArray<FWacomBackpackWorkspaceCardHitRecord> Normalized(Cards);
+	for (FWacomBackpackWorkspaceCardHitRecord& Card : Normalized)
+	{
+		Card.SourceZone = InActiveZone;
+	}
+	ReconcileCards(Normalized);
 }
 
 void FWacomBackpackWorkspaceInteractionModel::ClickCard(FGuid InstanceId, bool bControlDown)
@@ -80,15 +102,26 @@ void FWacomBackpackWorkspaceInteractionModel::ClickCard(FGuid InstanceId, bool b
 	{
 		return;
 	}
-	if (!bControlDown)
+	const FWacomBackpackWorkspaceCardHitRecord* Clicked = FindCard(InstanceId);
+	if (!Clicked)
+	{
+		return;
+	}
+	if (!bControlDown || (Selection.bHasSourceZone && !(Selection.SourceZone == Clicked->SourceZone)))
 	{
 		ReplaceSelection(MakeArrayView(&InstanceId, 1));
 		return;
+	}
+	if (!Selection.bHasSourceZone)
+	{
+		Selection.SourceZone = Clicked->SourceZone;
+		Selection.bHasSourceZone = true;
 	}
 	if (Selection.OrderedSelectedInstanceIds.Remove(InstanceId) == 0)
 	{
 		Selection.OrderedSelectedInstanceIds.Add(InstanceId);
 	}
+	NormalizeSelection();
 	Selection.AnchorInstanceId = Selection.OrderedSelectedInstanceIds.IsEmpty()
 		? FGuid()
 		: InstanceId;
@@ -104,10 +137,27 @@ void FWacomBackpackWorkspaceInteractionModel::ClickBlank()
 
 void FWacomBackpackWorkspaceInteractionModel::BeginMarquee(FVector2D Start, bool bControlDown)
 {
-	if (IsCarrying())
+	BeginMarquee(
+		Selection.bHasSourceZone ? Selection.SourceZone : FWacomBackpackZoneKey::Make(EZoneKind::Backpack),
+		Start,
+		bControlDown);
+}
+
+void FWacomBackpackWorkspaceInteractionModel::BeginMarquee(
+	const FWacomBackpackZoneKey& SourceZone,
+	FVector2D Start,
+	bool bControlDown)
+{
+	if (IsCarrying() || IsPileMoving())
 	{
 		return;
 	}
+	if (!Selection.bHasSourceZone || !(Selection.SourceZone == SourceZone))
+	{
+		Selection = FWacomBackpackWorkspaceSelectionState();
+	}
+	Selection.SourceZone = SourceZone;
+	Selection.bHasSourceZone = true;
 	Selection.MarqueeStart = Start;
 	Selection.MarqueeCurrent = Start;
 	Selection.MarqueeMode = bControlDown
@@ -116,6 +166,7 @@ void FWacomBackpackWorkspaceInteractionModel::BeginMarquee(FVector2D Start, bool
 	Selection.bMarqueeActive = true;
 	MarqueeStartSelection = Selection.OrderedSelectedInstanceIds;
 	bMouseCaptured = true;
+	Mode = EWacomBackpackWorkspaceInteractionMode::Marquee;
 }
 
 void FWacomBackpackWorkspaceInteractionModel::UpdateMarquee(FVector2D Current)
@@ -141,14 +192,13 @@ void FWacomBackpackWorkspaceInteractionModel::CompleteMarquee()
 	TArray<FGuid> Hits;
 	for (const FWacomBackpackWorkspaceCardHitRecord& Card : AvailableCards)
 	{
-		if (Card.bMovable
+		if (Card.bMovable && Selection.bHasSourceZone && Card.SourceZone == Selection.SourceZone
 			&& Card.CardCenter.X >= Minimum.X && Card.CardCenter.X <= Maximum.X
 			&& Card.CardCenter.Y >= Minimum.Y && Card.CardCenter.Y <= Maximum.Y)
 		{
 			Hits.Add(Card.InstanceId);
 		}
 	}
-
 	if (Selection.MarqueeMode == EWacomBackpackSelectionMode::Replace)
 	{
 		ReplaceSelection(Hits);
@@ -168,9 +218,18 @@ void FWacomBackpackWorkspaceInteractionModel::CompleteMarquee()
 	Selection.bMarqueeActive = false;
 	MarqueeStartSelection.Reset();
 	bMouseCaptured = false;
+	Mode = EWacomBackpackWorkspaceInteractionMode::Idle;
 }
 
 void FWacomBackpackWorkspaceInteractionModel::SelectAllMovable()
+{
+	SelectAllMovable(Selection.bHasSourceZone
+		? Selection.SourceZone
+		: FWacomBackpackZoneKey::Make(EZoneKind::Backpack));
+}
+
+void FWacomBackpackWorkspaceInteractionModel::SelectAllMovable(
+	const FWacomBackpackZoneKey& SourceZone)
 {
 	if (IsCarrying())
 	{
@@ -179,7 +238,7 @@ void FWacomBackpackWorkspaceInteractionModel::SelectAllMovable()
 	TArray<FGuid> MovableIds;
 	for (const FWacomBackpackWorkspaceCardHitRecord& Card : AvailableCards)
 	{
-		if (Card.bMovable)
+		if (Card.bMovable && Card.SourceZone == SourceZone)
 		{
 			MovableIds.Add(Card.InstanceId);
 		}
@@ -187,12 +246,61 @@ void FWacomBackpackWorkspaceInteractionModel::SelectAllMovable()
 	ReplaceSelection(MovableIds);
 }
 
+void FWacomBackpackWorkspaceInteractionModel::SetCardPressActive(bool bActive)
+{
+	if (!IsCarrying() && !IsMarqueeActive() && !IsPileMoving())
+	{
+		Mode = bActive
+			? EWacomBackpackWorkspaceInteractionMode::CardPress
+			: EWacomBackpackWorkspaceInteractionMode::Idle;
+	}
+}
+
+bool FWacomBackpackWorkspaceInteractionModel::BeginPileMove(
+	const FWacomBackpackZoneKey& Zone,
+	FVector2D PointerStart,
+	FVector2D PileStart)
+{
+	if (!Zone.IsValid() || IsCarrying() || IsMarqueeActive())
+	{
+		return false;
+	}
+	Selection = FWacomBackpackWorkspaceSelectionState();
+	PileMove = FWacomBackpackWorkspacePileMoveState();
+	PileMove.Zone = Zone;
+	PileMove.PointerStart = PointerStart;
+	PileMove.PileStart = PileStart;
+	PileMove.CurrentPosition = PileStart;
+	PileMove.bActive = true;
+	bMouseCaptured = true;
+	Mode = EWacomBackpackWorkspaceInteractionMode::PileMove;
+	return true;
+}
+
+void FWacomBackpackWorkspaceInteractionModel::UpdatePileMove(FVector2D PointerPosition)
+{
+	if (PileMove.bActive)
+	{
+		PileMove.CurrentPosition = PileMove.PileStart + (PointerPosition - PileMove.PointerStart);
+	}
+}
+
+FWacomBackpackWorkspacePileMoveState FWacomBackpackWorkspaceInteractionModel::CompletePileMove()
+{
+	const FWacomBackpackWorkspacePileMoveState Completed = PileMove;
+	PileMove = FWacomBackpackWorkspacePileMoveState();
+	bMouseCaptured = false;
+	Mode = EWacomBackpackWorkspaceInteractionMode::Idle;
+	return Completed;
+}
+
 bool FWacomBackpackWorkspaceInteractionModel::BeginCarry(
 	FGuid DraggedInstanceId,
 	FVector2D PointerPosition,
 	uint64 SourceStorageRevision)
 {
-	if (IsCarrying() || !IsMovable(DraggedInstanceId))
+	const FWacomBackpackWorkspaceCardHitRecord* Dragged = FindCard(DraggedInstanceId);
+	if (IsCarrying() || !Dragged || !Dragged->bMovable)
 	{
 		return false;
 	}
@@ -217,7 +325,6 @@ bool FWacomBackpackWorkspaceInteractionModel::BeginCarry(
 	{
 		return false;
 	}
-
 	Carry = FWacomBackpackWorkspaceCarryState();
 	Carry.RemainingInstanceIds = MoveTemp(Ordered);
 	Carry.DefaultIndex = Carry.RemainingInstanceIds.Num() - 1;
@@ -225,10 +332,11 @@ bool FWacomBackpackWorkspaceInteractionModel::BeginCarry(
 	Carry.PointerPosition = PointerPosition;
 	Carry.bInitialReleaseGuardArmed = true;
 	Carry.bMouseCaptured = true;
-	Carry.SourceZone = ActiveZone;
+	Carry.SourceZone = Dragged->SourceZone;
 	Carry.SourceStorageRevision = SourceStorageRevision;
 	bMouseCaptured = true;
 	Selection.bMarqueeActive = false;
+	Mode = EWacomBackpackWorkspaceInteractionMode::Carry;
 	return true;
 }
 
@@ -248,9 +356,7 @@ void FWacomBackpackWorkspaceInteractionModel::StepCurrentByWheel(float WheelDelt
 	}
 	const int32 Direction = WheelDelta > 0.0f ? -1 : 1;
 	Carry.CurrentIndex = FMath::Clamp(
-		Carry.CurrentIndex + Direction,
-		0,
-		Carry.RemainingInstanceIds.Num() - 1);
+		Carry.CurrentIndex + Direction, 0, Carry.RemainingInstanceIds.Num() - 1);
 }
 
 void FWacomBackpackWorkspaceInteractionModel::NotifyReleaseGestureStarted()
@@ -261,8 +367,7 @@ void FWacomBackpackWorkspaceInteractionModel::NotifyReleaseGestureStarted()
 	}
 }
 
-FWacomBackpackWorkspaceReleaseIntent FWacomBackpackWorkspaceInteractionModel::BuildReleaseIntent(
-	bool bReleaseAll)
+FWacomBackpackWorkspaceReleaseIntent FWacomBackpackWorkspaceInteractionModel::BuildReleaseIntent(bool bReleaseAll)
 {
 	FWacomBackpackWorkspaceReleaseIntent Intent;
 	Intent.bReleaseAll = bReleaseAll;
@@ -287,8 +392,7 @@ FWacomBackpackWorkspaceReleaseIntent FWacomBackpackWorkspaceInteractionModel::Bu
 	return Intent;
 }
 
-void FWacomBackpackWorkspaceInteractionModel::CommitReleasedCards(
-	TConstArrayView<FGuid> ReleasedInstanceIds)
+void FWacomBackpackWorkspaceInteractionModel::CommitReleasedCards(TConstArrayView<FGuid> ReleasedInstanceIds)
 {
 	if (!IsCarrying() || ReleasedInstanceIds.IsEmpty())
 	{
@@ -300,15 +404,14 @@ void FWacomBackpackWorkspaceInteractionModel::CommitReleasedCards(
 		Released.Add(InstanceId);
 	}
 	const int32 PreviousCurrentIndex = Carry.CurrentIndex;
-	Carry.RemainingInstanceIds.RemoveAll(
-		[&Released](FGuid InstanceId) { return Released.Contains(InstanceId); });
-	Selection.OrderedSelectedInstanceIds.RemoveAll(
-		[&Released](FGuid InstanceId) { return Released.Contains(InstanceId); });
+	Carry.RemainingInstanceIds.RemoveAll([&Released](FGuid Id) { return Released.Contains(Id); });
+	Selection.OrderedSelectedInstanceIds.RemoveAll([&Released](FGuid Id) { return Released.Contains(Id); });
 	if (Carry.RemainingInstanceIds.IsEmpty())
 	{
 		Carry = FWacomBackpackWorkspaceCarryState();
 		Selection = FWacomBackpackWorkspaceSelectionState();
 		bMouseCaptured = false;
+		Mode = EWacomBackpackWorkspaceInteractionMode::Idle;
 		return;
 	}
 	Carry.DefaultIndex = Carry.RemainingInstanceIds.Num() - 1;
@@ -317,10 +420,11 @@ void FWacomBackpackWorkspaceInteractionModel::CommitReleasedCards(
 	bMouseCaptured = true;
 	Selection.OrderedSelectedInstanceIds = Carry.RemainingInstanceIds;
 	Selection.AnchorInstanceId = Carry.RemainingInstanceIds[Carry.CurrentIndex];
+	Selection.SourceZone = Carry.SourceZone;
+	Selection.bHasSourceZone = true;
 }
 
-void FWacomBackpackWorkspaceInteractionModel::UpdateCarrySourceStorageRevision(
-	uint64 SourceStorageRevision)
+void FWacomBackpackWorkspaceInteractionModel::UpdateCarrySourceStorageRevision(uint64 SourceStorageRevision)
 {
 	if (IsCarrying())
 	{
@@ -333,18 +437,24 @@ void FWacomBackpackWorkspaceInteractionModel::SetCarryInputSuspended(bool bSuspe
 	if (!IsCarrying())
 	{
 		bMouseCaptured = false;
+		Mode = EWacomBackpackWorkspaceInteractionMode::Idle;
 		return;
 	}
 	Carry.bMouseCaptured = !bSuspended;
 	bMouseCaptured = !bSuspended;
+	Mode = bSuspended
+		? EWacomBackpackWorkspaceInteractionMode::Suspended
+		: EWacomBackpackWorkspaceInteractionMode::Carry;
 }
 
 void FWacomBackpackWorkspaceInteractionModel::CancelTransientState()
 {
 	Selection = FWacomBackpackWorkspaceSelectionState();
 	Carry = FWacomBackpackWorkspaceCarryState();
+	PileMove = FWacomBackpackWorkspacePileMoveState();
 	MarqueeStartSelection.Reset();
 	bMouseCaptured = false;
+	Mode = EWacomBackpackWorkspaceInteractionMode::Idle;
 }
 
 void FWacomBackpackWorkspaceInteractionModel::RestoreCarry(
@@ -363,4 +473,7 @@ void FWacomBackpackWorkspaceInteractionModel::RestoreCarry(
 	Selection = FWacomBackpackWorkspaceSelectionState();
 	Selection.OrderedSelectedInstanceIds = Carry.RemainingInstanceIds;
 	Selection.AnchorInstanceId = Carry.RemainingInstanceIds[Carry.CurrentIndex];
+	Selection.SourceZone = Carry.SourceZone;
+	Selection.bHasSourceZone = true;
+	Mode = EWacomBackpackWorkspaceInteractionMode::Carry;
 }

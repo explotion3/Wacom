@@ -23,6 +23,7 @@
 #include "Cards/CardDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
+#include "Settings/WacomSettingsSubsystem.h"
 #include "UI/Backpack/BackpackFallbackLayoutBuilder.h"
 #include "UI/Backpack/BackpackRuntimeZoneBuilder.h"
 #include "UI/Backpack/WacomBackpackCardDetailController.h"
@@ -38,7 +39,6 @@
 #include "UI/Backpack/WacomBackpackWorkspaceStateSubsystem.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
-#include "UI/Backpack/WacomBackpackZoneRackWidget.h"
 #include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
@@ -50,10 +50,17 @@
 #include "UI/ViewModels/WacomRunViewModel.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 
+#if WITH_EDITOR
+#include "UI/Backpack/WacomBackpackPIEValidationState.h"
+#endif
+
 namespace
 {
 template <typename TWidget>
 TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath);
+
+TSubclassOf<UWacomSpecialZoneWidget> LoadSpecialZoneWidgetClassWithDiagnostic(
+	const TCHAR* ClassPath);
 
 void AttachChildToHostAndFill(UPanelWidget& Host, UWidget& Child)
 {
@@ -103,6 +110,28 @@ void AttachChildToHostAndFill(UPanelWidget& Host, UWidget& Child)
 UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+#if WITH_EDITOR
+	const EWacomBackpackPIEValidationMode PIEValidationMode =
+		GetWacomBackpackPIEValidationMode();
+	bPIEValidationEmptySnapshot =
+		PIEValidationMode == EWacomBackpackPIEValidationMode::EmptySnapshot;
+	if (PIEValidationMode == EWacomBackpackPIEValidationMode::NativeFallback)
+	{
+		CardWidgetClass = UWacomDeckCardWidget::StaticClass();
+		SpecialZoneWidgetClass = UWacomSpecialZoneWidget::StaticClass();
+		CardDetailPanelClass = UWacomCardDetailPanel::StaticClass();
+		WorkspaceWidgetClass = UWacomBackpackWorkspaceWidget::StaticClass();
+		DeleteConfirmWidgetClass = UWacomBackpackDeleteConfirmWidget::StaticClass();
+		DeleteZoneSectionWidgetClass = UWacomBackpackZoneSectionWidget::StaticClass();
+		BattleDeckZoneSectionWidgetClass = UWacomBackpackZoneSectionWidget::StaticClass();
+		FluxMainZoneSectionWidgetClass = UWacomBackpackZoneSectionWidget::StaticClass();
+		FluxContentZoneSectionWidgetClass = UWacomBackpackZoneSectionWidget::StaticClass();
+		SpecialZonesSectionWidgetClass = UWacomBackpackZoneSectionWidget::StaticClass();
+		BurdenZoneSectionWidgetClass = UWacomBackpackZoneSectionWidget::StaticClass();
+		return;
+	}
+#endif
+
 	if (!CardWidgetClass)
 	{
 		CardWidgetClass = LoadOptionalWidgetClass<UWacomDeckCardWidget>(
@@ -111,7 +140,7 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 
 	if (!SpecialZoneWidgetClass)
 	{
-		SpecialZoneWidgetClass = LoadOptionalWidgetClass<UWacomSpecialZoneWidget>(
+		SpecialZoneWidgetClass = LoadSpecialZoneWidgetClassWithDiagnostic(
 			TEXT("/Game/Wacom/UI/Backpack/WBP_WacomSpecialZoneWidget.WBP_WacomSpecialZoneWidget_C"));
 	}
 
@@ -123,10 +152,6 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 	if (!WorkspaceWidgetClass)
 	{
 		WorkspaceWidgetClass = UWacomBackpackWorkspaceWidget::StaticClass();
-	}
-	if (!ZoneRackWidgetClass)
-	{
-		ZoneRackWidgetClass = UWacomBackpackZoneRackWidget::StaticClass();
 	}
 	if (!DeleteConfirmWidgetClass)
 	{
@@ -179,6 +204,45 @@ TSubclassOf<TWidget> LoadOptionalWidgetClass(const TCHAR* ClassPath)
 	return TWidget::StaticClass();
 }
 
+TSubclassOf<UWacomSpecialZoneWidget> LoadSpecialZoneWidgetClassWithDiagnostic(
+	const TCHAR* ClassPath)
+{
+	const FString ObjectPath(ClassPath);
+	const FString PackagePath = FPackageName::ObjectPathToPackageName(ObjectPath);
+	if (!FPackageName::DoesPackageExist(PackagePath))
+	{
+		static bool bLoggedMissingAsset = false;
+		if (!bLoggedMissingAsset)
+		{
+			bLoggedMissingAsset = true;
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("[Backpack] Compatibility SpecialZone asset is missing: %s. Using UWacomSpecialZoneWidget C++ fallback."),
+				ClassPath);
+		}
+		return UWacomSpecialZoneWidget::StaticClass();
+	}
+
+	UClass* LoadedClass = LoadObject<UClass>(nullptr, ClassPath);
+	if (LoadedClass && LoadedClass->IsChildOf(UWacomSpecialZoneWidget::StaticClass()))
+	{
+		return LoadedClass;
+	}
+
+	static bool bLoggedInvalidAsset = false;
+	if (!bLoggedInvalidAsset)
+	{
+		bLoggedInvalidAsset = true;
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[Backpack] Compatibility SpecialZone asset has an invalid class: %s. Using UWacomSpecialZoneWidget C++ fallback."),
+			ClassPath);
+	}
+	return UWacomSpecialZoneWidget::StaticClass();
+}
+
 }
 
 TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
@@ -202,10 +266,10 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 			&GoldText,
 			&BackpackTitleText,
 			&WorkspaceHost,
-			&ZoneRackHost,
 			&DeleteTargetHost,
 			&DeleteConfirmHost,
 			&ArrangeAllButton,
+			&ResetPilePositionsButton,
 			&DeleteZoneHost,
 			&BattleDeckZoneHost,
 			&FluxContentDropTargetHost,
@@ -229,6 +293,7 @@ void UWacomBackpackScreen::NativeConstruct()
 	EnsureRuntimeZoneWidgets();
 	EnsureWorkspaceWidgets();
 	BindOwningLayerTransition();
+	BindRuntimeSettings();
 
 	if (CloseButton)
 	{
@@ -238,6 +303,11 @@ void UWacomBackpackScreen::NativeConstruct()
 	{
 		ArrangeAllButton->OnClicked.AddUniqueDynamic(this, &UWacomBackpackScreen::HandleArrangeAllClicked);
 	}
+	if (ResetPilePositionsButton)
+	{
+		ResetPilePositionsButton->OnClicked.AddUniqueDynamic(
+			this, &UWacomBackpackScreen::HandleResetPilePositionsClicked);
+	}
 
 	TrySubscribeAndRefresh();
 }
@@ -245,7 +315,12 @@ void UWacomBackpackScreen::NativeConstruct()
 void UWacomBackpackScreen::NativeDestruct()
 {
 	CancelWorkspaceInteraction();
+	// Workspace children deliberately release transient bindings in NativeDestruct.
+	// The next construction must therefore perform an authoritative reconcile even
+	// when the Run storage revision itself has not changed.
+	ResetBackpackRefreshDirtyGate();
 	UnbindOwningLayerTransition();
+	UnbindRuntimeSettings();
 	bOwningLayerTransitioning = false;
 	if (CardDetailController)
 	{
@@ -268,6 +343,11 @@ void UWacomBackpackScreen::NativeDestruct()
 	{
 		ArrangeAllButton->OnClicked.RemoveDynamic(this, &UWacomBackpackScreen::HandleArrangeAllClicked);
 	}
+	if (ResetPilePositionsButton)
+	{
+		ResetPilePositionsButton->OnClicked.RemoveDynamic(
+			this, &UWacomBackpackScreen::HandleResetPilePositionsClicked);
+	}
 	if (WorkspaceWidget)
 	{
 		WorkspaceWidget->OnLayoutGeometryReadyNative.RemoveAll(this);
@@ -278,11 +358,6 @@ void UWacomBackpackScreen::NativeDestruct()
 		Provider->OnRunViewModelRefreshedNative.RemoveAll(this);
 	}
 	SubscribedProvider = nullptr;
-	if (ZoneRackWidget)
-	{
-		ZoneRackWidget->OnZoneActivatedNative.RemoveAll(this);
-	}
-
 	Super::NativeDestruct();
 }
 
@@ -480,23 +555,22 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 		WorkspaceWidget->OnLayoutGeometryReadyNative.AddUObject(
 			this,
 			&UWacomBackpackScreen::HandleWorkspaceLayoutGeometryReady);
-	}
-
-	if (ZoneRackHost && !ZoneRackWidget)
-	{
-		UClass* ClassToUse = ZoneRackWidgetClass
-			? ZoneRackWidgetClass.Get()
-			: UWacomBackpackZoneRackWidget::StaticClass();
-		ZoneRackWidget = CreateWidget<UWacomBackpackZoneRackWidget>(this, ClassToUse);
-	}
-	if (ZoneRackWidget)
-	{
-		ZoneRackWidget->OnZoneActivatedNative.RemoveAll(this);
-		ZoneRackWidget->OnZoneActivatedNative.AddUObject(this, &UWacomBackpackScreen::HandleZoneActivated);
-	}
-	if (ZoneRackHost && ZoneRackWidget)
-	{
-		AttachChildToHostAndFill(*ZoneRackHost, *ZoneRackWidget);
+		WorkspaceWidget->OnPileExpansionRequestedNative.RemoveAll(this);
+		WorkspaceWidget->OnPileExpansionRequestedNative.AddUObject(
+			this,
+			&UWacomBackpackScreen::HandlePileExpansionRequested);
+		WorkspaceWidget->OnPileMoveCommittedNative.RemoveAll(this);
+		WorkspaceWidget->OnPileMoveCommittedNative.AddUObject(
+			this,
+			&UWacomBackpackScreen::HandlePileMoveCommitted);
+		WorkspaceWidget->OnCollapseExpandedPileRequestedNative.RemoveAll(this);
+		WorkspaceWidget->OnCollapseExpandedPileRequestedNative.AddUObject(
+			this,
+			&UWacomBackpackScreen::HandleCollapseExpandedPileRequested);
+		WorkspaceWidget->OnPileCollapseAnimationFinishedNative.RemoveAll(this);
+		WorkspaceWidget->OnPileCollapseAnimationFinishedNative.AddUObject(
+			this,
+			&UWacomBackpackScreen::HandlePileCollapseAnimationFinished);
 	}
 	if (DeleteConfirmHost && !DeleteConfirmWidget)
 	{
@@ -597,11 +671,11 @@ FWacomBackpackScreenAutomationTestView UWacomBackpackScreen::GetAutomationTestVi
 	View.ListRefreshSkipCount = Counters.ListRefreshSkipCount;
 	View.SnapshotBuildCount = Counters.SnapshotBuildCount;
 	View.SnapshotRevisionSkipCount = Counters.SnapshotRevisionSkipCount;
-	View.ZoneRackEntryCount = ZoneRackWidget ? ZoneRackWidget->GetZoneEntryCount() : 0;
 	View.WorkspaceCardCount = ActiveWorkspaceCardWidgets.Num();
 	if (WorkspaceWidget)
 	{
 		const FWacomBackpackWorkspaceAutomationTestView WorkspaceView = WorkspaceWidget->GetAutomationTestView();
+		View.WorkspacePileCount = WorkspaceView.PileCount;
 		View.ActiveWorkspaceZone = WorkspaceView.ActiveZone;
 		View.ActiveWorkspaceOwnerInstanceId = WorkspaceView.ActiveZoneOwnerInstanceId;
 	}
@@ -661,13 +735,38 @@ void UWacomBackpackScreen::RebuildAll()
 			WorkspaceWidget->GetCardCanvas()->ClearChildren();
 			WorkspaceWidget->SetEmptyStateVisible(true);
 		}
-		if (ZoneRackWidget)
-		{
-			ZoneRackWidget->SetZoneEntries(TConstArrayView<FWacomBackpackZoneRackEntryView>());
-		}
 		ClearCardBoxes();
 		return;
 	}
+
+#if WITH_EDITOR
+	if (bPIEValidationEmptySnapshot)
+	{
+		FRunBackpackStorageSnapshot EmptySnapshot = Run->BuildBackpackStorageSnapshot();
+		EmptySnapshot.Flux.MainCards.Reset();
+		EmptySnapshot.Flux.ContentCards.Reset();
+		EmptySnapshot.Flux.FluxCapacity = 0;
+		EmptySnapshot.SpecialZones.Reset();
+		EmptySnapshot.BurdenCards.Reset();
+		EmptySnapshot.BattleDeckPhysicalCards.Reset();
+		EmptySnapshot.BattleDeckProjectedCards.Reset();
+		EmptySnapshot.FluxCapacity = 0;
+		EmptySnapshot.BattleDeckCapacity = 0;
+		EmptySnapshot.BackpackPhysicalCount = 0;
+		EmptySnapshot.FluxContentCount = 0;
+		EmptySnapshot.BattleDeckPhysicalCount = 0;
+		EmptySnapshot.BurdenCount = 0;
+
+		bHasLastAppliedStorageSnapshot = true;
+		LastAppliedStorageSnapshot = EmptySnapshot;
+		RebuildWorkspaceChrome(EmptySnapshot);
+		RebuildBattleDeckZone(EmptySnapshot);
+		RebuildBackpackZone(EmptySnapshot);
+		RebuildSpecialZones(EmptySnapshot);
+		RebuildBurdenZone(EmptySnapshot);
+		return;
+	}
+#endif
 
 	FWacomBackpackStorageRefreshGate& RefreshGate = GetStorageRefreshGate();
 	if (RefreshGate.BeginRefresh(*Run) == EWacomBackpackStorageRefreshGateResult::SkipSnapshotRevision)
@@ -694,42 +793,17 @@ void UWacomBackpackScreen::RebuildWorkspaceChrome(const FRunBackpackStorageSnaps
 {
 	EnsureWorkspaceWidgets();
 	URunSession* Run = GetRunSession();
-	if (!Run || !WorkspaceWidget || !ZoneRackWidget)
+	if (!Run || !WorkspaceWidget)
 	{
 		return;
 	}
 
 	FWacomBackpackWorkspaceStateStore& StateStore = GetWorkspaceStateStore(Run);
-	FWacomBackpackZoneKey ActiveZone = StateStore.GetActiveZone();
-	TArray<FWacomBackpackZoneRackEntryView> RackEntries = UWacomBackpackScreenPresenter::BuildZoneRackEntries(
-		Snapshot,
-		ActiveZone.Zone,
-		ActiveZone.OwnerInstanceId);
-	const bool bActiveStillExists = RackEntries.ContainsByPredicate(
-		[&ActiveZone](const FWacomBackpackZoneRackEntryView& Entry)
-		{
-			return Entry.HasSameIdentity(ActiveZone.Zone, ActiveZone.OwnerInstanceId);
-		});
-	if (!bActiveStillExists)
-	{
-		ActiveZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
-		StateStore.SetActiveZone(ActiveZone);
-		RackEntries = UWacomBackpackScreenPresenter::BuildZoneRackEntries(
-			Snapshot,
-			ActiveZone.Zone,
-			ActiveZone.OwnerInstanceId);
-	}
-	else if (!StateStore.HasActiveZone())
-	{
-		StateStore.SetActiveZone(ActiveZone);
-	}
-
-	ZoneRackWidget->SetZoneEntries(RackEntries);
 	FWacomBackpackWorkspaceReconciler::Reconcile(
 		*WorkspaceWidget,
 		Snapshot,
-		ActiveZone,
 		StateStore,
+		WorkspaceInteractionModel.Get(),
 		WorkspaceStyle,
 		[this](const FRunStorageCardView& CardView) { return CreateCardWidget(CardView); },
 		[this](UWacomDeckCardWidget* RemovedWidget) { HideCardDetailPanelIfSourceRemoved(RemovedWidget); },
@@ -747,28 +821,150 @@ void UWacomBackpackScreen::RebuildWorkspaceFromCachedSnapshot()
 	}
 }
 
-void UWacomBackpackScreen::HandleZoneActivated(EZoneKind Zone, FGuid OwnerInstanceId)
+void UWacomBackpackScreen::HandlePileExpansionRequested(
+	EZoneKind Zone,
+	FGuid OwnerInstanceId,
+	bool bExpandOnly)
 {
-	if (!bHasLastAppliedStorageSnapshot)
+	URunSession* Run = GetRunSession();
+	if (!Run || !bHasLastAppliedStorageSnapshot)
 	{
 		return;
 	}
 	const FWacomBackpackZoneKey Requested = FWacomBackpackZoneKey::Make(Zone, OwnerInstanceId);
-	const TArray<FWacomBackpackZoneRackEntryView> Entries = UWacomBackpackScreenPresenter::BuildZoneRackEntries(
-		LastAppliedStorageSnapshot,
-		Requested.Zone,
-		Requested.OwnerInstanceId);
-	if (!Requested.IsValid() || !Entries.ContainsByPredicate(
-		[&Requested](const FWacomBackpackZoneRackEntryView& Entry)
-		{
-			return Entry.HasSameIdentity(Requested.Zone, Requested.OwnerInstanceId);
-		}))
+	if (!Requested.IsValid() || Requested.Zone == EZoneKind::Backpack)
 	{
 		return;
 	}
-	CancelWorkspaceInteraction();
-	GetWorkspaceStateStore(GetRunSession()).SetActiveZone(Requested);
+	FWacomBackpackWorkspaceStateStore& Store = GetWorkspaceStateStore(Run);
+	if (Store.IsPileExpanded(Requested))
+	{
+		Store.BringPileToFront(Requested);
+		if (bExpandOnly)
+		{
+			RebuildWorkspaceFromCachedSnapshot();
+			return;
+		}
+		bHasPendingPileExpansionAfterCollapse = false;
+		bPendingPileExpansionRequiresCarryHover = false;
+		if (WorkspaceWidget
+			&& WorkspaceWidget->BeginPileCollapseAnimation(Zone, OwnerInstanceId))
+		{
+			return;
+		}
+		Store.SetExpandedPile(TOptional<FWacomBackpackZoneKey>());
+		RebuildWorkspaceFromCachedSnapshot();
+		return;
+	}
+
+	if (Store.GetExpandedPile().IsSet())
+	{
+		const FWacomBackpackZoneKey Previous = Store.GetExpandedPile().GetValue();
+		if (WorkspaceWidget
+			&& WorkspaceWidget->BeginPileCollapseAnimation(
+				Previous.Zone, Previous.OwnerInstanceId))
+		{
+			bHasPendingPileExpansionAfterCollapse = true;
+			bPendingPileExpansionRequiresCarryHover = bExpandOnly;
+			PendingPileExpansionZone = Requested.Zone;
+			PendingPileExpansionOwnerInstanceId = Requested.OwnerInstanceId;
+			return;
+		}
+	}
+	bHasPendingPileExpansionAfterCollapse = false;
+	bPendingPileExpansionRequiresCarryHover = false;
+	Store.SetExpandedPile(Requested);
+	Store.BringPileToFront(Requested);
 	RebuildWorkspaceFromCachedSnapshot();
+}
+
+void UWacomBackpackScreen::HandlePileMoveCommitted(
+	EZoneKind Zone,
+	FGuid OwnerInstanceId,
+	FVector2D NormalizedPosition)
+{
+	URunSession* Run = GetRunSession();
+	const FWacomBackpackZoneKey Key = FWacomBackpackZoneKey::Make(Zone, OwnerInstanceId);
+	if (!Run || !Key.IsValid() || Zone == EZoneKind::BurdenZone)
+	{
+		return;
+	}
+	FWacomBackpackWorkspaceStateStore& Store = GetWorkspaceStateStore(Run);
+	FWacomBackpackWorkspacePileLayoutEntry Entry;
+	if (const FWacomBackpackWorkspacePileLayoutEntry* Existing = Store.FindPileLayout(Key))
+	{
+		Entry = *Existing;
+	}
+	Entry.NormalizedPosition = FVector2D(
+		FMath::Clamp(NormalizedPosition.X, 0.0f, 1.0f),
+		FMath::Clamp(NormalizedPosition.Y, 0.0f, 1.0f));
+	Entry.LayerRank = Store.BringPileToFront(Key);
+	Entry.bHasManualPlacement = true;
+	Store.SetPileLayout(Key, Entry);
+	RebuildWorkspaceFromCachedSnapshot();
+}
+
+void UWacomBackpackScreen::HandleCollapseExpandedPileRequested()
+{
+	bHasPendingPileExpansionAfterCollapse = false;
+	bPendingPileExpansionRequiresCarryHover = false;
+	URunSession* Run = GetRunSession();
+	if (!Run)
+	{
+		return;
+	}
+	FWacomBackpackWorkspaceStateStore& Store = GetWorkspaceStateStore(Run);
+	if (Store.GetExpandedPile().IsSet() && WorkspaceWidget)
+	{
+		const FWacomBackpackZoneKey Expanded = Store.GetExpandedPile().GetValue();
+		if (WorkspaceWidget->BeginPileCollapseAnimation(
+			Expanded.Zone, Expanded.OwnerInstanceId))
+		{
+			return;
+		}
+	}
+	Store.SetExpandedPile(TOptional<FWacomBackpackZoneKey>());
+	RebuildWorkspaceFromCachedSnapshot();
+}
+
+void UWacomBackpackScreen::HandlePileCollapseAnimationFinished(
+	EZoneKind Zone,
+	FGuid OwnerInstanceId)
+{
+	URunSession* Run = GetRunSession();
+	if (!Run)
+	{
+		return;
+	}
+	FWacomBackpackWorkspaceStateStore& Store = GetWorkspaceStateStore(Run);
+	const FWacomBackpackZoneKey Completed = FWacomBackpackZoneKey::Make(Zone, OwnerInstanceId);
+	if (Store.IsPileExpanded(Completed))
+	{
+		Store.SetExpandedPile(TOptional<FWacomBackpackZoneKey>());
+		if (bHasPendingPileExpansionAfterCollapse)
+		{
+			const FWacomBackpackZoneKey Pending = FWacomBackpackZoneKey::Make(
+				PendingPileExpansionZone,
+				PendingPileExpansionOwnerInstanceId);
+			bool bStillRequested = true;
+			if (bPendingPileExpansionRequiresCarryHover)
+			{
+				FWacomBackpackZoneKey CurrentTarget;
+				bStillRequested = WorkspaceInteractionModel
+					&& WorkspaceInteractionModel->IsCarrying()
+					&& ResolveWorkspacePileTarget(CurrentTarget)
+					&& CurrentTarget == Pending;
+			}
+			bHasPendingPileExpansionAfterCollapse = false;
+			bPendingPileExpansionRequiresCarryHover = false;
+			if (bStillRequested && Pending.IsValid())
+			{
+				Store.SetExpandedPile(Pending);
+				Store.BringPileToFront(Pending);
+			}
+		}
+		RebuildWorkspaceFromCachedSnapshot();
+	}
 }
 
 void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
@@ -777,7 +973,7 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 	{
 		HideCardDetailPanel();
 		FWacomBackpackZoneKey Target;
-		if (ResolveWorkspaceRackTarget(Target) && ZoneRackWidget)
+		if (ResolveWorkspacePileTarget(Target) && WorkspaceWidget)
 		{
 			const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
 			bool bRejected = false;
@@ -790,13 +986,14 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 				URunSession* Run = GetRunSession();
 				bRejected = !Run || !Run->ValidateMoveInstancesAtomic(PreviewRequest).bCanExecute;
 			}
-			ZoneRackWidget->SetDropPreviewForZone(Target.Zone, Target.OwnerInstanceId, true, bRejected);
+			WorkspaceWidget->SetPileDropPreview(
+				Target.Zone, Target.OwnerInstanceId, true, bRejected);
 			return;
 		}
 	}
-	if (ZoneRackWidget)
+	if (WorkspaceWidget)
 	{
-		ZoneRackWidget->SetDropPreviewForZone(EZoneKind::Backpack, FGuid(), false, false);
+		WorkspaceWidget->SetPileDropPreview(EZoneKind::Backpack, FGuid(), false, false);
 	}
 }
 
@@ -864,9 +1061,59 @@ void UWacomBackpackScreen::HandleOwningLayerTransitioningChanged(
 	}
 }
 
-bool UWacomBackpackScreen::ResolveWorkspaceRackTarget(FWacomBackpackZoneKey& OutTarget) const
+void UWacomBackpackScreen::BindRuntimeSettings()
 {
-	if (!WorkspaceWidget || !ZoneRackWidget || !WorkspaceInteractionModel || !WorkspaceInteractionModel->IsCarrying())
+	UWacomSettingsSubsystem* Settings = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (BoundSettingsSubsystem.Get() == Settings && RuntimeSettingsChangedHandle.IsValid())
+	{
+		HandleRuntimeSettingsChanged(
+			Settings->GetCurrentSnapshot(),
+			EWacomRuntimeSettingsChangeReason::Startup);
+		return;
+	}
+	UnbindRuntimeSettings();
+	if (!Settings)
+	{
+		return;
+	}
+	BoundSettingsSubsystem = Settings;
+	RuntimeSettingsChangedHandle = Settings->OnRuntimeSettingsChangedNative().AddUObject(
+		this,
+		&UWacomBackpackScreen::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		Settings->GetCurrentSnapshot(),
+		EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomBackpackScreen::UnbindRuntimeSettings()
+{
+	if (UWacomSettingsSubsystem* Settings = BoundSettingsSubsystem.Get())
+	{
+		if (RuntimeSettingsChangedHandle.IsValid())
+		{
+			Settings->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+		}
+	}
+	BoundSettingsSubsystem.Reset();
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomBackpackScreen::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	if (WorkspaceWidget)
+	{
+		WorkspaceWidget->SetSimplifiedMotion(
+			Snapshot.UIMotionMode == EWacomUIMotionMode::Simplified);
+	}
+}
+
+bool UWacomBackpackScreen::ResolveWorkspacePileTarget(FWacomBackpackZoneKey& OutTarget) const
+{
+	if (!WorkspaceWidget || !WorkspaceInteractionModel || !WorkspaceInteractionModel->IsCarrying())
 	{
 		return false;
 	}
@@ -874,7 +1121,7 @@ bool UWacomBackpackScreen::ResolveWorkspaceRackTarget(FWacomBackpackZoneKey& Out
 		WorkspaceInteractionModel->GetCarry().PointerPosition);
 	EZoneKind Zone = EZoneKind::Backpack;
 	FGuid OwnerInstanceId;
-	if (!ZoneRackWidget->FindZoneAtAbsolutePosition(AbsolutePointer, Zone, OwnerInstanceId))
+	if (!WorkspaceWidget->FindPileAtAbsolutePosition(AbsolutePointer, Zone, OwnerInstanceId))
 	{
 		return false;
 	}
@@ -942,6 +1189,15 @@ void UWacomBackpackScreen::HandleWorkspaceDeleteCancelled()
 	if (PendingDeleteConfirmation && PendingDeleteConfirmation->bPending && WorkspaceInteractionModel)
 	{
 		WorkspaceInteractionModel->RestoreCarry(PendingDeleteConfirmation->SuspendedCarry);
+		// Atomic rejection caused by an unrelated storage revision must not strand the
+		// restored fan on an obsolete revision forever. Reconcile has already verified
+		// that the carried cards still exist in their source zone, so the same carry can
+		// be retried against the current snapshot without partially committing anything.
+		if (URunSession* Run = GetRunSession())
+		{
+			WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(
+				Run->GetBackpackStorageSnapshotRevision());
+		}
 	}
 	PendingDeleteConfirmation.Reset();
 	if (DeleteConfirmHost) DeleteConfirmHost->SetVisibility(ESlateVisibility::Collapsed);
@@ -1018,10 +1274,18 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		BeginWorkspaceDeleteConfirmation(Intent.InstanceIds);
 		return;
 	}
-	FWacomBackpackZoneKey RackTarget;
-	if (ResolveWorkspaceRackTarget(RackTarget))
+	FWacomBackpackZoneKey PileTarget;
+	if (ResolveWorkspacePileTarget(PileTarget))
 	{
-		HandleWorkspaceRackReleaseIntent(Intent, RackTarget);
+		HandleWorkspacePileReleaseIntent(Intent, PileTarget);
+		return;
+	}
+	const FVector2D AbsolutePointer = WorkspaceWidget->GetCachedGeometry().LocalToAbsolute(
+		Carry.PointerPosition);
+	if (!WorkspaceWidget->GetCachedGeometry().IsUnderLocation(AbsolutePointer))
+	{
+		// 工作台外既不是通量空白，也不是合法目标；保持携带并显示拒绝状态。
+		WorkspaceWidget->RefreshInteractionPresentation();
 		return;
 	}
 	const TArray<FWacomBackpackCarriedFanLayout> Fan =
@@ -1035,33 +1299,61 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 			Style->CurrentCardLiftPixels);
 	const FVector2D WorkspaceSize = WorkspaceWidget->GetLayoutSpaceSize();
 	FWacomBackpackWorkspaceStateStore& StateStore = GetWorkspaceStateStore(Run);
-	const FWacomBackpackZoneKey ActiveZone = StateStore.GetActiveZone();
-	for (const FGuid InstanceId : Intent.InstanceIds)
+	const FWacomBackpackZoneKey FluxZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
+	auto SaveFluxLayouts = [&]()
 	{
-		const int32 CarryIndex = Carry.RemainingInstanceIds.IndexOfByKey(InstanceId);
-		if (!Fan.IsValidIndex(CarryIndex))
+		for (const FGuid InstanceId : Intent.InstanceIds)
 		{
-			continue;
+			const int32 CarryIndex = Carry.RemainingInstanceIds.IndexOfByKey(InstanceId);
+			if (!Fan.IsValidIndex(CarryIndex))
+			{
+				continue;
+			}
+			const FVector2D ClampedCenter = FWacomBackpackWorkspaceLayoutSolver::ClampCardCenterToVisibleBounds(
+				Fan[CarryIndex].Transform.CardCenter,
+				WorkspaceSize,
+				Style->CardRenderSize,
+				Style->MinimumVisibleFraction);
+			FWacomBackpackWorkspaceLayoutEntry Entry;
+			Entry.NormalizedPosition = FVector2D(
+				WorkspaceSize.X > 1.0f ? ClampedCenter.X / WorkspaceSize.X : 0.5f,
+				WorkspaceSize.Y > 1.0f ? ClampedCenter.Y / WorkspaceSize.Y : 0.5f);
+			Entry.AngleDegrees = Fan[CarryIndex].Transform.AngleDegrees;
+			Entry.LayerRank = Fan[CarryIndex].Transform.LayerRank;
+			Entry.bHasManualPlacement = true;
+			StateStore.SetLayout(FluxZone, InstanceId, Entry);
 		}
-		const FVector2D ClampedCenter = FWacomBackpackWorkspaceLayoutSolver::ClampCardCenterToVisibleBounds(
-			Fan[CarryIndex].Transform.CardCenter,
-			WorkspaceSize,
-			Style->CardRenderSize,
-			Style->MinimumVisibleFraction);
-		FWacomBackpackWorkspaceLayoutEntry Entry;
-		Entry.NormalizedPosition = ClampedCenter / WorkspaceSize;
-		Entry.AngleDegrees = Fan[CarryIndex].Transform.AngleDegrees;
-		Entry.LayerRank = Fan[CarryIndex].Transform.LayerRank;
-		Entry.bHasManualPlacement = true;
-		StateStore.SetLayout(ActiveZone, InstanceId, Entry);
+	};
+	if (!(Carry.SourceZone == FluxZone))
+	{
+		const FRunDeckBatchMoveRequest Request = FWacomBackpackCommandFlow::BuildBatchMoveRequest(
+			Carry,
+			FluxZone,
+			Intent.InstanceIds);
+		BeginWorkspaceMutationRefreshDeferral();
+		const FRunDeckBatchOperationResult Result = FWacomBackpackCommandFlow::SubmitBatchMove(
+			*this, Run, Request);
+		if (!Result.bSucceeded)
+		{
+			EndWorkspaceMutationRefreshDeferral(false);
+			WorkspaceWidget->RefreshInteractionPresentation();
+			return;
+		}
+		SaveFluxLayouts();
+		WorkspaceInteractionModel->CommitReleasedCards(Intent.InstanceIds);
+		WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(Result.StorageRevision);
+		ResetBackpackRefreshDirtyGate();
+		EndWorkspaceMutationRefreshDeferral(true);
+		return;
 	}
+	SaveFluxLayouts();
 	WorkspaceInteractionModel->CommitReleasedCards(Intent.InstanceIds);
 	RebuildWorkspaceFromCachedSnapshot();
 }
 
-void UWacomBackpackScreen::HandleWorkspaceRackReleaseIntent(
+void UWacomBackpackScreen::HandleWorkspacePileReleaseIntent(
 	const FWacomBackpackWorkspaceReleaseIntent& Intent,
-	const FWacomBackpackZoneKey& RackTarget)
+	const FWacomBackpackZoneKey& PileTarget)
 {
 	URunSession* Run = GetRunSession();
 	if (!Run || !WorkspaceWidget || !WorkspaceInteractionModel
@@ -1071,13 +1363,13 @@ void UWacomBackpackScreen::HandleWorkspaceRackReleaseIntent(
 	}
 
 	const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
-	if (Carry.SourceZone == RackTarget)
+	if (Carry.SourceZone == PileTarget)
 	{
 		FWacomBackpackWorkspaceStateStore& Store = GetWorkspaceStateStore(Run);
 		FWacomBackpackCommandFlow::CollectSameZone(
 			Store,
 			Carry.SourceZone,
-			RackTarget,
+			PileTarget,
 			Intent.InstanceIds);
 		WorkspaceInteractionModel->CommitReleasedCards(Intent.InstanceIds);
 		RebuildWorkspaceFromCachedSnapshot();
@@ -1086,7 +1378,7 @@ void UWacomBackpackScreen::HandleWorkspaceRackReleaseIntent(
 
 	const FRunDeckBatchMoveRequest Request = FWacomBackpackCommandFlow::BuildBatchMoveRequest(
 		Carry,
-		RackTarget,
+		PileTarget,
 		Intent.InstanceIds);
 	BeginWorkspaceMutationRefreshDeferral();
 	const FRunDeckBatchOperationResult Result = FWacomBackpackCommandFlow::SubmitBatchMove(*this, Run, Request);
@@ -1105,6 +1397,9 @@ void UWacomBackpackScreen::HandleWorkspaceRackReleaseIntent(
 
 void UWacomBackpackScreen::CancelWorkspaceInteraction()
 {
+	const bool bWasSwitchingExpandedPile = bHasPendingPileExpansionAfterCollapse;
+	bHasPendingPileExpansionAfterCollapse = false;
+	bPendingPileExpansionRequiresCarryHover = false;
 	if (WorkspaceWidget)
 	{
 		WorkspaceWidget->CancelInteraction();
@@ -1112,6 +1407,15 @@ void UWacomBackpackScreen::CancelWorkspaceInteraction()
 	else if (WorkspaceInteractionModel)
 	{
 		WorkspaceInteractionModel->CancelTransientState();
+	}
+
+	// A pile switch animates the old pile closed before committing the new expanded pile.
+	// Cancelling during that interval must restore the still-authoritative old pile layout;
+	// otherwise its cards remain visually stacked at the collapsed origin while the state
+	// store continues to report the old pile as expanded.
+	if (bWasSwitchingExpandedPile)
+	{
+		RebuildWorkspaceFromCachedSnapshot();
 	}
 }
 
@@ -1123,7 +1427,24 @@ void UWacomBackpackScreen::HandleArrangeAllClicked()
 		return;
 	}
 	FWacomBackpackWorkspaceStateStore& StateStore = GetWorkspaceStateStore(Run);
-	FWacomBackpackCommandFlow::ArrangeAll(StateStore, StateStore.GetActiveZone());
+	FWacomBackpackCommandFlow::ArrangeAll(
+		StateStore,
+		FWacomBackpackZoneKey::Make(EZoneKind::Backpack));
+	RebuildWorkspaceFromCachedSnapshot();
+}
+
+void UWacomBackpackScreen::HandleResetPilePositionsClicked()
+{
+	URunSession* Run = GetRunSession();
+	if (!Run)
+	{
+		return;
+	}
+	FWacomBackpackWorkspaceStateStore& StateStore = GetWorkspaceStateStore(Run);
+	bHasPendingPileExpansionAfterCollapse = false;
+	bPendingPileExpansionRequiresCarryHover = false;
+	StateStore.ResetPileLayouts();
+	StateStore.SetExpandedPile(TOptional<FWacomBackpackZoneKey>());
 	RebuildWorkspaceFromCachedSnapshot();
 }
 
@@ -1286,11 +1607,19 @@ void UWacomBackpackScreen::HandleBattleEnabledToggle(FGuid InstanceId)
 
 void UWacomBackpackScreen::HandleCardHovered(UWacomDeckCardWidget* SourceWidget)
 {
+	if (WorkspaceWidget && SourceWidget)
+	{
+		WorkspaceWidget->SetHoveredCard(SourceWidget->GetCardInstanceId());
+	}
 	ShowCardDetailForCardWidget(SourceWidget);
 }
 
 void UWacomBackpackScreen::HandleCardUnhovered(UWacomDeckCardWidget* SourceWidget)
 {
+	if (WorkspaceWidget && SourceWidget)
+	{
+		WorkspaceWidget->ClearHoveredCard(SourceWidget->GetCardInstanceId());
+	}
 	HideCardDetailPanelIfSourceRemoved(SourceWidget);
 }
 
@@ -1359,8 +1688,29 @@ FReply UWacomBackpackScreen::NativeOnKeyDown(const FGeometry& InGeometry, const 
 	// 必须在 widget 层自己拦。父类已经处理 ESC。
 	if (InKeyEvent.GetKey() == EKeys::B)
 	{
+		CancelWorkspaceInteraction();
 		DeactivateWidget();
 		return FReply::Handled();
+	}
+	if (InKeyEvent.GetKey() == EKeys::Escape)
+	{
+		if (PendingDeleteConfirmation && PendingDeleteConfirmation->bPending)
+		{
+			HandleWorkspaceDeleteCancelled();
+			return FReply::Handled();
+		}
+		if ((WorkspaceInteractionModel
+				&& WorkspaceInteractionModel->GetMode() != EWacomBackpackWorkspaceInteractionMode::Idle))
+		{
+			CancelWorkspaceInteraction();
+			return FReply::Handled();
+		}
+		URunSession* Run = GetRunSession();
+		if (Run && GetWorkspaceStateStore(Run).GetExpandedPile().IsSet())
+		{
+			HandleCollapseExpandedPileRequested();
+			return FReply::Handled();
+		}
 	}
 	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
