@@ -61,7 +61,7 @@ tags:
   - 状态：`In Progress: Phase A 只读基线完成，等待资产所有权确认后分批迁移`
   - 归属：Content / Editor / Build
   - 入口：[Content Dependency Audit](./Content_Dependency_Audit.md) / [Worktree Development](./Worktree_Development.md) / [Content Organization](./Content_Organization.md)
-  - 说明：`WacomAuditContentDependencies` 已形成稳定 JSON contract。2026-07-16 基线为 163 个 Wacom 起始 package、276 个遍历 package、113 个外部依赖（92 直接、21 传递），集中在 `/Game/Art` 7、`/Game/Asset` 82、`/Game/DreamMaterials` 24；其中 21 个正式 Wacom 运行时 Material / MI 已由 Git LFS 管理，仍有 3 个 DreamMaterials package 缺失。下一步先确认 `Card_Luo`、`Plane`、`Chong_CardAsset` 及音频/字体/UI/Boar 样例的来源与授权，再按 A–F 批次用 Content Browser 迁移或建立版本化依赖 manifest。
+  - 说明：`WacomAuditContentDependencies` 已形成稳定 JSON contract。2026-07-16 基线为 163 个 Wacom 起始 package、276 个遍历 package、113 个外部依赖（92 直接、21 传递），集中在 `/Game/Art` 7、`/Game/Asset` 82、`/Game/DreamMaterials` 24；`Content/DreamMaterials` 现有 59 个 `.uasset` 已整体由 Git LFS 管理，仍有 3 个依赖图 package 在本地不存在。下一步先确认 `Card_Luo`、`Plane`、`Chong_CardAsset` 及音频/字体/UI/Boar 样例的来源与授权，再按 A–F 批次用 Content Browser 迁移或建立版本化依赖 manifest。
 
 - [x] **背包视觉制作与四分辨率适配**
   - 状态：`Done: formal/fallback assets, responsive matrix and final PIE complete`

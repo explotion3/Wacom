@@ -69,7 +69,7 @@ Run Tunnel authoring 蓝图归档到：
 
 ## Worktree 本地依赖
 
-Git worktree 只保证受版本管理内容完整。当前 `/Game/Art`、`/Game/Asset`、`/Game/L_TestBattle` 及 `/Game/DreamMaterials` 中未列入白名单的实验输出仍受 `Content/*` ignore policy 排除。正式 Wacom 运行时 Material / MI 是例外，使用 Git LFS 管理并随 worktree 检出；当前包括 `/Game/DreamMaterials/Card` 的卡牌材质以及主菜单、背包使用的 `M_CosmicBlob` 系列。
+Git worktree 只保证受版本管理内容完整。当前 `/Game/Art`、`/Game/Asset` 和 `/Game/L_TestBattle` 仍受 `Content/*` ignore policy 排除；`/Game/DreamMaterials` 已整体纳入版本控制，其中 `.uasset` 使用 Git LFS 管理并随 worktree 检出。
 
 多 worktree 开发使用 [`Worktree_Development.md`](./Worktree_Development.md) 记录的独立本地依赖层：每个 worktree 拥有自己的 D 盘 backing directory，通过 Content 子目录 Junction 暴露给 UE。该机制只是开发期补水，不把 ignored 目录提升为规则或资产真相。
 
@@ -77,7 +77,7 @@ Git worktree 只保证受版本管理内容完整。当前 `/Game/Art`、`/Game/
 
 - Wacom 自有并会随游戏出货的资产，通过 Content Browser 迁入 `/Game/Wacom` 并由 Git LFS 管理。
 - 第三方或授权上不适合进入主仓库的内容，建立带版本与安装清单的本地依赖包。
-- DreamShader 以 `.dsm`、`.dsh` 和生成脚本作为可编辑制作真源；正式 Wacom 运行时 Material / MI 同时提交生成 `.uasset`，其它实验输出仍不依赖某个 worktree 的唯一副本。
+- DreamShader 以 `.dsm`、`.dsh` 和生成脚本作为可编辑制作真源；`/Game/DreamMaterials` 的全部生成 `.uasset` 同时提交，保证任何 checkout 和 worktree 都取得一致运行时资产。
 
 ## 外部依赖审计
 

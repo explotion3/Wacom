@@ -25,7 +25,7 @@ DreamShader 材质应拆成四层，各自只保存一种事实：
 | Material Instance | `/Game/DreamMaterials/**/MI_*` | 颜色、亮度、线宽、深度、密度等审美调参 |
 | Runtime / Style | C++、WBP、DataAsset | 语义进度、卡牌身份、持续时间、音效、资源选择和生命周期 |
 
-`.dsm`、`.dsh` 和对应设置脚本是可编辑的长期制作真源。正式 Wacom 运行时材质及其 MI 同时以 Git LFS 纳入版本控制，保证普通 checkout 后可以直接解析 Map / WBP / DataAsset 的硬引用；其它 `/Game/DreamMaterials` 实验输出仍是 worktree-local 结果。生成 `.uasset` 不取代 `.dsm/.dsh`，也不得只在材质图中保存无法回写的制作修改。
+`.dsm`、`.dsh` 和对应设置脚本是可编辑的长期制作真源。`/Game/DreamMaterials` 的全部生成资产同时以 Git LFS 纳入版本控制，保证普通 checkout 后可以直接解析 Map / WBP / DataAsset 的引用。生成 `.uasset` 不取代 `.dsm/.dsh`，也不得只在材质图中保存无法回写的制作修改。
 
 参数归属原则：
 
@@ -206,9 +206,9 @@ DreamShader commandlet 只负责根据 `.dsm/.dsh` 生成基础 Material。它�
 3. 不能仅凭进程 Exit Code 判断目标材质失败。
 4. 旧 include 问题应单独强制重生成并保存对应旧材质，不要通过修改新材质绕过。
 
-### 5.7 正式 Wacom 运行时材质的双层真源
+### 5.7 DreamMaterials 的双层真源
 
-被 `/Game/Wacom` 正式运行时引用的 21 个 Material / Material Instance 使用 `.gitignore` 白名单并由 Git LFS 管理：19 个位于 `Content/DreamMaterials/Card`，另有主菜单与背包使用的 `M_CosmicBlob` / `M_CosmicBlob_Inst`。新 worktree 应直接取得这些资产，不再为整个 `Content/DreamMaterials` 建立本地依赖 Junction。其余实验材质仍受 ignore policy 影响，可在各 worktree 的普通目录中独立生成。
+`Content/DreamMaterials` 整体受 Git 管理，当前全部 `.uasset` 由 Git LFS 存储。新 worktree 应直接取得完整目录，不再建立本地依赖 Junction，也不再依靠每个 worktree 单独生成实验资产才能打开工程。
 
 提交前应确认至少包含：
 
@@ -219,7 +219,7 @@ DreamShader commandlet 只负责根据 `.dsm/.dsh` 生成基础 Material。它�
 - C++ 参数合同与领域文档
 - 正式运行时引用的生成 Material / MI `.uasset`
 
-修改 `.dsm/.dsh` 后必须强制重生成并同时提交对应正式 `.uasset`；不得只交付源码却留下旧运行时资产，也不得只提交本机生成的 `.uasset` 而遗漏制作真源。
+修改 `.dsm/.dsh` 后必须强制重生成并同时提交对应 `.uasset`；新增生成资产也必须一并提交。不得只交付源码却留下旧运行时资产，也不得只提交本机生成的 `.uasset` 而遗漏制作真源。
 
 ### 5.8 材质预览不等于真实宿主
 

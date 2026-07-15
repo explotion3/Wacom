@@ -24,7 +24,7 @@ Git worktree 会完整检出受 Git 管理的文件，但不会复制被 `.gitig
 
 Codex handoff 创建 worktree 时还可能只写入 Git LFS pointer。初始化脚本会先从主仓库共享的 `.git/lfs/objects` 执行 `git lfs checkout`，并逐个拒绝仍为 pointer text 的 `.uasset/.umap`。因此“Git tracked 文件数量相同”不等于 UE 资产已经可以加载。
 
-其中 `Content/Art` 和 `Content/Asset` 作为只读种子使用。正式 Wacom 运行时 Material / MI 已从本地依赖提升为 Git LFS 资产；其它 DreamShader 实验输出仍可在每个 worktree 的普通 `Content/DreamMaterials` 目录中独立生成。其它正式运行依赖长期仍应迁入 `/Game/Wacom`，或登记为有版本的第三方本地依赖包。
+其中 `Content/Art` 和 `Content/Asset` 作为只读种子使用。`Content/DreamMaterials` 已整体提升为 Git LFS 资产，不再属于本地依赖；其它正式运行依赖长期仍应迁入 `/Game/Wacom`，或登记为有版本的第三方本地依赖包。
 
 不要复制整个项目目录。完整复制会同时复制源码、配置、缓存和无版本资产，形成无法可靠合并的多份工程真相。
 
@@ -42,7 +42,7 @@ C:/Users/ahhh/.codex/worktrees/0b47/Wacom
   Content/Asset          -> D:/UE_Project/5.7/WacomWorktreeData/backpack-workspace/LocalDependencies/Content/Asset
 ```
 
-每个 worktree 的本地依赖和生成目录彼此独立。不要让两个 worktree 指向同一份可写 Content 目录。`Content/DreamMaterials` 现在是普通目录：受控白名单资产由 Git 管理，未受控实验输出继续被忽略。
+每个 worktree 的本地依赖目录彼此独立。不要让两个 worktree 指向同一份可写 Content 目录。`Content/DreamMaterials` 是普通受控目录，全部内容由 Git 管理；不同 worktree 的材质修改通过分支提交与合并同步。
 
 ## 初始化
 
@@ -84,7 +84,7 @@ C:/Users/ahhh/.codex/worktrees/0b47/Wacom
 
 - Source、Config、Docs、`Content/Wacom` 和 DShader 真源由 Git 分支管理。
 - `Content/Art`、`Content/Asset` 当前只作为本机 PIE 依赖，不在 worktree 间反向同步。
-- DreamShader 以 `.dsm`、`.dsh` 和设置脚本为制作真源；正式 Wacom 运行时 Material / MI 的生成 `.uasset` 同时由 Git LFS 管理，其它实验输出保持 worktree-local。
+- DreamShader 以 `.dsm`、`.dsh` 和设置脚本为制作真源；`Content/DreamMaterials` 的全部生成 `.uasset` 同时由 Git LFS 管理。
 - Agent 完成后只提交自己分支的受控内容，不提交 Junction、缓存或本地依赖副本。
 - 集成 Agent 合并分支并完成自动化后，最终 PIE 优先在集成 worktree 中验收。
 
