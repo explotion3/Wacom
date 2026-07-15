@@ -4,9 +4,7 @@
     "Content/Art",
     "Content/Asset"
   ],
-  "editableSeedDirectories": [
-    "Content/DreamMaterials"
-  ],
+  "editableSeedDirectories": [],
   "seedFiles": [
     "Content/L_TestBattle.umap"
   ],
