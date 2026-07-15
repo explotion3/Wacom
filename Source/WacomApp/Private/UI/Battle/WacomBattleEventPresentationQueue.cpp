@@ -37,13 +37,14 @@ FWacomBattleEventPresentationQueue::~FWacomBattleEventPresentationQueue()
 
 void FWacomBattleEventPresentationQueue::EnqueueEvents(const TArray<FBattleEvent>& Events)
 {
-	EnqueueEvents(Events, INDEX_NONE, 0.0f);
+	EnqueueEvents(Events, INDEX_NONE, 0.0f, false);
 }
 
 void FWacomBattleEventPresentationQueue::EnqueueEvents(
 	const TArray<FBattleEvent>& Events,
 	int32 PresentationStackEntryId,
-	float MinimumStackHoldSeconds)
+	float MinimumStackHoldSeconds,
+	bool bTargetAlreadyConfirmed)
 {
 	if (Events.IsEmpty())
 	{
@@ -54,7 +55,8 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 	bool bAddedDamageConfirmationLead = false;
 	for (const FBattleEvent& Event : Events)
 	{
-		if (!bAddedDamageConfirmationLead
+		if (!bTargetAlreadyConfirmed
+			&& !bAddedDamageConfirmationLead
 			&& Event.Type == EBattleEventType::DamageDealt
 			&& Event.ActorEnemyPartKey.IsValidKey())
 		{
@@ -106,6 +108,35 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 	if (Steps.IsEmpty())
 	{
 		FinishIfIdle();
+	}
+}
+
+void FWacomBattleEventPresentationQueue::EnqueueTargetCue(
+	const FWacomBattlePresentationTargetCue& Cue)
+{
+	if (!Cue.TargetPartKey.IsValidSlot())
+	{
+		return;
+	}
+
+	FWacomBattlePresentationStep Step;
+	Step.Type = EWacomBattlePresentationStepType::TargetCue;
+	Step.SourceEventType = Cue.SourceEventType;
+	Step.TargetCue = Cue;
+	Steps.Add(MoveTemp(Step));
+	if (!bProcessing)
+	{
+		bProcessing = true;
+		Coordinator.HandleQueueStarted();
+		Advance();
+		if (bProcessing && !Coordinator.GetWorld())
+		{
+			int32 SafetyCounter = 0;
+			while (bProcessing && SafetyCounter++ < 16)
+			{
+				Advance();
+			}
+		}
 	}
 }
 

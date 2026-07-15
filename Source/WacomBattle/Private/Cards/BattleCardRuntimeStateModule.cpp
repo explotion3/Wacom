@@ -108,8 +108,11 @@ FGameplayTagContainer FBattleCardRuntimeStateModule::BuildStatusProjection(
 
 bool FBattleCardRuntimeStateModule::ApplyRuntimeCostModifier(
 	FBattleState& State,
+	FBattleEventBus& Events,
 	const FGuid& CardInstanceId,
-	int32 Delta)
+	int32 Delta,
+	const FGuid& SourceInstanceId,
+	const FGameplayTag& SourceEffect)
 {
 	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardInstanceId);
 	if (!Card || Delta == 0)
@@ -117,6 +120,15 @@ bool FBattleCardRuntimeStateModule::ApplyRuntimeCostModifier(
 		return false;
 	}
 	Card->RuntimeCostModifier += Delta;
+
+	FBattleEvent Event;
+	Event.Type = EBattleEventType::CardRuntimeCostChanged;
+	Event.ActorInstanceId = SourceInstanceId;
+	Event.CardInstanceId = CardInstanceId;
+	Event.Tag = SourceEffect;
+	Event.Amount = Delta;
+	Event.Count = EvaluateCost(*Card).EffectiveCost;
+	Events.Emit(Event);
 	return true;
 }
 

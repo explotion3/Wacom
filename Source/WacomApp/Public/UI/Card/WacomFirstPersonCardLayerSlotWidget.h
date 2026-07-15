@@ -13,11 +13,13 @@ class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
+class FWacomFirstPersonCardDataRewritePlayback;
 class FWacomFirstPersonCardDragPickupPlayback;
 class FWacomFirstPersonCardHandTargetImpactPlayback;
 class FWacomFirstPersonCardSurfaceDeparturePlayback;
 class FWacomFirstPersonCardUseReformPlayback;
 class FWacomFirstPersonCardTransitionPlayback;
+struct FWacomFirstPersonCardLayerResolvedFeedbackHint;
 struct FWacomFirstPersonCardLayerTestAccess;
 
 struct FWacomFirstPersonCardTransitionPlaybackDeleter
@@ -38,6 +40,11 @@ struct FWacomFirstPersonCardDragPickupPlaybackDeleter
 struct FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardSurfaceDeparturePlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardDataRewritePlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardDataRewritePlayback* Playback) const;
 };
 
 struct FWacomFirstPersonCardHandTargetImpactPlaybackDeleter
@@ -103,6 +110,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	FWacomFirstPersonCardUseEffectView CardUseEffectView;
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolveView;
 	FWacomFirstPersonCardHandTargetImpactView HandTargetImpactView;
+	FWacomFirstPersonCardDataRewriteView DataRewriteView;
 	FWidgetTransform RenderTransform;
 	int32 RenderZOrder = 0;
 	bool bDragPickupFeedbackActive = false;
@@ -115,6 +123,8 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bCardUseReformPlaybackActive = false;
 	bool bCardUseReformUsingTargetSlot = false;
 	bool bHandTargetImpactCommitActive = false;
+	bool bDataRewritePlaybackActive = false;
+	bool bDataRewritePendingHandoff = false;
 	bool bHandTargetDeparturePending = false;
 	bool bHandTargetDepartureGateOpen = false;
 	int32 HandTargetImpactZOrderBoost = 0;
@@ -188,13 +198,27 @@ public:
 	void TriggerCommitFeedback();
 	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
 	void TriggerCardUseReformFeedback();
+	void TriggerCardUseReformOutFeedback();
+	void TriggerCardUseReformInFeedback();
 	void TriggerHandTargetImpactFeedback();
+	/** Locks the authoritative one-digit before/after values before incoming ViewData is applied. */
+	bool PrepareCardDataRewriteForSlotView(
+		const FWacomFirstPersonCardLayerSlotView& InTargetSlotView,
+		const FWacomFirstPersonCardLayerResolvedFeedbackHint& RewriteHint);
+	void TriggerCardDataRewriteFeedback(
+		int32 FieldMask,
+		EWacomFirstPersonCardDataRewriteTone Tone,
+		int32 Seed,
+		int32 SequenceIndex,
+		int32 SequenceCount,
+		bool bBlocksPresentationPhase = false);
 	void BeginDeferredExitWithHandTargetImpact(
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride,
 		EWacomFirstPersonCardSlotTransitionKind TransitionKind);
 	bool IsHandTargetImpactDeparturePending() const { return bHandTargetImpactDeparturePending; }
 	bool IsHandTargetImpactDepartureGateOpen() const;
+	bool HasHandTargetImpactReachedPeak() const { return IsHandTargetImpactDepartureGateOpen(); }
 	void SetHandTargetImpactDepartureOwnedByPileTransfer(bool bOwned);
 	void ReleaseDeferredHandTargetExitNow();
 	bool HasActivePresentationPlayback() const;
@@ -352,6 +376,17 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardHandTargetImpactPlayback,
 		FWacomFirstPersonCardHandTargetImpactPlaybackDeleter> HandTargetImpactPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardDataRewritePlayback,
+		FWacomFirstPersonCardDataRewritePlaybackDeleter> DataRewritePlayback;
+	int32 PendingDataRewriteFieldMask = 0;
+	EWacomFirstPersonCardDataRewriteTone PendingDataRewriteTone =
+		EWacomFirstPersonCardDataRewriteTone::Neutral;
+	int32 PendingDataRewriteSeed = 0;
+	int32 PendingDataRewriteSequenceIndex = 0;
+	int32 PendingDataRewriteSequenceCount = 1;
+	bool bPendingDataRewriteHandoff = false;
+	bool bDataRewriteBlocksPresentationPhase = false;
 	FWacomFirstPersonCardLayerSlotView DeferredHandTargetExitSlotView;
 	TOptional<FWacomFirstPersonCardTransitionMotionProfile> DeferredHandTargetExitProfile;
 	EWacomFirstPersonCardSlotTransitionKind DeferredHandTargetExitTransitionKind =
@@ -508,6 +543,7 @@ private:
 	void PlayPendingDragPickupSound();
 	float GetDragPickupAlpha() const;
 	void ResetCardSurfaceEffectView();
+	void ApplyActiveSurfaceEffectView();
 	bool CanPlayHandTargetImpact() const;
 	void BeginHandTargetImpactPreview();
 	void EndHandTargetImpactPreview();
@@ -517,6 +553,18 @@ private:
 	void PlayPendingHandTargetImpactSound();
 	bool IsHandTargetImpactPlaybackActive() const;
 	bool IsHandTargetImpactCommitPlaybackActive() const;
+	bool CanPlayCardDataRewrite() const;
+	void BeginCardDataRewritePlayback(
+		int32 FieldMask,
+		EWacomFirstPersonCardDataRewriteTone Tone,
+		int32 Seed,
+		int32 SequenceIndex,
+		bool bAllowSequenceDelay);
+	void TickCardDataRewritePlayback(float DeltaTime);
+	void ClearCardDataRewritePlayback();
+	void ApplyCardDataRewriteView();
+	void PlayPendingCardDataRewriteSound();
+	bool IsCardDataRewritePlaybackActive() const;
 	bool CanPlayCardUseEffect() const;
 	bool CanPlayCardUseReformEffect() const;
 	bool CanPlayExhaustDissolve() const;
@@ -529,6 +577,8 @@ private:
 	void ClearCardUseReformPlayback(bool bSnapToTarget = false);
 	void PlayPendingCardUseReformSound();
 	bool IsCardUseReformPlaybackActive() const;
+	bool IsCardUseReformPlaybackBlockingStage() const;
+	void TriggerCardUseReformFeedbackInternal(bool bOutboundOnly, bool bInboundOnly);
 	void BroadcastDragStarted();
 	void BroadcastDragUpdated();
 	void BroadcastDragReleased();

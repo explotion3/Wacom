@@ -65,6 +65,7 @@ private:
 	FBattleSnapshot LastTransitionSnapshot;
 	FBattleSnapshot PendingHandAnchorEnterSnapshot;
 	TArray<FBattleEvent> PendingTransitionEvents;
+	TArray<FBattleEvent> PendingCardDataChangeEvents;
 	TArray<FPlayCommitHint> PendingPlayCommitHints;
 	TArray<FGuid> PendingHandTargetImpactIds;
 	TArray<FBattleEvent> SubmittedTransitionEvents;

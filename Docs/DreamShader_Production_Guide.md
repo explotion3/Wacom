@@ -122,6 +122,8 @@ Function SelfContained WacomExample_ComputeMask(
 - 只有明确需要持续动画时才读取 Time。一次性效果优先由 Playback 写入归一化进度和确定性 Seed。
 - 重复的 3×3 Alpha 邻域、Bayer 阈值或 UV 投影只计算一次并复用，避免每增加一个表现模块就复制整组纹理采样。
 - 对图集 Sprite：先在局部 `0..1` UV 中做位移、inside mask 和裁切，再映射到 atlas scale/bias。直接在图集 UV 上视差会采样到相邻稀有度边框。
+- 卡面 `BackColor` 一类插画底板不能以 Alpha=1 的全屏颜色直接参与最终合成，否则会把透明圆角重新填成矩形，并污染 Retainer 实时 Alpha 阴影。应先通过局部 UV 生成居中缩放遮罩（当前默认 `BackColorScale=0.96`），再作为插画下层合成。
+- 卡面材质中的“层深”和“表面反光”是两个独立合同：Art、Frame、Rarity 都可以拥有不同 UV 深度，并分别使用标量开关控制角度反光。当前默认 `ArtReflectionEnabled=0 / FrameReflectionEnabled=0 / RarityReflectionEnabled=1`；反光关闭时必须精确恢复源 RGB，但不能顺带关闭该层 UV 视差。插画使用宽幅柔和覆膜高光，实体 Frame 使用方向金属高光，只有 Rarity 使用 foil / iridescence。
 
 ## 5. 已经踩过的坑
 
@@ -255,6 +257,8 @@ rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: E
   -Unattended -NoPause -NoSplash
 ```
 
+该脚本必须写入实际运行时使用的宿主，而不只是名称相近的通用资产。当前第一人称链是 `WBP_FPCardView -> WBP_FirstPersonCardView`，因此脚本会同时配置 `WBP_FirstPersonCardView` 与通用 `WBP_CardView`。如果只有出血装饰位移、核心插画/实体卡框/稀有度边框完全静止，优先检查实际嵌套 CardView 的 `CardSurfaceMaterial`，不要继续放大 Parallax Strength。
+
 如果脚本会修改 WBP、Blueprint CDO、DataAsset 或纹理，运行前关闭 Unreal Editor，避免编辑器内存中的旧资产在退出时覆盖脚本结果。
 
 ## 7. 参数设计技巧
@@ -267,6 +271,8 @@ rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: E
 - Seed 必须来自稳定语义（Card ID、Event Sequence、目标 ID），不能来自当前帧时间。
 - Reduced Motion 不等于关闭语义反馈：保留静态标记、中心方印或短淡出，只关闭方向传播、粒子位移和循环动画。
 - 卡牌插画与稀有度边框不是同一种资产合同：插画使用 `UTexture2D`；`RarityBorder` 使用 `UPaperSprite`，必须从 baked atlas texture 与 source rect 计算局部 UV，不能直接把 Sprite 当成整张 Texture 采样。
+- 稳定 Bayer、`step / smoothstep`、hash、色板选择等算法优先写进带 `Wacom` 前缀的 `.dsh` `Function SelfContained`。`.dsm` Graph 只负责参数、采样、helper 调用和最终合成：这样既避免在 Graph 中重复展开分支节点，也能绕开 Graph 表达式对部分 HLSL 风格函数调用的解析限制。费用数字重组的硬像素顺序、Tone 色板选择和 Preview/Rewrite 模式判断分别由 `WacomCard_ComputeCostDigitRewriteMasks`、`WacomCard_SelectCostDigitRewritePalette` 与 `WacomCard_SelectCostDigitEffectMode` 提供。`step()` 可在 `.dsh` 自包含函数中使用，但不能直接写在当前 DreamShader Graph 赋值表达式里；后者会报 `Unknown Graph function 'step'` 并导致运行时只能直接换数字。
+- 对 `UImage` 内的 PaperSprite 做双值过渡时，优先用 `UPaperSprite::GetSlateAtlasData()` 提取 Atlas Texture、StartUV 与 SizeUV，然后把两组 Atlas Rect 交给直接 UI 材质；不要假设 Sprite 独占整张纹理。为了避免新值先闪一帧，Layer 必须在 ViewData 更新前锁定旧 Sprite，再刷新权威数据并启动 MID。此类局部 Image MID 不需要 Retainer 的 `Texture` 参数，也不应复制 Fake3D、接触阴影或卡面几何换算。
 
 ## 8. 性能原则
 

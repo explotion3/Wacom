@@ -7,13 +7,14 @@ Shader(Name="DreamMaterials/Card/M_WacomCardSurfaceComposite")
         TextureSampleParameter2D FrameTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="卡牌核心表面|纹理"; SortPriority=1; Description="实体卡框纹理；推荐 148×210、Nearest。"; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
         TextureSampleParameter2D RarityTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="卡牌核心表面|纹理"; SortPriority=2; Description="稀有度 Sprite 使用的图集纹理。"; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
 
-        VectorParameter BackColor = float4(0.08, 0.075, 0.065, 1.0) [ Group="卡牌核心表面|制作"; SortPriority=10; ];
-        VectorParameter RarityUVScaleBias = float4(1.0, 1.0, 0.0, 0.0) [ Group="卡牌核心表面|运行时"; SortPriority=11; Description="稀有度图集区域：ScaleX、ScaleY、BiasX、BiasY。"; ];
-        VectorParameter CardSourceInvSize = float4(0.00675676, 0.00476190, 148.0, 210.0) [ Group="卡牌核心表面|运行时"; SortPriority=12; Description="卡面源像素尺寸倒数与尺寸；默认 148×210。"; ];
-        ScalarParameter RarityEnabled = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=13; ];
-        ScalarParameter TiltX = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=14; ];
-        ScalarParameter TiltY = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=15; ];
-        ScalarParameter ParallaxStrength = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=16; ];
+        VectorParameter BackColor = float4(0.08, 0.075, 0.065, 1.0) [ Group="卡牌核心表面|制作"; SortPriority=10; Description="插画透明区域后方的底板颜色；底板范围由 BackColorScale 控制。"; ];
+        ScalarParameter BackColorScale = 0.96 [ Group="卡牌核心表面|材质实例"; SortPriority=11; Description="插画底板相对完整卡面的居中均匀缩放比例；默认 0.96，用于避免方形底色露出圆角卡框。推荐 0.90–0.98。"; ];
+        VectorParameter RarityUVScaleBias = float4(1.0, 1.0, 0.0, 0.0) [ Group="卡牌核心表面|运行时"; SortPriority=12; Description="稀有度图集区域：ScaleX、ScaleY、BiasX、BiasY。"; ];
+        VectorParameter CardSourceInvSize = float4(0.00675676, 0.00476190, 148.0, 210.0) [ Group="卡牌核心表面|运行时"; SortPriority=13; Description="卡面源像素尺寸倒数与尺寸；默认 148×210。"; ];
+        ScalarParameter RarityEnabled = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=14; ];
+        ScalarParameter TiltX = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=15; ];
+        ScalarParameter TiltY = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=16; ];
+        ScalarParameter ParallaxStrength = 0.0 [ Group="卡牌核心表面|运行时"; SortPriority=17; ];
 
         ScalarParameter ReferenceTiltDegrees = 9.0 [ Group="卡牌核心表面|材质实例"; SortPriority=30; Description="达到 authored 层深的参考倾角，单位为度；推荐与 Drag 最大倾角一致。"; ];
         ScalarParameter ArtDepthPixels = -2.0 [ Group="卡牌核心表面|材质实例"; SortPriority=31; Description="插画相对卡框的源像素深度；负值表示位于卡框后方，推荐 -1 到 -3。"; ];
@@ -21,12 +22,16 @@ Shader(Name="DreamMaterials/Card/M_WacomCardSurfaceComposite")
         ScalarParameter RarityDepthPixels = 1.5 [ Group="卡牌核心表面|材质实例"; SortPriority=33; Description="稀有度饰条相对卡框的源像素深度；推荐 0.5 到 2。"; ];
         ScalarParameter ArtOverscan = 0.035 [ Group="卡牌核心表面|材质实例"; SortPriority=34; Description="插画为视差位移预留的内缩采样比例；推荐 0.02 到 0.06。"; ];
         ScalarParameter PixelQuantization = 1.0 [ Group="卡牌核心表面|材质实例"; SortPriority=35; Description="源像素量化强度；1 保持硬像素采样，0 使用连续 UV。"; ];
-        ScalarParameter FrameHighlightStrength = 0.10 [ Group="卡牌核心表面|材质实例"; SortPriority=40; ];
-        ScalarParameter RarityBevelStrength = 0.16 [ Group="卡牌核心表面|材质实例"; SortPriority=41; ];
-        ScalarParameter FoilStrength = 0.08 [ Group="卡牌核心表面|材质实例"; SortPriority=42; ];
-        ScalarParameter MetalContrast = 1.10 [ Group="卡牌核心表面|材质实例"; SortPriority=43; ];
-        ScalarParameter IridescenceStrength = 0.05 [ Group="卡牌核心表面|材质实例"; SortPriority=44; ];
-        ScalarParameter GlowStrength = 0.04 [ Group="卡牌核心表面|材质实例"; SortPriority=45; ];
+        ScalarParameter ArtReflectionEnabled = 0.0 [ Group="卡牌核心表面|插画反光"; SortPriority=40; Description="插画覆膜反光开关：0 关闭，1 开启；只控制倾斜受光，不关闭插画视差。默认关闭。"; ];
+        ScalarParameter ArtReflectionStrength = 0.06 [ Group="卡牌核心表面|插画反光"; SortPriority=41; Description="插画宽幅柔和反光强度；推荐 0.02–0.12。仅在 ArtReflectionEnabled=1 时生效。"; ];
+        ScalarParameter FrameReflectionEnabled = 0.0 [ Group="卡牌核心表面|实体边框反光"; SortPriority=42; Description="实体卡框金属反光开关：0 关闭，1 开启；只控制倾斜受光，不关闭卡框视差。默认关闭。"; ];
+        ScalarParameter FrameReflectionStrength = 0.10 [ Group="卡牌核心表面|实体边框反光"; SortPriority=43; Description="实体卡框方向高光强度；推荐 0.04–0.20。仅在 FrameReflectionEnabled=1 时生效。"; ];
+        ScalarParameter FrameMetalContrast = 1.10 [ Group="卡牌核心表面|实体边框反光"; SortPriority=44; Description="实体卡框启用反光时的金属明暗对比；1 保持原色，推荐 1.00–1.35。"; ];
+        ScalarParameter RarityReflectionEnabled = 1.0 [ Group="卡牌核心表面|稀有度反光"; SortPriority=45; Description="稀有度边框箔片反光开关：0 关闭，1 开启；默认开启。"; ];
+        ScalarParameter RarityBevelStrength = 0.16 [ Group="卡牌核心表面|稀有度反光"; SortPriority=46; Description="稀有度边框随倾斜变化的凹凸明暗；推荐 0.08–0.30。"; ];
+        ScalarParameter FoilStrength = 0.08 [ Group="卡牌核心表面|稀有度反光"; SortPriority=47; Description="稀有度边框箔片反射强度；推荐 0.04–0.20。"; ];
+        ScalarParameter IridescenceStrength = 0.05 [ Group="卡牌核心表面|稀有度反光"; SortPriority=48; Description="稀有度边框局部虹彩强度；推荐 0.00–0.15。"; ];
+        ScalarParameter GlowStrength = 0.04 [ Group="卡牌核心表面|稀有度反光"; SortPriority=49; Description="稀有度边框附加辉光强度；推荐 0.00–0.12。"; ];
     }
 
     Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "PremultipliedAlpha"; TwoSided = true; }
@@ -43,7 +48,11 @@ Shader(Name="DreamMaterials/Card/M_WacomCardSurfaceComposite")
         float artMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=artUVAndMask, R=false, G=false, B=true, A=false);
         float4 artSample = ArtTexture(Coordinates=artUV);
         float4 artLayer;
-        WacomCardSurface_ApplyLayerMask(artSample, artMask, artLayer);
+        WacomCardSurface_ApplyArtReflection(artSample, artUV, tilt, ReferenceTiltDegrees, artMask, ArtReflectionStrength * saturate(ArtReflectionEnabled), artLayer);
+
+        float3 backplateUVAndMask;
+        WacomCardSurface_ComputeLayerUV(uv, sourceInvSize, tilt, ReferenceTiltDegrees, ParallaxStrength, ArtDepthPixels, 0.0, PixelQuantization, backplateUVAndMask);
+        float2 backplateUV = UE.Expression(Class="ComponentMask", OutputType="float2", Input=backplateUVAndMask, R=true, G=true, B=false, A=false);
 
         float3 frameUVAndMask;
         WacomCardSurface_ComputeLayerUV(uv, sourceInvSize, tilt, ReferenceTiltDegrees, ParallaxStrength, FrameDepthPixels, 0.0, PixelQuantization, frameUVAndMask);
@@ -51,7 +60,9 @@ Shader(Name="DreamMaterials/Card/M_WacomCardSurfaceComposite")
         float frameMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=frameUVAndMask, R=false, G=false, B=true, A=false);
         float4 frameSample = FrameTexture(Coordinates=frameUV);
         float4 frameLayer;
-        WacomCardSurface_ApplyFrameFinish(frameSample, frameUV, tilt, ReferenceTiltDegrees, frameMask, FrameHighlightStrength, MetalContrast, frameLayer);
+        float frameReflectionAmount = saturate(FrameReflectionEnabled);
+        float frameMetalContrast = lerp(1.0, FrameMetalContrast, frameReflectionAmount);
+        WacomCardSurface_ApplyFrameFinish(frameSample, frameUV, tilt, ReferenceTiltDegrees, frameMask, FrameReflectionStrength * frameReflectionAmount, frameMetalContrast, frameLayer);
 
         float3 rarityLocalUVAndMask;
         WacomCardSurface_ComputeLayerUV(uv, sourceInvSize, tilt, ReferenceTiltDegrees, ParallaxStrength, RarityDepthPixels, 0.0, PixelQuantization, rarityLocalUVAndMask);
@@ -61,12 +72,15 @@ Shader(Name="DreamMaterials/Card/M_WacomCardSurfaceComposite")
         float rarityMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=rarityAtlasUVAndMask, R=false, G=false, B=true, A=false);
         float4 raritySample = RarityTexture(Coordinates=rarityUV);
         float4 rarityLayer;
-        WacomCardSurface_ApplyRarityFinish(raritySample, uv, tilt, ReferenceTiltDegrees, rarityMask * saturate(RarityEnabled), RarityBevelStrength, FoilStrength, IridescenceStrength, GlowStrength, rarityLayer);
+        float rarityReflectionAmount = saturate(RarityReflectionEnabled);
+        WacomCardSurface_ApplyRarityFinish(raritySample, uv, tilt, ReferenceTiltDegrees, rarityMask * saturate(RarityEnabled), RarityBevelStrength * rarityReflectionAmount, FoilStrength * rarityReflectionAmount, IridescenceStrength * rarityReflectionAmount, GlowStrength * rarityReflectionAmount, rarityLayer);
 
         float4 baseAndArt;
         float4 baseArtFrame;
         float4 finalSurface;
-        WacomCardSurface_AlphaComposite(BackColor, artLayer, baseAndArt);
+        float4 scaledBackColor;
+        WacomCardSurface_ApplyCenteredBackplate(BackColor, backplateUV, BackColorScale, scaledBackColor);
+        WacomCardSurface_AlphaComposite(scaledBackColor, artLayer, baseAndArt);
         WacomCardSurface_AlphaComposite(baseAndArt, frameLayer, baseArtFrame);
         WacomCardSurface_AlphaComposite(baseArtFrame, rarityLayer, finalSurface);
         Color = UE.Expression(Class="ComponentMask", OutputType="float3", Input=finalSurface, R=true, G=true, B=true, A=false);

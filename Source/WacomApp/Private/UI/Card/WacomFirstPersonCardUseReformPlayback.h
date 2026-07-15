@@ -64,6 +64,8 @@ class FWacomFirstPersonCardUseReformPlayback
 {
 public:
 	void Begin(const FWacomFirstPersonCardUseReformPlaybackConfig& Config);
+	void BeginOutbound(const FWacomFirstPersonCardUseReformPlaybackConfig& Config);
+	void BeginInbound(const FWacomFirstPersonCardUseReformPlaybackConfig& Config);
 	FWacomFirstPersonCardUseReformTickResult Tick(float DeltaTime);
 	FWacomFirstPersonCardUseReformTickResult BuildView() const;
 	TOptional<FWacomFirstPersonCardUseReformSoundRequest> ConsumePendingSoundRequest();
@@ -74,7 +76,23 @@ public:
 		return Phase != EWacomFirstPersonCardUseReformPhase::Inactive;
 	}
 
+	bool IsHeldHidden() const
+	{
+		return Phase == EWacomFirstPersonCardUseReformPhase::HiddenHold
+			&& bAwaitExplicitInbound;
+	}
+
+	bool IsBlockingStage() const
+	{
+		return IsActive() && !IsHeldHidden();
+	}
+
 private:
+	void Initialize(
+		const FWacomFirstPersonCardUseReformPlaybackConfig& Config,
+		bool bInAwaitExplicitInbound,
+		bool bRequestSound);
+
 	EWacomFirstPersonCardUseReformPhase Phase =
 		EWacomFirstPersonCardUseReformPhase::Inactive;
 	float ElapsedSeconds = 0.0f;
@@ -87,6 +105,7 @@ private:
 	EWacomFirstPersonCardUseEffectKind EffectKind =
 		EWacomFirstPersonCardUseEffectKind::DiamondWave;
 	bool bReducedMotion = false;
+	bool bAwaitExplicitInbound = false;
 	bool bSoundRequestPending = false;
 	FWacomFirstPersonCardUseReformSoundRequest PendingSoundRequest;
 };

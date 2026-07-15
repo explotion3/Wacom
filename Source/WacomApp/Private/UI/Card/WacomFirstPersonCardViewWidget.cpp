@@ -77,6 +77,66 @@ void UWacomFirstPersonCardViewWidget::SetCardViewData(const FWacomCardViewData& 
 	ApplyPendingCardViewData();
 }
 
+bool UWacomFirstPersonCardViewWidget::PrepareCostDigitRewrite(
+	const FWacomCardViewData& InNewData)
+{
+	EnsureFallbackWidgetTree();
+	return CardView && CardView->PrepareCostDigitRewrite(InNewData);
+}
+
+bool UWacomFirstPersonCardViewWidget::PrepareCostDigitRewrite(
+	const FWacomCardViewData& InOldData,
+	const FWacomCardViewData& InNewData)
+{
+	EnsureFallbackWidgetTree();
+	return CardView && CardView->PrepareCostDigitRewrite(InOldData, InNewData);
+}
+
+void UWacomFirstPersonCardViewWidget::SetCardDataRewriteView(
+	const FWacomFirstPersonCardDataRewriteView& View)
+{
+	EnsureFallbackWidgetTree();
+	LastDataRewriteView = View;
+	if (CardView)
+	{
+		CardView->SetCostDigitRewriteView(View);
+	}
+	if (Fake3DSurfaceRetainer)
+	{
+		Fake3DSurfaceRetainer->RequestRender();
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::ResetCardDataRewriteView()
+{
+	LastDataRewriteView = FWacomFirstPersonCardDataRewriteView();
+	if (CardView)
+	{
+		CardView->ResetCostDigitRewrite();
+	}
+	if (Fake3DSurfaceRetainer)
+	{
+		Fake3DSurfaceRetainer->RequestRender();
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::SetCostDigitPreviewView(
+	const FWacomFirstPersonCardCostPreviewView& View)
+{
+	if (CardView)
+	{
+		CardView->SetCostDigitPreviewView(View);
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::ResetCostDigitPreviewView()
+{
+	if (CardView)
+	{
+		CardView->ResetCostDigitPreview();
+	}
+}
+
 FVector2D UWacomFirstPersonCardViewWidget::GetCardBodyHitSize() const
 {
 	return CardView ? CardView->GetCardBodyHitSize() : UWacomCardView::GetDefaultCardBodyHitSize();
@@ -297,6 +357,7 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.bInteractionFeedbackUsesBrushMaterial = bLastInteractionFeedbackUsedBrushMaterial;
 	View.CardDepthView = LastCardDepthView;
 	View.SurfaceEffectView = LastSurfaceEffectView;
+	View.DataRewriteView = LastDataRewriteView;
 	View.bHasFake3DSurfaceRetainer = Fake3DSurfaceRetainer != nullptr;
 	View.bFake3DEffectMaterialReady =
 		Fake3DSurfaceRetainer && Fake3DSurfaceRetainer->GetEffectMaterial() != nullptr;
@@ -340,12 +401,14 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 	ClearInteractionFeedbackView();
 	SetCardDepthView(LastCardDepthView);
 	SetCardSurfaceEffectView(LastSurfaceEffectView);
+	SetCardDataRewriteView(LastDataRewriteView);
 }
 
 void UWacomFirstPersonCardViewWidget::NativeDestruct()
 {
 	if (CardView)
 	{
+		CardView->ResetCostDigitRewrite();
 		CardView->ResetCardSurfacePerspectiveView();
 	}
 	RestoreBaseSurfaceEffectMaterial();

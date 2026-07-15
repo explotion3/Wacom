@@ -17,6 +17,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerDelegateRouter.h"
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 #include "UI/Card/WacomFirstPersonCardHandTargetImpactStyle.h"
+#include "UI/Card/WacomFirstPersonCardDataRewriteStyle.h"
 #include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 #include "UI/Card/WacomFirstPersonCardPileTransferStyle.h"
 #include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
@@ -329,6 +330,16 @@ namespace
 			Config.HandTargetImpact.Style.CommitDurationSeconds =
 				Anchor.CardHandTargetImpactCommitDurationOverrideSeconds;
 		}
+		Config.DataRewrite.bEnabled = Anchor.bEnableCardDataRewrite;
+		Config.DataRewrite.bReducedMotion = Anchor.bReduceCardDataRewriteMotion;
+		Config.DataRewrite.Style = Anchor.CardDataRewriteStyle
+			? Anchor.CardDataRewriteStyle->Style
+			: FWacomFirstPersonCardDataRewriteStyleData();
+		if (Anchor.CardDataRewriteDurationOverrideSeconds >= 0.0f)
+		{
+			Config.DataRewrite.Style.DurationSeconds =
+				Anchor.CardDataRewriteDurationOverrideSeconds;
+		}
 		Config.PileTransfer.bEnabled = Anchor.bEnableCardPileTransfer;
 		Config.PileTransfer.bDiscardToPileEnabled = Anchor.bEnableCardDiscardGlyphTransfer;
 		Config.PileTransfer.bReducedMotion = Anchor.bReduceCardPileTransferMotion;
@@ -489,6 +500,7 @@ namespace
 		VisualConfig.CardUseEffect = Config.CardUseEffect;
 		VisualConfig.PlayedDissolve = Config.PlayedDissolve;
 		VisualConfig.HandTargetImpact = Config.HandTargetImpact;
+		VisualConfig.DataRewrite = Config.DataRewrite;
 		return VisualConfig;
 	}
 
@@ -863,6 +875,26 @@ namespace
 		AddFloat(Config.HandTargetImpact.Style.ImpactSoundVolumeMultiplier);
 		AddFloat(Config.HandTargetImpact.Style.ImpactSoundPitchMultiplier);
 		AddFloat(Config.HandTargetImpact.Style.ImpactSoundPitchVariation);
+		AddBool(Config.DataRewrite.bEnabled);
+		AddBool(Config.DataRewrite.bReducedMotion);
+		Combine(GetTypeHash(Config.DataRewrite.Style.DigitRewriteMaterialInstance.Get()));
+		AddFloat(Config.DataRewrite.Style.PreviewPulsePeriodSeconds);
+		AddFloat(Config.DataRewrite.Style.PreviewMinimumOpacity);
+		AddFloat(Config.DataRewrite.Style.PreviewMaximumOpacity);
+		AddFloat(Config.DataRewrite.Style.PreviewPeakBrightness);
+		AddFloat(Config.DataRewrite.Style.DurationSeconds);
+		AddFloat(Config.DataRewrite.Style.OldDissolveEndSeconds);
+		AddFloat(Config.DataRewrite.Style.NewRevealStartSeconds);
+		AddFloat(Config.DataRewrite.Style.NewRevealEndSeconds);
+		AddFloat(Config.DataRewrite.Style.MinimumScale);
+		AddFloat(Config.DataRewrite.Style.OvershootScale);
+		AddFloat(Config.DataRewrite.Style.OvershootPeakSeconds);
+		AddFloat(Config.DataRewrite.Style.SequenceStaggerSeconds);
+		AddFloat(Config.DataRewrite.Style.MaxSequenceDelaySeconds);
+		Combine(GetTypeHash(Config.DataRewrite.Style.RewriteSound.Get()));
+		AddFloat(Config.DataRewrite.Style.RewriteSoundVolumeMultiplier);
+		AddFloat(Config.DataRewrite.Style.RewriteSoundPitchMultiplier);
+		AddFloat(Config.DataRewrite.Style.RewriteSoundPitchVariation);
 		AddBool(Config.PileTransfer.bEnabled);
 		AddBool(Config.PileTransfer.bDiscardToPileEnabled);
 		AddBool(Config.PileTransfer.bReducedMotion);
@@ -1534,6 +1566,13 @@ bool UWacomFirstPersonCardAnchorComponent::HasRuntimeCardLayerPendingPresentatio
 bool UWacomFirstPersonCardAnchorComponent::HasActiveCardLayerPresentationPlayback() const
 {
 	return CardLayerWidget && CardLayerWidget->HasActivePresentationPlayback();
+}
+
+bool UWacomFirstPersonCardAnchorComponent::HasHandTargetImpactReachedPeak(
+	const FGuid& CardInstanceId) const
+{
+	return CardLayerWidget
+		&& CardLayerWidget->HasHandTargetImpactReachedPeak(CardInstanceId);
 }
 
 void UWacomFirstPersonCardAnchorComponent::ForceSettleCardLayerPresentationPlayback()

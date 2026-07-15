@@ -108,8 +108,8 @@ namespace
 	{
 		if (TargetPreview.bHasTargetHandCardCostPreview)
 		{
-			Context.bHasRuntimeCost = true;
-			Context.RuntimeCost = TargetPreview.TargetHandCardRuntimeCostAfter;
+			Context.bHasRuntimeCostPreview = true;
+			Context.RuntimeCostPreview = TargetPreview.TargetHandCardRuntimeCostAfter;
 		}
 	}
 }

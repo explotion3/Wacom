@@ -118,6 +118,23 @@ bool FWacomCardSurfaceParallaxDreamShaderContractSpec::RunTest(const FString& Pa
 	TestTrue(TEXT("Art texture contract is present"), MaterialSource.Contains(TEXT("ArtTexture")));
 	TestTrue(TEXT("Frame texture contract is present"), MaterialSource.Contains(TEXT("FrameTexture")));
 	TestTrue(TEXT("Rarity atlas contract is present"), MaterialSource.Contains(TEXT("RarityUVScaleBias")));
+	TestTrue(TEXT("Back color is a centered illustration backplate"),
+		MaterialSource.Contains(TEXT("ScalarParameter BackColorScale"))
+		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyCenteredBackplate(BackColor, backplateUV"))
+		&& MaterialSource.Contains(TEXT("WacomCardSurface_AlphaComposite(scaledBackColor"))
+		&& HelperSource.Contains(TEXT("Function SelfContained WacomCardSurface_ApplyCenteredBackplate")));
+	TestTrue(TEXT("Art reflection is independently disabled by default without removing parallax"),
+		MaterialSource.Contains(TEXT("ScalarParameter ArtReflectionEnabled = 0.0"))
+		&& MaterialSource.Contains(TEXT("ArtReflectionStrength * saturate(ArtReflectionEnabled)"))
+		&& HelperSource.Contains(TEXT("Function SelfContained WacomCardSurface_ApplyArtReflection")));
+	TestTrue(TEXT("Physical frame reflection is independently disabled by default"),
+		MaterialSource.Contains(TEXT("ScalarParameter FrameReflectionEnabled = 0.0"))
+		&& MaterialSource.Contains(TEXT("FrameReflectionStrength * frameReflectionAmount"))
+		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyFrameFinish(")));
+	TestTrue(TEXT("Rarity foil reflection remains independently enabled by default"),
+		MaterialSource.Contains(TEXT("ScalarParameter RarityReflectionEnabled = 1.0"))
+		&& MaterialSource.Contains(TEXT("RarityBevelStrength * rarityReflectionAmount"))
+		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyRarityFinish(")));
 	const FString CardViewSourcePath = FPaths::ProjectDir()
 		/ TEXT("Source/WacomApp/Private/UI/Card/WacomCardView.cpp");
 	FString CardViewSource;
@@ -132,5 +149,42 @@ bool FWacomCardSurfaceParallaxDreamShaderContractSpec::RunTest(const FString& Pa
 	TestTrue(TEXT("Helper clamps atlas sampling in local UV"), HelperSource.Contains(TEXT("localUVAndMask.z")));
 	TestFalse(TEXT("Surface parallax has no time loop"), MaterialSource.Contains(TEXT("Time("))
 		|| HelperSource.Contains(TEXT("Time(")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomCardSurfaceParallaxProductionWidgetAssetSpec,
+	"Wacom.UI.CardView.SurfaceParallax.ProductionWidgetAssetActivation",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomCardSurfaceParallaxProductionWidgetAssetSpec::RunTest(const FString& Parameters)
+{
+	UClass* CardViewClass = LoadClass<UWacomCardView>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C"));
+	TestNotNull(TEXT("Production WBP_FirstPersonCardView class loads"), CardViewClass);
+	if (!CardViewClass)
+	{
+		return false;
+	}
+
+	UWacomCardView* CardView = NewObject<UWacomCardView>(GetTransientPackage(), CardViewClass);
+	TestNotNull(TEXT("Production WBP_FirstPersonCardView instance is created"), CardView);
+	if (!CardView)
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Production WBP_FirstPersonCardView initializes its generated widget tree"), CardView->Initialize());
+	const TSharedRef<SWidget> SlateWidget = CardView->TakeWidget();
+	FWacomCardViewData LegacyData;
+	LegacyData.Name = FText::FromString(TEXT("Production widget authored art fallback"));
+	CardView->SetCardViewData(LegacyData);
+	const FWacomCardViewAutomationTestView View = CardView->GetAutomationTestViewForTest();
+	TestNotNull(TEXT("Production first-person card face exposes authored CardArt texture"), View.ResolvedSurfaceArt);
+	TestTrue(TEXT("Production first-person card face binds CardOverlay"), View.bHasCardOverlay);
+	TestTrue(TEXT("Production first-person card face creates CardSurfaceImage"), View.bHasCardSurfaceImage);
+	TestTrue(TEXT("Production first-person card face provides CardSurfaceMaterial"), View.bHasCardSurfaceMaterial);
+	TestTrue(TEXT("Production first-person card face activates core surface composite"), View.bSurfaceCompositeActive);
 	return true;
 }

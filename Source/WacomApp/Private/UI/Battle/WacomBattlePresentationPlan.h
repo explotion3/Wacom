@@ -6,6 +6,7 @@
 #include "Events/BattleEvent.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/WacomBattleDrawPileFeedbackController.h"
+#include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 enum class EWacomBattlePresentationPhaseKind : uint8
@@ -18,7 +19,19 @@ enum class EWacomBattlePresentationPhaseKind : uint8
 	TurnStartHandAnchorEnter,
 	CommandHandResolution,
 	HandDiscardGlyphTransfer,
-	DeckReshuffle
+	DeckReshuffle,
+	CommandSourceOut,
+	CommandPrimaryTarget,
+	CommandOutcome,
+	CommandSourceReturn,
+	CommandBlockingDialog
+};
+
+enum class EWacomBattlePresentationPhaseCompletionPolicy : uint8
+{
+	PlaybackIdle,
+	HandTargetImpactPeak,
+	EventQueue
 };
 
 struct FWacomBattlePresentationPhase
@@ -36,6 +49,12 @@ struct FWacomBattlePresentationPhase
 	int32 PileTransferFinalDiscardCount = 0;
 	int32 PileTransferPlayedCount = 0;
 	TOptional<FWacomBattleDrawPileFeedbackBatch> DrawPileFeedbackBatch;
+	TOptional<FWacomBattlePresentationTargetCue> TargetCue;
+	EWacomBattlePresentationPhaseCompletionPolicy CompletionPolicy =
+		EWacomBattlePresentationPhaseCompletionPolicy::PlaybackIdle;
+	FGuid CompletionCardInstanceId;
+	int32 OrderingSequence = INDEX_NONE;
+	bool bTargetAlreadyConfirmed = false;
 
 	bool HasHandFrame() const
 	{
@@ -45,18 +64,31 @@ struct FWacomBattlePresentationPhase
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter
 			|| Kind == EWacomBattlePresentationPhaseKind::CommandHandResolution
 			|| Kind == EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer
-			|| Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle;
+			|| Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandSourceOut
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandPrimaryTarget
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandOutcome
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandSourceReturn;
 	}
 
 	bool HasEventQueue() const
 	{
-		return Kind == EWacomBattlePresentationPhaseKind::EnemyAction && Events.Num() > 0;
+		return (Kind == EWacomBattlePresentationPhaseKind::EnemyAction
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandOutcome
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandBlockingDialog)
+			&& Events.Num() > 0;
+	}
+
+	bool HasTargetCue() const
+	{
+		return TargetCue.IsSet();
 	}
 };
 
 struct FWacomBattlePresentationPlan
 {
 	TArray<FWacomBattlePresentationPhase> Phases;
+	int32 CompletionStackEntryId = INDEX_NONE;
 
 	bool IsEmpty() const
 	{

@@ -48,8 +48,11 @@ public:
 
 	static bool ApplyRuntimeCostModifier(
 		FBattleState& State,
+		FBattleEventBus& Events,
 		const FGuid& CardInstanceId,
-		int32 Delta);
+		int32 Delta,
+		const FGuid& SourceInstanceId = FGuid(),
+		const FGameplayTag& SourceEffect = FGameplayTag());
 
 	static FCardStatusMutationResult ApplyStatusStacks(
 		FBattleState& State,

@@ -7,6 +7,37 @@
 void FWacomFirstPersonCardUseReformPlayback::Begin(
 	const FWacomFirstPersonCardUseReformPlaybackConfig& Config)
 {
+	Initialize(Config, false, true);
+}
+
+void FWacomFirstPersonCardUseReformPlayback::BeginOutbound(
+	const FWacomFirstPersonCardUseReformPlaybackConfig& Config)
+{
+	Initialize(Config, true, true);
+}
+
+void FWacomFirstPersonCardUseReformPlayback::BeginInbound(
+	const FWacomFirstPersonCardUseReformPlaybackConfig& Config)
+{
+	if (!IsHeldHidden())
+	{
+		Initialize(Config, false, false);
+		if (!IsActive())
+		{
+			return;
+		}
+	}
+
+	bAwaitExplicitInbound = false;
+	Phase = EWacomFirstPersonCardUseReformPhase::Reforming;
+	ElapsedSeconds = DissolveOutSeconds + HiddenHoldSeconds;
+}
+
+void FWacomFirstPersonCardUseReformPlayback::Initialize(
+	const FWacomFirstPersonCardUseReformPlaybackConfig& Config,
+	bool bInAwaitExplicitInbound,
+	bool bRequestSound)
+{
 	Reset();
 	DissolveOutSeconds = Config.bReducedMotion
 		? 0.10f
@@ -28,18 +59,22 @@ void FWacomFirstPersonCardUseReformPlayback::Begin(
 
 	Phase = EWacomFirstPersonCardUseReformPhase::DissolvingOut;
 	bReducedMotion = Config.bReducedMotion;
+	bAwaitExplicitInbound = bInAwaitExplicitInbound;
 	ShadowFadeSeconds = FMath::Max(KINDA_SMALL_NUMBER, Config.ShadowFadeSeconds);
 
-	if (USoundBase* Sound = Config.StartSound.Get())
+	if (bRequestSound)
 	{
-		const float PitchVariation = FMath::Clamp(Config.SoundPitchVariation, 0.0f, 0.99f);
-		PendingSoundRequest.Sound = Sound;
-		PendingSoundRequest.VolumeMultiplier = FMath::Max(0.0f, Config.SoundVolumeMultiplier);
-		PendingSoundRequest.PitchMultiplier = FMath::Max(
-			0.01f,
-			Config.SoundPitchMultiplier
-				* FMath::FRandRange(1.0f - PitchVariation, 1.0f + PitchVariation));
-		bSoundRequestPending = true;
+		if (USoundBase* Sound = Config.StartSound.Get())
+		{
+			const float PitchVariation = FMath::Clamp(Config.SoundPitchVariation, 0.0f, 0.99f);
+			PendingSoundRequest.Sound = Sound;
+			PendingSoundRequest.VolumeMultiplier = FMath::Max(0.0f, Config.SoundVolumeMultiplier);
+			PendingSoundRequest.PitchMultiplier = FMath::Max(
+				0.01f,
+				Config.SoundPitchMultiplier
+					* FMath::FRandRange(1.0f - PitchVariation, 1.0f + PitchVariation));
+			bSoundRequestPending = true;
+		}
 	}
 }
 
@@ -50,6 +85,10 @@ FWacomFirstPersonCardUseReformPlayback::Tick(float DeltaTime)
 	{
 		return FWacomFirstPersonCardUseReformTickResult();
 	}
+	if (IsHeldHidden())
+	{
+		return BuildView();
+	}
 
 	const float TotalDuration = DissolveOutSeconds + HiddenHoldSeconds + ReformSeconds + SettleSeconds;
 	ElapsedSeconds = FMath::Min(
@@ -59,9 +98,14 @@ FWacomFirstPersonCardUseReformPlayback::Tick(float DeltaTime)
 	{
 		Phase = EWacomFirstPersonCardUseReformPhase::DissolvingOut;
 	}
-	else if (ElapsedSeconds < DissolveOutSeconds + HiddenHoldSeconds)
+	else if (bAwaitExplicitInbound
+		|| ElapsedSeconds < DissolveOutSeconds + HiddenHoldSeconds)
 	{
 		Phase = EWacomFirstPersonCardUseReformPhase::HiddenHold;
+		if (bAwaitExplicitInbound)
+		{
+			ElapsedSeconds = DissolveOutSeconds;
+		}
 	}
 	else if (ElapsedSeconds < DissolveOutSeconds + HiddenHoldSeconds + ReformSeconds)
 	{
@@ -171,6 +215,7 @@ void FWacomFirstPersonCardUseReformPlayback::Reset()
 	ImpactSeconds = 0.0f;
 	EffectKind = EWacomFirstPersonCardUseEffectKind::DiamondWave;
 	bReducedMotion = false;
+	bAwaitExplicitInbound = false;
 	bSoundRequestPending = false;
 	PendingSoundRequest = FWacomFirstPersonCardUseReformSoundRequest();
 }
