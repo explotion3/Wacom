@@ -38,24 +38,22 @@ JSON 使用稳定排序且不写时间戳，包含分类、直接 Wacom 引用�
 | 指标 | 结果 |
 |---|---:|
 | `/Game/Wacom` 起始 package | 163 |
-| 遍历到的 `/Game` package | 276 |
-| 外部 package | 113 |
+| 遍历到的 `/Game` package | 277 |
+| 外部 package | 114 |
 | 直接由 `/Game/Wacom` 引用 | 92 |
-| 仅传递引用 | 21 |
-| Hard + Game 依赖 | 87 |
+| 仅传递引用 | 22 |
+| Hard + Game 依赖 | 88 |
 | `/Game/Art` | 7 |
 | `/Game/Asset` | 82 |
-| `/Game/DreamMaterials` | 24 |
+| `/Game/DreamMaterials` | 25 |
 | `/Game/L_TestBattle` | 0 |
 | 其它未知 `/Game` 根目录 | 0 |
 
-`Content/DreamMaterials` 当前共 59 个本地 `.uasset`，已整体通过 Git LFS 纳入版本控制；其中 21 个 Material / Material Instance 出现在本次 `/Game/Wacom` 依赖图中。这里的“外部”只表示 package 不在 `/Game/Wacom` 根路径，不表示这些 package 未受版本管理。
+`Content/DreamMaterials` 当前共 61 个本地 `.uasset`，已整体通过 Git LFS 纳入版本控制；其中 24 个 Material / Material Instance 出现在本次 `/Game/Wacom` 依赖图中并有磁盘资产。这里的“外部”只表示 package 不在 `/Game/Wacom` 根路径，不表示这些 package 未受版本管理。
 
-当前仍有以下 3 个 DreamMaterials package 在 AssetRegistry 依赖图中存在但本地磁盘没有对应资产，应视为旧生成记录或缺失生成物：
+当前仍有以下 1 个 DreamMaterials package 在 AssetRegistry 依赖图中存在但本地磁盘没有对应资产，应视为旧生成记录或缺失生成物：
 
 - `/Game/DreamMaterials/M_Card_Step2_Inst`
-- `/Game/DreamMaterials/World/MI_WacomBattleEnemyPartImpactPixel_Default`
-- `/Game/DreamMaterials/World/MI_WacomBattleEnemyPartTargetPreviewPixel_Default`
 
 主要直接引用源：
 
@@ -75,7 +73,7 @@ JSON 使用稳定排序且不写时间戳，包含分类、直接 Wacom 引用�
 | C：材质实验贴图 | `/Game/Asset/Chong_CardAsset` | 正式使用则迁入 `/Game/Wacom/Material/Textures`；仅调试则删除引用 | 确认 `NewMaterial*` 是否正式保留 |
 | D：音频、字体、UI 包 | `/Game/Asset/Audio`、`Fonts`、`UI` | 默认按第三方依赖处理，建立带版本、来源、哈希和安装路径的 manifest | 明确每一包的授权；不得按目录整体假定自有 |
 | E：Boar 调试占位 | `/Game/Art/PaperAssets/Enemies/Boar` | 优先替换或移除 `BP_SnakeHost_Debug` 的样例依赖 | 确认是否为第三方样例及 Debug Host 去留 |
-| F：DreamShader 输出 | `/Game/DreamMaterials` | `.dsm/.dsh` 保持制作真源；整个生成目录同时以 Git LFS 管理 | 修复 3 个剩余缺失 package，并验证可重复生成 |
+| F：DreamShader 输出 | `/Game/DreamMaterials` | `.dsm/.dsh` 保持制作真源；整个生成目录同时以 Git LFS 管理 | 处理 `M_Card_Step2_Inst` 剩余缺失引用，并验证可重复生成 |
 
 迁移顺序建议为 A → B → C，再处理 D/E/F。每批必须独立执行 Content Browser Move、Fix Up Redirectors、Save All、Blueprint Compile、审计重跑和相关 PIE；不要一次移动 113 个 package。
 
