@@ -20,6 +20,37 @@ void UWacomPrimaryGameLayout::NativeOnInitialized()
 	E.Tag = WacomUITags::UI_Layer_Overlay.GetTag();  E.Stack = OverlayLayerStack;  LayerEntries.Add(E);
 }
 
+void UWacomPrimaryGameLayout::NativeConstruct()
+{
+	Super::NativeConstruct();
+
+	for (FLayerEntry& Entry : LayerEntries)
+	{
+		Entry.bIsTransitioning = false;
+		if (Entry.Stack)
+		{
+			Entry.Stack->OnTransitioningChanged.RemoveAll(this);
+			Entry.Stack->OnTransitioningChanged.AddUObject(
+				this,
+				&UWacomPrimaryGameLayout::HandleLayerTransitioningChanged);
+		}
+	}
+}
+
+void UWacomPrimaryGameLayout::NativeDestruct()
+{
+	for (FLayerEntry& Entry : LayerEntries)
+	{
+		if (Entry.Stack)
+		{
+			Entry.Stack->OnTransitioningChanged.RemoveAll(this);
+		}
+		Entry.bIsTransitioning = false;
+	}
+	OnLayerTransitioningChangedNative.Clear();
+	Super::NativeDestruct();
+}
+
 UCommonActivatableWidgetStack* UWacomPrimaryGameLayout::GetLayerStack(const FGameplayTag& LayerTag) const
 {
 	for (const FLayerEntry& Entry : LayerEntries)
@@ -30,6 +61,33 @@ UCommonActivatableWidgetStack* UWacomPrimaryGameLayout::GetLayerStack(const FGam
 		}
 	}
 	return nullptr;
+}
+
+bool UWacomPrimaryGameLayout::IsLayerTransitioning(const FGameplayTag& LayerTag) const
+{
+	for (const FLayerEntry& Entry : LayerEntries)
+	{
+		if (Entry.Tag.MatchesTagExact(LayerTag))
+		{
+			return Entry.bIsTransitioning;
+		}
+	}
+	return false;
+}
+
+void UWacomPrimaryGameLayout::HandleLayerTransitioningChanged(
+	UCommonActivatableWidgetContainerBase* Container,
+	bool bIsTransitioning)
+{
+	for (FLayerEntry& Entry : LayerEntries)
+	{
+		if (Entry.Stack == Container)
+		{
+			Entry.bIsTransitioning = bIsTransitioning;
+			OnLayerTransitioningChangedNative.Broadcast(Entry.Tag, bIsTransitioning);
+			return;
+		}
+	}
 }
 
 UCommonActivatableWidget* UWacomPrimaryGameLayout::PushWidgetToLayer(const FGameplayTag& LayerTag, TSubclassOf<UCommonActivatableWidget> WidgetClass)

@@ -40,8 +40,12 @@ public:
 	bool BeginCarry(FGuid DraggedInstanceId, FVector2D PointerPosition, uint64 SourceStorageRevision);
 	void UpdateCarryPointer(FVector2D PointerPosition);
 	void StepCurrentByWheel(float WheelDelta);
+	/** 新的释放手势已经按下；即使起手 PointerUp 丢失，也不能再吞掉这次手势的释放。 */
+	void NotifyReleaseGestureStarted();
 	FWacomBackpackWorkspaceReleaseIntent BuildReleaseIntent(bool bReleaseAll);
 	void CommitReleasedCards(TConstArrayView<FGuid> ReleasedInstanceIds);
+	void UpdateCarrySourceStorageRevision(uint64 SourceStorageRevision);
+	void SetCarryInputSuspended(bool bSuspended);
 	void CancelTransientState();
 	void RestoreCarry(const FWacomBackpackWorkspaceCarryState& CarrySnapshot);
 

@@ -91,6 +91,24 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 	TestEqual(TEXT("Battle workspace includes physical and read-only projected cards"),
 		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen),
 		Snapshot.BattleDeckPhysicalCards.Num() + Snapshot.BattleDeckProjectedCards.Num());
+	TestFalse(TEXT("Idle Workspace leaves Escape unhandled for CommonUI Back"),
+		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestTrue(TEXT("Carry starts before layered Escape cancellation"),
+		FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(*Screen));
+	TestTrue(TEXT("Workspace handles Escape while carrying"),
+		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestTrue(TEXT("Carry Escape clears the carried fan"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
+	TestFalse(TEXT("Carry Escape releases mouse capture"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);
+	TestTrue(TEXT("Marquee starts before layered Escape cancellation"),
+		FWacomBackpackScreenTestAccess::BeginWorkspaceMarquee(*Screen));
+	TestTrue(TEXT("Workspace handles Escape while marquee is active"),
+		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
+	TestFalse(TEXT("Marquee Escape clears the active marquee"),
+		FWacomBackpackScreenTestAccess::IsWorkspaceMarqueeActive(*Screen));
+	TestFalse(TEXT("Marquee Escape releases mouse capture"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);
 	const TArray<FVector2D> BattleCardPositions =
 		FWacomBackpackScreenTestAccess::WorkspaceCardPositions(*Screen);
 	TSet<FIntPoint> DistinctBattleCardPositions;
@@ -128,6 +146,63 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 		}
 		TestEqual(TEXT("Formal WBP zone switch assigns distinct battle-card slots"),
 			DistinctFormalBattlePositions.Num(), FormalBattlePositions.Num());
+		TestTrue(
+			TEXT("First stable Workspace geometry triggers one authoritative layout refresh"),
+			FWacomBackpackScreenTestAccess::ApplyStableWorkspaceGeometry(
+				*FormalScreen,
+				FVector2D(920.0f, 580.0f)));
+		const FWacomBackpackWorkspaceAutomationTestView DeferredRenderView =
+			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen);
+		TestTrue(
+			TEXT("Stable Workspace geometry defers the final retained-card redraw until the next Slate frame"),
+			DeferredRenderView.bDeferredCardFaceRenderPending);
+		FWacomBackpackScreenTestAccess::FlushDeferredWorkspaceCardFaceRender(*FormalScreen);
+		const FWacomBackpackWorkspaceAutomationTestView FlushedRenderView =
+			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen);
+		TestFalse(
+			TEXT("Deferred retained-card redraw is one-shot"),
+			FlushedRenderView.bDeferredCardFaceRenderPending);
+		TestEqual(
+			TEXT("Deferred retained-card redraw executes exactly one pass"),
+			FlushedRenderView.DeferredCardFaceRenderPassCount,
+			DeferredRenderView.DeferredCardFaceRenderPassCount + 1);
+		const TArray<FVector2D> StableFormalBattlePositions =
+			FWacomBackpackScreenTestAccess::WorkspaceCardPositions(*FormalScreen);
+		bool bAnyPositionChangedAfterStableGeometry = false;
+		for (int32 Index = 0; Index < FormalBattlePositions.Num(); ++Index)
+		{
+			if (StableFormalBattlePositions.IsValidIndex(Index)
+				&& !StableFormalBattlePositions[Index].Equals(FormalBattlePositions[Index], 0.5f))
+			{
+				bAnyPositionChangedAfterStableGeometry = true;
+				break;
+			}
+		}
+		TestTrue(
+			TEXT("Stable Workspace geometry replaces the pre-layout fallback positions"),
+			bAnyPositionChangedAfterStableGeometry);
+		for (const float Opacity :
+			FWacomBackpackScreenTestAccess::WorkspaceCardRenderOpacities(*FormalScreen))
+		{
+			TestTrue(
+				TEXT("Stable Workspace refresh leaves every physical card fully opaque"),
+				FMath::IsNearlyEqual(Opacity, 1.0f));
+		}
+		TestFalse(
+			TEXT("An unchanged stable Workspace geometry does not rebuild again"),
+			FWacomBackpackScreenTestAccess::ApplyStableWorkspaceGeometry(
+				*FormalScreen,
+				FVector2D(920.0f, 580.0f)));
+		FWacomBackpackScreenTestAccess::ApplyWorkspaceLayerTransition(*FormalScreen, true);
+		TestFalse(
+			TEXT("CommonUI layer transition temporarily bypasses retained card-face rendering"),
+			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen)
+				.bCardFaceRetainedRenderingEnabled);
+		FWacomBackpackScreenTestAccess::ApplyWorkspaceLayerTransition(*FormalScreen, false);
+		TestTrue(
+			TEXT("Retained card-face rendering resumes only after the CommonUI layer transition"),
+			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen)
+				.bCardFaceRetainedRenderingEnabled);
 		TestTrue(TEXT("Formal WBP marquee keeps capture while crossing a card"),
 			FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(*FormalScreen));
 		TestTrue(TEXT("Formal WBP marquee completes when released over a card"),

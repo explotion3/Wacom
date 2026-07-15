@@ -12,6 +12,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/RetainerBox.h"
 #include "Components/ScaleBox.h"
 #include "Components/ScaleBoxSlot.h"
 #include "Components/SizeBox.h"
@@ -27,6 +28,7 @@
 #include "UI/Backpack/WacomBackpackZoneRackWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomRetainedCardViewWidget.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
@@ -72,6 +74,8 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackDeleteConfirm.WBP_BackpackDeleteConfirm_C"));
 	UClass* DeckCardClass = LoadWidgetClass(
 		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget_C"));
+	UClass* BackpackCardFaceClass = LoadWidgetClass(
+		TEXT("/Game/Wacom/UI/Card/WBP_BackpackCardView.WBP_BackpackCardView_C"));
 	UClass* FirstPersonCardFaceClass = LoadWidgetClass(
 		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C"));
 	UWacomBackpackWorkspaceStyle* Style = LoadObject<UWacomBackpackWorkspaceStyle>(
@@ -90,7 +94,19 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		ConfirmClass && ConfirmClass->IsChildOf(UWacomBackpackDeleteConfirmWidget::StaticClass()));
 	TestTrue(TEXT("Backpack card uses passive DeckCard parent"),
 		DeckCardClass && DeckCardClass->IsChildOf(UWacomDeckCardWidget::StaticClass()));
-	TestTrue(TEXT("Backpack card face uses reusable CardView parent"),
+	TestTrue(TEXT("Backpack card face uses passive retained-card parent"),
+		BackpackCardFaceClass
+			&& BackpackCardFaceClass->IsChildOf(UWacomRetainedCardViewWidget::StaticClass()));
+	const UWacomRetainedCardViewWidget* BackpackCardFaceCDO = BackpackCardFaceClass
+		? Cast<UWacomRetainedCardViewWidget>(BackpackCardFaceClass->GetDefaultObject())
+		: nullptr;
+	TestNotNull(TEXT("Backpack retained-card asset exposes its presentation defaults"), BackpackCardFaceCDO);
+	if (BackpackCardFaceCDO)
+	{
+		TestFalse(TEXT("Backpack retained-card asset keeps animated surface foil disabled"),
+			BackpackCardFaceCDO->IsSurfaceFoilEnabled());
+	}
+	TestTrue(TEXT("Authored card face uses reusable CardView parent"),
 		FirstPersonCardFaceClass && FirstPersonCardFaceClass->IsChildOf(UWacomCardView::StaticClass()));
 	TestNotNull(TEXT("Formal workspace style asset loads"), Style);
 	if (!ScreenClass || !WorkspaceClass || !RackClass || !EntryClass || !ConfirmClass || !Style)
@@ -172,17 +188,37 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		ConfirmTree ? Cast<UButton>(ConfirmTree->FindWidget(TEXT("CancelButton"))) : nullptr);
 
 	UWidgetTree* DeckCardTree = GetWidgetTree(DeckCardClass);
+	const UWidgetBlueprintGeneratedClass* DeckCardGeneratedClass =
+		Cast<UWidgetBlueprintGeneratedClass>(DeckCardClass);
+	TestNotNull(TEXT("Backpack card has a generated widget class"), DeckCardGeneratedClass);
+	if (DeckCardGeneratedClass)
+	{
+		TestEqual(
+			TEXT("Passive backpack card has no authored animation that can overwrite runtime layout or opacity"),
+			DeckCardGeneratedClass->Animations.Num(),
+			0);
+	}
+	if (DeckCardTree && DeckCardTree->RootWidget)
+	{
+		TestEqual(
+			TEXT("Backpack card root starts fully opaque"),
+			DeckCardTree->RootWidget->GetRenderOpacity(),
+			1.0f);
+		TestTrue(
+			TEXT("Backpack card root starts at unit render scale"),
+			DeckCardTree->RootWidget->GetRenderTransform().Scale.Equals(FVector2D::UnitVector));
+	}
 	UScaleBox* CardFaceScaleBox = DeckCardTree
 		? Cast<UScaleBox>(DeckCardTree->FindWidget(TEXT("CardFaceScaleBox")))
 		: nullptr;
 	UBorder* WorkspaceFeedbackOverlay = DeckCardTree
 		? Cast<UBorder>(DeckCardTree->FindWidget(TEXT("WorkspaceFeedbackOverlay")))
 		: nullptr;
-	UWacomCardView* EmbeddedCardFace = DeckCardTree
-		? Cast<UWacomCardView>(DeckCardTree->FindWidget(TEXT("CardView")))
+	UWacomRetainedCardViewWidget* EmbeddedCardFace = DeckCardTree
+		? Cast<UWacomRetainedCardViewWidget>(DeckCardTree->FindWidget(TEXT("BackpackCardView")))
 		: nullptr;
 	TestNotNull(TEXT("Backpack card uniformly scales the authored face instead of relaying it out"), CardFaceScaleBox);
-	TestNotNull(TEXT("Backpack card binds a reusable CardView"), EmbeddedCardFace);
+	TestNotNull(TEXT("Backpack card binds the retained Backpack CardView"), EmbeddedCardFace);
 	if (CardFaceScaleBox)
 	{
 		TestEqual(
@@ -233,12 +269,42 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			TestEqual(TEXT("Workspace feedback fills the card vertically"), FeedbackSlot->GetVerticalAlignment(), VAlign_Fill);
 		}
 	}
-	if (EmbeddedCardFace && FirstPersonCardFaceClass)
+	if (EmbeddedCardFace && BackpackCardFaceClass)
 	{
 		TestEqual(
-			TEXT("Backpack card embeds the authored first-person card face layout"),
+			TEXT("Backpack card embeds the backpack-specific retained wrapper"),
 			EmbeddedCardFace->GetClass(),
-			FirstPersonCardFaceClass);
+			BackpackCardFaceClass);
+	}
+
+	UWidgetTree* BackpackCardFaceTree = GetWidgetTree(BackpackCardFaceClass);
+	URetainerBox* CardFaceRetainer = BackpackCardFaceTree
+		? Cast<URetainerBox>(BackpackCardFaceTree->FindWidget(TEXT("CardFaceRetainer")))
+		: nullptr;
+	UWacomCardView* RetainedInnerCardFace = BackpackCardFaceTree
+		? Cast<UWacomCardView>(BackpackCardFaceTree->FindWidget(TEXT("CardView")))
+		: nullptr;
+	TestNotNull(TEXT("Backpack CardView owns one retained render surface"), CardFaceRetainer);
+	TestNotNull(TEXT("Backpack CardView retains the authored inner CardView"), RetainedInnerCardFace);
+	if (CardFaceRetainer)
+	{
+		TestTrue(TEXT("Backpack CardView keeps retained rendering enabled"),
+			CardFaceRetainer->IsRetainRendering());
+		TestTrue(TEXT("Backpack CardView redraws after child invalidation"),
+			CardFaceRetainer->IsRenderOnInvalidation());
+		TestFalse(TEXT("Backpack CardView does not redraw on a frame phase"),
+			CardFaceRetainer->IsRenderOnPhase());
+		TestNull(TEXT("Backpack CardView adds no first-person effect material"),
+			CardFaceRetainer->GetEffectMaterialInterface());
+		TestEqual(TEXT("Backpack CardView keeps the retained surface out of hit testing"),
+			CardFaceRetainer->GetVisibility(), ESlateVisibility::HitTestInvisible);
+		TestEqual(TEXT("Retainer directly owns the authored card face"),
+			CardFaceRetainer->GetContent(), static_cast<UWidget*>(RetainedInnerCardFace));
+	}
+	if (RetainedInnerCardFace && FirstPersonCardFaceClass)
+	{
+		TestEqual(TEXT("Retained Backpack CardView preserves the authored layout class"),
+			RetainedInnerCardFace->GetClass(), FirstPersonCardFaceClass);
 	}
 
 	UWidgetTree* FirstPersonCardFaceTree = GetWidgetTree(FirstPersonCardFaceClass);

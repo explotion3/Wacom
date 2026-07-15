@@ -44,17 +44,29 @@ tags:
 | `WBP_BackpackZoneRack` | `UWacomBackpackZoneRackWidget`；右侧常驻区域列表 |
 | `WBP_BackpackZoneRackEntry` | `UWacomBackpackZoneRackEntryWidget`；激活、合法目标和拒绝目标表现 |
 | `WBP_BackpackDeleteConfirm` | `UWacomBackpackDeleteConfirmWidget`；批量数量/奖励和 modal 焦点 |
+| `WBP_BackpackCardView` | `UWacomRetainedCardViewWidget`；静态 Retainer 包装并复用新版 authored 卡面，关闭内层动态 `SurfaceFoilOverlay`，不拥有输入或 first-person 效果 |
 | `DA_BackpackWorkspaceStyle` | 卡牌尺寸、边界、扇形、lift、运动时间、状态颜色和 `M_BackpackWorkspaceCardFeedback`；材质未加载时自动退回纯色边框 |
 
-上述资产由 WacomEditor builder 重建；同一 builder 也会把 `WBP_WacomDeckCardWidget.CardView` 校准为已完成新版排版的 `WBP_FirstPersonCardView`，并建立 `CardFaceScaleBox` 等比缩放层。禁止在生成资产里复制 Run 规则或增加并行输入 owner：
+上述资产由 WacomEditor builder 重建；同一 builder 会把 `WBP_WacomDeckCardWidget.BackpackCardView` 校准为 `WBP_BackpackCardView`，后者在单个静态 Retainer 内复用已完成新版排版的 `WBP_FirstPersonCardView`，外层继续使用 `CardFaceScaleBox` 等比缩放。Retainer 只在子控件失效或卡面数据变化后重绘，不启用逐帧 phase，也不绑定 first-person 效果材质。背包 wrapper 默认关闭内层 `SurfaceFoilOverlay`，同时折叠该层并清空其材质 Brush，避免 invalidation-only 缓存冻结动态流光；该实例策略不修改战斗/第一人称卡面资产的默认流光。禁止在生成资产里复制 Run 规则或增加并行输入 owner：
 
 ```powershell
 & 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomBuildBackpackUI -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
+`M_BackpackWorkspaceCardFeedback` 以 `DShader/Material/Card/M_BackpackWorkspaceCardFeedback.dsm` 为真源。修改 DreamShader 源码或升级/修补插件生成器后，必须显式强制重建材质资产：
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=DreamShader compile '-Source=DShader/Material/Card/M_BackpackWorkspaceCardFeedback.dsm' -Force -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
+```
+
+`UMaterialExpressionVertexColor` 的默认输出 0 是 `RGB`，独立输出 4 才是 `A`。材质必须通过 `UE.Expression(Class="VertexColor", OutputIndex=0/4)` 分别连接两者；禁止对默认输出 0 再做 A `ComponentMask`，否则 SM6 会对 `float3` 请求第 4 分量并报 `Not enough components`。DreamShader 返回“Generated”只表示资产图生成成功，不等于最终 ShaderMap 编译成功；`Wacom.UI.Backpack.Material.WorkspaceFeedbackCompiles` 会调用 UE 材质重编译、检查 compile errors，穿透 Named Reroute 验证 RGB/Alpha 的真实源输出索引，并禁止非法 A mask。
+
 当前像素安全制作基准为 1600×900、DPI 1.0；跨分辨率缩放仍按 `Docs/TechDebt.md` 的像素安全适配项处理，不在 WBP 内复制规则布局。
 `ScreenSize -> Root -> MainLayout` 的槽位必须显式水平/垂直 Fill；只设置 `SizeBox` 宽高而不设置子槽 Fill，会让内部布局退回最小 Desired Size。进入持续携带状态后，卡牌详情层必须保持隐藏，避免遮挡扇形和鼠标目标。
 Screen 在运行时向 `WorkspaceHost`、`ZoneRackHost`、`DeleteConfirmHost` 插入子控件时，必须按宿主实际 Slot 类型显式配置 Fill，不能依赖 `UPanelWidget::AddChild` 的默认槽位参数；尤其 `OverlaySlot` 默认 Left/Top，会把 Desired Size 为零的 Canvas Workspace 压缩到零尺寸。`WorkspaceWidget` 还必须保持 `Visible`，不能使用 `SelfHitTestInvisible`，因为中央空白区域需要由它接收左键并开始框选。
+Workspace 首次加入 CommonUI 层时，Snapshot reconcile 可能早于 Slate 几何完成。此时 `CardCanvas` 必须暂时隐藏，不能把 `1280×720` 回退坐标暴露给玩家；Workspace 通过短生命周期 ActiveTimer 等待真实尺寸连续稳定两帧，再向 Screen 广播一次布局刷新。最终 `CanvasSlot` 尺寸、位置、角度和交互表现全部写入后，Workspace 仍在下一次 Slate 更新请求一次静态卡面补绘，且早于 `NativeConstruct()` 的请求不能丢失。
+
+`UI.Layer.GameMenu` 的 CommonUI 进入/退出过渡会把层级 Alpha 传入子控件；若静态 Retainer 在过渡中首次离屏绘制，该 Alpha 会被烘入卡面缓存，造成界面已经完全显示而卡牌仍半透明。`UWacomPrimaryGameLayout` 因此缓存并广播每个 Layer Stack 的 `OnTransitioningChanged` 状态；`UWacomBackpackScreen` 只订阅所属 GameMenu 层，在过渡期间让 Workspace 所有卡面调用 `SetRetainRendering(false)` 直绘，过渡结束后恢复 retained rendering 并显式 `RequestRender()`。该状态必须同时应用到已绑定卡牌和过渡中后创建的卡牌；Screen `NativeDestruct()` 必须解除订阅。这里不使用固定延迟，也不启用逐帧 phase。几何与补绘 ActiveTimer 完成后立即停止，不形成空闲 Tick 或逐帧 Snapshot rebuild。
 正式 Screen 把 `ArrangeAllButton` 放在顶部命令栏，不占用中央自由工作台的安全边界。默认整理在行数超出可用高度时压缩行距，保持每行坐标可辨识；手动位置、角度和 ZOrder 不受该默认布局算法影响。
 
 Editor build 可执行 `Wacom.Backpack.SeedPIEValidation`，通过正常 Run 获牌入口把当前 Run 补到至少 24 张实体牌和 2 个 SpecialZone，用于正式 WBP 的结构、密集布局、框选和携带 PIE。该命令不自动保存，也不伪造 SpecialZone 内容、Burden 或事务拒绝条件。
@@ -184,7 +196,7 @@ WBP 不应做：
 | 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
 | `CardFaceScaleBox` | `ScaleBox` | 保留卡面 `360×424` 设计坐标系，使用固定 `UserSpecified = 0.75` 统一缩放；子槽必须水平/垂直居中，不能 Fill 后重排卡面 |
-| `CardView` | `WBP_FirstPersonCardView`（父类 `UWacomCardView`） | 复用新版卡面排版；由背包外层统一缩放和输入，不使用旧 `WBP_CardView` |
+| `BackpackCardView` | `WBP_BackpackCardView`（父类 `UWacomRetainedCardViewWidget`） | 内部 `CardFaceRetainer -> WBP_FirstPersonCardView`；按数据失效重绘并提供缩放后的抗锯齿缓存，关闭动态 `SurfaceFoilOverlay`，不包含 fake-3D、战斗反馈或手势语义 |
 | `WorkspaceFeedbackOverlay` | `Border` | 位于卡面上方、角标下方的纯表现反馈层；选中、合法目标和拒绝状态使用 Style 颜色与不透明度，显示时必须为 `HitTestInvisible` |
 
 可选绑定：
@@ -201,18 +213,24 @@ WBP 不应做：
 - 不直接修改卡牌所在持有区。
 - 不自行构造拖拽 payload。
 - 不根据所在列表、`PhysicalZone` 或 `bBattleEnabledInSpecialZone` 自行判定右键入战是否可用；该 affordance 由 C++ ViewData 写入。
-- 不改用 `WBP_FPCardView`：它是第一人称手牌的 Retainer/反馈 wrapper；背包只复用其内部同源卡面资产 `WBP_FirstPersonCardView`。
-- 不把 `CardView` 直接放进 Fill 槽后依靠外层 `CanvasSlot.SetSize()` 压缩；这会让固定坐标卡面重新布局并造成费用、名称、耐久和徽章错位。
+- 不改用 `WBP_FPCardView`：它是第一人称手牌的实时 Retainer/反馈 wrapper。背包使用独立 `WBP_BackpackCardView`，只保留静态 Retainer 与同源 `WBP_FirstPersonCardView` 卡面。
+- 不在 invalidation-only Retainer 中重新开启内层动态 `SurfaceFoilOverlay`；如未来背包需要流光，应先提供显式持续重绘预算或改为适合静态缓存的独立效果，再调整 wrapper 策略。
+- 不把 `BackpackCardView` 或其内部 `CardView` 直接放进 Fill 槽后依靠外层 `CanvasSlot.SetSize()` 压缩；这会让固定坐标卡面重新布局并造成费用、名称、耐久和徽章错位。
 - 不根据 Workspace 卡牌高度动态改写 `CardFaceScaleBox`。正式资产统一使用 `0.75` 基础缩放，`ApplyCardLayout()` 只写逻辑尺寸、整数像素位置、角度和 ZOrder，并启用 Widget 像素对齐；当前牌只通过扇形上抬表达，不再额外放大卡面。
 - 不用透明的 `CardBody` Brush 承载选中提示。`WorkspaceFeedbackOverlay` 独立覆盖卡面，不参与卡面缩放、布局和命中。
+- `M_BackpackWorkspaceCardFeedback` 只作为 `WorkspaceFeedbackOverlay` 的 UI Brush：中性状态该层折叠，当前生产链路只在卡牌被选中时显示青色边缘；它不是卡面流光、hover 或普通携带效果。Presenter 已预留合法/拒绝颜色，但在目标预览状态正式接入 Workspace 刷新前不会触发。
 - 携带状态的指针位置由 Workspace 的 carry-only ActiveTimer 从 Slate cursor 持续采样；卡牌移出自身命中范围后仍应跟随。卡牌 PointerMove 只作为同一输入 owner 的事件入口，不是持续跟随的唯一数据源。
+- 起手释放保护只属于开始携带的那一次指针手势。若 Slate 因捕获切换没有送达该手势的 PointerUp，下一次左键或右键 PointerDown 必须结束保护，使这次新手势的 PointerUp 立即执行单张或整组释放，不能再被误吞。
+- 左键向工作台、同区牌匣、跨区牌匣或销毁确认提交当前牌后，未提交的卡牌必须保持原 Carry 顺序并继续扇形携带。跨区移动/销毁的 Run 广播刷新由 Screen 延后到 Carry 已提交当前牌之后，剩余 Carry 同步更新 storage revision，支持连续逐张操作。
+- 销毁确认期间只暂停 Workspace 输入、跟随采样和鼠标捕获，扇形冻结显示；取消恢复原 Carry，确认成功只移除本次确认的牌，只有没有剩余牌时才退出携带。
 
 最小验收：
 
-- `CardView` 的实际类为 `WBP_FirstPersonCardView`，并由 `CardFaceScaleBox` 以固定 `0.75` 承载；`360×424` 设计根面对应 `270×318`，可见卡体约为 `222×315`，卡框、费用、名称、卡图、类型和效果徽章保持同一设计坐标系，横向出血不被压入 `220×320` 逻辑命中主体。
+- `BackpackCardView` 的实际类为 `WBP_BackpackCardView`；其唯一 `CardFaceRetainer` 开启 retained rendering 与 invalidation redraw、关闭 phase redraw、没有 effect material，内部 `CardView` 的实际类为 `WBP_FirstPersonCardView`；wrapper 默认关闭内层 Surface Foil，运行时该 Overlay 为 `Collapsed` 且不再持有材质 Brush。
+- `BackpackCardView` 由 `CardFaceScaleBox` 以固定 `0.75` 承载；`360×424` 设计根面对应 `270×318`，可见卡体约为 `222×315`，卡框、费用、名称、卡图、类型和效果徽章保持同一设计坐标系，横向出血不被压入 `220×320` 逻辑命中主体。
 - 选中卡牌可见 `WorkspaceFeedbackOverlay`，中性卡牌该层为 `Collapsed`；反馈层不会截获鼠标，也不会改变固定缩放。
 - 绑定 `CardBody` 后，拖拽源透明度变化可见。
-- 未绑定 `CardView` 时仍能生成拖拽 payload，但没有正式卡面显示。
+- 未绑定 `BackpackCardView` 时卡牌仍可转发 Workspace 指针意图，但没有正式卡面显示。
 - SpecialZone 内容卡和 BattleDeck 投影卡是否可右键切换入战，只由 `FRunStorageCardView.bCanToggleBattleEnabledInSpecialZone` 驱动。
 
 ## WBP_CardView
@@ -240,7 +258,7 @@ WBP 不应做：
 
 | 控件名 | 推荐类型 | 缺省行为 |
 |---|---|---|
-| `SurfaceFoilOverlay` | `Image` | 卡面弱流光覆盖层；未绑定时不显示流光 |
+| `SurfaceFoilOverlay` | `Image` | 卡面弱流光覆盖层；未绑定时不显示流光；背包静态 Retainer wrapper 会按实例关闭并释放其材质 Brush |
 | `EffectStatsHost` | `PanelWidget` | 兼容流式效果徽章；未绑定任意 `EffectBadgeSlot*` 时才使用 |
 
 WBP 不应做：
@@ -256,7 +274,7 @@ WBP 不应做：
 - `EffectBadgeSlot1-4` 按 `EffectBadges[]` 顺序动态创建 `UWacomCardEffectBadgeWidget`，不是按类型固定位置。
 - 只要绑定了任意 `EffectBadgeSlot*`，固定插槽模式启用，空 slot 折叠，超过 4 个的徽章不显示。
 - 当前主体只显示美术已配置的五类徽章：伤害、中毒、灼烧、回复、护盾。
-- `SurfaceFoilOverlay` 放在卡面内容最上层、`DisabledOverlay` 下方，保持不可命中，不挡拖拽。
+- `SurfaceFoilOverlay` 放在卡面内容最上层、`DisabledOverlay` 下方，保持不可命中，不挡拖拽；该条适用于允许流光的通用/第一人称卡面，背包 wrapper 的禁用策略优先。
 - 未绑定部分控件不会崩溃，但对应信息不会显示。
 
 ## WBP_CardDetailPanel

@@ -96,6 +96,8 @@ Details / Blueprint 分类口径：
 | UI settings | `Wacom|UI Foundation|Settings` |
 | Widget registry entry | `Wacom|UI Foundation|Widget Registry` |
 
+`UWacomPrimaryGameLayout` 缓存每个 Layer Stack 的 `OnTransitioningChanged` 状态，并通过 native delegate 广播 Layer Tag 与开始/结束状态。该合同只暴露 CommonUI Shell 的表现生命周期，不承载业务状态；需要避免在层 Alpha 过渡中烘入离屏缓存的 Screen（当前为背包静态卡面 Retainer）应在 Construct/Activate 时查询当前状态、订阅变化，并在 Destruct 时解除订阅。不要用固定帧数或持续 Tick 猜测过渡结束时间。
+
 ## §4 Activatable 与 Button 基类
 
 `UWacomActivatableWidget` 是项目通用 CommonUI activatable 基类，只提供生命周期和转场 WBP 钩子，不承载战斗、Run 或背包规则。

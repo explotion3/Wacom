@@ -14,6 +14,7 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
+#include "Components/RetainerBox.h"
 #include "Components/ScrollBox.h"
 #include "Components/ScaleBox.h"
 #include "Components/ScaleBoxSlot.h"
@@ -36,6 +37,8 @@
 #include "UI/Backpack/WacomBackpackZoneRackEntryWidget.h"
 #include "UI/Backpack/WacomBackpackZoneRackWidget.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomRetainedCardViewWidget.h"
+#include "UI/Card/WacomStaticRetainerBox.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintOperationUtils.h"
@@ -45,6 +48,7 @@ namespace Wacom::ContentBuilder
 namespace
 {
 const TCHAR* BackpackUIRoot = TEXT("/Game/Wacom/UI/Backpack");
+const TCHAR* CardUIRoot = TEXT("/Game/Wacom/UI/Card");
 
 FSlateChildSize FillSize(float Value = 1.0f)
 {
@@ -118,14 +122,14 @@ UButton* MakeLabeledButton(
 	return Button;
 }
 
-FString PackagePath(const TCHAR* AssetName)
+FString PackagePath(const TCHAR* AssetName, const TCHAR* RootPath = BackpackUIRoot)
 {
-	return FString(BackpackUIRoot) / AssetName;
+	return FString(RootPath) / AssetName;
 }
 
-FString ObjectPath(const TCHAR* AssetName)
+FString ObjectPath(const TCHAR* AssetName, const TCHAR* RootPath = BackpackUIRoot)
 {
-	const FString Path = PackagePath(AssetName);
+	const FString Path = PackagePath(AssetName, RootPath);
 	return Path + TEXT(".") + AssetName;
 }
 
@@ -147,12 +151,15 @@ bool SaveTopLevelAsset(UObject& Asset)
 	return UPackage::SavePackage(Package, &Asset, *Filename, Args);
 }
 
-UWidgetBlueprint* LoadOrCreateWidgetBlueprint(const TCHAR* AssetName, UClass* ParentClass)
+UWidgetBlueprint* LoadOrCreateWidgetBlueprint(
+	const TCHAR* AssetName,
+	UClass* ParentClass,
+	const TCHAR* RootPath = BackpackUIRoot)
 {
-	UWidgetBlueprint* Blueprint = LoadObject<UWidgetBlueprint>(nullptr, *ObjectPath(AssetName));
+	UWidgetBlueprint* Blueprint = LoadObject<UWidgetBlueprint>(nullptr, *ObjectPath(AssetName, RootPath));
 	if (!Blueprint)
 	{
-		UPackage* Package = CreatePackage(*PackagePath(AssetName));
+		UPackage* Package = CreatePackage(*PackagePath(AssetName, RootPath));
 		if (!Package)
 		{
 			return nullptr;
@@ -184,6 +191,10 @@ UWidgetBlueprint* LoadOrCreateWidgetBlueprint(const TCHAR* AssetName, UClass* Pa
 			*RetiredName.ToString(),
 			GetTransientPackage(),
 			REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
+		if (OldTree->IsRooted())
+		{
+			OldTree->RemoveFromRoot();
+		}
 		OldTree->MarkAsGarbage();
 	}
 	Blueprint->WidgetTree = NewObject<UWidgetTree>(Blueprint, TEXT("WidgetTree"), RF_Transactional);
@@ -277,34 +288,81 @@ bool ApplyCardFaceSlotLayout(UPanelSlot* Slot, const FBackpackCardFaceSlotLayout
 	return false;
 }
 
+bool BuildBackpackCardViewAsset()
+{
+	UClass* AuthoredCardFaceClass = LoadObject<UClass>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C"));
+	if (!AuthoredCardFaceClass || !AuthoredCardFaceClass->IsChildOf(UWacomCardView::StaticClass()))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Missing authored first-person CardView"));
+		return false;
+	}
+
+	UWidgetBlueprint* Blueprint = LoadOrCreateWidgetBlueprint(
+		TEXT("WBP_BackpackCardView"),
+		UWacomRetainedCardViewWidget::StaticClass(),
+		CardUIRoot);
+	if (!Blueprint || !Blueprint->WidgetTree)
+	{
+		return false;
+	}
+
+	UWacomStaticRetainerBox* Retainer = MakeWidget<UWacomStaticRetainerBox>(
+		*Blueprint, TEXT("CardFaceRetainer"), true);
+	Retainer->SetEffectMaterial(nullptr);
+	Blueprint->WidgetTree->RootWidget = Retainer;
+
+	UWacomCardView* AuthoredCardFace = Blueprint->WidgetTree->ConstructWidget<UWacomCardView>(
+		AuthoredCardFaceClass, TEXT("CardView"));
+	if (!AuthoredCardFace || !Retainer->SetContent(AuthoredCardFace))
+	{
+		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Failed to build retained Backpack CardView"));
+		return false;
+	}
+	FWidgetBlueprintOperationUtils::ToggleWidgetAsVariable(
+		Blueprint, AuthoredCardFace, true, false);
+
+	if (!CompileWidgetBlueprint(*Blueprint) || !SaveTopLevelAsset(*Blueprint))
+	{
+		return false;
+	}
+	UE_LOG(LogTemp, Display,
+		TEXT("[BackpackUIBuilder] Generated static retained WBP_BackpackCardView"));
+	return true;
+}
+
 bool PatchBackpackDeckCardFace()
 {
 	constexpr float BackpackCardFaceScale = 0.75f;
 	const TCHAR* DeckCardObjectPath =
 		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget");
 	const TCHAR* CardFaceClassPath =
-		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C");
+		TEXT("/Game/Wacom/UI/Card/WBP_BackpackCardView.WBP_BackpackCardView_C");
 	UWidgetBlueprint* DeckCardBlueprint = LoadObject<UWidgetBlueprint>(nullptr, DeckCardObjectPath);
 	UClass* CardFaceClass = LoadObject<UClass>(nullptr, CardFaceClassPath);
 	if (!DeckCardBlueprint || !DeckCardBlueprint->WidgetTree || !CardFaceClass
-		|| !CardFaceClass->IsChildOf(UWacomCardView::StaticClass()))
+		|| !CardFaceClass->IsChildOf(UWacomRetainedCardViewWidget::StaticClass()))
 	{
 		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Missing DeckCard or authored card face asset"));
 		return false;
 	}
 
-	UWacomCardView* ExistingCardFace = Cast<UWacomCardView>(
-		DeckCardBlueprint->WidgetTree->FindWidget(TEXT("CardView")));
-	if (!ExistingCardFace)
+	UWidget* ExistingCardFaceWidget = DeckCardBlueprint->WidgetTree->FindWidget(TEXT("BackpackCardView"));
+	if (!ExistingCardFaceWidget)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] DeckCard does not bind CardView"));
+		ExistingCardFaceWidget = DeckCardBlueprint->WidgetTree->FindWidget(TEXT("CardView"));
+	}
+	if (!ExistingCardFaceWidget)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] DeckCard does not provide a card face"));
 		return false;
 	}
 
-	UScaleBox* CardFaceScaleBox = Cast<UScaleBox>(ExistingCardFace->GetParent());
+	UScaleBox* CardFaceScaleBox = Cast<UScaleBox>(ExistingCardFaceWidget->GetParent());
 	UBorder* WorkspaceFeedbackOverlay = Cast<UBorder>(
 		DeckCardBlueprint->WidgetTree->FindWidget(TEXT("WorkspaceFeedbackOverlay")));
-	const UScaleBoxSlot* ExistingScaleSlot = Cast<UScaleBoxSlot>(ExistingCardFace->Slot);
+	const UScaleBoxSlot* ExistingScaleSlot = Cast<UScaleBoxSlot>(ExistingCardFaceWidget->Slot);
 	const UOverlaySlot* ExistingFeedbackSlot = WorkspaceFeedbackOverlay
 		? Cast<UOverlaySlot>(WorkspaceFeedbackOverlay->Slot)
 		: nullptr;
@@ -328,7 +386,10 @@ bool PatchBackpackDeckCardFace()
 		&& ExistingFeedbackSlot->GetHorizontalAlignment() == HAlign_Fill
 		&& ExistingFeedbackSlot->GetVerticalAlignment() == VAlign_Fill
 		&& WorkspaceFeedbackOverlay->GetVisibility() == ESlateVisibility::Collapsed;
-	if (ExistingCardFace->GetClass() == CardFaceClass
+	if (ExistingCardFaceWidget->GetClass() == CardFaceClass
+		&& ExistingCardFaceWidget->GetFName() == TEXT("BackpackCardView")
+		&& DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(TEXT("BackpackCardView"))
+		&& !DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(TEXT("CardView"))
 		&& bHasFormalScaleContract
 		&& bHasFormalFeedbackContract)
 	{
@@ -339,9 +400,9 @@ bool PatchBackpackDeckCardFace()
 	DeckCardBlueprint->WidgetTree->Modify();
 	if (!CardFaceScaleBox)
 	{
-		UPanelWidget* Parent = ExistingCardFace->GetParent();
-		const int32 ChildIndex = Parent ? Parent->GetChildIndex(ExistingCardFace) : INDEX_NONE;
-		const FBackpackCardFaceSlotLayout SlotLayout = CaptureCardFaceSlotLayout(ExistingCardFace->Slot);
+		UPanelWidget* Parent = ExistingCardFaceWidget->GetParent();
+		const int32 ChildIndex = Parent ? Parent->GetChildIndex(ExistingCardFaceWidget) : INDEX_NONE;
+		const FBackpackCardFaceSlotLayout SlotLayout = CaptureCardFaceSlotLayout(ExistingCardFaceWidget->Slot);
 		if (!Parent || ChildIndex == INDEX_NONE || !SlotLayout.bSupported)
 		{
 			UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] DeckCard CardView uses an unsupported parent slot"));
@@ -349,7 +410,7 @@ bool PatchBackpackDeckCardFace()
 		}
 
 		Parent->Modify();
-		Parent->RemoveChild(ExistingCardFace);
+		Parent->RemoveChild(ExistingCardFaceWidget);
 		CardFaceScaleBox = DeckCardBlueprint->WidgetTree->ConstructWidget<UScaleBox>(
 			UScaleBox::StaticClass(), TEXT("CardFaceScaleBox"));
 		if (!CardFaceScaleBox || !Parent->InsertChildAt(ChildIndex, CardFaceScaleBox)
@@ -358,7 +419,7 @@ bool PatchBackpackDeckCardFace()
 			UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Failed to install the DeckCard face scale host"));
 			return false;
 		}
-		CardFaceScaleBox->SetContent(ExistingCardFace);
+		CardFaceScaleBox->SetContent(ExistingCardFaceWidget);
 	}
 
 	CardFaceScaleBox->Modify();
@@ -367,27 +428,32 @@ bool PatchBackpackDeckCardFace()
 	CardFaceScaleBox->SetUserSpecifiedScale(BackpackCardFaceScale);
 	CardFaceScaleBox->SetClipping(EWidgetClipping::Inherit);
 
-	if (ExistingCardFace->GetClass() != CardFaceClass)
+	if (ExistingCardFaceWidget->GetClass() != CardFaceClass
+		|| ExistingCardFaceWidget->GetFName() != TEXT("BackpackCardView"))
 	{
-		CardFaceScaleBox->RemoveChild(ExistingCardFace);
-		DeckCardBlueprint->WidgetTree->RemoveWidget(ExistingCardFace);
+		CardFaceScaleBox->RemoveChild(ExistingCardFaceWidget);
+		DeckCardBlueprint->WidgetTree->RemoveWidget(ExistingCardFaceWidget);
 		const FName RetiredName = MakeUniqueObjectName(
-			GetTransientPackage(), ExistingCardFace->GetClass(), TEXT("RetiredBackpackCardFace"));
-		ExistingCardFace->Rename(
+			GetTransientPackage(), ExistingCardFaceWidget->GetClass(), TEXT("RetiredBackpackCardFace"));
+		ExistingCardFaceWidget->Rename(
 			*RetiredName.ToString(),
 			GetTransientPackage(),
 			REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
 
-		ExistingCardFace = DeckCardBlueprint->WidgetTree->ConstructWidget<UWacomCardView>(
-			CardFaceClass, TEXT("CardView"));
-		if (!ExistingCardFace || !CardFaceScaleBox->SetContent(ExistingCardFace))
+		ExistingCardFaceWidget = DeckCardBlueprint->WidgetTree->ConstructWidget<UWacomRetainedCardViewWidget>(
+			CardFaceClass, TEXT("BackpackCardView"));
+		if (!ExistingCardFaceWidget || !CardFaceScaleBox->SetContent(ExistingCardFaceWidget))
 		{
 			UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Failed to install authored DeckCard CardView"));
 			return false;
 		}
 	}
 
-	UScaleBoxSlot* CardFaceSlot = Cast<UScaleBoxSlot>(ExistingCardFace->Slot);
+	UWacomRetainedCardViewWidget* ExistingCardFace =
+		Cast<UWacomRetainedCardViewWidget>(ExistingCardFaceWidget);
+	UScaleBoxSlot* CardFaceSlot = ExistingCardFace
+		? Cast<UScaleBoxSlot>(ExistingCardFace->Slot)
+		: nullptr;
 	if (!CardFaceSlot)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] DeckCard CardView did not receive a ScaleBox slot"));
@@ -445,6 +511,13 @@ bool PatchBackpackDeckCardFace()
 			WorkspaceFeedbackOverlay->GetFName(),
 			FGuid::NewDeterministicGuid(WorkspaceFeedbackOverlay->GetPathName()));
 	}
+	DeckCardBlueprint->WidgetVariableNameToGuidMap.Remove(TEXT("CardView"));
+	if (!DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(ExistingCardFace->GetFName()))
+	{
+		DeckCardBlueprint->WidgetVariableNameToGuidMap.Emplace(
+			ExistingCardFace->GetFName(),
+			FGuid::NewDeterministicGuid(ExistingCardFace->GetPathName()));
+	}
 	FWidgetBlueprintOperationUtils::ToggleWidgetAsVariable(
 		DeckCardBlueprint, CardFaceScaleBox, true, false);
 	FWidgetBlueprintOperationUtils::ToggleWidgetAsVariable(
@@ -457,7 +530,7 @@ bool PatchBackpackDeckCardFace()
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BackpackUIBuilder] DeckCard now scales WBP_FirstPersonCardView uniformly at %.4f"),
+		TEXT("[BackpackUIBuilder] DeckCard now scales WBP_BackpackCardView uniformly at %.4f"),
 		BackpackCardFaceScale);
 	return true;
 }
@@ -818,7 +891,7 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 
 bool BuildBackpackUIContent()
 {
-	if (!PatchBackpackDeckCardFace())
+	if (!BuildBackpackCardViewAsset() || !PatchBackpackDeckCardFace())
 	{
 		return false;
 	}
@@ -877,7 +950,8 @@ bool BuildBackpackUIContent()
 		return false;
 	}
 
-	UE_LOG(LogTemp, Display, TEXT("[BackpackUIBuilder] Generated Screen, Workspace, ZoneRack, Entry, Confirm and Style assets"));
+	UE_LOG(LogTemp, Display,
+		TEXT("[BackpackUIBuilder] Generated BackpackCardView, Screen, Workspace, ZoneRack, Entry, Confirm and Style assets"));
 	return true;
 }
 }

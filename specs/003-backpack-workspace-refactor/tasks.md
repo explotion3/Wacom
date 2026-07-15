@@ -87,7 +87,7 @@
 - [x] T034 [US2] Implement selected/current/valid-target/rejected-target visual-state mapping from style data in `Source/WacomApp/Private/UI/Backpack/WacomBackpackScreenPresenter.cpp` and `Source/WacomApp/Public/UI/Backpack/WacomBackpackScreenPresenter.h`.
 - [x] T035 [US2] Unify Activate/Deactivate/Back/zone-switch/Snapshot-invalidated cancellation and provider unsubscription in `Source/WacomApp/Private/UI/Backpack/WacomBackpackScreen.cpp`.
 - [x] T036 [US2] Migrate existing hover/detail and SpecialZone right-click toggle tests to coexist with the Workspace input owner in `Source/WacomTests/Private/UI/BackpackScreenSpec.cpp` without adding selection/carry cases to that file.
-- [ ] T037 [US2] Run `Wacom.UI.Backpack` automation, compile WacomEditor, and complete the selection/carry section of `specs/003-backpack-workspace-refactor/quickstart.md` in PIE before Phase 5.
+- [x] T037 [US2] Run `Wacom.UI.Backpack` automation, compile WacomEditor, and complete the selection/carry section of `specs/003-backpack-workspace-refactor/quickstart.md` in PIE before Phase 5.
 
 **Checkpoint**: US1+US2 form the interaction MVP: players can organize, select, carry and place cards inside one active workspace.
 
@@ -161,9 +161,13 @@
 - [x] T067 Run the migration `rg` command from `specs/003-backpack-workspace-refactor/quickstart.md` and remove or explicitly justify every remaining old drag/drop production match in `specs/003-backpack-workspace-refactor/research.md`.
 - [x] T068 Compile WacomEditor with the command in `specs/003-backpack-workspace-refactor/quickstart.md` after all source/assets/contracts are migrated.
 - [x] T069 Run `Wacom.Run.Backpack` and `Wacom.UI.Backpack` automation with the commands in `specs/003-backpack-workspace-refactor/quickstart.md` and record results in `Docs/TODO.md` only if failures remain.
-- [ ] T070 Complete every PIE checklist section in `specs/003-backpack-workspace-refactor/quickstart.md`, including a recorded under-10-second active-workspace identification check with 20+ cards/4+ zones, no index UI, default no-lift, atomic rejection, modal restore, same-Run layout and DreamShader-disabled fallback.
+- [x] T070 Complete every PIE checklist section in `specs/003-backpack-workspace-refactor/quickstart.md`, including the active-workspace identification check with 20+ cards/4+ zones (stopwatch recording explicitly waived by the user in favor of the observed no-perceptible-delay result), no index UI, default no-lift, atomic rejection, modal restore, same-Run layout and DreamShader-disabled fallback.
 - [x] T071 Run the full `Automation RunTests Wacom` command from `specs/003-backpack-workspace-refactor/quickstart.md` and document any unrelated failure with log evidence in `Docs/TODO.md`.
 - [x] T072 Review `Docs/WacomRun.md`, `Docs/WacomUI.md`, `Docs/WacomApp.md`, `Docs/UI_Backpack_WBP_Binding.md`, `Docs/TODO.md`, and `Docs/TechDebt.md` against implemented facts so no long-term rule remains only in `specs/003-backpack-workspace-refactor/`.
+- [x] T073 Stabilize selected-card pickup so pointer-down enters carry immediately, pickup pointer-up only consumes the initial guard, and the next left/right click releases one/all without requiring an extra pointer move.
+- [x] T074 Add `WBP_BackpackCardView` with an invalidation-only static Retainer around the authored `WBP_FirstPersonCardView`, migrate `WBP_WacomDeckCardWidget.BackpackCardView`, and cover the asset/render contract without importing first-person effects or input.
+- [x] T075 Disable, collapse, and release the inner `SurfaceFoilOverlay` material brush for the backpack static-retained wrapper while preserving the shared battle/first-person card face default, with focused runtime and formal-asset contract coverage.
+- [x] T076 Connect `M_BackpackWorkspaceCardFeedback.dsm` directly to native VertexColor RGB output 0 and Alpha output 4, force-regenerate the material asset, and add a UE material-recompile/graph regression test that rejects A masks applied to RGB output 0.
 
 ---
 
