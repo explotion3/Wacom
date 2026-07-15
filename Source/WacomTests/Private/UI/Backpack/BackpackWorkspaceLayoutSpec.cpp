@@ -89,6 +89,31 @@ bool FWacomUIBackpackWorkspaceLayoutContractSpec::RunTest(const FString& Paramet
 		TEXT("Arrange All clears every manual layout entry"),
 		FWacomBackpackWorkspaceModelTestAccess::ArrangeAllAndCountRemainingManualLayouts(5),
 		0);
+
+	for (const int32 Count : { 0, 1, 3, 21 })
+	{
+		for (const FVector2D PilePosition : { FVector2D(24.0f, 470.0f), FVector2D(996.0f, 470.0f) })
+		{
+			const TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> Accordion =
+				FWacomBackpackWorkspaceModelTestAccess::BuildAccordionLayout(
+					Count,
+					PilePosition,
+					WorkspaceSize);
+			TestEqual(
+				*FString::Printf(TEXT("Accordion returns all %d cards at either edge"), Count),
+				Accordion.Num(),
+				Count);
+			for (int32 Index = 0; Index < Accordion.Num(); ++Index)
+			{
+				TestEqual(TEXT("Accordion layer order remains deterministic"), Accordion[Index].LayerRank, Index);
+				TestTrue(TEXT("Accordion keeps fixed-size card centers inside horizontal bounds"),
+					Accordion[Index].CardCenter.X >= 110.0f - KINDA_SMALL_NUMBER
+						&& Accordion[Index].CardCenter.X <= WorkspaceSize.X - 110.0f + KINDA_SMALL_NUMBER);
+				TestTrue(TEXT("Accordion uses only the configured light fan angle"),
+					FMath::Abs(Accordion[Index].AngleDegrees) <= 6.0f + KINDA_SMALL_NUMBER);
+			}
+		}
+	}
 	return true;
 }
 

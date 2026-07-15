@@ -37,14 +37,15 @@ bool FWacomUIBackpackWorkspaceSelectionSpec::RunTest(const FString& Parameters)
 	Model.ClickBlank();
 	TestTrue(TEXT("Blank click clears selection"), Model.GetSelection().OrderedSelectedInstanceIds.IsEmpty());
 
-	Model.BeginMarquee(FVector2D(50.0f, 50.0f), false);
+	const FWacomBackpackZoneKey BattleZone = FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck);
+	Model.BeginMarquee(BattleZone, FVector2D(50.0f, 50.0f), false);
 	Model.UpdateMarquee(FVector2D(350.0f, 150.0f));
 	Model.CompleteMarquee();
 	TestEqual(TEXT("Marquee uses card centers and excludes read-only cards"),
 		Model.GetSelection().OrderedSelectedInstanceIds,
 		TArray<FGuid>({ First, Second }));
 
-	Model.BeginMarquee(FVector2D(150.0f, 50.0f), true);
+	Model.BeginMarquee(BattleZone, FVector2D(150.0f, 50.0f), true);
 	Model.UpdateMarquee(FVector2D(450.0f, 150.0f));
 	Model.CompleteMarquee();
 	TestEqual(TEXT("Ctrl marquee toggles against drag-start selection"),
@@ -55,6 +56,33 @@ bool FWacomUIBackpackWorkspaceSelectionSpec::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Ctrl+A selects all and only movable physical cards"),
 		Model.GetSelection().OrderedSelectedInstanceIds,
 		TArray<FGuid>({ First, Second, Fourth }));
+
+	const FWacomBackpackZoneKey FluxZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
+	TArray<FWacomBackpackWorkspaceCardHitRecord> MultiZoneCards = {
+		{ First, FluxZone, FVector2D(100.0f, 100.0f), 0, true },
+		{ Second, BattleZone, FVector2D(200.0f, 100.0f), 1, true },
+		{ Fourth, BattleZone, FVector2D(300.0f, 100.0f), 2, true },
+	};
+	Model.CancelTransientState();
+	Model.ReconcileCards(MultiZoneCards);
+	Model.ClickCard(First, false);
+	Model.ClickCard(Second, true);
+	TestEqual(TEXT("Selection switches atomically to the clicked source zone"),
+		Model.GetSelection().OrderedSelectedInstanceIds, TArray<FGuid>{ Second });
+	TestEqual(TEXT("Selection records its source zone"), Model.GetSelection().SourceZone, BattleZone);
+	Model.BeginMarquee(BattleZone, FVector2D(150.0f, 50.0f), false);
+	Model.UpdateMarquee(FVector2D(350.0f, 150.0f));
+	Model.CompleteMarquee();
+	TestEqual(TEXT("Marquee only selects cards from its originating pile"),
+		Model.GetSelection().OrderedSelectedInstanceIds, TArray<FGuid>({ Second, Fourth }));
+	TestTrue(TEXT("Pile title drag enters the mutually-exclusive pile move mode"),
+		Model.BeginPileMove(BattleZone, FVector2D(20.0f), FVector2D(80.0f, 90.0f)));
+	Model.UpdatePileMove(FVector2D(52.0f, 36.0f));
+	const FWacomBackpackWorkspacePileMoveState CompletedPileMove = Model.CompletePileMove();
+	TestEqual(TEXT("Pile follows the pointer delta directly"),
+		CompletedPileMove.CurrentPosition, FVector2D(112.0f, 106.0f));
+	TestEqual(TEXT("Completed pile move returns to idle"),
+		Model.GetMode(), EWacomBackpackWorkspaceInteractionMode::Idle);
 	return true;
 }
 

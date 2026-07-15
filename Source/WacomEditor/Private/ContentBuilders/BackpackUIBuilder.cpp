@@ -15,7 +15,6 @@
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/RetainerBox.h"
-#include "Components/ScrollBox.h"
 #include "Components/ScaleBox.h"
 #include "Components/ScaleBoxSlot.h"
 #include "Components/SizeBox.h"
@@ -24,6 +23,7 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WrapBox.h"
 #include "HAL/FileManager.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -34,8 +34,9 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
-#include "UI/Backpack/WacomBackpackZoneRackEntryWidget.h"
-#include "UI/Backpack/WacomBackpackZoneRackWidget.h"
+#include "UI/Backpack/WacomBackpackPilePreviewWidget.h"
+#include "UI/Backpack/WacomBackpackZonePileWidget.h"
+#include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomRetainedCardViewWidget.h"
 #include "UI/Card/WacomStaticRetainerBox.h"
@@ -541,7 +542,7 @@ bool BuildWorkspaceBlueprint(UWidgetBlueprint& Blueprint)
 	Blueprint.WidgetTree->RootWidget = Root;
 
 	UBorder* Background = MakeWidget<UBorder>(Blueprint, TEXT("WorkspaceBackground"));
-	Background->SetBrushColor(FLinearColor(0.025f, 0.035f, 0.052f, 0.98f));
+	Background->SetBrushColor(FLinearColor(0.018f, 0.027f, 0.043f, 1.0f));
 	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Background))
 	{
 		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
@@ -549,15 +550,15 @@ bool BuildWorkspaceBlueprint(UWidgetBlueprint& Blueprint)
 		Slot->SetZOrder(-10);
 	}
 
-	UCanvasPanel* CardCanvas = MakeWidget<UCanvasPanel>(Blueprint, TEXT("CardCanvas"), true);
-	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(CardCanvas))
+	UCanvasPanel* WorkspaceCanvas = MakeWidget<UCanvasPanel>(Blueprint, TEXT("WorkspaceCanvas"), true);
+	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(WorkspaceCanvas))
 	{
 		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 		Slot->SetOffsets(FMargin(0.0f));
 	}
 
 	UBorder* Marquee = MakeWidget<UBorder>(Blueprint, TEXT("SelectionMarquee"), true);
-	Marquee->SetBrushColor(FLinearColor(0.18f, 0.70f, 1.0f, 0.22f));
+	Marquee->SetBrushColor(FLinearColor(0.12f, 0.76f, 0.96f, 0.24f));
 	Marquee->SetVisibility(ESlateVisibility::Collapsed);
 	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Marquee))
 	{
@@ -569,9 +570,9 @@ bool BuildWorkspaceBlueprint(UWidgetBlueprint& Blueprint)
 	UTextBlock* Empty = MakeText(
 		Blueprint,
 		TEXT("EmptyStateText"),
-		NSLOCTEXT("BackpackUIBuilder", "EmptyWorkspace", "该区域暂无卡牌"),
+		NSLOCTEXT("BackpackUIBuilder", "EmptyWorkspace", "通量区暂无卡牌"),
 		20,
-		FLinearColor(0.58f, 0.62f, 0.68f, 1.0f),
+		FLinearColor(0.48f, 0.57f, 0.66f, 1.0f),
 		true);
 	Empty->SetJustification(ETextJustify::Center);
 	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Empty))
@@ -584,41 +585,75 @@ bool BuildWorkspaceBlueprint(UWidgetBlueprint& Blueprint)
 	return true;
 }
 
-bool BuildZoneRackEntryBlueprint(UWidgetBlueprint& Blueprint)
+bool BuildSpecialZoneBlueprint(UWidgetBlueprint& Blueprint)
 {
-	UBorder* ActiveBorder = MakeWidget<UBorder>(Blueprint, TEXT("ActiveBorder"), true);
-	ActiveBorder->SetPadding(FMargin(10.0f, 8.0f));
-	ActiveBorder->SetBrushColor(FLinearColor(0.055f, 0.07f, 0.095f, 0.96f));
-	Blueprint.WidgetTree->RootWidget = ActiveBorder;
+	const FLinearColor TextPrimary(0.92f, 0.95f, 0.97f, 1.0f);
+	const FLinearColor TextSecondary(0.36f, 0.78f, 0.91f, 1.0f);
 
-	UButton* ActivateButton = MakeWidget<UButton>(Blueprint, TEXT("ActivateButton"), true);
-	ActivateButton->SetBackgroundColor(FLinearColor(0.16f, 0.18f, 0.22f, 0.7f));
-	ActiveBorder->AddChild(ActivateButton);
-	UVerticalBox* Content = MakeWidget<UVerticalBox>(Blueprint, TEXT("EntryContent"));
-	ActivateButton->AddChild(Content);
-	UTextBlock* Title = MakeText(
-		Blueprint, TEXT("TitleText"), FText::GetEmpty(), 18,
-		FLinearColor(0.94f, 0.91f, 0.82f, 1.0f), true);
-	UTextBlock* Count = MakeText(
-		Blueprint, TEXT("CountText"), FText::GetEmpty(), 14,
-		FLinearColor(0.54f, 0.76f, 0.86f, 1.0f), true);
-	Content->AddChildToVerticalBox(Title)->SetPadding(FMargin(2.0f));
-	Content->AddChildToVerticalBox(Count)->SetPadding(FMargin(2.0f, 1.0f));
-	return true;
-}
-
-bool BuildZoneRackBlueprint(UWidgetBlueprint& Blueprint)
-{
-	UBorder* Root = MakeWidget<UBorder>(Blueprint, TEXT("ZoneRackRoot"));
-	Root->SetPadding(FMargin(6.0f));
-	Root->SetBrushColor(FLinearColor(0.03f, 0.04f, 0.06f, 0.96f));
+	UBorder* Root = MakeWidget<UBorder>(Blueprint, TEXT("SpecialZoneBorder"));
+	Root->SetPadding(FMargin(14.0f, 12.0f));
+	Root->SetBrushColor(FLinearColor(0.035f, 0.049f, 0.071f, 1.0f));
 	Blueprint.WidgetTree->RootWidget = Root;
 
-	UScrollBox* Scroll = MakeWidget<UScrollBox>(Blueprint, TEXT("ZoneRackScroll"));
-	Scroll->SetScrollBarVisibility(ESlateVisibility::Visible);
-	Root->AddChild(Scroll);
-	UVerticalBox* EntriesHost = MakeWidget<UVerticalBox>(Blueprint, TEXT("EntriesHost"), true);
-	Scroll->AddChild(EntriesHost);
+	UVerticalBox* Content = MakeWidget<UVerticalBox>(Blueprint, TEXT("SpecialZoneContent"));
+	if (UBorderSlot* Slot = Cast<UBorderSlot>(Root->AddChild(Content)))
+	{
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+	}
+
+	UHorizontalBox* TitleRow = MakeWidget<UHorizontalBox>(Blueprint, TEXT("SpecialZoneTitleRow"));
+	UVerticalBoxSlot* TitleRowSlot = Content->AddChildToVerticalBox(TitleRow);
+	TitleRowSlot->SetSize(AutoSize());
+	TitleRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
+	UTextBlock* Title = MakeText(
+		Blueprint,
+		TEXT("TitleText"),
+		NSLOCTEXT("BackpackUIBuilder", "SpecialZoneTitle", "特殊存放区"),
+		18,
+		TextPrimary,
+		true);
+	TitleRow->AddChildToHorizontalBox(Title)->SetSize(FillSize());
+	UTextBlock* Badge = MakeText(
+		Blueprint,
+		TEXT("BattleReadyBadge"),
+		NSLOCTEXT("BackpackUIBuilder", "SpecialZoneBattleReady", "已入战"),
+		14,
+		TextSecondary,
+		true);
+	Badge->SetVisibility(ESlateVisibility::Collapsed);
+	if (UHorizontalBoxSlot* Slot = TitleRow->AddChildToHorizontalBox(Badge))
+	{
+		Slot->SetSize(AutoSize());
+		Slot->SetVerticalAlignment(VAlign_Center);
+		Slot->SetPadding(FMargin(12.0f, 0.0f, 0.0f, 0.0f));
+	}
+
+	UTextBlock* OwnerLabel = MakeText(
+		Blueprint,
+		TEXT("OwnerCardLabel"),
+		NSLOCTEXT("BackpackUIBuilder", "SpecialZoneOwnerCard", "主卡"),
+		14,
+		TextSecondary);
+	Content->AddChildToVerticalBox(OwnerLabel)->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
+	UWrapBox* OwnerHost = MakeWidget<UWrapBox>(Blueprint, TEXT("OwnerCardHost"), true);
+	OwnerHost->SetInnerSlotPadding(FVector2D(8.0f, 8.0f));
+	Content->AddChildToVerticalBox(OwnerHost)->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
+
+	UBorder* ContentHost = MakeWidget<UBorder>(Blueprint, TEXT("ContentDropTargetHost"), true);
+	ContentHost->SetPadding(FMargin(10.0f));
+	ContentHost->SetBrushColor(FLinearColor(0.018f, 0.027f, 0.043f, 1.0f));
+	UVerticalBoxSlot* ContentHostSlot = Content->AddChildToVerticalBox(ContentHost);
+	ContentHostSlot->SetSize(FillSize());
+	ContentHostSlot->SetHorizontalAlignment(HAlign_Fill);
+	ContentHostSlot->SetVerticalAlignment(VAlign_Fill);
+	UWrapBox* ContentCards = MakeWidget<UWrapBox>(Blueprint, TEXT("ContentCardsBox"), true);
+	ContentCards->SetInnerSlotPadding(FVector2D(8.0f, 8.0f));
+	if (UBorderSlot* Slot = Cast<UBorderSlot>(ContentHost->AddChild(ContentCards)))
+	{
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+	}
 	return true;
 }
 
@@ -641,7 +676,7 @@ bool BuildDeleteConfirmBlueprint(UWidgetBlueprint& Blueprint)
 	}
 	UBorder* Panel = MakeWidget<UBorder>(Blueprint, TEXT("ModalPanel"));
 	Panel->SetPadding(FMargin(28.0f, 24.0f));
-	Panel->SetBrushColor(FLinearColor(0.055f, 0.065f, 0.085f, 1.0f));
+	Panel->SetBrushColor(FLinearColor(0.035f, 0.049f, 0.071f, 1.0f));
 	PanelSize->AddChild(Panel);
 	UVerticalBox* Content = MakeWidget<UVerticalBox>(Blueprint, TEXT("ModalContent"));
 	Panel->AddChild(Content);
@@ -681,30 +716,21 @@ bool BuildDeleteConfirmBlueprint(UWidgetBlueprint& Blueprint)
 
 bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 {
-	const FLinearColor TextPrimary(0.94f, 0.91f, 0.82f, 1.0f);
-	const FLinearColor TextSecondary(0.54f, 0.76f, 0.86f, 1.0f);
-	// 当前项目 UI 以 1600×900、DPI 1.0 为像素安全制作基准。Screen 仍由 CommonUI
-	// GameMenu layer 分配全屏 geometry；这里显式固定设计面并让内部根节点 Fill，避免
-	// USizeBox 子槽按最小 desired size 收缩。
+	const FLinearColor TextPrimary(0.92f, 0.95f, 0.97f, 1.0f);
+	const FLinearColor TextSecondary(0.36f, 0.78f, 0.91f, 1.0f);
+	// CommonUI GameMenu layer 分配全屏 geometry，项目级 1920×1080 DPI 曲线是唯一
+	// 全屏缩放来源。背包内部保持流式 Fill，不再叠加固定设计面或第二套 ScaleToFit。
 	UOverlay* RootFrame = MakeWidget<UOverlay>(Blueprint, TEXT("RootFrame"));
 	Blueprint.WidgetTree->RootWidget = RootFrame;
-	USizeBox* ScreenSize = MakeWidget<USizeBox>(Blueprint, TEXT("ScreenSize"));
-	ScreenSize->SetWidthOverride(1600.0f);
-	ScreenSize->SetHeightOverride(900.0f);
-	if (UOverlaySlot* Slot = RootFrame->AddChildToOverlay(ScreenSize))
-	{
-		Slot->SetHorizontalAlignment(HAlign_Left);
-		Slot->SetVerticalAlignment(VAlign_Top);
-	}
 	UOverlay* Root = MakeWidget<UOverlay>(Blueprint, TEXT("Root"));
-	if (USizeBoxSlot* Slot = Cast<USizeBoxSlot>(ScreenSize->AddChild(Root)))
+	if (UOverlaySlot* Slot = RootFrame->AddChildToOverlay(Root))
 	{
 		Slot->SetHorizontalAlignment(HAlign_Fill);
 		Slot->SetVerticalAlignment(VAlign_Fill);
 	}
 
 	UBorder* Background = MakeWidget<UBorder>(Blueprint, TEXT("Background"));
-	Background->SetBrushColor(FLinearColor(0.012f, 0.018f, 0.028f, 0.98f));
+	Background->SetBrushColor(FLinearColor(0.008f, 0.013f, 0.022f, 0.985f));
 	if (UOverlaySlot* Slot = Root->AddChildToOverlay(Background))
 	{
 		Slot->SetHorizontalAlignment(HAlign_Fill);
@@ -714,16 +740,17 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 	UVerticalBox* Main = MakeWidget<UVerticalBox>(Blueprint, TEXT("MainLayout"));
 	if (UOverlaySlot* Slot = Root->AddChildToOverlay(Main))
 	{
-		Slot->SetPadding(FMargin(26.0f, 22.0f));
+		Slot->SetPadding(FMargin(28.0f, 24.0f));
 		Slot->SetHorizontalAlignment(HAlign_Fill);
 		Slot->SetVerticalAlignment(VAlign_Fill);
 	}
 
 	UBorder* HeaderBorder = MakeWidget<UBorder>(Blueprint, TEXT("HeaderBorder"));
-	HeaderBorder->SetPadding(FMargin(18.0f, 11.0f));
-	HeaderBorder->SetBrushColor(FLinearColor(0.045f, 0.058f, 0.078f, 0.98f));
+	HeaderBorder->SetPadding(FMargin(20.0f, 12.0f));
+	HeaderBorder->SetBrushColor(FLinearColor(0.035f, 0.049f, 0.071f, 1.0f));
 	UVerticalBoxSlot* HeaderSlot = Main->AddChildToVerticalBox(HeaderBorder);
 	HeaderSlot->SetSize(AutoSize());
+	HeaderSlot->SetHorizontalAlignment(HAlign_Fill);
 	HeaderSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 14.0f));
 	UHorizontalBox* Header = MakeWidget<UHorizontalBox>(Blueprint, TEXT("Header"));
 	HeaderBorder->AddChild(Header);
@@ -754,10 +781,25 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 	UButton* Arrange = MakeLabeledButton(
 		Blueprint,
 		TEXT("ArrangeAllButton"),
-		NSLOCTEXT("BackpackUIBuilder", "ArrangeAll", "整理当前区域"),
+		NSLOCTEXT("BackpackUIBuilder", "ArrangeAll", "整理通量卡牌"),
 		FLinearColor(0.12f, 0.31f, 0.42f, 1.0f),
 		true);
 	ArrangeSize->AddChild(Arrange);
+	USizeBox* ResetPilesSize = MakeWidget<USizeBox>(Blueprint, TEXT("ResetPilePositionsButtonSize"));
+	ResetPilesSize->SetWidthOverride(170.0f);
+	ResetPilesSize->SetHeightOverride(42.0f);
+	if (UHorizontalBoxSlot* ResetSlot = Header->AddChildToHorizontalBox(ResetPilesSize))
+	{
+		ResetSlot->SetVerticalAlignment(VAlign_Center);
+		ResetSlot->SetPadding(FMargin(0.0f, 0.0f, 10.0f, 0.0f));
+	}
+	UButton* ResetPiles = MakeLabeledButton(
+		Blueprint,
+		TEXT("ResetPilePositionsButton"),
+		NSLOCTEXT("BackpackUIBuilder", "ResetPilePositions", "重置牌堆位置"),
+		FLinearColor(0.12f, 0.24f, 0.34f, 1.0f),
+		true);
+	ResetPilesSize->AddChild(ResetPiles);
 	USizeBox* CloseSize = MakeWidget<USizeBox>(Blueprint, TEXT("CloseButtonSize"));
 	CloseSize->SetWidthOverride(108.0f);
 	CloseSize->SetHeightOverride(42.0f);
@@ -771,47 +813,50 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 	CloseSize->AddChild(Close);
 
 	UHorizontalBox* Body = MakeWidget<UHorizontalBox>(Blueprint, TEXT("Body"));
-	Main->AddChildToVerticalBox(Body)->SetSize(FillSize());
+	if (UVerticalBoxSlot* BodySlot = Main->AddChildToVerticalBox(Body))
+	{
+		BodySlot->SetSize(FillSize());
+		BodySlot->SetHorizontalAlignment(HAlign_Fill);
+		BodySlot->SetVerticalAlignment(VAlign_Fill);
+	}
 
 	UBorder* WorkspacePanel = MakeWidget<UBorder>(Blueprint, TEXT("WorkspacePanel"));
-	WorkspacePanel->SetPadding(FMargin(14.0f));
-	WorkspacePanel->SetBrushColor(FLinearColor(0.028f, 0.038f, 0.055f, 0.98f));
+	WorkspacePanel->SetPadding(FMargin(12.0f));
+	WorkspacePanel->SetBrushColor(FLinearColor(0.025f, 0.036f, 0.052f, 1.0f));
 	UHorizontalBoxSlot* WorkspacePanelSlot = Body->AddChildToHorizontalBox(WorkspacePanel);
 	WorkspacePanelSlot->SetSize(FillSize());
-	WorkspacePanelSlot->SetPadding(FMargin(0.0f, 0.0f, 16.0f, 0.0f));
-	UVerticalBox* WorkspaceColumn = MakeWidget<UVerticalBox>(Blueprint, TEXT("WorkspaceColumn"));
-	WorkspacePanel->AddChild(WorkspaceColumn);
+	WorkspacePanelSlot->SetHorizontalAlignment(HAlign_Fill);
+	WorkspacePanelSlot->SetVerticalAlignment(VAlign_Fill);
+	WorkspacePanelSlot->SetPadding(FMargin(0.0f, 0.0f, 14.0f, 0.0f));
+	UOverlay* WorkspaceOverlay = MakeWidget<UOverlay>(Blueprint, TEXT("WorkspaceOverlay"));
+	if (UBorderSlot* Slot = Cast<UBorderSlot>(WorkspacePanel->AddChild(WorkspaceOverlay)))
+	{
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+	}
 	UOverlay* WorkspaceHost = MakeWidget<UOverlay>(Blueprint, TEXT("WorkspaceHost"), true);
-	WorkspaceColumn->AddChildToVerticalBox(WorkspaceHost)->SetSize(FillSize());
-
-	USizeBox* RackSize = MakeWidget<USizeBox>(Blueprint, TEXT("RackSize"));
-	RackSize->SetWidthOverride(340.0f);
-	Body->AddChildToHorizontalBox(RackSize)->SetSize(AutoSize());
-	UBorder* RackPanel = MakeWidget<UBorder>(Blueprint, TEXT("RackPanel"));
-	RackPanel->SetPadding(FMargin(12.0f));
-	RackPanel->SetBrushColor(FLinearColor(0.028f, 0.038f, 0.055f, 0.98f));
-	RackSize->AddChild(RackPanel);
-	UVerticalBox* RackColumn = MakeWidget<UVerticalBox>(Blueprint, TEXT("RackColumn"));
-	RackPanel->AddChild(RackColumn);
-	UTextBlock* RackTitle = MakeText(
-		Blueprint,
-		TEXT("RackTitle"),
-		NSLOCTEXT("BackpackUIBuilder", "RackTitle", "区域牌匣"),
-		22,
-		TextPrimary);
-	RackColumn->AddChildToVerticalBox(RackTitle)->SetPadding(FMargin(4.0f, 2.0f, 4.0f, 10.0f));
-	UOverlay* ZoneRackHost = MakeWidget<UOverlay>(Blueprint, TEXT("ZoneRackHost"), true);
-	RackColumn->AddChildToVerticalBox(ZoneRackHost)->SetSize(FillSize());
-
+	if (UOverlaySlot* Slot = WorkspaceOverlay->AddChildToOverlay(WorkspaceHost))
+	{
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+	}
 	USizeBox* DeleteSize = MakeWidget<USizeBox>(Blueprint, TEXT("DeleteTargetSize"));
-	DeleteSize->SetHeightOverride(112.0f);
-	UVerticalBoxSlot* DeleteSizeSlot = RackColumn->AddChildToVerticalBox(DeleteSize);
-	DeleteSizeSlot->SetSize(AutoSize());
-	DeleteSizeSlot->SetPadding(FMargin(0.0f, 14.0f, 0.0f, 0.0f));
+	DeleteSize->SetWidthOverride(240.0f);
+	DeleteSize->SetHeightOverride(116.0f);
+	if (UOverlaySlot* DeleteSizeSlot = WorkspaceOverlay->AddChildToOverlay(DeleteSize))
+	{
+		DeleteSizeSlot->SetHorizontalAlignment(HAlign_Right);
+		DeleteSizeSlot->SetVerticalAlignment(VAlign_Bottom);
+		DeleteSizeSlot->SetPadding(FMargin(0.0f, 0.0f, 12.0f, 12.0f));
+	}
 	UOverlay* DeleteTargetHost = MakeWidget<UOverlay>(Blueprint, TEXT("DeleteTargetHost"), true);
-	DeleteSize->AddChild(DeleteTargetHost);
+	if (USizeBoxSlot* Slot = Cast<USizeBoxSlot>(DeleteSize->AddChild(DeleteTargetHost)))
+	{
+		Slot->SetHorizontalAlignment(HAlign_Fill);
+		Slot->SetVerticalAlignment(VAlign_Fill);
+	}
 	UBorder* DeleteBackground = MakeWidget<UBorder>(Blueprint, TEXT("DeleteTargetBackground"));
-	DeleteBackground->SetBrushColor(FLinearColor(0.22f, 0.055f, 0.05f, 0.96f));
+	DeleteBackground->SetBrushColor(FLinearColor(0.30f, 0.045f, 0.052f, 0.96f));
 	DeleteBackground->SetPadding(FMargin(12.0f));
 	DeleteTargetHost->AddChildToOverlay(DeleteBackground);
 	UTextBlock* DeleteLabel = MakeText(
@@ -819,7 +864,7 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 		TEXT("DeleteTargetLabel"),
 		NSLOCTEXT("BackpackUIBuilder", "DeleteTarget", "拖到这里批量销毁"),
 		18,
-		FLinearColor(1.0f, 0.73f, 0.62f, 1.0f));
+		FLinearColor(1.0f, 0.76f, 0.70f, 1.0f));
 	DeleteLabel->SetJustification(ETextJustify::Center);
 	if (UOverlaySlot* Slot = DeleteTargetHost->AddChildToOverlay(DeleteLabel))
 	{
@@ -871,10 +916,10 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	Style->SettleSeconds = 0.18f;
 	Style->CollectSeconds = 0.20f;
 	Style->RejectedFeedbackSeconds = 0.16f;
-	Style->SelectionColor = FLinearColor(0.18f, 0.70f, 1.0f, 0.92f);
-	Style->CardStateOverlayOpacity = 0.22f;
-	Style->ValidTargetColor = FLinearColor(0.20f, 0.86f, 0.42f, 0.92f);
-	Style->RejectedTargetColor = FLinearColor(0.96f, 0.18f, 0.12f, 0.92f);
+	Style->SelectionColor = FLinearColor(0.10f, 0.78f, 1.0f, 0.96f);
+	Style->CardStateOverlayOpacity = 0.20f;
+	Style->ValidTargetColor = FLinearColor(0.16f, 0.88f, 0.44f, 0.96f);
+	Style->RejectedTargetColor = FLinearColor(1.0f, 0.15f, 0.12f, 0.96f);
 	Style->CardFeedbackMaterial = LoadObject<UMaterialInterface>(
 		nullptr,
 		TEXT("/Game/Wacom/UI/Backpack/Materials/M_BackpackWorkspaceCardFeedback.M_BackpackWorkspaceCardFeedback"));
@@ -902,38 +947,32 @@ bool BuildBackpackUIContent()
 		return false;
 	}
 
-	UWidgetBlueprint* Entry = LoadOrCreateWidgetBlueprint(
-		TEXT("WBP_BackpackZoneRackEntry"), UWacomBackpackZoneRackEntryWidget::StaticClass());
-	UWidgetBlueprint* Rack = LoadOrCreateWidgetBlueprint(
-		TEXT("WBP_BackpackZoneRack"), UWacomBackpackZoneRackWidget::StaticClass());
 	UWidgetBlueprint* Workspace = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackWorkspace"), UWacomBackpackWorkspaceWidget::StaticClass());
 	UWidgetBlueprint* Confirm = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackDeleteConfirm"), UWacomBackpackDeleteConfirmWidget::StaticClass());
+	UWidgetBlueprint* SpecialZone = LoadOrCreateWidgetBlueprint(
+		TEXT("WBP_WacomSpecialZoneWidget"), UWacomSpecialZoneWidget::StaticClass());
 	UWidgetBlueprint* Screen = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackScreen"), UWacomBackpackScreen::StaticClass());
-	if (!Entry || !Rack || !Workspace || !Confirm || !Screen)
+	if (!Workspace || !Confirm || !SpecialZone || !Screen)
 	{
 		return false;
 	}
-
-	if (!BuildZoneRackEntryBlueprint(*Entry) || !CompileWidgetBlueprint(*Entry) || !SaveTopLevelAsset(*Entry))
-	{
-		return false;
-	}
-	if (!BuildZoneRackBlueprint(*Rack) || !CompileWidgetBlueprint(*Rack))
-	{
-		return false;
-	}
-	if (!SetObjectDefault(*Rack, TEXT("EntryWidgetClass"), Entry->GeneratedClass) || !SaveTopLevelAsset(*Rack))
-	{
-		return false;
-	}
-	if (!BuildWorkspaceBlueprint(*Workspace) || !CompileWidgetBlueprint(*Workspace) || !SaveTopLevelAsset(*Workspace))
+	if (!BuildWorkspaceBlueprint(*Workspace) || !CompileWidgetBlueprint(*Workspace)
+		|| !SetObjectDefault(*Workspace, TEXT("PileWidgetClass"), UWacomBackpackZonePileWidget::StaticClass())
+		|| !SetObjectDefault(*Workspace, TEXT("PilePreviewWidgetClass"), UWacomBackpackPilePreviewWidget::StaticClass())
+		|| !SaveTopLevelAsset(*Workspace))
 	{
 		return false;
 	}
 	if (!BuildDeleteConfirmBlueprint(*Confirm) || !CompileWidgetBlueprint(*Confirm) || !SaveTopLevelAsset(*Confirm))
+	{
+		return false;
+	}
+	if (!BuildSpecialZoneBlueprint(*SpecialZone)
+		|| !CompileWidgetBlueprint(*SpecialZone)
+		|| !SaveTopLevelAsset(*SpecialZone))
 	{
 		return false;
 	}
@@ -942,8 +981,8 @@ bool BuildBackpackUIContent()
 		return false;
 	}
 	if (!SetObjectDefault(*Screen, TEXT("WorkspaceWidgetClass"), Workspace->GeneratedClass)
-		|| !SetObjectDefault(*Screen, TEXT("ZoneRackWidgetClass"), Rack->GeneratedClass)
 		|| !SetObjectDefault(*Screen, TEXT("DeleteConfirmWidgetClass"), Confirm->GeneratedClass)
+		|| !SetObjectDefault(*Screen, TEXT("SpecialZoneWidgetClass"), SpecialZone->GeneratedClass)
 		|| !SetObjectDefault(*Screen, TEXT("WorkspaceStyle"), Style)
 		|| !SaveTopLevelAsset(*Screen))
 	{
@@ -951,7 +990,7 @@ bool BuildBackpackUIContent()
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BackpackUIBuilder] Generated BackpackCardView, Screen, Workspace, ZoneRack, Entry, Confirm and Style assets"));
+		TEXT("[BackpackUIBuilder] Generated BackpackCardView, Screen, unified Workspace, embedded piles, Confirm, SpecialZone and Style assets"));
 	return true;
 }
 }

@@ -23,9 +23,9 @@ class UWacomRunViewModel;
 class UWacomRunViewModelProvider;
 class UWacomBackpackWorkspaceStyle;
 class UWacomBackpackWorkspaceWidget;
-class UWacomBackpackZoneRackWidget;
 class UWacomBackpackDeleteConfirmWidget;
 class UWacomPrimaryGameLayout;
+class UWacomSettingsSubsystem;
 class FWacomBackpackCardDetailController;
 class FWacomBackpackStorageRefreshGate;
 class FWacomBackpackWorkspaceInteractionModel;
@@ -35,6 +35,8 @@ struct FWacomBackpackZoneKey;
 struct FWacomBackpackPendingDeleteConfirmation;
 struct FWacomBackpackScreenTestAccess;
 struct FCardInstance;
+struct FWacomLocalSettingsSnapshot;
+enum class EWacomRuntimeSettingsChangeReason : uint8;
 
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomBackpackScreenAutomationTestView
@@ -43,7 +45,7 @@ struct WACOMAPP_API FWacomBackpackScreenAutomationTestView
 	int32 ListRefreshSkipCount = 0;
 	int32 SnapshotBuildCount = 0;
 	int32 SnapshotRevisionSkipCount = 0;
-	int32 ZoneRackEntryCount = 0;
+	int32 WorkspacePileCount = 0;
 	int32 WorkspaceCardCount = 0;
 	EZoneKind ActiveWorkspaceZone = EZoneKind::Backpack;
 	FGuid ActiveWorkspaceOwnerInstanceId;
@@ -130,10 +132,6 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> WorkspaceHost;
 
-	/** 右侧常驻区域牌匣 Host。WBP 可提供；未绑定时 fallback 自动创建。 */
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> ZoneRackHost;
-
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> DeleteTargetHost;
 
@@ -143,6 +141,10 @@ protected:
 	/** 将当前区域的手动位置、角度和层级恢复为确定性默认布局。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> ArrangeAllButton;
+
+	/** 恢复所有可移动牌堆的默认位置和层级，不影响通量卡手动布局。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> ResetPilePositionsButton;
 
 	/** WBP 可绑定的删牌区运行时内容槽。未绑定时 C++ fallback 会创建。 */
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -189,9 +191,6 @@ protected:
 	TObjectPtr<UWacomBackpackWorkspaceWidget> WorkspaceWidget;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UWacomBackpackZoneRackWidget> ZoneRackWidget;
-
-	UPROPERTY(Transient)
 	TObjectPtr<UWacomBackpackDeleteConfirmWidget> DeleteConfirmWidget;
 
 	/** 关闭按钮（点击 = DeactivateWidget）。 */
@@ -203,6 +202,9 @@ protected:
 
 	UFUNCTION()
 	void HandleArrangeAllClicked();
+
+	UFUNCTION()
+	void HandleResetPilePositionsClicked();
 
 private:
 	UWacomRunViewModelProvider* GetProvider() const;
@@ -233,10 +235,6 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
 		meta = (ToolTip = "中央自由工作台 Widget 类。保持被动，只显示 Screen 提供的活动区域与布局。"))
 	TSubclassOf<UWacomBackpackWorkspaceWidget> WorkspaceWidgetClass;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
-		meta = (ToolTip = "右侧常驻区域牌匣 Widget 类。入口只转发区域激活意图，不直接修改 Run 状态。"))
-	TSubclassOf<UWacomBackpackZoneRackWidget> ZoneRackWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
 		meta = (ToolTip = "批量销毁确认 Widget 类。只显示数量和奖励并转发确认、取消意图。"))
@@ -292,19 +290,27 @@ private:
 	void RebuildBurdenZone(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildWorkspaceChrome(const FRunBackpackStorageSnapshot& Snapshot);
 	void RebuildWorkspaceFromCachedSnapshot();
-	void HandleZoneActivated(EZoneKind Zone, FGuid OwnerInstanceId);
+	void HandlePileExpansionRequested(EZoneKind Zone, FGuid OwnerInstanceId, bool bExpandOnly);
+	void HandlePileMoveCommitted(EZoneKind Zone, FGuid OwnerInstanceId, FVector2D NormalizedPosition);
+	void HandleCollapseExpandedPileRequested();
+	void HandlePileCollapseAnimationFinished(EZoneKind Zone, FGuid OwnerInstanceId);
 	void HandleWorkspaceReleaseIntent(const FWacomBackpackWorkspaceReleaseIntent& Intent);
-	void HandleWorkspaceRackReleaseIntent(
+	void HandleWorkspacePileReleaseIntent(
 		const FWacomBackpackWorkspaceReleaseIntent& Intent,
-		const FWacomBackpackZoneKey& RackTarget);
+		const FWacomBackpackZoneKey& PileTarget);
 	void HandleWorkspaceInteractionChanged();
 	void HandleWorkspaceLayoutGeometryReady(FVector2D LayoutSize);
 	void ApplyOwningLayerTransitionState(bool bTransitioning);
 	void BindOwningLayerTransition();
 	void UnbindOwningLayerTransition();
 	void HandleOwningLayerTransitioningChanged(FGameplayTag LayerTag, bool bTransitioning);
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
 	void CancelWorkspaceInteraction();
-	bool ResolveWorkspaceRackTarget(FWacomBackpackZoneKey& OutTarget) const;
+	bool ResolveWorkspacePileTarget(FWacomBackpackZoneKey& OutTarget) const;
 	bool IsWorkspaceDeleteTarget() const;
 	void BeginWorkspaceDeleteConfirmation(TConstArrayView<FGuid> InstanceIds);
 	void HandleWorkspaceDeleteConfirmed();
@@ -358,7 +364,18 @@ private:
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> WorkspaceInteractionModel;
 	TSharedPtr<FWacomBackpackPendingDeleteConfirmation> PendingDeleteConfirmation;
 	TWeakObjectPtr<UWacomPrimaryGameLayout> BoundPrimaryLayout;
+	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
+	FDelegateHandle RuntimeSettingsChangedHandle;
 	bool bOwningLayerTransitioning = false;
+	bool bHasPendingPileExpansionAfterCollapse = false;
+	bool bPendingPileExpansionRequiresCarryHover = false;
+	EZoneKind PendingPileExpansionZone = EZoneKind::Backpack;
+	FGuid PendingPileExpansionOwnerInstanceId;
+
+#if WITH_EDITOR
+	/** 仅由编辑器 PIE 验收入口在本实例构造时设置；不反射、不序列化、不修改 Run。 */
+	bool bPIEValidationEmptySnapshot = false;
+#endif
 
 	FRunBackpackStorageSnapshot LastAppliedStorageSnapshot;
 	bool bHasLastAppliedStorageSnapshot = false;

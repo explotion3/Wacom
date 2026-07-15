@@ -19,20 +19,95 @@ bool FWacomBackpackWorkspaceStateStore::BindToRun(URunSession* RunSession)
 void FWacomBackpackWorkspaceStateStore::Reset()
 {
 	BoundRun.Reset();
-	ActiveZone.Reset();
+	ExpandedPile.Reset();
 	LayoutsByZone.Reset();
+	PileLayouts.Reset();
+	NextPileLayerRank = 1;
 }
 
-FWacomBackpackZoneKey FWacomBackpackWorkspaceStateStore::GetActiveZone() const
+bool FWacomBackpackWorkspaceStateStore::IsPileExpanded(
+	const FWacomBackpackZoneKey& ZoneKey) const
 {
-	return ActiveZone.Get(FWacomBackpackZoneKey::Make(EZoneKind::Backpack));
+	return ExpandedPile.IsSet() && ExpandedPile.GetValue() == ZoneKey;
 }
 
-void FWacomBackpackWorkspaceStateStore::SetActiveZone(const FWacomBackpackZoneKey& ZoneKey)
+void FWacomBackpackWorkspaceStateStore::SetExpandedPile(
+	const TOptional<FWacomBackpackZoneKey>& ZoneKey)
+{
+	ExpandedPile = ZoneKey.IsSet() && ZoneKey.GetValue().IsValid()
+		? ZoneKey
+		: TOptional<FWacomBackpackZoneKey>();
+}
+
+void FWacomBackpackWorkspaceStateStore::ToggleExpandedPile(
+	const FWacomBackpackZoneKey& ZoneKey)
+{
+	if (!ZoneKey.IsValid())
+	{
+		return;
+	}
+	ExpandedPile = IsPileExpanded(ZoneKey)
+		? TOptional<FWacomBackpackZoneKey>()
+		: TOptional<FWacomBackpackZoneKey>(ZoneKey);
+}
+
+const FWacomBackpackWorkspacePileLayoutEntry* FWacomBackpackWorkspaceStateStore::FindPileLayout(
+	const FWacomBackpackZoneKey& ZoneKey) const
+{
+	return PileLayouts.Find(ZoneKey);
+}
+
+void FWacomBackpackWorkspaceStateStore::SetPileLayout(
+	const FWacomBackpackZoneKey& ZoneKey,
+	const FWacomBackpackWorkspacePileLayoutEntry& Entry)
 {
 	if (ZoneKey.IsValid())
 	{
-		ActiveZone = ZoneKey;
+		PileLayouts.Add(ZoneKey, Entry);
+		NextPileLayerRank = FMath::Max(NextPileLayerRank, Entry.LayerRank + 1);
+	}
+}
+
+int32 FWacomBackpackWorkspaceStateStore::BringPileToFront(
+	const FWacomBackpackZoneKey& ZoneKey)
+{
+	if (!ZoneKey.IsValid())
+	{
+		return 0;
+	}
+	FWacomBackpackWorkspacePileLayoutEntry& Entry = PileLayouts.FindOrAdd(ZoneKey);
+	Entry.LayerRank = NextPileLayerRank++;
+	return Entry.LayerRank;
+}
+
+void FWacomBackpackWorkspaceStateStore::ResetPileLayouts()
+{
+	PileLayouts.Reset();
+	NextPileLayerRank = 1;
+}
+
+void FWacomBackpackWorkspaceStateStore::ReconcilePiles(
+	TConstArrayView<FWacomBackpackZoneKey> VisiblePileKeys)
+{
+	TSet<FWacomBackpackZoneKey> Visible;
+	Visible.Reserve(VisiblePileKeys.Num());
+	for (const FWacomBackpackZoneKey& Key : VisiblePileKeys)
+	{
+		if (Key.IsValid())
+		{
+			Visible.Add(Key);
+		}
+	}
+	for (auto It = PileLayouts.CreateIterator(); It; ++It)
+	{
+		if (!Visible.Contains(It.Key()))
+		{
+			It.RemoveCurrent();
+		}
+	}
+	if (ExpandedPile.IsSet() && !Visible.Contains(ExpandedPile.GetValue()))
+	{
+		ExpandedPile.Reset();
 	}
 }
 

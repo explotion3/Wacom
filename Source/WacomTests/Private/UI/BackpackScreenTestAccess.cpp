@@ -11,9 +11,12 @@
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
+#include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
+#include "UI/Card/WacomCardDetailPanel.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceTypes.h"
 
@@ -37,6 +40,10 @@ UWacomBackpackScreen* FWacomBackpackScreenTestAccess::CreateWithClass(
 	SetRunSession(*Screen, RunSession);
 	Screen->TakeWidget();
 	Refresh(*Screen);
+	if (Screen->WorkspaceWidget)
+	{
+		Screen->WorkspaceWidget->SetSimplifiedMotion(true);
+	}
 	return Screen;
 }
 
@@ -110,15 +117,39 @@ int32 FWacomBackpackScreenTestAccess::SnapshotRevisionSkipCount(const UWacomBack
 	return View(Screen).SnapshotRevisionSkipCount;
 }
 
-int32 FWacomBackpackScreenTestAccess::ZoneRackEntryCount(const UWacomBackpackScreen& Screen)
+int32 FWacomBackpackScreenTestAccess::WorkspacePileCount(const UWacomBackpackScreen& Screen)
 {
-	return View(Screen).ZoneRackEntryCount;
+	return View(Screen).WorkspacePileCount;
 }
 
 int32 FWacomBackpackScreenTestAccess::WorkspaceCardCount(const UWacomBackpackScreen& Screen)
 {
 	return View(Screen).WorkspaceCardCount;
 }
+
+#if WITH_EDITOR
+bool FWacomBackpackScreenTestAccess::UsesEmptyPIEValidationSnapshot(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.bPIEValidationEmptySnapshot;
+}
+
+bool FWacomBackpackScreenTestAccess::UsesNativeFallbackVisualClasses(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.CardWidgetClass == UWacomDeckCardWidget::StaticClass()
+		&& Screen.SpecialZoneWidgetClass == UWacomSpecialZoneWidget::StaticClass()
+		&& Screen.CardDetailPanelClass == UWacomCardDetailPanel::StaticClass()
+		&& Screen.WorkspaceWidgetClass == UWacomBackpackWorkspaceWidget::StaticClass()
+		&& Screen.DeleteConfirmWidgetClass == UWacomBackpackDeleteConfirmWidget::StaticClass()
+		&& Screen.DeleteZoneSectionWidgetClass == UWacomBackpackZoneSectionWidget::StaticClass()
+		&& Screen.BattleDeckZoneSectionWidgetClass == UWacomBackpackZoneSectionWidget::StaticClass()
+		&& Screen.FluxMainZoneSectionWidgetClass == UWacomBackpackZoneSectionWidget::StaticClass()
+		&& Screen.FluxContentZoneSectionWidgetClass == UWacomBackpackZoneSectionWidget::StaticClass()
+		&& Screen.SpecialZonesSectionWidgetClass == UWacomBackpackZoneSectionWidget::StaticClass()
+		&& Screen.BurdenZoneSectionWidgetClass == UWacomBackpackZoneSectionWidget::StaticClass();
+}
+#endif
 
 bool FWacomBackpackScreenTestAccess::WorkspaceChildFillsHost(const UWacomBackpackScreen& Screen)
 {
@@ -372,7 +403,14 @@ void FWacomBackpackScreenTestAccess::ActivateZone(
 	EZoneKind Zone,
 	FGuid OwnerInstanceId)
 {
-	Screen.HandleZoneActivated(Zone, OwnerInstanceId);
+	if (Zone == EZoneKind::Backpack)
+	{
+		Screen.HandleCollapseExpandedPileRequested();
+	}
+	else
+	{
+		Screen.HandlePileExpansionRequested(Zone, OwnerInstanceId, false);
+	}
 }
 
 bool FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(UWacomBackpackScreen& Screen, int32 CardIndex)
@@ -451,7 +489,7 @@ bool FWacomBackpackScreenTestAccess::PressWorkspaceEscape(UWacomBackpackScreen& 
 	return Screen.WorkspaceWidget->NativeOnKeyDown(FGeometry(), EscapeEvent).IsEventHandled();
 }
 
-bool FWacomBackpackScreenTestAccess::ReleaseCurrentToRackWithSynchronousRefresh(
+bool FWacomBackpackScreenTestAccess::ReleaseCurrentToPileWithSynchronousRefresh(
 	UWacomBackpackScreen& Screen,
 	EZoneKind TargetZone,
 	FGuid TargetOwnerInstanceId)
@@ -474,16 +512,28 @@ bool FWacomBackpackScreenTestAccess::ReleaseCurrentToRackWithSynchronousRefresh(
 	}
 
 	Run->OnRunStateChangedNative.AddUObject(&Screen, &UWacomBackpackScreen::HandleViewModelRefreshed);
-	Screen.HandleWorkspaceRackReleaseIntent(
+	Screen.HandleWorkspacePileReleaseIntent(
 		Intent,
 		FWacomBackpackZoneKey::Make(TargetZone, TargetOwnerInstanceId));
 	Run->OnRunStateChangedNative.RemoveAll(&Screen);
 	return true;
 }
 
+void FWacomBackpackScreenTestAccess::ActivateWorkspaceScreen(UWacomBackpackScreen& Screen)
+{
+	Screen.ActivateWidget();
+}
+
 void FWacomBackpackScreenTestAccess::DeactivateWorkspaceScreen(UWacomBackpackScreen& Screen)
 {
-	Screen.NativeOnDeactivated();
+	// Transient automation widgets are not pushed through a CommonUI stack. Establish
+	// a valid active state before exercising the public deactivation path so the test
+	// observes the same lifecycle contract without calling NativeOn* directly.
+	if (!Screen.IsActivated())
+	{
+		Screen.ActivateWidget();
+	}
+	Screen.DeactivateWidget();
 }
 
 FWacomBackpackWorkspaceAutomationTestView FWacomBackpackScreenTestAccess::WorkspaceView(

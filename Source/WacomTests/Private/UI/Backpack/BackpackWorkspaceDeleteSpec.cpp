@@ -72,11 +72,9 @@ bool FWacomUIBackpackWorkspaceDeleteRestoreSpec::RunTest(const FString& Paramete
 		Run->BuildBackpackStorageSnapshot().Flux.ContentCards.ContainsByPredicate(
 			[White](const FRunStorageCardView& View) { return View.Instance.Definition == White; }));
 
-	FWacomBackpackScreenTestAccess::ActivateZone(*Screen, EZoneKind::Backpack);
 	FWacomBackpackScreenTestAccess::Refresh(*Screen);
-	TestTrue(TEXT("Fresh carry starts after stale restore"),
-		FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(*Screen, DeleteIds));
-	TestTrue(TEXT("Fresh confirmation opens"), FWacomBackpackScreenTestAccess::BeginDeleteConfirmation(*Screen));
+	TestTrue(TEXT("Restored carry retries after revision reconcile"),
+		FWacomBackpackScreenTestAccess::BeginDeleteConfirmation(*Screen));
 	FWacomBackpackScreenTestAccess::ConfirmDelete(*Screen);
 	TestTrue(TEXT("Successful confirm exits carry"),
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());

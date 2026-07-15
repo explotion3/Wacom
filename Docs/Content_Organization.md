@@ -2,7 +2,7 @@
 type: content-guideline
 scope: wacom-content
 status: active
-updated: 2026-07-13
+updated: 2026-07-15
 tags:
   - wacom/content
   - wacom/assets
@@ -78,3 +78,9 @@ Git worktree 只保证受版本管理内容完整。当前 `/Game/Art`、`/Game/
 - Wacom 自有并会随游戏出货的资产，通过 Content Browser 迁入 `/Game/Wacom` 并由 Git LFS 管理。
 - 第三方或授权上不适合进入主仓库的内容，建立带版本与安装清单的本地依赖包。
 - DreamShader 生成 `.uasset` 以 `.dsm`、`.dsh` 和生成脚本为真源，不依赖某个 worktree 的生成结果作为唯一副本。
+
+## 外部依赖审计
+
+移动 ignored Content 前，先运行 `WacomAuditContentDependencies` 的只读 AssetRegistry 审计。命令、JSON contract、当前基线和迁移批次见 [`Content_Dependency_Audit.md`](./Content_Dependency_Audit.md)。
+
+审计只说明“哪些 Wacom 资产引用了什么”，不证明资产归属或授权。迁移到 `/Game/Wacom` 和 Git LFS 前必须逐批确认来源、出货授权与长期维护责任；来源未确认的音频、字体、UI 包和样例美术默认按第三方本地依赖处理。

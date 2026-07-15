@@ -52,8 +52,12 @@ struct FWacomBackpackScreenTestAccess
 	static int32 RefreshSkipCount(const UWacomBackpackScreen& Screen);
 	static int32 SnapshotBuildCount(const UWacomBackpackScreen& Screen);
 	static int32 SnapshotRevisionSkipCount(const UWacomBackpackScreen& Screen);
-	static int32 ZoneRackEntryCount(const UWacomBackpackScreen& Screen);
+	static int32 WorkspacePileCount(const UWacomBackpackScreen& Screen);
 	static int32 WorkspaceCardCount(const UWacomBackpackScreen& Screen);
+#if WITH_EDITOR
+	static bool UsesEmptyPIEValidationSnapshot(const UWacomBackpackScreen& Screen);
+	static bool UsesNativeFallbackVisualClasses(const UWacomBackpackScreen& Screen);
+#endif
 	static bool WorkspaceChildFillsHost(const UWacomBackpackScreen& Screen);
 	static bool WorkspaceOwnsPointerInput(const UWacomBackpackScreen& Screen);
 	static TArray<FVector2D> WorkspaceCardPositions(const UWacomBackpackScreen& Screen);
@@ -74,10 +78,11 @@ struct FWacomBackpackScreenTestAccess
 	static bool BeginWorkspaceMarquee(UWacomBackpackScreen& Screen);
 	static bool IsWorkspaceMarqueeActive(const UWacomBackpackScreen& Screen);
 	static bool PressWorkspaceEscape(UWacomBackpackScreen& Screen);
-	static bool ReleaseCurrentToRackWithSynchronousRefresh(
+	static bool ReleaseCurrentToPileWithSynchronousRefresh(
 		UWacomBackpackScreen& Screen,
 		EZoneKind TargetZone,
 		FGuid TargetOwnerInstanceId = FGuid());
+	static void ActivateWorkspaceScreen(UWacomBackpackScreen& Screen);
 	static void DeactivateWorkspaceScreen(UWacomBackpackScreen& Screen);
 	static FWacomBackpackWorkspaceAutomationTestView WorkspaceView(const UWacomBackpackScreen& Screen);
 	static bool BeginDeleteConfirmation(UWacomBackpackScreen& Screen);

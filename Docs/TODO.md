@@ -52,16 +52,28 @@ tags:
 ## P1 近期实现候选
 
 - [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
-  - 状态：`Ready: worktree 本地依赖层已建立`
+  - 状态：`In Progress: Phase A 只读基线完成，等待资产所有权确认后分批迁移`
   - 归属：Content / Editor / Build
-  - 入口：[Worktree Development](./Worktree_Development.md) / [Content Organization](./Content_Organization.md)
-  - 说明：使用 AssetRegistry 找出 `/Game/Wacom` 与正式地图对 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials`、`/Game/L_TestBattle` 的真实引用；自有出货资产经编辑器迁入 `/Game/Wacom`，第三方内容建立版本化安装清单。完成前由每个 worktree 的独立 D 盘本地依赖层支持编译和 PIE。
+  - 入口：[Content Dependency Audit](./Content_Dependency_Audit.md) / [Worktree Development](./Worktree_Development.md) / [Content Organization](./Content_Organization.md)
+  - 说明：`WacomAuditContentDependencies` 已形成稳定 JSON contract。2026-07-15 基线为 161 个 Wacom 起始 package、270 个遍历 package、109 个外部依赖（91 直接、18 传递），集中在 `/Game/Art` 7、`/Game/Asset` 82、`/Game/DreamMaterials` 20；未发现 `L_TestBattle` 或未知 `/Game` 根目录。下一步先确认 `Card_Luo`、`Plane`、`Chong_CardAsset` 及音频/字体/UI/Boar 样例的来源与授权，再按 A–F 批次用 Content Browser 迁移或建立版本化依赖 manifest。
+
+- [x] **背包视觉制作与四分辨率适配**
+  - 状态：`Done: formal/fallback assets, responsive matrix and final PIE complete`
+  - 归属：App / UI / Editor / Tests
+  - 入口：`specs/005-backpack-visual-production/`
+  - 说明：该轮完成全局 `1920×1080` DPI、Root/Main/Body/Workspace/Overlay Fill、Header Auto、固定卡面缩放和静态 Retainer，并通过四分辨率、16:10、超宽及高卡量验收。2026-07-16 后续内嵌牌堆改造已删除右侧 Rack，但继续沿用本轮的分辨率、卡面与 Retainer 合同。
+
+- [ ] **背包工作台内嵌牌堆改造**
+  - 状态：`Implementation + automated verification complete; final PIE pending`
+  - 归属：App / UI / Editor / Tests
+  - 入口：[Backpack WBP 制作与绑定合同](./UI_Backpack_WBP_Binding.md) / [Wacom UI](./WacomUI.md)
+  - 说明：通量区已成为统一自由工作台；备战、特殊和负重改为工作台内嵌牌堆，右侧 Rack 类、Builder 路径和 WBP 已删除。已落地固定缩略预览、单展开手风琴、标题拖堆、标题避让、网格/边缘吸附、同 Run 瞬态位置/ZOrder/展开状态、单来源框选、携带悬停展开、空白通量投放和 Full/Simplified 位置/角度动效。2026-07-16 已通过 652-action Non-Unity 工程编译、Builder 双跑资产哈希幂等、`Wacom.UI.Backpack` 65/65 和 `Wacom.Run.Backpack` 2/2；待完成多分辨率、21 张备战卡、拖堆/悬停展开、原子拒绝及 Full/Simplified 动效手感 PIE 后勾选。
 
 - [x] **背包 Workspace 重构：正式实现、旧路径迁移与统一 PIE 验收完成**
   - 状态：`Done: C++ + formal WBP + DreamShader + legacy cleanup + final PIE complete`
   - 归属：Run / App / UI / Tests
   - 入口：`specs/003-backpack-workspace-refactor/`
-  - 说明：`specs/003-backpack-workspace-refactor/` 的 T001–T076 已全部完成。正式链路包含单活动 Workspace、常驻 ZoneRack、同 Run 瞬态布局、框选与持续扇形携带、分层 Back、原子批量移动/销毁、确认恢复、正式 WBP/Style、静态 Retainer 卡面与 Wacom-native DreamShader 反馈；旧单卡 UMG DragDrop owner 已删除。最终验证通过 `WacomEditor`、`Wacom.Run.Backpack` 2/2、`Wacom.UI.Backpack` 63/63、完整 quickstart PIE 和正式资产合同；实现细节与验收证据见 `Docs/WacomUI.md`、`Docs/UI_Backpack_WBP_Binding.md` 和该 spec 的 `quickstart.md`。
+  - 说明：`specs/003-backpack-workspace-refactor/` 的 T001–T076 已全部完成，建立了 Workspace、同 Run 瞬态布局、框选与持续扇形携带、分层 Back、原子批量移动/销毁、确认恢复、正式 WBP/Style、静态 Retainer 卡面与 Wacom-native DreamShader 反馈。该轮的“单活动区 + 常驻 ZoneRack”表现结构已在 2026-07-16 内嵌牌堆改造中替换；规则事务与输入合同继续复用。
   - 2026-07-14 Surface Foil 跟进：`WBP_BackpackCardView` 继续复用共享 `WBP_FirstPersonCardView` 排版，但 wrapper 默认按实例关闭内层动态 `SurfaceFoilOverlay`，运行时折叠该层并清空材质 Brush；战斗/第一人称卡面的默认流光不变。新增红→绿 runtime contract 与正式资产 CDO contract；验证通过 `WacomEditor`、`Wacom.Run.Backpack` 2/2、`Wacom.UI.Backpack` 60/60、`CompileAllBlueprints`（0 error；1 个既有蓝图弃用 warning，进程汇总 6 个既有 warning），资产 builder 0 error 且正式 8/8 资产连续生成 SHA-256 稳定。PIE 仍需确认背包卡面不存在冻结流光帧，并对照 authored 卡面检查最终抗锯齿与出血徽章。
   - 2026-07-15 T070 布局与卡面第一轮：24 张实体牌、4 个牌匣基线下，中央单活动区和高亮牌匣识别体感无延迟；用户明确豁免秒表记录并接受该定性结果，文档不虚构具体秒数。用户已确认三张卡的手动位置、角度和 ZOrder 在切区及同 Run 关闭/重开后保持，新 PIE Run 不继承旧布局；越界释放仍保留约 30% 卡牌主体；卡面静置保持完全不透明，费用/名称/耐久/出血徽章稳定，无冻结 Surface Foil 或采样清晰度变化。本轮无代码缺陷需要修复。
   - 2026-07-15 T070 事务、生命周期与表现轮：用户已确认活动区牌匣收拢、单张/整组跨区移动、容量与 stale 原子拒绝、批量销毁确认/取消/成功、切区取消、Deactivate/Reactivate、详情与确认焦点、键盘导航、反馈区分、命中几何及空闲表现均正常。携带中按 B 可关闭且重开后无捕获、扇形、旧选择或携带残留，鼠标/框选/卡牌点击立即可用。Escape 已定稿并完成分层 Back PIE：携带/框选/待决按压时先取消指针事务，下一次空闲 Escape 交给 CommonUI 关闭，B 始终直接关闭；实现和 `ScreenComposition` 自动化合同已补，`WacomEditor`、`Wacom.UI.Backpack` 63/63、`Wacom.Run.Backpack` 2/2 通过。T070 所有 PIE 项已完成，秒表项按用户明确豁免以“体感无延迟”收口。
@@ -174,7 +186,7 @@ tags:
   - 状态：`Done: Workspace/材质/旧路径清理与统一 PIE polish 完成`
   - 归属：UI / Run
   - 入口：[Roadmap: 背包 UI](./Roadmap.md#roadmap-backpack-ui)
-  - 说明：正式 Screen、Workspace、ZoneRack、Entry、DeleteConfirm、Style 和反馈材质已生成并由资产合同自动化覆盖；旧单卡 UMG drag/drop input owner 已删除，真实鼠标 PIE 观感/手感已通过 T070。20–100 卡 PIE 未观察到明显空闲 Tick 或逐帧 Snapshot 重建，因此本轮不实施虚拟列表；仅在未来内容规模证明有性能需求时重新评估。
+  - 说明：该轮完成正式 Screen、Workspace、DeleteConfirm、Style、反馈材质和旧单卡 UMG drag/drop owner 清理；当时的 Rack/Entry 已由 2026-07-16 内嵌牌堆改造正式删除。20–100 卡 PIE 未观察到明显空闲 Tick 或逐帧 Snapshot 重建，因此仍不提前实施虚拟列表。
 
 - [ ] **卡牌详情 token：ConditionTokenBuilder**
   - 状态：`Ready: 详情表现继续收口`

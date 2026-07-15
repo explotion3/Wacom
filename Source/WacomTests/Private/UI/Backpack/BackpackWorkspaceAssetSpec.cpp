@@ -10,26 +10,30 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/PanelWidget.h"
 #include "Components/RetainerBox.h"
 #include "Components/ScaleBox.h"
 #include "Components/ScaleBoxSlot.h"
+#include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
-#include "Components/SizeBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "Materials/MaterialInterface.h"
 #include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
-#include "UI/Backpack/WacomBackpackZoneRackEntryWidget.h"
-#include "UI/Backpack/WacomBackpackZoneRackWidget.h"
+#include "UI/Backpack/WacomBackpackPilePreviewWidget.h"
+#include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomRetainedCardViewWidget.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
+#include "UObject/StrongObjectPtr.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 
 namespace
@@ -66,10 +70,6 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackScreen.WBP_BackpackScreen_C"));
 	UClass* WorkspaceClass = LoadWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackWorkspace.WBP_BackpackWorkspace_C"));
-	UClass* RackClass = LoadWidgetClass(
-		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackZoneRack.WBP_BackpackZoneRack_C"));
-	UClass* EntryClass = LoadWidgetClass(
-		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackZoneRackEntry.WBP_BackpackZoneRackEntry_C"));
 	UClass* ConfirmClass = LoadWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackDeleteConfirm.WBP_BackpackDeleteConfirm_C"));
 	UClass* DeckCardClass = LoadWidgetClass(
@@ -86,10 +86,6 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		ScreenClass && ScreenClass->IsChildOf(UWacomBackpackScreen::StaticClass()));
 	TestTrue(TEXT("Formal workspace uses passive Workspace parent"),
 		WorkspaceClass && WorkspaceClass->IsChildOf(UWacomBackpackWorkspaceWidget::StaticClass()));
-	TestTrue(TEXT("Formal rack uses passive ZoneRack parent"),
-		RackClass && RackClass->IsChildOf(UWacomBackpackZoneRackWidget::StaticClass()));
-	TestTrue(TEXT("Formal entry uses passive ZoneRackEntry parent"),
-		EntryClass && EntryClass->IsChildOf(UWacomBackpackZoneRackEntryWidget::StaticClass()));
 	TestTrue(TEXT("Formal confirm uses passive DeleteConfirm parent"),
 		ConfirmClass && ConfirmClass->IsChildOf(UWacomBackpackDeleteConfirmWidget::StaticClass()));
 	TestTrue(TEXT("Backpack card uses passive DeckCard parent"),
@@ -109,7 +105,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestTrue(TEXT("Authored card face uses reusable CardView parent"),
 		FirstPersonCardFaceClass && FirstPersonCardFaceClass->IsChildOf(UWacomCardView::StaticClass()));
 	TestNotNull(TEXT("Formal workspace style asset loads"), Style);
-	if (!ScreenClass || !WorkspaceClass || !RackClass || !EntryClass || !ConfirmClass || !Style)
+	if (!ScreenClass || !WorkspaceClass || !ConfirmClass || !Style)
 	{
 		return false;
 	}
@@ -118,27 +114,32 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestNotNull(TEXT("Formal screen has compiled widget tree"), ScreenTree);
 	if (ScreenTree)
 	{
-		USizeBox* ScreenSize = Cast<USizeBox>(ScreenTree->FindWidget(TEXT("ScreenSize")));
-		TestNotNull(TEXT("Formal screen provides the 1600x900 pixel-safe design surface"), ScreenSize);
-		if (ScreenSize)
-		{
-			TestTrue(TEXT("Formal screen width override is enabled"), ScreenSize->IsWidthOverride());
-			TestTrue(TEXT("Formal screen height override is enabled"), ScreenSize->IsHeightOverride());
-			TestEqual(TEXT("Formal screen design width"), ScreenSize->GetWidthOverride(), 1600.0f);
-			TestEqual(TEXT("Formal screen design height"), ScreenSize->GetHeightOverride(), 900.0f);
-		}
+		UOverlay* RootFrame = Cast<UOverlay>(ScreenTree->FindWidget(TEXT("RootFrame")));
 		UOverlay* Root = Cast<UOverlay>(ScreenTree->FindWidget(TEXT("Root")));
 		UVerticalBox* MainLayout = Cast<UVerticalBox>(ScreenTree->FindWidget(TEXT("MainLayout")));
-		TestNotNull(TEXT("Formal screen design surface owns a root overlay"), Root);
+		UHorizontalBox* Body = Cast<UHorizontalBox>(ScreenTree->FindWidget(TEXT("Body")));
+		UOverlay* WorkspaceHost = Cast<UOverlay>(ScreenTree->FindWidget(TEXT("WorkspaceHost")));
+		UCanvasPanel* CardDetailLayer = Cast<UCanvasPanel>(ScreenTree->FindWidget(TEXT("CardDetailLayer")));
+		UOverlay* DeleteConfirmHost = Cast<UOverlay>(ScreenTree->FindWidget(TEXT("DeleteConfirmHost")));
+
+		TestNotNull(TEXT("Formal screen owns the CommonUI fill root"), RootFrame);
+		TestEqual(TEXT("RootFrame is the compiled screen root"), ScreenTree->RootWidget.Get(), static_cast<UWidget*>(RootFrame));
+		TestNull(TEXT("Formal screen does not add a second fixed 1600x900 design surface"),
+			ScreenTree->FindWidget(TEXT("ScreenSize")));
+		TestNotNull(TEXT("Formal screen fill root owns a root overlay"), Root);
 		TestNotNull(TEXT("Formal screen root owns the main layout"), MainLayout);
+		TestNotNull(TEXT("Formal screen main layout owns a fill body"), Body);
+		TestNotNull(TEXT("Screen binds WorkspaceHost"), WorkspaceHost);
+		TestNotNull(TEXT("Screen binds CardDetailLayer"), CardDetailLayer);
+		TestNotNull(TEXT("Screen binds DeleteConfirmHost"), DeleteConfirmHost);
 		if (Root)
 		{
-			const USizeBoxSlot* RootSlot = Cast<USizeBoxSlot>(Root->Slot);
-			TestNotNull(TEXT("Root uses a SizeBox slot"), RootSlot);
+			const UOverlaySlot* RootSlot = Cast<UOverlaySlot>(Root->Slot);
+			TestNotNull(TEXT("Root uses the RootFrame Overlay slot"), RootSlot);
 			if (RootSlot)
 			{
-				TestEqual(TEXT("Root fills the design surface horizontally"), RootSlot->GetHorizontalAlignment(), HAlign_Fill);
-				TestEqual(TEXT("Root fills the design surface vertically"), RootSlot->GetVerticalAlignment(), VAlign_Fill);
+				TestEqual(TEXT("Root fills the CommonUI layer horizontally"), RootSlot->GetHorizontalAlignment(), HAlign_Fill);
+				TestEqual(TEXT("Root fills the CommonUI layer vertically"), RootSlot->GetVerticalAlignment(), VAlign_Fill);
 			}
 		}
 		if (MainLayout)
@@ -151,33 +152,64 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 				TestEqual(TEXT("Main layout fills the root vertically"), MainSlot->GetVerticalAlignment(), VAlign_Fill);
 			}
 		}
-		TestNotNull(TEXT("Screen binds WorkspaceHost"), Cast<UOverlay>(ScreenTree->FindWidget(TEXT("WorkspaceHost"))));
-		TestNotNull(TEXT("Screen binds ZoneRackHost"), Cast<UOverlay>(ScreenTree->FindWidget(TEXT("ZoneRackHost"))));
+		if (Body)
+		{
+			const UVerticalBoxSlot* BodySlot = Cast<UVerticalBoxSlot>(Body->Slot);
+			TestNotNull(TEXT("Body uses a VerticalBox slot"), BodySlot);
+			if (BodySlot)
+			{
+				TestEqual(TEXT("Body consumes the remaining screen height"),
+					BodySlot->GetSize().SizeRule, ESlateSizeRule::Fill);
+			}
+		}
+		if (WorkspaceHost)
+		{
+			const UOverlaySlot* WorkspaceHostSlot = Cast<UOverlaySlot>(WorkspaceHost->Slot);
+			TestNotNull(TEXT("WorkspaceHost uses the unified Workspace overlay slot"), WorkspaceHostSlot);
+			if (WorkspaceHostSlot)
+			{
+				TestEqual(TEXT("WorkspaceHost fills horizontally"),
+					WorkspaceHostSlot->GetHorizontalAlignment(), HAlign_Fill);
+				TestEqual(TEXT("WorkspaceHost fills vertically"),
+					WorkspaceHostSlot->GetVerticalAlignment(), VAlign_Fill);
+			}
+		}
+		auto TestOverlayFill = [this](const TCHAR* Label, UWidget* Widget)
+		{
+			const UOverlaySlot* Slot = Widget ? Cast<UOverlaySlot>(Widget->Slot) : nullptr;
+			TestNotNull(*FString::Printf(TEXT("%s uses an Overlay slot"), Label), Slot);
+			if (Slot)
+			{
+				TestEqual(*FString::Printf(TEXT("%s fills horizontally"), Label),
+					Slot->GetHorizontalAlignment(), HAlign_Fill);
+				TestEqual(*FString::Printf(TEXT("%s fills vertically"), Label),
+					Slot->GetVerticalAlignment(), VAlign_Fill);
+			}
+		};
+		TestOverlayFill(TEXT("CardDetailLayer"), CardDetailLayer);
+		TestOverlayFill(TEXT("DeleteConfirmHost"), DeleteConfirmHost);
+		if (DeleteConfirmHost)
+		{
+			TestEqual(TEXT("DeleteConfirmHost starts collapsed"),
+				DeleteConfirmHost->GetVisibility(), ESlateVisibility::Collapsed);
+		}
+		TestNull(TEXT("Screen removes the legacy ZoneRackHost"), ScreenTree->FindWidget(TEXT("ZoneRackHost")));
 		TestNotNull(TEXT("Screen binds DeleteTargetHost"), Cast<UOverlay>(ScreenTree->FindWidget(TEXT("DeleteTargetHost"))));
-		TestNotNull(TEXT("Screen binds DeleteConfirmHost"), Cast<UOverlay>(ScreenTree->FindWidget(TEXT("DeleteConfirmHost"))));
 		TestNotNull(TEXT("Screen binds ArrangeAllButton"), Cast<UButton>(ScreenTree->FindWidget(TEXT("ArrangeAllButton"))));
-		TestNotNull(TEXT("Screen binds CardDetailLayer"), Cast<UCanvasPanel>(ScreenTree->FindWidget(TEXT("CardDetailLayer"))));
+		TestNotNull(TEXT("Screen binds ResetPilePositionsButton"),
+			Cast<UButton>(ScreenTree->FindWidget(TEXT("ResetPilePositionsButton"))));
 		TestNull(TEXT("Formal screen removes old DeleteZoneHost"), ScreenTree->FindWidget(TEXT("DeleteZoneHost")));
 		TestNull(TEXT("Formal screen removes old BattleDeckZoneHost"), ScreenTree->FindWidget(TEXT("BattleDeckZoneHost")));
 		TestNull(TEXT("Formal screen removes old SpecialZonesHost"), ScreenTree->FindWidget(TEXT("SpecialZonesHost")));
 	}
 
 	UWidgetTree* WorkspaceTree = GetWidgetTree(WorkspaceClass);
-	TestNotNull(TEXT("Workspace binds CardCanvas"),
-		WorkspaceTree ? Cast<UCanvasPanel>(WorkspaceTree->FindWidget(TEXT("CardCanvas"))) : nullptr);
+	TestNotNull(TEXT("Workspace binds its sole unified WorkspaceCanvas"),
+		WorkspaceTree ? Cast<UCanvasPanel>(WorkspaceTree->FindWidget(TEXT("WorkspaceCanvas"))) : nullptr);
 	TestNotNull(TEXT("Workspace binds SelectionMarquee"),
 		WorkspaceTree ? Cast<UBorder>(WorkspaceTree->FindWidget(TEXT("SelectionMarquee"))) : nullptr);
 	TestNotNull(TEXT("Workspace binds EmptyStateText"),
 		WorkspaceTree ? Cast<UTextBlock>(WorkspaceTree->FindWidget(TEXT("EmptyStateText"))) : nullptr);
-
-	UWidgetTree* RackTree = GetWidgetTree(RackClass);
-	TestNotNull(TEXT("Rack binds EntriesHost"),
-		RackTree ? Cast<UVerticalBox>(RackTree->FindWidget(TEXT("EntriesHost"))) : nullptr);
-	UWidgetTree* EntryTree = GetWidgetTree(EntryClass);
-	TestNotNull(TEXT("Entry binds activation button"),
-		EntryTree ? Cast<UButton>(EntryTree->FindWidget(TEXT("ActivateButton"))) : nullptr);
-	TestNotNull(TEXT("Entry binds active/preview border"),
-		EntryTree ? Cast<UBorder>(EntryTree->FindWidget(TEXT("ActiveBorder"))) : nullptr);
 
 	UWidgetTree* ConfirmTree = GetWidgetTree(ConfirmClass);
 	TestNotNull(TEXT("Confirm binds summary"),
@@ -214,6 +246,12 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	UBorder* WorkspaceFeedbackOverlay = DeckCardTree
 		? Cast<UBorder>(DeckCardTree->FindWidget(TEXT("WorkspaceFeedbackOverlay")))
 		: nullptr;
+	UTextBlock* BattleEnabledBadge = DeckCardTree
+		? Cast<UTextBlock>(DeckCardTree->FindWidget(TEXT("BattleEnabledBadge")))
+		: nullptr;
+	UTextBlock* ProjectedFromBadge = DeckCardTree
+		? Cast<UTextBlock>(DeckCardTree->FindWidget(TEXT("ProjectedFromBadge")))
+		: nullptr;
 	UWacomRetainedCardViewWidget* EmbeddedCardFace = DeckCardTree
 		? Cast<UWacomRetainedCardViewWidget>(DeckCardTree->FindWidget(TEXT("BackpackCardView")))
 		: nullptr;
@@ -249,6 +287,8 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			VAlign_Center);
 	}
 	TestNotNull(TEXT("Backpack card exposes a dedicated workspace feedback overlay"), WorkspaceFeedbackOverlay);
+	TestNotNull(TEXT("Backpack card keeps the battle-ready status badge"), BattleEnabledBadge);
+	TestNotNull(TEXT("Backpack card keeps the projected-source status badge"), ProjectedFromBadge);
 	if (WorkspaceFeedbackOverlay)
 	{
 		TestEqual(
@@ -268,6 +308,21 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			TestEqual(TEXT("Workspace feedback fills the card horizontally"), FeedbackSlot->GetHorizontalAlignment(), HAlign_Fill);
 			TestEqual(TEXT("Workspace feedback fills the card vertically"), FeedbackSlot->GetVerticalAlignment(), VAlign_Fill);
 		}
+		UPanelWidget* FeedbackHost = WorkspaceFeedbackOverlay->GetParent();
+		const int32 FaceIndex = FeedbackHost ? FeedbackHost->GetChildIndex(CardFaceScaleBox) : INDEX_NONE;
+		const int32 FeedbackIndex = FeedbackHost ? FeedbackHost->GetChildIndex(WorkspaceFeedbackOverlay) : INDEX_NONE;
+		TestEqual(TEXT("Workspace feedback is the first layer above the authored face"),
+			FeedbackIndex, FaceIndex + 1);
+		if (BattleEnabledBadge && BattleEnabledBadge->GetParent() == FeedbackHost)
+		{
+			TestTrue(TEXT("Battle-ready badge renders above workspace feedback"),
+				FeedbackHost->GetChildIndex(BattleEnabledBadge) > FeedbackIndex);
+		}
+		if (ProjectedFromBadge && ProjectedFromBadge->GetParent() == FeedbackHost)
+		{
+			TestTrue(TEXT("Projected-source badge renders above workspace feedback"),
+				FeedbackHost->GetChildIndex(ProjectedFromBadge) > FeedbackIndex);
+		}
 	}
 	if (EmbeddedCardFace && BackpackCardFaceClass)
 	{
@@ -278,6 +333,17 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	}
 
 	UWidgetTree* BackpackCardFaceTree = GetWidgetTree(BackpackCardFaceClass);
+	int32 RetainerSurfaceCount = 0;
+	if (BackpackCardFaceTree)
+	{
+		BackpackCardFaceTree->ForEachWidget(
+			[&RetainerSurfaceCount](UWidget* Widget)
+			{
+				RetainerSurfaceCount += Cast<URetainerBox>(Widget) ? 1 : 0;
+			});
+	}
+	TestEqual(TEXT("Backpack CardView owns exactly one retained render surface"),
+		RetainerSurfaceCount, 1);
 	URetainerBox* CardFaceRetainer = BackpackCardFaceTree
 		? Cast<URetainerBox>(BackpackCardFaceTree->FindWidget(TEXT("CardFaceRetainer")))
 		: nullptr;
@@ -306,6 +372,25 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TestEqual(TEXT("Retained Backpack CardView preserves the authored layout class"),
 			RetainedInnerCardFace->GetClass(), FirstPersonCardFaceClass);
 	}
+	if (BackpackCardFaceClass)
+	{
+		TStrongObjectPtr<UWacomRetainedCardViewWidget> RuntimeBackpackCardFace(
+			NewObject<UWacomRetainedCardViewWidget>(GetTransientPackage(), BackpackCardFaceClass));
+		RuntimeBackpackCardFace->TakeWidget();
+		UWacomCardView* RuntimeInnerCardFace = RuntimeBackpackCardFace->GetInnerCardView();
+		TestNotNull(TEXT("Generated Backpack CardView binds its runtime authored face"), RuntimeInnerCardFace);
+		if (RuntimeInnerCardFace)
+		{
+			const FWacomCardViewAutomationTestView RuntimeFaceView =
+				RuntimeInnerCardFace->GetAutomationTestViewForTest();
+			TestFalse(TEXT("Generated Backpack CardView disables the inner SurfaceFoilOverlay"),
+				RuntimeFaceView.bSurfaceFoilEnabled);
+			TestFalse(TEXT("Generated Backpack CardView keeps the inner SurfaceFoilOverlay collapsed"),
+				RuntimeFaceView.bSurfaceFoilVisible);
+			TestFalse(TEXT("Generated Backpack CardView releases the inner SurfaceFoilOverlay brush"),
+				RuntimeFaceView.bSurfaceFoilBrushConfigured);
+		}
+	}
 
 	UWidgetTree* FirstPersonCardFaceTree = GetWidgetTree(FirstPersonCardFaceClass);
 	USizeBox* FirstPersonFaceRoot = FirstPersonCardFaceTree
@@ -322,14 +407,18 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 
 	TestEqual(TEXT("Screen CDO selects formal Workspace class"),
 		ReadObjectDefault(ScreenClass, TEXT("WorkspaceWidgetClass")), static_cast<UObject*>(WorkspaceClass));
-	TestEqual(TEXT("Screen CDO selects formal ZoneRack class"),
-		ReadObjectDefault(ScreenClass, TEXT("ZoneRackWidgetClass")), static_cast<UObject*>(RackClass));
+	TestNull(TEXT("Screen class no longer exposes a ZoneRackWidgetClass dependency"),
+		FindFProperty<FProperty>(ScreenClass, TEXT("ZoneRackWidgetClass")));
 	TestEqual(TEXT("Screen CDO selects formal confirmation class"),
 		ReadObjectDefault(ScreenClass, TEXT("DeleteConfirmWidgetClass")), static_cast<UObject*>(ConfirmClass));
 	TestEqual(TEXT("Screen CDO selects formal workspace style"),
 		ReadObjectDefault(ScreenClass, TEXT("WorkspaceStyle")), static_cast<UObject*>(Style));
-	TestEqual(TEXT("Rack CDO selects formal entry class"),
-		ReadObjectDefault(RackClass, TEXT("EntryWidgetClass")), static_cast<UObject*>(EntryClass));
+	TestEqual(TEXT("Workspace CDO selects the passive embedded pile class"),
+		ReadObjectDefault(WorkspaceClass, TEXT("PileWidgetClass")),
+		static_cast<UObject*>(UWacomBackpackZonePileWidget::StaticClass()));
+	TestEqual(TEXT("Workspace CDO selects the simplified preview class"),
+		ReadObjectDefault(WorkspaceClass, TEXT("PilePreviewWidgetClass")),
+		static_cast<UObject*>(UWacomBackpackPilePreviewWidget::StaticClass()));
 	UMaterialInterface* FeedbackMaterial = LoadObject<UMaterialInterface>(
 		nullptr,
 		TEXT("/Game/Wacom/UI/Backpack/Materials/M_BackpackWorkspaceCardFeedback.M_BackpackWorkspaceCardFeedback"));

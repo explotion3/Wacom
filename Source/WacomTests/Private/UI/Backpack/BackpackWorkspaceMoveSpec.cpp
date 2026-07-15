@@ -64,11 +64,11 @@ bool FWacomUIBackpackWorkspaceMoveIntentSpec::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBackpackWorkspacePartialRackReleaseSpec,
-	"Wacom.UI.Backpack.Workspace.PartialRackReleasePreservesCarry",
+	FWacomUIBackpackWorkspacePartialPileReleaseSpec,
+	"Wacom.UI.Backpack.Workspace.PartialPileReleasePreservesCarry",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBackpackWorkspacePartialRackReleaseSpec::RunTest(const FString& Parameters)
+bool FWacomUIBackpackWorkspacePartialPileReleaseSpec::RunTest(const FString& Parameters)
 {
 	UObject* Outer = GetTransientPackage();
 	UCardDefinition* Bag = NewObject<UCardDefinition>(Outer);
@@ -82,7 +82,7 @@ bool FWacomUIBackpackWorkspacePartialRackReleaseSpec::RunTest(const FString& Par
 	Character->CharacterId = TEXT("WorkspaceMove.Character");
 	Character->StarterDeck.Add(Bag);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
-	TestTrue(TEXT("Partial rack release Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
+	TestTrue(TEXT("Partial pile release Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(FirstCard);
 	Run->AcquireCardToRun(SecondCard);
 
@@ -119,7 +119,7 @@ bool FWacomUIBackpackWorkspacePartialRackReleaseSpec::RunTest(const FString& Par
 		: FGuid();
 
 	TestTrue(TEXT("Left release reaches the BattleDeck rack through the production Screen flow"),
-		FWacomBackpackScreenTestAccess::ReleaseCurrentToRackWithSynchronousRefresh(
+		FWacomBackpackScreenTestAccess::ReleaseCurrentToPileWithSynchronousRefresh(
 			*Screen,
 			EZoneKind::BattleDeck));
 	const FWacomBackpackWorkspaceAutomationTestView AfterRelease =
@@ -135,7 +135,7 @@ bool FWacomUIBackpackWorkspacePartialRackReleaseSpec::RunTest(const FString& Par
 				return View.Instance.InstanceId == ReleasedId;
 			}));
 	TestTrue(TEXT("The remaining card can use the refreshed storage revision immediately"),
-		FWacomBackpackScreenTestAccess::ReleaseCurrentToRackWithSynchronousRefresh(
+		FWacomBackpackScreenTestAccess::ReleaseCurrentToPileWithSynchronousRefresh(
 			*Screen,
 			EZoneKind::BattleDeck));
 	TestTrue(TEXT("The second successful left release completes carry"),

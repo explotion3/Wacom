@@ -2,7 +2,7 @@
 type: development-workflow
 scope: wacom-worktrees
 status: active
-updated: 2026-07-13
+updated: 2026-07-15
 tags:
   - wacom/development
   - wacom/worktree
@@ -90,3 +90,5 @@ C:/Users/ahhh/.codex/worktrees/0b47/Wacom
 - DreamShader 生成资产以 `.dsm`、`.dsh` 和设置脚本为真源；生成 `.uasset` 保持 worktree-local。
 - Agent 完成后只提交自己分支的受控内容，不提交 Junction、缓存或本地依赖副本。
 - 集成 Agent 合并分支并完成自动化后，最终 PIE 优先在集成 worktree 中验收。
+
+Ignored Content 的实际引用由 [`Content_Dependency_Audit.md`](./Content_Dependency_Audit.md) 记录。初始化脚本保证本地可运行，审计报告负责迁移决策；两者都不构成第三方资产进入仓库的授权。

@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "RunStateTypes.h"
 
-/** 背包右侧牌匣和中央工作台共享的区域身份。 */
+/** 工作台卡牌、内嵌牌堆和命令目标共享的区域身份。 */
 struct FWacomBackpackZoneKey
 {
 	EZoneKind Zone = EZoneKind::Backpack;
@@ -44,6 +44,24 @@ struct FWacomBackpackWorkspaceLayoutEntry
 	bool bHasManualPlacement = false;
 };
 
+/** 当前 Run 内、非 SaveGame 的区域牌堆布局。 */
+struct FWacomBackpackWorkspacePileLayoutEntry
+{
+	FVector2D NormalizedPosition = FVector2D(0.5f, 0.5f);
+	int32 LayerRank = 0;
+	bool bHasManualPlacement = false;
+};
+
+enum class EWacomBackpackWorkspaceInteractionMode : uint8
+{
+	Idle,
+	CardPress,
+	Marquee,
+	Carry,
+	PileMove,
+	Suspended,
+};
+
 enum class EWacomBackpackSelectionMode : uint8
 {
 	Replace,
@@ -55,10 +73,22 @@ struct FWacomBackpackWorkspaceSelectionState
 {
 	TArray<FGuid> OrderedSelectedInstanceIds;
 	FGuid AnchorInstanceId;
+	FWacomBackpackZoneKey SourceZone;
+	bool bHasSourceZone = false;
 	FVector2D MarqueeStart = FVector2D::ZeroVector;
 	FVector2D MarqueeCurrent = FVector2D::ZeroVector;
 	EWacomBackpackSelectionMode MarqueeMode = EWacomBackpackSelectionMode::Replace;
 	bool bMarqueeActive = false;
+};
+
+/** 标题拖柄驱动的整堆移动瞬态状态；只保存表现坐标，不修改 Run。 */
+struct FWacomBackpackWorkspacePileMoveState
+{
+	FWacomBackpackZoneKey Zone;
+	FVector2D PointerStart = FVector2D::ZeroVector;
+	FVector2D PileStart = FVector2D::ZeroVector;
+	FVector2D CurrentPosition = FVector2D::ZeroVector;
+	bool bActive = false;
 };
 
 /** 一次持续扇形携带的全部瞬态状态。 */

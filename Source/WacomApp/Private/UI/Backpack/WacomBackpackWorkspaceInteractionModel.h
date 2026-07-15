@@ -9,9 +9,36 @@
 struct FWacomBackpackWorkspaceCardHitRecord
 {
 	FGuid InstanceId;
+	FWacomBackpackZoneKey SourceZone;
 	FVector2D CardCenter = FVector2D::ZeroVector;
 	int32 LayerRank = 0;
 	bool bMovable = true;
+
+	FWacomBackpackWorkspaceCardHitRecord() = default;
+	FWacomBackpackWorkspaceCardHitRecord(
+		FGuid InInstanceId,
+		FVector2D InCardCenter,
+		int32 InLayerRank,
+		bool bInMovable)
+		: InstanceId(InInstanceId)
+		, CardCenter(InCardCenter)
+		, LayerRank(InLayerRank)
+		, bMovable(bInMovable)
+	{
+	}
+	FWacomBackpackWorkspaceCardHitRecord(
+		FGuid InInstanceId,
+		const FWacomBackpackZoneKey& InSourceZone,
+		FVector2D InCardCenter,
+		int32 InLayerRank,
+		bool bInMovable)
+		: InstanceId(InInstanceId)
+		, SourceZone(InSourceZone)
+		, CardCenter(InCardCenter)
+		, LayerRank(InLayerRank)
+		, bMovable(bInMovable)
+	{
+	}
 };
 
 /** 指针释放只产生意图；Screen 成功提交后再调用 CommitReleasedCards。 */
@@ -26,6 +53,7 @@ struct FWacomBackpackWorkspaceReleaseIntent
 class WACOMAPP_API FWacomBackpackWorkspaceInteractionModel
 {
 public:
+	void ReconcileCards(TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards);
 	void ReconcileCards(
 		const FWacomBackpackZoneKey& ActiveZone,
 		TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards);
@@ -33,9 +61,19 @@ public:
 	void ClickCard(FGuid InstanceId, bool bControlDown);
 	void ClickBlank();
 	void BeginMarquee(FVector2D Start, bool bControlDown);
+	void BeginMarquee(const FWacomBackpackZoneKey& SourceZone, FVector2D Start, bool bControlDown);
 	void UpdateMarquee(FVector2D Current);
 	void CompleteMarquee();
 	void SelectAllMovable();
+	void SelectAllMovable(const FWacomBackpackZoneKey& SourceZone);
+	void SetCardPressActive(bool bActive);
+
+	bool BeginPileMove(
+		const FWacomBackpackZoneKey& Zone,
+		FVector2D PointerStart,
+		FVector2D PileStart);
+	void UpdatePileMove(FVector2D PointerPosition);
+	FWacomBackpackWorkspacePileMoveState CompletePileMove();
 
 	bool BeginCarry(FGuid DraggedInstanceId, FVector2D PointerPosition, uint64 SourceStorageRevision);
 	void UpdateCarryPointer(FVector2D PointerPosition);
@@ -54,14 +92,18 @@ public:
 	bool IsCarrying() const { return !Carry.RemainingInstanceIds.IsEmpty(); }
 	bool IsMarqueeActive() const { return Selection.bMarqueeActive; }
 	bool IsMouseCaptured() const { return bMouseCaptured; }
+	bool IsPileMoving() const { return PileMove.bActive; }
+	EWacomBackpackWorkspaceInteractionMode GetMode() const { return Mode; }
+	const FWacomBackpackWorkspacePileMoveState& GetPileMove() const { return PileMove; }
 	bool IsSelected(FGuid InstanceId) const { return Selection.OrderedSelectedInstanceIds.Contains(InstanceId); }
 	bool IsMovable(FGuid InstanceId) const;
 
 private:
 	TArray<FWacomBackpackWorkspaceCardHitRecord> AvailableCards;
-	FWacomBackpackZoneKey ActiveZone;
 	FWacomBackpackWorkspaceSelectionState Selection;
 	FWacomBackpackWorkspaceCarryState Carry;
+	FWacomBackpackWorkspacePileMoveState PileMove;
+	EWacomBackpackWorkspaceInteractionMode Mode = EWacomBackpackWorkspaceInteractionMode::Idle;
 	TArray<FGuid> MarqueeStartSelection;
 	bool bMouseCaptured = false;
 

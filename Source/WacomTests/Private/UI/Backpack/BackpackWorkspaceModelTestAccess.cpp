@@ -51,6 +51,30 @@ FWacomBackpackWorkspaceModelTestAccess::BuildDefaultLayout(
 	return Views;
 }
 
+TArray<FWacomBackpackWorkspaceResolvedLayoutTestView>
+FWacomBackpackWorkspaceModelTestAccess::BuildAccordionLayout(
+	int32 CardCount,
+	FVector2D PileTopLeft,
+	FVector2D WorkspaceSize)
+{
+	TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> Views;
+	for (const FWacomBackpackResolvedLayout& Layout :
+		FWacomBackpackWorkspaceLayoutSolver::BuildAccordionLayout(
+			CardCount,
+			PileTopLeft,
+			FVector2D(260.0f, 220.0f),
+			WorkspaceSize,
+			FVector2D(220.0f, 320.0f),
+			32.0f,
+			72.0f,
+			12.0f,
+			24.0f))
+	{
+		Views.Add(ToTestView(Layout));
+	}
+	return Views;
+}
+
 FWacomBackpackWorkspaceResolvedLayoutTestView
 FWacomBackpackWorkspaceModelTestAccess::ResolveManualLayout(
 	FVector2D NormalizedPosition,
@@ -95,11 +119,17 @@ FWacomBackpackWorkspaceModelTestAccess::RunStateLifecycleScenario()
 	TStrongObjectPtr<URunSession> SecondRun(NewObject<URunSession>());
 	FWacomBackpackWorkspaceStateStore Store;
 	const FWacomBackpackZoneKey BackpackZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
+	const FWacomBackpackZoneKey BattlePile = FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck);
 	const FGuid ExistingCardId(1, 2, 3, 4);
 	const FGuid NewCardId(5, 6, 7, 8);
 
 	Store.BindToRun(FirstRun.Get());
-	Store.SetActiveZone(BackpackZone);
+	Store.SetExpandedPile(BattlePile);
+	FWacomBackpackWorkspacePileLayoutEntry PileEntry;
+	PileEntry.bHasManualPlacement = true;
+	PileEntry.NormalizedPosition = FVector2D(0.2f, 0.7f);
+	PileEntry.LayerRank = 8;
+	Store.SetPileLayout(BattlePile, PileEntry);
 	FWacomBackpackWorkspaceLayoutEntry Entry;
 	Entry.bHasManualPlacement = true;
 	Entry.NormalizedPosition = FVector2D(0.25f, 0.75f);
@@ -107,7 +137,8 @@ FWacomBackpackWorkspaceModelTestAccess::RunStateLifecycleScenario()
 
 	Store.BindToRun(FirstRun.Get());
 	View.bSameRunPreservedLayout = Store.FindLayout(BackpackZone, ExistingCardId) != nullptr;
-	View.bActiveZonePreservedForSameRun = Store.GetActiveZone() == BackpackZone;
+	View.bExpandedPilePreservedForSameRun = Store.IsPileExpanded(BattlePile);
+	View.bPileLayoutPreservedForSameRun = Store.FindPileLayout(BattlePile) != nullptr;
 
 	Store.ReconcileZone(BackpackZone, MakeArrayView(&NewCardId, 1));
 	View.bRemovedCardLayoutPruned = Store.FindLayout(BackpackZone, ExistingCardId) == nullptr;
@@ -116,7 +147,8 @@ FWacomBackpackWorkspaceModelTestAccess::RunStateLifecycleScenario()
 	Store.SetLayout(BackpackZone, NewCardId, Entry);
 	Store.BindToRun(SecondRun.Get());
 	View.bNewRunClearedLayouts = Store.GetManualLayoutCount(BackpackZone) == 0;
-	View.bActiveZoneResetForNewRun = !Store.HasActiveZone();
+	View.bExpandedPileResetForNewRun = !Store.GetExpandedPile().IsSet();
+	View.bPileLayoutResetForNewRun = Store.FindPileLayout(BattlePile) == nullptr;
 	return View;
 }
 
