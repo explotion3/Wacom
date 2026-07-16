@@ -14,6 +14,7 @@ class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardDataRewritePlayback;
+class FWacomFirstPersonCardDrawRevealPlayback;
 class FWacomFirstPersonCardDragPickupPlayback;
 class FWacomFirstPersonCardHandTargetImpactPlayback;
 class FWacomFirstPersonCardSurfaceDeparturePlayback;
@@ -45,6 +46,11 @@ struct FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter
 struct FWacomFirstPersonCardDataRewritePlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardDataRewritePlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardDrawRevealPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardDrawRevealPlayback* Playback) const;
 };
 
 struct FWacomFirstPersonCardHandTargetImpactPlaybackDeleter
@@ -111,6 +117,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolveView;
 	FWacomFirstPersonCardHandTargetImpactView HandTargetImpactView;
 	FWacomFirstPersonCardDataRewriteView DataRewriteView;
+	FWacomFirstPersonCardDrawRevealView DrawRevealView;
 	FWidgetTransform RenderTransform;
 	int32 RenderZOrder = 0;
 	bool bDragPickupFeedbackActive = false;
@@ -125,6 +132,12 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bHandTargetImpactCommitActive = false;
 	bool bDataRewritePlaybackActive = false;
 	bool bDataRewritePendingHandoff = false;
+	bool bDrawRevealPlaybackActive = false;
+	bool bDrawRevealWaiting = false;
+	float DrawRevealProgress = 0.0f;
+	float DrawRevealHorizontalScale = 1.0f;
+	FVector2D DrawRevealLandingScale = FVector2D(1.0f, 1.0f);
+	float DrawRevealLandingTranslationYPixels = 0.0f;
 	bool bHandTargetDeparturePending = false;
 	bool bHandTargetDepartureGateOpen = false;
 	int32 HandTargetImpactZOrderBoost = 0;
@@ -379,6 +392,9 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardDataRewritePlayback,
 		FWacomFirstPersonCardDataRewritePlaybackDeleter> DataRewritePlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardDrawRevealPlayback,
+		FWacomFirstPersonCardDrawRevealPlaybackDeleter> DrawRevealPlayback;
 	int32 PendingDataRewriteFieldMask = 0;
 	EWacomFirstPersonCardDataRewriteTone PendingDataRewriteTone =
 		EWacomFirstPersonCardDataRewriteTone::Neutral;
@@ -565,6 +581,13 @@ private:
 	void ApplyCardDataRewriteView();
 	void PlayPendingCardDataRewriteSound();
 	bool IsCardDataRewritePlaybackActive() const;
+	bool CanPlayDrawReveal() const;
+	void PrepareDrawRevealPlayback(EWacomFirstPersonCardSlotTransitionKind TransitionKind);
+	void StartDrawRevealPlayback();
+	void UpdateDrawRevealPlayback(float NormalizedEnterProgress);
+	void ApplyDrawRevealSurfaceView();
+	void ClearDrawRevealPlayback();
+	bool IsDrawRevealPlaybackActive() const;
 	bool CanPlayCardUseEffect() const;
 	bool CanPlayCardUseReformEffect() const;
 	bool CanPlayExhaustDissolve() const;

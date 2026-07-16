@@ -17,6 +17,7 @@ class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class UWacomFirstPersonCardHandTargetImpactStyle;
 class UWacomFirstPersonCardDataRewriteStyle;
+class UWacomFirstPersonCardDrawRevealStyle;
 class UWacomFirstPersonCardPlayedDissolveStyle;
 class UWacomFirstPersonCardPileTransferStyle;
 class UWacomFirstPersonCardUseEffectStyle;
@@ -621,6 +622,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|17 Camera Look While UI", meta = (ToolTip = "Hover 卡牌时镜头追向鼠标的插值速度覆盖值，单位为每秒；小于 0 时沿用当前镜头的 LookInterpSpeed，0 表示立即贴合。推荐 -1 或 8 到 18。"))
 	float CardPointerCameraLookInterpSpeedOverride = -1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|18 Card Draw Reveal", meta = (ToolTip = "是否让 Battle 中真实 Drawn 卡牌以牌背飞出抽牌堆，并在飞行中翻成正面；Run 入场、获得卡牌和手牌锚点入场不受影响。"))
+	bool bEnableCardDrawReveal = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|18 Card Draw Reveal", meta = (ToolTip = "Battle 抽牌牌背翻面的可复用预设；材质实例控制牌背与边缘外观，DataAsset 控制归一化翻面阶段和落定反馈。为空或材质无效时沿用原 Drawn 入场。"))
+	TObjectPtr<UWacomFirstPersonCardDrawRevealStyle> CardDrawRevealStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|18 Card Draw Reveal", meta = (ToolTip = "弱化抽牌翻面动态：保留原 Drawn 飞行、计数和声音，只在飞行约 55% 到 75% 之间让牌背均匀交叉淡化到正面，不执行横向压缩或落定位移。"))
+	bool bReduceCardDrawRevealMotion = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量交互反馈；只影响 hover、按下、确认和不可用点击的 UMG 表现，不改变出牌命令路径。"))
 	bool bEnableCardInteractionFeedback = true;

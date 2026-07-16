@@ -81,6 +81,7 @@ FWacomFirstPersonCardTransitionTickResult FWacomFirstPersonCardTransitionPlaybac
 	if (PlaybackSeconds < 0.0f)
 	{
 		Result.VisualSlotView = StartSlotView;
+		Result.bHasPlaybackProgress = true;
 		Result.bHasVisualSlotView = true;
 		return Result;
 	}
@@ -96,6 +97,8 @@ FWacomFirstPersonCardTransitionTickResult FWacomFirstPersonCardTransitionPlaybac
 		: FMath::Clamp(PlaybackSeconds / DurationSeconds, 0.0f, 1.0f);
 	const float EasedAlpha =
 		FWacomFirstPersonCardMotionMixer::ComputeTransitionEaseAlpha(LinearAlpha, EasePower);
+	Result.NormalizedPlaybackProgress = LinearAlpha;
+	Result.bHasPlaybackProgress = true;
 	Result.VisualSlotView = FWacomFirstPersonCardMotionMixer::LerpSlotView(
 		StartSlotView,
 		TargetSlotView,

@@ -156,6 +156,9 @@ private:
 	void ApplyHandTargetImpactParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardHandTargetImpactView& View) const;
+	void ApplyDrawRevealParameters(
+		UMaterialInstanceDynamic& Material,
+		const FWacomFirstPersonCardDrawRevealView& View) const;
 	void ApplyPlayedDissolveParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardPlayedDissolveView& View) const;
@@ -166,5 +169,8 @@ private:
 		const FWacomFirstPersonCardInteractionFeedbackView& View,
 		bool& bOutUsesOverrideMaterial,
 		bool& bOutUsesBrushMaterial) const;
+	bool ResolveDrawRevealCardBodyUVRect(
+		FLinearColor& OutMin,
+		FLinearColor& OutMax) const;
 	void ApplyPendingCardViewData();
 };

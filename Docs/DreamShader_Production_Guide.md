@@ -291,6 +291,7 @@ rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: E
 - 卡牌插画与稀有度边框不是同一种资产合同：插画使用 `UTexture2D`；`RarityBorder` 使用 `UPaperSprite`，必须从 baked atlas texture 与 source rect 计算局部 UV，不能直接把 Sprite 当成整张 Texture 采样。
 - 稳定 Bayer、`step / smoothstep`、hash、色板选择等算法优先写进带 `Wacom` 前缀的 `.dsh` `Function SelfContained`。`.dsm` Graph 只负责参数、采样、helper 调用和最终合成：这样既避免在 Graph 中重复展开分支节点，也能绕开 Graph 表达式对部分 HLSL 风格函数调用的解析限制。费用数字重组的硬像素顺序、Tone 色板选择和 Preview/Rewrite 模式判断分别由 `WacomCard_ComputeCostDigitRewriteMasks`、`WacomCard_SelectCostDigitRewritePalette` 与 `WacomCard_SelectCostDigitEffectMode` 提供。`step()` 可在 `.dsh` 自包含函数中使用，但不能直接写在当前 DreamShader Graph 赋值表达式里；后者会报 `Unknown Graph function 'step'` 并导致运行时只能直接换数字。
 - 对 `UImage` 内的 PaperSprite 做双值过渡时，优先用 `UPaperSprite::GetSlateAtlasData()` 提取 Atlas Texture、StartUV 与 SizeUV，然后把两组 Atlas Rect 交给直接 UI 材质；不要假设 Sprite 独占整张纹理。为了避免新值先闪一帧，Layer 必须在 ViewData 更新前锁定旧 Sprite，再刷新权威数据并启动 MID。此类局部 Image MID 不需要 Retainer 的 `Texture` 参数，也不应复制 Fake3D、接触阴影或卡面几何换算。
+- 当临时 Surface Effect 要把另一张纹理映射到卡牌主体、同时保留实时出血装饰轮廓时，不能直接用整张 Retainer UV 采样图案。运行时应从 `CardContentSizeBox` 缓存几何解析 Retainer 局部 `BodyRectMin/Max`，将该矩形重映射为 `0–1` 牌背 UV；矩形外仍使用实时 `Texture.a` 作为完整剪影，并以 MI 的统一边缘色填充。纹理资产必须先导入，再生成引用它作为默认值的 `.dsm`；推荐 setup 脚本提供 import-only 阶段，随后定向 DreamShader compile，最后创建 MI/Style 与宿主引用。这样既不会把牌背图案拉伸到 EffectBadge，也不会让缺少默认纹理导致生成节点回退为错误采样器。
 
 ## 8. 性能原则
 

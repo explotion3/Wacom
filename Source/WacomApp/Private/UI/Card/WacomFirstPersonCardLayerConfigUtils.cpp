@@ -382,6 +382,38 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 		DataRewriteStyle.RewriteSoundPitchVariation,
 		0.0f,
 		0.99f);
+	FWacomFirstPersonCardDrawRevealStyleData& DrawRevealStyle =
+		Config.DrawReveal.Style;
+	DrawRevealStyle.BackHoldEndProgress = FMath::Clamp(
+		DrawRevealStyle.BackHoldEndProgress, 0.0f, 1.0f);
+	DrawRevealStyle.FaceSwitchProgress = FMath::Clamp(
+		DrawRevealStyle.FaceSwitchProgress,
+		DrawRevealStyle.BackHoldEndProgress,
+		1.0f);
+	DrawRevealStyle.FaceExpandEndProgress = FMath::Clamp(
+		DrawRevealStyle.FaceExpandEndProgress,
+		DrawRevealStyle.FaceSwitchProgress,
+		1.0f);
+	DrawRevealStyle.MinimumHorizontalScale = FMath::Clamp(
+		DrawRevealStyle.MinimumHorizontalScale, 0.01f, 1.0f);
+	DrawRevealStyle.LandingStartProgress = FMath::Clamp(
+		DrawRevealStyle.LandingStartProgress,
+		DrawRevealStyle.FaceExpandEndProgress,
+		1.0f);
+	DrawRevealStyle.LandingPeakProgress = FMath::Clamp(
+		DrawRevealStyle.LandingPeakProgress,
+		DrawRevealStyle.LandingStartProgress,
+		1.0f);
+	DrawRevealStyle.LandingScale.X = FMath::Max(0.01f, DrawRevealStyle.LandingScale.X);
+	DrawRevealStyle.LandingScale.Y = FMath::Max(0.01f, DrawRevealStyle.LandingScale.Y);
+	DrawRevealStyle.LandingTranslationYPixels = FMath::Max(
+		0.0f, DrawRevealStyle.LandingTranslationYPixels);
+	DrawRevealStyle.ReducedCrossFadeStartProgress = FMath::Clamp(
+		DrawRevealStyle.ReducedCrossFadeStartProgress, 0.0f, 1.0f);
+	DrawRevealStyle.ReducedCrossFadeEndProgress = FMath::Clamp(
+		DrawRevealStyle.ReducedCrossFadeEndProgress,
+		DrawRevealStyle.ReducedCrossFadeStartProgress,
+		1.0f);
 	Config.Selection.Style.EnterDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.EnterDurationSeconds);
 	Config.Selection.Style.ExitDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.ExitDurationSeconds);
 	Config.Selection.Style.SustainPeriodSeconds = FMath::Max(0.01f, Config.Selection.Style.SustainPeriodSeconds);
@@ -605,6 +637,43 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(
 			A.DataRewrite.Style.RewriteSoundPitchVariation,
 			B.DataRewrite.Style.RewriteSoundPitchVariation)
+		&& A.DrawReveal.bEnabled == B.DrawReveal.bEnabled
+		&& A.DrawReveal.bReducedMotion == B.DrawReveal.bReducedMotion
+		&& A.DrawReveal.Style.SurfaceEffectMaterialInstance
+			== B.DrawReveal.Style.SurfaceEffectMaterialInstance
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.BackHoldEndProgress,
+			B.DrawReveal.Style.BackHoldEndProgress)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.FaceSwitchProgress,
+			B.DrawReveal.Style.FaceSwitchProgress)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.FaceExpandEndProgress,
+			B.DrawReveal.Style.FaceExpandEndProgress)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.MinimumHorizontalScale,
+			B.DrawReveal.Style.MinimumHorizontalScale)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.LandingStartProgress,
+			B.DrawReveal.Style.LandingStartProgress)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.LandingPeakProgress,
+			B.DrawReveal.Style.LandingPeakProgress)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.LandingScale.X,
+			B.DrawReveal.Style.LandingScale.X)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.LandingScale.Y,
+			B.DrawReveal.Style.LandingScale.Y)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.LandingTranslationYPixels,
+			B.DrawReveal.Style.LandingTranslationYPixels)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.ReducedCrossFadeStartProgress,
+			B.DrawReveal.Style.ReducedCrossFadeStartProgress)
+		&& AreFloatsEquivalent(
+			A.DrawReveal.Style.ReducedCrossFadeEndProgress,
+			B.DrawReveal.Style.ReducedCrossFadeEndProgress)
 		&& A.Selection.bEnabled == B.Selection.bEnabled
 		&& A.Selection.bReducedMotion == B.Selection.bReducedMotion
 		&& AreColorsEquivalent(A.Selection.Style.PrimaryColor, B.Selection.Style.PrimaryColor)

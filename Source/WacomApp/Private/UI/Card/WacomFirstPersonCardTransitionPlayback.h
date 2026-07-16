@@ -26,6 +26,8 @@ struct FWacomFirstPersonCardTransitionSoundRequest
 struct FWacomFirstPersonCardTransitionTickResult
 {
 	FWacomFirstPersonCardLayerSlotView VisualSlotView;
+	float NormalizedPlaybackProgress = 0.0f;
+	bool bHasPlaybackProgress = false;
 	bool bHasVisualSlotView = false;
 	bool bCompleted = false;
 };

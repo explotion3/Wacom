@@ -214,6 +214,12 @@ tags:
 
 ## P2 后续清理
 
+- [ ] **Draw Reveal 正式主题牌背与多主题 MI**
+  - 状态：`Ready: 临时像素牌背已接入，等待美术替换`
+  - 归属：UI / 卡牌表现 / 美术
+  - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [DreamShader_Production_Guide.md](./DreamShader_Production_Guide.md)
+  - 说明：Battle 真实 Drawn 的等待、翻面、落定和 Reduced Motion 合同已完成；当前 `T_FPCardDrawBack_Temporary` 是无文字、无角色、主题中性的临时像素牌背。正式制作只需在默认或主题 `MI_FirstPersonCard_SurfaceEffects_DrawReveal_*` 替换 `CardBackTexture`，不得新增第二个 Retainer 或把图案扩展到实体出血轮廓。
+
 - [ ] **场景敌人像素命中 Niagara PIE 调参与正式音效**
   - 状态：`Ready: Graph/Style 已完成，等待手感验收`
   - 归属：App / Battle 表现 / VFX

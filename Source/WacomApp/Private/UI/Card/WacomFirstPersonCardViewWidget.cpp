@@ -44,6 +44,16 @@ namespace
 	const FName HandTargetImpactTimeParameterName(TEXT("HandTargetImpactTime"));
 	const FName HandTargetImpactSeedParameterName(TEXT("HandTargetImpactSeed"));
 	const FName HandTargetImpactReducedMotionParameterName(TEXT("HandTargetImpactReducedMotion"));
+	const FName DrawRevealEnabledParameterName(TEXT("DrawRevealEnabled"));
+	const FName DrawRevealProgressParameterName(TEXT("DrawRevealProgress"));
+	const FName DrawRevealReducedMotionParameterName(TEXT("DrawRevealReducedMotion"));
+	const FName DrawRevealBackHoldEndParameterName(TEXT("DrawRevealBackHoldEnd"));
+	const FName DrawRevealFaceSwitchParameterName(TEXT("DrawRevealFaceSwitch"));
+	const FName DrawRevealFaceExpandEndParameterName(TEXT("DrawRevealFaceExpandEnd"));
+	const FName DrawRevealReducedCrossFadeStartParameterName(TEXT("DrawRevealReducedCrossFadeStart"));
+	const FName DrawRevealReducedCrossFadeEndParameterName(TEXT("DrawRevealReducedCrossFadeEnd"));
+	const FName DrawRevealCardBodyRectMinParameterName(TEXT("DrawRevealCardBodyRectMin"));
+	const FName DrawRevealCardBodyRectMaxParameterName(TEXT("DrawRevealCardBodyRectMax"));
 	const FName PlayedDissolveEnabledParameterName(TEXT("PlayedDissolveEnabled"));
 	const FName PlayedDissolveAmountParameterName(TEXT("PlayedDissolveAmount"));
 	const FName PlayedDissolveTimeParameterName(TEXT("PlayedDissolveTime"));
@@ -306,10 +316,22 @@ void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
 
 	CacheBaseSurfaceEffectMaterial();
 	const FWacomFirstPersonCardUseEffectView& CardUseView = View.CardUse;
+	const FWacomFirstPersonCardDrawRevealView& DrawRevealView = View.DrawReveal;
 	const FWacomFirstPersonCardPlayedDissolveView& DissolveView = View.PlayedDissolve;
 	const FWacomFirstPersonCardHandTargetImpactView& HandTargetImpactView =
 		View.HandTargetImpact;
-	if (HandTargetImpactView.bActive
+	if (DrawRevealView.bActive
+		&& DrawRevealView.Style.SurfaceEffectMaterialInstance)
+	{
+		EnsureSurfaceEffectMaterialInstance(
+			DrawRevealView.Style.SurfaceEffectMaterialInstance);
+		if (ActiveSurfaceEffectMaterialInstance)
+		{
+			ApplyCardDepthParameters(*ActiveSurfaceEffectMaterialInstance);
+			ApplyDrawRevealParameters(*ActiveSurfaceEffectMaterialInstance, DrawRevealView);
+		}
+	}
+	else if (HandTargetImpactView.bActive
 		&& HandTargetImpactView.Style.SurfaceEffectMaterialInstance)
 	{
 		EnsureSurfaceEffectMaterialInstance(
@@ -641,6 +663,86 @@ void UWacomFirstPersonCardViewWidget::ApplyHandTargetImpactParameters(
 			1.0f / SurfaceSize.Y,
 			0.0f,
 			0.0f));
+}
+
+void UWacomFirstPersonCardViewWidget::ApplyDrawRevealParameters(
+	UMaterialInstanceDynamic& Material,
+	const FWacomFirstPersonCardDrawRevealView& View) const
+{
+	const FWacomFirstPersonCardDrawRevealStyleData& Style = View.Style;
+	Material.SetScalarParameterValue(DrawRevealEnabledParameterName, View.bActive ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(
+		DrawRevealProgressParameterName,
+		FMath::Clamp(View.Progress, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(
+		DrawRevealReducedMotionParameterName,
+		View.bReducedMotion ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(DrawRevealBackHoldEndParameterName, Style.BackHoldEndProgress);
+	Material.SetScalarParameterValue(DrawRevealFaceSwitchParameterName, Style.FaceSwitchProgress);
+	Material.SetScalarParameterValue(DrawRevealFaceExpandEndParameterName, Style.FaceExpandEndProgress);
+	Material.SetScalarParameterValue(
+		DrawRevealReducedCrossFadeStartParameterName,
+		Style.ReducedCrossFadeStartProgress);
+	Material.SetScalarParameterValue(
+		DrawRevealReducedCrossFadeEndParameterName,
+		Style.ReducedCrossFadeEndProgress);
+
+	FLinearColor BodyRectMin;
+	FLinearColor BodyRectMax;
+	ResolveDrawRevealCardBodyUVRect(BodyRectMin, BodyRectMax);
+	Material.SetVectorParameterValue(DrawRevealCardBodyRectMinParameterName, BodyRectMin);
+	Material.SetVectorParameterValue(DrawRevealCardBodyRectMaxParameterName, BodyRectMax);
+
+	FVector2D SurfaceSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
+	{
+		SurfaceSize = FVector2D(456.0f, 520.0f);
+	}
+	Material.SetVectorParameterValue(
+		SurfaceInvSizeParameterName,
+		FLinearColor(1.0f / SurfaceSize.X, 1.0f / SurfaceSize.Y, 0.0f, 0.0f));
+}
+
+bool UWacomFirstPersonCardViewWidget::ResolveDrawRevealCardBodyUVRect(
+	FLinearColor& OutMin,
+	FLinearColor& OutMax) const
+{
+	FVector2D SurfaceSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (!FMath::IsFinite(SurfaceSize.X) || !FMath::IsFinite(SurfaceSize.Y)
+		|| SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
+	{
+		SurfaceSize = FVector2D(456.0f, 520.0f);
+	}
+
+	FVector2D LocalMin(48.0f, 48.0f);
+	FVector2D LocalMax = LocalMin + FVector2D(360.0f, 424.0f);
+	const UWidget* CardContent = WidgetTree
+		? WidgetTree->FindWidget(TEXT("CardContentSizeBox"))
+		: nullptr;
+	if (Fake3DSurfaceRetainer && CardContent)
+	{
+		const FGeometry SurfaceGeometry = Fake3DSurfaceRetainer->GetCachedGeometry();
+		const FGeometry ContentGeometry = CardContent->GetCachedGeometry();
+		const FVector2D ContentSize = ContentGeometry.GetLocalSize();
+		if (ContentSize.X > 1.0f && ContentSize.Y > 1.0f)
+		{
+			LocalMin = SurfaceGeometry.AbsoluteToLocal(ContentGeometry.LocalToAbsolute(FVector2D::ZeroVector));
+			LocalMax = SurfaceGeometry.AbsoluteToLocal(ContentGeometry.LocalToAbsolute(ContentSize));
+		}
+	}
+	const FVector2D UVMin(
+		FMath::Clamp(LocalMin.X / SurfaceSize.X, 0.0f, 1.0f),
+		FMath::Clamp(LocalMin.Y / SurfaceSize.Y, 0.0f, 1.0f));
+	const FVector2D UVMax(
+		FMath::Clamp(LocalMax.X / SurfaceSize.X, UVMin.X + KINDA_SMALL_NUMBER, 1.0f),
+		FMath::Clamp(LocalMax.Y / SurfaceSize.Y, UVMin.Y + KINDA_SMALL_NUMBER, 1.0f));
+	OutMin = FLinearColor(UVMin.X, UVMin.Y, 0.0f, 0.0f);
+	OutMax = FLinearColor(UVMax.X, UVMax.Y, 0.0f, 0.0f);
+	return UVMax.X > UVMin.X && UVMax.Y > UVMin.Y;
 }
 
 void UWacomFirstPersonCardViewWidget::ApplyPlayedDissolveParameters(

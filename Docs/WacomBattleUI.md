@@ -246,6 +246,8 @@ Battle hand 抽牌表现由 `FWacomBattleHandPresentationController` 事务化�
 
 `FWacomBattleDrawPileFeedbackController` 只管理 DrawPile 的临时显示数量与发牌反馈，不改变 Battle Snapshot。普通/开场抽牌从 `CardsDrawn` 建批，Presentation Plan 从 `FBattlePresentationDeckStep::DrawBatch` 建批；两条路径最后都等待 first-person card layer 发回真实 `Drawn` Enter Started。每张可见卡开始移动的同一边缘，控制器把 `DrawPileView` 减一并调用方向性 `PlaySendFeedback()`；最后一张可见卡把隐藏差额校准到权威批次终值。重复 Card ID / Event Sequence 不重放，plan 中断、BattleEnd、source clear 和 teardown 直接恢复权威数量。已有 Drawn 音效与 Started 通知共享播放边缘，因此不新增第二层牌堆声音。
 
+同一 `Drawn` Enter 还驱动 Battle-only 的牌背翻面揭示。Slot 创建后在 stagger 延迟内已经显示牌背；真实 Started 边缘到来时，牌堆逐张减数、既有 Drawn 音效和 Draw Reveal 翻面在同一帧开始。Reveal 只读取现有 Enter 的归一化进度，不建立 Timer，也不延长交互阻塞或 presentation phase。缺失 Style/MI 时仅回退原 Drawn 飞行；`Gained / RunHandEntered / HandAnchorEntered` 不使用牌背。
+
 `DeckReshuffle` 的两端反馈由 Card Glyph Transfer 的真实 progress 边缘驱动，不使用额外 Timer。`LaunchedCount` 增加时，Coordinator 用新发射牌印的平均 Bezier 初始切线驱动 `DiscardPileView.PlaySendFeedback()`，并从洗牌前弃牌数逐张递减；`ArrivedCount` 增加时，从洗牌前抽牌数逐张递增 `DrawPileView`，同时触发 `PlayReceiveFeedback()` 与 Slate Impact。最后一枚只增强既有接收脉冲/方印。低帧率批量跨边缘按数量增量聚合，重复 progress 不重复计数；ForceComplete、超时、BattleEnd、source clear 与 teardown 只恢复 Deck Step 的精确终值并清除两端 Transform。弃牌堆的 `Discard+Played` 复合文本在整个阶段保持不变，任一 PileView 缺失时另一端仍可独立工作。
 
 First-person card layer 重新拥有语义 Transition Audio，并生成 `Gained` 专用 transition：音效只在对应 enter playback 跨过错峰延迟、真正开始播放时请求一次；普通 refresh/reflow 不播放。`CardsRetained` 通过独立 feedback hint 驱动原槽位上的短促上浮、缩放、错峰与临时 ZOrder，不使用旧 Overlay 发光。`Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` 均保持显式表现语义；规则事件、日志和 Toast 行为不变。

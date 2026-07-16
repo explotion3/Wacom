@@ -726,9 +726,74 @@ struct WACOMAPP_API FWacomFirstPersonCardCostPreviewView
 	FWacomFirstPersonCardDataRewriteStyleData Style;
 };
 
+/** Authoring data for the Battle Drawn card-back reveal. The Drawn enter transition owns time. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardDrawRevealStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal", meta = (ToolTip = "抽牌翻面期间临时绑定到唯一 Retainer 的 UI 材质实例；材质负责牌背、正反面混合与边缘高光，必须保留 Texture Retainer 参数合同。"))
+	TObjectPtr<UMaterialInstance> SurfaceEffectMaterialInstance = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Timing", meta = (ToolTip = "Drawn Enter 归一化进度中保持完整牌背的结束比例；默认 0.45，推荐 0.35 到 0.55。它不会改变抽牌总时长。"))
+	float BackHoldEndProgress = 0.45f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Timing", meta = (ToolTip = "横向压缩到最窄并切换到正面的进度；默认 0.615，推荐 0.55 到 0.68，应晚于牌背保持结束。"))
+	float FaceSwitchProgress = 0.615f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Timing", meta = (ToolTip = "正面从侧边展开完成的进度；默认 0.78，推荐 0.70 到 0.84，应晚于正面切换。"))
+	float FaceExpandEndProgress = 0.78f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Motion", meta = (ToolTip = "翻面中点的横向最小缩放；默认 0.06，推荐 0.03 到 0.12。只修改 RenderTransform，不改变布局或命中区域。"))
+	float MinimumHorizontalScale = 0.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Timing", meta = (ToolTip = "接近手牌时开始落定压缩的进度；默认 0.82，推荐 0.78 到 0.88。"))
+	float LandingStartProgress = 0.82f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Timing", meta = (ToolTip = "落定压缩达到峰值的进度；默认 0.90，推荐 0.86 到 0.94，应晚于落定开始。"))
+	float LandingPeakProgress = 0.90f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Motion", meta = (ToolTip = "落定峰值缩放；默认 X=1.035、Y=0.96，推荐 X 1.01 到 1.06、Y 0.92 到 0.99。只影响局部反馈。"))
+	FVector2D LandingScale = FVector2D(1.035f, 0.96f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Motion", meta = (ToolTip = "落定峰值向下位移，单位为 UMG 逻辑像素；默认 3，推荐 1 到 6，不改变手牌布局。"))
+	float LandingTranslationYPixels = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Reduced Motion", meta = (ToolTip = "弱化动态时牌背开始交叉淡化成正面的 Drawn Enter 进度；默认 0.55，推荐 0.45 到 0.65。"))
+	float ReducedCrossFadeStartProgress = 0.55f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Draw Reveal|Reduced Motion", meta = (ToolTip = "弱化动态时牌背交叉淡化完成的 Drawn Enter 进度；默认 0.75，推荐 0.65 到 0.85。"))
+	float ReducedCrossFadeEndProgress = 0.75f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardDrawRevealConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Draw Reveal")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Draw Reveal")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Draw Reveal")
+	FWacomFirstPersonCardDrawRevealStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardDrawRevealView
+{
+	bool bActive = false;
+	bool bWaiting = false;
+	bool bReducedMotion = false;
+	float Progress = 0.0f;
+	FWacomFirstPersonCardDrawRevealStyleData Style;
+};
+
 /** Card-surface material state shared by mutually exclusive Retainer effects. */
 struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 {
+	FWacomFirstPersonCardDrawRevealView DrawReveal;
 	FWacomFirstPersonCardSelectionView Selection;
 	FWacomFirstPersonCardHandTargetImpactView HandTargetImpact;
 	FWacomFirstPersonCardUseEffectView CardUse;
@@ -1707,6 +1772,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardDataRewriteConfig DataRewrite;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardDrawRevealConfig DrawReveal;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState

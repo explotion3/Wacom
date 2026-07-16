@@ -1,0 +1,36 @@
+// Copyright Wacom. All Rights Reserved.
+
+Function SelfContained WacomFirstPersonCard_ComputeDrawReveal(
+    in float2 surfaceUV,
+    in float2 cardBodyRectMin,
+    in float2 cardBodyRectMax,
+    in float progress,
+    in float faceSwitchProgress,
+    in float reducedMotion,
+    in float reducedCrossFadeStart,
+    in float reducedCrossFadeEnd,
+    out float2 cardBackUV,
+    out float cardBodyMask,
+    out float faceAmount,
+    out float edgePulse)
+{
+    float2 safeBodySize = max(cardBodyRectMax - cardBodyRectMin, float2(0.0001, 0.0001));
+    cardBackUV = saturate((surfaceUV - cardBodyRectMin) / safeBodySize);
+    cardBodyMask =
+        step(cardBodyRectMin.x, surfaceUV.x)
+        * step(cardBodyRectMin.y, surfaceUV.y)
+        * step(surfaceUV.x, cardBodyRectMax.x)
+        * step(surfaceUV.y, cardBodyRectMax.y);
+
+    float normalFaceAmount = step(faceSwitchProgress, progress);
+    float safeCrossFadeWidth = max(reducedCrossFadeEnd - reducedCrossFadeStart, 0.0001);
+    float reducedFaceAmount = smoothstep(
+        reducedCrossFadeStart,
+        reducedCrossFadeStart + safeCrossFadeWidth,
+        progress);
+    faceAmount = lerp(normalFaceAmount, reducedFaceAmount, saturate(reducedMotion));
+
+    float pulseWidth = max(0.035, safeCrossFadeWidth * 0.35);
+    edgePulse = 1.0 - saturate(abs(progress - faceSwitchProgress) / pulseWidth);
+    edgePulse *= 1.0 - saturate(reducedMotion);
+}

@@ -1,0 +1,109 @@
+import "Shared/WacomFirstPersonCardSurface.dsh";
+import "Shared/WacomFirstPersonCardDrawReveal.dsh";
+
+Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_DrawReveal")
+{
+    Properties = {
+        TextureSampleParameter2D Texture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="第一人称抽牌翻面|Retainer"; SortPriority=0; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+        TextureSampleParameter2D CardBackTexture = Path(Game, "/Wacom/UI/Card/SurfaceEffects/T_FPCardDrawBack_Temporary") [ Group="第一人称抽牌翻面|材质实例"; SortPriority=1; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+
+        ScalarParameter TiltX = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=10; ];
+        ScalarParameter TiltY = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=11; ];
+        ScalarParameter PerspectiveStrength = 0.12 [ Group="第一人称抽牌翻面|运行时"; SortPriority=12; ];
+        ScalarParameter ContactShadowEnabled = 1.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=13; ];
+        ScalarParameter ContactShadowLift = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=14; ];
+        ScalarParameter ContactShadowTiltOffsetXUV = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=15; ];
+        ScalarParameter ContactShadowTiltOffsetYUV = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=16; ];
+        ScalarParameter ContactShadowOpacityMultiplier = 1.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=17; ];
+        ScalarParameter DrawRevealEnabled = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=20; ];
+        ScalarParameter DrawRevealProgress = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=21; ];
+        ScalarParameter DrawRevealReducedMotion = 0.0 [ Group="第一人称抽牌翻面|运行时"; SortPriority=22; ];
+        ScalarParameter DrawRevealBackHoldEnd = 0.45 [ Group="第一人称抽牌翻面|运行时"; SortPriority=23; ];
+        ScalarParameter DrawRevealFaceSwitch = 0.615 [ Group="第一人称抽牌翻面|运行时"; SortPriority=24; ];
+        ScalarParameter DrawRevealFaceExpandEnd = 0.78 [ Group="第一人称抽牌翻面|运行时"; SortPriority=25; ];
+        ScalarParameter DrawRevealReducedCrossFadeStart = 0.55 [ Group="第一人称抽牌翻面|运行时"; SortPriority=26; ];
+        ScalarParameter DrawRevealReducedCrossFadeEnd = 0.75 [ Group="第一人称抽牌翻面|运行时"; SortPriority=27; ];
+        VectorParameter DrawRevealCardBodyRectMin = float4(0.105263, 0.092308, 0.0, 0.0) [ Group="第一人称抽牌翻面|运行时"; SortPriority=28; ];
+        VectorParameter DrawRevealCardBodyRectMax = float4(0.894737, 0.907692, 0.0, 0.0) [ Group="第一人称抽牌翻面|运行时"; SortPriority=29; ];
+        VectorParameter SurfaceInvSize = float4(0.002193, 0.001923, 0.0, 0.0) [ Group="第一人称抽牌翻面|运行时"; SortPriority=30; ];
+
+        VectorParameter DrawRevealBleedColor = float4(0.035, 0.055, 0.13, 1.0) [ Group="第一人称抽牌翻面|材质实例"; SortPriority=40; ];
+        VectorParameter DrawRevealEdgeColor = float4(0.72, 0.88, 1.0, 1.0) [ Group="第一人称抽牌翻面|材质实例"; SortPriority=41; ];
+        ScalarParameter DrawRevealEdgeBrightness = 1.25 [ Group="第一人称抽牌翻面|材质实例"; SortPriority=42; ];
+
+        ScalarParameter ReferenceTiltDegrees = 9.0 [ Group="第一人称抽牌翻面|投影制作"; SortPriority=50; ];
+        ScalarParameter ForeshortenStrength = 0.025 [ Group="第一人称抽牌翻面|投影制作"; SortPriority=51; ];
+        ScalarParameter EdgeFadeUV = 0.0025 [ Group="第一人称抽牌翻面|投影制作"; SortPriority=52; ];
+        VectorParameter ContactShadowColor = float4(0.008, 0.006, 0.004, 1.0) [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=60; ];
+        ScalarParameter ContactShadowBaseOffsetXUV = 0.0 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=61; ];
+        ScalarParameter ContactShadowBaseOffsetYUV = 0.0039 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=62; ];
+        ScalarParameter ContactShadowLiftOffsetXUV = 0.0 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=63; ];
+        ScalarParameter ContactShadowLiftOffsetYUV = 0.0100 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=64; ];
+        ScalarParameter ContactShadowBaseSoftnessUV = 0.0025 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=65; ];
+        ScalarParameter ContactShadowLiftSoftnessUV = 0.0065 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=66; ];
+        ScalarParameter ContactShadowBaseOpacity = 0.22 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=67; ];
+        ScalarParameter ContactShadowLiftOpacity = 0.09 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=68; ];
+        ScalarParameter ContactShadowAlphaThreshold = 0.18 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=69; ];
+        ScalarParameter ContactShadowAlphaFeather = 0.12 [ Group="第一人称抽牌翻面|阴影制作"; SortPriority=70; ];
+    }
+
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "PremultipliedAlpha"; TwoSided = true; }
+    Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 projectedUVAndMask;
+        WacomFirstPersonCard_ProjectSurface(uv, TiltX, TiltY, PerspectiveStrength, ReferenceTiltDegrees, ForeshortenStrength, EdgeFadeUV, projectedUVAndMask);
+        float2 projectedUV = UE.Expression(Class="ComponentMask", OutputType="float2", Input=projectedUVAndMask, R=true, G=true, B=false, A=false);
+        float insideMask = UE.Expression(Class="ComponentMask", OutputType="float1", Input=projectedUVAndMask, R=false, G=false, B=true, A=false);
+        float4 surface = Texture(Coordinates=projectedUV);
+        float3 surfaceColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=surface, R=true, G=true, B=true, A=false);
+        float surfaceAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=surface, R=false, G=false, B=false, A=true);
+        float2 bodyRectMin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=DrawRevealCardBodyRectMin, R=true, G=true, B=false, A=false);
+        float2 bodyRectMax = UE.Expression(Class="ComponentMask", OutputType="float2", Input=DrawRevealCardBodyRectMax, R=true, G=true, B=false, A=false);
+
+        float2 cardBackUV;
+        float cardBodyMask;
+        float faceAmount;
+        float edgePulse;
+        WacomFirstPersonCard_ComputeDrawReveal(projectedUV, bodyRectMin, bodyRectMax, DrawRevealProgress, DrawRevealFaceSwitch, DrawRevealReducedMotion, DrawRevealReducedCrossFadeStart, DrawRevealReducedCrossFadeEnd, cardBackUV, cardBodyMask, faceAmount, edgePulse);
+        float4 backSurface = CardBackTexture(Coordinates=cardBackUV);
+        float3 backSurfaceColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=backSurface, R=true, G=true, B=true, A=false);
+        float3 bleedColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=DrawRevealBleedColor, R=true, G=true, B=true, A=false);
+        float3 edgeColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=DrawRevealEdgeColor, R=true, G=true, B=true, A=false);
+        float3 backColor = lerp(bleedColor, backSurfaceColor, cardBodyMask);
+        float enabled = saturate(DrawRevealEnabled);
+        float revealFaceAmount = lerp(1.0, faceAmount, enabled);
+        float3 cardColor = lerp(backColor * surfaceAlpha, surfaceColor, revealFaceAmount) * insideMask;
+        float cardAlpha = surfaceAlpha * insideMask;
+        float flashMask = edgePulse * surfaceAlpha * insideMask * enabled;
+
+        float safeLift = clamp(ContactShadowLift, 0.0, 1.0);
+        float2 shadowOffset;
+        WacomFirstPersonCard_ResolveContactShadowOffset(safeLift, ContactShadowBaseOffsetXUV, ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetXUV, ContactShadowLiftOffsetYUV, ContactShadowTiltOffsetXUV, ContactShadowTiltOffsetYUV, shadowOffset);
+        float shadowSoftness = lerp(ContactShadowBaseSoftnessUV, ContactShadowLiftSoftnessUV, safeLift);
+        float2 shadowUV = projectedUV - shadowOffset;
+        float2 sx = float2(shadowSoftness, 0.0);
+        float2 sy = float2(0.0, shadowSoftness);
+        float4 c0 = Texture(Coordinates=shadowUV); float4 c1 = Texture(Coordinates=shadowUV-sx); float4 c2 = Texture(Coordinates=shadowUV+sx);
+        float4 c3 = Texture(Coordinates=shadowUV-sy); float4 c4 = Texture(Coordinates=shadowUV+sy); float4 c5 = Texture(Coordinates=shadowUV-sx-sy);
+        float4 c6 = Texture(Coordinates=shadowUV+sx-sy); float4 c7 = Texture(Coordinates=shadowUV-sx+sy); float4 c8 = Texture(Coordinates=shadowUV+sx+sy);
+        float a0 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c0, R=false,G=false,B=false,A=true);
+        float a1 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c1, R=false,G=false,B=false,A=true);
+        float a2 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c2, R=false,G=false,B=false,A=true);
+        float a3 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c3, R=false,G=false,B=false,A=true);
+        float a4 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c4, R=false,G=false,B=false,A=true);
+        float a5 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c5, R=false,G=false,B=false,A=true);
+        float a6 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c6, R=false,G=false,B=false,A=true);
+        float a7 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c7, R=false,G=false,B=false,A=true);
+        float a8 = UE.Expression(Class="ComponentMask", OutputType="float1", Input=c8, R=false,G=false,B=false,A=true);
+        float shadowMask;
+        WacomFirstPersonCard_CombineContactShadowAlpha(a0,a1,a2,a3,a4,a5,a6,a7,a8,ContactShadowAlphaThreshold,ContactShadowAlphaFeather,shadowMask);
+        float3 shadowColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ContactShadowColor, R=true,G=true,B=true,A=false);
+        float shadowOpacity = lerp(ContactShadowBaseOpacity, ContactShadowLiftOpacity, safeLift) * max(ContactShadowOpacityMultiplier, 0.0);
+        float shadowAlpha = shadowMask * shadowOpacity * clamp(ContactShadowEnabled,0.0,1.0) * insideMask * (1.0-cardAlpha);
+
+        Color = cardColor + edgeColor * flashMask * max(DrawRevealEdgeBrightness, 0.0) + shadowColor * shadowAlpha;
+        Alpha = saturate(cardAlpha + flashMask + shadowAlpha);
+    }
+}

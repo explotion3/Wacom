@@ -18,6 +18,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 #include "UI/Card/WacomFirstPersonCardHandTargetImpactStyle.h"
 #include "UI/Card/WacomFirstPersonCardDataRewriteStyle.h"
+#include "UI/Card/WacomFirstPersonCardDrawRevealStyle.h"
 #include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 #include "UI/Card/WacomFirstPersonCardPileTransferStyle.h"
 #include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
@@ -94,6 +95,7 @@ struct FWacomFirstPersonCardPresentationScaleBridge
 		Config.DragPickupLiftPixels *= Scale;
 		Config.DenyFeedbackShakePixels *= Scale;
 		Config.RetainedFeedbackLiftPixels *= Scale;
+		Config.DrawReveal.Style.LandingTranslationYPixels *= Scale;
 
 		// Playback copies this style at launch, so an active transfer keeps its
 		// starting multiplier while later transfers consume the current one.
@@ -344,6 +346,11 @@ namespace
 			Config.DataRewrite.Style.DurationSeconds =
 				Anchor.CardDataRewriteDurationOverrideSeconds;
 		}
+		Config.DrawReveal.bEnabled = Anchor.bEnableCardDrawReveal;
+		Config.DrawReveal.bReducedMotion = Anchor.bReduceCardDrawRevealMotion;
+		Config.DrawReveal.Style = Anchor.CardDrawRevealStyle
+			? Anchor.CardDrawRevealStyle->Style
+			: FWacomFirstPersonCardDrawRevealStyleData();
 		Config.PileTransfer.bEnabled = Anchor.bEnableCardPileTransfer;
 		Config.PileTransfer.bDiscardToPileEnabled = Anchor.bEnableCardDiscardGlyphTransfer;
 		Config.PileTransfer.bReducedMotion = Anchor.bReduceCardPileTransferMotion;
@@ -505,6 +512,7 @@ namespace
 		VisualConfig.PlayedDissolve = Config.PlayedDissolve;
 		VisualConfig.HandTargetImpact = Config.HandTargetImpact;
 		VisualConfig.DataRewrite = Config.DataRewrite;
+		VisualConfig.DrawReveal = Config.DrawReveal;
 		return VisualConfig;
 	}
 
@@ -901,6 +909,19 @@ namespace
 		AddFloat(Config.DataRewrite.Style.RewriteSoundVolumeMultiplier);
 		AddFloat(Config.DataRewrite.Style.RewriteSoundPitchMultiplier);
 		AddFloat(Config.DataRewrite.Style.RewriteSoundPitchVariation);
+		AddBool(Config.DrawReveal.bEnabled);
+		AddBool(Config.DrawReveal.bReducedMotion);
+		Combine(GetTypeHash(Config.DrawReveal.Style.SurfaceEffectMaterialInstance.Get()));
+		AddFloat(Config.DrawReveal.Style.BackHoldEndProgress);
+		AddFloat(Config.DrawReveal.Style.FaceSwitchProgress);
+		AddFloat(Config.DrawReveal.Style.FaceExpandEndProgress);
+		AddFloat(Config.DrawReveal.Style.MinimumHorizontalScale);
+		AddFloat(Config.DrawReveal.Style.LandingStartProgress);
+		AddFloat(Config.DrawReveal.Style.LandingPeakProgress);
+		AddVector(Config.DrawReveal.Style.LandingScale);
+		AddFloat(Config.DrawReveal.Style.LandingTranslationYPixels);
+		AddFloat(Config.DrawReveal.Style.ReducedCrossFadeStartProgress);
+		AddFloat(Config.DrawReveal.Style.ReducedCrossFadeEndProgress);
 		AddBool(Config.PileTransfer.bEnabled);
 		AddBool(Config.PileTransfer.bDiscardToPileEnabled);
 		AddBool(Config.PileTransfer.bReducedMotion);

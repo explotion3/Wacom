@@ -128,7 +128,9 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `13 Card Exhausted Dissolve` | 实际进入 Exhaust 的 PixelAsh / OrderedDither Style、Reduced Motion 与时长覆盖；C++ 旧字段名暂为资产兼容保留 |
 | `14 Card Pile Transfer` | 普通弃牌与洗牌牌印迁移的开关、Style、路径、拖尾、粒子和 Impact 制作参数 |
 | `15 Card Hand Target Impact` | Battle 有效手牌目标的弱刻印预演、成功压印、实体回弹、Reduced Motion 与一次性音效 |
-| `16 Camera Look While UI` | Hover pointer 与 Inspect / Drag view 驱动 Battle / Run 镜头的独立开关、强度倍率与插值速度覆盖 |
+| `16 Card Data Rewrite` | Battle 费用数字的预测呼吸、消散重组、Reduced Motion、时长覆盖与可选音效 |
+| `17 Camera Look While UI` | Hover pointer 与 Inspect / Drag view 驱动 Battle / Run 镜头的独立开关、强度倍率与插值速度覆盖 |
+| `18 Card Draw Reveal` | Battle 真实 Drawn 卡的牌背等待、飞行中翻面、落定反馈和 Reduced Motion |
 | `98 Experimental Surface Effect` | 暂不接入生产 Drag 的像素棱镜 Style / 参数原型；只为未来 CardDataChanged / Upgrade 效果保留 |
 | `99 Debug` | lifecycle 与 gesture diagnostics |
 
@@ -201,6 +203,8 @@ Transition audio 是 first-person card layer 的表现能力，不属于 Battle 
 `CardsDrawn` 事件由 `FWacomBattleHandPresentationController` 转成 Battle hand presentation frame 中的 `Drawn` transition hint。Controller 优先使用 `CardsDrawn.CardInstanceIds` 中的真实抽牌 / 移入手牌普通卡 ID，并且只为这些 ID 中仍存在于最新 `BattleSnapshot.Hand.Cards` 的普通卡生成 hint；同一批可见 hint 会按目标 hand snapshot 的普通手牌槽位从左到右写入连续稳定的 `SequenceIndex / SequenceCount`，被手牌上限立刻弃掉的 ID 不占可见动画序列。旧式或测试手写的 Count-only `CardsDrawn` 事件仍保留兼容 fallback：仅在 `CardInstanceIds` 为空时，才按 baseline snapshot 与 next snapshot 中“新出现的普通卡”分配 Drawn hint，左右手 anchor 不占抽牌预算。Battle hand 不再让普通 snapshot refresh 直接决定“新卡是否可见”：有 pending 事件时必须提交显式 `entries + hints` frame，没有 pending 事件时才是普通 entries refresh；状态刷新、输入解锁刷新或 CommandBar 可用性刷新不会用空 hints 覆盖尚未消费的 Drawn frame。Anchor 把 presentation frame hints 与 legacy hints 分开保存，Layer owner 优先消费 frame hints，消费成功后才交给 `UWacomFirstPersonCardLayerWidget` reconcile。Layer 只消费这些表现语义，不重新推断战斗事件、不读牌堆、不修改 Battle snapshot；如果 battle entry presentation gate 尚未打开，或镜头 staging / viewport 投影导致 slot 暂不可见，Drawn hint 会留在 Anchor runtime source 或 Layer pending set，直到 gate 打开且 slot 可见并真正启动入场，避免卡牌在不可见阶段播放完后直接落位。当前 `Drawn` 入场使用 `06 Transition Motion` 下的专用参数：`DrawnCardEnterDurationSeconds` 控制固定时长播放，`DrawnCardEnterStaggerSeconds` 按 sequence index 做批次错峰，`DrawnCardEnterArcLiftPixels` 叠加抛物线式上扬弧线，`DrawnCardEnterEasePower` 控制入场 ease，`bBlockInteractionDuringDrawnCardEnter` 决定播放期间是否临时禁止 hover / press / drag。播放完成后 SlotWidget 交回普通 slot motion，由 `Layout / Hover / Pending / DragTargetFocus` 等 motion intent 继续接管。
 
 `Drawn / RunHandEntered / Gained / HandAnchorEntered` 的入场音效和 motion profile 一起从 transition hint 解析出来：普通 refresh 只更新目标 slot，不能重播同一张卡的入场音效；slot 在 projection gate 打开前不可见时，音效和入场动画一样推迟到真正启动 playback 的那一帧。
+
+Battle 的真实 `Drawn` 还会在同一个 Enter Playback 上叠加 Draw Reveal；它不拥有第二套计时器或空间轨迹。Slot 在多卡 stagger 等待期先切到牌背，跨过真实 Enter Started 边缘后才消费 Enter 的线性归一化进度：前约 `45%` 保持牌背，约 `45%–61.5%` 横向压到 `0.06`，中点切换正反面，约 `61.5%–78%` 展开正面，最后 `82%–100%` 做一次轻压落定。横向翻面与落定只在 Motion Mixer 局部反馈阶段相乘，不覆盖 Drawn 弧线、扇形角度、目标布局或命中主体；完成、ForceComplete、source clear、身份复用和 teardown 都恢复正面及基础 Surface MID。该能力只接受 `Drawn`，不接受 `RunHandEntered / Gained / HandAnchorEntered`。Simplified Motion 或 Anchor Reduced Motion 时不压缩、不位移，只在 Enter 约 `55%–75%` 从牌背交叉淡化到正面。
 
 Battle 的真实 DrawBatch 额外由 App-private `FWacomBattleDrawPileFeedbackController` 建立 FIFO 表现批次。Frame 提交前，控制器先把 `DrawPileView` 临时恢复到抽牌前数量；每个唯一 `Drawn` 卡牌的 Enter Started 边缘到达时再逐张减数，并使用 `TargetWidgetPosition - StartWidgetPosition` 驱动牌堆沿发牌反方向后坐。最后一张可见卡启动时校准到该批权威 `DrawPileCountAfter`，因此被手牌上限隐藏的卡只影响最终数值，不制造不存在的卡牌脉冲。普通 Snapshot 刷新必须先写权威 pile count、再提交 hand frame；重复启动通知、普通 lifecycle refresh 和已完成 Event Sequence 都不能重复扣数。Presentation 中断、BattleEnd、source clear、teardown 或 force-complete 只恢复权威数量并清理反馈，不补播动作。该控制器只接受 Battle `Drawn`，`RunHandEntered / Gained / HandAnchorEntered` 不触发。
 
