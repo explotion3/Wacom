@@ -136,7 +136,7 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 
 敌人常驻状态阅读已经收敛到敌人 Host 头顶的聚合面板：`AWacomBattleEnemyActor.EnemyPanelWidgetComponent` 承载 `UWacomBattleEnemyPanelWidget`，HUD 只从 `FBattleSnapshot.Enemies` 向场景敌人派发只读 view data。面板内部用 `UWacomBattleEnemyPartEntryWidget` 渲染每个部位的 HP、护盾、先机、意图和状态。普通部位 hover 也复用所属敌人的聚合面板响应；`AWacomBattleEnemyPartActor` / `UWacomBattleEnemyPartPresentationComponent` 不再创建部位级常驻状态 Badge。
 
-场景敌人视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHostSlots + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`；规则敌人列表由 `ABattleTriggerActor.EncounterDefinition` 转换成 `FBattleInitParams.EnemySlots`。新制作应把敌人做成 Host 蓝图 prefab：给 Host 配置 `EnemyDefinition`，执行 `SyncEnemyPartsFromDefinition()` 从定义生成 / 对齐 ChildActorComponent，再摆放各部位的命中与视觉；然后在 Trigger 选好 `EncounterDefinition` 后执行 `SyncSceneEnemyHostSlotsFromEncounter()`，在生成的 `SceneEnemyHostSlots` 中按 `EnemySlotId` 绑定对应 Host。
+场景敌人视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHostSlots + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`；规则敌人列表由 `ABattleTriggerActor.EncounterDefinition` 转换成 `FBattleInitParams.EnemySlots`。新制作应把敌人做成 Host 蓝图 prefab：给 Host 配置 `EnemyDefinition`，在 Host Details 点击“从 EnemyDefinition 同步部位”，由 Editor service 从纯 Authoring Report 的计划生成 / 对齐 ChildActorComponent，再摆放各部位的命中与视觉；然后在 Trigger 选好 `EncounterDefinition` 后执行 `SyncSceneEnemyHostSlotsFromEncounter()`，在生成的 `SceneEnemyHostSlots` 中按 `EnemySlotId` 绑定对应 Host。
 
 Trigger 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并对应 `EncounterDefinition.EnemySlots[].EnemySlotId`。配置 `EncounterDefinition` 的正式 Trigger 必须用 `SceneEnemyHostSlots` 覆盖每个有效 EnemySlotId；缺 Host、漏映射或多余 EnemySlotId 都是编辑器验证错误。进入战斗时 GameMode 把当前 Trigger 的 Host 列表传给 BattleHUD，HUD 只同步当前 Host registry 中扫描到的 PartActor bridge。HUD registry 是 Host 列表，不维护“主 Host”兼容缓存。
 
@@ -161,7 +161,7 @@ Host 整体视觉和 PartActor `VisualLayers` 的生成组件会在构造 / Deta
 
 Details 制作分组按主路径整理：Host 的 `Identity` 配置 `EnemyDefinition / EnemySlotId`，`Authoring` 选择 `HostAuthoringMode` 并提供定义同步 / 非生成刷新按钮，`Presentation|Host Visual` 配普通怪整体 sprite / flipbook，`Presentation|Host Animation` 配语义动画 Style，`Presentation|Badge Layout` 配部位 Badge 错开，`Authoring Status` 显示只读制作诊断和最近同步结果，`Debug Sample` 只放开发样例按钮。PartActor 的 `Identity` 主要填写 `PartSlotId`，`PartId` 由定义同步派生，`Collision` 配置 `HitBoundsExtent`；普通怪 PartActor 可以不配独立视觉，精英 / Boss 正式美术走 `Visual Layers`。PartActor 不再提供旧 StaticMesh 原型可见体入口。
 
-Host 和 PartActor 的 Details `Authoring Status`、debug view 和 summary 使用同一套制作诊断事实。Host `AuthoringState=Ready` 表示 `EnemyDefinition`、子 PartActor、`PartId` 和 `PartSlotId` 对齐；常见异常包括 `MissingEnemyDefinition`、`NoPartActors`、`DuplicatePartSlotIds`、`PartSlotMismatch` 和 `PartDefinitionMismatch`。PartActor `AuthoringState` 会区分 `UsingVisualLayers`、`HitOnly`、`MissingIdentity`、`InvalidHitBounds` 和 `MissingVisualResource`，并通过 `VisualAuthoringMode=VisualLayers / HitOnly / None` 显示当前视觉路径。排查编辑器配置时先看 Details `Authoring Status`；需要完整一行串时再执行 Host / PartActor 的 `LogBattleSceneEnemyDebugSummary()`。
+Host Details 的 `Authoring Report`、Host validator、debug view 和 summary 使用同一个实时纯报告，不再依赖 Actor 上缓存的“当前 Authoring Status”。Host `AuthoringState=Ready` 表示 `EnemyDefinition`、子 PartActor、`PartId` 和 `PartSlotId` 对齐；常见异常包括 `MissingEnemyDefinition`、`NoPartActors`、`DuplicatePartSlotIds`、`PartSlotMismatch` 和 `PartDefinitionMismatch`。报告还显示待新增、待修正、无效定义槽位和 surplus；重复读取报告或运行 `IsDataValid()` 不得改变身份、组件、VisualLayers、Flipbook 播放、topology revision、Last Sync 或 package dirty 状态。PartActor 仍保留自身的制作状态预览，区分 `UsingVisualLayers`、`HitOnly`、`MissingIdentity`、`InvalidHitBounds` 和 `MissingVisualResource`。
 
 Host 整体视觉和 `VisualLayers` 都只属于表现层。Simple Flipbook Host 具备轻量的 Idle / Action / Destroyed 语义播放，但不是通用动画状态机：有效 `EnemyPartActed`（`Count > 0`）串行播放 Action，完成后恢复原 Idle Flipbook、播放速率、循环和 AutoPlay 配置；最新 Snapshot 已确认全部部位破坏时播放 Destroyed，完成后停在最后一帧。播放复用同一个 `UPaperFlipbookComponent`，以 `OnFinishedPlaying` 作为队列 barrier，并用一次性 duration watchdog 防止异常资源永久阻塞；缺 Host、Style 或 Clip 会立即完成请求。
 
@@ -177,13 +177,13 @@ Host 整体视觉和 `VisualLayers` 都只属于表现层。Simple Flipbook Host
 
 `EnemySlotId` 由 Host / Trigger 注入，不在 PartActor 模板里手填。Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对应 `UEnemyPartDefinition::PartId`，`PartSlotId` 必须对应 `UEnemyDefinition.Parts[].PartSlotId`。蛇的正式绑定身份是 `Enemy + Head/Body/Tail`，不是 `Enemy + Snake.Head/Snake.Body/Snake.Tail`。
 
-Host 的 `SyncEnemyPartsFromDefinition()` 是显式、幂等的通用制作入口：仅按 `PartSlotId` 匹配定义，为已有唯一槽位派生 `PartId`，为缺失槽位新增零相对变换、默认 facade 的 PartActor ChildActorComponent。Host Blueprint 模板上的新增部位写入 SCS，因此会出现在 Blueprint 组件树中，并在 Compile / Save / Reload 后保留；关卡 Host 实例上的新增部位只属于该实例，不反向修改来源 Blueprint。它不覆盖已有位置、`HitBoundsExtent`、`ImpactAnchorRelativeLocation` 或 `VisualLayers`；空、未知和重复部位只标记为 surplus，不静默删除；无效定义槽位跳过并进入最近同步报告。它不根据 Actor / 组件名称猜身份，也不进入 runtime Snapshot 路径。正式 prefab 制作应在 Host Blueprint 上执行同步、编译并保存，关卡实例同步只用于实例级特化。
+Host Details 的“从 EnemyDefinition 同步部位”是显式、幂等的通用制作入口。`WacomEditor` 先为全部选中 Host 建立纯报告，再用一次 `FScopedTransaction` 应用计划：仅按 `PartSlotId` 匹配定义，为已有唯一槽位派生 `PartId`，为缺失槽位新增零相对变换、默认 facade 的 PartActor ChildActorComponent。Host Blueprint 模板上的新增部位写入 SCS，并在 Compile / Save / Reload 后保留；关卡 Host 实例上的新增部位是 transactional InstanceComponent，不反向修改来源 Blueprint。同步不覆盖已有位置、`HitBoundsExtent`、`ImpactAnchorRelativeLocation` 或 `VisualLayers`；空、未知和重复部位只标记为 surplus，不静默删除；无效定义槽位跳过并进入 Last Sync。无实际变化时不创建事务、不 dirty package；创建失败明确返回 `ApplyFailed / PartiallyApplied`。Actor 上不再暴露旧 `CallInEditor` 同步函数。
 
-Host 的 `RefreshBattleEnemyPartAuthoringState()` 仍是非生成安全刷新入口：它刷新 Host visual，扫描自身 PartActor，并同步 `EnemySlotId`、Host visual 语境、Badge 诊断和 debug summary。它不会创建 PartActor，也不会自动补齐身份；需要生成或派生时显式执行 `SyncEnemyPartsFromDefinition()`。
+Host 的 `RefreshBattleEnemyPartAuthoringState()` 仍是 Construction / 显式表现刷新入口：它可以刷新 Host visual、扫描 PartActor 并更新 Part 表现状态，但不负责纯报告求值、Validator 或 runtime Snapshot sync。它不会创建 PartActor，也不会自动补齐身份；需要生成或派生时使用 Host Details 的正式同步按钮。
 
 Trigger 正式单蛇配置使用生成资产 `DA_Encounter_SnakeSingle`：`PersistentId` 填关卡唯一值，`EncounterDefinition=DA_Encounter_SnakeSingle`；执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 `SceneEnemyHostSlots[0].EnemySlotId=Enemy`，再把 `SceneEnemyHostSlots[0].SceneEnemyHost` 指向关卡里的 Snake Host 实例。`EncounterDefinition` 正式入口不能缺 Host 映射。
 
-`ConfigureDebugSnakeHostSample()` 是制作开发辅助入口：先在 Host 蓝图中放好 Head / Body / Tail 三个 PartActor，再执行该函数。Host 会扫描运行时子 Actor 和蓝图 ChildActorComponent 的子 Actor 模板，尝试写入上述蛇样例配置。它不自动创建缺失部位，也不创建正式美术资产；普通蛇的正式美术由 Host `Presentation|Host Visual` 配整体图，精英 / Boss 才优先在各 PartActor 配 `VisualLayers`。
+Debug 蛇样例已迁入 Host Details 的 `Advanced Debug` 折叠区，只支持单选 Host，并由 `WacomEditor` 使用独立事务执行。先在 Host 蓝图中放好 Head / Body / Tail 三个 PartActor，再点击“配置 Debug 蛇样例”；该操作扫描 live 子 Actor 和 ChildActor template 并写入样例身份、位置与 badge stagger，不自动创建缺失部位，也不创建正式美术资产。普通蛇的正式美术由 Host `Presentation|Host Visual` 配整体图，精英 / Boss 才优先在各 PartActor 配 `VisualLayers`。
 
 Host 蓝图视口中的 `SnakeHeadPart / SnakeBodyPart / SnakeTailPart` 是 `ChildActorComponent`；关卡 Outliner 会在 Host 实例下显示它们生成出来的 `WacomBattleEnemyPartActor...` 子 Actor，这是正常现象。运行时和摆放校验优先使用这些已生成的真实子 Actor；只有蓝图模板 / CDO 等没有生成实例的场景才读取 ChildActor 模板，避免同一组 Head / Body / Tail 被重复计入 Host registry。
 

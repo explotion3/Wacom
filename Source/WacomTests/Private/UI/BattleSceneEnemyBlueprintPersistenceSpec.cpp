@@ -4,9 +4,11 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
+#include "Authoring/WacomBattleSceneEnemyHostAuthoring.h"
 #include "Components/ChildActorComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Editor.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/SCS_Node.h"
@@ -200,11 +202,26 @@ bool FWacomUIBattleSceneEnemyBlueprintPersistenceSpec::RunTest(
 		return false;
 	}
 	Host->EnemyDefinition = MakeDefinition(*Package);
-	Host->SyncEnemyPartsFromDefinition();
+	TArray<AWacomBattleEnemyActor*> HostsToSync = { Host };
+	FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition(HostsToSync);
 	TestEqual(TEXT("Sync writes three persistent SCS component templates"),
 		GetPartComponentTemplates(*Blueprint).Num(),
 		3);
 	TestTrue(TEXT("SCS templates retain derived Head identity before compile"),
+		HasPartIdentity(*Blueprint, TEXT("Head"), TEXT("Snake.Head")));
+	if (!TestNotNull(TEXT("Editor transaction owner"), GEditor))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Undo removes the generated SCS component batch"),
+		GEditor->UndoTransaction());
+	TestEqual(TEXT("Blueprint SCS is empty after undo"),
+		GetPartComponentTemplates(*Blueprint).Num(), 0);
+	TestTrue(TEXT("Redo restores the generated SCS component batch"),
+		GEditor->RedoTransaction());
+	TestEqual(TEXT("Blueprint SCS restores all generated parts after redo"),
+		GetPartComponentTemplates(*Blueprint).Num(), 3);
+	TestTrue(TEXT("Redo restores derived Head identity"),
 		HasPartIdentity(*Blueprint, TEXT("Head"), TEXT("Snake.Head")));
 
 	const FTransform AuthoredHeadTransform(

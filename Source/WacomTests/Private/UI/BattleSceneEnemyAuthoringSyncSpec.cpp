@@ -4,6 +4,8 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
+#include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
+#include "Authoring/WacomBattleSceneEnemyHostAuthoring.h"
 #include "Components/ChildActorComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -158,6 +160,12 @@ namespace WacomBattleSceneEnemyAuthoringSyncSpec
 		}
 		return false;
 	}
+
+	void SyncPartsFromDefinition(AWacomBattleEnemyActor& Host)
+	{
+		TArray<AWacomBattleEnemyActor*> Hosts = { &Host };
+		FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition(Hosts);
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -198,7 +206,7 @@ bool FWacomUIBattleSceneEnemyAuthoringSyncCreatesAndPreservesSpec::RunTest(
 	Head.Part->VisualLayers = { VisualLayer };
 	UPaperSprite* AuthoredSprite = VisualLayer.Sprite;
 
-	Host->SyncEnemyPartsFromDefinition();
+	SyncPartsFromDefinition(*Host);
 
 	TestEqual(TEXT("Sync applied"),
 		Host->AuthoringLastPartSyncResult,
@@ -263,10 +271,10 @@ bool FWacomUIBattleSceneEnemyAuthoringSyncIdempotentSurplusSpec::RunTest(
 	using namespace WacomBattleSceneEnemyAuthoringSyncSpec;
 	FDefinitionFixture Definition = MakeDefinition();
 	TStrongObjectPtr<AWacomBattleEnemyActor> Host = MakeTemplateHost(*Definition.Enemy);
-	Host->SyncEnemyPartsFromDefinition();
+	SyncPartsFromDefinition(*Host);
 
 	const TArray<UChildActorComponent*> FirstComponents = GetPartComponents(*Host);
-	Host->SyncEnemyPartsFromDefinition();
+	SyncPartsFromDefinition(*Host);
 	const TArray<UChildActorComponent*> SecondComponents = GetPartComponents(*Host);
 	TestEqual(TEXT("Second sync reports no changes"),
 		Host->AuthoringLastPartSyncResult,
@@ -302,7 +310,7 @@ bool FWacomUIBattleSceneEnemyAuthoringSyncIdempotentSurplusSpec::RunTest(
 
 	const FString DuplicateActorName = DuplicateHead.Part->GetName();
 	const FString LegacyActorName = LegacyPart.Part->GetName();
-	Host->SyncEnemyPartsFromDefinition();
+	SyncPartsFromDefinition(*Host);
 
 	TestEqual(TEXT("Surplus-only sync does not rewrite topology"),
 		Host->AuthoringLastPartSyncResult,
@@ -310,16 +318,18 @@ bool FWacomUIBattleSceneEnemyAuthoringSyncIdempotentSurplusSpec::RunTest(
 	TestEqual(TEXT("Surplus components are preserved"),
 		GetPartComponents(*Host).Num(),
 		5);
+	const FWacomBattleSceneEnemyHostAuthoringReport SurplusReport =
+		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
 	TestTrue(TEXT("Duplicate slot is diagnosed"),
-		Host->AuthoringDuplicatePartSlotIds.Contains(TEXT("Head")));
+		SurplusReport.IdentityAudit.DuplicatePartSlotIds.Contains(TEXT("Head")));
 	TestTrue(TEXT("Unknown slot is diagnosed"),
-		Host->AuthoringUnknownPartSlotIds.Contains(TEXT("LegacyWing")));
+		SurplusReport.IdentityAudit.UnknownPartSlotIds.Contains(TEXT("LegacyWing")));
 	TestTrue(TEXT("Duplicate actor is marked surplus"),
-		Host->AuthoringSurplusPartActorNames.Contains(DuplicateActorName));
+		SurplusReport.IdentityAudit.SurplusPartActorNames.Contains(DuplicateActorName));
 	TestTrue(TEXT("Unknown actor is marked surplus"),
-		Host->AuthoringSurplusPartActorNames.Contains(LegacyActorName));
+		SurplusReport.IdentityAudit.SurplusPartActorNames.Contains(LegacyActorName));
 	TestFalse(TEXT("Duplicate topology is not authoring-ready"),
-		Host->bAuthoringReady);
+		SurplusReport.bAuthoringReady);
 	return true;
 }
 
@@ -340,7 +350,7 @@ bool FWacomUIBattleSceneEnemyAuthoringSyncSkipsInvalidDefinitionSlotsSpec::RunTe
 	Definition.Enemy->Parts.Add(MissingDefinition);
 
 	TStrongObjectPtr<AWacomBattleEnemyActor> Host = MakeTemplateHost(*Definition.Enemy);
-	Host->SyncEnemyPartsFromDefinition();
+	SyncPartsFromDefinition(*Host);
 
 	TestEqual(TEXT("Valid slots apply while invalid slots are reported"),
 		Host->AuthoringLastPartSyncResult,

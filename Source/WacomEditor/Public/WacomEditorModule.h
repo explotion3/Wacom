@@ -19,6 +19,8 @@ private:
 
 	void RegisterEditorValidator(UEditorValidatorBase* Validator);
 	void UnregisterEditorValidators();
+	void RegisterDetailsCustomizations();
+	void UnregisterDetailsCustomizations();
 	void RegisterMenus();
 	void ValidateCurrentRunFloor();
 

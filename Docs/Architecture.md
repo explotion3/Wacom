@@ -67,6 +67,7 @@ WacomEditor
   -> WacomCore
   -> WacomData
   -> WacomBattle
+  -> WacomApp
 
 WacomTests
   -> WacomCore
@@ -89,8 +90,14 @@ WacomTests
 | `WacomBattle` | 战斗生命周期、命令结算、手牌区域、卡牌效果、敌方部位行动、Snapshot/Event/ResultPacket | UI 展示、Run 探索、关卡交互 |
 | `WacomRun` | 战斗外状态、背包、压力、经验、商店、探索事件、地图节点生命周期 / 传送 / 跨层 / 行动点规则、战斗结果回传和 SaveGame schema | 单场战斗内规则细节、Spline / 场景 Actor、UI |
 | `WacomApp` | GameMode、PlayerController、世界交互、输入、UI 表现层、Run Floor Scene Descriptor 与场景绑定协调 | 修改 Battle / Run 状态真相 |
-| `WacomEditor` | 内容生成 Commandlet、Data/Scene Validation、开发辅助 | 运行时规则依赖、正式关卡自动覆盖 |
+| `WacomEditor` | 内容生成 Commandlet、Data/Scene Validation、Details 制作入口、Blueprint SCS / 关卡实例组件事务写入、开发辅助 | 运行时规则依赖、Validator 隐式写入、正式关卡自动覆盖 |
 | `WacomTests` | 自动化测试、测试 fixture | 运行时业务逻辑 |
+
+### Scene Enemy Host 制作边界
+
+Scene Enemy Host 使用单向依赖 `WacomEditor -> WacomApp -> WacomData`。`WacomApp` 公开非反射、纯只读的 `FWacomBattleSceneEnemyHostAuthoringReport` 与 evaluator，供 Host validator、debug view、Details 和同步计划共同消费；求值只读取 Host、PartActor、ChildActor template 与 `EnemyDefinition`，不得刷新表现、派生身份、创建组件、调用 `Modify()` 或 dirty package。
+
+所有写操作由 `WacomEditor` 的 `FWacomBattleSceneEnemyHostAuthoring` 独占：Details 的“从 EnemyDefinition 同步部位”按钮显式应用报告中的稳定计划，Blueprint template 写 SCS，关卡实例写 transactional InstanceComponent，多选 Host 共用一次事务。关卡实例使用 runtime-safe `UWacomBattleEnemyPartChildActorComponent` 保存明确派生身份，因为 UE 默认不持久化普通 ChildActorComponent 的 per-instance ChildActor 属性；该组件只在注册、加载或 Undo/Redo 重建 ChildActor 后重放身份，不执行推断、事务或 package 写入。Construction refresh、runtime binding、Snapshot sync 与 Editor authoring mutation 是四条独立路径；运行时模块不依赖 `UnrealEd`、`PropertyEditor` 或 `WacomEditor`。
 
 ### Logical Map Graph 边界
 
@@ -134,8 +141,8 @@ Source/
     Public/ { Actors/, Core/, GameFramework/, Interaction/, UI/ }
     Private/ { Actors/, Core/, GameFramework/, Interaction/, UI/ }
   WacomEditor/
-    Public/ { Validation/ }
-    Private/ { Commandlets/, ContentBuilders/, Validation/ }
+    Public/ { Authoring/, Validation/ }
+    Private/ { Authoring/, Commandlets/, ContentBuilders/, Details/, Validation/ }
   WacomTests/
     Public/ { Fixtures/ }
     Private/ { Fixtures/, Battle/, Run/, UI/ }

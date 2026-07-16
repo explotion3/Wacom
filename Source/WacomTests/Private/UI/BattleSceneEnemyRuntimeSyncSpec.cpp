@@ -288,7 +288,8 @@ bool FWacomUIBattleSceneEnemyTriggerRuntimeBindingSpec::RunTest(
 	HostVisualBefore->Stop();
 	HostVisualBefore->SetPlaybackPosition(0.04f, false);
 	const float PlaybackPositionBefore = HostVisualBefore->GetPlaybackPosition();
-	const FName HostAuthoringStateBefore = SceneEnemy.Host->AuthoringState;
+	const FName HostAuthoringStateBefore =
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView().AuthoringState;
 	const FName PartAuthoringStateBefore = SceneEnemy.Parts[0]->AuthoringState;
 
 	TStrongObjectPtr<ABattleTriggerActor> Trigger(NewObject<ABattleTriggerActor>());
@@ -340,7 +341,7 @@ bool FWacomUIBattleSceneEnemyTriggerRuntimeBindingSpec::RunTest(
 		SceneEnemy.Parts[0]->EnemySlotId,
 		FName(TEXT("WrongBeforeTrigger")));
 	TestEqual(TEXT("Trigger preparation keeps Host authoring status"),
-		SceneEnemy.Host->AuthoringState,
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView().AuthoringState,
 		HostAuthoringStateBefore);
 	TestEqual(TEXT("Trigger preparation keeps Part authoring status"),
 		SceneEnemy.Parts[0]->AuthoringState,

@@ -35,10 +35,5 @@ public class WacomApp : ModuleRules
 			"Slate",
 			"SlateCore"
 		});
-
-		if (Target.bBuildEditor)
-		{
-			PrivateDependencyModuleNames.Add("UnrealEd");
-		}
 	}
 }

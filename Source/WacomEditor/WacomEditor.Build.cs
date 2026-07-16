@@ -38,6 +38,7 @@ public class WacomEditor : ModuleRules
 			"UMGEditor",
 			"CommonUI",
 			"ToolMenus",
+			"PropertyEditor",
 			"DataValidation",
 			"EnhancedInput",
 			"InputCore",

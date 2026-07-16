@@ -256,11 +256,11 @@ namespace WacomBattleSceneEnemyAuthoring
 		return PartOrder;
 	}
 
-	FHostPartIdentityAudit BuildHostPartIdentityAudit(
+	FWacomBattleSceneEnemyHostIdentityAudit BuildHostPartIdentityAudit(
 		const UEnemyDefinition* EnemyDefinition,
 		const TArray<AWacomBattleEnemyPartActor*>& PartActors)
 	{
-		FHostPartIdentityAudit Audit;
+		FWacomBattleSceneEnemyHostIdentityAudit Audit;
 		if (!EnemyDefinition)
 		{
 			Audit.DuplicatePartSlotIds = BuildDuplicateConfiguredPartSlotIds(PartActors);
@@ -343,7 +343,7 @@ namespace WacomBattleSceneEnemyAuthoring
 	FName BuildHostAuthoringStateName(
 		const UEnemyDefinition* EnemyDefinition,
 		int32 PartActorCount,
-		const FHostPartIdentityAudit& Audit)
+		const FWacomBattleSceneEnemyHostIdentityAudit& Audit)
 	{
 		if (!EnemyDefinition)
 		{
@@ -553,10 +553,9 @@ namespace WacomBattleSceneEnemyAuthoring
 			return KeepInvalidResult(Result);
 		}
 
-		EnemyActor.RefreshBattleEnemyPartAuthoringState();
-		const TArray<AWacomBattleEnemyPartActor*> PartActors = EnemyActor.GetBattleEnemyPartActors();
-		const FHostPartIdentityAudit Audit =
-			BuildHostPartIdentityAudit(EnemyActor.EnemyDefinition, PartActors);
+		const FWacomBattleSceneEnemyHostAuthoringReport Report =
+			FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(EnemyActor);
+		const FWacomBattleSceneEnemyHostIdentityAudit& Audit = Report.IdentityAudit;
 		if (!EnemyActor.EnemyDefinition)
 		{
 			Context.AddError(FText::Format(
@@ -566,7 +565,7 @@ namespace WacomBattleSceneEnemyAuthoring
 			Result = EDataValidationResult::Invalid;
 		}
 
-		if (PartActors.Num() == 0)
+		if (Report.PartActorCount == 0)
 		{
 			Context.AddError(FText::Format(
 				LOCTEXT("PlacementNoAttachedParts",
@@ -589,7 +588,7 @@ namespace WacomBattleSceneEnemyAuthoring
 		{
 			Context.AddWarning(FText::Format(
 				LOCTEXT("PlacementPartDefinitionMismatchSlotIds",
-					"BattleEnemy Host 摆放警告：Actor={0} 的这些 PartSlotId 已匹配定义，但 PartId 与对应 PartDefinition.PartId 不一致：{1}。执行 SyncEnemyPartsFromDefinition 可安全派生并修正 PartId。"),
+					"BattleEnemy Host 摆放警告：Actor={0} 的这些 PartSlotId 已匹配定义，但 PartId 与对应 PartDefinition.PartId 不一致：{1}。在 Host Details 执行“从 EnemyDefinition 同步部位”可安全派生并修正 PartId。"),
 				FText::FromString(EnemyActor.GetName()),
 				FText::FromString(JoinNames(Audit.PartDefinitionMismatchSlotIds, TEXT(",")))));
 			Result = KeepInvalidResult(Result);
@@ -609,7 +608,7 @@ namespace WacomBattleSceneEnemyAuthoring
 		{
 			Context.AddWarning(FText::Format(
 				LOCTEXT("PlacementUnknownPartIds",
-					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 下有未在定义中声明的 PartId：{2}。已知 PartSlotId 可通过 SyncEnemyPartsFromDefinition 从 PartDefinition 自动派生。"),
+					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 下有未在定义中声明的 PartId：{2}。已知 PartSlotId 可通过 Host Details 同步操作从 PartDefinition 自动派生。"),
 				FText::FromString(EnemyActor.GetName()),
 				FText::FromString(EnemyActor.EnemyDefinition->GetName()),
 				FText::FromString(JoinNames(Audit.UnknownPartIds, TEXT(",")))));
@@ -642,7 +641,7 @@ namespace WacomBattleSceneEnemyAuthoring
 		{
 			Context.AddWarning(FText::Format(
 				LOCTEXT("PlacementMissingDefinitionPartSlotIds",
-					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 中有未映射到 Host 的 PartSlotId：{2}。执行 SyncEnemyPartsFromDefinition 可自动创建缺失部位；创建前对应槽位无法绑定场景目标。"),
+					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 中有未映射到 Host 的 PartSlotId：{2}。在 Host Details 执行“从 EnemyDefinition 同步部位”可自动创建缺失部位；创建前对应槽位无法绑定场景目标。"),
 				FText::FromString(EnemyActor.GetName()),
 				FText::FromString(EnemyActor.EnemyDefinition->GetName()),
 				FText::FromString(JoinNames(Audit.MissingDefinitionPartSlotIds, TEXT(",")))));
@@ -652,7 +651,7 @@ namespace WacomBattleSceneEnemyAuthoring
 		if (EnemyActor.HostAuthoringMode ==
 			EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual)
 		{
-			if (!EnemyActor.IsHostVisualActive())
+			if (!Report.bUsingHostVisual)
 			{
 				Context.AddWarning(FText::Format(
 					LOCTEXT("PlacementSimpleModeMissingHostVisual",
@@ -663,34 +662,20 @@ namespace WacomBattleSceneEnemyAuthoring
 		}
 		else
 		{
-			TArray<FName> MissingVisualLayerSlotIds;
-			for (const AWacomBattleEnemyPartActor* PartActor : PartActors)
-			{
-				if (PartActor
-					&& PartActor->VisualLayers.IsEmpty()
-					&& !PartActor->GetEffectivePartSlotId().IsNone())
-				{
-					MissingVisualLayerSlotIds.AddUnique(
-						PartActor->GetEffectivePartSlotId());
-				}
-			}
-			if (!MissingVisualLayerSlotIds.IsEmpty())
+			if (!Report.MissingVisualLayerPartSlotIds.IsEmpty())
 			{
 				Context.AddWarning(FText::Format(
 					LOCTEXT("PlacementMultiPartModeMissingVisualLayers",
 						"BattleEnemy Host 摆放警告：Actor={0} 使用 MultiPartVisualLayers 制作模式，但这些部位尚未配置 VisualLayers：{1}。同步不会覆盖已有视觉层。"),
 					FText::FromString(EnemyActor.GetName()),
-					FText::FromString(JoinNames(MissingVisualLayerSlotIds, TEXT(",")))));
+					FText::FromString(JoinNames(
+						Report.MissingVisualLayerPartSlotIds,
+						TEXT(",")))));
 				Result = KeepInvalidResult(Result);
 			}
 		}
 
-		if (EnemyActor.HostAnimationStyle
-			&& (EnemyActor.HostAuthoringMode !=
-					EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
-				|| EnemyActor.HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
-				|| !EnemyActor.HostFlipbook
-				|| !EnemyActor.bHostVisualVisible))
+		if (!Report.bHostAnimationStyleApplicable)
 		{
 			Context.AddWarning(FText::Format(
 				LOCTEXT("PlacementHostAnimationStyleWithoutFlipbookHost",

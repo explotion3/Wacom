@@ -2,10 +2,13 @@
 
 #include "WacomEditorModule.h"
 
+#include "Actors/WacomBattleEnemyActor.h"
+#include "Details/WacomBattleEnemyActorDetails.h"
 #include "Editor.h"
 #include "EditorValidatorSubsystem.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Modules/ModuleManager.h"
+#include "PropertyEditorModule.h"
 #include "ToolMenus.h"
 #include "Validation/WacomCardDefinitionValidator.h"
 #include "Validation/WacomCharacterDefinitionValidator.h"
@@ -66,6 +69,7 @@ namespace
 
 void FWacomEditorModule::StartupModule()
 {
+	RegisterDetailsCustomizations();
 	RegisterEditorValidator(NewObject<UWacomCardDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEncounterDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEnemyBehaviorDefinitionValidator>(GetTransientPackage()));
@@ -92,7 +96,36 @@ void FWacomEditorModule::ShutdownModule()
 	{
 		UToolMenus::UnregisterOwner(WacomEditorToolMenuOwner);
 	}
+	UnregisterDetailsCustomizations();
 	UnregisterEditorValidators();
+}
+
+void FWacomEditorModule::RegisterDetailsCustomizations()
+{
+	FPropertyEditorModule& PropertyEditorModule =
+		FModuleManager::LoadModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
+	PropertyEditorModule.RegisterCustomClassLayout(
+		AWacomBattleEnemyActor::StaticClass()->GetFName(),
+		FOnGetDetailCustomizationInstance::CreateStatic(
+			&FWacomBattleEnemyActorDetails::MakeInstance));
+	PropertyEditorModule.NotifyCustomizationModuleChanged();
+}
+
+void FWacomEditorModule::UnregisterDetailsCustomizations()
+{
+	if (!FModuleManager::Get().IsModuleLoaded(TEXT("PropertyEditor")))
+	{
+		return;
+	}
+
+	FPropertyEditorModule& PropertyEditorModule =
+		FModuleManager::GetModuleChecked<FPropertyEditorModule>(TEXT("PropertyEditor"));
+	PropertyEditorModule.UnregisterCustomClassLayout(
+		AWacomBattleEnemyActor::StaticClass()->GetFName());
+	if (!IsEngineExitRequested() && !GExitPurge)
+	{
+		PropertyEditorModule.NotifyCustomizationModuleChanged();
+	}
 }
 
 void FWacomEditorModule::RegisterMenus()

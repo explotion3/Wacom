@@ -1524,10 +1524,12 @@ bool FWacomUIBattleSceneEnemyHostVisualMakesChildPartsHitOnlySpec::RunTest(const
 	SceneEnemy.Host->RefreshBattleEnemyPartAuthoringState();
 
 	TestTrue(TEXT("Host visual active"), SceneEnemy.Host->IsHostVisualActive());
+	const FWacomBattleSceneEnemyDebugView HostView =
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView();
 	TestEqual(TEXT("Host details visual mode"),
-		SceneEnemy.Host->AuthoringHostVisualMode,
+		HostView.HostVisualMode,
 		FName(TEXT("StaticSprite")));
-	TestTrue(TEXT("Host details using visual"), SceneEnemy.Host->bAuthoringUsingHostVisual);
+	TestTrue(TEXT("Host details using visual"), HostView.bUsingHostVisual);
 
 	for (AWacomBattleEnemyPartActor* PartActor : SceneEnemy.Parts)
 	{
@@ -1719,16 +1721,6 @@ bool FWacomUIBattleSceneEnemyHostVisualBeginPlaySpec::RunTest(const FString& /*P
 	TestEqual(TEXT("Runtime host sprite no collision"),
 		RuntimeHostVisual->GetCollisionEnabled(),
 		ECollisionEnabled::NoCollision);
-	TestEqual(TEXT("BeginPlay does not refresh authoring generated component count"),
-		SceneEnemy.Host->AuthoringGeneratedHostVisualComponentCount,
-		0);
-	TestEqual(TEXT("BeginPlay does not refresh authoring registered component count"),
-		SceneEnemy.Host->AuthoringRegisteredHostVisualComponentCount,
-		0);
-	TestEqual(TEXT("BeginPlay does not refresh authoring visible component count"),
-		SceneEnemy.Host->AuthoringVisibleHostVisualComponentCount,
-		0);
-
 	for (AWacomBattleEnemyPartActor* PartActor : SceneEnemy.Parts)
 	{
 		if (!TestNotNull(TEXT("Part actor"), PartActor))
@@ -2132,6 +2124,7 @@ bool FWacomUIBattleSceneEnemyHostVisualValidationSpec::RunTest(const FString& /*
 	{
 		PartActor->VisualLayers.Reset();
 	}
+	Host->RefreshBattleEnemyPartAuthoringState();
 
 	TArray<FText> Warnings;
 	TArray<FText> Errors;
@@ -2142,7 +2135,9 @@ bool FWacomUIBattleSceneEnemyHostVisualValidationSpec::RunTest(const FString& /*
 	TestFalse(TEXT("Legal hit-only host does not warn about no-art enemy"),
 		WacomBattleSceneEnemyActorSpec::ValidationIssuesContain(Warnings, TEXT("只有命中体")));
 	TestEqual(TEXT("Head is hit-only"), Head->VisualAuthoringMode, FName(TEXT("HitOnly")));
-	TestEqual(TEXT("Host authoring ready"), Host->AuthoringState, FName(TEXT("Ready")));
+	TestEqual(TEXT("Host authoring ready"),
+		Host->GetBattleSceneEnemyDebugView().AuthoringState,
+		FName(TEXT("Ready")));
 
 	Result = WacomBattleSceneEnemyActorSpec::ValidateObjectForTest(Head, Warnings, Errors);
 	TestEqual(TEXT("Hit-only part validation is valid"), Result, EDataValidationResult::Valid);
@@ -2266,21 +2261,6 @@ bool FWacomUIBattleSceneEnemyHostReportsChildPartActorFactsSpec::RunTest(const F
 		View.AttachedPartSlotIds.Contains(TEXT("Test.Part.Head")));
 	TestTrue(TEXT("Default stable scene target includes host slot"),
 		View.StableSceneTargetIds.Contains(TEXT("Enemy.Test.Part.Head")));
-	TestEqual(TEXT("Details host authoring state mirrors debug view"),
-		Host->AuthoringState,
-		View.AuthoringState);
-	TestEqual(TEXT("Details host authoring ready mirrors debug view"),
-		Host->bAuthoringReady,
-		View.bAuthoringReady);
-	TestEqual(TEXT("Details host part count mirrors debug view"),
-		Host->AuthoringPartActorCount,
-		View.AttachedPartActorCount);
-	TestTrue(TEXT("Details host part ids include head"),
-		Host->AuthoringPartIds.Contains(TEXT("Test.Part.Head")));
-	TestTrue(TEXT("Details host stable target includes head"),
-		Host->AuthoringStableSceneTargetIds.Contains(TEXT("Enemy.Test.Part.Head")));
-	TestTrue(TEXT("Details host summary reports count"),
-		Host->AuthoringDebugSummary.Contains(TEXT("PartCount=2")));
 	TestTrue(TEXT("Host summary reports count"),
 		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("PartCount=2")));
 	return true;
@@ -2601,178 +2581,13 @@ bool FWacomUIBattleSceneEnemyHostRefreshDoesNotFillBlankChildActorIdentitySpec::
 
 	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
 	TestEqual(TEXT("Host remains not ready without explicit identities"), View.AuthoringState, FName(TEXT("PartSlotMismatch")));
-	TestFalse(TEXT("Details host stays not ready without explicit identities"), Host->bAuthoringReady);
-	TestFalse(TEXT("Details stable scene target does not invent head"),
-		Host->AuthoringStableSceneTargetIds.Contains(TEXT("Enemy.Head")));
+	TestFalse(TEXT("Host stays not ready without explicit identities"), View.bAuthoringReady);
+	TestFalse(TEXT("Report stable scene target does not invent head"),
+		View.StableSceneTargetIds.Contains(TEXT("Enemy.Head")));
 	TestEqual(TEXT("Head details report missing identity"),
 		Head->AuthoringState,
 		FName(TEXT("MissingIdentity")));
 	TestFalse(TEXT("Head details not ready"), Head->bAuthoringReady);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyHostConfigureDebugSnakeSampleSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostConfigureDebugSnakeSampleUsesExistingHeadBodyTailParts",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyHostConfigureDebugSnakeSampleSpec::RunTest(const FString& /*Parameters*/)
-{
-	UWorld* World = WacomBattleSceneEnemyActorSpec::FindAutomationWorld();
-	if (!TestNotNull(TEXT("Automation world"), World))
-	{
-		return false;
-	}
-
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.ObjectFlags |= RF_Transient;
-	AWacomBattleEnemyActor* Host =
-		World->SpawnActor<AWacomBattleEnemyActor>(
-			AWacomBattleEnemyActor::StaticClass(),
-			FTransform::Identity,
-			SpawnParams);
-	if (!TestNotNull(TEXT("Host"), Host))
-	{
-		return false;
-	}
-	ON_SCOPE_EXIT
-	{
-		if (IsValid(Host))
-		{
-			Host->Destroy();
-		}
-	};
-
-	UChildActorComponent* HeadComponent = NewObject<UChildActorComponent>(Host, TEXT("SnakeHeadPart"));
-	UChildActorComponent* BodyComponent = NewObject<UChildActorComponent>(Host, TEXT("SnakeBodyPart"));
-	UChildActorComponent* TailComponent = NewObject<UChildActorComponent>(Host, TEXT("SnakeTailPart"));
-	if (!TestNotNull(TEXT("Head child component"), HeadComponent)
-		|| !TestNotNull(TEXT("Body child component"), BodyComponent)
-		|| !TestNotNull(TEXT("Tail child component"), TailComponent))
-	{
-		return false;
-	}
-
-	for (UChildActorComponent* ChildComponent : { HeadComponent, BodyComponent, TailComponent })
-	{
-		ChildComponent->SetupAttachment(Host->GetRootComponent());
-		Host->AddInstanceComponent(ChildComponent);
-		ChildComponent->RegisterComponent();
-		ChildComponent->SetChildActorClass(AWacomBattleEnemyPartActor::StaticClass());
-	}
-
-	AWacomBattleEnemyPartActor* Head = Cast<AWacomBattleEnemyPartActor>(HeadComponent->GetChildActor());
-	AWacomBattleEnemyPartActor* Body = Cast<AWacomBattleEnemyPartActor>(BodyComponent->GetChildActor());
-	AWacomBattleEnemyPartActor* Tail = Cast<AWacomBattleEnemyPartActor>(TailComponent->GetChildActor());
-	if (!TestNotNull(TEXT("Head part"), Head)
-		|| !TestNotNull(TEXT("Body part"), Body)
-		|| !TestNotNull(TEXT("Tail part"), Tail))
-	{
-		return false;
-	}
-
-	Host->ConfigureDebugSnakeHostSample();
-
-	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
-	TestEqual(TEXT("Snake sample enemy slot"), View.EnemySlotId, FName(TEXT("Enemy")));
-	TestEqual(TEXT("Snake sample part count"), View.AttachedPartActorCount, 3);
-	TestTrue(TEXT("Snake sample head part id"), View.AttachedPartIds.Contains(TEXT("Snake.Head")));
-	TestTrue(TEXT("Snake sample body part id"), View.AttachedPartIds.Contains(TEXT("Snake.Body")));
-	TestTrue(TEXT("Snake sample tail part id"), View.AttachedPartIds.Contains(TEXT("Snake.Tail")));
-	TestTrue(TEXT("Snake sample head part slot"), View.AttachedPartSlotIds.Contains(TEXT("Head")));
-	TestTrue(TEXT("Snake sample body part slot"), View.AttachedPartSlotIds.Contains(TEXT("Body")));
-	TestTrue(TEXT("Snake sample tail part slot"), View.AttachedPartSlotIds.Contains(TEXT("Tail")));
-	TestTrue(TEXT("Snake sample head stable target"), View.StableSceneTargetIds.Contains(TEXT("Enemy.Head")));
-	TestTrue(TEXT("Snake sample body stable target"), View.StableSceneTargetIds.Contains(TEXT("Enemy.Body")));
-	TestTrue(TEXT("Snake sample tail stable target"), View.StableSceneTargetIds.Contains(TEXT("Enemy.Tail")));
-	TestEqual(TEXT("Snake head part id"), Head->PartId, FName(TEXT("Snake.Head")));
-	TestEqual(TEXT("Snake head part slot"), Head->PartSlotId, FName(TEXT("Head")));
-	TestEqual(TEXT("Snake body part id"), Body->PartId, FName(TEXT("Snake.Body")));
-	TestEqual(TEXT("Snake body part slot"), Body->PartSlotId, FName(TEXT("Body")));
-	TestEqual(TEXT("Snake tail part id"), Tail->PartId, FName(TEXT("Snake.Tail")));
-	TestEqual(TEXT("Snake tail part slot"), Tail->PartSlotId, FName(TEXT("Tail")));
-	TestEqual(TEXT("Snake head local position"), HeadComponent->GetRelativeLocation(), FVector(96.0f, -6.0f, 16.0f));
-	TestEqual(TEXT("Snake body local position"), BodyComponent->GetRelativeLocation(), FVector::ZeroVector);
-	TestEqual(TEXT("Snake tail local position"), TailComponent->GetRelativeLocation(), FVector(-92.0f, 16.0f, -8.0f));
-	TestTrue(TEXT("Snake head badge stagger applied"), Head->GetBadgeLayoutStaggerIndex() != INDEX_NONE);
-	TestTrue(TEXT("Snake body badge stagger applied"), Body->GetBadgeLayoutStaggerIndex() != INDEX_NONE);
-	TestTrue(TEXT("Snake tail badge stagger applied"), Tail->GetBadgeLayoutStaggerIndex() != INDEX_NONE);
-	TestEqual(TEXT("Snake sample missing definition parts"), View.MissingDefinitionPartIds.Num(), 0);
-	TestTrue(TEXT("Snake sample summary reports stable target"),
-		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("StableSceneTargets=[Enemy.Head,Enemy.Body,Enemy.Tail]")));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleSceneEnemyHostConfigureDebugSnakeTemplateSpec,
-	"Wacom.UI.Battle.BattleSceneEnemyActor.BattleSceneEnemyHostConfigureDebugSnakeSampleUpdatesChildActorTemplates",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleSceneEnemyHostConfigureDebugSnakeTemplateSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<AWacomBattleEnemyActor> Host(NewObject<AWacomBattleEnemyActor>(
-		GetTransientPackage(),
-		TEXT("BP_SnakeHost_Debug_CDO"),
-		RF_ArchetypeObject | RF_Transactional));
-	UChildActorComponent* HeadComponent = NewObject<UChildActorComponent>(
-		Host.Get(),
-		TEXT("SnakeHeadPart"),
-		RF_ArchetypeObject | RF_Transactional);
-	UChildActorComponent* BodyComponent = NewObject<UChildActorComponent>(
-		Host.Get(),
-		TEXT("SnakeBodyPart"),
-		RF_ArchetypeObject | RF_Transactional);
-	UChildActorComponent* TailComponent = NewObject<UChildActorComponent>(
-		Host.Get(),
-		TEXT("SnakeTailPart"),
-		RF_ArchetypeObject | RF_Transactional);
-	if (!TestNotNull(TEXT("Head template component"), HeadComponent)
-		|| !TestNotNull(TEXT("Body template component"), BodyComponent)
-		|| !TestNotNull(TEXT("Tail template component"), TailComponent))
-	{
-		return false;
-	}
-
-	for (UChildActorComponent* ChildComponent : { HeadComponent, BodyComponent, TailComponent })
-	{
-		ChildComponent->SetupAttachment(Host->GetRootComponent());
-		Host->AddInstanceComponent(ChildComponent);
-		ChildComponent->SetChildActorClass(AWacomBattleEnemyPartActor::StaticClass());
-	}
-
-	AWacomBattleEnemyPartActor* HeadTemplate =
-		Cast<AWacomBattleEnemyPartActor>(HeadComponent->GetChildActorTemplate());
-	AWacomBattleEnemyPartActor* BodyTemplate =
-		Cast<AWacomBattleEnemyPartActor>(BodyComponent->GetChildActorTemplate());
-	AWacomBattleEnemyPartActor* TailTemplate =
-		Cast<AWacomBattleEnemyPartActor>(TailComponent->GetChildActorTemplate());
-	if (!TestNotNull(TEXT("Head child actor template"), HeadTemplate)
-		|| !TestNotNull(TEXT("Body child actor template"), BodyTemplate)
-		|| !TestNotNull(TEXT("Tail child actor template"), TailTemplate))
-	{
-		return false;
-	}
-
-	Host->ConfigureDebugSnakeHostSample();
-
-	TestEqual(TEXT("Template head part id"), HeadTemplate->PartId, FName(TEXT("Snake.Head")));
-	TestEqual(TEXT("Template head part slot id"), HeadTemplate->PartSlotId, FName(TEXT("Head")));
-	TestEqual(TEXT("Template body part id"), BodyTemplate->PartId, FName(TEXT("Snake.Body")));
-	TestEqual(TEXT("Template body part slot id"), BodyTemplate->PartSlotId, FName(TEXT("Body")));
-	TestEqual(TEXT("Template tail part id"), TailTemplate->PartId, FName(TEXT("Snake.Tail")));
-	TestEqual(TEXT("Template tail part slot id"), TailTemplate->PartSlotId, FName(TEXT("Tail")));
-	TestEqual(TEXT("Template head component location"), HeadComponent->GetRelativeLocation(), FVector(96.0f, -6.0f, 16.0f));
-	TestEqual(TEXT("Template body component location"), BodyComponent->GetRelativeLocation(), FVector::ZeroVector);
-	TestEqual(TEXT("Template tail component location"), TailComponent->GetRelativeLocation(), FVector(-92.0f, 16.0f, -8.0f));
-
-	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
-	TestEqual(TEXT("Template snake sample part count"), View.AttachedPartActorCount, 3);
-	TestTrue(TEXT("Template snake sample stable targets"),
-		View.StableSceneTargetIds.Contains(TEXT("Enemy.Head"))
-		&& View.StableSceneTargetIds.Contains(TEXT("Enemy.Body"))
-		&& View.StableSceneTargetIds.Contains(TEXT("Enemy.Tail")));
-	TestTrue(TEXT("Template snake sample summary includes targets"),
-		Host->GetBattleSceneEnemyDebugSummary().Contains(TEXT("StableSceneTargets=[Enemy.Head,Enemy.Body,Enemy.Tail]")));
 	return true;
 }
 
@@ -2844,8 +2659,7 @@ bool FWacomUIBattleSceneEnemyHostDuplicateChildPartSlotValidationSpec::RunTest(c
 		WacomBattleSceneEnemyActorSpec::ValidationIssuesContain(Errors, TEXT("Claw")));
 	const FWacomBattleSceneEnemyDebugView View = Host->GetBattleSceneEnemyDebugView();
 	TestTrue(TEXT("Debug duplicate child part slot id"), View.DuplicatePartSlotIds.Contains(TEXT("Claw")));
-	TestTrue(TEXT("Details duplicate child part slot id"), Host->AuthoringDuplicatePartSlotIds.Contains(TEXT("Claw")));
-	TestEqual(TEXT("Details duplicate state"), Host->AuthoringState, FName(TEXT("MissingEnemyDefinition")));
+	TestEqual(TEXT("Report duplicate state"), View.AuthoringState, FName(TEXT("MissingEnemyDefinition")));
 	return true;
 }
 
