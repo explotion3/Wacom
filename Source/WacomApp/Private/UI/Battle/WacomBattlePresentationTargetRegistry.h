@@ -36,6 +36,17 @@ public:
 		}
 	}
 
+	void Unregister(const FBattlePartSlotIdentity& TargetPartKey)
+	{
+		for (int32 i = Handlers.Num() - 1; i >= 0; --i)
+		{
+			if (Handlers[i].TargetPartKey == TargetPartKey)
+			{
+				Handlers.RemoveAt(i);
+			}
+		}
+	}
+
 	bool ContainsOwner(const UObject* Owner) const
 	{
 		for (const FEntry& Entry : Handlers)

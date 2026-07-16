@@ -280,6 +280,11 @@ public:
 		return AutomationViewForTest().SceneEnemyPartWorldTargetBridgeCount;
 	}
 
+	int32 GetBattleSceneEnemyTargetRegistryRevisionForTest() const
+	{
+		return AutomationViewForTest().SceneEnemyTargetRegistryRevision;
+	}
+
 	void RefreshFromSnapshotForTest(const FBattleSnapshot& Snapshot)
 	{
 		RefreshFromSnapshot(Snapshot);

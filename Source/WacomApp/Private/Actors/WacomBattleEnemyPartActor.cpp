@@ -69,7 +69,14 @@ AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
 void AWacomBattleEnemyPartActor::BeginPlay()
 {
 	Super::BeginPlay();
-	RefreshAuthoringState();
+	InitializeRuntimePresentationState();
+	NotifyRuntimePartTopologyChanged();
+}
+
+void AWacomBattleEnemyPartActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	NotifyRuntimePartTopologyChanged();
+	Super::EndPlay(EndPlayReason);
 }
 
 void AWacomBattleEnemyPartActor::OnConstruction(const FTransform& Transform)
@@ -80,9 +87,21 @@ void AWacomBattleEnemyPartActor::OnConstruction(const FTransform& Transform)
 
 void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 {
+	RefreshVisualLayers();
+	ApplyRuntimeFacadeAndPresentationState();
+	RefreshAuthoringStatusPreview();
+}
+
+void AWacomBattleEnemyPartActor::InitializeRuntimePresentationState()
+{
+	RefreshVisualLayers();
+	ApplyRuntimeFacadeAndPresentationState();
+}
+
+void AWacomBattleEnemyPartActor::ApplyRuntimeFacadeAndPresentationState()
+{
 	const FName EffectivePartId = GetEffectivePartDefinitionId();
 
-	RefreshVisualLayers();
 	WacomBattleEnemyPartTargetAuthoring::SyncTargetFacade(
 		HitBounds,
 		InteractionTargetComponent,
@@ -131,8 +150,31 @@ void AWacomBattleEnemyPartActor::RefreshAuthoringState()
 		PresentationComponent->SetPredictionWidgetComponent(PredictionWidgetComponent);
 		PresentationComponent->SetBadgeLayoutDebugState(BadgeLayoutStaggerIndex);
 	}
+}
 
-	RefreshAuthoringStatusPreview();
+void AWacomBattleEnemyPartActor::ApplyRuntimeHostContext(
+	FName InEnemySlotId,
+	bool bInHostVisualActive,
+	UWacomBattleEnemyPartImpactStyle* InHostImpactStyle,
+	UWacomBattleEnemyPartTargetPreviewStyle* InHostTargetPreviewStyle,
+	int32 InBadgeStaggerIndex,
+	const FVector& InBadgeStaggerOffset)
+{
+	EnemySlotId = InEnemySlotId;
+	bHostVisualContextActive = bInHostVisualActive;
+	HostImpactStyle = InHostImpactStyle;
+	HostTargetPreviewStyle = InHostTargetPreviewStyle;
+	BadgeLayoutStaggerIndex = InBadgeStaggerIndex;
+	BadgeLayoutStaggerOffset = InBadgeStaggerOffset;
+	ApplyRuntimeFacadeAndPresentationState();
+}
+
+void AWacomBattleEnemyPartActor::NotifyRuntimePartTopologyChanged() const
+{
+	if (AWacomBattleEnemyActor* Host = Cast<AWacomBattleEnemyActor>(GetAttachParentActor()))
+	{
+		Host->InvalidateRuntimePartTopology();
+	}
 }
 
 void AWacomBattleEnemyPartActor::RefreshVisualLayers()

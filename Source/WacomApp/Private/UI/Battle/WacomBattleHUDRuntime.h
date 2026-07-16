@@ -252,6 +252,7 @@ public:
 		const FBattlePartSlotIdentity& TargetPartKey,
 		UObject* Owner,
 		TFunction<void(const FWacomBattlePresentationTargetCue&)> Handler);
+	void UnregisterBattlePresentationTarget(const FBattlePartSlotIdentity& TargetPartKey);
 	void UnregisterBattlePresentationTargetsForOwner(const UObject* Owner);
 	bool IsBattlePresentationTargetRegisteredForOwner(const UObject* Owner) const;
 	void PlayBattlePresentationCue(const FWacomBattlePresentationTargetCue& Cue);

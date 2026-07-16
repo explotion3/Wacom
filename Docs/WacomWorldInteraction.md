@@ -146,6 +146,10 @@ Host 的 `RefreshBattleEnemyPartAuthoringState()` 是安全刷新入口：它刷
 
 BattleHUD scene enemy coordinator 扫描当前 Host registry 时会把每个 PartActor 的 Bridge 与 Presentation 成对缓存：Bridge 用于判断 handle 是否属于当前战斗目标，Presentation 用于注册 BattlePresentation target、播放 cue、显示 targetable affordance、hover probe 和 drag preview。PartActor / Host 的综合 debug summary 可以同时展示 Bridge 绑定事实和 Presentation 表现事实，但这只是 PIE 排查入口，不改变职责边界。
 
+Host registry 建立时执行一次 runtime scene binding：Host 扫描 live PartActor，注入 `EnemySlotId`、Host visual context、默认 Impact/TargetPreview Style 和稳定 Badge stagger；这一入口不重建 Host visual、PartActor `VisualLayers` 或 Authoring Status。PartActor `BeginPlay / EndPlay` 和显式 runtime attach/detach 通过 Host topology revision 标记真实拓扑变化。Coordinator 在普通 Snapshot 中只比较 revision 与弱引用有效性；revision 未变化时不扫描 ChildActor、不重建 registry，也不注销/重注册 Presentation target。
+
+普通 Snapshot 同步只允许更新 Bridge Snapshot binding、InteractionTarget runtime id、Presentation runtime facts、targetable 和 EnemyPanel/hover/prediction/cue 状态。视觉生成仍只属于构造、Details/显式 Authoring 刷新和 runtime 初始化；Host Flipbook 播放进度与 PartActor VisualLayer 组件不能因为 Snapshot 刷新被重置。BattleEnd、source clear、Host/Part 销毁或拓扑 revision 变化会清理旧 Bridge binding 和按稳定部位 identity 注册的 Presentation target，重新进入战斗后再由当前 Host registry 建立新绑定。
+
 Bridge 绑定成功后会把 `PartInstanceId` 写入 `UWacomInteractionTargetComponent.TargetId`，把 `PartId` 写入 `StableTargetId`，并把 `EncounterId / EnemySlotId / PartSlotId` 写入 handle 的 Battle slot identity 字段。First-person world drop 使用完整 handle 提交，Battle validation 会拒绝 runtime id 与 slot identity 不一致的目标。BattleHUD 判断 handle 是否属于当前 scene enemy registry 时只按完整 slot identity 匹配，不再通过 `SourceObject` 反查 Bridge 兜底；`SourceObject` 只保留为命中来源和调试弱引用。
 
 Battle scene target click / probe 的正式实现位于 App-private `FWacomBattleSceneInteractionRouter`。`AWacomPlayerController::TryRouteBattleSceneTargetClick()` 等 public 方法只作为输入 façade 保留，并继续提供 protected trace / flow seam 给自动化测试。Router 通过 cursor trace 命中 Component，经共享 `WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit()` 扫描 `IWacomInteractionTargetProvider` 构建 handle；只有 `TargetKind=World`、`TargetTag=Interaction.Target.Battle.EnemyPart` 且 handle 属于当前 BattleHUD Host registry 时，才转发为 Battle enemy part 点击。

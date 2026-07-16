@@ -240,8 +240,8 @@ void AWacomBattleEnemyActor::BeginPlay()
 	Super::BeginPlay();
 	RefreshHostVisual();
 	RefreshEnemyPanelWidgetComponent();
-	SyncHostIdentityToPartActors();
-	RefreshAuthoringStatusPreview();
+	TArray<AWacomBattleEnemyPartActor*> RuntimePartActors;
+	InitializeRuntimeSceneBinding(RuntimePartActors);
 }
 
 bool AWacomBattleEnemyActor::HasHostVisualResource() const
@@ -438,6 +438,68 @@ void AWacomBattleEnemyActor::SyncHostIdentityToPartActors() const
 			PartActor->SetHostImpactStyle(DefaultImpactStyle);
 			PartActor->SetHostTargetPreviewStyle(DefaultTargetPreviewStyle);
 		}
+	}
+}
+
+void AWacomBattleEnemyActor::InitializeRuntimeSceneBinding(
+	TArray<AWacomBattleEnemyPartActor*>& OutPartActors) const
+{
+	OutPartActors = BuildAttachedBattleEnemyPartActors();
+	OutPartActors.RemoveAll([](const AWacomBattleEnemyPartActor* PartActor)
+	{
+		return !IsValid(PartActor) || PartActor->IsActorBeingDestroyed();
+	});
+
+	TArray<FVector> BadgeOffsets;
+	TArray<int32> BadgeIndices;
+	ApplyRuntimeBadgeLayout(OutPartActors, BadgeOffsets, BadgeIndices);
+
+	const FName EffectiveEnemySlotId = GetEffectiveEnemySlotId();
+	const bool bHostVisualActive = IsHostVisualActive();
+	for (int32 Index = 0; Index < OutPartActors.Num(); ++Index)
+	{
+		if (AWacomBattleEnemyPartActor* PartActor = OutPartActors[Index])
+		{
+			PartActor->ApplyRuntimeHostContext(
+				EffectiveEnemySlotId,
+				bHostVisualActive,
+				DefaultImpactStyle,
+				DefaultTargetPreviewStyle,
+				BadgeIndices[Index],
+				BadgeOffsets[Index]);
+		}
+	}
+}
+
+void AWacomBattleEnemyActor::InvalidateRuntimePartTopology()
+{
+	++RuntimePartTopologyRevision;
+}
+
+void AWacomBattleEnemyActor::ApplyRuntimeBadgeLayout(
+	const TArray<AWacomBattleEnemyPartActor*>& PartActors,
+	TArray<FVector>& OutOffsets,
+	TArray<int32>& OutIndices) const
+{
+	OutOffsets.Init(FVector::ZeroVector, PartActors.Num());
+	OutIndices.Init(INDEX_NONE, PartActors.Num());
+	const float CenterIndex = PartActors.Num() > 0
+		? (static_cast<float>(PartActors.Num() - 1) * 0.5f)
+		: 0.0f;
+
+	if (!bApplyAttachedPartBadgeStagger)
+	{
+		return;
+	}
+
+	for (int32 Index = 0; Index < PartActors.Num(); ++Index)
+	{
+		const float RelativeIndex = static_cast<float>(Index) - CenterIndex;
+		OutOffsets[Index] = FVector(
+			0.0f,
+			RelativeIndex * BadgeStaggerHorizontalStep,
+			FMath::Abs(RelativeIndex) * BadgeStaggerVerticalStep);
+		OutIndices[Index] = Index;
 	}
 }
 

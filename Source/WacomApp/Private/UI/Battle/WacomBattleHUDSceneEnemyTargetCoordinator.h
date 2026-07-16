@@ -51,22 +51,40 @@ public:
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 
 	int32 GetRegisteredBridgeCount() const { return SceneEnemyPartWorldTargets.Num(); }
+	int32 GetRegistryRevision() const { return RegistryRevision; }
 
 private:
+	struct FSceneEnemyHostEntry
+	{
+		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
+		uint32 ObservedTopologyRevision = 0;
+	};
+
 	struct FSceneEnemyPartWorldTargetEntry
 	{
 		TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> Bridge;
 		TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> Presentation;
+		FBattlePartSlotIdentity RegisteredTargetIdentity;
+		bool bPresentationTargetRegistered = false;
 	};
 
 	FWacomBattleHUDRuntime& Runtime;
-	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> SceneEnemyHosts;
+	TArray<FSceneEnemyHostEntry> SceneEnemyHosts;
 	TArray<FSceneEnemyPartWorldTargetEntry> SceneEnemyPartWorldTargets;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> HoveredPresentation;
 	TWeakObjectPtr<AWacomBattleEnemyActor> HoveredEnemyHost;
 	FWacomInteractionTargetHandle HoveredHandle;
 	float HoverProbeElapsedSeconds = 0.0f;
+	int32 RegistryRevision = 0;
 
+	bool HasSameSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts) const;
+	bool IsRegistryTopologyCurrent() const;
+	void ClearRegistryEntries(FName Reason);
+	void ClearPresentationTargetRegistration(FSceneEnemyPartWorldTargetEntry& Entry);
+	void EnsurePresentationTargetRegistration(
+		FSceneEnemyPartWorldTargetEntry& Entry,
+		UWacomBattleEnemyPartPresentationComponent& Presentation,
+		const FBattlePartSlotIdentity& TargetIdentity);
 	bool TryBuildHoverTargetPreviewContext(
 		const FWacomInteractionTargetHandle& TargetHandle,
 		FBattleSnapshot& OutSnapshot,

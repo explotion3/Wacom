@@ -199,6 +199,10 @@ Niagara Graph 的项目真源是现有 System 资产加 WacomEditor-only 生成�
 
 BattleHUD scene enemy coordinator 成对缓存 Bridge 和 Presentation：target handle 解析走 Bridge，表现 target 注册和反馈走 Presentation。target handle 必须携带完整 `EncounterId + EnemySlotId + PartSlotId` 才能命中当前 registry；`SourceObject` 即使指向当前 PartActor，也不会替代或修正错误 key。Host / PartActor debug summary 会合并两者事实用于 PIE 排查，但 passive UI 和 BattleSession 不依赖这个合并 debug。
 
+Scene enemy 生命周期分为三条路径。构造、Details 修改和显式 Authoring 刷新可以重建 Host visual、PartActor `VisualLayers`、扫描 ChildActor 并更新制作诊断；Host/Part `BeginPlay` 或 HUD Host registry 变化时执行一次 runtime scene binding，注入 EnemySlotId、Host Style、视觉语境和稳定 Badge stagger；普通 `FBattleSnapshot` 刷新只更新 Bridge runtime facts、EnemyPanel view data、targetable、hover、prediction、drag preview 和 cue 状态。普通 Snapshot 不调用 Host/Part Authoring refresh，不重建 PaperSprite/PaperFlipbook，也不重扫 Actor 层级。
+
+`FWacomBattleHUDSceneEnemyTargetCoordinator` 只在 Host 集合变化、Host runtime topology revision 变化或已有 Host/Part 弱引用失效时重建 target registry。稳定拓扑下 Bridge/Presentation entry 和按 `EncounterId + EnemySlotId + PartSlotId` 注册的 BattlePresentation target 保持不变；BattleEnd、Session/source clear、Host/Part 销毁或真正拓扑变化时才注销并清理。运行时不得通过 Tick 轮询 Actor 层级；显式动态 attach/detach live PartActor 的调用方必须通知 Host topology 失效。
+
 BattleHUD 不再构建或绑定敌方 2D fallback；点击、hover、drag target handle 全部通过当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge 完成。`EncounterDefinition` 正式入口缺 Host 会被编辑器验证阻止。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 ## §7 First-person Battle Hand
 

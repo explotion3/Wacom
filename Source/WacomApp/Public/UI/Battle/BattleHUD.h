@@ -159,6 +159,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 {
 	int32 PresentationTargetCount = 0;
 	int32 SceneEnemyPartWorldTargetBridgeCount = 0;
+	int32 SceneEnemyTargetRegistryRevision = 0;
 	const TArray<FWacomBattlePresentationStackEntryView>* PresentationStackEntries = nullptr;
 	const TArray<FWacomBattleCombatLogBlockView>* CombatLogHistory = nullptr;
 	bool bPresentationPlanActive = false;

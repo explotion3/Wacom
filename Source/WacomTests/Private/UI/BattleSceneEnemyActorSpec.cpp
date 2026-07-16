@@ -1715,15 +1715,15 @@ bool FWacomUIBattleSceneEnemyHostVisualBeginPlaySpec::RunTest(const FString& /*P
 	TestEqual(TEXT("Runtime host sprite no collision"),
 		RuntimeHostVisual->GetCollisionEnabled(),
 		ECollisionEnabled::NoCollision);
-	TestEqual(TEXT("Host details generated component count after BeginPlay"),
+	TestEqual(TEXT("BeginPlay does not refresh authoring generated component count"),
 		SceneEnemy.Host->AuthoringGeneratedHostVisualComponentCount,
-		1);
-	TestEqual(TEXT("Host details registered component count after BeginPlay"),
+		0);
+	TestEqual(TEXT("BeginPlay does not refresh authoring registered component count"),
 		SceneEnemy.Host->AuthoringRegisteredHostVisualComponentCount,
-		1);
-	TestEqual(TEXT("Host details visible component count after BeginPlay"),
+		0);
+	TestEqual(TEXT("BeginPlay does not refresh authoring visible component count"),
 		SceneEnemy.Host->AuthoringVisibleHostVisualComponentCount,
-		1);
+		0);
 
 	for (AWacomBattleEnemyPartActor* PartActor : SceneEnemy.Parts)
 	{

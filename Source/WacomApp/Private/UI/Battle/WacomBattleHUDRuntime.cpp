@@ -944,6 +944,15 @@ void FWacomBattleHUDRuntime::RegisterBattlePresentationTarget(
 	GetBattlePresentationTargetRegistry().Register(TargetPartKey, Owner, MoveTemp(Handler));
 }
 
+void FWacomBattleHUDRuntime::UnregisterBattlePresentationTarget(
+	const FBattlePartSlotIdentity& TargetPartKey)
+{
+	if (BattlePresentationTargetRegistry)
+	{
+		BattlePresentationTargetRegistry->Unregister(TargetPartKey);
+	}
+}
+
 void FWacomBattleHUDRuntime::UnregisterBattlePresentationTargetsForOwner(const UObject* Owner)
 {
 	if (BattlePresentationTargetRegistry)
@@ -1052,7 +1061,12 @@ bool FWacomBattleHUDRuntime::IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(
 
 void FWacomBattleHUDRuntime::RebuildBattleSceneEnemyPartWorldTargetRegistry()
 {
-	GetSceneEnemyTargetCoordinator().RebuildRegistry();
+	FWacomBattleHUDSceneEnemyTargetCoordinator& Coordinator = GetSceneEnemyTargetCoordinator();
+	Coordinator.RebuildRegistry();
+	if (UBattleSession* Session = GetSession())
+	{
+		Coordinator.SyncWorldTargets(Session->BuildSnapshot());
+	}
 }
 
 bool FWacomBattleHUDRuntime::IsBattleSceneEnemyPartBridgeInCurrentRegistry(
@@ -1408,6 +1422,7 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 	FWacomBattleHUDAutomationTestView View;
 	View.PresentationTargetCount = BattlePresentationTargetRegistry ? BattlePresentationTargetRegistry->Num() : 0;
 	View.SceneEnemyPartWorldTargetBridgeCount = GetSceneEnemyTargetCoordinator().GetRegisteredBridgeCount();
+	View.SceneEnemyTargetRegistryRevision = GetSceneEnemyTargetCoordinator().GetRegistryRevision();
 	View.PresentationStackEntries = PresentationCoordinator ? &PresentationCoordinator->GetStackEntries() : &EmptyEntries;
 	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;
 	View.bHasLastBattleSnapshot = bHasLastBattleSnapshot;

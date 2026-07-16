@@ -498,9 +498,22 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 
 private:
+	friend class AWacomBattleEnemyActor;
+
+	void InitializeRuntimePresentationState();
+	void ApplyRuntimeFacadeAndPresentationState();
+	void ApplyRuntimeHostContext(
+		FName InEnemySlotId,
+		bool bInHostVisualActive,
+		UWacomBattleEnemyPartImpactStyle* InHostImpactStyle,
+		UWacomBattleEnemyPartTargetPreviewStyle* InHostTargetPreviewStyle,
+		int32 InBadgeStaggerIndex,
+		const FVector& InBadgeStaggerOffset);
+	void NotifyRuntimePartTopologyChanged() const;
 	void ConfigureDebugSnakeSample(
 		FName InPartId,
 		FName InPartSlotId,

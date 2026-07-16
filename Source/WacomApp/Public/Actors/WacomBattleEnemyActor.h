@@ -348,6 +348,18 @@ public:
 		meta = (ToolTip = "返回当前 Host 的敌人槽位 ID。正式多敌人身份由 BattleTrigger.SceneEnemyHostSlots 注入；这里不根据 Actor 名称或空值推断。"))
 	FName GetEffectiveEnemySlotId() const;
 
+	/**
+	 * 为 BattleHUD runtime registry 建立一次轻量场景绑定。
+	 * 只扫描 live PartActor 并同步身份、Host 表现语境与 Badge 布局；不重建 Host/Part 视觉或制作状态。
+	 */
+	void InitializeRuntimeSceneBinding(TArray<AWacomBattleEnemyPartActor*>& OutPartActors) const;
+
+	/** 标记 live PartActor 拓扑发生变化；供 PartActor BeginPlay/EndPlay 和显式运行时装配调用。 */
+	void InvalidateRuntimePartTopology();
+
+	/** 返回 runtime PartActor 拓扑版本；普通 Snapshot 只比较版本，不扫描 Actor 层级。 */
+	uint32 GetRuntimePartTopologyRevision() const { return RuntimePartTopologyRevision; }
+
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "按当前 Host 部位顺序刷新状态/预测 Badge 的稳定错开布局。不会自动生成子 Actor。"))
 	void RefreshAttachedPartBadgeLayout() const;
@@ -406,6 +418,10 @@ private:
 	int32 GetVisibleHostVisualComponentCount() const;
 	TArray<AWacomBattleEnemyPartActor*> BuildAttachedBattleEnemyPartActors() const;
 	void SyncHostIdentityToPartActors() const;
+	void ApplyRuntimeBadgeLayout(
+		const TArray<AWacomBattleEnemyPartActor*>& PartActors,
+		TArray<FVector>& OutOffsets,
+		TArray<int32>& OutIndices) const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 根节点。部位 Actor 可附着到本 Actor 下进行分组。"))
@@ -422,4 +438,6 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 整体视觉生成组件。只负责 PaperSprite / PaperFlipbook 生命周期，不参与命中或战斗目标绑定。"))
 	TObjectPtr<UWacomBattleEnemyHostVisualComponent> HostVisualComponent = nullptr;
+
+	uint32 RuntimePartTopologyRevision = 0;
 };
