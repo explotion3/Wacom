@@ -1630,6 +1630,10 @@ bool FWacomUIBattleSceneEnemyHostVisualDoesNotCreateTargetProviderSpec::RunTest(
 	}
 
 	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>(PC));
+	ON_SCOPE_EXIT
+	{
+		HUD->NativeDestructForTest();
+	};
 	HUD->SetOwningPlayerForTest(PC);
 	HUD->SetWorldForTest(World);
 	HUD->SetSession(Session);
