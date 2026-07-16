@@ -5,6 +5,7 @@
 #include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
 #include "Engine/BlueprintGeneratedClass.h"
+#include "Engine/World.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SimpleConstructionScript.h"
 #include "Components/ChildActorComponent.h"
@@ -12,6 +13,7 @@
 #include "Components/WidgetComponent.h"
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
@@ -198,6 +200,127 @@ namespace
 			MarkObjectEditedForBattleEnemyAuthoring(&PartActor);
 			PartActor.SetActorRelativeLocation(Spec.RelativeLocation);
 		}
+	}
+
+	FName BuildEnemyPartComponentBaseName(FName PartSlotId)
+	{
+		FString SanitizedSlotId = PartSlotId.ToString();
+		for (TCHAR& Character : SanitizedSlotId)
+		{
+			if (!FChar::IsAlnum(Character) && Character != TEXT('_'))
+			{
+				Character = TEXT('_');
+			}
+		}
+		if (SanitizedSlotId.IsEmpty())
+		{
+			SanitizedSlotId = TEXT("Part");
+		}
+		return FName(*FString::Printf(TEXT("EnemyPart_%s"), *SanitizedSlotId));
+	}
+
+	bool ApplyDerivedPartIdentity(
+		AWacomBattleEnemyPartActor& PartActor,
+		FName PartSlotId,
+		FName PartId)
+	{
+		if (PartActor.PartSlotId == PartSlotId && PartActor.PartId == PartId)
+		{
+			return false;
+		}
+
+		MarkObjectEditedForBattleEnemyAuthoring(&PartActor);
+		PartActor.PartSlotId = PartSlotId;
+		PartActor.PartId = PartId;
+		PartActor.RefreshAuthoringState();
+		return true;
+	}
+
+	bool ApplyDerivedPartIdentityToAllRepresentations(
+		const AWacomBattleEnemyActor& Host,
+		AWacomBattleEnemyPartActor& PartActor,
+		FName PartSlotId,
+		FName PartId)
+	{
+		TArray<AWacomBattleEnemyPartActor*> Representations = { &PartActor };
+		if (UChildActorComponent* ChildActorComponent =
+			FindChildActorComponentForPart(Host, PartActor))
+		{
+			if (AWacomBattleEnemyPartActor* LivePart =
+				Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActor()))
+			{
+				Representations.AddUnique(LivePart);
+			}
+			if (AWacomBattleEnemyPartActor* TemplatePart =
+				Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActorTemplate()))
+			{
+				Representations.AddUnique(TemplatePart);
+			}
+		}
+
+		bool bChanged = false;
+		for (AWacomBattleEnemyPartActor* Representation : Representations)
+		{
+			if (Representation)
+			{
+				bChanged |= ApplyDerivedPartIdentity(
+					*Representation,
+					PartSlotId,
+					PartId);
+			}
+		}
+		return bChanged;
+	}
+
+	UChildActorComponent* CreateEnemyPartChildActorComponent(
+		AWacomBattleEnemyActor& Host,
+		FName PartSlotId,
+		FName PartId)
+	{
+		EObjectFlags ObjectFlags = RF_Transactional;
+		if (Host.HasAnyFlags(RF_ArchetypeObject))
+		{
+			ObjectFlags |= RF_ArchetypeObject;
+		}
+
+		const FName ComponentName = MakeUniqueObjectName(
+			&Host,
+			UChildActorComponent::StaticClass(),
+			BuildEnemyPartComponentBaseName(PartSlotId));
+		UChildActorComponent* ChildActorComponent = NewObject<UChildActorComponent>(
+			&Host,
+			ComponentName,
+			ObjectFlags);
+		if (!ChildActorComponent)
+		{
+			return nullptr;
+		}
+
+		MarkObjectEditedForBattleEnemyAuthoring(&Host);
+		Host.AddInstanceComponent(ChildActorComponent);
+		ChildActorComponent->SetupAttachment(Host.GetRootComponent());
+		ChildActorComponent->SetRelativeTransform(FTransform::Identity);
+		ChildActorComponent->SetChildActorClass(AWacomBattleEnemyPartActor::StaticClass());
+		MarkObjectEditedForBattleEnemyAuthoring(ChildActorComponent);
+
+		if (AWacomBattleEnemyPartActor* TemplatePart =
+			Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActorTemplate()))
+		{
+			ApplyDerivedPartIdentity(*TemplatePart, PartSlotId, PartId);
+		}
+
+		if (!Host.IsTemplate() && Host.GetWorld())
+		{
+			ChildActorComponent->OnComponentCreated();
+			ChildActorComponent->RegisterComponent();
+		}
+
+		if (AWacomBattleEnemyPartActor* LivePart =
+			Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActor()))
+		{
+			ApplyDerivedPartIdentity(*LivePart, PartSlotId, PartId);
+		}
+		return ChildActorComponent;
 	}
 
 }
@@ -517,6 +640,116 @@ void AWacomBattleEnemyActor::RefreshBattleEnemyPartAuthoringState() const
 	const_cast<AWacomBattleEnemyActor*>(this)->RefreshAuthoringStatusPreview();
 }
 
+void AWacomBattleEnemyActor::SyncEnemyPartsFromDefinition()
+{
+	AuthoringLastAddedPartSlotIds.Reset();
+	AuthoringLastUpdatedPartSlotIds.Reset();
+	AuthoringLastInvalidDefinitionPartSlotIds.Reset();
+
+#if WITH_EDITOR
+	if (const UWorld* World = GetWorld(); World && World->IsGameWorld())
+	{
+		AuthoringLastPartSyncResult = TEXT("EditorOnly");
+		return;
+	}
+
+	if (!EnemyDefinition)
+	{
+		AuthoringLastPartSyncResult = TEXT("MissingEnemyDefinition");
+		RefreshBattleEnemyPartAuthoringState();
+		return;
+	}
+
+	TMap<FName, int32> DefinitionSlotCounts;
+	for (const FEnemyPartSlot& PartSlot : EnemyDefinition->Parts)
+	{
+		if (!PartSlot.PartSlotId.IsNone())
+		{
+			DefinitionSlotCounts.FindOrAdd(PartSlot.PartSlotId) += 1;
+		}
+	}
+
+	TArray<const FEnemyPartSlot*> ValidDefinitionParts;
+	for (const FEnemyPartSlot& PartSlot : EnemyDefinition->Parts)
+	{
+		const int32 SlotCount = DefinitionSlotCounts.FindRef(PartSlot.PartSlotId);
+		if (PartSlot.PartSlotId.IsNone()
+			|| SlotCount != 1
+			|| !PartSlot.PartDef
+			|| PartSlot.PartDef->PartId.IsNone())
+		{
+			AuthoringLastInvalidDefinitionPartSlotIds.AddUnique(PartSlot.PartSlotId);
+			continue;
+		}
+		ValidDefinitionParts.Add(&PartSlot);
+	}
+
+	if (ValidDefinitionParts.IsEmpty())
+	{
+		AuthoringLastPartSyncResult = TEXT("NoValidDefinitionParts");
+		RefreshBattleEnemyPartAuthoringState();
+		return;
+	}
+
+	TMap<FName, AWacomBattleEnemyPartActor*> FirstPartBySlotId;
+	for (AWacomBattleEnemyPartActor* PartActor : GetBattleEnemyPartActors())
+	{
+		if (!PartActor || PartActor->PartSlotId.IsNone())
+		{
+			continue;
+		}
+		FirstPartBySlotId.FindOrAdd(PartActor->PartSlotId, PartActor);
+	}
+
+	bool bChanged = false;
+	bool bAddedPart = false;
+	for (const FEnemyPartSlot* PartSlot : ValidDefinitionParts)
+	{
+		if (!PartSlot || !PartSlot->PartDef)
+		{
+			continue;
+		}
+
+		if (AWacomBattleEnemyPartActor** ExistingPart =
+			FirstPartBySlotId.Find(PartSlot->PartSlotId))
+		{
+			if (*ExistingPart
+				&& ApplyDerivedPartIdentityToAllRepresentations(
+					*this,
+					**ExistingPart,
+					PartSlot->PartSlotId,
+					PartSlot->PartDef->PartId))
+			{
+				bChanged = true;
+				AuthoringLastUpdatedPartSlotIds.Add(PartSlot->PartSlotId);
+			}
+			continue;
+		}
+
+		if (CreateEnemyPartChildActorComponent(
+			*this,
+			PartSlot->PartSlotId,
+			PartSlot->PartDef->PartId))
+		{
+			bChanged = true;
+			bAddedPart = true;
+			AuthoringLastAddedPartSlotIds.Add(PartSlot->PartSlotId);
+		}
+	}
+
+	if (bAddedPart)
+	{
+		InvalidateRuntimePartTopology();
+	}
+	RefreshAttachedPartBadgeLayout();
+	AuthoringLastPartSyncResult = !AuthoringLastInvalidDefinitionPartSlotIds.IsEmpty()
+		? FName(TEXT("AppliedWithInvalidDefinitionSlots"))
+		: (bChanged ? FName(TEXT("Applied")) : FName(TEXT("NoChanges")));
+#else
+	AuthoringLastPartSyncResult = TEXT("EditorOnly");
+#endif
+}
+
 void AWacomBattleEnemyActor::RefreshAttachedPartBadgeLayout() const
 {
 	RefreshBattleEnemyPartAuthoringState();
@@ -633,6 +866,8 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 	View.EnemyDefinitionName = EnemyDefinition ? FName(*EnemyDefinition->GetName()) : NAME_None;
 	View.EnemyId = EnemyDefinition ? EnemyDefinition->EnemyId : NAME_None;
 	View.EnemySlotId = GetEffectiveEnemySlotId();
+	View.AuthoringMode = WacomBattleSceneEnemyAuthoring::GetHostAuthoringModeDebugString(
+		HostAuthoringMode);
 	View.HostVisualMode = GetHostVisualModeDebugName();
 	View.bUsingHostVisual = IsHostVisualActive();
 	View.HostVisualAssetName = GetHostVisualAssetName();
@@ -688,6 +923,8 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 	View.MissingDefinitionPartIds = Audit.MissingDefinitionPartIds;
 	View.MissingDefinitionPartSlotIds = Audit.MissingDefinitionPartSlotIds;
 	View.DuplicatePartSlotIds = Audit.DuplicatePartSlotIds;
+	View.PartDefinitionMismatchSlotIds = Audit.PartDefinitionMismatchSlotIds;
+	View.SurplusPartActorNames = Audit.SurplusPartActorNames;
 	View.AuthoringState = WacomBattleSceneEnemyAuthoring::BuildHostAuthoringStateName(
 		EnemyDefinition,
 		View.AttachedPartActorCount,
@@ -787,6 +1024,8 @@ void AWacomBattleEnemyActor::RefreshAuthoringStatusPreview()
 	AuthoringUnknownPartSlotIds = View.UnknownPartSlotIds;
 	AuthoringMissingDefinitionPartSlotIds = View.MissingDefinitionPartSlotIds;
 	AuthoringDuplicatePartSlotIds = View.DuplicatePartSlotIds;
+	AuthoringPartDefinitionMismatchSlotIds = View.PartDefinitionMismatchSlotIds;
+	AuthoringSurplusPartActorNames = View.SurplusPartActorNames;
 	AuthoringDebugSummary = GetBattleSceneEnemyDebugSummary();
 }
 

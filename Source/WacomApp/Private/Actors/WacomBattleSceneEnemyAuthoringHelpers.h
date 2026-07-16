@@ -18,12 +18,15 @@ namespace WacomBattleSceneEnemyAuthoring
 		TArray<FName> MissingDefinitionPartIds;
 		TArray<FName> MissingDefinitionPartSlotIds;
 		TArray<FName> DuplicatePartSlotIds;
+		TArray<FName> PartDefinitionMismatchSlotIds;
+		TArray<FString> SurplusPartActorNames;
 	};
 
 	bool ShouldValidateHostPlacementActor(const AWacomBattleEnemyActor& EnemyActor);
 	bool ShouldValidatePartPlacementActor(const AWacomBattleEnemyPartActor& PartActor);
 
 	const TCHAR* GetHostVisualModeDebugString(EWacomBattleEnemyHostVisualMode VisualMode);
+	const TCHAR* GetHostAuthoringModeDebugString(EWacomBattleEnemyHostAuthoringMode AuthoringMode);
 	TMap<FName, int32> BuildDefinitionPartOrder(const UEnemyDefinition* EnemyDefinition);
 	FHostPartIdentityAudit BuildHostPartIdentityAudit(
 		const UEnemyDefinition* EnemyDefinition,

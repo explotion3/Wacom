@@ -32,6 +32,13 @@ enum class EWacomBattleEnemyHostVisualMode : uint8
 	Flipbook UMETA(DisplayName = "Flipbook"),
 };
 
+UENUM(BlueprintType)
+enum class EWacomBattleEnemyHostAuthoringMode : uint8
+{
+	SimpleHostVisual UMETA(DisplayName = "Simple Enemy (Host Visual)"),
+	MultiPartVisualLayers UMETA(DisplayName = "Multi-Part / Boss (Part Visual Layers)"),
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 {
@@ -48,6 +55,9 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName EnemySlotId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName AuthoringMode = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
 		meta = (ToolTip = "当前 Host 整体视觉模式：StaticSprite、Flipbook 或 None。整体视觉只影响显示，不参与 HitBounds 命中。"))
@@ -107,6 +117,12 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 	TArray<FName> DuplicatePartSlotIds;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	TArray<FName> PartDefinitionMismatchSlotIds;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	TArray<FString> SurplusPartActorNames;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 BoundPartActorCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
@@ -155,6 +171,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
 		meta = (ToolTip = "Host 默认敌人槽位 ID。单敌人通常为 Enemy；关卡 BattleTrigger.SceneEnemyHostSlots 会在进入战斗前按 Encounter enemy slot 注入或覆盖它。"))
 	FName EnemySlotId = TEXT("Enemy");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Authoring",
+		meta = (ToolTip = "敌人场景制作模式。Simple Enemy 使用 Host 整体视觉并让部位保持 HitOnly；Multi-Part / Boss 使用各 PartActor.VisualLayers。同步入口不会清空或改写任何已有视觉资源。"))
+	EWacomBattleEnemyHostAuthoringMode HostAuthoringMode =
+		EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Impact",
 		meta = (ToolTip = "Host 下所有部位默认使用的世界像素命中特效 Style。单个 PartActor 的 ImpactStyleOverride 优先；为空时仍消费 Cue，但不播放 Niagara。"))
@@ -313,6 +334,30 @@ public:
 	TArray<FName> AuthoringDuplicatePartSlotIds;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "PartSlotId 已匹配 EnemyDefinition，但 PartId 与对应 PartDefinition.PartId 不一致的槽位。执行显式同步会修正 PartId。"))
+	TArray<FName> AuthoringPartDefinitionMismatchSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
+		meta = (ToolTip = "未匹配 EnemyDefinition 的多余 PartActor 名称。包括空 PartSlotId、未知 PartSlotId 和重复占用同一槽位的 Actor；同步不会自动删除。"))
+	TArray<FString> AuthoringSurplusPartActorNames;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status|Last Sync",
+		meta = (ToolTip = "最近一次显式 EnemyDefinition 部位同步结果：NotRun、EditorOnly、MissingEnemyDefinition、NoValidDefinitionParts、NoChanges、Applied 或 AppliedWithInvalidDefinitionSlots。"))
+	FName AuthoringLastPartSyncResult = TEXT("NotRun");
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status|Last Sync",
+		meta = (ToolTip = "最近一次显式同步自动创建的 PartSlotId。新部位使用零相对变换和 PartActor 默认 facade，等待内容人员继续摆放。"))
+	TArray<FName> AuthoringLastAddedPartSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status|Last Sync",
+		meta = (ToolTip = "最近一次显式同步从 EnemyDefinition 派生并修正 PartId 的已有 PartSlotId。"))
+	TArray<FName> AuthoringLastUpdatedPartSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status|Last Sync",
+		meta = (ToolTip = "EnemyDefinition 中 PartSlotId 为空、重复、缺 PartDefinition 或 PartDefinition.PartId 为空的槽位；显式同步不会为这些无效定义生成部位。"))
+	TArray<FName> AuthoringLastInvalidDefinitionPartSlotIds;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "Wacom|Battle|Scene Enemy|Authoring Status",
 		meta = (MultiLine = "true", ToolTip = "当前 Host 的一行诊断摘要缓存。手动执行刷新按钮或修改 Details 后会更新。"))
 	FString AuthoringDebugSummary;
 
@@ -343,6 +388,10 @@ public:
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "刷新当前 Host 子部位 Actor facade。会扫描子部位并注入 EnemySlotId；不会自动生成子 Actor。"))
 	void RefreshBattleEnemyPartAuthoringState() const;
+
+	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
+		meta = (ToolTip = "按 EnemyDefinition.Parts 显式同步 Host 部位：用 PartSlotId 匹配并派生 PartId，自动新增缺失 ChildActorComponent；保留已有位置、HitBounds、ImpactAnchor 和 VisualLayers；多余部位只标记不删除。可重复执行。"))
+	void SyncEnemyPartsFromDefinition();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "返回当前 Host 的敌人槽位 ID。正式多敌人身份由 BattleTrigger.SceneEnemyHostSlots 注入；这里不根据 Actor 名称或空值推断。"))

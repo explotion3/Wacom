@@ -64,6 +64,29 @@ namespace WacomBattleSceneEnemyAuthoring
 			return PartSlotIds;
 		}
 
+		TMap<FName, FName> BuildDefinitionPartIdsBySlotId(
+			const UEnemyDefinition* EnemyDefinition)
+		{
+			TMap<FName, FName> PartIdsBySlotId;
+			if (!EnemyDefinition)
+			{
+				return PartIdsBySlotId;
+			}
+
+			for (const FEnemyPartSlot& PartSlot : EnemyDefinition->Parts)
+			{
+				if (!PartSlot.PartSlotId.IsNone()
+					&& PartSlot.PartDef
+					&& !PartSlot.PartDef->PartId.IsNone())
+				{
+					PartIdsBySlotId.FindOrAdd(
+						PartSlot.PartSlotId,
+						PartSlot.PartDef->PartId);
+				}
+			}
+			return PartIdsBySlotId;
+		}
+
 		TArray<FName> BuildConfiguredPartIds(const TArray<AWacomBattleEnemyPartActor*>& PartActors)
 		{
 			TArray<FName> PartIds;
@@ -201,6 +224,19 @@ namespace WacomBattleSceneEnemyAuthoring
 		}
 	}
 
+	const TCHAR* GetHostAuthoringModeDebugString(
+		EWacomBattleEnemyHostAuthoringMode AuthoringMode)
+	{
+		switch (AuthoringMode)
+		{
+		case EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers:
+			return TEXT("MultiPartVisualLayers");
+		case EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual:
+		default:
+			return TEXT("SimpleHostVisual");
+		}
+	}
+
 	TMap<FName, int32> BuildDefinitionPartOrder(const UEnemyDefinition* EnemyDefinition)
 	{
 		TMap<FName, int32> PartOrder;
@@ -228,6 +264,13 @@ namespace WacomBattleSceneEnemyAuthoring
 		if (!EnemyDefinition)
 		{
 			Audit.DuplicatePartSlotIds = BuildDuplicateConfiguredPartSlotIds(PartActors);
+			for (const AWacomBattleEnemyPartActor* PartActor : PartActors)
+			{
+				if (PartActor)
+				{
+					Audit.SurplusPartActorNames.Add(PartActor->GetName());
+				}
+			}
 			return Audit;
 		}
 
@@ -235,6 +278,8 @@ namespace WacomBattleSceneEnemyAuthoring
 		const TArray<FName> ConfiguredPartSlotIds = BuildConfiguredPartSlotIds(PartActors);
 		const TSet<FName> DefinitionPartIds = BuildDefinitionPartIdSet(EnemyDefinition);
 		const TSet<FName> DefinitionPartSlotIds = BuildDefinitionPartSlotIdSet(EnemyDefinition);
+		const TMap<FName, FName> DefinitionPartIdsBySlotId =
+			BuildDefinitionPartIdsBySlotId(EnemyDefinition);
 
 		for (const FName& PartId : ConfiguredPartIds)
 		{
@@ -268,6 +313,30 @@ namespace WacomBattleSceneEnemyAuthoring
 		}
 
 		Audit.DuplicatePartSlotIds = BuildDuplicateConfiguredPartSlotIds(PartActors);
+		TSet<FName> ClaimedPartSlotIds;
+		for (const AWacomBattleEnemyPartActor* PartActor : PartActors)
+		{
+			if (!PartActor)
+			{
+				continue;
+			}
+
+			const FName PartSlotId = PartActor->GetEffectivePartSlotId();
+			const FName* ExpectedPartId = DefinitionPartIdsBySlotId.Find(PartSlotId);
+			if (PartSlotId.IsNone()
+				|| !ExpectedPartId
+				|| ClaimedPartSlotIds.Contains(PartSlotId))
+			{
+				Audit.SurplusPartActorNames.Add(PartActor->GetName());
+				continue;
+			}
+
+			ClaimedPartSlotIds.Add(PartSlotId);
+			if (PartActor->GetEffectivePartDefinitionId() != *ExpectedPartId)
+			{
+				Audit.PartDefinitionMismatchSlotIds.Add(PartSlotId);
+			}
+		}
 		return Audit;
 	}
 
@@ -292,7 +361,9 @@ namespace WacomBattleSceneEnemyAuthoring
 		{
 			return TEXT("PartSlotMismatch");
 		}
-		if (Audit.UnknownPartIds.Num() > 0 || Audit.MissingDefinitionPartIds.Num() > 0)
+		if (Audit.UnknownPartIds.Num() > 0
+			|| Audit.MissingDefinitionPartIds.Num() > 0
+			|| Audit.PartDefinitionMismatchSlotIds.Num() > 0)
 		{
 			return TEXT("PartDefinitionMismatch");
 		}
@@ -302,11 +373,12 @@ namespace WacomBattleSceneEnemyAuthoring
 	FString FormatHostDebugSummary(const FWacomBattleSceneEnemyDebugView& View)
 	{
 		return FString::Printf(
-			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s HostVisualMode=%s UsingHostVisual=%s HostVisualAsset=%s GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s]}"),
+			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s AuthoringMode=%s HostVisualMode=%s UsingHostVisual=%s HostVisualAsset=%s GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s] PartDefinitionMismatchSlotIds=[%s] SurplusPartActors=[%s]}"),
 			*View.ActorName,
 			*View.EnemyDefinitionName.ToString(),
 			*View.EnemyId.ToString(),
 			*View.EnemySlotId.ToString(),
+			*View.AuthoringMode.ToString(),
 			*View.HostVisualMode.ToString(),
 			View.bUsingHostVisual ? TEXT("true") : TEXT("false"),
 			*View.HostVisualAssetName.ToString(),
@@ -332,7 +404,9 @@ namespace WacomBattleSceneEnemyAuthoring
 			*JoinNames(View.UnknownPartSlotIds, TEXT(",")),
 			*JoinNames(View.MissingDefinitionPartIds, TEXT(",")),
 			*JoinNames(View.MissingDefinitionPartSlotIds, TEXT(",")),
-			*JoinNames(View.DuplicatePartSlotIds, TEXT(",")));
+			*JoinNames(View.DuplicatePartSlotIds, TEXT(",")),
+			*JoinNames(View.PartDefinitionMismatchSlotIds, TEXT(",")),
+			*FString::Join(View.SurplusPartActorNames, TEXT(",")));
 	}
 
 	FName BuildVisualAuthoringModeName(
@@ -498,17 +572,37 @@ namespace WacomBattleSceneEnemyAuthoring
 		{
 			Context.AddError(FText::Format(
 				LOCTEXT("PlacementDuplicatePartSlotIds",
-					"BattleEnemy Host 摆放配置错误：Actor={0} 下有重复 PartSlotId：{1}。"),
+					"BattleEnemy Host 摆放配置错误：Actor={0} 下有重复 PartSlotId：{1}。显式同步会保留重复 Actor 并标记为 surplus，不会静默删除；请人工确认保留项。"),
 				FText::FromString(EnemyActor.GetName()),
 				FText::FromString(JoinNames(Audit.DuplicatePartSlotIds, TEXT(",")))));
 			Result = EDataValidationResult::Invalid;
+		}
+
+		if (Audit.PartDefinitionMismatchSlotIds.Num() > 0)
+		{
+			Context.AddWarning(FText::Format(
+				LOCTEXT("PlacementPartDefinitionMismatchSlotIds",
+					"BattleEnemy Host 摆放警告：Actor={0} 的这些 PartSlotId 已匹配定义，但 PartId 与对应 PartDefinition.PartId 不一致：{1}。执行 SyncEnemyPartsFromDefinition 可安全派生并修正 PartId。"),
+				FText::FromString(EnemyActor.GetName()),
+				FText::FromString(JoinNames(Audit.PartDefinitionMismatchSlotIds, TEXT(",")))));
+			Result = KeepInvalidResult(Result);
+		}
+
+		if (Audit.SurplusPartActorNames.Num() > 0)
+		{
+			Context.AddWarning(FText::Format(
+				LOCTEXT("PlacementSurplusPartActors",
+					"BattleEnemy Host 摆放警告：Actor={0} 有未唯一匹配 EnemyDefinition.PartSlotId 的 surplus PartActor：{1}。显式同步会保留它们，需人工确认后再删除。"),
+				FText::FromString(EnemyActor.GetName()),
+				FText::FromString(FString::Join(Audit.SurplusPartActorNames, TEXT(",")))));
+			Result = KeepInvalidResult(Result);
 		}
 
 		if (EnemyActor.EnemyDefinition && Audit.UnknownPartIds.Num() > 0)
 		{
 			Context.AddWarning(FText::Format(
 				LOCTEXT("PlacementUnknownPartIds",
-					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 下有未在定义中声明的 PartId：{2}。"),
+					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 下有未在定义中声明的 PartId：{2}。已知 PartSlotId 可通过 SyncEnemyPartsFromDefinition 从 PartDefinition 自动派生。"),
 				FText::FromString(EnemyActor.GetName()),
 				FText::FromString(EnemyActor.EnemyDefinition->GetName()),
 				FText::FromString(JoinNames(Audit.UnknownPartIds, TEXT(",")))));
@@ -541,38 +635,45 @@ namespace WacomBattleSceneEnemyAuthoring
 		{
 			Context.AddWarning(FText::Format(
 				LOCTEXT("PlacementMissingDefinitionPartSlotIds",
-					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 中有未映射到 Host 的 PartSlotId：{2}。对应部位无法按 EnemySlotId + PartSlotId 绑定场景目标。"),
+					"BattleEnemy Host 摆放警告：Actor={0} EnemyDefinition={1} 中有未映射到 Host 的 PartSlotId：{2}。执行 SyncEnemyPartsFromDefinition 可自动创建缺失部位；创建前对应槽位无法绑定场景目标。"),
 				FText::FromString(EnemyActor.GetName()),
 				FText::FromString(EnemyActor.EnemyDefinition->GetName()),
 				FText::FromString(JoinNames(Audit.MissingDefinitionPartSlotIds, TEXT(",")))));
 			Result = KeepInvalidResult(Result);
 		}
 
-		if (!EnemyActor.IsHostVisualActive() && PartActors.Num() > 0)
+		if (EnemyActor.HostAuthoringMode ==
+			EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual)
 		{
-			bool bAnyPartHasVisibleResource = false;
-			for (const AWacomBattleEnemyPartActor* PartActor : PartActors)
-			{
-				if (!PartActor)
-				{
-					continue;
-				}
-
-				const FName PartVisualMode =
-					PartActor->GetBattleSceneEnemyPartDebugView().VisualAuthoringMode;
-				if (PartVisualMode == FName(TEXT("VisualLayers")))
-				{
-					bAnyPartHasVisibleResource = true;
-					break;
-				}
-			}
-
-			if (!bAnyPartHasVisibleResource)
+			if (!EnemyActor.IsHostVisualActive())
 			{
 				Context.AddWarning(FText::Format(
-					LOCTEXT("PlacementMissingAnyVisualResource",
-						"BattleEnemy Host 摆放警告：Actor={0} 没有 Host 整体视觉，子 PartActor 也没有 VisualLayers 可见资源；该敌人只有命中体和调试信息可见。"),
+					LOCTEXT("PlacementSimpleModeMissingHostVisual",
+						"BattleEnemy Host 摆放警告：Actor={0} 使用 SimpleHostVisual 制作模式，但没有可见 Host 整体视觉；敌人只有命中体和调试信息可见。"),
 					FText::FromString(EnemyActor.GetName())));
+				Result = KeepInvalidResult(Result);
+			}
+		}
+		else
+		{
+			TArray<FName> MissingVisualLayerSlotIds;
+			for (const AWacomBattleEnemyPartActor* PartActor : PartActors)
+			{
+				if (PartActor
+					&& PartActor->VisualLayers.IsEmpty()
+					&& !PartActor->GetEffectivePartSlotId().IsNone())
+				{
+					MissingVisualLayerSlotIds.AddUnique(
+						PartActor->GetEffectivePartSlotId());
+				}
+			}
+			if (!MissingVisualLayerSlotIds.IsEmpty())
+			{
+				Context.AddWarning(FText::Format(
+					LOCTEXT("PlacementMultiPartModeMissingVisualLayers",
+						"BattleEnemy Host 摆放警告：Actor={0} 使用 MultiPartVisualLayers 制作模式，但这些部位尚未配置 VisualLayers：{1}。同步不会覆盖已有视觉层。"),
+					FText::FromString(EnemyActor.GetName()),
+					FText::FromString(JoinNames(MissingVisualLayerSlotIds, TEXT(",")))));
 				Result = KeepInvalidResult(Result);
 			}
 		}

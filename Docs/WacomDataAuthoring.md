@@ -108,6 +108,8 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 - Card / EnemyPart / Enemy / EnemyBehavior / Character 校验 ID、基础数值、必填引用、数组索引、Gameplay tag 命名空间和当前 battle rule content contract。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量或生成资产路径。
 - Enemy 校验 `PartSlotId` 必填且不重复，并在配置 `DefaultBehavior / BehaviorOverride / InitialIntentSetId` 时检查对应 phase 和 intent set 是否存在。
+- Scene Enemy Host 的制作同步属于 `WacomApp` Actor authoring，不属于 `WacomData` schema 或自动 Validator mutation。内容人员先在 Host 配 `EnemyDefinition`，主要维护稳定 `PartSlotId`，再显式执行 `SyncEnemyPartsFromDefinition()`：唯一匹配槽位的 `PartId` 从 `PartDefinition.PartId` 派生，缺失槽位生成零相对变换的 PartActor ChildActorComponent；已有 transform、`HitBoundsExtent`、`ImpactAnchorRelativeLocation` 和 `VisualLayers` 保留。空、未知或重复槽位只标记 surplus，不自动删除；无效定义槽位跳过并报告。
+- Host validator 继续只读校验并给出修复方向：重复 `PartSlotId` 为错误；缺失槽位、PartId 与槽位定义不一致、surplus 部位以及制作模式缺少对应视觉资源为可定位 warning。Validator 不在扫描资产或 Validate Map 时生成、删除或改写 PartActor。
 - EnemyBehavior 校验 `BehaviorId`、phase、intent set、intent、selector rule、condition、cooldown authoring 和敌人意图 effect contract；可选传入 owning EnemyDefinition 时，会额外校验 `AppliesToPartSlotId / PartDestroyed` 等部位槽引用。
 - Character 会校验 `StarterDeck` 不包含左右手卡。
 - Shop 校验 `ShopId`、`Offers`、Offer 卡牌和非负价格；不校验重复商品、价格平衡或商品池规则。
