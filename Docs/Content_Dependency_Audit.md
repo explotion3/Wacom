@@ -2,7 +2,7 @@
 type: content-audit
 scope: wacom-content
 status: active
-updated: 2026-07-15
+updated: 2026-07-17
 tags:
   - wacom/content
   - wacom/assets
@@ -54,6 +54,21 @@ JSON 使用稳定排序且不写时间戳，包含分类、直接 Wacom 引用�
 当前仍有以下 1 个 DreamMaterials package 在 AssetRegistry 依赖图中存在但本地磁盘没有对应资产，应视为旧生成记录或缺失生成物：
 
 - `/Game/DreamMaterials/M_Card_Step2_Inst`
+
+## TrainingWarrior 正式素材晋升（2026-07-17）
+
+项目所有者于 2026-07-17 明确确认 `/Game/Art/PaperAssets/Party/BattleWarrior` 中本批选用素材可以进入 Git LFS 并随项目发布。正式包只选用 Idle、Attack、Block、Cleave、Downed 五个 Flipbook 及其递归 Sprite / Texture 依赖；Item 动画未迁移。
+
+| 项目 | 路径 / 结果 |
+|---|---|
+| 原始本地目录 | `/Game/Art/PaperAssets/Party/BattleWarrior` |
+| 正式目标 | `/Game/Wacom/Art/Enemies/TrainingWarrior` |
+| 正式闭包 | 5 Flipbook、30 Sprite、1 Texture，共 36 个 package |
+| 语义重命名 | Downed → Destroyed；其余为 Idle / Attack / Block / Cleave |
+| 复制方式 | `IAssetTools::AdvancedCopyPackages`，统一重写内部引用；不做文件系统复制 |
+| 依赖结果 | scoped audit 对 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials` 为 0 |
+
+命令为 `-run=WacomBuildEnemyPack -Pack=TrainingWarrior -PromoteArt`；`-ForceArtRefresh` 仅用于显式重晋升。目标完整时命令跳过复制。正式 DataAsset、Style 与 Host 只引用 `/Game/Wacom`，因此普通 `WacomBuildEnemyPack` 和 `WacomRegenerateContent` 不要求 ignored PaperAssets 存在。本地 Snake/BattleWarrior PIE 脚本继续保留为调试入口，但不再代表正式 TrainingWarrior。
 
 主要直接引用源：
 

@@ -153,6 +153,11 @@ const TCHAR* FWacomGeneratedBattleContentAssets::PoisonFangPath()
 	return TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang.DA_Card_PoisonFang");
 }
 
+const TCHAR* FWacomGeneratedBattleContentAssets::BrokenCleavePath()
+{
+	return TEXT("/Game/Wacom/Data/Cards/Rewards/DA_Card_BrokenCleave.DA_Card_BrokenCleave");
+}
+
 const TCHAR* FWacomGeneratedBattleContentAssets::PoisonNeedlePath()
 {
 	return TEXT("/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_PoisonNeedle.DA_Card_Starter_PoisonNeedle");
@@ -270,6 +275,7 @@ TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::GeneratedDefinitionCard
 		ZhujianRongnangPath(),
 		MuseiYinchongdengPath(),
 		PoisonFangPath(),
+		BrokenCleavePath(),
 		PoisonNeedlePath(),
 		ChitinWardPath(),
 		AntennaSearchPath(),
@@ -445,6 +451,11 @@ UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBadgeAllRuntimeSupporte
 UCardDefinition* FWacomGeneratedBattleContentAssets::LoadPoisonFang(FAutomationTestBase& Test)
 {
 	return LoadCardByPath(PoisonFangPath(), Test);
+}
+
+UCardDefinition* FWacomGeneratedBattleContentAssets::LoadBrokenCleave(FAutomationTestBase& Test)
+{
+	return LoadCardByPath(BrokenCleavePath(), Test);
 }
 
 UCardDefinition* FWacomGeneratedBattleContentAssets::LoadPoisonNeedle(FAutomationTestBase& Test)

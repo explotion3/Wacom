@@ -99,6 +99,8 @@ Scene Enemy Host 使用单向依赖 `WacomEditor -> WacomApp -> WacomData`。`Wa
 
 所有写操作由 `WacomEditor` 的 `FWacomBattleSceneEnemyHostAuthoring` 独占：Details 的“从 EnemyDefinition 同步部位”按钮显式应用报告中的稳定计划，Blueprint template 写 SCS，关卡实例写 transactional InstanceComponent，多选 Host 共用一次事务。关卡实例使用 runtime-safe `UWacomBattleEnemyPartChildActorComponent` 保存明确派生身份，因为 UE 默认不持久化普通 ChildActorComponent 的 per-instance ChildActor 属性；该组件只在注册、加载或 Undo/Redo 重建 ChildActor 后重放身份，不执行推断、事务或 package 写入。Construction refresh、runtime binding、Snapshot sync 与 Editor authoring mutation 是四条独立路径；运行时模块不依赖 `UnrealEd`、`PropertyEditor` 或 `WacomEditor`。
 
+正式敌人内容包同样保持单向写入边界。`WacomEditor` 的 enemy-pack commandlet 可以用 AssetTools 晋升已授权的本地 Paper2D 依赖闭包，并幂等构建 DataAsset、Animation Style 与 Host Blueprint；生成后的 `/Game/Wacom` 资产是运行时唯一依赖。本地 ignored `/Game/Art` 不是运行时 fallback，也不会被 `WacomRegenerateContent` 读取。TrainingWarrior 是该管线的首个实例；`WacomData` schema、`WacomBattle` 规则和 `WacomApp` Host runtime 均未为具体敌人增加分支。
+
 ### Logical Map Graph 边界
 
 Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：

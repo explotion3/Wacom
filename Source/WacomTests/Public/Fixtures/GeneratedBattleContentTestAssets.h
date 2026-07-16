@@ -53,6 +53,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static const TCHAR* BadgeDamageShieldHealCardPath();
 	static const TCHAR* BadgeAllRuntimeSupportedCardPath();
 	static const TCHAR* PoisonFangPath();
+	static const TCHAR* BrokenCleavePath();
 	static const TCHAR* PoisonNeedlePath();
 	static const TCHAR* ChitinWardPath();
 	static const TCHAR* AntennaSearchPath();
@@ -97,6 +98,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static UCardDefinition* LoadBadgeDamageShieldHealCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadBadgeAllRuntimeSupportedCard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadPoisonFang(FAutomationTestBase& Test);
+	static UCardDefinition* LoadBrokenCleave(FAutomationTestBase& Test);
 	static UCardDefinition* LoadPoisonNeedle(FAutomationTestBase& Test);
 	static UCardDefinition* LoadChitinWard(FAutomationTestBase& Test);
 	static UCardDefinition* LoadAntennaSearch(FAutomationTestBase& Test);

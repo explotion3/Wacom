@@ -246,6 +246,10 @@ Selector condition 当前支持 `Always`、自身 HP 阈值、同单位任意部
 
 `FIntentDefinition` 和 `FIntentEffect` 是敌方意图的静态效果描述，只通过 `UEnemyBehaviorDefinition` 进入 Battle 运行时。当前敌人意图字段比卡牌效果更窄；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
 
+首个正式动画敌人内容包是 TrainingWarrior，它只使用上述现有 schema：`EnemyId=Enemy.TrainingWarrior`，单一 `Body` 槽引用 `PartId=TrainingWarrior.Body`，HP 24、经验 3，默认行为 `TrainingWarrior.Behavior`。`Default` phase 的 `TrainingWarrior.Body.Sequence` 固定按 Attack（先机 3、抵抗 4、玩家伤害 4）→ Guard（先机 2、自身护盾 4）→ Cleave（先机 4、抵抗 7、玩家伤害 7）循环。单敌人 Encounter 使用 `EncounterDefinitionId=Encounter.TrainingWarrior.Single` 与 `EnemySlotId=Enemy`。
+
+Body 的 Aid / Destroy 击倒奖励是 `Reward.BrokenCleave`（“残缺横斩”）：White、Weapon、1 费、`TargetMode=AllEnemyParts`，对每个存活敌方部位造成 3 伤害。它没有 Physique、被动、ZoneHook、PerfectRelease 或专用插画；CardView 使用既有 fallback。Withdraw 不获得该卡。
+
 ```cpp
 USTRUCT(BlueprintType)
 struct FIntentDefinition

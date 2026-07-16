@@ -9,6 +9,7 @@
 #include "ContentBuilders/RunEventBuilder.h"
 #include "ContentBuilders/ShopBuilder.h"
 #include "ContentBuilders/SnakeBuilder.h"
+#include "ContentBuilders/TrainingWarriorBuilder.h"
 
 #include "Characters/CharacterDefinition.h"
 #include "Encounters/EncounterDefinition.h"
@@ -46,6 +47,23 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 		return 8;
 	}
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Encounters built"));
+
+	const Wacom::ContentBuilder::FTrainingWarriorBuildResult TrainingWarrior =
+		Wacom::ContentBuilder::BuildTrainingWarriorContent();
+	if (!TrainingWarrior.IsSuccess())
+	{
+		for (const FString& Error : TrainingWarrior.Errors)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomRegenerateContent] TrainingWarrior: %s"), *Error);
+		}
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomRegenerateContent] BuildTrainingWarriorContent failed"));
+		return 9;
+	}
+	UE_LOG(LogTemp, Display,
+		TEXT("[WacomRegenerateContent] TrainingWarrior built (changed=%s)"),
+		TrainingWarrior.bChanged ? TEXT("true") : TEXT("false"));
 
 	UCharacterDefinition* BugGirl = Wacom::ContentBuilder::BuildBugGirlContent();
 	if (!BugGirl)

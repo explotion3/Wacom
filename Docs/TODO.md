@@ -138,10 +138,10 @@ tags:
   - 说明：卡牌注册、六个定位容器、Runtime Location 与顺序已收口到 `CardZoneAggregate`；Effect、EndTurn、HandLimit、奖励和 Companion 统一由 `BattleCardZoneTransition` 消费 typed facts，旧 post-move event API 已删除。
 
 - [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和高级动画状态机**
-  - 状态：`Ready: 美术 / 表现 polish`
+  - 状态：`In Progress: TrainingWarrior 正式内容包已完成，剩余表现 polish`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。Simple Flipbook Host 已具备由 `EnemyPartActed` 和整体破坏驱动的串行 Idle / Action / Destroyed 语义播放；`SetupBattleEnemyHostAnimationPIEAssets.py` 已能从本地 BattleWarrior 素材幂等生成 PIE Style 与复制 Host。语义 Cue 生命周期已收敛为互斥 Playback，每个 PartActor 已提供可调 ImpactAnchor，旧确认、伤害、破坏缩放脉冲已删除。后续追踪正式蛇 Host prefab 美术保存、正式 sprite/flipbook/`UWacomBattleEnemyHostAnimationStyle` 资产、`/Game/Art` 素材授权与 Git LFS/出货接入、材质描边、贴近部位 tooltip、风险动效、MultiPart/PaperZD 高级状态机和 Status Badge 美术替换。
+  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。TrainingWarrior 已作为首个正式包落地：BattleWarrior 的 36 个受控依赖晋升到 `/Game/Wacom` 并由 Git LFS 管理，规则数据、奖励卡、语义 Style、Host prefab 和单敌人 Encounter 均可重复生成。`SetupBattleEnemyHostAnimationPIEAssets.py` 继续只服务本地 Snake 调试。后续追踪材质描边、贴近部位 tooltip、风险动效、部位 Destroyed 反馈、更多敌人包、MultiPart/PaperZD 高级状态机和 Status Badge 美术替换。
 
 - [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
   - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`

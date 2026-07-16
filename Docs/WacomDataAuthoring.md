@@ -23,6 +23,7 @@ tags:
 |---|---|---|
 | DataAsset 字段 | 保存静态配置和内容 ID | 运行时状态、交易记录、UI 状态 |
 | `WacomRegenerateContent` | 重建当前示例 / 调试 DataAsset | 运行时加载入口或策划数据库 |
+| `WacomBuildEnemyPack` | 晋升已授权敌人素材并幂等构建正式敌人包 | 通用文件复制器、运行时加载入口 |
 | Editor Validator | 阻断结构错误和当前规则未接入配置 | 数值平衡、文案质量、剧情合法性校验 |
 | Battle authoring matrix | 说明当前可写入 DataAsset 并能被 resolver 执行的规则组合 | 自动开放所有已声明 Gameplay tag |
 | 自动化测试 | 防止生成资产、validator 和 runtime resolver 漂移 | 正式内容设计审核 |
@@ -45,6 +46,7 @@ Builder 当前职责：
 |---|---|
 | `BuildSnakeContent()` | 蛇敌人、`DA_Behavior_Snake`、三部位、奖励卡 `DA_Card_PoisonFang` |
 | `BuildEncounterContent()` | `DA_Encounter_SnakeSingle`，正式单蛇战斗入口样例 |
+| `BuildTrainingWarriorContent()` | TrainingWarrior 规则数据、奖励卡、语义动画 Style、Host Blueprint 与单敌人 Encounter；只读取正式 `/Game/Wacom` 素材 |
 | `BuildBugGirlContent()` | 虫妹角色、左右手、伙伴初始牌、容器 / 功能卡、starter pack、debug key、卡对卡测试卡、badge 测试卡 |
 | `BuildShopContent()` | `DA_Shop_DebugSnake`，正式调试商品保留原价，测试 / 调试卡统一 0 金币 |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
@@ -52,6 +54,22 @@ Builder 当前职责：
 | `BuildRunWorldCardInteractionDefinitionContent()` | `DA_RunWorldCardInteraction_DebugKeyGold3` |
 
 改 Builder 后应运行 commandlet 落盘资产，并跑对应 `Wacom.Data.*`、`Wacom.Battle.*` 或 Run/UI smoke。Commandlet 只辅助内容制作，不参与运行时规则。
+
+TrainingWarrior 使用独立 enemy-pack 入口：
+
+```powershell
+# 首次从已授权本地 PaperAssets 晋升五组动画及其受控依赖闭包
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<ProjectRoot>\Wacom.uproject' `
+  -run=WacomBuildEnemyPack -Pack=TrainingWarrior -PromoteArt `
+  -Unattended -NoPause -NoSplash -NullRHI -NoDreamShaderEditorBridge
+
+# 日常只用已经提交的正式素材重建内容，不要求本地 /Game/Art
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<ProjectRoot>\Wacom.uproject' `
+  -run=WacomBuildEnemyPack -Pack=TrainingWarrior `
+  -Unattended -NoPause -NoSplash -NullRHI -NoDreamShaderEditorBridge
+```
+
+`-ForceArtRefresh` 只允许与 `-PromoteArt` 同用。晋升服务先验证 Idle / Attack / Block / Cleave / Downed 的 Flipbook、Sprite、Texture 闭包完全位于 BattleWarrior 源目录，再用 `IAssetTools::AdvancedCopyPackages` 一次复制并重写引用；不会复制 Item，也不会删除目标目录中的未知资产。正式目标完整时跳过复制；目标不完整且未指定 `-PromoteArt` 时失败。`WacomRegenerateContent` 会同步调用 TrainingWarrior builder，但绝不读取或晋升 `/Game/Art`。
 
 ## §3 当前生成内容
 
@@ -64,7 +82,7 @@ Builder 当前职责：
 | 伙伴初始牌 | 朝光暮蝶、拂晓飞蛾、赤腹工蚁、烁光蝶、暮蛉 |
 | 容器 / 功能卡 | 虫妹的小布袋、蛛茧绒囊、暮色引虫灯 |
 | Starter pack | 毒针、几丁护片、触须探路、蜕壳切、轻蜕壳、丝线佯攻 |
-| 奖励卡 | `DA_Card_PoisonFang`，当前蛇部位击倒奖励样例 |
+| 奖励卡 | `DA_Card_PoisonFang`；`DA_Card_BrokenCleave` 是 TrainingWarrior Body 的正式 Aid / Destroy 奖励 |
 | Debug / 测试卡 | DebugKey、卡对卡加费 / 减费 / 弃置 / 消耗、关键词筛选目标卡、按当前费用抽牌测试卡 |
 | Badge 测试卡 | Damage / Poison / Shield / Heal 的卡面徽章显示测试卡；Burn 只有 UI 预留，不生成正式测试卡 |
 
@@ -76,6 +94,7 @@ Builder 当前职责：
 | `DA_Behavior_Snake` | 蛇行为资产，Default phase 下为 Head / Body / Tail 提供三套 `Sequence` intent set |
 | 蛇部位 | Head / Body / Tail 配置 HP、经验和毒牙奖励；部位资产不承载行为，行为统一写入 `DA_Behavior_Snake` |
 | `DA_Encounter_SnakeSingle` | 正式单蛇 Encounter 样例，`EncounterDefinitionId=Encounter.Snake.Single`，`EnemySlots[0]=Enemy -> DA_Enemy_Snake` |
+| TrainingWarrior 内容包 | `DA_Enemy_TrainingWarrior`、单 Body Part、Attack → Guard → Cleave 行为、`DA_Encounter_TrainingWarriorSingle`、语义动画 Style 与 `BP_EnemyHost_TrainingWarrior` |
 | `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡和 badge 测试卡 |
 | `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力与显式 Action Point policy |
 | `DA_Event_DebugFlagReward` | RunFlag 与 `MinGold + AddGold(-N)` 组合样例 |

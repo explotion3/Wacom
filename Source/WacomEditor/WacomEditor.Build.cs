@@ -37,6 +37,7 @@ public class WacomEditor : ModuleRules
 			"UMG",
 			"UMGEditor",
 			"CommonUI",
+			"Paper2D",
 			"ToolMenus",
 			"PropertyEditor",
 			"DataValidation",

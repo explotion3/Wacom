@@ -153,6 +153,8 @@ Trigger 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并�
 & 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Worktree>\Wacom.uproject' -ExecutePythonScript='<Worktree>\Scripts\SetupBattleEnemyHostAnimationPIEAssets.py' -Unattended -NoSplash -NullRHI
 ```
 
+正式 TrainingWarrior 不再走这条 PIE 脚本。`BP_EnemyHost_TrainingWarrior` 使用 `/Game/Wacom/Art/Enemies/TrainingWarrior` 下已晋升并由 Git LFS 管理的 Idle / Attack / Block / Cleave / Destroyed：Idle 循环 1.0；Attack 故意从 Style 的 Default Action 以 0.75 播放；`TrainingWarrior.Body.Guard` 显式映射 Block 1.0；`TrainingWarrior.Body.Cleave` 显式映射 Cleave 0.75；整体破坏映射 Destroyed 0.75。Host 只有一个 hit-only Body PartActor，命中与拖卡沿用正式 Pixel Style。正式运行时不加载 `/Game/Art`，也不根据动画名称猜 Intent。
+
 每个 PartActor 原生携带一个无碰撞 `ImpactAnchor`，默认位于 `HitBounds` 中心；`ImpactAnchorRelativeLocation` 以厘米为单位，只用于世界命中特效的美术微调，不改变命中盒、目标身份或 Battle 规则。HitOnly 与 VisualLayers 两条制作路径共享这一合同。Authoring Status / debug view / summary 会报告锚点组件名和世界位置，非有限偏移会被 Data Validation 判为错误。
 
 Host 整体视觉的 `HostVisualMaterialOverride / bHostVisualCastShadow` 和每个 VisualLayer 的 `MaterialOverride / bCastShadow` 会应用到动态生成的 `UPaperSpriteComponent / UPaperFlipbookComponent`。需要 Sprite 投射阴影时，材质覆盖应使用 Paper2D 的 `MaskedLitSpriteMaterial` 或等效 lit masked 材质，并确保场景光源开启阴影；默认字段为空 / false 时保持无材质覆盖、无投影。
