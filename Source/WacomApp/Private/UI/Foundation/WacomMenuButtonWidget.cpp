@@ -14,7 +14,16 @@ UWacomMenuButtonWidget::UWacomMenuButtonWidget(
 	SetIsFocusable(true);
 }
 
-TSharedRef<SWidget> UWacomMenuButtonWidget::RebuildWidget()
+void UWacomMenuButtonWidget::InitializeNativeClassData()
+{
+	Super::InitializeNativeClassData();
+	// UCommonButtonBase::Initialize wraps and binds an existing root after
+	// UUserWidget::Initialize returns. Build only the native fallback tree here;
+	// Blueprint subclasses must remain free to duplicate their authored tree.
+	EnsureFallbackWidgetTree();
+}
+
+void UWacomMenuButtonWidget::EnsureFallbackWidgetTree()
 {
 	if (!WidgetTree)
 	{
@@ -39,6 +48,11 @@ TSharedRef<SWidget> UWacomMenuButtonWidget::RebuildWidget()
 		ButtonText->SetColorAndOpacity(FSlateColor(FLinearColor(0.91f, 0.90f, 0.82f, 1.0f)));
 		ButtonBackdrop->AddChild(ButtonText);
 	}
+}
+
+TSharedRef<SWidget> UWacomMenuButtonWidget::RebuildWidget()
+{
+	EnsureFallbackWidgetTree();
 	return Super::RebuildWidget();
 }
 

@@ -25,6 +25,7 @@ public:
 	void RefreshPresentationState();
 
 protected:
+	virtual void InitializeNativeClassData() override;
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
@@ -46,6 +47,7 @@ protected:
 	TObjectPtr<UBorder> Accent;
 
 private:
+	void EnsureFallbackWidgetTree();
 	void HandleCommonButtonFocusReceived();
 	void HandleCommonButtonFocusLost();
 

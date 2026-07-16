@@ -110,6 +110,8 @@ Details / Blueprint 分类口径：
 
 `UWacomButtonBase` 是 CommonUI 按钮基础合同，统一文本、点击、hover、interactable 和音效表现钩子。`ButtonText_Cached` 是可序列化的制作属性，`SynchronizeProperties()` 会把它应用到绑定的 `ButtonText`，因此嵌套在其它 WBP 内的按钮实例可以各自保存文案。具体业务命令仍由 Screen、HUD 或调用方监听并提交。
 
+`UWacomMenuButtonWidget` 同时服务 WBP 与 Pause / Run Map 等 C++ fallback。原生 fallback 必须在 `InitializeNativeClassData()` 建立非空 `WidgetTree.RootWidget`，让后续 `UCommonButtonBase::Initialize()` 把内容包入并绑定真正的内部 `SCommonButton`；不能把首次建树延后到 `RebuildWidget()`，否则控件虽然可见且可聚焦，却不会进入 Slate 鼠标点击链。该建树逻辑不能放在 `Initialize()` 的 `Super` 调用前，否则会阻止 Blueprint Generated Class 复制 authored widget tree。`Wacom.UI.GameMenu.PointerRouting.NativeButtonsReceiveSlateMouseClicks` 使用实际 Slate hit-test、hover、mouse-down / mouse-up 序列锁定 Pause Resume 与正式 Run Map Travel 两条原生按钮路径。
+
 `UWacomMainMenuButtonWidget` 是主菜单导航按钮的可实例化 CommonUI 制作入口，继承 `UWacomButtonBase`。C++ fallback 与正式主菜单 WBP 使用同一个按钮类型；`/Game/Wacom/UI/Menus/WBP_MainMenuNavButton` 已继承该类，不使用原生 `UButton` 重新建立鼠标专用交互。按钮负责焦点、hover、pressed、disabled、文本和音效表现，当前原生表现驱动只在状态过渡期间短暂 Tick，统一控制背景、左侧强调条、焦点符号、文字色、位移与缩放；`UWacomMainMenuScreen` 仍是 Action 广播所有者。
 
 | Hook | 分类 |
