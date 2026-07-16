@@ -94,10 +94,24 @@ Settings = {
 ### 3.3 Niagara Sprite 材质
 
 - 使用 `Surface / Unlit / Translucent / TwoSided`。
-- 开启 `Used With Niagara Sprites`。
+- 在 `.dsm` 的 `Settings` 中持久声明 `bUsedWithNiagaraSprites = true`。不要只在 Material Editor 中手动勾选 `Used With Niagara Sprites`；DreamShader 下次重新生成父材质时会按真源覆盖未声明的 Usage。
 - Dynamic Material Parameter 四通道应先在 Niagara 中写入 `Particles.DynamicMaterialParameter`，再在 Sprite Renderer 的动态材质绑定中绑定同一变量。
 - Wacom 当前约定常用 `X=ShapeKind`、`Y=NormalizedAge`、`Z=PaletteVariant`、`W=Semantic/Decorative`；具体效果以对应领域文档为准。
 - Material Instance 的球体预览不能代表 Sprite 最终效果。应在 Niagara 预览和 PIE 中检查朝向、尺寸、透明度、Fixed Bounds 与摄像机遮挡。
+
+推荐的 Niagara 父材质设置：
+
+```dshader
+Settings = {
+    Domain = "Surface";
+    ShadingModel = "Unlit";
+    BlendMode = "Translucent";
+    TwoSided = true;
+    bUsedWithNiagaraSprites = true;
+}
+```
+
+`Setup<Feature>Assets.py` 可以再次读取并验证该标记，作为旧生成资产的防御性修复；但脚本不能替代 `.dsm` 真源声明，否则编辑器自动生成后问题会复发。
 
 ## 4. `.dsh` 的使用技巧
 

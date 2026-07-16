@@ -24,6 +24,15 @@ def load_required(asset_path, label):
     return asset
 
 
+def validate_niagara_sprite_usage(material):
+    if not material.get_editor_property("used_with_niagara_sprites"):
+        raise RuntimeError(
+            "Enemy target-preview parent material lacks Used With Niagara Sprites. "
+            "Regenerate M_WacomBattleEnemyPartImpactPixel from its .dsm and run "
+            "SetupBattleEnemyPartImpactAssets.py before configuring the preview."
+        )
+
+
 def create_preview_material_instance(parent):
     material_instance = unreal.load_asset(PREVIEW_MI_PATH)
     if not material_instance:
@@ -104,6 +113,7 @@ def assign_debug_snake_default(style):
 
 
 base_material = load_required(BASE_MATERIAL_PATH, "Enemy impact DreamShader material")
+validate_niagara_sprite_usage(base_material)
 system = load_required(NIAGARA_SYSTEM_PATH, "Enemy impact Niagara System")
 preview_instance = create_preview_material_instance(base_material)
 preview_style = create_preview_style(system, preview_instance)

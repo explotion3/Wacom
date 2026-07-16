@@ -236,6 +236,8 @@ bool FWacomUIBattleSceneEnemyImpactDreamShaderContractSpec::RunTest(
 	TestTrue(TEXT("Material is Unlit"), MaterialSource.Contains(TEXT("ShadingModel = \"Unlit\"")));
 	TestTrue(TEXT("Material is Translucent"), MaterialSource.Contains(TEXT("BlendMode = \"Translucent\"")));
 	TestTrue(TEXT("Material is TwoSided"), MaterialSource.Contains(TEXT("TwoSided = true")));
+	TestTrue(TEXT("Material persistently enables Niagara Sprite usage"),
+		MaterialSource.Contains(TEXT("bUsedWithNiagaraSprites = true")));
 	TestTrue(TEXT("Material reads Niagara Dynamic Parameters"), MaterialSource.Contains(TEXT("DynamicParameter ParticleData")));
 	TestTrue(TEXT("Dynamic W preserves semantic/decorative classification"), MaterialSource.Contains(TEXT("decorativeClass")));
 	TestTrue(TEXT("Material exposes an invalid target color"),

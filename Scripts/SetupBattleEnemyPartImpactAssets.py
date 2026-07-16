@@ -28,6 +28,11 @@ def load_required(asset_path, label):
 
 
 def enable_niagara_sprite_usage(material):
+    """Defensively verify the usage authored by the DreamShader Settings block.
+
+    The .dsm file is the durable source of truth. This repair remains here so an old
+    generated Material cannot silently fall back to Unreal's default checker material.
+    """
     try:
         material.set_editor_property("used_with_niagara_sprites", True)
     except Exception as error:
@@ -40,6 +45,10 @@ def enable_niagara_sprite_usage(material):
         raise RuntimeError(
             "Enemy impact material failed to compile after enabling Niagara Sprite usage:\n"
             + formatted_errors
+        )
+    if not material.get_editor_property("used_with_niagara_sprites"):
+        raise RuntimeError(
+            "Enemy impact material still lacks Used With Niagara Sprites after recompilation"
         )
     unreal.EditorAssetLibrary.save_loaded_asset(material)
 

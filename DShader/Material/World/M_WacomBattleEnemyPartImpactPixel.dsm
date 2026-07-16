@@ -18,7 +18,13 @@ Shader(Name="DreamMaterials/World/M_WacomBattleEnemyPartImpactPixel")
         ScalarParameter ImpactPreviewGlow = 0.28 [ Group="敌人像素命中|目标预演"; SortPriority=1; ];
     }
 
-    Settings = { Domain = "Surface"; ShadingModel = "Unlit"; BlendMode = "Translucent"; TwoSided = true; }
+    Settings = {
+        Domain = "Surface";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+        bUsedWithNiagaraSprites = true;
+    }
     Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
 
     Graph = {
