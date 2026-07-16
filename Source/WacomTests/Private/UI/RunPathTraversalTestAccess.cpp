@@ -5,6 +5,12 @@
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Components/WacomRunPathTraversalComponent.h"
 
+void FWacomRunPathTraversalTestAccess::BeginPlay(
+	UWacomRunPathTraversalComponent& Component)
+{
+	Component.BeginPlay();
+}
+
 void FWacomRunPathTraversalTestAccess::Tick(
 	UWacomRunPathTraversalComponent& Component,
 	const float DeltaTime)

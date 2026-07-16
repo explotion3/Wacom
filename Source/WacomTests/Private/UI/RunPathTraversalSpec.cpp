@@ -50,6 +50,61 @@ namespace WacomRunPathTraversalSpec
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunPathTraversalPreBeginPlayAnchorPreservesTickTest,
+	"Wacom.UI.RunPathTraversal.PreBeginPlayAnchorPreservesTick",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunPathTraversalPreBeginPlayAnchorPreservesTickTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* World = WacomRunPathTraversalSpec::FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	const FTransform SpawnTransform = FTransform::Identity;
+	AWacomPlayerCharacter* Character =
+		World->SpawnActorDeferred<AWacomPlayerCharacter>(
+			AWacomPlayerCharacter::StaticClass(),
+			SpawnTransform,
+			nullptr,
+			nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!TestNotNull(TEXT("Deferred player character"), Character))
+	{
+		return false;
+	}
+
+	UWacomRunPathTraversalComponent* Traversal =
+		Character->GetRunPathTraversalComponent();
+	TestNotNull(TEXT("Native Run Path traversal component"), Traversal);
+	if (!Traversal)
+	{
+		Character->Destroy();
+		return false;
+	}
+
+	TestTrue(TEXT("Scene binding can anchor before component BeginPlay"),
+		Traversal->AnchorAtTransform(SpawnTransform));
+	TestTrue(TEXT("Pre-BeginPlay anchor requests traversal Tick"),
+		Traversal->IsComponentTickEnabled());
+
+	Character->FinishSpawning(SpawnTransform);
+	TestFalse(TEXT("Deferred automation actor has not implicitly begun play"),
+		Traversal->HasBegunPlay());
+	FWacomRunPathTraversalTestAccess::BeginPlay(*Traversal);
+	TestEqual(TEXT("BeginPlay preserves the anchored traversal state"),
+		Traversal->GetTraversalState(),
+		EWacomRunPathTraversalState::Anchored);
+	TestTrue(TEXT("BeginPlay preserves Tick required by anchored cursor look"),
+		Traversal->IsComponentTickEnabled());
+
+	Character->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunPathTraversalStateAndBoundaryTest,
 	"Wacom.UI.RunPathTraversal.StateAndBoundaryOneShot",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

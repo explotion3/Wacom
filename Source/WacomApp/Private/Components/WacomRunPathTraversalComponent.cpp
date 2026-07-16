@@ -26,7 +26,9 @@ void UWacomRunPathTraversalComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	BindRuntimeSettings();
-	SetComponentTickEnabled(false);
+	SetComponentTickEnabled(
+		State == EWacomRunPathTraversalState::Anchored
+		|| State == EWacomRunPathTraversalState::Traversing);
 }
 
 void UWacomRunPathTraversalComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)

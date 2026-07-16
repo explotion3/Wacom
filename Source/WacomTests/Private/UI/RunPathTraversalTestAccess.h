@@ -9,6 +9,7 @@ class AWacomRunPathSegmentActor;
 
 struct FWacomRunPathTraversalTestAccess
 {
+	static void BeginPlay(UWacomRunPathTraversalComponent& Component);
 	static void Tick(UWacomRunPathTraversalComponent& Component, float DeltaTime);
 	static bool BeginTraversalAtDistance(
 		UWacomRunPathTraversalComponent& Component,
