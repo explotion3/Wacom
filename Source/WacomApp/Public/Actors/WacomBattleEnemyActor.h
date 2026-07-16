@@ -390,7 +390,7 @@ public:
 	void RefreshBattleEnemyPartAuthoringState() const;
 
 	UFUNCTION(BlueprintCallable, CallInEditor, Category = "Wacom|Battle|Scene Enemy|Authoring",
-		meta = (ToolTip = "按 EnemyDefinition.Parts 显式同步 Host 部位：用 PartSlotId 匹配并派生 PartId，自动新增缺失 ChildActorComponent；保留已有位置、HitBounds、ImpactAnchor 和 VisualLayers；多余部位只标记不删除。可重复执行。"))
+		meta = (ToolTip = "按 EnemyDefinition.Parts 显式同步 Host 部位：用 PartSlotId 匹配并派生 PartId，自动新增缺失 ChildActorComponent；Host 蓝图模板写入可编译保存的 SCS，关卡实例只修改当前实例；保留已有位置、HitBounds、ImpactAnchor 和 VisualLayers；多余部位只标记不删除。可重复执行。"))
 	void SyncEnemyPartsFromDefinition();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Authoring",

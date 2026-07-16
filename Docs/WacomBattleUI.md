@@ -164,7 +164,7 @@ Host 整体视觉和 `VisualLayers` 都是表现层合同，不接管动画状�
 
 `EnemySlotId` 由 Host / Trigger 注入，不在 PartActor 模板里手填。Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对应 `UEnemyPartDefinition::PartId`，`PartSlotId` 必须对应 `UEnemyDefinition.Parts[].PartSlotId`。蛇的正式绑定身份是 `Enemy + Head/Body/Tail`，不是 `Enemy + Snake.Head/Snake.Body/Snake.Tail`。
 
-Host 的 `SyncEnemyPartsFromDefinition()` 是显式、幂等的通用制作入口：仅按 `PartSlotId` 匹配定义，为已有唯一槽位派生 `PartId`，为缺失槽位新增零相对变换、默认 facade 的 PartActor ChildActorComponent。它不覆盖已有位置、`HitBoundsExtent`、`ImpactAnchorRelativeLocation` 或 `VisualLayers`；空、未知和重复部位只标记为 surplus，不静默删除；无效定义槽位跳过并进入最近同步报告。它不根据 Actor / 组件名称猜身份，也不进入 runtime Snapshot 路径。
+Host 的 `SyncEnemyPartsFromDefinition()` 是显式、幂等的通用制作入口：仅按 `PartSlotId` 匹配定义，为已有唯一槽位派生 `PartId`，为缺失槽位新增零相对变换、默认 facade 的 PartActor ChildActorComponent。Host Blueprint 模板上的新增部位写入 SCS，因此会出现在 Blueprint 组件树中，并在 Compile / Save / Reload 后保留；关卡 Host 实例上的新增部位只属于该实例，不反向修改来源 Blueprint。它不覆盖已有位置、`HitBoundsExtent`、`ImpactAnchorRelativeLocation` 或 `VisualLayers`；空、未知和重复部位只标记为 surplus，不静默删除；无效定义槽位跳过并进入最近同步报告。它不根据 Actor / 组件名称猜身份，也不进入 runtime Snapshot 路径。正式 prefab 制作应在 Host Blueprint 上执行同步、编译并保存，关卡实例同步只用于实例级特化。
 
 Host 的 `RefreshBattleEnemyPartAuthoringState()` 仍是非生成安全刷新入口：它刷新 Host visual，扫描自身 PartActor，并同步 `EnemySlotId`、Host visual 语境、Badge 诊断和 debug summary。它不会创建 PartActor，也不会自动补齐身份；需要生成或派生时显式执行 `SyncEnemyPartsFromDefinition()`。
 

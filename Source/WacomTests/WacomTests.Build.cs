@@ -35,7 +35,8 @@ public class WacomTests : ModuleRules
 			"MaterialEditor",
 			"Niagara",
 			"Slate",
-			"SlateCore"
+			"SlateCore",
+			"UnrealEd"
 		});
 	}
 }

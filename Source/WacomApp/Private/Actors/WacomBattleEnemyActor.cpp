@@ -4,6 +4,7 @@
 
 #include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
+#include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/World.h"
 #include "Engine/SCS_Node.h"
@@ -21,6 +22,10 @@
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "Blueprint/UserWidget.h"
+
+#if WITH_EDITOR
+#include "Kismet2/BlueprintEditorUtils.h"
+#endif
 
 namespace
 {
@@ -219,6 +224,25 @@ namespace
 		return FName(*FString::Printf(TEXT("EnemyPart_%s"), *SanitizedSlotId));
 	}
 
+	UBlueprint* ResolveOwningBlueprintForAuthoringTemplate(
+		const AWacomBattleEnemyActor& Host)
+	{
+#if WITH_EDITOR
+		if (!Host.IsTemplate())
+		{
+			return nullptr;
+		}
+
+		const UBlueprintGeneratedClass* BlueprintClass =
+			Cast<UBlueprintGeneratedClass>(Host.GetClass());
+		return BlueprintClass
+			? Cast<UBlueprint>(BlueprintClass->ClassGeneratedBy)
+			: nullptr;
+#else
+		return nullptr;
+#endif
+	}
+
 	bool ApplyDerivedPartIdentity(
 		AWacomBattleEnemyPartActor& PartActor,
 		FName PartSlotId,
@@ -272,7 +296,63 @@ namespace
 		return bChanged;
 	}
 
-	UChildActorComponent* CreateEnemyPartChildActorComponent(
+	UChildActorComponent* CreateBlueprintEnemyPartChildActorComponent(
+		AWacomBattleEnemyActor& Host,
+		UBlueprint& Blueprint,
+		FName PartSlotId,
+		FName PartId)
+	{
+#if WITH_EDITOR
+		USimpleConstructionScript* ConstructionScript =
+			Blueprint.SimpleConstructionScript;
+		if (!ConstructionScript)
+		{
+			return nullptr;
+		}
+
+		MarkObjectEditedForBattleEnemyAuthoring(&Blueprint);
+		MarkObjectEditedForBattleEnemyAuthoring(ConstructionScript);
+		const FName ComponentName = ConstructionScript->GenerateNewComponentName(
+			UChildActorComponent::StaticClass(),
+			BuildEnemyPartComponentBaseName(PartSlotId));
+		USCS_Node* Node = ConstructionScript->CreateNode(
+			UChildActorComponent::StaticClass(), ComponentName);
+		if (!Node)
+		{
+			return nullptr;
+		}
+
+		ConstructionScript->AddNode(Node);
+		if (Host.GetRootComponent())
+		{
+			Node->SetParent(Host.GetRootComponent());
+		}
+
+		UChildActorComponent* ChildActorComponent =
+			Cast<UChildActorComponent>(Node->ComponentTemplate);
+		if (!ChildActorComponent)
+		{
+			ConstructionScript->RemoveNode(Node);
+			return nullptr;
+		}
+
+		MarkObjectEditedForBattleEnemyAuthoring(ChildActorComponent);
+		ChildActorComponent->SetRelativeTransform(FTransform::Identity);
+		ChildActorComponent->SetChildActorClass(
+			AWacomBattleEnemyPartActor::StaticClass());
+		if (AWacomBattleEnemyPartActor* TemplatePart =
+			Cast<AWacomBattleEnemyPartActor>(
+				ChildActorComponent->GetChildActorTemplate()))
+		{
+			ApplyDerivedPartIdentity(*TemplatePart, PartSlotId, PartId);
+		}
+		return ChildActorComponent;
+#else
+		return nullptr;
+#endif
+	}
+
+	UChildActorComponent* CreateInstanceEnemyPartChildActorComponent(
 		AWacomBattleEnemyActor& Host,
 		FName PartSlotId,
 		FName PartId)
@@ -321,6 +401,21 @@ namespace
 			ApplyDerivedPartIdentity(*LivePart, PartSlotId, PartId);
 		}
 		return ChildActorComponent;
+	}
+
+	UChildActorComponent* CreateEnemyPartChildActorComponent(
+		AWacomBattleEnemyActor& Host,
+		FName PartSlotId,
+		FName PartId)
+	{
+		if (UBlueprint* Blueprint =
+			ResolveOwningBlueprintForAuthoringTemplate(Host))
+		{
+			return CreateBlueprintEnemyPartChildActorComponent(
+				Host, *Blueprint, PartSlotId, PartId);
+		}
+		return CreateInstanceEnemyPartChildActorComponent(
+			Host, PartSlotId, PartId);
 	}
 
 }
@@ -745,6 +840,17 @@ void AWacomBattleEnemyActor::SyncEnemyPartsFromDefinition()
 	AuthoringLastPartSyncResult = !AuthoringLastInvalidDefinitionPartSlotIds.IsEmpty()
 		? FName(TEXT("AppliedWithInvalidDefinitionSlots"))
 		: (bChanged ? FName(TEXT("Applied")) : FName(TEXT("NoChanges")));
+	if (UBlueprint* Blueprint = ResolveOwningBlueprintForAuthoringTemplate(*this))
+	{
+		if (bAddedPart)
+		{
+			FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+		}
+		else if (bChanged)
+		{
+			FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+		}
+	}
 #else
 	AuthoringLastPartSyncResult = TEXT("EditorOnly");
 #endif
