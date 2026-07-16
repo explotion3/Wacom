@@ -1,0 +1,134 @@
+// Copyright Wacom. All Rights Reserved.
+
+Function SelfContained WacomFirstPersonCard_ComputeGainRevealVisibility(
+    in float2 surfaceUV,
+    in float2 surfaceInvSize,
+    in float progress,
+    in float seedEstablishEnd,
+    in float assemblyEnd,
+    in float reducedMotion,
+    in float reducedCrossFadeStart,
+    in float reducedCrossFadeEnd,
+    in float pixelColumns,
+    in float stableSeed,
+    out float assembledVisibility,
+    out float stableCellHash)
+{
+    float safeColumns = max(pixelColumns, 1.0);
+    float safeAspect = max(surfaceInvSize.x / max(surfaceInvSize.y, 0.000001), 0.01);
+    float2 gridSize = float2(safeColumns, max(safeColumns * safeAspect, 1.0));
+    float2 pixelCell = floor(saturate(surfaceUV) * gridSize);
+    stableCellHash = frac(sin(dot(
+        pixelCell + stableSeed * 193.0,
+        float2(37.719, 19.913))) * 43758.5453);
+
+    float2 centered = abs(surfaceUV - float2(0.5, 0.5)) * 2.0;
+    float radialDistance = saturate(max(centered.x, centered.y));
+    float safeAssemblySpan = max(assemblyEnd - seedEstablishEnd, 0.0001);
+    float assemblyAmount = saturate((progress - seedEstablishEnd) / safeAssemblySpan);
+    float inwardThreshold = saturate((1.0 - radialDistance) * 0.72 + stableCellHash * 0.28);
+    float normalVisibility = step(inwardThreshold, assemblyAmount);
+
+    float safeReducedSpan = max(reducedCrossFadeEnd - reducedCrossFadeStart, 0.0001);
+    float reducedVisibility = smoothstep(
+        reducedCrossFadeStart,
+        reducedCrossFadeStart + safeReducedSpan,
+        progress);
+    assembledVisibility = lerp(normalVisibility, reducedVisibility, saturate(reducedMotion));
+}
+
+Function SelfContained WacomFirstPersonCard_ComputeGainRevealCrystal(
+    in float2 surfaceUV,
+    in float2 surfaceInvSize,
+    in float progress,
+    in float seedEstablishEnd,
+    in float assemblyEnd,
+    in float rarityEdgePeak,
+    in float settleEnd,
+    in float reducedMotion,
+    in float pixelColumns,
+    in float clusterDensity,
+    in float clusterTravelPixels,
+    in float stableSeed,
+    out float2 crystalSourceUV,
+    out float crystalClusterMask,
+    out float rarityEdgePulse)
+{
+    float safeColumns = max(pixelColumns, 1.0);
+    float safeAspect = max(surfaceInvSize.x / max(surfaceInvSize.y, 0.000001), 0.01);
+    float2 gridSize = float2(safeColumns, max(safeColumns * safeAspect, 1.0));
+    float2 pixelCell = floor(saturate(surfaceUV) * gridSize);
+    float cellHash = frac(sin(dot(
+        pixelCell + stableSeed * 271.0,
+        float2(53.117, 89.443))) * 43758.5453);
+
+    float safeAssemblySpan = max(assemblyEnd - seedEstablishEnd, 0.0001);
+    float assemblyAmount = saturate((progress - seedEstablishEnd) / safeAssemblySpan);
+    float2 toCenter = float2(0.5, 0.5) - surfaceUV;
+    float directionLength = max(length(toCenter / max(surfaceInvSize, float2(0.000001, 0.000001))), 0.0001);
+    float2 directionToCenter = (toCenter / max(surfaceInvSize, float2(0.000001, 0.000001))) / directionLength;
+    float travelPixels = max(clusterTravelPixels, 0.0) * (1.0 - assemblyAmount);
+    crystalSourceUV = surfaceUV + directionToCenter * surfaceInvSize * travelPixels;
+
+    float establishAmount = smoothstep(0.0, max(seedEstablishEnd, 0.0001), progress);
+    float settleFade = 1.0 - smoothstep(assemblyEnd, max(settleEnd, assemblyEnd + 0.0001), progress);
+    float densityMask = step(1.0 - saturate(clusterDensity), cellHash);
+    crystalClusterMask = densityMask * establishAmount * settleFade * (1.0 - saturate(reducedMotion));
+
+    float rarityRise = smoothstep(assemblyEnd, max(rarityEdgePeak, assemblyEnd + 0.0001), progress);
+    float rarityFall = 1.0 - smoothstep(
+        rarityEdgePeak,
+        max(settleEnd, rarityEdgePeak + 0.0001),
+        progress);
+    rarityEdgePulse = rarityRise * rarityFall;
+    rarityEdgePulse = lerp(
+        rarityEdgePulse,
+        0.22 * smoothstep(0.0, max(seedEstablishEnd, 0.0001), progress)
+            * (1.0 - smoothstep(settleEnd, 1.0, progress)),
+        saturate(reducedMotion));
+}
+
+Function SelfContained WacomFirstPersonCard_SelectGainRevealCrystalColor(
+    in float stableCellHash,
+    in float3 primaryColor,
+    in float3 secondaryColor,
+    in float3 sampledCardColor,
+    out float3 crystalColor)
+{
+    float paletteAmount = step(0.58, stableCellHash);
+    crystalColor = lerp(primaryColor, secondaryColor, paletteAmount);
+    crystalColor = lerp(crystalColor, sampledCardColor, 0.28);
+}
+
+Function SelfContained WacomFirstPersonCard_SelectGainRevealRarityColor(
+    in float rarityIndex,
+    in float3 neutralColor,
+    in float3 whiteColor,
+    in float3 blueColor,
+    in float3 yellowColor,
+    in float3 purpleColor,
+    out float3 rarityColor)
+{
+    float neutralMask = 1.0 - step(0.5, abs(rarityIndex - 0.0));
+    float whiteMask = 1.0 - step(0.5, abs(rarityIndex - 1.0));
+    float blueMask = 1.0 - step(0.5, abs(rarityIndex - 2.0));
+    float yellowMask = 1.0 - step(0.5, abs(rarityIndex - 3.0));
+    float purpleMask = 1.0 - step(0.5, abs(rarityIndex - 4.0));
+    rarityColor = neutralColor * neutralMask
+        + whiteColor * whiteMask
+        + blueColor * blueMask
+        + yellowColor * yellowMask
+        + purpleColor * purpleMask;
+}
+
+Function SelfContained WacomFirstPersonCard_ComputeGainRevealSourceEdge(
+    in float centerAlpha,
+    in float leftAlpha,
+    in float rightAlpha,
+    in float topAlpha,
+    in float bottomAlpha,
+    out float sourceEdge)
+{
+    float neighborMinimum = min(min(leftAlpha, rightAlpha), min(topAlpha, bottomAlpha));
+    sourceEdge = centerAlpha * (1.0 - smoothstep(0.2, 0.8, neighborMinimum));
+}

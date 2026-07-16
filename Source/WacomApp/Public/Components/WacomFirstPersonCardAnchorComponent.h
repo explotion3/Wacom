@@ -18,6 +18,7 @@ class UWacomFirstPersonCardLayerWidget;
 class UWacomFirstPersonCardHandTargetImpactStyle;
 class UWacomFirstPersonCardDataRewriteStyle;
 class UWacomFirstPersonCardDrawRevealStyle;
+class UWacomFirstPersonCardGainRevealStyle;
 class UWacomFirstPersonCardPlayedDissolveStyle;
 class UWacomFirstPersonCardPileTransferStyle;
 class UWacomFirstPersonCardUseEffectStyle;
@@ -631,6 +632,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|18 Card Draw Reveal", meta = (ToolTip = "弱化抽牌翻面动态：保留原 Drawn 飞行、计数和声音，只在飞行约 55% 到 75% 之间让牌背均匀交叉淡化到正面，不执行横向压缩或落定位移。"))
 	bool bReduceCardDrawRevealMotion = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|19 Card Gain Reveal", meta = (ToolTip = "是否让显式 Gained 卡牌在现有入场飞行中由硬像素簇结晶成完整正面；只改变表现，不影响获得、手牌上限或奖励结算。"))
+	bool bEnableCardGainReveal = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|19 Card Gain Reveal", meta = (ToolTip = "获得卡牌正面像素结晶的可复用预设；材质实例控制像素、稀有度边缘和外溢范围，DataAsset 控制归一化阶段。为空或材质无效时沿用原 Gained 入场。"))
+	TObjectPtr<UWacomFirstPersonCardGainRevealStyle> CardGainRevealStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|19 Card Gain Reveal", meta = (ToolTip = "弱化获得卡牌结晶动态：保留原 Gained 飞行和声音，只交叉显现正面并显示静态弱稀有度边缘，不播放外溢像素回收。"))
+	bool bReduceCardGainRevealMotion = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量交互反馈；只影响 hover、按下、确认和不可用点击的 UMG 表现，不改变出牌命令路径。"))
 	bool bEnableCardInteractionFeedback = true;

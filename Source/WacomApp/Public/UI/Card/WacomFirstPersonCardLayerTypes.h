@@ -790,10 +790,75 @@ struct WACOMAPP_API FWacomFirstPersonCardDrawRevealView
 	FWacomFirstPersonCardDrawRevealStyleData Style;
 };
 
+enum class EWacomFirstPersonCardGainRevealRarity : uint8
+{
+	Neutral,
+	White,
+	Blue,
+	Yellow,
+	Purple
+};
+
+/** Authoring data for the front-facing pixel crystallization used by explicit Gained enters. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardGainRevealStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Gain Reveal", meta = (ToolTip = "获得卡牌结晶入场期间临时绑定到唯一 Retainer 的 UI 材质实例；必须保留 Texture、Fake-3D 与实时 Alpha 接触阴影合同。"))
+	TObjectPtr<UMaterialInstance> SurfaceEffectMaterialInstance = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Gain Reveal|Timing", meta = (ToolTip = "Gained Enter 归一化进度中外缘结晶种子建立完成的比例；默认 0.12，推荐 0.08 到 0.20，不改变获得卡牌入场总时长。"))
+	float SeedEstablishEndProgress = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Gain Reveal|Timing", meta = (ToolTip = "Gained Enter 归一化进度中正面卡牌完成结晶组装的比例；默认 0.62，推荐 0.52 到 0.72。"))
+	float AssemblyEndProgress = 0.62f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Gain Reveal|Timing", meta = (ToolTip = "稀有度色硬像素外缘达到峰值的归一化进度；默认 0.70，推荐 0.64 到 0.78。"))
+	float RarityEdgePeakProgress = 0.70f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Gain Reveal|Timing", meta = (ToolTip = "外溢结晶和稀有度外缘完全收束的归一化进度；默认 0.84，推荐 0.78 到 0.92。"))
+	float SettleEndProgress = 0.84f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Gain Reveal|Reduced Motion", meta = (ToolTip = "弱化动态时正面开始均匀交叉显现的 Gained Enter 进度；默认 0.25，推荐 0.15 到 0.35。"))
+	float ReducedCrossFadeStartProgress = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Gain Reveal|Reduced Motion", meta = (ToolTip = "弱化动态时正面交叉显现完成的 Gained Enter 进度；默认 0.65，推荐 0.50 到 0.75。"))
+	float ReducedCrossFadeEndProgress = 0.65f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardGainRevealConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Gain Reveal")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Gain Reveal")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Gain Reveal")
+	FWacomFirstPersonCardGainRevealStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardGainRevealView
+{
+	bool bActive = false;
+	bool bWaiting = false;
+	bool bReducedMotion = false;
+	float Progress = 0.0f;
+	float Seed = 0.0f;
+	EWacomFirstPersonCardGainRevealRarity Rarity =
+		EWacomFirstPersonCardGainRevealRarity::Neutral;
+	FWacomFirstPersonCardGainRevealStyleData Style;
+};
+
 /** Card-surface material state shared by mutually exclusive Retainer effects. */
 struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 {
 	FWacomFirstPersonCardDrawRevealView DrawReveal;
+	FWacomFirstPersonCardGainRevealView GainReveal;
 	FWacomFirstPersonCardSelectionView Selection;
 	FWacomFirstPersonCardHandTargetImpactView HandTargetImpact;
 	FWacomFirstPersonCardUseEffectView CardUse;
@@ -1775,6 +1840,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardDrawRevealConfig DrawReveal;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardGainRevealConfig GainReveal;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState

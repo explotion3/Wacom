@@ -414,6 +414,28 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 		DrawRevealStyle.ReducedCrossFadeEndProgress,
 		DrawRevealStyle.ReducedCrossFadeStartProgress,
 		1.0f);
+	FWacomFirstPersonCardGainRevealStyleData& GainRevealStyle =
+		Config.GainReveal.Style;
+	GainRevealStyle.SeedEstablishEndProgress = FMath::Clamp(
+		GainRevealStyle.SeedEstablishEndProgress, 0.0f, 1.0f);
+	GainRevealStyle.AssemblyEndProgress = FMath::Clamp(
+		GainRevealStyle.AssemblyEndProgress,
+		GainRevealStyle.SeedEstablishEndProgress,
+		1.0f);
+	GainRevealStyle.RarityEdgePeakProgress = FMath::Clamp(
+		GainRevealStyle.RarityEdgePeakProgress,
+		GainRevealStyle.AssemblyEndProgress,
+		1.0f);
+	GainRevealStyle.SettleEndProgress = FMath::Clamp(
+		GainRevealStyle.SettleEndProgress,
+		GainRevealStyle.RarityEdgePeakProgress,
+		1.0f);
+	GainRevealStyle.ReducedCrossFadeStartProgress = FMath::Clamp(
+		GainRevealStyle.ReducedCrossFadeStartProgress, 0.0f, 1.0f);
+	GainRevealStyle.ReducedCrossFadeEndProgress = FMath::Clamp(
+		GainRevealStyle.ReducedCrossFadeEndProgress,
+		GainRevealStyle.ReducedCrossFadeStartProgress,
+		1.0f);
 	Config.Selection.Style.EnterDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.EnterDurationSeconds);
 	Config.Selection.Style.ExitDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.ExitDurationSeconds);
 	Config.Selection.Style.SustainPeriodSeconds = FMath::Max(0.01f, Config.Selection.Style.SustainPeriodSeconds);
@@ -674,6 +696,28 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(
 			A.DrawReveal.Style.ReducedCrossFadeEndProgress,
 			B.DrawReveal.Style.ReducedCrossFadeEndProgress)
+		&& A.GainReveal.bEnabled == B.GainReveal.bEnabled
+		&& A.GainReveal.bReducedMotion == B.GainReveal.bReducedMotion
+		&& A.GainReveal.Style.SurfaceEffectMaterialInstance
+			== B.GainReveal.Style.SurfaceEffectMaterialInstance
+		&& AreFloatsEquivalent(
+			A.GainReveal.Style.SeedEstablishEndProgress,
+			B.GainReveal.Style.SeedEstablishEndProgress)
+		&& AreFloatsEquivalent(
+			A.GainReveal.Style.AssemblyEndProgress,
+			B.GainReveal.Style.AssemblyEndProgress)
+		&& AreFloatsEquivalent(
+			A.GainReveal.Style.RarityEdgePeakProgress,
+			B.GainReveal.Style.RarityEdgePeakProgress)
+		&& AreFloatsEquivalent(
+			A.GainReveal.Style.SettleEndProgress,
+			B.GainReveal.Style.SettleEndProgress)
+		&& AreFloatsEquivalent(
+			A.GainReveal.Style.ReducedCrossFadeStartProgress,
+			B.GainReveal.Style.ReducedCrossFadeStartProgress)
+		&& AreFloatsEquivalent(
+			A.GainReveal.Style.ReducedCrossFadeEndProgress,
+			B.GainReveal.Style.ReducedCrossFadeEndProgress)
 		&& A.Selection.bEnabled == B.Selection.bEnabled
 		&& A.Selection.bReducedMotion == B.Selection.bReducedMotion
 		&& AreColorsEquivalent(A.Selection.Style.PrimaryColor, B.Selection.Style.PrimaryColor)

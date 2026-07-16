@@ -8,6 +8,7 @@
 
 class UCardDefinition;
 struct FBattleEventBus;
+struct FBattlePresentationJournal;
 struct FBattleState;
 
 struct FBattleCardGrantResult
@@ -26,6 +27,7 @@ struct FBattleCardGrantService
 	static FBattleCardGrantResult GrantCardToHand(
 		FBattleState& State,
 		FBattleEventBus& Events,
+		FBattlePresentationJournal& PresentationJournal,
 		UCardDefinition* CardDefinition,
 		const FGuid& SourcePartInstanceId,
 		const FBattleEnemyPartKey& SourcePartKey,

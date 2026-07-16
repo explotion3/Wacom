@@ -44,6 +44,8 @@ namespace
 			return TEXT("HandDiscardGlyphTransfer");
 		case EWacomBattlePresentationPhaseKind::DeckReshuffle:
 			return TEXT("DeckReshuffle");
+		case EWacomBattlePresentationPhaseKind::CommandCardGained:
+			return TEXT("CommandCardGained");
 		case EWacomBattlePresentationPhaseKind::CommandSourceOut:
 			return TEXT("CommandSourceOut");
 		case EWacomBattlePresentationPhaseKind::CommandPrimaryTarget:
@@ -1107,7 +1109,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueEndTurnPresentationPlan(
 	return true;
 }
 
-bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
+bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationPlan(
 	const FBattlePresentationJournal& Journal,
 	const TArray<FBattleEvent>& Events,
 	const FBattleSnapshot& PreCommandSnapshot,
@@ -1116,7 +1118,16 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 {
 	const TArray<FHandDiscardPresentationBatch> DiscardBatches =
 		BuildHandDiscardPresentationBatches(Events);
-	if ((Journal.DeckSteps.IsEmpty() && DiscardBatches.IsEmpty()) || bProcessingPresentationPlan)
+	TArray<const FBattlePresentationCheckpoint*> GainedCheckpoints;
+	for (const FBattlePresentationCheckpoint& Checkpoint : Journal.Checkpoints)
+	{
+		if (Checkpoint.Type == EBattlePresentationCheckpointType::CardGainedResolved)
+		{
+			GainedCheckpoints.Add(&Checkpoint);
+		}
+	}
+	if ((Journal.DeckSteps.IsEmpty() && DiscardBatches.IsEmpty() && GainedCheckpoints.IsEmpty())
+		|| bProcessingPresentationPlan)
 	{
 		return false;
 	}
@@ -1133,23 +1144,71 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 		PostCommandSnapshot,
 		FutureDrawnIds);
 	const TArray<FBattleEvent> NonDeckEvents = FilterNonDeckPresentationEvents(Events);
+	const bool bHasGainedCheckpoint = !GainedCheckpoints.IsEmpty();
 	const TArray<FBattleEvent> HandResolutionEvents = NonDeckEvents.FilterByPredicate(
-		[](const FBattleEvent& Event)
+		[bHasGainedCheckpoint](const FBattleEvent& Event)
 		{
 			return Event.Type != EBattleEventType::CardDiscarded
-				&& Event.Type != EBattleEventType::HandLimitDiscarded;
+				&& Event.Type != EBattleEventType::HandLimitDiscarded
+				&& (!bHasGainedCheckpoint || Event.Type != EBattleEventType::CardGained);
 		});
-	Runtime.StoreFirstPersonCardTransitionEvents(HandResolutionEvents);
 
 	FWacomBattlePresentationPlan NewPlan;
+	FBattleSnapshot PreviousHandSnapshot = PreCommandSnapshot;
+	for (const FBattlePresentationCheckpoint* Checkpoint : GainedCheckpoints)
+	{
+		if (!Checkpoint)
+		{
+			continue;
+		}
+		const TArray<FBattleEvent> GainedEvents = NonDeckEvents.FilterByPredicate(
+			[Checkpoint](const FBattleEvent& Event)
+			{
+				return Event.Type == EBattleEventType::CardGained
+					&& Event.Sequence >= Checkpoint->FirstEventSequence
+					&& Event.Sequence <= Checkpoint->LastEventSequence;
+			});
+		Runtime.StoreFirstPersonCardTransitionEvents(GainedEvents);
+		FWacomBattlePresentationPhase GainedPhase;
+		GainedPhase.Kind = EWacomBattlePresentationPhaseKind::CommandCardGained;
+		GainedPhase.Snapshot = Checkpoint->Snapshot;
+		GainedPhase.TransitionHints = Runtime.BuildFirstPersonCardTransitionHints(
+			PreviousHandSnapshot,
+			Checkpoint->Snapshot);
+		GainedPhase.FeedbackHints = Runtime.BuildFirstPersonCardFeedbackHints(
+			Checkpoint->Snapshot);
+		Runtime.ClearPendingFirstPersonCardTransitionEvents();
+		if (!GainedPhase.TransitionHints.IsEmpty() || !GainedPhase.FeedbackHints.IsEmpty())
+		{
+			NewPlan.Phases.Add(MoveTemp(GainedPhase));
+		}
+		PreviousHandSnapshot = Checkpoint->Snapshot;
+	}
+
+	Runtime.StoreFirstPersonCardTransitionEvents(HandResolutionEvents);
 	FWacomBattlePresentationPhase HandPhase;
 	HandPhase.Kind = EWacomBattlePresentationPhaseKind::CommandHandResolution;
 	HandPhase.Snapshot = BaseSnapshot;
 	HandPhase.TransitionHints = Runtime.BuildFirstPersonCardTransitionHints(
-		PreCommandSnapshot,
+		PreviousHandSnapshot,
 		BaseSnapshot);
 	HandPhase.FeedbackHints = Runtime.BuildFirstPersonCardFeedbackHints(BaseSnapshot);
 	Runtime.ClearPendingFirstPersonCardTransitionEvents();
+	TSet<FGuid> GlyphDiscardCardIds;
+	for (const FHandDiscardPresentationBatch& Batch : DiscardBatches)
+	{
+		GlyphDiscardCardIds.Append(Batch.CardInstanceIds);
+	}
+	HandPhase.TransitionHints.RemoveAll(
+		[&GlyphDiscardCardIds](const FWacomFirstPersonCardLayerTransitionHint& Hint)
+		{
+			return GlyphDiscardCardIds.Contains(Hint.CardInstanceId);
+		});
+	HandPhase.FeedbackHints.RemoveAll(
+		[&GlyphDiscardCardIds](const FWacomFirstPersonCardLayerFeedbackHint& Hint)
+		{
+			return GlyphDiscardCardIds.Contains(Hint.CardInstanceId);
+		});
 	const FGuid HandTargetImpactCardId = [&HandPhase]()
 	{
 		for (const FWacomFirstPersonCardLayerFeedbackHint& Hint : HandPhase.FeedbackHints)
@@ -1164,9 +1223,9 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueDeckPresentationPlan(
 	}();
 	const bool bHasHandPhase = !HandPhase.TransitionHints.IsEmpty()
 		|| !HandPhase.FeedbackHints.IsEmpty()
-		|| DiscardBatches.IsEmpty();
+		|| (DiscardBatches.IsEmpty() && GainedCheckpoints.IsEmpty());
 	bool bHandPhaseAdded = false;
-	FBattleSnapshot DiscardSnapshot = PreCommandSnapshot;
+	FBattleSnapshot DiscardSnapshot = PreviousHandSnapshot;
 	for (const FHandDiscardPresentationBatch& Batch : DiscardBatches)
 	{
 		RemoveHandCards(DiscardSnapshot, Batch.CardInstanceIds);

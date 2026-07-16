@@ -137,6 +137,7 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	FWacomFirstPersonCardHandTargetImpactConfig HandTargetImpact;
 	FWacomFirstPersonCardDataRewriteConfig DataRewrite;
 	FWacomFirstPersonCardDrawRevealConfig DrawReveal;
+	FWacomFirstPersonCardGainRevealConfig GainReveal;
 	FWacomFirstPersonCardPileTransferConfig PileTransfer;
 	bool bEnableCardInteractionFeedback = true;
 	FLinearColor PlayableHoverFeedbackColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);

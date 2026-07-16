@@ -20,6 +20,7 @@ enum class EWacomBattlePresentationPhaseKind : uint8
 	CommandHandResolution,
 	HandDiscardGlyphTransfer,
 	DeckReshuffle,
+	CommandCardGained,
 	CommandSourceOut,
 	CommandPrimaryTarget,
 	CommandOutcome,
@@ -65,6 +66,7 @@ struct FWacomBattlePresentationPhase
 			|| Kind == EWacomBattlePresentationPhaseKind::CommandHandResolution
 			|| Kind == EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer
 			|| Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle
+			|| Kind == EWacomBattlePresentationPhaseKind::CommandCardGained
 			|| Kind == EWacomBattlePresentationPhaseKind::CommandSourceOut
 			|| Kind == EWacomBattlePresentationPhaseKind::CommandPrimaryTarget
 			|| Kind == EWacomBattlePresentationPhaseKind::CommandOutcome

@@ -8,11 +8,15 @@
 #include "Commands/BattleCommand.h"
 #include "Events/BattleEventBus.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Rewards/BattleCardGrantService.h"
 #include "Runtime/RuntimeEnemyPart.h"
 
 FWacomStatus FKnockdownChoiceResolver::Resolve(
-	FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command)
+	FBattleState& State,
+	FBattleEventBus& Events,
+	FBattlePresentationJournal& PresentationJournal,
+	const FBattleCommand& Command)
 {
 	if (State.PendingKnockdownEvents.Num() <= 0)
 	{
@@ -89,6 +93,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 			FBattleCardGrantService::GrantCardToHand(
 				State,
 				Events,
+				PresentationJournal,
 				RewardCard,
 				Head.PartInstanceId,
 				Head.Identity.ToEnemyPartKey(),

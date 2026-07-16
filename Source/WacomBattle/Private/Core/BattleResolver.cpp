@@ -23,7 +23,11 @@ FWacomStatus FBattleResolver::Resolve(
 		{
 			return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("NotPendingKnockdown"));
 		}
-		return FKnockdownChoiceResolver::Resolve(State, Events, Command);
+		return FKnockdownChoiceResolver::Resolve(
+			State,
+			Events,
+			PresentationJournal,
+			Command);
 	}
 
 	// PlayCard 的完整可提交性只由 PlayCard Evaluation 判断。

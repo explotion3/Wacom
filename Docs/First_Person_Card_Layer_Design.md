@@ -131,6 +131,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `16 Card Data Rewrite` | Battle 费用数字的预测呼吸、消散重组、Reduced Motion、时长覆盖与可选音效 |
 | `17 Camera Look While UI` | Hover pointer 与 Inspect / Drag view 驱动 Battle / Run 镜头的独立开关、强度倍率与插值速度覆盖 |
 | `18 Card Draw Reveal` | Battle 真实 Drawn 卡的牌背等待、飞行中翻面、落定反馈和 Reduced Motion |
+| `19 Card Gain Reveal` | 显式 Gained 卡的正面像素结晶、稀有度完成边缘和 Reduced Motion |
 | `98 Experimental Surface Effect` | 暂不接入生产 Drag 的像素棱镜 Style / 参数原型；只为未来 CardDataChanged / Upgrade 效果保留 |
 | `99 Debug` | lifecycle 与 gesture diagnostics |
 
@@ -215,6 +216,8 @@ Run 探索期默认手牌和 provider-backed menu lease 的卡牌进入使用 `R
 `CardsRetained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 retained feedback hint，而不是 `Retained` transition hint。Controller 的 loose event 路径只为仍存在于下一份普通手牌中的卡生成 feedback，过滤无效 ID、重复 ID、左右手 anchor 和已经离开手牌的 ID；EndTurn `TurnEndRetain` phase 会在不改变 `CardsRetained` 规则事件的前提下，为 retain checkpoint snapshot 中仍存在的左右手 anchor 追加同款 retained feedback。同一批 feedback 使用稳定 `SequenceIndex / SequenceCount`。Layer 侧 retained feedback 是 post-layout pulse：卡牌保持当前 slot identity 和 layout target，只短促上浮、轻微放大并播放暖金色 feedback overlay。普通 refresh 不会取消正在播放的 retained feedback；slot 暂不可投影时 hint 会留到下一次 projected refresh。
 
 `CardGained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 `Gained` transition hint。`Gained` 和 `Drawn / RunHandEntered / HandAnchorEntered` 一样必须启动有限时长 enter playback；Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 控制奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
+
+`Gained` Slot 同时可叠加 Gain Reveal，但 Reveal 不拥有第二套时间或 Transform。等待错峰期间卡面完全隐藏；Enter Started 后直接使用 transition 归一化进度驱动“外缘像素簇建立 -> 向内结晶正面 -> 稀有度色硬边峰值 -> 完整正面”。默认阶段为 `0–0.12 / 0.12–0.62 / 0.62–0.84 / 0.84–1.0`。材质使用稳定 Card ID Seed，未组装区域同时裁切 RGB/Alpha，接触阴影只由已经组装的真实卡牌 Alpha 产生；外溢结晶不写入 shadow caster。该能力只接受 `Gained`，不影响 Draw Reveal、RunHandEntered 或 HandAnchorEntered；ForceComplete、source clear、身份复用和 teardown 都恢复基础 MID 与完整正面。
 
 `Played / Exhausted / Discarded` 都保留显式离场语义。`Discarded` 继续使用和 enter 对称的固定 elapsed 空间离场；普通成功使用映射为 `Played`，锁定提交成功当帧的位置和基础缩放，保留 Commit 局部脉冲，并默认播放约 `0.28s` 的单面像素翻面收牌：短促上提和像素闪边后，Slot 只在最终 RenderTransform 层压缩横轴并回正角度，直至形成约 `6%` 宽的发光侧边；最终进入 Exhaust 的牌映射为 `Exhausted`，继续使用约 `0.40s` 的 PixelAsh / OrderedDither 消耗消散。离开手牌的两种 Surface 离场由 App-private `FWacomFirstPersonCardSurfaceDeparturePlayback` 互斥管理，材质完成前 outgoing slot 不会移除。成功使用后仍存在于最终 Hand snapshot 的同一 Card ID 不创建 outgoing slot，而是收到 `CardUseReform` feedback hint：Slot 在提交位置翻到侧边，完全隐藏时切到最新布局目标，再反向展开并落定；没有左右手锚点时目标等于原位。旧 DiamondWave Style 仍可直接切换回中心向外消失 / 反向重构。普通使用 Style / Material Instance 无效时回退正常手牌重排；Exhaust Style、材质或噪声无效时回退 Discarded 空间离场，不能留下静止 slot。
 

@@ -18,7 +18,8 @@ enum class EBattlePresentationCheckpointType : uint8
 	None,
 	TurnEndDiscardResolved,
 	TurnEndRetainResolved,
-	TurnStartDrawResolved
+	TurnStartDrawResolved,
+	CardGainedResolved
 };
 
 enum class EBattlePresentationDeckStepKind : uint8

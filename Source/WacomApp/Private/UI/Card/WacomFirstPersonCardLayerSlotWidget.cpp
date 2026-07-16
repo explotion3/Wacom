@@ -12,11 +12,13 @@
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
+#include "Tags/WacomGameplayTags.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardDataRewritePlayback.h"
 #include "UI/Card/WacomFirstPersonCardDepthMotion.h"
 #include "UI/Card/WacomFirstPersonCardDrawRevealPlayback.h"
+#include "UI/Card/WacomFirstPersonCardGainRevealPlayback.h"
 #include "UI/Card/WacomFirstPersonCardDragPickupPlayback.h"
 #include "UI/Card/WacomFirstPersonCardHandTargetImpactPlayback.h"
 #include "UI/Card/WacomFirstPersonCardMotionMixer.h"
@@ -167,6 +169,49 @@ namespace
 		SurfaceView.DrawReveal.bReducedMotion = PlaybackView.bReducedMotion;
 		SurfaceView.DrawReveal.Progress = PlaybackView.Progress;
 		SurfaceView.DrawReveal.Style = VisualConfig.DrawReveal.Style;
+		return SurfaceView;
+	}
+
+	EWacomFirstPersonCardGainRevealRarity ResolveGainRevealRarity(
+		const FGameplayTag& RarityTag)
+	{
+		if (RarityTag.MatchesTagExact(WacomTags::Card_Rarity_White))
+		{
+			return EWacomFirstPersonCardGainRevealRarity::White;
+		}
+		if (RarityTag.MatchesTagExact(WacomTags::Card_Rarity_Blue))
+		{
+			return EWacomFirstPersonCardGainRevealRarity::Blue;
+		}
+		if (RarityTag.MatchesTagExact(WacomTags::Card_Rarity_Yellow))
+		{
+			return EWacomFirstPersonCardGainRevealRarity::Yellow;
+		}
+		if (RarityTag.MatchesTagExact(WacomTags::Card_Rarity_Purple))
+		{
+			return EWacomFirstPersonCardGainRevealRarity::Purple;
+		}
+		return EWacomFirstPersonCardGainRevealRarity::Neutral;
+	}
+
+	FWacomFirstPersonCardSurfaceEffectView BuildGainRevealView(
+		const FWacomFirstPersonCardGainRevealPlaybackView& PlaybackView,
+		const FWacomFirstPersonCardSlotVisualConfig& VisualConfig,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		FWacomFirstPersonCardSurfaceEffectView SurfaceView;
+		SurfaceView.GainReveal.bActive =
+			PlaybackView.Phase != EWacomFirstPersonCardGainRevealPhase::Inactive;
+		SurfaceView.GainReveal.bWaiting =
+			PlaybackView.Phase == EWacomFirstPersonCardGainRevealPhase::Waiting;
+		SurfaceView.GainReveal.bReducedMotion = PlaybackView.bReducedMotion;
+		SurfaceView.GainReveal.Progress = PlaybackView.Progress;
+		SurfaceView.GainReveal.Seed =
+			static_cast<float>(GetTypeHash(SlotView.Entry.CardInstanceId) & 0xFFFFu)
+			/ 65535.0f;
+		SurfaceView.GainReveal.Rarity = ResolveGainRevealRarity(
+			SlotView.Entry.CardViewData.Rarity);
+		SurfaceView.GainReveal.Style = VisualConfig.GainReveal.Style;
 		return SurfaceView;
 	}
 }
@@ -351,6 +396,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 		ClearHandTargetImpactPlayback();
 		ClearCardDataRewritePlayback();
 		ClearDrawRevealPlayback();
+		ClearGainRevealPlayback();
 		ClearGestureState(true);
 		ClearInteractionFeedback();
 	}
@@ -398,7 +444,8 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	if (!IsCardUseReformPlaybackActive()
 		&& !IsHandTargetImpactPlaybackActive()
 		&& !IsCardDataRewritePlaybackActive()
-		&& !IsDrawRevealPlaybackActive())
+		&& !IsDrawRevealPlaybackActive()
+		&& !IsGainRevealPlaybackActive())
 	{
 		ResetCardSurfaceEffectView();
 	}
@@ -633,6 +680,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotVisualConfig(
 	if (IsDrawRevealPlaybackActive())
 	{
 		ClearDrawRevealPlayback();
+	}
+	if (IsGainRevealPlaybackActive())
+	{
+		ClearGainRevealPlayback();
 	}
 	if (CardDepthMotion)
 	{
@@ -993,6 +1044,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	ClearHandTargetImpactPlayback();
 	ClearCardDataRewritePlayback();
 	ClearDrawRevealPlayback();
+	ClearGainRevealPlayback();
 	TransitionPlayback.Reset();
 	CardDepthMotion.Reset();
 	DragPickupPlayback.Reset();
@@ -1001,6 +1053,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	HandTargetImpactPlayback.Reset();
 	DataRewritePlayback.Reset();
 	DrawRevealPlayback.Reset();
+	GainRevealPlayback.Reset();
 	SetTickEnabledForMotion(false);
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
@@ -2638,6 +2691,11 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyActiveSurfaceEffectView()
 		ApplyDrawRevealSurfaceView();
 		return;
 	}
+	if (IsGainRevealPlaybackActive())
+	{
+		ApplyGainRevealSurfaceView();
+		return;
+	}
 	ResetCardSurfaceEffectView();
 }
 
@@ -2708,6 +2766,76 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearDrawRevealPlayback()
 bool UWacomFirstPersonCardLayerSlotWidget::IsDrawRevealPlaybackActive() const
 {
 	return DrawRevealPlayback && DrawRevealPlayback->IsActive();
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CanPlayGainReveal() const
+{
+	const FWacomFirstPersonCardGainRevealConfig& Config = SlotVisualConfig.GainReveal;
+	return Config.bEnabled && Config.Style.SurfaceEffectMaterialInstance != nullptr;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::PrepareGainRevealPlayback(
+	EWacomFirstPersonCardSlotTransitionKind TransitionKind)
+{
+	ClearGainRevealPlayback();
+	if (TransitionKind != EWacomFirstPersonCardSlotTransitionKind::Gained
+		|| !CanPlayGainReveal())
+	{
+		return;
+	}
+	if (!GainRevealPlayback)
+	{
+		GainRevealPlayback.Reset(new FWacomFirstPersonCardGainRevealPlayback());
+	}
+	GainRevealPlayback->Prepare(SlotVisualConfig.GainReveal);
+	ApplyGainRevealSurfaceView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::StartGainRevealPlayback()
+{
+	if (!GainRevealPlayback)
+	{
+		return;
+	}
+	GainRevealPlayback->Start();
+	ApplyGainRevealSurfaceView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::UpdateGainRevealPlayback(
+	float NormalizedEnterProgress)
+{
+	if (!GainRevealPlayback || !GainRevealPlayback->IsActive())
+	{
+		return;
+	}
+	GainRevealPlayback->Update(NormalizedEnterProgress);
+	ApplyGainRevealSurfaceView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ApplyGainRevealSurfaceView()
+{
+	if (!CardView || !GainRevealPlayback || !GainRevealPlayback->IsActive())
+	{
+		return;
+	}
+	CardView->SetCardSurfaceEffectView(BuildGainRevealView(
+		GainRevealPlayback->BuildView(),
+		SlotVisualConfig,
+		CurrentSlotView));
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ClearGainRevealPlayback()
+{
+	if (GainRevealPlayback)
+	{
+		GainRevealPlayback->Reset();
+	}
+	ApplyActiveSurfaceEffectView();
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::IsGainRevealPlaybackActive() const
+{
+	return GainRevealPlayback && GainRevealPlayback->IsActive();
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::PlayPendingHandTargetImpactSound()
@@ -3293,6 +3421,7 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 		View.PlayedDissolveView = CardViewTestView.SurfaceEffectView.PlayedDissolve;
 		View.HandTargetImpactView = CardViewTestView.SurfaceEffectView.HandTargetImpact;
 		View.DrawRevealView = CardViewTestView.SurfaceEffectView.DrawReveal;
+		View.GainRevealView = CardViewTestView.SurfaceEffectView.GainReveal;
 		View.DataRewriteView = CardViewTestView.DataRewriteView;
 	}
 	else
@@ -3315,6 +3444,13 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 			View.DrawRevealView = BuildDrawRevealView(
 				DrawRevealPlayback->BuildView(),
 				SlotVisualConfig).DrawReveal;
+		}
+		if (GainRevealPlayback && GainRevealPlayback->IsActive())
+		{
+			View.GainRevealView = BuildGainRevealView(
+				GainRevealPlayback->BuildView(),
+				SlotVisualConfig,
+				CurrentSlotView).GainReveal;
 		}
 	}
 	View.RenderTransform = GetRenderTransform();
@@ -3349,6 +3485,15 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 		View.DrawRevealLandingScale = RevealView.LandingScale;
 		View.DrawRevealLandingTranslationYPixels =
 			RevealView.LandingTranslationYPixels;
+	}
+	View.bGainRevealPlaybackActive = IsGainRevealPlaybackActive();
+	if (GainRevealPlayback && GainRevealPlayback->IsActive())
+	{
+		const FWacomFirstPersonCardGainRevealPlaybackView RevealView =
+			GainRevealPlayback->BuildView();
+		View.bGainRevealWaiting = RevealView.Phase
+			== EWacomFirstPersonCardGainRevealPhase::Waiting;
+		View.GainRevealProgress = RevealView.Progress;
 	}
 	View.bHandTargetDeparturePending = bHandTargetImpactDeparturePending;
 	View.bHandTargetDepartureGateOpen = IsHandTargetImpactDepartureGateOpen();
@@ -3915,6 +4060,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 		|| bPendingDataRewriteHandoff
 		|| bHandTargetImpactDeparturePending
 		|| IsDrawRevealPlaybackActive()
+		|| IsGainRevealPlaybackActive()
 		|| (bHasVisualSlotView
 			&& (FVector2D::Distance(VisualSlotView.ScreenPosition, EffectiveTargetSlotView.ScreenPosition) > 0.1f
 				|| FMath::Abs(VisualSlotView.RenderAngleDegrees - EffectiveTargetSlotView.RenderAngleDegrees) > 0.05f
@@ -3940,10 +4086,12 @@ void UWacomFirstPersonCardLayerSlotWidget::StartEnterTransitionPlayback(
 	if (TransitionPlayback->IsEnterActive())
 	{
 		PrepareDrawRevealPlayback(EnterProfile.TransitionKind);
+		PrepareGainRevealPlayback(EnterProfile.TransitionKind);
 	}
 	else
 	{
 		ClearDrawRevealPlayback();
+		ClearGainRevealPlayback();
 	}
 	BroadcastPendingEnterTransitionStarted();
 	PlayPendingTransitionStartSound();
@@ -3961,6 +4109,12 @@ void FWacomFirstPersonCardDrawRevealPlaybackDeleter::operator()(
 	delete Playback;
 }
 
+void FWacomFirstPersonCardGainRevealPlaybackDeleter::operator()(
+	FWacomFirstPersonCardGainRevealPlayback* Playback) const
+{
+	delete Playback;
+}
+
 void FWacomFirstPersonCardDataRewritePlaybackDeleter::operator()(
 	FWacomFirstPersonCardDataRewritePlayback* Playback) const
 {
@@ -3974,6 +4128,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearEnterTransitionPlayback()
 		TransitionPlayback->ResetIfMode(EWacomFirstPersonCardTransitionPlaybackMode::Enter);
 	}
 	ClearDrawRevealPlayback();
+	ClearGainRevealPlayback();
 	EnterTransitionStartWidgetPosition = FVector2D::ZeroVector;
 }
 
@@ -3990,6 +4145,7 @@ bool UWacomFirstPersonCardLayerSlotWidget::TickEnterTransitionPlayback(float Del
 	if (Result.bHasPlaybackProgress)
 	{
 		UpdateDrawRevealPlayback(Result.NormalizedPlaybackProgress);
+		UpdateGainRevealPlayback(Result.NormalizedPlaybackProgress);
 	}
 	if (Result.bHasVisualSlotView)
 	{
@@ -3999,6 +4155,7 @@ bool UWacomFirstPersonCardLayerSlotWidget::TickEnterTransitionPlayback(float Del
 	if (Result.bCompleted)
 	{
 		ClearDrawRevealPlayback();
+		ClearGainRevealPlayback();
 	}
 	return Result.bCompleted;
 }
@@ -4018,6 +4175,10 @@ void UWacomFirstPersonCardLayerSlotWidget::BroadcastPendingEnterTransitionStarte
 	if (PendingRequest.GetValue() == EWacomFirstPersonCardSlotTransitionKind::Drawn)
 	{
 		StartDrawRevealPlayback();
+	}
+	else if (PendingRequest.GetValue() == EWacomFirstPersonCardSlotTransitionKind::Gained)
+	{
+		StartGainRevealPlayback();
 	}
 
 	FWacomFirstPersonCardEnterTransitionStartedView View;

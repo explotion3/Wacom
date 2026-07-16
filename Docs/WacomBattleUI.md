@@ -108,6 +108,8 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 
 手牌 phase 的完成条件由 first-person card layer 的 production playback 状态提供：仍有 active enter、exit outgoing、retained feedback 或 Card Glyph Transfer 时保持 phase busy；播放结束后才进入下一 phase。普通弃牌和弃牌堆洗回使用传输种类加 Batch Sequence 去重并按 FIFO 播放，新批次不得强制完成前一批。timeout 不是直接跳过：触发时 coordinator 必须先 force-settle 当前 Anchor / Layer，清除 pending hints、收束 active playback、Impact 和临时牌堆计数，再启动下一 phase，避免旧动画跨阶段重叠。没有 journal 或 journal 无有效 phase 时，非 EndTurn / fallback 路径继续使用原来的 loose event hints 与 event queue。
 
+显式战斗奖励卡使用同一通用 resolved-command planner。`CardGainedResolved` checkpoint 先提交包含新卡的中间 Snapshot，并建立 `CommandCardGained` phase；该 phase 等待真实 `Gained` Enter 与 Gain Reveal 完成后，才处理 checkpoint 之后的 `CardDiscarded / HandLimitDiscarded`、洗牌或抽牌。因此手牌已满时严格表现为“新卡结晶入手 -> 对应卡普通弃牌迁移”，而不是直接把最终 Snapshot 中已经离手的卡跳过。中断、BattleEnd 或超时只恢复权威 Post Snapshot，不补播未开始的阶段。
+
 ## §4 Event Presentation Helper
 
 `UWacomBattleEventPresentationBuilder`、`FBattleEventPresentationView` 和 `EWacomBattleEventVisualTone` 是 UI-only 单事件展示词汇。它们被 Combat Log detail line 复用，用于生成玩家可读中文文案、tone 和 icon；新的 BattleHUD WBP 不应直接消费 raw `FBattleEvent`。
@@ -253,6 +255,8 @@ Battle hand 抽牌表现由 `FWacomBattleHandPresentationController` 事务化�
 `DeckReshuffle` 的两端反馈由 Card Glyph Transfer 的真实 progress 边缘驱动，不使用额外 Timer。`LaunchedCount` 增加时，Coordinator 用新发射牌印的平均 Bezier 初始切线驱动 `DiscardPileView.PlaySendFeedback()`，并从洗牌前弃牌数逐张递减；`ArrivedCount` 增加时，从洗牌前抽牌数逐张递增 `DrawPileView`，同时触发 `PlayReceiveFeedback()` 与 Slate Impact。最后一枚只增强既有接收脉冲/方印。低帧率批量跨边缘按数量增量聚合，重复 progress 不重复计数；ForceComplete、超时、BattleEnd、source clear 与 teardown 只恢复 Deck Step 的精确终值并清除两端 Transform。弃牌堆的 `Discard+Played` 复合文本在整个阶段保持不变，任一 PileView 缺失时另一端仍可独立工作。
 
 First-person card layer 重新拥有语义 Transition Audio，并生成 `Gained` 专用 transition：音效只在对应 enter playback 跨过错峰延迟、真正开始播放时请求一次；普通 refresh/reflow 不播放。`CardsRetained` 通过独立 feedback hint 驱动原槽位上的短促上浮、缩放、错峰与临时 ZOrder，不使用旧 Overlay 发光。`Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` 均保持显式表现语义；规则事件、日志和 Toast 行为不变。
+
+同一 `Gained` Enter 还驱动正面像素结晶入手。Stagger 等待期完全隐藏；真实 Started 边缘到来时，既有 Gained 音效与结晶在同一帧开始，结晶只消费 Enter 的归一化进度，不建立第二套计时或实体运动。默认先由外缘稳定像素簇向内组装正面，再在完成段播放一次由卡牌稀有度决定颜色的硬边峰值；该颜色不大面积染色卡面。Simplified Motion 只交叉显现正面并保留静态弱边缘。缺失 Style/MI 时安全回退原 Gained 飞行。
 
 `WacomBattle` 在 `CardPlayed` 后发布 `CardPlayDestinationResolved`，只提供最终 `ECardLocation` 规则事实；`WacomApp` 先索引同批事件再映射表现语义。最终进入 Exhaust 或独立 `CardExhausted` 事件生成 `Exhausted`，其他成功离开手牌的使用生成 `Played`；同一卡的相关事件会去重。成功使用且最终仍在 Hand 的卡（例如 AfterPlayed 自身腾挪）不会伪造离场，而是在存在已接受的 play commit 时生成可分段的 `CardUseReformOut / CardUseReformIn`：Outbound 默认在提交位置约 `0.22s` 翻到侧边，随后停在 `HeldHidden`，不 Tick、也不继续占用阶段完成条件；命令全部可见结果结束后，Inbound 才在最新手牌槽反向展开约 `0.18s` 并 `0.04s` 落定。Style 中旧 Hidden Hold 数值被计入结果期间的隐藏停留，不会在回手前额外重复等待。无左右锚点时最终槽位等于原位，仍完整播放翻出与翻回；使用音效只在 Outbound 开始请求一次。普通 `Played` 默认约 `0.28s` 翻面收起，`Exhausted` 继续使用 OrderedDither / PixelAsh；替换 Anchor Style 可恢复旧 DiamondWave。所有路径复用唯一 `Fake3DSurfaceRetainer`，不延迟 BattleSession 命令结算。
 

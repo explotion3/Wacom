@@ -78,7 +78,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 
 规则层不等待 UI 动画。BattleHUD 的 presentation queue、Combat Log、Presentation Stack 和 turn-boundary barrier 都属于表现层；它们只决定何时把玩家意图提交成 `FBattleCommand`，不改变命令本身。
 
-`FBattlePresentationJournal` 也是 C++ only 只读表现合同，不是规则状态，也不是 WBP 制作面。它记录一次成功命令结算中的关键 checkpoint snapshot、相关卡实例 ID，以及从同次正式事件流派生的有序 Deck Steps，让 App 层后续表现计划能读取精确中间态；恢复、存档、规则判断和权威 UI 刷新仍以 `FBattleSnapshot` 为准。EndTurn checkpoint 包含 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`；`DeckSteps` 可由 EndTurn 或 `Effect.Draw` 等任意正式命令产生，Action Preview 不生成这组事实。
+`FBattlePresentationJournal` 也是 C++ only 只读表现合同，不是规则状态，也不是 WBP 制作面。它记录一次成功命令结算中的关键 checkpoint snapshot、相关卡实例 ID，以及从同次正式事件流派生的有序 Deck Steps，让 App 层后续表现计划能读取精确中间态；恢复、存档、规则判断和权威 UI 刷新仍以 `FBattleSnapshot` 为准。EndTurn checkpoint 包含 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`；战斗内显式获得卡牌会在插入手牌后、执行手牌上限弃置前记录 `CardGainedResolved`，使 App 能严格还原“获得入手 -> 必要时弃置”。`DeckSteps` 可由 EndTurn 或 `Effect.Draw` 等任意正式命令产生，Action Preview 不生成这组事实。
 
 普通玩家命令在 `PlayerAction` 阶段提交。`PendingKnockdownChoice`、`BattleEnd` 和非玩家行动阶段会阻止普通 `PlayCard / Wait / EndTurn`。
 
@@ -538,6 +538,7 @@ Battle 只负责产出战后包。疲劳、伤口、经验、获得卡、撤离�
 - Aid / Destroy 是击倒事件分支，不依赖左 / 右手牌当前是否仍在手牌区，也不消耗左右手牌。
 - 如果被击倒部位配置 `KnockdownRewardCard`，选择 Aid 或 Destroy 会立刻创建战斗内 runtime card，随机插入当前手牌，并发出 `CardGained`；Withdraw 不触发奖励卡。
 - `CardGained.CardInstanceId` 是新建战斗内卡实例，`ActorInstanceId` 是来源部位实例，`CardDefinition` 是奖励卡定义，`Count` 记录本次 `EKnockdownChoice`。
+- 同次规则事务会在新卡已经插入手牌、手牌上限弃置尚未执行时记录 `CardGainedResolved` checkpoint；该事实只服务表现重建，不延迟或改写最终规则结果。
 - 奖励卡选择时即写入 `FBattleResultPacket.GainedCards`。后续即使这张战内卡被打出、弃掉、消耗或被上限弃牌，战后 Victory 仍会进入 Run。
 - 撤离只在敌人仍有存活部位时可选；如果本次击倒后敌人所有部位都已清空，必须 Aid 或 Destroy。
 - `UBattleSession::BuildPendingKnockdownChoiceView()` 输出当前击倒事件的 `FKnockdownChoiceView`。`DisabledReason` 当前使用 `None / NoLivingEnemyPart`；`LeftHandMissing / RightHandMissing` 已预留但未被当前规则触发。

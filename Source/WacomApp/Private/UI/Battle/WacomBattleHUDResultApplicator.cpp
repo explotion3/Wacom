@@ -196,7 +196,7 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 	}
 	if (Context.CombatLogContext.CommandKind != EWacomBattleCombatLogCommandKind::EndTurn
 		&& Context.CombatLogContext.CommandKind != EWacomBattleCombatLogCommandKind::PlayCard
-		&& Runtime.GetPresentationCoordinator().EnqueueDeckPresentationPlan(
+		&& Runtime.GetPresentationCoordinator().EnqueueResolvedCommandPresentationPlan(
 			Resolution.PresentationJournal,
 			Resolution.Events,
 			Context.PreCommandSnapshot,

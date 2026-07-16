@@ -19,6 +19,7 @@
 #include "UI/Card/WacomFirstPersonCardHandTargetImpactStyle.h"
 #include "UI/Card/WacomFirstPersonCardDataRewriteStyle.h"
 #include "UI/Card/WacomFirstPersonCardDrawRevealStyle.h"
+#include "UI/Card/WacomFirstPersonCardGainRevealStyle.h"
 #include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 #include "UI/Card/WacomFirstPersonCardPileTransferStyle.h"
 #include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
@@ -351,6 +352,11 @@ namespace
 		Config.DrawReveal.Style = Anchor.CardDrawRevealStyle
 			? Anchor.CardDrawRevealStyle->Style
 			: FWacomFirstPersonCardDrawRevealStyleData();
+		Config.GainReveal.bEnabled = Anchor.bEnableCardGainReveal;
+		Config.GainReveal.bReducedMotion = Anchor.bReduceCardGainRevealMotion;
+		Config.GainReveal.Style = Anchor.CardGainRevealStyle
+			? Anchor.CardGainRevealStyle->Style
+			: FWacomFirstPersonCardGainRevealStyleData();
 		Config.PileTransfer.bEnabled = Anchor.bEnableCardPileTransfer;
 		Config.PileTransfer.bDiscardToPileEnabled = Anchor.bEnableCardDiscardGlyphTransfer;
 		Config.PileTransfer.bReducedMotion = Anchor.bReduceCardPileTransferMotion;
@@ -513,6 +519,7 @@ namespace
 		VisualConfig.HandTargetImpact = Config.HandTargetImpact;
 		VisualConfig.DataRewrite = Config.DataRewrite;
 		VisualConfig.DrawReveal = Config.DrawReveal;
+		VisualConfig.GainReveal = Config.GainReveal;
 		return VisualConfig;
 	}
 
@@ -922,6 +929,15 @@ namespace
 		AddFloat(Config.DrawReveal.Style.LandingTranslationYPixels);
 		AddFloat(Config.DrawReveal.Style.ReducedCrossFadeStartProgress);
 		AddFloat(Config.DrawReveal.Style.ReducedCrossFadeEndProgress);
+		AddBool(Config.GainReveal.bEnabled);
+		AddBool(Config.GainReveal.bReducedMotion);
+		Combine(GetTypeHash(Config.GainReveal.Style.SurfaceEffectMaterialInstance.Get()));
+		AddFloat(Config.GainReveal.Style.SeedEstablishEndProgress);
+		AddFloat(Config.GainReveal.Style.AssemblyEndProgress);
+		AddFloat(Config.GainReveal.Style.RarityEdgePeakProgress);
+		AddFloat(Config.GainReveal.Style.SettleEndProgress);
+		AddFloat(Config.GainReveal.Style.ReducedCrossFadeStartProgress);
+		AddFloat(Config.GainReveal.Style.ReducedCrossFadeEndProgress);
 		AddBool(Config.PileTransfer.bEnabled);
 		AddBool(Config.PileTransfer.bDiscardToPileEnabled);
 		AddBool(Config.PileTransfer.bReducedMotion);

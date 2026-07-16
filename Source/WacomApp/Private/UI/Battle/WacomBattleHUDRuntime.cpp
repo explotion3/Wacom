@@ -1406,7 +1406,7 @@ bool FWacomBattleHUDRuntime::EnqueueCommandPresentationPlanForTest(
 	const FBattleSnapshot& PreCommandSnapshot,
 	const FBattleSnapshot& PostCommandSnapshot)
 {
-	return GetPresentationCoordinator().EnqueueDeckPresentationPlan(
+	return GetPresentationCoordinator().EnqueueResolvedCommandPresentationPlan(
 		Journal,
 		Events,
 		PreCommandSnapshot,

@@ -46,7 +46,7 @@ tags:
 
 - `CardsDrawn.CardInstanceIds` 是真实入手普通卡实例列表。Battle hand presentation controller 优先用这些 ID 生成 `Drawn` transition hint。
 - `CardsRetained` 是规则事件，只记录回合结束明确保留的普通手牌实例；当前会生成独立 retained feedback hint，但不对应 first-person `Retained` transition kind。
-- `FBattlePresentationJournal` 是 C++ only 只读 checkpoint journal，当前只记录 EndTurn 的 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`。
+- `FBattlePresentationJournal` 是 C++ only 只读 checkpoint journal，记录 EndTurn 的 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`，以及显式获得卡插入后、手牌上限弃置前的 `CardGainedResolved`。
 - first-person card layer 当前 transition kind 包含 `Default`、`Drawn`、`RunHandEntered`、`Gained`、`HandAnchorEntered`、`Played`、`Discarded`。`RunHandEntered` 是 Run/App-only hand/source 进入语义，v1 复用 `Drawn` 入场 profile；`HandAnchorEntered` 是 UI-only 左右手牌生成入手语义。两者都不属于 `CardsDrawn`。
 - EndTurn journal 现在由 `WacomApp` presentation coordinator 翻译为阶段化 plan：`TurnEndDiscard -> TurnEndRetain -> EnemyAction -> TurnStartDraw -> TurnStartHandAnchorEnter`。手牌阶段等待 first-person card layer 报告播放结束后再进入下一阶段；enemy phase v1 复用现有 battle event presentation queue。
 - `FWacomBattleHandPresentationController` 在非 EndTurn phase plan 路径中，仍把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
@@ -206,6 +206,8 @@ Run default source 和 RunEvent / 菜单的 provider-backed menu lease 使用 `R
 战斗中获得卡牌使用 `CardGained` 事件和 `Gained` hint。它和普通抽牌不同：语义来源是战斗奖励、击倒选择或其他获得入口，不是抽牌堆。
 
 `Gained` 入场和 `Drawn / RunHandEntered / HandAnchorEntered` 一样是有限时长 enter playback，而不是只给新 slot 一个初始 offset 后交给普通 layout motion。Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 决定奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞；`07 Transition Audio` 下的 `GainedCardEnterSound` 决定奖励卡入手音效。
+
+Anchor `19 Card Gain Reveal` 为同一个 `Gained` Enter 增加正面像素结晶。它直接消费真实 Enter progress，因此不会改变既有 `0.32s` 总时长、错峰、弧线、音效或交互阻塞；等待期不泄露卡面，完成时只让外缘按 White / Blue / Yellow / Purple 稀有度短暂着色。`CardGainedResolved` checkpoint 让命令级 planner 在手牌已满时先完成该 Enter，再播放实际被上限弃置卡的普通弃牌迁移。
 
 后续可把 reward source、敌方部位来源、choice 类型转成更丰富的入场 origin，但不能让 first-person card layer 读取击倒规则。
 

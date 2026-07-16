@@ -159,6 +159,9 @@ private:
 	void ApplyDrawRevealParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardDrawRevealView& View) const;
+	void ApplyGainRevealParameters(
+		UMaterialInstanceDynamic& Material,
+		const FWacomFirstPersonCardGainRevealView& View) const;
 	void ApplyPlayedDissolveParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardPlayedDissolveView& View) const;

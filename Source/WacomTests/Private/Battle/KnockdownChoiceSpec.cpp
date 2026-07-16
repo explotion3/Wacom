@@ -12,6 +12,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Map/WacomFloorMapDefinition.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Session/BattleSession.h"
 #include "Session/BattleResultPacket.h"
 #include "Runtime/BattleEnemyKeys.h"
@@ -87,6 +88,17 @@ namespace
 			}
 		}
 		return nullptr;
+	}
+
+	const FBattlePresentationCheckpoint* FindCardGainedCheckpoint(
+		const FBattlePresentationJournal& Journal)
+	{
+		return Journal.Checkpoints.FindByPredicate(
+			[](const FBattlePresentationCheckpoint& Checkpoint)
+			{
+				return Checkpoint.Type
+					== EBattlePresentationCheckpointType::CardGainedResolved;
+			});
 	}
 
 	UCardDefinition* MakeKnockdownRewardLimitDrawCard(FWacomBattleFixture& Fx, int32 DrawCount)
@@ -265,6 +277,26 @@ bool FWacomKnockdownChoiceRewardCardAidSpec::RunTest(const FString& /*Parameters
 		TestEqual(TEXT("CardGained source part key"), CardGained->ActorEnemyPartKey, FWacomBattleFixture::FindPartKey(Snap0, 0));
 		TestEqual(TEXT("CardGained choice count is Aid"), CardGained->Count, static_cast<int32>(EKnockdownChoice::Aid));
 	}
+	const FBattlePresentationCheckpoint* GainedCheckpoint =
+		FindCardGainedCheckpoint(AidStatus.PresentationJournal);
+	if (TestNotNull(TEXT("CardGainedResolved checkpoint recorded"), GainedCheckpoint)
+		&& CardGained)
+	{
+		TestTrue(TEXT("Checkpoint contains the gained runtime card"),
+			GainedCheckpoint->CardInstanceIds.Contains(CardGained->CardInstanceId));
+		TestTrue(TEXT("Checkpoint snapshot contains the gained runtime card"),
+			GainedCheckpoint->Snapshot.Hand.Cards.ContainsByPredicate(
+				[CardGained](const FHandCardSnapshot& Card)
+				{
+					return Card.InstanceId == CardGained->CardInstanceId;
+				}));
+		TestEqual(TEXT("Checkpoint begins at the CardGained event"),
+			GainedCheckpoint->FirstEventSequence,
+			CardGained->Sequence);
+		TestEqual(TEXT("Checkpoint ends at the CardGained event"),
+			GainedCheckpoint->LastEventSequence,
+			CardGained->Sequence);
+	}
 
 	const FBattleResultPacket Packet = S->BuildResultPacket();
 	TestEqual(TEXT("GainedCards has one reward"), Packet.GainedCards.Num(), 1);
@@ -438,6 +470,20 @@ bool FWacomKnockdownChoiceRewardCardRespectsHandLimitSpec::RunTest(const FString
 			Snap.Hand.NormalCardLimit);
 		TestNotNull(TEXT("Reward still emits CardGained even if limit discard happens"),
 			FindCardGainedEvent(Events, RewardCard));
+		const FBattleEvent* GainedEvent = FindCardGainedEvent(Events, RewardCard);
+		const FBattlePresentationCheckpoint* GainedCheckpoint =
+			FindCardGainedCheckpoint(AidResolution.PresentationJournal);
+		if (TestNotNull(TEXT("Full-hand reward still records the pre-discard gained checkpoint"),
+			GainedCheckpoint)
+			&& GainedEvent)
+		{
+			TestTrue(TEXT("Pre-discard checkpoint retains the gained card even if final hand does not"),
+				GainedCheckpoint->Snapshot.Hand.Cards.ContainsByPredicate(
+					[GainedEvent](const FHandCardSnapshot& Card)
+					{
+						return Card.InstanceId == GainedEvent->CardInstanceId;
+					}));
+		}
 		TestTrue(TEXT("Reward grant over full hand emits HandLimitDiscarded"), LimitDiscardEvents > 0);
 		bCovered = true;
 	}

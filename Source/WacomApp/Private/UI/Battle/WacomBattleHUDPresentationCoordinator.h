@@ -45,7 +45,7 @@ public:
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PostCommandSnapshot);
-	bool EnqueueDeckPresentationPlan(
+	bool EnqueueResolvedCommandPresentationPlan(
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PreCommandSnapshot,

@@ -54,6 +54,17 @@ namespace
 	const FName DrawRevealReducedCrossFadeEndParameterName(TEXT("DrawRevealReducedCrossFadeEnd"));
 	const FName DrawRevealCardBodyRectMinParameterName(TEXT("DrawRevealCardBodyRectMin"));
 	const FName DrawRevealCardBodyRectMaxParameterName(TEXT("DrawRevealCardBodyRectMax"));
+	const FName GainRevealEnabledParameterName(TEXT("GainRevealEnabled"));
+	const FName GainRevealProgressParameterName(TEXT("GainRevealProgress"));
+	const FName GainRevealReducedMotionParameterName(TEXT("GainRevealReducedMotion"));
+	const FName GainRevealSeedParameterName(TEXT("GainRevealSeed"));
+	const FName GainRevealRarityIndexParameterName(TEXT("GainRevealRarityIndex"));
+	const FName GainRevealSeedEstablishEndParameterName(TEXT("GainRevealSeedEstablishEnd"));
+	const FName GainRevealAssemblyEndParameterName(TEXT("GainRevealAssemblyEnd"));
+	const FName GainRevealRarityEdgePeakParameterName(TEXT("GainRevealRarityEdgePeak"));
+	const FName GainRevealSettleEndParameterName(TEXT("GainRevealSettleEnd"));
+	const FName GainRevealReducedCrossFadeStartParameterName(TEXT("GainRevealReducedCrossFadeStart"));
+	const FName GainRevealReducedCrossFadeEndParameterName(TEXT("GainRevealReducedCrossFadeEnd"));
 	const FName PlayedDissolveEnabledParameterName(TEXT("PlayedDissolveEnabled"));
 	const FName PlayedDissolveAmountParameterName(TEXT("PlayedDissolveAmount"));
 	const FName PlayedDissolveTimeParameterName(TEXT("PlayedDissolveTime"));
@@ -317,6 +328,7 @@ void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
 	CacheBaseSurfaceEffectMaterial();
 	const FWacomFirstPersonCardUseEffectView& CardUseView = View.CardUse;
 	const FWacomFirstPersonCardDrawRevealView& DrawRevealView = View.DrawReveal;
+	const FWacomFirstPersonCardGainRevealView& GainRevealView = View.GainReveal;
 	const FWacomFirstPersonCardPlayedDissolveView& DissolveView = View.PlayedDissolve;
 	const FWacomFirstPersonCardHandTargetImpactView& HandTargetImpactView =
 		View.HandTargetImpact;
@@ -329,6 +341,17 @@ void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
 		{
 			ApplyCardDepthParameters(*ActiveSurfaceEffectMaterialInstance);
 			ApplyDrawRevealParameters(*ActiveSurfaceEffectMaterialInstance, DrawRevealView);
+		}
+	}
+	else if (GainRevealView.bActive
+		&& GainRevealView.Style.SurfaceEffectMaterialInstance)
+	{
+		EnsureSurfaceEffectMaterialInstance(
+			GainRevealView.Style.SurfaceEffectMaterialInstance);
+		if (ActiveSurfaceEffectMaterialInstance)
+		{
+			ApplyCardDepthParameters(*ActiveSurfaceEffectMaterialInstance);
+			ApplyGainRevealParameters(*ActiveSurfaceEffectMaterialInstance, GainRevealView);
 		}
 	}
 	else if (HandTargetImpactView.bActive
@@ -692,6 +715,57 @@ void UWacomFirstPersonCardViewWidget::ApplyDrawRevealParameters(
 	ResolveDrawRevealCardBodyUVRect(BodyRectMin, BodyRectMax);
 	Material.SetVectorParameterValue(DrawRevealCardBodyRectMinParameterName, BodyRectMin);
 	Material.SetVectorParameterValue(DrawRevealCardBodyRectMaxParameterName, BodyRectMax);
+
+	FVector2D SurfaceSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
+	{
+		SurfaceSize = FVector2D(456.0f, 520.0f);
+	}
+	Material.SetVectorParameterValue(
+		SurfaceInvSizeParameterName,
+		FLinearColor(1.0f / SurfaceSize.X, 1.0f / SurfaceSize.Y, 0.0f, 0.0f));
+}
+
+void UWacomFirstPersonCardViewWidget::ApplyGainRevealParameters(
+	UMaterialInstanceDynamic& Material,
+	const FWacomFirstPersonCardGainRevealView& View) const
+{
+	const FWacomFirstPersonCardGainRevealStyleData& Style = View.Style;
+	Material.SetScalarParameterValue(
+		GainRevealEnabledParameterName,
+		View.bActive ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(
+		GainRevealProgressParameterName,
+		FMath::Clamp(View.Progress, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(
+		GainRevealReducedMotionParameterName,
+		View.bReducedMotion ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(
+		GainRevealSeedParameterName,
+		FMath::Frac(FMath::Abs(View.Seed)));
+	Material.SetScalarParameterValue(
+		GainRevealRarityIndexParameterName,
+		static_cast<float>(View.Rarity));
+	Material.SetScalarParameterValue(
+		GainRevealSeedEstablishEndParameterName,
+		Style.SeedEstablishEndProgress);
+	Material.SetScalarParameterValue(
+		GainRevealAssemblyEndParameterName,
+		Style.AssemblyEndProgress);
+	Material.SetScalarParameterValue(
+		GainRevealRarityEdgePeakParameterName,
+		Style.RarityEdgePeakProgress);
+	Material.SetScalarParameterValue(
+		GainRevealSettleEndParameterName,
+		Style.SettleEndProgress);
+	Material.SetScalarParameterValue(
+		GainRevealReducedCrossFadeStartParameterName,
+		Style.ReducedCrossFadeStartProgress);
+	Material.SetScalarParameterValue(
+		GainRevealReducedCrossFadeEndParameterName,
+		Style.ReducedCrossFadeEndProgress);
 
 	FVector2D SurfaceSize = Fake3DSurfaceRetainer
 		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()

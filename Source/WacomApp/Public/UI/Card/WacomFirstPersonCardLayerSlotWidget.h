@@ -15,6 +15,7 @@ class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardDataRewritePlayback;
 class FWacomFirstPersonCardDrawRevealPlayback;
+class FWacomFirstPersonCardGainRevealPlayback;
 class FWacomFirstPersonCardDragPickupPlayback;
 class FWacomFirstPersonCardHandTargetImpactPlayback;
 class FWacomFirstPersonCardSurfaceDeparturePlayback;
@@ -51,6 +52,11 @@ struct FWacomFirstPersonCardDataRewritePlaybackDeleter
 struct FWacomFirstPersonCardDrawRevealPlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardDrawRevealPlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardGainRevealPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardGainRevealPlayback* Playback) const;
 };
 
 struct FWacomFirstPersonCardHandTargetImpactPlaybackDeleter
@@ -118,6 +124,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	FWacomFirstPersonCardHandTargetImpactView HandTargetImpactView;
 	FWacomFirstPersonCardDataRewriteView DataRewriteView;
 	FWacomFirstPersonCardDrawRevealView DrawRevealView;
+	FWacomFirstPersonCardGainRevealView GainRevealView;
 	FWidgetTransform RenderTransform;
 	int32 RenderZOrder = 0;
 	bool bDragPickupFeedbackActive = false;
@@ -138,6 +145,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	float DrawRevealHorizontalScale = 1.0f;
 	FVector2D DrawRevealLandingScale = FVector2D(1.0f, 1.0f);
 	float DrawRevealLandingTranslationYPixels = 0.0f;
+	bool bGainRevealPlaybackActive = false;
+	bool bGainRevealWaiting = false;
+	float GainRevealProgress = 0.0f;
 	bool bHandTargetDeparturePending = false;
 	bool bHandTargetDepartureGateOpen = false;
 	int32 HandTargetImpactZOrderBoost = 0;
@@ -395,6 +405,9 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardDrawRevealPlayback,
 		FWacomFirstPersonCardDrawRevealPlaybackDeleter> DrawRevealPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardGainRevealPlayback,
+		FWacomFirstPersonCardGainRevealPlaybackDeleter> GainRevealPlayback;
 	int32 PendingDataRewriteFieldMask = 0;
 	EWacomFirstPersonCardDataRewriteTone PendingDataRewriteTone =
 		EWacomFirstPersonCardDataRewriteTone::Neutral;
@@ -588,6 +601,13 @@ private:
 	void ApplyDrawRevealSurfaceView();
 	void ClearDrawRevealPlayback();
 	bool IsDrawRevealPlaybackActive() const;
+	bool CanPlayGainReveal() const;
+	void PrepareGainRevealPlayback(EWacomFirstPersonCardSlotTransitionKind TransitionKind);
+	void StartGainRevealPlayback();
+	void UpdateGainRevealPlayback(float NormalizedEnterProgress);
+	void ApplyGainRevealSurfaceView();
+	void ClearGainRevealPlayback();
+	bool IsGainRevealPlaybackActive() const;
 	bool CanPlayCardUseEffect() const;
 	bool CanPlayCardUseReformEffect() const;
 	bool CanPlayExhaustDissolve() const;

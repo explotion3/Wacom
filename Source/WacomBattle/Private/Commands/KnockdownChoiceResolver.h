@@ -7,6 +7,7 @@
 
 struct FBattleState;
 struct FBattleEventBus;
+struct FBattlePresentationJournal;
 struct FBattleCommand;
 
 /**
@@ -27,5 +28,9 @@ struct FBattleCommand;
 class FKnockdownChoiceResolver
 {
 public:
-	static FWacomStatus Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command);
+	static FWacomStatus Resolve(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		FBattlePresentationJournal& PresentationJournal,
+		const FBattleCommand& Command);
 };
