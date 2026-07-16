@@ -175,24 +175,6 @@ namespace WacomCardFaceViewDataBuilder
 			return Effect.Magnitude;
 		}
 
-		int32 GetPreviewDisplayMagnitude(
-			const FCardEffect& Effect,
-			const UCardDefinition* Card,
-			const FWacomCardPresentationRuntimeContext& RuntimeContext,
-			int32 EffectIndex)
-		{
-			if (const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview =
-				FindEffectPreview(RuntimeContext, EffectIndex))
-			{
-				if (Preview->bHasMagnitude)
-				{
-					return Preview->Magnitude;
-				}
-			}
-
-			return GetBaseDisplayMagnitude(Effect, Card, RuntimeContext);
-		}
-
 		FText BuildEffectBadgeText(EWacomCardViewEffectBadgeKind Kind, int32 Value)
 		{
 			switch (Kind)
@@ -241,58 +223,55 @@ namespace WacomCardFaceViewDataBuilder
 			}
 		}
 
-		bool TryBuildEffectBadge(
+		bool TryResolveEffectBadgeKind(
 			const FCardEffect& Effect,
-			const UCardDefinition* Card,
-			const FWacomCardPresentationRuntimeContext& RuntimeContext,
-			int32 EffectIndex,
-			FWacomCardViewEffectBadge& OutBadge)
+			EWacomCardViewEffectBadgeKind& OutKind)
 		{
-			if (const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview =
-				FindEffectPreview(RuntimeContext, EffectIndex))
-			{
-				if (Preview->bSkip)
-				{
-					return false;
-				}
-			}
-
-			const int32 Value = GetPreviewDisplayMagnitude(Effect, Card, RuntimeContext, EffectIndex);
-			if (Value == 0)
-			{
-				return false;
-			}
-
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Damage))
 			{
-				OutBadge.Kind = EWacomCardViewEffectBadgeKind::Damage;
+				OutKind = EWacomCardViewEffectBadgeKind::Damage;
 			}
 			else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Heal))
 			{
-				OutBadge.Kind = EWacomCardViewEffectBadgeKind::Heal;
+				OutKind = EWacomCardViewEffectBadgeKind::Heal;
 			}
 			else if (Effect.EffectType.MatchesTagExact(WacomTags::Status_Shield))
 			{
-				OutBadge.Kind = EWacomCardViewEffectBadgeKind::Shield;
+				OutKind = EWacomCardViewEffectBadgeKind::Shield;
 			}
 			else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Poison))
 			{
-				OutBadge.Kind = EWacomCardViewEffectBadgeKind::Poison;
+				OutKind = EWacomCardViewEffectBadgeKind::Poison;
 			}
 			else
 			{
 				return false;
 			}
-
-			if (!IsArtBackedCardFaceEffectBadgeKind(OutBadge.Kind))
-			{
-				return false;
-			}
-
-			OutBadge.Value = Value;
-			OutBadge.DisplayText = BuildEffectBadgeText(OutBadge.Kind, Value);
-			return true;
+			return IsArtBackedCardFaceEffectBadgeKind(OutKind);
 		}
+
+		FName GetEffectBadgePresentationKey(EWacomCardViewEffectBadgeKind Kind)
+		{
+			switch (Kind)
+			{
+			case EWacomCardViewEffectBadgeKind::Damage: return TEXT("Badge.Damage");
+			case EWacomCardViewEffectBadgeKind::Heal: return TEXT("Badge.Heal");
+			case EWacomCardViewEffectBadgeKind::Poison: return TEXT("Badge.Poison");
+			case EWacomCardViewEffectBadgeKind::Burn: return TEXT("Badge.Burn");
+			case EWacomCardViewEffectBadgeKind::Shield: return TEXT("Badge.Shield");
+			default:
+				return FName(*FString::Printf(TEXT("Badge.%d"), static_cast<int32>(Kind)));
+			}
+		}
+
+		struct FEffectBadgeAggregate
+		{
+			EWacomCardViewEffectBadgeKind Kind = EWacomCardViewEffectBadgeKind::Generic;
+			int32 AuthoritativeValue = 0;
+			int32 PreviewValue = 0;
+			bool bHasPreviewFacts = false;
+			bool bHasApplicablePreviewContribution = false;
+		};
 	}
 
 	FWacomCardViewData BuildCardViewData(
@@ -342,15 +321,73 @@ namespace WacomCardFaceViewDataBuilder
 		{
 			return Badges;
 		}
+		TArray<FEffectBadgeAggregate> Aggregates;
+		Aggregates.Reserve(Card->Effects.Num());
 
 		for (int32 EffectIndex = 0; EffectIndex < Card->Effects.Num(); ++EffectIndex)
 		{
 			const FCardEffect& Effect = Card->Effects[EffectIndex];
-			FWacomCardViewEffectBadge Badge;
-			if (TryBuildEffectBadge(Effect, Card, RuntimeContext, EffectIndex, Badge))
+			EWacomCardViewEffectBadgeKind Kind = EWacomCardViewEffectBadgeKind::Generic;
+			if (!TryResolveEffectBadgeKind(Effect, Kind))
 			{
-				Badges.Add(Badge);
+				continue;
 			}
+
+			FEffectBadgeAggregate* Aggregate = Aggregates.FindByPredicate([Kind](
+				const FEffectBadgeAggregate& Candidate)
+			{
+				return Candidate.Kind == Kind;
+			});
+			if (!Aggregate)
+			{
+				Aggregate = &Aggregates.AddDefaulted_GetRef();
+				Aggregate->Kind = Kind;
+			}
+
+			const int32 BaseMagnitude = GetBaseDisplayMagnitude(Effect, Card, RuntimeContext);
+			const int32 AuthoritativeContribution = Effect.Condition.IsSet() ? 0 : BaseMagnitude;
+			Aggregate->AuthoritativeValue += AuthoritativeContribution;
+
+			const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview =
+				FindEffectPreview(RuntimeContext, EffectIndex);
+			if (!Preview)
+			{
+				Aggregate->PreviewValue += AuthoritativeContribution;
+				Aggregate->bHasApplicablePreviewContribution |= AuthoritativeContribution != 0;
+				continue;
+			}
+
+			Aggregate->bHasPreviewFacts = true;
+			if (!Preview->bSkip)
+			{
+				const int32 PreviewContribution = Preview->bHasMagnitude
+					? Preview->Magnitude
+					: BaseMagnitude;
+				Aggregate->PreviewValue += PreviewContribution;
+				Aggregate->bHasApplicablePreviewContribution |= PreviewContribution != 0;
+			}
+		}
+
+		for (const FEffectBadgeAggregate& Aggregate : Aggregates)
+		{
+			if (Aggregate.AuthoritativeValue == 0 && Aggregate.PreviewValue == 0)
+			{
+				continue;
+			}
+
+			FWacomCardViewEffectBadge& Badge = Badges.AddDefaulted_GetRef();
+			Badge.Kind = Aggregate.Kind;
+			Badge.PresentationKey = GetEffectBadgePresentationKey(Aggregate.Kind);
+			Badge.Value = Aggregate.AuthoritativeValue;
+			Badge.PreviewValue = Aggregate.PreviewValue;
+			Badge.bPreviewSkipped = Aggregate.bHasPreviewFacts
+				&& !Aggregate.bHasApplicablePreviewContribution;
+			Badge.bHasPreviewValue = Aggregate.bHasPreviewFacts
+				&& !Badge.bPreviewSkipped
+				&& Aggregate.PreviewValue != Aggregate.AuthoritativeValue;
+			Badge.DisplayText = BuildEffectBadgeText(
+				Badge.Kind,
+				Badge.Value != 0 ? Badge.Value : Badge.PreviewValue);
 		}
 		return Badges;
 	}

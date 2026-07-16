@@ -69,8 +69,12 @@ namespace
 		}
 		for (int32 Index = 0; Index < A.Num(); ++Index)
 		{
-			if (A[Index].Kind != B[Index].Kind
+			if (A[Index].PresentationKey != B[Index].PresentationKey
+				|| A[Index].Kind != B[Index].Kind
 				|| A[Index].Value != B[Index].Value
+				|| A[Index].bHasPreviewValue != B[Index].bHasPreviewValue
+				|| A[Index].PreviewValue != B[Index].PreviewValue
+				|| A[Index].bPreviewSkipped != B[Index].bPreviewSkipped
 				|| !AreTextsEquivalent(A[Index].DisplayText, B[Index].DisplayText))
 			{
 				return false;
@@ -827,6 +831,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardFeedbackHints(
 		ResolvedHint.bHasDataRewriteCostValues = Hint.bHasDataRewriteCostValues;
 		ResolvedHint.DataRewriteCostBefore = Hint.DataRewriteCostBefore;
 		ResolvedHint.DataRewriteCostAfter = Hint.DataRewriteCostAfter;
+		ResolvedHint.EffectBadgeChanges = Hint.EffectBadgeChanges;
 		ResolvedHint.bBlocksPresentationPhase = Hint.bBlocksPresentationPhase;
 		ResolvedHint.bRetainUntilExplicitRelease = Hint.bRetainUntilExplicitRelease;
 		FWacomFirstPersonCardLayerResolvedFeedbackBundle& Bundle =
@@ -839,7 +844,28 @@ void UWacomFirstPersonCardLayerWidget::SetCardFeedbackHints(
 					return Candidate.FeedbackKind == ResolvedHint.FeedbackKind;
 				}))
 		{
-			if (ResolvedHint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite)
+			if (ResolvedHint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange)
+			{
+				for (const FWacomFirstPersonCardEffectBadgeChange& Change : ResolvedHint.EffectBadgeChanges)
+				{
+					if (FWacomFirstPersonCardEffectBadgeChange* ExistingChange =
+						Existing->EffectBadgeChanges.FindByPredicate([&Change](
+							const FWacomFirstPersonCardEffectBadgeChange& Candidate)
+						{
+							return Candidate.PresentationKey == Change.PresentationKey;
+						}))
+					{
+						*ExistingChange = Change;
+					}
+					else
+					{
+						Existing->EffectBadgeChanges.Add(Change);
+					}
+				}
+				Existing->bBlocksPresentationPhase =
+					Existing->bBlocksPresentationPhase || ResolvedHint.bBlocksPresentationPhase;
+			}
+			else if (ResolvedHint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite)
 			{
 				Existing->DataRewriteFieldMask |= ResolvedHint.DataRewriteFieldMask;
 				Existing->DataRewriteTone = ResolvedHint.DataRewriteTone;
@@ -1027,6 +1053,15 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 							== EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite;
 					})
 				: nullptr;
+		const FWacomFirstPersonCardLayerResolvedFeedbackHint* EffectBadgeHint =
+			IncomingFeedbackBundle
+				? IncomingFeedbackBundle->Hints.FindByPredicate(
+					[](const FWacomFirstPersonCardLayerResolvedFeedbackHint& Hint)
+					{
+						return Hint.FeedbackKind
+							== EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange;
+					})
+				: nullptr;
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile> EnterProfileOverride =
 			(IncomingTransitionHint && SlotView.bProjected)
 				? GetEnterProfileForTransition(*IncomingTransitionHint, SlotView)
@@ -1142,6 +1177,14 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 					DataRewriteHint->SequenceIndex,
 					DataRewriteHint->SequenceCount,
 					DataRewriteHint->bBlocksPresentationPhase);
+			}
+			if (EffectBadgeHint
+				&& !bHasCardUseReformHint
+				&& !EffectBadgeHint->EffectBadgeChanges.IsEmpty())
+			{
+				SlotWidget->TriggerEffectBadgeFeedback(
+					EffectBadgeHint->EffectBadgeChanges,
+					EffectBadgeHint->bBlocksPresentationPhase);
 			}
 			AppliedFeedbackHintKeys.Add(SlotKey);
 		}

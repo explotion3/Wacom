@@ -5,9 +5,11 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomCardEffectBadgeWidget.generated.h"
 
 class UImage;
+class UMaterialInstanceDynamic;
 class UPanelWidget;
 class UPaperSprite;
 
@@ -16,6 +18,15 @@ struct FWacomCardEffectBadgeAutomationTestView
 {
 	int32 ApplyCount = 0;
 	int32 DigitImageUpdateCount = 0;
+	bool bFeedbackMaterialActive = false;
+	bool bFeedbackMaterialConfigured = false;
+	bool bPreviewSkipped = false;
+	float PreviewAmount = 0.0f;
+	int32 ResolvedDigitSpriteCount = 0;
+	int32 ActiveDigitMaterialInstanceCount = 0;
+	int32 LastFeedbackMaterialFailure = 0;
+	FVector2D RootScale = FVector2D(1.0f, 1.0f);
+	float RootOpacity = 1.0f;
 };
 #endif
 
@@ -40,12 +51,27 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|CardView")
 	FText GetValueText() const;
 
+	void SetEffectBadgeFeedbackConfig(
+		const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig);
+	void SetEffectBadgeFeedbackView(
+		const FWacomFirstPersonCardEffectBadgeFeedbackItemView& InView);
+	void ResetEffectBadgeFeedback();
+
 #if WITH_AUTOMATION_TESTS
 	FWacomCardEffectBadgeAutomationTestView GetAutomationTestViewForTest() const
 	{
 		FWacomCardEffectBadgeAutomationTestView View;
 		View.ApplyCount = ApplyCountForTest;
 		View.DigitImageUpdateCount = DigitImageUpdateCountForTest;
+		View.bFeedbackMaterialActive = bFeedbackMaterialActive;
+		View.bFeedbackMaterialConfigured = FeedbackConfig.Style.DigitFeedbackMaterialInstance != nullptr;
+		View.bPreviewSkipped = CurrentData.bPreviewSkipped;
+		View.PreviewAmount = PreviewAmount;
+		View.ResolvedDigitSpriteCount = ResolvedDigitSprites.Num();
+		View.ActiveDigitMaterialInstanceCount = ActiveDigitMaterialInstances.Num();
+		View.LastFeedbackMaterialFailure = LastFeedbackMaterialFailureForTest;
+		View.RootScale = GetRenderTransform().Scale;
+		View.RootOpacity = GetRenderOpacity();
 		return View;
 	}
 #endif
@@ -53,6 +79,8 @@ public:
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> BadgeFrameImage;
@@ -88,12 +116,29 @@ private:
 	UPROPERTY(Transient)
 	TMap<int32, TObjectPtr<UPaperSprite>> ResolvedDigitSprites;
 
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInstanceDynamic>> ActiveDigitMaterialInstances;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> ActiveDigitMaterialSource;
+
+	FWacomFirstPersonCardEffectBadgeFeedbackConfig FeedbackConfig;
+	FWacomFirstPersonCardEffectBadgeFeedbackItemView FeedbackView;
+	FWidgetTransform AuthoredRootTransform;
+	FVector2D AuthoredRootPivot = FVector2D(0.5f, 0.5f);
+	float PreviewAmount = 0.0f;
+	float PreviewElapsedSeconds = 0.0f;
+	bool bAuthoredRootTransformCached = false;
+	bool bFeedbackMaterialActive = false;
+	bool bPreviewDigitStateDirty = false;
+
 	bool bSpriteCachesBuilt = false;
 	bool bHasAppliedData = false;
 
 #if WITH_AUTOMATION_TESTS
 	int32 ApplyCountForTest = 0;
 	int32 DigitImageUpdateCountForTest = 0;
+	int32 LastFeedbackMaterialFailureForTest = 0;
 #endif
 
 	void ApplyCurrentDataToWidgets();
@@ -101,6 +146,20 @@ private:
 	void RebuildSpriteCaches();
 	void UpdateFrameImage();
 	void UpdateDigitImages();
+	void ApplyPreviewState(float DeltaTime);
+	bool ApplyDigitMaterial(
+		int32 OldValue,
+		int32 NewValue,
+		float OldDissolveAmount,
+		float NewRevealAmount,
+		float Tone,
+		float Seed,
+		bool bReducedMotion,
+		float EffectMode,
+		float Pulse);
+	void RestoreAuthoritativeDigitBrushes();
+	void CacheAuthoredRootTransform();
+	void RestoreAuthoredRootTransform();
 	UImage* EnsureDigitImage(int32 Index);
 	TArray<int32> SplitIntoDigits(int32 Value) const;
 	static void SetSpriteBrush(UImage& Image, UPaperSprite& Sprite, const FVector2D& DesiredSize);

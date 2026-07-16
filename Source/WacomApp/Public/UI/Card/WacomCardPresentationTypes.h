@@ -218,11 +218,26 @@ struct WACOMAPP_API FWacomCardViewEffectBadge
 {
 	GENERATED_BODY()
 
+	/** Stable visual identity. Compact card faces aggregate one Badge per semantic kind. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	FName PresentationKey;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	EWacomCardViewEffectBadgeKind Kind = EWacomCardViewEffectBadgeKind::Generic;
 
+	/** Authoritative value. Target preview must never overwrite this field. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	int32 Value = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	bool bHasPreviewValue = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	int32 PreviewValue = 0;
+
+	/** The whole semantic Badge has no applicable contribution for this preview target. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	bool bPreviewSkipped = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	FText DisplayText;

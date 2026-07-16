@@ -1,0 +1,82 @@
+import "Shared/WacomCardEffectBadgeFeedback.dsh";
+
+Shader(Name="DreamMaterials/Card/M_WacomCard_EffectBadgeFeedback")
+{
+    Properties = {
+        TextureSampleParameter2D OldBadgeDigitTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="效果徽章反馈|运行时"; SortPriority=0; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+        TextureSampleParameter2D NewBadgeDigitTexture = Path(Engine, "/EngineResources/DefaultTexture") [ Group="效果徽章反馈|运行时"; SortPriority=1; SamplerType="Color"; SamplerSource="FromTextureAsset"; ];
+        VectorParameter OldBadgeDigitUVRect = float4(0.0, 0.0, 1.0, 1.0) [ Group="效果徽章反馈|运行时"; SortPriority=2; ];
+        VectorParameter NewBadgeDigitUVRect = float4(0.0, 0.0, 1.0, 1.0) [ Group="效果徽章反馈|运行时"; SortPriority=3; ];
+        ScalarParameter BadgeOldDissolve = 0.0 [ Group="效果徽章反馈|运行时"; SortPriority=4; ];
+        ScalarParameter BadgeNewReveal = 0.0 [ Group="效果徽章反馈|运行时"; SortPriority=5; ];
+        ScalarParameter BadgeFeedbackTone = 0.0 [ Group="效果徽章反馈|运行时"; SortPriority=6; ];
+        ScalarParameter BadgeFeedbackSeed = 0.0 [ Group="效果徽章反馈|运行时"; SortPriority=7; ];
+        ScalarParameter BadgeReducedMotion = 0.0 [ Group="效果徽章反馈|运行时"; SortPriority=8; ];
+        ScalarParameter BadgeEffectMode = 2.0 [ Group="效果徽章反馈|运行时"; SortPriority=9; ];
+        ScalarParameter BadgePreviewPulse = 0.0 [ Group="效果徽章反馈|运行时"; SortPriority=10; ];
+
+        VectorParameter BadgeNeutralPrimaryColor = float4(0.93, 0.88, 0.68, 1.0) [ Group="效果徽章反馈|材质实例"; SortPriority=20; ];
+        VectorParameter BadgeNeutralSecondaryColor = float4(0.44, 0.62, 0.76, 1.0) [ Group="效果徽章反馈|材质实例"; SortPriority=21; ];
+        VectorParameter BadgeIncreasePrimaryColor = float4(0.58, 0.82, 1.0, 1.0) [ Group="效果徽章反馈|材质实例"; SortPriority=22; ];
+        VectorParameter BadgeIncreaseSecondaryColor = float4(0.98, 0.82, 0.42, 1.0) [ Group="效果徽章反馈|材质实例"; SortPriority=23; ];
+        VectorParameter BadgeDecreasePrimaryColor = float4(0.92, 0.26, 0.68, 1.0) [ Group="效果徽章反馈|材质实例"; SortPriority=24; ];
+        VectorParameter BadgeDecreaseSecondaryColor = float4(0.10, 0.16, 0.34, 1.0) [ Group="效果徽章反馈|材质实例"; SortPriority=25; ];
+        ScalarParameter BadgeGridColumns = 10.0 [ Group="效果徽章反馈|材质实例"; SortPriority=26; ];
+        ScalarParameter BadgeEdgeWidth = 0.10 [ Group="效果徽章反馈|材质实例"; SortPriority=27; ];
+        ScalarParameter BadgeEdgeBrightness = 1.25 [ Group="效果徽章反馈|材质实例"; SortPriority=28; ];
+        ScalarParameter BadgePreviewMinimumOpacity = 0.55 [ Group="效果徽章反馈|材质实例"; SortPriority=29; ];
+        ScalarParameter BadgePreviewMaximumOpacity = 0.92 [ Group="效果徽章反馈|材质实例"; SortPriority=30; ];
+    }
+
+    Settings = { Domain = "UI"; ShadingModel = "Unlit"; BlendMode = "PremultipliedAlpha"; TwoSided = true; }
+    Outputs = { float3 Color; float Alpha; Base.EmissiveColor = Color; Base.Opacity = Alpha; }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float2 oldMin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OldBadgeDigitUVRect, R=true, G=true, B=false, A=false);
+        float2 oldSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OldBadgeDigitUVRect, R=false, G=false, B=true, A=true);
+        float2 newMin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=NewBadgeDigitUVRect, R=true, G=true, B=false, A=false);
+        float2 newSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=NewBadgeDigitUVRect, R=false, G=false, B=true, A=true);
+        float4 oldDigit = OldBadgeDigitTexture(Coordinates=oldMin + uv * oldSize);
+        float4 newDigit = NewBadgeDigitTexture(Coordinates=newMin + uv * newSize);
+        float3 oldColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=oldDigit, R=true, G=true, B=true, A=false);
+        float oldAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=oldDigit, R=false, G=false, B=false, A=true);
+        float3 newColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=newDigit, R=true, G=true, B=true, A=false);
+        float newAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=newDigit, R=false, G=false, B=false, A=true);
+
+        float oldVisibility;
+        float newVisibility;
+        float edgeMask;
+        float variant;
+        WacomCard_ComputeEffectBadgeDigitMasks(uv, BadgeOldDissolve, BadgeNewReveal, BadgeFeedbackSeed, BadgeReducedMotion, BadgeGridColumns, BadgeEdgeWidth, oldVisibility, newVisibility, edgeMask, variant);
+
+        float3 neutralPrimary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=BadgeNeutralPrimaryColor, R=true, G=true, B=true, A=false);
+        float3 neutralSecondary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=BadgeNeutralSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 increasePrimary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=BadgeIncreasePrimaryColor, R=true, G=true, B=true, A=false);
+        float3 increaseSecondary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=BadgeIncreaseSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 decreasePrimary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=BadgeDecreasePrimaryColor, R=true, G=true, B=true, A=false);
+        float3 decreaseSecondary = UE.Expression(Class="ComponentMask", OutputType="float3", Input=BadgeDecreaseSecondaryColor, R=true, G=true, B=true, A=false);
+        float3 primary;
+        float3 secondary;
+        WacomCard_SelectEffectBadgePalette(BadgeFeedbackTone, neutralPrimary, neutralSecondary, increasePrimary, increaseSecondary, decreasePrimary, decreaseSecondary, primary, secondary);
+        float3 accent = lerp(primary, secondary, variant);
+
+        float visibleOldAlpha = oldAlpha * saturate(oldVisibility);
+        float visibleNewAlpha = newAlpha * saturate(newVisibility);
+        float rewriteAlpha = saturate(visibleOldAlpha + visibleNewAlpha);
+        float3 rewriteColor = oldColor * visibleOldAlpha + newColor * visibleNewAlpha;
+        rewriteColor = rewriteColor + accent * saturate(edgeMask) * rewriteAlpha * max(BadgeEdgeBrightness, 0.0);
+
+        float previewOpacity = lerp(saturate(BadgePreviewMinimumOpacity), saturate(BadgePreviewMaximumOpacity), saturate(BadgePreviewPulse));
+        // Preview may breathe from dim to authored brightness, but must never become
+        // super-white: HDR emissive made the unchanged alpha silhouette look thicker.
+        float previewBrightness = lerp(0.82, 1.0, saturate(BadgePreviewPulse));
+        float previewAlpha = newAlpha * previewOpacity * saturate(BadgeNewReveal);
+        float3 previewTint = newColor * lerp(float3(1.0, 1.0, 1.0), saturate(accent), 0.45);
+        float3 previewColor = previewTint * previewBrightness * previewAlpha;
+        float usePreview;
+        WacomCard_SelectEffectBadgeMode(BadgeEffectMode, usePreview);
+        Color = lerp(rewriteColor, previewColor, usePreview);
+        Alpha = lerp(rewriteAlpha, previewAlpha, usePreview);
+    }
+}

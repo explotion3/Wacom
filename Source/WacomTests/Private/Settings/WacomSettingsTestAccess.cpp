@@ -80,6 +80,9 @@ FWacomPresentationPolicyTestView FWacomSettingsSubsystemTestAccess::EvaluatePres
 	View.bPlayedDissolveReducedMotion = Config.PlayedDissolve.bReducedMotion;
 	View.bPileTransferReducedMotion = Config.PileTransfer.bReducedMotion;
 	View.bSelectionReducedMotion = Config.Selection.bReducedMotion;
+	View.bHandTargetImpactReducedMotion = Config.HandTargetImpact.bReducedMotion;
+	View.bDataRewriteReducedMotion = Config.DataRewrite.bReducedMotion;
+	View.bEffectBadgeFeedbackReducedMotion = Config.EffectBadgeFeedback.bReducedMotion;
 	View.bDragPickupReducedMotion = Config.bReduceDragPickupMotion;
 	View.SelectionSweepIntensity = Config.Selection.Style.SweepIntensity;
 	View.PlayedDissolveEdgeIntensity = Config.PlayedDissolve.Style.EdgeIntensity;

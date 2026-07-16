@@ -87,6 +87,11 @@ public:
 	void ResetCardDataRewriteView();
 	void SetCostDigitPreviewView(const FWacomFirstPersonCardCostPreviewView& View);
 	void ResetCostDigitPreviewView();
+	void SetEffectBadgeFeedbackConfig(
+		const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig);
+	void SetEffectBadgeFeedbackView(
+		const FWacomFirstPersonCardEffectBadgeFeedbackView& InView);
+	void ResetEffectBadgeFeedbackView();
 	/** 背包等静态容器请求一次卡面重绘，不改变当前动态表现策略。 */
 	void RequestPresentationRender();
 	/** CommonUI 过渡期间可关闭 retained rendering，避免把父层透明度烘入缓存。 */
@@ -152,6 +157,8 @@ private:
 	FWacomFirstPersonCardDepthView LastCardDepthView;
 	FWacomFirstPersonCardSurfaceEffectView LastSurfaceEffectView;
 	FWacomFirstPersonCardDataRewriteView LastDataRewriteView;
+	FWacomFirstPersonCardEffectBadgeFeedbackConfig LastEffectBadgeFeedbackConfig;
+	FWacomFirstPersonCardEffectBadgeFeedbackView LastEffectBadgeFeedbackView;
 	bool bLastInteractionFeedbackUsedOverrideMaterial = false;
 	bool bLastInteractionFeedbackUsedBrushMaterial = false;
 	bool bBaseSurfaceEffectMaterialCached = false;

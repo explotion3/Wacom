@@ -18,6 +18,7 @@
 #include "UI/Card/WacomFirstPersonCardLayerOwner.h"
 #include "UI/Card/WacomFirstPersonCardHandTargetImpactStyle.h"
 #include "UI/Card/WacomFirstPersonCardDataRewriteStyle.h"
+#include "UI/Card/WacomFirstPersonCardEffectBadgeFeedbackStyle.h"
 #include "UI/Card/WacomFirstPersonCardDrawRevealStyle.h"
 #include "UI/Card/WacomFirstPersonCardGainRevealStyle.h"
 #include "UI/Card/WacomFirstPersonCardRetainSealStyle.h"
@@ -349,6 +350,12 @@ namespace
 			Config.DataRewrite.Style.DurationSeconds =
 				Anchor.CardDataRewriteDurationOverrideSeconds;
 		}
+		Config.EffectBadgeFeedback.bEnabled = Anchor.bEnableCardEffectBadgeFeedback;
+		Config.EffectBadgeFeedback.bReducedMotion =
+			Anchor.bReduceCardEffectBadgeFeedbackMotion;
+		Config.EffectBadgeFeedback.Style = Anchor.CardEffectBadgeFeedbackStyle
+			? Anchor.CardEffectBadgeFeedbackStyle->Style
+			: FWacomFirstPersonCardEffectBadgeFeedbackStyleData();
 		Config.DrawReveal.bEnabled = Anchor.bEnableCardDrawReveal;
 		Config.DrawReveal.bReducedMotion = Anchor.bReduceCardDrawRevealMotion;
 		Config.DrawReveal.Style = Anchor.CardDrawRevealStyle
@@ -529,6 +536,7 @@ namespace
 		VisualConfig.PlayedDissolve = Config.PlayedDissolve;
 		VisualConfig.HandTargetImpact = Config.HandTargetImpact;
 		VisualConfig.DataRewrite = Config.DataRewrite;
+		VisualConfig.EffectBadgeFeedback = Config.EffectBadgeFeedback;
 		VisualConfig.DrawReveal = Config.DrawReveal;
 		VisualConfig.GainReveal = Config.GainReveal;
 		VisualConfig.RetainSeal = Config.RetainSeal;
@@ -928,6 +936,23 @@ namespace
 		AddFloat(Config.DataRewrite.Style.RewriteSoundVolumeMultiplier);
 		AddFloat(Config.DataRewrite.Style.RewriteSoundPitchMultiplier);
 		AddFloat(Config.DataRewrite.Style.RewriteSoundPitchVariation);
+		AddBool(Config.EffectBadgeFeedback.bEnabled);
+		AddBool(Config.EffectBadgeFeedback.bReducedMotion);
+		Combine(GetTypeHash(Config.EffectBadgeFeedback.Style.DigitFeedbackMaterialInstance.Get()));
+		AddFloat(Config.EffectBadgeFeedback.Style.PreviewEnterSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.PreviewExitSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.PreviewPulsePeriodSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.SkippedOpacity);
+		AddFloat(Config.EffectBadgeFeedback.Style.ValueChangeDurationSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.AddedDurationSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.RemovedDurationSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.ReflowDurationSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.SequenceStaggerSeconds);
+		AddFloat(Config.EffectBadgeFeedback.Style.MaxSequenceDelaySeconds);
+		Combine(GetTypeHash(Config.EffectBadgeFeedback.Style.ChangeSound.Get()));
+		AddFloat(Config.EffectBadgeFeedback.Style.ChangeSoundVolumeMultiplier);
+		AddFloat(Config.EffectBadgeFeedback.Style.ChangeSoundPitchMultiplier);
+		AddFloat(Config.EffectBadgeFeedback.Style.ChangeSoundPitchVariation);
 		AddBool(Config.DrawReveal.bEnabled);
 		AddBool(Config.DrawReveal.bReducedMotion);
 		Combine(GetTypeHash(Config.DrawReveal.Style.SurfaceEffectMaterialInstance.Get()));

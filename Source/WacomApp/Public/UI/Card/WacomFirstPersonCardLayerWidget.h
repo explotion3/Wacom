@@ -101,6 +101,7 @@ struct FWacomFirstPersonCardLayerResolvedFeedbackHint
 	bool bHasDataRewriteCostValues = false;
 	int32 DataRewriteCostBefore = 0;
 	int32 DataRewriteCostAfter = 0;
+	TArray<FWacomFirstPersonCardEffectBadgeChange> EffectBadgeChanges;
 	bool bBlocksPresentationPhase = false;
 	bool bRetainUntilExplicitRelease = false;
 };

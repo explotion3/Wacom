@@ -12,6 +12,7 @@
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
+#include "UI/Battle/WacomBattleEffectBadgeFeedbackBuilder.h"
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
@@ -490,6 +491,62 @@ namespace
 					GetTypeHash(LastSequence),
 					GetTypeHash(Hint.DataRewriteFieldMask))));
 			Hints.Add(MoveTemp(Hint));
+		}
+		return Hints;
+	}
+
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildCommandEffectBadgeChangeHints(
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot,
+		const TArray<FBattleEvent>& Events,
+		const FGuid& SuppressedSourceCardId)
+	{
+		TMap<FGuid, int32> LastRelevantSequenceByCard;
+		for (const FBattleEvent& Event : Events)
+		{
+			if ((Event.Type == EBattleEventType::CardRuntimeCostChanged
+					|| Event.Type == EBattleEventType::CardStatusChanged)
+				&& Event.CardInstanceId.IsValid())
+			{
+				int32& Sequence = LastRelevantSequenceByCard.FindOrAdd(Event.CardInstanceId);
+				Sequence = FMath::Max(Sequence, Event.Sequence);
+			}
+		}
+
+		TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
+		for (const FHandCardSnapshot& NextCard : PostCommandSnapshot.Hand.Cards)
+		{
+			if (NextCard.bIsHandAnchor
+				|| NextCard.InstanceId == SuppressedSourceCardId
+				|| !LastRelevantSequenceByCard.Contains(NextCard.InstanceId))
+			{
+				continue;
+			}
+			const FHandCardSnapshot* PreviousCard = FindNormalHandCardSnapshot(
+				PreCommandSnapshot,
+				NextCard.InstanceId);
+			if (!PreviousCard)
+			{
+				continue;
+			}
+			TArray<FWacomFirstPersonCardEffectBadgeChange> Changes =
+				WacomBattleEffectBadgeFeedback::BuildVisibleValueChanges(
+					*PreviousCard,
+					NextCard,
+					LastRelevantSequenceByCard.FindRef(NextCard.InstanceId));
+			if (Changes.IsEmpty())
+			{
+				continue;
+			}
+			FWacomFirstPersonCardLayerFeedbackHint& Hint = Hints.AddDefaulted_GetRef();
+			Hint.CardInstanceId = NextCard.InstanceId;
+			Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange;
+			Hint.EffectBadgeChanges = MoveTemp(Changes);
+		}
+		for (int32 Index = 0; Index < Hints.Num(); ++Index)
+		{
+			Hints[Index].SequenceIndex = Index;
+			Hints[Index].SequenceCount = FMath::Max(1, Hints.Num());
 		}
 		return Hints;
 	}
@@ -1393,9 +1450,16 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		[](const FWacomFirstPersonCardLayerFeedbackHint& Hint)
 		{
 			return Hint.FeedbackKind
-				== EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite;
+					== EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite
+				|| Hint.FeedbackKind
+					== EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange;
 		});
 	AllFeedbackHints.Append(BuildCommandDataRewriteHints(
+		Context.PreCommandSnapshot,
+		BasePostSnapshot,
+		Resolution.Events,
+		SourceCardId));
+	AllFeedbackHints.Append(BuildCommandEffectBadgeChangeHints(
 		Context.PreCommandSnapshot,
 		BasePostSnapshot,
 		Resolution.Events,
@@ -1551,7 +1615,9 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		}
 		FWacomFirstPersonCardLayerFeedbackHint OutcomeHint = Hint;
 		if (OutcomeHint.FeedbackKind
-			== EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite)
+				== EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite
+			|| OutcomeHint.FeedbackKind
+				== EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange)
 		{
 			OutcomeHint.bBlocksPresentationPhase = true;
 		}

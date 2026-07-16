@@ -278,6 +278,7 @@ bool FWacomFirstPersonCardDataRewriteCardViewTest::RunTest(
 	TStrongObjectPtr<UWacomCardViewSingleCostDigitProbe> CardView(
 		NewObject<UWacomCardViewSingleCostDigitProbe>());
 	UTexture2D* AtlasTexture = UTexture2D::CreateTransient(64, 64, PF_B8G8R8A8);
+	AtlasTexture->Source.Init(64, 64, 1, 1, TSF_BGRA8);
 	UPaperSprite* OldSprite = MakeAtlasSprite(CardView.Get(), AtlasTexture, 0);
 	UPaperSprite* NewSprite = MakeAtlasSprite(CardView.Get(), AtlasTexture, 32);
 	CardView->SetCostDigitIconForTest(1, OldSprite);

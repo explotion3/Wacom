@@ -17,6 +17,7 @@ class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class UWacomFirstPersonCardHandTargetImpactStyle;
 class UWacomFirstPersonCardDataRewriteStyle;
+class UWacomFirstPersonCardEffectBadgeFeedbackStyle;
 class UWacomFirstPersonCardDrawRevealStyle;
 class UWacomFirstPersonCardGainRevealStyle;
 class UWacomFirstPersonCardRetainSealStyle;
@@ -591,6 +592,15 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|16 Card Data Rewrite", meta = (Units = "s", ToolTip = "费用数字消散重组总时长覆盖，单位为秒；负值表示使用 Style，默认 0.34，推荐 0.28 到 0.42。"))
 	float CardDataRewriteDurationOverrideSeconds = -1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|21 Card Effect Badge Feedback", meta = (ToolTip = "是否启用 EffectBadge 的目标预览、局部数值重写、新增和移除反馈；只改变卡面局部表现，不改变规则或 Badge 布局上限。"))
+	bool bEnableCardEffectBadgeFeedback = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|21 Card Effect Badge Feedback", meta = (ToolTip = "EffectBadge 局部反馈的材质、时序和可选音效预设；为空时保留权威数据刷新和 skipped 低亮，但不创建数字 MID。"))
+	TObjectPtr<UWacomFirstPersonCardEffectBadgeFeedbackStyle> CardEffectBadgeFeedbackStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|21 Card Effect Badge Feedback", meta = (ToolTip = "弱化 EffectBadge 动态：只执行旧、新数字交叉淡化和静态颜色提示，不缩放、不平移、不呼吸。"))
+	bool bReduceCardEffectBadgeFeedbackMotion = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category = "Wacom|First Person Hand|98 Experimental Surface Effect", meta = (ToolTip = "实验性像素棱镜 Surface Effect 制作开关；当前拖拽流程不会激活它，默认关闭。后续只允许由明确的卡面数据更新或升级表现语义驱动。"))
 	bool bEnableCardSelectionEffect = false;

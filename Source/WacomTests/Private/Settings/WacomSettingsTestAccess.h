@@ -14,6 +14,9 @@ struct FWacomPresentationPolicyTestView
 	bool bPlayedDissolveReducedMotion = false;
 	bool bPileTransferReducedMotion = false;
 	bool bSelectionReducedMotion = false;
+	bool bHandTargetImpactReducedMotion = false;
+	bool bDataRewriteReducedMotion = false;
+	bool bEffectBadgeFeedbackReducedMotion = false;
 	bool bDragPickupReducedMotion = false;
 	float SelectionSweepIntensity = 0.0f;
 	float PlayedDissolveEdgeIntensity = 0.0f;

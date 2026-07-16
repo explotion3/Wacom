@@ -248,6 +248,9 @@ bool FWacomLocalSettingsPresentationPolicyTest::RunTest(const FString& Parameter
 		&& Reduced.bPlayedDissolveReducedMotion
 		&& Reduced.bPileTransferReducedMotion
 		&& Reduced.bSelectionReducedMotion
+		&& Reduced.bHandTargetImpactReducedMotion
+		&& Reduced.bDataRewriteReducedMotion
+		&& Reduced.bEffectBadgeFeedbackReducedMotion
 		&& Reduced.bDragPickupReducedMotion);
 	TestTrue(TEXT("Reduced flash maps to 35 percent"),
 		FMath::IsNearlyEqual(Reduced.SelectionSweepIntensity, 0.95f * 0.35f));

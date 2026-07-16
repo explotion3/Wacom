@@ -19,10 +19,10 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "PaperSprite.h"
-#include "Slate/SlateTextureAtlasInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
+#include "UI/Card/WacomPaperSpriteAtlasUtils.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardView"
 
@@ -93,8 +93,12 @@ namespace
 
 		for (int32 Index = 0; Index < A.Num(); ++Index)
 		{
-			if (A[Index].Kind != B[Index].Kind
+			if (A[Index].PresentationKey != B[Index].PresentationKey
+				|| A[Index].Kind != B[Index].Kind
 				|| A[Index].Value != B[Index].Value
+				|| A[Index].bHasPreviewValue != B[Index].bHasPreviewValue
+				|| A[Index].PreviewValue != B[Index].PreviewValue
+				|| A[Index].bPreviewSkipped != B[Index].bPreviewSkipped
 				|| !AreCardViewTextViewsEquivalent(A[Index].DisplayText, B[Index].DisplayText))
 			{
 				return false;
@@ -514,6 +518,7 @@ void UWacomCardView::EnsureCardSurfaceImage()
 
 void UWacomCardView::NativeDestruct()
 {
+	ResetEffectBadgeFeedback();
 	ResetCostDigitRewrite();
 	ResetCardSurfacePerspectiveView();
 	RestoreAttachmentAuthoredTransforms();
@@ -620,14 +625,14 @@ void UWacomCardView::SetCostDigitPreviewView(
 
 	CostDigitRewriteMaterialInstance->SetScalarParameterValue(DigitEffectModeParameterName, 1.0f);
 	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
+		CostRewriteToneParameterName,
+		static_cast<float>(InView.Tone));
+	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
 		CostPreviewAmountParameterName,
 		FMath::Clamp(InView.PreviewAmount, 0.0f, 1.0f));
 	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
 		CostPreviewPulseParameterName,
 		FMath::Clamp(InView.PulseAmount, 0.0f, 1.0f));
-	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
-		CostRewriteToneParameterName,
-		static_cast<float>(InView.Tone));
 	CostDigitRewriteMaterialInstance->SetScalarParameterValue(
 		CostRewriteSeedParameterName,
 		static_cast<float>(InView.Seed));
@@ -830,9 +835,14 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 			}
 
 			BadgeWidget->SetEffectBadgeData(RenderableBadges[BadgeIndex]);
+			if (EffectBadgeFeedbackConfig.IsSet())
+			{
+				BadgeWidget->SetEffectBadgeFeedbackConfig(EffectBadgeFeedbackConfig.GetValue());
+			}
 			BadgeSlot->SetVisibility(ESlateVisibility::HitTestInvisible);
 			++BadgeIndex;
 		}
+		ApplyEffectBadgeFeedbackState();
 		return;
 	}
 
@@ -860,10 +870,120 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 				continue;
 			}
 			BadgeWidget->SetEffectBadgeData(RenderableBadges[BadgeIndex]);
+			if (EffectBadgeFeedbackConfig.IsSet())
+			{
+				BadgeWidget->SetEffectBadgeFeedbackConfig(EffectBadgeFeedbackConfig.GetValue());
+			}
 		}
 		EffectStatsHost->SetVisibility(RenderableBadges.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
+	ApplyEffectBadgeFeedbackState();
+}
 
+void UWacomCardView::SetEffectBadgeFeedbackConfig(
+	const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig)
+{
+	EffectBadgeFeedbackConfig = InConfig;
+	for (UWacomCardEffectBadgeWidget* BadgeWidget : CollectEffectBadgeWidgets())
+	{
+		if (BadgeWidget)
+		{
+			BadgeWidget->SetEffectBadgeFeedbackConfig(InConfig);
+		}
+	}
+}
+
+void UWacomCardView::SetEffectBadgeFeedbackView(
+	const FWacomFirstPersonCardEffectBadgeFeedbackView& InView)
+{
+	EffectBadgeFeedbackView = InView;
+	ApplyEffectBadgeFeedbackState();
+}
+
+void UWacomCardView::ResetEffectBadgeFeedback()
+{
+	EffectBadgeFeedbackView.Reset();
+	for (UWacomCardEffectBadgeWidget* BadgeWidget : CollectEffectBadgeWidgets())
+	{
+		if (BadgeWidget)
+		{
+			BadgeWidget->ResetEffectBadgeFeedback();
+		}
+	}
+}
+
+TArray<UWacomCardEffectBadgeWidget*> UWacomCardView::CollectEffectBadgeWidgets() const
+{
+	TArray<UWacomCardEffectBadgeWidget*> Result;
+	const TArray<UPanelWidget*> Hosts = {
+		EffectBadgeSlot1.Get(),
+		EffectBadgeSlot2.Get(),
+		EffectBadgeSlot3.Get(),
+		EffectBadgeSlot4.Get()};
+	for (UPanelWidget* Host : Hosts)
+	{
+		if (Host)
+		{
+			if (UWacomCardEffectBadgeWidget* Widget = FindReusableBadgeWidget(*Host))
+			{
+				Result.Add(Widget);
+			}
+		}
+	}
+	if (EffectStatsHost)
+	{
+		for (int32 Index = 0; Index < EffectStatsHost->GetChildrenCount(); ++Index)
+		{
+			if (UWacomCardEffectBadgeWidget* Widget =
+				Cast<UWacomCardEffectBadgeWidget>(EffectStatsHost->GetChildAt(Index)))
+			{
+				Result.AddUnique(Widget);
+			}
+		}
+	}
+	return Result;
+}
+
+void UWacomCardView::ApplyEffectBadgeFeedbackState()
+{
+	const TArray<UWacomCardEffectBadgeWidget*> BadgeWidgets = CollectEffectBadgeWidgets();
+	if (!EffectBadgeFeedbackView.IsSet() || !EffectBadgeFeedbackView->bActive)
+	{
+		for (UWacomCardEffectBadgeWidget* BadgeWidget : BadgeWidgets)
+		{
+			if (BadgeWidget)
+			{
+				BadgeWidget->ResetEffectBadgeFeedback();
+			}
+		}
+		return;
+	}
+
+	for (UWacomCardEffectBadgeWidget* BadgeWidget : BadgeWidgets)
+	{
+		if (!BadgeWidget)
+		{
+			continue;
+		}
+		const FName Key = BadgeWidget->GetEffectBadgeData().PresentationKey;
+		const FWacomFirstPersonCardEffectBadgeFeedbackItemView* Item =
+			EffectBadgeFeedbackView->Items.FindByPredicate([Key](
+				const FWacomFirstPersonCardEffectBadgeFeedbackItemView& Candidate)
+			{
+				return Candidate.PresentationKey == Key;
+			});
+		if (Item)
+		{
+			BadgeWidget->SetEffectBadgeFeedbackView(*Item);
+		}
+		else
+		{
+			// A new deterministic bundle replaces the previous one. A badge that is
+			// absent from the active bundle must not retain an old digit MID or root
+			// transform when another badge starts changing.
+			BadgeWidget->ResetEffectBadgeFeedback();
+		}
+	}
 }
 
 void UWacomCardView::ApplySurfaceFoilOverlay()
@@ -970,14 +1090,10 @@ bool UWacomCardView::EnsureCostDigitRewriteMaterial(
 	{
 		return false;
 	}
-	const FSlateAtlasData OldAtlas = CostDigitRewriteOldSprite->GetSlateAtlasData();
-	const FSlateAtlasData NewAtlas = CostDigitRewriteNewSprite->GetSlateAtlasData();
-	if (!OldAtlas.AtlasTexture
-		|| !NewAtlas.AtlasTexture
-		|| OldAtlas.SizeUV.X <= 0.0f
-		|| OldAtlas.SizeUV.Y <= 0.0f
-		|| NewAtlas.SizeUV.X <= 0.0f
-		|| NewAtlas.SizeUV.Y <= 0.0f)
+	FWacomPaperSpriteAtlasView OldAtlas;
+	FWacomPaperSpriteAtlasView NewAtlas;
+	if (!WacomPaperSpriteAtlas::Resolve(CostDigitRewriteOldSprite, OldAtlas)
+		|| !WacomPaperSpriteAtlas::Resolve(CostDigitRewriteNewSprite, NewAtlas))
 	{
 		return false;
 	}
@@ -1002,10 +1118,10 @@ bool UWacomCardView::EnsureCostDigitRewriteMaterial(
 	CostDigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 	CostDigitRewriteMaterialInstance->SetTextureParameterValue(
 		OldDigitTextureParameterName,
-		OldAtlas.AtlasTexture);
+		OldAtlas.Texture);
 	CostDigitRewriteMaterialInstance->SetTextureParameterValue(
 		NewDigitTextureParameterName,
-		NewAtlas.AtlasTexture);
+		NewAtlas.Texture);
 	CostDigitRewriteMaterialInstance->SetVectorParameterValue(
 		OldDigitUVRectParameterName,
 		FLinearColor(

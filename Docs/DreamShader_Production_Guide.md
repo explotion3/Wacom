@@ -91,6 +91,8 @@ Settings = {
 
 不要让多个卡牌 Widget 共享同一个可变 MID，否则一张牌更新插画、稀有度或倾斜时会污染其他卡牌。
 
+费用与 EffectBadge 数字一类局部反馈应优先直接绑定数字 `UImage`，而不是为了一个小区域接管整张卡的 Retainer。PaperSprite 数字先通过 App-private Atlas 工具读取 `AtlasTexture / StartUV / SizeUV`，再把旧、新纹理和 UV Rect 写给每个数字自己的 MID；播放结束必须恢复权威 PaperSprite Brush、authored RenderTransform 与 Pivot。多位数只有在旧、新位数一致且每位 Sprite 都能解析时才播放，失败应直接刷新正式值，不能留下空白或半套 MID。
+
 ### 3.3 Niagara Sprite 材质
 
 - 使用 `Surface / Unlit / Translucent / TwoSided`。
@@ -138,6 +140,7 @@ Function SelfContained WacomExample_ComputeMask(
 - 对图集 Sprite：先在局部 `0..1` UV 中做位移、inside mask 和裁切，再映射到 atlas scale/bias。直接在图集 UV 上视差会采样到相邻稀有度边框。
 - 卡面 `BackColor` 一类插画底板不能以 Alpha=1 的全屏颜色直接参与最终合成，否则会把透明圆角重新填成矩形，并污染 Retainer 实时 Alpha 阴影。应先通过局部 UV 生成居中缩放遮罩（当前默认 `BackColorScale=0.96`），再作为插画下层合成。
 - 卡面材质中的“层深”和“表面反光”是两个独立合同：Art、Frame、Rarity 都可以拥有不同 UV 深度，并分别使用标量开关控制角度反光。当前默认 `ArtReflectionEnabled=0 / FrameReflectionEnabled=0 / RarityReflectionEnabled=1`；反光关闭时必须精确恢复源 RGB，但不能顺带关闭该层 UV 视差。插画使用宽幅柔和覆膜高光，实体 Frame 使用方向金属高光，只有 Rarity 使用 foil / iridescence。
+- DreamShader Graph 区不支持的 HLSL 写法应移入 `Function SelfContained`。例如 `step()` 可以在 `.dsh` helper 内使用，但某些插件版本不能在 Graph assignment 中直接解析；复合赋值 `value += expression` 也可能把左值误判为 Graph 变量类型。生产源使用显式 `value = value + expression`，并把 mode 选择、阈值分支放进 helper，再由 Graph 只接收输出。
 
 ## 5. 已经踩过的坑
 

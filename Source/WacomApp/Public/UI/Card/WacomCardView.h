@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomCardView.generated.h"
 
 class UBorder;
@@ -21,6 +22,8 @@ class UWacomCardEffectBadgeWidget;
 class UPaperSprite;
 struct FWacomFirstPersonCardDataRewriteView;
 struct FWacomFirstPersonCardCostPreviewView;
+struct FWacomFirstPersonCardEffectBadgeFeedbackConfig;
+struct FWacomFirstPersonCardEffectBadgeFeedbackView;
 
 #if WITH_AUTOMATION_TESTS
 struct FWacomCardViewAutomationTestView
@@ -108,6 +111,11 @@ public:
 	void ResetCostDigitPreview();
 	/** Restores the authoritative cost PaperSprite and authored transform. */
 	void ResetCostDigitRewrite();
+	void SetEffectBadgeFeedbackConfig(
+		const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig);
+	void SetEffectBadgeFeedbackView(
+		const FWacomFirstPersonCardEffectBadgeFeedbackView& InView);
+	void ResetEffectBadgeFeedback();
 
 	FVector2D GetCardBodyHitSize() const;
 	bool HasCardBodyHitGeometry() const;
@@ -269,6 +277,8 @@ private:
 	TObjectPtr<UMaterialInterface> CostDigitRewriteMaterialSource;
 
 	FWacomCardSurfacePerspectiveView CardSurfacePerspectiveView;
+	TOptional<FWacomFirstPersonCardEffectBadgeFeedbackConfig> EffectBadgeFeedbackConfig;
+	TOptional<FWacomFirstPersonCardEffectBadgeFeedbackView> EffectBadgeFeedbackView;
 	FVector2D AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
 	TMap<TWeakObjectPtr<UWidget>, FWidgetTransform> AuthoredAttachmentTransforms;
 	TMap<TWeakObjectPtr<UWidget>, ESlateVisibility> AuthoredLegacySurfaceVisibilities;
@@ -301,6 +311,8 @@ private:
 
 	void ApplyCurrentDataToWidgets();
 	void UpdateEffectBadgeDisplays();
+	TArray<UWacomCardEffectBadgeWidget*> CollectEffectBadgeWidgets() const;
+	void ApplyEffectBadgeFeedbackState();
 	void UpdateCostDisplay();
 	UPaperSprite* ResolveSingleCostDigitSprite(const FWacomCardViewData& Data) const;
 	bool EnsureCostDigitRewriteMaterial(const FWacomFirstPersonCardDataRewriteView& View);

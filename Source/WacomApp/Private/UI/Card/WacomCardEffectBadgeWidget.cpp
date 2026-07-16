@@ -8,7 +8,9 @@
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "PaperSprite.h"
+#include "UI/Card/WacomPaperSpriteAtlasUtils.h"
 
 namespace
 {
@@ -21,10 +23,26 @@ namespace
 		const FWacomCardViewEffectBadge& A,
 		const FWacomCardViewEffectBadge& B)
 	{
-		return A.Kind == B.Kind
+		return A.PresentationKey == B.PresentationKey
+			&& A.Kind == B.Kind
 			&& A.Value == B.Value
+			&& A.bHasPreviewValue == B.bHasPreviewValue
+			&& A.PreviewValue == B.PreviewValue
+			&& A.bPreviewSkipped == B.bPreviewSkipped
 			&& AreTextViewsEquivalent(A.DisplayText, B.DisplayText);
 	}
+
+	const FName OldBadgeDigitTextureParameterName(TEXT("OldBadgeDigitTexture"));
+	const FName NewBadgeDigitTextureParameterName(TEXT("NewBadgeDigitTexture"));
+	const FName OldBadgeDigitUVRectParameterName(TEXT("OldBadgeDigitUVRect"));
+	const FName NewBadgeDigitUVRectParameterName(TEXT("NewBadgeDigitUVRect"));
+	const FName BadgeOldDissolveParameterName(TEXT("BadgeOldDissolve"));
+	const FName BadgeNewRevealParameterName(TEXT("BadgeNewReveal"));
+	const FName BadgeFeedbackToneParameterName(TEXT("BadgeFeedbackTone"));
+	const FName BadgeFeedbackSeedParameterName(TEXT("BadgeFeedbackSeed"));
+	const FName BadgeReducedMotionParameterName(TEXT("BadgeReducedMotion"));
+	const FName BadgeEffectModeParameterName(TEXT("BadgeEffectMode"));
+	const FName BadgePreviewPulseParameterName(TEXT("BadgePreviewPulse"));
 }
 
 TSharedRef<SWidget> UWacomCardEffectBadgeWidget::RebuildWidget()
@@ -66,6 +84,12 @@ void UWacomCardEffectBadgeWidget::NativeConstruct()
 	ApplyCurrentDataToWidgets();
 }
 
+void UWacomCardEffectBadgeWidget::NativeDestruct()
+{
+	ResetEffectBadgeFeedback();
+	Super::NativeDestruct();
+}
+
 void UWacomCardEffectBadgeWidget::SetEffectBadgeData(const FWacomCardViewEffectBadge& InData)
 {
 	if (bHasAppliedData && AreEffectBadgeDataEquivalent(CurrentData, InData))
@@ -82,6 +106,73 @@ FText UWacomCardEffectBadgeWidget::GetValueText() const
 	return FText::AsNumber(CurrentData.Value);
 }
 
+void UWacomCardEffectBadgeWidget::SetEffectBadgeFeedbackConfig(
+	const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig)
+{
+	FeedbackConfig = InConfig;
+	if (!FeedbackConfig.bEnabled)
+	{
+		ResetEffectBadgeFeedback();
+	}
+}
+
+void UWacomCardEffectBadgeWidget::SetEffectBadgeFeedbackView(
+	const FWacomFirstPersonCardEffectBadgeFeedbackItemView& InView)
+{
+	if (InView.PresentationKey != CurrentData.PresentationKey)
+	{
+		return;
+	}
+	FeedbackView = InView;
+	if (!InView.bActive)
+	{
+		if (bFeedbackMaterialActive)
+		{
+			RestoreAuthoritativeDigitBrushes();
+		}
+		RestoreAuthoredRootTransform();
+		return;
+	}
+
+	ApplyDigitMaterial(
+		InView.OldValue,
+		InView.NewValue,
+		InView.OldDissolveAmount,
+		InView.NewRevealAmount,
+		static_cast<float>(InView.Direction),
+		static_cast<float>(InView.Seed & 0xFFFF) / 65535.0f,
+		FeedbackConfig.bReducedMotion,
+		2.0f,
+		0.0f);
+	CacheAuthoredRootTransform();
+	FWidgetTransform Transform = AuthoredRootTransform;
+	if (!FeedbackConfig.bReducedMotion)
+	{
+		Transform.Scale.X *= InView.RootScale;
+		Transform.Scale.Y *= InView.RootScale;
+	}
+	SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+	SetRenderTransform(Transform);
+	SetRenderOpacity(FMath::Clamp(InView.RootOpacity, 0.0f, 1.0f));
+}
+
+void UWacomCardEffectBadgeWidget::ResetEffectBadgeFeedback()
+{
+	FeedbackView = FWacomFirstPersonCardEffectBadgeFeedbackItemView();
+	PreviewAmount = 0.0f;
+	PreviewElapsedSeconds = 0.0f;
+	bPreviewDigitStateDirty = false;
+	RestoreAuthoritativeDigitBrushes();
+	RestoreAuthoredRootTransform();
+	SetRenderOpacity(1.0f);
+}
+
+void UWacomCardEffectBadgeWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+	Super::NativeTick(MyGeometry, InDeltaTime);
+	ApplyPreviewState(InDeltaTime);
+}
+
 void UWacomCardEffectBadgeWidget::ApplyCurrentDataToWidgets()
 {
 #if WITH_AUTOMATION_TESTS
@@ -91,7 +182,196 @@ void UWacomCardEffectBadgeWidget::ApplyCurrentDataToWidgets()
 	EnsureSpriteCachesBuilt();
 	UpdateFrameImage();
 	UpdateDigitImages();
+	bPreviewDigitStateDirty = true;
 	bHasAppliedData = true;
+}
+
+void UWacomCardEffectBadgeWidget::ApplyPreviewState(float DeltaTime)
+{
+	if (FeedbackView.bActive || !FeedbackConfig.bEnabled)
+	{
+		return;
+	}
+	const bool bWantsPreview = CurrentData.bHasPreviewValue || CurrentData.bPreviewSkipped;
+	const float Duration = bWantsPreview
+		? FMath::Max(KINDA_SMALL_NUMBER, FeedbackConfig.Style.PreviewEnterSeconds)
+		: FMath::Max(KINDA_SMALL_NUMBER, FeedbackConfig.Style.PreviewExitSeconds);
+	const float Target = bWantsPreview ? 1.0f : 0.0f;
+	const float PreviousAmount = PreviewAmount;
+	PreviewAmount = FMath::FInterpConstantTo(
+		PreviewAmount,
+		Target,
+		FMath::Max(0.0f, DeltaTime),
+		1.0f / Duration);
+	PreviewElapsedSeconds += FMath::Max(0.0f, DeltaTime);
+	const float PulsePeriod = FMath::Max(0.01f, FeedbackConfig.Style.PreviewPulsePeriodSeconds);
+	const float Pulse = FeedbackConfig.bReducedMotion
+		? 0.5f
+		: 0.5f + 0.5f * FMath::Sin(PreviewElapsedSeconds * 2.0f * PI / PulsePeriod);
+
+	if (CurrentData.bPreviewSkipped && bFeedbackMaterialActive)
+	{
+		RestoreAuthoritativeDigitBrushes();
+	}
+	if (CurrentData.bHasPreviewValue
+		&& !CurrentData.bPreviewSkipped
+		&& PreviewAmount > KINDA_SMALL_NUMBER)
+	{
+		ApplyDigitMaterial(
+			CurrentData.Value,
+			CurrentData.PreviewValue,
+			PreviewAmount,
+			PreviewAmount,
+			CurrentData.PreviewValue >= CurrentData.Value ? 1.0f : 2.0f,
+			static_cast<float>(GetTypeHash(CurrentData.PresentationKey) & 0xFFFFu) / 65535.0f,
+			FeedbackConfig.bReducedMotion,
+			1.0f,
+			Pulse);
+	}
+	else if (PreviousAmount > KINDA_SMALL_NUMBER && PreviewAmount <= KINDA_SMALL_NUMBER)
+	{
+		RestoreAuthoritativeDigitBrushes();
+	}
+	SetRenderOpacity(CurrentData.bPreviewSkipped
+		? FMath::Lerp(1.0f, FeedbackConfig.Style.SkippedOpacity, PreviewAmount)
+		: 1.0f);
+	if (!FMath::IsNearlyEqual(PreviousAmount, PreviewAmount) || CurrentData.bPreviewSkipped)
+	{
+		Invalidate(EInvalidateWidgetReason::Paint);
+	}
+}
+
+bool UWacomCardEffectBadgeWidget::ApplyDigitMaterial(
+	int32 OldValue,
+	int32 NewValue,
+	float OldDissolveAmount,
+	float NewRevealAmount,
+	float Tone,
+	float Seed,
+	bool bReducedMotion,
+	float EffectMode,
+	float Pulse)
+{
+#if WITH_AUTOMATION_TESTS
+	LastFeedbackMaterialFailureForTest = 0;
+#endif
+	if (!DigitHost || !FeedbackConfig.Style.DigitFeedbackMaterialInstance)
+	{
+#if WITH_AUTOMATION_TESTS
+		LastFeedbackMaterialFailureForTest = 1;
+#endif
+		return false;
+	}
+	EnsureSpriteCachesBuilt();
+	const TArray<int32> OldDigits = SplitIntoDigits(OldValue);
+	const TArray<int32> NewDigits = SplitIntoDigits(NewValue);
+	const int32 DigitCount = FMath::Max(OldDigits.Num(), NewDigits.Num());
+	if (DigitCount <= 0 || OldDigits.Num() != NewDigits.Num())
+	{
+#if WITH_AUTOMATION_TESTS
+		LastFeedbackMaterialFailureForTest = 2;
+#endif
+		return false;
+	}
+
+	if (ActiveDigitMaterialSource != FeedbackConfig.Style.DigitFeedbackMaterialInstance
+		|| ActiveDigitMaterialInstances.Num() != DigitCount)
+	{
+		ActiveDigitMaterialSource = FeedbackConfig.Style.DigitFeedbackMaterialInstance;
+		ActiveDigitMaterialInstances.Reset();
+		for (int32 Index = 0; Index < DigitCount; ++Index)
+		{
+			ActiveDigitMaterialInstances.Add(UMaterialInstanceDynamic::Create(
+				FeedbackConfig.Style.DigitFeedbackMaterialInstance,
+				this));
+		}
+	}
+
+	for (int32 Index = 0; Index < DigitCount; ++Index)
+	{
+		UPaperSprite* OldSprite = ResolvedDigitSprites.FindRef(OldDigits[Index]);
+		UPaperSprite* NewSprite = ResolvedDigitSprites.FindRef(NewDigits[Index]);
+		UImage* DigitImage = Cast<UImage>(DigitHost->GetChildAt(Index));
+		UMaterialInstanceDynamic* Material = ActiveDigitMaterialInstances.IsValidIndex(Index)
+			? ActiveDigitMaterialInstances[Index]
+			: nullptr;
+		if (!OldSprite || !NewSprite || !DigitImage || !Material)
+		{
+#if WITH_AUTOMATION_TESTS
+			LastFeedbackMaterialFailureForTest = 3;
+#endif
+			RestoreAuthoritativeDigitBrushes();
+			return false;
+		}
+		FWacomPaperSpriteAtlasView OldAtlas;
+		FWacomPaperSpriteAtlasView NewAtlas;
+		if (!WacomPaperSpriteAtlas::Resolve(OldSprite, OldAtlas)
+			|| !WacomPaperSpriteAtlas::Resolve(NewSprite, NewAtlas))
+		{
+#if WITH_AUTOMATION_TESTS
+			LastFeedbackMaterialFailureForTest = 4;
+#endif
+			RestoreAuthoritativeDigitBrushes();
+			return false;
+		}
+
+		Material->SetTextureParameterValue(OldBadgeDigitTextureParameterName, OldAtlas.Texture);
+		Material->SetTextureParameterValue(NewBadgeDigitTextureParameterName, NewAtlas.Texture);
+		Material->SetVectorParameterValue(
+			OldBadgeDigitUVRectParameterName,
+			FLinearColor(OldAtlas.StartUV.X, OldAtlas.StartUV.Y, OldAtlas.SizeUV.X, OldAtlas.SizeUV.Y));
+		Material->SetVectorParameterValue(
+			NewBadgeDigitUVRectParameterName,
+			FLinearColor(NewAtlas.StartUV.X, NewAtlas.StartUV.Y, NewAtlas.SizeUV.X, NewAtlas.SizeUV.Y));
+		Material->SetScalarParameterValue(BadgeOldDissolveParameterName, FMath::Clamp(OldDissolveAmount, 0.0f, 1.0f));
+		Material->SetScalarParameterValue(BadgeNewRevealParameterName, FMath::Clamp(NewRevealAmount, 0.0f, 1.0f));
+		Material->SetScalarParameterValue(BadgeFeedbackToneParameterName, Tone);
+		Material->SetScalarParameterValue(BadgeFeedbackSeedParameterName, Seed);
+		Material->SetScalarParameterValue(BadgeReducedMotionParameterName, bReducedMotion ? 1.0f : 0.0f);
+		Material->SetScalarParameterValue(BadgeEffectModeParameterName, EffectMode);
+		Material->SetScalarParameterValue(BadgePreviewPulseParameterName, FMath::Clamp(Pulse, 0.0f, 1.0f));
+		FSlateBrush Brush = DigitImage->GetBrush();
+		Brush.SetResourceObject(Material);
+		Brush.SetImageSize(FVector2f(
+			FMath::Max(1.0f, DigitDrawSize.X),
+			FMath::Max(1.0f, DigitDrawSize.Y)));
+		DigitImage->SetBrush(Brush);
+		DigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	bFeedbackMaterialActive = true;
+	return true;
+}
+
+void UWacomCardEffectBadgeWidget::RestoreAuthoritativeDigitBrushes()
+{
+	if (bFeedbackMaterialActive)
+	{
+		bFeedbackMaterialActive = false;
+		UpdateDigitImages();
+	}
+	ActiveDigitMaterialInstances.Reset();
+	ActiveDigitMaterialSource = nullptr;
+}
+
+void UWacomCardEffectBadgeWidget::CacheAuthoredRootTransform()
+{
+	if (bAuthoredRootTransformCached)
+	{
+		return;
+	}
+	AuthoredRootTransform = GetRenderTransform();
+	AuthoredRootPivot = GetRenderTransformPivot();
+	bAuthoredRootTransformCached = true;
+}
+
+void UWacomCardEffectBadgeWidget::RestoreAuthoredRootTransform()
+{
+	if (!bAuthoredRootTransformCached)
+	{
+		return;
+	}
+	SetRenderTransformPivot(AuthoredRootPivot);
+	SetRenderTransform(AuthoredRootTransform);
 }
 
 void UWacomCardEffectBadgeWidget::EnsureSpriteCachesBuilt()

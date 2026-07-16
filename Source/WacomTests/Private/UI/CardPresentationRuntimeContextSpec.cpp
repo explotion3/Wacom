@@ -51,6 +51,18 @@ namespace
 		return Context;
 	}
 
+	FName ExpectedBadgePresentationKey(EWacomCardViewEffectBadgeKind Kind)
+	{
+		switch (Kind)
+		{
+		case EWacomCardViewEffectBadgeKind::Damage: return TEXT("Badge.Damage");
+		case EWacomCardViewEffectBadgeKind::Poison: return TEXT("Badge.Poison");
+		case EWacomCardViewEffectBadgeKind::Heal: return TEXT("Badge.Heal");
+		case EWacomCardViewEffectBadgeKind::Shield: return TEXT("Badge.Shield");
+		default: return NAME_None;
+		}
+	}
+
 	void TestBadge(
 		FAutomationTestBase& Test,
 		const TArray<FWacomCardViewEffectBadge>& Badges,
@@ -65,6 +77,8 @@ namespace
 
 		Test.TestEqual(TEXT("Badge kind"), Badges[Index].Kind, ExpectedKind);
 		Test.TestEqual(TEXT("Badge value"), Badges[Index].Value, ExpectedValue);
+		Test.TestEqual(TEXT("Badge identity follows its semantic kind"),
+			Badges[Index].PresentationKey, ExpectedBadgePresentationKey(ExpectedKind));
 	}
 
 	bool HasDetailValueRun(
@@ -155,10 +169,17 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 
 	const FWacomCardViewData PreviewViewData =
 		UWacomCardPresentationBuilder::BuildCardViewData(Card.Get(), PreviewContext);
-	TestEqual(TEXT("Preview skip removes one effect badge"), PreviewViewData.EffectBadges.Num(), 3);
-	TestBadge(*this, PreviewViewData.EffectBadges, 0, EWacomCardViewEffectBadgeKind::Damage, 9);
-	TestBadge(*this, PreviewViewData.EffectBadges, 1, EWacomCardViewEffectBadgeKind::Heal, 5);
-	TestBadge(*this, PreviewViewData.EffectBadges, 2, EWacomCardViewEffectBadgeKind::Shield, 12);
+	TestEqual(TEXT("Preview keeps all authoritative effect badges"), PreviewViewData.EffectBadges.Num(), 4);
+	TestBadge(*this, PreviewViewData.EffectBadges, 0, EWacomCardViewEffectBadgeKind::Damage, 5);
+	TestTrue(TEXT("Damage preview has a predicted value"), PreviewViewData.EffectBadges[0].bHasPreviewValue);
+	TestEqual(TEXT("Damage preview value remains separate"), PreviewViewData.EffectBadges[0].PreviewValue, 9);
+	TestBadge(*this, PreviewViewData.EffectBadges, 1, EWacomCardViewEffectBadgeKind::Poison, 5);
+	TestTrue(TEXT("Skipped poison remains visible"), PreviewViewData.EffectBadges[1].bPreviewSkipped);
+	TestFalse(TEXT("Skipped poison does not invent a new numeric value"), PreviewViewData.EffectBadges[1].bHasPreviewValue);
+	TestBadge(*this, PreviewViewData.EffectBadges, 2, EWacomCardViewEffectBadgeKind::Heal, 5);
+	TestBadge(*this, PreviewViewData.EffectBadges, 3, EWacomCardViewEffectBadgeKind::Shield, 6);
+	TestTrue(TEXT("Shield preview has a predicted value"), PreviewViewData.EffectBadges[3].bHasPreviewValue);
+	TestEqual(TEXT("Shield preview value remains separate"), PreviewViewData.EffectBadges[3].PreviewValue, 12);
 
 	Card->Description = FText::GetEmpty();
 	const FWacomCardDetailViewData RuntimeDetail =
@@ -173,6 +194,71 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 		HasSkippedDetailStatusRun(PreviewDetail, WacomTags::Status_Poison));
 	TestTrue(TEXT("Preview detail run records shield override"),
 		HasDetailValueRun(PreviewDetail, 6, 12));
+
+	TStrongObjectPtr<UCardDefinition> ConditionalCard(NewObject<UCardDefinition>());
+	ConditionalCard->CardId = TEXT("UI.CardPresentation.AggregatedDamage");
+	FCardEffect BaseDamage;
+	BaseDamage.EffectType = WacomTags::Effect_Damage;
+	BaseDamage.Magnitude = 4;
+	FCardEffect ConditionalDamage;
+	ConditionalDamage.EffectType = WacomTags::Effect_Damage;
+	ConditionalDamage.Magnitude = 5;
+	ConditionalDamage.Condition.ConditionType = WacomTags::Condition_Target_HasStatus;
+	ConditionalDamage.Condition.ParamTag = WacomTags::Status_Poison;
+	FCardEffect SeparatePoison;
+	SeparatePoison.EffectType = WacomTags::Effect_ApplyStatus_Poison;
+	SeparatePoison.Magnitude = 1;
+	ConditionalCard->Effects = { BaseDamage, ConditionalDamage, SeparatePoison };
+
+	const FWacomCardViewData ConditionalBaseView =
+		UWacomCardPresentationBuilder::BuildCardViewData(ConditionalCard.Get());
+	TestEqual(TEXT("Same-kind damage effects aggregate into one compact badge"),
+		ConditionalBaseView.EffectBadges.Num(), 2);
+	TestBadge(*this, ConditionalBaseView.EffectBadges, 0,
+		EWacomCardViewEffectBadgeKind::Damage, 4);
+	TestBadge(*this, ConditionalBaseView.EffectBadges, 1,
+		EWacomCardViewEffectBadgeKind::Poison, 1);
+
+	FWacomCardPresentationRuntimeContext SkippedConditionalContext;
+	FWacomCardPresentationRuntimeContext::FEffectPreview BaseDamagePreview;
+	BaseDamagePreview.EffectIndex = 0;
+	BaseDamagePreview.bHasMagnitude = true;
+	BaseDamagePreview.Magnitude = 4;
+	FWacomCardPresentationRuntimeContext::FEffectPreview SkippedBonusPreview;
+	SkippedBonusPreview.EffectIndex = 1;
+	SkippedBonusPreview.bSkip = true;
+	FWacomCardPresentationRuntimeContext::FEffectPreview PoisonPreview;
+	PoisonPreview.EffectIndex = 2;
+	PoisonPreview.bHasMagnitude = true;
+	PoisonPreview.Magnitude = 1;
+	SkippedConditionalContext.EffectPreviews = {
+		BaseDamagePreview, SkippedBonusPreview, PoisonPreview };
+	const FWacomCardViewData SkippedConditionalView =
+		UWacomCardPresentationBuilder::BuildCardViewData(
+			ConditionalCard.Get(), SkippedConditionalContext);
+	TestEqual(TEXT("Skipped conditional damage does not create another badge"),
+		SkippedConditionalView.EffectBadges.Num(), 2);
+	TestEqual(TEXT("Skipped bonus keeps authoritative base damage"),
+		SkippedConditionalView.EffectBadges[0].Value, 4);
+	TestFalse(TEXT("One applicable contribution keeps the aggregate active"),
+		SkippedConditionalView.EffectBadges[0].bPreviewSkipped);
+	TestFalse(TEXT("Unchanged aggregate does not start a numeric preview"),
+		SkippedConditionalView.EffectBadges[0].bHasPreviewValue);
+
+	FWacomCardPresentationRuntimeContext AppliedConditionalContext = SkippedConditionalContext;
+	AppliedConditionalContext.EffectPreviews[1].bSkip = false;
+	AppliedConditionalContext.EffectPreviews[1].bHasMagnitude = true;
+	AppliedConditionalContext.EffectPreviews[1].Magnitude = 5;
+	const FWacomCardViewData AppliedConditionalView =
+		UWacomCardPresentationBuilder::BuildCardViewData(
+			ConditionalCard.Get(), AppliedConditionalContext);
+	TestEqual(TEXT("Applicable conditional damage previews the semantic total"),
+		AppliedConditionalView.EffectBadges[0].PreviewValue, 9);
+	TestTrue(TEXT("Applicable conditional total uses reversible numeric preview"),
+		AppliedConditionalView.EffectBadges[0].bHasPreviewValue);
+	TestEqual(TEXT("Poison remains a separate semantic badge"),
+		AppliedConditionalView.EffectBadges[1].Kind,
+		EWacomCardViewEffectBadgeKind::Poison);
 
 	return true;
 }

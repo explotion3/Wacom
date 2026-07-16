@@ -213,6 +213,35 @@ void UWacomFirstPersonCardViewWidget::ResetCostDigitPreviewView()
 	}
 }
 
+void UWacomFirstPersonCardViewWidget::SetEffectBadgeFeedbackConfig(
+	const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig)
+{
+	LastEffectBadgeFeedbackConfig = InConfig;
+	if (CardView)
+	{
+		CardView->SetEffectBadgeFeedbackConfig(InConfig);
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::SetEffectBadgeFeedbackView(
+	const FWacomFirstPersonCardEffectBadgeFeedbackView& InView)
+{
+	LastEffectBadgeFeedbackView = InView;
+	if (CardView)
+	{
+		CardView->SetEffectBadgeFeedbackView(InView);
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::ResetEffectBadgeFeedbackView()
+{
+	LastEffectBadgeFeedbackView = FWacomFirstPersonCardEffectBadgeFeedbackView();
+	if (CardView)
+	{
+		CardView->ResetEffectBadgeFeedback();
+	}
+}
+
 FVector2D UWacomFirstPersonCardViewWidget::GetCardBodyHitSize() const
 {
 	return CardView ? CardView->GetCardBodyHitSize() : UWacomCardView::GetDefaultCardBodyHitSize();
@@ -543,6 +572,8 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 	SetCardDepthView(LastCardDepthView);
 	SetCardSurfaceEffectView(LastSurfaceEffectView);
 	SetCardDataRewriteView(LastDataRewriteView);
+	SetEffectBadgeFeedbackConfig(LastEffectBadgeFeedbackConfig);
+	SetEffectBadgeFeedbackView(LastEffectBadgeFeedbackView);
 	SetRetainedRenderingEnabled(bRetainedRenderingEnabled);
 	SetRealtimePresentationEnabled(bRealtimePresentationEnabled);
 }
@@ -551,6 +582,7 @@ void UWacomFirstPersonCardViewWidget::NativeDestruct()
 {
 	if (CardView)
 	{
+		CardView->ResetEffectBadgeFeedback();
 		CardView->ResetCostDigitRewrite();
 		CardView->ResetCardSurfacePerspectiveView();
 	}

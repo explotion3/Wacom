@@ -129,6 +129,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | Exhausted 消散旧 `PlayedDissolve` C++ 命名 | 为避免破坏已制作 DataAsset 的反射字段和序列化数据，`CardPlayedDissolveStyle`、相关 Style 类型及资产名暂保留；运行时已经只由 `Exhausted` 语义驱动 | 后续完成资产重命名 / redirector / Blueprint compile audit 后，统一迁移为 `CardExhaustedDissolve*`，再删除兼容名称；不得在此之前复制第二套 Style 数据 |
 | Worktree 依赖 ignored Content | 开发期由 `InitializeWacomWorktree.ps1` 仅为 Art / Asset 建立独立 D 盘依赖层；`Content/DreamMaterials` 现有 61 个 `.uasset` 已整体由 Git LFS 管理。2026-07-16 只读 AssetRegistry 基线只剩 `/Game/DreamMaterials/M_Card_Step2_Inst` 没有本地磁盘资产 | 按 [`Content_Dependency_Audit.md`](./Content_Dependency_Audit.md) 继续确认 Art / Asset 所有权、登记第三方 manifest，并处理 `M_Card_Step2_Inst` 的旧引用或重建；最终删除对主工程 seed source 的依赖并启用外部依赖 gate |
 | 卡牌核心表面缺少独立 Finish Mask | 第一版分层视差使用现有插画 / Frame / Rarity 的 RGB 与 Alpha 程序化计算高光、金属明暗和虹彩，不要求内容团队补贴图 | 美术资产稳定后评估一张可选的打包 Mask（例如 R=金属、G=箔片、B=凹凸、A=虹彩）；只在能显著提升不同主题复用时加入 MI，不把单一卡牌特例写进规则数据 |
+| EffectBadge Added/Removed 缺少正式规则事务 | App 已有稳定 `PresentationKey`、ValueChanged/Added/Removed Hint、局部 Playback、移除后重排与新增展开能力；当前生产触发只接受 `CardRuntimeCostChanged / CardStatusChanged` 许可下的可见 ValueChanged，不从普通 Snapshot 数组差异推断增删 | 规则或升级系统引入动态 Effect 增删时，先定义明确事件/事务、来源与稳定 EffectIndex，再由 Battle Presentation 生成 Added/Removed Hint；随后补真实旧槽位几何缓存与 PIE 验收，禁止 Widget 自己把数组变化解释成规则事实 |
 
 ---
 

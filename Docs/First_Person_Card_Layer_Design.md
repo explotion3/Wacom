@@ -132,6 +132,8 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `17 Camera Look While UI` | Hover pointer 与 Inspect / Drag view 驱动 Battle / Run 镜头的独立开关、强度倍率与插值速度覆盖 |
 | `18 Card Draw Reveal` | Battle 真实 Drawn 卡的牌背等待、飞行中翻面、落定反馈和 Reduced Motion |
 | `19 Card Gain Reveal` | 显式 Gained 卡的正面像素结晶、稀有度完成边缘和 Reduced Motion |
+| `20 Card Retain Seal` | EndTurn 普通保留牌的封存、Held 姿态、显式解除和 Reduced Motion |
+| `21 Card Effect Badge Feedback` | Battle EffectBadge 目标预览、正式局部重写、错峰、Reduced Motion 与可选音效 |
 | `98 Experimental Surface Effect` | 暂不接入生产 Drag 的像素棱镜 Style / 参数原型；只为未来 CardDataChanged / Upgrade 效果保留 |
 | `99 Debug` | lifecycle 与 gesture diagnostics |
 
@@ -268,6 +270,16 @@ Battle 可见普通手牌只有在“明确改费事件 + 命令前后 Snapshot 
 Layer 的每卡反馈容器是确定性的 Feedback Bundle，不再以单值 Map 互相覆盖：`Retained` 可与重写并存，`HandTargetImpact` 与费用数字 MID 可以并行，`CardUseReform` 与 Departure 优先并抑制重写。`CardDataRewrite` Hint 明确携带权威 `CostBefore / CostAfter`；动画不得从当前 Brush 猜旧值，因为 Preview MID 可能正在绘制预测数字，而 Outcome Snapshot 已经携带新权威值。Layer 在提交新 ViewData 前调用 Slot/CardView 的 prepare 接口，用 Hint 的权威数值解析并锁定旧一位数 PaperSprite，再刷新权威新值；没有 Hint、Atlas 无效、材质无效或跨入多位数时直接显示新值。App-private `FWacomFirstPersonCardDataRewritePlayback` 默认播放 `0.34s`：旧数字在 `0.10s` 内按稳定硬像素顺序消散并缩至 `0.88`，`0.12s` 起新数字从中心逐格重组，约 `0.26s` 回弹到 `1.10`，最终归位。播放中再次改费不排长队，而采用最新目标值、Tone 与 Seed；它只写 `CostDigitImage` 的 MID/RenderTransform，不改变整卡 Transform、ZOrder 或命中。普通独立重写不阻塞 Presentation；PlayCard 命令 Outcome 中的重写由 Hint 显式标记为阶段阻塞，完成后才允许留手源卡 Inbound。
 
 费用重组直接消费 `UPaperSprite::GetSlateAtlasData()` 返回的旧/新 Atlas Texture、StartUV 与 SizeUV，不再计算 Retainer 局部 Cost Rect。DreamShader 真源为 `M_WacomCard_CostDigitRewrite.dsm + WacomCardCostDigitRewrite.dsh`，默认 MI / Style 为 `/Game/DreamMaterials/Card/MI_WacomCard_CostDigitRewrite_Default` 与 `/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardDataRewriteStyle_Pixel`。该 UI 材质只绑定到现有 `CostDigitImage`，不拥有 `Fake3DSurfaceRetainer`，因此可与 HandTarget、Fake3D、视差、反光和实时 Alpha 接触阴影同时存在；边缘短闪只乘数字原始 Alpha，不产生矩形遮罩，也不使用 Time、Noise 或额外纹理。Anchor 制作入口为 `16 Card Data Rewrite`。Reduced Motion 使用约 `0.12s` 旧/新数字交叉淡化和静态轮廓，不缩放、不逐格消散；clear、ForceComplete、身份复用、BattleEnd 和 teardown 都恢复权威新 Sprite、authored ImageSize/RenderTransform/Pivot 并清除 MID。
+
+### EffectBadge 局部重写与生命周期反馈
+
+`FWacomCardViewEffectBadge` 使用 `PresentationKey` 表达同一张卡内紧凑语义的稳定表现身份。卡面按 `Damage / Poison / Heal / Shield` 等 Badge Kind 聚合同类型效果，使用 `Badge.<Kind>` 作为身份；同类型的无条件效果组成权威基础值，带条件效果只在目标预览判定生效时加入预览总值。例如“4 点基础伤害 + 目标中毒时额外 5 点伤害”平时只显示一枚 `Damage=4`，有效目标上预览为 `9`；中毒层数始终留在独立 `Poison` Badge，不会并入伤害。`Value` 始终保存权威基础值，目标预览只写 `bHasPreviewValue / PreviewValue / bPreviewSkipped`，切换目标、取消 Preview 或重复同一目标刷新不会误播正式变化。
+
+目标 Preview 直接驱动现有 `UWacomCardEffectBadgeWidget`：预测数字通过 `DigitHost` 内每个数字 Image 的临时 MID 低强度呼吸；只有整个语义组都无法在当前目标上生效时，Badge 才保持槽位和权威数字并整体降到约 `0.28` 透明度，不再绘制覆盖卡面的像素叉。若同组仍有基础贡献，跳过的条件分量只是不计入预览总值，Badge 保持正常。正式 `EffectBadgeChange` 只允许由明确 Battle 事件许可后，再用 Pre/Post Snapshot 按稳定 Key 比较可见 Badge 得出；首次显示、普通 Snapshot、Hover、重排、Preview 与取消 Preview 均不得推断正式反馈。当前生产链只从 `CardRuntimeCostChanged / CardStatusChanged` 派生实际可见的 `ValueChanged`；`Added / Removed` 的 Hint、Playback、移除后重排与新增展开能力已经建立，但必须等未来明确的动态 Effect 事务接入，不能从普通数组差异静默推断。
+
+正式数值变化默认约 `0.28s`：框体保持，旧数字局部消散、新数字从中心重组，同时 Badge Root 执行一次 `1.0 → 0.94 → 1.08 → 1.0` 回弹。移除阶段先保留旧槽位约 `0.18s`，随后幸存项按缓存几何约 `0.14s` 平移归位，再与约 `0.22s` 新增展开自然衔接；几何无效时直接切换，不阻塞其它反馈。同卡多项按稳定 Key 排序并以 `0.035s` 错峰、最多额外等待 `0.12s`。费用重写和 Badge 重写作用于不同 Image，因此可在 `CommandOutcome` 并行，阶段等待较晚完成者；目标即将 Played、Discarded、Exhausted 或 CardUseReform 时 Departure 优先并清理 Badge MID、临时数字、Paint 与 Root Transform。
+
+数字材质真源为 `DShader/Material/Card/M_WacomCard_EffectBadgeFeedback.dsm + DShader/Shared/WacomCardEffectBadgeFeedback.dsh`，默认 MI / Style 为 `/Game/DreamMaterials/Card/MI_WacomCard_EffectBadgeFeedback_Default` 与 `/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardEffectBadgeFeedbackStyle_Pixel`。它与费用数字共用 App-private PaperSprite Atlas 解析工具，直接绑定现有数字 `UImage`，不占用 `Fake3DSurfaceRetainer`。未变化数字继续使用普通 PaperSprite Brush；材质不读取 Time、Noise 或额外纹理。Anchor 制作入口为 `21 Card Effect Badge Feedback`。Reduced Motion 只做旧/新数字交叉淡化和静态颜色提示，不缩放、不平移、不呼吸；全局 Settings 的 `UI 动效=简化` 会强制启用该路径。本轮完全不修改耐久规则或 `DurabilityHost`。
 
 基础材质和两种 Surface-Effect 材质共用 `DShader/Shared/WacomFirstPersonCardSurface.dsh` 中的投影与实时 Alpha 接触阴影算法。PixelAsh 算法继续位于 `WacomFirstPersonCardPlayedDissolve.dsh`；OrderedDither 独立位于 `WacomFirstPersonCardPlayedOrderedDither.dsh`，程序化生成稳定的 `4×4 / 8×8 Bayer` 阈值，不需要 Bayer 纹理。默认 OrderedDither 从卡牌左下向右上以 `45°` 推进：未到达区域保持原卡面，固定宽度前沿以 Bayer 棋盘直接裁切原卡面的 RGB / Alpha，已通过区域完全透明并显示后方场景。默认残片密度为 `0.28`，每个网格按 Seed 获得稳定方向和距离倍率：约 `75%` 在消散方向正负 `18°` 内移动约 `34px`，其余约 `25%` 向 360° 四周散开且距离缩至主流的 `0.55`；所有残片按各自 `ResidueAge` 在约 `0.14s` 内缓出并平方衰减，不形成 PixelAsh 式长尾。它不修改旧灰烬源。`M_FirstPersonCard_Fake3D.dsm` 不引用任何消散噪声，普通手牌没有额外采样成本；只有消散活动期间，`UWacomFirstPersonCardViewWidget` 才把 Style 的源材质交给同一个 `Fake3DSurfaceRetainer`，并按 `EffectKind` 写入对应参数。基础 Effect Material 必须分别缓存 WBP 创作源材质与 Slate 运行时 MID：嵌套 Retainer 的 MID 可能晚于 `NativeConstruct` 生成，不能把首帧空 MID 当成已完成缓存；结束、清理、复用或 teardown 时优先恢复创作源并重新取得 Retainer 实际 MID。`PlayedDissolveNoiseTexture` 的 DreamShader 默认资产必须本身使用 Masks sampler，不能使用 Engine `DefaultTexture`；接触阴影会在阴影采样坐标重新计算当前 Bayer caster 可见度并在总时长前 `0.25`（默认约 `0.10s`）淡出，消散前沿与外飘网点不写入 caster，外飘限制在 WBP 已有 bleed 内。Reduced Motion 继续关闭所有残片方向运动。
 

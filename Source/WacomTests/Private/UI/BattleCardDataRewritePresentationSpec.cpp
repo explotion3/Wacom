@@ -10,6 +10,7 @@
 #include "Session/BattleInitializationResult.h"
 #include "Session/BattleResolution.h"
 #include "Session/BattleSession.h"
+#include "Tags/WacomGameplayTags.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 
 #if WITH_AUTOMATION_TESTS
@@ -41,6 +42,11 @@ namespace WacomBattleCardDataRewritePresentationSpec
 			/*Magnitude*/ 2,
 			/*bReduceCost*/ false);
 		OutTargetCard = Fixture.MakeNoopCard(/*Cost*/ 3);
+		FCardEffect RuntimeDamage;
+		RuntimeDamage.EffectType = WacomTags::Effect_Damage;
+		RuntimeDamage.Magnitude = 1;
+		RuntimeDamage.MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
+		OutTargetCard->Effects.Add(RuntimeDamage);
 		return Fixture.CreateInitializedSession(
 			Fixture.MakeCharacter(
 				Fixture.MakeNoopCard(0),
@@ -138,6 +144,27 @@ bool FWacomBattleCardDataRewritePresentationTest::RunTest(
 	TestEqual(TEXT("Rewrite preserves the pre-preview cost"), RewriteHint->DataRewriteCostBefore, 3);
 	TestEqual(TEXT("Rewrite preserves the committed cost"), RewriteHint->DataRewriteCostAfter, 5);
 	TestTrue(TEXT("Rewrite uses a stable non-zero seed"), RewriteHint->DataRewriteSeed != 0);
+
+	const FWacomFirstPersonCardLayerFeedbackHint* BadgeHint = Hints.FindByPredicate(
+		[&TargetId](const FWacomFirstPersonCardLayerFeedbackHint& Hint)
+		{
+			return Hint.CardInstanceId == TargetId
+				&& Hint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange;
+		});
+	if (!TestNotNull(TEXT("Runtime-cost badge changes alongside the cost digit"), BadgeHint))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Only the visible runtime badge changes"), BadgeHint->EffectBadgeChanges.Num(), 1);
+	if (BadgeHint->EffectBadgeChanges.Num() == 1)
+	{
+		const FWacomFirstPersonCardEffectBadgeChange& Change = BadgeHint->EffectBadgeChanges[0];
+		TestEqual(TEXT("Badge keeps its semantic aggregate identity"),
+			Change.PresentationKey, FName(TEXT("Badge.Damage")));
+		TestEqual(TEXT("Badge old value follows pre-command runtime cost"), Change.OldValue, 3);
+		TestEqual(TEXT("Badge new value follows post-command runtime cost"), Change.NewValue, 5);
+		TestEqual(TEXT("Badge direction is increase"), Change.Direction, EWacomFirstPersonCardEffectBadgeValueDirection::Increase);
+	}
 
 	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
 	return true;

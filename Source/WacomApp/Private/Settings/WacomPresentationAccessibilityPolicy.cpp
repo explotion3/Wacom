@@ -39,6 +39,9 @@ void FWacomPresentationAccessibilityPolicy::ApplyToFirstPersonCardConfig(
 		Config.DrawReveal.bReducedMotion = true;
 		Config.GainReveal.bReducedMotion = true;
 		Config.RetainSeal.bReducedMotion = true;
+		Config.HandTargetImpact.bReducedMotion = true;
+		Config.DataRewrite.bReducedMotion = true;
+		Config.EffectBadgeFeedback.bReducedMotion = true;
 		Config.bReduceDragPickupMotion = true;
 	}
 

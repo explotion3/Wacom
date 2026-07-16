@@ -14,6 +14,7 @@ class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardDataRewritePlayback;
+class FWacomFirstPersonCardEffectBadgeFeedbackPlayback;
 class FWacomFirstPersonCardDrawRevealPlayback;
 class FWacomFirstPersonCardGainRevealPlayback;
 class FWacomFirstPersonCardRetainSealPlayback;
@@ -48,6 +49,11 @@ struct FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter
 struct FWacomFirstPersonCardDataRewritePlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardDataRewritePlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardEffectBadgeFeedbackPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardEffectBadgeFeedbackPlayback* Playback) const;
 };
 
 struct FWacomFirstPersonCardDrawRevealPlaybackDeleter
@@ -136,6 +142,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolveView;
 	FWacomFirstPersonCardHandTargetImpactView HandTargetImpactView;
 	FWacomFirstPersonCardDataRewriteView DataRewriteView;
+	FWacomFirstPersonCardEffectBadgeFeedbackView EffectBadgeFeedbackView;
 	FWacomFirstPersonCardDrawRevealView DrawRevealView;
 	FWacomFirstPersonCardGainRevealView GainRevealView;
 	FWidgetTransform RenderTransform;
@@ -152,6 +159,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bHandTargetImpactCommitActive = false;
 	bool bDataRewritePlaybackActive = false;
 	bool bDataRewritePendingHandoff = false;
+	bool bEffectBadgeFeedbackPlaybackActive = false;
 	bool bDrawRevealPlaybackActive = false;
 	bool bDrawRevealWaiting = false;
 	float DrawRevealProgress = 0.0f;
@@ -251,6 +259,9 @@ public:
 		int32 Seed,
 		int32 SequenceIndex,
 		int32 SequenceCount,
+		bool bBlocksPresentationPhase = false);
+	void TriggerEffectBadgeFeedback(
+		const TArray<FWacomFirstPersonCardEffectBadgeChange>& Changes,
 		bool bBlocksPresentationPhase = false);
 	void BeginDeferredExitWithHandTargetImpact(
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
@@ -420,6 +431,9 @@ private:
 		FWacomFirstPersonCardDataRewritePlayback,
 		FWacomFirstPersonCardDataRewritePlaybackDeleter> DataRewritePlayback;
 	TUniquePtr<
+		FWacomFirstPersonCardEffectBadgeFeedbackPlayback,
+		FWacomFirstPersonCardEffectBadgeFeedbackPlaybackDeleter> EffectBadgeFeedbackPlayback;
+	TUniquePtr<
 		FWacomFirstPersonCardDrawRevealPlayback,
 		FWacomFirstPersonCardDrawRevealPlaybackDeleter> DrawRevealPlayback;
 	TUniquePtr<
@@ -436,6 +450,7 @@ private:
 	int32 PendingDataRewriteSequenceCount = 1;
 	bool bPendingDataRewriteHandoff = false;
 	bool bDataRewriteBlocksPresentationPhase = false;
+	bool bEffectBadgeFeedbackBlocksPresentationPhase = false;
 	FWacomFirstPersonCardLayerSlotView DeferredHandTargetExitSlotView;
 	TOptional<FWacomFirstPersonCardTransitionMotionProfile> DeferredHandTargetExitProfile;
 	EWacomFirstPersonCardSlotTransitionKind DeferredHandTargetExitTransitionKind =
@@ -612,6 +627,11 @@ private:
 	void ApplyCardDataRewriteView();
 	void PlayPendingCardDataRewriteSound();
 	bool IsCardDataRewritePlaybackActive() const;
+	void TickEffectBadgeFeedbackPlayback(float DeltaTime);
+	void ClearEffectBadgeFeedbackPlayback();
+	void ApplyEffectBadgeFeedbackView();
+	void PlayPendingEffectBadgeFeedbackSound();
+	bool IsEffectBadgeFeedbackPlaybackActive() const;
 	bool CanPlayDrawReveal() const;
 	void PrepareDrawRevealPlayback(EWacomFirstPersonCardSlotTransitionKind TransitionKind);
 	void StartDrawRevealPlayback();

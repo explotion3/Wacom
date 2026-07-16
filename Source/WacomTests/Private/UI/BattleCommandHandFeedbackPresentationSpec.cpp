@@ -12,6 +12,7 @@
 #include "Session/BattleInitializationResult.h"
 #include "Session/BattleResolution.h"
 #include "Session/BattleSession.h"
+#include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 
@@ -197,6 +198,11 @@ bool FWacomUIBattleCommandCostRewritePhaseOrderTest::RunTest(
 		/*Magnitude*/ 2,
 		/*bReduceCost*/ false);
 	UCardDefinition* TargetDefinition = Fixture.MakeNoopCard(/*Cost*/ 3);
+	FCardEffect RuntimeDamage;
+	RuntimeDamage.EffectType = WacomTags::Effect_Damage;
+	RuntimeDamage.Magnitude = 1;
+	RuntimeDamage.MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
+	TargetDefinition->Effects.Add(RuntimeDamage);
 	const FWacomInitializedBattleSession Initialized = Fixture.CreateInitializedSession(
 		Fixture.MakeCharacter(
 			Fixture.MakeNoopCard(0),
@@ -283,6 +289,22 @@ bool FWacomUIBattleCommandCostRewritePhaseOrderTest::RunTest(
 	TestTrue(
 		TEXT("Command-owned cost rewrite blocks source return until complete"),
 		RewriteHint->bBlocksPresentationPhase);
+	const FWacomFirstPersonCardLayerFeedbackHint* BadgeHint =
+		FeedbackHints.FindByPredicate(
+			[&TargetCardId](const FWacomFirstPersonCardLayerFeedbackHint& Hint)
+			{
+				return Hint.CardInstanceId == TargetCardId
+					&& Hint.FeedbackKind
+						== EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange;
+			});
+	if (!TestNotNull(TEXT("Outcome contains the parallel effect-badge rewrite"), BadgeHint))
+	{
+		return false;
+	}
+	TestTrue(
+		TEXT("Command-owned badge rewrite blocks the same outcome phase"),
+		BadgeHint->bBlocksPresentationPhase);
+	TestEqual(TEXT("Outcome badge rewrite contains one stable item"), BadgeHint->EffectBadgeChanges.Num(), 1);
 	return true;
 }
 

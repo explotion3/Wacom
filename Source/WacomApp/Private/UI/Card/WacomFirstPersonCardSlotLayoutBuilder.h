@@ -136,6 +136,7 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	FWacomFirstPersonCardPlayedDissolveConfig PlayedDissolve;
 	FWacomFirstPersonCardHandTargetImpactConfig HandTargetImpact;
 	FWacomFirstPersonCardDataRewriteConfig DataRewrite;
+	FWacomFirstPersonCardEffectBadgeFeedbackConfig EffectBadgeFeedback;
 	FWacomFirstPersonCardDrawRevealConfig DrawReveal;
 	FWacomFirstPersonCardGainRevealConfig GainReveal;
 	FWacomFirstPersonCardRetainSealConfig RetainSeal;

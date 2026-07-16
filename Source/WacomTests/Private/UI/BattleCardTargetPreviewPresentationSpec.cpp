@@ -384,7 +384,10 @@ bool FWacomUIBattlePresentationStackUsesCardTargetPreviewSpec::RunTest(const FSt
 		return false;
 	}
 
-	TestEqual(TEXT("Stack mini card uses target preview magnitude"), DamageBadge->Value, 10);
+	TestEqual(TEXT("Stack mini card keeps the authoritative magnitude"), DamageBadge->Value, 2);
+	TestTrue(TEXT("Stack mini card exposes a reversible target preview"), DamageBadge->bHasPreviewValue);
+	TestEqual(TEXT("Stack mini card carries the target preview magnitude"), DamageBadge->PreviewValue, 10);
+	TestFalse(TEXT("Applicable damage preview is not marked skipped"), DamageBadge->bPreviewSkipped);
 	return true;
 }
 

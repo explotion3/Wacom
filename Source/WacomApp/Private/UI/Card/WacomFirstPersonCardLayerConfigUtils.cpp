@@ -382,6 +382,30 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 		DataRewriteStyle.RewriteSoundPitchVariation,
 		0.0f,
 		0.99f);
+	FWacomFirstPersonCardEffectBadgeFeedbackStyleData& EffectBadgeStyle =
+		Config.EffectBadgeFeedback.Style;
+	EffectBadgeStyle.PreviewEnterSeconds = FMath::Max(0.0f, EffectBadgeStyle.PreviewEnterSeconds);
+	EffectBadgeStyle.PreviewExitSeconds = FMath::Max(0.0f, EffectBadgeStyle.PreviewExitSeconds);
+	EffectBadgeStyle.PreviewPulsePeriodSeconds = FMath::Max(
+		0.01f, EffectBadgeStyle.PreviewPulsePeriodSeconds);
+	EffectBadgeStyle.SkippedOpacity = FMath::Clamp(EffectBadgeStyle.SkippedOpacity, 0.0f, 1.0f);
+	EffectBadgeStyle.ValueChangeDurationSeconds = FMath::Max(
+		0.0f, EffectBadgeStyle.ValueChangeDurationSeconds);
+	EffectBadgeStyle.AddedDurationSeconds = FMath::Max(0.0f, EffectBadgeStyle.AddedDurationSeconds);
+	EffectBadgeStyle.RemovedDurationSeconds = FMath::Max(
+		0.0f, EffectBadgeStyle.RemovedDurationSeconds);
+	EffectBadgeStyle.ReflowDurationSeconds = FMath::Max(
+		0.0f, EffectBadgeStyle.ReflowDurationSeconds);
+	EffectBadgeStyle.SequenceStaggerSeconds = FMath::Max(
+		0.0f, EffectBadgeStyle.SequenceStaggerSeconds);
+	EffectBadgeStyle.MaxSequenceDelaySeconds = FMath::Max(
+		0.0f, EffectBadgeStyle.MaxSequenceDelaySeconds);
+	EffectBadgeStyle.ChangeSoundVolumeMultiplier = FMath::Max(
+		0.0f, EffectBadgeStyle.ChangeSoundVolumeMultiplier);
+	EffectBadgeStyle.ChangeSoundPitchMultiplier = FMath::Max(
+		0.01f, EffectBadgeStyle.ChangeSoundPitchMultiplier);
+	EffectBadgeStyle.ChangeSoundPitchVariation = FMath::Clamp(
+		EffectBadgeStyle.ChangeSoundPitchVariation, 0.0f, 0.99f);
 	FWacomFirstPersonCardDrawRevealStyleData& DrawRevealStyle =
 		Config.DrawReveal.Style;
 	DrawRevealStyle.BackHoldEndProgress = FMath::Clamp(
@@ -659,6 +683,50 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(
 			A.DataRewrite.Style.RewriteSoundPitchVariation,
 			B.DataRewrite.Style.RewriteSoundPitchVariation)
+		&& A.EffectBadgeFeedback.bEnabled == B.EffectBadgeFeedback.bEnabled
+		&& A.EffectBadgeFeedback.bReducedMotion == B.EffectBadgeFeedback.bReducedMotion
+		&& A.EffectBadgeFeedback.Style.DigitFeedbackMaterialInstance
+			== B.EffectBadgeFeedback.Style.DigitFeedbackMaterialInstance
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.PreviewEnterSeconds,
+			B.EffectBadgeFeedback.Style.PreviewEnterSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.PreviewExitSeconds,
+			B.EffectBadgeFeedback.Style.PreviewExitSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.PreviewPulsePeriodSeconds,
+			B.EffectBadgeFeedback.Style.PreviewPulsePeriodSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.SkippedOpacity,
+			B.EffectBadgeFeedback.Style.SkippedOpacity)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.ValueChangeDurationSeconds,
+			B.EffectBadgeFeedback.Style.ValueChangeDurationSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.AddedDurationSeconds,
+			B.EffectBadgeFeedback.Style.AddedDurationSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.RemovedDurationSeconds,
+			B.EffectBadgeFeedback.Style.RemovedDurationSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.ReflowDurationSeconds,
+			B.EffectBadgeFeedback.Style.ReflowDurationSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.SequenceStaggerSeconds,
+			B.EffectBadgeFeedback.Style.SequenceStaggerSeconds)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.MaxSequenceDelaySeconds,
+			B.EffectBadgeFeedback.Style.MaxSequenceDelaySeconds)
+		&& A.EffectBadgeFeedback.Style.ChangeSound == B.EffectBadgeFeedback.Style.ChangeSound
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.ChangeSoundVolumeMultiplier,
+			B.EffectBadgeFeedback.Style.ChangeSoundVolumeMultiplier)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.ChangeSoundPitchMultiplier,
+			B.EffectBadgeFeedback.Style.ChangeSoundPitchMultiplier)
+		&& AreFloatsEquivalent(
+			A.EffectBadgeFeedback.Style.ChangeSoundPitchVariation,
+			B.EffectBadgeFeedback.Style.ChangeSoundPitchVariation)
 		&& A.DrawReveal.bEnabled == B.DrawReveal.bEnabled
 		&& A.DrawReveal.bReducedMotion == B.DrawReveal.bReducedMotion
 		&& A.DrawReveal.Style.SurfaceEffectMaterialInstance

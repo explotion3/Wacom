@@ -127,7 +127,53 @@ enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
 	CardDataRewrite UMETA(DisplayName = "Card Data Rewrite"),
 	CardUseReformOut UMETA(DisplayName = "Card Use Reform Out"),
 	CardUseReformIn UMETA(DisplayName = "Card Use Reform In"),
-	RetainedRelease UMETA(DisplayName = "Retained Release")
+	RetainedRelease UMETA(DisplayName = "Retained Release"),
+	EffectBadgeChange UMETA(DisplayName = "Effect Badge Change")
+};
+
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardEffectBadgeChangeKind : uint8
+{
+	ValueChanged UMETA(DisplayName = "Value Changed"),
+	Added UMETA(DisplayName = "Added"),
+	Removed UMETA(DisplayName = "Removed")
+};
+
+UENUM(BlueprintType)
+enum class EWacomFirstPersonCardEffectBadgeValueDirection : uint8
+{
+	Neutral UMETA(DisplayName = "Neutral"),
+	Increase UMETA(DisplayName = "Increase"),
+	Decrease UMETA(DisplayName = "Decrease")
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardEffectBadgeChange
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	FName PresentationKey;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	EWacomCardViewEffectBadgeKind BadgeKind = EWacomCardViewEffectBadgeKind::Generic;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	EWacomFirstPersonCardEffectBadgeChangeKind ChangeKind =
+		EWacomFirstPersonCardEffectBadgeChangeKind::ValueChanged;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	EWacomFirstPersonCardEffectBadgeValueDirection Direction =
+		EWacomFirstPersonCardEffectBadgeValueDirection::Neutral;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	int32 OldValue = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	int32 NewValue = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	int32 Seed = 0;
 };
 
 UENUM(BlueprintType, meta = (Bitflags))
@@ -687,6 +733,100 @@ struct WACOMAPP_API FWacomFirstPersonCardDataRewriteStyleData
 	float RewriteSoundPitchVariation = 0.03f;
 };
 
+/** Direct EffectBadge digit feedback; it never takes ownership of the card Retainer. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardEffectBadgeFeedbackStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge", meta = (ToolTip = "效果徽章数字变化时临时绑定到数字 UImage 的 UI 材质实例；不占用卡牌 Retainer。为空时仍保留局部透明度与缩放反馈。"))
+	TObjectPtr<UMaterialInstance> DigitFeedbackMaterialInstance = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Preview", meta = (Units = "s", ToolTip = "目标预览淡入时间，单位为秒；默认 0.10，推荐 0.06 到 0.16。"))
+	float PreviewEnterSeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Preview", meta = (Units = "s", ToolTip = "目标预览淡出时间，单位为秒；默认 0.08，推荐 0.05 到 0.14。"))
+	float PreviewExitSeconds = 0.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Preview", meta = (Units = "s", ToolTip = "预测数字低强度呼吸周期，单位为秒；默认 0.85，推荐 0.65 到 1.10。"))
+	float PreviewPulsePeriodSeconds = 0.85f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Preview", meta = (ToolTip = "被规则跳过的 Badge 透明度；默认 0.28，推荐 0.18 到 0.40。"))
+	float SkippedOpacity = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Timing", meta = (Units = "s", ToolTip = "数值变化完整时长，单位为秒；默认 0.28，推荐 0.22 到 0.36。"))
+	float ValueChangeDurationSeconds = 0.28f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Timing", meta = (Units = "s", ToolTip = "新增 Badge 展开时长，单位为秒；默认 0.22，推荐 0.16 到 0.30。"))
+	float AddedDurationSeconds = 0.22f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Timing", meta = (Units = "s", ToolTip = "移除 Badge 收束时长，单位为秒；默认 0.18，推荐 0.12 到 0.26。"))
+	float RemovedDurationSeconds = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Timing", meta = (Units = "s", ToolTip = "幸存 Badge 重排归位时长，单位为秒；默认 0.14，推荐 0.10 到 0.22。"))
+	float ReflowDurationSeconds = 0.14f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Timing", meta = (Units = "s", ToolTip = "同卡多项变化的错峰间隔，单位为秒；默认 0.035，推荐 0.02 到 0.06。"))
+	float SequenceStaggerSeconds = 0.035f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Timing", meta = (Units = "s", ToolTip = "同卡多项变化最大附加等待，单位为秒；默认 0.12。"))
+	float MaxSequenceDelaySeconds = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Audio", meta = (ToolTip = "正式 Badge 变化在新值开始显现时的一次性 2D 音效；同批只由第一项请求，留空表示静音。"))
+	TObjectPtr<USoundBase> ChangeSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Audio", meta = (ToolTip = "Badge 变化音效音量倍率；1 为原始音量。"))
+	float ChangeSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Audio", meta = (ToolTip = "Badge 变化音效基础音高倍率；1 为原始音高。"))
+	float ChangeSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Effect Badge|Audio", meta = (ToolTip = "Badge 变化音高随机范围；0.03 表示约正负 3%。"))
+	float ChangeSoundPitchVariation = 0.03f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardEffectBadgeFeedbackConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	FWacomFirstPersonCardEffectBadgeFeedbackStyleData Style;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardEffectBadgeFeedbackItemView
+{
+	FName PresentationKey;
+	EWacomFirstPersonCardEffectBadgeChangeKind ChangeKind =
+		EWacomFirstPersonCardEffectBadgeChangeKind::ValueChanged;
+	EWacomFirstPersonCardEffectBadgeValueDirection Direction =
+		EWacomFirstPersonCardEffectBadgeValueDirection::Neutral;
+	int32 OldValue = 0;
+	int32 NewValue = 0;
+	int32 Seed = 0;
+	float OldDissolveAmount = 0.0f;
+	float NewRevealAmount = 0.0f;
+	float RootScale = 1.0f;
+	float RootOpacity = 1.0f;
+	bool bActive = false;
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardEffectBadgeFeedbackView
+{
+	bool bActive = false;
+	bool bReducedMotion = false;
+	bool bCompleted = false;
+	float ReflowProgress = 0.0f;
+	FWacomFirstPersonCardEffectBadgeFeedbackStyleData Style;
+	TArray<FWacomFirstPersonCardEffectBadgeFeedbackItemView> Items;
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomFirstPersonCardDataRewriteConfig
 {
@@ -1126,6 +1266,9 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerFeedbackHint
 	/** Formal EndTurn retains stay sealed until a later RetainedRelease hint. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
 	bool bRetainUntilExplicitRelease = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Effect Badge")
+	TArray<FWacomFirstPersonCardEffectBadgeChange> EffectBadgeChanges;
 };
 
 USTRUCT(BlueprintType)
@@ -1896,6 +2039,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardRetainSealConfig RetainSeal;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardEffectBadgeFeedbackConfig EffectBadgeFeedback;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState

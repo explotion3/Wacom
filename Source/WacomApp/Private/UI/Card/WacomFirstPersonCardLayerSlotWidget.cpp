@@ -16,6 +16,7 @@
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
 #include "UI/Card/WacomFirstPersonCardDataRewritePlayback.h"
+#include "UI/Card/WacomFirstPersonCardEffectBadgeFeedbackPlayback.h"
 #include "UI/Card/WacomFirstPersonCardDepthMotion.h"
 #include "UI/Card/WacomFirstPersonCardDrawRevealPlayback.h"
 #include "UI/Card/WacomFirstPersonCardGainRevealPlayback.h"
@@ -295,6 +296,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	ClearCardUseReformPlayback();
 	ClearHandTargetImpactPlayback();
 	ClearCardDataRewritePlayback();
+	ClearEffectBadgeFeedbackPlayback();
 	if (bCardIdentityChanged || !InSlotView.bProjected || !InSlotView.Entry.CardInstanceId.IsValid())
 	{
 		ClearRetainSealPlayback();
@@ -414,6 +416,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 		ClearCardUseReformPlayback();
 		ClearHandTargetImpactPlayback();
 		ClearCardDataRewritePlayback();
+		ClearEffectBadgeFeedbackPlayback();
 		ClearDrawRevealPlayback();
 		ClearGainRevealPlayback();
 		ClearRetainSealPlayback();
@@ -580,6 +583,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 		ClearExitTransitionPlayback();
 		ClearSurfaceDeparturePlayback();
 		ClearCardDataRewritePlayback();
+		ClearEffectBadgeFeedbackPlayback();
 		ClearRetainSealPlayback();
 		bIsExitingForFirstPersonLayer = true;
 		bUsesFixedExitTransitionPlayback = false;
@@ -597,6 +601,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginExitMotionWithProfile(
 	ClearInteractionFeedback();
 	ClearEnterTransitionPlayback();
 	ClearCardDataRewritePlayback();
+	ClearEffectBadgeFeedbackPlayback();
 	ClearHandTargetImpactPlayback();
 	ClearSurfaceDeparturePlayback();
 	ClearCardUseReformPlayback();
@@ -683,6 +688,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotVisualConfig(
 	}
 
 	SlotVisualConfig = NewConfig;
+	if (CardView)
+	{
+		CardView->SetEffectBadgeFeedbackConfig(SlotVisualConfig.EffectBadgeFeedback);
+	}
 	if (IsSurfaceDeparturePlaybackActive())
 	{
 		ClearSurfaceDeparturePlayback();
@@ -698,6 +707,10 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotVisualConfig(
 	if (IsCardDataRewritePlaybackActive() || bPendingDataRewriteHandoff)
 	{
 		ClearCardDataRewritePlayback();
+	}
+	if (IsEffectBadgeFeedbackPlaybackActive())
+	{
+		ClearEffectBadgeFeedbackPlayback();
 	}
 	if (IsDrawRevealPlaybackActive())
 	{
@@ -1077,6 +1090,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	ClearRetainSealPlayback();
 	ClearHandTargetImpactPlayback();
 	ClearCardDataRewritePlayback();
+	ClearEffectBadgeFeedbackPlayback();
 	ClearDrawRevealPlayback();
 	ClearGainRevealPlayback();
 	TransitionPlayback.Reset();
@@ -1086,6 +1100,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	CardUseReformPlayback.Reset();
 	HandTargetImpactPlayback.Reset();
 	DataRewritePlayback.Reset();
+	EffectBadgeFeedbackPlayback.Reset();
 	DrawRevealPlayback.Reset();
 	GainRevealPlayback.Reset();
 	RetainSealPlayback.Reset();
@@ -1158,6 +1173,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 		bPendingDataRewriteHandoff = false;
 	}
 	TickCardDataRewritePlayback(InDeltaTime);
+	TickEffectBadgeFeedbackPlayback(InDeltaTime);
 	if (bHandTargetImpactDeparturePending
 		&& IsHandTargetImpactDepartureGateOpen()
 		&& !bHandTargetImpactDepartureOwnedByPileTransfer)
@@ -2433,6 +2449,30 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerCardDataRewriteFeedback(
 	bDataRewriteBlocksPresentationPhase = bBlocksPresentationPhase;
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::TriggerEffectBadgeFeedback(
+	const TArray<FWacomFirstPersonCardEffectBadgeChange>& Changes,
+	bool bBlocksPresentationPhase)
+{
+	if (!SlotVisualConfig.EffectBadgeFeedback.bEnabled
+		|| Changes.IsEmpty()
+		|| bIsExitingForFirstPersonLayer
+		|| IsSurfaceDeparturePlaybackActive()
+		|| IsCardUseReformPlaybackActive())
+	{
+		return;
+	}
+	if (!EffectBadgeFeedbackPlayback)
+	{
+		EffectBadgeFeedbackPlayback.Reset(
+			new FWacomFirstPersonCardEffectBadgeFeedbackPlayback());
+	}
+	EffectBadgeFeedbackPlayback->Begin(SlotVisualConfig.EffectBadgeFeedback, Changes);
+	bEffectBadgeFeedbackBlocksPresentationPhase =
+		bBlocksPresentationPhase && EffectBadgeFeedbackPlayback->IsActive();
+	ApplyEffectBadgeFeedbackView();
+	UpdateWantsTick();
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::BeginDeferredExitWithHandTargetImpact(
 	const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 	const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride,
@@ -2710,6 +2750,75 @@ bool UWacomFirstPersonCardLayerSlotWidget::IsCardDataRewritePlaybackActive() con
 	return DataRewritePlayback && DataRewritePlayback->IsActive();
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::TickEffectBadgeFeedbackPlayback(float DeltaTime)
+{
+	if (!EffectBadgeFeedbackPlayback || !EffectBadgeFeedbackPlayback->IsActive())
+	{
+		return;
+	}
+	const FWacomFirstPersonCardEffectBadgeFeedbackView View =
+		EffectBadgeFeedbackPlayback->Tick(DeltaTime);
+	PlayPendingEffectBadgeFeedbackSound();
+	if (View.bCompleted || !EffectBadgeFeedbackPlayback->IsActive())
+	{
+		ClearEffectBadgeFeedbackPlayback();
+		UpdateWantsTick();
+		return;
+	}
+	ApplyEffectBadgeFeedbackView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ClearEffectBadgeFeedbackPlayback()
+{
+	if (EffectBadgeFeedbackPlayback)
+	{
+		EffectBadgeFeedbackPlayback->Reset();
+	}
+	bEffectBadgeFeedbackBlocksPresentationPhase = false;
+	if (CardView)
+	{
+		CardView->ResetEffectBadgeFeedbackView();
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ApplyEffectBadgeFeedbackView()
+{
+	if (!CardView || !EffectBadgeFeedbackPlayback || !EffectBadgeFeedbackPlayback->IsActive())
+	{
+		return;
+	}
+	CardView->SetEffectBadgeFeedbackConfig(SlotVisualConfig.EffectBadgeFeedback);
+	CardView->SetEffectBadgeFeedbackView(EffectBadgeFeedbackPlayback->BuildView());
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::PlayPendingEffectBadgeFeedbackSound()
+{
+	if (!EffectBadgeFeedbackPlayback)
+	{
+		return;
+	}
+	const TOptional<FWacomFirstPersonCardEffectBadgeFeedbackSoundRequest> PendingRequest =
+		EffectBadgeFeedbackPlayback->ConsumePendingSoundRequest();
+	if (!PendingRequest.IsSet())
+	{
+		return;
+	}
+	const FWacomFirstPersonCardEffectBadgeFeedbackSoundRequest& Request = PendingRequest.GetValue();
+	if (USoundBase* Sound = Request.Sound.Get(); Sound && GetWorld())
+	{
+		UGameplayStatics::PlaySound2D(
+			GetWorld(),
+			Sound,
+			Request.VolumeMultiplier,
+			Request.PitchMultiplier);
+	}
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::IsEffectBadgeFeedbackPlaybackActive() const
+{
+	return EffectBadgeFeedbackPlayback && EffectBadgeFeedbackPlayback->IsActive();
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::ApplyActiveSurfaceEffectView()
 {
 	if (!CardView)
@@ -2740,6 +2849,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyActiveSurfaceEffectView()
 		ApplyRetainSealSurfaceView();
 		return;
 	}
+	CardView->SetEffectBadgeFeedbackConfig(SlotVisualConfig.EffectBadgeFeedback);
 	ResetCardSurfaceEffectView();
 }
 
@@ -3161,6 +3271,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerCardUseReformFeedbackInternal(
 		ClearCardUseReformPlayback();
 	}
 	ClearCardDataRewritePlayback();
+	ClearEffectBadgeFeedbackPlayback();
 	ClearEnterTransitionPlayback();
 	ClearExitTransitionPlayback();
 	ClearSurfaceDeparturePlayback();
@@ -3557,6 +3668,11 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.bHandTargetImpactCommitActive = IsHandTargetImpactCommitPlaybackActive();
 	View.bDataRewritePlaybackActive = IsCardDataRewritePlaybackActive();
 	View.bDataRewritePendingHandoff = bPendingDataRewriteHandoff;
+	View.bEffectBadgeFeedbackPlaybackActive = IsEffectBadgeFeedbackPlaybackActive();
+	if (EffectBadgeFeedbackPlayback && EffectBadgeFeedbackPlayback->IsActive())
+	{
+		View.EffectBadgeFeedbackView = EffectBadgeFeedbackPlayback->BuildView();
+	}
 	View.bDrawRevealPlaybackActive = IsDrawRevealPlaybackActive();
 	if (DrawRevealPlayback && DrawRevealPlayback->IsActive())
 	{
@@ -3980,7 +4096,9 @@ bool UWacomFirstPersonCardLayerSlotWidget::HasActivePresentationPlayback() const
 		|| bHandTargetImpactDeparturePending
 		|| IsRetainSealPlaybackBlockingPresentation()
 		|| (bDataRewriteBlocksPresentationPhase
-			&& (IsCardDataRewritePlaybackActive() || bPendingDataRewriteHandoff));
+			&& (IsCardDataRewritePlaybackActive() || bPendingDataRewriteHandoff))
+		|| (bEffectBadgeFeedbackBlocksPresentationPhase
+			&& IsEffectBadgeFeedbackPlaybackActive());
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ForceCompletePresentationPlayback()
@@ -3997,6 +4115,10 @@ void UWacomFirstPersonCardLayerSlotWidget::ForceCompletePresentationPlayback()
 	if (IsCardDataRewritePlaybackActive() || bPendingDataRewriteHandoff)
 	{
 		ClearCardDataRewritePlayback();
+	}
+	if (IsEffectBadgeFeedbackPlaybackActive())
+	{
+		ClearEffectBadgeFeedbackPlayback();
 	}
 	if (bIsExitingForFirstPersonLayer)
 	{
@@ -4163,6 +4285,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 		|| IsCardUseReformPlaybackBlockingStage()
 		|| IsHandTargetImpactPlaybackActive()
 		|| IsCardDataRewritePlaybackActive()
+		|| IsEffectBadgeFeedbackPlaybackActive()
 		|| bPendingDataRewriteHandoff
 		|| bHandTargetImpactDeparturePending
 		|| IsDrawRevealPlaybackActive()
@@ -4230,6 +4353,12 @@ void FWacomFirstPersonCardRetainSealPlaybackDeleter::operator()(
 
 void FWacomFirstPersonCardDataRewritePlaybackDeleter::operator()(
 	FWacomFirstPersonCardDataRewritePlayback* Playback) const
+{
+	delete Playback;
+}
+
+void FWacomFirstPersonCardEffectBadgeFeedbackPlaybackDeleter::operator()(
+	FWacomFirstPersonCardEffectBadgeFeedbackPlayback* Playback) const
 {
 	delete Playback;
 }

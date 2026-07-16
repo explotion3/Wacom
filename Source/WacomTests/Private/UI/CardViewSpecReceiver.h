@@ -40,6 +40,11 @@ public:
 	}
 
 	UPanelWidget* GetDigitHostForTest() const { return DigitHost; }
+
+	void TickForTest(float DeltaTime)
+	{
+		NativeTick(GetCachedGeometry(), DeltaTime);
+	}
 };
 
 UCLASS()

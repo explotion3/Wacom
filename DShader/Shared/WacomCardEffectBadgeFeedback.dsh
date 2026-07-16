@@ -1,0 +1,64 @@
+Function SelfContained WacomCard_ComputeEffectBadgeDigitMasks(
+    in float2 localUV,
+    in float oldDissolve,
+    in float newReveal,
+    in float seed,
+    in float reducedMotion,
+    in float gridColumns,
+    in float edgeWidth,
+    out float oldVisibility,
+    out float newVisibility,
+    out float edgeMask,
+    out float paletteVariant)
+{
+    float safeColumns = max(gridColumns, 4.0);
+    float safeRows = max(round(safeColumns * 30.0 / 22.0), 4.0);
+    float2 cell = floor(saturate(localUV) * float2(safeColumns, safeRows));
+    float2 parity = fmod(cell, 2.0);
+    float bayer = (parity.x * 2.0 + parity.y * 3.0 - parity.x * parity.y * 4.0 + 0.5) / 4.0;
+    float stable = frac(sin(dot(
+        cell + float2(seed * 97.31, seed * 53.17),
+        float2(12.9898, 78.233))) * 43758.5453);
+    float oldThreshold = frac(bayer * 0.76 + stable * 0.24);
+    float2 center = abs((cell + 0.5) / float2(safeColumns, safeRows) - float2(0.5, 0.5)) * 2.0;
+    float newThreshold = saturate(max(center.x, center.y) * 0.82 + bayer * 0.18);
+    float reduced = step(0.5, reducedMotion);
+    oldVisibility = lerp(
+        1.0 - step(oldThreshold, saturate(oldDissolve)),
+        1.0 - saturate(oldDissolve),
+        reduced);
+    newVisibility = lerp(
+        step(newThreshold, saturate(newReveal)),
+        saturate(newReveal),
+        reduced);
+    float safeEdge = max(edgeWidth, 0.01);
+    edgeMask = (1.0 - reduced) * saturate(
+        1.0 - smoothstep(safeEdge, safeEdge * 1.8, abs(oldThreshold - saturate(oldDissolve)))
+        + 1.0 - smoothstep(safeEdge, safeEdge * 1.8, abs(newThreshold - saturate(newReveal))));
+    paletteVariant = step(0.5, stable);
+}
+
+Function SelfContained WacomCard_SelectEffectBadgePalette(
+    in float tone,
+    in float3 neutralPrimary,
+    in float3 neutralSecondary,
+    in float3 increasePrimary,
+    in float3 increaseSecondary,
+    in float3 decreasePrimary,
+    in float3 decreaseSecondary,
+    out float3 primary,
+    out float3 secondary)
+{
+    float useIncrease = step(0.5, tone) * (1.0 - step(1.5, tone));
+    float useDecrease = step(1.5, tone);
+    float useNeutral = 1.0 - saturate(useIncrease + useDecrease);
+    primary = neutralPrimary * useNeutral + increasePrimary * useIncrease + decreasePrimary * useDecrease;
+    secondary = neutralSecondary * useNeutral + increaseSecondary * useIncrease + decreaseSecondary * useDecrease;
+}
+
+Function SelfContained WacomCard_SelectEffectBadgeMode(
+    in float effectMode,
+    out float usePreview)
+{
+    usePreview = step(0.5, effectMode) * (1.0 - step(1.5, effectMode));
+}

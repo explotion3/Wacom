@@ -3,6 +3,7 @@
 #include "UI/Battle/WacomBattleHandPresentationController.h"
 
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
+#include "UI/Battle/WacomBattleEffectBadgeFeedbackBuilder.h"
 
 namespace
 {
@@ -717,6 +718,42 @@ FWacomBattleHandPresentationController::BuildFeedbackHints(
 					GetTypeHash(LastSequence),
 					GetTypeHash(Hint.DataRewriteFieldMask))));
 			Hints.Add(Hint);
+		}
+
+		TArray<FWacomFirstPersonCardLayerFeedbackHint> BadgeHints;
+		for (const FHandCardSnapshot& NextCard : NextSnapshot.Hand.Cards)
+		{
+			if (NextCard.bIsHandAnchor
+				|| !LastRelevantSequenceByCard.Contains(NextCard.InstanceId)
+				|| SeenCardUseReformIds.Contains(NextCard.InstanceId))
+			{
+				continue;
+			}
+			const FHandCardSnapshot* PreviousCard =
+				FindNormalHandCardSnapshotForPresentation(LastPresentedSnapshot, NextCard.InstanceId);
+			if (!PreviousCard)
+			{
+				continue;
+			}
+			TArray<FWacomFirstPersonCardEffectBadgeChange> Changes =
+				WacomBattleEffectBadgeFeedback::BuildVisibleValueChanges(
+					*PreviousCard,
+					NextCard,
+					LastRelevantSequenceByCard.FindRef(NextCard.InstanceId));
+			if (Changes.IsEmpty())
+			{
+				continue;
+			}
+			FWacomFirstPersonCardLayerFeedbackHint& Hint = BadgeHints.AddDefaulted_GetRef();
+			Hint.CardInstanceId = NextCard.InstanceId;
+			Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::EffectBadgeChange;
+			Hint.EffectBadgeChanges = MoveTemp(Changes);
+		}
+		for (int32 Index = 0; Index < BadgeHints.Num(); ++Index)
+		{
+			BadgeHints[Index].SequenceIndex = Index;
+			BadgeHints[Index].SequenceCount = FMath::Max(1, BadgeHints.Num());
+			Hints.Add(MoveTemp(BadgeHints[Index]));
 		}
 	}
 	return Hints;
