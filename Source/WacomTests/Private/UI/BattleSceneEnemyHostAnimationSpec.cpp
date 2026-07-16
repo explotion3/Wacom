@@ -4,6 +4,7 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyHostAnimationStyle.h"
+#include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -14,6 +15,8 @@
 #include "PaperSprite.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "Tags/WacomGameplayTags.h"
+#include "Types/WacomInteractionTargetTypes.h"
 #include "BattleHUDTestHarness.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 
@@ -50,6 +53,20 @@ namespace WacomBattleSceneEnemyHostAnimationSpec
 		KeyFrame.FrameRun = FrameRun;
 		Mutator.KeyFrames.Add(KeyFrame);
 		return Flipbook;
+	}
+
+	FWacomInteractionTargetHandle MakeWorldTargetHandle(const FEnemyPartSnapshot& Part)
+	{
+		return FWacomInteractionTargetHandle::ForWorldTarget(
+			Part.InstanceId,
+			nullptr,
+			FVector::ZeroVector,
+			FVector2D::ZeroVector,
+			WacomTags::Interaction_Target_Battle_EnemyPart,
+			Part.Definition ? Part.Definition->PartId : NAME_None,
+			Part.EncounterId,
+			Part.EnemySlotId,
+			Part.PartSlotId);
 	}
 
 	UWacomBattleEnemyHostAnimationStyle* ConfigureAnimatedHost(
@@ -358,6 +375,121 @@ bool FWacomUIBattleSceneEnemyHostAnimationQueueBarrierSpec::RunTest(
 	Visual->OnFinishedPlaying.Broadcast();
 	TestFalse(TEXT("Queue drains after second action completes"), HUD->IsBattlePresentationBusy());
 	TestEqual(TEXT("Queue drain restores Idle"), Visual->GetFlipbook(), Idle);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostAnimationFinalPartPlayCardPlanSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyHostAnimation.FinalPartDestroyedThroughPlayCardPlan",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostAnimationFinalPartPlayCardPlanSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleSceneEnemyHostAnimationSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UCardDefinition* Killer = Fixture.MakeSimpleDamageCard(0, 100);
+	UCharacterDefinition* Character = Fixture.MakeCharacter(
+		Fixture.MakeNoopCard(0),
+		Fixture.MakeNoopCard(0),
+		{ Killer, Killer, Killer, Killer, Killer });
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(10, 5, 0);
+	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, 17);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	FWacomBattleHUDTestSceneEnemyHost& SceneEnemy =
+		Harness->AttachSceneEnemyHost(Enemy, BuildDefinitionPartIds(*Enemy));
+	if (!TestNotNull(TEXT("Scene enemy Host"), SceneEnemy.Host))
+	{
+		return false;
+	}
+
+	UPaperFlipbook* Idle = nullptr;
+	UPaperFlipbook* Attack = nullptr;
+	UPaperFlipbook* Block = nullptr;
+	UPaperFlipbook* Destroyed = nullptr;
+	ConfigureAnimatedHost(*SceneEnemy.Host, Idle, Attack, Block, Destroyed);
+	Harness->SetSession(Session);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
+	UPaperFlipbookComponent* Visual =
+		SceneEnemy.Host->GetGeneratedHostFlipbookVisualComponent();
+	if (!TestNotNull(TEXT("Host Flipbook component"), Visual))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot Before = Session->BuildSnapshot();
+	const FGuid KillerId =
+		FWacomBattleFixture::FindHandInstanceByCardId(Before, Killer->CardId);
+	const FEnemyPartSnapshot* Target =
+		FWacomBattleFixture::GetEnemyPartSnapshot(Before, 0, 0);
+	if (!TestTrue(TEXT("Killer is in hand"), KillerId.IsValid())
+		|| !TestNotNull(TEXT("Target part"), Target))
+	{
+		return false;
+	}
+
+	HUD->SetTargetSelectionStateForTest(KillerId);
+	HUD->OnEnemyPartClickedByUser(MakeWorldTargetHandle(*Target));
+	const FBattleSnapshot After = Session->BuildSnapshot();
+	TestTrue(TEXT("HUD-routed killing PlayCard advances the session"),
+		After.Version > Before.Version);
+	TestTrue(TEXT("HUD-routed PlayCard marks all parts destroyed"),
+		After.Enemies.Num() == 1 && After.Enemies[0].bAllPartsDestroyed);
+	TestTrue(TEXT("HUD-routed PlayCard enters pending knockdown choice"),
+		After.Phase == EBattlePhase::PendingKnockdownChoice);
+
+	for (int32 Step = 0;
+		Step < 32 && HUD->IsBattlePresentationBusy()
+			&& Visual->GetFlipbook() != Destroyed;
+		++Step)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+	TestEqual(TEXT("Real PlayCard plan starts Destroyed clip"),
+		Visual->GetFlipbook(), Destroyed);
+	TestTrue(TEXT("Destroyed clip holds the presentation queue"),
+		HUD->IsBattlePresentationBusy());
+
+	Visual->OnFinishedPlaying.Broadcast();
+	TestTrue(TEXT("Completed Destroyed remains terminal before knockdown choice"),
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView().bHostAnimationTerminalState);
+	TestEqual(TEXT("Completed Destroyed remains on its terminal clip"),
+		Visual->GetFlipbook(), Destroyed);
+
+	bool bBattleEndBroadcast = false;
+	const FDelegateHandle BattleEndHandle = HUD->OnBattleEndedNative.AddLambda(
+		[&bBattleEndBroadcast](EBattleOutcome)
+		{
+			bBattleEndBroadcast = true;
+		});
+	ON_SCOPE_EXIT
+	{
+		HUD->OnBattleEndedNative.Remove(BattleEndHandle);
+	};
+	HUD->OnKnockdownChoiceSelected(EKnockdownChoice::Destroy);
+	for (int32 Step = 0; Step < 32 && !bBattleEndBroadcast; ++Step)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+	TestTrue(TEXT("Destroy choice reaches BattleEnd presentation signal"),
+		bBattleEndBroadcast);
+	HUD->SetBattleSceneEnemyHostsForTest({});
+	TestTrue(TEXT("BattleEnd Host clear preserves Destroyed terminal state"),
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView().bHostAnimationTerminalState);
+	TestEqual(TEXT("BattleEnd Host clear preserves Destroyed terminal clip"),
+		Visual->GetFlipbook(), Destroyed);
 	return true;
 }
 

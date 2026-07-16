@@ -60,6 +60,14 @@ struct FWacomBattlePresentationPhase
 
 	bool HasHandFrame() const
 	{
+		// A phase with authored events belongs to the serial event queue even
+		// when its semantic kind can also carry a hand frame (CommandOutcome).
+		// Plans that need both responsibilities author separate phases.
+		if (!Events.IsEmpty())
+		{
+			return false;
+		}
+
 		return Kind == EWacomBattlePresentationPhaseKind::TurnEndDiscard
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnEndRetain
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartDraw
