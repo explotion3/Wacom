@@ -141,7 +141,7 @@ tags:
   - 状态：`Ready: 美术 / 表现 polish`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。Simple Flipbook Host 已具备由 `EnemyPartActed` 和整体破坏驱动的串行 Idle / Action / Destroyed 语义播放；语义 Cue 生命周期已收敛为互斥 Playback，每个 PartActor 已提供可调 ImpactAnchor，旧确认、伤害、破坏缩放脉冲已删除。后续追踪正式蛇 Host prefab 美术保存、正式 sprite/flipbook/`UWacomBattleEnemyHostAnimationStyle` 资产、`/Game/Art` 素材授权与 Git LFS/出货接入、材质描边、贴近部位 tooltip、风险动效、MultiPart/PaperZD 高级状态机和 Status Badge 美术替换。
+  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。Simple Flipbook Host 已具备由 `EnemyPartActed` 和整体破坏驱动的串行 Idle / Action / Destroyed 语义播放；`SetupBattleEnemyHostAnimationPIEAssets.py` 已能从本地 BattleWarrior 素材幂等生成 PIE Style 与复制 Host。语义 Cue 生命周期已收敛为互斥 Playback，每个 PartActor 已提供可调 ImpactAnchor，旧确认、伤害、破坏缩放脉冲已删除。后续追踪正式蛇 Host prefab 美术保存、正式 sprite/flipbook/`UWacomBattleEnemyHostAnimationStyle` 资产、`/Game/Art` 素材授权与 Git LFS/出货接入、材质描边、贴近部位 tooltip、风险动效、MultiPart/PaperZD 高级状态机和 Status Badge 美术替换。
 
 - [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
   - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`

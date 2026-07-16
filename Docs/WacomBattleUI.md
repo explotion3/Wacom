@@ -147,6 +147,12 @@ Trigger 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并�
 
 `SimpleHostVisual` 的 Flipbook Host 可以配置 `UWacomBattleEnemyHostAnimationStyle`。现有 `HostFlipbook` 始终是 Idle 真源；Style 只声明 `DefaultActionClip`、显式 `IntentId -> Clip` 和 `DestroyedClip`。显式 Intent 映射优先于默认 Action，运行时不根据 Intent、Actor 或资产名称猜测动画。Clip 资源和正数有限 `PlayRate` 由 Data Validation 检查；Host 配置 Style 但不是有效的 Simple Flipbook Host 时进入制作警告。
 
+本地 PIE 可以执行 `Scripts/SetupBattleEnemyHostAnimationPIEAssets.py`，幂等生成 `/Game/Art/WacomPIE/EnemyHostAnimation/DA_EnemyHostAnimation_BattleWarrior_PIE` 和 `BP_SnakeHost_BattleWarrior_PIE`。脚本使用本地 `PaperAssets/Party/BattleWarrior` 的 Idle、Attack、Block、Cleave 和 Downed，只配置复制出来的 Debug Snake Host；不会修改正式 `/Game/Wacom` Host。`/Game/Art` 由 worktree 的 D 盘 Junction 提供且被 Git 忽略，这组资产只用于 PIE，不代表授权、Git LFS 或正式出货接入已经完成。运行命令：
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Worktree>\Wacom.uproject' -ExecutePythonScript='<Worktree>\Scripts\SetupBattleEnemyHostAnimationPIEAssets.py' -Unattended -NoSplash -NullRHI
+```
+
 每个 PartActor 原生携带一个无碰撞 `ImpactAnchor`，默认位于 `HitBounds` 中心；`ImpactAnchorRelativeLocation` 以厘米为单位，只用于世界命中特效的美术微调，不改变命中盒、目标身份或 Battle 规则。HitOnly 与 VisualLayers 两条制作路径共享这一合同。Authoring Status / debug view / summary 会报告锚点组件名和世界位置，非有限偏移会被 Data Validation 判为错误。
 
 Host 整体视觉的 `HostVisualMaterialOverride / bHostVisualCastShadow` 和每个 VisualLayer 的 `MaterialOverride / bCastShadow` 会应用到动态生成的 `UPaperSpriteComponent / UPaperFlipbookComponent`。需要 Sprite 投射阴影时，材质覆盖应使用 Paper2D 的 `MaskedLitSpriteMaterial` 或等效 lit masked 材质，并确保场景光源开启阴影；默认字段为空 / false 时保持无材质覆盖、无投影。
