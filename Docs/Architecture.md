@@ -99,6 +99,8 @@ Scene Enemy Host 使用单向依赖 `WacomEditor -> WacomApp -> WacomData`。`Wa
 
 所有写操作由 `WacomEditor` 的 `FWacomBattleSceneEnemyHostAuthoring` 独占：Details 的“从 EnemyDefinition 同步部位”按钮显式应用报告中的稳定计划，Blueprint template 写 SCS，关卡实例写 transactional InstanceComponent，多选 Host 共用一次事务。关卡实例使用 runtime-safe `UWacomBattleEnemyPartChildActorComponent` 保存明确派生身份，因为 UE 默认不持久化普通 ChildActorComponent 的 per-instance ChildActor 属性；该组件只在注册、加载或 Undo/Redo 重建 ChildActor 后重放身份，不执行推断、事务或 package 写入。Construction refresh、runtime binding、Snapshot sync 与 Editor authoring mutation 是四条独立路径；运行时模块不依赖 `UnrealEd`、`PropertyEditor` 或 `WacomEditor`。
 
+部位破坏表现仍停留在 `WacomApp`，不反向污染规则或数据 schema。`EnemyPartHpEmptied` 只提供稳定语义和顺序；Part Presentation 复用现有 Cue Playback，在 `ImpactAnchor` 启动 Destroyed Niagara，并在归一化进度达到 authored marker 时调用 VisualLayer Component 原地替换 Sprite/Flipbook。运行时不重建组件、不扫描拓扑、不调用 Authoring Refresh。Host 的整体 Downed barrier 和 Trigger 的探索场景退役继续位于后续队列 / 生命周期层，三者不可合并为单个 Actor 自毁流程。
+
 正式敌人内容包同样保持单向写入边界。`WacomEditor` 的 enemy-pack commandlet 可以用 AssetTools 晋升已授权的本地 Paper2D 依赖闭包，并幂等构建 DataAsset、Animation Style 与 Host Blueprint；生成后的 `/Game/Wacom` 资产是运行时唯一依赖。本地 ignored `/Game/Art` 不是运行时 fallback，也不会被 `WacomRegenerateContent` 读取。TrainingWarrior 是该管线的首个实例；`WacomData` schema、`WacomBattle` 规则和 `WacomApp` Host runtime 均未为具体敌人增加分支。
 
 完成 Encounter 的场景退役同样不进入 BattleHUD 或规则模块。`WacomRun` 的 Map Node `Resolved` 是完成真相；`WacomApp/GameMode` 只在同一 Encounter ticket 的非撤离 Victory 成功提交后启动退役，并复用返回探索的镜头 / 后置工作双 barrier。`ABattleTriggerActor` 独占 `EncounterDefinition + SceneEnemyHostSlots` 的场景映射：先禁用自身交互，待 barrier 完成后调用 Host/Part 的非反射 runtime retirement、隐藏并关闭碰撞，最后销毁 Trigger。BattleHUD 只负责完成 Destroyed 动画和清 target registry，不拥有探索场景 Actor 生命周期。
@@ -320,7 +322,7 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / 
 - `GameplayTags`：词条、状态、效果类型、区域等标识。
 - `CommonUI`：主 UI 层级和 Activatable Widget 管理。
 - `ModelViewViewModel`：Run 域 ViewModel / Provider，供探索 HUD 和背包顶部统计使用。
-- `Niagara`：计划用于后续表现；当前不构成模块边界或规则依赖。
+- `Niagara`：用于 App 世界目标确认、伤害、目标预演与部位破坏表现；Graph 写入和编译只在 `WacomEditor`，运行时仍不构成规则依赖。
 
 当前不把 GAS 作为战斗核心。核心是卡牌规则内核，不是典型技能 Ability 生命周期。GAS 后续可以作为状态和属性系统参考，但不应阻塞战斗框架。
 

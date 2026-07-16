@@ -11,6 +11,15 @@ class UPaperFlipbookComponent;
 class UPaperSpriteComponent;
 class USceneComponent;
 
+struct FWacomBattleEnemyPartRuntimeVisualLayer
+{
+	int32 LayerIndex = INDEX_NONE;
+	EWacomBattleEnemyPartVisualLayerMode LayerMode =
+		EWacomBattleEnemyPartVisualLayerMode::StaticSprite;
+	TWeakObjectPtr<UPaperSpriteComponent> SpriteComponent;
+	TWeakObjectPtr<UPaperFlipbookComponent> FlipbookComponent;
+};
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleEnemyPartVisualLayerDebugView
 {
@@ -66,6 +75,18 @@ struct WACOMAPP_API FWacomBattleEnemyPartVisualLayerDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Debug")
 	TArray<FName> VisualLayerAssetNames;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Debug")
+	int32 DestroyedVisualResourceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Debug")
+	bool bRuntimeDestroyedStateApplied = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Debug")
+	int32 RuntimeDestroyedVisualLayerCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Debug")
+	int32 RuntimeDestroyedVisualApplyCount = 0;
 };
 
 /**
@@ -85,8 +106,13 @@ public:
 		const TArray<FWacomBattleEnemyPartVisualLayer>& VisualLayers,
 		USceneComponent* AttachRoot);
 	void ClearGeneratedVisualLayers();
+	int32 ApplyRuntimeDestroyedState(
+		const TArray<FWacomBattleEnemyPartVisualLayer>& VisualLayers);
+	void RestoreRuntimeAuthoredState(
+		const TArray<FWacomBattleEnemyPartVisualLayer>& VisualLayers);
 	FWacomBattleEnemyPartVisualLayerDebugView BuildVisualLayerDebugView(
 		const TArray<FWacomBattleEnemyPartVisualLayer>& VisualLayers) const;
+	bool IsRuntimeDestroyedStateApplied() const { return bRuntimeDestroyedStateApplied; }
 
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -97,4 +123,9 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UPaperFlipbookComponent>> GeneratedFlipbookVisualLayerComponents;
+
+	TArray<FWacomBattleEnemyPartRuntimeVisualLayer> RuntimeVisualLayers;
+	bool bRuntimeDestroyedStateApplied = false;
+	int32 RuntimeDestroyedVisualLayerCount = 0;
+	int32 RuntimeDestroyedVisualApplyCount = 0;
 };

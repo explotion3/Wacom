@@ -141,19 +141,19 @@ tags:
   - 状态：`In Progress: TrainingWarrior 正式内容包已完成，剩余表现 polish`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。TrainingWarrior 已作为首个正式包落地：BattleWarrior 的 36 个受控依赖晋升到 `/Game/Wacom` 并由 Git LFS 管理，规则数据、奖励卡、语义 Style、Host prefab 和单敌人 Encounter 均可重复生成。`SetupBattleEnemyHostAnimationPIEAssets.py` 继续只服务本地 Snake 调试。后续追踪材质描边、贴近部位 tooltip、风险动效、部位 Destroyed 反馈、更多敌人包、MultiPart/PaperZD 高级状态机和 Status Badge 美术替换。
+  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。TrainingWarrior 已作为首个正式包落地：BattleWarrior 的 36 个受控依赖晋升到 `/Game/Wacom` 并由 Git LFS 管理，规则数据、奖励卡、语义 Style、Host prefab 和单敌人 Encounter 均可重复生成。PartActor 通用 Destroyed 粒子 / 可选逐层破损终态也已完成；TrainingWarrior 按内容合同只使用粒子 + Host Downed，不伪造 Body 破损图。`SetupBattleEnemyHostAnimationPIEAssets.py` 继续只服务本地 Snake 调试。后续追踪材质描边、贴近部位 tooltip、风险动效、更多敌人包、首个正式 Multi-Part 破损资源、MultiPart/PaperZD 高级状态机和 Status Badge 美术替换。
 
 - [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
   - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`
   - 归属：App / Battle World Presentation
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
-  - 说明：`TargetConfirmed / Damage` 已接入共用的 Niagara 像素反馈，读取统一 Playback、ImpactAnchor、稳定 Seed、Reduced Motion 与 semantic / decorative flash 分类；不恢复旧缩放脉冲。`Destroyed` 保留高优先级 Cue，作为后续独立破坏切片。
+  - 说明：`TargetConfirmed / Damage / Destroyed` 已接入共用 Niagara 像素反馈，读取统一 Playback、ImpactAnchor、稳定 Seed、Reduced Motion 与 semantic / decorative flash 分类；不恢复旧缩放脉冲。Destroyed 的逐层终态见下一项。
 
-- [ ] **Battle 世界目标 Destroyed 正式破坏反馈**
-  - 状态：`Ready: 后续表现切片`
+- [x] **Battle 世界目标 Destroyed 正式破坏反馈**
+  - 状态：`Done: 两段像素崩裂 + 35% 原地破损换图`
   - 归属：App / Battle World Presentation
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
-  - 说明：消费既有最高优先级 `Destroyed` Cue 与 ImpactAnchor，制作部位破坏而非普通受击的独立视觉；不得恢复旧缩放脉冲。攻击方向、局部材质闪白和镜头震动也留在本项或后续独立切片评估。
+  - 说明：消费既有最高优先级 `Destroyed` Cue 与 ImpactAnchor，先播放语义裂印和可关闭位移的大碎块，再在默认 35% 处原地替换配置了 `DestroyedSprite / DestroyedFlipbook` 的 VisualLayer；缺失资源保持原图，HitOnly 只播放粒子并继续由 Host Downed 承担整体终态。组件、registry topology 和规则事件不变；攻击方向、局部材质闪白和镜头震动留给独立切片。
 
 - [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
 	- 状态：`Done: Trigger 已接线`
@@ -236,7 +236,7 @@ tags:
   - 状态：`Ready: Graph/Style 已完成，等待手感验收`
   - 归属：App / Battle 表现 / VFX
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
-  - 说明：`NS_WacomBattleEnemyPartImpact_Pixel` 的三个 CPU Burst Emitter、四通道 Dynamic Material Parameter、默认 MI/Style 与 Debug Snake Host 绑定均已由 WacomEditor 生成流程完成；尺寸已改为读取单个部位 `HitBounds` 的摄像机平面投影，默认约 `1.2x` 覆盖。剩余工作是 PIE 验收 `0.24s` 确认、`0.30s` 伤害、单次/多段/高低伤害、HitOnly/VisualLayers、遮挡和 Accessibility，并在 Style 中指定正式 TargetConfirmed/Damage 音效。Destroyed、攻击方向、局部材质闪白和镜头震动留给后续切片。
+  - 说明：`NS_WacomBattleEnemyPartImpact_Pixel` 的六个 CPU Burst Emitter、四通道 Dynamic Material Parameter、默认 MI/Style 与 Debug Snake Host 绑定均已由 WacomEditor 生成流程完成；尺寸读取单个部位 `HitBounds` 的摄像机平面投影，Destroyed 默认约 `1.35x` 覆盖。剩余工作是 PIE 调整确认、伤害、崩裂的手感与遮挡，并在 Style 中指定正式 TargetConfirmed/Damage/Destroyed 音效。攻击方向、局部材质闪白和镜头震动留给后续切片。
 
 - [x] **用编辑器迁移旧内容目录并清理 `_GAME` 临时蓝图目录**
   - 状态：`Done: Content Organization V1-A`

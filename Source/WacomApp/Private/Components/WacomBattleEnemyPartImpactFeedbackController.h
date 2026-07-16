@@ -19,6 +19,7 @@ enum class EWacomBattleEnemyPartImpactEffectKind : uint8
 	None,
 	TargetConfirmed,
 	Damage,
+	Destroyed,
 };
 
 struct FWacomBattleEnemyPartImpactRequest
@@ -49,6 +50,7 @@ struct FWacomBattleEnemyPartImpactFeedbackDebugView
 	int32 EffectPlayCount = 0;
 	int32 SoundRequestCount = 0;
 	FName LastEffectKind = TEXT("None");
+	int32 LastEffectKindValue = INDEX_NONE;
 };
 
 /** App-private owner of the one reusable Niagara component for an enemy part. */

@@ -369,6 +369,9 @@ public:
 	/** 新战斗首次接管该 Host 时，仅在残留 runtime 播放或终态存在时恢复 authored Idle。 */
 	void ResetRuntimeHostAnimation();
 
+	/** 新战斗首次接管该 Host 时恢复 Host Idle 与全部 Part authored 资源。 */
+	void ResetRuntimeScenePresentationForBattle();
+
 	/** Host/source/session 清理时安全结束当前动画 barrier。 */
 	void CancelRuntimeHostAnimation();
 

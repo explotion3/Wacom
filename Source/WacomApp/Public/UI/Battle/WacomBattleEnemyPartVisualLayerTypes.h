@@ -37,6 +37,18 @@ struct WACOMAPP_API FWacomBattleEnemyPartVisualLayer
 		meta = (ToolTip = "Flipbook 层使用的 PaperFlipbook。LayerMode=Flipbook 且留空时不生成组件，但会进入 debug / validation。"))
 	TObjectPtr<UPaperFlipbook> Flipbook = nullptr;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Destroyed",
+		meta = (ToolTip = "StaticSprite 层进入部位破坏终态时原地替换的 PaperSprite。可留空；留空时该层继续保持原资源。"))
+	TObjectPtr<UPaperSprite> DestroyedSprite = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Destroyed",
+		meta = (ToolTip = "Flipbook 层进入部位破坏终态时原地替换的 PaperFlipbook。可留空；留空时该层继续保持原资源。"))
+	TObjectPtr<UPaperFlipbook> DestroyedFlipbook = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Destroyed",
+		meta = (ToolTip = "破损 Flipbook 的播放倍率。必须为有限正数；非循环播放结束后保持末帧。", ClampMin = "0.001"))
+	float DestroyedFlipbookPlayRate = 1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Flipbook",
 		meta = (ToolTip = "Flipbook 层播放倍率。只影响视觉播放速度；1 表示原速。", ClampMin = "0.0", ClampMax = "8.0", UIMin = "0.0", UIMax = "3.0"))
 	float FlipbookPlayRate = 1.0f;

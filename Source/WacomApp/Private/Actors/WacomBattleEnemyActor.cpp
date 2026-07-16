@@ -442,6 +442,23 @@ void AWacomBattleEnemyActor::ResetRuntimeHostAnimation()
 	}
 }
 
+void AWacomBattleEnemyActor::ResetRuntimeScenePresentationForBattle()
+{
+	ResetRuntimeHostAnimation();
+	if (bRuntimeEncounterPresentationRetired)
+	{
+		return;
+	}
+
+	for (AWacomBattleEnemyPartActor* PartActor : BuildAttachedBattleEnemyPartActors())
+	{
+		if (IsValid(PartActor) && !PartActor->IsActorBeingDestroyed())
+		{
+			PartActor->ResetRuntimeDestroyedVisualState();
+		}
+	}
+}
+
 void AWacomBattleEnemyActor::CancelRuntimeHostAnimation()
 {
 	if (HostVisualComponent)

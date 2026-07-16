@@ -25,6 +25,20 @@ namespace WacomBattleEnemyPartImpactFeedbackPrivate
 	const FName PlaneRightParameter(TEXT("User.PlaneRight"));
 	const FName PlaneUpParameter(TEXT("User.PlaneUp"));
 	const FName TargetDiameterParameter(TEXT("User.TargetDiameter"));
+
+	int32 ToNiagaraEffectKind(EWacomBattleEnemyPartImpactEffectKind EffectKind)
+	{
+		switch (EffectKind)
+		{
+		case EWacomBattleEnemyPartImpactEffectKind::Damage:
+			return 1;
+		case EWacomBattleEnemyPartImpactEffectKind::Destroyed:
+			return 3;
+		case EWacomBattleEnemyPartImpactEffectKind::TargetConfirmed:
+		default:
+			return 0;
+		}
+	}
 }
 
 FWacomBattleEnemyPartImpactRequest
@@ -61,6 +75,13 @@ FWacomBattleEnemyPartImpactFeedbackController::BuildRequest(
 		Request.SoundPitchVariation = Style.DamageSoundPitchVariation;
 		break;
 	case EWacomBattleEnemyPartCuePlaybackKind::Destroyed:
+		Request.EffectKind = EWacomBattleEnemyPartImpactEffectKind::Destroyed;
+		Request.Intensity = FMath::Max(0.0f, Style.DestroyedIntensity);
+		Request.Sound = Style.DestroyedSound;
+		Request.SoundVolumeMultiplier = Style.DestroyedSoundVolumeMultiplier;
+		Request.SoundPitchMultiplier = Style.DestroyedSoundPitchMultiplier;
+		Request.SoundPitchVariation = Style.DestroyedSoundPitchVariation;
+		break;
 	case EWacomBattleEnemyPartCuePlaybackKind::None:
 	default:
 		Request.EffectKind = EWacomBattleEnemyPartImpactEffectKind::None;
@@ -134,6 +155,8 @@ bool FWacomBattleEnemyPartImpactFeedbackController::PlayAcceptedCue(
 		PlaneRight,
 		PlaneUp);
 	DebugView.LastEffectKind = EffectKindToName(Request.EffectKind);
+	DebugView.LastEffectKindValue =
+		WacomBattleEnemyPartImpactFeedbackPrivate::ToNiagaraEffectKind(Request.EffectKind);
 	DebugView.LastIntensity = Request.Intensity;
 	DebugView.LastSeed = Request.Seed;
 	DebugView.LastDecorativeIntensity = Request.DecorativeIntensity;
@@ -162,7 +185,7 @@ bool FWacomBattleEnemyPartImpactFeedbackController::PlayAcceptedCue(
 		ImpactAnchor->GetComponentLocation()
 		+ CameraDirection * Request.CameraDepthOffsetCentimeters);
 	Component->SetVariableInt(WacomBattleEnemyPartImpactFeedbackPrivate::EffectKindParameter,
-		Request.EffectKind == EWacomBattleEnemyPartImpactEffectKind::Damage ? 1 : 0);
+		WacomBattleEnemyPartImpactFeedbackPrivate::ToNiagaraEffectKind(Request.EffectKind));
 	Component->SetVariableFloat(
 		WacomBattleEnemyPartImpactFeedbackPrivate::DurationParameter,
 		Request.DurationSeconds);
@@ -277,6 +300,8 @@ FName FWacomBattleEnemyPartImpactFeedbackController::EffectKindToName(
 		return TEXT("TargetConfirmed");
 	case EWacomBattleEnemyPartImpactEffectKind::Damage:
 		return TEXT("Damage");
+	case EWacomBattleEnemyPartImpactEffectKind::Destroyed:
+		return TEXT("Destroyed");
 	case EWacomBattleEnemyPartImpactEffectKind::None:
 	default:
 		return TEXT("None");
@@ -321,9 +346,15 @@ float FWacomBattleEnemyPartImpactFeedbackController::ResolveTargetDiameterCentim
 		}
 	}
 
-	const float CoverageMultiplier = EffectKind == EWacomBattleEnemyPartImpactEffectKind::Damage
-		? Style.DamageCoverageMultiplier
-		: Style.TargetConfirmedCoverageMultiplier;
+	float CoverageMultiplier = Style.TargetConfirmedCoverageMultiplier;
+	if (EffectKind == EWacomBattleEnemyPartImpactEffectKind::Damage)
+	{
+		CoverageMultiplier = Style.DamageCoverageMultiplier;
+	}
+	else if (EffectKind == EWacomBattleEnemyPartImpactEffectKind::Destroyed)
+	{
+		CoverageMultiplier = Style.DestroyedCoverageMultiplier;
+	}
 	if (bHasProjectedDiameter)
 	{
 		Diameter *= FMath::Max(0.0f, CoverageMultiplier);

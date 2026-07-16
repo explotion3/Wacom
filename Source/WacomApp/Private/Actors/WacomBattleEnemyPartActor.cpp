@@ -216,6 +216,21 @@ void AWacomBattleEnemyPartActor::RefreshVisualLayers()
 	}
 }
 
+int32 AWacomBattleEnemyPartActor::ApplyRuntimeDestroyedVisualState()
+{
+	return VisualLayerComponent
+		? VisualLayerComponent->ApplyRuntimeDestroyedState(VisualLayers)
+		: 0;
+}
+
+void AWacomBattleEnemyPartActor::ResetRuntimeDestroyedVisualState()
+{
+	if (VisualLayerComponent)
+	{
+		VisualLayerComponent->RestoreRuntimeAuthoredState(VisualLayers);
+	}
+}
+
 void AWacomBattleEnemyPartActor::SetEnemySlotId(FName InEnemySlotId)
 {
 	if (EnemySlotId == InEnemySlotId)
@@ -378,6 +393,10 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.MissingVisualLayerAssetCount = VisualLayerView.MissingVisualLayerAssetCount;
 	View.MissingVisualLayerSpriteCount = VisualLayerView.MissingVisualLayerSpriteCount;
 	View.MissingVisualLayerFlipbookCount = VisualLayerView.MissingVisualLayerFlipbookCount;
+	View.DestroyedVisualResourceCount = VisualLayerView.DestroyedVisualResourceCount;
+	View.bDestroyedVisualStateApplied = VisualLayerView.bRuntimeDestroyedStateApplied;
+	View.DestroyedVisualLayerCount = VisualLayerView.RuntimeDestroyedVisualLayerCount;
+	View.DestroyedVisualApplyCount = VisualLayerView.RuntimeDestroyedVisualApplyCount;
 	View.FeedbackTargetName = VisualLayersRoot ? FName(*VisualLayersRoot->GetName()) : NAME_None;
 	View.bImpactAnchorReady = IsValid(ImpactAnchor)
 		&& !ImpactAnchor->GetComponentLocation().ContainsNaN();
@@ -483,6 +502,14 @@ EDataValidationResult AWacomBattleEnemyPartActor::IsDataValid(
 	{
 		Context.AddError(FText::FromString(
 			TEXT("ImpactAnchorRelativeLocation 包含非有限值，无法作为世界命中特效锚点。")));
+		Result = EDataValidationResult::Invalid;
+	}
+	if (!FMath::IsFinite(DestroyedVisualSwapNormalizedTime)
+		|| DestroyedVisualSwapNormalizedTime < 0.0f
+		|| DestroyedVisualSwapNormalizedTime > 1.0f)
+	{
+		Context.AddError(FText::FromString(
+			TEXT("DestroyedVisualSwapNormalizedTime 必须是 0 到 1 之间的有限归一化时间。")));
 		Result = EDataValidationResult::Invalid;
 	}
 	return Result;

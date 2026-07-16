@@ -23,6 +23,8 @@ namespace
 		TEXT("/Game/Wacom/VFX/Battle/NS_WacomBattleEnemyPartImpact_Pixel");
 	constexpr TCHAR ImpactSystemObjectPath[] =
 		TEXT("/Game/Wacom/VFX/Battle/NS_WacomBattleEnemyPartImpact_Pixel.NS_WacomBattleEnemyPartImpact_Pixel");
+	const FName ImpactContractVersionMetadataKey(TEXT("WacomEnemyImpactContractVersion"));
+	constexpr TCHAR ImpactContractVersion[] = TEXT("2");
 
 	constexpr TCHAR EmitterStatePath[] =
 		TEXT("/Niagara/Modules/Emitter/EmitterState.EmitterState");
@@ -36,7 +38,17 @@ namespace
 	const FName ConfirmStampEmitter(TEXT("ConfirmStamp"));
 	const FName DamageCoreWaveEmitter(TEXT("DamageCoreWave"));
 	const FName DamageFragmentsEmitter(TEXT("DamageFragments"));
+	const FName DestroyedFractureEmitter(TEXT("DestroyedFracture"));
+	const FName DestroyedFragmentsEmitter(TEXT("DestroyedFragments"));
 	const FName TargetPreviewEmitter(TEXT("TargetPreview"));
+	const TArray<FName> RequiredEmitterNames = {
+		ConfirmStampEmitter,
+		DamageCoreWaveEmitter,
+		DamageFragmentsEmitter,
+		DestroyedFractureEmitter,
+		DestroyedFragmentsEmitter,
+		TargetPreviewEmitter,
+	};
 
 	const FName EmitterUpdateScript(TEXT("EmitterUpdateScript"));
 	const FName ParticleSpawnScript(TEXT("ParticleSpawnScript"));
@@ -480,6 +492,75 @@ namespace
 		return AddParticleScaffold(System, DamageFragmentsEmitter, Spawn, Update, Context);
 	}
 
+	bool BuildDestroyedFracture(UNiagaraSystem& System, FNiagaraExternalEditContext& Context)
+	{
+		if (!AddBurst(System, DestroyedFractureEmitter, TEXT("User.EffectKind == 3 ? 5 : 0"), Context))
+		{
+			return false;
+		}
+
+		const TCHAR* Lifetime = TEXT("max(User.Duration * (Engine.ExecIndex == 0 ? 0.72 : 0.92), 0.01)");
+		const TCHAR* Shape = TEXT("Engine.ExecIndex == 0 ? 3.0 : 1.0");
+		const TCHAR* Size = TEXT("float2(1.0, 1.0) * User.TargetDiameter * (Engine.ExecIndex == 0 ? 0.42 : 0.64) * lerp(0.95, 1.10, saturate((User.Intensity - 1.0) / 0.6))");
+		const TCHAR* Palette = TEXT("frac((float)(User.Seed + Engine.ExecIndex * 67) * 0.754877666)");
+		return AddParticleScaffold(
+			System,
+			DestroyedFractureEmitter,
+			MakeCommonSpawnParameters(Lifetime, Shape, Size, TEXT("1.0"), Palette, TEXT("0.0")),
+			MakeCommonUpdateParameters(
+				TEXT("Particles.Position"),
+				TEXT("User.ReducedMotion ? Particles.WacomInitialSpriteSize : Particles.WacomInitialSpriteSize * (Particles.WacomShapeKind > 2.5 ? lerp(1.0, 0.62, saturate(Particles.NormalizedAge)) : lerp(0.72, 1.32, 1.0 - pow(1.0 - saturate(Particles.NormalizedAge), 3.0)))")),
+			Context);
+	}
+
+	bool BuildDestroyedFragments(UNiagaraSystem& System, FNiagaraExternalEditContext& Context)
+	{
+		const TCHAR* Count =
+			TEXT("(User.EffectKind == 3 && !User.ReducedMotion && User.DecorativeIntensity > 0.0) ? clamp((int)(24.0 + 20.0 * saturate((User.Intensity - 1.0) / 0.6) + 0.5), 0, 48) : 0");
+		if (!AddBurst(System, DestroyedFragmentsEmitter, Count, Context))
+		{
+			return false;
+		}
+
+		const TCHAR* Hash0 = TEXT("frac(sin((float)(User.Seed + Engine.ExecIndex * 19) * 12.9898) * 43758.5453)");
+		const TCHAR* Hash1 = TEXT("frac(sin((float)(User.Seed + Engine.ExecIndex * 43) * 78.233) * 24634.6345)");
+		const TCHAR* Hash2 = TEXT("frac(sin((float)(User.Seed + Engine.ExecIndex * 71) * 39.425) * 16543.2341)");
+
+		TArray<FParameterExpression> Spawn = MakeCommonSpawnParameters(
+			*FString::Printf(TEXT("max(User.Duration * lerp(0.82, 1.18, %s), 0.01)"), Hash0),
+			TEXT("0.0"),
+			*FString::Printf(TEXT("float2(1.0, 1.0) * clamp(User.TargetDiameter * lerp(0.07, 0.13, %s) * sqrt(max(User.Intensity, 0.01)), 6.0, 28.0)"), Hash2),
+			TEXT("User.DecorativeIntensity"),
+			Hash1,
+			TEXT("1.0"));
+		const FNiagaraTypeDefinition& PositionType = FNiagaraTypeDefinition::GetPositionDef();
+		const FNiagaraTypeDefinition& Vec3Type = FNiagaraTypeDefinition::GetVec3Def();
+		const FNiagaraTypeDefinition& FloatType = FNiagaraTypeDefinition::GetFloatDef();
+		Spawn.Add(MakeParameterExpression(
+			TEXT("Particles.WacomOrigin"),
+			PositionType,
+			FNiagaraPosition(ForceInit),
+			TEXT("Engine.Owner.Position")));
+		Spawn.Add(MakeParameterExpression(
+			TEXT("Particles.WacomDirection"),
+			Vec3Type,
+			FVector3f::ZeroVector,
+			*FString::Printf(
+				TEXT("normalize(User.PlaneRight * cos(6.28318530718 * %s) + User.PlaneUp * sin(6.28318530718 * %s))"),
+				Hash0,
+				Hash0)));
+		Spawn.Add(MakeParameterExpression(
+			TEXT("Particles.WacomTravelDistance"),
+			FloatType,
+			32.0f,
+			*FString::Printf(TEXT("User.TargetDiameter * lerp(0.45, 0.90, %s) * lerp(0.95, 1.18, saturate((User.Intensity - 1.0) / 0.6))"), Hash1)));
+
+		const TArray<FParameterExpression> Update = MakeCommonUpdateParameters(
+			TEXT("Particles.WacomOrigin + Particles.WacomDirection * Particles.WacomTravelDistance * (1.0 - pow(1.0 - saturate(Particles.NormalizedAge), 3.0))"),
+			TEXT("Particles.WacomInitialSpriteSize * lerp(1.0, 0.12, saturate(Particles.NormalizedAge))"));
+		return AddParticleScaffold(System, DestroyedFragmentsEmitter, Spawn, Update, Context);
+	}
+
 	bool BuildTargetPreview(UNiagaraSystem& System, FNiagaraExternalEditContext& Context)
 	{
 		if (!AddBurst(System, TargetPreviewEmitter, TEXT("User.EffectKind == 2 ? 2 : 0"), Context))
@@ -541,40 +622,48 @@ namespace
 		return System.GetExposedParameters().SetParameterValue(DefaultValue, Variable, true);
 	}
 
-	bool EnsureTargetPreviewContract(UNiagaraSystem& System, FNiagaraExternalEditContext& Context)
+	bool EnsureGeneratedEmitterContract(UNiagaraSystem& System, FNiagaraExternalEditContext& Context)
 	{
-		FNiagaraExt_SystemSummary Summary;
-		UNiagaraExternalEditUtilities::GetSystemSummary(&System, Summary, Context);
-		const bool bHasTargetPreview = Summary.Emitters.ContainsByPredicate(
-			[](const FNiagaraExt_EmitterSummary& Emitter)
-			{
-				return Emitter.EmitterName == TargetPreviewEmitter;
-			});
-		if (!bHasTargetPreview)
+		UNiagaraEmitter* TemplateEmitter = nullptr;
+		for (const FNiagaraEmitterHandle& Handle : System.GetEmitterHandles())
 		{
-			UNiagaraEmitter* TemplateEmitter = nullptr;
-			for (const FNiagaraEmitterHandle& Handle : System.GetEmitterHandles())
+			if (Handle.GetName() == ConfirmStampEmitter)
 			{
-				if (Handle.GetName() == ConfirmStampEmitter)
+				TemplateEmitter = Handle.GetInstance().Emitter;
+				break;
+			}
+		}
+		if (!TemplateEmitter)
+		{
+			Context.Error(NSLOCTEXT(
+				"WacomNiagaraBuilder",
+				"MissingGeneratedEmitterTemplate",
+				"Cannot create generated emitters because ConfirmStamp is missing."));
+			return false;
+		}
+
+		for (const FName Required : { TargetPreviewEmitter, DestroyedFractureEmitter, DestroyedFragmentsEmitter })
+		{
+			const bool bAlreadyExists = System.GetEmitterHandles().ContainsByPredicate(
+				[Required](const FNiagaraEmitterHandle& Handle)
 				{
-					TemplateEmitter = Handle.GetInstance().Emitter;
-					break;
-				}
-			}
-			if (!TemplateEmitter)
+					return Handle.GetName() == Required;
+				});
+			if (bAlreadyExists)
 			{
-				Context.Error(NSLOCTEXT(
-					"WacomNiagaraBuilder",
-					"MissingPreviewTemplate",
-					"Cannot create TargetPreview emitter because ConfirmStamp is missing."));
-				return false;
+				continue;
 			}
+
 			FNiagaraExt_EmitterTopology AddedEmitter;
 			UNiagaraExternalEditUtilities::AddEmitter(
 				TemplateEmitter,
-				TargetPreviewEmitter,
+				Required,
 				AddedEmitter,
 				Context);
+			if (Context.HasErrors())
+			{
+				return false;
+			}
 		}
 
 		return !Context.HasErrors()
@@ -597,7 +686,7 @@ namespace
 		{
 			Emitters.Add(Emitter.EmitterName);
 		}
-		for (const FName Required : { ConfirmStampEmitter, DamageCoreWaveEmitter, DamageFragmentsEmitter, TargetPreviewEmitter })
+		for (const FName Required : RequiredEmitterNames)
 		{
 			if (!Emitters.Contains(Required))
 			{
@@ -657,7 +746,7 @@ namespace
 		UNiagaraSystem& System,
 		FNiagaraExternalEditContext& Context)
 	{
-		for (const FName Emitter : { ConfirmStampEmitter, DamageCoreWaveEmitter, DamageFragmentsEmitter, TargetPreviewEmitter })
+		for (const FName Emitter : RequiredEmitterNames)
 		{
 			FNiagaraExt_EmitterTopology Topology;
 			const FNiagaraExt_StackItemReference EmitterRef(&System, Emitter);
@@ -689,7 +778,7 @@ namespace
 		UNiagaraSystem& System,
 		FNiagaraExternalEditContext& Context)
 	{
-		for (const FName Emitter : { ConfirmStampEmitter, DamageCoreWaveEmitter, DamageFragmentsEmitter, TargetPreviewEmitter })
+		for (const FName Emitter : RequiredEmitterNames)
 		{
 			const FNiagaraExt_StackItemReference EmitterRef(&System, Emitter);
 			FNiagaraExt_EmitterData EmitterData;
@@ -742,7 +831,7 @@ namespace
 		UNiagaraSystem& System,
 		FNiagaraExternalEditContext& Context)
 	{
-		for (const FName Emitter : { ConfirmStampEmitter, DamageCoreWaveEmitter, DamageFragmentsEmitter, TargetPreviewEmitter })
+		for (const FName Emitter : RequiredEmitterNames)
 		{
 			for (const FName Script : { EmitterUpdateScript, ParticleSpawnScript, ParticleUpdateScript })
 			{
@@ -808,6 +897,25 @@ namespace
 		return UPackage::SavePackage(Package, &System, *Filename, Args);
 	}
 
+	bool HasCurrentImpactContractVersion(const UNiagaraSystem& System)
+	{
+		UPackage* Package = System.GetPackage();
+		return Package
+			&& Package->GetMetaData().GetValue(&System, ImpactContractVersionMetadataKey)
+				== ImpactContractVersion;
+	}
+
+	void StampCurrentImpactContractVersion(UNiagaraSystem& System)
+	{
+		if (UPackage* Package = System.GetPackage())
+		{
+			Package->GetMetaData().SetValue(
+				&System,
+				ImpactContractVersionMetadataKey,
+				ImpactContractVersion);
+		}
+	}
+
 	void LogSystemTopology(UNiagaraSystem& System, FNiagaraExternalEditContext& Context)
 	{
 		FNiagaraExt_SystemSummary Summary;
@@ -844,14 +952,43 @@ namespace Wacom::ContentBuilder
 			return false;
 		}
 
-		FNiagaraExternalEditContext Context(System);
 		if (bInspectOnly)
 		{
+			FNiagaraExternalEditContext Context(System);
 			LogSystemTopology(*System, Context);
-			return LogContextErrors(Context);
+			if (!HasCurrentImpactContractVersion(*System))
+			{
+				Context.Error(NSLOCTEXT(
+					"WacomNiagaraBuilder",
+					"StaleImpactContractVersion",
+					"Niagara System does not carry the current generated impact contract version."));
+			}
+			return ValidateRequiredEmitters(*System, Context)
+				&& ValidateUserParameterContract(*System, Context)
+				&& ValidateRendererContract(*System, Context)
+				&& ValidateCompile(*System, Context)
+				&& LogContextErrors(Context);
 		}
 
-		if (!EnsureTargetPreviewContract(*System, Context)
+		if (HasCurrentImpactContractVersion(*System))
+		{
+			FNiagaraExternalEditContext CurrentContractContext(System);
+			if (ValidateRequiredEmitters(*System, CurrentContractContext)
+				&& ValidateUserParameterContract(*System, CurrentContractContext)
+				&& ValidateRendererContract(*System, CurrentContractContext)
+				&& ValidateCompile(*System, CurrentContractContext)
+				&& LogContextErrors(CurrentContractContext))
+			{
+				UE_LOG(LogTemp, Display,
+					TEXT("[EnemyImpactNiagara] Current six-emitter contract is already valid; no asset write required."));
+				return true;
+			}
+			UE_LOG(LogTemp, Warning,
+				TEXT("[EnemyImpactNiagara] Current contract marker is stale relative to asset contents; rebuilding."));
+		}
+
+		FNiagaraExternalEditContext Context(System);
+		if (!EnsureGeneratedEmitterContract(*System, Context)
 			|| !ValidateRequiredEmitters(*System, Context)
 			|| !ValidateUserParameterContract(*System, Context)
 			|| !ValidateRendererContract(*System, Context)
@@ -859,6 +996,8 @@ namespace Wacom::ContentBuilder
 			|| !BuildConfirmStamp(*System, Context)
 			|| !BuildDamageCoreWave(*System, Context)
 			|| !BuildDamageFragments(*System, Context)
+			|| !BuildDestroyedFracture(*System, Context)
+			|| !BuildDestroyedFragments(*System, Context)
 			|| !BuildTargetPreview(*System, Context)
 			|| !ConfigureEmitterRuntimeData(*System, Context))
 		{
@@ -873,6 +1012,7 @@ namespace Wacom::ContentBuilder
 			return false;
 		}
 
+		StampCurrentImpactContractVersion(*System);
 		if (!SaveSystem(*System))
 		{
 			UE_LOG(LogTemp, Error, TEXT("[EnemyImpactNiagara] Failed to save %s"), ImpactSystemPackagePath);
@@ -880,7 +1020,7 @@ namespace Wacom::ContentBuilder
 		}
 
 		UE_LOG(LogTemp, Display,
-			TEXT("[EnemyImpactNiagara] Built and saved ConfirmStamp, DamageCoreWave, DamageFragments and TargetPreview."));
+			TEXT("[EnemyImpactNiagara] Built and saved six emitters including DestroyedFracture and DestroyedFragments."));
 		return LogContextErrors(Context);
 	}
 }

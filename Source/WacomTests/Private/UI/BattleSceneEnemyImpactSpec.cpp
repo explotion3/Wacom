@@ -128,6 +128,10 @@ bool FWacomUIBattleSceneEnemyImpactStyleAndCueSpec::RunTest(const FString& /*Par
 		FMath::IsNearlyEqual(OverrideStyle->TargetConfirmedCoverageMultiplier, 1.20f));
 	TestTrue(TEXT("Damage covers the authored part bounds at 1.2x"),
 		FMath::IsNearlyEqual(OverrideStyle->DamageCoverageMultiplier, 1.20f));
+	TestTrue(TEXT("Destroyed uses the approved 1.35 intensity"),
+		FMath::IsNearlyEqual(OverrideStyle->DestroyedIntensity, 1.35f));
+	TestTrue(TEXT("Destroyed covers the authored part bounds at 1.35x"),
+		FMath::IsNearlyEqual(OverrideStyle->DestroyedCoverageMultiplier, 1.35f));
 
 	UWacomBattleEnemyPartPresentationComponent* Presentation = Part->GetPresentationComponent();
 	if (!TestNotNull(TEXT("Presentation component"), Presentation))
@@ -260,6 +264,11 @@ bool FWacomUIBattleSceneEnemyImpactDreamShaderContractSpec::RunTest(
 		&& NiagaraBuilderSource.Contains(TEXT("User.TargetHeight"))
 		&& NiagaraBuilderSource.Contains(TEXT("User.PreviewAmount"))
 		&& NiagaraBuilderSource.Contains(TEXT("TargetPreviewEmitter")));
+	TestTrue(TEXT("Niagara builder owns both Destroyed emitter stacks"),
+		NiagaraBuilderSource.Contains(TEXT("DestroyedFractureEmitter"))
+		&& NiagaraBuilderSource.Contains(TEXT("DestroyedFragmentsEmitter")));
+	TestTrue(TEXT("Destroyed EffectKind remains the stable value 3"),
+		NiagaraBuilderSource.Contains(TEXT("User.EffectKind == 3")));
 	return true;
 }
 

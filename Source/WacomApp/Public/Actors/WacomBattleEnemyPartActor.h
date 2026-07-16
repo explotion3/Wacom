@@ -126,6 +126,18 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	int32 MissingVisualLayerFlipbookCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 DestroyedVisualResourceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bDestroyedVisualStateApplied = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 DestroyedVisualLayerCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 DestroyedVisualApplyCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	TArray<FName> VisualLayerAssetNames;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
@@ -234,6 +246,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers",
 		meta = (ToolTip = "正式 2D 视觉层。非空时按 LayerMode 在 VisualLayersRoot 下生成 PaperSprite / PaperFlipbook 表现层；视觉层不影响 HitBounds、目标身份或战斗规则。"))
 	TArray<FWacomBattleEnemyPartVisualLayer> VisualLayers;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Destroyed",
+		meta = (ToolTip = "Destroyed Cue 归一化进度达到此值时原地应用破损资源。0 表示 cue 开始立即换图，1 表示 cue 结束时换图；推荐 0.35。", ClampMin = "0.0", ClampMax = "1.0"))
+	float DestroyedVisualSwapNormalizedTime = 0.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
 		meta = (ToolTip = "世界命中特效锚点相对 HitBounds 中心的位置。单位：厘米；推荐按部位视觉中心微调，不影响命中、布局或战斗规则。"))
@@ -457,6 +473,12 @@ public:
 
 	/** Encounter 已正式完成时清理运行时目标/表现并隐藏部位；不重建 VisualLayers。 */
 	void RetireRuntimeEncounterPresentation();
+
+	/** 由语义 Destroyed Cue 原地应用破损终态；重复调用幂等，不重建 VisualLayers。 */
+	int32 ApplyRuntimeDestroyedVisualState();
+
+	/** 新战斗首次接管 Host 时原地恢复 authored 资源和播放配置。 */
+	void ResetRuntimeDestroyedVisualState();
 
 	/** 当前部位是否已被所属 Encounter 的终态场景退役。 */
 	bool IsRuntimeEncounterPresentationRetired() const

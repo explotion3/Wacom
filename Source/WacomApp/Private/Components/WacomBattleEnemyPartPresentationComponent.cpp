@@ -2,6 +2,7 @@
 
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
 
+#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Components/WacomBattleEnemyPartCuePlayback.h"
@@ -115,12 +116,46 @@ void UWacomBattleEnemyPartPresentationComponent::CacheRuntimePartFacts(
 	FName InPartId,
 	const FEnemyPartSnapshot& Part)
 {
+	const bool bHadRuntimePartFacts = bHasRuntimePartFacts;
+	const bool bWasDestroyed = bRuntimePartDestroyed;
+	const bool bRuntimeInstanceChanged = bHadRuntimePartFacts
+		&& Part.InstanceId.IsValid()
+		&& RuntimePartInstanceId != Part.InstanceId;
+	if (bRuntimeInstanceChanged)
+	{
+		CancelPendingDestroyedVisualSwap();
+		if (AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(GetOwner()))
+		{
+			PartActor->ResetRuntimeDestroyedVisualState();
+		}
+	}
+
 	PartId = InPartId;
 	RuntimePartInstanceId = Part.InstanceId;
 	bHasRuntimePartFacts = Part.InstanceId.IsValid();
 	CurrentInitiative = Part.CurrentInitiative;
 	bRuntimePartDestroyed = Part.bDestroyed;
 	CurrentIntentId = Part.CurrentIntent.IntentId;
+
+	if (bHasRuntimePartFacts && Part.bDestroyed)
+	{
+		if (!bHadRuntimePartFacts || bRuntimeInstanceChanged)
+		{
+			if (AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(GetOwner()))
+			{
+				PartActor->ApplyRuntimeDestroyedVisualState();
+			}
+			bAwaitingDestroyedCueForRuntimeFacts = false;
+		}
+		else if (!bWasDestroyed)
+		{
+			bAwaitingDestroyedCueForRuntimeFacts = true;
+		}
+	}
+	else if (!Part.bDestroyed)
+	{
+		bAwaitingDestroyedCueForRuntimeFacts = false;
+	}
 	RefreshPredictionDisplay();
 }
 
@@ -132,6 +167,7 @@ void UWacomBattleEnemyPartPresentationComponent::ClearRuntimePartFacts()
 	CurrentInitiative = 0;
 	bRuntimePartDestroyed = false;
 	CurrentIntentId = NAME_None;
+	CancelPendingDestroyedVisualSwap();
 	RefreshPredictionDisplay();
 }
 
@@ -149,14 +185,15 @@ void UWacomBattleEnemyPartPresentationComponent::PlayBattlePresentationCue(
 	++CuePlayCount;
 
 	const FWacomBattleEnemyPartCuePlaybackView& CueView = CuePlayback->GetView();
+	if (CueView.Kind == EWacomBattleEnemyPartCuePlaybackKind::Destroyed)
+	{
+		bAwaitingDestroyedCueForRuntimeFacts = false;
+		bDestroyedVisualSwapPending = true;
+		TryApplyDestroyedVisualState(CueView.Progress);
+	}
 	if (ImpactFeedbackController)
 	{
-		if (CueView.Kind == EWacomBattleEnemyPartCuePlaybackKind::Destroyed)
-		{
-			// Destroyed owns the semantic priority but has no authored visual this round.
-			ImpactFeedbackController->ResetImmediate(false);
-		}
-		else if (bImpactFeedbackEnabled && IsValid(ImpactFeedbackStyle))
+		if (bImpactFeedbackEnabled && IsValid(ImpactFeedbackStyle))
 		{
 			FWacomBattlePresentationTargetCue EffectiveCue = Cue;
 			EffectiveCue.Duration = CueView.DurationSeconds;
@@ -176,6 +213,12 @@ void UWacomBattleEnemyPartPresentationComponent::PlayBattlePresentationCue(
 
 void UWacomBattleEnemyPartPresentationComponent::ForceCompleteBattlePresentationCue()
 {
+	if ((CuePlayback
+			&& CuePlayback->GetView().Kind == EWacomBattleEnemyPartCuePlaybackKind::Destroyed)
+		|| bDestroyedVisualSwapPending)
+	{
+		TryApplyDestroyedVisualState(1.0f);
+	}
 	if (CuePlayback)
 	{
 		CuePlayback->ForceComplete();
@@ -189,6 +232,7 @@ void UWacomBattleEnemyPartPresentationComponent::ForceCompleteBattlePresentation
 
 void UWacomBattleEnemyPartPresentationComponent::ResetBattlePresentationFeedback()
 {
+	CancelPendingDestroyedVisualSwap();
 	ResetCuePlayback();
 	bTargetable = false;
 	bDragPreviewActive = false;
@@ -460,6 +504,8 @@ UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugV
 		View.CuePlaybackProgress = CueView.Progress;
 		View.CuePlaybackDurationSeconds = CueView.DurationSeconds;
 	}
+	View.bDestroyedVisualSwapPending = bDestroyedVisualSwapPending;
+	View.bAwaitingDestroyedCueForRuntimeFacts = bAwaitingDestroyedCueForRuntimeFacts;
 	if (const USceneComponent* ImpactAnchor = ResolveImpactAnchorComponent())
 	{
 		View.bImpactAnchorReady = true;
@@ -485,6 +531,7 @@ UWacomBattleEnemyPartPresentationComponent::GetBattleEnemyPartPresentationDebugV
 		View.LastImpactIntensity = ImpactView.LastIntensity;
 		View.LastImpactTargetDiameterCentimeters = ImpactView.LastTargetDiameterCentimeters;
 		View.LastImpactEffectKind = ImpactView.LastEffectKind;
+		View.LastImpactEffectKindValue = ImpactView.LastEffectKindValue;
 		View.LastImpactSeed = ImpactView.LastSeed;
 		View.ImpactEffectPlayCount = ImpactView.EffectPlayCount;
 		View.ImpactSoundRequestCount = ImpactView.SoundRequestCount;
@@ -540,6 +587,10 @@ void UWacomBattleEnemyPartPresentationComponent::TickComponent(
 	if (CuePlayback && CuePlayback->GetView().bActive)
 	{
 		const FWacomBattleEnemyPartCuePlaybackView CueView = CuePlayback->Tick(DeltaTime);
+		if (CueView.Kind == EWacomBattleEnemyPartCuePlaybackKind::Destroyed)
+		{
+			TryApplyDestroyedVisualState(CueView.Progress);
+		}
 		if (!CueView.bActive && ImpactFeedbackController)
 		{
 			ImpactFeedbackController->FinishNaturally();
@@ -839,6 +890,35 @@ void UWacomBattleEnemyPartPresentationComponent::ResetCuePlayback()
 		ImpactFeedbackController->ResetImmediate(false);
 	}
 	RefreshComponentTickEnabled();
+}
+
+void UWacomBattleEnemyPartPresentationComponent::TryApplyDestroyedVisualState(float CueProgress)
+{
+	if (!bDestroyedVisualSwapPending)
+	{
+		return;
+	}
+
+	AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(GetOwner());
+	const float SwapTime = PartActor && FMath::IsFinite(PartActor->DestroyedVisualSwapNormalizedTime)
+		? FMath::Clamp(PartActor->DestroyedVisualSwapNormalizedTime, 0.0f, 1.0f)
+		: 0.35f;
+	if (CueProgress + UE_KINDA_SMALL_NUMBER < SwapTime)
+	{
+		return;
+	}
+
+	if (PartActor)
+	{
+		PartActor->ApplyRuntimeDestroyedVisualState();
+	}
+	bDestroyedVisualSwapPending = false;
+}
+
+void UWacomBattleEnemyPartPresentationComponent::CancelPendingDestroyedVisualSwap()
+{
+	bDestroyedVisualSwapPending = false;
+	bAwaitingDestroyedCueForRuntimeFacts = false;
 }
 
 void UWacomBattleEnemyPartPresentationComponent::ResetTargetPreviewPlayback(bool bDestroyComponent)

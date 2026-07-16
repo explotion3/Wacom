@@ -23,7 +23,7 @@ class WACOMAPP_API UWacomBattleEnemyPartImpactStyle : public UDataAsset
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Assets",
-		meta = (ToolTip = "TargetConfirmed 与 Damage 共用的 Niagara System。推荐使用 CPU Simulation、固定 Bounds，并暴露项目文档约定的 User 参数。"))
+		meta = (ToolTip = "TargetConfirmed、Damage 与 Destroyed 共用的 Niagara System。推荐使用 CPU Simulation、固定 Bounds，并暴露项目文档约定的 User 参数。"))
 	TObjectPtr<UNiagaraSystem> ImpactSystem = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Assets",
@@ -50,6 +50,10 @@ public:
 		meta = (ToolTip = "Damage 视觉强度上限。无单位；推荐 1.2–2.2，避免高伤害产生过量粒子。"))
 	float DamageIntensityMax = 1.80f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Intensity",
+		meta = (ToolTip = "Destroyed 两段式崩裂的基础视觉强度。无单位；推荐 1.1–1.6，只影响表现。"))
+	float DestroyedIntensity = 1.35f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
 		meta = (ToolTip = "TargetConfirmed 相对当前命中部位屏幕投影包围尺寸的覆盖倍率。无单位；推荐 1.1–1.4，1.2 表示刻印略大于该部位，不会覆盖整个敌人。"))
 	float TargetConfirmedCoverageMultiplier = 1.20f;
@@ -57,6 +61,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
 		meta = (ToolTip = "Damage 冲击环相对当前命中部位屏幕投影包围尺寸的覆盖倍率。无单位；推荐 1.1–1.5，1.2 表示冲击环略越过该部位边缘。"))
 	float DamageCoverageMultiplier = 1.20f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
+		meta = (ToolTip = "Destroyed 崩裂相对当前部位屏幕投影包围尺寸的覆盖倍率。无单位；推荐 1.2–1.5。"))
+	float DestroyedCoverageMultiplier = 1.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
 		meta = (ToolTip = "无法取得有效 HitBounds 时使用的特效直径，单位：厘米。推荐 80–120cm；只影响表现，不影响命中范围。"))
@@ -105,6 +113,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Audio|Damage",
 		meta = (ToolTip = "伤害声音稳定随机音高变化比例。0.03 表示约 ±3%；推荐 0–0.08。"))
 	float DamageSoundPitchVariation = 0.03f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Audio|Destroyed",
+		meta = (ToolTip = "部位破坏时播放的一次性声音。为空时静默跳过，不影响粒子或破损换图。"))
+	TObjectPtr<USoundBase> DestroyedSound = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Audio|Destroyed",
+		meta = (ToolTip = "部位破坏声音音量倍率。1 为原始音量；推荐 0.6–1.3。"))
+	float DestroyedSoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Audio|Destroyed",
+		meta = (ToolTip = "部位破坏声音基础音高倍率。1 为原始音高；推荐 0.85–1.05。"))
+	float DestroyedSoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Audio|Destroyed",
+		meta = (ToolTip = "部位破坏声音稳定随机音高变化比例。0.03 表示约 ±3%；推荐 0–0.08。"))
+	float DestroyedSoundPitchVariation = 0.03f;
 
 	float ResolveDamageIntensity(int32 DamageAmount) const;
 	bool HasValidVisualAssets() const;

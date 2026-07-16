@@ -75,6 +75,12 @@ struct WACOMAPP_API FWacomBattleEnemyPartPresentationDebugView
 	float CuePlaybackDurationSeconds = 0.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bDestroyedVisualSwapPending = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	bool bAwaitingDestroyedCueForRuntimeFacts = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	bool bImpactAnchorReady = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
@@ -103,6 +109,9 @@ struct WACOMAPP_API FWacomBattleEnemyPartPresentationDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	FName LastImpactEffectKind = TEXT("None");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
+	int32 LastImpactEffectKindValue = INDEX_NONE;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Debug")
 	int32 LastImpactSeed = 0;
@@ -333,6 +342,8 @@ private:
 		const FWacomLocalSettingsSnapshot& Snapshot,
 		EWacomRuntimeSettingsChangeReason Reason);
 	void RestoreBaseScaleIfNeeded();
+	void TryApplyDestroyedVisualState(float CueProgress);
+	void CancelPendingDestroyedVisualSwap();
 
 	UPROPERTY(Transient)
 	FGuid RuntimePartInstanceId;
@@ -391,6 +402,8 @@ private:
 	bool bTargetPreviewFeedbackEnabled = false;
 	float RuntimeDecorativeFlashIntensityScale = 1.0f;
 	bool bRuntimeSimplifiedMotion = false;
+	bool bDestroyedVisualSwapPending = false;
+	bool bAwaitingDestroyedCueForRuntimeFacts = false;
 	FDelegateHandle RuntimeSettingsChangedHandle;
 	TUniquePtr<FWacomBattleEnemyPartCuePlayback, FCuePlaybackDeleter> CuePlayback;
 	TUniquePtr<FWacomBattleEnemyPartImpactFeedbackController, FImpactFeedbackControllerDeleter>

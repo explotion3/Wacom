@@ -155,6 +155,10 @@ void UWacomBattleEnemyPartVisualLayerComponent::RefreshVisualLayers(
 			Owner->AddInstanceComponent(FlipbookComponent);
 			FlipbookComponent->RegisterComponentWithWorld(World);
 			GeneratedFlipbookVisualLayerComponents.Add(FlipbookComponent);
+			FWacomBattleEnemyPartRuntimeVisualLayer& RuntimeLayer = RuntimeVisualLayers.AddDefaulted_GetRef();
+			RuntimeLayer.LayerIndex = LayerIndex;
+			RuntimeLayer.LayerMode = Layer.LayerMode;
+			RuntimeLayer.FlipbookComponent = FlipbookComponent;
 		}
 		else
 		{
@@ -185,8 +189,102 @@ void UWacomBattleEnemyPartVisualLayerComponent::RefreshVisualLayers(
 			Owner->AddInstanceComponent(SpriteComponent);
 			SpriteComponent->RegisterComponentWithWorld(World);
 			GeneratedVisualLayerComponents.Add(SpriteComponent);
+			FWacomBattleEnemyPartRuntimeVisualLayer& RuntimeLayer = RuntimeVisualLayers.AddDefaulted_GetRef();
+			RuntimeLayer.LayerIndex = LayerIndex;
+			RuntimeLayer.LayerMode = Layer.LayerMode;
+			RuntimeLayer.SpriteComponent = SpriteComponent;
 		}
 	}
+}
+
+int32 UWacomBattleEnemyPartVisualLayerComponent::ApplyRuntimeDestroyedState(
+	const TArray<FWacomBattleEnemyPartVisualLayer>& VisualLayers)
+{
+	if (bRuntimeDestroyedStateApplied)
+	{
+		return RuntimeDestroyedVisualLayerCount;
+	}
+
+	bRuntimeDestroyedStateApplied = true;
+	RuntimeDestroyedVisualLayerCount = 0;
+	++RuntimeDestroyedVisualApplyCount;
+	for (const FWacomBattleEnemyPartRuntimeVisualLayer& RuntimeLayer : RuntimeVisualLayers)
+	{
+		if (!VisualLayers.IsValidIndex(RuntimeLayer.LayerIndex))
+		{
+			continue;
+		}
+
+		const FWacomBattleEnemyPartVisualLayer& Layer = VisualLayers[RuntimeLayer.LayerIndex];
+		if (RuntimeLayer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::Flipbook)
+		{
+			UPaperFlipbookComponent* Component = RuntimeLayer.FlipbookComponent.Get();
+			if (!Component || !Layer.DestroyedFlipbook
+				|| !FMath::IsFinite(Layer.DestroyedFlipbookPlayRate)
+				|| Layer.DestroyedFlipbookPlayRate <= 0.0f)
+			{
+				continue;
+			}
+
+			Component->Stop();
+			Component->SetFlipbook(Layer.DestroyedFlipbook);
+			Component->SetLooping(false);
+			Component->SetPlayRate(Layer.DestroyedFlipbookPlayRate);
+			Component->SetPlaybackPosition(0.0f, false);
+			Component->Play();
+			++RuntimeDestroyedVisualLayerCount;
+		}
+		else if (UPaperSpriteComponent* Component = RuntimeLayer.SpriteComponent.Get())
+		{
+			if (Layer.DestroyedSprite)
+			{
+				Component->SetSprite(Layer.DestroyedSprite);
+				++RuntimeDestroyedVisualLayerCount;
+			}
+		}
+	}
+	return RuntimeDestroyedVisualLayerCount;
+}
+
+void UWacomBattleEnemyPartVisualLayerComponent::RestoreRuntimeAuthoredState(
+	const TArray<FWacomBattleEnemyPartVisualLayer>& VisualLayers)
+{
+	if (!bRuntimeDestroyedStateApplied)
+	{
+		return;
+	}
+
+	for (const FWacomBattleEnemyPartRuntimeVisualLayer& RuntimeLayer : RuntimeVisualLayers)
+	{
+		if (!VisualLayers.IsValidIndex(RuntimeLayer.LayerIndex))
+		{
+			continue;
+		}
+
+		const FWacomBattleEnemyPartVisualLayer& Layer = VisualLayers[RuntimeLayer.LayerIndex];
+		if (RuntimeLayer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::Flipbook)
+		{
+			if (UPaperFlipbookComponent* Component = RuntimeLayer.FlipbookComponent.Get())
+			{
+				Component->Stop();
+				Component->SetFlipbook(Layer.Flipbook);
+				Component->SetLooping(Layer.bLoopFlipbook);
+				Component->SetPlayRate(Layer.FlipbookPlayRate);
+				Component->SetPlaybackPosition(Layer.FlipbookStartTimeSeconds, false);
+				if (Layer.bAutoPlayFlipbook && Layer.FlipbookPlayRate > 0.0f)
+				{
+					Component->Play();
+				}
+			}
+		}
+		else if (UPaperSpriteComponent* Component = RuntimeLayer.SpriteComponent.Get())
+		{
+			Component->SetSprite(Layer.Sprite);
+		}
+	}
+
+	bRuntimeDestroyedStateApplied = false;
+	RuntimeDestroyedVisualLayerCount = 0;
 }
 
 void UWacomBattleEnemyPartVisualLayerComponent::ClearGeneratedVisualLayers()
@@ -208,6 +306,10 @@ void UWacomBattleEnemyPartVisualLayerComponent::ClearGeneratedVisualLayers()
 		}
 	}
 	GeneratedFlipbookVisualLayerComponents.Reset();
+	RuntimeVisualLayers.Reset();
+	bRuntimeDestroyedStateApplied = false;
+	RuntimeDestroyedVisualLayerCount = 0;
+	RuntimeDestroyedVisualApplyCount = 0;
 }
 
 FWacomBattleEnemyPartVisualLayerDebugView
@@ -267,7 +369,15 @@ UWacomBattleEnemyPartVisualLayerComponent::BuildVisualLayerDebugView(
 		{
 			++View.MissingVisualLayerFlipbookCount;
 		}
+		if ((Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::StaticSprite && Layer.DestroyedSprite)
+			|| (Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::Flipbook && Layer.DestroyedFlipbook))
+		{
+			++View.DestroyedVisualResourceCount;
+		}
 	}
+	View.bRuntimeDestroyedStateApplied = bRuntimeDestroyedStateApplied;
+	View.RuntimeDestroyedVisualLayerCount = RuntimeDestroyedVisualLayerCount;
+	View.RuntimeDestroyedVisualApplyCount = RuntimeDestroyedVisualApplyCount;
 	View.DuplicateVisualLayerIds = BuildDuplicateVisualLayerIds(VisualLayers);
 	return View;
 }

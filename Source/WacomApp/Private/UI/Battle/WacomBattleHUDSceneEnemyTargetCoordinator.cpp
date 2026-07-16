@@ -197,7 +197,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
 				});
 			if (!bWasAlreadyActive)
 			{
-				Host->ResetRuntimeHostAnimation();
+				Host->ResetRuntimeScenePresentationForBattle();
 			}
 			FSceneEnemyHostEntry& Entry = SceneEnemyHosts.AddDefaulted_GetRef();
 			Entry.Host = Host;

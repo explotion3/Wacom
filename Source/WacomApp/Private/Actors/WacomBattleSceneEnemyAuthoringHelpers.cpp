@@ -766,6 +766,34 @@ namespace WacomBattleSceneEnemyAuthoring
 					FText::AsNumber(LayerIndex),
 					FText::FromString(GetVisualLayerModeDebugName(Layer.LayerMode))));
 			}
+
+			const bool bDestroyedResourceModeMismatch =
+				(Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::StaticSprite
+					&& Layer.DestroyedFlipbook != nullptr)
+				|| (Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::Flipbook
+					&& Layer.DestroyedSprite != nullptr);
+			if (bDestroyedResourceModeMismatch)
+			{
+				Context.AddError(FText::Format(
+					LOCTEXT("PlacementVisualLayerDestroyedModeMismatch",
+						"BattleEnemyPart 摆放配置错误：Actor={0} VisualLayers[{1}] 的破损资源与 LayerMode 不匹配。"),
+					FText::FromString(PartActor.GetName()),
+					FText::AsNumber(LayerIndex)));
+				Result = EDataValidationResult::Invalid;
+			}
+
+			if (Layer.LayerMode == EWacomBattleEnemyPartVisualLayerMode::Flipbook
+				&& Layer.DestroyedFlipbook
+				&& (!FMath::IsFinite(Layer.DestroyedFlipbookPlayRate)
+					|| Layer.DestroyedFlipbookPlayRate <= 0.0f))
+			{
+				Context.AddError(FText::Format(
+					LOCTEXT("PlacementVisualLayerDestroyedInvalidPlayRate",
+						"BattleEnemyPart 摆放配置错误：Actor={0} VisualLayers[{1}] 的 DestroyedFlipbookPlayRate 必须为有限正数。"),
+					FText::FromString(PartActor.GetName()),
+					FText::AsNumber(LayerIndex)));
+				Result = EDataValidationResult::Invalid;
+			}
 		}
 
 		if (PartActor.VisualLayers.Num() == 0 && !HasHostVisualContext(PartActor))

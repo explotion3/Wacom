@@ -485,7 +485,7 @@ BattleState
 
 `DamageDealt.Amount` 是本次实际 HP 损失，不是进入伤害流程的名义数值：护盾完全吸收时仍发布事件但 `Amount=0`；部分吸收只记录穿盾后的 HP 损失；overkill 只记录目标受击前剩余 HP。普通卡牌伤害继续填写 `CardInstanceId`，Poison 继续填写 `Tag=Status.Poison`，敌方意图不伪造来源字段。Combat Log、伤害表现 cue 和 Action Preview 都消费这一口径。
 
-App 层的世界伤害像素反馈只读取上述 `DamageDealt.Amount`，并按平方根映射视觉强度；不会把粒子强度、Cue 时长或表现 Seed 写回 BattleState。`FWacomBattlePresentationTargetCue.Seed` 是 App presentation 的稳定装饰随机合同：Damage 由事件 Sequence、目标稳定部位 key 和 Amount 构造，TargetConfirmed 由来源卡实例和目标稳定部位 key 构造；不得复用为规则 RNG、伤害方向或存档事实。`EnemyPartHpEmptied` 仍只占用 Destroyed 高优先级 Cue，本轮不新增规则事件。
+App 层的世界伤害像素反馈只读取上述 `DamageDealt.Amount`，并按平方根映射视觉强度；不会把粒子强度、Cue 时长或表现 Seed 写回 BattleState。`FWacomBattlePresentationTargetCue.Seed` 是 App presentation 的稳定装饰随机合同：Damage 由事件 Sequence、目标稳定部位 key 和 Amount 构造，TargetConfirmed 由来源卡实例和目标稳定部位 key 构造；不得复用为规则 RNG、伤害方向或存档事实。`EnemyPartHpEmptied` 占用 Destroyed 高优先级 Cue，App 可用它驱动局部崩裂与 authored 破损终态，但不新增规则事件，也不把换图时机或资源写入 BattleState。
 
 伤害导致部位破坏时，事件顺序固定为 `DamageDealt -> EnemyPartHpEmptied`；击倒请求由命令管线稍后追加。`StatusApplied.Amount` 仍表示本次新增层数，普通 Effect ApplyStatus 保持空来源卡，Resistance Stun 保持 `ResistanceResolved -> StatusApplied` 并携带来源卡。Combatant 状态移除继续静默；Card Status 的物化、减半、解冻与清理统一使用 `CardStatusChanged`。
 

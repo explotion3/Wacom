@@ -62,7 +62,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ fallback 布局；BattleHUD / BackpackScreen 的 fallback 构建已抽到私有 helper | 美术阶段用 WBP 替换视觉，C++ 保留协议和兜底 |
 | Battle Widget Session Blueprint 面 | C++ owner 注入已改走 `UWacomBattleWidgetBase.SetInjectedBattleSession / GetInjectedBattleSession`；`SetSession / GetSession` 已降为 C++ only 旧兼容 wrapper，不再暴露给 Blueprint；正式 WBP 制作面只消费 Snapshot / ViewData 并回传玩家意图 | 保留 C++ wrapper 到旧测试和零散调用迁移完成；如外部 widget 需要只读战斗状态，再评估 `UWacomBattleViewModel` / provider |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
-| 场景敌人表现 polish | 主链路已拆成 `SceneEnemyHost + PartActor + WorldTargetBridge + Presentation`；普通小怪走 Host 整体图 + hit-only 部位，并已具备串行 Idle / Action / Destroyed 语义 Flipbook 播放、完成 barrier 与 watchdog；精英 / Boss 走 PartActor VisualLayers | 继续补正式 sprite/flipbook/AnimationStyle 资产、材质描边、tooltip 和风险动效；只有 Part 局部状态或复杂转场确有需要时再接 PaperZD/Animator，避免复制现有 Host 语义层 |
+| 场景敌人表现 polish | 主链路已拆成 `SceneEnemyHost + PartActor + WorldTargetBridge + Presentation`；普通小怪具备 Host Idle / Action / Destroyed barrier，PartActor 已具备通用 Destroyed 粒子和 VisualLayer 原地破损终态；精英 / Boss 仍缺正式逐层破损内容 | 为首个正式 Multi-Part enemy pack 制作对应 `DestroyedSprite / DestroyedFlipbook`，继续补材质描边、tooltip 和风险动效；只有 Part 局部多状态或复杂转场确有需要时再接 PaperZD/Animator，避免复制现有语义层 |
 | CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | UI Style 资产命名 V0 | 通用样式资产已迁到 `/Game/Wacom/UI/Style/`，但仍保留 `tiny_menu_Button`、`MyCommonTextStyle` 等原型命名 | 后续设计系统整理时统一命名为语义化 Style asset，例如 `WBPStyle_Button_CommandPrimary` / `TextStyle_CommandButton`，并通过资产审计确认没有旧路径引用后再重命名 |
@@ -73,7 +73,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | AppToast C++ fallback 表现 | 未配置 settings 时仍使用文字 fallback；viewport 创建已受真实本地玩家 / `LocalPlayer` 条件保护，离屏自动化注入 Widget 不进入 viewport | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
 | PrimaryLayout 固定路径 fallback | PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
 | Local Settings 音频分类 | `SC_Wacom_Master / Music / SFX / UI` 和用户 SoundMix 已建立，项目当前没有可明确迁移的 `/Game/Wacom` 音频源资产；未设置 SoundClass 的声音只受 Master 控制，第三方 / 来源不明资产未修改 | 正式音乐、UI 和玩法音效进入 `/Game/Wacom/Audio` 后在导入 / 制作校验中要求显式 SoundClass；用 AssetRegistry 审计存量声音，再按所有权分批迁移，不批改第三方资产 |
-| Local Settings 世界材质闪光覆盖 | 全局 Flash 策略当前覆盖 first-person 卡牌的装饰扫光、亮边、残片、牌堆拖尾与 motes；世界材质、场景 Niagara 和未来敌人受击闪光尚未接入统一语义标记 | 为世界表现建立 decorative / semantic 分类和统一参数入口，再订阅 Local Settings；接入前不得用全局材质扫描或粗暴关闭所有 emissive，以免隐藏可打 / 不可打和伤害等语义反馈 |
+| Local Settings 世界材质闪光覆盖 | 全局 Flash 策略覆盖 first-person 卡牌装饰表现；场景敌人 Impact / TargetPreview Niagara 已通过 Dynamic W 与 `DecorativeIntensity` 区分 semantic / decorative，Reduced Motion 关闭位移碎片；其他世界材质和未来 VFX 尚未统一 | 后续世界表现沿用同一 semantic / decorative 参数入口并订阅 Local Settings；不得用全局材质扫描或粗暴关闭所有 emissive，以免隐藏可打 / 不可打、伤害或破坏裂印等语义反馈 |
 
 <a id="techdebt-run-session"></a>
 ## RunSession 结构债
@@ -182,6 +182,6 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Card face view data builder 已抽出：`UWacomCardPresentationBuilder` 不再直接持有小卡卡面字段、紧凑描述、体格/价值展示和效果徽章映射逻辑，`WacomCardFaceViewDataBuilder` 负责生成 `FWacomCardViewData` 和 `FWacomCardViewEffectBadge`。
 - Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast`、`BuildLegacyEventBlock()` 和旧 `WBP_BattleEventLogEntry / WBP_BattleEventLogPanel` 残留资产已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。
 - Enemy system refactor 主链路已收口：旧敌方 2D fallback、第一敌人 HUD 入口、Actor 名称身份推断、旧部位意图序列主合同和旧单 Host Trigger 入口已删除；当前规则和制作口径见 `WacomBattle.md`、`WacomData.md`、`WacomRun.md`、`WacomWorldInteraction.md`、`WacomBattleUI.md` 和 `WacomDataAuthoring.md`。
-- TrainingWarrior 已验证通用 Simple Host 正式内容管线；剩余敌人表现债务是 PartActor 局部 Destroyed 反馈、材质描边、tooltip、MultiPart / Boss 局部动画和 PaperZD 状态机。不要把这些能力塞回 TrainingWarrior 的单 Host Flipbook Style，也不要让新的正式敌人重新依赖 ignored `/Game/Art`。
+- TrainingWarrior 已验证通用 Simple Host 正式内容管线；PartActor 通用局部 Destroyed 反馈已落地，但 TrainingWarrior 按内容合同不伪造 Body 破损图。剩余债务是首个正式 Multi-Part 的逐层破损资源、材质描边、tooltip、MultiPart / Boss 局部动画和 PaperZD 状态机。不要把这些能力塞回 TrainingWarrior 的单 Host Flipbook Style，也不要让新的正式敌人重新依赖 ignored `/Game/Art`。
 - Resolved Encounter 场景生命周期已收口为 `Run settlement -> Trigger pending -> return barrier -> Host/Part retirement`；HUD 不销毁探索 Actor，GameMode 不再按部位数推断 Victory。剩余存档债务只是 v3 仍以 `DestroyedTriggerIds` 投影未持久化的 Map Node lifecycle。
 - Battle exit legacy outcome byte 出口已收口：`AWacomPlayerController::RequestExitBattle()` 公开面改为 `EBattleOutcome`，正式 BattleEnd 主链路仍由 `UBattleHUD::OnBattleEndedNative(EBattleOutcome)` 触发 GameMode，并在 Session 释放前构造 `FBattleResultPacket` 给 Run 层。
