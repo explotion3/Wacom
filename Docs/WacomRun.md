@@ -265,6 +265,8 @@ RunEvent 是轻量事件图。事件内容来自 `UWacomRunEventDefinition`，�
 - 关闭事件只清 active 标记，不改变完成状态。
 - App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；token 不进入 RunState/SaveGame。
 
+正式 C++ App 路径使用 `BeginRunEventWithExplorationResult()`、`EndRunEventIfOwnedWithExplorationResult()`（无 ownership 的兼容入口为 `EndRunEventWithExplorationResult()`），并从每次成功 `FRunEventChoiceResult.ExplorationResolution` 取得本次规则提交的探索版本。App 必须按 Begin、每次成功 Choice、End / rollback 的实际提交顺序消费这些结果；原有 bool/void API 仅作为 Blueprint/旧调用兼容 wrapper，不是正式表现同步入口。
+
 当前条件：
 
 - 金币不少于指定值。
@@ -296,7 +298,7 @@ RunEvent Choice Evaluation 的唯一 Implementation 位于 `WacomRun/Private/Eve
 
 卡牌支付通过 active GameMenu 的 Run menu zone drop 提交：`FWacomRunFirstPersonCardDropCoordinator` 负责命中、preview 和分发，`AWacomPlayerController` 只提供输入/查询上下文，`UWacomRunEventScreen` 接管 release 并调用 `URunSession::ChooseRunEventOptionWithPaidCardResult()`。支付 UI、menu lease 和 drop target 合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#6-run-menu-zone-target) 与 [WacomUI.md](./WacomUI.md)。
 
-`FRunEventChoiceResult` 只表达本次选项直接效果和展示诊断字段，供 UI 和日志展示。成功卡牌支付会记录 `PaidCardDefinition`，仅用于 UI / 日志显示。成功结果还会记录节点变化、事件关闭和事件完成 facts。失败或回滚结果不写入成功 outcome，后续规则不能依赖该结果包反向修改 RunState。
+`FRunEventChoiceResult` 表达本次选项直接效果、展示诊断字段和同批规则提交的 `ExplorationResolution`。成功卡牌支付会记录 `PaidCardDefinition`，仅用于 UI / 日志显示。成功结果还会记录节点变化、事件关闭和事件完成 facts。失败或回滚结果不写入成功 outcome，后续规则不能依赖该结果包反向修改 RunState。
 
 当前 `RunEventStates` 和 `RunFlags` 只保存在 Run 内存态，不写入 SaveGame。Definition 字段、生成样例和 Validator 口径见 [WacomData.md](./WacomData.md) 与 [WacomDataAuthoring.md](./WacomDataAuthoring.md)。
 
@@ -320,6 +322,7 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 - 固定卡牌奖励必须配置 `CardDefinition`。
 - 重复提交同一 `PersistentId` 不改状态、不广播。
 - 金币和卡牌 Pickup 共用 `CollectedPickupIds`，相同 ID 会共享已拾取状态。
+- `CollectGoldPickup()` / `CollectCardPickup()` 返回的 `FRunTreasureSettlementResult.ExplorationResolution` 是正式 Floor 中这次 Treasure 完成的版本结果；成功调用方必须把它交给 App 表现协调器，不能只读取 `bSucceeded` 后丢弃。
 
 数据驱动推荐入口是 `AWacomRunRewardPickupActor + UWacomRunPickupDefinition`。Definition 只描述固定单一奖励；运行时仍调用现有金币 / 卡牌拾取结算。当前不支持掉落表、多卡、区域选择、拾取动画或 SaveGame。
 

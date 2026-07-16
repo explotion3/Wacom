@@ -8,12 +8,14 @@
 #include "UI/Run/WacomRunMenuCardDropIntentTypes.h"
 
 class URunSession;
+class AWacomPlayerController;
 class UWacomAppToastSubsystem;
 class UWacomRunEventScreen;
 
 struct FWacomRunEventPaymentDropFlowContext
 {
 	UWacomRunEventScreen* Screen = nullptr;
+	AWacomPlayerController* PlayerController = nullptr;
 	URunSession* Run = nullptr;
 	UWacomAppToastSubsystem* ToastSubsystem = nullptr;
 	FWacomRunEventPresentationStateView PresentationState;

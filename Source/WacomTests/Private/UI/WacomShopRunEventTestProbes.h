@@ -886,6 +886,11 @@ public:
 		ToastSubsystem = InToastSubsystem;
 	}
 
+	void SetPlayerController(AWacomPlayerController* InPlayerController)
+	{
+		PlayerController = InPlayerController;
+	}
+
 	void SetChoiceButtonClassForTest(TSubclassOf<UWacomRunEventChoiceButton> InClass)
 	{
 		ChoiceButtonWidgetClass = InClass;
@@ -912,6 +917,13 @@ protected:
 		return RunSession ? RunSession.Get() : UWacomRunEventScreen::ResolveRunSession();
 	}
 
+	virtual AWacomPlayerController* ResolveWacomPlayerController() const override
+	{
+		return PlayerController
+			? PlayerController.Get()
+			: UWacomRunEventScreen::ResolveWacomPlayerController();
+	}
+
 	virtual UWacomAppToastSubsystem* ResolveToastSubsystem() const override
 	{
 		return ToastSubsystem ? ToastSubsystem.Get() : UWacomRunEventScreen::ResolveToastSubsystem();
@@ -923,4 +935,7 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomAppToastSubsystem> ToastSubsystem = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<AWacomPlayerController> PlayerController = nullptr;
 };

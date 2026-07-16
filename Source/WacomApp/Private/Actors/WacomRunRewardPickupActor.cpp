@@ -9,6 +9,7 @@
 #include "Pickups/RunPickupDefinition.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "UI/Run/WacomRunTreasurePresentationSync.h"
 
 namespace
 {
@@ -184,10 +185,17 @@ bool AWacomRunRewardPickupActor::TryCollectPickupReward(AWacomPlayerController* 
 	switch (PickupDefinition->RewardType)
 	{
 	case EWacomRunPickupRewardType::Gold:
-		if (!Run->CollectGoldPickup(PersistentId, PickupDefinition->GoldAmount).bSucceeded)
+	{
+		const FRunTreasureSettlementResult Result =
+			Run->CollectGoldPickup(PersistentId, PickupDefinition->GoldAmount);
+		if (!Result.bSucceeded)
 		{
 			return false;
 		}
+		FWacomRunTreasurePresentationSync::ApplySettlement(
+			PC,
+			Result,
+			TEXT("RunRewardPickup.Gold"));
 		if (UGameInstance* GameInstance = PC ? PC->GetGameInstance() : nullptr)
 		{
 			if (UWacomAppToastSubsystem* ToastSubsystem =
@@ -197,11 +205,19 @@ bool AWacomRunRewardPickupActor::TryCollectPickupReward(AWacomPlayerController* 
 			}
 		}
 		return true;
+	}
 	case EWacomRunPickupRewardType::Card:
-		if (!Run->CollectCardPickup(PersistentId, PickupDefinition->CardDefinition).bSucceeded)
+	{
+		const FRunTreasureSettlementResult Result =
+			Run->CollectCardPickup(PersistentId, PickupDefinition->CardDefinition);
+		if (!Result.bSucceeded)
 		{
 			return false;
 		}
+		FWacomRunTreasurePresentationSync::ApplySettlement(
+			PC,
+			Result,
+			TEXT("RunRewardPickup.Card"));
 		if (UGameInstance* GameInstance = PC ? PC->GetGameInstance() : nullptr)
 		{
 			if (UWacomAppToastSubsystem* ToastSubsystem =
@@ -211,6 +227,7 @@ bool AWacomRunRewardPickupActor::TryCollectPickupReward(AWacomPlayerController* 
 			}
 		}
 		return true;
+	}
 	case EWacomRunPickupRewardType::None:
 	default:
 		return false;

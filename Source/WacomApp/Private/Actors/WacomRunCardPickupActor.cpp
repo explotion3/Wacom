@@ -8,6 +8,7 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "UI/Run/WacomRunTreasurePresentationSync.h"
 
 namespace
 {
@@ -118,10 +119,20 @@ FName AWacomRunCardPickupActor::GetRewardConfigWarningReason() const
 bool AWacomRunCardPickupActor::TryCollectPickupReward(AWacomPlayerController* PC)
 {
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
-	if (!Run || !Run->CollectCardPickup(PersistentId, CardDefinition).bSucceeded)
+	if (!Run)
 	{
 		return false;
 	}
+	const FRunTreasureSettlementResult Result =
+		Run->CollectCardPickup(PersistentId, CardDefinition);
+	if (!Result.bSucceeded)
+	{
+		return false;
+	}
+	FWacomRunTreasurePresentationSync::ApplySettlement(
+		PC,
+		Result,
+		TEXT("RunPickup.Card"));
 
 	if (UGameInstance* GameInstance = PC ? PC->GetGameInstance() : nullptr)
 	{

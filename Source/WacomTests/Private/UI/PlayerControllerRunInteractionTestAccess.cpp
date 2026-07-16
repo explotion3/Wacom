@@ -397,6 +397,16 @@ bool FWacomPlayerControllerRunInteractionTestAccess::RefreshRunExplorationPresen
 	return PC && PC->RefreshRunExplorationPresentationBindingForTest();
 }
 
+bool FWacomPlayerControllerRunInteractionTestAccess::CanPresentRunMap(
+	const AWacomPlayerControllerProbe* PC,
+	FName& OutRejectDetail)
+{
+	bool bPreferRecommendedTarget = false;
+	return PC && PC->CanPresentRunMapScreen(
+		bPreferRecommendedTarget,
+		&OutRejectDetail);
+}
+
 void FWacomPlayerControllerRunInteractionTestAccess::PrepareExplorationRunFirstPersonCardLayer(
 	AWacomPlayerControllerProbe* PC)
 {

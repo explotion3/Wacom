@@ -7,6 +7,7 @@
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "UI/Run/WacomRunTreasurePresentationSync.h"
 
 AWacomRunPickupActor::AWacomRunPickupActor()
 {
@@ -96,10 +97,20 @@ FName AWacomRunPickupActor::GetRewardConfigWarningReason() const
 bool AWacomRunPickupActor::TryCollectPickupReward(AWacomPlayerController* PC)
 {
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
-	if (!Run || !Run->CollectGoldPickup(PersistentId, GoldAmount).bSucceeded)
+	if (!Run)
 	{
 		return false;
 	}
+	const FRunTreasureSettlementResult Result =
+		Run->CollectGoldPickup(PersistentId, GoldAmount);
+	if (!Result.bSucceeded)
+	{
+		return false;
+	}
+	FWacomRunTreasurePresentationSync::ApplySettlement(
+		PC,
+		Result,
+		TEXT("RunPickup.Gold"));
 
 	if (UGameInstance* GameInstance = PC ? PC->GetGameInstance() : nullptr)
 	{

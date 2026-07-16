@@ -24,6 +24,8 @@
 
 namespace
 {
+	const FName DebugGeneratedTag(TEXT("Wacom.Generated.RunExploration"));
+
 	void SortSnapshot(
 		FWacomRunExplorationDebugAssetBuilderAutomationSnapshot& Snapshot)
 	{
@@ -34,6 +36,12 @@ namespace
 		Snapshot.PathEdgeIds.Sort(FNameLexicalLess());
 		Snapshot.BranchEdgeIds.Sort(FNameLexicalLess());
 		Snapshot.HostNodeIds.Sort(FNameLexicalLess());
+		Snapshot.ContentHosts.Sort(
+			[](const FWacomRunExplorationDebugContentHostAutomationRecord& A,
+				const FWacomRunExplorationDebugContentHostAutomationRecord& B)
+			{
+				return A.NodeId.LexicalLess(B.NodeId);
+			});
 	}
 }
 
@@ -114,6 +122,14 @@ bool FWacomRunExplorationDebugAssetBuilderAutomationTestView::Build(
 			Actor->FindComponentByClass<UWacomRunMapNodeBindingComponent>())
 		{
 			OutSnapshot.HostNodeIds.Add(Binding->NodeId);
+			FWacomRunExplorationDebugContentHostAutomationRecord& Host =
+				OutSnapshot.ContentHosts.AddDefaulted_GetRef();
+			Host.NodeId = Binding->NodeId;
+			Host.NodeType = static_cast<uint8>(Binding->NodeType);
+			Host.ActorClassPath = GetPathNameSafe(Actor->GetClass());
+			Host.Transform = Actor->GetActorTransform();
+			Host.bHasGeneratedOwnership =
+				Actor->Tags.Contains(DebugGeneratedTag);
 		}
 	}
 

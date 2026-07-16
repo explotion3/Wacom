@@ -131,6 +131,9 @@ struct FWacomPlayerControllerRunInteractionTestAccess
 
 	static void SetRunSession(AWacomPlayerControllerProbe* PC, URunSession* RunSession);
 	static bool RefreshRunExplorationPresentationBinding(AWacomPlayerControllerProbe* PC);
+	static bool CanPresentRunMap(
+		const AWacomPlayerControllerProbe* PC,
+		FName& OutRejectDetail);
 	static void PrepareExplorationRunFirstPersonCardLayer(AWacomPlayerControllerProbe* PC);
 	static void SetRunFirstPersonMenuLease(
 		AWacomPlayerControllerProbe* PC,

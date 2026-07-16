@@ -2553,95 +2553,153 @@ bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 
 bool URunSession::BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition)
 {
+	return BeginRunEventWithExplorationResult(
+		PersistentId,
+		EventDefinition).IsOk();
+}
+
+FRunExplorationResolution URunSession::BeginRunEventWithExplorationResult(
+	const FName PersistentId,
+	UWacomRunEventDefinition* EventDefinition)
+{
+	FRunExplorationResolution Result;
+	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
+	Result.VersionAfter = Result.VersionBefore;
+	Result.PostSnapshot = BuildExplorationSnapshot();
 	if (IsRunEventActive())
 	{
-		return false;
+		Result.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			TEXT("RunEventAlreadyActive"));
+		return Result;
 	}
 
 	const FGuid NewVisitToken = FGuid::NewGuid();
 	if (!NewVisitToken.IsValid())
 	{
 		UE_LOG(LogTemp, Error, TEXT("[RunSession] BeginRunEvent: 生成访问 token 失败"));
-		return false;
+		Result.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			TEXT("RunEventVisitTokenGenerationFailed"));
+		return Result;
 	}
 
 	FRunState WorkingState = RunState;
 	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
 	FRunNodeActivityTicket ActivityTicket;
-	TArray<FRunExplorationEvent> ActivityEvents;
 	const bool bUsesFormalExploration =
 		WorkingState.ExplorationState.JourneyDefinition
 		&& WorkingState.ExplorationState.ExplorationStateVersion > 0;
 	if (bUsesFormalExploration)
 	{
-		const FWacomStatus BeginStatus = FRunNodeActivityModule::Begin(
+		Result.Status = FRunNodeActivityModule::Begin(
 			WorkingState,
 			WorkingActivity,
 			ERunNodeActivityKind::RunEvent,
 			/*ReservedActionPoints=*/0,
 			ActivityTicket,
-			ActivityEvents);
-		if (!BeginStatus.IsOk())
+			Result.Events);
+		if (!Result.IsOk())
 		{
-			return false;
+			Result.Events.Reset();
+			return Result;
 		}
 	}
-
-	if (FRunEventExecutor::BeginEvent(WorkingState, PersistentId, EventDefinition))
+	else
 	{
-		RunState = MoveTemp(WorkingState);
-		ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
-		ActiveRunEventVisitToken = NewVisitToken;
-		NotifyRunStateChanged();
-		return true;
+		Result.Status = FWacomStatus::Ok();
 	}
-	return false;
+
+	if (!FRunEventExecutor::BeginEvent(WorkingState, PersistentId, EventDefinition))
+	{
+		Result.Status = FWacomStatus::Fail(
+			EWacomError::InvalidArgument,
+			TEXT("RunEventBeginFailed"));
+		Result.Events.Reset();
+		return Result;
+	}
+
+	Result.VersionAfter = WorkingState.ExplorationState.ExplorationStateVersion;
+	Result.PostSnapshot = FRunMapModule::BuildSnapshot(WorkingState);
+	RunState = MoveTemp(WorkingState);
+	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
+	ActiveRunEventVisitToken = NewVisitToken;
+	NotifyRunStateChanged();
+	return Result;
 }
 
 bool URunSession::EndRunEventIfOwned(FGuid VisitToken)
 {
+	return EndRunEventIfOwnedWithExplorationResult(VisitToken).IsOk();
+}
+
+FRunExplorationResolution URunSession::EndRunEventIfOwnedWithExplorationResult(
+	const FGuid VisitToken)
+{
 	if (!VisitToken.IsValid() || VisitToken != ActiveRunEventVisitToken)
 	{
-		return false;
+		FRunExplorationResolution Result;
+		Result.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			TEXT("RunEventVisitTokenMismatch"));
+		Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
+		Result.VersionAfter = Result.VersionBefore;
+		Result.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
 	}
 
-	EndRunEvent();
-	return true;
+	return EndRunEventWithExplorationResult();
 }
 
 void URunSession::EndRunEvent()
 {
+	EndRunEventWithExplorationResult();
+}
+
+FRunExplorationResolution URunSession::EndRunEventWithExplorationResult()
+{
+	FRunExplorationResolution Result;
+	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
+	Result.VersionAfter = Result.VersionBefore;
+	Result.PostSnapshot = BuildExplorationSnapshot();
 	if (RunState.ActiveRunEventId.IsNone() && !RunState.ActiveRunEventDefinition)
 	{
 		ActiveRunEventVisitToken.Invalidate();
-		return;
+		Result.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			TEXT("RunEventNotActive"));
+		return Result;
 	}
 
 	FRunState WorkingState = RunState;
 	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
 	WorkingState.ActiveRunEventId = NAME_None;
 	WorkingState.ActiveRunEventDefinition = nullptr;
+	Result.Status = FWacomStatus::Ok();
 	if (WorkingActivity.IsSet()
 		&& WorkingActivity->Kind == ERunNodeActivityKind::RunEvent)
 	{
-		TArray<FRunExplorationEvent> Events;
-		const FWacomStatus CancelStatus = FRunNodeActivityModule::Cancel(
+		Result.Status = FRunNodeActivityModule::Cancel(
 			WorkingState,
 			WorkingActivity,
 			WorkingActivity.GetValue(),
-			Events);
-		if (!CancelStatus.IsOk())
+			Result.Events);
+		if (!Result.IsOk())
 		{
 			UE_LOG(LogTemp, Warning,
 				TEXT("[RunSession] EndRunEvent: formal activity cancel failed Reason=%s"),
-				*CancelStatus.Detail.ToString());
-			return;
+				*Result.Status.Detail.ToString());
+			Result.Events.Reset();
+			return Result;
 		}
 	}
+	Result.VersionAfter = WorkingState.ExplorationState.ExplorationStateVersion;
+	Result.PostSnapshot = FRunMapModule::BuildSnapshot(WorkingState);
 	RunState = MoveTemp(WorkingState);
 	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
 	ActiveRunEventVisitToken.Invalidate();
 	NotifyRunStateChanged();
+	return Result;
 }
 
 bool URunSession::IsRunEventCompleted(FName PersistentId) const

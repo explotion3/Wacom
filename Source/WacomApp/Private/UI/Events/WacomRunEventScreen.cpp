@@ -165,6 +165,7 @@ void UWacomRunEventScreen::NativeOnActivated()
 void UWacomRunEventScreen::NativeOnDeactivated()
 {
 	FWacomRunEventScreenFlow::EndRunEventOnDeactivate(
+		ResolveWacomPlayerController(),
 		ResolveRunSession(),
 		OwnedRunEventVisitToken,
 		bDidEndRunEvent);
@@ -178,6 +179,7 @@ FWacomRunMenuCardDropResolveResult UWacomRunEventScreen::ResolveRunMenuCardDropI
 	const FWacomRunMenuCardDropResolveResult Result =
 		FWacomRunEventPaymentDropFlow::ResolveDropIntent(
 			FWacomRunEventPaymentDropFlowContext{
+				nullptr,
 				nullptr,
 				ResolveRunSession(),
 				nullptr,
@@ -197,6 +199,7 @@ bool UWacomRunEventScreen::SubmitRunMenuCardDropIntent_Implementation(
 		FWacomRunEventPaymentDropFlow::SubmitDropIntent(
 			FWacomRunEventPaymentDropFlowContext{
 				this,
+				ResolveWacomPlayerController(),
 				ResolveRunSession(),
 				ResolveToastSubsystem(),
 				BuildRunEventPresentationStateView(CachedChoices, PaymentZoneToChoiceId),
@@ -300,8 +303,13 @@ UWacomRunMenuDropTargetWidget* UWacomRunEventScreen::GetPaymentDropTargetForTest
 
 URunSession* UWacomRunEventScreen::ResolveRunSession() const
 {
-	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(GetOwningPlayer());
+	AWacomPlayerController* WacomPC = ResolveWacomPlayerController();
 	return WacomPC ? WacomPC->GetRunSession() : nullptr;
+}
+
+AWacomPlayerController* UWacomRunEventScreen::ResolveWacomPlayerController() const
+{
+	return Cast<AWacomPlayerController>(GetOwningPlayer());
 }
 
 UWacomAppToastSubsystem* UWacomRunEventScreen::ResolveToastSubsystem() const
@@ -395,6 +403,7 @@ bool UWacomRunEventScreen::ChooseChoice(FName ChoiceId)
 
 	return FWacomRunEventScreenFlow::ChooseChoice(
 		*this,
+		ResolveWacomPlayerController(),
 		Run,
 		ResolveToastSubsystem(),
 		ChoiceId,

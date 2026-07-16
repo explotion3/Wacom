@@ -93,7 +93,9 @@ Run world click / hover 使用显式 opt-in：
 - receiver 提供正向筛选：`AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 至少一个非空。
 - `URunSession::ValidateRunWorldCardInteraction()` 接受精确 `SourceCardInstanceId`。
 
-成功提交由 `SubmitRunWorldCardInteraction()` 返回显式 `FRunTreasureSettlementResult`：在同一 working-state 事务内可选消耗源卡、发放 Gold / Card、写完成 ID、消费 1 Action Point 并 Resolve 当前 Treasure 节点，最后最多广播一次 Run state changed。校验失败或重复提交为 0 成本且全部状态不变；receiver 必须显式检查 result，不得只依赖粗粒度广播猜测成功。
+成功提交由 `SubmitRunWorldCardInteraction()` 返回显式 `FRunTreasureSettlementResult`：在同一 working-state 事务内可选消耗源卡、发放 Gold / Card、写完成 ID、消费 1 Action Point 并 Resolve 当前 Treasure 节点，最后最多广播一次 Run state changed。校验失败或重复提交为 0 成本且全部状态不变；receiver 必须显式检查 result，并在成功后把 `ExplorationResolution` 交给 PlayerController 的唯一节点活动表现入口，不得只依赖粗粒度广播猜测成功。
+
+金币 Pickup、固定卡 Pickup、Definition 驱动 RewardPickup 和 KeyChest card-drop receiver 共用同一 WacomApp Treasure 表现同步 adapter。旧的无正式 Floor Session 会返回空版本结果并保持兼容 no-op；正式 Floor 的成功结算若不能按序应用到已绑定的表现 Coordinator，则记录错误并走 PlayerController 的现有场景绑定恢复路径，不能静默留下规则/表现版本漂移。
 
 失败反馈属于 App 表现层：preview 阶段只更新轻量有效 / 无效反馈；release 命中过目标且提交失败时才发 AppToast。文案优先来自 receiver failure contract，没有 receiver 可询问时由 PlayerController 提供通用配置异常 fallback。
 

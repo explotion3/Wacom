@@ -674,15 +674,26 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
 	bool BeginRunEvent(FName PersistentId, UWacomRunEventDefinition* EventDefinition);
 
+	/** C++ 正式入口：开始事件访问并显式返回探索版本结果。 */
+	FRunExplorationResolution BeginRunEventWithExplorationResult(
+		FName PersistentId,
+		UWacomRunEventDefinition* EventDefinition);
+
 	/** C++ UI ownership token for the currently active RunEvent visit. */
 	FGuid GetActiveRunEventVisitToken() const { return ActiveRunEventVisitToken; }
 
 	/** Ends the RunEvent only when the caller still owns the active visit token. */
 	bool EndRunEventIfOwned(FGuid VisitToken);
 
+	/** C++ 正式入口：只结束调用方仍拥有的事件访问，并显式返回探索版本结果。 */
+	FRunExplorationResolution EndRunEventIfOwnedWithExplorationResult(FGuid VisitToken);
+
 	/** 结束当前事件访问，不改变完成状态。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Event")
 	void EndRunEvent();
+
+	/** C++ 入口：结束当前事件访问，并显式返回探索版本结果。正式 UI 应优先使用 owned 入口。 */
+	FRunExplorationResolution EndRunEventWithExplorationResult();
 
 	/** 当前是否处于一次事件访问。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Event")
@@ -843,7 +854,6 @@ private:
 
 	/** 商店关闭的无 ownership 内部实现；公开 UI 路径应使用 owned result 入口。 */
 	FRunShopVisitResult EndShopVisitWithResult();
-
 	/** 私有路径：AcquireCardToRun 的"不广播"版本，供复合 Run 操作统一尾部广播。 */
 	bool AcquireCardToRunInternal(UCardDefinition* Card);
 

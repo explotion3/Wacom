@@ -159,7 +159,8 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性，但本阶段不启用 SaveGame schema。
 - Editor 场景验证覆盖 Descriptor 缺失/重复/空引用，重复、缺失或意外的 NodeAnchor / EdgePath / content host，host 类型与 typed payload 不一致，以及多出口 Edge 缺失/重复 BranchTarget、单出口 Edge 残留 BranchTarget。Spline 少于 2 点、长度不超过 10 cm、非有限 Transform 和方向颠倒是 Error；端点偏离不超过 100 cm 通过，`(100, 300] cm` 为 Warning，超过 300 cm 为 Error。诊断固定为 `Severity / Code / ObjectPath / Message`，菜单、commandlet、builder 和测试共用同一只读实现。
 - 制作人员可用 `Tools -> Wacom -> Validate Current Run Floor` 验证当前 World；CI/命令行使用 `-run=WacomValidateRunFloorScene -Map=/Game/...`，退出码 `0/1/2` 分别表示通过或仅 Warning、场景合同 Error、参数/加载/Descriptor 解析失败。两个入口都不得修复、标脏或保存 Package。
-- Debug builder 命令为 `-run=WacomBuildRunExplorationDebugAssets`。它只写 Debug Journey/Floor/GameMode/map；Player BP 和三个共享 Run Path Blueprint 只读校验父类，正式 `GM_Wacom`、Authoring 数据和 `L_Exploration` 禁止写。连续运行必须保持 JourneyId、FloorId、NodeId、EdgeId、Actor 计数和内容引用稳定，但不承诺 Debug 生成 Actor GUID 或二进制文件哈希稳定。
+- Debug builder 命令为 `-run=WacomBuildRunExplorationDebugAssets`。它只写 Debug Journey/Floor/GameMode/map；Player BP 和三个共享 Run Path Blueprint 只读校验父类，正式 `GM_Wacom`、Authoring 数据和 `L_Exploration` 禁止写。连续运行必须保持 JourneyId、FloorId、NodeId、EdgeId、Actor 计数和内容引用稳定，但不承诺 Debug 生成 Actor GUID 或二进制文件哈希稳定。带 `Wacom.Generated.RunExploration` 的 Anchor/Path/Branch 属于 builder ownership；六个内容 Host 是按 Definition 复用的手工实例，不带该 tag，其 NodeId、NodeType、Blueprint class 和人工 transform 必须跨连续构建保持不变。
+- Debug map 与正式 `L_Exploration` 共享逻辑身份和场景制作合同，不要求两张地图的世界 transform 相同。`MapPosition` 只控制地图 UI；Debug fixture 的世界道路可独立摆放，但仍必须通过端点、初始方向、BranchTarget 和 content binding 校验。当前 Junction 从 `Event.SnakeGift` 沿 +X 抵达时，`Treasure.PoisonFang` 为左路（-Y）、`Treasure.KeyChest` 为右路（+Y）、`Event.FlagReward` 为正前方。
 - 地图规则 Module 应提供较小 Interface；场景 Actor、Spline、地图 Widget 和关卡 travel 只作为 App Adapter，不进入地图规则 Implementation。
 
 ### 当前 Floor 地图 Screen

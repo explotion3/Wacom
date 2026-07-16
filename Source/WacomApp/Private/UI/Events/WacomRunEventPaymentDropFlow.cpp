@@ -89,6 +89,7 @@ bool FWacomRunEventPaymentDropFlow::SubmitDropIntent(
 		Context.Run->ChooseRunEventOptionWithPaidCardResult(Choice.ChoiceId, Resolved.SourceCardInstanceId);
 	FWacomRunEventScreenFlow::ApplyChoiceResult(
 		*Context.Screen,
+		Context.PlayerController,
 		Context.Run,
 		Context.ToastSubsystem,
 		Result,

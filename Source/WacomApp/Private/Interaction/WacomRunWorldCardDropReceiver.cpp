@@ -7,6 +7,7 @@
 #include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "RunSession.h"
 #include "RunStateTypes.h"
+#include "UI/Run/WacomRunTreasurePresentationSync.h"
 
 #define LOCTEXT_NAMESPACE "WacomRunWorldCardDropReceiver"
 
@@ -165,6 +166,13 @@ bool UWacomRunWorldCardDropReceiverComponent::SubmitRunWorldCardDrop_Implementat
 			Result.DisabledReason.IsNone()
 				? FName(TEXT("SubmitFailed"))
 				: Result.DisabledReason);
+	}
+	else
+	{
+		FWacomRunTreasurePresentationSync::ApplySettlement(
+			PC,
+			Result,
+			TEXT("RunWorldCardDrop"));
 	}
 	return Result.bSucceeded;
 }

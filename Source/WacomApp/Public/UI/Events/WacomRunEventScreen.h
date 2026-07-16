@@ -8,6 +8,7 @@
 #include "WacomRunEventScreen.generated.h"
 
 class UButton;
+class AWacomPlayerController;
 class UTextBlock;
 class UVerticalBox;
 class UWacomRunEventChoiceButton;
@@ -163,6 +164,7 @@ protected:
 		FWacomRunMenuCardDropResolveResult& OutSubmitted) override;
 
 	virtual URunSession* ResolveRunSession() const;
+	virtual AWacomPlayerController* ResolveWacomPlayerController() const;
 	virtual UWacomAppToastSubsystem* ResolveToastSubsystem() const;
 
 	UFUNCTION()

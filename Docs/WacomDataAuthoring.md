@@ -160,7 +160,9 @@ Run 探索 Debug 内容由 `UWacomBuildRunExplorationDebugAssetsCommandlet` 可�
 
 命令的唯一写集合是 `/Game/Wacom/Data/Map/DA_Journey_Debug`、`DA_Floor_Debug_01`、`/Game/Wacom/Debug/GameModes/GM_WacomRunDebug` 和 `/Game/Wacom/Maps/Debug/L_RunExploration_Debug`。Player BP 与 `/Game/Wacom/Run/Path/Blueprints` 下的 Anchor/Path/Branch Blueprint 是只读依赖：缺失或父类错误时立即失败，不创建替代资产，也不编译、标脏或保存它们。正式 `L_Exploration`、Authoring Journey/Floor、`GM_Wacom` 以及任何卡牌、背包、敌人材质、美术和 UI 资产都是禁止写集合。
 
-builder 只重建 Debug map 中带 `Wacom.Generated.RunExploration` ownership 的 Actor，保留非生成美术与可复用 host；它确保唯一 Debug Floor Descriptor、8/7/3/6 当前 fixture 结构和 Debug GameMode 引用，并在保存四个 owned Package 前运行同一 Scene validator。连续两次构建要求逻辑身份、计数和引用相同；Debug 生成 Actor GUID 与 owned 二进制 hash 不属于稳定合同。`Wacom.Editor.RunExplorationDebugAssets` 同时用 SHA-256 与 dirty-state 守卫正式 map、Authoring 数据、`GM_Wacom`、Player BP 和三个共享 Run Path BP。
+builder 只重建 Debug map 中带 `Wacom.Generated.RunExploration` ownership 的 Actor，保留非生成美术与可复用 host；它确保唯一 Debug Floor Descriptor、8/7/3/6 当前 fixture 结构和 Debug GameMode 引用，并在保存四个 owned Package 前运行同一 Scene validator。六个内容 Host 由 `FindContentHost` 按 Floor typed payload 对应的 Definition 查找并复用，属于人工摆放实例：不得带 generated ownership，builder 只刷新其 `RunMapNodeBinding`，不覆盖 Blueprint class、transform、Definition、交互配置或绑定的 Viewpoint/SceneEnemyHost。内容人员移动这些 Host 后必须同时检查触发范围、点击命中体、Viewpoint staging 和 traversal spline 避让。
+
+连续两次构建要求逻辑身份、计数和引用相同；Debug 生成 Actor GUID 与 owned 二进制 hash 不属于稳定合同。`Wacom.Editor.RunExplorationDebugAssets` 还锁定六个手工 Host 的 NodeId、NodeType、Blueprint class、transform 和非 generated ownership，并用 SHA-256 与 dirty-state 守卫正式 map、Authoring 数据、`GM_Wacom`、Player BP 和三个共享 Run Path BP。Debug map 可以为测试表现独立调整 Anchor/Path/Branch 世界几何；它与正式图共享身份和 validator 合同，不共享 transform 真值。
 
 Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
 

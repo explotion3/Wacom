@@ -2333,6 +2333,14 @@ bool FWacomUIRunWorldCardDropReleaseSubmitsSpec::RunTest(const FString& /*Parame
 	ConfigureValidKeyChestReceiverForUiTest(*Chest);
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
+	// This headless UI fixture intentionally has no Run scene/presentation coordinator. The
+	// bound-world contract is covered by Wacom.UI.WorldInteraction.TreasureReturnToRunPath.
+	AddExpectedError(TEXT("RunExplorationPresentationCoordinatorMissing"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("Run 探索表现绑定恢复失败"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("Treasure 结算结果未按序应用到 Run 表现"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	TestTrue(TEXT("Release submits"),
 		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,
@@ -2379,6 +2387,14 @@ bool FWacomUIRunWorldCardDropReleaseCardRewardToastSpec::RunTest(const FString& 
 	Chest->GetCardDropReceiverComponent()->Rewards = { CardReward };
 	FWacomPlayerControllerRunInteractionTestAccess::SetRunSceneHit(PC.Get(), Chest.Get(), Chest->GetClickBounds());
 
+	// This headless UI fixture intentionally has no Run scene/presentation coordinator. The
+	// bound-world contract is covered by Wacom.UI.WorldInteraction.TreasureReturnToRunPath.
+	AddExpectedError(TEXT("RunExplorationPresentationCoordinatorMissing"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("Run 探索表现绑定恢复失败"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	AddExpectedError(TEXT("Treasure 结算结果未按序应用到 Run 表现"),
+		EAutomationExpectedErrorFlags::Contains, 1);
 	TestTrue(TEXT("Release submits"),
 		FWacomPlayerControllerRunInteractionTestAccess::ApplyRunWorldCardDropProbeFeedback(PC.Get(),
 			KeyInstanceId,

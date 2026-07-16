@@ -153,7 +153,7 @@ namespace WacomRunLevelAuthoringBaselineAssetContract
 	}
 
 	template <typename TMapType>
-	void CompareActorCatalog(
+	void VerifyActorIdentityCatalog(
 		FAutomationTestBase& Test,
 		const TCHAR* Label,
 		const TMapType& MainCatalog,
@@ -181,28 +181,6 @@ namespace WacomRunLevelAuthoringBaselineAssetContract
 				FString::Printf(TEXT("%s %s Debug Actor GUID is valid"),
 					Label, *Pair.Key.ToString()),
 				DebugRecord->Guid.IsValid());
-			Test.TestTrue(
-				FString::Printf(TEXT("%s %s Transform is preserved"),
-					Label, *Pair.Key.ToString()),
-				DebugRecord->Transform.Equals(Pair.Value.Transform, 0.01f));
-			Test.TestEqual(
-				FString::Printf(TEXT("%s %s Spline point count is preserved"),
-					Label, *Pair.Key.ToString()),
-				DebugRecord->SplinePoints.Num(),
-				Pair.Value.SplinePoints.Num());
-			for (int32 Index = 0;
-				Index < FMath::Min(
-					DebugRecord->SplinePoints.Num(),
-					Pair.Value.SplinePoints.Num());
-				++Index)
-			{
-				Test.TestTrue(
-					FString::Printf(TEXT("%s %s Spline point %d is preserved"),
-						Label, *Pair.Key.ToString(), Index),
-					DebugRecord->SplinePoints[Index].Equals(
-						Pair.Value.SplinePoints[Index],
-						0.01));
-			}
 		}
 	}
 
@@ -344,9 +322,14 @@ bool FWacomRunLevelAuthoringBaselineAssetContractSpec::RunTest(
 	TestTrue(TEXT("Content host identities are preserved"),
 		bContentHostIdentitiesMatch);
 
-	CompareActorCatalog(*this, TEXT("Anchor"), MainRecord.Anchors, DebugRecord.Anchors);
-	CompareActorCatalog(*this, TEXT("Path"), MainRecord.Paths, DebugRecord.Paths);
-	CompareActorCatalog(*this, TEXT("Branch"), MainRecord.Branches, DebugRecord.Branches);
+	// Debug map 与正式图共享逻辑身份和制作合同，但允许独立摆放调试几何。
+	// 端点、方向和绑定合法性由 Run scene validator/path tests 负责。
+	VerifyActorIdentityCatalog(
+		*this, TEXT("Anchor"), MainRecord.Anchors, DebugRecord.Anchors);
+	VerifyActorIdentityCatalog(
+		*this, TEXT("Path"), MainRecord.Paths, DebugRecord.Paths);
+	VerifyActorIdentityCatalog(
+		*this, TEXT("Branch"), MainRecord.Branches, DebugRecord.Branches);
 	return true;
 }
 

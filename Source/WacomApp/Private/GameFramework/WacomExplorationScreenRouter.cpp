@@ -492,17 +492,54 @@ namespace
 		AWacomPlayerController* PC = WeakPC.Get();
 		URunSession* RunSession = PC ? PC->GetRunSession() : nullptr;
 		UWacomRunEventDefinition* EventDefinition = WeakEventDefinition.Get();
-		if (!RunSession || !RunSession->BeginRunEvent(PersistentId, EventDefinition))
+		if (!RunSession)
 		{
 			OutFailureReason = TEXT("BeginRunEventFailed");
 			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenRunEvent.AsyncPush: BeginRunEvent 失败 PersistentId=%s"), *PersistentId.ToString());
+			return false;
+		}
+		const FRunExplorationResolution BeginResolution =
+			RunSession->BeginRunEventWithExplorationResult(
+				PersistentId,
+				EventDefinition);
+		if (!BeginResolution.IsOk())
+		{
+			OutFailureReason = BeginResolution.Status.Detail.IsNone()
+				? FName(TEXT("BeginRunEventFailed"))
+				: BeginResolution.Status.Detail;
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomPlayerController] OpenRunEvent.AsyncPush: BeginRunEvent 失败 PersistentId=%s Detail=%s"),
+				*PersistentId.ToString(),
+				*OutFailureReason.ToString());
 			return false;
 		}
 		OutVisitToken = RunSession->GetActiveRunEventVisitToken();
 		if (!OutVisitToken.IsValid())
 		{
 			OutFailureReason = TEXT("MissingRunEventVisitToken");
-			RunSession->EndRunEvent();
+			if (BeginResolution.VersionAfter > 0)
+			{
+				PC->ApplyRunNodeActivityResolutionForPresentation(BeginResolution);
+			}
+			const FRunExplorationResolution Rollback =
+				RunSession->EndRunEventWithExplorationResult();
+			if (Rollback.IsOk() && Rollback.VersionAfter > 0)
+			{
+				PC->ApplyRunNodeActivityResolutionForPresentation(Rollback);
+			}
+			return false;
+		}
+		if (BeginResolution.VersionAfter > 0
+			&& !PC->ApplyRunNodeActivityResolutionForPresentation(BeginResolution))
+		{
+			OutFailureReason = TEXT("RunEventBeginPresentationSyncFailed");
+			const FRunExplorationResolution Rollback =
+				RunSession->EndRunEventIfOwnedWithExplorationResult(OutVisitToken);
+			if (Rollback.IsOk())
+			{
+				PC->ApplyRunNodeActivityResolutionForPresentation(Rollback);
+			}
+			OutVisitToken.Invalidate();
 			return false;
 		}
 		return true;
@@ -529,7 +566,12 @@ namespace
 		{
 			if (URunSession* RunSession = PC->GetRunSession())
 			{
-				RunSession->EndRunEventIfOwned(VisitToken);
+				const FRunExplorationResolution Resolution =
+					RunSession->EndRunEventIfOwnedWithExplorationResult(VisitToken);
+				if (Resolution.IsOk() && Resolution.VersionAfter > 0)
+				{
+					PC->ApplyRunNodeActivityResolutionForPresentation(Resolution);
+				}
 			}
 		}
 	}

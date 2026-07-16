@@ -5,6 +5,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Editor/RunExplorationDebugAssetBuilderTestSupport.h"
+#include "Map/WacomMapTypes.h"
 #include "Testing/WacomRunExplorationDebugAssetBuilderAutomationTestView.h"
 
 using namespace WacomRunExplorationDebugAssetBuilderTests;
@@ -53,11 +54,69 @@ bool FWacomRunExplorationDebugAssetBuilderSpec::RunTest(
 		Second.BranchEdgeIds, First.BranchEdgeIds);
 	TestEqual(TEXT("Host identities are stable"),
 		Second.HostNodeIds, First.HostNodeIds);
+	TestEqual(TEXT("Host authoring record count is stable"),
+		Second.ContentHosts.Num(), First.ContentHosts.Num());
+	for (int32 Index = 0;
+		Index < FMath::Min(First.ContentHosts.Num(), Second.ContentHosts.Num());
+		++Index)
+	{
+		const FWacomRunExplorationDebugContentHostAutomationRecord& BeforeHost =
+			First.ContentHosts[Index];
+		const FWacomRunExplorationDebugContentHostAutomationRecord& AfterHost =
+			Second.ContentHosts[Index];
+		TestEqual(*FString::Printf(TEXT("Host %d NodeId is stable"), Index),
+			AfterHost.NodeId, BeforeHost.NodeId);
+		TestEqual(*FString::Printf(TEXT("Host %s NodeType is stable"),
+			*AfterHost.NodeId.ToString()), AfterHost.NodeType, BeforeHost.NodeType);
+		TestEqual(*FString::Printf(TEXT("Host %s class is stable"),
+			*AfterHost.NodeId.ToString()), AfterHost.ActorClassPath,
+			BeforeHost.ActorClassPath);
+		TestTrue(*FString::Printf(TEXT("Host %s transform is stable"),
+			*AfterHost.NodeId.ToString()),
+			AfterHost.Transform.Equals(BeforeHost.Transform, 0.01f));
+		TestFalse(*FString::Printf(TEXT("Host %s is manually owned"),
+			*AfterHost.NodeId.ToString()), AfterHost.bHasGeneratedOwnership);
+	}
 	TestEqual(TEXT("Exactly one Descriptor"), Second.DescriptorCount, 1);
 	TestEqual(TEXT("Eight Debug anchors"), Second.AnchorNodeIds.Num(), 8);
 	TestEqual(TEXT("Seven Debug paths"), Second.PathEdgeIds.Num(), 7);
 	TestEqual(TEXT("Three Debug branch targets"), Second.BranchEdgeIds.Num(), 3);
 	TestEqual(TEXT("Six Debug activity hosts"), Second.HostNodeIds.Num(), 6);
+	const TMap<FName, TPair<EWacomMapNodeType, FString>> ExpectedHosts =
+	{
+		{TEXT("Battle.Snake"), {EWacomMapNodeType::Encounter,
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_BattleTriggerActor.BP_BattleTriggerActor_C")}},
+		{TEXT("Shop.Snake"), {EWacomMapNodeType::Shop,
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomShopTriggerActor.BP_WacomShopTriggerActor_C")}},
+		{TEXT("Event.SnakeGift"), {EWacomMapNodeType::RunEvent,
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunEventTriggerActor.BP_WacomRunEventTriggerActor_C")}},
+		{TEXT("Treasure.PoisonFang"), {EWacomMapNodeType::Treasure,
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunRewardPickupActor.BP_WacomRunRewardPickupActor_C")}},
+		{TEXT("Treasure.KeyChest"), {EWacomMapNodeType::Treasure,
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunKeyChestActor.BP_WacomRunKeyChestActor_C")}},
+		{TEXT("Event.FlagReward"), {EWacomMapNodeType::RunEvent,
+			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunEventTriggerActor.BP_WacomRunEventTriggerActor_C")}},
+	};
+	TestEqual(TEXT("Six manual Host authoring records"),
+		Second.ContentHosts.Num(), ExpectedHosts.Num());
+	for (const FWacomRunExplorationDebugContentHostAutomationRecord& Host :
+		Second.ContentHosts)
+	{
+		const TPair<EWacomMapNodeType, FString>* Expected =
+			ExpectedHosts.Find(Host.NodeId);
+		TestNotNull(*FString::Printf(TEXT("Host %s is expected"),
+			*Host.NodeId.ToString()), Expected);
+		if (Expected)
+		{
+			TestEqual(*FString::Printf(TEXT("Host %s has the expected NodeType"),
+				*Host.NodeId.ToString()), Host.NodeType,
+				static_cast<uint8>(Expected->Key));
+			TestEqual(*FString::Printf(TEXT("Host %s has the expected class"),
+				*Host.NodeId.ToString()), Host.ActorClassPath, Expected->Value);
+		}
+		TestFalse(*FString::Printf(TEXT("Host %s has no generated ownership"),
+			*Host.NodeId.ToString()), Host.bHasGeneratedOwnership);
+	}
 	TestEqual(TEXT("Descriptor references Debug Floor"),
 		Second.DescriptorFloorPath,
 		FString(TEXT("/Game/Wacom/Data/Map/DA_Floor_Debug_01.DA_Floor_Debug_01")));
