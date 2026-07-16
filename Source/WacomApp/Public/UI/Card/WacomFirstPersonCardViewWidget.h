@@ -39,6 +39,10 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	bool bUsingSurfaceEffectMaterial = false;
 	bool bBaseSurfaceEffectMaterialCached = false;
 	bool bRetainerCaptureRootUsesIndependentClipping = false;
+	FVector2D WrapperDesiredSize = FVector2D::ZeroVector;
+	FVector2D RetainerDesiredSize = FVector2D::ZeroVector;
+	FVector2D RetainerCaptureRootDesiredSize = FVector2D::ZeroVector;
+	FVector2D CardContentDesiredSize = FVector2D::ZeroVector;
 };
 #endif
 

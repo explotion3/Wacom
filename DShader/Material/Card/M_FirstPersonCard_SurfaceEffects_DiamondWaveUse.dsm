@@ -17,6 +17,9 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_DiamondWaveUse
         ScalarParameter PerspectiveStrength = 0.12 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=12; ];
         ScalarParameter ContactShadowEnabled = 1.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=13; ];
         ScalarParameter ContactShadowLift = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=14; ];
+        ScalarParameter ContactShadowTiltOffsetXUV = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=15; ];
+        ScalarParameter ContactShadowTiltOffsetYUV = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=16; ];
+		ScalarParameter ContactShadowOpacityMultiplier = 1.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=17; ];
         ScalarParameter CardUseEnabled = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=20; ];
         ScalarParameter CardUseProgress = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=21; ];
         ScalarParameter CardUseTime = 0.0 [ Group="第一人称卡牌使用效果|运行时"; SortPriority=22; ];
@@ -131,9 +134,16 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_DiamondWaveUse
             * useEnabled;
 
         float safeContactShadowLift = clamp(ContactShadowLift, 0.0, 1.0);
-        float2 contactShadowOffsetUV = float2(
-            lerp(ContactShadowBaseOffsetXUV, ContactShadowLiftOffsetXUV, safeContactShadowLift),
-            lerp(ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetYUV, safeContactShadowLift));
+        float2 contactShadowOffsetUV;
+        WacomFirstPersonCard_ResolveContactShadowOffset(
+            safeContactShadowLift,
+            ContactShadowBaseOffsetXUV,
+            ContactShadowBaseOffsetYUV,
+            ContactShadowLiftOffsetXUV,
+            ContactShadowLiftOffsetYUV,
+            ContactShadowTiltOffsetXUV,
+            ContactShadowTiltOffsetYUV,
+            contactShadowOffsetUV);
         float contactShadowSoftnessUV = lerp(
             ContactShadowBaseSoftnessUV,
             ContactShadowLiftSoftnessUV,
@@ -199,7 +209,8 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_DiamondWaveUse
         float contactShadowOpacity = lerp(
             ContactShadowBaseOpacity,
             ContactShadowLiftOpacity,
-            safeContactShadowLift);
+            safeContactShadowLift)
+			* max(ContactShadowOpacityMultiplier, 0.0);
         float cardUseShadowFade = lerp(
             1.0,
             1.0 - saturate(CardUseTime / max(UseShadowFadeSeconds, 0.001)),

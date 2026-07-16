@@ -41,6 +41,24 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
             Description="接触阴影的抬升归一化值；0 为静止时紧贴轮廓，1 为 Drag 时更软更淡，由 C++ Card Depth 平滑写入。";
         ];
 
+        ScalarParameter ContactShadowTiltOffsetXUV = 0.0 [
+            Group="第一人称手牌透视|接触阴影运行时";
+            SortPriority=37;
+            Description="由 C++ 按当前卡面倾角写入的横向阴影位移，UV 单位；正值向右，负值向左。";
+        ];
+
+        ScalarParameter ContactShadowTiltOffsetYUV = 0.0 [
+            Group="第一人称手牌透视|接触阴影运行时";
+            SortPriority=38;
+            Description="由 C++ 按当前卡面倾角写入的纵向阴影位移，UV 单位；正值向下，负值向上。";
+        ];
+
+		ScalarParameter ContactShadowOpacityMultiplier = 1.0 [
+			Group="第一人称手牌透视|接触阴影运行时";
+			SortPriority=39;
+			Description="由 C++ Anchor 写入的接触阴影不透明度倍率；1 使用材质制作强度。";
+		];
+
         ScalarParameter ReferenceTiltDegrees = 9.0 [
             Group="第一人称手牌透视|制作";
             SortPriority=40;
@@ -191,9 +209,16 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
             A=true);
 
         float safeContactShadowLift = clamp(ContactShadowLift, 0.0, 1.0);
-        float2 contactShadowOffsetUV = float2(
-            lerp(ContactShadowBaseOffsetXUV, ContactShadowLiftOffsetXUV, safeContactShadowLift),
-            lerp(ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetYUV, safeContactShadowLift));
+        float2 contactShadowOffsetUV;
+        WacomFirstPersonCard_ResolveContactShadowOffset(
+            safeContactShadowLift,
+            ContactShadowBaseOffsetXUV,
+            ContactShadowBaseOffsetYUV,
+            ContactShadowLiftOffsetXUV,
+            ContactShadowLiftOffsetYUV,
+            ContactShadowTiltOffsetXUV,
+            ContactShadowTiltOffsetYUV,
+            contactShadowOffsetUV);
         float contactShadowSoftnessUV = lerp(
             ContactShadowBaseSoftnessUV,
             ContactShadowLiftSoftnessUV,
@@ -249,7 +274,8 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_Fake3D")
         float contactShadowOpacity = lerp(
             ContactShadowBaseOpacity,
             ContactShadowLiftOpacity,
-            safeContactShadowLift);
+            safeContactShadowLift)
+			* max(ContactShadowOpacityMultiplier, 0.0);
         float contactShadowAlpha =
             contactShadowMask
             * contactShadowOpacity

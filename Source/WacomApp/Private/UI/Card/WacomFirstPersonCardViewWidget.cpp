@@ -29,6 +29,9 @@ namespace
 	const FName Fake3DPerspectiveStrengthParameterName(TEXT("PerspectiveStrength"));
 	const FName ContactShadowEnabledParameterName(TEXT("ContactShadowEnabled"));
 	const FName ContactShadowLiftParameterName(TEXT("ContactShadowLift"));
+	const FName ContactShadowOpacityMultiplierParameterName(TEXT("ContactShadowOpacityMultiplier"));
+	const FName ContactShadowTiltOffsetXUVParameterName(TEXT("ContactShadowTiltOffsetXUV"));
+	const FName ContactShadowTiltOffsetYUVParameterName(TEXT("ContactShadowTiltOffsetYUV"));
 	const FName CardUseEnabledParameterName(TEXT("CardUseEnabled"));
 	const FName CardUseProgressParameterName(TEXT("CardUseProgress"));
 	const FName CardUseFlipProgressParameterName(TEXT("CardUseFlipProgress"));
@@ -254,6 +257,13 @@ void UWacomFirstPersonCardViewWidget::SetCardDepthView(const FWacomFirstPersonCa
 	LastCardDepthView = View;
 	LastCardDepthView.PerspectiveStrength = FMath::Max(0.0f, LastCardDepthView.PerspectiveStrength);
 	LastCardDepthView.ContactShadowLift = FMath::Clamp(LastCardDepthView.ContactShadowLift, 0.0f, 1.0f);
+	LastCardDepthView.ContactShadowOpacityMultiplier =
+		FMath::Max(0.0f, LastCardDepthView.ContactShadowOpacityMultiplier);
+	if (!FMath::IsFinite(LastCardDepthView.ContactShadowOffsetPixels.X)
+		|| !FMath::IsFinite(LastCardDepthView.ContactShadowOffsetPixels.Y))
+	{
+		LastCardDepthView.ContactShadowOffsetPixels = FVector2D::ZeroVector;
+	}
 	if (CardView)
 	{
 		CardView->SetCardSurfacePerspectiveView(LastCardDepthView.SurfacePerspective);
@@ -372,6 +382,19 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.bRetainerCaptureRootUsesIndependentClipping =
 		RetainerCaptureRoot
 		&& RetainerCaptureRoot->GetClipping() == EWidgetClipping::ClipToBoundsWithoutIntersecting;
+	View.WrapperDesiredSize = GetDesiredSize();
+	View.RetainerDesiredSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetDesiredSize()
+		: FVector2D::ZeroVector;
+	View.RetainerCaptureRootDesiredSize = RetainerCaptureRoot
+		? RetainerCaptureRoot->GetDesiredSize()
+		: FVector2D::ZeroVector;
+	const UWidget* CardContentSizeBox = WidgetTree
+		? WidgetTree->FindWidget(TEXT("CardContentSizeBox"))
+		: nullptr;
+	View.CardContentDesiredSize = CardContentSizeBox
+		? CardContentSizeBox->GetDesiredSize()
+		: FVector2D::ZeroVector;
 	const UPanelWidget* FeedbackParent = FeedbackOverlay ? FeedbackOverlay->GetParent() : nullptr;
 	View.bInteractionFeedbackLayerAboveFeedbackOverlay =
 		FeedbackParent
@@ -532,6 +555,29 @@ void UWacomFirstPersonCardViewWidget::ApplyCardDepthParameters(
 	Material.SetScalarParameterValue(
 		ContactShadowLiftParameterName,
 		LastCardDepthView.ContactShadowLift);
+	Material.SetScalarParameterValue(
+		ContactShadowOpacityMultiplierParameterName,
+		LastCardDepthView.ContactShadowOpacityMultiplier);
+
+	FVector2D SurfaceSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (!FMath::IsFinite(SurfaceSize.X)
+		|| !FMath::IsFinite(SurfaceSize.Y)
+		|| SurfaceSize.X <= 1.0f
+		|| SurfaceSize.Y <= 1.0f)
+	{
+		SurfaceSize = FVector2D(456.0f, 520.0f);
+	}
+	const FVector2D ContactShadowOffsetPixels = LastCardDepthView.bContactShadowEnabled
+		? LastCardDepthView.ContactShadowOffsetPixels
+		: FVector2D::ZeroVector;
+	Material.SetScalarParameterValue(
+		ContactShadowTiltOffsetXUVParameterName,
+		ContactShadowOffsetPixels.X / SurfaceSize.X);
+	Material.SetScalarParameterValue(
+		ContactShadowTiltOffsetYUVParameterName,
+		ContactShadowOffsetPixels.Y / SurfaceSize.Y);
 }
 
 void UWacomFirstPersonCardViewWidget::ApplyCardUseEffectParameters(

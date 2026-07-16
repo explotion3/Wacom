@@ -39,10 +39,12 @@ const FWacomFirstPersonCardDepthView& FWacomFirstPersonCardDepthMotion::Update(
 		TargetView.PerspectiveStrength,
 		Alpha);
 	CurrentView.bContactShadowEnabled = TargetView.bContactShadowEnabled;
+	CurrentView.ContactShadowOpacityMultiplier = TargetView.ContactShadowOpacityMultiplier;
 	CurrentView.ContactShadowLift = FMath::Lerp(
 		CurrentView.ContactShadowLift,
 		TargetView.ContactShadowLift,
 		Alpha);
+	PopulateContactShadowOffset(Config, CurrentView);
 	PopulateSurfacePerspective(Config, CurrentView);
 
 	if (!IsInMotion())
@@ -130,8 +132,36 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::MakeNeutralView
 		? FMath::Max(0.0f, Config.PerspectiveStrength)
 		: 0.0f;
 	View.bContactShadowEnabled = Config.bEnableContactShadow && bProjected;
+	View.ContactShadowOpacityMultiplier = FMath::Max(0.0f, Config.ContactShadowOpacityMultiplier);
+	PopulateContactShadowOffset(Config, View);
 	PopulateSurfacePerspective(Config, View);
 	return View;
+}
+
+void FWacomFirstPersonCardDepthMotion::PopulateContactShadowOffset(
+	const FWacomFirstPersonCardDepthConfig& Config,
+	FWacomFirstPersonCardDepthView& View)
+{
+	View.ContactShadowOffsetPixels = FVector2D::ZeroVector;
+	if (!View.bContactShadowEnabled || !View.bFake3DEnabled)
+	{
+		return;
+	}
+
+	const float ReferenceTiltDegrees = FMath::Max(
+		1.0f,
+		FMath::Max(Config.HoverMaxTiltDegrees, Config.DragMaxTiltDegrees));
+	const float ReferenceTangent = FMath::Max(
+		0.001f,
+		FMath::Tan(FMath::DegreesToRadians(ReferenceTiltDegrees)));
+	const float MaxOffsetPixels = FMath::Max(0.0f, Config.ContactShadowTiltOffsetPixels);
+	const FVector2D SurfaceDirection(
+		FMath::Tan(FMath::DegreesToRadians(View.TiltDegrees.Y)) / ReferenceTangent,
+		-FMath::Tan(FMath::DegreesToRadians(View.TiltDegrees.X)) / ReferenceTangent);
+
+	// The card face leans toward SurfaceDirection; its contact shadow falls away from it.
+	View.ContactShadowOffsetPixels =
+		(-SurfaceDirection * MaxOffsetPixels).GetClampedToMaxSize(MaxOffsetPixels);
 }
 
 void FWacomFirstPersonCardDepthMotion::PopulateSurfacePerspective(
@@ -219,6 +249,7 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::BuildTargetView
 			View.ContactShadowLift = FMath::Clamp(Config.HoverContactShadowLift, 0.0f, 1.0f);
 		}
 	}
+	PopulateContactShadowOffset(Config, View);
 	PopulateSurfacePerspective(Config, View);
 	return View;
 }

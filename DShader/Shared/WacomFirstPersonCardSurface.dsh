@@ -67,3 +67,20 @@ Function SelfContained WacomFirstPersonCard_CombineContactShadowAlpha(
         + topLeftCaster + topRightCaster + bottomLeftCaster + bottomRightCaster)
         / 16.0;
 }
+
+Function SelfContained WacomFirstPersonCard_ResolveContactShadowOffset(
+    in float contactShadowLift,
+    in float baseOffsetXUV,
+    in float baseOffsetYUV,
+    in float liftOffsetXUV,
+    in float liftOffsetYUV,
+    in float tiltOffsetXUV,
+    in float tiltOffsetYUV,
+    out float2 contactShadowOffsetUV)
+{
+    float safeLift = clamp(contactShadowLift, 0.0, 1.0);
+    float2 authoredOffsetUV = float2(
+        lerp(baseOffsetXUV, liftOffsetXUV, safeLift),
+        lerp(baseOffsetYUV, liftOffsetYUV, safeLift));
+    contactShadowOffsetUV = authoredOffsetUV + float2(tiltOffsetXUV, tiltOffsetYUV);
+}

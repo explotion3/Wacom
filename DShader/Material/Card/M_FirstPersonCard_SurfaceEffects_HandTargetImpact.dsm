@@ -11,6 +11,9 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpa
         ScalarParameter PerspectiveStrength = 0.12 [ Group="手牌目标刻印|运行时"; SortPriority=12; ];
         ScalarParameter ContactShadowEnabled = 1.0 [ Group="手牌目标刻印|运行时"; SortPriority=13; ];
         ScalarParameter ContactShadowLift = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=14; ];
+        ScalarParameter ContactShadowTiltOffsetXUV = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=15; ];
+        ScalarParameter ContactShadowTiltOffsetYUV = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=16; ];
+		ScalarParameter ContactShadowOpacityMultiplier = 1.0 [ Group="手牌目标刻印|运行时"; SortPriority=17; ];
         ScalarParameter HandTargetImpactEnabled = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=20; ];
         ScalarParameter HandTargetImpactPreviewAmount = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=21; ];
         ScalarParameter HandTargetImpactCommitProgress = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=22; ];
@@ -71,7 +74,8 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpa
         float3 stampColor = primaryColor * primaryMask + secondaryColor * secondaryMask + accentColor * fragmentMask;
 
         float safeLift = clamp(ContactShadowLift, 0.0, 1.0);
-        float2 shadowOffset = float2(lerp(ContactShadowBaseOffsetXUV, ContactShadowLiftOffsetXUV, safeLift), lerp(ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetYUV, safeLift));
+        float2 shadowOffset;
+        WacomFirstPersonCard_ResolveContactShadowOffset(safeLift, ContactShadowBaseOffsetXUV, ContactShadowBaseOffsetYUV, ContactShadowLiftOffsetXUV, ContactShadowLiftOffsetYUV, ContactShadowTiltOffsetXUV, ContactShadowTiltOffsetYUV, shadowOffset);
         float shadowSoftness = lerp(ContactShadowBaseSoftnessUV, ContactShadowLiftSoftnessUV, safeLift);
         float2 shadowUV = projectedUV - shadowOffset;
         float2 sx = float2(shadowSoftness, 0.0);
@@ -91,7 +95,8 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpa
         float shadowMask;
         WacomFirstPersonCard_CombineContactShadowAlpha(a0,a1,a2,a3,a4,a5,a6,a7,a8,ContactShadowAlphaThreshold,ContactShadowAlphaFeather,shadowMask);
         float3 shadowColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=ContactShadowColor, R=true,G=true,B=true,A=false);
-        float shadowOpacity = lerp(ContactShadowBaseOpacity, ContactShadowLiftOpacity, safeLift);
+		float shadowOpacity = lerp(ContactShadowBaseOpacity, ContactShadowLiftOpacity, safeLift)
+			* max(ContactShadowOpacityMultiplier, 0.0);
         float cardAlpha = surfaceAlpha * insideMask;
         float shadowAlpha = shadowMask * shadowOpacity * clamp(ContactShadowEnabled,0.0,1.0) * insideMask * (1.0-cardAlpha);
 

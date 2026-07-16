@@ -288,6 +288,10 @@ namespace
 		Config.CardDepth.bEnableContactShadow = Anchor.bEnableCardContactShadow;
 		Config.CardDepth.HoverContactShadowLift = Anchor.CardHoverContactShadowLift;
 		Config.CardDepth.DragContactShadowLift = Anchor.CardDragContactShadowLift;
+		Config.CardDepth.ContactShadowTiltOffsetPixels =
+			Anchor.CardContactShadowTiltOffsetPixels;
+		Config.CardDepth.ContactShadowOpacityMultiplier =
+			Anchor.CardContactShadowOpacityMultiplier;
 		Config.CardDepth.bEnableSurfaceParallax = Anchor.bEnableCardSurfaceParallax;
 		Config.CardDepth.SurfaceParallaxStrength = Anchor.CardSurfaceParallaxStrength;
 		Config.CardDepth.AttachmentParallaxDepthPixels = Anchor.AttachmentParallaxDepthPixels;
@@ -800,6 +804,8 @@ namespace
 		AddBool(Config.CardDepth.bEnableContactShadow);
 		AddFloat(Config.CardDepth.HoverContactShadowLift);
 		AddFloat(Config.CardDepth.DragContactShadowLift);
+		AddFloat(Config.CardDepth.ContactShadowTiltOffsetPixels);
+		AddFloat(Config.CardDepth.ContactShadowOpacityMultiplier);
 		AddBool(Config.CardDepth.bEnableSurfaceParallax);
 		AddFloat(Config.CardDepth.SurfaceParallaxStrength);
 		AddFloat(Config.CardDepth.AttachmentParallaxDepthPixels);

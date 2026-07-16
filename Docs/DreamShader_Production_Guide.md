@@ -191,6 +191,9 @@ Sampler type is Masks, should be Color for /Engine/EngineResources/DefaultTextur
 
 - `Fake3DSurfaceRetainer` 的实时 Alpha 接触阴影是卡牌唯一阴影来源。
 - caster visibility 必须乘入当前消散可见度；残片和发光不参与 caster。
+- 倾斜阴影不要只依赖固定的 Base/Lift Offset。当前卡牌合同由 C++ 写入 `ContactShadowTiltOffsetXUV / YUV`，DreamShader 使用 `WacomFirstPersonCard_ResolveContactShadowOffset` 把它与 authored lift offset 相加；所有会临时接管同一 Retainer 的 Surface 材质都必须声明并消费这两个参数，否则材质切换时阴影会跳回卡框下方。
+- 阴影软硬和方向正确但整体偏淡时，优先使用运行时 `ContactShadowOpacityMultiplier`；该参数由 Anchor 统一写入基础与临时 Surface 材质，不要分别提高多个 `.dsm` 的 Base/Lift Opacity。
+- 材质无法绘制到 Retainer 捕获范围之外。当前 `WBP_FPCardView` 使用 `456 x 520` 捕获面包住居中的 `360 x 424` 卡面内容，四边各留 `48 px`；只设置 `Clip To Bounds - Without Intersecting` 不能弥补尺寸不足，也不要通过拉伸内部卡面来获得余量。
 - 先验证 `Texture.A`、inside mask、caster mask，再调阴影颜色和软硬度。
 
 ### 5.5 生成成功不等于资产接线完成

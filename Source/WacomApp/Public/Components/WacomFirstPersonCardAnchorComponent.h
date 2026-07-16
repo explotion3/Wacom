@@ -505,6 +505,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "Drag 状态传给材质接触阴影的抬升归一化值；0 表示紧贴轮廓，1 表示最软最淡端点。推荐 0.85 到 1.0。"))
 	float CardDragContactShadowLift = 1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "卡牌达到最大参考倾角时，实时 Alpha 接触阴影沿倾斜反方向增加的最大位移，单位为 UMG 逻辑像素；推荐 6 到 12，默认 10。0 会关闭倾斜位移，但保留静止与抬升阴影；不影响布局或命中区域。"))
+	float CardContactShadowTiltOffsetPixels = 10.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "实时 Alpha 接触阴影的不透明度倍率；1 使用材质原始强度，推荐 0.8 到 2.0，默认 1.5。数值越高阴影越清晰，但过高会形成生硬黑边；不影响卡牌布局、命中或倾斜幅度。"))
+	float CardContactShadowOpacityMultiplier = 1.5f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "是否让卡面插画、实体边框和稀有度饰条根据 Hover / Drag 倾角产生分层 UV 视差。仅影响表现，不改变卡牌命中区域。"))
 	bool bEnableCardSurfaceParallax = true;
 

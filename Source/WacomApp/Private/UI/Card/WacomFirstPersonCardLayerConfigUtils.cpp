@@ -211,6 +211,10 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.CardDepth.ReturnSpeed = FMath::Max(0.0f, Config.CardDepth.ReturnSpeed);
 	Config.CardDepth.HoverContactShadowLift = FMath::Clamp(Config.CardDepth.HoverContactShadowLift, 0.0f, 1.0f);
 	Config.CardDepth.DragContactShadowLift = FMath::Clamp(Config.CardDepth.DragContactShadowLift, 0.0f, 1.0f);
+	Config.CardDepth.ContactShadowTiltOffsetPixels =
+		FMath::Max(0.0f, Config.CardDepth.ContactShadowTiltOffsetPixels);
+	Config.CardDepth.ContactShadowOpacityMultiplier =
+		FMath::Max(0.0f, Config.CardDepth.ContactShadowOpacityMultiplier);
 	Config.CardDepth.SurfaceParallaxStrength = FMath::Max(0.0f, Config.CardDepth.SurfaceParallaxStrength);
 	Config.CardDepth.AttachmentParallaxDepthPixels =
 		FMath::Max(0.0f, Config.CardDepth.AttachmentParallaxDepthPixels);
@@ -427,6 +431,12 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(A.CardDepth.ReturnSpeed, B.CardDepth.ReturnSpeed)
 		&& AreFloatsEquivalent(A.CardDepth.HoverContactShadowLift, B.CardDepth.HoverContactShadowLift)
 		&& AreFloatsEquivalent(A.CardDepth.DragContactShadowLift, B.CardDepth.DragContactShadowLift)
+		&& AreFloatsEquivalent(
+			A.CardDepth.ContactShadowTiltOffsetPixels,
+			B.CardDepth.ContactShadowTiltOffsetPixels)
+		&& AreFloatsEquivalent(
+			A.CardDepth.ContactShadowOpacityMultiplier,
+			B.CardDepth.ContactShadowOpacityMultiplier)
 		&& A.CardDepth.bEnableSurfaceParallax == B.CardDepth.bEnableSurfaceParallax
 		&& AreFloatsEquivalent(
 			A.CardDepth.SurfaceParallaxStrength,

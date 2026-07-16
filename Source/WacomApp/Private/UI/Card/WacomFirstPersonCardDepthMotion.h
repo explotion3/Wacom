@@ -57,6 +57,9 @@ private:
 	static void PopulateSurfacePerspective(
 		const FWacomFirstPersonCardDepthConfig& Config,
 		FWacomFirstPersonCardDepthView& View);
+	static void PopulateContactShadowOffset(
+		const FWacomFirstPersonCardDepthConfig& Config,
+		FWacomFirstPersonCardDepthView& View);
 	FWacomFirstPersonCardDepthView BuildTargetView(
 		const FWacomFirstPersonCardDepthConfig& Config,
 		const FWacomFirstPersonCardDepthMotionInput& Input) const;

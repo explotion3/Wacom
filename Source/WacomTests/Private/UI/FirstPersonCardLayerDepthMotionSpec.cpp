@@ -1,6 +1,8 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 #include "Materials/Material.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
@@ -52,6 +54,8 @@ namespace WacomFirstPersonCardLayerDepthMotionSpec
 		VisualConfig.CardDepth.DragVelocityForMaxTiltPixelsPerSecond = 1400.0f;
 		VisualConfig.CardDepth.HoverContactShadowLift = 0.55f;
 		VisualConfig.CardDepth.DragContactShadowLift = 1.0f;
+		VisualConfig.CardDepth.ContactShadowTiltOffsetPixels = 10.0f;
+		VisualConfig.CardDepth.ContactShadowOpacityMultiplier = 1.5f;
 		VisualConfig.CardDepth.bEnableSurfaceParallax = true;
 		VisualConfig.CardDepth.SurfaceParallaxStrength = 1.0f;
 		VisualConfig.CardDepth.AttachmentParallaxDepthPixels = 5.0f;
@@ -103,6 +107,16 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 	TestTrue(TEXT("Centered vertical pointer keeps pitch restrained"), FMath::Abs(HoverDepth.TiltDegrees.X) < 0.25f);
 	TestTrue(TEXT("Material contact shadow is enabled"), HoverDepth.bContactShadowEnabled);
 	TestTrue(TEXT("Hover lifts the material contact shadow"), HoverDepth.ContactShadowLift > 0.35f);
+	TestEqual(
+		TEXT("Anchor-configured contact-shadow opacity reaches the material view"),
+		HoverDepth.ContactShadowOpacityMultiplier,
+		1.5f);
+	TestTrue(
+		TEXT("Right-side hover moves the contact shadow away to the left"),
+		HoverDepth.ContactShadowOffsetPixels.X < -2.0f);
+	TestTrue(
+		TEXT("Centered vertical pointer keeps contact-shadow Y offset restrained"),
+		FMath::Abs(HoverDepth.ContactShadowOffsetPixels.Y) < 0.5f);
 	TestTrue(TEXT("Hover enables the inner card-surface parallax"), HoverDepth.SurfacePerspective.bEnabled);
 	TestTrue(
 		TEXT("Inner surface consumes the same smoothed tilt"),
@@ -118,6 +132,10 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 	TestTrue(
 		TEXT("Pressed state damps hover tilt"),
 		FMath::Abs(PressedDepth.TiltDegrees.Y) < FMath::Abs(HoverDepth.TiltDegrees.Y) * 0.65f);
+	TestTrue(
+		TEXT("Pressed state damps directional contact-shadow travel"),
+		FMath::Abs(PressedDepth.ContactShadowOffsetPixels.X)
+			< FMath::Abs(HoverDepth.ContactShadowOffsetPixels.X) * 0.65f);
 
 	FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(*Widget);
 	FWacomFirstPersonCardLayerTestAccess::RequestUnhover(*Widget);
@@ -126,6 +144,9 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
 	TestTrue(TEXT("Leaving the card returns tilt to neutral"), RestDepth.TiltDegrees.IsNearlyZero(0.05f));
 	TestTrue(TEXT("Rest returns material shadow to contact"), RestDepth.ContactShadowLift < 0.01f);
+	TestTrue(
+		TEXT("Rest removes tilt-driven contact-shadow travel"),
+		RestDepth.ContactShadowOffsetPixels.IsNearlyZero(0.05f));
 	TestTrue(
 		TEXT("Rest returns attachment parallax to neutral"),
 		RestDepth.SurfacePerspective.AttachmentOffsetPixels.IsNearlyZero(0.05f));
@@ -163,6 +184,7 @@ bool FWacomFirstPersonCardAuthoredRetainerBaseMaterialLifecycleTest::RunTest(
 	}
 	TestTrue(TEXT("Authored card view initializes"), CardView->Initialize());
 	const TSharedRef<SWidget> SlateWidget = CardView->TakeWidget();
+	SlateWidget->SlatePrepass(1.0f);
 
 	FWacomFirstPersonCardDepthView DepthView;
 	DepthView.bFake3DEnabled = true;
@@ -176,6 +198,12 @@ bool FWacomFirstPersonCardAuthoredRetainerBaseMaterialLifecycleTest::RunTest(
 	TestTrue(
 		TEXT("NativeConstruct does not clear the authored base Effect Material"),
 		View.bFake3DEffectMaterialReady);
+	TestTrue(
+		TEXT("Authored wrapper reserves transparent render bleed around the card"),
+		View.WrapperDesiredSize.Equals(FVector2D(456.0f, 520.0f), 0.5f));
+	TestTrue(
+		TEXT("Authored card content remains at 360 by 424 inside the larger capture"),
+		View.CardContentDesiredSize.Equals(FVector2D(360.0f, 424.0f), 0.5f));
 	return true;
 }
 
@@ -242,6 +270,9 @@ bool FWacomFirstPersonCardLayerDragDepthMotionTest::RunTest(const FString& /*Par
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
 	TestTrue(TEXT("Rightward drag creates opposite inertial yaw"), MovingDepth.TiltDegrees.Y < -0.25f);
 	TestTrue(TEXT("Drag lifts the material contact shadow further"), MovingDepth.ContactShadowLift > 0.80f);
+	TestTrue(
+		TEXT("Rightward drag inertia moves the contact shadow to the right"),
+		MovingDepth.ContactShadowOffsetPixels.X > 0.25f);
 
 	Tick(*Widget, 50);
 	const FWacomFirstPersonCardDepthView SettledDragDepth =
@@ -319,6 +350,60 @@ bool FWacomFirstPersonCardLayerHandTargetFocusMotionTest::RunTest(const FString&
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
 	TestTrue(TEXT("Hand target focus is active"), View.bCardDragTargetFocusActive);
 	TestEqual(TEXT("Hand target focus selects its motion intent"), View.ActiveMotionIntent, EWacomFirstPersonCardMotionIntent::DragTargetFocus);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardDirectionalContactShadowDreamShaderContractTest,
+	"Wacom.UI.FirstPersonCardLayer.DepthMotion.DirectionalContactShadowDreamShaderContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardDirectionalContactShadowDreamShaderContractTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	const TCHAR* MaterialSourcePaths[] = {
+		TEXT("DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm"),
+		TEXT("DShader/Material/Card/M_FirstPersonCard_SurfaceEffects.dsm"),
+		TEXT("DShader/Material/Card/M_FirstPersonCard_SurfaceEffects_DiamondWaveUse.dsm"),
+		TEXT("DShader/Material/Card/M_FirstPersonCard_SurfaceEffects_EdgeFlipUse.dsm"),
+		TEXT("DShader/Material/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpact.dsm"),
+		TEXT("DShader/Material/Card/M_FirstPersonCard_SurfaceEffects_OrderedDither.dsm"),
+	};
+	for (const TCHAR* RelativePath : MaterialSourcePaths)
+	{
+		FString Source;
+		const FString AbsolutePath = FPaths::Combine(FPaths::ProjectDir(), RelativePath);
+		TestTrue(
+			*FString::Printf(TEXT("Directional contact-shadow material source can be read: %s"), RelativePath),
+			FFileHelper::LoadFileToString(Source, *AbsolutePath));
+		TestTrue(
+			*FString::Printf(TEXT("Material exposes runtime contact-shadow X travel: %s"), RelativePath),
+			Source.Contains(TEXT("ContactShadowTiltOffsetXUV")));
+		TestTrue(
+			*FString::Printf(TEXT("Material exposes runtime contact-shadow Y travel: %s"), RelativePath),
+			Source.Contains(TEXT("ContactShadowTiltOffsetYUV")));
+		TestTrue(
+			*FString::Printf(TEXT("Material exposes runtime contact-shadow opacity authoring: %s"), RelativePath),
+			Source.Contains(TEXT("ContactShadowOpacityMultiplier")));
+		TestTrue(
+			*FString::Printf(TEXT("Material applies the runtime contact-shadow opacity authoring: %s"), RelativePath),
+			Source.Contains(TEXT("max(ContactShadowOpacityMultiplier, 0.0)")));
+		TestTrue(
+			*FString::Printf(TEXT("Material resolves authored and tilt-driven shadow offsets together: %s"), RelativePath),
+			Source.Contains(TEXT("WacomFirstPersonCard_ResolveContactShadowOffset")));
+	}
+
+	FString SharedSource;
+	const FString SharedPath = FPaths::Combine(
+		FPaths::ProjectDir(),
+		TEXT("DShader/Shared/WacomFirstPersonCardSurface.dsh"));
+	TestTrue(
+		TEXT("Shared first-person card surface source can be read"),
+		FFileHelper::LoadFileToString(SharedSource, *SharedPath));
+	TestTrue(
+		TEXT("Shared contact-shadow helper adds authored lift and runtime tilt travel"),
+		SharedSource.Contains(TEXT(
+			"contactShadowOffsetUV = authoredOffsetUV + float2(tiltOffsetXUV, tiltOffsetYUV)")));
 	return true;
 }
 

@@ -1615,6 +1615,12 @@ struct WACOMAPP_API FWacomFirstPersonCardDepthConfig
 	float DragContactShadowLift = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float ContactShadowTiltOffsetPixels = 10.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float ContactShadowOpacityMultiplier = 1.5f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
 	bool bEnableSurfaceParallax = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
@@ -1637,6 +1643,8 @@ struct WACOMAPP_API FWacomFirstPersonCardDepthView
 	float PerspectiveStrength = 0.0f;
 	bool bContactShadowEnabled = false;
 	float ContactShadowLift = 0.0f;
+	FVector2D ContactShadowOffsetPixels = FVector2D::ZeroVector;
+	float ContactShadowOpacityMultiplier = 1.0f;
 	FWacomCardSurfacePerspectiveView SurfacePerspective;
 };
 
