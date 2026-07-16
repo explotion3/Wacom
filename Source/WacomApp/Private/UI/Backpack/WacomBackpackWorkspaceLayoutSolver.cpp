@@ -192,6 +192,150 @@ TArray<FWacomBackpackResolvedLayout> FWacomBackpackWorkspaceLayoutSolver::BuildA
 	return Result;
 }
 
+FWacomBackpackResolvedPileContentLayout
+FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
+	int32 CardCount,
+	FVector2D HeaderTopLeft,
+	FVector2D HeaderSize,
+	FVector2D WorkspaceSize,
+	FVector2D CardSize,
+	bool bExpanded,
+	float CollapsedExposurePixels,
+	float MinimumExpandedExposurePixels,
+	float MaximumExpandedExposurePixels,
+	float MaximumAngleDegrees,
+	float EdgeMarginPixels)
+{
+	FWacomBackpackResolvedPileContentLayout Result;
+	HeaderSize.X = FMath::Max(1.0f, HeaderSize.X);
+	HeaderSize.Y = FMath::Max(1.0f, HeaderSize.Y);
+	CardSize.X = FMath::Max(1.0f, CardSize.X);
+	CardSize.Y = FMath::Max(1.0f, CardSize.Y);
+	EdgeMarginPixels = FMath::Max(0.0f, EdgeMarginPixels);
+	HeaderTopLeft = SnapPileTopLeft(
+		HeaderTopLeft,
+		WorkspaceSize,
+		HeaderSize,
+		1.0f,
+		EdgeMarginPixels);
+	Result.HeaderRect = FSlateRect(
+		HeaderTopLeft.X,
+		HeaderTopLeft.Y,
+		HeaderTopLeft.X + HeaderSize.X,
+		HeaderTopLeft.Y + HeaderSize.Y);
+	Result.FrameRect = Result.HeaderRect;
+	if (CardCount <= 0)
+	{
+		Result.FrameRect.Bottom = FMath::Min(
+			WorkspaceSize.Y - EdgeMarginPixels,
+			Result.FrameRect.Bottom + 40.0f);
+		return Result;
+	}
+
+	const float AvailableWidth = FMath::Max(
+		CardSize.X,
+		WorkspaceSize.X - EdgeMarginPixels * 2.0f);
+	float Exposure = FMath::Clamp(CollapsedExposurePixels, 10.0f, 24.0f);
+	if (bExpanded)
+	{
+		MinimumExpandedExposurePixels = FMath::Max(1.0f, MinimumExpandedExposurePixels);
+		MaximumExpandedExposurePixels = FMath::Max(
+			MinimumExpandedExposurePixels,
+			MaximumExpandedExposurePixels);
+		const float FittingExposure = CardCount > 1
+			? (AvailableWidth - CardSize.X) / static_cast<float>(CardCount - 1)
+			: 0.0f;
+		Exposure = CardCount > 1
+			? FMath::Clamp(
+				FittingExposure,
+				MinimumExpandedExposurePixels,
+				MaximumExpandedExposurePixels)
+			: 0.0f;
+	}
+	else if (CardCount <= 1)
+	{
+		Exposure = 0.0f;
+	}
+	const float UsedWidth = FMath::Min(
+		AvailableWidth,
+		CardSize.X + Exposure * FMath::Max(0, CardCount - 1));
+	if (CardCount > 1 && UsedWidth < CardSize.X + Exposure * (CardCount - 1))
+	{
+		Exposure = FMath::Max(
+			1.0f,
+			(UsedWidth - CardSize.X) / static_cast<float>(CardCount - 1));
+	}
+
+	const float SpaceRight = WorkspaceSize.X - EdgeMarginPixels - HeaderTopLeft.X;
+	const float SpaceLeft = HeaderTopLeft.X + HeaderSize.X - EdgeMarginPixels;
+	// Choose the side with more usable workspace consistently.  A small pile may fit
+	// on either side, but keeping the direction anchored to available space prevents
+	// the fan from flipping when its card count crosses the fitting threshold.
+	Result.bOpensRight = SpaceRight >= SpaceLeft;
+	const float StartX = Result.bOpensRight
+		? FMath::Clamp(
+			HeaderTopLeft.X,
+			EdgeMarginPixels,
+			FMath::Max(EdgeMarginPixels, WorkspaceSize.X - EdgeMarginPixels - UsedWidth))
+		: FMath::Clamp(
+			HeaderTopLeft.X + HeaderSize.X - UsedWidth,
+			EdgeMarginPixels,
+			FMath::Max(EdgeMarginPixels, WorkspaceSize.X - EdgeMarginPixels - UsedWidth));
+
+	const float SpaceBelow = WorkspaceSize.Y - EdgeMarginPixels - (HeaderTopLeft.Y + HeaderSize.Y);
+	const float SpaceAbove = HeaderTopLeft.Y - EdgeMarginPixels;
+	const bool bOpenBelow = SpaceBelow >= CardSize.Y + 8.0f || SpaceBelow >= SpaceAbove;
+	const float CardTop = bOpenBelow
+		? FMath::Clamp(
+			HeaderTopLeft.Y + HeaderSize.Y + 8.0f,
+			EdgeMarginPixels,
+			FMath::Max(EdgeMarginPixels, WorkspaceSize.Y - EdgeMarginPixels - CardSize.Y))
+		: FMath::Clamp(
+			HeaderTopLeft.Y - 8.0f - CardSize.Y,
+			EdgeMarginPixels,
+			FMath::Max(EdgeMarginPixels, WorkspaceSize.Y - EdgeMarginPixels - CardSize.Y));
+	const float UsedAngle = bExpanded && CardCount > 1
+		? FMath::Min(FMath::Max(0.0f, MaximumAngleDegrees), (CardCount - 1) * 2.0f)
+		: 0.0f;
+
+	Result.Cards.Reserve(CardCount);
+	for (int32 Index = 0; Index < CardCount; ++Index)
+	{
+		const float Alpha = CardCount > 1
+			? static_cast<float>(Index) / static_cast<float>(CardCount - 1)
+			: 0.5f;
+		FWacomBackpackResolvedLayout Layout;
+		Layout.AngleDegrees = bExpanded
+			? FMath::Lerp(-UsedAngle * 0.5f, UsedAngle * 0.5f, Alpha)
+			: 0.0f;
+		Layout.CardCenter = FVector2D(
+			StartX + CardSize.X * 0.5f + Exposure * Index,
+			CardTop + CardSize.Y * 0.5f + (bExpanded ? FMath::Abs(Layout.AngleDegrees) * 0.45f : 0.0f));
+		Layout.LayerRank = Index;
+		Result.Cards.Add(Layout);
+	}
+
+	const FSlateRect CardsRect(
+		StartX,
+		CardTop,
+		StartX + UsedWidth,
+		FMath::Min(WorkspaceSize.Y - EdgeMarginPixels, CardTop + CardSize.Y + UsedAngle * 0.45f));
+	constexpr float FramePadding = 8.0f;
+	Result.FrameRect.Left = FMath::Max(
+		EdgeMarginPixels,
+		FMath::Min(Result.HeaderRect.Left, CardsRect.Left) - FramePadding);
+	Result.FrameRect.Top = FMath::Max(
+		EdgeMarginPixels,
+		FMath::Min(Result.HeaderRect.Top, CardsRect.Top) - FramePadding);
+	Result.FrameRect.Right = FMath::Min(
+		WorkspaceSize.X - EdgeMarginPixels,
+		FMath::Max(Result.HeaderRect.Right, CardsRect.Right) + FramePadding);
+	Result.FrameRect.Bottom = FMath::Min(
+		WorkspaceSize.Y - EdgeMarginPixels,
+		FMath::Max(Result.HeaderRect.Bottom, CardsRect.Bottom) + FramePadding);
+	return Result;
+}
+
 FWacomBackpackResolvedPileLayout FWacomBackpackWorkspaceLayoutSolver::BuildDefaultPileLayout(
 	int32 PileIndex,
 	FVector2D WorkspaceSize,

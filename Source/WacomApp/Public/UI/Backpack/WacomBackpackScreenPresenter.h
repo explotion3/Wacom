@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "RunStateTypes.h"
-#include "UI/Backpack/WacomBackpackPilePreviewWidget.h"
+#include "UI/Backpack/WacomBackpackZonePileTypes.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomBackpackScreenPresenter.generated.h"
 

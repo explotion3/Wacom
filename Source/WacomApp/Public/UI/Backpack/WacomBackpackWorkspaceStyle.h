@@ -36,6 +36,10 @@ public:
 	FVector2D PileCollapsedSize = FVector2D(260.0f, 220.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
+		meta = (ToolTip = "折叠牌堆中相邻真实卡牌的默认水平露出，单位像素。推荐 10–24；只改变牌堆宽度，不缩放卡面。"))
+	float PileCollapsedExposurePixels = 16.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
 		meta = (ToolTip = "整堆移动释放后的吸附网格尺寸，单位为像素。推荐 8–24；只影响牌堆布局，不改变规则。"))
 	float PileSnapGridPixels = 16.0f;
 
@@ -70,10 +74,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Carry",
 		meta = (ToolTip = "滚轮选中非默认当前牌时的上抬距离，单位为像素。推荐 40–80；默认最右牌不使用该抬升。"))
 	float CurrentCardLiftPixels = 56.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
-		meta = (ToolTip = "扇形跟随鼠标目标的平滑时间，单位为秒。推荐 0.05–0.12；只在携带期间更新，不轮询 Run 状态。"))
-	float PointerFollowSeconds = 0.08f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
 		meta = (ToolTip = "卡牌放下后收敛到目标布局的时间，单位为秒。推荐 0.12–0.24；只影响表现。"))

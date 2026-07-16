@@ -12,7 +12,7 @@ class UBorder;
 class UTextBlock;
 class UCardDefinition;
 class UScaleBox;
-class UWacomRetainedCardViewWidget;
+class UWacomFirstPersonCardViewWidget;
 struct FWacomBackpackWorkspaceCardVisualState;
 
 enum class EWacomBackpackDeckCardListReuseRole : uint8
@@ -21,6 +21,14 @@ enum class EWacomBackpackDeckCardListReuseRole : uint8
 	BattleDeckProjected,
 	SpecialOwner,
 	SpecialContent
+};
+
+enum class EWacomBackpackWorkspaceCardReadOnlyKind : uint8
+{
+	None,
+	BattleProjection,
+	SpecialOwner,
+	BurdenLocked,
 };
 
 /**
@@ -81,7 +89,18 @@ public:
 	 * - false：禁用（如备战区已满，再点 Backpack 卡也不让加）
 	 */
 	void SetMoveEnabled(bool bEnabled);
-	bool IsMoveEnabled() const { return bCardInteractionEnabled; }
+	bool IsMoveEnabled() const { return bCardInteractionEnabled && bWorkspaceInteractionEnabled; }
+	void SetWorkspaceInteractionEnabled(bool bEnabled);
+	bool IsWorkspaceInteractionEnabled() const { return bWorkspaceInteractionEnabled; }
+	void SetWorkspaceReadOnlyKind(EWacomBackpackWorkspaceCardReadOnlyKind InKind);
+	EWacomBackpackWorkspaceCardReadOnlyKind GetWorkspaceReadOnlyKind() const { return WorkspaceReadOnlyKind; }
+	bool UsesReadOnlyOpacity() const
+	{
+		return WorkspaceReadOnlyKind == EWacomBackpackWorkspaceCardReadOnlyKind::BattleProjection;
+	}
+	void SetWorkspaceDisplayZone(EZoneKind InZone, FGuid InOwnerInstanceId);
+	EZoneKind GetWorkspaceDisplayZone() const { return WorkspaceDisplayZone; }
+	FGuid GetWorkspaceDisplayOwnerInstanceId() const { return WorkspaceDisplayOwnerInstanceId; }
 
 	/** 清理父 Workspace 安装的指针转发，供复用和生命周期收口使用。 */
 	void UnbindWorkspacePointerEvents();
@@ -89,6 +108,11 @@ public:
 	void ApplyWorkspaceVisualState(const FWacomBackpackWorkspaceCardVisualState& VisualState);
 	void RequestBackpackCardFaceRender();
 	void SetBackpackCardFaceRetainedRenderingEnabled(bool bEnabled);
+	/** 仅供背包表现控制器使用；开启 Fake3D/表面视差并切换实时 Retainer。 */
+	void SetBackpackRealtimePresentation(
+		bool bEnabled,
+		FVector2D NormalizedPointer,
+		bool bCarrying);
 	bool IsWorkspaceSelected() const { return bWorkspaceSelected; }
 	bool IsWorkspaceCurrent() const { return bWorkspaceCurrent; }
 
@@ -142,7 +166,7 @@ protected:
 	TObjectPtr<UBorder> CardBody;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UWacomRetainedCardViewWidget> BackpackCardView;
+	TObjectPtr<UWacomFirstPersonCardViewWidget> BackpackCardView;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UScaleBox> CardFaceScaleBox;
@@ -167,10 +191,19 @@ private:
 	bool bBattleEnabledBadgeVisible = false;
 	bool bRightClickToggleEnabled = false;
 	bool bCardInteractionEnabled = true;
+	bool bWorkspaceInteractionEnabled = true;
 	bool bWorkspaceSelected = false;
 	bool bWorkspaceCurrent = false;
 	EWacomBackpackDeckCardListReuseRole BackpackListReuseRole = EWacomBackpackDeckCardListReuseRole::PhysicalList;
+	EWacomBackpackWorkspaceCardReadOnlyKind WorkspaceReadOnlyKind =
+		EWacomBackpackWorkspaceCardReadOnlyKind::None;
+	EZoneKind WorkspaceDisplayZone = EZoneKind::Backpack;
+	FGuid WorkspaceDisplayOwnerInstanceId;
 	FText ProjectedFromBadgeText;
+	bool bBackpackRealtimePresentationEnabled = false;
+	bool bHasAppliedBackpackRealtimePresentation = false;
+	FVector2D LastBackpackPresentationPointer = FVector2D::ZeroVector;
+	bool bLastBackpackPresentationCarrying = false;
 
 	void SetRightClickToggleEnabled(bool bEnabled);
 	void RefreshContentFromCard();

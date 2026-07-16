@@ -49,11 +49,8 @@ bool FWacomUIBackpackZonePileViewSpec::RunTest(const FString& Parameters)
 	if (SpecialPile)
 	{
 		TestEqual(TEXT("Special pile count contains only operable content"), SpecialPile->CardCount, 1);
-		TestEqual(TEXT("Special pile exposes owner plus content previews"), SpecialPile->PreviewCards.Num(), 2);
-		TestTrue(TEXT("First Special preview is the non-operable identity owner"),
-			SpecialPile->PreviewCards[0].bOwnerIdentity);
-		TestFalse(TEXT("Content preview is not misclassified as the owner"),
-			SpecialPile->PreviewCards[1].bOwnerIdentity);
+		TestEqual(TEXT("Special pile keeps its owner identity"),
+			SpecialPile->OwnerInstanceId, Special.OwnerCard.Instance.InstanceId);
 		TestTrue(TEXT("Requested Special pile is the sole expanded pile"), SpecialPile->bExpanded);
 	}
 	return true;

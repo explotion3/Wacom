@@ -67,12 +67,20 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
 	const int32 ExpectedPileCount = UWacomBackpackScreenPresenter::BuildWorkspacePileViews(
 		Snapshot, EZoneKind::Backpack, FGuid(), false).Num();
+	int32 ExpectedWorkspaceCardCount = Snapshot.Flux.ContentCards.Num()
+		+ Snapshot.BattleDeckPhysicalCards.Num()
+		+ Snapshot.BattleDeckProjectedCards.Num()
+		+ Snapshot.BurdenCards.Num();
+	for (const FRunSpecialStorageView& Special : Snapshot.SpecialZones)
+	{
+		ExpectedWorkspaceCardCount += 1 + Special.ContentCards.Num();
+	}
 	TestEqual(TEXT("Fallback builds the Snapshot-derived embedded piles"),
 		FWacomBackpackScreenTestAccess::WorkspacePileCount(*Screen), ExpectedPileCount);
 	TestEqual(TEXT("Flux workspace is the deterministic initial active zone"),
 		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen), EZoneKind::Backpack);
-	TestEqual(TEXT("Initial workspace contains only active flux cards"),
-		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen), Snapshot.Flux.ContentCards.Num());
+	TestEqual(TEXT("Initial workspace materializes flux and every collapsed real-card pile"),
+		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen), ExpectedWorkspaceCardCount);
 	TestTrue(TEXT("Fallback workspace child fills its runtime host"),
 		FWacomBackpackScreenTestAccess::WorkspaceChildFillsHost(*Screen));
 	TestTrue(TEXT("Fallback workspace owns blank-area pointer input"),
@@ -93,11 +101,9 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);
 	TestEqual(TEXT("Pile expansion selects the sole expanded content source"),
 		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen), EZoneKind::BattleDeck);
-	TestEqual(TEXT("Unified workspace keeps flux cards beside expanded battle cards"),
+	TestEqual(TEXT("Expanding a pile reuses the same complete set of card widgets"),
 		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen),
-		Snapshot.Flux.ContentCards.Num()
-			+ Snapshot.BattleDeckPhysicalCards.Num()
-			+ Snapshot.BattleDeckProjectedCards.Num());
+		ExpectedWorkspaceCardCount);
 	TestTrue(TEXT("Workspace handles Escape while carrying"),
 		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
 	TestTrue(TEXT("First Escape cancels carry before collapsing the pile"),

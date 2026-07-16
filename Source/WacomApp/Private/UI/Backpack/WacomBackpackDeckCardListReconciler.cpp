@@ -177,3 +177,99 @@ void FWacomBackpackDeckCardListReconciler::Reconcile(
 		}
 	}
 }
+
+void FWacomBackpackDeckCardListReconciler::ReconcileAcrossPanels(
+	TConstArrayView<UPanelWidget*> SearchPanels,
+	UPanelWidget* DestinationPanel,
+	TConstArrayView<FWacomBackpackDeckCardListItem> DesiredCards,
+	TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent,
+	TFunctionRef<UWacomDeckCardWidget*(const FRunStorageCardView&)> CreateWidget,
+	TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget,
+	TArray<TObjectPtr<UWacomDeckCardWidget>>* OutOrderedWidgets)
+{
+	if (OutOrderedWidgets)
+	{
+		OutOrderedWidgets->Reset();
+		OutOrderedWidgets->Reserve(DesiredCards.Num());
+	}
+	if (!DestinationPanel)
+	{
+		return;
+	}
+
+	TMap<FWacomBackpackCardWidgetKey, UWacomDeckCardWidget*> ExistingByKey;
+	TMap<FGuid, UWacomDeckCardWidget*> PreservedPhysicalByInstanceId;
+	for (UPanelWidget* Panel : SearchPanels)
+	{
+		if (!Panel)
+		{
+			continue;
+		}
+		for (int32 ChildIndex = 0; ChildIndex < Panel->GetChildrenCount(); ++ChildIndex)
+		{
+			if (UWacomDeckCardWidget* Child = Cast<UWacomDeckCardWidget>(Panel->GetChildAt(ChildIndex)))
+			{
+				ExistingByKey.Add(MakeBackpackCardWidgetKey(*Child), Child);
+				if (Child->GetBackpackListReuseRole()
+						== EWacomBackpackDeckCardListReuseRole::PhysicalList
+					&& PreserveCurrentParent(Child))
+				{
+					PreservedPhysicalByInstanceId.Add(Child->GetCardInstanceId(), Child);
+				}
+			}
+		}
+	}
+
+	TSet<UWacomDeckCardWidget*> UsedWidgets;
+	int32 StaticIndex = 0;
+	for (const FWacomBackpackDeckCardListItem& Desired : DesiredCards)
+	{
+		const FWacomBackpackCardWidgetKey Key = MakeBackpackCardWidgetKey(
+			Desired.CardView, Desired.Role);
+		UWacomDeckCardWidget* Widget = ExistingByKey.FindRef(Key);
+		if (!Widget && Desired.Role == EWacomBackpackDeckCardListReuseRole::PhysicalList)
+		{
+			// A physical move changes PhysicalZone and therefore the formal ViewKey.
+			// The carried widget is nevertheless the same owned instance and must be
+			// migrated in place so the target scene can consume its visual ownership.
+			PreservedPhysicalByInstanceId.RemoveAndCopyValue(
+				Desired.CardView.Instance.InstanceId, Widget);
+		}
+		if (!Widget)
+		{
+			Widget = CreateWidget(Desired.CardView);
+		}
+		if (!Widget)
+		{
+			continue;
+		}
+
+		Widget->PrepareForBackpackListReuse();
+		Widget->SetStorageCardView(Desired.CardView);
+		Widget->SetMoveEnabled(true);
+		Widget->SetWorkspaceInteractionEnabled(Desired.bWorkspaceInteractive);
+		Widget->SetWorkspaceReadOnlyKind(Desired.ReadOnlyKind);
+		Widget->SetWorkspaceDisplayZone(
+			Desired.DisplayZone.Zone, Desired.DisplayZone.OwnerInstanceId);
+		Widget->SetBackpackListReuseRole(Desired.Role);
+		Widget->SetProjectedFromBadgeText(Desired.ProjectedBadgeText);
+		UsedWidgets.Add(Widget);
+		if (OutOrderedWidgets)
+		{
+			OutOrderedWidgets->Add(Widget);
+		}
+		if (!PreserveCurrentParent(Widget))
+		{
+			MoveCardWidgetToPanelIndex(DestinationPanel, Widget, StaticIndex++);
+		}
+	}
+
+	for (const TPair<FWacomBackpackCardWidgetKey, UWacomDeckCardWidget*>& ExistingPair : ExistingByKey)
+	{
+		if (ExistingPair.Value && !UsedWidgets.Contains(ExistingPair.Value))
+		{
+			OnRemovedWidget(ExistingPair.Value);
+			ExistingPair.Value->RemoveFromParent();
+		}
+	}
+}

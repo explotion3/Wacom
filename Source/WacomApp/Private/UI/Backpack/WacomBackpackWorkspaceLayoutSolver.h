@@ -25,6 +25,14 @@ struct FWacomBackpackResolvedPileLayout
 	int32 LayerRank = 0;
 };
 
+struct FWacomBackpackResolvedPileContentLayout
+{
+	FSlateRect HeaderRect;
+	FSlateRect FrameRect;
+	bool bOpensRight = true;
+	TArray<FWacomBackpackResolvedLayout> Cards;
+};
+
 /** 背包工作台的确定性纯布局算法；不读取 Widget 或 Run 状态。 */
 struct WACOMAPP_API FWacomBackpackWorkspaceLayoutSolver
 {
@@ -51,6 +59,19 @@ struct WACOMAPP_API FWacomBackpackWorkspaceLayoutSolver
 		FVector2D CardSize,
 		float MinimumExposurePixels,
 		float MaximumExposurePixels,
+		float MaximumAngleDegrees,
+		float EdgeMarginPixels);
+
+	static FWacomBackpackResolvedPileContentLayout BuildPileContentLayout(
+		int32 CardCount,
+		FVector2D HeaderTopLeft,
+		FVector2D HeaderSize,
+		FVector2D WorkspaceSize,
+		FVector2D CardSize,
+		bool bExpanded,
+		float CollapsedExposurePixels,
+		float MinimumExpandedExposurePixels,
+		float MaximumExpandedExposurePixels,
 		float MaximumAngleDegrees,
 		float EdgeMarginPixels);
 

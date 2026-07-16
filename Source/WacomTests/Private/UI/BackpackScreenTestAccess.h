@@ -70,6 +70,21 @@ struct FWacomBackpackScreenTestAccess
 	static FWacomBackpackPickupPointerSequenceProbe ProbeSelectedCardPickupPointerSequence(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		UWacomDeckCardWidget& CardWidget);
+	static void FlushWorkspaceCarryPointer(UWacomBackpackWorkspaceWidget& Workspace);
+	static void SendWorkspaceCarryPointerEvents(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		UWacomDeckCardWidget& CardWidget,
+		TConstArrayView<FVector2D> PointerLocals);
+	static bool CommitWorkspacePileMoveWithSynchronousTargetReconcile(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		UWacomDeckCardWidget& CardWidget,
+		EZoneKind Zone,
+		FVector2D HeaderStart,
+		FVector2D PointerEnd,
+		FVector2D TargetCardCenter);
+	static void ForgetWorkspacePileRegistry(UWacomBackpackWorkspaceWidget& Workspace);
+	static bool CommitWorkspaceReleaseBeforeTargetReconcile(
+		UWacomBackpackWorkspaceWidget& Workspace);
 	static EZoneKind ActiveWorkspaceZone(const UWacomBackpackScreen& Screen);
 	static FGuid ActiveWorkspaceOwnerInstanceId(const UWacomBackpackScreen& Screen);
 	static void ActivateZone(UWacomBackpackScreen& Screen, EZoneKind Zone, FGuid OwnerInstanceId = FGuid());

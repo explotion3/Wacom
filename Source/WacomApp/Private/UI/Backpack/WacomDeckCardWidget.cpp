@@ -10,13 +10,18 @@
 #include "Cards/CardDefinition.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
-#include "UI/Card/WacomRetainedCardViewWidget.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 
 void UWacomDeckCardWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 
 	RefreshContentFromCard();
+	bHasAppliedBackpackRealtimePresentation = false;
+	SetBackpackRealtimePresentation(
+		bBackpackRealtimePresentationEnabled,
+		LastBackpackPresentationPointer,
+		bLastBackpackPresentationCarrying);
 }
 
 void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZone, FGuid InFromZoneOwnerInstanceId)
@@ -45,6 +50,10 @@ void UWacomDeckCardWidget::PrepareForBackpackListReuse()
 {
 	UnbindWorkspacePointerEvents();
 	SetWorkspaceVisualState(false, false, false);
+	SetWorkspaceInteractionEnabled(true);
+	SetWorkspaceReadOnlyKind(EWacomBackpackWorkspaceCardReadOnlyKind::None);
+	SetWorkspaceDisplayZone(FromZone, FromZoneOwnerInstanceId);
+	SetBackpackRealtimePresentation(false, FVector2D::ZeroVector, false);
 	SetRenderOpacity(1.0f);
 	SetProjectedFromBadgeText(FText::GetEmpty());
 	SetRightClickToggleEnabled(false);
@@ -99,7 +108,7 @@ void UWacomDeckCardWidget::RequestBackpackCardFaceRender()
 {
 	if (BackpackCardView)
 	{
-		BackpackCardView->RequestCardFaceRender();
+		BackpackCardView->RequestPresentationRender();
 	}
 }
 
@@ -111,10 +120,74 @@ void UWacomDeckCardWidget::SetBackpackCardFaceRetainedRenderingEnabled(bool bEna
 	}
 }
 
+void UWacomDeckCardWidget::SetBackpackRealtimePresentation(
+	bool bEnabled,
+	FVector2D NormalizedPointer,
+	bool bCarrying)
+{
+	bBackpackRealtimePresentationEnabled = bEnabled;
+	if (!BackpackCardView)
+	{
+		bHasAppliedBackpackRealtimePresentation = false;
+		return;
+	}
+	if (bHasAppliedBackpackRealtimePresentation
+		&& bEnabled == BackpackCardView->IsRealtimePresentationEnabled()
+		&& LastBackpackPresentationPointer.Equals(NormalizedPointer, 0.001f)
+		&& bLastBackpackPresentationCarrying == bCarrying)
+	{
+		return;
+	}
+	bHasAppliedBackpackRealtimePresentation = true;
+	LastBackpackPresentationPointer = NormalizedPointer;
+	bLastBackpackPresentationCarrying = bCarrying;
+
+	FWacomFirstPersonCardDepthView Depth;
+	if (bEnabled)
+	{
+		const float MaxTilt = bCarrying ? 2.5f : 6.0f;
+		Depth.bFake3DEnabled = true;
+		Depth.TiltDegrees = FVector2D(
+			-NormalizedPointer.Y * MaxTilt,
+			NormalizedPointer.X * MaxTilt);
+		Depth.PerspectiveStrength = 0.12f;
+		Depth.bContactShadowEnabled = true;
+		Depth.ContactShadowLift = bCarrying ? 1.0f : 0.55f;
+		Depth.SurfacePerspective.bEnabled = true;
+		Depth.SurfacePerspective.Strength = 1.0f;
+		Depth.SurfacePerspective.TiltDegrees = Depth.TiltDegrees;
+		Depth.SurfacePerspective.AttachmentOffsetPixels = FVector2D(
+			NormalizedPointer.X * 5.0f,
+			-NormalizedPointer.Y * 5.0f);
+	}
+	BackpackCardView->SetRealtimePresentationEnabled(bEnabled);
+	BackpackCardView->SetCardDepthView(Depth);
+}
+
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
 {
 	bCardInteractionEnabled = bEnabled;
 	RefreshContentFromCard();
+}
+
+void UWacomDeckCardWidget::SetWorkspaceInteractionEnabled(bool bEnabled)
+{
+	bWorkspaceInteractionEnabled = bEnabled;
+	SetVisibility(bEnabled ? ESlateVisibility::Visible : ESlateVisibility::HitTestInvisible);
+}
+
+void UWacomDeckCardWidget::SetWorkspaceReadOnlyKind(
+	EWacomBackpackWorkspaceCardReadOnlyKind InKind)
+{
+	WorkspaceReadOnlyKind = InKind;
+}
+
+void UWacomDeckCardWidget::SetWorkspaceDisplayZone(EZoneKind InZone, FGuid InOwnerInstanceId)
+{
+	WorkspaceDisplayZone = InZone;
+	WorkspaceDisplayOwnerInstanceId = InZone == EZoneKind::SpecialZone
+		? InOwnerInstanceId
+		: FGuid();
 }
 
 void UWacomDeckCardWidget::SetBattleEnabledBadgeVisible(bool bVisible)
@@ -234,7 +307,7 @@ FText UWacomDeckCardWidget::GetProjectedFromBadgeText() const
 
 bool UWacomDeckCardWidget::RequestBattleEnabledToggle()
 {
-	if (!InstanceId.IsValid() || !bCardInteractionEnabled || !bRightClickToggleEnabled)
+	if (!InstanceId.IsValid() || !IsMoveEnabled() || !bRightClickToggleEnabled)
 	{
 		return false;
 	}
@@ -245,7 +318,7 @@ bool UWacomDeckCardWidget::RequestBattleEnabledToggle()
 
 bool UWacomDeckCardWidget::RequestCardHover()
 {
-	if (!Card || !InstanceId.IsValid())
+	if (!Card || !InstanceId.IsValid() || !bWorkspaceInteractionEnabled)
 	{
 		return false;
 	}
@@ -256,7 +329,7 @@ bool UWacomDeckCardWidget::RequestCardHover()
 
 bool UWacomDeckCardWidget::RequestCardUnhover()
 {
-	if (!Card || !InstanceId.IsValid())
+	if (!Card || !InstanceId.IsValid() || !bWorkspaceInteractionEnabled)
 	{
 		return false;
 	}

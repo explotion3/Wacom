@@ -14,6 +14,14 @@ struct FWacomBackpackWorkspaceResolvedLayoutTestView
 	int32 LayerRank = 0;
 };
 
+struct FWacomBackpackPileContentLayoutTestView
+{
+	FSlateRect HeaderRect;
+	FSlateRect FrameRect;
+	bool bOpensRight = true;
+	TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> Cards;
+};
+
 struct FWacomBackpackWorkspaceStateLifecycleTestView
 {
 	bool bSameRunPreservedLayout = false;
@@ -39,6 +47,11 @@ struct FWacomBackpackWorkspaceModelTestAccess
 		int32 CardCount,
 		FVector2D PileTopLeft,
 		FVector2D WorkspaceSize);
+	static FWacomBackpackPileContentLayoutTestView BuildPileContentLayout(
+		int32 CardCount,
+		FVector2D HeaderTopLeft,
+		FVector2D WorkspaceSize,
+		bool bExpanded);
 	static FWacomBackpackWorkspaceResolvedLayoutTestView ResolveManualLayout(
 		FVector2D NormalizedPosition,
 		float AngleDegrees,

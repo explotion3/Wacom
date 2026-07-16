@@ -13,6 +13,7 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
+#include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
@@ -386,6 +387,119 @@ FWacomBackpackScreenTestAccess::ProbeSelectedCardPickupPointerSequence(
 	Workspace.OnReleaseIntentNative.Clear();
 	Workspace.CancelInteraction();
 	return Probe;
+}
+
+void FWacomBackpackScreenTestAccess::FlushWorkspaceCarryPointer(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	Workspace.FlushQueuedCarryPointer();
+}
+
+void FWacomBackpackScreenTestAccess::SendWorkspaceCarryPointerEvents(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	UWacomDeckCardWidget& CardWidget,
+	TConstArrayView<FVector2D> PointerLocals)
+{
+	FVector2D Previous = Workspace.CarryAnchorLocal;
+	for (const FVector2D Pointer : PointerLocals)
+	{
+		const FVector2D PointerAbsolute =
+			Workspace.GetCachedGeometry().LocalToAbsolute(Pointer);
+		const FVector2D PreviousAbsolute =
+			Workspace.GetCachedGeometry().LocalToAbsolute(Previous);
+		const FPointerEvent PointerMove(
+			0,
+			PointerAbsolute,
+			PreviousAbsolute,
+			TSet<FKey>{ EKeys::LeftMouseButton },
+			EKeys::LeftMouseButton,
+			0.0f,
+			FModifierKeysState());
+		Workspace.HandleCardPointerMove(&CardWidget, FGeometry(), PointerMove);
+		Previous = Pointer;
+	}
+}
+
+bool FWacomBackpackScreenTestAccess::CommitWorkspacePileMoveWithSynchronousTargetReconcile(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	UWacomDeckCardWidget& CardWidget,
+	EZoneKind Zone,
+	FVector2D HeaderStart,
+	FVector2D PointerEnd,
+	FVector2D TargetCardCenter)
+{
+	if (!Workspace.InteractionModel)
+	{
+		return false;
+	}
+	const FWacomBackpackZoneKey Key = FWacomBackpackZoneKey::Make(Zone);
+	if (!Workspace.InteractionModel->BeginPileMove(Key, HeaderStart, HeaderStart))
+	{
+		return false;
+	}
+	Workspace.PendingPileStartPosition = HeaderStart;
+	Workspace.InteractionModel->UpdatePileMove(PointerEnd);
+	Workspace.ApplyActivePileMove();
+	bool bReconciled = false;
+	const FDelegateHandle Handle = Workspace.OnPileMoveCommittedNative.AddLambda(
+		[&Workspace, &CardWidget, TargetCardCenter, &bReconciled](EZoneKind, FGuid, FVector2D)
+		{
+			Workspace.ApplyCardBaseLayout(
+				CardWidget,
+				TargetCardCenter,
+				FVector2D(220.0f, 320.0f),
+				0.0f,
+				4000);
+			bReconciled = true;
+		});
+	const FVector2D PointerEndAbsolute =
+		Workspace.GetCachedGeometry().LocalToAbsolute(PointerEnd);
+	const FPointerEvent PointerUp(
+		0,
+		PointerEndAbsolute,
+		PointerEndAbsolute,
+		TSet<FKey>(),
+		EKeys::LeftMouseButton,
+		0.0f,
+		FModifierKeysState());
+	Workspace.NativeOnMouseButtonUp(FGeometry(), PointerUp);
+	Workspace.OnPileMoveCommittedNative.Remove(Handle);
+	return bReconciled;
+}
+
+void FWacomBackpackScreenTestAccess::ForgetWorkspacePileRegistry(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	for (UWacomBackpackZonePileWidget* Pile : Workspace.PileWidgets)
+	{
+		if (Pile)
+		{
+			Pile->OnPilePointerDownNative.Unbind();
+		}
+	}
+	Workspace.PileWidgets.Reset();
+}
+
+bool FWacomBackpackScreenTestAccess::CommitWorkspaceReleaseBeforeTargetReconcile(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	const TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Model = Workspace.InteractionModel;
+	if (!Model || !Model->IsCarrying())
+	{
+		return false;
+	}
+
+	bool bCommitted = false;
+	const FDelegateHandle Handle = Workspace.OnReleaseIntentNative.AddLambda(
+		[Model, &bCommitted](const FWacomBackpackWorkspaceReleaseIntent& Intent)
+		{
+			Model->CommitReleasedCards(Intent.InstanceIds);
+			bCommitted = !Intent.InstanceIds.IsEmpty();
+		});
+	Model->NotifyReleaseGestureStarted();
+	Workspace.BroadcastRelease(false);
+	Workspace.OnReleaseIntentNative.Remove(Handle);
+	return bCommitted;
 }
 
 EZoneKind FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(const UWacomBackpackScreen& Screen)

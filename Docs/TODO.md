@@ -75,18 +75,18 @@ tags:
   - 入口：`specs/005-backpack-visual-production/`
   - 说明：该轮完成全局 `1920×1080` DPI、Root/Main/Body/Workspace/Overlay Fill、Header Auto、固定卡面缩放和静态 Retainer，并通过四分辨率、16:10、超宽及高卡量验收。2026-07-16 后续内嵌牌堆改造已删除右侧 Rack，但继续沿用本轮的分辨率、卡面与 Retainer 合同。
 
-- [ ] **背包工作台内嵌牌堆改造**
-  - 状态：`Implementation + automated verification complete; final PIE pending`
+- [ ] **背包真实卡牌牌堆与携带性能改造**
+  - 状态：`Implementation and automated/Builder verification complete; final PIE/Insights pending`
   - 归属：App / UI / Editor / Tests
   - 入口：[Backpack WBP 制作与绑定合同](./UI_Backpack_WBP_Binding.md) / [Wacom UI](./WacomUI.md)
-  - 说明：通量区已成为统一自由工作台；备战、特殊和负重改为工作台内嵌牌堆，右侧 Rack 类、Builder 路径和 WBP 已删除。已落地固定缩略预览、单展开手风琴、标题拖堆、标题避让、网格/边缘吸附、同 Run 瞬态位置/ZOrder/展开状态、单来源框选、携带悬停展开、空白通量投放和 Full/Simplified 位置/角度动效。2026-07-16 已通过 652-action Non-Unity 工程编译、Builder 双跑资产哈希幂等、`Wacom.UI.Backpack` 65/65 和 `Wacom.Run.Backpack` 2/2；待完成多分辨率、21 张备战卡、拖堆/悬停展开、原子拒绝及 Full/Simplified 动效手感 PIE 后勾选。
+  - 说明：通量区保持统一自由工作台；备战、特殊和负重牌堆已迁移为折叠/展开共用的全部真实卡面。正式链路删除 Preview class/ViewData/Builder 依赖，新增 `WBP_BackpackZonePile` 与 Workspace 分层，DeckCard 改承载 `WBP_FPCardView`。携带路径使用单一 `CarryRoot` 锚点：静止 `CarryCache` 缓存非当前扇形卡，独立 `CarryActiveLayer` 只承载当前实时卡；鼠标移动不插值、不重算扇形、不全量刷新静态卡。跨区提交按 `InstanceId` 原位迁移同一实体 Widget，不再因 `PhysicalZone` 变化创建替代实例。牌堆 Reconcile 以实际 Canvas 子控件为视觉所有权真相并在 Destruct 主动清理，已消除反复展开/收起后累积不可交互牌堆框的问题；用户连续 10 次 PIE 验证通过。`WacomEditor -DisableUnity`、Builder 双跑 Hash、`Wacom.UI.Backpack` 71/71、`Wacom.Run.Backpack` 2/2 已通过；完成剩余 1/21 张携带手感与 Insights 观察后更新为 Done。对应阶段工件见 `specs/006-backpack-real-card-piles/`。
 
 - [x] **背包 Workspace 重构：正式实现、旧路径迁移与统一 PIE 验收完成**
   - 状态：`Done: C++ + formal WBP + DreamShader + legacy cleanup + final PIE complete`
   - 归属：Run / App / UI / Tests
   - 入口：`specs/003-backpack-workspace-refactor/`
   - 说明：`specs/003-backpack-workspace-refactor/` 的 T001–T076 已全部完成，建立了 Workspace、同 Run 瞬态布局、框选与持续扇形携带、分层 Back、原子批量移动/销毁、确认恢复、正式 WBP/Style、静态 Retainer 卡面与 Wacom-native DreamShader 反馈。该轮的“单活动区 + 常驻 ZoneRack”表现结构已在 2026-07-16 内嵌牌堆改造中替换；规则事务与输入合同继续复用。
-  - 2026-07-14 Surface Foil 跟进：`WBP_BackpackCardView` 继续复用共享 `WBP_FirstPersonCardView` 排版，但 wrapper 默认按实例关闭内层动态 `SurfaceFoilOverlay`，运行时折叠该层并清空材质 Brush；战斗/第一人称卡面的默认流光不变。新增红→绿 runtime contract 与正式资产 CDO contract；验证通过 `WacomEditor`、`Wacom.Run.Backpack` 2/2、`Wacom.UI.Backpack` 60/60、`CompileAllBlueprints`（0 error；1 个既有蓝图弃用 warning，进程汇总 6 个既有 warning），资产 builder 0 error 且正式 8/8 资产连续生成 SHA-256 稳定。PIE 仍需确认背包卡面不存在冻结流光帧，并对照 authored 卡面检查最终抗锯齿与出血徽章。
+  - 2026-07-14 Surface Foil 跟进（历史）：当时的 `WBP_BackpackCardView` 静态 wrapper 合同已由 2026-07-16 的 `specs/006-backpack-real-card-piles/` 取代；新正式路径直接复用 `WBP_FPCardView` 并通过单动态卡预算控制实时材质，不再扩展旧 wrapper。
   - 2026-07-15 T070 布局与卡面第一轮：24 张实体牌、4 个牌匣基线下，中央单活动区和高亮牌匣识别体感无延迟；用户明确豁免秒表记录并接受该定性结果，文档不虚构具体秒数。用户已确认三张卡的手动位置、角度和 ZOrder 在切区及同 Run 关闭/重开后保持，新 PIE Run 不继承旧布局；越界释放仍保留约 30% 卡牌主体；卡面静置保持完全不透明，费用/名称/耐久/出血徽章稳定，无冻结 Surface Foil 或采样清晰度变化。本轮无代码缺陷需要修复。
   - 2026-07-15 T070 事务、生命周期与表现轮：用户已确认活动区牌匣收拢、单张/整组跨区移动、容量与 stale 原子拒绝、批量销毁确认/取消/成功、切区取消、Deactivate/Reactivate、详情与确认焦点、键盘导航、反馈区分、命中几何及空闲表现均正常。携带中按 B 可关闭且重开后无捕获、扇形、旧选择或携带残留，鼠标/框选/卡牌点击立即可用。Escape 已定稿并完成分层 Back PIE：携带/框选/待决按压时先取消指针事务，下一次空闲 Escape 交给 CommonUI 关闭，B 始终直接关闭；实现和 `ScreenComposition` 自动化合同已补，`WacomEditor`、`Wacom.UI.Backpack` 63/63、`Wacom.Run.Backpack` 2/2 通过。T070 所有 PIE 项已完成，秒表项按用户明确豁免以“体感无延迟”收口。
   - 2026-07-14 Workspace Feedback SM6 修复：`UMaterialExpressionVertexColor` 默认输出 0 实际为 RGB `float3`，Alpha 是独立输出 4；隐式 `.w` 与对输出 0 使用 A `ComponentMask` 都会报 `Not enough components`。`.dsm` 现直接消费 OutputIndex 0/4，并通过 DreamShader `-Force` 重建正式材质；`WorkspaceFeedbackCompiles` 红→绿测试会实际重编译材质、穿透 Named Reroute 核对输出索引并拒绝非法 A mask，真实 D3D12 `PCD3D_SM6` 定向测试及完整 `Wacom.UI.Backpack` 61/61 均通过。

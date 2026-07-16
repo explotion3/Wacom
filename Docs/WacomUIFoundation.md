@@ -96,7 +96,7 @@ Details / Blueprint 分类口径：
 | UI settings | `Wacom|UI Foundation|Settings` |
 | Widget registry entry | `Wacom|UI Foundation|Widget Registry` |
 
-`UWacomPrimaryGameLayout` 缓存每个 Layer Stack 的 `OnTransitioningChanged` 状态，并通过 native delegate 广播 Layer Tag 与开始/结束状态。该合同只暴露 CommonUI Shell 的表现生命周期，不承载业务状态；需要避免在层 Alpha 过渡中烘入离屏缓存的 Screen（当前为背包静态卡面 Retainer）应在 Construct/Activate 时查询当前状态、订阅变化，并在 Destruct 时解除订阅。不要用固定帧数或持续 Tick 猜测过渡结束时间。
+`UWacomPrimaryGameLayout` 缓存每个 Layer Stack 的 `OnTransitioningChanged` 状态，并通过 native delegate 广播 Layer Tag 与开始/结束状态。该合同只暴露 CommonUI Shell 的表现生命周期，不承载业务状态；需要避免在层 Alpha 过渡中烘入离屏缓存的 Screen（当前包括承载 `WBP_FPCardView` 的背包卡面）应在 Construct/Activate 时查询当前状态、订阅变化，并在 Destruct 时解除订阅。背包在过渡中暂停 retained caching，结束后恢复静态按需补绘与“最多一张实时卡”的表现预算；不要用固定帧数或持续 Tick 猜测过渡结束时间。
 
 ## §4 Activatable 与 Button 基类
 
@@ -161,7 +161,7 @@ Continue 只有在 `bHasActiveJourney` 时显示，并由 `bCanContinueJourney` 
 
 全局 UMG DPI 使用 `UIScaleRule=Custom` 和 `UWacomCappedDesignDPIScalingRule`，设计基准固定为 `1920 × 1080`，`ApplicationScale=1.0`。规则按 `min(1, ViewportWidth / 1920, ViewportHeight / 1080)` 计算缩放：`1280 × 720` 约为 `0.667`、`1920 × 1080` 为 `1.0`，`2560 × 1440` 与 `3840 × 2160` 仍为 `1.0`。因此较小视口会完整容纳基准画布，而较高分辨率不会再次放大主菜单、Settings、暂停菜单、Run / Battle HUD 框架等按设计单位制作的固定尺寸元素；16:10 和超宽屏同样按较短比例适配并封顶。`UIScaleCurve` 与引擎 `ScaleToFit` 不再作为其它缩放来源；WBP 与 C++ fallback 都继承这一全局结果。本阶段最低视口为 `1280 × 720`，不增加 Settings 行或 Footer 的响应式重排，也不嵌套额外 `ScaleBox`。
 
-Backpack 正式 Screen 直接 Fill `UI.Layer.GameMenu`，不再保留固定 `1600×900` 子画布，也不叠加第二个全屏 `ScaleBox`。它只在完整卡牌局部使用固定 `CardFaceScaleBox=0.75` 来保存 authored 卡面坐标；折叠牌堆使用独立固定尺寸简化预览，不缩放完整卡面。这个局部常量不是 viewport profile，不消费 first-person `PresentationScale`，分辨率变化统一由上述全局 DPI 和统一 Workspace 内的自适应牌堆/手风琴布局吸收。
+Backpack 正式 Screen 直接 Fill `UI.Layer.GameMenu`，不再保留固定 `1600×900` 子画布，也不叠加第二个全屏 `ScaleBox`。它只在完整卡牌局部使用固定 `CardFaceScaleBox=0.75` 来保存 authored 卡面坐标；折叠牌堆同样显示全部真实 `WBP_FPCardView`，以固定卡面尺寸和水平露出适配，不再使用简化预览。这个局部常量不是 viewport profile，不消费 first-person `PresentationScale`，分辨率变化统一由上述全局 DPI 和统一 Workspace 内的折叠/手风琴布局吸收。
 
 CommonUI 继续拥有键盘和手柄的焦点导航。主菜单导航按钮与通用 `UWacomMenuButtonWidget` 都在 Construct / Destruct 中对称订阅 `UCommonButtonBase::OnFocusReceived / OnFocusLost`，将 CommonButton 内部 Slate 焦点与鼠标 Hover 合并为同一个强调状态；主菜单继续使用自己的底板、强调条、箭头和插值动画，Settings / Pause / Modal 共用按钮则使用深色底板、琥珀强调条和文字色反馈。`UWacomSettingsOptionRow` 额外通过 focus-path 事件统一处理“焦点在行本身、左右步进按钮或 Slider 内”的整行高亮，因此切换分类后落到选项行也有明确反馈。
 

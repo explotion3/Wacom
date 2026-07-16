@@ -61,22 +61,6 @@ TArray<FWacomBackpackZonePileView> UWacomBackpackScreenPresenter::BuildWorkspace
 			&& Zone == ExpandedZone
 			&& (Zone != EZoneKind::SpecialZone || Owner == ExpandedOwnerInstanceId);
 	};
-	auto AddPreview = [](TArray<FWacomBackpackPilePreviewCardView>& Out,
-		const FRunStorageCardView& Card,
-		bool bOwner,
-		bool bProjected)
-	{
-		if (Out.Num() >= 3 || !Card.Instance.Definition)
-		{
-			return;
-		}
-		FWacomBackpackPilePreviewCardView Preview;
-		Preview.Definition = Card.Instance.Definition.Get();
-		Preview.bOwnerIdentity = bOwner;
-		Preview.bProjected = bProjected;
-		Out.Add(MoveTemp(Preview));
-	};
-
 	TArray<FWacomBackpackZonePileView> Result;
 	FWacomBackpackZonePileView Battle;
 	Battle.Zone = EZoneKind::BattleDeck;
@@ -86,18 +70,6 @@ TArray<FWacomBackpackZonePileView> UWacomBackpackScreenPresenter::BuildWorkspace
 	Battle.ProjectedCount = Snapshot.BattleDeckProjectedCards.Num();
 	Battle.bHasCapacity = true;
 	Battle.bExpanded = IsExpanded(Battle.Zone, FGuid());
-	for (const FRunStorageCardView& Card : Snapshot.BattleDeckPhysicalCards)
-	{
-		AddPreview(Battle.PreviewCards, Card, false, false);
-	}
-	if (!Snapshot.BattleDeckProjectedCards.IsEmpty())
-	{
-		if (Battle.PreviewCards.Num() >= 3)
-		{
-			Battle.PreviewCards.SetNum(2);
-		}
-		AddPreview(Battle.PreviewCards, Snapshot.BattleDeckProjectedCards[0], false, true);
-	}
 	Result.Add(MoveTemp(Battle));
 
 	for (const FRunSpecialStorageView& Special : Snapshot.SpecialZones)
@@ -117,11 +89,6 @@ TArray<FWacomBackpackZonePileView> UWacomBackpackScreenPresenter::BuildWorkspace
 		Pile.Capacity = Special.Capacity;
 		Pile.bHasCapacity = true;
 		Pile.bExpanded = IsExpanded(Pile.Zone, OwnerId);
-		AddPreview(Pile.PreviewCards, Special.OwnerCard, true, false);
-		for (const FRunStorageCardView& Card : Special.ContentCards)
-		{
-			AddPreview(Pile.PreviewCards, Card, false, false);
-		}
 		Result.Add(MoveTemp(Pile));
 	}
 
@@ -134,10 +101,6 @@ TArray<FWacomBackpackZonePileView> UWacomBackpackScreenPresenter::BuildWorkspace
 		Burden.bMovable = false;
 		Burden.bWarning = true;
 		Burden.bExpanded = IsExpanded(Burden.Zone, FGuid());
-		for (const FRunStorageCardView& Card : Snapshot.BurdenCards)
-		{
-			AddPreview(Burden.PreviewCards, Card, false, false);
-		}
 		Result.Add(MoveTemp(Burden));
 	}
 	return Result;

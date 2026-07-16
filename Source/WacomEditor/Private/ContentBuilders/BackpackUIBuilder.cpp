@@ -10,11 +10,11 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
+#include "Components/InvalidationBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
-#include "Components/RetainerBox.h"
 #include "Components/ScaleBox.h"
 #include "Components/ScaleBoxSlot.h"
 #include "Components/SizeBox.h"
@@ -34,12 +34,9 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
-#include "UI/Backpack/WacomBackpackPilePreviewWidget.h"
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
-#include "UI/Card/WacomCardView.h"
-#include "UI/Card/WacomRetainedCardViewWidget.h"
-#include "UI/Card/WacomStaticRetainerBox.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
 #include "WidgetBlueprintOperationUtils.h"
@@ -49,7 +46,6 @@ namespace Wacom::ContentBuilder
 namespace
 {
 const TCHAR* BackpackUIRoot = TEXT("/Game/Wacom/UI/Backpack");
-const TCHAR* CardUIRoot = TEXT("/Game/Wacom/UI/Card");
 
 FSlateChildSize FillSize(float Value = 1.0f)
 {
@@ -152,9 +148,36 @@ bool SaveTopLevelAsset(UObject& Asset)
 	return UPackage::SavePackage(Package, &Asset, *Filename, Args);
 }
 
+void ResetWidgetBlueprintContent(UWidgetBlueprint& Blueprint)
+{
+	if (Blueprint.WidgetTree)
+	{
+		UWidgetTree* OldTree = Blueprint.WidgetTree;
+		const FName RetiredName = MakeUniqueObjectName(
+			GetTransientPackage(), UWidgetTree::StaticClass(), TEXT("RetiredBackpackWidgetTree"));
+		OldTree->Rename(
+			*RetiredName.ToString(),
+			GetTransientPackage(),
+			REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
+		if (OldTree->IsRooted())
+		{
+			OldTree->RemoveFromRoot();
+		}
+		OldTree->MarkAsGarbage();
+	}
+	Blueprint.WidgetTree = NewObject<UWidgetTree>(&Blueprint, TEXT("WidgetTree"), RF_Transactional);
+	Blueprint.Bindings.Reset();
+	Blueprint.Animations.Reset();
+	// The whole tree is rebuilt.  Let the compiler derive stable widget GUIDs from
+	// the new deterministic object paths instead of preserving retired names.
+	Blueprint.WidgetVariableNameToGuidMap.Reset();
+	Blueprint.bCanCallInitializedWithoutPlayerContext = true;
+}
+
 UWidgetBlueprint* LoadOrCreateWidgetBlueprint(
 	const TCHAR* AssetName,
 	UClass* ParentClass,
+	bool bResetContent = true,
 	const TCHAR* RootPath = BackpackUIRoot)
 {
 	UWidgetBlueprint* Blueprint = LoadObject<UWidgetBlueprint>(nullptr, *ObjectPath(AssetName, RootPath));
@@ -183,28 +206,10 @@ UWidgetBlueprint* LoadOrCreateWidgetBlueprint(
 	{
 		Blueprint->ParentClass = ParentClass;
 	}
-	if (Blueprint->WidgetTree)
+	if (bResetContent)
 	{
-		UWidgetTree* OldTree = Blueprint->WidgetTree;
-		const FName RetiredName = MakeUniqueObjectName(
-			GetTransientPackage(), UWidgetTree::StaticClass(), TEXT("RetiredBackpackWidgetTree"));
-		OldTree->Rename(
-			*RetiredName.ToString(),
-			GetTransientPackage(),
-			REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
-		if (OldTree->IsRooted())
-		{
-			OldTree->RemoveFromRoot();
-		}
-		OldTree->MarkAsGarbage();
+		ResetWidgetBlueprintContent(*Blueprint);
 	}
-	Blueprint->WidgetTree = NewObject<UWidgetTree>(Blueprint, TEXT("WidgetTree"), RF_Transactional);
-	Blueprint->Bindings.Reset();
-	Blueprint->Animations.Reset();
-	// 整棵树由 builder 重建，旧名称表不能继续作为新增 Widget 的 GUID 真相。
-	// 编译器会按稳定对象路径重新生成 deterministic GUID，因此重复生成仍保持稳定。
-	Blueprint->WidgetVariableNameToGuidMap.Reset();
-	Blueprint->bCanCallInitializedWithoutPlayerContext = true;
 	return Blueprint;
 }
 
@@ -289,61 +294,17 @@ bool ApplyCardFaceSlotLayout(UPanelSlot* Slot, const FBackpackCardFaceSlotLayout
 	return false;
 }
 
-bool BuildBackpackCardViewAsset()
-{
-	UClass* AuthoredCardFaceClass = LoadObject<UClass>(
-		nullptr,
-		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C"));
-	if (!AuthoredCardFaceClass || !AuthoredCardFaceClass->IsChildOf(UWacomCardView::StaticClass()))
-	{
-		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Missing authored first-person CardView"));
-		return false;
-	}
-
-	UWidgetBlueprint* Blueprint = LoadOrCreateWidgetBlueprint(
-		TEXT("WBP_BackpackCardView"),
-		UWacomRetainedCardViewWidget::StaticClass(),
-		CardUIRoot);
-	if (!Blueprint || !Blueprint->WidgetTree)
-	{
-		return false;
-	}
-
-	UWacomStaticRetainerBox* Retainer = MakeWidget<UWacomStaticRetainerBox>(
-		*Blueprint, TEXT("CardFaceRetainer"), true);
-	Retainer->SetEffectMaterial(nullptr);
-	Blueprint->WidgetTree->RootWidget = Retainer;
-
-	UWacomCardView* AuthoredCardFace = Blueprint->WidgetTree->ConstructWidget<UWacomCardView>(
-		AuthoredCardFaceClass, TEXT("CardView"));
-	if (!AuthoredCardFace || !Retainer->SetContent(AuthoredCardFace))
-	{
-		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Failed to build retained Backpack CardView"));
-		return false;
-	}
-	FWidgetBlueprintOperationUtils::ToggleWidgetAsVariable(
-		Blueprint, AuthoredCardFace, true, false);
-
-	if (!CompileWidgetBlueprint(*Blueprint) || !SaveTopLevelAsset(*Blueprint))
-	{
-		return false;
-	}
-	UE_LOG(LogTemp, Display,
-		TEXT("[BackpackUIBuilder] Generated static retained WBP_BackpackCardView"));
-	return true;
-}
-
 bool PatchBackpackDeckCardFace()
 {
 	constexpr float BackpackCardFaceScale = 0.75f;
 	const TCHAR* DeckCardObjectPath =
 		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget");
 	const TCHAR* CardFaceClassPath =
-		TEXT("/Game/Wacom/UI/Card/WBP_BackpackCardView.WBP_BackpackCardView_C");
+		TEXT("/Game/Wacom/UI/Card/WBP_FPCardView.WBP_FPCardView_C");
 	UWidgetBlueprint* DeckCardBlueprint = LoadObject<UWidgetBlueprint>(nullptr, DeckCardObjectPath);
 	UClass* CardFaceClass = LoadObject<UClass>(nullptr, CardFaceClassPath);
 	if (!DeckCardBlueprint || !DeckCardBlueprint->WidgetTree || !CardFaceClass
-		|| !CardFaceClass->IsChildOf(UWacomRetainedCardViewWidget::StaticClass()))
+		|| !CardFaceClass->IsChildOf(UWacomFirstPersonCardViewWidget::StaticClass()))
 	{
 		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] Missing DeckCard or authored card face asset"));
 		return false;
@@ -389,6 +350,7 @@ bool PatchBackpackDeckCardFace()
 		&& WorkspaceFeedbackOverlay->GetVisibility() == ESlateVisibility::Collapsed;
 	if (ExistingCardFaceWidget->GetClass() == CardFaceClass
 		&& ExistingCardFaceWidget->GetFName() == TEXT("BackpackCardView")
+		&& ExistingCardFaceWidget->GetVisibility() == ESlateVisibility::HitTestInvisible
 		&& DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(TEXT("BackpackCardView"))
 		&& !DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(TEXT("CardView"))
 		&& bHasFormalScaleContract
@@ -441,7 +403,7 @@ bool PatchBackpackDeckCardFace()
 			GetTransientPackage(),
 			REN_DontCreateRedirectors | REN_DoNotDirty | REN_NonTransactional);
 
-		ExistingCardFaceWidget = DeckCardBlueprint->WidgetTree->ConstructWidget<UWacomRetainedCardViewWidget>(
+		ExistingCardFaceWidget = DeckCardBlueprint->WidgetTree->ConstructWidget<UWacomFirstPersonCardViewWidget>(
 			CardFaceClass, TEXT("BackpackCardView"));
 		if (!ExistingCardFaceWidget || !CardFaceScaleBox->SetContent(ExistingCardFaceWidget))
 		{
@@ -450,8 +412,12 @@ bool PatchBackpackDeckCardFace()
 		}
 	}
 
-	UWacomRetainedCardViewWidget* ExistingCardFace =
-		Cast<UWacomRetainedCardViewWidget>(ExistingCardFaceWidget);
+	UWacomFirstPersonCardViewWidget* ExistingCardFace =
+		Cast<UWacomFirstPersonCardViewWidget>(ExistingCardFaceWidget);
+	if (ExistingCardFace)
+	{
+		ExistingCardFace->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
 	UScaleBoxSlot* CardFaceSlot = ExistingCardFace
 		? Cast<UScaleBoxSlot>(ExistingCardFace->Slot)
 		: nullptr;
@@ -531,8 +497,105 @@ bool PatchBackpackDeckCardFace()
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BackpackUIBuilder] DeckCard now scales WBP_BackpackCardView uniformly at %.4f"),
+		TEXT("[BackpackUIBuilder] DeckCard now scales WBP_FPCardView uniformly at %.4f"),
 		BackpackCardFaceScale);
+	return true;
+}
+
+constexpr TCHAR ZonePileBuilderContract[] = TEXT("Wacom.Backpack.ZonePile.RealCards.v1");
+
+bool IsZonePileBlueprintCurrent(const UWidgetBlueprint& Blueprint)
+{
+	if (Blueprint.ParentClass != UWacomBackpackZonePileWidget::StaticClass()
+		|| Blueprint.BlueprintDescription != ZonePileBuilderContract
+		|| !Blueprint.WidgetTree
+		|| !Cast<UCanvasPanel>(Blueprint.WidgetTree->RootWidget))
+	{
+		return false;
+	}
+	UWidgetTree* Tree = Blueprint.WidgetTree;
+	const UBorder* Frame = Cast<UBorder>(Tree->FindWidget(TEXT("FrameBorder")));
+	const UBorder* DragHandle = Cast<UBorder>(Tree->FindWidget(TEXT("DragHandle")));
+	const UTextBlock* Title = Cast<UTextBlock>(Tree->FindWidget(TEXT("TitleText")));
+	const UTextBlock* Count = Cast<UTextBlock>(Tree->FindWidget(TEXT("CountText")));
+	const UTextBlock* Status = Cast<UTextBlock>(Tree->FindWidget(TEXT("StatusText")));
+	const UBorder* DropFeedback = Cast<UBorder>(Tree->FindWidget(TEXT("DropFeedback")));
+	return Frame && Frame->bIsVariable
+		&& DragHandle && DragHandle->bIsVariable
+		&& Title && Title->bIsVariable
+		&& Count && Count->bIsVariable
+		&& Status && Status->bIsVariable
+		&& DropFeedback && DropFeedback->bIsVariable
+		&& !Tree->FindWidget(TEXT("PreviewHost"));
+}
+
+bool BuildZonePileBlueprint(UWidgetBlueprint& Blueprint)
+{
+	Blueprint.BlueprintDescription = ZonePileBuilderContract;
+	UCanvasPanel* Root = MakeWidget<UCanvasPanel>(Blueprint, TEXT("PileRoot"));
+	Blueprint.WidgetTree->RootWidget = Root;
+
+	UBorder* Frame = MakeWidget<UBorder>(Blueprint, TEXT("FrameBorder"), true);
+	Frame->SetBrushColor(FLinearColor(0.025f, 0.04f, 0.065f, 0.74f));
+	Frame->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Frame))
+	{
+		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		Slot->SetOffsets(FMargin(0.0f));
+	}
+
+	UBorder* DragHandle = MakeWidget<UBorder>(Blueprint, TEXT("DragHandle"), true);
+	DragHandle->SetPadding(FMargin(10.0f, 7.0f));
+	DragHandle->SetBrushColor(FLinearColor(0.08f, 0.13f, 0.19f, 1.0f));
+	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(DragHandle))
+	{
+		Slot->SetPosition(FVector2D::ZeroVector);
+		Slot->SetSize(FVector2D(260.0f, 48.0f));
+		Slot->SetZOrder(2);
+	}
+	UHorizontalBox* Header = MakeWidget<UHorizontalBox>(Blueprint, TEXT("Header"));
+	DragHandle->AddChild(Header);
+	UTextBlock* Title = MakeText(
+		Blueprint, TEXT("TitleText"),
+		NSLOCTEXT("BackpackUIBuilder", "PileTitle", "区域牌堆"),
+		18, FLinearColor(0.92f, 0.95f, 0.97f, 1.0f), true);
+	if (UHorizontalBoxSlot* Slot = Header->AddChildToHorizontalBox(Title))
+	{
+		Slot->SetSize(FillSize());
+		Slot->SetVerticalAlignment(VAlign_Center);
+	}
+	UTextBlock* Count = MakeText(
+		Blueprint, TEXT("CountText"), FText::FromString(TEXT("0")),
+		17, FLinearColor(0.55f, 0.86f, 0.98f, 1.0f), true);
+	if (UHorizontalBoxSlot* Slot = Header->AddChildToHorizontalBox(Count))
+	{
+		Slot->SetSize(AutoSize());
+		Slot->SetVerticalAlignment(VAlign_Center);
+	}
+
+	UTextBlock* Status = MakeText(
+		Blueprint, TEXT("StatusText"),
+		NSLOCTEXT("BackpackUIBuilder", "PileExpandHint", "点击牌堆展开"),
+		14, FLinearColor(0.62f, 0.70f, 0.78f, 1.0f), true);
+	Status->SetJustification(ETextJustify::Center);
+	Status->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Status))
+	{
+		Slot->SetAnchors(FAnchors(0.0f, 1.0f, 1.0f, 1.0f));
+		Slot->SetAlignment(FVector2D(0.0f, 1.0f));
+		Slot->SetOffsets(FMargin(8.0f, -32.0f, 8.0f, 28.0f));
+		Slot->SetZOrder(2);
+	}
+
+	UBorder* DropFeedback = MakeWidget<UBorder>(Blueprint, TEXT("DropFeedback"), true);
+	DropFeedback->SetBrushColor(FLinearColor(0.12f, 0.85f, 0.42f, 0.72f));
+	DropFeedback->SetVisibility(ESlateVisibility::Collapsed);
+	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(DropFeedback))
+	{
+		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		Slot->SetOffsets(FMargin(0.0f));
+		Slot->SetZOrder(3);
+	}
 	return true;
 }
 
@@ -556,11 +619,57 @@ bool BuildWorkspaceBlueprint(UWidgetBlueprint& Blueprint)
 		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 		Slot->SetOffsets(FMargin(0.0f));
 	}
+	auto AddWorkspaceLayer = [&Blueprint, WorkspaceCanvas](FName Name, int32 ZOrder)
+	{
+		UCanvasPanel* Layer = MakeWidget<UCanvasPanel>(Blueprint, Name, true);
+		Layer->SetClipping(EWidgetClipping::Inherit);
+		if (UCanvasPanelSlot* Slot = WorkspaceCanvas->AddChildToCanvas(Layer))
+		{
+			Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+			Slot->SetOffsets(FMargin(0.0f));
+			Slot->SetZOrder(ZOrder);
+		}
+		return Layer;
+	};
+	AddWorkspaceLayer(TEXT("PileFrameLayer"), 1000);
+	AddWorkspaceLayer(TEXT("StaticCardLayer"), 2000);
+	UCanvasPanel* MarqueeLayer = AddWorkspaceLayer(TEXT("MarqueeLayer"), 9000);
+	UCanvasPanel* CarryRoot = AddWorkspaceLayer(TEXT("CarryRoot"), 10000);
+	if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(CarryRoot->Slot))
+	{
+		Slot->SetAnchors(FAnchors(0.0f, 0.0f));
+		Slot->SetAlignment(FVector2D::ZeroVector);
+		Slot->SetPosition(FVector2D::ZeroVector);
+		Slot->SetSize(FVector2D(1.0f, 1.0f));
+		Slot->SetZOrder(10000);
+	}
+	UInvalidationBox* CarryCache = MakeWidget<UInvalidationBox>(
+		Blueprint, TEXT("CarryCache"), true);
+	CarryCache->SetCanCache(true);
+	if (UCanvasPanelSlot* Slot = CarryRoot->AddChildToCanvas(CarryCache))
+	{
+		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		Slot->SetOffsets(FMargin(0.0f));
+		Slot->SetZOrder(0);
+	}
+	UCanvasPanel* CarryLayer = MakeWidget<UCanvasPanel>(
+		Blueprint, TEXT("CarryLayer"), true);
+	CarryLayer->SetClipping(EWidgetClipping::Inherit);
+	CarryCache->SetContent(CarryLayer);
+	UCanvasPanel* CarryActiveLayer = MakeWidget<UCanvasPanel>(
+		Blueprint, TEXT("CarryActiveLayer"), true);
+	CarryActiveLayer->SetClipping(EWidgetClipping::Inherit);
+	if (UCanvasPanelSlot* Slot = CarryRoot->AddChildToCanvas(CarryActiveLayer))
+	{
+		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		Slot->SetOffsets(FMargin(0.0f));
+		Slot->SetZOrder(1);
+	}
 
 	UBorder* Marquee = MakeWidget<UBorder>(Blueprint, TEXT("SelectionMarquee"), true);
 	Marquee->SetBrushColor(FLinearColor(0.12f, 0.76f, 0.96f, 0.24f));
 	Marquee->SetVisibility(ESlateVisibility::Collapsed);
-	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(Marquee))
+	if (UCanvasPanelSlot* Slot = MarqueeLayer->AddChildToCanvas(Marquee))
 	{
 		Slot->SetPosition(FVector2D::ZeroVector);
 		Slot->SetSize(FVector2D::ZeroVector);
@@ -912,7 +1021,7 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	Style->FanMaximumAngleDegrees = 36.0f;
 	Style->FanCardSpacingPixels = 72.0f;
 	Style->CurrentCardLiftPixels = 56.0f;
-	Style->PointerFollowSeconds = 0.08f;
+	Style->PileCollapsedExposurePixels = 16.0f;
 	Style->SettleSeconds = 0.18f;
 	Style->CollectSeconds = 0.20f;
 	Style->RejectedFeedbackSeconds = 0.16f;
@@ -936,7 +1045,7 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 
 bool BuildBackpackUIContent()
 {
-	if (!BuildBackpackCardViewAsset() || !PatchBackpackDeckCardFace())
+	if (!PatchBackpackDeckCardFace())
 	{
 		return false;
 	}
@@ -949,19 +1058,30 @@ bool BuildBackpackUIContent()
 
 	UWidgetBlueprint* Workspace = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackWorkspace"), UWacomBackpackWorkspaceWidget::StaticClass());
+	UWidgetBlueprint* ZonePile = LoadOrCreateWidgetBlueprint(
+		TEXT("WBP_BackpackZonePile"), UWacomBackpackZonePileWidget::StaticClass(), false);
 	UWidgetBlueprint* Confirm = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackDeleteConfirm"), UWacomBackpackDeleteConfirmWidget::StaticClass());
 	UWidgetBlueprint* SpecialZone = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_WacomSpecialZoneWidget"), UWacomSpecialZoneWidget::StaticClass());
 	UWidgetBlueprint* Screen = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackScreen"), UWacomBackpackScreen::StaticClass());
-	if (!Workspace || !Confirm || !SpecialZone || !Screen)
+	if (!Workspace || !ZonePile || !Confirm || !SpecialZone || !Screen)
 	{
 		return false;
 	}
+	if (!IsZonePileBlueprintCurrent(*ZonePile))
+	{
+		ResetWidgetBlueprintContent(*ZonePile);
+		if (!BuildZonePileBlueprint(*ZonePile)
+			|| !CompileWidgetBlueprint(*ZonePile)
+			|| !SaveTopLevelAsset(*ZonePile))
+		{
+			return false;
+		}
+	}
 	if (!BuildWorkspaceBlueprint(*Workspace) || !CompileWidgetBlueprint(*Workspace)
-		|| !SetObjectDefault(*Workspace, TEXT("PileWidgetClass"), UWacomBackpackZonePileWidget::StaticClass())
-		|| !SetObjectDefault(*Workspace, TEXT("PilePreviewWidgetClass"), UWacomBackpackPilePreviewWidget::StaticClass())
+		|| !SetObjectDefault(*Workspace, TEXT("PileWidgetClass"), ZonePile->GeneratedClass)
 		|| !SaveTopLevelAsset(*Workspace))
 	{
 		return false;
@@ -990,7 +1110,7 @@ bool BuildBackpackUIContent()
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BackpackUIBuilder] Generated BackpackCardView, Screen, unified Workspace, embedded piles, Confirm, SpecialZone and Style assets"));
+		TEXT("[BackpackUIBuilder] Generated Screen, unified Workspace, formal ZonePile, Confirm, SpecialZone and Style assets; DeckCard hosts WBP_FPCardView"));
 	return true;
 }
 }

@@ -114,6 +114,47 @@ bool FWacomUIBackpackWorkspaceLayoutContractSpec::RunTest(const FString& Paramet
 			}
 		}
 	}
+
+	for (const int32 Count : { 0, 1, 3, 15, 21 })
+	{
+		for (const bool bExpanded : { false, true })
+		{
+			const FWacomBackpackPileContentLayoutTestView Left =
+				FWacomBackpackWorkspaceModelTestAccess::BuildPileContentLayout(
+					Count, FVector2D(24.0f, 360.0f), WorkspaceSize, bExpanded);
+			const FWacomBackpackPileContentLayoutTestView Right =
+				FWacomBackpackWorkspaceModelTestAccess::BuildPileContentLayout(
+					Count, FVector2D(996.0f, 360.0f), WorkspaceSize, bExpanded);
+			TestEqual(TEXT("Real pile returns one fixed card transform per item"), Left.Cards.Num(), Count);
+			TestEqual(TEXT("Right-edge real pile returns every item"), Right.Cards.Num(), Count);
+			if (Count > 0)
+			{
+				TestTrue(TEXT("Left pile opens toward available right space"), Left.bOpensRight);
+				TestFalse(TEXT("Right pile opens toward available left space"), Right.bOpensRight);
+			}
+			for (const FWacomBackpackWorkspaceResolvedLayoutTestView& Card : Left.Cards)
+			{
+				TestTrue(TEXT("Real pile frame encloses every fixed-width card center"),
+					Card.CardCenter.X - 110.0f >= Left.FrameRect.Left - KINDA_SMALL_NUMBER
+						&& Card.CardCenter.X + 110.0f <= Left.FrameRect.Right + KINDA_SMALL_NUMBER);
+				TestTrue(TEXT("Real pile never dynamically shrinks the card height"),
+					Card.CardCenter.Y - 160.0f >= Left.FrameRect.Top - KINDA_SMALL_NUMBER
+						&& Card.CardCenter.Y + 160.0f <= Left.FrameRect.Bottom + 6.0f);
+				TestTrue(TEXT("Collapsed cards do not rotate; expanded fan remains mild"),
+					bExpanded
+						? FMath::Abs(Card.AngleDegrees) <= 6.0f + KINDA_SMALL_NUMBER
+						: FMath::IsNearlyZero(Card.AngleDegrees));
+			}
+			if (Left.Cards.Num() > 1)
+			{
+				const float Exposure = Left.Cards[1].CardCenter.X - Left.Cards[0].CardCenter.X;
+				TestTrue(TEXT("Collapsed exposure stays 10-24; expanded exposure stays 32-72"),
+					bExpanded
+						? Exposure >= 32.0f - KINDA_SMALL_NUMBER && Exposure <= 72.0f + KINDA_SMALL_NUMBER
+						: Exposure >= 10.0f - KINDA_SMALL_NUMBER && Exposure <= 24.0f + KINDA_SMALL_NUMBER);
+			}
+		}
+	}
 	return true;
 }
 

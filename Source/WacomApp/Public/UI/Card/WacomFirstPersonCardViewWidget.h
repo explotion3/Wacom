@@ -43,6 +43,11 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	FVector2D RetainerDesiredSize = FVector2D::ZeroVector;
 	FVector2D RetainerCaptureRootDesiredSize = FVector2D::ZeroVector;
 	FVector2D CardContentDesiredSize = FVector2D::ZeroVector;
+	bool bRetainedRenderingEnabled = true;
+	bool bRealtimePresentationEnabled = true;
+	int32 PresentationRenderRequestCount = 0;
+	int32 RealtimePresentationApplyCount = 0;
+	int32 CardDepthApplyCount = 0;
 };
 #endif
 
@@ -82,6 +87,13 @@ public:
 	void ResetCardDataRewriteView();
 	void SetCostDigitPreviewView(const FWacomFirstPersonCardCostPreviewView& View);
 	void ResetCostDigitPreviewView();
+	/** 背包等静态容器请求一次卡面重绘，不改变当前动态表现策略。 */
+	void RequestPresentationRender();
+	/** CommonUI 过渡期间可关闭 retained rendering，避免把父层透明度烘入缓存。 */
+	void SetRetainedRenderingEnabled(bool bEnabled);
+	/** 允许或暂停逐帧材质更新；静态模式仍可由 RequestPresentationRender 精确补绘。 */
+	void SetRealtimePresentationEnabled(bool bEnabled);
+	bool IsRealtimePresentationEnabled() const { return bRealtimePresentationEnabled; }
 
 #if WITH_AUTOMATION_TESTS
 	FWacomFirstPersonCardViewAutomationTestView GetAutomationTestViewForTest() const;
@@ -143,6 +155,14 @@ private:
 	bool bLastInteractionFeedbackUsedOverrideMaterial = false;
 	bool bLastInteractionFeedbackUsedBrushMaterial = false;
 	bool bBaseSurfaceEffectMaterialCached = false;
+	bool bRetainedRenderingEnabled = true;
+	bool bRealtimePresentationEnabled = true;
+	bool bRealtimePresentationStateApplied = false;
+	#if WITH_AUTOMATION_TESTS
+	int32 PresentationRenderRequestCount = 0;
+	int32 RealtimePresentationApplyCount = 0;
+	int32 CardDepthApplyCount = 0;
+	#endif
 
 	void EnsureFallbackWidgetTree();
 	void ConfigureRetainerCaptureRootClipping();

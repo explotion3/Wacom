@@ -4,14 +4,11 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
-#include "Components/Overlay.h"
-#include "Components/OverlaySlot.h"
-#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
 #include "InputCoreTypes.h"
 
 #define LOCTEXT_NAMESPACE "WacomBackpackZonePile"
@@ -29,23 +26,35 @@ void UWacomBackpackZonePileWidget::SetPileView(const FWacomBackpackZonePileView&
 	ApplyView();
 }
 
-void UWacomBackpackZonePileWidget::SetPreviewWidgetClass(
-	TSubclassOf<UWacomBackpackPilePreviewWidget> InClass)
+void UWacomBackpackZonePileWidget::SetResolvedGeometry(
+	const FSlateRect& InFrameRect,
+	const FSlateRect& InHeaderRect)
 {
-	PreviewWidgetClass = InClass;
-	RebuildPreviews();
+	ResolvedFrameRect = InFrameRect;
+	ResolvedHeaderRect = InHeaderRect;
+	if (UCanvasPanelSlot* HeaderSlot = DragHandle
+		? Cast<UCanvasPanelSlot>(DragHandle->Slot)
+		: nullptr)
+	{
+		HeaderSlot->SetPosition(FVector2D(
+			InHeaderRect.Left - InFrameRect.Left,
+			InHeaderRect.Top - InFrameRect.Top));
+		HeaderSlot->SetSize(FVector2D(
+			InHeaderRect.Right - InHeaderRect.Left,
+			InHeaderRect.Bottom - InHeaderRect.Top));
+	}
 }
 
 void UWacomBackpackZonePileWidget::SetDropPreviewState(bool bVisible, bool bRejected)
 {
 	bDropPreviewVisible = bVisible;
 	bDropPreviewRejected = bRejected;
-	if (DropPreviewBorder)
+	if (DropFeedback)
 	{
-		DropPreviewBorder->SetBrushColor(bRejected
+		DropFeedback->SetBrushColor(bRejected
 			? FLinearColor(1.0f, 0.12f, 0.08f, 0.78f)
 			: FLinearColor(0.12f, 0.85f, 0.42f, 0.72f));
-		DropPreviewBorder->SetVisibility(bVisible
+		DropFeedback->SetVisibility(bVisible
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
@@ -55,9 +64,9 @@ FReply UWacomBackpackZonePileWidget::NativeOnMouseButtonDown(
 	const FGeometry& InGeometry,
 	const FPointerEvent& InMouseEvent)
 {
+	bLastPointerDownOnDragHandle = DragHandle
+		&& DragHandle->GetCachedGeometry().IsUnderLocation(InMouseEvent.GetScreenSpacePosition());
 	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton
-		&& DragHandle
-		&& DragHandle->GetCachedGeometry().IsUnderLocation(InMouseEvent.GetScreenSpacePosition())
 		&& OnPilePointerDownNative.IsBound())
 	{
 		return OnPilePointerDownNative.Execute(this, InGeometry, InMouseEvent);
@@ -76,25 +85,30 @@ void UWacomBackpackZonePileWidget::EnsureFallbackTree()
 		return;
 	}
 
-	USizeBox* RootSize = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("PileSize"));
-	RootSize->SetWidthOverride(260.0f);
-	RootSize->SetHeightOverride(220.0f);
-	WidgetTree->RootWidget = RootSize;
-	UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("PileRoot"));
-	RootSize->AddChild(Root);
+	UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(
+		UCanvasPanel::StaticClass(), TEXT("PileRoot"));
+	WidgetTree->RootWidget = Root;
 
-	UBorder* Body = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("PileBody"));
-	Body->SetPadding(FMargin(10.0f));
-	Body->SetBrushColor(FLinearColor(0.025f, 0.04f, 0.065f, 0.98f));
-	Root->AddChildToOverlay(Body);
-	UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("PileColumn"));
-	Body->AddChild(Column);
+	FrameBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("FrameBorder"));
+	FrameBorder->SetBrushColor(FLinearColor(0.025f, 0.04f, 0.065f, 0.74f));
+	FrameBorder->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* FrameSlot = Root->AddChildToCanvas(FrameBorder))
+	{
+		FrameSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		FrameSlot->SetOffsets(FMargin(0.0f));
+	}
 
 	DragHandle = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DragHandle"));
 	DragHandle->SetPadding(FMargin(8.0f, 6.0f));
 	DragHandle->SetBrushColor(FLinearColor(0.08f, 0.13f, 0.19f, 1.0f));
-	Column->AddChildToVerticalBox(DragHandle);
-	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Header"));
+	if (UCanvasPanelSlot* HeaderSlot = Root->AddChildToCanvas(DragHandle))
+	{
+		HeaderSlot->SetPosition(FVector2D::ZeroVector);
+		HeaderSlot->SetSize(FVector2D(260.0f, 48.0f));
+		HeaderSlot->SetZOrder(2);
+	}
+	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>(
+		UHorizontalBox::StaticClass(), TEXT("Header"));
 	DragHandle->AddChild(Header);
 	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
 	if (UHorizontalBoxSlot* HeaderSlot = Header->AddChildToHorizontalBox(TitleText))
@@ -104,22 +118,25 @@ void UWacomBackpackZonePileWidget::EnsureFallbackTree()
 	CountText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("CountText"));
 	Header->AddChildToHorizontalBox(CountText);
 
-	PreviewHost = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("PreviewHost"));
-	if (UVerticalBoxSlot* PreviewSlot = Column->AddChildToVerticalBox(PreviewHost))
-	{
-		PreviewSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-	}
 	StatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("StatusText"));
 	StatusText->SetJustification(ETextJustify::Center);
-	Column->AddChildToVerticalBox(StatusText);
-
-	DropPreviewBorder = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DropPreviewBorder"));
-	DropPreviewBorder->SetVisibility(ESlateVisibility::Collapsed);
-	DropPreviewBorder->SetPadding(FMargin(4.0f));
-	if (UOverlaySlot* PreviewBorderSlot = Root->AddChildToOverlay(DropPreviewBorder))
+	StatusText->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* StatusSlot = Root->AddChildToCanvas(StatusText))
 	{
-		PreviewBorderSlot->SetHorizontalAlignment(HAlign_Fill);
-		PreviewBorderSlot->SetVerticalAlignment(VAlign_Fill);
+		StatusSlot->SetAnchors(FAnchors(0.0f, 1.0f, 1.0f, 1.0f));
+		StatusSlot->SetAlignment(FVector2D(0.0f, 1.0f));
+		StatusSlot->SetOffsets(FMargin(8.0f, -32.0f, 8.0f, 28.0f));
+		StatusSlot->SetZOrder(2);
+	}
+
+	DropFeedback = WidgetTree->ConstructWidget<UBorder>(
+		UBorder::StaticClass(), TEXT("DropFeedback"));
+	DropFeedback->SetVisibility(ESlateVisibility::Collapsed);
+	if (UCanvasPanelSlot* DropSlot = Root->AddChildToCanvas(DropFeedback))
+	{
+		DropSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+		DropSlot->SetOffsets(FMargin(0.0f));
+		DropSlot->SetZOrder(3);
 	}
 }
 
@@ -146,7 +163,9 @@ void UWacomBackpackZonePileWidget::ApplyView()
 	{
 		StatusText->SetText(PileView.bWarning
 			? LOCTEXT("BurdenWarning", "负重警告")
-			: (PileView.bExpanded ? LOCTEXT("CollapseHint", "点击标题收起") : LOCTEXT("ExpandHint", "点击标题展开")));
+			: (PileView.bExpanded
+				? LOCTEXT("CollapseHint", "点击标题收起")
+				: LOCTEXT("ExpandHint", "点击牌堆展开")));
 	}
 	if (DragHandle)
 	{
@@ -156,38 +175,7 @@ void UWacomBackpackZonePileWidget::ApplyView()
 				? FLinearColor(0.08f, 0.38f, 0.52f, 1.0f)
 				: FLinearColor(0.08f, 0.13f, 0.19f, 1.0f)));
 	}
-	RebuildPreviews();
 	SetDropPreviewState(bDropPreviewVisible, bDropPreviewRejected);
-}
-
-void UWacomBackpackZonePileWidget::RebuildPreviews()
-{
-	if (!PreviewHost || !WidgetTree)
-	{
-		return;
-	}
-	PreviewHost->ClearChildren();
-	UClass* ClassToUse = PreviewWidgetClass
-		? PreviewWidgetClass.Get()
-		: UWacomBackpackPilePreviewWidget::StaticClass();
-	const int32 PreviewCount = FMath::Min(3, PileView.PreviewCards.Num());
-	for (int32 Index = 0; Index < PreviewCount; ++Index)
-	{
-		UWacomBackpackPilePreviewWidget* Preview =
-			CreateWidget<UWacomBackpackPilePreviewWidget>(this, ClassToUse);
-		if (!Preview)
-		{
-			continue;
-		}
-		Preview->SetPreviewView(PileView.PreviewCards[Index]);
-		Preview->SetRenderTransformAngle((Index - 1) * 4.0f);
-		Preview->SetRenderTranslation(FVector2D((Index - 1) * 36.0f, FMath::Abs(Index - 1) * 5.0f));
-		if (UOverlaySlot* PreviewSlot = PreviewHost->AddChildToOverlay(Preview))
-		{
-			PreviewSlot->SetHorizontalAlignment(HAlign_Center);
-			PreviewSlot->SetVerticalAlignment(VAlign_Center);
-		}
-	}
 }
 
 #undef LOCTEXT_NAMESPACE

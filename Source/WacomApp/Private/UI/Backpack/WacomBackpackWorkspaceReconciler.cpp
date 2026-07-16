@@ -3,6 +3,7 @@
 #include "UI/Backpack/WacomBackpackWorkspaceReconciler.h"
 
 #include "Components/CanvasPanel.h"
+#include "Components/PanelWidget.h"
 #include "UI/Backpack/WacomBackpackDeckCardListReconciler.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
@@ -12,21 +13,10 @@
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 
+#define LOCTEXT_NAMESPACE "WacomBackpackWorkspaceReconciler"
+
 namespace
 {
-void AppendPhysicalCards(
-	TConstArrayView<FRunStorageCardView> Source,
-	TArray<FWacomBackpackDeckCardListItem>& OutDesired)
-{
-	for (const FRunStorageCardView& CardView : Source)
-	{
-		FWacomBackpackDeckCardListItem Item;
-		Item.CardView = CardView;
-		Item.Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
-		OutDesired.Add(MoveTemp(Item));
-	}
-}
-
 const FRunSpecialStorageView* FindSpecial(
 	const FRunBackpackStorageSnapshot& Snapshot,
 	FGuid OwnerInstanceId)
@@ -38,83 +28,132 @@ const FRunSpecialStorageView* FindSpecial(
 		});
 }
 
-const FRunStorageCardView* FindPhysicalCard(
-	const FRunBackpackStorageSnapshot& Snapshot,
-	const FWacomBackpackZoneKey& Source,
+bool IsCarriedPhysicalCard(
+	const FWacomBackpackWorkspaceInteractionModel* InteractionModel,
+	const FWacomBackpackZoneKey& Zone,
 	FGuid InstanceId)
 {
-	auto FindById = [InstanceId](TConstArrayView<FRunStorageCardView> Cards)
+	if (!InteractionModel || !InteractionModel->IsCarrying())
 	{
-		return Cards.FindByPredicate(
-			[InstanceId](const FRunStorageCardView& Card)
-			{
-				return Card.Instance.InstanceId == InstanceId;
-			});
-	};
-	switch (Source.Zone)
-	{
-	case EZoneKind::Backpack:
-		return FindById(Snapshot.Flux.ContentCards);
-	case EZoneKind::BattleDeck:
-		return FindById(Snapshot.BattleDeckPhysicalCards);
-	case EZoneKind::BurdenZone:
-		return FindById(Snapshot.BurdenCards);
-	case EZoneKind::SpecialZone:
-		if (const FRunSpecialStorageView* Special = FindSpecial(Snapshot, Source.OwnerInstanceId))
-		{
-			return FindById(Special->ContentCards);
-		}
-		break;
-	default:
-		break;
+		return false;
 	}
-	return nullptr;
+	const FWacomBackpackWorkspaceCarryState& Carry = InteractionModel->GetCarry();
+	return Carry.SourceZone == Zone && Carry.RemainingInstanceIds.Contains(InstanceId);
 }
 
-void AppendExpandedCards(
+void AddCardItem(
+	const FRunStorageCardView& Card,
+	const FWacomBackpackZoneKey& DisplayZone,
+	EWacomBackpackDeckCardListReuseRole Role,
+	bool bInteractive,
+	EWacomBackpackWorkspaceCardReadOnlyKind ReadOnlyKind,
+	TArray<FWacomBackpackDeckCardListItem>& OutDesired,
+	const FText& Badge = FText::GetEmpty())
+{
+	FWacomBackpackDeckCardListItem Item;
+	Item.CardView = Card;
+	Item.DisplayZone = DisplayZone;
+	Item.Role = Role;
+	Item.bWorkspaceInteractive = bInteractive;
+	Item.ReadOnlyKind = ReadOnlyKind;
+	Item.ProjectedBadgeText = Badge;
+	OutDesired.Add(MoveTemp(Item));
+}
+
+void AppendPileCards(
 	const FRunBackpackStorageSnapshot& Snapshot,
-	const FWacomBackpackZoneKey& Expanded,
+	const FWacomBackpackZonePileView& Pile,
+	const FWacomBackpackWorkspaceInteractionModel* InteractionModel,
 	TArray<FWacomBackpackDeckCardListItem>& OutDesired)
 {
-	switch (Expanded.Zone)
+	const FWacomBackpackZoneKey Zone = FWacomBackpackZoneKey::Make(
+		Pile.Zone, Pile.OwnerInstanceId);
+	auto PhysicalInteractive = [&](const FRunStorageCardView& Card)
+	{
+		return Pile.bExpanded
+			|| IsCarriedPhysicalCard(InteractionModel, Zone, Card.Instance.InstanceId);
+	};
+
+	switch (Pile.Zone)
 	{
 	case EZoneKind::BattleDeck:
-		AppendPhysicalCards(Snapshot.BattleDeckPhysicalCards, OutDesired);
-		for (const FRunStorageCardView& ProjectedView : Snapshot.BattleDeckProjectedCards)
+		for (const FRunStorageCardView& Card : Snapshot.BattleDeckPhysicalCards)
 		{
-			FWacomBackpackDeckCardListItem Item;
-			Item.CardView = ProjectedView;
-			Item.Role = EWacomBackpackDeckCardListReuseRole::BattleDeckProjected;
-			Item.ProjectedBadgeText = UWacomBackpackScreenPresenter::BuildBattleDeckProjectedFromBadgeText(
-				ProjectedView,
-				Snapshot);
-			OutDesired.Add(MoveTemp(Item));
+			AddCardItem(
+				Card, Zone, EWacomBackpackDeckCardListReuseRole::PhysicalList,
+				PhysicalInteractive(Card), EWacomBackpackWorkspaceCardReadOnlyKind::None,
+				OutDesired);
+		}
+		for (const FRunStorageCardView& Card : Snapshot.BattleDeckProjectedCards)
+		{
+			AddCardItem(
+				Card, Zone, EWacomBackpackDeckCardListReuseRole::BattleDeckProjected,
+				false, EWacomBackpackWorkspaceCardReadOnlyKind::BattleProjection,
+				OutDesired,
+				UWacomBackpackScreenPresenter::BuildBattleDeckProjectedFromBadgeText(Card, Snapshot));
 		}
 		break;
 	case EZoneKind::SpecialZone:
-		if (const FRunSpecialStorageView* Special = FindSpecial(Snapshot, Expanded.OwnerInstanceId))
+		if (const FRunSpecialStorageView* Special = FindSpecial(Snapshot, Pile.OwnerInstanceId))
 		{
-			// 主卡只作为牌堆身份封面；实体仍由 Backpack/BattleDeck 拥有。
-			AppendPhysicalCards(Special->ContentCards, OutDesired);
+			AddCardItem(
+				Special->OwnerCard, Zone, EWacomBackpackDeckCardListReuseRole::SpecialOwner,
+				false, EWacomBackpackWorkspaceCardReadOnlyKind::SpecialOwner,
+				OutDesired, LOCTEXT("SpecialOwnerBadge", "主卡"));
+			for (const FRunStorageCardView& Card : Special->ContentCards)
+			{
+				AddCardItem(
+					Card, Zone, EWacomBackpackDeckCardListReuseRole::SpecialContent,
+					PhysicalInteractive(Card), EWacomBackpackWorkspaceCardReadOnlyKind::None,
+					OutDesired);
+			}
 		}
 		break;
 	case EZoneKind::BurdenZone:
-		AppendPhysicalCards(Snapshot.BurdenCards, OutDesired);
+		for (const FRunStorageCardView& Card : Snapshot.BurdenCards)
+		{
+			AddCardItem(
+				Card, Zone, EWacomBackpackDeckCardListReuseRole::PhysicalList,
+				false, EWacomBackpackWorkspaceCardReadOnlyKind::BurdenLocked,
+				OutDesired);
+		}
 		break;
 	default:
 		break;
 	}
 }
 
-bool SameIdentity(const FWacomBackpackZoneKey& A, const FWacomBackpackZoneKey& B)
+FSlateRect CardBounds(
+	TConstArrayView<FWacomBackpackResolvedLayout> Layouts,
+	FVector2D CardSize,
+	float HoverLift)
 {
-	return A == B;
+	if (Layouts.IsEmpty())
+	{
+		return FSlateRect();
+	}
+	FSlateRect Result(
+		Layouts[0].CardCenter.X - CardSize.X * 0.5f,
+		Layouts[0].CardCenter.Y - CardSize.Y * 0.5f - HoverLift,
+		Layouts[0].CardCenter.X + CardSize.X * 0.5f,
+		Layouts[0].CardCenter.Y + CardSize.Y * 0.5f);
+	for (const FWacomBackpackResolvedLayout& Layout : Layouts)
+	{
+		Result.Left = FMath::Min(Result.Left, Layout.CardCenter.X - CardSize.X * 0.5f);
+		Result.Top = FMath::Min(Result.Top, Layout.CardCenter.Y - CardSize.Y * 0.5f - HoverLift);
+		Result.Right = FMath::Max(Result.Right, Layout.CardCenter.X + CardSize.X * 0.5f);
+		Result.Bottom = FMath::Max(Result.Bottom, Layout.CardCenter.Y + CardSize.Y * 0.5f);
+	}
+	return Result;
 }
 
-FSlateRect MakeRect(FVector2D TopLeft, FVector2D Size)
+struct FPileGroup
 {
-	return FSlateRect(TopLeft.X, TopLeft.Y, TopLeft.X + Size.X, TopLeft.Y + Size.Y);
-}
+	FWacomBackpackZoneKey Zone;
+	int32 StartIndex = 0;
+	int32 CardCount = 0;
+	FWacomBackpackResolvedPileContentLayout Layout;
+};
 }
 
 void FWacomBackpackWorkspaceReconciler::Reconcile(
@@ -127,8 +166,10 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 	TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget,
 	TArray<TObjectPtr<UWacomDeckCardWidget>>* OutOrderedWidgets)
 {
-	UCanvasPanel* Canvas = Workspace.GetCardCanvas();
-	if (!Canvas)
+	UCanvasPanel* StaticCanvas = Workspace.GetCardCanvas();
+	UCanvasPanel* CarryCanvas = Workspace.GetCarryCanvas();
+	UCanvasPanel* CarryActiveCanvas = Workspace.GetCarryActiveCanvas();
+	if (!StaticCanvas)
 	{
 		return;
 	}
@@ -136,8 +177,13 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		? Style
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
 	const FVector2D WorkspaceSize = Workspace.GetLayoutSpaceSize();
+	const FVector2D HeaderSize(
+		FMath::Max(260.0f, ResolvedStyle->PileCollapsedSize.X),
+		48.0f);
+	const FVector2D DefaultPileFootprint(
+		HeaderSize.X,
+		HeaderSize.Y + ResolvedStyle->CardRenderSize.Y + 24.0f);
 
-	// 先按 Snapshot 清理已消失的牌堆和展开状态。
 	TArray<FWacomBackpackZoneKey> VisiblePileKeys;
 	VisiblePileKeys.Add(FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck));
 	for (const FRunSpecialStorageView& Special : Snapshot.SpecialZones)
@@ -145,8 +191,7 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		if (Special.OwnerCard.Instance.InstanceId.IsValid())
 		{
 			VisiblePileKeys.Add(FWacomBackpackZoneKey::Make(
-				EZoneKind::SpecialZone,
-				Special.OwnerCard.Instance.InstanceId));
+				EZoneKind::SpecialZone, Special.OwnerCard.Instance.InstanceId));
 		}
 	}
 	if (!Snapshot.BurdenCards.IsEmpty())
@@ -162,52 +207,41 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		: FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
 	TArray<FWacomBackpackZonePileView> PileViews =
 		UWacomBackpackScreenPresenter::BuildWorkspacePileViews(
-			Snapshot,
-			Expanded.Zone,
-			Expanded.OwnerInstanceId,
-			bHasExpanded);
+			Snapshot, Expanded.Zone, Expanded.OwnerInstanceId, bHasExpanded);
 
-	TArray<FVector2D> PileTopLefts;
-	TArray<int32> PileLayerRanks;
-	TArray<FSlateRect> Obstacles;
-	TArray<FSlateRect> OccupiedPileHeaders;
-	PileTopLefts.Reserve(PileViews.Num());
-	PileLayerRanks.Reserve(PileViews.Num());
-	Obstacles.Reserve(PileViews.Num() + 1);
-	if (!Snapshot.BurdenCards.IsEmpty())
+	TArray<FWacomBackpackDeckCardListItem> Desired;
+	Desired.Reserve(
+		Snapshot.Flux.ContentCards.Num()
+		+ Snapshot.BattleDeckPhysicalCards.Num()
+		+ Snapshot.BattleDeckProjectedCards.Num()
+		+ Snapshot.BurdenCards.Num()
+		+ Snapshot.SpecialZones.Num());
+	const FWacomBackpackZoneKey FluxZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
+	for (const FRunStorageCardView& Card : Snapshot.Flux.ContentCards)
 	{
-		const FVector2D FixedBurdenTopLeft = FWacomBackpackWorkspaceLayoutSolver::SnapPileTopLeft(
-			FVector2D(
-				WorkspaceSize.X - ResolvedStyle->PileEdgeMarginPixels - ResolvedStyle->PileCollapsedSize.X,
-				ResolvedStyle->PileEdgeMarginPixels),
-			WorkspaceSize,
-			ResolvedStyle->PileCollapsedSize,
-			1.0f,
-			ResolvedStyle->PileEdgeMarginPixels);
-		OccupiedPileHeaders.Emplace(
-			FixedBurdenTopLeft.X,
-			FixedBurdenTopLeft.Y,
-			FixedBurdenTopLeft.X + ResolvedStyle->PileCollapsedSize.X,
-			FixedBurdenTopLeft.Y + 48.0f);
+		AddCardItem(
+			Card, FluxZone, EWacomBackpackDeckCardListReuseRole::PhysicalList,
+			true, EWacomBackpackWorkspaceCardReadOnlyKind::None, Desired);
 	}
+	const int32 FluxCardCount = Desired.Num();
+
+	TArray<FSlateRect> PileFrameRects;
+	TArray<FSlateRect> PileHeaderRects;
+	TArray<int32> PileLayerRanks;
+	TArray<FSlateRect> OccupiedHeaders;
+	TArray<FSlateRect> Obstacles;
+	TArray<FPileGroup> PileGroups;
 	int32 MovablePileIndex = 0;
 	for (const FWacomBackpackZonePileView& Pile : PileViews)
 	{
 		const FWacomBackpackZoneKey Key = FWacomBackpackZoneKey::Make(
-			Pile.Zone,
-			Pile.OwnerInstanceId);
-		FVector2D TopLeft;
+			Pile.Zone, Pile.OwnerInstanceId);
+		FVector2D HeaderTopLeft;
 		int32 LayerRank = 0;
 		if (!Pile.bMovable)
 		{
-			TopLeft = FVector2D(
-				WorkspaceSize.X - ResolvedStyle->PileEdgeMarginPixels - ResolvedStyle->PileCollapsedSize.X,
-				ResolvedStyle->PileEdgeMarginPixels);
-			TopLeft = FWacomBackpackWorkspaceLayoutSolver::SnapPileTopLeft(
-				TopLeft,
-				WorkspaceSize,
-				ResolvedStyle->PileCollapsedSize,
-				1.0f,
+			HeaderTopLeft = FVector2D(
+				WorkspaceSize.X - ResolvedStyle->PileEdgeMarginPixels - HeaderSize.X,
 				ResolvedStyle->PileEdgeMarginPixels);
 			LayerRank = 100000;
 		}
@@ -215,106 +249,85 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		{
 			const FWacomBackpackResolvedPileLayout Default =
 				FWacomBackpackWorkspaceLayoutSolver::BuildDefaultPileLayout(
-					MovablePileIndex++,
-					WorkspaceSize,
-					ResolvedStyle->PileCollapsedSize,
+					MovablePileIndex++, WorkspaceSize, DefaultPileFootprint,
 					ResolvedStyle->PileEdgeMarginPixels);
-			TopLeft = Default.TopLeft;
+			HeaderTopLeft = Default.TopLeft;
 			LayerRank = Default.LayerRank;
 			if (const FWacomBackpackWorkspacePileLayoutEntry* Stored = StateStore.FindPileLayout(Key))
 			{
 				LayerRank = Stored->LayerRank;
 				if (Stored->bHasManualPlacement)
 				{
-					TopLeft = FWacomBackpackWorkspaceLayoutSolver::ResolvePileTopLeft(
-						*Stored,
-						WorkspaceSize,
-						ResolvedStyle->PileCollapsedSize,
-						ResolvedStyle->PileEdgeMarginPixels);
+					HeaderTopLeft = FWacomBackpackWorkspaceLayoutSolver::ResolvePileTopLeft(
+						*Stored, WorkspaceSize, HeaderSize, ResolvedStyle->PileEdgeMarginPixels);
 				}
 			}
-			TopLeft = FWacomBackpackWorkspaceLayoutSolver::ResolvePileHeaderOverlap(
-				TopLeft,
+			HeaderTopLeft = FWacomBackpackWorkspaceLayoutSolver::ResolvePileHeaderOverlap(
+				HeaderTopLeft, WorkspaceSize, HeaderSize, HeaderSize,
+				ResolvedStyle->PileSnapGridPixels, ResolvedStyle->PileEdgeMarginPixels,
+				OccupiedHeaders);
+		}
+
+		const int32 StartIndex = Desired.Num();
+		AppendPileCards(Snapshot, Pile, InteractionModel, Desired);
+		const int32 PileCardCount = Desired.Num() - StartIndex;
+		FWacomBackpackResolvedPileContentLayout Layout =
+			FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
+				PileCardCount,
+				HeaderTopLeft,
+				HeaderSize,
 				WorkspaceSize,
-				ResolvedStyle->PileCollapsedSize,
-				FVector2D(ResolvedStyle->PileCollapsedSize.X, 48.0f),
-				ResolvedStyle->PileSnapGridPixels,
-				ResolvedStyle->PileEdgeMarginPixels,
-				OccupiedPileHeaders);
-			OccupiedPileHeaders.Emplace(
-				TopLeft.X,
-				TopLeft.Y,
-				TopLeft.X + ResolvedStyle->PileCollapsedSize.X,
-				TopLeft.Y + 48.0f);
-		}
-		PileTopLefts.Add(TopLeft);
+				ResolvedStyle->CardRenderSize,
+				Pile.bExpanded,
+				ResolvedStyle->PileCollapsedExposurePixels,
+				ResolvedStyle->AccordionMinimumExposurePixels,
+				ResolvedStyle->AccordionMaximumExposurePixels,
+				ResolvedStyle->AccordionMaximumAngleDegrees,
+				ResolvedStyle->PileEdgeMarginPixels);
+		OccupiedHeaders.Add(Layout.HeaderRect);
+		PileFrameRects.Add(Layout.FrameRect);
+		PileHeaderRects.Add(Layout.HeaderRect);
 		PileLayerRanks.Add(LayerRank);
-		Obstacles.Add(MakeRect(TopLeft, ResolvedStyle->PileCollapsedSize));
+		Obstacles.Add(Layout.FrameRect);
+		FPileGroup& Group = PileGroups.AddDefaulted_GetRef();
+		Group.Zone = Key;
+		Group.StartIndex = StartIndex;
+		Group.CardCount = PileCardCount;
+		Group.Layout = MoveTemp(Layout);
 	}
-	// 固定销毁区占据工作台右下角，整理通量卡时避开其交互区域。
-	Obstacles.Add(MakeRect(
-		FVector2D(
-			FMath::Max(0.0f, WorkspaceSize.X - 220.0f - ResolvedStyle->PileEdgeMarginPixels),
-			FMath::Max(0.0f, WorkspaceSize.Y - 150.0f - ResolvedStyle->PileEdgeMarginPixels)),
-		FVector2D(220.0f, 150.0f)));
-	Workspace.ReconcilePiles(PileViews, PileTopLefts, PileLayerRanks);
-
-	TArray<FWacomBackpackDeckCardListItem> FluxDesired;
-	AppendPhysicalCards(Snapshot.Flux.ContentCards, FluxDesired);
-	TArray<FWacomBackpackDeckCardListItem> ExpandedDesired;
-	if (bHasExpanded)
-	{
-		AppendExpandedCards(Snapshot, Expanded, ExpandedDesired);
-	}
-	TArray<FWacomBackpackDeckCardListItem> HiddenCarryDesired;
-
-	// 自动展开目标牌堆时，来源牌堆会收起；携带中的物理卡仍需保留到提交或取消。
-	if (InteractionModel && InteractionModel->IsCarrying())
-	{
-		const FWacomBackpackWorkspaceCarryState& Carry = InteractionModel->GetCarry();
-		if (!bHasExpanded || !SameIdentity(Carry.SourceZone, Expanded))
-		{
-			for (const FGuid InstanceId : Carry.RemainingInstanceIds)
-			{
-				// 通量卡始终已经位于 FluxDesired，保持其分组索引；隐藏牌堆的
-				// 物理卡则放到展开组之后，并替换目标牌堆中可能存在的同身份投影。
-				if (Carry.SourceZone.Zone == EZoneKind::Backpack)
-				{
-					continue;
-				}
-				ExpandedDesired.RemoveAll(
-					[InstanceId](const FWacomBackpackDeckCardListItem& Item)
-					{
-						return Item.CardView.Instance.InstanceId == InstanceId;
-					});
-				if (const FRunStorageCardView* Card = FindPhysicalCard(Snapshot, Carry.SourceZone, InstanceId))
-				{
-					AppendPhysicalCards(MakeArrayView(Card, 1), HiddenCarryDesired);
-				}
-			}
-		}
-	}
-	TArray<FWacomBackpackDeckCardListItem> Desired;
-	Desired.Reserve(FluxDesired.Num() + ExpandedDesired.Num() + HiddenCarryDesired.Num());
-	Desired.Append(FluxDesired);
-	const int32 FluxCardCount = Desired.Num();
-	Desired.Append(ExpandedDesired);
-	const int32 ExpandedCardCount = ExpandedDesired.Num();
-	Desired.Append(HiddenCarryDesired);
+	Obstacles.Emplace(
+		FMath::Max(0.0f, WorkspaceSize.X - 220.0f - ResolvedStyle->PileEdgeMarginPixels),
+		FMath::Max(0.0f, WorkspaceSize.Y - 150.0f - ResolvedStyle->PileEdgeMarginPixels),
+		WorkspaceSize.X - ResolvedStyle->PileEdgeMarginPixels,
+		WorkspaceSize.Y - ResolvedStyle->PileEdgeMarginPixels);
+	Workspace.ReconcilePiles(PileViews, PileFrameRects, PileHeaderRects, PileLayerRanks);
 
 	TArray<FGuid> FluxIds;
-	FluxIds.Reserve(Snapshot.Flux.ContentCards.Num());
 	for (const FRunStorageCardView& Card : Snapshot.Flux.ContentCards)
 	{
 		FluxIds.Add(Card.Instance.InstanceId);
 	}
-	const FWacomBackpackZoneKey FluxZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
 	StateStore.ReconcileZone(FluxZone, FluxIds);
 
 	TArray<TObjectPtr<UWacomDeckCardWidget>> OrderedWidgets;
-	FWacomBackpackDeckCardListReconciler::Reconcile(
-		Canvas,
+	TArray<UPanelWidget*> SearchPanels;
+	SearchPanels.Add(StaticCanvas);
+	if (CarryCanvas)
+	{
+		SearchPanels.Add(CarryCanvas);
+	}
+	if (CarryActiveCanvas)
+	{
+		SearchPanels.Add(CarryActiveCanvas);
+	}
+	FWacomBackpackDeckCardListReconciler::ReconcileAcrossPanels(
+		SearchPanels,
+		StaticCanvas,
 		Desired,
+		[&Workspace](const UWacomDeckCardWidget* Widget)
+		{
+			return Workspace.ShouldPreserveCardParent(Widget);
+		},
 		CreateWidget,
 		OnRemovedWidget,
 		&OrderedWidgets);
@@ -327,33 +340,6 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 			ResolvedStyle->DefaultCardSpacing,
 			ResolvedStyle->WorkspacePadding,
 			Obstacles);
-	TArray<FWacomBackpackResolvedLayout> Accordion;
-	int32 ExpandedPileIndex = INDEX_NONE;
-	if (bHasExpanded)
-	{
-		for (int32 Index = 0; Index < PileViews.Num(); ++Index)
-		{
-			if (FWacomBackpackZoneKey::Make(PileViews[Index].Zone, PileViews[Index].OwnerInstanceId) == Expanded)
-			{
-				ExpandedPileIndex = Index;
-				break;
-			}
-		}
-		if (PileTopLefts.IsValidIndex(ExpandedPileIndex))
-		{
-			Accordion = FWacomBackpackWorkspaceLayoutSolver::BuildAccordionLayout(
-				ExpandedCardCount,
-				PileTopLefts[ExpandedPileIndex],
-				ResolvedStyle->PileCollapsedSize,
-				WorkspaceSize,
-				ResolvedStyle->CardRenderSize,
-				ResolvedStyle->AccordionMinimumExposurePixels,
-				ResolvedStyle->AccordionMaximumExposurePixels,
-				ResolvedStyle->AccordionMaximumAngleDegrees,
-				ResolvedStyle->PileEdgeMarginPixels);
-		}
-	}
-
 	FSlateRect ExpandedBounds;
 	bool bHasExpandedBounds = false;
 	for (int32 Index = 0; Index < OrderedWidgets.Num(); ++Index)
@@ -364,75 +350,60 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 			continue;
 		}
 		FWacomBackpackResolvedLayout Resolved;
-		bool bExpandedCardLayout = false;
+		bool bFoundLayout = false;
 		if (Index < FluxCardCount && FluxDefaults.IsValidIndex(Index))
 		{
 			Resolved = FluxDefaults[Index];
-			if (const FWacomBackpackWorkspaceLayoutEntry* Manual = StateStore.FindLayout(
-				FluxZone,
-				CardWidget->GetCardInstanceId()))
+			bFoundLayout = true;
+			if (const FWacomBackpackWorkspaceLayoutEntry* Manual =
+				StateStore.FindLayout(FluxZone, CardWidget->GetCardInstanceId()))
 			{
 				if (Manual->bHasManualPlacement)
 				{
 					Resolved = FWacomBackpackWorkspaceLayoutSolver::ResolveManualLayout(
-						*Manual,
-						WorkspaceSize,
-						ResolvedStyle->CardRenderSize,
+						*Manual, WorkspaceSize, ResolvedStyle->CardRenderSize,
 						ResolvedStyle->MinimumVisibleFraction);
 				}
 			}
 		}
-		else if (Index < FluxCardCount + ExpandedCardCount
-			&& Accordion.IsValidIndex(Index - FluxCardCount))
-		{
-			Resolved = Accordion[Index - FluxCardCount];
-			Resolved.LayerRank += 3000;
-			bExpandedCardLayout = true;
-			const FSlateRect CardRect(
-				Resolved.CardCenter.X - ResolvedStyle->CardRenderSize.X * 0.5f,
-				Resolved.CardCenter.Y - ResolvedStyle->CardRenderSize.Y * 0.5f - ResolvedStyle->AccordionHoverLiftPixels,
-				Resolved.CardCenter.X + ResolvedStyle->CardRenderSize.X * 0.5f,
-				Resolved.CardCenter.Y + ResolvedStyle->CardRenderSize.Y * 0.5f);
-			if (!bHasExpandedBounds)
-			{
-				ExpandedBounds = CardRect;
-				bHasExpandedBounds = true;
-			}
-			else
-			{
-				ExpandedBounds.Left = FMath::Min(ExpandedBounds.Left, CardRect.Left);
-				ExpandedBounds.Top = FMath::Min(ExpandedBounds.Top, CardRect.Top);
-				ExpandedBounds.Right = FMath::Max(ExpandedBounds.Right, CardRect.Right);
-				ExpandedBounds.Bottom = FMath::Max(ExpandedBounds.Bottom, CardRect.Bottom);
-			}
-		}
 		else
 		{
-			// 隐藏来源牌堆的剩余携带卡会立即被携带扇形覆盖。
-			Resolved.CardCenter = InteractionModel && InteractionModel->IsCarrying()
-				? InteractionModel->GetCarry().PointerPosition
-				: WorkspaceSize * 0.5f;
-			Resolved.LayerRank = 3000 + Index;
+			for (const FPileGroup& Group : PileGroups)
+			{
+				const int32 LocalIndex = Index - Group.StartIndex;
+				if (LocalIndex >= 0 && LocalIndex < Group.CardCount
+					&& Group.Layout.Cards.IsValidIndex(LocalIndex))
+				{
+					Resolved = Group.Layout.Cards[LocalIndex];
+					Resolved.LayerRank += 3000;
+					bFoundLayout = true;
+					if (bHasExpanded && Group.Zone == Expanded)
+					{
+						ExpandedBounds = CardBounds(
+							Group.Layout.Cards,
+							ResolvedStyle->CardRenderSize,
+							ResolvedStyle->AccordionHoverLiftPixels);
+						bHasExpandedBounds = !Group.Layout.Cards.IsEmpty();
+					}
+					break;
+				}
+			}
 		}
-		if (bExpandedCardLayout
-			&& PileTopLefts.IsValidIndex(ExpandedPileIndex)
-			&& !Workspace.HasCardBaseLayout(CardWidget->GetCardInstanceId()))
+		if (!bFoundLayout)
+		{
+			continue;
+		}
+		if (!Workspace.HasCardBaseLayout(*CardWidget))
 		{
 			Workspace.PrimeCardBaseLayout(
-				*CardWidget,
-				PileTopLefts[ExpandedPileIndex] + ResolvedStyle->PileCollapsedSize * 0.5f,
-				ResolvedStyle->CardRenderSize,
-				0.0f,
-				Resolved.LayerRank);
+				*CardWidget, Resolved.CardCenter, ResolvedStyle->CardRenderSize,
+				Resolved.AngleDegrees, Resolved.LayerRank);
 		}
 		Workspace.ApplyCardBaseLayout(
-			*CardWidget,
-			Resolved.CardCenter,
-			ResolvedStyle->CardRenderSize,
-			Resolved.AngleDegrees,
-			Resolved.LayerRank);
-		CardWidget->SetMoveEnabled(
-			Desired[Index].Role != EWacomBackpackDeckCardListReuseRole::BattleDeckProjected);
+			*CardWidget, Resolved.CardCenter, ResolvedStyle->CardRenderSize,
+			Resolved.AngleDegrees, Resolved.LayerRank);
+		CardWidget->SetWorkspaceInteractionEnabled(Desired[Index].bWorkspaceInteractive);
+		CardWidget->SetWorkspaceReadOnlyKind(Desired[Index].ReadOnlyKind);
 	}
 
 	if (bHasExpanded && bHasExpandedBounds)
@@ -451,3 +422,5 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		*OutOrderedWidgets = MoveTemp(OrderedWidgets);
 	}
 }
+
+#undef LOCTEXT_NAMESPACE

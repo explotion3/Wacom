@@ -13,7 +13,7 @@ class FWacomBackpackWorkspaceInteractionModel;
 struct FWacomBackpackWorkspaceStateStore;
 
 /** InstanceId 驱动的活动工作台卡牌协调器。 */
-struct FWacomBackpackWorkspaceReconciler
+struct WACOMAPP_API FWacomBackpackWorkspaceReconciler
 {
 	static void Reconcile(
 		UWacomBackpackWorkspaceWidget& Workspace,

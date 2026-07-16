@@ -5,18 +5,19 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "RunStateTypes.h"
+#include "UI/Backpack/WacomBackpackZonePileTypes.h"
 #include "WacomBackpackWorkspaceWidget.generated.h"
 
 class UBorder;
 class UCanvasPanel;
+class UInvalidationBox;
 class UTextBlock;
 class UWacomBackpackWorkspaceStyle;
 class UWacomDeckCardWidget;
 class UWacomBackpackZonePileWidget;
-class UWacomBackpackPilePreviewWidget;
-struct FWacomBackpackZonePileView;
 struct FWacomBackpackZoneKey;
 class FWacomBackpackWorkspaceInteractionModel;
+class FWacomBackpackCardPresentationController;
 struct FWacomBackpackWorkspaceReleaseIntent;
 #if WITH_AUTOMATION_TESTS
 struct FWacomBackpackWorkspaceAutomationTestView;
@@ -55,7 +56,8 @@ public:
 	void BindWorkspaceCards(TConstArrayView<TObjectPtr<UWacomDeckCardWidget>> CardWidgets, uint64 StorageRevision);
 	void ReconcilePiles(
 		TConstArrayView<FWacomBackpackZonePileView> PileViews,
-		TConstArrayView<FVector2D> PileTopLefts,
+		TConstArrayView<FSlateRect> PileFrameRects,
+		TConstArrayView<FSlateRect> PileHeaderRects,
 		TConstArrayView<int32> PileLayerRanks);
 	bool FindPileAtAbsolutePosition(
 		FVector2D AbsolutePosition,
@@ -73,7 +75,7 @@ public:
 	void CancelInteraction();
 	void ApplyCardLayout(UWidget& CardWidget, FVector2D CardCenter, FVector2D CardSize, float AngleDegrees, int32 ZOrder);
 	void ApplyCardBaseLayout(UWidget& CardWidget, FVector2D CardCenter, FVector2D CardSize, float AngleDegrees, int32 ZOrder);
-	bool HasCardBaseLayout(FGuid InstanceId) const { return BaseCardLayouts.Contains(InstanceId); }
+	bool HasCardBaseLayout(const UWidget& CardWidget) const;
 	void PrimeCardBaseLayout(
 		UWidget& CardWidget,
 		FVector2D CardCenter,
@@ -83,6 +85,10 @@ public:
 	void SetEmptyStateVisible(bool bVisible);
 	void SetManualLayoutCount(int32 Count) { ManualLayoutCount = FMath::Max(0, Count); }
 	UCanvasPanel* GetCardCanvas();
+	UCanvasPanel* GetCarryCanvas();
+	UCanvasPanel* GetCarryActiveCanvas();
+	UCanvasPanel* GetPileCanvas();
+	bool ShouldPreserveCardParent(const UWacomDeckCardWidget* CardWidget) const;
 	FVector2D GetLayoutSpaceSize() const;
 	void RequestLayoutGeometryRefresh();
 
@@ -104,6 +110,30 @@ protected:
 	TObjectPtr<UCanvasPanel> CardCanvas;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCanvasPanel> PileFrameLayer;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCanvasPanel> StaticCardLayer;
+
+	/** 只负责平移携带扇形；缓存层和动态前卡都保持本地坐标不变。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCanvasPanel> CarryRoot;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCanvasPanel> CarryLayer;
+
+	/** 当前上抬卡的独立实时层；不放入静态扇形缓存。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCanvasPanel> CarryActiveLayer;
+
+	/**
+	 * CarryLayer 的独立 Slate invalidation root。它保持本地变换不变，
+	 * 由外层 CarryRoot 平移，避免指针热路径使静态扇形缓存失效。
+	 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UInvalidationBox> CarryCache;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> SelectionMarquee;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -115,6 +145,7 @@ private:
 	int32 ManualLayoutCount = 0;
 	int32 PileCount = 0;
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> InteractionModel;
+	TSharedPtr<FWacomBackpackCardPresentationController> CardPresentationController;
 	TWeakObjectPtr<UWacomBackpackWorkspaceStyle> InteractionStyle;
 	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> BoundCardWidgets;
 	UPROPERTY(Transient)
@@ -124,9 +155,6 @@ private:
 		meta = (ToolTip = "工作台内嵌区域牌堆 Widget 类。只显示 ViewData 并转发标题指针意图，不直接访问 RunSession。"))
 	TSubclassOf<UWacomBackpackZonePileWidget> PileWidgetClass;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
-		meta = (ToolTip = "折叠牌堆使用的固定尺寸简化卡牌预览类。不应复用完整 Retainer 卡面或拥有输入。"))
-	TSubclassOf<UWacomBackpackPilePreviewWidget> PilePreviewWidgetClass;
 	FGuid PendingCardPressId;
 	FVector2D PendingPressPosition = FVector2D::ZeroVector;
 	bool bPendingCardPress = false;
@@ -148,9 +176,22 @@ private:
 	EZoneKind CollapsingPileZone = EZoneKind::Backpack;
 	FGuid CollapsingPileOwnerInstanceId;
 	uint64 CurrentStorageRevision = 0;
-	FVector2D DisplayedCarryPointer = FVector2D::ZeroVector;
-	bool bHasDisplayedCarryPointer = false;
-	bool bCarryInterpolationActive = false;
+	FVector2D CarryAnchorLocal = FVector2D::ZeroVector;
+	FVector2D QueuedCarryPointerLocal = FVector2D::ZeroVector;
+	FVector2D QueuedPilePointerLocal = FVector2D::ZeroVector;
+	bool bCarryPointerTrackingActive = false;
+	bool bPilePointerTrackingActive = false;
+	bool bHasQueuedCarryPointer = false;
+	bool bHasQueuedPilePointer = false;
+	bool bCarryFanLayoutDirty = false;
+	TArray<FGuid> LastCarryFanInstanceIds;
+	/** 已提交释放、等待目标 Scene 消费的实体卡；期间禁止恢复来源基础布局。 */
+	TSet<FGuid> PendingReleasedVisualHandoffs;
+	int32 LastCarryFanCurrentIndex = INDEX_NONE;
+	int32 LastCarryFanDefaultIndex = INDEX_NONE;
+	int32 CarryFanLayoutRebuildCount = 0;
+	int32 StaticCardPresentationUpdateCount = 0;
+	int32 CarryVisualAnchorApplyCount = 0;
 	bool bCarryInputSuspended = false;
 	FVector2D StableLayoutSize = FVector2D::ZeroVector;
 	FVector2D PendingLayoutSize = FVector2D::ZeroVector;
@@ -169,15 +210,16 @@ private:
 		float AngleDegrees = 0.0f;
 		int32 ZOrder = 0;
 	};
-	TMap<FGuid, FBaseCardLayout> BaseCardLayouts;
+	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> BaseCardLayouts;
 	struct FBaseCardLayoutTransition
 	{
+		FBaseCardLayout Start;
 		FBaseCardLayout Current;
 		FBaseCardLayout Target;
 		float ElapsedSeconds = 0.0f;
 		float DurationSeconds = 0.0f;
 	};
-	TMap<FGuid, FBaseCardLayoutTransition> BaseCardLayoutTransitions;
+	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayoutTransition> BaseCardLayoutTransitions;
 	bool bBaseCardLayoutTransitionActive = false;
 
 	void EnsureFallbackTree();
@@ -189,12 +231,24 @@ private:
 	bool TryBeginCarryFromPendingPress(FVector2D Pointer);
 	bool TryBeginPileMove(FVector2D Pointer);
 	void ApplyActivePileMove();
+	void StartPilePointerTracking();
+	void QueuePilePointer(FVector2D Pointer);
+	void FlushQueuedPilePointer();
+	void CommitPileMoveCardLayouts(const FWacomBackpackZoneKey& Zone, FVector2D FinalDelta);
 	FWacomBackpackZoneKey ResolveMarqueeSource(FVector2D LocalPointer) const;
 	void CancelHoverExpandTimer();
 	void StartBaseCardLayoutTransitions();
 	FReply BuildHandledPointerReply();
 	void BroadcastRelease(bool bReleaseAll);
-	void StartCarryInterpolation();
+	void StartCarryPointerTracking();
+	void QueueCarryPointer(FVector2D Pointer);
+	void FlushQueuedCarryPointer();
+	void SyncCarryPointerForRelease(FVector2D Pointer);
+	void UpdateCarryAnchor(FVector2D Pointer, bool bUpdateModel = true);
+	void SyncCarryLayer();
+	void RebuildCarryFanLayout();
+	void RestoreStaticCardParents();
+	bool IsInCarryVisualLayer(const UWidget* CardWidget) const;
 	void RequestBoundCardFaceRenders();
 	void ScheduleBoundCardFaceRender();
 	void FlushDeferredCardFaceRender();
@@ -234,6 +288,20 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	bool bDeferredCardFaceRenderPending = false;
 	int32 DeferredCardFaceRenderPassCount = 0;
 	bool bCardFaceRetainedRenderingEnabled = true;
+	FVector2D CarryAnchorLocal = FVector2D::ZeroVector;
+	FVector2D CarryRootTranslation = FVector2D::ZeroVector;
+	FVector2D CarryCacheTranslation = FVector2D::ZeroVector;
+	int32 CachedCarryCardCount = 0;
+	int32 ActiveCarryCardCount = 0;
+	int32 CarryFanLayoutRebuildCount = 0;
+	int32 StaticCardPresentationUpdateCount = 0;
+	int32 CarryVisualAnchorApplyCount = 0;
+	int32 ActiveBaseCardLayoutTransitionCount = 0;
+	TArray<FVector2D> ActiveBaseCardLayoutTransitionTargetCenters;
+	bool bHasExpandedContentBounds = false;
+	bool bPileCollapseAnimationPending = false;
+	EZoneKind ExpandedContentZone = EZoneKind::Backpack;
+	FGuid ExpandedContentOwnerInstanceId;
 };
 
 #endif

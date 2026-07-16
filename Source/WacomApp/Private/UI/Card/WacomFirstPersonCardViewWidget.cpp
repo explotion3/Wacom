@@ -106,6 +106,53 @@ void UWacomFirstPersonCardViewWidget::SetCardViewData(const FWacomCardViewData& 
 	ApplyPendingCardViewData();
 }
 
+void UWacomFirstPersonCardViewWidget::RequestPresentationRender()
+{
+	if (Fake3DSurfaceRetainer)
+	{
+		#if WITH_AUTOMATION_TESTS
+		++PresentationRenderRequestCount;
+		#endif
+		Fake3DSurfaceRetainer->RequestRender();
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::SetRetainedRenderingEnabled(bool bEnabled)
+{
+	bRetainedRenderingEnabled = bEnabled;
+	if (Fake3DSurfaceRetainer)
+	{
+		Fake3DSurfaceRetainer->SetRetainRendering(bEnabled);
+		if (bEnabled)
+		{
+			Fake3DSurfaceRetainer->RequestRender();
+		}
+	}
+}
+
+void UWacomFirstPersonCardViewWidget::SetRealtimePresentationEnabled(bool bEnabled)
+{
+	if (!Fake3DSurfaceRetainer)
+	{
+		bRealtimePresentationEnabled = bEnabled;
+		bRealtimePresentationStateApplied = false;
+		return;
+	}
+	if (bRealtimePresentationStateApplied && bRealtimePresentationEnabled == bEnabled)
+	{
+		return;
+	}
+	bRealtimePresentationEnabled = bEnabled;
+	// WBP_FPCardView 使用 phase rendering。静态模式把 phase 周期移出正常运行区间，
+	// 内容变化仍由 RequestRender 精确补绘；实时模式恢复每帧 phase。
+	#if WITH_AUTOMATION_TESTS
+	++RealtimePresentationApplyCount;
+	#endif
+	Fake3DSurfaceRetainer->SetRenderingPhase(0, bEnabled ? 1 : 1000000);
+	Fake3DSurfaceRetainer->RequestRender();
+	bRealtimePresentationStateApplied = true;
+}
+
 bool UWacomFirstPersonCardViewWidget::PrepareCostDigitRewrite(
 	const FWacomCardViewData& InNewData)
 {
@@ -280,6 +327,9 @@ void UWacomFirstPersonCardViewWidget::ClearInteractionFeedbackView()
 void UWacomFirstPersonCardViewWidget::SetCardDepthView(const FWacomFirstPersonCardDepthView& View)
 {
 	EnsureFallbackWidgetTree();
+	#if WITH_AUTOMATION_TESTS
+	++CardDepthApplyCount;
+	#endif
 	LastCardDepthView = View;
 	LastCardDepthView.PerspectiveStrength = FMath::Max(0.0f, LastCardDepthView.PerspectiveStrength);
 	LastCardDepthView.ContactShadowLift = FMath::Clamp(LastCardDepthView.ContactShadowLift, 0.0f, 1.0f);
@@ -438,6 +488,11 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 		&& ActiveSurfaceEffectMaterialInstance
 		&& Fake3DSurfaceRetainer->GetEffectMaterial() == ActiveSurfaceEffectMaterialInstance;
 	View.bBaseSurfaceEffectMaterialCached = bBaseSurfaceEffectMaterialCached;
+	View.bRetainedRenderingEnabled = bRetainedRenderingEnabled;
+	View.bRealtimePresentationEnabled = bRealtimePresentationEnabled;
+	View.PresentationRenderRequestCount = PresentationRenderRequestCount;
+	View.RealtimePresentationApplyCount = RealtimePresentationApplyCount;
+	View.CardDepthApplyCount = CardDepthApplyCount;
 	const UWidget* RetainerCaptureRoot = Fake3DSurfaceRetainer
 		? Fake3DSurfaceRetainer->GetContent()
 		: nullptr;
@@ -479,6 +534,7 @@ TSharedRef<SWidget> UWacomFirstPersonCardViewWidget::RebuildWidget()
 void UWacomFirstPersonCardViewWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	bRealtimePresentationStateApplied = false;
 	ConfigureRetainerCaptureRootClipping();
 	CacheBaseSurfaceEffectMaterial();
 	ApplyPendingCardViewData();
@@ -487,6 +543,8 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 	SetCardDepthView(LastCardDepthView);
 	SetCardSurfaceEffectView(LastSurfaceEffectView);
 	SetCardDataRewriteView(LastDataRewriteView);
+	SetRetainedRenderingEnabled(bRetainedRenderingEnabled);
+	SetRealtimePresentationEnabled(bRealtimePresentationEnabled);
 }
 
 void UWacomFirstPersonCardViewWidget::NativeDestruct()
@@ -502,6 +560,7 @@ void UWacomFirstPersonCardViewWidget::NativeDestruct()
 	BaseSurfaceEffectMaterialInstance = nullptr;
 	BaseSurfaceEffectMaterialSource = nullptr;
 	bBaseSurfaceEffectMaterialCached = false;
+	bRealtimePresentationStateApplied = false;
 	Super::NativeDestruct();
 }
 

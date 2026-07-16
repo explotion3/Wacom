@@ -75,6 +75,37 @@ FWacomBackpackWorkspaceModelTestAccess::BuildAccordionLayout(
 	return Views;
 }
 
+FWacomBackpackPileContentLayoutTestView
+FWacomBackpackWorkspaceModelTestAccess::BuildPileContentLayout(
+	int32 CardCount,
+	FVector2D HeaderTopLeft,
+	FVector2D WorkspaceSize,
+	bool bExpanded)
+{
+	const FWacomBackpackResolvedPileContentLayout Layout =
+		FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
+			CardCount,
+			HeaderTopLeft,
+			FVector2D(260.0f, 48.0f),
+			WorkspaceSize,
+			FVector2D(220.0f, 320.0f),
+			bExpanded,
+			16.0f,
+			32.0f,
+			72.0f,
+			12.0f,
+			24.0f);
+	FWacomBackpackPileContentLayoutTestView View;
+	View.HeaderRect = Layout.HeaderRect;
+	View.FrameRect = Layout.FrameRect;
+	View.bOpensRight = Layout.bOpensRight;
+	for (const FWacomBackpackResolvedLayout& Card : Layout.Cards)
+	{
+		View.Cards.Add(ToTestView(Card));
+	}
+	return View;
+}
+
 FWacomBackpackWorkspaceResolvedLayoutTestView
 FWacomBackpackWorkspaceModelTestAccess::ResolveManualLayout(
 	FVector2D NormalizedPosition,
