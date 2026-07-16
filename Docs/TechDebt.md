@@ -25,6 +25,7 @@ tags:
 | 费用转移 | 只支持 `ReduceCost(LastShuffled) + AddCost(Self)` 组合 | 更复杂的多点 / 条件费用转移引入 `CostLedger` 或 `CostTransferEvent` |
 | CompanionPlayedCount | 全局计数，不区分哪张伙伴 | 当前对齐 BugGirl.md §5；多角色或多类伙伴时再评估是否拆分 |
 | 回合结束保留 / 弃牌时序 | `BattleTurnLifecycleModule` 权威固定在敌方行动之前 | 若规则明确放在敌方行动之后，需要迁移 Turn Lifecycle 的事件、checkpoint 和 early-exit 合同 |
+| Retain Seal 旧反射字段命名 | 为保护已有 Blueprint 序列化，`bEnableRetainedFeedback` 与 `RetainedFeedback*` 继续作为 Anchor `20 Card Retain Seal` 的制作字段，运行时已经改为 Sealing / Held / Releasing | 只有在提供 Blueprint/DataAsset 重命名迁移并完成资产审计时，才统一改名为 `CardRetainSeal*`；当前不要复制第二套字段 |
 | `Magnitude.Source.TargetStatusStacks` 资产参数 | Public `FCardEffect` 仍借用 `TargetZone` 传 Status Tag；Private Effect Semantics 已在 decode seam 转成独立 magnitude plan | 只有在允许迁移现有 DataAsset schema 时，新增专用反射字段并提供资产迁移；运行时不再扩散该复用 |
 | `Effect.GainKeyword` / `Effect.RemoveStatus` 资产参数 | Public `FCardEffect` 仍借用 `TargetZone`；Private handler 已只消费 typed Keyword / Status 参数，不再存在 `EffectContext::MetaTag` | 只有在允许迁移现有 DataAsset schema 时，拆为专用反射 payload；保持 semantic definition 为唯一解释入口 |
 | `Effect.Shuffle.FromBothToOther` HandZone 参数 | 制作校验兼容接受任意 `HandZone.*`，但正式执行始终从 Both 选择；Effect Semantics 显式保留该兼容怪点 | 先确认是否要扩展为通用 FromZone，或收紧资产只允许 Both；确认后同步校验、内容迁移和规则测试 |

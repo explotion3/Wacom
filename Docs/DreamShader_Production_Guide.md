@@ -294,6 +294,7 @@ rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: E
 - 当临时 Surface Effect 要把另一张纹理映射到卡牌主体、同时保留实时出血装饰轮廓时，不能直接用整张 Retainer UV 采样图案。运行时应从 `CardContentSizeBox` 缓存几何解析 Retainer 局部 `BodyRectMin/Max`，将该矩形重映射为 `0–1` 牌背 UV；矩形外仍使用实时 `Texture.a` 作为完整剪影，并以 MI 的统一边缘色填充。纹理资产必须先导入，再生成引用它作为默认值的 `.dsm`；推荐 setup 脚本提供 import-only 阶段，随后定向 DreamShader compile，最后创建 MI/Style 与宿主引用。这样既不会把牌背图案拉伸到 EffectBadge，也不会让缺少默认纹理导致生成节点回退为错误采样器。
 - 正面结晶一类 Retainer Surface Effect 应把“卡体已组装可见度”和“外溢装饰像素”拆成两条 mask：前者同时裁切实时 `Texture.rgb/a` 并作为接触阴影 caster，后者只合成发光颜色/Alpha，绝不能写回 shadow caster。稳定结晶顺序使用 Card ID Seed、局部量化 UV 和 `.dsh` 自包含 hash；不要使用材质 `Time`、Noise Texture 或逐帧随机。稀有度色只在完成边缘阶段选择，不应预先改染完整卡面。
 - `M_FirstPersonCard_SurfaceEffects_GainReveal.dsm` 的生成资产、默认 MI 与 Style 由 `Scripts/SetupFirstPersonCardGainRevealAssets.py` 定向维护；设置 `WACOM_SKIP_GAIN_REVEAL_ANCHOR=1` 可在保留其它分支玩家 Blueprint 的情况下只重建材质与 Style。脚本不得调用其它 DreamShader 全量资产设置流程。
+- 长时间 Held 的封存刻印仍应使用临时 Surface MID，而不是把算法塞进普通手牌基础材质。`M_FirstPersonCard_SurfaceEffects_RetainSeal.dsm` 保留原始卡面 RGB/Alpha，并只把角标、外缘与中心方印作为额外预乘颜色合成；这些亮纹不能写回接触阴影 caster。`RetainSealPhase / Progress` 由 Playback 写入，Held 使用静态强度，不读取 `Time`。默认 MI、Style 与 Anchor 由 `Scripts/SetupFirstPersonCardRetainSealAssets.py` 定向维护；设置 `WACOM_SKIP_RETAIN_SEAL_ANCHOR=1` 可跳过玩家 Blueprint 保存。
 
 ## 8. 性能原则
 

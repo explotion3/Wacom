@@ -17,6 +17,7 @@ enum class EWacomBattlePresentationPhaseKind : uint8
 	EnemyAction,
 	TurnStartDraw,
 	TurnStartHandAnchorEnter,
+	TurnStartRetainRelease,
 	CommandHandResolution,
 	HandDiscardGlyphTransfer,
 	DeckReshuffle,
@@ -63,6 +64,7 @@ struct FWacomBattlePresentationPhase
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnEndRetain
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartDraw
 			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter
+			|| Kind == EWacomBattlePresentationPhaseKind::TurnStartRetainRelease
 			|| Kind == EWacomBattlePresentationPhaseKind::CommandHandResolution
 			|| Kind == EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer
 			|| Kind == EWacomBattlePresentationPhaseKind::DeckReshuffle

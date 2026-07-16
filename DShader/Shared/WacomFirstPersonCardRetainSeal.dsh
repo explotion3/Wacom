@@ -1,0 +1,71 @@
+// Copyright Wacom. All Rights Reserved.
+
+Function SelfContained WacomFirstPersonCard_ComputeRetainSeal(
+    in float2 surfaceUV,
+    in float phase,
+    in float progress,
+    in float reducedMotion,
+    in float pixelColumns,
+    in float cornerExtent,
+    in float cornerThickness,
+    in float outerEdgeWidth,
+    in float centerStampExtent,
+    in float heldIntensity,
+    in float stableSeed,
+    out float cornerMask,
+    out float edgeMask,
+    out float centerStampMask,
+    out float paletteVariant)
+{
+    float safeColumns = max(pixelColumns, 1.0);
+    float2 cellUV = floor(saturate(surfaceUV) * safeColumns) / safeColumns;
+    float2 centered = abs(cellUV - float2(0.5, 0.5));
+    float2 edgeDistance = min(cellUV, 1.0 - cellUV);
+
+    float sealing = 1.0 - step(0.5, abs(phase - 1.0));
+    float held = 1.0 - step(0.5, abs(phase - 2.0));
+    float releasing = 1.0 - step(0.5, abs(phase - 3.0));
+    float normalAmount = saturate(sealing * progress + held + releasing * (1.0 - progress));
+    float reducedAmount = saturate(sealing * progress + held + releasing * (1.0 - progress));
+    float amount = lerp(normalAmount, reducedAmount, saturate(reducedMotion));
+
+    float safeCornerExtent = clamp(cornerExtent, 0.01, 0.45);
+    float safeCornerThickness = clamp(cornerThickness, 0.001, safeCornerExtent);
+    float cornerRegion = step(0.5 - safeCornerExtent, centered.x)
+        * step(0.5 - safeCornerExtent, centered.y);
+    float horizontalStroke = step(0.5 - safeCornerExtent, centered.x)
+        * (1.0 - step(0.5 - safeCornerExtent + safeCornerThickness, centered.y));
+    float verticalStroke = step(0.5 - safeCornerExtent, centered.y)
+        * (1.0 - step(0.5 - safeCornerExtent + safeCornerThickness, centered.x));
+    float cornerShape = cornerRegion * saturate(horizontalStroke + verticalStroke);
+
+    float safeEdgeWidth = clamp(outerEdgeWidth, 0.001, 0.12);
+    float nearestEdge = min(edgeDistance.x, edgeDistance.y);
+    float edgeShape = 1.0 - step(safeEdgeWidth, nearestEdge);
+
+    float safeStampExtent = clamp(centerStampExtent, 0.005, 0.20);
+    float centerDiamond = 1.0 - step(safeStampExtent, centered.x + centered.y);
+    float stampPulse = sealing
+        * smoothstep(0.25, 0.52, progress)
+        * (1.0 - smoothstep(0.62, 0.92, progress));
+    stampPulse = lerp(stampPulse, sealing * 0.35 * amount, saturate(reducedMotion));
+
+    float heldScale = lerp(1.0, saturate(heldIntensity), held);
+    cornerMask = cornerShape * amount * heldScale;
+    edgeMask = edgeShape * amount * heldScale;
+    centerStampMask = centerDiamond * stampPulse;
+
+    float2 pixelCell = floor(saturate(surfaceUV) * safeColumns);
+    paletteVariant = frac(sin(dot(
+        pixelCell + stableSeed * 173.0,
+        float2(31.731, 67.193))) * 43758.5453);
+}
+
+Function SelfContained WacomFirstPersonCard_SelectRetainSealColor(
+    in float paletteVariant,
+    in float3 primaryColor,
+    in float3 secondaryColor,
+    out float3 sealColor)
+{
+    sealColor = lerp(primaryColor, secondaryColor, step(0.76, paletteVariant));
+}

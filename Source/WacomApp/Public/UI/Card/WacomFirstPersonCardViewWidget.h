@@ -162,6 +162,9 @@ private:
 	void ApplyGainRevealParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardGainRevealView& View) const;
+	void ApplyRetainSealParameters(
+		UMaterialInstanceDynamic& Material,
+		const FWacomFirstPersonCardRetainSealView& View) const;
 	void ApplyPlayedDissolveParameters(
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardPlayedDissolveView& View) const;

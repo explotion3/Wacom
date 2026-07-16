@@ -16,6 +16,7 @@ class FWacomFirstPersonCardDepthMotion;
 class FWacomFirstPersonCardDataRewritePlayback;
 class FWacomFirstPersonCardDrawRevealPlayback;
 class FWacomFirstPersonCardGainRevealPlayback;
+class FWacomFirstPersonCardRetainSealPlayback;
 class FWacomFirstPersonCardDragPickupPlayback;
 class FWacomFirstPersonCardHandTargetImpactPlayback;
 class FWacomFirstPersonCardSurfaceDeparturePlayback;
@@ -57,6 +58,11 @@ struct FWacomFirstPersonCardDrawRevealPlaybackDeleter
 struct FWacomFirstPersonCardGainRevealPlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardGainRevealPlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardRetainSealPlaybackDeleter
+{
+	void operator()(FWacomFirstPersonCardRetainSealPlayback* Playback) const;
 };
 
 struct FWacomFirstPersonCardHandTargetImpactPlaybackDeleter
@@ -103,6 +109,13 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	bool bConfirmFeedbackActive = false;
 	bool bCommitFeedbackActive = false;
 	bool bRetainedFeedbackActive = false;
+	bool bRetainedFeedbackHeld = false;
+	bool bRetainedFeedbackBlocking = false;
+	EWacomFirstPersonCardRetainSealPhase RetainSealPhase =
+		EWacomFirstPersonCardRetainSealPhase::Inactive;
+	float RetainSealProgress = 0.0f;
+	float RetainSealLiftPixels = 0.0f;
+	float RetainSealScaleMultiplier = 1.0f;
 	float RetainedFeedbackElapsedSeconds = 0.0f;
 	float RetainedFeedbackStartDelaySeconds = 0.0f;
 	bool bCardDragProbeFeedback = false;
@@ -219,7 +232,11 @@ public:
 		EWacomFirstPersonCardSlotTransitionKind TransitionKind =
 			EWacomFirstPersonCardSlotTransitionKind::Default);
 	void TriggerCommitFeedback();
-	void TriggerRetainedFeedback(int32 SequenceIndex, int32 SequenceCount);
+	void TriggerRetainedFeedback(
+		int32 SequenceIndex,
+		int32 SequenceCount,
+		bool bRetainUntilExplicitRelease = false);
+	void TriggerRetainedReleaseFeedback();
 	void TriggerCardUseReformFeedback();
 	void TriggerCardUseReformOutFeedback();
 	void TriggerCardUseReformInFeedback();
@@ -408,6 +425,9 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardGainRevealPlayback,
 		FWacomFirstPersonCardGainRevealPlaybackDeleter> GainRevealPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardRetainSealPlayback,
+		FWacomFirstPersonCardRetainSealPlaybackDeleter> RetainSealPlayback;
 	int32 PendingDataRewriteFieldMask = 0;
 	EWacomFirstPersonCardDataRewriteTone PendingDataRewriteTone =
 		EWacomFirstPersonCardDataRewriteTone::Neutral;
@@ -434,8 +454,6 @@ private:
 	float ConfirmFeedbackElapsedSeconds = 999999.0f;
 	float DenyFeedbackElapsedSeconds = 999999.0f;
 	float CommitFeedbackElapsedSeconds = 999999.0f;
-	float RetainedFeedbackElapsedSeconds = 999999.0f;
-	float RetainedFeedbackStartDelaySeconds = 0.0f;
 	bool bCardLayerInteractionEnabled = false;
 	bool bIsHoveredForFirstPersonLayer = false;
 	bool bIsPressedForFirstPersonLayer = false;
@@ -608,6 +626,11 @@ private:
 	void ApplyGainRevealSurfaceView();
 	void ClearGainRevealPlayback();
 	bool IsGainRevealPlaybackActive() const;
+	void TickRetainSealPlayback(float DeltaTime);
+	void ApplyRetainSealSurfaceView();
+	void ClearRetainSealPlayback();
+	bool IsRetainSealPlaybackActive() const;
+	bool IsRetainSealPlaybackBlockingPresentation() const;
 	bool CanPlayCardUseEffect() const;
 	bool CanPlayCardUseReformEffect() const;
 	bool CanPlayExhaustDissolve() const;
@@ -633,7 +656,6 @@ private:
 	void ClearInteractionFeedback();
 	bool IsDenyFeedbackActive() const;
 	bool IsRetainedFeedbackActive() const;
-	float ComputeRetainedFeedbackAlpha() const;
 	void ApplyFeedbackOverlay();
 	void ApplyInteractionFeedbackOverlay();
 	void UpdateVisibilityForInteractionMode();

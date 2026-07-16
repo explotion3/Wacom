@@ -828,6 +828,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardFeedbackHints(
 		ResolvedHint.DataRewriteCostBefore = Hint.DataRewriteCostBefore;
 		ResolvedHint.DataRewriteCostAfter = Hint.DataRewriteCostAfter;
 		ResolvedHint.bBlocksPresentationPhase = Hint.bBlocksPresentationPhase;
+		ResolvedHint.bRetainUntilExplicitRelease = Hint.bRetainUntilExplicitRelease;
 		FWacomFirstPersonCardLayerResolvedFeedbackBundle& Bundle =
 			PendingFeedbackHintsByKey.FindOrAdd(
 				Hint.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphensLower));
@@ -1098,11 +1099,23 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 						return Hint.FeedbackKind
 							== EWacomFirstPersonCardLayerFeedbackKind::HandTargetImpact;
 					});
+			const FWacomFirstPersonCardLayerResolvedFeedbackHint* RetainedReleaseHint =
+				IncomingFeedbackBundle->Hints.FindByPredicate(
+					[](const FWacomFirstPersonCardLayerResolvedFeedbackHint& Hint)
+					{
+						return Hint.FeedbackKind
+							== EWacomFirstPersonCardLayerFeedbackKind::RetainedRelease;
+					});
 			if (RetainedHint)
 			{
 				SlotWidget->TriggerRetainedFeedback(
 					RetainedHint->SequenceIndex,
-					RetainedHint->SequenceCount);
+					RetainedHint->SequenceCount,
+					RetainedHint->bRetainUntilExplicitRelease);
+			}
+			if (RetainedReleaseHint)
+			{
+				SlotWidget->TriggerRetainedReleaseFeedback();
 			}
 			if (CardUseReformHint)
 			{

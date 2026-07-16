@@ -65,6 +65,11 @@ namespace
 	const FName GainRevealSettleEndParameterName(TEXT("GainRevealSettleEnd"));
 	const FName GainRevealReducedCrossFadeStartParameterName(TEXT("GainRevealReducedCrossFadeStart"));
 	const FName GainRevealReducedCrossFadeEndParameterName(TEXT("GainRevealReducedCrossFadeEnd"));
+	const FName RetainSealEnabledParameterName(TEXT("RetainSealEnabled"));
+	const FName RetainSealPhaseParameterName(TEXT("RetainSealPhase"));
+	const FName RetainSealProgressParameterName(TEXT("RetainSealProgress"));
+	const FName RetainSealSeedParameterName(TEXT("RetainSealSeed"));
+	const FName RetainSealReducedMotionParameterName(TEXT("RetainSealReducedMotion"));
 	const FName PlayedDissolveEnabledParameterName(TEXT("PlayedDissolveEnabled"));
 	const FName PlayedDissolveAmountParameterName(TEXT("PlayedDissolveAmount"));
 	const FName PlayedDissolveTimeParameterName(TEXT("PlayedDissolveTime"));
@@ -332,6 +337,7 @@ void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
 	const FWacomFirstPersonCardPlayedDissolveView& DissolveView = View.PlayedDissolve;
 	const FWacomFirstPersonCardHandTargetImpactView& HandTargetImpactView =
 		View.HandTargetImpact;
+	const FWacomFirstPersonCardRetainSealView& RetainSealView = View.RetainSeal;
 	if (DrawRevealView.bActive
 		&& DrawRevealView.Style.SurfaceEffectMaterialInstance)
 	{
@@ -386,6 +392,17 @@ void UWacomFirstPersonCardViewWidget::SetCardSurfaceEffectView(
 		{
 			ApplyCardDepthParameters(*ActiveSurfaceEffectMaterialInstance);
 			ApplyPlayedDissolveParameters(*ActiveSurfaceEffectMaterialInstance, DissolveView);
+		}
+	}
+	else if (RetainSealView.bActive
+		&& RetainSealView.Style.SurfaceEffectMaterialInstance)
+	{
+		EnsureSurfaceEffectMaterialInstance(
+			RetainSealView.Style.SurfaceEffectMaterialInstance);
+		if (ActiveSurfaceEffectMaterialInstance)
+		{
+			ApplyCardDepthParameters(*ActiveSurfaceEffectMaterialInstance);
+			ApplyRetainSealParameters(*ActiveSurfaceEffectMaterialInstance, RetainSealView);
 		}
 	}
 	else
@@ -766,6 +783,38 @@ void UWacomFirstPersonCardViewWidget::ApplyGainRevealParameters(
 	Material.SetScalarParameterValue(
 		GainRevealReducedCrossFadeEndParameterName,
 		Style.ReducedCrossFadeEndProgress);
+
+	FVector2D SurfaceSize = Fake3DSurfaceRetainer
+		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
+	{
+		SurfaceSize = FVector2D(456.0f, 520.0f);
+	}
+	Material.SetVectorParameterValue(
+		SurfaceInvSizeParameterName,
+		FLinearColor(1.0f / SurfaceSize.X, 1.0f / SurfaceSize.Y, 0.0f, 0.0f));
+}
+
+void UWacomFirstPersonCardViewWidget::ApplyRetainSealParameters(
+	UMaterialInstanceDynamic& Material,
+	const FWacomFirstPersonCardRetainSealView& View) const
+{
+	Material.SetScalarParameterValue(
+		RetainSealEnabledParameterName,
+		View.bActive ? 1.0f : 0.0f);
+	Material.SetScalarParameterValue(
+		RetainSealPhaseParameterName,
+		static_cast<float>(View.Phase));
+	Material.SetScalarParameterValue(
+		RetainSealProgressParameterName,
+		FMath::Clamp(View.Progress, 0.0f, 1.0f));
+	Material.SetScalarParameterValue(
+		RetainSealSeedParameterName,
+		FMath::Frac(FMath::Abs(View.Seed)));
+	Material.SetScalarParameterValue(
+		RetainSealReducedMotionParameterName,
+		View.bReducedMotion ? 1.0f : 0.0f);
 
 	FVector2D SurfaceSize = Fake3DSurfaceRetainer
 		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()

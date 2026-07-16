@@ -38,6 +38,8 @@ namespace
 			return TEXT("TurnStartDraw");
 		case EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter:
 			return TEXT("TurnStartHandAnchorEnter");
+		case EWacomBattlePresentationPhaseKind::TurnStartRetainRelease:
+			return TEXT("TurnStartRetainRelease");
 		case EWacomBattlePresentationPhaseKind::CommandHandResolution:
 			return TEXT("CommandHandResolution");
 		case EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer:
@@ -247,7 +249,6 @@ namespace
 			{
 				return ContainsNormalHandCardId(Snapshot, CardInstanceId);
 			});
-		FeedbackCardIds.Append(CollectHandAnchorCardIds(Snapshot));
 		return SortCardIdsByPhaseSnapshotOrder(Snapshot, FeedbackCardIds);
 	}
 
@@ -616,7 +617,8 @@ namespace
 	}
 
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildRetainedFeedbackHintsForCardIds(
-		const TArray<FGuid>& CardInstanceIds)
+		const TArray<FGuid>& CardInstanceIds,
+		bool bRetainUntilExplicitRelease)
 	{
 		TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
 		for (int32 Index = 0; Index < CardInstanceIds.Num(); ++Index)
@@ -624,6 +626,23 @@ namespace
 			FWacomFirstPersonCardLayerFeedbackHint Hint;
 			Hint.CardInstanceId = CardInstanceIds[Index];
 			Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::Retained;
+			Hint.SequenceIndex = Index;
+			Hint.SequenceCount = FMath::Max(1, CardInstanceIds.Num());
+			Hint.bRetainUntilExplicitRelease = bRetainUntilExplicitRelease;
+			Hints.Add(Hint);
+		}
+		return Hints;
+	}
+
+	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildRetainedReleaseHintsForCardIds(
+		const TArray<FGuid>& CardInstanceIds)
+	{
+		TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints;
+		for (int32 Index = 0; Index < CardInstanceIds.Num(); ++Index)
+		{
+			FWacomFirstPersonCardLayerFeedbackHint Hint;
+			Hint.CardInstanceId = CardInstanceIds[Index];
+			Hint.FeedbackKind = EWacomFirstPersonCardLayerFeedbackKind::RetainedRelease;
 			Hint.SequenceIndex = Index;
 			Hint.SequenceCount = FMath::Max(1, CardInstanceIds.Num());
 			Hints.Add(Hint);
@@ -791,17 +810,20 @@ namespace
 			}
 		}
 
+		TArray<FGuid> RetainedSealCardIds;
 		if (RetainCheckpoint)
 		{
-			const TArray<FGuid> RetainedFeedbackCardIds = BuildRetainedPhaseFeedbackCardIds(
+			RetainedSealCardIds = BuildRetainedPhaseFeedbackCardIds(
 				RetainCheckpoint->Snapshot,
 				RetainCheckpoint->CardInstanceIds);
-			if (!RetainedFeedbackCardIds.IsEmpty())
+			if (!RetainedSealCardIds.IsEmpty())
 			{
 				FWacomBattlePresentationPhase Phase;
 				Phase.Kind = EWacomBattlePresentationPhaseKind::TurnEndRetain;
 				Phase.Snapshot = RetainCheckpoint->Snapshot;
-				Phase.FeedbackHints = BuildRetainedFeedbackHintsForCardIds(RetainedFeedbackCardIds);
+				Phase.FeedbackHints = BuildRetainedFeedbackHintsForCardIds(
+					RetainedSealCardIds,
+					true);
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}
@@ -881,6 +903,30 @@ namespace
 				Phase.TransitionHints = BuildTransitionHintsForCardIds(
 					SortCardIdsByPhaseSnapshotOrder(DrawCheckpoint->Snapshot, NewHandAnchorCardIds),
 					EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered);
+				Plan.Phases.Add(MoveTemp(Phase));
+			}
+		}
+
+		if (!RetainedSealCardIds.IsEmpty()
+			&& PostCommandSnapshot.Phase != EBattlePhase::BattleEnd)
+		{
+			const FBattleSnapshot& ReleaseSnapshot = DrawCheckpoint
+				? DrawCheckpoint->Snapshot
+				: PostCommandSnapshot;
+			const TArray<FGuid> ReleaseCardIds = SortCardIdsByPhaseSnapshotOrder(
+				ReleaseSnapshot,
+				BuildUniqueValidCardIds(
+					RetainedSealCardIds,
+					[&ReleaseSnapshot](const FGuid& CardInstanceId)
+					{
+						return ContainsNormalHandCardId(ReleaseSnapshot, CardInstanceId);
+					}));
+			if (!ReleaseCardIds.IsEmpty())
+			{
+				FWacomBattlePresentationPhase Phase;
+				Phase.Kind = EWacomBattlePresentationPhaseKind::TurnStartRetainRelease;
+				Phase.Snapshot = ReleaseSnapshot;
+				Phase.FeedbackHints = BuildRetainedReleaseHintsForCardIds(ReleaseCardIds);
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}

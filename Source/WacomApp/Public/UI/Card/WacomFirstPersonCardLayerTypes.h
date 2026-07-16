@@ -126,7 +126,8 @@ enum class EWacomFirstPersonCardLayerFeedbackKind : uint8
 	HandTargetImpact UMETA(DisplayName = "Hand Target Impact"),
 	CardDataRewrite UMETA(DisplayName = "Card Data Rewrite"),
 	CardUseReformOut UMETA(DisplayName = "Card Use Reform Out"),
-	CardUseReformIn UMETA(DisplayName = "Card Use Reform In")
+	CardUseReformIn UMETA(DisplayName = "Card Use Reform In"),
+	RetainedRelease UMETA(DisplayName = "Retained Release")
 };
 
 UENUM(BlueprintType, meta = (Bitflags))
@@ -854,6 +855,50 @@ struct WACOMAPP_API FWacomFirstPersonCardGainRevealView
 	FWacomFirstPersonCardGainRevealStyleData Style;
 };
 
+/** Authoring data for the low-cost retained-card seal rendered by the shared Retainer. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardRetainSealStyleData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|First Person Card Retain Seal", meta = (ToolTip = "保留牌封存期间临时绑定到唯一 Retainer 的 UI 材质实例；必须保留 Texture、Fake-3D 与实时 Alpha 接触阴影合同。"))
+	TObjectPtr<UMaterialInstance> SurfaceEffectMaterialInstance = nullptr;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardRetainSealConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	bool bEnabled = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	FWacomFirstPersonCardRetainSealStyleData Style;
+};
+
+enum class EWacomFirstPersonCardRetainSealPhase : uint8
+{
+	Inactive,
+	Sealing,
+	Held,
+	Releasing
+};
+
+struct WACOMAPP_API FWacomFirstPersonCardRetainSealView
+{
+	bool bActive = false;
+	bool bReducedMotion = false;
+	EWacomFirstPersonCardRetainSealPhase Phase =
+		EWacomFirstPersonCardRetainSealPhase::Inactive;
+	float Progress = 0.0f;
+	float Seed = 0.0f;
+	FWacomFirstPersonCardRetainSealStyleData Style;
+};
+
 /** Card-surface material state shared by mutually exclusive Retainer effects. */
 struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 {
@@ -863,6 +908,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSurfaceEffectView
 	FWacomFirstPersonCardHandTargetImpactView HandTargetImpact;
 	FWacomFirstPersonCardUseEffectView CardUse;
 	FWacomFirstPersonCardPlayedDissolveView PlayedDissolve;
+	FWacomFirstPersonCardRetainSealView RetainSeal;
 };
 
 /** Authoring contract for a discard-to-draw pile transfer. The material instance owns glyph appearance. */
@@ -1076,6 +1122,10 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerFeedbackHint
 	/** Command presentation phases may opt into waiting for this otherwise decorative playback. */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Data Rewrite")
 	bool bBlocksPresentationPhase = false;
+
+	/** Formal EndTurn retains stay sealed until a later RetainedRelease hint. */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	bool bRetainUntilExplicitRelease = false;
 };
 
 USTRUCT(BlueprintType)
@@ -1843,6 +1893,9 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotVisualConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomFirstPersonCardGainRevealConfig GainReveal;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardRetainSealConfig RetainSeal;
 };
 
 struct WACOMAPP_API FWacomFirstPersonCardSlotVisualState
@@ -2191,7 +2244,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 	bool bEnableRetainedFeedback = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackDuration = 0.28f;
+	float RetainedFeedbackDuration = 0.32f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float RetainedFeedbackStaggerSeconds = 0.045f;
@@ -2203,6 +2256,12 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 	float RetainedFeedbackScale = 1.025f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	int32 RetainedFeedbackZOrderBoost = 180;
+	float RetainedFeedbackHeldLiftPixels = 5.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackHeldScale = 1.01f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float RetainedFeedbackReleaseDuration = 0.16f;
 
 };

@@ -48,7 +48,7 @@ tags:
 - `CardsRetained` 是规则事件，只记录回合结束明确保留的普通手牌实例；当前会生成独立 retained feedback hint，但不对应 first-person `Retained` transition kind。
 - `FBattlePresentationJournal` 是 C++ only 只读 checkpoint journal，记录 EndTurn 的 `TurnEndDiscardResolved`、`TurnEndRetainResolved`、`TurnStartDrawResolved`，以及显式获得卡插入后、手牌上限弃置前的 `CardGainedResolved`。
 - first-person card layer 当前 transition kind 包含 `Default`、`Drawn`、`RunHandEntered`、`Gained`、`HandAnchorEntered`、`Played`、`Discarded`。`RunHandEntered` 是 Run/App-only hand/source 进入语义，v1 复用 `Drawn` 入场 profile；`HandAnchorEntered` 是 UI-only 左右手牌生成入手语义。两者都不属于 `CardsDrawn`。
-- EndTurn journal 现在由 `WacomApp` presentation coordinator 翻译为阶段化 plan：`TurnEndDiscard -> TurnEndRetain -> EnemyAction -> TurnStartDraw -> TurnStartHandAnchorEnter`。手牌阶段等待 first-person card layer 报告播放结束后再进入下一阶段；enemy phase v1 复用现有 battle event presentation queue。
+- EndTurn journal 现在由 `WacomApp` presentation coordinator 翻译为阶段化 plan：`TurnEndDiscard -> TurnEndRetain -> EnemyAction -> TurnStartDraw -> TurnStartHandAnchorEnter -> TurnStartRetainRelease`。Retain Held 不阻塞敌人行动或抽牌，只有 Sealing / Releasing 计入完成条件；enemy phase 复用现有 battle event presentation queue。
 - `FWacomBattleHandPresentationController` 在非 EndTurn phase plan 路径中，仍把 `CardsDrawn / CardGained / CardPlayed / HandLimitDiscarded / CardDiscarded / CardExhausted` 转为一帧 `entries + transition hints`，并把 `CardsRetained` 转为同帧 `feedback hints`。
 - `UWacomFirstPersonCardAnchorComponent` 的 `05 Slot Motion`、`06 Transition Motion` 和 `07 Transition Audio` 是当前卡牌入场、离场、事件感知转场和入手音效的主要制作参数入口。
 - WBP 可以负责卡面、overlay、材质和局部视觉反馈；核心手牌动画队列不应依赖 UMG Designer timeline。
@@ -110,10 +110,11 @@ EndTurn phase plan 的当前合同：
 | Phase | 来源 | Card layer 输入 | 完成条件 |
 |---|---|---|---|
 | `TurnEndDiscard` | `TurnEndDiscardResolved` checkpoint | checkpoint snapshot + `Discarded` transition hints | card layer 没有 active enter / exit / retained feedback，或 timeout 兜底 |
-| `TurnEndRetain` | `TurnEndRetainResolved` checkpoint | checkpoint snapshot + 普通保留手牌与仍在手牌中的左右手 anchor `Retained` feedback hints | 同上 |
+| `TurnEndRetain` | `TurnEndRetainResolved` checkpoint | checkpoint snapshot + 普通保留手牌 `Retained` feedback hints；左右手 anchor 不参与 | Sealing 完成并进入非阻塞 Held，或 timeout 兜底 |
 | `EnemyAction` | retain / discard checkpoint 与 draw checkpoint 之间的 battle events | 现有 battle event presentation queue | event queue finished |
 | `TurnStartDraw` | `TurnStartDrawResolved` checkpoint | 临时隐藏新出现左右手 anchor 的 checkpoint snapshot + `Drawn` transition hints | card layer 没有 active presentation playback，或 timeout 兜底 |
 | `TurnStartHandAnchorEnter` | `TurnStartDrawResolved` checkpoint | 完整 checkpoint snapshot + 新出现左右手 anchor 的 `HandAnchorEntered` transition hints | 同上 |
+| `TurnStartRetainRelease` | draw checkpoint 或 EndTurn 最后安全 snapshot | 仍在手牌中的保留卡 `RetainedRelease` feedback hints | Releasing 完成，或 timeout 兜底 |
 
 ## §5 动画语义词汇
 
@@ -173,9 +174,9 @@ EndTurn phase plan 的当前合同：
 |---|---|
 | `CardsRetained` | 对仍存在于 next hand snapshot 的普通保留手牌生成 `Retained` feedback，并写入稳定 `SequenceIndex / SequenceCount` |
 
-`CardsRetained` 不生成 first-person transition。Layer 收到 retained feedback 后只在匹配 slot 上播放短促锁定脉冲；若 slot 暂不可投影，hint 保留到下一次可见刷新。播放期间的普通 refresh 只能更新 slot 最新布局目标，不能取消 retained feedback。
+`CardsRetained` 不生成 first-person transition。正式 EndTurn 的 `Retained` feedback 建立像素封存并进入 Held；Held 不阻塞 Presentation Plan，但会跨过敌人行动与新回合抽牌继续跟随最新 slot 布局。`TurnStartRetainRelease` 再显式解除。若 slot 暂不可投影，hint 保留到下一次可见刷新；播放期间的普通 refresh 只能更新 slot 最新布局目标，不能取消封存。
 
-EndTurn phase plan 的 `TurnEndRetain` 阶段会在不改变 `CardsRetained` 规则事件的前提下，额外为 retain checkpoint snapshot 中仍存在的左右手 anchor 生成同款 `Retained` feedback hint。左右手 anchor 只是共享当前反馈视觉，不进入 `CardsRetained.CardInstanceIds`。
+EndTurn phase plan 的 `TurnEndRetain` 阶段只消费 `CardsRetained.CardInstanceIds` 中仍存在的普通卡。左右手 anchor 既不进入规则事件，也不生成封存反馈。
 
 ## §7 动画类型目录
 
@@ -227,13 +228,15 @@ Anchor `19 Card Gain Reveal` 为同一个 `Gained` Enter 增加正面像素结�
 
 `CardsRetained` 表示回合结束仍留在普通手牌中的卡。当前没有 `Retained` transition kind，只有独立 `Retained` feedback hint。
 
-Retain 表现必须避免和“入手 / 离手”混在一起。当前 v1 是非阻塞反馈：
+Retain 表现必须避免和“入手 / 离手”混在一起。当前正式表现是建立阶段阻塞、保持阶段非阻塞、解除阶段阻塞：
 
 - 非保留普通卡执行 `TurnEndDiscard` 离场。
-- 保留普通卡和仍在手牌中的左右手 anchor 保持 slot identity，播放轻量 lift / scale / 暖金色 feedback pulse。
-- 下回合抽牌完成后，保留卡参与普通 reflow。
+- 保留普通卡保持 slot identity，播放像素封存刻印并进入轻量 Held；左右手 anchor 不播放。
+- 封存只叠加材质、上提和缩放，不修改 authored hand ZOrder；因此普通保留牌不会因长期 Held 越过相邻左右手 anchor。
+- Held 跨过敌人行动、抽牌和普通 reflow，继续追随最新手牌布局。
+- 抽牌与左右手生成完成后，`RetainedRelease` 缓出材质刻印和额外 Transform。
 
-后续如果要做完整 EndTurn hand timeline，应在 `BattleHandPresentationPlan` 里表达 retain hold / deemphasis / recover 阶段；不要把当前 retained feedback 升级成 Widget 自发状态，也不要为 v1 新增 `Retained` transition kind。
+Retain hold / release 始终由 EndTurn Presentation Plan 显式编排；Widget 只消费 Hint 和维护单卡 Playback，不得自行从回合或 Snapshot 猜测解除时机，也不需要新增 `Retained` transition kind。
 
 ### Reflow
 
@@ -323,7 +326,7 @@ UMG Designer timeline 不适合作为核心手牌动画主线：
 - `CardsDrawn` fallback 只为普通新手牌生成 `Drawn` hint，不把左右手 anchor 纳入抽牌预算。
 - 新出现的左右手 anchor 在 EndTurn draw 后或 battle entry opening draw 后生成 `HandAnchorEntered` hint。
 - `CardsRetained` 只为仍在 next hand snapshot 的普通保留手牌生成 retained feedback hint，不生成 first-person transition，也不包含左右手 anchor。
-- EndTurn `TurnEndRetain` phase 可以为仍在 retain checkpoint snapshot 中的左右手 anchor 额外生成 retained feedback hint，但不改变 `CardsRetained` 事件内容。
+- EndTurn `TurnEndRetain` 只封存普通保留卡；`TurnStartRetainRelease` 在新牌与手牌 Anchor 入场后解除，左右手 anchor 始终不播放封存。
 - presentation journal 消费一次，checkpoint 顺序和 ID 正确。
 - 普通 refresh 不覆盖尚未消费的 explicit presentation frame。
 - source suppression / gate 关闭时不提前消费入场 hint。

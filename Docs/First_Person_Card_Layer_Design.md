@@ -33,7 +33,7 @@ Battle / Run snapshot
 
 卡牌仍由 UMG 渲染，因此保留 HUD 级别清晰度、材质动画和 WBP 可迭代性。第一人称感来自 anchor 投影、身体 / tunnel / battle base rotation、soft clamp、hand center smoothing 和 slot motion，而不是把常驻手牌做成 `WidgetComponent`。
 
-2026-07-12 收口后，Anchor 不再承担 Development Preview 或 Debug Projection Widget，外部 `CardShadowImage`、旧 drag-target 颜色覆盖和箭头吸附仍保持移除。Hover / Drag fake-3D、Inspect scrub、Battle 无目标 drag-out commit、Hover / Inspect / Drag camera look、语义入场音频、`Gained` 入场、`Retained` 纯运动反馈以及手牌目标 lift / scale / ZOrder 均沿现有 first-person card layer 边界恢复；镜头路径直接使用 BattleCamera / RunPath，阴影继续使用 Retainer 内实时 Alpha 接触阴影。`Retained` 不恢复旧 Overlay 发光，未来由统一卡牌效果系统接管颜色、闪光、选中和溶解。
+2026-07-12 收口后，Anchor 不再承担 Development Preview 或 Debug Projection Widget，外部 `CardShadowImage`、旧 drag-target 颜色覆盖和箭头吸附仍保持移除。Hover / Drag fake-3D、Inspect scrub、Battle 无目标 drag-out commit、Hover / Inspect / Drag camera look、语义入场音频、`Gained` 入场以及手牌目标 lift / scale / ZOrder 均沿现有 first-person card layer 边界恢复；镜头路径直接使用 BattleCamera / RunPath，阴影继续使用 Retainer 内实时 Alpha 接触阴影。`Retained` 已由统一 Surface Effect 接管为 `Sealing / Held / Releasing` 像素封存刻印，并只与轻量 Motion Mixer 位移和缩放合成；它不改变 authored hand ZOrder，避免普通保留牌越过左右手 Anchor，也不恢复旧 `FeedbackOverlay` 发光。
 
 ## §2 核心对象
 
@@ -213,7 +213,7 @@ Run 探索期默认手牌和 provider-backed menu lease 的卡牌进入使用 `R
 
 左右手 anchor 的生成入手使用 `HandAnchorEntered` transition hint。它是 UI-only 表现语义，不进入 `CardsDrawn.CardInstanceIds`，也不改变左右手牌保留 / 生成规则。EndTurn `TurnStartDraw` phase 会先临时隐藏本次新出现的左右手 anchor，让普通抽牌完成；随后 `TurnStartHandAnchorEnter` phase 提交完整 hand snapshot 并只为这些 anchor 播放生成入手。Battle entry opening reveal 同样分两帧：普通 `Drawn` frame 先播，bridge 等播放结束或无播放时提交完整 snapshot + `HandAnchorEntered` follow-up frame。`HandAnchorEntered` 的 origin、offset、scale、angle、duration、stagger、arc lift、ease 和播放期间交互阻塞都在 Anchor `06 Transition Motion` 下独立调参。
 
-`CardsRetained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 retained feedback hint，而不是 `Retained` transition hint。Controller 的 loose event 路径只为仍存在于下一份普通手牌中的卡生成 feedback，过滤无效 ID、重复 ID、左右手 anchor 和已经离开手牌的 ID；EndTurn `TurnEndRetain` phase 会在不改变 `CardsRetained` 规则事件的前提下，为 retain checkpoint snapshot 中仍存在的左右手 anchor 追加同款 retained feedback。同一批 feedback 使用稳定 `SequenceIndex / SequenceCount`。Layer 侧 retained feedback 是 post-layout pulse：卡牌保持当前 slot identity 和 layout target，只短促上浮、轻微放大并播放暖金色 feedback overlay。普通 refresh 不会取消正在播放的 retained feedback；slot 暂不可投影时 hint 会留到下一次 projected refresh。
+`CardsRetained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 retained feedback hint，而不是 `Retained` transition hint。Controller 的 loose event 路径只为仍存在于下一份普通手牌中的卡生成 feedback，过滤无效 ID、重复 ID、左右手 anchor 和已经离开手牌的 ID；正式 EndTurn plan 同样只消费规则明确记录的普通保留卡，左右手 anchor 不进入封存。同一批 feedback 使用稳定 `SequenceIndex / SequenceCount`。Layer 侧由 `FWacomFirstPersonCardRetainSealPlayback` 管理 `Sealing / Held / Releasing`：Sealing 与 Releasing 阻塞阶段，Held 只保持低强度材质刻印、`5px` 抬升和 `1.01` Scale，不计入 active presentation playback，也不提升 Slot ZOrder。普通 refresh/reflow 只更新最新布局目标，不能清除 Held；`TurnStartRetainRelease` 在抽牌和手牌 Anchor 入场后显式解除。loose/fallback `CardsRetained` 不设置 explicit hold，会自动完成短反馈，避免永久残留。
 
 `CardGained` 事件由同一个 controller 转成 Battle hand presentation frame 中的 `Gained` transition hint。`Gained` 和 `Drawn / RunHandEntered / HandAnchorEntered` 一样必须启动有限时长 enter playback；Anchor `06 Transition Motion` 下的 `GainedCardEnterDurationSeconds`、`GainedCardEnterStaggerSeconds`、`GainedCardEnterArcLiftPixels`、`GainedCardEnterEasePower` 和 `bBlockInteractionDuringGainedCardEnter` 控制奖励卡入场的时长、错峰、弧线、缓动和播放期间交互阻塞。
 

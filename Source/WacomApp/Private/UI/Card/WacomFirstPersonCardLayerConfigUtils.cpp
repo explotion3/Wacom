@@ -718,6 +718,10 @@ bool AreSlotVisualConfigsEquivalent(
 		&& AreFloatsEquivalent(
 			A.GainReveal.Style.ReducedCrossFadeEndProgress,
 			B.GainReveal.Style.ReducedCrossFadeEndProgress)
+		&& A.RetainSeal.bEnabled == B.RetainSeal.bEnabled
+		&& A.RetainSeal.bReducedMotion == B.RetainSeal.bReducedMotion
+		&& A.RetainSeal.Style.SurfaceEffectMaterialInstance
+			== B.RetainSeal.Style.SurfaceEffectMaterialInstance
 		&& A.Selection.bEnabled == B.Selection.bEnabled
 		&& A.Selection.bReducedMotion == B.Selection.bReducedMotion
 		&& AreColorsEquivalent(A.Selection.Style.PrimaryColor, B.Selection.Style.PrimaryColor)
@@ -775,7 +779,12 @@ FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
 	Config.RetainedFeedbackStaggerSeconds = FMath::Max(0.0f, Config.RetainedFeedbackStaggerSeconds);
 	Config.RetainedFeedbackLiftPixels = FMath::Max(0.0f, Config.RetainedFeedbackLiftPixels);
 	Config.RetainedFeedbackScale = FMath::Max(0.01f, Config.RetainedFeedbackScale);
-	Config.RetainedFeedbackZOrderBoost = FMath::Max(0, Config.RetainedFeedbackZOrderBoost);
+	Config.RetainedFeedbackHeldLiftPixels = FMath::Max(
+		0.0f, Config.RetainedFeedbackHeldLiftPixels);
+	Config.RetainedFeedbackHeldScale = FMath::Max(
+		0.01f, Config.RetainedFeedbackHeldScale);
+	Config.RetainedFeedbackReleaseDuration = FMath::Max(
+		0.0f, Config.RetainedFeedbackReleaseDuration);
 	return Config;
 }
 
@@ -821,7 +830,13 @@ bool AreSlotFeedbackConfigsEquivalent(
 		&& AreFloatsEquivalent(A.RetainedFeedbackStaggerSeconds, B.RetainedFeedbackStaggerSeconds)
 		&& AreFloatsEquivalent(A.RetainedFeedbackLiftPixels, B.RetainedFeedbackLiftPixels)
 		&& AreFloatsEquivalent(A.RetainedFeedbackScale, B.RetainedFeedbackScale)
-		&& A.RetainedFeedbackZOrderBoost == B.RetainedFeedbackZOrderBoost;
+		&& AreFloatsEquivalent(
+			A.RetainedFeedbackHeldLiftPixels,
+			B.RetainedFeedbackHeldLiftPixels)
+		&& AreFloatsEquivalent(A.RetainedFeedbackHeldScale, B.RetainedFeedbackHeldScale)
+		&& AreFloatsEquivalent(
+			A.RetainedFeedbackReleaseDuration,
+			B.RetainedFeedbackReleaseDuration);
 }
 
 FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(

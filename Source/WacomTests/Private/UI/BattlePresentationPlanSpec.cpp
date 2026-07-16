@@ -193,7 +193,7 @@ bool FWacomUIBattleEndTurnPresentationPlanSequencesPhasesTest::RunTest(const FSt
 		TEXT("Hand phases skip without card layer and enemy phase becomes active"),
 		HUD->GetActivePresentationPlanPhaseNameForTest(),
 		FName(TEXT("EnemyAction")));
-	TestEqual(TEXT("Draw phase remains pending after enemy phase starts"), HUD->GetPresentationPlanPendingPhaseCountForTest(), 1);
+	TestEqual(TEXT("Draw and retain release remain pending after enemy phase starts"), HUD->GetPresentationPlanPendingPhaseCountForTest(), 2);
 	TestFalse(TEXT("Presentation plan blocks player commands"), HUD->CanSubmitPlayerActionCommand());
 	TestFalse(
 		TEXT("Presentation plan locks first-person hand interaction"),
@@ -216,7 +216,8 @@ bool FWacomUIBattleEndTurnPresentationPlanSequencesPhasesTest::RunTest(const FSt
 		FName(TEXT("TurnEndDiscard")),
 		FName(TEXT("TurnEndRetain")),
 		FName(TEXT("EnemyAction")),
-		FName(TEXT("TurnStartDraw"))
+		FName(TEXT("TurnStartDraw")),
+		FName(TEXT("TurnStartRetainRelease"))
 	};
 	TestEqual(TEXT("Plan starts expected phase count"), StartedPhases.Num(), ExpectedPhases.Num());
 	for (int32 Index = 0; Index < FMath::Min(StartedPhases.Num(), ExpectedPhases.Num()); ++Index)
@@ -299,9 +300,10 @@ bool FWacomUIBattleEndTurnPresentationPlanAddsHandAnchorEnterAfterDrawTest::RunT
 	const TArray<FName> ExpectedPhases = {
 		FName(TEXT("TurnEndRetain")),
 		FName(TEXT("TurnStartDraw")),
-		FName(TEXT("TurnStartHandAnchorEnter"))
+		FName(TEXT("TurnStartHandAnchorEnter")),
+		FName(TEXT("TurnStartRetainRelease"))
 	};
-	TestEqual(TEXT("Plan starts retained, draw, then hand-anchor enter"), StartedPhases.Num(), ExpectedPhases.Num());
+	TestEqual(TEXT("Plan starts retained, draw, hand-anchor enter, then retained release"), StartedPhases.Num(), ExpectedPhases.Num());
 	for (int32 Index = 0; Index < FMath::Min(StartedPhases.Num(), ExpectedPhases.Num()); ++Index)
 	{
 		TestEqual(

@@ -19,6 +19,7 @@ class UWacomFirstPersonCardHandTargetImpactStyle;
 class UWacomFirstPersonCardDataRewriteStyle;
 class UWacomFirstPersonCardDrawRevealStyle;
 class UWacomFirstPersonCardGainRevealStyle;
+class UWacomFirstPersonCardRetainSealStyle;
 class UWacomFirstPersonCardPlayedDissolveStyle;
 class UWacomFirstPersonCardPileTransferStyle;
 class UWacomFirstPersonCardUseEffectStyle;
@@ -642,6 +643,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|19 Card Gain Reveal", meta = (ToolTip = "弱化获得卡牌结晶动态：保留原 Gained 飞行和声音，只交叉显现正面并显示静态弱稀有度边缘，不播放外溢像素回收。"))
 	bool bReduceCardGainRevealMotion = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "回合结束时是否为规则明确保留的普通手牌建立像素封存；关闭后仍保留 CardsRetained 规则事实，但表现阶段会安全跳过。", DisplayName = "Enable Card Retain Seal"))
+	bool bEnableRetainedFeedback = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "保留牌像素封存的可复用材质预设；为空时仍播放上提、缩放与解除运动，不影响回合流程。"))
+	TObjectPtr<UWacomFirstPersonCardRetainSealStyle> CardRetainSealStyle;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "弱化封存动态：不改变卡牌 Scale 或 Translation，只保留静态像素封存和解除淡出；封存无论是否弱化都不会改变 authored ZOrder。"))
+	bool bReduceCardRetainSealMotion = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量交互反馈；只影响 hover、按下、确认和不可用点击的 UMG 表现，不改变出牌命令路径。"))
 	bool bEnableCardInteractionFeedback = true;
 
@@ -741,18 +751,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.2", ToolTip = "成功提交出牌后 commit 反馈额外乘上的缩放倍率；只作用于视觉 slot。"))
 	float PlayCommitFeedbackScale = 1.015f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用回合结束保留牌的纯运动反馈；不使用旧 Overlay 发光。"))
-	bool bEnableRetainedFeedback = true;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留牌运动反馈时长，单位为秒；推荐 0.22 到 0.34。"))
-	float RetainedFeedbackDuration = 0.28f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "多张保留牌的错峰间隔，单位为秒；推荐 0.03 到 0.07。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (Units = "s", ToolTip = "像素封存从建立到进入 Held 的时长，单位为秒；默认 0.32，推荐 0.24 到 0.42，不包含多卡错峰。"))
+	float RetainedFeedbackDuration = 0.32f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (Units = "s", ToolTip = "多张保留牌的错峰间隔，单位为秒；默认 0.045，推荐 0.03 到 0.07。"))
 	float RetainedFeedbackStaggerSeconds = 0.045f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留反馈额外上浮距离，单位为 UMG 布局像素；推荐 8 到 18。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "封存建立峰值的额外上浮距离，单位为 UMG 布局像素；默认 12，推荐 8 到 18，不改变手牌布局。"))
 	float RetainedFeedbackLiftPixels = 12.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留反馈额外缩放倍率；推荐 1.015 到 1.04。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "封存建立峰值的额外缩放倍率；默认 1.025，推荐 1.015 到 1.04，不改变命中区域。"))
 	float RetainedFeedbackScale = 1.025f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "保留反馈期间额外增加的绘制层级；推荐 100 到 300。"))
-	int32 RetainedFeedbackZOrderBoost = 180;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "Held 期间额外上浮距离，单位为 UMG 布局像素；默认 5，推荐 2 到 8，跟随最新手牌布局。"))
+	float RetainedFeedbackHeldLiftPixels = 5.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "Held 期间额外缩放倍率；默认 1.01，推荐 1.0 到 1.02，不改变命中区域。"))
+	float RetainedFeedbackHeldScale = 1.01f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (Units = "s", ToolTip = "抽牌落位后解除封存并恢复普通姿态的时长，单位为秒；默认 0.16，推荐 0.10 到 0.24。"))
+	float RetainedFeedbackReleaseDuration = 0.16f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|09 Gesture", meta = (ToolTip = "是否启用第一人称手牌按住读牌、拖出手牌或拉箭头提交。关闭后只保留 hover / 读牌表现，不再提交卡牌。"))
 	bool bEnableFirstPersonCardDragCommit = true;

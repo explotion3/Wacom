@@ -156,6 +156,7 @@ WBP 合同：
 - Hover 卡面随卡内 pointer 克制倾斜，按下后倾角减弱；Drag 改由 pointer velocity 产生惯性，pointer 停止后倾角回正但抬升阴影保持到 release。
 - 抽牌 / 出牌 / 弃牌 semantic transition 期间卡面逐渐压平；目标候选卡不倾斜，只有 Drag source 消费 fake-3D。
 - Battle 真实抽牌在 stagger 等待期应显示牌背，飞行中横向翻成正面并在手牌位置轻压落定；这由 Anchor `18 Card Draw Reveal`、`DA_FPCardDrawRevealStyle_PixelBack` 和单个 `Fake3DSurfaceRetainer` 完成，不需要 WBP 增加 Image、Retainer 或 Animation。牌背图案只映射居中的 `CardContentSizeBox`，费用、耐久、EffectBadge 等出血轮廓继续使用实时 CardView Alpha 的统一牌背边缘色。替换正式牌背时优先改默认或主题 MI 的 `CardBackTexture`，不要改 WBP 层级。
+- 回合结束保留牌使用 Anchor `20 Card Retain Seal`、`DA_FPCardRetainSealStyle_Pixel` 与同一个 `Fake3DSurfaceRetainer`。Sealing 后 Held 只保留低强度四角/外缘刻印并轻微抬升，抽牌与左右手生成完成后再由 `RetainedRelease` 解除；左右手 Anchor 本身不播放。WBP 不增加 Image、Overlay、Animation 或第二个 Retainer，`Texture`、Fake3D 与实时 Alpha 接触阴影合同保持不变。
 - 普通 Played 成功后卡牌停在提交位置，Commit 脉冲后短促上提并出现一次暖象牙金 / 蓝色像素闪边，随后横向压缩、角度回正并成为发光侧边，默认约 `0.28s`。成功使用后仍留在 Hand 的牌先在提交位置翻到侧边，完全隐藏时切换到最终槽位，再从侧边反向展开；换位帧必须处于 `OpacityMultiplier=0`，不能在屏幕上滑动。横向压缩只作用于最终 RenderTransform，基础 Slot scale 与命中区域保持不变。实际 Exhausted 才播放左下向右上的 OrderedDither 棋盘与短程原色残片。效果完成、强制完成、Slot 复用或 teardown 后必须恢复完整横向比例和基础 Fake3D MID。无目标、世界目标和手牌目标均使用普通 Card Use 行为；可在 Anchor 替换 DiamondWave Style，或分别禁用 Card Use / Exhausted 效果检查 fallback。
 - Battle 无目标 / 世界目标 / 手牌目标和 Run 正式拖拽都只在首次进入正式 Drag 时播放一次短促拾牌上提/缩放；随后只保留现有 Fake-3D 与接触阴影。鼠标按下超过拖拽阈值后，Pressed 压缩必须先结束，再播放完整拾牌脉冲。首次远距离快捷键拿起无目标卡时，卡牌抵达 pointer 后必须仍能看到这次脉冲；连续按同一牌位快捷键时保持立即重播。Hover、Inspect、Pending 本身和 Drag 内部状态切换不触发；退出、取消、换牌后立即清理，Reduced Motion 取消额外上提/缩放但仍允许拾牌音。
 - 鼠标在主体范围外、bleed 范围内不触发 hover 或拖拽起手。

@@ -174,10 +174,8 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 	}
 	const FWacomFirstPersonCardLayerSlotView& SlotView = *Input.SlotView;
 	const FWacomFirstPersonCardSlotFeedbackConfig& FeedbackConfig = *Input.FeedbackConfig;
-	const bool bRetainedTransformActive = Input.RetainedAlpha > 0.0f;
-	Result.ZOrder = SlotView.ZOrder
-		+ (bRetainedTransformActive ? FeedbackConfig.RetainedFeedbackZOrderBoost : 0)
-		+ FMath::Max(0, Input.HandTargetImpactZOrderBoost);
+	const bool bRetainedTransformActive = Input.bRetainTransformActive;
+	Result.ZOrder = SlotView.ZOrder + FMath::Max(0, Input.HandTargetImpactZOrderBoost);
 
 	const bool bDenyActive = FeedbackConfig.bEnabled
 		&& Input.DenyFeedbackElapsedSeconds < FeedbackConfig.DenyDuration;
@@ -197,7 +195,7 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 			? FeedbackConfig.PlayCommitScale
 			: 1.0f;
 	const float RetainedScale = bRetainedTransformActive
-		? FMath::Lerp(1.0f, FeedbackConfig.RetainedFeedbackScale, Input.RetainedAlpha)
+		? FMath::Max(0.01f, Input.RetainScaleMultiplier)
 		: 1.0f;
 	const float DragPickupAlpha = FMath::Clamp(Input.DragPickupAlpha, 0.0f, 1.0f);
 	const float DragPickupScale = FMath::Lerp(
@@ -207,7 +205,7 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 	Result.RenderTransform.Translation = FVector2D(
 		DenyShakeOffset,
 		-(bRetainedTransformActive
-			? FeedbackConfig.RetainedFeedbackLiftPixels * Input.RetainedAlpha
+			? FMath::Max(0.0f, Input.RetainLiftPixels)
 			: 0.0f)
 			- FeedbackConfig.DragPickupLiftPixels * DragPickupAlpha
 			+ Input.HandTargetImpactTranslationYPixels);

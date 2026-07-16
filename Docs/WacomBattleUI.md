@@ -101,12 +101,13 @@ Wait / EndTurn 请求遇到表现栈未清空时会进入 pending turn-boundary�
 EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当 journal 能生成有效 phase plan 时，`FWacomBattleHUDPresentationCoordinator` 接管本次 EndTurn 表现，不再把整批事件直接压成一帧 hand hints，也不立即把 first-person hand 刷到最终抽牌态。v1 phase 顺序固定为：
 
 1. `TurnEndDiscard`：用 discard checkpoint snapshot 把非保留普通手牌原地收束为牌印并飞向弃牌堆；每枚抵达只增加一次表现计数，并在同一 progress 回调触发像素 Impact 与 `DiscardPileView` 接收脉冲。连续抵达的脉冲由 `UPileCountView` 叠加，最后一枚稍强；phase 完成或强制清理后恢复权威 Snapshot 数量与 authored RenderTransform，ForceComplete 不补播回弹。
-2. retain checkpoint 仍保留在规则 / journal 中，但不再建立独立 `TurnEndRetain` UI phase，也不播放 `Retained` feedback；`CardsRetained` 规则事件本身保持不变。
+2. `TurnEndRetain`：只为 `CardsRetained.CardInstanceIds` 中仍在手牌的普通卡建立像素封存；左右手 Anchor 不参与。封存建立完成后进入非阻塞 Held，允许后续敌人行动和抽牌继续，但卡牌只保持低强度刻印与轻微抬升，不改变 authored hand ZOrder。
 3. `EnemyAction`：复用现有 battle event presentation queue 播放敌人行动相关 cue / delay / battle end / knockdown modal。
 4. `TurnStartDraw`：用 draw checkpoint snapshot 播放新回合 `Drawn` 入场。
 5. `TurnStartHandAnchorEnter`：如果 draw checkpoint 中出现了上一手牌 checkpoint 没有的左/右手 anchor，则在普通抽牌后提交完整 hand snapshot，并播放 `HandAnchorEntered` 生成入手。
+6. `TurnStartRetainRelease`：向仍在最终手牌中的保留卡发送 `RetainedRelease`，等待刻印和额外 Retain Transform 缓出归零；缺少 draw checkpoint 时在本次 EndTurn 最后一个安全阶段执行。
 
-手牌 phase 的完成条件由 first-person card layer 的 production playback 状态提供：仍有 active enter、exit outgoing、retained feedback 或 Card Glyph Transfer 时保持 phase busy；播放结束后才进入下一 phase。普通弃牌和弃牌堆洗回使用传输种类加 Batch Sequence 去重并按 FIFO 播放，新批次不得强制完成前一批。timeout 不是直接跳过：触发时 coordinator 必须先 force-settle 当前 Anchor / Layer，清除 pending hints、收束 active playback、Impact 和临时牌堆计数，再启动下一 phase，避免旧动画跨阶段重叠。没有 journal 或 journal 无有效 phase 时，非 EndTurn / fallback 路径继续使用原来的 loose event hints 与 event queue。
+手牌 phase 的完成条件由 first-person card layer 的 production playback 状态提供：仍有 active enter、exit outgoing、Retain Sealing/Releasing 或 Card Glyph Transfer 时保持 phase busy；Retain Held 明确不计入 busy，因此不会阻塞敌人行动与抽牌。普通弃牌和弃牌堆洗回使用传输种类加 Batch Sequence 去重并按 FIFO 播放，新批次不得强制完成前一批。timeout 不是直接跳过：触发时 coordinator 必须先 force-settle 当前 Anchor / Layer，清除 pending hints、Retain Held、Impact 和临时牌堆计数，再启动下一 phase，避免旧动画跨阶段重叠。没有 journal 或 journal 无有效 phase 时，非 EndTurn / fallback 路径继续使用原来的 loose event hints 与 event queue；loose `CardsRetained` 使用自动释放的短反馈，不会永久封存。
 
 显式战斗奖励卡使用同一通用 resolved-command planner。`CardGainedResolved` checkpoint 先提交包含新卡的中间 Snapshot，并建立 `CommandCardGained` phase；该 phase 等待真实 `Gained` Enter 与 Gain Reveal 完成后，才处理 checkpoint 之后的 `CardDiscarded / HandLimitDiscarded`、洗牌或抽牌。因此手牌已满时严格表现为“新卡结晶入手 -> 对应卡普通弃牌迁移”，而不是直接把最终 Snapshot 中已经离手的卡跳过。中断、BattleEnd 或超时只恢复权威 Post Snapshot，不补播未开始的阶段。
 
@@ -254,7 +255,7 @@ Battle hand 抽牌表现由 `FWacomBattleHandPresentationController` 事务化�
 
 `DeckReshuffle` 的两端反馈由 Card Glyph Transfer 的真实 progress 边缘驱动，不使用额外 Timer。`LaunchedCount` 增加时，Coordinator 用新发射牌印的平均 Bezier 初始切线驱动 `DiscardPileView.PlaySendFeedback()`，并从洗牌前弃牌数逐张递减；`ArrivedCount` 增加时，从洗牌前抽牌数逐张递增 `DrawPileView`，同时触发 `PlayReceiveFeedback()` 与 Slate Impact。最后一枚只增强既有接收脉冲/方印。低帧率批量跨边缘按数量增量聚合，重复 progress 不重复计数；ForceComplete、超时、BattleEnd、source clear 与 teardown 只恢复 Deck Step 的精确终值并清除两端 Transform。弃牌堆的 `Discard+Played` 复合文本在整个阶段保持不变，任一 PileView 缺失时另一端仍可独立工作。
 
-First-person card layer 重新拥有语义 Transition Audio，并生成 `Gained` 专用 transition：音效只在对应 enter playback 跨过错峰延迟、真正开始播放时请求一次；普通 refresh/reflow 不播放。`CardsRetained` 通过独立 feedback hint 驱动原槽位上的短促上浮、缩放、错峰与临时 ZOrder，不使用旧 Overlay 发光。`Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` 均保持显式表现语义；规则事件、日志和 Toast 行为不变。
+First-person card layer 重新拥有语义 Transition Audio，并生成 `Gained` 专用 transition：音效只在对应 enter playback 跨过错峰延迟、真正开始播放时请求一次；普通 refresh/reflow 不播放。`CardsRetained` 通过 `Retained` feedback 建立 `Sealing → Held`，EndTurn plan 在抽牌与手牌 Anchor 入场后用 `RetainedRelease` 解除；Held 继续追随最新 slot 布局但不阻塞 plan，不使用旧 Overlay 发光。`Drawn / RunHandEntered / Gained / HandAnchorEntered / Played / Discarded` 均保持显式表现语义；规则事件、日志和 Toast 行为不变。
 
 同一 `Gained` Enter 还驱动正面像素结晶入手。Stagger 等待期完全隐藏；真实 Started 边缘到来时，既有 Gained 音效与结晶在同一帧开始，结晶只消费 Enter 的归一化进度，不建立第二套计时或实体运动。默认先由外缘稳定像素簇向内组装正面，再在完成段播放一次由卡牌稀有度决定颜色的硬边峰值；该颜色不大面积染色卡面。Simplified Motion 只交叉显现正面并保留静态弱边缘。缺失 Style/MI 时安全回退原 Gained 飞行。
 

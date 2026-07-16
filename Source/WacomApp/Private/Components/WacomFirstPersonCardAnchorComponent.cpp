@@ -20,6 +20,7 @@
 #include "UI/Card/WacomFirstPersonCardDataRewriteStyle.h"
 #include "UI/Card/WacomFirstPersonCardDrawRevealStyle.h"
 #include "UI/Card/WacomFirstPersonCardGainRevealStyle.h"
+#include "UI/Card/WacomFirstPersonCardRetainSealStyle.h"
 #include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 #include "UI/Card/WacomFirstPersonCardPileTransferStyle.h"
 #include "UI/Card/WacomFirstPersonCardUseEffectStyle.h"
@@ -96,6 +97,7 @@ struct FWacomFirstPersonCardPresentationScaleBridge
 		Config.DragPickupLiftPixels *= Scale;
 		Config.DenyFeedbackShakePixels *= Scale;
 		Config.RetainedFeedbackLiftPixels *= Scale;
+		Config.RetainedFeedbackHeldLiftPixels *= Scale;
 		Config.DrawReveal.Style.LandingTranslationYPixels *= Scale;
 
 		// Playback copies this style at launch, so an active transfer keeps its
@@ -357,6 +359,11 @@ namespace
 		Config.GainReveal.Style = Anchor.CardGainRevealStyle
 			? Anchor.CardGainRevealStyle->Style
 			: FWacomFirstPersonCardGainRevealStyleData();
+		Config.RetainSeal.bEnabled = Anchor.bEnableRetainedFeedback;
+		Config.RetainSeal.bReducedMotion = Anchor.bReduceCardRetainSealMotion;
+		Config.RetainSeal.Style = Anchor.CardRetainSealStyle
+			? Anchor.CardRetainSealStyle->Style
+			: FWacomFirstPersonCardRetainSealStyleData();
 		Config.PileTransfer.bEnabled = Anchor.bEnableCardPileTransfer;
 		Config.PileTransfer.bDiscardToPileEnabled = Anchor.bEnableCardDiscardGlyphTransfer;
 		Config.PileTransfer.bReducedMotion = Anchor.bReduceCardPileTransferMotion;
@@ -416,7 +423,9 @@ namespace
 		Config.RetainedFeedbackStaggerSeconds = Anchor.RetainedFeedbackStaggerSeconds;
 		Config.RetainedFeedbackLiftPixels = Anchor.RetainedFeedbackLiftPixels;
 		Config.RetainedFeedbackScale = Anchor.RetainedFeedbackScale;
-		Config.RetainedFeedbackZOrderBoost = Anchor.RetainedFeedbackZOrderBoost;
+		Config.RetainedFeedbackHeldLiftPixels = Anchor.RetainedFeedbackHeldLiftPixels;
+		Config.RetainedFeedbackHeldScale = Anchor.RetainedFeedbackHeldScale;
+		Config.RetainedFeedbackReleaseDuration = Anchor.RetainedFeedbackReleaseDuration;
 		Config.DragCardTargetFocusLiftPixels = Anchor.DragCardTargetFocusLiftPixels;
 		Config.DragCardTargetFocusScale = Anchor.DragCardTargetFocusScale;
 		Config.DragCardTargetFocusZOrderBoost = Anchor.DragCardTargetFocusZOrderBoost;
@@ -491,7 +500,9 @@ namespace
 		FeedbackConfig.RetainedFeedbackStaggerSeconds = Config.RetainedFeedbackStaggerSeconds;
 		FeedbackConfig.RetainedFeedbackLiftPixels = Config.RetainedFeedbackLiftPixels;
 		FeedbackConfig.RetainedFeedbackScale = Config.RetainedFeedbackScale;
-		FeedbackConfig.RetainedFeedbackZOrderBoost = Config.RetainedFeedbackZOrderBoost;
+		FeedbackConfig.RetainedFeedbackHeldLiftPixels = Config.RetainedFeedbackHeldLiftPixels;
+		FeedbackConfig.RetainedFeedbackHeldScale = Config.RetainedFeedbackHeldScale;
+		FeedbackConfig.RetainedFeedbackReleaseDuration = Config.RetainedFeedbackReleaseDuration;
 		return FeedbackConfig;
 	}
 
@@ -520,6 +531,7 @@ namespace
 		VisualConfig.DataRewrite = Config.DataRewrite;
 		VisualConfig.DrawReveal = Config.DrawReveal;
 		VisualConfig.GainReveal = Config.GainReveal;
+		VisualConfig.RetainSeal = Config.RetainSeal;
 		return VisualConfig;
 	}
 
@@ -938,6 +950,9 @@ namespace
 		AddFloat(Config.GainReveal.Style.SettleEndProgress);
 		AddFloat(Config.GainReveal.Style.ReducedCrossFadeStartProgress);
 		AddFloat(Config.GainReveal.Style.ReducedCrossFadeEndProgress);
+		AddBool(Config.RetainSeal.bEnabled);
+		AddBool(Config.RetainSeal.bReducedMotion);
+		Combine(GetTypeHash(Config.RetainSeal.Style.SurfaceEffectMaterialInstance.Get()));
 		AddBool(Config.PileTransfer.bEnabled);
 		AddBool(Config.PileTransfer.bDiscardToPileEnabled);
 		AddBool(Config.PileTransfer.bReducedMotion);
@@ -1045,7 +1060,9 @@ namespace
 		AddFloat(Config.RetainedFeedbackStaggerSeconds);
 		AddFloat(Config.RetainedFeedbackLiftPixels);
 		AddFloat(Config.RetainedFeedbackScale);
-		AddInt(Config.RetainedFeedbackZOrderBoost);
+		AddFloat(Config.RetainedFeedbackHeldLiftPixels);
+		AddFloat(Config.RetainedFeedbackHeldScale);
+		AddFloat(Config.RetainedFeedbackReleaseDuration);
 		AddFloat(Config.DragCardTargetFocusLiftPixels);
 		AddFloat(Config.DragCardTargetFocusScale);
 		AddInt(Config.DragCardTargetFocusZOrderBoost);

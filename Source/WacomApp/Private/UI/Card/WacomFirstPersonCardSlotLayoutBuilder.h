@@ -138,6 +138,7 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	FWacomFirstPersonCardDataRewriteConfig DataRewrite;
 	FWacomFirstPersonCardDrawRevealConfig DrawReveal;
 	FWacomFirstPersonCardGainRevealConfig GainReveal;
+	FWacomFirstPersonCardRetainSealConfig RetainSeal;
 	FWacomFirstPersonCardPileTransferConfig PileTransfer;
 	bool bEnableCardInteractionFeedback = true;
 	FLinearColor PlayableHoverFeedbackColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);
@@ -173,11 +174,13 @@ struct FWacomFirstPersonCardResolvedLayoutConfig
 	FLinearColor PlayCommitFeedbackColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
 	float PlayCommitFeedbackScale = 1.015f;
 	bool bEnableRetainedFeedback = true;
-	float RetainedFeedbackDuration = 0.28f;
+	float RetainedFeedbackDuration = 0.32f;
 	float RetainedFeedbackStaggerSeconds = 0.045f;
 	float RetainedFeedbackLiftPixels = 12.0f;
 	float RetainedFeedbackScale = 1.025f;
-	int32 RetainedFeedbackZOrderBoost = 180;
+	float RetainedFeedbackHeldLiftPixels = 5.0f;
+	float RetainedFeedbackHeldScale = 1.01f;
+	float RetainedFeedbackReleaseDuration = 0.16f;
 };
 
 struct FWacomFirstPersonCardSlotLayoutBuildInput

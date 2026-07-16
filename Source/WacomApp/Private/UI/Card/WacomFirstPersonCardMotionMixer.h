@@ -11,7 +11,9 @@ struct FWacomFirstPersonCardLocalFeedbackMixInput
 	const FWacomFirstPersonCardLayerSlotView* SlotView = nullptr;
 	const FWacomFirstPersonCardSlotFeedbackConfig* FeedbackConfig = nullptr;
 	float DenyFeedbackElapsedSeconds = 0.0f;
-	float RetainedAlpha = 0.0f;
+	bool bRetainTransformActive = false;
+	float RetainLiftPixels = 0.0f;
+	float RetainScaleMultiplier = 1.0f;
 	float DragPickupAlpha = 0.0f;
 	float HandTargetImpactScaleMultiplier = 1.0f;
 	float HandTargetImpactTranslationYPixels = 0.0f;

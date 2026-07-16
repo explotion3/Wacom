@@ -102,6 +102,7 @@ struct FWacomFirstPersonCardLayerResolvedFeedbackHint
 	int32 DataRewriteCostBefore = 0;
 	int32 DataRewriteCostAfter = 0;
 	bool bBlocksPresentationPhase = false;
+	bool bRetainUntilExplicitRelease = false;
 };
 
 struct FWacomFirstPersonCardLayerResolvedFeedbackBundle
