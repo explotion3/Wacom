@@ -44,10 +44,11 @@ The resolver never mutates the World, Session, Descriptor or DataAsset.
 2. Resolve and validate the World Descriptor against that snapshot.
 3. Create a new working `FWacomRunSceneBindingRegistry` scoped to the resolved FloorId.
 4. Enumerate scene Anchor/Path/Branch/activity hosts into the working registry.
-5. Revalidate the Run snapshot version and active Floor before commit.
-6. Install the complete working registry and refresh coordinator/presentation bindings once.
+5. Revalidate the Run snapshot version, active Floor and current Node before commit.
+6. Prepare a working presentation coordinator against the complete working registry without touching the installed generation.
+7. Tear down the previous generation, install the working registry/coordinator pair, and commit the prepared initialization once.
 
-Any failure before step 6:
+Any failure before step 7:
 
 - returns `false` and a stable log detail;
 - does not reset or partly populate the installed registry;

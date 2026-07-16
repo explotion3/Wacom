@@ -6,6 +6,7 @@
 #include "UObject/StrongObjectPtr.h"
 
 class UEditorValidatorBase;
+class FWacomRunFloorSceneValidationMenuAutomationTestView;
 
 class FWacomEditorModule : public IModuleInterface
 {
@@ -14,8 +15,13 @@ public:
 	virtual void ShutdownModule() override;
 
 private:
+	friend class FWacomRunFloorSceneValidationMenuAutomationTestView;
+
 	void RegisterEditorValidator(UEditorValidatorBase* Validator);
 	void UnregisterEditorValidators();
+	void RegisterMenus();
+	void ValidateCurrentRunFloor();
 
 	TArray<TStrongObjectPtr<UEditorValidatorBase>> RegisteredValidators;
+	FDelegateHandle ToolMenusStartupCallbackHandle;
 };

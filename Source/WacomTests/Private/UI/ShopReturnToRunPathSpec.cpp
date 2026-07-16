@@ -4,11 +4,13 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Actors/WacomRunFloorSceneDescriptorActor.h"
 #include "Actors/WacomRunMapNodeAnchorActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Camera/WacomFirstPersonViewpointPlacement.h"
 #include "Components/SplineComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
+#include "Components/WacomRunMapNodeBindingComponent.h"
 #include "Components/WacomRunPathTraversalComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -32,21 +34,6 @@ struct FWacomGameMenuViewpointStageReturnFlowTestAccess
 
 namespace WacomShopReturnToRunPathSpec
 {
-	UWorld* FindAutomationWorld()
-	{
-		if (GEngine)
-		{
-			for (const FWorldContext& Context : GEngine->GetWorldContexts())
-			{
-				if (UWorld* World = Context.World())
-				{
-					return World;
-				}
-			}
-		}
-		return GWorld;
-	}
-
 	AWacomRunMapNodeAnchorActor* SpawnAnchor(
 		UWorld& World,
 		const FName NodeId,
@@ -96,7 +83,7 @@ bool FWacomUIShopCloseReturnsToSynchronizedRunPathTest::RunTest(
 	const FString& Parameters)
 {
 	using namespace WacomShopReturnToRunPathSpec;
-	UWorld* World = FindAutomationWorld();
+	UWorld* World = UWorld::CreateWorld(EWorldType::Game, false);
 	if (!TestNotNull(TEXT("Automation world"), World))
 	{
 		return false;
@@ -145,6 +132,22 @@ bool FWacomUIShopCloseReturnsToSynchronizedRunPathTest::RunTest(
 		*World, TargetNodeId, FVector(1000.0f, 0.0f, 0.0f));
 	AWacomRunPathSegmentActor* Path = SpawnPath(
 		*World, EdgeId, FVector::ZeroVector, FVector(1000.0f, 0.0f, 0.0f));
+	AWacomRunFloorSceneDescriptorActor* Descriptor =
+		World->SpawnActor<AWacomRunFloorSceneDescriptorActor>();
+	if (Descriptor)
+	{
+		Descriptor->FloorDefinition = Floor;
+	}
+	AActor* ShopHost = World->SpawnActor<AActor>();
+	if (ShopHost)
+	{
+		UWacomRunMapNodeBindingComponent* Binding =
+			NewObject<UWacomRunMapNodeBindingComponent>(ShopHost, TEXT("ShopBinding"));
+		ShopHost->AddInstanceComponent(Binding);
+		Binding->NodeId = SourceNodeId;
+		Binding->NodeType = EWacomMapNodeType::Shop;
+		Binding->RegisterComponent();
+	}
 	TStrongObjectPtr<UWacomMenuWidgetBaseProbe> Menu(
 		NewObject<UWacomMenuWidgetBaseProbe>());
 
@@ -153,13 +156,18 @@ bool FWacomUIShopCloseReturnsToSynchronizedRunPathTest::RunTest(
 		|| !TestNotNull(TEXT("Source anchor"), SourceAnchor)
 		|| !TestNotNull(TEXT("Target anchor"), TargetAnchor)
 		|| !TestNotNull(TEXT("Path"), Path)
+		|| !TestNotNull(TEXT("Floor Descriptor"), Descriptor)
+		|| !TestNotNull(TEXT("Shop content host"), ShopHost)
 		|| !TestNotNull(TEXT("Menu"), Menu.Get()))
 	{
 		if (Path) Path->Destroy();
 		if (SourceAnchor) SourceAnchor->Destroy();
 		if (TargetAnchor) TargetAnchor->Destroy();
+		if (Descriptor) Descriptor->Destroy();
+		if (ShopHost) ShopHost->Destroy();
 		if (Character) Character->Destroy();
 		if (PC) PC->Destroy();
+		World->DestroyWorld(false);
 		return false;
 	}
 
@@ -181,8 +189,11 @@ bool FWacomUIShopCloseReturnsToSynchronizedRunPathTest::RunTest(
 		Path->Destroy();
 		SourceAnchor->Destroy();
 		TargetAnchor->Destroy();
+		Descriptor->Destroy();
+		ShopHost->Destroy();
 		Character->Destroy();
 		PC->Destroy();
+		World->DestroyWorld(false);
 		return false;
 	}
 
@@ -262,8 +273,11 @@ bool FWacomUIShopCloseReturnsToSynchronizedRunPathTest::RunTest(
 	Path->Destroy();
 	SourceAnchor->Destroy();
 	TargetAnchor->Destroy();
+	Descriptor->Destroy();
+	ShopHost->Destroy();
 	Character->Destroy();
 	PC->Destroy();
+	World->DestroyWorld(false);
 	return true;
 }
 

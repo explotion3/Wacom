@@ -8,7 +8,7 @@
 
 ## Summary
 
-把 `L_Exploration` 从调试生成器拥有的原型地图迁移为可长期人工制作的正式 Run 场景，同时保留一个完全隔离、可幂等重建的 Debug Run 夹具。每个 Run Floor 关卡通过唯一的 `AWacomRunFloorSceneDescriptorActor` 单向引用 `UWacomFloorMapDefinition`；运行时和编辑器都先解析该声明，再建立或验证 Actor 绑定。新增只读场景验证合同、编辑器菜单与命令行入口，确保制作错误能在 PIE 前被定位。
+把 `L_Exploration` 从调试生成器拥有的原型地图迁移为可长期人工制作的 Run 场景基线，同时保留一个完全隔离、可幂等重建的 Debug Run 夹具。每个 Run Floor 关卡通过唯一的 `AWacomRunFloorSceneDescriptorActor` 单向引用 `UWacomFloorMapDefinition`；运行时和编辑器都先解析该声明，再建立或验证 Actor 绑定。新增只读场景验证合同、编辑器菜单与命令行入口，确保制作错误能在 PIE 前被定位。
 
 本切片不设计正式第一层图。当前已验证 8 节点图迁入 `Authoring` 身份的过渡 DataAsset，只作为可替换制作基线；Debug 图继续服务自动化。
 
@@ -26,12 +26,12 @@
 - [x] `Docs/Questions.md`
 
 **Docs To Update**:
-- [ ] `Docs/WacomMap.md`
-- [ ] `Docs/WacomApp.md`
-- [ ] `Docs/WacomDataAuthoring.md`
-- [ ] `Docs/Architecture.md`
-- [ ] `Docs/TODO.md`
-- [ ] `Docs/Questions.md`（只保留正式 Floor 1 内容与稳定身份的未决问题）
+- [x] `Docs/WacomMap.md`
+- [x] `Docs/WacomApp.md`
+- [x] `Docs/WacomDataAuthoring.md`
+- [x] `Docs/Architecture.md`
+- [x] `Docs/TODO.md`
+- [x] `Docs/Questions.md`（只保留正式 Floor 1 内容与稳定身份的未决问题）
 
 **Owning Module(s)**: WacomData / WacomApp / WacomEditor / WacomTests
 
@@ -188,13 +188,13 @@ Content/Wacom/Core/GameModes/GM_Wacom.uasset
 **Compile**:
 
 ```powershell
-& 'E:\UE_5.8\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
+& 'E:\UE_5.8\Engine\Build\BatchFiles\Build.bat' WacomEditor Win64 Development -Project='D:\UE_Project\5.7\WacomWorktrees\run-level-authoring-baseline\Wacom\Wacom.uproject' -WaitMutex -NoHotReloadFromIDE
 ```
 
 **Focused Automation**:
 
 ```powershell
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests Wacom.UI.RunSceneBinding; Automation RunTests Wacom.Editor.RunSceneValidation; Automation RunTests Wacom.Editor.RunExplorationDebugAssets; Automation RunTests Wacom.UI.RunPathTraversal; Automation RunTests Wacom.Run.Map; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\WacomWorktrees\run-level-authoring-baseline\Wacom\Wacom.uproject' -ExecCmds='Automation RunTests Wacom.UI.RunSceneBinding; Automation RunTests Wacom.Editor.RunSceneValidation; Automation RunTests Wacom.Editor.RunExplorationDebugAssets; Automation RunTests Wacom.UI.RunPathTraversal; Automation RunTests Wacom.Run.Map; Quit' -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache -NoDreamShaderEditorBridge
 ```
 
 再运行受影响的 `Wacom.UI.Battle`、`Wacom.UI.Shop`、`Wacom.UI.Event` 返回路径测试；最后与完整 `Wacom` 基线比较。
@@ -202,9 +202,9 @@ Content/Wacom/Core/GameModes/GM_Wacom.uasset
 **Commandlet Validation**:
 
 ```powershell
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomValidateRunFloorScene -Map=/Game/Wacom/Maps/L_Exploration -Unattended -NoPause -NoSplash -NullRHI
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\WacomWorktrees\run-level-authoring-baseline\Wacom\Wacom.uproject' -run=WacomValidateRunFloorScene -Map=/Game/Wacom/Maps/L_Exploration -Unattended -NoPause -NoSplash -NullRHI -NoDreamShaderEditorBridge
 
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomValidateRunFloorScene -Map=/Game/Wacom/Maps/Debug/L_RunExploration_Debug -Unattended -NoPause -NoSplash -NullRHI
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\WacomWorktrees\run-level-authoring-baseline\Wacom\Wacom.uproject' -run=WacomValidateRunFloorScene -Map=/Game/Wacom/Maps/Debug/L_RunExploration_Debug -Unattended -NoPause -NoSplash -NullRHI -NoDreamShaderEditorBridge
 ```
 
 **Asset Integrity**:

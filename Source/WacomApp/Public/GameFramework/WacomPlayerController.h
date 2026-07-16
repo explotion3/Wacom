@@ -44,6 +44,9 @@ class FWacomRunFirstPersonCardDropCoordinator;
 class AWacomPlayerControllerProbe;
 struct FWacomPlayerControllerRunInteractionTestAccess;
 #endif
+#if WITH_DEV_AUTOMATION_TESTS
+struct FWacomRunFloorSceneBindingAutomationTestView;
+#endif
 struct FWacomCardDetailViewData;
 struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
@@ -527,6 +530,11 @@ private:
 	TSharedPtr<FWacomRunMapScreenFlow> RunMapScreenFlow;
 	TWeakObjectPtr<UWacomRunPathTraversalComponent> BoundRunPathTraversal;
 	TArray<TWeakObjectPtr<AWacomRunPathBranchTargetActor>> BoundRunPathBranchTargets;
+	uint64 RunExplorationSceneBindingGeneration = 0;
+	FName RunExplorationSceneBindingLastFailureDetail = NAME_None;
+#if WITH_DEV_AUTOMATION_TESTS
+	FName RunExplorationSceneBindingPreCommitFaultForAutomation = NAME_None;
+#endif
 
 	bool bRunFirstPersonCardLayerTransitionSuppressedByGameMenu = false;
 	bool bGameMenuViewpointStageTransitionActive = false;
@@ -543,5 +551,8 @@ private:
 #if WITH_AUTOMATION_TESTS
 	friend class AWacomPlayerControllerProbe;
 	friend struct FWacomPlayerControllerRunInteractionTestAccess;
+#endif
+#if WITH_DEV_AUTOMATION_TESTS
+	friend struct FWacomRunFloorSceneBindingAutomationTestView;
 #endif
 };

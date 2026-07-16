@@ -2,7 +2,7 @@
 type: architecture
 scope: wacom-project
 status: active
-updated: 2026-07-14
+updated: 2026-07-16
 tags:
   - wacom/architecture
   - wacom/modules
@@ -88,8 +88,8 @@ WacomTests
 | `WacomData` | 卡牌、敌人、角色、商店、探索事件、地图 Floor / Node / Edge 等静态定义 | 本场战斗状态、Run 库存、地图运行时状态、Widget、输入 |
 | `WacomBattle` | 战斗生命周期、命令结算、手牌区域、卡牌效果、敌方部位行动、Snapshot/Event/ResultPacket | UI 展示、Run 探索、关卡交互 |
 | `WacomRun` | 战斗外状态、背包、压力、经验、商店、探索事件、地图节点生命周期 / 传送 / 跨层 / 行动点规则、战斗结果回传和 SaveGame schema | 单场战斗内规则细节、Spline / 场景 Actor、UI |
-| `WacomApp` | GameMode、PlayerController、世界交互、输入、UI 表现层、交互目标命中与桥接 | 修改 Battle / Run 状态真相 |
-| `WacomEditor` | 内容生成 Commandlet、Data Validation、开发辅助 | 运行时规则依赖 |
+| `WacomApp` | GameMode、PlayerController、世界交互、输入、UI 表现层、Run Floor Scene Descriptor 与场景绑定协调 | 修改 Battle / Run 状态真相 |
+| `WacomEditor` | 内容生成 Commandlet、Data/Scene Validation、开发辅助 | 运行时规则依赖、正式关卡自动覆盖 |
 | `WacomTests` | 自动化测试、测试 fixture | 运行时业务逻辑 |
 
 ### Logical Map Graph 边界
@@ -99,10 +99,12 @@ Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：
 - `WacomData/Public/Map`：反射的 Journey/Floor/Node/Edge 和 typed payload，只保存静态制作真相。
 - `WacomRun/Public/Exploration`：Snapshot、事件、C++-only Command/Result 与 opaque token；`FRunState` 组合持有 time/exploration runtime state。
 - `WacomRun/Private/Exploration`：lifecycle、traversal、AP、Camp、Floor transition 和内容活动事务实现。
-- `WacomApp`：Spline、NodeAnchor、ContentHost、输入、镜头和结果表现；不得把 Actor 或世界坐标回写成规则真相。
-- `WacomEditor`：Journey/Floor/Scene validation 与可重复调试内容 builder。
+- `WacomApp`：World 单向引用 Floor 的 `AWacomRunFloorSceneDescriptorActor`、App-private resolver、working Scene Registry、Spline、NodeAnchor、ContentHost、输入、镜头和结果表现；不得把 Actor 或世界坐标回写成规则真相。Descriptor 是需要关卡制作与 Blueprint 只读引用的反射 Actor；resolver、原子刷新状态和 Coordinator prepare/commit 仍是 Private 普通 C++。
+- `WacomEditor`：Journey/Floor validation、共用的 World-only read-only Scene validator、ToolMenus/validation commandlet，以及只拥有 Debug namespace 的可重复内容 builder。正式 map、Authoring 数据、Player/共享 Run Path Blueprint 只能由 builder 读取或哈希守卫，不能保存。
 
 `URunSession::Initialize(FRunInitializationParams)` 使用完整 working state，成功时一次提交角色持有区、Journey/Floor、时间、压力和探索版本并返回 `FRunInitializationResult`；失败时保留旧 Session。App 和测试都必须显式消费该结果，不保留只返回 bool 的初始化入口。
+
+Run scene refresh 同样采用 working-state 原子提交：Snapshot 先与唯一 Descriptor 的 Floor 对齐，再完整构建 Registry 和 Coordinator plan；版本/Floor 漂移、场景身份错误或表现预检失败都保留上一代已安装状态。该收口没有修改 `WacomRun` Snapshot/Command/Resolution/SaveGame schema，也没有新增 GameplayTag、`Build.cs` 或模块依赖；`WacomEditor` 继续使用既有 Private `WacomApp` 依赖。
 
 需要资产制作、Details 面板或 Blueprint 只读绑定的数据类型使用反射；探索 Command、Resolution、一次性 token 和 resolver/module 保持普通 C++。`UWacomRunPathTraversalComponent` 是唯一场景移动组件，Segment / Branch / Anchor 只保存场景绑定身份，不形成第二份规则图。当前 SaveGame schema 3 不保存新探索状态，也不因公共 handle 已稳定而宣称支持地图恢复。
 
@@ -284,7 +286,7 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / 
 2. `WacomRun`：RunSession、背包、SpecialZone、负重、经验/压力、商店、RunEvent、战斗结果回传、SaveGame schema。
 3. `WacomApp`：GameMode、PlayerController、世界交互接口、CommonUI 层级、探索 HUD、BattleHUD、Backpack / Shop / RunEvent Screen、AppToast。
 4. `WacomData`：卡牌、敌人、角色、商店、RunEvent 静态定义和生成内容。
-5. `WacomEditor`：WacomRegenerateContent commandlet、Shop / RunEvent Data Validation。
+5. `WacomEditor`：内容 commandlet、Shop / RunEvent / Map Data Validation、Run Floor Scene validator、Debug-only Run fixture builder。
 6. 自动化测试覆盖 Battle / Run / UI / Data validation 关键规则。
 
 ## 12. 自动化测试重点

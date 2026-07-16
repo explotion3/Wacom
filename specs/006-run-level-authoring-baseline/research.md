@@ -87,3 +87,13 @@
 **Decision**: 本切片不修改 WacomRun 规则类型、SaveGame schema、GameplayTag 或 Build.cs。
 
 **Rationale**: 这是关卡制作和绑定所有权收口，不是旅程内容与持久化切片。Authoring 身份在正式存档启用前可替换。
+
+## Live implementation audit — 2026-07-16
+
+实施前复核确认规划方向正确，但 live 源码有以下必须先收口的危险写入口与测试差异：
+
+- `RunExplorationDebugAssetBuilder.cpp` 当前仍会创建/覆盖 Debug Journey/Floor，同时编译并保存共享 Run Path Blueprint、修改并保存正式 `GM_Wacom` 与 `BP_WacomPlayerCharacter`，销毁 `L_Exploration` 中带 `Wacom.Generated.RunExploration` tag 的 Actor、重建 Anchor/Path/Branch、修改 content host binding 并保存正式地图。
+- `AWacomPlayerController::RefreshRunExplorationPresentationBinding()` 当前第一步调用 teardown，随后直接把 Actor 注册到已安装 registry；重复/无效注册只记 warning 并继续，初始化失败还会停用当前 Traversal。因此它不满足 descriptor-first 或失败保留旧绑定的原子合同。
+- `FWacomRunSceneBindingValidation::ValidateLoadedWorld()` 当前由调用方传入任意 Floor，只有 `Errors/Warnings` 文本数组，不校验 World 自声明，也不覆盖 Spline 几何。
+- live builder 自动化名称是 `Wacom.Editor.RunExploration.DebugAssetBuilder.IdempotentAndStable`，而不是规划中的 `Wacom.Editor.RunExplorationDebugAssets`；更重要的是该测试会实际调用上述危险 builder，不能在 Phase 1 作为只读基线执行。Phase 1 只记录跳过原因；待 Phase 5 写集合收敛和禁止写守卫落地后再运行重命名后的测试。
+- Spec Kit prerequisite script 要求数字前缀 branch，无法接受用户指定的 `codex/run-level-authoring-baseline`。本功能保留指定 branch，并以 `specs/006-run-level-authoring-baseline`、完整 checklist 和手动 prerequisites 审计替代，不创建或切换额外 branch。

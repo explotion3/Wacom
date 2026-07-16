@@ -22,11 +22,11 @@ description: "Run 正式关卡制作基线收口的依赖有序实施任务"
 
 **Purpose**: 在任何源码或资产迁移前冻结 live workspace、危险写入口和回归基线。
 
-- [ ] T001 在 `specs/006-run-level-authoring-baseline/quickstart.md` 记录 `git status --short --branch`，明确保护当前无关的 `Content/DreamMaterials/World/MI_WacomBattleEnemyPartImpactPixel_Default.uasset` 改动且不纳入本切片
-- [ ] T002 在 `specs/006-run-level-authoring-baseline/quickstart.md` 记录相关 Unreal Editor 实例已关闭，并列出 `L_Exploration`、Authoring/Debug DataAsset 与 GameMode 的资产锁风险
-- [ ] T003 在 `specs/006-run-level-authoring-baseline/research.md` 复核 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp`、`Source/WacomApp/Private/GameFramework/WacomPlayerController.cpp` 和 `Source/WacomEditor/Private/Validation/WacomRunSceneBindingValidation.cpp` 的 live 调用/写集合，若与计划不同先修订工件
-- [ ] T004 [P] 在 `specs/006-run-level-authoring-baseline/quickstart.md` 记录 `Content/Wacom/Maps/L_Exploration.umap`、`Content/Wacom/Core/GameModes/GM_Wacom.uasset`、`Content/Wacom/Core/Player/BP_WacomPlayerCharacter.uasset` 和 `Content/Wacom/Run/Path/Blueprints/BP_WacomRun*.uasset` 的初始 SHA-256
-- [ ] T005 [P] 编译 `D:/UE_Project/5.7/Wacom/Wacom.uproject` 的 `WacomEditor` 并运行当前 `Wacom.UI.RunSceneBinding`、`Wacom.Editor.RunExplorationDebugAssets` 基线，将结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T001 在 `specs/006-run-level-authoring-baseline/quickstart.md` 记录 `git status --short --branch`；live worktree 无 DreamMaterials 脏改动，明确保护 `Content/DreamMaterials/World/MI_WacomBattleEnemyPartImpactPixel_Default.uasset` 且不纳入本切片
+- [x] T002 在 `specs/006-run-level-authoring-baseline/quickstart.md` 记录没有 Editor 打开目标 worktree，并列出另一个 worktree 的 Editor 实例以及 `L_Exploration`、Authoring/Debug DataAsset 与 GameMode 的资产锁风险
+- [x] T003 在 `specs/006-run-level-authoring-baseline/research.md` 复核 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp`、`Source/WacomApp/Private/GameFramework/WacomPlayerController.cpp` 和 `Source/WacomEditor/Private/Validation/WacomRunSceneBindingValidation.cpp` 的 live 调用/写集合，若与计划不同先修订工件
+- [x] T004 [P] 在 `specs/006-run-level-authoring-baseline/quickstart.md` 记录 `Content/Wacom/Maps/L_Exploration.umap`、`Content/Wacom/Core/GameModes/GM_Wacom.uasset`、`Content/Wacom/Core/Player/BP_WacomPlayerCharacter.uasset` 和 `Content/Wacom/Run/Path/Blueprints/BP_WacomRun*.uasset` 的初始 SHA-256
+- [x] T005 [P] 编译本功能 worktree 的 `WacomEditor` 并运行只读的当前 `Wacom.UI.RunSceneBinding` 基线；live builder 自动化会调用尚未收敛的危险写入口，Phase 1 明确跳过并记录，待 T035–T043 后以最终 `Wacom.Editor.RunExplorationDebugAssets` 合同补跑
 
 ---
 
@@ -36,15 +36,15 @@ description: "Run 正式关卡制作基线收口的依赖有序实施任务"
 
 **CRITICAL**: Descriptor 失败矩阵和 working registry 原子性必须先有自动化，再触碰 `L_Exploration`。
 
-- [ ] T006 [P] 在 `Source/WacomTests/Private/UI/RunFloorSceneDescriptorSpec.cpp` 先覆盖无 Descriptor、重复 Descriptor、空 Floor、空 FloorId、预期 FloorId 不匹配和唯一合法 Descriptor
-- [ ] T007 在 `Source/WacomApp/Public/Actors/WacomRunFloorSceneDescriptorActor.h` 与 `Source/WacomApp/Private/Actors/WacomRunFloorSceneDescriptorActor.cpp` 实现无 Tick、无碰撞、HiddenInGame、只读 FloorDefinition 的场景声明 Actor
-- [ ] T008 在 `Source/WacomApp/Private/GameFramework/WacomRunFloorSceneDescriptorResolver.h` 与 `Source/WacomApp/Private/GameFramework/WacomRunFloorSceneDescriptorResolver.cpp` 实现 World 枚举、唯一性、空引用和 expected FloorId 的稳定只读解析
-- [ ] T009 [P] 在 `Source/WacomApp/Public/Testing/WacomRunFloorSceneBindingAutomationTestView.h`、`Source/WacomApp/Private/Testing/WacomRunFloorSceneBindingAutomationTestView.cpp` 与 `Source/WacomTests/Private/UI/WacomRunFloorSceneBindingTestAccess.h/.cpp` 建立非反射测试观察 seam，禁止新增 Blueprint 测试 API 或散落 ForTest getter
-- [ ] T010 在 `Source/WacomTests/Private/UI/RunSceneBindingValidationSpec.cpp` 先覆盖 working registry 注册中途失败、Snapshot 版本漂移和 Floor 漂移时不替换已安装绑定
-- [ ] T011 在 `Source/WacomApp/Private/GameFramework/WacomRunSceneBindingRegistry.h` 与 `Source/WacomApp/Private/GameFramework/WacomRunSceneBindingRegistry.cpp` 增加完整性检查和可一次性安装的 working-state 支持，不在失败路径 Reset 当前 registry
-- [ ] T012 在 `Source/WacomApp/Private/GameFramework/WacomPlayerController.cpp` 将 `RefreshRunExplorationPresentationBinding` 改为 Snapshot→Descriptor→working registry→版本复验→一次提交的固定顺序
-- [ ] T013 在 `Source/WacomApp/Public/GameFramework/WacomPlayerController.h` 仅补充必要前向声明/私有 helper，确认不公开 Descriptor setter、规则写 API 或额外 Blueprint 反射
-- [ ] T014 编译 `D:/UE_Project/5.7/Wacom/Wacom.uproject` 的 `WacomEditor` 并运行 `Wacom.UI.RunSceneBinding`，把 Descriptor 失败矩阵和原子绑定结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T006 [P] 在 `Source/WacomTests/Private/UI/RunFloorSceneDescriptorSpec.cpp` 先覆盖无 Descriptor、重复 Descriptor、空 Floor、空 FloorId、预期 FloorId 不匹配和唯一合法 Descriptor
+- [x] T007 在 `Source/WacomApp/Public/Actors/WacomRunFloorSceneDescriptorActor.h` 与 `Source/WacomApp/Private/Actors/WacomRunFloorSceneDescriptorActor.cpp` 实现无 Tick、无碰撞、HiddenInGame、只读 FloorDefinition 的场景声明 Actor
+- [x] T008 在 `Source/WacomApp/Private/GameFramework/WacomRunFloorSceneDescriptorResolver.h` 与 `Source/WacomApp/Private/GameFramework/WacomRunFloorSceneDescriptorResolver.cpp` 实现 World 枚举、唯一性、空引用和 expected FloorId 的稳定只读解析
+- [x] T009 [P] 在 `Source/WacomApp/Public/Testing/WacomRunFloorSceneBindingAutomationTestView.h`、`Source/WacomApp/Private/Testing/WacomRunFloorSceneBindingAutomationTestView.cpp` 与 `Source/WacomTests/Private/UI/WacomRunFloorSceneBindingTestAccess.h/.cpp` 建立非反射测试观察 seam，禁止新增 Blueprint 测试 API 或散落 ForTest getter
+- [x] T010 在 `Source/WacomTests/Private/UI/RunSceneBindingValidationSpec.cpp` 先覆盖 working registry 注册中途失败、Snapshot 版本漂移和 Floor 漂移时不替换已安装绑定
+- [x] T011 在 `Source/WacomApp/Private/GameFramework/WacomRunSceneBindingRegistry.h` 与 `Source/WacomApp/Private/GameFramework/WacomRunSceneBindingRegistry.cpp` 增加完整性检查和可一次性安装的 working-state 支持，不在失败路径 Reset 当前 registry
+- [x] T012 在 `Source/WacomApp/Private/GameFramework/WacomPlayerController.cpp` 将 `RefreshRunExplorationPresentationBinding` 改为 Snapshot→Descriptor→working registry→版本复验→一次提交的固定顺序
+- [x] T013 在 `Source/WacomApp/Public/GameFramework/WacomPlayerController.h` 仅补充必要前向声明/私有 helper，确认不公开 Descriptor setter、规则写 API 或额外 Blueprint 反射
+- [x] T014 编译本功能 worktree 的 `WacomEditor` 并运行 `Wacom.UI.RunSceneBinding`，把 Descriptor 失败矩阵和原子绑定结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
 
 **Checkpoint**: 瞬态/测试 World 已能通过唯一 Descriptor 建立完整 binding；所有失败均无部分 registry、镜头、HUD 或规则副作用。
 
@@ -58,18 +58,18 @@ description: "Run 正式关卡制作基线收口的依赖有序实施任务"
 
 ### Tests and Validation for User Story 1
 
-- [ ] T015 [P] [US1] 在 `Source/WacomTests/Private/Editor/RunLevelAuthoringBaselineAssetContractSpec.cpp` 先覆盖 `L_Exploration` 唯一 Descriptor、Authoring Floor 引用、`GM_Wacom` Journey 引用、无 Debug generated ownership 和必要 Actor 数量/身份
-- [ ] T016 [P] [US1] 在 `Source/WacomTests/Private/UI/RunSceneBindingValidationSpec.cpp` 增加 `Floor.Authoring.01` 与 runtime Snapshot 匹配时成功、错误 Floor 时原子拒绝的回归
+- [x] T015 [P] [US1] 在 `Source/WacomTests/Private/Editor/RunLevelAuthoringBaselineAssetContractSpec.cpp` 先覆盖 `L_Exploration` 唯一 Descriptor、Authoring Floor 引用、`GM_Wacom` Journey 引用、无 Debug generated ownership 和必要 Actor 数量/身份
+- [x] T016 [P] [US1] 在 `Source/WacomTests/Private/UI/RunSceneBindingValidationSpec.cpp` 增加 `Floor.Authoring.01` 与 runtime Snapshot 匹配时成功、错误 Floor 时原子拒绝的回归
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] 使用 `Scripts/MigrateRunLevelAuthoringBaseline.py` 编写一次性、显式资产迁移：先复制 `Content/Wacom/Maps/L_Exploration.umap` 到 `Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap`，再创建 Authoring Journey/Floor 并定向更新两张地图 Descriptor/GameMode
-- [ ] T018 [US1] 运行 `Scripts/MigrateRunLevelAuthoringBaseline.py` 生成 `Content/Wacom/Data/Map/Authoring/DA_Journey_LevelAuthoring.uasset`、`DA_Floor_LevelAuthoring_01.uasset`、`Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap` 和 `Content/Wacom/Debug/GameModes/GM_WacomRunDebug.uasset`
-- [ ] T019 [US1] 在 `Content/Wacom/Maps/L_Exploration.umap` 定向移除 Run Node/Path/Branch 的 Debug generated ownership，保留 Actor GUID、Transform、Spline points、activity hosts 和所有场景美术
-- [ ] T020 [US1] 在 `Content/Wacom/Core/GameModes/GM_Wacom.uasset` 将默认 Journey 指向 `DA_Journey_LevelAuthoring`，并确认 `L_Exploration` Descriptor 指向 `DA_Floor_LevelAuthoring_01`
-- [ ] T021 [US1] 删除已执行的 `Scripts/MigrateRunLevelAuthoringBaseline.py`，确保仓库不保留可再次覆盖正式关卡的一次性迁移入口
-- [ ] T022 [US1] 使用 AssetRegistry 与 `Source/WacomTests/Private/Editor/RunLevelAuthoringBaselineAssetContractSpec.cpp` 验证正式地图、Authoring DataAssets、GM 引用、Actor GUID/Transform/Spline 保留和新资产 Git LFS 跟踪
-- [ ] T023 [US1] 编译 `D:/UE_Project/5.7/Wacom/Wacom.uproject` 的 `WacomEditor` 并运行 `Wacom.UI.RunSceneBinding.AuthoringBaseline`、`Wacom.UI.RunPathTraversal`、`Wacom.Run.Map`，将结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T017 [US1] 使用 `Scripts/MigrateRunLevelAuthoringBaseline.py` 编写一次性、显式资产迁移：先复制 `Content/Wacom/Maps/L_Exploration.umap` 到 `Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap`，再创建 Authoring Journey/Floor 并定向更新两张地图 Descriptor/GameMode
+- [x] T018 [US1] 运行 `Scripts/MigrateRunLevelAuthoringBaseline.py` 生成 `Content/Wacom/Data/Map/Authoring/DA_Journey_LevelAuthoring.uasset`、`DA_Floor_LevelAuthoring_01.uasset`、`Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap` 和 `Content/Wacom/Debug/GameModes/GM_WacomRunDebug.uasset`
+- [x] T019 [US1] 在 `Content/Wacom/Maps/L_Exploration.umap` 定向移除 Run Node/Path/Branch 的 Debug generated ownership，保留 Actor GUID、Transform、Spline points、activity hosts 和所有场景美术
+- [x] T020 [US1] 在 `Content/Wacom/Core/GameModes/GM_Wacom.uasset` 将默认 Journey 指向 `DA_Journey_LevelAuthoring`，并确认 `L_Exploration` Descriptor 指向 `DA_Floor_LevelAuthoring_01`
+- [x] T021 [US1] 删除已执行的 `Scripts/MigrateRunLevelAuthoringBaseline.py`，确保仓库不保留可再次覆盖正式关卡的一次性迁移入口
+- [x] T022 [US1] 使用 AssetRegistry 与 `Source/WacomTests/Private/Editor/RunLevelAuthoringBaselineAssetContractSpec.cpp` 验证正式地图、Authoring DataAssets、GM 引用、Actor GUID/Transform/Spline 保留和新资产 Git LFS 跟踪
+- [x] T023 [US1] 编译本功能 worktree 的 `WacomEditor` 并运行 `Wacom.UI.RunSceneBinding.AuthoringBaseline`、`Wacom.UI.RunPathTraversal`、`Wacom.Run.Map`，将结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
 
 **Checkpoint**: 正式关卡可以独立加载和绑定 Authoring Floor，当前路径仍可玩，且不存在 Debug builder 所有权标记。
 
@@ -83,20 +83,20 @@ description: "Run 正式关卡制作基线收口的依赖有序实施任务"
 
 ### Tests and Validation for User Story 2
 
-- [ ] T024 [P] [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationSpec.cpp` 先覆盖 Descriptor 缺失/重复/空引用、Anchor/Path/Branch/host 缺失/重复/意外身份和稳定诊断排序
-- [ ] T025 [P] [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationGeometrySpec.cpp` 先覆盖 Spline 少于 2 点、长度不超过 10cm、非有限 Transform、方向颠倒以及 100cm/300cm 端点阈值边界
-- [ ] T026 [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationReadOnlySpec.cpp` 先覆盖有效与无效 World 验证前后 Actor 状态、DataAsset 和 Package dirty flags 均不改变
-- [ ] T027 [P] [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationCommandletSpec.cpp` 先覆盖有效地图返回 0、合同错误返回 1、缺参数/加载或 Descriptor 解析失败返回 2
+- [x] T024 [P] [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationSpec.cpp` 先覆盖 Descriptor 缺失/重复/空引用、Anchor/Path/Branch/host 缺失/重复/意外身份和稳定诊断排序
+- [x] T025 [P] [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationGeometrySpec.cpp` 先覆盖 Spline 少于 2 点、长度不超过 10cm、非有限 Transform、方向颠倒以及 100cm/300cm 端点阈值边界
+- [x] T026 [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationReadOnlySpec.cpp` 先覆盖有效与无效 World 验证前后 Actor 状态、DataAsset 和 Package dirty flags 均不改变
+- [x] T027 [P] [US2] 在 `Source/WacomTests/Private/Editor/RunFloorSceneValidationCommandletSpec.cpp` 先覆盖有效地图返回 0、合同错误返回 1、缺参数/加载或 Descriptor 解析失败返回 2
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] 在 `Source/WacomEditor/Public/Validation/WacomRunSceneBindingValidation.h` 将文本数组收敛为 Severity/Code/ObjectPath/Message 的稳定诊断结构，并保留 `IsValid/HasErrors` 只读 helper
-- [ ] T029 [US2] 在 `Source/WacomEditor/Private/Validation/WacomRunSceneBindingValidation.cpp` 改为只接收 World 并内部解析唯一 Descriptor，统一实现节点、道路、分支、host 与 Spline 几何验证且禁止任何修复/保存
-- [ ] T030 [US2] 在 `Source/WacomEditor/Private/Commandlets/WacomValidateRunFloorSceneCommandlet.h` 与 `Source/WacomEditor/Private/Commandlets/WacomValidateRunFloorSceneCommandlet.cpp` 实现 `-Map` 加载、排序输出和稳定 0/1/2 退出结果
-- [ ] T031 [US2] 在 `Source/WacomEditor/Public/WacomEditorModule.h` 与 `Source/WacomEditor/Private/WacomEditorModule.cpp` 对称注册/注销 `Tools -> Wacom -> Validate Current Run Floor` 并复用同一 validator
-- [ ] T032 [US2] 迁移 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 和 `Source/WacomTests/Private/UI/RunSceneBindingValidationSpec.cpp` 的旧 validator 调用，删除由调用方传入任意 Floor 的旁路
-- [ ] T033 [US2] 对 `Content/Wacom/Maps/L_Exploration.umap` 与 `Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap` 运行 editor menu 和 `WacomValidateRunFloorScene`，确认退出 0、诊断可定位且所有 Package 保持 clean
-- [ ] T034 [US2] 编译 `D:/UE_Project/5.7/Wacom/Wacom.uproject` 的 `WacomEditor` 并运行 `Wacom.Editor.RunSceneValidation`、`Wacom.UI.RunSceneBinding`，将结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T028 [US2] 在 `Source/WacomEditor/Public/Validation/WacomRunSceneBindingValidation.h` 将文本数组收敛为 Severity/Code/ObjectPath/Message 的稳定诊断结构，并保留 `IsValid/HasErrors` 只读 helper
+- [x] T029 [US2] 在 `Source/WacomEditor/Private/Validation/WacomRunSceneBindingValidation.cpp` 改为只接收 World 并内部解析唯一 Descriptor，统一实现节点、道路、分支、host 与 Spline 几何验证且禁止任何修复/保存
+- [x] T030 [US2] 在 `Source/WacomEditor/Private/Commandlets/WacomValidateRunFloorSceneCommandlet.h` 与 `Source/WacomEditor/Private/Commandlets/WacomValidateRunFloorSceneCommandlet.cpp` 实现 `-Map` 加载、排序输出和稳定 0/1/2 退出结果
+- [x] T031 [US2] 在 `Source/WacomEditor/Public/WacomEditorModule.h` 与 `Source/WacomEditor/Private/WacomEditorModule.cpp` 对称注册/注销 `Tools -> Wacom -> Validate Current Run Floor` 并复用同一 validator
+- [x] T032 [US2] 迁移 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 和 `Source/WacomTests/Private/UI/RunSceneBindingValidationSpec.cpp` 的旧 validator 调用，删除由调用方传入任意 Floor 的旁路
+- [x] T033 [US2] 对 `Content/Wacom/Maps/L_Exploration.umap` 与 `Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap` 运行 editor menu 和 `WacomValidateRunFloorScene`，确认退出 0、诊断可定位且所有 Package 保持 clean
+- [x] T034 [US2] 编译本功能 worktree 的 `WacomEditor` 并运行 `Wacom.Editor.RunSceneValidation`、`Wacom.UI.RunSceneBinding`，将结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
 
 **Checkpoint**: 两张正式/Debug Run map 均可通过相同只读入口验证；所有故障样例有稳定诊断和退出结果。
 
@@ -110,20 +110,20 @@ description: "Run 正式关卡制作基线收口的依赖有序实施任务"
 
 ### Tests and Validation for User Story 3
 
-- [ ] T035 [P] [US3] 在 `Source/WacomTests/Private/Editor/RunExplorationDebugAssetBuilderSpec.cpp` 先把期望目标改为 Debug map/Debug GameMode，并覆盖唯一 Descriptor、graph/actor counts 和连续两次构建幂等
-- [ ] T036 [US3] 在 `Source/WacomTests/Private/Editor/RunExplorationDebugAssetBuilderSpec.cpp` 增加正式 map、Authoring DataAssets、`GM_Wacom`、玩家 BP 和共享 Run Path BP 的禁止写集合 SHA-256/dirty-state 守卫
-- [ ] T037 [P] [US3] 在 `Source/WacomTests/Private/Editor/RunExplorationDebugAssetBuilderDependencySpec.cpp` 先覆盖共享 BP 缺失或父类错误时构建失败且不创建替代资产
+- [x] T035 [P] [US3] 在 `Source/WacomTests/Private/Editor/RunExplorationDebugAssetBuilderSpec.cpp` 先把期望目标改为 Debug map/Debug GameMode，并覆盖唯一 Descriptor、graph/actor counts 和连续两次构建幂等
+- [x] T036 [US3] 在 `Source/WacomTests/Private/Editor/RunExplorationDebugAssetBuilderSpec.cpp` 增加正式 map、Authoring DataAssets、`GM_Wacom`、玩家 BP 和共享 Run Path BP 的禁止写集合 SHA-256/dirty-state 守卫
+- [x] T037 [P] [US3] 在 `Source/WacomTests/Private/Editor/RunExplorationDebugAssetBuilderDependencySpec.cpp` 先覆盖共享 BP 缺失或父类错误时构建失败且不创建替代资产
 
 ### Implementation for User Story 3
 
-- [ ] T038 [US3] 将 `Source/WacomEditor/Private/Commandlets/WacomBuildRunExplorationAssetsCommandlet.h/.cpp` 删除并新增 `Source/WacomEditor/Private/Commandlets/WacomBuildRunExplorationDebugAssetsCommandlet.h/.cpp`，不保留旧命令 wrapper
-- [ ] T039 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.h` 收敛 result 字段为 Debug data/GameMode/map/validation 状态，移除正式 runtime 配置与 `L_Exploration` migration 语义
-- [ ] T040 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 将写集合限制为 Debug Journey/Floor/GameMode/map，删除对 `GM_Wacom`、玩家 BP 和共享 Run Path BP 的编译、修改与保存
-- [ ] T041 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 将共享 BP 收敛为父类校验后的只读依赖，并在 Debug map 中幂等生成唯一 Descriptor、Anchor、Path、必要 BranchTarget 与 activity host
-- [ ] T042 [US3] 连续两次运行 `WacomBuildRunExplorationDebugAssets` 更新 `Content/Wacom/Data/Map/DA_Journey_Debug.uasset`、`DA_Floor_Debug_01.uasset`、`Content/Wacom/Debug/GameModes/GM_WacomRunDebug.uasset` 与 `Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap`
-- [ ] T043 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 构建保存前运行 descriptor-aware validator，任何 Error 均拒绝保存并输出稳定诊断
-- [ ] T044 [US3] 复算 `specs/006-run-level-authoring-baseline/quickstart.md` 中禁止写集合 SHA-256，确认两次 builder 后全部与 Phase 3 稳定基线一致并记录 LFS 状态
-- [ ] T045 [US3] 编译 `D:/UE_Project/5.7/Wacom/Wacom.uproject` 的 `WacomEditor` 并运行 `Wacom.Editor.RunExplorationDebugAssets`、`Wacom.Editor.RunSceneValidation`、`Wacom.UI.RunSceneBinding`，将结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T038 [US3] 将 `Source/WacomEditor/Private/Commandlets/WacomBuildRunExplorationAssetsCommandlet.h/.cpp` 删除并新增 `Source/WacomEditor/Private/Commandlets/WacomBuildRunExplorationDebugAssetsCommandlet.h/.cpp`，不保留旧命令 wrapper
+- [x] T039 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.h` 收敛 result 字段为 Debug data/GameMode/map/validation 状态，移除正式 runtime 配置与 `L_Exploration` migration 语义
+- [x] T040 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 将写集合限制为 Debug Journey/Floor/GameMode/map，删除对 `GM_Wacom`、玩家 BP 和共享 Run Path BP 的编译、修改与保存
+- [x] T041 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 将共享 BP 收敛为父类校验后的只读依赖，并在 Debug map 中幂等生成唯一 Descriptor、Anchor、Path、必要 BranchTarget 与 activity host
+- [x] T042 [US3] 连续两次运行 `WacomBuildRunExplorationDebugAssets` 更新 `Content/Wacom/Data/Map/DA_Journey_Debug.uasset`、`DA_Floor_Debug_01.uasset`、`Content/Wacom/Debug/GameModes/GM_WacomRunDebug.uasset` 与 `Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap`
+- [x] T043 [US3] 在 `Source/WacomEditor/Private/ContentBuilders/RunExplorationDebugAssetBuilder.cpp` 构建保存前运行 descriptor-aware validator，任何 Error 均拒绝保存并输出稳定诊断
+- [x] T044 [US3] 复算 `specs/006-run-level-authoring-baseline/quickstart.md` 中禁止写集合 SHA-256，确认两次 builder 后全部与 Phase 3 稳定基线一致并记录 LFS 状态
+- [x] T045 [US3] 编译本功能 worktree 的 `WacomEditor` 并运行 `Wacom.Editor.RunExplorationDebugAssets`、`Wacom.Editor.RunSceneValidation`、`Wacom.UI.RunSceneBinding`，将结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
 
 **Checkpoint**: Debug 夹具可被工具完全重建，正式关卡和共享资产在 builder 前后逐文件不变。
 
@@ -133,18 +133,18 @@ description: "Run 正式关卡制作基线收口的依赖有序实施任务"
 
 **Purpose**: 清理旧入口、回写长期事实并确认正式 Run 黄金路径无回归。
 
-- [ ] T046 [P] 更新 `Docs/WacomMap.md`：正式/Authoring/Debug 资产边界、唯一 Scene Descriptor、场景验证合同，并修正“Map Screen 尚未交付”的过期表述
-- [ ] T047 [P] 更新 `Docs/WacomApp.md` 与 `Docs/Architecture.md`：descriptor-first working registry、原子提交、WacomData/App/Editor 所有权和无 Build.cs 变化
-- [ ] T048 [P] 更新 `Docs/WacomDataAuthoring.md`：Authoring baseline 非正式 Floor 1、Debug builder 写集合、validator menu/commandlet、Spline 阈值和共享 Blueprint 只读合同
-- [ ] T049 [P] 更新 `Docs/TODO.md` 与 `Docs/Questions.md`：保留正式 Floor 1 节点图、稳定 NodeId、跨层入口、Camp 和 SaveGame 身份为后续，不重复登记已完成基线
-- [ ] T050 使用 `rg` 审计 `WacomBuildRunExplorationAssets` 在 `Source/`、`Config/`、`Scripts/`、`Docs/` 和 `specs/006-run-level-authoring-baseline/` 中除迁移说明外为零运行入口，并把结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
-- [ ] T051 使用 AssetRegistry/引用审计确认 `Content/Wacom/Maps/L_Exploration.umap` 不依赖 Debug Journey/Floor/GameMode，`Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap` 不被正式 `GM_Wacom` 引用，并记录到 `specs/006-run-level-authoring-baseline/quickstart.md`
-- [ ] T052 编译 `D:/UE_Project/5.7/Wacom/Wacom.uproject` 的完整 `WacomEditor` Win64 Development 目标并记录结果到 `specs/006-run-level-authoring-baseline/quickstart.md`
-- [ ] T053 运行 `Wacom.UI.RunSceneBinding`、`Wacom.Editor.RunSceneValidation`、`Wacom.Editor.RunExplorationDebugAssets`、`Wacom.UI.RunPathTraversal`、`Wacom.Run.Map`、`Wacom.UI.Battle`、`Wacom.UI.Shop` 与 `Wacom.UI.Event`，记录结果到 `specs/006-run-level-authoring-baseline/quickstart.md`
-- [ ] T054 运行完整 `Automation RunTests Wacom` 并与实施前已知失败基线比较，任何新增失败均在 `specs/006-run-level-authoring-baseline/quickstart.md` 定位或修复
-- [ ] T055 执行 Blueprint 全量编译、两张地图 commandlet validation、Debug builder 二次幂等、Package dirty 审计、Git LFS 检查和 `git diff --check`，记录结果到 `specs/006-run-level-authoring-baseline/quickstart.md`
-- [ ] T056 按 `specs/006-run-level-authoring-baseline/quickstart.md` 在 `Content/Wacom/Maps/L_Exploration.umap` 完成首次进入、单/多出口、地图传送、Battle/Shop/RunEvent 往返的 PIE 黄金路径；无法执行时明确记录人工验收风险
-- [ ] T057 审核 `specs/006-run-level-authoring-baseline/spec.md`、`plan.md`、`data-model.md`、`contracts/` 与最终 `Docs/` 一致，确认长期事实不只停留在 Spec Kit 工件且当前 8 节点图未被承诺为正式 Floor 1
+- [x] T046 [P] 更新 `Docs/WacomMap.md`：正式/Authoring/Debug 资产边界、唯一 Scene Descriptor、场景验证合同，并修正“Map Screen 尚未交付”的过期表述
+- [x] T047 [P] 更新 `Docs/WacomApp.md` 与 `Docs/Architecture.md`：descriptor-first working registry、原子提交、WacomData/App/Editor 所有权和无 Build.cs 变化
+- [x] T048 [P] 更新 `Docs/WacomDataAuthoring.md`：Authoring baseline 非正式 Floor 1、Debug builder 写集合、validator menu/commandlet、Spline 阈值和共享 Blueprint 只读合同
+- [x] T049 [P] 更新 `Docs/TODO.md` 与 `Docs/Questions.md`：保留正式 Floor 1 节点图、稳定 NodeId、跨层入口、Camp 和 SaveGame 身份为后续，不重复登记已完成基线
+- [x] T050 使用 `rg` 审计 `WacomBuildRunExplorationAssets` 在 `Source/`、`Config/`、`Scripts/`、`Docs/` 和 `specs/006-run-level-authoring-baseline/` 中除迁移说明外为零运行入口，并把结果写入 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T051 使用 AssetRegistry/引用审计确认 `Content/Wacom/Maps/L_Exploration.umap` 不依赖 Debug Journey/Floor/GameMode，`Content/Wacom/Maps/Debug/L_RunExploration_Debug.umap` 不被正式 `GM_Wacom` 引用，并记录到 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T052 编译本功能 worktree 的完整 `WacomEditor` Win64 Development 目标并记录结果到 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T053 运行 `Wacom.UI.RunSceneBinding`、`Wacom.Editor.RunSceneValidation`、`Wacom.Editor.RunExplorationDebugAssets`、`Wacom.UI.RunPathTraversal`、`Wacom.Run.Map`、`Wacom.UI.Battle`、`Wacom.UI.Shop` 与 `Wacom.UI.Event`，记录结果到 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T054 运行完整 `Automation RunTests Wacom` 并与实施前已知失败基线比较，任何新增失败均在 `specs/006-run-level-authoring-baseline/quickstart.md` 定位或修复
+- [x] T055 执行 Blueprint 全量编译、两张地图 commandlet validation、Debug builder 二次幂等、Package dirty 审计、Git LFS 检查和 `git diff --check`，记录结果到 `specs/006-run-level-authoring-baseline/quickstart.md`
+- [x] T056 按 `specs/006-run-level-authoring-baseline/quickstart.md` 在 `Content/Wacom/Maps/L_Exploration.umap` 完成首次进入、单/多出口、地图传送、Battle/Shop/RunEvent 往返的 PIE 黄金路径；无法执行时明确记录人工验收风险
+- [x] T057 审核 `specs/006-run-level-authoring-baseline/spec.md`、`plan.md`、`data-model.md`、`contracts/` 与最终 `Docs/` 一致，确认长期事实不只停留在 Spec Kit 工件且当前 8 节点图未被承诺为正式 Floor 1
 
 ---
 

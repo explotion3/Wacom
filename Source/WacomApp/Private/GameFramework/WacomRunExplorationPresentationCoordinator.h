@@ -86,6 +86,17 @@ public:
 		URunSession& InSession,
 		UWacomRunPathTraversalComponent& InTraversal,
 		FWacomRunSceneBindingRegistry& InRegistry);
+	bool InitializeFromValidatedSnapshot(
+		URunSession& InSession,
+		UWacomRunPathTraversalComponent& InTraversal,
+		FWacomRunSceneBindingRegistry& InRegistry,
+		const FRunExplorationSnapshot& Snapshot);
+	bool PrepareFromValidatedSnapshot(
+		URunSession& InSession,
+		UWacomRunPathTraversalComponent& InTraversal,
+		FWacomRunSceneBindingRegistry& InRegistry,
+		const FRunExplorationSnapshot& Snapshot);
+	void CommitPreparedInitialization();
 	void Shutdown();
 
 	bool HandleBranchIntent(FName EdgeId);
@@ -132,6 +143,8 @@ private:
 	int32 LastAppliedVersion = 0;
 	FName LastErrorDetail = NAME_None;
 	FWacomRunRouteChoiceState RouteChoiceState;
+	FTransform PreparedInitialAnchorTransform = FTransform::Identity;
+	bool bPreparedForInitializationCommit = false;
 	FWacomRunNodeContentPresentationRequestedNative NodeContentPresentationRequestedNative;
 	FWacomRunRouteChoiceStateChangedNative RouteChoiceStateChangedNative;
 

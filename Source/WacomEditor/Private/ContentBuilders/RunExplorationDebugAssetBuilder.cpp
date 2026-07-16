@@ -2,31 +2,33 @@
 
 #include "ContentBuilders/RunExplorationDebugAssetBuilder.h"
 
-#include "Actors/WacomRunMapNodeAnchorActor.h"
+#include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
+#include "Actors/WacomRunFloorSceneDescriptorActor.h"
 #include "Actors/WacomRunKeyChestActor.h"
+#include "Actors/WacomRunMapNodeAnchorActor.h"
 #include "Actors/WacomRunPathBranchTargetActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Actors/WacomRunRewardPickupActor.h"
 #include "Actors/WacomShopTriggerActor.h"
-#include "Actors/BattleTriggerActor.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Characters/CharacterDefinition.h"
 #include "Components/SplineComponent.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
-#include "Components/WacomRunPathTraversalComponent.h"
 #include "ContentBuilders/ContentBuilderHelpers.h"
 #include "Engine/Blueprint.h"
+#include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Events/RunEventDefinition.h"
 #include "FileHelpers.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "GameFramework/WorldSettings.h"
 #include "HAL/FileManager.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
-#include "Kismet2/KismetEditorUtilities.h"
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "Kismet2/KismetEditorUtilities.h"
 #include "Map/WacomFloorMapDefinition.h"
 #include "Map/WacomJourneyDefinition.h"
 #include "Misc/PackageName.h"
@@ -43,15 +45,29 @@ namespace
 
 	constexpr const TCHAR* JourneyAssetName = TEXT("DA_Journey_Debug");
 	constexpr const TCHAR* FloorAssetName = TEXT("DA_Floor_Debug_01");
+	constexpr const TCHAR* DebugGameModeAssetName = TEXT("GM_WacomRunDebug");
+	constexpr const TCHAR* DebugGameModePackagePath =
+		TEXT("/Game/Wacom/Debug/GameModes/GM_WacomRunDebug");
+	constexpr const TCHAR* DebugMapPackagePath =
+		TEXT("/Game/Wacom/Maps/Debug/L_RunExploration_Debug");
+	const FName DebugGeneratedTag(TEXT("Wacom.Generated.RunExploration"));
+
+	struct FSharedBlueprintClasses
+	{
+		UClass* AnchorClass = nullptr;
+		UClass* PathClass = nullptr;
+		UClass* BranchClass = nullptr;
+	};
+
+	struct FExistingPathPresentation
+	{
+		FTransform ActorTransform = FTransform::Identity;
+		TArray<FVector> SplinePoints;
+	};
 
 	FString MapDataRoot()
 	{
 		return DataRoot() / TEXT("Map");
-	}
-
-	FString PathBlueprintRoot()
-	{
-		return TEXT("/Game/Wacom/Run/Path/Blueprints");
 	}
 
 	template <typename T>
@@ -60,9 +76,55 @@ namespace
 		T* Asset = LoadObject<T>(nullptr, ObjectPath);
 		if (!Asset)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[RunExplorationDebugAssetBuilder] Missing asset: %s"), ObjectPath);
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder] Missing asset: %s"),
+				ObjectPath);
 		}
 		return Asset;
+	}
+
+	bool ValidateSharedBlueprint(
+		const FString& ObjectPath,
+		const UClass& ExpectedParent,
+		UClass*& OutGeneratedClass)
+	{
+		OutGeneratedClass = nullptr;
+		UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, *ObjectPath);
+		if (!Blueprint || !Blueprint->GeneratedClass)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder] Missing shared Blueprint: %s"),
+				*ObjectPath);
+			return false;
+		}
+		if (!Blueprint->GeneratedClass->IsChildOf(&ExpectedParent))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder] Shared Blueprint has wrong parent: %s (expected %s)"),
+				*ObjectPath, *ExpectedParent.GetPathName());
+			return false;
+		}
+		OutGeneratedClass = Blueprint->GeneratedClass;
+		return true;
+	}
+
+	bool ValidateSharedDependencies(
+		const FRunExplorationDebugSharedDependencies& Dependencies,
+		FSharedBlueprintClasses& OutClasses)
+	{
+		UClass* PlayerClass = nullptr;
+		return ValidateSharedBlueprint(
+			Dependencies.PlayerBlueprintObjectPath,
+			*AWacomPlayerCharacter::StaticClass(), PlayerClass)
+			&& ValidateSharedBlueprint(
+				Dependencies.AnchorBlueprintObjectPath,
+				*AWacomRunMapNodeAnchorActor::StaticClass(), OutClasses.AnchorClass)
+			&& ValidateSharedBlueprint(
+				Dependencies.PathBlueprintObjectPath,
+				*AWacomRunPathSegmentActor::StaticClass(), OutClasses.PathClass)
+			&& ValidateSharedBlueprint(
+				Dependencies.BranchBlueprintObjectPath,
+				*AWacomRunPathBranchTargetActor::StaticClass(), OutClasses.BranchClass);
 	}
 
 	FWacomMapNodeDefinition MakeNode(
@@ -80,145 +142,16 @@ namespace
 		return Node;
 	}
 
-	FWacomMapEdgeDefinition MakeEdge(const TCHAR* EdgeId, const TCHAR* From, const TCHAR* To)
+	FWacomMapEdgeDefinition MakeEdge(
+		const TCHAR* EdgeId,
+		const TCHAR* From,
+		const TCHAR* To)
 	{
 		FWacomMapEdgeDefinition Edge;
 		Edge.EdgeId = EdgeId;
 		Edge.FromNodeId = From;
 		Edge.ToNodeId = To;
 		return Edge;
-	}
-
-	bool SaveBlueprint(UBlueprint& Blueprint, const FString& PackagePath)
-	{
-		FKismetEditorUtilities::CompileBlueprint(&Blueprint);
-		if (Blueprint.Status == BS_Error)
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunExplorationDebugAssetBuilder] Blueprint compile failed: %s"),
-				*Blueprint.GetPathName());
-			return false;
-		}
-
-		UPackage* Package = Blueprint.GetOutermost();
-		FAssetRegistryModule::AssetCreated(&Blueprint);
-		Package->MarkPackageDirty();
-		Blueprint.MarkPackageDirty();
-		const FString Filename = FPackageName::LongPackageNameToFilename(
-			PackagePath, FPackageName::GetAssetPackageExtension());
-		IFileManager::Get().MakeDirectory(*FPaths::GetPath(Filename), true);
-		FSavePackageArgs Args;
-		Args.TopLevelFlags = RF_Public | RF_Standalone;
-		Args.SaveFlags = SAVE_NoError;
-		return UPackage::SavePackage(Package, &Blueprint, *Filename, Args);
-	}
-
-	bool EnsureActorBlueprint(const TCHAR* AssetName, UClass& ParentClass)
-	{
-		const FString PackagePath = MakePackagePath(PathBlueprintRoot(), AssetName);
-		UPackage* Package = FindOrCreatePackage(PackagePath);
-		if (!Package)
-		{
-			return false;
-		}
-
-		UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, *MakeObjectPath(PackagePath));
-		if (Blueprint)
-		{
-			if (!Blueprint->GeneratedClass || !Blueprint->GeneratedClass->IsChildOf(&ParentClass))
-			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunExplorationDebugAssetBuilder] Existing Blueprint has wrong parent: %s"),
-					*PackagePath);
-				return false;
-			}
-		}
-		else
-		{
-			Blueprint = FKismetEditorUtilities::CreateBlueprint(
-				&ParentClass,
-				Package,
-				AssetName,
-				BPTYPE_Normal,
-				UBlueprint::StaticClass(),
-				UBlueprintGeneratedClass::StaticClass());
-		}
-		return Blueprint && SaveBlueprint(*Blueprint, PackagePath);
-	}
-
-	bool BuildPathBlueprints()
-	{
-		return EnsureActorBlueprint(
-			TEXT("BP_WacomRunPathSegmentActor"), *AWacomRunPathSegmentActor::StaticClass())
-			&& EnsureActorBlueprint(
-				TEXT("BP_WacomRunPathBranchTargetActor"), *AWacomRunPathBranchTargetActor::StaticClass())
-			&& EnsureActorBlueprint(
-				TEXT("BP_WacomRunMapNodeAnchorActor"), *AWacomRunMapNodeAnchorActor::StaticClass());
-	}
-
-	bool SaveLoadedBlueprint(UBlueprint& Blueprint)
-	{
-		UPackage* Package = Blueprint.GetOutermost();
-		if (!Package)
-		{
-			return false;
-		}
-		Package->MarkPackageDirty();
-		Blueprint.MarkPackageDirty();
-		const FString PackagePath = Package->GetName();
-		const FString Filename = FPackageName::LongPackageNameToFilename(
-			PackagePath, FPackageName::GetAssetPackageExtension());
-		FSavePackageArgs Args;
-		Args.TopLevelFlags = RF_Public | RF_Standalone;
-		Args.SaveFlags = SAVE_NoError;
-		return UPackage::SavePackage(Package, &Blueprint, *Filename, Args);
-	}
-
-	bool ConfigureRuntimeBlueprints(UWacomJourneyDefinition& Journey)
-	{
-		UBlueprint* GameModeBlueprint = LoadObject<UBlueprint>(nullptr,
-			TEXT("/Game/Wacom/Core/GameModes/GM_Wacom.GM_Wacom"));
-		AWacomGameMode* GameModeCDO = GameModeBlueprint && GameModeBlueprint->GeneratedClass
-			? Cast<AWacomGameMode>(GameModeBlueprint->GeneratedClass->GetDefaultObject())
-			: nullptr;
-		if (!GameModeBlueprint || !GameModeCDO)
-		{
-			UE_LOG(LogTemp, Error, TEXT("[RunExplorationDebugAssetBuilder] Missing GM_Wacom"));
-			return false;
-		}
-		GameModeBlueprint->Modify();
-		GameModeCDO->Modify();
-		GameModeCDO->DefaultJourneyDefinition = &Journey;
-		FBlueprintEditorUtils::MarkBlueprintAsModified(GameModeBlueprint);
-
-		UBlueprint* PlayerBlueprint = LoadObject<UBlueprint>(nullptr,
-			TEXT("/Game/Wacom/Core/Player/BP_WacomPlayerCharacter.BP_WacomPlayerCharacter"));
-		AWacomPlayerCharacter* PlayerCDO = PlayerBlueprint && PlayerBlueprint->GeneratedClass
-			? Cast<AWacomPlayerCharacter>(PlayerBlueprint->GeneratedClass->GetDefaultObject())
-			: nullptr;
-		UWacomRunPathTraversalComponent* NewTraversal = PlayerCDO
-			? PlayerCDO->GetRunPathTraversalComponent()
-			: nullptr;
-		if (!PlayerBlueprint || !PlayerCDO || !NewTraversal)
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunExplorationDebugAssetBuilder] Player Blueprint missing Run Path traversal component"));
-			return false;
-		}
-		PlayerBlueprint->Modify();
-		PlayerCDO->Modify();
-		NewTraversal->Modify();
-		FBlueprintEditorUtils::MarkBlueprintAsModified(PlayerBlueprint);
-		FKismetEditorUtilities::CompileBlueprint(GameModeBlueprint);
-		FKismetEditorUtilities::CompileBlueprint(PlayerBlueprint);
-		if (GameModeBlueprint->Status == BS_Error || PlayerBlueprint->Status == BS_Error)
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunExplorationDebugAssetBuilder] Runtime Blueprint compile failed"));
-			return false;
-		}
-
-		return SaveLoadedBlueprint(*GameModeBlueprint) && SaveLoadedBlueprint(*PlayerBlueprint);
 	}
 
 	FTransform MakeFallbackNodeTransform(const FWacomMapNodeDefinition& Node)
@@ -245,7 +178,9 @@ namespace
 		return nullptr;
 	}
 
-	AActor* FindContentHost(UWorld& World, const FWacomMapNodeDefinition& Node)
+	AActor* FindContentHost(
+		UWorld& World,
+		const FWacomMapNodeDefinition& Node)
 	{
 		switch (Node.NodeType)
 		{
@@ -253,19 +188,22 @@ namespace
 			return FindActor<ABattleTriggerActor>(World,
 				[&Node](const ABattleTriggerActor& Actor)
 				{
-					return Actor.EncounterDefinition == Node.Content.Encounter.EncounterDefinition;
+					return Actor.EncounterDefinition ==
+						Node.Content.Encounter.EncounterDefinition;
 				});
 		case EWacomMapNodeType::RunEvent:
 			return FindActor<AWacomRunEventTriggerActor>(World,
 				[&Node](const AWacomRunEventTriggerActor& Actor)
 				{
-					return Actor.EventDefinition == Node.Content.RunEvent.RunEventDefinition;
+					return Actor.EventDefinition ==
+						Node.Content.RunEvent.RunEventDefinition;
 				});
 		case EWacomMapNodeType::Shop:
 			return FindActor<AWacomShopTriggerActor>(World,
 				[&Node](const AWacomShopTriggerActor& Actor)
 				{
-					return Actor.ShopDefinition == Node.Content.Shop.ShopDefinition;
+					return Actor.ShopDefinition ==
+						Node.Content.Shop.ShopDefinition;
 				});
 		case EWacomMapNodeType::Treasure:
 			if (Node.Content.Treasure.PickupDefinition)
@@ -273,7 +211,8 @@ namespace
 				return FindActor<AWacomRunRewardPickupActor>(World,
 					[&Node](const AWacomRunRewardPickupActor& Actor)
 					{
-						return Actor.PickupDefinition == Node.Content.Treasure.PickupDefinition;
+						return Actor.PickupDefinition ==
+							Node.Content.Treasure.PickupDefinition;
 					});
 			}
 			return FindActor<AWacomRunKeyChestActor>(World,
@@ -287,10 +226,75 @@ namespace
 		}
 	}
 
-	bool BindContentHost(AActor& Host, const FWacomMapNodeDefinition& Node)
+	AActor* SpawnContentHost(
+		UWorld& World,
+		const FWacomMapNodeDefinition& Node,
+		const FTransform& Transform)
+	{
+		AActor* Host = nullptr;
+		switch (Node.NodeType)
+		{
+		case EWacomMapNodeType::Encounter:
+			if (ABattleTriggerActor* Actor = Cast<ABattleTriggerActor>(
+				World.SpawnActor<AActor>(ABattleTriggerActor::StaticClass(), Transform)))
+			{
+				Actor->EncounterDefinition = Node.Content.Encounter.EncounterDefinition;
+				Host = Actor;
+			}
+			break;
+		case EWacomMapNodeType::RunEvent:
+			if (AWacomRunEventTriggerActor* Actor = Cast<AWacomRunEventTriggerActor>(
+				World.SpawnActor<AActor>(AWacomRunEventTriggerActor::StaticClass(), Transform)))
+			{
+				Actor->EventDefinition = Node.Content.RunEvent.RunEventDefinition;
+				Host = Actor;
+			}
+			break;
+		case EWacomMapNodeType::Shop:
+			if (AWacomShopTriggerActor* Actor = Cast<AWacomShopTriggerActor>(
+				World.SpawnActor<AActor>(AWacomShopTriggerActor::StaticClass(), Transform)))
+			{
+				Actor->ShopDefinition = Node.Content.Shop.ShopDefinition;
+				Host = Actor;
+			}
+			break;
+		case EWacomMapNodeType::Treasure:
+			if (Node.Content.Treasure.PickupDefinition)
+			{
+				if (AWacomRunRewardPickupActor* Actor =
+					Cast<AWacomRunRewardPickupActor>(World.SpawnActor<AActor>(
+						AWacomRunRewardPickupActor::StaticClass(), Transform)))
+				{
+					Actor->PickupDefinition = Node.Content.Treasure.PickupDefinition;
+					Host = Actor;
+				}
+			}
+			else if (AWacomRunKeyChestActor* Actor = Cast<AWacomRunKeyChestActor>(
+				World.SpawnActor<AActor>(AWacomRunKeyChestActor::StaticClass(), Transform)))
+			{
+				Actor->CardInteractionDefinition =
+					Node.Content.Treasure.WorldCardInteractionDefinition;
+				Host = Actor;
+			}
+			break;
+		default:
+			break;
+		}
+		if (Host)
+		{
+			Host->Tags.AddUnique(DebugGeneratedTag);
+			Host->SetActorLabel(FString::Printf(
+				TEXT("RunHost_%s"), *Node.NodeId.ToString()));
+		}
+		return Host;
+	}
+
+	bool BindContentHost(
+		AActor& Host,
+		const FWacomMapNodeDefinition& Node)
 	{
 		UWacomRunMapNodeBindingComponent* Binding =
-			FindObject<UWacomRunMapNodeBindingComponent>(&Host, TEXT("RunMapNodeBinding"));
+			Host.FindComponentByClass<UWacomRunMapNodeBindingComponent>();
 		if (!Binding)
 		{
 			Binding = NewObject<UWacomRunMapNodeBindingComponent>(
@@ -307,70 +311,93 @@ namespace
 		return true;
 	}
 
-	bool MigrateExplorationWorld(UWacomFloorMapDefinition& Floor)
+	AWacomRunFloorSceneDescriptorActor* EnsureUniqueDescriptor(
+		UWorld& World,
+		UWacomFloorMapDefinition& Floor)
 	{
-		UWorld* World = UEditorLoadingAndSavingUtils::LoadMap(TEXT("/Game/Wacom/Maps/L_Exploration"));
-		if (!World)
+		TArray<AWacomRunFloorSceneDescriptorActor*> Descriptors;
+		for (TActorIterator<AWacomRunFloorSceneDescriptorActor> It(&World); It; ++It)
 		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[RunExplorationDebugAssetBuilder] Failed to load L_Exploration"));
-			return false;
+			Descriptors.Add(*It);
 		}
+		AWacomRunFloorSceneDescriptorActor* Descriptor =
+			Descriptors.IsEmpty() ? nullptr : Descriptors[0];
+		for (int32 Index = 1; Index < Descriptors.Num(); ++Index)
+		{
+			World.DestroyActor(Descriptors[Index]);
+		}
+		if (!Descriptor)
+		{
+			Descriptor = World.SpawnActor<AWacomRunFloorSceneDescriptorActor>();
+		}
+		if (Descriptor)
+		{
+			Descriptor->Modify();
+			Descriptor->FloorDefinition = &Floor;
+			Descriptor->SetActorLabel(TEXT("RunFloorSceneDescriptor"));
+		}
+		return Descriptor;
+	}
 
-		static const FName GeneratedTag = TEXT("Wacom.Generated.RunExploration");
+	bool ConfigureDebugWorld(
+		UWorld& World,
+		UWacomFloorMapDefinition& Floor,
+		UClass& DebugGameModeClass,
+		const FSharedBlueprintClasses& SharedClasses)
+	{
 		TMap<FName, FTransform> ExistingAnchorTransforms;
-		for (TActorIterator<AWacomRunMapNodeAnchorActor> It(World); It; ++It)
+		TMap<FName, FExistingPathPresentation> ExistingPaths;
+		TMap<FName, FTransform> ExistingBranchTransforms;
+		TArray<AActor*> GeneratedActors;
+		for (TActorIterator<AActor> It(&World); It; ++It)
 		{
-			if (It->ActorHasTag(GeneratedTag) && !It->NodeId.IsNone())
-			{
-				ExistingAnchorTransforms.Add(It->NodeId, It->GetActorTransform());
-			}
-		}
-
-		TArray<AActor*> ActorsToRemove;
-		for (TActorIterator<AActor> It(World); It; ++It)
-		{
-			if (It->ActorHasTag(GeneratedTag))
-			{
-				ActorsToRemove.Add(*It);
-			}
-		}
-		for (AActor* Actor : ActorsToRemove)
-		{
-			World->DestroyActor(Actor);
-		}
-
-		UBlueprint* AnchorBlueprint = LoadObject<UBlueprint>(nullptr,
-			TEXT("/Game/Wacom/Run/Path/Blueprints/BP_WacomRunMapNodeAnchorActor.BP_WacomRunMapNodeAnchorActor"));
-		UBlueprint* PathBlueprint = LoadObject<UBlueprint>(nullptr,
-			TEXT("/Game/Wacom/Run/Path/Blueprints/BP_WacomRunPathSegmentActor.BP_WacomRunPathSegmentActor"));
-		UBlueprint* BranchBlueprint = LoadObject<UBlueprint>(nullptr,
-			TEXT("/Game/Wacom/Run/Path/Blueprints/BP_WacomRunPathBranchTargetActor.BP_WacomRunPathBranchTargetActor"));
-		if (!AnchorBlueprint || !AnchorBlueprint->GeneratedClass
-			|| !PathBlueprint || !PathBlueprint->GeneratedClass
-			|| !BranchBlueprint || !BranchBlueprint->GeneratedClass)
-		{
-			return false;
-		}
-
-		TMap<FName, AActor*> Hosts;
-		for (const FWacomMapNodeDefinition& Node : Floor.Nodes)
-		{
-			if (Node.NodeType == EWacomMapNodeType::Navigation)
+			AActor* Actor = *It;
+			if (!Actor->ActorHasTag(DebugGeneratedTag))
 			{
 				continue;
 			}
-			AActor* Host = FindContentHost(*World, Node);
-			if (!Host)
+			GeneratedActors.Add(Actor);
+			if (const AWacomRunMapNodeAnchorActor* Anchor =
+				Cast<AWacomRunMapNodeAnchorActor>(Actor))
 			{
-				UE_LOG(LogTemp, Error,
-					TEXT("[RunExplorationDebugAssetBuilder] Missing content host for NodeId=%s"),
-					*Node.NodeId.ToString());
-				return false;
+				ExistingAnchorTransforms.Add(Anchor->NodeId, Anchor->GetActorTransform());
 			}
-			BindContentHost(*Host, Node);
-			Hosts.Add(Node.NodeId, Host);
+			else if (const AWacomRunPathSegmentActor* Path =
+				Cast<AWacomRunPathSegmentActor>(Actor))
+			{
+				FExistingPathPresentation& Existing = ExistingPaths.Add(Path->EdgeId);
+				Existing.ActorTransform = Path->GetActorTransform();
+				if (const USplineComponent* Spline = Path->GetPathSpline())
+				{
+					for (int32 Point = 0; Point < Spline->GetNumberOfSplinePoints(); ++Point)
+					{
+						Existing.SplinePoints.Add(Spline->GetLocationAtSplinePoint(
+							Point, ESplineCoordinateSpace::World));
+					}
+				}
+			}
+			else if (const AWacomRunPathBranchTargetActor* Branch =
+				Cast<AWacomRunPathBranchTargetActor>(Actor))
+			{
+				ExistingBranchTransforms.Add(Branch->EdgeId, Branch->GetActorTransform());
+			}
 		}
+		for (AActor* Actor : GeneratedActors)
+		{
+			World.DestroyActor(Actor);
+		}
+
+		if (!EnsureUniqueDescriptor(World, Floor))
+		{
+			return false;
+		}
+		AWorldSettings* WorldSettings = World.GetWorldSettings();
+		if (!WorldSettings)
+		{
+			return false;
+		}
+		WorldSettings->Modify();
+		WorldSettings->DefaultGameMode = &DebugGameModeClass;
 
 		TMap<FName, AWacomRunMapNodeAnchorActor*> Anchors;
 		for (const FWacomMapNodeDefinition& Node : Floor.Nodes)
@@ -378,81 +405,207 @@ namespace
 			const FTransform Transform = ExistingAnchorTransforms.Contains(Node.NodeId)
 				? ExistingAnchorTransforms.FindChecked(Node.NodeId)
 				: MakeFallbackNodeTransform(Node);
-
 			AWacomRunMapNodeAnchorActor* Anchor = Cast<AWacomRunMapNodeAnchorActor>(
-				World->SpawnActor<AActor>(AnchorBlueprint->GeneratedClass, Transform));
+				World.SpawnActor<AActor>(SharedClasses.AnchorClass, Transform));
 			if (!Anchor)
 			{
 				return false;
 			}
 			Anchor->NodeId = Node.NodeId;
-			Anchor->Tags.AddUnique(GeneratedTag);
-			Anchor->SetActorLabel(FString::Printf(TEXT("RunNode_%s"), *Node.NodeId.ToString()));
+			Anchor->Tags.AddUnique(DebugGeneratedTag);
+			Anchor->SetActorLabel(FString::Printf(
+				TEXT("RunNode_%s"), *Node.NodeId.ToString()));
 			Anchors.Add(Node.NodeId, Anchor);
 		}
 
-		TMap<FName, int32> DeclaredOutgoingEdgeCounts;
+		for (const FWacomMapNodeDefinition& Node : Floor.Nodes)
+		{
+			if (Node.NodeType == EWacomMapNodeType::Navigation)
+			{
+				continue;
+			}
+			AActor* Host = FindContentHost(World, Node);
+			if (!Host)
+			{
+				const AWacomRunMapNodeAnchorActor* Anchor = Anchors.FindRef(Node.NodeId);
+				Host = SpawnContentHost(World, Node,
+					Anchor ? Anchor->GetActorTransform() : MakeFallbackNodeTransform(Node));
+			}
+			if (!Host || !BindContentHost(*Host, Node))
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[RunExplorationDebugAssetBuilder] Failed to bind Debug host for NodeId=%s"),
+					*Node.NodeId.ToString());
+				return false;
+			}
+		}
+
+		TMap<FName, int32> OutgoingEdgeCounts;
 		for (const FWacomMapEdgeDefinition& Edge : Floor.Edges)
 		{
-			++DeclaredOutgoingEdgeCounts.FindOrAdd(Edge.FromNodeId);
+			++OutgoingEdgeCounts.FindOrAdd(Edge.FromNodeId);
 		}
 		for (const FWacomMapEdgeDefinition& Edge : Floor.Edges)
 		{
-			AWacomRunMapNodeAnchorActor* const* SourceAnchor = Anchors.Find(Edge.FromNodeId);
-			AWacomRunMapNodeAnchorActor* const* TargetAnchor = Anchors.Find(Edge.ToNodeId);
+			AWacomRunMapNodeAnchorActor* SourceAnchor = Anchors.FindRef(Edge.FromNodeId);
+			AWacomRunMapNodeAnchorActor* TargetAnchor = Anchors.FindRef(Edge.ToNodeId);
 			if (!SourceAnchor || !TargetAnchor)
 			{
 				return false;
 			}
+			const FExistingPathPresentation* Existing = ExistingPaths.Find(Edge.EdgeId);
+			const FTransform PathTransform = Existing
+				? Existing->ActorTransform
+				: FTransform::Identity;
 			AWacomRunPathSegmentActor* Path = Cast<AWacomRunPathSegmentActor>(
-				World->SpawnActor<AActor>(PathBlueprint->GeneratedClass, FTransform::Identity));
+				World.SpawnActor<AActor>(SharedClasses.PathClass, PathTransform));
 			if (!Path || !Path->GetPathSpline())
 			{
 				return false;
 			}
 			Path->EdgeId = Edge.EdgeId;
-			Path->Tags.AddUnique(GeneratedTag);
-			Path->SetActorLabel(FString::Printf(TEXT("RunPath_%s"), *Edge.EdgeId.ToString()));
+			Path->Tags.AddUnique(DebugGeneratedTag);
+			Path->SetActorLabel(FString::Printf(
+				TEXT("RunPath_%s"), *Edge.EdgeId.ToString()));
 			USplineComponent* Spline = Path->GetPathSpline();
 			Spline->ClearSplinePoints(false);
-			Spline->AddSplinePoint((*SourceAnchor)->GetActorLocation(), ESplineCoordinateSpace::World, false);
-			Spline->AddSplinePoint((*TargetAnchor)->GetActorLocation(), ESplineCoordinateSpace::World, false);
-			Spline->SetSplinePointType(0, ESplinePointType::Curve, false);
-			Spline->SetSplinePointType(1, ESplinePointType::Curve, false);
+			const bool bReuseSpline = Existing && Existing->SplinePoints.Num() >= 2;
+			const TArray<FVector> FallbackPoints =
+			{
+				SourceAnchor->GetActorLocation(), TargetAnchor->GetActorLocation(),
+			};
+			const TArray<FVector>& Points = bReuseSpline
+				? Existing->SplinePoints
+				: FallbackPoints;
+			for (const FVector& Point : Points)
+			{
+				Spline->AddSplinePoint(Point, ESplineCoordinateSpace::World, false);
+			}
+			for (int32 PointIndex = 0; PointIndex < Points.Num(); ++PointIndex)
+			{
+				Spline->SetSplinePointType(
+					PointIndex, ESplinePointType::Curve, false);
+			}
 			Spline->UpdateSpline();
 
-			if (DeclaredOutgoingEdgeCounts.FindRef(Edge.FromNodeId) < 2)
+			if (OutgoingEdgeCounts.FindRef(Edge.FromNodeId) < 2)
 			{
 				continue;
 			}
-
-			const FVector InitialDirection =
-				Spline->GetDirectionAtSplinePoint(0, ESplineCoordinateSpace::World)
-					.GetSafeNormal();
-			FTransform BranchTransform = (*SourceAnchor)->GetActorTransform();
-			BranchTransform.SetLocation(
-				(*SourceAnchor)->GetActorLocation() + InitialDirection * 160.0f);
-			BranchTransform.SetRotation(InitialDirection.Rotation().Quaternion());
-			AWacomRunPathBranchTargetActor* Branch = Cast<AWacomRunPathBranchTargetActor>(
-				World->SpawnActor<AActor>(BranchBlueprint->GeneratedClass, BranchTransform));
+			FTransform BranchTransform;
+			if (const FTransform* ExistingTransform =
+				ExistingBranchTransforms.Find(Edge.EdgeId))
+			{
+				BranchTransform = *ExistingTransform;
+			}
+			else
+			{
+				const FVector InitialDirection = Spline->GetDirectionAtSplinePoint(
+					0, ESplineCoordinateSpace::World).GetSafeNormal();
+				BranchTransform = SourceAnchor->GetActorTransform();
+				BranchTransform.SetLocation(
+					SourceAnchor->GetActorLocation() + InitialDirection * 160.0f);
+				BranchTransform.SetRotation(InitialDirection.Rotation().Quaternion());
+			}
+			AWacomRunPathBranchTargetActor* Branch =
+				Cast<AWacomRunPathBranchTargetActor>(World.SpawnActor<AActor>(
+					SharedClasses.BranchClass, BranchTransform));
 			if (!Branch)
 			{
 				return false;
 			}
 			Branch->EdgeId = Edge.EdgeId;
-			Branch->Tags.AddUnique(GeneratedTag);
-			Branch->SetActorLabel(FString::Printf(TEXT("RunBranch_%s"), *Edge.EdgeId.ToString()));
+			Branch->Tags.AddUnique(DebugGeneratedTag);
+			Branch->SetActorLabel(FString::Printf(
+				TEXT("RunBranch_%s"), *Edge.EdgeId.ToString()));
 		}
+		return true;
+	}
 
-		const FWacomRunSceneBindingValidationReport SceneReport =
-			FWacomRunSceneBindingValidation::ValidateLoadedWorld(World, &Floor);
-		for (const FText& Error : SceneReport.Errors)
+	UBlueprint* ConfigureDebugGameMode(UWacomJourneyDefinition& Journey)
+	{
+		UPackage* Package = FindOrCreatePackage(DebugGameModePackagePath);
+		if (!Package)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[RunExplorationDebugAssetBuilder] Scene validation: %s"),
-				*Error.ToString());
+			return nullptr;
 		}
-		return SceneReport.IsValid()
-			&& UEditorLoadingAndSavingUtils::SaveMap(World, TEXT("/Game/Wacom/Maps/L_Exploration"));
+		UBlueprint* Blueprint = LoadObject<UBlueprint>(
+			nullptr, *MakeObjectPath(DebugGameModePackagePath));
+		if (Blueprint && (!Blueprint->GeneratedClass
+			|| !Blueprint->GeneratedClass->IsChildOf(AWacomGameMode::StaticClass())))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder] Debug GameMode has wrong parent: %s"),
+				DebugGameModePackagePath);
+			return nullptr;
+		}
+		if (!Blueprint)
+		{
+			Blueprint = FKismetEditorUtilities::CreateBlueprint(
+				AWacomGameMode::StaticClass(), Package, DebugGameModeAssetName,
+				BPTYPE_Normal, UBlueprint::StaticClass(),
+				UBlueprintGeneratedClass::StaticClass());
+		}
+		AWacomGameMode* GameModeCDO = Blueprint && Blueprint->GeneratedClass
+			? Cast<AWacomGameMode>(Blueprint->GeneratedClass->GetDefaultObject())
+			: nullptr;
+		if (!Blueprint || !GameModeCDO)
+		{
+			return nullptr;
+		}
+		Blueprint->Modify();
+		GameModeCDO->Modify();
+		GameModeCDO->DefaultJourneyDefinition = &Journey;
+		FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+		FKismetEditorUtilities::CompileBlueprint(Blueprint);
+		if (Blueprint->Status == BS_Error)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder] Debug GameMode compile failed"));
+			return nullptr;
+		}
+		return Blueprint;
+	}
+
+	bool SaveBlueprintAsset(UBlueprint& Blueprint, const FString& PackagePath)
+	{
+		UPackage* Package = Blueprint.GetOutermost();
+		if (!Package)
+		{
+			return false;
+		}
+		FAssetRegistryModule::AssetCreated(&Blueprint);
+		Package->MarkPackageDirty();
+		Blueprint.MarkPackageDirty();
+		const FString Filename = FPackageName::LongPackageNameToFilename(
+			PackagePath, FPackageName::GetAssetPackageExtension());
+		IFileManager::Get().MakeDirectory(*FPaths::GetPath(Filename), true);
+		FSavePackageArgs Args;
+		Args.TopLevelFlags = RF_Public | RF_Standalone;
+		Args.SaveFlags = SAVE_NoError;
+		return UPackage::SavePackage(
+			Package, &Blueprint, *Filename, Args);
+	}
+
+	void LogSceneDiagnostic(
+		const FWacomRunSceneBindingDiagnostic& Diagnostic)
+	{
+		if (Diagnostic.Severity ==
+			EWacomRunSceneBindingDiagnosticSeverity::Error)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder][%s][%s] %s: %s"),
+				LexToString(Diagnostic.Severity), LexToString(Diagnostic.Code),
+				*Diagnostic.ObjectPath, *Diagnostic.Message.ToString());
+		}
+		else if (Diagnostic.Severity ==
+			EWacomRunSceneBindingDiagnosticSeverity::Warning)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[RunExplorationDebugAssetBuilder][%s][%s] %s: %s"),
+				LexToString(Diagnostic.Severity), LexToString(Diagnostic.Code),
+				*Diagnostic.ObjectPath, *Diagnostic.Message.ToString());
+		}
 	}
 }
 
@@ -460,7 +613,22 @@ namespace Wacom::ContentBuilder
 {
 	FRunExplorationDebugAssetBuildResult BuildRunExplorationDebugAssets()
 	{
+		return BuildRunExplorationDebugAssets(
+			FRunExplorationDebugSharedDependencies{});
+	}
+
+	FRunExplorationDebugAssetBuildResult BuildRunExplorationDebugAssets(
+		const FRunExplorationDebugSharedDependencies& Dependencies)
+	{
 		FRunExplorationDebugAssetBuildResult Result;
+		FSharedBlueprintClasses SharedClasses;
+		Result.bSharedDependenciesValid =
+			ValidateSharedDependencies(Dependencies, SharedClasses);
+		if (!Result.bSharedDependenciesValid)
+		{
+			return Result;
+		}
+
 		UCharacterDefinition* Character = LoadRequired<UCharacterDefinition>(
 			TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl"));
 		UEncounterDefinition* Encounter = LoadRequired<UEncounterDefinition>(
@@ -476,67 +644,87 @@ namespace Wacom::ContentBuilder
 		UWacomRunWorldCardInteractionDefinition* Chest =
 			LoadRequired<UWacomRunWorldCardInteractionDefinition>(
 				TEXT("/Game/Wacom/Data/Interactions/DA_RunWorldCardInteraction_DebugKeyGold3.DA_RunWorldCardInteraction_DebugKeyGold3"));
-		if (!Character || !Encounter || !EventSnake || !EventFlag || !Shop || !Pickup || !Chest)
+		if (!Character || !Encounter || !EventSnake || !EventFlag
+			|| !Shop || !Pickup || !Chest)
 		{
 			return Result;
 		}
 
-		const FString FloorPackagePath = MakePackagePath(MapDataRoot(), FloorAssetName);
+		const FString FloorPackagePath =
+			MakePackagePath(MapDataRoot(), FloorAssetName);
 		UPackage* FloorPackage = FindOrCreatePackage(FloorPackagePath);
-		Result.Floor = FloorPackage
-			? CreateOrReplaceAsset<UWacomFloorMapDefinition>(FloorPackage, FloorAssetName)
+		Result.DebugFloor = FloorPackage
+			? CreateOrReplaceAsset<UWacomFloorMapDefinition>(
+				FloorPackage, FloorAssetName)
 			: nullptr;
-		if (!Result.Floor)
+		if (!Result.DebugFloor)
 		{
 			return Result;
 		}
+		Result.DebugFloor->FloorId = TEXT("Floor.Debug.01");
+		Result.DebugFloor->DisplayName = FText::FromString(TEXT("蛇巢浅层"));
+		Result.DebugFloor->EntryNodeId = TEXT("Entry");
 
-		Result.Floor->FloorId = TEXT("Floor.Debug.01");
-		Result.Floor->DisplayName = FText::FromString(TEXT("蛇巢浅层"));
-		Result.Floor->EntryNodeId = TEXT("Entry");
 		FWacomMapNodeDefinition Entry = MakeNode(
-			TEXT("Entry"), EWacomMapNodeType::Navigation, FVector2D(960.f, 980.f), true);
+			TEXT("Entry"), EWacomMapNodeType::Navigation,
+			FVector2D(960.f, 980.f), true);
 		Entry.DisplayName = FText::FromString(TEXT("林地入口"));
-		Entry.ShortDescription = FText::FromString(TEXT("进入蛇巢浅层的安全落脚点。"));
+		Entry.ShortDescription = FText::FromString(
+			TEXT("进入蛇巢浅层的安全落脚点。"));
 		FWacomMapNodeDefinition Battle = MakeNode(
-			TEXT("Battle.Snake"), EWacomMapNodeType::Encounter, FVector2D(960.f, 840.f));
+			TEXT("Battle.Snake"), EWacomMapNodeType::Encounter,
+			FVector2D(960.f, 840.f));
 		Battle.DisplayName = FText::FromString(TEXT("伏蛇草径"));
-		Battle.ShortDescription = FText::FromString(TEXT("草丛中传来持续的窸窣声。"));
+		Battle.ShortDescription = FText::FromString(
+			TEXT("草丛中传来持续的窸窣声。"));
 		Battle.Content.Encounter.EncounterDefinition = Encounter;
 		FWacomMapNodeDefinition ShopNode = MakeNode(
-			TEXT("Shop.Snake"), EWacomMapNodeType::Shop, FVector2D(960.f, 700.f));
+			TEXT("Shop.Snake"), EWacomMapNodeType::Shop,
+			FVector2D(960.f, 700.f));
 		ShopNode.DisplayName = FText::FromString(TEXT("行商营帐"));
-		ShopNode.ShortDescription = FText::FromString(TEXT("一处临时搭起的补给点。"));
+		ShopNode.ShortDescription = FText::FromString(
+			TEXT("一处临时搭起的补给点。"));
 		ShopNode.Content.Shop.ShopDefinition = Shop;
 		FWacomMapNodeDefinition EventSnakeNode = MakeNode(
-			TEXT("Event.SnakeGift"), EWacomMapNodeType::RunEvent, FVector2D(960.f, 560.f));
+			TEXT("Event.SnakeGift"), EWacomMapNodeType::RunEvent,
+			FVector2D(960.f, 560.f));
 		EventSnakeNode.DisplayName = FText::FromString(TEXT("蛇蜕空地"));
-		EventSnakeNode.ShortDescription = FText::FromString(TEXT("残留的蛇蜕似乎掩盖着什么。"));
+		EventSnakeNode.ShortDescription = FText::FromString(
+			TEXT("残留的蛇蜕似乎掩盖着什么。"));
 		EventSnakeNode.Content.RunEvent.RunEventDefinition = EventSnake;
 		FWacomMapNodeDefinition Junction = MakeNode(
-			TEXT("Junction"), EWacomMapNodeType::Navigation, FVector2D(960.f, 420.f), true);
+			TEXT("Junction"), EWacomMapNodeType::Navigation,
+			FVector2D(960.f, 420.f), true);
 		Junction.DisplayName = FText::FromString(TEXT("三岔旧路"));
-		Junction.ShortDescription = FText::FromString(TEXT("道路在这里分向三处。"));
+		Junction.ShortDescription = FText::FromString(
+			TEXT("道路在这里分向三处。"));
 		FWacomMapNodeDefinition PickupNode = MakeNode(
-			TEXT("Treasure.PoisonFang"), EWacomMapNodeType::Treasure, FVector2D(650.f, 260.f), true);
+			TEXT("Treasure.PoisonFang"), EWacomMapNodeType::Treasure,
+			FVector2D(650.f, 260.f), true);
 		PickupNode.DisplayName = FText::FromString(TEXT("毒牙遗落处"));
-		PickupNode.ShortDescription = FText::FromString(TEXT("一枚仍带毒性的断牙落在泥里。"));
+		PickupNode.ShortDescription = FText::FromString(
+			TEXT("一枚仍带毒性的断牙落在泥里。"));
 		PickupNode.Content.Treasure.PickupDefinition = Pickup;
 		FWacomMapNodeDefinition ChestNode = MakeNode(
-			TEXT("Treasure.KeyChest"), EWacomMapNodeType::Treasure, FVector2D(1270.f, 260.f), true);
+			TEXT("Treasure.KeyChest"), EWacomMapNodeType::Treasure,
+			FVector2D(1270.f, 260.f), true);
 		ChestNode.DisplayName = FText::FromString(TEXT("封锁宝箱"));
-		ChestNode.ShortDescription = FText::FromString(TEXT("沉重的箱锁需要合适的钥匙。"));
+		ChestNode.ShortDescription = FText::FromString(
+			TEXT("沉重的箱锁需要合适的钥匙。"));
 		ChestNode.Content.Treasure.WorldCardInteractionDefinition = Chest;
 		FWacomMapNodeDefinition EventFlagNode = MakeNode(
-			TEXT("Event.FlagReward"), EWacomMapNodeType::RunEvent, FVector2D(960.f, 120.f), true);
+			TEXT("Event.FlagReward"), EWacomMapNodeType::RunEvent,
+			FVector2D(960.f, 120.f), true);
 		EventFlagNode.DisplayName = FText::FromString(TEXT("褪色路标"));
-		EventFlagNode.ShortDescription = FText::FromString(TEXT("一面褪色标记指向更深的林地。"));
+		EventFlagNode.ShortDescription = FText::FromString(
+			TEXT("一面褪色标记指向更深的林地。"));
 		EventFlagNode.Content.RunEvent.RunEventDefinition = EventFlag;
-		Result.Floor->Nodes =
+		Result.DebugFloor->Nodes =
 		{
-			Entry, Battle, ShopNode, EventSnakeNode, Junction, PickupNode, ChestNode, EventFlagNode,
+			Entry, Battle, ShopNode, EventSnakeNode, Junction,
+			PickupNode, ChestNode, EventFlagNode,
 		};
-		Result.Floor->Edges =
+		Result.DebugFloor->Edges =
 		{
 			MakeEdge(TEXT("EntryToBattle"), TEXT("Entry"), TEXT("Battle.Snake")),
 			MakeEdge(TEXT("BattleToShop"), TEXT("Battle.Snake"), TEXT("Shop.Snake")),
@@ -546,43 +734,67 @@ namespace Wacom::ContentBuilder
 			MakeEdge(TEXT("JunctionToChest"), TEXT("Junction"), TEXT("Treasure.KeyChest")),
 			MakeEdge(TEXT("JunctionToEventFlag"), TEXT("Junction"), TEXT("Event.FlagReward")),
 		};
-		if (!FWacomMapDefinitionValidation::ValidateFloor(Result.Floor).IsValid()
-			|| !SaveAssetPackage(FloorPackage, Result.Floor, FloorPackagePath))
-		{
-			Result.Floor = nullptr;
-			return Result;
-		}
 
-		const FString JourneyPackagePath = MakePackagePath(MapDataRoot(), JourneyAssetName);
+		const FString JourneyPackagePath =
+			MakePackagePath(MapDataRoot(), JourneyAssetName);
 		UPackage* JourneyPackage = FindOrCreatePackage(JourneyPackagePath);
-		Result.Journey = JourneyPackage
-			? CreateOrReplaceAsset<UWacomJourneyDefinition>(JourneyPackage, JourneyAssetName)
+		Result.DebugJourney = JourneyPackage
+			? CreateOrReplaceAsset<UWacomJourneyDefinition>(
+				JourneyPackage, JourneyAssetName)
 			: nullptr;
-		if (!Result.Journey)
+		if (!Result.DebugJourney)
 		{
 			return Result;
 		}
-		Result.Journey->JourneyId = TEXT("Journey.Debug");
-		Result.Journey->SupportedCharacters = {Character};
-		Result.Journey->Floors = {Result.Floor};
-		if (!FWacomMapDefinitionValidation::ValidateJourney(Result.Journey).IsValid()
-			|| !SaveAssetPackage(JourneyPackage, Result.Journey, JourneyPackagePath))
+		Result.DebugJourney->JourneyId = TEXT("Journey.Debug");
+		Result.DebugJourney->SupportedCharacters = {Character};
+		Result.DebugJourney->Floors = {Result.DebugFloor};
+		Result.bDataValidationPassed =
+			FWacomMapDefinitionValidation::ValidateFloor(Result.DebugFloor).IsValid()
+			&& FWacomMapDefinitionValidation::ValidateJourney(
+				Result.DebugJourney).IsValid();
+		if (!Result.bDataValidationPassed)
 		{
-			Result.Journey = nullptr;
 			return Result;
 		}
 
-		Result.bPathBlueprintsBuilt = BuildPathBlueprints();
-		if (!Result.bPathBlueprintsBuilt)
+		Result.DebugGameMode = ConfigureDebugGameMode(*Result.DebugJourney);
+		if (!Result.DebugGameMode || !Result.DebugGameMode->GeneratedClass)
 		{
 			return Result;
 		}
-		Result.bRuntimeAssetsConfigured = ConfigureRuntimeBlueprints(*Result.Journey);
-		if (!Result.bRuntimeAssetsConfigured)
+
+		Result.DebugWorld = FPackageName::DoesPackageExist(DebugMapPackagePath)
+			? UEditorLoadingAndSavingUtils::LoadMap(DebugMapPackagePath)
+			: UEditorLoadingAndSavingUtils::NewBlankMap(false);
+		if (!Result.DebugWorld
+			|| !ConfigureDebugWorld(*Result.DebugWorld, *Result.DebugFloor,
+				*Result.DebugGameMode->GeneratedClass.Get(), SharedClasses))
 		{
 			return Result;
 		}
-		Result.bExplorationWorldMigrated = MigrateExplorationWorld(*Result.Floor);
+
+		const FWacomRunSceneBindingValidationReport SceneReport =
+			FWacomRunSceneBindingValidation::ValidateLoadedWorld(Result.DebugWorld);
+		for (const FWacomRunSceneBindingDiagnostic& Diagnostic :
+			SceneReport.Diagnostics)
+		{
+			LogSceneDiagnostic(Diagnostic);
+		}
+		Result.bSceneValidationPassed = SceneReport.IsValid();
+		if (!Result.bSceneValidationPassed)
+		{
+			return Result;
+		}
+
+		Result.bOwnedAssetsSaved =
+			SaveAssetPackage(FloorPackage, Result.DebugFloor, FloorPackagePath)
+			&& SaveAssetPackage(
+				JourneyPackage, Result.DebugJourney, JourneyPackagePath)
+			&& SaveBlueprintAsset(
+				*Result.DebugGameMode, DebugGameModePackagePath)
+			&& UEditorLoadingAndSavingUtils::SaveMap(
+				Result.DebugWorld, DebugMapPackagePath);
 		return Result;
 	}
 }

@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-07-14
+updated: 2026-07-16
 tags:
   - wacom/data
   - wacom/authoring
@@ -123,13 +123,25 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
 
-Run 探索 Debug 内容由 `UWacomBuildRunExplorationAssetsCommandlet` 可重复构建：
+当前 `L_Exploration` 使用 `/Game/Wacom/Data/Map/Authoring/DA_Floor_LevelAuthoring_01` 与 `DA_Journey_LevelAuthoring`。这是承接现有可玩图的过渡制作基线，不是正式 Floor 1：当前 8 个 NodeId、布局、内容密度、跨层入口、Camp 内容和未来 SaveGame 身份都未冻结。`GM_Wacom` 指向 Authoring Journey；Debug builder 禁止修改这三个正式/Authoring Package。
+
+每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 
 ```powershell
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomBuildRunExplorationAssets -NoSplash -Unattended
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomValidateRunFloorScene -Map=/Game/Wacom/Maps/L_Exploration -NoSplash -Unattended -NoDreamShaderEditorBridge
 ```
 
-命令创建或更新 `/Game/Wacom/Data/Map/DA_Journey_Debug`、`DA_Floor_Debug_01` 和 `/Game/Wacom/Run/Path/Blueprints` 下的 Path / Branch / Anchor 蓝图，编译并保存 `GM_Wacom`、`BP_WacomPlayerCharacter` 与 `L_Exploration` 绑定，再执行 Map 和 loaded-world Scene validation。它只迁移可识别的正式内容引用，不从关卡 Actor 连接反向生成第二份 Logical Map Graph。
+validator 只读检查 Descriptor、Anchor/Path/Branch/content host 身份与 typed payload。Spline 少于 2 点、长度不超过 `10 cm`、非有限 Transform 或方向颠倒为 Error；端点距离 `<= 100 cm` 通过，`(100, 300] cm` 为 Warning，`> 300 cm` 为 Error。诊断按 Severity/Code/ObjectPath 排序；命令退出 `0/1/2` 分别表示通过或仅 Warning、合同 Error、参数/加载/Descriptor 解析失败。它不得调用 `Modify`、标脏、修复或保存。
+
+Run 探索 Debug 内容由 `UWacomBuildRunExplorationDebugAssetsCommandlet` 可重复构建：
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomBuildRunExplorationDebugAssets -NoSplash -Unattended -NoDreamShaderEditorBridge
+```
+
+命令的唯一写集合是 `/Game/Wacom/Data/Map/DA_Journey_Debug`、`DA_Floor_Debug_01`、`/Game/Wacom/Debug/GameModes/GM_WacomRunDebug` 和 `/Game/Wacom/Maps/Debug/L_RunExploration_Debug`。Player BP 与 `/Game/Wacom/Run/Path/Blueprints` 下的 Anchor/Path/Branch Blueprint 是只读依赖：缺失或父类错误时立即失败，不创建替代资产，也不编译、标脏或保存它们。正式 `L_Exploration`、Authoring Journey/Floor、`GM_Wacom` 以及任何卡牌、背包、敌人材质、美术和 UI 资产都是禁止写集合。
+
+builder 只重建 Debug map 中带 `Wacom.Generated.RunExploration` ownership 的 Actor，保留非生成美术与可复用 host；它确保唯一 Debug Floor Descriptor、8/7/3/6 当前 fixture 结构和 Debug GameMode 引用，并在保存四个 owned Package 前运行同一 Scene validator。连续两次构建要求逻辑身份、计数和引用相同；Debug 生成 Actor GUID 与 owned 二进制 hash 不属于稳定合同。`Wacom.Editor.RunExplorationDebugAssets` 同时用 SHA-256 与 dirty-state 守卫正式 map、Authoring 数据、`GM_Wacom`、Player BP 和三个共享 Run Path BP。
 
 Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
 
@@ -137,7 +149,7 @@ Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
 & 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' 'D:\UE_Project\5.7\Wacom\Wacom.uproject' -run=WacomBuildRunMapUIAssets -NoSplash -Unattended
 ```
 
-它幂等生成并编译 `/Game/Wacom/UI/Map/WBP_RunMapNode` 与 `WBP_RunMapScreen`。应先运行探索 Debug builder 迁移 Floor 文案，再运行 UI builder；两者都要求连续运行两次结果稳定。
+它幂等生成并编译 `/Game/Wacom/UI/Map/WBP_RunMapNode` 与 `WBP_RunMapScreen`。UI builder 不修改关卡或 Floor 数据，也不依赖 Debug builder 迁移 Authoring 文案；两个 builder 各自要求连续运行两次结果稳定。
 
 ## §5 生成内容自动化
 

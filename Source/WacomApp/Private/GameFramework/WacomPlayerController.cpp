@@ -24,6 +24,7 @@
 #include "GameFramework/WacomBattleSceneInteractionRouter.h"
 #include "GameFramework/WacomRunWorldInteractionRouter.h"
 #include "GameFramework/WacomRunExplorationPresentationCoordinator.h"
+#include "GameFramework/WacomRunFloorSceneDescriptorResolver.h"
 #include "GameFramework/WacomRunPathBranchSelectionController.h"
 #include "GameFramework/WacomRunSceneBindingRegistry.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
@@ -35,6 +36,7 @@
 #include "Interaction/WacomWorldInteractableContractHelpers.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
+#include "Map/WacomFloorMapDefinition.h"
 #include "RunStateTypes.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
@@ -1235,40 +1237,74 @@ bool AWacomPlayerController::ApplyRunNodeActivityResolutionForPresentation(
 
 bool AWacomPlayerController::RefreshRunExplorationPresentationBinding()
 {
-	TeardownRunExplorationPresentationBinding();
+	const auto RejectRefresh = [this](const FName Detail)
+	{
+		RunExplorationSceneBindingLastFailureDetail = Detail;
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("[WacomPlayerController] Run 探索场景绑定原子拒绝：%s"),
+			*Detail.ToString());
+		return false;
+	};
+
+#if WITH_DEV_AUTOMATION_TESTS
+	const FName PreCommitFault =
+		RunExplorationSceneBindingPreCommitFaultForAutomation;
+	RunExplorationSceneBindingPreCommitFaultForAutomation = NAME_None;
+#endif
+
 	AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
 	UWacomRunPathTraversalComponent* Traversal = WacomCharacter
 		? WacomCharacter->GetRunPathTraversalComponent()
 		: nullptr;
 	if (!RunSession || !Traversal || !GetWorld())
 	{
-		return false;
+		return RejectRefresh(TEXT("SceneBindingPrerequisiteMissing"));
+	}
+	if (RunExplorationPresentationCoordinator
+		&& RunExplorationPresentationCoordinator->HasActiveTraversal())
+	{
+		return RejectRefresh(TEXT("SceneBindingRefreshDuringTraversal"));
 	}
 
 	const FRunExplorationSnapshot Snapshot = RunSession->BuildExplorationSnapshot();
 	if (Snapshot.StateVersion <= 0 || !Snapshot.CurrentNode.IsValid())
 	{
-		return false;
+		return RejectRefresh(TEXT("SceneBindingSnapshotInvalid"));
 	}
 
-	RunExplorationSceneBindingRegistry = MakeShared<FWacomRunSceneBindingRegistry>();
-	RunExplorationSceneBindingRegistry->Reset(Snapshot.CurrentNode.FloorId);
+	const FWacomRunFloorSceneDescriptorResolveResult DescriptorResult =
+		FWacomRunFloorSceneDescriptorResolver::Resolve(
+			GetWorld(),
+			Snapshot.CurrentNode.FloorId);
+	if (!DescriptorResult.IsResolved() || !DescriptorResult.FloorDefinition)
+	{
+		return RejectRefresh(DescriptorResult.GetDetail());
+	}
+
+	TSharedPtr<FWacomRunSceneBindingRegistry> WorkingRegistry =
+		MakeShared<FWacomRunSceneBindingRegistry>();
+	WorkingRegistry->Reset(Snapshot.CurrentNode.FloorId);
 	for (TActorIterator<AWacomRunPathSegmentActor> It(GetWorld()); It; ++It)
 	{
-		if (!RunExplorationSceneBindingRegistry->RegisterPath(**It))
+		if (!WorkingRegistry->RegisterPath(**It))
 		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[WacomPlayerController] Run Path 注册失败或 EdgeId 重复：%s"),
-				*It->GetName());
+			return RejectRefresh(TEXT("ScenePathRegistrationFailed"));
 		}
 	}
 	for (TActorIterator<AWacomRunMapNodeAnchorActor> It(GetWorld()); It; ++It)
 	{
-		if (!RunExplorationSceneBindingRegistry->RegisterNodeAnchor(**It))
+		if (!WorkingRegistry->RegisterNodeAnchor(**It))
 		{
-			UE_LOG(LogTemp, Warning,
-				TEXT("[WacomPlayerController] Run Node Anchor 注册失败或 NodeId 重复：%s"),
-				*It->GetName());
+			return RejectRefresh(TEXT("SceneNodeAnchorRegistrationFailed"));
+		}
+	}
+	for (TActorIterator<AWacomRunPathBranchTargetActor> It(GetWorld()); It; ++It)
+	{
+		if (!WorkingRegistry->RegisterBranchTarget(**It))
+		{
+			return RejectRefresh(TEXT("SceneBranchTargetRegistrationFailed"));
 		}
 	}
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
@@ -1277,38 +1313,69 @@ bool AWacomPlayerController::RefreshRunExplorationPresentationBinding()
 		It->GetComponents(Bindings);
 		for (UWacomRunMapNodeBindingComponent* Binding : Bindings)
 		{
-			if (Binding && !RunExplorationSceneBindingRegistry->RegisterContentHost(
-				Binding->NodeId, Binding->NodeType, **It))
+			if (Binding && !WorkingRegistry->RegisterContentHost(
+				Binding->NodeId,
+				Binding->NodeType,
+				**It))
 			{
-				UE_LOG(LogTemp, Warning,
-					TEXT("[WacomPlayerController] Run 内容 Host 注册失败：Actor=%s NodeId=%s"),
-					*It->GetName(), *Binding->NodeId.ToString());
+				return RejectRefresh(TEXT("SceneContentHostRegistrationFailed"));
 			}
 		}
 	}
 
-	RunExplorationPresentationCoordinator =
-		MakeShared<FWacomRunExplorationPresentationCoordinator>();
-	if (!RunExplorationPresentationCoordinator->Initialize(
-		*RunSession,
-		*Traversal,
-		*RunExplorationSceneBindingRegistry))
+	const FWacomStatus Completeness = WorkingRegistry->ValidateComplete(
+		*DescriptorResult.FloorDefinition);
+	if (!Completeness.IsOk())
 	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[WacomPlayerController] Run 探索场景绑定初始化失败：%s"),
-			*RunExplorationPresentationCoordinator->GetLastErrorDetail().ToString());
-		RunExplorationPresentationCoordinator.Reset();
-		RunExplorationSceneBindingRegistry.Reset();
-		Traversal->DeactivateTraversal();
-		return false;
+		return RejectRefresh(Completeness.Detail);
 	}
 
-	for (TActorIterator<AWacomRunPathBranchTargetActor> It(GetWorld()); It; ++It)
+	FRunExplorationSnapshot CommitSnapshot =
+		RunSession->BuildExplorationSnapshot();
+#if WITH_DEV_AUTOMATION_TESTS
+	if (PreCommitFault == TEXT("VersionDrift"))
 	{
-		It->OnBranchRequestedNative().AddUObject(
+		++CommitSnapshot.StateVersion;
+	}
+	else if (PreCommitFault == TEXT("FloorDrift"))
+	{
+		CommitSnapshot.CurrentNode.FloorId = TEXT("Floor.AutomationDrift");
+	}
+#endif
+	if (CommitSnapshot.StateVersion != Snapshot.StateVersion)
+	{
+		return RejectRefresh(TEXT("SceneBindingSnapshotVersionDrift"));
+	}
+	if (CommitSnapshot.CurrentNode.FloorId != Snapshot.CurrentNode.FloorId
+		|| CommitSnapshot.CurrentNode.NodeId != Snapshot.CurrentNode.NodeId)
+	{
+		return RejectRefresh(TEXT("SceneBindingSnapshotFloorDrift"));
+	}
+
+	TSharedPtr<FWacomRunExplorationPresentationCoordinator> WorkingCoordinator =
+		MakeShared<FWacomRunExplorationPresentationCoordinator>();
+	if (!WorkingCoordinator->PrepareFromValidatedSnapshot(
+		*RunSession,
+		*Traversal,
+		*WorkingRegistry,
+		CommitSnapshot))
+	{
+		return RejectRefresh(WorkingCoordinator->GetLastErrorDetail());
+	}
+
+	const TArray<AWacomRunPathBranchTargetActor*> WorkingBranchTargets =
+		WorkingRegistry->GetBranchTargets();
+	TeardownRunExplorationPresentationBinding();
+	RunExplorationSceneBindingRegistry = MoveTemp(WorkingRegistry);
+	RunExplorationPresentationCoordinator = MoveTemp(WorkingCoordinator);
+	RunExplorationPresentationCoordinator->CommitPreparedInitialization();
+
+	for (AWacomRunPathBranchTargetActor* Target : WorkingBranchTargets)
+	{
+		Target->OnBranchRequestedNative().AddUObject(
 			this,
 			&AWacomPlayerController::HandleRunPathBranchRequested);
-		BoundRunPathBranchTargets.Add(*It);
+		BoundRunPathBranchTargets.Add(Target);
 	}
 	BoundRunPathTraversal = Traversal;
 	Traversal->OnAnchoredForwardIntentNative().AddUObject(
@@ -1330,6 +1397,8 @@ bool AWacomPlayerController::RefreshRunExplorationPresentationBinding()
 		CanRouteRunScenePointerInput());
 	RunMapScreenFlow = MakeShared<FWacomRunMapScreenFlow>();
 	RunMapScreenFlow->Initialize(*this, *RunExplorationPresentationCoordinator);
+	++RunExplorationSceneBindingGeneration;
+	RunExplorationSceneBindingLastFailureDetail = NAME_None;
 	RefreshInteractToast();
 	return true;
 }

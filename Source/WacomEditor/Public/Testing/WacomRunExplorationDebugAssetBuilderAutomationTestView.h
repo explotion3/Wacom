@@ -6,7 +6,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-/** Editor-private Debug builder 的非反射测试视图。 */
+/** Editor-private Debug builder 的非反射测试快照。 */
 struct WACOMEDITOR_API FWacomRunExplorationDebugAssetBuilderAutomationSnapshot
 {
 	FName JourneyId = NAME_None;
@@ -14,13 +14,29 @@ struct WACOMEDITOR_API FWacomRunExplorationDebugAssetBuilderAutomationSnapshot
 	TArray<FName> NodeIds;
 	TArray<FName> EdgeIds;
 	TArray<FString> ContentObjectPaths;
-	bool bPathBlueprintsValid = false;
-	bool bValidationPassed = false;
+	TArray<FName> AnchorNodeIds;
+	TArray<FName> PathEdgeIds;
+	TArray<FName> BranchEdgeIds;
+	TArray<FName> HostNodeIds;
+	FString DescriptorFloorPath;
+	FString GameModeJourneyPath;
+	int32 DescriptorCount = 0;
+	bool bSharedBlueprintsValid = false;
+	bool bDataValidationPassed = false;
+	bool bSceneValidationPassed = false;
+	bool bOwnedPackagesClean = false;
 };
 
 struct WACOMEDITOR_API FWacomRunExplorationDebugAssetBuilderAutomationTestView
 {
-	static bool Build(FWacomRunExplorationDebugAssetBuilderAutomationSnapshot& OutSnapshot);
+	static bool Build(
+		FWacomRunExplorationDebugAssetBuilderAutomationSnapshot& OutSnapshot);
+
+	static bool BuildWithSharedBlueprintOverrides(
+		const FString& PlayerBlueprintObjectPath,
+		const FString& AnchorBlueprintObjectPath,
+		const FString& PathBlueprintObjectPath,
+		const FString& BranchBlueprintObjectPath);
 };
 
 #endif

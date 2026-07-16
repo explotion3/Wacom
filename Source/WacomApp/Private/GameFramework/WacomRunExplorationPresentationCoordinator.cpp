@@ -17,8 +17,39 @@ bool FWacomRunExplorationPresentationCoordinator::Initialize(
 	UWacomRunPathTraversalComponent& InTraversal,
 	FWacomRunSceneBindingRegistry& InRegistry)
 {
-	Shutdown();
 	const FRunExplorationSnapshot Snapshot = InSession.BuildExplorationSnapshot();
+	return InitializeFromValidatedSnapshot(
+		InSession,
+		InTraversal,
+		InRegistry,
+		Snapshot);
+}
+
+bool FWacomRunExplorationPresentationCoordinator::InitializeFromValidatedSnapshot(
+	URunSession& InSession,
+	UWacomRunPathTraversalComponent& InTraversal,
+	FWacomRunSceneBindingRegistry& InRegistry,
+	const FRunExplorationSnapshot& Snapshot)
+{
+	if (!PrepareFromValidatedSnapshot(
+		InSession,
+		InTraversal,
+		InRegistry,
+		Snapshot))
+	{
+		return false;
+	}
+	CommitPreparedInitialization();
+	return true;
+}
+
+bool FWacomRunExplorationPresentationCoordinator::PrepareFromValidatedSnapshot(
+	URunSession& InSession,
+	UWacomRunPathTraversalComponent& InTraversal,
+	FWacomRunSceneBindingRegistry& InRegistry,
+	const FRunExplorationSnapshot& Snapshot)
+{
+	Shutdown();
 	if (Snapshot.StateVersion <= 0 || Snapshot.CurrentNode.FloorId != InRegistry.GetFloorId())
 	{
 		LastErrorDetail = TEXT("CoordinatorInitializationMismatch");
@@ -26,7 +57,7 @@ bool FWacomRunExplorationPresentationCoordinator::Initialize(
 	}
 
 	AWacomRunMapNodeAnchorActor* CurrentAnchor = InRegistry.FindNodeAnchor(Snapshot.CurrentNode.NodeId);
-	if (!CurrentAnchor || !InTraversal.AnchorAtTransform(CurrentAnchor->GetViewTransform()))
+	if (!CurrentAnchor || CurrentAnchor->GetViewTransform().ContainsNaN())
 	{
 		LastErrorDetail = TEXT("CurrentNodeAnchorMissing");
 		return false;
@@ -37,10 +68,27 @@ bool FWacomRunExplorationPresentationCoordinator::Initialize(
 	Registry = &InRegistry;
 	LastAppliedVersion = Snapshot.StateVersion;
 	LastErrorDetail = NAME_None;
-	InTraversal.OnReachedStartNative().AddRaw(this, &FWacomRunExplorationPresentationCoordinator::HandleReachedStart);
-	InTraversal.OnReachedEndNative().AddRaw(this, &FWacomRunExplorationPresentationCoordinator::HandleReachedEnd);
+	PreparedInitialAnchorTransform = CurrentAnchor->GetViewTransform();
+	bPreparedForInitializationCommit = true;
 	RefreshRouteChoiceState(Snapshot);
 	return true;
+}
+
+void FWacomRunExplorationPresentationCoordinator::CommitPreparedInitialization()
+{
+	check(bPreparedForInitializationCommit);
+	UWacomRunPathTraversalComponent* TraversalComponent = Traversal.Get();
+	check(TraversalComponent);
+	const bool bAnchored =
+		TraversalComponent->AnchorAtTransform(PreparedInitialAnchorTransform);
+	check(bAnchored);
+	TraversalComponent->OnReachedStartNative().AddRaw(
+		this,
+		&FWacomRunExplorationPresentationCoordinator::HandleReachedStart);
+	TraversalComponent->OnReachedEndNative().AddRaw(
+		this,
+		&FWacomRunExplorationPresentationCoordinator::HandleReachedEnd);
+	bPreparedForInitializationCommit = false;
 }
 
 void FWacomRunExplorationPresentationCoordinator::Shutdown()
@@ -61,6 +109,8 @@ void FWacomRunExplorationPresentationCoordinator::Shutdown()
 	ActiveSceneBinding.Reset();
 	LastAppliedVersion = 0;
 	RouteChoiceState = {};
+	PreparedInitialAnchorTransform = FTransform::Identity;
+	bPreparedForInitializationCommit = false;
 	NodeContentPresentationRequestedNative.Clear();
 	RouteChoiceStateChangedNative.Clear();
 #if WITH_DEV_AUTOMATION_TESTS

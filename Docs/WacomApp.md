@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-07-13
+updated: 2026-07-16
 tags:
   - wacom/app
   - wacom/gameflow
@@ -98,7 +98,7 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 主要职责：
 
 - BeginPlay 创建并持有 `URunSession`。
-- 新探索状态有效时，构建当前 Floor scoped `FWacomRunSceneBindingRegistry`，并由 App-private `FWacomRunExplorationPresentationCoordinator` 将 EdgeId 意图转换为显式 Begin / Complete / Cancel Resolution；Coordinator 只应用结果，不自行判断地图合法性。
+- 新探索状态有效时，先从当前 World 唯一 `AWacomRunFloorSceneDescriptorActor` 解析显式 Floor，再在独立 working `FWacomRunSceneBindingRegistry` 中完整枚举和校验 Anchor/Path/Branch/content host；Snapshot 版本与 Floor 两次复核后，Coordinator 预检和 Registry 安装一次提交。任一步失败都保留旧 Registry、Coordinator 版本、Traversal、Pawn Transform 和 HUD 表现。Coordinator 继续只应用显式 Begin / Complete / Cancel Resolution，不自行判断地图合法性。
 - 初始化 `UWacomInputContextCoordinatorSubsystem`，提供探索 / 战斗 mapping context 给 coordinator。
 - 处理探索交互、地图、暂停菜单、背包、商店、RunEvent 打开请求；具体 GameMenu 打开、关闭、异步 Push 和 Shop / RunEvent rollback 由私有 `FWacomExplorationScreenRouter` 承接。
 - 转发战斗快捷键到当前 `UBattleHUD / UBattleSession`；Battle scene target click / probe 由 App-private `FWacomBattleSceneInteractionRouter` 承接，`AWacomPlayerController` 只保留 public façade、trace / flow protected seam 和输入入口。
@@ -128,7 +128,9 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 
 ### Run Path Scene Registry 与结果应用
 
-- Registry 每次只对应当前 Floor，建立 `EdgeId -> PathSegment`、`NodeId -> NodeAnchor`、`NodeId + NodeType -> content host` 映射；重复或缺失绑定使相关意图在规则提交前失败。
+- 一个独立 Run Floor World 必须且只能有一个 `AWacomRunFloorSceneDescriptorActor`；App-private resolver 先验证 World、唯一 Descriptor、非空 Floor、非空 FloorId 和 Snapshot FloorId 一致。不得再从场景 Actor 集合猜 Floor，也不得由调用方绕过 Descriptor 任意传入 Floor。
+- Registry 每次只对应 Descriptor 已解析的当前 Floor，建立 `EdgeId -> PathSegment`、`NodeId -> NodeAnchor`、多出口 `EdgeId -> BranchTarget`、`NodeId + NodeType -> content host` 的完整 working 映射。缺失、重复、意外身份、host 类型或 payload 不匹配都在安装前拒绝，不能把部分 Registry 暴露给运行中表现。
+- 刷新顺序固定为 `Snapshot -> Descriptor -> working registry -> completeness -> version/Floor drift recheck -> Coordinator prepare -> teardown/install/commit`。旧绑定只在所有预检完成后替换；Descriptor/枚举/完整性、Coordinator prepare 或版本漂移失败均无 UI/规则副作用。
 - 带 `UWacomRunMapNodeBindingComponent` 的 BattleTrigger 只有在绑定 NodeId 已成为 Snapshot 的正式 current node、该节点为 `Visited Encounter` 且当前没有 Traversal / NodeActivity / Camp / FloorTransition 事务时才可交互。未抵达、移动途中、已解决或绑定错误时只显示不可用原因，不提交战斗意图。未迁移绑定的独立旧 BattleTrigger 暂时保留原有直接交互语义。
 - `FWacomRunExplorationPresentationCoordinator` 依据显式 Snapshot 维护 App-private route-choice state。Anchored 首次正向越阈值时：唯一合法 Edge 自动复用正式 Begin 路径；多条合法 Edge 只提示选择且不提交规则；结构死胡同和暂时锁定分别使用明确 AppToast，均不改变版本。
 - `FWacomRunPathBranchSelectionController` 由 PlayerController 独占，只在 `ChoiceRequired + Exploration + Anchored + 无 active/pending GameMenu` 时显示合法 BranchTarget。鼠标 hover/click、A/D 或左摇杆左右移动焦点、E/手柄 A 确认都走同一 EdgeId 意图；多出口状态下只在场景输入拥有权有效时消费 E 与场景点击，GameMenu 激活或镜头过渡期间必须把鼠标完整交给 CommonUI。
@@ -296,7 +298,10 @@ GameMode 退出战斗时：
 | 场景 | 用途 |
 |---|---|
 | `L_Exploration` | 完整探索 -> 世界交互 -> 战斗 / 商店 / RunEvent 流程；PIE 战斗验证走正式 `AWacomGameMode` 生命周期 |
+| `L_RunExploration_Debug` | Debug builder 独占的可重建 Run scene fixture；使用 `GM_WacomRunDebug` 与 Debug Floor Descriptor |
 | `L_MainMenu` | 主菜单与启动流程 |
+
+Run Floor 场景制作验证使用 `Tools -> Wacom -> Validate Current Run Floor`；无界面验证使用 `-run=WacomValidateRunFloorScene -Map=/Game/Wacom/Maps/...`。两者共用 `WacomEditor` 的只读结构化 validator，不会修复或保存地图。`Wacom.Editor.RunSceneValidation` 覆盖诊断、几何阈值、dirty 不变量、菜单和命令退出码；`Wacom.UI.RunSceneBinding` 覆盖 Descriptor 与原子安装。
 
 常用自动化前缀：
 
