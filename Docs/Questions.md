@@ -2,7 +2,7 @@
 type: question-index
 scope: wacom-open-decisions
 status: active
-updated: 2026-07-16
+updated: 2026-07-17
 tags:
   - wacom/questions
   - wacom/docs
@@ -61,11 +61,10 @@ tags:
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| 首版地图与旅程规模 | Logical Map Graph、节点类型和 DataAsset authoring 已确认；当前 `Floor.Authoring.01` 的 8 节点图仅是过渡制作基线 | 首版包含多少 Floor、每层多少有效节点、完整旅程目标多少天 |
-| 正式 Floor 1 图与稳定身份 | `L_Exploration` 已绑定 Authoring baseline；Debug map/data/GameMode 已完全隔离，二者都不承诺正式存档身份 | 正式 Floor 1 的 Node/Edge 图、稳定 NodeId、内容密度和哪些身份可进入未来 SaveGame schema |
-| 正式跨层入口内容 | Floor Transition 规则事务已落地，本轮没有扩大到正式跨层入口制作 | Floor 1 出口位置、目标 Floor、条件、视觉与不可返回确认内容 |
+| Floor 2/3 图与 Journey 总时长 | 三层身份已冻结为 `Floor.Main.01/02/03`；Floor 1 为 20 Node/21 Edge，完整探索 14–15 AP，Floor 2/3 只有主题职责 | Floor 2/3 的图、内容密度、跨层节奏和整段 Journey 目标天数 |
+| 蛇印任务凭证保留 / 恢复 | `Node.Key.01` 必经并奖励 `Card.Run.SerpentSigil`，Floor 1→2 非消耗检查该卡；普通卡之后仍可能被永久移除，Pickup 不能保证补发 | 使用不可移除任务卡、独立持久凭证、确定性恢复/补发，还是明确取消卡牌门槛 |
+| Floor 1 Production 世界资产权威 | 正式图和身份已冻结，`L_Exploration` 仍是 Authoring baseline，Production map 尚不存在 | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
-| 地图内容密度 | 纯走廊与 Camp 已确认不创建 Map Node，首版基础类型已固定 | 每层 Encounter、RunEvent、Treasure、Shop、Junction 的数量和保底关系 |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |
 

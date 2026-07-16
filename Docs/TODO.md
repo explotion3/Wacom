@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-07-16
+updated: 2026-07-17
 tags:
   - wacom/todo
   - wacom/docs
@@ -47,7 +47,7 @@ tags:
 	- 状态：`Done: 规则核心、Run Path、当前 Floor Map Screen、正式制作基线与隔离 Debug builder 已落地`
   - 归属：Map / Run / App
   - 入口：[WacomMap.md](./WacomMap.md) / [Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline 与 Debug-only builder 已经落地。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是正式 Floor 1、正式 Camp handler/UI、多 Floor 内容和旅程规模填充，不恢复已删除的原型轨道路径。
+	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline 与 Debug-only builder 已经落地；正式三层 Journey 身份及 Floor 1 的 20 节点/21 边设计、内容槽和稳定身份也已冻结。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是任务凭证规则、Floor 2/3 图、Production 内容/关卡和正式 Camp handler/UI，不恢复已删除的原型轨道路径。
 	- 2026-07-15 地图闭环：单合法出口 W 自动前进，多合法出口使用道路入口选择，Anchored 无需点击 Actor 即可持续 cursor look；M / 手柄 View 打开当前 Floor 地图，死胡同默认聚焦最近的已完成节点，并可免费同层返回。
 
 - [ ] **Run Map 后续页面与交互扩展**
@@ -55,13 +55,37 @@ tags:
 	- 归属：Map / UI
 	- 说明：旧 Floor 只读历史页签、地图缩放/拖拽、多 Floor Transition 页面和更复杂的迷雾表现后续独立规划；首版当前 Floor Screen 不预留隐藏按钮或半实现状态。
 
-- [ ] **正式 Floor 1 内容设计与稳定身份冻结**
-  - 状态：`Blocked: 策划确认`
+- [x] **正式 Floor 1 内容设计与稳定身份冻结**
+  - 状态：`Done: 三层身份、20 Node/21 Edge、内容槽、AP 与生产门禁已冻结`
   - 归属：Map / Run / Data / App
-  - 入口：[WacomMap.md](./WacomMap.md) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-  - 说明：当前 `Floor.Authoring.01` 的 8 节点图只是制作基线。后续需独立确认正式 Floor 1 节点图与稳定 NodeId、内容密度、跨层入口、正式 Camp 内容，以及哪些身份进入未来 SaveGame schema；不得直接把 Authoring 或 Debug 身份冻结为正式内容。
+  - 入口：[WacomMap.md](./WacomMap.md) / `specs/007-formal-floor1-content-freeze/`
+  - 说明：正式身份为 `Journey.Main.01` 与 `Floor.Main.01/02/03`；Floor 1 冻结 20 Node/21 Edge、`4/6/4/4/1/1` 类型配比、15 个 Production 内容槽、四处 Camp 落点、`8–9 AP` 最短推进和 `14–15 AP` 完整探索。Authoring/Debug 资产保持独立，未创建 Production DataAsset/map。蛇印卡可移除软锁和缺失 Floor 2/3 有效图继续阻塞资产实施。
 
 ## P1 近期实现候选
+
+- [ ] **蛇印任务凭证保留 / 恢复正式规则**
+  - 状态：`Blocked: 策划与规则合同确认`
+  - 归属：Run / Data / Tests
+  - 入口：[Questions: Run、探索与地图](./Questions.md#questions-run-map) / `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`
+  - 说明：`Card.Run.SerpentSigil` 是 Floor 1→2 非消耗入口条件，但普通持有卡可能被永久移除，完成的 Pickup 不能假设补发。需在不可移除任务卡、独立持久凭证、确定性恢复/补发或取消卡门槛中确认正式方案；涉及 runtime/SaveGame 时另开 Spec，不能写 Floor 1 特例。
+
+- [ ] **正式 Floor 2/3 图与 Journey 总时长冻结**
+  - 状态：`Blocked: 策划确认`
+  - 归属：Map / Run / Data
+  - 入口：[WacomMap.md](./WacomMap.md) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
+  - 说明：`Floor.Main.02/03` 当前只冻结“蛇蜕洞窟 / 毒巢核心”身份和主题职责。必须完成两层的有效 Node/Edge 图、内容密度、入口/出口、AP 节奏及整段 Journey 目标天数后，才能让正式 Journey 通过跨层校验；禁止创建空壳 Floor 2/3。
+
+- [ ] **Floor 1 Production 内容 Definition 制作**
+  - 状态：`Blocked: 内容合同与任务凭证前置`
+  - 归属：Data / Editor / Tests
+  - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/007-formal-floor1-content-freeze/data-model.md`
+  - 说明：为冻结的 6 Encounter、4 RunEvent、4 Treasure、1 Shop ID 制作非 Debug typed definitions，独立确认敌人槽、事件选项、库存与奖励数值并补 Data Validation；不得复用 `DA_*_Debug` 资产占位。
+
+- [ ] **Floor 1 Production DataAsset 与正式世界场景制作**
+  - 状态：`Blocked: readiness gate`
+  - 归属：Map / Data / App / Editor / Tests
+  - 入口：`specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`
+  - 说明：任务凭证、Floor 2/3 图、15 个 Production definitions 和 AssetRegistry/引用/哈希权威审计全部完成后，另开实现切片创建 `/Game/Wacom/Data/Map/Production` 与 `/Game/Wacom/Maps/Run` 资产。不得盲目覆盖 `L_Exploration`，不得修改 Debug builder 写集合。
 
 - [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
   - 状态：`In Progress: Phase A 只读基线完成，等待资产所有权确认后分批迁移`

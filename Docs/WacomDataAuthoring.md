@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-07-16
+updated: 2026-07-17
 tags:
   - wacom/data
   - wacom/authoring
@@ -144,7 +144,49 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
 
-当前 `L_Exploration` 使用 `/Game/Wacom/Data/Map/Authoring/DA_Floor_LevelAuthoring_01` 与 `DA_Journey_LevelAuthoring`。这是承接现有可玩图的过渡制作基线，不是正式 Floor 1：当前 8 个 NodeId、布局、内容密度、跨层入口、Camp 内容和未来 SaveGame 身份都未冻结。`GM_Wacom` 指向 Authoring Journey；Debug builder 禁止修改这三个正式/Authoring Package。
+当前 `L_Exploration` 使用 `/Game/Wacom/Data/Map/Authoring/DA_Floor_LevelAuthoring_01` 与 `DA_Journey_LevelAuthoring`。这是承接现有可玩图的过渡制作基线，不是正式 Floor 1；`GM_Wacom` 继续指向 Authoring Journey，Debug builder 禁止修改这三个正式/Authoring Package。正式设计已在 2026-07-17 独立冻结为 `Journey.Main.01` 与 `Floor.Main.01/02/03`，不会通过重命名或覆盖 Authoring/Debug 资产落地。
+
+正式 Production Map 资产路径预留为：
+
+```text
+/Game/Wacom/Data/Map/Production/DA_Journey_Main_01
+/Game/Wacom/Data/Map/Production/DA_Floor_Main_01
+/Game/Wacom/Data/Map/Production/DA_Floor_Main_02
+/Game/Wacom/Data/Map/Production/DA_Floor_Main_03
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_01
+```
+
+这些路径当前不存在，也不授权 builder 或迁移脚本创建。正式 Floor 1 的 20 Node/21 Edge canonical graph 与内容槽见 [WacomMap](./WacomMap.md#wacommap) §9；`Floor.Main.02/03` 只有身份与主题职责，禁止创建最小空壳图绕过 Journey/FloorEntrance validator。
+
+正式内容 Host 的 `PersistentId` 不另建人工注册表，统一按 `<FloorId>.<NodeId>` 派生。例如 `Node.Route.A.01` 在正式首层的 runtime key 为 `Floor.Main.01.Node.Route.A.01`；Host 的 `RunMapNodeBinding.NodeId/NodeType` 仍必须等于 Floor DataAsset 节点。Navigation 没有内容 Host PersistentId，Path/Branch 在单 Floor World 内继续只保存 EdgeId。
+
+Floor 1 为 15 个内容节点预留以下 Production definition IDs：
+
+```text
+Encounter.SerpentWood.Scout
+Encounter.SerpentWood.MoltGuard
+Encounter.SerpentWood.Ambush
+Encounter.SerpentWood.RootStalker
+Encounter.SerpentWood.EliteSentinel
+Encounter.SerpentWood.ShallowGuardian
+
+Event.SerpentWood.CastSkin
+Event.SerpentWood.HunterTrace
+Event.SerpentWood.MerchantRumor
+Event.SerpentWood.PoisonMarsh
+
+Pickup.SerpentWood.HerbCache
+Pickup.SerpentWood.HunterCache
+Pickup.SerpentWood.MoltCache
+Pickup.SerpentWood.SerpentSigil
+
+Shop.SerpentWood.Wayfarer
+Card.Run.SerpentSigil
+```
+
+这些 ID 冻结内容职责和后续资产命名入口，不冻结敌人槽、事件选项、库存、奖励数值或视觉。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload 或钥匙占位。
+
+正式资产制作存在硬门禁：`Node.Key.01` 虽然在图上支配 Guardian/Exit，当前规则却不能保证普通 `Card.Run.SerpentSigil` 在获得后不会被永久移除，完成的 Pickup 也不能假设补发；同时 `Floor.Main.02/03` 尚无有效图。任务凭证保留/恢复合同、Floor 2/3 正式图、15 个非 Debug definition 和 production map 资产权威审计全部完成前，不创建或绑定正式 Journey/Floor/map。完整门禁见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 
