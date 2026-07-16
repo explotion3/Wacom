@@ -47,7 +47,8 @@ namespace
 	bool HasFloorEntrancePayload(const FWacomMapNodeContent& Content)
 	{
 		return !Content.FloorEntrance.TargetFloorId.IsNone()
-			|| !Content.FloorEntrance.OwnedCardRequirements.IsEmpty();
+			|| !Content.FloorEntrance.OwnedCardRequirements.IsEmpty()
+			|| !Content.FloorEntrance.RequiredCredentialIds.IsEmpty();
 	}
 
 	void ValidateExclusivePayload(
@@ -183,6 +184,36 @@ namespace
 		}
 	}
 
+	void AppendGuaranteedCredentialsBeforeEntrance(
+		const UWacomFloorMapDefinition& Floor,
+		const FName EntranceNodeId,
+		TSet<FName>& OutCredentialIds)
+	{
+		for (const FWacomMapNodeDefinition& Candidate : Floor.Nodes)
+		{
+			const UWacomRunPickupDefinition* Pickup =
+				Candidate.Content.Treasure.PickupDefinition;
+			if (Candidate.NodeType != EWacomMapNodeType::Treasure
+				|| Candidate.NodeId == EntranceNodeId
+				|| !Pickup
+				|| !Pickup->IsRewardConfigValid()
+				|| Pickup->GrantedCredentialIds.IsEmpty())
+			{
+				continue;
+			}
+
+			const TSet<FName> ReachableWithoutCandidate =
+				BuildReachableNodes(Floor, Floor.EntryNodeId, Candidate.NodeId);
+			if (!ReachableWithoutCandidate.Contains(EntranceNodeId))
+			{
+				for (const FName CredentialId : Pickup->GrantedCredentialIds)
+				{
+					OutCredentialIds.Add(CredentialId);
+				}
+			}
+		}
+	}
+
 	void ValidateFloorLocal(const UWacomFloorMapDefinition& Floor, FWacomMapDefinitionValidationReport& Report)
 	{
 		if (Floor.FloorId.IsNone())
@@ -281,6 +312,29 @@ namespace
 						AddError(Report, FString::Printf(
 							TEXT("FloorEntrance 节点 %s 的 Requirement[%d] 缺少有效正向筛选。"),
 							*Node.NodeId.ToString(), RequirementIndex));
+					}
+				}
+				{
+					TSet<FName> UniqueCredentialIds;
+					for (const FName CredentialId :
+						Node.Content.FloorEntrance.RequiredCredentialIds)
+					{
+						if (CredentialId.IsNone())
+						{
+							AddError(Report, FString::Printf(
+								TEXT("FloorEntrance 节点 %s 的 RequiredCredentialIds 不能包含 None。"),
+								*Node.NodeId.ToString()));
+						}
+						else if (UniqueCredentialIds.Contains(CredentialId))
+						{
+							AddError(Report, FString::Printf(
+								TEXT("FloorEntrance 节点 %s 的 RequiredCredentialIds 包含重复 ID：%s。"),
+								*Node.NodeId.ToString(), *CredentialId.ToString()));
+						}
+						else
+						{
+							UniqueCredentialIds.Add(CredentialId);
+						}
 					}
 				}
 				break;
@@ -469,6 +523,58 @@ FWacomMapDefinitionValidationReport FWacomMapDefinitionValidation::ValidateJourn
 					TEXT("FloorEntrance %s 只能指向更后的 Floor：%s。"),
 					*Node.NodeId.ToString(), *TargetFloorId.ToString()));
 				continue;
+			}
+
+			const TArray<FName>& CredentialRequirements =
+				Node.Content.FloorEntrance.RequiredCredentialIds;
+			if (!CredentialRequirements.IsEmpty())
+			{
+				TSet<FName> GuaranteedCredentialIds;
+				for (int32 PreviousFloorIndex = 0;
+					PreviousFloorIndex <= FloorIndex;
+					++PreviousFloorIndex)
+				{
+					const UWacomFloorMapDefinition* PreviousFloor =
+						JourneyDefinition->Floors[PreviousFloorIndex];
+					if (!PreviousFloor)
+					{
+						continue;
+					}
+
+					FName EntranceForDominance = PreviousFloor == Floor ? Node.NodeId : NAME_None;
+					if (PreviousFloor != Floor)
+					{
+						for (const FWacomMapNodeDefinition& PreviousNode : PreviousFloor->Nodes)
+						{
+							if (PreviousNode.NodeType == EWacomMapNodeType::FloorEntrance
+								&& JourneyDefinition->FindFloorIndex(
+									PreviousNode.Content.FloorEntrance.TargetFloorId)
+									== PreviousFloorIndex + 1)
+							{
+								EntranceForDominance = PreviousNode.NodeId;
+								break;
+							}
+						}
+					}
+					if (!EntranceForDominance.IsNone())
+					{
+						AppendGuaranteedCredentialsBeforeEntrance(
+							*PreviousFloor,
+							EntranceForDominance,
+							GuaranteedCredentialIds);
+					}
+				}
+
+				for (const FName CredentialId : CredentialRequirements)
+				{
+					if (!CredentialId.IsNone()
+						&& !GuaranteedCredentialIds.Contains(CredentialId))
+					{
+						AddError(Report, FString::Printf(
+							TEXT("FloorEntrance %s 的 Credential %s 没有前置支配入口的固定 Pickup 保证来源。"),
+							*Node.NodeId.ToString(), *CredentialId.ToString()));
+					}
+				}
 			}
 
 			const TArray<FWacomOwnedCardRequirement>& Requirements =

@@ -630,6 +630,10 @@ struct WACOMRUN_API FRunState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup")
 	TSet<FName> CollectedPickupIds;
 
+	/** 已获得的稳定 Run 任务凭证。只由 Run 规则事务授予，不从实体卡或场景状态反推。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Credential")
+	TSet<FName> GrantedCredentialIds;
+
 	/** 已完成的探索期世界卡牌交互 ID。当前只在本次 Run 内存态保留，不接 SaveGame。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction")
 	TSet<FName> CompletedRunWorldInteractionIds;

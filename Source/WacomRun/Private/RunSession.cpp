@@ -6,6 +6,7 @@
 #include "Battle/RunBattleSettlementResolver.h"
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
+#include "Credential/RunCredentialModule.h"
 #include "Deck/RunDeckRules.h"
 #include "Events/RunEventExecutor.h"
 #include "Events/RunEventDefinition.h"
@@ -16,6 +17,7 @@
 #include "Exploration/RunMapModule.h"
 #include "Map/WacomFloorMapDefinition.h"
 #include "Map/WacomJourneyDefinition.h"
+#include "Pickups/RunPickupDefinition.h"
 #include "Save/RunSaveGameSerializer.h"
 #include "Session/BattleSession.h"
 #include "Shops/RunShopTransaction.h"
@@ -1824,78 +1826,85 @@ bool URunSession::IsPickupCollected(FName PersistentId) const
 	return RunState.CollectedPickupIds.Contains(PersistentId);
 }
 
-FRunTreasureSettlementResult URunSession::CollectGoldPickup(FName PersistentId, int32 GoldAmount)
+bool URunSession::HasCredential(const FName CredentialId) const
+{
+	return !CredentialId.IsNone() && RunState.GrantedCredentialIds.Contains(CredentialId);
+}
+
+FRunTreasureSettlementResult URunSession::CollectPickupFromDefinition(
+	const FName PersistentId,
+	const UWacomRunPickupDefinition* PickupDefinition)
 {
 	FRunTreasureSettlementResult Result;
-	if (PersistentId.IsNone() || GoldAmount <= 0)
+	if (!PickupDefinition)
 	{
-		Result.DisabledReason = PersistentId.IsNone()
-			? FName(TEXT("MissingPersistentId"))
-			: FName(TEXT("InvalidGoldReward"));
-		return Result;
-	}
-	if (RunState.CollectedPickupIds.Contains(PersistentId))
-	{
-		Result.DisabledReason = TEXT("AlreadyCollected");
+		Result.DisabledReason = TEXT("MissingPickupDefinition");
 		return Result;
 	}
 
-	FRunState WorkingState = RunState;
-	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
-	const bool bUsesFormalExploration =
-		WorkingState.ExplorationState.JourneyDefinition
-		&& WorkingState.ExplorationState.ExplorationStateVersion > 0;
-	if (bUsesFormalExploration)
+	const FName ConfigWarning = PickupDefinition->GetRewardConfigWarningReason();
+	if (!ConfigWarning.IsNone())
 	{
-		Result.ExplorationResolution.VersionBefore =
-			RunState.ExplorationState.ExplorationStateVersion;
-		Result.ExplorationResolution.Status = FRunNodeActivityModule::ResolveImmediate(
-			WorkingState,
-			WorkingActivity,
-			ERunNodeActivityKind::Treasure,
-			1,
-			true,
-			Result.ExplorationResolution.Events);
-		if (!Result.ExplorationResolution.IsOk())
-		{
-			Result.DisabledReason = Result.ExplorationResolution.Status.Detail;
-			Result.ExplorationResolution.Events.Reset();
-			Result.ExplorationResolution.VersionAfter = Result.ExplorationResolution.VersionBefore;
-			Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
-			return Result;
-		}
-		Result.ActionPointCost = 1;
-		Result.ExplorationResolution.VersionAfter =
-			WorkingState.ExplorationState.ExplorationStateVersion;
-		Result.ExplorationResolution.PostSnapshot = FRunMapModule::BuildSnapshot(WorkingState);
-	}
-	else
-	{
-		Result.ExplorationResolution.Status = FWacomStatus::Fail(
-			EWacomError::InvalidState,
-			TEXT("LegacyRunSessionHasNoExplorationResult"));
+		Result.DisabledReason = ConfigWarning;
+		return Result;
 	}
 
-	WorkingState.Gold += GoldAmount;
-	WorkingState.CollectedPickupIds.Add(PersistentId);
-	RunState = MoveTemp(WorkingState);
-	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Economy));
-	NotifyRunStateChanged();
-	Result.bSucceeded = true;
-	return Result;
+	switch (PickupDefinition->RewardType)
+	{
+	case EWacomRunPickupRewardType::Gold:
+		return CollectPickupInternal(
+			PersistentId,
+			PickupDefinition->GoldAmount,
+			nullptr,
+			PickupDefinition->GrantedCredentialIds);
+	case EWacomRunPickupRewardType::Card:
+		return CollectPickupInternal(
+			PersistentId,
+			0,
+			PickupDefinition->CardDefinition,
+			PickupDefinition->GrantedCredentialIds);
+	case EWacomRunPickupRewardType::None:
+	default:
+		Result.DisabledReason = TEXT("MissingRewardType");
+		return Result;
+	}
+}
+
+FRunTreasureSettlementResult URunSession::CollectGoldPickup(
+	const FName PersistentId,
+	const int32 GoldAmount)
+{
+	static const TArray<FName> NoCredentials;
+	return CollectPickupInternal(PersistentId, GoldAmount, nullptr, NoCredentials);
 }
 
 FRunTreasureSettlementResult URunSession::CollectCardPickup(
-	FName PersistentId,
+	const FName PersistentId,
 	UCardDefinition* CardDefinition)
 {
+	static const TArray<FName> NoCredentials;
+	return CollectPickupInternal(PersistentId, 0, CardDefinition, NoCredentials);
+}
+
+FRunTreasureSettlementResult URunSession::CollectPickupInternal(
+	const FName PersistentId,
+	const int32 GoldAmount,
+	UCardDefinition* CardDefinition,
+	const TArray<FName>& GrantedCredentialIds)
+{
 	FRunTreasureSettlementResult Result;
-	if (PersistentId.IsNone() || !CardDefinition)
+	const bool bHasGoldReward = GoldAmount > 0;
+	const bool bHasCardReward = CardDefinition != nullptr;
+	if (PersistentId.IsNone() || bHasGoldReward == bHasCardReward)
 	{
-		Result.DisabledReason = PersistentId.IsNone()
-			? FName(TEXT("MissingPersistentId"))
-			: FName(TEXT("MissingCardDefinition"));
+		Result.DisabledReason = PersistentId.IsNone() ? FName(TEXT("MissingPersistentId"))
+			: (CardDefinition ? FName(TEXT("ConflictingPickupReward"))
+				: FName(TEXT("InvalidPickupReward")));
+		return Result;
+	}
+	if (!FRunCredentialModule::AreCredentialIdsValid(GrantedCredentialIds))
+	{
+		Result.DisabledReason = TEXT("InvalidCredentialIds");
 		return Result;
 	}
 	if (RunState.CollectedPickupIds.Contains(PersistentId))
@@ -1939,16 +1948,29 @@ FRunTreasureSettlementResult URunSession::CollectCardPickup(
 			EWacomError::InvalidState,
 			TEXT("LegacyRunSessionHasNoExplorationResult"));
 	}
-	if (!AcquireCardToWorkingState(WorkingState, CardDefinition))
+
+	if (bHasGoldReward)
+	{
+		WorkingState.Gold += GoldAmount;
+	}
+	else if (!AcquireCardToWorkingState(WorkingState, CardDefinition))
 	{
 		Result.DisabledReason = TEXT("CardRewardFailed");
 		return Result;
 	}
+	if (!FRunCredentialModule::GrantAll(WorkingState, GrantedCredentialIds))
+	{
+		Result.DisabledReason = TEXT("InvalidCredentialIds");
+		return Result;
+	}
 
 	WorkingState.CollectedPickupIds.Add(PersistentId);
 	RunState = MoveTemp(WorkingState);
 	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(
+		bHasGoldReward
+			? ERunUiSnapshotDirtyFlags::Economy
+			: ERunUiSnapshotDirtyFlags::BackpackStorage));
 	NotifyRunStateChanged();
 	Result.bSucceeded = true;
 	return Result;

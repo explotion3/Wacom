@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验与 Debug Journey 已落地。正式三层 Journey 身份、Floor 1 的 20 节点/21 边设计、内容槽与稳定身份已冻结，但尚未创建 Production DataAsset 或世界关卡；`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受蛇印任务凭证软锁、Floor 2/3 有效图和 Production 内容资产阻塞。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验与 Debug Journey 已落地。正式三层 Journey 身份、Floor 1 的 20 节点/21 边设计、内容槽与稳定身份已冻结，蛇印资格已由独立持久 Credential 收口；但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 Floor 2/3 有效图、Production 内容资产和资产权威审计阻塞。
 
 ## §1 两层图合同
 
@@ -64,9 +64,9 @@ Hidden → Revealed → Visited → Resolved
 ## §5 Floor Transition
 
 - Floor Transition 是不可逆的跨层规则事务；进入下一 Floor 后默认不能返回上一 Floor。
-- 入口可以要求拥有指定卡牌或关键词；检查 Backpack、BattleDeck、SpecialZone 与 BurdenZone 中的真实持有卡牌。
-- 满足入口条件的卡牌不被消耗；首次成功后永久记录入口已解锁。
-- 每个强制入口条件必须在前置可达子图中存在至少一种保证可获得的满足方式，或存在明确替代条件。
+- 入口可以要求稳定 Run Credential，也可以保留指定卡牌/关键词条件；两类数组同时存在时采用 AND。卡牌条件检查 Backpack、BattleDeck、SpecialZone 与 BurdenZone 中的真实持有卡牌。
+- 满足入口条件的 Credential 与卡牌都不被消耗；首次成功后永久记录入口已解锁。
+- 每个强制 Credential 必须由前置、不可绕过且配置有效的固定 Pickup 保证授予；卡牌条件继续要求前置可达子图存在保证可获得的满足方式或明确替代条件。
 - 进入前显示专用确认：不可返回提示、已揭示但未完成的节点数量、未知区域提示、当前压力、额外压力预期和入口条件。
 - 旧 Floor 在地图历史中保留只读摘要，但不能成为 Map Travel 目标。
 - 当前入口的 `FRunFloorTransitionPreview` 由 Snapshot 输出已知未完成数量、未知区域、压力和门槛事实。Request 只创建确认票据；Confirm 会重新验证门槛并提交；Cancel 只释放确认事务，避免关闭未来 Modal 后锁死探索。
@@ -156,7 +156,7 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - NodeAnchor 的 View 朝向可以面向节点内容，PathSpline 起始切线可以面向道路方向；二者不要求制作时完全相同。开始 Traversal 的首帧保持 NodeAnchor View，App 在短距离内平滑对齐到 PathSpline，禁止用瞬时切换或 Character controller yaw 反写制造镜头中心跳变。
 - 首版入口视觉由 `DShader/Material/World/M_WacomRunBranchEntrance.dsm` 生成 `/Game/DreamMaterials/World/M_WacomRunBranchEntrance`：Available 使用稳定青色，Focused 使用稳定琥珀色；Full / Reduced / Off 只改变装饰脉冲，Off 仍保留合法选择的语义颜色。
 - `WacomEditor` 已提供 Journey/Floor Data Validation、严格只读的 loaded-world Scene Binding Validation 和可重复 Debug builder；未来图形 authoring Adapter 仍必须编辑同一份 DataAsset，不能维护第二份图数据。
-- Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性，但本阶段不启用 SaveGame schema。
+- Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性。当前 SaveGame v4 只保存 Run Credential，不保存 Journey/Floor/Node、节点 lifecycle 或 Floor history。
 - Editor 场景验证覆盖 Descriptor 缺失/重复/空引用，重复、缺失或意外的 NodeAnchor / EdgePath / content host，host 类型与 typed payload 不一致，以及多出口 Edge 缺失/重复 BranchTarget、单出口 Edge 残留 BranchTarget。Spline 少于 2 点、长度不超过 10 cm、非有限 Transform 和方向颠倒是 Error；端点偏离不超过 100 cm 通过，`(100, 300] cm` 为 Warning，超过 300 cm 为 Error。诊断固定为 `Severity / Code / ObjectPath / Message`，菜单、commandlet、builder 和测试共用同一只读实现。
 - 制作人员可用 `Tools -> Wacom -> Validate Current Run Floor` 验证当前 World；CI/命令行使用 `-run=WacomValidateRunFloorScene -Map=/Game/...`，退出码 `0/1/2` 分别表示通过或仅 Warning、场景合同 Error、参数/加载/Descriptor 解析失败。两个入口都不得修复、标脏或保存 Package。
 - Debug builder 命令为 `-run=WacomBuildRunExplorationDebugAssets`。它只写 Debug Journey/Floor/GameMode/map；Player BP 和三个共享 Run Path Blueprint 只读校验父类，正式 `GM_Wacom`、Authoring 数据和 `L_Exploration` 禁止写。连续运行必须保持 JourneyId、FloorId、NodeId、EdgeId、Actor 计数和内容引用稳定，但不承诺 Debug 生成 Actor GUID 或二进制文件哈希稳定。带 `Wacom.Generated.RunExploration` 的 Anchor/Path/Branch 属于 builder ownership；六个内容 Host 是按 Definition 复用的手工实例，不带该 tag，其 NodeId、NodeType、Blueprint class 和人工 transform 必须跨连续构建保持不变。
@@ -201,11 +201,11 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 | `Node.Route.D.01` | Encounter | 盘根伏蛇；`Encounter.SerpentWood.RootStalker` | No |
 | `Node.Route.D.02` | RunEvent | 毒沼抉择；`Event.SerpentWood.PoisonMarsh` | No |
 | `Node.Route.D.03` | Treasure | 蜕壳密藏；`Pickup.SerpentWood.MoltCache` | No |
-| `Node.Key.01` | Treasure | 必经蛇印；`Pickup.SerpentWood.SerpentSigil` → `Card.Run.SerpentSigil` | No |
+| `Node.Key.01` | Treasure | 必经蛇印；`Pickup.SerpentWood.SerpentSigil` 同时授予 `Card.Run.SerpentSigil` 与 `Credential.Run.SerpentSigil` | No |
 | `Node.Junction.03` | Navigation | Boss 前汇合 | Yes |
 | `Node.Main.02` | Encounter | 精英巡猎者；`Encounter.SerpentWood.EliteSentinel` | No |
 | `Node.Guardian.01` | Encounter | 浅巢守卫；`Encounter.SerpentWood.ShallowGuardian`，`bBoss=true` | No |
-| `Node.Exit.01` | FloorEntrance | 指向 `Floor.Main.02`，非消耗检查 `Card.Run.SerpentSigil` | No |
+| `Node.Exit.01` | FloorEntrance | 指向 `Floor.Main.02`，非消耗检查 `Credential.Run.SerpentSigil` | No |
 
 节点类型精确配比为 `4 Navigation / 6 Encounter / 4 RunEvent / 4 Treasure / 1 Shop / 1 FloorEntrance`。四个 Navigation 都允许 Camp；这只冻结落点，不增加 Camp NodeType 或正式 Camp Activity 数值。分支内容不固定左援助/右风险语义。
 
@@ -236,11 +236,11 @@ Node.Key.01 -Edge.Main.03-> Node.Junction.03
 
 ### 身份与生产门禁
 
-- `Journey.Main.01`、三个 FloorId、20 个 NodeId、21 个 EdgeId 和 `Card.Run.SerpentSigil` 已冻结为未来持久化候选；本轮不修改 SaveGame。
+- `Journey.Main.01`、三个 FloorId、20 个 NodeId、21 个 EdgeId、`Card.Run.SerpentSigil` 与 `Credential.Run.SerpentSigil` 都是稳定身份。SaveGame v4 已持久化 Credential；探索图进度仍未进入磁盘 schema。
 - 内容 Host 的跨 Floor runtime `PersistentId` 固定按 `<FloorId>.<NodeId>` 派生，例如 `Floor.Main.01.Node.Route.A.01`。Actor Label、资产名、GUID、坐标和 transform 都不是身份。
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
 - 预留 Production 内容 ID 只冻结职责；敌人槽、事件选项、Shop Offers、奖励数值和视觉资产另案制作。带 `Debug` 语义的现有 Event/Shop/Reward 不能作为正式引用。
-- 蛇印必经只能证明保证获得，不能证明普通卡不会被后续删牌流程移除；Pickup 完成后也不能假设自动补发。因此 Production Journey/Floor DataAsset 与正式关卡仍被阻塞，直到任务凭证不可移除或可恢复的规则完成。
+- 蛇印软锁前置已通过独立 Credential 解除：`Node.Key.01` 的固定 Pickup 原子授予表现卡与 Credential，删牌流程不影响资格，入口只检查 Credential。Production Journey/Floor DataAsset 与正式关卡仍受 Floor 2/3 有效图、Production definitions 和资产权威审计阻塞。
 - `Floor.Main.02/03` 当前都没有有效图，禁止创建空壳 Floor 2/3 只为绕过 Journey validation。
 
 默认 MapPosition、完整 Edge 表、Production readiness gate 和静态验证证据见 `specs/007-formal-floor1-content-freeze/`；上述长期身份、拓扑、配比和阻塞事实以本节为准。
@@ -248,6 +248,5 @@ Node.Key.01 -Edge.Main.03-> Node.Junction.03
 ## §10 尚待确认
 
 - Floor 2/3 的节点图、内容密度、完整 Journey 目标天数和正式 Floor 间节奏。
-- 蛇印任务凭证采用不可移除卡、独立持久凭证、可恢复/补发还是取消卡牌门槛。
 - Hunger / Fatigue 恢复活动的具体值、资源成本和重复使用口径。
 - 卡牌强化、特殊事件、背包调整和技能类 Camp Activity 的正式规则与 UI 流程。

@@ -62,7 +62,6 @@ tags:
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
 | Floor 2/3 图与 Journey 总时长 | 三层身份已冻结为 `Floor.Main.01/02/03`；Floor 1 为 20 Node/21 Edge，完整探索 14–15 AP，Floor 2/3 只有主题职责 | Floor 2/3 的图、内容密度、跨层节奏和整段 Journey 目标天数 |
-| 蛇印任务凭证保留 / 恢复 | `Node.Key.01` 必经并奖励 `Card.Run.SerpentSigil`，Floor 1→2 非消耗检查该卡；普通卡之后仍可能被永久移除，Pickup 不能保证补发 | 使用不可移除任务卡、独立持久凭证、确定性恢复/补发，还是明确取消卡牌门槛 |
 | Floor 1 Production 世界资产权威 | 正式图和身份已冻结，`L_Exploration` 仍是 Authoring baseline，Production map 尚不存在 | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |

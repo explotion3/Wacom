@@ -135,7 +135,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - Character 会校验 `StarterDeck` 不包含左右手卡。
 - Shop 校验 `ShopId`、`Offers`、Offer 卡牌和非负价格；不校验重复商品、价格平衡或商品池规则。
 - RunEvent 校验事件图结构、ID、引用、NextNode、卡牌条件 / 效果、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag、压力 ID，以及 `Automatic / Free / Fixed` Action Point policy。正成本非 terminal choice 是错误；早期由 effect 单独扣减探索预算的做法已删除。金币门槛 / 扣费组合中的 authoring 风险可以给 warning。
-- RunPickupDefinition 校验固定单一奖励配置：`PickupId`、奖励类型、金币数量或卡牌引用。
+- RunPickupDefinition 校验固定单一主奖励配置：`PickupId`、奖励类型、金币数量或卡牌引用；可选 `GrantedCredentialIds` 必须全部非 `None` 且 Definition 内唯一。
 - RunWorldCardInteractionDefinition 校验 `InteractionId`、至少一个正向卡牌筛选和有效奖励项。
 - Actor 摆放实例的 `PersistentId`、重复 ID、receiver 和 facade 配置属于 map / level validation，见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#2-run-world-interactable-actor)。
 - Map Floor 与每个 Node 的 `DisplayName` 必填；`ShortDescription` 可空。`MapPosition` 合法闭区间是 `[0,1920] × [0,1080]`，越界或完全重合为 error，节点中心距离小于 `48 px` 为 warning；这些坐标不参与规则距离或合法性。
@@ -182,11 +182,16 @@ Pickup.SerpentWood.SerpentSigil
 
 Shop.SerpentWood.Wayfarer
 Card.Run.SerpentSigil
+Credential.Run.SerpentSigil
 ```
 
 这些 ID 冻结内容职责和后续资产命名入口，不冻结敌人槽、事件选项、库存、奖励数值或视觉。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload 或钥匙占位。
 
-正式资产制作存在硬门禁：`Node.Key.01` 虽然在图上支配 Guardian/Exit，当前规则却不能保证普通 `Card.Run.SerpentSigil` 在获得后不会被永久移除，完成的 Pickup 也不能假设补发；同时 `Floor.Main.02/03` 尚无有效图。任务凭证保留/恢复合同、Floor 2/3 正式图、15 个非 Debug definition 和 production map 资产权威审计全部完成前，不创建或绑定正式 Journey/Floor/map。完整门禁见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`。
+`Pickup.SerpentWood.SerpentSigil` 的正式 Definition 必须以 Card 作为固定主奖励，并在 `GrantedCredentialIds` 中授予 `Credential.Run.SerpentSigil`；`Node.Exit.01` 的 FloorEntrance 只在 `RequiredCredentialIds` 中引用该 Credential，不把 `Card.Run.SerpentSigil` 写回 `OwnedCardRequirements`。两者由同一稳定 ID 对接，但表现卡和资格状态互不推断。
+
+Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
+
+蛇印任务凭证门禁已经完成；正式资产制作仍被 `Floor.Main.02/03` 有效图、15 个非 Debug definition 和 production map AssetRegistry/引用/哈希权威审计阻塞。这些条件完成前不创建或绑定正式 Journey/Floor/map。原始门禁背景见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`，当前 Credential 合同见 `specs/008-run-credential/`。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 

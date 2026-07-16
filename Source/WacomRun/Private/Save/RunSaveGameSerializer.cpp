@@ -104,6 +104,8 @@ UWacomSaveGame* FRunSaveGameSerializer::BuildSaveGameFromRunState(const FRunStat
 	Save->bRunActive = State.bRunActive;
 
 	Save->DestroyedTriggerIds = State.DestroyedTriggerIds.Array();
+	Save->GrantedCredentialIds = State.GrantedCredentialIds.Array();
+	Save->GrantedCredentialIds.Sort(FNameLexicalLess());
 	Save->PlayerTransform = State.PlayerTransform;
 	Save->bHasPlayerTransform = State.bHasPlayerTransform;
 
@@ -216,6 +218,28 @@ bool FRunSaveGameSerializer::TryApplySaveGameToRunState(UWacomSaveGame* SaveGame
 		return false;
 	}
 
+	TSet<FName> GrantedCredentialIds;
+	GrantedCredentialIds.Reserve(SaveGame->GrantedCredentialIds.Num());
+	for (const FName CredentialId : SaveGame->GrantedCredentialIds)
+	{
+		if (CredentialId.IsNone())
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: GrantedCredentialIds 包含 None"));
+			return false;
+		}
+
+		bool bAlreadyGranted = false;
+		GrantedCredentialIds.Add(CredentialId, &bAlreadyGranted);
+		if (bAlreadyGranted)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunSession] ApplySaveGameToRunState 拒绝加载: GrantedCredentialIds 重复 ID %s"),
+				*CredentialId.ToString());
+			return false;
+		}
+	}
+
 	UCharacterDefinition* LoadedChar = Cast<UCharacterDefinition>(
 		SaveGame->CharacterAssetPath.TryLoad());
 	if (!LoadedChar)
@@ -230,6 +254,7 @@ bool FRunSaveGameSerializer::TryApplySaveGameToRunState(UWacomSaveGame* SaveGame
 	TempState.Character = LoadedChar;
 	TempState.BattleSeed = SaveGame->BattleSeed;
 	TempState.bRunActive = SaveGame->bRunActive;
+	TempState.GrantedCredentialIds = MoveTemp(GrantedCredentialIds);
 	TempState.PlayerTransform = SaveGame->PlayerTransform;
 	TempState.bHasPlayerTransform = SaveGame->bHasPlayerTransform;
 

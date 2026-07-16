@@ -314,17 +314,30 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 |---|---|---|
 | `CollectGoldPickup(PersistentId, GoldAmount)` | 增加金币 | `CollectedPickupIds` |
 | `CollectCardPickup(PersistentId, CardDefinition)` | 获得一张固定卡 | `CollectedPickupIds` |
+| `CollectPickupFromDefinition(PersistentId, Definition)` | 原子结算固定 Gold/Card 主奖励、可选 Credential、拾取状态及正式 Treasure 节点/AP | `CollectedPickupIds` + `GrantedCredentialIds` |
 
 规则要求：
 
 - `PersistentId != NAME_None`。
 - 金币数量必须大于 0。
 - 固定卡牌奖励必须配置 `CardDefinition`。
+- `GrantedCredentialIds` 可以为空；存在时每项必须非 `None` 且 Definition 内唯一。
 - 重复提交同一 `PersistentId` 不改状态、不广播。
 - 金币和卡牌 Pickup 共用 `CollectedPickupIds`，相同 ID 会共享已拾取状态。
+- Definition 入口先在 working state 中完成全部校验，再一次提交主奖励、Credential、拾取标记和探索结算；任一环节失败时全部回滚且不广播。
 - `CollectGoldPickup()` / `CollectCardPickup()` 返回的 `FRunTreasureSettlementResult.ExplorationResolution` 是正式 Floor 中这次 Treasure 完成的版本结果；成功调用方必须把它交给 App 表现协调器，不能只读取 `bSucceeded` 后丢弃。
 
-数据驱动推荐入口是 `AWacomRunRewardPickupActor + UWacomRunPickupDefinition`。Definition 只描述固定单一奖励；运行时仍调用现有金币 / 卡牌拾取结算。当前不支持掉落表、多卡、区域选择、拾取动画或 SaveGame。
+数据驱动推荐入口是 `AWacomRunRewardPickupActor + UWacomRunPickupDefinition`。Actor 只转发完整 Definition；Definition 仍只有一个固定 Gold/Card 主奖励，但可同时授予多个 Credential。当前不支持掉落表、多卡、区域选择或拾取动画。
+
+### Run Credential
+
+`FRunState::GrantedCredentialIds` 是 Run 内不可因实体卡牌移除而丢失的任务资格真相，ID 使用稳定 `FName`，不是 GameplayTag。`URunSession::HasCredential()` 只读查询；批量校验和幂等授予由 `WacomRun/Private/Credential` 持有，不向 App/Data 暴露任意写入口。
+
+- Credential 只能由已校验的 Definition 结算事务写入；重复授予同一 ID 幂等。
+- 直接销毁、删牌换金币、RunEvent 卡牌支付和世界交互消耗只改变实体卡牌，不删除 Credential。
+- FloorEntrance 的 `RequiredCredentialIds` 与旧 `OwnedCardRequirements` 是 AND；Request/Confirm 都读取最新 RunState，条件本身不消耗 Credential 或卡牌。
+- 已解锁入口继续按既有规则通过，不重复要求凭证。
+- `Credential.Run.SerpentSigil` 是正式 Floor 1→2 的稳定资格；`Card.Run.SerpentSigil` 只是同一次 Pickup 的实体展示奖励，拥有该卡不能反推 Credential。
 
 ### Run World Card Interaction
 
@@ -456,19 +469,20 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`。正常游戏流程不读盘、不写盘；战斗结束和退出时的自动存档会静默 no-op。
 
-下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v3 的实际字段拷贝结果。
+下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v4 的实际字段拷贝结果。
 
 `LoadFromSlot()` 成功应用 SaveGame 到 `RunState` 后会标记 Run UI snapshot dirty，并广播一次 `OnRunStateChangedNative`。读档失败（slot 不存在、SaveGame 类型不匹配、版本或字段校验失败）不修改 RunState，也不广播。Run first-person source、ViewModel provider 和其他只读 Run UI 应依赖这条通知更新到读档后的 default workspace / storage 状态；当前 default workspace provider 仍读取 BattleDeck 物理卡和可选投影卡。
 
-### v3 磁盘会保存
+### v4 磁盘会保存
 
 | SaveGame 字段 | 来源 / 说明 |
 |---|---|
-| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 3 |
+| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 4 |
 | `CharacterAssetPath` | 当前角色资产路径 |
 | `BattleSeed` | 战斗随机种子 |
 | `bRunActive` | Run 活跃状态 |
 | `DestroyedTriggerIds` | 已 Resolved Encounter Trigger 的 Save v3 兼容投影；Map Node lifecycle 才是完成真相 |
+| `GrantedCredentialIds` | 已获得的稳定 Run Credential；写盘按 `FName` 词法序排序 |
 | `PlayerTransform`、`bHasPlayerTransform` | 探索 Pawn 位置 |
 | `Backpack` | 卡牌 instance 列表 |
 | `BattleDeck` | 卡牌 instance 列表 |
@@ -479,11 +493,11 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 若旧档迁移到 v2 后四个 instance 数组全空，读档会按 Character 的 StarterDeck 重新生成 instance；新 GUID 会替代旧运行态身份。
 
-v3 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。v3 已移除旧 `DefeatedEnemyAssetPaths`；由于 Map Node lifecycle 尚未进入 v3 磁盘字段，`DestroyedTriggerIds` 暂时承担已 Resolved Encounter 的磁盘兼容投影。Bootstrap 命中该投影时先通过 Trigger 的统一入口退役 Host/Part，再销毁 Trigger，避免读档后留下 Idle 敌人。
+v4 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。v3 已移除旧 `DefeatedEnemyAssetPaths`；由于 Map Node lifecycle 尚未进入磁盘字段，`DestroyedTriggerIds` 暂时承担已 Resolved Encounter 的磁盘兼容投影。Bootstrap 命中该投影时先通过 Trigger 的统一入口退役 Host/Part，再销毁 Trigger，避免读档后留下 Idle 敌人。v3→v4 把 Credential 明确迁移为空集合，不从实体卡牌推断；v4 读档拒绝 `None` 或重复 Credential，失败时 RunState 不变且不广播。
 
 ### 当前仍是内存态
 
-| RunState 字段 / 系统 | SaveGame v3 状态 | 读档后的实际结果 |
+| RunState 字段 / 系统 | SaveGame v4 状态 | 读档后的实际结果 |
 |---|---|---|
 | `FingerCount`、`HpPerFinger` | 不保存 | 使用 `FRunState` 默认值，不从 SaveGame 还原 |
 | `Pressure`、`TheftCount` | 不保存 | 压力全为 0，偷窃计数为 0 |
@@ -514,11 +528,12 @@ Run 领域入口集中在 `Source/WacomRun/`：
 | `Private/RunSession.cpp` | 时间、压力、商店 / RunEvent public 入口、战斗回传 public 入口、SaveGame slot IO、dirty revision 和通知广播的协调实现 |
 | `Private/Battle/RunBattleSettlementResolver.*` | 战斗结束回传包的 Run 结算流程 |
 | `Private/Deck/RunDeckRules.*` | 背包、备战区、SpecialZone、负重区的私有规则 helper；拥有已通过校验后的物理区移动 mutation |
+| `Private/Credential/RunCredentialModule.*` | Credential ID 校验、幂等授予与 FloorEntrance 全量持有检查 |
 | `Private/Exploration/RunTimeModule.*` | Action Point 原子消费、时段推进、Morning Planning、Night gate 与 Camp 特殊推进原语 |
 | `Private/Exploration/RunFloorExposureModule.*` | 新 Morning 的 Base/Overstay Decay 一次性结算 |
 | `Private/Exploration/RunNodeActivityModule.*` | Encounter/RunEvent/Shop/Treasure 的互斥活动票据、预留和原子完成/取消 |
 | `Private/Exploration/RunCampModule.*` | Camp 最近合法落点、预留、typed handler 和 Night→Morning 提交 |
-| `Private/Exploration/RunFloorTransitionModule.*` | 入口预览、持有卡门槛、确认/取消票据和不可逆跨层提交 |
+| `Private/Exploration/RunFloorTransitionModule.*` | 入口预览、Credential/持有卡 AND 门槛、确认/取消票据和不可逆跨层提交 |
 | `Private/Exploration/RunExplorationSnapshotBuilder.*` | Camp eligibility、Floor history、travelability 与 transition preview 的只读投影 |
 | `Private/Events/RunEventExecutor.*` | RunEvent 事件图解释、选项条件、效果执行和结果包生成 |
 | `Private/Save/RunSaveGameSerializer.*` | `FRunState <-> UWacomSaveGame` 字段拷贝、SaveEntry 写入和读档校验 |

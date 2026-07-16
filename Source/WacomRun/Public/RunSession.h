@@ -17,6 +17,7 @@
 
 class UCharacterDefinition;
 class UCardDefinition;
+class UWacomRunPickupDefinition;
 class UWacomRunEventDefinition;
 class UWacomSaveGame;
 struct FBattleInitParams;
@@ -561,6 +562,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Pickup")
 	bool IsPickupCollected(FName PersistentId) const;
 
+	/** C++ 只读查询：CredentialId 非空且已由 Run 规则授予时返回 true。 */
+	bool HasCredential(FName CredentialId) const;
+
+	/**
+	 * 数据驱动世界拾取物的正式原子结算入口。
+	 *
+	 * 主奖励、Definition 声明的全部 Credential、PersistentId、Treasure 节点与 AP
+	 * 在同一 working-state 中提交；失败时零修改、零广播。
+	 */
+	FRunTreasureSettlementResult CollectPickupFromDefinition(
+		FName PersistentId,
+		const UWacomRunPickupDefinition* PickupDefinition);
+
 	/**
 	 * 拾取金币型世界拾取物。
 	 *
@@ -859,6 +873,13 @@ private:
 
 	/** 私有路径：DestroyCardByInstance 的"不广播"版本。 */
 	bool DestroyCardByInstanceInternal(FGuid InstanceId);
+
+	/** Gold/Card/Definition Pickup 共用的 working-state 原子结算路径。 */
+	FRunTreasureSettlementResult CollectPickupInternal(
+		FName PersistentId,
+		int32 GoldAmount,
+		UCardDefinition* CardDefinition,
+		const TArray<FName>& GrantedCredentialIds);
 
 	/**
 	 * 幂等保证：B 主卡 instance 进入 Backpack/BattleDeck 时 `RunState.SpecialZones`

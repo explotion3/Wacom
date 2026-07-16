@@ -2,6 +2,7 @@
 
 #include "Exploration/RunFloorTransitionModule.h"
 
+#include "Credential/RunCredentialModule.h"
 #include "Exploration/RunMapModule.h"
 #include "Exploration/RunOwnedCardRequirementEvaluator.h"
 #include "Map/WacomFloorMapDefinition.h"
@@ -83,9 +84,12 @@ bool FRunFloorTransitionModule::BuildCurrentPreview(
 	OutPreview.bEntranceUnlocked =
 		State.ExplorationState.UnlockedEntranceIds.Contains(OutPreview.EntranceNode);
 	OutPreview.bRequirementsMet = OutPreview.bEntranceUnlocked
-		|| FRunOwnedCardRequirementEvaluator::AreAllSatisfied(
-			State,
-			Entrance->Content.FloorEntrance.OwnedCardRequirements);
+		|| (FRunCredentialModule::HasAll(
+				State,
+				Entrance->Content.FloorEntrance.RequiredCredentialIds)
+			&& FRunOwnedCardRequirementEvaluator::AreAllSatisfied(
+				State,
+				Entrance->Content.FloorEntrance.OwnedCardRequirements));
 	return true;
 }
 

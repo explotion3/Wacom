@@ -9,6 +9,20 @@ FName UWacomRunPickupDefinition::GetRewardConfigWarningReason() const
 		return TEXT("MissingPickupId");
 	}
 
+	TSet<FName> UniqueCredentialIds;
+	for (const FName CredentialId : GrantedCredentialIds)
+	{
+		if (CredentialId.IsNone())
+		{
+			return TEXT("MissingCredentialId");
+		}
+		if (UniqueCredentialIds.Contains(CredentialId))
+		{
+			return TEXT("DuplicateCredentialId");
+		}
+		UniqueCredentialIds.Add(CredentialId);
+	}
+
 	switch (RewardType)
 	{
 	case EWacomRunPickupRewardType::Gold:

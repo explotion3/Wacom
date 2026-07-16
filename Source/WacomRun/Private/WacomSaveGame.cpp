@@ -53,6 +53,13 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 		SaveGame->SaveVersion = 3;
 		[[fallthrough]];
 
+	case 3:
+		// v3 -> v4：引入独立 Run Credential 集合。
+		// 旧档明确迁移为空集合；不从可能已被移除的同名实体卡牌反推任务凭证。
+		SaveGame->GrantedCredentialIds.Empty();
+		SaveGame->SaveVersion = 4;
+		[[fallthrough]];
+
 	// case CurrentSaveVersion - 1: // 实际会是具体数字
 	//     SaveGame->SaveVersion = CurrentSaveVersion;
 	//     break;

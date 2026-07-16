@@ -99,6 +99,68 @@ bool FWacomDataRunPickupValidationCardSpec::RunTest(const FString& /*Parameters*
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunPickupValidationCredentialGrantSpec,
+	"Wacom.Data.RunPickup.Validation.ValidCredentialGrant",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunPickupValidationCredentialGrantSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeValidCardPickupDefinition(GetTransientPackage()));
+	Definition->GrantedCredentialIds = {
+		TEXT("Credential.Run.SerpentSigil"),
+		TEXT("Credential.Run.Secondary")};
+
+	TArray<FText> Errors;
+	TestTrue(TEXT("Unique non-empty credential grants pass"),
+		ValidateRunPickupDefinitionForTest(Definition.Get(), Errors));
+	TestEqual(TEXT("No validation errors"), Errors.Num(), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunPickupValidationMissingCredentialSpec,
+	"Wacom.Data.RunPickup.Validation.MissingCredentialIdReportsError",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunPickupValidationMissingCredentialSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeValidGoldPickupDefinition(GetTransientPackage()));
+	Definition->GrantedCredentialIds.Add(NAME_None);
+
+	TArray<FText> Errors;
+	TestFalse(TEXT("None credential grant fails"),
+		ValidateRunPickupDefinitionForTest(Definition.Get(), Errors));
+	TestEqual(TEXT("Helper reports missing credential id"),
+		Definition->GetRewardConfigWarningReason(), FName(TEXT("MissingCredentialId")));
+	TestTrue(TEXT("Missing credential id has error"), Errors.Num() > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataRunPickupValidationDuplicateCredentialSpec,
+	"Wacom.Data.RunPickup.Validation.DuplicateCredentialIdReportsError",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataRunPickupValidationDuplicateCredentialSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomRunPickupDefinition> Definition(
+		MakeValidGoldPickupDefinition(GetTransientPackage()));
+	Definition->GrantedCredentialIds = {
+		TEXT("Credential.Run.Duplicate"),
+		TEXT("Credential.Run.Duplicate")};
+
+	TArray<FText> Errors;
+	TestFalse(TEXT("Duplicate credential grant fails"),
+		ValidateRunPickupDefinitionForTest(Definition.Get(), Errors));
+	TestEqual(TEXT("Helper reports duplicate credential id"),
+		Definition->GetRewardConfigWarningReason(), FName(TEXT("DuplicateCredentialId")));
+	TestTrue(TEXT("Duplicate credential id has error"), Errors.Num() > 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomDataRunPickupValidationMissingPickupIdSpec,
 	"Wacom.Data.RunPickup.Validation.MissingPickupIdReportsError",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -197,6 +259,7 @@ bool FWacomDataRunPickupDebugGoldAssetSpec::RunTest(const FString& /*Parameters*
 		Definition->RewardType, EWacomRunPickupRewardType::Gold);
 	TestEqual(TEXT("Debug gold amount"), Definition->GoldAmount, 3);
 	TestNull(TEXT("Debug gold has no card definition"), Definition->CardDefinition.Get());
+	TestEqual(TEXT("Debug gold grants no credentials"), Definition->GrantedCredentialIds.Num(), 0);
 
 	TArray<FText> Errors;
 	TestTrue(TEXT("Debug gold pickup definition passes validation"),
@@ -229,6 +292,8 @@ bool FWacomDataRunPickupDebugPoisonFangAssetSpec::RunTest(const FString& /*Param
 		TestEqual(TEXT("Debug poison fang card id"),
 			Card->CardId, FName(TEXT("PoisonFang")));
 	}
+	TestEqual(TEXT("Debug poison fang grants no credentials"),
+		Definition->GrantedCredentialIds.Num(), 0);
 
 	TArray<FText> Errors;
 	TestTrue(TEXT("Debug poison fang pickup definition passes validation"),
