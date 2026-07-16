@@ -21,6 +21,7 @@
 #include "PaperSpriteComponent.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
+#include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "Blueprint/UserWidget.h"
 
 namespace
@@ -123,6 +124,20 @@ AWacomBattleEnemyActor::AWacomBattleEnemyActor()
 	HostVisualComponent->bEditableWhenInherited = false;
 }
 
+void AWacomBattleEnemyActor::PostLoad()
+{
+	Super::PostLoad();
+	if (EnemyPanelWidgetComponent
+		&& EnemyPanelWidgetComponent->GetWidgetClass()
+			== UWacomBattleEnemyPanelWidget::StaticClass())
+	{
+		// 旧 Host/关卡实例会把已经移除的 native fallback 直接保存在组件上。
+		// 组件注册早于 OnConstruction，必须在 PostLoad 先清掉抽象类，随后再由
+		// RefreshEnemyPanelWidgetComponent 解析 Host override / 项目默认正式 WBP。
+		EnemyPanelWidgetComponent->SetWidgetClass(nullptr);
+	}
+}
+
 void AWacomBattleEnemyActor::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
@@ -214,12 +229,65 @@ void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
 		return;
 	}
 
-	const TSubclassOf<UUserWidget> WidgetClass =
-		EnemyPanelWidgetClass ? EnemyPanelWidgetClass.Get() : UWacomBattleEnemyPanelWidget::StaticClass();
+	TSubclassOf<UWacomBattleEnemyPanelWidget> ResolvedPanelClass = EnemyPanelWidgetClass;
+	if (ResolvedPanelClass == UWacomBattleEnemyPanelWidget::StaticClass())
+	{
+		// 早期资产会把 native C++ fallback 序列化成 Host override。该类现在是
+		// abstract 被动 WBP 父类；不要求重存关卡，按“未配置 override”迁移到项目默认类。
+		ResolvedPanelClass = nullptr;
+	}
+	if (!ResolvedPanelClass)
+	{
+		if (const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>())
+		{
+			ResolvedPanelClass = Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
+		}
+	}
+
+	if (!ResolvedPanelClass)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomBattleEnemyActor] Enemy panel class unresolved: Host=%s"),
+			*GetName());
+		EnemyPanelWidgetComponent->SetWidgetClass(nullptr);
+		EnemyPanelWidgetComponent->SetVisibility(false, true);
+		return;
+	}
+	if (ResolvedPanelClass->HasAnyClassFlags(
+		CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomBattleEnemyActor] Enemy panel class is not constructible: Host=%s Class=%s"),
+			*GetName(), *ResolvedPanelClass->GetPathName());
+		EnemyPanelWidgetComponent->SetWidgetClass(nullptr);
+		EnemyPanelWidgetComponent->SetVisibility(false, true);
+		return;
+	}
+
+	const TSubclassOf<UUserWidget> WidgetClass = ResolvedPanelClass.Get();
 	EnemyPanelWidgetComponent->SetWidgetClass(WidgetClass);
 	EnemyPanelWidgetComponent->SetRelativeLocation(EnemyPanelRelativeLocation);
-	EnemyPanelWidgetComponent->SetDrawSize(EnemyPanelDrawSize);
+	EnemyPanelWidgetComponent->SetDrawAtDesiredSize(bEnemyPanelDrawAtDesiredSize);
+	EnemyPanelWidgetComponent->SetPivot(FVector2D(0.5f, 1.0f));
+	if (!bEnemyPanelDrawAtDesiredSize)
+	{
+		EnemyPanelWidgetComponent->SetDrawSize(EnemyPanelDrawSize);
+	}
 	EnemyPanelWidgetComponent->SetVisibility(false, true);
+}
+
+void AWacomBattleEnemyActor::RefreshEnemyPanelVisibility()
+{
+	if (!EnemyPanelWidgetComponent)
+	{
+		return;
+	}
+
+	const bool bHasInteractionContext =
+		!EnemyPanelHoveredPartSlotId.IsNone() || bEnemyPanelHasActionPreview;
+	EnemyPanelWidgetComponent->SetVisibility(
+		bEnemyPanelHasViewData && (bEnemyPanelVisibleByDefault || bHasInteractionContext),
+		true);
 }
 
 FName AWacomBattleEnemyActor::GetHostVisualModeDebugName() const
@@ -670,10 +738,10 @@ void AWacomBattleEnemyActor::SetEnemyPanelViewData(const FWacomBattleEnemyPanelV
 		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
 		PanelWidget->TakeWidget();
-		PanelWidget->SetEnemyPanelViewData({ ViewData });
+		PanelWidget->SetEnemyPanelViewData(ViewData);
 	}
-
-	EnemyPanelWidgetComponent->SetVisibility(bEnemyPanelVisibleByDefault, true);
+	bEnemyPanelHasViewData = true;
+	RefreshEnemyPanelVisibility();
 }
 
 void AWacomBattleEnemyActor::ClearEnemyPanelViewData()
@@ -681,13 +749,12 @@ void AWacomBattleEnemyActor::ClearEnemyPanelViewData()
 	if (UWacomBattleEnemyPanelWidget* PanelWidget =
 		EnemyPanelWidgetComponent ? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()) : nullptr)
 	{
-		PanelWidget->SetEnemyPanelViewData({});
+		PanelWidget->ClearEnemyPanelViewData();
 	}
-
-	if (EnemyPanelWidgetComponent)
-	{
-		EnemyPanelWidgetComponent->SetVisibility(false, true);
-	}
+	bEnemyPanelHasViewData = false;
+	bEnemyPanelHasActionPreview = false;
+	EnemyPanelHoveredPartSlotId = NAME_None;
+	RefreshEnemyPanelVisibility();
 }
 
 void AWacomBattleEnemyActor::SetEnemyPanelActionPreview(
@@ -698,13 +765,15 @@ void AWacomBattleEnemyActor::SetEnemyPanelActionPreview(
 		return;
 	}
 
+	bEnemyPanelHasActionPreview = false;
 	EnemyPanelWidgetComponent->InitWidget();
 	if (UWacomBattleEnemyPanelWidget* PanelWidget =
 		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
 		PanelWidget->TakeWidget();
-		PanelWidget->SetActionPreviewPartViews(PreviewParts);
+		bEnemyPanelHasActionPreview = PanelWidget->SetActionPreviewPartViews(PreviewParts);
 	}
+	RefreshEnemyPanelVisibility();
 }
 
 void AWacomBattleEnemyActor::ClearEnemyPanelActionPreview()
@@ -714,16 +783,25 @@ void AWacomBattleEnemyActor::ClearEnemyPanelActionPreview()
 	{
 		PanelWidget->ClearActionPreview();
 	}
+	bEnemyPanelHasActionPreview = false;
+	RefreshEnemyPanelVisibility();
 }
 
-void AWacomBattleEnemyActor::SetEnemyPanelHoveredVisible(bool bVisible)
+void AWacomBattleEnemyActor::SetEnemyPanelHoveredPart(const FName PartSlotId)
 {
 	if (!EnemyPanelWidgetComponent)
 	{
 		return;
 	}
 
-	EnemyPanelWidgetComponent->SetVisibility(bVisible || bEnemyPanelVisibleByDefault, true);
+	EnemyPanelHoveredPartSlotId = PartSlotId;
+	EnemyPanelWidgetComponent->InitWidget();
+	if (UWacomBattleEnemyPanelWidget* PanelWidget =
+		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	{
+		PanelWidget->SetHoveredPartSlotId(PartSlotId);
+	}
+	RefreshEnemyPanelVisibility();
 }
 
 FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const

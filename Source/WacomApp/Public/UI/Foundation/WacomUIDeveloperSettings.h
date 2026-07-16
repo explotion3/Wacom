@@ -13,6 +13,7 @@
 
 class UWacomActivatableWidget;
 class UWacomAppToastWidget;
+class UWacomBattleEnemyPanelWidget;
 class UWacomCardDetailTheme;
 class UWacomCardExplanationLexicon;
 class UWacomPrimaryGameLayout;
@@ -56,6 +57,10 @@ public:
 	/** AppToast WBP 类；未配置或加载失败时回退到 C++ 类。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Settings", meta = (ToolTip = "AppToast WBP 类；未配置或加载失败时回退到 C++ 类。它只配置 Toast 表现类，不改变 Toast 触发规则。"))
 	TSoftClassPtr<UWacomAppToastWidget> AppToastWidgetClass;
+
+	/** Scene Enemy Host 头顶聚合面板的项目默认 WBP；Host 可通过 EnemyPanelWidgetClass 显式覆盖。 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Battle", meta = (ToolTip = "Scene Enemy Host 头顶聚合面板的项目默认 WBP。Host 显式 EnemyPanelWidgetClass 优先；该项为空或加载失败时面板会隐藏并报告配置错误。"))
+	TSoftClassPtr<UWacomBattleEnemyPanelWidget> DefaultBattleEnemyPanelWidgetClass;
 
 	/** 卡牌详情说明模板 DataAsset；为空时使用 C++ fallback 模板。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Card Detail", meta = (ToolTip = "卡牌详情说明模板 DataAsset。用于把 Effect / Passive facts 编译为详情语义文档；为空时使用 C++ fallback 模板。"))

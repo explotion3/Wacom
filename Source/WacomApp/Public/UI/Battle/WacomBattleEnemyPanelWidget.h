@@ -2,93 +2,97 @@
 
 #pragma once
 
+#include "CommonUserWidget.h"
 #include "CoreMinimal.h"
-#include "UI/Battle/WacomBattleWidgetBase.h"
 #include "WacomBattleEnemyPanelViewData.h"
 #include "WacomBattleEnemyPanelWidget.generated.h"
 
+class UPanelWidget;
 class UTextBlock;
-class UVerticalBox;
-class UBorder;
+class UWidget;
 class UWacomBattleEnemyPartEntryWidget;
-struct FEnemySnapshot;
 
-USTRUCT()
-struct FWacomBattleEnemyPanelEnemyWidgetState
+/**
+ * 单个 Scene Enemy Host 的头顶聚合面板。
+ *
+ * 每个实例只渲染一个 FWacomBattleEnemyPanelViewData。C++ 负责稳定部位条目复用，
+ * 正式 WBP 负责全部布局、皮肤和动画。
+ */
+UCLASS(Abstract, Blueprintable, meta = (ToolTip = "单个 Scene Enemy Host 的被动聚合面板。只消费一个 Enemy ViewData，布局由正式 WBP 提供。"))
+class WACOMAPP_API UWacomBattleEnemyPanelWidget : public UCommonUserWidget
 {
 	GENERATED_BODY()
 
-	UPROPERTY(Transient)
-	TObjectPtr<UVerticalBox> EnemyBox = nullptr;
+public:
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel")
+	void SetEnemyPanelViewData(const FWacomBattleEnemyPanelViewData& InView);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel")
+	void ClearEnemyPanelViewData();
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel")
+	bool HasEnemyPanelViewData() const { return bHasCurrentView; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel")
+	const FWacomBattleEnemyPanelViewData& GetEnemyPanelViewData() const { return CurrentView; }
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "应用规则层生成的部位行动预览，只覆盖现有部位条目的显示。"))
+	bool SetActionPreviewPartViews(const TArray<FWacomBattleEnemyPartEntryViewData>& InPreviewParts);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "清除全部部位行动预览。"))
+	void ClearActionPreview();
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "设置当前场景 hover 的稳定 PartSlotId；NAME_None 表示清除。"))
+	void SetHoveredPartSlotId(FName InPartSlotId);
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "设置面板内每个部位条目使用的正式 WBP 类。运行时切换会清空并重建条目。"))
+	void SetPartEntryWidgetClass(TSubclassOf<UWacomBattleEnemyPartEntryWidget> InWidgetClass);
+
+	TSubclassOf<UWacomBattleEnemyPartEntryWidget> GetPartEntryWidgetClass() const
+	{
+		return PartEntryWidgetClass;
+	}
+
+protected:
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "面板内每个部位条目使用的正式 WBP 类。必须继承 UWacomBattleEnemyPartEntryWidget。"))
+	TSubclassOf<UWacomBattleEnemyPartEntryWidget> PartEntryWidgetClass;
+
+private:
+	void RefreshHeader();
+	void SyncPartEntries();
+	void ClearPartEntries();
+	void RefreshContextHighlight();
+	UWacomBattleEnemyPartEntryWidget* FindOrCreatePartEntryWidget(
+		const FWacomBattleEnemyPartEntryViewData& PartView);
+	FName BuildPartEntryWidgetKey(const FWacomBattleEnemyPartEntryViewData& PartView) const;
+	bool DoesPartBelongToCurrentEnemy(const FWacomBattleEnemyPartEntryViewData& PartView) const;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> EnemyNameText = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> EnemyInitiativeText = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UPanelWidget> PartList = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> PanelContextHighlight = nullptr;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UBorder> EnemyBorder = nullptr;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UTextBlock> HeaderText = nullptr;
+	FWacomBattleEnemyPanelViewData CurrentView;
 
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>> PartEntryWidgets;
 
 	UPROPERTY(Transient)
 	TSet<FName> AnimatedPartEntryKeys;
-};
 
-UCLASS(Blueprintable, meta = (ToolTip = "BattleHUD 的敌人总面板。只渲染 FWacomBattleEnemyPanelViewData。"))
-class WACOMAPP_API UWacomBattleEnemyPanelWidget : public UWacomBattleWidgetBase
-{
-	GENERATED_BODY()
-
-public:
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel")
-	void SetEnemyPanelViewData(const TArray<FWacomBattleEnemyPanelViewData>& InViews);
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "应用部位行动预览。只覆盖已存在部位条目的显示，不改变真实 EnemyPanelViewData。"))
-	void SetActionPreviewPartViews(const TArray<FWacomBattleEnemyPartEntryViewData>& InPreviewParts);
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "清除所有部位行动预览，恢复真实 EnemyPanelViewData 显示。"))
-	void ClearActionPreview();
-
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "设置敌人面板内每个部位条目使用的 Widget 类。通常在 WBP 默认值中指定；运行时切换会清空并重建条目缓存。"))
-	void SetPartEntryWidgetClass(TSubclassOf<UWacomBattleEnemyPartEntryWidget> InWidgetClass);
-
-	static FWacomBattleEnemyPanelViewData BuildEnemyPanelViewDataFromSnapshot(
-		const FBattleSnapshot& Snap,
-		const FEnemySnapshot& Enemy);
-
-	static TArray<FWacomBattleEnemyPanelViewData> BuildEnemyPanelViewDataListFromSnapshot(const FBattleSnapshot& Snap);
-
-protected:
-	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual void NativeRefreshFromSnapshot(const FBattleSnapshot& Snap) override;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "敌人面板内每个部位条目使用的 Widget 类。默认使用 C++ fallback；正式 WBP 可指定 BP_WacomBattleEnemyPartEntryWidget。"))
-	TSubclassOf<UWacomBattleEnemyPartEntryWidget> PartEntryWidgetClass;
-
-private:
-	void SyncEnemyWidgets();
-	FWacomBattleEnemyPanelEnemyWidgetState& FindOrCreateEnemyWidgetState(const FWacomBattleEnemyPanelViewData& View);
-	UWacomBattleEnemyPartEntryWidget* FindOrCreatePartEntryWidget(
-		FWacomBattleEnemyPanelEnemyWidgetState& EnemyState,
-		const FWacomBattleEnemyPartEntryViewData& PartView);
-	FText BuildEnemyHeaderText(const FWacomBattleEnemyPanelViewData& View) const;
-	FName BuildEnemyWidgetKey(const FWacomBattleEnemyPanelViewData& View) const;
-	FName BuildPartEntryWidgetKey(const FWacomBattleEnemyPartEntryViewData& PartView) const;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UVerticalBox> RootBox = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UVerticalBox> EnemyListBox = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> EmptyTextBlock = nullptr;
-
-	UPROPERTY(Transient)
-	TArray<FWacomBattleEnemyPanelViewData> CurrentViews;
-
-	UPROPERTY(Transient)
-	TMap<FName, FWacomBattleEnemyPanelEnemyWidgetState> EnemyWidgetStates;
-
-	bool bSyncingEnemyWidgets = false;
+	FName HoveredPartSlotId = NAME_None;
+	bool bHasCurrentView = false;
+	bool bHasActionPreview = false;
+	bool bSyncingPartEntries = false;
 };

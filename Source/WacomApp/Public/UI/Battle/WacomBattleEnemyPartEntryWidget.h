@@ -2,20 +2,26 @@
 
 #pragma once
 
+#include "CommonUserWidget.h"
 #include "CoreMinimal.h"
-#include "UI/Battle/WacomBattleWidgetBase.h"
+#include "TimerManager.h"
 #include "WacomBattleEnemyPanelViewData.h"
 #include "WacomBattleEnemyPartEntryWidget.generated.h"
 
+class UProgressBar;
 class UTextBlock;
-class UBorder;
-class UHorizontalBox;
-class UVerticalBox;
-class UWacomBattleStatusIconListWidget;
 class UWidget;
+class UWidgetAnimation;
+class UWacomBattleStatusIconListWidget;
 
-UCLASS(Blueprintable, meta = (ToolTip = "敌人面板中的单个部位条目。只渲染 FWacomBattleEnemyPartEntryViewData。"))
-class WACOMAPP_API UWacomBattleEnemyPartEntryWidget : public UWacomBattleWidgetBase
+/**
+ * 敌人聚合面板中的单个部位条目。
+ *
+ * 该类只消费 FWacomBattleEnemyPartEntryViewData，并把值写入正式 WBP 绑定。
+ * 它不读取 BattleSession、不拉取 Snapshot，也不创建运行时布局。
+ */
+UCLASS(Abstract, Blueprintable, meta = (ToolTip = "敌人面板中的被动部位条目。只渲染 ViewData；布局、皮肤和动画由正式 WBP 提供。"))
+class WACOMAPP_API UWacomBattleEnemyPartEntryWidget : public UCommonUserWidget
 {
 	GENERATED_BODY()
 
@@ -23,88 +29,97 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel")
 	virtual void SetPartEntryViewData(const FWacomBattleEnemyPartEntryViewData& InView);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "返回当前部位条目的只读展示数据。用于 WBP 表现读取，不应反向修改战斗状态。"))
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "返回当前真实 Snapshot 部位展示数据。Action Preview 不会覆盖该值。"))
 	const FWacomBattleEnemyPartEntryViewData& GetPartEntryViewData() const { return CurrentView; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "返回当前实际用于显示的数据。Action Preview 激活时返回预览值，否则返回真实 Snapshot 值。"))
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "返回当前实际显示的数据。Action Preview 激活时返回预览值。"))
 	const FWacomBattleEnemyPartEntryViewData& GetEffectivePartEntryViewData() const;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "应用战斗行动预览。只覆盖本条目显示，不触发真实结算动画，也不修改 BattleSession。"))
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "应用规则层生成的行动预览，只覆盖显示，不触发真实伤害、护盾或破坏动画。"))
 	void SetActionPreview(const FWacomBattleEnemyPartEntryViewData& InPreviewView);
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "清除战斗行动预览，恢复真实 Snapshot 显示。"))
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "清除行动预览并恢复真实 Snapshot 显示。"))
 	void ClearActionPreview();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel")
 	bool HasActionPreview() const { return bHasActionPreview; }
 
-	void SetFallbackIntroDelaySeconds(float InDelaySeconds);
+	/** 设置当前条目是否对应场景 hover 部位。 */
+	void SetContextHighlighted(bool bHighlighted);
 
-#if WITH_AUTOMATION_TESTS
-	void TickFallbackMotionForTest(float DeltaSeconds);
-#endif
+	/** Panel 创建新条目时设置一次错峰入场延迟。 */
+	void SetIntroDelaySeconds(float InDelaySeconds);
+
+	/** Panel 移除条目前取消弱 Timer 和正在播放的动画。 */
+	void CancelPendingPresentation();
 
 protected:
-	virtual TSharedRef<SWidget> RebuildWidget() override;
-	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
-	virtual void NativeRefreshFromSnapshot(const FBattleSnapshot& Snap) override;
+	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 private:
-	void RefreshText();
-	FText BuildStatusText(const FWacomBattleEnemyPartEntryViewData& View) const;
-	void StartFallbackIntroAnimation();
-	void StartFallbackPulseAnimation(const FLinearColor& InPulseTint, float InIntensity);
-	void ApplyFallbackMotionVisual();
-	float GetFallbackBaseOpacity() const;
-	FLinearColor GetFallbackBaseBackgroundColor() const;
+	void RefreshPresentation();
+	void ScheduleIntroAnimation();
+	void PlayIntroAnimation();
+	void PlayRealFactTransition(
+		const FWacomBattleEnemyPartEntryViewData& PreviousView,
+		const FWacomBattleEnemyPartEntryViewData& NewView);
+	void RefreshContextPresentation(bool bPreviousContextActive);
+	void CancelIntroTimer();
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UVerticalBox> RootBox = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UHorizontalBox> RowBox = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UBorder> EntryBackground = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> PartNameText = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> HpLabelText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UProgressBar> HpBar = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> HpText = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UBorder> ShieldPill = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ShieldContainer = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> ShieldLabelText = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ShieldText = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> InitiativeLabelText = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> InitiativeText = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> StatsText = nullptr;
-
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> IntentText = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> StatusText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> ResistanceText = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> DetailsContainer = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWacomBattleStatusIconListWidget> StatusList = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ContextHighlight = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ActionPreviewOverlay = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> DestroyedOverlay = nullptr;
+
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> IntroAnimation = nullptr;
+
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> DamagePulseAnimation = nullptr;
+
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> ShieldPulseAnimation = nullptr;
+
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> DestroyedPulseAnimation = nullptr;
+
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> ContextHighlightAnimation = nullptr;
 
 	UPROPERTY(Transient)
 	FWacomBattleEnemyPartEntryViewData CurrentView;
@@ -112,17 +127,12 @@ private:
 	UPROPERTY(Transient)
 	FWacomBattleEnemyPartEntryViewData ActionPreviewView;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Preview", meta = (AllowPrivateAccess = "true", ToolTip = "Action Preview 激活时部位条目的渲染透明度。单位：0-1；推荐 0.7-1.0，仅提示这是预览态，不影响布局或规则。"))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Preview", meta = (AllowPrivateAccess = "true", ToolTip = "Action Preview 激活时条目的整体透明度。单位：0-1；推荐 0.7-1.0，只影响表现。"))
 	float ActionPreviewRenderOpacity = 0.82f;
 
-	FLinearColor FallbackPulseTint = FLinearColor::White;
-	float FallbackIntroDelaySeconds = 0.0f;
-	float FallbackIntroElapsedSeconds = 1.0f;
-	float FallbackPulseElapsedSeconds = 999.0f;
-	float FallbackPulseIntensity = 0.0f;
-	bool bUsingGeneratedFallbackLayout = false;
+	FTimerHandle IntroTimerHandle;
+	float IntroDelaySeconds = 0.0f;
 	bool bHasReceivedViewData = false;
 	bool bHasActionPreview = false;
-	bool bFallbackIntroActive = false;
-	bool bFallbackPulseActive = false;
+	bool bContextHighlighted = false;
 };

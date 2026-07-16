@@ -159,6 +159,8 @@ Host registry 建立时执行一次 runtime scene binding：Host 扫描 live Par
 
 普通 Snapshot 同步只允许更新 Bridge Snapshot binding、InteractionTarget runtime id、Presentation runtime facts、targetable 和 EnemyPanel/hover/prediction/cue 状态。视觉生成仍只属于构造、Details/显式 Authoring 刷新和 runtime 初始化；Host Flipbook 播放进度与 PartActor VisualLayer 组件不能因为 Snapshot 刷新被重置。`EnemyPartActed Count > 0` 和最新 Snapshot 已确认的整体破坏可以通过 presentation queue 按稳定 `EnemySlotId` 请求 Host 语义动画；播放只原地切换现有 Flipbook 组件，不改变 target handle、HitBounds、Part identity 或规则事件顺序。
 
+EnemyPanel 是 Host 的 screen-space 被动视图，不是世界命中入口。Coordinator 按当前 Host registry 的稳定 `EnemySlotId` 构建一敌人一份 ViewData，并把 hover 的稳定 `PartSlotId` 与 projected preview 传给所属 Host；WBP 只展开匹配条目。面板 Root 与全部子控件必须不可命中，因此 first-person 卡牌输入、cursor trace 和 `HitBounds` 场景目标解析不会被 UI 截获。Target handle、PartActor Presentation 和 Bridge 生命周期不依赖面板是否可见或能否加载。
+
 BattleEnd Snapshot 到达时立即清理 Bridge binding、Presentation target、hover、drag、panel 和 targetable，确保已死亡敌人不再可交互；coordinator 只临时保留 Host 弱引用和最终 `bAllPartsDestroyed` facts，让队列中最后一个 Destroyed Clip 可以完成。`BattleEndSignal`、source/session clear、HUD shutdown 或 Host 销毁会取消旧 barrier 并清空 retiring Host；重新进入战斗后由当前 Host registry 建立新绑定并恢复 Idle。Host/Part 真正销毁或 topology revision 变化仍按稳定部位 identity 清理或重建 registry，但普通重建不重置正在播放的 Clip。
 
 真胜利的探索场景退役由 BattleTrigger 而非 HUD 承担。Run settlement 成功后 GameMode 先调用 `BeginResolvedEncounterSceneRetirement()` 禁用 Trigger 交互和碰撞，Host 的 Downed 终态继续可见；返回探索镜头与 ExitBattle 后置工作双 barrier 完成后，再调用 `CompleteResolvedEncounterSceneRetirement()`。该入口只处理 `EncounterDefinition.EnemySlots` 中有效、唯一且仍存在的 Host 映射，忽略缺失、无效和 Encounter 外 extra slot；Host 会取消残留回调、清 EnemyPanel，Part 会清 Bridge、prediction、hover/drag/cue，随后 Host/Part 隐藏并关闭碰撞，authored Actor、Flipbook/VisualLayer 组件和 topology revision 都保留。最后 Trigger 销毁。撤离、失败、Undetermined 或结算失败不会开始该流程。

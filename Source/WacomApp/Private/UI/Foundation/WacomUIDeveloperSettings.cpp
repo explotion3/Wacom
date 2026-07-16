@@ -3,6 +3,7 @@
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Card/WacomCardDetailTheme.h"
 #include "UI/Card/WacomCardExplanationLexicon.h"
 #include "UI/Events/WacomRunEventScreen.h"
@@ -170,6 +171,28 @@ bool UWacomUIDeveloperSettings::ValidateSettings(TArray<FText>& OutErrors) const
 		AppToastWidgetClass,
 		LOCTEXT("AppToastWidgetClassLabel", "AppToastWidgetClass"),
 		OutErrors);
+	if (DefaultBattleEnemyPanelWidgetClass.IsNull())
+	{
+		OutErrors.Add(LOCTEXT(
+			"DefaultBattleEnemyPanelWidgetClassNull",
+			"DefaultBattleEnemyPanelWidgetClass 不能为空；Scene Enemy Host 需要正式聚合面板 WBP。"));
+	}
+	else
+	{
+		ValidateSoftClass(
+			DefaultBattleEnemyPanelWidgetClass,
+			LOCTEXT("DefaultBattleEnemyPanelWidgetClassLabel", "DefaultBattleEnemyPanelWidgetClass"),
+			OutErrors);
+		if (UClass* PanelClass = DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
+			PanelClass && PanelClass->HasAnyClassFlags(
+				CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+		{
+			OutErrors.Add(FText::Format(
+				LOCTEXT("DefaultBattleEnemyPanelWidgetClassNotConstructible",
+					"DefaultBattleEnemyPanelWidgetClass 必须是可实例化的正式 WBP，当前类 {0} 为 abstract、deprecated 或已被新版本替代。"),
+				FText::FromString(PanelClass->GetPathName())));
+		}
+	}
 	ValidateSoftObject(
 		CardExplanationLexicon,
 		LOCTEXT("CardExplanationLexiconLabel", "CardExplanationLexicon"),

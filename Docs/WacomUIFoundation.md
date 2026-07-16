@@ -63,6 +63,7 @@ Wacom UI Settings
 | ShopScreen | `UI.Widget.ShopScreen` -> `UWacomShopScreen` C++ fallback |
 | RunEventScreen | `UI.Widget.RunEventScreen` -> `UWacomRunEventScreen` C++ fallback |
 | AppToast | `AppToastWidgetClass` -> `UWacomAppToastWidget` C++ fallback |
+| BattleEnemyPanel | Host `EnemyPanelWidgetClass` -> `DefaultBattleEnemyPanelWidgetClass` -> hidden + error |
 | CardExplanationLexicon | `CardExplanationLexicon` -> C++ generated explanation fallback |
 | CardDetailTheme | `CardDetailTheme` -> WBP / RichTextBlock 默认样式 |
 
@@ -78,6 +79,7 @@ Wacom UI Settings 是顶层 UI WBP 的唯一项目级覆盖入口。未配置顶
 
 - `PrimaryLayoutClass` 非空时必须继承 `UWacomPrimaryGameLayout`。
 - `AppToastWidgetClass` 非空时必须继承 `UWacomAppToastWidget`。
+- `DefaultBattleEnemyPanelWidgetClass` 必须配置且继承 abstract `UWacomBattleEnemyPanelWidget`；Scene Enemy Host 可显式覆盖，二者都无有效类时面板隐藏而不是创建 C++ 布局 fallback。
 - `WidgetClasses` 的 tag 必须属于 `UI.Widget.*` 命名空间。
 - `WidgetClasses` 的 class 必须继承 `UWacomActivatableWidget`。
 - `UI.Widget.SettingsScreen` 必须继承 `UWacomSettingsScreen`；其它已知顶层 Screen tag 同样校验自己的具体 C++ 父类。

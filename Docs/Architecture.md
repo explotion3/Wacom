@@ -261,7 +261,7 @@ UI 不可以：
 - 自己计算最终规则结果作为真相。
 - 让 ViewData / PresentationView 反向成为领域规则输入。
 
-当前 UI 仍以 C++ 默认布局为主，但必须遵守边界。UI 当前事实集中记录在 `WacomUI.md`，WBP 绑定合同分别记录在 `UI_Backpack_WBP_Binding.md` 和 `UI_Battle_WBP_Binding.md`。
+UI 允许不同业务按切片从 C++ fallback 迁移到正式 WBP，但必须保持同一被动边界。Scene Enemy Panel 已完成 WBP-only 迁移：`WacomApp` 的 abstract CommonUserWidget 父类只保留 ViewData、稳定条目复用、语义动画触发和生命周期；布局、字体、颜色、九宫格与动画属于 `/Game/Wacom/UI/Enemy` 的 WBP；Snapshot 转换只位于 App-private HUD coordinator。`WacomEditor` 独占旧空壳迁移、WidgetTree / animation 写入、编译保存和合同审计，运行时模块不得依赖 UMGEditor、MovieScene 制作 API 或资产写入。UI 当前事实集中记录在 `WacomUI.md`，WBP 绑定合同分别记录在 `UI_Backpack_WBP_Binding.md` 和 `UI_Battle_WBP_Binding.md`。
 
 Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / RunEvent / Backpack Screen 读取 `URunSession` Snapshot 或 ViewData；Battle UI 保持 `FBattleSnapshot` 推送模型。两者都不直接修改规则状态。
 

@@ -7,6 +7,8 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Resolution/BattleCardActionPreview.h"
@@ -16,7 +18,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
-#include "UI/Battle/WacomBattleEnemyPanelWidget.h"
+#include "UI/Battle/WacomBattleEnemyPanelViewData.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
@@ -103,6 +105,47 @@ namespace
 			&& Identity.EncounterId == Bridge.GetBoundEncounterId()
 			&& Identity.GetEffectiveEnemySlotId() == Bridge.GetBoundEnemySlotId()
 			&& Identity.GetEffectivePartSlotId() == Bridge.GetBoundPartSlotId();
+	}
+
+	FWacomBattleEnemyPanelViewData BuildEnemyPanelViewData(
+		const FBattleSnapshot& Snapshot,
+		const FEnemySnapshot& Enemy)
+	{
+		FWacomBattleEnemyPanelViewData View;
+		View.EncounterId = Snapshot.EncounterId;
+		View.EnemySlotId = Enemy.EnemySlotId;
+		View.UnitKey = Enemy.UnitKey;
+		View.EnemyDefinition = Enemy.Definition;
+		View.EnemyDisplayName = Enemy.Definition
+			? Enemy.Definition->DisplayName
+			: FText::FromName(Enemy.EnemySlotId);
+		View.EnemyInitiativeSum = Enemy.InitiativeSum;
+		View.bAllPartsDestroyed = Enemy.bAllPartsDestroyed;
+		View.Parts.Reserve(Enemy.Parts.Num());
+
+		for (const FEnemyPartSnapshot& Part : Enemy.Parts)
+		{
+			FWacomBattleEnemyPartEntryViewData PartView;
+			PartView.PartInstanceId = Part.InstanceId;
+			PartView.Identity = Part.Identity;
+			PartView.EnemySlotId = Part.EnemySlotId;
+			PartView.PartSlotId = Part.PartSlotId;
+			PartView.PartDisplayName = Part.Definition
+				? Part.Definition->DisplayName
+				: FText::FromName(Part.PartSlotId);
+			PartView.CurrentHp = Part.CurrentHp;
+			PartView.MaxHp = Part.MaxHp;
+			PartView.Shield = Part.Shield;
+			PartView.CurrentInitiative = Part.CurrentInitiative;
+			PartView.CurrentIntentDisplayName = Part.CurrentIntent.DisplayName;
+			PartView.CurrentIntentInitiative = Part.CurrentIntent.Initiative;
+			PartView.CurrentIntentResistanceValue = Part.CurrentIntent.ResistanceValue;
+			PartView.RuntimeStatuses = Part.Statuses;
+			PartView.RuntimeStatusStacks = Part.StatusStacks;
+			PartView.bDestroyed = Part.bDestroyed;
+			View.Parts.Add(MoveTemp(PartView));
+		}
+		return View;
 	}
 }
 
@@ -492,8 +535,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 				});
 			if (MatchedEnemy)
 			{
-				Host->SetEnemyPanelViewData(
-					UWacomBattleEnemyPanelWidget::BuildEnemyPanelViewDataFromSnapshot(Snapshot, *MatchedEnemy));
+				Host->SetEnemyPanelViewData(BuildEnemyPanelViewData(Snapshot, *MatchedEnemy));
 			}
 			else
 			{
@@ -867,7 +909,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(
 	}
 	if (AWacomBattleEnemyActor* Host = HoveredEnemyHost.Get())
 	{
-		Host->SetEnemyPanelHoveredVisible(false);
+		Host->SetEnemyPanelHoveredPart(NAME_None);
 	}
 
 	HoveredPresentation.Reset();
@@ -950,7 +992,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 	HoveredHandle = TargetHandle;
 	if (HoveredHost)
 	{
-		HoveredHost->SetEnemyPanelHoveredVisible(true);
+		HoveredHost->SetEnemyPanelHoveredPart(Bridge->GetBoundPartSlotId());
 	}
 
 	FBattleSnapshot CurrentSnapshot;

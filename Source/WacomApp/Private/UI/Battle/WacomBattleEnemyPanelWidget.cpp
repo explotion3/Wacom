@@ -2,39 +2,14 @@
 
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 
-#include "Blueprint/WidgetTree.h"
-#include "Components/Border.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
-#include "Components/VerticalBox.h"
-#include "Components/VerticalBoxSlot.h"
-#include "Enemies/EnemyDefinition.h"
-#include "Enemies/EnemyPartDefinition.h"
+#include "Components/Widget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
 namespace
 {
-	constexpr float FallbackEntryIntroStaggerSeconds = 0.045f;
-
-	FText BuildEnemyHeaderTextInternal(const FWacomBattleEnemyPanelViewData& View)
-	{
-		const FString EnemyName =
-			View.EnemyDisplayName.IsEmpty() ? View.EnemySlotId.ToString() : View.EnemyDisplayName.ToString();
-		return FText::FromString(FString::Printf(TEXT("%s   INIT %d"), *EnemyName, View.EnemyInitiativeSum));
-	}
-
-	FString SanitizeEnemyPanelWidgetObjectName(const FName Key)
-	{
-		FString Name = Key.ToString();
-		for (TCHAR& Character : Name)
-		{
-			if (!FChar::IsAlnum(Character) && Character != TEXT('_'))
-			{
-				Character = TEXT('_');
-			}
-		}
-		return Name.IsEmpty() ? FString(TEXT("None")) : Name;
-	}
+	constexpr float EntryIntroStaggerSeconds = 0.045f;
 
 	void SyncPanelChildAt(UPanelWidget* Panel, UWidget* Child, const int32 DesiredIndex)
 	{
@@ -43,92 +18,117 @@ namespace
 			return;
 		}
 
-		const int32 CurrentIndex = Panel->GetChildIndex(Child);
-		if (CurrentIndex == INDEX_NONE)
+		if (Panel->GetChildIndex(Child) == INDEX_NONE)
 		{
 			Panel->AddChild(Child);
 		}
-
 		Panel->ShiftChild(DesiredIndex, Child);
 	}
 
-	void RemoveInactivePanelChildren(UPanelWidget* Panel, const TSet<UWidget*>& ActiveChildren)
+	FName MakeWidgetObjectName(const FName StablePartKey)
 	{
-		if (!Panel)
+		FString ObjectName = StablePartKey.ToString();
+		for (TCHAR& Character : ObjectName)
 		{
-			return;
-		}
-
-		for (int32 ChildIndex = Panel->GetChildrenCount() - 1; ChildIndex >= 0; --ChildIndex)
-		{
-			UWidget* Child = Panel->GetChildAt(ChildIndex);
-			if (!ActiveChildren.Contains(Child))
+			if (!FChar::IsAlnum(Character) && Character != TEXT('_'))
 			{
-				Panel->RemoveChildAt(ChildIndex);
+				Character = TEXT('_');
 			}
 		}
-	}
-
-	void StylePanelText(UTextBlock* TextBlock, const int32 Size, const FLinearColor& Color)
-	{
-		if (!TextBlock)
-		{
-			return;
-		}
-
-		FSlateFontInfo Font = TextBlock->GetFont();
-		Font.Size = Size;
-		TextBlock->SetFont(Font);
-		TextBlock->SetColorAndOpacity(FSlateColor(Color));
-		TextBlock->SetShadowOffset(FVector2D(0.0f, 1.0f));
-		TextBlock->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.55f));
-		TextBlock->SetAutoWrapText(false);
+		return FName(*FString::Printf(TEXT("EnemyPart_%s"), *ObjectName));
 	}
 }
 
-void UWacomBattleEnemyPanelWidget::SetEnemyPanelViewData(const TArray<FWacomBattleEnemyPanelViewData>& InViews)
+void UWacomBattleEnemyPanelWidget::SetEnemyPanelViewData(
+	const FWacomBattleEnemyPanelViewData& InView)
 {
-	CurrentViews = InViews;
-	SyncEnemyWidgets();
+	CurrentView = InView;
+	bHasCurrentView = true;
+	RefreshHeader();
+	SyncPartEntries();
 }
 
-void UWacomBattleEnemyPanelWidget::SetActionPreviewPartViews(
+void UWacomBattleEnemyPanelWidget::ClearEnemyPanelViewData()
+{
+	ClearActionPreview();
+	HoveredPartSlotId = NAME_None;
+	bHasCurrentView = false;
+	CurrentView = FWacomBattleEnemyPanelViewData();
+	ClearPartEntries();
+	RefreshHeader();
+	RefreshContextHighlight();
+}
+
+bool UWacomBattleEnemyPanelWidget::SetActionPreviewPartViews(
 	const TArray<FWacomBattleEnemyPartEntryViewData>& InPreviewParts)
 {
+	for (TPair<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>>& Pair : PartEntryWidgets)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->ClearActionPreview();
+		}
+	}
+
+	bHasActionPreview = false;
 	for (const FWacomBattleEnemyPartEntryViewData& PreviewPart : InPreviewParts)
 	{
-		const FName EnemyKey = PreviewPart.Identity.IsValidSlot()
-			? PreviewPart.Identity.GetEffectiveEnemySlotId()
-			: (PreviewPart.EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : PreviewPart.EnemySlotId);
-		FWacomBattleEnemyPanelEnemyWidgetState* EnemyState = EnemyWidgetStates.Find(EnemyKey);
-		if (!EnemyState)
+		if (!DoesPartBelongToCurrentEnemy(PreviewPart))
 		{
 			continue;
 		}
 
 		const FName PartKey = BuildPartEntryWidgetKey(PreviewPart);
-		if (TObjectPtr<UWacomBattleEnemyPartEntryWidget>* PartWidget = EnemyState->PartEntryWidgets.Find(PartKey))
+		if (TObjectPtr<UWacomBattleEnemyPartEntryWidget>* PartWidget = PartEntryWidgets.Find(PartKey))
 		{
 			if (PartWidget->Get())
 			{
 				PartWidget->Get()->SetActionPreview(PreviewPart);
+				bHasActionPreview = true;
 			}
 		}
 	}
+	RefreshContextHighlight();
+	return bHasActionPreview;
 }
 
 void UWacomBattleEnemyPanelWidget::ClearActionPreview()
 {
-	for (TPair<FName, FWacomBattleEnemyPanelEnemyWidgetState>& EnemyStatePair : EnemyWidgetStates)
+	for (TPair<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>>& Pair : PartEntryWidgets)
 	{
-		for (TPair<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>>& PartWidgetPair : EnemyStatePair.Value.PartEntryWidgets)
+		if (Pair.Value)
 		{
-			if (PartWidgetPair.Value)
+			Pair.Value->ClearActionPreview();
+		}
+	}
+	bHasActionPreview = false;
+	RefreshContextHighlight();
+}
+
+void UWacomBattleEnemyPanelWidget::SetHoveredPartSlotId(const FName InPartSlotId)
+{
+	if (HoveredPartSlotId == InPartSlotId)
+	{
+		return;
+	}
+
+	HoveredPartSlotId = InPartSlotId;
+	for (const FWacomBattleEnemyPartEntryViewData& PartView : CurrentView.Parts)
+	{
+		if (TObjectPtr<UWacomBattleEnemyPartEntryWidget>* PartWidget =
+			PartEntryWidgets.Find(BuildPartEntryWidgetKey(PartView)))
+		{
+			if (PartWidget->Get())
 			{
-				PartWidgetPair.Value->ClearActionPreview();
+				const FName EffectivePartSlotId = PartView.Identity.IsValidSlot()
+					? PartView.Identity.GetEffectivePartSlotId()
+					: PartView.PartSlotId;
+				PartWidget->Get()->SetContextHighlighted(
+					!HoveredPartSlotId.IsNone() && EffectivePartSlotId == HoveredPartSlotId);
 			}
 		}
 	}
+	RefreshContextHighlight();
 }
 
 void UWacomBattleEnemyPanelWidget::SetPartEntryWidgetClass(
@@ -140,280 +140,163 @@ void UWacomBattleEnemyPanelWidget::SetPartEntryWidgetClass(
 	}
 
 	PartEntryWidgetClass = InWidgetClass;
-	EnemyWidgetStates.Reset();
-	SyncEnemyWidgets();
+	ClearPartEntries();
+	SyncPartEntries();
 }
 
-FWacomBattleEnemyPanelViewData UWacomBattleEnemyPanelWidget::BuildEnemyPanelViewDataFromSnapshot(
-	const FBattleSnapshot& Snap,
-	const FEnemySnapshot& Enemy)
+void UWacomBattleEnemyPanelWidget::NativeConstruct()
 {
-	FWacomBattleEnemyPanelViewData View;
-	View.EncounterId = Snap.EncounterId;
-	View.EnemySlotId = Enemy.EnemySlotId;
-	View.UnitKey = Enemy.UnitKey;
-	View.EnemyDefinition = Enemy.Definition;
-	View.EnemyDisplayName = Enemy.Definition ? Enemy.Definition->DisplayName : FText::FromName(Enemy.EnemySlotId);
-	View.EnemyInitiativeSum = Enemy.InitiativeSum;
-	View.bAllPartsDestroyed = Enemy.bAllPartsDestroyed;
-	View.Parts.Reserve(Enemy.Parts.Num());
+	Super::NativeConstruct();
+	RefreshHeader();
+	SyncPartEntries();
+	RefreshContextHighlight();
+}
 
-	for (const FEnemyPartSnapshot& Part : Enemy.Parts)
+void UWacomBattleEnemyPanelWidget::NativeDestruct()
+{
+	ClearPartEntries();
+	Super::NativeDestruct();
+}
+
+void UWacomBattleEnemyPanelWidget::RefreshHeader()
+{
+	if (EnemyNameText)
 	{
-		FWacomBattleEnemyPartEntryViewData PartView;
-		PartView.PartInstanceId = Part.InstanceId;
-		PartView.Identity = Part.Identity;
-		PartView.EnemySlotId = Part.EnemySlotId;
-		PartView.PartSlotId = Part.PartSlotId;
-		PartView.PartDisplayName = Part.Definition ? Part.Definition->DisplayName : FText::FromName(Part.PartSlotId);
-		PartView.CurrentHp = Part.CurrentHp;
-		PartView.MaxHp = Part.MaxHp;
-		PartView.Shield = Part.Shield;
-		PartView.CurrentInitiative = Part.CurrentInitiative;
-		PartView.CurrentIntentDisplayName = Part.CurrentIntent.DisplayName;
-		PartView.CurrentIntentInitiative = Part.CurrentIntent.Initiative;
-		PartView.CurrentIntentResistanceValue = Part.CurrentIntent.ResistanceValue;
-		PartView.RuntimeStatuses = Part.Statuses;
-		PartView.RuntimeStatusStacks = Part.StatusStacks;
-		PartView.bDestroyed = Part.bDestroyed;
-		View.Parts.Add(MoveTemp(PartView));
+		EnemyNameText->SetText(bHasCurrentView
+			? (CurrentView.EnemyDisplayName.IsEmpty()
+				? FText::FromName(CurrentView.EnemySlotId)
+				: CurrentView.EnemyDisplayName)
+			: FText::GetEmpty());
 	}
-
-	return View;
-}
-
-TArray<FWacomBattleEnemyPanelViewData> UWacomBattleEnemyPanelWidget::BuildEnemyPanelViewDataListFromSnapshot(
-	const FBattleSnapshot& Snap)
-{
-	TArray<FWacomBattleEnemyPanelViewData> Views;
-	Views.Reserve(Snap.Enemies.Num());
-	for (const FEnemySnapshot& Enemy : Snap.Enemies)
+	if (EnemyInitiativeText)
 	{
-		Views.Add(BuildEnemyPanelViewDataFromSnapshot(Snap, Enemy));
+		EnemyInitiativeText->SetText(bHasCurrentView
+			? FText::FromString(FString::Printf(
+				TEXT("INIT %d"), CurrentView.EnemyInitiativeSum))
+			: FText::GetEmpty());
 	}
-	return Views;
 }
 
-TSharedRef<SWidget> UWacomBattleEnemyPanelWidget::RebuildWidget()
+void UWacomBattleEnemyPanelWidget::SyncPartEntries()
 {
-	if (!WidgetTree)
-	{
-		WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
-	}
-
-	if (!WidgetTree->RootWidget)
-	{
-		UBorder* PanelFrame = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("PanelFrame"));
-		PanelFrame->SetBrushColor(FLinearColor(0.018f, 0.022f, 0.028f, 0.78f));
-		PanelFrame->SetContentColorAndOpacity(FLinearColor::White);
-		PanelFrame->SetPadding(FMargin(10.0f, 8.0f));
-		WidgetTree->RootWidget = PanelFrame;
-
-		RootBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Root"));
-		PanelFrame->SetContent(RootBox);
-
-		EmptyTextBlock = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("EmptyText"));
-		EnemyListBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("EnemyListBox"));
-
-		if (RootBox)
-		{
-			if (EmptyTextBlock)
-			{
-				EmptyTextBlock->SetText(FText::FromString(TEXT("No enemy data")));
-				StylePanelText(EmptyTextBlock, 16, FLinearColor(0.62f, 0.67f, 0.74f, 1.0f));
-				if (UVerticalBoxSlot* EmptySlot = RootBox->AddChildToVerticalBox(EmptyTextBlock))
-				{
-					EmptySlot->SetHorizontalAlignment(HAlign_Center);
-					EmptySlot->SetPadding(FMargin(0.0f, 4.0f));
-				}
-			}
-
-			if (EnemyListBox)
-			{
-				RootBox->AddChildToVerticalBox(EnemyListBox);
-			}
-		}
-	}
-
-	SyncEnemyWidgets();
-	return Super::RebuildWidget();
-}
-
-void UWacomBattleEnemyPanelWidget::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
-{
-	SetEnemyPanelViewData(BuildEnemyPanelViewDataListFromSnapshot(Snap));
-}
-
-void UWacomBattleEnemyPanelWidget::SyncEnemyWidgets()
-{
-	if (bSyncingEnemyWidgets || !EnemyListBox || !WidgetTree)
+	if (bSyncingPartEntries || !bHasCurrentView || !PartList || !PartEntryWidgetClass)
 	{
 		return;
 	}
 
-	TGuardValue<bool> SyncGuard(bSyncingEnemyWidgets, true);
-	TSet<FName> ActiveEnemyKeys;
-	TSet<UWidget*> ActiveEnemyWidgets;
-
-	for (int32 EnemyIndex = 0; EnemyIndex < CurrentViews.Num(); ++EnemyIndex)
+	TGuardValue<bool> SyncGuard(bSyncingPartEntries, true);
+	TSet<FName> ActivePartKeys;
+	for (int32 PartIndex = 0; PartIndex < CurrentView.Parts.Num(); ++PartIndex)
 	{
-		const FWacomBattleEnemyPanelViewData& View = CurrentViews[EnemyIndex];
-		const FName EnemyKey = BuildEnemyWidgetKey(View);
-		ActiveEnemyKeys.Add(EnemyKey);
-		FWacomBattleEnemyPanelEnemyWidgetState& EnemyState = FindOrCreateEnemyWidgetState(View);
-		if (!EnemyState.EnemyBox)
+		const FWacomBattleEnemyPartEntryViewData& PartView = CurrentView.Parts[PartIndex];
+		const FName PartKey = BuildPartEntryWidgetKey(PartView);
+		ActivePartKeys.Add(PartKey);
+		UWacomBattleEnemyPartEntryWidget* PartWidget = FindOrCreatePartEntryWidget(PartView);
+		if (!PartWidget)
 		{
 			continue;
 		}
 
-		TSet<UWidget*> ActivePartWidgets;
-		if (EnemyState.HeaderText)
-		{
-			EnemyState.HeaderText->SetText(BuildEnemyHeaderTextInternal(View));
-			SyncPanelChildAt(EnemyState.EnemyBox, EnemyState.HeaderText, 0);
-			ActivePartWidgets.Add(EnemyState.HeaderText);
-		}
-
-		TSet<FName> ActivePartKeys;
-		for (int32 PartIndex = 0; PartIndex < View.Parts.Num(); ++PartIndex)
-		{
-			const FWacomBattleEnemyPartEntryViewData& PartView = View.Parts[PartIndex];
-			const FName PartKey = BuildPartEntryWidgetKey(PartView);
-			ActivePartKeys.Add(PartKey);
-			UWacomBattleEnemyPartEntryWidget* PartWidget = FindOrCreatePartEntryWidget(EnemyState, PartView);
-			if (!PartWidget)
-			{
-				continue;
-			}
-
-			PartWidget->SetPartEntryViewData(PartView);
-			SyncPanelChildAt(EnemyState.EnemyBox, PartWidget, ActivePartWidgets.Num());
-			ActivePartWidgets.Add(PartWidget);
-		}
-
-		for (auto It = EnemyState.PartEntryWidgets.CreateIterator(); It; ++It)
-		{
-			if (!ActivePartKeys.Contains(It.Key()))
-			{
-				EnemyState.AnimatedPartEntryKeys.Remove(It.Key());
-				It.RemoveCurrent();
-			}
-		}
-		RemoveInactivePanelChildren(EnemyState.EnemyBox, ActivePartWidgets);
-
-		UWidget* EnemyGroupWidget = EnemyState.EnemyBorder ? Cast<UWidget>(EnemyState.EnemyBorder) : Cast<UWidget>(EnemyState.EnemyBox);
-		SyncPanelChildAt(EnemyListBox, EnemyGroupWidget, EnemyIndex);
-		if (UVerticalBoxSlot* EnemySlot = EnemyGroupWidget ? Cast<UVerticalBoxSlot>(EnemyGroupWidget->Slot) : nullptr)
-		{
-			EnemySlot->SetPadding(FMargin(0.0f, EnemyIndex > 0 ? 6.0f : 0.0f, 0.0f, 0.0f));
-		}
-		ActiveEnemyWidgets.Add(EnemyGroupWidget);
+		PartWidget->SetPartEntryViewData(PartView);
+		const FName EffectivePartSlotId = PartView.Identity.IsValidSlot()
+			? PartView.Identity.GetEffectivePartSlotId()
+			: PartView.PartSlotId;
+		PartWidget->SetContextHighlighted(
+			!HoveredPartSlotId.IsNone() && EffectivePartSlotId == HoveredPartSlotId);
+		SyncPanelChildAt(PartList, PartWidget, PartIndex);
 	}
 
-	for (auto It = EnemyWidgetStates.CreateIterator(); It; ++It)
+	for (auto It = PartEntryWidgets.CreateIterator(); It; ++It)
 	{
-		if (!ActiveEnemyKeys.Contains(It.Key()))
+		if (!ActivePartKeys.Contains(It.Key()))
 		{
+			if (It.Value())
+			{
+				It.Value()->CancelPendingPresentation();
+				PartList->RemoveChild(It.Value());
+			}
+			AnimatedPartEntryKeys.Remove(It.Key());
 			It.RemoveCurrent();
 		}
 	}
-	RemoveInactivePanelChildren(EnemyListBox, ActiveEnemyWidgets);
-
-	if (EmptyTextBlock)
-	{
-		EmptyTextBlock->SetVisibility(CurrentViews.IsEmpty() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-	}
+	RefreshContextHighlight();
 }
 
-FWacomBattleEnemyPanelEnemyWidgetState&
-UWacomBattleEnemyPanelWidget::FindOrCreateEnemyWidgetState(const FWacomBattleEnemyPanelViewData& View)
+void UWacomBattleEnemyPanelWidget::ClearPartEntries()
 {
-	const FName EnemyKey = BuildEnemyWidgetKey(View);
-	FWacomBattleEnemyPanelEnemyWidgetState& State = EnemyWidgetStates.FindOrAdd(EnemyKey);
-	if (!State.EnemyBorder && WidgetTree)
+	for (TPair<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>>& Pair : PartEntryWidgets)
 	{
-		const FString SafeKey = SanitizeEnemyPanelWidgetObjectName(EnemyKey);
-		State.EnemyBorder = WidgetTree->ConstructWidget<UBorder>(
-			UBorder::StaticClass(),
-			*FString::Printf(TEXT("EnemyGroup_%s"), *SafeKey));
-		if (State.EnemyBorder)
+		if (Pair.Value)
 		{
-			State.EnemyBorder->SetPadding(FMargin(8.0f, 7.0f));
-			State.EnemyBorder->SetBrushColor(FLinearColor(0.06f, 0.073f, 0.088f, 0.88f));
+			Pair.Value->CancelPendingPresentation();
 		}
 	}
-	if (!State.EnemyBox && WidgetTree)
+	if (PartList)
 	{
-		const FString SafeKey = SanitizeEnemyPanelWidgetObjectName(EnemyKey);
-		State.EnemyBox = WidgetTree->ConstructWidget<UVerticalBox>(
-			UVerticalBox::StaticClass(),
-			*FString::Printf(TEXT("EnemyBox_%s"), *SafeKey));
-		if (State.EnemyBorder && State.EnemyBox)
-		{
-			State.EnemyBorder->SetContent(State.EnemyBox);
-		}
+		PartList->ClearChildren();
 	}
-	if (!State.HeaderText && WidgetTree)
-	{
-		const FString SafeKey = SanitizeEnemyPanelWidgetObjectName(EnemyKey);
-		State.HeaderText = WidgetTree->ConstructWidget<UTextBlock>(
-			UTextBlock::StaticClass(),
-			*FString::Printf(TEXT("EnemyHeader_%s"), *SafeKey));
-		StylePanelText(State.HeaderText, 16, FLinearColor(0.92f, 0.84f, 0.62f, 1.0f));
-	}
-	return State;
+	PartEntryWidgets.Reset();
+	AnimatedPartEntryKeys.Reset();
+	bHasActionPreview = false;
 }
 
-UWacomBattleEnemyPartEntryWidget* UWacomBattleEnemyPanelWidget::FindOrCreatePartEntryWidget(
-	FWacomBattleEnemyPanelEnemyWidgetState& EnemyState,
+void UWacomBattleEnemyPanelWidget::RefreshContextHighlight()
+{
+	if (PanelContextHighlight)
+	{
+		PanelContextHighlight->SetVisibility(
+			(!HoveredPartSlotId.IsNone() || bHasActionPreview)
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
+	}
+}
+
+UWacomBattleEnemyPartEntryWidget*
+UWacomBattleEnemyPanelWidget::FindOrCreatePartEntryWidget(
 	const FWacomBattleEnemyPartEntryViewData& PartView)
 {
 	const FName PartKey = BuildPartEntryWidgetKey(PartView);
-	if (TObjectPtr<UWacomBattleEnemyPartEntryWidget>* Existing = EnemyState.PartEntryWidgets.Find(PartKey))
+	if (TObjectPtr<UWacomBattleEnemyPartEntryWidget>* Existing = PartEntryWidgets.Find(PartKey))
 	{
 		return Existing->Get();
 	}
 
-	if (!WidgetTree)
-	{
-		return nullptr;
-	}
-
-	const TSubclassOf<UWacomBattleEnemyPartEntryWidget> EntryClass =
-		PartEntryWidgetClass ? PartEntryWidgetClass.Get() : UWacomBattleEnemyPartEntryWidget::StaticClass();
 	UWacomBattleEnemyPartEntryWidget* PartWidget =
-		WidgetTree->ConstructWidget<UWacomBattleEnemyPartEntryWidget>(
-			EntryClass,
-			*FString::Printf(TEXT("EnemyPartEntry_%s"), *SanitizeEnemyPanelWidgetObjectName(PartKey)));
+		CreateWidget<UWacomBattleEnemyPartEntryWidget>(
+			this, PartEntryWidgetClass, MakeWidgetObjectName(PartKey));
 	if (PartWidget)
 	{
-		PartWidget->SetFallbackIntroDelaySeconds(EnemyState.AnimatedPartEntryKeys.Num() * FallbackEntryIntroStaggerSeconds);
-		EnemyState.AnimatedPartEntryKeys.Add(PartKey);
-		EnemyState.PartEntryWidgets.Add(PartKey, PartWidget);
+		PartWidget->SetIntroDelaySeconds(
+			AnimatedPartEntryKeys.Num() * EntryIntroStaggerSeconds);
+		AnimatedPartEntryKeys.Add(PartKey);
+		PartEntryWidgets.Add(PartKey, PartWidget);
 	}
 	return PartWidget;
 }
 
-FText UWacomBattleEnemyPanelWidget::BuildEnemyHeaderText(const FWacomBattleEnemyPanelViewData& View) const
-{
-	return BuildEnemyHeaderTextInternal(View);
-}
-
-FName UWacomBattleEnemyPanelWidget::BuildEnemyWidgetKey(const FWacomBattleEnemyPanelViewData& View) const
-{
-	const FName EnemySlotId = View.UnitKey.IsValidKey()
-		? View.UnitKey.GetEffectiveEnemyUnitSlotId()
-		: (View.EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : View.EnemySlotId);
-	return EnemySlotId;
-}
-
-FName UWacomBattleEnemyPanelWidget::BuildPartEntryWidgetKey(const FWacomBattleEnemyPartEntryViewData& PartView) const
+FName UWacomBattleEnemyPanelWidget::BuildPartEntryWidgetKey(
+	const FWacomBattleEnemyPartEntryViewData& PartView) const
 {
 	const FName EnemySlotId = PartView.Identity.IsValidSlot()
 		? PartView.Identity.GetEffectiveEnemySlotId()
-		: (PartView.EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : PartView.EnemySlotId);
+		: (PartView.EnemySlotId.IsNone() ? CurrentView.EnemySlotId : PartView.EnemySlotId);
 	const FName PartSlotId = PartView.Identity.IsValidSlot()
 		? PartView.Identity.GetEffectivePartSlotId()
 		: PartView.PartSlotId;
-	return FName(*FString::Printf(TEXT("%s.%s"), *EnemySlotId.ToString(), *PartSlotId.ToString()));
+	return FName(*FString::Printf(
+		TEXT("%s.%s"), *EnemySlotId.ToString(), *PartSlotId.ToString()));
+}
+
+bool UWacomBattleEnemyPanelWidget::DoesPartBelongToCurrentEnemy(
+	const FWacomBattleEnemyPartEntryViewData& PartView) const
+{
+	if (!bHasCurrentView)
+	{
+		return false;
+	}
+
+	const FName EnemySlotId = PartView.Identity.IsValidSlot()
+		? PartView.Identity.GetEffectiveEnemySlotId()
+		: PartView.EnemySlotId;
+	return EnemySlotId == CurrentView.EnemySlotId;
 }

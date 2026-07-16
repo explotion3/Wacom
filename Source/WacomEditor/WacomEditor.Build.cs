@@ -37,6 +37,8 @@ public class WacomEditor : ModuleRules
 			"UMG",
 			"UMGEditor",
 			"CommonUI",
+			"MovieScene",
+			"MovieSceneTracks",
 			"Paper2D",
 			"ToolMenus",
 			"PropertyEditor",

@@ -4,6 +4,7 @@
 
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 
 #define LOCTEXT_NAMESPACE "WacomBattleSceneEnemyAuthoringHelpers"
 
@@ -583,6 +584,26 @@ namespace WacomBattleSceneEnemyAuthoring
 				FText::FromString(EnemyActor.GetName()),
 				FText::FromString(JoinNames(Audit.DuplicatePartSlotIds, TEXT(",")))));
 			Result = EDataValidationResult::Invalid;
+		}
+		else if (!EnemyActor.EnemyPanelWidgetClass
+			&& EnemyActor.EnemyDefinition->Parts.Num() > 4)
+		{
+			Context.AddWarning(FText::Format(
+				LOCTEXT("PlacementDefaultEnemyPanelPartLimit",
+					"BattleEnemy Host 摆放警告：Actor={0} 的 EnemyDefinition={1} 包含 {2} 个部位，超过默认 Scene Enemy Panel 的 4 部位制作合同。运行时仍会显示全部条目，但请为该 Host 配置 Boss 专用 EnemyPanelWidgetClass。"),
+				FText::FromString(EnemyActor.GetName()),
+				FText::FromString(EnemyActor.EnemyDefinition->GetName()),
+				FText::AsNumber(EnemyActor.EnemyDefinition->Parts.Num())));
+			Result = KeepInvalidResult(Result);
+		}
+
+		if (EnemyActor.EnemyPanelWidgetClass == UWacomBattleEnemyPanelWidget::StaticClass())
+		{
+			Context.AddWarning(FText::Format(
+				LOCTEXT("PlacementLegacyNativeEnemyPanelClass",
+					"BattleEnemy Host 摆放警告：Actor={0} 仍保存旧 native Enemy Panel fallback。运行时会改用项目默认正式 WBP；无需为兼容而重存地图，后续编辑该 Host 时可清空 EnemyPanelWidgetClass。"),
+				FText::FromString(EnemyActor.GetName())));
+			Result = KeepInvalidResult(Result);
 		}
 
 		if (Audit.PartDefinitionMismatchSlotIds.Num() > 0)

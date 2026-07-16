@@ -59,10 +59,13 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 |---|---|---|
 | 战斗 UI 全量刷新 | 每次命令后 BattleHUD 从 Snapshot 全量刷新子 widget | 加动画时动画系统自行 diff；数据源仍保持 Snapshot |
 | 战斗 UI 不做 ViewModel | BattleHUD 持有 `UBattleSession*`，子 widget 读 `FBattleSnapshot` | UI 复杂度上升或外部 widget 需要战斗状态时，再抽 `UWacomBattleViewModel` |
-| C++ 硬编码默认布局 | Widget 类 `Blueprintable` 非 Abstract，带 C++ fallback 布局；BattleHUD / BackpackScreen 的 fallback 构建已抽到私有 helper | 美术阶段用 WBP 替换视觉，C++ 保留协议和兜底 |
+| C++ 硬编码默认布局 | 部分旧 Widget 仍为 `Blueprintable` 非 Abstract 并带 C++ fallback；Scene Enemy Panel / PartEntry 已迁为 abstract CommonUserWidget + 正式 WBP，不再保留原生完整布局 | 其它界面按业务切片迁移；正式 WBP 后 C++ 只保留协议、ViewData 与生命周期，不重新建立第二套视觉 |
 | Battle Widget Session Blueprint 面 | C++ owner 注入已改走 `UWacomBattleWidgetBase.SetInjectedBattleSession / GetInjectedBattleSession`；`SetSession / GetSession` 已降为 C++ only 旧兼容 wrapper，不再暴露给 Blueprint；正式 WBP 制作面只消费 Snapshot / ViewData 并回传玩家意图 | 保留 C++ wrapper 到旧测试和零散调用迁移完成；如外部 widget 需要只读战斗状态，再评估 `UWacomBattleViewModel` / provider |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
 | 场景敌人表现 polish | 主链路已拆成 `SceneEnemyHost + PartActor + WorldTargetBridge + Presentation`；普通小怪具备 Host Idle / Action / Destroyed barrier，PartActor 已具备通用 Destroyed 粒子和 VisualLayer 原地破损终态；精英 / Boss 仍缺正式逐层破损内容 | 为首个正式 Multi-Part enemy pack 制作对应 `DestroyedSprite / DestroyedFlipbook`，继续补材质描边、tooltip 和风险动效；只有 Part 局部多状态或复杂转场确有需要时再接 PaperZD/Animator，避免复制现有语义层 |
+| Scene Enemy Panel 兼容资产命名 | 正式面板仍沿用既有 `BP_WacomBattleEnemyPanelWidget / BP_WacomBattleEnemyPartEntryWidget` 路径，避免本轮重命名波及地图与 Host 资产 | 等地图和 Host 资产可统一重存时，单独迁到 `WBP_` 命名并用 redirect / dependency audit 清理旧路径 |
+| 普通 Enemy Panel 部位上限 | 正式 WBP 对 1–4 个部位提供紧凑/展开布局；超过 4 个只给制作警告并继续运行 | 首个复杂 Boss 内容切片引入专用 Boss WidgetClass；不要把滚动、分页或 Phase UI 塞回普通面板 |
+| Scene Enemy Host 旧原生面板 override | 老地图/Host 可能序列化了已改为 abstract 的原生 Panel class；`PostLoad()` 只在运行时把这个精确旧值视为未配置并回退项目默认 WBP，不修改 package | 下次有意重存相关地图/Host 时清空旧 override；完成资产审计后删除这条精确兼容分支 |
 | CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
 | UI Style 资产命名 V0 | 通用样式资产已迁到 `/Game/Wacom/UI/Style/`，但仍保留 `tiny_menu_Button`、`MyCommonTextStyle` 等原型命名 | 后续设计系统整理时统一命名为语义化 Style asset，例如 `WBPStyle_Button_CommandPrimary` / `TextStyle_CommandButton`，并通过资产审计确认没有旧路径引用后再重命名 |

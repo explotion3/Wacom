@@ -192,6 +192,7 @@ class WACOMAPP_API AWacomBattleEnemyActor : public AActor
 
 public:
 	AWacomBattleEnemyActor();
+	virtual void PostLoad() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
 		meta = (ToolTip = "Host 对应的敌人定义。用于校验子 PartActor 的 PartId / PartSlotId 是否对应 EnemyDefinition.Parts；运行时敌人列表仍由 BattleTrigger.EncounterDefinition 提供。"))
@@ -291,7 +292,7 @@ public:
 	float BadgeStaggerVerticalStep = 18.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
-		meta = (ToolTip = "敌人头顶聚合面板使用的 Widget 类。为空时使用 C++ fallback UWacomBattleEnemyPanelWidget。"))
+		meta = (ToolTip = "敌人头顶聚合面板的 Host 专用 WBP override。为空时使用 Wacom UI Settings.DefaultBattleEnemyPanelWidgetClass。"))
 	TSubclassOf<UWacomBattleEnemyPanelWidget> EnemyPanelWidgetClass;
 
 	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
@@ -299,8 +300,12 @@ public:
 	FVector EnemyPanelRelativeLocation = FVector(0.0f, 0.0f, 180.0f);
 
 	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
-		meta = (ToolTip = "敌人头顶聚合面板的渲染尺寸，单位 Slate 像素。", ClampMin = "1.0", UIMin = "64.0"))
+		meta = (ToolTip = "关闭 Desired Size 时敌人头顶聚合面板的固定渲染尺寸，单位 Slate 像素；建议约 320×180 至 560×420，会直接影响固定画布布局。", ClampMin = "1.0", UIMin = "64.0"))
 	FVector2D EnemyPanelDrawSize = FVector2D(360.0f, 220.0f);
+
+	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
+		meta = (ToolTip = "是否让 WidgetComponent 使用 WBP Desired Size，并以底部中心为 Pivot 向上增长。关闭时使用 EnemyPanelDrawSize 固定画布。"))
+	bool bEnemyPanelDrawAtDesiredSize = true;
 
 	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
 		meta = (ToolTip = "是否在有敌人数据时常驻显示头顶聚合面板。关闭后只在部位悬浮等交互状态显示。"))
@@ -402,7 +407,8 @@ public:
 
 	void ClearEnemyPanelActionPreview();
 
-	void SetEnemyPanelHoveredVisible(bool bVisible);
+	/** 设置当前 hover 的稳定 PartSlotId；NAME_None 清除 hover 上下文。 */
+	void SetEnemyPanelHoveredPart(FName PartSlotId);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Debug",
 		meta = (ToolTip = "读取战斗场景敌人 Host 的只读诊断信息。"))
@@ -436,6 +442,7 @@ protected:
 private:
 	void RefreshHostVisual();
 	void RefreshEnemyPanelWidgetComponent();
+	void RefreshEnemyPanelVisibility();
 	FName GetHostVisualModeDebugName() const;
 	FName GetHostVisualAssetName() const;
 	int32 GetGeneratedHostVisualComponentCount() const;
@@ -449,6 +456,9 @@ private:
 		TArray<int32>& OutIndices) const;
 
 	bool bRuntimeEncounterPresentationRetired = false;
+	bool bEnemyPanelHasViewData = false;
+	bool bEnemyPanelHasActionPreview = false;
+	FName EnemyPanelHoveredPartSlotId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 根节点。部位 Actor 可附着到本 Actor 下进行分组。"))

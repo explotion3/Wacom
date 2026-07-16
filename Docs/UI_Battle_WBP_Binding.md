@@ -401,57 +401,71 @@ WBP 不应做：不修改牌堆或规则状态，不自行计算数量，也不�
 
 ## Enemy Panel WBP
 
-### WBP_BattleEnemyPanelWidget
+### BP_WacomBattleEnemyPanelWidget
 
 父类：`UWacomBattleEnemyPanelWidget`
 
-用途：敌人 Host 头顶的世界空间聚合面板。`AWacomBattleEnemyActor.EnemyPanelWidgetComponent` 承载该 WBP，HUD 只从 `FBattleSnapshot.Enemies` 派发只读 view data，按敌人聚合展示所有部位。
+资产路径：`/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget`
 
-推荐绑定：
+用途：敌人 Host 头顶的 screen-space 被动面板。一个实例只消费一个 `FWacomBattleEnemyPanelViewData`；Snapshot 到 ViewData 的转换属于 App-private HUD coordinator，WBP 不读取 `UBattleSession` 或 `FBattleSnapshot`。
 
-| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
-|---|---|---|---|
-| `EnemyListBox` | `VerticalBox` | Optional | 每个敌人一组；缺省时 C++ fallback 自动创建 |
+必需绑定：
 
-推荐类默认值：
-
-| 属性 | 推荐值 | 运行时职责 |
+| 控件名 | 推荐类型 | 运行时职责 |
 |---|---|---|
-| `PartEntryWidgetClass` | `BP_WacomBattleEnemyPartEntryWidget` | 面板内每个部位条目的正式 WBP 类；为空时使用 C++ fallback |
+| `EnemyNameText` | `TextBlock` | 敌人名称 |
+| `EnemyInitiativeText` | `TextBlock` | 当前部位先机合计 |
+| `PartList` | `VerticalBox` | 按 Definition / ViewData 顺序承载稳定部位条目 |
+| `PanelContextHighlight` | `Widget` | hover 或 Action Preview 上下文强调 |
 
-WBP 不应做：不直接读取或修改 `UBattleSession`，不在部位 Actor 上创建常驻状态 UI。
+类默认值：
 
-### WBP_BattleEnemyPartEntryWidget
+| 属性 | 正式值 | 运行时职责 |
+|---|---|---|
+| `PartEntryWidgetClass` | `BP_WacomBattleEnemyPartEntryWidget` | 创建、排序和复用部位条目；为空属于合同错误 |
+
+Panel 按稳定 `EnemySlotId + PartSlotId` 复用条目，只有部位真正移除、战斗清空或 Widget 析构时才销毁缓存。新条目使用 `0.045s` stagger 触发 Intro；Timer 使用弱对象 delegate，并在 clear / destruct 时清理。普通面板正式支持最多 4 个部位；更多部位可运行，但 Validator 会提示改用未来的 Boss 专用 WidgetClass。
+
+WBP 不应做：不读取或修改 `UBattleSession`，不构建 ViewData，不提交命令，也不在图中创建/销毁部位条目。
+
+### BP_WacomBattleEnemyPartEntryWidget
 
 父类：`UWacomBattleEnemyPartEntryWidget`
 
-用途：敌人面板内的通用部位条目，展示单个部位的名称、HP/MaxHP、护盾、先机、意图和状态。当前可继续使用状态文本，也可选接共享状态图标列表。
+资产路径：`/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget`
 
-推荐绑定：
+用途：展示单个部位的紧凑状态，并在 hover / Action Preview 时展开细节。布局、字体、颜色、九宫格和动画都属于 WBP；C++ 父类只应用 ViewData 和语义状态。
 
-| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
-|---|---|---|---|
-| `PartNameText` | `TextBlock` | Optional | 部位名 |
-| `HpText` | `TextBlock` | Optional | HP / MaxHP |
-| `ShieldText` | `TextBlock` | Optional | 护盾；无护盾时可为空或隐藏 |
-| `InitiativeText` | `TextBlock` | Optional | 当前先机 |
-| `StatsText` | `TextBlock` | Optional | HP / 护盾 / 先机的汇总兜底文本；正式 WBP 拆出上面三个字段后可以不放 |
-| `IntentText` | `TextBlock` | Optional | 当前意图 |
-| `StatusList` | `UWacomBattleStatusIconListWidget` | Optional | 状态图标行；绑定后优先使用图标列表 |
-| `StatusText` | `TextBlock` | Optional | 状态标签汇总；未绑定 `StatusList` 时的回退 |
-| `DestroyedOverlay` | `Widget` | Optional | 部位破坏时的弱化/覆盖层 |
+必需绑定：
+
+| 控件名 | 推荐类型 | 运行时职责 |
+|---|---|---|
+| `PartNameText` | `TextBlock` | 部位名 |
+| `HpBar` / `HpText` | `ProgressBar` / `TextBlock` | HP 比例与数值 |
+| `ShieldContainer` / `ShieldText` | `Widget` / `TextBlock` | 护盾区域与数值；零护盾折叠 |
+| `InitiativeText` | `TextBlock` | 当前先机 |
+| `IntentText` / `ResistanceText` | `TextBlock` | 当前意图与抵抗 |
+| `DetailsContainer` | `Widget` | hover / preview 展开的细节区域 |
+| `StatusList` | `UWacomBattleStatusIconListWidget` | 正式状态图标列表 |
+| `ContextHighlight` / `ActionPreviewOverlay` | `Widget` / `Widget` | hover 与 projected 语义 |
+| `DestroyedOverlay` | `Widget` | 部位破坏终态弱化层 |
+
+必需动画：`IntroAnimation`、`DamagePulseAnimation`、`ShieldPulseAnimation`、`DestroyedPulseAnimation`、`ContextHighlightAnimation`。C++ 只按语义触发；时长、曲线、颜色和关键帧由 WBP 独占。
 
 刷新语义：
 
-- Panel 按 `EnemySlotId` 复用敌人组，按 `EnemySlotId + PartSlotId` 复用部位条目；同一部位只更新 view data，不重建条目 Widget。
-- `Shield == 0` 时 `ShieldText` 会清空并折叠；如果 WBP 只绑定 `StatsText` 而未绑定 `HpText / ShieldText / InitiativeText`，汇总文本仍会显示。
-- `StatusList` 绑定时，C++ 使用共享图标列表并隐藏 `StatusText`；未绑定时保留旧状态文本格式。
-- `bDestroyed` 时 `DestroyedOverlay` 显示，条目整体透明度降低。
-- Action Preview 不需要新增必绑控件。预览激活时，C++ 会用 Battle 规则层产出的 projected part view 覆盖 `HpText / ShieldText / InitiativeText / StatusList / DestroyedOverlay` 当前显示；如果部位会因本次打牌立即行动，`InitiativeText` 显示 `0`。同一次出牌触发多个敌人部位行动时，敌人聚合面板会显示所有 projected 部位的净结果，不限于当前鼠标指向部位。预览刷新不触发真实 HP / Shield pulse，清理后恢复基础 ViewData。
-- C++ fallback 使用暗色紧凑面板和水平部位条目：部位名、HP、护盾、先机、意图同排展示，状态和破坏标记作为次级信息显示。
-- C++ fallback 自带轻量表现动效：新增条目错峰淡入/轻微下移归位，HP、护盾和破坏状态变化时短促 pulse。正式 WBP 可以用 UMG Animation 覆盖更完整的动效表现。
+- 紧凑态显示名称、HP、护盾、当前先机和意图；只展开匹配 hover 的 `PartSlotId` 或具有 projected preview 的条目。
+- Action Preview 临时覆盖 HP、护盾、先机、状态与 Destroyed 显示；清理后恢复最近一次真实 ViewData。
+- Preview 不触发 Damage / Shield / Destroyed pulse。只有真实 Snapshot 值发生变化时才播放；同次刷新命中多个变化时按 `Destroyed > Damage > Shield` 只播最高语义，避免终态叠闪。
+- Destroyed 部位保留条目并显示终态覆盖，不改变 Host Downed 或 Trigger retirement 顺序。
+- Root 和所有子控件必须不可命中，不能抢占 first-person 卡牌输入或场景目标射线。
 
-WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不承担 world target/hover/drag preview 反馈。
+WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不读取 Actor 命中，也不自行推断 Preview 或真实伤害。
+
+面板背景使用 `T_UI_PixelPanel_EnemyInfo_9Slice_512x160` 九宫格。Host WidgetComponent 默认启用 Desired Size、Pivot `(0.5, 1.0)`，让 1–4 个部位向上增长；只有显式关闭 Desired Size 时才使用 `EnemyPanelDrawSize` 兼容固定尺寸。Host 的 `EnemyPanelWidgetClass` 优先于 `UWacomUIDeveloperSettings.DefaultBattleEnemyPanelWidgetClass`；两者均无有效类时记录错误并隐藏面板，不创建 C++ 完整布局 fallback。
+
+编辑器关闭时可执行 `-run=WacomBuildEnemyUI -MigrateLegacy`，仅把两个已识别的空壳旧路径迁成正式合同；遇到非空且合同不匹配的人工布局会停止并拒绝覆盖。`-run=WacomBuildEnemyUI -InspectOnly` 只读检查父类、绑定、动画、PartEntry class、命中策略和九宫格资源。该命令不接入 `WacomRegenerateContent`，重复迁移不得 dirty package。
+
 ## PIE Smoke Checklist
 
 - `WBP_BattleHUD` 能显示玩家状态、CommandBar、牌堆数量、CombatLogFeed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。

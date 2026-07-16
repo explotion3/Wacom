@@ -6,6 +6,8 @@
 #include "Components/PanelWidget.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
+#include "Engine/Engine.h"
+#include "Engine/World.h"
 #include "GameplayTagContainer.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
@@ -18,6 +20,24 @@
 
 namespace WacomBattleStatusIconWidgetSpec
 {
+	constexpr TCHAR EnemyPartEntryClassPath[] =
+		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget_C");
+
+	UWorld* FindAutomationWorld()
+	{
+		if (GEngine)
+		{
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (UWorld* World = Context.World())
+				{
+					return World;
+				}
+			}
+		}
+		return GWorld;
+	}
+
 	UWacomBattleStatusIconListWidget* FindStatusList(UWidgetTree* WidgetTree)
 	{
 		return WidgetTree
@@ -247,15 +267,28 @@ bool FWacomUIBattlePlayerStatusBarActionPreviewSpec::RunTest(const FString& /*Pa
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyPartStatusTextFallbackStillWorksSpec,
-	"Wacom.UI.Battle.StatusIcons.EnemyPartStatusTextFallbackStillWorks",
+	FWacomUIBattleEnemyPartUsesFormalStatusListSpec,
+	"Wacom.UI.Battle.StatusIcons.EnemyPartUsesFormalStatusList",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleEnemyPartStatusTextFallbackStillWorksSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleEnemyPartUsesFormalStatusListSpec::RunTest(const FString& /*Parameters*/)
 {
 	using namespace WacomBattleStatusIconWidgetSpec;
 
-	TStrongObjectPtr<UWacomBattleEnemyPartEntryWidget> Widget(NewObject<UWacomBattleEnemyPartEntryWidget>());
+	UWorld* World = FindAutomationWorld();
+	UClass* PartEntryClass = LoadClass<UWacomBattleEnemyPartEntryWidget>(nullptr, EnemyPartEntryClassPath);
+	if (!TestNotNull(TEXT("Automation world"), World)
+		|| !TestNotNull(TEXT("Formal enemy part-entry WBP"), PartEntryClass))
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBattleEnemyPartEntryWidget> Widget(
+		CreateWidget<UWacomBattleEnemyPartEntryWidget>(World, PartEntryClass));
+	if (!TestNotNull(TEXT("Formal enemy part-entry instance"), Widget.Get()))
+	{
+		return false;
+	}
 	Widget->TakeWidget();
 
 	FWacomBattleEnemyPartEntryViewData View = MakeEnemyPartView();
@@ -263,17 +296,20 @@ bool FWacomUIBattleEnemyPartStatusTextFallbackStillWorksSpec::RunTest(const FStr
 	View.RuntimeStatusStacks.Add(WacomTags::Status_Poison, 2);
 	Widget->SetPartEntryViewData(View);
 
-	TestNull(TEXT("Generated fallback does not bind icon StatusList"), FindStatusList(Widget->WidgetTree));
-
-	UTextBlock* StatusText = FindTextBlock(Widget->WidgetTree, TEXT("StatusText"));
-	if (!TestNotNull(TEXT("StatusText fallback"), StatusText))
+	UWacomBattleStatusIconListWidget* StatusList = FindStatusList(Widget->WidgetTree);
+	if (!TestNotNull(TEXT("Formal StatusList binding"), StatusList))
 	{
 		return false;
 	}
 
-	TestTrue(TEXT("Status fallback includes localized status name"), StatusText->GetText().ToString().Contains(TEXT("中毒")));
-	TestTrue(TEXT("Status fallback includes stack count"), StatusText->GetText().ToString().Contains(TEXT("x2")));
-	TestEqual(TEXT("Status fallback visible"), StatusText->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	const TArray<FWacomBattleStatusIconView> Views = StatusList->GetStatusIconViews();
+	TestEqual(TEXT("Enemy part has one status icon"), Views.Num(), 1);
+	if (Views.Num() == 1)
+	{
+		TestTrue(TEXT("Enemy part status is poison"), Views[0].StatusTag == WacomTags::Status_Poison);
+		TestEqual(TEXT("Enemy part poison stack"), Views[0].StackCount, 2);
+	}
+	TestEqual(TEXT("Formal status list visible"), StatusList->GetVisibility(), ESlateVisibility::HitTestInvisible);
 
 	return true;
 }
