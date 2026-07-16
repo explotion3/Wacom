@@ -2,7 +2,7 @@
 type: production-guide
 scope: wacom-dreamshader
 status: active
-updated: 2026-07-15
+updated: 2026-07-16
 tags:
   - wacom/materials
   - dreamshader
@@ -245,6 +245,14 @@ DreamShader commandlet 只负责根据 `.dsm/.dsh` 生成基础 Material。它�
 - 像素卡面最终还会经过 UMG 缩放、DPI、Retainer、Nearest 过滤和 authored clipping。
 
 审美与空间表现必须在真实 WBP、Niagara System 和 PIE 中验收。
+
+### 5.9 编辑器启动与跨 worktree 元数据
+
+生成资产的 `DreamShader.SourceFile` 必须保存为工程相对路径，例如 `DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm`。不得把 main、Codex worktree 或开发者机器的绝对路径写入受 Git LFS 管理的 `.uasset`；插件读取旧绝对路径时会按当前 `DShader` 根目录解析其稳定后缀，保证同一源文件换 worktree 后仍能命中 Source Hash 跳过逻辑。
+
+普通持久化材质模式下，`bAutoCompileOnEditorStartup` 默认关闭。Editor 启动只重建轻量的 import dependency graph，不排队、加载或保存全部生成 Material；修改 `.dsm/.dsh` 时仍由 `bAutoCompileOnSave` 触发定向编译，也可以通过 `Tools > Recompile DSM` 显式全量编译。Virtual Material Mode 需要在内存中恢复 transient 资产，因此不受该启动开关限制。
+
+`Content/DreamMaterials` 继续整体由 Git LFS 管理。禁止用忽略生成资产来掩盖启动重写；升级元数据格式时应在隔离 worktree 执行一次受控 `DreamShader compile -All -Force`，提交迁移后的父 Material / Material Function，再在两个不同绝对路径的 worktree 验证普通启动不产生资产 diff。
 
 ## 6. 推荐生成流程
 

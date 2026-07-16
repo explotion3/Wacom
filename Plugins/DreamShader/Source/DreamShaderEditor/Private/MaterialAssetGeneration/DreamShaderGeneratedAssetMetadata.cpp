@@ -1,10 +1,11 @@
-#include "DreamShaderMaterialGeneratorPrivate.h"
+#include "DreamShaderGeneratedAssetMetadata.h"
 
 #include "DreamShaderModule.h"
 #include "DreamShaderVersionCompat.h"
 
 #include "FileHelpers.h"
 #include "Misc/Crc.h"
+#include "Misc/Paths.h"
 #include "UObject/MetaData.h"
 #include "UObject/Package.h"
 
@@ -12,6 +13,47 @@ namespace UE::DreamShader::Editor::Private
 {
 	namespace
 	{
+		FString NormalizeRelativePath(FString Path)
+		{
+			FPaths::NormalizeFilename(Path);
+			FPaths::CollapseRelativeDirectories(Path);
+			while (Path.RemoveFromStart(TEXT("./")))
+			{
+			}
+			return Path;
+		}
+
+		FString AddTrailingSlash(FString Path)
+		{
+			if (!Path.EndsWith(TEXT("/")))
+			{
+				Path += TEXT("/");
+			}
+			return Path;
+		}
+
+		bool IsPathWithinDirectory(const FString& Path, const FString& Directory)
+		{
+			return Path.Equals(Directory, ESearchCase::IgnoreCase)
+				|| Path.StartsWith(AddTrailingSlash(Directory), ESearchCase::IgnoreCase);
+		}
+
+		FString MakeRelativePath(const FString& Path, const FString& Directory)
+		{
+			FString RelativePath = Path;
+			FPaths::MakePathRelativeTo(RelativePath, *AddTrailingSlash(Directory));
+			return NormalizeRelativePath(MoveTemp(RelativePath));
+		}
+
+		FString GetProjectRelativeSourceDirectory()
+		{
+			const FString ProjectDirectory = UE::DreamShader::NormalizeSourceFilePath(FPaths::ProjectDir());
+			const FString SourceDirectory = UE::DreamShader::NormalizeSourceFilePath(UE::DreamShader::GetSourceShaderDirectory());
+			return IsPathWithinDirectory(SourceDirectory, ProjectDirectory)
+				? MakeRelativePath(SourceDirectory, ProjectDirectory)
+				: FString();
+		}
+
 		FString GetSourceMetadataValue(UObject* Asset, const TCHAR* Key)
 		{
 			if (!Asset)
@@ -37,6 +79,64 @@ namespace UE::DreamShader::Editor::Private
 		}
 	}
 
+	FString BuildSourceFileMetadataValue(const FString& SourceFilePath)
+	{
+		if (SourceFilePath.IsEmpty())
+		{
+			return FString();
+		}
+
+		const FString ProjectDirectory = UE::DreamShader::NormalizeSourceFilePath(FPaths::ProjectDir());
+		const FString ProjectRelativeSourceDirectory = GetProjectRelativeSourceDirectory();
+		FString NormalizedPath = SourceFilePath;
+		FPaths::NormalizeFilename(NormalizedPath);
+
+		if (FPaths::IsRelative(NormalizedPath))
+		{
+			NormalizedPath = NormalizeRelativePath(MoveTemp(NormalizedPath));
+			if (!ProjectRelativeSourceDirectory.IsEmpty()
+				&& (NormalizedPath.Equals(ProjectRelativeSourceDirectory, ESearchCase::IgnoreCase)
+					|| NormalizedPath.StartsWith(AddTrailingSlash(ProjectRelativeSourceDirectory), ESearchCase::IgnoreCase)))
+			{
+				return NormalizedPath;
+			}
+
+			NormalizedPath = UE::DreamShader::NormalizeSourceFilePath(FPaths::Combine(ProjectDirectory, NormalizedPath));
+		}
+		else
+		{
+			NormalizedPath = UE::DreamShader::NormalizeSourceFilePath(NormalizedPath);
+		}
+
+		if (IsPathWithinDirectory(NormalizedPath, ProjectDirectory))
+		{
+			return MakeRelativePath(NormalizedPath, ProjectDirectory);
+		}
+
+		// Legacy generated packages stored the absolute path of the worktree that created them.
+		// Recover the configured project-relative source suffix so those packages remain current
+		// after they are checked out in another worktree.
+		if (!ProjectRelativeSourceDirectory.IsEmpty())
+		{
+			const FString SourceMarker = TEXT("/") + ProjectRelativeSourceDirectory + TEXT("/");
+			const int32 MarkerIndex = NormalizedPath.Find(SourceMarker, ESearchCase::IgnoreCase, ESearchDir::FromEnd);
+			if (MarkerIndex != INDEX_NONE)
+			{
+				return NormalizeRelativePath(NormalizedPath.Mid(MarkerIndex + 1));
+			}
+		}
+
+		return NormalizedPath;
+	}
+
+	FString ResolveSourceFileMetadataValue(const FString& SourceFileMetadata)
+	{
+		const FString StablePath = BuildSourceFileMetadataValue(SourceFileMetadata);
+		return StablePath.IsEmpty() || !FPaths::IsRelative(StablePath)
+			? StablePath
+			: UE::DreamShader::NormalizeSourceFilePath(FPaths::Combine(FPaths::ProjectDir(), StablePath));
+	}
+
 	FString BuildSourceHash(const FString& SourceText)
 	{
 		return FString::Printf(TEXT("%08x"), FCrc::StrCrc32(*SourceText));
@@ -55,10 +155,10 @@ namespace UE::DreamShader::Editor::Private
 			return false;
 		}
 
-		const FString ExistingSourceFile = UE::DreamShader::NormalizeSourceFilePath(ExistingSourceFileRaw);
+		const FString ExistingSourceFile = BuildSourceFileMetadataValue(ExistingSourceFileRaw);
 		const FString ExistingSourceHash = GetSourceMetadataValue(Asset, TEXT("DreamShader.SourceHash"));
 
-		return ExistingSourceFile.Equals(UE::DreamShader::NormalizeSourceFilePath(SourceFilePath), ESearchCase::IgnoreCase)
+		return ExistingSourceFile.Equals(BuildSourceFileMetadataValue(SourceFilePath), ESearchCase::IgnoreCase)
 			&& ExistingSourceHash.Equals(SourceHash, ESearchCase::CaseSensitive);
 	}
 
@@ -82,7 +182,7 @@ namespace UE::DreamShader::Editor::Private
 
 #if DREAMSHADER_UE_VERSION_AT_LEAST(5, 6)
 		FMetaData& MetaData = Package->GetMetaData();
-		MetaData.SetValue(Asset, TEXT("DreamShader.SourceFile"), *UE::DreamShader::NormalizeSourceFilePath(SourceFilePath));
+		MetaData.SetValue(Asset, TEXT("DreamShader.SourceFile"), *BuildSourceFileMetadataValue(SourceFilePath));
 		if (!SourceHash.IsEmpty())
 		{
 			MetaData.SetValue(Asset, TEXT("DreamShader.SourceHash"), *SourceHash);
@@ -94,7 +194,7 @@ namespace UE::DreamShader::Editor::Private
 		{
 			return;
 		}
-		MetaData->SetValue(Asset, TEXT("DreamShader.SourceFile"), *UE::DreamShader::NormalizeSourceFilePath(SourceFilePath));
+		MetaData->SetValue(Asset, TEXT("DreamShader.SourceFile"), *BuildSourceFileMetadataValue(SourceFilePath));
 		if (!SourceHash.IsEmpty())
 		{
 			MetaData->SetValue(Asset, TEXT("DreamShader.SourceHash"), *SourceHash);

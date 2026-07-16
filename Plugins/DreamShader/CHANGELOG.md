@@ -1,5 +1,15 @@
 # DreamShader ChangeLog
 
+## Unreleased
+
+### Fixed
+
+- Generated asset source metadata now uses a project-relative path and recognizes legacy absolute worktree paths, preventing unchanged materials from being regenerated after branch integration or checkout in another worktree.
+
+### Changed
+
+- Persistent material mode no longer queues a full material compile on every editor startup by default. `bAutoCompileOnEditorStartup` can restore the old behavior; save-triggered and explicit recompilation remain available, and Virtual Material Mode still restores transient assets at startup.
+
 ## 1.4.1 - 2026-07-01
 
 ### Added

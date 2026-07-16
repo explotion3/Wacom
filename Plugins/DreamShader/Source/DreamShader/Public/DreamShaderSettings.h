@@ -56,6 +56,11 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category="Compiler")
 	bool bAutoCompileOnSave = true;
 
+	UPROPERTY(Config, EditAnywhere, Category="Compiler",
+		meta=(DisplayName="编辑器启动时编译全部 DreamShader",
+			ToolTip="启用后，普通编辑器启动会扫描并编译全部 DreamShader 源文件。默认关闭，避免已由 Git 管理的生成材质在每次启动时被加载或重写；仍可通过保存源文件或 Tools > Recompile DSM 手动编译。Virtual Material Mode 不受此项影响。"))
+	bool bAutoCompileOnEditorStartup = false;
+
 	UPROPERTY(Config, EditAnywhere, Category="Compiler", meta=(ClampMin="0.05", ClampMax="10.0", UIMin="0.05", UIMax="2.0"))
 	float SaveDebounceSeconds = 0.25f;
 

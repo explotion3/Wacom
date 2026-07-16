@@ -4,9 +4,12 @@
 #include "DreamShaderTypes.h"
 #include "DreamShaderVersionCompat.h"
 #include "MaterialAssetGeneration/DreamShaderMaterialGenerator.h"
+#include "MaterialAssetGeneration/DreamShaderGeneratedAssetMetadata.h"
 
 #include "HAL/FileManager.h"
 #include "Materials/Material.h"
+#include "UObject/MetaData.h"
+#include "UObject/Package.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialExpressionIf.h"
 #include "Materials/MaterialExpressionAdd.h"
@@ -398,6 +401,44 @@ bool FDreamShaderSourceHashSkipTest::RunTest(const FString& Parameters)
 	{
 		return false;
 	}
+
+	UMaterial* GeneratedMaterial = LoadObject<UMaterial>(nullptr, *ObjectPath);
+	if (!TestNotNull(TEXT("Generated material is available for metadata validation."), GeneratedMaterial))
+	{
+		return false;
+	}
+
+	UPackage* GeneratedPackage = GeneratedMaterial->GetOutermost();
+	if (!TestNotNull(TEXT("Generated material has a package."), GeneratedPackage))
+	{
+		return false;
+	}
+
+	FString StoredSourcePath;
+#if DREAMSHADER_UE_VERSION_AT_LEAST(5, 6)
+	StoredSourcePath = GeneratedPackage->GetMetaData().GetValue(GeneratedMaterial, TEXT("DreamShader.SourceFile"));
+#else
+	if (UMetaData* MetaData = GeneratedPackage->GetMetaData())
+	{
+		StoredSourcePath = MetaData->GetValue(GeneratedMaterial, TEXT("DreamShader.SourceFile"));
+	}
+#endif
+	TestFalse(TEXT("Generated source metadata is worktree-independent."), StoredSourcePath.IsEmpty() || !FPaths::IsRelative(StoredSourcePath));
+	TestEqual(
+		TEXT("Generated source metadata uses the stable project-relative path."),
+		StoredSourcePath,
+		UE::DreamShader::Editor::Private::BuildSourceFileMetadataValue(SourceFilePath));
+
+	const FString LegacyWorktreeSourcePath = UE::DreamShader::NormalizeSourceFilePath(
+		FPaths::Combine(TEXT("C:/Users/DreamShader/.codex/worktrees/legacy/Wacom"), StoredSourcePath));
+#if DREAMSHADER_UE_VERSION_AT_LEAST(5, 6)
+	GeneratedPackage->GetMetaData().SetValue(GeneratedMaterial, TEXT("DreamShader.SourceFile"), *LegacyWorktreeSourcePath);
+#else
+	if (UMetaData* MetaData = GeneratedPackage->GetMetaData())
+	{
+		MetaData->SetValue(GeneratedMaterial, TEXT("DreamShader.SourceFile"), *LegacyWorktreeSourcePath);
+	}
+#endif
 
 	FString SecondMessage;
 	const bool bSkipped = FMaterialGenerator::GenerateMaterialFromFile(SourceFilePath, SecondMessage, false);

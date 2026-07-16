@@ -3,6 +3,7 @@
 #include "Bridge/DreamShaderPreviewWebSocketServer.h"
 #include "DreamShaderCompileService.h"
 #include "MaterialAssetGeneration/DreamShaderMaterialGenerator.h"
+#include "MaterialAssetGeneration/DreamShaderGeneratedAssetMetadata.h"
 #include "Decompiler/DreamShaderDecompileService.h"
 #include "Decompiler/DreamShaderGraphDecompiler.h"
 #include "Compile/DreamShaderEditorCompileAdapter.h"
@@ -128,11 +129,11 @@ namespace UE::DreamShader::Editor::Private
 		if (UPackage* Package = Asset->GetOutermost())
 		{
 #if DREAMSHADER_UE_VERSION_AT_LEAST(5, 6)
-			return Package->GetMetaData().GetValue(Asset, TEXT("DreamShader.SourceFile"));
+			return ResolveSourceFileMetadataValue(Package->GetMetaData().GetValue(Asset, TEXT("DreamShader.SourceFile")));
 #else
 			if (UMetaData* MetaData = Package->GetMetaData())
 			{
-				return MetaData->GetValue(Asset, TEXT("DreamShader.SourceFile"));
+				return ResolveSourceFileMetadataValue(MetaData->GetValue(Asset, TEXT("DreamShader.SourceFile")));
 			}
 #endif
 		}
@@ -162,9 +163,17 @@ namespace UE::DreamShader::Editor::Private
 			PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddSP(
 				AsShared(),
 				&FDreamShaderEditorBridge::GenerateAllVirtualMaterials);
+			RebuildDependencyGraph();
 		}
-
-		QueueFullScan();
+		else if (Settings && Settings->bAutoCompileOnEditorStartup)
+		{
+			QueueFullScan();
+		}
+		else
+		{
+			// Keep import dependency routing ready without loading every generated material.
+			RebuildDependencyGraph();
+		}
 		UpdateDiagnosticsFile();
 
 		PreviewWebSocketServer = MakeUnique<FDreamShaderPreviewWebSocketServer>();
