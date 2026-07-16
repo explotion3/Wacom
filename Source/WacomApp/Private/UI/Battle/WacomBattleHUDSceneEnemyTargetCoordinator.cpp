@@ -130,7 +130,9 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::HasSameSceneEnemyHosts(
 
 	for (int32 Index = 0; Index < ValidUniqueHosts.Num(); ++Index)
 	{
-		if (SceneEnemyHosts[Index].Host.Get() != ValidUniqueHosts[Index])
+		const AWacomBattleEnemyActor* Host = ValidUniqueHosts[Index];
+		if (SceneEnemyHosts[Index].Host.Get() != Host
+			|| SceneEnemyHosts[Index].ObservedEnemySlotId != Host->GetEffectiveEnemySlotId())
 		{
 			return false;
 		}
@@ -168,6 +170,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
 		{
 			FSceneEnemyHostEntry& Entry = SceneEnemyHosts.AddDefaulted_GetRef();
 			Entry.Host = Host;
+			Entry.ObservedEnemySlotId = Host->GetEffectiveEnemySlotId();
 			Entry.ObservedTopologyRevision = Host->GetRuntimePartTopologyRevision();
 		}
 	}
@@ -305,6 +308,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 
 		TArray<AWacomBattleEnemyPartActor*> RuntimePartActors;
 		Host->InitializeRuntimeSceneBinding(RuntimePartActors);
+		HostEntry.ObservedEnemySlotId = Host->GetEffectiveEnemySlotId();
 		HostEntry.ObservedTopologyRevision = Host->GetRuntimePartTopologyRevision();
 		for (AWacomBattleEnemyPartActor* PartActor : RuntimePartActors)
 		{
@@ -337,6 +341,7 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsRegistryTopologyCurrent() con
 		const AWacomBattleEnemyActor* Host = HostEntry.Host.Get();
 		if (!IsValid(Host)
 			|| Host->IsActorBeingDestroyed()
+			|| HostEntry.ObservedEnemySlotId != Host->GetEffectiveEnemySlotId()
 			|| HostEntry.ObservedTopologyRevision != Host->GetRuntimePartTopologyRevision())
 		{
 			return false;
@@ -445,9 +450,9 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 		if (AWacomBattleEnemyActor* Host = HostEntry.Host.Get())
 		{
 			const FEnemySnapshot* MatchedEnemy = Snapshot.Enemies.FindByPredicate(
-				[Host](const FEnemySnapshot& Enemy)
+				[EnemySlotId = HostEntry.ObservedEnemySlotId](const FEnemySnapshot& Enemy)
 				{
-					return Enemy.EnemySlotId == Host->GetEffectiveEnemySlotId();
+					return Enemy.EnemySlotId == EnemySlotId;
 				});
 			if (MatchedEnemy)
 			{

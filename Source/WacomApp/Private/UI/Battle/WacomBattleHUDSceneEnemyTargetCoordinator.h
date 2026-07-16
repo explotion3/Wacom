@@ -57,6 +57,7 @@ private:
 	struct FSceneEnemyHostEntry
 	{
 		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
+		FName ObservedEnemySlotId = NAME_None;
 		uint32 ObservedTopologyRevision = 0;
 	};
 

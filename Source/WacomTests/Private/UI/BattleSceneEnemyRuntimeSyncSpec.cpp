@@ -2,10 +2,12 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
 #include "Characters/CharacterDefinition.h"
 #include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Engine/Engine.h"
@@ -241,6 +243,134 @@ bool FWacomUIBattleSceneEnemyRuntimeSnapshotKeepsTopologyAndVisualsSpec::RunTest
 		FindGeneratedPartSpriteComponent(*SceneEnemy.Parts[0]) == PartVisualBefore);
 	TestTrue(TEXT("Host flipbook playback position is preserved"),
 		FMath::IsNearlyEqual(HostVisualBefore->GetPlaybackPosition(), PlaybackPositionBefore));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyTriggerRuntimeBindingSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyRuntimeSync.TriggerBindingIsPureAndIdentityAware",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyTriggerRuntimeBindingSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleSceneEnemyRuntimeSyncSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UEnemyDefinition* Enemy = nullptr;
+	UBattleSession* Session = CreateThreePartSession(Fixture, Enemy);
+	FSceneEnemyActors SceneEnemy = SpawnSceneEnemy(*World, *Enemy, 1, true);
+	if (!TestNotNull(TEXT("Scene enemy host"), SceneEnemy.Host)
+		|| !TestEqual(TEXT("Scene part count"), SceneEnemy.Parts.Num(), 1))
+	{
+		DestroySceneEnemy(SceneEnemy);
+		return false;
+	}
+	ON_SCOPE_EXIT { DestroySceneEnemy(SceneEnemy); };
+
+	SceneEnemy.Host->EnemySlotId = TEXT("WrongBeforeTrigger");
+	SceneEnemy.Parts[0]->SetEnemySlotId(TEXT("WrongBeforeTrigger"));
+	UPaperFlipbookComponent* HostVisualBefore =
+		SceneEnemy.Host->GetGeneratedHostFlipbookVisualComponent();
+	UPaperSpriteComponent* PartVisualBefore =
+		FindGeneratedPartSpriteComponent(*SceneEnemy.Parts[0]);
+	if (!TestNotNull(TEXT("Generated host flipbook"), HostVisualBefore)
+		|| !TestNotNull(TEXT("Generated part visual layer"), PartVisualBefore))
+	{
+		return false;
+	}
+
+	HostVisualBefore->Stop();
+	HostVisualBefore->SetPlaybackPosition(0.04f, false);
+	const float PlaybackPositionBefore = HostVisualBefore->GetPlaybackPosition();
+	const FName HostAuthoringStateBefore = SceneEnemy.Host->AuthoringState;
+	const FName PartAuthoringStateBefore = SceneEnemy.Parts[0]->AuthoringState;
+
+	TStrongObjectPtr<ABattleTriggerActor> Trigger(NewObject<ABattleTriggerActor>());
+	Trigger->PersistentId = TEXT("Trigger.RuntimeSync");
+	UEncounterDefinition* Encounter = NewObject<UEncounterDefinition>(Trigger.Get());
+	FEncounterEnemySlot EncounterSlot;
+	EncounterSlot.EnemySlotId = TEXT("Enemy");
+	EncounterSlot.EnemyDefinition = Enemy;
+	Encounter->EnemySlots = { EncounterSlot };
+	Trigger->EncounterDefinition = Encounter;
+	FWacomBattleSceneEnemyHostSlot SceneHostSlot;
+	SceneHostSlot.EnemySlotId = TEXT("Enemy");
+	SceneHostSlot.SceneEnemyHost = SceneEnemy.Host;
+	Trigger->SceneEnemyHostSlots = { SceneHostSlot };
+
+	const FWacomBattleTriggerDebugView TriggerView =
+		Trigger->GetBattleTriggerDebugView(nullptr);
+	TestEqual(TEXT("Debug view resolves the configured host"),
+		TriggerView.SceneEnemyHostCount, 1);
+	TestEqual(TEXT("Debug view does not mutate Host EnemySlotId"),
+		SceneEnemy.Host->GetEffectiveEnemySlotId(),
+		FName(TEXT("WrongBeforeTrigger")));
+	TestEqual(TEXT("Debug view does not mutate Part EnemySlotId"),
+		SceneEnemy.Parts[0]->EnemySlotId,
+		FName(TEXT("WrongBeforeTrigger")));
+	TestTrue(TEXT("Debug view keeps Host visual component"),
+		SceneEnemy.Host->GetGeneratedHostFlipbookVisualComponent() == HostVisualBefore);
+	TestTrue(TEXT("Debug view keeps Part visual component"),
+		FindGeneratedPartSpriteComponent(*SceneEnemy.Parts[0]) == PartVisualBefore);
+
+	TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
+	HUD->SetWorldForTest(World);
+	HUD->SetSession(Session);
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
+	const int32 RegistryRevisionBeforeIdentityChange =
+		HUD->GetBattleSceneEnemyTargetRegistryRevisionForTest();
+	TestFalse(TEXT("Wrong runtime identity does not bind to the Enemy snapshot"),
+		SceneEnemy.Parts[0]->GetWorldTargetBridgeComponent()->IsBoundToBattlePart());
+
+	TArray<AWacomBattleEnemyActor*> SceneHosts;
+	Trigger->BuildBattleSceneEnemyHosts(SceneHosts);
+	TestEqual(TEXT("Trigger exports one scene Host"), SceneHosts.Num(), 1);
+	TestTrue(TEXT("Trigger exports the configured scene Host"),
+		SceneHosts.Num() == 1 && SceneHosts[0] == SceneEnemy.Host);
+	TestEqual(TEXT("Trigger injects Host EnemySlotId"),
+		SceneEnemy.Host->GetEffectiveEnemySlotId(),
+		FName(TEXT("Enemy")));
+	TestEqual(TEXT("Trigger preparation leaves Part identity for runtime binding"),
+		SceneEnemy.Parts[0]->EnemySlotId,
+		FName(TEXT("WrongBeforeTrigger")));
+	TestEqual(TEXT("Trigger preparation keeps Host authoring status"),
+		SceneEnemy.Host->AuthoringState,
+		HostAuthoringStateBefore);
+	TestEqual(TEXT("Trigger preparation keeps Part authoring status"),
+		SceneEnemy.Parts[0]->AuthoringState,
+		PartAuthoringStateBefore);
+	TestTrue(TEXT("Trigger preparation keeps Host visual component"),
+		SceneEnemy.Host->GetGeneratedHostFlipbookVisualComponent() == HostVisualBefore);
+	TestTrue(TEXT("Trigger preparation keeps Part visual component"),
+		FindGeneratedPartSpriteComponent(*SceneEnemy.Parts[0]) == PartVisualBefore);
+	TestTrue(TEXT("Trigger preparation keeps Host playback position"),
+		FMath::IsNearlyEqual(
+			HostVisualBefore->GetPlaybackPosition(),
+			PlaybackPositionBefore));
+
+	HUD->SetBattleSceneEnemyHostsForTest(SceneHosts);
+	TestEqual(TEXT("Identity change rebuilds registry exactly once"),
+		HUD->GetBattleSceneEnemyTargetRegistryRevisionForTest(),
+		RegistryRevisionBeforeIdentityChange + 1);
+	TestEqual(TEXT("Runtime binding injects Part EnemySlotId"),
+		SceneEnemy.Parts[0]->EnemySlotId,
+		FName(TEXT("Enemy")));
+	TestTrue(TEXT("Runtime binding reaches the Enemy snapshot"),
+		SceneEnemy.Parts[0]->GetWorldTargetBridgeComponent()->IsBoundToBattlePart());
+	TestTrue(TEXT("Runtime binding keeps Host visual component"),
+		SceneEnemy.Host->GetGeneratedHostFlipbookVisualComponent() == HostVisualBefore);
+	TestTrue(TEXT("Runtime binding keeps Part visual component"),
+		FindGeneratedPartSpriteComponent(*SceneEnemy.Parts[0]) == PartVisualBefore);
+	TestTrue(TEXT("Runtime binding keeps Host playback position"),
+		FMath::IsNearlyEqual(
+			HostVisualBefore->GetPlaybackPosition(),
+			PlaybackPositionBefore));
 	return true;
 }
 

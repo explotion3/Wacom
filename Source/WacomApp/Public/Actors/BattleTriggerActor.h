@@ -236,7 +236,7 @@ public:
 	/** 将 EncounterDefinition.EnemySlots 转换为 Battle init enemy slots。 */
 	void BuildBattleEnemySlots(TArray<FBattleEnemySlotInit>& OutEnemySlots) const;
 
-	/** 返回本 Trigger 进入战斗时应绑定到 BattleHUD 的场景敌人 Host 列表，顺序跟随 EncounterDefinition.EnemySlots。 */
+	/** 返回本 Trigger 进入战斗时应绑定到 BattleHUD 的场景敌人 Host 列表，顺序跟随 EncounterDefinition.EnemySlots；只注入 Host 临时 EnemySlotId，不刷新制作状态或视觉。 */
 	void BuildBattleSceneEnemyHosts(TArray<AWacomBattleEnemyActor*>& OutSceneEnemyHosts) const;
 
 	/** 构造进入战斗时应使用的第一人称镜头站位请求；未配置时返回 false。 */

@@ -82,6 +82,54 @@ namespace
 		}
 	}
 
+	struct FResolvedSceneEnemyHostBinding
+	{
+		FName EnemySlotId = NAME_None;
+		AWacomBattleEnemyActor* Host = nullptr;
+	};
+
+	void CollectResolvedSceneEnemyHostBindings(
+		const UEncounterDefinition* Encounter,
+		const TArray<FWacomBattleSceneEnemyHostSlot>& SceneEnemyHostSlots,
+		TArray<FResolvedSceneEnemyHostBinding>& OutBindings)
+	{
+		OutBindings.Reset();
+		if (!Encounter || SceneEnemyHostSlots.IsEmpty())
+		{
+			return;
+		}
+
+		TArray<FName> EncounterSlotIds;
+		CollectValidEncounterEnemySlotIdsInOrder(Encounter, EncounterSlotIds);
+		OutBindings.Reserve(EncounterSlotIds.Num());
+		TSet<AWacomBattleEnemyActor*> UsedHosts;
+		for (const FName& EncounterSlotId : EncounterSlotIds)
+		{
+			AWacomBattleEnemyActor* MatchedHost = nullptr;
+			for (const FWacomBattleSceneEnemyHostSlot& Slot : SceneEnemyHostSlots)
+			{
+				AWacomBattleEnemyActor* CandidateHost = Slot.SceneEnemyHost;
+				if (Slot.EnemySlotId == EncounterSlotId
+					&& IsValid(CandidateHost)
+					&& !CandidateHost->IsActorBeingDestroyed())
+				{
+					MatchedHost = CandidateHost;
+					break;
+				}
+			}
+
+			if (!MatchedHost || UsedHosts.Contains(MatchedHost))
+			{
+				continue;
+			}
+
+			UsedHosts.Add(MatchedHost);
+			FResolvedSceneEnemyHostBinding& Binding = OutBindings.AddDefaulted_GetRef();
+			Binding.EnemySlotId = EncounterSlotId;
+			Binding.Host = MatchedHost;
+		}
+	}
+
 	void CollectSceneEnemyHostSlotDiff(
 		const UEncounterDefinition* Encounter,
 		const TArray<FWacomBattleSceneEnemyHostSlot>& SceneEnemyHostSlots,
@@ -710,8 +758,17 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	View.EncounterEnemySlotCount =
 		EncounterDefinition ? EncounterDefinition->EnemySlots.Num() : 0;
 	View.bUsingEncounterDefinition = EncounterDefinition != nullptr;
+	TArray<FResolvedSceneEnemyHostBinding> ResolvedSceneHostBindings;
+	CollectResolvedSceneEnemyHostBindings(
+		EncounterDefinition,
+		SceneEnemyHostSlots,
+		ResolvedSceneHostBindings);
 	TArray<AWacomBattleEnemyActor*> SceneHosts;
-	BuildBattleSceneEnemyHosts(SceneHosts);
+	SceneHosts.Reserve(ResolvedSceneHostBindings.Num());
+	for (const FResolvedSceneEnemyHostBinding& Binding : ResolvedSceneHostBindings)
+	{
+		SceneHosts.Add(Binding.Host);
+	}
 	View.SceneEnemyHostSlotCount = SceneEnemyHostSlots.Num();
 	View.SceneEnemyHostCount = SceneHosts.Num();
 	View.bSceneEnemyHostConfigured = SceneHosts.Num() > 0;
@@ -890,30 +947,21 @@ void ABattleTriggerActor::BuildBattleSceneEnemyHosts(
 		return;
 	}
 
-	TArray<FName> EncounterSlotIds;
-	CollectValidEncounterEnemySlotIdsInOrder(EncounterDefinition, EncounterSlotIds);
-	OutSceneEnemyHosts.Reserve(EncounterSlotIds.Num());
-	for (const FName& EncounterSlotId : EncounterSlotIds)
+	TArray<FResolvedSceneEnemyHostBinding> ResolvedBindings;
+	CollectResolvedSceneEnemyHostBindings(
+		EncounterDefinition,
+		SceneEnemyHostSlots,
+		ResolvedBindings);
+	OutSceneEnemyHosts.Reserve(ResolvedBindings.Num());
+	for (const FResolvedSceneEnemyHostBinding& Binding : ResolvedBindings)
 	{
-		const FWacomBattleSceneEnemyHostSlot* MatchedSceneSlot = nullptr;
-		for (const FWacomBattleSceneEnemyHostSlot& Slot : SceneEnemyHostSlots)
-		{
-			if (Slot.EnemySlotId == EncounterSlotId && Slot.SceneEnemyHost)
-			{
-				MatchedSceneSlot = &Slot;
-				break;
-			}
-		}
-
-		if (!MatchedSceneSlot || !MatchedSceneSlot->SceneEnemyHost)
+		if (!Binding.Host)
 		{
 			continue;
 		}
 
-		AWacomBattleEnemyActor* Host = MatchedSceneSlot->SceneEnemyHost;
-		Host->EnemySlotId = EncounterSlotId;
-		Host->RefreshBattleEnemyPartAuthoringState();
-		OutSceneEnemyHosts.AddUnique(Host);
+		Binding.Host->EnemySlotId = Binding.EnemySlotId;
+		OutSceneEnemyHosts.Add(Binding.Host);
 	}
 }
 

@@ -150,6 +150,8 @@ BattleHUD scene enemy coordinator 扫描当前 Host registry 时会把每个 Par
 
 Host registry 建立时执行一次 runtime scene binding：Host 扫描 live PartActor，注入 `EnemySlotId`、Host visual context、默认 Impact/TargetPreview Style 和稳定 Badge stagger；这一入口不重建 Host visual、PartActor `VisualLayers` 或 Authoring Status。PartActor `BeginPlay / EndPlay` 和显式 runtime attach/detach 通过 Host topology revision 标记真实拓扑变化。Coordinator 在普通 Snapshot 中只比较 revision 与弱引用有效性；revision 未变化时不扫描 ChildActor、不重建 registry，也不注销/重注册 Presentation target。
 
+`ABattleTriggerActor.BuildBattleSceneEnemyHosts()` 是 runtime preparation，不是 Authoring refresh：它通过无副作用的内部解析按 Encounter 顺序选择有效且未销毁的 Host，重复 Host 只采用 Encounter 顺序中的第一项，然后仅把对应 `EnemySlotId` 注入 Host。它不触发 `RefreshBattleEnemyPartAuthoringState()`；PartActor 的 runtime identity 由后续 HUD registry 初始化统一注入。Trigger Debug View 使用同一纯解析结果且不写 Host。Coordinator 会同时观察 Host 的 `EnemySlotId` 和 topology revision；同一 Host 指针改变槽位身份时会重建一次 registry，身份和拓扑都未变化时继续复用现有注册。
+
 普通 Snapshot 同步只允许更新 Bridge Snapshot binding、InteractionTarget runtime id、Presentation runtime facts、targetable 和 EnemyPanel/hover/prediction/cue 状态。视觉生成仍只属于构造、Details/显式 Authoring 刷新和 runtime 初始化；Host Flipbook 播放进度与 PartActor VisualLayer 组件不能因为 Snapshot 刷新被重置。BattleEnd、source clear、Host/Part 销毁或拓扑 revision 变化会清理旧 Bridge binding 和按稳定部位 identity 注册的 Presentation target，重新进入战斗后再由当前 Host registry 建立新绑定。
 
 Bridge 绑定成功后会把 `PartInstanceId` 写入 `UWacomInteractionTargetComponent.TargetId`，把 `PartId` 写入 `StableTargetId`，并把 `EncounterId / EnemySlotId / PartSlotId` 写入 handle 的 Battle slot identity 字段。First-person world drop 使用完整 handle 提交，Battle validation 会拒绝 runtime id 与 slot identity 不一致的目标。BattleHUD 判断 handle 是否属于当前 scene enemy registry 时只按完整 slot identity 匹配，不再通过 `SourceObject` 反查 Bridge 兜底；`SourceObject` 只保留为命中来源和调试弱引用。

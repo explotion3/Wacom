@@ -203,6 +203,8 @@ BattleHUD scene enemy coordinator 成对缓存 Bridge 和 Presentation：target 
 
 Scene enemy 生命周期分为三条路径。构造、Details 修改和显式 Authoring 刷新可以重建 Host visual、PartActor `VisualLayers`、扫描 ChildActor 并更新制作诊断；Host/Part `BeginPlay` 或 HUD Host registry 变化时执行一次 runtime scene binding，注入 EnemySlotId、Host Style、视觉语境和稳定 Badge stagger；普通 `FBattleSnapshot` 刷新只更新 Bridge runtime facts、EnemyPanel view data、targetable、hover、prediction、drag preview 和 cue 状态。普通 Snapshot 不调用 Host/Part Authoring refresh，不重建 PaperSprite/PaperFlipbook，也不重扫 Actor 层级。
 
+BattleTrigger 的 runtime preparation 与 Host Authoring 也保持分离：`BuildBattleSceneEnemyHosts()` 只按 `EncounterDefinition.EnemySlots` 顺序解析有效 `SceneEnemyHostSlots`、向 Host 注入临时 `EnemySlotId` 并导出 Host 列表，不刷新 Host/Part Authoring Status，也不重建 Host visual 或 `VisualLayers`。PartActor 身份和 Host context 由 HUD registry 的 `InitializeRuntimeSceneBinding()` 统一注入。Trigger `GetBattleTriggerDebugView()` 复用无副作用的绑定解析，不修改 Host；coordinator 同时观察 Host 指针、`EnemySlotId` 和 topology revision，只有 Host 集合、身份或真实拓扑变化时才重建 registry。
+
 `FWacomBattleHUDSceneEnemyTargetCoordinator` 只在 Host 集合变化、Host runtime topology revision 变化或已有 Host/Part 弱引用失效时重建 target registry。稳定拓扑下 Bridge/Presentation entry 和按 `EncounterId + EnemySlotId + PartSlotId` 注册的 BattlePresentation target 保持不变；BattleEnd、Session/source clear、Host/Part 销毁或真正拓扑变化时才注销并清理。运行时不得通过 Tick 轮询 Actor 层级；显式动态 attach/detach live PartActor 的调用方必须通知 Host topology 失效。
 
 BattleHUD 不再构建或绑定敌方 2D fallback；点击、hover、drag target handle 全部通过当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge 完成。`EncounterDefinition` 正式入口缺 Host 会被编辑器验证阻止。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
