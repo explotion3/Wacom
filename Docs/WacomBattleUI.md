@@ -222,6 +222,8 @@ BattleTrigger 的 runtime preparation 与 Host Authoring 也保持分离：`Buil
 
 `FWacomBattleHUDSceneEnemyTargetCoordinator` 只在 Host 集合变化、Host runtime topology revision 变化或已有 Host/Part 弱引用失效时重建 target registry。稳定拓扑下 Bridge/Presentation entry 和按 `EncounterId + EnemySlotId + PartSlotId` 注册的 BattlePresentation target 保持不变；Host identity 或拓扑重建不会重置正在播放的语义 Clip。BattleEnd Snapshot 到达时立即注销 Part target / presentation registry，并清理 hover、drag、panel 和 targetable；coordinator 只保留 Host 弱引用及最终 `bAllPartsDestroyed` facts，供已排队的整体 Destroyed 动画完成。`BattleEndSignal`、HUD shutdown、Session/source clear 或 Host 销毁会清空 retiring Host 并使旧回调失效；新战斗首次接管 Host 时恢复 Idle 和非终态。运行时不得通过 Tick 轮询 Actor 层级；显式动态 attach/detach live PartActor 的调用方必须通知 Host topology 失效。
 
+HUD 的 retiring Host 只是一条“完成 Downed 后清队列”的 Battle 表现生命周期，不负责探索场景销毁。非撤离 Victory 成功提交给 Run 后，GameMode 立即禁用当前 BattleTrigger，并把有效 Trigger 弱引用交给返回探索双 barrier；镜头返回与 ExitBattle 后置工作都完成时，Trigger 才统一退役 Encounter 内 Host/Part 并销毁自身。这个阶段不刷新 Authoring、不重建 Host visual/VisualLayers，也不恢复终态 Flipbook；退出 PIE、对象提前销毁或弱引用失效时不会留下 HUD barrier。Aid 与 Destroy 都沿用同一个非撤离 Victory 合同；Withdraw、Defeat、Undetermined 和结算失败保留场景。
+
 BattleHUD 不再构建或绑定敌方 2D fallback；点击、hover、drag target handle 全部通过当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge 完成。`EncounterDefinition` 正式入口缺 Host 会被编辑器验证阻止。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 ## §7 First-person Battle Hand
 

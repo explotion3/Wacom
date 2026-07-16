@@ -99,6 +99,12 @@ struct WACOMAPP_API FWacomBattleTriggerDebugView
 	bool bIsDestroyed = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	bool bResolvedSceneRetirementPending = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
+	bool bResolvedSceneRetirementCompleted = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
 	bool bClickTargetConfigured = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Debug")
@@ -239,6 +245,12 @@ public:
 	/** 返回本 Trigger 进入战斗时应绑定到 BattleHUD 的场景敌人 Host 列表，顺序跟随 EncounterDefinition.EnemySlots；只注入 Host 临时 EnemySlotId，不刷新制作状态或视觉。 */
 	void BuildBattleSceneEnemyHosts(TArray<AWacomBattleEnemyActor*>& OutSceneEnemyHosts) const;
 
+	/** 正式胜利结算后立即禁用 Trigger 交互；Host 保持终态可见直到返回探索镜头完成。 */
+	void BeginResolvedEncounterSceneRetirement();
+
+	/** 返回探索镜头完成后退役 Encounter 内有效 Host 并销毁 Trigger；可重复调用。 */
+	void CompleteResolvedEncounterSceneRetirement();
+
 	/** 构造进入战斗时应使用的第一人称镜头站位请求；未配置时返回 false。 */
 	bool TryBuildBattleEntryViewStageRequest(FWacomFirstPersonViewStageRequest& OutRequest) const;
 
@@ -285,6 +297,9 @@ private:
 	bool IsAvailableAtBoundRunMapNode(
 		AWacomPlayerController* PC,
 		FName* OutFailureReason = nullptr) const;
+
+	bool bResolvedSceneRetirementPending = false;
+	bool bResolvedSceneRetirementCompleted = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle",
 		meta = (AllowPrivateAccess = "true"))

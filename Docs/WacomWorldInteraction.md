@@ -108,6 +108,7 @@ Battle scene enemy 视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHo
 - Trigger 进入战斗时把 `EncounterDefinition.EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。
 - Trigger 进入战斗时把 `SceneEnemyHostSlots` 中的 `EnemySlotId -> SceneEnemyHost` 映射按 `EncounterDefinition.EnemySlots` 顺序传给 `UBattleHUD`；没有 Host 映射的 Trigger 会被编辑器验证阻止，不再走旧单 Host 兼容入口。
 - 配置 `EncounterDefinition` 的正式入口必须配置 `SceneEnemyHostSlots` 并覆盖每个有效 `EncounterDefinition.EnemySlots[].EnemySlotId`；缺 Host / 漏映射 / 多余 EnemySlotId 都是摆放配置错误。
+- 每个有效 SceneEnemyHost 必须由唯一 BattleTrigger 拥有；同一 Host 被两个 Trigger 引用会被 Validate Map 判为错误，避免任一 Encounter 完成时误退役另一入口的敌人。
 - Trigger Details 中可执行 `SyncSceneEnemyHostSlotsFromEncounter()`，它会按 Encounter enemy slot 顺序补齐 `SceneEnemyHostSlots`，保留已填写的 Host 引用，并把不在 Encounter 中的多余 slot 追加保留到尾部供人工确认删除。
 - 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并对应 `EncounterDefinition.EnemySlots[].EnemySlotId`。进入战斗 / 刷新时 Trigger 会用 slot 上的 `EnemySlotId` 覆盖对应 Host 的临时 `EnemySlotId`，再由 Host 注入到子 PartActor；Host 自己的默认值不参与多敌人身份推断。
 - Host 作为敌人 prefab 根 Actor，只从自身蓝图 / 子 Actor 层级自动扫描 `AWacomBattleEnemyPartActor`；蓝图视口里的 ChildActorComponent PartActor 是新制作主线。
@@ -159,6 +160,8 @@ Host registry 建立时执行一次 runtime scene binding：Host 扫描 live Par
 普通 Snapshot 同步只允许更新 Bridge Snapshot binding、InteractionTarget runtime id、Presentation runtime facts、targetable 和 EnemyPanel/hover/prediction/cue 状态。视觉生成仍只属于构造、Details/显式 Authoring 刷新和 runtime 初始化；Host Flipbook 播放进度与 PartActor VisualLayer 组件不能因为 Snapshot 刷新被重置。`EnemyPartActed Count > 0` 和最新 Snapshot 已确认的整体破坏可以通过 presentation queue 按稳定 `EnemySlotId` 请求 Host 语义动画；播放只原地切换现有 Flipbook 组件，不改变 target handle、HitBounds、Part identity 或规则事件顺序。
 
 BattleEnd Snapshot 到达时立即清理 Bridge binding、Presentation target、hover、drag、panel 和 targetable，确保已死亡敌人不再可交互；coordinator 只临时保留 Host 弱引用和最终 `bAllPartsDestroyed` facts，让队列中最后一个 Destroyed Clip 可以完成。`BattleEndSignal`、source/session clear、HUD shutdown 或 Host 销毁会取消旧 barrier 并清空 retiring Host；重新进入战斗后由当前 Host registry 建立新绑定并恢复 Idle。Host/Part 真正销毁或 topology revision 变化仍按稳定部位 identity 清理或重建 registry，但普通重建不重置正在播放的 Clip。
+
+真胜利的探索场景退役由 BattleTrigger 而非 HUD 承担。Run settlement 成功后 GameMode 先调用 `BeginResolvedEncounterSceneRetirement()` 禁用 Trigger 交互和碰撞，Host 的 Downed 终态继续可见；返回探索镜头与 ExitBattle 后置工作双 barrier 完成后，再调用 `CompleteResolvedEncounterSceneRetirement()`。该入口只处理 `EncounterDefinition.EnemySlots` 中有效、唯一且仍存在的 Host 映射，忽略缺失、无效和 Encounter 外 extra slot；Host 会取消残留回调、清 EnemyPanel，Part 会清 Bridge、prediction、hover/drag/cue，随后 Host/Part 隐藏并关闭碰撞，authored Actor、Flipbook/VisualLayer 组件和 topology revision 都保留。最后 Trigger 销毁。撤离、失败、Undetermined 或结算失败不会开始该流程。
 
 Bridge 绑定成功后会把 `PartInstanceId` 写入 `UWacomInteractionTargetComponent.TargetId`，把 `PartId` 写入 `StableTargetId`，并把 `EncounterId / EnemySlotId / PartSlotId` 写入 handle 的 Battle slot identity 字段。First-person world drop 使用完整 handle 提交，Battle validation 会拒绝 runtime id 与 slot identity 不一致的目标。BattleHUD 判断 handle 是否属于当前 scene enemy registry 时只按完整 slot identity 匹配，不再通过 `SourceObject` 反查 Bridge 兜底；`SourceObject` 只保留为命中来源和调试弱引用。
 

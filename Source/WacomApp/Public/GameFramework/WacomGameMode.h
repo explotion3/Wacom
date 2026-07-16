@@ -153,9 +153,6 @@ private:
 	/** 当前 Battle 唯一持有的 Encounter NodeActivity 票据；退出时必须提交或取消。 */
 	TOptional<FRunNodeActivityTicket> PendingEncounterActivity;
 
-	/** 本场战斗初始化后的总部位数，用于多敌人 Encounter 下判断撤离是否实际全灭。 */
-	int32 PendingBattleTotalPartCount = 0;
-
 	/** HUD::OnBattleEndedNative 的订阅句柄，ExitBattle 时反注册。 */
 	FDelegateHandle BattleEndedHandle;
 };

@@ -422,7 +422,7 @@ Outcome 分支：
 - Defeat / Undetermined 不结算经验和获得卡。
 - `KnockdownChoices[]` 当前只按 `PartKey` 记日志，后续事件分支再消费。
 
-GameMode 不再手工扣时段点或写 Trigger completion。真胜利只在正式 settlement 成功后销毁当前场景表现 Actor；撤离保留 Actor，允许从同一 Map Node 重入。Map Node lifecycle 是完成状态真相。
+GameMode 不再手工扣时段点，也不根据已破坏部位数量重新推断胜利。只有正式 settlement 成功且 `Packet.Outcome == Victory && !Packet.bWithdrawn` 时，才把已 Resolved Map Node 投影到 SaveGame v3 的 `DestroyedTriggerIds`，并启动当前 BattleTrigger 的场景退役。Trigger 会立即失去交互，但 Host 保留完整 Destroyed/Downed 末帧；返回探索镜头和 ExitBattle 后置工作都完成后，Trigger 才隐藏并禁用 Encounter 内有效 Host/Part，然后销毁自身。撤离、失败、Undetermined 或 settlement 失败都保留场景，允许从同一 Map Node 重入。Map Node lifecycle 始终是完成状态真相，`DestroyedTriggerIds` 只是旧存档格式的兼容投影。
 
 `BattleProgress[MapNodeHandle].DestroyedPartKeys` 是撤离重入的规则真相，部位身份仍由 `EncounterId + EnemySlotId + PartSlotId` 匹配。`DestroyedParts` 只作为无法派生有效 key 的旧数据 / 手写测试 snapshot 内部 fallback。当前 `BattleProgress` 仍不进入 SaveGame。
 
@@ -434,7 +434,7 @@ GameMode 不再手工扣时段点或写 Trigger completion。真胜利只在正�
 
 | 场景对象 | PersistentId 用途 |
 |---|---|
-| `ABattleTriggerActor` | 已销毁 Trigger、撤离 `BattleProgress` |
+| `ABattleTriggerActor` | Save v3 完成投影、撤离 `BattleProgress` |
 | `AWacomShopTriggerActor` | `ShopStates` 库存与已购买状态 |
 | `AWacomRunEventTriggerActor` | `RunEventStates` 当前节点与完成状态 |
 | `AWacomRunPickupActor` | 金币拾取物已拾取状态 |
@@ -468,7 +468,7 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 | `CharacterAssetPath` | 当前角色资产路径 |
 | `BattleSeed` | 战斗随机种子 |
 | `bRunActive` | Run 活跃状态 |
-| `DestroyedTriggerIds` | 已永久销毁的战斗 Trigger |
+| `DestroyedTriggerIds` | 已 Resolved Encounter Trigger 的 Save v3 兼容投影；Map Node lifecycle 才是完成真相 |
 | `PlayerTransform`、`bHasPlayerTransform` | 探索 Pawn 位置 |
 | `Backpack` | 卡牌 instance 列表 |
 | `BattleDeck` | 卡牌 instance 列表 |
@@ -479,7 +479,7 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 若旧档迁移到 v2 后四个 instance 数组全空，读档会按 Character 的 StarterDeck 重新生成 instance；新 GUID 会替代旧运行态身份。
 
-v3 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。v3 已移除旧 `DefeatedEnemyAssetPaths`；战斗入口完成状态只以 `DestroyedTriggerIds` 表达。
+v3 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。v3 已移除旧 `DefeatedEnemyAssetPaths`；由于 Map Node lifecycle 尚未进入 v3 磁盘字段，`DestroyedTriggerIds` 暂时承担已 Resolved Encounter 的磁盘兼容投影。Bootstrap 命中该投影时先通过 Trigger 的统一入口退役 Host/Part，再销毁 Trigger，避免读档后留下 Idle 敌人。
 
 ### 当前仍是内存态
 

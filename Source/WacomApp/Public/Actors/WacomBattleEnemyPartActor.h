@@ -455,6 +455,15 @@ public:
 		meta = (ToolTip = "返回场景目标稳定身份，例如 Enemy.Head。由 EnemySlotId + 显式 PartSlotId 组成。"))
 	FName GetStableSceneTargetId() const;
 
+	/** Encounter 已正式完成时清理运行时目标/表现并隐藏部位；不重建 VisualLayers。 */
+	void RetireRuntimeEncounterPresentation();
+
+	/** 当前部位是否已被所属 Encounter 的终态场景退役。 */
+	bool IsRuntimeEncounterPresentationRetired() const
+	{
+		return bRuntimeEncounterPresentationRetired;
+	}
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Scene Enemy|Authoring",
 		meta = (ToolTip = "由 Host 调用：设置当前部位在场景敌人状态/预测 Badge 布局中的稳定错开序号和偏移。不会修改 Actor facade 基础位置。"))
 	void SetBadgeLayoutStagger(int32 InStaggerIndex, const FVector& InStaggerOffset);
@@ -560,6 +569,7 @@ private:
 	TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle> HostTargetPreviewStyle = nullptr;
 
 	bool bHostVisualContextActive = false;
+	bool bRuntimeEncounterPresentationRetired = false;
 
 	int32 BadgeLayoutStaggerIndex = INDEX_NONE;
 	FVector BadgeLayoutStaggerOffset = FVector::ZeroVector;

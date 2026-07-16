@@ -373,7 +373,7 @@ namespace WacomBattleSceneEnemyAuthoring
 	FString FormatHostDebugSummary(const FWacomBattleSceneEnemyDebugView& View)
 	{
 		return FString::Printf(
-			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s AuthoringMode=%s HostVisualMode=%s UsingHostVisual=%s HostVisualAsset=%s HostAnimationStyle=%s CurrentHostAnimationClip=%s CurrentHostAnimationIntent=%s HostAnimationActive=%s HostAnimationTerminal=%s HostAnimationPlayCount=%d HostAnimationWatchdogCompletions=%d GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s] PartDefinitionMismatchSlotIds=[%s] SurplusPartActors=[%s]}"),
+			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s AuthoringMode=%s HostVisualMode=%s UsingHostVisual=%s RuntimeEncounterRetired=%s HostVisualAsset=%s HostAnimationStyle=%s CurrentHostAnimationClip=%s CurrentHostAnimationIntent=%s HostAnimationActive=%s HostAnimationTerminal=%s HostAnimationPlayCount=%d HostAnimationWatchdogCompletions=%d GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s] PartDefinitionMismatchSlotIds=[%s] SurplusPartActors=[%s]}"),
 			*View.ActorName,
 			*View.EnemyDefinitionName.ToString(),
 			*View.EnemyId.ToString(),
@@ -381,6 +381,7 @@ namespace WacomBattleSceneEnemyAuthoring
 			*View.AuthoringMode.ToString(),
 			*View.HostVisualMode.ToString(),
 			View.bUsingHostVisual ? TEXT("true") : TEXT("false"),
+			View.bRuntimeEncounterPresentationRetired ? TEXT("true") : TEXT("false"),
 			*View.HostVisualAssetName.ToString(),
 			*View.HostAnimationStyleAssetName.ToString(),
 			*View.CurrentHostAnimationClipName.ToString(),

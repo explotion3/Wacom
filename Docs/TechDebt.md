@@ -31,7 +31,7 @@ tags:
 | `Effect.Shuffle.FromBothToOther` HandZone 参数 | 制作校验兼容接受任意 `HandZone.*`，但正式执行始终从 Both 选择；Effect Semantics 显式保留该兼容怪点 | 先确认是否要扩展为通用 FromZone，或收紧资产只允许 Both；确认后同步校验、内容迁移和规则测试 |
 | `IsDeleteFunctionAvailable` | 接口已存在，但当前 Run 删牌事务和背包 UI 仍按始终可删的简化口径工作 | 等删牌可用性口径确认后，Run 校验和 UI 显隐统一接入 |
 | 手牌锚点左右归属 | `FHandCardSnapshot` 不带左右手角色，UI 用遍历顺序启发式 | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
-| BattleResult identity 兼容字段 | `FBattleResultPacket` 仍同时暴露 `PartId / Identity / PartKey`、`DestroyedParts / DestroyedPartKeys`；Run 撤离进度的新写入和 Run 结算日志已收敛为 key-first，GameMode 撤离全灭判断已改为 key-only；`DestroyedParts` 仅作旧数据 / 手写 snapshot fallback | 继续把测试、日志和消费者迁到 `FBattleEnemyPartKey` / `DestroyedPartKeys`；确认没有资产 / 蓝图依赖后再降级或移除 legacy projection 字段 |
+| BattleResult identity 兼容字段 | `FBattleResultPacket` 仍同时暴露 `PartId / Identity / PartKey`、`DestroyedParts / DestroyedPartKeys`；Run 撤离进度的新写入和 Run 结算日志已收敛为 key-first，GameMode 已删除按部位数量重新推断 Victory；`DestroyedParts` 仅作旧数据 / 手写 snapshot fallback | 继续把测试、日志和消费者迁到 `FBattleEnemyPartKey` / `DestroyedPartKeys`；确认没有资产 / 蓝图依赖后再降级或移除 legacy projection 字段 |
 
 ---
 
@@ -46,6 +46,7 @@ tags:
 | 金币存档 | `Gold` 当前作为 Run 内资源，不写入 SaveGame | 恢复存档系统时确认是否入档 |
 | `BattleState` 非反射 | 裸 struct + pImpl，GC 引用靠 Session 的 `ReferencedAssets` | 若需存档 / 网络，升级为 USTRUCT 或 UObject |
 | SaveGame 迁移 | 版本迁移 switch 已有 v0 到 v2 模型 | 每次升版本加新 case，永远不改已存在 case |
+| Resolved Encounter 磁盘投影 | Map Node lifecycle 是内存态完成真相；SaveGame v3 仍只持久化 `DestroyedTriggerIds`，GameMode 在非撤离 Victory 成功 settlement 后写兼容投影，Bootstrap 用统一 Trigger 退役入口还原场景 | 下一次 SaveGame schema 升级应持久化 Map Node lifecycle，再从节点状态派生或迁移 Trigger 投影；在新版本迁移完成前不要让 Actor ID 反向成为规则真相 |
 
 ---
 
@@ -181,4 +182,5 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - Legacy battle event log 已清理：`UBattleEventLogPanel / UBattleEventLogEntryWidget / UEventToast`、`BuildLegacyEventBlock()` 和旧 `WBP_BattleEventLogEntry / WBP_BattleEventLogPanel` 残留资产已删除；正式日志只走 `CombatLogFeed + BattleCombatLogBlock`。
 - Enemy system refactor 主链路已收口：旧敌方 2D fallback、第一敌人 HUD 入口、Actor 名称身份推断、旧部位意图序列主合同和旧单 Host Trigger 入口已删除；当前规则和制作口径见 `WacomBattle.md`、`WacomData.md`、`WacomRun.md`、`WacomWorldInteraction.md`、`WacomBattleUI.md` 和 `WacomDataAuthoring.md`。
 - TrainingWarrior 已验证通用 Simple Host 正式内容管线；剩余敌人表现债务是 PartActor 局部 Destroyed 反馈、材质描边、tooltip、MultiPart / Boss 局部动画和 PaperZD 状态机。不要把这些能力塞回 TrainingWarrior 的单 Host Flipbook Style，也不要让新的正式敌人重新依赖 ignored `/Game/Art`。
+- Resolved Encounter 场景生命周期已收口为 `Run settlement -> Trigger pending -> return barrier -> Host/Part retirement`；HUD 不销毁探索 Actor，GameMode 不再按部位数推断 Victory。剩余存档债务只是 v3 仍以 `DestroyedTriggerIds` 投影未持久化的 Map Node lifecycle。
 - Battle exit legacy outcome byte 出口已收口：`AWacomPlayerController::RequestExitBattle()` 公开面改为 `EBattleOutcome`，正式 BattleEnd 主链路仍由 `UBattleHUD::OnBattleEndedNative(EBattleOutcome)` 触发 GameMode，并在 Session 释放前构造 `FBattleResultPacket` 给 Run 层。

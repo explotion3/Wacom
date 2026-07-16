@@ -167,6 +167,12 @@ tags:
 	- 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md#5-battle-scene-target) / [WacomBattleUI.md](./WacomBattleUI.md#6-scene-enemy-ui)
 	- 说明：`ABattleTriggerActor.SceneEnemyHostSlots` 已按 `EnemySlotId` 绑定多 Host；旧单 `SceneEnemyHost` Trigger 入口已删除。后续敌人方向集中到正式蛇 Host 蓝图 prefab 资产、正式美术样式和制作工具。
 
+- [x] **Resolved Encounter Scene Host 退役生命周期**
+	- 状态：`Done: Downed -> 返回探索 barrier -> Trigger/Host/Part 退役`
+	- 归属：Run / App / Battle World Target
+	- 入口：[WacomRun.md](./WacomRun.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md#5-battle-scene-target) / [WacomBattleUI.md](./WacomBattleUI.md#6-scene-enemy-ui)
+	- 说明：非撤离 Victory 仅在 Encounter ticket 成功提交后退役；Trigger 先禁用交互，Host 完整保留 Destroyed/Downed 终态，返回镜头和 ExitBattle 后置工作都完成后才隐藏并禁用 Encounter 内 Host/Part。Withdraw、Defeat、Undetermined 和结算失败保留；SaveGame v3 继续用 `DestroyedTriggerIds` 作为 Map Node Resolved 的兼容投影。
+
 - [ ] **交互目标系统：Card-World / Card-Card drag resolver / Zone 命中来源接入**
   - 状态：`Ready: 剩余正式内容`
   - 归属：App / Battle / Run

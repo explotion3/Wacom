@@ -89,6 +89,10 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	bool bHostAnimationTerminalState = false;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 Host 是否已由完成的 Encounter 退役并隐藏。"))
+	bool bRuntimeEncounterPresentationRetired = false;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 HostAnimationPlayCount = 0;
 
@@ -368,6 +372,15 @@ public:
 	/** Host/source/session 清理时安全结束当前动画 barrier。 */
 	void CancelRuntimeHostAnimation();
 
+	/** Encounter 正式完成后清理运行时表现、退役全部 Part 并隐藏 Host；不重建视觉组件。 */
+	void RetireRuntimeEncounterPresentation();
+
+	/** 当前 Host 是否已被完成的 Encounter 场景退役。 */
+	bool IsRuntimeEncounterPresentationRetired() const
+	{
+		return bRuntimeEncounterPresentationRetired;
+	}
+
 	/** 标记 live PartActor 拓扑发生变化；供 PartActor BeginPlay/EndPlay 和显式运行时装配调用。 */
 	void InvalidateRuntimePartTopology();
 
@@ -431,6 +444,8 @@ private:
 		const TArray<AWacomBattleEnemyPartActor*>& PartActors,
 		TArray<FVector>& OutOffsets,
 		TArray<int32>& OutIndices) const;
+
+	bool bRuntimeEncounterPresentationRetired = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 根节点。部位 Actor 可附着到本 Actor 下进行分组。"))

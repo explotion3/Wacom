@@ -762,10 +762,10 @@ public:
 	 */
 	bool BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const;
 
-	/** 场景：标记一个触发器已被永久销毁。 */
+	/** SaveGame v3 兼容投影：记录已由 Map Node Resolved 判定完成的 Trigger。 */
 	void MarkTriggerDestroyed(FName PersistentId);
 
-	/** 场景：某触发器是否已被销毁（关卡加载时查）。 */
+	/** SaveGame v3 兼容投影：关卡加载时查询对应完成 Trigger。 */
 	bool IsTriggerDestroyed(FName PersistentId) const;
 
 	/** 场景：记录玩家当前 Transform（用于下次启动恢复）。 */

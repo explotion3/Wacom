@@ -17,6 +17,7 @@
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "GameFramework/WacomResolvedEncounterSceneRetirementPolicy.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "RunSession.h"
 
@@ -31,24 +32,6 @@ const FString AWacomGameMode::SlotName_Auto = TEXT("Auto");
 
 namespace
 {
-	int32 CountBattleEnemySlotParts(const TArray<FBattleEnemySlotInit>& EnemySlots)
-	{
-		int32 Count = 0;
-		for (const FBattleEnemySlotInit& Slot : EnemySlots)
-		{
-			if (Slot.Enemy)
-			{
-				Count += Slot.Enemy->Parts.Num();
-			}
-		}
-		return Count;
-	}
-
-	int32 CountBattleInitEnemyParts(const FBattleInitParams& Params)
-	{
-		return CountBattleEnemySlotParts(Params.EnemySlots);
-	}
-
 	struct FExitBattleRunPresentationRestoreState
 	{
 		explicit FExitBattleRunPresentationRestoreState(AWacomPlayerController* InPlayerController)
@@ -68,6 +51,11 @@ namespace
 			TryRestore();
 		}
 
+		void SetResolvedEncounterTrigger(ABattleTriggerActor* InTrigger)
+		{
+			WeakResolvedEncounterTrigger = InTrigger;
+		}
+
 	private:
 		void TryRestore()
 		{
@@ -77,6 +65,10 @@ namespace
 			}
 
 			bPresentationRestored = true;
+			if (ABattleTriggerActor* Trigger = WeakResolvedEncounterTrigger.Get())
+			{
+				Trigger->CompleteResolvedEncounterSceneRetirement();
+			}
 			if (AWacomPlayerController* WacomPC = WeakPlayerController.Get())
 			{
 				WacomPC->PrepareExplorationRunFirstPersonCardLayer();
@@ -85,6 +77,7 @@ namespace
 		}
 
 		TWeakObjectPtr<AWacomPlayerController> WeakPlayerController;
+		TWeakObjectPtr<ABattleTriggerActor> WeakResolvedEncounterTrigger;
 		bool bReturnCompleted = false;
 		bool bExitBattlePostRunReady = false;
 		bool bPresentationRestored = false;
@@ -244,9 +237,9 @@ void AWacomGameMode::BootstrapRunFromSave()
 	// 还在场景里，teleport 到原来位置会立刻再次触发同一场战斗。
 	if (bLoaded)
 	{
-		// 1. 销毁存档中已标记为"已销毁"的触发器。
+		// 1. 退役存档中已标记为完成的 Encounter 场景，再销毁对应触发器。
 		// Trigger::BeginPlay 做过一次自销毁检查，但那时 Bootstrap 尚未加载存档，
-		// RunSession 是空的，所以还得在这里补一刀。
+		// RunSession 是空的，所以还得在这里补一刀。先退役 Host，避免读档后留下 Idle 敌人。
 		for (TActorIterator<ABattleTriggerActor> It(GetWorld()); It; ++It)
 		{
 			ABattleTriggerActor* Trigger = *It;
@@ -257,7 +250,7 @@ void AWacomGameMode::BootstrapRunFromSave()
 				UE_LOG(LogTemp, Display,
 					TEXT("[WacomGameMode] Bootstrap: 清理存档中已销毁的触发器 %s (id=%s)"),
 					*Trigger->GetName(), *Trigger->PersistentId.ToString());
-				Trigger->Destroy();
+				Trigger->CompleteResolvedEncounterSceneRetirement();
 			}
 		}
 
@@ -400,7 +393,6 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 
 		// 敌人侧由 App/Trigger 层负责：EncounterDefinition -> EnemySlots。
 		Params.EnemySlots = MoveTemp(EncounterEnemySlots);
-		PendingBattleTotalPartCount = CountBattleInitEnemyParts(Params);
 		EnterBattleEnemySlotCount = Params.EnemySlots.Num() > 0 ? Params.EnemySlots.Num() : 1;
 
 		ActiveSession = NewObject<UBattleSession>(this);
@@ -424,7 +416,6 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 			TEXT("[WacomGameMode] EnterBattle: 当前逻辑节点无法开始 Encounter，拒绝场景战斗。Detail=%s"),
 			*EncounterBegin.Status.Detail.ToString());
 		ActiveSession = nullptr;
-		PendingBattleTotalPartCount = 0;
 		return;
 	}
 	if (!WacomPC->ApplyRunNodeActivityResolutionForPresentation(EncounterBegin))
@@ -444,7 +435,6 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 				*Cancellation.Status.Detail.ToString());
 		}
 		ActiveSession = nullptr;
-		PendingBattleTotalPartCount = 0;
 		return;
 	}
 	PendingEncounterActivity = EncounterBegin.NodeActivityTicket.GetValue();
@@ -473,7 +463,6 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		}
 		PendingEncounterActivity.Reset();
 		ActiveSession = nullptr;
-		PendingBattleTotalPartCount = 0;
 		return;
 	}
 
@@ -651,6 +640,24 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	}
 	PendingEncounterActivity.Reset();
 
+	// Map Node 结算成功才是 Encounter 完成真相。Save v3 的 Trigger Id 只是兼容投影；
+	// 先禁用 Trigger，Host 继续保留 Downed 终态，等返回探索双 barrier 完成后统一退役。
+	const bool bShouldRetireResolvedEncounterScene =
+		WacomResolvedEncounterSceneRetirementPolicy::ShouldRetire(
+			bEncounterSettlementSucceeded,
+			Packet.Outcome,
+			Packet.bWithdrawn);
+	if (bShouldRetireResolvedEncounterScene && PendingTrigger)
+	{
+		if (Run && !PendingTrigger->PersistentId.IsNone())
+		{
+			Run->MarkTriggerDestroyed(PendingTrigger->PersistentId);
+		}
+		PendingTrigger->BeginResolvedEncounterSceneRetirement();
+		RunPresentationRestore->SetResolvedEncounterTrigger(PendingTrigger);
+	}
+	PendingTrigger = nullptr;
+
 	// 2) Pop HUD + 清理 Session
 	if (UIManager && BattleHUD)
 	{
@@ -701,37 +708,16 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		RunPresentationRestore->MarkReturnCompleted();
 	}
 
-	// 3) 真胜利且规则结算成功后，仅清理当前场景表现 Actor；完成真相是 Map Node lifecycle。
-	if (PendingTrigger)
-	{
-		// 真胜利（非撤离）才标记已销毁 + Destroy。
-		// 若异常路径产生"撤离但所有部位都已毁"，也按胜利清理，避免留下空血敌人反复重入。
-		// 正常规则层会在最后一个存活部位被击倒时禁用撤离。
-		// 失败 / 未定场景也不销毁。
-		const int32 DestroyedPartCount = Packet.CountDestroyedPartKeysOnly();
-		const bool bAllPartsDestroyed = PendingBattleTotalPartCount > 0
-			&& DestroyedPartCount >= PendingBattleTotalPartCount;
-		const bool bRealVictory = (Packet.Outcome == EBattleOutcome::Victory)
-			&& (!Packet.bWithdrawn || bAllPartsDestroyed);
+	// 3) Run 规则结果已在上方通过 Encounter ticket 一次性提交。
 
-		if (bEncounterSettlementSucceeded && bRealVictory)
-		{
-			PendingTrigger->Destroy();
-		}
-		PendingTrigger = nullptr;
-	}
-
-	// 4) Run 规则结果已在上方通过 Encounter ticket 一次性提交。
-	PendingBattleTotalPartCount = 0;
-
-	// 5) 状态复位
+	// 4) 状态复位
 	CurrentState = EGameFlowState::Exploration;
 
 	// 撤离回探索时玩家仍在 Sphere 内（不会再发 BeginOverlap），但候选列表里 Trigger 还在。
 	// Run 手牌和 Toast 等 return staging 完成后再恢复，避免退出战斗时从 Viewpoint 平移回样条。
 	RunPresentationRestore->MarkExitBattlePostRunReady();
 
-	// 6) 存档：先写 Auto 备份，再覆盖 Main。
+	// 5) 存档：先写 Auto 备份，再覆盖 Main。
 	// 顺序很重要——如果程序在这两次 Save 之间崩掉，Auto 至少是新的，Main 还是上次的旧档，
 	// 下次启动会先试 Main 失败（或读到旧数据）再回退 Auto。
 	SaveRunToSlot(SlotName_Auto);

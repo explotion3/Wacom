@@ -170,6 +170,68 @@ namespace
 		}
 	}
 
+#if WITH_EDITOR
+	void CollectSharedSceneEnemyHostOwners(
+		const ABattleTriggerActor& Trigger,
+		TArray<TPair<AWacomBattleEnemyActor*, const ABattleTriggerActor*>>& OutConflicts)
+	{
+		OutConflicts.Reset();
+		UWorld* World = Trigger.GetWorld();
+		if (!World)
+		{
+			return;
+		}
+
+		TArray<FResolvedSceneEnemyHostBinding> OwnedBindings;
+		CollectResolvedSceneEnemyHostBindings(
+			Trigger.EncounterDefinition,
+			Trigger.SceneEnemyHostSlots,
+			OwnedBindings);
+		if (OwnedBindings.IsEmpty())
+		{
+			return;
+		}
+
+		TSet<AWacomBattleEnemyActor*> ReportedHosts;
+		for (TActorIterator<ABattleTriggerActor> It(World); It; ++It)
+		{
+			const ABattleTriggerActor* Other = *It;
+			if (!Other
+				|| Other == &Trigger
+				|| Other->IsActorBeingDestroyed()
+				|| Other->HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+				|| Other->IsTemplate())
+			{
+				continue;
+			}
+
+			TArray<FResolvedSceneEnemyHostBinding> OtherBindings;
+			CollectResolvedSceneEnemyHostBindings(
+				Other->EncounterDefinition,
+				Other->SceneEnemyHostSlots,
+				OtherBindings);
+			for (const FResolvedSceneEnemyHostBinding& OwnedBinding : OwnedBindings)
+			{
+				if (!OwnedBinding.Host || ReportedHosts.Contains(OwnedBinding.Host))
+				{
+					continue;
+				}
+
+				const bool bShared = OtherBindings.ContainsByPredicate(
+					[&OwnedBinding](const FResolvedSceneEnemyHostBinding& OtherBinding)
+					{
+						return OtherBinding.Host == OwnedBinding.Host;
+					});
+				if (bShared)
+				{
+					ReportedHosts.Add(OwnedBinding.Host);
+					OutConflicts.Emplace(OwnedBinding.Host, Other);
+				}
+			}
+		}
+	}
+#endif
+
 }
 
 ABattleTriggerActor::ABattleTriggerActor()
@@ -241,7 +303,7 @@ void ABattleTriggerActor::BeginPlay()
 						UE_LOG(LogTemp, Display,
 							TEXT("[BattleTriggerActor] %s (id=%s) 已在存档中被销毁，跳过生成"),
 							*GetName(), *PersistentId.ToString());
-						Destroy();
+						CompleteResolvedEncounterSceneRetirement();
 						return;
 					}
 				}
@@ -675,6 +737,19 @@ EDataValidationResult ABattleTriggerActor::IsDataValid(
 		}
 	}
 
+	TArray<TPair<AWacomBattleEnemyActor*, const ABattleTriggerActor*>> SharedHostOwners;
+	CollectSharedSceneEnemyHostOwners(*this, SharedHostOwners);
+	for (const TPair<AWacomBattleEnemyActor*, const ABattleTriggerActor*>& Conflict : SharedHostOwners)
+	{
+		Context.AddError(FText::Format(
+			LOCTEXT("PlacementSceneEnemyHostSharedAcrossTriggers",
+				"BattleTrigger 摆放配置错误：Actor={0} 与 Actor={1} 共享 SceneEnemyHost={2}；完成任一 Encounter 都会退役同一 Host，必须为每个 Trigger 提供独占 Host。"),
+			FText::FromString(GetName()),
+			FText::FromString(GetNameSafe(Conflict.Value)),
+			FText::FromString(GetNameSafe(Conflict.Key))));
+		Result = EDataValidationResult::Invalid;
+	}
+
 	if (EncounterDefinition)
 	{
 		for (const FName& MissingSlotId : MissingSceneEnemyHostSlotIds)
@@ -729,6 +804,8 @@ FVector ABattleTriggerActor::GetInteractLocation_Implementation(AWacomPlayerCont
 bool ABattleTriggerActor::CanInteract_Implementation(AWacomPlayerController* PC) const
 {
 	return PC
+		&& !bResolvedSceneRetirementPending
+		&& !bResolvedSceneRetirementCompleted
 		&& HasConfiguredBattleDefinition()
 		&& !IsDestroyedFor(PC)
 		&& IsAvailableAtBoundRunMapNode(PC);
@@ -821,6 +898,8 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	}
 	View.bCanInteract = CanInteract_Implementation(PC);
 	View.bIsDestroyed = IsDestroyedFor(PC);
+	View.bResolvedSceneRetirementPending = bResolvedSceneRetirementPending;
+	View.bResolvedSceneRetirementCompleted = bResolvedSceneRetirementCompleted;
 	View.HoverPrompt = GetHoverPromptText(PC).ToString();
 	View.DestroyedHoverPrompt = DestroyedHoverPromptText.IsEmpty()
 		? FString(TEXT("战斗已结束"))
@@ -864,7 +943,7 @@ FString ABattleTriggerActor::GetBattleTriggerDebugSummary(AWacomPlayerController
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("BattleTrigger{Actor=%s PersistentId=%s FirstEnemySlotDefinition=%s EncounterDefinition=%s EncounterDefinitionId=%s EncounterSlots=%d UsingEncounter=%s FirstSceneEnemyHost=%s SceneEnemyHostEnemyDef=%s SceneEnemyHostSlots=%d SceneEnemyHostCount=%d SceneEnemyHostSlotIds=[%s] MissingSceneEnemyHostSlotIds=[%s] ExtraSceneEnemyHostSlotIds=[%s] SceneEnemyHostParts=%d SceneEnemyHostConfigured=%s SceneEnemyHostDefinitionMatches=%s CanInteract=%s Destroyed=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("BattleTrigger{Actor=%s PersistentId=%s FirstEnemySlotDefinition=%s EncounterDefinition=%s EncounterDefinitionId=%s EncounterSlots=%d UsingEncounter=%s FirstSceneEnemyHost=%s SceneEnemyHostEnemyDef=%s SceneEnemyHostSlots=%d SceneEnemyHostCount=%d SceneEnemyHostSlotIds=[%s] MissingSceneEnemyHostSlotIds=[%s] ExtraSceneEnemyHostSlotIds=[%s] SceneEnemyHostParts=%d SceneEnemyHostConfigured=%s SceneEnemyHostDefinitionMatches=%s CanInteract=%s Destroyed=%s RetirementPending=%s RetirementCompleted=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s DestroyedHoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.FirstEnemySlotDefinitionName,
@@ -884,6 +963,8 @@ FString ABattleTriggerActor::GetBattleTriggerDebugSummary(AWacomPlayerController
 		View.bSceneEnemyHostDefinitionMatches ? TEXT("true") : TEXT("false"),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
 		View.bIsDestroyed ? TEXT("true") : TEXT("false"),
+		View.bResolvedSceneRetirementPending ? TEXT("true") : TEXT("false"),
+		View.bResolvedSceneRetirementCompleted ? TEXT("true") : TEXT("false"),
 		View.bClickTargetConfigured ? TEXT("true") : TEXT("false"),
 		*View.ClickTargetStableId.ToString(),
 		*View.HoverPrompt,
@@ -963,6 +1044,60 @@ void ABattleTriggerActor::BuildBattleSceneEnemyHosts(
 		Binding.Host->EnemySlotId = Binding.EnemySlotId;
 		OutSceneEnemyHosts.Add(Binding.Host);
 	}
+}
+
+void ABattleTriggerActor::BeginResolvedEncounterSceneRetirement()
+{
+	if (bResolvedSceneRetirementPending || bResolvedSceneRetirementCompleted)
+	{
+		return;
+	}
+
+	bResolvedSceneRetirementPending = true;
+	SetActorEnableCollision(false);
+	if (TriggerSphere)
+	{
+		TriggerSphere->SetGenerateOverlapEvents(false);
+		TriggerSphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	if (ClickBounds)
+	{
+		ClickBounds->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	if (APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr)
+	{
+		if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
+		{
+			WacomPC->UnregisterCandidateInteractable(this);
+		}
+	}
+}
+
+void ABattleTriggerActor::CompleteResolvedEncounterSceneRetirement()
+{
+	if (bResolvedSceneRetirementCompleted)
+	{
+		return;
+	}
+
+	BeginResolvedEncounterSceneRetirement();
+	TArray<FResolvedSceneEnemyHostBinding> ResolvedBindings;
+	CollectResolvedSceneEnemyHostBindings(
+		EncounterDefinition,
+		SceneEnemyHostSlots,
+		ResolvedBindings);
+	for (const FResolvedSceneEnemyHostBinding& Binding : ResolvedBindings)
+	{
+		if (Binding.Host)
+		{
+			Binding.Host->RetireRuntimeEncounterPresentation();
+		}
+	}
+
+	bResolvedSceneRetirementPending = false;
+	bResolvedSceneRetirementCompleted = true;
+	Destroy();
 }
 
 bool ABattleTriggerActor::TryBuildBattleEntryViewStageRequest(

@@ -101,6 +101,8 @@ Scene Enemy Host 使用单向依赖 `WacomEditor -> WacomApp -> WacomData`。`Wa
 
 正式敌人内容包同样保持单向写入边界。`WacomEditor` 的 enemy-pack commandlet 可以用 AssetTools 晋升已授权的本地 Paper2D 依赖闭包，并幂等构建 DataAsset、Animation Style 与 Host Blueprint；生成后的 `/Game/Wacom` 资产是运行时唯一依赖。本地 ignored `/Game/Art` 不是运行时 fallback，也不会被 `WacomRegenerateContent` 读取。TrainingWarrior 是该管线的首个实例；`WacomData` schema、`WacomBattle` 规则和 `WacomApp` Host runtime 均未为具体敌人增加分支。
 
+完成 Encounter 的场景退役同样不进入 BattleHUD 或规则模块。`WacomRun` 的 Map Node `Resolved` 是完成真相；`WacomApp/GameMode` 只在同一 Encounter ticket 的非撤离 Victory 成功提交后启动退役，并复用返回探索的镜头 / 后置工作双 barrier。`ABattleTriggerActor` 独占 `EncounterDefinition + SceneEnemyHostSlots` 的场景映射：先禁用自身交互，待 barrier 完成后调用 Host/Part 的非反射 runtime retirement、隐藏并关闭碰撞，最后销毁 Trigger。BattleHUD 只负责完成 Destroyed 动画和清 target registry，不拥有探索场景 Actor 生命周期。
+
 ### Logical Map Graph 边界
 
 Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：

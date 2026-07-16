@@ -134,6 +134,10 @@ void AWacomBattleEnemyActor::OnConstruction(const FTransform& Transform)
 void AWacomBattleEnemyActor::BeginPlay()
 {
 	Super::BeginPlay();
+	if (bRuntimeEncounterPresentationRetired)
+	{
+		return;
+	}
 	RefreshHostVisual();
 	RefreshEnemyPanelWidgetComponent();
 	TArray<AWacomBattleEnemyPartActor*> RuntimePartActors;
@@ -340,6 +344,12 @@ void AWacomBattleEnemyActor::SyncHostIdentityToPartActors() const
 void AWacomBattleEnemyActor::InitializeRuntimeSceneBinding(
 	TArray<AWacomBattleEnemyPartActor*>& OutPartActors) const
 {
+	if (bRuntimeEncounterPresentationRetired)
+	{
+		OutPartActors.Reset();
+		return;
+	}
+
 	OutPartActors = BuildAttachedBattleEnemyPartActors();
 	OutPartActors.RemoveAll([](const AWacomBattleEnemyPartActor* PartActor)
 	{
@@ -374,7 +384,8 @@ void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
 	const FWacomBattleEnemyHostAnimationClip* Clip = HostAnimationStyle
 		? HostAnimationStyle->ResolveActionClip(IntentId)
 		: nullptr;
-	if (HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
+	if (bRuntimeEncounterPresentationRetired
+		|| HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
 		|| HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
 		|| !IsHostVisualActive()
 		|| !HostVisualComponent
@@ -401,7 +412,8 @@ void AWacomBattleEnemyActor::PlayRuntimeHostDestroyedAnimation(
 	const FWacomBattleEnemyHostAnimationClip* Clip = HostAnimationStyle
 		? HostAnimationStyle->ResolveDestroyedClip()
 		: nullptr;
-	if (HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
+	if (bRuntimeEncounterPresentationRetired
+		|| HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
 		|| HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
 		|| !IsHostVisualActive()
 		|| !HostVisualComponent
@@ -424,7 +436,7 @@ void AWacomBattleEnemyActor::PlayRuntimeHostDestroyedAnimation(
 
 void AWacomBattleEnemyActor::ResetRuntimeHostAnimation()
 {
-	if (HostVisualComponent)
+	if (!bRuntimeEncounterPresentationRetired && HostVisualComponent)
 	{
 		HostVisualComponent->ResetRuntimePlaybackToIdle();
 	}
@@ -436,6 +448,29 @@ void AWacomBattleEnemyActor::CancelRuntimeHostAnimation()
 	{
 		HostVisualComponent->CancelRuntimePlayback();
 	}
+}
+
+void AWacomBattleEnemyActor::RetireRuntimeEncounterPresentation()
+{
+	if (bRuntimeEncounterPresentationRetired)
+	{
+		return;
+	}
+
+	bRuntimeEncounterPresentationRetired = true;
+	CancelRuntimeHostAnimation();
+	ClearEnemyPanelActionPreview();
+	ClearEnemyPanelViewData();
+	for (AWacomBattleEnemyPartActor* PartActor : BuildAttachedBattleEnemyPartActors())
+	{
+		if (IsValid(PartActor) && !PartActor->IsActorBeingDestroyed())
+		{
+			PartActor->RetireRuntimeEncounterPresentation();
+		}
+	}
+
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
 }
 
 void AWacomBattleEnemyActor::InvalidateRuntimePartTopology()
@@ -533,6 +568,7 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 		HostAuthoringMode);
 	View.HostVisualMode = GetHostVisualModeDebugName();
 	View.bUsingHostVisual = AuthoringReport.bUsingHostVisual;
+	View.bRuntimeEncounterPresentationRetired = bRuntimeEncounterPresentationRetired;
 	View.HostVisualAssetName = GetHostVisualAssetName();
 	View.HostAnimationStyleAssetName = HostAnimationStyle
 		? FName(*HostAnimationStyle->GetName())

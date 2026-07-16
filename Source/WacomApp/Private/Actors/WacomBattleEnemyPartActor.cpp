@@ -69,6 +69,10 @@ AWacomBattleEnemyPartActor::AWacomBattleEnemyPartActor()
 void AWacomBattleEnemyPartActor::BeginPlay()
 {
 	Super::BeginPlay();
+	if (bRuntimeEncounterPresentationRetired)
+	{
+		return;
+	}
 	InitializeRuntimePresentationState();
 	NotifyRuntimePartTopologyChanged();
 }
@@ -96,6 +100,31 @@ void AWacomBattleEnemyPartActor::InitializeRuntimePresentationState()
 {
 	RefreshVisualLayers();
 	ApplyRuntimeFacadeAndPresentationState();
+}
+
+void AWacomBattleEnemyPartActor::RetireRuntimeEncounterPresentation()
+{
+	if (bRuntimeEncounterPresentationRetired)
+	{
+		return;
+	}
+
+	bRuntimeEncounterPresentationRetired = true;
+	if (WorldTargetBridgeComponent)
+	{
+		WorldTargetBridgeComponent->ClearBattleBinding();
+	}
+	if (PresentationComponent)
+	{
+		PresentationComponent->ClearRuntimePartFacts();
+	}
+	if (PredictionWidgetComponent)
+	{
+		PredictionWidgetComponent->SetVisibility(false, true);
+	}
+
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
 }
 
 void AWacomBattleEnemyPartActor::ApplyRuntimeFacadeAndPresentationState()
