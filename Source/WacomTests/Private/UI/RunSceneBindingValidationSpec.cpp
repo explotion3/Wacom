@@ -44,7 +44,7 @@ namespace
 		return Floor;
 	}
 
-	AWacomRunMapNodeAnchorActor* SpawnAnchor(
+	AWacomRunMapNodeAnchorActor* SpawnRunSceneValidationAnchor(
 		UWorld& World,
 		const FName NodeId,
 		const FVector& Location = FVector::ZeroVector)
@@ -121,8 +121,8 @@ bool FWacomRunSceneBindingValidationSpec::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Empty scene fails missing anchor/path/host checks"),
 		FWacomRunSceneBindingValidation::ValidateLoadedWorld(Fixture.World).IsValid());
 
-	SpawnAnchor(*Fixture.World, TEXT("Entry"), FVector::ZeroVector);
-	SpawnAnchor(*Fixture.World, TEXT("Event"), FVector(1000.0, 0.0, 0.0));
+	SpawnRunSceneValidationAnchor(*Fixture.World, TEXT("Entry"), FVector::ZeroVector);
+	SpawnRunSceneValidationAnchor(*Fixture.World, TEXT("Event"), FVector(1000.0, 0.0, 0.0));
 	AWacomRunPathSegmentActor* Path = Fixture.World->SpawnActor<AWacomRunPathSegmentActor>();
 	Path->EdgeId = TEXT("EntryToEvent");
 	SetPathPoints(*Path, FVector::ZeroVector, FVector(1000.0, 0.0, 0.0));
@@ -136,7 +136,7 @@ bool FWacomRunSceneBindingValidationSpec::RunTest(const FString& Parameters)
 		FWacomRunSceneBindingValidation::ValidateLoadedWorld(Fixture.World).IsValid());
 	Fixture.World->DestroyActor(RedundantSingleExitBranch);
 
-	SpawnAnchor(*Fixture.World, TEXT("Entry"));
+	SpawnRunSceneValidationAnchor(*Fixture.World, TEXT("Entry"));
 	SpawnHost(*Fixture.World, TEXT("Event"), EWacomMapNodeType::Shop);
 	AWacomRunPathBranchTargetActor* UnknownBranch =
 		Fixture.World->SpawnActor<AWacomRunPathBranchTargetActor>();
@@ -171,9 +171,9 @@ bool FWacomRunSceneBranchDecisionGateValidationSpec::RunTest(const FString& Para
 	RightEdge.FromNodeId = TEXT("Entry");
 	RightEdge.ToNodeId = TEXT("Right");
 
-	SpawnAnchor(*Fixture.World, TEXT("Entry"), FVector::ZeroVector);
-	SpawnAnchor(*Fixture.World, TEXT("Event"), FVector(1000.0, 0.0, 0.0));
-	SpawnAnchor(*Fixture.World, TEXT("Right"), FVector(1000.0, 1000.0, 0.0));
+	SpawnRunSceneValidationAnchor(*Fixture.World, TEXT("Entry"), FVector::ZeroVector);
+	SpawnRunSceneValidationAnchor(*Fixture.World, TEXT("Event"), FVector(1000.0, 0.0, 0.0));
+	SpawnRunSceneValidationAnchor(*Fixture.World, TEXT("Right"), FVector(1000.0, 1000.0, 0.0));
 	AWacomRunPathSegmentActor* LeftPath =
 		Fixture.World->SpawnActor<AWacomRunPathSegmentActor>();
 	LeftPath->EdgeId = TEXT("EntryToEvent");
