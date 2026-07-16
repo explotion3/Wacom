@@ -38,6 +38,14 @@ public:
 	void RebuildRegistry();
 	void SyncWorldTargets(const FBattleSnapshot& Snapshot);
 	void ClearWorldTargets();
+	void PlayHostActionAnimation(
+		FName EnemySlotId,
+		FName IntentId,
+		TFunction<void()>&& Completion);
+	void PlayHostDestroyedAnimation(
+		FName EnemySlotId,
+		TFunction<void()>&& Completion);
+	void ClearRetiringHosts(bool bCancelPendingPlayback);
 	void ApplyActionPreviewToEnemyPanels(
 		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts,
 		bool bApplyScenePartPreview = true) const;
@@ -69,8 +77,16 @@ private:
 		bool bPresentationTargetRegistered = false;
 	};
 
+	struct FRetiringSceneEnemyHostEntry
+	{
+		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
+		FName ObservedEnemySlotId = NAME_None;
+		bool bAllPartsDestroyed = false;
+	};
+
 	FWacomBattleHUDRuntime& Runtime;
 	TArray<FSceneEnemyHostEntry> SceneEnemyHosts;
+	TArray<FRetiringSceneEnemyHostEntry> RetiringSceneEnemyHosts;
 	TArray<FSceneEnemyPartWorldTargetEntry> SceneEnemyPartWorldTargets;
 	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> HoveredPresentation;
 	TWeakObjectPtr<AWacomBattleEnemyActor> HoveredEnemyHost;
@@ -80,6 +96,9 @@ private:
 
 	bool HasSameSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts) const;
 	bool IsRegistryTopologyCurrent() const;
+	void ClearActiveWorldTargets(FName Reason);
+	void RetireWorldTargetsForBattleEnd(const FBattleSnapshot& Snapshot);
+	bool IsActiveEnemyAllPartsDestroyed(FName EnemySlotId) const;
 	void ClearRegistryEntries(FName Reason);
 	void ClearPresentationTargetRegistration(FSceneEnemyPartWorldTargetEntry& Entry);
 	void EnsurePresentationTargetRegistration(

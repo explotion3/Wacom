@@ -373,7 +373,7 @@ namespace WacomBattleSceneEnemyAuthoring
 	FString FormatHostDebugSummary(const FWacomBattleSceneEnemyDebugView& View)
 	{
 		return FString::Printf(
-			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s AuthoringMode=%s HostVisualMode=%s UsingHostVisual=%s HostVisualAsset=%s GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s] PartDefinitionMismatchSlotIds=[%s] SurplusPartActors=[%s]}"),
+			TEXT("BattleSceneEnemy{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s AuthoringMode=%s HostVisualMode=%s UsingHostVisual=%s HostVisualAsset=%s HostAnimationStyle=%s CurrentHostAnimationClip=%s CurrentHostAnimationIntent=%s HostAnimationActive=%s HostAnimationTerminal=%s HostAnimationPlayCount=%d HostAnimationWatchdogCompletions=%d GeneratedHostVisualComponents=%d RegisteredHostVisualComponents=%d VisibleHostVisualComponents=%d AuthoringState=%s AuthoringReady=%s PartCount=%d BoundParts=%d UnboundParts=%d RuntimeFacts=%d RuntimeInitiativeTotal=%d HoveredParts=%d PredictionVisibleParts=%d BadgeLayoutAppliedParts=%d UsedByBattleHUD=%s ActiveBattleHUD=%s PartIds=[%s] PartSlotIds=[%s] StableSceneTargets=[%s] UnknownPartIds=[%s] UnknownPartSlotIds=[%s] MissingDefinitionPartIds=[%s] MissingDefinitionPartSlotIds=[%s] DuplicatePartSlotIds=[%s] PartDefinitionMismatchSlotIds=[%s] SurplusPartActors=[%s]}"),
 			*View.ActorName,
 			*View.EnemyDefinitionName.ToString(),
 			*View.EnemyId.ToString(),
@@ -382,6 +382,13 @@ namespace WacomBattleSceneEnemyAuthoring
 			*View.HostVisualMode.ToString(),
 			View.bUsingHostVisual ? TEXT("true") : TEXT("false"),
 			*View.HostVisualAssetName.ToString(),
+			*View.HostAnimationStyleAssetName.ToString(),
+			*View.CurrentHostAnimationClipName.ToString(),
+			*View.CurrentHostAnimationIntentId.ToString(),
+			View.bHostAnimationPlaybackActive ? TEXT("true") : TEXT("false"),
+			View.bHostAnimationTerminalState ? TEXT("true") : TEXT("false"),
+			View.HostAnimationPlayCount,
+			View.HostAnimationWatchdogCompletionCount,
 			View.GeneratedHostVisualComponentCount,
 			View.RegisteredHostVisualComponentCount,
 			View.VisibleHostVisualComponentCount,
@@ -676,6 +683,20 @@ namespace WacomBattleSceneEnemyAuthoring
 					FText::FromString(JoinNames(MissingVisualLayerSlotIds, TEXT(",")))));
 				Result = KeepInvalidResult(Result);
 			}
+		}
+
+		if (EnemyActor.HostAnimationStyle
+			&& (EnemyActor.HostAuthoringMode !=
+					EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
+				|| EnemyActor.HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
+				|| !EnemyActor.HostFlipbook
+				|| !EnemyActor.bHostVisualVisible))
+		{
+			Context.AddWarning(FText::Format(
+				LOCTEXT("PlacementHostAnimationStyleWithoutFlipbookHost",
+					"BattleEnemy Host 摆放警告：Actor={0} 配置了 HostAnimationStyle，但不是可见的 SimpleHostVisual Flipbook Host。语义动画请求会立即跳过；请改为 SimpleHostVisual + Flipbook 并配置 HostFlipbook，或移除 Style。"),
+				FText::FromString(EnemyActor.GetName())));
+			Result = KeepInvalidResult(Result);
 		}
 
 		return KeepInvalidResult(Result);

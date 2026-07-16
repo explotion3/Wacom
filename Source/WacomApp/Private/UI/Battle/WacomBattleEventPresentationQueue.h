@@ -15,6 +15,7 @@ enum class EWacomBattlePresentationStepType : uint8
 	KnockdownChoiceDialog,
 	BattleEndSignal,
 	CardStackBoundary,
+	HostAnimation,
 };
 
 struct FWacomBattlePresentationStep
@@ -25,9 +26,13 @@ struct FWacomBattlePresentationStep
 	FWacomBattlePresentationTargetCue TargetCue;
 	float Duration = 0.0f;
 	int32 PresentationStackEntryId = INDEX_NONE;
+	FName EnemySlotId = NAME_None;
+	FName IntentId = NAME_None;
+	bool bDestroyedHostAnimation = false;
 };
 
 class FWacomBattleEventPresentationQueue
+	: public TSharedFromThis<FWacomBattleEventPresentationQueue>
 {
 public:
 	explicit FWacomBattleEventPresentationQueue(FWacomBattleHUDPresentationCoordinator& InCoordinator);
@@ -55,10 +60,13 @@ private:
 	FTimerHandle StepTimerHandle;
 	bool bProcessing = false;
 	bool bAdvancing = false;
+	bool bWaitingForHostAnimation = false;
+	uint64 HostAnimationBarrierSerial = 0;
 
-	bool BuildStepsForEvent(const FBattleEvent& Event);
+	bool BuildStepsForEvent(const FBattleEvent& Event, bool bLastDestroyedEventForEnemy);
 	void ScheduleNextStep(float DelaySeconds);
 	void StopTimer();
 	void Advance();
 	void FinishIfIdle();
+	void CompleteHostAnimationBarrier(uint64 ExpectedSerial);
 };

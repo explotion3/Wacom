@@ -12,6 +12,7 @@
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
+#include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
 #include "UI/Battle/WacomBattlePileCountPresentation.h"
@@ -1915,6 +1916,7 @@ void FWacomBattleHUDPresentationCoordinator::HandleBattleEndStep()
 	{
 		Runtime.NativeRefreshFromSnapshot(CurrentSession->BuildSnapshot());
 	}
+	Runtime.GetSceneEnemyTargetCoordinator().ClearRetiringHosts(false);
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleKnockdownChoiceDialogStep()
@@ -1926,6 +1928,27 @@ void FWacomBattleHUDPresentationCoordinator::HandleTargetCueStep(
 	const FWacomBattlePresentationTargetCue& Cue)
 {
 	Runtime.PlayBattlePresentationCue(Cue);
+}
+
+void FWacomBattleHUDPresentationCoordinator::HandleHostAnimationStep(
+	FName EnemySlotId,
+	FName IntentId,
+	bool bDestroyed,
+	TFunction<void()>&& Completion)
+{
+	FWacomBattleHUDSceneEnemyTargetCoordinator& SceneEnemyCoordinator =
+		Runtime.GetSceneEnemyTargetCoordinator();
+	if (bDestroyed)
+	{
+		SceneEnemyCoordinator.PlayHostDestroyedAnimation(
+			EnemySlotId,
+			MoveTemp(Completion));
+		return;
+	}
+	SceneEnemyCoordinator.PlayHostActionAnimation(
+		EnemySlotId,
+		IntentId,
+		MoveTemp(Completion));
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleCardStackBoundaryStep(int32 EntryId)

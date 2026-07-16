@@ -19,6 +19,7 @@ class UPaperSpriteComponent;
 class USceneComponent;
 class UWidgetComponent;
 class UWacomBattleEnemyHostVisualComponent;
+class UWacomBattleEnemyHostAnimationStyle;
 class UWacomBattleEnemyPartImpactStyle;
 class UWacomBattleEnemyPartTargetPreviewStyle;
 class UWacomBattleEnemyPanelWidget;
@@ -69,6 +70,30 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName HostVisualAssetName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 Host 语义动画 Style 资产名；未配置时为 None。"))
+	FName HostAnimationStyleAssetName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前 Host Flipbook 组件正在显示的 authored Idle、Action 或 Destroyed Clip 名。"))
+	FName CurrentHostAnimationClipName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前行动动画对应的显式 IntentId；Idle、Destroyed 或无活动播放时为 None。"))
+	FName CurrentHostAnimationIntentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bHostAnimationPlaybackActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bHostAnimationTerminalState = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 HostAnimationPlayCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 HostAnimationWatchdogCompletionCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 GeneratedHostVisualComponentCount = 0;
@@ -196,6 +221,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual",
 		meta = (ToolTip = "Host 整体 PaperFlipbook。HostVisualMode=Flipbook 时使用；适合普通小怪整体 idle。只影响显示，不影响命中或战斗规则。"))
 	TObjectPtr<UPaperFlipbook> HostFlipbook = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Animation",
+		meta = (ToolTip = "SimpleHostVisual 的语义动画 Style。HostFlipbook 继续作为 Idle；本资产只按 EnemyPartActed.IntentId 播放 Action，并在敌人全部部位破坏后播放 Destroyed。不会修改战斗规则或根据名称猜动画。"))
+	TObjectPtr<UWacomBattleEnemyHostAnimationStyle> HostAnimationStyle = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Host Visual|Flipbook",
 		meta = (ToolTip = "Host 整体 Flipbook 播放倍率。1 表示原速；只影响显示。", ClampMin = "0.0", ClampMax = "8.0", UIMin = "0.0", UIMax = "3.0"))
@@ -402,6 +431,18 @@ public:
 	 * 只扫描 live PartActor 并同步身份、Host 表现语境与 Badge 布局；不重建 Host/Part 视觉或制作状态。
 	 */
 	void InitializeRuntimeSceneBinding(TArray<AWacomBattleEnemyPartActor*>& OutPartActors) const;
+
+	/** 由 Battle presentation queue 请求一次行动动画；缺配置时同步完成。 */
+	void PlayRuntimeHostActionAnimation(FName IntentId, TFunction<void()>&& Completion);
+
+	/** 由 Battle presentation queue 请求整体终态动画；缺配置时同步完成。 */
+	void PlayRuntimeHostDestroyedAnimation(TFunction<void()>&& Completion);
+
+	/** 新战斗首次接管该 Host 时，仅在残留 runtime 播放或终态存在时恢复 authored Idle。 */
+	void ResetRuntimeHostAnimation();
+
+	/** Host/source/session 清理时安全结束当前动画 barrier。 */
+	void CancelRuntimeHostAnimation();
 
 	/** 标记 live PartActor 拓扑发生变化；供 PartActor BeginPlay/EndPlay 和显式运行时装配调用。 */
 	void InvalidateRuntimePartTopology();

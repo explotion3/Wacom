@@ -45,6 +45,20 @@ public:
 		bool bAutoPlayFlipbook);
 	void ClearGeneratedHostVisual();
 
+	/** 原地播放一次 Host 语义动画；返回 false 时会同步完成 Completion。 */
+	bool PlayRuntimeOneShot(
+		UPaperFlipbook* Flipbook,
+		float PlayRate,
+		FName IntentId,
+		bool bTerminal,
+		TFunction<void()>&& Completion);
+
+	/** 新战斗首次接管 Host 时，仅在残留 runtime 播放或终态存在时恢复 authored Idle。 */
+	void ResetRuntimePlaybackToIdle();
+
+	/** source/session 清理时结束当前 barrier；行动恢复 Idle，终态保持末帧。 */
+	void CancelRuntimePlayback();
+
 	UPaperSpriteComponent* GetGeneratedHostSpriteVisualComponent() const
 	{
 		return GeneratedHostSpriteVisualComponent;
@@ -58,14 +72,47 @@ public:
 	int32 GetGeneratedHostVisualComponentCount() const;
 	int32 GetRegisteredHostVisualComponentCount() const;
 	int32 GetVisibleHostVisualComponentCount() const;
+	FName GetCurrentRuntimeClipName() const { return CurrentRuntimeClipName; }
+	FName GetCurrentRuntimeIntentId() const { return CurrentRuntimeIntentId; }
+	bool IsRuntimePlaybackActive() const { return bRuntimePlaybackActive; }
+	bool IsRuntimeTerminalState() const { return bRuntimeTerminalState; }
+	int32 GetRuntimePlaybackCount() const { return RuntimePlaybackCount; }
+	int32 GetRuntimeWatchdogCompletionCount() const { return RuntimeWatchdogCompletionCount; }
 
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	UFUNCTION()
+	void HandleRuntimeFlipbookFinished();
+
+	void HandleRuntimeWatchdogExpired(uint64 ExpectedPlaybackSerial);
+	void CompleteRuntimePlayback(uint64 ExpectedPlaybackSerial, bool bWatchdogCompletion);
+	void StopRuntimeWatchdog();
+	void RestoreAuthoredIdlePlayback();
+	void CompletePendingCallback();
+
 	UPROPERTY(Transient)
 	TObjectPtr<UPaperSpriteComponent> GeneratedHostSpriteVisualComponent = nullptr;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPaperFlipbookComponent> GeneratedHostFlipbookVisualComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPaperFlipbook> AuthoredIdleFlipbook = nullptr;
+
+	float AuthoredIdlePlayRate = 1.0f;
+	float AuthoredIdleStartTimeSeconds = 0.0f;
+	bool bAuthoredIdleLooping = true;
+	bool bAuthoredIdleAutoPlay = true;
+	bool bRuntimePlaybackActive = false;
+	bool bRuntimeTerminalState = false;
+	FName CurrentRuntimeClipName = NAME_None;
+	FName CurrentRuntimeIntentId = NAME_None;
+	int32 RuntimePlaybackCount = 0;
+	int32 RuntimeWatchdogCompletionCount = 0;
+	uint64 PlaybackSerial = 0;
+	uint64 ActivePlaybackSerial = 0;
+	FTimerHandle RuntimeWatchdogTimerHandle;
+	TFunction<void()> PendingRuntimeCompletion;
 };

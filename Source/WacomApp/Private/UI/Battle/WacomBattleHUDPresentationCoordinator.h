@@ -86,6 +86,11 @@ public:
 	void HandleBattleEndStep();
 	void HandleKnockdownChoiceDialogStep();
 	void HandleTargetCueStep(const FWacomBattlePresentationTargetCue& Cue);
+	void HandleHostAnimationStep(
+		FName EnemySlotId,
+		FName IntentId,
+		bool bDestroyed,
+		TFunction<void()>&& Completion);
 	void HandleCardStackBoundaryStep(int32 EntryId);
 
 	UWorld* GetWorld() const;

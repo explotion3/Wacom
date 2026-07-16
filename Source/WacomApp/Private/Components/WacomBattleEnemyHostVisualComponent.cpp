@@ -3,11 +3,18 @@
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
 
 #include "Components/SceneComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
 #include "PaperSpriteComponent.h"
+#include "TimerManager.h"
+
+namespace
+{
+	constexpr float RuntimeAnimationWatchdogGraceSeconds = 0.10f;
+}
 
 UWacomBattleEnemyHostVisualComponent::UWacomBattleEnemyHostVisualComponent()
 {
@@ -33,6 +40,15 @@ void UWacomBattleEnemyHostVisualComponent::RefreshHostVisual(
 	bool bAutoPlayFlipbook)
 {
 	ClearGeneratedHostVisual();
+	AuthoredIdleFlipbook = bUseFlipbook ? HostFlipbook : nullptr;
+	AuthoredIdlePlayRate = FlipbookPlayRate;
+	AuthoredIdleStartTimeSeconds = FlipbookStartTimeSeconds;
+	bAuthoredIdleLooping = bLoopFlipbook;
+	bAuthoredIdleAutoPlay = bAutoPlayFlipbook;
+	bRuntimeTerminalState = false;
+	CurrentRuntimeClipName = AuthoredIdleFlipbook
+		? FName(*AuthoredIdleFlipbook->GetName())
+		: NAME_None;
 
 	AActor* Owner = GetOwner();
 	UWorld* World = GetWorld();
@@ -84,6 +100,9 @@ void UWacomBattleEnemyHostVisualComponent::RefreshHostVisual(
 		FlipbookComponent->bCastDynamicShadow = bCastShadow;
 		FlipbookComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		FlipbookComponent->SetGenerateOverlapEvents(false);
+		FlipbookComponent->OnFinishedPlaying.AddUniqueDynamic(
+			this,
+			&UWacomBattleEnemyHostVisualComponent::HandleRuntimeFlipbookFinished);
 		FlipbookComponent->SetLooping(bLoopFlipbook);
 		FlipbookComponent->SetPlayRate(FlipbookPlayRate);
 		FlipbookComponent->SetPlaybackPosition(FlipbookStartTimeSeconds, false);
@@ -141,6 +160,7 @@ void UWacomBattleEnemyHostVisualComponent::RefreshHostVisual(
 
 void UWacomBattleEnemyHostVisualComponent::ClearGeneratedHostVisual()
 {
+	CancelRuntimePlayback();
 	if (GeneratedHostSpriteVisualComponent)
 	{
 		GeneratedHostSpriteVisualComponent->DestroyComponent();
@@ -148,8 +168,179 @@ void UWacomBattleEnemyHostVisualComponent::ClearGeneratedHostVisual()
 	}
 	if (GeneratedHostFlipbookVisualComponent)
 	{
+		GeneratedHostFlipbookVisualComponent->OnFinishedPlaying.RemoveDynamic(
+			this,
+			&UWacomBattleEnemyHostVisualComponent::HandleRuntimeFlipbookFinished);
 		GeneratedHostFlipbookVisualComponent->DestroyComponent();
 		GeneratedHostFlipbookVisualComponent = nullptr;
+	}
+}
+
+bool UWacomBattleEnemyHostVisualComponent::PlayRuntimeOneShot(
+	UPaperFlipbook* Flipbook,
+	float PlayRate,
+	FName IntentId,
+	bool bTerminal,
+	TFunction<void()>&& Completion)
+{
+	UPaperFlipbookComponent* FlipbookComponent = GeneratedHostFlipbookVisualComponent.Get();
+	if (!IsValid(FlipbookComponent)
+		|| !IsValid(Flipbook)
+		|| !FMath::IsFinite(PlayRate)
+		|| PlayRate <= 0.0f
+		|| !FMath::IsFinite(Flipbook->GetTotalDuration())
+		|| Flipbook->GetTotalDuration() <= 0.0f)
+	{
+		if (Completion)
+		{
+			Completion();
+		}
+		return false;
+	}
+
+	CancelRuntimePlayback();
+	PendingRuntimeCompletion = MoveTemp(Completion);
+	bRuntimePlaybackActive = true;
+	bRuntimeTerminalState = bTerminal;
+	CurrentRuntimeIntentId = bTerminal ? NAME_None : IntentId;
+	CurrentRuntimeClipName = FName(*Flipbook->GetName());
+	ActivePlaybackSerial = ++PlaybackSerial;
+	++RuntimePlaybackCount;
+
+	FlipbookComponent->Stop();
+	FlipbookComponent->SetFlipbook(Flipbook);
+	FlipbookComponent->SetLooping(false);
+	FlipbookComponent->SetPlayRate(PlayRate);
+	FlipbookComponent->SetPlaybackPosition(0.0f, false);
+	FlipbookComponent->Play();
+
+	if (UWorld* World = GetWorld())
+	{
+		const float WatchdogSeconds = Flipbook->GetTotalDuration() / PlayRate
+			+ RuntimeAnimationWatchdogGraceSeconds;
+		World->GetTimerManager().SetTimer(
+			RuntimeWatchdogTimerHandle,
+			FTimerDelegate::CreateUObject(
+				this,
+				&UWacomBattleEnemyHostVisualComponent::HandleRuntimeWatchdogExpired,
+				ActivePlaybackSerial),
+			FMath::Max(0.01f, WatchdogSeconds),
+			false);
+	}
+	else
+	{
+		CompleteRuntimePlayback(ActivePlaybackSerial, true);
+		return false;
+	}
+
+	return true;
+}
+
+void UWacomBattleEnemyHostVisualComponent::ResetRuntimePlaybackToIdle()
+{
+	if (!bRuntimePlaybackActive && !bRuntimeTerminalState)
+	{
+		return;
+	}
+
+	CancelRuntimePlayback();
+	bRuntimeTerminalState = false;
+	RestoreAuthoredIdlePlayback();
+}
+
+void UWacomBattleEnemyHostVisualComponent::CancelRuntimePlayback()
+{
+	if (!bRuntimePlaybackActive)
+	{
+		StopRuntimeWatchdog();
+		return;
+	}
+
+	const uint64 SerialToComplete = ActivePlaybackSerial;
+	CompleteRuntimePlayback(SerialToComplete, false);
+}
+
+void UWacomBattleEnemyHostVisualComponent::HandleRuntimeFlipbookFinished()
+{
+	CompleteRuntimePlayback(ActivePlaybackSerial, false);
+}
+
+void UWacomBattleEnemyHostVisualComponent::HandleRuntimeWatchdogExpired(
+	uint64 ExpectedPlaybackSerial)
+{
+	CompleteRuntimePlayback(ExpectedPlaybackSerial, true);
+}
+
+void UWacomBattleEnemyHostVisualComponent::CompleteRuntimePlayback(
+	uint64 ExpectedPlaybackSerial,
+	bool bWatchdogCompletion)
+{
+	if (!bRuntimePlaybackActive || ExpectedPlaybackSerial != ActivePlaybackSerial)
+	{
+		return;
+	}
+
+	StopRuntimeWatchdog();
+	if (bWatchdogCompletion)
+	{
+		++RuntimeWatchdogCompletionCount;
+	}
+
+	bRuntimePlaybackActive = false;
+	++PlaybackSerial;
+	if (UPaperFlipbookComponent* FlipbookComponent = GeneratedHostFlipbookVisualComponent.Get())
+	{
+		if (bRuntimeTerminalState)
+		{
+			FlipbookComponent->Stop();
+			FlipbookComponent->SetPlaybackPosition(FlipbookComponent->GetFlipbookLength(), false);
+		}
+		else
+		{
+			RestoreAuthoredIdlePlayback();
+		}
+	}
+	CurrentRuntimeIntentId = NAME_None;
+	CompletePendingCallback();
+}
+
+void UWacomBattleEnemyHostVisualComponent::StopRuntimeWatchdog()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RuntimeWatchdogTimerHandle);
+	}
+	RuntimeWatchdogTimerHandle = FTimerHandle();
+}
+
+void UWacomBattleEnemyHostVisualComponent::RestoreAuthoredIdlePlayback()
+{
+	UPaperFlipbookComponent* FlipbookComponent = GeneratedHostFlipbookVisualComponent.Get();
+	if (!IsValid(FlipbookComponent) || !IsValid(AuthoredIdleFlipbook))
+	{
+		CurrentRuntimeClipName = NAME_None;
+		return;
+	}
+
+	FlipbookComponent->Stop();
+	FlipbookComponent->SetFlipbook(AuthoredIdleFlipbook);
+	FlipbookComponent->SetLooping(bAuthoredIdleLooping);
+	FlipbookComponent->SetPlayRate(AuthoredIdlePlayRate);
+	FlipbookComponent->SetPlaybackPosition(AuthoredIdleStartTimeSeconds, false);
+	if (bAuthoredIdleAutoPlay && AuthoredIdlePlayRate > 0.0f)
+	{
+		FlipbookComponent->Play();
+	}
+	CurrentRuntimeClipName = FName(*AuthoredIdleFlipbook->GetName());
+}
+
+void UWacomBattleEnemyHostVisualComponent::CompletePendingCallback()
+{
+	TFunction<void()> Completion = MoveTemp(PendingRuntimeCompletion);
+	PendingRuntimeCompletion = TFunction<void()>();
+	if (Completion)
+	{
+		Completion();
 	}
 }
 

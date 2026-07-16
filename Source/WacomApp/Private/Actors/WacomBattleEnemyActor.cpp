@@ -3,6 +3,7 @@
 #include "Actors/WacomBattleEnemyActor.h"
 
 #include "Actors/WacomBattleEnemyPartActor.h"
+#include "Actors/WacomBattleEnemyHostAnimationStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
@@ -689,6 +690,77 @@ void AWacomBattleEnemyActor::InitializeRuntimeSceneBinding(
 	}
 }
 
+void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
+	FName IntentId,
+	TFunction<void()>&& Completion)
+{
+	const FWacomBattleEnemyHostAnimationClip* Clip = HostAnimationStyle
+		? HostAnimationStyle->ResolveActionClip(IntentId)
+		: nullptr;
+	if (HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
+		|| HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
+		|| !IsHostVisualActive()
+		|| !HostVisualComponent
+		|| !Clip)
+	{
+		if (Completion)
+		{
+			Completion();
+		}
+		return;
+	}
+
+	HostVisualComponent->PlayRuntimeOneShot(
+		Clip->Flipbook,
+		Clip->PlayRate,
+		IntentId,
+		false,
+		MoveTemp(Completion));
+}
+
+void AWacomBattleEnemyActor::PlayRuntimeHostDestroyedAnimation(
+	TFunction<void()>&& Completion)
+{
+	const FWacomBattleEnemyHostAnimationClip* Clip = HostAnimationStyle
+		? HostAnimationStyle->ResolveDestroyedClip()
+		: nullptr;
+	if (HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
+		|| HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
+		|| !IsHostVisualActive()
+		|| !HostVisualComponent
+		|| !Clip)
+	{
+		if (Completion)
+		{
+			Completion();
+		}
+		return;
+	}
+
+	HostVisualComponent->PlayRuntimeOneShot(
+		Clip->Flipbook,
+		Clip->PlayRate,
+		NAME_None,
+		true,
+		MoveTemp(Completion));
+}
+
+void AWacomBattleEnemyActor::ResetRuntimeHostAnimation()
+{
+	if (HostVisualComponent)
+	{
+		HostVisualComponent->ResetRuntimePlaybackToIdle();
+	}
+}
+
+void AWacomBattleEnemyActor::CancelRuntimeHostAnimation()
+{
+	if (HostVisualComponent)
+	{
+		HostVisualComponent->CancelRuntimePlayback();
+	}
+}
+
 void AWacomBattleEnemyActor::InvalidateRuntimePartTopology()
 {
 	++RuntimePartTopologyRevision;
@@ -977,6 +1049,19 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 	View.HostVisualMode = GetHostVisualModeDebugName();
 	View.bUsingHostVisual = IsHostVisualActive();
 	View.HostVisualAssetName = GetHostVisualAssetName();
+	View.HostAnimationStyleAssetName = HostAnimationStyle
+		? FName(*HostAnimationStyle->GetName())
+		: NAME_None;
+	if (HostVisualComponent)
+	{
+		View.CurrentHostAnimationClipName = HostVisualComponent->GetCurrentRuntimeClipName();
+		View.CurrentHostAnimationIntentId = HostVisualComponent->GetCurrentRuntimeIntentId();
+		View.bHostAnimationPlaybackActive = HostVisualComponent->IsRuntimePlaybackActive();
+		View.bHostAnimationTerminalState = HostVisualComponent->IsRuntimeTerminalState();
+		View.HostAnimationPlayCount = HostVisualComponent->GetRuntimePlaybackCount();
+		View.HostAnimationWatchdogCompletionCount =
+			HostVisualComponent->GetRuntimeWatchdogCompletionCount();
+	}
 	View.GeneratedHostVisualComponentCount = GetGeneratedHostVisualComponentCount();
 	View.RegisteredHostVisualComponentCount = GetRegisteredHostVisualComponentCount();
 	View.VisibleHostVisualComponentCount = GetVisibleHostVisualComponentCount();

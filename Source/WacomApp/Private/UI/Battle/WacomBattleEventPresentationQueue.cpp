@@ -53,8 +53,22 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 
 	bool bAddedPresentationStep = false;
 	bool bAddedDamageConfirmationLead = false;
-	for (const FBattleEvent& Event : Events)
+	TMap<FName, int32> LastDestroyedEventIndexByEnemySlot;
+	for (int32 EventIndex = 0; EventIndex < Events.Num(); ++EventIndex)
 	{
+		const FBattleEvent& Event = Events[EventIndex];
+		if (Event.Type == EBattleEventType::EnemyPartHpEmptied
+			&& Event.ActorEnemyPartKey.IsValidKey())
+		{
+			LastDestroyedEventIndexByEnemySlot.Add(
+				Event.ActorEnemyPartKey.GetEffectiveEnemyUnitSlotId(),
+				EventIndex);
+		}
+	}
+
+	for (int32 EventIndex = 0; EventIndex < Events.Num(); ++EventIndex)
+	{
+		const FBattleEvent& Event = Events[EventIndex];
 		if (!bTargetAlreadyConfirmed
 			&& !bAddedDamageConfirmationLead
 			&& Event.Type == EBattleEventType::DamageDealt
@@ -69,7 +83,15 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 			bAddedPresentationStep = true;
 			bAddedDamageConfirmationLead = true;
 		}
-		bAddedPresentationStep |= BuildStepsForEvent(Event);
+		const int32* LastDestroyedEventIndex = Event.ActorEnemyPartKey.IsValidKey()
+			? LastDestroyedEventIndexByEnemySlot.Find(
+				Event.ActorEnemyPartKey.GetEffectiveEnemyUnitSlotId())
+			: nullptr;
+		bAddedPresentationStep |= BuildStepsForEvent(
+			Event,
+			Event.Type == EBattleEventType::EnemyPartHpEmptied
+				&& LastDestroyedEventIndex
+				&& *LastDestroyedEventIndex == EventIndex);
 	}
 
 	if (PresentationStackEntryId != INDEX_NONE)
@@ -154,6 +176,8 @@ void FWacomBattleEventPresentationQueue::Clear()
 	Steps.Reset();
 	bProcessing = false;
 	bAdvancing = false;
+	bWaitingForHostAnimation = false;
+	++HostAnimationBarrierSerial;
 }
 
 void FWacomBattleEventPresentationQueue::AbandonWithoutWorldAccess()
@@ -162,9 +186,13 @@ void FWacomBattleEventPresentationQueue::AbandonWithoutWorldAccess()
 	Steps.Reset();
 	bProcessing = false;
 	bAdvancing = false;
+	bWaitingForHostAnimation = false;
+	++HostAnimationBarrierSerial;
 }
 
-bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& Event)
+bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(
+	const FBattleEvent& Event,
+	bool bLastDestroyedEventForEnemy)
 {
 	if (Event.Type == EBattleEventType::KnockdownChoiceRequested)
 	{
@@ -177,6 +205,20 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 	}
 
 	bool bAddedStep = false;
+	if (Event.Type == EBattleEventType::EnemyPartActed
+		&& Event.Count > 0
+		&& Event.ActorEnemyPartKey.IsValidKey())
+	{
+		FWacomBattlePresentationStep HostAnimationStep;
+		HostAnimationStep.Type = EWacomBattlePresentationStepType::HostAnimation;
+		HostAnimationStep.EventSequence = Event.Sequence;
+		HostAnimationStep.SourceEventType = Event.Type;
+		HostAnimationStep.EnemySlotId =
+			Event.ActorEnemyPartKey.GetEffectiveEnemyUnitSlotId();
+		HostAnimationStep.IntentId = Event.IntentId;
+		Steps.Add(MoveTemp(HostAnimationStep));
+		bAddedStep = true;
+	}
 	if ((Event.Type == EBattleEventType::DamageDealt || Event.Type == EBattleEventType::EnemyPartHpEmptied)
 		&& Event.ActorEnemyPartKey.IsValidKey())
 	{
@@ -210,6 +252,18 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(const FBattleEvent& 
 		DelayStep.Duration = EnemyPartHpEmptiedExtraDelay;
 		Steps.Add(MoveTemp(DelayStep));
 		bAddedStep = true;
+
+		if (bLastDestroyedEventForEnemy && Event.ActorEnemyPartKey.IsValidKey())
+		{
+			FWacomBattlePresentationStep HostAnimationStep;
+			HostAnimationStep.Type = EWacomBattlePresentationStepType::HostAnimation;
+			HostAnimationStep.EventSequence = Event.Sequence;
+			HostAnimationStep.SourceEventType = Event.Type;
+			HostAnimationStep.EnemySlotId =
+				Event.ActorEnemyPartKey.GetEffectiveEnemyUnitSlotId();
+			HostAnimationStep.bDestroyedHostAnimation = true;
+			Steps.Add(MoveTemp(HostAnimationStep));
+		}
 	}
 
 	if (Event.Type == EBattleEventType::BattleEnded)
@@ -254,6 +308,10 @@ void FWacomBattleEventPresentationQueue::StopTimer()
 
 void FWacomBattleEventPresentationQueue::Advance()
 {
+	if (bWaitingForHostAnimation)
+	{
+		return;
+	}
 	if (bAdvancing)
 	{
 		ScheduleNextStep(0.01f);
@@ -301,6 +359,30 @@ void FWacomBattleEventPresentationQueue::Advance()
 		NextDelay = 0.0f;
 		break;
 
+	case EWacomBattlePresentationStepType::HostAnimation:
+	{
+		const uint64 BarrierSerial = ++HostAnimationBarrierSerial;
+		bWaitingForHostAnimation = true;
+		TWeakPtr<FWacomBattleEventPresentationQueue> WeakThis = AsShared();
+		Coordinator.HandleHostAnimationStep(
+			Step.EnemySlotId,
+			Step.IntentId,
+			Step.bDestroyedHostAnimation,
+			[WeakThis, BarrierSerial]()
+			{
+				if (const TSharedPtr<FWacomBattleEventPresentationQueue> Pinned = WeakThis.Pin())
+				{
+					Pinned->CompleteHostAnimationBarrier(BarrierSerial);
+				}
+			});
+		if (bWaitingForHostAnimation)
+		{
+			return;
+		}
+		NextDelay = 0.0f;
+		break;
+	}
+
 	default:
 		break;
 	}
@@ -323,6 +405,22 @@ void FWacomBattleEventPresentationQueue::Advance()
 	}
 
 	ScheduleNextStep(NextDelay);
+}
+
+void FWacomBattleEventPresentationQueue::CompleteHostAnimationBarrier(uint64 ExpectedSerial)
+{
+	if (!bProcessing
+		|| !bWaitingForHostAnimation
+		|| ExpectedSerial != HostAnimationBarrierSerial)
+	{
+		return;
+	}
+
+	bWaitingForHostAnimation = false;
+	if (!bAdvancing)
+	{
+		Advance();
+	}
 }
 
 void FWacomBattleEventPresentationQueue::FinishIfIdle()
