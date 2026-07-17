@@ -34,13 +34,13 @@ Shader(Name="DreamMaterials/Card/M_WacomCardSurfaceComposite")
         VectorParameter ArtCastShadowColor = float4(0.015, 0.02, 0.035, 1.0) [ Group="卡牌核心表面|插画投影"; SortPriority=51; Description="插画投影颜色；默认中性深蓝黑。"; ];
         ScalarParameter ArtCastShadowOpacity = 0.18 [ Group="卡牌核心表面|插画投影"; SortPriority=52; Description="插画投影不透明度；推荐 0.10 到 0.28。投影只出现在插画轮廓外。"; ];
         VectorParameter ArtCastShadowStaticOffset = float4(0.75, 1.0, 0.0, 0.0) [ Group="卡牌核心表面|插画投影"; SortPriority=53; Description="静止投影的 X/Y 视觉位移，单位为源像素；默认向右下约 1px。"; ];
-        ScalarParameter ArtCastShadowTiltOffsetPixels = 1.5 [ Group="卡牌核心表面|插画投影"; SortPriority=54; Description="达到参考倾角时投影沿卡牌接触阴影方向增加的位移，单位为源像素；推荐 1 到 2.5。"; ];
+        ScalarParameter ArtCastShadowTiltOffsetPixels = 2.680516 [ Group="卡牌核心表面|插画投影"; SortPriority=54; Description="达到参考倾角时投影沿卡牌接触阴影方向增加的位移，单位为源像素；当前默认约 2.68，推荐 1 到 3。"; ];
         ScalarParameter ArtReflectionEnabled = 0.0 [ Group="卡牌核心表面|插画反光"; SortPriority=40; Description="插画覆膜反光开关：0 关闭，1 开启；只控制倾斜受光，不关闭插画视差。默认关闭。"; ];
         ScalarParameter ArtReflectionStrength = 0.06 [ Group="卡牌核心表面|插画反光"; SortPriority=41; Description="插画宽幅柔和反光强度；推荐 0.02–0.12。仅在 ArtReflectionEnabled=1 时生效。"; ];
-        ScalarParameter FrameReflectionEnabled = 0.0 [ Group="卡牌核心表面|实体边框反光"; SortPriority=42; Description="实体卡框金属反光开关：0 关闭，1 开启；只控制倾斜受光，不关闭卡框视差。默认关闭。"; ];
+        ScalarParameter FrameReflectionEnabled = 1.0 [ Group="卡牌核心表面|实体边框反光"; SortPriority=42; Description="实体卡框金属反光开关：0 关闭，1 开启；只控制倾斜受光，不关闭卡框视差。默认开启。"; ];
         ScalarParameter FrameReflectionStrength = 0.10 [ Group="卡牌核心表面|实体边框反光"; SortPriority=43; Description="实体卡框方向高光强度；推荐 0.04–0.20。仅在 FrameReflectionEnabled=1 时生效。"; ];
         ScalarParameter FrameMetalContrast = 1.10 [ Group="卡牌核心表面|实体边框反光"; SortPriority=44; Description="实体卡框启用反光时的金属明暗对比；1 保持原色，推荐 1.00–1.35。"; ];
-        ScalarParameter RarityReflectionEnabled = 1.0 [ Group="卡牌核心表面|稀有度反光"; SortPriority=45; Description="稀有度边框箔片反光开关：0 关闭，1 开启；默认开启。"; ];
+        ScalarParameter RarityReflectionEnabled = 0.0 [ Group="卡牌核心表面|稀有度反光"; SortPriority=45; Description="稀有度边框箔片反光开关：0 关闭，1 开启；默认关闭，内容可按稀有度主题显式开启。"; ];
         ScalarParameter RarityBevelStrength = 0.16 [ Group="卡牌核心表面|稀有度反光"; SortPriority=46; Description="稀有度边框随倾斜变化的凹凸明暗；推荐 0.08–0.30。"; ];
         ScalarParameter FoilStrength = 0.08 [ Group="卡牌核心表面|稀有度反光"; SortPriority=47; Description="稀有度边框箔片反射强度；推荐 0.04–0.20。"; ];
         ScalarParameter IridescenceStrength = 0.05 [ Group="卡牌核心表面|稀有度反光"; SortPriority=48; Description="稀有度边框局部虹彩强度；推荐 0.00–0.15。"; ];

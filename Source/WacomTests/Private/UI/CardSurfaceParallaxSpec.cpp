@@ -137,12 +137,12 @@ bool FWacomCardSurfaceParallaxDreamShaderContractSpec::RunTest(const FString& Pa
 		MaterialSource.Contains(TEXT("ScalarParameter ArtReflectionEnabled = 0.0"))
 		&& MaterialSource.Contains(TEXT("ArtReflectionStrength * saturate(ArtReflectionEnabled)"))
 		&& HelperSource.Contains(TEXT("Function SelfContained WacomCardSurface_ApplyArtReflection")));
-	TestTrue(TEXT("Physical frame reflection is independently disabled by default"),
-		MaterialSource.Contains(TEXT("ScalarParameter FrameReflectionEnabled = 0.0"))
+	TestTrue(TEXT("Physical frame reflection is independently enabled by default"),
+		MaterialSource.Contains(TEXT("ScalarParameter FrameReflectionEnabled = 1.0"))
 		&& MaterialSource.Contains(TEXT("FrameReflectionStrength * frameReflectionAmount"))
 		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyFrameFinish(")));
-	TestTrue(TEXT("Rarity foil reflection remains independently enabled by default"),
-		MaterialSource.Contains(TEXT("ScalarParameter RarityReflectionEnabled = 1.0"))
+	TestTrue(TEXT("Rarity foil reflection remains independently available but disabled by default"),
+		MaterialSource.Contains(TEXT("ScalarParameter RarityReflectionEnabled = 0.0"))
 		&& MaterialSource.Contains(TEXT("RarityBevelStrength * rarityReflectionAmount"))
 		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyRarityFinish(")));
 	TestTrue(TEXT("Rarity shares the exact physical frame UV plane"),
@@ -160,6 +160,7 @@ bool FWacomCardSurfaceParallaxDreamShaderContractSpec::RunTest(const FString& Pa
 			"WacomCardSurface_ApplyCenteredBackplate(BackColor, frameUV")));
 	TestTrue(TEXT("Art alpha creates a hard pixel cast shadow on the fixed backplate"),
 		MaterialSource.Contains(TEXT("ScalarParameter ArtCastShadowEnabled = 1.0"))
+		&& MaterialSource.Contains(TEXT("ScalarParameter ArtCastShadowTiltOffsetPixels = 2.680516"))
 		&& MaterialSource.Contains(TEXT("artCastShadowSample = ArtTexture"))
 		&& MaterialSource.Contains(TEXT("WacomCardSurface_BuildArtCastShadowLayer"))
 		&& MaterialSource.Contains(TEXT(

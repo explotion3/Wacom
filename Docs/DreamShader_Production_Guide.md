@@ -141,7 +141,7 @@ Function SelfContained WacomExample_ComputeMask(
 - 卡面 `BackColor` 一类插画底板不能以 Alpha=1 的全屏颜色直接参与最终合成，否则会把透明圆角重新填成矩形，并污染 Retainer 实时 Alpha 阴影。应先通过局部 UV 生成居中缩放遮罩（当前默认 `BackColorScale=0.96`），再作为插画下层合成。
 - 纯色 `BackColor` 没有可识别纹理，不应随 Tilt 平移。需要无深度图层次时，额外采样一次透明插画 Alpha，使用偏移 Alpha 乘 `(1-ArtAlpha)` 与 `BackColorAlpha` 生成硬像素接触投影，再按 `BackColor → 投影 → Art` 合成。投影不能写入最终卡体 Alpha，也不能成为 Retainer 外部接触阴影 caster。
 - 像素插画视差必须同时设置最大源像素位移和半像素采样安全边界：先把目标 offset 限制到 `MaxArtParallaxPixels`，再把位移后的局部 UV Clamp 到 `0.5*InvSize .. 1-0.5*InvSize`。只做 inside mask 不能阻止过滤器在纹理边缘外取样。
-- 卡面材质中的“层深”和“表面反光”是两个独立合同：Art、Frame、Rarity 都可以拥有不同 UV 深度，并分别使用标量开关控制角度反光。当前默认 `ArtReflectionEnabled=0 / FrameReflectionEnabled=0 / RarityReflectionEnabled=1`；反光关闭时必须精确恢复源 RGB，但不能顺带关闭该层 UV 视差。插画使用宽幅柔和覆膜高光，实体 Frame 使用方向金属高光，只有 Rarity 使用 foil / iridescence。
+- 卡面材质中的“层深”和“表面反光”是两个独立合同：Art、Frame、Rarity 都可以拥有不同 UV 深度，并分别使用标量开关控制角度反光。当前默认 `ArtReflectionEnabled=0 / FrameReflectionEnabled=1 / RarityReflectionEnabled=0`；反光关闭时必须精确恢复源 RGB，但不能顺带关闭该层 UV 视差。插画具备宽幅柔和覆膜高光能力但默认关闭，实体 Frame 默认使用方向金属高光，Rarity 的 foil / iridescence 能力保留并由内容按主题显式开启。
 - DreamShader Graph 区不支持的 HLSL 写法应移入 `Function SelfContained`。例如 `step()` 可以在 `.dsh` helper 内使用，但某些插件版本不能在 Graph assignment 中直接解析；复合赋值 `value += expression` 也可能把左值误判为 Graph 变量类型。生产源使用显式 `value = value + expression`，并把 mode 选择、阈值分支放进 helper，再由 Graph 只接收输出。
 
 ## 5. 已经踩过的坑
