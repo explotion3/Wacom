@@ -124,6 +124,8 @@ Run scene refresh 同样采用 working-state 原子提交：Snapshot 先与唯�
 
 Journey success 继续遵守既有依赖方向：`WacomData` 只声明 `DisplayName + SuccessTerminalNode` 静态终局，`WacomRun` 在 terminal Encounter working-state 事务中生成 Outcome/summary/末尾 event，`WacomApp` 只消费 event、展示 passive ViewData 并编排 CommonUI teardown/travel，`WacomEditor` 只做静态制作校验。Defeat 与 success 不复用状态语义；Screen 不读取 RunSession，也不调用 travel。该切片没有增加模块、GameplayTag 或依赖边。
 
+击倒分支奖励同样沿用单向依赖：`WacomData` 的 `UEnemyPartDefinition` 保存 Aid/Destroy 静态引用并提供唯一 legacy-compatible C++ 查询；`WacomBattle` 在原有选择事务中消费查询，同时生成不含规则对象的只读奖励摘要；`WacomApp` 的 Dialog 只渲染摘要并提交选择意图；`WacomEditor` 用 General/FormalProduction profile 管制作门禁；`WacomRun` 继续只消费 `FBattleGainedCard.SourceChoice` 和 Card Definition。不得让 App 直接读取 Part Definition、让 Editor validator 进入 runtime、或为奖励预览新增 Battle/Run 状态和模块依赖。
+
 ## 5. 目录结构
 
 模块层：

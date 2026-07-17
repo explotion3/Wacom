@@ -51,10 +51,17 @@ namespace
 		for (TFieldIterator<FProperty> It(Target.GetClass()); It; ++It)
 		{
 			FProperty* Property = *It;
+			const bool bIsKnockdownRewardMigrationField =
+				Property->GetFName()
+				== GET_MEMBER_NAME_CHECKED(
+					UEnemyPartDefinition,
+					KnockdownRewardCard);
 			if (!Property->HasAnyPropertyFlags(CPF_Edit)
 				|| Property->HasAnyPropertyFlags(
 					CPF_Transient | CPF_DuplicateTransient
-					| CPF_NonPIEDuplicateTransient | CPF_Deprecated))
+					| CPF_NonPIEDuplicateTransient)
+				|| (Property->HasAnyPropertyFlags(CPF_Deprecated)
+					&& !bIsKnockdownRewardMigrationField))
 			{
 				continue;
 			}
@@ -480,7 +487,9 @@ namespace Wacom::ContentBuilder
 				Part.DisplayName = FText::FromString(TEXT("Training Warrior Body"));
 				Part.MaxHp = 24;
 				Part.ExperienceReward = 3;
-				Part.KnockdownRewardCard = RewardCard;
+				Part.AidRewardCard = RewardCard;
+				Part.DestroyRewardCard = RewardCard;
+				Part.KnockdownRewardCard = nullptr;
 			},
 			Result.bChanged,
 			Result.Errors);

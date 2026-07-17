@@ -27,7 +27,7 @@ tags:
 
 ## 当前推进顺序
 
-1. 先收口 P0 规则问题。
+1. 先收口剩余 P0 规则问题；击倒卡牌奖励粒度与运行时合同已经完成，只剩卡牌具体效果和其它分支效果。
 2. 再推进地图 / 节点服务。
 3. 地图口径确定后，再接击倒分支、RunEvent / Shop 的节点生成与存档恢复。
 4. UI WBP、表现 polish 和存档恢复按 Demo 范围穿插推进。
@@ -36,10 +36,16 @@ tags:
 
 ## P0 策划确认
 
-- [ ] **明确击倒事件 Aid / Withdraw / Destroy 的正式分支效果**
-  - 状态：`Blocked: 策划确认`
+- [ ] **明确击倒事件 Aid / Withdraw / Destroy 的其它正式分支效果**
+  - 状态：`Blocked: 八张奖励卡数值与非卡牌效果需策划确认`
   - 归属：战斗 / Run
   - 入口：[Questions: 击倒与战后结算](./Questions.md#questions-knockdown)
+
+- [x] **击倒 Aid / Destroy 分支奖励合同基线**
+  - 状态：`Done: 分支字段、legacy fallback、原子结算、被动预览与 Production 门禁已落地`
+  - 归属：Data / Battle / App / Editor / Tests
+  - 入口：[WacomData.md](./WacomData.md) / [WacomBattle.md](./WacomBattle.md) / `specs/012-knockdown-branch-reward-baseline/`
+  - 说明：Aid/Destroy 显式字段使用统一查询，旧资产可 legacy-only 读取，混填为制作错误；FormalProduction 要求双分支显式配置。UI 只显示 Battle 奖励摘要。Floor 1 按四个敌人各一对预留 8 个 CardId，但具体卡牌效果和资产仍待下一轮。
 
 ## P0.5 近期架构规划
 
@@ -65,7 +71,7 @@ tags:
   - 状态：`Done: 15 个节点 Definition + 23 个支持资产合同已冻结`
   - 归属：Data / Battle / Run / Map
   - 入口：[WacomData.md](./WacomData.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/011-formal-floor1-production-content-freeze/`
-  - 说明：已冻结 4 Enemy、11 Part、4 Behavior、24 Intent、6 Encounter、4 Card、4 Pickup、1 Shop 和 4 Event/13 Choice；战斗梯度为 `16 → 26–32 → 44 → 52 HP`，两条前半路线各有从 0 Gold 获得一次购买力的选择，Floor AP 保持 `8–9 / 14–15`。本项只关闭内容设计 blocker，没有创建 38 个 DataAsset；击倒三分支奖励、资产实现、世界权威与正式 PIE 继续独立处理。
+  - 说明：已冻结 4 Enemy、11 Part、4 Behavior、24 Intent、6 Encounter、4 核心 Card、4 Pickup、1 Shop 和 4 Event/13 Choice；战斗梯度为 `16 → 26–32 → 44 → 52 HP`，两条前半路线各有从 0 Gold 获得一次购买力的选择，Floor AP 保持 `8–9 / 14–15`。Spec 012 又冻结了四个敌人各一对的 8 张击倒分支奖励卡身份；没有创建任何 DataAsset，八张卡具体效果、资产实现、世界权威与正式 PIE 继续独立处理。
 
 ## P1 近期实现候选
 
@@ -99,11 +105,11 @@ tags:
   - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/009-formal-floor23-journey-pacing-freeze/data-model.md`
   - 说明：制作 `MoltCavern` 的 15 个与 `VenomCore` 的 16 个非 Debug typed definitions，独立冻结敌人槽、事件选项、Shop 库存和奖励数值并补 Data Validation。蜕印 Pickup 必须同时授予 `Card.Run.MoltSeal` 与 `Credential.Run.MoltSeal`。
 
-- [ ] **Floor 1 Production 38 个 DataAsset 实现与校验**
-  - 状态：`Ready for implementation: 内容合同与 manifest 已冻结`
+- [ ] **Floor 1 Production 38 core + 8 branch reward DataAsset 实现与校验**
+  - 状态：`Blocked: 八张分支奖励卡具体效果与 package leaf manifest 尚未冻结`
   - 归属：Data / Editor / Tests
-  - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/011-formal-floor1-production-content-freeze/contracts/production-asset-manifest.md`
-  - 说明：创建 15 个节点 Definition、4 Card、4 Enemy、4 Behavior、11 Part；future builder 只能写 manifest 中 38 个新 package，三张 Starter 卡和现有 `PoisonFang` 只读。补 Data Validation、生成内容 smoke、builder 双跑、依赖/failed-load/hash/dirty 审计与受影响 Battle/Run 测试；不得把 Debug/Test/BadgeDisplayTests/TrainingWarrior 作为 Production 资产依赖，不得修改地图、材质、卡牌表现或其它 Agent 资产。所有新 Part 的 KnockdownRewardCard 先保持 null，直到击倒三分支 P0 另案完成。
+  - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/011-formal-floor1-production-content-freeze/contracts/production-asset-manifest.md` / `specs/012-knockdown-branch-reward-baseline/contracts/production-migration-contract.md`
+  - 说明：创建 15 个节点 Definition、4 核心 Card、4 Enemy、4 Behavior、11 Part，再追加每敌人 Aid/Destroy 共 8 张 Card；三张 Starter 卡和现有 `PoisonFang` 只读。先冻结八张卡数值与 package leaf，再扩展受控 manifest。全部正式 Part 必须清空 legacy 并显式配置双分支；补 Data Validation、生成内容 smoke、builder 双跑、依赖/failed-load/hash/dirty 审计与受影响 Battle/Run 测试。不得引用 Debug/Test/BadgeDisplayTests/TrainingWarrior，不得修改地图、材质、卡牌表现或其它 Agent 资产。
 
 - [ ] **Floor 1 Production DataAsset 与正式世界场景制作**
   - 状态：`Blocked: readiness gate`
@@ -233,10 +239,11 @@ tags:
   - 入口：[WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)
   - 说明：Battle 已由 `PlayCard Evaluation` 权威处理 Card-World / Card-Card；本项只追踪 Run 与 Zone 后续各自的领域求值，避免重新引入跨域通用 Resolver。
 
-- [ ] **接入击倒事件实际分支、奖励卡差异化和节点事件联动**
-  - 状态：`Blocked: P0 击倒口径`
+- [ ] **接入击倒事件其它分支效果与节点事件联动**
+  - 状态：`Blocked: 非卡牌效果与触发条件仍需 P0 口径`
   - 归属：战斗 / RunEvent
   - 入口：[Roadmap: 击倒事件扩展](./Roadmap.md#roadmap-knockdown)
+  - 说明：Aid/Destroy 差异化奖励字段、原子授予和简单预览已完成；本项只追踪左手 buff、永久强化/破坏、特殊节点或地图回路等未冻结能力。
 
 - [ ] **推进 RunEvent：随机事件池、更多条件效果、地图节点生成、存档**
   - 状态：`Blocked: 地图节点口径`

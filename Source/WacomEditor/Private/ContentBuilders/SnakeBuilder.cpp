@@ -199,7 +199,7 @@ namespace
 		const FString& DisplayName,
 		int32 MaxHp,
 		int32 ExperienceReward,
-		UCardDefinition* KnockdownRewardCard)
+		UCardDefinition* BranchRewardCard)
 	{
 		UPackage* Pkg = FindOrCreatePackage(PackagePath);
 		if (!Pkg) { return nullptr; }
@@ -211,7 +211,9 @@ namespace
 		Part->DisplayName         = FText::FromString(DisplayName);
 		Part->MaxHp               = MaxHp;
 		Part->ExperienceReward    = ExperienceReward;
-		Part->KnockdownRewardCard = KnockdownRewardCard;
+		Part->AidRewardCard       = BranchRewardCard;
+		Part->DestroyRewardCard   = BranchRewardCard;
+		Part->KnockdownRewardCard = nullptr;
 
 		SaveAssetPackage(Pkg, Part, PackagePath);
 		return Part;

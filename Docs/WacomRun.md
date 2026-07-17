@@ -440,6 +440,7 @@ Journey 成功只由 `UWacomJourneyDefinition::SuccessTerminalNode` 驱动：本
 - `bMutualDestruction`：伤口 +10，不直接终止 Run。
 - Victory 包含撤离：结算 `KnockdownExpGains[]` 和 `GainedCards[]`。
 - Defeat / Undetermined 不结算经验和获得卡。
+- `GainedCards[].SourceChoice` 已能区分 Aid / Destroy 来源；Run 只按现有定义获取卡，不重新查询 EnemyPart、奖励表或 UI ViewData，也不需要修改 `FBattleResultPacket`、`FBattleGainedCard`、`FRunState` 或 SaveGame schema。
 - `KnockdownChoices[]` 当前只按 `PartKey` 记日志，后续事件分支再消费。
 
 GameMode 不再手工扣时段点，也不根据已破坏部位数量重新推断胜利。只有正式 settlement 成功且 `Packet.Outcome == Victory && !Packet.bWithdrawn` 时，才把已 Resolved Map Node 投影到 SaveGame v3 的 `DestroyedTriggerIds`，并启动当前 BattleTrigger 的场景退役。Trigger 会立即失去交互，但 Host 保留完整 Destroyed/Downed 末帧；返回探索镜头和 ExitBattle 后置工作都完成后，Trigger 才隐藏并禁用 Encounter 内有效 Host/Part，然后销毁自身。撤离、失败、Undetermined 或 settlement 失败都保留场景，允许从同一 Map Node 重入。Map Node lifecycle 始终是完成状态真相，`DestroyedTriggerIds` 只是旧存档格式的兼容投影。

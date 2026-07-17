@@ -68,7 +68,7 @@ tags:
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
 | 击倒事件三选一具体效果 | 当前框架见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)，开放决策见 [Questions: 击倒与战后结算](./Questions.md#questions-knockdown) | 探索事件 / 地图节点系统接入后，按击倒选择触发左手 buff、永久强化部位、特殊节点等实际效果 |
-| 击倒奖励卡分支扩展 | 奖励字段入口见 [WacomData.md](./WacomData.md)，当前规则事实见 [WacomBattle.md](./WacomBattle.md) | 后续细化 Aid / Destroy 不同奖励、毒牙正式效果、敌人奖励表或节点事件奖励表 |
+| 击倒奖励卡内容制作 | Aid/Destroy 显式字段、legacy fallback、统一查询、原子授予、简单预览和 Production validation 已落地；Floor 1 已固定每敌人一对共 8 个 CardId | 下一轮冻结八张卡的费用/稀有度/关键词/效果与 package leaf，随后纳入 Floor 1 受控 builder/manifest；不要另建节点奖励表或让 UI 读取规则资产 |
 | 左右手永久缺失可用性 | 待确认口径见 [Questions: 手牌、区域与抽牌](./Questions.md#questions-hand) / [Questions: 击倒与战后结算](./Questions.md#questions-knockdown) | 等 Run / Battle 中永久失去左 / 右手字段确定后，在击倒可用性 helper 中禁用对应分支 |
 
 ---
@@ -126,7 +126,7 @@ tags:
 | 目标选择 3D 射线 | 旧 2D EnemyPartWidget 已删除；当前点击、hover、drag preview 走 SceneEnemyHost / PartActor / WorldTargetBridge | 继续完善场景部位高亮、点击反馈、材质描边、tooltip、命中手感和正式动画 |
 | 敌人表现正式化 | 当前支持普通小怪 Host 整体 sprite / flipbook + hit-only 部位，以及精英 / Boss PartActor VisualLayers | 保存正式蛇 Host prefab、美术替换、描边材质、tooltip、风险动效、PaperZD / Animator 状态机和更多敌人包 |
 | CombatLog / 表现队列 | BattleHUD 使用常驻可滚动 CombatLog 命令块和事件明细；旧日志抽屉与 EventToast 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
-| 击倒事件 Dialog 美术 | C++ 硬编码 CanvasPanel + Border + Button 布局，BindWidget 锚点就位 | 美术阶段配正式 WBP |
+| 击倒事件 Dialog 美术 | C++ fallback 已有三按钮及 Aid/Destroy 奖励文本；`AidRewardText / DestroyRewardText` 等 BindWidget 锚点就位 | 美术阶段配正式 WBP 和排版；保持 Battle ViewData 被动输入，不引入完整 CardView 或新焦点流 |
 
 <a id="roadmap-backpack-ui"></a>
 ### 背包 UI

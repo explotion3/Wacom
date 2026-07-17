@@ -536,12 +536,13 @@ Battle 只负责产出战后包。疲劳、伤口、经验、获得卡、撤离�
 击倒事件补充：
 
 - Aid / Destroy 是击倒事件分支，不依赖左 / 右手牌当前是否仍在手牌区，也不消耗左右手牌。
-- 如果被击倒部位配置 `KnockdownRewardCard`，选择 Aid 或 Destroy 会立刻创建战斗内 runtime card，随机插入当前手牌，并发出 `CardGained`；Withdraw 不触发奖励卡。
+- Aid / Destroy 分别通过 `UEnemyPartDefinition::ResolveKnockdownRewardCard(Choice)` 查询奖励：显式分支字段优先，空时兼容回退 legacy `KnockdownRewardCard`；Withdraw 不查询或授予奖励。
+- 有奖励时会立刻创建战斗内 runtime card，随机插入当前手牌，并发出 `CardGained`；所选分支没有奖励时选择仍合法，只是不创建卡、不发 `CardGained`、不写 `GainedCards`。奖励存在性不参与可用性判断。
 - `CardGained.CardInstanceId` 是新建战斗内卡实例，`ActorInstanceId` 是来源部位实例，`CardDefinition` 是奖励卡定义，`Count` 记录本次 `EKnockdownChoice`。
 - 同次规则事务会在新卡已经插入手牌、手牌上限弃置尚未执行时记录 `CardGainedResolved` checkpoint；该事实只服务表现重建，不延迟或改写最终规则结果。
 - 奖励卡选择时即写入 `FBattleResultPacket.GainedCards`。后续即使这张战内卡被打出、弃掉、消耗或被上限弃牌，战后 Victory 仍会进入 Run。
 - 撤离只在敌人仍有存活部位时可选；如果本次击倒后敌人所有部位都已清空，必须 Aid 或 Destroy。
-- `UBattleSession::BuildPendingKnockdownChoiceView()` 输出当前击倒事件的 `FKnockdownChoiceView`。`DisabledReason` 当前使用 `None / NoLivingEnemyPart`；`LeftHandMissing / RightHandMissing` 已预留但未被当前规则触发。
+- `UBattleSession::BuildPendingKnockdownChoiceView()` 输出当前击倒事件的 `FKnockdownChoiceView`。每个 Aid/Destroy option 同时携带只读 `bHasRewardCard / RewardCardId / RewardCardName`，与 resolver 使用同一 Data 查询；它不暴露可写规则对象。`DisabledReason` 当前使用 `None / NoLivingEnemyPart`；`LeftHandMissing / RightHandMissing` 已预留但未被当前规则触发。
 - `KnockdownChoiceRequested` 事件只通知 UI 需要展示选择面板；`FBattleEvent.Count` 的旧位掩码仅保留日志兼容，不作为 UI 读取合同。
 
 `Outcome=Undetermined` 不结算压力；它只用于异常路径或玩家取消。

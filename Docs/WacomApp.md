@@ -221,6 +221,12 @@ WacomApp 负责调用 UI shell，但不在本文定义具体 UI 视觉和刷新�
 
 菜单按钮不直接 OpenLevel；切关卡委托给 GameMode 或 PlayerController。主菜单和暂停菜单切关前先 `TearDownPrimaryLayout()`，再在下一帧 `OpenLevel()`，避免在按钮点击 / CommonUI deactivate 链中立即切关。
 
+### Knockdown Choice 被动奖励预览
+
+`UWacomKnockdownChoiceDialog` 只消费 `FKnockdownChoiceView`，不读取 `UEnemyPartDefinition`、不加载奖励资产、也不重新判断选项合法性。Aid / Destroy option 的 `bHasRewardCard / RewardCardId / RewardCardName` 由 Battle 通过与实际结算相同的查询构造；Dialog 只显示 `奖励：<名称>`，名称为空时使用稳定 CardId，两者都不可用或没有奖励时显示“无卡牌奖励”。空奖励不会让 UI 自行禁用按钮。
+
+原生 fallback 在 `AidButton / DestroyButton` 下提供 `AidRewardText / DestroyRewardText`；正式 WBP 可通过同名 `BindWidgetOptional` 锚点替换布局。`NativeConstruct` 和每次 `SetContext` 使用同一刷新路径，因此连续多部位击倒不会保留上一部位的奖励文字或按钮状态。Modal layer、必须三选一、ESC/Back 拦截、BattleHUD 命令提交和 deactivate 时机保持不变；完整 CardView、缩略图和新焦点流不属于该 Dialog。
+
 ### GameMenu viewpoint staging
 
 GameMenu viewpoint staging 是 Exploration GameMenu 的通用临时镜头站位流程，当前接入者是 Shop 和 RunEvent，共用同一套 PlayerController 状态和 Run Path return flow。`AWacomShopTriggerActor.ShopEntryViewpoint` 是商店入口的可选第一人称镜头站位；`AWacomRunEventTriggerActor.RunEventEntryViewpoint` 是事件入口的可选第一人称镜头站位。未配置时沿用普通路径：Shop 为 `BeginShopVisit -> Push ShopScreen`，RunEvent 为 `BeginRunEvent -> Push RunEventScreen`。配置后，Trigger 会构造 `FWacomFirstPersonViewStageRequest`：Shop 使用 `Reason=ShopEntry`，RunEvent 使用 `Reason=RunEventEntry`，`DebugSource` 优先使用 `PersistentId`，并复制 viewpoint 的 View Transform、blend 时间、曲线和 ease power。

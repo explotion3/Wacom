@@ -2,9 +2,32 @@
 
 #include "Commands/KnockdownChoiceAvailability.h"
 
+#include "Cards/CardDefinition.h"
 #include "Core/BattleState.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Runtime/RuntimeEnemyPart.h"
+
+namespace
+{
+	void PopulateRewardSummary(
+		const UEnemyPartDefinition& PartDefinition,
+		EKnockdownChoice Choice,
+		FKnockdownChoiceOptionView& OutOption)
+	{
+		const UCardDefinition* RewardCard =
+			PartDefinition.ResolveKnockdownRewardCard(Choice);
+		if (!RewardCard)
+		{
+			return;
+		}
+
+		OutOption.bHasRewardCard = true;
+		OutOption.RewardCardId = RewardCard->CardId;
+		OutOption.RewardCardName = RewardCard->DisplayName.IsEmpty()
+			? FText::FromName(RewardCard->CardId)
+			: RewardCard->DisplayName;
+	}
+}
 
 const FName FKnockdownChoiceAvailability::Reason_None(TEXT("None"));
 const FName FKnockdownChoiceAvailability::Reason_NoLivingEnemyPart(TEXT("NoLivingEnemyPart"));
@@ -56,6 +79,14 @@ FKnockdownChoiceView FKnockdownChoiceAvailability::BuildView(const FBattleState&
 		View.PartName = Part.Definition->DisplayName.IsEmpty()
 			? FText::FromName(Part.Definition->PartId)
 			: Part.Definition->DisplayName;
+		PopulateRewardSummary(
+			*Part.Definition,
+			EKnockdownChoice::Aid,
+			View.AidOption);
+		PopulateRewardSummary(
+			*Part.Definition,
+			EKnockdownChoice::Destroy,
+			View.DestroyOption);
 		break;
 	}
 

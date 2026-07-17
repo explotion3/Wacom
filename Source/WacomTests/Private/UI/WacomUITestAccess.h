@@ -3,6 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/Button.h"
+#include "Components/TextBlock.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "Input/Events.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
@@ -62,6 +64,36 @@ class UWacomKnockdownChoiceDialogInputProbe : public UWacomKnockdownChoiceDialog
 	GENERATED_BODY()
 
 public:
+	FString GetAidRewardText() const
+	{
+		return AidRewardText ? AidRewardText->GetText().ToString() : FString();
+	}
+
+	FString GetDestroyRewardText() const
+	{
+		return DestroyRewardText ? DestroyRewardText->GetText().ToString() : FString();
+	}
+
+	FString GetPartNameText() const
+	{
+		return PartNameText ? PartNameText->GetText().ToString() : FString();
+	}
+
+	bool IsAidButtonEnabled() const
+	{
+		return AidButton && AidButton->GetIsEnabled();
+	}
+
+	bool IsWithdrawButtonEnabled() const
+	{
+		return WithdrawButton && WithdrawButton->GetIsEnabled();
+	}
+
+	bool IsDestroyButtonEnabled() const
+	{
+		return DestroyButton && DestroyButton->GetIsEnabled();
+	}
+
 	FReply SendGamepadBackKeyDown()
 	{
 		const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);

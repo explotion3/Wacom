@@ -76,7 +76,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 		return FWacomStatus::Ok();
 	}
 
-	// 援助 / 破坏：如果部位配置了击倒奖励卡，立即获得一张战斗内卡并记入战后包。
+	// 援助 / 破坏：从统一分支查询取得奖励，立即获得战斗内卡并记入战后包。
 	if (Choice == EKnockdownChoice::Aid || Choice == EKnockdownChoice::Destroy)
 	{
 		const FRuntimeEnemyPart* SourcePart = State.Enemy.Parts.FindByPredicate(
@@ -85,7 +85,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 				return Part.InstanceId == Head.PartInstanceId;
 			});
 		UCardDefinition* RewardCard = (SourcePart && SourcePart->Definition)
-			? SourcePart->Definition->KnockdownRewardCard.Get()
+			? SourcePart->Definition->ResolveKnockdownRewardCard(Choice)
 			: nullptr;
 
 		if (RewardCard)

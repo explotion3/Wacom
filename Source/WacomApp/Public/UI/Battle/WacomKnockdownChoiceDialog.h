@@ -52,10 +52,14 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> TitleText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> PartNameText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton>    AidButton;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> AidRewardText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton>    WithdrawButton;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton>    DestroyButton;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DestroyRewardText;
 
 private:
+	void ApplyCurrentView();
+
 	UPROPERTY(Transient)
 	TObjectPtr<UBattleHUD> OwningHUD = nullptr;
 

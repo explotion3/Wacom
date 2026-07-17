@@ -62,6 +62,50 @@ namespace
 		}
 		return Btn;
 	}
+
+	UTextBlock* MakeRewardText(
+		UWidgetTree* Tree,
+		FName Name,
+		UHorizontalBox* Parent,
+		float Width)
+	{
+		USizeBox* Sizer = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
+		Sizer->SetMinDesiredWidth(Width);
+
+		UTextBlock* Text =
+			Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
+		Text->SetJustification(ETextJustify::Center);
+		Text->SetAutoWrapText(true);
+		FSlateFontInfo Font = Text->GetFont();
+		Font.Size = 12;
+		Text->SetFont(Font);
+		Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.82f, 0.95f)));
+		Sizer->AddChild(Text);
+
+		if (UHorizontalBoxSlot* Slot = Parent->AddChildToHorizontalBox(Sizer))
+		{
+			Slot->SetPadding(FMargin(8.f, 6.f, 8.f, 0.f));
+			Slot->SetVerticalAlignment(VAlign_Top);
+		}
+		return Text;
+	}
+
+	FText BuildRewardSummaryText(const FKnockdownChoiceOptionView& Option)
+	{
+		if (!Option.bHasRewardCard)
+		{
+			return LOCTEXT("NoCardReward", "无卡牌奖励");
+		}
+
+		const FText RewardName = !Option.RewardCardName.IsEmpty()
+			? Option.RewardCardName
+			: (Option.RewardCardId.IsNone()
+				? FText::GetEmpty()
+				: FText::FromName(Option.RewardCardId));
+		return RewardName.IsEmpty()
+			? LOCTEXT("NoCardReward", "无卡牌奖励")
+			: FText::Format(LOCTEXT("CardRewardFormat", "奖励：{0}"), RewardName);
+	}
 }
 
 TSharedRef<SWidget> UWacomKnockdownChoiceDialog::RebuildWidget()
@@ -94,7 +138,7 @@ TSharedRef<SWidget> UWacomKnockdownChoiceDialog::RebuildWidget()
 		{
 			S->SetAnchors(FAnchors(0.5f, 0.5f));
 			S->SetAlignment(FVector2D(0.5f, 0.5f));
-			S->SetOffsets(FMargin(-260.f, -90.f, 520.f, 180.f));
+			S->SetOffsets(FMargin(-260.f, -115.f, 520.f, 230.f));
 			S->SetAutoSize(false);
 		}
 
@@ -151,6 +195,25 @@ TSharedRef<SWidget> UWacomKnockdownChoiceDialog::RebuildWidget()
 		{
 			DestroyButton = MakeChoiceButton(WidgetTree, TEXT("DestroyButton"), LOCTEXT("Destroy", "破坏（右手）"), BtnRow, 140.f);
 		}
+
+		UHorizontalBox* RewardRow = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(), TEXT("RewardRow"));
+		if (UVerticalBoxSlot* S = VBox->AddChildToVerticalBox(RewardRow))
+		{
+			S->SetHorizontalAlignment(HAlign_Center);
+		}
+		if (!AidRewardText)
+		{
+			AidRewardText = MakeRewardText(
+				WidgetTree, TEXT("AidRewardText"), RewardRow, 140.f);
+		}
+		MakeRewardText(WidgetTree, TEXT("WithdrawRewardSpacer"), RewardRow, 100.f)
+			->SetVisibility(ESlateVisibility::Hidden);
+		if (!DestroyRewardText)
+		{
+			DestroyRewardText = MakeRewardText(
+				WidgetTree, TEXT("DestroyRewardText"), RewardRow, 140.f);
+		}
 	}
 	return Super::RebuildWidget();
 }
@@ -163,14 +226,7 @@ void UWacomKnockdownChoiceDialog::NativeConstruct()
 	if (WithdrawButton) { WithdrawButton->OnClicked.AddUniqueDynamic(this, &UWacomKnockdownChoiceDialog::HandleWithdrawClicked); }
 	if (DestroyButton)  { DestroyButton ->OnClicked.AddUniqueDynamic(this, &UWacomKnockdownChoiceDialog::HandleDestroyClicked); }
 
-	// 应用 SetContext 传入的状态。
-	if (PartNameText && !CurrentView.PartName.IsEmpty())
-	{
-		PartNameText->SetText(CurrentView.PartName);
-	}
-	if (AidButton) { AidButton->SetIsEnabled(CurrentView.AidOption.bAvailable); }
-	if (WithdrawButton) { WithdrawButton->SetIsEnabled(CurrentView.WithdrawOption.bAvailable); }
-	if (DestroyButton) { DestroyButton->SetIsEnabled(CurrentView.DestroyOption.bAvailable); }
+	ApplyCurrentView();
 }
 
 void UWacomKnockdownChoiceDialog::SetContext(UBattleHUD* InHUD, const FKnockdownChoiceView& InView)
@@ -178,11 +234,24 @@ void UWacomKnockdownChoiceDialog::SetContext(UBattleHUD* InHUD, const FKnockdown
 	OwningHUD = InHUD;
 	CurrentView = InView;
 
-	// 即时应用（如果 NativeConstruct 已经跑过）
+	// 即时应用（如果 NativeConstruct 已经跑过）。
+	ApplyCurrentView();
+}
+
+void UWacomKnockdownChoiceDialog::ApplyCurrentView()
+{
 	if (PartNameText) { PartNameText->SetText(CurrentView.PartName); }
 	if (AidButton) { AidButton->SetIsEnabled(CurrentView.AidOption.bAvailable); }
 	if (WithdrawButton) { WithdrawButton->SetIsEnabled(CurrentView.WithdrawOption.bAvailable); }
 	if (DestroyButton) { DestroyButton->SetIsEnabled(CurrentView.DestroyOption.bAvailable); }
+	if (AidRewardText)
+	{
+		AidRewardText->SetText(BuildRewardSummaryText(CurrentView.AidOption));
+	}
+	if (DestroyRewardText)
+	{
+		DestroyRewardText->SetText(BuildRewardSummaryText(CurrentView.DestroyOption));
+	}
 }
 
 void UWacomKnockdownChoiceDialog::HandleAidClicked()

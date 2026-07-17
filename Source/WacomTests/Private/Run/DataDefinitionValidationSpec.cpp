@@ -110,9 +110,13 @@ namespace
 		return FWacomCardDefinitionValidation::Validate(Card, OutErrors);
 	}
 
-	bool ValidateEnemyPartForTest(const UEnemyPartDefinition* Part, TArray<FText>& OutErrors)
+	bool ValidateEnemyPartForTest(
+		const UEnemyPartDefinition* Part,
+		TArray<FText>& OutErrors,
+		EWacomEnemyPartValidationProfile Profile =
+			EWacomEnemyPartValidationProfile::General)
 	{
-		return FWacomEnemyPartDefinitionValidation::Validate(Part, OutErrors);
+		return FWacomEnemyPartDefinitionValidation::Validate(Part, OutErrors, Profile);
 	}
 
 	bool ValidateEnemyForTest(const UEnemyDefinition* Enemy, TArray<FText>& OutErrors)
@@ -530,6 +534,136 @@ bool FWacomDataEnemyPartValidationRequiredFieldsSpec::RunTest(const FString& /*P
 		TArray<FText> Errors;
 		TestFalse(TEXT("Negative ExperienceReward fails"), ValidateEnemyPartForTest(Part.Get(), Errors));
 		TestTrue(TEXT("Negative ExperienceReward has error"), Errors.Num() > 0);
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataEnemyPartRewardCompatibilitySpec,
+	"Wacom.Data.EnemyPart.Validation.KnockdownRewardCompatibility",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataEnemyPartRewardCompatibilitySpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> LegacyCard(
+		MakeValidCardForValidation(GetTransientPackage(), TEXT("Card.Validation.Legacy")));
+	TStrongObjectPtr<UCardDefinition> AidCard(
+		MakeValidCardForValidation(GetTransientPackage(), TEXT("Card.Validation.Aid")));
+	TStrongObjectPtr<UCardDefinition> DestroyCard(
+		MakeValidCardForValidation(GetTransientPackage(), TEXT("Card.Validation.Destroy")));
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(
+			MakeValidEnemyPartForValidation(GetTransientPackage()));
+		TArray<FText> Errors;
+		TestTrue(TEXT("General allows no knockdown rewards"),
+			ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestNull(TEXT("Aid without any reward is empty"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::Aid));
+		TestNull(TEXT("Destroy without any reward is empty"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::Destroy));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(
+			MakeValidEnemyPartForValidation(GetTransientPackage()));
+		Part->KnockdownRewardCard = LegacyCard.Get();
+		TArray<FText> Errors;
+		TestTrue(TEXT("General allows legacy-only reward"),
+			ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Aid falls back to legacy reward"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::Aid) == LegacyCard.Get());
+		TestTrue(TEXT("Destroy falls back to legacy reward"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::Destroy) == LegacyCard.Get());
+		TestNull(TEXT("Withdraw never resolves a reward"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::Withdraw));
+		TestNull(TEXT("None never resolves a reward"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::None));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(
+			MakeValidEnemyPartForValidation(GetTransientPackage()));
+		Part->AidRewardCard = AidCard.Get();
+		Part->DestroyRewardCard = DestroyCard.Get();
+		TArray<FText> Errors;
+		TestTrue(TEXT("General allows explicit branch rewards"),
+			ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Aid resolves only the explicit Aid reward"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::Aid) == AidCard.Get());
+		TestTrue(TEXT("Destroy resolves only the explicit Destroy reward"),
+			Part->ResolveKnockdownRewardCard(EKnockdownChoice::Destroy) == DestroyCard.Get());
+		Errors.Reset();
+		TestTrue(TEXT("FormalProduction accepts both explicit rewards"),
+			ValidateEnemyPartForTest(
+				Part.Get(), Errors,
+				EWacomEnemyPartValidationProfile::FormalProduction));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(
+			MakeValidEnemyPartForValidation(GetTransientPackage()));
+		Part->KnockdownRewardCard = LegacyCard.Get();
+		Part->AidRewardCard = AidCard.Get();
+		TArray<FText> Errors;
+		TestFalse(TEXT("General rejects legacy and explicit reward mixing"),
+			ValidateEnemyPartForTest(Part.Get(), Errors));
+		TestTrue(TEXT("Mixed reward error is actionable"),
+			ErrorsContain(Errors, TEXT("不能与")));
+	}
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomDataEnemyPartFormalProductionRewardSpec,
+	"Wacom.Data.EnemyPart.Validation.FormalProductionRewards",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomDataEnemyPartFormalProductionRewardSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Reward(
+		MakeValidCardForValidation(GetTransientPackage(), TEXT("Card.Validation.Reward")));
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(
+			MakeValidEnemyPartForValidation(GetTransientPackage()));
+		Part->DestroyRewardCard = Reward.Get();
+		TArray<FText> Errors;
+		TestFalse(TEXT("FormalProduction rejects missing Aid reward"),
+			ValidateEnemyPartForTest(
+				Part.Get(), Errors,
+				EWacomEnemyPartValidationProfile::FormalProduction));
+		TestTrue(TEXT("Missing Aid reward is reported"),
+			ErrorsContain(Errors, TEXT("AidRewardCard")));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(
+			MakeValidEnemyPartForValidation(GetTransientPackage()));
+		Part->AidRewardCard = Reward.Get();
+		TArray<FText> Errors;
+		TestFalse(TEXT("FormalProduction rejects missing Destroy reward"),
+			ValidateEnemyPartForTest(
+				Part.Get(), Errors,
+				EWacomEnemyPartValidationProfile::FormalProduction));
+		TestTrue(TEXT("Missing Destroy reward is reported"),
+			ErrorsContain(Errors, TEXT("DestroyRewardCard")));
+	}
+
+	{
+		TStrongObjectPtr<UEnemyPartDefinition> Part(
+			MakeValidEnemyPartForValidation(GetTransientPackage()));
+		Part->KnockdownRewardCard = Reward.Get();
+		TArray<FText> Errors;
+		TestFalse(TEXT("FormalProduction rejects legacy-only reward"),
+			ValidateEnemyPartForTest(
+				Part.Get(), Errors,
+				EWacomEnemyPartValidationProfile::FormalProduction));
+		TestTrue(TEXT("Legacy field is reported"),
+			ErrorsContain(Errors, TEXT("旧 KnockdownRewardCard")));
 	}
 
 	return true;

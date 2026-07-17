@@ -55,7 +55,7 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 |---|---|---|---|
 | `UCardDefinition` | `Source/WacomData/Public/Cards` | 卡牌 ID、文案、费用、关键词、目标模式、效果、被动和身材 | Battle 创建 runtime card；Run 保存玩家持有卡牌实例 |
 | `UEnemyDefinition` | `Source/WacomData/Public/Enemies` | 敌人由哪些部位组成、默认行为资产和部位行为绑定 | Battle 初始化敌人 runtime state |
-| `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、经验、击倒奖励卡 | Battle 执行部位行动和击倒选择 |
+| `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、经验、Aid/Destroy 分支奖励与 legacy 兼容来源 | Battle 执行部位行动和击倒选择 |
 | `UEnemyBehaviorDefinition` | `Source/WacomData/Public/Enemies` | 敌人 phase、intent set、selector rule 和意图候选 | Battle 刷新并执行敌方部位当前意图 |
 | `UEncounterDefinition` | `Source/WacomData/Public/Encounters` | 单场战斗包含哪些敌人槽，以及敌人槽顺序 | App 的 BattleTrigger 进入战斗前转换为 Battle init params |
 | `UCharacterDefinition` | `Source/WacomData/Public/Characters` | 角色基础 HP、左右手固有卡、初始牌组 | Run 初始化角色和玩家卡池；Battle 读取入战卡组 |
@@ -195,7 +195,12 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
     FText DisplayName;
     int32 MaxHp = 0;
     int32 ExperienceReward = 0;
+    TObjectPtr<UCardDefinition> AidRewardCard = nullptr;
+    TObjectPtr<UCardDefinition> DestroyRewardCard = nullptr;
+    // Deprecated：只供尚未迁移的资产兼容读取。
     TObjectPtr<UCardDefinition> KnockdownRewardCard = nullptr;
+
+    UCardDefinition* ResolveKnockdownRewardCard(EKnockdownChoice Choice) const;
 };
 ```
 
@@ -204,7 +209,11 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
 | `PartId` | 部位 authored id，例如 `Snake.Head`；SceneEnemy PartActor authoring 用它校验静态部位定义。 |
 | `MaxHp` | 部位初始生命上限。 |
 | `ExperienceReward` | 部位破坏后给玩家的经验记账。 |
-| `KnockdownRewardCard` | Aid / Destroy 击倒选择共用的奖励卡定义；Battle 内创建 card，战后由 Run 接收。 |
+| `AidRewardCard` | Aid 分支显式奖励卡；正式 Production Part 必须填写。 |
+| `DestroyRewardCard` | Destroy 分支显式奖励卡；正式 Production Part 必须填写。 |
+| `KnockdownRewardCard` | deprecated legacy 兼容来源。只有对应新字段为空时 Aid/Destroy 才回退读取；不得与任一新字段混填。 |
+
+Battle 与 UI ViewData 都只能通过 `ResolveKnockdownRewardCard()` 读取奖励：Aid/Destroy 各自优先新字段，空时回退 legacy；Withdraw/None 永远返回空。这个查询是非反射 C++ 合同，Blueprint 不应绕过它自行解释兼容优先级。
 
 `UEnemyBehaviorDefinition` 是敌人行为的静态主合同：
 
@@ -250,7 +259,7 @@ Selector condition 当前支持 `Always`、自身 HP 阈值、同单位任意部
 
 首个正式动画敌人内容包是 TrainingWarrior，它只使用上述现有 schema：`EnemyId=Enemy.TrainingWarrior`，单一 `Body` 槽引用 `PartId=TrainingWarrior.Body`，HP 24、经验 3，默认行为 `TrainingWarrior.Behavior`。`Default` phase 的 `TrainingWarrior.Body.Sequence` 固定按 Attack（先机 3、抵抗 4、玩家伤害 4）→ Guard（先机 2、自身护盾 4）→ Cleave（先机 4、抵抗 7、玩家伤害 7）循环。单敌人 Encounter 使用 `EncounterDefinitionId=Encounter.TrainingWarrior.Single` 与 `EnemySlotId=Enemy`。
 
-Body 的 Aid / Destroy 击倒奖励是 `Reward.BrokenCleave`（“残缺横斩”）：White、Weapon、1 费、`TargetMode=AllEnemyParts`，对每个存活敌方部位造成 3 伤害。它没有 Physique、被动、ZoneHook、PerfectRelease 或专用插画；CardView 使用既有 fallback。Withdraw 不获得该卡。
+Body 的现有二进制资产仍通过 legacy `KnockdownRewardCard` 给 Aid / Destroy 提供 `Reward.BrokenCleave`（“残缺横斩”）：White、Weapon、1 费、`TargetMode=AllEnemyParts`，对每个存活敌方部位造成 3 伤害。它没有 Physique、被动、ZoneHook、PerfectRelease 或专用插画；CardView 使用既有 fallback。Withdraw 不获得该卡。TrainingWarrior builder 的未来写入已改为同时填写两个显式字段并清空 legacy，但在授权资产迁移前不会执行或重存现有资产。
 
 ```cpp
 USTRUCT(BlueprintType)
@@ -494,7 +503,18 @@ Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorM
 | `Enemy.SerpentWood.RootStalker` | Head `10/2`；Coil `16/2` | Head: Lunge `5/4/5` → Sap `Poison1/I3`; Coil: Tangle `Slow2/I4` → Crush `4/3/4` → RootGuard `Shield3/I2` |
 | `Enemy.SerpentWood.ShallowGuardian` | Head `14/2`；Body `22/4`；Tail `10/2`；Crest `6/1` | Head: Bite `6/3/6` → Venom `Poison2/I5`; Body: Crush `6/4/7` → Harden `Shield6/I2`; Tail: Sweep `4/2/4` → Tangle `Slow1/I3`; Crest: Dread `Twilight1/I5` → CrownGuard `Shield4/I2` |
 
-Damage/Poison/Slow/Twilight 均指向 Player，Shield 指向行动部位自身。Slow 使用现有玩家手牌 `Default / TargetCardCount=1` 投递；Twilight 使用现有整手牌语义。所有 11 个新部位暂时 `KnockdownRewardCard=null`，因为 Aid/Destroy/Withdraw 的正式差异化效果仍是独立 P0；这不是“正式无奖励”结论。
+Damage/Poison/Slow/Twilight 均指向 Player，Shield 指向行动部位自身。Slow 使用现有玩家手牌 `Default / TargetCardCount=1` 投递；Twilight 使用现有整手牌语义。所有 11 个正式新部位必须清空 legacy `KnockdownRewardCard`，并按所属敌人显式引用一对 Aid/Destroy 奖励卡。奖励粒度固定为“每个敌人一对”，不是每个部位或节点各建一对；八张卡的具体数值仍需下一轮内容冻结。
+
+### SerpentWood 击倒分支奖励身份
+
+| Archetype | Aid CardId | Destroy CardId |
+|---|---|---|
+| BrushSnake | `Reward.SerpentWood.BrushSnake.Aid` | `Reward.SerpentWood.BrushSnake.Destroy` |
+| MoltGuard | `Reward.SerpentWood.MoltGuard.Aid` | `Reward.SerpentWood.MoltGuard.Destroy` |
+| RootStalker | `Reward.SerpentWood.RootStalker.Aid` | `Reward.SerpentWood.RootStalker.Destroy` |
+| ShallowGuardian | `Reward.SerpentWood.ShallowGuardian.Aid` | `Reward.SerpentWood.ShallowGuardian.Destroy` |
+
+本轮只冻结身份和数量，不冻结费用、稀有度、关键词、效果、插画或描述。它们位于 `/Game/Wacom/Data/Cards/Rewards/SerpentWood/<Archetype>/`，并作为 Spec 011 的 38 个核心内容资产之外的 8 张额外 CardDefinition 计算。
 
 ### Encounter 梯度
 
@@ -542,7 +562,7 @@ Pickup 固定映射：
 
 `SerpentWood.MoltTrailKnown` 与 `SerpentWood.MarshRouteKnown` 是当前 Run 内的 FName RunFlag，不是 GameplayTag，也不承诺跨 SaveGame 恢复。全部条件、效果、负数恢复和扣费继续由现有 RunEvent working-state 事务原子解释。
 
-上述内容冻结关闭 Floor 1 的内容设计 blocker，但没有创建任何资产。后续仍需按 [WacomDataAuthoring.md](./WacomDataAuthoring.md) 的 38 资产 manifest 创建、校验和审计 Production DataAsset；正式世界关卡与击倒三分支继续独立阻塞。
+上述内容冻结关闭 Floor 1 的核心内容设计 blocker，但没有创建任何资产。后续需要按 [WacomDataAuthoring.md](./WacomDataAuthoring.md) 创建、校验和审计 `38 core + 8 knockdown branch reward cards = 46` 个 Production DataAsset；八张卡具体效果、正式世界关卡和其它击倒分支效果继续独立阻塞。
 
 ## §14 修改数据合同时的检查点
 

@@ -47,6 +47,7 @@ tags:
 | `BattleState` 非反射 | 裸 struct + pImpl，GC 引用靠 Session 的 `ReferencedAssets` | 若需存档 / 网络，升级为 USTRUCT 或 UObject |
 | SaveGame 迁移 | 版本迁移 switch 已有 v0 到 v2 模型 | 每次升版本加新 case，永远不改已存在 case |
 | Resolved Encounter 磁盘投影 | Map Node lifecycle 是内存态完成真相；SaveGame v3 仍只持久化 `DestroyedTriggerIds`，GameMode 在非撤离 Victory 成功 settlement 后写兼容投影，Bootstrap 用统一 Trigger 退役入口还原场景 | 下一次 SaveGame schema 升级应持久化 Map Node lifecycle，再从节点状态派生或迁移 Trigger 投影；在新版本迁移完成前不要让 Actor ID 反向成为规则真相 |
+| EnemyPart `KnockdownRewardCard` legacy 字段 | 旧 TrainingWarrior、Snake 和其它尚未授权迁移的 Part 仍可让 Aid/Destroy 回退读取同一张卡；新字段与 legacy 混填由 validator 拒绝 | 先迁 TrainingWarrior、Snake 和全部 Production Part 到显式 Aid/Destroy，运行 builder 双跑与 Battle/Run/UI 回归，再用 AssetRegistry/引用审计证明零 legacy 依赖；满足前不得删除字段或 fallback |
 
 ---
 
@@ -67,7 +68,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | 普通 Enemy Panel 部位上限 | 正式 WBP 对 1–4 个部位提供紧凑/展开布局；超过 4 个只给制作警告并继续运行 | 首个复杂 Boss 内容切片引入专用 Boss WidgetClass；不要把滚动、分页或 Phase UI 塞回普通面板 |
 | Scene Enemy Host 旧原生面板 override | 老地图/Host 可能序列化了已改为 abstract 的原生 Panel class；`PostLoad()` 只在运行时把这个精确旧值视为未配置并回退项目默认 WBP，不修改 package | 下次有意重存相关地图/Host 时清空旧 override；完成资产审计后删除这条精确兼容分支 |
 | CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
-| 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button 硬编码 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点 |
+| 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button + Aid/Destroy 奖励文本硬编码；行为和连续刷新已由 ViewData 测试覆盖 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点并只调整视觉；不要在 WBP 复制奖励查询、可用性或焦点规则 |
 | UI Style 资产命名 V0 | 通用样式资产已迁到 `/Game/Wacom/UI/Style/`，但仍保留 `tiny_menu_Button`、`MyCommonTextStyle` 等原型命名 | 后续设计系统整理时统一命名为语义化 Style asset，例如 `WBPStyle_Button_CommandPrimary` / `TextStyle_CommandButton`，并通过资产审计确认没有旧路径引用后再重命名 |
 | Backpack UI C++ 默认布局 | 正式 Screen/Workspace/ZonePile/DeleteConfirm/SpecialZone/Style 由 builder 生成；旧 Rack、缩略 Preview 与 `WBP_BackpackCardView` 生产链已删除。ZonePile 仍保留被动 C++ fallback，旧区域 Host 只在正式资产缺失时显示 Snapshot | 保留行为等价 fallback，但不扩展为第二套视觉或输入结构；牌堆美术只修改正式 `WBP_BackpackZonePile`，真实卡面统一复用 `WBP_FPCardView`，不得复制 Workspace 输入或 Run 规则 |
 | Backpack / Shop 长列表 | Backpack / SpecialZone / Shop 已有 revision gate、signature dirty gate 和 identity reconcile；Backpack 的 snapshot refresh gate、普通卡列表 reconcile 和 SpecialZone section reconcile 已抽到 App-private helper，Shop 的 snapshot / offer dirty gate 和 offer row reconcile 已抽到 App-private helper，但列表仍是 WrapBox / VerticalBox | 卡量明显上升时再迁 `ListView` / `TileView` 或做正式虚拟化；Shop 正式卡面预览另起切片 |

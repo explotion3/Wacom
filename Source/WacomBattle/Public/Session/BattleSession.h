@@ -92,6 +92,18 @@ struct WACOMBATTLE_API FKnockdownChoiceOptionView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
 	FName DisabledReason = NAME_None;
+
+	/** 所选分支是否配置了可授予的奖励卡。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	bool bHasRewardCard = false;
+
+	/** 奖励卡稳定 ID；无奖励时为空。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FName RewardCardId = NAME_None;
+
+	/** 奖励卡显示名；为空时 Battle 层优先回退到 RewardCardId。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Knockdown")
+	FText RewardCardName;
 };
 
 /**

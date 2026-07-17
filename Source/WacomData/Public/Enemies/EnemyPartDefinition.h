@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Types/WacomEnums.h"
 #include "EnemyPartDefinition.generated.h"
 
 class UCardDefinition;
@@ -38,11 +39,44 @@ public:
 	int32 ExperienceReward = 0;
 
 	/**
-	 * 击倒事件奖励卡（万物成卡第一版）。
-	 *
-	 * 当玩家在该部位击倒事件中选择 Aid 或 Destroy 时，战斗内会获得这张卡，
-	 * 并在战斗结束后由 Run 层加入背包。Withdraw 不触发本奖励。
+	 * Aid 分支击倒奖励卡。正式内容应显式填写该字段。
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Reward")
+	TObjectPtr<UCardDefinition> AidRewardCard = nullptr;
+
+	/**
+	 * Destroy 分支击倒奖励卡。正式内容应显式填写该字段。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Reward")
+	TObjectPtr<UCardDefinition> DestroyRewardCard = nullptr;
+
+	/**
+	 * 旧版 Aid/Destroy 共用击倒奖励卡，仅用于尚未迁移的资产。
+	 *
+	 * 新资产不得与 AidRewardCard / DestroyRewardCard 混填。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Enemy|Reward",
+		meta = (DeprecatedProperty,
+			DeprecationMessage = "Use AidRewardCard and DestroyRewardCard for branch-specific rewards."))
 	TObjectPtr<UCardDefinition> KnockdownRewardCard = nullptr;
+
+	/**
+	 * 返回所选击倒分支的奖励卡。
+	 *
+	 * 显式分支字段优先；为空时兼容读取旧字段。Withdraw / None 永远无奖励。
+	 */
+	UCardDefinition* ResolveKnockdownRewardCard(EKnockdownChoice Choice) const
+	{
+		switch (Choice)
+		{
+		case EKnockdownChoice::Aid:
+			return AidRewardCard ? AidRewardCard.Get() : KnockdownRewardCard.Get();
+		case EKnockdownChoice::Destroy:
+			return DestroyRewardCard ? DestroyRewardCard.Get() : KnockdownRewardCard.Get();
+		case EKnockdownChoice::Withdraw:
+		case EKnockdownChoice::None:
+		default:
+			return nullptr;
+		}
+	}
 };

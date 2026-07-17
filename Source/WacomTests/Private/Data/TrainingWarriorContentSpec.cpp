@@ -168,8 +168,18 @@ bool FWacomDataTrainingWarriorAssetContractSpec::RunTest(
 	TestEqual(TEXT("Body PartId"), Part->PartId, FName(TEXT("TrainingWarrior.Body")));
 	TestEqual(TEXT("Body HP"), Part->MaxHp, 24);
 	TestEqual(TEXT("Body experience"), Part->ExperienceReward, 3);
-	TestTrue(TEXT("Body reward references BrokenCleave"),
+	TestTrue(TEXT("Legacy Body reward still references BrokenCleave"),
 		Part->KnockdownRewardCard.Get() == Card);
+	TestNull(TEXT("Legacy Body has no explicit Aid reward yet"),
+		Part->AidRewardCard.Get());
+	TestNull(TEXT("Legacy Body has no explicit Destroy reward yet"),
+		Part->DestroyRewardCard.Get());
+	TestTrue(TEXT("Unified Aid query reads legacy BrokenCleave"),
+		Part->ResolveKnockdownRewardCard(EKnockdownChoice::Aid) == Card);
+	TestTrue(TEXT("Unified Destroy query reads legacy BrokenCleave"),
+		Part->ResolveKnockdownRewardCard(EKnockdownChoice::Destroy) == Card);
+	TestNull(TEXT("Unified Withdraw query returns no reward"),
+		Part->ResolveKnockdownRewardCard(EKnockdownChoice::Withdraw));
 
 	TestEqual(TEXT("BehaviorId"), Behavior->BehaviorId, FName(TEXT("TrainingWarrior.Behavior")));
 	TestEqual(TEXT("Behavior initial phase"), Behavior->InitialPhaseId, FName(TEXT("Default")));
