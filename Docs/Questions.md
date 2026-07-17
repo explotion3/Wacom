@@ -61,7 +61,7 @@ tags:
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| Floor 2/3 图与 Journey 总时长 | 三层身份已冻结为 `Floor.Main.01/02/03`；Floor 1 为 20 Node/21 Edge，完整探索 14–15 AP，Floor 2/3 只有主题职责 | Floor 2/3 的图、内容密度、跨层节奏和整段 Journey 目标天数 |
+| Journey 成功结算与终局交接 | 三层图已冻结；`Floor.Main.03.Node.Guardian.01` 是无出边 terminal design node。当前战斗胜利只 Resolve Encounter，`bRunActive=false` 属于 Defeat，FloorEntrance 只能指向更后 Floor | 成功状态/Outcome 放在哪个 Run contract、何时广播、是否进入 SaveGame/统计、总结页展示内容以及完成后返回主菜单、营地还是 Journey 选择页 |
 | Floor 1 Production 世界资产权威 | 正式图和身份已冻结，`L_Exploration` 仍是 Authoring baseline，Production map 尚不存在 | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |

@@ -233,5 +233,5 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/008-run-credential/plan.md
+at specs/009-formal-floor23-journey-pacing-freeze/plan.md
 <!-- SPECKIT END -->

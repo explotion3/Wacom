@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验与 Debug Journey 已落地。正式三层 Journey 身份、Floor 1 的 20 节点/21 边设计、内容槽与稳定身份已冻结，蛇印资格已由独立持久 Credential 收口；但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 Floor 2/3 有效图、Production 内容资产和资产权威审计阻塞。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验与 Debug Journey 已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 Journey 成功结算合同、46 个 Production 内容资产和资产权威审计阻塞。
 
 ## §1 两层图合同
 
@@ -171,16 +171,16 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 
 推荐落点只用于死胡同打开地图时的瞬时默认焦点：将当前 Floor 静态有向边视作无向邻接，选择图距离最近的合法 `Resolved` 节点，平局按 NodeId。它不写入 RunState、SaveGame 或最近访问历史。
 
-## §9 正式 Journey 与 Floor 1 设计冻结
+## §9 正式三层 Journey 图与总节奏冻结
 
-首版正式 Journey 使用三层骨架；只有 Floor 1 完成图与内容槽设计，Floor 2/3 当前只冻结身份和主题职责：
+首版正式 Journey 使用三层不可逆顺序；三层图与内容槽均已完成设计冻结：
 
 | Identity | 默认标题 | 本轮事实 |
 |---|---|---|
 | `Journey.Main.01` | 蛇巢之路 | 三层不可逆顺序的正式 Journey 身份 |
 | `Floor.Main.01` | 蛇巢浅林 | 20 节点 / 21 边正式设计 |
-| `Floor.Main.02` | 蛇蜕洞窟 | 目标 Floor 身份；节点图未设计 |
-| `Floor.Main.03` | 毒巢核心 | 终层身份；节点图未设计 |
+| `Floor.Main.02` | 蛇蜕洞窟 | 20 节点 / 21 边；蜕印 Credential 门槛 |
+| `Floor.Main.03` | 毒巢核心 | 20 节点 / 21 边；无入口 terminal Guardian |
 
 ### Floor 1 节点与内容槽
 
@@ -234,19 +234,134 @@ Node.Key.01 -Edge.Main.03-> Node.Junction.03
 
 所有 20 个节点从 Entry 可达；A/B 汇合到 `Node.Junction.02`，C/D 汇合到 `Node.Key.01`。蛇印节点支配精英、守卫与出口，删除它后 Guardian/Exit 不可达。最短推进为 `8–9 AP`，完整探索为 `14–15 AP`；唯一 1 点差值来自是否在 Shop 完成本次访问的首次成功交易。
 
+### Floor 2 节点与内容槽
+
+| NodeId | NodeType | 内容职责 / 预留 Production ID | Camp |
+|---|---|---|:---:|
+| `Node.Entry` | Navigation | 洞窟入口 | Yes |
+| `Node.Main.01` | Encounter | 鳞岩伏击；`Encounter.MoltCavern.ScaleScout` | No |
+| `Node.Junction.01` | Navigation | 裂隙岔口 | Yes |
+| `Node.Route.A.01` | RunEvent | 残蜕回声；`Event.MoltCavern.CastoffEcho` | No |
+| `Node.Route.A.02` | Encounter | 石鳞守地；`Encounter.MoltCavern.StoneScaleGuard` | No |
+| `Node.Route.A.03` | Treasure | 菌光补给；`Pickup.MoltCavern.FungalCache` | No |
+| `Node.Route.B.01` | Encounter | 孵室伏击；`Encounter.MoltCavern.HatcheryAmbush` | No |
+| `Node.Route.B.02` | Treasure | 矿脉密藏；`Pickup.MoltCavern.MineralCache` | No |
+| `Node.Route.B.03` | RunEvent | 失踪探路者；`Event.MoltCavern.LostDelver` | No |
+| `Node.Junction.02` | Navigation | 旧井汇流 | Yes |
+| `Node.Route.C.01` | Shop | 深窟行商；`Shop.MoltCavern.DeepWayfarer` | No |
+| `Node.Route.C.02` | Encounter | 断桥守敌；`Encounter.MoltCavern.BridgeSentinel` | No |
+| `Node.Route.D.01` | Encounter | 毒泉猎手；`Encounter.MoltCavern.VenomHunter` | No |
+| `Node.Route.D.02` | RunEvent | 蜕壳仪式；`Event.MoltCavern.MoltingRite` | No |
+| `Node.Route.D.03` | Treasure | 毒晶密藏；`Pickup.MoltCavern.VenomCrystalCache` | No |
+| `Node.Key.01` | Treasure | 深窟蜕印；`Pickup.MoltCavern.MoltSeal` 同时预留 `Card.Run.MoltSeal` 与 `Credential.Run.MoltSeal` | No |
+| `Node.Junction.03` | Navigation | 核门前哨 | Yes |
+| `Node.Main.02` | Encounter | 蜕窟巡猎；`Encounter.MoltCavern.EliteMolter` | No |
+| `Node.Guardian.01` | Encounter | 洞窟守卫；`Encounter.MoltCavern.CavernGuardian`，`bBoss=true` | No |
+| `Node.Exit.01` | FloorEntrance | 指向 `Floor.Main.03`，非消耗检查 `Credential.Run.MoltSeal` | No |
+
+类型精确配比为 `4 Navigation / 7 Encounter / 3 RunEvent / 4 Treasure / 1 Shop / 1 FloorEntrance`。`Node.Key.01` 支配精英、守卫与出口；表现卡可被移除，入口资格只来自持久 Credential。
+
+### Floor 2 有向图
+
+```text
+Node.Entry -Edge.Main.01-> Node.Main.01 -Edge.Main.02-> Node.Junction.01
+
+Node.Junction.01
+  -Edge.Route.A.01-> Node.Route.A.01 -Edge.Route.A.02-> Node.Route.A.02
+  -Edge.Route.A.03-> Node.Route.A.03 -Edge.Route.A.04-> Node.Junction.02
+  -Edge.Route.B.01-> Node.Route.B.01 -Edge.Route.B.02-> Node.Route.B.02
+  -Edge.Route.B.03-> Node.Route.B.03 -Edge.Route.B.04-> Node.Junction.02
+
+Node.Junction.02
+  -Edge.Route.C.01-> Node.Route.C.01 -Edge.Route.C.02-> Node.Route.C.02
+  -Edge.Route.C.03-> Node.Key.01
+  -Edge.Route.D.01-> Node.Route.D.01 -Edge.Route.D.02-> Node.Route.D.02
+  -Edge.Route.D.03-> Node.Route.D.03 -Edge.Route.D.04-> Node.Key.01
+
+Node.Key.01 -Edge.Main.03-> Node.Junction.03
+  -Edge.Main.04-> Node.Main.02
+  -Edge.Main.05-> Node.Guardian.01
+  -Edge.Main.06-> Node.Exit.01
+```
+
+所有 20 个节点从 Entry 可达；A/B 汇合到 `Node.Junction.02`，C/D 汇合到 `Node.Key.01`。最短推进为 `8–9 AP`，完整探索为 `14–15 AP`，差值只来自 Floor 2 Shop 的首次成功交易。
+
+### Floor 3 节点与内容槽
+
+| NodeId | NodeType | 内容职责 / 预留 Production ID | Camp |
+|---|---|---|:---:|
+| `Node.Entry` | Navigation | 核心外环 | Yes |
+| `Node.Main.01` | Encounter | 巢心先锋；`Encounter.VenomCore.CoreVanguard` | No |
+| `Node.Junction.01` | Navigation | 毒脉分流 | Yes |
+| `Node.Route.A.01` | RunEvent | 毒脉共振；`Event.VenomCore.VeinResonance` | No |
+| `Node.Route.A.02` | Encounter | 脉道守卫；`Encounter.VenomCore.VeinGuardian` | No |
+| `Node.Route.A.03` | Treasure | 解毒储备；`Pickup.VenomCore.AntidoteCache` | No |
+| `Node.Route.B.01` | Encounter | 孵群巡猎；`Encounter.VenomCore.BroodPatrol` | No |
+| `Node.Route.B.02` | Treasure | 仪式密藏；`Pickup.VenomCore.RitualCache` | No |
+| `Node.Route.B.03` | RunEvent | 核心低语；`Event.VenomCore.CoreWhisper` | No |
+| `Node.Junction.02` | Navigation | 巢心汇流 | Yes |
+| `Node.Route.C.01` | Encounter | 内环哨卫；`Encounter.VenomCore.InnerSentinel` | No |
+| `Node.Route.C.02` | RunEvent | 献祭抉择；`Event.VenomCore.SacrificeChoice` | No |
+| `Node.Route.D.01` | Encounter | 毒液潜猎；`Encounter.VenomCore.ToxinStalker` | No |
+| `Node.Route.D.02` | RunEvent | 巢心搏动；`Event.VenomCore.HeartPulse` | No |
+| `Node.Route.D.03` | Treasure | 毒池储备；`Pickup.VenomCore.VenomReservoir` | No |
+| `Node.Core.01` | Treasure | 必经核心恩赐；`Pickup.VenomCore.CoreBoon` | No |
+| `Node.Junction.03` | Navigation | 核心前庭 | Yes |
+| `Node.Main.02` | Encounter | 精英收割者；`Encounter.VenomCore.EliteHarvester` | No |
+| `Node.Main.03` | Encounter | 终门先锋；`Encounter.VenomCore.FinalVanguard` | No |
+| `Node.Guardian.01` | Encounter | 毒巢核心守卫；`Encounter.VenomCore.CoreGuardian`，`bBoss=true`，Journey terminal design node | No |
+
+类型精确配比为 `4 Navigation / 8 Encounter / 4 RunEvent / 4 Treasure`，没有 Shop 或 FloorEntrance。`Node.Core.01` 是两条第二轮支路的必经奖励并支配完整终局链。
+
+### Floor 3 有向图与终局边界
+
+```text
+Node.Entry -Edge.Main.01-> Node.Main.01 -Edge.Main.02-> Node.Junction.01
+
+Node.Junction.01
+  -Edge.Route.A.01-> Node.Route.A.01 -Edge.Route.A.02-> Node.Route.A.02
+  -Edge.Route.A.03-> Node.Route.A.03 -Edge.Route.A.04-> Node.Junction.02
+  -Edge.Route.B.01-> Node.Route.B.01 -Edge.Route.B.02-> Node.Route.B.02
+  -Edge.Route.B.03-> Node.Route.B.03 -Edge.Route.B.04-> Node.Junction.02
+
+Node.Junction.02
+  -Edge.Route.C.01-> Node.Route.C.01 -Edge.Route.C.02-> Node.Route.C.02
+  -Edge.Route.C.03-> Node.Core.01
+  -Edge.Route.D.01-> Node.Route.D.01 -Edge.Route.D.02-> Node.Route.D.02
+  -Edge.Route.D.03-> Node.Route.D.03 -Edge.Route.D.04-> Node.Core.01
+
+Node.Core.01 -Edge.Main.03-> Node.Junction.03
+  -Edge.Main.04-> Node.Main.02
+  -Edge.Main.05-> Node.Main.03
+  -Edge.Main.06-> Node.Guardian.01
+```
+
+Guardian 无出边，设计语义为战斗胜利后 Journey 成功完成。当前 runtime 只会 Resolve Encounter，没有 Journey success state/event/result；`bRunActive=false` 仍专属于 Defeat，不能作为成功标记。Production 激活前必须另案实现通用 `WacomRun` 成功合同和 `WacomApp` 总结/返回交接，不能用 Actor、Level Blueprint 或伪 FloorEntrance 绕过。Floor 3 最短推进为 `10 AP`，完整探索为 `16 AP`。
+
+### Journey 总节奏
+
+| Floor | 最短推进 | 完整探索 |
+|---|---:|---:|
+| `Floor.Main.01` | 8–9 | 14–15 |
+| `Floor.Main.02` | 8–9 | 14–15 |
+| `Floor.Main.03` | 10 | 16 |
+| **Journey** | **26–28** | **44–46** |
+
+区间只来自 Floor 1/2 Shop 是否发生首次成功交易。正常 Camp/恢复节奏的内容吞吐约为 8–10 AP/天，因此关键推进目标约 3 天，完整探索约 5–6 天；积极 Night Exploration 并使用 Sunrise 时，完整探索理论下界约 4 天。这些是 authoring 目标，不新增强制 Journey timer，也不改变三天 Floor Exposure 宽限。
+
 ### 身份与生产门禁
 
-- `Journey.Main.01`、三个 FloorId、20 个 NodeId、21 个 EdgeId、`Card.Run.SerpentSigil` 与 `Credential.Run.SerpentSigil` 都是稳定身份。SaveGame v4 已持久化 Credential；探索图进度仍未进入磁盘 schema。
+- `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v4 已通用持久化 Credential；探索图进度仍未进入磁盘 schema。
 - 内容 Host 的跨 Floor runtime `PersistentId` 固定按 `<FloorId>.<NodeId>` 派生，例如 `Floor.Main.01.Node.Route.A.01`。Actor Label、资产名、GUID、坐标和 transform 都不是身份。
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
-- 预留 Production 内容 ID 只冻结职责；敌人槽、事件选项、Shop Offers、奖励数值和视觉资产另案制作。带 `Debug` 语义的现有 Event/Shop/Reward 不能作为正式引用。
-- 蛇印软锁前置已通过独立 Credential 解除：`Node.Key.01` 的固定 Pickup 原子授予表现卡与 Credential，删牌流程不影响资格，入口只检查 Credential。Production Journey/Floor DataAsset 与正式关卡仍受 Floor 2/3 有效图、Production definitions 和资产权威审计阻塞。
-- `Floor.Main.02/03` 当前都没有有效图，禁止创建空壳 Floor 2/3 只为绕过 Journey validation。
+- 三层共 46 个预留 Production 内容 ID 只冻结职责；敌人槽、事件选项、Shop Offers、奖励数值和视觉资产另案制作。带 `Debug` 语义的现有 Event/Shop/Reward 不能作为正式引用。
+- 蛇印和蜕印都采用表现卡 + 独立 Credential：必经 Pickup 原子授予两者，删牌流程不影响资格，入口只检查 Credential。
+- Floor 2/3 缺图 blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受通用 Journey success 合同、46 个 Production definitions 和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
 
-默认 MapPosition、完整 Edge 表、Production readiness gate 和静态验证证据见 `specs/007-formal-floor1-content-freeze/`；上述长期身份、拓扑、配比和阻塞事实以本节为准。
+Floor 1 默认 MapPosition 与原始冻结证据见 `specs/007-formal-floor1-content-freeze/`；Floor 2/3 默认 MapPosition、完整 Edge 表、Journey pacing 与当前 Production readiness gate 见 `specs/009-formal-floor23-journey-pacing-freeze/`。上述长期身份、拓扑、配比和阻塞事实以本节为准。
 
 ## §10 尚待确认
 
-- Floor 2/3 的节点图、内容密度、完整 Journey 目标天数和正式 Floor 间节奏。
+- Journey 成功完成后的权威状态、事件/结果、总结页、统计/存档语义和返回目标。
 - Hunger / Fatigue 恢复活动的具体值、资源成本和重复使用口径。
 - 卡牌强化、特殊事件、背包调整和技能类 Camp Activity 的正式规则与 UI 流程。

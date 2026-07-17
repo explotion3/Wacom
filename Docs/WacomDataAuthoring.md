@@ -154,9 +154,11 @@ Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtur
 /Game/Wacom/Data/Map/Production/DA_Floor_Main_02
 /Game/Wacom/Data/Map/Production/DA_Floor_Main_03
 /Game/Wacom/Maps/Run/L_Run_Floor_Main_01
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_02
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_03
 ```
 
-这些路径当前不存在，也不授权 builder 或迁移脚本创建。正式 Floor 1 的 20 Node/21 Edge canonical graph 与内容槽见 [WacomMap](./WacomMap.md#wacommap) §9；`Floor.Main.02/03` 只有身份与主题职责，禁止创建最小空壳图绕过 Journey/FloorEntrance validator。
+这些路径当前不存在，也不授权 builder 或迁移脚本创建。正式三层各 20 Node/21 Edge canonical graph、内容槽、跨层门槛与 Journey 节奏见 [WacomMap](./WacomMap.md#wacommap) §9；不得创建最小空壳图、伪 FloorEntrance 或 terminal Actor 特例绕过 Production readiness gate。
 
 正式内容 Host 的 `PersistentId` 不另建人工注册表，统一按 `<FloorId>.<NodeId>` 派生。例如 `Node.Route.A.01` 在正式首层的 runtime key 为 `Floor.Main.01.Node.Route.A.01`；Host 的 `RunMapNodeBinding.NodeId/NodeType` 仍必须等于 Floor DataAsset 节点。Navigation 没有内容 Host PersistentId，Path/Branch 在单 Floor World 内继续只保存 EdgeId。
 
@@ -185,13 +187,65 @@ Card.Run.SerpentSigil
 Credential.Run.SerpentSigil
 ```
 
-这些 ID 冻结内容职责和后续资产命名入口，不冻结敌人槽、事件选项、库存、奖励数值或视觉。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload 或钥匙占位。
+Floor 2 为 15 个内容节点预留 `MoltCavern` namespace：
+
+```text
+Encounter.MoltCavern.ScaleScout
+Encounter.MoltCavern.StoneScaleGuard
+Encounter.MoltCavern.HatcheryAmbush
+Encounter.MoltCavern.BridgeSentinel
+Encounter.MoltCavern.VenomHunter
+Encounter.MoltCavern.EliteMolter
+Encounter.MoltCavern.CavernGuardian
+
+Event.MoltCavern.CastoffEcho
+Event.MoltCavern.LostDelver
+Event.MoltCavern.MoltingRite
+
+Pickup.MoltCavern.FungalCache
+Pickup.MoltCavern.MineralCache
+Pickup.MoltCavern.VenomCrystalCache
+Pickup.MoltCavern.MoltSeal
+
+Shop.MoltCavern.DeepWayfarer
+Card.Run.MoltSeal
+Credential.Run.MoltSeal
+```
+
+Floor 3 为 16 个内容节点预留 `VenomCore` namespace：
+
+```text
+Encounter.VenomCore.CoreVanguard
+Encounter.VenomCore.VeinGuardian
+Encounter.VenomCore.BroodPatrol
+Encounter.VenomCore.InnerSentinel
+Encounter.VenomCore.ToxinStalker
+Encounter.VenomCore.EliteHarvester
+Encounter.VenomCore.FinalVanguard
+Encounter.VenomCore.CoreGuardian
+
+Event.VenomCore.VeinResonance
+Event.VenomCore.CoreWhisper
+Event.VenomCore.SacrificeChoice
+Event.VenomCore.HeartPulse
+
+Pickup.VenomCore.AntidoteCache
+Pickup.VenomCore.RitualCache
+Pickup.VenomCore.VenomReservoir
+Pickup.VenomCore.CoreBoon
+```
+
+三层共 46 个内容槽；以上 ID 冻结内容职责和后续资产命名入口，不冻结敌人槽、事件选项、库存、奖励数值或视觉。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
 
 `Pickup.SerpentWood.SerpentSigil` 的正式 Definition 必须以 Card 作为固定主奖励，并在 `GrantedCredentialIds` 中授予 `Credential.Run.SerpentSigil`；`Node.Exit.01` 的 FloorEntrance 只在 `RequiredCredentialIds` 中引用该 Credential，不把 `Card.Run.SerpentSigil` 写回 `OwnedCardRequirements`。两者由同一稳定 ID 对接，但表现卡和资格状态互不推断。
 
+`Pickup.MoltCavern.MoltSeal` 使用相同通用合同：固定主奖励为 `Card.Run.MoltSeal`，`GrantedCredentialIds` 授予 `Credential.Run.MoltSeal`；Floor 2 `Node.Exit.01` 只要求 Credential 并指向 `Floor.Main.03`。不得从表现卡推断、撤销或补算资格。
+
+Floor 3 `Node.Guardian.01` 是无出边的 terminal design node，不配置 FloorEntrance payload。当前 `FRunState`/Battle settlement 尚无 Journey success contract，因此 Production asset 不得用 Actor label、Level Blueprint、`bRunActive=false` 或伪 TargetFloorId 实现终局。
+
 Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
 
-蛇印任务凭证门禁已经完成；正式资产制作仍被 `Floor.Main.02/03` 有效图、15 个非 Debug definition 和 production map AssetRegistry/引用/哈希权威审计阻塞。这些条件完成前不创建或绑定正式 Journey/Floor/map。原始门禁背景见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`，当前 Credential 合同见 `specs/008-run-credential/`。
+蛇印任务凭证门禁和 Floor 2/3 图冻结已经完成。正式资产制作仍被通用 Journey success state/event/UI handoff、46 个非 Debug definitions 和 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始门禁见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`，通用 Credential 合同见 `specs/008-run-credential/`，当前 readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 
