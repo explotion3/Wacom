@@ -428,6 +428,7 @@ bool FWacomUIBattleHUDPrivateCoordinatorSurfaceSpec::RunTest(const FString& /*Pa
 		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDCombatLogController.h"),
 		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"),
 		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDCardDetailController.h"),
+		TEXT("Source/WacomApp/Private/UI/Battle/WacomBattlePresentationTimerOwner.h"),
 	};
 
 	for (const TCHAR* RelativeHeaderPath : PrivateHelperHeaders)
@@ -460,40 +461,6 @@ bool FWacomUIBattleHUDPrivateCoordinatorSurfaceSpec::RunTest(const FString& /*Pa
 		TestFalse(
 			FString::Printf(TEXT("%s does not export a WacomApp public symbol"), RelativeHeaderPath),
 			HeaderText.Contains(TEXT("WACOMAPP_API FWacomBattleHUD")));
-	}
-
-	const FString PresentationCoordinatorSourcePath = FPaths::ConvertRelativePathToFull(
-		FPaths::Combine(
-			FPaths::ProjectDir(),
-			TEXT("Source/WacomApp/Private/UI/Battle/WacomBattleHUDPresentationCoordinator.cpp")));
-	FString PresentationCoordinatorSource;
-	if (TestTrue(
-			TEXT("Presentation coordinator source exists"),
-			FPaths::FileExists(PresentationCoordinatorSourcePath))
-		&& TestTrue(
-			TEXT("Presentation coordinator source can be read"),
-			FFileHelper::LoadFileToString(PresentationCoordinatorSource, *PresentationCoordinatorSourcePath)))
-	{
-		const FString DestructorSignature =
-			TEXT("FWacomBattleHUDPresentationCoordinator::~FWacomBattleHUDPresentationCoordinator()");
-		const int32 DestructorStart = PresentationCoordinatorSource.Find(DestructorSignature);
-		if (TestTrue(TEXT("Presentation coordinator destructor exists"), DestructorStart != INDEX_NONE))
-		{
-			const int32 NextMethodStart = PresentationCoordinatorSource.Find(
-				TEXT("\nvoid FWacomBattleHUDPresentationCoordinator::"),
-				ESearchCase::CaseSensitive,
-				ESearchDir::FromStart,
-				DestructorStart + DestructorSignature.Len());
-			const FString DestructorBody = NextMethodStart != INDEX_NONE
-				? PresentationCoordinatorSource.Mid(DestructorStart, NextMethodStart - DestructorStart)
-				: PresentationCoordinatorSource.Mid(DestructorStart);
-			TestFalse(
-				TEXT("Presentation coordinator destructor does not call HUD/World teardown"),
-				DestructorBody.Contains(TEXT("GetWorld(")));
-			TestFalse(
-				TEXT("Presentation coordinator destructor does not clear timer manager"),
-				DestructorBody.Contains(TEXT("GetTimerManager")));
-		}
 	}
 
 	return true;

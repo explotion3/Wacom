@@ -50,6 +50,10 @@ FWacomBattleHUDTestHarness::FWacomBattleHUDTestHarness(UWorld* InWorld)
 
 FWacomBattleHUDTestHarness::~FWacomBattleHUDTestHarness()
 {
+	if (HUDPtr)
+	{
+		HUDPtr->NativeDestructForTest();
+	}
 	DestroySpawnedActors();
 }
 

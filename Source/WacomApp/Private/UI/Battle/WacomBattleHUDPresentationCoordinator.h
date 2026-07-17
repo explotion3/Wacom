@@ -8,6 +8,7 @@
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
 class FWacomBattleEventPresentationQueue;
+class FWacomBattlePresentationTimerOwner;
 struct FBattleEvent;
 struct FBattlePartSlotIdentity;
 struct FBattlePresentationJournal;
@@ -84,26 +85,6 @@ public:
 	FText GetPendingTurnBoundaryCommandText() const;
 	void TryExecutePendingTurnBoundaryCommand();
 
-	TSharedPtr<FWacomBattleEventPresentationQueue> GetQueueSelfKeepAlive() const
-	{
-		return BattleEventPresentationQueue;
-	}
-
-	void HandleQueueStarted();
-	void HandleQueueFinished();
-	void HandleBattleEndStep();
-	void HandleKnockdownChoiceDialogStep();
-	void HandleTargetCueStep(const FWacomBattlePresentationTargetCue& Cue);
-	void HandleSceneEnemyAnimationStep(
-		const FBattlePartSlotIdentity& ActingPartKey,
-		FName IntentId,
-		bool bDestroyed,
-		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
-	void HandleSceneEnemyActionImpact(const FBattlePresentationEnemyActionStep& ActionStep);
-	void HandleCardStackBoundaryStep(int32 EntryId);
-
-	UWorld* GetWorld() const;
-
 #if WITH_AUTOMATION_TESTS
 	void AdvanceQueueOnce();
 	void AdvancePresentationPlanOnce();
@@ -130,12 +111,13 @@ public:
 #endif
 
 private:
+	friend class FWacomBattleEventPresentationQueue;
+
 	FWacomBattleHUDRuntime& Runtime;
+	TSharedPtr<FWacomBattlePresentationTimerOwner> PresentationTimerOwner;
 	TArray<FWacomBattlePresentationStackEntryView> BattlePresentationStackEntries;
 	TSharedPtr<FWacomBattleEventPresentationQueue> BattleEventPresentationQueue;
 	TArray<int32> BattlePresentationStackExitingEntryIds;
-	TMap<int32, FTimerHandle> BattlePresentationStackExitTimerHandles;
-	FTimerHandle PresentationPlanTimerHandle;
 	FWacomBattlePresentationPlan PresentationPlan;
 	EWacomBattlePresentationPhaseKind ActivePresentationPlanPhaseKind =
 		EWacomBattlePresentationPhaseKind::None;
@@ -167,6 +149,19 @@ private:
 #endif
 
 	void SyncStackWidget();
+	void HandleQueueStarted();
+	void HandleQueueFinished();
+	void HandleBattleEndStep();
+	void HandleKnockdownChoiceDialogStep();
+	void HandleTargetCueStep(const FWacomBattlePresentationTargetCue& Cue);
+	void HandleSceneEnemyAnimationStep(
+		const FBattlePartSlotIdentity& ActingPartKey,
+		FName IntentId,
+		bool bDestroyed,
+		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
+	void HandleSceneEnemyActionImpact(const FBattlePresentationEnemyActionStep& ActionStep);
+	void HandleCardStackBoundaryStep(int32 EntryId);
+	UWorld* GetWorld() const;
 	void ExecuteTurnBoundaryCommandNow(EWacomBattleHUDTurnBoundaryCommand Command);
 	void RefreshCommandBarOnly();
 	void RefreshCommandBar();

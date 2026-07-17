@@ -105,6 +105,8 @@ Scene Enemy Host 使用单向依赖 `WacomEditor -> WacomApp -> WacomData`。`Wa
 
 Host Action、Part Action 与 Host Destroyed 的异步所有权统一位于 App-private `FWacomBattleEnemyActionPlayback`。该控制器独占弱 UObject timer、playback serial、Impact / Complete exactly-once 状态和 watchdog 诊断；natural finish 与 watchdog 先补齐 Impact 再完成，cancel 丢弃未触发 Impact 但仍释放 barrier。Host visual 与 Part visual layer component 只作为视觉 Adapter：前者恢复整体 Idle 或保持 terminal 末帧，后者按精确 LayerId 恢复 authored layer 或让 Destroyed 抢占。Actor 对外只保留正式双回调 Action 入口和无 Impact 的 Host terminal 入口，不再维护 completion-only 兼容 overload。
 
+Battle presentation 的编排计时也统一留在 `WacomApp` Private。`FWacomBattlePresentationTimerOwner` 用稳定 key 独占 Event Queue Advance、Presentation Plan Poll 和 Stack Entry Exit 三类一次性 timer，并为每次注册保存原始 World、TimerHandle、serial 与业务回调；TimerManager delegate 只捕获弱 owner、key 和 serial。正常 clear 会通过原始 World 精确撤销 handle；析构遇到 World 已不可用时只遗弃 owner 内的回调状态，残留弱 delegate 即使随后触发也不会进入已释放 coordinator。Queue、Plan 和 Stack 仍拥有各自的表现语义，但不再各自管理 TimerHandle 或 raw delegate；该 Implementation 不改变 `WacomBattle` 规则、barrier 顺序或既有时长。
+
 正式敌人内容包同样保持单向写入边界。`WacomEditor` 的 manifest-driven enemy-pack commandlet 可以用 AssetTools 晋升明确授权范围内的本地 Paper2D 依赖闭包，并幂等构建 DataAsset、Encounter 与 Host Blueprint；生成后的 `/Game/Wacom` 资产是运行时唯一依赖。本地 ignored `/Game/Art` 不是运行时 fallback，也不会被 `WacomRegenerateContent` 读取。TrainingWarrior 验证 `SimpleHostVisual + Host Animation Style`，Snake 验证 `MultiPartVisualLayers + Part Destroyed`；两者共享构建和运行时能力，`WacomData` schema、`WacomBattle` 规则与 `WacomApp` Host runtime 不为具体敌人增加分支。
 
 `/Game/Wacom/Art/Placeholders` 是受控开发资产而不是正式出货内容。依赖审计 JSON v2 单独列出该根目录，普通开发审计允许存在，发布审计必须启用 `-FailOnPlaceholder`。Snake 当前 Slime 闭包只获占位授权；未来正式素材替换必须切换 Host 引用、删除已知占位包并让发布 gate 通过，不能通过重命名或移动来规避 Placeholder 语义。

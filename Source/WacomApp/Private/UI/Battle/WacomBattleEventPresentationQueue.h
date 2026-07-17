@@ -9,6 +9,7 @@
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
 class FWacomBattleHUDPresentationCoordinator;
+class FWacomBattlePresentationTimerOwner;
 
 enum class EWacomBattlePresentationStepType : uint8
 {
@@ -39,7 +40,9 @@ class FWacomBattleEventPresentationQueue
 	: public TSharedFromThis<FWacomBattleEventPresentationQueue>
 {
 public:
-	explicit FWacomBattleEventPresentationQueue(FWacomBattleHUDPresentationCoordinator& InCoordinator);
+	FWacomBattleEventPresentationQueue(
+		FWacomBattleHUDPresentationCoordinator& InCoordinator,
+		FWacomBattlePresentationTimerOwner& InTimerOwner);
 	~FWacomBattleEventPresentationQueue();
 
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
@@ -61,8 +64,8 @@ public:
 
 private:
 	FWacomBattleHUDPresentationCoordinator& Coordinator;
+	FWacomBattlePresentationTimerOwner& TimerOwner;
 	TArray<FWacomBattlePresentationStep> Steps;
-	FTimerHandle StepTimerHandle;
 	bool bProcessing = false;
 	bool bAdvancing = false;
 	bool bWaitingForSceneEnemyAnimation = false;

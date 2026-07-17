@@ -4,8 +4,7 @@
 
 #include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
-
-#include "Engine/World.h"
+#include "UI/Battle/WacomBattlePresentationTimerOwner.h"
 
 namespace
 {
@@ -26,8 +25,10 @@ namespace
 }
 
 FWacomBattleEventPresentationQueue::FWacomBattleEventPresentationQueue(
-	FWacomBattleHUDPresentationCoordinator& InCoordinator)
+	FWacomBattleHUDPresentationCoordinator& InCoordinator,
+	FWacomBattlePresentationTimerOwner& InTimerOwner)
 	: Coordinator(InCoordinator)
+	, TimerOwner(InTimerOwner)
 {
 }
 
@@ -200,7 +201,8 @@ void FWacomBattleEventPresentationQueue::Clear()
 
 void FWacomBattleEventPresentationQueue::AbandonWithoutWorldAccess()
 {
-	StepTimerHandle = FTimerHandle();
+	TimerOwner.AbandonWithoutWorldAccess(
+		FWacomBattlePresentationTimerKey::EventQueueAdvance());
 	Steps.Reset();
 	bProcessing = false;
 	bAdvancing = false;
@@ -308,15 +310,19 @@ void FWacomBattleEventPresentationQueue::ScheduleNextStep(float DelaySeconds)
 {
 	if (UWorld* World = Coordinator.GetWorld())
 	{
-		World->GetTimerManager().ClearTimer(StepTimerHandle);
-		StepTimerHandle = FTimerHandle();
-
 		const float SafeDelay = FMath::Max(0.01f, DelaySeconds);
-		World->GetTimerManager().SetTimer(
-			StepTimerHandle,
-			FTimerDelegate::CreateRaw(this, &FWacomBattleEventPresentationQueue::Advance),
+		const TWeakPtr<FWacomBattleEventPresentationQueue> WeakThis = AsShared();
+		TimerOwner.ScheduleOnce(
+			World,
+			FWacomBattlePresentationTimerKey::EventQueueAdvance(),
 			SafeDelay,
-			false);
+			[WeakThis]()
+			{
+				if (const TSharedPtr<FWacomBattleEventPresentationQueue> Pinned = WeakThis.Pin())
+				{
+					Pinned->Advance();
+				}
+			});
 		return;
 	}
 
@@ -325,10 +331,7 @@ void FWacomBattleEventPresentationQueue::ScheduleNextStep(float DelaySeconds)
 
 void FWacomBattleEventPresentationQueue::StopTimer()
 {
-	if (UWorld* World = Coordinator.GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(StepTimerHandle);
-	}
+	TimerOwner.Cancel(FWacomBattlePresentationTimerKey::EventQueueAdvance());
 }
 
 void FWacomBattleEventPresentationQueue::Advance()
@@ -345,8 +348,7 @@ void FWacomBattleEventPresentationQueue::Advance()
 
 	TGuardValue<bool> AdvancingGuard(bAdvancing, true);
 
-	TSharedPtr<FWacomBattleEventPresentationQueue> SelfKeepAlive =
-		Coordinator.GetQueueSelfKeepAlive();
+	TSharedPtr<FWacomBattleEventPresentationQueue> SelfKeepAlive = AsShared();
 
 	if (Steps.IsEmpty())
 	{

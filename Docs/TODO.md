@@ -171,7 +171,7 @@ tags:
   - 状态：`Ready: 体验 polish`
   - 归属：App / UI
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [Roadmap: 战斗 UI](./Roadmap.md#roadmap-battle-ui)
-  - 说明：后续只追踪表现体验，如 cue 合并、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
+  - 说明：Queue Advance、Presentation Plan Poll 与 Stack Entry Exit 的 TimerHandle / teardown 所有权已收敛到 App-private keyed timer owner，raw delegate 与无 World 析构访问已清除；后续只追踪表现体验，如 cue 合并、速度压缩、正式动画、stack 入场 polish、动画回放或规则层 command batch id。
 
 - [ ] **First-person hand 动效第二阶段：世界目标命中反馈与整体 PIE polish**
   - 状态：`In Progress: 手牌目标像素刻印已接线，待世界目标与 PIE polish`

@@ -18,6 +18,7 @@
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
 #include "UI/Battle/WacomBattlePileCountPresentation.h"
+#include "UI/Battle/WacomBattlePresentationTimerOwner.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Common/PileCountView.h"
@@ -1045,39 +1046,30 @@ namespace
 
 FWacomBattleHUDPresentationCoordinator::FWacomBattleHUDPresentationCoordinator(FWacomBattleHUDRuntime& InRuntime)
 	: Runtime(InRuntime)
+	, PresentationTimerOwner(MakeShared<FWacomBattlePresentationTimerOwner>())
 {
 }
 
 FWacomBattleHUDPresentationCoordinator::~FWacomBattleHUDPresentationCoordinator()
 {
-	PresentationPlanTimerHandle = FTimerHandle();
-	PresentationPlan = FWacomBattlePresentationPlan();
-	ActivePresentationPlanPhaseKind = EWacomBattlePresentationPhaseKind::None;
-	ActivePresentationPlanCompletionPolicy =
-		EWacomBattlePresentationPhaseCompletionPolicy::PlaybackIdle;
-	ActivePresentationPlanCompletionCardId.Invalidate();
-	ActivePresentationPlanCompletionStackEntryId = INDEX_NONE;
-	ActivePresentationPlanPhaseElapsedSeconds = 0.0f;
-	bProcessingPresentationPlan = false;
-	bWaitingForPresentationPlanEventQueue = false;
-#if WITH_AUTOMATION_TESTS
-	StartedPresentationPlanPhaseNamesForTest.Reset();
-	SubmittedPresentationPlanFeedbackHintsForTest.Reset();
-#endif
 	if (BattleEventPresentationQueue)
 	{
 		BattleEventPresentationQueue->AbandonWithoutWorldAccess();
 		BattleEventPresentationQueue.Reset();
 	}
-	BattlePresentationStackExitTimerHandles.Reset();
-	BattlePresentationStackExitingEntryIds.Reset();
-	BattlePresentationStackEntries.Reset();
-	PendingTurnBoundaryCommand = EWacomBattleHUDTurnBoundaryCommand::None;
+	if (PresentationTimerOwner)
+	{
+		PresentationTimerOwner->AbandonAllWithoutWorldAccess();
+	}
 }
 
 void FWacomBattleHUDPresentationCoordinator::Shutdown()
 {
 	ClearQueue();
+	if (PresentationTimerOwner)
+	{
+		PresentationTimerOwner->CancelAll();
+	}
 }
 
 int32 FWacomBattleHUDPresentationCoordinator::AppendStackEntry(
@@ -1145,13 +1137,14 @@ void FWacomBattleHUDPresentationCoordinator::BeginStackEntryExit(int32 EntryId)
 
 	if (UWorld* World = GetWorld())
 	{
-		FTimerHandle& TimerHandle = BattlePresentationStackExitTimerHandles.FindOrAdd(EntryId);
-		World->GetTimerManager().ClearTimer(TimerHandle);
-		World->GetTimerManager().SetTimer(
-			TimerHandle,
-			FTimerDelegate::CreateRaw(this, &FWacomBattleHUDPresentationCoordinator::FinishStackEntryExit, EntryId),
+		PresentationTimerOwner->ScheduleOnce(
+			World,
+			FWacomBattlePresentationTimerKey::StackEntryExit(EntryId),
 			BattlePresentationStackExitSeconds,
-			false);
+			[this, EntryId]()
+			{
+				FinishStackEntryExit(EntryId);
+			});
 		return;
 	}
 
@@ -1165,14 +1158,8 @@ void FWacomBattleHUDPresentationCoordinator::FinishStackEntryExit(int32 EntryId)
 		return;
 	}
 
-	if (UWorld* World = GetWorld())
-	{
-		if (FTimerHandle* TimerHandle = BattlePresentationStackExitTimerHandles.Find(EntryId))
-		{
-			World->GetTimerManager().ClearTimer(*TimerHandle);
-		}
-	}
-	BattlePresentationStackExitTimerHandles.Remove(EntryId);
+	PresentationTimerOwner->Cancel(
+		FWacomBattlePresentationTimerKey::StackEntryExit(EntryId));
 	BattlePresentationStackExitingEntryIds.Remove(EntryId);
 
 	const int32 Removed = BattlePresentationStackEntries.RemoveAll(
@@ -1192,14 +1179,8 @@ void FWacomBattleHUDPresentationCoordinator::FinishStackEntryExit(int32 EntryId)
 
 void FWacomBattleHUDPresentationCoordinator::ClearStack()
 {
-	if (UWorld* World = GetWorld())
-	{
-		for (TPair<int32, FTimerHandle>& Pair : BattlePresentationStackExitTimerHandles)
-		{
-			World->GetTimerManager().ClearTimer(Pair.Value);
-		}
-	}
-	BattlePresentationStackExitTimerHandles.Reset();
+	PresentationTimerOwner->CancelKind(
+		EWacomBattlePresentationTimerKind::StackEntryExit);
 	BattlePresentationStackExitingEntryIds.Reset();
 	BattlePresentationStackEntries.Reset();
 	SyncStackWidget();
@@ -1234,7 +1215,9 @@ void FWacomBattleHUDPresentationCoordinator::EnqueueEvents(
 
 	if (!BattleEventPresentationQueue)
 	{
-		BattleEventPresentationQueue = MakeShared<FWacomBattleEventPresentationQueue>(*this);
+		BattleEventPresentationQueue = MakeShared<FWacomBattleEventPresentationQueue>(
+			*this,
+			*PresentationTimerOwner);
 	}
 
 	BattleEventPresentationQueue->EnqueueEvents(
@@ -2448,7 +2431,9 @@ void FWacomBattleHUDPresentationCoordinator::StartTargetCuePresentationPlanPhase
 	}
 	if (!BattleEventPresentationQueue)
 	{
-		BattleEventPresentationQueue = MakeShared<FWacomBattleEventPresentationQueue>(*this);
+		BattleEventPresentationQueue = MakeShared<FWacomBattleEventPresentationQueue>(
+			*this,
+			*PresentationTimerOwner);
 	}
 	bWaitingForPresentationPlanEventQueue = true;
 	BattleEventPresentationQueue->EnqueueTargetCue(Phase.TargetCue.GetValue());
@@ -2463,12 +2448,14 @@ void FWacomBattleHUDPresentationCoordinator::SchedulePresentationPlanPoll(float 
 {
 	if (UWorld* World = GetWorld())
 	{
-		World->GetTimerManager().ClearTimer(PresentationPlanTimerHandle);
-		World->GetTimerManager().SetTimer(
-			PresentationPlanTimerHandle,
-			FTimerDelegate::CreateRaw(this, &FWacomBattleHUDPresentationCoordinator::PollActivePresentationPlanPhase),
+		PresentationTimerOwner->ScheduleOnce(
+			World,
+			FWacomBattlePresentationTimerKey::PresentationPlanPoll(),
 			FMath::Max(0.01f, DelaySeconds),
-			false);
+			[this]()
+			{
+				PollActivePresentationPlanPhase();
+			});
 		return;
 	}
 
@@ -2477,11 +2464,8 @@ void FWacomBattleHUDPresentationCoordinator::SchedulePresentationPlanPoll(float 
 
 void FWacomBattleHUDPresentationCoordinator::StopPresentationPlanTimer()
 {
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(PresentationPlanTimerHandle);
-	}
-	PresentationPlanTimerHandle = FTimerHandle();
+	PresentationTimerOwner->Cancel(
+		FWacomBattlePresentationTimerKey::PresentationPlanPoll());
 }
 
 void FWacomBattleHUDPresentationCoordinator::PollActivePresentationPlanPhase()
