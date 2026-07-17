@@ -388,7 +388,8 @@ namespace
 
 	bool IsImmediateEventQueuePresentationEvent(const FBattleEvent& Event)
 	{
-		return Event.Type == EBattleEventType::DamageDealt
+		return Event.Type == EBattleEventType::EnemyPartActed
+			|| Event.Type == EBattleEventType::DamageDealt
 			|| Event.Type == EBattleEventType::EnemyPartHpEmptied
 			|| Event.Type == EBattleEventType::BattleEnded;
 	}

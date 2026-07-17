@@ -379,6 +379,103 @@ bool FWacomUIBattleSceneEnemyHostAnimationQueueBarrierSpec::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyHostAnimationPlayCardInitiativeActionSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyHostAnimation.PlayCardInitiativeActionUsesHostAnimationBarrier",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyHostAnimationPlayCardInitiativeActionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleSceneEnemyHostAnimationSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UCardDefinition* InitiativeCard = Fixture.MakeSimpleDamageCard(/*Cost*/1, /*Damage*/0);
+	UCharacterDefinition* Character = Fixture.MakeCharacter(
+		Fixture.MakeNoopCard(0),
+		Fixture.MakeNoopCard(0),
+		{ InitiativeCard, InitiativeCard, InitiativeCard, InitiativeCard, InitiativeCard });
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(
+		/*Hp*/20,
+		/*Initiative*/1,
+		/*IntentResist*/0,
+		/*Damage*/3);
+	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, 23);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDOnly(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	FWacomBattleHUDTestSceneEnemyHost& SceneEnemy =
+		Harness->AttachSceneEnemyHost(Enemy, BuildDefinitionPartIds(*Enemy));
+	if (!TestNotNull(TEXT("Scene enemy Host"), SceneEnemy.Host))
+	{
+		return false;
+	}
+
+	UPaperFlipbook* Idle = nullptr;
+	UPaperFlipbook* Attack = nullptr;
+	UPaperFlipbook* Block = nullptr;
+	UPaperFlipbook* Destroyed = nullptr;
+	ConfigureAnimatedHost(*SceneEnemy.Host, Idle, Attack, Block, Destroyed);
+	Harness->SetSession(Session);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
+	UPaperFlipbookComponent* Visual =
+		SceneEnemy.Host->GetGeneratedHostFlipbookVisualComponent();
+	if (!TestNotNull(TEXT("Host Flipbook component"), Visual))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot Before = Session->BuildSnapshot();
+	const FGuid CardInstanceId =
+		FWacomBattleFixture::FindHandInstanceByCardId(Before, InitiativeCard->CardId);
+	const FEnemyPartSnapshot* Target =
+		FWacomBattleFixture::GetEnemyPartSnapshot(Before, 0, 0);
+	if (!TestTrue(TEXT("Initiative card is in hand"), CardInstanceId.IsValid())
+		|| !TestNotNull(TEXT("Target part"), Target))
+	{
+		return false;
+	}
+
+	const int32 PlayCountBefore =
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView().HostAnimationPlayCount;
+	HUD->SetTargetSelectionStateForTest(CardInstanceId);
+	HUD->OnEnemyPartClickedByUser(MakeWorldTargetHandle(*Target));
+	const FBattleSnapshot After = Session->BuildSnapshot();
+	TestEqual(TEXT("One-cost PlayCard triggers the enemy attack rules"),
+		After.Player.CurrentHp,
+		Before.Player.CurrentHp - 3);
+
+	for (int32 Step = 0;
+		Step < 32 && HUD->IsBattlePresentationBusy() && Visual->GetFlipbook() != Attack;
+		++Step)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+	TestEqual(TEXT("PlayCard initiative action starts the Host action clip"),
+		Visual->GetFlipbook(), Attack);
+	TestEqual(TEXT("PlayCard initiative action starts exactly one Host animation"),
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView().HostAnimationPlayCount,
+		PlayCountBefore + 1);
+	TestTrue(TEXT("Host action clip holds the PlayCard presentation plan"),
+		HUD->IsBattlePresentationBusy());
+
+	Visual->OnFinishedPlaying.Broadcast();
+	TestFalse(TEXT("Completed PlayCard action releases the Host animation barrier"),
+		SceneEnemy.Host->GetBattleSceneEnemyDebugView().bHostAnimationPlaybackActive);
+	TestEqual(TEXT("Completed PlayCard action restores authored Idle"),
+		Visual->GetFlipbook(), Idle);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleSceneEnemyHostAnimationFinalPartPlayCardPlanSpec,
 	"Wacom.UI.Battle.BattleSceneEnemyHostAnimation.FinalPartDestroyedThroughPlayCardPlan",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
