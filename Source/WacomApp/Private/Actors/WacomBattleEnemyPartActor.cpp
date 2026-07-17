@@ -3,7 +3,6 @@
 #include "Actors/WacomBattleEnemyPartActor.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyActionPlayback.h"
 #include "Actors/WacomBattleEnemyPartAnimationStyle.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
@@ -11,6 +10,7 @@
 #include "Actors/WacomBattleEnemyPartTargetAuthoringHelpers.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Components/WacomBattleEnemyPartVisualLayerComponent.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
@@ -156,15 +156,6 @@ void AWacomBattleEnemyPartActor::PlayRuntimePartActionAnimation(
 		Clip->ImpactNormalizedTime,
 		IntentId,
 		MoveTemp(Callbacks));
-}
-
-void AWacomBattleEnemyPartActor::PlayRuntimePartActionAnimation(
-	FName IntentId,
-	TFunction<void()>&& Completion)
-{
-	FWacomBattleEnemyActionPlaybackCallbacks Callbacks;
-	Callbacks.OnCompleted = MoveTemp(Completion);
-	PlayRuntimePartActionAnimation(IntentId, MoveTemp(Callbacks));
 }
 
 void AWacomBattleEnemyPartActor::CancelRuntimePartActionAnimation()

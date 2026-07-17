@@ -213,7 +213,7 @@ tags:
   - 状态：`Done: 完整 Part key 路由 + 原地 Flipbook barrier`
   - 归属：App / Battle World Presentation
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md)
-  - 说明：`EnemyPartActed Count > 0` 现在从 queue 到 scene coordinator 保留完整 Part key；Simple Host 继续播放 Host Style，Multi-Part 精确播放匹配 PartActor 的一个目标 Flipbook Layer。真实完成和 watchdog 串行队列，Destroyed 抢占、BattleEnd retiring Part 与重新入战恢复已覆盖；正式 Snake Style 等待正式行动素材后再制作。
+  - 说明：`EnemyPartActed Count > 0` 现在从 queue 到 scene coordinator 保留完整 Part key；Simple Host 继续播放 Host Style，Multi-Part 精确播放匹配 PartActor 的一个目标 Flipbook Layer。Host / Part 已共用 App-private playback 生命周期，统一弱 timer、serial、Impact / Complete exactly-once、watchdog 与 cancel 语义；Destroyed 抢占、BattleEnd retiring Part 与重新入战恢复已覆盖。正式 Snake Style 等待正式行动素材后再制作。
 
 - [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
 	- 状态：`Done: Trigger 已接线`

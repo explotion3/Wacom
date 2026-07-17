@@ -181,6 +181,8 @@ Part Animation Style 只声明一个稳定 `TargetVisualLayerId`、`DefaultActio
 
 Host / Part Action Clip 共享 `ImpactNormalizedTime`（默认 `0.55`）和 `OnImpact / OnCompleted` 双阶段合同。队列开始行动时保持 Journal 的行动前 Combat facts；Impact timer 到点才应用对应 `SnapshotAfter` 的玩家 HP、护盾、状态与敌人护盾、Intent、Initiative 等 Combat facts，动画真正结束后才释放下一行动的 barrier。提前完成或 watchdog 会先补发一次 Impact 再 Complete；缺失 Host、Style、Clip、Layer 或 World 时两个回调按同样顺序同步完成。`Count == 0` 不播动画但立即应用行动后 facts，因此中毒等行动后结算仍可反馈。Combat-only refresh 不同步手牌、牌堆或 first-person transition；Journal 缺失或序号不匹配时不猜中间状态，最终权威 Snapshot 仍负责回收。
 
+上述双阶段生命周期只有一个实现：App-private `FWacomBattleEnemyActionPlayback` 持有弱 UObject timer、watchdog、serial 和 exactly-once 回调状态。Host / Part visual component 不再各自保存 timer 或 pending callback，只负责原地换片与完成后的视觉收尾。natural finish / watchdog 会补发尚未到达的 Impact；cancel 不提交旧 Impact但一定完成 barrier；后续播放通过 serial 令旧 timer 和回调失效。Host Destroyed 复用同一生命周期但不创建 Impact timer，并保持末帧终态。
+
 正式 Snake prefab 为 `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`。它绑定 `DA_Enemy_Snake`、`EnemySlotId=Enemy`，使用 `MultiPartVisualLayers`，清空 Host Sprite、Flipbook、Animation Style 和面板 override；三部位 Definition 因此自动使用现有多部位 WBP。Builder 必须通过 `FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition()` 生成三个 ChildActorComponent，再按稳定槽位配置：
 
 | PartSlotId | Relative Location | PartId | HitBoundsExtent | Visual scale | Idle offset |

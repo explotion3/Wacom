@@ -2,7 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 
-#include "Actors/WacomBattleEnemyActionPlayback.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyHostAnimationStyle.h"
 #include "Cards/CardDefinition.h"
@@ -225,6 +225,47 @@ bool FWacomUIBattleEnemyActionImpactFallbackSpec::RunTest(
 		TestEqual(TEXT("Cancellation only completes the barrier"),
 			CancelOrder[0],
 			FName(TEXT("Complete")));
+	}
+	++GFrameCounter;
+	World->GetTimerManager().Tick(0.50f);
+	TestEqual(TEXT("Cancelled timers cannot deliver a stale Impact"), CancelOrder.Num(), 1);
+
+	TArray<FName> ReplacementOrder;
+	Host->PlayRuntimeHostActionAnimation(
+		TEXT("Intent.Attack"),
+		FWacomBattleEnemyActionPlaybackCallbacks{
+			[&ReplacementOrder]() { ReplacementOrder.Add(TEXT("OldImpact")); },
+			[&ReplacementOrder]() { ReplacementOrder.Add(TEXT("OldComplete")); }});
+	Host->PlayRuntimeHostActionAnimation(
+		TEXT("Intent.Attack"),
+		FWacomBattleEnemyActionPlaybackCallbacks{
+			[&ReplacementOrder]() { ReplacementOrder.Add(TEXT("NewImpact")); },
+			[&ReplacementOrder]() { ReplacementOrder.Add(TEXT("NewComplete")); }});
+	TestEqual(TEXT("Replacement cancels only the old completion barrier"),
+		ReplacementOrder.Num(), 1);
+	if (ReplacementOrder.Num() == 1)
+	{
+		TestEqual(TEXT("Old playback cannot submit Impact during replacement"),
+			ReplacementOrder[0], FName(TEXT("OldComplete")));
+	}
+	++GFrameCounter;
+	World->GetTimerManager().Tick(0.01f);
+	++GFrameCounter;
+	World->GetTimerManager().Tick(0.11f);
+	if (UPaperFlipbookComponent* Visual = Host->GetGeneratedHostFlipbookVisualComponent())
+	{
+		Visual->OnFinishedPlaying.Broadcast();
+	}
+	++GFrameCounter;
+	World->GetTimerManager().Tick(0.50f);
+	TestEqual(TEXT("Replacement and stale timers preserve exactly-once callbacks"),
+		ReplacementOrder.Num(), 3);
+	if (ReplacementOrder.Num() == 3)
+	{
+		TestEqual(TEXT("Replacement Impact belongs to the new serial"),
+			ReplacementOrder[1], FName(TEXT("NewImpact")));
+		TestEqual(TEXT("Replacement completion belongs to the new serial"),
+			ReplacementOrder[2], FName(TEXT("NewComplete")));
 	}
 
 	Host->HostAnimationStyle = nullptr;

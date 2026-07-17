@@ -12,6 +12,8 @@ class UPaperSprite;
 class UPaperSpriteComponent;
 class UMaterialInterface;
 class USceneComponent;
+class AWacomBattleEnemyActor;
+class FWacomBattleEnemyActionPlayback;
 struct FWacomBattleEnemyActionPlaybackCallbacks;
 
 /**
@@ -26,6 +28,31 @@ class WACOMAPP_API UWacomBattleEnemyHostVisualComponent : public UActorComponent
 
 public:
 	UWacomBattleEnemyHostVisualComponent();
+
+	UPaperSpriteComponent* GetGeneratedHostSpriteVisualComponent() const
+	{
+		return GeneratedHostSpriteVisualComponent;
+	}
+
+	UPaperFlipbookComponent* GetGeneratedHostFlipbookVisualComponent() const
+	{
+		return GeneratedHostFlipbookVisualComponent;
+	}
+
+	int32 GetGeneratedHostVisualComponentCount() const;
+	int32 GetRegisteredHostVisualComponentCount() const;
+	int32 GetVisibleHostVisualComponentCount() const;
+
+protected:
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+private:
+	friend class AWacomBattleEnemyActor;
+
+	struct FActionPlaybackDeleter
+	{
+		void operator()(FWacomBattleEnemyActionPlayback* Playback) const;
+	};
 
 	void RefreshHostVisual(
 		USceneComponent* AttachRoot,
@@ -46,7 +73,6 @@ public:
 		bool bAutoPlayFlipbook);
 	void ClearGeneratedHostVisual();
 
-	/** 原地播放一次 Host 语义动画；返回 false 时会同步完成 Completion。 */
 	bool PlayRuntimeOneShot(
 		UPaperFlipbook* Flipbook,
 		float PlayRate,
@@ -54,54 +80,24 @@ public:
 		FName IntentId,
 		bool bTerminal,
 		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
-
-	/** 新战斗首次接管 Host 时，仅在残留 runtime 播放或终态存在时恢复 authored Idle。 */
 	void ResetRuntimePlaybackToIdle();
-
-	/** source/session 清理时结束当前 barrier；行动恢复 Idle，终态保持末帧。 */
 	void CancelRuntimePlayback();
 
-	UPaperSpriteComponent* GetGeneratedHostSpriteVisualComponent() const
-	{
-		return GeneratedHostSpriteVisualComponent;
-	}
-
-	UPaperFlipbookComponent* GetGeneratedHostFlipbookVisualComponent() const
-	{
-		return GeneratedHostFlipbookVisualComponent;
-	}
-
-	int32 GetGeneratedHostVisualComponentCount() const;
-	int32 GetRegisteredHostVisualComponentCount() const;
-	int32 GetVisibleHostVisualComponentCount() const;
 	FName GetCurrentRuntimeClipName() const { return CurrentRuntimeClipName; }
 	FName GetCurrentRuntimeIntentId() const { return CurrentRuntimeIntentId; }
-	bool IsRuntimePlaybackActive() const { return bRuntimePlaybackActive; }
+	bool IsRuntimePlaybackActive() const;
 	bool IsRuntimeTerminalState() const { return bRuntimeTerminalState; }
-	int32 GetRuntimePlaybackCount() const { return RuntimePlaybackCount; }
-	int32 GetRuntimeWatchdogCompletionCount() const { return RuntimeWatchdogCompletionCount; }
-	float GetCurrentRuntimeImpactNormalizedTime() const { return CurrentRuntimeImpactNormalizedTime; }
-	bool HasRuntimeImpactFired() const { return bRuntimeImpactFired; }
-	int32 GetRuntimeImpactCount() const { return RuntimeImpactCount; }
-	int32 GetRuntimeWatchdogForcedImpactCount() const { return RuntimeWatchdogForcedImpactCount; }
+	int32 GetRuntimePlaybackCount() const;
+	int32 GetRuntimeWatchdogCompletionCount() const;
+	float GetCurrentRuntimeImpactNormalizedTime() const;
+	bool HasRuntimeImpactFired() const;
+	int32 GetRuntimeImpactCount() const;
+	int32 GetRuntimeWatchdogForcedImpactCount() const;
 
-protected:
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
-private:
 	UFUNCTION()
 	void HandleRuntimeFlipbookFinished();
-
-	void HandleRuntimeWatchdogExpired(uint64 ExpectedPlaybackSerial);
-	void HandleRuntimeImpact(uint64 ExpectedPlaybackSerial);
-	void CompleteRuntimePlayback(
-		uint64 ExpectedPlaybackSerial,
-		bool bWatchdogCompletion,
-		bool bDeliverPendingImpact);
-	void StopRuntimeWatchdog();
-	void StopRuntimeImpactTimer();
+	void FinalizeRuntimePlayback(bool bRestoreAuthoredVisual);
 	void RestoreAuthoredIdlePlayback();
-	void CompletePendingCallback();
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPaperSpriteComponent> GeneratedHostSpriteVisualComponent = nullptr;
@@ -116,20 +112,8 @@ private:
 	float AuthoredIdleStartTimeSeconds = 0.0f;
 	bool bAuthoredIdleLooping = true;
 	bool bAuthoredIdleAutoPlay = true;
-	bool bRuntimePlaybackActive = false;
 	bool bRuntimeTerminalState = false;
 	FName CurrentRuntimeClipName = NAME_None;
 	FName CurrentRuntimeIntentId = NAME_None;
-	int32 RuntimePlaybackCount = 0;
-	int32 RuntimeWatchdogCompletionCount = 0;
-	float CurrentRuntimeImpactNormalizedTime = 0.0f;
-	bool bRuntimeImpactFired = false;
-	int32 RuntimeImpactCount = 0;
-	int32 RuntimeWatchdogForcedImpactCount = 0;
-	uint64 PlaybackSerial = 0;
-	uint64 ActivePlaybackSerial = 0;
-	FTimerHandle RuntimeWatchdogTimerHandle;
-	FTimerHandle RuntimeImpactTimerHandle;
-	TFunction<void()> PendingRuntimeImpact;
-	TFunction<void()> PendingRuntimeCompletion;
+	TUniquePtr<FWacomBattleEnemyActionPlayback, FActionPlaybackDeleter> RuntimePlayback;
 };

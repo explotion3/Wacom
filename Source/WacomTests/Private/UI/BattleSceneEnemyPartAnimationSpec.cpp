@@ -13,6 +13,7 @@
 #include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "BattleHUDTestHarness.h"
@@ -316,10 +317,12 @@ bool FWacomUIBattleSceneEnemyPartAnimationComponentSpec::RunTest(const FString& 
 	Host->HostAuthoringMode = EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers;
 
 	bool bActionCompleted = false;
-	Part->PlayRuntimePartActionAnimation(TEXT("Intent.Explicit"), [&bActionCompleted]()
+	FWacomBattleEnemyActionPlaybackCallbacks ActionCallbacks;
+	ActionCallbacks.OnCompleted = [&bActionCompleted]()
 	{
 		bActionCompleted = true;
-	});
+	};
+	Part->PlayRuntimePartActionAnimation(TEXT("Intent.Explicit"), MoveTemp(ActionCallbacks));
 	TestEqual(TEXT("Explicit action switches the existing component"),
 		Visual->GetFlipbook(), Animation.ExplicitAction);
 	TestTrue(TEXT("Part action is a real barrier"),
@@ -337,10 +340,12 @@ bool FWacomUIBattleSceneEnemyPartAnimationComponentSpec::RunTest(const FString& 
 	bool bWatchdogCompleted = false;
 	const int32 WatchdogBefore = Part->GetBattleSceneEnemyPartDebugView()
 		.PartAnimationWatchdogCompletionCount;
-	Part->PlayRuntimePartActionAnimation(TEXT("Intent.Unknown"), [&bWatchdogCompleted]()
+	FWacomBattleEnemyActionPlaybackCallbacks WatchdogCallbacks;
+	WatchdogCallbacks.OnCompleted = [&bWatchdogCompleted]()
 	{
 		bWatchdogCompleted = true;
-	});
+	};
+	Part->PlayRuntimePartActionAnimation(TEXT("Intent.Unknown"), MoveTemp(WatchdogCallbacks));
 	++GFrameCounter;
 	World->GetTimerManager().Tick(0.50f);
 	++GFrameCounter;
@@ -351,15 +356,28 @@ bool FWacomUIBattleSceneEnemyPartAnimationComponentSpec::RunTest(const FString& 
 		WatchdogBefore + 1);
 
 	bool bCancelledByDestroyed = false;
-	Part->PlayRuntimePartActionAnimation(TEXT("Intent.Unknown"), [&bCancelledByDestroyed]()
+	bool bDestroyedCancellationImpactFired = false;
+	FWacomBattleEnemyActionPlaybackCallbacks DestroyedCallbacks;
+	DestroyedCallbacks.OnImpact = [&bDestroyedCancellationImpactFired]()
+	{
+		bDestroyedCancellationImpactFired = true;
+	};
+	DestroyedCallbacks.OnCompleted = [&bCancelledByDestroyed]()
 	{
 		bCancelledByDestroyed = true;
-	});
+	};
+	Part->PlayRuntimePartActionAnimation(TEXT("Intent.Unknown"), MoveTemp(DestroyedCallbacks));
 	Part->ApplyRuntimeDestroyedVisualState();
 	TestTrue(TEXT("Destroyed safely completes residual action barrier"), bCancelledByDestroyed);
+	TestFalse(TEXT("Destroyed cancellation discards the stale action Impact"),
+		bDestroyedCancellationImpactFired);
 	TestEqual(TEXT("Destroyed owns terminal visual"), Visual->GetFlipbook(), Animation.Destroyed);
 	TestFalse(TEXT("Destroyed leaves no active action"),
 		Part->GetBattleSceneEnemyPartDebugView().bPartAnimationPlaybackActive);
+	++GFrameCounter;
+	World->GetTimerManager().Tick(0.50f);
+	TestFalse(TEXT("Destroyed cancellation invalidates old action timers"),
+		bDestroyedCancellationImpactFired);
 
 	Part->ResetRuntimeDestroyedVisualState();
 	TestEqual(TEXT("New battle reset restores authored Idle"), Visual->GetFlipbook(), Animation.Idle);

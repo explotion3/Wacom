@@ -2,7 +2,7 @@
 
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
 
-#include "Actors/WacomBattleEnemyActionPlayback.h"
+#include "Components/WacomBattleEnemyActionPlayback.h"
 
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -11,7 +11,6 @@
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
 #include "PaperSpriteComponent.h"
-#include "TimerManager.h"
 
 namespace
 {
@@ -19,8 +18,15 @@ namespace
 }
 
 UWacomBattleEnemyHostVisualComponent::UWacomBattleEnemyHostVisualComponent()
+	: RuntimePlayback(new FWacomBattleEnemyActionPlayback())
 {
 	PrimaryComponentTick.bCanEverTick = false;
+}
+
+void UWacomBattleEnemyHostVisualComponent::FActionPlaybackDeleter::operator()(
+	FWacomBattleEnemyActionPlayback* Playback) const
+{
+	delete Playback;
 }
 
 void UWacomBattleEnemyHostVisualComponent::RefreshHostVisual(
@@ -202,70 +208,44 @@ bool UWacomBattleEnemyHostVisualComponent::PlayRuntimeOneShot(
 		return false;
 	}
 
-	CancelRuntimePlayback();
-	PendingRuntimeImpact = MoveTemp(Callbacks.OnImpact);
-	PendingRuntimeCompletion = MoveTemp(Callbacks.OnCompleted);
-	bRuntimePlaybackActive = true;
-	bRuntimeTerminalState = bTerminal;
-	bRuntimeImpactFired = false;
-	CurrentRuntimeImpactNormalizedTime = bTerminal ? 0.0f : ImpactNormalizedTime;
-	CurrentRuntimeIntentId = bTerminal ? NAME_None : IntentId;
-	CurrentRuntimeClipName = FName(*Flipbook->GetName());
-	ActivePlaybackSerial = ++PlaybackSerial;
-	++RuntimePlaybackCount;
-
-	FlipbookComponent->Stop();
-	FlipbookComponent->SetFlipbook(Flipbook);
-	FlipbookComponent->SetLooping(false);
-	FlipbookComponent->SetPlayRate(PlayRate);
-	FlipbookComponent->SetPlaybackPosition(0.0f, false);
-	FlipbookComponent->Play();
-
-	if (UWorld* World = GetWorld())
+	FWacomBattleEnemyActionPlaybackRequest Request;
+	Request.LifetimeOwner = this;
+	Request.DurationSeconds = Flipbook->GetTotalDuration() / PlayRate;
+	if (!bTerminal)
 	{
-		if (!bTerminal && PendingRuntimeImpact)
+		Request.ImpactNormalizedTime = ImpactNormalizedTime;
+	}
+	Request.WatchdogGraceSeconds = RuntimeAnimationWatchdogGraceSeconds;
+	Request.Callbacks = MoveTemp(Callbacks);
+	Request.StartVisual = [this, FlipbookComponent, Flipbook, PlayRate, IntentId, bTerminal]()
+	{
+		if (!IsValid(FlipbookComponent) || !IsValid(Flipbook))
 		{
-			const float ImpactSeconds = Flipbook->GetTotalDuration() / PlayRate
-				* ImpactNormalizedTime;
-			if (ImpactSeconds <= 0.0f)
-			{
-				HandleRuntimeImpact(ActivePlaybackSerial);
-			}
-			else
-			{
-				World->GetTimerManager().SetTimer(
-					RuntimeImpactTimerHandle,
-					FTimerDelegate::CreateUObject(
-						this,
-						&UWacomBattleEnemyHostVisualComponent::HandleRuntimeImpact,
-						ActivePlaybackSerial),
-					FMath::Max(0.01f, ImpactSeconds),
-					false);
-			}
+			return false;
 		}
-		const float WatchdogSeconds = Flipbook->GetTotalDuration() / PlayRate
-			+ RuntimeAnimationWatchdogGraceSeconds;
-		World->GetTimerManager().SetTimer(
-			RuntimeWatchdogTimerHandle,
-			FTimerDelegate::CreateUObject(
-				this,
-				&UWacomBattleEnemyHostVisualComponent::HandleRuntimeWatchdogExpired,
-				ActivePlaybackSerial),
-			FMath::Max(0.01f, WatchdogSeconds),
-			false);
-	}
-	else
-	{
-		CompleteRuntimePlayback(ActivePlaybackSerial, true, true);
-		return false;
-	}
 
-	return true;
+		bRuntimeTerminalState = bTerminal;
+		CurrentRuntimeIntentId = bTerminal ? NAME_None : IntentId;
+		CurrentRuntimeClipName = FName(*Flipbook->GetName());
+		FlipbookComponent->Stop();
+		FlipbookComponent->SetFlipbook(Flipbook);
+		FlipbookComponent->SetLooping(false);
+		FlipbookComponent->SetPlayRate(PlayRate);
+		FlipbookComponent->SetPlaybackPosition(0.0f, false);
+		FlipbookComponent->Play();
+		return true;
+	};
+	Request.FinalizeVisual = [this](
+		const FWacomBattleEnemyActionPlaybackFinishContext& Context)
+	{
+		FinalizeRuntimePlayback(Context.bRestoreAuthoredVisual);
+	};
+	return RuntimePlayback && RuntimePlayback->Begin(MoveTemp(Request));
 }
 
 void UWacomBattleEnemyHostVisualComponent::ResetRuntimePlaybackToIdle()
 {
-	if (!bRuntimePlaybackActive && !bRuntimeTerminalState)
+	if (!IsRuntimePlaybackActive() && !bRuntimeTerminalState)
 	{
 		return;
 	}
@@ -277,112 +257,37 @@ void UWacomBattleEnemyHostVisualComponent::ResetRuntimePlaybackToIdle()
 
 void UWacomBattleEnemyHostVisualComponent::CancelRuntimePlayback()
 {
-	if (!bRuntimePlaybackActive)
+	if (RuntimePlayback)
 	{
-		StopRuntimeWatchdog();
-		StopRuntimeImpactTimer();
-		PendingRuntimeImpact = nullptr;
-		return;
+		RuntimePlayback->Cancel(true);
 	}
-
-	const uint64 SerialToComplete = ActivePlaybackSerial;
-	CompleteRuntimePlayback(SerialToComplete, false, false);
 }
 
 void UWacomBattleEnemyHostVisualComponent::HandleRuntimeFlipbookFinished()
 {
-	CompleteRuntimePlayback(ActivePlaybackSerial, false, true);
+	if (RuntimePlayback)
+	{
+		RuntimePlayback->NotifyFinished();
+	}
 }
 
-void UWacomBattleEnemyHostVisualComponent::HandleRuntimeWatchdogExpired(
-	uint64 ExpectedPlaybackSerial)
+void UWacomBattleEnemyHostVisualComponent::FinalizeRuntimePlayback(
+	bool bRestoreAuthoredVisual)
 {
-	CompleteRuntimePlayback(ExpectedPlaybackSerial, true, true);
-}
-
-void UWacomBattleEnemyHostVisualComponent::HandleRuntimeImpact(
-	uint64 ExpectedPlaybackSerial)
-{
-	if (!bRuntimePlaybackActive
-		|| ExpectedPlaybackSerial != ActivePlaybackSerial
-		|| bRuntimeImpactFired
-		|| !PendingRuntimeImpact)
-	{
-		return;
-	}
-
-	StopRuntimeImpactTimer();
-	bRuntimeImpactFired = true;
-	++RuntimeImpactCount;
-	TFunction<void()> Callback = MoveTemp(PendingRuntimeImpact);
-	PendingRuntimeImpact = nullptr;
-	Callback();
-}
-
-void UWacomBattleEnemyHostVisualComponent::CompleteRuntimePlayback(
-	uint64 ExpectedPlaybackSerial,
-	bool bWatchdogCompletion,
-	bool bDeliverPendingImpact)
-{
-	if (!bRuntimePlaybackActive || ExpectedPlaybackSerial != ActivePlaybackSerial)
-	{
-		return;
-	}
-
-	StopRuntimeWatchdog();
-	StopRuntimeImpactTimer();
-	const bool bHadPendingImpact = !bRuntimeImpactFired && PendingRuntimeImpact;
-	if (bDeliverPendingImpact)
-	{
-		HandleRuntimeImpact(ExpectedPlaybackSerial);
-		if (bWatchdogCompletion && bHadPendingImpact && bRuntimeImpactFired)
-		{
-			++RuntimeWatchdogForcedImpactCount;
-		}
-	}
-	else
-	{
-		PendingRuntimeImpact = nullptr;
-	}
-	if (bWatchdogCompletion)
-	{
-		++RuntimeWatchdogCompletionCount;
-	}
-
-	bRuntimePlaybackActive = false;
-	++PlaybackSerial;
-	if (UPaperFlipbookComponent* FlipbookComponent = GeneratedHostFlipbookVisualComponent.Get())
+	UPaperFlipbookComponent* FlipbookComponent = GeneratedHostFlipbookVisualComponent.Get();
+	if (IsValid(FlipbookComponent))
 	{
 		if (bRuntimeTerminalState)
 		{
 			FlipbookComponent->Stop();
 			FlipbookComponent->SetPlaybackPosition(FlipbookComponent->GetFlipbookLength(), false);
 		}
-		else
+		else if (bRestoreAuthoredVisual)
 		{
 			RestoreAuthoredIdlePlayback();
 		}
 	}
 	CurrentRuntimeIntentId = NAME_None;
-	CompletePendingCallback();
-}
-
-void UWacomBattleEnemyHostVisualComponent::StopRuntimeWatchdog()
-{
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(RuntimeWatchdogTimerHandle);
-	}
-	RuntimeWatchdogTimerHandle = FTimerHandle();
-}
-
-void UWacomBattleEnemyHostVisualComponent::StopRuntimeImpactTimer()
-{
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(RuntimeImpactTimerHandle);
-	}
-	RuntimeImpactTimerHandle = FTimerHandle();
 }
 
 void UWacomBattleEnemyHostVisualComponent::RestoreAuthoredIdlePlayback()
@@ -406,14 +311,39 @@ void UWacomBattleEnemyHostVisualComponent::RestoreAuthoredIdlePlayback()
 	CurrentRuntimeClipName = FName(*AuthoredIdleFlipbook->GetName());
 }
 
-void UWacomBattleEnemyHostVisualComponent::CompletePendingCallback()
+bool UWacomBattleEnemyHostVisualComponent::IsRuntimePlaybackActive() const
 {
-	TFunction<void()> Completion = MoveTemp(PendingRuntimeCompletion);
-	PendingRuntimeCompletion = TFunction<void()>();
-	if (Completion)
-	{
-		Completion();
-	}
+	return RuntimePlayback && RuntimePlayback->GetView().bActive;
+}
+
+int32 UWacomBattleEnemyHostVisualComponent::GetRuntimePlaybackCount() const
+{
+	return RuntimePlayback ? RuntimePlayback->GetView().PlaybackCount : 0;
+}
+
+int32 UWacomBattleEnemyHostVisualComponent::GetRuntimeWatchdogCompletionCount() const
+{
+	return RuntimePlayback ? RuntimePlayback->GetView().WatchdogCompletionCount : 0;
+}
+
+float UWacomBattleEnemyHostVisualComponent::GetCurrentRuntimeImpactNormalizedTime() const
+{
+	return RuntimePlayback ? RuntimePlayback->GetView().ImpactNormalizedTime : 0.0f;
+}
+
+bool UWacomBattleEnemyHostVisualComponent::HasRuntimeImpactFired() const
+{
+	return RuntimePlayback && RuntimePlayback->GetView().bImpactFired;
+}
+
+int32 UWacomBattleEnemyHostVisualComponent::GetRuntimeImpactCount() const
+{
+	return RuntimePlayback ? RuntimePlayback->GetView().ImpactCount : 0;
+}
+
+int32 UWacomBattleEnemyHostVisualComponent::GetRuntimeWatchdogForcedImpactCount() const
+{
+	return RuntimePlayback ? RuntimePlayback->GetView().WatchdogForcedImpactCount : 0;
 }
 
 int32 UWacomBattleEnemyHostVisualComponent::GetGeneratedHostVisualComponentCount() const

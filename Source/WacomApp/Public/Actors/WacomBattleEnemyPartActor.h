@@ -517,7 +517,6 @@ public:
 	void PlayRuntimePartActionAnimation(
 		FName IntentId,
 		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
-	void PlayRuntimePartActionAnimation(FName IntentId, TFunction<void()>&& Completion);
 
 	/** source/session/Actor 清理时安全结束当前部位行动 barrier。 */
 	void CancelRuntimePartActionAnimation();

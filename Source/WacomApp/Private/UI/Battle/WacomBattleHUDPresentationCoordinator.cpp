@@ -2,7 +2,7 @@
 
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
-#include "Actors/WacomBattleEnemyActionPlayback.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/Widget.h"
 #include "Events/BattleEvent.h"

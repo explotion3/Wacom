@@ -2,7 +2,7 @@
 
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
 
-#include "Actors/WacomBattleEnemyActionPlayback.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
 #include "Engine/World.h"

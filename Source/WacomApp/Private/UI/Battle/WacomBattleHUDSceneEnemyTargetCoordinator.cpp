@@ -3,7 +3,7 @@
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyActionPlayback.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"

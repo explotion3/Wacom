@@ -382,7 +382,6 @@ public:
 	void PlayRuntimeHostActionAnimation(
 		FName IntentId,
 		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
-	void PlayRuntimeHostActionAnimation(FName IntentId, TFunction<void()>&& Completion);
 
 	/** 由 Battle presentation queue 请求整体终态动画；缺配置时同步完成。 */
 	void PlayRuntimeHostDestroyedAnimation(TFunction<void()>&& Completion);

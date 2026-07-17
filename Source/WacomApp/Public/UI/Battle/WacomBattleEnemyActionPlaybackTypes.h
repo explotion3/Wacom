@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 
-/** Non-reflected runtime callbacks shared by simple-host and multi-part actions. */
+/** Runtime callbacks shared by simple-host and multi-part enemy action playback. */
 struct WACOMAPP_API FWacomBattleEnemyActionPlaybackCallbacks
 {
 	TFunction<void()> OnImpact;

@@ -13,6 +13,7 @@
 #include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
@@ -229,10 +230,12 @@ bool FWacomUIBattleSceneEnemyHostAnimationComponentLifecycleSpec::RunTest(
 	}
 
 	bool bActionCompleted = false;
-	Host->PlayRuntimeHostActionAnimation(TEXT("Intent.Attack"), [&bActionCompleted]()
+	FWacomBattleEnemyActionPlaybackCallbacks ActionCallbacks;
+	ActionCallbacks.OnCompleted = [&bActionCompleted]()
 	{
 		bActionCompleted = true;
-	});
+	};
+	Host->PlayRuntimeHostActionAnimation(TEXT("Intent.Attack"), MoveTemp(ActionCallbacks));
 	TestTrue(TEXT("Action switches the existing component in place"),
 		Host->GetGeneratedHostFlipbookVisualComponent() == Visual);
 	TestEqual(TEXT("Action clip is active"), Visual->GetFlipbook(), Attack);
@@ -248,10 +251,12 @@ bool FWacomUIBattleSceneEnemyHostAnimationComponentLifecycleSpec::RunTest(
 	bool bWatchdogCompleted = false;
 	const int32 WatchdogCountBefore =
 		Host->GetBattleSceneEnemyDebugView().HostAnimationWatchdogCompletionCount;
-	Host->PlayRuntimeHostActionAnimation(TEXT("Intent.Block"), [&bWatchdogCompleted]()
+	FWacomBattleEnemyActionPlaybackCallbacks WatchdogCallbacks;
+	WatchdogCallbacks.OnCompleted = [&bWatchdogCompleted]()
 	{
 		bWatchdogCompleted = true;
-	});
+	};
+	Host->PlayRuntimeHostActionAnimation(TEXT("Intent.Block"), MoveTemp(WatchdogCallbacks));
 	++GFrameCounter;
 	World->GetTimerManager().Tick(0.40f);
 	// Timers created before this world's first TimerManager tick enter PendingTimerSet;

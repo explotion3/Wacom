@@ -3,7 +3,6 @@
 #include "Actors/WacomBattleEnemyActor.h"
 
 #include "Actors/WacomBattleEnemyPartActor.h"
-#include "Actors/WacomBattleEnemyActionPlayback.h"
 #include "Actors/WacomBattleEnemyHostAnimationStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
@@ -15,6 +14,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "PaperFlipbook.h"
@@ -524,15 +524,6 @@ void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
 		IntentId,
 		false,
 		MoveTemp(Callbacks));
-}
-
-void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
-	FName IntentId,
-	TFunction<void()>&& Completion)
-{
-	FWacomBattleEnemyActionPlaybackCallbacks Callbacks;
-	Callbacks.OnCompleted = MoveTemp(Completion);
-	PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Callbacks));
 }
 
 void AWacomBattleEnemyActor::PlayRuntimeHostDestroyedAnimation(
