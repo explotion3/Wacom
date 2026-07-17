@@ -92,9 +92,9 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 - 备战实体卡和投影卡都常驻；投影卡保持只读、`0.72` 透明度和来源角标。
 - 备战投影卡在展开区保持只读、半透明并显示来源角标，不参与选择、框选、携带或批量移动。
 - 只有标题拖柄可移动整堆；标题或牌堆主体短点切换展开，内容区域拖动则在超过默认 `5px` 阈值后切换为该来源区框选，打开新堆时旧堆先收拢。
-- 同时只展开一个牌堆。展开卡保持 `296×420` Battle 主体逻辑尺寸与卡面 `1.0` 固定缩放，使用默认 `48px` 相邻露出和零旋转，不使用滚动；安全宽度不足时只压缩露出间距，绝不缩放卡面。
-- 展开的备战区、特殊区和负重区使用数量自适应紧凑牌列。焦点卡保持中性锚点，左侧卡组整体左移默认 `32px`，右侧卡组整体右移默认 `32px`，不再摊开固定 `3–5` 张完整窗口。折叠牌堆保持原固定布局。
-- `WBP_BackpackScreen` 的 Class Defaults 通过 `WorkspaceStyle` 引用 `DA_BackpackWorkspaceStyle`；双击该资产进入全部制作字段。`AdaptiveStripFocusSeparationPixels` 同时控制展开牌堆与多卡携带的左右让位距离；默认 `32px`。`AdaptiveStripExposurePixels` 控制两种牌列的基础露出；默认 `48px`。运行时只消费这一个资产，避免牌堆与携带出现两套数值。
+- 同时只展开一个牌堆。展开卡保持 `296×420` Battle 主体逻辑尺寸与卡面 `1.0` 固定缩放，使用默认 `72px` 相邻露出和零旋转，不使用滚动；安全宽度不足时只压缩露出间距，绝不缩放卡面。
+- 展开的备战区、特殊区和负重区使用数量自适应紧凑牌列。焦点卡保持中性锚点，左侧卡组整体左移默认 `48px`，右侧卡组整体右移默认 `48px`，不再摊开固定 `3–5` 张完整窗口。折叠牌堆保持原固定布局。
+- `WBP_BackpackScreen` 的 Class Defaults 通过 `WorkspaceStyle` 引用 `DA_BackpackWorkspaceStyle`；双击该资产进入全部制作字段。`AdaptiveStripFocusSeparationPixels` 同时控制展开牌堆与多卡携带的左右让位距离；当前正式资产值为 `48px`。`AdaptiveStripExposurePixels` 控制两种牌列的基础露出；当前正式资产值为 `72px`。运行时只消费这一个资产，避免牌堆与携带出现两套数值。
 - 展开布局按当前卡数预先计算稳定 `FrameRect` / 焦点走廊：宽度为卡宽、相邻露出与最多两侧让位预留之和。Hover 只能改变 `CardMotionRoot` 局部姿态，不能推动标题、牌框、避障矩形或持久化锚点。每次让位后由新的实际目标卡位重建命中条带：横向条带保持连续并使用默认 `8px` 切换迟滞，纵向范围严格等于当前实际卡身高度，不得把上抬预留走廊算入命中；标题拖柄矩形始终优先于卡牌 Hover，指针进入标题时立即清除浏览焦点。
 - 焦点卡上抬并置顶，不缩放、不改卡面透明度；邻居仅水平移动外层局部姿态。鼠标离开牌框默认等待 `0.12s`，再用约 `0.14s` 返回中性水平牌列；重新进入会取消恢复。
 - 投影卡、特殊区主卡和负重卡可以进入焦点牌列、启用详情浏览和上抬反馈，但继续保持各自透明度、角标和只读语义，不能选择、框选或携带。
@@ -126,7 +126,7 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 
 背包私有表现控制器限制任意时刻最多一张卡实时重绘：展开 Hover 卡优先；携带时改由当前最前卡占用预算。其余折叠卡、静置卡和非当前携带卡把 `WBP_FPCardView` 切为内容/状态变化时按需补绘。CommonUI Layer 过渡期间 Screen 暂停 retained caching 并直绘，过渡结束后恢复并请求最终补绘；不要用固定延迟或 Tick 轮询替代 PrimaryLayout transition delegate。
 
-Carry 同时维护两个坐标：Interaction Model 中的精确逻辑指针用于目标判定和 Run 原子命令；`CarryRoot` 使用独立视觉锚点，以默认 `34/s` 响应速度追赶且最大落后 `14px`，鼠标停止后在 `0.5px` 内归位。多卡携带从起手就复用同一套自适应紧凑牌列，焦点索引来自 `Carry.CurrentIndex`，当前卡中心固定在鼠标锚点，左右卡按有效露出间距延伸并各额外让位默认 `32px`；只有开始携带、滚轮切换、部分释放、数量或几何变化会重算牌列，普通鼠标移动只平移 `CarryRoot`，不得重算牌列、遍历静态卡、请求 Snapshot/Scene reconcile 或逐卡重绘。`CarryCache` 本身必须保持零位移并缓存全部非当前卡及其局部让位运动；滚轮交接期间仅新旧当前卡可短时同处 `CarryActiveLayer`，运动结束后旧卡回到缓存分支。这样 `1/7/15/21` 张卡的鼠标热路径成本保持一致。
+Carry 同时维护两个坐标：Interaction Model 中的精确逻辑指针用于目标判定和 Run 原子命令；`CarryRoot` 使用独立视觉锚点，以默认 `34/s` 响应速度追赶且最大落后 `14px`，鼠标停止后在 `0.5px` 内归位。多卡携带从起手就复用同一套自适应紧凑牌列，焦点索引来自 `Carry.CurrentIndex`，当前卡中心固定在鼠标锚点，左右卡按有效露出间距延伸并各额外让位默认 `48px`；只有开始携带、滚轮切换、部分释放、数量或几何变化会重算牌列，普通鼠标移动只平移 `CarryRoot`，不得重算牌列、遍历静态卡、请求 Snapshot/Scene reconcile 或逐卡重绘。`CarryCache` 本身必须保持零位移并缓存全部非当前卡及其局部让位运动；滚轮交接期间仅新旧当前卡可短时同处 `CarryActiveLayer`，运动结束后旧卡回到缓存分支。这样 `1/7/15/21` 张卡的鼠标热路径成本保持一致。
 
 Hover 卡使用局部 `48px` 上抬，紧凑牌列邻居默认约 `0.18s` 完成水平让位；滚轮选中的非默认当前卡约 `0.14s` 上抬 `56px` 并获得组内绝对最高 ZOrder，默认最右卡不抬升。牌堆和携带基础姿态始终为零旋转，二者都不得改变卡面缩放或透明度。背包活动卡 DepthMotion 复用 Battle 的低层速度倾斜、Fake3D、表面视差和接触阴影能力，但由背包私有表现控制器拥有状态；让位邻居保持静态 Retainer，只有 Hover 卡或携带当前卡最多一张启用实时 Retainer。`Simplified Motion` 保留紧凑牌列的可读位置，但关闭离开延迟、空间上抬、视觉弹簧、速度倾斜和 Settlement，直接应用最终姿态。
 
@@ -140,7 +140,7 @@ Hover 卡使用局部 `48px` 上抬，紧凑牌列邻居默认约 `0.18s` 完成
 & 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomBuildBackpackUI -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
-Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 ZonePile、DeleteConfirm、兼容 SpecialZone、Screen 和 Style。不再生成 `WBP_BackpackCardView`、Preview、Rack 或 Rack Entry。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构或资产 Hash。
+Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 ZonePile、DeleteConfirm、兼容 SpecialZone 和 Screen。不再生成 `WBP_BackpackCardView`、Preview、Rack 或 Rack Entry。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
 
 ## Fallback 与迁移兼容
 

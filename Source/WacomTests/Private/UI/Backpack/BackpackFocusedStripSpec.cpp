@@ -180,9 +180,9 @@ bool FWacomUIBackpackAdaptiveStripLayoutSpec::RunTest(const FString& Parameters)
 
 	const FVector2D LargeWorkspace(1920.0f, 1080.0f);
 	for (const TPair<int32, float>& Case : {
-		TPair<int32, float>(2, 376.0f),
-		TPair<int32, float>(3, 456.0f),
-		TPair<int32, float>(5, 552.0f) })
+		TPair<int32, float>(2, 416.0f),
+		TPair<int32, float>(3, 536.0f),
+		TPair<int32, float>(5, 680.0f) })
 	{
 		const FWacomBackpackResolvedPileContentLayout Layout =
 			FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(

@@ -477,10 +477,10 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			AssignedStyle->MinimumVisibleFraction, 0.3f);
 		TestEqual(TEXT("Workspace style keeps default current lift"),
 			AssignedStyle->CurrentCardLiftPixels, 56.0f);
-		TestEqual(TEXT("Workspace style keeps the compact adaptive-strip exposure"),
-			AssignedStyle->AdaptiveStripExposurePixels, 48.0f);
-		TestEqual(TEXT("Workspace style exposes the shared pile/carry focus separation"),
-			AssignedStyle->AdaptiveStripFocusSeparationPixels, 32.0f);
+		TestEqual(TEXT("Workspace style keeps the authored adaptive-strip exposure"),
+			AssignedStyle->AdaptiveStripExposurePixels, 72.0f);
+		TestEqual(TEXT("Workspace style keeps the authored pile/carry focus separation"),
+			AssignedStyle->AdaptiveStripFocusSeparationPixels, 48.0f);
 		TestEqual(TEXT("Workspace style keeps the stable-band hysteresis"),
 			AssignedStyle->FocusHitHysteresisPixels, 8.0f);
 	}

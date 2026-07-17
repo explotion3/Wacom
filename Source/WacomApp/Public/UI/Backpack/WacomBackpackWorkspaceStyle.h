@@ -99,12 +99,12 @@ public:
 	float ExpandedCardHoverLiftPixels = 48.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
-		meta = (ToolTip = "展开牌堆与多卡携带的默认相邻露出，单位为像素。默认 48，推荐 32–72；空间不足时可自动压缩，不改变 296×420 卡面尺寸。"))
-	float AdaptiveStripExposurePixels = 48.0f;
+		meta = (ToolTip = "展开牌堆与多卡携带的默认相邻露出，单位为像素。默认 72，推荐 32–72；空间不足时可自动压缩，不改变 296×420 卡面尺寸。"))
+	float AdaptiveStripExposurePixels = 72.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
-		meta = (ToolTip = "焦点卡左右卡组额外让位距离，单位为像素。默认 32，推荐 16–48；只影响外层姿态和牌框预留，不改变命中身份或规则。"))
-	float AdaptiveStripFocusSeparationPixels = 32.0f;
+		meta = (ToolTip = "焦点卡左右卡组额外让位距离，单位为像素。默认 48，推荐 16–48；只影响外层姿态和牌框预留，不改变命中身份或规则。"))
+	float AdaptiveStripFocusSeparationPixels = 48.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
 		meta = (ToolTip = "稳定命中条带切换焦点时的迟滞宽度，单位为像素。默认 8；用于避免边界来回振荡。"))

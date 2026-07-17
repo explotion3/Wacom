@@ -1052,19 +1052,27 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 {
 	const TCHAR* AssetName = TEXT("DA_BackpackWorkspaceStyle");
+	if (UWacomBackpackWorkspaceStyle* ExistingStyle =
+		LoadObject<UWacomBackpackWorkspaceStyle>(nullptr, *ObjectPath(AssetName)))
+	{
+		// Style assets are authored production data. The builder may seed a missing
+		// asset, but must not normalize or resave an artist-tuned existing asset.
+		return ExistingStyle;
+	}
+
 	UPackage* Package = CreatePackage(*PackagePath(AssetName));
 	if (!Package)
 	{
 		return nullptr;
 	}
 	Package->FullyLoad();
-	UWacomBackpackWorkspaceStyle* Style = LoadObject<UWacomBackpackWorkspaceStyle>(nullptr, *ObjectPath(AssetName));
+	UWacomBackpackWorkspaceStyle* Style = NewObject<UWacomBackpackWorkspaceStyle>(
+		Package, AssetName, RF_Public | RF_Standalone | RF_Transactional);
 	if (!Style)
 	{
-		Style = NewObject<UWacomBackpackWorkspaceStyle>(
-			Package, AssetName, RF_Public | RF_Standalone | RF_Transactional);
-		FAssetRegistryModule::AssetCreated(Style);
+		return nullptr;
 	}
+	FAssetRegistryModule::AssetCreated(Style);
 	Style->CardRenderSize = FVector2D(296.0f, 420.0f);
 	Style->MinimumVisibleFraction = 0.3f;
 	Style->DefaultCardSpacing = FVector2D(36.0f, 44.0f);
@@ -1072,8 +1080,8 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	Style->CurrentCardLiftPixels = 56.0f;
 	Style->CurrentCardZOrderBoost = 1000;
 	Style->PileCollapsedExposurePixels = 16.0f;
-	Style->AdaptiveStripExposurePixels = 48.0f;
-	Style->AdaptiveStripFocusSeparationPixels = 32.0f;
+	Style->AdaptiveStripExposurePixels = 72.0f;
+	Style->AdaptiveStripFocusSeparationPixels = 48.0f;
 	Style->FocusHitHysteresisPixels = 8.0f;
 	Style->FocusReflowSeconds = 0.18f;
 	Style->FocusReturnSeconds = 0.14f;
