@@ -2,7 +2,7 @@
 type: question-index
 scope: wacom-open-decisions
 status: active
-updated: 2026-07-16
+updated: 2026-07-17
 tags:
   - wacom/questions
   - wacom/docs
@@ -51,6 +51,7 @@ tags:
 | 最后存活部位击倒 | 当前最后部位不可选 Withdraw | 是否所有敌人都保持该规则，还是部分 Boss / 事件敌人有例外 |
 | 背包容量不足时的战斗奖励 | 当前 Victory 后 `AcquireCardToRun()` 加入 Run，再由负重 / 容量重算兜底 | 是否正式接受“溢出进负重区”，还是需要奖励选择、丢弃、邮寄或临时缓存 |
 | 战内玩家受扣血事件 | 现有高 / 低 HP 阈值 flag 回传 Run 压力 | 是否还需要 `Passive.Trigger.OnPlayerDamaged` 表达每次受伤触发 |
+| Run 失败统一总结交接 | Journey success 已有独立 Outcome/summary/event、passive Screen 与主菜单 handoff；Defeat、压力满和手指耗尽目前只结束活动 Run，不进入该成功页面 | 三种失败是否共用一个失败摘要；失败原因、战斗细节、进度统计与返回目标分别显示什么 |
 
 ---
 
@@ -61,11 +62,8 @@ tags:
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| 首版地图与旅程规模 | Logical Map Graph、节点类型和 DataAsset authoring 已确认；当前 `Floor.Authoring.01` 的 8 节点图仅是过渡制作基线 | 首版包含多少 Floor、每层多少有效节点、完整旅程目标多少天 |
-| 正式 Floor 1 图与稳定身份 | `L_Exploration` 已绑定 Authoring baseline；Debug map/data/GameMode 已完全隔离，二者都不承诺正式存档身份 | 正式 Floor 1 的 Node/Edge 图、稳定 NodeId、内容密度和哪些身份可进入未来 SaveGame schema |
-| 正式跨层入口内容 | Floor Transition 规则事务已落地，本轮没有扩大到正式跨层入口制作 | Floor 1 出口位置、目标 Floor、条件、视觉与不可返回确认内容 |
+| Floor 1 Production 世界资产权威 | 正式图和身份已冻结，`L_Exploration` 仍是 Authoring baseline，Production map 尚不存在 | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
-| 地图内容密度 | 纯走廊与 Camp 已确认不创建 Map Node，首版基础类型已固定 | 每层 Encounter、RunEvent、Treasure、Shop、Junction 的数量和保底关系 |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |
 

@@ -17,6 +17,14 @@ FRunExplorationSnapshot FRunExplorationSnapshotBuilder::Build(const FRunState& S
 	Snapshot.JourneyId = Exploration.JourneyDefinition
 		? Exploration.JourneyDefinition->JourneyId
 		: NAME_None;
+	Snapshot.Outcome = State.Outcome;
+	if (State.Outcome == ERunOutcome::InProgress
+		&& (State.Pressure.GetTotal() >= 100 || State.FingerCount <= 0))
+	{
+		Snapshot.Outcome = ERunOutcome::Failed;
+	}
+	Snapshot.bHasCompletionSummary = State.bHasCompletionSummary;
+	Snapshot.CompletionSummary = State.CompletionSummary;
 	Snapshot.CurrentNode = { Exploration.CurrentFloorId, Exploration.CurrentNodeId };
 	Snapshot.Time = State.TimeState;
 	Snapshot.FloorDay = FMath::Max(

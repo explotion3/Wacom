@@ -48,6 +48,16 @@ bool FWacomRunPickupDefinitionValidation::Validate(
 		AddValidationError(OutErrors,
 			LOCTEXT("MissingCardDefinition", "RewardType=Card 时 CardDefinition 不能为空。"));
 	}
+	else if (Reason == FName(TEXT("MissingCredentialId")))
+	{
+		AddValidationError(OutErrors,
+			LOCTEXT("MissingCredentialId", "GrantedCredentialIds 不能包含 None。"));
+	}
+	else if (Reason == FName(TEXT("DuplicateCredentialId")))
+	{
+		AddValidationError(OutErrors,
+			LOCTEXT("DuplicateCredentialId", "GrantedCredentialIds 不能包含重复 ID。"));
+	}
 
 	return OutErrors.IsEmpty();
 }

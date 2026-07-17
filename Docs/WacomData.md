@@ -367,6 +367,7 @@ class UWacomRunPickupDefinition : public UPrimaryDataAsset
     EWacomRunPickupRewardType RewardType;
     int32 GoldAmount = 1;
     TObjectPtr<UCardDefinition> CardDefinition;
+    TArray<FName> GrantedCredentialIds;
 };
 ```
 
@@ -376,8 +377,9 @@ class UWacomRunPickupDefinition : public UPrimaryDataAsset
 | `RewardType` | `None / Gold / Card`；`None` 是无效配置 |
 | `GoldAmount` | 仅 `RewardType=Gold` 使用，必须大于 0 |
 | `CardDefinition` | 仅 `RewardType=Card` 使用，表示固定获得一张卡 |
+| `GrantedCredentialIds` | 可为空；与固定主奖励在同一事务中授予的稳定 Run Credential，每项非 `None` 且 Definition 内唯一 |
 
-正式摆放推荐 `BP_WacomRunRewardPickupActor + UWacomRunPickupDefinition`。每个场景实例仍必须有自己的唯一 `PersistentId`。
+正式摆放推荐 `BP_WacomRunRewardPickupActor + UWacomRunPickupDefinition`。每个场景实例仍必须有自己的唯一 `PersistentId`。Credential ID 使用 `FName` 数据身份，不是 GameplayTag；静态 Definition 只声明 grant，权威持有状态和写事务属于 `WacomRun`。
 
 ## §9 Run World Card Interaction Definition
 
@@ -429,7 +431,8 @@ Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorM
 - `FWacomMapEdgeDefinition` 是有向边；允许反向通行必须显式制作另一条边。
 - `FWacomMapNodeContent` 使用固定 typed payload。Encounter、RunEvent、Shop、Treasure 和 FloorEntrance 的规则引用只写在匹配字段中。
 - Camp 不是节点类型；`bAllowsCamp` 只声明某个已完成节点是否可以成为 Night Camp 的落点。
-- Floor Entrance 的持有卡条件读取真实卡牌实例，但静态合同只保存 Definition/CardId/keyword 筛选，不保存运行进度。
+- Floor Entrance 的 `RequiredCredentialIds` 保存稳定 `FName` 资格要求；`OwnedCardRequirements` 继续保存 Definition/CardId/keyword 筛选。两类条件运行时采用 AND，静态数据不保存持有进度。
+- Map validator 要求 Credential requirement 非 `None` 且不重复，并能在入口前置子图中找到不可绕过、配置有效的固定 Pickup grant；它不从实体卡奖励或同名字符串推断 Credential。
 
 这些类型需要 DataAsset、Details 面板和 Blueprint 只读检查，因此使用反射；节点 lifecycle、探索 token、运行时版本和事务结果属于 `WacomRun`。
 

@@ -143,6 +143,89 @@ bool FWacomRunFloorTransitionOwnedZonesTest::RunTest(const FString& /*Parameters
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunFloorTransitionCredentialOnlyTest,
+	"Wacom.Run.FloorTransition.CredentialOnlyAllowsWithoutCardAndDoesNotConsume",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunFloorTransitionCredentialOnlyTest::RunTest(const FString& /*Parameters*/)
+{
+	FFloorTransitionFixture Floor(false);
+	const FName CredentialId(TEXT("Credential.Run.SerpentSigil"));
+	FWacomMapFloorEntrancePayload& Entrance =
+		Floor.FirstFloor->Nodes[1].Content.FloorEntrance;
+	Entrance.OwnedCardRequirements.Reset();
+	Entrance.RequiredCredentialIds = { CredentialId };
+	FWacomRunSessionTestAccess::GetMutableRunState(*Floor.Session)
+		.GrantedCredentialIds.Add(CredentialId);
+
+	const FRunExplorationSnapshot Before = Floor.Session->BuildExplorationSnapshot();
+	TestTrue(TEXT("Credential-only preview is met"),
+		Before.FloorTransitionPreview.bRequirementsMet);
+	const FRunExplorationResolution Request = Floor.Session->ResolveExplorationCommand(
+		FRunExplorationCommand::RequestFloorTransition(Before.StateVersion));
+	TestTrue(TEXT("Credential-only request succeeds"), Request.IsOk());
+	const FRunExplorationResolution Confirm = Floor.Session->ResolveExplorationCommand(
+		FRunExplorationCommand::ConfirmFloorTransition(
+			Request.FloorTransitionConfirmation.GetValue()));
+	TestTrue(TEXT("Credential-only confirmation succeeds"), Confirm.IsOk());
+	TestTrue(TEXT("Credential is not consumed"), Floor.Session->HasCredential(CredentialId));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunFloorTransitionCredentialCardDoesNotInferTest,
+	"Wacom.Run.FloorTransition.SameNamedCardDoesNotInferCredential",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunFloorTransitionCredentialCardDoesNotInferTest::RunTest(const FString& /*Parameters*/)
+{
+	FFloorTransitionFixture Floor(true);
+	FWacomMapFloorEntrancePayload& Entrance =
+		Floor.FirstFloor->Nodes[1].Content.FloorEntrance;
+	Entrance.OwnedCardRequirements.Reset();
+	Entrance.RequiredCredentialIds = { TEXT("Credential.Run.SerpentSigil") };
+
+	const FRunExplorationSnapshot Snapshot = Floor.Session->BuildExplorationSnapshot();
+	TestFalse(TEXT("Physical card alone cannot satisfy credential"),
+		Snapshot.FloorTransitionPreview.bRequirementsMet);
+	TestFalse(TEXT("Request is rejected"), Floor.Session->ResolveExplorationCommand(
+		FRunExplorationCommand::RequestFloorTransition(Snapshot.StateVersion)).IsOk());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunFloorTransitionMixedAndRevalidationTest,
+	"Wacom.Run.FloorTransition.MixedRequirementsUseAndAndConfirmRevalidatesCredential",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunFloorTransitionMixedAndRevalidationTest::RunTest(const FString& /*Parameters*/)
+{
+	FFloorTransitionFixture Floor(true);
+	const FName CredentialId(TEXT("Credential.Run.SerpentSigil"));
+	Floor.FirstFloor->Nodes[1].Content.FloorEntrance.RequiredCredentialIds = { CredentialId };
+	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Floor.Session);
+
+	TestFalse(TEXT("Owned card without credential fails mixed AND"),
+		Floor.Session->BuildExplorationSnapshot().FloorTransitionPreview.bRequirementsMet);
+	State.GrantedCredentialIds.Add(CredentialId);
+	const FRunExplorationSnapshot Ready = Floor.Session->BuildExplorationSnapshot();
+	TestTrue(TEXT("Card and credential satisfy mixed AND"),
+		Ready.FloorTransitionPreview.bRequirementsMet);
+	const FRunExplorationResolution Request = Floor.Session->ResolveExplorationCommand(
+		FRunExplorationCommand::RequestFloorTransition(Ready.StateVersion));
+	TestTrue(TEXT("Mixed request succeeds"), Request.IsOk());
+
+	State.GrantedCredentialIds.Remove(CredentialId);
+	const FRunExplorationResolution Confirm = Floor.Session->ResolveExplorationCommand(
+		FRunExplorationCommand::ConfirmFloorTransition(
+			Request.FloorTransitionConfirmation.GetValue()));
+	TestFalse(TEXT("Confirm revalidates latest credential state"), Confirm.IsOk());
+	TestEqual(TEXT("Failed confirm keeps current Floor"),
+		Confirm.PostSnapshot.CurrentNode.FloorId, Floor.FirstFloor->FloorId);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunFloorTransitionRequirementAndTokenTest,
 	"Wacom.Run.FloorTransition.RequirementCancelAndStaleTokenAreAtomic",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

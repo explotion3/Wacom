@@ -51,10 +51,11 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 | `L_MainMenu` | `AWacomMenuGameMode` | 主菜单，不 Spawn 探索 Pawn；注入主菜单 ViewData，并处理菜单 Action、确认、退出和 travel |
 | `L_Exploration` | `AWacomGameMode` | 探索主流程，持有 GameFlowState，进入 / 退出战斗，初始化探索 HUD |
 
-当前 `EGameFlowState` 只有 `Exploration` 与 `Battle`：
+当前 `EGameFlowState` 包含：
 
 - `Exploration`：允许 Run Path 移动、世界交互、打开暂停 / 背包 / 商店 / RunEvent 等 GameMenu。
 - `Battle`：暂停 Run Path 移动，启用 Battle camera look，切换输入 profile，并 Push `UBattleHUD` 到 Game 层。
+- `JourneySummary`：terminal success 后的只读总结与主菜单交接阶段；不恢复 Run hand、交互 Toast 或探索写入口。
 
 `UWacomExplorationHUD` 使用 `GameAndUI + NoCapture` 保持鼠标可见和世界点击；每次激活后会等待 CommonUI 完成本轮 input config，再在下一帧把 Slate 焦点交给游戏视口。失活或销毁会取消待执行请求，因此首次进入嵌入式 PIE、战斗返回探索或关闭 GameMenu 后都不需要额外点击视口才能收到 W/S 与鼠标视角输入，也不会让过期 HUD 在页面切换后抢回焦点。Cursor Look 优先使用 PlayerController 的视口鼠标坐标；嵌入式 PIE 尚未产生第一次 viewport mouse event 时，回退到 Slate 光标与 viewport geometry 的相对坐标，不以一次点击作为视角激活条件。
 
@@ -88,6 +89,10 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 主菜单采用 App flow 与 Screen 分离。`AWacomMenuGameMode` 进入 `L_MainMenu` 时先把 `UWacomTitleScreen` Push 到 `UI.Layer.GameMenu` 作为稳定栈底；标题页只把键盘按键、鼠标左键和手柄按键转换为继续意图，ESC / Gamepad B 在根页面被消费。继续意图成功后 GameMode 再 Push `UWacomMainMenuScreen`；主菜单 ESC / B 上报 `EWacomMainMenuAction::ReturnToTitle`，GameMode 只有确认 TitleScreen 仍存在于同一 Stack 时才 Pop 主菜单，避免根页面缺失时产生空 UI 栈。每次进入主菜单关都重新从 TitleScreen 开始；Settings / Modal 仍叠在 MainMenu 上方并使用 CommonUI 焦点恢复。
 
 `AWacomMenuGameMode` 构造 `FWacomMainMenuViewData`，绑定 `UWacomMainMenuScreen::OnActionRequestedNative`，并处理其余 `EWacomMainMenuAction`；Screen 只应用 ViewData、刷新 fallback / WBP 和上报玩家意图，不读取或删除 SaveGame，不调用 `OpenLevel()` 或退出 API。Title / MainMenu class 分别收紧为 `TSubclassOf<UWacomTitleScreen>` 与 `TSubclassOf<UWacomMainMenuScreen>`，C++ 默认加载 `/Game/Wacom/UI/Menus/WBP_TitleScreen` 和 `/Game/Wacom/UI/Menus/WBP_MainMenuScreen`，资产缺失或加载失败时回退对应原生 Screen；travel 前和 `EndPlay` 都会显式解绑。当前存档总开关关闭，因此 GameMode 不访问磁盘，Continue、Journey History、Credits 保持隐藏；Settings 已开放并进入统一 Settings Screen flow，Start New Journey 仍直接走 `/Game/Wacom/Maps/L_Exploration`。未来档案服务接入后，只替换 GameMode 的 ViewData 构建与 Action flow，不让 Screen 重新拥有 slot 语义。
+
+Journey 成功页沿用同一 passive Screen 边界。`AWacomGameMode` 只消费 Run settlement 中的 `JourneySucceeded` event，不读取 Actor label、EncounterId 或硬编码 NodeId；它从同批 `PostSnapshot.CompletionSummary` 与 Journey `DisplayName` 构造 `FWacomJourneySummaryViewData`。`UWacomJourneySummaryScreen` 只显示“Journey 成功”、Journey 标题、完成天数、Floor/Node 进度和最终压力，并通过 `OnContinueRequestedNative` 上报按钮或 ESC/Back 的一次性继续意图。当前只提供原生 C++ fallback 和 WBP 表现钩子，不创建 `WBP_JourneySummary`，也不新增 Widget GameplayTag。
+
+成功战斗仍先 Pop BattleHUD、结算 Encounter 并完成既有 Return-to-Run 镜头 staging；staging barrier 完成后直接进入 `JourneySummary`，不恢复 Run first-person hand 或 interact Toast。GameMode 把总结页 Push 到既有 `UI.Layer.GameMenu`；确认或 Back 后先解绑 Screen、`TearDownPrimaryLayout()`，再在下一帧 travel 到 `/Game/Wacom/Maps/L_MainMenu`。Screen push、PrimaryLayout 或 PlayerController 缺失时跳过页面并走完全相同的安全主菜单交接，避免玩家停在不可操作的终局世界。
 
 ---
 
@@ -279,9 +284,9 @@ GameMode 退出战斗时：
 7. stage 完成后恢复 PlayerCharacter 探索移动；若回程 blend 为 0 或无法构造 request，则同步恢复。
 8. 从 `UBattleSession::BuildResultPacket()` 构造 `FBattleResultPacket`，使用进入战斗前取得的 `FRunNodeActivityTicket` 调 RunSession 原子结算战斗结果、Action Point、撤离进度和节点 lifecycle，并在恢复输入前把 Settlement 或 Cancel 的显式 Resolution 应用到同一个 Run 表现 Coordinator。GameMode 判断撤离异常全灭时只统计 packet 中有效的 `DestroyedPartKeys` / `EnemyResults.DestroyedPartKeys`，不再用 legacy `DestroyedParts` projection 触发场景 Trigger 销毁。
 9. 真胜利时由节点结算结果驱动场景 Trigger 完成表现；撤离保留 Trigger 和按 MapNodeHandle 保存的部位进度，允许玩家重入。
-10. `EGameFlowState` 回到 `Exploration` 后，等待 return staging completion，再重新激活并刷新 Run first-person hand，同时刷新交互 Toast。
+10. 普通结算把 `EGameFlowState` 回到 `Exploration`，等待 return staging completion 后重新激活 Run first-person hand 并刷新交互 Toast；`JourneySucceeded` 则进入 `JourneySummary`，同一 barrier 后展示成功页且不恢复两者。
 
-退出战斗回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前默认 Run workspace。当前默认 workspace provider 仍读取 Run `BattleDeck` 物理卡和可选投影卡；这个刷新只读 Run snapshot，不提交 Run 命令；若回程是 deferred blend，刷新必须等镜头回到 Run Path 后再发生。
+普通战斗退出回到 Exploration 后，PlayerController 会重新激活并刷新 `UWacomRunFirstPersonCardSourceComponent`，让 first-person card layer 再次显示当前默认 Run workspace。当前默认 workspace provider 仍读取 Run `BattleDeck` 物理卡和可选投影卡；这个刷新只读 Run snapshot，不提交 Run 命令；若回程是 deferred blend，刷新必须等镜头回到 Run Path 后再发生。Journey success 不执行该刷新。
 
 `AWacomPlayerController::RequestExitBattle(EBattleOutcome)` 仅作为外部手动结束战斗的 typed façade 保留，不再接受裸 `uint8` Outcome。正式 BattleEnd 主链路仍是 BattleHUD 根据 Snapshot BattleEnd 广播 `EBattleOutcome`，由 GameMode 在 Session 释放前生成 `FBattleResultPacket` 交给 Run 层。
 

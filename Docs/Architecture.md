@@ -112,14 +112,17 @@ Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：
 - `WacomData/Public/Map`：反射的 Journey/Floor/Node/Edge 和 typed payload，只保存静态制作真相。
 - `WacomRun/Public/Exploration`：Snapshot、事件、C++-only Command/Result 与 opaque token；`FRunState` 组合持有 time/exploration runtime state。
 - `WacomRun/Private/Exploration`：lifecycle、traversal、AP、Camp、Floor transition 和内容活动事务实现。
+- `WacomRun/Private/Credential`：稳定 Credential ID 的校验、幂等授予与入口持有求值；`FRunState::GrantedCredentialIds` 是唯一权威状态，App/Data 只转发静态声明或只读查询。
 - `WacomApp`：World 单向引用 Floor 的 `AWacomRunFloorSceneDescriptorActor`、App-private resolver、working Scene Registry、Spline、NodeAnchor、ContentHost、输入、镜头和结果表现；不得把 Actor 或世界坐标回写成规则真相。Descriptor 是需要关卡制作与 Blueprint 只读引用的反射 Actor；resolver、原子刷新状态和 Coordinator prepare/commit 仍是 Private 普通 C++。
 - `WacomEditor`：Journey/Floor validation、共用的 World-only read-only Scene validator、ToolMenus/validation commandlet，以及只拥有 Debug namespace 的可重复内容 builder。正式 map、Authoring 数据、Player/共享 Run Path Blueprint 只能由 builder 读取或哈希守卫，不能保存。
 
 `URunSession::Initialize(FRunInitializationParams)` 使用完整 working state，成功时一次提交角色持有区、Journey/Floor、时间、压力和探索版本并返回 `FRunInitializationResult`；失败时保留旧 Session。App 和测试都必须显式消费该结果，不保留只返回 bool 的初始化入口。
 
-Run scene refresh 同样采用 working-state 原子提交：Snapshot 先与唯一 Descriptor 的 Floor 对齐，再完整构建 Registry 和 Coordinator plan；版本/Floor 漂移、场景身份错误或表现预检失败都保留上一代已安装状态。该收口没有修改 `WacomRun` Snapshot/Command/Resolution/SaveGame schema，也没有新增 GameplayTag、`Build.cs` 或模块依赖；`WacomEditor` 继续使用既有 Private `WacomApp` 依赖。
+Run scene refresh 同样采用 working-state 原子提交：Snapshot 先与唯一 Descriptor 的 Floor 对齐，再完整构建 Registry 和 Coordinator plan；版本/Floor 漂移、场景身份错误或表现预检失败都保留上一代已安装状态。场景绑定收口本身没有修改 `WacomRun` Snapshot/Command/Resolution；后续 Credential 与 Journey success 切片把 SaveGame 依次升到 v4/v5，但没有新增 GameplayTag、`Build.cs` 或模块依赖，`WacomEditor` 继续使用既有 Private `WacomApp` 依赖。
 
-需要资产制作、Details 面板或 Blueprint 只读绑定的数据类型使用反射；探索 Command、Resolution、一次性 token 和 resolver/module 保持普通 C++。`UWacomRunPathTraversalComponent` 是唯一场景移动组件，Segment / Branch / Anchor 只保存场景绑定身份，不形成第二份规则图。当前 SaveGame schema 3 不保存新探索状态，也不因公共 handle 已稳定而宣称支持地图恢复。
+需要资产制作、Details 面板或 Blueprint 只读绑定的数据类型使用反射；探索 Command、Resolution、一次性 token 和 resolver/module 保持普通 C++。`UWacomRunPathTraversalComponent` 是唯一场景移动组件，Segment / Branch / Anchor 只保存场景绑定身份，不形成第二份规则图。当前 SaveGame schema 5 保存确定排序的 `GrantedCredentialIds`、`ERunOutcome` 与独立成功摘要；v4 active/inactive 分别迁移为 InProgress/Failed。Journey/Floor/Node、节点生命周期和 Floor history 仍不保存，终态档也不能恢复为活动 Run，因此不能宣称支持地图恢复或 Continue。
+
+Journey success 继续遵守既有依赖方向：`WacomData` 只声明 `DisplayName + SuccessTerminalNode` 静态终局，`WacomRun` 在 terminal Encounter working-state 事务中生成 Outcome/summary/末尾 event，`WacomApp` 只消费 event、展示 passive ViewData 并编排 CommonUI teardown/travel，`WacomEditor` 只做静态制作校验。Defeat 与 success 不复用状态语义；Screen 不读取 RunSession，也不调用 travel。该切片没有增加模块、GameplayTag 或依赖边。
 
 ## 5. 目录结构
 
@@ -142,7 +145,7 @@ Source/
     }
   WacomRun/
     Public/ { RunSession.h, RunState.h, RunStateTypes.h, WacomSaveGame.h }
-    Private/
+    Private/ { Battle/, Credential/, Deck/, Events/, Exploration/, Save/, Shops/ }
   WacomApp/
     Public/ { Actors/, Core/, GameFramework/, Interaction/, UI/ }
     Private/ { Actors/, Core/, GameFramework/, Interaction/, UI/ }

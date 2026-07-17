@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-07-16
+updated: 2026-07-17
 tags:
   - wacom/data
   - wacom/authoring
@@ -121,7 +121,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
 | `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
 | `UWacomRunWorldCardInteractionDefinitionValidator` | `UWacomRunWorldCardInteractionDefinition` | `FWacomRunWorldCardInteractionDefinitionValidation::Validate()` |
-| `UWacomMapDefinitionValidator` | `UWacomJourneyDefinition`、`UWacomFloorMapDefinition` | `FWacomMapDefinitionValidationReport`；检查身份、端点、可达性、typed payload、入口条件、必填 DisplayName 与 MapPosition 制作边界 |
+| `UWacomMapDefinitionValidator` | `UWacomJourneyDefinition`、`UWacomFloorMapDefinition` | `FWacomMapDefinitionValidationReport`；检查身份、端点、可达性、typed payload、入口条件、必填 DisplayName、MapPosition 制作边界，以及 Journey success terminal 的末层/Encounter Boss/可达/无出边合同 |
 
 当前校验边界：
 
@@ -135,7 +135,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - Character 会校验 `StarterDeck` 不包含左右手卡。
 - Shop 校验 `ShopId`、`Offers`、Offer 卡牌和非负价格；不校验重复商品、价格平衡或商品池规则。
 - RunEvent 校验事件图结构、ID、引用、NextNode、卡牌条件 / 效果、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag、压力 ID，以及 `Automatic / Free / Fixed` Action Point policy。正成本非 terminal choice 是错误；早期由 effect 单独扣减探索预算的做法已删除。金币门槛 / 扣费组合中的 authoring 风险可以给 warning。
-- RunPickupDefinition 校验固定单一奖励配置：`PickupId`、奖励类型、金币数量或卡牌引用。
+- RunPickupDefinition 校验固定单一主奖励配置：`PickupId`、奖励类型、金币数量或卡牌引用；可选 `GrantedCredentialIds` 必须全部非 `None` 且 Definition 内唯一。
 - RunWorldCardInteractionDefinition 校验 `InteractionId`、至少一个正向卡牌筛选和有效奖励项。
 - Actor 摆放实例的 `PersistentId`、重复 ID、receiver 和 facade 配置属于 map / level validation，见 [WacomWorldInteraction.md](./WacomWorldInteraction.md#2-run-world-interactable-actor)。
 - Map Floor 与每个 Node 的 `DisplayName` 必填；`ShortDescription` 可空。`MapPosition` 合法闭区间是 `[0,1920] × [0,1080]`，越界或完全重合为 error，节点中心距离小于 `48 px` 为 warning；这些坐标不参与规则距离或合法性。
@@ -144,7 +144,108 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
 
-当前 `L_Exploration` 使用 `/Game/Wacom/Data/Map/Authoring/DA_Floor_LevelAuthoring_01` 与 `DA_Journey_LevelAuthoring`。这是承接现有可玩图的过渡制作基线，不是正式 Floor 1：当前 8 个 NodeId、布局、内容密度、跨层入口、Camp 内容和未来 SaveGame 身份都未冻结。`GM_Wacom` 指向 Authoring Journey；Debug builder 禁止修改这三个正式/Authoring Package。
+当前 `L_Exploration` 使用 `/Game/Wacom/Data/Map/Authoring/DA_Floor_LevelAuthoring_01` 与 `DA_Journey_LevelAuthoring`。这是承接现有可玩图的过渡制作基线，不是正式 Floor 1；`GM_Wacom` 继续指向 Authoring Journey，Debug builder 禁止修改这三个正式/Authoring Package。正式设计已在 2026-07-17 独立冻结为 `Journey.Main.01` 与 `Floor.Main.01/02/03`，不会通过重命名或覆盖 Authoring/Debug 资产落地。
+
+正式 Production Map 资产路径预留为：
+
+```text
+/Game/Wacom/Data/Map/Production/DA_Journey_Main_01
+/Game/Wacom/Data/Map/Production/DA_Floor_Main_01
+/Game/Wacom/Data/Map/Production/DA_Floor_Main_02
+/Game/Wacom/Data/Map/Production/DA_Floor_Main_03
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_01
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_02
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_03
+```
+
+这些路径当前不存在，也不授权 builder 或迁移脚本创建。正式三层各 20 Node/21 Edge canonical graph、内容槽、跨层门槛与 Journey 节奏见 [WacomMap](./WacomMap.md#wacommap) §9；不得创建最小空壳图、伪 FloorEntrance 或 terminal Actor 特例绕过 Production readiness gate。
+
+正式内容 Host 的 `PersistentId` 不另建人工注册表，统一按 `<FloorId>.<NodeId>` 派生。例如 `Node.Route.A.01` 在正式首层的 runtime key 为 `Floor.Main.01.Node.Route.A.01`；Host 的 `RunMapNodeBinding.NodeId/NodeType` 仍必须等于 Floor DataAsset 节点。Navigation 没有内容 Host PersistentId，Path/Branch 在单 Floor World 内继续只保存 EdgeId。
+
+Floor 1 为 15 个内容节点预留以下 Production definition IDs：
+
+```text
+Encounter.SerpentWood.Scout
+Encounter.SerpentWood.MoltGuard
+Encounter.SerpentWood.Ambush
+Encounter.SerpentWood.RootStalker
+Encounter.SerpentWood.EliteSentinel
+Encounter.SerpentWood.ShallowGuardian
+
+Event.SerpentWood.CastSkin
+Event.SerpentWood.HunterTrace
+Event.SerpentWood.MerchantRumor
+Event.SerpentWood.PoisonMarsh
+
+Pickup.SerpentWood.HerbCache
+Pickup.SerpentWood.HunterCache
+Pickup.SerpentWood.MoltCache
+Pickup.SerpentWood.SerpentSigil
+
+Shop.SerpentWood.Wayfarer
+Card.Run.SerpentSigil
+Credential.Run.SerpentSigil
+```
+
+Floor 2 为 15 个内容节点预留 `MoltCavern` namespace：
+
+```text
+Encounter.MoltCavern.ScaleScout
+Encounter.MoltCavern.StoneScaleGuard
+Encounter.MoltCavern.HatcheryAmbush
+Encounter.MoltCavern.BridgeSentinel
+Encounter.MoltCavern.VenomHunter
+Encounter.MoltCavern.EliteMolter
+Encounter.MoltCavern.CavernGuardian
+
+Event.MoltCavern.CastoffEcho
+Event.MoltCavern.LostDelver
+Event.MoltCavern.MoltingRite
+
+Pickup.MoltCavern.FungalCache
+Pickup.MoltCavern.MineralCache
+Pickup.MoltCavern.VenomCrystalCache
+Pickup.MoltCavern.MoltSeal
+
+Shop.MoltCavern.DeepWayfarer
+Card.Run.MoltSeal
+Credential.Run.MoltSeal
+```
+
+Floor 3 为 16 个内容节点预留 `VenomCore` namespace：
+
+```text
+Encounter.VenomCore.CoreVanguard
+Encounter.VenomCore.VeinGuardian
+Encounter.VenomCore.BroodPatrol
+Encounter.VenomCore.InnerSentinel
+Encounter.VenomCore.ToxinStalker
+Encounter.VenomCore.EliteHarvester
+Encounter.VenomCore.FinalVanguard
+Encounter.VenomCore.CoreGuardian
+
+Event.VenomCore.VeinResonance
+Event.VenomCore.CoreWhisper
+Event.VenomCore.SacrificeChoice
+Event.VenomCore.HeartPulse
+
+Pickup.VenomCore.AntidoteCache
+Pickup.VenomCore.RitualCache
+Pickup.VenomCore.VenomReservoir
+Pickup.VenomCore.CoreBoon
+```
+
+三层共 46 个内容槽；以上 ID 冻结内容职责和后续资产命名入口，不冻结敌人槽、事件选项、库存、奖励数值或视觉。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
+
+`Pickup.SerpentWood.SerpentSigil` 的正式 Definition 必须以 Card 作为固定主奖励，并在 `GrantedCredentialIds` 中授予 `Credential.Run.SerpentSigil`；`Node.Exit.01` 的 FloorEntrance 只在 `RequiredCredentialIds` 中引用该 Credential，不把 `Card.Run.SerpentSigil` 写回 `OwnedCardRequirements`。两者由同一稳定 ID 对接，但表现卡和资格状态互不推断。
+
+`Pickup.MoltCavern.MoltSeal` 使用相同通用合同：固定主奖励为 `Card.Run.MoltSeal`，`GrantedCredentialIds` 授予 `Credential.Run.MoltSeal`；Floor 2 `Node.Exit.01` 只要求 Credential 并指向 `Floor.Main.03`。不得从表现卡推断、撤销或补算资格。
+
+Floor 3 `Node.Guardian.01` 是无出边的 success terminal，不配置 FloorEntrance payload。Production `DA_Journey_Main_01` 必须配置 `DisplayName` 和 `SuccessTerminalNode={Floor.Main.03, Node.Guardian.01}`。`/Game/Wacom/Data/Map/Production/` 下缺失 terminal 是 validation error；旧 Debug/Authoring Journey 可保持未配置并产生 warning，Runtime 仍允许启动但不会自动成功。已配置 terminal 在 Editor 与 Runtime 都必须位于最后一层、引用存在的 `Encounter + bBoss=true` 节点、从 Entry 可达、无出边，且最后一层不得包含 FloorEntrance。不得用 Actor label、Level Blueprint、EncounterId、legacy `bRunActive` 或伪 TargetFloorId 实现终局。
+
+Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
+
+蛇印任务凭证门禁、Floor 2/3 图冻结和通用 Journey success state/event/summary/UI handoff 已完成。正式资产制作仍被 46 个非 Debug definitions 和 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始门禁见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`，成功合同证据见 `specs/010-journey-success-settlement-baseline/`。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 

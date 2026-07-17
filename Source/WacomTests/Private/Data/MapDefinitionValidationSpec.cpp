@@ -192,6 +192,55 @@ bool FWacomMapDefinitionValidationRequirementSpec::RunTest(const FString& Parame
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomMapDefinitionValidationCredentialRequirementSpec,
+	"Wacom.Data.Map.Validation.CredentialRequirementsNeedUniqueDominatingPickupSource",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomMapDefinitionValidationCredentialRequirementSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	const FName CredentialId(TEXT("Credential.Run.SerpentSigil"));
+	FValidJourneyFixture Fixture;
+	FWacomMapFloorEntrancePayload& Entrance =
+		Fixture.Floor1->Nodes[1].Content.FloorEntrance;
+
+	Entrance.RequiredCredentialIds = { NAME_None };
+	TestFalse(TEXT("None credential requirement fails"),
+		FWacomMapDefinitionValidation::ValidateJourney(Fixture.Journey).IsValid());
+	Entrance.RequiredCredentialIds = { CredentialId, CredentialId };
+	TestFalse(TEXT("Duplicate credential requirement fails"),
+		FWacomMapDefinitionValidation::ValidateJourney(Fixture.Journey).IsValid());
+	Entrance.RequiredCredentialIds = { CredentialId };
+	TestFalse(TEXT("Missing credential source fails"),
+		FWacomMapDefinitionValidation::ValidateJourney(Fixture.Journey).IsValid());
+
+	FWacomMapNodeDefinition CredentialPickupNode;
+	CredentialPickupNode.NodeId = TEXT("CredentialPickup");
+	CredentialPickupNode.DisplayName = FText::FromString(TEXT("Credential Pickup"));
+	CredentialPickupNode.MapPosition = MakeStableMapPosition(TEXT("CredentialPickup"));
+	CredentialPickupNode.NodeType = EWacomMapNodeType::Treasure;
+	UWacomRunPickupDefinition* Pickup =
+		NewObject<UWacomRunPickupDefinition>(Fixture.Floor1);
+	Pickup->PickupId = TEXT("Pickup.Validation.Credential");
+	Pickup->RewardType = EWacomRunPickupRewardType::Gold;
+	Pickup->GoldAmount = 1;
+	Pickup->GrantedCredentialIds = { CredentialId };
+	CredentialPickupNode.Content.Treasure.PickupDefinition = Pickup;
+	Fixture.Floor1->Nodes.Add(CredentialPickupNode);
+	Fixture.Floor1->Edges = {
+		MakeEdge(TEXT("EntryToCredential"), TEXT("Entry"), TEXT("CredentialPickup")),
+		MakeEdge(TEXT("CredentialToExit"), TEXT("CredentialPickup"), TEXT("Exit")) };
+
+	TestTrue(TEXT("Dominating fixed credential pickup passes"),
+		FWacomMapDefinitionValidation::ValidateJourney(Fixture.Journey).IsValid());
+	Fixture.Floor1->Edges.Add(
+		MakeEdge(TEXT("BypassCredential"), TEXT("Entry"), TEXT("Exit")));
+	TestFalse(TEXT("Bypassable credential pickup is not a guaranteed source"),
+		FWacomMapDefinitionValidation::ValidateJourney(Fixture.Journey).IsValid());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomMapDefinitionValidationPresentationFieldsSpec,
 	"Wacom.Data.Map.Validation.PresentationFieldsAndMapPositions",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

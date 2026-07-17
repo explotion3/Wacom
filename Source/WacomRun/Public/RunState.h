@@ -8,6 +8,7 @@
 #include "Runtime/BattleEnemyKeys.h"
 #include "Session/BattleSession.h"  // FBattleInitParams
 #include "Exploration/RunExplorationResolution.h"
+#include "RunOutcomeTypes.h"
 #include "RunStateTypes.h"
 #include "RunState.generated.h"
 
@@ -592,14 +593,17 @@ struct WACOMRUN_API FRunState
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run")
 	int32 BattleSeed = 0;
 
-	/**
-	 * 当前 Run 是否仍在进行。
-	 * 战内失败：bRunActive = false。
-	 * 战外失败（压力满 / 手指掉光）：bRunActive = false。
-	 * URunSession::IsRunFailed() 提供综合判定。
-	 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
-	bool bRunActive = true;
+	/** 当前 Run 的权威结局。压力满/手指耗尽仍通过兼容查询派生 Failed。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Completion")
+	ERunOutcome Outcome = ERunOutcome::InProgress;
+
+	/** 仅 Succeeded 状态允许为 true。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Completion")
+	bool bHasCompletionSummary = false;
+
+	/** 成功事务冻结的最近一次完成摘要。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Completion")
+	FRunCompletionSummary CompletionSummary;
 
 	/** 已被永久销毁的场景触发器 ID 列表。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
@@ -629,6 +633,10 @@ struct WACOMRUN_API FRunState
 	/** 已拾取的世界拾取物 ID。当前只在本次 Run 内存态保留，不接 SaveGame。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Pickup")
 	TSet<FName> CollectedPickupIds;
+
+	/** 已获得的稳定 Run 任务凭证。只由 Run 规则事务授予，不从实体卡或场景状态反推。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Credential")
+	TSet<FName> GrantedCredentialIds;
 
 	/** 已完成的探索期世界卡牌交互 ID。当前只在本次 Run 内存态保留，不接 SaveGame。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|World Interaction")

@@ -6,6 +6,7 @@
 #include "Battle/RunBattleSettlementResolver.h"
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
+#include "Credential/RunCredentialModule.h"
 #include "Deck/RunDeckRules.h"
 #include "Events/RunEventExecutor.h"
 #include "Events/RunEventDefinition.h"
@@ -16,6 +17,7 @@
 #include "Exploration/RunMapModule.h"
 #include "Map/WacomFloorMapDefinition.h"
 #include "Map/WacomJourneyDefinition.h"
+#include "Pickups/RunPickupDefinition.h"
 #include "Save/RunSaveGameSerializer.h"
 #include "Session/BattleSession.h"
 #include "Shops/RunShopTransaction.h"
@@ -35,6 +37,105 @@ enum class ERunUiSnapshotDirtyFlags : uint8
 
 namespace
 {
+	bool IsJourneySuccessTerminalConfigurationValid(const UWacomJourneyDefinition& Journey)
+	{
+		const FWacomMapNodeHandle& Terminal = Journey.SuccessTerminalNode;
+		if (Terminal.FloorId.IsNone() && Terminal.NodeId.IsNone())
+		{
+			return true;
+		}
+		if (!Terminal.IsValid())
+		{
+			return false;
+		}
+
+		const int32 FloorIndex = Journey.FindFloorIndex(Terminal.FloorId);
+		if (FloorIndex == INDEX_NONE || FloorIndex != Journey.Floors.Num() - 1)
+		{
+			return false;
+		}
+
+		const UWacomFloorMapDefinition* Floor = Journey.Floors[FloorIndex];
+		const FWacomMapNodeDefinition* Node = Floor ? Floor->FindNode(Terminal.NodeId) : nullptr;
+		if (!Floor || !Node
+			|| Node->NodeType != EWacomMapNodeType::Encounter
+			|| !Node->Content.Encounter.bBoss
+			|| Floor->Nodes.ContainsByPredicate(
+				[](const FWacomMapNodeDefinition& Candidate)
+				{
+					return Candidate.NodeType == EWacomMapNodeType::FloorEntrance;
+				})
+			|| Floor->Edges.ContainsByPredicate(
+				[Terminal](const FWacomMapEdgeDefinition& Edge)
+				{
+					return Edge.FromNodeId == Terminal.NodeId;
+				}))
+		{
+			return false;
+		}
+
+		TSet<FName> ReachableNodes;
+		TArray<FName> Queue;
+		if (!Floor->EntryNodeId.IsNone() && Floor->FindNode(Floor->EntryNodeId))
+		{
+			Queue.Add(Floor->EntryNodeId);
+			ReachableNodes.Add(Floor->EntryNodeId);
+		}
+		for (int32 QueueIndex = 0; QueueIndex < Queue.Num(); ++QueueIndex)
+		{
+			for (const FWacomMapEdgeDefinition& Edge : Floor->Edges)
+			{
+				if (Edge.FromNodeId == Queue[QueueIndex]
+					&& Floor->FindNode(Edge.ToNodeId)
+					&& !ReachableNodes.Contains(Edge.ToNodeId))
+				{
+					ReachableNodes.Add(Edge.ToNodeId);
+					Queue.Add(Edge.ToNodeId);
+				}
+			}
+		}
+		return ReachableNodes.Contains(Terminal.NodeId);
+	}
+
+	bool IsJourneyTerminalVictory(
+		const FRunState& State,
+		const FRunNodeActivityTicket& Ticket,
+		const FBattleResultPacket& Packet)
+	{
+		const UWacomJourneyDefinition* Journey =
+			State.ExplorationState.JourneyDefinition;
+		return Journey
+			&& Journey->SuccessTerminalNode.IsValid()
+			&& Journey->SuccessTerminalNode == Ticket.Node
+			&& Packet.Outcome == EBattleOutcome::Victory
+			&& !Packet.bWithdrawn;
+	}
+
+	FRunCompletionSummary BuildJourneyCompletionSummary(
+		const FRunState& State,
+		const FWacomMapNodeHandle& TerminalNode)
+	{
+		FRunCompletionSummary Summary;
+		Summary.JourneyId = State.ExplorationState.JourneyDefinition
+			? State.ExplorationState.JourneyDefinition->JourneyId
+			: NAME_None;
+		Summary.TerminalNode = TerminalNode;
+		Summary.CompletionDay = State.TimeState.CurrentDayNumber;
+		Summary.TotalFloorCount = State.ExplorationState.FloorProgress.Num();
+		Summary.FinalPressure = State.Pressure.GetTotal();
+		for (const FRunFloorProgress& Floor : State.ExplorationState.FloorProgress)
+		{
+			Summary.EnteredFloorCount += Floor.EnteredDayNumber > 0 ? 1 : 0;
+			Summary.TotalNodeCount += Floor.Nodes.Num();
+			for (const FRunMapNodeProgress& Node : Floor.Nodes)
+			{
+				Summary.ResolvedNodeCount +=
+					Node.Lifecycle == ERunMapNodeLifecycle::Resolved ? 1 : 0;
+			}
+		}
+		return Summary;
+	}
+
 	FWacomMapNodeHandle ResolveEncounterProgressNode(const FRunState& State)
 	{
 		return FWacomMapNodeHandle{
@@ -90,7 +191,7 @@ namespace
 		return (static_cast<uint8>(DirtyFlags) & static_cast<uint8>(Flag)) != 0;
 	}
 
-	bool ShouldStarterCardStartInBattleDeck(const UCardDefinition* Card)
+	bool ShouldRunSessionStarterCardStartInBattleDeck(const UCardDefinition* Card)
 	{
 		// 原型内容规则：暮色引虫灯默认进入备战区，但仍作为 A 类容器贡献通量容量。
 		// 后续若类似规则增多，应抽成 Card/Character 数据字段，而不是继续扩硬编码列表。
@@ -379,7 +480,7 @@ namespace
 		});
 	}
 
-	bool IsSafeArrivalNode(const EWacomMapNodeType NodeType)
+	bool IsRunSessionSafeArrivalNode(const EWacomMapNodeType NodeType)
 	{
 		return NodeType == EWacomMapNodeType::Navigation || NodeType == EWacomMapNodeType::Shop;
 	}
@@ -503,6 +604,13 @@ FRunInitializationResult URunSession::Initialize(const FRunInitializationParams&
 		Result.Status = FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("MissingJourney"));
 		return Result;
 	}
+	if (!IsJourneySuccessTerminalConfigurationValid(*Params.Journey))
+	{
+		Result.Status = FWacomStatus::Fail(
+			EWacomError::InvalidArgument,
+			TEXT("InvalidJourneySuccessTerminal"));
+		return Result;
+	}
 
 	UWacomFloorMapDefinition* EntryFloor = Params.Journey->Floors[0];
 	if (!EntryFloor || EntryFloor->FloorId.IsNone() || EntryFloor->EntryNodeId.IsNone())
@@ -520,7 +628,9 @@ FRunInitializationResult URunSession::Initialize(const FRunInitializationParams&
 	FRunState WorkingState{};
 	WorkingState.Character = Params.Character;
 	WorkingState.BattleSeed = 0;
-	WorkingState.bRunActive = true;
+	WorkingState.Outcome = ERunOutcome::InProgress;
+	WorkingState.bHasCompletionSummary = false;
+	WorkingState.CompletionSummary = {};
 	WorkingState.PlayerTransform = FTransform::Identity;
 	WorkingState.bHasPlayerTransform = false;
 	WorkingState.FingerCount = Params.Character->FingerCount;
@@ -544,7 +654,7 @@ FRunInitializationResult URunSession::Initialize(const FRunInitializationParams&
 			return Result;
 		}
 
-		if (ShouldStarterCardStartInBattleDeck(Card) || !URunSession::IsContainerCard(Card))
+		if (ShouldRunSessionStarterCardStartInBattleDeck(Card) || !URunSession::IsContainerCard(Card))
 		{
 			WorkingState.BattleDeck.Add(Instance);
 		}
@@ -599,7 +709,7 @@ FRunInitializationResult URunSession::Initialize(const FRunInitializationParams&
 		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("MissingEntryProgress"));
 		return Result;
 	}
-	EntryProgress->Lifecycle = IsSafeArrivalNode(EntryNode->NodeType)
+	EntryProgress->Lifecycle = IsRunSessionSafeArrivalNode(EntryNode->NodeType)
 		? ERunMapNodeLifecycle::Resolved
 		: ERunMapNodeLifecycle::Visited;
 	const bool bEntryResolved = EntryProgress->Lifecycle == ERunMapNodeLifecycle::Resolved;
@@ -684,6 +794,13 @@ FRunExplorationResolution URunSession::BeginCurrentNodeActivity(
 {
 	FRunExplorationResolution Result;
 	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("RunAlreadySucceeded"));
+		Result.VersionAfter = Result.VersionBefore;
+		Result.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
 	const int32 ReservedActionPoints =
 		Kind == ERunNodeActivityKind::Encounter || Kind == ERunNodeActivityKind::Treasure
 			? 1
@@ -715,6 +832,13 @@ FRunExplorationResolution URunSession::CancelNodeActivity(
 {
 	FRunExplorationResolution Result;
 	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("RunAlreadySucceeded"));
+		Result.VersionAfter = Result.VersionBefore;
+		Result.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
 	Result.Status = FRunNodeActivityModule::Cancel(
 		RunState,
 		ActiveNodeActivityTicket,
@@ -739,6 +863,13 @@ FRunExplorationResolution URunSession::CompleteCampActivity(
 {
 	FRunExplorationResolution Result;
 	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("RunAlreadySucceeded"));
+		Result.VersionAfter = Result.VersionBefore;
+		Result.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
 	FRunState WorkingState = RunState;
 	TOptional<FRunCampTicket> WorkingCamp = ActiveCampTicket;
 	Result.Status = FRunCampModule::Complete(
@@ -770,6 +901,13 @@ FRunExplorationResolution URunSession::SettleEncounterNodeActivity(
 {
 	FRunExplorationResolution Result;
 	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("RunAlreadySucceeded"));
+		Result.VersionAfter = Result.VersionBefore;
+		Result.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
 	if (Ticket.Kind != ERunNodeActivityKind::Encounter
 		|| !FRunNodeActivityModule::Matches(RunState, ActiveNodeActivityTicket, Ticket))
 	{
@@ -797,6 +935,7 @@ FRunExplorationResolution URunSession::SettleEncounterNodeActivity(
 	}
 
 	const bool bVictory = Packet.Outcome == EBattleOutcome::Victory && !Packet.bWithdrawn;
+	const bool bTerminalVictory = IsJourneyTerminalVictory(WorkingState, Ticket, Packet);
 	Result.Status = FRunNodeActivityModule::Complete(
 		WorkingState,
 		WorkingActivity,
@@ -810,6 +949,35 @@ FRunExplorationResolution URunSession::SettleEncounterNodeActivity(
 		Result.VersionAfter = Result.VersionBefore;
 		Result.PostSnapshot = BuildExplorationSnapshot();
 		return Result;
+	}
+
+	if (bTerminalVictory)
+	{
+		const FRunCompletionSummary Summary =
+			BuildJourneyCompletionSummary(WorkingState, Ticket.Node);
+		if (!Summary.IsValid())
+		{
+			Result.Status = FWacomStatus::Fail(
+				EWacomError::InvalidState,
+				TEXT("InvalidJourneyCompletionSummary"));
+			Result.Events.Reset();
+			Result.VersionAfter = Result.VersionBefore;
+			Result.PostSnapshot = BuildExplorationSnapshot();
+			return Result;
+		}
+
+		WorkingState.Outcome = ERunOutcome::Succeeded;
+		WorkingState.bHasCompletionSummary = true;
+		WorkingState.CompletionSummary = Summary;
+		FRunExplorationEvent& SuccessEvent = Result.Events.AddDefaulted_GetRef();
+		SuccessEvent.Type = ERunExplorationEventType::JourneySucceeded;
+		SuccessEvent.Node = Ticket.Node;
+		SuccessEvent.Detail = Summary.JourneyId;
+	}
+	else if (WorkingState.Outcome == ERunOutcome::InProgress
+		&& (WorkingState.Pressure.GetTotal() >= 100 || WorkingState.FingerCount <= 0))
+	{
+		WorkingState.Outcome = ERunOutcome::Failed;
 	}
 
 	RunState = MoveTemp(WorkingState);
@@ -861,6 +1029,10 @@ FRunExplorationResolution URunSession::ResolveExplorationCommand(
 
 bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	if (!RunState.Character)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BuildInitParamsForBattle: RunState.Character 为空"));
@@ -947,6 +1119,10 @@ bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleIni
 
 void URunSession::MarkTriggerDestroyed(FName PersistentId)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	if (PersistentId.IsNone())
 	{
 		UE_LOG(LogTemp, Warning,
@@ -965,6 +1141,10 @@ bool URunSession::IsTriggerDestroyed(FName PersistentId) const
 
 void URunSession::SetPlayerTransform(const FTransform& InTransform)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	RunState.PlayerTransform   = InTransform;
 	RunState.bHasPlayerTransform = true;
 }
@@ -978,6 +1158,10 @@ UWacomSaveGame* URunSession::BuildSaveGameFromRunState() const
 
 bool URunSession::ApplySaveGameToRunState(UWacomSaveGame* SaveGame)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	if (!FRunSaveGameSerializer::TryApplySaveGameToRunState(SaveGame, RunState))
 	{
 		return false;
@@ -1016,6 +1200,10 @@ bool URunSession::SaveToSlot(const FString& SlotName) const
 
 bool URunSession::LoadFromSlot(const FString& SlotName)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	if (!UGameplayStatics::DoesSaveGameExist(SlotName, /*UserIndex*/0))
 	{
 		UE_LOG(LogTemp, Display, TEXT("[RunSession] LoadFromSlot(%s): 存档不存在"), *SlotName);
@@ -1057,6 +1245,10 @@ bool URunSession::HasSaveInSlot(const FString& SlotName) const
 
 void URunSession::RemoveFinger(int32 Count)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	if (Count <= 0)
 	{
 		return;
@@ -1093,6 +1285,10 @@ int32 URunSession::GetTotalPressure() const
 
 void URunSession::AddPressure(EWacomPressureType Type, int32 Delta)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	if (Delta == 0)
 	{
 		return;
@@ -1103,12 +1299,20 @@ void URunSession::AddPressure(EWacomPressureType Type, int32 Delta)
 
 void URunSession::SetPressure(EWacomPressureType Type, int32 Value)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	RunState.Pressure.Set(Type, Value);
 	NotifyRunStateChanged();
 }
 
 void URunSession::RemovePressure(EWacomPressureType Type, int32 Amount)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	if (Amount <= 0)
 	{
 		return;
@@ -1119,6 +1323,10 @@ void URunSession::RemovePressure(EWacomPressureType Type, int32 Amount)
 
 void URunSession::ClearPressure(EWacomPressureType Type)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	RunState.Pressure.Set(Type, 0);
 	NotifyRunStateChanged();
 }
@@ -1150,6 +1358,10 @@ void URunSession::OnCompanionCardPermanentlyDestroyed()
 
 void URunSession::OnTheftCommitted()
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	// 劣迹增量：第 n 次完成时 +(n*(n+1)/2 + 1)%。
 	++RunState.TheftCount;
 	const int32 N = RunState.TheftCount;
@@ -1162,6 +1374,10 @@ void URunSession::OnTheftCommitted()
 
 void URunSession::RecomputeBurden()
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	// Public 入口：内部完成容量重算，末尾统一广播一次。
 	// 其他 public 入口会调用 RecomputeBurdenInternal，避免重复广播。
 	RecomputeBurdenInternal();
@@ -1178,7 +1394,11 @@ void URunSession::RecomputeBurdenInternal(bool bAllowBurdenRefill)
 
 bool URunSession::IsRunFailed() const
 {
-	if (!RunState.bRunActive)
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
+	if (RunState.Outcome == ERunOutcome::Failed)
 	{
 		return true;
 	}
@@ -1193,10 +1413,19 @@ bool URunSession::IsRunFailed() const
 	return false;
 }
 
+bool URunSession::IsRunActive() const
+{
+	return RunState.Outcome == ERunOutcome::InProgress && !IsRunFailed();
+}
+
 // ================ §3.3：经验值与技能 ================
 
 void URunSession::AddExperience(int32 Amount)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	if (Amount == 0)
 	{
 		return;
@@ -1263,6 +1492,10 @@ int32 URunSession::GetSpecialZoneCapacityFor(FGuid OwnerInstanceId) const
 
 bool URunSession::SetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnabled)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	// 仅切 SpecialZone 内卡牌的参战 flag，不移动卡牌。
 	// 未命中时不修改 RunState、不广播；重复设置同值仍视为成功并广播一次。
 	FName DisabledReason = NAME_None;
@@ -1281,11 +1514,21 @@ bool URunSession::SetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnable
 
 FRunDeckOperationValidation URunSession::ValidateSetSpecialZoneCardBattleEnabled(FGuid InstanceId, bool bEnabled) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckOperationValidation Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	return FRunDeckRules::ValidateSetSpecialZoneCardBattleEnabled(RunState, InstanceId, bEnabled);
 }
 
 bool URunSession::ToggleSpecialZoneCardBattleEnabled(FGuid InstanceId)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	FName DisabledReason = NAME_None;
 	if (!FRunDeckRules::ToggleSpecialZoneCardBattleEnabled(RunState, InstanceId, &DisabledReason))
 	{
@@ -1302,6 +1545,12 @@ bool URunSession::ToggleSpecialZoneCardBattleEnabled(FGuid InstanceId)
 
 FRunDeckOperationValidation URunSession::ValidateToggleSpecialZoneCardBattleEnabled(FGuid InstanceId) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckOperationValidation Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	return FRunDeckRules::ValidateToggleSpecialZoneCardBattleEnabled(RunState, InstanceId);
 }
 
@@ -1578,6 +1827,10 @@ int32 URunSession::CountFluxContentCards(const TArray<FCardInstance>& Pile) cons
 
 bool URunSession::IsBackpackUiAvailable() const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	auto HasCapacityProvider = [](const TArray<FCardInstance>& Pile)
 	{
 		for (const FCardInstance& Inst : Pile)
@@ -1605,6 +1858,10 @@ bool URunSession::IsBackpackUiAvailable() const
 
 bool URunSession::IsDeleteFunctionAvailable() const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	auto HasProvider = [](const TArray<FCardInstance>& Pile)
 	{
 		for (const FCardInstance& Inst : Pile)
@@ -1637,6 +1894,10 @@ bool URunSession::FindInstance(FGuid InstanceId, FCardInstance& OutInstance, EZo
 
 bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	// 设计要点：
 	//   1) 任何校验失败都原子拒绝：不修改 RunState、不广播 OnRunStateChangedNative。
 	//   2) "in-place 移动"语义：当 FromZone == ToZone（且 SpecialZone 同 owner）时仍走"先移除再追加"
@@ -1673,11 +1934,21 @@ bool URunSession::MoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneO
 
 FRunDeckOperationValidation URunSession::ValidateMoveInstance(FGuid InstanceId, EZoneKind ToZone, FGuid ToZoneOwnerInstanceId) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckOperationValidation Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	return FRunDeckRules::ValidateMoveInstance(RunState, InstanceId, ToZone, ToZoneOwnerInstanceId);
 }
 
 void URunSession::AcquireCardToRun(UCardDefinition* Card)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	if (AcquireCardToRunInternal(Card))
 	{
 		MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
@@ -1698,6 +1969,10 @@ bool URunSession::AcquireCardToRunInternal(UCardDefinition* Card)
 
 bool URunSession::DestroyCardByInstance(FGuid InstanceId)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	const bool bOk = DestroyCardByInstanceInternal(InstanceId);
 	if (bOk)
 	{
@@ -1723,6 +1998,10 @@ bool URunSession::DestroyCardByInstanceInternal(FGuid InstanceId)
 
 bool URunSession::DeleteCardForGoldByInstance(FGuid InstanceId)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	const FRunDeckOperationValidation Validation = ValidateDeleteCardForGoldByInstance(InstanceId);
 	if (!Validation.bCanExecute)
 	{
@@ -1775,11 +2054,23 @@ int32 URunSession::GetDeleteGoldRewardForInstance(FGuid InstanceId) const
 
 FRunDeckOperationValidation URunSession::ValidateDestroyCardByInstance(FGuid InstanceId) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckOperationValidation Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	return FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
 }
 
 FRunDeckOperationValidation URunSession::ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckOperationValidation Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	return FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
 }
 
@@ -1787,6 +2078,10 @@ FRunDeckOperationValidation URunSession::ValidateDeleteCardForGoldByInstance(FGu
 
 void URunSession::AddGold(int32 Amount)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return;
+	}
 	if (Amount <= 0)
 	{
 		return;
@@ -1798,6 +2093,10 @@ void URunSession::AddGold(int32 Amount)
 
 bool URunSession::RemoveGold(int32 Amount)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	if (Amount <= 0)
 	{
 		return true;
@@ -1824,78 +2123,98 @@ bool URunSession::IsPickupCollected(FName PersistentId) const
 	return RunState.CollectedPickupIds.Contains(PersistentId);
 }
 
-FRunTreasureSettlementResult URunSession::CollectGoldPickup(FName PersistentId, int32 GoldAmount)
+bool URunSession::HasCredential(const FName CredentialId) const
+{
+	return !CredentialId.IsNone() && RunState.GrantedCredentialIds.Contains(CredentialId);
+}
+
+FRunTreasureSettlementResult URunSession::CollectPickupFromDefinition(
+	const FName PersistentId,
+	const UWacomRunPickupDefinition* PickupDefinition)
 {
 	FRunTreasureSettlementResult Result;
-	if (PersistentId.IsNone() || GoldAmount <= 0)
+	if (!PickupDefinition)
 	{
-		Result.DisabledReason = PersistentId.IsNone()
-			? FName(TEXT("MissingPersistentId"))
-			: FName(TEXT("InvalidGoldReward"));
-		return Result;
-	}
-	if (RunState.CollectedPickupIds.Contains(PersistentId))
-	{
-		Result.DisabledReason = TEXT("AlreadyCollected");
+		Result.DisabledReason = TEXT("MissingPickupDefinition");
 		return Result;
 	}
 
-	FRunState WorkingState = RunState;
-	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
-	const bool bUsesFormalExploration =
-		WorkingState.ExplorationState.JourneyDefinition
-		&& WorkingState.ExplorationState.ExplorationStateVersion > 0;
-	if (bUsesFormalExploration)
+	const FName ConfigWarning = PickupDefinition->GetRewardConfigWarningReason();
+	if (!ConfigWarning.IsNone())
 	{
-		Result.ExplorationResolution.VersionBefore =
-			RunState.ExplorationState.ExplorationStateVersion;
-		Result.ExplorationResolution.Status = FRunNodeActivityModule::ResolveImmediate(
-			WorkingState,
-			WorkingActivity,
-			ERunNodeActivityKind::Treasure,
-			1,
-			true,
-			Result.ExplorationResolution.Events);
-		if (!Result.ExplorationResolution.IsOk())
-		{
-			Result.DisabledReason = Result.ExplorationResolution.Status.Detail;
-			Result.ExplorationResolution.Events.Reset();
-			Result.ExplorationResolution.VersionAfter = Result.ExplorationResolution.VersionBefore;
-			Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
-			return Result;
-		}
-		Result.ActionPointCost = 1;
-		Result.ExplorationResolution.VersionAfter =
-			WorkingState.ExplorationState.ExplorationStateVersion;
-		Result.ExplorationResolution.PostSnapshot = FRunMapModule::BuildSnapshot(WorkingState);
-	}
-	else
-	{
-		Result.ExplorationResolution.Status = FWacomStatus::Fail(
-			EWacomError::InvalidState,
-			TEXT("LegacyRunSessionHasNoExplorationResult"));
+		Result.DisabledReason = ConfigWarning;
+		return Result;
 	}
 
-	WorkingState.Gold += GoldAmount;
-	WorkingState.CollectedPickupIds.Add(PersistentId);
-	RunState = MoveTemp(WorkingState);
-	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::Economy));
-	NotifyRunStateChanged();
-	Result.bSucceeded = true;
-	return Result;
+	switch (PickupDefinition->RewardType)
+	{
+	case EWacomRunPickupRewardType::Gold:
+		return CollectPickupInternal(
+			PersistentId,
+			PickupDefinition->GoldAmount,
+			nullptr,
+			PickupDefinition->GrantedCredentialIds);
+	case EWacomRunPickupRewardType::Card:
+		return CollectPickupInternal(
+			PersistentId,
+			0,
+			PickupDefinition->CardDefinition,
+			PickupDefinition->GrantedCredentialIds);
+	case EWacomRunPickupRewardType::None:
+	default:
+		Result.DisabledReason = TEXT("MissingRewardType");
+		return Result;
+	}
+}
+
+FRunTreasureSettlementResult URunSession::CollectGoldPickup(
+	const FName PersistentId,
+	const int32 GoldAmount)
+{
+	static const TArray<FName> NoCredentials;
+	return CollectPickupInternal(PersistentId, GoldAmount, nullptr, NoCredentials);
 }
 
 FRunTreasureSettlementResult URunSession::CollectCardPickup(
-	FName PersistentId,
+	const FName PersistentId,
 	UCardDefinition* CardDefinition)
 {
+	static const TArray<FName> NoCredentials;
+	return CollectPickupInternal(PersistentId, 0, CardDefinition, NoCredentials);
+}
+
+FRunTreasureSettlementResult URunSession::CollectPickupInternal(
+	const FName PersistentId,
+	const int32 GoldAmount,
+	UCardDefinition* CardDefinition,
+	const TArray<FName>& GrantedCredentialIds)
+{
 	FRunTreasureSettlementResult Result;
-	if (PersistentId.IsNone() || !CardDefinition)
+	if (RunState.Outcome == ERunOutcome::Succeeded)
 	{
-		Result.DisabledReason = PersistentId.IsNone()
-			? FName(TEXT("MissingPersistentId"))
-			: FName(TEXT("MissingCardDefinition"));
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		Result.ExplorationResolution.VersionBefore =
+			RunState.ExplorationState.ExplorationStateVersion;
+		Result.ExplorationResolution.VersionAfter =
+			Result.ExplorationResolution.VersionBefore;
+		Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
+	const bool bHasGoldReward = GoldAmount > 0;
+	const bool bHasCardReward = CardDefinition != nullptr;
+	if (PersistentId.IsNone() || bHasGoldReward == bHasCardReward)
+	{
+		Result.DisabledReason = PersistentId.IsNone() ? FName(TEXT("MissingPersistentId"))
+			: (CardDefinition ? FName(TEXT("ConflictingPickupReward"))
+				: FName(TEXT("InvalidPickupReward")));
+		return Result;
+	}
+	if (!FRunCredentialModule::AreCredentialIdsValid(GrantedCredentialIds))
+	{
+		Result.DisabledReason = TEXT("InvalidCredentialIds");
 		return Result;
 	}
 	if (RunState.CollectedPickupIds.Contains(PersistentId))
@@ -1939,16 +2258,29 @@ FRunTreasureSettlementResult URunSession::CollectCardPickup(
 			EWacomError::InvalidState,
 			TEXT("LegacyRunSessionHasNoExplorationResult"));
 	}
-	if (!AcquireCardToWorkingState(WorkingState, CardDefinition))
+
+	if (bHasGoldReward)
+	{
+		WorkingState.Gold += GoldAmount;
+	}
+	else if (!AcquireCardToWorkingState(WorkingState, CardDefinition))
 	{
 		Result.DisabledReason = TEXT("CardRewardFailed");
 		return Result;
 	}
+	if (!FRunCredentialModule::GrantAll(WorkingState, GrantedCredentialIds))
+	{
+		Result.DisabledReason = TEXT("InvalidCredentialIds");
+		return Result;
+	}
 
 	WorkingState.CollectedPickupIds.Add(PersistentId);
 	RunState = MoveTemp(WorkingState);
 	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
-	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(ERunUiSnapshotDirtyFlags::BackpackStorage));
+	MarkRunUiSnapshotsDirty(MakeRunUiSnapshotDirtyFlags(
+		bHasGoldReward
+			? ERunUiSnapshotDirtyFlags::Economy
+			: ERunUiSnapshotDirtyFlags::BackpackStorage));
 	NotifyRunStateChanged();
 	Result.bSucceeded = true;
 	return Result;
@@ -1974,6 +2306,10 @@ FRunWorldCardInteractionValidation URunSession::ValidateRunWorldCardInteraction(
 		FinalizeRunWorldCardInteractionValidationDebug(Result, Request);
 		return Result;
 	};
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return RejectWith(TEXT("RunAlreadySucceeded"));
+	}
 
 	if (Request.PersistentId.IsNone())
 	{
@@ -2183,6 +2519,14 @@ FRunShopVisitResult URunSession::BeginShopVisitWithResult(
 	Result.ExplorationResolution.VersionAfter =
 		Result.ExplorationResolution.VersionBefore;
 	Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		return Result;
+	}
 	if (IsShopVisitActive())
 	{
 		Result.DisabledReason = TEXT("ShopVisitAlreadyActive");
@@ -2257,6 +2601,14 @@ FRunShopVisitResult URunSession::BeginShopVisitWithResult(
 FRunDeckBatchDeletePreview URunSession::ValidateDeleteCardsForGoldAtomic(
 	const FRunDeckBatchDeleteRequest& Request) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckBatchDeletePreview Result;
+		Result.Validation.DisabledReason = TEXT("RunAlreadySucceeded");
+		Result.Validation.RequestedCount = Request.InstanceIds.Num();
+		Result.Validation.ValidatedStorageRevision = BackpackStorageSnapshotRevision;
+		return Result;
+	}
 	return FRunDeckRules::ValidateDeleteCardsForGoldAtomic(
 		RunState,
 		BackpackStorageSnapshotRevision,
@@ -2268,6 +2620,11 @@ FRunDeckBatchOperationResult URunSession::DeleteCardsForGoldAtomic(
 {
 	FRunDeckBatchOperationResult Result;
 	Result.StorageRevision = BackpackStorageSnapshotRevision;
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	const FRunDeckBatchDeletePreview Preview = ValidateDeleteCardsForGoldAtomic(Request);
 	if (!Preview.Validation.bCanExecute)
 	{
@@ -2299,6 +2656,14 @@ FRunDeckBatchOperationResult URunSession::DeleteCardsForGoldAtomic(
 FRunDeckBatchOperationValidation URunSession::ValidateMoveInstancesAtomic(
 	const FRunDeckBatchMoveRequest& Request) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckBatchOperationValidation Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		Result.RequestedCount = Request.InstanceIds.Num();
+		Result.ValidatedStorageRevision = BackpackStorageSnapshotRevision;
+		return Result;
+	}
 	return FRunDeckRules::ValidateMoveInstancesAtomic(
 		RunState,
 		BackpackStorageSnapshotRevision,
@@ -2310,6 +2675,11 @@ FRunDeckBatchOperationResult URunSession::MoveInstancesAtomic(
 {
 	FRunDeckBatchOperationResult Result;
 	Result.StorageRevision = BackpackStorageSnapshotRevision;
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	const FRunDeckBatchOperationValidation Validation = ValidateMoveInstancesAtomic(Request);
 	if (!Validation.bCanExecute)
 	{
@@ -2373,6 +2743,14 @@ FRunShopVisitResult URunSession::EndShopVisitWithResult()
 	Result.ExplorationResolution.VersionAfter =
 		Result.ExplorationResolution.VersionBefore;
 	Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		return Result;
+	}
 	if (!IsShopVisitActive())
 	{
 		ActiveShopVisitToken.Invalidate();
@@ -2430,6 +2808,19 @@ FRunShopSnapshot URunSession::BuildCurrentShopSnapshot() const
 FRunShopPurchaseResult URunSession::PurchaseShopOffer(FGuid OfferId)
 {
 	FRunShopPurchaseResult Result;
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		Result.ExplorationResolution.VersionBefore =
+			RunState.ExplorationState.ExplorationStateVersion;
+		Result.ExplorationResolution.VersionAfter =
+			Result.ExplorationResolution.VersionBefore;
+		Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
 	FRunState WorkingState = RunState;
 	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
 	const bool bFirstPurchaseThisVisit = !WorkingState.bShopVisitHasPurchase;
@@ -2528,6 +2919,10 @@ FRunShopPurchaseResult URunSession::PurchaseShopOffer(FGuid OfferId)
 
 bool URunSession::PurchaseCardFromShop(UCardDefinition* Card, int32 Price)
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		return false;
+	}
 	const bool bPurchased = FRunShopTransaction::PurchaseCard(
 		RunState,
 		Card,
@@ -2566,6 +2961,11 @@ FRunExplorationResolution URunSession::BeginRunEventWithExplorationResult(
 	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
 	Result.VersionAfter = Result.VersionBefore;
 	Result.PostSnapshot = BuildExplorationSnapshot();
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("RunAlreadySucceeded"));
+		return Result;
+	}
 	if (IsRunEventActive())
 	{
 		Result.Status = FWacomStatus::Fail(
@@ -2662,6 +3062,11 @@ FRunExplorationResolution URunSession::EndRunEventWithExplorationResult()
 	Result.VersionBefore = RunState.ExplorationState.ExplorationStateVersion;
 	Result.VersionAfter = Result.VersionBefore;
 	Result.PostSnapshot = BuildExplorationSnapshot();
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("RunAlreadySucceeded"));
+		return Result;
+	}
 	if (RunState.ActiveRunEventId.IsNone() && !RunState.ActiveRunEventDefinition)
 	{
 		ActiveRunEventVisitToken.Invalidate();
@@ -2731,6 +3136,12 @@ FRunDeckOperationValidation URunSession::ValidateRunEventOptionCardPayment(
 	FName ChoiceId,
 	FGuid PaidCardInstanceId) const
 {
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunDeckOperationValidation Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		return Result;
+	}
 	return FRunEventExecutor::ValidateChoiceCardPayment(RunState, ChoiceId, PaidCardInstanceId);
 }
 
@@ -2746,6 +3157,20 @@ FRunEventChoiceResult URunSession::ResolveRunEventChoiceInternal(
 	const TOptional<FGuid> PaidCardInstanceId)
 {
 	FScopedRunStateNotificationBatch NotificationBatch(*this);
+	if (RunState.Outcome == ERunOutcome::Succeeded)
+	{
+		FRunEventChoiceResult Result;
+		Result.DisabledReason = TEXT("RunAlreadySucceeded");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		Result.ExplorationResolution.VersionBefore =
+			RunState.ExplorationState.ExplorationStateVersion;
+		Result.ExplorationResolution.VersionAfter =
+			Result.ExplorationResolution.VersionBefore;
+		Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
 	FRunState WorkingState = RunState;
 	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
 	FRunEventChoiceResult Result = PaidCardInstanceId.IsSet()

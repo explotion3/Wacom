@@ -176,6 +176,10 @@ struct WACOMDATA_API FWacomMapFloorEntrancePayload
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Map|Content",
 		meta = (ToolTip = "进入后续 Floor 必须全部满足的持有卡牌条件。只检查真实持有区且不消耗卡牌。"))
 	TArray<FWacomOwnedCardRequirement> OwnedCardRequirements;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Map|Content",
+		meta = (ToolTip = "进入后续 Floor 必须全部拥有的稳定 Run Credential ID。条件不消耗凭证，并与持有卡牌条件采用 AND；非空项必须唯一且不能为 None。"))
+	TArray<FName> RequiredCredentialIds;
 };
 
 /** 固定 tagged payload；只有与 NodeType 匹配的字段允许非空。 */

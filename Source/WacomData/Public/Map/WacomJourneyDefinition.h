@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Curves/CurveFloat.h"
 #include "Engine/DataAsset.h"
+#include "Map/WacomMapTypes.h"
 #include "WacomJourneyDefinition.generated.h"
 
 class UCharacterDefinition;
@@ -49,6 +50,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Journey",
 		meta = (ToolTip = "Journey 的稳定 ID。必须非空且在项目中唯一。"))
 	FName JourneyId = NAME_None;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Journey",
+		meta = (ToolTip = "Journey 的玩家可读标题。成功总结页优先显示此值；留空时回退 JourneyId。"))
+	FText DisplayName;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Journey|Completion",
+		meta = (ToolTip = "唯一成功终局的 Floor-qualified Node handle。正式 Journey 必须指向最后一层可达、无出边的 Boss Encounter；旧 Debug/Authoring Journey 可暂时留空。"))
+	FWacomMapNodeHandle SuccessTerminalNode;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Journey",
 		meta = (ToolTip = "允许进入该 Journey 的角色定义。Validator 使用它检查强制 Floor Entrance 条件是否有保证满足方式。"))

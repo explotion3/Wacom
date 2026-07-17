@@ -17,6 +17,7 @@
 
 class UCharacterDefinition;
 class UCardDefinition;
+class UWacomRunPickupDefinition;
 class UWacomRunEventDefinition;
 class UWacomSaveGame;
 struct FBattleInitParams;
@@ -108,9 +109,9 @@ public:
 	uint64 GetShopSnapshotRevision() const { return ShopSnapshotRevision; }
 	uint64 GetEconomySnapshotRevision() const { return EconomySnapshotRevision; }
 
-	/** 是否仍在 Run 中（bRunActive == true）。 */
+	/** 是否仍可继续 Run；Succeeded/Failed 和既有失败门槛均返回 false。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
-	bool IsRunActive() const { return RunState.bRunActive; }
+	bool IsRunActive() const;
 
 	// ---- 手指 ----
 
@@ -125,7 +126,7 @@ public:
 	 *
 	 * 副作用：
 	 *   - 残疾压力同步增加：每缺 1 指 +5%
-	 *   - FingerCount 降到 0 时不主动改 bRunActive；调用 IsRunFailed() 综合判定
+	 *   - FingerCount 降到 0 时由 IsRunFailed() 兼容查询派生 Failed
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|HP")
 	void RemoveFinger(int32 Count = 1);
@@ -142,7 +143,7 @@ public:
 	 * 增量调整某种压力。
 	 *   - Delta 可以为负（用于减少压力）
 	 *   - Clamp 到 [0, 100]
-	 *   - 不主动改 bRunActive；调用 IsRunFailed() 综合判定
+	 *   - 达到失败线时由 IsRunFailed() 兼容查询派生 Failed
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pressure")
 	void AddPressure(EWacomPressureType Type, int32 Delta);
@@ -218,7 +219,7 @@ public:
 	 * Run 是否失败。
 	 *
 	 * 任一为 true 即败：
-	 *   - 战内 Defeat（bRunActive == false）
+	 *   - 战内 Defeat（Outcome == Failed）
 	 *   - 战外压力 8 条加和 ≥ 100%
 	 *   - 战外手指 = 0
 	 */
@@ -561,6 +562,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Pickup")
 	bool IsPickupCollected(FName PersistentId) const;
 
+	/** C++ 只读查询：CredentialId 非空且已由 Run 规则授予时返回 true。 */
+	bool HasCredential(FName CredentialId) const;
+
+	/**
+	 * 数据驱动世界拾取物的正式原子结算入口。
+	 *
+	 * 主奖励、Definition 声明的全部 Credential、PersistentId、Treasure 节点与 AP
+	 * 在同一 working-state 中提交；失败时零修改、零广播。
+	 */
+	FRunTreasureSettlementResult CollectPickupFromDefinition(
+		FName PersistentId,
+		const UWacomRunPickupDefinition* PickupDefinition);
+
 	/**
 	 * 拾取金币型世界拾取物。
 	 *
@@ -859,6 +873,13 @@ private:
 
 	/** 私有路径：DestroyCardByInstance 的"不广播"版本。 */
 	bool DestroyCardByInstanceInternal(FGuid InstanceId);
+
+	/** Gold/Card/Definition Pickup 共用的 working-state 原子结算路径。 */
+	FRunTreasureSettlementResult CollectPickupInternal(
+		FName PersistentId,
+		int32 GoldAmount,
+		UCardDefinition* CardDefinition,
+		const TArray<FName>& GrantedCredentialIds);
 
 	/**
 	 * 幂等保证：B 主卡 instance 进入 Backpack/BattleDeck 时 `RunState.SpecialZones`

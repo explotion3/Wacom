@@ -48,6 +48,11 @@ public:
 		meta = (ToolTip = "卡牌奖励定义。仅 RewardType=Card 使用；V1 固定获得一张该卡牌。"))
 	TObjectPtr<UCardDefinition> CardDefinition = nullptr;
 
+	/** 与主奖励在同一 Run 事务中幂等授予的稳定任务凭证。空数组表示不授予凭证。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Run|Pickup|Credential",
+		meta = (ToolTip = "与主奖励在同一 Run 事务中授予的稳定任务凭证 ID。允许为空；非空项必须唯一且不能为 None。凭证独立于实体卡，实体卡被销毁、出售、支付或消耗时不会撤销凭证。"))
+	TArray<FName> GrantedCredentialIds;
+
 	/** 返回当前奖励配置的阻断原因；None 表示配置有效。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Pickup|Validation",
 		meta = (ToolTip = "返回当前奖励配置的阻断原因；None 表示配置有效。"))

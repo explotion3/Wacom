@@ -21,7 +21,7 @@ namespace
 		return Fixture.CreateInitializedSession(nullptr, Fixture.MakeJourney({ Floor }));
 	}
 
-	int32 CountOwnedCard(const FRunState& State, const UCardDefinition* Definition)
+	int32 CountEncounterOwnedCard(const FRunState& State, const UCardDefinition* Definition)
 	{
 		int32 Count = 0;
 		auto CountPile = [&Count, Definition](const TArray<FCardInstance>& Pile)
@@ -85,7 +85,7 @@ bool FWacomRunEncounterVictoryAtomicSettlementTest::RunTest(const FString& Param
 	TestEqual(TEXT("Wound threshold is settled"),
 		Run->GetPressureValue(EWacomPressureType::Wound), 1);
 	TestEqual(TEXT("Experience is settled"), Run->GetExperienceCurrent(), 3);
-	TestEqual(TEXT("Reward card is settled"), CountOwnedCard(Run->GetRunState(), Reward), 1);
+	TestEqual(TEXT("Reward card is settled"), CountEncounterOwnedCard(Run->GetRunState(), Reward), 1);
 
 	const FRunExplorationSnapshot BeforeDuplicate = Run->BuildExplorationSnapshot();
 	const FRunExplorationResolution Duplicate = Run->SettleEncounterNodeActivity(
@@ -95,7 +95,7 @@ bool FWacomRunEncounterVictoryAtomicSettlementTest::RunTest(const FString& Param
 	TestEqual(TEXT("Duplicate preserves version"),
 		Run->BuildExplorationSnapshot().StateVersion, BeforeDuplicate.StateVersion);
 	TestEqual(TEXT("Duplicate does not grant another card"),
-		CountOwnedCard(Run->GetRunState(), Reward), 1);
+		CountEncounterOwnedCard(Run->GetRunState(), Reward), 1);
 	return true;
 }
 
