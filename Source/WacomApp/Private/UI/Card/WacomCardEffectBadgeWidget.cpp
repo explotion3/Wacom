@@ -45,6 +45,38 @@ namespace
 	const FName BadgePreviewPulseParameterName(TEXT("BadgePreviewPulse"));
 }
 
+#if WITH_AUTOMATION_TESTS
+FWacomCardEffectBadgeAutomationTestView
+UWacomCardEffectBadgeWidget::GetAutomationTestViewForTest() const
+{
+	FWacomCardEffectBadgeAutomationTestView View;
+	View.ApplyCount = ApplyCountForTest;
+	View.DigitImageUpdateCount = DigitImageUpdateCountForTest;
+	View.bFeedbackMaterialActive = bFeedbackMaterialActive;
+	View.bFeedbackMaterialConfigured =
+		FeedbackConfig.Style.DigitFeedbackMaterialInstance != nullptr;
+	View.bPreviewSkipped = CurrentData.bPreviewSkipped;
+	View.PreviewAmount = PreviewAmount;
+	View.ResolvedDigitSpriteCount = ResolvedDigitSprites.Num();
+	View.ActiveDigitMaterialInstanceCount = ActiveDigitMaterialInstances.Num();
+	View.LastFeedbackMaterialFailure = LastFeedbackMaterialFailureForTest;
+	View.DigitMaterialPoolSize = ActiveDigitMaterialInstances.Num();
+	View.DigitMaterialCreateCount = DigitMaterialCreateCountForTest;
+	View.RootScale = GetRenderTransform().Scale;
+	View.RootOpacity = GetRenderOpacity();
+	View.bHasFrameShadowImage = BadgeFrameShadowImage != nullptr;
+	View.bFrameShadowVisible = BadgeFrameShadowImage
+		&& BadgeFrameShadowImage->GetVisibility() != ESlateVisibility::Collapsed;
+	View.FrameShadowOffsetPixels = BadgeFrameShadowImage
+		? BadgeFrameShadowImage->GetRenderTransform().Translation
+		: FVector2D::ZeroVector;
+	View.FrameShadowColor = BadgeFrameShadowImage
+		? BadgeFrameShadowImage->GetColorAndOpacity()
+		: FLinearColor::Transparent;
+	return View;
+}
+#endif
+
 TSharedRef<SWidget> UWacomCardEffectBadgeWidget::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
@@ -80,6 +112,7 @@ TSharedRef<SWidget> UWacomCardEffectBadgeWidget::RebuildWidget()
 void UWacomCardEffectBadgeWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	EnsureBadgeFrameShadowImage();
 	bHasAppliedData = false;
 	ApplyCurrentDataToWidgets();
 }
@@ -87,6 +120,7 @@ void UWacomCardEffectBadgeWidget::NativeConstruct()
 void UWacomCardEffectBadgeWidget::NativeDestruct()
 {
 	ResetEffectBadgeFeedback();
+	ResetAttachmentCastShadowView();
 	ReleaseDigitMaterialPool();
 	Super::NativeDestruct();
 }
@@ -213,6 +247,24 @@ bool UWacomCardEffectBadgeWidget::IsEffectBadgeFeedbackMaterialReady() const
 		}
 	}
 	return true;
+}
+
+void UWacomCardEffectBadgeWidget::SetAttachmentCastShadowView(
+	const FWacomCardSurfacePerspectiveView& InView)
+{
+	AttachmentCastShadowView = InView;
+	RefreshBadgeFrameShadow();
+}
+
+void UWacomCardEffectBadgeWidget::ResetAttachmentCastShadowView()
+{
+	AttachmentCastShadowView = FWacomCardSurfacePerspectiveView();
+	if (BadgeFrameShadowImage)
+	{
+		BadgeFrameShadowImage->SetRenderTransform(FWidgetTransform());
+		BadgeFrameShadowImage->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+		BadgeFrameShadowImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomCardEffectBadgeWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -480,10 +532,81 @@ void UWacomCardEffectBadgeWidget::UpdateFrameImage()
 	{
 		SetSpriteBrush(*BadgeFrameImage, *Sprite, BadgeFrameDrawSize);
 		BadgeFrameImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		RefreshBadgeFrameShadow();
 		return;
 	}
 
 	BadgeFrameImage->SetVisibility(ESlateVisibility::Collapsed);
+	RefreshBadgeFrameShadow();
+}
+
+void UWacomCardEffectBadgeWidget::EnsureBadgeFrameShadowImage()
+{
+	if (BadgeFrameShadowImage || !WidgetTree || !BadgeFrameImage)
+	{
+		return;
+	}
+	UOverlay* ParentOverlay = Cast<UOverlay>(BadgeFrameImage->GetParent());
+	if (!ParentOverlay)
+	{
+		return;
+	}
+	const int32 SourceIndex = ParentOverlay->GetChildIndex(BadgeFrameImage);
+	if (SourceIndex == INDEX_NONE)
+	{
+		return;
+	}
+
+	BadgeFrameShadowImage = WidgetTree->ConstructWidget<UImage>(
+		UImage::StaticClass(),
+		TEXT("BadgeFrameShadowImage_Runtime"));
+	if (!BadgeFrameShadowImage)
+	{
+		return;
+	}
+	BadgeFrameShadowImage->SetVisibility(ESlateVisibility::Collapsed);
+	UOverlaySlot* ShadowSlot = Cast<UOverlaySlot>(
+		ParentOverlay->InsertChildAt(SourceIndex, BadgeFrameShadowImage));
+	const UOverlaySlot* SourceSlot = Cast<UOverlaySlot>(BadgeFrameImage->Slot);
+	if (ShadowSlot && SourceSlot)
+	{
+		ShadowSlot->SetPadding(SourceSlot->GetPadding());
+		ShadowSlot->SetHorizontalAlignment(SourceSlot->GetHorizontalAlignment());
+		ShadowSlot->SetVerticalAlignment(SourceSlot->GetVerticalAlignment());
+	}
+}
+
+void UWacomCardEffectBadgeWidget::RefreshBadgeFrameShadow()
+{
+	EnsureBadgeFrameShadowImage();
+	if (!BadgeFrameShadowImage || !BadgeFrameImage
+		|| !AttachmentCastShadowView.bAttachmentCastShadowEnabled
+		|| AttachmentCastShadowView.AttachmentCastShadowOpacity <= KINDA_SMALL_NUMBER
+		|| !BadgeFrameImage->IsVisible()
+		|| (BadgeFrameImage->GetBrush().GetResourceObject() == nullptr
+			&& BadgeFrameImage->GetBrush().GetDrawType()
+				== ESlateBrushDrawType::NoDrawType))
+	{
+		if (BadgeFrameShadowImage)
+		{
+			BadgeFrameShadowImage->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		return;
+	}
+
+	BadgeFrameShadowImage->SetBrush(BadgeFrameImage->GetBrush());
+	FLinearColor ShadowColor = AttachmentCastShadowView.AttachmentCastShadowColor;
+	ShadowColor.A = FMath::Clamp(
+		AttachmentCastShadowView.AttachmentCastShadowOpacity,
+		0.0f,
+		1.0f);
+	BadgeFrameShadowImage->SetColorAndOpacity(ShadowColor);
+	BadgeFrameShadowImage->SetRenderTransformPivot(BadgeFrameImage->GetRenderTransformPivot());
+	FWidgetTransform ShadowTransform = BadgeFrameImage->GetRenderTransform();
+	ShadowTransform.Translation +=
+		AttachmentCastShadowView.AttachmentCastShadowOffsetPixels;
+	BadgeFrameShadowImage->SetRenderTransform(ShadowTransform);
+	BadgeFrameShadowImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 void UWacomCardEffectBadgeWidget::UpdateDigitImages()

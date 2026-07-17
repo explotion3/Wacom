@@ -300,9 +300,25 @@ namespace
 			Anchor.CardContactShadowOpacityMultiplier;
 		Config.CardDepth.bEnableSurfaceParallax = Anchor.bEnableCardSurfaceParallax;
 		Config.CardDepth.SurfaceParallaxStrength = Anchor.CardSurfaceParallaxStrength;
+		Config.CardDepth.DragSurfaceParallaxStrengthMultiplier =
+			Anchor.CardDragSurfaceParallaxStrengthMultiplier;
+		Config.CardDepth.SurfaceParallaxResponseSpeed = Anchor.CardSurfaceParallaxResponseSpeed;
+		Config.CardDepth.SurfaceParallaxReturnSpeed = Anchor.CardSurfaceParallaxReturnSpeed;
 		Config.CardDepth.AttachmentParallaxDepthPixels = Anchor.AttachmentParallaxDepthPixels;
 		Config.CardDepth.AttachmentParallaxMaxOffsetPixels =
 			Anchor.AttachmentParallaxMaxOffsetPixels;
+		Config.CardDepth.bEnableAttachmentCastShadow =
+			Anchor.bEnableCardAttachmentCastShadow;
+		Config.CardDepth.AttachmentCastShadowColor =
+			Anchor.CardAttachmentCastShadowColor;
+		Config.CardDepth.AttachmentCastShadowOpacity =
+			Anchor.CardAttachmentCastShadowOpacity;
+		Config.CardDepth.AttachmentCastShadowStaticOffsetPixels =
+			Anchor.CardAttachmentCastShadowStaticOffsetPixels;
+		Config.CardDepth.AttachmentCastShadowCounterMotionRatio =
+			Anchor.CardAttachmentCastShadowCounterMotionRatio;
+		Config.CardDepth.AttachmentCastShadowMaxOffsetPixels =
+			Anchor.CardAttachmentCastShadowMaxOffsetPixels;
 		Config.CardDepth.bReduceSurfaceParallaxMotion =
 			Anchor.bReduceCardSurfaceParallaxMotion;
 		Config.CardUseEffect.bEnabled = Anchor.bEnableCardUseEffect;
@@ -843,8 +859,21 @@ namespace
 		AddFloat(Config.CardDepth.ContactShadowOpacityMultiplier);
 		AddBool(Config.CardDepth.bEnableSurfaceParallax);
 		AddFloat(Config.CardDepth.SurfaceParallaxStrength);
+		AddFloat(Config.CardDepth.DragSurfaceParallaxStrengthMultiplier);
+		AddFloat(Config.CardDepth.SurfaceParallaxResponseSpeed);
+		AddFloat(Config.CardDepth.SurfaceParallaxReturnSpeed);
 		AddFloat(Config.CardDepth.AttachmentParallaxDepthPixels);
 		AddFloat(Config.CardDepth.AttachmentParallaxMaxOffsetPixels);
+		AddBool(Config.CardDepth.bEnableAttachmentCastShadow);
+		AddFloat(Config.CardDepth.AttachmentCastShadowColor.R);
+		AddFloat(Config.CardDepth.AttachmentCastShadowColor.G);
+		AddFloat(Config.CardDepth.AttachmentCastShadowColor.B);
+		AddFloat(Config.CardDepth.AttachmentCastShadowColor.A);
+		AddFloat(Config.CardDepth.AttachmentCastShadowOpacity);
+		AddFloat(Config.CardDepth.AttachmentCastShadowStaticOffsetPixels.X);
+		AddFloat(Config.CardDepth.AttachmentCastShadowStaticOffsetPixels.Y);
+		AddFloat(Config.CardDepth.AttachmentCastShadowCounterMotionRatio);
+		AddFloat(Config.CardDepth.AttachmentCastShadowMaxOffsetPixels);
 		AddBool(Config.CardDepth.bReduceSurfaceParallaxMotion);
 		AddBool(Config.CardUseEffect.bEnabled);
 		AddBool(Config.CardUseEffect.bReducedMotion);

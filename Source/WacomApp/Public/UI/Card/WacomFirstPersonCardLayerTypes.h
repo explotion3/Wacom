@@ -1952,10 +1952,37 @@ struct WACOMAPP_API FWacomFirstPersonCardDepthConfig
 	float SurfaceParallaxStrength = 1.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float DragSurfaceParallaxStrengthMultiplier = 0.75f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float SurfaceParallaxResponseSpeed = 20.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float SurfaceParallaxReturnSpeed = 12.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
 	float AttachmentParallaxDepthPixels = 5.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
 	float AttachmentParallaxMaxOffsetPixels = 7.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	bool bEnableAttachmentCastShadow = true;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	FLinearColor AttachmentCastShadowColor = FLinearColor(0.006f, 0.009f, 0.018f, 1.0f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float AttachmentCastShadowOpacity = 0.17f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	FVector2D AttachmentCastShadowStaticOffsetPixels = FVector2D(2.0f, 2.5f);
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float AttachmentCastShadowCounterMotionRatio = 0.80f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
+	float AttachmentCastShadowMaxOffsetPixels = 6.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Depth")
 	bool bReduceSurfaceParallaxMotion = false;

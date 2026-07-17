@@ -300,6 +300,12 @@ tags:
   - 入口：[TechDebt: WacomApp Public UI API surface](./TechDebt.md#techdebt-wacomapp-public-ui-api-surface)
   - 说明：后续优先处理 prototype / test-only surface。真正删除、迁到测试模块、迁到开发插件、移除控制台入口或重命名旧反射字段，都另起资产影响明确的切片；Blueprint-visible 制作面默认保守保留。
 
+- [ ] **重点卡牌插画五级深度图制作**
+  - 状态：`Ready: 可按卡逐张制作`
+  - 归属：Card Art / UI Presentation
+  - 入口：[WacomData.md](./WacomData.md) / [DreamShader_Production_Guide.md](./DreamShader_Production_Guide.md)
+  - 说明：核心卡面已经支持可选 `CardIllustrationDepthMap`；普通卡继续使用统一凹入层。后续为高稀有度或重点卡牌使用原始透明插画生成 Image2 深度初稿，保持同构图并量化为五级灰度，人工确认后再写入 CardDefinition，不批量伪造所有卡牌深度。
+
 ## 维护规则
 
 > [!tip] 新任务放哪

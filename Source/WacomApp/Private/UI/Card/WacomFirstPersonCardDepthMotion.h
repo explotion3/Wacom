@@ -42,6 +42,8 @@ public:
 private:
 	FWacomFirstPersonCardDepthView CurrentView;
 	FWacomFirstPersonCardDepthView TargetView;
+	FVector2D FilteredSurfaceTiltDegrees = FVector2D::ZeroVector;
+	float FilteredSurfaceStrength = 0.0f;
 	FVector2D FilteredPointerVelocity = FVector2D::ZeroVector;
 	FVector2D LastPointerPosition = FVector2D::ZeroVector;
 	bool bHasLastPointerPosition = false;
@@ -55,7 +57,10 @@ private:
 		bool bProjected);
 	static void PopulateSurfacePerspective(
 		const FWacomFirstPersonCardDepthConfig& Config,
-		FWacomFirstPersonCardDepthView& View);
+		FWacomFirstPersonCardDepthView& View,
+		const FVector2D& SurfaceTiltDegrees,
+		float SurfaceStrength,
+		bool bProjected);
 	static void PopulateContactShadowOffset(
 		const FWacomFirstPersonCardDepthConfig& Config,
 		FWacomFirstPersonCardDepthView& View);

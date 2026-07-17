@@ -47,6 +47,10 @@ struct FWacomCardViewAutomationTestView
 	bool bHasCardSurfaceMaterial = false;
 	FVector2D AppliedAttachmentOffsetPixels = FVector2D::ZeroVector;
 	FWacomCardSurfacePerspectiveView SurfacePerspectiveView;
+	bool bHasDurabilityShadowImage = false;
+	bool bDurabilityShadowVisible = false;
+	FVector2D DurabilityShadowOffsetPixels = FVector2D::ZeroVector;
+	FLinearColor DurabilityShadowColor = FLinearColor::Transparent;
 	UTexture2D* ResolvedSurfaceArt = nullptr;
 	bool bCostDigitRewritePrepared = false;
 	bool bCostDigitRewriteMaterialActive = false;
@@ -216,6 +220,9 @@ protected:
 	TObjectPtr<UWidget> DurabilityHost;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> DurabilityBackIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> AttachmentParallaxHost;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -276,6 +283,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> CostDigitRewriteMaterialInstance;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UImage> DurabilityShadowImage;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> CostDigitRewriteMaterialSource;
@@ -342,6 +352,10 @@ private:
 	void CacheAttachmentAuthoredTransforms();
 	void RestoreAttachmentAuthoredTransforms();
 	void ApplyAttachmentParallaxOffset(const FVector2D& OffsetPixels);
+	void EnsureDurabilityShadowImage();
+	void ApplyAttachmentCastShadowView();
+	void RefreshDurabilityShadow();
+	void ResetAttachmentCastShadowView();
 	bool ApplyRarityToCardSurfaceMaterial();
 	void EnsureSpriteIconCachesBuilt();
 	void RebuildSpriteIconCaches();

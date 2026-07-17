@@ -515,17 +515,44 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "实时 Alpha 接触阴影的不透明度倍率；1 使用材质原始强度，推荐 0.8 到 2.0，默认 1.5。数值越高阴影越清晰，但过高会形成生硬黑边；不影响卡牌布局、命中或倾斜幅度。"))
 	float CardContactShadowOpacityMultiplier = 1.5f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "是否让卡面插画、实体边框和稀有度饰条根据 Hover / Drag 倾角产生分层 UV 视差。仅影响表现，不改变卡牌命中区域。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "是否让卡面凹入插画和实体出血装饰根据 Hover / Drag 倾角产生视差。RarityBorder 与 Frame 保持共面，只保留独立反光；本开关仅影响表现，不改变卡牌命中区域。"))
 	bool bEnableCardSurfaceParallax = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "卡面分层 UV 视差的整体强度倍率；1 使用材质实例中的 authored 深度，推荐 0.65 到 1.35。0 会关闭材质层间位移，但不关闭外层 Fake-3D。"))
 	float CardSurfaceParallaxStrength = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "正式 Drag 时卡面内部 UV 与出血装饰视差相对 Hover 的强度倍率；默认 0.75，推荐 0.65 到 0.85。只降低快速拖拽时的内部晃动，不改变外层 Fake-3D、命中或接触阴影。"))
+	float CardDragSurfaceParallaxStrengthMultiplier = 0.75f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "卡面内部视差追随已经平滑过的 Fake-3D 倾角的响应速度，单位为每秒；默认 20，推荐 16 到 24。它只影响插画和出血装饰的轻微惯性，不改变卡牌整体倾斜。"))
+	float CardSurfaceParallaxResponseSpeed = 20.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "卡面内部视差在 Hover / Drag 结束后回到静止状态的速度，单位为每秒；默认 12，推荐 10 到 16。数值越低，内部层次回正越从容。"))
+	float CardSurfaceParallaxReturnSpeed = 12.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "实体出血装饰在最大参考倾角时的目标位移，单位为 UMG 布局像素；推荐 3 到 7。不会改变布局或命中区域。"))
 	float AttachmentParallaxDepthPixels = 5.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "实体出血装饰视差位移的安全上限，单位为 UMG 布局像素；推荐 5 到 10，用于避免装饰滑出 Retainer bleed。"))
 	float AttachmentParallaxMaxOffsetPixels = 7.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth|Attachment Shadow", meta = (ToolTip = "是否让 EffectBadge 实体框体与耐久底板在卡面上生成硬像素接触影。只影响实体底板，不包含数字、文字或发光，也不替代整张卡投向场景的实时 Alpha 阴影。"))
+	bool bEnableCardAttachmentCastShadow = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth|Attachment Shadow", meta = (ToolTip = "出血装饰局部接触影颜色；默认使用更深的中性蓝黑以提升浅色卡面上的轮廓分离。Alpha 不参与此颜色，透明度由 CardAttachmentCastShadowOpacity 单独控制。"))
+	FLinearColor CardAttachmentCastShadowColor = FLinearColor(0.006f, 0.009f, 0.018f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth|Attachment Shadow", meta = (ToolTip = "出血装饰局部接触影透明度；默认 0.17。推荐 0.12 到 0.17，超过现有外部阴影 Alpha 阈值 0.18 后可能让局部阴影再次参与整卡场景投影。"))
+	float CardAttachmentCastShadowOpacity = 0.17f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth|Attachment Shadow", meta = (ToolTip = "出血装饰静止时局部接触影的 X/Y 偏移，单位为 UMG 逻辑像素；默认 (2.0, 2.5)，推荐每轴 1.0 到 3.5。优先增加该偏移来提升可见度；只使用 RenderTransform，不影响布局或命中。"))
+	FVector2D CardAttachmentCastShadowStaticOffsetPixels = FVector2D(2.0f, 2.5f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth|Attachment Shadow", meta = (ToolTip = "局部阴影抵消出血装饰视差位移的比例；默认 0.80，使阴影绝对位置只跟随装饰约 20%，从而在 Hover/Drag 时形成更明显的高度分离。推荐 0.55 到 0.90。"))
+	float CardAttachmentCastShadowCounterMotionRatio = 0.80f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth|Attachment Shadow", meta = (ToolTip = "局部阴影相对装饰的最大偏移，单位为 UMG 逻辑像素；默认 6，推荐 4 到 8。该值只限制局部阴影运动，仍需保证 Retainer bleed 足够容纳阴影。"))
+	float CardAttachmentCastShadowMaxOffsetPixels = 6.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|11 Card Depth", meta = (ToolTip = "是否弱化卡面分层视差运动。开启后内层材质和实体出血装饰保持零位移，但外层 Fake-3D 与接触阴影仍按各自开关工作。"))
 	bool bReduceCardSurfaceParallaxMotion = false;

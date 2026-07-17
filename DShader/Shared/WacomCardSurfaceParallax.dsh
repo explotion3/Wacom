@@ -7,6 +7,7 @@ Function SelfContained WacomCardSurface_ComputeLayerUV(
     in float depthPixels,
     in float overscan,
     in float pixelQuantization,
+    in float maxParallaxPixels,
     out float3 layerUVAndMask)
 {
     float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
@@ -18,15 +19,29 @@ Function SelfContained WacomCardSurface_ComputeLayerUV(
     float2 safeInvSize = max(sourceInvSize, float2(0.000001, 0.000001));
     float safeOverscan = max(overscan, 0.0);
     float2 centeredUV = (uv - float2(0.5, 0.5)) / (1.0 + safeOverscan);
+    float2 parallaxOffsetPixels = parallaxDirection
+        * depthPixels
+        * max(parallaxStrength, 0.0);
+    float offsetLengthPixels = length(parallaxOffsetPixels);
+    float safeMaxParallaxPixels = max(maxParallaxPixels, 0.0);
+    float offsetScale = min(
+        1.0,
+        safeMaxParallaxPixels / max(offsetLengthPixels, 0.000001));
+    parallaxOffsetPixels *= offsetScale;
     float2 displacedUV = centeredUV + float2(0.5, 0.5)
-        - parallaxDirection * depthPixels * max(parallaxStrength, 0.0) * safeInvSize;
+        - parallaxOffsetPixels * safeInvSize;
     float2 quantizedUV = (floor(displacedUV / safeInvSize) + float2(0.5, 0.5)) * safeInvSize;
     float2 sampledUV = lerp(displacedUV, quantizedUV, saturate(pixelQuantization));
     float insideMask = step(0.0, sampledUV.x)
         * step(sampledUV.x, 1.0)
         * step(0.0, sampledUV.y)
         * step(sampledUV.y, 1.0);
-    layerUVAndMask = float3(sampledUV.x, sampledUV.y, insideMask);
+    float2 halfTexel = safeInvSize * 0.5;
+    float2 safeSampledUV = clamp(
+        sampledUV,
+        halfTexel,
+        float2(1.0, 1.0) - halfTexel);
+    layerUVAndMask = float3(safeSampledUV.x, safeSampledUV.y, insideMask);
 }
 
 Function SelfContained WacomCardSurface_MapAtlasUV(
@@ -61,6 +76,114 @@ Function SelfContained WacomCardSurface_ApplyCenteredBackplate(
     float backplateMask = step(distanceFromCenter.x, halfExtent.x)
         * step(distanceFromCenter.y, halfExtent.y);
     backplate = float4(backColor.rgb, backColor.a * backplateMask);
+}
+
+Function SelfContained WacomCardSurface_ComputeArtCastShadowUV(
+    in float2 artUV,
+    in float2 sourceInvSize,
+    in float2 tiltDegrees,
+    in float referenceTiltDegrees,
+    in float parallaxStrength,
+    in float2 staticVisualOffsetPixels,
+    in float tiltVisualOffsetPixels,
+    in float maxOffsetPixels,
+    out float2 shadowUV)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        tiltDegrees / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+    float2 surfaceDirection = float2(normalizedTilt.y, -normalizedTilt.x);
+    float2 visualOffsetPixels = staticVisualOffsetPixels
+        - surfaceDirection * max(tiltVisualOffsetPixels, 0.0) * max(parallaxStrength, 0.0);
+    float safeMaxOffsetPixels = max(maxOffsetPixels, 0.0);
+    float visualOffsetLength = length(visualOffsetPixels);
+    visualOffsetPixels *= min(
+        1.0,
+        safeMaxOffsetPixels / max(visualOffsetLength, 0.000001));
+    visualOffsetPixels = sign(visualOffsetPixels) * floor(abs(visualOffsetPixels) + 0.5);
+
+    float2 safeInvSize = max(sourceInvSize, float2(0.000001, 0.000001));
+    float2 halfTexel = safeInvSize * 0.5;
+    shadowUV = clamp(
+        artUV - visualOffsetPixels * safeInvSize,
+        halfTexel,
+        float2(1.0, 1.0) - halfTexel);
+}
+
+Function SelfContained WacomCardSurface_BuildArtCastShadowLayer(
+    in float shadowAlpha,
+    in float artAlpha,
+    in float backplateAlpha,
+    in float enabled,
+    in float opacity,
+    in float3 shadowColor,
+    out float4 shadowLayer)
+{
+    float shadowMask = saturate(shadowAlpha)
+        * (1.0 - saturate(artAlpha))
+        * saturate(backplateAlpha)
+        * saturate(enabled)
+        * saturate(opacity);
+    shadowLayer = float4(max(shadowColor, float3(0.0, 0.0, 0.0)), shadowMask);
+}
+
+Function SelfContained WacomCardSurface_ResolveArtDepth(
+    in float depthSample,
+    in float depthEnabled,
+    in float baseDepthPixels,
+    in float depthRangePixels,
+    in float depthLevels,
+    in float frameDepthPixels,
+    out float resolvedDepthPixels)
+{
+    float safeLevels = max(floor(depthLevels + 0.5), 2.0);
+    float quantizedDepth = floor(saturate(depthSample) * (safeLevels - 1.0) + 0.5)
+        / (safeLevels - 1.0);
+    float localDepthOffset = (quantizedDepth - 0.5)
+        * max(depthRangePixels, 0.0)
+        * saturate(depthEnabled);
+    resolvedDepthPixels = min(baseDepthPixels + localDepthOffset, frameDepthPixels - 0.25);
+}
+
+Function SelfContained WacomCardSurface_ApplyInsetWindowFinish(
+    in float4 insetSurface,
+    in float frameAlpha,
+    in float frameLeftAlpha,
+    in float frameRightAlpha,
+    in float frameTopAlpha,
+    in float frameBottomAlpha,
+    in float2 tiltDegrees,
+    in float referenceTiltDegrees,
+    in float staticShadowStrength,
+    in float directionalShadowStrength,
+    in float highlightStrength,
+    out float4 finishedSurface)
+{
+    float safeReferenceTilt = max(abs(referenceTiltDegrees), 0.001);
+    float2 normalizedTilt = clamp(
+        tiltDegrees / safeReferenceTilt,
+        float2(-1.0, -1.0),
+        float2(1.0, 1.0));
+    float2 lightDirection = float2(normalizedTilt.y, -normalizedTilt.x);
+    float apertureMask = 1.0 - saturate(frameAlpha);
+    float staticNeighbor = max(
+        max(frameLeftAlpha, frameRightAlpha),
+        max(frameTopAlpha, frameBottomAlpha));
+    float staticEdge = saturate(staticNeighbor - frameAlpha) * apertureMask;
+    float shadowNeighbor = max(
+        max(frameLeftAlpha * saturate(lightDirection.x), frameRightAlpha * saturate(-lightDirection.x)),
+        max(frameTopAlpha * saturate(lightDirection.y), frameBottomAlpha * saturate(-lightDirection.y)));
+    float highlightNeighbor = max(
+        max(frameLeftAlpha * saturate(-lightDirection.x), frameRightAlpha * saturate(lightDirection.x)),
+        max(frameTopAlpha * saturate(-lightDirection.y), frameBottomAlpha * saturate(lightDirection.y)));
+    float shadow = saturate(
+        staticEdge * max(staticShadowStrength, 0.0)
+        + shadowNeighbor * apertureMask * max(directionalShadowStrength, 0.0));
+    float highlight = highlightNeighbor * apertureMask * max(highlightStrength, 0.0);
+    float3 color = max(insetSurface.rgb * (1.0 - shadow) + highlight, float3(0.0, 0.0, 0.0));
+    finishedSurface = float4(color, insetSurface.a);
 }
 
 Function SelfContained WacomCardSurface_ApplyArtReflection(

@@ -31,6 +31,8 @@ namespace
 	constexpr float DefaultCardWidth = 260.f;
 	constexpr float DefaultCardHeight = 380.f;
 	const FName ArtTextureParameterName(TEXT("ArtTexture"));
+	const FName ArtDepthTextureParameterName(TEXT("ArtDepthTexture"));
+	const FName ArtDepthEnabledParameterName(TEXT("ArtDepthEnabled"));
 	const FName FrameTextureParameterName(TEXT("FrameTexture"));
 	const FName RarityTextureParameterName(TEXT("RarityTexture"));
 	const FName BackColorParameterName(TEXT("BackColor"));
@@ -125,7 +127,8 @@ namespace
 			&& A.bDisabled == B.bDisabled
 			&& A.Durability == B.Durability
 			&& A.bShowDurability == B.bShowDurability
-			&& A.Art == B.Art;
+			&& A.Art == B.Art
+			&& A.ArtDepthMap == B.ArtDepthMap;
 	}
 
 	bool AreTextDisplayFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
@@ -330,9 +333,9 @@ TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 			DurSlot->SetVerticalAlignment(VAlign_Top);
 		}
 		{
-			UImage* DurabilityBg = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("DurabilityBg"));
-			DurabilityBg->SetColorAndOpacity(FLinearColor(0.08f, 0.08f, 0.08f, 0.70f));
-			if (UOverlaySlot* BgSlot = Cast<UOverlay>(DurabilityHost)->AddChildToOverlay(DurabilityBg))
+			DurabilityBackIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("DurabilityBackIcon"));
+			DurabilityBackIcon->SetColorAndOpacity(FLinearColor(0.08f, 0.08f, 0.08f, 0.70f));
+			if (UOverlaySlot* BgSlot = Cast<UOverlay>(DurabilityHost)->AddChildToOverlay(DurabilityBackIcon))
 			{
 				BgSlot->SetHorizontalAlignment(HAlign_Fill);
 				BgSlot->SetVerticalAlignment(VAlign_Fill);
@@ -465,6 +468,15 @@ FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() 
 	View.bHasCardSurfaceMaterial = CardSurfaceMaterial != nullptr;
 	View.AppliedAttachmentOffsetPixels = AppliedAttachmentOffsetPixels;
 	View.SurfacePerspectiveView = CardSurfacePerspectiveView;
+	View.bHasDurabilityShadowImage = DurabilityShadowImage != nullptr;
+	View.bDurabilityShadowVisible = DurabilityShadowImage
+		&& DurabilityShadowImage->GetVisibility() != ESlateVisibility::Collapsed;
+	View.DurabilityShadowOffsetPixels = DurabilityShadowImage
+		? DurabilityShadowImage->GetRenderTransform().Translation
+		: FVector2D::ZeroVector;
+	View.DurabilityShadowColor = DurabilityShadowImage
+		? DurabilityShadowImage->GetColorAndOpacity()
+		: FLinearColor::Transparent;
 	View.ResolvedSurfaceArt = ResolveCardSurfaceArtTexture();
 	View.bCostDigitRewritePrepared = bCostDigitRewritePrepared;
 	View.bCostDigitRewriteMaterialActive = bCostDigitRewriteMaterialActive;
@@ -485,6 +497,7 @@ void UWacomCardView::NativeConstruct()
 	Super::NativeConstruct();
 	CacheAuthoredCardArtTexture();
 	EnsureCardSurfaceImage();
+	EnsureDurabilityShadowImage();
 	CacheLegacySurfaceVisibility();
 	CacheAttachmentAuthoredTransforms();
 	CacheCostDigitAuthoredTransform();
@@ -526,6 +539,7 @@ void UWacomCardView::NativeDestruct()
 	CostDigitRewriteMaterialSource = nullptr;
 	ResetCardSurfacePerspectiveView();
 	RestoreAttachmentAuthoredTransforms();
+	ResetAttachmentCastShadowView();
 	bCardSurfaceCompositeActive = false;
 	SetLegacySurfaceVisibility(true);
 	if (CardSurfaceImage)
@@ -737,7 +751,9 @@ void UWacomCardView::ApplyCurrentDataToWidgets()
 		UpdateEffectBadgeDisplays();
 		bUpdatedAnyDisplay = true;
 	}
-	if (bForceFullApply || LastAppliedData.Art != CurrentData.Art)
+	if (bForceFullApply
+		|| LastAppliedData.Art != CurrentData.Art
+		|| LastAppliedData.ArtDepthMap != CurrentData.ArtDepthMap)
 	{
 		UpdateArtDisplay();
 		bUpdatedAnyDisplay = true;
@@ -841,6 +857,7 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 			++BadgeIndex;
 		}
 		ApplyEffectBadgeFeedbackState();
+		ApplyAttachmentCastShadowView();
 		return;
 	}
 
@@ -876,6 +893,7 @@ void UWacomCardView::UpdateEffectBadgeDisplays()
 		EffectStatsHost->SetVisibility(RenderableBadges.Num() > 0 ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 	}
 	ApplyEffectBadgeFeedbackState();
+	ApplyAttachmentCastShadowView();
 }
 
 void UWacomCardView::SetEffectBadgeFeedbackConfig(
@@ -1369,6 +1387,7 @@ void UWacomCardView::UpdateDurabilityDisplay()
 
 	DurabilityHost->SetVisibility(
 		bRenderedDurabilityDigits ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+	RefreshDurabilityShadow();
 }
 
 UImage* UWacomCardView::EnsureDurabilityDigitImage(UPanelWidget& Host)
@@ -1466,6 +1485,15 @@ void UWacomCardView::RefreshCardSurfaceComposite()
 	}
 
 	CardSurfaceMaterialInstance->SetTextureParameterValue(ArtTextureParameterName, SurfaceArtTexture);
+	CardSurfaceMaterialInstance->SetScalarParameterValue(
+		ArtDepthEnabledParameterName,
+		CurrentData.ArtDepthMap ? 1.0f : 0.0f);
+	if (CurrentData.ArtDepthMap)
+	{
+		CardSurfaceMaterialInstance->SetTextureParameterValue(
+			ArtDepthTextureParameterName,
+			CurrentData.ArtDepthMap);
+	}
 	if (CardSurfaceFrameTexture)
 	{
 		CardSurfaceMaterialInstance->SetTextureParameterValue(
@@ -1529,6 +1557,106 @@ void UWacomCardView::ApplyCardSurfacePerspective()
 		? CardSurfacePerspectiveView.AttachmentOffsetPixels
 		: FVector2D::ZeroVector;
 	ApplyAttachmentParallaxOffset(Offset);
+	ApplyAttachmentCastShadowView();
+}
+
+void UWacomCardView::EnsureDurabilityShadowImage()
+{
+	if (DurabilityShadowImage || !WidgetTree || !DurabilityBackIcon)
+	{
+		return;
+	}
+	UOverlay* ParentOverlay = Cast<UOverlay>(DurabilityBackIcon->GetParent());
+	if (!ParentOverlay)
+	{
+		return;
+	}
+	const int32 SourceIndex = ParentOverlay->GetChildIndex(DurabilityBackIcon);
+	if (SourceIndex == INDEX_NONE)
+	{
+		return;
+	}
+
+	DurabilityShadowImage = WidgetTree->ConstructWidget<UImage>(
+		UImage::StaticClass(),
+		TEXT("DurabilityShadowImage_Runtime"));
+	if (!DurabilityShadowImage)
+	{
+		return;
+	}
+	DurabilityShadowImage->SetVisibility(ESlateVisibility::Collapsed);
+	UOverlaySlot* ShadowSlot = Cast<UOverlaySlot>(
+		ParentOverlay->InsertChildAt(SourceIndex, DurabilityShadowImage));
+	const UOverlaySlot* SourceSlot = Cast<UOverlaySlot>(DurabilityBackIcon->Slot);
+	if (ShadowSlot && SourceSlot)
+	{
+		ShadowSlot->SetPadding(SourceSlot->GetPadding());
+		ShadowSlot->SetHorizontalAlignment(SourceSlot->GetHorizontalAlignment());
+		ShadowSlot->SetVerticalAlignment(SourceSlot->GetVerticalAlignment());
+	}
+}
+
+void UWacomCardView::ApplyAttachmentCastShadowView()
+{
+	for (UWacomCardEffectBadgeWidget* BadgeWidget : CollectEffectBadgeWidgets())
+	{
+		if (BadgeWidget)
+		{
+			BadgeWidget->SetAttachmentCastShadowView(CardSurfacePerspectiveView);
+		}
+	}
+	RefreshDurabilityShadow();
+}
+
+void UWacomCardView::RefreshDurabilityShadow()
+{
+	EnsureDurabilityShadowImage();
+	if (!DurabilityShadowImage || !DurabilityBackIcon || !DurabilityHost
+		|| !CardSurfacePerspectiveView.bAttachmentCastShadowEnabled
+		|| CardSurfacePerspectiveView.AttachmentCastShadowOpacity <= KINDA_SMALL_NUMBER
+		|| !DurabilityHost->IsVisible()
+		|| !DurabilityBackIcon->IsVisible()
+		|| (DurabilityBackIcon->GetBrush().GetResourceObject() == nullptr
+			&& DurabilityBackIcon->GetBrush().GetDrawType()
+				== ESlateBrushDrawType::NoDrawType))
+	{
+		if (DurabilityShadowImage)
+		{
+			DurabilityShadowImage->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		return;
+	}
+
+	DurabilityShadowImage->SetBrush(DurabilityBackIcon->GetBrush());
+	FLinearColor ShadowColor = CardSurfacePerspectiveView.AttachmentCastShadowColor;
+	ShadowColor.A = FMath::Clamp(
+		CardSurfacePerspectiveView.AttachmentCastShadowOpacity,
+		0.0f,
+		1.0f);
+	DurabilityShadowImage->SetColorAndOpacity(ShadowColor);
+	DurabilityShadowImage->SetRenderTransformPivot(DurabilityBackIcon->GetRenderTransformPivot());
+	FWidgetTransform ShadowTransform = DurabilityBackIcon->GetRenderTransform();
+	ShadowTransform.Translation +=
+		CardSurfacePerspectiveView.AttachmentCastShadowOffsetPixels;
+	DurabilityShadowImage->SetRenderTransform(ShadowTransform);
+	DurabilityShadowImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+}
+
+void UWacomCardView::ResetAttachmentCastShadowView()
+{
+	for (UWacomCardEffectBadgeWidget* BadgeWidget : CollectEffectBadgeWidgets())
+	{
+		if (BadgeWidget)
+		{
+			BadgeWidget->ResetAttachmentCastShadowView();
+		}
+	}
+	if (DurabilityShadowImage)
+	{
+		DurabilityShadowImage->SetRenderTransform(FWidgetTransform());
+		DurabilityShadowImage->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+		DurabilityShadowImage->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomCardView::CacheLegacySurfaceVisibility()

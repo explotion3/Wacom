@@ -3,6 +3,7 @@
 #include "Validation/WacomCardDefinitionValidator.h"
 
 #include "Cards/CardDefinition.h"
+#include "Engine/Texture2D.h"
 #include "Validation/CardDefinitionValidation.h"
 
 bool UWacomCardDefinitionValidator::CanValidateAsset_Implementation(
@@ -22,6 +23,24 @@ EDataValidationResult UWacomCardDefinitionValidator::ValidateLoadedAsset_Impleme
 	if (!CardDefinition)
 	{
 		return EDataValidationResult::NotValidated;
+	}
+
+	if (const UTexture2D* DepthMap = CardDefinition->CardIllustrationDepthMap)
+	{
+		const bool bUsesRecommendedDepthMapSettings =
+			DepthMap->CompressionSettings == TC_Masks
+			&& !DepthMap->SRGB
+			&& DepthMap->Filter == TF_Nearest
+			&& DepthMap->MipGenSettings == TMGS_NoMipmaps
+			&& DepthMap->LODGroup == TEXTUREGROUP_UI;
+		if (!bUsesRecommendedDepthMapSettings)
+		{
+			AssetMessage(
+				InAssetData,
+				EMessageSeverity::Warning,
+				FText::FromString(TEXT(
+					"CardIllustrationDepthMap 推荐设置为 Compression=Masks、sRGB=false、Filter=Nearest、MipGen=NoMipmaps、LODGroup=UI；当前设置仍可运行，但可能产生灰度偏差或像素边缘游动。")));
+		}
 	}
 
 	TArray<FText> Errors;

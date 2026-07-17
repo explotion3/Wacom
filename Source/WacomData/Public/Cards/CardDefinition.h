@@ -60,6 +60,9 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Presentation", meta = (ToolTip = "卡牌主题插画纹理。推荐使用带透明通道的像素卡面 Texture2D；为空时 CardView 沿用 WBP 中 authored CardArt Brush，便于旧卡牌渐进迁移。RarityBorder 仍独立使用 PaperSprite 图集，不由本字段承载。"))
 	TObjectPtr<UTexture2D> CardIllustration = nullptr;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Presentation", meta = (ToolTip = "可选的插画局部深度图。黑色表示更深，白色表示更靠近实体卡框，中灰表示插画 authored 基准深度；推荐与 CardIllustration 同尺寸或同比例，使用 Masks、sRGB=false、Nearest、NoMipmaps。为空时整张插画仍按统一凹入深度显示。"))
+	TObjectPtr<UTexture2D> CardIllustrationDepthMap = nullptr;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	int32 BaseCost = 0;
 

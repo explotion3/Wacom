@@ -70,13 +70,19 @@ bool FWacomCardSurfaceParallaxProductionArtSpec::RunTest(const FString& Paramete
 {
 	UCardDefinition* Definition = NewObject<UCardDefinition>();
 	UTexture2D* DefinitionArt = NewObject<UTexture2D>(Definition);
+	UTexture2D* DefinitionDepthMap = NewObject<UTexture2D>(Definition);
 	Definition->CardIllustration = DefinitionArt;
+	Definition->CardIllustrationDepthMap = DefinitionDepthMap;
 	const FWacomCardViewData BuiltData =
 		UWacomCardPresentationBuilder::BuildCardViewData(Definition);
 	TestEqual(
 		TEXT("Production builder forwards CardDefinition illustration"),
 		BuiltData.Art.Get(),
 		DefinitionArt);
+	TestEqual(
+		TEXT("Production builder forwards optional illustration depth map"),
+		BuiltData.ArtDepthMap.Get(),
+		DefinitionDepthMap);
 
 	UWacomCardSurfaceParallaxProbe* CardView = NewObject<UWacomCardSurfaceParallaxProbe>();
 	const TSharedRef<SWidget> SlateWidget = CardView->TakeWidget();
@@ -118,9 +124,13 @@ bool FWacomCardSurfaceParallaxDreamShaderContractSpec::RunTest(const FString& Pa
 	TestTrue(TEXT("Art texture contract is present"), MaterialSource.Contains(TEXT("ArtTexture")));
 	TestTrue(TEXT("Frame texture contract is present"), MaterialSource.Contains(TEXT("FrameTexture")));
 	TestTrue(TEXT("Rarity atlas contract is present"), MaterialSource.Contains(TEXT("RarityUVScaleBias")));
+	TestTrue(TEXT("Optional illustration depth-map contract is present"),
+		MaterialSource.Contains(TEXT("TextureSampleParameter2D ArtDepthTexture"))
+		&& MaterialSource.Contains(TEXT("ScalarParameter ArtDepthEnabled = 0.0"))
+		&& HelperSource.Contains(TEXT("Function SelfContained WacomCardSurface_ResolveArtDepth")));
 	TestTrue(TEXT("Back color is a centered illustration backplate"),
 		MaterialSource.Contains(TEXT("ScalarParameter BackColorScale"))
-		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyCenteredBackplate(BackColor, backplateUV"))
+		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyCenteredBackplate(BackColor, frameUV"))
 		&& MaterialSource.Contains(TEXT("WacomCardSurface_AlphaComposite(scaledBackColor"))
 		&& HelperSource.Contains(TEXT("Function SelfContained WacomCardSurface_ApplyCenteredBackplate")));
 	TestTrue(TEXT("Art reflection is independently disabled by default without removing parallax"),
@@ -135,6 +145,38 @@ bool FWacomCardSurfaceParallaxDreamShaderContractSpec::RunTest(const FString& Pa
 		MaterialSource.Contains(TEXT("ScalarParameter RarityReflectionEnabled = 1.0"))
 		&& MaterialSource.Contains(TEXT("RarityBevelStrength * rarityReflectionAmount"))
 		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyRarityFinish(")));
+	TestTrue(TEXT("Rarity shares the exact physical frame UV plane"),
+		MaterialSource.Contains(TEXT(
+			"WacomCardSurface_MapAtlasUV(frameUVAndMask, RarityUVScaleBias")));
+	TestFalse(TEXT("Rarity no longer owns an independent parallax depth"),
+		MaterialSource.Contains(TEXT("RarityDepthPixels")));
+	TestTrue(TEXT("Inset window finish is derived from the authored frame alpha"),
+		MaterialSource.Contains(TEXT("frameLeftSample = FrameTexture"))
+		&& MaterialSource.Contains(TEXT("frameRightSample = FrameTexture"))
+		&& MaterialSource.Contains(TEXT("WacomCardSurface_ApplyInsetWindowFinish"))
+		&& HelperSource.Contains(TEXT("Function SelfContained WacomCardSurface_ApplyInsetWindowFinish")));
+	TestTrue(TEXT("BackColor remains a fixed centered plate on the frame plane"),
+		MaterialSource.Contains(TEXT(
+			"WacomCardSurface_ApplyCenteredBackplate(BackColor, frameUV")));
+	TestTrue(TEXT("Art alpha creates a hard pixel cast shadow on the fixed backplate"),
+		MaterialSource.Contains(TEXT("ScalarParameter ArtCastShadowEnabled = 1.0"))
+		&& MaterialSource.Contains(TEXT("artCastShadowSample = ArtTexture"))
+		&& MaterialSource.Contains(TEXT("WacomCardSurface_BuildArtCastShadowLayer"))
+		&& MaterialSource.Contains(TEXT(
+			"WacomCardSurface_AlphaComposite(scaledBackColor, artCastShadowLayer"))
+		&& HelperSource.Contains(TEXT(
+			"Function SelfContained WacomCardSurface_ComputeArtCastShadowUV"))
+		&& HelperSource.Contains(TEXT(
+			"Function SelfContained WacomCardSurface_BuildArtCastShadowLayer")));
+	TestTrue(TEXT("Art cast shadow stays outside the art and inside the backplate"),
+		HelperSource.Contains(TEXT("1.0 - saturate(artAlpha)"))
+		&& HelperSource.Contains(TEXT("saturate(backplateAlpha)")));
+	TestTrue(TEXT("Art parallax is capped and samples through a half-texel edge guard"),
+		MaterialSource.Contains(TEXT("ScalarParameter MaxArtParallaxPixels = 4.0"))
+		&& HelperSource.Contains(TEXT("safeMaxParallaxPixels"))
+		&& HelperSource.Contains(TEXT("float2 halfTexel = safeInvSize * 0.5")));
+	TestFalse(TEXT("Art cast shadow adds no texture asset contract"),
+		MaterialSource.Contains(TEXT("ArtCastShadowTexture")));
 	const FString CardViewSourcePath = FPaths::ProjectDir()
 		/ TEXT("Source/WacomApp/Private/UI/Card/WacomCardView.cpp");
 	FString CardViewSource;

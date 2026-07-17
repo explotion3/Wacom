@@ -216,10 +216,29 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 	Config.CardDepth.ContactShadowOpacityMultiplier =
 		FMath::Max(0.0f, Config.CardDepth.ContactShadowOpacityMultiplier);
 	Config.CardDepth.SurfaceParallaxStrength = FMath::Max(0.0f, Config.CardDepth.SurfaceParallaxStrength);
+	Config.CardDepth.DragSurfaceParallaxStrengthMultiplier =
+		FMath::Max(0.0f, Config.CardDepth.DragSurfaceParallaxStrengthMultiplier);
+	Config.CardDepth.SurfaceParallaxResponseSpeed =
+		FMath::Max(0.0f, Config.CardDepth.SurfaceParallaxResponseSpeed);
+	Config.CardDepth.SurfaceParallaxReturnSpeed =
+		FMath::Max(0.0f, Config.CardDepth.SurfaceParallaxReturnSpeed);
 	Config.CardDepth.AttachmentParallaxDepthPixels =
 		FMath::Max(0.0f, Config.CardDepth.AttachmentParallaxDepthPixels);
 	Config.CardDepth.AttachmentParallaxMaxOffsetPixels =
 		FMath::Max(0.0f, Config.CardDepth.AttachmentParallaxMaxOffsetPixels);
+	Config.CardDepth.AttachmentCastShadowColor.R =
+		FMath::Max(0.0f, Config.CardDepth.AttachmentCastShadowColor.R);
+	Config.CardDepth.AttachmentCastShadowColor.G =
+		FMath::Max(0.0f, Config.CardDepth.AttachmentCastShadowColor.G);
+	Config.CardDepth.AttachmentCastShadowColor.B =
+		FMath::Max(0.0f, Config.CardDepth.AttachmentCastShadowColor.B);
+	Config.CardDepth.AttachmentCastShadowColor.A = 1.0f;
+	Config.CardDepth.AttachmentCastShadowOpacity =
+		FMath::Clamp(Config.CardDepth.AttachmentCastShadowOpacity, 0.0f, 1.0f);
+	Config.CardDepth.AttachmentCastShadowCounterMotionRatio =
+		FMath::Max(0.0f, Config.CardDepth.AttachmentCastShadowCounterMotionRatio);
+	Config.CardDepth.AttachmentCastShadowMaxOffsetPixels =
+		FMath::Max(0.0f, Config.CardDepth.AttachmentCastShadowMaxOffsetPixels);
 	Config.CardUseEffect.Style.DurationSeconds = FMath::Max(
 		0.0f,
 		Config.CardUseEffect.Style.DurationSeconds);
@@ -520,11 +539,35 @@ bool AreSlotVisualConfigsEquivalent(
 			A.CardDepth.SurfaceParallaxStrength,
 			B.CardDepth.SurfaceParallaxStrength)
 		&& AreFloatsEquivalent(
+			A.CardDepth.DragSurfaceParallaxStrengthMultiplier,
+			B.CardDepth.DragSurfaceParallaxStrengthMultiplier)
+		&& AreFloatsEquivalent(
+			A.CardDepth.SurfaceParallaxResponseSpeed,
+			B.CardDepth.SurfaceParallaxResponseSpeed)
+		&& AreFloatsEquivalent(
+			A.CardDepth.SurfaceParallaxReturnSpeed,
+			B.CardDepth.SurfaceParallaxReturnSpeed)
+		&& AreFloatsEquivalent(
 			A.CardDepth.AttachmentParallaxDepthPixels,
 			B.CardDepth.AttachmentParallaxDepthPixels)
 		&& AreFloatsEquivalent(
 			A.CardDepth.AttachmentParallaxMaxOffsetPixels,
 			B.CardDepth.AttachmentParallaxMaxOffsetPixels)
+		&& A.CardDepth.bEnableAttachmentCastShadow
+			== B.CardDepth.bEnableAttachmentCastShadow
+		&& A.CardDepth.AttachmentCastShadowColor.Equals(
+			B.CardDepth.AttachmentCastShadowColor)
+		&& AreFloatsEquivalent(
+			A.CardDepth.AttachmentCastShadowOpacity,
+			B.CardDepth.AttachmentCastShadowOpacity)
+		&& A.CardDepth.AttachmentCastShadowStaticOffsetPixels.Equals(
+			B.CardDepth.AttachmentCastShadowStaticOffsetPixels)
+		&& AreFloatsEquivalent(
+			A.CardDepth.AttachmentCastShadowCounterMotionRatio,
+			B.CardDepth.AttachmentCastShadowCounterMotionRatio)
+		&& AreFloatsEquivalent(
+			A.CardDepth.AttachmentCastShadowMaxOffsetPixels,
+			B.CardDepth.AttachmentCastShadowMaxOffsetPixels)
 		&& A.CardDepth.bReduceSurfaceParallaxMotion
 			== B.CardDepth.bReduceSurfaceParallaxMotion
 		&& A.CardUseEffect.bEnabled == B.CardUseEffect.bEnabled

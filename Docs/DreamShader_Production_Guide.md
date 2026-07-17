@@ -139,6 +139,8 @@ Function SelfContained WacomExample_ComputeMask(
 - 重复的 3×3 Alpha 邻域、Bayer 阈值或 UV 投影只计算一次并复用，避免每增加一个表现模块就复制整组纹理采样。
 - 对图集 Sprite：先在局部 `0..1` UV 中做位移、inside mask 和裁切，再映射到 atlas scale/bias。直接在图集 UV 上视差会采样到相邻稀有度边框。
 - 卡面 `BackColor` 一类插画底板不能以 Alpha=1 的全屏颜色直接参与最终合成，否则会把透明圆角重新填成矩形，并污染 Retainer 实时 Alpha 阴影。应先通过局部 UV 生成居中缩放遮罩（当前默认 `BackColorScale=0.96`），再作为插画下层合成。
+- 纯色 `BackColor` 没有可识别纹理，不应随 Tilt 平移。需要无深度图层次时，额外采样一次透明插画 Alpha，使用偏移 Alpha 乘 `(1-ArtAlpha)` 与 `BackColorAlpha` 生成硬像素接触投影，再按 `BackColor → 投影 → Art` 合成。投影不能写入最终卡体 Alpha，也不能成为 Retainer 外部接触阴影 caster。
+- 像素插画视差必须同时设置最大源像素位移和半像素采样安全边界：先把目标 offset 限制到 `MaxArtParallaxPixels`，再把位移后的局部 UV Clamp 到 `0.5*InvSize .. 1-0.5*InvSize`。只做 inside mask 不能阻止过滤器在纹理边缘外取样。
 - 卡面材质中的“层深”和“表面反光”是两个独立合同：Art、Frame、Rarity 都可以拥有不同 UV 深度，并分别使用标量开关控制角度反光。当前默认 `ArtReflectionEnabled=0 / FrameReflectionEnabled=0 / RarityReflectionEnabled=1`；反光关闭时必须精确恢复源 RGB，但不能顺带关闭该层 UV 视差。插画使用宽幅柔和覆膜高光，实体 Frame 使用方向金属高光，只有 Rarity 使用 foil / iridescence。
 - DreamShader Graph 区不支持的 HLSL 写法应移入 `Function SelfContained`。例如 `step()` 可以在 `.dsh` helper 内使用，但某些插件版本不能在 Graph assignment 中直接解析；复合赋值 `value += expression` 也可能把左值误判为 Graph 变量类型。生产源使用显式 `value = value + expression`，并把 mode 选择、阈值分支放进 helper，再由 Graph 只接收输出。
 
@@ -303,6 +305,10 @@ rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: E
 - Seed 必须来自稳定语义（Card ID、Event Sequence、目标 ID），不能来自当前帧时间。
 - Reduced Motion 不等于关闭语义反馈：保留静态标记、中心方印或短淡出，只关闭方向传播、粒子位移和循环动画。
 - 卡牌插画与稀有度边框不是同一种资产合同：插画使用 `UTexture2D`；`RarityBorder` 使用 `UPaperSprite`，必须从 baked atlas texture 与 source rect 计算局部 UV，不能直接把 Sprite 当成整张 Texture 采样。
+- 核心卡面把 `RarityBorder` 贴在实体 Frame 的同一 UV 平面：位置直接复用 `frameUVAndMask`，箔片反光仍独立计算。不要用重新增加 `RarityDepthPixels` 的方式强化稀有度，否则倾斜时会与卡框发生可见错位。
+- 嵌入式插画窗口应从真实 `FrameTexture.a` 推导内沿，而不是按矩形 UV 画假边框。当前 helper 使用四方向 Nearest Alpha 采样生成静态内阴影、背光侧加深和受光侧窄高光；它只调整 BackColor+Art 合成色，不得改写最终卡体 Alpha。
+- 插画 Alpha 投影与整张卡牌的 Retainer 接触阴影职责不同：前者只表达卡框内部 Art/BackColor 的层差，必须裁在 BackColor 内；后者从完整实时卡体 Alpha 投到场景背景。不要把插画投影合入 caster，否则会出现内部光效继续投影自身的双重阴影。
+- `CardIllustrationDepthMap` 是可选的五级灰度 Mask：黑色更深、白色更靠近 Frame，中灰为基准。材质必须用 `ArtDepthEnabled` 显式关闭缺失深度图的局部变化，并把最终深度限制在 Frame 后方；不能依赖一张默认 Noise 恰好呈现为平面。推荐导入为 `Masks / sRGB=false / Nearest / NoMipmaps / UI`。具体卡图可用 Image2 参考原始透明插画生成初稿，但必须保持同构图、同尺寸、硬像素轮廓，并在导入前量化为有限灰度级。
 - 稳定 Bayer、`step / smoothstep`、hash、色板选择等算法优先写进带 `Wacom` 前缀的 `.dsh` `Function SelfContained`。`.dsm` Graph 只负责参数、采样、helper 调用和最终合成：这样既避免在 Graph 中重复展开分支节点，也能绕开 Graph 表达式对部分 HLSL 风格函数调用的解析限制。费用数字重组的硬像素顺序、Tone 色板选择和 Preview/Rewrite 模式判断分别由 `WacomCard_ComputeCostDigitRewriteMasks`、`WacomCard_SelectCostDigitRewritePalette` 与 `WacomCard_SelectCostDigitEffectMode` 提供。`step()` 可在 `.dsh` 自包含函数中使用，但不能直接写在当前 DreamShader Graph 赋值表达式里；后者会报 `Unknown Graph function 'step'` 并导致运行时只能直接换数字。
 - 对 `UImage` 内的 PaperSprite 做双值过渡时，优先用 `UPaperSprite::GetSlateAtlasData()` 提取 Atlas Texture、StartUV 与 SizeUV，然后把两组 Atlas Rect 交给直接 UI 材质；不要假设 Sprite 独占整张纹理。为了避免新值先闪一帧，Layer 必须在 ViewData 更新前锁定旧 Sprite，再刷新权威数据并启动 MID。此类局部 Image MID 不需要 Retainer 的 `Texture` 参数，也不应复制 Fake3D、接触阴影或卡面几何换算。
 - 当临时 Surface Effect 要把另一张纹理映射到卡牌主体、同时保留实时出血装饰轮廓时，不能直接用整张 Retainer UV 采样图案。运行时应从 `CardContentSizeBox` 缓存几何解析 Retainer 局部 `BodyRectMin/Max`，将该矩形重映射为 `0–1` 牌背 UV；矩形外仍使用实时 `Texture.a` 作为完整剪影，并以 MI 的统一边缘色填充。纹理资产必须先导入，再生成引用它作为默认值的 `.dsm`；推荐 setup 脚本提供 import-only 阶段，随后定向 DreamShader compile，最后创建 MI/Style 与宿主引用。这样既不会把牌背图案拉伸到 EffectBadge，也不会让缺少默认纹理导致生成节点回退为错误采样器。

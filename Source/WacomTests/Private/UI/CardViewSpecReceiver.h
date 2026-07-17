@@ -29,6 +29,13 @@ public:
 		DigitSprites.Add(Digit, TSoftObjectPtr<UPaperSprite>(Sprite));
 	}
 
+	void SetBadgeFrameSpriteForTest(
+		EWacomCardViewEffectBadgeKind Kind,
+		UPaperSprite* Sprite)
+	{
+		BadgeFrameSprites.Add(Kind, TSoftObjectPtr<UPaperSprite>(Sprite));
+	}
+
 	void SetMinimumDigitCountForTest(int32 Count)
 	{
 		MinimumDigitCount = Count;
@@ -40,6 +47,13 @@ public:
 	}
 
 	UPanelWidget* GetDigitHostForTest() const { return DigitHost; }
+	UImage* GetBadgeFrameImageForTest() const { return BadgeFrameImage; }
+	UImage* GetBadgeFrameShadowImageForTest() const
+	{
+		return WidgetTree
+			? Cast<UImage>(WidgetTree->FindWidget(TEXT("BadgeFrameShadowImage_Runtime")))
+			: nullptr;
+	}
 
 	void TickForTest(float DeltaTime)
 	{
@@ -95,6 +109,8 @@ public:
 
 	UImage* GetCostDigitImageForTest() const { return CostDigitImage; }
 	UWidget* GetDurabilityHostForTest() const { return DurabilityHost; }
+	UImage* GetDurabilityBackIconForTest() const { return DurabilityBackIcon; }
+	UImage* GetDurabilityShadowImageForTest() const { return DurabilityShadowImage; }
 	UPanelWidget* GetDurabilityDigitsHostForTest() const { return DurabilityDigitsHost; }
 	UImage* GetRarityBorderForTest() const { return RarityBorder; }
 	UPanelWidget* GetEffectStatsHostForTest() const { return EffectStatsHost; }

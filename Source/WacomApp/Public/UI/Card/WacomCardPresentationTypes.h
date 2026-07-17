@@ -20,6 +20,10 @@ struct WACOMAPP_API FWacomCardSurfacePerspectiveView
 	FVector2D TiltDegrees = FVector2D::ZeroVector;
 	float Strength = 0.0f;
 	FVector2D AttachmentOffsetPixels = FVector2D::ZeroVector;
+	bool bAttachmentCastShadowEnabled = false;
+	FVector2D AttachmentCastShadowOffsetPixels = FVector2D::ZeroVector;
+	FLinearColor AttachmentCastShadowColor = FLinearColor(0.006f, 0.009f, 0.018f, 1.0f);
+	float AttachmentCastShadowOpacity = 0.0f;
 	bool bReducedMotion = false;
 };
 
@@ -333,4 +337,8 @@ struct WACOMAPP_API FWacomCardViewData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	TObjectPtr<UTexture2D> Art = nullptr;
+
+	/** Optional visual-only depth map for the illustration. It never affects card rules. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	TObjectPtr<UTexture2D> ArtDepthMap = nullptr;
 };

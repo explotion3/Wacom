@@ -58,8 +58,16 @@ namespace WacomFirstPersonCardLayerDepthMotionSpec
 		VisualConfig.CardDepth.ContactShadowOpacityMultiplier = 1.5f;
 		VisualConfig.CardDepth.bEnableSurfaceParallax = true;
 		VisualConfig.CardDepth.SurfaceParallaxStrength = 1.0f;
+		VisualConfig.CardDepth.DragSurfaceParallaxStrengthMultiplier = 0.75f;
+		VisualConfig.CardDepth.SurfaceParallaxResponseSpeed = 20.0f;
+		VisualConfig.CardDepth.SurfaceParallaxReturnSpeed = 12.0f;
 		VisualConfig.CardDepth.AttachmentParallaxDepthPixels = 5.0f;
 		VisualConfig.CardDepth.AttachmentParallaxMaxOffsetPixels = 7.0f;
+		VisualConfig.CardDepth.bEnableAttachmentCastShadow = true;
+		VisualConfig.CardDepth.AttachmentCastShadowOpacity = 0.17f;
+		VisualConfig.CardDepth.AttachmentCastShadowStaticOffsetPixels = FVector2D(2.0f, 2.5f);
+		VisualConfig.CardDepth.AttachmentCastShadowCounterMotionRatio = 0.80f;
+		VisualConfig.CardDepth.AttachmentCastShadowMaxOffsetPixels = 6.0f;
 		Widget->SetSlotVisualConfig(VisualConfig);
 
 		FWacomFirstPersonCardDragConfig DragConfig;
@@ -99,7 +107,14 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 		*Widget,
 		CardCenter + FVector2D(110.0f, 0.0f));
 	TestTrue(TEXT("Playable card accepts hover"), FWacomFirstPersonCardLayerTestAccess::RequestHover(*Widget));
-	Tick(*Widget, 20);
+	Tick(*Widget, 1);
+	const FWacomFirstPersonCardDepthView EarlyHoverDepth =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
+	TestTrue(
+		TEXT("Inner surface follows through an independent second response filter"),
+		FMath::Abs(EarlyHoverDepth.SurfacePerspective.TiltDegrees.Y)
+			< FMath::Abs(EarlyHoverDepth.TiltDegrees.Y));
+	Tick(*Widget, 19);
 	const FWacomFirstPersonCardDepthView HoverDepth =
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
 	TestTrue(TEXT("Fake-3D is enabled"), HoverDepth.bFake3DEnabled);
@@ -119,11 +134,29 @@ bool FWacomFirstPersonCardLayerHoverDepthMotionTest::RunTest(const FString& /*Pa
 		FMath::Abs(HoverDepth.ContactShadowOffsetPixels.Y) < 0.5f);
 	TestTrue(TEXT("Hover enables the inner card-surface parallax"), HoverDepth.SurfacePerspective.bEnabled);
 	TestTrue(
-		TEXT("Inner surface consumes the same smoothed tilt"),
-		HoverDepth.SurfacePerspective.TiltDegrees.Equals(HoverDepth.TiltDegrees, 0.001f));
+		TEXT("Hover retains the full authored surface-parallax strength"),
+		FMath::IsNearlyEqual(HoverDepth.SurfacePerspective.Strength, 1.0f, 0.01f));
+	TestTrue(
+		TEXT("Inner surface converges toward the visible card tilt"),
+		HoverDepth.SurfacePerspective.TiltDegrees.Equals(HoverDepth.TiltDegrees, 0.10f));
 	TestTrue(
 		TEXT("Foreground attachment moves with horizontal tilt"),
 		HoverDepth.SurfacePerspective.AttachmentOffsetPixels.X > 1.0f);
+	TestTrue(
+		TEXT("Physical attachment shadow is enabled independently from the outer card shadow"),
+		HoverDepth.SurfacePerspective.bAttachmentCastShadowEnabled);
+	const FVector2D ExpectedHoverShadowOffset =
+		(FVector2D(2.0f, 2.5f)
+			- HoverDepth.SurfacePerspective.AttachmentOffsetPixels * 0.80f)
+		.GetClampedToMaxSize(6.0f);
+	TestTrue(
+		TEXT("Attachment shadow counter-motion consumes the filtered attachment offset"),
+		HoverDepth.SurfacePerspective.AttachmentCastShadowOffsetPixels.Equals(
+			ExpectedHoverShadowOffset,
+			0.001f));
+	TestTrue(
+		TEXT("Attachment shadow remains inside the authored six-pixel limit"),
+		HoverDepth.SurfacePerspective.AttachmentCastShadowOffsetPixels.Size() <= 6.001f);
 
 	TestTrue(TEXT("Hovered card accepts pressed feedback"), FWacomFirstPersonCardLayerTestAccess::RequestPress(*Widget));
 	Tick(*Widget, 20);
@@ -265,7 +298,14 @@ bool FWacomFirstPersonCardLayerDragDepthMotionTest::RunTest(const FString& /*Par
 		*Widget,
 		0.0f,
 		CardCenter + FVector2D(80.0f, 0.0f));
-	Tick(*Widget, 8);
+	Tick(*Widget, 1);
+	const float EarlyDragSurfaceStrength =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget)
+			.CardDepthView.SurfacePerspective.Strength;
+	TestTrue(
+		TEXT("Hover-to-drag surface strength transitions instead of snapping"),
+		EarlyDragSurfaceStrength < 1.0f && EarlyDragSurfaceStrength > 0.75f);
+	Tick(*Widget, 7);
 	const FWacomFirstPersonCardDepthView MovingDepth =
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget).CardDepthView;
 	TestTrue(TEXT("Rightward drag creates opposite inertial yaw"), MovingDepth.TiltDegrees.Y < -0.25f);
@@ -273,6 +313,19 @@ bool FWacomFirstPersonCardLayerDragDepthMotionTest::RunTest(const FString& /*Par
 	TestTrue(
 		TEXT("Rightward drag inertia moves the contact shadow to the right"),
 		MovingDepth.ContactShadowOffsetPixels.X > 0.25f);
+	TestTrue(
+		TEXT("Drag reduces material and attachment parallax toward seventy-five percent"),
+		MovingDepth.SurfacePerspective.Strength < 0.82f
+			&& MovingDepth.SurfacePerspective.Strength >= 0.75f);
+	const FVector2D ExpectedMovingShadowOffset =
+		(FVector2D(2.0f, 2.5f)
+			- MovingDepth.SurfacePerspective.AttachmentOffsetPixels * 0.80f)
+		.GetClampedToMaxSize(6.0f);
+	TestTrue(
+		TEXT("Drag attachment shadow inherits the filtered seventy-five-percent motion"),
+		MovingDepth.SurfacePerspective.AttachmentCastShadowOffsetPixels.Equals(
+			ExpectedMovingShadowOffset,
+			0.001f));
 
 	Tick(*Widget, 50);
 	const FWacomFirstPersonCardDepthView SettledDragDepth =
@@ -283,6 +336,68 @@ bool FWacomFirstPersonCardLayerDragDepthMotionTest::RunTest(const FString& /*Par
 	TestTrue(
 		TEXT("Drag contact-shadow lift remains while the gesture is active"),
 		SettledDragDepth.ContactShadowLift > 0.90f);
+	TestTrue(
+		TEXT("Settled drag retains the authored seventy-five percent surface strength"),
+		FMath::IsNearlyEqual(SettledDragDepth.SurfacePerspective.Strength, 0.75f, 0.01f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardAttachmentShadowReducedMotionTest,
+	"Wacom.UI.FirstPersonCardLayer.DepthMotion.AttachmentShadowReducedMotionKeepsStaticContact",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardAttachmentShadowReducedMotionTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomFirstPersonCardLayerDepthMotionSpec;
+	const FVector2D CardCenter(500.0f, 500.0f);
+	UWacomFirstPersonCardLayerSlotWidget* Widget = MakeWidget(CardCenter);
+	if (!TestNotNull(TEXT("Reduced-motion attachment-shadow slot"), Widget))
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardSlotVisualConfig VisualConfig =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).SlotVisualConfig;
+	VisualConfig.CardDepth.bReduceSurfaceParallaxMotion = true;
+	Widget->SetSlotVisualConfig(VisualConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetCardDepthPointerPosition(
+		*Widget,
+		CardCenter + FVector2D(110.0f, 0.0f));
+	FWacomFirstPersonCardLayerTestAccess::RequestHover(*Widget);
+	Tick(*Widget, 20);
+
+	const FWacomCardSurfacePerspectiveView Perspective =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget)
+			.CardDepthView.SurfacePerspective;
+	TestTrue(
+		TEXT("Reduced motion keeps the attachment-shadow presentation contract enabled"),
+		Perspective.bAttachmentCastShadowEnabled);
+	TestTrue(
+		TEXT("Reduced motion removes dynamic attachment parallax"),
+		Perspective.AttachmentOffsetPixels.IsNearlyZero(0.001f));
+	TestTrue(
+		TEXT("Reduced motion keeps only the authored static contact-shadow offset"),
+		Perspective.AttachmentCastShadowOffsetPixels.Equals(
+			FVector2D(2.0f, 2.5f),
+			0.001f));
+
+	VisualConfig.CardDepth.bEnableFake3D = false;
+	VisualConfig.CardDepth.bReduceSurfaceParallaxMotion = false;
+	Widget->SetSlotVisualConfig(VisualConfig);
+	Tick(*Widget, 2);
+	const FWacomCardSurfacePerspectiveView FlatPerspective =
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget)
+			.CardDepthView.SurfacePerspective;
+	TestTrue(
+		TEXT("The explicit attachment-shadow switch remains independent from outer fake-3D"),
+		FlatPerspective.bAttachmentCastShadowEnabled);
+	TestTrue(
+		TEXT("Disabling fake-3D leaves the attachment at its static contact offset"),
+		FlatPerspective.AttachmentCastShadowOffsetPixels.Equals(
+			FVector2D(2.0f, 2.5f),
+			0.001f));
 	return true;
 }
 

@@ -29,6 +29,10 @@ struct FWacomCardEffectBadgeAutomationTestView
 	int32 DigitMaterialCreateCount = 0;
 	FVector2D RootScale = FVector2D(1.0f, 1.0f);
 	float RootOpacity = 1.0f;
+	bool bHasFrameShadowImage = false;
+	bool bFrameShadowVisible = false;
+	FVector2D FrameShadowOffsetPixels = FVector2D::ZeroVector;
+	FLinearColor FrameShadowColor = FLinearColor::Transparent;
 };
 #endif
 
@@ -59,26 +63,11 @@ public:
 		const FWacomFirstPersonCardEffectBadgeFeedbackItemView& InView);
 	void ResetEffectBadgeFeedback();
 	bool IsEffectBadgeFeedbackMaterialReady() const;
+	void SetAttachmentCastShadowView(const FWacomCardSurfacePerspectiveView& InView);
+	void ResetAttachmentCastShadowView();
 
 #if WITH_AUTOMATION_TESTS
-	FWacomCardEffectBadgeAutomationTestView GetAutomationTestViewForTest() const
-	{
-		FWacomCardEffectBadgeAutomationTestView View;
-		View.ApplyCount = ApplyCountForTest;
-		View.DigitImageUpdateCount = DigitImageUpdateCountForTest;
-		View.bFeedbackMaterialActive = bFeedbackMaterialActive;
-		View.bFeedbackMaterialConfigured = FeedbackConfig.Style.DigitFeedbackMaterialInstance != nullptr;
-		View.bPreviewSkipped = CurrentData.bPreviewSkipped;
-		View.PreviewAmount = PreviewAmount;
-		View.ResolvedDigitSpriteCount = ResolvedDigitSprites.Num();
-		View.ActiveDigitMaterialInstanceCount = ActiveDigitMaterialInstances.Num();
-		View.LastFeedbackMaterialFailure = LastFeedbackMaterialFailureForTest;
-		View.DigitMaterialPoolSize = ActiveDigitMaterialInstances.Num();
-		View.DigitMaterialCreateCount = DigitMaterialCreateCountForTest;
-		View.RootScale = GetRenderTransform().Scale;
-		View.RootOpacity = GetRenderOpacity();
-		return View;
-	}
+	FWacomCardEffectBadgeAutomationTestView GetAutomationTestViewForTest() const;
 #endif
 
 protected:
@@ -125,10 +114,14 @@ private:
 	TArray<TObjectPtr<UMaterialInstanceDynamic>> ActiveDigitMaterialInstances;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UImage> BadgeFrameShadowImage;
+
+	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> ActiveDigitMaterialSource;
 
 	FWacomFirstPersonCardEffectBadgeFeedbackConfig FeedbackConfig;
 	FWacomFirstPersonCardEffectBadgeFeedbackItemView FeedbackView;
+	FWacomCardSurfacePerspectiveView AttachmentCastShadowView;
 	FWidgetTransform AuthoredRootTransform;
 	FVector2D AuthoredRootPivot = FVector2D(0.5f, 0.5f);
 	float PreviewAmount = 0.0f;
@@ -165,6 +158,8 @@ private:
 		float Pulse);
 	void RestoreAuthoritativeDigitBrushes();
 	void ReleaseDigitMaterialPool();
+	void EnsureBadgeFrameShadowImage();
+	void RefreshBadgeFrameShadow();
 	void CacheAuthoredRootTransform();
 	void RestoreAuthoredRootTransform();
 	UImage* EnsureDigitImage(int32 Index);

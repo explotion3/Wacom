@@ -25,6 +25,7 @@ const FWacomFirstPersonCardDepthView& FWacomFirstPersonCardDepthMotion::Update(
 	if (!bInitialized)
 	{
 		CurrentView = MakeNeutralView(Config, Input.bProjected);
+		FilteredSurfaceStrength = CurrentView.SurfacePerspective.Strength;
 		bInitialized = true;
 	}
 
@@ -47,7 +48,33 @@ const FWacomFirstPersonCardDepthView& FWacomFirstPersonCardDepthMotion::Update(
 		TargetView.ContactShadowLift,
 		Alpha);
 	PopulateContactShadowOffset(Config, CurrentView);
-	PopulateSurfacePerspective(Config, CurrentView);
+
+	const bool bSurfaceReturningToRest = !TargetView.SurfacePerspective.bEnabled
+		|| CurrentView.TiltDegrees.IsNearlyZero(DepthTiltToleranceDegrees);
+	const float SurfaceResponseSpeed = bSurfaceReturningToRest
+		? Config.SurfaceParallaxReturnSpeed
+		: Config.SurfaceParallaxResponseSpeed;
+	const float SurfaceAlpha = ComputeExponentialAlpha(SurfaceResponseSpeed, SafeDeltaTime);
+	const FVector2D SurfaceTiltTarget = TargetView.SurfacePerspective.bEnabled
+		? CurrentView.TiltDegrees
+		: FVector2D::ZeroVector;
+	FilteredSurfaceTiltDegrees = FMath::Lerp(
+		FilteredSurfaceTiltDegrees,
+		SurfaceTiltTarget,
+		SurfaceAlpha);
+	const float SurfaceStrengthTarget = TargetView.SurfacePerspective.bEnabled
+		? TargetView.SurfacePerspective.Strength
+		: 0.0f;
+	FilteredSurfaceStrength = FMath::Lerp(
+		FilteredSurfaceStrength,
+		SurfaceStrengthTarget,
+		SurfaceAlpha);
+	PopulateSurfacePerspective(
+		Config,
+		CurrentView,
+		FilteredSurfaceTiltDegrees,
+		FilteredSurfaceStrength,
+		Input.bProjected);
 
 	if (!IsInMotion())
 	{
@@ -60,6 +87,8 @@ void FWacomFirstPersonCardDepthMotion::Reset()
 {
 	CurrentView = FWacomFirstPersonCardDepthView();
 	TargetView = FWacomFirstPersonCardDepthView();
+	FilteredSurfaceTiltDegrees = FVector2D::ZeroVector;
+	FilteredSurfaceStrength = 0.0f;
 	FilteredPointerVelocity = FVector2D::ZeroVector;
 	LastPointerPosition = FVector2D::ZeroVector;
 	bHasLastPointerPosition = false;
@@ -79,6 +108,17 @@ bool FWacomFirstPersonCardDepthMotion::IsInMotion() const
 		return true;
 	}
 	return !CurrentView.TiltDegrees.Equals(TargetView.TiltDegrees, DepthTiltToleranceDegrees)
+		|| !FilteredSurfaceTiltDegrees.Equals(
+			CurrentView.SurfacePerspective.bEnabled
+				? CurrentView.TiltDegrees
+				: FVector2D::ZeroVector,
+			DepthTiltToleranceDegrees)
+		|| !FMath::IsNearlyEqual(
+			FilteredSurfaceStrength,
+			TargetView.SurfacePerspective.bEnabled
+				? TargetView.SurfacePerspective.Strength
+				: 0.0f,
+			DepthScalarTolerance)
 		|| !FMath::IsNearlyEqual(
 			CurrentView.PerspectiveStrength,
 			TargetView.PerspectiveStrength,
@@ -125,7 +165,14 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::MakeNeutralView
 	View.bContactShadowEnabled = Config.bEnableContactShadow && bProjected;
 	View.ContactShadowOpacityMultiplier = FMath::Max(0.0f, Config.ContactShadowOpacityMultiplier);
 	PopulateContactShadowOffset(Config, View);
-	PopulateSurfacePerspective(Config, View);
+	PopulateSurfacePerspective(
+		Config,
+		View,
+		FVector2D::ZeroVector,
+		Config.bEnableSurfaceParallax && bProjected && !Config.bReduceSurfaceParallaxMotion
+			? FMath::Max(0.0f, Config.SurfaceParallaxStrength)
+			: 0.0f,
+		bProjected);
 	return View;
 }
 
@@ -157,39 +204,55 @@ void FWacomFirstPersonCardDepthMotion::PopulateContactShadowOffset(
 
 void FWacomFirstPersonCardDepthMotion::PopulateSurfacePerspective(
 	const FWacomFirstPersonCardDepthConfig& Config,
-	FWacomFirstPersonCardDepthView& View)
+	FWacomFirstPersonCardDepthView& View,
+	const FVector2D& SurfaceTiltDegrees,
+	float SurfaceStrength,
+	bool bProjected)
 {
 	FWacomCardSurfacePerspectiveView& SurfaceView = View.SurfacePerspective;
 	SurfaceView.bEnabled = Config.bEnableSurfaceParallax
 		&& View.bFake3DEnabled
 		&& !Config.bReduceSurfaceParallaxMotion;
 	SurfaceView.bReducedMotion = Config.bReduceSurfaceParallaxMotion;
-	SurfaceView.Strength = SurfaceView.bEnabled
-		? FMath::Max(0.0f, Config.SurfaceParallaxStrength)
-		: 0.0f;
+	SurfaceView.Strength = SurfaceView.bEnabled ? FMath::Max(0.0f, SurfaceStrength) : 0.0f;
 	SurfaceView.TiltDegrees = SurfaceView.bEnabled
-		? View.TiltDegrees
+		? SurfaceTiltDegrees
 		: FVector2D::ZeroVector;
+	SurfaceView.bAttachmentCastShadowEnabled =
+		Config.bEnableAttachmentCastShadow && bProjected;
+	SurfaceView.AttachmentCastShadowColor = Config.AttachmentCastShadowColor;
+	SurfaceView.AttachmentCastShadowOpacity = SurfaceView.bAttachmentCastShadowEnabled
+		? FMath::Clamp(Config.AttachmentCastShadowOpacity, 0.0f, 1.0f)
+		: 0.0f;
 
 	if (!SurfaceView.bEnabled)
 	{
 		SurfaceView.AttachmentOffsetPixels = FVector2D::ZeroVector;
-		return;
+	}
+	else
+	{
+		const float ReferenceTiltDegrees = FMath::Max(
+			1.0f,
+			FMath::Max(Config.HoverMaxTiltDegrees, Config.DragMaxTiltDegrees));
+		const float ReferenceTangent = FMath::Max(
+			0.001f,
+			FMath::Tan(FMath::DegreesToRadians(ReferenceTiltDegrees)));
+		const float DepthPixels = FMath::Max(0.0f, Config.AttachmentParallaxDepthPixels);
+		FVector2D Offset(
+			FMath::Tan(FMath::DegreesToRadians(SurfaceView.TiltDegrees.Y)) / ReferenceTangent * DepthPixels,
+			-FMath::Tan(FMath::DegreesToRadians(SurfaceView.TiltDegrees.X)) / ReferenceTangent * DepthPixels);
+		Offset *= SurfaceView.Strength;
+		SurfaceView.AttachmentOffsetPixels = Offset.GetClampedToMaxSize(
+			FMath::Max(0.0f, Config.AttachmentParallaxMaxOffsetPixels));
 	}
 
-	const float ReferenceTiltDegrees = FMath::Max(
-		1.0f,
-		FMath::Max(Config.HoverMaxTiltDegrees, Config.DragMaxTiltDegrees));
-	const float ReferenceTangent = FMath::Max(
-		0.001f,
-		FMath::Tan(FMath::DegreesToRadians(ReferenceTiltDegrees)));
-	const float DepthPixels = FMath::Max(0.0f, Config.AttachmentParallaxDepthPixels);
-	FVector2D Offset(
-		FMath::Tan(FMath::DegreesToRadians(View.TiltDegrees.Y)) / ReferenceTangent * DepthPixels,
-		-FMath::Tan(FMath::DegreesToRadians(View.TiltDegrees.X)) / ReferenceTangent * DepthPixels);
-	Offset *= SurfaceView.Strength;
-	SurfaceView.AttachmentOffsetPixels = Offset.GetClampedToMaxSize(
-		FMath::Max(0.0f, Config.AttachmentParallaxMaxOffsetPixels));
+	const FVector2D DynamicCounterOffset = Config.bReduceSurfaceParallaxMotion
+		? FVector2D::ZeroVector
+		: -SurfaceView.AttachmentOffsetPixels
+			* FMath::Max(0.0f, Config.AttachmentCastShadowCounterMotionRatio);
+	SurfaceView.AttachmentCastShadowOffsetPixels =
+		(Config.AttachmentCastShadowStaticOffsetPixels + DynamicCounterOffset)
+		.GetClampedToMaxSize(FMath::Max(0.0f, Config.AttachmentCastShadowMaxOffsetPixels));
 }
 
 FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::BuildTargetView(
@@ -241,7 +304,15 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::BuildTargetView
 		}
 	}
 	PopulateContactShadowOffset(Config, View);
-	PopulateSurfacePerspective(Config, View);
+	const float StateStrengthMultiplier = Input.bDragging
+		? FMath::Max(0.0f, Config.DragSurfaceParallaxStrengthMultiplier)
+		: 1.0f;
+	PopulateSurfacePerspective(
+		Config,
+		View,
+		View.TiltDegrees,
+		FMath::Max(0.0f, Config.SurfaceParallaxStrength) * StateStrengthMultiplier,
+		Input.bProjected);
 	return View;
 }
 
