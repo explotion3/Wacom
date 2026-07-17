@@ -72,7 +72,10 @@ tags:
 | `UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerSourceLifecycleFrame` | Battle / Run adapter 写入 Anchor runtime source、presentation gate、interaction 和 source 清理的统一提交入口 | 不生成领域事件，不读取 Run workspace 或 Battle snapshot |
 | `UWacomFirstPersonCardAnchorComponent` | 制作参数 facade、runtime source、projection、presentation gate | 不提交 Battle / Run 命令，不持有规则真相 |
 | `UWacomFirstPersonCardLayerWidget` | reconcile active / outgoing slot，应用 transition hint，管理 layer-level gesture | 不读取牌堆或战斗规则 |
-| `UWacomFirstPersonCardLayerSlotWidget` | 单槽 motion、hover / inspect / drag visual composition、入场 / 离场播放 | 不直接调用 BattleSession |
+| `UWacomFirstPersonCardLayerSlotWidget` | UMG 输入适配、卡牌几何/命中、Layer 委托和最终 RenderTransform | 不持有规则真相，不自行仲裁 Surface 优先级 |
+| `FWacomFirstPersonCardGestureController` | Pressed / Inspecting / Dragging / Aiming / Armed / Cancelled 手势事实与阈值 | 不绘制、不播放语义动画、不提交命令 |
+| `FWacomFirstPersonCardSlotPresentationController` | 单槽语义 Playback 生命周期、三路 Ready 协调、单 Retainer 所有权，以及统一 `NeedsTick / BlocksPresentation` Activity View | 不计算手牌布局、不读取 BattleSession |
+| `FWacomFirstPersonCardMotionMixer` | 合成布局、状态、手势/Transition 和统一 Local Feedback View | 不读取 Slot 计时器或配置制作字段 |
 | `FWacomCardMotionKernel` | App-private 帧率无关指数收敛、固定时长 ease-out、最短角度插值、到达判断 | 不持有 Widget、语义状态、规则或音效 |
 | `FWacomBackpackCardPresentationController` | 背包 Hover、拾起、滚轮当前卡、活动卡 DepthMotion 和收落的唯一局部运动所有者 | 不接入 Battle Slot、transition hint 或 Run 写 API |
 | `FWacomFirstPersonCardDetailMotionController` | Battle / Run 共用的详情面板预热、缓存、淡入淡出、scale、follow 和稳定换边 motion core | 不创建 panel，不读取规则状态，不决定详情数据来源 |
@@ -153,7 +156,7 @@ EndTurn phase plan 的当前合同：
 - 规则事件名描述事实，例如 `CardsDrawn`、`CardsRetained`、`CardDiscarded`。
 - App plan 名描述表现阶段，例如 `TurnEndDiscard`、`RetainHold`、`TurnStartDraw`。
 - Layer transition 名描述单卡运动语义，例如 `Drawn`、`Played`、`Discarded`。
-- WBP 控件名描述视觉图层，例如 `FeedbackOverlay`、`InteractionFeedbackImage`。
+- WBP 控件名只描述长期视觉结构，例如 `Fake3DSurfaceRetainer`、`SurfaceCaptureOverlay`、`CardContentSizeBox`；Pressed/Deny 一类短时交互语义不再映射成常驻 WBP Image。
 
 ## §6 当前 Hint 合同
 
@@ -310,7 +313,7 @@ Hover、inspect 和 drag 是交互表现，不属于规则事件动画。
 | `07 Transition Audio` | `Drawn / RunHandEntered / Gained / HandAnchorEntered` 的入场音效和音量 / 音高倍率 |
 | `07 Hover` | hover lift、scale、ZOrder 和命中稳定性 |
 | `09 Gesture` | inspect、drag 起手、commit 距离和 drag 姿态 |
-| `10 Interaction Feedback` | pressed、confirm、commit、deny、retained 等源卡反馈 |
+| `10 Interaction Feedback` | Pressed 实体按压、权威 Commit、formal-release Deny、Drag Pickup 与 Retained 等源卡反馈 |
 | `11 Drag Target Feedback` | world / card target affordance 和 focus |
 | `12 Camera Look While UI` | hover / pointer / drag 时的镜头 look override |
 
@@ -321,7 +324,7 @@ Hover、inspect 和 drag 是交互表现，不属于规则事件动画。
 UMG / WBP 适合承载：
 
 - 卡面排版和 `UWacomCardView` 视觉。
-- `FeedbackOverlay`、`InteractionFeedbackImage`、材质参数和局部微反馈。
+- 唯一 Retainer、卡面内容层与 authored brush；Pressed/Commit 由 Slot Motion 合成，Deny 四角刻线由 CardView Slate Paint 绘制。
 - 静态层级结构、NamedSlot、控件大小和 brush 默认材质。
 - 按钮、Toast、菜单等局部 UI 的短动画。
 

@@ -6,33 +6,33 @@
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 void FWacomFirstPersonCardDragPickupPlayback::Begin(
-	const FWacomFirstPersonCardSlotFeedbackConfig& Config,
+	const FWacomFirstPersonCardDragPickupConfig& Config,
 	bool bStartVisualImmediately)
 {
 	Reset();
-	if (!Config.bEnabled || !Config.bEnableDragPickupFeedback)
+	if (!Config.bEnabled)
 	{
 		return;
 	}
 
-	DurationSeconds = FMath::Max(0.0f, Config.DragPickupDurationSeconds);
-	RiseSeconds = FMath::Clamp(Config.DragPickupRiseSeconds, 0.0f, DurationSeconds);
-	bVisualPlaybackEnabled = !Config.bReduceDragPickupMotion
+	DurationSeconds = FMath::Max(0.0f, Config.DurationSeconds);
+	RiseSeconds = FMath::Clamp(Config.RiseSeconds, 0.0f, DurationSeconds);
+	bVisualPlaybackEnabled = !Config.bReducedMotion
 		&& DurationSeconds > KINDA_SMALL_NUMBER
-		&& (Config.DragPickupLiftPixels > KINDA_SMALL_NUMBER
-			|| !FMath::IsNearlyEqual(Config.DragPickupScaleMultiplier, 1.0f));
+		&& (Config.LiftPixels > KINDA_SMALL_NUMBER
+			|| !FMath::IsNearlyEqual(Config.ScaleMultiplier, 1.0f));
 	bWaitingForVisualStart = bVisualPlaybackEnabled && !bStartVisualImmediately;
 	bPlaying = bVisualPlaybackEnabled && bStartVisualImmediately;
 
-	if (Config.DragPickupSound)
+	if (Config.Sound)
 	{
-		const float PitchVariation = FMath::Max(0.0f, Config.DragPickupSoundPitchVariation);
-		PendingSoundRequest.Sound = Config.DragPickupSound;
+		const float PitchVariation = FMath::Max(0.0f, Config.SoundPitchVariation);
+		PendingSoundRequest.Sound = Config.Sound;
 		PendingSoundRequest.VolumeMultiplier =
-			FMath::Max(0.0f, Config.DragPickupSoundVolumeMultiplier);
+			FMath::Max(0.0f, Config.SoundVolumeMultiplier);
 		PendingSoundRequest.PitchMultiplier = FMath::Max(
 			0.01f,
-			Config.DragPickupSoundPitchMultiplier
+			Config.SoundPitchMultiplier
 				* FMath::FRandRange(1.0f - PitchVariation, 1.0f + PitchVariation));
 		bSoundRequestPending = true;
 	}

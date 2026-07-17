@@ -76,10 +76,10 @@ namespace WacomFirstPersonCardUseEffectSpec
 		FWacomFirstPersonCardSlotMotionConfig MotionConfig;
 		MotionConfig.bEnabled = true;
 		MotionConfig.ExitDuration = 0.16f;
-		Widget->SetSlotMotionConfig(MotionConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Widget, MotionConfig);
 		FWacomFirstPersonCardSlotVisualConfig VisualConfig;
 		VisualConfig.CardUseEffect = UseConfig;
-		Widget->SetSlotVisualConfig(VisualConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 		Widget->SetSlotViewImmediate(MakeSlot());
 		return Widget;
 	}

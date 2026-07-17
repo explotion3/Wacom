@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 
 class USoundBase;
-struct FWacomFirstPersonCardSlotFeedbackConfig;
+struct FWacomFirstPersonCardDragPickupConfig;
 
 struct FWacomFirstPersonCardDragPickupSoundRequest
 {
@@ -24,7 +24,7 @@ class FWacomFirstPersonCardDragPickupPlayback
 {
 public:
 	void Begin(
-		const FWacomFirstPersonCardSlotFeedbackConfig& Config,
+		const FWacomFirstPersonCardDragPickupConfig& Config,
 		bool bStartVisualImmediately = true);
 	void StartVisualPlayback();
 	void Tick(float DeltaTime);

@@ -286,8 +286,9 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::BuildTargetView
 			View.ContactShadowLift = FMath::Clamp(Config.DragContactShadowLift, 0.0f, 1.0f);
 		}
 	}
-	else if (Input.bHovered || Input.bPressed)
+	else if (Input.bHovered || Input.bPressed || Input.PressedFeedbackAmount > KINDA_SMALL_NUMBER)
 	{
+		const float PressedAmount = FMath::Clamp(Input.PressedFeedbackAmount, 0.0f, 1.0f);
 		if (View.bFake3DEnabled)
 		{
 			const float MaxTiltDegrees = FMath::Max(0.0f, Config.HoverMaxTiltDegrees);
@@ -295,14 +296,21 @@ FWacomFirstPersonCardDepthView FWacomFirstPersonCardDepthMotion::BuildTargetView
 			View.TiltDegrees = FVector2D(
 				-PointerInCardSpace.Y * MaxTiltDegrees,
 				PointerInCardSpace.X * MaxTiltDegrees);
-			if (Input.bPressed)
-			{
-				View.TiltDegrees *= FMath::Clamp(Config.PressedTiltMultiplier, 0.0f, 1.0f);
-			}
+			View.TiltDegrees *= FMath::Lerp(
+				1.0f,
+				FMath::Clamp(Config.PressedTiltMultiplier, 0.0f, 1.0f),
+				PressedAmount);
 		}
 		if (View.bContactShadowEnabled)
 		{
-			View.ContactShadowLift = FMath::Clamp(Config.HoverContactShadowLift, 0.0f, 1.0f);
+			const float PressedLiftMultiplier = FMath::Lerp(
+				1.0f,
+				FMath::Clamp(Input.PressedContactShadowLiftMultiplier, 0.0f, 1.0f),
+				PressedAmount);
+			View.ContactShadowLift = FMath::Clamp(
+				Config.HoverContactShadowLift * PressedLiftMultiplier,
+				0.0f,
+				1.0f);
 		}
 	}
 	PopulateContactShadowOffset(Config, View);

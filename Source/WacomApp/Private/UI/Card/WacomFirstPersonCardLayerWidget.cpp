@@ -268,124 +268,54 @@ void UWacomFirstPersonCardLayerWidget::SetCardViewClass(
 	ClearSlotMotionState();
 }
 
-void UWacomFirstPersonCardLayerWidget::SetSlotMotionConfig(
-	const FWacomFirstPersonCardSlotMotionConfig& InConfig)
+void UWacomFirstPersonCardLayerWidget::SetSlotRuntimeConfig(
+	const FWacomFirstPersonCardSlotRuntimeConfig& InConfig)
 {
-	const FWacomFirstPersonCardSlotMotionConfig NewConfig = NormalizeSlotMotionConfig(InConfig);
-	if (AreSlotMotionConfigsEquivalent(SlotMotionConfig, NewConfig))
+	const FWacomFirstPersonCardSlotRuntimeConfig NewConfig = NormalizeSlotRuntimeConfig(InConfig);
+	const FWacomFirstPersonCardSlotRuntimeConfig CurrentConfig = BuildCurrentSlotRuntimeConfig();
+	if (AreSlotRuntimeConfigsEquivalent(CurrentConfig, NewConfig))
 	{
 		return;
 	}
 
-	SlotMotionConfig = NewConfig;
+	SlotMotionConfig = NewConfig.Motion;
+	SlotVisualConfig = NewConfig.Visual;
+	InteractionFeedbackConfig = NewConfig.Interaction;
+	DragPickupConfig = NewConfig.DragPickup;
+	CardDragConfig = NewConfig.Drag;
 #if WITH_AUTOMATION_TESTS
-	++SlotMotionConfigPropagationCountForTest;
+	++SlotRuntimeConfigPropagationCountForTest;
 #endif
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
 	{
 		if (SlotWidget)
 		{
-			SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
+			SlotWidget->SetSlotRuntimeConfig(NewConfig);
 		}
 	}
 	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
 	{
 		if (SlotWidget)
 		{
-			SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
-		}
-	}
-}
-
-void UWacomFirstPersonCardLayerWidget::SetSlotVisualConfig(
-	const FWacomFirstPersonCardSlotVisualConfig& InConfig)
-{
-	const FWacomFirstPersonCardSlotVisualConfig NewConfig = NormalizeSlotVisualConfig(InConfig);
-	if (AreSlotVisualConfigsEquivalent(SlotVisualConfig, NewConfig))
-	{
-		return;
-	}
-
-	SlotVisualConfig = NewConfig;
-#if WITH_AUTOMATION_TESTS
-	++SlotVisualConfigPropagationCountForTest;
-#endif
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
-		}
-	}
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
-		}
-	}
-}
-
-void UWacomFirstPersonCardLayerWidget::SetSlotFeedbackConfig(
-	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig)
-{
-	const FWacomFirstPersonCardSlotFeedbackConfig NewConfig = NormalizeSlotFeedbackConfig(InConfig);
-	if (AreSlotFeedbackConfigsEquivalent(SlotFeedbackConfig, NewConfig))
-	{
-		return;
-	}
-
-	SlotFeedbackConfig = NewConfig;
-#if WITH_AUTOMATION_TESTS
-	++SlotFeedbackConfigPropagationCountForTest;
-#endif
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
-		}
-	}
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
-		}
-	}
-}
-
-void UWacomFirstPersonCardLayerWidget::SetCardDragConfig(
-	const FWacomFirstPersonCardDragConfig& InConfig)
-{
-	const FWacomFirstPersonCardDragConfig NewConfig = NormalizeCardDragConfig(InConfig);
-	if (AreCardDragConfigsEquivalent(CardDragConfig, NewConfig))
-	{
-		return;
-	}
-
-	CardDragConfig = NewConfig;
-#if WITH_AUTOMATION_TESTS
-	++CardDragConfigPropagationCountForTest;
-#endif
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : SlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->SetCardDragConfig(CardDragConfig);
-		}
-	}
-	for (TObjectPtr<UWacomFirstPersonCardLayerSlotWidget>& SlotWidget : OutgoingSlotWidgets)
-	{
-		if (SlotWidget)
-		{
-			SlotWidget->SetCardDragConfig(CardDragConfig);
+			SlotWidget->SetSlotRuntimeConfig(NewConfig);
 		}
 	}
 	if (!CardDragConfig.bEnableFirstPersonCardDragCommit)
 	{
 		ClearCurrentDragState(true);
 	}
+}
+
+FWacomFirstPersonCardSlotRuntimeConfig
+UWacomFirstPersonCardLayerWidget::BuildCurrentSlotRuntimeConfig() const
+{
+	FWacomFirstPersonCardSlotRuntimeConfig Config;
+	Config.Motion = SlotMotionConfig;
+	Config.Visual = SlotVisualConfig;
+	Config.Interaction = InteractionFeedbackConfig;
+	Config.DragPickup = DragPickupConfig;
+	Config.Drag = CardDragConfig;
+	return Config;
 }
 
 void UWacomFirstPersonCardLayerWidget::SetCardDragFeedbackTarget(
@@ -1069,10 +999,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardSlots(
 
 		SlotWidget->SetSlotMotionKey(SlotKey);
 		SlotWidget->SetCardViewClass(CardViewClass);
-		SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
-		SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
-		SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
-		SlotWidget->SetCardDragConfig(CardDragConfig);
+		SlotWidget->SetSlotRuntimeConfig(BuildCurrentSlotRuntimeConfig());
 		SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);
 		SlotWidget->SetOwningFirstPersonCardLayer(this);
 		const bool bDataRewritePrepared =
@@ -1644,14 +1571,8 @@ FWacomFirstPersonCardLayerAutomationTestView UWacomFirstPersonCardLayerWidget::G
 {
 	FWacomFirstPersonCardLayerAutomationTestView View;
 	View.SkippedEquivalentSlotRefreshCount = SkippedEquivalentSlotRefreshCountForTest;
-	View.SlotMotionConfigPropagationCount = SlotMotionConfigPropagationCountForTest;
-	View.SlotVisualConfigPropagationCount = SlotVisualConfigPropagationCountForTest;
-	View.SlotFeedbackConfigPropagationCount = SlotFeedbackConfigPropagationCountForTest;
-	View.CardDragConfigPropagationCount = CardDragConfigPropagationCountForTest;
-	View.SlotMotionConfig = SlotMotionConfig;
-	View.SlotVisualConfig = SlotVisualConfig;
-	View.SlotFeedbackConfig = SlotFeedbackConfig;
-	View.CardDragConfig = CardDragConfig;
+	View.SlotRuntimeConfigPropagationCount = SlotRuntimeConfigPropagationCountForTest;
+	View.SlotRuntimeConfig = BuildCurrentSlotRuntimeConfig();
 	View.CurrentDragView = CurrentDragView;
 	View.CurrentPointerView = CurrentPointerView;
 	View.bHasCurrentPointerView = bHasCurrentPointerView;
@@ -1989,10 +1910,7 @@ UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::CreateSl
 	}
 
 	SlotWidget->SetCardViewClass(CardViewClass);
-	SlotWidget->SetSlotMotionConfig(SlotMotionConfig);
-	SlotWidget->SetSlotVisualConfig(SlotVisualConfig);
-	SlotWidget->SetSlotFeedbackConfig(SlotFeedbackConfig);
-	SlotWidget->SetCardDragConfig(CardDragConfig);
+	SlotWidget->SetSlotRuntimeConfig(BuildCurrentSlotRuntimeConfig());
 	SlotWidget->SetCardLayerInteractionEnabled(bCardLayerInteractionEnabled);
 	SlotWidget->SetOwningFirstPersonCardLayer(this);
 	BindSlotWidget(SlotWidget);

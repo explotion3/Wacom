@@ -63,10 +63,10 @@ namespace WacomFirstPersonCardPlayedDissolveSpec
 		FWacomFirstPersonCardSlotMotionConfig MotionConfig;
 		MotionConfig.bEnabled = true;
 		MotionConfig.ExitDuration = 0.16f;
-		Widget->SetSlotMotionConfig(MotionConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Widget, MotionConfig);
 		FWacomFirstPersonCardSlotVisualConfig VisualConfig;
 		VisualConfig.PlayedDissolve = DissolveConfig;
-		Widget->SetSlotVisualConfig(VisualConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 		Widget->SetSlotViewImmediate(MakeSlot());
 		return Widget;
 	}
@@ -246,7 +246,7 @@ bool FWacomFirstPersonCardPlayedDissolveStyleVariantTest::RunTest(
 	FWacomFirstPersonCardSlotAutomationTestView View =
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget);
 	const FWacomFirstPersonCardOrderedDitherStyleData& NormalizedDither =
-		View.SlotVisualConfig.PlayedDissolve.Style.OrderedDither;
+		View.SlotRuntimeConfig.Visual.PlayedDissolve.Style.OrderedDither;
 	TestEqual(TEXT("Bayer sizes above four normalize to eight"), NormalizedDither.BayerMatrixSize, 8);
 	TestTrue(TEXT("Dither band width remains positive"), NormalizedDither.BandWidth > 0.0f);
 	TestTrue(TEXT("Residue density clamps to zero"), FMath::IsNearlyZero(NormalizedDither.ResidueDensity));
@@ -278,7 +278,7 @@ bool FWacomFirstPersonCardPlayedDissolveStyleVariantTest::RunTest(
 	AshConfig.Style.EffectKind = EWacomFirstPersonCardPlayedDissolveEffectKind::PixelAsh;
 	FWacomFirstPersonCardSlotVisualConfig AshVisualConfig;
 	AshVisualConfig.PlayedDissolve = AshConfig;
-	Widget->SetSlotVisualConfig(AshVisualConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, AshVisualConfig);
 	Widget->SetSlotViewImmediate(MakeSlot());
 	Widget->BeginExitMotionWithProfile(
 		Widget->GetSlotView(),

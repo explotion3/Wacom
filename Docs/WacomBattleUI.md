@@ -254,6 +254,8 @@ First-person hand 不在 slot widget 内提交规则。正式 target drag / aim�
 
 Battle / Run hand 共用 Card Depth。`FWacomFirstPersonCardDepthMotion` 在 Hover 时按卡面局部 pointer 计算倾斜，在 Drag 时按低通 pointer velocity 计算惯性倾斜，并与 rest / semantic transition 的压平以及 `ContactShadowLift` 一起做帧率无关平滑。`UWacomFirstPersonCardViewWidget` 将 `TiltX / TiltY / PerspectiveStrength / ContactShadowEnabled / ContactShadowLift` 写入现有 Retainer，同时把同一倾角以 `FWacomCardSurfacePerspectiveView` 交给内层 `UWacomCardView`：核心表面 MI 分层移动插画 / 卡框 / 稀有度饰条，实体出血 Badge / Durability 走 UMG RenderTransform。Badge 实体框和耐久底板还会复制自身 Brush 生成卡面内局部硬接触影；数字、文字和发光不投影，Reduced Motion 只保留静态接触。该路径只属于表现层，不改变规则、296×420 命中或外部 Surface Effect；局部附件影不替代 Retainer 内整卡实时 Alpha 阴影，外部 `CardShadowImage` 也不属于当前生产链。
 
+First-person hand 的旧 `FeedbackOverlay / InteractionFeedbackImage / M_FirstPersonCard_FeedbackEdge` 已删除。Hover 只使用 lift、Fake-3D、卡面视差与接触阴影；Pressed 由 Motion Mixer 平滑合成默认 `0.985x`、向下 `2px`，并缩短接触阴影；权威成功 Commit 只保留约 `0.12s` 的运动脉冲。无效目标 Hover/Probe 不显示拒绝色，只有正式 release 被规则拒绝时才播放源卡水平阻尼 shake，并由 CardView Slate Paint 绘制四角红色硬像素 L 刻线。Simplified Motion 关闭 Pressed 运动与 Deny shake，但保留短促静态刻线。该收口不改变 card-target identity、validation 或 release 命令路径。
+
 Battle / Run 共用的 first-person Slot 不再执行单卡视口底边钳制。卡面靠近屏幕边缘时的文字连续绘制由 `Fake3DSurfaceRetainer` 直接内容根的 `Clip To Bounds - Without Intersecting` 合同保证；该合同只修正 Retainer 内部 culling，不改变手牌扇形、卡牌位置或输入命中。
 
 Battle hand 与 Run hand 共用 App-private `FWacomFirstPersonCardPresentationScalePolicy`。全局 UI 仍参照 `1920 × 1080`，但 first-person 卡牌表现参照 `2560 × 1440`：720p 目标物理倍率 `0.5`、1080p 为 `0.75`、1440p 及以上封顶 `1.0`。倍率由 Anchor 写入 resolved runtime config 与 Slot view；BattleHUD 不自行计算或覆盖。卡牌 `296 × 420` 主体、手牌布局、语义转场、反馈位移、Aim Arrow 和 Card Glyph Transfer 使用同一局部空间倍率，时序和输入阈值不变。
@@ -347,3 +349,6 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 - `Wacom.UI.Battle`
 - `Wacom.UI.Battle.CombatLog`
 - `Wacom.UI.FirstPersonCardLayer` 覆盖 first-person card layer 专题行为
+### First-person Card Slot 内部所有权
+
+BattleHUD 仍只生成表现 Frame / Hint，不感知 Slot 内部状态机。Anchor 将既有编辑器字段解析成单个 `FWacomFirstPersonCardSlotRuntimeConfig`，经 Owner 与 Layer 原子提交到 Slot。Slot 的 UMG adapter 把输入交给 Gesture Controller，把语义 Hint 交给 Presentation Controller；后者统一拥有语义 Playback、Surface/Cost/Badge Ready Generation 和单 Retainer Arbiter。该整理不改变 Battle/Run Hint、声音时机、动画数值或命令阶段，只消除任意 Visual 配置刷新清空全部动画的隐式耦合。

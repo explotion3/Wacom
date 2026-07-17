@@ -293,6 +293,93 @@ bool FWacomFirstPersonCardLayerTestAccess::RequestMouseUp(
 	return Slot.RequestMouseUpForTest();
 }
 
+void FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FWacomFirstPersonCardSlotMotionConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Layer).SlotRuntimeConfig;
+	RuntimeConfig.Motion = Config;
+	Layer.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FWacomFirstPersonCardSlotMotionConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Slot).SlotRuntimeConfig;
+	RuntimeConfig.Motion = Config;
+	Slot.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FWacomFirstPersonCardSlotVisualConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Layer).SlotRuntimeConfig;
+	RuntimeConfig.Visual = Config;
+	Layer.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FWacomFirstPersonCardSlotVisualConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Slot).SlotRuntimeConfig;
+	RuntimeConfig.Visual = Config;
+	Slot.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FWacomFirstPersonCardInteractionFeedbackConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Layer).SlotRuntimeConfig;
+	RuntimeConfig.Interaction = Config;
+	Layer.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FWacomFirstPersonCardInteractionFeedbackConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Slot).SlotRuntimeConfig;
+	RuntimeConfig.Interaction = Config;
+	Slot.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetDragPickupConfig(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FWacomFirstPersonCardDragPickupConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Slot).SlotRuntimeConfig;
+	RuntimeConfig.DragPickup = Config;
+	Slot.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetCardDragConfig(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	const FWacomFirstPersonCardDragConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Layer).SlotRuntimeConfig;
+	RuntimeConfig.Drag = Config;
+	Layer.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::SetCardDragConfig(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	const FWacomFirstPersonCardDragConfig& Config)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig RuntimeConfig = View(Slot).SlotRuntimeConfig;
+	RuntimeConfig.Drag = Config;
+	Slot.SetSlotRuntimeConfig(RuntimeConfig);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::TriggerDenyFeedback(
+	UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	Slot.TriggerDenyFeedback();
+}
+
 void FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(
 	UWacomFirstPersonCardLayerSlotWidget& Slot,
 	float DeltaTime)

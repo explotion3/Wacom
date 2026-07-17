@@ -43,6 +43,7 @@ void FWacomPresentationAccessibilityPolicy::ApplyToFirstPersonCardConfig(
 		Config.DataRewrite.bReducedMotion = true;
 		Config.EffectBadgeFeedback.bReducedMotion = true;
 		Config.bReduceDragPickupMotion = true;
+		Config.bReduceCardInteractionMotion = true;
 	}
 
 	Config.Selection.Style.SustainIntensity *= IntensityScale;

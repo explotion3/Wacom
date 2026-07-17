@@ -141,7 +141,7 @@ bool FWacomFirstPersonCardLayerEnterPlaybackActiveContractTest::RunTest(const FS
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeMotionConfig());
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn) });
 	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(120.0f, 240.0f)) });
@@ -176,7 +176,7 @@ bool FWacomFirstPersonCardLayerHandAnchorEnterPlaybackActiveContractTest::RunTes
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeMotionConfig());
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::HandAnchorEntered) });
 	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(160.0f, 260.0f)) });
@@ -211,7 +211,7 @@ bool FWacomFirstPersonCardLayerExitPlaybackActiveContractTest::RunTest(const FSt
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeMotionConfig());
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(180.0f, 260.0f)) });
 	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Discarded) });
@@ -248,7 +248,7 @@ bool FWacomFirstPersonCardLayerDiscardExitStaggersBySequenceTest::RunTest(
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeMotionConfig());
 	const FGuid FirstCardId = FGuid::NewGuid();
 	const FGuid SecondCardId = FGuid::NewGuid();
 	const FVector2D FirstStart(180.0f, 260.0f);
@@ -311,7 +311,7 @@ bool FWacomFirstPersonCardLayerForceSettlePresentationPlaybackTest::RunTest(
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeMotionConfig());
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(180.0f, 260.0f)) });
 	Layer->SetCardTransitionHints({
@@ -610,7 +610,7 @@ bool FWacomFirstPersonCardLayerGainedAndRetainedPlaybackTest::RunTest(const FStr
 	FWacomFirstPersonCardSlotMotionConfig Motion = MakeMotionConfig();
 	Motion.GainedEnterDurationSeconds = 0.2f;
 	Motion.GainedEnterSound = NewObject<USoundWave>(Layer);
-	Layer->SetSlotMotionConfig(Motion);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, Motion);
 	const FGuid CardId = FGuid::NewGuid();
 	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Gained) });
 	Layer->SetCardSlots({ MakeSlot(CardId, FVector2D(220.0f, 280.0f)) });
@@ -655,7 +655,7 @@ bool FWacomFirstPersonCardLayerEnterStartedEdgeTest::RunTest(const FString& /*Pa
 		});
 	FWacomFirstPersonCardSlotMotionConfig Motion = MakeMotionConfig();
 	Motion.DrawnEnterStaggerSeconds = 0.0f;
-	Layer->SetSlotMotionConfig(Motion);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, Motion);
 	const FGuid CardId = FGuid::NewGuid();
 	const FVector2D TargetPosition(320.0f, 240.0f);
 	Layer->SetCardTransitionHints({ MakeTransitionHint(CardId, EWacomFirstPersonCardSlotTransitionKind::Drawn) });
@@ -702,7 +702,7 @@ bool FWacomFirstPersonCardLayerDelayedEnterStartedEdgeTest::RunTest(const FStrin
 		});
 	FWacomFirstPersonCardSlotMotionConfig Motion = MakeMotionConfig();
 	Motion.DrawnEnterStaggerSeconds = 0.10f;
-	Layer->SetSlotMotionConfig(Motion);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, Motion);
 	const FGuid FirstCardId = FGuid::NewGuid();
 	FWacomFirstPersonCardLayerTransitionHint DelayedHint =
 		MakeTransitionHint(FirstCardId, EWacomFirstPersonCardSlotTransitionKind::Drawn);

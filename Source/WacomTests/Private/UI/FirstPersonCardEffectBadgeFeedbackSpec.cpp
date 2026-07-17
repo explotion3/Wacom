@@ -65,7 +65,7 @@ namespace WacomFirstPersonCardEffectBadgeFeedbackSpec
 			NewObject<UWacomFirstPersonCardLayerSlotWidget>();
 		FWacomFirstPersonCardSlotVisualConfig VisualConfig;
 		VisualConfig.EffectBadgeFeedback = MakeConfig(bReducedMotion);
-		Widget->SetSlotVisualConfig(VisualConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 		Widget->SetSlotViewImmediate(MakeSlot(FGuid::NewGuid()));
 		return Widget;
 	}

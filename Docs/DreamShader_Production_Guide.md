@@ -93,6 +93,8 @@ Settings = {
 
 费用与 EffectBadge 数字一类局部反馈应优先直接绑定数字 `UImage`，而不是为了一个小区域接管整张卡的 Retainer。PaperSprite 数字先通过 App-private Atlas 工具读取 `AtlasTexture / StartUV / SizeUV`，再把旧、新纹理和 UV Rect 写给每个数字自己的 MID；播放结束必须恢复权威 PaperSprite Brush、authored RenderTransform 与 Pivot。多位数只有在旧、新位数一致且每位 Sprite 都能解析时才播放，失败应直接刷新正式值，不能留下空白或半套 MID。
 
+短时 Pressed、Commit 或规则拒绝不应默认制作成整卡 UI 材质。first-person card layer 已删除历史 `M_FirstPersonCard_FeedbackEdge` 及其 `InteractionFeedbackImage` 宿主：实体按压和提交脉冲由 Motion Mixer/Card Depth 表达，拒绝四角标记由 Slate Paint 直接绘制。只有确实需要采样卡面、改变 Surface Alpha/RGB 或复用复杂像素算法时，才为交互语义增加 DreamShader 材质；不要为了颜色 tint 或几条硬边恢复常驻 Overlay/MID。
+
 ### 3.3 Niagara Sprite 材质
 
 - 使用 `Surface / Unlit / Translucent / TwoSided`。

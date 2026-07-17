@@ -79,7 +79,7 @@ BattleHUD 战斗手牌由 first-person card layer 提供，不再通过 WBP_Batt
 
 配置入口：`BP_WacomPlayerCharacter -> FirstPersonCardAnchorComponent -> FirstPersonCardViewClass`
 
-用途：first-person card layer 的卡面 wrapper，服务静态预览和 BattleHUD runtime battle hand。它组合通用 `UWacomCardView` 与 first-person 专属反馈层，只显示 `FWacomCardViewData` 和交互反馈，不承接点击、hover 命令、目标选择或战斗规则。
+用途：first-person card layer 的卡面 wrapper，服务静态预览和 BattleHUD runtime battle hand。它组合通用 `UWacomCardView` 与唯一 Surface Retainer；短时交互反馈由 Slot Motion、Card Depth 与 CardView Slate Paint 驱动，不承接点击命令、目标选择或战斗规则。
 
 推荐结构：
 
@@ -91,15 +91,13 @@ WBP_FPCardView
          └─ SurfaceCaptureOverlay / Overlay [Clipping = Clip To Bounds - Without Intersecting]
             └─ CardContentSizeBox / SizeBox [360 x 424, Center]
                └─ SurfaceOverlay / Overlay
-                  ├─ CardView : UWacomCardView
+                  └─ CardView : UWacomCardView
          │  └─ BleedCanvas / SizeBox
          │     └─ CardSizeBox / SizeBox
          │        └─ CardOverlay / Overlay
          │           ├─ CardSurfaceImage / Image（Optional；缺失时 C++ 在底层创建）
          │           ├─ 文本、费用与类型等稳定 UMG 内容
          │           └─ AttachmentParallaxHost（Optional；出血装饰容器）
-                  ├─ FeedbackOverlay : Image
-                  └─ InteractionFeedbackImage : Image
 ```
 
 关键绑定 / 命名：
@@ -107,12 +105,10 @@ WBP_FPCardView
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
 | `CardView` | `UWacomCardView` | Optional BindWidget | 通用卡面显示、`FWacomCardViewData` 刷新、主体命中几何来源 |
-| `FeedbackOverlay` | `Image` | Optional BindWidget | playable hover / drag target / card target affordance 的 full-card overlay |
-| `InteractionFeedbackImage` | `Image` | Optional BindWidget | pressed / confirm / commit / deny 的第一人称源卡交互反馈层；尺寸、层级和默认材质由 WBP 控制 |
 | `Fake3DSurfaceRetainer` | `RetainerBox` | Optional BindWidget | 卡面唯一 Retainer；常态承载 fake-3D 与实时 Alpha 接触阴影，Played 消散活动期间由 C++ 临时切换专用 Surface-Effect MID |
 | `SurfaceCaptureOverlay` | `Overlay` | Retainer direct content by convention | Retainer 完整离屏捕获根；覆盖 `456 x 520` 透明范围并重置继承自视口的普通 culling rect |
 | `CardContentSizeBox` | `SizeBox` | Authored by convention | 保持原 `360 x 424` 卡面与反馈层尺寸并居中，避免扩大捕获面时拉伸内容 |
-| `SurfaceOverlay` | `Overlay` | `CardContentSizeBox` content | 原有 CardView、FeedbackOverlay 与 InteractionFeedbackImage 的共同内容根 |
+| `SurfaceOverlay` | `Overlay` | `CardContentSizeBox` content | `CardView` 的内容根；不再放置旧交互 Overlay Image |
 | `CardSizeBox` | `SizeBox` | `CardView` 内 Required by convention | 296 x 420 主体显示和交互参考范围 |
 | `CostDigitImage` | `Image` | `CardView` 内 Optional | 一位费用数字 PaperSprite brush；真实改费时 C++ 临时绑定双 Atlas UI MID，结束后恢复权威新 Sprite |
 | `EffectBadgeSlot1..4` | `PanelWidget` | `CardView` 内 Optional | 保持最多四个可见 EffectBadge 的 authored 位置；稳定身份来自数据 Key，不来自槽位索引 |
@@ -126,10 +122,11 @@ WBP_FPCardView
 
 WBP 合同：
 
-- `WBP_FPCardView` 外层只负责包装和反馈层；通用卡面内容应放在 `CardView` 子控件里。
-- `FeedbackOverlay` 和 `InteractionFeedbackImage` 都由 WBP 控制尺寸、锚点和层级；C++ 只写颜色、透明度和材质参数。
-- `WBP_FPCardView` 一张卡只允许一个 Retainer。需要把旧 `CardView` 内 Retainer 移除，并让 `CardView / FeedbackOverlay / InteractionFeedbackImage` 一起成为 `Fake3DSurfaceRetainer` 内容；嵌套 Retainer 会增加离屏渲染成本并造成刷新时序不稳定。
+- `WBP_FPCardView` 外层只负责 first-person 包装；通用卡面内容应放在 `CardView` 子控件里。
+- `FeedbackOverlay / InteractionFeedbackImage` 已删除，不应重新加入。Pressed 使用 wrapper RenderTransform 与 Card Depth；权威 Commit 只保留运动脉冲；formal-release Deny 的红色四角 L 刻线由 App-private `FWacomFirstPersonCardInteractionCuePainter` 绘制，CardView 的 `NativePaint()` 只负责 Paint Generation 确认和转发。
+- `WBP_FPCardView` 一张卡只允许一个 Retainer。`CardView` 是 `Fake3DSurfaceRetainer` 内唯一的 authored 卡面内容；嵌套 Retainer 会增加离屏渲染成本并造成刷新时序不稳定。
 - `SetEffectMaterial()` 只表示 Retainer 已收到源材质，不代表 Slate 运行时 MID 已建立或新参数已经绘制。C++ 会为 Surface、`CostDigitImage` 和 Badge Digit 分别提交进度 0 Generation，并在 `WBP_FPCardView` 完成一次真实 Paint 后才启动对应 Playback；不要在 WBP Timeline、Construct 或 Binding 中抢先重置这些 Brush/Effect Material。该准备帧不会改变 WBP 层级和 authored 动画时长。
+- 三路准备状态由每个 Slot 的 `FWacomFirstPersonCardPresentationReadinessCoordinator` 统一管理；单 Retainer 所有权由 `FWacomFirstPersonCardSurfaceEffectArbiter` 决定。WBP 不负责材质优先级，也不能用 Binding 根据当前效果重复调用 `SetEffectMaterial()`。
 - `SurfaceCaptureOverlay` 必须是 `Fake3DSurfaceRetainer` 的直接内容根，尺寸覆盖完整 `456 x 520` Retainer，Clipping 使用 `Clip To Bounds - Without Intersecting (Advanced)`。`CardContentSizeBox` 保持 `360 x 424` 并居中，四边各留 `48 px` 纯渲染空间。`UWacomFirstPersonCardViewWidget` 会在 Rebuild / Construct 时自动保证直接内容根的 clipping 值，以免 Slate 使用视口 culling rect 提前整批剔除靠近屏幕底边的内容。该结构只改变 Retainer 捕获边界，不移动卡牌、不改变扇形、角度或命中。
 - `Fake3DSurfaceRetainer` Effect Material 使用 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`，Retainer texture parameter 填 `Texture` 并启用效果；该材质来自 `DShader/Material/Card/M_FirstPersonCard_Fake3D.dsm`，Blend Mode 必须是 `AlphaComposite`（DreamShader 源写作 `PremultipliedAlpha`），以符合 Retainer 的预乘 Alpha 合成。C++ Card Depth 参数名固定为 `TiltX`、`TiltY`、`PerspectiveStrength`、`ContactShadowEnabled`、`ContactShadowLift`、`ContactShadowTiltOffsetXUV`、`ContactShadowTiltOffsetYUV`、`ContactShadowOpacityMultiplier`。倾斜 Offset 让阴影沿卡面倾斜反方向移动，来自 Anchor 的 UMG px 参数并按 Retainer 当前尺寸转换为 UV；Opacity Multiplier 默认 `1.5`，可在 Anchor `11 Card Depth` 调整。基础与临时 Surface 材质必须全部保留该合同。当前生产材质不包含 Selection 参数、Noise 采样、轮廓、扫光或 Glint；实体出血卡框只参与实时 `Texture.A` 接触阴影。没有材质或缺少可选绑定时安全退化，不取消 Hover / Drag 或抽弃牌动画。
 - `WBP_FPCardView` 的 `CardView` 子控件实际使用 `WBP_FirstPersonCardView`；它与通用 `WBP_CardView` 的核心表面材质都使用 `/Game/DreamMaterials/Card/MI_WacomCardSurfaceComposite_Default`。DreamShader 真源是 `M_WacomCardSurfaceComposite.dsm + WacomCardSurfaceParallax.dsh`，`Scripts/SetupCardSurfacePerspectiveAssets.py` 会幂等同步两个 CardView 资产。C++ 按卡牌实例写入 `ArtTexture / ArtDepthTexture / ArtDepthEnabled`、`RarityTexture / RarityUVScaleBias` 与过滤后的 `TiltX / TiltY / ParallaxStrength`。`BackColorScale=0.96` 并固定在 Frame 平面；插画默认凹入 `-2.5` 源像素。无深度图时，插画实时 Alpha 会在固定 BackColor 上生成硬像素接触投影，默认 `ArtCastShadowEnabled=1 / ArtCastShadowOpacity=0.18 / ArtCastShadowStaticOffset=(0.75,1.0) / ArtCastShadowTiltOffsetPixels=2.680516`；投影只落在 BackColor 安全范围，不扩大卡牌 Alpha。`MaxArtParallaxPixels=4` 和半像素 Clamp 负责阻止极端视差采到边缘。Frame Alpha 另行生成约 `2px` 的静态/方向内沿阴影。可选 `CardIllustrationDepthMap` 使用黑深白浅的五级灰度，导入推荐 `Masks / sRGB=false / Nearest / NoMipmaps / UI`；为空时整层凹入仍正常工作。`RarityBorder` 继续使用 `PaperSprite` Atlas，但位置直接复用 Frame UV，不再具有独立深度；它可通过 `RarityReflectionEnabled` 使用 bevel、foil、虹彩和 glow，但正式默认关闭，内容可按稀有度主题显式开启。`ArtReflectionEnabled / FrameReflectionEnabled / RarityReflectionEnabled` 默认值为 `0 / 1 / 0`。Anchor `11 Card Depth` 的 `CardDragSurfaceParallaxStrengthMultiplier` 默认 `0.75`，通过现有响应滤波同步降低 Drag 的内层 UV 和出血装饰位移；不改变外层 Fake-3D。复合路径有效时旧 `BackColor / CardArt / Frame / RarityBorder / SurfaceFoilOverlay` 自动折叠；材质、插画或插入点无效时恢复旧路径。
@@ -146,15 +143,14 @@ WBP 合同：
 - Card Depth 材质由 DreamShader 1.4.1 生成，`.dsm` 是长期真源。若 Content 资产缺失，使用 DreamShader commandlet 对上述源文件执行 `compile -Force`；不要在 Unreal 材质图里做无法回写到 `.dsm` 的平行修改。
 - 材质图人工复查时，Fake3D 主卡面应有 `RG` 投影 UV、`B` inside mask、`RGB` 卡面颜色、`A` 卡面透明度；接触阴影还应有 9 个 `A` 采样 mask 与 `ContactShadowColor RGB`。若单通道节点仍显示 `RGB` 或 `RGA`，说明资产没有使用带 ComponentMask 默认通道修复的 DreamShader 版本重新生成。
 - `WBP_FPCardView` 已删除历史 `ShadowHost / CardShadowImage`；生产链只允许 `Fake3DSurfaceRetainer` 内的实时 Alpha 接触阴影，禁止重新加入与 Card Depth、消散 caster 不同步的宽泛矩形阴影。
-- `InteractionFeedbackImage` 优先使用 Anchor 的 `InteractionFeedbackMaterial`；该材质为空时，会复用 WBP Image brush 上预设的材质。推荐制作流程是：常规风格直接把材质放到 `InteractionFeedbackImage` 的 brush 上；需要角色 / 场景级替换时再在 Anchor 上填 override。若没有材质，pressed / confirm / commit 仍可退化为普通 tint，deny 只保留 shake，不退回整卡红色 overlay。
-- 交互反馈材质需要支持 C++ 写入参数：`FeedbackColor`、`EdgeWidth`、`EdgeSoftness`、`VignetteStrength`、`VignetteRadius`、`VignetteSoftness`、`Opacity`、`Pulse`。
-- 不再支持旧 `DenyFeedbackEdgeImage` fallback；源卡交互反馈统一绑定到 `InteractionFeedbackImage`。
+- Anchor `10 Interaction Feedback` 直接管理 Pressed 建立/退出时长、Scale、向下位移、接触阴影倍率，以及 Deny shake/四角刻线的颜色、透明度、Inset、Length 与 Thickness。没有交互反馈材质或 WBP Brush override。
+- Hover 和无效目标 Probe 不画整卡 tint。只有正式无效 release 才出现 Deny shake 与四角红色 L 刻线；Simplified Motion 关闭 shake 和 Pressed 运动，但保留短促静态刻线。
 - RootOverlay 使用 `Inherit`；`SurfaceCaptureOverlay` 使用 `Clip To Bounds - Without Intersecting (Advanced)` 并覆盖 `456 x 520` 透明捕获面，`CardContentSizeBox` 维持 `360 x 424` 居中。四边 `48 px` 余量用于倾斜边角、实时阴影和出血装饰，不扩大命中区域。
 - `SurfaceFoilOverlay` 只作为旧卡面 fallback 的显式 opt-in 装饰层；核心表面复合材质活动时会折叠它，箔片 / 虹彩应在默认 MI 中调节，避免双重高光。
 - `CardView.CardSizeBox` 默认保持 296 x 420，并居中放在 bleed 画布中；缺失时运行时回退旧主体尺寸。
 - 透明 bleed 只负责渲染，不扩大 hover、click、drag 起手或 Card target probe 范围。
 - 不绑定按钮，不在 WBP 图里实现 hover / pending / disabled 状态机。
-- 材质流光和表面装饰继续走内层 `UWacomCardView` 路径；first-person 反馈走 wrapper 绑定控件，不在 slot widget 内新增 Image / 材质刷新逻辑。
+- 材质流光和表面装饰继续走内层 `UWacomCardView` 路径；first-person 微反馈由 Slot/Depth/CardView Paint 合成，不新增 wrapper Image 或反馈材质。
 
 最小 PIE 验收：
 
@@ -162,6 +158,8 @@ WBP 合同：
 - 带实体出血卡框装饰的卡牌，其紧贴接触阴影跟随真实装饰轮廓；Hover / Drag 时接触阴影平滑变软、变淡，并沿卡面倾斜反方向产生可读位移，且没有明显双黑边。
 - EffectBadge 框体和耐久底板在 Hover / Drag 时应能看到独立的硬像素局部接触影；数字本身无影。局部影只在卡面上表达附件高度，不应形成第二个宽泛的整卡场景阴影。
 - Hover 卡面随卡内 pointer 克制倾斜，按下后倾角减弱；Drag 改由 pointer velocity 产生惯性，pointer 停止后倾角回正但抬升阴影保持到 release。
+- Pressed 平滑缩到约 `0.985x` 并下沉约 `2px`，松开后平滑归位；成功提交前不出现 optimistic Confirm，权威 Commit 只保留运动脉冲。
+- 无效目标 Hover 不出现拒绝提示；正式无效 release 才播放水平阻尼 shake 与四角红色硬像素 L 刻线。Simplified Motion 下不 shake，但刻线仍短促显示。
 - 抽牌 / 出牌 / 弃牌 semantic transition 期间卡面逐渐压平；目标候选卡不倾斜，只有 Drag source 消费 fake-3D。
 - Battle 真实抽牌在 stagger 等待期应显示牌背，飞行中横向翻成正面并在手牌位置轻压落定；这由 Anchor `18 Card Draw Reveal`、`DA_FPCardDrawRevealStyle_PixelBack` 和单个 `Fake3DSurfaceRetainer` 完成，不需要 WBP 增加 Image、Retainer 或 Animation。牌背图案只映射居中的 `CardContentSizeBox`，费用、耐久、EffectBadge 等出血轮廓继续使用实时 CardView Alpha 的统一牌背边缘色。替换正式牌背时优先改默认或主题 MI 的 `CardBackTexture`，不要改 WBP 层级。
 - 回合结束保留牌使用 Anchor `20 Card Retain Seal`、`DA_FPCardRetainSealStyle_Pixel` 与同一个 `Fake3DSurfaceRetainer`。Sealing 后 Held 只保留低强度四角/外缘刻印并轻微抬升，抽牌与左右手生成完成后再由 `RetainedRelease` 解除；左右手 Anchor 本身不播放。WBP 不增加 Image、Overlay、Animation 或第二个 Retainer，`Texture`、Fake3D 与实时 Alpha 接触阴影合同保持不变。

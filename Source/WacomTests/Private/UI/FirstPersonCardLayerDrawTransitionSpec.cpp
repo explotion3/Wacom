@@ -294,7 +294,7 @@ bool FWacomFirstPersonCardLayerDrawEnterPlaybackTest::RunTest(const FString& Par
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeDrawPlaybackMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeDrawPlaybackMotionConfig());
 	Layer->SetCardLayerInteractionEnabled(true);
 
 	const FGuid CardId = FGuid::NewGuid();
@@ -366,7 +366,7 @@ bool FWacomFirstPersonCardLayerDrawEnterPlaybackSurvivesOrdinaryRefreshTest::Run
 	MotionConfig.DrawnEnterStaggerSeconds = 0.0f;
 	MotionConfig.DrawnEnterArcLiftPixels = 0.0f;
 	MotionConfig.DrawnEnterEasePower = 1.0f;
-	Layer->SetSlotMotionConfig(MotionConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MotionConfig);
 	Layer->SetCardLayerInteractionEnabled(true);
 
 	const FGuid CardId = FGuid::NewGuid();
@@ -577,7 +577,7 @@ bool FWacomFirstPersonCardLayerDrawHintWaitsForVisibleSlotTest::RunTest(const FS
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeDrawPlaybackMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeDrawPlaybackMotionConfig());
 	Layer->SetCardLayerInteractionEnabled(true);
 
 	const FGuid CardId = FGuid::NewGuid();
@@ -625,7 +625,7 @@ bool FWacomFirstPersonCardLayerDrawHintWaitsForProjectedSlotTest::RunTest(const 
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(MakeDrawPlaybackMotionConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeDrawPlaybackMotionConfig());
 	Layer->SetCardLayerInteractionEnabled(true);
 
 	const FGuid CardId = FGuid::NewGuid();

@@ -107,14 +107,10 @@ enum class EWacomFirstPersonCardDragTargetFeedbackState : uint8
 	CommitReady UMETA(DisplayName = "Commit Ready")
 };
 
-UENUM(BlueprintType)
-enum class EWacomFirstPersonCardInteractionFeedbackKind : uint8
+enum class EWacomFirstPersonCardInteractionCueKind : uint8
 {
-	None UMETA(DisplayName = "None"),
-	Pressed UMETA(DisplayName = "Pressed"),
-	Confirm UMETA(DisplayName = "Confirm"),
-	Commit UMETA(DisplayName = "Commit"),
-	Deny UMETA(DisplayName = "Deny")
+	None,
+	Deny
 };
 
 UENUM(BlueprintType)
@@ -192,41 +188,16 @@ enum class EWacomFirstPersonCardDataRewriteTone : uint8
 	Detrimental UMETA(DisplayName = "Detrimental")
 };
 
-USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomFirstPersonCardInteractionFeedbackView
+struct WACOMAPP_API FWacomFirstPersonCardInteractionCueView
 {
-	GENERATED_BODY()
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	EWacomFirstPersonCardInteractionFeedbackKind Kind =
-		EWacomFirstPersonCardInteractionFeedbackKind::None;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	TSoftObjectPtr<UMaterialInterface> Material;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
+	EWacomFirstPersonCardInteractionCueKind Kind =
+		EWacomFirstPersonCardInteractionCueKind::None;
 	FLinearColor Color = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	float Opacity = 0.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	float Pulse = 0.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	float EdgeWidth = 0.048f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	float EdgeSoftness = 0.024f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	float VignetteStrength = 0.22f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	float VignetteRadius = 0.58f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Feedback")
-	float VignetteSoftness = 0.28f;
+	float Amount = 0.0f;
+	float CornerInsetPixels = 8.0f;
+	float CornerLengthPixels = 14.0f;
+	float CornerThicknessPixels = 3.0f;
+	bool bReducedMotion = false;
 };
 
 USTRUCT(BlueprintType)
@@ -1017,6 +988,27 @@ struct WACOMAPP_API FWacomFirstPersonCardRetainSealConfig
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
 	bool bReducedMotion = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	float SealingDurationSeconds = 0.32f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	float SequenceStaggerSeconds = 0.045f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	float PeakLiftPixels = 12.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	float PeakScale = 1.025f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	float HeldLiftPixels = 5.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	float HeldScale = 1.01f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
+	float ReleaseDurationSeconds = 0.16f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer|Retain Seal")
 	FWacomFirstPersonCardRetainSealStyleData Style;
@@ -2312,7 +2304,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotMotionConfig
 };
 
 USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
+struct WACOMAPP_API FWacomFirstPersonCardInteractionFeedbackConfig
 {
 	GENERATED_BODY()
 
@@ -2320,55 +2312,22 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 	bool bEnabled = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FLinearColor PlayableHoverColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float PlayableHoverOpacity = 0.06f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float PressedScale = 0.985f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FLinearColor PressedColor = FLinearColor::White;
+	float PressedTranslationYPixels = 2.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float PressedOpacity = 0.10f;
+	float PressedInDurationSeconds = 0.045f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	bool bEnableDragPickupFeedback = true;
+	float PressedOutDurationSeconds = 0.08f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragPickupDurationSeconds = 0.14f;
+	float PressedContactShadowLiftMultiplier = 0.35f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragPickupRiseSeconds = 0.02f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragPickupLiftPixels = 12.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragPickupScaleMultiplier = 1.03f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	bool bReduceDragPickupMotion = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	TObjectPtr<USoundBase> DragPickupSound = nullptr;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragPickupSoundVolumeMultiplier = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragPickupSoundPitchMultiplier = 1.0f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DragPickupSoundPitchVariation = 0.03f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float ConfirmDuration = 0.08f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float ConfirmOpacity = 0.12f;
+	bool bReduceInteractionMotion = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float DenyDuration = 0.18f;
@@ -2380,25 +2339,16 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 	FLinearColor DenyColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float DenyOpacity = 0.18f;
+	float DenyOpacity = 0.42f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	TSoftObjectPtr<UMaterialInterface> InteractionFeedbackMaterial;
+	float DenyCornerInsetPixels = 8.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float InteractionFeedbackEdgeWidth = 0.048f;
+	float DenyCornerLengthPixels = 14.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float InteractionFeedbackEdgeSoftness = 0.024f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float InteractionFeedbackVignetteStrength = 0.22f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float InteractionFeedbackVignetteRadius = 0.58f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float InteractionFeedbackVignetteSoftness = 0.28f;
+	float DenyCornerThicknessPixels = 3.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	bool bEnablePlayCommitFeedback = true;
@@ -2407,36 +2357,64 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotFeedbackConfig
 	float PlayCommitDuration = 0.12f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float PlayCommitOpacity = 0.16f;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	FLinearColor PlayCommitColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	float PlayCommitScale = 1.015f;
+};
+
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardDragPickupConfig
+{
+	GENERATED_BODY()
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	bool bEnableRetainedFeedback = true;
+	bool bEnabled = true;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackDuration = 0.32f;
+	float DurationSeconds = 0.14f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackStaggerSeconds = 0.045f;
+	float RiseSeconds = 0.02f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackLiftPixels = 12.0f;
+	float LiftPixels = 12.0f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackScale = 1.025f;
+	float ScaleMultiplier = 1.03f;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackHeldLiftPixels = 5.0f;
+	bool bReducedMotion = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackHeldScale = 1.01f;
+	TObjectPtr<USoundBase> Sound = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
-	float RetainedFeedbackReleaseDuration = 0.16f;
+	float SoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float SoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	float SoundPitchVariation = 0.03f;
+};
+
+/** Atomic runtime contract propagated from the authored Anchor to every card slot. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomFirstPersonCardSlotRuntimeConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardSlotMotionConfig Motion;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardSlotVisualConfig Visual;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardInteractionFeedbackConfig Interaction;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardDragPickupConfig DragPickup;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomFirstPersonCardDragConfig Drag;
 
 };

@@ -16,10 +16,7 @@ struct FWacomFirstPersonCardLayerOwnerConfig
 	TSubclassOf<UWacomFirstPersonCardViewWidget> CardViewClass;
 	int32 ZOrder = 0;
 	uint32 ConfigHash = 0;
-	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
-	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
-	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
-	FWacomFirstPersonCardDragConfig CardDragConfig;
+	FWacomFirstPersonCardSlotRuntimeConfig SlotRuntimeConfig;
 	FWacomFirstPersonCardPileTransferConfig PileTransferConfig;
 	bool bLogSlotMotionDiagnostics = false;
 	bool bInteractionEnabled = false;
@@ -71,7 +68,7 @@ private:
 	bool bHasAppliedConfig = false;
 	uint32 LastAppliedConfigHash = 0;
 	TWeakObjectPtr<UClass> LastAppliedCardViewClass;
-	FWacomFirstPersonCardDragConfig LastAppliedCardDragConfig;
+	FWacomFirstPersonCardSlotRuntimeConfig LastAppliedSlotRuntimeConfig;
 	bool bLastAppliedLogDiagnostics = false;
 	bool bLastAppliedInteractionEnabled = false;
 #if WITH_AUTOMATION_TESTS

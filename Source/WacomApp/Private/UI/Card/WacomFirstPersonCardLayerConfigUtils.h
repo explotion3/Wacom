@@ -17,14 +17,26 @@ bool AreSlotVisualConfigsEquivalent(
 	const FWacomFirstPersonCardSlotVisualConfig& A,
 	const FWacomFirstPersonCardSlotVisualConfig& B);
 
-FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
-	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
-bool AreSlotFeedbackConfigsEquivalent(
-	const FWacomFirstPersonCardSlotFeedbackConfig& A,
-	const FWacomFirstPersonCardSlotFeedbackConfig& B);
+FWacomFirstPersonCardInteractionFeedbackConfig NormalizeInteractionFeedbackConfig(
+	const FWacomFirstPersonCardInteractionFeedbackConfig& InConfig);
+bool AreInteractionFeedbackConfigsEquivalent(
+	const FWacomFirstPersonCardInteractionFeedbackConfig& A,
+	const FWacomFirstPersonCardInteractionFeedbackConfig& B);
+
+FWacomFirstPersonCardDragPickupConfig NormalizeDragPickupConfig(
+	const FWacomFirstPersonCardDragPickupConfig& InConfig);
+bool AreDragPickupConfigsEquivalent(
+	const FWacomFirstPersonCardDragPickupConfig& A,
+	const FWacomFirstPersonCardDragPickupConfig& B);
 
 FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(
 	const FWacomFirstPersonCardDragConfig& InConfig);
 bool AreCardDragConfigsEquivalent(
 	const FWacomFirstPersonCardDragConfig& A,
 	const FWacomFirstPersonCardDragConfig& B);
+
+FWacomFirstPersonCardSlotRuntimeConfig NormalizeSlotRuntimeConfig(
+	const FWacomFirstPersonCardSlotRuntimeConfig& InConfig);
+bool AreSlotRuntimeConfigsEquivalent(
+	const FWacomFirstPersonCardSlotRuntimeConfig& A,
+	const FWacomFirstPersonCardSlotRuntimeConfig& B);

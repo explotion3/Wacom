@@ -10,6 +10,8 @@ struct FWacomFirstPersonCardDepthMotionInput
 	bool bProjected = false;
 	bool bHovered = false;
 	bool bPressed = false;
+	float PressedFeedbackAmount = 0.0f;
+	float PressedContactShadowLiftMultiplier = 0.35f;
 	bool bDragging = false;
 	bool bFlattenForSemanticTransition = false;
 	bool bHasPointerPosition = false;

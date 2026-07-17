@@ -87,7 +87,7 @@ namespace WacomFirstPersonCardLayerPresentationAnchorSpec
 	UWacomFirstPersonCardLayerWidget* MakeLayer(APlayerController& PC)
 	{
 		UWacomFirstPersonCardLayerWidget* Layer = NewObject<UWacomFirstPersonCardLayerWidget>(&PC);
-		Layer->SetSlotMotionConfig(MakeMotionConfig());
+		FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer, MakeMotionConfig());
 		return Layer;
 	}
 

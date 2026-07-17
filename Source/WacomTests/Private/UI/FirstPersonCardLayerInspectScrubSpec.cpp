@@ -147,7 +147,7 @@ bool FWacomFirstPersonCardLayerInspectScrubKeepsPreviewInHandTest::RunTest(const
 	const FGuid TargetCardId = FGuid::NewGuid();
 
 	Layer->SetCardLayerInteractionEnabled(true);
-	Layer->SetCardDragConfig(MakeScrubDragConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetCardDragConfig(*Layer, MakeScrubDragConfig());
 	FWacomFirstPersonCardLayerTestAccess::SetViewportSizeOverride(*Layer, FVector2D(1000.0f, 1000.0f));
 	Layer->SetCardSlots({
 		MakeSlot(SourceCardId, 0, SourcePosition),
@@ -268,7 +268,7 @@ bool FWacomFirstPersonCardLayerInspectScrubDragSourceTest::RunTest(const FString
 	const FGuid TargetCardId = FGuid::NewGuid();
 
 	Layer->SetCardLayerInteractionEnabled(true);
-	Layer->SetCardDragConfig(MakeScrubDragConfig());
+	FWacomFirstPersonCardLayerTestAccess::SetCardDragConfig(*Layer, MakeScrubDragConfig());
 	FWacomFirstPersonCardLayerTestAccess::SetViewportSizeOverride(*Layer, FVector2D(1000.0f, 1000.0f));
 	Layer->SetCardSlots({
 		MakeSlot(SourceCardId, 0, SourcePosition),

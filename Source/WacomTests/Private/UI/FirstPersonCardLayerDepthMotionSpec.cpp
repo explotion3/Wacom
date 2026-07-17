@@ -68,12 +68,12 @@ namespace WacomFirstPersonCardLayerDepthMotionSpec
 		VisualConfig.CardDepth.AttachmentCastShadowStaticOffsetPixels = FVector2D(2.0f, 2.5f);
 		VisualConfig.CardDepth.AttachmentCastShadowCounterMotionRatio = 0.80f;
 		VisualConfig.CardDepth.AttachmentCastShadowMaxOffsetPixels = 6.0f;
-		Widget->SetSlotVisualConfig(VisualConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 
 		FWacomFirstPersonCardDragConfig DragConfig;
 		DragConfig.bEnableFirstPersonCardDragCommit = true;
 		DragConfig.CardDragStartThresholdPixels = 1.0f;
-		Widget->SetCardDragConfig(DragConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetCardDragConfig(*Widget, DragConfig);
 		Widget->SetSlotViewImmediate(MakeSlot(Position));
 		FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Widget, TestStepSeconds);
 		return Widget;
@@ -359,9 +359,9 @@ bool FWacomFirstPersonCardAttachmentShadowReducedMotionTest::RunTest(
 	}
 
 	FWacomFirstPersonCardSlotVisualConfig VisualConfig =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget).SlotVisualConfig;
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).SlotRuntimeConfig.Visual;
 	VisualConfig.CardDepth.bReduceSurfaceParallaxMotion = true;
-	Widget->SetSlotVisualConfig(VisualConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 	FWacomFirstPersonCardLayerTestAccess::SetCardDepthPointerPosition(
 		*Widget,
 		CardCenter + FVector2D(110.0f, 0.0f));
@@ -385,7 +385,7 @@ bool FWacomFirstPersonCardAttachmentShadowReducedMotionTest::RunTest(
 
 	VisualConfig.CardDepth.bEnableFake3D = false;
 	VisualConfig.CardDepth.bReduceSurfaceParallaxMotion = false;
-	Widget->SetSlotVisualConfig(VisualConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 	Tick(*Widget, 2);
 	const FWacomCardSurfacePerspectiveView FlatPerspective =
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget)
@@ -452,11 +452,11 @@ bool FWacomFirstPersonCardLayerHandTargetFocusMotionTest::RunTest(const FString&
 	UWacomFirstPersonCardLayerSlotWidget* Widget = MakeWidget(FVector2D(500.0f, 500.0f));
 	if (!TestNotNull(TEXT("Target focus slot"), Widget)) return false;
 	FWacomFirstPersonCardSlotVisualConfig VisualConfig =
-		FWacomFirstPersonCardLayerTestAccess::View(*Widget).SlotVisualConfig;
+		FWacomFirstPersonCardLayerTestAccess::View(*Widget).SlotRuntimeConfig.Visual;
 	VisualConfig.DragCardTargetFocusLiftPixels = 18.0f;
 	VisualConfig.DragCardTargetFocusScale = 1.045f;
 	VisualConfig.DragCardTargetFocusZOrderBoost = 650;
-	Widget->SetSlotVisualConfig(VisualConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 	Widget->SetCardDragTargetFocusFeedback(
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
 		true);

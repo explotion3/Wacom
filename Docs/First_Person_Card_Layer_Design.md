@@ -122,7 +122,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `07 Hover` | hover lift / scale / ZOrder / hit hysteresis |
 | `08 Targeting State` | pending targeting、target select deemphasis |
 | `09 Gesture` | 按住读牌、拖出提交、快捷键拿起卡牌、inspect 姿态、aim arrow |
-| `10 Interaction Feedback` | hover overlay、pressed、confirm、deny、commit、正式 Drag 拾牌反馈与音效 |
+| `10 Interaction Feedback` | Pressed 实体按压、formal-release Deny 四角刻线/阻尼 shake、权威 Commit、正式 Drag 拾牌反馈与音效 |
 | `11 Card Depth` | Hover / Drag tilt、pointer velocity filter、perspective strength、Retainer 实时轮廓接触阴影，以及核心卡面 UV 分层与实体出血装饰视差 |
 | `12 Card Use Effect` | 普通成功使用牌的像素翻面收牌（可切回菱形波）、Reduced Motion、时长覆盖与一次性音效 |
 | `13 Card Exhausted Dissolve` | 实际进入 Exhaust 的 PixelAsh / OrderedDither Style、Reduced Motion 与时长覆盖；C++ 旧字段名暂为资产兼容保留 |
@@ -291,6 +291,8 @@ Layer 的每卡反馈容器是确定性的 Feedback Bundle，不再以单值 Map
 
 所有 first-person 临时卡面材质遵循统一的 Presentation Readiness Gate。Slot 先提交进度 0 View；`UWacomFirstPersonCardViewWidget` 为 Surface、`CostDigitImage` 与 EffectBadge 数字分别分配稳定 Generation，只有源材质有效、运行时 MID/Brush 已安装且该 Generation 在真实 `NativePaint()` 后被确认，Playback 才能起播。Ready 的首个 Tick 只消费一次性声音、Enter Started 或语义开始边缘，强制使用 `DeltaTime=0`，下一 Tick 才推进 authored 时间；因此首次 PSO/MID 建立或低帧率不会直接跳过刻印峰值和数字重组。
 
+内部所有权已经收口为四层：`FWacomFirstPersonCardGestureController` 只持有 Pressed / Inspecting / Dragging / Aiming / Armed / Cancelled 手势事实；`FWacomFirstPersonCardInteractionFeedbackPlayback` 与独立 Drag Pickup Playback 只输出局部反馈；`FWacomFirstPersonCardSlotPresentationController` 统一持有 Enter/Exit、Departure、Reform、HandTarget、Draw/Gain Reveal、Retain、Cost 与 EffectBadge 等语义 Playback，并通过单一 Activity View 汇总 `NeedsTick / BlocksPresentation`，Slot 不再重复遍历各 Playback 判定阶段所有权；Motion Mixer 只消费最终 `FWacomFirstPersonCardLocalFeedbackView`，不读取计时器。延迟目标离场、费用重写交接、Surface Departure 身份和 Ready 冻结等瞬态编排事实同样属于 Controller 的 App-private Runtime State，不再展开在公共 Slot Widget 头文件中；Controller 的统一 Reset 会同时清除 Playback、Readiness、Surface 所有权和这些瞬态事实。Presentation Controller 内的 `FWacomFirstPersonCardPresentationReadinessCoordinator` 原子管理 Surface / CostDigit / EffectBadge 三路 Generation，`FWacomFirstPersonCardSurfaceEffectArbiter` 以 `Departure > CardUseReform > HandTargetImpact > DrawReveal > GainReveal > RetainSeal > Base` 的固定优先级拥有唯一 Retainer。Anchor 字段仍通过一个 `FWacomFirstPersonCardSlotRuntimeConfig` 原子传播到 Slot；等价刷新不会重置 Playback，单个子配置变化只清理对应能力。
+
 Pending Gate 计入阶段阻塞，但 Preview 预热保持非阻塞；超时 `0.75s` 后按各效果既有空间/无材质路径降级，不补播声音或伪造 Peak。Slot 身份复用、配置实际变化、ForceComplete、source clear、BattleEnd 与 teardown 会取消所有 Generation。费用数字按材质源复用一枚 MID，Badge 按最大位数保留 MID 池；普通显示仍恢复 PaperSprite Brush，不承担持续材质绘制。
 
 ### Drag Pickup 与实验性 Surface Effect
@@ -361,22 +363,11 @@ Hover 输入命中与最终视觉几何分离。Anchor 先投影并平滑整副�
 
 `FWacomFirstPersonCardLayerSlotView` 本轮仍保留原字段名以降低调用方和测试改动量，但语义需要区分：`GetSlotView()` 更接近基础 slot + state flags，`GetVisualSlotView()` 是 SlotWidget 合成和 motion 后的最终视觉真相。详情面板、hover update、drag arrow 和 card-target feedback 应使用 final visual slot 语义；稳定 hover / press / drag 起手命中应继续使用基础 input hit 几何。
 
-视觉状态优先级固定为：pending source 高于普通 hover；drag card-target focus 不触发普通 hover，只负责当前指针压中的唯一目标卡 lift / scale / ZOrder；target affordance 只控制 overlay，不参与 lift / scale / ZOrder；pressed、commit pulse 和 deny shake 保留为短时 micro feedback，其中 deny 只做 shake + 边缘 / 暗角反馈，不改变主 scale / ZOrder。
+视觉状态优先级固定为：pending source 高于普通 hover；drag card-target focus 不触发普通 hover，只负责当前指针压中的唯一目标卡 lift / scale / ZOrder；Pressed、authoritative Commit 和 Deny 只作为局部 micro feedback 合成，不写整卡颜色、不改变 authored hand order。
 
-源卡颜色类短时交互反馈统一走 `InteractionFeedbackImage`，当前包括 `Pressed / Confirm / Commit / Deny`。SlotWidget 只计算状态、shake、scale 和 `FWacomFirstPersonCardInteractionFeedbackView`，然后交给 `UWacomFirstPersonCardViewWidget`；实际尺寸、层级和默认材质由 WBP 内的 `InteractionFeedbackImage` 控件负责。正式 Drag 拾牌反馈不使用该 Image，而是在 Motion Mixer 的 local feedback 阶段直接合成短时 RenderTransform 并由 Slot 播放一次声音。材质来源有两级：AnchorComponent Details 的 `InteractionFeedbackMaterial` 显式 override 优先；为空时 C++ 会复用 `InteractionFeedbackImage` 自身 brush 上预设的材质，作为 WBP 默认材质。若没有任何材质，pressed / confirm / commit 会退化为普通 tint，deny 仍保留 shake，且不会回退成整卡红色填充。`Retained` 已恢复为独立语义运动，不借用 Selection 或旧 Overlay 发光。`DenyFeedbackEdgeImage` 旧 fallback 已删除，新制作主线必须使用 `InteractionFeedbackImage`。拖拽 `InvalidCardTarget / ValidCardTarget`、card probe、commit ready 和 playable hover 等目标/候选提示继续使用 `FeedbackOverlay` full-card overlay 语义，但 overlay 控件本身也由 `WBP_FPCardView` 绑定和控制尺寸。
+旧 `FeedbackOverlay / InteractionFeedbackImage` 与 `M_FirstPersonCard_FeedbackEdge` 已从 first-person card layer 删除。Hover 只使用已有的 lift、Fake-3D、卡面视差与接触阴影；不会再附加 playable tint。左键 Pressed 由 Motion Mixer 平滑合成默认 `0.985x` Scale 与向下 `2px` 位移，并由 Card Depth 把接触阴影 lift 缩短；建立与退出默认分别为 `0.045s / 0.08s`。规则确认前不播放 optimistic Confirm。权威成功提交仍保留约 `0.12s`、默认 `1.015x` 的 Commit 运动脉冲，但不增加材质或整卡 tint。
 
-`InteractionFeedbackImage` 材质需要支持以下参数名，C++ 会在每次反馈刷新时写入动态材质实例：
-
-| 参数 | 类型 | 含义 |
-|---|---|---|
-| `FeedbackColor` | Vector | 当前反馈颜色，来自 pressed / confirm / commit / deny 对应配置 |
-| `EdgeWidth` | Scalar | 四边高亮宽度，UV 单位 |
-| `EdgeSoftness` | Scalar | 边缘向内淡出的柔和宽度，UV 单位 |
-| `VignetteStrength` | Scalar | 暗角强度 |
-| `VignetteRadius` | Scalar | 暗角开始出现的中心距离 |
-| `VignetteSoftness` | Scalar | 暗角淡入柔和度 |
-| `Opacity` | Scalar | 状态基础不透明度 |
-| `Pulse` | Scalar | 反馈生命周期脉冲，0 到 1 |
+无效目标的普通 Hover/Probe 不播放 Deny。只有正式 release 被规则拒绝时，Slot 才播放既有水平阻尼 shake，同时由 App-private `FWacomFirstPersonCardInteractionCuePainter` 在 `CardContentSizeBox` 四角绘制短促红色硬像素 L 刻线；`UWacomFirstPersonCardViewWidget::NativePaint()` 只确认最新 Paint Generation 并调用 Painter。刻线不需要 WBP Image、Retainer 材质或额外纹理。Simplified Motion 关闭 Pressed 位移/缩放和 Deny shake，但保留短促静态四角语义标记。正式 Drag 拾牌反馈继续在 Motion Mixer local feedback 阶段合成短时上提/缩放，并由 Slot 播放一次声音。
 
 稳定命中 resolver 只考虑 projected、非 exiting、有效 `CardInstanceId` 且可交互的 active slot。透明 bleed 不参与命中，命中范围仍只使用 `UWacomCardView.FixedCardBodyHitSize` 对应的 card body bounds。多张基础 body 重叠时，不按 hover 后 ZOrder 抢输入，而是按手牌左右顺序的相邻中心线分界选择；当前 hover 卡在分界线附近享有 `HoverHitHysteresisPixels` 滞后区，越过滞后区后才切到相邻卡。
 
@@ -384,7 +375,7 @@ Hover、press / drag 起手和拖拽中的 card target probe 复用同一个稳�
 
 拖拽到手牌目标时，稳定命中 resolver 只负责解析目标 `CardInstanceId` 和目标 slot identity，不负责判断目标是否合法。BattleHUD 继续通过 `UBattleSession::ValidateTargetWithCard()` 校验，并把 `CardProbe`、`ValidCardTarget` 或 `InvalidCardTarget` 下发回 first-person card layer。同一拖拽目标上的 `ValidCardTarget / InvalidCardTarget` 会持续保留；只有指针切到另一张目标卡、离开 card body，或当前状态还没有 HUD 校验结果时，layer 才回到本地 `CardProbe` 等待下一次校验。
 
-Card target 选中反馈拆成候选 affordance 和当前 focus 两层，不复用普通 hover。Affordance 表示一张手牌是否可作为当前源卡的目标，只负责绿色 / 红色 overlay，可多张同时存在；focus 表示拖拽指针当前命中的唯一目标卡，才应用 focus lift、scale 和 ZOrder boost。`CardProbe / ValidCardTarget / InvalidCardTarget` 都可作为 focus 状态，并继续用 overlay 颜色区分 probe、valid、invalid；该状态不调用普通 hover，不广播 hover / detail delegate，不写 `HoveredCardInstanceId`，也不影响 hover 稳定命中。像“加费测试”这类允许普通手牌和左右手锚点的 HandCard 目标卡，会显示全手牌合法候选全绿，但只有指针压中的那张卡获得唯一 focus。拖拽进入 active 状态后会清空并压制普通 hover，pointer enter / move 只更新拖拽手势和 CardTarget probe；release / cancel 当帧不会立即恢复 ordinary hover，避免目标卡 focus 与 hover lerp 叠加造成双重放大或双重缩小。release 成功后如果指针仍压在手牌 card body 上，Layer 会刷新普通 pointer view 但保持 `bIsHovered=false`，让 HUD / Run 的 camera look override 在 drag override 清理后同帧接续到当前指针，避免镜头先回到默认/中心再跳回鼠标方向。`bEnableDragTargetFeedback` 只控制 probe / focus / overlay 的显示；关闭后拖拽目标 identity 仍可被解析并交给 HUD / Battle 规则处理。
+Card target 状态仍拆成候选 affordance 事实和当前 focus 两层，不复用普通 hover。Affordance 表示一张手牌是否可作为当前源卡的目标；移除整卡 Overlay 后它只保留目标身份与规则诊断，不再绘制全手牌绿色/红色覆盖。Focus 表示拖拽指针当前命中的唯一目标卡，才应用 lift、scale 和 ZOrder boost；`CardProbe / ValidCardTarget / InvalidCardTarget` 继续作为规则/诊断状态，但无效 Hover 本身不触发 Deny。该状态不调用普通 hover，不广播 hover/detail delegate，不写 `HoveredCardInstanceId`，也不影响 hover 稳定命中。拖拽进入 active 状态后会清空并压制普通 hover，pointer enter/move 只更新拖拽手势和 CardTarget probe；release/cancel 当帧不会立即恢复 ordinary hover，避免目标 focus 与 hover lerp 叠加。正式无效 release 才播放源卡 Deny。`bEnableDragTargetFeedback` 只控制 probe/focus 表现，不影响目标 identity 继续交给 HUD/Battle 规则处理。
 
 Battle first-person 拖拽进入有效释放语义后，Action Preview 不只更新当前压中的目标部位。HUD 会把 `BuildCardActionPreview()` 返回的所有 projected enemy part facts 同步到敌人聚合面板和对应场景部位 prediction badge；如果一次出牌推进多个部位到行动，所有这些部位都会显示 projected 先机 `0` 和 action risk。单纯拖出手牌区但未命中有效目标时仍只显示轻量可作用对象提示，不显示玩家侧收益或敌人净结果。
 
@@ -434,24 +425,22 @@ Development Preview 已删除，不得重新建立静态卡牌 fallback 或把�
 
 - 外层 WBP 负责 first-person 专属卡面包装；通用卡面仍放在名为 `CardView` 的 `UWacomCardView` 子控件中，不改 `UWacomCardView::SetCardViewData()` 语义。
 - 必须提供 `CardView : UWacomCardView`，用于显示 `FWacomCardViewData` 和提供 `CardSizeBox` 主体命中几何。
-- 建议提供 `FeedbackOverlay : UImage`，用于 playable hover 等仍保留的整卡弱反馈；drag target / card target 不再使用颜色整卡覆盖，而由 target identity、focus lift / scale / ZOrder 和中性 aim arrow 表达。
-- 建议提供 `InteractionFeedbackImage : UImage`，用于 pressed / confirm / commit / deny 第一人称源卡交互反馈层；尺寸、层级和默认材质由 WBP 控制，通常放在 `FeedbackOverlay` 上方。
-- 建议提供 `Fake3DSurfaceRetainer : URetainerBox`，作为第一人称卡面的唯一 Retainer。Retainer 的直接内容根为铺满透明捕获面的 `SurfaceCaptureOverlay`，其中央放置固定 `360 x 424` 的 `CardContentSizeBox`，原有 `SurfaceOverlay` 与 `CardView / FeedbackOverlay / InteractionFeedbackImage` 位于该内容盒内；不要在 `CardView` 内再嵌套 Retainer。`SurfaceCaptureOverlay` 使用 `Clip To Bounds - Without Intersecting (Advanced)`，C++ 会在重建和 Construct 时再次保证该合同。
-- 不再支持旧 `DenyFeedbackEdgeImage` fallback；需要源卡交互反馈时必须绑定 `InteractionFeedbackImage`。
+- 不提供 `FeedbackOverlay / InteractionFeedbackImage`。Hover、Pressed、Commit 与 Deny 的正式表现由 Slot Motion、Card Depth 和 CardView Slate Paint 负责，WBP 不承载交互状态机或反馈材质。
+- 建议提供 `Fake3DSurfaceRetainer : URetainerBox`，作为第一人称卡面的唯一 Retainer。Retainer 的直接内容根为铺满透明捕获面的 `SurfaceCaptureOverlay`，其中央放置固定 `360 x 424` 的 `CardContentSizeBox`，`SurfaceOverlay` 与 `CardView` 位于该内容盒内；不要在 `CardView` 内再嵌套 Retainer。`SurfaceCaptureOverlay` 使用 `Clip To Bounds - Without Intersecting (Advanced)`，C++ 会在重建和 Construct 时再次保证该合同。
 - 当前外层 `FPCardViewSizeBox` 固定为 `456 x 520`，内部卡面内容仍固定为 `360 x 424` 并居中，相当于在四边增加 `48 px` 的纯渲染余量，用于容纳大倾角 Fake3D、实时接触阴影和实体出血装饰。
 - 内层 `CardView` 必须提供 `CardSizeBox` 主体 `SizeBox`，默认 296 x 420，并在 bleed 画布中尽量居中。
 - 命中范围使用 `UWacomCardView.FixedCardBodyHitSize`，默认 296 x 420；不会因 bleed 画布、RetainerBox 或布局压缩而变小。
 - `RootOverlay` 与 Retainer 使用外层 `456 x 520` 捕获尺寸并保持 `Inherit`；直接内容根 `SurfaceCaptureOverlay` 覆盖完整范围并使用 `Clip To Bounds - Without Intersecting (Advanced)`，内部 `CardContentSizeBox` 保持 `360 x 424`。这会让 Retainer 在离屏合成时绘制完整卡面子树与倾斜阴影，同时不缩放或移动卡牌、不改变扇形和命中。主体命中仍固定使用 `CardSizeBox`，透明捕获余量不扩大输入范围。
 - `Fake3DSurfaceRetainer` Effect Material 使用 DreamShader 生成的 `/Game/DreamMaterials/Card/M_FirstPersonCard_Fake3D`；Domain 为 User Interface，Blend Mode 为 `AlphaComposite`，采样参数名使用 Retainer 的 `Texture`，C++ 写入标量参数 `TiltX`、`TiltY`、`PerspectiveStrength`、`ContactShadowEnabled`、`ContactShadowLift`、`ContactShadowTiltOffsetXUV`、`ContactShadowTiltOffsetYUV`、`ContactShadowOpacityMultiplier`。没有 Effect Material 时卡面安全退化为平面，Hover / Drag 输入与其它动画仍正常工作。
 - 费用图标使用固定 `CostDigitImage : Image` 绑定；多位数、缺图标或未绑定时不会回退成文字费用。Battle 一位数真实改费期间，C++ 会临时把该 Image 的 PaperSprite Brush 换成双 Atlas UI MID，结束后精确恢复新 Sprite 与 authored transform；不需要新增 Widget 层。
-- 材质流光和 disabled overlay 继续走内层 `UWacomCardView` 现有绑定；first-person 交互反馈走 wrapper 的 `FeedbackOverlay / InteractionFeedbackImage`。
+- 材质流光和 disabled overlay 继续走内层 `UWacomCardView` 现有绑定；first-person 短时交互反馈不新增 wrapper Image。
 - WBP 只负责卡面显示质量，不提交战斗命令，不读取 `UBattleSession`。
 
 验收口径：
 
 - 大角度扇形排布下没有明显锯齿、像素断裂或黑边。
 - 卡面材质动画在 HUD first-person layer 中正常刷新。
-- Hover、Drag、pending、disabled、pressed、confirm、deny、retained 由 slot motion、Card Depth 和 wrapper feedback 表现，WBP 只提供控件和材质承载，不重复实现状态机。
+- Hover、Drag、pending、disabled、Pressed、Commit、Deny、Retained 由 Slot Motion、Card Depth、Surface Effect 或 CardView Paint 表现，WBP 不重复实现状态机。
 - 透明 bleed 区只用于渲染，不扩大 hover、press、drag 起手或 card target probe 范围。
 - 卡牌接近视口底边时，卡面文字随整张卡连续离开屏幕，不会整行瞬隐；卡牌位置、角度和扇形不因可读性保护发生补偿。
 

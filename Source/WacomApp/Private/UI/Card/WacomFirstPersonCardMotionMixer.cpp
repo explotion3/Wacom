@@ -165,58 +165,31 @@ bool FWacomFirstPersonCardMotionMixer::IsNearTarget(
 }
 
 FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::MixLocalFeedback(
-	const FWacomFirstPersonCardLocalFeedbackMixInput& Input)
+	const FWacomFirstPersonCardLayerSlotView& SlotView,
+	const FWacomFirstPersonCardLocalFeedbackView& FeedbackView)
 {
 	FWacomFirstPersonCardLocalFeedbackMixResult Result;
-	if (!Input.SlotView || !Input.FeedbackConfig)
-	{
-		return Result;
-	}
-	const FWacomFirstPersonCardLayerSlotView& SlotView = *Input.SlotView;
-	const FWacomFirstPersonCardSlotFeedbackConfig& FeedbackConfig = *Input.FeedbackConfig;
-	const bool bRetainedTransformActive = Input.bRetainTransformActive;
-	Result.ZOrder = SlotView.ZOrder + FMath::Max(0, Input.HandTargetImpactZOrderBoost);
-
-	const bool bDenyActive = FeedbackConfig.bEnabled
-		&& Input.DenyFeedbackElapsedSeconds < FeedbackConfig.DenyDuration;
-	const float DenyShakeOffset = bDenyActive
-		? ComputeDenyShakeOffset(
-			Input.DenyFeedbackElapsedSeconds,
-			FeedbackConfig.DenyDuration,
-			FeedbackConfig.DenyShakePixels)
-		: 0.0f;
-	const float PressedScale = FeedbackConfig.bEnabled && Input.bPressed
-		? FeedbackConfig.PressedScale
-		: 1.0f;
-	const float CommitScale =
-		FeedbackConfig.bEnabled
-		&& FeedbackConfig.bEnablePlayCommitFeedback
-		&& Input.bCommitFeedbackActive
-			? FeedbackConfig.PlayCommitScale
-			: 1.0f;
+	const bool bRetainedTransformActive = FeedbackView.bRetainTransformActive;
+	Result.ZOrder = SlotView.ZOrder + FMath::Max(0, FeedbackView.HandTargetImpactZOrderBoost);
 	const float RetainedScale = bRetainedTransformActive
-		? FMath::Max(0.01f, Input.RetainScaleMultiplier)
+		? FMath::Max(0.01f, FeedbackView.RetainScaleMultiplier)
 		: 1.0f;
-	const float DragPickupAlpha = FMath::Clamp(Input.DragPickupAlpha, 0.0f, 1.0f);
-	const float DragPickupScale = FMath::Lerp(
-		1.0f,
-		FeedbackConfig.DragPickupScaleMultiplier,
-		DragPickupAlpha);
 	Result.RenderTransform.Translation = FVector2D(
-		DenyShakeOffset,
+		FeedbackView.DenyTranslationXPixels,
 		-(bRetainedTransformActive
-			? FMath::Max(0.0f, Input.RetainLiftPixels)
+			? FMath::Max(0.0f, FeedbackView.RetainLiftPixels)
 			: 0.0f)
-			- FeedbackConfig.DragPickupLiftPixels * DragPickupAlpha
-			+ Input.HandTargetImpactTranslationYPixels);
+			- FMath::Max(0.0f, FeedbackView.DragPickupLiftPixels)
+			+ FeedbackView.HandTargetImpactTranslationYPixels
+			+ FeedbackView.PressedTranslationYPixels);
 	Result.RenderTransform.Scale = FVector2D(FMath::Max(
 		0.01f,
 		SlotView.RenderScale
-			* PressedScale
-			* CommitScale
+			* FMath::Max(0.01f, FeedbackView.PressedScaleMultiplier)
+			* FMath::Max(0.01f, FeedbackView.CommitScaleMultiplier)
 			* RetainedScale
-			* DragPickupScale
-			* FMath::Max(0.01f, Input.HandTargetImpactScaleMultiplier)));
+			* FMath::Max(0.01f, FeedbackView.DragPickupScaleMultiplier)
+			* FMath::Max(0.01f, FeedbackView.HandTargetImpactScaleMultiplier)));
 	Result.RenderTransform.Angle = SlotView.RenderAngleDegrees;
 	return Result;
 }

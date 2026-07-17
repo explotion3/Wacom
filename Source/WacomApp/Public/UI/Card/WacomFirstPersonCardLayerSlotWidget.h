@@ -13,24 +13,13 @@ class UWacomCardView;
 class UWacomFirstPersonCardViewWidget;
 class UWacomFirstPersonCardLayerWidget;
 class FWacomFirstPersonCardDepthMotion;
-class FWacomFirstPersonCardDataRewritePlayback;
-class FWacomFirstPersonCardEffectBadgeFeedbackPlayback;
-class FWacomFirstPersonCardDrawRevealPlayback;
-class FWacomFirstPersonCardGainRevealPlayback;
-class FWacomFirstPersonCardRetainSealPlayback;
+class FWacomFirstPersonCardGestureController;
+struct FWacomFirstPersonCardGestureControllerState;
 class FWacomFirstPersonCardDragPickupPlayback;
-class FWacomFirstPersonCardHandTargetImpactPlayback;
-class FWacomFirstPersonCardSurfaceDeparturePlayback;
-class FWacomFirstPersonCardUseReformPlayback;
-class FWacomFirstPersonCardTransitionPlayback;
-class FWacomFirstPersonCardPresentationReadinessGate;
+class FWacomFirstPersonCardInteractionFeedbackPlayback;
+class FWacomFirstPersonCardSlotPresentationController;
 struct FWacomFirstPersonCardLayerResolvedFeedbackHint;
 struct FWacomFirstPersonCardLayerTestAccess;
-
-struct FWacomFirstPersonCardTransitionPlaybackDeleter
-{
-	void operator()(FWacomFirstPersonCardTransitionPlayback* Playback) const;
-};
 
 struct FWacomFirstPersonCardDepthMotionDeleter
 {
@@ -42,49 +31,19 @@ struct FWacomFirstPersonCardDragPickupPlaybackDeleter
 	void operator()(FWacomFirstPersonCardDragPickupPlayback* Playback) const;
 };
 
-struct FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter
+struct FWacomFirstPersonCardInteractionFeedbackPlaybackDeleter
 {
-	void operator()(FWacomFirstPersonCardSurfaceDeparturePlayback* Playback) const;
+	void operator()(FWacomFirstPersonCardInteractionFeedbackPlayback* Playback) const;
 };
 
-struct FWacomFirstPersonCardDataRewritePlaybackDeleter
+struct FWacomFirstPersonCardGestureControllerDeleter
 {
-	void operator()(FWacomFirstPersonCardDataRewritePlayback* Playback) const;
+	void operator()(FWacomFirstPersonCardGestureController* Controller) const;
 };
 
-struct FWacomFirstPersonCardEffectBadgeFeedbackPlaybackDeleter
+struct FWacomFirstPersonCardSlotPresentationControllerDeleter
 {
-	void operator()(FWacomFirstPersonCardEffectBadgeFeedbackPlayback* Playback) const;
-};
-
-struct FWacomFirstPersonCardDrawRevealPlaybackDeleter
-{
-	void operator()(FWacomFirstPersonCardDrawRevealPlayback* Playback) const;
-};
-
-struct FWacomFirstPersonCardGainRevealPlaybackDeleter
-{
-	void operator()(FWacomFirstPersonCardGainRevealPlayback* Playback) const;
-};
-
-struct FWacomFirstPersonCardRetainSealPlaybackDeleter
-{
-	void operator()(FWacomFirstPersonCardRetainSealPlayback* Playback) const;
-};
-
-struct FWacomFirstPersonCardHandTargetImpactPlaybackDeleter
-{
-	void operator()(FWacomFirstPersonCardHandTargetImpactPlayback* Playback) const;
-};
-
-struct FWacomFirstPersonCardUseReformPlaybackDeleter
-{
-	void operator()(FWacomFirstPersonCardUseReformPlayback* Playback) const;
-};
-
-struct FWacomFirstPersonCardPresentationReadinessGateDeleter
-{
-	void operator()(FWacomFirstPersonCardPresentationReadinessGate* Gate) const;
+	void operator()(FWacomFirstPersonCardSlotPresentationController* Controller) const;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -104,21 +63,14 @@ enum class EWacomFirstPersonCardGestureInputSource : uint8
 #if WITH_AUTOMATION_TESTS
 struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 {
-	float FeedbackOverlayOpacity = 0.0f;
-	FLinearColor FeedbackOverlayColor = FLinearColor::Transparent;
-	float InteractionFeedbackOpacity = 0.0f;
-	EWacomFirstPersonCardInteractionFeedbackKind InteractionFeedbackKind =
-		EWacomFirstPersonCardInteractionFeedbackKind::None;
-	bool bHasInteractionFeedbackImage = false;
-	bool bInteractionFeedbackMaterialConfigured = false;
-	bool bInteractionFeedbackMaterialLoaded = false;
-	bool bInteractionFeedbackUsesOverrideMaterial = false;
-	bool bInteractionFeedbackUsesBrushMaterial = false;
-	bool bInteractionFeedbackLayerAboveFeedbackOverlay = false;
+	float InteractionCueAmount = 0.0f;
+	EWacomFirstPersonCardInteractionCueKind InteractionCueKind =
+		EWacomFirstPersonCardInteractionCueKind::None;
+	FLinearColor InteractionCueColor = FLinearColor::Transparent;
+	float PressedFeedbackAmount = 0.0f;
 	EWacomFirstPersonCardGestureSource GestureSource = EWacomFirstPersonCardGestureSource::None;
 	bool bPressed = false;
 	bool bDenyFeedbackActive = false;
-	bool bConfirmFeedbackActive = false;
 	bool bCommitFeedbackActive = false;
 	bool bRetainedFeedbackActive = false;
 	bool bRetainedFeedbackHeld = false;
@@ -199,13 +151,8 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	int32 EnterTransitionSoundRequestCount = 0;
 	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKind =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
-	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
-	FWacomFirstPersonCardDragConfig CardDragConfig;
-	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
-	int32 SlotMotionConfigApplyCount = 0;
-	int32 SlotFeedbackConfigApplyCount = 0;
-	int32 CardDragConfigApplyCount = 0;
-	int32 SlotVisualConfigApplyCount = 0;
+	FWacomFirstPersonCardSlotRuntimeConfig SlotRuntimeConfig;
+	int32 SlotRuntimeConfigApplyCount = 0;
 	int32 SurfaceReadinessState = 0;
 	int32 CostDigitReadinessState = 0;
 	int32 EffectBadgeReadinessState = 0;
@@ -282,17 +229,14 @@ public:
 		const FWacomFirstPersonCardLayerSlotView& InExitTargetSlotView,
 		const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& ExitProfileOverride,
 		EWacomFirstPersonCardSlotTransitionKind TransitionKind);
-	bool IsHandTargetImpactDeparturePending() const { return bHandTargetImpactDeparturePending; }
+	bool IsHandTargetImpactDeparturePending() const;
 	bool IsHandTargetImpactDepartureGateOpen() const;
 	bool HasHandTargetImpactReachedPeak() const { return IsHandTargetImpactDepartureGateOpen(); }
 	void SetHandTargetImpactDepartureOwnedByPileTransfer(bool bOwned);
 	void ReleaseDeferredHandTargetExitNow();
 	bool HasActivePresentationPlayback() const;
 	void ForceCompletePresentationPlayback();
-	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
-	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
-	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
-	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
+	void SetSlotRuntimeConfig(const FWacomFirstPersonCardSlotRuntimeConfig& InConfig);
 	void SetCardDragFeedbackTarget(
 		const FWacomInteractionTargetHandle& TargetHandle,
 		bool bValidTarget,
@@ -331,7 +275,7 @@ public:
 	FWacomInteractionTargetHandle BuildCardTargetHandle() const;
 	FVector2D GetCardBodyHitSizeForFirstPersonLayer() const;
 	bool IsWidgetPositionInsideCardBodyForFirstPersonLayer(const FVector2D& WidgetPosition) const;
-	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const { return GestureState; }
+	EWacomFirstPersonCardGestureState GetGestureStateForFirstPersonLayer() const;
 	bool CanUpdateGestureFromSlotPointer() const;
 	bool CanUpdateGestureFromExternalPointer() const;
 	bool IsInspectScrubActiveForFirstPersonLayer() const;
@@ -410,23 +354,15 @@ private:
 	TWeakObjectPtr<UWacomFirstPersonCardLayerWidget> OwningFirstPersonCardLayer;
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
-	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
+	FWacomFirstPersonCardInteractionFeedbackConfig InteractionFeedbackConfig;
+	FWacomFirstPersonCardDragPickupConfig DragPickupConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FString SlotMotionKey;
 	EWacomFirstPersonCardMotionIntent ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
-	EWacomFirstPersonCardGestureState GestureState = EWacomFirstPersonCardGestureState::Idle;
-	EWacomFirstPersonCardGestureSource GestureSource = EWacomFirstPersonCardGestureSource::None;
-	EWacomFirstPersonCardGestureInputSource GestureInputSource = EWacomFirstPersonCardGestureInputSource::None;
-	TOptional<FWacomFirstPersonCardLayerSlotView> GestureStartSlotView;
-	TOptional<FWacomFirstPersonCardLayerSlotView> GestureOverrideTargetSlotView;
-	FWacomInteractionTargetHandle GestureFeedbackTargetHandle;
-	FVector2D PressScreenPosition = FVector2D::ZeroVector;
-	FVector2D CurrentGestureScreenPosition = FVector2D::ZeroVector;
-	float GestureElapsedSeconds = 0.0f;
 	float ExitMotionElapsedSeconds = 0.0f;
 	TUniquePtr<
-		FWacomFirstPersonCardTransitionPlayback,
-		FWacomFirstPersonCardTransitionPlaybackDeleter> TransitionPlayback;
+		FWacomFirstPersonCardGestureController,
+		FWacomFirstPersonCardGestureControllerDeleter> GestureController;
 	TUniquePtr<
 		FWacomFirstPersonCardDepthMotion,
 		FWacomFirstPersonCardDepthMotionDeleter> CardDepthMotion;
@@ -434,82 +370,25 @@ private:
 		FWacomFirstPersonCardDragPickupPlayback,
 		FWacomFirstPersonCardDragPickupPlaybackDeleter> DragPickupPlayback;
 	TUniquePtr<
-		FWacomFirstPersonCardSurfaceDeparturePlayback,
-		FWacomFirstPersonCardSurfaceDeparturePlaybackDeleter> SurfaceDeparturePlayback;
+		FWacomFirstPersonCardInteractionFeedbackPlayback,
+		FWacomFirstPersonCardInteractionFeedbackPlaybackDeleter> InteractionFeedbackPlayback;
 	TUniquePtr<
-		FWacomFirstPersonCardUseReformPlayback,
-		FWacomFirstPersonCardUseReformPlaybackDeleter> CardUseReformPlayback;
-	TUniquePtr<
-		FWacomFirstPersonCardHandTargetImpactPlayback,
-		FWacomFirstPersonCardHandTargetImpactPlaybackDeleter> HandTargetImpactPlayback;
-	TUniquePtr<
-		FWacomFirstPersonCardDataRewritePlayback,
-		FWacomFirstPersonCardDataRewritePlaybackDeleter> DataRewritePlayback;
-	TUniquePtr<
-		FWacomFirstPersonCardEffectBadgeFeedbackPlayback,
-		FWacomFirstPersonCardEffectBadgeFeedbackPlaybackDeleter> EffectBadgeFeedbackPlayback;
-	TUniquePtr<
-		FWacomFirstPersonCardDrawRevealPlayback,
-		FWacomFirstPersonCardDrawRevealPlaybackDeleter> DrawRevealPlayback;
-	TUniquePtr<
-		FWacomFirstPersonCardGainRevealPlayback,
-		FWacomFirstPersonCardGainRevealPlaybackDeleter> GainRevealPlayback;
-	TUniquePtr<
-		FWacomFirstPersonCardRetainSealPlayback,
-		FWacomFirstPersonCardRetainSealPlaybackDeleter> RetainSealPlayback;
-	TUniquePtr<
-		FWacomFirstPersonCardPresentationReadinessGate,
-		FWacomFirstPersonCardPresentationReadinessGateDeleter> SurfaceReadinessGate;
-	TUniquePtr<
-		FWacomFirstPersonCardPresentationReadinessGate,
-		FWacomFirstPersonCardPresentationReadinessGateDeleter> CostDigitReadinessGate;
-	TUniquePtr<
-		FWacomFirstPersonCardPresentationReadinessGate,
-		FWacomFirstPersonCardPresentationReadinessGateDeleter> EffectBadgeReadinessGate;
-	FName SurfaceReadinessEffectName;
-	bool bPlaybackFrozenForReadiness = false;
-	bool bSurfaceReadinessBlocksPresentationPhase = true;
-	bool bSuppressRetainSealSurfaceForReadinessFailure = false;
-	int32 PendingDataRewriteFieldMask = 0;
-	EWacomFirstPersonCardDataRewriteTone PendingDataRewriteTone =
-		EWacomFirstPersonCardDataRewriteTone::Neutral;
-	int32 PendingDataRewriteSeed = 0;
-	int32 PendingDataRewriteSequenceIndex = 0;
-	int32 PendingDataRewriteSequenceCount = 1;
-	bool bPendingDataRewriteHandoff = false;
-	bool bDataRewriteBlocksPresentationPhase = false;
-	bool bEffectBadgeFeedbackBlocksPresentationPhase = false;
-	FWacomFirstPersonCardLayerSlotView DeferredHandTargetExitSlotView;
-	TOptional<FWacomFirstPersonCardTransitionMotionProfile> DeferredHandTargetExitProfile;
-	EWacomFirstPersonCardSlotTransitionKind DeferredHandTargetExitTransitionKind =
-		EWacomFirstPersonCardSlotTransitionKind::Default;
+		FWacomFirstPersonCardSlotPresentationController,
+		FWacomFirstPersonCardSlotPresentationControllerDeleter> PresentationController;
 	float HandTargetImpactScaleMultiplier = 1.0f;
 	float HandTargetImpactTranslationYPixels = 0.0f;
 	int32 HandTargetImpactZOrderBoost = 0;
-	bool bHandTargetImpactDeparturePending = false;
-	bool bHandTargetImpactDepartureOwnedByPileTransfer = false;
-	bool bHandTargetImpactDepartureGateReleased = false;
 	FWacomFirstPersonCardLayerSlotView CardUseReformStartSlotView;
 	float CardUseFlipProgress = 0.0f;
 	float CardUseImpactProgress = 0.0f;
 	float CardUseMotionAlpha = 0.0f;
 	float CardUseOpacityMultiplier = 1.0f;
-	float ConfirmFeedbackElapsedSeconds = 999999.0f;
-	float DenyFeedbackElapsedSeconds = 999999.0f;
-	float CommitFeedbackElapsedSeconds = 999999.0f;
 	bool bCardLayerInteractionEnabled = false;
 	bool bIsHoveredForFirstPersonLayer = false;
-	bool bIsPressedForFirstPersonLayer = false;
 	bool bHasVisualSlotView = false;
 	bool bIsExitingForFirstPersonLayer = false;
 	bool bUsesFixedExitTransitionPlayback = false;
-	bool bUsesSurfaceDepartureExit = false;
-	EWacomFirstPersonCardSlotTransitionKind SurfaceDepartureTransitionKind =
-		EWacomFirstPersonCardSlotTransitionKind::Default;
 	bool bWantsSlotMotionTick = false;
-	bool bPreserveGestureReturnMotion = false;
-	bool bGestureTargetValid = false;
-	bool bGestureCommitArmed = false;
 	bool bHasPointerViewportPosition = false;
 	bool bCardDepthPointerDirty = false;
 	bool bHasFeedbackTargetScreenPosition = false;
@@ -545,10 +424,7 @@ private:
 	bool RequestGestureReleaseForTest(const FVector2D& ScreenPosition);
 
 	TOptional<FVector2D> LocalHitCanvasSizeOverrideForTest;
-	int32 SlotMotionConfigApplyCountForTest = 0;
-	int32 SlotFeedbackConfigApplyCountForTest = 0;
-	int32 CardDragConfigApplyCountForTest = 0;
-	int32 SlotVisualConfigApplyCountForTest = 0;
+	int32 SlotRuntimeConfigApplyCountForTest = 0;
 	int32 EnterTransitionSoundRequestCountForTest = 0;
 	int32 DragPickupTriggerCountForTest = 0;
 	int32 DragPickupSoundRequestCountForTest = 0;
@@ -568,6 +444,8 @@ private:
 	friend struct FWacomFirstPersonCardLayerTestAccess;
 
 	void EnsureCardView();
+	FWacomFirstPersonCardGestureControllerState& GestureRuntime();
+	const FWacomFirstPersonCardGestureControllerState& GestureRuntime() const;
 	void ApplyCurrentSlotView();
 	void ApplyVisualSlotView();
 	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
@@ -591,7 +469,6 @@ private:
 		const FWacomFirstPersonCardLayerSlotView& PreviousVisualSlotView,
 		const FWacomFirstPersonCardLayerSlotView& CurrentVisualSlotView);
 	bool CanInteractWithCurrentSlot() const;
-	bool CanApplyPlayableHoverFeedback() const;
 	bool CanStartCardDragGesture() const;
 	bool IsNoTargetDragCard() const;
 	bool IsTargetedAimCard() const;
@@ -721,13 +598,12 @@ private:
 	void BroadcastDragCancelled();
 	void SetHoveredForFirstPersonLayer(bool bHovered, bool bBroadcast = true);
 	void SetPressedForFirstPersonLayer(bool bPressed);
-	void TriggerConfirmFeedback();
 	void TriggerDenyFeedback();
 	void ClearInteractionFeedback();
 	bool IsDenyFeedbackActive() const;
 	bool IsRetainedFeedbackActive() const;
-	void ApplyFeedbackOverlay();
-	void ApplyInteractionFeedbackOverlay();
+	void UpdatePressedFeedback(float DeltaTime);
+	void ApplyInteractionCue();
 	void UpdateVisibilityForInteractionMode();
 	void SetTickEnabledForMotion(bool bEnabled);
 	void UpdateWantsTick();
@@ -748,5 +624,4 @@ private:
 	bool TickExitTransitionPlayback(float DeltaTime);
 	bool IsExitTransitionPlaybackActive() const;
 
-	FVector2D EnterTransitionStartWidgetPosition = FVector2D::ZeroVector;
 };

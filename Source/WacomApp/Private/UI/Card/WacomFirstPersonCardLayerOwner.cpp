@@ -89,7 +89,9 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfigIfNeeded(
 		!bHasAppliedConfig
 		|| LastAppliedConfigHash != Config.ConfigHash
 		|| LastAppliedCardViewClass.Get() != Config.CardViewClass.Get()
-		|| !AreCardDragConfigsEquivalent(LastAppliedCardDragConfig, Config.CardDragConfig)
+		|| !AreSlotRuntimeConfigsEquivalent(
+			LastAppliedSlotRuntimeConfig,
+			Config.SlotRuntimeConfig)
 		|| bLastAppliedLogDiagnostics != Config.bLogSlotMotionDiagnostics
 		|| bLastAppliedInteractionEnabled != Config.bInteractionEnabled;
 	if (bConfigChanged)
@@ -102,10 +104,7 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfig(
 	UWacomFirstPersonCardLayerWidget& LayerWidget,
 	const FWacomFirstPersonCardLayerOwnerConfig& Config)
 {
-	LayerWidget.SetSlotMotionConfig(Config.SlotMotionConfig);
-	LayerWidget.SetSlotVisualConfig(Config.SlotVisualConfig);
-	LayerWidget.SetSlotFeedbackConfig(Config.SlotFeedbackConfig);
-	LayerWidget.SetCardDragConfig(Config.CardDragConfig);
+	LayerWidget.SetSlotRuntimeConfig(Config.SlotRuntimeConfig);
 	LayerWidget.SetPileTransferConfig(Config.PileTransferConfig);
 	LayerWidget.SetLogSlotMotionDiagnostics(Config.bLogSlotMotionDiagnostics);
 	LayerWidget.SetCardViewClass(Config.CardViewClass);
@@ -114,7 +113,7 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfig(
 	bHasAppliedConfig = true;
 	LastAppliedConfigHash = Config.ConfigHash;
 	LastAppliedCardViewClass = Config.CardViewClass.Get();
-	LastAppliedCardDragConfig = Config.CardDragConfig;
+	LastAppliedSlotRuntimeConfig = Config.SlotRuntimeConfig;
 	bLastAppliedLogDiagnostics = Config.bLogSlotMotionDiagnostics;
 	bLastAppliedInteractionEnabled = Config.bInteractionEnabled;
 #if WITH_AUTOMATION_TESTS
@@ -127,7 +126,7 @@ void FWacomFirstPersonCardLayerOwner::ResetConfigState()
 	bHasAppliedConfig = false;
 	LastAppliedConfigHash = 0;
 	LastAppliedCardViewClass.Reset();
-	LastAppliedCardDragConfig = FWacomFirstPersonCardDragConfig();
+	LastAppliedSlotRuntimeConfig = FWacomFirstPersonCardSlotRuntimeConfig();
 	bLastAppliedLogDiagnostics = false;
 	bLastAppliedInteractionEnabled = false;
 }

@@ -479,6 +479,16 @@ FWacomFirstPersonCardSlotVisualConfig NormalizeSlotVisualConfig(
 		GainRevealStyle.ReducedCrossFadeEndProgress,
 		GainRevealStyle.ReducedCrossFadeStartProgress,
 		1.0f);
+	Config.RetainSeal.SealingDurationSeconds = FMath::Max(
+		0.0f, Config.RetainSeal.SealingDurationSeconds);
+	Config.RetainSeal.SequenceStaggerSeconds = FMath::Max(
+		0.0f, Config.RetainSeal.SequenceStaggerSeconds);
+	Config.RetainSeal.PeakLiftPixels = FMath::Max(0.0f, Config.RetainSeal.PeakLiftPixels);
+	Config.RetainSeal.PeakScale = FMath::Max(0.01f, Config.RetainSeal.PeakScale);
+	Config.RetainSeal.HeldLiftPixels = FMath::Max(0.0f, Config.RetainSeal.HeldLiftPixels);
+	Config.RetainSeal.HeldScale = FMath::Max(0.01f, Config.RetainSeal.HeldScale);
+	Config.RetainSeal.ReleaseDurationSeconds = FMath::Max(
+		0.0f, Config.RetainSeal.ReleaseDurationSeconds);
 	Config.Selection.Style.EnterDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.EnterDurationSeconds);
 	Config.Selection.Style.ExitDurationSeconds = FMath::Max(0.0f, Config.Selection.Style.ExitDurationSeconds);
 	Config.Selection.Style.SustainPeriodSeconds = FMath::Max(0.01f, Config.Selection.Style.SustainPeriodSeconds);
@@ -831,6 +841,19 @@ bool AreSlotVisualConfigsEquivalent(
 			B.GainReveal.Style.ReducedCrossFadeEndProgress)
 		&& A.RetainSeal.bEnabled == B.RetainSeal.bEnabled
 		&& A.RetainSeal.bReducedMotion == B.RetainSeal.bReducedMotion
+		&& AreFloatsEquivalent(
+			A.RetainSeal.SealingDurationSeconds,
+			B.RetainSeal.SealingDurationSeconds)
+		&& AreFloatsEquivalent(
+			A.RetainSeal.SequenceStaggerSeconds,
+			B.RetainSeal.SequenceStaggerSeconds)
+		&& AreFloatsEquivalent(A.RetainSeal.PeakLiftPixels, B.RetainSeal.PeakLiftPixels)
+		&& AreFloatsEquivalent(A.RetainSeal.PeakScale, B.RetainSeal.PeakScale)
+		&& AreFloatsEquivalent(A.RetainSeal.HeldLiftPixels, B.RetainSeal.HeldLiftPixels)
+		&& AreFloatsEquivalent(A.RetainSeal.HeldScale, B.RetainSeal.HeldScale)
+		&& AreFloatsEquivalent(
+			A.RetainSeal.ReleaseDurationSeconds,
+			B.RetainSeal.ReleaseDurationSeconds)
 		&& A.RetainSeal.Style.SurfaceEffectMaterialInstance
 			== B.RetainSeal.Style.SurfaceEffectMaterialInstance
 		&& A.Selection.bEnabled == B.Selection.bEnabled
@@ -853,101 +876,80 @@ bool AreSlotVisualConfigsEquivalent(
 		&& A.Selection.Style.PixelClusterMask == B.Selection.Style.PixelClusterMask;
 }
 
-FWacomFirstPersonCardSlotFeedbackConfig NormalizeSlotFeedbackConfig(
-	const FWacomFirstPersonCardSlotFeedbackConfig& InConfig)
+FWacomFirstPersonCardInteractionFeedbackConfig NormalizeInteractionFeedbackConfig(
+	const FWacomFirstPersonCardInteractionFeedbackConfig& InConfig)
 {
-	FWacomFirstPersonCardSlotFeedbackConfig Config = InConfig;
-	Config.PlayableHoverOpacity = FMath::Clamp(Config.PlayableHoverOpacity, 0.0f, 1.0f);
+	FWacomFirstPersonCardInteractionFeedbackConfig Config = InConfig;
 	Config.PressedScale = FMath::Max(0.01f, Config.PressedScale);
-	Config.PressedOpacity = FMath::Clamp(Config.PressedOpacity, 0.0f, 1.0f);
-	Config.DragPickupDurationSeconds = FMath::Max(0.0f, Config.DragPickupDurationSeconds);
-	Config.DragPickupRiseSeconds = FMath::Clamp(
-		Config.DragPickupRiseSeconds,
-		0.0f,
-		Config.DragPickupDurationSeconds);
-	Config.DragPickupLiftPixels = FMath::Max(0.0f, Config.DragPickupLiftPixels);
-	Config.DragPickupScaleMultiplier = FMath::Max(0.01f, Config.DragPickupScaleMultiplier);
-	Config.DragPickupSoundVolumeMultiplier = FMath::Max(0.0f, Config.DragPickupSoundVolumeMultiplier);
-	Config.DragPickupSoundPitchMultiplier = FMath::Max(0.01f, Config.DragPickupSoundPitchMultiplier);
-	Config.DragPickupSoundPitchVariation = FMath::Clamp(
-		Config.DragPickupSoundPitchVariation,
-		0.0f,
-		0.99f);
-	Config.ConfirmDuration = FMath::Max(0.0f, Config.ConfirmDuration);
-	Config.ConfirmOpacity = FMath::Clamp(Config.ConfirmOpacity, 0.0f, 1.0f);
+	Config.PressedTranslationYPixels = FMath::Max(0.0f, Config.PressedTranslationYPixels);
+	Config.PressedInDurationSeconds = FMath::Max(0.0f, Config.PressedInDurationSeconds);
+	Config.PressedOutDurationSeconds = FMath::Max(0.0f, Config.PressedOutDurationSeconds);
+	Config.PressedContactShadowLiftMultiplier = FMath::Clamp(
+		Config.PressedContactShadowLiftMultiplier, 0.0f, 1.0f);
 	Config.DenyDuration = FMath::Max(0.0f, Config.DenyDuration);
 	Config.DenyShakePixels = FMath::Max(0.0f, Config.DenyShakePixels);
 	Config.DenyOpacity = FMath::Clamp(Config.DenyOpacity, 0.0f, 1.0f);
-	Config.InteractionFeedbackEdgeWidth = FMath::Max(0.0f, Config.InteractionFeedbackEdgeWidth);
-	Config.InteractionFeedbackEdgeSoftness = FMath::Max(0.0f, Config.InteractionFeedbackEdgeSoftness);
-	Config.InteractionFeedbackVignetteStrength = FMath::Max(0.0f, Config.InteractionFeedbackVignetteStrength);
-	Config.InteractionFeedbackVignetteRadius = FMath::Max(0.0f, Config.InteractionFeedbackVignetteRadius);
-	Config.InteractionFeedbackVignetteSoftness = FMath::Max(0.0f, Config.InteractionFeedbackVignetteSoftness);
+	Config.DenyCornerInsetPixels = FMath::Max(0.0f, Config.DenyCornerInsetPixels);
+	Config.DenyCornerLengthPixels = FMath::Max(0.0f, Config.DenyCornerLengthPixels);
+	Config.DenyCornerThicknessPixels = FMath::Max(0.0f, Config.DenyCornerThicknessPixels);
 	Config.PlayCommitDuration = FMath::Max(0.0f, Config.PlayCommitDuration);
-	Config.PlayCommitOpacity = FMath::Clamp(Config.PlayCommitOpacity, 0.0f, 1.0f);
 	Config.PlayCommitScale = FMath::Max(0.01f, Config.PlayCommitScale);
-	Config.RetainedFeedbackDuration = FMath::Max(0.0f, Config.RetainedFeedbackDuration);
-	Config.RetainedFeedbackStaggerSeconds = FMath::Max(0.0f, Config.RetainedFeedbackStaggerSeconds);
-	Config.RetainedFeedbackLiftPixels = FMath::Max(0.0f, Config.RetainedFeedbackLiftPixels);
-	Config.RetainedFeedbackScale = FMath::Max(0.01f, Config.RetainedFeedbackScale);
-	Config.RetainedFeedbackHeldLiftPixels = FMath::Max(
-		0.0f, Config.RetainedFeedbackHeldLiftPixels);
-	Config.RetainedFeedbackHeldScale = FMath::Max(
-		0.01f, Config.RetainedFeedbackHeldScale);
-	Config.RetainedFeedbackReleaseDuration = FMath::Max(
-		0.0f, Config.RetainedFeedbackReleaseDuration);
 	return Config;
 }
 
-bool AreSlotFeedbackConfigsEquivalent(
-	const FWacomFirstPersonCardSlotFeedbackConfig& A,
-	const FWacomFirstPersonCardSlotFeedbackConfig& B)
+bool AreInteractionFeedbackConfigsEquivalent(
+	const FWacomFirstPersonCardInteractionFeedbackConfig& A,
+	const FWacomFirstPersonCardInteractionFeedbackConfig& B)
 {
 	return A.bEnabled == B.bEnabled
-		&& AreColorsEquivalent(A.PlayableHoverColor, B.PlayableHoverColor)
-		&& AreFloatsEquivalent(A.PlayableHoverOpacity, B.PlayableHoverOpacity)
 		&& AreFloatsEquivalent(A.PressedScale, B.PressedScale)
-		&& AreColorsEquivalent(A.PressedColor, B.PressedColor)
-		&& AreFloatsEquivalent(A.PressedOpacity, B.PressedOpacity)
-		&& A.bEnableDragPickupFeedback == B.bEnableDragPickupFeedback
-		&& AreFloatsEquivalent(A.DragPickupDurationSeconds, B.DragPickupDurationSeconds)
-		&& AreFloatsEquivalent(A.DragPickupRiseSeconds, B.DragPickupRiseSeconds)
-		&& AreFloatsEquivalent(A.DragPickupLiftPixels, B.DragPickupLiftPixels)
-		&& AreFloatsEquivalent(A.DragPickupScaleMultiplier, B.DragPickupScaleMultiplier)
-		&& A.bReduceDragPickupMotion == B.bReduceDragPickupMotion
-		&& A.DragPickupSound == B.DragPickupSound
-		&& AreFloatsEquivalent(A.DragPickupSoundVolumeMultiplier, B.DragPickupSoundVolumeMultiplier)
-		&& AreFloatsEquivalent(A.DragPickupSoundPitchMultiplier, B.DragPickupSoundPitchMultiplier)
-		&& AreFloatsEquivalent(A.DragPickupSoundPitchVariation, B.DragPickupSoundPitchVariation)
-		&& AreFloatsEquivalent(A.ConfirmDuration, B.ConfirmDuration)
-		&& AreFloatsEquivalent(A.ConfirmOpacity, B.ConfirmOpacity)
+		&& AreFloatsEquivalent(A.PressedTranslationYPixels, B.PressedTranslationYPixels)
+		&& AreFloatsEquivalent(A.PressedInDurationSeconds, B.PressedInDurationSeconds)
+		&& AreFloatsEquivalent(A.PressedOutDurationSeconds, B.PressedOutDurationSeconds)
+		&& AreFloatsEquivalent(
+			A.PressedContactShadowLiftMultiplier,
+			B.PressedContactShadowLiftMultiplier)
+		&& A.bReduceInteractionMotion == B.bReduceInteractionMotion
 		&& AreFloatsEquivalent(A.DenyDuration, B.DenyDuration)
 		&& AreFloatsEquivalent(A.DenyShakePixels, B.DenyShakePixels)
 		&& AreColorsEquivalent(A.DenyColor, B.DenyColor)
 		&& AreFloatsEquivalent(A.DenyOpacity, B.DenyOpacity)
-		&& A.InteractionFeedbackMaterial.ToSoftObjectPath() == B.InteractionFeedbackMaterial.ToSoftObjectPath()
-		&& AreFloatsEquivalent(A.InteractionFeedbackEdgeWidth, B.InteractionFeedbackEdgeWidth)
-		&& AreFloatsEquivalent(A.InteractionFeedbackEdgeSoftness, B.InteractionFeedbackEdgeSoftness)
-		&& AreFloatsEquivalent(A.InteractionFeedbackVignetteStrength, B.InteractionFeedbackVignetteStrength)
-		&& AreFloatsEquivalent(A.InteractionFeedbackVignetteRadius, B.InteractionFeedbackVignetteRadius)
-		&& AreFloatsEquivalent(A.InteractionFeedbackVignetteSoftness, B.InteractionFeedbackVignetteSoftness)
+		&& AreFloatsEquivalent(A.DenyCornerInsetPixels, B.DenyCornerInsetPixels)
+		&& AreFloatsEquivalent(A.DenyCornerLengthPixels, B.DenyCornerLengthPixels)
+		&& AreFloatsEquivalent(A.DenyCornerThicknessPixels, B.DenyCornerThicknessPixels)
 		&& A.bEnablePlayCommitFeedback == B.bEnablePlayCommitFeedback
 		&& AreFloatsEquivalent(A.PlayCommitDuration, B.PlayCommitDuration)
-		&& AreFloatsEquivalent(A.PlayCommitOpacity, B.PlayCommitOpacity)
-		&& AreColorsEquivalent(A.PlayCommitColor, B.PlayCommitColor)
-		&& AreFloatsEquivalent(A.PlayCommitScale, B.PlayCommitScale)
-		&& A.bEnableRetainedFeedback == B.bEnableRetainedFeedback
-		&& AreFloatsEquivalent(A.RetainedFeedbackDuration, B.RetainedFeedbackDuration)
-		&& AreFloatsEquivalent(A.RetainedFeedbackStaggerSeconds, B.RetainedFeedbackStaggerSeconds)
-		&& AreFloatsEquivalent(A.RetainedFeedbackLiftPixels, B.RetainedFeedbackLiftPixels)
-		&& AreFloatsEquivalent(A.RetainedFeedbackScale, B.RetainedFeedbackScale)
-		&& AreFloatsEquivalent(
-			A.RetainedFeedbackHeldLiftPixels,
-			B.RetainedFeedbackHeldLiftPixels)
-		&& AreFloatsEquivalent(A.RetainedFeedbackHeldScale, B.RetainedFeedbackHeldScale)
-		&& AreFloatsEquivalent(
-			A.RetainedFeedbackReleaseDuration,
-			B.RetainedFeedbackReleaseDuration);
+		&& AreFloatsEquivalent(A.PlayCommitScale, B.PlayCommitScale);
+}
+
+FWacomFirstPersonCardDragPickupConfig NormalizeDragPickupConfig(
+	const FWacomFirstPersonCardDragPickupConfig& InConfig)
+{
+	FWacomFirstPersonCardDragPickupConfig Config = InConfig;
+	Config.DurationSeconds = FMath::Max(0.0f, Config.DurationSeconds);
+	Config.RiseSeconds = FMath::Clamp(Config.RiseSeconds, 0.0f, Config.DurationSeconds);
+	Config.LiftPixels = FMath::Max(0.0f, Config.LiftPixels);
+	Config.ScaleMultiplier = FMath::Max(0.01f, Config.ScaleMultiplier);
+	Config.SoundVolumeMultiplier = FMath::Max(0.0f, Config.SoundVolumeMultiplier);
+	Config.SoundPitchMultiplier = FMath::Max(0.01f, Config.SoundPitchMultiplier);
+	Config.SoundPitchVariation = FMath::Clamp(Config.SoundPitchVariation, 0.0f, 0.99f);
+	return Config;
+}
+
+bool AreDragPickupConfigsEquivalent(
+	const FWacomFirstPersonCardDragPickupConfig& A,
+	const FWacomFirstPersonCardDragPickupConfig& B)
+{
+	return A.bEnabled == B.bEnabled
+		&& AreFloatsEquivalent(A.DurationSeconds, B.DurationSeconds)
+		&& AreFloatsEquivalent(A.RiseSeconds, B.RiseSeconds)
+		&& AreFloatsEquivalent(A.LiftPixels, B.LiftPixels)
+		&& AreFloatsEquivalent(A.ScaleMultiplier, B.ScaleMultiplier)
+		&& A.bReducedMotion == B.bReducedMotion
+		&& A.Sound == B.Sound
+		&& AreFloatsEquivalent(A.SoundVolumeMultiplier, B.SoundVolumeMultiplier)
+		&& AreFloatsEquivalent(A.SoundPitchMultiplier, B.SoundPitchMultiplier)
+		&& AreFloatsEquivalent(A.SoundPitchVariation, B.SoundPitchVariation);
 }
 
 FWacomFirstPersonCardDragConfig NormalizeCardDragConfig(
@@ -999,4 +1001,27 @@ bool AreCardDragConfigsEquivalent(
 		&& A.SelectedSourceZOrderBoost == B.SelectedSourceZOrderBoost
 		&& A.bSelectedSourceStraightenAngle == B.bSelectedSourceStraightenAngle
 		&& AreFloatsEquivalent(A.SelectedSourceAngleBlend, B.SelectedSourceAngleBlend);
+}
+
+FWacomFirstPersonCardSlotRuntimeConfig NormalizeSlotRuntimeConfig(
+	const FWacomFirstPersonCardSlotRuntimeConfig& InConfig)
+{
+	FWacomFirstPersonCardSlotRuntimeConfig Config = InConfig;
+	Config.Motion = NormalizeSlotMotionConfig(Config.Motion);
+	Config.Visual = NormalizeSlotVisualConfig(Config.Visual);
+	Config.Interaction = NormalizeInteractionFeedbackConfig(Config.Interaction);
+	Config.DragPickup = NormalizeDragPickupConfig(Config.DragPickup);
+	Config.Drag = NormalizeCardDragConfig(Config.Drag);
+	return Config;
+}
+
+bool AreSlotRuntimeConfigsEquivalent(
+	const FWacomFirstPersonCardSlotRuntimeConfig& A,
+	const FWacomFirstPersonCardSlotRuntimeConfig& B)
+{
+	return AreSlotMotionConfigsEquivalent(A.Motion, B.Motion)
+		&& AreSlotVisualConfigsEquivalent(A.Visual, B.Visual)
+		&& AreInteractionFeedbackConfigsEquivalent(A.Interaction, B.Interaction)
+		&& AreDragPickupConfigsEquivalent(A.DragPickup, B.DragPickup)
+		&& AreCardDragConfigsEquivalent(A.Drag, B.Drag);
 }

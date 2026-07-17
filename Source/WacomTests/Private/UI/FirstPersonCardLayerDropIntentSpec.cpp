@@ -1885,7 +1885,10 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		}
 	}
 	TestEqual(TEXT("Target card cost updated through layer gesture"), TargetRuntimeCost, 5);
-	TestTrue(TEXT("Source release used confirm feedback"), FWacomFirstPersonCardLayerTestAccess::View(*SourceWidget).bConfirmFeedbackActive);
+	TestEqual(
+		TEXT("Source release does not use optimistic feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*SourceWidget).InteractionCueKind,
+		EWacomFirstPersonCardInteractionCueKind::None);
 	TestFalse(TEXT("Source release did not play deny feedback"), FWacomFirstPersonCardLayerTestAccess::View(*SourceWidget).bDenyFeedbackActive);
 
 	Character->Destroy();

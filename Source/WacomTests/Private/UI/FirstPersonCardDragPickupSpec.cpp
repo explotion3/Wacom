@@ -35,22 +35,21 @@ namespace WacomFirstPersonCardDragPickupSpec
 		return Slot;
 	}
 
-	FWacomFirstPersonCardSlotFeedbackConfig MakeFeedbackConfig(
+	FWacomFirstPersonCardDragPickupConfig MakeFeedbackConfig(
 		bool bReducedMotion = false,
 		USoundBase* Sound = nullptr)
 	{
-		FWacomFirstPersonCardSlotFeedbackConfig Config;
+		FWacomFirstPersonCardDragPickupConfig Config;
 		Config.bEnabled = true;
-		Config.bEnableDragPickupFeedback = true;
-		Config.DragPickupDurationSeconds = 0.14f;
-		Config.DragPickupRiseSeconds = 0.02f;
-		Config.DragPickupLiftPixels = 12.0f;
-		Config.DragPickupScaleMultiplier = 1.03f;
-		Config.bReduceDragPickupMotion = bReducedMotion;
-		Config.DragPickupSound = Sound;
-		Config.DragPickupSoundVolumeMultiplier = 1.0f;
-		Config.DragPickupSoundPitchMultiplier = 1.0f;
-		Config.DragPickupSoundPitchVariation = 0.03f;
+		Config.DurationSeconds = 0.14f;
+		Config.RiseSeconds = 0.02f;
+		Config.LiftPixels = 12.0f;
+		Config.ScaleMultiplier = 1.03f;
+		Config.bReducedMotion = bReducedMotion;
+		Config.Sound = Sound;
+		Config.SoundVolumeMultiplier = 1.0f;
+		Config.SoundPitchMultiplier = 1.0f;
+		Config.SoundPitchVariation = 0.03f;
 		return Config;
 	}
 
@@ -63,18 +62,20 @@ namespace WacomFirstPersonCardDragPickupSpec
 		UWacomFirstPersonCardLayerSlotWidget* Widget =
 			NewObject<UWacomFirstPersonCardLayerSlotWidget>();
 		Widget->SetCardLayerInteractionEnabled(true);
-		Widget->SetSlotFeedbackConfig(MakeFeedbackConfig(bReducedMotion, Sound));
+		FWacomFirstPersonCardLayerTestAccess::SetDragPickupConfig(
+			*Widget,
+			MakeFeedbackConfig(bReducedMotion, Sound));
 
 		FWacomFirstPersonCardSlotVisualConfig VisualConfig;
 		VisualConfig.HoverLiftPixels = 0.0f;
 		VisualConfig.HoverScale = 1.0f;
 		VisualConfig.Selection.bEnabled = true;
-		Widget->SetSlotVisualConfig(VisualConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 
 		FWacomFirstPersonCardDragConfig DragConfig;
 		DragConfig.bEnableFirstPersonCardDragCommit = true;
 		DragConfig.CardDragStartThresholdPixels = 1.0f;
-		Widget->SetCardDragConfig(DragConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetCardDragConfig(*Widget, DragConfig);
 		Widget->SetSlotViewImmediate(MakeSlot(Intent));
 		return Widget;
 	}

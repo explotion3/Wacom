@@ -96,7 +96,11 @@ struct FWacomFirstPersonCardPresentationScaleBridge
 		Config.HoverLiftPixels *= Scale;
 		Config.DragCardTargetFocusLiftPixels *= Scale;
 		Config.DragPickupLiftPixels *= Scale;
+		Config.PressedFeedbackTranslationYPixels *= Scale;
 		Config.DenyFeedbackShakePixels *= Scale;
+		Config.DenyFeedbackCornerInsetPixels *= Scale;
+		Config.DenyFeedbackCornerLengthPixels *= Scale;
+		Config.DenyFeedbackCornerThicknessPixels *= Scale;
 		Config.RetainedFeedbackLiftPixels *= Scale;
 		Config.RetainedFeedbackHeldLiftPixels *= Scale;
 		Config.DrawReveal.Style.LandingTranslationYPixels *= Scale;
@@ -409,11 +413,13 @@ namespace
 				Anchor.CardSelectionExitDurationOverrideSeconds;
 		}
 		Config.bEnableCardInteractionFeedback = Anchor.bEnableCardInteractionFeedback;
-		Config.PlayableHoverFeedbackColor = Anchor.PlayableHoverFeedbackColor;
-		Config.PlayableHoverFeedbackOpacity = Anchor.PlayableHoverFeedbackOpacity;
 		Config.PressedFeedbackScale = Anchor.PressedFeedbackScale;
-		Config.PressedFeedbackColor = Anchor.PressedFeedbackColor;
-		Config.PressedFeedbackOpacity = Anchor.PressedFeedbackOpacity;
+		Config.PressedFeedbackTranslationYPixels = Anchor.PressedFeedbackTranslationYPixels;
+		Config.PressedFeedbackInDurationSeconds = Anchor.PressedFeedbackInDurationSeconds;
+		Config.PressedFeedbackOutDurationSeconds = Anchor.PressedFeedbackOutDurationSeconds;
+		Config.PressedFeedbackContactShadowLiftMultiplier =
+			Anchor.PressedFeedbackContactShadowLiftMultiplier;
+		Config.bReduceCardInteractionMotion = Anchor.bReduceCardInteractionMotion;
 		Config.bEnableDragPickupFeedback = Anchor.bEnableCardDragPickupFeedback;
 		Config.DragPickupDurationSeconds = Anchor.CardDragPickupDurationSeconds;
 		Config.DragPickupRiseSeconds = Anchor.CardDragPickupRiseSeconds;
@@ -424,22 +430,15 @@ namespace
 		Config.DragPickupSoundVolumeMultiplier = Anchor.CardDragPickupSoundVolumeMultiplier;
 		Config.DragPickupSoundPitchMultiplier = Anchor.CardDragPickupSoundPitchMultiplier;
 		Config.DragPickupSoundPitchVariation = Anchor.CardDragPickupSoundPitchVariation;
-		Config.ConfirmFeedbackDuration = Anchor.ConfirmFeedbackDuration;
-		Config.ConfirmFeedbackOpacity = Anchor.ConfirmFeedbackOpacity;
 		Config.DenyFeedbackDuration = Anchor.DenyFeedbackDuration;
 		Config.DenyFeedbackShakePixels = Anchor.DenyFeedbackShakePixels;
 		Config.DenyFeedbackColor = Anchor.DenyFeedbackColor;
 		Config.DenyFeedbackOpacity = Anchor.DenyFeedbackOpacity;
-		Config.InteractionFeedbackMaterial = Anchor.InteractionFeedbackMaterial;
-		Config.InteractionFeedbackEdgeWidth = Anchor.InteractionFeedbackEdgeWidth;
-		Config.InteractionFeedbackEdgeSoftness = Anchor.InteractionFeedbackEdgeSoftness;
-		Config.InteractionFeedbackVignetteStrength = Anchor.InteractionFeedbackVignetteStrength;
-		Config.InteractionFeedbackVignetteRadius = Anchor.InteractionFeedbackVignetteRadius;
-		Config.InteractionFeedbackVignetteSoftness = Anchor.InteractionFeedbackVignetteSoftness;
+		Config.DenyFeedbackCornerInsetPixels = Anchor.DenyFeedbackCornerInsetPixels;
+		Config.DenyFeedbackCornerLengthPixels = Anchor.DenyFeedbackCornerLengthPixels;
+		Config.DenyFeedbackCornerThicknessPixels = Anchor.DenyFeedbackCornerThicknessPixels;
 		Config.bEnablePlayCommitFeedback = Anchor.bEnablePlayCommitFeedback;
 		Config.PlayCommitFeedbackDuration = Anchor.PlayCommitFeedbackDuration;
-		Config.PlayCommitFeedbackOpacity = Anchor.PlayCommitFeedbackOpacity;
-		Config.PlayCommitFeedbackColor = Anchor.PlayCommitFeedbackColor;
 		Config.PlayCommitFeedbackScale = Anchor.PlayCommitFeedbackScale;
 		Config.bEnableRetainedFeedback = Anchor.bEnableRetainedFeedback;
 		Config.RetainedFeedbackDuration = Anchor.RetainedFeedbackDuration;
@@ -481,52 +480,47 @@ namespace
 		return BuildResolvedLayoutConfigFromComponent(Anchor);
 	}
 
-	FWacomFirstPersonCardSlotFeedbackConfig BuildSlotFeedbackConfig(
+	FWacomFirstPersonCardInteractionFeedbackConfig BuildInteractionFeedbackConfig(
 		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
 	{
-		FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig;
+		FWacomFirstPersonCardInteractionFeedbackConfig FeedbackConfig;
 		FeedbackConfig.bEnabled = Config.bEnableCardInteractionFeedback;
-		FeedbackConfig.PlayableHoverColor = Config.PlayableHoverFeedbackColor;
-		FeedbackConfig.PlayableHoverOpacity = Config.PlayableHoverFeedbackOpacity;
 		FeedbackConfig.PressedScale = Config.PressedFeedbackScale;
-		FeedbackConfig.PressedColor = Config.PressedFeedbackColor;
-		FeedbackConfig.PressedOpacity = Config.PressedFeedbackOpacity;
-		FeedbackConfig.bEnableDragPickupFeedback = Config.bEnableDragPickupFeedback;
-		FeedbackConfig.DragPickupDurationSeconds = Config.DragPickupDurationSeconds;
-		FeedbackConfig.DragPickupRiseSeconds = Config.DragPickupRiseSeconds;
-		FeedbackConfig.DragPickupLiftPixels = Config.DragPickupLiftPixels;
-		FeedbackConfig.DragPickupScaleMultiplier = Config.DragPickupScaleMultiplier;
-		FeedbackConfig.bReduceDragPickupMotion = Config.bReduceDragPickupMotion;
-		FeedbackConfig.DragPickupSound = Config.DragPickupSound;
-		FeedbackConfig.DragPickupSoundVolumeMultiplier = Config.DragPickupSoundVolumeMultiplier;
-		FeedbackConfig.DragPickupSoundPitchMultiplier = Config.DragPickupSoundPitchMultiplier;
-		FeedbackConfig.DragPickupSoundPitchVariation = Config.DragPickupSoundPitchVariation;
-		FeedbackConfig.ConfirmDuration = Config.ConfirmFeedbackDuration;
-		FeedbackConfig.ConfirmOpacity = Config.ConfirmFeedbackOpacity;
+		FeedbackConfig.PressedTranslationYPixels = Config.PressedFeedbackTranslationYPixels;
+		FeedbackConfig.PressedInDurationSeconds = Config.PressedFeedbackInDurationSeconds;
+		FeedbackConfig.PressedOutDurationSeconds = Config.PressedFeedbackOutDurationSeconds;
+		FeedbackConfig.PressedContactShadowLiftMultiplier =
+			Config.PressedFeedbackContactShadowLiftMultiplier;
+		FeedbackConfig.bReduceInteractionMotion = Config.bReduceCardInteractionMotion;
 		FeedbackConfig.DenyDuration = Config.DenyFeedbackDuration;
 		FeedbackConfig.DenyShakePixels = Config.DenyFeedbackShakePixels;
 		FeedbackConfig.DenyColor = Config.DenyFeedbackColor;
 		FeedbackConfig.DenyOpacity = Config.DenyFeedbackOpacity;
-		FeedbackConfig.InteractionFeedbackMaterial = Config.InteractionFeedbackMaterial;
-		FeedbackConfig.InteractionFeedbackEdgeWidth = Config.InteractionFeedbackEdgeWidth;
-		FeedbackConfig.InteractionFeedbackEdgeSoftness = Config.InteractionFeedbackEdgeSoftness;
-		FeedbackConfig.InteractionFeedbackVignetteStrength = Config.InteractionFeedbackVignetteStrength;
-		FeedbackConfig.InteractionFeedbackVignetteRadius = Config.InteractionFeedbackVignetteRadius;
-		FeedbackConfig.InteractionFeedbackVignetteSoftness = Config.InteractionFeedbackVignetteSoftness;
+		FeedbackConfig.DenyCornerInsetPixels = Config.DenyFeedbackCornerInsetPixels;
+		FeedbackConfig.DenyCornerLengthPixels = Config.DenyFeedbackCornerLengthPixels;
+		FeedbackConfig.DenyCornerThicknessPixels = Config.DenyFeedbackCornerThicknessPixels;
 		FeedbackConfig.bEnablePlayCommitFeedback = Config.bEnablePlayCommitFeedback;
 		FeedbackConfig.PlayCommitDuration = Config.PlayCommitFeedbackDuration;
-		FeedbackConfig.PlayCommitOpacity = Config.PlayCommitFeedbackOpacity;
-		FeedbackConfig.PlayCommitColor = Config.PlayCommitFeedbackColor;
 		FeedbackConfig.PlayCommitScale = Config.PlayCommitFeedbackScale;
-		FeedbackConfig.bEnableRetainedFeedback = Config.bEnableRetainedFeedback;
-		FeedbackConfig.RetainedFeedbackDuration = Config.RetainedFeedbackDuration;
-		FeedbackConfig.RetainedFeedbackStaggerSeconds = Config.RetainedFeedbackStaggerSeconds;
-		FeedbackConfig.RetainedFeedbackLiftPixels = Config.RetainedFeedbackLiftPixels;
-		FeedbackConfig.RetainedFeedbackScale = Config.RetainedFeedbackScale;
-		FeedbackConfig.RetainedFeedbackHeldLiftPixels = Config.RetainedFeedbackHeldLiftPixels;
-		FeedbackConfig.RetainedFeedbackHeldScale = Config.RetainedFeedbackHeldScale;
-		FeedbackConfig.RetainedFeedbackReleaseDuration = Config.RetainedFeedbackReleaseDuration;
 		return FeedbackConfig;
+	}
+
+	FWacomFirstPersonCardDragPickupConfig BuildDragPickupConfig(
+		const FWacomFirstPersonCardResolvedLayoutConfig& Config)
+	{
+		FWacomFirstPersonCardDragPickupConfig PickupConfig;
+		PickupConfig.bEnabled = Config.bEnableCardInteractionFeedback
+			&& Config.bEnableDragPickupFeedback;
+		PickupConfig.DurationSeconds = Config.DragPickupDurationSeconds;
+		PickupConfig.RiseSeconds = Config.DragPickupRiseSeconds;
+		PickupConfig.LiftPixels = Config.DragPickupLiftPixels;
+		PickupConfig.ScaleMultiplier = Config.DragPickupScaleMultiplier;
+		PickupConfig.bReducedMotion = Config.bReduceDragPickupMotion;
+		PickupConfig.Sound = Config.DragPickupSound;
+		PickupConfig.SoundVolumeMultiplier = Config.DragPickupSoundVolumeMultiplier;
+		PickupConfig.SoundPitchMultiplier = Config.DragPickupSoundPitchMultiplier;
+		PickupConfig.SoundPitchVariation = Config.DragPickupSoundPitchVariation;
+		return PickupConfig;
 	}
 
 	FWacomFirstPersonCardSlotVisualConfig BuildSlotVisualConfig(
@@ -556,6 +550,17 @@ namespace
 		VisualConfig.DrawReveal = Config.DrawReveal;
 		VisualConfig.GainReveal = Config.GainReveal;
 		VisualConfig.RetainSeal = Config.RetainSeal;
+		VisualConfig.RetainSeal.bEnabled = Config.RetainSeal.bEnabled
+			&& Config.bEnableRetainedFeedback;
+		VisualConfig.RetainSeal.SealingDurationSeconds = Config.RetainedFeedbackDuration;
+		VisualConfig.RetainSeal.SequenceStaggerSeconds =
+			Config.RetainedFeedbackStaggerSeconds;
+		VisualConfig.RetainSeal.PeakLiftPixels = Config.RetainedFeedbackLiftPixels;
+		VisualConfig.RetainSeal.PeakScale = Config.RetainedFeedbackScale;
+		VisualConfig.RetainSeal.HeldLiftPixels = Config.RetainedFeedbackHeldLiftPixels;
+		VisualConfig.RetainSeal.HeldScale = Config.RetainedFeedbackHeldScale;
+		VisualConfig.RetainSeal.ReleaseDurationSeconds =
+			Config.RetainedFeedbackReleaseDuration;
 		return VisualConfig;
 	}
 
@@ -1077,11 +1082,12 @@ namespace
 		AddFloat(Config.Selection.Style.GlintSpeed);
 		Combine(GetTypeHash(Config.Selection.Style.PixelClusterMask.Get()));
 		AddBool(Config.bEnableCardInteractionFeedback);
-		AddColor(Config.PlayableHoverFeedbackColor);
-		AddFloat(Config.PlayableHoverFeedbackOpacity);
 		AddFloat(Config.PressedFeedbackScale);
-		AddColor(Config.PressedFeedbackColor);
-		AddFloat(Config.PressedFeedbackOpacity);
+		AddFloat(Config.PressedFeedbackTranslationYPixels);
+		AddFloat(Config.PressedFeedbackInDurationSeconds);
+		AddFloat(Config.PressedFeedbackOutDurationSeconds);
+		AddFloat(Config.PressedFeedbackContactShadowLiftMultiplier);
+		AddBool(Config.bReduceCardInteractionMotion);
 		AddBool(Config.bEnableDragPickupFeedback);
 		AddFloat(Config.DragPickupDurationSeconds);
 		AddFloat(Config.DragPickupRiseSeconds);
@@ -1092,22 +1098,15 @@ namespace
 		AddFloat(Config.DragPickupSoundVolumeMultiplier);
 		AddFloat(Config.DragPickupSoundPitchMultiplier);
 		AddFloat(Config.DragPickupSoundPitchVariation);
-		AddFloat(Config.ConfirmFeedbackDuration);
-		AddFloat(Config.ConfirmFeedbackOpacity);
 		AddColor(Config.DenyFeedbackColor);
 		AddFloat(Config.DenyFeedbackOpacity);
 		AddFloat(Config.DenyFeedbackDuration);
 		AddFloat(Config.DenyFeedbackShakePixels);
-		AddSoftObjectPath(Config.InteractionFeedbackMaterial.ToSoftObjectPath());
-		AddFloat(Config.InteractionFeedbackEdgeWidth);
-		AddFloat(Config.InteractionFeedbackEdgeSoftness);
-		AddFloat(Config.InteractionFeedbackVignetteStrength);
-		AddFloat(Config.InteractionFeedbackVignetteRadius);
-		AddFloat(Config.InteractionFeedbackVignetteSoftness);
+		AddFloat(Config.DenyFeedbackCornerInsetPixels);
+		AddFloat(Config.DenyFeedbackCornerLengthPixels);
+		AddFloat(Config.DenyFeedbackCornerThicknessPixels);
 		AddBool(Config.bEnablePlayCommitFeedback);
 		AddFloat(Config.PlayCommitFeedbackDuration);
-		AddFloat(Config.PlayCommitFeedbackOpacity);
-		AddColor(Config.PlayCommitFeedbackColor);
 		AddFloat(Config.PlayCommitFeedbackScale);
 		AddBool(Config.bEnableRetainedFeedback);
 		AddFloat(Config.RetainedFeedbackDuration);
@@ -2306,10 +2305,11 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 		const FWacomFirstPersonCardResolvedLayoutConfig ResolvedConfig = ResolveLayoutConfig(*this);
 
 		CachedOwnerConfigHash          = BuildResolvedLayoutConfigHash(ResolvedConfig);
-		CachedSlotMotionConfig         = BuildSlotMotionConfig(ResolvedConfig);
-		CachedSlotVisualConfig         = BuildSlotVisualConfig(ResolvedConfig);
-		CachedSlotFeedbackConfig       = BuildSlotFeedbackConfig(ResolvedConfig);
-		CachedCardDragConfig           = BuildCardDragConfig(*this, ResolvedConfig);
+		CachedSlotRuntimeConfig.Motion = BuildSlotMotionConfig(ResolvedConfig);
+		CachedSlotRuntimeConfig.Visual = BuildSlotVisualConfig(ResolvedConfig);
+		CachedSlotRuntimeConfig.Interaction = BuildInteractionFeedbackConfig(ResolvedConfig);
+		CachedSlotRuntimeConfig.DragPickup = BuildDragPickupConfig(ResolvedConfig);
+		CachedSlotRuntimeConfig.Drag = BuildCardDragConfig(*this, ResolvedConfig);
 		CachedPileTransferConfig       = ResolvedConfig.PileTransfer;
 		CachedInteractionEnabled       = bFirstPersonCardLayerInteractionEnabled;
 		CachedLogDiagnostics           = bLogCardLayerMotionDiagnostics;
@@ -2322,10 +2322,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	OwnerConfig.CardViewClass             = FirstPersonCardViewClass;
 	OwnerConfig.ZOrder                   = CardLayerZOrder;
 	OwnerConfig.ConfigHash               = CachedOwnerConfigHash;
-	OwnerConfig.SlotMotionConfig          = CachedSlotMotionConfig;
-	OwnerConfig.SlotVisualConfig          = CachedSlotVisualConfig;
-	OwnerConfig.SlotFeedbackConfig        = CachedSlotFeedbackConfig;
-	OwnerConfig.CardDragConfig            = CachedCardDragConfig;
+	OwnerConfig.SlotRuntimeConfig         = CachedSlotRuntimeConfig;
 	OwnerConfig.PileTransferConfig        = CachedPileTransferConfig;
 	OwnerConfig.bLogSlotMotionDiagnostics  = CachedLogDiagnostics;
 	OwnerConfig.bInteractionEnabled       = CachedInteractionEnabled;

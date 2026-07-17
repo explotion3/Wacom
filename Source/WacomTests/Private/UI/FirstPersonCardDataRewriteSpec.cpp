@@ -89,7 +89,7 @@ namespace WacomFirstPersonCardDataRewriteSpec
 		{
 			VisualConfig.HandTargetImpact = MakeHandTargetConfig();
 		}
-		Widget->SetSlotVisualConfig(VisualConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 		Widget->SetSlotViewImmediate(MakeSlot(CardInstanceId));
 		return Widget;
 	}
@@ -244,7 +244,7 @@ bool FWacomFirstPersonCardDataRewriteCompositionTest::RunTest(
 	UWacomFirstPersonCardLayerWidget* ReformLayer = NewObject<UWacomFirstPersonCardLayerWidget>();
 	FWacomFirstPersonCardSlotVisualConfig VisualConfig;
 	VisualConfig.DataRewrite = MakeRewriteConfig();
-	ReformLayer->SetSlotVisualConfig(VisualConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*ReformLayer, VisualConfig);
 	ReformLayer->SetCardSlots({ MakeSlot(CardId) });
 	FWacomFirstPersonCardLayerFeedbackHint RewriteHint;
 	RewriteHint.CardInstanceId = CardId;

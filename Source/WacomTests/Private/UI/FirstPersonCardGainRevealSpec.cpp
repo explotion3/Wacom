@@ -65,11 +65,11 @@ namespace WacomFirstPersonCardGainRevealSpec
 		FWacomFirstPersonCardSlotMotionConfig MotionConfig;
 		MotionConfig.bEnabled = true;
 		MotionConfig.EnterOpacity = 1.0f;
-		Widget->SetSlotMotionConfig(MotionConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Widget, MotionConfig);
 
 		FWacomFirstPersonCardSlotVisualConfig VisualConfig;
 		VisualConfig.GainReveal = RevealConfig;
-		Widget->SetSlotVisualConfig(VisualConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 		return Widget;
 	}
 

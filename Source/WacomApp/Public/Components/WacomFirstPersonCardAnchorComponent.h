@@ -689,23 +689,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|20 Card Retain Seal", meta = (ToolTip = "弱化封存动态：不改变卡牌 Scale 或 Translation，只保留静态像素封存和解除淡出；封存无论是否弱化都不会改变 authored ZOrder。"))
 	bool bReduceCardRetainSealMotion = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量交互反馈；只影响 hover、按下、确认和不可用点击的 UMG 表现，不改变出牌命令路径。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否启用第一人称手牌的轻量实体交互反馈；只影响按下、拖拽拾牌、权威提交和失败释放，不改变出牌命令路径。"))
 	bool bEnableCardInteractionFeedback = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "可打卡牌悬停时叠加的轻微颜色；通过 C++ overlay 表现，不要求修改卡面 WBP。"))
-	FLinearColor PlayableHoverFeedbackColor = FLinearColor(1.0f, 0.92f, 0.45f, 1.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.4", ToolTip = "可打卡牌悬停时颜色叠加的不透明度，范围 0 到 1；建议保持很低，避免盖住卡面。"))
-	float PlayableHoverFeedbackOpacity = 0.06f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.1", ToolTip = "左键按下可交互卡牌时额外乘上的缩放倍率；小于 1 会产生轻微按下感。"))
 	float PressedFeedbackScale = 0.985f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "左键按下可交互卡牌时叠加的颜色。"))
-	FLinearColor PressedFeedbackColor = FLinearColor::White;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "左键按下卡牌时向下移动的 UMG 逻辑像素；默认 2，推荐 1 到 4，只影响局部 RenderTransform，不改变布局或命中。"))
+	float PressedFeedbackTranslationYPixels = 2.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.5", ToolTip = "左键按下可交互卡牌时颜色叠加的不透明度，范围 0 到 1。"))
-	float PressedFeedbackOpacity = 0.10f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (Units = "s", ToolTip = "Pressed 实体反馈建立时长，单位秒；默认 0.045，推荐 0.03 到 0.08。"))
+	float PressedFeedbackInDurationSeconds = 0.045f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (Units = "s", ToolTip = "Pressed 实体反馈释放时长，单位秒；默认 0.08，推荐 0.05 到 0.12。"))
+	float PressedFeedbackOutDurationSeconds = 0.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "Pressed 时对 Hover 接触阴影抬升量使用的倍率；默认 0.35，推荐 0.15 到 0.55，数值越小越像压回卡面。"))
+	float PressedFeedbackContactShadowLiftMultiplier = 0.35f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "弱化轻量交互运动：关闭 Pressed 位移/缩放和 Deny 抖动，但保留失败释放的静态四角语义刻线；全局 Simplified Motion 也会强制启用。"))
+	bool bReduceCardInteractionMotion = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "是否在卡牌首次进入正式拖拽时播放一次拾牌反馈；只影响局部缩放、上提和 2D 音效，不改变拖拽、瞄准或提交规则。"))
 	bool bEnableCardDragPickupFeedback = true;
@@ -737,53 +740,32 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "每次拾牌音效相对基础音高的随机浮动比例；0.03 表示约正负 3%，推荐 0 到 0.06。"))
 	float CardDragPickupSoundPitchVariation = 0.03f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.5", Units = "s", ToolTip = "有效点击释放后确认反馈保留的时长，单位为秒；不延迟出牌或目标选择流程。"))
-	float ConfirmFeedbackDuration = 0.08f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.5", ToolTip = "有效点击释放后确认反馈的不透明度，范围 0 到 1。"))
-	float ConfirmFeedbackOpacity = 0.12f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.6", Units = "s", ToolTip = "点击不可打卡牌时拒绝反馈保留的时长，单位为秒；只消费第一人称卡槽点击，不提交战斗命令。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.6", Units = "s", ToolTip = "正式拖拽在无效目标上释放时的拒绝反馈总时长，单位秒；普通 Hover、Inspect 返回和取消不触发。"))
 	float DenyFeedbackDuration = 0.18f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "32.0", ToolTip = "点击不可打卡牌时的横向抖动幅度，单位为 UMG 布局像素。"))
 	float DenyFeedbackShakePixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "点击不可打卡牌时叠加的拒绝反馈颜色。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "失败释放时四角硬像素刻线的颜色。"))
 	FLinearColor DenyFeedbackColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.6", ToolTip = "点击不可打卡牌时拒绝反馈的不透明度，范围 0 到 1。"))
-	float DenyFeedbackOpacity = 0.18f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "失败释放四角刻线的峰值不透明度；默认 0.42，推荐 0.30 到 0.65。"))
+	float DenyFeedbackOpacity = 0.42f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "Pressed / Confirm / Commit / Deny 源卡交互反馈使用的 UI 材质；为空时优先使用 WBP InteractionFeedbackImage 自带材质，没有材质时 pressed/confirm/commit 退化为普通 tint，deny 只保留横向抖动。可手动指定 /Game/DreamMaterials/Card/M_FirstPersonCard_FeedbackEdge。"))
-	TSoftObjectPtr<UMaterialInterface> InteractionFeedbackMaterial;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "四角刻线相对 CardContentSizeBox 边缘的内缩，单位 UMG 逻辑像素；默认 8，推荐 4 到 14，不影响布局。"))
+	float DenyFeedbackCornerInsetPixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.16", ToolTip = "源卡交互反馈材质的四边高亮宽度，UV 单位；数值越大边框越粗。"))
-	float InteractionFeedbackEdgeWidth = 0.048f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "四角 L 形刻线每条边的长度，单位 UMG 逻辑像素；默认 14，推荐 10 到 24。"))
+	float DenyFeedbackCornerLengthPixels = 14.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.12", ToolTip = "源卡交互反馈材质向内淡出的柔和宽度，UV 单位；数值越大边缘越软。"))
-	float InteractionFeedbackEdgeSoftness = 0.024f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "源卡交互反馈材质的暗角强度；0 表示只显示边框，不显示暗角。"))
-	float InteractionFeedbackVignetteStrength = 0.22f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "1.2", ToolTip = "源卡交互反馈材质暗角开始出现的中心距离，UV 距离；数值越小暗角越靠近中心。"))
-	float InteractionFeedbackVignetteRadius = 0.58f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.8", ToolTip = "源卡交互反馈材质暗角淡入柔和度；数值越大暗角过渡越缓。"))
-	float InteractionFeedbackVignetteSoftness = 0.28f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "四角硬像素刻线厚度，单位 UMG 逻辑像素；默认 3，推荐 2 到 5。"))
+	float DenyFeedbackCornerThicknessPixels = 3.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否在战斗卡牌成功提交后播放第一人称手牌 commit 脉冲；只影响 UMG 表现，不延迟或改变 BattleSession 命令。"))
 	bool bEnablePlayCommitFeedback = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.5", Units = "s", ToolTip = "成功提交出牌后 commit 反馈保留时长，单位为秒。"))
 	float PlayCommitFeedbackDuration = 0.12f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "0.5", ToolTip = "成功提交出牌后 commit 反馈颜色叠加的不透明度，范围 0 到 1。"))
-	float PlayCommitFeedbackOpacity = 0.16f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "成功提交出牌后 commit 反馈使用的颜色；用于和普通点击确认区分。"))
-	FLinearColor PlayCommitFeedbackColor = FLinearColor(0.75f, 1.0f, 0.55f, 1.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.01", UIMin = "0.9", UIMax = "1.2", ToolTip = "成功提交出牌后 commit 反馈额外乘上的缩放倍率；只作用于视觉 slot。"))
 	float PlayCommitFeedbackScale = 1.015f;
@@ -1014,7 +996,7 @@ private:
 	mutable bool bHasResolvedCardBaseConfigHash = false;
 	mutable uint32 LastResolvedCardBaseConfigHash = 0;
 
-	mutable FWacomFirstPersonCardSlotMotionConfig CachedSlotMotionConfig;
+	mutable FWacomFirstPersonCardSlotRuntimeConfig CachedSlotRuntimeConfig;
 
 	friend struct FWacomFirstPersonCardLayerTestAccess;
 	friend struct FWacomFirstPersonCardAccessibilityBridge;
@@ -1022,9 +1004,6 @@ private:
 
 	void ApplyRuntimeCardLayerPresentationFrame(
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
-	mutable FWacomFirstPersonCardSlotVisualConfig CachedSlotVisualConfig;
-	mutable FWacomFirstPersonCardSlotFeedbackConfig CachedSlotFeedbackConfig;
-	mutable FWacomFirstPersonCardDragConfig CachedCardDragConfig;
 	mutable FWacomFirstPersonCardPileTransferConfig CachedPileTransferConfig;
 	mutable TObjectPtr<UClass> CachedCardViewClass;
 	mutable uint32 CachedOwnerConfigHash = 0;

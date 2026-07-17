@@ -89,7 +89,7 @@ bool FWacomFirstPersonCardLayerEntryInteractionIntentRefreshTest::RunTest(
 		return false;
 	}
 
-	Layer->SetSlotMotionConfig(
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Layer,
 		WacomFirstPersonCardLayerEntryContractSpec::MakeFastSlotMotionConfig());
 
 	const FGuid CardId = FGuid::NewGuid();

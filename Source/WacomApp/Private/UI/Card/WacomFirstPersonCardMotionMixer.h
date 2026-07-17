@@ -6,20 +6,20 @@
 #include "Slate/WidgetTransform.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
-struct FWacomFirstPersonCardLocalFeedbackMixInput
+struct FWacomFirstPersonCardLocalFeedbackView
 {
-	const FWacomFirstPersonCardLayerSlotView* SlotView = nullptr;
-	const FWacomFirstPersonCardSlotFeedbackConfig* FeedbackConfig = nullptr;
-	float DenyFeedbackElapsedSeconds = 0.0f;
+	float DenyTranslationXPixels = 0.0f;
+	float PressedScaleMultiplier = 1.0f;
+	float PressedTranslationYPixels = 0.0f;
+	float CommitScaleMultiplier = 1.0f;
+	float DragPickupLiftPixels = 0.0f;
+	float DragPickupScaleMultiplier = 1.0f;
 	bool bRetainTransformActive = false;
 	float RetainLiftPixels = 0.0f;
 	float RetainScaleMultiplier = 1.0f;
-	float DragPickupAlpha = 0.0f;
 	float HandTargetImpactScaleMultiplier = 1.0f;
 	float HandTargetImpactTranslationYPixels = 0.0f;
 	int32 HandTargetImpactZOrderBoost = 0;
-	bool bPressed = false;
-	bool bCommitFeedbackActive = false;
 };
 
 struct FWacomFirstPersonCardLocalFeedbackMixResult
@@ -65,7 +65,8 @@ public:
 		const FWacomFirstPersonCardLayerSlotView& Target);
 
 	static FWacomFirstPersonCardLocalFeedbackMixResult MixLocalFeedback(
-		const FWacomFirstPersonCardLocalFeedbackMixInput& Input);
+		const FWacomFirstPersonCardLayerSlotView& SlotView,
+		const FWacomFirstPersonCardLocalFeedbackView& FeedbackView);
 
 private:
 	static int32 GetMotionIntentPriority(EWacomFirstPersonCardMotionIntent Intent);

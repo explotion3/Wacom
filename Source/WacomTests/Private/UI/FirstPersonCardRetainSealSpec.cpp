@@ -42,19 +42,15 @@ namespace WacomFirstPersonCardRetainSealSpec
 		FWacomFirstPersonCardSlotVisualConfig VisualConfig;
 		VisualConfig.RetainSeal.bEnabled = true;
 		VisualConfig.RetainSeal.bReducedMotion = bReducedMotion;
+		VisualConfig.RetainSeal.SealingDurationSeconds = 0.32f;
+		VisualConfig.RetainSeal.PeakLiftPixels = 12.0f;
+		VisualConfig.RetainSeal.PeakScale = 1.025f;
+		VisualConfig.RetainSeal.HeldLiftPixels = 5.0f;
+		VisualConfig.RetainSeal.HeldScale = 1.01f;
+		VisualConfig.RetainSeal.ReleaseDurationSeconds = 0.16f;
 		VisualConfig.RetainSeal.Style.SurfaceEffectMaterialInstance =
 			NewObject<UMaterialInstanceConstant>();
-		Widget->SetSlotVisualConfig(VisualConfig);
-
-		FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig;
-		FeedbackConfig.bEnableRetainedFeedback = true;
-		FeedbackConfig.RetainedFeedbackDuration = 0.32f;
-		FeedbackConfig.RetainedFeedbackLiftPixels = 12.0f;
-		FeedbackConfig.RetainedFeedbackScale = 1.025f;
-		FeedbackConfig.RetainedFeedbackHeldLiftPixels = 5.0f;
-		FeedbackConfig.RetainedFeedbackHeldScale = 1.01f;
-		FeedbackConfig.RetainedFeedbackReleaseDuration = 0.16f;
-		Widget->SetSlotFeedbackConfig(FeedbackConfig);
+		FWacomFirstPersonCardLayerTestAccess::SetSlotVisualConfig(*Widget, VisualConfig);
 		UCanvasPanel* Canvas = NewObject<UCanvasPanel>();
 		Canvas->AddChild(Widget);
 		return Widget;

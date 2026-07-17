@@ -19,6 +19,33 @@ struct FWacomFirstPersonCardLayerTestAccess
 		const UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static FWacomFirstPersonCardAnchorAutomationTestView View(
 		const UWacomFirstPersonCardAnchorComponent& Anchor);
+	static void SetSlotMotionConfig(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FWacomFirstPersonCardSlotMotionConfig& Config);
+	static void SetSlotMotionConfig(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		const FWacomFirstPersonCardSlotMotionConfig& Config);
+	static void SetSlotVisualConfig(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FWacomFirstPersonCardSlotVisualConfig& Config);
+	static void SetSlotVisualConfig(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		const FWacomFirstPersonCardSlotVisualConfig& Config);
+	static void SetInteractionFeedbackConfig(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FWacomFirstPersonCardInteractionFeedbackConfig& Config);
+	static void SetInteractionFeedbackConfig(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		const FWacomFirstPersonCardInteractionFeedbackConfig& Config);
+	static void SetDragPickupConfig(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		const FWacomFirstPersonCardDragPickupConfig& Config);
+	static void SetCardDragConfig(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		const FWacomFirstPersonCardDragConfig& Config);
+	static void SetCardDragConfig(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		const FWacomFirstPersonCardDragConfig& Config);
 	static void TickAnchor(UWacomFirstPersonCardAnchorComponent& Anchor, float DeltaTime);
 	static void SetCardViewRetainerEffectMaterialBeforeSlate(
 		UWacomFirstPersonCardViewWidget& CardView,
@@ -121,6 +148,7 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static void RequestUnhover(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static bool RequestPress(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static bool RequestMouseUp(UWacomFirstPersonCardLayerSlotWidget& Slot);
+	static void TriggerDenyFeedback(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static void TickSlotMotion(UWacomFirstPersonCardLayerSlotWidget& Slot, float DeltaTime);
 	static void TickSlotMotionWithoutPresentationPaint(
 		UWacomFirstPersonCardLayerSlotWidget& Slot,

@@ -115,14 +115,8 @@ struct FWacomFirstPersonCardLayerResolvedFeedbackBundle
 struct WACOMAPP_API FWacomFirstPersonCardLayerAutomationTestView
 {
 	int32 SkippedEquivalentSlotRefreshCount = 0;
-	int32 SlotMotionConfigPropagationCount = 0;
-	int32 SlotVisualConfigPropagationCount = 0;
-	int32 SlotFeedbackConfigPropagationCount = 0;
-	int32 CardDragConfigPropagationCount = 0;
-	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
-	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
-	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
-	FWacomFirstPersonCardDragConfig CardDragConfig;
+	int32 SlotRuntimeConfigPropagationCount = 0;
+	FWacomFirstPersonCardSlotRuntimeConfig SlotRuntimeConfig;
 	FWacomFirstPersonCardDragView CurrentDragView;
 	FWacomFirstPersonCardPointerView CurrentPointerView;
 	bool bHasCurrentPointerView = false;
@@ -149,10 +143,7 @@ class WACOMAPP_API UWacomFirstPersonCardLayerWidget : public UUserWidget
 
 public:
 	void SetCardViewClass(TSubclassOf<UWacomFirstPersonCardViewWidget> InCardViewClass);
-	void SetSlotMotionConfig(const FWacomFirstPersonCardSlotMotionConfig& InConfig);
-	void SetSlotVisualConfig(const FWacomFirstPersonCardSlotVisualConfig& InConfig);
-	void SetSlotFeedbackConfig(const FWacomFirstPersonCardSlotFeedbackConfig& InConfig);
-	void SetCardDragConfig(const FWacomFirstPersonCardDragConfig& InConfig);
+	void SetSlotRuntimeConfig(const FWacomFirstPersonCardSlotRuntimeConfig& InConfig);
 	void SetCardDragFeedbackTarget(
 		const FWacomInteractionTargetHandle& TargetHandle,
 		bool bValidTarget,
@@ -277,7 +268,8 @@ private:
 
 	FWacomFirstPersonCardSlotMotionConfig SlotMotionConfig;
 	FWacomFirstPersonCardSlotVisualConfig SlotVisualConfig;
-	FWacomFirstPersonCardSlotFeedbackConfig SlotFeedbackConfig;
+	FWacomFirstPersonCardInteractionFeedbackConfig InteractionFeedbackConfig;
+	FWacomFirstPersonCardDragPickupConfig DragPickupConfig;
 	FWacomFirstPersonCardDragConfig CardDragConfig;
 	FWacomFirstPersonCardPileTransferConfig PileTransferConfig;
 	FWacomFirstPersonCardLayerMotionDebugView LastMotionDebugView;
@@ -322,16 +314,14 @@ private:
 
 	TOptional<FVector2D> WidgetViewportSizeOverrideForTest;
 	int32 SkippedEquivalentSlotRefreshCountForTest = 0;
-	int32 SlotMotionConfigPropagationCountForTest = 0;
-	int32 SlotVisualConfigPropagationCountForTest = 0;
-	int32 SlotFeedbackConfigPropagationCountForTest = 0;
-	int32 CardDragConfigPropagationCountForTest = 0;
+	int32 SlotRuntimeConfigPropagationCountForTest = 0;
 #endif
 
 	friend class UWacomFirstPersonCardLayerSlotWidget;
 	friend struct FWacomFirstPersonCardLayerTestAccess;
 
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
+	FWacomFirstPersonCardSlotRuntimeConfig BuildCurrentSlotRuntimeConfig() const;
 	void ApplyLayerVisibility();
 	void EnsurePileTransferWidget();
 	void ProcessDeferredPileTransferHints();

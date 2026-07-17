@@ -118,7 +118,7 @@ bool FWacomFirstPersonCardLayerDisableInteractionReleasesMouseCaptureTest::RunTe
 	}
 	FWacomFirstPersonCardSlotMotionConfig Motion;
 	Motion.bEnabled = false;
-	Slot->SetSlotMotionConfig(Motion);
+	FWacomFirstPersonCardLayerTestAccess::SetSlotMotionConfig(*Slot, Motion);
 	Slot->SetSlotViewImmediate(MakeInteractiveSlot(CardId));
 	Slot->SetCardLayerInteractionEnabled(true);
 

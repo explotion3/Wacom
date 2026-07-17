@@ -16,11 +16,11 @@ bool FWacomFirstPersonCardReleaseReentrancyTest::RunTest(const FString& /*Parame
 {
 	UWacomFirstPersonCardLayerSlotWidget* Slot =
 		NewObject<UWacomFirstPersonCardLayerSlotWidget>();
-	FWacomFirstPersonCardSlotFeedbackConfig FeedbackConfig;
+	FWacomFirstPersonCardInteractionFeedbackConfig FeedbackConfig;
 	FeedbackConfig.bEnabled = true;
-	FeedbackConfig.ConfirmDuration = 0.10f;
+	FeedbackConfig.PressedOutDurationSeconds = 0.08f;
 	FeedbackConfig.DenyDuration = 0.10f;
-	Slot->SetSlotFeedbackConfig(FeedbackConfig);
+	FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*Slot, FeedbackConfig);
 	Slot->SetCardLayerInteractionEnabled(true);
 
 	FWacomFirstPersonCardLayerSlotView SlotView;
@@ -63,7 +63,10 @@ bool FWacomFirstPersonCardReleaseReentrancyTest::RunTest(const FString& /*Parame
 	const FWacomFirstPersonCardSlotAutomationTestView View =
 		FWacomFirstPersonCardLayerTestAccess::View(*Slot);
 	TestFalse(TEXT("Synchronous refresh cannot create a false Deny"), View.bDenyFeedbackActive);
-	TestTrue(TEXT("Accepted release keeps confirm semantics"), View.bConfirmFeedbackActive);
+	TestEqual(
+		TEXT("Accepted release has no optimistic cue"),
+		View.InteractionCueKind,
+		EWacomFirstPersonCardInteractionCueKind::None);
 	return true;
 }
 
