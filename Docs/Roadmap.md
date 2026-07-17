@@ -68,7 +68,7 @@ tags:
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
 | 击倒事件三选一具体效果 | 当前框架见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)，开放决策见 [Questions: 击倒与战后结算](./Questions.md#questions-knockdown) | 探索事件 / 地图节点系统接入后，按击倒选择触发左手 buff、永久强化部位、特殊节点等实际效果 |
-| 击倒奖励卡内容制作 | Aid/Destroy 显式字段、legacy fallback、统一查询、原子授予、简单预览和 Production validation 已落地；Floor 1 已固定每敌人一对共 8 个 CardId | 下一轮冻结八张卡的费用/稀有度/关键词/效果与 package leaf，随后纳入 Floor 1 受控 builder/manifest；不要另建节点奖励表或让 UI 读取规则资产 |
+| 击倒奖励卡内容制作 | Aid/Destroy 显式字段、legacy fallback、统一查询、原子授予、简单预览和 Production validation 已落地；Floor 1 每敌人一对共 8 张卡的完整字段、package leaf、十一 Part 映射与 `14–17 / 20` 奖励量已冻结 | 下一轮将八张卡纳入 Floor 1 的 46-package 受控 builder/manifest，完成 Data Validation、双跑、引用/哈希与平衡/背包量验证；不要另建节点奖励表或让 UI 读取规则资产 |
 | 左右手永久缺失可用性 | 待确认口径见 [Questions: 手牌、区域与抽牌](./Questions.md#questions-hand) / [Questions: 击倒与战后结算](./Questions.md#questions-knockdown) | 等 Run / Battle 中永久失去左 / 右手字段确定后，在击倒可用性 helper 中禁用对应分支 |
 
 ---

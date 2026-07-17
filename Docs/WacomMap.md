@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential，Floor 1 的敌人、奖励、事件、Shop 与 38 个未来资产合同也已冻结。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 46 个节点 Definition 的实际制作、各层支持内容资产和资产权威审计阻塞；真实 Golden Path PIE 须在 Production 资产轮完成。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential，Floor 1 的敌人、奖励、事件、Shop 与 `38 core + 8 branch reward = 46` 个未来资产合同也已冻结。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受三层 46 个节点 Definition 的实际制作、各层支持内容资产和资产权威审计阻塞；真实 Golden Path PIE 须在 Production 资产轮完成。
 
 ## §1 两层图合同
 
@@ -257,7 +257,9 @@ Floor 1 的 15 个内容节点已完成 Production 内容设计冻结，不再�
 
 所有 RunEvent 选项都是 terminal Automatic 选项，成功固定 1 AP；Treasure/Encounter 仍各按首次成功/胜利 1 AP，Shop 只有本次访问首次成功购买 1 AP。因此路线数值没有改变 `8–9 / 14–15 AP`：情报/道德选择影响经济与压力，不改变事件 AP；区间仍只来自是否购买。
 
-Floor 1 内容设计 blocker 已关闭，但没有创建任何 DataAsset、Host 或关卡。首层下一步需实现并验证 38 个新 DataAsset（15 节点 Definition + 23 个 Card/Enemy/Behavior/Part 支持资产）；Aid/Destroy/Withdraw 效果、世界资产权威、正式场景和 Golden Path PIE 仍分别阻塞。精确静态内容合同见 [WacomData.md](./WacomData.md) §13，路径和 builder 边界见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。
+击倒奖励量按 Encounter 部位数固定为：必经 Scout + EliteSentinel + Guardian 共 11；Route A 增加 MoltGuard 3，Route B 增加双 BrushSnake 4，Route C 不增加 Encounter，Route D 增加 RootStalker 2。因此 A/C、B/C、A/D、B/D 四条关键路线分别获得 `14 / 15 / 16 / 17` 张分支奖励卡，完整探索全部六场 Encounter 最多获得 20 张。每个部位只获得所选 Aid 或 Destroy 的一张独立实例，允许重复；选择不额外消耗 AP。该体量是后续卡组/背包平衡和 PIE 的显式风险，不在本轮增加去重或替代奖励。
+
+Floor 1 核心内容与八张击倒奖励卡设计 blocker 已关闭，但没有创建任何 DataAsset、Host 或关卡。首层下一步需实现并验证 `38 core + 8 branch reward = 46` 个新 Production DataAsset；其它 Aid/Destroy/Withdraw 后果、背包容量、世界资产权威、正式场景和 Golden Path PIE 仍分别处理。精确静态内容合同见 [WacomData.md](./WacomData.md) §13，路径和 builder 边界见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。
 
 ### Floor 2 节点与内容槽
 
@@ -381,7 +383,7 @@ Guardian 无出边，战斗胜利后由通用 Journey success 合同完成 Journ
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
 - 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结敌人槽、事件选项、Shop Offers 与奖励数值；Floor 2/3 的 31 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。
 - 蛇印和蜕印都采用表现卡 + 独立 Credential：必经 Pickup 原子授予两者，删牌流程不影响资格，入口只检查 Credential。
-- Floor 2/3 缺图、通用 Journey success 与 Floor 1 内容设计 blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受 46 个节点 Definition 的实际制作、首层 23 个支持资产、Floor 2/3 支持内容设计和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
+- Floor 2/3 缺图、通用 Journey success 与 Floor 1 内容设计 blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受三层 46 个节点 Definition 的实际制作、首层 31 个支持资产（含 8 张击倒奖励卡）、Floor 2/3 支持内容设计和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
 
 Floor 1 默认 MapPosition 与原始冻结证据见 `specs/007-formal-floor1-content-freeze/`；Floor 2/3 默认 MapPosition、完整 Edge 表、Journey pacing 与当前 Production readiness gate 见 `specs/009-formal-floor23-journey-pacing-freeze/`。上述长期身份、拓扑、配比和阻塞事实以本节为准。
 

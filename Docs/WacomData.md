@@ -503,18 +503,26 @@ Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorM
 | `Enemy.SerpentWood.RootStalker` | Head `10/2`；Coil `16/2` | Head: Lunge `5/4/5` → Sap `Poison1/I3`; Coil: Tangle `Slow2/I4` → Crush `4/3/4` → RootGuard `Shield3/I2` |
 | `Enemy.SerpentWood.ShallowGuardian` | Head `14/2`；Body `22/4`；Tail `10/2`；Crest `6/1` | Head: Bite `6/3/6` → Venom `Poison2/I5`; Body: Crush `6/4/7` → Harden `Shield6/I2`; Tail: Sweep `4/2/4` → Tangle `Slow1/I3`; Crest: Dread `Twilight1/I5` → CrownGuard `Shield4/I2` |
 
-Damage/Poison/Slow/Twilight 均指向 Player，Shield 指向行动部位自身。Slow 使用现有玩家手牌 `Default / TargetCardCount=1` 投递；Twilight 使用现有整手牌语义。所有 11 个正式新部位必须清空 legacy `KnockdownRewardCard`，并按所属敌人显式引用一对 Aid/Destroy 奖励卡。奖励粒度固定为“每个敌人一对”，不是每个部位或节点各建一对；八张卡的具体数值仍需下一轮内容冻结。
+Damage/Poison/Slow/Twilight 均指向 Player，Shield 指向行动部位自身。Slow 使用现有玩家手牌 `Default / TargetCardCount=1` 投递；Twilight 使用现有整手牌语义。所有 11 个正式新部位必须清空 legacy `KnockdownRewardCard`，并按所属敌人显式引用一对 Aid/Destroy 奖励卡。奖励粒度固定为“每个敌人一对”，不是每个部位或节点各建一对；每个部位处理一次击倒选择并获得所选分支的一张独立卡实例，允许同卡重复。
 
-### SerpentWood 击倒分支奖励身份
+### SerpentWood 击倒分支奖励卡
 
-| Archetype | Aid CardId | Destroy CardId |
-|---|---|---|
-| BrushSnake | `Reward.SerpentWood.BrushSnake.Aid` | `Reward.SerpentWood.BrushSnake.Destroy` |
-| MoltGuard | `Reward.SerpentWood.MoltGuard.Aid` | `Reward.SerpentWood.MoltGuard.Destroy` |
-| RootStalker | `Reward.SerpentWood.RootStalker.Aid` | `Reward.SerpentWood.RootStalker.Destroy` |
-| ShallowGuardian | `Reward.SerpentWood.ShallowGuardian.Aid` | `Reward.SerpentWood.ShallowGuardian.Destroy` |
+Aid 固定使用 `Card.Keyword.Tool`，Destroy 固定使用 `Card.Keyword.Weapon`。八张卡都使用零 Physique，无 Swift/Exhaust、PerfectRelease、ZoneHook 或 Passive；Effects 顺序同时决定描述中的 `{Effect.N}`。插画、音效和专用 CardView 表现继续留待资产制作。
 
-本轮只冻结身份和数量，不冻结费用、稀有度、关键词、效果、插画或描述。它们位于 `/Game/Wacom/Data/Cards/Rewards/SerpentWood/<Archetype>/`，并作为 Spec 011 的 38 个核心内容资产之外的 8 张额外 CardDefinition 计算。
+| CardId | 名称 | Cost / Rarity | TargetMode | Ordered Effects |
+|---|---|---|---|---|
+| `Reward.SerpentWood.BrushSnake.Aid` | 伏草藏身 | `1 / White / Tool` | SingleEnemyPart | Shield 2 → Player；Slow 1 → SingleEnemyPart |
+| `Reward.SerpentWood.BrushSnake.Destroy` | 断牙毒刺 | `1 / White / Weapon` | SingleEnemyPart | Damage 3；Poison 1 |
+| `Reward.SerpentWood.MoltGuard.Aid` | 蜕甲壁垒 | `1 / Blue / Tool` | None | Shield 7 → Player |
+| `Reward.SerpentWood.MoltGuard.Destroy` | 裂壳重击 | `1 / Blue / Weapon` | SingleEnemyPart | Damage 6 |
+| `Reward.SerpentWood.RootStalker.Aid` | 盘根护身 | `1 / Blue / Tool` | SingleEnemyPart | Shield 3 → Player；Slow 2 → SingleEnemyPart |
+| `Reward.SerpentWood.RootStalker.Destroy` | 毒根突袭 | `1 / Blue / Weapon` | SingleEnemyPart | Damage 5；Poison 1 |
+| `Reward.SerpentWood.ShallowGuardian.Aid` | 冠鳞庇护 | `1 / Yellow / Tool` | None | Shield 10 → Player |
+| `Reward.SerpentWood.ShallowGuardian.Destroy` | 碎冠毒潮 | `2 / Yellow / Weapon` | AllEnemyParts | Damage 4；Poison 1，均作用于所有存活敌方部位 |
+
+描述模板固定为：伏草藏身/盘根护身使用“获得 `{Effect.0}` 护盾，使一个敌方部位的当前意图延后 `{Effect.1}` 点先机”；断牙毒刺/毒根突袭使用“造成 `{Effect.0}` 点伤害并施加 `{Effect.1}` 层中毒”；蜕甲壁垒、冠鳞庇护只描述获得 `{Effect.0}` 护盾；裂壳重击只描述造成 `{Effect.0}` 伤害；碎冠毒潮明确作用于所有存活敌方部位。占位索引不得脱离上表 Effects 顺序。
+
+拟态来源依次为 BrushSnake 的 Hide/Coil 与 Bite/Venom、MoltGuard 的 Harden+Brace 与 Snap/Slam、RootStalker 的 RootGuard+Tangle 与 Lunge/Sap、ShallowGuardian 的 Harden+CrownGuard 与 Sweep/Venom。完整 package、描述模板与十一 Part 映射见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4；八张 CardDefinition 作为 Spec 011 的 38 个核心资产之外的增量，未来 Production 总量为 46。
 
 ### Encounter 梯度
 
@@ -562,7 +570,7 @@ Pickup 固定映射：
 
 `SerpentWood.MoltTrailKnown` 与 `SerpentWood.MarshRouteKnown` 是当前 Run 内的 FName RunFlag，不是 GameplayTag，也不承诺跨 SaveGame 恢复。全部条件、效果、负数恢复和扣费继续由现有 RunEvent working-state 事务原子解释。
 
-上述内容冻结关闭 Floor 1 的核心内容设计 blocker，但没有创建任何资产。后续需要按 [WacomDataAuthoring.md](./WacomDataAuthoring.md) 创建、校验和审计 `38 core + 8 knockdown branch reward cards = 46` 个 Production DataAsset；八张卡具体效果、正式世界关卡和其它击倒分支效果继续独立阻塞。
+上述内容冻结关闭 Floor 1 的核心内容设计和八张击倒奖励卡内容 blocker，但没有创建任何资产。后续需要按 [WacomDataAuthoring.md](./WacomDataAuthoring.md) 创建、校验和审计 `38 core + 8 knockdown branch reward cards = 46` 个 Production DataAsset；正式世界关卡、背包容量取舍和其它击倒分支效果继续独立处理。
 
 ## §14 修改数据合同时的检查点
 

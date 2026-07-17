@@ -547,6 +547,8 @@ Battle 只负责产出战后包。疲劳、伤口、经验、获得卡、撤离�
 - `UBattleSession::BuildPendingKnockdownChoiceView()` 输出当前击倒事件的 `FKnockdownChoiceView`。每个 Aid/Destroy option 同时携带只读 `bHasRewardCard / RewardCardId / RewardCardName`，与 resolver 使用同一 Data 查询；它不暴露可写规则对象。`DisabledReason` 当前使用 `None / NoLivingEnemyPart`；`LeftHandMissing / RightHandMissing` 已预留但未被当前规则触发。
 - `KnockdownChoiceRequested` 事件只通知 UI 需要展示选择面板；`FBattleEvent.Count` 的旧位掩码仅保留日志兼容，不作为 UI 读取合同。
 
+Floor 1 SerpentWood Production 内容使用“每敌人一对 Definition、每部位一次选择”的固定配置：四个敌人共八张 Aid/Destroy 卡，十一 Part 分别显式引用所属敌人的同一卡对并清空 legacy。每个击倒事件只授予所选分支的一张独立 Card Instance；同敌多部位、同 Archetype 多 Encounter 实例允许产生重复卡，不增加 per-enemy claimed state、去重、领取上限或替代奖励。按当前 Floor 1 Encounter 组合，四条关键路线分别产生 14、15、16、17 个击倒奖励选择，完整探索为 20；这些选择不新增 AP。具体卡牌字段见 [WacomData §13](./WacomData.md)，package 与 Part 映射见 [WacomDataAuthoring §4](./WacomDataAuthoring.md)。
+
 `Outcome=Undetermined` 不结算压力；它只用于异常路径或玩家取消。
 
 部位 HP 归零瞬间会记一条 `FKnockdownExpGain` 到 `BattleState.PendingKnockdownExpGains`。每个部位只记一次，未填 `ExperienceReward` 的部位仍记录 `ExpAmount=0`，让 Run 层有完整的被破坏部位列表。

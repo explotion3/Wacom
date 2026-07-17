@@ -47,11 +47,12 @@ tags:
 |---|---|---|
 | 击倒事件正式触发条件 | 部位 HP 归零时已有击倒事件框架；撤离只在仍有存活部位时可选 | 未来是否还受敌人类型、阶段、节点、剧情状态或特殊状态影响 |
 | Aid / Destroy / Withdraw 其它具体效果 | Aid/Destroy 分支奖励字段、原子授予与文本预览已经完成；正式 Part 必须显式配置双分支，Withdraw 不获得卡 | Aid 是否另给左手 buff，Destroy 是否永久强化 / 破坏部位，Withdraw 是否触发特殊节点或地图回路 |
-| Floor 1 八张分支奖励卡具体效果 | 奖励粒度已关闭：每个 SerpentWood 敌人一对 Aid/Destroy，共 8 个稳定 CardId，路径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) | 每张卡的费用、稀有度、关键词、效果、文案和 package leaf name；不得回退为四敌人共用同卡或每部位膨胀一对 |
 | 最后存活部位击倒 | 当前最后部位不可选 Withdraw | 是否所有敌人都保持该规则，还是部分 Boss / 事件敌人有例外 |
 | 背包容量不足时的战斗奖励 | 当前 Victory 后 `AcquireCardToRun()` 加入 Run，再由负重 / 容量重算兜底 | 是否正式接受“溢出进负重区”，还是需要奖励选择、丢弃、邮寄或临时缓存 |
 | 战内玩家受扣血事件 | 现有高 / 低 HP 阈值 flag 回传 Run 压力 | 是否还需要 `Passive.Trigger.OnPlayerDamaged` 表达每次受伤触发 |
 | Run 失败统一总结交接 | Journey success 已有独立 Outcome/summary/event、passive Screen 与主菜单 handoff；Defeat、压力满和手指耗尽目前只结束活动 Run，不进入该成功页面 | 三种失败是否共用一个失败摘要；失败原因、战斗细节、进度统计与返回目标分别显示什么 |
+
+Floor 1 八张分支奖励卡的费用、稀有度、关键词、效果、描述模板、package leaf、十一 Part 映射与 `14–17 / 20` 奖励量已由 Spec 013 关闭，不再作为开放问题。背包容量和其它非卡牌击倒后果仍按上表独立确认。
 
 ---
 
@@ -62,7 +63,7 @@ tags:
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| Floor 1 Production 世界资产权威 | 正式图、身份和 `38 core + 8 branch reward` 内容合同已冻结，但八张卡具体效果、DataAsset/Host/map 尚未创建；`L_Exploration` 仍是 Authoring baseline | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在 46 资产实现并完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
+| Floor 1 Production 世界资产权威 | 正式图、身份和 `38 core + 8 branch reward` 完整内容合同已冻结，但 DataAsset/Host/map 尚未创建；`L_Exploration` 仍是 Authoring baseline | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在 46 资产实现并完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |

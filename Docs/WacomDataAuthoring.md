@@ -266,7 +266,20 @@ Enemy.SerpentWood.RootStalker
 Enemy.SerpentWood.ShallowGuardian
 ```
 
-BehaviorId 使用 `SerpentWood.<Archetype>.Behavior`，PartId 使用 `SerpentWood.<Archetype>.<Part>`。所有 11 个正式部位必须清空 deprecated `KnockdownRewardCard`，并按所属 Archetype 显式填写 `AidRewardCard` 与 `DestroyRewardCard`。四组身份为 `Reward.SerpentWood.<Archetype>.Aid/Destroy`，各放在 `/Game/Wacom/Data/Cards/Rewards/SerpentWood/<Archetype>/`；八张卡本轮只冻结 ID、目录与数量，具体数值另案。Encounter 敌人组合、24 条 Intent、4 张核心新卡、Pickup/Shop/RunEvent 精确字段见 [WacomData.md](./WacomData.md) §13；Spec 011 的 manifest 保留历史 38 core package 清单，未来实施清单必须显式追加 8 张分支奖励卡后才可宣称 Floor 1 Production 完整。
+BehaviorId 使用 `SerpentWood.<Archetype>.Behavior`，PartId 使用 `SerpentWood.<Archetype>.<Part>`。所有 11 个正式部位必须清空 deprecated `KnockdownRewardCard`，并按所属 Archetype 显式填写 `AidRewardCard` 与 `DestroyRewardCard`。四组身份为 `Reward.SerpentWood.<Archetype>.Aid/Destroy`；完整规则字段见 [WacomData.md](./WacomData.md) §13。Spec 011 的 manifest 保留历史 38 core package 清单，未来实施清单必须显式追加下列 8 张分支奖励卡后才可宣称 Floor 1 Production 完整：
+
+| CardId | Package path |
+|---|---|
+| `Reward.SerpentWood.BrushSnake.Aid` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/BrushSnake/DA_Card_BrushSnake_Aid` |
+| `Reward.SerpentWood.BrushSnake.Destroy` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/BrushSnake/DA_Card_BrushSnake_Destroy` |
+| `Reward.SerpentWood.MoltGuard.Aid` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/MoltGuard/DA_Card_MoltGuard_Aid` |
+| `Reward.SerpentWood.MoltGuard.Destroy` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/MoltGuard/DA_Card_MoltGuard_Destroy` |
+| `Reward.SerpentWood.RootStalker.Aid` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/RootStalker/DA_Card_RootStalker_Aid` |
+| `Reward.SerpentWood.RootStalker.Destroy` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/RootStalker/DA_Card_RootStalker_Destroy` |
+| `Reward.SerpentWood.ShallowGuardian.Aid` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/ShallowGuardian/DA_Card_ShallowGuardian_Aid` |
+| `Reward.SerpentWood.ShallowGuardian.Destroy` | `/Game/Wacom/Data/Cards/Rewards/SerpentWood/ShallowGuardian/DA_Card_ShallowGuardian_Destroy` |
+
+Card object name 与 package leaf 相同；内部 CardId 才是稳定规则身份。Aid/Destroy 每个部位只引用所属敌人的卡对，不按部位或节点另建 Definition。Encounter 敌人组合、24 条 Intent、4 张核心新卡、Pickup/Shop/RunEvent 精确字段见 [WacomData.md](./WacomData.md) §13。
 
 EnemyPart 奖励校验分两档：
 
@@ -279,7 +292,7 @@ TrainingWarrior 与 Snake 的现有二进制资产继续由 General + legacy fal
 
 Wayfarer 允许只读引用三张现有正式 Starter 卡和 `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang`；该卡 live `CardId=PoisonFang`，不新建主题副本。Production Definition 不得引用 `Debug`、Authoring、`Test.*`、BadgeDisplayTests 或 TrainingWarrior 内容；TrainingWarrior 只作为当前 enemy-pack 制作范式参考。
 
-后续 SerpentWood builder 的核心写集合以 Spec 011 的 38 个 package 为基础；在 8 张奖励卡 package leaf name 与数值合同另案冻结并扩展 manifest 前，不得创建不受清单约束的奖励资产。Starter 与 PoisonFang 是只读依赖。不得通过全量 `WacomRegenerateContent` 或 Debug builder 顺带写入地图、Player/Host Blueprint、UI、材质、卡牌表现、背包或其它 Agent 资产。实现轮必须双跑 builder，检查 ID/引用/计数/字段稳定、重复资产、dirty package 和只读依赖哈希；本轮未授权或运行该 builder。
+后续 SerpentWood builder 的写集合固定为 Spec 011 的 38 个 core package 加上表 8 个 package，共 46 个新 Production DataAsset。Starter 与 PoisonFang 是只读依赖。不得通过全量 `WacomRegenerateContent` 或 Debug builder 顺带写入地图、Player/Host Blueprint、UI、材质、卡牌表现、背包或其它 Agent 资产。实现轮必须先创建八张卡再装配十一 Part 引用，双跑 builder，并检查 ID/字段/引用/计数稳定、重复资产、dirty package 和只读依赖哈希；本轮未授权或运行该 builder。
 
 Floor 2 为 15 个内容节点预留 `MoltCavern` namespace：
 
@@ -339,7 +352,7 @@ Floor 3 `Node.Guardian.01` 是无出边的 success terminal，不配置 FloorEnt
 
 Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
 
-蛇印任务凭证门禁、Floor 2/3 图冻结、通用 Journey success、Floor 1 核心内容设计和击倒分支奖励 schema 均已完成。正式资产制作仍被 46 个非 Debug 节点 Definition 的实际创建与 validation、Floor 1 的 `38 core + 8 branch reward cards`、八张卡具体效果、Floor 2/3 支持内容设计，以及 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始图门禁见 `specs/007-formal-floor1-content-freeze/`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/`，成功合同见 `specs/010-journey-success-settlement-baseline/`，Floor 1 核心内容冻结证据见 `specs/011-formal-floor1-production-content-freeze/`，击倒分支奖励合同见 `specs/012-knockdown-branch-reward-baseline/`。
+蛇印任务凭证门禁、Floor 2/3 图冻结、通用 Journey success、Floor 1 核心内容、击倒分支奖励 schema 和八张奖励卡内容均已完成设计冻结。正式资产制作仍被 46 个 Production DataAsset 的实际创建与 validation、Floor 2/3 支持内容设计，以及 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始图门禁见 `specs/007-formal-floor1-content-freeze/`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/`，成功合同见 `specs/010-journey-success-settlement-baseline/`，Floor 1 核心内容冻结证据见 `specs/011-formal-floor1-production-content-freeze/`，击倒分支奖励合同见 `specs/012-knockdown-branch-reward-baseline/`，八张正式奖励卡内容见 `specs/013-formal-floor1-knockdown-reward-content-freeze/`。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 
