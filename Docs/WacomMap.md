@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 46 个 Production 内容资产和资产权威审计阻塞；真实 Floor 3 Golden Path PIE 须在 Production 资产轮完成。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential，Floor 1 的敌人、奖励、事件、Shop 与 38 个未来资产合同也已冻结。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 46 个节点 Definition 的实际制作、各层支持内容资产和资产权威审计阻塞；真实 Golden Path PIE 须在 Production 资产轮完成。
 
 ## §1 两层图合同
 
@@ -234,6 +234,31 @@ Node.Key.01 -Edge.Main.03-> Node.Junction.03
 
 所有 20 个节点从 Entry 可达；A/B 汇合到 `Node.Junction.02`，C/D 汇合到 `Node.Key.01`。蛇印节点支配精英、守卫与出口，删除它后 Guardian/Exit 不可达。最短推进为 `8–9 AP`，完整探索为 `14–15 AP`；唯一 1 点差值来自是否在 Shop 完成本次访问的首次成功交易。
 
+### Floor 1 Production 内容与路线节奏
+
+Floor 1 的 15 个内容节点已完成 Production 内容设计冻结，不再只是空槽。战斗梯度：
+
+| Node | Encounter | Composition | Total HP |
+|---|---|---|---:|
+| `Node.Main.01` | `Encounter.SerpentWood.Scout` | BrushSnake | 16 |
+| `Node.Route.A.02` | `Encounter.SerpentWood.MoltGuard` | MoltGuard | 28 |
+| `Node.Route.B.01` | `Encounter.SerpentWood.Ambush` | 2 × BrushSnake | 32 |
+| `Node.Route.D.01` | `Encounter.SerpentWood.RootStalker` | RootStalker | 26 |
+| `Node.Main.02` | `Encounter.SerpentWood.EliteSentinel` | MoltGuard + BrushSnake | 44 |
+| `Node.Guardian.01` | `Encounter.SerpentWood.ShallowGuardian` | ShallowGuardian | 52 |
+
+路线内容与收益：
+
+- Route A：蛇蜕事件可选择研究情报、`Gold +2 / Misdeed +2` 或离开；随后 MoltGuard 与草药敷剂 Pickup。选择 Gold 时从初始 0 Gold 已可购买一个 2 Gold 商品。
+- Route B：双 BrushSnake 伏击、猎人绊索 Pickup、猎人痕迹事件；事件可选择路线情报、`Gold +3 / Misdeed +3` 或 `Misdeed -2`。选择 Gold 时可购买任一 Wayfarer 商品。
+- Route C：Wayfarer 固定出售 `Starter.ChitinWard(2)`、`Starter.AntennaSearch(2)`、`Starter.MoltCut(3)`、现有正式 `PoisonFang(2)`、`Reward.SerpentWood.HerbalPoultice(2)`；行商情报可用蛇蜕 flag 换毒沼路线、1 Gold 买图、增加 2 Misdeed 偷听或放弃。
+- Route D：RootStalker、毒沼事件和蜕壳护符 Pickup；已知路线可 `Fatigue -2`，也可花 2 Gold 或直接 `Fatigue +5` 涉水。
+- `Node.Key.01` 固定授予 `Card.Run.SerpentSigil + Credential.Run.SerpentSigil`；入口继续只检查 Credential。
+
+所有 RunEvent 选项都是 terminal Automatic 选项，成功固定 1 AP；Treasure/Encounter 仍各按首次成功/胜利 1 AP，Shop 只有本次访问首次成功购买 1 AP。因此路线数值没有改变 `8–9 / 14–15 AP`：情报/道德选择影响经济与压力，不改变事件 AP；区间仍只来自是否购买。
+
+Floor 1 内容设计 blocker 已关闭，但没有创建任何 DataAsset、Host 或关卡。首层下一步需实现并验证 38 个新 DataAsset（15 节点 Definition + 23 个 Card/Enemy/Behavior/Part 支持资产）；Aid/Destroy/Withdraw 效果、世界资产权威、正式场景和 Golden Path PIE 仍分别阻塞。精确静态内容合同见 [WacomData.md](./WacomData.md) §13，路径和 builder 边界见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。
+
 ### Floor 2 节点与内容槽
 
 | NodeId | NodeType | 内容职责 / 预留 Production ID | Camp |
@@ -354,9 +379,9 @@ Guardian 无出边，战斗胜利后由通用 Journey success 合同完成 Journ
 - `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v5 已通用持久化 Credential、Outcome 与最近一次成功摘要；探索图进度仍未进入磁盘 schema。
 - 内容 Host 的跨 Floor runtime `PersistentId` 固定按 `<FloorId>.<NodeId>` 派生，例如 `Floor.Main.01.Node.Route.A.01`。Actor Label、资产名、GUID、坐标和 transform 都不是身份。
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
-- 三层共 46 个预留 Production 内容 ID 只冻结职责；敌人槽、事件选项、Shop Offers、奖励数值和视觉资产另案制作。带 `Debug` 语义的现有 Event/Shop/Reward 不能作为正式引用。
+- 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结敌人槽、事件选项、Shop Offers 与奖励数值；Floor 2/3 的 31 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。
 - 蛇印和蜕印都采用表现卡 + 独立 Credential：必经 Pickup 原子授予两者，删牌流程不影响资格，入口只检查 Credential。
-- Floor 2/3 缺图与通用 Journey success blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受 46 个 Production definitions 和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
+- Floor 2/3 缺图、通用 Journey success 与 Floor 1 内容设计 blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受 46 个节点 Definition 的实际制作、首层 23 个支持资产、Floor 2/3 支持内容设计和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
 
 Floor 1 默认 MapPosition 与原始冻结证据见 `specs/007-formal-floor1-content-freeze/`；Floor 2/3 默认 MapPosition、完整 Edge 表、Journey pacing 与当前 Production readiness gate 见 `specs/009-formal-floor23-journey-pacing-freeze/`。上述长期身份、拓扑、配比和阻塞事实以本节为准。
 

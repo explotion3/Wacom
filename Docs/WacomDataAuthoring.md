@@ -187,6 +187,51 @@ Card.Run.SerpentSigil
 Credential.Run.SerpentSigil
 ```
 
+### Floor 1 SerpentWood Production 内容制作合同
+
+Floor 1 的 15 个节点 Definition 已从“只预留职责”升级为完整内容合同。未来需要创建恰好 38 个新 DataAsset：
+
+| Type | Count | Contract |
+|---|---:|---|
+| Encounter Definition | 6 | 上述 6 个 `Encounter.SerpentWood.*` |
+| RunEvent Definition | 4 | 上述 4 个 `Event.SerpentWood.*` |
+| Pickup Definition | 4 | 上述 4 个 `Pickup.SerpentWood.*` |
+| Shop Definition | 1 | `Shop.SerpentWood.Wayfarer` |
+| Card Definition | 4 | 3 个 `Reward.SerpentWood.*` + `Card.Run.SerpentSigil` |
+| Enemy Definition | 4 | BrushSnake / MoltGuard / RootStalker / ShallowGuardian |
+| Enemy Behavior Definition | 4 | 每敌人一份 `Default` + per-part `Sequence` 行为 |
+| Enemy Part Definition | 11 | 2 + 3 + 2 + 4 个部位 |
+| **Total** | **38** | — |
+
+主题路径固定为：
+
+```text
+/Game/Wacom/Data/Enemies/SerpentWood/<Archetype>/
+/Game/Wacom/Data/Encounters/SerpentWood/
+/Game/Wacom/Data/Events/SerpentWood/
+/Game/Wacom/Data/Pickups/SerpentWood/
+/Game/Wacom/Data/Shops/SerpentWood/
+/Game/Wacom/Data/Cards/Rewards/SerpentWood/
+/Game/Wacom/Data/Cards/Run/SerpentWood/
+```
+
+Enemy 资产使用 `DA_Enemy_<Archetype>`、`DA_Behavior_<Archetype>`、`DA_Part_<Archetype>_<Part>`；其它资产使用 `DA_Encounter_<Slot>`、`DA_Event_<Slot>`、`DA_Pickup_<Slot>`、`DA_Shop_Wayfarer`、`DA_Card_<CardName>`。内部 ID 才是规则身份，不能由 package path、DisplayName 或资产名反推。
+
+四个 EnemyId 固定为：
+
+```text
+Enemy.SerpentWood.BrushSnake
+Enemy.SerpentWood.MoltGuard
+Enemy.SerpentWood.RootStalker
+Enemy.SerpentWood.ShallowGuardian
+```
+
+BehaviorId 使用 `SerpentWood.<Archetype>.Behavior`，PartId 使用 `SerpentWood.<Archetype>.<Part>`；所有 11 个部位的 `KnockdownRewardCard` 暂为空，等待 Aid/Destroy/Withdraw P0，不代表正式无奖励。Encounter 敌人组合、24 条 Intent、4 张新卡、Pickup/Shop/RunEvent 精确字段见 [WacomData.md](./WacomData.md) §13；Spec 011 的 manifest 只保留完整 38 package 清单与静态验收证据，长期语义以本文与 `WacomData.md` 为准。
+
+Wayfarer 允许只读引用三张现有正式 Starter 卡和 `/Game/Wacom/Data/Cards/Rewards/DA_Card_PoisonFang`；该卡 live `CardId=PoisonFang`，不新建主题副本。Production Definition 不得引用 `Debug`、Authoring、`Test.*`、BadgeDisplayTests 或 TrainingWarrior 内容；TrainingWarrior 只作为当前 enemy-pack 制作范式参考。
+
+后续 SerpentWood builder 的写集合只能是上述 38 个新 package；Starter 与 PoisonFang 是只读依赖。不得通过全量 `WacomRegenerateContent` 或 Debug builder 顺带写入地图、Player/Host Blueprint、UI、材质、卡牌表现、背包或其它 Agent 资产。实现轮必须双跑 builder，检查 ID/引用/计数/字段稳定、重复资产、dirty package 和只读依赖哈希；本轮未授权或运行该 builder。
+
 Floor 2 为 15 个内容节点预留 `MoltCavern` namespace：
 
 ```text
@@ -235,7 +280,7 @@ Pickup.VenomCore.VenomReservoir
 Pickup.VenomCore.CoreBoon
 ```
 
-三层共 46 个内容槽；以上 ID 冻结内容职责和后续资产命名入口，不冻结敌人槽、事件选项、库存、奖励数值或视觉。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
+三层共 46 个节点内容槽。Floor 1 的 15 个槽已经由 Spec 011 冻结敌人组合、事件选项、库存和奖励数值；Floor 2/3 的 31 个槽仍只冻结职责和命名入口。视觉资产、Host、世界 Transform 与三层正式场景继续另案。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
 
 `Pickup.SerpentWood.SerpentSigil` 的正式 Definition 必须以 Card 作为固定主奖励，并在 `GrantedCredentialIds` 中授予 `Credential.Run.SerpentSigil`；`Node.Exit.01` 的 FloorEntrance 只在 `RequiredCredentialIds` 中引用该 Credential，不把 `Card.Run.SerpentSigil` 写回 `OwnedCardRequirements`。两者由同一稳定 ID 对接，但表现卡和资格状态互不推断。
 
@@ -245,7 +290,7 @@ Floor 3 `Node.Guardian.01` 是无出边的 success terminal，不配置 FloorEnt
 
 Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
 
-蛇印任务凭证门禁、Floor 2/3 图冻结和通用 Journey success state/event/summary/UI handoff 已完成。正式资产制作仍被 46 个非 Debug definitions 和 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始门禁见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`，成功合同证据见 `specs/010-journey-success-settlement-baseline/`。
+蛇印任务凭证门禁、Floor 2/3 图冻结、通用 Journey success 和 Floor 1 内容设计均已完成。正式资产制作仍被 46 个非 Debug 节点 Definition 的实际创建与 validation、Floor 1 额外 23 个支持资产（因此首层实现共 38 个新资产）、Floor 2/3 支持内容设计，以及 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始图门禁见 `specs/007-formal-floor1-content-freeze/`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/`，成功合同见 `specs/010-journey-success-settlement-baseline/`，Floor 1 内容冻结证据见 `specs/011-formal-floor1-production-content-freeze/`。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 

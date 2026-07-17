@@ -46,7 +46,7 @@ tags:
 | 问题 | 当前事实 / 约束 | 需要确认 |
 |---|---|---|
 | 击倒事件正式触发条件 | 部位 HP 归零时已有击倒事件框架；撤离只在仍有存活部位时可选 | 未来是否还受敌人类型、阶段、节点、剧情状态或特殊状态影响 |
-| Aid / Destroy / Withdraw 具体效果 | 击倒框架、UI 和战后包事实见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md) | Aid 是否给左手 buff，Destroy 是否永久强化 / 破坏部位，Withdraw 是否触发特殊节点或地图回路 |
+| Aid / Destroy / Withdraw 具体效果 | 击倒框架、UI 和战后包事实见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)；Floor 1 的 11 个新 Part 在内容合同中暂以 `KnockdownRewardCard=null` 阻止错误同卡奖励进入 Production | Aid 是否给左手 buff，Destroy 是否永久强化 / 破坏部位，Withdraw 是否触发特殊节点或地图回路；null 只代表本 P0 未解决，不是正式无奖励规则 |
 | Aid / Destroy 奖励差异 | 当前 `KnockdownRewardCard` 奖励口径见 [WacomData.md](./WacomData.md) / [WacomBattle.md](./WacomBattle.md) | 是否按分支、部位、敌人或节点事件使用不同奖励表 |
 | 最后存活部位击倒 | 当前最后部位不可选 Withdraw | 是否所有敌人都保持该规则，还是部分 Boss / 事件敌人有例外 |
 | 背包容量不足时的战斗奖励 | 当前 Victory 后 `AcquireCardToRun()` 加入 Run，再由负重 / 容量重算兜底 | 是否正式接受“溢出进负重区”，还是需要奖励选择、丢弃、邮寄或临时缓存 |
@@ -62,7 +62,7 @@ tags:
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| Floor 1 Production 世界资产权威 | 正式图和身份已冻结，`L_Exploration` 仍是 Authoring baseline，Production map 尚不存在 | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
+| Floor 1 Production 世界资产权威 | 正式图、身份和 38 个未来内容资产合同已冻结，但 DataAsset/Host/map 尚未创建；`L_Exploration` 仍是 Authoring baseline | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在 38 资产实现并完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |

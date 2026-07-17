@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-07-14
+updated: 2026-07-17
 tags:
   - wacom/data
   - wacom/dataasset
@@ -479,7 +479,72 @@ Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorM
 
 `FCardPassive.DisplayText` 是旧展示文本，不是规则真相。正式卡牌详情面板不再把它作为输入；被动详情由 `Trigger / Condition / Effects / TriggerThreshold` 经 WacomApp explanation compiler 生成 semantic blocks/runs。`Passive.Trigger.OnCompanionCount` 的回手说明来自 WacomApp 的 `PassiveOutcomeTemplates`，不要求内容作者在 `Passive.Effects` 里配置不会执行的假效果。
 
-## §13 修改数据合同时的检查点
+## §13 正式 Floor 1 Production 内容合同
+
+`Floor.Main.01 / 蛇巢浅林` 的 15 个内容节点已完成 Production 内容设计冻结。它们继续使用本文件既有静态 schema，不新增字段、GameplayTag 或运行时能力。完整资产路径与制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)；本节记录长期规则内容事实。
+
+### SerpentWood 敌人、部位与行为
+
+四个敌人各使用一份 `Default` phase 的 `Sequence` Behavior；每个部位拥有显式 PartSlot/IntentSet。数值记法为 `Damage / Initiative / Resistance`，未写 Resistance 的状态/护盾意图固定为 0，所有 Duration 为 0。
+
+| EnemyId | Part HP / EXP | Sequence Intent contract |
+|---|---|---|
+| `Enemy.SerpentWood.BrushSnake` | Head `7/1`；Body `9/1` | Head: Bite `3/3/3` → Venom `Poison1/I5`; Body: Rush `2/2/2` → Coil `Slow1/I4` → Hide `Shield2/I2` |
+| `Enemy.SerpentWood.MoltGuard` | Head `8/1`；Carapace `14/2`；Tail `6/1` | Head: Snap `4/3/4` → Spit `Poison1/I5`; Carapace: Harden `Shield5/I2` → Slam `4/4/5`; Tail: Sweep `2/2/2` → Brace `Shield2/I2` |
+| `Enemy.SerpentWood.RootStalker` | Head `10/2`；Coil `16/2` | Head: Lunge `5/4/5` → Sap `Poison1/I3`; Coil: Tangle `Slow2/I4` → Crush `4/3/4` → RootGuard `Shield3/I2` |
+| `Enemy.SerpentWood.ShallowGuardian` | Head `14/2`；Body `22/4`；Tail `10/2`；Crest `6/1` | Head: Bite `6/3/6` → Venom `Poison2/I5`; Body: Crush `6/4/7` → Harden `Shield6/I2`; Tail: Sweep `4/2/4` → Tangle `Slow1/I3`; Crest: Dread `Twilight1/I5` → CrownGuard `Shield4/I2` |
+
+Damage/Poison/Slow/Twilight 均指向 Player，Shield 指向行动部位自身。Slow 使用现有玩家手牌 `Default / TargetCardCount=1` 投递；Twilight 使用现有整手牌语义。所有 11 个新部位暂时 `KnockdownRewardCard=null`，因为 Aid/Destroy/Withdraw 的正式差异化效果仍是独立 P0；这不是“正式无奖励”结论。
+
+### Encounter 梯度
+
+| EncounterDefinitionId | EnemySlots | Total HP |
+|---|---|---:|
+| `Encounter.SerpentWood.Scout` | `Scout → BrushSnake` | 16 |
+| `Encounter.SerpentWood.MoltGuard` | `Guard → MoltGuard` | 28 |
+| `Encounter.SerpentWood.Ambush` | `Left → BrushSnake`, `Right → BrushSnake` | 32 |
+| `Encounter.SerpentWood.RootStalker` | `Stalker → RootStalker` | 26 |
+| `Encounter.SerpentWood.EliteSentinel` | `Guard → MoltGuard`, `Scout → BrushSnake` | 44 |
+| `Encounter.SerpentWood.ShallowGuardian` | `Guardian → ShallowGuardian` | 52 |
+
+战斗梯度固定为 `16 → 26–32 → 44 → 52 HP`，单场最多两个敌人。`bBoss=true` 仍只属于 `Floor.Main.01/Node.Guardian.01` 的 Encounter node payload，不复制到 Encounter 或 Enemy。
+
+### 卡牌、Pickup 与 Shop
+
+四张新卡都使用零 Physique，无 PerfectRelease、ZoneHook 或 Passive；插画和描述不在本轮冻结。
+
+| CardId | Static contract |
+|---|---|
+| `Reward.SerpentWood.HerbalPoultice` | 草药敷剂；Cost 1；White；Tool；Heal 4 → Player |
+| `Reward.SerpentWood.HunterSnare` | 猎人绊索；Cost 1；White；Tool；Slow 2 → SingleEnemyPart |
+| `Reward.SerpentWood.MoltWard` | 蜕壳护符；Cost 0；Blue；Tool；Shield 3 → Player |
+| `Card.Run.SerpentSigil` | 浅巢蛇印；Cost 1；White；无关键词；Draw 1 → Player from `CardLocation.Draw` |
+
+Pickup 固定映射：
+
+- `Pickup.SerpentWood.HerbCache → Reward.SerpentWood.HerbalPoultice`
+- `Pickup.SerpentWood.HunterCache → Reward.SerpentWood.HunterSnare`
+- `Pickup.SerpentWood.MoltCache → Reward.SerpentWood.MoltWard`
+- `Pickup.SerpentWood.SerpentSigil → Card.Run.SerpentSigil + Credential.Run.SerpentSigil`
+
+`Shop.SerpentWood.Wayfarer` 固定按顺序出售：`Starter.ChitinWard` 2 Gold、`Starter.AntennaSearch` 2、`Starter.MoltCut` 3、现有正式 `PoisonFang` 2、`Reward.SerpentWood.HerbalPoultice` 2。现有毒牙的 live CardId 就是 `PoisonFang`，不重命名、不复制为新的 SerpentWood 卡。
+
+### RunEvent
+
+四个事件均为单节点事件图；全部 13 个选项使用 `ActionPointPolicy=Automatic`，成功时标记当前场景事件完成并关闭，因此每项固定消耗 1 AP。
+
+| EventId | Choice contract |
+|---|---|
+| `Event.SerpentWood.CastSkin` | `StudyPattern`: Set `SerpentWood.MoltTrailKnown`; `SellSkin`: Gold +2, Misdeed +2; `LeaveUntouched`: none |
+| `Event.SerpentWood.HunterTrace` | `ReadTrail`: Set `SerpentWood.MarshRouteKnown`; `LootPack`: Gold +3, Misdeed +3; `BuryRemains`: Misdeed -2 |
+| `Event.SerpentWood.MerchantRumor` | `TradeMoltClue`: requires MoltTrailKnown, set MarshRouteKnown; `BuyMap`: MinGold 1, Gold -1, set flag; `Eavesdrop`: Misdeed +2, set flag; `Decline`: none |
+| `Event.SerpentWood.PoisonMarsh` | `FollowMarkedRoute`: requires MarshRouteKnown, Fatigue -2; `BurnOffering`: MinGold 2, Gold -2; `WadeThrough`: Fatigue +5 |
+
+`SerpentWood.MoltTrailKnown` 与 `SerpentWood.MarshRouteKnown` 是当前 Run 内的 FName RunFlag，不是 GameplayTag，也不承诺跨 SaveGame 恢复。全部条件、效果、负数恢复和扣费继续由现有 RunEvent working-state 事务原子解释。
+
+上述内容冻结关闭 Floor 1 的内容设计 blocker，但没有创建任何资产。后续仍需按 [WacomDataAuthoring.md](./WacomDataAuthoring.md) 的 38 资产 manifest 创建、校验和审计 Production DataAsset；正式世界关卡与击倒三分支继续独立阻塞。
+
+## §14 修改数据合同时的检查点
 
 修改 DataAsset 字段或新增静态数据能力时，先确认：
 
