@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Map/WacomJourneyDefinition.h"
 #include "Map/WacomMapTypes.h"
+#include "RunOutcomeTypes.h"
 #include "RunStateTypes.h"
 #include "RunExplorationTypes.generated.h"
 
@@ -254,6 +255,15 @@ struct WACOMRUN_API FRunExplorationSnapshot
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Map")
 	FName JourneyId = NAME_None;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Completion")
+	ERunOutcome Outcome = ERunOutcome::InProgress;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Completion")
+	bool bHasCompletionSummary = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Completion")
+	FRunCompletionSummary CompletionSummary;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Map")
 	FWacomMapNodeHandle CurrentNode;
 
@@ -313,6 +323,7 @@ enum class ERunExplorationEventType : uint8
 	NodeActivityStarted,
 	NodeActivityCancelled,
 	NodeActivityCompleted,
+	JourneySucceeded,
 };
 
 struct WACOMRUN_API FRunExplorationEvent

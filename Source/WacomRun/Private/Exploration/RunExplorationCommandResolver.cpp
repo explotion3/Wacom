@@ -61,6 +61,10 @@ FRunExplorationResolution FRunExplorationCommandResolver::Resolve(
 	{
 		return Fail(State, EWacomError::InvalidState, TEXT("RunExplorationNotInitialized"));
 	}
+	if (State.Outcome == ERunOutcome::Succeeded)
+	{
+		return Fail(State, EWacomError::InvalidState, TEXT("RunAlreadySucceeded"));
+	}
 	if (Command.ExpectedVersion != VersionBefore)
 	{
 		return Fail(State, EWacomError::InvalidState, TEXT("StaleExplorationVersion"));

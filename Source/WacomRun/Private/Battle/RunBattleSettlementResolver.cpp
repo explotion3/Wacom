@@ -130,7 +130,7 @@ bool FRunBattleSettlementResolver::Resolve(
 		break;
 
 	case EBattleOutcome::Defeat:
-		State.bRunActive = false;
+		State.Outcome = ERunOutcome::Failed;
 		UE_LOG(LogTemp, Display, TEXT("[RunSession] Battle defeat, run ended"));
 		break;
 
@@ -155,7 +155,7 @@ bool FRunBattleSettlementResolver::Resolve(
 	{
 		State.Pressure.Add(EWacomPressureType::Wound, 5);
 	}
-	// 同归于尽：+10% 伤口；不影响 bRunActive（Outcome 已是 Victory）。
+	// 同归于尽：+10% 伤口；终局 Victory 的成功优先级由 RunSession 事务决定。
 	if (Packet.bMutualDestruction)
 	{
 		State.Pressure.Add(EWacomPressureType::Wound, 10);

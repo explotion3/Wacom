@@ -5,8 +5,11 @@
 #include "Blueprint/UserWidget.h"
 #include "CommonActivatableWidget.h"
 #include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
 
 #include "Characters/CharacterDefinition.h"
+#include "Map/WacomJourneyDefinition.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Session/BattleSession.h"
@@ -26,29 +29,32 @@
 #include "UI/Foundation/WacomExplorationHUD.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
+#include "UI/Menus/WacomJourneySummaryScreen.h"
 
 const FString AWacomGameMode::SlotName_Main = TEXT("Main");
 const FString AWacomGameMode::SlotName_Auto = TEXT("Auto");
 
 namespace
 {
-	struct FExitBattleRunPresentationRestoreState
+	const FName JourneySummaryMainMenuPackagePath(TEXT("/Game/Wacom/Maps/L_MainMenu"));
+
+	struct FExitBattlePostRunBarrierState
 	{
-		explicit FExitBattleRunPresentationRestoreState(AWacomPlayerController* InPlayerController)
-			: WeakPlayerController(InPlayerController)
+		explicit FExitBattlePostRunBarrierState(TFunction<void()>&& InOnReady)
+			: OnReady(MoveTemp(InOnReady))
 		{
 		}
 
 		void MarkReturnCompleted()
 		{
 			bReturnCompleted = true;
-			TryRestore();
+			TryComplete();
 		}
 
 		void MarkExitBattlePostRunReady()
 		{
 			bExitBattlePostRunReady = true;
-			TryRestore();
+			TryComplete();
 		}
 
 		void SetResolvedEncounterTrigger(ABattleTriggerActor* InTrigger)
@@ -57,30 +63,29 @@ namespace
 		}
 
 	private:
-		void TryRestore()
+		void TryComplete()
 		{
-			if (!bReturnCompleted || !bExitBattlePostRunReady || bPresentationRestored)
+			if (!bReturnCompleted || !bExitBattlePostRunReady || bCompleted)
 			{
 				return;
 			}
 
-			bPresentationRestored = true;
+			bCompleted = true;
 			if (ABattleTriggerActor* Trigger = WeakResolvedEncounterTrigger.Get())
 			{
 				Trigger->CompleteResolvedEncounterSceneRetirement();
 			}
-			if (AWacomPlayerController* WacomPC = WeakPlayerController.Get())
+			if (OnReady)
 			{
-				WacomPC->PrepareExplorationRunFirstPersonCardLayer();
-				WacomPC->RefreshInteractToast();
+				OnReady();
 			}
 		}
 
-		TWeakObjectPtr<AWacomPlayerController> WeakPlayerController;
+		TFunction<void()> OnReady;
 		TWeakObjectPtr<ABattleTriggerActor> WeakResolvedEncounterTrigger;
 		bool bReturnCompleted = false;
 		bool bExitBattlePostRunReady = false;
-		bool bPresentationRestored = false;
+		bool bCompleted = false;
 	};
 }
 
@@ -88,6 +93,11 @@ AWacomGameMode::AWacomGameMode()
 {
 	PlayerControllerClass = AWacomPlayerController::StaticClass();
 	DefaultPawnClass      = AWacomPlayerCharacter::StaticClass();
+}
+
+FName AWacomGameMode::GetJourneySummaryMainMenuLevelPackagePathForTravel()
+{
+	return JourneySummaryMainMenuPackagePath;
 }
 
 void AWacomGameMode::BeginPlay()
@@ -114,6 +124,10 @@ void AWacomGameMode::BeginPlay()
 	if (!ExplorationHUDClass)
 	{
 		ExplorationHUDClass = UWacomExplorationHUD::StaticClass();
+	}
+	if (!JourneySummaryScreenClass)
+	{
+		JourneySummaryScreenClass = UWacomJourneySummaryScreen::StaticClass();
 	}
 
 	UE_LOG(LogTemp, Display,
@@ -171,6 +185,8 @@ void AWacomGameMode::BeginPlay()
 
 void AWacomGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	UnbindJourneySummaryScreen();
+
 	// 只对正常退出做存档。关卡切换 / 崩溃 / Editor 停止 PIE 都归属"游戏结束"。
 	// 如果当前在战斗中（CurrentState == Battle），按规则丢弃进度：不存档。
 	if (CurrentState == EGameFlowState::Exploration)
@@ -183,7 +199,8 @@ void AWacomGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	else
 	{
 		UE_LOG(LogTemp, Display,
-			TEXT("[WacomGameMode] EndPlay 期间仍在战斗中，按规则丢弃进度，不写存档"));
+			TEXT("[WacomGameMode] EndPlay 期间不处于活动探索，按规则不写活动 Run 存档。State=%d"),
+			static_cast<int32>(CurrentState));
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -566,8 +583,9 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
-	const TSharedRef<FExitBattleRunPresentationRestoreState> RunPresentationRestore =
-		MakeShared<FExitBattleRunPresentationRestoreState>(WacomPC);
+	PendingJourneySummaryViewData.Reset();
+	bJourneySummarySuccessEventConsumed = false;
+	bool bJourneySucceeded = false;
 
 	UGameInstance* GI = GetGameInstance();
 	UWacomGameUIManagerSubsystem* UIManager =
@@ -620,6 +638,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		}
 		if (EncounterResult.IsOk())
 		{
+			bJourneySucceeded = ConsumeJourneySucceededEvent(EncounterResult, *Run);
 			if (!WacomPC->ApplyRunNodeActivityResolutionForPresentation(EncounterResult))
 			{
 				UE_LOG(LogTemp, Error,
@@ -640,7 +659,21 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	}
 	PendingEncounterActivity.Reset();
 
-	// Map Node 结算成功才是 Encounter 完成真相。Save v3 的 Trigger Id 只是兼容投影；
+	TWeakObjectPtr<AWacomGameMode> WeakGameMode(this);
+	TWeakObjectPtr<AWacomPlayerController> WeakWacomPC(WacomPC);
+	const TSharedRef<FExitBattlePostRunBarrierState> PostRunBarrier =
+		MakeShared<FExitBattlePostRunBarrierState>(
+			[WeakGameMode, WeakWacomPC, bJourneySucceeded]()
+			{
+				if (AWacomGameMode* GameMode = WeakGameMode.Get())
+				{
+					GameMode->HandleExitBattlePostRunBarrier(
+						bJourneySucceeded,
+						WeakWacomPC.Get());
+				}
+			});
+
+	// Map Node 结算成功才是 Encounter 完成真相。SaveGame 的 Trigger Id 只是兼容投影；
 	// 先禁用 Trigger，Host 继续保留 Downed 终态，等返回探索双 barrier 完成后统一退役。
 	const bool bShouldRetireResolvedEncounterScene =
 		WacomResolvedEncounterSceneRetirementPolicy::ShouldRetire(
@@ -654,7 +687,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 			Run->MarkTriggerDestroyed(PendingTrigger->PersistentId);
 		}
 		PendingTrigger->BeginResolvedEncounterSceneRetirement();
-		RunPresentationRestore->SetResolvedEncounterTrigger(PendingTrigger);
+		PostRunBarrier->SetResolvedEncounterTrigger(PendingTrigger);
 	}
 	PendingTrigger = nullptr;
 
@@ -697,25 +730,27 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 			FWacomFirstPersonViewStageReturnFlow::ReturnToRunPath(
 				*Pawn,
 				*PC,
-				[RunPresentationRestore]()
+				[PostRunBarrier]()
 				{
-					RunPresentationRestore->MarkReturnCompleted();
+					PostRunBarrier->MarkReturnCompleted();
 				});
 		}
 	}
 	if (!bRunReturnFlowStarted)
 	{
-		RunPresentationRestore->MarkReturnCompleted();
+		PostRunBarrier->MarkReturnCompleted();
 	}
 
 	// 3) Run 规则结果已在上方通过 Encounter ticket 一次性提交。
 
 	// 4) 状态复位
-	CurrentState = EGameFlowState::Exploration;
+	CurrentState = bJourneySucceeded
+		? EGameFlowState::JourneySummary
+		: EGameFlowState::Exploration;
 
 	// 撤离回探索时玩家仍在 Sphere 内（不会再发 BeginOverlap），但候选列表里 Trigger 还在。
 	// Run 手牌和 Toast 等 return staging 完成后再恢复，避免退出战斗时从 Viewpoint 平移回样条。
-	RunPresentationRestore->MarkExitBattlePostRunReady();
+	PostRunBarrier->MarkExitBattlePostRunReady();
 
 	// 5) 存档：先写 Auto 备份，再覆盖 Main。
 	// 顺序很重要——如果程序在这两次 Save 之间崩掉，Auto 至少是新的，Main 还是上次的旧档，
@@ -723,3 +758,233 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 	SaveRunToSlot(SlotName_Auto);
 	SaveRunToSlot(SlotName_Main);
 }
+
+bool AWacomGameMode::ConsumeJourneySucceededEvent(
+	const FRunExplorationResolution& Resolution,
+	const URunSession& RunSession)
+{
+	const FRunExplorationEvent* SuccessEvent = Resolution.Events.FindByPredicate(
+		[](const FRunExplorationEvent& Event)
+		{
+			return Event.Type == ERunExplorationEventType::JourneySucceeded;
+		});
+	if (!SuccessEvent)
+	{
+		return false;
+	}
+
+	bJourneySummarySuccessEventConsumed = true;
+	const FRunExplorationSnapshot& Snapshot = Resolution.PostSnapshot;
+	const FRunCompletionSummary& Summary = Snapshot.CompletionSummary;
+	if (Snapshot.Outcome != ERunOutcome::Succeeded
+		|| !Snapshot.bHasCompletionSummary
+		|| !Summary.IsValid()
+		|| SuccessEvent->Detail != Summary.JourneyId
+		|| SuccessEvent->Node != Summary.TerminalNode)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] JourneySucceeded event 缺少匹配的合法 PostSnapshot summary；跳过 Screen 并走安全主菜单交接"));
+		PendingJourneySummaryViewData.Reset();
+		return true;
+	}
+
+	FWacomJourneySummaryViewData ViewData;
+	ViewData.StatusTitle = NSLOCTEXT("WacomJourneySummary", "SuccessStatus", "Journey 成功");
+	const UWacomJourneyDefinition* Journey =
+		RunSession.GetRunState().ExplorationState.JourneyDefinition;
+	ViewData.JourneyTitle = Journey && !Journey->DisplayName.IsEmpty()
+		? Journey->DisplayName
+		: FText::FromName(SuccessEvent->Detail);
+	ViewData.CompletionDay = Summary.CompletionDay;
+	ViewData.EnteredFloorCount = Summary.EnteredFloorCount;
+	ViewData.TotalFloorCount = Summary.TotalFloorCount;
+	ViewData.ResolvedNodeCount = Summary.ResolvedNodeCount;
+	ViewData.TotalNodeCount = Summary.TotalNodeCount;
+	ViewData.FinalPressure = Summary.FinalPressure;
+	PendingJourneySummaryViewData = MoveTemp(ViewData);
+	return true;
+}
+
+void AWacomGameMode::HandleExitBattlePostRunBarrier(
+	bool bJourneySucceeded,
+	AWacomPlayerController* WacomPC)
+{
+	bJourneySummaryBarrierCompleted = true;
+	if (bJourneySucceeded)
+	{
+		// 终局不恢复 Run 手牌或交互 Toast；镜头 staging 完成后直接进入总结。
+		ShowJourneySummaryOrTravel();
+		return;
+	}
+
+	bJourneySummaryRunPresentationRestoreRequested = true;
+	if (WacomPC)
+	{
+		WacomPC->PrepareExplorationRunFirstPersonCardLayer();
+		WacomPC->RefreshInteractToast();
+	}
+}
+
+void AWacomGameMode::ShowJourneySummaryOrTravel()
+{
+	if (CurrentState != EGameFlowState::JourneySummary)
+	{
+		return;
+	}
+
+	bJourneySummaryPushAttempted = true;
+	if (!PendingJourneySummaryViewData.IsSet() || !JourneySummaryScreenClass)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] Journey Summary 缺少 ViewData 或 Screen class，执行安全主菜单交接"));
+		RequestJourneySummaryMainMenuHandoff();
+		return;
+	}
+
+	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	UGameInstance* GI = GetGameInstance();
+	UWacomGameUIManagerSubsystem* UIManager =
+		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
+	if (!PC || !UIManager)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] Journey Summary 缺少 PlayerController/UIManager，执行安全主菜单交接"));
+		RequestJourneySummaryMainMenuHandoff();
+		return;
+	}
+
+	UIManager->EnsurePrimaryLayout(PC);
+	UWacomJourneySummaryScreen* Screen = Cast<UWacomJourneySummaryScreen>(
+		UIManager->PushContentToLayer(
+			WacomUITags::UI_Layer_GameMenu.GetTag(),
+			JourneySummaryScreenClass));
+	if (!Screen)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomGameMode] Push Journey Summary Screen 失败，执行安全主菜单交接"));
+		RequestJourneySummaryMainMenuHandoff();
+		return;
+	}
+
+	bJourneySummaryPushSucceeded = true;
+	BindJourneySummaryScreen(*Screen);
+	Screen->ApplyViewData(PendingJourneySummaryViewData.GetValue());
+}
+
+void AWacomGameMode::BindJourneySummaryScreen(UWacomJourneySummaryScreen& Screen)
+{
+	UnbindJourneySummaryScreen();
+	ActiveJourneySummaryScreen = &Screen;
+	Screen.OnContinueRequestedNative.RemoveAll(this);
+	Screen.OnContinueRequestedNative.AddUObject(
+		this,
+		&AWacomGameMode::HandleJourneySummaryContinueRequested);
+}
+
+void AWacomGameMode::UnbindJourneySummaryScreen()
+{
+	if (UWacomJourneySummaryScreen* Screen = ActiveJourneySummaryScreen.Get())
+	{
+		Screen->OnContinueRequestedNative.RemoveAll(this);
+	}
+	ActiveJourneySummaryScreen.Reset();
+}
+
+void AWacomGameMode::HandleJourneySummaryContinueRequested()
+{
+	RequestJourneySummaryMainMenuHandoff();
+}
+
+void AWacomGameMode::RequestJourneySummaryMainMenuHandoff()
+{
+	if (bJourneySummaryHandoffRequested)
+	{
+		return;
+	}
+	bJourneySummaryHandoffRequested = true;
+	++JourneySummaryHandoffRequestCount;
+	UnbindJourneySummaryScreen();
+
+	bJourneySummaryPrimaryLayoutTeardownRequested = true;
+	JourneySummaryTeardownOrder = ++JourneySummaryTravelOrderCounter;
+	if (UGameInstance* GI = GetGameInstance())
+	{
+		if (UWacomGameUIManagerSubsystem* UIManager =
+			GI->GetSubsystem<UWacomGameUIManagerSubsystem>())
+		{
+			UIManager->TearDownPrimaryLayout();
+			bJourneySummaryPrimaryLayoutTeardownCompleted = true;
+		}
+	}
+
+	PendingJourneySummaryTravelLevelName = JourneySummaryMainMenuPackagePath;
+	bJourneySummaryTravelScheduled = true;
+	JourneySummaryScheduleOrder = ++JourneySummaryTravelOrderCounter;
+
+	UE_LOG(LogTemp, Display,
+		TEXT("[WacomGameMode] Schedule JourneySummary travel Target=%s Teardown=%s"),
+		*PendingJourneySummaryTravelLevelName.ToString(),
+		bJourneySummaryPrimaryLayoutTeardownCompleted ? TEXT("true") : TEXT("false"));
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(
+			FTimerDelegate::CreateUObject(
+				this,
+				&AWacomGameMode::ExecuteJourneySummaryMainMenuTravel));
+	}
+}
+
+void AWacomGameMode::ExecuteJourneySummaryMainMenuTravel()
+{
+	if (PendingJourneySummaryTravelLevelName.IsNone())
+	{
+		return;
+	}
+
+	const FName LevelName = PendingJourneySummaryTravelLevelName;
+	PendingJourneySummaryTravelLevelName = NAME_None;
+	bJourneySummaryTravelExecuted = true;
+	JourneySummaryExecuteOrder = ++JourneySummaryTravelOrderCounter;
+
+	UE_LOG(LogTemp, Display,
+		TEXT("[WacomGameMode] Execute JourneySummary travel Target=%s SuppressedForAutomation=%s"),
+		*LevelName.ToString(),
+		bSuppressJourneySummaryTravelForAutomation ? TEXT("true") : TEXT("false"));
+
+	if (!bSuppressJourneySummaryTravelForAutomation)
+	{
+		UGameplayStatics::OpenLevel(this, LevelName);
+	}
+}
+
+#if WITH_AUTOMATION_TESTS
+FWacomJourneySummaryHandoffAutomationTestView
+AWacomGameMode::GetJourneySummaryHandoffAutomationTestView() const
+{
+	FWacomJourneySummaryHandoffAutomationTestView View;
+	View.bSuccessEventConsumed = bJourneySummarySuccessEventConsumed;
+	View.bBarrierCompleted = bJourneySummaryBarrierCompleted;
+	View.bRunPresentationRestoreRequested = bJourneySummaryRunPresentationRestoreRequested;
+	View.bSummaryPushAttempted = bJourneySummaryPushAttempted;
+	View.bSummaryPushSucceeded = bJourneySummaryPushSucceeded;
+	View.bHandoffRequested = bJourneySummaryHandoffRequested;
+	View.bPrimaryLayoutTeardownRequested = bJourneySummaryPrimaryLayoutTeardownRequested;
+	View.bPrimaryLayoutTeardownCompleted = bJourneySummaryPrimaryLayoutTeardownCompleted;
+	View.bTravelScheduled = bJourneySummaryTravelScheduled;
+	View.bTravelExecuted = bJourneySummaryTravelExecuted;
+	View.bActualTravelSuppressed = bSuppressJourneySummaryTravelForAutomation;
+	View.HandoffRequestCount = JourneySummaryHandoffRequestCount;
+	View.TeardownOrder = JourneySummaryTeardownOrder;
+	View.ScheduleOrder = JourneySummaryScheduleOrder;
+	View.ExecuteOrder = JourneySummaryExecuteOrder;
+	View.TravelLevelName = bJourneySummaryTravelExecuted
+		? JourneySummaryMainMenuPackagePath
+		: PendingJourneySummaryTravelLevelName;
+	if (PendingJourneySummaryViewData.IsSet())
+	{
+		View.ViewData = PendingJourneySummaryViewData.GetValue();
+	}
+	return View;
+}
+#endif

@@ -7,6 +7,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "Types/WacomEnums.h"
 #include "GameFramework/WacomGameFlowTypes.h"
+#include "UI/Menus/WacomJourneySummaryScreen.h"
 #include "WacomGameMode.generated.h"
 
 class UCharacterDefinition;
@@ -16,6 +17,34 @@ class UWacomBattleWidgetBase;
 class UWacomExplorationHUD;
 class UBattleHUD;
 class ABattleTriggerActor;
+class AWacomPlayerController;
+class URunSession;
+struct FWacomJourneySummaryGameModeTestAccess;
+struct FRunExplorationResolution;
+
+#if WITH_AUTOMATION_TESTS
+/** Journey 总结交接的非反射自动化快照。 */
+struct WACOMAPP_API FWacomJourneySummaryHandoffAutomationTestView
+{
+	bool bSuccessEventConsumed = false;
+	bool bBarrierCompleted = false;
+	bool bRunPresentationRestoreRequested = false;
+	bool bSummaryPushAttempted = false;
+	bool bSummaryPushSucceeded = false;
+	bool bHandoffRequested = false;
+	bool bPrimaryLayoutTeardownRequested = false;
+	bool bPrimaryLayoutTeardownCompleted = false;
+	bool bTravelScheduled = false;
+	bool bTravelExecuted = false;
+	bool bActualTravelSuppressed = false;
+	int32 HandoffRequestCount = 0;
+	int32 TeardownOrder = 0;
+	int32 ScheduleOrder = 0;
+	int32 ExecuteOrder = 0;
+	FName TravelLevelName = NAME_None;
+	FWacomJourneySummaryViewData ViewData;
+};
+#endif
 
 /**
  * Wacom 游戏 GameMode。
@@ -94,6 +123,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI")
 	TSubclassOf<UWacomExplorationHUD> ExplorationHUDClass;
 
+	/** Journey 成功总结页；未配置 WBP 时回退原生 UWacomJourneySummaryScreen。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|UI", meta = (ToolTip = "Journey 成功后 Push 到 GameMenu layer 的被动总结 Screen。正式 WBP 可继承 UWacomJourneySummaryScreen 覆盖；为空时使用原生 fallback。"))
+	TSubclassOf<UWacomJourneySummaryScreen> JourneySummaryScreenClass;
+
 	// ---- 状态 ----
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|GameFlow")
@@ -104,6 +137,21 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")
 	UBattleHUD* GetActiveBattleHUD() const { return BattleHUD; }
+
+	/** Journey 总结确认后使用的稳定主菜单 package path。 */
+	static FName GetJourneySummaryMainMenuLevelPackagePathForTravel();
+
+#if WITH_AUTOMATION_TESTS
+	FWacomJourneySummaryHandoffAutomationTestView GetJourneySummaryHandoffAutomationTestView() const;
+	void SetSuppressJourneySummaryTravelForAutomation(bool bSuppress)
+	{
+		bSuppressJourneySummaryTravelForAutomation = bSuppress;
+	}
+	void FlushJourneySummaryTravelForAutomation()
+	{
+		ExecuteJourneySummaryMainMenuTravel();
+	}
+#endif
 
 	// ---- 切换入口 ----
 
@@ -138,6 +186,19 @@ protected:
 	bool SaveRunToSlot(const FString& SlotName, bool bQuiet = false) const;
 
 private:
+	bool ConsumeJourneySucceededEvent(
+		const FRunExplorationResolution& Resolution,
+		const URunSession& RunSession);
+	void HandleExitBattlePostRunBarrier(
+		bool bJourneySucceeded,
+		AWacomPlayerController* WacomPC);
+	void ShowJourneySummaryOrTravel();
+	void BindJourneySummaryScreen(UWacomJourneySummaryScreen& Screen);
+	void UnbindJourneySummaryScreen();
+	void HandleJourneySummaryContinueRequested();
+	void RequestJourneySummaryMainMenuHandoff();
+	void ExecuteJourneySummaryMainMenuTravel();
+
 	UPROPERTY(VisibleInstanceOnly, Category = "Wacom|GameFlow", Transient)
 	EGameFlowState CurrentState = EGameFlowState::Exploration;
 
@@ -155,4 +216,31 @@ private:
 
 	/** HUD::OnBattleEndedNative 的订阅句柄，ExitBattle 时反注册。 */
 	FDelegateHandle BattleEndedHandle;
+
+	TOptional<FWacomJourneySummaryViewData> PendingJourneySummaryViewData;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomJourneySummaryScreen> ActiveJourneySummaryScreen;
+
+	FName PendingJourneySummaryTravelLevelName = NAME_None;
+	bool bJourneySummarySuccessEventConsumed = false;
+	bool bJourneySummaryBarrierCompleted = false;
+	bool bJourneySummaryRunPresentationRestoreRequested = false;
+	bool bJourneySummaryPushAttempted = false;
+	bool bJourneySummaryPushSucceeded = false;
+	bool bJourneySummaryHandoffRequested = false;
+	bool bJourneySummaryPrimaryLayoutTeardownRequested = false;
+	bool bJourneySummaryPrimaryLayoutTeardownCompleted = false;
+	bool bJourneySummaryTravelScheduled = false;
+	bool bJourneySummaryTravelExecuted = false;
+	bool bSuppressJourneySummaryTravelForAutomation = false;
+	int32 JourneySummaryHandoffRequestCount = 0;
+	int32 JourneySummaryTravelOrderCounter = 0;
+	int32 JourneySummaryTeardownOrder = 0;
+	int32 JourneySummaryScheduleOrder = 0;
+	int32 JourneySummaryExecuteOrder = 0;
+
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomJourneySummaryGameModeTestAccess;
+#endif
 };

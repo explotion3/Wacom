@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "RunOutcomeTypes.h"
 #include "UObject/SoftObjectPath.h"
 #include "Misc/DateTime.h"
 #include "WacomSaveGame.generated.h"
@@ -55,6 +56,47 @@ struct WACOMRUN_API FSpecialZoneSaveEntry
 };
 
 /**
+ * Journey 成功摘要的稳定磁盘结构（SaveGame v5 起）。
+ *
+ * 与 FRunCompletionSummary 保持逐字段转换，但不直接序列化 runtime struct，避免后续
+ * 运行时展示字段扩展无意改变历史存档 schema。
+ */
+USTRUCT()
+struct WACOMRUN_API FRunCompletionSummarySaveEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(SaveGame)
+	FName JourneyId;
+
+	UPROPERTY(SaveGame)
+	FName TerminalFloorId;
+
+	UPROPERTY(SaveGame)
+	FName TerminalNodeId;
+
+	UPROPERTY(SaveGame)
+	int32 CompletionDay = 0;
+
+	UPROPERTY(SaveGame)
+	int32 EnteredFloorCount = 0;
+
+	UPROPERTY(SaveGame)
+	int32 TotalFloorCount = 0;
+
+	UPROPERTY(SaveGame)
+	int32 ResolvedNodeCount = 0;
+
+	UPROPERTY(SaveGame)
+	int32 TotalNodeCount = 0;
+
+	UPROPERTY(SaveGame)
+	int32 FinalPressure = 0;
+
+	bool IsValid() const;
+};
+
+/**
  * Wacom 项目的 SaveGame 磁盘数据。
  *
  * 和 FRunState 的区别：
@@ -85,8 +127,9 @@ public:
 	 *   v1 → v2: 引入 Backpack/BattleDeck/BurdenZone/SpecialZones instance 列表
 	 *   v2 → v3: 移除 DefeatedEnemyAssetPaths；战斗入口完成状态只使用 DestroyedTriggerIds
 	 *   v3 → v4: 引入独立于实体卡牌的 Run Credential 集合
+	 *   v4 → v5: 引入 Run Outcome 与独立 Journey 成功摘要
 	 */
-	static constexpr int32 CurrentSaveVersion = 4;
+	static constexpr int32 CurrentSaveVersion = 5;
 
 	/**
 	 * 防止有人未同步修改 MigrateIfNeeded 迁移链就升 / 降版本号。
@@ -94,7 +137,7 @@ public:
 	 *   - 同步把这里的硬编码值与 MigrateIfNeeded 的 case 链一起改；
 	 *   - 要么不改（编译失败提醒下一位作者去看 MigrateIfNeeded）。
 	 */
-	static_assert(CurrentSaveVersion == 4,
+	static_assert(CurrentSaveVersion == 5,
 		"CurrentSaveVersion 升级必须同步更新 MigrateIfNeeded 的 case 链与本断言。");
 
 	/**
@@ -131,8 +174,21 @@ public:
 	UPROPERTY(SaveGame)
 	int32 BattleSeed = 0;
 
+	/** v4 及更早存档的迁移来源；v5 runtime/apply 不再读取此字段。 */
 	UPROPERTY(SaveGame)
 	bool bRunActive = true;
+
+	/** v5 权威 Run 结果。 */
+	UPROPERTY(SaveGame)
+	ERunOutcome Outcome = ERunOutcome::InProgress;
+
+	/** v5 成功摘要存在位；只有 Outcome=Succeeded 时允许为 true。 */
+	UPROPERTY(SaveGame)
+	bool bHasCompletionSummary = false;
+
+	/** v5 最近一次 Journey 成功摘要。 */
+	UPROPERTY(SaveGame)
+	FRunCompletionSummarySaveEntry CompletionSummary;
 
 	// ---- 场景数据 ----
 

@@ -108,6 +108,97 @@ namespace
 		return Reachable;
 	}
 
+	void ValidateSuccessTerminal(
+		const UWacomJourneyDefinition& Journey,
+		FWacomMapDefinitionValidationReport& Report)
+	{
+		const FWacomMapNodeHandle& Terminal = Journey.SuccessTerminalNode;
+		const bool bUnconfigured = Terminal.FloorId.IsNone() && Terminal.NodeId.IsNone();
+		if (bUnconfigured)
+		{
+			const FString PackageName = Journey.GetOutermost()->GetName();
+			if (PackageName.StartsWith(TEXT("/Game/Wacom/Data/Map/Production/")))
+			{
+				AddError(Report, FString::Printf(
+					TEXT("Production Journey %s 必须配置 SuccessTerminalNode。"),
+					*Journey.JourneyId.ToString()));
+				return;
+			}
+			AddWarning(Report, FString::Printf(
+				TEXT("Journey %s 尚未配置 SuccessTerminalNode；允许旧 Debug/Authoring 内容运行，但不会自动成功。"),
+				*Journey.JourneyId.ToString()));
+			return;
+		}
+
+		if (!Terminal.IsValid())
+		{
+			AddError(Report, TEXT("SuccessTerminalNode 必须同时配置 FloorId 和 NodeId。"));
+			return;
+		}
+
+		const int32 TerminalFloorIndex = Journey.FindFloorIndex(Terminal.FloorId);
+		if (TerminalFloorIndex == INDEX_NONE)
+		{
+			AddError(Report, FString::Printf(
+				TEXT("SuccessTerminalNode 的 FloorId 不属于 Journey：%s。"),
+				*Terminal.FloorId.ToString()));
+			return;
+		}
+
+		const int32 LastFloorIndex = Journey.Floors.Num() - 1;
+		if (TerminalFloorIndex != LastFloorIndex)
+		{
+			AddError(Report, TEXT("SuccessTerminalNode 必须位于 Journey 最后一层。"));
+		}
+
+		const UWacomFloorMapDefinition* TerminalFloor = Journey.Floors[TerminalFloorIndex];
+		if (!TerminalFloor)
+		{
+			AddError(Report, TEXT("SuccessTerminalNode 所属 Floor 为空。"));
+			return;
+		}
+
+		const FWacomMapNodeDefinition* TerminalNode = TerminalFloor->FindNode(Terminal.NodeId);
+		if (!TerminalNode)
+		{
+			AddError(Report, FString::Printf(
+				TEXT("SuccessTerminalNode 引用不存在的节点：%s。"),
+				*Terminal.NodeId.ToString()));
+			return;
+		}
+		if (TerminalNode->NodeType != EWacomMapNodeType::Encounter)
+		{
+			AddError(Report, TEXT("SuccessTerminalNode 必须是 Encounter 节点。"));
+		}
+		else if (!TerminalNode->Content.Encounter.bBoss)
+		{
+			AddError(Report, TEXT("SuccessTerminalNode 必须配置 bBoss=true。"));
+		}
+
+		if (!BuildReachableNodes(*TerminalFloor, TerminalFloor->EntryNodeId).Contains(Terminal.NodeId))
+		{
+			AddError(Report, TEXT("SuccessTerminalNode 必须从最后一层 Entry 可达。"));
+		}
+		if (TerminalFloor->Edges.ContainsByPredicate(
+			[Terminal](const FWacomMapEdgeDefinition& Edge)
+			{
+				return Edge.FromNodeId == Terminal.NodeId;
+			}))
+		{
+			AddError(Report, TEXT("SuccessTerminalNode 必须无出边。"));
+		}
+
+		if (TerminalFloorIndex == LastFloorIndex
+			&& TerminalFloor->Nodes.ContainsByPredicate(
+				[](const FWacomMapNodeDefinition& Node)
+				{
+					return Node.NodeType == EWacomMapNodeType::FloorEntrance;
+				}))
+		{
+			AddError(Report, TEXT("配置成功终局后，Journey 最后一层不得包含 FloorEntrance。"));
+		}
+	}
+
 	bool CardMatchesRequirement(const UCardDefinition* Card, const FWacomOwnedCardRequirement& Requirement)
 	{
 		if (!Card)
@@ -494,6 +585,8 @@ FWacomMapDefinitionValidationReport FWacomMapDefinitionValidation::ValidateJourn
 		}
 		Report.Append(ValidateFloor(Floor));
 	}
+
+	ValidateSuccessTerminal(*JourneyDefinition, Report);
 
 	for (int32 FloorIndex = 0; FloorIndex < JourneyDefinition->Floors.Num(); ++FloorIndex)
 	{

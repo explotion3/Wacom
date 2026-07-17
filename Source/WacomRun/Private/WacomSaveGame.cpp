@@ -2,12 +2,55 @@
 
 #include "WacomSaveGame.h"
 
+bool FRunCompletionSummarySaveEntry::IsValid() const
+{
+	return !JourneyId.IsNone()
+		&& !TerminalFloorId.IsNone()
+		&& !TerminalNodeId.IsNone()
+		&& CompletionDay > 0
+		&& EnteredFloorCount > 0
+		&& TotalFloorCount > 0
+		&& EnteredFloorCount <= TotalFloorCount
+		&& ResolvedNodeCount > 0
+		&& TotalNodeCount > 0
+		&& ResolvedNodeCount <= TotalNodeCount
+		&& FinalPressure >= 0;
+}
+
+namespace
+{
+	bool HasValidV5OutcomeSchema(const UWacomSaveGame& SaveGame)
+	{
+		switch (SaveGame.Outcome)
+		{
+		case ERunOutcome::InProgress:
+		case ERunOutcome::Failed:
+			return !SaveGame.bHasCompletionSummary;
+
+		case ERunOutcome::Succeeded:
+			return SaveGame.bHasCompletionSummary && SaveGame.CompletionSummary.IsValid();
+
+		default:
+			return false;
+		}
+	}
+}
+
 bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 {
 	if (!SaveGame) { return false; }
 
-	// 已经是最新版本：无需迁移。
-	if (SaveGame->SaveVersion == CurrentSaveVersion) { return true; }
+	// 已经是最新版本：仍需校验 v5 Outcome/摘要组合，不能让非法终态进入 apply。
+	if (SaveGame->SaveVersion == CurrentSaveVersion)
+	{
+		const bool bValid = HasValidV5OutcomeSchema(*SaveGame);
+		if (!bValid)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomSaveGame] v5 Outcome/CompletionSummary 组合非法"));
+		}
+		return bValid;
+	}
 
 	// 新版本存档被旧版本客户端读取：拒绝。
 	if (SaveGame->SaveVersion > CurrentSaveVersion)
@@ -60,6 +103,16 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 		SaveGame->SaveVersion = 4;
 		[[fallthrough]];
 
+	case 4:
+		// v4 -> v5：旧活动位只作为迁移来源；旧档没有成功摘要。
+		SaveGame->Outcome = SaveGame->bRunActive
+			? ERunOutcome::InProgress
+			: ERunOutcome::Failed;
+		SaveGame->bHasCompletionSummary = false;
+		SaveGame->CompletionSummary = FRunCompletionSummarySaveEntry();
+		SaveGame->SaveVersion = 5;
+		[[fallthrough]];
+
 	// case CurrentSaveVersion - 1: // 实际会是具体数字
 	//     SaveGame->SaveVersion = CurrentSaveVersion;
 	//     break;
@@ -68,7 +121,8 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 		break;
 	}
 
-	const bool bOk = (SaveGame->SaveVersion == CurrentSaveVersion);
+	const bool bOk = SaveGame->SaveVersion == CurrentSaveVersion
+		&& HasValidV5OutcomeSchema(*SaveGame);
 	if (!bOk)
 	{
 		UE_LOG(LogTemp, Error,

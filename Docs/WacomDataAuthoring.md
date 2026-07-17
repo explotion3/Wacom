@@ -121,7 +121,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 | `UWacomRunEventDefinitionValidator` | `UWacomRunEventDefinition` | `FWacomRunEventDefinitionValidation::Validate()` |
 | `UWacomRunPickupDefinitionValidator` | `UWacomRunPickupDefinition` | `FWacomRunPickupDefinitionValidation::Validate()` |
 | `UWacomRunWorldCardInteractionDefinitionValidator` | `UWacomRunWorldCardInteractionDefinition` | `FWacomRunWorldCardInteractionDefinitionValidation::Validate()` |
-| `UWacomMapDefinitionValidator` | `UWacomJourneyDefinition`、`UWacomFloorMapDefinition` | `FWacomMapDefinitionValidationReport`；检查身份、端点、可达性、typed payload、入口条件、必填 DisplayName 与 MapPosition 制作边界 |
+| `UWacomMapDefinitionValidator` | `UWacomJourneyDefinition`、`UWacomFloorMapDefinition` | `FWacomMapDefinitionValidationReport`；检查身份、端点、可达性、typed payload、入口条件、必填 DisplayName、MapPosition 制作边界，以及 Journey success terminal 的末层/Encounter Boss/可达/无出边合同 |
 
 当前校验边界：
 
@@ -241,11 +241,11 @@ Pickup.VenomCore.CoreBoon
 
 `Pickup.MoltCavern.MoltSeal` 使用相同通用合同：固定主奖励为 `Card.Run.MoltSeal`，`GrantedCredentialIds` 授予 `Credential.Run.MoltSeal`；Floor 2 `Node.Exit.01` 只要求 Credential 并指向 `Floor.Main.03`。不得从表现卡推断、撤销或补算资格。
 
-Floor 3 `Node.Guardian.01` 是无出边的 terminal design node，不配置 FloorEntrance payload。当前 `FRunState`/Battle settlement 尚无 Journey success contract，因此 Production asset 不得用 Actor label、Level Blueprint、`bRunActive=false` 或伪 TargetFloorId 实现终局。
+Floor 3 `Node.Guardian.01` 是无出边的 success terminal，不配置 FloorEntrance payload。Production `DA_Journey_Main_01` 必须配置 `DisplayName` 和 `SuccessTerminalNode={Floor.Main.03, Node.Guardian.01}`。`/Game/Wacom/Data/Map/Production/` 下缺失 terminal 是 validation error；旧 Debug/Authoring Journey 可保持未配置并产生 warning，Runtime 仍允许启动但不会自动成功。已配置 terminal 在 Editor 与 Runtime 都必须位于最后一层、引用存在的 `Encounter + bBoss=true` 节点、从 Entry 可达、无出边，且最后一层不得包含 FloorEntrance。不得用 Actor label、Level Blueprint、EncounterId、legacy `bRunActive` 或伪 TargetFloorId 实现终局。
 
 Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
 
-蛇印任务凭证门禁和 Floor 2/3 图冻结已经完成。正式资产制作仍被通用 Journey success state/event/UI handoff、46 个非 Debug definitions 和 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始门禁见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`，通用 Credential 合同见 `specs/008-run-credential/`，当前 readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`。
+蛇印任务凭证门禁、Floor 2/3 图冻结和通用 Journey success state/event/summary/UI handoff 已完成。正式资产制作仍被 46 个非 Debug definitions 和 production map AssetRegistry/引用/哈希权威审计阻塞；关闭这些条件前不创建或绑定正式 Journey/Floor/map。Floor 1 原始门禁见 `specs/007-formal-floor1-content-freeze/contracts/production-readiness-gate.md`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`，成功合同证据见 `specs/010-journey-success-settlement-baseline/`。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 

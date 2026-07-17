@@ -109,9 +109,9 @@ public:
 	uint64 GetShopSnapshotRevision() const { return ShopSnapshotRevision; }
 	uint64 GetEconomySnapshotRevision() const { return EconomySnapshotRevision; }
 
-	/** 是否仍在 Run 中（bRunActive == true）。 */
+	/** 是否仍可继续 Run；Succeeded/Failed 和既有失败门槛均返回 false。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run")
-	bool IsRunActive() const { return RunState.bRunActive; }
+	bool IsRunActive() const;
 
 	// ---- 手指 ----
 
@@ -126,7 +126,7 @@ public:
 	 *
 	 * 副作用：
 	 *   - 残疾压力同步增加：每缺 1 指 +5%
-	 *   - FingerCount 降到 0 时不主动改 bRunActive；调用 IsRunFailed() 综合判定
+	 *   - FingerCount 降到 0 时由 IsRunFailed() 兼容查询派生 Failed
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|HP")
 	void RemoveFinger(int32 Count = 1);
@@ -143,7 +143,7 @@ public:
 	 * 增量调整某种压力。
 	 *   - Delta 可以为负（用于减少压力）
 	 *   - Clamp 到 [0, 100]
-	 *   - 不主动改 bRunActive；调用 IsRunFailed() 综合判定
+	 *   - 达到失败线时由 IsRunFailed() 兼容查询派生 Failed
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Pressure")
 	void AddPressure(EWacomPressureType Type, int32 Delta);
@@ -219,7 +219,7 @@ public:
 	 * Run 是否失败。
 	 *
 	 * 任一为 true 即败：
-	 *   - 战内 Defeat（bRunActive == false）
+	 *   - 战内 Defeat（Outcome == Failed）
 	 *   - 战外压力 8 条加和 ≥ 100%
 	 *   - 战外手指 = 0
 	 */

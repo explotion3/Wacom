@@ -12,7 +12,7 @@
 
 namespace
 {
-	const FName SerpentCredential(TEXT("Credential.Run.SerpentSigil"));
+	const FName CredentialSaveSerpentCredential(TEXT("Credential.Run.SerpentSigil"));
 	const TCHAR* CharacterPath =
 		TEXT("/Game/Wacom/Data/Characters/DA_Character_BugGirl.DA_Character_BugGirl");
 
@@ -49,7 +49,7 @@ bool FWacomRunCredentialSaveRoundtripSpec::RunTest(const FString& /*Parameters*/
 	SourceState.Character = Character;
 	SourceState.GrantedCredentialIds = {
 		TEXT("Credential.Run.Zeta"),
-		SerpentCredential,
+		CredentialSaveSerpentCredential,
 		TEXT("Credential.Run.Alpha")
 	};
 
@@ -59,14 +59,14 @@ bool FWacomRunCredentialSaveRoundtripSpec::RunTest(const FString& /*Parameters*/
 		return false;
 	}
 
-	TestEqual(TEXT("Save schema is v4"), Save->SaveVersion, 4);
+	TestEqual(TEXT("Save schema is v5"), Save->SaveVersion, 5);
 	TestEqual(TEXT("All credentials serialized"), Save->GrantedCredentialIds.Num(), 3);
 	if (Save->GrantedCredentialIds.Num() == 3)
 	{
 		TestEqual(TEXT("Credential order 0"), Save->GrantedCredentialIds[0],
 			FName(TEXT("Credential.Run.Alpha")));
 		TestEqual(TEXT("Credential order 1"), Save->GrantedCredentialIds[1],
-			SerpentCredential);
+			CredentialSaveSerpentCredential);
 		TestEqual(TEXT("Credential order 2"), Save->GrantedCredentialIds[2],
 			FName(TEXT("Credential.Run.Zeta")));
 	}
@@ -75,7 +75,7 @@ bool FWacomRunCredentialSaveRoundtripSpec::RunTest(const FString& /*Parameters*/
 	TestTrue(TEXT("Credential save applies"), Loaded->ApplySaveGameToRunState(Save.Get()));
 	TestEqual(TEXT("Credential count roundtrips"),
 		Loaded->GetRunState().GrantedCredentialIds.Num(), 3);
-	TestTrue(TEXT("Serpent credential roundtrips"), Loaded->HasCredential(SerpentCredential));
+	TestTrue(TEXT("Serpent credential roundtrips"), Loaded->HasCredential(CredentialSaveSerpentCredential));
 	TestTrue(TEXT("Alpha credential roundtrips"),
 		Loaded->HasCredential(TEXT("Credential.Run.Alpha")));
 	TestTrue(TEXT("Zeta credential roundtrips"),
@@ -95,16 +95,16 @@ bool FWacomRunCredentialSaveV3MigrationSpec::RunTest(const FString& /*Parameters
 		return false;
 	}
 
-	TStrongObjectPtr<UWacomSaveGame> Save(MakeCredentialSave({ SerpentCredential }));
+	TStrongObjectPtr<UWacomSaveGame> Save(MakeCredentialSave({ CredentialSaveSerpentCredential }));
 	Save->SaveVersion = 3;
 
 	TStrongObjectPtr<URunSession> Loaded(NewObject<URunSession>());
 	TestTrue(TEXT("v3 save migrates and applies"), Loaded->ApplySaveGameToRunState(Save.Get()));
-	TestEqual(TEXT("Save migrated to v4"), Save->SaveVersion, 4);
+	TestEqual(TEXT("Save migrated to v5"), Save->SaveVersion, 5);
 	TestEqual(TEXT("v3 migration explicitly clears credentials"),
 		Loaded->GetRunState().GrantedCredentialIds.Num(), 0);
 	TestFalse(TEXT("No physical-card inference grants serpent credential"),
-		Loaded->HasCredential(SerpentCredential));
+		Loaded->HasCredential(CredentialSaveSerpentCredential));
 	return true;
 }
 
@@ -150,7 +150,7 @@ bool FWacomRunCredentialInvalidSaveAtomicSpec::RunTest(const FString& /*Paramete
 		TEXT("GrantedCredentialIds 重复 ID"),
 		EAutomationExpectedErrorFlags::Contains,
 		1);
-	VerifyRejected({ SerpentCredential, SerpentCredential },
+	VerifyRejected({ CredentialSaveSerpentCredential, CredentialSaveSerpentCredential },
 		TEXT("Duplicate credential rejects save"));
 	return true;
 }

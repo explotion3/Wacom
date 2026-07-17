@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验与 Debug Journey 已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 Journey 成功结算合同、46 个 Production 内容资产和资产权威审计阻塞。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受 46 个 Production 内容资产和资产权威审计阻塞；真实 Floor 3 Golden Path PIE 须在 Production 资产轮完成。
 
 ## §1 两层图合同
 
@@ -156,7 +156,7 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - NodeAnchor 的 View 朝向可以面向节点内容，PathSpline 起始切线可以面向道路方向；二者不要求制作时完全相同。开始 Traversal 的首帧保持 NodeAnchor View，App 在短距离内平滑对齐到 PathSpline，禁止用瞬时切换或 Character controller yaw 反写制造镜头中心跳变。
 - 首版入口视觉由 `DShader/Material/World/M_WacomRunBranchEntrance.dsm` 生成 `/Game/DreamMaterials/World/M_WacomRunBranchEntrance`：Available 使用稳定青色，Focused 使用稳定琥珀色；Full / Reduced / Off 只改变装饰脉冲，Off 仍保留合法选择的语义颜色。
 - `WacomEditor` 已提供 Journey/Floor Data Validation、严格只读的 loaded-world Scene Binding Validation 和可重复 Debug builder；未来图形 authoring Adapter 仍必须编辑同一份 DataAsset，不能维护第二份图数据。
-- Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性。当前 SaveGame v4 只保存 Run Credential，不保存 Journey/Floor/Node、节点 lifecycle 或 Floor history。
+- Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性。当前 SaveGame v5 保存 Run Credential、Outcome 与最近成功摘要，但仍不保存 Journey/Floor/Node、节点 lifecycle 或 Floor history。
 - Editor 场景验证覆盖 Descriptor 缺失/重复/空引用，重复、缺失或意外的 NodeAnchor / EdgePath / content host，host 类型与 typed payload 不一致，以及多出口 Edge 缺失/重复 BranchTarget、单出口 Edge 残留 BranchTarget。Spline 少于 2 点、长度不超过 10 cm、非有限 Transform 和方向颠倒是 Error；端点偏离不超过 100 cm 通过，`(100, 300] cm` 为 Warning，超过 300 cm 为 Error。诊断固定为 `Severity / Code / ObjectPath / Message`，菜单、commandlet、builder 和测试共用同一只读实现。
 - 制作人员可用 `Tools -> Wacom -> Validate Current Run Floor` 验证当前 World；CI/命令行使用 `-run=WacomValidateRunFloorScene -Map=/Game/...`，退出码 `0/1/2` 分别表示通过或仅 Warning、场景合同 Error、参数/加载/Descriptor 解析失败。两个入口都不得修复、标脏或保存 Package。
 - Debug builder 命令为 `-run=WacomBuildRunExplorationDebugAssets`。它只写 Debug Journey/Floor/GameMode/map；Player BP 和三个共享 Run Path Blueprint 只读校验父类，正式 `GM_Wacom`、Authoring 数据和 `L_Exploration` 禁止写。连续运行必须保持 JourneyId、FloorId、NodeId、EdgeId、Actor 计数和内容引用稳定，但不承诺 Debug 生成 Actor GUID 或二进制文件哈希稳定。带 `Wacom.Generated.RunExploration` 的 Anchor/Path/Branch 属于 builder ownership；六个内容 Host 是按 Definition 复用的手工实例，不带该 tag，其 NodeId、NodeType、Blueprint class 和人工 transform 必须跨连续构建保持不变。
@@ -336,7 +336,7 @@ Node.Core.01 -Edge.Main.03-> Node.Junction.03
   -Edge.Main.06-> Node.Guardian.01
 ```
 
-Guardian 无出边，设计语义为战斗胜利后 Journey 成功完成。当前 runtime 只会 Resolve Encounter，没有 Journey success state/event/result；`bRunActive=false` 仍专属于 Defeat，不能作为成功标记。Production 激活前必须另案实现通用 `WacomRun` 成功合同和 `WacomApp` 总结/返回交接，不能用 Actor、Level Blueprint 或伪 FloorEntrance 绕过。Floor 3 最短推进为 `10 AP`，完整探索为 `16 AP`。
+Guardian 无出边，战斗胜利后由通用 Journey success 合同完成 Journey。Production `DA_Journey_Main_01` 必须把 `SuccessTerminalNode` 配为 `Floor.Main.03 + Node.Guardian.01`；Editor/Runtime 会要求它位于最后一层、节点存在、为 `Encounter + bBoss=true`、从 Entry 可达、无出边，且最后一层没有 FloorEntrance。非撤离 terminal Victory 会在同一 Run 事务中 Resolve 节点、生成成功摘要、写入 `Outcome=Succeeded` 并把 `JourneySucceeded` 作为末尾事件；不能用 Actor、Level Blueprint、EncounterId、`bRunActive=false` 或伪 FloorEntrance 代替。Floor 3 最短推进为 `10 AP`，完整探索为 `16 AP`。
 
 ### Journey 总节奏
 
@@ -351,17 +351,16 @@ Guardian 无出边，设计语义为战斗胜利后 Journey 成功完成。当�
 
 ### 身份与生产门禁
 
-- `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v4 已通用持久化 Credential；探索图进度仍未进入磁盘 schema。
+- `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v5 已通用持久化 Credential、Outcome 与最近一次成功摘要；探索图进度仍未进入磁盘 schema。
 - 内容 Host 的跨 Floor runtime `PersistentId` 固定按 `<FloorId>.<NodeId>` 派生，例如 `Floor.Main.01.Node.Route.A.01`。Actor Label、资产名、GUID、坐标和 transform 都不是身份。
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
 - 三层共 46 个预留 Production 内容 ID 只冻结职责；敌人槽、事件选项、Shop Offers、奖励数值和视觉资产另案制作。带 `Debug` 语义的现有 Event/Shop/Reward 不能作为正式引用。
 - 蛇印和蜕印都采用表现卡 + 独立 Credential：必经 Pickup 原子授予两者，删牌流程不影响资格，入口只检查 Credential。
-- Floor 2/3 缺图 blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受通用 Journey success 合同、46 个 Production definitions 和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
+- Floor 2/3 缺图与通用 Journey success blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受 46 个 Production definitions 和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
 
 Floor 1 默认 MapPosition 与原始冻结证据见 `specs/007-formal-floor1-content-freeze/`；Floor 2/3 默认 MapPosition、完整 Edge 表、Journey pacing 与当前 Production readiness gate 见 `specs/009-formal-floor23-journey-pacing-freeze/`。上述长期身份、拓扑、配比和阻塞事实以本节为准。
 
 ## §10 尚待确认
 
-- Journey 成功完成后的权威状态、事件/结果、总结页、统计/存档语义和返回目标。
 - Hunger / Fatigue 恢复活动的具体值、资源成本和重复使用口径。
 - 卡牌强化、特殊事件、背包调整和技能类 Camp Activity 的正式规则与 UI 流程。

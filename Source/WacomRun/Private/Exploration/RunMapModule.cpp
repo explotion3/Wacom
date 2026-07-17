@@ -20,7 +20,7 @@ namespace
 		Event.Node = { FloorId, NodeId };
 	}
 
-	bool IsSafeArrivalNode(const EWacomMapNodeType Type)
+	bool IsMapSafeArrivalNode(const EWacomMapNodeType Type)
 	{
 		return Type == EWacomMapNodeType::Navigation || Type == EWacomMapNodeType::Shop;
 	}
@@ -170,7 +170,7 @@ bool FRunMapModule::CommitArrival(
 		AddNodeEvent(OutEvents, ERunExplorationEventType::NodeVisited, Floor->FloorId, TargetNodeId);
 	}
 	if (TargetProgress->Lifecycle == ERunMapNodeLifecycle::Visited
-		&& IsSafeArrivalNode(TargetNode->NodeType))
+		&& IsMapSafeArrivalNode(TargetNode->NodeType))
 	{
 		TargetProgress->Lifecycle = ERunMapNodeLifecycle::Resolved;
 		AddNodeEvent(OutEvents, ERunExplorationEventType::NodeResolved, Floor->FloorId, TargetNodeId);
@@ -180,7 +180,7 @@ bool FRunMapModule::CommitArrival(
 		return false;
 	}
 
-	if (!IsSafeArrivalNode(TargetNode->NodeType))
+	if (!IsMapSafeArrivalNode(TargetNode->NodeType))
 	{
 		AddNodeEvent(
 			OutEvents,

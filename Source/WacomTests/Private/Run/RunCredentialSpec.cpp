@@ -89,7 +89,7 @@ namespace
 		return FGuid();
 	}
 
-	int32 CountOwnedCard(const FRunState& State, const UCardDefinition* Card)
+	int32 CountCredentialOwnedCard(const FRunState& State, const UCardDefinition* Card)
 	{
 		int32 Count = 0;
 		auto CountIn = [&Count, Card](const TArray<FCardInstance>& Cards)
@@ -166,7 +166,7 @@ bool FWacomRunCredentialAtomicPickupSpec::RunTest(const FString& /*Parameters*/)
 	TestTrue(TEXT("Secondary credential granted"),
 		Run->HasCredential(TEXT("Credential.Run.Secondary")));
 	TestEqual(TEXT("Credential set has two ids"), Run->GetRunState().GrantedCredentialIds.Num(), 2);
-	TestEqual(TEXT("Presentation card acquired"), CountOwnedCard(Run->GetRunState(), Card), 1);
+	TestEqual(TEXT("Presentation card acquired"), CountCredentialOwnedCard(Run->GetRunState(), Card), 1);
 	TestTrue(TEXT("Pickup marked collected"),
 		Run->IsPickupCollected(TEXT("Floor.Main.01.Node.Key.01")));
 	TestEqual(TEXT("Atomic pickup broadcasts once"), BroadcastCount, 1);
@@ -250,7 +250,7 @@ bool FWacomRunCredentialExplorationRollbackSpec::RunTest(const FString& /*Parame
 		Run->CollectPickupFromDefinition(TEXT("Credential.Source.Rollback"), Definition);
 
 	TestFalse(TEXT("Navigation node rejects Treasure settlement"), Result.bSucceeded);
-	TestEqual(TEXT("Card reward rolled back"), CountOwnedCard(Run->GetRunState(), Card), 0);
+	TestEqual(TEXT("Card reward rolled back"), CountCredentialOwnedCard(Run->GetRunState(), Card), 0);
 	TestFalse(TEXT("Credential rolled back"), Run->HasCredential(SerpentCredential));
 	TestFalse(TEXT("Pickup marker rolled back"),
 		Run->IsPickupCollected(TEXT("Credential.Source.Rollback")));

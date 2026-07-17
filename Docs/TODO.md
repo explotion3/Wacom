@@ -47,7 +47,7 @@ tags:
 	- 状态：`Done: 规则核心、Run Path、当前 Floor Map Screen、正式制作基线与隔离 Debug builder 已落地`
   - 归属：Map / Run / App
   - 入口：[WacomMap.md](./WacomMap.md) / [Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline 与 Debug-only builder 已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 Journey 成功结算、46 个 Production 内容、正式 DataAsset/关卡和 Camp handler/UI，不恢复已删除的原型轨道路径。
+	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline、Debug-only builder 与 Journey 成功结算/主菜单交接已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 46 个 Production 内容、正式 DataAsset/关卡、失败总结交接和 Camp handler/UI，不恢复已删除的原型轨道路径。
 	- 2026-07-15 地图闭环：单合法出口 W 自动前进，多合法出口使用道路入口选择，Anchored 无需点击 Actor 即可持续 cursor look；M / 手柄 View 打开当前 Floor 地图，死胡同默认聚焦最近的已完成节点，并可免费同层返回。
 
 - [ ] **Run Map 后续页面与交互扩展**
@@ -64,10 +64,10 @@ tags:
 ## P1 近期实现候选
 
 - [x] **蛇印任务凭证保留 / 恢复正式规则**
-  - 状态：`Done: 独立持久 Credential、原子 Pickup、入口与 SaveGame v4 已落地`
+  - 状态：`Done: 独立持久 Credential、原子 Pickup、入口已落地；Credential 自 v4 起持久化，当前 schema 为 v5`
   - 归属：Run / Data / Tests
   - 入口：[WacomRun.md](./WacomRun.md) / [WacomMap.md](./WacomMap.md) / `specs/008-run-credential/`
-  - 说明：正式资格为 `Credential.Run.SerpentSigil`；蛇印 Pickup 与表现卡在一个 working-state 事务中授予资格，删牌不影响 Credential，FloorEntrance 非消耗检查 Credential。SaveGame v4 确定排序持久化，v3 明确迁移为空且不从卡牌反推；实现为通用数据合同，没有 Floor 1 运行时特例。
+  - 说明：正式资格为 `Credential.Run.SerpentSigil`；蛇印 Pickup 与表现卡在一个 working-state 事务中授予资格，删牌不影响 Credential，FloorEntrance 非消耗检查 Credential。Credential 在 SaveGame v4 引入确定排序持久化，当前 v5 保留该合同；v3 明确迁移为空且不从卡牌反推。实现为通用数据合同，没有 Floor 1 运行时特例。
 
 - [x] **正式 Floor 2/3 图与 Journey 总时长冻结**
   - 状态：`Done: 两层 20 Node/21 Edge、蜕印门槛、终局图与 5–6 天节奏已冻结`
@@ -75,11 +75,17 @@ tags:
   - 入口：[WacomMap.md](./WacomMap.md) / `specs/009-formal-floor23-journey-pacing-freeze/`
   - 说明：Floor 2/3 各冻结 20 Node/21 Edge 双分岔图；Floor 2 使用 `Card.Run.MoltSeal` + `Credential.Run.MoltSeal` 进入 Floor 3，Floor 3 无 Shop/Entrance 并以无出边 Guardian 作为 Journey terminal design node。三层最短/完整为 `26–28 / 44–46 AP`，正常目标约 5–6 天。未创建 Production 资产。
 
-- [ ] **通用 Journey 成功结算与终局交接**
-  - 状态：`Blocked: 策划/架构确认`
+- [x] **通用 Journey 成功结算与终局交接**
+  - 状态：`Done: terminal Outcome/summary/event、Save v5、被动总结页与主菜单交接已落地`
   - 归属：Run / App / Save / UI / Tests
-  - 入口：[WacomMap.md](./WacomMap.md) / [Questions: Run、探索与地图](./Questions.md#questions-run-map) / `specs/009-formal-floor23-journey-pacing-freeze/contracts/floor3-terminal-graph-contract.md`
-  - 说明：为 terminal Encounter 胜利新增可复用的成功状态、事件/结果、结算幂等、总结页、统计/存档语义和返回目标。不得复用 Defeat 的 `bRunActive=false`、伪 FloorEntrance、Actor label 或 Level Blueprint 特例。
+  - 入口：[WacomRun.md](./WacomRun.md) / [WacomMap.md](./WacomMap.md) / [WacomApp.md](./WacomApp.md) / `specs/010-journey-success-settlement-baseline/`
+  - 说明：Production Journey 必须声明合法 `SuccessTerminalNode`；terminal 非撤离 Victory 原子提交 `Outcome=Succeeded`、成功摘要和末尾 `JourneySucceeded` event。SaveGame v5 可持久化 Outcome/摘要但只允许 InProgress 恢复；GameMode 在 Return-to-Run staging 后显示原生 fallback 总结页，确认/Back 或 push failure 都 teardown 后次帧返回 `L_MainMenu`。没有复用 Defeat、Actor label、EncounterId、伪 FloorEntrance 或 Level Blueprint 特例。
+
+- [ ] **Defeat / 压力满 / 手指耗尽的统一总结交接**
+  - 状态：`Ready for design`
+  - 归属：Run / App / Save / UI / Tests
+  - 入口：[WacomRun.md](./WacomRun.md) / [WacomApp.md](./WacomApp.md)
+  - 说明：复用 JourneySummary 的 passive Screen/handoff 方向，另案冻结失败原因、摘要字段、事件时点、是否保留战斗结果细节和返回主菜单口径。不得把成功事件或成功文案反向复用于失败。
 
 - [ ] **Floor 2/3 Production 内容 Definition 制作**
   - 状态：`Ready for design: 31 个内容槽与命名已冻结`
@@ -97,7 +103,7 @@ tags:
   - 状态：`Blocked: readiness gate`
   - 归属：Map / Data / App / Editor / Tests
   - 入口：`specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`
-  - 说明：Credential 与三层图前置已完成；通用 Journey success、三层 46 个 Production definitions 和 AssetRegistry/引用/哈希权威审计完成后，另开实现切片创建 `/Game/Wacom/Data/Map/Production` 与 `/Game/Wacom/Maps/Run` 资产。不得盲目覆盖 `L_Exploration`，不得修改 Debug builder 写集合。
+  - 说明：Credential、三层图和通用 Journey success 前置已完成；三层 46 个 Production definitions 和 AssetRegistry/引用/哈希权威审计完成后，另开实现切片创建 `/Game/Wacom/Data/Map/Production` 与 `/Game/Wacom/Maps/Run` 资产。不得盲目覆盖 `L_Exploration`，不得修改 Debug builder 写集合。
 
 - [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
   - 状态：`In Progress: Phase A 只读基线完成，等待资产所有权确认后分批迁移`

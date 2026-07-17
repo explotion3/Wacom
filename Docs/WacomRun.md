@@ -43,15 +43,17 @@ Run 层可以引用卡牌、角色和战斗回传结构；不能依赖 Widget、
 - 非容器卡默认进 `BattleDeck`。
 - 容器卡默认进 `Backpack`；当前 `MuseiYinchongdeng` 作为内容特例默认进 `BattleDeck`。
 
+`FRunState::Outcome` 是显式 Run 结果，取值为 `InProgress / Succeeded / Failed`。成功与失败都属于终态；`IsRunActive()`、`IsRunFailed()` 保留为兼容查询，不再由一个可混淆成功/失败的 `bRunActive` 充当运行时真相。
+
 Run 失败条件：
 
 | 来源 | 条件 |
 |---|---|
-| 战内失败 | 战斗结果为 Defeat，写入 `bRunActive=false` |
+| 战内失败 | 战斗结果为 Defeat，写入 `Outcome=Failed` |
 | 战外压力 | 八条压力总和 `>= 100` |
 | 手指耗尽 | `FingerCount <= 0` |
 
-`bRunActive` 只记录显式 Run 活跃状态；压力和手指失败通过 `IsRunFailed()` 综合判定。
+压力和手指失败继续由 `IsRunFailed()` 综合判定，并在 `FRunExplorationSnapshot::Outcome` 投影为 `Failed`；terminal success 的显式 `Succeeded` 优先于同一次 Guardian 结算达到的压力失败线。成功后所有探索、节点/Camp、战斗初始化、商店、事件、拾取、背包、经济和直接数值写入口统一零修改、零广播拒绝；构建成功摘要存档仍允许。
 
 经验来自战斗击倒结算。Victory 包括撤离，会把 `FBattleResultPacket.KnockdownExpGains[]` 累加到 Run；Defeat / Undetermined 不结算经验。
 
@@ -422,8 +424,13 @@ Outcome 分支：
 |---|---|
 | Victory 且 `bWithdrawn == true` | 撤离；释放预留、消费 0，节点保持 Visited；写 `BattleProgress[MapNodeHandle].DestroyedPartKeys` |
 | Victory 且未撤离 | 真胜利；提交预留的 1 Action Point、清理该节点撤离进度并 Resolve Encounter 节点 |
-| Defeat | `bRunActive = false` |
+| terminal Victory 且未撤离 | 在普通真胜利结算基础上，同一 working-state 事务提交 `Outcome=Succeeded`、`FRunCompletionSummary` 和末尾 `JourneySucceeded` event |
+| Defeat | `Outcome = Failed` |
 | Undetermined | 不做战外结算并返回 |
+
+Journey 成功只由 `UWacomJourneyDefinition::SuccessTerminalNode` 驱动：本次 Encounter ticket 必须精确对应该 handle，战果必须是非撤离 Victory。普通 Boss、撤离、Defeat、Undetermined、错误或 stale ticket 都不能触发。成功摘要固定保存 JourneyId、terminal handle、完成天数、已进入/总 Floor、已解决/总 Node 和最终压力；统计时点在奖励、压力、经验、AP 与 Node Resolve 之后。`JourneySucceeded` 是该 Resolution 的最后一个 event，`Node` 为 terminal handle，`Detail` 为 JourneyId；整个结算只推进一次版本、广播一次。即使战果同时是 mutual destruction 或战后压力达到失败线，terminal Guardian 胜利仍优先成为 `Succeeded`，最终压力原样进入摘要。
+
+重复战果回调会被 ticket/version 幂等门槛拒绝，不会重复奖励、扣 AP、发成功事件或打开第二次总结流程。
 
 战后压力与奖励：
 
@@ -469,18 +476,20 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`。正常游戏流程不读盘、不写盘；战斗结束和退出时的自动存档会静默 no-op。
 
-下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v4 的实际字段拷贝结果。
+下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v5 的实际字段拷贝结果。
 
 `LoadFromSlot()` 成功应用 SaveGame 到 `RunState` 后会标记 Run UI snapshot dirty，并广播一次 `OnRunStateChangedNative`。读档失败（slot 不存在、SaveGame 类型不匹配、版本或字段校验失败）不修改 RunState，也不广播。Run first-person source、ViewModel provider 和其他只读 Run UI 应依赖这条通知更新到读档后的 default workspace / storage 状态；当前 default workspace provider 仍读取 BattleDeck 物理卡和可选投影卡。
 
-### v4 磁盘会保存
+### v5 磁盘会保存
 
 | SaveGame 字段 | 来源 / 说明 |
 |---|---|
-| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 4 |
+| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 5 |
 | `CharacterAssetPath` | 当前角色资产路径 |
 | `BattleSeed` | 战斗随机种子 |
-| `bRunActive` | Run 活跃状态 |
+| `Outcome` | `InProgress / Succeeded / Failed` 权威磁盘结果 |
+| `bHasCompletionSummary`、`CompletionSummary` | 最近一次成功摘要；使用独立磁盘结构，字段与 runtime summary 一一转换 |
+| `bRunActive` | 仅保留为 v4→v5 的 legacy 迁移来源；v5 apply 不读取 |
 | `DestroyedTriggerIds` | 已 Resolved Encounter Trigger 的 Save v3 兼容投影；Map Node lifecycle 才是完成真相 |
 | `GrantedCredentialIds` | 已获得的稳定 Run Credential；写盘按 `FName` 词法序排序 |
 | `PlayerTransform`、`bHasPlayerTransform` | 探索 Pawn 位置 |
@@ -493,11 +502,11 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 若旧档迁移到 v2 后四个 instance 数组全空，读档会按 Character 的 StarterDeck 重新生成 instance；新 GUID 会替代旧运行态身份。
 
-v4 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。v3 已移除旧 `DefeatedEnemyAssetPaths`；由于 Map Node lifecycle 尚未进入磁盘字段，`DestroyedTriggerIds` 暂时承担已 Resolved Encounter 的磁盘兼容投影。Bootstrap 命中该投影时先通过 Trigger 的统一入口退役 Host/Part，再销毁 Trigger，避免读档后留下 Idle 敌人。v3→v4 把 Credential 明确迁移为空集合，不从实体卡牌推断；v4 读档拒绝 `None` 或重复 Credential，失败时 RunState 不变且不广播。
+v5 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。v3 已移除旧 `DefeatedEnemyAssetPaths`；由于 Map Node lifecycle 尚未进入磁盘字段，`DestroyedTriggerIds` 暂时承担已 Resolved Encounter 的磁盘兼容投影。Bootstrap 命中该投影时先通过 Trigger 的统一入口退役 Host/Part，再销毁 Trigger，避免读档后留下 Idle 敌人。v3→v4 把 Credential 明确迁移为空集合，不从实体卡牌推断；v4 读档拒绝 `None` 或重复 Credential，失败时 RunState 不变且不广播。v4→v5 把 active 映射为 `InProgress`、inactive 映射为 `Failed`，旧摘要为空。v5 要求 `Succeeded` 必须携带合法摘要，`InProgress / Failed` 不得伪带摘要；`ApplySaveGameToRunState()` 只接受 `InProgress`，在解析资产和构造 working state 前原子拒绝 `Succeeded / Failed` 终态档。终态摘要可写盘，但本轮不开放 Continue、Journey History 或实际自动存档。
 
 ### 当前仍是内存态
 
-| RunState 字段 / 系统 | SaveGame v4 状态 | 读档后的实际结果 |
+| RunState 字段 / 系统 | SaveGame v5 状态 | 读档后的实际结果 |
 |---|---|---|
 | `FingerCount`、`HpPerFinger` | 不保存 | 使用 `FRunState` 默认值，不从 SaveGame 还原 |
 | `Pressure`、`TheftCount` | 不保存 | 压力全为 0，偷窃计数为 0 |
