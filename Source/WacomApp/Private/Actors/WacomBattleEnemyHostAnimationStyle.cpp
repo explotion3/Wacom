@@ -24,7 +24,7 @@ UWacomBattleEnemyHostAnimationStyle::ResolveActionClip(FName IntentId) const
 const FWacomBattleEnemyHostAnimationClip*
 UWacomBattleEnemyHostAnimationStyle::ResolveDestroyedClip() const
 {
-	return DestroyedClip.IsRuntimeUsable() ? &DestroyedClip : nullptr;
+	return DestroyedClip.IsPlaybackUsable() ? &DestroyedClip : nullptr;
 }
 
 #if WITH_EDITOR
@@ -33,7 +33,9 @@ EDataValidationResult UWacomBattleEnemyHostAnimationStyle::IsDataValid(
 {
 	EDataValidationResult Result = Super::IsDataValid(Context);
 	auto RejectClip = [&Context, &Result](const FText& Label,
-		const FWacomBattleEnemyHostAnimationClip& Clip, bool bRequired)
+		const FWacomBattleEnemyHostAnimationClip& Clip,
+		bool bRequired,
+		bool bValidateImpact)
 	{
 		if (!Clip.Flipbook && !bRequired)
 		{
@@ -54,10 +56,29 @@ EDataValidationResult UWacomBattleEnemyHostAnimationStyle::IsDataValid(
 				FText::AsNumber(Clip.PlayRate)));
 			Result = EDataValidationResult::Invalid;
 		}
+		if (bValidateImpact
+			&& (!FMath::IsFinite(Clip.ImpactNormalizedTime)
+			|| Clip.ImpactNormalizedTime < 0.0f
+			|| Clip.ImpactNormalizedTime > 1.0f))
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("InvalidClipImpactTime", "Enemy Host 动画配置错误：{0} 的 ImpactNormalizedTime 必须位于 0–1，当前为 {1}。"),
+				Label,
+				FText::AsNumber(Clip.ImpactNormalizedTime)));
+			Result = EDataValidationResult::Invalid;
+		}
 	};
 
-	RejectClip(LOCTEXT("DefaultActionLabel", "DefaultActionClip"), DefaultActionClip, false);
-	RejectClip(LOCTEXT("DestroyedLabel", "DestroyedClip"), DestroyedClip, false);
+	RejectClip(
+		LOCTEXT("DefaultActionLabel", "DefaultActionClip"),
+		DefaultActionClip,
+		false,
+		true);
+	RejectClip(
+		LOCTEXT("DestroyedLabel", "DestroyedClip"),
+		DestroyedClip,
+		false,
+		false);
 	for (const TPair<FName, FWacomBattleEnemyHostAnimationClip>& Pair : ActionClipsByIntentId)
 	{
 		if (Pair.Key.IsNone())
@@ -70,6 +91,7 @@ EDataValidationResult UWacomBattleEnemyHostAnimationStyle::IsDataValid(
 		RejectClip(
 			FText::Format(LOCTEXT("IntentClipLabel", "Intent {0}"), FText::FromName(Pair.Key)),
 			Pair.Value,
+			true,
 			true);
 	}
 

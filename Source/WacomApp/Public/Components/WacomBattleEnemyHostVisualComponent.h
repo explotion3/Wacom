@@ -12,6 +12,7 @@ class UPaperSprite;
 class UPaperSpriteComponent;
 class UMaterialInterface;
 class USceneComponent;
+struct FWacomBattleEnemyActionPlaybackCallbacks;
 
 /**
  * 生成并维护场景敌人 Host 的整体 PaperSprite / PaperFlipbook 视觉。
@@ -49,9 +50,10 @@ public:
 	bool PlayRuntimeOneShot(
 		UPaperFlipbook* Flipbook,
 		float PlayRate,
+		float ImpactNormalizedTime,
 		FName IntentId,
 		bool bTerminal,
-		TFunction<void()>&& Completion);
+		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
 
 	/** 新战斗首次接管 Host 时，仅在残留 runtime 播放或终态存在时恢复 authored Idle。 */
 	void ResetRuntimePlaybackToIdle();
@@ -78,6 +80,10 @@ public:
 	bool IsRuntimeTerminalState() const { return bRuntimeTerminalState; }
 	int32 GetRuntimePlaybackCount() const { return RuntimePlaybackCount; }
 	int32 GetRuntimeWatchdogCompletionCount() const { return RuntimeWatchdogCompletionCount; }
+	float GetCurrentRuntimeImpactNormalizedTime() const { return CurrentRuntimeImpactNormalizedTime; }
+	bool HasRuntimeImpactFired() const { return bRuntimeImpactFired; }
+	int32 GetRuntimeImpactCount() const { return RuntimeImpactCount; }
+	int32 GetRuntimeWatchdogForcedImpactCount() const { return RuntimeWatchdogForcedImpactCount; }
 
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -87,8 +93,13 @@ private:
 	void HandleRuntimeFlipbookFinished();
 
 	void HandleRuntimeWatchdogExpired(uint64 ExpectedPlaybackSerial);
-	void CompleteRuntimePlayback(uint64 ExpectedPlaybackSerial, bool bWatchdogCompletion);
+	void HandleRuntimeImpact(uint64 ExpectedPlaybackSerial);
+	void CompleteRuntimePlayback(
+		uint64 ExpectedPlaybackSerial,
+		bool bWatchdogCompletion,
+		bool bDeliverPendingImpact);
 	void StopRuntimeWatchdog();
+	void StopRuntimeImpactTimer();
 	void RestoreAuthoredIdlePlayback();
 	void CompletePendingCallback();
 
@@ -111,8 +122,14 @@ private:
 	FName CurrentRuntimeIntentId = NAME_None;
 	int32 RuntimePlaybackCount = 0;
 	int32 RuntimeWatchdogCompletionCount = 0;
+	float CurrentRuntimeImpactNormalizedTime = 0.0f;
+	bool bRuntimeImpactFired = false;
+	int32 RuntimeImpactCount = 0;
+	int32 RuntimeWatchdogForcedImpactCount = 0;
 	uint64 PlaybackSerial = 0;
 	uint64 ActivePlaybackSerial = 0;
 	FTimerHandle RuntimeWatchdogTimerHandle;
+	FTimerHandle RuntimeImpactTimerHandle;
+	TFunction<void()> PendingRuntimeImpact;
 	TFunction<void()> PendingRuntimeCompletion;
 };

@@ -179,6 +179,8 @@ Host 整体视觉和 `VisualLayers` 都只属于表现层。有效 `EnemyPartAct
 
 Part Animation Style 只声明一个稳定 `TargetVisualLayerId`、`DefaultActionClip` 和显式 `IntentId -> Clip`；显式映射优先于默认 Action，Destroyed 仍由 VisualLayer 自身的 `DestroyedFlipbook` 合同拥有。行动在同一个 `UPaperFlipbookComponent` 上非循环播放，以 `OnFinishedPlaying` 和一次性 duration watchdog 作为队列 barrier，结束后恢复 authored Flipbook、PlayRate、Looping、StartTime 与 AutoPlay。Destroyed 优先并会安全结束残留 Action；Snapshot refresh、相同 Host 设置和无拓扑变化的 registry 操作不会重播或重置。复杂多层联动、PaperZD 与 Boss Phase 仍留给后续能力。
 
+Host / Part Action Clip 共享 `ImpactNormalizedTime`（默认 `0.55`）和 `OnImpact / OnCompleted` 双阶段合同。队列开始行动时保持 Journal 的行动前 Combat facts；Impact timer 到点才应用对应 `SnapshotAfter` 的玩家 HP、护盾、状态与敌人护盾、Intent、Initiative 等 Combat facts，动画真正结束后才释放下一行动的 barrier。提前完成或 watchdog 会先补发一次 Impact 再 Complete；缺失 Host、Style、Clip、Layer 或 World 时两个回调按同样顺序同步完成。`Count == 0` 不播动画但立即应用行动后 facts，因此中毒等行动后结算仍可反馈。Combat-only refresh 不同步手牌、牌堆或 first-person transition；Journal 缺失或序号不匹配时不猜中间状态，最终权威 Snapshot 仍负责回收。
+
 正式 Snake prefab 为 `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`。它绑定 `DA_Enemy_Snake`、`EnemySlotId=Enemy`，使用 `MultiPartVisualLayers`，清空 Host Sprite、Flipbook、Animation Style 和面板 override；三部位 Definition 因此自动使用现有多部位 WBP。Builder 必须通过 `FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition()` 生成三个 ChildActorComponent，再按稳定槽位配置：
 
 | PartSlotId | Relative Location | PartId | HitBoundsExtent | Visual scale | Idle offset |
@@ -306,6 +308,8 @@ BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命�
 | `UWacomBattleStatusIconListWidget / UWacomBattleStatusIconWidget` | `Wacom|Battle|Status Icons|Authoring` | 共享状态图标列表和单个状态图标；玩家状态条正式使用，敌人部位条目可选接入 |
 | `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用数量显示与收发反馈控件；牌堆类型由 WBP Image 图标表达，BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数`。可选 `PileFeedbackRoot` 统一承载图标+数字弹性 RenderTransform；缺失时兼容回退 `ReceiveFeedbackRoot`，再回退整个控件。Receive 与 Send 使用同一个组合 playback，不争用或覆盖 authored transform；Reduced Motion 仍更新数量但不播放变换。 |
 | `UWacomProgressBar` | `Wacom|Common UI|Progress Bar` | 通用数值进度条显示控件 |
+
+`UPlayerStatusBar` 在敌人行动 Impact 之后比较 Journal 的行动前后 `FPlayerSnapshot`：HP 下降播放 `DamagePulseAnimation`，护盾下降播放 `ShieldPulseAnimation`，两者同时下降则两个脉冲都播放而音效只选 Damage；仅状态变化只刷新状态图标。数值在 Impact 立即切换到权威值，不做 Tick 插值。Action Preview 仍只覆盖显示，不触发真实脉冲或音效；`NativeDestruct()` 停止瞬时动画。
 
 CommandBar 的轻量协议定义在 `BattleCommandBarTypes.h`：`EWacomBattleCommandId`、`FWacomBattleCommandButtonView` 和 `FWacomBattleCommandBarViewData` 可以被 HUD / runtime presenter / tests 直接使用；`BattleCommandBarWidget.h` 只承载 UMG Widget 实现与 WBP 制作面。当前 `WBP_BattleCommandBar` 推荐直接绑定 `WaitButton / EndTurnButton` 让资产控制位置，并在 CommandBar 上配置 `WaitIconBrush / EndTurnIconBrush`；`CommandButtonContainer` 仅作为未绑定按钮时的动态生成回退。CommandBar ViewData 构建收口在 App-private `FWacomBattleHUDCommandBarPresenter`，`FWacomBattleHUDRuntime` 只保留刷新入口和 command gate 查询。
 

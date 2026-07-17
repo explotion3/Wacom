@@ -137,7 +137,11 @@ void FBattleTurnLifecycleModule::CompleteCurrentTurn(
 		return;
 	}
 
-	FEnemyPartActionResolver::ResolveEndTurnActions(State, Events);
+	FEnemyPartActionResolver::ResolveEndTurnActions(
+		State,
+		Events,
+		nullptr,
+		&PresentationJournal);
 
 	if (FBattleRules::CheckAndApplyBattleEnd(State, Events))
 	{

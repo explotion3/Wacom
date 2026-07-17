@@ -53,6 +53,16 @@ void FWacomBattleHUDSnapshotPresenter::RefreshFromPresentationPhase(
 	Runtime.SyncBattleEnemyPartWorldTargets(Snapshot);
 }
 
+void FWacomBattleHUDSnapshotPresenter::RefreshCombatPresentationFrame(
+	const FBattleSnapshot& Snapshot)
+{
+	Runtime.HideCardDetailPanel();
+	Runtime.SetLastBattleSnapshot(Snapshot);
+	RefreshBoundBattleWidgets(Snapshot);
+	Runtime.RefreshCommandBarFromSnapshot(Snapshot);
+	Runtime.SyncBattleEnemyPartWorldTargets(Snapshot);
+}
+
 void FWacomBattleHUDSnapshotPresenter::RefreshPileViews(
 	const FBattleSnapshot& Snapshot)
 {

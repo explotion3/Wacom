@@ -10,6 +10,7 @@
 class UPaperFlipbook;
 class UPaperFlipbookComponent;
 class UPaperSpriteComponent;
+struct FWacomBattleEnemyActionPlaybackCallbacks;
 class USceneComponent;
 
 struct FWacomBattleEnemyPartRuntimeVisualLayer
@@ -132,8 +133,9 @@ public:
 		FName TargetVisualLayerId,
 		UPaperFlipbook* Flipbook,
 		float PlayRate,
+		float ImpactNormalizedTime,
 		FName IntentId,
-		TFunction<void()>&& Completion);
+		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
 	/** 清理当前行动 barrier；按需恢复 authored layer，Destroyed 终态应用时不会短暂恢复。 */
 	void CancelRuntimeActionPlayback(bool bRestoreAuthoredLayer = true);
 	int32 ApplyRuntimeDestroyedState(
@@ -152,6 +154,16 @@ public:
 	{
 		return RuntimeActionWatchdogCompletionCount;
 	}
+	float GetCurrentRuntimeActionImpactNormalizedTime() const
+	{
+		return CurrentRuntimeActionImpactNormalizedTime;
+	}
+	bool HasRuntimeActionImpactFired() const { return bRuntimeActionImpactFired; }
+	int32 GetRuntimeActionImpactCount() const { return RuntimeActionImpactCount; }
+	int32 GetRuntimeActionWatchdogForcedImpactCount() const
+	{
+		return RuntimeActionWatchdogForcedImpactCount;
+	}
 
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -161,11 +173,14 @@ private:
 	void HandleRuntimeActionFlipbookFinished();
 
 	void HandleRuntimeActionWatchdogExpired(uint64 ExpectedPlaybackSerial);
+	void HandleRuntimeActionImpact(uint64 ExpectedPlaybackSerial);
 	void CompleteRuntimeActionPlayback(
 		uint64 ExpectedPlaybackSerial,
 		bool bWatchdogCompletion,
-		bool bRestoreAuthoredLayer);
+		bool bRestoreAuthoredLayer,
+		bool bDeliverPendingImpact);
 	void StopRuntimeActionWatchdog();
+	void StopRuntimeActionImpactTimer();
 	void RestoreActiveRuntimeActionLayer();
 	void UnbindRuntimeActionFinishedDelegate();
 	void CompletePendingRuntimeActionCallback();
@@ -194,8 +209,14 @@ private:
 	FName CurrentRuntimeActionIntentId = NAME_None;
 	int32 RuntimeActionPlaybackCount = 0;
 	int32 RuntimeActionWatchdogCompletionCount = 0;
+	float CurrentRuntimeActionImpactNormalizedTime = 0.0f;
+	bool bRuntimeActionImpactFired = false;
+	int32 RuntimeActionImpactCount = 0;
+	int32 RuntimeActionWatchdogForcedImpactCount = 0;
 	uint64 RuntimeActionPlaybackSerial = 0;
 	uint64 ActiveRuntimeActionPlaybackSerial = 0;
 	FTimerHandle RuntimeActionWatchdogTimerHandle;
+	FTimerHandle RuntimeActionImpactTimerHandle;
+	TFunction<void()> PendingRuntimeActionImpact;
 	TFunction<void()> PendingRuntimeActionCompletion;
 };

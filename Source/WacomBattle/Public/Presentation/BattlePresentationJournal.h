@@ -59,22 +59,57 @@ struct WACOMBATTLE_API FBattlePresentationCheckpoint
 };
 
 /**
+ * One fully resolved enemy-part action presentation fact.
+ *
+ * Rules do not pause at this boundary. WacomApp consumes the two snapshots
+ * later so presentation can keep the pre-action combat frame visible until
+ * the authored action animation reaches its impact marker.
+ */
+struct WACOMBATTLE_API FBattlePresentationEnemyActionStep
+{
+	FBattleSnapshot SnapshotBefore;
+	FBattleSnapshot SnapshotAfter;
+	int32 FirstEventSequence = INDEX_NONE;
+	int32 LastEventSequence = INDEX_NONE;
+
+	bool IsValid() const
+	{
+		return FirstEventSequence > 0 && LastEventSequence >= FirstEventSequence;
+	}
+};
+
+/**
  * Per-command presentation journal consumed once by WacomApp.
  */
 struct WACOMBATTLE_API FBattlePresentationJournal
 {
 	TArray<FBattlePresentationCheckpoint> Checkpoints;
 	TArray<FBattlePresentationDeckStep> DeckSteps;
+	TArray<FBattlePresentationEnemyActionStep> EnemyActionSteps;
 
 	bool IsEmpty() const
 	{
-		return Checkpoints.IsEmpty() && DeckSteps.IsEmpty();
+		return Checkpoints.IsEmpty() && DeckSteps.IsEmpty() && EnemyActionSteps.IsEmpty();
 	}
 
 	void Reset()
 	{
 		Checkpoints.Reset();
 		DeckSteps.Reset();
+		EnemyActionSteps.Reset();
+	}
+
+	void AddEnemyActionStep(
+		const FBattleSnapshot& SnapshotBefore,
+		const FBattleSnapshot& SnapshotAfter,
+		int32 FirstEventSequence,
+		int32 LastEventSequence)
+	{
+		FBattlePresentationEnemyActionStep& Step = EnemyActionSteps.AddDefaulted_GetRef();
+		Step.SnapshotBefore = SnapshotBefore;
+		Step.SnapshotAfter = SnapshotAfter;
+		Step.FirstEventSequence = FirstEventSequence;
+		Step.LastEventSequence = LastEventSequence;
 	}
 
 	void AddCheckpoint(

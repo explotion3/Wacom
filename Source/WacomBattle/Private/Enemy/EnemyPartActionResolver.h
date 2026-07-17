@@ -6,6 +6,7 @@
 
 struct FBattleState;
 struct FBattleEventBus;
+struct FBattlePresentationJournal;
 class IBattleOperationAdapter;
 
 /**
@@ -27,7 +28,8 @@ public:
 	static void ResolveInitiativeZeroActions(
 		FBattleState& State,
 		FBattleEventBus& Events,
-		IBattleOperationAdapter* OperationAdapter = nullptr);
+		IBattleOperationAdapter* OperationAdapter = nullptr,
+		FBattlePresentationJournal* PresentationJournal = nullptr);
 
 	/**
 	 * 结束阶段触发的行动：所有存活且可行动部位按部位顺序行动。
@@ -35,5 +37,6 @@ public:
 	static void ResolveEndTurnActions(
 		FBattleState& State,
 		FBattleEventBus& Events,
-		IBattleOperationAdapter* OperationAdapter = nullptr);
+		IBattleOperationAdapter* OperationAdapter = nullptr,
+		FBattlePresentationJournal* PresentationJournal = nullptr);
 };

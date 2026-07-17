@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/WacomBattleDrawPileFeedbackController.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
@@ -43,6 +44,7 @@ struct FWacomBattlePresentationPhase
 	TArray<FWacomFirstPersonCardLayerTransitionHint> TransitionHints;
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints;
 	TArray<FBattleEvent> Events;
+	TArray<FBattlePresentationEnemyActionStep> EnemyActionSteps;
 	int32 PresentationStackEntryId = INDEX_NONE;
 	TArray<FWacomFirstPersonCardPileTransferHint> PileTransferHints;
 	int32 PileTransferInitialDrawCount = 0;

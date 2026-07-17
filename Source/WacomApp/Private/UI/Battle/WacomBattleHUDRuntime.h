@@ -292,6 +292,7 @@ public:
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints =
 			TArray<FWacomFirstPersonCardLayerFeedbackHint>());
+	void RefreshCombatPresentationFrame(const FBattleSnapshot& Snapshot);
 	void ClearFirstPersonBattleHandLayer();
 	bool ShouldUseFirstPersonBattleHandLayer() const;
 	bool ShouldEnableFirstPersonBattleHandInteraction() const;

@@ -5,10 +5,15 @@
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Enemy/EnemyPartActionResolver.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Events/BattleEventBus.h"
 #include "Initiative/BattleInitiativeTimelineModule.h"
 
-FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& /*Command*/)
+FWacomStatus FWaitResolver::Resolve(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	FBattlePresentationJournal& PresentationJournal,
+	const FBattleCommand& /*Command*/)
 {
 	// 等待流程：
 	// 1. 所有敌人部位当前先机减去当前等待值
@@ -28,7 +33,11 @@ FWacomStatus FWaitResolver::Resolve(FBattleState& State, FBattleEventBus& Events
 	}
 
 	// 先机归零 -> 敌方部位行动子流程
-	FEnemyPartActionResolver::ResolveInitiativeZeroActions(State, Events);
+	FEnemyPartActionResolver::ResolveInitiativeZeroActions(
+		State,
+		Events,
+		nullptr,
+		&PresentationJournal);
 
 	// 等待值 +1
 	++State.CurrentWaitValue;

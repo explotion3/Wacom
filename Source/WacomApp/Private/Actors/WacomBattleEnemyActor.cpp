@@ -3,6 +3,7 @@
 #include "Actors/WacomBattleEnemyActor.h"
 
 #include "Actors/WacomBattleEnemyPartActor.h"
+#include "Actors/WacomBattleEnemyActionPlayback.h"
 #include "Actors/WacomBattleEnemyHostAnimationStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
@@ -500,7 +501,7 @@ void AWacomBattleEnemyActor::InitializeRuntimeSceneBinding(
 
 void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
 	FName IntentId,
-	TFunction<void()>&& Completion)
+	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
 {
 	const FWacomBattleEnemyHostAnimationClip* Clip = HostAnimationStyle
 		? HostAnimationStyle->ResolveActionClip(IntentId)
@@ -512,19 +513,26 @@ void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
 		|| !HostVisualComponent
 		|| !Clip)
 	{
-		if (Completion)
-		{
-			Completion();
-		}
+		Callbacks.CompleteImmediately();
 		return;
 	}
 
 	HostVisualComponent->PlayRuntimeOneShot(
 		Clip->Flipbook,
 		Clip->PlayRate,
+		Clip->ImpactNormalizedTime,
 		IntentId,
 		false,
-		MoveTemp(Completion));
+		MoveTemp(Callbacks));
+}
+
+void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
+	FName IntentId,
+	TFunction<void()>&& Completion)
+{
+	FWacomBattleEnemyActionPlaybackCallbacks Callbacks;
+	Callbacks.OnCompleted = MoveTemp(Completion);
+	PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Callbacks));
 }
 
 void AWacomBattleEnemyActor::PlayRuntimeHostDestroyedAnimation(
@@ -550,9 +558,12 @@ void AWacomBattleEnemyActor::PlayRuntimeHostDestroyedAnimation(
 	HostVisualComponent->PlayRuntimeOneShot(
 		Clip->Flipbook,
 		Clip->PlayRate,
+		Clip->ImpactNormalizedTime,
 		NAME_None,
 		true,
-		MoveTemp(Completion));
+		FWacomBattleEnemyActionPlaybackCallbacks{
+			TFunction<void()>(),
+			MoveTemp(Completion) });
 }
 
 void AWacomBattleEnemyActor::ResetRuntimeHostAnimation()
@@ -720,6 +731,12 @@ FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebug
 		View.HostAnimationPlayCount = HostVisualComponent->GetRuntimePlaybackCount();
 		View.HostAnimationWatchdogCompletionCount =
 			HostVisualComponent->GetRuntimeWatchdogCompletionCount();
+		View.HostAnimationImpactNormalizedTime =
+			HostVisualComponent->GetCurrentRuntimeImpactNormalizedTime();
+		View.bHostAnimationImpactFired = HostVisualComponent->HasRuntimeImpactFired();
+		View.HostAnimationImpactCount = HostVisualComponent->GetRuntimeImpactCount();
+		View.HostAnimationWatchdogForcedImpactCount =
+			HostVisualComponent->GetRuntimeWatchdogForcedImpactCount();
 	}
 	View.GeneratedHostVisualComponentCount = GetGeneratedHostVisualComponentCount();
 	View.RegisteredHostVisualComponentCount = GetRegisteredHostVisualComponentCount();

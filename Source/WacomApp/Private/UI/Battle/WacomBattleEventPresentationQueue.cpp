@@ -2,6 +2,7 @@
 
 #include "UI/Battle/WacomBattleEventPresentationQueue.h"
 
+#include "Actors/WacomBattleEnemyActionPlayback.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
 #include "Engine/World.h"
@@ -37,11 +38,17 @@ FWacomBattleEventPresentationQueue::~FWacomBattleEventPresentationQueue()
 
 void FWacomBattleEventPresentationQueue::EnqueueEvents(const TArray<FBattleEvent>& Events)
 {
-	EnqueueEvents(Events, INDEX_NONE, 0.0f, false);
+	EnqueueEvents(
+		Events,
+		TArray<FBattlePresentationEnemyActionStep>(),
+		INDEX_NONE,
+		0.0f,
+		false);
 }
 
 void FWacomBattleEventPresentationQueue::EnqueueEvents(
 	const TArray<FBattleEvent>& Events,
+	const TArray<FBattlePresentationEnemyActionStep>& EnemyActionSteps,
 	int32 PresentationStackEntryId,
 	float MinimumStackHoldSeconds,
 	bool bTargetAlreadyConfirmed)
@@ -69,6 +76,14 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 	for (int32 EventIndex = 0; EventIndex < Events.Num(); ++EventIndex)
 	{
 		const FBattleEvent& Event = Events[EventIndex];
+		const FBattlePresentationEnemyActionStep* EnemyActionStep =
+			Event.Type == EBattleEventType::EnemyPartActed
+			? EnemyActionSteps.FindByPredicate(
+				[Sequence = Event.Sequence](const FBattlePresentationEnemyActionStep& Candidate)
+				{
+					return Candidate.FirstEventSequence == Sequence;
+				})
+			: nullptr;
 		if (!bTargetAlreadyConfirmed
 			&& !bAddedDamageConfirmationLead
 			&& Event.Type == EBattleEventType::DamageDealt
@@ -89,6 +104,7 @@ void FWacomBattleEventPresentationQueue::EnqueueEvents(
 			: nullptr;
 		bAddedPresentationStep |= BuildStepsForEvent(
 			Event,
+			EnemyActionStep,
 			Event.Type == EBattleEventType::EnemyPartHpEmptied
 				&& LastDestroyedEventIndex
 				&& *LastDestroyedEventIndex == EventIndex);
@@ -177,6 +193,8 @@ void FWacomBattleEventPresentationQueue::Clear()
 	bProcessing = false;
 	bAdvancing = false;
 	bWaitingForSceneEnemyAnimation = false;
+	bSceneEnemyAnimationImpactDelivered = false;
+	ActiveSceneEnemyActionStep.Reset();
 	++SceneEnemyAnimationBarrierSerial;
 }
 
@@ -187,11 +205,14 @@ void FWacomBattleEventPresentationQueue::AbandonWithoutWorldAccess()
 	bProcessing = false;
 	bAdvancing = false;
 	bWaitingForSceneEnemyAnimation = false;
+	bSceneEnemyAnimationImpactDelivered = false;
+	ActiveSceneEnemyActionStep.Reset();
 	++SceneEnemyAnimationBarrierSerial;
 }
 
 bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(
 	const FBattleEvent& Event,
+	const FBattlePresentationEnemyActionStep* EnemyActionStep,
 	bool bLastDestroyedEventForEnemy)
 {
 	if (Event.Type == EBattleEventType::KnockdownChoiceRequested)
@@ -206,7 +227,6 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(
 
 	bool bAddedStep = false;
 	if (Event.Type == EBattleEventType::EnemyPartActed
-		&& Event.Count > 0
 		&& Event.ActorEnemyPartKey.IsValidKey())
 	{
 		FWacomBattlePresentationStep SceneEnemyAnimationStep;
@@ -216,6 +236,11 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(
 		SceneEnemyAnimationStep.ActingPartKey =
 			FBattlePartSlotIdentity::FromEnemyPartKey(Event.ActorEnemyPartKey);
 		SceneEnemyAnimationStep.IntentId = Event.IntentId;
+		SceneEnemyAnimationStep.bSkipSceneEnemyAnimation = Event.Count <= 0;
+		if (EnemyActionStep && EnemyActionStep->IsValid())
+		{
+			SceneEnemyAnimationStep.EnemyActionStep = *EnemyActionStep;
+		}
 		Steps.Add(MoveTemp(SceneEnemyAnimationStep));
 		bAddedStep = true;
 	}
@@ -363,18 +388,37 @@ void FWacomBattleEventPresentationQueue::Advance()
 	{
 		const uint64 BarrierSerial = ++SceneEnemyAnimationBarrierSerial;
 		bWaitingForSceneEnemyAnimation = true;
+		bSceneEnemyAnimationImpactDelivered = false;
+		ActiveSceneEnemyActionStep = MoveTemp(Step.EnemyActionStep);
 		TWeakPtr<FWacomBattleEventPresentationQueue> WeakThis = AsShared();
-		Coordinator.HandleSceneEnemyAnimationStep(
-			Step.ActingPartKey,
-			Step.IntentId,
-			Step.bDestroyedHostAnimation,
-			[WeakThis, BarrierSerial]()
+		if (Step.bSkipSceneEnemyAnimation)
+		{
+			DeliverSceneEnemyAnimationImpact(BarrierSerial);
+			CompleteSceneEnemyAnimationBarrier(BarrierSerial);
+		}
+		else
+		{
+			FWacomBattleEnemyActionPlaybackCallbacks Callbacks;
+			Callbacks.OnImpact = [WeakThis, BarrierSerial]()
+			{
+				if (const TSharedPtr<FWacomBattleEventPresentationQueue> Pinned = WeakThis.Pin())
+				{
+					Pinned->DeliverSceneEnemyAnimationImpact(BarrierSerial);
+				}
+			};
+			Callbacks.OnCompleted = [WeakThis, BarrierSerial]()
 			{
 				if (const TSharedPtr<FWacomBattleEventPresentationQueue> Pinned = WeakThis.Pin())
 				{
 					Pinned->CompleteSceneEnemyAnimationBarrier(BarrierSerial);
 				}
-			});
+			};
+			Coordinator.HandleSceneEnemyAnimationStep(
+				Step.ActingPartKey,
+				Step.IntentId,
+				Step.bDestroyedHostAnimation,
+				MoveTemp(Callbacks));
+		}
 		if (bWaitingForSceneEnemyAnimation)
 		{
 			return;
@@ -417,9 +461,27 @@ void FWacomBattleEventPresentationQueue::CompleteSceneEnemyAnimationBarrier(uint
 	}
 
 	bWaitingForSceneEnemyAnimation = false;
+	ActiveSceneEnemyActionStep.Reset();
 	if (!bAdvancing)
 	{
 		Advance();
+	}
+}
+
+void FWacomBattleEventPresentationQueue::DeliverSceneEnemyAnimationImpact(uint64 ExpectedSerial)
+{
+	if (!bProcessing
+		|| !bWaitingForSceneEnemyAnimation
+		|| ExpectedSerial != SceneEnemyAnimationBarrierSerial
+		|| bSceneEnemyAnimationImpactDelivered)
+	{
+		return;
+	}
+
+	bSceneEnemyAnimationImpactDelivered = true;
+	if (ActiveSceneEnemyActionStep.IsSet())
+	{
+		Coordinator.HandleSceneEnemyActionImpact(ActiveSceneEnemyActionStep.GetValue());
 	}
 }
 

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Runtime/BattlePartSlotIdentity.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
@@ -29,6 +30,8 @@ struct FWacomBattlePresentationStep
 	int32 PresentationStackEntryId = INDEX_NONE;
 	FBattlePartSlotIdentity ActingPartKey;
 	FName IntentId = NAME_None;
+	TOptional<FBattlePresentationEnemyActionStep> EnemyActionStep;
+	bool bSkipSceneEnemyAnimation = false;
 	bool bDestroyedHostAnimation = false;
 };
 
@@ -42,6 +45,7 @@ public:
 	void EnqueueEvents(const TArray<FBattleEvent>& Events);
 	void EnqueueEvents(
 		const TArray<FBattleEvent>& Events,
+		const TArray<FBattlePresentationEnemyActionStep>& EnemyActionSteps,
 		int32 PresentationStackEntryId,
 		float MinimumStackHoldSeconds,
 		bool bTargetAlreadyConfirmed = false);
@@ -62,12 +66,18 @@ private:
 	bool bProcessing = false;
 	bool bAdvancing = false;
 	bool bWaitingForSceneEnemyAnimation = false;
+	bool bSceneEnemyAnimationImpactDelivered = false;
+	TOptional<FBattlePresentationEnemyActionStep> ActiveSceneEnemyActionStep;
 	uint64 SceneEnemyAnimationBarrierSerial = 0;
 
-	bool BuildStepsForEvent(const FBattleEvent& Event, bool bLastDestroyedEventForEnemy);
+	bool BuildStepsForEvent(
+		const FBattleEvent& Event,
+		const FBattlePresentationEnemyActionStep* EnemyActionStep,
+		bool bLastDestroyedEventForEnemy);
 	void ScheduleNextStep(float DelaySeconds);
 	void StopTimer();
 	void Advance();
 	void FinishIfIdle();
 	void CompleteSceneEnemyAnimationBarrier(uint64 ExpectedSerial);
+	void DeliverSceneEnemyAnimationImpact(uint64 ExpectedSerial);
 };

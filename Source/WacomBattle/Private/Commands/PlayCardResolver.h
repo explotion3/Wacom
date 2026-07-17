@@ -7,6 +7,7 @@
 
 struct FBattleState;
 struct FBattleEventBus;
+struct FBattlePresentationJournal;
 class FPreparedPlayCard;
 class IBattleOperationAdapter;
 
@@ -27,5 +28,6 @@ public:
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const FPreparedPlayCard& Prepared,
-		IBattleOperationAdapter& OperationAdapter);
+		IBattleOperationAdapter& OperationAdapter,
+		FBattlePresentationJournal* PresentationJournal = nullptr);
 };

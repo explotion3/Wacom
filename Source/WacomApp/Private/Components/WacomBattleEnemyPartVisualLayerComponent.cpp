@@ -2,6 +2,8 @@
 
 #include "Components/WacomBattleEnemyPartVisualLayerComponent.h"
 
+#include "Actors/WacomBattleEnemyActionPlayback.h"
+
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -208,8 +210,9 @@ bool UWacomBattleEnemyPartVisualLayerComponent::PlayRuntimeActionOneShot(
 	FName TargetVisualLayerId,
 	UPaperFlipbook* Flipbook,
 	float PlayRate,
+	float ImpactNormalizedTime,
 	FName IntentId,
-	TFunction<void()>&& Completion)
+	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
 {
 	int32 MatchingLayerIndex = INDEX_NONE;
 	int32 MatchingLayerCount = 0;
@@ -250,19 +253,22 @@ bool UWacomBattleEnemyPartVisualLayerComponent::PlayRuntimeActionOneShot(
 		|| !IsValid(Flipbook)
 		|| !FMath::IsFinite(PlayRate)
 		|| PlayRate <= 0.0f
+		|| !FMath::IsFinite(ImpactNormalizedTime)
+		|| ImpactNormalizedTime < 0.0f
+		|| ImpactNormalizedTime > 1.0f
 		|| !FMath::IsFinite(Duration)
 		|| Duration <= 0.0f)
 	{
-		if (Completion)
-		{
-			Completion();
-		}
+		Callbacks.CompleteImmediately();
 		return false;
 	}
 
 	CancelRuntimeActionPlayback(true);
-	PendingRuntimeActionCompletion = MoveTemp(Completion);
+	PendingRuntimeActionImpact = MoveTemp(Callbacks.OnImpact);
+	PendingRuntimeActionCompletion = MoveTemp(Callbacks.OnCompleted);
 	bRuntimeActionPlaybackActive = true;
+	bRuntimeActionImpactFired = false;
+	CurrentRuntimeActionImpactNormalizedTime = ImpactNormalizedTime;
 	CurrentRuntimeActionLayerId = TargetVisualLayerId;
 	CurrentRuntimeActionClipName = FName(*Flipbook->GetName());
 	CurrentRuntimeActionIntentId = IntentId;
@@ -287,6 +293,25 @@ bool UWacomBattleEnemyPartVisualLayerComponent::PlayRuntimeActionOneShot(
 
 	if (UWorld* World = GetWorld())
 	{
+		if (PendingRuntimeActionImpact)
+		{
+			const float ImpactSeconds = Duration / PlayRate * ImpactNormalizedTime;
+			if (ImpactSeconds <= 0.0f)
+			{
+				HandleRuntimeActionImpact(ActiveRuntimeActionPlaybackSerial);
+			}
+			else
+			{
+				World->GetTimerManager().SetTimer(
+					RuntimeActionImpactTimerHandle,
+					FTimerDelegate::CreateUObject(
+						this,
+						&UWacomBattleEnemyPartVisualLayerComponent::HandleRuntimeActionImpact,
+						ActiveRuntimeActionPlaybackSerial),
+					FMath::Max(0.01f, ImpactSeconds),
+					false);
+			}
+		}
 		const float WatchdogSeconds = Duration / PlayRate + RuntimeActionWatchdogGraceSeconds;
 		World->GetTimerManager().SetTimer(
 			RuntimeActionWatchdogTimerHandle,
@@ -302,6 +327,7 @@ bool UWacomBattleEnemyPartVisualLayerComponent::PlayRuntimeActionOneShot(
 		CompleteRuntimeActionPlayback(
 			ActiveRuntimeActionPlaybackSerial,
 			true,
+			true,
 			true);
 		return false;
 	}
@@ -315,14 +341,17 @@ void UWacomBattleEnemyPartVisualLayerComponent::CancelRuntimeActionPlayback(
 	if (!bRuntimeActionPlaybackActive)
 	{
 		StopRuntimeActionWatchdog();
+		StopRuntimeActionImpactTimer();
 		UnbindRuntimeActionFinishedDelegate();
+		PendingRuntimeActionImpact = nullptr;
 		return;
 	}
 
 	CompleteRuntimeActionPlayback(
 		ActiveRuntimeActionPlaybackSerial,
 		false,
-		bRestoreAuthoredLayer);
+		bRestoreAuthoredLayer,
+		false);
 }
 
 void UWacomBattleEnemyPartVisualLayerComponent::HandleRuntimeActionFlipbookFinished()
@@ -330,19 +359,40 @@ void UWacomBattleEnemyPartVisualLayerComponent::HandleRuntimeActionFlipbookFinis
 	CompleteRuntimeActionPlayback(
 		ActiveRuntimeActionPlaybackSerial,
 		false,
+		true,
 		true);
 }
 
 void UWacomBattleEnemyPartVisualLayerComponent::HandleRuntimeActionWatchdogExpired(
 	uint64 ExpectedPlaybackSerial)
 {
-	CompleteRuntimeActionPlayback(ExpectedPlaybackSerial, true, true);
+	CompleteRuntimeActionPlayback(ExpectedPlaybackSerial, true, true, true);
+}
+
+void UWacomBattleEnemyPartVisualLayerComponent::HandleRuntimeActionImpact(
+	uint64 ExpectedPlaybackSerial)
+{
+	if (!bRuntimeActionPlaybackActive
+		|| ExpectedPlaybackSerial != ActiveRuntimeActionPlaybackSerial
+		|| bRuntimeActionImpactFired
+		|| !PendingRuntimeActionImpact)
+	{
+		return;
+	}
+
+	StopRuntimeActionImpactTimer();
+	bRuntimeActionImpactFired = true;
+	++RuntimeActionImpactCount;
+	TFunction<void()> Callback = MoveTemp(PendingRuntimeActionImpact);
+	PendingRuntimeActionImpact = nullptr;
+	Callback();
 }
 
 void UWacomBattleEnemyPartVisualLayerComponent::CompleteRuntimeActionPlayback(
 	uint64 ExpectedPlaybackSerial,
 	bool bWatchdogCompletion,
-	bool bRestoreAuthoredLayer)
+	bool bRestoreAuthoredLayer,
+	bool bDeliverPendingImpact)
 {
 	if (!bRuntimeActionPlaybackActive
 		|| ExpectedPlaybackSerial != ActiveRuntimeActionPlaybackSerial)
@@ -351,6 +401,20 @@ void UWacomBattleEnemyPartVisualLayerComponent::CompleteRuntimeActionPlayback(
 	}
 
 	StopRuntimeActionWatchdog();
+	StopRuntimeActionImpactTimer();
+	const bool bHadPendingImpact = !bRuntimeActionImpactFired && PendingRuntimeActionImpact;
+	if (bDeliverPendingImpact)
+	{
+		HandleRuntimeActionImpact(ExpectedPlaybackSerial);
+		if (bWatchdogCompletion && bHadPendingImpact && bRuntimeActionImpactFired)
+		{
+			++RuntimeActionWatchdogForcedImpactCount;
+		}
+	}
+	else
+	{
+		PendingRuntimeActionImpact = nullptr;
+	}
 	UnbindRuntimeActionFinishedDelegate();
 	if (bWatchdogCompletion)
 	{
@@ -378,6 +442,15 @@ void UWacomBattleEnemyPartVisualLayerComponent::StopRuntimeActionWatchdog()
 		World->GetTimerManager().ClearTimer(RuntimeActionWatchdogTimerHandle);
 	}
 	RuntimeActionWatchdogTimerHandle = FTimerHandle();
+}
+
+void UWacomBattleEnemyPartVisualLayerComponent::StopRuntimeActionImpactTimer()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RuntimeActionImpactTimerHandle);
+	}
+	RuntimeActionImpactTimerHandle = FTimerHandle();
 }
 
 void UWacomBattleEnemyPartVisualLayerComponent::RestoreActiveRuntimeActionLayer()

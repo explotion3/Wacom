@@ -2,6 +2,8 @@
 
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
 
+#include "Actors/WacomBattleEnemyActionPlayback.h"
+
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -179,29 +181,34 @@ void UWacomBattleEnemyHostVisualComponent::ClearGeneratedHostVisual()
 bool UWacomBattleEnemyHostVisualComponent::PlayRuntimeOneShot(
 	UPaperFlipbook* Flipbook,
 	float PlayRate,
+	float ImpactNormalizedTime,
 	FName IntentId,
 	bool bTerminal,
-	TFunction<void()>&& Completion)
+	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
 {
 	UPaperFlipbookComponent* FlipbookComponent = GeneratedHostFlipbookVisualComponent.Get();
 	if (!IsValid(FlipbookComponent)
 		|| !IsValid(Flipbook)
 		|| !FMath::IsFinite(PlayRate)
 		|| PlayRate <= 0.0f
+		|| (!bTerminal
+			&& (!FMath::IsFinite(ImpactNormalizedTime)
+				|| ImpactNormalizedTime < 0.0f
+				|| ImpactNormalizedTime > 1.0f))
 		|| !FMath::IsFinite(Flipbook->GetTotalDuration())
 		|| Flipbook->GetTotalDuration() <= 0.0f)
 	{
-		if (Completion)
-		{
-			Completion();
-		}
+		Callbacks.CompleteImmediately();
 		return false;
 	}
 
 	CancelRuntimePlayback();
-	PendingRuntimeCompletion = MoveTemp(Completion);
+	PendingRuntimeImpact = MoveTemp(Callbacks.OnImpact);
+	PendingRuntimeCompletion = MoveTemp(Callbacks.OnCompleted);
 	bRuntimePlaybackActive = true;
 	bRuntimeTerminalState = bTerminal;
+	bRuntimeImpactFired = false;
+	CurrentRuntimeImpactNormalizedTime = bTerminal ? 0.0f : ImpactNormalizedTime;
 	CurrentRuntimeIntentId = bTerminal ? NAME_None : IntentId;
 	CurrentRuntimeClipName = FName(*Flipbook->GetName());
 	ActivePlaybackSerial = ++PlaybackSerial;
@@ -216,6 +223,26 @@ bool UWacomBattleEnemyHostVisualComponent::PlayRuntimeOneShot(
 
 	if (UWorld* World = GetWorld())
 	{
+		if (!bTerminal && PendingRuntimeImpact)
+		{
+			const float ImpactSeconds = Flipbook->GetTotalDuration() / PlayRate
+				* ImpactNormalizedTime;
+			if (ImpactSeconds <= 0.0f)
+			{
+				HandleRuntimeImpact(ActivePlaybackSerial);
+			}
+			else
+			{
+				World->GetTimerManager().SetTimer(
+					RuntimeImpactTimerHandle,
+					FTimerDelegate::CreateUObject(
+						this,
+						&UWacomBattleEnemyHostVisualComponent::HandleRuntimeImpact,
+						ActivePlaybackSerial),
+					FMath::Max(0.01f, ImpactSeconds),
+					false);
+			}
+		}
 		const float WatchdogSeconds = Flipbook->GetTotalDuration() / PlayRate
 			+ RuntimeAnimationWatchdogGraceSeconds;
 		World->GetTimerManager().SetTimer(
@@ -229,7 +256,7 @@ bool UWacomBattleEnemyHostVisualComponent::PlayRuntimeOneShot(
 	}
 	else
 	{
-		CompleteRuntimePlayback(ActivePlaybackSerial, true);
+		CompleteRuntimePlayback(ActivePlaybackSerial, true, true);
 		return false;
 	}
 
@@ -253,27 +280,49 @@ void UWacomBattleEnemyHostVisualComponent::CancelRuntimePlayback()
 	if (!bRuntimePlaybackActive)
 	{
 		StopRuntimeWatchdog();
+		StopRuntimeImpactTimer();
+		PendingRuntimeImpact = nullptr;
 		return;
 	}
 
 	const uint64 SerialToComplete = ActivePlaybackSerial;
-	CompleteRuntimePlayback(SerialToComplete, false);
+	CompleteRuntimePlayback(SerialToComplete, false, false);
 }
 
 void UWacomBattleEnemyHostVisualComponent::HandleRuntimeFlipbookFinished()
 {
-	CompleteRuntimePlayback(ActivePlaybackSerial, false);
+	CompleteRuntimePlayback(ActivePlaybackSerial, false, true);
 }
 
 void UWacomBattleEnemyHostVisualComponent::HandleRuntimeWatchdogExpired(
 	uint64 ExpectedPlaybackSerial)
 {
-	CompleteRuntimePlayback(ExpectedPlaybackSerial, true);
+	CompleteRuntimePlayback(ExpectedPlaybackSerial, true, true);
+}
+
+void UWacomBattleEnemyHostVisualComponent::HandleRuntimeImpact(
+	uint64 ExpectedPlaybackSerial)
+{
+	if (!bRuntimePlaybackActive
+		|| ExpectedPlaybackSerial != ActivePlaybackSerial
+		|| bRuntimeImpactFired
+		|| !PendingRuntimeImpact)
+	{
+		return;
+	}
+
+	StopRuntimeImpactTimer();
+	bRuntimeImpactFired = true;
+	++RuntimeImpactCount;
+	TFunction<void()> Callback = MoveTemp(PendingRuntimeImpact);
+	PendingRuntimeImpact = nullptr;
+	Callback();
 }
 
 void UWacomBattleEnemyHostVisualComponent::CompleteRuntimePlayback(
 	uint64 ExpectedPlaybackSerial,
-	bool bWatchdogCompletion)
+	bool bWatchdogCompletion,
+	bool bDeliverPendingImpact)
 {
 	if (!bRuntimePlaybackActive || ExpectedPlaybackSerial != ActivePlaybackSerial)
 	{
@@ -281,6 +330,20 @@ void UWacomBattleEnemyHostVisualComponent::CompleteRuntimePlayback(
 	}
 
 	StopRuntimeWatchdog();
+	StopRuntimeImpactTimer();
+	const bool bHadPendingImpact = !bRuntimeImpactFired && PendingRuntimeImpact;
+	if (bDeliverPendingImpact)
+	{
+		HandleRuntimeImpact(ExpectedPlaybackSerial);
+		if (bWatchdogCompletion && bHadPendingImpact && bRuntimeImpactFired)
+		{
+			++RuntimeWatchdogForcedImpactCount;
+		}
+	}
+	else
+	{
+		PendingRuntimeImpact = nullptr;
+	}
 	if (bWatchdogCompletion)
 	{
 		++RuntimeWatchdogCompletionCount;
@@ -311,6 +374,15 @@ void UWacomBattleEnemyHostVisualComponent::StopRuntimeWatchdog()
 		World->GetTimerManager().ClearTimer(RuntimeWatchdogTimerHandle);
 	}
 	RuntimeWatchdogTimerHandle = FTimerHandle();
+}
+
+void UWacomBattleEnemyHostVisualComponent::StopRuntimeImpactTimer()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RuntimeImpactTimerHandle);
+	}
+	RuntimeImpactTimerHandle = FTimerHandle();
 }
 
 void UWacomBattleEnemyHostVisualComponent::RestoreAuthoredIdlePlayback()

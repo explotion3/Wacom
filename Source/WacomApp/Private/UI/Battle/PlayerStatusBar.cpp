@@ -12,6 +12,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Blueprint/WidgetTree.h"
+#include "Animation/WidgetAnimation.h"
+#include "Kismet/GameplayStatics.h"
 #include "Snapshots/BattleSnapshot.h"
 
 namespace
@@ -116,6 +118,39 @@ void UPlayerStatusBar::ClearActionPreview()
 
 	bHasActionPreview = false;
 	RefreshDisplay();
+}
+
+void UPlayerStatusBar::PlayEnemyActionImpactFeedback(
+	const FPlayerSnapshot& PreviousPlayer,
+	const FPlayerSnapshot& CurrentPlayer)
+{
+	const bool bHpLost = CurrentPlayer.CurrentHp < PreviousPlayer.CurrentHp;
+	const bool bShieldLost = CurrentPlayer.Shield < PreviousPlayer.Shield;
+
+	if (bHpLost && DamagePulseAnimation)
+	{
+		StopAnimation(DamagePulseAnimation);
+		PlayAnimation(DamagePulseAnimation);
+	}
+	if (bShieldLost && ShieldPulseAnimation)
+	{
+		StopAnimation(ShieldPulseAnimation);
+		PlayAnimation(ShieldPulseAnimation);
+	}
+
+	USoundBase* ImpactSound = bHpLost ? DamageImpactSound.Get()
+		: (bShieldLost ? ShieldImpactSound.Get() : nullptr);
+	if (ImpactSound)
+	{
+		UGameplayStatics::PlaySound2D(this, ImpactSound, FMath::Max(0.0f, ImpactSoundVolume));
+	}
+}
+
+void UPlayerStatusBar::NativeDestruct()
+{
+	StopAllAnimations();
+	bHasActionPreview = false;
+	Super::NativeDestruct();
 }
 
 void UPlayerStatusBar::RefreshDisplay()

@@ -3,6 +3,7 @@
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomBattleEnemyActionPlayback.h"
 #include "Actors/WacomBattleEnemyPartActor.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomBattleEnemyPartPresentationComponent.h"
@@ -724,18 +725,15 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RetireWorldTargetsForBattleEnd(
 void FWacomBattleHUDSceneEnemyTargetCoordinator::PlaySceneEnemyActionAnimation(
 	const FBattlePartSlotIdentity& ActingPartKey,
 	FName IntentId,
-	TFunction<void()>&& Completion)
+	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
 {
 	if (!ActingPartKey.IsValidSlot())
 	{
-		if (Completion)
-		{
-			Completion();
-		}
+		Callbacks.CompleteImmediately();
 		return;
 	}
 
-	auto TryPlay = [&ActingPartKey, IntentId, &Completion](
+	auto TryPlay = [&ActingPartKey, IntentId, &Callbacks](
 		AWacomBattleEnemyActor* Host,
 		const TArray<FSceneEnemyRuntimePartEntry>& RuntimeParts)
 	{
@@ -756,7 +754,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::PlaySceneEnemyActionAnimation(
 
 		if (Host->HostAuthoringMode == EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual)
 		{
-			Host->PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Completion));
+			Host->PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Callbacks));
 			return true;
 		}
 
@@ -765,11 +763,11 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::PlaySceneEnemyActionAnimation(
 			AWacomBattleEnemyPartActor* PartActor = RuntimePart->PartActor.Get();
 			if (IsValid(PartActor) && !PartActor->IsActorBeingDestroyed())
 			{
-				PartActor->PlayRuntimePartActionAnimation(IntentId, MoveTemp(Completion));
+				PartActor->PlayRuntimePartActionAnimation(IntentId, MoveTemp(Callbacks));
 			}
-			else if (Completion)
+			else
 			{
-				Completion();
+				Callbacks.CompleteImmediately();
 			}
 			return true;
 		}
@@ -794,10 +792,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::PlaySceneEnemyActionAnimation(
 		}
 	}
 
-	if (Completion)
-	{
-		Completion();
-	}
+	Callbacks.CompleteImmediately();
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::PlayHostDestroyedAnimation(

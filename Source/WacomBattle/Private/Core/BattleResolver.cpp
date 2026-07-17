@@ -45,7 +45,8 @@ FWacomStatus FBattleResolver::Resolve(
 			State,
 			Events,
 			Evaluation.GetPrepared(),
-			OperationAdapter);
+			OperationAdapter,
+			&PresentationJournal);
 	}
 
 	// Wait / EndTurn / 未知普通命令仅在 PlayerAction 阶段。
@@ -58,7 +59,7 @@ FWacomStatus FBattleResolver::Resolve(
 	switch (Command.Type)
 	{
 	case EBattleCommandType::Wait:
-		return FWaitResolver::Resolve(State, Events, Command);
+		return FWaitResolver::Resolve(State, Events, PresentationJournal, Command);
 
 	case EBattleCommandType::EndTurn:
 		return FEndTurnResolver::Resolve(State, Events, PresentationJournal, Command);

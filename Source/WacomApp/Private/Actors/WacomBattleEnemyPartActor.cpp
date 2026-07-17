@@ -3,6 +3,7 @@
 #include "Actors/WacomBattleEnemyPartActor.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomBattleEnemyActionPlayback.h"
 #include "Actors/WacomBattleEnemyPartAnimationStyle.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
@@ -132,7 +133,7 @@ void AWacomBattleEnemyPartActor::RetireRuntimeEncounterPresentation()
 
 void AWacomBattleEnemyPartActor::PlayRuntimePartActionAnimation(
 	FName IntentId,
-	TFunction<void()>&& Completion)
+	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
 {
 	const FWacomBattleEnemyPartAnimationClip* Clip = PartAnimationStyle
 		? PartAnimationStyle->ResolveActionClip(IntentId)
@@ -143,10 +144,7 @@ void AWacomBattleEnemyPartActor::PlayRuntimePartActionAnimation(
 		|| !PartAnimationStyle
 		|| !Clip)
 	{
-		if (Completion)
-		{
-			Completion();
-		}
+		Callbacks.CompleteImmediately();
 		return;
 	}
 
@@ -155,8 +153,18 @@ void AWacomBattleEnemyPartActor::PlayRuntimePartActionAnimation(
 		PartAnimationStyle->TargetVisualLayerId,
 		Clip->Flipbook,
 		Clip->PlayRate,
+		Clip->ImpactNormalizedTime,
 		IntentId,
-		MoveTemp(Completion));
+		MoveTemp(Callbacks));
+}
+
+void AWacomBattleEnemyPartActor::PlayRuntimePartActionAnimation(
+	FName IntentId,
+	TFunction<void()>&& Completion)
+{
+	FWacomBattleEnemyActionPlaybackCallbacks Callbacks;
+	Callbacks.OnCompleted = MoveTemp(Completion);
+	PlayRuntimePartActionAnimation(IntentId, MoveTemp(Callbacks));
 }
 
 void AWacomBattleEnemyPartActor::CancelRuntimePartActionAnimation()
@@ -449,6 +457,12 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.PartAnimationPlayCount = VisualLayerView.RuntimeActionPlaybackCount;
 	View.PartAnimationWatchdogCompletionCount =
 		VisualLayerView.RuntimeActionWatchdogCompletionCount;
+	View.PartAnimationImpactNormalizedTime =
+		VisualLayerComponent->GetCurrentRuntimeActionImpactNormalizedTime();
+	View.bPartAnimationImpactFired = VisualLayerComponent->HasRuntimeActionImpactFired();
+	View.PartAnimationImpactCount = VisualLayerComponent->GetRuntimeActionImpactCount();
+	View.PartAnimationWatchdogForcedImpactCount =
+		VisualLayerComponent->GetRuntimeActionWatchdogForcedImpactCount();
 	View.FeedbackTargetName = VisualLayersRoot ? FName(*VisualLayersRoot->GetName()) : NAME_None;
 	View.bImpactAnchorReady = IsValid(ImpactAnchor)
 		&& !ImpactAnchor->GetComponentLocation().ContainsNaN();

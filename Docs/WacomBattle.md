@@ -353,6 +353,8 @@ GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWaco
 
 ## §9 敌方部位行动子流程
 
+每次正式 `ActOnce()` 都向非序列化 `FBattlePresentationJournal` 追加一个 `FBattlePresentationEnemyActionStep`，记录该次行动的 `SnapshotBefore / SnapshotAfter`，以及从 `EnemyPartActed` 开始、覆盖效果、意图刷新和行动后状态结算的事件序号范围。晕厥跳过的 `Count == 0` 也记录 Step；连续行动的前后 Combat facts 必须连贯。Journal 只是在一次命令结果内帮助 App 重放命中时机，不是规则真相、DataAsset schema 或 SaveGame 内容，Preview 副本产生的 Journal 不提交到正式表现队列。
+
 触发来源：
 
 - 等待使部位先机 <= 0。

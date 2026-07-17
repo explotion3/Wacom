@@ -9,7 +9,9 @@
 #include "Enemy/EnemyIntentSelector.h"
 #include "Effects/Semantics/BattleEffectSemanticsModule.h"
 #include "Events/BattleEventBus.h"
+#include "Presentation/BattlePresentationJournal.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Snapshots/BattleSnapshotBuilder.h"
 #include "Statuses/BattleStatusSemanticsModule.h"
 #include "Initiative/BattleInitiativeTimelineModule.h"
 #include "Tags/WacomGameplayTags.h"
@@ -52,7 +54,8 @@ namespace
 		FBattleState& State,
 		FBattleEventBus& Events,
 		FRuntimeEnemyPart& Part,
-		IBattleOperationAdapter* OperationAdapter)
+		IBattleOperationAdapter* OperationAdapter,
+		FBattlePresentationJournal* PresentationJournal)
 	{
 		if (Part.bDestroyed || !Part.Definition)
 		{
@@ -65,6 +68,8 @@ namespace
 
 		const FIntentDefinition Intent = Part.CurrentIntent;
 		const bool bSkip = IsStunned(Part);
+		const FBattleSnapshot SnapshotBefore = FBattleSnapshotBuilder::Build(State);
+		const int32 FirstEventSequence = Events.GetNextSequence();
 
 		// 事件只记录行动部位和是否跳过；意图展示名由 Snapshot 提供给 UI。
 		{
@@ -119,13 +124,23 @@ namespace
 		// bDestroyed 做 no-op。玩家若被中毒打死，外层 ResolveInitiativeZeroActions /
 		// ResolveEndTurnActions 会在下一轮 PlayerCurrentHp <= 0 检查时 return。
 		FBattleStatusSemanticsModule::ResolveAfterEnemyPartAction(State, Events);
+
+		if (PresentationJournal)
+		{
+			PresentationJournal->AddEnemyActionStep(
+				SnapshotBefore,
+				FBattleSnapshotBuilder::Build(State),
+				FirstEventSequence,
+				Events.GetNextSequence() - 1);
+		}
 	}
 }
 
 void FEnemyPartActionResolver::ResolveInitiativeZeroActions(
 	FBattleState& State,
 	FBattleEventBus& Events,
-	IBattleOperationAdapter* OperationAdapter)
+	IBattleOperationAdapter* OperationAdapter,
+	FBattlePresentationJournal* PresentationJournal)
 {
 	// 收集 CurrentInitiative <= 0 且未破坏的部位，按部位顺序行动。
 	// 按 State.Enemy.Parts 的数组顺序即为部位顺序（Definition 的 Parts 顺序）。
@@ -144,7 +159,7 @@ void FEnemyPartActionResolver::ResolveInitiativeZeroActions(
 		{
 			continue;
 		}
-		ActOnce(State, Events, Part, OperationAdapter);
+		ActOnce(State, Events, Part, OperationAdapter, PresentationJournal);
 
 		// 玩家死亡则停止后续部位行动（战斗结束由调用方统一判断）。
 		if (State.Player.CurrentHp <= 0)
@@ -157,7 +172,8 @@ void FEnemyPartActionResolver::ResolveInitiativeZeroActions(
 void FEnemyPartActionResolver::ResolveEndTurnActions(
 	FBattleState& State,
 	FBattleEventBus& Events,
-	IBattleOperationAdapter* OperationAdapter)
+	IBattleOperationAdapter* OperationAdapter,
+	FBattlePresentationJournal* PresentationJournal)
 {
 	// 结束阶段所有存活且可行动部位按部位顺序行动，
 	// 即使该部位本回合内已因先机归零行动过。
@@ -168,7 +184,7 @@ void FEnemyPartActionResolver::ResolveEndTurnActions(
 		{
 			continue;
 		}
-		ActOnce(State, Events, Part, OperationAdapter);
+		ActOnce(State, Events, Part, OperationAdapter, PresentationJournal);
 
 		if (State.Player.CurrentHp <= 0)
 		{

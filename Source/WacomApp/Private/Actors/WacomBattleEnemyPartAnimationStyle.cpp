@@ -56,6 +56,16 @@ EDataValidationResult UWacomBattleEnemyPartAnimationStyle::IsDataValid(
 				FText::AsNumber(Clip.PlayRate)));
 			Result = EDataValidationResult::Invalid;
 		}
+		if (!FMath::IsFinite(Clip.ImpactNormalizedTime)
+			|| Clip.ImpactNormalizedTime < 0.0f
+			|| Clip.ImpactNormalizedTime > 1.0f)
+		{
+			Context.AddError(FText::Format(
+				LOCTEXT("InvalidClipImpactTime", "Enemy Part 动画配置错误：{0} 的 ImpactNormalizedTime 必须位于 0–1，当前为 {1}。"),
+				Label,
+				FText::AsNumber(Clip.ImpactNormalizedTime)));
+			Result = EDataValidationResult::Invalid;
+		}
 	};
 
 	RejectClip(LOCTEXT("DefaultActionLabel", "DefaultActionClip"), DefaultActionClip, false);

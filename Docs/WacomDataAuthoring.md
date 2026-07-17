@@ -93,6 +93,16 @@ Snake 的 `-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用；`-Pr
 -run=WacomBuildEnemyUI -InspectSinglePartCompact
 ```
 
+玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
+
+```powershell
+# 为已识别的正式 PlayerStatusBar 补齐两个脉冲 Surface 和动画
+-run=WacomBuildPlayerStatusUI -BuildImpactFeedback
+
+# 只读检查父类、基础状态栏布局、bindings、动画和命中策略
+-run=WacomBuildPlayerStatusUI -InspectOnly
+```
+
 `DA_EnemyIntentPresentation_Default` 属于 UI-only 制作资产，不是战斗规则 schema。新增 Intent 图标时必须填写准确且唯一的稳定 `IntentId` 与有效 Brush；不允许用显示名、动画名或 effect 自动推断。空 ID、重复 ID 和无效 Brush 会被 Data Validation 拒绝；未配置 Intent 运行时使用 fallback 星形，不阻断战斗。
 
 ## §3 当前生成内容
@@ -156,6 +166,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - Host validator 继续只读校验并给出修复方向：重复 `PartSlotId` 为错误；缺失槽位、PartId 与槽位定义不一致、surplus 部位以及制作模式缺少对应视觉资源为可定位 warning。Validator 不在扫描资产或 Validate Map 时生成、删除或改写 PartActor。
 - PartActor VisualLayer 的破损资源是可选制作数据，不影响 Authoring Ready。Validator 会拒绝 `StaticSprite + DestroyedFlipbook`、`Flipbook + DestroyedSprite` 的模式错配，拒绝非有限 / 非正的 Destroyed Flipbook PlayRate，以及不在 `[0,1]` 内的 `DestroyedVisualSwapNormalizedTime`。同步部位服务继续原样保留 `VisualLayers`，不会生成、猜测或删除破损资源；首个正式 Multi-Part enemy pack 必须由内容人员明确提供逐层资源。
 - PartActor 行动动画同样是可选制作数据，不影响 Authoring Ready。`UWacomBattleEnemyPartAnimationStyle` 必须填写唯一 `TargetVisualLayerId`；显式 Intent map 的 key、Flipbook 和有限正数 PlayRate 必须有效，目标层必须在 PartActor 上唯一存在且为有效 Flipbook Layer。Style 只适用于 `MultiPartVisualLayers` Host；同步部位服务不会生成 Action Clip、猜 Intent 映射或覆盖 Style。缺少正式行动素材时应保持 Style 为空，不得用 Idle 冒充攻击动画。
+- Host / Part Action Clip 的 `ImpactNormalizedTime` 必须是有限 `[0,1]`，默认和 TrainingWarrior 正式内容均为 `0.55`。它表示行动动画中应用 Journal 行动后 Combat facts 的语义命中点；Destroyed Clip 不消费该字段。内容人员应按接触帧调整，而不是用动画名称或效果类型推断。
 - 正式 Pixel Impact System 的 Graph 只由 `WacomBuildBattleEnemyPartImpactNiagara` 写入。当前生成合同包含六个 Emitter 和固定 `EffectKind=0/1/2/3` 映射；运行 `-InspectOnly` 只读验证版本、User Parameter、Renderer 和编译结果。`Scripts/SetupBattleEnemyPartImpactAssets.py` 幂等写入 Destroyed Style 数值但不覆盖人工声音引用，也不会在已有 DreamShader 材质 / MI 合同正确时重存它们。
 - EnemyBehavior 校验 `BehaviorId`、phase、intent set、intent、selector rule、condition、cooldown authoring 和敌人意图 effect contract；可选传入 owning EnemyDefinition 时，会额外校验 `AppliesToPartSlotId / PartDestroyed` 等部位槽引用。
 - Character 会校验 `StarterDeck` 不包含左右手卡。

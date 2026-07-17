@@ -2,6 +2,7 @@
 
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
+#include "Actors/WacomBattleEnemyActionPlayback.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/Widget.h"
 #include "Events/BattleEvent.h"
@@ -18,6 +19,7 @@
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
 #include "UI/Battle/WacomBattlePileCountPresentation.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Common/PileCountView.h"
 
 namespace
@@ -808,6 +810,43 @@ namespace
 		});
 	}
 
+	FBattleSnapshot BuildSnapshotWithCombatFacts(
+		const FBattleSnapshot& LayoutSnapshot,
+		const FBattleSnapshot& CombatSnapshot)
+	{
+		FBattleSnapshot Result = LayoutSnapshot;
+		Result.Player = CombatSnapshot.Player;
+		Result.Enemies = CombatSnapshot.Enemies;
+		return Result;
+	}
+
+	TArray<FBattlePresentationEnemyActionStep> FilterEnemyActionStepsForEvents(
+		const TArray<FBattlePresentationEnemyActionStep>& Steps,
+		const TArray<FBattleEvent>& Events)
+	{
+		TSet<int32> EnemyPartActedSequences;
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type == EBattleEventType::EnemyPartActed && Event.Sequence > 0)
+			{
+				EnemyPartActedSequences.Add(Event.Sequence);
+			}
+		}
+
+		return Steps.FilterByPredicate(
+			[&EnemyPartActedSequences](const FBattlePresentationEnemyActionStep& Step)
+			{
+				return Step.IsValid()
+					&& EnemyPartActedSequences.Contains(Step.FirstEventSequence);
+			});
+	}
+
+	const FBattlePresentationEnemyActionStep* FindFirstEnemyActionStep(
+		const TArray<FBattlePresentationEnemyActionStep>& Steps)
+	{
+		return Steps.IsEmpty() ? nullptr : &Steps[0];
+	}
+
 	FWacomBattlePresentationPlan BuildEndTurnPresentationPlan(
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
@@ -913,6 +952,16 @@ namespace
 				? LastHandCheckpointBeforeEnemy->Snapshot
 				: PostCommandSnapshot;
 			Phase.Events = MoveTemp(EnemyEvents);
+			Phase.EnemyActionSteps = FilterEnemyActionStepsForEvents(
+				Journal.EnemyActionSteps,
+				Phase.Events);
+			if (const FBattlePresentationEnemyActionStep* FirstActionStep =
+				FindFirstEnemyActionStep(Phase.EnemyActionSteps))
+			{
+				Phase.Snapshot = BuildSnapshotWithCombatFacts(
+					Phase.Snapshot,
+					FirstActionStep->SnapshotBefore);
+			}
 			Plan.Phases.Add(MoveTemp(Phase));
 		}
 
@@ -1161,6 +1210,19 @@ void FWacomBattleHUDPresentationCoordinator::EnqueueEvents(
 	int32 PresentationStackEntryId,
 	bool bTargetAlreadyConfirmed)
 {
+	EnqueueEvents(
+		Events,
+		TArray<FBattlePresentationEnemyActionStep>(),
+		PresentationStackEntryId,
+		bTargetAlreadyConfirmed);
+}
+
+void FWacomBattleHUDPresentationCoordinator::EnqueueEvents(
+	const TArray<FBattleEvent>& Events,
+	const TArray<FBattlePresentationEnemyActionStep>& EnemyActionSteps,
+	int32 PresentationStackEntryId,
+	bool bTargetAlreadyConfirmed)
+{
 	if (Events.IsEmpty())
 	{
 		if (PresentationStackEntryId != INDEX_NONE)
@@ -1177,6 +1239,7 @@ void FWacomBattleHUDPresentationCoordinator::EnqueueEvents(
 
 	BattleEventPresentationQueue->EnqueueEvents(
 		Events,
+		EnemyActionSteps,
 		PresentationStackEntryId,
 		Runtime.Host().GetCardPresentationStackMinimumHoldSeconds(),
 		bTargetAlreadyConfirmed);
@@ -1231,7 +1294,10 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 			GainedCheckpoints.Add(&Checkpoint);
 		}
 	}
-	if ((Journal.DeckSteps.IsEmpty() && DiscardBatches.IsEmpty() && GainedCheckpoints.IsEmpty())
+	if ((Journal.DeckSteps.IsEmpty()
+			&& DiscardBatches.IsEmpty()
+			&& GainedCheckpoints.IsEmpty()
+			&& Journal.EnemyActionSteps.IsEmpty())
 		|| bProcessingPresentationPlan)
 	{
 		return false;
@@ -1248,6 +1314,11 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 	const FBattleSnapshot BaseSnapshot = BuildSnapshotWithoutHandCardIds(
 		PostCommandSnapshot,
 		FutureDrawnIds);
+	const FBattlePresentationEnemyActionStep* FirstEnemyActionStep =
+		FindFirstEnemyActionStep(Journal.EnemyActionSteps);
+	const FBattleSnapshot PreActionBaseSnapshot = FirstEnemyActionStep
+		? BuildSnapshotWithCombatFacts(BaseSnapshot, FirstEnemyActionStep->SnapshotBefore)
+		: BaseSnapshot;
 	const TArray<FBattleEvent> NonDeckEvents = FilterNonDeckPresentationEvents(Events);
 	const bool bHasGainedCheckpoint = !GainedCheckpoints.IsEmpty();
 	const TArray<FBattleEvent> HandResolutionEvents = NonDeckEvents.FilterByPredicate(
@@ -1328,7 +1399,9 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 	}();
 	const bool bHasHandPhase = !HandPhase.TransitionHints.IsEmpty()
 		|| !HandPhase.FeedbackHints.IsEmpty()
-		|| (DiscardBatches.IsEmpty() && GainedCheckpoints.IsEmpty());
+		|| (DiscardBatches.IsEmpty()
+			&& GainedCheckpoints.IsEmpty()
+			&& Journal.EnemyActionSteps.IsEmpty());
 	bool bHandPhaseAdded = false;
 	FBattleSnapshot DiscardSnapshot = PreviousHandSnapshot;
 	for (const FHandDiscardPresentationBatch& Batch : DiscardBatches)
@@ -1361,8 +1434,11 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 	{
 		FWacomBattlePresentationPhase EventPhase;
 		EventPhase.Kind = EWacomBattlePresentationPhaseKind::EnemyAction;
-		EventPhase.Snapshot = BaseSnapshot;
+		EventPhase.Snapshot = PreActionBaseSnapshot;
 		EventPhase.Events = NonDeckEvents;
+		EventPhase.EnemyActionSteps = FilterEnemyActionStepsForEvents(
+			Journal.EnemyActionSteps,
+			EventPhase.Events);
 		EventPhase.PresentationStackEntryId = PresentationStackEntryId;
 		NewPlan.Phases.Add(MoveTemp(EventPhase));
 	}
@@ -1425,6 +1501,11 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 	const FBattleSnapshot BasePostSnapshot = BuildSnapshotWithoutHandCardIds(
 		Resolution.PostSnapshot,
 		FutureDrawnIds);
+	const FBattlePresentationEnemyActionStep* FirstEnemyActionStep =
+		FindFirstEnemyActionStep(Resolution.PresentationJournal.EnemyActionSteps);
+	const FBattleSnapshot PreActionBasePostSnapshot = FirstEnemyActionStep
+		? BuildSnapshotWithCombatFacts(BasePostSnapshot, FirstEnemyActionStep->SnapshotBefore)
+		: BasePostSnapshot;
 	const TArray<FHandDiscardPresentationBatch> DiscardBatches =
 		BuildHandDiscardPresentationBatches(Resolution.Events);
 	TArray<FGuid> DiscardedCardIds;
@@ -1433,7 +1514,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		DiscardedCardIds.Append(Batch.CardInstanceIds);
 	}
 	const FBattleSnapshot PreDiscardOutcomeSnapshot = BuildSnapshotRestoringHandCardIds(
-		BasePostSnapshot,
+		PreActionBasePostSnapshot,
 		Context.PreCommandSnapshot,
 		DiscardedCardIds);
 
@@ -1651,8 +1732,11 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 	{
 		FWacomBattlePresentationPhase EventPhase;
 		EventPhase.Kind = EWacomBattlePresentationPhaseKind::CommandOutcome;
-		EventPhase.Snapshot = BasePostSnapshot;
+		EventPhase.Snapshot = PreActionBasePostSnapshot;
 		EventPhase.Events = QueueEvents;
+		EventPhase.EnemyActionSteps = FilterEnemyActionStepsForEvents(
+			Resolution.PresentationJournal.EnemyActionSteps,
+			EventPhase.Events);
 		EventPhase.OrderingSequence = FindFirstPositiveEventSequence(QueueEvents);
 		EventPhase.bTargetAlreadyConfirmed =
 			Context.PlayCardCommit->TargetPartIdentity.IsValidSlot();
@@ -2001,7 +2085,7 @@ void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyAnimationStep(
 	const FBattlePartSlotIdentity& ActingPartKey,
 	FName IntentId,
 	bool bDestroyed,
-	TFunction<void()>&& Completion)
+	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
 {
 	FWacomBattleHUDSceneEnemyTargetCoordinator& SceneEnemyCoordinator =
 		Runtime.GetSceneEnemyTargetCoordinator();
@@ -2009,13 +2093,30 @@ void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyAnimationStep(
 	{
 		SceneEnemyCoordinator.PlayHostDestroyedAnimation(
 			ActingPartKey.GetEffectiveEnemySlotId(),
-			MoveTemp(Completion));
+			MoveTemp(Callbacks.OnCompleted));
 		return;
 	}
 	SceneEnemyCoordinator.PlaySceneEnemyActionAnimation(
 		ActingPartKey,
 		IntentId,
-		MoveTemp(Completion));
+		MoveTemp(Callbacks));
+}
+
+void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyActionImpact(
+	const FBattlePresentationEnemyActionStep& ActionStep)
+{
+	if (!ActionStep.IsValid())
+	{
+		return;
+	}
+
+	Runtime.RefreshCombatPresentationFrame(ActionStep.SnapshotAfter);
+	if (UPlayerStatusBar* PlayerStatusBar = Runtime.Host().GetPlayerStatusBar())
+	{
+		PlayerStatusBar->PlayEnemyActionImpactFeedback(
+			ActionStep.SnapshotBefore.Player,
+			ActionStep.SnapshotAfter.Player);
+	}
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleCardStackBoundaryStep(int32 EntryId)
@@ -2320,9 +2421,14 @@ void FWacomBattleHUDPresentationCoordinator::StartHandPresentationPlanPhase(
 void FWacomBattleHUDPresentationCoordinator::StartEventPresentationPlanPhase(
 	FWacomBattlePresentationPhase&& Phase)
 {
+	if (!Phase.EnemyActionSteps.IsEmpty())
+	{
+		Runtime.RefreshCombatPresentationFrame(Phase.Snapshot);
+	}
 	bWaitingForPresentationPlanEventQueue = true;
 	EnqueueEvents(
 		Phase.Events,
+		Phase.EnemyActionSteps,
 		Phase.PresentationStackEntryId,
 		Phase.bTargetAlreadyConfirmed);
 	if (bWaitingForPresentationPlanEventQueue && !IsQueueBusy())

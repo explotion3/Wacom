@@ -445,15 +445,18 @@ namespace Wacom::ContentBuilder
 				{
 					Style.DefaultActionClip.Flipbook = AttackFlipbook;
 					Style.DefaultActionClip.PlayRate = 0.75f;
+					Style.DefaultActionClip.ImpactNormalizedTime = 0.55f;
 					Style.ActionClipsByIntentId.Reset();
 					FWacomBattleEnemyHostAnimationClip GuardClip;
 					GuardClip.Flipbook = BlockFlipbook;
 					GuardClip.PlayRate = 1.0f;
+					GuardClip.ImpactNormalizedTime = 0.55f;
 					Style.ActionClipsByIntentId.Add(
 						TEXT("TrainingWarrior.Body.Guard"), GuardClip);
 					FWacomBattleEnemyHostAnimationClip CleaveClip;
 					CleaveClip.Flipbook = CleaveFlipbook;
 					CleaveClip.PlayRate = 0.75f;
+					CleaveClip.ImpactNormalizedTime = 0.55f;
 					Style.ActionClipsByIntentId.Add(
 						TEXT("TrainingWarrior.Body.Cleave"), CleaveClip);
 					Style.DestroyedClip.Flipbook = DestroyedFlipbook;

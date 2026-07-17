@@ -19,11 +19,17 @@
 #include "Types/WacomInteractionTargetTypes.h"
 #include "BattleHUDTestHarness.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Battle/PlayerStatusBar.h"
+#include "UI/Common/WacomProgressBar.h"
 
+#include "Blueprint/WidgetTree.h"
 #include "Engine/Engine.h"
 #include "EngineGlobals.h"
 #include "Engine/World.h"
+#include "Misc/DataValidation.h"
 #include "Misc/ScopeExit.h"
+
+#include <limits>
 
 namespace WacomBattleSceneEnemyHostAnimationSpec
 {
@@ -173,6 +179,16 @@ bool FWacomUIBattleSceneEnemyHostAnimationStyleResolutionSpec::RunTest(
 	Style->ActionClipsByIntentId.Reset();
 	TestNull(TEXT("Asset-like Intent name is not inferred"),
 		Style->ResolveActionClip(FName(*ExplicitFlipbook->GetName())));
+
+	Style->DestroyedClip.Flipbook = ExplicitFlipbook;
+	Style->DestroyedClip.PlayRate = 1.0f;
+	Style->DestroyedClip.ImpactNormalizedTime = std::numeric_limits<float>::quiet_NaN();
+	TestNotNull(TEXT("Destroyed ignores the action-only Impact marker"),
+		Style->ResolveDestroyedClip());
+	FDataValidationContext ValidationContext;
+	TestEqual(TEXT("Destroyed action-only Impact value does not invalidate the Style"),
+		Style->IsDataValid(ValidationContext),
+		EDataValidationResult::Valid);
 	return true;
 }
 
@@ -423,6 +439,11 @@ bool FWacomUIBattleSceneEnemyHostAnimationPlayCardInitiativeActionSpec::RunTest(
 	UPaperFlipbook* Block = nullptr;
 	UPaperFlipbook* Destroyed = nullptr;
 	ConfigureAnimatedHost(*SceneEnemy.Host, Idle, Attack, Block, Destroyed);
+	UPlayerStatusBar* PlayerStatusBar = Harness->AttachPlayerStatusBar();
+	if (!TestNotNull(TEXT("Player status bar"), PlayerStatusBar))
+	{
+		return false;
+	}
 	Harness->SetSession(Session);
 	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
 	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
@@ -465,6 +486,26 @@ bool FWacomUIBattleSceneEnemyHostAnimationPlayCardInitiativeActionSpec::RunTest(
 		SceneEnemy.Host->GetBattleSceneEnemyDebugView().HostAnimationPlayCount,
 		PlayCountBefore + 1);
 	TestTrue(TEXT("Host action clip holds the PlayCard presentation plan"),
+		HUD->IsBattlePresentationBusy());
+	UWacomProgressBar* PlayerHpBar = Cast<UWacomProgressBar>(
+		PlayerStatusBar->WidgetTree
+			? PlayerStatusBar->WidgetTree->FindWidget(TEXT("HpBar"))
+			: nullptr);
+	if (!TestNotNull(TEXT("Player HP bar"), PlayerHpBar))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Player status remains at the action-before HP until Impact"),
+		PlayerHpBar->GetCurrent(),
+		Before.Player.CurrentHp);
+	++GFrameCounter;
+	World->GetTimerManager().Tick(0.01f);
+	++GFrameCounter;
+	World->GetTimerManager().Tick(0.16f);
+	TestEqual(TEXT("Player status applies authoritative HP at Impact"),
+		PlayerHpBar->GetCurrent(),
+		After.Player.CurrentHp);
+	TestTrue(TEXT("Impact does not release the completion barrier"),
 		HUD->IsBattlePresentationBusy());
 
 	Visual->OnFinishedPlaying.Broadcast();

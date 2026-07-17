@@ -20,6 +20,7 @@ class UPaperFlipbook;
 class UPaperSprite;
 class UWacomBattleEnemyPartVisualLayerComponent;
 class UWacomBattleEnemyPartAnimationStyle;
+struct FWacomBattleEnemyActionPlaybackCallbacks;
 class UWacomBattleEnemyPartImpactStyle;
 class UWacomBattleEnemyPartTargetPreviewStyle;
 class UWacomBattleEnemyPartPredictionWidget;
@@ -158,6 +159,18 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 PartAnimationWatchdogCompletionCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	float PartAnimationImpactNormalizedTime = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bPartAnimationImpactFired = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 PartAnimationImpactCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 PartAnimationWatchdogForcedImpactCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	TArray<FName> VisualLayerAssetNames;
@@ -501,6 +514,9 @@ public:
 	void RetireRuntimeEncounterPresentation();
 
 	/** 由 Scene Enemy presentation queue 请求一次精确部位行动；缺配置时同步完成。 */
+	void PlayRuntimePartActionAnimation(
+		FName IntentId,
+		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
 	void PlayRuntimePartActionAnimation(FName IntentId, TFunction<void()>&& Completion);
 
 	/** source/session/Actor 清理时安全结束当前部位行动 barrier。 */

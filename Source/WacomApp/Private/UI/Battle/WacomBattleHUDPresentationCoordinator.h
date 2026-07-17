@@ -11,6 +11,8 @@ class FWacomBattleEventPresentationQueue;
 struct FBattleEvent;
 struct FBattlePartSlotIdentity;
 struct FBattlePresentationJournal;
+struct FBattlePresentationEnemyActionStep;
+struct FWacomBattleEnemyActionPlaybackCallbacks;
 struct FBattleSnapshot;
 struct FWacomBattleCombatLogCommandContext;
 struct FWacomBattleCommandPresentationContext;
@@ -41,6 +43,11 @@ public:
 	void EnqueueEvents(
 		const TArray<FBattleEvent>& Events,
 		int32 PresentationStackEntryId = INDEX_NONE,
+		bool bTargetAlreadyConfirmed = false);
+	void EnqueueEvents(
+		const TArray<FBattleEvent>& Events,
+		const TArray<FBattlePresentationEnemyActionStep>& EnemyActionSteps,
+		int32 PresentationStackEntryId,
 		bool bTargetAlreadyConfirmed = false);
 	bool EnqueueEndTurnPresentationPlan(
 		const FBattlePresentationJournal& Journal,
@@ -91,7 +98,8 @@ public:
 		const FBattlePartSlotIdentity& ActingPartKey,
 		FName IntentId,
 		bool bDestroyed,
-		TFunction<void()>&& Completion);
+		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
+	void HandleSceneEnemyActionImpact(const FBattlePresentationEnemyActionStep& ActionStep);
 	void HandleCardStackBoundaryStep(int32 EntryId);
 
 	UWorld* GetWorld() const;

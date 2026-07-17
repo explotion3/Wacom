@@ -268,9 +268,13 @@ WBP 不应做：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `HpBar` | `UWacomProgressBar` | Optional | 玩家 HP |
+| `HpBar` | `UWacomProgressBar` | Required | 玩家 HP |
 | `ShieldText` | `TextBlock` | Optional | 护盾文本，0 时可隐藏 |
 | `StatusList` | `UWacomBattleStatusIconListWidget` | Optional | 玩家 runtime 状态图标行；为空状态时自动隐藏 |
+| `DamagePulseSurface` | `Border` | Required for impact feedback | HP 下降时的红色被动覆盖面；必须不可命中 |
+| `ShieldPulseSurface` | `Border` | Required for impact feedback | 护盾下降时的蓝色被动覆盖面；必须不可命中 |
+
+正式 WBP 还必须提供 `DamagePulseAnimation` 与 `ShieldPulseAnimation`。两个动画只改变对应 Surface 的表现属性，不能提交命令、插值规则数值或改变输入模式；Root 与全部子控件保持 `HitTestInvisible`。
 
 制作提示：
 
@@ -279,6 +283,8 @@ WBP 不应做：
 - Action Preview 不需要新增必绑控件。预览激活时，C++ 会用 Battle 规则层产出的 projected player state 覆盖 `HpBar / ShieldText / StatusList` 当前显示，并用可调透明度提示这是预览态；清理后恢复最近一次真实 Snapshot。
 
 WBP 不应做：不提交玩家命令，不修改 BattleSession。
+
+编辑器关闭时可运行 `-run=WacomBuildPlayerStatusUI -BuildImpactFeedback`，为已识别的正式布局幂等补齐两个 Surface 与动画；再次执行不得产生语义修改。`-run=WacomBuildPlayerStatusUI -InspectOnly` 只读检查父类、基础状态栏布局、bindings、动画与命中策略。若同名控件/动画已被人工用于不兼容结构，工具停止并拒绝覆盖。
 
 ### WBP_BattleStatusIconList
 

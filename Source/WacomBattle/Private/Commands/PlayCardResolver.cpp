@@ -34,7 +34,8 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 	FBattleState& State,
 	FBattleEventBus& Events,
 	const FPreparedPlayCard& Prepared,
-	IBattleOperationAdapter& OperationAdapter)
+	IBattleOperationAdapter& OperationAdapter,
+	FBattlePresentationJournal* PresentationJournal)
 {
 	if (Prepared.GetEvaluatedStateVersion() != State.StateVersion)
 	{
@@ -212,7 +213,11 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 	// ================ 12. 敌方部位行动子流程 ================
 	if (!bSwift)
 	{
-		FEnemyPartActionResolver::ResolveInitiativeZeroActions(State, Events, &OperationAdapter);
+		FEnemyPartActionResolver::ResolveInitiativeZeroActions(
+			State,
+			Events,
+			&OperationAdapter,
+			PresentationJournal);
 	}
 
 	// ================ 13. 战斗结束判断 ================

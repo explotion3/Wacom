@@ -25,6 +25,7 @@ class UWacomBattleEnemyPartTargetPreviewStyle;
 class UWacomBattleEnemyPanelWidget;
 struct FWacomBattleEnemyPartEntryViewData;
 struct FWacomBattleEnemyPanelViewData;
+struct FWacomBattleEnemyActionPlaybackCallbacks;
 
 UENUM(BlueprintType)
 enum class EWacomBattleEnemyHostVisualMode : uint8
@@ -98,6 +99,18 @@ struct WACOMAPP_API FWacomBattleSceneEnemyDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 HostAnimationWatchdogCompletionCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	float HostAnimationImpactNormalizedTime = 0.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bHostAnimationImpactFired = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 HostAnimationImpactCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 HostAnimationWatchdogForcedImpactCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 GeneratedHostVisualComponentCount = 0;
@@ -366,6 +379,9 @@ public:
 	void InitializeRuntimeSceneBinding(TArray<AWacomBattleEnemyPartActor*>& OutPartActors) const;
 
 	/** 由 Battle presentation queue 请求一次行动动画；缺配置时同步完成。 */
+	void PlayRuntimeHostActionAnimation(
+		FName IntentId,
+		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
 	void PlayRuntimeHostActionAnimation(FName IntentId, TFunction<void()>&& Completion);
 
 	/** 由 Battle presentation queue 请求整体终态动画；缺配置时同步完成。 */

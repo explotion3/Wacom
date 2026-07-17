@@ -8,6 +8,7 @@
 struct FBattleState;
 struct FBattleCommand;
 struct FBattleEventBus;
+struct FBattlePresentationJournal;
 
 /**
  * 等待命令解析。
@@ -17,5 +18,9 @@ struct FBattleEventBus;
 class FWaitResolver
 {
 public:
-	static FWacomStatus Resolve(FBattleState& State, FBattleEventBus& Events, const FBattleCommand& Command);
+	static FWacomStatus Resolve(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		FBattlePresentationJournal& PresentationJournal,
+		const FBattleCommand& Command);
 };

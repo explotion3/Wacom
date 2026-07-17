@@ -25,9 +25,23 @@ struct WACOMAPP_API FWacomBattleEnemyHostAnimationClip
 		meta = (ToolTip = "该段动画的播放倍率。1 表示原速；推荐 0.5–2.0。必须为有限正数，否则运行时立即跳过并由资产校验报错。"))
 	float PlayRate = 1.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Host Animation",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", ToolTip = "行动动画的语义命中点，按归一化播放进度计算。0 表示起播即命中，1 表示结束时命中；推荐 0.45–0.65。DestroyedClip 忽略此字段。"))
+	float ImpactNormalizedTime = 0.55f;
+
+	bool IsPlaybackUsable() const
+	{
+		return Flipbook != nullptr
+			&& FMath::IsFinite(PlayRate)
+			&& PlayRate > 0.0f;
+	}
+
 	bool IsRuntimeUsable() const
 	{
-		return Flipbook != nullptr && FMath::IsFinite(PlayRate) && PlayRate > 0.0f;
+		return IsPlaybackUsable()
+			&& FMath::IsFinite(ImpactNormalizedTime)
+			&& ImpactNormalizedTime >= 0.0f
+			&& ImpactNormalizedTime <= 1.0f;
 	}
 };
 

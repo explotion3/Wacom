@@ -19,6 +19,7 @@ struct FHandCardSnapshot;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
+struct FWacomBattleEnemyActionPlaybackCallbacks;
 
 class FWacomBattleHUDSceneEnemyTargetCoordinator
 {
@@ -42,7 +43,7 @@ public:
 	void PlaySceneEnemyActionAnimation(
 		const FBattlePartSlotIdentity& ActingPartKey,
 		FName IntentId,
-		TFunction<void()>&& Completion);
+		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
 	void PlayHostDestroyedAnimation(
 		FName EnemySlotId,
 		TFunction<void()>&& Completion);

@@ -1176,6 +1176,12 @@ void FWacomBattleHUDRuntime::RefreshFromPresentationPhase(
 	GetSnapshotPresenter().RefreshFromPresentationPhase(Snapshot, TransitionHints, FeedbackHints);
 }
 
+void FWacomBattleHUDRuntime::RefreshCombatPresentationFrame(
+	const FBattleSnapshot& Snapshot)
+{
+	GetSnapshotPresenter().RefreshCombatPresentationFrame(Snapshot);
+}
+
 void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerPileTransferProgress(
 	const FWacomFirstPersonCardPileTransferProgressView& Progress)
 {
