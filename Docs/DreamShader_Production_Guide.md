@@ -179,6 +179,9 @@ Sampler type is Masks, should be Color for /Engine/EngineResources/DefaultTextur
 
 - 分别缓存 WBP 创作源 Effect Material 和当前 Slate 运行时 MID。
 - 切换效果时只切一次源材质，再重新获取 Retainer 实际 MID。
+- `SetEffectMaterial()` 后不能立即把 `GetEffectMaterial()==nullptr` 当成永久失败；先写入进度 0 View、请求 Retainer Render，并在后续 Tick 重试取得实际 MID。
+- 材质源有效、MID 已取得且参数已写入仍不等于“可起播”。必须等待拥有该请求 Generation 的 Widget 完成一次真实 Slate Paint；Ready 首 Tick 使用零 Delta，避免编译/PSO 抖动把 authored 时间直接推进到中段。
+- `CostDigitImage` / EffectBadge 这类直接 `UImage` 材质不经过 Retainer，但同样要在安装 MID Brush 后等待一次 Paint。结束时恢复权威 PaperSprite Brush；MID 可以按材质源/最大位数缓存到 Widget teardown，不要每次反馈重新创建。
 - Reset、ForceComplete、Slot 复用和 Destruct 都恢复创作源并清零运行时参数。
 - 不要长期持有另一个 Widget 的动态材质强引用。
 

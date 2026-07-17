@@ -145,10 +145,11 @@ bool FWacomFirstPersonCardEffectBadgeFeedbackPlaybackSpec::RunTest(const FString
 	}
 	TestTrue(TEXT("First frame keeps the authoritative digit visible"), FMath::IsNearlyZero(DamageItem->OldDissolveAmount));
 	TestEqual(TEXT("Direction is preserved"), DamageItem->Direction, EWacomFirstPersonCardEffectBadgeValueDirection::Increase);
-	TestFalse(TEXT("Loose badge rewrite does not block presentation"), Widget->HasActivePresentationPlayback());
+	TestTrue(TEXT("Pending badge material blocks until its first Paint"), Widget->HasActivePresentationPlayback());
 
 	Tick(*Widget, 0.05f);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestFalse(TEXT("Ready loose badge rewrite does not block presentation"), Widget->HasActivePresentationPlayback());
 	DamageItem = FindItem(View.EffectBadgeFeedbackView, DamageKey);
 	TestTrue(TEXT("Old digits dissolve during the first phase"), DamageItem && DamageItem->OldDissolveAmount > 0.0f);
 	TestTrue(TEXT("Badge root compresses without moving the card"), DamageItem && DamageItem->RootScale < 1.0f);
@@ -262,10 +263,18 @@ bool FWacomCardEffectBadgePreviewWidgetSpec::RunTest(const FString&)
 	Badge->TickForTest(0.10f);
 	View = FWacomCardViewTestAccess::View(*Badge);
 	TestFalse(TEXT("Skipped preview restores the authoritative digit"), View.bFeedbackMaterialActive);
+	TestEqual(TEXT("Restoring the sprite brush retains one cached digit MID"), View.DigitMaterialPoolSize, 1);
+	TestEqual(TEXT("The cold preview creates one digit MID"), View.DigitMaterialCreateCount, 1);
 	TestTrue(TEXT("Skipped badge retains explicit muted state"), View.bPreviewSkipped);
 	TestTrue(TEXT("Skipped badge dims instead of leaving its slot"), View.RootOpacity < 0.4f);
 
 	Data.bPreviewSkipped = false;
+	Data.bHasPreviewValue = true;
+	Badge->SetEffectBadgeData(Data);
+	Badge->TickForTest(0.08f);
+	View = FWacomCardViewTestAccess::View(*Badge);
+	TestEqual(TEXT("A warm preview reuses the cached digit MID"), View.DigitMaterialCreateCount, 1);
+	Data.bHasPreviewValue = false;
 	Badge->SetEffectBadgeData(Data);
 	Badge->TickForTest(0.08f);
 	View = FWacomCardViewTestAccess::View(*Badge);

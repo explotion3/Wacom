@@ -468,6 +468,8 @@ FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() 
 	View.ResolvedSurfaceArt = ResolveCardSurfaceArtTexture();
 	View.bCostDigitRewritePrepared = bCostDigitRewritePrepared;
 	View.bCostDigitRewriteMaterialActive = bCostDigitRewriteMaterialActive;
+	View.bCostDigitRewriteMaterialCached = CostDigitRewriteMaterialInstance != nullptr;
+	View.CostDigitRewriteMaterialCreateCount = CostDigitRewriteMaterialCreateCountForTest;
 	View.bCostDigitPreviewMaterialActive = bCostDigitPreviewMaterialActive;
 	View.CostDigitRewriteOldSprite = CostDigitRewriteOldSprite;
 	View.CostDigitRewriteNewSprite = CostDigitRewriteNewSprite;
@@ -520,6 +522,8 @@ void UWacomCardView::NativeDestruct()
 {
 	ResetEffectBadgeFeedback();
 	ResetCostDigitRewrite();
+	CostDigitRewriteMaterialInstance = nullptr;
+	CostDigitRewriteMaterialSource = nullptr;
 	ResetCardSurfacePerspectiveView();
 	RestoreAttachmentAuthoredTransforms();
 	bCardSurfaceCompositeActive = false;
@@ -583,8 +587,6 @@ bool UWacomCardView::PrepareCostDigitRewrite(
 
 	CacheCostDigitAuthoredTransform();
 	RestoreCostDigitAuthoredTransform();
-	CostDigitRewriteMaterialInstance = nullptr;
-	CostDigitRewriteMaterialSource = nullptr;
 	CostDigitRewriteOldSprite = OldSprite;
 	CostDigitRewriteNewSprite = NewSprite;
 	bCostDigitRewritePrepared = true;
@@ -657,8 +659,6 @@ void UWacomCardView::ResetCostDigitPreview()
 	bCostDigitPreviewMaterialActive = false;
 	bCostDigitRewriteMaterialActive = false;
 	bCostDigitRewritePrepared = false;
-	CostDigitRewriteMaterialInstance = nullptr;
-	CostDigitRewriteMaterialSource = nullptr;
 	CostDigitRewriteOldSprite = nullptr;
 	CostDigitRewriteNewSprite = nullptr;
 	RestoreCostDigitAuthoredTransform();
@@ -679,8 +679,6 @@ void UWacomCardView::ResetCostDigitPreview()
 void UWacomCardView::ResetCostDigitRewrite()
 {
 	RestoreCostDigitAuthoredTransform();
-	CostDigitRewriteMaterialInstance = nullptr;
-	CostDigitRewriteMaterialSource = nullptr;
 	bCostDigitRewriteMaterialActive = false;
 	bCostDigitPreviewMaterialActive = false;
 	bCostDigitRewritePrepared = false;
@@ -912,6 +910,48 @@ void UWacomCardView::ResetEffectBadgeFeedback()
 	}
 }
 
+bool UWacomCardView::IsCostDigitRewriteMaterialReady() const
+{
+	return bCostDigitRewriteMaterialActive
+		&& CostDigitImage
+		&& CostDigitRewriteMaterialInstance
+		&& CostDigitImage->GetBrush().GetResourceObject() == CostDigitRewriteMaterialInstance;
+}
+
+bool UWacomCardView::IsEffectBadgeFeedbackMaterialReady() const
+{
+	if (!EffectBadgeFeedbackView.IsSet() || !EffectBadgeFeedbackView->bActive)
+	{
+		return false;
+	}
+	bool bFoundActiveItem = false;
+	for (UWacomCardEffectBadgeWidget* BadgeWidget : CollectEffectBadgeWidgets())
+	{
+		if (!BadgeWidget)
+		{
+			continue;
+		}
+		const FName Key = BadgeWidget->GetEffectBadgeData().PresentationKey;
+		const FWacomFirstPersonCardEffectBadgeFeedbackItemView* Item =
+			EffectBadgeFeedbackView->Items.FindByPredicate([Key](
+				const FWacomFirstPersonCardEffectBadgeFeedbackItemView& Candidate)
+			{
+				return Candidate.PresentationKey == Key
+					&& (Candidate.bActive || Candidate.bPrepareMaterial);
+			});
+		if (!Item)
+		{
+			continue;
+		}
+		bFoundActiveItem = true;
+		if (!BadgeWidget->IsEffectBadgeFeedbackMaterialReady())
+		{
+			return false;
+		}
+	}
+	return bFoundActiveItem;
+}
+
 TArray<UWacomCardEffectBadgeWidget*> UWacomCardView::CollectEffectBadgeWidgets() const
 {
 	TArray<UWacomCardEffectBadgeWidget*> Result;
@@ -1035,8 +1075,6 @@ void UWacomCardView::UpdateCostDisplay()
 		bCostDigitRewriteMaterialActive = false;
 		CostDigitRewriteOldSprite = nullptr;
 		CostDigitRewriteNewSprite = nullptr;
-		CostDigitRewriteMaterialInstance = nullptr;
-		CostDigitRewriteMaterialSource = nullptr;
 		RestoreCostDigitAuthoredTransform();
 	}
 
@@ -1104,6 +1142,9 @@ bool UWacomCardView::EnsureCostDigitRewriteMaterial(
 		CostDigitRewriteMaterialInstance = UMaterialInstanceDynamic::Create(
 			View.Style.DigitRewriteMaterialInstance,
 			this);
+#if WITH_AUTOMATION_TESTS
+		++CostDigitRewriteMaterialCreateCountForTest;
+#endif
 	}
 	if (!CostDigitRewriteMaterialInstance)
 	{

@@ -170,15 +170,16 @@ bool FWacomFirstPersonCardUseEffectLifecycleTest::RunTest(const FString& /*Param
 	TestEqual(TEXT("Card Use locks current position"), Widget->GetVisualSlotView().ScreenPosition, StartPosition);
 	TestTrue(TEXT("Card Use locks base scale"), FMath::IsNearlyEqual(Widget->GetVisualSlotView().RenderScale, StartScale));
 	TestTrue(TEXT("Surface material owns exit opacity"), FMath::IsNearlyEqual(Widget->GetVisualSlotView().RenderOpacity, 1.0f));
-	TestEqual(TEXT("Card Use sound requests once"), View.CardUseEffectSoundRequestCount, 1);
-	TestTrue(
-		TEXT("Card Use pitch stays in authored range"),
-		View.LastCardUseEffectSoundPitchMultiplier >= 0.97f
-			&& View.LastCardUseEffectSoundPitchMultiplier <= 1.03f);
+	TestEqual(TEXT("Card Use sound waits for the first painted frame"), View.CardUseEffectSoundRequestCount, 0);
 	TestTrue(TEXT("Commit pulse coexists with center charge"), View.bCommitFeedbackActive);
 
 	Tick(*Widget, 0.03f);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestEqual(TEXT("Card Use sound requests once after readiness"), View.CardUseEffectSoundRequestCount, 1);
+	TestTrue(
+		TEXT("Card Use pitch stays in authored range"),
+		View.LastCardUseEffectSoundPitchMultiplier >= 0.97f
+			&& View.LastCardUseEffectSoundPitchMultiplier <= 1.03f);
 	TestTrue(TEXT("Confirm hold keeps progress at zero"), FMath::IsNearlyZero(View.CardUseEffectView.Amount));
 	Tick(*Widget, 0.15f);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
@@ -278,10 +279,11 @@ bool FWacomFirstPersonCardUseReformLifecycleTest::RunTest(
 	TestTrue(TEXT("Retained Played card starts reform playback"), View.bCardUseReformPlaybackActive);
 	TestFalse(TEXT("Reform is not an outgoing Card Use departure"), View.bCardUseEffectPlaybackActive);
 	TestEqual(TEXT("Dissolve begins at submitted position"), Widget->GetVisualSlotView().ScreenPosition, SubmittedPosition);
-	TestEqual(TEXT("Reform requests the Card Use sound once"), View.CardUseReformSoundRequestCount, 1);
+	TestEqual(TEXT("Reform sound waits for the first painted frame"), View.CardUseReformSoundRequestCount, 0);
 
 	Tick(*Widget, 0.14f);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestEqual(TEXT("Reform requests the Card Use sound once after readiness"), View.CardUseReformSoundRequestCount, 1);
 	TestTrue(TEXT("Out wave is half complete"), FMath::IsNearlyEqual(View.CardUseEffectView.Amount, 0.5f, 0.03f));
 	TestEqual(TEXT("Visible out wave remains at submitted position"), Widget->GetVisualSlotView().ScreenPosition, SubmittedPosition);
 

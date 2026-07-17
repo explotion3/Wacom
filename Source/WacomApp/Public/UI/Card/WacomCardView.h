@@ -50,6 +50,8 @@ struct FWacomCardViewAutomationTestView
 	UTexture2D* ResolvedSurfaceArt = nullptr;
 	bool bCostDigitRewritePrepared = false;
 	bool bCostDigitRewriteMaterialActive = false;
+	bool bCostDigitRewriteMaterialCached = false;
+	int32 CostDigitRewriteMaterialCreateCount = 0;
 	bool bCostDigitPreviewMaterialActive = false;
 	UPaperSprite* CostDigitRewriteOldSprite = nullptr;
 	UPaperSprite* CostDigitRewriteNewSprite = nullptr;
@@ -116,6 +118,8 @@ public:
 	void SetEffectBadgeFeedbackView(
 		const FWacomFirstPersonCardEffectBadgeFeedbackView& InView);
 	void ResetEffectBadgeFeedback();
+	bool IsCostDigitRewriteMaterialReady() const;
+	bool IsEffectBadgeFeedbackMaterialReady() const;
 
 	FVector2D GetCardBodyHitSize() const;
 	bool HasCardBodyHitGeometry() const;
@@ -307,6 +311,7 @@ private:
 	int32 ArtDisplayUpdateCountForTest = 0;
 	int32 DisabledDisplayUpdateCountForTest = 0;
 	int32 EffectBadgeDisplayUpdateCountForTest = 0;
+	int32 CostDigitRewriteMaterialCreateCountForTest = 0;
 #endif
 
 	void ApplyCurrentDataToWidgets();

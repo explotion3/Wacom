@@ -297,7 +297,55 @@ void FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(
 	UWacomFirstPersonCardLayerSlotWidget& Slot,
 	float DeltaTime)
 {
+	const UWacomFirstPersonCardViewWidget* CardView = Slot.CardView;
+	const bool bHadUnpaintedPresentationGeneration = CardView
+		&& ((CardView->SurfaceRequestedGeneration != 0
+				&& CardView->SurfacePaintedGeneration != CardView->SurfaceRequestedGeneration)
+			|| (CardView->CostDigitRequestedGeneration != 0
+				&& CardView->CostDigitPaintedGeneration != CardView->CostDigitRequestedGeneration)
+			|| (CardView->EffectBadgeRequestedGeneration != 0
+				&& CardView->EffectBadgePaintedGeneration != CardView->EffectBadgeRequestedGeneration));
+	AcknowledgePendingPresentationPaint(Slot);
+	if (bHadUnpaintedPresentationGeneration)
+	{
+		// Mirror the production contract: the first Tick after a real Paint only
+		// consumes the start edge with DeltaTime zero. Unrelated motion ticks must
+		// not receive an extra zero-delta sample because that changes drag velocity.
+		Slot.TickSlotMotionForTest(0.0f);
+	}
 	Slot.TickSlotMotionForTest(DeltaTime);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::TickSlotMotionWithoutPresentationPaint(
+	UWacomFirstPersonCardLayerSlotWidget& Slot,
+	float DeltaTime)
+{
+	Slot.TickSlotMotionForTest(DeltaTime);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::AcknowledgePendingPresentationPaint(
+	UWacomFirstPersonCardLayerSlotWidget& Slot)
+{
+	UWacomFirstPersonCardViewWidget* CardView = Slot.CardView;
+	if (!CardView)
+	{
+		return;
+	}
+	if (CardView->SurfaceRequestedGeneration != 0)
+	{
+		CardView->SurfaceMaterialReadyGeneration = CardView->SurfaceRequestedGeneration;
+		CardView->SurfacePaintedGeneration = CardView->SurfaceRequestedGeneration;
+	}
+	if (CardView->CostDigitRequestedGeneration != 0)
+	{
+		CardView->CostDigitMaterialReadyGeneration = CardView->CostDigitRequestedGeneration;
+		CardView->CostDigitPaintedGeneration = CardView->CostDigitRequestedGeneration;
+	}
+	if (CardView->EffectBadgeRequestedGeneration != 0)
+	{
+		CardView->EffectBadgeMaterialReadyGeneration = CardView->EffectBadgeRequestedGeneration;
+		CardView->EffectBadgePaintedGeneration = CardView->EffectBadgeRequestedGeneration;
+	}
 }
 
 void FWacomFirstPersonCardLayerTestAccess::SetLocalHitCanvasSizeOverride(

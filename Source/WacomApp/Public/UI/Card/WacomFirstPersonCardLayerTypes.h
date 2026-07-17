@@ -814,6 +814,8 @@ struct WACOMAPP_API FWacomFirstPersonCardEffectBadgeFeedbackItemView
 	float NewRevealAmount = 0.0f;
 	float RootScale = 1.0f;
 	float RootOpacity = 1.0f;
+	/** Installs the zero-progress digit MID before a staggered item becomes active. */
+	bool bPrepareMaterial = false;
 	bool bActive = false;
 };
 

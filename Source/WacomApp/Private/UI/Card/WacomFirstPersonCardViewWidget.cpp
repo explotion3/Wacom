@@ -108,6 +108,7 @@ void UWacomFirstPersonCardViewWidget::SetCardViewData(const FWacomCardViewData& 
 
 void UWacomFirstPersonCardViewWidget::RequestPresentationRender()
 {
+	Invalidate(EInvalidateWidgetReason::Paint);
 	if (Fake3DSurfaceRetainer)
 	{
 		#if WITH_AUTOMATION_TESTS
@@ -240,6 +241,173 @@ void UWacomFirstPersonCardViewWidget::ResetEffectBadgeFeedbackView()
 	{
 		CardView->ResetEffectBadgeFeedback();
 	}
+}
+
+uint32 UWacomFirstPersonCardViewWidget::AllocatePresentationPreparationGeneration()
+{
+	uint32 Result = NextPresentationPreparationGeneration++;
+	if (Result == 0)
+	{
+		Result = NextPresentationPreparationGeneration++;
+	}
+	return Result;
+}
+
+uint32 UWacomFirstPersonCardViewWidget::BeginSurfacePresentationPreparation(
+	bool bReuseReadyGeneration)
+{
+	const UMaterialInterface* DesiredSource = ResolveActiveSurfaceEffectMaterialSource();
+	if (!DesiredSource)
+	{
+		CancelSurfacePresentationPreparation();
+		return 0;
+	}
+	if (bReuseReadyGeneration
+		&& SurfaceRequestedGeneration != 0
+		&& ActiveSurfaceEffectMaterialSource == DesiredSource
+		&& IsSurfacePresentationMaterialReady(SurfaceRequestedGeneration)
+		&& IsSurfacePresentationPainted(SurfaceRequestedGeneration))
+	{
+		return SurfaceRequestedGeneration;
+	}
+
+	SurfaceRequestedGeneration = AllocatePresentationPreparationGeneration();
+	SurfaceMaterialReadyGeneration = 0;
+	SurfacePaintedGeneration = 0;
+	RefreshSurfacePresentationPreparation(SurfaceRequestedGeneration);
+	return SurfaceRequestedGeneration;
+}
+
+uint32 UWacomFirstPersonCardViewWidget::BeginCostDigitPresentationPreparation()
+{
+	CostDigitRequestedGeneration = AllocatePresentationPreparationGeneration();
+	CostDigitMaterialReadyGeneration = 0;
+	CostDigitPaintedGeneration = 0;
+	RefreshCostDigitPresentationPreparation(CostDigitRequestedGeneration);
+	return CostDigitRequestedGeneration;
+}
+
+uint32 UWacomFirstPersonCardViewWidget::BeginEffectBadgePresentationPreparation()
+{
+	EffectBadgeRequestedGeneration = AllocatePresentationPreparationGeneration();
+	EffectBadgeMaterialReadyGeneration = 0;
+	EffectBadgePaintedGeneration = 0;
+	RefreshEffectBadgePresentationPreparation(EffectBadgeRequestedGeneration);
+	return EffectBadgeRequestedGeneration;
+}
+
+void UWacomFirstPersonCardViewWidget::RefreshSurfacePresentationPreparation(
+	uint32 Generation)
+{
+	if (Generation == 0 || Generation != SurfaceRequestedGeneration)
+	{
+		return;
+	}
+	const UMaterialInterface* DesiredSource = ResolveActiveSurfaceEffectMaterialSource();
+	if (!DesiredSource)
+	{
+		return;
+	}
+	// Retainer's Slate resource may create its runtime MID after SetEffectMaterial.
+	// Re-submit the progress-zero view so a late MID never reaches Paint with defaults.
+	SetCardSurfaceEffectView(LastSurfaceEffectView);
+	if (ActiveSurfaceEffectMaterialInstance
+		&& ActiveSurfaceEffectMaterialSource == DesiredSource
+		&& Fake3DSurfaceRetainer
+		&& Fake3DSurfaceRetainer->GetEffectMaterial() == ActiveSurfaceEffectMaterialInstance)
+	{
+		SurfaceMaterialReadyGeneration = Generation;
+	}
+	RequestPresentationRender();
+}
+
+void UWacomFirstPersonCardViewWidget::RefreshCostDigitPresentationPreparation(
+	uint32 Generation)
+{
+	if (Generation == 0 || Generation != CostDigitRequestedGeneration)
+	{
+		return;
+	}
+	if (CardView && CardView->IsCostDigitRewriteMaterialReady())
+	{
+		CostDigitMaterialReadyGeneration = Generation;
+	}
+	RequestPresentationRender();
+}
+
+void UWacomFirstPersonCardViewWidget::RefreshEffectBadgePresentationPreparation(
+	uint32 Generation)
+{
+	if (Generation == 0 || Generation != EffectBadgeRequestedGeneration)
+	{
+		return;
+	}
+	if (CardView && CardView->IsEffectBadgeFeedbackMaterialReady())
+	{
+		EffectBadgeMaterialReadyGeneration = Generation;
+	}
+	RequestPresentationRender();
+}
+
+bool UWacomFirstPersonCardViewWidget::IsSurfacePresentationMaterialReady(
+	uint32 Generation) const
+{
+	return Generation != 0 && SurfaceMaterialReadyGeneration == Generation;
+}
+
+bool UWacomFirstPersonCardViewWidget::IsSurfacePresentationPainted(uint32 Generation) const
+{
+	return Generation != 0 && SurfacePaintedGeneration == Generation;
+}
+
+bool UWacomFirstPersonCardViewWidget::IsCostDigitPresentationMaterialReady(
+	uint32 Generation) const
+{
+	return Generation != 0 && CostDigitMaterialReadyGeneration == Generation;
+}
+
+bool UWacomFirstPersonCardViewWidget::IsCostDigitPresentationPainted(uint32 Generation) const
+{
+	return Generation != 0 && CostDigitPaintedGeneration == Generation;
+}
+
+bool UWacomFirstPersonCardViewWidget::IsEffectBadgePresentationMaterialReady(
+	uint32 Generation) const
+{
+	return Generation != 0 && EffectBadgeMaterialReadyGeneration == Generation;
+}
+
+bool UWacomFirstPersonCardViewWidget::IsEffectBadgePresentationPainted(uint32 Generation) const
+{
+	return Generation != 0 && EffectBadgePaintedGeneration == Generation;
+}
+
+void UWacomFirstPersonCardViewWidget::CancelSurfacePresentationPreparation()
+{
+	SurfaceRequestedGeneration = 0;
+	SurfaceMaterialReadyGeneration = 0;
+	SurfacePaintedGeneration = 0;
+}
+
+void UWacomFirstPersonCardViewWidget::CancelCostDigitPresentationPreparation()
+{
+	CostDigitRequestedGeneration = 0;
+	CostDigitMaterialReadyGeneration = 0;
+	CostDigitPaintedGeneration = 0;
+}
+
+void UWacomFirstPersonCardViewWidget::CancelEffectBadgePresentationPreparation()
+{
+	EffectBadgeRequestedGeneration = 0;
+	EffectBadgeMaterialReadyGeneration = 0;
+	EffectBadgePaintedGeneration = 0;
+}
+
+void UWacomFirstPersonCardViewWidget::CancelAllPresentationPreparations()
+{
+	CancelSurfacePresentationPreparation();
+	CancelCostDigitPresentationPreparation();
+	CancelEffectBadgePresentationPreparation();
 }
 
 FVector2D UWacomFirstPersonCardViewWidget::GetCardBodyHitSize() const
@@ -522,6 +690,21 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.PresentationRenderRequestCount = PresentationRenderRequestCount;
 	View.RealtimePresentationApplyCount = RealtimePresentationApplyCount;
 	View.CardDepthApplyCount = CardDepthApplyCount;
+	View.SurfaceRequestedGeneration = SurfaceRequestedGeneration;
+	View.SurfaceMaterialReadyGeneration = SurfaceMaterialReadyGeneration;
+	View.SurfacePaintedGeneration = SurfacePaintedGeneration;
+	View.CostDigitRequestedGeneration = CostDigitRequestedGeneration;
+	View.CostDigitMaterialReadyGeneration = CostDigitMaterialReadyGeneration;
+	View.CostDigitPaintedGeneration = CostDigitPaintedGeneration;
+	View.EffectBadgeRequestedGeneration = EffectBadgeRequestedGeneration;
+	View.EffectBadgeMaterialReadyGeneration = EffectBadgeMaterialReadyGeneration;
+	View.EffectBadgePaintedGeneration = EffectBadgePaintedGeneration;
+	View.bSurfacePresentationMaterialReady = IsSurfacePresentationMaterialReady(
+		SurfaceRequestedGeneration);
+	View.bCostDigitPresentationMaterialReady = IsCostDigitPresentationMaterialReady(
+		CostDigitRequestedGeneration);
+	View.bEffectBadgePresentationMaterialReady = IsEffectBadgePresentationMaterialReady(
+		EffectBadgeRequestedGeneration);
 	const UWidget* RetainerCaptureRoot = Fake3DSurfaceRetainer
 		? Fake3DSurfaceRetainer->GetContent()
 		: nullptr;
@@ -580,6 +763,7 @@ void UWacomFirstPersonCardViewWidget::NativeConstruct()
 
 void UWacomFirstPersonCardViewWidget::NativeDestruct()
 {
+	CancelAllPresentationPreparations();
 	if (CardView)
 	{
 		CardView->ResetEffectBadgeFeedback();
@@ -594,6 +778,41 @@ void UWacomFirstPersonCardViewWidget::NativeDestruct()
 	bBaseSurfaceEffectMaterialCached = false;
 	bRealtimePresentationStateApplied = false;
 	Super::NativeDestruct();
+}
+
+int32 UWacomFirstPersonCardViewWidget::NativePaint(
+	const FPaintArgs& Args,
+	const FGeometry& AllottedGeometry,
+	const FSlateRect& MyCullingRect,
+	FSlateWindowElementList& OutDrawElements,
+	const int32 LayerId,
+	const FWidgetStyle& InWidgetStyle,
+	const bool bParentEnabled) const
+{
+	const int32 MaxLayerId = Super::NativePaint(
+		Args,
+		AllottedGeometry,
+		MyCullingRect,
+		OutDrawElements,
+		LayerId,
+		InWidgetStyle,
+		bParentEnabled);
+	if (SurfaceRequestedGeneration != 0
+		&& SurfaceMaterialReadyGeneration == SurfaceRequestedGeneration)
+	{
+		SurfacePaintedGeneration = SurfaceRequestedGeneration;
+	}
+	if (CostDigitRequestedGeneration != 0
+		&& CostDigitMaterialReadyGeneration == CostDigitRequestedGeneration)
+	{
+		CostDigitPaintedGeneration = CostDigitRequestedGeneration;
+	}
+	if (EffectBadgeRequestedGeneration != 0
+		&& EffectBadgeMaterialReadyGeneration == EffectBadgeRequestedGeneration)
+	{
+		EffectBadgePaintedGeneration = EffectBadgeRequestedGeneration;
+	}
+	return MaxLayerId;
 }
 
 void UWacomFirstPersonCardViewWidget::CacheBaseSurfaceEffectMaterial()
@@ -689,6 +908,39 @@ void UWacomFirstPersonCardViewWidget::EnsureSurfaceEffectMaterialInstance(
 	ActiveSurfaceEffectMaterialSource = Material;
 	Fake3DSurfaceRetainer->SetEffectMaterial(Material);
 	ActiveSurfaceEffectMaterialInstance = Fake3DSurfaceRetainer->GetEffectMaterial();
+}
+
+UMaterialInterface* UWacomFirstPersonCardViewWidget::ResolveActiveSurfaceEffectMaterialSource() const
+{
+	const FWacomFirstPersonCardDrawRevealView& DrawReveal = LastSurfaceEffectView.DrawReveal;
+	if (DrawReveal.bActive && DrawReveal.Style.SurfaceEffectMaterialInstance)
+	{
+		return DrawReveal.Style.SurfaceEffectMaterialInstance;
+	}
+	const FWacomFirstPersonCardGainRevealView& GainReveal = LastSurfaceEffectView.GainReveal;
+	if (GainReveal.bActive && GainReveal.Style.SurfaceEffectMaterialInstance)
+	{
+		return GainReveal.Style.SurfaceEffectMaterialInstance;
+	}
+	const FWacomFirstPersonCardHandTargetImpactView& HandTarget =
+		LastSurfaceEffectView.HandTargetImpact;
+	if (HandTarget.bActive && HandTarget.Style.SurfaceEffectMaterialInstance)
+	{
+		return HandTarget.Style.SurfaceEffectMaterialInstance;
+	}
+	const FWacomFirstPersonCardUseEffectView& CardUse = LastSurfaceEffectView.CardUse;
+	if (CardUse.bActive && CardUse.Style.SurfaceEffectMaterialInstance)
+	{
+		return CardUse.Style.SurfaceEffectMaterialInstance;
+	}
+	const FWacomFirstPersonCardPlayedDissolveView& Dissolve =
+		LastSurfaceEffectView.PlayedDissolve;
+	if (Dissolve.bActive && Dissolve.Style.SurfaceEffectMaterial && Dissolve.Style.NoiseTexture)
+	{
+		return Dissolve.Style.SurfaceEffectMaterial;
+	}
+	const FWacomFirstPersonCardRetainSealView& RetainSeal = LastSurfaceEffectView.RetainSeal;
+	return RetainSeal.bActive ? RetainSeal.Style.SurfaceEffectMaterialInstance.Get() : nullptr;
 }
 
 void UWacomFirstPersonCardViewWidget::ApplyCardDepthParameters(

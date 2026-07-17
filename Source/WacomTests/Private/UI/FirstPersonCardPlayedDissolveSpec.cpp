@@ -116,15 +116,16 @@ bool FWacomFirstPersonCardPlayedDissolveLifecycleTest::RunTest(const FString& /*
 	TestEqual(TEXT("Played locks the current position"), Widget->GetVisualSlotView().ScreenPosition, StartPosition);
 	TestTrue(TEXT("Played locks the base scale"), FMath::IsNearlyEqual(Widget->GetVisualSlotView().RenderScale, StartScale));
 	TestTrue(TEXT("Material owns exit opacity"), FMath::IsNearlyEqual(Widget->GetVisualSlotView().RenderOpacity, 1.0f));
-	TestEqual(TEXT("Played sound requests once"), View.PlayedDissolveSoundRequestCount, 1);
-	TestTrue(
-		TEXT("Played pitch stays in authored range"),
-		View.LastPlayedDissolveSoundPitchMultiplier >= 0.97f
-			&& View.LastPlayedDissolveSoundPitchMultiplier <= 1.03f);
+	TestEqual(TEXT("Played sound waits for the first painted frame"), View.PlayedDissolveSoundRequestCount, 0);
 	TestTrue(TEXT("Commit pulse can coexist with dissolve hold"), View.bCommitFeedbackActive);
 
 	Tick(*Widget, 0.04f);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestEqual(TEXT("Played sound requests once after readiness"), View.PlayedDissolveSoundRequestCount, 1);
+	TestTrue(
+		TEXT("Played pitch stays in authored range"),
+		View.LastPlayedDissolveSoundPitchMultiplier >= 0.97f
+			&& View.LastPlayedDissolveSoundPitchMultiplier <= 1.03f);
 	TestTrue(TEXT("Confirm hold keeps amount at zero"), FMath::IsNearlyZero(View.PlayedDissolveView.Amount));
 	Tick(*Widget, 0.18f);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);

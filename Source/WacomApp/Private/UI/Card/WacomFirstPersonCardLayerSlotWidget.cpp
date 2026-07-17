@@ -24,6 +24,7 @@
 #include "UI/Card/WacomFirstPersonCardDragPickupPlayback.h"
 #include "UI/Card/WacomFirstPersonCardHandTargetImpactPlayback.h"
 #include "UI/Card/WacomFirstPersonCardMotionMixer.h"
+#include "UI/Card/WacomFirstPersonCardPresentationReadinessGate.h"
 #include "UI/Card/WacomFirstPersonCardSurfaceDeparturePlayback.h"
 #include "UI/Card/WacomFirstPersonCardUseReformPlayback.h"
 #include "UI/Card/WacomFirstPersonCardTransitionPlayback.h"
@@ -32,6 +33,15 @@
 
 namespace
 {
+	DEFINE_LOG_CATEGORY_STATIC(LogWacomCardPresentationReadiness, Log, All);
+
+	const FName SurfaceEffectHandTargetImpact(TEXT("HandTargetImpact"));
+	const FName SurfaceEffectDrawReveal(TEXT("DrawReveal"));
+	const FName SurfaceEffectGainReveal(TEXT("GainReveal"));
+	const FName SurfaceEffectRetainSeal(TEXT("RetainSeal"));
+	const FName SurfaceEffectDeparture(TEXT("SurfaceDeparture"));
+	const FName SurfaceEffectCardUseReform(TEXT("CardUseReform"));
+
 	float ComputeFeedbackPulseAlpha(float ElapsedSeconds, float DurationSeconds)
 	{
 		if (DurationSeconds <= 0.0f || ElapsedSeconds >= DurationSeconds)
@@ -355,6 +365,9 @@ UWacomFirstPersonCardLayerSlotWidget::UWacomFirstPersonCardLayerSlotWidget(
 	: Super(ObjectInitializer)
 	, TransitionPlayback(new FWacomFirstPersonCardTransitionPlayback())
 	, CardDepthMotion(new FWacomFirstPersonCardDepthMotion())
+	, SurfaceReadinessGate(new FWacomFirstPersonCardPresentationReadinessGate())
+	, CostDigitReadinessGate(new FWacomFirstPersonCardPresentationReadinessGate())
+	, EffectBadgeReadinessGate(new FWacomFirstPersonCardPresentationReadinessGate())
 {
 }
 
@@ -771,6 +784,12 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotFeedbackConfig(
 	UpdateWantsTick();
 }
 
+void FWacomFirstPersonCardPresentationReadinessGateDeleter::operator()(
+	FWacomFirstPersonCardPresentationReadinessGate* Gate) const
+{
+	delete Gate;
+}
+
 void UWacomFirstPersonCardLayerSlotWidget::SetCardDragConfig(
 	const FWacomFirstPersonCardDragConfig& InConfig)
 {
@@ -1082,6 +1101,7 @@ TSharedRef<SWidget> UWacomFirstPersonCardLayerSlotWidget::RebuildWidget()
 
 void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 {
+	CancelAllPresentationReadiness();
 	SetHoveredForFirstPersonLayer(false);
 	ClearGestureState(false);
 	ClearInteractionFeedback();
@@ -1104,6 +1124,9 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	DrawRevealPlayback.Reset();
 	GainRevealPlayback.Reset();
 	RetainSealPlayback.Reset();
+	SurfaceReadinessGate.Reset();
+	CostDigitReadinessGate.Reset();
+	EffectBadgeReadinessGate.Reset();
 	SetTickEnabledForMotion(false);
 	OnCardHoveredNative.Clear();
 	OnCardUnhoveredNative.Clear();
@@ -2317,6 +2340,350 @@ void UWacomFirstPersonCardLayerSlotWidget::ResetCardSurfaceEffectView()
 	}
 }
 
+void UWacomFirstPersonCardLayerSlotWidget::BeginSurfacePresentationReadiness(
+	FName EffectName,
+	bool bReuseReadyGeneration,
+	bool bBlocksPresentationPhase)
+{
+	if (!CardView || !SurfaceReadinessGate)
+	{
+		SurfaceReadinessEffectName = EffectName;
+		RecordPresentationReadinessFailure(TEXT("Surface"), EffectName, false);
+		HandleSurfacePresentationReadinessFailure();
+		return;
+	}
+	SurfaceReadinessEffectName = EffectName;
+	bSurfaceReadinessBlocksPresentationPhase = bBlocksPresentationPhase;
+	const uint32 Generation =
+		CardView->BeginSurfacePresentationPreparation(bReuseReadyGeneration);
+	if (Generation == 0)
+	{
+		RecordPresentationReadinessFailure(TEXT("Surface"), EffectName, false);
+		HandleSurfacePresentationReadinessFailure();
+		return;
+	}
+	SurfaceReadinessGate->Begin(
+		Generation,
+		CardView->IsSurfacePresentationMaterialReady(Generation)
+			&& CardView->IsSurfacePresentationPainted(Generation));
+	RefreshPresentationReadinessFrozenFlag();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginCostDigitPresentationReadiness()
+{
+	if (!CardView || !CostDigitReadinessGate)
+	{
+		RecordPresentationReadinessFailure(TEXT("CostDigit"), TEXT("DataRewrite"), false);
+		ClearCardDataRewritePlayback();
+		return;
+	}
+	const uint32 Generation = CardView->BeginCostDigitPresentationPreparation();
+	if (Generation == 0)
+	{
+		RecordPresentationReadinessFailure(TEXT("CostDigit"), TEXT("DataRewrite"), false);
+		ClearCardDataRewritePlayback();
+		return;
+	}
+	CostDigitReadinessGate->Begin(
+		Generation,
+		CardView->IsCostDigitPresentationMaterialReady(Generation)
+			&& CardView->IsCostDigitPresentationPainted(Generation));
+	RefreshPresentationReadinessFrozenFlag();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginEffectBadgePresentationReadiness()
+{
+	if (!CardView || !EffectBadgeReadinessGate)
+	{
+		RecordPresentationReadinessFailure(TEXT("EffectBadge"), TEXT("EffectBadgeRewrite"), false);
+		ClearEffectBadgeFeedbackPlayback();
+		return;
+	}
+	const uint32 Generation = CardView->BeginEffectBadgePresentationPreparation();
+	if (Generation == 0)
+	{
+		RecordPresentationReadinessFailure(TEXT("EffectBadge"), TEXT("EffectBadgeRewrite"), false);
+		ClearEffectBadgeFeedbackPlayback();
+		return;
+	}
+	EffectBadgeReadinessGate->Begin(
+		Generation,
+		CardView->IsEffectBadgePresentationMaterialReady(Generation)
+			&& CardView->IsEffectBadgePresentationPainted(Generation));
+	RefreshPresentationReadinessFrozenFlag();
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::ResolveSurfacePresentationReadiness(
+	float DeltaTime,
+	float& OutPlaybackDeltaTime)
+{
+	OutPlaybackDeltaTime = 0.0f;
+	if (!SurfaceReadinessGate || !SurfaceReadinessGate->IsActive())
+	{
+		OutPlaybackDeltaTime = DeltaTime;
+		return true;
+	}
+	if (CardView)
+	{
+		CardView->RefreshSurfacePresentationPreparation(
+			SurfaceReadinessGate->GetGeneration());
+	}
+	const uint32 Generation = SurfaceReadinessGate->GetGeneration();
+	const EWacomFirstPersonCardPresentationReadinessPollResult Result =
+		SurfaceReadinessGate->Poll(
+			DeltaTime,
+			CardView && CardView->IsSurfacePresentationMaterialReady(Generation),
+			CardView && CardView->IsSurfacePresentationPainted(Generation));
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::Ready)
+	{
+		OutPlaybackDeltaTime = DeltaTime;
+		RefreshPresentationReadinessFrozenFlag();
+		return true;
+	}
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::BecameReady)
+	{
+		RefreshPresentationReadinessFrozenFlag();
+		return true;
+	}
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::Failed)
+	{
+		RecordPresentationReadinessFailure(TEXT("Surface"), SurfaceReadinessEffectName, true);
+		HandleSurfacePresentationReadinessFailure();
+	}
+	RefreshPresentationReadinessFrozenFlag();
+	return false;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::ResolveCostDigitPresentationReadiness(
+	float DeltaTime,
+	float& OutPlaybackDeltaTime)
+{
+	OutPlaybackDeltaTime = 0.0f;
+	if (!CostDigitReadinessGate || !CostDigitReadinessGate->IsActive())
+	{
+		OutPlaybackDeltaTime = DeltaTime;
+		return true;
+	}
+	if (CardView)
+	{
+		CardView->RefreshCostDigitPresentationPreparation(CostDigitReadinessGate->GetGeneration());
+	}
+	const uint32 Generation = CostDigitReadinessGate->GetGeneration();
+	const EWacomFirstPersonCardPresentationReadinessPollResult Result =
+		CostDigitReadinessGate->Poll(
+			DeltaTime,
+			CardView && CardView->IsCostDigitPresentationMaterialReady(Generation),
+			CardView && CardView->IsCostDigitPresentationPainted(Generation));
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::Ready)
+	{
+		OutPlaybackDeltaTime = DeltaTime;
+		RefreshPresentationReadinessFrozenFlag();
+		return true;
+	}
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::BecameReady)
+	{
+		RefreshPresentationReadinessFrozenFlag();
+		return true;
+	}
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::Failed)
+	{
+		RecordPresentationReadinessFailure(TEXT("CostDigit"), TEXT("DataRewrite"), true);
+		CancelCostDigitPresentationReadiness();
+		ClearCardDataRewritePlayback();
+	}
+	RefreshPresentationReadinessFrozenFlag();
+	return false;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::ResolveEffectBadgePresentationReadiness(
+	float DeltaTime,
+	float& OutPlaybackDeltaTime)
+{
+	OutPlaybackDeltaTime = 0.0f;
+	if (!EffectBadgeReadinessGate || !EffectBadgeReadinessGate->IsActive())
+	{
+		OutPlaybackDeltaTime = DeltaTime;
+		return true;
+	}
+	if (CardView)
+	{
+		CardView->RefreshEffectBadgePresentationPreparation(
+			EffectBadgeReadinessGate->GetGeneration());
+	}
+	const uint32 Generation = EffectBadgeReadinessGate->GetGeneration();
+	const EWacomFirstPersonCardPresentationReadinessPollResult Result =
+		EffectBadgeReadinessGate->Poll(
+			DeltaTime,
+			CardView && CardView->IsEffectBadgePresentationMaterialReady(Generation),
+			CardView && CardView->IsEffectBadgePresentationPainted(Generation));
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::Ready)
+	{
+		OutPlaybackDeltaTime = DeltaTime;
+		RefreshPresentationReadinessFrozenFlag();
+		return true;
+	}
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::BecameReady)
+	{
+		RefreshPresentationReadinessFrozenFlag();
+		return true;
+	}
+	if (Result == EWacomFirstPersonCardPresentationReadinessPollResult::Failed)
+	{
+		RecordPresentationReadinessFailure(TEXT("EffectBadge"), TEXT("EffectBadgeRewrite"), true);
+		CancelEffectBadgePresentationReadiness();
+		ClearEffectBadgeFeedbackPlayback();
+	}
+	RefreshPresentationReadinessFrozenFlag();
+	return false;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::CancelSurfacePresentationReadiness()
+{
+	if (SurfaceReadinessGate)
+	{
+		SurfaceReadinessGate->Reset();
+	}
+	SurfaceReadinessEffectName = NAME_None;
+	bSurfaceReadinessBlocksPresentationPhase = true;
+	if (CardView)
+	{
+		CardView->CancelSurfacePresentationPreparation();
+	}
+	RefreshPresentationReadinessFrozenFlag();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::CancelSurfacePresentationReadinessIfOwnedBy(
+	FName EffectName)
+{
+	if (SurfaceReadinessEffectName == EffectName)
+	{
+		CancelSurfacePresentationReadiness();
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::CancelCostDigitPresentationReadiness()
+{
+	if (CostDigitReadinessGate)
+	{
+		CostDigitReadinessGate->Reset();
+	}
+	if (CardView)
+	{
+		CardView->CancelCostDigitPresentationPreparation();
+	}
+	RefreshPresentationReadinessFrozenFlag();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::CancelEffectBadgePresentationReadiness()
+{
+	if (EffectBadgeReadinessGate)
+	{
+		EffectBadgeReadinessGate->Reset();
+	}
+	if (CardView)
+	{
+		CardView->CancelEffectBadgePresentationPreparation();
+	}
+	RefreshPresentationReadinessFrozenFlag();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::CancelAllPresentationReadiness()
+{
+	CancelSurfacePresentationReadiness();
+	CancelCostDigitPresentationReadiness();
+	CancelEffectBadgePresentationReadiness();
+	if (CardView)
+	{
+		CardView->CancelAllPresentationPreparations();
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::RefreshPresentationReadinessFrozenFlag()
+{
+	bPlaybackFrozenForReadiness =
+		(SurfaceReadinessGate && SurfaceReadinessGate->IsPending())
+		|| (CostDigitReadinessGate && CostDigitReadinessGate->IsPending())
+		|| (EffectBadgeReadinessGate && EffectBadgeReadinessGate->IsPending());
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::RecordPresentationReadinessFailure(
+	FName ChannelName,
+	FName EffectName,
+	bool bTimedOut)
+{
+#if WITH_AUTOMATION_TESTS
+	if (bTimedOut)
+	{
+		++PresentationReadinessTimeoutCountForTest;
+	}
+	++PresentationReadinessFallbackCountForTest;
+#endif
+	UE_LOG(
+		LogWacomCardPresentationReadiness,
+		Warning,
+		TEXT("Card presentation readiness %s. Card=%s Channel=%s Effect=%s"),
+		bTimedOut ? TEXT("timed out") : TEXT("contract is invalid"),
+		*CurrentSlotView.Entry.CardInstanceId.ToString(EGuidFormats::DigitsWithHyphens),
+		*ChannelName.ToString(),
+		*EffectName.ToString());
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::HandleSurfacePresentationReadinessFailure()
+{
+	const FName FailedEffect = SurfaceReadinessEffectName;
+	CancelSurfacePresentationReadiness();
+	if (FailedEffect == SurfaceEffectDrawReveal)
+	{
+		ClearDrawRevealPlayback();
+		if (TransitionPlayback)
+		{
+			TransitionPlayback->ConsumePendingSoundRequest();
+		}
+	}
+	else if (FailedEffect == SurfaceEffectGainReveal)
+	{
+		ClearGainRevealPlayback();
+		if (TransitionPlayback)
+		{
+			TransitionPlayback->ConsumePendingSoundRequest();
+		}
+	}
+	else if (FailedEffect == SurfaceEffectHandTargetImpact)
+	{
+		if (HandTargetImpactPlayback)
+		{
+			HandTargetImpactPlayback->Reset();
+		}
+		HandTargetImpactScaleMultiplier = 1.0f;
+		HandTargetImpactTranslationYPixels = 0.0f;
+		HandTargetImpactZOrderBoost = 0;
+		bHandTargetImpactDepartureGateReleased = true;
+		ApplyActiveSurfaceEffectView();
+		ApplyVisualSlotView();
+	}
+	else if (FailedEffect == SurfaceEffectDeparture)
+	{
+		ClearSurfaceDeparturePlayback();
+		bUsesSurfaceDepartureExit = false;
+		bUsesFixedExitTransitionPlayback = false;
+		TargetSlotView = VisualSlotView;
+		TargetSlotView.ScreenPosition += SlotMotionConfig.ExitOffsetPixels;
+		TargetSlotView.WidgetPosition += SlotMotionConfig.ExitOffsetPixels;
+		TargetSlotView.RenderOpacity = 0.0f;
+		TargetSlotView.bProjected = false;
+		ExitMotionElapsedSeconds = 0.0f;
+	}
+	else if (FailedEffect == SurfaceEffectCardUseReform)
+	{
+		ClearCardUseReformPlayback(true);
+	}
+	else if (FailedEffect == SurfaceEffectRetainSeal)
+	{
+		bSuppressRetainSealSurfaceForReadinessFailure = true;
+		ResetCardSurfaceEffectView();
+	}
+}
+
 bool UWacomFirstPersonCardLayerSlotWidget::CanPlayHandTargetImpact() const
 {
 	const FWacomFirstPersonCardHandTargetImpactConfig& Config =
@@ -2339,6 +2706,7 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginHandTargetImpactPreview()
 	}
 	HandTargetImpactPlayback->BeginPreview(SlotVisualConfig.HandTargetImpact);
 	ApplyActiveSurfaceEffectView();
+	BeginSurfacePresentationReadiness(SurfaceEffectHandTargetImpact, false, false);
 	UpdateWantsTick();
 }
 
@@ -2374,6 +2742,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerHandTargetImpactFeedback()
 	HandTargetImpactTranslationYPixels = 0.0f;
 	HandTargetImpactZOrderBoost = SlotVisualConfig.HandTargetImpact.Style.ZOrderBoost;
 	ApplyActiveSurfaceEffectView();
+	BeginSurfacePresentationReadiness(SurfaceEffectHandTargetImpact, true);
 	ApplyVisualSlotView();
 	UpdateWantsTick();
 }
@@ -2470,6 +2839,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerEffectBadgeFeedback(
 	bEffectBadgeFeedbackBlocksPresentationPhase =
 		bBlocksPresentationPhase && EffectBadgeFeedbackPlayback->IsActive();
 	ApplyEffectBadgeFeedbackView();
+	BeginEffectBadgePresentationReadiness();
 	UpdateWantsTick();
 }
 
@@ -2529,12 +2899,18 @@ void UWacomFirstPersonCardLayerSlotWidget::TickHandTargetImpactPlayback(float De
 	{
 		return;
 	}
+	float PlaybackDeltaTime = 0.0f;
+	if (!ResolveSurfacePresentationReadiness(DeltaTime, PlaybackDeltaTime))
+	{
+		return;
+	}
 	const FWacomFirstPersonCardHandTargetImpactPlaybackView View =
-		HandTargetImpactPlayback->Tick(DeltaTime);
+		HandTargetImpactPlayback->Tick(PlaybackDeltaTime);
 	bHandTargetImpactDepartureGateReleased =
 		bHandTargetImpactDepartureGateReleased || View.bDepartureGateOpen;
 	if (!HandTargetImpactPlayback->IsActive())
 	{
+		CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectHandTargetImpact);
 		HandTargetImpactScaleMultiplier = 1.0f;
 		HandTargetImpactTranslationYPixels = 0.0f;
 		HandTargetImpactZOrderBoost = 0;
@@ -2550,6 +2926,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TickHandTargetImpactPlayback(float De
 	if (View.bCompleted)
 	{
 		HandTargetImpactPlayback->Reset();
+		CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectHandTargetImpact);
 		HandTargetImpactScaleMultiplier = 1.0f;
 		HandTargetImpactTranslationYPixels = 0.0f;
 		HandTargetImpactZOrderBoost = 0;
@@ -2564,6 +2941,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TickHandTargetImpactPlayback(float De
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearHandTargetImpactPlayback()
 {
+	CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectHandTargetImpact);
 	if (HandTargetImpactPlayback)
 	{
 		HandTargetImpactPlayback->Reset();
@@ -2666,6 +3044,10 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginCardDataRewritePlayback(
 		bDataRewriteBlocksPresentationPhase = false;
 	}
 	ApplyCardDataRewriteView();
+	if (DataRewritePlayback->BuildView().bActive)
+	{
+		BeginCostDigitPresentationReadiness();
+	}
 	UpdateWantsTick();
 }
 
@@ -2675,8 +3057,24 @@ void UWacomFirstPersonCardLayerSlotWidget::TickCardDataRewritePlayback(float Del
 	{
 		return;
 	}
+	if (!DataRewritePlayback->BuildView().bActive)
+	{
+		const FWacomFirstPersonCardDataRewritePlaybackView DelayView =
+			DataRewritePlayback->Tick(DeltaTime);
+		if (!DelayView.bActive)
+		{
+			return;
+		}
+		ApplyCardDataRewriteView();
+		BeginCostDigitPresentationReadiness();
+	}
+	float PlaybackDeltaTime = 0.0f;
+	if (!ResolveCostDigitPresentationReadiness(DeltaTime, PlaybackDeltaTime))
+	{
+		return;
+	}
 	const FWacomFirstPersonCardDataRewritePlaybackView View =
-		DataRewritePlayback->Tick(DeltaTime);
+		DataRewritePlayback->Tick(PlaybackDeltaTime);
 	PlayPendingCardDataRewriteSound();
 	if (View.bCompleted || !DataRewritePlayback->IsActive())
 	{
@@ -2694,6 +3092,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TickCardDataRewritePlayback(float Del
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearCardDataRewritePlayback()
 {
+	CancelCostDigitPresentationReadiness();
 	if (DataRewritePlayback)
 	{
 		DataRewritePlayback->Reset();
@@ -2756,8 +3155,13 @@ void UWacomFirstPersonCardLayerSlotWidget::TickEffectBadgeFeedbackPlayback(float
 	{
 		return;
 	}
+	float PlaybackDeltaTime = 0.0f;
+	if (!ResolveEffectBadgePresentationReadiness(DeltaTime, PlaybackDeltaTime))
+	{
+		return;
+	}
 	const FWacomFirstPersonCardEffectBadgeFeedbackView View =
-		EffectBadgeFeedbackPlayback->Tick(DeltaTime);
+		EffectBadgeFeedbackPlayback->Tick(PlaybackDeltaTime);
 	PlayPendingEffectBadgeFeedbackSound();
 	if (View.bCompleted || !EffectBadgeFeedbackPlayback->IsActive())
 	{
@@ -2770,6 +3174,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TickEffectBadgeFeedbackPlayback(float
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearEffectBadgeFeedbackPlayback()
 {
+	CancelEffectBadgePresentationReadiness();
 	if (EffectBadgeFeedbackPlayback)
 	{
 		EffectBadgeFeedbackPlayback->Reset();
@@ -2874,6 +3279,7 @@ void UWacomFirstPersonCardLayerSlotWidget::PrepareDrawRevealPlayback(
 	}
 	DrawRevealPlayback->Prepare(SlotVisualConfig.DrawReveal);
 	ApplyDrawRevealSurfaceView();
+	BeginSurfacePresentationReadiness(SurfaceEffectDrawReveal);
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::StartDrawRevealPlayback()
@@ -2910,6 +3316,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyDrawRevealSurfaceView()
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearDrawRevealPlayback()
 {
+	CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectDrawReveal);
 	if (DrawRevealPlayback)
 	{
 		DrawRevealPlayback->Reset();
@@ -2943,6 +3350,7 @@ void UWacomFirstPersonCardLayerSlotWidget::PrepareGainRevealPlayback(
 	}
 	GainRevealPlayback->Prepare(SlotVisualConfig.GainReveal);
 	ApplyGainRevealSurfaceView();
+	BeginSurfacePresentationReadiness(SurfaceEffectGainReveal);
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::StartGainRevealPlayback()
@@ -2980,6 +3388,7 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyGainRevealSurfaceView()
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearGainRevealPlayback()
 {
+	CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectGainReveal);
 	if (GainRevealPlayback)
 	{
 		GainRevealPlayback->Reset();
@@ -2998,7 +3407,16 @@ void UWacomFirstPersonCardLayerSlotWidget::TickRetainSealPlayback(float DeltaTim
 	{
 		return;
 	}
-	RetainSealPlayback->Tick(DeltaTime);
+	float PlaybackDeltaTime = 0.0f;
+	if (!ResolveSurfacePresentationReadiness(DeltaTime, PlaybackDeltaTime))
+	{
+		return;
+	}
+	RetainSealPlayback->Tick(PlaybackDeltaTime);
+	if (!RetainSealPlayback->IsActive())
+	{
+		CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectRetainSeal);
+	}
 	ApplyActiveSurfaceEffectView();
 	ApplyVisualSlotView();
 }
@@ -3009,12 +3427,19 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyRetainSealSurfaceView()
 	{
 		return;
 	}
+	if (bSuppressRetainSealSurfaceForReadinessFailure)
+	{
+		ResetCardSurfaceEffectView();
+		return;
+	}
 	CardView->SetCardSurfaceEffectView(BuildRetainSealView(
 		RetainSealPlayback->BuildView()));
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearRetainSealPlayback()
 {
+	CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectRetainSeal);
+	bSuppressRetainSealSurfaceForReadinessFailure = false;
 	if (RetainSealPlayback)
 	{
 		RetainSealPlayback->Reset();
@@ -3156,7 +3581,7 @@ void UWacomFirstPersonCardLayerSlotWidget::StartSurfaceDeparturePlayback(
 			SurfaceDeparturePlayback->BuildView(),
 			SlotVisualConfig));
 	}
-	PlayPendingSurfaceDepartureSound();
+	BeginSurfacePresentationReadiness(SurfaceEffectDeparture);
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::TickSurfaceDeparturePlayback(float DeltaTime)
@@ -3166,8 +3591,14 @@ void UWacomFirstPersonCardLayerSlotWidget::TickSurfaceDeparturePlayback(float De
 		return;
 	}
 
+	float PlaybackDeltaTime = 0.0f;
+	if (!ResolveSurfacePresentationReadiness(DeltaTime, PlaybackDeltaTime))
+	{
+		return;
+	}
 	const FWacomFirstPersonCardSurfaceDepartureTickResult TickResult =
-		SurfaceDeparturePlayback->Tick(DeltaTime);
+		SurfaceDeparturePlayback->Tick(PlaybackDeltaTime);
+	PlayPendingSurfaceDepartureSound();
 	CardUseFlipProgress = TickResult.FlipProgress;
 	CardUseImpactProgress = TickResult.ImpactProgress;
 	CardUseMotionAlpha = TickResult.MotionAlpha;
@@ -3188,6 +3619,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TickSurfaceDeparturePlayback(float De
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearSurfaceDeparturePlayback()
 {
+	CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectDeparture);
 	if (SurfaceDeparturePlayback)
 	{
 		SurfaceDeparturePlayback->Reset();
@@ -3339,7 +3771,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerCardUseReformFeedbackInternal(
 			CardUseReformPlayback->BuildView(),
 			SlotVisualConfig));
 	}
-	PlayPendingCardUseReformSound();
+	BeginSurfacePresentationReadiness(SurfaceEffectCardUseReform);
 	ApplyVisualSlotView();
 	UpdateWantsTick();
 }
@@ -3351,8 +3783,14 @@ void UWacomFirstPersonCardLayerSlotWidget::TickCardUseReformPlayback(float Delta
 		return;
 	}
 
+	float PlaybackDeltaTime = 0.0f;
+	if (!ResolveSurfacePresentationReadiness(DeltaTime, PlaybackDeltaTime))
+	{
+		return;
+	}
 	const FWacomFirstPersonCardUseReformTickResult TickResult =
-		CardUseReformPlayback->Tick(DeltaTime);
+		CardUseReformPlayback->Tick(PlaybackDeltaTime);
+	PlayPendingCardUseReformSound();
 	CardUseFlipProgress = TickResult.FlipProgress;
 	CardUseImpactProgress = TickResult.ImpactProgress;
 	CardUseMotionAlpha = TickResult.MotionAlpha;
@@ -3379,6 +3817,7 @@ void UWacomFirstPersonCardLayerSlotWidget::TickCardUseReformPlayback(float Delta
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearCardUseReformPlayback(bool bSnapToTarget)
 {
+	CancelSurfacePresentationReadinessIfOwnedBy(SurfaceEffectCardUseReform);
 	if (CardUseReformPlayback)
 	{
 		CardUseReformPlayback->Reset();
@@ -3775,6 +4214,27 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.SlotVisualConfigApplyCount = SlotVisualConfigApplyCountForTest;
 	View.SlotFeedbackConfigApplyCount = SlotFeedbackConfigApplyCountForTest;
 	View.CardDragConfigApplyCount = CardDragConfigApplyCountForTest;
+	View.SurfaceReadinessState = SurfaceReadinessGate
+		? static_cast<int32>(SurfaceReadinessGate->GetState())
+		: 0;
+	View.CostDigitReadinessState = CostDigitReadinessGate
+		? static_cast<int32>(CostDigitReadinessGate->GetState())
+		: 0;
+	View.EffectBadgeReadinessState = EffectBadgeReadinessGate
+		? static_cast<int32>(EffectBadgeReadinessGate->GetState())
+		: 0;
+	View.SurfaceReadinessGeneration = SurfaceReadinessGate
+		? SurfaceReadinessGate->GetGeneration()
+		: 0;
+	View.CostDigitReadinessGeneration = CostDigitReadinessGate
+		? CostDigitReadinessGate->GetGeneration()
+		: 0;
+	View.EffectBadgeReadinessGeneration = EffectBadgeReadinessGate
+		? EffectBadgeReadinessGate->GetGeneration()
+		: 0;
+	View.bPlaybackFrozenForReadiness = bPlaybackFrozenForReadiness;
+	View.PresentationReadinessTimeoutCount = PresentationReadinessTimeoutCountForTest;
+	View.PresentationReadinessFallbackCount = PresentationReadinessFallbackCountForTest;
 	return View;
 }
 
@@ -4045,7 +4505,9 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerRetainedFeedback(
 		/ 65535.0f;
 	Config.Style = SlotVisualConfig.RetainSeal.Style;
 	RetainSealPlayback->Begin(Config);
+	bSuppressRetainSealSurfaceForReadinessFailure = false;
 	ApplyActiveSurfaceEffectView();
+	BeginSurfacePresentationReadiness(SurfaceEffectRetainSeal);
 	ApplyVisualSlotView();
 	UpdateWantsTick();
 }
@@ -4057,7 +4519,9 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerRetainedReleaseFeedback()
 		return;
 	}
 	RetainSealPlayback->Release();
+	bSuppressRetainSealSurfaceForReadinessFailure = false;
 	ApplyActiveSurfaceEffectView();
+	BeginSurfacePresentationReadiness(SurfaceEffectRetainSeal);
 	ApplyVisualSlotView();
 	UpdateWantsTick();
 }
@@ -4089,7 +4553,13 @@ bool UWacomFirstPersonCardLayerSlotWidget::IsRetainedFeedbackActive() const
 
 bool UWacomFirstPersonCardLayerSlotWidget::HasActivePresentationPlayback() const
 {
-	return IsEnterTransitionPlaybackActive()
+	const bool bBlockingPresentationReadiness =
+		(SurfaceReadinessGate && SurfaceReadinessGate->IsPending()
+			&& bSurfaceReadinessBlocksPresentationPhase)
+		|| (CostDigitReadinessGate && CostDigitReadinessGate->IsPending())
+		|| (EffectBadgeReadinessGate && EffectBadgeReadinessGate->IsPending());
+	return bBlockingPresentationReadiness
+		|| IsEnterTransitionPlaybackActive()
 		|| IsExitingForFirstPersonLayer()
 		|| IsCardUseReformPlaybackBlockingStage()
 		|| IsHandTargetImpactCommitPlaybackActive()
@@ -4103,6 +4573,7 @@ bool UWacomFirstPersonCardLayerSlotWidget::HasActivePresentationPlayback() const
 
 void UWacomFirstPersonCardLayerSlotWidget::ForceCompletePresentationPlayback()
 {
+	CancelAllPresentationReadiness();
 	ClearEnterTransitionPlayback();
 	if (IsCardUseReformPlaybackActive())
 	{
@@ -4281,6 +4752,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 		GestureState != EWacomFirstPersonCardGestureState::Idle
 		&& GestureState != EWacomFirstPersonCardGestureState::Cancelled;
 	bWantsSlotMotionTick = IsEnterTransitionPlaybackActive()
+		|| bPlaybackFrozenForReadiness
 		|| bIsExitingForFirstPersonLayer
 		|| IsCardUseReformPlaybackBlockingStage()
 		|| IsHandTargetImpactPlaybackActive()
@@ -4323,8 +4795,11 @@ void UWacomFirstPersonCardLayerSlotWidget::StartEnterTransitionPlayback(
 		ClearDrawRevealPlayback();
 		ClearGainRevealPlayback();
 	}
-	BroadcastPendingEnterTransitionStarted();
-	PlayPendingTransitionStartSound();
+	if (!IsDrawRevealPlaybackActive() && !IsGainRevealPlaybackActive())
+	{
+		BroadcastPendingEnterTransitionStarted();
+		PlayPendingTransitionStartSound();
+	}
 }
 
 void FWacomFirstPersonCardHandTargetImpactPlaybackDeleter::operator()(
@@ -4380,8 +4855,14 @@ bool UWacomFirstPersonCardLayerSlotWidget::TickEnterTransitionPlayback(float Del
 	{
 		return true;
 	}
+	float PlaybackDeltaTime = DeltaTime;
+	if ((IsDrawRevealPlaybackActive() || IsGainRevealPlaybackActive())
+		&& !ResolveSurfacePresentationReadiness(DeltaTime, PlaybackDeltaTime))
+	{
+		return false;
+	}
 	const FWacomFirstPersonCardTransitionTickResult Result =
-		TransitionPlayback->Tick(DeltaTime, GetEffectiveTargetSlotView());
+		TransitionPlayback->Tick(PlaybackDeltaTime, GetEffectiveTargetSlotView());
 	BroadcastPendingEnterTransitionStarted();
 	PlayPendingTransitionStartSound();
 	if (Result.bHasPlaybackProgress)

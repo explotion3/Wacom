@@ -87,6 +87,7 @@ void UWacomCardEffectBadgeWidget::NativeConstruct()
 void UWacomCardEffectBadgeWidget::NativeDestruct()
 {
 	ResetEffectBadgeFeedback();
+	ReleaseDigitMaterialPool();
 	Super::NativeDestruct();
 }
 
@@ -109,6 +110,11 @@ FText UWacomCardEffectBadgeWidget::GetValueText() const
 void UWacomCardEffectBadgeWidget::SetEffectBadgeFeedbackConfig(
 	const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig)
 {
+	if (ActiveDigitMaterialSource
+		&& ActiveDigitMaterialSource != InConfig.Style.DigitFeedbackMaterialInstance)
+	{
+		ReleaseDigitMaterialPool();
+	}
 	FeedbackConfig = InConfig;
 	if (!FeedbackConfig.bEnabled)
 	{
@@ -126,6 +132,23 @@ void UWacomCardEffectBadgeWidget::SetEffectBadgeFeedbackView(
 	FeedbackView = InView;
 	if (!InView.bActive)
 	{
+		if (InView.bPrepareMaterial)
+		{
+			ApplyDigitMaterial(
+				InView.OldValue,
+				InView.NewValue,
+				0.0f,
+				0.0f,
+				static_cast<float>(InView.Direction),
+				static_cast<float>(InView.Seed & 0xFFFF) / 65535.0f,
+				FeedbackConfig.bReducedMotion,
+				2.0f,
+				0.0f);
+			CacheAuthoredRootTransform();
+			RestoreAuthoredRootTransform();
+			SetRenderOpacity(1.0f);
+			return;
+		}
 		if (bFeedbackMaterialActive)
 		{
 			RestoreAuthoritativeDigitBrushes();
@@ -165,6 +188,31 @@ void UWacomCardEffectBadgeWidget::ResetEffectBadgeFeedback()
 	RestoreAuthoritativeDigitBrushes();
 	RestoreAuthoredRootTransform();
 	SetRenderOpacity(1.0f);
+}
+
+bool UWacomCardEffectBadgeWidget::IsEffectBadgeFeedbackMaterialReady() const
+{
+	if (!bFeedbackMaterialActive || !DigitHost || ActiveDigitMaterialInstances.IsEmpty())
+	{
+		return false;
+	}
+	const int32 VisibleDigitCount = FMath::Min(
+		DigitHost->GetChildrenCount(),
+		ActiveDigitMaterialInstances.Num());
+	if (VisibleDigitCount <= 0)
+	{
+		return false;
+	}
+	for (int32 Index = 0; Index < VisibleDigitCount; ++Index)
+	{
+		const UImage* DigitImage = Cast<UImage>(DigitHost->GetChildAt(Index));
+		const UMaterialInstanceDynamic* Material = ActiveDigitMaterialInstances[Index];
+		if (!DigitImage || !Material || DigitImage->GetBrush().GetResourceObject() != Material)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 void UWacomCardEffectBadgeWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -274,17 +322,19 @@ bool UWacomCardEffectBadgeWidget::ApplyDigitMaterial(
 		return false;
 	}
 
-	if (ActiveDigitMaterialSource != FeedbackConfig.Style.DigitFeedbackMaterialInstance
-		|| ActiveDigitMaterialInstances.Num() != DigitCount)
+	if (ActiveDigitMaterialSource != FeedbackConfig.Style.DigitFeedbackMaterialInstance)
 	{
 		ActiveDigitMaterialSource = FeedbackConfig.Style.DigitFeedbackMaterialInstance;
 		ActiveDigitMaterialInstances.Reset();
-		for (int32 Index = 0; Index < DigitCount; ++Index)
-		{
-			ActiveDigitMaterialInstances.Add(UMaterialInstanceDynamic::Create(
-				FeedbackConfig.Style.DigitFeedbackMaterialInstance,
-				this));
-		}
+	}
+	while (ActiveDigitMaterialInstances.Num() < DigitCount)
+	{
+		ActiveDigitMaterialInstances.Add(UMaterialInstanceDynamic::Create(
+			FeedbackConfig.Style.DigitFeedbackMaterialInstance,
+			this));
+#if WITH_AUTOMATION_TESTS
+		++DigitMaterialCreateCountForTest;
+#endif
 	}
 
 	for (int32 Index = 0; Index < DigitCount; ++Index)
@@ -349,6 +399,11 @@ void UWacomCardEffectBadgeWidget::RestoreAuthoritativeDigitBrushes()
 		bFeedbackMaterialActive = false;
 		UpdateDigitImages();
 	}
+}
+
+void UWacomCardEffectBadgeWidget::ReleaseDigitMaterialPool()
+{
+	bFeedbackMaterialActive = false;
 	ActiveDigitMaterialInstances.Reset();
 	ActiveDigitMaterialSource = nullptr;
 }

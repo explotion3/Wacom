@@ -140,6 +140,7 @@ FWacomFirstPersonCardEffectBadgeFeedbackPlayback::BuildView() const
 		ItemView.OldValue = Item.Change.OldValue;
 		ItemView.NewValue = Item.Change.NewValue;
 		ItemView.Seed = Item.Change.Seed;
+		ItemView.bPrepareMaterial = bActive;
 		const float LocalTime = ElapsedSeconds - Item.StartSeconds;
 		if (!bActive || LocalTime < 0.0f)
 		{

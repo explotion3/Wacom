@@ -283,6 +283,12 @@ Layer 的每卡反馈容器是确定性的 Feedback Bundle，不再以单值 Map
 
 基础材质和两种 Surface-Effect 材质共用 `DShader/Shared/WacomFirstPersonCardSurface.dsh` 中的投影与实时 Alpha 接触阴影算法。PixelAsh 算法继续位于 `WacomFirstPersonCardPlayedDissolve.dsh`；OrderedDither 独立位于 `WacomFirstPersonCardPlayedOrderedDither.dsh`，程序化生成稳定的 `4×4 / 8×8 Bayer` 阈值，不需要 Bayer 纹理。默认 OrderedDither 从卡牌左下向右上以 `45°` 推进：未到达区域保持原卡面，固定宽度前沿以 Bayer 棋盘直接裁切原卡面的 RGB / Alpha，已通过区域完全透明并显示后方场景。默认残片密度为 `0.28`，每个网格按 Seed 获得稳定方向和距离倍率：约 `75%` 在消散方向正负 `18°` 内移动约 `34px`，其余约 `25%` 向 360° 四周散开且距离缩至主流的 `0.55`；所有残片按各自 `ResidueAge` 在约 `0.14s` 内缓出并平方衰减，不形成 PixelAsh 式长尾。它不修改旧灰烬源。`M_FirstPersonCard_Fake3D.dsm` 不引用任何消散噪声，普通手牌没有额外采样成本；只有消散活动期间，`UWacomFirstPersonCardViewWidget` 才把 Style 的源材质交给同一个 `Fake3DSurfaceRetainer`，并按 `EffectKind` 写入对应参数。基础 Effect Material 必须分别缓存 WBP 创作源材质与 Slate 运行时 MID：嵌套 Retainer 的 MID 可能晚于 `NativeConstruct` 生成，不能把首帧空 MID 当成已完成缓存；结束、清理、复用或 teardown 时优先恢复创作源并重新取得 Retainer 实际 MID。`PlayedDissolveNoiseTexture` 的 DreamShader 默认资产必须本身使用 Masks sampler，不能使用 Engine `DefaultTexture`；接触阴影会在阴影采样坐标重新计算当前 Bayer caster 可见度并在总时长前 `0.25`（默认约 `0.10s`）淡出，消散前沿与外飘网点不写入 caster，外飘限制在 WBP 已有 bleed 内。Reduced Motion 继续关闭所有残片方向运动。
 
+### 临时材质渲染准备
+
+所有 first-person 临时卡面材质遵循统一的 Presentation Readiness Gate。Slot 先提交进度 0 View；`UWacomFirstPersonCardViewWidget` 为 Surface、`CostDigitImage` 与 EffectBadge 数字分别分配稳定 Generation，只有源材质有效、运行时 MID/Brush 已安装且该 Generation 在真实 `NativePaint()` 后被确认，Playback 才能起播。Ready 的首个 Tick 只消费一次性声音、Enter Started 或语义开始边缘，强制使用 `DeltaTime=0`，下一 Tick 才推进 authored 时间；因此首次 PSO/MID 建立或低帧率不会直接跳过刻印峰值和数字重组。
+
+Pending Gate 计入阶段阻塞，但 Preview 预热保持非阻塞；超时 `0.75s` 后按各效果既有空间/无材质路径降级，不补播声音或伪造 Peak。Slot 身份复用、配置实际变化、ForceComplete、source clear、BattleEnd 与 teardown 会取消所有 Generation。费用数字按材质源复用一枚 MID，Badge 按最大位数保留 MID 池；普通显示仍恢复 PaperSprite Brush，不承担持续材质绘制。
+
 ### Drag Pickup 与实验性 Surface Effect
 
 正式拖拽不再使用循环扫光、移动亮点或持续轮廓。SlotWidget 只在手势首次从非正式状态进入 `DraggingNoTargetCard / AimingTargetedCard / ArmedForCommit` 时启动一次 App-private `FWacomFirstPersonCardDragPickupPlayback`；`Pressed`、`Inspecting`、单纯 `Entry.bIsPendingTargeting` 以及正式 Drag 状态之间的切换都不触发。进入正式 Drag 的同一状态边缘必须先结束 `Pressed` 局部缩放，避免 `PressedScale` 抵消拾牌放大。鼠标、Inspect 后拖出、快捷键和 Run 正式拖拽共用该状态边缘。快捷键首次拿起无目标卡且源卡离鼠标较远时，声音仍立即请求，但短时上提 / 缩放会等待 slot motion 追到当前 pointer 后再开始，避免 `0.14s` 反馈在长距离飞行途中耗尽；已在 pointer 附近的快捷键重选、鼠标拖拽和 targeted aim 仍立即播放。release、cancel、source clear、语义离场和 slot 重用立即清理，且不改变既有 drag delegate、命中或命令语义。

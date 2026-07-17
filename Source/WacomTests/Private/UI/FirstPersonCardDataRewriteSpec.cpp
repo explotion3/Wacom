@@ -134,7 +134,7 @@ bool FWacomFirstPersonCardDataRewritePlaybackTest::RunTest(
 	TestTrue(TEXT("Rewrite starts immediately for the first card"), View.bDataRewritePlaybackActive);
 	TestTrue(TEXT("Rewrite exposes an active digit view"), View.DataRewriteView.bActive);
 	TestEqual(TEXT("Rewrite keeps the requested tone"), View.DataRewriteView.Tone, EWacomFirstPersonCardDataRewriteTone::Beneficial);
-	TestFalse(TEXT("Rewrite does not block presentation gating"), Widget->HasActivePresentationPlayback());
+	TestTrue(TEXT("Pending rewrite material blocks until its first Paint"), Widget->HasActivePresentationPlayback());
 
 	UWacomFirstPersonCardLayerSlotWidget* DelayedWidget = MakeSlotWidget(FGuid::NewGuid());
 	DelayedWidget->TriggerCardDataRewriteFeedback(
@@ -153,6 +153,7 @@ bool FWacomFirstPersonCardDataRewritePlaybackTest::RunTest(
 
 	Tick(*Widget, 0.03f);
 	View = FWacomFirstPersonCardLayerTestAccess::View(*Widget);
+	TestFalse(TEXT("Ready loose rewrite does not block presentation gating"), Widget->HasActivePresentationPlayback());
 	TestTrue(TEXT("Old digit starts dissolving during the first phase"), View.DataRewriteView.OldDissolveAmount > 0.0f);
 	TestTrue(TEXT("New digit is not revealed before 0.12 seconds"), FMath::IsNearlyZero(View.DataRewriteView.NewRevealAmount));
 	TestTrue(TEXT("Old digit begins shrinking"), View.DataRewriteView.DigitScale < 1.0f);
@@ -303,13 +304,14 @@ bool FWacomFirstPersonCardDataRewriteCardViewTest::RunTest(
 	PreviewData.bHasCostPreview = true;
 	PreviewData.PreviewCost = 2;
 	CardView->SetCardViewData(PreviewData);
+	const FWacomFirstPersonCardDataRewriteConfig RewriteConfig = MakeRewriteConfig();
 	FWacomFirstPersonCardCostPreviewView PreviewView;
 	PreviewView.bActive = true;
 	PreviewView.PreviewAmount = 0.75f;
 	PreviewView.PulseAmount = 0.60f;
 	PreviewView.Tone = EWacomFirstPersonCardDataRewriteTone::Detrimental;
 	PreviewView.Seed = 37;
-	PreviewView.Style = MakeRewriteConfig().Style;
+	PreviewView.Style = RewriteConfig.Style;
 	CardView->SetCostDigitPreviewView(PreviewView);
 	FWacomCardViewAutomationTestView View = CardView->GetAutomationTestViewForTest();
 	TestTrue(TEXT("Preview uses the direct CostDigitImage MID"), View.bCostDigitPreviewMaterialActive);
@@ -341,16 +343,19 @@ bool FWacomFirstPersonCardDataRewriteCardViewTest::RunTest(
 	RewriteView.OldDissolveAmount = 0.5f;
 	RewriteView.NewRevealAmount = 0.25f;
 	RewriteView.DigitScale = 0.90f;
-	RewriteView.Style = MakeRewriteConfig().Style;
+	RewriteView.Style = RewriteConfig.Style;
 	CardView->SetCostDigitRewriteView(RewriteView);
 	View = CardView->GetAutomationTestViewForTest();
 	TestTrue(TEXT("Direct digit MID becomes active"), View.bCostDigitRewriteMaterialActive);
+	TestTrue(TEXT("Cost digit MID is cached by material source"), View.bCostDigitRewriteMaterialCached);
+	TestEqual(TEXT("Cold cost rewrite creates one MID"), View.CostDigitRewriteMaterialCreateCount, 1);
 	TestTrue(TEXT("Digit scale is local to CostDigitImage"), FMath::IsNearlyEqual(View.CostDigitRewriteRenderTransform.Scale.X, 0.90f));
 
 	CardView->ResetCostDigitRewrite();
 	View = CardView->GetAutomationTestViewForTest();
 	TestFalse(TEXT("Reset clears prepared state"), View.bCostDigitRewritePrepared);
 	TestFalse(TEXT("Reset clears transient MID"), View.bCostDigitRewriteMaterialActive);
+	TestTrue(TEXT("Reset preserves the cached MID for reuse"), View.bCostDigitRewriteMaterialCached);
 	TestEqual(TEXT("Reset restores the authoritative new sprite"), DigitImage->GetBrush().GetResourceObject(), static_cast<UObject*>(NewSprite));
 	TestEqual(TEXT("Reset restores authored transform"), DigitImage->GetRenderTransform(), AuthoredTransform);
 	TestEqual(TEXT("Reset restores authored pivot"), DigitImage->GetRenderTransformPivot(), AuthoredPivot);
@@ -372,6 +377,7 @@ bool FWacomFirstPersonCardDataRewriteCardViewTest::RunTest(
 	CardView->SetCostDigitRewriteView(RewriteView);
 	View = CardView->GetAutomationTestViewForTest();
 	TestTrue(TEXT("Preview-to-commit path activates the direct digit MID"), View.bCostDigitRewriteMaterialActive);
+	TestEqual(TEXT("A warm rewrite reuses the cached MID"), View.CostDigitRewriteMaterialCreateCount, 1);
 	CardView->ResetCostDigitRewrite();
 
 	FWacomCardViewData MultiDigitData = NewData;

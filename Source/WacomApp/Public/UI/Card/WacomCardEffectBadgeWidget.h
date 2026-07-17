@@ -25,6 +25,8 @@ struct FWacomCardEffectBadgeAutomationTestView
 	int32 ResolvedDigitSpriteCount = 0;
 	int32 ActiveDigitMaterialInstanceCount = 0;
 	int32 LastFeedbackMaterialFailure = 0;
+	int32 DigitMaterialPoolSize = 0;
+	int32 DigitMaterialCreateCount = 0;
 	FVector2D RootScale = FVector2D(1.0f, 1.0f);
 	float RootOpacity = 1.0f;
 };
@@ -56,6 +58,7 @@ public:
 	void SetEffectBadgeFeedbackView(
 		const FWacomFirstPersonCardEffectBadgeFeedbackItemView& InView);
 	void ResetEffectBadgeFeedback();
+	bool IsEffectBadgeFeedbackMaterialReady() const;
 
 #if WITH_AUTOMATION_TESTS
 	FWacomCardEffectBadgeAutomationTestView GetAutomationTestViewForTest() const
@@ -70,6 +73,8 @@ public:
 		View.ResolvedDigitSpriteCount = ResolvedDigitSprites.Num();
 		View.ActiveDigitMaterialInstanceCount = ActiveDigitMaterialInstances.Num();
 		View.LastFeedbackMaterialFailure = LastFeedbackMaterialFailureForTest;
+		View.DigitMaterialPoolSize = ActiveDigitMaterialInstances.Num();
+		View.DigitMaterialCreateCount = DigitMaterialCreateCountForTest;
 		View.RootScale = GetRenderTransform().Scale;
 		View.RootOpacity = GetRenderOpacity();
 		return View;
@@ -139,6 +144,7 @@ private:
 	int32 ApplyCountForTest = 0;
 	int32 DigitImageUpdateCountForTest = 0;
 	int32 LastFeedbackMaterialFailureForTest = 0;
+	int32 DigitMaterialCreateCountForTest = 0;
 #endif
 
 	void ApplyCurrentDataToWidgets();
@@ -158,6 +164,7 @@ private:
 		float EffectMode,
 		float Pulse);
 	void RestoreAuthoritativeDigitBrushes();
+	void ReleaseDigitMaterialPool();
 	void CacheAuthoredRootTransform();
 	void RestoreAuthoredRootTransform();
 	UImage* EnsureDigitImage(int32 Index);

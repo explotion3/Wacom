@@ -23,6 +23,7 @@ class FWacomFirstPersonCardHandTargetImpactPlayback;
 class FWacomFirstPersonCardSurfaceDeparturePlayback;
 class FWacomFirstPersonCardUseReformPlayback;
 class FWacomFirstPersonCardTransitionPlayback;
+class FWacomFirstPersonCardPresentationReadinessGate;
 struct FWacomFirstPersonCardLayerResolvedFeedbackHint;
 struct FWacomFirstPersonCardLayerTestAccess;
 
@@ -79,6 +80,11 @@ struct FWacomFirstPersonCardHandTargetImpactPlaybackDeleter
 struct FWacomFirstPersonCardUseReformPlaybackDeleter
 {
 	void operator()(FWacomFirstPersonCardUseReformPlayback* Playback) const;
+};
+
+struct FWacomFirstPersonCardPresentationReadinessGateDeleter
+{
+	void operator()(FWacomFirstPersonCardPresentationReadinessGate* Gate) const;
 };
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
@@ -200,6 +206,15 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	int32 SlotFeedbackConfigApplyCount = 0;
 	int32 CardDragConfigApplyCount = 0;
 	int32 SlotVisualConfigApplyCount = 0;
+	int32 SurfaceReadinessState = 0;
+	int32 CostDigitReadinessState = 0;
+	int32 EffectBadgeReadinessState = 0;
+	uint32 SurfaceReadinessGeneration = 0;
+	uint32 CostDigitReadinessGeneration = 0;
+	uint32 EffectBadgeReadinessGeneration = 0;
+	bool bPlaybackFrozenForReadiness = false;
+	int32 PresentationReadinessTimeoutCount = 0;
+	int32 PresentationReadinessFallbackCount = 0;
 };
 #endif
 
@@ -442,6 +457,19 @@ private:
 	TUniquePtr<
 		FWacomFirstPersonCardRetainSealPlayback,
 		FWacomFirstPersonCardRetainSealPlaybackDeleter> RetainSealPlayback;
+	TUniquePtr<
+		FWacomFirstPersonCardPresentationReadinessGate,
+		FWacomFirstPersonCardPresentationReadinessGateDeleter> SurfaceReadinessGate;
+	TUniquePtr<
+		FWacomFirstPersonCardPresentationReadinessGate,
+		FWacomFirstPersonCardPresentationReadinessGateDeleter> CostDigitReadinessGate;
+	TUniquePtr<
+		FWacomFirstPersonCardPresentationReadinessGate,
+		FWacomFirstPersonCardPresentationReadinessGateDeleter> EffectBadgeReadinessGate;
+	FName SurfaceReadinessEffectName;
+	bool bPlaybackFrozenForReadiness = false;
+	bool bSurfaceReadinessBlocksPresentationPhase = true;
+	bool bSuppressRetainSealSurfaceForReadinessFailure = false;
 	int32 PendingDataRewriteFieldMask = 0;
 	EWacomFirstPersonCardDataRewriteTone PendingDataRewriteTone =
 		EWacomFirstPersonCardDataRewriteTone::Neutral;
@@ -532,6 +560,8 @@ private:
 	float LastCardUseEffectSoundPitchMultiplierForTest = 1.0f;
 	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKindForTest =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
+	int32 PresentationReadinessTimeoutCountForTest = 0;
+	int32 PresentationReadinessFallbackCountForTest = 0;
 #endif
 
 	friend class UWacomFirstPersonCardLayerWidget;
@@ -606,6 +636,26 @@ private:
 	float GetDragPickupAlpha() const;
 	void ResetCardSurfaceEffectView();
 	void ApplyActiveSurfaceEffectView();
+	void BeginSurfacePresentationReadiness(
+		FName EffectName,
+		bool bReuseReadyGeneration = false,
+		bool bBlocksPresentationPhase = true);
+	void BeginCostDigitPresentationReadiness();
+	void BeginEffectBadgePresentationReadiness();
+	bool ResolveSurfacePresentationReadiness(float DeltaTime, float& OutPlaybackDeltaTime);
+	bool ResolveCostDigitPresentationReadiness(float DeltaTime, float& OutPlaybackDeltaTime);
+	bool ResolveEffectBadgePresentationReadiness(float DeltaTime, float& OutPlaybackDeltaTime);
+	void CancelSurfacePresentationReadiness();
+	void CancelSurfacePresentationReadinessIfOwnedBy(FName EffectName);
+	void CancelCostDigitPresentationReadiness();
+	void CancelEffectBadgePresentationReadiness();
+	void CancelAllPresentationReadiness();
+	void RefreshPresentationReadinessFrozenFlag();
+	void HandleSurfacePresentationReadinessFailure();
+	void RecordPresentationReadinessFailure(
+		FName ChannelName,
+		FName EffectName,
+		bool bTimedOut);
 	bool CanPlayHandTargetImpact() const;
 	void BeginHandTargetImpactPreview();
 	void EndHandTargetImpactPreview();

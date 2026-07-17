@@ -89,6 +89,9 @@ bool FWacomFirstPersonCardHandTargetImpactPreviewAndCommitTest::RunTest(
 	Widget->SetCardDragTargetFocusFeedback(
 		EWacomFirstPersonCardDragTargetFeedbackState::ValidCardTarget,
 		true);
+	TestFalse(
+		TEXT("Hand-target preview material preparation remains non-blocking"),
+		Widget->HasActivePresentationPlayback());
 	Tick(*Widget, 0.10f);
 	FWacomFirstPersonCardSlotAutomationTestView View =
 		FWacomFirstPersonCardLayerTestAccess::View(*Widget);

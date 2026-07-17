@@ -72,8 +72,12 @@ FWacomFirstPersonCardDataRewritePlayback::Tick(float DeltaTime)
 		{
 			return BuildView();
 		}
-		ElapsedSeconds = FMath::Max(0.0f, ElapsedSeconds - DelaySeconds);
+		// The digit MID is installed only when the stagger reaches its real start
+		// edge. Keep that first active view at progress zero so the readiness gate
+		// can wait for a genuine Paint without exposing a partially advanced frame.
+		ElapsedSeconds = 0.0f;
 		Phase = EWacomFirstPersonCardDataRewritePhase::Playing;
+		return BuildView();
 	}
 
 	const float Duration = ResolveDurationSeconds();

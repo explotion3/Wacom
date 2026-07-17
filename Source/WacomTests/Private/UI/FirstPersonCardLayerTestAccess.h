@@ -122,6 +122,11 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static bool RequestPress(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static bool RequestMouseUp(UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static void TickSlotMotion(UWacomFirstPersonCardLayerSlotWidget& Slot, float DeltaTime);
+	static void TickSlotMotionWithoutPresentationPaint(
+		UWacomFirstPersonCardLayerSlotWidget& Slot,
+		float DeltaTime);
+	static void AcknowledgePendingPresentationPaint(
+		UWacomFirstPersonCardLayerSlotWidget& Slot);
 	static void SetLocalHitCanvasSizeOverride(
 		UWacomFirstPersonCardLayerSlotWidget& Slot,
 		const TOptional<FVector2D>& Size);
