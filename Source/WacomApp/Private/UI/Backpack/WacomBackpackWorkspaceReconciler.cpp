@@ -169,6 +169,7 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 	UCanvasPanel* StaticCanvas = Workspace.GetCardCanvas();
 	UCanvasPanel* CarryCanvas = Workspace.GetCarryCanvas();
 	UCanvasPanel* CarryActiveCanvas = Workspace.GetCarryActiveCanvas();
+	UCanvasPanel* SettlementCanvas = Workspace.GetSettlementCanvas();
 	if (!StaticCanvas)
 	{
 		return;
@@ -280,10 +281,10 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 				ResolvedStyle->CardRenderSize,
 				Pile.bExpanded,
 				ResolvedStyle->PileCollapsedExposurePixels,
-				ResolvedStyle->AccordionMinimumExposurePixels,
-				ResolvedStyle->AccordionMaximumExposurePixels,
-				ResolvedStyle->AccordionMaximumAngleDegrees,
-				ResolvedStyle->PileEdgeMarginPixels);
+				ResolvedStyle->AdaptiveStripExposurePixels,
+				ResolvedStyle->AdaptiveStripFocusSeparationPixels,
+				ResolvedStyle->PileEdgeMarginPixels,
+				ResolvedStyle->ExpandedCardHoverLiftPixels);
 		OccupiedHeaders.Add(Layout.HeaderRect);
 		PileFrameRects.Add(Layout.FrameRect);
 		PileHeaderRects.Add(Layout.HeaderRect);
@@ -319,6 +320,12 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 	if (CarryActiveCanvas)
 	{
 		SearchPanels.Add(CarryActiveCanvas);
+	}
+	if (SettlementCanvas)
+	{
+		// Settlement retains the authoritative Widget while its outer pose converges.
+		// Excluding it makes the next Snapshot refresh create a duplicate static card.
+		SearchPanels.Add(SettlementCanvas);
 	}
 	FWacomBackpackDeckCardListReconciler::ReconcileAcrossPanels(
 		SearchPanels,
@@ -379,10 +386,7 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 					bFoundLayout = true;
 					if (bHasExpanded && Group.Zone == Expanded)
 					{
-						ExpandedBounds = CardBounds(
-							Group.Layout.Cards,
-							ResolvedStyle->CardRenderSize,
-							ResolvedStyle->AccordionHoverLiftPixels);
+						ExpandedBounds = Group.Layout.FrameRect;
 						bHasExpandedBounds = !Group.Layout.Cards.IsEmpty();
 					}
 					break;
@@ -404,6 +408,50 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 			Resolved.AngleDegrees, Resolved.LayerRank);
 		CardWidget->SetWorkspaceInteractionEnabled(Desired[Index].bWorkspaceInteractive);
 		CardWidget->SetWorkspaceReadOnlyKind(Desired[Index].ReadOnlyKind);
+	}
+
+	bool bAppliedExpandedFocusContract = false;
+	if (bHasExpanded)
+	{
+		for (const FPileGroup& Group : PileGroups)
+		{
+			if (Group.Zone != Expanded || Group.CardCount <= 0)
+			{
+				continue;
+			}
+			TArray<FWacomBackpackExpandedPileFocusCard> FocusCards;
+			FocusCards.Reserve(Group.CardCount);
+			for (int32 LocalIndex = 0; LocalIndex < Group.CardCount; ++LocalIndex)
+			{
+				const int32 OrderedIndex = Group.StartIndex + LocalIndex;
+				if (!OrderedWidgets.IsValidIndex(OrderedIndex)
+					|| !Group.Layout.Cards.IsValidIndex(LocalIndex)
+					|| !Group.Layout.FocusHitBands.IsValidIndex(LocalIndex))
+				{
+					continue;
+				}
+				FWacomBackpackExpandedPileFocusCard& FocusCard = FocusCards.AddDefaulted_GetRef();
+				FocusCard.Card = OrderedWidgets[OrderedIndex];
+				FocusCard.NeutralCenter = Group.Layout.Cards[LocalIndex].CardCenter;
+				FocusCard.NeutralAngleDegrees = Group.Layout.Cards[LocalIndex].AngleDegrees;
+				FocusCard.NeutralLayerRank = Group.Layout.Cards[LocalIndex].LayerRank + 3000;
+				FocusCard.NeutralHitBand = Group.Layout.FocusHitBands[LocalIndex];
+				FocusCard.CurrentHitBand = FocusCard.NeutralHitBand;
+			}
+			Workspace.SetExpandedPileFocusContract(
+				Expanded.Zone,
+				Expanded.OwnerInstanceId,
+				Group.Layout.HeaderRect,
+				Group.Layout.FocusCorridorRect,
+				FocusCards);
+			bAppliedExpandedFocusContract = true;
+			break;
+		}
+	}
+	if (!bAppliedExpandedFocusContract)
+	{
+		Workspace.SetExpandedPileFocusContract(
+			EZoneKind::Backpack, FGuid(), FSlateRect(), FSlateRect(), {});
 	}
 
 	if (bHasExpanded && bHasExpandedBounds)

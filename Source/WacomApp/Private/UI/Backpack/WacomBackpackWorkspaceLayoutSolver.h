@@ -12,7 +12,7 @@ struct FWacomBackpackResolvedLayout
 	int32 LayerRank = 0;
 };
 
-struct FWacomBackpackCarriedFanLayout
+struct FWacomBackpackCarriedStripLayout
 {
 	FWacomBackpackResolvedLayout Transform;
 	bool bCurrent = false;
@@ -29,8 +29,23 @@ struct FWacomBackpackResolvedPileContentLayout
 {
 	FSlateRect HeaderRect;
 	FSlateRect FrameRect;
+	/** 展开牌堆按当前卡数预留、在 Hover 切换期间保持稳定的视觉走廊。 */
+	FSlateRect FocusCorridorRect;
+	/** 展开牌堆中性紧凑布局的初始命中条带。 */
+	TArray<FSlateRect> FocusHitBands;
 	bool bOpensRight = true;
 	TArray<FWacomBackpackResolvedLayout> Cards;
+};
+
+struct FWacomBackpackAdaptiveStripLayout
+{
+	FSlateRect CorridorRect;
+	float EffectiveExposurePixels = 0.0f;
+	float EffectiveFocusSeparationPixels = 0.0f;
+	float ReservedWidthPixels = 0.0f;
+	TArray<FWacomBackpackResolvedLayout> Cards;
+	/** 由本次焦点重排后的实际卡位生成，供 Workspace 做直观 Hover 命中。 */
+	TArray<FSlateRect> HitBands;
 };
 
 /** 背包工作台的确定性纯布局算法；不读取 Widget 或 Run 状态。 */
@@ -51,17 +66,6 @@ struct WACOMAPP_API FWacomBackpackWorkspaceLayoutSolver
 		FVector2D Padding,
 		TConstArrayView<FSlateRect> Obstacles);
 
-	static TArray<FWacomBackpackResolvedLayout> BuildAccordionLayout(
-		int32 CardCount,
-		FVector2D PileTopLeft,
-		FVector2D PileSize,
-		FVector2D WorkspaceSize,
-		FVector2D CardSize,
-		float MinimumExposurePixels,
-		float MaximumExposurePixels,
-		float MaximumAngleDegrees,
-		float EdgeMarginPixels);
-
 	static FWacomBackpackResolvedPileContentLayout BuildPileContentLayout(
 		int32 CardCount,
 		FVector2D HeaderTopLeft,
@@ -70,10 +74,23 @@ struct WACOMAPP_API FWacomBackpackWorkspaceLayoutSolver
 		FVector2D CardSize,
 		bool bExpanded,
 		float CollapsedExposurePixels,
-		float MinimumExpandedExposurePixels,
-		float MaximumExpandedExposurePixels,
-		float MaximumAngleDegrees,
-		float EdgeMarginPixels);
+		float AdaptiveStripExposurePixels,
+		float AdaptiveStripFocusSeparationPixels,
+		float EdgeMarginPixels,
+		float FocusLiftPixels = 48.0f);
+
+	/**
+	 * 在按卡数预留的稳定走廊内生成紧凑水平条；焦点两侧只做局部让位。
+	 * NeutralLayouts 提供稳定 Y、层级和焦点定位基准；结果不缩放卡面且保持零旋转。
+	 */
+	static FWacomBackpackAdaptiveStripLayout BuildAdaptiveStripLayout(
+		int32 CardCount,
+		int32 FocusIndex,
+		const FSlateRect& CorridorRect,
+		FVector2D CardSize,
+		TConstArrayView<FWacomBackpackResolvedLayout> NeutralLayouts,
+		float BaseExposurePixels,
+		float FocusSeparationPixels);
 
 	static FWacomBackpackResolvedPileLayout BuildDefaultPileLayout(
 		int32 PileIndex,
@@ -109,13 +126,15 @@ struct WACOMAPP_API FWacomBackpackWorkspaceLayoutSolver
 		FVector2D CardSize,
 		float MinimumVisibleFraction);
 
-	static TArray<FWacomBackpackCarriedFanLayout> BuildCarriedFanLayout(
+	static TArray<FWacomBackpackCarriedStripLayout> BuildCarriedStripLayout(
 		int32 CardCount,
 		int32 CurrentIndex,
 		int32 DefaultIndex,
 		FVector2D PointerPosition,
-		float MaximumAngleDegrees,
-		float CardSpacingPixels,
+		float AvailableWidth,
+		float CardWidth,
+		float BaseExposurePixels,
+		float FocusSeparationPixels,
 		float CurrentCardLiftPixels);
 
 	static FVector2D ClampCardCenterToVisibleBounds(

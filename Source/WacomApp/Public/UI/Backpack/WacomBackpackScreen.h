@@ -240,14 +240,15 @@ private:
 		meta = (ToolTip = "批量销毁确认 Widget 类。只显示数量和奖励并转发确认、取消意图。"))
 	TSubclassOf<UWacomBackpackDeleteConfirmWidget> DeleteConfirmWidgetClass;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
-		meta = (ToolTip = "背包自由工作台的布局、颜色和动效表现参数。留空时使用 C++ 默认表现，不影响 Run 规则。"))
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace Tuning",
+		meta = (ToolTip = "背包自由工作台的布局、牌列、颜色和动效制作参数资产。双击引用的 DA_BackpackWorkspaceStyle 可直接调整；不影响 Run 规则。"))
 	TObjectPtr<UWacomBackpackWorkspaceStyle> WorkspaceStyle;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> CardDetailPanel;
 
 	TWeakObjectPtr<UWacomDeckCardWidget> CardDetailSourceWidget;
+	TWeakObjectPtr<UWacomDeckCardWidget> WorkspaceBrowseFocusDetailSource;
 
 	TSharedPtr<FWacomBackpackCardDetailController> CardDetailController;
 
@@ -299,6 +300,7 @@ private:
 		const FWacomBackpackWorkspaceReleaseIntent& Intent,
 		const FWacomBackpackZoneKey& PileTarget);
 	void HandleWorkspaceInteractionChanged();
+	void HandleWorkspaceBrowseFocusChanged(UWacomDeckCardWidget* SourceWidget);
 	void HandleWorkspaceLayoutGeometryReady(FVector2D LayoutSize);
 	void ApplyOwningLayerTransitionState(bool bTransitioning);
 	void BindOwningLayerTransition();

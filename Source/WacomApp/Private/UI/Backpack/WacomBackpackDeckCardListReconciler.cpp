@@ -199,6 +199,7 @@ void FWacomBackpackDeckCardListReconciler::ReconcileAcrossPanels(
 
 	TMap<FWacomBackpackCardWidgetKey, UWacomDeckCardWidget*> ExistingByKey;
 	TMap<FGuid, UWacomDeckCardWidget*> PreservedPhysicalByInstanceId;
+	TArray<UWacomDeckCardWidget*> DuplicateExistingWidgets;
 	for (UPanelWidget* Panel : SearchPanels)
 	{
 		if (!Panel)
@@ -209,7 +210,29 @@ void FWacomBackpackDeckCardListReconciler::ReconcileAcrossPanels(
 		{
 			if (UWacomDeckCardWidget* Child = Cast<UWacomDeckCardWidget>(Panel->GetChildAt(ChildIndex)))
 			{
-				ExistingByKey.Add(MakeBackpackCardWidgetKey(*Child), Child);
+				const FWacomBackpackCardWidgetKey Key = MakeBackpackCardWidgetKey(*Child);
+				if (UWacomDeckCardWidget** Existing = ExistingByKey.Find(Key))
+				{
+					// A previous faulty reconcile may already have left one static copy
+					// beside the authoritative carry/settlement visual. Prefer the widget
+					// whose transient parent is explicitly owned by Workspace and retire
+					// every other widget for the same complete ViewKey.
+					const bool bExistingPreserved = PreserveCurrentParent(*Existing);
+					const bool bChildPreserved = PreserveCurrentParent(Child);
+					if (bChildPreserved && !bExistingPreserved)
+					{
+						DuplicateExistingWidgets.Add(*Existing);
+						*Existing = Child;
+					}
+					else
+					{
+						DuplicateExistingWidgets.Add(Child);
+					}
+				}
+				else
+				{
+					ExistingByKey.Add(Key, Child);
+				}
 				if (Child->GetBackpackListReuseRole()
 						== EWacomBackpackDeckCardListReuseRole::PhysicalList
 					&& PreserveCurrentParent(Child))
@@ -270,6 +293,14 @@ void FWacomBackpackDeckCardListReconciler::ReconcileAcrossPanels(
 		{
 			OnRemovedWidget(ExistingPair.Value);
 			ExistingPair.Value->RemoveFromParent();
+		}
+	}
+	for (UWacomDeckCardWidget* Duplicate : DuplicateExistingWidgets)
+	{
+		if (Duplicate && !UsedWidgets.Contains(Duplicate))
+		{
+			OnRemovedWidget(Duplicate);
+			Duplicate->RemoveFromParent();
 		}
 	}
 }

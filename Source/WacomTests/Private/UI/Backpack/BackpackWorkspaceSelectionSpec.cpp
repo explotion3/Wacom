@@ -44,6 +44,22 @@ bool FWacomUIBackpackWorkspaceSelectionSpec::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Marquee uses card centers and excludes read-only cards"),
 		Model.GetSelection().OrderedSelectedInstanceIds,
 		TArray<FGuid>({ First, Second }));
+	TArray<FWacomBackpackWorkspaceCardHitRecord> RefreshedLayouts = {
+		{ First, BattleZone, FVector2D(600.0f, 100.0f), 10, true },
+		{ Second, BattleZone, FVector2D(700.0f, 100.0f), 11, true },
+	};
+	Model.UpdateCardHitLayouts(RefreshedLayouts);
+	Model.BeginMarquee(BattleZone, FVector2D(550.0f, 50.0f), false);
+	Model.UpdateMarquee(FVector2D(750.0f, 150.0f));
+	Model.CompleteMarquee();
+	TestEqual(TEXT("Marquee consumes refreshed actual card positions"),
+		Model.GetSelection().OrderedSelectedInstanceIds,
+		TArray<FGuid>({ First, Second }));
+	RefreshedLayouts = {
+		{ First, BattleZone, FVector2D(100.0f, 100.0f), 0, true },
+		{ Second, BattleZone, FVector2D(200.0f, 100.0f), 1, true },
+	};
+	Model.UpdateCardHitLayouts(RefreshedLayouts);
 
 	Model.BeginMarquee(BattleZone, FVector2D(150.0f, 50.0f), true);
 	Model.UpdateMarquee(FVector2D(450.0f, 150.0f));

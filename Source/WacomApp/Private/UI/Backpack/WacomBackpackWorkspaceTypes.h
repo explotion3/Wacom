@@ -91,7 +91,7 @@ struct FWacomBackpackWorkspacePileMoveState
 	bool bActive = false;
 };
 
-/** 一次持续扇形携带的全部瞬态状态。 */
+/** 一次持续水平牌列携带的全部瞬态状态。 */
 struct FWacomBackpackWorkspaceCarryState
 {
 	TArray<FGuid> RemainingInstanceIds;

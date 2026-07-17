@@ -83,6 +83,12 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	UWacomBackpackWorkspaceStyle* Style = LoadObject<UWacomBackpackWorkspaceStyle>(
 		nullptr,
 		TEXT("/Game/Wacom/UI/Backpack/DA_BackpackWorkspaceStyle.DA_BackpackWorkspaceStyle"));
+	TestNotNull(TEXT("Formal workspace style is loadable"), Style);
+	if (Style)
+	{
+		TestTrue(TEXT("Backpack uses the authored Battle card body size"),
+			Style->CardRenderSize.Equals(FVector2D(296.0f, 420.0f), 0.1f));
+	}
 
 	TestTrue(TEXT("Formal screen uses BackpackScreen parent"),
 		ScreenClass && ScreenClass->IsChildOf(UWacomBackpackScreen::StaticClass()));
@@ -202,6 +208,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestNotNull(TEXT("Workspace binds its sole unified WorkspaceCanvas"),
 		WorkspaceTree ? Cast<UCanvasPanel>(WorkspaceTree->FindWidget(TEXT("WorkspaceCanvas"))) : nullptr);
 	for (const FName LayerName : { FName(TEXT("PileFrameLayer")), FName(TEXT("StaticCardLayer")),
+		FName(TEXT("SettlementLayer")),
 		FName(TEXT("MarqueeLayer")), FName(TEXT("CarryRoot")), FName(TEXT("CarryLayer")),
 		FName(TEXT("CarryActiveLayer")) })
 	{
@@ -211,13 +218,13 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	UInvalidationBox* CarryCache = WorkspaceTree
 		? Cast<UInvalidationBox>(WorkspaceTree->FindWidget(TEXT("CarryCache")))
 		: nullptr;
-	TestNotNull(TEXT("Workspace carries the moving fan through an invalidation root"),
+	TestNotNull(TEXT("Workspace carries the moving strip through an invalidation root"),
 		CarryCache);
 	if (CarryCache)
 	{
-		TestEqual(TEXT("CarryLayer is the sole cached fan subtree"),
+		TestEqual(TEXT("CarryLayer is the sole cached strip subtree"),
 			CarryCache->GetContent(), WorkspaceTree->FindWidget(TEXT("CarryLayer")));
-		TestTrue(TEXT("Carry invalidation root caches the fan draw elements"),
+		TestTrue(TEXT("Carry invalidation root caches the strip draw elements"),
 			CarryCache->GetCanCache());
 		TestEqual(TEXT("CarryCache is stationary content of the moving CarryRoot"),
 			static_cast<UWidget*>(CarryCache->GetParent()),
@@ -238,7 +245,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			TestTrue(TEXT("CarryRoot is a point anchor instead of a full-workspace invalidation surface"),
 				CarryRootSlot->GetAnchors().Minimum.IsNearlyZero()
 					&& CarryRootSlot->GetAnchors().Maximum.IsNearlyZero());
-			TestTrue(TEXT("CarryRoot keeps a 1x1 logical extent while its unclipped children render the fan"),
+			TestTrue(TEXT("CarryRoot keeps a 1x1 logical extent while its unclipped children render the strip"),
 				CarryRootSlot->GetSize().Equals(FVector2D(1.0f, 1.0f), 0.1f));
 		}
 	}
@@ -296,17 +303,21 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	UWacomFirstPersonCardViewWidget* EmbeddedCardFace = DeckCardTree
 		? Cast<UWacomFirstPersonCardViewWidget>(DeckCardTree->FindWidget(TEXT("BackpackCardView")))
 		: nullptr;
+	UOverlay* CardMotionRoot = DeckCardTree
+		? Cast<UOverlay>(DeckCardTree->FindWidget(TEXT("CardMotionRoot")))
+		: nullptr;
 	TestNotNull(TEXT("Backpack card uniformly scales the authored face instead of relaying it out"), CardFaceScaleBox);
+	TestNotNull(TEXT("Backpack card binds a dedicated local CardMotionRoot"), CardMotionRoot);
 	TestNotNull(TEXT("Backpack card binds WBP_FPCardView"), EmbeddedCardFace);
 	if (CardFaceScaleBox)
 	{
 		TestEqual(
-			TEXT("Card face uses a fixed uniform scale without triggering child relayout"),
+			TEXT("Card face retains a stable uniform scale host"),
 			CardFaceScaleBox->GetStretch(),
 			EStretch::UserSpecified);
 		TestTrue(
-			TEXT("Card face uses the fixed three-quarter pixel-art scale"),
-			FMath::IsNearlyEqual(CardFaceScaleBox->GetUserSpecifiedScale(), 0.75f));
+			TEXT("Backpack preserves the full authored Battle card face size"),
+			FMath::IsNearlyEqual(CardFaceScaleBox->GetUserSpecifiedScale(), 1.0f));
 		TestEqual(
 			TEXT("Card face is the scale box content"),
 			CardFaceScaleBox->GetContent(),
@@ -376,6 +387,12 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			EmbeddedCardFace->GetVisibility(),
 			ESlateVisibility::HitTestInvisible);
 	}
+	if (CardMotionRoot && CardFaceScaleBox && CardFaceScaleBox->GetParent())
+	{
+		TestEqual(TEXT("CardMotionRoot wraps the complete card overlay host"),
+			static_cast<UWidget*>(CardFaceScaleBox->GetParent()->GetParent()),
+			static_cast<UWidget*>(CardMotionRoot));
+	}
 
 	UWidgetTree* BackpackCardFaceTree = GetBackpackWorkspaceWidgetTree(BackpackCardFaceClass);
 	int32 RetainerSurfaceCount = 0;
@@ -425,8 +442,24 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		FindFProperty<FProperty>(ScreenClass, TEXT("ZoneRackWidgetClass")));
 	TestEqual(TEXT("Screen CDO selects formal confirmation class"),
 		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("DeleteConfirmWidgetClass")), static_cast<UObject*>(ConfirmClass));
-	TestEqual(TEXT("Screen CDO selects formal workspace style"),
-		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("WorkspaceStyle")), static_cast<UObject*>(Style));
+	FObjectPropertyBase* WorkspaceStyleProperty =
+		FindFProperty<FObjectPropertyBase>(ScreenClass, TEXT("WorkspaceStyle"));
+	TestNotNull(TEXT("Screen exposes the workspace style as an editable object property"),
+		WorkspaceStyleProperty);
+	if (WorkspaceStyleProperty)
+	{
+		TestFalse(TEXT("Screen style reference must not inline an object into Widget Blueprint details"),
+			WorkspaceStyleProperty->HasAnyPropertyFlags(CPF_InstancedReference));
+		TestFalse(TEXT("Screen style reference avoids recursive root-details flattening"),
+			WorkspaceStyleProperty->HasMetaData(TEXT("ShowOnlyInnerProperties")));
+	}
+	TestFalse(TEXT("Workspace style assets cannot be created as inline detail objects"),
+		UWacomBackpackWorkspaceStyle::StaticClass()->HasAnyClassFlags(CLASS_EditInlineNew));
+	UWacomBackpackWorkspaceStyle* AssignedStyle = Cast<UWacomBackpackWorkspaceStyle>(
+		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("WorkspaceStyle")));
+	TestNotNull(TEXT("Screen CDO selects a formal workspace style asset"), AssignedStyle);
+	TestEqual(TEXT("Screen uses the external style asset without an inline UObject details tree"),
+		AssignedStyle, Style);
 	TestEqual(TEXT("Workspace CDO selects the passive embedded pile class"),
 		ReadBackpackWorkspaceObjectDefault(WorkspaceClass, TEXT("PileWidgetClass")),
 		static_cast<UObject*>(ZonePileClass));
@@ -436,9 +469,21 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		nullptr,
 		TEXT("/Game/Wacom/UI/Backpack/Materials/M_BackpackWorkspaceCardFeedback.M_BackpackWorkspaceCardFeedback"));
 	TestNotNull(TEXT("Formal workspace feedback material loads"), FeedbackMaterial);
-	TestEqual(TEXT("Style selects formal feedback material"), Style->CardFeedbackMaterial.Get(), FeedbackMaterial);
-	TestEqual(TEXT("Style keeps 30 percent minimum visibility"), Style->MinimumVisibleFraction, 0.3f);
-	TestEqual(TEXT("Style keeps default current lift"), Style->CurrentCardLiftPixels, 56.0f);
+	if (AssignedStyle)
+	{
+		TestEqual(TEXT("Workspace style selects formal feedback material"),
+			AssignedStyle->CardFeedbackMaterial.Get(), FeedbackMaterial);
+		TestEqual(TEXT("Workspace style keeps 30 percent minimum visibility"),
+			AssignedStyle->MinimumVisibleFraction, 0.3f);
+		TestEqual(TEXT("Workspace style keeps default current lift"),
+			AssignedStyle->CurrentCardLiftPixels, 56.0f);
+		TestEqual(TEXT("Workspace style keeps the compact adaptive-strip exposure"),
+			AssignedStyle->AdaptiveStripExposurePixels, 48.0f);
+		TestEqual(TEXT("Workspace style exposes the shared pile/carry focus separation"),
+			AssignedStyle->AdaptiveStripFocusSeparationPixels, 32.0f);
+		TestEqual(TEXT("Workspace style keeps the stable-band hysteresis"),
+			AssignedStyle->FocusHitHysteresisPixels, 8.0f);
+	}
 
 	UClass* PrimaryLayoutClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Foundation/WBP_PrimaryGameLayout.WBP_PrimaryGameLayout_C"));

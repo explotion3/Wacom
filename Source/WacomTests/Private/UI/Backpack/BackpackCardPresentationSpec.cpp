@@ -8,6 +8,7 @@
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "Cards/CardDefinition.h"
 #include "Components/CanvasPanel.h"
+#include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UObject/StrongObjectPtr.h"
@@ -63,13 +64,16 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 		FirstFace->GetAutomationTestViewForTest().bRealtimePresentationEnabled);
 
 	FWacomBackpackCardPresentationController Controller;
+	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
 	Controller.Reconcile(
 		Cards,
-		OwnedCards[0]->GetCardInstanceId(),
+		OwnedCards[0].Get(),
 		nullptr,
 		nullptr,
 		FGeometry(),
-		FVector2D::ZeroVector);
+		FVector2D::ZeroVector,
+		*Style,
+		false);
 	TestTrue(TEXT("Hovered card enables shared Fake3D realtime presentation"),
 		FirstFace->GetAutomationTestViewForTest().bRealtimePresentationEnabled);
 	TestFalse(TEXT("Non-hovered card stays static"),
@@ -85,11 +89,13 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 	Carry.DefaultIndex = 0;
 	Controller.Reconcile(
 		Cards,
-		FGuid(),
+		nullptr,
 		&Carry,
 		CarryLayer.Get(),
 		FGeometry(),
-		FVector2D::ZeroVector);
+		FVector2D::ZeroVector,
+		*Style,
+		false);
 	const int32 CarryDepthApplyBaseline =
 		FirstFace->GetAutomationTestViewForTest().CardDepthApplyCount;
 	const int32 CarryRealtimeApplyBaseline =
@@ -99,41 +105,107 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 		TEXT("Equivalent realtime policy does not rewrite the Retainer phase"),
 		FirstFace->GetAutomationTestViewForTest().RealtimePresentationApplyCount,
 		CarryRealtimeApplyBaseline);
-	OwnedCards[0]->SetBackpackRealtimePresentation(
-		true,
-		FVector2D::ZeroVector,
-		true);
-	TestEqual(
-		TEXT("Equivalent Backpack carry presentation is idempotent"),
-		FirstFace->GetAutomationTestViewForTest().CardDepthApplyCount,
-		CarryDepthApplyBaseline);
 	for (int32 Step = 0; Step < 12; ++Step)
 	{
 		Controller.UpdatePointer(
 			FGeometry(),
 			FVector2D(100.0f + Step * 25.0f, 200.0f + Step * 11.0f),
 			true);
+		Controller.Tick(1.0f / 60.0f, FGeometry(), *Style, false);
 	}
-	TestEqual(
-		TEXT("Carry pointer motion does not rewrite the pointer-independent retained card depth"),
-		FirstFace->GetAutomationTestViewForTest().CardDepthApplyCount,
-		CarryDepthApplyBaseline);
+	TestTrue(
+		TEXT("Carry pointer motion updates the active card velocity depth"),
+		FirstFace->GetAutomationTestViewForTest().CardDepthApplyCount > CarryDepthApplyBaseline);
+	TestEqual(TEXT("Carry keeps a single realtime Retainer budget"),
+		Controller.GetRealtimeCardCount(), 1);
 	CarryLayer->RemoveChild(OwnedCards[0].Get());
 
+	OwnedCards[1]->SetWorkspaceInteractionEnabled(false);
+	OwnedCards[1]->SetWorkspaceReadOnlyKind(
+		EWacomBackpackWorkspaceCardReadOnlyKind::BattleProjection);
 	Controller.Reconcile(
 		Cards,
-		OwnedCards[1]->GetCardInstanceId(),
+		OwnedCards[1].Get(),
 		nullptr,
 		nullptr,
 		FGeometry(),
-		FVector2D::ZeroVector);
+		FVector2D::ZeroVector,
+		*Style,
+		false);
 	TestFalse(TEXT("Previous dynamic card returns to static redraw mode"),
 		FirstFace->GetAutomationTestViewForTest().bRealtimePresentationEnabled);
-	TestTrue(TEXT("Realtime budget transfers to the new hover card"),
+	TestTrue(TEXT("Realtime budget transfers to the exact read-only browse focus"),
 		SecondFace->GetAutomationTestViewForTest().bRealtimePresentationEnabled);
 	Controller.Reset();
 	TestFalse(TEXT("Controller reset leaves no realtime Backpack card"),
 		SecondFace->GetAutomationTestViewForTest().bRealtimePresentationEnabled);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardLocalPoseMotionSpec,
+	"Wacom.UI.Backpack.CardView.LocalPoseMotion",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardLocalPoseMotionSpec::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
+	FWacomBackpackCardPresentationController Controller;
+	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
+	const FVector2D InitialScale = Card->GetRenderTransform().Scale;
+	const float InitialOpacity = Card->GetRenderOpacity();
+
+	Controller.SetLocalPoseTarget(
+		*Card,
+		FVector2D(0.0f, -Style->ExpandedCardHoverLiftPixels),
+		-12.0f,
+		Style->HoverEnterSeconds,
+		false);
+	Controller.Tick(Style->HoverEnterSeconds * 0.5f, FGeometry(), *Style, false);
+	TestTrue(TEXT("Hover local lift is in flight at half duration"),
+		Card->GetBackpackLocalMotionTranslation().Y < 0.0f
+			&& Card->GetBackpackLocalMotionTranslation().Y > -Style->ExpandedCardHoverLiftPixels);
+	TestTrue(TEXT("Hover local rotation is in flight at half duration"),
+		Card->GetBackpackLocalMotionAngle() < 0.0f
+			&& Card->GetBackpackLocalMotionAngle() > -12.0f);
+	Controller.Tick(Style->HoverEnterSeconds * 0.5f, FGeometry(), *Style, false);
+	TestTrue(TEXT("Hover reaches the authored 48px lift"),
+		Card->GetBackpackLocalMotionTranslation().Equals(
+			FVector2D(0.0f, -Style->ExpandedCardHoverLiftPixels), 0.01f));
+	TestTrue(TEXT("Hover reaches the angle compensation target"),
+		FMath::IsNearlyEqual(Card->GetBackpackLocalMotionAngle(), -12.0f, 0.01f));
+	TestTrue(TEXT("Local motion never changes card scale"),
+		Card->GetRenderTransform().Scale.Equals(InitialScale));
+	TestTrue(TEXT("Local motion never changes card opacity"),
+		FMath::IsNearlyEqual(Card->GetRenderOpacity(), InitialOpacity));
+
+	Controller.BeginSettlement(
+		*Card,
+		FVector2D(-140.0f, 35.0f),
+		18.0f,
+		Style->SettleSeconds,
+		false);
+	Controller.Tick(Style->SettleSeconds * 0.5f, FGeometry(), *Style, false);
+	Controller.Tick(Style->SettleSeconds * 0.5f, FGeometry(), *Style, false);
+	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> Completed;
+	Controller.ConsumeCompletedSettlements(Completed);
+	TestEqual(TEXT("Settlement reports exactly one completed original Widget"),
+		Completed.Num(), 1);
+	TestTrue(TEXT("Settlement finishes at zero local translation"),
+		Card->GetBackpackLocalMotionTranslation().IsNearlyZero(0.01f));
+	TestTrue(TEXT("Settlement finishes at zero local angle"),
+		FMath::IsNearlyZero(Card->GetBackpackLocalMotionAngle(), 0.01f));
+
+	Controller.SetLocalPoseTarget(
+		*Card,
+		FVector2D(0.0f, -Style->CurrentCardLiftPixels),
+		7.0f,
+		Style->CarryCurrentTransitionSeconds,
+		true);
+	TestTrue(TEXT("Simplified motion snaps directly to its final pose"),
+		Card->GetBackpackLocalMotionTranslation().Equals(
+			FVector2D(0.0f, -Style->CurrentCardLiftPixels), 0.01f));
+	Controller.Reset();
 	return true;
 }
 

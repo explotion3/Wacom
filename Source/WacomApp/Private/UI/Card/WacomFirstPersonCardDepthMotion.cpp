@@ -2,6 +2,8 @@
 
 #include "UI/Card/WacomFirstPersonCardDepthMotion.h"
 
+#include "UI/Card/WacomCardMotionKernel.h"
+
 namespace
 {
 	constexpr float DepthTiltToleranceDegrees = 0.01f;
@@ -30,7 +32,7 @@ const FWacomFirstPersonCardDepthView& FWacomFirstPersonCardDepthMotion::Update(
 		TargetView.TiltDegrees.IsNearlyZero(DepthTiltToleranceDegrees)
 		&& FMath::IsNearlyZero(TargetView.ContactShadowLift, ContactShadowLiftTolerance);
 	const float ResponseSpeed = bReturningToRest ? Config.ReturnSpeed : Config.ResponseSpeed;
-	const float Alpha = ComputeExponentialAlpha(ResponseSpeed, SafeDeltaTime);
+	const float Alpha = FWacomCardMotionKernel::ComputeExponentialAlpha(ResponseSpeed, SafeDeltaTime);
 
 	CurrentView.bFake3DEnabled = TargetView.bFake3DEnabled;
 	CurrentView.TiltDegrees = FMath::Lerp(CurrentView.TiltDegrees, TargetView.TiltDegrees, Alpha);
@@ -86,17 +88,6 @@ bool FWacomFirstPersonCardDepthMotion::IsInMotion() const
 			TargetView.ContactShadowLift,
 			ContactShadowLiftTolerance)
 		|| FilteredPointerVelocity.SizeSquared() > FMath::Square(PointerVelocityTolerance);
-}
-
-float FWacomFirstPersonCardDepthMotion::ComputeExponentialAlpha(float Speed, float DeltaTime)
-{
-	if (DeltaTime <= 0.0f)
-	{
-		return 0.0f;
-	}
-	return Speed <= 0.0f
-		? 1.0f
-		: 1.0f - FMath::Exp(-FMath::Max(0.0f, Speed) * DeltaTime);
 }
 
 FVector2D FWacomFirstPersonCardDepthMotion::ResolvePointerInCardSpace(
@@ -274,6 +265,8 @@ void FWacomFirstPersonCardDepthMotion::UpdateFilteredPointerVelocity(
 		bHasLastPointerPosition = false;
 	}
 
-	const float VelocityAlpha = ComputeExponentialAlpha(Config.DragVelocityFilterSpeed, DeltaTime);
+	const float VelocityAlpha = FWacomCardMotionKernel::ComputeExponentialAlpha(
+		Config.DragVelocityFilterSpeed,
+		DeltaTime);
 	FilteredPointerVelocity = FMath::Lerp(FilteredPointerVelocity, RawVelocity, VelocityAlpha);
 }

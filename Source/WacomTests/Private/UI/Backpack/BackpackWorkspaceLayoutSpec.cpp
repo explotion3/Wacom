@@ -90,31 +90,6 @@ bool FWacomUIBackpackWorkspaceLayoutContractSpec::RunTest(const FString& Paramet
 		FWacomBackpackWorkspaceModelTestAccess::ArrangeAllAndCountRemainingManualLayouts(5),
 		0);
 
-	for (const int32 Count : { 0, 1, 3, 21 })
-	{
-		for (const FVector2D PilePosition : { FVector2D(24.0f, 470.0f), FVector2D(996.0f, 470.0f) })
-		{
-			const TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> Accordion =
-				FWacomBackpackWorkspaceModelTestAccess::BuildAccordionLayout(
-					Count,
-					PilePosition,
-					WorkspaceSize);
-			TestEqual(
-				*FString::Printf(TEXT("Accordion returns all %d cards at either edge"), Count),
-				Accordion.Num(),
-				Count);
-			for (int32 Index = 0; Index < Accordion.Num(); ++Index)
-			{
-				TestEqual(TEXT("Accordion layer order remains deterministic"), Accordion[Index].LayerRank, Index);
-				TestTrue(TEXT("Accordion keeps fixed-size card centers inside horizontal bounds"),
-					Accordion[Index].CardCenter.X >= 110.0f - KINDA_SMALL_NUMBER
-						&& Accordion[Index].CardCenter.X <= WorkspaceSize.X - 110.0f + KINDA_SMALL_NUMBER);
-				TestTrue(TEXT("Accordion uses only the configured light fan angle"),
-					FMath::Abs(Accordion[Index].AngleDegrees) <= 6.0f + KINDA_SMALL_NUMBER);
-			}
-		}
-	}
-
 	for (const int32 Count : { 0, 1, 3, 15, 21 })
 	{
 		for (const bool bExpanded : { false, true })
@@ -140,17 +115,15 @@ bool FWacomUIBackpackWorkspaceLayoutContractSpec::RunTest(const FString& Paramet
 				TestTrue(TEXT("Real pile never dynamically shrinks the card height"),
 					Card.CardCenter.Y - 160.0f >= Left.FrameRect.Top - KINDA_SMALL_NUMBER
 						&& Card.CardCenter.Y + 160.0f <= Left.FrameRect.Bottom + 6.0f);
-				TestTrue(TEXT("Collapsed cards do not rotate; expanded fan remains mild"),
-					bExpanded
-						? FMath::Abs(Card.AngleDegrees) <= 6.0f + KINDA_SMALL_NUMBER
-						: FMath::IsNearlyZero(Card.AngleDegrees));
+				TestTrue(TEXT("Collapsed and expanded pile cards remain horizontal"),
+					FMath::IsNearlyZero(Card.AngleDegrees));
 			}
 			if (Left.Cards.Num() > 1)
 			{
 				const float Exposure = Left.Cards[1].CardCenter.X - Left.Cards[0].CardCenter.X;
-				TestTrue(TEXT("Collapsed exposure stays 10-24; expanded exposure stays 32-72"),
+				TestTrue(TEXT("Collapsed exposure stays 10-24; expanded strip stays at or below 48"),
 					bExpanded
-						? Exposure >= 32.0f - KINDA_SMALL_NUMBER && Exposure <= 72.0f + KINDA_SMALL_NUMBER
+						? Exposure >= 0.0f && Exposure <= 48.0f + KINDA_SMALL_NUMBER
 						: Exposure >= 10.0f - KINDA_SMALL_NUMBER && Exposure <= 24.0f + KINDA_SMALL_NUMBER);
 			}
 		}

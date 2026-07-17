@@ -51,30 +51,6 @@ FWacomBackpackWorkspaceModelTestAccess::BuildDefaultLayout(
 	return Views;
 }
 
-TArray<FWacomBackpackWorkspaceResolvedLayoutTestView>
-FWacomBackpackWorkspaceModelTestAccess::BuildAccordionLayout(
-	int32 CardCount,
-	FVector2D PileTopLeft,
-	FVector2D WorkspaceSize)
-{
-	TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> Views;
-	for (const FWacomBackpackResolvedLayout& Layout :
-		FWacomBackpackWorkspaceLayoutSolver::BuildAccordionLayout(
-			CardCount,
-			PileTopLeft,
-			FVector2D(260.0f, 220.0f),
-			WorkspaceSize,
-			FVector2D(220.0f, 320.0f),
-			32.0f,
-			72.0f,
-			12.0f,
-			24.0f))
-	{
-		Views.Add(ToTestView(Layout));
-	}
-	return Views;
-}
-
 FWacomBackpackPileContentLayoutTestView
 FWacomBackpackWorkspaceModelTestAccess::BuildPileContentLayout(
 	int32 CardCount,
@@ -91,9 +67,8 @@ FWacomBackpackWorkspaceModelTestAccess::BuildPileContentLayout(
 			FVector2D(220.0f, 320.0f),
 			bExpanded,
 			16.0f,
+			48.0f,
 			32.0f,
-			72.0f,
-			12.0f,
 			24.0f);
 	FWacomBackpackPileContentLayoutTestView View;
 	View.HeaderRect = Layout.HeaderRect;

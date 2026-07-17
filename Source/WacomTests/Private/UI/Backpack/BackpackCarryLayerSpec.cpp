@@ -62,23 +62,14 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 
 		const FWacomBackpackWorkspaceAutomationTestView Started =
 			Workspace->GetAutomationTestView();
-		TestEqual(TEXT("Carry fan is calculated once at pickup"),
-			Started.CarryFanLayoutRebuildCount, 1);
-		TestEqual(TEXT("Exactly one current card lives outside the cached fan"),
+		TestEqual(TEXT("Carry strip is calculated once at pickup"),
+			Started.CarryStripLayoutRebuildCount, 1);
+		TestEqual(TEXT("Exactly one current card lives outside the cached strip"),
 			Started.ActiveCarryCardCount, 1);
-		TestEqual(TEXT("Only non-current cards live in the cached fan"),
+		TestEqual(TEXT("Only non-current cards live in the cached strip"),
 			Started.CachedCarryCardCount, FMath::Max(0, CardCount - 1));
 		const FWacomBackpackWorkspaceCarryState& StartedCarry = Model->GetCarry();
 		const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
-		const TArray<FWacomBackpackCarriedFanLayout> LocalFan =
-			FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFanLayout(
-				CardCount,
-				StartedCarry.CurrentIndex,
-				StartedCarry.DefaultIndex,
-				FVector2D::ZeroVector,
-				Style->FanMaximumAngleDegrees,
-				Style->FanCardSpacingPixels,
-				Style->CurrentCardLiftPixels);
 		UWacomDeckCardWidget* CurrentCard = nullptr;
 		if (StartedCarry.RemainingInstanceIds.IsValidIndex(StartedCarry.CurrentIndex))
 		{
@@ -96,20 +87,86 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 			? Cast<UCanvasPanelSlot>(CurrentCard->Slot)
 			: nullptr;
 		TestNotNull(TEXT("Current carry card has a canvas slot"), CurrentSlot);
-		if (CurrentSlot && LocalFan.IsValidIndex(StartedCarry.CurrentIndex))
+		if (CurrentSlot)
 		{
-			const FVector2D ExpectedLocalPosition =
-				LocalFan[StartedCarry.CurrentIndex].Transform.CardCenter
-				- Style->CardRenderSize * 0.5f;
-			TestTrue(TEXT("Presentation refresh preserves the current card local fan layout"),
-				CurrentSlot->GetPosition().Equals(ExpectedLocalPosition, 1.0f));
+			TestTrue(TEXT("Carry focus strip keeps the formal fixed card size"),
+				CurrentSlot->GetSize().Equals(Style->CardRenderSize, 0.1f));
+			int32 HighestZOrder = TNumericLimits<int32>::Lowest();
+			for (UWacomDeckCardWidget* Card : Cards)
+			{
+				if (const UCanvasPanelSlot* Slot = Card
+					? Cast<UCanvasPanelSlot>(Card->Slot)
+					: nullptr)
+				{
+					HighestZOrder = FMath::Max(HighestZOrder, Slot->GetZOrder());
+				}
+			}
+			TestEqual(TEXT("Default release card owns the highest carry ZOrder"),
+				CurrentSlot->GetZOrder(), HighestZOrder);
 		}
+		if (CardCount >= 3)
+		{
+			TestTrue(TEXT("First wheel step is handled by Workspace"),
+				FWacomBackpackScreenTestAccess::StepWorkspaceCarryCurrentByWheel(
+					*Workspace, 1.0f));
+			UWacomDeckCardWidget* PreviousWheelCurrent = nullptr;
+			const FGuid PreviousWheelCurrentId =
+				Model->GetCarry().RemainingInstanceIds[Model->GetCarry().CurrentIndex];
+			for (UWacomDeckCardWidget* Card : Cards)
+			{
+				if (Card && Card->GetCardInstanceId() == PreviousWheelCurrentId)
+				{
+					PreviousWheelCurrent = Card;
+					break;
+				}
+			}
+
+			TestTrue(TEXT("Second wheel step is handled by Workspace"),
+				FWacomBackpackScreenTestAccess::StepWorkspaceCarryCurrentByWheel(
+					*Workspace, 1.0f));
+			UWacomDeckCardWidget* NewWheelCurrent = nullptr;
+			const FGuid NewWheelCurrentId =
+				Model->GetCarry().RemainingInstanceIds[Model->GetCarry().CurrentIndex];
+			for (UWacomDeckCardWidget* Card : Cards)
+			{
+				if (Card && Card->GetCardInstanceId() == NewWheelCurrentId)
+				{
+					NewWheelCurrent = Card;
+					break;
+				}
+			}
+			const UCanvasPanelSlot* PreviousWheelSlot = PreviousWheelCurrent
+				? Cast<UCanvasPanelSlot>(PreviousWheelCurrent->Slot)
+				: nullptr;
+			const UCanvasPanelSlot* NewWheelSlot = NewWheelCurrent
+				? Cast<UCanvasPanelSlot>(NewWheelCurrent->Slot)
+				: nullptr;
+			TestNotNull(TEXT("Previous wheel card remains available during pose handoff"),
+				PreviousWheelSlot);
+			TestNotNull(TEXT("New wheel current card has an active canvas slot"), NewWheelSlot);
+			if (PreviousWheelSlot && NewWheelSlot)
+			{
+				TestEqual(TEXT("Wheel handoff keeps both moving cards in the active layer"),
+					NewWheelCurrent->GetParent(), PreviousWheelCurrent->GetParent());
+				TestTrue(TEXT("New wheel current card renders above the returning previous card"),
+					NewWheelSlot->GetZOrder() > PreviousWheelSlot->GetZOrder());
+			}
+
+			FWacomBackpackScreenTestAccess::StepWorkspaceCarryCurrentByWheel(
+				*Workspace, -1.0f);
+			FWacomBackpackScreenTestAccess::StepWorkspaceCarryCurrentByWheel(
+				*Workspace, -1.0f);
+		}
+		const FWacomBackpackWorkspaceAutomationTestView AfterWheelHandoff =
+			Workspace->GetAutomationTestView();
 		const int32 StaticUpdatesBeforeRepeatedPresentation =
-			Started.StaticCardPresentationUpdateCount;
+			AfterWheelHandoff.StaticCardPresentationUpdateCount;
 		Workspace->RefreshInteractionPresentation();
 		TestEqual(TEXT("Repeated presentation does not rewrite a carried current card as static"),
 			Workspace->GetAutomationTestView().StaticCardPresentationUpdateCount,
 			StaticUpdatesBeforeRepeatedPresentation);
+		const FWacomBackpackWorkspaceAutomationTestView PointerBaseline =
+			Workspace->GetAutomationTestView();
 
 		const FVector2D LatestPointer(845.25f, 417.75f);
 		TArray<FVector2D> PointerBurst;
@@ -127,27 +184,32 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 		}
 		const FWacomBackpackWorkspaceAutomationTestView BeforeFrameFlush =
 			Workspace->GetAutomationTestView();
+		TestTrue(TEXT("Pointer events update exact logical target immediately"),
+			BeforeFrameFlush.CarryAnchorLocal.Equals(LatestPointer, 1.0f));
 		TestTrue(TEXT("High-frequency pointer events wait for the single Slate-frame apply"),
-			BeforeFrameFlush.CarryRootTranslation.Equals(Started.CarryRootTranslation, 0.1f));
+			BeforeFrameFlush.CarryRootTranslation.Equals(PointerBaseline.CarryRootTranslation, 0.1f));
 		TestEqual(TEXT("Pointer burst does not issue visual anchor writes before the frame flush"),
 			BeforeFrameFlush.CarryVisualAnchorApplyCount,
-			Started.CarryVisualAnchorApplyCount);
+			PointerBaseline.CarryVisualAnchorApplyCount);
 		FWacomBackpackScreenTestAccess::FlushWorkspaceCarryPointer(*Workspace);
 		const FWacomBackpackWorkspaceAutomationTestView Moved =
 			Workspace->GetAutomationTestView();
-		TestTrue(TEXT("Carry anchor reaches the latest pointer with <=1px error"),
+		TestTrue(TEXT("Carry logical anchor remains at the latest pointer with <=1px error"),
 			Moved.CarryAnchorLocal.Equals(LatestPointer, 1.0f));
-		TestTrue(TEXT("Outer CarryRoot owns pointer translation"),
-			Moved.CarryRootTranslation.Equals(LatestPointer, 1.0f));
+		TestTrue(TEXT("Visual CarryRoot remains within the authored maximum lag"),
+			FVector2D::Distance(Moved.CarryRootTranslation, LatestPointer)
+				<= Style->CarryMaximumVisualLagPixels + 0.1f);
+		TestTrue(TEXT("Automation view reports the independent visual anchor"),
+			Moved.CarryRootTranslation.Equals(Moved.CarryVisualAnchorLocal, 0.1f));
 		TestTrue(TEXT("Invalidation cache remains at a stable local transform"),
 			Moved.CarryCacheTranslation.IsNearlyZero(0.1f));
 		TestEqual(TEXT("One Slate-frame flush applies the latest pointer exactly once"),
 			Moved.CarryVisualAnchorApplyCount,
-			Started.CarryVisualAnchorApplyCount + 1);
-		TestEqual(TEXT("Pointer movement does not rebuild the local fan"),
-			Moved.CarryFanLayoutRebuildCount, Started.CarryFanLayoutRebuildCount);
+			PointerBaseline.CarryVisualAnchorApplyCount + 1);
+		TestEqual(TEXT("Pointer movement does not rebuild the local strip"),
+			Moved.CarryStripLayoutRebuildCount, PointerBaseline.CarryStripLayoutRebuildCount);
 		TestEqual(TEXT("Pointer movement does not refresh static card presentation"),
-			Moved.StaticCardPresentationUpdateCount, Started.StaticCardPresentationUpdateCount);
+			Moved.StaticCardPresentationUpdateCount, PointerBaseline.StaticCardPresentationUpdateCount);
 		if (CardCount == 1)
 		{
 			TestTrue(TEXT("Release commit is observed before the target scene reconcile"),
@@ -162,7 +224,9 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 			TestEqual(TEXT("Committed release does not start a cached source-to-target transition"),
 				Workspace->GetAutomationTestView().ActiveBaseCardLayoutTransitionCount, 0);
 			const UCanvasPanelSlot* ReleasedSlot = Cast<UCanvasPanelSlot>(Cards[0]->Slot);
-			TestNotNull(TEXT("Released card returns to StaticCardLayer"), ReleasedSlot);
+			TestEqual(TEXT("Released card enters the dedicated SettlementLayer"),
+				Workspace->GetAutomationTestView().SettlementCardCount, 1);
+			TestNotNull(TEXT("Released card keeps a target canvas slot during settlement"), ReleasedSlot);
 			if (ReleasedSlot)
 			{
 				TestTrue(TEXT("Released card lands directly at the target layout"),

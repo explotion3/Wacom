@@ -5,11 +5,13 @@
 #define LOCTEXT_NAMESPACE "WacomDeckCard"
 
 #include "Components/Border.h"
+#include "Components/ScaleBox.h"
 #include "Components/TextBlock.h"
 
 #include "Cards/CardDefinition.h"
 #include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 
 void UWacomDeckCardWidget::NativeConstruct()
@@ -22,6 +24,9 @@ void UWacomDeckCardWidget::NativeConstruct()
 		bBackpackRealtimePresentationEnabled,
 		LastBackpackPresentationPointer,
 		bLastBackpackPresentationCarrying);
+	ApplyBackpackLocalMotionPose(
+		BackpackLocalMotionTranslation,
+		BackpackLocalMotionAngleDegrees);
 }
 
 void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZone, FGuid InFromZoneOwnerInstanceId)
@@ -54,6 +59,7 @@ void UWacomDeckCardWidget::PrepareForBackpackListReuse()
 	SetWorkspaceReadOnlyKind(EWacomBackpackWorkspaceCardReadOnlyKind::None);
 	SetWorkspaceDisplayZone(FromZone, FromZoneOwnerInstanceId);
 	SetBackpackRealtimePresentation(false, FVector2D::ZeroVector, false);
+	ResetBackpackLocalMotionPose();
 	SetRenderOpacity(1.0f);
 	SetProjectedFromBadgeText(FText::GetEmpty());
 	SetRightClickToggleEnabled(false);
@@ -162,6 +168,55 @@ void UWacomDeckCardWidget::SetBackpackRealtimePresentation(
 	}
 	BackpackCardView->SetRealtimePresentationEnabled(bEnabled);
 	BackpackCardView->SetCardDepthView(Depth);
+}
+
+void UWacomDeckCardWidget::ApplyBackpackLocalMotionPose(
+	FVector2D Translation,
+	float AngleDegrees)
+{
+	BackpackLocalMotionTranslation = Translation;
+	BackpackLocalMotionAngleDegrees = AngleDegrees;
+	UWidget* MotionRoot = CardMotionRoot.Get();
+	if (!MotionRoot)
+	{
+		MotionRoot = CardFaceScaleBox.Get();
+	}
+	if (!MotionRoot)
+	{
+		return;
+	}
+	MotionRoot->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+	MotionRoot->SetRenderTranslation(Translation);
+	MotionRoot->SetRenderTransformAngle(AngleDegrees);
+}
+
+void UWacomDeckCardWidget::ResetBackpackLocalMotionPose()
+{
+	ApplyBackpackLocalMotionPose(FVector2D::ZeroVector, 0.0f);
+}
+
+void UWacomDeckCardWidget::ApplyBackpackDepthPresentation(
+	bool bRealtimeEnabled,
+	const FWacomFirstPersonCardDepthView& DepthView)
+{
+	bBackpackRealtimePresentationEnabled = bRealtimeEnabled;
+	bHasAppliedBackpackRealtimePresentation = true;
+	if (!BackpackCardView)
+	{
+		return;
+	}
+	BackpackCardView->SetRealtimePresentationEnabled(bRealtimeEnabled);
+	BackpackCardView->SetCardDepthView(DepthView);
+}
+
+FVector2D UWacomDeckCardWidget::GetBackpackLocalMotionTranslation() const
+{
+	return BackpackLocalMotionTranslation;
+}
+
+float UWacomDeckCardWidget::GetBackpackLocalMotionAngle() const
+{
+	return BackpackLocalMotionAngleDegrees;
 }
 
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)

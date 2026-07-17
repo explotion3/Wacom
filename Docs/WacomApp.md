@@ -36,7 +36,7 @@ tags:
 - 单场战斗规则真相；战斗命令必须提交给 `UBattleSession`。
 - Run / 背包 / 商店 / RunEvent 规则真相；战外事务必须提交给 `URunSession`。
 
-背包自由工作台的布局 owner 是 `UWacomBackpackWorkspaceStateSubsystem`：按 `URunSession` 对象身份保存活动区域和 `ZoneKey -> InstanceId -> normalized layout`，同一 Run 关闭/重开保留，新 Run 或 GameInstance 结束清空。该状态不序列化；选择、框选、扇形携带、确认暂停和鼠标捕获属于 Screen 活跃期 interaction model，Deactivate 时清理。
+背包自由工作台的布局 owner 是 `UWacomBackpackWorkspaceStateSubsystem`：按 `URunSession` 对象身份保存活动区域和 `ZoneKey -> InstanceId -> normalized layout`，同一 Run 关闭/重开保留，新 Run 或 GameInstance 结束清空。该状态不序列化；选择、框选、水平牌列携带、确认暂停和鼠标捕获属于 Screen 活跃期 interaction model，Deactivate 时清理。
 - 静态数据资产定义；卡牌、敌人、商店、RunEvent 等资产契约见 `WacomData.md`。
 - WBP 视觉细节、卡牌展示规则和 UI 子控件刷新模型；这些见 `WacomUI.md`、UI 专题文档和 Binding 文档。
 

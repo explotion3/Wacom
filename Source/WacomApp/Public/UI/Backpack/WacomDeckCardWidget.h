@@ -12,8 +12,10 @@ class UBorder;
 class UTextBlock;
 class UCardDefinition;
 class UScaleBox;
+class UWidget;
 class UWacomFirstPersonCardViewWidget;
 struct FWacomBackpackWorkspaceCardVisualState;
+struct FWacomFirstPersonCardDepthView;
 
 enum class EWacomBackpackDeckCardListReuseRole : uint8
 {
@@ -92,6 +94,12 @@ public:
 	bool IsMoveEnabled() const { return bCardInteractionEnabled && bWorkspaceInteractionEnabled; }
 	void SetWorkspaceInteractionEnabled(bool bEnabled);
 	bool IsWorkspaceInteractionEnabled() const { return bWorkspaceInteractionEnabled; }
+	/** 实体卡是否可进入工作台选择模型；与折叠牌堆禁止直接点卡的命中策略分离。 */
+	bool IsWorkspaceSelectionEnabled() const
+	{
+		return bCardInteractionEnabled
+			&& WorkspaceReadOnlyKind == EWacomBackpackWorkspaceCardReadOnlyKind::None;
+	}
 	void SetWorkspaceReadOnlyKind(EWacomBackpackWorkspaceCardReadOnlyKind InKind);
 	EWacomBackpackWorkspaceCardReadOnlyKind GetWorkspaceReadOnlyKind() const { return WorkspaceReadOnlyKind; }
 	bool UsesReadOnlyOpacity() const
@@ -113,6 +121,15 @@ public:
 		bool bEnabled,
 		FVector2D NormalizedPointer,
 		bool bCarrying);
+	/** 只应用卡牌局部交互姿态；基础 Canvas 布局和牌列位置仍由 Workspace 拥有。 */
+	void ApplyBackpackLocalMotionPose(FVector2D Translation, float AngleDegrees);
+	void ResetBackpackLocalMotionPose();
+	/** 背包表现控制器的底层入口；不接受 Battle slot 或 transition 状态。 */
+	void ApplyBackpackDepthPresentation(
+		bool bRealtimeEnabled,
+		const FWacomFirstPersonCardDepthView& DepthView);
+	FVector2D GetBackpackLocalMotionTranslation() const;
+	float GetBackpackLocalMotionAngle() const;
 	bool IsWorkspaceSelected() const { return bWorkspaceSelected; }
 	bool IsWorkspaceCurrent() const { return bWorkspaceCurrent; }
 
@@ -171,6 +188,10 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UScaleBox> CardFaceScaleBox;
 
+	/** 完整卡面、反馈与角标的局部运动根；不得改变外层命中几何。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> CardMotionRoot;
+
 	/** 不参与布局和命中的纯色反馈层；正式 WBP 将它放在卡面上方、角标下方。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> WorkspaceFeedbackOverlay;
@@ -204,6 +225,8 @@ private:
 	bool bHasAppliedBackpackRealtimePresentation = false;
 	FVector2D LastBackpackPresentationPointer = FVector2D::ZeroVector;
 	bool bLastBackpackPresentationCarrying = false;
+	FVector2D BackpackLocalMotionTranslation = FVector2D::ZeroVector;
+	float BackpackLocalMotionAngleDegrees = 0.0f;
 
 	void SetRightClickToggleEnabled(bool bEnabled);
 	void RefreshContentFromCard();

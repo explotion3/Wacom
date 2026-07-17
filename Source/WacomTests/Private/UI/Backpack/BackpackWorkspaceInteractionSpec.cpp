@@ -62,21 +62,33 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	TestEqual(TEXT("Default current is rightmost card"), Model.GetCarry().DefaultIndex, 14);
 	TestEqual(TEXT("Current starts at default rightmost card"), Model.GetCarry().CurrentIndex, 14);
 
-	const TArray<FWacomBackpackCarriedFanLayout> DefaultFan =
-		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFanLayout(
-			15, 14, 14, FVector2D(600.0f, 400.0f), 36.0f, 72.0f, 56.0f);
-	TestEqual(TEXT("Fan returns one transform per carried card"), DefaultFan.Num(), 15);
-	TestTrue(TEXT("Rightmost card is current"), DefaultFan[14].bCurrent);
-	TestFalse(TEXT("Default current is not lifted"), DefaultFan[14].bLifted);
-	TestEqual(TEXT("Rightmost card has highest stable Z"), DefaultFan[14].Transform.LayerRank, 14);
+	const TArray<FWacomBackpackCarriedStripLayout> DefaultStrip =
+		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
+			15, 14, 14, FVector2D(600.0f, 400.0f), 1280.0f, 296.0f, 48.0f, 32.0f, 56.0f);
+	TestEqual(TEXT("Strip returns one transform per carried card"), DefaultStrip.Num(), 15);
+	for (const FWacomBackpackCarriedStripLayout& Card : DefaultStrip)
+	{
+		TestTrue(TEXT("Carried cards use a zero-rotation horizontal strip"),
+			FMath::IsNearlyZero(Card.Transform.AngleDegrees));
+		TestTrue(TEXT("Non-current carried cards share one horizontal baseline"),
+			Card.bCurrent || FMath::IsNearlyEqual(Card.Transform.CardCenter.Y, 400.0f));
+	}
+	TestTrue(TEXT("Rightmost card is current"), DefaultStrip[14].bCurrent);
+	TestFalse(TEXT("Default current is not lifted"), DefaultStrip[14].bLifted);
+	TestTrue(TEXT("Default current stays anchored to the pointer"),
+		DefaultStrip[14].Transform.CardCenter.Equals(FVector2D(600.0f, 400.0f), 0.1f));
+	TestTrue(TEXT("Rightmost current card has highest stable Z"),
+		DefaultStrip[14].Transform.LayerRank > DefaultStrip[13].Transform.LayerRank);
 
 	Model.StepCurrentByWheel(1.0f);
 	TestEqual(TEXT("Wheel up moves current left"), Model.GetCarry().CurrentIndex, 13);
-	const TArray<FWacomBackpackCarriedFanLayout> LiftedFan =
-		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFanLayout(
-			15, 13, 14, FVector2D(600.0f, 400.0f), 36.0f, 72.0f, 56.0f);
-	TestTrue(TEXT("Only non-default current lifts"), LiftedFan[13].bLifted);
-	TestFalse(TEXT("Default card remains unlifted after wheel"), LiftedFan[14].bLifted);
+	const TArray<FWacomBackpackCarriedStripLayout> LiftedStrip =
+		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
+			15, 13, 14, FVector2D(600.0f, 400.0f), 1280.0f, 296.0f, 48.0f, 32.0f, 56.0f);
+	TestTrue(TEXT("Only non-default current lifts"), LiftedStrip[13].bLifted);
+	TestFalse(TEXT("Default card remains unlifted after wheel"), LiftedStrip[14].bLifted);
+	TestTrue(TEXT("Wheel-selected current remains horizontally anchored to the pointer"),
+		FMath::IsNearlyEqual(LiftedStrip[13].Transform.CardCenter.X, 600.0f, 0.1f));
 	for (int32 Index = 0; Index < 30; ++Index)
 	{
 		Model.StepCurrentByWheel(1.0f);
@@ -93,7 +105,7 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	const FWacomBackpackWorkspaceReleaseIntent Single = Model.BuildReleaseIntent(false);
 	TestEqual(TEXT("Later left release targets current only"), Single.InstanceIds, TArray<FGuid>{ Cards[14].InstanceId });
 	Model.CommitReleasedCards(Single.InstanceIds);
-	TestEqual(TEXT("Single release leaves stable remaining fan"), Model.GetCarry().RemainingInstanceIds.Num(), 14);
+	TestEqual(TEXT("Single release leaves stable remaining strip"), Model.GetCarry().RemainingInstanceIds.Num(), 14);
 	TestEqual(TEXT("Remaining default/current clamp to new rightmost"), Model.GetCarry().CurrentIndex, 13);
 	const FWacomBackpackWorkspaceReleaseIntent All = Model.BuildReleaseIntent(true);
 	TestEqual(TEXT("Right release targets every remaining card"), All.InstanceIds.Num(), 14);
@@ -118,7 +130,7 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	TestTrue(TEXT("Workspace installs the only pointer-move owner"), PassiveCard->OnWorkspacePointerMoveNative.IsBound());
 	TestTrue(TEXT("Workspace installs the only pointer-up owner"), PassiveCard->OnWorkspacePointerUpNative.IsBound());
 	const FWacomBackpackPickupPointerSequenceProbe PickupProbe =
-		FWacomBackpackScreenTestAccess::ProbeSelectedCardPickupPointerSequence(*Workspace, *PassiveCard);
+		FWacomBackpackScreenTestAccess::ProbeCardPickupPointerSequence(*Workspace, *PassiveCard);
 	TestTrue(TEXT("Pickup fixture card is movable"), PickupProbe.bCardMovable);
 	TestTrue(TEXT("Pickup fixture card is selected before pointer down"),
 		PickupProbe.bSelectedBeforePointerDown);
@@ -129,7 +141,7 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	TestTrue(TEXT("Workspace handles pointer down on the selected card"), PickupProbe.bPointerDownHandled);
 	TestTrue(TEXT("Pressing an already-selected card starts carry without pointer movement"),
 		PickupProbe.bCarryStartedOnPointerDown);
-	TestTrue(TEXT("Pickup release keeps the selected fan carried"), PickupProbe.bPickupReleaseKeptCarry);
+	TestTrue(TEXT("Pickup release keeps the selected strip carried"), PickupProbe.bPickupReleaseKeptCarry);
 	TestTrue(TEXT("Pickup release consumes the initial release guard"),
 		PickupProbe.bInitialReleaseGuardCleared);
 	TestEqual(TEXT("The next left release immediately targets the current card"),
@@ -140,6 +152,19 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 		PickupProbe.FirstLeftReleaseAfterMissedPickupUpCount, 1);
 	TestEqual(TEXT("A new right click releases immediately even when pickup-up was lost"),
 		PickupProbe.FirstRightReleaseAfterMissedPickupUpCount, 1);
+	const FWacomBackpackPickupPointerSequenceProbe FirstClickPickupProbe =
+		FWacomBackpackScreenTestAccess::ProbeCardPickupPointerSequence(
+			*Workspace,
+			*PassiveCard,
+			false);
+	TestFalse(TEXT("First-click pickup fixture starts with an unselected card"),
+		FirstClickPickupProbe.bSelectedBeforePointerDown);
+	TestTrue(TEXT("Pressing an unselected movable card starts carry without pointer movement"),
+		FirstClickPickupProbe.bCarryStartedOnPointerDown);
+	TestTrue(TEXT("The matching pickup release keeps the newly selected card carried"),
+		FirstClickPickupProbe.bPickupReleaseKeptCarry);
+	TestTrue(TEXT("The matching pickup release consumes the initial release guard"),
+		FirstClickPickupProbe.bInitialReleaseGuardCleared);
 	PassiveCard->UnbindWorkspacePointerEvents();
 	TestFalse(TEXT("Card can release all workspace input forwarding on reuse"), PassiveCard->OnWorkspacePointerDownNative.IsBound());
 	return true;

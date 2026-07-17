@@ -48,7 +48,6 @@ private:
 	bool bInitialized = false;
 	bool bHasTarget = false;
 
-	static float ComputeExponentialAlpha(float Speed, float DeltaTime);
 	static FVector2D ResolvePointerInCardSpace(
 		const FWacomFirstPersonCardDepthMotionInput& Input);
 	static FWacomFirstPersonCardDepthView MakeNeutralView(

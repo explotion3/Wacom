@@ -57,6 +57,8 @@ public:
 	void ReconcileCards(
 		const FWacomBackpackZoneKey& ActiveZone,
 		TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards);
+	/** 只更新既有显示身份的表现命中位置；不改变可移动性、选择或携带状态。 */
+	void UpdateCardHitLayouts(TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards);
 
 	void ClickCard(FGuid InstanceId, bool bControlDown);
 	void ClickBlank();

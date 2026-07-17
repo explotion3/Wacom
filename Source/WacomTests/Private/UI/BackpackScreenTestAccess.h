@@ -14,6 +14,7 @@ class UWacomSpecialZoneWidget;
 enum class EZoneKind : uint8;
 struct FWacomBackpackScreenAutomationTestView;
 struct FWacomBackpackWorkspaceAutomationTestView;
+struct FWacomBackpackExpandedPileFocusCard;
 
 struct FWacomBackpackPickupPointerSequenceProbe
 {
@@ -67,14 +68,28 @@ struct FWacomBackpackScreenTestAccess
 	static void ApplyWorkspaceLayerTransition(UWacomBackpackScreen& Screen, bool bTransitioning);
 	static bool MarqueeCrossingCardPreservesMouseCapture(UWacomBackpackScreen& Screen, int32 CardIndex = 0);
 	static bool MarqueeCompletesWhenReleasedOverCard(UWacomBackpackScreen& Screen, int32 CardIndex = 0);
-	static FWacomBackpackPickupPointerSequenceProbe ProbeSelectedCardPickupPointerSequence(
+	static FWacomBackpackPickupPointerSequenceProbe ProbeCardPickupPointerSequence(
 		UWacomBackpackWorkspaceWidget& Workspace,
-		UWacomDeckCardWidget& CardWidget);
+		UWacomDeckCardWidget& CardWidget,
+		bool bPreselectCard = true);
 	static void FlushWorkspaceCarryPointer(UWacomBackpackWorkspaceWidget& Workspace);
 	static void SendWorkspaceCarryPointerEvents(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		UWacomDeckCardWidget& CardWidget,
 		TConstArrayView<FVector2D> PointerLocals);
+	static bool StepWorkspaceCarryCurrentByWheel(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		float WheelDelta);
+	static void MoveWorkspaceBrowsePointer(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		FVector2D PointerLocal);
+	static void TickWorkspaceBrowseExit(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		float DeltaSeconds);
+	static bool MarqueeWorkspacePileContents(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId = FGuid());
 	static bool CommitWorkspacePileMoveWithSynchronousTargetReconcile(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		UWacomDeckCardWidget& CardWidget,

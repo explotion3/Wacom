@@ -13,12 +13,14 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
+#include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
+#include "../../../WacomApp/Private/UI/Backpack/WacomBackpackCardPresentationController.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceTypes.h"
 
 UWacomBackpackScreen* FWacomBackpackScreenTestAccess::Create(UObject* Outer, URunSession* RunSession)
@@ -294,9 +296,10 @@ bool FWacomBackpackScreenTestAccess::MarqueeCompletesWhenReleasedOverCard(
 }
 
 FWacomBackpackPickupPointerSequenceProbe
-FWacomBackpackScreenTestAccess::ProbeSelectedCardPickupPointerSequence(
+FWacomBackpackScreenTestAccess::ProbeCardPickupPointerSequence(
 	UWacomBackpackWorkspaceWidget& Workspace,
-	UWacomDeckCardWidget& CardWidget)
+	UWacomDeckCardWidget& CardWidget,
+	bool bPreselectCard)
 {
 	FWacomBackpackPickupPointerSequenceProbe Probe;
 	if (!Workspace.InteractionModel || !CardWidget.GetCardInstanceId().IsValid())
@@ -305,7 +308,17 @@ FWacomBackpackScreenTestAccess::ProbeSelectedCardPickupPointerSequence(
 	}
 
 	Probe.bCardMovable = CardWidget.IsMoveEnabled();
-	Workspace.InteractionModel->ClickCard(CardWidget.GetCardInstanceId(), false);
+	if (Workspace.InteractionModel->IsSelected(CardWidget.GetCardInstanceId()) != bPreselectCard)
+	{
+		if (bPreselectCard)
+		{
+			Workspace.InteractionModel->ClickCard(CardWidget.GetCardInstanceId(), false);
+		}
+		else
+		{
+			Workspace.InteractionModel->ClickBlank();
+		}
+	}
 	Probe.bSelectedBeforePointerDown =
 		Workspace.InteractionModel->IsSelected(CardWidget.GetCardInstanceId());
 	TSet<FKey> PressedButtons{ EKeys::LeftMouseButton };
@@ -393,6 +406,19 @@ void FWacomBackpackScreenTestAccess::FlushWorkspaceCarryPointer(
 	UWacomBackpackWorkspaceWidget& Workspace)
 {
 	Workspace.FlushQueuedCarryPointer();
+	Workspace.ApplyCarryVisualAnchor(1.0f / 60.0f);
+	if (Workspace.CardPresentationController)
+	{
+		const UWacomBackpackWorkspaceStyle* Style = Workspace.InteractionStyle.IsValid()
+			? Workspace.InteractionStyle.Get()
+			: GetDefault<UWacomBackpackWorkspaceStyle>();
+		Workspace.CardPresentationController->Tick(
+			1.0f / 60.0f,
+			Workspace.GetCachedGeometry(),
+			*Style,
+			Workspace.bSimplifiedMotion);
+	}
+	Workspace.FinalizeCompletedSettlements();
 }
 
 void FWacomBackpackScreenTestAccess::SendWorkspaceCarryPointerEvents(
@@ -418,6 +444,69 @@ void FWacomBackpackScreenTestAccess::SendWorkspaceCarryPointerEvents(
 		Workspace.HandleCardPointerMove(&CardWidget, FGeometry(), PointerMove);
 		Previous = Pointer;
 	}
+}
+
+bool FWacomBackpackScreenTestAccess::StepWorkspaceCarryCurrentByWheel(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	float WheelDelta)
+{
+	const FPointerEvent WheelEvent(
+		0,
+		FVector2D::ZeroVector,
+		FVector2D::ZeroVector,
+		TSet<FKey>(),
+		EKeys::Invalid,
+		WheelDelta,
+		FModifierKeysState());
+	return Workspace.NativeOnMouseWheel(FGeometry(), WheelEvent).IsEventHandled();
+}
+
+void FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	FVector2D PointerLocal)
+{
+	Workspace.UpdateExpandedPileFocus(PointerLocal);
+}
+
+void FWacomBackpackScreenTestAccess::TickWorkspaceBrowseExit(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	float DeltaSeconds)
+{
+	Workspace.TickExpandedPileFocusExit(DeltaSeconds);
+}
+
+bool FWacomBackpackScreenTestAccess::MarqueeWorkspacePileContents(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	EZoneKind Zone,
+	FGuid OwnerInstanceId)
+{
+	UWacomBackpackZonePileWidget* TargetPile = nullptr;
+	for (UWacomBackpackZonePileWidget* Pile : Workspace.PileWidgets)
+	{
+		if (Pile && Pile->GetPileView().HasSameIdentity(Zone, OwnerInstanceId))
+		{
+			TargetPile = Pile;
+			break;
+		}
+	}
+	if (!TargetPile || !Workspace.InteractionModel)
+	{
+		return false;
+	}
+
+	const FSlateRect Frame = TargetPile->GetResolvedFrameRect();
+	const FSlateRect Header = TargetPile->GetResolvedHeaderRect();
+	const FVector2D Start(
+		Frame.Left + 4.0f,
+		FMath::Min(Frame.Bottom - 4.0f, Header.Bottom + 4.0f));
+	const FVector2D End(Frame.Right - 4.0f, Frame.Bottom - 4.0f);
+	// Drive the same local-space state transition used by the runtime pointer
+	// handler without constructing an FReply for this unarranged unit fixture.
+	Workspace.BeginPendingPilePress(*TargetPile, Start, false);
+	const bool bBeganMarquee = Workspace.TryBeginMarqueeFromPendingPilePress(End);
+	Workspace.InteractionModel->UpdateMarquee(End);
+	Workspace.InteractionModel->CompleteMarquee();
+	return bBeganMarquee && !Workspace.InteractionModel->IsMarqueeActive();
 }
 
 bool FWacomBackpackScreenTestAccess::CommitWorkspacePileMoveWithSynchronousTargetReconcile(

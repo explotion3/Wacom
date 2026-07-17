@@ -96,6 +96,25 @@ void FWacomBackpackWorkspaceInteractionModel::ReconcileCards(
 	ReconcileCards(Normalized);
 }
 
+void FWacomBackpackWorkspaceInteractionModel::UpdateCardHitLayouts(
+	TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards)
+{
+	for (const FWacomBackpackWorkspaceCardHitRecord& Update : Cards)
+	{
+		FWacomBackpackWorkspaceCardHitRecord* Existing = AvailableCards.FindByPredicate(
+			[&Update](const FWacomBackpackWorkspaceCardHitRecord& Card)
+			{
+				return Card.InstanceId == Update.InstanceId
+					&& Card.SourceZone == Update.SourceZone;
+			});
+		if (Existing)
+		{
+			Existing->CardCenter = Update.CardCenter;
+			Existing->LayerRank = Update.LayerRank;
+		}
+	}
+}
+
 void FWacomBackpackWorkspaceInteractionModel::ClickCard(FGuid InstanceId, bool bControlDown)
 {
 	if (IsCarrying() || !IsMovable(InstanceId))

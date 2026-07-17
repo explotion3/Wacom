@@ -551,6 +551,9 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 		WorkspaceWidget->OnReleaseIntentNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceReleaseIntent);
 		WorkspaceWidget->OnInteractionChangedNative.RemoveAll(this);
 		WorkspaceWidget->OnInteractionChangedNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceInteractionChanged);
+		WorkspaceWidget->OnBrowseFocusChangedNative.RemoveAll(this);
+		WorkspaceWidget->OnBrowseFocusChangedNative.AddUObject(
+			this, &UWacomBackpackScreen::HandleWorkspaceBrowseFocusChanged);
 		WorkspaceWidget->OnLayoutGeometryReadyNative.RemoveAll(this);
 		WorkspaceWidget->OnLayoutGeometryReadyNative.AddUObject(
 			this,
@@ -1190,7 +1193,7 @@ void UWacomBackpackScreen::HandleWorkspaceDeleteCancelled()
 	{
 		WorkspaceInteractionModel->RestoreCarry(PendingDeleteConfirmation->SuspendedCarry);
 		// Atomic rejection caused by an unrelated storage revision must not strand the
-		// restored fan on an obsolete revision forever. Reconcile has already verified
+		// restored strip on an obsolete revision forever. Reconcile has already verified
 		// that the carried cards still exist in their source zone, so the same carry can
 		// be retried against the current snapshot without partially committing anything.
 		if (URunSession* Run = GetRunSession())
@@ -1288,16 +1291,21 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		WorkspaceWidget->RefreshInteractionPresentation();
 		return;
 	}
-	const TArray<FWacomBackpackCarriedFanLayout> Fan =
-		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFanLayout(
+	const FVector2D WorkspaceSize = WorkspaceWidget->GetLayoutSpaceSize();
+	const float AvailableStripWidth = FMath::Max(
+		Style->CardRenderSize.X,
+		WorkspaceSize.X - FMath::Max(0.0f, Style->PileEdgeMarginPixels) * 2.0f);
+	const TArray<FWacomBackpackCarriedStripLayout> Strip =
+		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
 			Carry.RemainingInstanceIds.Num(),
 			Carry.CurrentIndex,
 			Carry.DefaultIndex,
 			Carry.PointerPosition,
-			Style->FanMaximumAngleDegrees,
-			Style->FanCardSpacingPixels,
+			AvailableStripWidth,
+			Style->CardRenderSize.X,
+			Style->AdaptiveStripExposurePixels,
+			Style->AdaptiveStripFocusSeparationPixels,
 			Style->CurrentCardLiftPixels);
-	const FVector2D WorkspaceSize = WorkspaceWidget->GetLayoutSpaceSize();
 	FWacomBackpackWorkspaceStateStore& StateStore = GetWorkspaceStateStore(Run);
 	const FWacomBackpackZoneKey FluxZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
 	auto SaveFluxLayouts = [&]()
@@ -1305,12 +1313,12 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		for (const FGuid InstanceId : Intent.InstanceIds)
 		{
 			const int32 CarryIndex = Carry.RemainingInstanceIds.IndexOfByKey(InstanceId);
-			if (!Fan.IsValidIndex(CarryIndex))
+			if (!Strip.IsValidIndex(CarryIndex))
 			{
 				continue;
 			}
 			const FVector2D ClampedCenter = FWacomBackpackWorkspaceLayoutSolver::ClampCardCenterToVisibleBounds(
-				Fan[CarryIndex].Transform.CardCenter,
+				Strip[CarryIndex].Transform.CardCenter,
 				WorkspaceSize,
 				Style->CardRenderSize,
 				Style->MinimumVisibleFraction);
@@ -1318,8 +1326,8 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 			Entry.NormalizedPosition = FVector2D(
 				WorkspaceSize.X > 1.0f ? ClampedCenter.X / WorkspaceSize.X : 0.5f,
 				WorkspaceSize.Y > 1.0f ? ClampedCenter.Y / WorkspaceSize.Y : 0.5f);
-			Entry.AngleDegrees = Fan[CarryIndex].Transform.AngleDegrees;
-			Entry.LayerRank = Fan[CarryIndex].Transform.LayerRank;
+			Entry.AngleDegrees = Strip[CarryIndex].Transform.AngleDegrees;
+			Entry.LayerRank = Strip[CarryIndex].Transform.LayerRank;
 			Entry.bHasManualPlacement = true;
 			StateStore.SetLayout(FluxZone, InstanceId, Entry);
 		}
@@ -1609,7 +1617,7 @@ void UWacomBackpackScreen::HandleCardHovered(UWacomDeckCardWidget* SourceWidget)
 {
 	if (WorkspaceWidget && SourceWidget)
 	{
-		WorkspaceWidget->SetHoveredCard(SourceWidget->GetCardInstanceId());
+		WorkspaceWidget->SetHoveredCard(SourceWidget);
 	}
 	ShowCardDetailForCardWidget(SourceWidget);
 }
@@ -1618,9 +1626,27 @@ void UWacomBackpackScreen::HandleCardUnhovered(UWacomDeckCardWidget* SourceWidge
 {
 	if (WorkspaceWidget && SourceWidget)
 	{
-		WorkspaceWidget->ClearHoveredCard(SourceWidget->GetCardInstanceId());
+		WorkspaceWidget->ClearHoveredCard(SourceWidget);
 	}
 	HideCardDetailPanelIfSourceRemoved(SourceWidget);
+}
+
+void UWacomBackpackScreen::HandleWorkspaceBrowseFocusChanged(
+	UWacomDeckCardWidget* SourceWidget)
+{
+	if (SourceWidget)
+	{
+		WorkspaceBrowseFocusDetailSource = SourceWidget;
+		ShowCardDetailForCardWidget(SourceWidget);
+	}
+	else
+	{
+		if (UWacomDeckCardWidget* PreviousSource = WorkspaceBrowseFocusDetailSource.Get())
+		{
+			HideCardDetailPanelIfSourceRemoved(PreviousSource);
+		}
+		WorkspaceBrowseFocusDetailSource.Reset();
+	}
 }
 
 bool UWacomBackpackScreen::ShowCardDetailForCardWidget(UWacomDeckCardWidget* SourceWidget)
@@ -1635,6 +1661,7 @@ bool UWacomBackpackScreen::ShowCardDetailForCardWidget(UWacomDeckCardWidget* Sou
 
 void UWacomBackpackScreen::HideCardDetailPanel()
 {
+	WorkspaceBrowseFocusDetailSource.Reset();
 	GetCardDetailController().Hide();
 }
 

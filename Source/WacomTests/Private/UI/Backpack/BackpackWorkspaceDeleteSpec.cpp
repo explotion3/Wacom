@@ -146,7 +146,7 @@ bool FWacomUIBackpackWorkspacePartialDeletePreservesCarrySpec::RunTest(const FSt
 		FWacomBackpackScreenTestAccess::DeletePreviewCardCount(*Screen), 1);
 	const FWacomBackpackWorkspaceAutomationTestView DuringConfirm =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
-	TestEqual(TEXT("The carried fan stays visible while delete input is suspended"),
+	TestEqual(TEXT("The carried strip stays visible while delete input is suspended"),
 		DuringConfirm.CarriedInstanceIds, BeforeConfirm.CarriedInstanceIds);
 	TestFalse(TEXT("Delete confirmation releases Workspace mouse capture"),
 		DuringConfirm.bMouseCaptured);

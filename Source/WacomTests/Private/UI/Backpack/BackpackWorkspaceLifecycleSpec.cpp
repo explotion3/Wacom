@@ -116,7 +116,7 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 		FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(*Screen));
 	TestTrue(TEXT("Workspace handles Escape while carrying"),
 		FWacomBackpackScreenTestAccess::PressWorkspaceEscape(*Screen));
-	TestTrue(TEXT("Carry Escape clears the carried fan"),
+	TestTrue(TEXT("Carry Escape clears the carried strip"),
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
 	TestFalse(TEXT("Carry Escape releases mouse capture"),
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).bMouseCaptured);

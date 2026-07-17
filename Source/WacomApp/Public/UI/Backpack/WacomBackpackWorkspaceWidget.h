@@ -24,6 +24,19 @@ struct FWacomBackpackWorkspaceAutomationTestView;
 struct FWacomBackpackScreenTestAccess;
 #endif
 
+/** Reconciler 提供给 Workspace 的展开牌堆浏览合同。 */
+struct WACOMAPP_API FWacomBackpackExpandedPileFocusCard
+{
+	TWeakObjectPtr<UWacomDeckCardWidget> Card;
+	FVector2D NeutralCenter = FVector2D::ZeroVector;
+	float NeutralAngleDegrees = 0.0f;
+	int32 NeutralLayerRank = 0;
+	/** 无焦点水平布局的命中条带。 */
+	FSlateRect NeutralHitBand;
+	/** 当前展开后实际目标卡位的命中条带；每次让位重排后更新。 */
+	FSlateRect CurrentHitBand;
+};
+
 /**
  * 被动中央工作台。只持有可视卡牌、框选层和空状态，并应用 Screen/协调器计算好的布局。
  * 输入语义和 Run 写操作由后续的 Screen flow 统一拥有。
@@ -41,6 +54,7 @@ public:
 	DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnPileMoveCommittedNative, EZoneKind, FGuid, FVector2D);
 	DECLARE_MULTICAST_DELEGATE(FOnCollapseExpandedPileRequestedNative);
 	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnPileCollapseAnimationFinishedNative, EZoneKind, FGuid);
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnBrowseFocusChangedNative, UWacomDeckCardWidget*);
 	FOnReleaseIntentNative OnReleaseIntentNative;
 	FOnInteractionChangedNative OnInteractionChangedNative;
 	FOnLayoutGeometryReadyNative OnLayoutGeometryReadyNative;
@@ -48,6 +62,7 @@ public:
 	FOnPileMoveCommittedNative OnPileMoveCommittedNative;
 	FOnCollapseExpandedPileRequestedNative OnCollapseExpandedPileRequestedNative;
 	FOnPileCollapseAnimationFinishedNative OnPileCollapseAnimationFinishedNative;
+	FOnBrowseFocusChangedNative OnBrowseFocusChangedNative;
 
 	void SetPresentedContentZone(EZoneKind Zone, FGuid OwnerInstanceId);
 	void SetInteractionModel(
@@ -65,10 +80,16 @@ public:
 		FGuid& OutOwnerInstanceId) const;
 	void SetPileDropPreview(EZoneKind Zone, FGuid OwnerInstanceId, bool bVisible, bool bRejected);
 	void SetExpandedContentBounds(EZoneKind Zone, FGuid OwnerInstanceId, const FSlateRect& LocalBounds);
+	void SetExpandedPileFocusContract(
+		EZoneKind Zone,
+		FGuid OwnerInstanceId,
+		const FSlateRect& HeaderRect,
+		const FSlateRect& FocusCorridorRect,
+		TConstArrayView<FWacomBackpackExpandedPileFocusCard> Cards);
 	bool BeginPileCollapseAnimation(EZoneKind Zone, FGuid OwnerInstanceId);
-	void SetHoveredCard(FGuid InstanceId);
-	void ClearHoveredCard(FGuid InstanceId);
-	void SetSimplifiedMotion(bool bSimplified) { bSimplifiedMotion = bSimplified; }
+	void SetHoveredCard(UWacomDeckCardWidget* CardWidget);
+	void ClearHoveredCard(UWacomDeckCardWidget* CardWidget);
+	void SetSimplifiedMotion(bool bSimplified);
 	void RefreshInteractionPresentation();
 	void SetCardFaceRetainedRenderingEnabled(bool bEnabled);
 	void SetCarryInputSuspended(bool bSuspended);
@@ -87,6 +108,7 @@ public:
 	UCanvasPanel* GetCardCanvas();
 	UCanvasPanel* GetCarryCanvas();
 	UCanvasPanel* GetCarryActiveCanvas();
+	UCanvasPanel* GetSettlementCanvas();
 	UCanvasPanel* GetPileCanvas();
 	bool ShouldPreserveCardParent(const UWacomDeckCardWidget* CardWidget) const;
 	FVector2D GetLayoutSpaceSize() const;
@@ -98,6 +120,7 @@ protected:
 	virtual void NativeDestruct() override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseMove(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
@@ -115,20 +138,24 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> StaticCardLayer;
 
-	/** 只负责平移携带扇形；缓存层和动态前卡都保持本地坐标不变。 */
+	/** 成功释放和 ESC 返回使用的高层；复用原卡牌 Widget，不复制实例。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UCanvasPanel> SettlementLayer;
+
+	/** 只负责平移携带紧凑牌列；缓存层和动态前卡都保持本地坐标不变。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> CarryRoot;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> CarryLayer;
 
-	/** 当前上抬卡的独立实时层；不放入静态扇形缓存。 */
+	/** 当前上抬卡的独立实时层；不放入静态牌列缓存。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> CarryActiveLayer;
 
 	/**
 	 * CarryLayer 的独立 Slate invalidation root。它保持本地变换不变，
-	 * 由外层 CarryRoot 平移，避免指针热路径使静态扇形缓存失效。
+	 * 由外层 CarryRoot 平移，避免指针热路径使静态牌列缓存失效。
 	 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UInvalidationBox> CarryCache;
@@ -163,7 +190,8 @@ private:
 	FVector2D PendingPilePressPosition = FVector2D::ZeroVector;
 	FVector2D PendingPileStartPosition = FVector2D::ZeroVector;
 	bool bPendingPilePress = false;
-	FGuid HoveredCardInstanceId;
+	bool bPendingPileControlDown = false;
+	TWeakObjectPtr<UWacomDeckCardWidget> HoveredCardWidget;
 	EZoneKind ExpandedContentZone = EZoneKind::Backpack;
 	FGuid ExpandedContentOwnerInstanceId;
 	FSlateRect ExpandedContentBounds;
@@ -176,20 +204,31 @@ private:
 	EZoneKind CollapsingPileZone = EZoneKind::Backpack;
 	FGuid CollapsingPileOwnerInstanceId;
 	uint64 CurrentStorageRevision = 0;
+	/** 精确逻辑指针；目标判定和 Run 命令永远使用本值。 */
 	FVector2D CarryAnchorLocal = FVector2D::ZeroVector;
+	/** 仅表现使用的轻微跟随锚点；受最大落后约束。 */
+	FVector2D CarryVisualAnchorLocal = FVector2D::ZeroVector;
+	bool bCarryVisualAnchorInitialized = false;
 	FVector2D QueuedCarryPointerLocal = FVector2D::ZeroVector;
 	FVector2D QueuedPilePointerLocal = FVector2D::ZeroVector;
 	bool bCarryPointerTrackingActive = false;
 	bool bPilePointerTrackingActive = false;
 	bool bHasQueuedCarryPointer = false;
 	bool bHasQueuedPilePointer = false;
-	bool bCarryFanLayoutDirty = false;
-	TArray<FGuid> LastCarryFanInstanceIds;
+	bool bCarryStripLayoutDirty = false;
+	TArray<FGuid> LastCarryStripInstanceIds;
+	TWeakObjectPtr<UWacomDeckCardWidget> PreviousCarryCurrentCard;
 	/** 已提交释放、等待目标 Scene 消费的实体卡；期间禁止恢复来源基础布局。 */
 	TSet<FGuid> PendingReleasedVisualHandoffs;
-	int32 LastCarryFanCurrentIndex = INDEX_NONE;
-	int32 LastCarryFanDefaultIndex = INDEX_NONE;
-	int32 CarryFanLayoutRebuildCount = 0;
+	struct FCardVisualPose
+	{
+		FVector2D Center = FVector2D::ZeroVector;
+		float AngleDegrees = 0.0f;
+	};
+	TMap<FGuid, FCardVisualPose> PendingReleasedVisualPoses;
+	int32 LastCarryStripCurrentIndex = INDEX_NONE;
+	int32 LastCarryStripDefaultIndex = INDEX_NONE;
+	int32 CarryStripLayoutRebuildCount = 0;
 	int32 StaticCardPresentationUpdateCount = 0;
 	int32 CarryVisualAnchorApplyCount = 0;
 	bool bCarryInputSuspended = false;
@@ -220,7 +259,24 @@ private:
 		float DurationSeconds = 0.0f;
 	};
 	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayoutTransition> BaseCardLayoutTransitions;
+	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> SettlementTargets;
 	bool bBaseCardLayoutTransitionActive = false;
+
+	struct FExpandedPileFocusState
+	{
+		EZoneKind Zone = EZoneKind::Backpack;
+		FGuid OwnerInstanceId;
+		FSlateRect HeaderRect;
+		FSlateRect CorridorRect;
+		TArray<FWacomBackpackExpandedPileFocusCard> Cards;
+		int32 FocusIndex = INDEX_NONE;
+		FVector2D PointerLocal = FVector2D::ZeroVector;
+		float ExitDelayRemainingSeconds = 0.0f;
+		bool bExitPending = false;
+	};
+	FExpandedPileFocusState ExpandedPileFocus;
+	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> ExpandedPileFocusTargets;
+	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 
 	void EnsureFallbackTree();
 	FReply HandleCardPointerDown(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
@@ -228,8 +284,13 @@ private:
 	FReply HandleCardPointerUp(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FReply HandlePilePointerDown(UWacomBackpackZonePileWidget* PileWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FVector2D ToLocalPointer(const FPointerEvent& Event) const;
+	void BeginPendingPilePress(
+		UWacomBackpackZonePileWidget& PileWidget,
+		FVector2D LocalPointer,
+		bool bControlDown);
 	bool TryBeginCarryFromPendingPress(FVector2D Pointer);
 	bool TryBeginPileMove(FVector2D Pointer);
+	bool TryBeginMarqueeFromPendingPilePress(FVector2D Pointer);
 	void ApplyActivePileMove();
 	void StartPilePointerTracking();
 	void QueuePilePointer(FVector2D Pointer);
@@ -240,15 +301,39 @@ private:
 	void StartBaseCardLayoutTransitions();
 	FReply BuildHandledPointerReply();
 	void BroadcastRelease(bool bReleaseAll);
-	void StartCarryPointerTracking();
+	void StartCardMotionTimer();
 	void QueueCarryPointer(FVector2D Pointer);
 	void FlushQueuedCarryPointer();
 	void SyncCarryPointerForRelease(FVector2D Pointer);
 	void UpdateCarryAnchor(FVector2D Pointer, bool bUpdateModel = true);
+	void ApplyCarryVisualAnchor(float DeltaTime);
+	void UpdateExpandedPileFocus(FVector2D PointerLocal);
+	void BeginExpandedPileFocusExit();
+	void TickExpandedPileFocusExit(float DeltaTime);
+	void SetExpandedPileFocusIndex(int32 FocusIndex);
+	void RebuildExpandedPileFocusLayout();
+	void SyncExpandedPileHitLayouts(bool bUseFocusedTargets);
+	void ClearExpandedPileFocus(bool bAnimateReturn, bool bBroadcastChange = true);
+	bool IsExpandedPileFocusAllowed() const;
+	bool IsExpandedPileFocusCard(const UWacomDeckCardWidget* CardWidget, int32* OutIndex = nullptr) const;
+	UWacomDeckCardWidget* GetPresentationFocusedCard() const;
+	void RetargetCardLocalPoseFromVisual(
+		UWacomDeckCardWidget& Card,
+		const FCardVisualPose& VisualPose,
+		const FBaseCardLayout& TargetBase,
+		FVector2D TargetLocalTranslation,
+		float TargetLocalAngle,
+		float DurationSeconds);
 	void SyncCarryLayer();
-	void RebuildCarryFanLayout();
+	void RebuildCarryStripLayout();
+	void BeginCarryPickupFeedback();
+	void CaptureReleasedVisualPoses(TConstArrayView<FGuid> InstanceIds);
+	FCardVisualPose CaptureCardVisualPose(const UWacomDeckCardWidget& Card) const;
+	void FinalizeCompletedSettlements();
+	void CancelInteractionWithReturn();
 	void RestoreStaticCardParents();
 	bool IsInCarryVisualLayer(const UWidget* CardWidget) const;
+	bool IsInSettlementVisualLayer(const UWidget* CardWidget) const;
 	void RequestBoundCardFaceRenders();
 	void ScheduleBoundCardFaceRender();
 	void FlushDeferredCardFaceRender();
@@ -290,13 +375,20 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	bool bCardFaceRetainedRenderingEnabled = true;
 	FVector2D CarryAnchorLocal = FVector2D::ZeroVector;
 	FVector2D CarryRootTranslation = FVector2D::ZeroVector;
+	FVector2D CarryVisualAnchorLocal = FVector2D::ZeroVector;
 	FVector2D CarryCacheTranslation = FVector2D::ZeroVector;
 	int32 CachedCarryCardCount = 0;
 	int32 ActiveCarryCardCount = 0;
-	int32 CarryFanLayoutRebuildCount = 0;
+	int32 SettlementCardCount = 0;
+	int32 ActiveLocalMotionCardCount = 0;
+	int32 RealtimeCardCount = 0;
+	int32 CarryStripLayoutRebuildCount = 0;
 	int32 StaticCardPresentationUpdateCount = 0;
 	int32 CarryVisualAnchorApplyCount = 0;
 	int32 ActiveBaseCardLayoutTransitionCount = 0;
+	int32 ExpandedPileFocusIndex = INDEX_NONE;
+	int32 ExpandedPileFocusLayoutRebuildCount = 0;
+	bool bExpandedPileFocusExitPending = false;
 	TArray<FVector2D> ActiveBaseCardLayoutTransitionTargetCenters;
 	bool bHasExpandedContentBounds = false;
 	bool bPileCollapseAnimationPending = false;

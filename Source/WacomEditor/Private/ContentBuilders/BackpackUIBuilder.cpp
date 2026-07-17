@@ -296,7 +296,7 @@ bool ApplyCardFaceSlotLayout(UPanelSlot* Slot, const FBackpackCardFaceSlotLayout
 
 bool PatchBackpackDeckCardFace()
 {
-	constexpr float BackpackCardFaceScale = 0.75f;
+	constexpr float BackpackCardFaceScale = 1.0f;
 	const TCHAR* DeckCardObjectPath =
 		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget");
 	const TCHAR* CardFaceClassPath =
@@ -322,6 +322,8 @@ bool PatchBackpackDeckCardFace()
 	}
 
 	UScaleBox* CardFaceScaleBox = Cast<UScaleBox>(ExistingCardFaceWidget->GetParent());
+	UOverlay* CardMotionRoot = Cast<UOverlay>(
+		DeckCardBlueprint->WidgetTree->FindWidget(TEXT("CardMotionRoot")));
 	UBorder* WorkspaceFeedbackOverlay = Cast<UBorder>(
 		DeckCardBlueprint->WidgetTree->FindWidget(TEXT("WorkspaceFeedbackOverlay")));
 	const UScaleBoxSlot* ExistingScaleSlot = Cast<UScaleBoxSlot>(ExistingCardFaceWidget->Slot);
@@ -348,13 +350,21 @@ bool PatchBackpackDeckCardFace()
 		&& ExistingFeedbackSlot->GetHorizontalAlignment() == HAlign_Fill
 		&& ExistingFeedbackSlot->GetVerticalAlignment() == VAlign_Fill
 		&& WorkspaceFeedbackOverlay->GetVisibility() == ESlateVisibility::Collapsed;
+	const bool bHasFormalMotionRootContract = CardMotionRoot
+		&& CardMotionRoot->bIsVariable
+		&& DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(CardMotionRoot->GetFName())
+		&& CardFaceScaleBox
+		&& CardFaceScaleBox->GetParent()
+		&& CardFaceScaleBox->GetParent()->GetParent() == CardMotionRoot
+		&& CardMotionRoot->GetVisibility() == ESlateVisibility::SelfHitTestInvisible;
 	if (ExistingCardFaceWidget->GetClass() == CardFaceClass
 		&& ExistingCardFaceWidget->GetFName() == TEXT("BackpackCardView")
 		&& ExistingCardFaceWidget->GetVisibility() == ESlateVisibility::HitTestInvisible
 		&& DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(TEXT("BackpackCardView"))
 		&& !DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(TEXT("CardView"))
 		&& bHasFormalScaleContract
-		&& bHasFormalFeedbackContract)
+		&& bHasFormalFeedbackContract
+		&& bHasFormalMotionRootContract)
 	{
 		return true;
 	}
@@ -435,6 +445,38 @@ bool PatchBackpackDeckCardFace()
 		UE_LOG(LogTemp, Error, TEXT("[BackpackUIBuilder] DeckCard face scale host must be a direct Overlay child"));
 		return false;
 	}
+	if (!CardMotionRoot)
+	{
+		UPanelWidget* MotionParent = CardOverlayHost->GetParent();
+		const int32 MotionChildIndex = MotionParent
+			? MotionParent->GetChildIndex(CardOverlayHost)
+			: INDEX_NONE;
+		const FBackpackCardFaceSlotLayout MotionSlotLayout =
+			CaptureCardFaceSlotLayout(CardOverlayHost->Slot);
+		if (!MotionParent || MotionChildIndex == INDEX_NONE || !MotionSlotLayout.bSupported)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[BackpackUIBuilder] DeckCard visual host cannot be wrapped by CardMotionRoot"));
+			return false;
+		}
+		MotionParent->Modify();
+		MotionParent->RemoveChild(CardOverlayHost);
+		CardMotionRoot = DeckCardBlueprint->WidgetTree->ConstructWidget<UOverlay>(
+			UOverlay::StaticClass(), TEXT("CardMotionRoot"));
+		if (!CardMotionRoot || !MotionParent->InsertChildAt(MotionChildIndex, CardMotionRoot)
+			|| !ApplyCardFaceSlotLayout(CardMotionRoot->Slot, MotionSlotLayout))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[BackpackUIBuilder] Failed to install DeckCard CardMotionRoot"));
+			return false;
+		}
+		if (UOverlaySlot* VisualSlot = CardMotionRoot->AddChildToOverlay(CardOverlayHost))
+		{
+			VisualSlot->SetHorizontalAlignment(HAlign_Fill);
+			VisualSlot->SetVerticalAlignment(VAlign_Fill);
+		}
+	}
+	CardMotionRoot->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	if (!WorkspaceFeedbackOverlay)
 	{
 		WorkspaceFeedbackOverlay = DeckCardBlueprint->WidgetTree->ConstructWidget<UBorder>(
@@ -478,6 +520,12 @@ bool PatchBackpackDeckCardFace()
 			WorkspaceFeedbackOverlay->GetFName(),
 			FGuid::NewDeterministicGuid(WorkspaceFeedbackOverlay->GetPathName()));
 	}
+	if (!DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(CardMotionRoot->GetFName()))
+	{
+		DeckCardBlueprint->WidgetVariableNameToGuidMap.Emplace(
+			CardMotionRoot->GetFName(),
+			FGuid::NewDeterministicGuid(CardMotionRoot->GetPathName()));
+	}
 	DeckCardBlueprint->WidgetVariableNameToGuidMap.Remove(TEXT("CardView"));
 	if (!DeckCardBlueprint->WidgetVariableNameToGuidMap.Contains(ExistingCardFace->GetFName()))
 	{
@@ -489,6 +537,8 @@ bool PatchBackpackDeckCardFace()
 		DeckCardBlueprint, CardFaceScaleBox, true, false);
 	FWidgetBlueprintOperationUtils::ToggleWidgetAsVariable(
 		DeckCardBlueprint, WorkspaceFeedbackOverlay, true, false);
+	FWidgetBlueprintOperationUtils::ToggleWidgetAsVariable(
+		DeckCardBlueprint, CardMotionRoot, true, false);
 	FWidgetBlueprintOperationUtils::ToggleWidgetAsVariable(
 		DeckCardBlueprint, ExistingCardFace, true, false);
 	if (!CompileWidgetBlueprint(*DeckCardBlueprint) || !SaveTopLevelAsset(*DeckCardBlueprint))
@@ -633,6 +683,7 @@ bool BuildWorkspaceBlueprint(UWidgetBlueprint& Blueprint)
 	};
 	AddWorkspaceLayer(TEXT("PileFrameLayer"), 1000);
 	AddWorkspaceLayer(TEXT("StaticCardLayer"), 2000);
+	AddWorkspaceLayer(TEXT("SettlementLayer"), 8000);
 	UCanvasPanel* MarqueeLayer = AddWorkspaceLayer(TEXT("MarqueeLayer"), 9000);
 	UCanvasPanel* CarryRoot = AddWorkspaceLayer(TEXT("CarryRoot"), 10000);
 	if (UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(CarryRoot->Slot))
@@ -1014,14 +1065,19 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 			Package, AssetName, RF_Public | RF_Standalone | RF_Transactional);
 		FAssetRegistryModule::AssetCreated(Style);
 	}
-	Style->CardRenderSize = FVector2D(220.0f, 320.0f);
+	Style->CardRenderSize = FVector2D(296.0f, 420.0f);
 	Style->MinimumVisibleFraction = 0.3f;
 	Style->DefaultCardSpacing = FVector2D(36.0f, 44.0f);
 	Style->WorkspacePadding = FVector2D(56.0f, 56.0f);
-	Style->FanMaximumAngleDegrees = 36.0f;
-	Style->FanCardSpacingPixels = 72.0f;
 	Style->CurrentCardLiftPixels = 56.0f;
+	Style->CurrentCardZOrderBoost = 1000;
 	Style->PileCollapsedExposurePixels = 16.0f;
+	Style->AdaptiveStripExposurePixels = 48.0f;
+	Style->AdaptiveStripFocusSeparationPixels = 32.0f;
+	Style->FocusHitHysteresisPixels = 8.0f;
+	Style->FocusReflowSeconds = 0.18f;
+	Style->FocusReturnSeconds = 0.14f;
+	Style->FocusExitDelaySeconds = 0.12f;
 	Style->SettleSeconds = 0.18f;
 	Style->CollectSeconds = 0.20f;
 	Style->RejectedFeedbackSeconds = 0.16f;
@@ -1110,7 +1166,7 @@ bool BuildBackpackUIContent()
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BackpackUIBuilder] Generated Screen, unified Workspace, formal ZonePile, Confirm, SpecialZone and Style assets; DeckCard hosts WBP_FPCardView"));
+		TEXT("[BackpackUIBuilder] Generated Screen with external WorkspaceStyle asset, unified Workspace, formal ZonePile, Confirm and SpecialZone; DeckCard hosts WBP_FPCardView"));
 	return true;
 }
 }

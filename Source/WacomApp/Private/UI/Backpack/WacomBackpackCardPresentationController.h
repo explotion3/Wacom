@@ -4,35 +4,99 @@
 
 #include "CoreMinimal.h"
 #include "Layout/Geometry.h"
+#include "../Card/WacomFirstPersonCardDepthMotion.h"
 
 class UCanvasPanel;
+class UWacomBackpackWorkspaceStyle;
 class UWacomDeckCardWidget;
 struct FWacomBackpackWorkspaceCarryState;
 
 /**
- * 背包私有卡面表现控制器。
+ * Backpack-private card presentation owner.
  *
- * 只把 Workspace 的 hover/carry 状态映射到 FirstPersonCardView 的视觉参数；
- * 不接入 Battle slot、transition hint 或规则状态机，并保证最多一张卡实时重绘。
+ * Workspace owns input and base Canvas layout. This controller exclusively owns local card pose,
+ * active-card DepthMotion, pickup feedback and settlement completion. It never reads Run rules and
+ * never enters the Battle slot / transition-hint state machine.
  */
 class WACOMAPP_API FWacomBackpackCardPresentationController
 {
 public:
 	void Reconcile(
 		TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
-		FGuid HoveredInstanceId,
+		UWacomDeckCardWidget* FocusedCard,
 		const FWacomBackpackWorkspaceCarryState* Carry,
 		const UCanvasPanel* CarryLayer,
 		const FGeometry& WorkspaceGeometry,
-		FVector2D PointerLocal);
+		FVector2D PointerLocal,
+		const UWacomBackpackWorkspaceStyle& Style,
+		bool bSimplifiedMotion);
 	void UpdatePointer(const FGeometry& WorkspaceGeometry, FVector2D PointerLocal, bool bCarrying);
+	void SetLocalPoseTarget(
+		UWacomDeckCardWidget& Card,
+		FVector2D Translation,
+		float AngleDegrees,
+		float DurationSeconds,
+		bool bSimplifiedMotion);
+	void SnapLocalPose(UWacomDeckCardWidget& Card, FVector2D Translation, float AngleDegrees);
+	void BeginCarryPickup(
+		TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
+		float LiftPixels,
+		float DurationSeconds,
+		bool bSimplifiedMotion);
+	void BeginSettlement(
+		UWacomDeckCardWidget& Card,
+		FVector2D StartLocalTranslation,
+		float StartLocalAngleDegrees,
+		float DurationSeconds,
+		bool bSimplifiedMotion);
+	void Tick(
+		float DeltaTime,
+		const FGeometry& WorkspaceGeometry,
+		const UWacomBackpackWorkspaceStyle& Style,
+		bool bSimplifiedMotion);
+	bool WantsTick() const;
+	void ConsumeCompletedSettlements(TArray<TWeakObjectPtr<UWacomDeckCardWidget>>& OutCards);
 	void Reset();
 
 	UWacomDeckCardWidget* GetActiveCard() const { return ActiveCard.Get(); }
+	int32 GetMovingCardCount() const { return LocalPoseMotions.Num(); }
+	int32 GetRealtimeCardCount() const { return ActiveCard.IsValid() ? 1 : 0; }
+	bool IsCardMoving(const UWacomDeckCardWidget& Card) const
+	{
+		return LocalPoseMotions.Contains(const_cast<UWacomDeckCardWidget*>(&Card));
+	}
 
 private:
-	TWeakObjectPtr<UWacomDeckCardWidget> ActiveCard;
-	bool bActiveCardCarrying = false;
+	struct FLocalPoseMotion
+	{
+		FVector2D StartTranslation = FVector2D::ZeroVector;
+		FVector2D TargetTranslation = FVector2D::ZeroVector;
+		float StartAngleDegrees = 0.0f;
+		float TargetAngleDegrees = 0.0f;
+		float ElapsedSeconds = 0.0f;
+		float DurationSeconds = 0.0f;
+		bool bSettlement = false;
+	};
 
-	void ApplyActivePointer(const FGeometry& WorkspaceGeometry, FVector2D PointerLocal);
+	TWeakObjectPtr<UWacomDeckCardWidget> ActiveCard;
+	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FLocalPoseMotion> LocalPoseMotions;
+	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> PickupCards;
+	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> CompletedSettlements;
+	FWacomFirstPersonCardDepthMotion ActiveDepthMotion;
+	FVector2D PointerLocal = FVector2D::ZeroVector;
+	FVector2D LastDepthPointerLocal = FVector2D::ZeroVector;
+	float PickupElapsedSeconds = 0.0f;
+	float PickupDurationSeconds = 0.0f;
+	float PickupLiftPixels = 0.0f;
+	float LastPickupOffsetPixels = 0.0f;
+	bool bHasPointer = false;
+	bool bDepthPointerChanged = false;
+	bool bActiveCardCarrying = false;
+	bool bSimplified = false;
+
+	void DisableActiveCard();
+	void UpdateActiveDepth(
+		float DeltaTime,
+		const FGeometry& WorkspaceGeometry,
+		const UWacomBackpackWorkspaceStyle& Style);
 };

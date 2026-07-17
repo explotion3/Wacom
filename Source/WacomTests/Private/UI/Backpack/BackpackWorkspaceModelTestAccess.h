@@ -43,10 +43,6 @@ struct FWacomBackpackWorkspaceModelTestAccess
 		FVector2D CardSize,
 		FVector2D Spacing,
 		FVector2D Padding);
-	static TArray<FWacomBackpackWorkspaceResolvedLayoutTestView> BuildAccordionLayout(
-		int32 CardCount,
-		FVector2D PileTopLeft,
-		FVector2D WorkspaceSize);
 	static FWacomBackpackPileContentLayoutTestView BuildPileContentLayout(
 		int32 CardCount,
 		FVector2D HeaderTopLeft,
