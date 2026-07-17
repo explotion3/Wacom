@@ -367,6 +367,11 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsBridgeInCurrentRegistry(
 void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 {
 	ClearRegistryEntries(TEXT("RegistryRebuilt"));
+	FName RuntimeEncounterId = NAME_None;
+	if (UBattleSession* Session = Runtime.GetSession())
+	{
+		RuntimeEncounterId = Session->BuildSnapshot().EncounterId;
+	}
 	SceneEnemyHosts.RemoveAll([](const FSceneEnemyHostEntry& Entry)
 	{
 		const AWacomBattleEnemyActor* Host = Entry.Host.Get();
@@ -385,6 +390,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 		Host->InitializeRuntimeSceneBinding(RuntimePartActors);
 		HostEntry.ObservedEnemySlotId = Host->GetEffectiveEnemySlotId();
 		HostEntry.ObservedTopologyRevision = Host->GetRuntimePartTopologyRevision();
+		HostEntry.RuntimeParts.Reset();
 		for (AWacomBattleEnemyPartActor* PartActor : RuntimePartActors)
 		{
 			if (!IsValid(PartActor) || PartActor->IsActorBeingDestroyed())
@@ -397,6 +403,14 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 			{
 				if (Bridge->IsRegistered())
 				{
+					FSceneEnemyRuntimePartEntry RuntimePartEntry;
+					RuntimePartEntry.PartActor = PartActor;
+					RuntimePartEntry.ObservedIdentity = FBattlePartSlotIdentity::Make(
+						RuntimeEncounterId,
+						HostEntry.ObservedEnemySlotId,
+						PartActor->GetEffectivePartSlotId());
+					HostEntry.RuntimeParts.Add(MoveTemp(RuntimePartEntry));
+
 					FSceneEnemyPartWorldTargetEntry Entry;
 					Entry.Bridge = Bridge;
 					Entry.Presentation = PartActor->GetPresentationComponent();
@@ -622,9 +636,14 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 {
 	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> ActiveHosts;
+	TArray<TWeakObjectPtr<AWacomBattleEnemyPartActor>> ActiveParts;
 	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
 	{
 		ActiveHosts.AddUnique(HostEntry.Host);
+		for (const FSceneEnemyRuntimePartEntry& RuntimePart : HostEntry.RuntimeParts)
+		{
+			ActiveParts.AddUnique(RuntimePart.PartActor);
+		}
 	}
 	ClearActiveWorldTargets(TEXT("WorldTargetsCleared"));
 	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& HostPtr : ActiveHosts)
@@ -632,6 +651,13 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
 		if (AWacomBattleEnemyActor* Host = HostPtr.Get())
 		{
 			Host->CancelRuntimeHostAnimation();
+		}
+	}
+	for (const TWeakObjectPtr<AWacomBattleEnemyPartActor>& PartPtr : ActiveParts)
+	{
+		if (AWacomBattleEnemyPartActor* PartActor = PartPtr.Get())
+		{
+			PartActor->CancelRuntimePartActionAnimation();
 		}
 	}
 	ClearRetiringHosts(true);
@@ -689,35 +715,81 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::RetireWorldTargetsForBattleEnd(
 		RetiringEntry->ObservedEnemySlotId = ActiveEntry.ObservedEnemySlotId;
 		RetiringEntry->bAllPartsDestroyed =
 			EnemySnapshot && EnemySnapshot->bAllPartsDestroyed;
+		RetiringEntry->RuntimeParts = ActiveEntry.RuntimeParts;
 	}
 
 	ClearActiveWorldTargets(TEXT("BattleEnd"));
 }
 
-void FWacomBattleHUDSceneEnemyTargetCoordinator::PlayHostActionAnimation(
-	FName EnemySlotId,
+void FWacomBattleHUDSceneEnemyTargetCoordinator::PlaySceneEnemyActionAnimation(
+	const FBattlePartSlotIdentity& ActingPartKey,
 	FName IntentId,
 	TFunction<void()>&& Completion)
 {
+	if (!ActingPartKey.IsValidSlot())
+	{
+		if (Completion)
+		{
+			Completion();
+		}
+		return;
+	}
+
+	auto TryPlay = [&ActingPartKey, IntentId, &Completion](
+		AWacomBattleEnemyActor* Host,
+		const TArray<FSceneEnemyRuntimePartEntry>& RuntimeParts)
+	{
+		if (!IsValid(Host) || Host->IsActorBeingDestroyed())
+		{
+			return false;
+		}
+
+		const FSceneEnemyRuntimePartEntry* RuntimePart = RuntimeParts.FindByPredicate(
+			[&ActingPartKey](const FSceneEnemyRuntimePartEntry& Candidate)
+			{
+				return Candidate.ObservedIdentity.MatchesRuntimeSlot(ActingPartKey);
+			});
+		if (!RuntimePart)
+		{
+			return false;
+		}
+
+		if (Host->HostAuthoringMode == EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual)
+		{
+			Host->PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Completion));
+			return true;
+		}
+
+		if (Host->HostAuthoringMode == EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers)
+		{
+			AWacomBattleEnemyPartActor* PartActor = RuntimePart->PartActor.Get();
+			if (IsValid(PartActor) && !PartActor->IsActorBeingDestroyed())
+			{
+				PartActor->PlayRuntimePartActionAnimation(IntentId, MoveTemp(Completion));
+			}
+			else if (Completion)
+			{
+				Completion();
+			}
+			return true;
+		}
+
+		return false;
+	};
+
 	for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
 	{
 		AWacomBattleEnemyActor* Host = Entry.Host.Get();
-		if (Entry.ObservedEnemySlotId == EnemySlotId
-			&& IsValid(Host)
-			&& !Host->IsActorBeingDestroyed())
+		if (TryPlay(Host, Entry.RuntimeParts))
 		{
-			Host->PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Completion));
 			return;
 		}
 	}
 	for (const FRetiringSceneEnemyHostEntry& Entry : RetiringSceneEnemyHosts)
 	{
 		AWacomBattleEnemyActor* Host = Entry.Host.Get();
-		if (Entry.ObservedEnemySlotId == EnemySlotId
-			&& IsValid(Host)
-			&& !Host->IsActorBeingDestroyed())
+		if (TryPlay(Host, Entry.RuntimeParts))
 		{
-			Host->PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Completion));
 			return;
 		}
 	}
@@ -790,6 +862,13 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearRetiringHosts(
 			if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
 			{
 				Host->CancelRuntimeHostAnimation();
+			}
+			for (const FSceneEnemyRuntimePartEntry& RuntimePart : Entry.RuntimeParts)
+			{
+				if (AWacomBattleEnemyPartActor* PartActor = RuntimePart.PartActor.Get())
+				{
+					PartActor->CancelRuntimePartActionAnimation();
+				}
 			}
 		}
 	}

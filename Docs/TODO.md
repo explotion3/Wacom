@@ -192,10 +192,10 @@ tags:
   - 说明：卡牌注册、六个定位容器、Runtime Location 与顺序已收口到 `CardZoneAggregate`；Effect、EndTurn、HandLimit、奖励和 Companion 统一由 `BattleCardZoneTransition` 消费 typed facts，旧 post-move event API 已删除。
 
 - [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和高级动画状态机**
-  - 状态：`In Progress: Simple Host 与 Multi-Part 占位内容包已完成，剩余正式美术与高级表现`
+  - 状态：`In Progress: Simple / Multi-Part 通用行动层已完成，剩余正式美术与高级表现`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：TrainingWarrior 已验证正式 Simple Host 与语义动画；`BP_EnemyHost_Snake` 已验证三部位 Definition 同步、VisualLayers、局部 Destroyed、普通多部位 WBP 和 Encounter lifecycle，但当前只使用会阻止发布的 Slime Placeholder，且不提供 Part Intent 行动动画。后续优先制作正式 Snake Head / Body / Tail 素材并迁到 `/Game/Wacom/Art/Enemies/Snake`，再规划 Multi-Part 语义动画；材质描边、贴近部位 tooltip、风险动效、PaperZD/Animator 和 Status Badge 美术替换继续独立切片。
+  - 说明：TrainingWarrior 已验证正式 Simple Host 与语义动画；通用 Multi-Part Part Action 已按完整稳定身份、精确 Layer、完成 barrier 和 watchdog 接线。`BP_EnemyHost_Snake` 当前仍只使用会阻止发布的 Slime Placeholder，因缺少正式行动素材而故意不配置 Style。后续优先制作正式 Snake Head / Body / Tail Idle / Action 素材并迁到 `/Game/Wacom/Art/Enemies/Snake`，再补 13 个 Intent 的显式 Style 映射；材质描边、贴近部位 tooltip、风险动效、PaperZD/Animator 和 Status Badge 美术替换继续独立切片。
 
 - [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
   - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`
@@ -208,6 +208,12 @@ tags:
   - 归属：App / Battle World Presentation
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
   - 说明：消费既有最高优先级 `Destroyed` Cue 与 ImpactAnchor，先播放语义裂印和可关闭位移的大碎块，再在默认 35% 处原地替换配置了 `DestroyedSprite / DestroyedFlipbook` 的 VisualLayer；缺失资源保持原图，HitOnly 只播放粒子并继续由 Host Downed 承担整体终态。组件、registry topology 和规则事件不变；攻击方向、局部材质闪白和镜头震动留给独立切片。
+
+- [x] **Multi-Part Enemy Part 语义行动动画层**
+  - 状态：`Done: 完整 Part key 路由 + 原地 Flipbook barrier`
+  - 归属：App / Battle World Presentation
+  - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md)
+  - 说明：`EnemyPartActed Count > 0` 现在从 queue 到 scene coordinator 保留完整 Part key；Simple Host 继续播放 Host Style，Multi-Part 精确播放匹配 PartActor 的一个目标 Flipbook Layer。真实完成和 watchdog 串行队列，Destroyed 抢占、BattleEnd retiring Part 与重新入战恢复已覆盖；正式 Snake Style 等待正式行动素材后再制作。
 
 - [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
 	- 状态：`Done: Trigger 已接线`

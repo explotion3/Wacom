@@ -176,8 +176,8 @@ void FWacomBattleEventPresentationQueue::Clear()
 	Steps.Reset();
 	bProcessing = false;
 	bAdvancing = false;
-	bWaitingForHostAnimation = false;
-	++HostAnimationBarrierSerial;
+	bWaitingForSceneEnemyAnimation = false;
+	++SceneEnemyAnimationBarrierSerial;
 }
 
 void FWacomBattleEventPresentationQueue::AbandonWithoutWorldAccess()
@@ -186,8 +186,8 @@ void FWacomBattleEventPresentationQueue::AbandonWithoutWorldAccess()
 	Steps.Reset();
 	bProcessing = false;
 	bAdvancing = false;
-	bWaitingForHostAnimation = false;
-	++HostAnimationBarrierSerial;
+	bWaitingForSceneEnemyAnimation = false;
+	++SceneEnemyAnimationBarrierSerial;
 }
 
 bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(
@@ -209,14 +209,14 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(
 		&& Event.Count > 0
 		&& Event.ActorEnemyPartKey.IsValidKey())
 	{
-		FWacomBattlePresentationStep HostAnimationStep;
-		HostAnimationStep.Type = EWacomBattlePresentationStepType::HostAnimation;
-		HostAnimationStep.EventSequence = Event.Sequence;
-		HostAnimationStep.SourceEventType = Event.Type;
-		HostAnimationStep.EnemySlotId =
-			Event.ActorEnemyPartKey.GetEffectiveEnemyUnitSlotId();
-		HostAnimationStep.IntentId = Event.IntentId;
-		Steps.Add(MoveTemp(HostAnimationStep));
+		FWacomBattlePresentationStep SceneEnemyAnimationStep;
+		SceneEnemyAnimationStep.Type = EWacomBattlePresentationStepType::SceneEnemyAnimation;
+		SceneEnemyAnimationStep.EventSequence = Event.Sequence;
+		SceneEnemyAnimationStep.SourceEventType = Event.Type;
+		SceneEnemyAnimationStep.ActingPartKey =
+			FBattlePartSlotIdentity::FromEnemyPartKey(Event.ActorEnemyPartKey);
+		SceneEnemyAnimationStep.IntentId = Event.IntentId;
+		Steps.Add(MoveTemp(SceneEnemyAnimationStep));
 		bAddedStep = true;
 	}
 	if ((Event.Type == EBattleEventType::DamageDealt || Event.Type == EBattleEventType::EnemyPartHpEmptied)
@@ -255,14 +255,14 @@ bool FWacomBattleEventPresentationQueue::BuildStepsForEvent(
 
 		if (bLastDestroyedEventForEnemy && Event.ActorEnemyPartKey.IsValidKey())
 		{
-			FWacomBattlePresentationStep HostAnimationStep;
-			HostAnimationStep.Type = EWacomBattlePresentationStepType::HostAnimation;
-			HostAnimationStep.EventSequence = Event.Sequence;
-			HostAnimationStep.SourceEventType = Event.Type;
-			HostAnimationStep.EnemySlotId =
-				Event.ActorEnemyPartKey.GetEffectiveEnemyUnitSlotId();
-			HostAnimationStep.bDestroyedHostAnimation = true;
-			Steps.Add(MoveTemp(HostAnimationStep));
+			FWacomBattlePresentationStep SceneEnemyAnimationStep;
+			SceneEnemyAnimationStep.Type = EWacomBattlePresentationStepType::SceneEnemyAnimation;
+			SceneEnemyAnimationStep.EventSequence = Event.Sequence;
+			SceneEnemyAnimationStep.SourceEventType = Event.Type;
+			SceneEnemyAnimationStep.ActingPartKey =
+				FBattlePartSlotIdentity::FromEnemyPartKey(Event.ActorEnemyPartKey);
+			SceneEnemyAnimationStep.bDestroyedHostAnimation = true;
+			Steps.Add(MoveTemp(SceneEnemyAnimationStep));
 		}
 	}
 
@@ -308,7 +308,7 @@ void FWacomBattleEventPresentationQueue::StopTimer()
 
 void FWacomBattleEventPresentationQueue::Advance()
 {
-	if (bWaitingForHostAnimation)
+	if (bWaitingForSceneEnemyAnimation)
 	{
 		return;
 	}
@@ -359,23 +359,23 @@ void FWacomBattleEventPresentationQueue::Advance()
 		NextDelay = 0.0f;
 		break;
 
-	case EWacomBattlePresentationStepType::HostAnimation:
+	case EWacomBattlePresentationStepType::SceneEnemyAnimation:
 	{
-		const uint64 BarrierSerial = ++HostAnimationBarrierSerial;
-		bWaitingForHostAnimation = true;
+		const uint64 BarrierSerial = ++SceneEnemyAnimationBarrierSerial;
+		bWaitingForSceneEnemyAnimation = true;
 		TWeakPtr<FWacomBattleEventPresentationQueue> WeakThis = AsShared();
-		Coordinator.HandleHostAnimationStep(
-			Step.EnemySlotId,
+		Coordinator.HandleSceneEnemyAnimationStep(
+			Step.ActingPartKey,
 			Step.IntentId,
 			Step.bDestroyedHostAnimation,
 			[WeakThis, BarrierSerial]()
 			{
 				if (const TSharedPtr<FWacomBattleEventPresentationQueue> Pinned = WeakThis.Pin())
 				{
-					Pinned->CompleteHostAnimationBarrier(BarrierSerial);
+					Pinned->CompleteSceneEnemyAnimationBarrier(BarrierSerial);
 				}
 			});
-		if (bWaitingForHostAnimation)
+		if (bWaitingForSceneEnemyAnimation)
 		{
 			return;
 		}
@@ -407,16 +407,16 @@ void FWacomBattleEventPresentationQueue::Advance()
 	ScheduleNextStep(NextDelay);
 }
 
-void FWacomBattleEventPresentationQueue::CompleteHostAnimationBarrier(uint64 ExpectedSerial)
+void FWacomBattleEventPresentationQueue::CompleteSceneEnemyAnimationBarrier(uint64 ExpectedSerial)
 {
 	if (!bProcessing
-		|| !bWaitingForHostAnimation
-		|| ExpectedSerial != HostAnimationBarrierSerial)
+		|| !bWaitingForSceneEnemyAnimation
+		|| ExpectedSerial != SceneEnemyAnimationBarrierSerial)
 	{
 		return;
 	}
 
-	bWaitingForHostAnimation = false;
+	bWaitingForSceneEnemyAnimation = false;
 	if (!bAdvancing)
 	{
 		Advance();

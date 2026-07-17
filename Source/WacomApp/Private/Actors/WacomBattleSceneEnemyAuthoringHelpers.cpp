@@ -2,6 +2,7 @@
 
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
 
+#include "Actors/WacomBattleEnemyPartAnimationStyle.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
@@ -463,7 +464,7 @@ namespace WacomBattleSceneEnemyAuthoring
 		const FWacomBattleEnemyPartWorldTargetDebugView& BridgeView = View.BridgeDebugView;
 		const FWacomBattleEnemyPartPresentationDebugView& PresentationView = View.PresentationDebugView;
 		return FString::Printf(
-			TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s AuthoringState=%s AuthoringReady=%s VisualAuthoringMode=%s UsingHostVisual=%s HitOnlyVisual=%s HitBounds=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d RegisteredVisualLayerComponents=%d RegisteredStaticVisualLayerComponents=%d RegisteredFlipbookVisualLayerComponents=%d VisibleVisualLayerComponents=%d VisibleStaticVisualLayerComponents=%d VisibleFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s FeedbackTarget=%s ImpactAnchorReady=%s ImpactAnchor=%s ImpactAnchorWorld=%s PredictionWidget=%s PredictionBadgeLocation=%s PredictionBadgeDrawSize=%s PredictionBadgeScale=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s Initiative=%d Destroyed=%s Intent=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d ActiveCue=%s CueActive=%s CueProgress=%.3f CueDuration=%.3f DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s}"),
+			TEXT("BattleSceneEnemyPart{Actor=%s EnemySlotId=%s PartSlotId=%s StableSceneTargetId=%s PartId=%s AuthoringState=%s AuthoringReady=%s VisualAuthoringMode=%s UsingHostVisual=%s HitOnlyVisual=%s HitBounds=%s UsingVisualLayers=%s VisualLayerCount=%d GeneratedVisualLayerComponents=%d GeneratedStaticVisualLayerComponents=%d GeneratedFlipbookVisualLayerComponents=%d RegisteredVisualLayerComponents=%d RegisteredStaticVisualLayerComponents=%d RegisteredFlipbookVisualLayerComponents=%d VisibleVisualLayerComponents=%d VisibleStaticVisualLayerComponents=%d VisibleFlipbookVisualLayerComponents=%d MissingVisualLayerAssets=%d MissingVisualLayerSprites=%d MissingVisualLayerFlipbooks=%d VisualLayerIds=%s VisualLayerAssets=%s PartAnimationStyle=%s PartAnimationLayer=%s PartAnimationClip=%s PartAnimationIntent=%s PartAnimationActive=%s PartAnimationPlayCount=%d PartAnimationWatchdogCompletions=%d FeedbackTarget=%s ImpactAnchorReady=%s ImpactAnchor=%s ImpactAnchorWorld=%s PredictionWidget=%s PredictionBadgeLocation=%s PredictionBadgeDrawSize=%s PredictionBadgeScale=%.2f PredictionBadgeZOffset=%.1f BadgeStaggerIndex=%d BadgeStaggerOffset=%s InteractionConfigured=%s InteractionTargetId=%s InteractionStableId=%s BridgePartId=%s Bound=%s Registered=%s RuntimeFacts=%s Initiative=%d Destroyed=%s Intent=%s Targetable=%s LastBind=%s LastCue=%s CueType=%d CueAmount=%d CueCount=%d ActiveCue=%s CueActive=%s CueProgress=%.3f CueDuration=%.3f DragPreview=%d DragPreviewActive=%s DragSource=%s DragCost=%d DragSwift=%s DragCanSubmit=%s DragReject=%s HoverActive=%s HoverReason=%s HoverStableId=%s HoverWorldTargetId=%s HoverScreen=%s PredictionVisible=%s PredictionMode=%d PredictedInitiative=%d PerfectCandidate=%s ActionRisk=%s PredictionReject=%s PredictionBadgeOffsetActive=%s}"),
 			*View.ActorName,
 			*View.EnemySlotId.ToString(),
 			*View.PartSlotId.ToString(),
@@ -491,6 +492,13 @@ namespace WacomBattleSceneEnemyAuthoring
 			View.MissingVisualLayerFlipbookCount,
 			*JoinNames(View.VisualLayerIds, TEXT("|")),
 			*JoinNames(View.VisualLayerAssetNames, TEXT("|")),
+			*View.PartAnimationStyleAssetName.ToString(),
+			*View.PartAnimationTargetLayerId.ToString(),
+			*View.CurrentPartAnimationClipName.ToString(),
+			*View.CurrentPartAnimationIntentId.ToString(),
+			View.bPartAnimationPlaybackActive ? TEXT("true") : TEXT("false"),
+			View.PartAnimationPlayCount,
+			View.PartAnimationWatchdogCompletionCount,
 			*View.FeedbackTargetName.ToString(),
 			View.bImpactAnchorReady ? TEXT("true") : TEXT("false"),
 			*View.ImpactAnchorName.ToString(),
@@ -814,6 +822,55 @@ namespace WacomBattleSceneEnemyAuthoring
 					FText::FromString(PartActor.GetName()),
 					FText::AsNumber(LayerIndex)));
 				Result = EDataValidationResult::Invalid;
+			}
+		}
+
+		if (PartActor.PartAnimationStyle)
+		{
+			const FName TargetLayerId = PartActor.PartAnimationStyle->TargetVisualLayerId;
+			const FWacomBattleEnemyPartVisualLayer* TargetLayer = nullptr;
+			int32 TargetLayerCount = 0;
+			for (const FWacomBattleEnemyPartVisualLayer& Layer : PartActor.VisualLayers)
+			{
+				if (Layer.LayerId == TargetLayerId)
+				{
+					TargetLayer = &Layer;
+					++TargetLayerCount;
+				}
+			}
+
+			if (TargetLayerId.IsNone() || TargetLayerCount != 1)
+			{
+				Context.AddError(FText::Format(
+					LOCTEXT("PlacementPartAnimationTargetLayerMissingOrDuplicate",
+						"BattleEnemyPart 摆放配置错误：Actor={0} PartAnimationStyle 的 TargetVisualLayerId={1} 必须精确匹配一个唯一 VisualLayer，当前匹配数={2}。"),
+					FText::FromString(PartActor.GetName()),
+					FText::FromName(TargetLayerId),
+					FText::AsNumber(TargetLayerCount)));
+				Result = EDataValidationResult::Invalid;
+			}
+			else if (!TargetLayer
+				|| TargetLayer->LayerMode != EWacomBattleEnemyPartVisualLayerMode::Flipbook
+				|| !TargetLayer->Flipbook)
+			{
+				Context.AddError(FText::Format(
+					LOCTEXT("PlacementPartAnimationTargetLayerNotFlipbook",
+						"BattleEnemyPart 摆放配置错误：Actor={0} PartAnimationStyle 的目标层 {1} 必须是具有有效 authored Flipbook 的 Flipbook Layer。"),
+					FText::FromString(PartActor.GetName()),
+					FText::FromName(TargetLayerId)));
+				Result = EDataValidationResult::Invalid;
+			}
+
+			const AWacomBattleEnemyActor* Host =
+				Cast<AWacomBattleEnemyActor>(PartActor.GetAttachParentActor());
+			if (!Host
+				|| Host->HostAuthoringMode !=
+					EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers)
+			{
+				Context.AddWarning(FText::Format(
+					LOCTEXT("PlacementPartAnimationWithoutMultiPartHost",
+						"BattleEnemyPart 摆放警告：Actor={0} 配置了 PartAnimationStyle，但不属于 MultiPartVisualLayers Host；运行时不会消费该 Style。"),
+					FText::FromString(PartActor.GetName())));
 			}
 		}
 

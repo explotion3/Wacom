@@ -9,6 +9,7 @@
 
 class FWacomBattleEventPresentationQueue;
 struct FBattleEvent;
+struct FBattlePartSlotIdentity;
 struct FBattlePresentationJournal;
 struct FBattleSnapshot;
 struct FWacomBattleCombatLogCommandContext;
@@ -86,8 +87,8 @@ public:
 	void HandleBattleEndStep();
 	void HandleKnockdownChoiceDialogStep();
 	void HandleTargetCueStep(const FWacomBattlePresentationTargetCue& Cue);
-	void HandleHostAnimationStep(
-		FName EnemySlotId,
+	void HandleSceneEnemyAnimationStep(
+		const FBattlePartSlotIdentity& ActingPartKey,
 		FName IntentId,
 		bool bDestroyed,
 		TFunction<void()>&& Completion);

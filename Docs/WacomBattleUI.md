@@ -175,9 +175,9 @@ Details 制作分组按主路径整理：Host 的 `Identity` 配置 `EnemyDefini
 
 Host Details 的 `Authoring Report`、Host validator、debug view 和 summary 使用同一个实时纯报告，不再依赖 Actor 上缓存的“当前 Authoring Status”。Host `AuthoringState=Ready` 表示 `EnemyDefinition`、子 PartActor、`PartId` 和 `PartSlotId` 对齐；常见异常包括 `MissingEnemyDefinition`、`NoPartActors`、`DuplicatePartSlotIds`、`PartSlotMismatch` 和 `PartDefinitionMismatch`。报告还显示待新增、待修正、无效定义槽位和 surplus；重复读取报告或运行 `IsDataValid()` 不得改变身份、组件、VisualLayers、Flipbook 播放、topology revision、Last Sync 或 package dirty 状态。PartActor 仍保留自身的制作状态预览，区分 `UsingVisualLayers`、`HitOnly`、`MissingIdentity`、`InvalidHitBounds` 和 `MissingVisualResource`。
 
-Host 整体视觉和 `VisualLayers` 都只属于表现层。Simple Flipbook Host 具备轻量的 Idle / Action / Destroyed 语义播放，但不是通用动画状态机：有效 `EnemyPartActed`（`Count > 0`）串行播放 Action，完成后恢复原 Idle Flipbook、播放速率、循环和 AutoPlay 配置；最新 Snapshot 已确认全部部位破坏时播放 Destroyed，完成后停在最后一帧。播放复用同一个 `UPaperFlipbookComponent`，以 `OnFinishedPlaying` 作为队列 barrier，并用一次性 duration watchdog 防止异常资源永久阻塞；缺 Host、Style 或 Clip 会立即完成请求。
+Host 整体视觉和 `VisualLayers` 都只属于表现层。有效 `EnemyPartActed`（`Count > 0`）在 presentation queue 中保留完整 `FBattlePartSlotIdentity` 并严格串行；`SimpleHostVisual` 继续调用 Host Animation Style，`MultiPartVisualLayers` 则精确调用匹配 PartActor 的 `UWacomBattleEnemyPartAnimationStyle`。缺 Host、Part、Style、Clip 或有效目标层时同步完成请求，不按 Intent 名、Actor 名、Layer 顺序或首个部位猜测。
 
-`MultiPartVisualLayers` 仍只提供静态层和局部循环 Flipbook，不消费这套 Host 语义动画。精英 / Boss 可以用 PartActor `StaticSprite` 做主体、阴影、前景遮挡，用 PartActor `Flipbook` 做尾巴摆动、眼睛眨动或局部表现；Part 局部状态机、PaperZD 和 Boss Phase 留给后续独立能力。`SortOrder` 映射到 `TranslucentSortPriority`，数值越大越靠前。`HitBounds` 仍是唯一命中范围，sprite / flipbook 的尺寸和透明区域不改变目标身份或 BattleSession 规则。
+Part Animation Style 只声明一个稳定 `TargetVisualLayerId`、`DefaultActionClip` 和显式 `IntentId -> Clip`；显式映射优先于默认 Action，Destroyed 仍由 VisualLayer 自身的 `DestroyedFlipbook` 合同拥有。行动在同一个 `UPaperFlipbookComponent` 上非循环播放，以 `OnFinishedPlaying` 和一次性 duration watchdog 作为队列 barrier，结束后恢复 authored Flipbook、PlayRate、Looping、StartTime 与 AutoPlay。Destroyed 优先并会安全结束残留 Action；Snapshot refresh、相同 Host 设置和无拓扑变化的 registry 操作不会重播或重置。复杂多层联动、PaperZD 与 Boss Phase 仍留给后续能力。
 
 正式 Snake prefab 为 `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`。它绑定 `DA_Enemy_Snake`、`EnemySlotId=Enemy`，使用 `MultiPartVisualLayers`，清空 Host Sprite、Flipbook、Animation Style 和面板 override；三部位 Definition 因此自动使用现有多部位 WBP。Builder 必须通过 `FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition()` 生成三个 ChildActorComponent，再按稳定槽位配置：
 
@@ -187,7 +187,7 @@ Host 整体视觉和 `VisualLayers` 都只属于表现层。Simple Flipbook Host
 | `Body` | `(0,0,0)` | `Snake.Body` | `(62,46,42)` | `1.00` | `0.04s` |
 | `Tail` | `(-92,16,-8)` | `Snake.Tail` | `(48,34,34)` | `0.70` | `0.08s` |
 
-每个 Part 只有一个 `Snake.<Part>.Main` Flipbook VisualLayer，复用 `/Game/Wacom/Art/Placeholders/Enemies/Snake` 的 Idle，并绑定自己的单帧 Destroyed Flipbook；局部换图 marker 保持 `0.35`。该 Slime 组合可提交和开发验证，但发布审计必须用 `-FailOnPlaceholder` 阻止出包。本轮不提供 Part Intent 行动动画，Head / Body / Tail 只持续错帧 Idle；最后部位破坏后保持三个局部终态，等待返回探索镜头后统一退役。
+每个 Part 只有一个 `Snake.<Part>.Main` Flipbook VisualLayer，复用 `/Game/Wacom/Art/Placeholders/Enemies/Snake` 的 Idle，并绑定自己的单帧 Destroyed Flipbook；局部换图 marker 保持 `0.35`。该 Slime 组合可提交和开发验证，但发布审计必须用 `-FailOnPlaceholder` 阻止出包。通用 Part Action runtime 已可用，但正式 Snake prefab 当前故意不配置 `PartAnimationStyle`，因为没有获准提交的 Head / Body / Tail 行动素材；因此三段仍只持续错帧 Idle。最后部位破坏后保持三个局部终态，等待返回探索镜头后统一退役。
 
 `EnemySlotId` 由 Host / Trigger 注入，不在 PartActor 模板里手填。Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对应 `UEnemyPartDefinition::PartId`，`PartSlotId` 必须对应 `UEnemyDefinition.Parts[].PartSlotId`。蛇的正式绑定身份是 `Enemy + Head/Body/Tail`，不是 `Enemy + Snake.Head/Snake.Body/Snake.Tail`。
 

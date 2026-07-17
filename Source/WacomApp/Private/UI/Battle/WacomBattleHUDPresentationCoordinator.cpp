@@ -1997,8 +1997,8 @@ void FWacomBattleHUDPresentationCoordinator::HandleTargetCueStep(
 	Runtime.PlayBattlePresentationCue(Cue);
 }
 
-void FWacomBattleHUDPresentationCoordinator::HandleHostAnimationStep(
-	FName EnemySlotId,
+void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyAnimationStep(
+	const FBattlePartSlotIdentity& ActingPartKey,
 	FName IntentId,
 	bool bDestroyed,
 	TFunction<void()>&& Completion)
@@ -2008,12 +2008,12 @@ void FWacomBattleHUDPresentationCoordinator::HandleHostAnimationStep(
 	if (bDestroyed)
 	{
 		SceneEnemyCoordinator.PlayHostDestroyedAnimation(
-			EnemySlotId,
+			ActingPartKey.GetEffectiveEnemySlotId(),
 			MoveTemp(Completion));
 		return;
 	}
-	SceneEnemyCoordinator.PlayHostActionAnimation(
-		EnemySlotId,
+	SceneEnemyCoordinator.PlaySceneEnemyActionAnimation(
+		ActingPartKey,
 		IntentId,
 		MoveTemp(Completion));
 }

@@ -3,6 +3,7 @@
 #include "Actors/WacomBattleEnemyPartActor.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomBattleEnemyPartAnimationStyle.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
@@ -79,6 +80,7 @@ void AWacomBattleEnemyPartActor::BeginPlay()
 
 void AWacomBattleEnemyPartActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelRuntimePartActionAnimation();
 	NotifyRuntimePartTopologyChanged();
 	Super::EndPlay(EndPlayReason);
 }
@@ -110,6 +112,7 @@ void AWacomBattleEnemyPartActor::RetireRuntimeEncounterPresentation()
 	}
 
 	bRuntimeEncounterPresentationRetired = true;
+	CancelRuntimePartActionAnimation();
 	if (WorldTargetBridgeComponent)
 	{
 		WorldTargetBridgeComponent->ClearBattleBinding();
@@ -125,6 +128,43 @@ void AWacomBattleEnemyPartActor::RetireRuntimeEncounterPresentation()
 
 	SetActorEnableCollision(false);
 	SetActorHiddenInGame(true);
+}
+
+void AWacomBattleEnemyPartActor::PlayRuntimePartActionAnimation(
+	FName IntentId,
+	TFunction<void()>&& Completion)
+{
+	const FWacomBattleEnemyPartAnimationClip* Clip = PartAnimationStyle
+		? PartAnimationStyle->ResolveActionClip(IntentId)
+		: nullptr;
+	if (bRuntimeEncounterPresentationRetired
+		|| bHostVisualContextActive
+		|| !VisualLayerComponent
+		|| !PartAnimationStyle
+		|| !Clip)
+	{
+		if (Completion)
+		{
+			Completion();
+		}
+		return;
+	}
+
+	VisualLayerComponent->PlayRuntimeActionOneShot(
+		VisualLayers,
+		PartAnimationStyle->TargetVisualLayerId,
+		Clip->Flipbook,
+		Clip->PlayRate,
+		IntentId,
+		MoveTemp(Completion));
+}
+
+void AWacomBattleEnemyPartActor::CancelRuntimePartActionAnimation()
+{
+	if (VisualLayerComponent)
+	{
+		VisualLayerComponent->CancelRuntimeActionPlayback(true);
+	}
 }
 
 void AWacomBattleEnemyPartActor::ApplyRuntimeFacadeAndPresentationState()
@@ -397,6 +437,18 @@ AWacomBattleEnemyPartActor::GetBattleSceneEnemyPartDebugView() const
 	View.bDestroyedVisualStateApplied = VisualLayerView.bRuntimeDestroyedStateApplied;
 	View.DestroyedVisualLayerCount = VisualLayerView.RuntimeDestroyedVisualLayerCount;
 	View.DestroyedVisualApplyCount = VisualLayerView.RuntimeDestroyedVisualApplyCount;
+	View.PartAnimationStyleAssetName = PartAnimationStyle
+		? FName(*PartAnimationStyle->GetName())
+		: NAME_None;
+	View.PartAnimationTargetLayerId = PartAnimationStyle
+		? PartAnimationStyle->TargetVisualLayerId
+		: NAME_None;
+	View.CurrentPartAnimationClipName = VisualLayerView.CurrentRuntimeActionClipName;
+	View.CurrentPartAnimationIntentId = VisualLayerView.CurrentRuntimeActionIntentId;
+	View.bPartAnimationPlaybackActive = VisualLayerView.bRuntimeActionPlaybackActive;
+	View.PartAnimationPlayCount = VisualLayerView.RuntimeActionPlaybackCount;
+	View.PartAnimationWatchdogCompletionCount =
+		VisualLayerView.RuntimeActionWatchdogCompletionCount;
 	View.FeedbackTargetName = VisualLayersRoot ? FName(*VisualLayersRoot->GetName()) : NAME_None;
 	View.bImpactAnchorReady = IsValid(ImpactAnchor)
 		&& !ImpactAnchor->GetComponentLocation().ContainsNaN();

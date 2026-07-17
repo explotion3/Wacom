@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 
 class FWacomBattleHUDPresentationCoordinator;
@@ -15,7 +16,7 @@ enum class EWacomBattlePresentationStepType : uint8
 	KnockdownChoiceDialog,
 	BattleEndSignal,
 	CardStackBoundary,
-	HostAnimation,
+	SceneEnemyAnimation,
 };
 
 struct FWacomBattlePresentationStep
@@ -26,7 +27,7 @@ struct FWacomBattlePresentationStep
 	FWacomBattlePresentationTargetCue TargetCue;
 	float Duration = 0.0f;
 	int32 PresentationStackEntryId = INDEX_NONE;
-	FName EnemySlotId = NAME_None;
+	FBattlePartSlotIdentity ActingPartKey;
 	FName IntentId = NAME_None;
 	bool bDestroyedHostAnimation = false;
 };
@@ -60,13 +61,13 @@ private:
 	FTimerHandle StepTimerHandle;
 	bool bProcessing = false;
 	bool bAdvancing = false;
-	bool bWaitingForHostAnimation = false;
-	uint64 HostAnimationBarrierSerial = 0;
+	bool bWaitingForSceneEnemyAnimation = false;
+	uint64 SceneEnemyAnimationBarrierSerial = 0;
 
 	bool BuildStepsForEvent(const FBattleEvent& Event, bool bLastDestroyedEventForEnemy);
 	void ScheduleNextStep(float DelaySeconds);
 	void StopTimer();
 	void Advance();
 	void FinishIfIdle();
-	void CompleteHostAnimationBarrier(uint64 ExpectedSerial);
+	void CompleteSceneEnemyAnimationBarrier(uint64 ExpectedSerial);
 };

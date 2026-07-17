@@ -19,6 +19,7 @@ class UWidgetComponent;
 class UPaperFlipbook;
 class UPaperSprite;
 class UWacomBattleEnemyPartVisualLayerComponent;
+class UWacomBattleEnemyPartAnimationStyle;
 class UWacomBattleEnemyPartImpactStyle;
 class UWacomBattleEnemyPartTargetPreviewStyle;
 class UWacomBattleEnemyPartPredictionWidget;
@@ -138,6 +139,27 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartDebugView
 	int32 DestroyedVisualApplyCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName PartAnimationStyleAssetName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName PartAnimationTargetLayerId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName CurrentPartAnimationClipName = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName CurrentPartAnimationIntentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bPartAnimationPlaybackActive = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 PartAnimationPlayCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 PartAnimationWatchdogCompletionCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	TArray<FName> VisualLayerAssetNames;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
@@ -246,6 +268,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers",
 		meta = (ToolTip = "正式 2D 视觉层。非空时按 LayerMode 在 VisualLayersRoot 下生成 PaperSprite / PaperFlipbook 表现层；视觉层不影响 HitBounds、目标身份或战斗规则。"))
 	TArray<FWacomBattleEnemyPartVisualLayer> VisualLayers;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Part Animation",
+		meta = (ToolTip = "MultiPartVisualLayers 部位的语义行动动画 Style。精确驱动 Style 指定的 Flipbook Layer；为空时行动请求立即完成。SimpleHostVisual 继续使用 Host Animation Style。"))
+	TObjectPtr<UWacomBattleEnemyPartAnimationStyle> PartAnimationStyle = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Visual Layers|Destroyed",
 		meta = (ToolTip = "Destroyed Cue 归一化进度达到此值时原地应用破损资源。0 表示 cue 开始立即换图，1 表示 cue 结束时换图；推荐 0.35。", ClampMin = "0.0", ClampMax = "1.0"))
@@ -473,6 +499,12 @@ public:
 
 	/** Encounter 已正式完成时清理运行时目标/表现并隐藏部位；不重建 VisualLayers。 */
 	void RetireRuntimeEncounterPresentation();
+
+	/** 由 Scene Enemy presentation queue 请求一次精确部位行动；缺配置时同步完成。 */
+	void PlayRuntimePartActionAnimation(FName IntentId, TFunction<void()>&& Completion);
+
+	/** source/session/Actor 清理时安全结束当前部位行动 barrier。 */
+	void CancelRuntimePartActionAnimation();
 
 	/** 由语义 Destroyed Cue 原地应用破损终态；重复调用幂等，不重建 VisualLayers。 */
 	int32 ApplyRuntimeDestroyedVisualState();

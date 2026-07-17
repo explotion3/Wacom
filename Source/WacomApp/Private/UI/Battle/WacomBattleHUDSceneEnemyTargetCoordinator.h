@@ -8,6 +8,7 @@
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
 class AWacomBattleEnemyActor;
+class AWacomBattleEnemyPartActor;
 class FWacomBattleHUDRuntime;
 class UWacomBattleEnemyPartPresentationComponent;
 class UWacomBattleEnemyPartWorldTargetBridgeComponent;
@@ -38,8 +39,8 @@ public:
 	void RebuildRegistry();
 	void SyncWorldTargets(const FBattleSnapshot& Snapshot);
 	void ClearWorldTargets();
-	void PlayHostActionAnimation(
-		FName EnemySlotId,
+	void PlaySceneEnemyActionAnimation(
+		const FBattlePartSlotIdentity& ActingPartKey,
 		FName IntentId,
 		TFunction<void()>&& Completion);
 	void PlayHostDestroyedAnimation(
@@ -62,11 +63,18 @@ public:
 	int32 GetRegistryRevision() const { return RegistryRevision; }
 
 private:
+	struct FSceneEnemyRuntimePartEntry
+	{
+		TWeakObjectPtr<AWacomBattleEnemyPartActor> PartActor;
+		FBattlePartSlotIdentity ObservedIdentity;
+	};
+
 	struct FSceneEnemyHostEntry
 	{
 		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
 		FName ObservedEnemySlotId = NAME_None;
 		uint32 ObservedTopologyRevision = 0;
+		TArray<FSceneEnemyRuntimePartEntry> RuntimeParts;
 	};
 
 	struct FSceneEnemyPartWorldTargetEntry
@@ -82,6 +90,7 @@ private:
 		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
 		FName ObservedEnemySlotId = NAME_None;
 		bool bAllPartsDestroyed = false;
+		TArray<FSceneEnemyRuntimePartEntry> RuntimeParts;
 	};
 
 	FWacomBattleHUDRuntime& Runtime;

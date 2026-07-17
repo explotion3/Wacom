@@ -101,6 +101,8 @@ Scene Enemy Host 使用单向依赖 `WacomEditor -> WacomApp -> WacomData`。`Wa
 
 部位破坏表现仍停留在 `WacomApp`，不反向污染规则或数据 schema。`EnemyPartHpEmptied` 只提供稳定语义和顺序；Part Presentation 复用现有 Cue Playback，在 `ImpactAnchor` 启动 Destroyed Niagara，并在归一化进度达到 authored marker 时调用 VisualLayer Component 原地替换 Sprite/Flipbook。运行时不重建组件、不扫描拓扑、不调用 Authoring Refresh。Host 的整体 Downed barrier 和 Trigger 的探索场景退役继续位于后续队列 / 生命周期层，三者不可合并为单个 Actor 自毁流程。
 
+敌人行动动画也只属于 `WacomApp` 表现层。Presentation queue 从 `EnemyPartActed` 保留完整 `EncounterId + EnemySlotId + PartSlotId`，scene-enemy coordinator 再按 Host 制作模式分流：`SimpleHostVisual` 使用 Host Animation Style，`MultiPartVisualLayers` 使用精确 PartActor 上的 Part Animation Style。Part Style 只驱动一个明确 `TargetVisualLayerId`，原地切换既有 Flipbook Component 并以完成回调 / watchdog 作为队列 barrier；缺失身份、Style、Clip 或 Layer 时同步完成。`WacomBattle` 事件、`WacomData` schema、target registry 与组件拓扑都不为动画反向改变。
+
 正式敌人内容包同样保持单向写入边界。`WacomEditor` 的 manifest-driven enemy-pack commandlet 可以用 AssetTools 晋升明确授权范围内的本地 Paper2D 依赖闭包，并幂等构建 DataAsset、Encounter 与 Host Blueprint；生成后的 `/Game/Wacom` 资产是运行时唯一依赖。本地 ignored `/Game/Art` 不是运行时 fallback，也不会被 `WacomRegenerateContent` 读取。TrainingWarrior 验证 `SimpleHostVisual + Host Animation Style`，Snake 验证 `MultiPartVisualLayers + Part Destroyed`；两者共享构建和运行时能力，`WacomData` schema、`WacomBattle` 规则与 `WacomApp` Host runtime 不为具体敌人增加分支。
 
 `/Game/Wacom/Art/Placeholders` 是受控开发资产而不是正式出货内容。依赖审计 JSON v2 单独列出该根目录，普通开发审计允许存在，发布审计必须启用 `-FailOnPlaceholder`。Snake 当前 Slime 闭包只获占位授权；未来正式素材替换必须切换 Host 引用、删除已知占位包并让发布 gate 通过，不能通过重命名或移动来规避 Placeholder 语义。
