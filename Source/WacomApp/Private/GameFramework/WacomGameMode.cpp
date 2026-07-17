@@ -20,6 +20,7 @@
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "GameFramework/WacomExitBattlePostRunBarrier.h"
 #include "GameFramework/WacomResolvedEncounterSceneRetirementPolicy.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "RunSession.h"
@@ -37,56 +38,6 @@ const FString AWacomGameMode::SlotName_Auto = TEXT("Auto");
 namespace
 {
 	const FName JourneySummaryMainMenuPackagePath(TEXT("/Game/Wacom/Maps/L_MainMenu"));
-
-	struct FExitBattlePostRunBarrierState
-	{
-		explicit FExitBattlePostRunBarrierState(TFunction<void()>&& InOnReady)
-			: OnReady(MoveTemp(InOnReady))
-		{
-		}
-
-		void MarkReturnCompleted()
-		{
-			bReturnCompleted = true;
-			TryComplete();
-		}
-
-		void MarkExitBattlePostRunReady()
-		{
-			bExitBattlePostRunReady = true;
-			TryComplete();
-		}
-
-		void SetResolvedEncounterTrigger(ABattleTriggerActor* InTrigger)
-		{
-			WeakResolvedEncounterTrigger = InTrigger;
-		}
-
-	private:
-		void TryComplete()
-		{
-			if (!bReturnCompleted || !bExitBattlePostRunReady || bCompleted)
-			{
-				return;
-			}
-
-			bCompleted = true;
-			if (ABattleTriggerActor* Trigger = WeakResolvedEncounterTrigger.Get())
-			{
-				Trigger->CompleteResolvedEncounterSceneRetirement();
-			}
-			if (OnReady)
-			{
-				OnReady();
-			}
-		}
-
-		TFunction<void()> OnReady;
-		TWeakObjectPtr<ABattleTriggerActor> WeakResolvedEncounterTrigger;
-		bool bReturnCompleted = false;
-		bool bExitBattlePostRunReady = false;
-		bool bCompleted = false;
-	};
 }
 
 AWacomGameMode::AWacomGameMode()

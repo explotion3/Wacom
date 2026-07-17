@@ -191,7 +191,7 @@ namespace
 		return (static_cast<uint8>(DirtyFlags) & static_cast<uint8>(Flag)) != 0;
 	}
 
-	bool ShouldStarterCardStartInBattleDeck(const UCardDefinition* Card)
+	bool ShouldRunSessionStarterCardStartInBattleDeck(const UCardDefinition* Card)
 	{
 		// 原型内容规则：暮色引虫灯默认进入备战区，但仍作为 A 类容器贡献通量容量。
 		// 后续若类似规则增多，应抽成 Card/Character 数据字段，而不是继续扩硬编码列表。
@@ -480,7 +480,7 @@ namespace
 		});
 	}
 
-	bool IsSafeArrivalNode(const EWacomMapNodeType NodeType)
+	bool IsRunSessionSafeArrivalNode(const EWacomMapNodeType NodeType)
 	{
 		return NodeType == EWacomMapNodeType::Navigation || NodeType == EWacomMapNodeType::Shop;
 	}
@@ -654,7 +654,7 @@ FRunInitializationResult URunSession::Initialize(const FRunInitializationParams&
 			return Result;
 		}
 
-		if (ShouldStarterCardStartInBattleDeck(Card) || !URunSession::IsContainerCard(Card))
+		if (ShouldRunSessionStarterCardStartInBattleDeck(Card) || !URunSession::IsContainerCard(Card))
 		{
 			WorkingState.BattleDeck.Add(Instance);
 		}
@@ -709,7 +709,7 @@ FRunInitializationResult URunSession::Initialize(const FRunInitializationParams&
 		Result.Status = FWacomStatus::Fail(EWacomError::InvalidState, TEXT("MissingEntryProgress"));
 		return Result;
 	}
-	EntryProgress->Lifecycle = IsSafeArrivalNode(EntryNode->NodeType)
+	EntryProgress->Lifecycle = IsRunSessionSafeArrivalNode(EntryNode->NodeType)
 		? ERunMapNodeLifecycle::Resolved
 		: ERunMapNodeLifecycle::Visited;
 	const bool bEntryResolved = EntryProgress->Lifecycle == ERunMapNodeLifecycle::Resolved;

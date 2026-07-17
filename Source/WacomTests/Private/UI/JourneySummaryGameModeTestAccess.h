@@ -15,6 +15,7 @@ struct FWacomJourneySummaryGameModeTestAccess
 		const FRunExplorationResolution& Resolution,
 		const URunSession& RunSession);
 	static void CompleteSuccessBarrier(AWacomGameMode& GameMode);
+	static void CompleteOrdinaryBarrier(AWacomGameMode& GameMode);
 	static void BindScreen(
 		AWacomGameMode& GameMode,
 		UWacomJourneySummaryScreen& Screen);

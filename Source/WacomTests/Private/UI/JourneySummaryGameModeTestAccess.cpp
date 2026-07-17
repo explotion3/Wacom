@@ -22,6 +22,13 @@ void FWacomJourneySummaryGameModeTestAccess::CompleteSuccessBarrier(
 	GameMode.HandleExitBattlePostRunBarrier(true, nullptr);
 }
 
+void FWacomJourneySummaryGameModeTestAccess::CompleteOrdinaryBarrier(
+	AWacomGameMode& GameMode)
+{
+	GameMode.CurrentState = EGameFlowState::Exploration;
+	GameMode.HandleExitBattlePostRunBarrier(false, nullptr);
+}
+
 void FWacomJourneySummaryGameModeTestAccess::BindScreen(
 	AWacomGameMode& GameMode,
 	UWacomJourneySummaryScreen& Screen)
