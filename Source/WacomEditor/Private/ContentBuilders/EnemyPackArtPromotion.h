@@ -27,4 +27,12 @@ namespace Wacom::ContentBuilder
 	 * 不读取或要求本地 /Game/Art 源素材。
 	 */
 	FEnemyPackArtPromotionResult ValidateTrainingWarriorFormalArt();
+
+	/**
+	 * 将本地 Slime Idle 闭包晋升为可提交、但必须被发布审计阻断的 Snake 占位素材。
+	 */
+	FEnemyPackArtPromotionResult PromoteSnakePlaceholderArt(bool bForceRefresh);
+
+	/** 只读验证已提交的 Snake 占位素材及三个单帧 Destroyed Flipbook。 */
+	FEnemyPackArtPromotionResult ValidateSnakePlaceholderArt();
 }

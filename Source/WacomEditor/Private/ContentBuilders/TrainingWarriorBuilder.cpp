@@ -26,7 +26,6 @@
 #include "PaperFlipbook.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UObject/SavePackage.h"
-#include "UObject/UnrealType.h"
 
 namespace
 {
@@ -43,103 +42,6 @@ namespace
 	T* LoadFormalAsset(const FString& PackagePath)
 	{
 		return LoadObject<T>(nullptr, *MakeObjectPath(PackagePath));
-	}
-
-	bool CopyEditedProperties(UObject& Target, const UObject& Expected)
-	{
-		TArray<FProperty*> ChangedProperties;
-		for (TFieldIterator<FProperty> It(Target.GetClass()); It; ++It)
-		{
-			FProperty* Property = *It;
-			const bool bIsKnockdownRewardMigrationField =
-				Property->GetFName()
-				== GET_MEMBER_NAME_CHECKED(
-					UEnemyPartDefinition,
-					KnockdownRewardCard);
-			if (!Property->HasAnyPropertyFlags(CPF_Edit)
-				|| Property->HasAnyPropertyFlags(
-					CPF_Transient | CPF_DuplicateTransient
-					| CPF_NonPIEDuplicateTransient)
-				|| (Property->HasAnyPropertyFlags(CPF_Deprecated)
-					&& !bIsKnockdownRewardMigrationField))
-			{
-				continue;
-			}
-			if (!Property->Identical_InContainer(&Target, &Expected, PPF_None))
-			{
-				ChangedProperties.Add(Property);
-			}
-		}
-		if (ChangedProperties.IsEmpty())
-		{
-			return false;
-		}
-
-		Target.Modify();
-		for (FProperty* Property : ChangedProperties)
-		{
-			Property->CopyCompleteValue_InContainer(&Target, &Expected);
-		}
-		return true;
-	}
-
-	template <typename T, typename ConfigureExpectedType>
-	T* BuildDataAsset(
-		const FString& PackagePath,
-		FName AssetName,
-		ConfigureExpectedType&& ConfigureExpected,
-		bool& bOutChanged,
-		TArray<FString>& OutErrors)
-	{
-		UPackage* Package = FindOrCreatePackage(PackagePath);
-		if (!Package)
-		{
-			OutErrors.Add(FString::Printf(
-				TEXT("Could not create package %s"), *PackagePath));
-			return nullptr;
-		}
-
-		UObject* ExistingObject = StaticFindObject(
-			UObject::StaticClass(), Package, *AssetName.ToString());
-		T* Asset = Cast<T>(ExistingObject);
-		bool bCreated = false;
-		if (ExistingObject && !Asset)
-		{
-			OutErrors.Add(FString::Printf(
-				TEXT("Existing object has unexpected class %s: %s"),
-				*GetNameSafe(ExistingObject->GetClass()),
-				*PackagePath));
-			return nullptr;
-		}
-		if (!Asset)
-		{
-			Asset = NewObject<T>(
-				Package,
-				AssetName,
-				RF_Public | RF_Standalone | RF_Transactional);
-			bCreated = Asset != nullptr;
-		}
-		if (!Asset)
-		{
-			OutErrors.Add(FString::Printf(
-				TEXT("Could not create asset %s"), *PackagePath));
-			return nullptr;
-		}
-
-		TStrongObjectPtr<T> Expected(NewObject<T>(GetTransientPackage()));
-		ConfigureExpected(*Expected.Get());
-		const bool bChanged = bCreated || CopyEditedProperties(*Asset, *Expected.Get());
-		if (bChanged)
-		{
-			if (!SaveAssetPackage(Package, Asset, PackagePath))
-			{
-				OutErrors.Add(FString::Printf(
-					TEXT("Could not save asset %s"), *PackagePath));
-				return nullptr;
-			}
-			bOutChanged = true;
-		}
-		return Asset;
 	}
 
 	FCardEffect MakeAllEnemyPartsDamage(int32 Amount)
@@ -183,18 +85,6 @@ namespace
 		Result.Intent.ResistanceValue = Resistance;
 		Result.Intent.Effects = { MoveTemp(Effect) };
 		return Result;
-	}
-
-	template <typename T>
-	bool AssignIfDifferent(UObject& Owner, T& Target, const T& Value)
-	{
-		if (Target == Value)
-		{
-			return false;
-		}
-		Owner.Modify();
-		Target = Value;
-		return true;
 	}
 
 	bool SaveBlueprint(

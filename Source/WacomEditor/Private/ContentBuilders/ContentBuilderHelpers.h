@@ -43,11 +43,30 @@ namespace Wacom::ContentBuilder
 	 * PackagePath 形如 "/Game/Wacom/Data/Cards/BugGirl/DA_Card_LeftHand"。
 	 */
 	bool SaveAssetPackage(UPackage* Package, UObject* Asset, const FString& PackagePath);
+
+	/** 只复制发生变化的可编辑、非 transient 属性。 */
+	bool CopyEditedProperties(UObject& Target, const UObject& Expected);
+
+	/**
+	 * 幂等创建或更新一个 DataAsset / Editor 生成资产。
+	 * ConfigureExpected 只写期望制作字段；没有语义变化时不会 dirty 或保存 package。
+	 */
+	template <typename T, typename ConfigureExpectedType>
+	T* BuildDataAsset(
+		const FString& PackagePath,
+		FName AssetName,
+		ConfigureExpectedType&& ConfigureExpected,
+		bool& bOutChanged,
+		TArray<FString>& OutErrors);
+
+	template <typename T>
+	bool AssignIfDifferent(UObject& Owner, T& Target, const T& Value);
 }
 
 // ---- 模板实现 ----
 
 #include "Engine/Engine.h"
+#include "UObject/StrongObjectPtr.h"
 #include "UObject/Package.h"
 
 namespace Wacom::ContentBuilder
@@ -68,5 +87,77 @@ namespace Wacom::ContentBuilder
 		}
 		T* NewAsset = NewObject<T>(Package, AssetName, RF_Public | RF_Standalone);
 		return NewAsset;
+	}
+
+	template <typename T, typename ConfigureExpectedType>
+	T* BuildDataAsset(
+		const FString& PackagePath,
+		FName AssetName,
+		ConfigureExpectedType&& ConfigureExpected,
+		bool& bOutChanged,
+		TArray<FString>& OutErrors)
+	{
+		UPackage* Package = FindOrCreatePackage(PackagePath);
+		if (!Package)
+		{
+			OutErrors.Add(FString::Printf(
+				TEXT("Could not create package %s"), *PackagePath));
+			return nullptr;
+		}
+
+		UObject* ExistingObject = StaticFindObject(
+			UObject::StaticClass(), Package, *AssetName.ToString());
+		T* Asset = Cast<T>(ExistingObject);
+		bool bCreated = false;
+		if (ExistingObject && !Asset)
+		{
+			OutErrors.Add(FString::Printf(
+				TEXT("Existing object has unexpected class %s: %s"),
+				*GetNameSafe(ExistingObject->GetClass()),
+				*PackagePath));
+			return nullptr;
+		}
+		if (!Asset)
+		{
+			Asset = NewObject<T>(
+				Package,
+				AssetName,
+				RF_Public | RF_Standalone | RF_Transactional);
+			bCreated = Asset != nullptr;
+		}
+		if (!Asset)
+		{
+			OutErrors.Add(FString::Printf(
+				TEXT("Could not create asset %s"), *PackagePath));
+			return nullptr;
+		}
+
+		TStrongObjectPtr<T> Expected(NewObject<T>(GetTransientPackage()));
+		ConfigureExpected(*Expected.Get());
+		const bool bChanged = bCreated
+			|| CopyEditedProperties(*Asset, *Expected.Get());
+		if (bChanged)
+		{
+			if (!SaveAssetPackage(Package, Asset, PackagePath))
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Could not save asset %s"), *PackagePath));
+				return nullptr;
+			}
+			bOutChanged = true;
+		}
+		return Asset;
+	}
+
+	template <typename T>
+	bool AssignIfDifferent(UObject& Owner, T& Target, const T& Value)
+	{
+		if (Target == Value)
+		{
+			return false;
+		}
+		Owner.Modify();
+		Target = Value;
+		return true;
 	}
 }

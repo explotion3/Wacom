@@ -2,7 +2,6 @@
 
 #include "Commandlets/WacomRegenerateContentCommandlet.h"
 #include "ContentBuilders/BugGirlBuilder.h"
-#include "ContentBuilders/EncounterBuilder.h"
 #include "ContentBuilders/RunPickupBlueprintBuilder.h"
 #include "ContentBuilders/RunPickupDefinitionBuilder.h"
 #include "ContentBuilders/RunWorldCardInteractionDefinitionBuilder.h"
@@ -32,21 +31,21 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 {
 	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Start"));
 
-	UEnemyDefinition* Snake = Wacom::ContentBuilder::BuildSnakeContent();
-	if (!Snake)
+	const Wacom::ContentBuilder::FSnakeBuildResult Snake =
+		Wacom::ContentBuilder::BuildSnakeContent();
+	if (!Snake.IsSuccess())
 	{
+		for (const FString& Error : Snake.Errors)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomRegenerateContent] Snake: %s"), *Error);
+		}
 		UE_LOG(LogTemp, Error, TEXT("[WacomRegenerateContent] BuildSnakeContent failed"));
 		return 1;
 	}
-	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Snake built"));
-
-	UEncounterDefinition* SnakeEncounter = Wacom::ContentBuilder::BuildEncounterContent(Snake);
-	if (!SnakeEncounter)
-	{
-		UE_LOG(LogTemp, Error, TEXT("[WacomRegenerateContent] BuildEncounterContent failed"));
-		return 8;
-	}
-	UE_LOG(LogTemp, Display, TEXT("[WacomRegenerateContent] Encounters built"));
+	UE_LOG(LogTemp, Display,
+		TEXT("[WacomRegenerateContent] Snake built (changed=%s)"),
+		Snake.bChanged ? TEXT("true") : TEXT("false"));
 
 	const Wacom::ContentBuilder::FTrainingWarriorBuildResult TrainingWarrior =
 		Wacom::ContentBuilder::BuildTrainingWarriorContent();

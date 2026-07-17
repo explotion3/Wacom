@@ -35,6 +35,9 @@ bool FWacomEditorContentDependencyAuditPathContractSpec::RunTest(const FString& 
 	Report.ScanRoot = WacomRoot;
 	Report.ScannedPackageCount = 2;
 	Report.TraversedGamePackageCount = 3;
+	Report.PlaceholderPackages = {
+		FName(TEXT("/Game/Wacom/Art/Placeholders/Z_Proxy")),
+		FName(TEXT("/Game/Wacom/Art/Placeholders/A_Proxy")) };
 	FWacomExternalDependencyFinding& Finding = Report.ExternalFindings.AddDefaulted_GetRef();
 	Finding.PackageName = FName(TEXT("/Game/Asset/Texture/T_Noise"));
 	Finding.Classification = TEXT("Asset");
@@ -51,12 +54,16 @@ bool FWacomEditorContentDependencyAuditPathContractSpec::RunTest(const FString& 
 	Finding.bHasHardReference = true;
 	Finding.bHasGameReference = true;
 	const FString Json = SerializeReportToJson(Report);
-	TestTrue(TEXT("Report contains its stable schema"), Json.Contains(TEXT("\"schemaVersion\": 1")));
+	TestTrue(TEXT("Report contains its stable schema"), Json.Contains(TEXT("\"schemaVersion\": 2")));
 	TestTrue(TEXT("Report contains the external package"), Json.Contains(Finding.PackageName.ToString()));
 	TestTrue(TEXT("Report records on-disk asset state"), Json.Contains(TEXT("\"hasOnDiskAsset\": true")));
 	TestTrue(TEXT("Report records asset classes"), Json.Contains(TEXT("/Script/Engine.Texture2D")));
 	TestTrue(TEXT("Referencers are serialized in lexical order"),
 		Json.Find(TEXT("A_Referencer")) < Json.Find(TEXT("Z_Referencer")));
+	TestTrue(TEXT("Placeholder packages trigger the release gate"),
+		HasPlaceholderPackages(Report));
+	TestTrue(TEXT("Placeholder packages are serialized in lexical order"),
+		Json.Find(TEXT("A_Proxy")) < Json.Find(TEXT("Z_Proxy")));
 	TestFalse(TEXT("Report omits volatile timestamps"), Json.Contains(TEXT("generatedAt")));
 	return true;
 }

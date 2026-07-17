@@ -9,14 +9,16 @@
 #include "ContentBuilders/ContentBuilderHelpers.h"
 #include "Engine/Texture2D.h"
 #include "IAssetTools.h"
+#include "Misc/PackageName.h"
 #include "Modules/ModuleManager.h"
+#include "PackageTools.h"
 #include "PaperFlipbook.h"
 #include "PaperSprite.h"
+#include "UObject/UnrealType.h"
 
 namespace
 {
-	const FString SourceRoot = TEXT("/Game/Art/PaperAssets/Party/BattleWarrior");
-	const FString FormalRoot = TEXT("/Game/Wacom/Art/Enemies/TrainingWarrior");
+	using namespace Wacom::ContentBuilder;
 
 	struct FAnimationPromotionSpec
 	{
@@ -25,16 +27,73 @@ namespace
 		int32 FrameCount;
 	};
 
-	const TArray<FAnimationPromotionSpec>& GetAnimationSpecs()
+	struct FEnemyArtPromotionManifest
 	{
-		static const TArray<FAnimationPromotionSpec> Specs = {
-			{ TEXT("Idle"), TEXT("Idle"), 6 },
-			{ TEXT("Attack"), TEXT("Attack"), 5 },
-			{ TEXT("Block"), TEXT("Block"), 4 },
-			{ TEXT("Cleave"), TEXT("Cleave"), 11 },
-			{ TEXT("Downed"), TEXT("Destroyed"), 4 },
+		const TCHAR* Label;
+		FString SourceRoot;
+		FString TargetRoot;
+		FString SourceAssetPrefix;
+		FString TargetAssetPrefix;
+		FString SourceTextureName;
+		FString TargetTextureName;
+		TArray<FAnimationPromotionSpec> Animations;
+		bool bBuildSnakeDestroyedFlipbooks = false;
+	};
+
+	struct FSnakeDestroyedFlipbookSpec
+	{
+		const TCHAR* PartName;
+		int32 SourceFrameIndex;
+	};
+
+	const TArray<FSnakeDestroyedFlipbookSpec>& GetSnakeDestroyedSpecs()
+	{
+		static const TArray<FSnakeDestroyedFlipbookSpec> Specs = {
+			{ TEXT("Head"), 3 },
+			{ TEXT("Body"), 2 },
+			{ TEXT("Tail"), 1 },
 		};
 		return Specs;
+	}
+
+	const FEnemyArtPromotionManifest& GetTrainingWarriorManifest()
+	{
+		static const FEnemyArtPromotionManifest Manifest = {
+			TEXT("TrainingWarrior"),
+			TEXT("/Game/Art/PaperAssets/Party/BattleWarrior"),
+			TEXT("/Game/Wacom/Art/Enemies/TrainingWarrior"),
+			TEXT("BattleWarrior__"),
+			TEXT("TrainingWarrior"),
+			TEXT("BattleWarrior"),
+			TEXT("T_Enemy_TrainingWarrior"),
+			{
+				{ TEXT("Idle"), TEXT("Idle"), 6 },
+				{ TEXT("Attack"), TEXT("Attack"), 5 },
+				{ TEXT("Block"), TEXT("Block"), 4 },
+				{ TEXT("Cleave"), TEXT("Cleave"), 11 },
+				{ TEXT("Downed"), TEXT("Destroyed"), 4 },
+			},
+			false,
+		};
+		return Manifest;
+	}
+
+	const FEnemyArtPromotionManifest& GetSnakePlaceholderManifest()
+	{
+		static const FEnemyArtPromotionManifest Manifest = {
+			TEXT("SnakePlaceholder"),
+			TEXT("/Game/Art/PaperAssets/Enemies/Slime"),
+			TEXT("/Game/Wacom/Art/Placeholders/Enemies/Snake"),
+			TEXT("Slime__"),
+			TEXT("SnakePlaceholder"),
+			TEXT("Slime"),
+			TEXT("T_Enemy_SnakePlaceholder_Slime"),
+			{
+				{ TEXT("Idle"), TEXT("Idle"), 4 },
+			},
+			true,
+		};
+		return Manifest;
 	}
 
 	bool IsPackageUnderRoot(const FString& PackageName, const FString& Root)
@@ -42,49 +101,106 @@ namespace
 		return PackageName == Root || PackageName.StartsWith(Root + TEXT("/"));
 	}
 
-	FString MakeObjectPath(const FString& PackageName)
-	{
-		return PackageName + TEXT(".") + FPackageName::GetLongPackageAssetName(PackageName);
-	}
-
-	FString SourceFlipbookPackage(const TCHAR* State)
-	{
-		return FString::Printf(TEXT("%s/BattleWarrior__%s"), *SourceRoot, State);
-	}
-
-	FString FormalFlipbookPackage(const TCHAR* State)
+	FString SourceFlipbookPackage(
+		const FEnemyArtPromotionManifest& Manifest,
+		const FAnimationPromotionSpec& Spec)
 	{
 		return FString::Printf(
-			TEXT("%s/Flipbooks/PF_Enemy_TrainingWarrior_%s"),
-			*FormalRoot,
-			State);
+			TEXT("%s/%s%s"),
+			*Manifest.SourceRoot,
+			*Manifest.SourceAssetPrefix,
+			Spec.SourceState);
 	}
 
-	FString FormalSpritePackage(const TCHAR* State, int32 FrameIndex)
+	FString SourceSpritePackage(
+		const FEnemyArtPromotionManifest& Manifest,
+		const FAnimationPromotionSpec& Spec,
+		int32 FrameIndex)
 	{
 		return FString::Printf(
-			TEXT("%s/Sprites/SPR_Enemy_TrainingWarrior_%s_%02d"),
-			*FormalRoot,
-			State,
+			TEXT("%s/Frames/%s%s_%d_aseprite"),
+			*Manifest.SourceRoot,
+			*Manifest.SourceAssetPrefix,
+			Spec.SourceState,
 			FrameIndex);
 	}
 
-	void AddExpectedFormalPackages(
-		TMap<FString, UClass*>& OutExpectedPackages)
+	FString TargetFlipbookPackage(
+		const FEnemyArtPromotionManifest& Manifest,
+		const FAnimationPromotionSpec& Spec)
 	{
-		OutExpectedPackages.Add(
-			FormalRoot + TEXT("/Textures/T_Enemy_TrainingWarrior"),
-			UTexture2D::StaticClass());
-		for (const FAnimationPromotionSpec& Spec : GetAnimationSpecs())
+		return FString::Printf(
+			TEXT("%s/Flipbooks/PF_Enemy_%s_%s"),
+			*Manifest.TargetRoot,
+			*Manifest.TargetAssetPrefix,
+			Spec.FormalState);
+	}
+
+	FString TargetSpritePackage(
+		const FEnemyArtPromotionManifest& Manifest,
+		const FAnimationPromotionSpec& Spec,
+		int32 FrameIndex)
+	{
+		return FString::Printf(
+			TEXT("%s/Sprites/SPR_Enemy_%s_%s_%02d"),
+			*Manifest.TargetRoot,
+			*Manifest.TargetAssetPrefix,
+			Spec.FormalState,
+			FrameIndex);
+	}
+
+	FString SnakeDestroyedFlipbookPackage(const TCHAR* PartName)
+	{
+		return FString::Printf(
+			TEXT("%s/Flipbooks/PF_Enemy_SnakePlaceholder_Destroyed_%s"),
+			*GetSnakePlaceholderManifest().TargetRoot,
+			PartName);
+	}
+
+	void BuildManifestMaps(
+		const FEnemyArtPromotionManifest& Manifest,
+		TMap<FString, FString>& OutCopyMap,
+		TMap<FString, UClass*>& OutSourceClasses,
+		TMap<FString, UClass*>& OutTargetClasses)
+	{
+		const FString SourceTexture = FString::Printf(
+			TEXT("%s/Textures/%s"),
+			*Manifest.SourceRoot,
+			*Manifest.SourceTextureName);
+		const FString TargetTexture = FString::Printf(
+			TEXT("%s/Textures/%s"),
+			*Manifest.TargetRoot,
+			*Manifest.TargetTextureName);
+		OutCopyMap.Add(SourceTexture, TargetTexture);
+		OutSourceClasses.Add(SourceTexture, UTexture2D::StaticClass());
+		OutTargetClasses.Add(TargetTexture, UTexture2D::StaticClass());
+
+		for (const FAnimationPromotionSpec& Spec : Manifest.Animations)
 		{
-			OutExpectedPackages.Add(
-				FormalFlipbookPackage(Spec.FormalState),
-				UPaperFlipbook::StaticClass());
+			const FString SourceFlipbook = SourceFlipbookPackage(Manifest, Spec);
+			const FString TargetFlipbook = TargetFlipbookPackage(Manifest, Spec);
+			OutCopyMap.Add(SourceFlipbook, TargetFlipbook);
+			OutSourceClasses.Add(SourceFlipbook, UPaperFlipbook::StaticClass());
+			OutTargetClasses.Add(TargetFlipbook, UPaperFlipbook::StaticClass());
 			for (int32 FrameIndex = 0; FrameIndex < Spec.FrameCount; ++FrameIndex)
 			{
-				OutExpectedPackages.Add(
-					FormalSpritePackage(Spec.FormalState, FrameIndex),
-					UPaperSprite::StaticClass());
+				const FString SourceSprite = SourceSpritePackage(
+					Manifest, Spec, FrameIndex);
+				const FString TargetSprite = TargetSpritePackage(
+					Manifest, Spec, FrameIndex);
+				OutCopyMap.Add(SourceSprite, TargetSprite);
+				OutSourceClasses.Add(SourceSprite, UPaperSprite::StaticClass());
+				OutTargetClasses.Add(TargetSprite, UPaperSprite::StaticClass());
+			}
+		}
+
+		if (Manifest.bBuildSnakeDestroyedFlipbooks)
+		{
+			for (const FSnakeDestroyedFlipbookSpec& Spec : GetSnakeDestroyedSpecs())
+			{
+				OutTargetClasses.Add(
+					SnakeDestroyedFlipbookPackage(Spec.PartName),
+					UPaperFlipbook::StaticClass());
 			}
 		}
 	}
@@ -94,7 +210,17 @@ namespace
 		return StaticLoadObject(
 			UObject::StaticClass(),
 			nullptr,
-			*MakeObjectPath(PackageName));
+			*Wacom::ContentBuilder::MakeObjectPath(PackageName));
+	}
+
+	IAssetRegistry& GetAssetRegistry()
+	{
+		FAssetRegistryModule& Module =
+			FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
+		IAssetRegistry& Registry = Module.Get();
+		Registry.SearchAllAssets(/*bSynchronousSearch*/ true);
+		Registry.WaitForCompletion();
+		return Registry;
 	}
 
 	bool ValidateExpectedPackages(
@@ -109,14 +235,14 @@ namespace
 			if (!Asset)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Missing formal asset: %s"), *Entry.Key));
+					TEXT("Missing promoted asset: %s"), *Entry.Key));
 				bValid = false;
 				continue;
 			}
 			if (!Asset->IsA(Entry.Value))
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Formal asset has class %s, expected %s: %s"),
+					TEXT("Promoted asset has class %s, expected %s: %s"),
 					*GetNameSafe(Asset->GetClass()),
 					*GetNameSafe(Entry.Value),
 					*Entry.Key));
@@ -145,7 +271,7 @@ namespace
 					if (IsPackageUnderRoot(DependencyName, ForbiddenRoot))
 					{
 						OutErrors.Add(FString::Printf(
-							TEXT("Formal asset %s still depends on ignored package %s"),
+							TEXT("Promoted asset %s still depends on ignored package %s"),
 							*Entry.Key,
 							*DependencyName));
 						bValid = false;
@@ -158,13 +284,14 @@ namespace
 
 	bool BuildSourceClosure(
 		IAssetRegistry& AssetRegistry,
+		const FEnemyArtPromotionManifest& Manifest,
 		TSet<FName>& OutPackages,
 		TArray<FString>& OutErrors)
 	{
 		TArray<FName> Queue;
-		for (const FAnimationPromotionSpec& Spec : GetAnimationSpecs())
+		for (const FAnimationPromotionSpec& Spec : Manifest.Animations)
 		{
-			const FName PackageName(*SourceFlipbookPackage(Spec.SourceState));
+			const FName PackageName(*SourceFlipbookPackage(Manifest, Spec));
 			Queue.Add(PackageName);
 			OutPackages.Add(PackageName);
 		}
@@ -185,10 +312,11 @@ namespace
 				{
 					continue;
 				}
-				if (!IsPackageUnderRoot(TargetPackage, SourceRoot))
+				if (!IsPackageUnderRoot(TargetPackage, Manifest.SourceRoot))
 				{
 					OutErrors.Add(FString::Printf(
-						TEXT("Source dependency escapes BattleWarrior: %s -> %s"),
+						TEXT("%s source dependency escapes its source root: %s -> %s"),
+						Manifest.Label,
 						*SourcePackage.ToString(),
 						*TargetPackage));
 					continue;
@@ -204,161 +332,345 @@ namespace
 		return OutErrors.IsEmpty();
 	}
 
-	const FAnimationPromotionSpec* FindSpecBySourceState(
-		const FString& SourceState)
-	{
-		for (const FAnimationPromotionSpec& Spec : GetAnimationSpecs())
-		{
-			if (SourceState == Spec.SourceState)
-			{
-				return &Spec;
-			}
-		}
-		return nullptr;
-	}
-
-	bool BuildCopyMap(
+	bool ValidateSourceClosure(
+		const FEnemyArtPromotionManifest& Manifest,
 		const TSet<FName>& SourcePackages,
-		TMap<FString, FString>& OutCopyMap,
-		TArray<FString>& OutErrors)
-	{
-		const FString TexturePackage = SourceRoot + TEXT("/Textures/BattleWarrior");
-		for (FName SourcePackageName : SourcePackages)
-		{
-			const FString SourcePackage = SourcePackageName.ToString();
-			FString DestinationPackage;
-			if (SourcePackage == TexturePackage)
-			{
-				DestinationPackage =
-					FormalRoot + TEXT("/Textures/T_Enemy_TrainingWarrior");
-			}
-			else if (SourcePackage.StartsWith(SourceRoot + TEXT("/Frames/")))
-			{
-				FString AssetName = FPackageName::GetLongPackageAssetName(SourcePackage);
-				if (!AssetName.RemoveFromStart(TEXT("BattleWarrior__"))
-					|| !AssetName.RemoveFromEnd(TEXT("_aseprite")))
-				{
-					OutErrors.Add(FString::Printf(
-						TEXT("Unsupported BattleWarrior sprite name: %s"),
-						*SourcePackage));
-					continue;
-				}
-				FString SourceState;
-				FString FrameText;
-				if (!AssetName.Split(
-					TEXT("_"),
-					&SourceState,
-					&FrameText,
-					ESearchCase::CaseSensitive,
-					ESearchDir::FromEnd))
-				{
-					OutErrors.Add(FString::Printf(
-						TEXT("Unsupported BattleWarrior sprite frame: %s"),
-						*SourcePackage));
-					continue;
-				}
-				const FAnimationPromotionSpec* Spec =
-					FindSpecBySourceState(SourceState);
-				if (!Spec || !FrameText.IsNumeric())
-				{
-					OutErrors.Add(FString::Printf(
-						TEXT("Sprite is outside selected animation states: %s"),
-						*SourcePackage));
-					continue;
-				}
-				const int32 FrameIndex = FCString::Atoi(*FrameText);
-				if (FrameIndex < 0 || FrameIndex >= Spec->FrameCount)
-				{
-					OutErrors.Add(FString::Printf(
-						TEXT("Sprite frame is outside expected range: %s"),
-						*SourcePackage));
-					continue;
-				}
-				DestinationPackage =
-					FormalSpritePackage(Spec->FormalState, FrameIndex);
-			}
-			else
-			{
-				const FString AssetName = FPackageName::GetLongPackageAssetName(SourcePackage);
-				FString SourceState = AssetName;
-				if (!SourceState.RemoveFromStart(TEXT("BattleWarrior__")))
-				{
-					OutErrors.Add(FString::Printf(
-						TEXT("Unsupported BattleWarrior dependency: %s"),
-						*SourcePackage));
-					continue;
-				}
-				const FAnimationPromotionSpec* Spec =
-					FindSpecBySourceState(SourceState);
-				if (!Spec)
-				{
-					OutErrors.Add(FString::Printf(
-						TEXT("Flipbook is outside selected animation states: %s"),
-						*SourcePackage));
-					continue;
-				}
-				DestinationPackage = FormalFlipbookPackage(Spec->FormalState);
-			}
-			OutCopyMap.Add(SourcePackage, DestinationPackage);
-		}
-		return OutErrors.IsEmpty();
-	}
-
-	bool ValidateSourceAssets(
-		const TSet<FName>& SourcePackages,
+		const TMap<FString, UClass*>& ExpectedSourceClasses,
 		TArray<FString>& OutErrors)
 	{
 		for (FName PackageName : SourcePackages)
 		{
-			UObject* Asset = LoadExactAsset(PackageName.ToString());
-			if (!Asset)
+			const FString PackageString = PackageName.ToString();
+			UClass* const* ExpectedClass = ExpectedSourceClasses.Find(PackageString);
+			if (!ExpectedClass)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Missing source asset: %s"), *PackageName.ToString()));
+					TEXT("%s source closure contains an unmapped package: %s"),
+					Manifest.Label,
+					*PackageString));
 				continue;
 			}
-			if (!Asset->IsA<UPaperFlipbook>()
-				&& !Asset->IsA<UPaperSprite>()
-				&& !Asset->IsA<UTexture2D>())
+			UObject* Asset = LoadExactAsset(PackageString);
+			if (!Asset || !Asset->IsA(*ExpectedClass))
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Unsupported source asset class %s: %s"),
-					*GetNameSafe(Asset->GetClass()),
-					*PackageName.ToString()));
+					TEXT("%s source asset is missing or has an unexpected class: %s"),
+					Manifest.Label,
+					*PackageString));
+			}
+		}
+		for (const TPair<FString, UClass*>& Entry : ExpectedSourceClasses)
+		{
+			if (!SourcePackages.Contains(FName(*Entry.Key)))
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("%s selected source asset is outside the dependency closure: %s"),
+					Manifest.Label,
+					*Entry.Key));
 			}
 		}
 		return OutErrors.IsEmpty();
 	}
 
-	IAssetRegistry& GetAssetRegistry()
+	bool UnloadLoadedTargetPackages(
+		const TMap<FString, UClass*>& TargetClasses,
+		TArray<FString>& OutErrors)
 	{
-		FAssetRegistryModule& Module =
-			FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
-		IAssetRegistry& Registry = Module.Get();
-		Registry.SearchAllAssets(/*bSynchronousSearch*/ true);
-		return Registry;
-	}
-}
+		TArray<UPackage*> LoadedPackages;
+		for (const TPair<FString, UClass*>& Entry : TargetClasses)
+		{
+			if (UPackage* Package = FindPackage(nullptr, *Entry.Key))
+			{
+				ResetLoaders(Package);
+				LoadedPackages.AddUnique(Package);
+			}
+		}
+		if (LoadedPackages.IsEmpty())
+		{
+			return true;
+		}
 
-namespace Wacom::ContentBuilder
-{
-	FEnemyPackArtPromotionResult ValidateTrainingWarriorFormalArt()
+		UPackageTools::FUnloadPackageParams UnloadParams(LoadedPackages);
+		UnloadParams.bUnloadDirtyPackages = true;
+		UnloadParams.bResetTransBuffer = true;
+		UPackageTools::UnloadPackages(UnloadParams);
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS);
+
+		for (const TPair<FString, UClass*>& Entry : TargetClasses)
+		{
+			if (FindPackage(nullptr, *Entry.Key))
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Could not unload existing promoted package before replacement: %s"),
+					*Entry.Key));
+			}
+		}
+		return OutErrors.IsEmpty();
+	}
+
+	bool FixupPromotedManifestReferences(
+		const FEnemyArtPromotionManifest& Manifest,
+		TArray<FString>& OutErrors)
+	{
+		UTexture2D* TargetTexture = Cast<UTexture2D>(LoadExactAsset(FString::Printf(
+			TEXT("%s/Textures/%s"),
+			*Manifest.TargetRoot,
+			*Manifest.TargetTextureName)));
+		if (!TargetTexture)
+		{
+			OutErrors.Add(FString::Printf(
+				TEXT("Missing promoted texture for %s"), Manifest.Label));
+			return false;
+		}
+
+		FSoftObjectProperty* SourceTextureProperty = FindFProperty<FSoftObjectProperty>(
+			UPaperSprite::StaticClass(),
+			UPaperSprite::GetSourceTextureMemberName());
+		FObjectPropertyBase* BakedTextureProperty = FindFProperty<FObjectPropertyBase>(
+			UPaperSprite::StaticClass(), TEXT("BakedSourceTexture"));
+		FObjectPropertyBase* SourceTextureCacheProperty = FindFProperty<FObjectPropertyBase>(
+			UPaperSprite::StaticClass(), TEXT("SourceTextureCacheNeverSerialized"));
+		if (!SourceTextureProperty || !BakedTextureProperty || !SourceTextureCacheProperty)
+		{
+			OutErrors.Add(TEXT("Could not resolve PaperSprite texture properties for promoted reference fixup"));
+			return false;
+		}
+
+		for (const FAnimationPromotionSpec& Spec : Manifest.Animations)
+		{
+			TArray<UPaperSprite*> TargetSprites;
+			TargetSprites.Reserve(Spec.FrameCount);
+			for (int32 FrameIndex = 0; FrameIndex < Spec.FrameCount; ++FrameIndex)
+			{
+				const FString SpritePackage = TargetSpritePackage(
+					Manifest, Spec, FrameIndex);
+				UPaperSprite* Sprite = Cast<UPaperSprite>(LoadExactAsset(SpritePackage));
+				if (!Sprite)
+				{
+					OutErrors.Add(FString::Printf(
+						TEXT("Missing promoted sprite during reference fixup: %s"),
+						*SpritePackage));
+					continue;
+				}
+				TargetSprites.Add(Sprite);
+
+				const FSoftObjectPtr* SourceTextureValue =
+					SourceTextureProperty->ContainerPtrToValuePtr<FSoftObjectPtr>(Sprite);
+				const bool bNeedsTextureFixup = !SourceTextureValue
+					|| SourceTextureValue->Get() != TargetTexture
+					|| BakedTextureProperty->GetObjectPropertyValue_InContainer(Sprite)
+						!= TargetTexture;
+				if (bNeedsTextureFixup)
+				{
+					Sprite->Modify();
+					FSoftObjectPtr* MutableSourceTexture =
+						SourceTextureProperty->ContainerPtrToValuePtr<FSoftObjectPtr>(Sprite);
+					*MutableSourceTexture = FSoftObjectPtr(TargetTexture);
+					BakedTextureProperty->SetObjectPropertyValue_InContainer(
+						Sprite, TargetTexture);
+					SourceTextureCacheProperty->SetObjectPropertyValue_InContainer(
+						Sprite, TargetTexture);
+					Sprite->PostEditChange();
+					if (!SaveAssetPackage(Sprite->GetPackage(), Sprite, SpritePackage))
+					{
+						OutErrors.Add(FString::Printf(
+							TEXT("Could not save promoted sprite after reference fixup: %s"),
+							*SpritePackage));
+					}
+				}
+			}
+
+			const FString SourceFlipbookPath = SourceFlipbookPackage(Manifest, Spec);
+			const FString TargetFlipbookPath = TargetFlipbookPackage(Manifest, Spec);
+			UPaperFlipbook* SourceFlipbook = Cast<UPaperFlipbook>(
+				LoadExactAsset(SourceFlipbookPath));
+			UPaperFlipbook* TargetFlipbook = Cast<UPaperFlipbook>(
+				LoadExactAsset(TargetFlipbookPath));
+			if (!SourceFlipbook || !TargetFlipbook
+				|| SourceFlipbook->GetNumKeyFrames() != Spec.FrameCount
+				|| TargetSprites.Num() != Spec.FrameCount)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Could not establish promoted flipbook frame contract: %s"),
+					*TargetFlipbookPath));
+				continue;
+			}
+
+			bool bNeedsFlipbookFixup = TargetFlipbook->GetNumKeyFrames()
+				!= Spec.FrameCount
+				|| !FMath::IsNearlyEqual(
+					TargetFlipbook->GetFramesPerSecond(),
+					SourceFlipbook->GetFramesPerSecond());
+			for (int32 FrameIndex = 0;
+				!bNeedsFlipbookFixup && FrameIndex < Spec.FrameCount;
+				++FrameIndex)
+			{
+				bNeedsFlipbookFixup =
+					TargetFlipbook->GetKeyFrameChecked(FrameIndex).Sprite
+						!= TargetSprites[FrameIndex]
+					|| TargetFlipbook->GetKeyFrameChecked(FrameIndex).FrameRun
+						!= SourceFlipbook->GetKeyFrameChecked(FrameIndex).FrameRun;
+			}
+			if (bNeedsFlipbookFixup)
+			{
+				TargetFlipbook->Modify();
+				FScopedFlipbookMutator Mutator(TargetFlipbook);
+				Mutator.FramesPerSecond = SourceFlipbook->GetFramesPerSecond();
+				Mutator.KeyFrames.Reset(Spec.FrameCount);
+				for (int32 FrameIndex = 0; FrameIndex < Spec.FrameCount; ++FrameIndex)
+				{
+					FPaperFlipbookKeyFrame& Frame =
+						Mutator.KeyFrames.AddDefaulted_GetRef();
+					Frame.Sprite = TargetSprites[FrameIndex];
+					Frame.FrameRun =
+						SourceFlipbook->GetKeyFrameChecked(FrameIndex).FrameRun;
+				}
+				if (!SaveAssetPackage(
+					TargetFlipbook->GetPackage(),
+					TargetFlipbook,
+					TargetFlipbookPath))
+				{
+					OutErrors.Add(FString::Printf(
+						TEXT("Could not save promoted flipbook after reference fixup: %s"),
+						*TargetFlipbookPath));
+				}
+			}
+		}
+		return OutErrors.IsEmpty();
+	}
+
+	bool BuildSnakeDestroyedFlipbooks(
+		bool& bOutChanged,
+		TArray<FString>& OutErrors)
+	{
+		const FEnemyArtPromotionManifest& Manifest = GetSnakePlaceholderManifest();
+		const FAnimationPromotionSpec& IdleSpec = Manifest.Animations[0];
+		for (const FSnakeDestroyedFlipbookSpec& Spec : GetSnakeDestroyedSpecs())
+		{
+			UPaperSprite* SourceSprite = Cast<UPaperSprite>(LoadExactAsset(
+				TargetSpritePackage(Manifest, IdleSpec, Spec.SourceFrameIndex)));
+			if (!SourceSprite)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Missing Snake placeholder source sprite for %s destroyed flipbook"),
+					Spec.PartName));
+				continue;
+			}
+
+			const FString PackagePath = SnakeDestroyedFlipbookPackage(Spec.PartName);
+			const FName AssetName(*FPackageName::GetLongPackageAssetName(PackagePath));
+			UPackage* Package = FindOrCreatePackage(PackagePath);
+			if (!Package)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Could not create Snake placeholder destroyed package: %s"),
+					*PackagePath));
+				continue;
+			}
+
+			UObject* ExistingObject = StaticFindObject(
+				UObject::StaticClass(), Package, *AssetName.ToString());
+			UPaperFlipbook* Flipbook = Cast<UPaperFlipbook>(ExistingObject);
+			if (ExistingObject && !Flipbook)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Snake placeholder destroyed asset has an unexpected class: %s"),
+					*PackagePath));
+				continue;
+			}
+
+			bool bCreated = false;
+			if (!Flipbook)
+			{
+				Flipbook = NewObject<UPaperFlipbook>(
+					Package,
+					AssetName,
+					RF_Public | RF_Standalone | RF_Transactional);
+				bCreated = Flipbook != nullptr;
+			}
+			if (!Flipbook)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Could not create Snake placeholder destroyed flipbook: %s"),
+					*PackagePath));
+				continue;
+			}
+
+			const bool bHasExpectedFrame = Flipbook->GetNumKeyFrames() == 1
+				&& Flipbook->GetKeyFrameChecked(0).Sprite == SourceSprite
+				&& Flipbook->GetKeyFrameChecked(0).FrameRun == 1;
+			const bool bNeedsUpdate = bCreated
+				|| !bHasExpectedFrame
+				|| !FMath::IsNearlyEqual(Flipbook->GetFramesPerSecond(), 1.0f);
+			if (bNeedsUpdate)
+			{
+				Flipbook->Modify();
+				FScopedFlipbookMutator Mutator(Flipbook);
+				Mutator.FramesPerSecond = 1.0f;
+				Mutator.KeyFrames.Reset();
+				FPaperFlipbookKeyFrame& Frame = Mutator.KeyFrames.AddDefaulted_GetRef();
+				Frame.Sprite = SourceSprite;
+				Frame.FrameRun = 1;
+				if (!SaveAssetPackage(Package, Flipbook, PackagePath))
+				{
+					OutErrors.Add(FString::Printf(
+						TEXT("Could not save Snake placeholder destroyed flipbook: %s"),
+						*PackagePath));
+					continue;
+				}
+				bOutChanged = true;
+			}
+		}
+		return OutErrors.IsEmpty();
+	}
+
+	bool ValidateSnakeDestroyedFlipbooks(TArray<FString>& OutErrors)
+	{
+		const FEnemyArtPromotionManifest& Manifest = GetSnakePlaceholderManifest();
+		const FAnimationPromotionSpec& IdleSpec = Manifest.Animations[0];
+		for (const FSnakeDestroyedFlipbookSpec& Spec : GetSnakeDestroyedSpecs())
+		{
+			UPaperFlipbook* Flipbook = Cast<UPaperFlipbook>(LoadExactAsset(
+				SnakeDestroyedFlipbookPackage(Spec.PartName)));
+			UPaperSprite* ExpectedSprite = Cast<UPaperSprite>(LoadExactAsset(
+				TargetSpritePackage(Manifest, IdleSpec, Spec.SourceFrameIndex)));
+			if (!Flipbook || Flipbook->GetNumKeyFrames() != 1
+				|| Flipbook->GetKeyFrameChecked(0).Sprite != ExpectedSprite
+				|| Flipbook->GetKeyFrameChecked(0).FrameRun != 1
+				|| !FMath::IsNearlyEqual(Flipbook->GetFramesPerSecond(), 1.0f)
+				|| Flipbook->GetTotalDuration() <= 0.0f)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Snake placeholder destroyed flipbook contract is invalid: %s"),
+					Spec.PartName));
+			}
+		}
+		return OutErrors.IsEmpty();
+	}
+
+	FEnemyPackArtPromotionResult ValidateManifestTargets(
+		const FEnemyArtPromotionManifest& Manifest)
 	{
 		FEnemyPackArtPromotionResult Result;
-		TMap<FString, UClass*> ExpectedPackages;
-		AddExpectedFormalPackages(ExpectedPackages);
-		Result.ExpectedAssetCount = ExpectedPackages.Num();
+		TMap<FString, FString> CopyMap;
+		TMap<FString, UClass*> SourceClasses;
+		TMap<FString, UClass*> TargetClasses;
+		BuildManifestMaps(Manifest, CopyMap, SourceClasses, TargetClasses);
+		Result.ExpectedAssetCount = TargetClasses.Num();
 		Result.bSucceeded = ValidateExpectedPackages(
-			GetAssetRegistry(),
-			ExpectedPackages,
-			Result.Errors);
+			GetAssetRegistry(), TargetClasses, Result.Errors);
+		if (Result.bSucceeded && Manifest.bBuildSnakeDestroyedFlipbooks)
+		{
+			Result.bSucceeded = ValidateSnakeDestroyedFlipbooks(Result.Errors);
+		}
 		return Result;
 	}
 
-	FEnemyPackArtPromotionResult PromoteTrainingWarriorArt(bool bForceRefresh)
+	FEnemyPackArtPromotionResult PromoteManifest(
+		const FEnemyArtPromotionManifest& Manifest,
+		bool bForceRefresh)
 	{
-		FEnemyPackArtPromotionResult ExistingResult =
-			ValidateTrainingWarriorFormalArt();
+		FEnemyPackArtPromotionResult ExistingResult = ValidateManifestTargets(Manifest);
 		if (ExistingResult.bSucceeded && !bForceRefresh)
 		{
 			return ExistingResult;
@@ -367,19 +679,15 @@ namespace Wacom::ContentBuilder
 		FEnemyPackArtPromotionResult Result;
 		Result.ExpectedAssetCount = ExistingResult.ExpectedAssetCount;
 		IAssetRegistry& AssetRegistry = GetAssetRegistry();
-		TSet<FName> SourcePackages;
-		BuildSourceClosure(AssetRegistry, SourcePackages, Result.Errors);
-		ValidateSourceAssets(SourcePackages, Result.Errors);
-
 		TMap<FString, FString> CopyMap;
-		BuildCopyMap(SourcePackages, CopyMap, Result.Errors);
-		if (CopyMap.Num() != Result.ExpectedAssetCount)
-		{
-			Result.Errors.Add(FString::Printf(
-				TEXT("Source closure produced %d mapped assets; expected %d"),
-				CopyMap.Num(),
-				Result.ExpectedAssetCount));
-		}
+		TMap<FString, UClass*> SourceClasses;
+		TMap<FString, UClass*> TargetClasses;
+		BuildManifestMaps(Manifest, CopyMap, SourceClasses, TargetClasses);
+
+		TSet<FName> SourcePackages;
+		BuildSourceClosure(AssetRegistry, Manifest, SourcePackages, Result.Errors);
+		ValidateSourceClosure(Manifest, SourcePackages, SourceClasses, Result.Errors);
+		UnloadLoadedTargetPackages(TargetClasses, Result.Errors);
 		if (!Result.Errors.IsEmpty())
 		{
 			return Result;
@@ -396,19 +704,7 @@ namespace Wacom::ContentBuilder
 			return Result;
 		}
 		Result.bCopiedAssets = true;
-		TMap<FString, UClass*> ExpectedPackages;
-		AddExpectedFormalPackages(ExpectedPackages);
-		for (const TPair<FString, UClass*>& Entry : ExpectedPackages)
-		{
-			UObject* Asset = LoadExactAsset(Entry.Key);
-			if (!Asset || !Wacom::ContentBuilder::SaveAssetPackage(
-				Asset->GetPackage(), Asset, Entry.Key))
-			{
-				Result.Errors.Add(FString::Printf(
-					TEXT("Could not persist promoted formal asset: %s"),
-					*Entry.Key));
-			}
-		}
+		FixupPromotedManifestReferences(Manifest, Result.Errors);
 		UPackage::WaitForAsyncFileWrites();
 		if (!Result.Errors.IsEmpty())
 		{
@@ -416,13 +712,50 @@ namespace Wacom::ContentBuilder
 		}
 
 		AssetRegistry.ScanPathsSynchronous(
-			{ FormalRoot },
+			{ Manifest.TargetRoot },
 			/*bForceRescan*/ true,
 			/*bIgnoreDenyListScanFilters*/ true);
-		FEnemyPackArtPromotionResult Validation =
-			ValidateTrainingWarriorFormalArt();
+		if (Manifest.bBuildSnakeDestroyedFlipbooks)
+		{
+			bool bGeneratedChanged = false;
+			BuildSnakeDestroyedFlipbooks(bGeneratedChanged, Result.Errors);
+			UPackage::WaitForAsyncFileWrites();
+			AssetRegistry.ScanPathsSynchronous(
+				{ Manifest.TargetRoot },
+				/*bForceRescan*/ true,
+				/*bIgnoreDenyListScanFilters*/ true);
+		}
+		if (!Result.Errors.IsEmpty())
+		{
+			return Result;
+		}
+
+		FEnemyPackArtPromotionResult Validation = ValidateManifestTargets(Manifest);
 		Result.bSucceeded = Validation.bSucceeded;
 		Result.Errors = MoveTemp(Validation.Errors);
 		return Result;
+	}
+}
+
+namespace Wacom::ContentBuilder
+{
+	FEnemyPackArtPromotionResult ValidateTrainingWarriorFormalArt()
+	{
+		return ValidateManifestTargets(GetTrainingWarriorManifest());
+	}
+
+	FEnemyPackArtPromotionResult PromoteTrainingWarriorArt(bool bForceRefresh)
+	{
+		return PromoteManifest(GetTrainingWarriorManifest(), bForceRefresh);
+	}
+
+	FEnemyPackArtPromotionResult ValidateSnakePlaceholderArt()
+	{
+		return ValidateManifestTargets(GetSnakePlaceholderManifest());
+	}
+
+	FEnemyPackArtPromotionResult PromoteSnakePlaceholderArt(bool bForceRefresh)
+	{
+		return PromoteManifest(GetSnakePlaceholderManifest(), bForceRefresh);
 	}
 }

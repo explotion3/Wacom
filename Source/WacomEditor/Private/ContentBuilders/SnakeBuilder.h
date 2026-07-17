@@ -4,23 +4,35 @@
 
 #include "CoreMinimal.h"
 
+class UBlueprint;
+class UCardDefinition;
+class UEncounterDefinition;
+class UEnemyBehaviorDefinition;
 class UEnemyDefinition;
+class UEnemyPartDefinition;
 
-/**
- * 蛇敌人及其部位的 DataAsset 构造器。
- *
- * 部位：头 / 身体 / 尾巴。顺序即部位顺序。
- */
 namespace Wacom::ContentBuilder
 {
-	/**
-	 * 在 /Game/Wacom/Data/Enemies/Snake/ 下生成：
-	 * - DA_Part_Snake_Head.uasset
-	 * - DA_Part_Snake_Body.uasset
-	 * - DA_Part_Snake_Tail.uasset
-	 * - DA_Enemy_Snake.uasset（引用上述三个部位）
-	 *
-	 * 返回顶层 UEnemyDefinition，失败返回 nullptr。
-	 */
-	UEnemyDefinition* BuildSnakeContent();
+	struct WACOMEDITOR_API FSnakeBuildResult
+	{
+		TObjectPtr<UCardDefinition> RewardCard = nullptr;
+		TObjectPtr<UEnemyBehaviorDefinition> Behavior = nullptr;
+		TObjectPtr<UEnemyPartDefinition> HeadPart = nullptr;
+		TObjectPtr<UEnemyPartDefinition> BodyPart = nullptr;
+		TObjectPtr<UEnemyPartDefinition> TailPart = nullptr;
+		TObjectPtr<UEnemyDefinition> Enemy = nullptr;
+		TObjectPtr<UEncounterDefinition> Encounter = nullptr;
+		TObjectPtr<UBlueprint> HostBlueprint = nullptr;
+		bool bChanged = false;
+		TArray<FString> Errors;
+
+		bool IsSuccess() const
+		{
+			return RewardCard && Behavior && HeadPart && BodyPart && TailPart
+				&& Enemy && Encounter && HostBlueprint && Errors.IsEmpty();
+		}
+	};
+
+	/** 幂等创建或更新 Snake 规则数据、单蛇 Encounter 与正式 Multi-Part Host。 */
+	WACOMEDITOR_API FSnakeBuildResult BuildSnakeContent();
 }

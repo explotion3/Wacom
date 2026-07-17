@@ -58,16 +58,25 @@ int32 UWacomAuditContentDependenciesCommandlet::Main(const FString& Params)
 	UE_LOG(
 		LogTemp,
 		Display,
-		TEXT("[WacomContentAudit] Done Root=%s Scanned=%d TraversedGame=%d External=%d Report=%s"),
+		TEXT("[WacomContentAudit] Done Root=%s Scanned=%d TraversedGame=%d External=%d Placeholders=%d Report=%s"),
 		*RootString,
 		Report.ScannedPackageCount,
 		Report.TraversedGamePackageCount,
 		Report.ExternalFindings.Num(),
+		Report.PlaceholderPackages.Num(),
 		*OutputPath);
 	if (FParse::Param(*Params, TEXT("FailOnExternal")) && !Report.ExternalFindings.IsEmpty())
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomContentAudit] FailOnExternal: 检测到 %d 个外部 package"), Report.ExternalFindings.Num());
 		return 2;
+	}
+	if (FParse::Param(*Params, TEXT("FailOnPlaceholder"))
+		&& Wacom::ContentAudit::HasPlaceholderPackages(Report))
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomContentAudit] FailOnPlaceholder: 检测到 %d 个占位 package"),
+			Report.PlaceholderPackages.Num());
+		return 3;
 	}
 	return 0;
 }

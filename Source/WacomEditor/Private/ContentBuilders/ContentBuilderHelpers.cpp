@@ -3,11 +3,13 @@
 #include "ContentBuilders/ContentBuilderHelpers.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "HAL/FileManager.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
 #include "UObject/SavePackage.h"
+#include "UObject/UnrealType.h"
 
 namespace Wacom::ContentBuilder
 {
@@ -117,5 +119,44 @@ namespace Wacom::ContentBuilder
 		Args.SaveFlags     = SAVE_NoError;
 
 		return UPackage::SavePackage(Package, Asset, *Filename, Args);
+	}
+
+	bool CopyEditedProperties(UObject& Target, const UObject& Expected)
+	{
+		TArray<FProperty*> ChangedProperties;
+		for (TFieldIterator<FProperty> It(Target.GetClass()); It; ++It)
+		{
+			FProperty* Property = *It;
+			const bool bIsKnockdownRewardMigrationField =
+				Target.IsA<UEnemyPartDefinition>()
+				&& Property->GetFName()
+					== GET_MEMBER_NAME_CHECKED(
+						UEnemyPartDefinition,
+						KnockdownRewardCard);
+			if (!Property->HasAnyPropertyFlags(CPF_Edit)
+				|| Property->HasAnyPropertyFlags(
+					CPF_Transient | CPF_DuplicateTransient
+					| CPF_NonPIEDuplicateTransient)
+				|| (Property->HasAnyPropertyFlags(CPF_Deprecated)
+					&& !bIsKnockdownRewardMigrationField))
+			{
+				continue;
+			}
+			if (!Property->Identical_InContainer(&Target, &Expected, PPF_None))
+			{
+				ChangedProperties.Add(Property);
+			}
+		}
+		if (ChangedProperties.IsEmpty())
+		{
+			return false;
+		}
+
+		Target.Modify();
+		for (FProperty* Property : ChangedProperties)
+		{
+			Property->CopyCompleteValue_InContainer(&Target, &Expected);
+		}
+		return true;
 	}
 }

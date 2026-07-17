@@ -179,13 +179,15 @@ Host 整体视觉和 `VisualLayers` 都只属于表现层。Simple Flipbook Host
 
 `MultiPartVisualLayers` 仍只提供静态层和局部循环 Flipbook，不消费这套 Host 语义动画。精英 / Boss 可以用 PartActor `StaticSprite` 做主体、阴影、前景遮挡，用 PartActor `Flipbook` 做尾巴摆动、眼睛眨动或局部表现；Part 局部状态机、PaperZD 和 Boss Phase 留给后续独立能力。`SortOrder` 映射到 `TranslucentSortPriority`，数值越大越靠前。`HitBounds` 仍是唯一命中范围，sprite / flipbook 的尺寸和透明区域不改变目标身份或 BattleSession 规则。
 
-蛇 Host prefab 的第一版正式口径是：创建 `AWacomBattleEnemyActor` 蓝图 prefab，推荐路径 `/Game/Wacom/Core/Enemy/BP_SnakeHost_Debug`，Host `EnemyDefinition=/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake`、`EnemySlotId=Enemy`；普通蛇美术优先在 Host 的 `Presentation|Host Visual` 配整体 sprite / flipbook。Host 蓝图视口内放置三个 ChildActorComponent，Child Actor Class 都是 `AWacomBattleEnemyPartActor`：
+正式 Snake prefab 为 `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`。它绑定 `DA_Enemy_Snake`、`EnemySlotId=Enemy`，使用 `MultiPartVisualLayers`，清空 Host Sprite、Flipbook、Animation Style 和面板 override；三部位 Definition 因此自动使用现有多部位 WBP。Builder 必须通过 `FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition()` 生成三个 ChildActorComponent，再按稳定槽位配置：
 
-| ChildActor | Relative Location | PartId | PartSlotId | HitBoundsExtent |
-|---|---:|---|---|---:|
-| `SnakeHeadPart` | `(96,-6,16)` | `Snake.Head` | `Head` | `(42,38,42)` |
-| `SnakeBodyPart` | `(0,0,0)` | `Snake.Body` | `Body` | `(62,46,42)` |
-| `SnakeTailPart` | `(-92,16,-8)` | `Snake.Tail` | `Tail` | `(48,34,34)` |
+| PartSlotId | Relative Location | PartId | HitBoundsExtent | Visual scale | Idle offset |
+|---|---:|---|---:|---:|---:|
+| `Head` | `(96,-6,16)` | `Snake.Head` | `(42,38,42)` | `0.85` | `0.00s` |
+| `Body` | `(0,0,0)` | `Snake.Body` | `(62,46,42)` | `1.00` | `0.04s` |
+| `Tail` | `(-92,16,-8)` | `Snake.Tail` | `(48,34,34)` | `0.70` | `0.08s` |
+
+每个 Part 只有一个 `Snake.<Part>.Main` Flipbook VisualLayer，复用 `/Game/Wacom/Art/Placeholders/Enemies/Snake` 的 Idle，并绑定自己的单帧 Destroyed Flipbook；局部换图 marker 保持 `0.35`。该 Slime 组合可提交和开发验证，但发布审计必须用 `-FailOnPlaceholder` 阻止出包。本轮不提供 Part Intent 行动动画，Head / Body / Tail 只持续错帧 Idle；最后部位破坏后保持三个局部终态，等待返回探索镜头后统一退役。
 
 `EnemySlotId` 由 Host / Trigger 注入，不在 PartActor 模板里手填。Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对应 `UEnemyPartDefinition::PartId`，`PartSlotId` 必须对应 `UEnemyDefinition.Parts[].PartSlotId`。蛇的正式绑定身份是 `Enemy + Head/Body/Tail`，不是 `Enemy + Snake.Head/Snake.Body/Snake.Tail`。
 

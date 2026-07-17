@@ -30,8 +30,9 @@ tags:
 - `-Root=/Game/Wacom`：覆盖扫描根路径；只接受 `/Game` package path。
 - `-Output=Saved/Reports/Custom.json`：覆盖报告路径，相对路径以项目根目录解析。
 - `-FailOnExternal`：存在任一外部 package 时返回退出码 `2`，用于未来 CI gate；当前迁移完成前不要默认启用。
+- `-FailOnPlaceholder`：`/Game/Wacom/Art/Placeholders` 下存在任一 package 时返回退出码 `3`；开发审计默认只报告，发布审计必须启用。
 
-JSON 使用稳定排序且不写时间戳，包含分类、直接 Wacom 引用方、全部遍历引用方、最短引用链、hard/soft/game/editor/build 属性、磁盘资产状态、资产数量和资产类。连续运行可直接比较内容变化。
+JSON schema v2 使用稳定排序且不写时间戳，除原有分类、引用方、最短引用链、依赖属性、磁盘状态、数量和资产类外，还显式输出稳定排序的 `placeholder_packages`。连续运行可直接比较内容变化。
 
 ## 2026-07-16 基线
 
@@ -69,6 +70,22 @@ JSON 使用稳定排序且不写时间戳，包含分类、直接 Wacom 引用�
 | 依赖结果 | scoped audit 对 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials` 为 0 |
 
 命令为 `-run=WacomBuildEnemyPack -Pack=TrainingWarrior -PromoteArt`；`-ForceArtRefresh` 仅用于显式重晋升。目标完整时命令跳过复制。正式 DataAsset、Style 与 Host 只引用 `/Game/Wacom`，因此普通 `WacomBuildEnemyPack` 和 `WacomRegenerateContent` 不要求 ignored PaperAssets 存在。本地 Snake/BattleWarrior PIE 脚本继续保留为调试入口，但不再代表正式 TrainingWarrior。
+
+## Snake 受控占位美术包（2026-07-17）
+
+项目所有者于 2026-07-17 允许 `/Game/Art/PaperAssets/Enemies/Slime` 的选定闭包进入 Git LFS，仅用于 Snake 的版本化占位、构建和开发验证；这不构成正式出货许可。晋升入口只读取 `Slime__Idle`、四个 Frame Sprite 和一个 Texture，并在正式副本上生成 Head / Body / Tail 三个单帧 Destroyed Flipbook。
+
+| 项目 | 路径 / 结果 |
+|---|---|
+| 原始本地目录 | `/Game/Art/PaperAssets/Enemies/Slime` |
+| 受控占位目标 | `/Game/Wacom/Art/Placeholders/Enemies/Snake` |
+| 占位闭包 | 1 Idle Flipbook、4 Sprite、1 Texture、3 生成的 Destroyed Flipbook，共 9 个 package |
+| 晋升命令 | `-run=WacomBuildEnemyPack -Pack=Snake -PromotePlaceholderArt` |
+| 日常重建 | `-run=WacomBuildEnemyPack -Pack=Snake`，只读取已提交 `/Game/Wacom` 资产 |
+| 依赖结果 | Snake Host 与 Placeholder 闭包对 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials` 为 0 |
+| 发布门槛 | `WacomAuditContentDependencies -FailOnPlaceholder` 必须失败，直到占位包被正式素材替换并删除 |
+
+Snake 不接受 `-PromoteArt`，避免把 Slime 占位冒充正式美术；`-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用。正式蛇素材到位后应晋升到 `/Game/Wacom/Art/Enemies/Snake`，切换 `BP_EnemyHost_Snake` 引用并删除已知生成的 Placeholder package，发布审计才允许通过。
 
 主要直接引用源：
 

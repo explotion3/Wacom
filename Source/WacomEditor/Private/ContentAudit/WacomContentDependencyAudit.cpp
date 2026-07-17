@@ -20,6 +20,7 @@ constexpr const TCHAR* ArtRoot = TEXT("/Game/Art");
 constexpr const TCHAR* AssetRoot = TEXT("/Game/Asset");
 constexpr const TCHAR* DreamMaterialsRoot = TEXT("/Game/DreamMaterials");
 constexpr const TCHAR* LegacyTestBattlePackage = TEXT("/Game/L_TestBattle");
+constexpr const TCHAR* PlaceholderRoot = TEXT("/Game/Wacom/Art/Placeholders");
 
 bool IsGamePackage(FName PackageName)
 {
@@ -208,6 +209,14 @@ FWacomContentDependencyAuditReport BuildReport(
 	}
 
 	Report.TraversedGamePackageCount = VisitedPackages.Num();
+	for (FName PackageName : VisitedPackages)
+	{
+		if (IsPackageUnderRoot(PackageName, FName(PlaceholderRoot)))
+		{
+			Report.PlaceholderPackages.Add(PackageName);
+		}
+	}
+	SortNames(Report.PlaceholderPackages);
 	TArray<FName> FindingPackages;
 	MutableFindings.GetKeys(FindingPackages);
 	SortNames(FindingPackages);
@@ -247,11 +256,17 @@ FWacomContentDependencyAuditReport BuildReport(
 FString SerializeReportToJson(const FWacomContentDependencyAuditReport& Report)
 {
 	TSharedRef<FJsonObject> RootObject = MakeShared<FJsonObject>();
-	RootObject->SetNumberField(TEXT("schemaVersion"), 1);
+	RootObject->SetNumberField(TEXT("schemaVersion"), 2);
 	RootObject->SetStringField(TEXT("scanRoot"), Report.ScanRoot.ToString());
 	RootObject->SetNumberField(TEXT("scannedPackageCount"), Report.ScannedPackageCount);
 	RootObject->SetNumberField(TEXT("traversedGamePackageCount"), Report.TraversedGamePackageCount);
 	RootObject->SetNumberField(TEXT("externalPackageCount"), Report.ExternalFindings.Num());
+	TArray<FName> PlaceholderPackages = Report.PlaceholderPackages;
+	SortNames(PlaceholderPackages);
+	RootObject->SetNumberField(
+		TEXT("placeholderPackageCount"), PlaceholderPackages.Num());
+	RootObject->SetArrayField(
+		TEXT("placeholderPackages"), NamesToJson(PlaceholderPackages));
 
 	TMap<FString, int32> ClassificationCounts;
 	TArray<FWacomExternalDependencyFinding> Findings = Report.ExternalFindings;
@@ -301,6 +316,11 @@ FString SerializeReportToJson(const FWacomContentDependencyAuditReport& Report)
 	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Json);
 	FJsonSerializer::Serialize(RootObject, Writer);
 	return Json;
+}
+
+bool HasPlaceholderPackages(const FWacomContentDependencyAuditReport& Report)
+{
+	return !Report.PlaceholderPackages.IsEmpty();
 }
 
 bool WriteReport(

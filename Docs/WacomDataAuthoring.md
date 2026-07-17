@@ -44,8 +44,8 @@ Builder 当前职责：
 
 | Builder | 产物 |
 |---|---|
-| `BuildSnakeContent()` | 蛇敌人、`DA_Behavior_Snake`、三部位、奖励卡 `DA_Card_PoisonFang` |
-| `BuildEncounterContent()` | `DA_Encounter_SnakeSingle`，正式单蛇战斗入口样例 |
+| `BuildSnakeContent()` | 幂等生成 Snake 规则数据、`DA_Encounter_SnakeSingle` 与 `BP_EnemyHost_Snake`；只读取已提交的 `/Game/Wacom` Placeholder |
+| `BuildEncounterContent()` | 其它旧 Encounter 生成入口；单蛇 Encounter 已由 `BuildSnakeContent()` 统一拥有 |
 | `BuildTrainingWarriorContent()` | TrainingWarrior 规则数据、奖励卡、语义动画 Style、Host Blueprint 与单敌人 Encounter；只读取正式 `/Game/Wacom` 素材 |
 | `BuildBugGirlContent()` | 虫妹角色、左右手、伙伴初始牌、容器 / 功能卡、starter pack、debug key、卡对卡测试卡、badge 测试卡 |
 | `BuildShopContent()` | `DA_Shop_DebugSnake`，正式调试商品保留原价，测试 / 调试卡统一 0 金币 |
@@ -70,6 +70,18 @@ TrainingWarrior 使用独立 enemy-pack 入口：
 ```
 
 `-ForceArtRefresh` 只允许与 `-PromoteArt` 同用。晋升服务先验证 Idle / Attack / Block / Cleave / Downed 的 Flipbook、Sprite、Texture 闭包完全位于 BattleWarrior 源目录，再用 `IAssetTools::AdvancedCopyPackages` 一次复制并重写引用；不会复制 Item，也不会删除目标目录中的未知资产。正式目标完整时跳过复制；目标不完整且未指定 `-PromoteArt` 时失败。`WacomRegenerateContent` 会同步调用 TrainingWarrior builder，但绝不读取或晋升 `/Game/Art`。
+
+Snake 使用同一套 manifest-driven enemy-pack 服务，但素材语义是“受控占位”而不是正式美术：
+
+```powershell
+# 首次或明确重晋升 Slime Idle 的受控占位闭包
+-run=WacomBuildEnemyPack -Pack=Snake -PromotePlaceholderArt
+
+# 日常幂等重建 Snake 数据、Encounter 与三部位 Host
+-run=WacomBuildEnemyPack -Pack=Snake
+```
+
+Snake 的 `-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用；`-PromoteArt` 会明确失败。晋升闭包固定为一个 Slime Idle Flipbook、四个 Sprite 和一个 Texture，另从正式副本生成 Head / Body / Tail 三个单帧 Destroyed Flipbook。目标完整时不复制，本地 `/Game/Art` 可以缺席；目标不完整时必须显式晋升。`WacomRegenerateContent` 只消费已经提交的 `/Game/Wacom/Art/Placeholders/Enemies/Snake`，不会执行素材晋升。
 
 单部位敌人紧凑 UI 使用独立、幂等的 Editor builder，不接入 `WacomRegenerateContent`，也不触碰旧 Enemy WBP：
 
@@ -106,6 +118,7 @@ TrainingWarrior 使用独立 enemy-pack 入口：
 | `DA_Behavior_Snake` | 蛇行为资产，Default phase 下为 Head / Body / Tail 提供三套 `Sequence` intent set |
 | 蛇部位 | Head / Body / Tail 配置 HP、经验和毒牙奖励；部位资产不承载行为，行为统一写入 `DA_Behavior_Snake` |
 | `DA_Encounter_SnakeSingle` | 正式单蛇 Encounter 样例，`EncounterDefinitionId=Encounter.Snake.Single`，`EnemySlots[0]=Enemy -> DA_Enemy_Snake` |
+| Snake Host 内容包 | `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`；`MultiPartVisualLayers` 下按 Definition 顺序生成 Head / Body / Tail，每段使用错帧 Slime Idle 与独立单帧 Destroyed，占位资产禁止正式出包 |
 | TrainingWarrior 内容包 | `DA_Enemy_TrainingWarrior`、单 Body Part、Attack → Guard → Cleave 行为、`DA_Encounter_TrainingWarriorSingle`、语义动画 Style 与 `BP_EnemyHost_TrainingWarrior` |
 | `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡和 badge 测试卡 |
 | `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力与显式 Action Point policy |

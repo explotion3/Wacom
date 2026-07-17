@@ -118,10 +118,10 @@ tags:
   - 说明：Credential、三层图和通用 Journey success 前置已完成；三层 46 个 Production definitions 和 AssetRegistry/引用/哈希权威审计完成后，另开实现切片创建 `/Game/Wacom/Data/Map/Production` 与 `/Game/Wacom/Maps/Run` 资产。不得盲目覆盖 `L_Exploration`，不得修改 Debug builder 写集合。
 
 - [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
-  - 状态：`In Progress: Phase A 只读基线完成，等待资产所有权确认后分批迁移`
+  - 状态：`In Progress: JSON v2 + Placeholder 发布门槛已完成，外部依赖仍待分批迁移`
   - 归属：Content / Editor / Build
   - 入口：[Content Dependency Audit](./Content_Dependency_Audit.md) / [Worktree Development](./Worktree_Development.md) / [Content Organization](./Content_Organization.md)
-  - 说明：`WacomAuditContentDependencies` 已形成稳定 JSON contract。2026-07-16 基线为 163 个 Wacom 起始 package、277 个遍历 package、114 个外部依赖（92 直接、22 传递），集中在 `/Game/Art` 7、`/Game/Asset` 82、`/Game/DreamMaterials` 25；`Content/DreamMaterials` 现有 61 个 `.uasset` 已整体由 Git LFS 管理，只剩 `/Game/DreamMaterials/M_Card_Step2_Inst` 在依赖图中存在但本地缺失。下一步先确认 `Card_Luo`、`Plane`、`Chong_CardAsset` 及音频/字体/UI/Boar 样例的来源与授权，再按 A–F 批次用 Content Browser 迁移或建立版本化依赖 manifest。
+  - 说明：`WacomAuditContentDependencies` 已形成稳定 JSON v2 contract，显式列出 `/Game/Wacom/Art/Placeholders` 并提供发布用 `-FailOnPlaceholder`。2026-07-16 外部依赖基线仍集中在 `/Game/Art`、`/Game/Asset` 和 `/Game/DreamMaterials`；Snake 的 9 个 Slime Placeholder 已进入受控 `/Game/Wacom` 路径，但只获开发占位授权且会阻止发布。下一步先确认 `Card_Luo`、`Plane`、`Chong_CardAsset` 及音频/字体/UI/Boar 样例的来源与授权，再按 A–F 批次迁移；正式 Snake 美术到位后切换 Host、删除 Placeholder 并让 release gate 通过。
 
 - [x] **背包视觉制作与四分辨率适配**
   - 状态：`Done: formal/fallback assets, responsive matrix and final PIE complete`
@@ -192,10 +192,10 @@ tags:
   - 说明：卡牌注册、六个定位容器、Runtime Location 与顺序已收口到 `CardZoneAggregate`；Effect、EndTurn、HandLimit、奖励和 Companion 统一由 `BattleCardZoneTransition` 消费 typed facts，旧 post-move event API 已删除。
 
 - [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和高级动画状态机**
-  - 状态：`In Progress: TrainingWarrior 正式内容包已完成，剩余表现 polish`
+  - 状态：`In Progress: Simple Host 与 Multi-Part 占位内容包已完成，剩余正式美术与高级表现`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：主链路已经能支撑普通小怪 Host 整体图 + hit-only 部位，以及精英 / Boss PartActor VisualLayers。TrainingWarrior 已作为首个正式包落地：BattleWarrior 的 36 个受控依赖晋升到 `/Game/Wacom` 并由 Git LFS 管理，规则数据、奖励卡、语义 Style、Host prefab 和单敌人 Encounter 均可重复生成。PartActor 通用 Destroyed 粒子 / 可选逐层破损终态也已完成；TrainingWarrior 按内容合同只使用粒子 + Host Downed，不伪造 Body 破损图。`SetupBattleEnemyHostAnimationPIEAssets.py` 继续只服务本地 Snake 调试。后续追踪材质描边、贴近部位 tooltip、风险动效、更多敌人包、首个正式 Multi-Part 破损资源、MultiPart/PaperZD 高级状态机和 Status Badge 美术替换。
+  - 说明：TrainingWarrior 已验证正式 Simple Host 与语义动画；`BP_EnemyHost_Snake` 已验证三部位 Definition 同步、VisualLayers、局部 Destroyed、普通多部位 WBP 和 Encounter lifecycle，但当前只使用会阻止发布的 Slime Placeholder，且不提供 Part Intent 行动动画。后续优先制作正式 Snake Head / Body / Tail 素材并迁到 `/Game/Wacom/Art/Enemies/Snake`，再规划 Multi-Part 语义动画；材质描边、贴近部位 tooltip、风险动效、PaperZD/Animator 和 Status Badge 美术替换继续独立切片。
 
 - [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
   - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`

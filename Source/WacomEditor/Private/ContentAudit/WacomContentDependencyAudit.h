@@ -31,6 +31,7 @@ struct FWacomContentDependencyAuditReport
 	int32 ScannedPackageCount = 0;
 	int32 TraversedGamePackageCount = 0;
 	TArray<FWacomExternalDependencyFinding> ExternalFindings;
+	TArray<FName> PlaceholderPackages;
 };
 
 /** PackagePath 必须等于 Root 或位于 Root 的真实子目录，避免把 /Game/Wacomish 误判为 /Game/Wacom。 */
@@ -46,6 +47,10 @@ WACOMEDITOR_API FWacomContentDependencyAuditReport BuildReport(
 
 /** 稳定排序并序列化报告；不写时间戳，便于连续运行比较内容。 */
 WACOMEDITOR_API FString SerializeReportToJson(
+	const FWacomContentDependencyAuditReport& Report);
+
+/** 发布门槛：任何被遍历到的 /Game/Wacom/Art/Placeholders package 都必须阻断。 */
+WACOMEDITOR_API bool HasPlaceholderPackages(
 	const FWacomContentDependencyAuditReport& Report);
 
 WACOMEDITOR_API bool WriteReport(
