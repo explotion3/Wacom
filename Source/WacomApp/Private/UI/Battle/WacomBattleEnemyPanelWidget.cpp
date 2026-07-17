@@ -160,6 +160,7 @@ void UWacomBattleEnemyPanelWidget::NativeDestruct()
 
 void UWacomBattleEnemyPanelWidget::RefreshHeader()
 {
+	const bool bContextActive = !HoveredPartSlotId.IsNone() || bHasActionPreview;
 	if (EnemyNameText)
 	{
 		EnemyNameText->SetText(bHasCurrentView
@@ -167,6 +168,10 @@ void UWacomBattleEnemyPanelWidget::RefreshHeader()
 				? FText::FromName(CurrentView.EnemySlotId)
 				: CurrentView.EnemyDisplayName)
 			: FText::GetEmpty());
+		EnemyNameText->SetVisibility(
+			bHasCurrentView && (!bCompactSinglePartPresentation || bContextActive)
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
 	}
 	if (EnemyInitiativeText)
 	{
@@ -174,6 +179,10 @@ void UWacomBattleEnemyPanelWidget::RefreshHeader()
 			? FText::FromString(FString::Printf(
 				TEXT("INIT %d"), CurrentView.EnemyInitiativeSum))
 			: FText::GetEmpty());
+		EnemyInitiativeText->SetVisibility(
+			bHasCurrentView && !bCompactSinglePartPresentation
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
 	}
 }
 
@@ -242,6 +251,7 @@ void UWacomBattleEnemyPanelWidget::ClearPartEntries()
 
 void UWacomBattleEnemyPanelWidget::RefreshContextHighlight()
 {
+	RefreshHeader();
 	if (PanelContextHighlight)
 	{
 		PanelContextHighlight->SetVisibility(

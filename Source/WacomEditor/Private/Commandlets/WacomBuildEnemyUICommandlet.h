@@ -12,6 +12,8 @@
  * 用法：
  *   -run=WacomBuildEnemyUI -MigrateLegacy
  *   -run=WacomBuildEnemyUI -InspectOnly
+ *   -run=WacomBuildEnemyUI -BuildSinglePartCompact
+ *   -run=WacomBuildEnemyUI -InspectSinglePartCompact
  */
 UCLASS()
 class UWacomBuildEnemyUICommandlet final : public UCommandlet

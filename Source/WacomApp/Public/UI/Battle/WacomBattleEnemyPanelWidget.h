@@ -53,12 +53,26 @@ public:
 		return PartEntryWidgetClass;
 	}
 
+	/** Editor builder 为单部位紧凑 Panel 配置：常态隐藏名称和聚合 Initiative。 */
+	void SetCompactSinglePartPresentation(bool bInCompact)
+	{
+		bCompactSinglePartPresentation = bInCompact;
+		RefreshHeader();
+	}
+	bool IsCompactSinglePartPresentation() const
+	{
+		return bCompactSinglePartPresentation;
+	}
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "面板内每个部位条目使用的正式 WBP 类。必须继承 UWacomBattleEnemyPartEntryWidget。"))
 	TSubclassOf<UWacomBattleEnemyPartEntryWidget> PartEntryWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "单部位紧凑 Panel 开启后，常态隐藏敌人名称和聚合 Initiative；hover 或 Action Preview 时只展开敌人名称。多部位正式 WBP 应保持关闭。"))
+	bool bCompactSinglePartPresentation = false;
 
 private:
 	void RefreshHeader();

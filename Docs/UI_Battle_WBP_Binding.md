@@ -470,6 +470,35 @@ WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不读取 Act
 
 编辑器关闭时可执行 `-run=WacomBuildEnemyUI -MigrateLegacy`，仅把两个已识别的空壳旧路径迁成正式合同；遇到非空且合同不匹配的人工布局会停止并拒绝覆盖。`-run=WacomBuildEnemyUI -InspectOnly` 只读检查父类、绑定、动画、PartEntry class、命中策略和九宫格资源。该命令不接入 `WacomRegenerateContent`，重复迁移不得 dirty package。
 
+### WBP_WacomBattleEnemySinglePartPanelWidget
+
+父类仍为 `UWacomBattleEnemyPanelWidget`，资产路径为 `/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget`。它只适用于恰好一个有效 Definition PartSlot 的普通敌人，消费与多部位面板完全相同的 ViewData。`EnemyNameText / EnemyInitiativeText / PartList / PanelContextHighlight` 合同不变；类默认 `PartEntryWidgetClass=WBP_WacomBattleEnemySinglePartEntryWidget` 且开启 compact presentation。常态折叠名称与聚合 Initiative，hover 或 Preview 时展开名称。
+
+### WBP_WacomBattleEnemySinglePartEntryWidget
+
+父类仍为 `UWacomBattleEnemyPartEntryWidget`，资产路径为 `/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget`。除通用 Entry binding 外，正式紧凑布局要求：
+
+| 控件名 | 推荐类型 | 运行时职责 |
+|---|---|---|
+| `InitiativeDiamond` / `InitiativeText` | `Widget` / `TextBlock` | 红色菱形与正向当前 Initiative 数字 |
+| `IntentDiamond` / `IntentIcon` | `Widget` / `Image` | 黑色半透明菱形与准确 Intent 图标 |
+| `HpBar` / `HpText` | `ProgressBar` / `TextBlock` | `CurrentHp / MaxHp` 比例；文字仅显示 `CurrentHp` |
+| `ShieldContainer` / `ShieldBar` / `ShieldText` | `Widget` / `ProgressBar` / `TextBlock` | `Shield / MaxHp` 比例、准确护盾数字；零时折叠 |
+| `DestroyedMark` | `Widget` | Destroyed 时显示 `X`，优先于 Initiative / Intent change pulse |
+
+通用的 `StatusList` 常态可见（无状态时自身折叠），`DetailsContainer` 只在 hover / Preview 展开。新增可选动画 `InitiativePulseAnimation` 与 `IntentChangedAnimation`，只由真实 Snapshot 变化触发；Preview 不触发。所有根节点和子控件必须保持 `HitTestInvisible`，不得获取焦点。
+
+Intent 图标 Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default`。Style 只接受准确、唯一、非空的 `IntentId -> IconBrush`；TrainingWarrior 的 Attack / Guard / Cleave 分别映射剑击、盾牌和横斩像素图标，未知 Intent 使用白色四角星 fallback。不要按 Intent 显示名、Actor 名或 effect 猜图标。
+
+新资产使用隔离的 Editor 命令构建，不会调用或覆盖旧面板迁移：
+
+```powershell
+-run=WacomBuildEnemyUI -BuildSinglePartCompact
+-run=WacomBuildEnemyUI -InspectSinglePartCompact
+```
+
+Builder 只管理带自身合同标记的新 WBP、Style 与四张图标；遇到同路径未知人工内容会停止。重复 Build 必须无语义变更，Inspect 永远只读。
+
 ## PIE Smoke Checklist
 
 - `WBP_BattleHUD` 能显示玩家状态、CommandBar、牌堆数量、CombatLogFeed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
@@ -477,5 +506,6 @@ WBP 不应做：不提交战斗命令，不反向写入 Snapshot，不读取 Act
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Log 连续追加后可滚动，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；PartActor 只显示 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
+- TrainingWarrior 自动使用单部位紧凑面板：Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；多部位 Snake 仍使用原面板。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。
 - 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget / EventLogPanel / EventToast / WBP_BattleEnemyPartStatusBadgeWidget` 已删除，不再作为 BattleHUD 制作入口。

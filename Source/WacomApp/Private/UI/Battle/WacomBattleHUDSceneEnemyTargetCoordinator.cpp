@@ -137,6 +137,7 @@ namespace
 			PartView.MaxHp = Part.MaxHp;
 			PartView.Shield = Part.Shield;
 			PartView.CurrentInitiative = Part.CurrentInitiative;
+			PartView.CurrentIntentId = Part.CurrentIntentId;
 			PartView.CurrentIntentDisplayName = Part.CurrentIntent.DisplayName;
 			PartView.CurrentIntentInitiative = Part.CurrentIntent.Initiative;
 			PartView.CurrentIntentResistanceValue = Part.CurrentIntent.ResistanceValue;

@@ -292,7 +292,7 @@ public:
 	float BadgeStaggerVerticalStep = 18.0f;
 
 	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",
-		meta = (ToolTip = "敌人头顶聚合面板的 Host 专用 WBP override。为空时使用 Wacom UI Settings.DefaultBattleEnemyPanelWidgetClass。"))
+		meta = (ToolTip = "敌人头顶聚合面板的 Host 专用 WBP override。为空时，恰好一个有效 Definition PartSlot 使用项目单部位默认类，其他情况使用项目普通默认类。"))
 	TSubclassOf<UWacomBattleEnemyPanelWidget> EnemyPanelWidgetClass;
 
 	UPROPERTY(EditAnywhere, Category = "Wacom|Battle|Scene Enemy|Presentation|Enemy Panel",

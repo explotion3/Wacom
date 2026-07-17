@@ -3,11 +3,13 @@
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
 #include "Animation/WidgetAnimation.h"
+#include "Components/Image.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
 #include "Engine/World.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
+#include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 
 namespace
 {
@@ -44,6 +46,7 @@ namespace
 			&& Left.MaxHp == Right.MaxHp
 			&& Left.Shield == Right.Shield
 			&& Left.CurrentInitiative == Right.CurrentInitiative
+			&& Left.CurrentIntentId == Right.CurrentIntentId
 			&& Left.CurrentIntentDisplayName.EqualTo(Right.CurrentIntentDisplayName)
 			&& Left.CurrentIntentInitiative == Right.CurrentIntentInitiative
 			&& Left.CurrentIntentResistanceValue == Right.CurrentIntentResistanceValue
@@ -134,6 +137,18 @@ void UWacomBattleEnemyPartEntryWidget::CancelPendingPresentation()
 	StopAllAnimations();
 }
 
+void UWacomBattleEnemyPartEntryWidget::SetIntentPresentationStyle(
+	UWacomBattleEnemyIntentPresentationStyle* InStyle)
+{
+	if (IntentPresentationStyle == InStyle)
+	{
+		return;
+	}
+
+	IntentPresentationStyle = InStyle;
+	RefreshPresentation();
+}
+
 void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -166,8 +181,17 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 	}
 	if (HpText)
 	{
-		HpText->SetText(FText::FromString(
-			FString::Printf(TEXT("%d/%d"), View.CurrentHp, View.MaxHp)));
+		HpText->SetText(bDisplayCurrentHpOnly
+			? FText::AsNumber(View.CurrentHp)
+			: FText::FromString(FString::Printf(
+				TEXT("%d/%d"), View.CurrentHp, View.MaxHp)));
+	}
+	if (ShieldBar)
+	{
+		const float ShieldFraction = View.MaxHp > 0
+			? static_cast<float>(View.Shield) / static_cast<float>(View.MaxHp)
+			: 0.0f;
+		ShieldBar->SetPercent(FMath::Clamp(ShieldFraction, 0.0f, 1.0f));
 	}
 	if (ShieldText)
 	{
@@ -182,6 +206,14 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 	if (InitiativeText)
 	{
 		InitiativeText->SetText(FText::AsNumber(View.CurrentInitiative));
+	}
+	if (IntentIcon && IntentPresentationStyle)
+	{
+		if (const FSlateBrush* IntentBrush =
+			IntentPresentationStyle->ResolveIntentIcon(View.CurrentIntentId))
+		{
+			IntentIcon->SetBrush(*IntentBrush);
+		}
 	}
 	if (IntentText)
 	{
@@ -228,6 +260,12 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
+	if (DestroyedMark)
+	{
+		DestroyedMark->SetVisibility(View.bDestroyed
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
 
 	const float PreviewOpacity = bHasActionPreview ? ActionPreviewRenderOpacity : 1.0f;
 	SetRenderOpacity((View.bDestroyed ? 0.64f : 1.0f) * PreviewOpacity);
@@ -267,24 +305,45 @@ void UWacomBattleEnemyPartEntryWidget::PlayRealFactTransition(
 	const FWacomBattleEnemyPartEntryViewData& PreviousView,
 	const FWacomBattleEnemyPartEntryViewData& NewView)
 {
-	UWidgetAnimation* Animation = nullptr;
+	UWidgetAnimation* PrimaryAnimation = nullptr;
 	if (!PreviousView.bDestroyed && NewView.bDestroyed)
 	{
-		Animation = DestroyedPulseAnimation;
+		PrimaryAnimation = DestroyedPulseAnimation;
 	}
 	else if (NewView.CurrentHp < PreviousView.CurrentHp)
 	{
-		Animation = DamagePulseAnimation;
+		PrimaryAnimation = DamagePulseAnimation;
 	}
 	else if (NewView.Shield != PreviousView.Shield)
 	{
-		Animation = ShieldPulseAnimation;
+		PrimaryAnimation = ShieldPulseAnimation;
 	}
 
-	if (Animation)
+	if (PrimaryAnimation)
 	{
-		StopAnimation(Animation);
-		PlayAnimation(Animation, 0.0f, 1, EUMGSequencePlayMode::Forward, 1.0f, true);
+		StopAnimation(PrimaryAnimation);
+		PlayAnimation(PrimaryAnimation, 0.0f, 1,
+			EUMGSequencePlayMode::Forward, 1.0f, true);
+	}
+
+	if (NewView.bDestroyed)
+	{
+		return;
+	}
+
+	if (InitiativePulseAnimation
+		&& PreviousView.CurrentInitiative != NewView.CurrentInitiative)
+	{
+		StopAnimation(InitiativePulseAnimation);
+		PlayAnimation(InitiativePulseAnimation, 0.0f, 1,
+			EUMGSequencePlayMode::Forward, 1.0f, true);
+	}
+	if (IntentChangedAnimation
+		&& PreviousView.CurrentIntentId != NewView.CurrentIntentId)
+	{
+		StopAnimation(IntentChangedAnimation);
+		PlayAnimation(IntentChangedAnimation, 0.0f, 1,
+			EUMGSequencePlayMode::Forward, 1.0f, true);
 	}
 }
 

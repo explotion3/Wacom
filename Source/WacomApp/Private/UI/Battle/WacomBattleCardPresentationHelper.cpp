@@ -330,10 +330,32 @@ namespace WacomBattleCardPresentation
 		return Presentation;
 	}
 
+	const FEnemyPartSnapshot* FindEnemyPartSnapshot(
+		const FBattleSnapshot& Snapshot,
+		const FEnemyPartSnapshot& Candidate)
+	{
+		for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
+		{
+			for (const FEnemyPartSnapshot& Part : Enemy.Parts)
+			{
+				if ((Candidate.InstanceId.IsValid() && Part.InstanceId == Candidate.InstanceId)
+					|| (Candidate.Identity.IsValidSlot() && Part.Identity == Candidate.Identity))
+				{
+					return &Part;
+				}
+			}
+		}
+		return nullptr;
+	}
+
 	FWacomBattleEnemyPartEntryViewData BuildEnemyPartEntryViewDataFromPreviewSnapshot(
 		const FEnemyPartSnapshot& PartSnapshot,
-		const bool bWillAct)
+		const bool bWillAct,
+		const FEnemyPartSnapshot* BaselinePart)
 	{
+		const FEnemyPartSnapshot& IntentFacts = bWillAct && BaselinePart
+			? *BaselinePart
+			: PartSnapshot;
 		FWacomBattleEnemyPartEntryViewData View;
 		View.PartInstanceId = PartSnapshot.InstanceId;
 		View.Identity = PartSnapshot.Identity;
@@ -345,10 +367,11 @@ namespace WacomBattleCardPresentation
 		View.CurrentHp = PartSnapshot.CurrentHp;
 		View.MaxHp = PartSnapshot.MaxHp;
 		View.Shield = PartSnapshot.Shield;
-		View.CurrentInitiative = PartSnapshot.CurrentInitiative;
-		View.CurrentIntentDisplayName = PartSnapshot.CurrentIntent.DisplayName;
-		View.CurrentIntentInitiative = PartSnapshot.CurrentIntent.Initiative;
-		View.CurrentIntentResistanceValue = PartSnapshot.CurrentIntent.ResistanceValue;
+		View.CurrentInitiative = bWillAct ? 0 : PartSnapshot.CurrentInitiative;
+		View.CurrentIntentId = IntentFacts.CurrentIntentId;
+		View.CurrentIntentDisplayName = IntentFacts.CurrentIntent.DisplayName;
+		View.CurrentIntentInitiative = IntentFacts.CurrentIntent.Initiative;
+		View.CurrentIntentResistanceValue = IntentFacts.CurrentIntent.ResistanceValue;
 		View.RuntimeStatuses = PartSnapshot.Statuses;
 		View.RuntimeStatusStacks = PartSnapshot.StatusStacks;
 		View.bDestroyed = PartSnapshot.bDestroyed;
@@ -379,8 +402,13 @@ namespace WacomBattleCardPresentation
 
 		for (const FBattleCardActionPreviewEnemyPartState& PartState : ActionPreview.ProjectedEnemyParts)
 		{
+			const FEnemyPartSnapshot* BaselinePart =
+				FindEnemyPartSnapshot(Snapshot, PartState.Snapshot);
 			Presentation.ProjectedEnemyParts.Add(
-				BuildEnemyPartEntryViewDataFromPreviewSnapshot(PartState.Snapshot, PartState.bWillAct));
+				BuildEnemyPartEntryViewDataFromPreviewSnapshot(
+					PartState.Snapshot,
+					PartState.bWillAct,
+					BaselinePart));
 		}
 		return Presentation;
 	}

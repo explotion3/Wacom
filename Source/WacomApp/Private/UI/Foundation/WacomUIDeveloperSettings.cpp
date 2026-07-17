@@ -193,6 +193,28 @@ bool UWacomUIDeveloperSettings::ValidateSettings(TArray<FText>& OutErrors) const
 				FText::FromString(PanelClass->GetPathName())));
 		}
 	}
+	if (DefaultBattleEnemySinglePartPanelWidgetClass.IsNull())
+	{
+		OutErrors.Add(LOCTEXT(
+			"DefaultBattleEnemySinglePartPanelWidgetClassNull",
+			"DefaultBattleEnemySinglePartPanelWidgetClass 不能为空；单部位 Scene Enemy Host 需要正式紧凑面板 WBP。"));
+	}
+	else
+	{
+		ValidateSoftClass(
+			DefaultBattleEnemySinglePartPanelWidgetClass,
+			LOCTEXT("DefaultBattleEnemySinglePartPanelWidgetClassLabel", "DefaultBattleEnemySinglePartPanelWidgetClass"),
+			OutErrors);
+		if (UClass* PanelClass = DefaultBattleEnemySinglePartPanelWidgetClass.LoadSynchronous();
+			PanelClass && PanelClass->HasAnyClassFlags(
+				CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+		{
+			OutErrors.Add(FText::Format(
+				LOCTEXT("DefaultBattleEnemySinglePartPanelWidgetClassNotConstructible",
+					"DefaultBattleEnemySinglePartPanelWidgetClass 必须是可实例化的正式 WBP，当前类 {0} 为 abstract、deprecated 或已被新版本替代。"),
+				FText::FromString(PanelClass->GetPathName())));
+		}
+	}
 	ValidateSoftObject(
 		CardExplanationLexicon,
 		LOCTEXT("CardExplanationLexiconLabel", "CardExplanationLexicon"),

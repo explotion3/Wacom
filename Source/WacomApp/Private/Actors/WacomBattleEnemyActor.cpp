@@ -15,6 +15,7 @@
 #include "Components/WidgetComponent.h"
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
 #include "Enemies/EnemyDefinition.h"
+#include "Enemies/EnemyPartDefinition.h"
 #include "PaperFlipbook.h"
 #include "PaperFlipbookComponent.h"
 #include "PaperSprite.h"
@@ -26,6 +27,42 @@
 
 namespace
 {
+	bool HasExactlyOneValidDefinitionPart(const UEnemyDefinition* Definition)
+	{
+		if (!Definition)
+		{
+			return false;
+		}
+
+		TMap<FName, int32> SlotCounts;
+		for (const FEnemyPartSlot& PartSlot : Definition->Parts)
+		{
+			if (!PartSlot.PartSlotId.IsNone())
+			{
+				SlotCounts.FindOrAdd(PartSlot.PartSlotId) += 1;
+			}
+		}
+
+		int32 ValidPartCount = 0;
+		for (const FEnemyPartSlot& PartSlot : Definition->Parts)
+		{
+			const bool bValid = !PartSlot.PartSlotId.IsNone()
+				&& SlotCounts.FindRef(PartSlot.PartSlotId) == 1
+				&& PartSlot.PartDef
+				&& !PartSlot.PartDef->PartId.IsNone();
+			ValidPartCount += bValid ? 1 : 0;
+		}
+		return ValidPartCount == 1;
+	}
+
+	bool IsConstructibleEnemyPanelClass(
+		const TSubclassOf<UWacomBattleEnemyPanelWidget> PanelClass)
+	{
+		return PanelClass
+			&& !PanelClass->HasAnyClassFlags(
+				CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists);
+	}
+
 	AWacomBattleEnemyPartActor* ResolveChildActorComponentPartActor(
 		UChildActorComponent* ChildActorComponent,
 		bool bAllowTemplateFallback)
@@ -240,7 +277,24 @@ void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
 	{
 		if (const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>())
 		{
-			ResolvedPanelClass = Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
+			if (HasExactlyOneValidDefinitionPart(EnemyDefinition))
+			{
+				ResolvedPanelClass =
+					Settings->DefaultBattleEnemySinglePartPanelWidgetClass.LoadSynchronous();
+				if (!IsConstructibleEnemyPanelClass(ResolvedPanelClass))
+				{
+					UE_LOG(LogTemp, Error,
+						TEXT("[WacomBattleEnemyActor] Compact single-part enemy panel class unresolved; falling back: Host=%s Class=%s"),
+						*GetName(),
+						ResolvedPanelClass ? *ResolvedPanelClass->GetPathName() : TEXT("None"));
+					ResolvedPanelClass = nullptr;
+				}
+			}
+
+			if (!ResolvedPanelClass)
+			{
+				ResolvedPanelClass = Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
+			}
 		}
 	}
 
@@ -253,8 +307,7 @@ void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
 		EnemyPanelWidgetComponent->SetVisibility(false, true);
 		return;
 	}
-	if (ResolvedPanelClass->HasAnyClassFlags(
-		CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+	if (!IsConstructibleEnemyPanelClass(ResolvedPanelClass))
 	{
 		UE_LOG(LogTemp, Error,
 			TEXT("[WacomBattleEnemyActor] Enemy panel class is not constructible: Host=%s Class=%s"),

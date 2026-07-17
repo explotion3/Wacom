@@ -71,6 +71,18 @@ TrainingWarrior 使用独立 enemy-pack 入口：
 
 `-ForceArtRefresh` 只允许与 `-PromoteArt` 同用。晋升服务先验证 Idle / Attack / Block / Cleave / Downed 的 Flipbook、Sprite、Texture 闭包完全位于 BattleWarrior 源目录，再用 `IAssetTools::AdvancedCopyPackages` 一次复制并重写引用；不会复制 Item，也不会删除目标目录中的未知资产。正式目标完整时跳过复制；目标不完整且未指定 `-PromoteArt` 时失败。`WacomRegenerateContent` 会同步调用 TrainingWarrior builder，但绝不读取或晋升 `/Game/Art`。
 
+单部位敌人紧凑 UI 使用独立、幂等的 Editor builder，不接入 `WacomRegenerateContent`，也不触碰旧 Enemy WBP：
+
+```powershell
+# 创建或更新受合同标记管理的新 WBP、Intent Style 与四张像素图标
+-run=WacomBuildEnemyUI -BuildSinglePartCompact
+
+# 只读检查父类、bindings、动画、Style 映射和图标资源
+-run=WacomBuildEnemyUI -InspectSinglePartCompact
+```
+
+`DA_EnemyIntentPresentation_Default` 属于 UI-only 制作资产，不是战斗规则 schema。新增 Intent 图标时必须填写准确且唯一的稳定 `IntentId` 与有效 Brush；不允许用显示名、动画名或 effect 自动推断。空 ID、重复 ID 和无效 Brush 会被 Data Validation 拒绝；未配置 Intent 运行时使用 fallback 星形，不阻断战斗。
+
 ## §3 当前生成内容
 
 核心角色与卡牌：

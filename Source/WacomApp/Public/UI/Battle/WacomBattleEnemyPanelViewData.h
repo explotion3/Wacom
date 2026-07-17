@@ -38,6 +38,10 @@ struct WACOMAPP_API FWacomBattleEnemyPartEntryViewData
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
 	int32 CurrentInitiative = 0;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel",
+		meta = (ToolTip = "当前语义意图的稳定 ID。敌人面板只用它解析 UI 图标，不根据显示名或效果猜测。"))
+	FName CurrentIntentId = NAME_None;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
 	FText CurrentIntentDisplayName;
 
