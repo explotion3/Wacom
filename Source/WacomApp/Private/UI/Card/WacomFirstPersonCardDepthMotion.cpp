@@ -54,7 +54,9 @@ const FWacomFirstPersonCardDepthView& FWacomFirstPersonCardDepthMotion::Update(
 	const float SurfaceResponseSpeed = bSurfaceReturningToRest
 		? Config.SurfaceParallaxReturnSpeed
 		: Config.SurfaceParallaxResponseSpeed;
-	const float SurfaceAlpha = ComputeExponentialAlpha(SurfaceResponseSpeed, SafeDeltaTime);
+	const float SurfaceAlpha = FWacomCardMotionKernel::ComputeExponentialAlpha(
+		SurfaceResponseSpeed,
+		SafeDeltaTime);
 	const FVector2D SurfaceTiltTarget = TargetView.SurfacePerspective.bEnabled
 		? CurrentView.TiltDegrees
 		: FVector2D::ZeroVector;
