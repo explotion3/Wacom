@@ -91,7 +91,12 @@ Snake 的 `-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用；`-Pr
 
 # 只读检查父类、bindings、动画、Style 映射和图标资源
 -run=WacomBuildEnemyUI -InspectSinglePartCompact
+
+# 只读检查正式 v2 分段生命条、详情面板与完整 Slate 命中祖先链
+-run=WacomBuildEnemyUI -InspectSegmentedVitals
 ```
+
+正式 v2 WBP 的命中修复只能通过 `UWacomEnemyUIToolset::NormalizeInteractiveHitTestPaths()` 在 Writer Package allowlist 内执行。该工具只接受六个已知 Enemy UI 包，只把交互按钮、动态条目容器及其路径上的 `HitTestInvisible` 改为保留子控件命中的 Visibility；遇到 Hidden / Collapsed 路径会拒绝，不会擅自显示内容或修改布局。
 
 玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
 

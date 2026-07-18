@@ -50,4 +50,13 @@ public:
 	static bool NormalizeSinglePartPanelGeometry(
 		UWidgetBlueprint* PanelBlueprint,
 		UWidgetBlueprint* EntryBlueprint);
+
+	/**
+	 * Repairs only the known Slate interaction routes in one of the six formal
+	 * Enemy UI WBPs. Blocking HitTestInvisible ancestors become
+	 * SelfHitTestInvisible; hidden or collapsed routes are rejected.
+	 */
+	UFUNCTION(meta = (AICallable), Category = "Wacom|Enemy UI")
+	static bool NormalizeInteractiveHitTestPaths(
+		UWidgetBlueprint* WidgetBlueprint);
 };

@@ -2,7 +2,7 @@
 type: interaction-contract
 scope: wacom-world-interaction
 status: active
-updated: 2026-07-08
+updated: 2026-07-18
 tags:
   - wacom/app
   - wacom/world-interaction
@@ -163,7 +163,7 @@ Host registry 建立时执行一次 runtime scene binding：Host 扫描 live Par
 
 普通 Snapshot 同步只允许更新 Bridge Snapshot binding、InteractionTarget runtime id、Presentation runtime facts、targetable 和 EnemyPanel/hover/prediction/cue 状态。视觉生成仍只属于构造、Details/显式 Authoring 刷新和 runtime 初始化；Host Flipbook 播放进度与 PartActor VisualLayer 组件不能因为 Snapshot 刷新被重置。`EnemyPartActed Count > 0` 通过 presentation queue 保留完整 `EncounterId + EnemySlotId + PartSlotId`：Simple Host 路由到 Host Style，Multi-Part 路由到精确 PartActor / Layer；Action 的 Impact 标记只推动 Journal 对应的 Combat-only Snapshot，不重建 target registry、视觉组件或 first-person 手牌。BattleEnd 清 target registry 时会把 Part 弱引用与观察身份复制到 retiring entry，使同批已排队行动仍能完成。播放只原地切换现有组件，不改变 target handle、HitBounds、Part identity、topology revision 或规则事件顺序。
 
-EnemyPanel 是 Host 的 screen-space 被动视图，不是世界命中入口。Coordinator 按当前 Host registry 的稳定 `EnemySlotId` 构建一敌人一份 ViewData，并把 hover 的稳定 `PartSlotId` 与 projected preview 传给所属 Host；WBP 只展开匹配条目。面板 Root 与全部子控件必须不可命中，因此 first-person 卡牌输入、cursor trace 和 `HitBounds` 场景目标解析不会被 UI 截获。Target handle、PartActor Presentation 和 Bridge 生命周期不依赖面板是否可见或能否加载。
+EnemyPanel 是 Host 的 screen-space 被动视图，不是规则或世界 target handle 入口。Coordinator 按当前 Host registry 的稳定 `EnemySlotId` 构建一敌人一份 ViewData，并把 hover 的稳定 `PartSlotId` 与 projected preview 传给所属 Host；WBP 只展开匹配条目。Host 面板使用高于 BattleHUD 的专用 screen layer，确保 Idle 时唯一 `InspectHitTarget` 能接收真实 Slate 点击并上报稳定 Part identity；热区与动态条目容器到 Root 的完整祖先链必须用 `Visible / SelfHitTestInvisible` 保留子控件命中，Panel/Entry 其它装饰表面继续不可命中。TargetSelect、拖卡、Preview、表现结算和 BattleEnd 会关闭检查门，使整个紧凑条恢复 `HitTestInvisible`，同一次输入随后仍由 BattleHUD / cursor trace / `HitBounds` 世界目标路径处理。Target handle、PartActor Presentation 和 Bridge 生命周期不依赖面板是否可见或能否加载。
 
 BattleEnd Snapshot 到达时立即清理 Bridge binding、Presentation target、hover、drag、panel 和 targetable，确保已死亡敌人不再可交互；coordinator 只临时保留 Host 弱引用和最终 `bAllPartsDestroyed` facts，让队列中最后一个 Destroyed Clip 可以完成。`BattleEndSignal`、source/session clear、HUD shutdown 或 Host 销毁会取消旧 barrier 并清空 retiring Host；重新进入战斗后由当前 Host registry 建立新绑定并恢复 Idle。Host/Part 真正销毁或 topology revision 变化仍按稳定部位 identity 清理或重建 registry，但普通重建不重置正在播放的 Clip。
 

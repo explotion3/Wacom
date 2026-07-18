@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "ContentBuilders/EnemySegmentedUIInspector.h"
+#include "ContentBuilders/EnemyUIHitTestPolicy.h"
 
 #include "Animation/WidgetAnimation.h"
 #include "Blueprint/WidgetTree.h"
@@ -116,7 +117,9 @@ namespace
 				? Visibility != ESlateVisibility::SelfHitTestInvisible || bValidContainer
 				: IsExpectedInteractiveWidget(Widget);
 		}
-		return bValid;
+		return bValid
+			&& Wacom::ContentBuilder::EnemyUIHitTestPolicy::ValidateInteractiveRoutes(
+				*Blueprint);
 	}
 
 	bool ValidatePanel(const UWidgetBlueprint* Blueprint, const TCHAR* Label)

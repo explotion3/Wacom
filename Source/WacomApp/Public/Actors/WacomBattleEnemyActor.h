@@ -499,7 +499,7 @@ private:
 	TObjectPtr<USceneComponent> SceneRoot = nullptr;
 
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|Battle|Scene Enemy|Internal",
-		meta = (ToolTip = "敌人头顶聚合状态面板的世界空间 WidgetComponent。"))
+		meta = (ToolTip = "敌人头顶聚合状态面板的 Screen-space WidgetComponent。它使用专用 Battle Enemy Screen Layer；只有 Idle 检查热区可命中。"))
 	TObjectPtr<UWidgetComponent> EnemyPanelWidgetComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",

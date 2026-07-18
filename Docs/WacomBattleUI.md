@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-07-14
+updated: 2026-07-18
 tags:
   - wacom/ui
   - wacom/battle
@@ -143,7 +143,7 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 
 恰好包含一个有效 Definition PartSlot 的 Host 默认使用 `/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget` 与 `WBP_WacomBattleEnemySinglePartEntryWidget`，并保持约 `250 x 84`。多部位面板把同一条目按 `EnemyDefinition.Parts` 顺序放进 `HorizontalBox`，每段固定等宽 Fill，段间只保留像素分隔线；段宽不按 MaxHP 分配，因此低 HP 部位的 Initiative / Intent / Buff 不会被挤到相邻段。两者消费完全相同的 `FWacomBattleEnemyPanelViewData`，不建立单部位专用 Snapshot 链。紧凑条不再显示敌人名、部位名、Intent 名称或 Resistance；这些事实只进入详情面板。Destroyed 优先显示 `X` 并抑制 Initiative / Intent change pulse。显式 `EnemyPanelWidgetClass` 始终拥有最高优先级。
 
-紧凑条的点击只代表“检查部位”的 UI 意图。`UWacomBattleEnemyPartEntryWidget` 通过透明 `InspectHitTarget` 向 Panel、Host 和 scene-enemy coordinator 上报完整 `FBattlePartSlotIdentity`；只有 `EBattleUIState::Idle`、PlayerAction、没有拖卡、Action Preview 或表现结算时才启用。TargetSelect、拖卡、Resolving、BattleEnd 和 source clear 会立即关闭详情并把紧凑条恢复为点击穿透，场景目标射线和 first-person 手牌输入仍走原路径。Escape / Back 先取消既有拖卡或目标选择，随后才在 Idle 关闭详情；不新增 `Inspect` Battle UI state，也不依赖焦点或 Tick。
+紧凑条的点击只代表“检查部位”的 UI 意图。`UWacomBattleEnemyPartEntryWidget` 通过透明 `InspectHitTarget` 向 Panel、Host 和 scene-enemy coordinator 上报完整 `FBattlePartSlotIdentity`；只有 `EBattleUIState::Idle`、PlayerAction、没有拖卡、Action Preview 或表现结算时才启用。Host 的 screen-space `WidgetComponent` 固定进入专用 `WacomBattleEnemyPanelScreenLayer`，层级 `8000`：它高于默认 viewport / BattleHUD，保证真实 Slate 点击能到达热区；低于详情面板 `8500` 和 first-person 手牌 `9996`。按钮自身为 `Visible` 还不够：从 `InspectHitTarget`、动态 `PartList` 到各自 Root 的完整祖先链都必须允许子控件命中，只能使用 `Visible` 或 `SelfHitTestInvisible`；任何 `HitTestInvisible` 祖先都会使按钮永久不可点击。TargetSelect、拖卡、Resolving、BattleEnd 和 source clear 会立即关闭详情并把紧凑条恢复为 `HitTestInvisible`，此时专用层不会阻挡 BattleHUD 世界目标射线或 first-person 手牌输入。Escape / Back 先取消既有拖卡或目标选择，随后才在 Idle 关闭详情；不新增 `Inspect` Battle UI state，也不依赖焦点或 Tick。
 
 BattleHUD 生命周期内只维护一个 `/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionWidget`。App-private `FWacomBattleHUDEnemyInspectionCoordinator` 把现有 `FWacomBattleEnemyPanelViewData` 与选中的稳定 Part identity 组合成 `FWacomBattleEnemyInspectionViewData`：点击同一部位关闭，点击其它部位或其它敌人原地切换；Snapshot 刷新复用同一个 Widget 和 Definition 顺序的导航 Row。左侧显示敌人名、剩余部位整体状态和部位导航；右侧显示选中部位的当前/最大 HP、Shield、Initiative、Intent 名称、Intent Initiative、Resistance、完整 Buff / 层数和 Destroyed 状态。左右面板各自从屏幕侧边进入，中央战场与底部手牌不被遮罩或暂停。BattleEnd、Host/Part 移除、session/source clear 和 HUD destruct 会强制清理。
 

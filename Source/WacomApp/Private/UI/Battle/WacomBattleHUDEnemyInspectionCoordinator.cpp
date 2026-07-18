@@ -6,12 +6,11 @@
 #include "GameFramework/PlayerController.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
+#include "UI/Battle/WacomBattleEnemyUILayerPolicy.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 
 namespace
 {
-	constexpr int32 EnemyInspectionViewportZOrder = 8500;
-
 	bool IsConstructibleInspectionClass(const UClass* WidgetClass)
 	{
 		return WidgetClass
@@ -187,7 +186,7 @@ FWacomBattleHUDEnemyInspectionCoordinator::EnsureWidget()
 		return nullptr;
 	}
 
-	Created->AddToViewport(EnemyInspectionViewportZOrder);
+	Created->AddToViewport(WacomBattleEnemyUILayerPolicy::InspectionPanelZOrder);
 	Created->SetVisibility(ESlateVisibility::Collapsed);
 	InspectionWidget = Created;
 	BindWidgetDelegates(*Created);

@@ -2,6 +2,7 @@
 
 #include "Toolsets/WacomEnemyUIToolset.h"
 
+#include "ContentBuilders/EnemyUIHitTestPolicy.h"
 #include "Animation/MovieScene2DTransformSection.h"
 #include "Animation/MovieScene2DTransformTrack.h"
 #include "Animation/WidgetAnimation.h"
@@ -390,4 +391,26 @@ bool UWacomEnemyUIToolset::NormalizeSinglePartPanelGeometry(
 	FBlueprintEditorUtils::MarkBlueprintAsModified(PanelBlueprint);
 	FBlueprintEditorUtils::MarkBlueprintAsModified(EntryBlueprint);
 	return HasExpectedSinglePartGeometry(*PanelBlueprint, *EntryBlueprint);
+}
+
+bool UWacomEnemyUIToolset::NormalizeInteractiveHitTestPaths(
+	UWidgetBlueprint* WidgetBlueprint)
+{
+	if (!WidgetBlueprint || !ResolveContractMarker(*WidgetBlueprint))
+	{
+		return false;
+	}
+
+	int32 ChangedWidgetCount = 0;
+	if (!Wacom::ContentBuilder::EnemyUIHitTestPolicy::NormalizeInteractiveRoutes(
+		*WidgetBlueprint,
+		ChangedWidgetCount))
+	{
+		return false;
+	}
+	if (ChangedWidgetCount > 0)
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsModified(WidgetBlueprint);
+	}
+	return true;
 }

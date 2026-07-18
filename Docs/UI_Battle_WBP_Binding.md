@@ -2,7 +2,7 @@
 type: ui-binding-contract
 scope: wacom-ui-battle
 status: active
-updated: 2026-07-11
+updated: 2026-07-18
 tags:
   - wacom/ui
   - wacom/wbp
@@ -422,7 +422,7 @@ WBP 不应做：不修改牌堆或规则状态，不自行计算数量，也不�
 | `PartList` | `HorizontalBox` | 按 Definition / ViewData 顺序承载等宽部位段 |
 | `PanelContextHighlight` | `Widget` | hover / projected context 的非交互强调 |
 
-`PartList` 每个 child slot 由 C++ 设置 `Fill + zero padding`；HP 较少的部位也获得完整段宽。Panel 按稳定 `EnemySlotId + PartSlotId` 复用条目，只有部位真正移除、Battle clear 或 destruct 才移除。多部位普通面板支持 2–4 段；更多部位使用未来 Boss WidgetClass。Root 必须是 `SelfHitTestInvisible`，Panel 自身不建立拦截层。
+`PartList` 每个 child slot 由 C++ 设置 `Fill + zero padding`；HP 较少的部位也获得完整段宽。Panel 按稳定 `EnemySlotId + PartSlotId` 复用条目，只有部位真正移除、Battle clear 或 destruct 才移除。多部位普通面板支持 2–4 段；更多部位使用未来 Boss WidgetClass。Root 必须是 `SelfHitTestInvisible`，Panel 自身不建立拦截层；`PartList` 及其直到 Root 的所有祖先都必须是 `Visible` 或 `SelfHitTestInvisible`，因为动态加入的 Part Entry 需要穿过这条 Slate 命中路径。
 
 ### 通用 Part Entry：分段生命条
 
@@ -441,7 +441,7 @@ WBP 不应做：不修改牌堆或规则状态，不自行计算数量，也不�
 | `PartNameText` / `IntentText` / `ResistanceText` / `DetailsContainer` | 对应旧类型 | 兼容必绑但在紧凑条中折叠；完整文字由详情面板显示 |
 | `ContextHighlight` / `ActionPreviewOverlay` / `DestroyedOverlay` / `DestroyedMark` | `Widget` | hover、Preview 与终态覆盖；Destroyed 不移除段 |
 
-不再制作或使用独立 `ShieldBar`。Shield Frame / Badge 由 projected ViewData 同步显隐，但 Preview 不触发真实 Shield pulse。必需动画仍为 `IntroAnimation`、`DamagePulseAnimation`、`ShieldPulseAnimation`、`DestroyedPulseAnimation`、`ContextHighlightAnimation`；单部位资产继续提供 `InitiativePulseAnimation` 与 `IntentChangedAnimation`。Entry Root 是 `SelfHitTestInvisible`，仅 `InspectHitTarget` 可命中；Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时启用按钮。
+不再制作或使用独立 `ShieldBar`。Shield Frame / Badge 由 projected ViewData 同步显隐，但 Preview 不触发真实 Shield pulse。必需动画仍为 `IntroAnimation`、`DamagePulseAnimation`、`ShieldPulseAnimation`、`DestroyedPulseAnimation`、`ContextHighlightAnimation`；单部位资产继续提供 `InitiativePulseAnimation` 与 `IntentChangedAnimation`。Entry Root 是 `SelfHitTestInvisible`，仅 `InspectHitTarget` 可命中；Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时启用按钮。`InspectHitTarget` 到 Entry Root 的每一级容器都必须允许子控件命中，装饰面可以保持 `HitTestInvisible`，但不能作为热区祖先。WBP 不自行设置 viewport ZOrder；Host 的 `WidgetComponent` 统一使用专用 `WacomBattleEnemyPanelScreenLayer@8000`，详情 WBP 位于 `8500`。禁用检查时 Entry 与热区必须回到 `HitTestInvisible`，否则会阻断 BattleHUD 的世界目标点击。
 
 Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default`，只接受准确 `IntentId -> IconBrush`，不得按显示名或 effects 猜图标。
 
@@ -463,11 +463,11 @@ Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresent
 | `DestroyedOverlay` | `Widget` | 当前部位终态 |
 | `CloseButton` | `Button` | 被动 Close 请求 |
 
-必需动画：`OpenLeftAnimation`、`OpenRightAnimation`、`CloseAnimation`，都必须有真实 widget binding。Root 为 `SelfHitTestInvisible`；只有 `CloseButton` 和部位 Row 按钮可命中。开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭或清理。
+必需动画：`OpenLeftAnimation`、`OpenRightAnimation`、`CloseAnimation`，都必须有真实 widget binding。Root 为 `SelfHitTestInvisible`；只有 `CloseButton` 和部位 Row 按钮可命中。`PartNavigator`、`CloseButton` 及其祖先链必须允许子控件命中。开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭或清理。
 
 ### WBP_WacomBattleEnemyInspectionPartRowWidget
 
-父类：`UWacomBattleEnemyInspectionPartRowWidget`。必需绑定为 `PartSelectButton`、`PartNameText`、`HpText`、`ShieldContainer`、`ShieldText`、`InitiativeText`、`SelectionHighlight`、`DestroyedOverlay`。Root 为 `SelfHitTestInvisible`，仅 `PartSelectButton` 可命中；点击只广播稳定 Part identity。
+父类：`UWacomBattleEnemyInspectionPartRowWidget`。必需绑定为 `PartSelectButton`、`PartNameText`、`HpText`、`ShieldContainer`、`ShieldText`、`InitiativeText`、`SelectionHighlight`、`DestroyedOverlay`。Root 为 `SelfHitTestInvisible`，仅 `PartSelectButton` 可命中；按钮到 Root 的祖先链必须允许子控件命中，点击只广播稳定 Part identity。
 
 资产修改只通过受控 Editor / MCP 写入。只读合同检查使用：
 

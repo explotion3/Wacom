@@ -23,6 +23,7 @@
 #include "PaperSpriteComponent.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
+#include "UI/Battle/WacomBattleEnemyUILayerPolicy.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "Blueprint/UserWidget.h"
 
@@ -62,6 +63,14 @@ namespace
 		return PanelClass
 			&& !PanelClass->HasAnyClassFlags(
 				CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists);
+	}
+
+	void ConfigureEnemyPanelScreenLayer(UWidgetComponent& Component)
+	{
+		Component.SetInitialSharedLayerName(
+			WacomBattleEnemyUILayerPolicy::CompactPanelSharedLayerName);
+		Component.SetInitialLayerZOrder(
+			WacomBattleEnemyUILayerPolicy::CompactPanelZOrder);
 	}
 
 	AWacomBattleEnemyPartActor* ResolveChildActorComponentPartActor(
@@ -146,6 +155,7 @@ AWacomBattleEnemyActor::AWacomBattleEnemyActor()
 
 	EnemyPanelWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("EnemyPanelWidget"));
 	EnemyPanelWidgetComponent->SetupAttachment(SceneRoot);
+	ConfigureEnemyPanelScreenLayer(*EnemyPanelWidgetComponent);
 	EnemyPanelWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
 	EnemyPanelWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	EnemyPanelWidgetComponent->SetVisibility(false, true);
@@ -165,6 +175,12 @@ AWacomBattleEnemyActor::AWacomBattleEnemyActor()
 void AWacomBattleEnemyActor::PostLoad()
 {
 	Super::PostLoad();
+	if (EnemyPanelWidgetComponent)
+	{
+		// Existing Host Blueprints may have serialized the engine default screen layer.
+		// PostLoad runs before registration and migrates them without resaving assets.
+		ConfigureEnemyPanelScreenLayer(*EnemyPanelWidgetComponent);
+	}
 	if (EnemyPanelWidgetComponent
 		&& EnemyPanelWidgetComponent->GetWidgetClass()
 			== UWacomBattleEnemyPanelWidget::StaticClass())
@@ -266,6 +282,7 @@ void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
 	{
 		return;
 	}
+	ConfigureEnemyPanelScreenLayer(*EnemyPanelWidgetComponent);
 
 	TSubclassOf<UWacomBattleEnemyPanelWidget> ResolvedPanelClass = EnemyPanelWidgetClass;
 	if (ResolvedPanelClass == UWacomBattleEnemyPanelWidget::StaticClass())
