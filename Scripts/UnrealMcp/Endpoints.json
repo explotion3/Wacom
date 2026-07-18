@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "roles": [
+    {
+      "name": "main",
+      "codexEndpoint": "ue_wacom_main",
+      "port": 8100,
+      "defaultAccess": "read-only"
+    },
+    {
+      "name": "card",
+      "codexEndpoint": "ue_wacom_card",
+      "port": 8110,
+      "defaultAccess": "writer-eligible"
+    },
+    {
+      "name": "enemy",
+      "codexEndpoint": "ue_wacom_enemy",
+      "port": 8120,
+      "defaultAccess": "writer-eligible"
+    },
+    {
+      "name": "backpack",
+      "codexEndpoint": "ue_wacom_backpack",
+      "port": 8130,
+      "defaultAccess": "writer-eligible"
+    },
+    {
+      "name": "run",
+      "codexEndpoint": "ue_wacom_run",
+      "port": 8140,
+      "defaultAccess": "writer-eligible"
+    },
+    {
+      "name": "integration",
+      "codexEndpoint": "ue_wacom_integration",
+      "port": 8190,
+      "defaultAccess": "read-only"
+    }
+  ]
+}

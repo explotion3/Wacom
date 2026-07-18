@@ -2,7 +2,7 @@
 type: workflow
 scope: wacom-agent-integration
 status: active
-updated: 2026-07-16
+updated: 2026-07-18
 tags:
   - wacom/workflow
   - wacom/git
@@ -70,6 +70,8 @@ tags:
 
 `.uasset`、`.umap` 以及其他 UE 二进制 Package 不能可靠地逐行合并。发生同路径冲突时，必须确定权威版本，或让其中一个功能 Agent 基于最新集成结果在编辑器中重新应用改动。
 
+通过 Unreal MCP 修改资产时，还必须遵循 `Docs/UnrealMCPWorkflow.md`。MCP endpoint 可达只证明服务在线，不证明连接的是目标 worktree；必须保留经过身份校验的 session provenance、Package allowlist 和 writer audit。
+
 ### 2.5 验证分层但不重复造假
 
 功能 Agent 提供定向验证；集成会话验证跨提交组合；用户在主工程执行最终 PIE 手感与视觉验收。任何未执行项目必须明确标记为未验证，不能以“预计通过”代替结果。
@@ -89,6 +91,7 @@ tags:
 - 只修改被分配的功能范围，保护其他 Agent 和用户的工作。
 - 开工前记录 base commit；需要依赖其他功能时显式报告。
 - 完成编译、定向测试及适用的 Blueprint/资产验证。
+- 使用 Unreal MCP mutation 时，在保存前取得 writer lease，交付 session provenance、Package allowlist 和 writer audit。
 - 把自身成果整理为一个或一组有序、可解释的 commit。
 - 交付前确认 worktree 干净。
 - 不 merge `main`、不 push、不删除自己的 branch/worktree，除非用户明确要求。
@@ -183,6 +186,8 @@ codex/integration-20260716
 
 资产说明：
 - Git LFS 文件：
+- Unreal MCP role / endpoint / SessionId / task ID：
+- Unreal MCP writer audit 路径与 Package allowlist：
 - DreamShader/Niagara/WBP 等生成步骤：
 - 是否需要在集成环境重新生成：
 - 是否修改正式人工资产：
@@ -210,6 +215,7 @@ codex/integration-20260716
 1. 确认仓库与 worktree 状态。
 2. 确认每个 commit 在本地对象库中存在。
 3. 查看 commit subject、parents、changed files、二进制/LFS 文件和 diff summary。
+   如果资产由 Unreal MCP 产生，同时核对 writer audit 中的 branch、HEAD、Package allowlist、实际 dirty paths 和文件哈希。
 4. 计算每个候选提交相对 `main` 的 merge-base。
 5. 判断候选提交之间是否有依赖或文件重叠。
 6. 判断候选提交是否已经进入 `main`，避免重复应用。
@@ -306,6 +312,8 @@ main 当前 HEAD
 
 未经用户确认，不因“提交较新”自动判定二进制资产权威版本。
 
+若修改来自 Unreal MCP，writer audit 只用于证明“哪个 Editor/branch/HEAD、哪个 task、允许保存哪些 Package、最终产生哪些 dirty paths”；它不能自动解决同路径冲突，也不能替代用户对权威资产的决定。集成会话应把 audit 中的 SHA-256、实际 commit blob/LFS object 和当前 main 同路径资产三者一起核对。
+
 ### 9.3 DreamShader 与生成材质
 
 Wacom 正式运行时材质需要同时考虑：
@@ -335,6 +343,7 @@ Wacom 正式运行时材质需要同时考虑：
 
 - `.uasset`、`.umap` 和项目配置的其他二进制类型匹配 LFS attributes；
 - commit 中保存的是 LFS pointer，所指对象在本地可用；
+- Unreal MCP writer audit 报告的 Package、dirty path 和哈希与实际提交一致；
 - checkout 后文件不是未解析 pointer 文本；
 - AssetRegistry 能加载正式引用；
 - 新 worktree 不依赖主 worktree 的未跟踪本地副本才能运行。

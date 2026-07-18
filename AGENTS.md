@@ -47,6 +47,15 @@
 & 'C:\Users\ahhh\AppData\Local\codegraph\current\node.exe' --liftoff-only 'C:\Users\ahhh\AppData\Local\codegraph\current\lib\dist\bin\codegraph.js' sync 'D:\UE_Project\5.7\Wacom'
 ```
 
+### Unreal MCP 使用
+
+- Unreal Editor 资产操作遵循 `Docs/UnrealMCPWorkflow.md`；固定 role、端口和默认权限以 `Scripts/UnrealMcp/Endpoints.json` 为准。
+- Subagent 不是固定前置条件。当前会话已经拥有目标 endpoint 的 Unreal 工具且身份校验通过时可直接调用；当前会话没有工具、Editor 已重启或二进制 mutation 风险高时，为本次 Editor 生命周期新建 disposable asset agent。
+- MCP 不认识 Codex cwd。调用工具前必须用 `Scripts/Invoke-WacomUnrealMcp.ps1 -Action AssertReady` 校验准确 `.uproject`、PID、进程启动时间、SessionId、port owner、branch 和 HEAD；单独调用 `IsPIERunning` 不能证明 worktree 身份。
+- 任何资产 mutation 前必须取得单一 writer lease，并用完整 `/Game/...` Package allowlist 限制保存范围。`main` 和 `integration` endpoint 默认只读；只有用户明确授权本次资产范围后才能临时解除保护。
+- Editor 生命周期内不切 branch、不更新 HEAD、不运行 C++ 编译。保存并成功释放写锁、正常关闭 Editor，再用 `-Action AssertClosedForBuild` 通过编译门禁。
+- `.uasset/.umap` 不做文本合并。交接必须报告 MCP session provenance、writer audit、实际变化路径、Git LFS 状态和资产/PIE 验证。
+
 ### Spec Kit 使用
 
 Spec Kit 是项目级规划工具，用来把较大的功能需求拆成 `spec.md`、`plan.md`、`tasks.md` 等设计工件；它不是默认实现入口，也不替代 `Docs/`、`AGENTS.md`、实时源码和工程判断。
