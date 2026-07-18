@@ -77,7 +77,7 @@ bool FWacomFirstPersonCardInteractionFeedbackReducedMotionTest::RunTest(const FS
 		return false;
 	}
 
-	FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*SlotWidget, 
+	FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*SlotWidget,
 		WacomFirstPersonCardInteractionFeedbackSpec::MakeReducedConfig());
 	SlotWidget->SetCardLayerInteractionEnabled(true);
 	SlotWidget->SetSlotViewImmediate(
@@ -117,4 +117,3 @@ bool FWacomFirstPersonCardInteractionFeedbackReducedMotionTest::RunTest(const FS
 	PlayerController->Destroy();
 	return true;
 }
-
