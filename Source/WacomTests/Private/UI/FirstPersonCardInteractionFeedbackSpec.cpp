@@ -57,7 +57,7 @@ namespace WacomFirstPersonCardInteractionFeedbackSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardInteractionFeedbackReducedMotionTest,
-	"Wacom.UI.FirstPersonCardLayer.InteractionFeedback.ReducedMotionKeepsSemanticDenyCue",
+	"Wacom.UI.FirstPersonCardLayer.InteractionFeedback.ReducedMotionKeepsDenyWithoutSourceCue",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardInteractionFeedbackReducedMotionTest::RunTest(const FString& Parameters)
@@ -99,11 +99,12 @@ bool FWacomFirstPersonCardInteractionFeedbackReducedMotionTest::RunTest(const FS
 	FWacomFirstPersonCardLayerTestAccess::TriggerDenyFeedback(*SlotWidget);
 	const FWacomFirstPersonCardSlotAutomationTestView InitialDenyView =
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget);
-	TestEqual(TEXT("Semantic corner cue remains enabled"),
+	TestEqual(TEXT("Source-card Deny cue remains disabled"),
 		InitialDenyView.InteractionCueKind,
-		EWacomFirstPersonCardInteractionCueKind::Deny);
-	TestTrue(TEXT("Semantic corner cue remains visible"),
-		InitialDenyView.InteractionCueAmount > 0.0f);
+		EWacomFirstPersonCardInteractionCueKind::None);
+	TestEqual(TEXT("Source-card Deny cue has no opacity"),
+		InitialDenyView.InteractionCueAmount,
+		0.0f);
 
 	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*SlotWidget, 0.025f);
 	TestEqual(TEXT("Reduced motion suppresses deny shake"),
@@ -163,9 +164,9 @@ bool FWacomFirstPersonCardInvalidTargetPreviewTest::RunTest(const FString& Param
 		FWacomFirstPersonCardLayerTestAccess::View(*Slot);
 	TestTrue(TEXT("Resolved invalid target activates the warning"),
 		InvalidView.bInvalidTargetPreviewActive);
-	TestEqual(TEXT("Invalid target uses the preview cue"),
+	TestEqual(TEXT("Invalid target source-card cue remains disabled"),
 		InvalidView.InteractionCueKind,
-		EWacomFirstPersonCardInteractionCueKind::InvalidPreview);
+		EWacomFirstPersonCardInteractionCueKind::None);
 	TestTrue(TEXT("Preview reaches its authored amount"),
 		InvalidView.InvalidTargetPreviewAmount > 0.99f);
 

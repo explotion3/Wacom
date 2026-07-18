@@ -52,6 +52,11 @@ struct FWacomFirstPersonCardLayerTestAccess
 		UMaterialInterface* Material);
 	static const UMaterialInterface* CardViewRetainerEffectMaterialInterface(
 		UWacomFirstPersonCardViewWidget& CardView);
+	static bool ResolveCenteredCardBodyUVRect(
+		const FVector2D& SurfaceSize,
+		const FVector2D& CardBodySize,
+		FLinearColor& OutMin,
+		FLinearColor& OutMax);
 
 	static FWacomRunFirstPersonCardSourceRefreshCountersForTest DefaultSourceCounters(
 		const UWacomRunFirstPersonCardSourceComponent& Source);

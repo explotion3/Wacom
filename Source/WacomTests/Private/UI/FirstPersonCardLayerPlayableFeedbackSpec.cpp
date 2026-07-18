@@ -310,7 +310,7 @@ bool FWacomFirstPersonCardLayerDenyFeedbackTest::RunTest(const FString& Paramete
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardLayerDenyUsesInteractionFeedbackTest,
-	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.FormalDenyUsesSlateCornersWithoutFullCardOverlay",
+	"Wacom.UI.FirstPersonCardLayer.PlayableFeedback.FormalDenyKeepsMotionWithoutSourceCue",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomFirstPersonCardLayerDenyUsesInteractionFeedbackTest::RunTest(const FString& Parameters)
@@ -369,10 +369,10 @@ bool FWacomFirstPersonCardLayerDenyUsesInteractionFeedbackTest::RunTest(const FS
 		FWacomFirstPersonCardLayerTestAccess::View(*SlotWidget);
 	TestTrue(TEXT("Deny feedback starts"), DenyView.bDenyFeedbackActive);
 	TestEqual(
-		TEXT("Deny uses Slate corner cue"),
+		TEXT("Deny source-card cue remains disabled"),
 		DenyView.InteractionCueKind,
-		EWacomFirstPersonCardInteractionCueKind::Deny);
-	TestEqual(TEXT("Deny corner cue uses authored opacity"), DenyView.InteractionCueAmount, 0.5f);
+		EWacomFirstPersonCardInteractionCueKind::None);
+	TestEqual(TEXT("Deny source-card cue has no opacity"), DenyView.InteractionCueAmount, 0.0f);
 
 	PC->Destroy();
 	return true;

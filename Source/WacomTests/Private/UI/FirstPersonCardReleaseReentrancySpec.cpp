@@ -134,9 +134,9 @@ bool FWacomFirstPersonCardReleaseRequiresResolvedInvalidTargetTest::RunTest(
 	const FWacomFirstPersonCardSlotAutomationTestView InvalidView =
 		FWacomFirstPersonCardLayerTestAccess::View(*InvalidSlot);
 	TestTrue(TEXT("Resolved invalid release triggers Deny"), InvalidView.bDenyFeedbackActive);
-	TestEqual(TEXT("Deny takes ownership from the preview cue"),
+	TestEqual(TEXT("Deny keeps source-card decorative cues disabled"),
 		InvalidView.InteractionCueKind,
-		EWacomFirstPersonCardInteractionCueKind::Deny);
+		EWacomFirstPersonCardInteractionCueKind::None);
 	return true;
 }
 

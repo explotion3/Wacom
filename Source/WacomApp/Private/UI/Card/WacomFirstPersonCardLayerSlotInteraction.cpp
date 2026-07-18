@@ -16,6 +16,11 @@
 
 namespace
 {
+	// The source-card brackets/cracks are intentionally disabled while their visual
+	// language is being reconsidered. Keep the semantic preview and Deny playback
+	// alive so target validation, return motion, sound, and diagnostics are unchanged.
+	constexpr bool bRenderInvalidTargetSourceCues = false;
+
 	bool IsFormalDragGestureState(EWacomFirstPersonCardGestureState State)
 	{
 		return State == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
@@ -1244,6 +1249,12 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyInteractionCue()
 		{
 			CardView->ClearInteractionCueView();
 		}
+		return;
+	}
+
+	if (!bRenderInvalidTargetSourceCues)
+	{
+		CardView->ClearInteractionCueView();
 		return;
 	}
 

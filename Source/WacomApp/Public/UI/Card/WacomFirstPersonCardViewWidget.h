@@ -42,6 +42,8 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	FVector2D RetainerDesiredSize = FVector2D::ZeroVector;
 	FVector2D RetainerCaptureRootDesiredSize = FVector2D::ZeroVector;
 	FVector2D CardContentDesiredSize = FVector2D::ZeroVector;
+	FVector2D CardBodyUVRectMin = FVector2D::ZeroVector;
+	FVector2D CardBodyUVRectMax = FVector2D::ZeroVector;
 	bool bRetainedRenderingEnabled = true;
 	bool bRealtimePresentationEnabled = true;
 	int32 PresentationRenderRequestCount = 0;
@@ -235,6 +237,11 @@ private:
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardPlayedDissolveView& View) const;
 	FSlateRect ResolveInteractionCueRect(const FGeometry& AllottedGeometry) const;
+	static bool ResolveCenteredCardBodyUVRect(
+		const FVector2D& SurfaceSize,
+		const FVector2D& CardBodySize,
+		FLinearColor& OutMin,
+		FLinearColor& OutMax);
 	bool ResolveCardBodyUVRect(
 		FLinearColor& OutMin,
 		FLinearColor& OutMax) const;

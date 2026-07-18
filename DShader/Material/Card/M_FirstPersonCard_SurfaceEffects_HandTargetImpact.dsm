@@ -68,14 +68,18 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpa
         float2 surfaceInvSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=SurfaceInvSize, R=true, G=true, B=false, A=false);
         float2 cardBodyRectMin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=HandTargetImpactCardBodyRectMin, R=true, G=true, B=false, A=false);
         float2 cardBodyRectMax = UE.Expression(Class="ComponentMask", OutputType="float2", Input=HandTargetImpactCardBodyRectMax, R=true, G=true, B=false, A=false);
+		float2 cardLocalUV;
+		float2 cardInvSize;
+		float cardBodyMask;
+		WacomFirstPersonCard_ResolveCardBodySpace(projectedUV, surfaceInvSize, cardBodyRectMin, cardBodyRectMax, cardLocalUV, cardInvSize, cardBodyMask);
 
         float primaryMask;
         float secondaryMask;
         float fragmentMask;
-        WacomFirstPersonCard_ComputeHandTargetImpact(projectedUV, surfaceInvSize, cardBodyRectMin, cardBodyRectMax, HandTargetImpactPreviewAmount, HandTargetImpactCommitProgress, HandTargetImpactReducedMotion, HandTargetImpactSeed, TargetImpactGridColumns, TargetImpactLineWidth, TargetImpactFragmentDensity, TargetImpactExitPaddingPixels, TargetImpactTravelEndProgress, TargetImpactFadeStartProgress, TargetImpactFadeEndProgress, primaryMask, secondaryMask, fragmentMask);
+        WacomFirstPersonCard_ComputeHandTargetImpact(cardLocalUV, surfaceInvSize, cardInvSize, HandTargetImpactPreviewAmount, HandTargetImpactCommitProgress, HandTargetImpactReducedMotion, HandTargetImpactSeed, TargetImpactGridColumns, TargetImpactLineWidth, TargetImpactFragmentDensity, TargetImpactExitPaddingPixels, TargetImpactTravelEndProgress, TargetImpactFadeStartProgress, TargetImpactFadeEndProgress, primaryMask, secondaryMask, fragmentMask);
         float effectEnabled = saturate(HandTargetImpactEnabled);
         float previewWeight = lerp(max(TargetImpactPreviewStrength, 0.0), 1.0, saturate(HandTargetImpactCommitProgress));
-        float stampMask = saturate(primaryMask * previewWeight + secondaryMask + fragmentMask) * surfaceAlpha * insideMask * effectEnabled;
+        float stampMask = saturate(primaryMask * previewWeight + secondaryMask + fragmentMask) * surfaceAlpha * insideMask * cardBodyMask * effectEnabled;
         float3 primaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=TargetImpactPrimaryColor, R=true, G=true, B=true, A=false);
         float3 secondaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=TargetImpactSecondaryColor, R=true, G=true, B=true, A=false);
         float3 accentColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=TargetImpactAccentColor, R=true, G=true, B=true, A=false);

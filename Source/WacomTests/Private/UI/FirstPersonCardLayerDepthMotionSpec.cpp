@@ -237,6 +237,14 @@ bool FWacomFirstPersonCardAuthoredRetainerBaseMaterialLifecycleTest::RunTest(
 	TestTrue(
 		TEXT("Authored card content remains at 360 by 424 inside the larger capture"),
 		View.CardContentDesiredSize.Equals(FVector2D(360.0f, 424.0f), 0.5f));
+	TestTrue(
+		TEXT("Authored card body resolves from centered local layout instead of absolute geometry"),
+		View.CardBodyUVRectMin.Equals(
+			FVector2D(48.0f / 456.0f, 48.0f / 520.0f),
+			KINDA_SMALL_NUMBER)
+			&& View.CardBodyUVRectMax.Equals(
+				FVector2D(408.0f / 456.0f, 472.0f / 520.0f),
+				KINDA_SMALL_NUMBER));
 	return true;
 }
 

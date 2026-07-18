@@ -176,6 +176,48 @@ bool FWacomFirstPersonCardHandTargetImpactFallbackAndReducedMotionTest::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardHandTargetImpactCardBodyGeometryTest,
+	"Wacom.UI.FirstPersonCardLayer.HandTargetImpact.CardBodyGeometryUsesCenteredLocalLayout",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardHandTargetImpactCardBodyGeometryTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	FLinearColor RectMin;
+	FLinearColor RectMax;
+	TestTrue(
+		TEXT("Valid local layout resolves a card-body rectangle"),
+		FWacomFirstPersonCardLayerTestAccess::ResolveCenteredCardBodyUVRect(
+			FVector2D(456.0f, 520.0f),
+			FVector2D(360.0f, 424.0f),
+			RectMin,
+			RectMax));
+	TestTrue(
+		TEXT("Centered card-body minimum uses the authored 48px bleed"),
+		FVector2D(RectMin.R, RectMin.G).Equals(
+			FVector2D(48.0f / 456.0f, 48.0f / 520.0f),
+			KINDA_SMALL_NUMBER));
+	TestTrue(
+		TEXT("Centered card-body maximum uses the authored 48px bleed"),
+		FVector2D(RectMax.R, RectMax.G).Equals(
+			FVector2D(408.0f / 456.0f, 472.0f / 520.0f),
+			KINDA_SMALL_NUMBER));
+
+	TestFalse(
+		TEXT("Invalid local sizes cannot produce a misleading UV rectangle"),
+		FWacomFirstPersonCardLayerTestAccess::ResolveCenteredCardBodyUVRect(
+			FVector2D::ZeroVector,
+			FVector2D(360.0f, 424.0f),
+			RectMin,
+			RectMax));
+	TestTrue(
+		TEXT("Invalid local sizes clear the diagnostic rectangle"),
+		FVector2D(RectMin.R, RectMin.G).IsNearlyZero()
+			&& FVector2D(RectMax.R, RectMax.G).IsNearlyZero());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomFirstPersonCardHandTargetImpactDreamShaderContractTest,
 	"Wacom.UI.FirstPersonCardLayer.HandTargetImpact.DreamShaderContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -214,11 +256,30 @@ bool FWacomFirstPersonCardHandTargetImpactDreamShaderContractTest::RunTest(
 			&& MaterialSource.Contains(TEXT("TargetImpactFadeStartProgress"))
 			&& MaterialSource.Contains(TEXT("TargetImpactFadeEndProgress")));
 	TestFalse(TEXT("The impact effect has no new texture dependency"), MaterialSource.Contains(TEXT("NoiseTexture")));
-	TestTrue(TEXT("Helper quantizes stable card-local pixels"), HelperSource.Contains(TEXT("quantizedUV")));
 	TestTrue(
-		TEXT("Commit normalizes the ring against the real card-body rectangle"),
-		HelperSource.Contains(TEXT("bodySquareDistance"))
+		TEXT("Projected surface UV is explicitly remapped into card-local UV"),
+		HelperSource.Contains(TEXT("WacomFirstPersonCard_ResolveCardBodySpace"))
+			&& HelperSource.Contains(TEXT("cardLocalUV = (surfaceUV - safeBodyMin) / safeBodySize")));
+	TestTrue(
+		TEXT("Preview and Commit quantize the same card-local pixel space"),
+		HelperSource.Contains(TEXT("quantizedCardUV"))
+			&& HelperSource.Contains(TEXT("float2 centered = quantizedCardUV - float2(0.5, 0.5)"))
+			&& HelperSource.Contains(TEXT("float2 bodyCentered = centered * 2.0")));
+	TestTrue(
+		TEXT("Card-local grid density derives from real card-body pixels"),
+		HelperSource.Contains(TEXT("safeCardInvSize"))
+			&& HelperSource.Contains(TEXT("cardLocalUV / safeCardInvSize")));
+	TestTrue(
+		TEXT("Commit normalizes exit padding against real card-body pixels"),
+		HelperSource.Contains(TEXT("halfBodyMinPixels"))
 			&& HelperSource.Contains(TEXT("exitPaddingNormalized")));
+	TestTrue(
+		TEXT("Material clips the stamp to the card body and live card alpha"),
+		MaterialSource.Contains(TEXT("surfaceAlpha * insideMask * cardBodyMask * effectEnabled")));
+	TestFalse(
+		TEXT("Preview no longer centers itself in raw Retainer UV"),
+		HelperSource.Contains(TEXT("float2 quantizedUV"))
+			|| HelperSource.Contains(TEXT("float2 centered = quantizedUV - float2(0.5, 0.5)")));
 	TestTrue(
 		TEXT("Commit keeps travelling until it crosses the card-body edge"),
 		HelperSource.Contains(TEXT("safeCommit / safeTravelEnd"))

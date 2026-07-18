@@ -6,6 +6,7 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/RetainerBox.h"
+#include "Components/SizeBox.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -14,6 +15,21 @@
 
 namespace
 {
+	constexpr float DefaultSurfaceWidth = 456.0f;
+	constexpr float DefaultSurfaceHeight = 520.0f;
+	constexpr float DefaultCardBodyWidth = 360.0f;
+	constexpr float DefaultCardBodyHeight = 424.0f;
+
+	bool IsUsableLayoutDimension(const float Value)
+	{
+		return FMath::IsFinite(Value) && Value > 1.0f;
+	}
+
+	bool IsUsableLayoutSize(const FVector2D& Size)
+	{
+		return IsUsableLayoutDimension(Size.X) && IsUsableLayoutDimension(Size.Y);
+	}
+
 	const FName Fake3DTiltXParameterName(TEXT("TiltX"));
 	const FName Fake3DTiltYParameterName(TEXT("TiltY"));
 	const FName Fake3DPerspectiveStrengthParameterName(TEXT("PerspectiveStrength"));
@@ -675,6 +691,11 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.CardContentDesiredSize = CardContentWidget
 		? CardContentWidget->GetDesiredSize()
 		: FVector2D::ZeroVector;
+	FLinearColor BodyRectMin;
+	FLinearColor BodyRectMax;
+	ResolveCardBodyUVRect(BodyRectMin, BodyRectMax);
+	View.CardBodyUVRectMin = FVector2D(BodyRectMin.R, BodyRectMin.G);
+	View.CardBodyUVRectMax = FVector2D(BodyRectMax.R, BodyRectMax.G);
 	return View;
 }
 #endif
@@ -1138,6 +1159,31 @@ void UWacomFirstPersonCardViewWidget::ApplyRetainSealParameters(
 		FLinearColor(1.0f / SurfaceSize.X, 1.0f / SurfaceSize.Y, 0.0f, 0.0f));
 }
 
+bool UWacomFirstPersonCardViewWidget::ResolveCenteredCardBodyUVRect(
+	const FVector2D& SurfaceSize,
+	const FVector2D& CardBodySize,
+	FLinearColor& OutMin,
+	FLinearColor& OutMax)
+{
+	if (!IsUsableLayoutSize(SurfaceSize) || !IsUsableLayoutSize(CardBodySize))
+	{
+		OutMin = FLinearColor::Transparent;
+		OutMax = FLinearColor::Transparent;
+		return false;
+	}
+
+	const FVector2D SafeBodySize(
+		FMath::Min(CardBodySize.X, SurfaceSize.X),
+		FMath::Min(CardBodySize.Y, SurfaceSize.Y));
+	const FVector2D LocalMin = (SurfaceSize - SafeBodySize) * 0.5f;
+	const FVector2D LocalMax = LocalMin + SafeBodySize;
+	const FVector2D UVMin(LocalMin.X / SurfaceSize.X, LocalMin.Y / SurfaceSize.Y);
+	const FVector2D UVMax(LocalMax.X / SurfaceSize.X, LocalMax.Y / SurfaceSize.Y);
+	OutMin = FLinearColor(UVMin.X, UVMin.Y, 0.0f, 0.0f);
+	OutMax = FLinearColor(UVMax.X, UVMax.Y, 0.0f, 0.0f);
+	return UVMax.X > UVMin.X && UVMax.Y > UVMin.Y;
+}
+
 bool UWacomFirstPersonCardViewWidget::ResolveCardBodyUVRect(
 	FLinearColor& OutMin,
 	FLinearColor& OutMax) const
@@ -1145,37 +1191,37 @@ bool UWacomFirstPersonCardViewWidget::ResolveCardBodyUVRect(
 	FVector2D SurfaceSize = Fake3DSurfaceRetainer
 		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
 		: FVector2D::ZeroVector;
-	if (!FMath::IsFinite(SurfaceSize.X) || !FMath::IsFinite(SurfaceSize.Y)
-		|| SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
+	if (!IsUsableLayoutSize(SurfaceSize))
 	{
-		SurfaceSize = FVector2D(456.0f, 520.0f);
+		SurfaceSize = FVector2D(DefaultSurfaceWidth, DefaultSurfaceHeight);
 	}
 
-	FVector2D LocalMin(48.0f, 48.0f);
-	FVector2D LocalMax = LocalMin + FVector2D(360.0f, 424.0f);
-	const UWidget* CardContent = WidgetTree
-		? WidgetTree->FindWidget(TEXT("CardContentSizeBox"))
-		: nullptr;
-	if (Fake3DSurfaceRetainer && CardContent)
+	FVector2D BodySize = CardContentSizeBox
+		? CardContentSizeBox->GetCachedGeometry().GetLocalSize()
+		: FVector2D::ZeroVector;
+	if (!IsUsableLayoutSize(BodySize))
 	{
-		const FGeometry SurfaceGeometry = Fake3DSurfaceRetainer->GetCachedGeometry();
-		const FGeometry ContentGeometry = CardContent->GetCachedGeometry();
-		const FVector2D ContentSize = ContentGeometry.GetLocalSize();
-		if (ContentSize.X > 1.0f && ContentSize.Y > 1.0f)
+		BodySize = FVector2D::ZeroVector;
+		if (const USizeBox* CardBodySizeBox = Cast<USizeBox>(CardContentSizeBox))
 		{
-			LocalMin = SurfaceGeometry.AbsoluteToLocal(ContentGeometry.LocalToAbsolute(FVector2D::ZeroVector));
-			LocalMax = SurfaceGeometry.AbsoluteToLocal(ContentGeometry.LocalToAbsolute(ContentSize));
+			if (CardBodySizeBox->IsWidthOverride()
+				&& IsUsableLayoutDimension(CardBodySizeBox->GetWidthOverride()))
+			{
+				BodySize.X = CardBodySizeBox->GetWidthOverride();
+			}
+			if (CardBodySizeBox->IsHeightOverride()
+				&& IsUsableLayoutDimension(CardBodySizeBox->GetHeightOverride()))
+			{
+				BodySize.Y = CardBodySizeBox->GetHeightOverride();
+			}
 		}
 	}
-	const FVector2D UVMin(
-		FMath::Clamp(LocalMin.X / SurfaceSize.X, 0.0f, 1.0f),
-		FMath::Clamp(LocalMin.Y / SurfaceSize.Y, 0.0f, 1.0f));
-	const FVector2D UVMax(
-		FMath::Clamp(LocalMax.X / SurfaceSize.X, UVMin.X + KINDA_SMALL_NUMBER, 1.0f),
-		FMath::Clamp(LocalMax.Y / SurfaceSize.Y, UVMin.Y + KINDA_SMALL_NUMBER, 1.0f));
-	OutMin = FLinearColor(UVMin.X, UVMin.Y, 0.0f, 0.0f);
-	OutMax = FLinearColor(UVMax.X, UVMax.Y, 0.0f, 0.0f);
-	return UVMax.X > UVMin.X && UVMax.Y > UVMin.Y;
+	if (!IsUsableLayoutSize(BodySize))
+	{
+		BodySize = FVector2D(DefaultCardBodyWidth, DefaultCardBodyHeight);
+	}
+
+	return ResolveCenteredCardBodyUVRect(SurfaceSize, BodySize, OutMin, OutMax);
 }
 
 void UWacomFirstPersonCardViewWidget::ApplyPlayedDissolveParameters(

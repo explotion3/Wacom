@@ -51,6 +51,19 @@ const UMaterialInterface* FWacomFirstPersonCardLayerTestAccess::CardViewRetainer
 		: nullptr;
 }
 
+bool FWacomFirstPersonCardLayerTestAccess::ResolveCenteredCardBodyUVRect(
+	const FVector2D& SurfaceSize,
+	const FVector2D& CardBodySize,
+	FLinearColor& OutMin,
+	FLinearColor& OutMax)
+{
+	return UWacomFirstPersonCardViewWidget::ResolveCenteredCardBodyUVRect(
+		SurfaceSize,
+		CardBodySize,
+		OutMin,
+		OutMax);
+}
+
 FWacomRunFirstPersonCardSourceRefreshCountersForTest FWacomFirstPersonCardLayerTestAccess::DefaultSourceCounters(
 	const UWacomRunFirstPersonCardSourceComponent& Source)
 {
