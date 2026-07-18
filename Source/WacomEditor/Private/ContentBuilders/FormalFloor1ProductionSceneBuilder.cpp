@@ -671,20 +671,58 @@ namespace
 		}
 		const AActor* Marker = Cast<AActor>(
 			Blueprint.GeneratedClass->GetDefaultObject());
-		const UWacomRunMapNodeBindingComponent* Binding = Marker
-			? Marker->FindComponentByClass<UWacomRunMapNodeBindingComponent>()
-			: nullptr;
-		const UStaticMeshComponent* MarkerMesh = Marker
-			? Marker->FindComponentByClass<UStaticMeshComponent>() : nullptr;
+		const UWacomRunMapNodeBindingComponent* Binding = nullptr;
+		const UStaticMeshComponent* MarkerMesh = nullptr;
+		bool bHasInteractionTarget = Marker
+			&& Marker->FindComponentByClass<UWacomInteractionTargetComponent>();
+		if (const USimpleConstructionScript* SCS = Blueprint.SimpleConstructionScript)
+		{
+			for (const USCS_Node* Node : SCS->GetAllNodes())
+			{
+				const UActorComponent* Template = Node
+					? Cast<UActorComponent>(Node->ComponentTemplate) : nullptr;
+				if (!Binding)
+				{
+					Binding = Cast<UWacomRunMapNodeBindingComponent>(Template);
+				}
+				if (!MarkerMesh)
+				{
+					MarkerMesh = Cast<UStaticMeshComponent>(Template);
+				}
+				bHasInteractionTarget = bHasInteractionTarget
+					|| Cast<UWacomInteractionTargetComponent>(Template) != nullptr;
+			}
+		}
 		const FNameProperty* PersistentIdProperty = FindFProperty<FNameProperty>(
 			Blueprint.GeneratedClass, TEXT("PersistentId"));
-		if (!Marker || !Binding || !MarkerMesh || !MarkerMesh->GetStaticMesh()
-			|| MarkerMesh->GetCollisionEnabled() != ECollisionEnabled::NoCollision
-			|| !PersistentIdProperty)
+		if (!Marker)
 		{
-			OutErrors.Add(TEXT("FloorEntrance marker requires non-colliding mesh, binding, and PersistentId"));
+			OutErrors.Add(TEXT("FloorEntrance marker generated CDO is unavailable"));
 		}
-		if (Marker && Marker->FindComponentByClass<UWacomInteractionTargetComponent>())
+		if (!Binding)
+		{
+			OutErrors.Add(TEXT("FloorEntrance marker RunMapNodeBinding is unavailable"));
+		}
+		if (!MarkerMesh)
+		{
+			OutErrors.Add(TEXT("FloorEntrance marker graybox mesh component is unavailable"));
+		}
+		else
+		{
+			if (!MarkerMesh->GetStaticMesh())
+			{
+				OutErrors.Add(TEXT("FloorEntrance marker graybox mesh asset is unavailable"));
+			}
+			if (MarkerMesh->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				OutErrors.Add(TEXT("FloorEntrance marker graybox mesh collision must be disabled"));
+			}
+		}
+		if (!PersistentIdProperty)
+		{
+			OutErrors.Add(TEXT("FloorEntrance marker PersistentId property is unavailable"));
+		}
+		if (bHasInteractionTarget)
 		{
 			OutErrors.Add(TEXT("FloorEntrance marker must remain non-interactive"));
 		}
