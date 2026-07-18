@@ -1159,6 +1159,8 @@ function Acquire-WacomUnrealMcpWriter
         [Parameter(Mandatory = $true)][string]$ExpectedBranch,
         [Parameter(Mandatory = $true)][string]$ThreadId,
         [Parameter(Mandatory = $true)][string[]]$Packages,
+        [AllowNull()][string]$ExistingDirtyReason,
+        [switch]$AllowExistingDirtyPackages,
         [switch]$AllowProtectedRoleWrite
     )
 
@@ -1205,9 +1207,15 @@ function Acquire-WacomUnrealMcpWriter
 
     $DirtyPaths = @($Identity.Git.DirtyPaths)
     $DirtyAllowedPaths = @($DirtyPaths | Where-Object { $AllowedPathsValue -contains $_ })
-    if ($DirtyAllowedPaths.Count -gt 0)
+    if ($DirtyAllowedPaths.Count -gt 0 -and -not $AllowExistingDirtyPackages)
     {
         throw "Allowed package files are already dirty and cannot be attributed to this MCP writer: $($DirtyAllowedPaths -join ', ')"
+    }
+    if (
+        $DirtyAllowedPaths.Count -gt 0 -and
+        [string]::IsNullOrWhiteSpace($ExistingDirtyReason))
+    {
+        throw "-Reason is required when -AllowExistingDirtyPackages takes ownership of existing dirty package files."
     }
 
     $WriterPath = Get-StateFilePath -StateRoot $StateRoot -Kind Writer -Role $RoleConfig.name
@@ -1240,6 +1248,12 @@ function Acquire-WacomUnrealMcpWriter
         baselineAllowedHashes = Get-FileHashes `
             -ProjectRoot ([string]$Identity.Session.projectRoot) `
             -RelativePaths $AllowedPathsValue
+        allowedExistingDirtyPaths = $DirtyAllowedPaths
+        existingDirtyReason = if ($DirtyAllowedPaths.Count -gt 0) {
+            $ExistingDirtyReason
+        } else {
+            $null
+        }
         acquiredAtUtc = [DateTime]::UtcNow.ToString("o")
     }
     Write-NewJsonFile -Path $WriterPath -Value $Lease
@@ -1332,6 +1346,24 @@ function Release-WacomUnrealMcpWriter
         gitLfsFsck = $LfsFsck
         lfsFilters = $Lease.lfsFilters
         baselineAllowedHashes = $Lease.baselineAllowedHashes
+        allowedExistingDirtyPaths = if (
+            $null -ne $Lease.PSObject.Properties["allowedExistingDirtyPaths"])
+        {
+            @($Lease.allowedExistingDirtyPaths)
+        }
+        else
+        {
+            @()
+        }
+        existingDirtyReason = if (
+            $null -ne $Lease.PSObject.Properties["existingDirtyReason"])
+        {
+            [string]$Lease.existingDirtyReason
+        }
+        else
+        {
+            $null
+        }
         finalAllowedHashes = Get-FileHashes `
             -ProjectRoot $ProjectRoot `
             -RelativePaths $AllowedPaths
@@ -1478,6 +1510,7 @@ function Invoke-WacomUnrealMcp
         [AllowNull()][string]$LocalStateRoot,
         [int]$TimeoutSeconds = 120,
         [switch]$AllowDirty,
+        [switch]$AllowExistingDirtyPackages,
         [switch]$AllowProtectedRoleWrite,
         [switch]$ConfirmStaleWriterArchive,
         [Parameter(Mandatory = $true)][string]$EndpointConfigPath
@@ -1567,6 +1600,8 @@ function Invoke-WacomUnrealMcp
                 -ExpectedBranch $ExpectedBranch `
                 -ThreadId $ThreadId `
                 -Packages $Packages `
+                -ExistingDirtyReason $Reason `
+                -AllowExistingDirtyPackages:$AllowExistingDirtyPackages `
                 -AllowProtectedRoleWrite:$AllowProtectedRoleWrite
         }
         "ReleaseWriter"

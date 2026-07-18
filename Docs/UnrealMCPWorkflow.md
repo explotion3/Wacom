@@ -151,6 +151,8 @@ $TaskId = '<current-codex-task-id>'
 - 不在 Editor 打开期间切 branch、更新 HEAD 或执行 C++ 编译。
 - 保存后立即检查 `git status --short`，再释放写锁。
 
+默认情况下，Writer 不接管取得租约前已经 dirty 的 allowlist Package。只有这些二进制的来源、当前哈希和本轮所有者都已明确，且任务确实需要继续修改同一路径时，才可显式使用 `-AllowExistingDirtyPackages -Reason '<原因>'`。该模式仍会把接管路径及其租约前 SHA-256 写入 lease/audit，并继续拒绝白名单外变化；它不是忽略 dirty 状态或允许批量覆盖的开关。
+
 ```powershell
 & $Mcp -Action ReleaseWriter `
     -Role card `

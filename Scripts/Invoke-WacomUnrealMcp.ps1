@@ -22,6 +22,7 @@ param(
     [string]$LocalStateRoot,
     [int]$TimeoutSeconds = 120,
     [switch]$AllowDirty,
+    [switch]$AllowExistingDirtyPackages,
     [switch]$AllowProtectedRoleWrite,
     [switch]$ConfirmStaleWriterArchive,
     [string]$EndpointConfigPath = (Join-Path $PSScriptRoot "UnrealMcp\Endpoints.json")
@@ -45,6 +46,7 @@ Invoke-WacomUnrealMcp `
     -LocalStateRoot $LocalStateRoot `
     -TimeoutSeconds $TimeoutSeconds `
     -AllowDirty:$AllowDirty `
+    -AllowExistingDirtyPackages:$AllowExistingDirtyPackages `
     -AllowProtectedRoleWrite:$AllowProtectedRoleWrite `
     -ConfirmStaleWriterArchive:$ConfirmStaleWriterArchive `
     -EndpointConfigPath $EndpointConfigPath
