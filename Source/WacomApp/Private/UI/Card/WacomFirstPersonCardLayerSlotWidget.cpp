@@ -1376,7 +1376,13 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 	View.bPressed = InteractionView.bPressed;
 	View.PressedFeedbackAmount = InteractionView.PressedAmount;
 	View.bDenyFeedbackActive = InteractionView.bDenyActive;
+	View.bInvalidTargetPreviewActive = InteractionView.bInvalidTargetPreviewActive;
+	View.InvalidTargetPreviewAmount = InteractionView.InvalidTargetPreviewAmount;
+	View.DenyProgress = InteractionView.DenyProgress;
+	View.DenyDirection = InteractionView.DenyDirection;
 	View.bCommitFeedbackActive = InteractionView.bCommitActive;
+	View.DenySoundRequestCount = DenySoundRequestCountForTest;
+	View.LastDenySoundPitchMultiplier = LastDenySoundPitchMultiplierForTest;
 	View.bRetainedFeedbackActive = IsRetainedFeedbackActive();
 	if (PresentationController->RetainSealPlayback && PresentationController->RetainSealPlayback->IsActive())
 	{

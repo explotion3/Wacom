@@ -707,8 +707,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "Pressed 时对 Hover 接触阴影抬升量使用的倍率；默认 0.35，推荐 0.15 到 0.55，数值越小越像压回卡面。"))
 	float PressedFeedbackContactShadowLiftMultiplier = 0.35f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "弱化轻量交互运动：关闭 Pressed 位移/缩放和 Deny 抖动，但保留失败释放的静态四角语义刻线；全局 Simplified Motion 也会强制启用。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "弱化轻量交互运动：关闭 Pressed 位移/缩放、无效括角收紧和 Deny 压缩/回弹，但保留静态无效括角与失败释放的短促裂痕/四角刻线；全局 Simplified Motion 也会强制启用。"))
 	bool bReduceCardInteractionMotion = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Invalid Target", meta = (ToolTip = "拖牌悬浮于已经解析但规则判定无效的真实目标时，是否在源卡显示低强度硬像素括角；空白区域、Probe、取消和 Inspect 不触发。"))
+	bool bEnableInvalidTargetPreview = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Invalid Target", meta = (Units = "s", ToolTip = "无效目标源卡括角淡入时长，单位秒；默认 0.08，推荐 0.05 到 0.12，不阻塞拖拽输入。"))
+	float InvalidTargetPreviewEnterDuration = 0.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Invalid Target", meta = (Units = "s", ToolTip = "离开无效目标后括角淡出时长，单位秒；默认 0.06，推荐 0.04 到 0.10。"))
+	float InvalidTargetPreviewExitDuration = 0.06f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Invalid Target", meta = (ToolTip = "无效目标源卡括角主色；默认暗紫红，只用于 Slate 硬像素绘制。"))
+	FLinearColor InvalidTargetPreviewColor = FLinearColor(0.62f, 0.12f, 0.32f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Invalid Target", meta = (ToolTip = "无效目标源卡括角辅色；默认低饱和蓝，用于和正式拒绝的裂痕色板保持一致。"))
+	FLinearColor InvalidTargetPreviewAccentColor = FLinearColor(0.18f, 0.32f, 0.48f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Invalid Target", meta = (ToolTip = "无效目标源卡括角峰值不透明度；默认 0.20，推荐 0.12 到 0.30，不改变卡牌主体透明度。"))
+	float InvalidTargetPreviewOpacity = 0.20f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Invalid Target", meta = (ToolTip = "无效目标括角进入时向卡面内部收紧的距离，单位 UMG 逻辑像素；默认 4，推荐 2 到 7，不影响布局或命中。"))
+	float InvalidTargetPreviewTightenPixels = 4.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "是否在卡牌首次进入正式拖拽时播放一次拾牌反馈；只影响局部缩放、上提和 2D 音效，不改变拖拽、瞄准或提交规则。"))
 	bool bEnableCardDragPickupFeedback = true;
@@ -740,26 +761,50 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Drag Pickup", meta = (ToolTip = "每次拾牌音效相对基础音高的随机浮动比例；0.03 表示约正负 3%，推荐 0 到 0.06。"))
 	float CardDragPickupSoundPitchVariation = 0.03f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "0.6", Units = "s", ToolTip = "正式拖拽在无效目标上释放时的拒绝反馈总时长，单位秒；普通 Hover、Inspect 返回和取消不触发。"))
-	float DenyFeedbackDuration = 0.18f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ClampMin = "0.0", Units = "s", ToolTip = "正式拖拽在已解析无效目标上释放时的拒绝反馈总时长，单位秒；默认 0.20，普通 Hover、空白释放、Inspect 返回和取消不触发。"))
+	float DenyFeedbackDuration = 0.20f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", UIMin = "0.0", UIMax = "32.0", ToolTip = "点击不可打卡牌时的横向抖动幅度，单位为 UMG 布局像素。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ClampMin = "0.0", ToolTip = "正式拖拽释放被拒绝时，卡牌沿释放反方向回弹的峰值距离，单位 UMG 逻辑像素；保留旧字段名以兼容已有资产，默认 8，推荐 5 到 12。"))
 	float DenyFeedbackShakePixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "失败释放时四角硬像素刻线的颜色。"))
-	FLinearColor DenyFeedbackColor = FLinearColor(1.0f, 0.12f, 0.08f, 1.0f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "拒绝反馈建立时的均匀压缩倍率；默认 0.97，推荐 0.95 到 0.985，只作用局部 RenderTransform。"))
+	float DenyFeedbackCompressScale = 0.97f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0", ToolTip = "失败释放四角刻线的峰值不透明度；默认 0.42，推荐 0.30 到 0.65。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "失败释放时四角刻线和裂痕的主色；默认紫红。"))
+	FLinearColor DenyFeedbackColor = FLinearColor(0.88f, 0.18f, 0.36f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "失败释放像素裂痕的辅色；默认低饱和暗蓝。"))
+	FLinearColor DenyFeedbackAccentColor = FLinearColor(0.16f, 0.28f, 0.46f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ClampMin = "0.0", ClampMax = "1.0", ToolTip = "失败释放四角刻线与裂痕的峰值不透明度；默认 0.42，推荐 0.30 到 0.65。"))
 	float DenyFeedbackOpacity = 0.42f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "四角刻线相对 CardContentSizeBox 边缘的内缩，单位 UMG 逻辑像素；默认 8，推荐 4 到 14，不影响布局。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "四角刻线相对 CardContentSizeBox 边缘的内缩，单位 UMG 逻辑像素；默认 8，推荐 4 到 14，不影响布局。"))
 	float DenyFeedbackCornerInsetPixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "四角 L 形刻线每条边的长度，单位 UMG 逻辑像素；默认 14，推荐 10 到 24。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "四角 L 形刻线每条边的长度，单位 UMG 逻辑像素；默认 14，推荐 10 到 24。"))
 	float DenyFeedbackCornerLengthPixels = 14.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "四角硬像素刻线厚度，单位 UMG 逻辑像素；默认 3，推荐 2 到 5。"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "四角硬像素刻线厚度，单位 UMG 逻辑像素；默认 3，推荐 2 到 5。"))
 	float DenyFeedbackCornerThicknessPixels = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "从释放方向对应卡边向内生成的阶梯像素裂痕长度，单位 UMG 逻辑像素；默认 30，推荐 20 到 44。"))
+	float DenyFeedbackCrackLengthPixels = 30.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "方向性像素裂痕的线段厚度，单位 UMG 逻辑像素；默认 3，推荐 2 到 5。"))
+	float DenyFeedbackCrackThicknessPixels = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "正式释放被拒绝时播放的一次性短促纸牌受阻音效；使用硬引用避免交互瞬间同步加载，为空时静默跳过。"))
+	TObjectPtr<USoundBase> DenySound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "拒绝音效音量倍率；默认 1.0，推荐 0.6 到 1.1。"))
+	float DenySoundVolumeMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "拒绝音效基础音高倍率；默认 1.0，推荐 0.9 到 1.1。"))
+	float DenySoundPitchMultiplier = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback|Deny", meta = (ToolTip = "每次拒绝音效相对基础音高的随机浮动比例；0.03 表示约正负 3%，推荐 0 到 0.06。"))
+	float DenySoundPitchVariation = 0.03f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|First Person Hand|10 Interaction Feedback", meta = (ToolTip = "是否在战斗卡牌成功提交后播放第一人称手牌 commit 脉冲；只影响 UMG 表现，不延迟或改变 BattleSession 命令。"))
 	bool bEnablePlayCommitFeedback = true;

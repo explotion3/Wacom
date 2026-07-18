@@ -317,7 +317,7 @@ Hover、inspect 和 drag 是交互表现，不属于规则事件动画。
 | `07 Transition Audio` | `Drawn / RunHandEntered / Gained / HandAnchorEntered` 的入场音效和音量 / 音高倍率 |
 | `07 Hover` | hover lift、scale、ZOrder 和命中稳定性 |
 | `09 Gesture` | inspect、drag 起手、commit 距离和 drag 姿态 |
-| `10 Interaction Feedback` | Pressed 实体按压、权威 Commit、formal-release Deny、Drag Pickup 与 Retained 等源卡反馈 |
+| `10 Interaction Feedback` | Pressed 实体按压、真实无效目标源卡预警、权威 Commit、formal-release 方向性 Deny、Drag Pickup 与 Retained 等源卡反馈 |
 | `11 Drag Target Feedback` | world / card target affordance 和 focus |
 | `12 Camera Look While UI` | hover / pointer / drag 时的镜头 look override |
 
@@ -328,7 +328,7 @@ Hover、inspect 和 drag 是交互表现，不属于规则事件动画。
 UMG / WBP 适合承载：
 
 - 卡面排版和 `UWacomCardView` 视觉。
-- 唯一 Retainer、卡面内容层与 authored brush；Pressed/Commit 由 Slot Motion 合成，Deny 四角刻线由 CardView Slate Paint 绘制。
+- 唯一 Retainer、卡面内容层与 authored brush；Pressed/Commit 由 Slot Motion 合成，无效目标括角与 Deny 四角刻线/方向性裂痕由 CardView Slate Paint 绘制。
 - 静态层级结构、NamedSlot、控件大小和 brush 默认材质。
 - 按钮、Toast、菜单等局部 UI 的短动画。
 

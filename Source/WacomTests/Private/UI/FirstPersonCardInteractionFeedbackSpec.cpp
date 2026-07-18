@@ -5,6 +5,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Sound/SoundWave.h"
 #include "UI/Card/WacomFirstPersonCardLayerSlotWidget.h"
 #include "UI/FirstPersonCardLayerTestAccess.h"
 
@@ -115,5 +116,158 @@ bool FWacomFirstPersonCardInteractionFeedbackReducedMotionTest::RunTest(const FS
 		EWacomFirstPersonCardInteractionCueKind::None);
 
 	PlayerController->Destroy();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardInvalidTargetPreviewTest,
+	"Wacom.UI.FirstPersonCardLayer.InteractionFeedback.InvalidTargetPreviewRequiresResolvedTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardInvalidTargetPreviewTest::RunTest(const FString& Parameters)
+{
+	UWacomFirstPersonCardLayerSlotWidget* Slot =
+		NewObject<UWacomFirstPersonCardLayerSlotWidget>();
+	FWacomFirstPersonCardInteractionFeedbackConfig Config;
+	Config.bEnabled = true;
+	Config.InvalidTargetPreviewEnterDuration = 0.08f;
+	Config.InvalidTargetPreviewExitDuration = 0.06f;
+	FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*Slot, Config);
+	Slot->SetCardLayerInteractionEnabled(true);
+	Slot->SetSlotViewImmediate(WacomFirstPersonCardInteractionFeedbackSpec::MakeSlotView());
+	FWacomFirstPersonCardLayerTestAccess::SetGestureState(
+		*Slot,
+		EWacomFirstPersonCardGestureState::AimingTargetedCard);
+
+	Slot->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle(),
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::Invalid);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.10f);
+	TestFalse(
+		TEXT("Blank invalid area does not show the source warning"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot).bInvalidTargetPreviewActive);
+
+	const FWacomInteractionTargetHandle InvalidTarget =
+		FWacomInteractionTargetHandle::ForWorldTarget(
+			FGuid::NewGuid(),
+			Slot,
+			FVector::ZeroVector,
+			FVector2D(700.0f, 260.0f));
+	Slot->SetCardDragFeedbackTarget(
+		InvalidTarget,
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::Invalid);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.08f);
+	const FWacomFirstPersonCardSlotAutomationTestView InvalidView =
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot);
+	TestTrue(TEXT("Resolved invalid target activates the warning"),
+		InvalidView.bInvalidTargetPreviewActive);
+	TestEqual(TEXT("Invalid target uses the preview cue"),
+		InvalidView.InteractionCueKind,
+		EWacomFirstPersonCardInteractionCueKind::InvalidPreview);
+	TestTrue(TEXT("Preview reaches its authored amount"),
+		InvalidView.InvalidTargetPreviewAmount > 0.99f);
+
+	Slot->SetCardDragFeedbackTarget(
+		InvalidTarget,
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::Invalid);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.01f);
+	TestTrue(TEXT("Equivalent target refresh does not restart the warning"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot).InvalidTargetPreviewAmount > 0.99f);
+
+	Slot->SetCardDragFeedbackTarget(
+		InvalidTarget,
+		true,
+		EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.08f);
+	TestEqual(TEXT("Valid target fades the warning out"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot).InteractionCueKind,
+		EWacomFirstPersonCardInteractionCueKind::None);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardDirectionalDenyTest,
+	"Wacom.UI.FirstPersonCardLayer.InteractionFeedback.DirectionalDenyAndSound",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardDirectionalDenyTest::RunTest(const FString& Parameters)
+{
+	UWacomFirstPersonCardLayerSlotWidget* Slot =
+		NewObject<UWacomFirstPersonCardLayerSlotWidget>();
+	FWacomFirstPersonCardInteractionFeedbackConfig Config;
+	Config.bEnabled = true;
+	Config.DenyDuration = 0.20f;
+	Config.DenyShakePixels = 10.0f;
+	Config.DenyCompressScale = 0.97f;
+	Config.DenySound = NewObject<USoundWave>(Slot);
+	Config.DenySoundPitchMultiplier = 1.0f;
+	Config.DenySoundPitchVariation = 0.03f;
+	FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*Slot, Config);
+	Slot->SetCardLayerInteractionEnabled(true);
+	Slot->SetSlotViewImmediate(WacomFirstPersonCardInteractionFeedbackSpec::MakeSlotView());
+
+	FWacomFirstPersonCardLayerTestAccess::TriggerDenyFeedback(*Slot);
+	FWacomFirstPersonCardSlotAutomationTestView View =
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot);
+	TestTrue(TEXT("Deny begins immediately"), View.bDenyFeedbackActive);
+	TestEqual(TEXT("Deny sound is requested once"), View.DenySoundRequestCount, 1);
+	TestTrue(TEXT("Deny pitch remains inside the authored variation"),
+		View.LastDenySoundPitchMultiplier >= 0.97f
+		&& View.LastDenySoundPitchMultiplier <= 1.03f);
+
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.025f);
+	View = FWacomFirstPersonCardLayerTestAccess::View(*Slot);
+	TestTrue(TEXT("Deny compresses before recoil"), View.RenderTransform.Scale.X < 1.0f);
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.065f);
+	View = FWacomFirstPersonCardLayerTestAccess::View(*Slot);
+	TestTrue(TEXT("Deny recoils opposite the default release direction"),
+		View.RenderTransform.Translation.Y > 0.0f);
+	TestEqual(TEXT("Ticking the same Deny never repeats its sound"),
+		View.DenySoundRequestCount,
+		1);
+
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.20f);
+	View = FWacomFirstPersonCardLayerTestAccess::View(*Slot);
+	TestFalse(TEXT("Deny completes"), View.bDenyFeedbackActive);
+	TestTrue(TEXT("Deny restores scale"),
+		FMath::IsNearlyEqual(View.RenderTransform.Scale.X, 1.0f, 0.001f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardInteractionConfigRefreshTest,
+	"Wacom.UI.FirstPersonCardLayer.InteractionFeedback.ConfigRefreshDoesNotReactivateCompletedFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardInteractionConfigRefreshTest::RunTest(const FString& Parameters)
+{
+	UWacomFirstPersonCardLayerSlotWidget* Slot =
+		NewObject<UWacomFirstPersonCardLayerSlotWidget>();
+	FWacomFirstPersonCardInteractionFeedbackConfig Config;
+	Config.bEnabled = true;
+	Config.DenyDuration = 0.20f;
+	Config.PlayCommitDuration = 0.12f;
+	FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*Slot, Config);
+	Slot->SetCardLayerInteractionEnabled(true);
+	Slot->SetSlotViewImmediate(WacomFirstPersonCardInteractionFeedbackSpec::MakeSlotView());
+
+	FWacomFirstPersonCardLayerTestAccess::TriggerDenyFeedback(*Slot);
+	Slot->TriggerCommitFeedback();
+	FWacomFirstPersonCardLayerTestAccess::TickSlotMotion(*Slot, 0.25f);
+	TestFalse(TEXT("Deny has completed before the config refresh"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot).bDenyFeedbackActive);
+	TestFalse(TEXT("Commit has completed before the config refresh"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot).bCommitFeedbackActive);
+
+	Config.DenyDuration = 0.40f;
+	Config.PlayCommitDuration = 0.30f;
+	FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*Slot, Config);
+	TestFalse(TEXT("Increasing Deny duration does not reactivate completed feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot).bDenyFeedbackActive);
+	TestFalse(TEXT("Increasing Commit duration does not reactivate completed feedback"),
+		FWacomFirstPersonCardLayerTestAccess::View(*Slot).bCommitFeedbackActive);
 	return true;
 }

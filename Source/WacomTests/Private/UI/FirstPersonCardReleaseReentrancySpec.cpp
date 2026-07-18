@@ -70,4 +70,74 @@ bool FWacomFirstPersonCardReleaseReentrancyTest::RunTest(const FString& /*Parame
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomFirstPersonCardReleaseRequiresResolvedInvalidTargetTest,
+	"Wacom.UI.FirstPersonCardLayer.Interaction.ReleaseDenyRequiresResolvedInvalidTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomFirstPersonCardReleaseRequiresResolvedInvalidTargetTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	auto MakeSlot = []()
+	{
+		UWacomFirstPersonCardLayerSlotWidget* Slot =
+			NewObject<UWacomFirstPersonCardLayerSlotWidget>();
+		FWacomFirstPersonCardInteractionFeedbackConfig FeedbackConfig;
+		FeedbackConfig.bEnabled = true;
+		FeedbackConfig.DenyDuration = 0.20f;
+		FWacomFirstPersonCardLayerTestAccess::SetInteractionFeedbackConfig(*Slot, FeedbackConfig);
+		Slot->SetCardLayerInteractionEnabled(true);
+		FWacomFirstPersonCardLayerSlotView SlotView;
+		SlotView.Entry.CardInstanceId = FGuid::NewGuid();
+		SlotView.Entry.bIsPlayable = true;
+		SlotView.Entry.InteractionIntent =
+			EWacomFirstPersonCardInteractionIntent::AimWorldTarget;
+		SlotView.ScreenPosition = FVector2D(400.0f, 500.0f);
+		SlotView.WidgetPosition = SlotView.ScreenPosition;
+		SlotView.SnappedWidgetPosition = SlotView.ScreenPosition;
+		SlotView.bProjected = true;
+		Slot->SetSlotViewImmediate(SlotView);
+		Slot->SetCardLayerInteractionEnabled(true);
+		FWacomFirstPersonCardLayerTestAccess::SetGestureState(
+			*Slot,
+			EWacomFirstPersonCardGestureState::AimingTargetedCard);
+		return Slot;
+	};
+
+	UWacomFirstPersonCardLayerSlotWidget* BlankSlot = MakeSlot();
+	BlankSlot->SetCardDragFeedbackTarget(
+		FWacomInteractionTargetHandle(),
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::Invalid);
+	TestTrue(TEXT("Blank release is handled"),
+		FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(
+			*BlankSlot,
+			FVector2D(700.0f, 260.0f)));
+	TestFalse(TEXT("Blank release is neutral"),
+		FWacomFirstPersonCardLayerTestAccess::View(*BlankSlot).bDenyFeedbackActive);
+
+	UWacomFirstPersonCardLayerSlotWidget* InvalidSlot = MakeSlot();
+	const FWacomInteractionTargetHandle InvalidTarget =
+		FWacomInteractionTargetHandle::ForWorldTarget(
+			FGuid::NewGuid(),
+			InvalidSlot,
+			FVector::ZeroVector,
+			FVector2D(700.0f, 260.0f));
+	InvalidSlot->SetCardDragFeedbackTarget(
+		InvalidTarget,
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::Invalid);
+	TestTrue(TEXT("Resolved invalid release is handled"),
+		FWacomFirstPersonCardLayerTestAccess::RequestGestureRelease(
+			*InvalidSlot,
+			FVector2D(700.0f, 260.0f)));
+	const FWacomFirstPersonCardSlotAutomationTestView InvalidView =
+		FWacomFirstPersonCardLayerTestAccess::View(*InvalidSlot);
+	TestTrue(TEXT("Resolved invalid release triggers Deny"), InvalidView.bDenyFeedbackActive);
+	TestEqual(TEXT("Deny takes ownership from the preview cue"),
+		InvalidView.InteractionCueKind,
+		EWacomFirstPersonCardInteractionCueKind::Deny);
+	return true;
+}
+
 #endif

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 
 class FSlateWindowElementList;
 struct FGeometry;
@@ -12,15 +13,11 @@ class FSlateRect;
 class FWacomFirstPersonCardInteractionCuePainter
 {
 public:
-	static int32 PaintCorners(
+	static int32 PaintCue(
 		const FGeometry& AllottedGeometry,
 		FSlateWindowElementList& OutDrawElements,
 		int32 BaseLayerId,
 		const FSlateRect& CueRect,
-		const FLinearColor& Color,
-		float Amount,
-		float WidgetOpacity,
-		float CornerInsetPixels,
-		float CornerLengthPixels,
-		float CornerThicknessPixels);
+		const FWacomFirstPersonCardInteractionCueView& View,
+		float WidgetOpacity);
 };

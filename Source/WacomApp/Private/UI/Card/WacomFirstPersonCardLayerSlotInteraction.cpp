@@ -23,6 +23,13 @@ namespace
 			|| State == EWacomFirstPersonCardGestureState::AimingTargetedCard;
 	}
 
+	bool IsResolvedInvalidTargetFeedbackState(
+		EWacomFirstPersonCardDragTargetFeedbackState State)
+	{
+		return State == EWacomFirstPersonCardDragTargetFeedbackState::Invalid
+			|| State == EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
+	}
+
 	FReply BuildPointerRouteReply(
 		const FWacomFirstPersonCardPointerRouteResult& RouteResult,
 		const TSharedRef<SWidget>& CaptureWidget)
@@ -83,6 +90,16 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragFeedbackTarget(
 	GestureRuntime().bTargetValid = TargetHandle.IsValid() && bValidTarget;
 	DirectDragTargetFeedbackState = FeedbackState;
 	DragTargetFeedbackState = ResolveEffectiveDragTargetFeedbackState();
+	if (!InteractionFeedbackPlayback)
+	{
+		InteractionFeedbackPlayback.Reset(
+			new FWacomFirstPersonCardInteractionFeedbackPlayback());
+		InteractionFeedbackPlayback->SetConfig(InteractionFeedbackConfig);
+	}
+	InteractionFeedbackPlayback->SetInvalidTargetPreview(
+		IsFormalDragGestureState(GestureRuntime().State)
+		&& TargetHandle.IsValid()
+		&& IsResolvedInvalidTargetFeedbackState(FeedbackState));
 	RefreshPresentationTarget(true, EWacomFirstPersonCardMotionIntent::Layout);
 	if (InFeedbackTargetScreenPosition.IsSet())
 	{
@@ -95,6 +112,7 @@ void UWacomFirstPersonCardLayerSlotWidget::SetCardDragFeedbackTarget(
 		FeedbackTargetScreenPosition = FVector2D::ZeroVector;
 	}
 	ApplyVisualSlotView();
+	UpdateWantsTick();
 	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -194,6 +212,10 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearCardDragTargetFeedback()
 	bCardDragProbeFeedback = false;
 	bCardDragProbeFeedbackValid = false;
 	EndHandTargetImpactPreview();
+	if (InteractionFeedbackPlayback)
+	{
+		InteractionFeedbackPlayback->SetInvalidTargetPreview(false);
+	}
 	if (bHadFeedback)
 	{
 		RefreshPresentationTarget(
@@ -647,12 +669,20 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(
 		ReleaseState == EWacomFirstPersonCardGestureState::ArmedForCommit
 		|| (ReleaseState == EWacomFirstPersonCardGestureState::AimingTargetedCard
 			&& GestureRuntime().bTargetValid);
+	const bool bResolvedInvalidTargetRelease =
+		IsFormalDragGestureState(ReleaseState)
+		&& GestureRuntime().FeedbackTargetHandle.IsValid()
+		&& !GestureRuntime().bTargetValid
+		&& IsResolvedInvalidTargetFeedbackState(DirectDragTargetFeedbackState);
 	const bool bNeutralRelease =
 		ReleaseState == EWacomFirstPersonCardGestureState::Inspecting
 		|| ReleaseState == EWacomFirstPersonCardGestureState::Pressed
-		|| (ReleaseState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
-			&& CurrentSlotView.Entry.InteractionIntent
-				== EWacomFirstPersonCardInteractionIntent::DragToDropTarget);
+		|| !bResolvedInvalidTargetRelease;
+	const FVector2D FrozenReleaseDirection =
+		(ScreenPosition - GestureRuntime().PressScreenPosition).GetSafeNormal();
+	const int32 FrozenDenySeed = HashCombineFast(
+		GetTypeHash(CurrentSlotView.Entry.CardInstanceId),
+		GetTypeHash(DirectDragTargetFeedbackState));
 	SetPressedForFirstPersonLayer(false);
 	BroadcastDragReleased();
 
@@ -661,9 +691,9 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(
 		// Authority-owned Commit feedback begins only after the accepted command is
 		// reflected back into the layer. A pointer release has no optimistic cue.
 	}
-	else if (ReleaseState != EWacomFirstPersonCardGestureState::Pressed)
+	else if (bResolvedInvalidTargetRelease)
 	{
-		TriggerDenyFeedback();
+		TriggerDenyFeedback(FrozenReleaseDirection, FrozenDenySeed);
 	}
 
 	ClearGestureState(false);
@@ -772,6 +802,10 @@ void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCanc
 	bCardDragProbeFeedbackValid = false;
 	CardDragTargetFocusFeedbackState = EWacomFirstPersonCardDragTargetFeedbackState::None;
 	DragTargetFeedbackState = ResolveEffectiveDragTargetFeedbackState();
+	if (InteractionFeedbackPlayback)
+	{
+		InteractionFeedbackPlayback->SetInvalidTargetPreview(false);
+	}
 	ClearPointerViewportDiagnostics();
 	SetPressedForFirstPersonLayer(false);
 	ResetDragPickupFeedback();
@@ -1119,7 +1153,9 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdatePressedFeedback(float DeltaTime
 	}
 }
 
-void UWacomFirstPersonCardLayerSlotWidget::TriggerDenyFeedback()
+void UWacomFirstPersonCardLayerSlotWidget::TriggerDenyFeedback(
+	const FVector2D& ReleaseDirection,
+	int32 Seed)
 {
 	if (!InteractionFeedbackConfig.bEnabled || InteractionFeedbackConfig.DenyDuration <= 0.0f)
 	{
@@ -1132,9 +1168,39 @@ void UWacomFirstPersonCardLayerSlotWidget::TriggerDenyFeedback()
 			new FWacomFirstPersonCardInteractionFeedbackPlayback());
 		InteractionFeedbackPlayback->SetConfig(InteractionFeedbackConfig);
 	}
-	InteractionFeedbackPlayback->TriggerDeny();
+	InteractionFeedbackPlayback->TriggerDeny(ReleaseDirection, Seed);
+	PlayPendingDenySound();
 	ApplyVisualSlotView();
 	UpdateWantsTick();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::PlayPendingDenySound()
+{
+	if (!InteractionFeedbackPlayback)
+	{
+		return;
+	}
+
+	const TOptional<FWacomFirstPersonCardDenySoundRequest> PendingRequest =
+		InteractionFeedbackPlayback->ConsumePendingDenySoundRequest();
+	if (!PendingRequest.IsSet())
+	{
+		return;
+	}
+
+	const FWacomFirstPersonCardDenySoundRequest& Request = PendingRequest.GetValue();
+#if WITH_AUTOMATION_TESTS
+	++DenySoundRequestCountForTest;
+	LastDenySoundPitchMultiplierForTest = Request.PitchMultiplier;
+#endif
+	if (USoundBase* Sound = Request.Sound.Get(); Sound && GetWorld())
+	{
+		UGameplayStatics::PlaySound2D(
+			GetWorld(),
+			Sound,
+			Request.VolumeMultiplier,
+			Request.PitchMultiplier);
+	}
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::TriggerCommitFeedback()
@@ -1183,22 +1249,50 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyInteractionCue()
 
 	const FWacomFirstPersonCardInteractionFeedbackPlaybackView PlaybackView =
 		InteractionFeedbackPlayback->BuildView();
-	if (!PlaybackView.bDenyActive || PlaybackView.DenyPulseAlpha <= KINDA_SMALL_NUMBER)
+	if (PlaybackView.bDenyActive && PlaybackView.DenyPulseAlpha > KINDA_SMALL_NUMBER)
 	{
-		CardView->ClearInteractionCueView();
+		FWacomFirstPersonCardInteractionCueView CueView;
+		CueView.Kind = EWacomFirstPersonCardInteractionCueKind::Deny;
+		CueView.Color = InteractionFeedbackConfig.DenyColor;
+		CueView.AccentColor = InteractionFeedbackConfig.DenyAccentColor;
+		CueView.Amount = FMath::Clamp(
+			PlaybackView.DenyPulseAlpha * InteractionFeedbackConfig.DenyOpacity,
+			0.0f,
+			1.0f);
+		CueView.Progress = PlaybackView.DenyProgress;
+		CueView.CornerInsetPixels = InteractionFeedbackConfig.DenyCornerInsetPixels;
+		CueView.CornerLengthPixels = InteractionFeedbackConfig.DenyCornerLengthPixels;
+		CueView.CornerThicknessPixels = InteractionFeedbackConfig.DenyCornerThicknessPixels;
+		CueView.CrackLengthPixels = InteractionFeedbackConfig.DenyCrackLengthPixels;
+		CueView.CrackThicknessPixels = InteractionFeedbackConfig.DenyCrackThicknessPixels;
+		CueView.Direction = PlaybackView.DenyDirection;
+		CueView.Seed = PlaybackView.DenySeed;
+		CueView.bReducedMotion = InteractionFeedbackConfig.bReduceInteractionMotion;
+		CardView->SetInteractionCueView(CueView);
 		return;
 	}
 
-	FWacomFirstPersonCardInteractionCueView CueView;
-	CueView.Kind = EWacomFirstPersonCardInteractionCueKind::Deny;
-	CueView.Color = InteractionFeedbackConfig.DenyColor;
-	CueView.Amount = FMath::Clamp(
-		PlaybackView.DenyPulseAlpha * InteractionFeedbackConfig.DenyOpacity,
-		0.0f,
-		1.0f);
-	CueView.CornerInsetPixels = InteractionFeedbackConfig.DenyCornerInsetPixels;
-	CueView.CornerLengthPixels = InteractionFeedbackConfig.DenyCornerLengthPixels;
-	CueView.CornerThicknessPixels = InteractionFeedbackConfig.DenyCornerThicknessPixels;
-	CueView.bReducedMotion = InteractionFeedbackConfig.bReduceInteractionMotion;
-	CardView->SetInteractionCueView(CueView);
+	if (PlaybackView.bInvalidTargetPreviewActive
+		&& PlaybackView.InvalidTargetPreviewAmount > KINDA_SMALL_NUMBER)
+	{
+		FWacomFirstPersonCardInteractionCueView CueView;
+		CueView.Kind = EWacomFirstPersonCardInteractionCueKind::InvalidPreview;
+		CueView.Color = InteractionFeedbackConfig.InvalidTargetPreviewColor;
+		CueView.AccentColor = InteractionFeedbackConfig.InvalidTargetPreviewAccentColor;
+		CueView.Amount = FMath::Clamp(
+			PlaybackView.InvalidTargetPreviewAmount
+				* InteractionFeedbackConfig.InvalidTargetPreviewOpacity,
+			0.0f,
+			1.0f);
+		CueView.Progress = PlaybackView.InvalidTargetPreviewAmount;
+		CueView.CornerInsetPixels = InteractionFeedbackConfig.DenyCornerInsetPixels;
+		CueView.CornerLengthPixels = InteractionFeedbackConfig.DenyCornerLengthPixels;
+		CueView.CornerThicknessPixels = InteractionFeedbackConfig.DenyCornerThicknessPixels;
+		CueView.TightenPixels = InteractionFeedbackConfig.InvalidTargetPreviewTightenPixels;
+		CueView.bReducedMotion = InteractionFeedbackConfig.bReduceInteractionMotion;
+		CardView->SetInteractionCueView(CueView);
+		return;
+	}
+
+	CardView->ClearInteractionCueView();
 }

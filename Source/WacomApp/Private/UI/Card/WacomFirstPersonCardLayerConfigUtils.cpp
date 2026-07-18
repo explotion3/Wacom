@@ -886,12 +886,26 @@ FWacomFirstPersonCardInteractionFeedbackConfig NormalizeInteractionFeedbackConfi
 	Config.PressedOutDurationSeconds = FMath::Max(0.0f, Config.PressedOutDurationSeconds);
 	Config.PressedContactShadowLiftMultiplier = FMath::Clamp(
 		Config.PressedContactShadowLiftMultiplier, 0.0f, 1.0f);
+	Config.InvalidTargetPreviewEnterDuration = FMath::Max(
+		0.0f, Config.InvalidTargetPreviewEnterDuration);
+	Config.InvalidTargetPreviewExitDuration = FMath::Max(
+		0.0f, Config.InvalidTargetPreviewExitDuration);
+	Config.InvalidTargetPreviewOpacity = FMath::Clamp(
+		Config.InvalidTargetPreviewOpacity, 0.0f, 1.0f);
+	Config.InvalidTargetPreviewTightenPixels = FMath::Max(
+		0.0f, Config.InvalidTargetPreviewTightenPixels);
 	Config.DenyDuration = FMath::Max(0.0f, Config.DenyDuration);
 	Config.DenyShakePixels = FMath::Max(0.0f, Config.DenyShakePixels);
+	Config.DenyCompressScale = FMath::Max(0.01f, Config.DenyCompressScale);
 	Config.DenyOpacity = FMath::Clamp(Config.DenyOpacity, 0.0f, 1.0f);
 	Config.DenyCornerInsetPixels = FMath::Max(0.0f, Config.DenyCornerInsetPixels);
 	Config.DenyCornerLengthPixels = FMath::Max(0.0f, Config.DenyCornerLengthPixels);
 	Config.DenyCornerThicknessPixels = FMath::Max(0.0f, Config.DenyCornerThicknessPixels);
+	Config.DenyCrackLengthPixels = FMath::Max(0.0f, Config.DenyCrackLengthPixels);
+	Config.DenyCrackThicknessPixels = FMath::Max(0.0f, Config.DenyCrackThicknessPixels);
+	Config.DenySoundVolumeMultiplier = FMath::Max(0.0f, Config.DenySoundVolumeMultiplier);
+	Config.DenySoundPitchMultiplier = FMath::Max(0.01f, Config.DenySoundPitchMultiplier);
+	Config.DenySoundPitchVariation = FMath::Max(0.0f, Config.DenySoundPitchVariation);
 	Config.PlayCommitDuration = FMath::Max(0.0f, Config.PlayCommitDuration);
 	Config.PlayCommitScale = FMath::Max(0.01f, Config.PlayCommitScale);
 	return Config;
@@ -910,13 +924,38 @@ bool AreInteractionFeedbackConfigsEquivalent(
 			A.PressedContactShadowLiftMultiplier,
 			B.PressedContactShadowLiftMultiplier)
 		&& A.bReduceInteractionMotion == B.bReduceInteractionMotion
+		&& A.bEnableInvalidTargetPreview == B.bEnableInvalidTargetPreview
+		&& AreFloatsEquivalent(
+			A.InvalidTargetPreviewEnterDuration,
+			B.InvalidTargetPreviewEnterDuration)
+		&& AreFloatsEquivalent(
+			A.InvalidTargetPreviewExitDuration,
+			B.InvalidTargetPreviewExitDuration)
+		&& AreColorsEquivalent(A.InvalidTargetPreviewColor, B.InvalidTargetPreviewColor)
+		&& AreColorsEquivalent(
+			A.InvalidTargetPreviewAccentColor,
+			B.InvalidTargetPreviewAccentColor)
+		&& AreFloatsEquivalent(
+			A.InvalidTargetPreviewOpacity,
+			B.InvalidTargetPreviewOpacity)
+		&& AreFloatsEquivalent(
+			A.InvalidTargetPreviewTightenPixels,
+			B.InvalidTargetPreviewTightenPixels)
 		&& AreFloatsEquivalent(A.DenyDuration, B.DenyDuration)
 		&& AreFloatsEquivalent(A.DenyShakePixels, B.DenyShakePixels)
+		&& AreFloatsEquivalent(A.DenyCompressScale, B.DenyCompressScale)
 		&& AreColorsEquivalent(A.DenyColor, B.DenyColor)
+		&& AreColorsEquivalent(A.DenyAccentColor, B.DenyAccentColor)
 		&& AreFloatsEquivalent(A.DenyOpacity, B.DenyOpacity)
 		&& AreFloatsEquivalent(A.DenyCornerInsetPixels, B.DenyCornerInsetPixels)
 		&& AreFloatsEquivalent(A.DenyCornerLengthPixels, B.DenyCornerLengthPixels)
 		&& AreFloatsEquivalent(A.DenyCornerThicknessPixels, B.DenyCornerThicknessPixels)
+		&& AreFloatsEquivalent(A.DenyCrackLengthPixels, B.DenyCrackLengthPixels)
+		&& AreFloatsEquivalent(A.DenyCrackThicknessPixels, B.DenyCrackThicknessPixels)
+		&& A.DenySound == B.DenySound
+		&& AreFloatsEquivalent(A.DenySoundVolumeMultiplier, B.DenySoundVolumeMultiplier)
+		&& AreFloatsEquivalent(A.DenySoundPitchMultiplier, B.DenySoundPitchMultiplier)
+		&& AreFloatsEquivalent(A.DenySoundPitchVariation, B.DenySoundPitchVariation)
 		&& A.bEnablePlayCommitFeedback == B.bEnablePlayCommitFeedback
 		&& AreFloatsEquivalent(A.PlayCommitDuration, B.PlayCommitDuration)
 		&& AreFloatsEquivalent(A.PlayCommitScale, B.PlayCommitScale);

@@ -71,6 +71,10 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	EWacomFirstPersonCardGestureSource GestureSource = EWacomFirstPersonCardGestureSource::None;
 	bool bPressed = false;
 	bool bDenyFeedbackActive = false;
+	bool bInvalidTargetPreviewActive = false;
+	float InvalidTargetPreviewAmount = 0.0f;
+	float DenyProgress = 0.0f;
+	FVector2D DenyDirection = FVector2D(0.0f, -1.0f);
 	bool bCommitFeedbackActive = false;
 	bool bRetainedFeedbackActive = false;
 	bool bRetainedFeedbackHeld = false;
@@ -110,6 +114,8 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	int32 DragPickupTriggerCount = 0;
 	int32 DragPickupSoundRequestCount = 0;
 	float LastDragPickupSoundPitchMultiplier = 1.0f;
+	int32 DenySoundRequestCount = 0;
+	float LastDenySoundPitchMultiplier = 1.0f;
 	bool bPlayedDissolvePlaybackActive = false;
 	bool bCardUseEffectPlaybackActive = false;
 	bool bCardUseReformPlaybackActive = false;
@@ -432,6 +438,8 @@ private:
 	int32 DragPickupTriggerCountForTest = 0;
 	int32 DragPickupSoundRequestCountForTest = 0;
 	float LastDragPickupSoundPitchMultiplierForTest = 1.0f;
+	int32 DenySoundRequestCountForTest = 0;
+	float LastDenySoundPitchMultiplierForTest = 1.0f;
 	int32 PlayedDissolveSoundRequestCountForTest = 0;
 	float LastPlayedDissolveSoundPitchMultiplierForTest = 1.0f;
 	int32 CardUseEffectSoundRequestCountForTest = 0;
@@ -601,7 +609,10 @@ private:
 	void BroadcastDragCancelled();
 	void SetHoveredForFirstPersonLayer(bool bHovered, bool bBroadcast = true);
 	void SetPressedForFirstPersonLayer(bool bPressed);
-	void TriggerDenyFeedback();
+	void TriggerDenyFeedback(
+		const FVector2D& ReleaseDirection = FVector2D(0.0f, -1.0f),
+		int32 Seed = 0);
+	void PlayPendingDenySound();
 	void ClearInteractionFeedback();
 	bool IsDenyFeedbackActive() const;
 	bool IsRetainedFeedbackActive() const;

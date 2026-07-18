@@ -23,6 +23,10 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 {
 	float InteractionCueAmount = 0.0f;
 	FLinearColor InteractionCueColor = FLinearColor::Transparent;
+	FLinearColor InteractionCueAccentColor = FLinearColor::Transparent;
+	float InteractionCueProgress = 0.0f;
+	FVector2D InteractionCueDirection = FVector2D(0.0f, -1.0f);
+	int32 InteractionCueSeed = 0;
 	EWacomFirstPersonCardInteractionCueKind InteractionCueKind =
 		EWacomFirstPersonCardInteractionCueKind::None;
 	bool bInteractionCuePaintRequested = false;

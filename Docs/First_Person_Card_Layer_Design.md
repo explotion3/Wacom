@@ -122,7 +122,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `07 Hover` | hover lift / scale / ZOrder / hit hysteresis |
 | `08 Targeting State` | pending targeting、target select deemphasis |
 | `09 Gesture` | 按住读牌、拖出提交、快捷键拿起卡牌、inspect 姿态、aim arrow |
-| `10 Interaction Feedback` | Pressed 实体按压、formal-release Deny 四角刻线/阻尼 shake、权威 Commit、正式 Drag 拾牌反馈与音效 |
+| `10 Interaction Feedback` | Pressed 实体按压、真实无效目标源卡预警、formal-release 方向性 Deny、权威 Commit、正式 Drag 拾牌反馈与音效 |
 | `11 Card Depth` | Hover / Drag tilt、pointer velocity filter、perspective strength、Retainer 实时轮廓接触阴影，以及核心卡面 UV 分层与实体出血装饰视差 |
 | `12 Card Use Effect` | 普通成功使用牌的像素翻面收牌（可切回菱形波）、Reduced Motion、时长覆盖与一次性音效 |
 | `13 Card Exhausted Dissolve` | 实际进入 Exhaust 的 PixelAsh / OrderedDither Style、Reduced Motion 与时长覆盖；C++ 旧字段名暂为资产兼容保留 |
@@ -373,7 +373,7 @@ Hover 输入命中与最终视觉几何分离。Anchor 先投影并平滑整副�
 
 旧 `FeedbackOverlay / InteractionFeedbackImage` 与 `M_FirstPersonCard_FeedbackEdge` 已从 first-person card layer 删除。Hover 只使用已有的 lift、Fake-3D、卡面视差与接触阴影；不会再附加 playable tint。左键 Pressed 由 Motion Mixer 平滑合成默认 `0.985x` Scale 与向下 `2px` 位移，并由 Card Depth 把接触阴影 lift 缩短；建立与退出默认分别为 `0.045s / 0.08s`。规则确认前不播放 optimistic Confirm。权威成功提交仍保留约 `0.12s`、默认 `1.015x` 的 Commit 运动脉冲，但不增加材质或整卡 tint。
 
-无效目标的普通 Hover/Probe 不播放 Deny。只有正式 release 被规则拒绝时，Slot 才播放既有水平阻尼 shake，同时由 App-private `FWacomFirstPersonCardInteractionCuePainter` 在 `CardContentSizeBox` 四角绘制短促红色硬像素 L 刻线；`UWacomFirstPersonCardViewWidget::NativePaint()` 只确认最新 Paint Generation 并调用 Painter。刻线不需要 WBP Image、Retainer 材质或额外纹理。Simplified Motion 关闭 Pressed 位移/缩放和 Deny shake，但保留短促静态四角语义标记。正式 Drag 拾牌反馈继续在 Motion Mixer local feedback 阶段合成短时上提/缩放，并由 Slot 播放一次声音。
+正式 Drag 悬浮于已经解析的真实无效目标时，源卡显示一次淡入后保持静态的低强度紫红/暗蓝硬像素括角；空白区域的泛化 `Invalid`、`CardProbe / ZoneProbe`、Pressed、Inspect 和取消不显示。目标侧仍由现有手牌 focus 或敌人 Niagara 破框负责，不叠加第二套覆盖层。只有在该真实无效目标上正式 release 才播放 Deny：Slot 先均匀压缩，再沿冻结释放方向的反方向回弹并阻尼归位；App-private `FWacomFirstPersonCardInteractionCuePainter` 同时从对应 `CardContentSizeBox` 边缘绘制稳定四段阶梯裂痕和四角刻线。Deny 优先于尚在淡出的无效预警。`UWacomFirstPersonCardViewWidget::NativePaint()` 只确认最新 Paint Generation 并调用 Painter；两种 Cue 都不需要 WBP Image、Retainer 材质或额外纹理。Simplified Motion 关闭 Pressed、收紧、压缩和回弹，只保留静态无效括角与短促裂痕/刻线。主动取消、右键取消、Inspect 返回和空白释放均为中性语义，不播放 Deny 或声音。
 
 稳定命中 resolver 只考虑 projected、非 exiting、有效 `CardInstanceId` 且可交互的 active slot。透明 bleed 不参与命中，命中范围仍只使用 `UWacomCardView.FixedCardBodyHitSize` 对应的 card body bounds。多张基础 body 重叠时，不按 hover 后 ZOrder 抢输入，而是按手牌左右顺序的相邻中心线分界选择；当前 hover 卡在分界线附近享有 `HoverHitHysteresisPixels` 滞后区，越过滞后区后才切到相邻卡。
 

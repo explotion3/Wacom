@@ -258,7 +258,7 @@ First-person hand 不在 slot widget 内提交规则。正式 target drag / aim�
 
 Battle / Run hand 共用 Card Depth。`FWacomFirstPersonCardDepthMotion` 在 Hover 时按卡面局部 pointer 计算倾斜，在 Drag 时按低通 pointer velocity 计算惯性倾斜，并与 rest / semantic transition 的压平以及 `ContactShadowLift` 一起做帧率无关平滑。`UWacomFirstPersonCardViewWidget` 将 `TiltX / TiltY / PerspectiveStrength / ContactShadowEnabled / ContactShadowLift` 写入现有 Retainer，同时把同一倾角以 `FWacomCardSurfacePerspectiveView` 交给内层 `UWacomCardView`：核心表面 MI 分层移动插画 / 卡框 / 稀有度饰条，实体出血 Badge / Durability 走 UMG RenderTransform。Badge 实体框和耐久底板还会复制自身 Brush 生成卡面内局部硬接触影；数字、文字和发光不投影，Reduced Motion 只保留静态接触。该路径只属于表现层，不改变规则、296×420 命中或外部 Surface Effect；局部附件影不替代 Retainer 内整卡实时 Alpha 阴影，外部 `CardShadowImage` 也不属于当前生产链。
 
-First-person hand 的旧 `FeedbackOverlay / InteractionFeedbackImage / M_FirstPersonCard_FeedbackEdge` 已删除。Hover 只使用 lift、Fake-3D、卡面视差与接触阴影；Pressed 由 Motion Mixer 平滑合成默认 `0.985x`、向下 `2px`，并缩短接触阴影；权威成功 Commit 只保留约 `0.12s` 的运动脉冲。无效目标 Hover/Probe 不显示拒绝色，只有正式 release 被规则拒绝时才播放源卡水平阻尼 shake，并由 CardView Slate Paint 绘制四角红色硬像素 L 刻线。Simplified Motion 关闭 Pressed 运动与 Deny shake，但保留短促静态刻线。该收口不改变 card-target identity、validation 或 release 命令路径。
+First-person hand 的旧 `FeedbackOverlay / InteractionFeedbackImage / M_FirstPersonCard_FeedbackEdge` 已删除。Hover 只使用 lift、Fake-3D、卡面视差与接触阴影；Pressed 由 Motion Mixer 平滑合成默认 `0.985x`、向下 `2px`，并缩短接触阴影；权威成功 Commit 只保留约 `0.12s` 的运动脉冲。正式 Drag 只有在已经解析出真实目标且规则反馈为 `Invalid / InvalidCardTarget` 时，才在源卡 CardContent 左右显示低强度像素括角；空白泛化 Invalid 与尚未验证的 Probe 不显示。正式释放拒绝冻结方向和 Seed，播放 `0.97x` 压缩、反方向回弹、四段边缘裂痕和阻尼归位，可选硬引用 Deny Sound 只请求一次。敌人无效破框与目标手牌 focus 保持原有目标侧职责。Simplified Motion 只保留静态括角和短促裂痕/刻线，不执行实体运动。该收口不改变 card-target identity、validation 或 release 命令路径。
 
 Battle / Run 共用的 first-person Slot 不再执行单卡视口底边钳制。卡面靠近屏幕边缘时的文字连续绘制由 `Fake3DSurfaceRetainer` 直接内容根的 `Clip To Bounds - Without Intersecting` 合同保证；该合同只修正 Retainer 内部 culling，不改变手牌扇形、卡牌位置或输入命中。
 
@@ -306,7 +306,7 @@ First-person card layer 重新拥有语义 Transition Audio，并生成 `Gained`
 
 成功的 `PlayCardOnHandCard` 还会由 BattleHUD 读取提交前冻结的目标手牌 ID，并在同一 command presentation phase 给目标卡下发一次 `HandTargetImpact`；这不是新的战斗事件，也不改变目标判定。有效目标 hover 只播放弱像素刻印 Preview；命令成功后源卡效果立即开始，目标约 `0.07s` 后压印、在约 `0.11s` 开放结果离场，再回弹归位。Post Snapshot 决定目标留手、普通弃牌或 Exhaust：普通弃牌牌印与消耗 Surface 都等待该 Gate，缺失 Style/MI/Slot 时则立即走旧路径，不为表现延迟命令。默认 Style 为 `/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardHandTargetImpactStyle_PixelStamp`，Anchor 入口为 `15 Card Hand Target Impact`；世界目标命中反馈仍是后续独立切片。
 
-Slot 释放结果必须在任何同步 HUD 回调前冻结。Layer 把解析后的目标事实同时写入 source Slot；Release 只做最后一次本地手势计算，不重复广播 DragUpdated，然后按冻结的 accepted / neutral / denied 结果播放反馈。这样成功命令触发的同步 snapshot refresh、手势清理或交互禁用不会把有效目标误改成 Deny 抖动。
+Slot 释放结果必须在任何同步 HUD 回调前冻结。Layer 把解析后的目标事实同时写入 source Slot；Release 只做最后一次本地手势计算，不重复广播 DragUpdated，然后冻结 accepted / resolved-invalid / neutral、释放方向与稳定 Seed，再广播同步命令。只有冻结时存在有效 Target Handle 且反馈为 `Invalid / InvalidCardTarget` 的正式拖拽才进入 Deny；成功命令触发的同步 snapshot refresh、手势清理或交互禁用不能把有效目标误改成拒绝，空白、Probe、主动取消与右键取消也不能伪造 Deny。
 
 ## §8 Battle Shared Widgets
 

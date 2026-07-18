@@ -8,7 +8,8 @@
 
 struct FWacomFirstPersonCardLocalFeedbackView
 {
-	float DenyTranslationXPixels = 0.0f;
+	FVector2D DenyTranslationPixels = FVector2D::ZeroVector;
+	float DenyScaleMultiplier = 1.0f;
 	float PressedScaleMultiplier = 1.0f;
 	float PressedTranslationYPixels = 0.0f;
 	float CommitScaleMultiplier = 1.0f;
@@ -70,5 +71,4 @@ public:
 
 private:
 	static int32 GetMotionIntentPriority(EWacomFirstPersonCardMotionIntent Intent);
-	static float ComputeDenyShakeOffset(float ElapsedSeconds, float DurationSeconds, float ShakePixels);
 };

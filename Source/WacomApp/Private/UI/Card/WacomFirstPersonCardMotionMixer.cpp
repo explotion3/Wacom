@@ -121,7 +121,6 @@ const FWacomFirstPersonCardMotionProfile& FWacomFirstPersonCardMotionMixer::GetM
 		return MotionConfig.LayoutMotionProfile;
 	}
 }
-
 float FWacomFirstPersonCardMotionMixer::ComputeMotionAlpha(float Speed, float DeltaTime, float EasePower)
 {
 	const float LinearAlpha = Speed <= 0.0f ? 1.0f : FMath::Clamp(DeltaTime * Speed, 0.0f, 1.0f);
@@ -174,8 +173,8 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 	const float RetainedScale = bRetainedTransformActive
 		? FMath::Max(0.01f, FeedbackView.RetainScaleMultiplier)
 		: 1.0f;
-	Result.RenderTransform.Translation = FVector2D(
-		FeedbackView.DenyTranslationXPixels,
+	Result.RenderTransform.Translation = FeedbackView.DenyTranslationPixels + FVector2D(
+		0.0f,
 		-(bRetainedTransformActive
 			? FMath::Max(0.0f, FeedbackView.RetainLiftPixels)
 			: 0.0f)
@@ -185,6 +184,7 @@ FWacomFirstPersonCardLocalFeedbackMixResult FWacomFirstPersonCardMotionMixer::Mi
 	Result.RenderTransform.Scale = FVector2D(FMath::Max(
 		0.01f,
 		SlotView.RenderScale
+			* FMath::Max(0.01f, FeedbackView.DenyScaleMultiplier)
 			* FMath::Max(0.01f, FeedbackView.PressedScaleMultiplier)
 			* FMath::Max(0.01f, FeedbackView.CommitScaleMultiplier)
 			* RetainedScale
@@ -206,17 +206,4 @@ int32 FWacomFirstPersonCardMotionMixer::GetMotionIntentPriority(EWacomFirstPerso
 	case EWacomFirstPersonCardMotionIntent::Layout:
 	default: return 10;
 	}
-}
-
-float FWacomFirstPersonCardMotionMixer::ComputeDenyShakeOffset(
-	float ElapsedSeconds,
-	float DurationSeconds,
-	float ShakePixels)
-{
-	if (DurationSeconds <= 0.0f || ElapsedSeconds >= DurationSeconds || ShakePixels <= 0.0f)
-	{
-		return 0.0f;
-	}
-	const float Progress = FMath::Clamp(ElapsedSeconds / DurationSeconds, 0.0f, 1.0f);
-	return FMath::Sin(Progress * PI * 6.0f) * ShakePixels * (1.0f - Progress);
 }

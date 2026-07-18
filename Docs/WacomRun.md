@@ -152,6 +152,8 @@ Run first-person hand 不直接等同于某个物理持有区。`URunSession::Bu
 
 `UWacomRunFirstPersonCardSourceComponent` 在首次显示或切换 workspace / menu lease source 时，先通过共享 App-private card presentation prewarm 收集并异步驻留 first-person CardView 的数字、稀有度、Badge 等 Required Visual，以及四类 Optional Enter Sound。首次来源在 Ready/TimedOut 前保持隐藏；切换来源时旧来源继续显示，最新 revision 只保留一份待提交 Frame。预热只冻结这条 card source，不冻结探索、镜头或其它 Run UI 输入。菜单压制、lease 释放、source clear、RunSession 解绑和 EndPlay 都会取消旧 Generation，防止迟到回调覆盖新来源；`1.5s` 超时后安全提交最新 Frame，同时允许 Required Visual 请求继续完成驻留。
 
+Run menu / world drop 与 Battle 共用 first-person Slot 的无效目标提示。正式 Drag 只有在 Run 已经解析出有效 Target Handle 且反馈为 `Invalid / InvalidCardTarget` 时，源卡才显示低强度像素括角；空白区域和 Probe 不显示。若玩家在该真实无效目标上释放，Slot 播放方向性压缩/回弹与边缘裂痕，但不会伪造 Run drop 命令；主动取消、快捷键右键取消、Inspect 返回和空白释放保持中性。该表现只消费 App 层目标校验事实，不修改 Run storage、menu drop 或 world interaction 规则。
+
 `FRunStorageCardView` 是背包 / SpecialZone / 投影列表的单卡只读 ViewData。它会显式携带 `bCanToggleBattleEnabledInSpecialZone` 与 `bShowBattleEnabledInSpecialZoneBadge`，App 列表和 Widget 只消费这些 affordance，不通过 `PhysicalZone`、`bBattleEnabledInSpecialZone` 或列表来源重新推断右键入战是否可用。
 
 玩家已拥有卡的操作以 `InstanceId` 为主。UI、蓝图玩家操作和交互层必须使用 `DestroyCardByInstance()`、`ValidateDestroyCardByInstance()`、`DeleteCardForGoldByInstance()`、`MoveInstance()` 等入口，不能用 Definition 指代某张已拥有卡。`URunSession` 不再提供 `AddCardToBattleDeck()`、`RemoveCardFromBattleDeck()`、`DestroyCardFromBackpack()`、`DeleteCardForGold()` 这类 Definition 级已拥有卡 wrapper。

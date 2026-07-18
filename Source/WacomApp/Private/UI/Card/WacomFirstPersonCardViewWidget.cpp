@@ -453,9 +453,18 @@ void UWacomFirstPersonCardViewWidget::SetInteractionCueView(
 {
 	LastInteractionCueView = View;
 	LastInteractionCueView.Amount = FMath::Clamp(View.Amount, 0.0f, 1.0f);
+	LastInteractionCueView.Progress = FMath::Clamp(View.Progress, 0.0f, 1.0f);
 	LastInteractionCueView.CornerInsetPixels = FMath::Max(0.0f, View.CornerInsetPixels);
 	LastInteractionCueView.CornerLengthPixels = FMath::Max(0.0f, View.CornerLengthPixels);
 	LastInteractionCueView.CornerThicknessPixels = FMath::Max(0.0f, View.CornerThicknessPixels);
+	LastInteractionCueView.TightenPixels = FMath::Max(0.0f, View.TightenPixels);
+	LastInteractionCueView.CrackLengthPixels = FMath::Max(0.0f, View.CrackLengthPixels);
+	LastInteractionCueView.CrackThicknessPixels = FMath::Max(0.0f, View.CrackThicknessPixels);
+	LastInteractionCueView.Direction = View.Direction.GetSafeNormal();
+	if (LastInteractionCueView.Direction.IsNearlyZero())
+	{
+		LastInteractionCueView.Direction = FVector2D(0.0f, -1.0f);
+	}
 	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -610,6 +619,10 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	FWacomFirstPersonCardViewAutomationTestView View;
 	View.InteractionCueAmount = LastInteractionCueView.Amount;
 	View.InteractionCueColor = LastInteractionCueView.Color;
+	View.InteractionCueAccentColor = LastInteractionCueView.AccentColor;
+	View.InteractionCueProgress = LastInteractionCueView.Progress;
+	View.InteractionCueDirection = LastInteractionCueView.Direction;
+	View.InteractionCueSeed = LastInteractionCueView.Seed;
 	View.InteractionCueKind = LastInteractionCueView.Kind;
 	View.bInteractionCuePaintRequested = LastInteractionCueView.Amount > KINDA_SMALL_NUMBER;
 	View.CardDepthView = LastCardDepthView;
@@ -749,23 +762,19 @@ int32 UWacomFirstPersonCardViewWidget::NativePaint(
 	{
 		EffectBadgePaintedGeneration = EffectBadgeRequestedGeneration;
 	}
-	if (LastInteractionCueView.Kind != EWacomFirstPersonCardInteractionCueKind::Deny
+	if (LastInteractionCueView.Kind == EWacomFirstPersonCardInteractionCueKind::None
 		|| LastInteractionCueView.Amount <= KINDA_SMALL_NUMBER)
 	{
 		return MaxLayerId;
 	}
 
-	return FWacomFirstPersonCardInteractionCuePainter::PaintCorners(
+	return FWacomFirstPersonCardInteractionCuePainter::PaintCue(
 		AllottedGeometry,
 		OutDrawElements,
 		MaxLayerId,
 		ResolveInteractionCueRect(AllottedGeometry),
-		LastInteractionCueView.Color,
-		LastInteractionCueView.Amount,
-		InWidgetStyle.GetColorAndOpacityTint().A,
-		LastInteractionCueView.CornerInsetPixels,
-		LastInteractionCueView.CornerLengthPixels,
-		LastInteractionCueView.CornerThicknessPixels);
+		LastInteractionCueView,
+		InWidgetStyle.GetColorAndOpacityTint().A);
 }
 
 void UWacomFirstPersonCardViewWidget::CacheBaseSurfaceEffectMaterial()
