@@ -426,6 +426,17 @@ namespace
 			});
 	}
 
+	const FHandCardSnapshot* FindVisibleHandCardSnapshotForDataRewrite(
+		const FBattleSnapshot& Snapshot,
+		const FGuid& CardInstanceId)
+	{
+		return Snapshot.Hand.Cards.FindByPredicate(
+			[&CardInstanceId](const FHandCardSnapshot& Card)
+			{
+				return Card.InstanceId == CardInstanceId;
+			});
+	}
+
 	TArray<FWacomFirstPersonCardLayerFeedbackHint> BuildCommandDataRewriteHints(
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot,
@@ -447,13 +458,12 @@ namespace
 		TArray<const FHandCardSnapshot*> ChangedCards;
 		for (const FHandCardSnapshot& NextCard : PostCommandSnapshot.Hand.Cards)
 		{
-			if (NextCard.bIsHandAnchor
-				|| NextCard.InstanceId == SuppressedSourceCardId
+			if (NextCard.InstanceId == SuppressedSourceCardId
 				|| !LastRelevantSequenceByCard.Contains(NextCard.InstanceId))
 			{
 				continue;
 			}
-			const FHandCardSnapshot* PreviousCard = FindNormalHandCardSnapshot(
+			const FHandCardSnapshot* PreviousCard = FindVisibleHandCardSnapshotForDataRewrite(
 				PreCommandSnapshot,
 				NextCard.InstanceId);
 			if (PreviousCard && PreviousCard->RuntimeCost != NextCard.RuntimeCost)
@@ -467,7 +477,7 @@ namespace
 		for (int32 Index = 0; Index < ChangedCards.Num(); ++Index)
 		{
 			const FHandCardSnapshot& NextCard = *ChangedCards[Index];
-			const FHandCardSnapshot* PreviousCard = FindNormalHandCardSnapshot(
+			const FHandCardSnapshot* PreviousCard = FindVisibleHandCardSnapshotForDataRewrite(
 				PreCommandSnapshot,
 				NextCard.InstanceId);
 			if (!PreviousCard)

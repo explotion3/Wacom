@@ -170,4 +170,89 @@ bool FWacomBattleCardDataRewritePresentationTest::RunTest(
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleHandAnchorDataRewritePresentationTest,
+	"Wacom.UI.Battle.CardDataRewrite.HandAnchorCostChange",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleHandAnchorDataRewritePresentationTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleCardDataRewritePresentationSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UCardDefinition* SourceCard = nullptr;
+	UCardDefinition* UnusedNormalTargetCard = nullptr;
+	const FWacomInitializedBattleSession Initialized = CreateSession(
+		Fixture,
+		SourceCard,
+		UnusedNormalTargetCard);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Initialized session"), Initialized.Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get())
+		|| !TestNotNull(TEXT("First-person character"), Harness->AttachFirstPersonCharacter()))
+	{
+		return false;
+	}
+	Harness->SetInitializedSession(Initialized);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	if (!TestNotNull(TEXT("Battle HUD"), HUD))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot PreSnapshot = Initialized.Session->BuildSnapshot();
+	HUD->SyncFirstPersonBattleHandLayerForTest(PreSnapshot);
+	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(
+		PreSnapshot,
+		SourceCard->CardId);
+	const FHandCardSnapshot* AnchorCard = PreSnapshot.Hand.Cards.FindByPredicate(
+		[](const FHandCardSnapshot& Card)
+		{
+			return Card.bIsHandAnchor && Card.InstanceId.IsValid();
+		});
+	if (!TestNotNull(TEXT("Visible hand anchor"), AnchorCard))
+	{
+		return false;
+	}
+	const FGuid AnchorId = AnchorCard->InstanceId;
+	const int32 CostBefore = AnchorCard->RuntimeCost;
+	const FBattleResolution Resolution = Initialized.Session->ResolveCommand(
+		FBattleCommand::MakePlayCardOnHandCard(SourceId, AnchorId));
+	if (!TestTrue(TEXT("Hand-anchor cost change succeeds"), Resolution.IsOk()))
+	{
+		return false;
+	}
+
+	HUD->StoreFirstPersonCardTransitionEventsForTest(Resolution.Events);
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint> Hints =
+		HUD->BuildFirstPersonCardFeedbackHintsForTest(Resolution.PostSnapshot);
+	const FWacomFirstPersonCardLayerFeedbackHint* RewriteHint = Hints.FindByPredicate(
+		[&AnchorId](const FWacomFirstPersonCardLayerFeedbackHint& Hint)
+		{
+			return Hint.CardInstanceId == AnchorId
+				&& Hint.FeedbackKind == EWacomFirstPersonCardLayerFeedbackKind::CardDataRewrite;
+		});
+	if (!TestNotNull(TEXT("Visible hand-anchor cost change emits a rewrite hint"), RewriteHint))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Anchor rewrite carries authoritative costs"), RewriteHint->bHasDataRewriteCostValues);
+	TestEqual(TEXT("Anchor rewrite preserves its old cost"), RewriteHint->DataRewriteCostBefore, CostBefore);
+	TestEqual(TEXT("Anchor rewrite carries its new cost"), RewriteHint->DataRewriteCostAfter, CostBefore + 2);
+	TestEqual(
+		TEXT("Increasing anchor cost uses the detrimental tone"),
+		RewriteHint->DataRewriteTone,
+		EWacomFirstPersonCardDataRewriteTone::Detrimental);
+
+	HUD->ClearPendingFirstPersonCardTransitionEventsForTest();
+	return true;
+}
+
 #endif

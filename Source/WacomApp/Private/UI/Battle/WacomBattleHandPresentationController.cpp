@@ -157,6 +157,20 @@ namespace
 		}
 		return nullptr;
 	}
+
+	const FHandCardSnapshot* FindVisibleHandCardSnapshotForDataRewritePresentation(
+		const FBattleSnapshot& Snapshot,
+		const FGuid& CardInstanceId)
+	{
+		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
+		{
+			if (CardSnapshot.InstanceId == CardInstanceId)
+			{
+				return &CardSnapshot;
+			}
+		}
+		return nullptr;
+	}
 }
 
 void FWacomBattleHandPresentationController::Reset()
@@ -674,14 +688,15 @@ FWacomBattleHandPresentationController::BuildFeedbackHints(
 		TArray<const FHandCardSnapshot*> ChangedCards;
 		for (const FHandCardSnapshot& NextCard : NextSnapshot.Hand.Cards)
 		{
-			if (NextCard.bIsHandAnchor
-				|| !LastRelevantSequenceByCard.Contains(NextCard.InstanceId)
+			if (!LastRelevantSequenceByCard.Contains(NextCard.InstanceId)
 				|| SeenCardUseReformIds.Contains(NextCard.InstanceId))
 			{
 				continue;
 			}
 			const FHandCardSnapshot* PreviousCard =
-				FindNormalHandCardSnapshotForPresentation(LastPresentedSnapshot, NextCard.InstanceId);
+				FindVisibleHandCardSnapshotForDataRewritePresentation(
+					LastPresentedSnapshot,
+					NextCard.InstanceId);
 			if (PreviousCard && PreviousCard->RuntimeCost != NextCard.RuntimeCost)
 			{
 				ChangedCards.Add(&NextCard);
@@ -692,7 +707,9 @@ FWacomBattleHandPresentationController::BuildFeedbackHints(
 		{
 			const FHandCardSnapshot& NextCard = *ChangedCards[Index];
 			const FHandCardSnapshot* PreviousCard =
-				FindNormalHandCardSnapshotForPresentation(LastPresentedSnapshot, NextCard.InstanceId);
+				FindVisibleHandCardSnapshotForDataRewritePresentation(
+					LastPresentedSnapshot,
+					NextCard.InstanceId);
 			if (!PreviousCard)
 			{
 				continue;

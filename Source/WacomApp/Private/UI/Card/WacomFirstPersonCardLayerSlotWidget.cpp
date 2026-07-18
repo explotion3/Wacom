@@ -32,13 +32,6 @@
 
 namespace
 {
-	const FName SurfaceEffectHandTargetImpact(TEXT("HandTargetImpact"));
-	const FName SurfaceEffectDrawReveal(TEXT("DrawReveal"));
-	const FName SurfaceEffectGainReveal(TEXT("GainReveal"));
-	const FName SurfaceEffectRetainSeal(TEXT("RetainSeal"));
-	const FName SurfaceEffectDeparture(TEXT("SurfaceDeparture"));
-	const FName SurfaceEffectCardUseReform(TEXT("CardUseReform"));
-
 	bool IsCardTargetFocusFeedbackState(EWacomFirstPersonCardDragTargetFeedbackState FeedbackState)
 	{
 		return FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
@@ -46,7 +39,8 @@ namespace
 			|| FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget;
 	}
 
-	bool IsFormalDragGestureState(EWacomFirstPersonCardGestureState InGestureState)
+	bool IsFormalDragGestureStateForVisualMotion(
+		EWacomFirstPersonCardGestureState InGestureState)
 	{
 		return InGestureState == EWacomFirstPersonCardGestureState::DraggingNoTargetCard
 			|| InGestureState == EWacomFirstPersonCardGestureState::ArmedForCommit
@@ -1224,13 +1218,13 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateCardDepthMotion(float DeltaTime
 			? InteractionFeedbackPlayback->BuildView()
 			: FWacomFirstPersonCardInteractionFeedbackPlaybackView();
 	Input.bPressed = InteractionView.PressedAmount > KINDA_SMALL_NUMBER
-		&& !IsFormalDragGestureState(GestureRuntime().State);
+		&& !IsFormalDragGestureStateForVisualMotion(GestureRuntime().State);
 	Input.PressedFeedbackAmount = InteractionFeedbackConfig.bReduceInteractionMotion
 		? 0.0f
 		: InteractionView.PressedAmount;
 	Input.PressedContactShadowLiftMultiplier =
 		InteractionFeedbackConfig.PressedContactShadowLiftMultiplier;
-	Input.bDragging = IsFormalDragGestureState(GestureRuntime().State);
+	Input.bDragging = IsFormalDragGestureStateForVisualMotion(GestureRuntime().State);
 	Input.bFlattenForSemanticTransition =
 		IsEnterTransitionPlaybackActive()
 		|| bIsExitingForFirstPersonLayer

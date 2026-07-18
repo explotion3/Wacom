@@ -267,7 +267,7 @@ Battle 拖拽指针压中规则判定为有效的唯一手牌目标时，目标 
 
 ### 卡面费用变化像素重写
 
-Battle 可见普通手牌只有在“明确改费事件 + 命令前后 Snapshot 的 `RuntimeCost` 实际变化”同时成立时才收到 `CardDataRewrite` feedback。规则层的 `CardRuntimeCostChanged` 给出目标、来源、效果、原始 modifier delta 与变更后有效费用；`CardStatusChanged` 只作为 Slow / Twilight 等可能改费的许可事实。首次 Snapshot、普通刷新、Preview / 取消 Preview、Hover、重排、source 切换和 Clamp 后净费用不变均不触发。一次命令对同一卡多次改费合并为最终可见结果，多卡按当前手牌顺序以默认 `0.045s` 错峰、最多等待 `0.14s`；离手卡和 `CardUseReform` 源卡被过滤。命令编排直接消费该命令的 `PreCommandSnapshot + PostSnapshot + Events`，不会被入口门控或目标 Preview 的最后渲染帧干扰。
+Battle 可见手牌（包括左右手 Anchor）只有在“明确改费事件 + 命令前后 Snapshot 的 `RuntimeCost` 实际变化”同时成立时才收到 `CardDataRewrite` feedback。规则层的 `CardRuntimeCostChanged` 给出目标、来源、效果、原始 modifier delta 与变更后有效费用；`CardStatusChanged` 只作为 Slow / Twilight 等可能改费的许可事实。首次 Snapshot、普通刷新、Preview / 取消 Preview、Hover、重排、source 切换和 Clamp 后净费用不变均不触发。一次命令对同一卡多次改费合并为最终可见结果，多卡按当前手牌顺序以默认 `0.045s` 错峰、最多等待 `0.14s`；离手卡和 `CardUseReform` 源卡被过滤。左右手 Anchor 只复用费用数字重写能力，不因此进入抽牌、保留或 EffectBadge 的普通卡语义。命令编排直接消费该命令的 `PreCommandSnapshot + PostSnapshot + Events`，不会被入口门控或目标 Preview 的最后渲染帧干扰。
 
 有效手牌目标预演不会把预测值写回正式 `RuntimeCost` 或 `FWacomCardViewData.Cost`。`FWacomFirstPersonCardCostPreviewView` 把当前费用、预测费用、Tone、稳定 Seed 与 Preview/Pulse 直接交给现有 `CostDigitImage` 临时 MID：降费使用冰蓝/暖金，提高使用紫红/暗蓝，默认约 `0.85s` 呼吸；透明度约 `0.38–0.90`、亮度约 `1.0–1.45`。Preview Amount 沿用目标刻印进入/退出包络，切换目标、取消或成功提交都会先恢复正式旧费用 PaperSprite。材质/Atlas 无效时保持旧费用，不显示空白；材质不读取 Time，呼吸进度来自现有目标 Preview Playback。
 
