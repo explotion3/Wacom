@@ -388,6 +388,59 @@ function Get-GitContext
     }
 }
 
+function Assert-EditorModuleBinariesPresent
+{
+    param([Parameter(Mandatory = $true)][string]$ProjectRoot)
+
+    $Root = Get-CanonicalPath -Path $ProjectRoot -MustExist
+    $Descriptors = [System.Collections.Generic.List[object]]::new()
+    $Descriptors.Add([pscustomobject]@{
+        Path = Join-Path $Root "Wacom.uproject"
+        BinaryRoot = Join-Path $Root "Binaries\Win64"
+    })
+
+    $PluginsRoot = Join-Path $Root "Plugins"
+    if (Test-Path -LiteralPath $PluginsRoot -PathType Container)
+    {
+        foreach ($PluginDescriptor in @(Get-ChildItem -LiteralPath $PluginsRoot -Recurse -Filter "*.uplugin" -File))
+        {
+            $Descriptors.Add([pscustomobject]@{
+                Path = $PluginDescriptor.FullName
+                BinaryRoot = Join-Path $PluginDescriptor.Directory.FullName "Binaries\Win64"
+            })
+        }
+    }
+
+    $Missing = [System.Collections.Generic.List[string]]::new()
+    foreach ($Descriptor in $Descriptors)
+    {
+        $Json = Get-Content -LiteralPath $Descriptor.Path -Raw | ConvertFrom-Json
+        $ModulesProperty = $Json.PSObject.Properties["Modules"]
+        if ($null -eq $ModulesProperty)
+        {
+            continue
+        }
+        foreach ($Module in @($ModulesProperty.Value))
+        {
+            $ModuleName = [string]$Module.Name
+            if ([string]::IsNullOrWhiteSpace($ModuleName))
+            {
+                continue
+            }
+            $BinaryPath = Join-Path $Descriptor.BinaryRoot "UnrealEditor-$ModuleName.dll"
+            if (-not (Test-Path -LiteralPath $BinaryPath -PathType Leaf))
+            {
+                $Missing.Add($BinaryPath)
+            }
+        }
+    }
+
+    if ($Missing.Count -gt 0)
+    {
+        throw "Editor module binaries are missing for this worktree. Run AssertClosedForBuild, then build WacomEditor with Build.bat before Start. Missing: $($Missing -join ', ')"
+    }
+}
+
 function Get-ProcessRecord
 {
     param([Parameter(Mandatory = $true)][int]$ProcessId)
@@ -891,6 +944,7 @@ function Start-WacomUnrealMcp
     {
         throw "Worktree is dirty. Handle the changes or rerun with -AllowDirty after explicitly assigning ownership."
     }
+    Assert-EditorModuleBinariesPresent -ProjectRoot $GitContext.ProjectRoot
 
     $EditorPath = Get-CanonicalPath -Path $EditorExecutable -MustExist
     $SessionPath = Get-StateFilePath -StateRoot $StateRoot -Kind Session -Role $RoleConfig.name

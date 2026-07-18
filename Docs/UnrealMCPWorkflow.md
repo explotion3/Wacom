@@ -62,13 +62,34 @@ Subagent 不是固定前置条件：
 
 ## 4. 启动与身份校验
 
-以 card worktree 为例：
+以 card worktree 为例，先固定本轮身份参数：
 
 ```powershell
 $ProjectRoot = 'D:\UE_Project\5.7\WacomWorktrees\card-presentation\Wacom'
 $Branch = 'codex/card-presentation'
 $Mcp = Join-Path $ProjectRoot 'Scripts\Invoke-WacomUnrealMcp.ps1'
+```
 
+新建 worktree 不共享 `Binaries/`。第一次启动 Editor 前，先确认没有 Editor/端口/写锁占用，再正式编译一次该 worktree：
+
+```powershell
+& $Mcp -Action AssertClosedForBuild `
+    -Role card `
+    -ProjectRoot $ProjectRoot `
+    -ExpectedBranch $Branch
+
+& 'E:\UE_5.8\Engine\Build\BatchFiles\Build.bat' `
+    WacomEditor Win64 Development `
+    -Project="$ProjectRoot\Wacom.uproject" `
+    -WaitMutex `
+    -NoHotReloadFromIDE
+```
+
+`Start` 会检查项目和仓库内插件声明的 Editor module DLL。缺失时直接停止并提示先编译，不打开 Unreal 的 “Missing Modules” 重建弹窗。
+
+编译成功后启动：
+
+```powershell
 & $Mcp -Action Start `
     -Role card `
     -ProjectRoot $ProjectRoot `
