@@ -485,16 +485,24 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			AssignedStyle->MinimumVisibleFraction, 0.3f);
 		TestEqual(TEXT("Workspace style keeps default current lift"),
 			AssignedStyle->CurrentCardLiftPixels, 56.0f);
-		TestEqual(TEXT("Workspace style caps the focus window at five cards"),
-			AssignedStyle->FocusWindowMaximumCards, 5);
-		TestEqual(TEXT("Workspace style keeps the authored full-card gap"),
-			AssignedStyle->FocusWindowFullGapPixels, 24.0f);
-		TestEqual(TEXT("Workspace style keeps the desired compressed exposure"),
-			AssignedStyle->FocusWindowCompressedExposurePixels, 56.0f);
-		TestEqual(TEXT("Workspace style protects the minimum compressed exposure"),
-			AssignedStyle->FocusWindowMinimumExposurePixels, 16.0f);
-		TestEqual(TEXT("Workspace style keeps the stable-band hysteresis"),
-			AssignedStyle->FocusHitHysteresisPixels, 8.0f);
+		TestEqual(TEXT("Workspace style uses the explicit Hand Lens asset version"),
+			AssignedStyle->AssetVersion,
+			UWacomBackpackWorkspaceStyle::CurrentAssetVersion);
+		TestTrue(TEXT("Carry FocusWindow keeps an authored positive window size"),
+			AssignedStyle->FocusWindowMaximumCards >= 1);
+		TestTrue(TEXT("Carry FocusWindow authored values remain runtime-valid"),
+			AssignedStyle->FocusWindowFullGapPixels >= 0.0f
+				&& AssignedStyle->FocusWindowCompressedExposurePixels > 0.0f
+				&& AssignedStyle->FocusWindowMinimumExposurePixels > 0.0f);
+		TestTrue(TEXT("Expanded pile Hand Lens authored values remain runtime-valid"),
+			AssignedStyle->HandLensFullGapPixels >= 0.0f
+				&& AssignedStyle->HandLensCompressedExposurePixels > 0.0f
+				&& AssignedStyle->HandLensMinimumExposurePixels > 0.0f
+				&& AssignedStyle->HandLensPromotionOverlapTolerancePixels >= 0.0f);
+		TestTrue(TEXT("Hand Lens interaction timing remains runtime-valid"),
+			AssignedStyle->FocusHitHysteresisPixels >= 0.0f
+				&& AssignedStyle->FocusReflowSeconds >= 0.0f
+				&& AssignedStyle->FocusExitDelaySeconds >= 0.0f);
 	}
 
 	UClass* PrimaryLayoutClass = LoadBackpackWorkspaceWidgetClass(

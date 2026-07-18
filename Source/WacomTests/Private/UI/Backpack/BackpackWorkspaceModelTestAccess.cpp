@@ -67,10 +67,10 @@ FWacomBackpackWorkspaceModelTestAccess::BuildPileContentLayout(
 			FVector2D(220.0f, 320.0f),
 			bExpanded,
 			16.0f,
-			5,
 			24.0f,
-			56.0f,
+			59.0f,
 			16.0f,
+			178.0f,
 			24.0f);
 	FWacomBackpackPileContentLayoutTestView View;
 	View.HeaderRect = Layout.HeaderRect;

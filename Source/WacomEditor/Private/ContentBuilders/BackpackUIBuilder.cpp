@@ -1000,6 +1000,7 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 		return nullptr;
 	}
 	FAssetRegistryModule::AssetCreated(Style);
+	Style->AssetVersion = UWacomBackpackWorkspaceStyle::CurrentAssetVersion;
 	Style->CardRenderSize = FVector2D(296.0f, 420.0f);
 	Style->MinimumVisibleFraction = 0.3f;
 	Style->DefaultCardSpacing = FVector2D(36.0f, 44.0f);
@@ -1007,12 +1008,17 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	Style->CurrentCardLiftPixels = 56.0f;
 	Style->CurrentCardZOrderBoost = 1000;
 	Style->PileCollapsedExposurePixels = 16.0f;
+	Style->ExpandedCardHoverLiftPixels = 36.0f;
+	Style->HandLensFullGapPixels = 24.0f;
+	Style->HandLensCompressedExposurePixels = 59.0f;
+	Style->HandLensMinimumExposurePixels = 16.0f;
+	Style->HandLensPromotionOverlapTolerancePixels = 178.0f;
 	Style->FocusWindowMaximumCards = 5;
 	Style->FocusWindowFullGapPixels = 24.0f;
 	Style->FocusWindowCompressedExposurePixels = 56.0f;
 	Style->FocusWindowMinimumExposurePixels = 16.0f;
 	Style->FocusHitHysteresisPixels = 8.0f;
-	Style->FocusReflowSeconds = 0.18f;
+	Style->FocusReflowSeconds = 0.32f;
 	Style->FocusExitDelaySeconds = 0.12f;
 	Style->SettleSeconds = 0.18f;
 	Style->SelectionColor = FLinearColor(0.10f, 0.78f, 1.0f, 0.96f);

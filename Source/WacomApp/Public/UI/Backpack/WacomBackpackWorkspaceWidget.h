@@ -288,13 +288,13 @@ private:
 		TArray<FWacomBackpackExpandedPileFocusCard> Cards;
 		/** 当前抬升并启用实时卡面的卡；离开后清空。 */
 		int32 FocusIndex = INDEX_NONE;
-		/** 最后一次驱动三段式窗口的位置；离开卡面后保留到牌堆收起。 */
-		int32 WindowFocusIndex = INDEX_NONE;
-		/** 上一次完整窗口起点；新焦点只做纳入所需的最小滑动。 */
-		int32 WindowStartIndex = INDEX_NONE;
-		/** 焦点切换瞬间的实际视觉中心，保证目标卡不离开鼠标。 */
-		FVector2D FocusAnchorCenter = FVector2D::ZeroVector;
-		bool bHasFocusAnchor = false;
+		/** 0..Cards.Num()-1 的连续鼠标透镜位置；与实际浏览卡身份严格分离。 */
+		float LensFocus = 0.0f;
+		int32 LensLeftStackCount = 0;
+		int32 LensExpandedStartIndex = INDEX_NONE;
+		int32 LensExpandedCardCount = 0;
+		int32 LensRightStackCount = 0;
+		bool bHasLensLayout = false;
 		FVector2D PointerLocal = FVector2D::ZeroVector;
 		float ExitDelayRemainingSeconds = 0.0f;
 		bool bExitPending = false;
@@ -356,13 +356,15 @@ private:
 	void UpdateCarryAnchor(FVector2D Pointer, bool bUpdateModel = true);
 	void ApplyCarryVisualAnchor(float DeltaTime);
 	void UpdateExpandedPileFocus(FVector2D PointerLocal);
+	void UpdateExpandedPileLensFocus(FVector2D PointerLocal);
+	void RefreshExpandedPileVisualHitAtCachedPointer();
 	int32 ResolveExpandedPileVisualHitIndex(
 		FVector2D PointerLocal,
 		bool bAllowCurrentFocusHysteresis) const;
 	void BeginExpandedPileFocusExit();
 	void TickExpandedPileFocusExit(float DeltaTime);
 	void SetExpandedPileFocusIndex(int32 FocusIndex);
-	void RebuildExpandedPileFocusLayout();
+	bool RebuildExpandedPileFocusLayout();
 	void SyncExpandedPileHitLayouts(bool bUseFocusedTargets);
 	void ClearExpandedPileFocus(bool bAnimateReturn, bool bBroadcastChange = true);
 	void ResetExpandedPileFocusWindow(bool bAnimateReturn, bool bBroadcastChange = true);
@@ -450,8 +452,11 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 CarryVisualAnchorApplyCount = 0;
 	int32 ActiveBaseCardLayoutTransitionCount = 0;
 	int32 ExpandedPileFocusIndex = INDEX_NONE;
-	int32 ExpandedPileWindowFocusIndex = INDEX_NONE;
-	int32 ExpandedPileWindowStartIndex = INDEX_NONE;
+	float ExpandedPileLensFocus = 0.0f;
+	int32 ExpandedPileLensLeftStackCount = 0;
+	int32 ExpandedPileLensExpandedStartIndex = INDEX_NONE;
+	int32 ExpandedPileLensExpandedCardCount = 0;
+	int32 ExpandedPileLensRightStackCount = 0;
 	int32 SelectionFrozenCardCount = 0;
 	bool bPileMoveRollbackSnapshotActive = false;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;

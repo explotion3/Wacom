@@ -62,6 +62,13 @@ class WACOMAPP_API UWacomBackpackWorkspaceStyle : public UDataAsset
 	GENERATED_BODY()
 
 public:
+	/** 当前制作资产版本。运行时与 Builder 禁止静默迁移已有资产。 */
+	static constexpr int32 CurrentAssetVersion = 2;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Version",
+		meta = (ToolTip = "背包工作台 Style 资产版本。版本 2 引入展开牌堆 Hand Lens；仅允许通过明确的白名单资产迁移修改已有资产。"))
+	int32 AssetVersion = 1;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Layout",
 		meta = (ToolTip = "工作台卡牌渲染尺寸，单位为像素。默认 296×420，与 Battle 的正式卡牌主体制作尺寸一致；会影响默认布局、框选中心和边界约束，不改变规则。"))
 	FVector2D CardRenderSize = FVector2D(296.0f, 420.0f);
@@ -95,8 +102,24 @@ public:
 	float PileEdgeMarginPixels = 24.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Pile Layout",
-		meta = (ToolTip = "展开牌堆中悬停卡牌的上抬距离，单位为像素。推荐 32–64；不缩放卡面。"))
-	float ExpandedCardHoverLiftPixels = 48.0f;
+		meta = (ToolTip = "展开牌堆中悬停卡牌的上抬距离，单位为像素。版本 2 基线 36，推荐 24–56；不缩放卡面。"))
+	float ExpandedCardHoverLiftPixels = 36.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Hand Lens Strip",
+		meta = (ToolTip = "展开牌堆 Hand Lens 完整卡之间的边缘间隔，单位为像素。版本 2 基线 24，推荐 0–32；不改变 296×420 卡面尺寸。"))
+	float HandLensFullGapPixels = 24.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Hand Lens Strip",
+		meta = (ToolTip = "展开牌堆左右压缩段的期望可见露出，单位为像素。版本 2 基线 59，推荐 32–80；空间不足时自动减小。"))
+	float HandLensCompressedExposurePixels = 59.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Hand Lens Strip",
+		meta = (ToolTip = "展开牌堆压缩卡必须保留的最小可见露出，单位为像素。版本 2 基线 16，推荐 10–24；只作为严格布局下限。"))
+	float HandLensMinimumExposurePixels = 16.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Hand Lens Strip",
+		meta = (ToolTip = "严格布局仍有剩余空间时，多提升一张完整卡所允许的边界堆顶重叠，单位为像素。版本 2 基线 178，推荐 120–220；只影响展开牌堆三段分配。"))
+	float HandLensPromotionOverlapTolerancePixels = 178.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
 		meta = (ToolTip = "中央完整展开窗口允许的最大卡牌数。默认 5，推荐 3–7；实际数量会根据工作台宽度自动降低。", ClampMin = "1"))
@@ -118,9 +141,9 @@ public:
 		meta = (ToolTip = "稳定命中条带切换焦点时的迟滞宽度，单位为像素。默认 8；用于避免边界来回振荡。"))
 	float FocusHitHysteresisPixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
-		meta = (ToolTip = "展开牌堆邻居让位到新焦点布局的时间，单位为秒。默认 0.18；只动画局部位置和角度。"))
-	float FocusReflowSeconds = 0.18f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Hand Lens Strip",
+		meta = (ToolTip = "展开牌堆 Hand Lens 横向重排到新三段布局的时间，单位为秒。版本 2 基线 0.32；使用 Ease-Out，只动画外层位置。"))
+	float FocusReflowSeconds = 0.32f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
 		meta = (ToolTip = "鼠标离开实际卡身后取消活动焦点前的等待时间，单位为秒。默认 0.12；重新进入会取消计时，最后窗口位置保持冻结。"))

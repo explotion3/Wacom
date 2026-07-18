@@ -286,9 +286,10 @@ FWacomBackpackWorkspaceScene FWacomBackpackWorkspaceSceneBuilder::Build(
 		Pile.ContentLayout = FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 			Pile.CardCount, HeaderTopLeft, HeaderSize, WorkspaceSize,
 			Style.CardRenderSize, PileView.bExpanded,
-			Style.PileCollapsedExposurePixels, Style.FocusWindowMaximumCards,
-			Style.FocusWindowFullGapPixels, Style.FocusWindowCompressedExposurePixels,
-			Style.FocusWindowMinimumExposurePixels, Style.PileEdgeMarginPixels,
+			Style.PileCollapsedExposurePixels, Style.HandLensFullGapPixels,
+			Style.HandLensCompressedExposurePixels,
+			Style.HandLensMinimumExposurePixels,
+			Style.HandLensPromotionOverlapTolerancePixels, Style.PileEdgeMarginPixels,
 			Style.ExpandedCardHoverLiftPixels);
 		Pile.FrameRect = Pile.ContentLayout.FrameRect;
 		Pile.HeaderRect = Pile.ContentLayout.HeaderRect;
