@@ -2,7 +2,7 @@
 type: orchestration-spec
 scope: wacom-app
 status: active
-updated: 2026-07-16
+updated: 2026-07-18
 tags:
   - wacom/app
   - wacom/gameflow
@@ -50,6 +50,7 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 |---|---|---|
 | `L_MainMenu` | `AWacomMenuGameMode` | 主菜单，不 Spawn 探索 Pawn；注入主菜单 ViewData，并处理菜单 Action、确认、退出和 travel |
 | `L_Exploration` | `AWacomGameMode` | 探索主流程，持有 GameFlowState，进入 / 退出战斗，初始化探索 HUD |
+| `L_Run_Floor_Main_01` | 未接入完整 Production Journey | Floor 1 Production 灰盒与本地 Scene Binding 验证；不是当前主菜单启动目标 |
 
 当前 `EGameFlowState` 包含：
 
@@ -93,6 +94,8 @@ Subsystem 在 GameInstance 初始化时应用已保存的非分辨率配置，�
 Journey 成功页沿用同一 passive Screen 边界。`AWacomGameMode` 只消费 Run settlement 中的 `JourneySucceeded` event，不读取 Actor label、EncounterId 或硬编码 NodeId；它从同批 `PostSnapshot.CompletionSummary` 与 Journey `DisplayName` 构造 `FWacomJourneySummaryViewData`。`UWacomJourneySummaryScreen` 只显示“Journey 成功”、Journey 标题、完成天数、Floor/Node 进度和最终压力，并通过 `OnContinueRequestedNative` 上报按钮或 ESC/Back 的一次性继续意图。当前只提供原生 C++ fallback 和 WBP 表现钩子，不创建 `WBP_JourneySummary`，也不新增 Widget GameplayTag。
 
 成功战斗仍先 Pop BattleHUD、结算 Encounter 并完成既有 Return-to-Run 镜头 staging；staging barrier 完成后直接进入 `JourneySummary`，不恢复 Run first-person hand 或 interact Toast。GameMode 把总结页 Push 到既有 `UI.Layer.GameMenu`；确认或 Back 后先解绑 Screen、`TearDownPrimaryLayout()`，再在下一帧 travel 到 `/Game/Wacom/Maps/L_MainMenu`。Screen push、PrimaryLayout 或 PlayerController 缺失时跳过页面并走完全相同的安全主菜单交接，避免玩家停在不可操作的终局世界。
+
+Floor 1 Production 灰盒中的 `Node.Exit.01` 当前使用非交互 marker，仅表达 Floor DataAsset 的 `TargetFloorId=Floor.Main.02` 与 Credential 条件已有场景落点。它不接收 E/hover/click、不调用 `AdvanceFloor()` 或 `OpenLevel()`，也没有 Level Blueprint 特例。未来跨层交接必须由 GameMode/App flow 消费成功的 `WacomRun` Floor transition result，再以 FloorId-to-world 配置选择目标 map；不得把 travel 规则塞进 marker、Actor label 或当前灰盒 map。
 
 ---
 

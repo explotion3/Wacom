@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-07-13
+updated: 2026-07-18
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -64,6 +64,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | Battle Widget Session Blueprint 面 | C++ owner 注入已改走 `UWacomBattleWidgetBase.SetInjectedBattleSession / GetInjectedBattleSession`；`SetSession / GetSession` 已降为 C++ only 旧兼容 wrapper，不再暴露给 Blueprint；正式 WBP 制作面只消费 Snapshot / ViewData 并回传玩家意图 | 保留 C++ wrapper 到旧测试和零散调用迁移完成；如外部 widget 需要只读战斗状态，再评估 `UWacomBattleViewModel` / provider |
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
 | 场景敌人表现 polish | 主链路已拆成 `SceneEnemyHost + PartActor + WorldTargetBridge + Presentation`；TrainingWarrior 覆盖 Host Idle / Action / Destroyed，通用 Multi-Part Part Action 已支持精确身份 / Layer、barrier、watchdog 和 Destroyed 抢占；Snake 与 SlimeTrio 的独立 Placeholder 包覆盖三部位 VisualLayers、错帧 Idle 与逐层 Destroyed，但都没有正式美术和 Action Clip | 正式 Snake / SlimeTrio 素材到位后分别替换对应 `/Game/Wacom/Art/Placeholders/Enemies/<Pack>`、删除已知占位包并让 `-FailOnPlaceholder` 通过，再显式制作 Intent Style；继续补多层同步、材质描边、tooltip 和风险动效，只有复杂局部状态确有需要时再接 PaperZD/Animator |
+| Floor 1 Production 灰盒表现与出口 | `L_Run_Floor_Main_01` 的四个 SerpentWood Enemy Host 使用受控 Placeholder；`Node.Exit.01` 只有非交互灰盒 marker，没有 FloorId-to-world handoff | 正式美术到位后逐个替换 Host 引用并跑发布 placeholder gate；完成 Production Journey/Floor 2/3 后，由 App flow 实现跨层交接并用正式入口表现替换 marker，禁止在 Level Blueprint 或 marker 中硬编码 travel |
 | Scene Enemy Panel 兼容资产命名 | 正式面板仍沿用既有 `BP_WacomBattleEnemyPanelWidget / BP_WacomBattleEnemyPartEntryWidget` 路径，避免本轮重命名波及地图与 Host 资产 | 等地图和 Host 资产可统一重存时，单独迁到 `WBP_` 命名并用 redirect / dependency audit 清理旧路径 |
 | 普通 Enemy Panel 部位上限 | 正式 WBP 对 1–4 个部位提供等宽连续分段，双侧详情复用同一 ViewData；超过 4 个只给制作警告并继续运行 | 首个复杂 Boss 内容切片引入专用 Boss WidgetClass；不要把滚动、分页或 Phase UI 塞回普通面板 |
 | Enemy Inspection 详情深度 | 当前详情只展示 Snapshot 已有的 HP、Shield、Initiative、Intent 名称/先机/抵抗、Buff 与 Destroyed；不翻译 Intent effects，也不包含 Lore / 图鉴 | 等战斗策划冻结公开信息口径后新增独立 presentation facts；不要让 WBP 解析规则 effect 或直接读取 DataAsset 猜说明 |

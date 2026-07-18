@@ -59,7 +59,7 @@
 - [x] T036 Pass `AssertClosedForBuild`, compile default Unity WacomEditor, and record command/result/hash
 - [x] T037 Run `Wacom.Editor.FormalFloor1ProductionScene` transient tests plus `Wacom.Data.Map.Validation`; record discovered/pass/fail counts
 - [x] T038 Run inspect-only command against absent targets and prove zero Content changes
-- [ ] T039 Stage only Spec 015, pointers, Editor source, and transient tests; confirm zero `.uasset/.umap`; commit `feat(editor): add formal floor1 scene seeder`
+- [x] T039 Stage only Spec 015, pointers, Editor source, and transient tests; confirm zero `.uasset/.umap`; commit `feat(editor): add formal floor1 scene seeder`
 
 ## Phase 5 — Seed and validate Floor DataAsset
 
@@ -67,12 +67,12 @@
 
 **Independent Test**: Asset loads as `UWacomFloorMapDefinition` and exact graph/identity/reference validation passes; no other binary package changes.
 
-- [ ] T040 Start exact target Editor through the formal MCP workflow using Role `run`, exact ProjectRoot/branch, and record session provenance
-- [ ] T041 AssertReady immediately before mutation and acquire writer for the one-package Floor allowlist
-- [ ] T042 Invoke `SeedMissing Group=Floor CompareSeedDefaults` and save exactly `DA_Floor_Main_01`
-- [ ] T043 Audit Git path, SHA-256, LFS, report, Editor log, and allowlist while writer is held; then release writer
-- [ ] T044 Run real `UWacomFloorMapDefinition` validation: 20/21 counts, type distribution, IDs, reachability, merges, dominance, positions, Camp, payloads, Guardian, Exit target/credential, and forbidden references
-- [ ] T045 Record report/audit JSON and Floor validation evidence in `quickstart.md`
+- [x] T040 Start exact target Editor through the formal MCP workflow using Role `run`, exact ProjectRoot/branch, and record session provenance
+- [x] T041 AssertReady immediately before mutation and acquire writer for the one-package Floor allowlist
+- [x] T042 Invoke `SeedMissing Group=Floor CompareSeedDefaults` and save exactly `DA_Floor_Main_01`
+- [x] T043 Audit Git path, SHA-256, LFS, report, Editor log, and allowlist while writer is held; then release writer
+- [x] T044 Run real `UWacomFloorMapDefinition` validation: 20/21 counts, type distribution, IDs, reachability, merges, dominance, positions, Camp, payloads, Guardian, Exit target/credential, and forbidden references
+- [x] T045 Record report/audit JSON and Floor validation evidence in `quickstart.md`
 
 ## Phase 6 — Seed and validate four enemy Host Blueprints
 
@@ -80,15 +80,15 @@
 
 **Independent Test**: 4/4 Blueprints compile and expose exact parent/definition/11-part topology; all visual dependencies are controlled placeholders.
 
-- [ ] T046 Implement initial-only Blueprint creation and EnemyDefinition assignment for four archetypes
-- [ ] T047 Invoke existing `SyncPartsFromDefinition` authoring for initial creation and apply controlled graybox part presentation/layout defaults
-- [ ] T048 Add compile/reload/parent/definition/part/placeholder validation and ensure existing Blueprint paths are inspect-only
-- [ ] T049 Close Editor, pass `AssertClosedForBuild`, compile default Unity WacomEditor, and run transient enemy Host authoring tests
-- [ ] T050 Start/AssertReady exact Editor and acquire writer for the four-package EnemyHosts allowlist
-- [ ] T051 Invoke `SeedMissing Group=EnemyHosts CompareSeedDefaults`; compile and save exactly four Blueprints
-- [ ] T052 Audit Git paths, four SHA-256 values, LFS, placeholder references, report, and allowlist while writer is held; then release writer
-- [ ] T053 Run real Blueprint compile, 4 definition/11 part closure, controlled-reference, and affected Battle scene-host authoring tests
-- [ ] T054 Record report/audit JSON, placeholder release blocker, and validation evidence in `quickstart.md`
+- [x] T046 Implement initial-only Blueprint creation and EnemyDefinition assignment for four archetypes
+- [x] T047 Invoke existing `SyncPartsFromDefinition` authoring for initial creation and apply controlled graybox part presentation/layout defaults
+- [x] T048 Add compile/reload/parent/definition/part/placeholder validation and ensure existing Blueprint paths are inspect-only
+- [x] T049 Close Editor, pass `AssertClosedForBuild`, compile default Unity WacomEditor, and run transient enemy Host authoring tests
+- [x] T050 Start/AssertReady exact Editor and acquire writer for the four-package EnemyHosts allowlist
+- [x] T051 Invoke `SeedMissing Group=EnemyHosts CompareSeedDefaults`; compile and save exactly four Blueprints
+- [x] T052 Audit Git paths, four SHA-256 values, LFS, placeholder references, report, and allowlist while writer is held; then release writer
+- [x] T053 Run real Blueprint compile, 4 definition/11 part closure, controlled-reference, and affected Battle scene-host authoring tests
+- [x] T054 Record report/audit JSON, placeholder release blocker, and validation evidence in `quickstart.md`
 
 ## Phase 7 — Seed and validate Exit marker and Production map
 
@@ -96,38 +96,38 @@
 
 **Independent Test**: Reloaded map contains exact descriptor/Anchor/Path/BranchTarget/content Host/enemy Host/viewpoint contracts and passes scene validation.
 
-- [ ] T055 Implement initial-only Exit marker Blueprint creation with visual diagnostics, RunMapNodeBinding, Blueprint PersistentId, and no interaction/travel logic
-- [ ] T056 Implement new empty World creation and basic graybox environment without Level Blueprint gameplay logic
-- [ ] T057 Place/configure the one descriptor and exact 20 Anchors from the world layout manifest
-- [ ] T058 Place/configure exact 21 Path actors and four BranchTargets with correct source/target bindings and clear traversal splines
-- [ ] T059 Place/configure 16 content Hosts with exact NodeType, payload mirror, PersistentId, trigger reachability, and no Navigation Host
-- [ ] T060 Place/configure eight enemy Host instances with exact Encounter slot mapping and six Battle viewpoints
-- [ ] T061 Place/configure four Event and one Shop viewpoint; stage Pickups and Exit marker beside Anchors without blocking traversal
-- [ ] T062 Implement reload-time map contract inspection, local scene validator invocation, forbidden-reference scan, and Level Blueprint no-logic check
-- [ ] T063 Close Editor, pass `AssertClosedForBuild`, compile default Unity WacomEditor, and run transient scene-contract tests
-- [ ] T064 Start/AssertReady exact Editor and acquire writer for the two-package Scene allowlist
-- [ ] T065 Invoke `SeedMissing Group=Scene CompareSeedDefaults`; compile marker and save only marker/map
-- [ ] T066 Audit Git paths, two SHA-256 values, LFS, report, Editor log, and allowlist while writer is held; then release writer
-- [ ] T067 Run `WacomValidateRunFloorScene` against the Production map and affected `Wacom.Editor.RunSceneValidation`/Run scene-binding/path tests
-- [ ] T068 Run real 5/5 Blueprint compile, 7/7 AssetRegistry/failed-load/class checks, exact scene counts, Host payload/PersistentId, encounter composition, and forbidden-reference audits
-- [ ] T069 Perform read-only viewport inspection of branch direction, Host visibility/spacing, traversal clearance, viewpoint staging, part targetability, and Exit diagnostic; do not save
-- [ ] T070 Record report/audit JSON, scene validation, viewport findings, and explicit Golden Path PIE skip in `quickstart.md`
+- [x] T055 Implement initial-only Exit marker Blueprint creation with visual diagnostics, RunMapNodeBinding, Blueprint PersistentId, and no interaction/travel logic
+- [x] T056 Implement new empty World creation and basic graybox environment without Level Blueprint gameplay logic
+- [x] T057 Place/configure the one descriptor and exact 20 Anchors from the world layout manifest
+- [x] T058 Place/configure exact 21 Path actors and four BranchTargets with correct source/target bindings and clear traversal splines
+- [x] T059 Place/configure 16 content Hosts with exact NodeType, payload mirror, PersistentId, trigger reachability, and no Navigation Host
+- [x] T060 Place/configure eight enemy Host instances with exact Encounter slot mapping and six Battle viewpoints
+- [x] T061 Place/configure four Event and one Shop viewpoint; stage Pickups and Exit marker beside Anchors without blocking traversal
+- [x] T062 Implement reload-time map contract inspection, local scene validator invocation, forbidden-reference scan, and Level Blueprint no-logic check
+- [x] T063 Close Editor, pass `AssertClosedForBuild`, compile default Unity WacomEditor, and run transient scene-contract tests
+- [x] T064 Start/AssertReady exact Editor and acquire writer for the two-package Scene allowlist
+- [x] T065 Invoke `SeedMissing Group=Scene CompareSeedDefaults`; compile marker and save only marker/map
+- [x] T066 Audit Git paths, two SHA-256 values, LFS, report, Editor log, and allowlist while writer is held; then release writer
+- [x] T067 Run `WacomValidateRunFloorScene` against the Production map and affected `Wacom.Editor.RunSceneValidation`/Run scene-binding/path tests
+- [x] T068 Run real 5/5 Blueprint compile, 7/7 AssetRegistry/failed-load/class checks, exact scene counts, Host payload/PersistentId, encounter composition, and forbidden-reference audits
+- [x] T069 Perform read-only viewport inspection of branch direction, Host visibility/spacing, traversal clearance, viewpoint staging, part targetability, and Exit diagnostic; do not save
+- [x] T070 Record report/audit JSON, scene validation, viewport findings, and explicit Golden Path PIE skip in `quickstart.md`
 
 ## Phase 8 — Idempotence, regression, durable Docs, and handoff
 
-- [ ] T071 Run `SeedMissing Group=All CompareSeedDefaults` a second time under exact seven-package writer allowlist; require 0 created/0 saved and stable seven SHA-256 values
-- [ ] T072 Add read-only real-asset tests in `WacomTests/Private/Editor/FormalFloor1ProductionSceneAssetSpec.cpp`
-- [ ] T073 Release writer, close Editor normally, pass `AssertClosedForBuild`, and compile final default Unity WacomEditor
-- [ ] T074 Run all focused prefixes from `contracts/validation-contract.md`; record exact discovered/pass/fail counts
-- [ ] T075 Re-run AssetRegistry/failed-load, five Blueprint compile, local scene validator, 46-dependency hash, forbidden-reference, and LFS audits
-- [ ] T076 Update `Docs/WacomMap.md` and `Docs/WacomDataAuthoring.md` with implemented Floor/map/Host package and scene-authoring facts
-- [ ] T077 Update `Docs/WacomApp.md`/`Docs/WacomWorldInteraction.md` only with the confirmed non-interactive Exit limitation and future cross-floor ownership boundary
-- [ ] T078 Update `Docs/Architecture.md` only if the reusable Editor seed service adds durable authoring architecture; otherwise record no architecture change
-- [ ] T079 Update `Docs/TODO.md`, `Docs/Questions.md`, `Docs/Roadmap.md`, and `Docs/TechDebt.md` with completed local graybox work and remaining Journey/Floor2/3/transition/art/Exit-marker blockers
-- [ ] T080 Complete `quickstart.md` with branch/base/final commits, changed files, seven hashes, writer/session audit, build/test/AssetRegistry/Blueprint/scene/viewport results, skips, and risks
-- [ ] T081 Run Spec Kit consistency recheck, `git diff --check`, scope and forbidden-path audit, `git status`, `git lfs status`, and `git lfs fsck`
-- [ ] T082 Stage real-asset tests, seven binaries, durable Docs, and final evidence only; commit `feat(content): seed formal floor1 production scene`
-- [ ] T083 Confirm worktree/LFS clean and produce standard `Docs/AgentIntegrationWorkflow.md` handoff; do not merge main or push
+- [x] T071 Run `SeedMissing Group=All CompareSeedDefaults` a second time under exact seven-package writer allowlist; require 0 created/0 saved and stable seven SHA-256 values
+- [x] T072 Add read-only real-asset tests in `WacomTests/Private/Editor/FormalFloor1ProductionSceneAssetSpec.cpp`
+- [x] T073 Release writer, close Editor normally, pass `AssertClosedForBuild`, and compile final default Unity WacomEditor
+- [x] T074 Run all focused prefixes from `contracts/validation-contract.md`; record exact discovered/pass/fail counts
+- [x] T075 Re-run AssetRegistry/failed-load, five Blueprint compile, local scene validator, 46-dependency hash, forbidden-reference, and LFS audits
+- [x] T076 Update `Docs/WacomMap.md` and `Docs/WacomDataAuthoring.md` with implemented Floor/map/Host package and scene-authoring facts
+- [x] T077 Update `Docs/WacomApp.md`/`Docs/WacomWorldInteraction.md` only with the confirmed non-interactive Exit limitation and future cross-floor ownership boundary
+- [x] T078 Update `Docs/Architecture.md` only if the reusable Editor seed service adds durable authoring architecture; otherwise record no architecture change
+- [x] T079 Update `Docs/TODO.md`, `Docs/Questions.md`, `Docs/Roadmap.md`, and `Docs/TechDebt.md` with completed local graybox work and remaining Journey/Floor2/3/transition/art/Exit-marker blockers
+- [x] T080 Complete `quickstart.md` with branch/base/final commits, changed files, seven hashes, writer/session audit, build/test/AssetRegistry/Blueprint/scene/viewport results, skips, and risks
+- [x] T081 Run Spec Kit consistency recheck, `git diff --check`, scope and forbidden-path audit, `git status`, `git lfs status`, and `git lfs fsck`
+- [x] T082 Stage real-asset tests, seven binaries, durable Docs, and final evidence only; commit `feat(content): seed formal floor1 production scene`
+- [x] T083 Confirm worktree/LFS clean and produce standard `Docs/AgentIntegrationWorkflow.md` handoff; do not merge main or push
 
 ## Dependencies
 

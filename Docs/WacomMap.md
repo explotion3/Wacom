@@ -2,7 +2,7 @@
 type: domain-design
 scope: wacom-map
 status: core-implemented
-updated: 2026-07-17
+updated: 2026-07-18
 tags:
   - wacom/map
   - wacom/run
@@ -146,7 +146,7 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - 首版使用手工 Logical Map Graph 和手工 Run Path 场景，不实现 runtime PCG。
 - 每个 Floor 使用一个 DataAsset 作为 Logical Map Graph 的规则真源，保存稳定 FloorId、NodeId、有向 Edge、地图 UI 坐标、内容定义和入口条件。
 - 每个可独立加载的 Run Floor World 必须且只能放置一个 `AWacomRunFloorSceneDescriptorActor`，由 World 单向引用其 Floor DataAsset。Descriptor 不复制 Node/Edge、不保存 Run 状态，也不让 Floor 反向引用 World。
-- 当前资产分为三类：`L_Exploration + DA_Journey_LevelAuthoring + DA_Floor_LevelAuthoring_01 + GM_Wacom` 是人工制作基线；`DA_Journey_Debug + DA_Floor_Debug_01 + GM_WacomRunDebug + L_RunExploration_Debug` 是 Debug builder 独占夹具；`Journey.Main.01 / Floor.Main.*` 是已冻结但尚未落成资产的 Production 设计身份。Authoring baseline 的当前 8 节点图仍不得被存档、内容文档或后续代码默认视为正式 Floor 1。
+- 当前资产分为三类：`L_Exploration + DA_Journey_LevelAuthoring + DA_Floor_LevelAuthoring_01 + GM_Wacom` 是人工制作基线；`DA_Journey_Debug + DA_Floor_Debug_01 + GM_WacomRunDebug + L_RunExploration_Debug` 是 Debug builder 独占夹具；`DA_Floor_Main_01 + L_Run_Floor_Main_01` 是独立的 Floor 1 Production 灰盒基线。Production Journey 与 Floor 2/3 仍未创建。Authoring baseline 的当前 8 节点图不得被存档、内容文档或后续代码默认视为正式 Floor 1。
 - 静态地图 DataAsset 类型属于 `WacomData`；Map Node Lifecycle、Action Point、Map Travel、Floor Transition 与 Floor Exposure 的运行时规则属于 `WacomRun` 内部的深层地图 Module，不新增 UE `.Build.cs` 模块。
 - 场景 Actor / Component 只提供 `NodeId / EdgeId / NodeAnchor / content host` 映射；Actor 连线和关卡坐标不能成为 Logical Map Graph 的规则真相。`AWacomRunPathBranchTargetActor` 只广播 EdgeId，`AWacomRunPathSegmentActor` 只保存 EdgeId + Spline，`UWacomRunMapNodeBindingComponent` 只声明 Host 的 NodeId + NodeType。
 - 现有 Battle / Shop / RunEvent / Treasure Host 为复用外围 flow 可以保留 Definition 字段作为 façade mirror；Scene Validator 要求它与 Floor typed payload 一致。规则层只认 Floor DataAsset，Host 不得反向生成或覆盖地图内容。
@@ -155,7 +155,7 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - 多出口入口按道路初始方向从左到右排序，鼠标 hover / click 或 A/D、左摇杆、E / 手柄 A 只上报 EdgeId；Branch Actor 不保存目标节点、规则门槛或 Segment 引用。单出口不要求玩家寻找或点击场景 Actor。
 - NodeAnchor 的 View 朝向可以面向节点内容，PathSpline 起始切线可以面向道路方向；二者不要求制作时完全相同。开始 Traversal 的首帧保持 NodeAnchor View，App 在短距离内平滑对齐到 PathSpline，禁止用瞬时切换或 Character controller yaw 反写制造镜头中心跳变。
 - 首版入口视觉由 `DShader/Material/World/M_WacomRunBranchEntrance.dsm` 生成 `/Game/DreamMaterials/World/M_WacomRunBranchEntrance`：Available 使用稳定青色，Focused 使用稳定琥珀色；Full / Reduced / Off 只改变装饰脉冲，Off 仍保留合法选择的语义颜色。
-- `WacomEditor` 已提供 Journey/Floor Data Validation、严格只读的 loaded-world Scene Binding Validation 和可重复 Debug builder；未来图形 authoring Adapter 仍必须编辑同一份 DataAsset，不能维护第二份图数据。
+- `WacomEditor` 已提供 Journey/Floor Data Validation、严格只读的 loaded-world Scene Binding Validation、可重复 Debug builder，以及 exact-manifest、initial-only 的 Floor 1 Production Scene seeder。Seeder 只创建缺失资产；已有正确 class 的 Floor、Host Blueprint 或 map 永远只读，不覆盖人工调参。未来图形 authoring Adapter 仍必须编辑同一份 DataAsset，不能维护第二份图数据。
 - Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性。当前 SaveGame v5 保存 Run Credential、Outcome 与最近成功摘要，但仍不保存 Journey/Floor/Node、节点 lifecycle 或 Floor history。
 - Editor 场景验证覆盖 Descriptor 缺失/重复/空引用，重复、缺失或意外的 NodeAnchor / EdgePath / content host，host 类型与 typed payload 不一致，以及多出口 Edge 缺失/重复 BranchTarget、单出口 Edge 残留 BranchTarget。Spline 少于 2 点、长度不超过 10 cm、非有限 Transform 和方向颠倒是 Error；端点偏离不超过 100 cm 通过，`(100, 300] cm` 为 Warning，超过 300 cm 为 Error。诊断固定为 `Severity / Code / ObjectPath / Message`，菜单、commandlet、builder 和测试共用同一只读实现。
 - 制作人员可用 `Tools -> Wacom -> Validate Current Run Floor` 验证当前 World；CI/命令行使用 `-run=WacomValidateRunFloorScene -Map=/Game/...`，退出码 `0/1/2` 分别表示通过或仅 Warning、场景合同 Error、参数/加载/Descriptor 解析失败。两个入口都不得修复、标脏或保存 Package。
@@ -259,7 +259,9 @@ Floor 1 的 15 个内容节点已完成 Production 内容设计冻结，不再�
 
 击倒奖励量按 Encounter 部位数固定为：必经 Scout + EliteSentinel + Guardian 共 11；Route A 增加 MoltGuard 3，Route B 增加双 BrushSnake 4，Route C 不增加 Encounter，Route D 增加 RootStalker 2。因此 A/C、B/C、A/D、B/D 四条关键路线分别获得 `14 / 15 / 16 / 17` 张分支奖励卡，完整探索全部六场 Encounter 最多获得 20 张。每个部位只获得所选 Aid 或 Destroy 的一张独立实例，允许重复；选择不额外消耗 AP。该体量是后续卡组/背包平衡和 PIE 的显式风险，不在本轮增加去重或替代奖励。
 
-Floor 1 核心内容与八张击倒奖励卡设计 blocker 已关闭，`38 core + 8 branch reward = 46` 个静态 Production DataAsset 也已创建并通过真实加载、AssetRegistry、引用/哈希与幂等审计；Host、Production Journey/Floor DataAsset 和正式关卡仍未创建。其它 Aid/Destroy/Withdraw 后果、背包容量、世界资产权威、正式场景和 Golden Path PIE 继续分别处理。精确静态内容合同见 [WacomData.md](./WacomData.md) §13，路径和 seed-only 制作边界见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。
+Floor 1 核心内容与八张击倒奖励卡设计 blocker 已关闭，`38 core + 8 branch reward = 46` 个静态 Production DataAsset 已通过真实加载、AssetRegistry、引用/哈希与幂等审计。`DA_Floor_Main_01`、独立新建的 `L_Run_Floor_Main_01`、四个 SerpentWood 灰盒 Enemy Host Blueprint 和非交互 Exit marker 也已形成 Production 灰盒基线；没有迁移或修改 `L_Exploration`。Production Journey、Floor 2/3、跨层 world transition、正式敌人美术和完整 Golden Path PIE 仍未完成。其它 Aid/Destroy/Withdraw 后果、背包容量和表现平衡继续分别处理。精确静态内容合同见 [WacomData.md](./WacomData.md) §13，路径和 seed-only 制作边界见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。
+
+`L_Run_Floor_Main_01` 固定使用世界 `+X` 作为推进方向，`-Y` 为地图语义左路，`+Y` 为右路；两轮分岔分别保持 A/C 在左、B/D 在右。场景精确包含 `1 Descriptor / 20 Anchor / 21 Path / 4 BranchTarget / 16 content Host / 8 enemy Host / 11 viewpoint`。四个 Navigation 节点不放 content Host；其余 Host 使用 `<FloorId>.<NodeId>` 的 `PersistentId`，Floor typed payload 仍是规则真相。`Node.Exit.01` 当前只放置带 Node binding 的可见灰盒 marker，不实现 `IWacomWorldInteractable`、Floor travel 或 Level Blueprint 逻辑，不能被视为跨层已完成。
 
 ### Floor 2 节点与内容槽
 

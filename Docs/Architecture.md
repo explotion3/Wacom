@@ -314,7 +314,7 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / 
 2. `WacomRun`：RunSession、背包、SpecialZone、负重、经验/压力、商店、RunEvent、战斗结果回传、SaveGame schema。
 3. `WacomApp`：GameMode、PlayerController、世界交互接口、CommonUI 层级、探索 HUD、BattleHUD、Backpack / Shop / RunEvent Screen、AppToast。
 4. `WacomData`：卡牌、敌人、角色、商店、RunEvent 静态定义和生成内容。
-5. `WacomEditor`：内容 commandlet、Shop / RunEvent / Map Data Validation、Run Floor Scene validator、Debug-only Run fixture builder。
+5. `WacomEditor`：内容 commandlet、Shop / RunEvent / Map Data Validation、Run Floor Scene validator、Debug-only Run fixture builder，以及 exact-manifest、initial-only 的 Floor 1 Production DataAsset/scene seeder；Production seeder 只创建缺失 package，不覆盖已有资产或拥有后续人工调参。
 6. 自动化测试覆盖 Battle / Run / UI / Data validation 关键规则。
 
 ## 12. 自动化测试重点

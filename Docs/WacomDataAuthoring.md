@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-07-17
+updated: 2026-07-18
 tags:
   - wacom/data
   - wacom/authoring
@@ -364,7 +364,7 @@ Pickup.VenomCore.VenomReservoir
 Pickup.VenomCore.CoreBoon
 ```
 
-三层共 46 个节点内容槽。Floor 1 的 15 个槽已经由 Spec 011 冻结敌人组合、事件选项、库存和奖励数值；Floor 2/3 的 31 个槽仍只冻结职责和命名入口。视觉资产、Host、世界 Transform 与三层正式场景继续另案。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
+三层共 46 个节点内容槽。Floor 1 的 15 个槽已经由 Spec 011 冻结敌人组合、事件选项、库存和奖励数值，并由 Spec 014 创建 46 个支持 DataAsset；Floor 1 Floor/map/Host 灰盒由 Spec 015 独立落地。Floor 2/3 的 31 个槽仍只冻结职责和命名入口。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
 
 `Pickup.SerpentWood.SerpentSigil` 的正式 Definition 必须以 Card 作为固定主奖励，并在 `GrantedCredentialIds` 中授予 `Credential.Run.SerpentSigil`；`Node.Exit.01` 的 FloorEntrance 只在 `RequiredCredentialIds` 中引用该 Credential，不把 `Card.Run.SerpentSigil` 写回 `OwnedCardRequirements`。两者由同一稳定 ID 对接，但表现卡和资格状态互不推断。
 
@@ -374,7 +374,23 @@ Floor 3 `Node.Guardian.01` 是无出边的 success terminal，不配置 FloorEnt
 
 Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
 
-蛇印任务凭证门禁、Floor 2/3 图冻结、通用 Journey success、Floor 1 内容与击倒分支奖励合同均已冻结；Floor 1 的 46 个 Production DataAsset 也已完成 seed-only 创建、真实加载、通用/strict validation、AssetRegistry/引用/哈希与双跑幂等审计。Floor 1 内容资产制作 blocker 因此关闭。剩余 Production 阻塞是 Floor 2/3 的 31 个内容槽设计与资产、正式 Journey/Floor DataAsset、Production map/Host 权威选择与场景制作，以及后续美术和平衡验收；这些工作不得反向覆盖已人工调优的 46 个资产。Floor 1 原始图门禁见 `specs/007-formal-floor1-content-freeze/`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/`，成功合同见 `specs/010-journey-success-settlement-baseline/`，内容与奖励冻结证据见 Spec 011–013，实际播种与审计见 `specs/014-formal-floor1-production-assets/`。
+蛇印任务凭证门禁、Floor 2/3 图冻结、通用 Journey success、Floor 1 内容与击倒分支奖励合同均已冻结；Floor 1 的 46 个 Production DataAsset 已完成 seed-only 创建、真实加载、通用/strict validation、AssetRegistry/引用/哈希与双跑幂等审计。Floor 1 世界资产权威也已选择“新建独立 Production map”，并由下述 Spec 015 seeder 建立 Floor/map/Host 灰盒。剩余 Production 阻塞是 Floor 2/3 的 31 个内容槽设计与资产、完整 Production Journey、Floor 2/3 Floor/map、跨层 world transition、正式美术和平衡验收；这些工作不得反向覆盖已人工调优的 46 个资产或迁移 `L_Exploration`。Floor 1 原始图门禁见 `specs/007-formal-floor1-content-freeze/`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/`，成功合同见 `specs/010-journey-success-settlement-baseline/`，内容与奖励冻结证据见 Spec 011–013，实际内容播种见 Spec 014，场景播种与审计见 `specs/015-formal-floor1-production-scene-baseline/`。
+
+Floor 1 Production 场景入口是 `WacomBuildFormalFloor1ProductionScene` commandlet 与 `Wacom.BuildFormalFloor1ProductionScene` Editor console command。二者共享 exact 7-package manifest，分组为 `Floor=1`、`EnemyHosts=4`、`Scene=2`：
+
+```text
+/Game/Wacom/Data/Map/Production/DA_Floor_Main_01
+/Game/Wacom/Run/SceneActors/Enemies/SerpentWood/BrushSnake/BP_EnemyHost_BrushSnake_Graybox
+/Game/Wacom/Run/SceneActors/Enemies/SerpentWood/MoltGuard/BP_EnemyHost_MoltGuard_Graybox
+/Game/Wacom/Run/SceneActors/Enemies/SerpentWood/RootStalker/BP_EnemyHost_RootStalker_Graybox
+/Game/Wacom/Run/SceneActors/Enemies/SerpentWood/ShallowGuardian/BP_EnemyHost_ShallowGuardian_Graybox
+/Game/Wacom/Run/SceneActors/Graybox/BP_WacomRunFloorEntranceMarker_Graybox
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_01
+```
+
+默认运行只 inspect；只有显式 `SeedMissing` 才创建缺失 package，`Force` 被拒绝。已有正确 class 的资产不覆盖、不重存、不恢复 seed defaults；`CompareSeedDefaults` 仅用于首次播种和连续第二次 `0 created / 0 saved` 验收。四个 Enemy Host 通过现有 `SyncPartsFromDefinition` 初始生成 11 个 Part，使用受控 Placeholder 只服务灰盒可见性和命中制作验证；正式发布必须替换这些引用。新 map 固定 `1 Descriptor / 20 Anchors / 21 Paths / 4 BranchTargets / 16 content Hosts / 8 enemy Hosts / 11 viewpoints`，内容 Host 绑定真实 Spec 014 Definition，禁止 Debug/Authoring/Test/legacy-map 引用。Exit marker 只有可见 primitive、`RunMapNodeBinding` 与实例 `PersistentId`，没有交互、travel 或 Level Blueprint 规则。
+
+该入口只能通过正式 Unreal MCP writer lease 保存 exact package allowlist；Editor 生命周期内不切 branch、不更新 HEAD、不编译。保存后必须做 AssetRegistry/failed-load、五个 Blueprint compile、Floor/scene validator、SHA-256、Git LFS 和第二次幂等审计。它不是可重复覆盖的关卡 builder；首次播种后世界 transform、Host 摆放和 Blueprint 表现都转为人工权威。
 
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 

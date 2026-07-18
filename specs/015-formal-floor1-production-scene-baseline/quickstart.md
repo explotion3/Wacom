@@ -179,53 +179,124 @@ T039 source-only commit is the next gate; no binary mutation may begin before it
 
 ## 6. Floor asset checkpoint
 
-Pending T040–T045.
-
-Expected `UWacomFloorMapDefinition` package:
+Completed through the formal Run MCP endpoint. The one-package writer allowed only:
 
 ```text
 /Game/Wacom/Data/Map/Production/DA_Floor_Main_01
 ```
 
-Record MCP session/writer audit, seed report, SHA-256, LFS state, and exact graph validation.
+Evidence:
+
+```text
+MCP session: 5845bab1-2c80-4237-9372-6c9721c7b260
+Seed report: Saved/FormalFloor1ProductionScene/Spec015-floor-seed.json
+Report SHA-256: 45E68EA9A9DACD161667B1B1C6AF97426A8EFDA337C6FC7025DDA7349A4E5D9B
+Writer audit: C:\Users\ahhh\AppData\Local\Wacom\UnrealMcp\Audits\20260718-160553-994-run-5845bab1-2c80-4237-9372-6c9721c7b260.json
+Asset SHA-256: 8391FCFC362D7F4B3B7168D38B3B5746917470BCF335C9089EAFEE4C4C86BA43
+```
+
+The loaded object is `UWacomFloorMapDefinition`. Validation passed exact `20 Nodes / 21 Edges`, type distribution `4 Navigation / 6 Encounter / 4 RunEvent / 4 Treasure / 1 Shop / 1 FloorEntrance`, Entry reachability, both branch merges, Key dominance, finite unique map positions, four Camp nodes, typed payload closure, Guardian boss flag, and Exit target/credential. No Journey package was fabricated.
 
 ## 7. Enemy Host checkpoint
 
-Pending T046–T054.
+Four missing-only Blueprint packages were created from the formal EnemyDefinitions through the existing `SyncPartsFromDefinition` authoring path. Existing paths remain inspect-only.
 
-Expected packages: four entries from `contracts/graybox-enemy-host-contract.md`.
+```text
+MCP session: edfa2416-81c5-4603-a381-b32ddf4f7f74
+Seed report: Saved/FormalFloor1ProductionScene/Spec015-enemy-hosts-seed.json
+Report SHA-256: 28B06D7C6A0044CEABCFA34AFF2DFA32871C7274CD738F63233FAA1F05C068DD
+Writer audit: C:\Users\ahhh\AppData\Local\Wacom\UnrealMcp\Audits\20260718-161720-000-run-edfa2416-81c5-4603-a381-b32ddf4f7f74.json
+```
 
-Record MCP session/writer audit, hashes, Blueprint compile, 11-part closure, placeholder dependencies, and tests.
+| Archetype | SHA-256 |
+|---|---|
+| BrushSnake | `00AEE67043990FC2644D5437753EF0BCE5F79D4CE868A95D7E50B39E3B6595B8` |
+| MoltGuard | `E0E779190E1121FAF9E5115E5A355D3C1C0C128C92609E4BBD0A31EA5BA059BA` |
+| RootStalker | `74387C768B30553CF267976A84AE3FC8371F361E3548350860649EC40B1B6BCB` |
+| ShallowGuardian | `1ABDFFE0DAE1043DC90C04DA15B53FF3B97316A8FED3B737A8DC1A12CF0674A0` |
+
+All four compile and reload with the expected parent, formal Definition, and exact 11-part closure. Placeholder dependencies are restricted to the controlled Wacom placeholder root. This is a development graybox contract, not release-art approval; `-FailOnPlaceholder` remains a release blocker.
 
 ## 8. Scene checkpoint
 
-Pending T055–T070.
-
-Expected packages:
+The Scene group created:
 
 ```text
 /Game/Wacom/Run/SceneActors/Graybox/BP_WacomRunFloorEntranceMarker_Graybox
 /Game/Wacom/Maps/Run/L_Run_Floor_Main_01
 ```
 
-Record exact actor counts, validator output, hashes, five-Blueprint compile, AssetRegistry/failed loads, viewport review, and Exit no-travel evidence.
+The marker compiles with an instance-editable Blueprint `PersistentId`, `RunMapNodeBinding`, and a non-colliding visible cube. It has no interaction, click bridge, travel component, `OpenLevel`, or Level Blueprint gameplay logic. Final marker SHA-256 is `905193ACB8CF509FF1FDF1ECF1F110C80EA3E6BF8CAD6601D4B07A1B37B62A0D`.
+
+Final map contract after reload:
+
+```text
+1 Descriptor / 20 Anchors / 20 pads / 21 Paths / 4 BranchTargets
+16 content Hosts / 8 enemy Hosts / 11 viewpoints / 20 enemy PartActors
+Encounter instances: BrushSnake 4 / MoltGuard 2 / RootStalker 1 / ShallowGuardian 1
+```
+
+The first scene writer audit is `20260718-163241-858-run-c6214e8e-0bbe-46b2-9b8c-97a4369a0eba.json`. Two source corrections were required before final acceptance: SCS-template validation for generated Blueprint components and explicit map loading for persisted-world inspection. A third correction made marker `PersistentId` instance editable. All source corrections were compiled/tested and committed before the corrected asset replay. Corrected replay and first all-asset idempotence audits are:
+
+```text
+C:\Users\ahhh\AppData\Local\Wacom\UnrealMcp\Audits\20260718-164906-611-run-d28f046d-9f01-48be-ad43-6f5560911484.json
+C:\Users\ahhh\AppData\Local\Wacom\UnrealMcp\Audits\20260718-165556-923-run-6b72b22a-70b9-4fa5-bb6c-333f15a25296.json
+```
+
+Read-only viewport review used session `a2082194-1dbe-48da-8c6f-16fc108d1e6e`, PID `28564`, with no writer and no PIE. It confirmed:
+
+- world progression is `+X`; A/C are `-Y` (left), B/D are `+Y` (right);
+- Junction 1 and Junction 2 BranchTargets are symmetrically staged at `Y=-208/+208`;
+- Hosts are approximately 180 cm beside/behind their Anchors and stay off the white traversal paths;
+- all 20 enemy PartActors have independent finite target bounds;
+- six Battle, four Event, and one Shop viewpoint map one-to-one to their nodes;
+- Exit label is `Host_Node_Exit_01_GRAYBOX_NO_TRAVEL`, with only root, billboard, graybox mesh, and node binding components.
+
+`CaptureViewport` unexpectedly dirtied editor-only map state and the normal close path wrote it to disk, changing the then-current map hash from `166BB84F...63F2F` to `4654627B...F7DDDA`. This was not accepted as deliverable state. With the Editor closed, the exact task-owned untracked map path and hash were reverified, that one file was removed, and the map was replayed under a new exact seven-package writer lease without loading a viewport. Recovery evidence:
+
+```text
+MCP session: 193309b7-6970-4500-9040-03c041e2fb20
+First replay: Scene Existing=1 / Created=1 / Saved=1 / Failed=0
+Second replay: All Existing=7 / Created=0 / Saved=0 / Failed=0
+Reports: Spec015-map-replay-first.json, Spec015-map-replay-idempotence.json
+Writer audit: C:\Users\ahhh\AppData\Local\Wacom\UnrealMcp\Audits\20260718-172225-648-run-193309b7-6970-4500-9040-03c041e2fb20.json
+Final map SHA-256: 352944F4FC53234CD3EE6E7A7D52BCFF76B1BF20CA7C0CE4D796E109EC579ECF
+```
+
+The final map was clean before close and retained the same hash after close. The other six hashes remained unchanged throughout recovery. No screenshot file was saved or committed.
 
 ## 9. Final validation matrix
 
 | Check | Result | Evidence |
 |---|---|---|
-| Default Unity WacomEditor build | Pending | — |
-| Focused Automation | Pending | — |
-| 7/7 AssetRegistry/load/class | Pending | — |
-| 5/5 Blueprint compile | Pending | — |
-| Floor 20/21 graph validation | Pending | — |
-| Scene 1/20/21/4/16 binding validation | Pending | — |
-| 8 enemy Host slot composition | Pending | — |
-| Second seed 0 create/0 save | Pending | — |
-| Seven SHA-256 stable | Pending | — |
-| 46 dependencies byte-identical | Pending | — |
-| Git LFS fsck | Pending | — |
+| Default Unity WacomEditor build | Passed | `Result: Succeeded`; build log SHA `98E3504FFFF018106196588F1D3A09A394E5DFBC20155659A349D037345E7A45` |
+| Data/Editor Automation | 20/20 passed | log SHA `35EAC583DB3ABF50A14B14B37F55F0F9E20B4B9EAB042A78470FCBBA5A61A944` |
+| Run scene/path Automation | 30/30 passed | log SHA `3AA709424227333B24D1C17C9228865D9D0AFBF763F06A0C5DBBAC81EADFBD38` |
+| Battle Host Automation | 17/17 passed | log SHA `7E07F849CA31203532FAAD672FCEF8208E359F925FBB825EB83A729373AB1A7D` |
+| 7/7 AssetRegistry/load/class | Passed | `Wacom.Editor.FormalFloor1ProductionScene.Assets.RegistryAndBlueprintCompile` |
+| 5/5 Blueprint compile | Passed | four enemy prefabs + Exit marker |
+| Floor 20/21 graph validation | Passed | transient and real persisted contract tests |
+| Scene 1/20/21/4/16 binding validation | Passed | real persisted contract + commandlet |
+| `WacomValidateRunFloorScene` | Passed | `Valid`, 0 diagnostics; log SHA `4A8C0B222222E4DDC1A1805DE1689C7F007BD7A4CA771109311A14544295A7B8` |
+| 8 enemy Host slot composition | Passed | exact six Encounter slot mappings |
+| Second seed 0 create/0 save | Passed | replay idempotence report SHA `B305B83927C10B308B2DA79C8E682AD9EE1E00256C8446D44DC52B301A765848` |
+| Seven SHA-256 stable | Passed | final hashes below; unchanged after idempotence/close/tests |
+| 46 dependencies byte-identical | Passed | count 46; ordered `Package=SHA` aggregate remains `D9308919279B3E7DC706AF26869A558808B6524B075B20A5E4E771DDFE4D6AC0` |
+| Forbidden Production references | Passed | no Debug/Authoring/Test/legacy-map dependency in the real-asset contract |
+| Git LFS | Passed | all 7 paths use `filter=lfs`; writer and final `git lfs fsck` report OK |
 | Full Golden Path PIE | Required skip | No valid Production Journey/Floor2/3/transition runtime |
+
+Final seven hashes:
+
+| Asset | SHA-256 |
+|---|---|
+| `DA_Floor_Main_01.uasset` | `8391FCFC362D7F4B3B7168D38B3B5746917470BCF335C9089EAFEE4C4C86BA43` |
+| `BP_EnemyHost_BrushSnake_Graybox.uasset` | `00AEE67043990FC2644D5437753EF0BCE5F79D4CE868A95D7E50B39E3B6595B8` |
+| `BP_EnemyHost_MoltGuard_Graybox.uasset` | `E0E779190E1121FAF9E5115E5A355D3C1C0C128C92609E4BBD0A31EA5BA059BA` |
+| `BP_EnemyHost_RootStalker_Graybox.uasset` | `74387C768B30553CF267976A84AE3FC8371F361E3548350860649EC40B1B6BCB` |
+| `BP_EnemyHost_ShallowGuardian_Graybox.uasset` | `1ABDFFE0DAE1043DC90C04DA15B53FF3B97316A8FED3B737A8DC1A12CF0674A0` |
+| `BP_WacomRunFloorEntranceMarker_Graybox.uasset` | `905193ACB8CF509FF1FDF1ECF1F110C80EA3E6BF8CAD6601D4B07A1B37B62A0D` |
+| `L_Run_Floor_Main_01.umap` | `352944F4FC53234CD3EE6E7A7D52BCFF76B1BF20CA7C0CE4D796E109EC579ECF` |
 
 ## 10. Continuous risks and skips
 
@@ -235,17 +306,17 @@ Record exact actor counts, validator output, hashes, five-Blueprint compile, Ass
 - **Balance risk**: This slice does not evaluate encounter/card balance.
 - **Binary risk**: `.uasset/.umap` changes are non-mergeable; integration must choose this branch as authority for the seven new paths.
 - **Builder risk**: Only the named seed-only command is allowed; all other builders remain forbidden.
+- **Viewport tooling risk**: programmatic `CaptureViewport` dirtied and auto-saved editor-only map state in this UE build. The map was replayed and re-audited; future read-only reviews should avoid that tool until its save behavior is isolated.
+- **Known unrelated warnings**: startup can report the pre-existing missing BugGirlBag illustration source; commandlet startup also reports existing PaperZD config, DreamShader generated-include, and duplicate Python enum-name warnings. None are referenced by the seven targets or caused focused failures.
 
 ## 11. Final handoff
 
-Pending completion. Must include:
+```text
+Branch: codex/formal-floor1-production-scene-baseline
+Worktree: D:\UE_Project\5.7\WacomWorktrees\formal-floor1-production-scene-baseline\Wacom
+Base: 9fbdb74858b9b4b705a216c8dd7ff539fe44b19e
+Source checkpoint chain: 67514493, 449a544b, 7df248c8, 6fa405df, 5946cd8c, 26d14dc4
+Final content commit: produced by T082 as `feat(content): seed formal floor1 production scene`; authoritative hash is reported in the integration handoff.
+```
 
-- branch/worktree/base/final commits;
-- changed source, Docs, Spec, `.uasset`, and `.umap` files;
-- MCP session and writer audit paths;
-- seven hashes and dependency-hash result;
-- Git LFS state;
-- build/Automation/Blueprint/AssetRegistry/scene/viewport results;
-- full PIE skip reason;
-- known issues/conflicts;
-- explicit “not merged, not pushed” statement.
+No main merge, rebase, push, shared builder, or Debug/Authoring asset mutation was performed. The final handoff must choose this branch as binary authority for the seven new paths; `.uasset/.umap` must not be text-merged.

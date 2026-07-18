@@ -59,6 +59,8 @@ Actor 和 Widget 可以提供 target handle、debug view、hover prompt 和 prev
 - 专用 Pickup Actor 只作为快速验证入口保留；正式关卡优先使用 Definition 驱动入口，不把快速入口扩展成新的长期制作主线。
 - Blueprint 只放默认外观和可见 primitive，不写 EventGraph 规则逻辑、不直接调用 RunSession。
 - Prototype sample button 只用于 PIE / 开发验证；它们只改当前 Actor 配置和 facade 同步，不修改 RunState、不生成资产。
+- Floor 1 Production 灰盒使用真实 Definition 驱动的 6 个 Battle、1 个 Shop、4 个 RunEvent 和 4 个 RewardPickup Host；四个 Navigation 节点没有 content Host。所有实例使用 `Floor.Main.01.<NodeId>` 作为 `PersistentId`，并由 `UWacomRunMapNodeBindingComponent` 映射到对应 typed payload。
+- `BP_WacomRunFloorEntranceMarker_Graybox` 不是正式可交互 Actor：它只有无碰撞可见 primitive、Node binding 和实例 `PersistentId`，不实现 `IWacomWorldInteractable`、click/hover bridge、Floor travel 或 Level Blueprint 逻辑。未来 FloorEntrance 交互与 world handoff 归 App flow，marker 不拥有规则。
 
 ### Data Validation 口径
 

@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-07-17
+updated: 2026-07-18
 tags:
   - wacom/todo
   - wacom/docs
@@ -53,7 +53,7 @@ tags:
 	- 状态：`Done: 规则核心、Run Path、当前 Floor Map Screen、正式制作基线与隔离 Debug builder 已落地`
   - 归属：Map / Run / App
   - 入口：[WacomMap.md](./WacomMap.md) / [Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline、Debug-only builder 与 Journey 成功结算/主菜单交接已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结，Floor 1 的 46 个 Production DataAsset 已创建并审计。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 Floor 2/3 的 31 节点内容设计、正式 Journey/Floor/map/Host、失败总结交接和 Camp handler/UI，不恢复已删除的原型轨道路径。
+	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline、Debug-only builder 与 Journey 成功结算/主菜单交接已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结，Floor 1 的 46 个 Production DataAsset 与独立 Floor/map/Host 灰盒已创建并审计。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是完整 Production Journey、Floor 2/3 内容与场景、跨层 world transition、失败总结交接和 Camp handler/UI，不恢复已删除的原型轨道路径。
 	- 2026-07-15 地图闭环：单合法出口 W 自动前进，多合法出口使用道路入口选择，Anchored 无需点击 Actor 即可持续 cursor look；M / 手柄 View 打开当前 Floor 地图，死胡同默认聚焦最近的已完成节点，并可免费同层返回。
 
 - [ ] **Run Map 后续页面与交互扩展**
@@ -65,7 +65,7 @@ tags:
   - 状态：`Done: 三层身份、20 Node/21 Edge、内容槽、AP 与生产门禁已冻结`
   - 归属：Map / Run / Data / App
   - 入口：[WacomMap.md](./WacomMap.md) / `specs/007-formal-floor1-content-freeze/`
-  - 说明：正式身份为 `Journey.Main.01` 与 `Floor.Main.01/02/03`；Floor 1 冻结 20 Node/21 Edge、`4/6/4/4/1/1` 类型配比、15 个 Production 内容槽、四处 Camp 落点、`8–9 AP` 最短推进和 `14–15 AP` 完整探索。Authoring/Debug 资产保持独立；46 个静态 Production 内容 DataAsset 已创建，但 Production Journey/Floor/map 尚未创建。蛇印软锁已由独立 Credential 解除；Floor 2/3 图后续由 Spec 009 完成。
+  - 说明：正式身份为 `Journey.Main.01` 与 `Floor.Main.01/02/03`；Floor 1 冻结 20 Node/21 Edge、`4/6/4/4/1/1` 类型配比、15 个 Production 内容槽、四处 Camp 落点、`8–9 AP` 最短推进和 `14–15 AP` 完整探索。Authoring/Debug 资产保持独立；46 个静态 Production 内容 DataAsset 与独立 `DA_Floor_Main_01 / L_Run_Floor_Main_01` 灰盒已创建，Production Journey 与 Floor 2/3 资产尚未创建。蛇印软锁已由独立 Credential 解除；Floor 2/3 图后续由 Spec 009 完成。
 
 - [x] **Floor 1 Production 内容合同冻结**
   - 状态：`Done: 15 个节点 Definition + 23 个支持资产合同已冻结`
@@ -111,11 +111,17 @@ tags:
   - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/014-formal-floor1-production-assets/`
   - 说明：Spec 014 以 exact manifest 创建 12 Card、4 Behavior、11 Part、4 Enemy、6 Encounter、4 Event、4 Pickup 与 1 Shop；三张 Starter 卡和现有 `PoisonFang` 保持只读且哈希不变。46/46 真实加载、strict/structural validation、AssetRegistry class/count、forbidden reference、双跑幂等与 LFS 审计通过；没有修改地图、材质、卡牌表现、背包或其它 Agent 资产。
 
-- [ ] **Floor 1 Production DataAsset 与正式世界场景制作**
-  - 状态：`Ready for planning: 46 Definition gate complete; world authority still requires user decision`
+- [x] **Floor 1 Production Floor / Map / Host 灰盒基线**
+  - 状态：`Done: 新建独立 Floor/map、四个敌人 Host、16 个内容 Host 与 Exit marker，并完成真实资产/场景/幂等审计`
   - 归属：Map / Data / App / Editor / Tests
-  - 入口：`specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`
-  - 说明：Credential、三层图、通用 Journey success 与 Floor 1 的 46 个 Production definitions/审计前置已完成。下一切片需先确认新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01` 还是显式迁移 Authoring 场景，再创建 `/Game/Wacom/Data/Map/Production` Journey/Floor 与正式 Host/scene binding。不得盲目覆盖 `L_Exploration`，不得修改 Debug builder 写集合。
+  - 入口：[WacomMap.md](./WacomMap.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/015-formal-floor1-production-scene-baseline/`
+  - 说明：已选择新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，未迁移或修改 `L_Exploration`。Exact 7-package seeder 创建 `DA_Floor_Main_01`、4 个可复用 SerpentWood 灰盒 Enemy Host、非交互 Exit marker 和 20/21 场景；已有资产只读，第二次运行 `0 created / 0 saved`。完整 Journey、Floor 2/3、跨层 travel、正式美术和 Golden Path PIE 仍是后续任务。
+
+- [ ] **Production Journey 与 Floor 2/3 场景/跨层交接**
+  - 状态：`Blocked: Floor 2/3 definitions/maps and FloorId-to-world handoff are absent`
+  - 归属：Map / Data / App / Editor / Tests
+  - 入口：[WacomMap.md](./WacomMap.md) / `specs/009-formal-floor23-journey-pacing-freeze/`
+  - 说明：创建 `DA_Journey_Main_01`、Floor 2/3 Production DataAsset 与 world，配置 SuccessTerminalNode，并实现由 App flow 消费 Floor transition result 的 FloorId-to-world handoff。不得在 Floor 1 Exit marker 或 Level Blueprint 中硬编码 travel。
 
 - [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
   - 状态：`In Progress: JSON v2 + Placeholder 发布门槛已完成，外部依赖仍待分批迁移`

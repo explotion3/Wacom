@@ -2,7 +2,7 @@
 type: roadmap
 scope: wacom-future
 status: active
-updated: 2026-06-08
+updated: 2026-07-18
 tags:
   - wacom/roadmap
   - wacom/docs
@@ -78,8 +78,8 @@ tags:
 
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
-| 地图系统 | 已确认合同见 [WacomMap.md](./WacomMap.md)；当前 Run 只维护时间 / 节点消耗事实，旧节点预算术语仍见 [Questions: Run、探索与地图](./Questions.md#questions-run-map) | 收口 UE Module 布局、行动点、节点类型和 authoring 后，实现 Logical Map Graph 与地图运行时状态 |
-| 地图运行时状态 | 当前 Run 状态边界见 [WacomRun.md](./WacomRun.md)，地图合同见 [WacomMap.md](./WacomMap.md) | 实现 Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure；未来再接 SaveGame |
+| Floor 1 Production 场景 | `DA_Floor_Main_01 + L_Run_Floor_Main_01 + 4 Enemy Host + Exit marker` 灰盒已建立并通过本地 scene/asset/幂等审计 | 替换敌人 Placeholder、人工美术与碰撞调优；不得让 seeder 覆盖已有资产 |
+| Journey 与跨层场景 | Logical Map Graph、Map Travel、Floor Transition 规则和 Journey success 已落地；Floor 1 Exit 当前是非交互 marker | 创建 Production Journey、Floor 2/3 definitions/world，并由 App flow 实现 FloorId-to-world handoff 后执行完整 Golden Path PIE |
 | 自由探索 Session 边界 | 仍复用 `RunSession` | 若自由探索规则明显区别于 Run，需确认是否新建区域探索 session |
 
 <a id="roadmap-runevent"></a>
