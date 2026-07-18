@@ -876,7 +876,9 @@ function Get-FileHashes
 {
     param(
         [Parameter(Mandatory = $true)][string]$ProjectRoot,
-        [Parameter(Mandatory = $true)][string[]]$RelativePaths
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyCollection()]
+        [string[]]$RelativePaths
     )
 
     $Hashes = [ordered]@{}
