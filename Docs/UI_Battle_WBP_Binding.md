@@ -476,6 +476,8 @@ Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresent
 
 该模式验证四个紧凑 WBP、详情 WBP / Row、Shield Frame / Badge、父类、required bindings、动画、HorizontalBox 和命中策略；永远不修改资产。旧 `-MigrateLegacy / -BuildSinglePartCompact` 只服务 v1 生成资产，不得覆盖标记为 segmented v2 的人工正式布局。
 
+单部位几何由 Panel 独占：`SinglePartPanelRoot` 固定宽度 `250`，Entry 不得再声明宽度或最小宽度，`CompactSize` 只保留 `84` 的行高。这样 `WidgetComponent.DrawAtDesiredSize` 与运行时 `HorizontalBox Fill` 只有一个水平尺寸真相，避免固定宽度、最小宽度和 Fill 叠加导致拉伸或空白。`-InspectSegmentedVitals` 会验证这一合同。
+
 ## PIE Smoke Checklist
 
 - `WBP_BattleHUD` 能显示玩家状态、CommandBar、牌堆数量、CombatLogFeed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。

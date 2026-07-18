@@ -9,6 +9,8 @@
 #include "Channels/MovieSceneFloatChannel.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "MovieScene.h"
+#include "Components/HorizontalBox.h"
+#include "Components/SizeBox.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
@@ -231,6 +233,36 @@ namespace
 			|| Line.StartsWith(TEXT("WacomEnemyInspectionWBP.ContractVersion="))
 			|| Line.StartsWith(TEXT("WacomEnemyInspectionPartRowWBP.ContractVersion="));
 	}
+
+	bool HasExpectedSinglePartGeometry(
+		const UWidgetBlueprint& PanelBlueprint,
+		const UWidgetBlueprint& EntryBlueprint)
+	{
+		const USizeBox* PanelRoot = PanelBlueprint.WidgetTree
+			? Cast<USizeBox>(PanelBlueprint.WidgetTree->FindWidget(TEXT("SinglePartPanelRoot")))
+			: nullptr;
+		const UHorizontalBox* PartList = PanelBlueprint.WidgetTree
+			? Cast<UHorizontalBox>(PanelBlueprint.WidgetTree->FindWidget(TEXT("PartList")))
+			: nullptr;
+		const USizeBox* EntryRoot = EntryBlueprint.WidgetTree
+			? Cast<USizeBox>(EntryBlueprint.WidgetTree->FindWidget(TEXT("SinglePartEntryRoot")))
+			: nullptr;
+		const USizeBox* CompactSize = EntryBlueprint.WidgetTree
+			? Cast<USizeBox>(EntryBlueprint.WidgetTree->FindWidget(TEXT("CompactSize")))
+			: nullptr;
+		return PanelRoot
+			&& PartList
+			&& EntryRoot
+			&& CompactSize
+			&& PanelRoot->IsWidthOverride()
+			&& FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 250.0f)
+			&& !PanelRoot->IsMinDesiredWidthOverride()
+			&& !EntryRoot->IsWidthOverride()
+			&& !EntryRoot->IsMinDesiredWidthOverride()
+			&& !CompactSize->IsWidthOverride()
+			&& CompactSize->IsHeightOverride()
+			&& FMath::IsNearlyEqual(CompactSize->GetHeightOverride(), 84.0f);
+	}
 }
 
 bool UWacomEnemyUIToolset::EnsureInspectionPanelAnimations(
@@ -311,4 +343,51 @@ bool UWacomEnemyUIToolset::EnsureSegmentedUIContractMarker(
 	WidgetBlueprint->BlueprintDescription = ExpectedDescription;
 	FBlueprintEditorUtils::MarkBlueprintAsModified(WidgetBlueprint);
 	return true;
+}
+
+bool UWacomEnemyUIToolset::NormalizeSinglePartPanelGeometry(
+	UWidgetBlueprint* PanelBlueprint,
+	UWidgetBlueprint* EntryBlueprint)
+{
+	if (!PanelBlueprint
+		|| !EntryBlueprint
+		|| PanelBlueprint->GetOutermost()->GetName() != SinglePanelPackageName
+		|| EntryBlueprint->GetOutermost()->GetName() != SingleEntryPackageName
+		|| !PanelBlueprint->WidgetTree
+		|| !EntryBlueprint->WidgetTree
+		|| !Cast<UHorizontalBox>(PanelBlueprint->WidgetTree->FindWidget(TEXT("PartList"))))
+	{
+		return false;
+	}
+
+	USizeBox* PanelRoot = Cast<USizeBox>(
+		PanelBlueprint->WidgetTree->FindWidget(TEXT("SinglePartPanelRoot")));
+	USizeBox* EntryRoot = Cast<USizeBox>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("SinglePartEntryRoot")));
+	USizeBox* CompactSize = Cast<USizeBox>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("CompactSize")));
+	if (!PanelRoot || !EntryRoot || !CompactSize)
+	{
+		return false;
+	}
+
+	if (HasExpectedSinglePartGeometry(*PanelBlueprint, *EntryBlueprint))
+	{
+		return true;
+	}
+
+	PanelBlueprint->Modify();
+	EntryBlueprint->Modify();
+	PanelRoot->Modify();
+	EntryRoot->Modify();
+	CompactSize->Modify();
+	PanelRoot->SetWidthOverride(250.0f);
+	PanelRoot->ClearMinDesiredWidth();
+	EntryRoot->ClearWidthOverride();
+	EntryRoot->ClearMinDesiredWidth();
+	CompactSize->ClearWidthOverride();
+	CompactSize->SetHeightOverride(84.0f);
+	FBlueprintEditorUtils::MarkBlueprintAsModified(PanelBlueprint);
+	FBlueprintEditorUtils::MarkBlueprintAsModified(EntryBlueprint);
+	return HasExpectedSinglePartGeometry(*PanelBlueprint, *EntryBlueprint);
 }

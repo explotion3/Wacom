@@ -9,6 +9,7 @@
 #include "Components/Image.h"
 #include "Components/PanelWidget.h"
 #include "Components/ProgressBar.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Engine/Texture2D.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
@@ -182,6 +183,38 @@ namespace
 		return bValid;
 	}
 
+	bool ValidateSinglePartGeometry(
+		const UWidgetBlueprint* PanelBlueprint,
+		const UWidgetBlueprint* EntryBlueprint)
+	{
+		const USizeBox* PanelRoot = PanelBlueprint && PanelBlueprint->WidgetTree
+			? Cast<USizeBox>(PanelBlueprint->WidgetTree->FindWidget(TEXT("SinglePartPanelRoot")))
+			: nullptr;
+		const USizeBox* EntryRoot = EntryBlueprint && EntryBlueprint->WidgetTree
+			? Cast<USizeBox>(EntryBlueprint->WidgetTree->FindWidget(TEXT("SinglePartEntryRoot")))
+			: nullptr;
+		const USizeBox* CompactSize = EntryBlueprint && EntryBlueprint->WidgetTree
+			? Cast<USizeBox>(EntryBlueprint->WidgetTree->FindWidget(TEXT("CompactSize")))
+			: nullptr;
+		const bool bValid = PanelRoot
+			&& EntryRoot
+			&& CompactSize
+			&& PanelRoot->IsWidthOverride()
+			&& FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 250.0f)
+			&& !PanelRoot->IsMinDesiredWidthOverride()
+			&& !EntryRoot->IsWidthOverride()
+			&& !EntryRoot->IsMinDesiredWidthOverride()
+			&& !CompactSize->IsWidthOverride()
+			&& CompactSize->IsHeightOverride()
+			&& FMath::IsNearlyEqual(CompactSize->GetHeightOverride(), 84.0f);
+		if (!bValid)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[EnemySegmentedUIInspector] Invalid single-part geometry ownership"));
+		}
+		return bValid;
+	}
+
 	bool ValidateInspection(const UWidgetBlueprint* Blueprint)
 	{
 		const UWacomBattleEnemyInspectionWidget* InspectionDefaults =
@@ -281,6 +314,7 @@ bool Wacom::ContentBuilder::InspectEnemySegmentedUI()
 	bValid &= ValidatePanel(SinglePanel, TEXT("single-part"));
 	bValid &= ValidateEntry(MultiEntry, TEXT("multi-part"));
 	bValid &= ValidateEntry(SingleEntry, TEXT("single-part"));
+	bValid &= ValidateSinglePartGeometry(SinglePanel, SingleEntry);
 	bValid &= ValidateInspection(Inspection);
 	bValid &= ValidateInspectionRow(InspectionRow);
 	bValid &= ShieldBadge && ShieldFrame

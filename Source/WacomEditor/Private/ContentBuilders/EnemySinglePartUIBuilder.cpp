@@ -682,7 +682,6 @@ namespace
 		UWidgetTree* Tree = Blueprint->WidgetTree;
 		USizeBox* Root = Tree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("SinglePartEntryRoot"));
-		Root->SetMinDesiredWidth(250.0f);
 		Tree->RootWidget = Root;
 
 		UVerticalBox* Rows = Tree->ConstructWidget<UVerticalBox>(
@@ -690,7 +689,6 @@ namespace
 		Root->AddChild(Rows);
 		USizeBox* CompactSize = Tree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("CompactSize"));
-		CompactSize->SetWidthOverride(250.0f);
 		CompactSize->SetHeightOverride(84.0f);
 		Rows->AddChildToVerticalBox(CompactSize);
 
@@ -873,7 +871,7 @@ namespace
 		UWidgetTree* Tree = Blueprint->WidgetTree;
 		USizeBox* Root = Tree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("SinglePartPanelRoot"));
-		Root->SetMinDesiredWidth(250.0f);
+		Root->SetWidthOverride(250.0f);
 		Tree->RootWidget = Root;
 		UOverlay* Overlay = Tree->ConstructWidget<UOverlay>(
 			UOverlay::StaticClass(), TEXT("SinglePartPanelOverlay"));
@@ -906,8 +904,8 @@ namespace
 		Header->AddChildToHorizontalBox(EnemyInitiativeText);
 		MarkWidgetVariable(Blueprint, EnemyInitiativeText);
 
-		UVerticalBox* PartList = Tree->ConstructWidget<UVerticalBox>(
-			UVerticalBox::StaticClass(), TEXT("PartList"));
+		UHorizontalBox* PartList = Tree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(), TEXT("PartList"));
 		Content->AddChildToVerticalBox(PartList);
 		MarkWidgetVariable(Blueprint, PartList);
 
@@ -1036,6 +1034,19 @@ namespace
 			}
 		}
 		bValid &= IsTreeNonHitTestable(Blueprint);
+		const USizeBox* EntryRoot = Blueprint && Blueprint->WidgetTree
+			? Cast<USizeBox>(Blueprint->WidgetTree->FindWidget(TEXT("SinglePartEntryRoot")))
+			: nullptr;
+		const USizeBox* CompactSize = Blueprint && Blueprint->WidgetTree
+			? Cast<USizeBox>(Blueprint->WidgetTree->FindWidget(TEXT("CompactSize")))
+			: nullptr;
+		bValid &= EntryRoot
+			&& CompactSize
+			&& !EntryRoot->IsWidthOverride()
+			&& !EntryRoot->IsMinDesiredWidthOverride()
+			&& !CompactSize->IsWidthOverride()
+			&& CompactSize->IsHeightOverride()
+			&& FMath::IsNearlyEqual(CompactSize->GetHeightOverride(), 84.0f);
 		const UWacomBattleEnemyPartEntryWidget* CDO =
 			Blueprint && Blueprint->GeneratedClass
 				? Cast<UWacomBattleEnemyPartEntryWidget>(
@@ -1064,9 +1075,16 @@ namespace
 			&& Blueprint->GeneratedClass
 			&& HasWidgetOfClass(Blueprint, TEXT("EnemyNameText"), UTextBlock::StaticClass())
 			&& HasWidgetOfClass(Blueprint, TEXT("EnemyInitiativeText"), UTextBlock::StaticClass())
-			&& HasWidgetOfClass(Blueprint, TEXT("PartList"), UPanelWidget::StaticClass())
+			&& HasWidgetOfClass(Blueprint, TEXT("PartList"), UHorizontalBox::StaticClass())
 			&& HasWidgetOfClass(Blueprint, TEXT("PanelContextHighlight"), UWidget::StaticClass())
 			&& IsTreeNonHitTestable(Blueprint);
+		const USizeBox* PanelRoot = Blueprint && Blueprint->WidgetTree
+			? Cast<USizeBox>(Blueprint->WidgetTree->FindWidget(TEXT("SinglePartPanelRoot")))
+			: nullptr;
+		bValid &= PanelRoot
+			&& PanelRoot->IsWidthOverride()
+			&& FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 250.0f)
+			&& !PanelRoot->IsMinDesiredWidthOverride();
 		const UWacomBattleEnemyPanelWidget* CDO =
 			Blueprint && Blueprint->GeneratedClass
 				? Cast<UWacomBattleEnemyPanelWidget>(

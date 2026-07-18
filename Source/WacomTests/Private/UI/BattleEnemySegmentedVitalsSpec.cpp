@@ -9,6 +9,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ProgressBar.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -261,6 +262,27 @@ bool FWacomUIBattleEnemySegmentedVitalsSinglePartAndInputSpec::RunTest(
 	{
 		return false;
 	}
+	USizeBox* PanelRoot = FindWidget<USizeBox>(Panel, TEXT("SinglePartPanelRoot"));
+	USizeBox* EntryRoot = FindWidget<USizeBox>(Entry, TEXT("SinglePartEntryRoot"));
+	USizeBox* CompactSize = FindWidget<USizeBox>(Entry, TEXT("CompactSize"));
+	if (!TestNotNull(TEXT("Single panel owns its root size"), PanelRoot)
+		|| !TestNotNull(TEXT("Single entry root"), EntryRoot)
+		|| !TestNotNull(TEXT("Single entry compact height box"), CompactSize))
+	{
+		return false;
+	}
+	TestTrue(TEXT("Single panel owns the compact width"), PanelRoot->IsWidthOverride());
+	TestTrue(TEXT("Single panel width remains 250"),
+		FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 250.0f));
+	TestFalse(TEXT("Single panel does not duplicate width with a minimum"),
+		PanelRoot->IsMinDesiredWidthOverride());
+	TestFalse(TEXT("Single entry root does not own width"), EntryRoot->IsWidthOverride());
+	TestFalse(TEXT("Single entry root does not impose minimum width"),
+		EntryRoot->IsMinDesiredWidthOverride());
+	TestFalse(TEXT("Single entry content fills panel width"), CompactSize->IsWidthOverride());
+	TestTrue(TEXT("Single entry owns the compact row height"), CompactSize->IsHeightOverride());
+	TestTrue(TEXT("Single entry row height remains 84"),
+		FMath::IsNearlyEqual(CompactSize->GetHeightOverride(), 84.0f));
 	UButton* InspectButton = FindWidget<UButton>(Entry, TEXT("InspectHitTarget"));
 	if (!TestNotNull(TEXT("Inspection hotspot"), InspectButton))
 	{

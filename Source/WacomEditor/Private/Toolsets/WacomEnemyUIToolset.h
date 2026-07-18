@@ -40,4 +40,14 @@ public:
 	UFUNCTION(meta = (AICallable), Category = "Wacom|Enemy UI")
 	static bool EnsureSegmentedUIContractMarker(
 		UWidgetBlueprint* WidgetBlueprint);
+
+	/**
+	 * Normalizes the compact single-part panel geometry so the panel owns the
+	 * 250 Slate-unit width while the entry owns only its 84-unit row height.
+	 * The function accepts only the two formal single-part Enemy UI packages.
+	 */
+	UFUNCTION(meta = (AICallable), Category = "Wacom|Enemy UI")
+	static bool NormalizeSinglePartPanelGeometry(
+		UWidgetBlueprint* PanelBlueprint,
+		UWidgetBlueprint* EntryBlueprint);
 };
