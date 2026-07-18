@@ -248,6 +248,7 @@ void FWacomBattleHUDRuntime::NativeConstruct()
 
 void FWacomBattleHUDRuntime::NativeDestruct()
 {
+	GetResultApplicator().HandleSessionChanged(GetSession(), nullptr);
 	bBattleInputReady = true;
 	bFirstPersonBattleHandSuppressedForEntry = false;
 	if (PresentationCoordinator)
@@ -272,6 +273,7 @@ void FWacomBattleHUDRuntime::NativeDestruct()
 
 void FWacomBattleHUDRuntime::NativeTick(float DeltaTime)
 {
+	GetResultApplicator().Tick(DeltaTime);
 	TickCardDetailMotion(DeltaTime);
 	TickBattleSceneEnemyPartHoverProbe(DeltaTime);
 	GetFirstPersonHandBridge().TickPendingPresentationFrames(DeltaTime);
@@ -655,6 +657,11 @@ FWacomBattleHUDResultApplicator& FWacomBattleHUDRuntime::GetResultApplicator()
 		ResultApplicator = MakeUnique<FWacomBattleHUDResultApplicator>(*this);
 	}
 	return *ResultApplicator;
+}
+
+const FWacomBattleHUDResultApplicator& FWacomBattleHUDRuntime::GetResultApplicator() const
+{
+	return const_cast<FWacomBattleHUDRuntime*>(this)->GetResultApplicator();
 }
 
 FWacomBattleHUDCommandBarPresenter& FWacomBattleHUDRuntime::GetCommandBarPresenter()
@@ -1434,6 +1441,15 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 	View.bHasLastBattleSnapshot = bHasLastBattleSnapshot;
 	View.LastBattleSnapshotHandCount = bHasLastBattleSnapshot ? LastBattleSnapshot.Hand.Cards.Num() : 0;
 	View.LastBattleSnapshotVersion = bHasLastBattleSnapshot ? LastBattleSnapshot.Version : INDEX_NONE;
+	const FWacomBattleHUDResultApplicator& ResultApplicatorView = GetResultApplicator();
+	View.CardPresentationPrewarmState = ResultApplicatorView.GetCardPresentationPrewarmState();
+	View.CardPresentationPrewarmGeneration = ResultApplicatorView.GetCardPresentationPrewarmGeneration();
+	View.CardPresentationRequiredAssetCount = ResultApplicatorView.GetCardPresentationRequiredAssetCount();
+	View.CardPresentationOptionalAssetCount = ResultApplicatorView.GetCardPresentationOptionalAssetCount();
+	View.CardPresentationPrewarmElapsedSeconds = ResultApplicatorView.GetCardPresentationPrewarmElapsedSeconds();
+	View.bEntryWaitingForCamera = ResultApplicatorView.IsEntryWaitingForCamera();
+	View.bEntryWaitingForCardPresentationPrewarm =
+		ResultApplicatorView.IsEntryWaitingForCardPresentationPrewarm();
 	if (PresentationCoordinator)
 	{
 		View.bPresentationPlanActive = PresentationCoordinator->IsPresentationPlanBusy();

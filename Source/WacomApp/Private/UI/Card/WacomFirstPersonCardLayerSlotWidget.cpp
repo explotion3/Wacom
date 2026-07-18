@@ -95,7 +95,9 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotRuntimeConfig(
 	{
 		if (CardView)
 		{
-			CardView->SetEffectBadgeFeedbackConfig(SlotVisualConfig.EffectBadgeFeedback);
+			CardView->PrimeLocalPresentationMaterials(
+				SlotVisualConfig.DataRewrite,
+				SlotVisualConfig.EffectBadgeFeedback);
 		}
 		if (IsSurfaceDeparturePlaybackActive())
 		{
@@ -868,6 +870,9 @@ void UWacomFirstPersonCardLayerSlotWidget::EnsureCardView()
 		CardSlot->SetVerticalAlignment(VAlign_Fill);
 	}
 	ResetCardSurfaceEffectView();
+	CardView->PrimeLocalPresentationMaterials(
+		SlotVisualConfig.DataRewrite,
+		SlotVisualConfig.EffectBadgeFeedback);
 }
 
 void UWacomFirstPersonCardLayerSlotWidget::ApplyCurrentSlotView()
@@ -1421,6 +1426,7 @@ FWacomFirstPersonCardSlotAutomationTestView UWacomFirstPersonCardLayerSlotWidget
 		? PresentationController->TransitionPlayback->GetDurationSeconds()
 		: 0.0f;
 	View.EnterTransitionSoundRequestCount = EnterTransitionSoundRequestCountForTest;
+	View.OptionalEnterSoundSkipCount = OptionalEnterSoundSkipCountForTest;
 	View.LastEnterTransitionSoundKind = LastEnterTransitionSoundKindForTest;
 	View.SlotRuntimeConfig.Motion = SlotMotionConfig;
 	View.SlotRuntimeConfig.Visual = SlotVisualConfig;

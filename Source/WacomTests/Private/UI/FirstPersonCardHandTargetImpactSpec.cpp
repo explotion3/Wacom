@@ -199,8 +199,34 @@ bool FWacomFirstPersonCardHandTargetImpactDreamShaderContractTest::RunTest(
 	TestTrue(TEXT("Retainer Texture contract remains Color"), MaterialSource.Contains(TEXT("SamplerType=\"Color\"")));
 	TestTrue(TEXT("Material reuses Fake3D projection"), MaterialSource.Contains(TEXT("WacomFirstPersonCard_ProjectSurface")));
 	TestTrue(TEXT("Material reuses realtime contact shadow"), MaterialSource.Contains(TEXT("WacomFirstPersonCard_CombineContactShadowAlpha")));
+	TestTrue(
+		TEXT("Commit receives the authored card-body minimum UV"),
+		MaterialSource.Contains(TEXT("HandTargetImpactCardBodyRectMin")));
+	TestTrue(
+		TEXT("Commit receives the authored card-body maximum UV"),
+		MaterialSource.Contains(TEXT("HandTargetImpactCardBodyRectMax")));
+	TestTrue(
+		TEXT("Material instance controls the off-card exit padding"),
+		MaterialSource.Contains(TEXT("TargetImpactExitPaddingPixels")));
+	TestTrue(
+		TEXT("Material instance controls continuous travel and terminal fade"),
+		MaterialSource.Contains(TEXT("TargetImpactTravelEndProgress"))
+			&& MaterialSource.Contains(TEXT("TargetImpactFadeStartProgress"))
+			&& MaterialSource.Contains(TEXT("TargetImpactFadeEndProgress")));
 	TestFalse(TEXT("The impact effect has no new texture dependency"), MaterialSource.Contains(TEXT("NoiseTexture")));
 	TestTrue(TEXT("Helper quantizes stable card-local pixels"), HelperSource.Contains(TEXT("quantizedUV")));
+	TestTrue(
+		TEXT("Commit normalizes the ring against the real card-body rectangle"),
+		HelperSource.Contains(TEXT("bodySquareDistance"))
+			&& HelperSource.Contains(TEXT("exitPaddingNormalized")));
+	TestTrue(
+		TEXT("Commit keeps travelling until it crosses the card-body edge"),
+		HelperSource.Contains(TEXT("safeCommit / safeTravelEnd"))
+			&& HelperSource.Contains(TEXT("1.0 + exitPaddingNormalized")));
+	TestFalse(
+		TEXT("Commit no longer freezes at the old fixed Retainer radius"),
+		HelperSource.Contains(TEXT("smoothstep(0.0, 0.52, safeCommit)"))
+			|| HelperSource.Contains(TEXT("lerp(0.035, 0.35, expansion)")));
 	TestFalse(TEXT("Helper does not animate from global time"), HelperSource.Contains(TEXT("iTime")));
 	return true;
 }

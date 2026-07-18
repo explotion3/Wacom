@@ -170,6 +170,13 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 	bool bHasLastBattleSnapshot = false;
 	int32 LastBattleSnapshotHandCount = 0;
 	int32 LastBattleSnapshotVersion = INDEX_NONE;
+	int32 CardPresentationPrewarmState = 0;
+	uint32 CardPresentationPrewarmGeneration = 0;
+	int32 CardPresentationRequiredAssetCount = 0;
+	int32 CardPresentationOptionalAssetCount = 0;
+	float CardPresentationPrewarmElapsedSeconds = 0.0f;
+	bool bEntryWaitingForCamera = false;
+	bool bEntryWaitingForCardPresentationPrewarm = false;
 };
 #endif
 

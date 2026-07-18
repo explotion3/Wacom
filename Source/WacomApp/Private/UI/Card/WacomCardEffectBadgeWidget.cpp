@@ -62,6 +62,7 @@ UWacomCardEffectBadgeWidget::GetAutomationTestViewForTest() const
 	View.LastFeedbackMaterialFailure = LastFeedbackMaterialFailureForTest;
 	View.DigitMaterialPoolSize = ActiveDigitMaterialInstances.Num();
 	View.DigitMaterialCreateCount = DigitMaterialCreateCountForTest;
+	View.SpriteSynchronousFallbackCount = SpriteSynchronousFallbackCountForTest;
 	View.RootScale = GetRenderTransform().Scale;
 	View.RootOpacity = GetRenderOpacity();
 	View.bHasFrameShadowImage = BadgeFrameShadowImage != nullptr;
@@ -136,6 +137,25 @@ void UWacomCardEffectBadgeWidget::SetEffectBadgeData(const FWacomCardViewEffectB
 	ApplyCurrentDataToWidgets();
 }
 
+void UWacomCardEffectBadgeWidget::AppendPresentationSoftObjectPaths(
+	TArray<FSoftObjectPath>& OutPaths) const
+{
+	for (const TPair<EWacomCardViewEffectBadgeKind, TSoftObjectPtr<UPaperSprite>>& Pair : BadgeFrameSprites)
+	{
+		if (!Pair.Value.IsNull())
+		{
+			OutPaths.Add(Pair.Value.ToSoftObjectPath());
+		}
+	}
+	for (const TPair<int32, TSoftObjectPtr<UPaperSprite>>& Pair : DigitSprites)
+	{
+		if (!Pair.Value.IsNull())
+		{
+			OutPaths.Add(Pair.Value.ToSoftObjectPath());
+		}
+	}
+}
+
 FText UWacomCardEffectBadgeWidget::GetValueText() const
 {
 	return FText::AsNumber(CurrentData.Value);
@@ -150,6 +170,7 @@ void UWacomCardEffectBadgeWidget::SetEffectBadgeFeedbackConfig(
 		ReleaseDigitMaterialPool();
 	}
 	FeedbackConfig = InConfig;
+	PrimeDigitMaterialPool();
 	if (!FeedbackConfig.bEnabled)
 	{
 		ResetEffectBadgeFeedback();
@@ -460,6 +481,28 @@ void UWacomCardEffectBadgeWidget::ReleaseDigitMaterialPool()
 	ActiveDigitMaterialSource = nullptr;
 }
 
+void UWacomCardEffectBadgeWidget::PrimeDigitMaterialPool()
+{
+	UMaterialInterface* MaterialSource = FeedbackConfig.Style.DigitFeedbackMaterialInstance;
+	if (!FeedbackConfig.bEnabled || !MaterialSource)
+	{
+		return;
+	}
+	if (ActiveDigitMaterialSource != MaterialSource)
+	{
+		ActiveDigitMaterialSource = MaterialSource;
+		ActiveDigitMaterialInstances.Reset();
+	}
+	const int32 DesiredPoolSize = FMath::Max(1, MinimumDigitCount);
+	while (ActiveDigitMaterialInstances.Num() < DesiredPoolSize)
+	{
+		ActiveDigitMaterialInstances.Add(UMaterialInstanceDynamic::Create(MaterialSource, this));
+#if WITH_AUTOMATION_TESTS
+		++DigitMaterialCreateCountForTest;
+#endif
+	}
+}
+
 void UWacomCardEffectBadgeWidget::CacheAuthoredRootTransform()
 {
 	if (bAuthoredRootTransformCached)
@@ -500,7 +543,15 @@ void UWacomCardEffectBadgeWidget::RebuildSpriteCaches()
 	{
 		if (!Pair.Value.IsNull())
 		{
-			if (UPaperSprite* Sprite = Pair.Value.LoadSynchronous())
+			UPaperSprite* Sprite = Pair.Value.Get();
+			if (!Sprite)
+			{
+#if WITH_AUTOMATION_TESTS
+				++SpriteSynchronousFallbackCountForTest;
+#endif
+				Sprite = Pair.Value.LoadSynchronous();
+			}
+			if (Sprite)
 			{
 				ResolvedBadgeFrameSprites.Add(Pair.Key, Sprite);
 			}
@@ -511,7 +562,15 @@ void UWacomCardEffectBadgeWidget::RebuildSpriteCaches()
 	{
 		if (!Pair.Value.IsNull())
 		{
-			if (UPaperSprite* Sprite = Pair.Value.LoadSynchronous())
+			UPaperSprite* Sprite = Pair.Value.Get();
+			if (!Sprite)
+			{
+#if WITH_AUTOMATION_TESTS
+				++SpriteSynchronousFallbackCountForTest;
+#endif
+				Sprite = Pair.Value.LoadSynchronous();
+			}
+			if (Sprite)
 			{
 				ResolvedDigitSprites.Add(Pair.Key, Sprite);
 			}

@@ -56,6 +56,7 @@ struct FWacomCardViewAutomationTestView
 	bool bCostDigitRewriteMaterialActive = false;
 	bool bCostDigitRewriteMaterialCached = false;
 	int32 CostDigitRewriteMaterialCreateCount = 0;
+	int32 SpriteSynchronousFallbackCount = 0;
 	bool bCostDigitPreviewMaterialActive = false;
 	UPaperSprite* CostDigitRewriteOldSprite = nullptr;
 	UPaperSprite* CostDigitRewriteNewSprite = nullptr;
@@ -86,6 +87,9 @@ class WACOMAPP_API UWacomCardView : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	/** Collects authored soft sprite resources without constructing or synchronously loading a widget. */
+	void AppendPresentationSoftObjectPaths(TArray<FSoftObjectPath>& OutPaths) const;
+
 	UWacomCardView(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|CardView")
@@ -119,6 +123,8 @@ public:
 	void ResetCostDigitRewrite();
 	void SetEffectBadgeFeedbackConfig(
 		const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig);
+	/** Creates the reusable local digit MID without replacing the authoritative PaperSprite brush. */
+	void PrimeCostDigitPresentationMaterial(UMaterialInterface* MaterialSource);
 	void SetEffectBadgeFeedbackView(
 		const FWacomFirstPersonCardEffectBadgeFeedbackView& InView);
 	void ResetEffectBadgeFeedback();
@@ -322,6 +328,7 @@ private:
 	int32 DisabledDisplayUpdateCountForTest = 0;
 	int32 EffectBadgeDisplayUpdateCountForTest = 0;
 	int32 CostDigitRewriteMaterialCreateCountForTest = 0;
+	int32 SpriteSynchronousFallbackCountForTest = 0;
 #endif
 
 	void ApplyCurrentDataToWidgets();

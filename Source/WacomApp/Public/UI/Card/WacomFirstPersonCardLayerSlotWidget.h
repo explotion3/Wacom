@@ -149,6 +149,7 @@ struct WACOMAPP_API FWacomFirstPersonCardSlotAutomationTestView
 	float ExitTransitionStartDelaySeconds = 0.0f;
 	float ExitTransitionDurationSeconds = 0.0f;
 	int32 EnterTransitionSoundRequestCount = 0;
+	int32 OptionalEnterSoundSkipCount = 0;
 	EWacomFirstPersonCardSlotTransitionKind LastEnterTransitionSoundKind =
 		EWacomFirstPersonCardSlotTransitionKind::Default;
 	FWacomFirstPersonCardSlotRuntimeConfig SlotRuntimeConfig;
@@ -407,6 +408,7 @@ private:
 	FVector2D PointerViewportPosition = FVector2D::ZeroVector;
 	FVector2D PointerNormalizedViewportPosition = FVector2D::ZeroVector;
 	FVector2D FeedbackTargetScreenPosition = FVector2D::ZeroVector;
+	TSet<FSoftObjectPath> WarnedUnavailableEnterSoundPaths;
 #if WITH_AUTOMATION_TESTS
 	FWacomFirstPersonCardSlotAutomationTestView GetAutomationTestViewForTest() const;
 	bool RequestHoverForTest();
@@ -426,6 +428,7 @@ private:
 	TOptional<FVector2D> LocalHitCanvasSizeOverrideForTest;
 	int32 SlotRuntimeConfigApplyCountForTest = 0;
 	int32 EnterTransitionSoundRequestCountForTest = 0;
+	int32 OptionalEnterSoundSkipCountForTest = 0;
 	int32 DragPickupTriggerCountForTest = 0;
 	int32 DragPickupSoundRequestCountForTest = 0;
 	float LastDragPickupSoundPitchMultiplierForTest = 1.0f;

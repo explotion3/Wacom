@@ -97,6 +97,10 @@ public:
 	void ResetCostDigitPreviewView();
 	void SetEffectBadgeFeedbackConfig(
 		const FWacomFirstPersonCardEffectBadgeFeedbackConfig& InConfig);
+	/** Pre-creates reusable local digit MIDs while authoritative PaperSprite brushes remain active. */
+	void PrimeLocalPresentationMaterials(
+		const FWacomFirstPersonCardDataRewriteConfig& DataRewriteConfig,
+		const FWacomFirstPersonCardEffectBadgeFeedbackConfig& EffectBadgeConfig);
 	void SetEffectBadgeFeedbackView(
 		const FWacomFirstPersonCardEffectBadgeFeedbackView& InView);
 	void ResetEffectBadgeFeedbackView();
@@ -227,7 +231,7 @@ private:
 		UMaterialInstanceDynamic& Material,
 		const FWacomFirstPersonCardPlayedDissolveView& View) const;
 	FSlateRect ResolveInteractionCueRect(const FGeometry& AllottedGeometry) const;
-	bool ResolveDrawRevealCardBodyUVRect(
+	bool ResolveCardBodyUVRect(
 		FLinearColor& OutMin,
 		FLinearColor& OutMax) const;
 	void ApplyPendingCardViewData();

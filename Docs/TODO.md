@@ -177,7 +177,7 @@ tags:
   - 状态：`In Progress: 手牌目标像素刻印已接线，待世界目标与 PIE polish`
   - 归属：App / First-person Card Layer
   - 入口：[First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup、普通 Played 像素翻面收牌、Exhausted 消耗消散、成功 HandCard 目标刻印，以及 EndTurn `Sealing → Held → Releasing` 保留牌封存。所有 Battle PlayCard 已收口为 `SourceOut → PrimaryTarget → Outcome → SourceReturn` 命令编排；费用与 EffectBadge Preview/Rewrite 分别直接作用于现有局部数字 Image，命令 Outcome 可并行等待两者完成。EffectBadge 已按 Damage/Poison/Heal/Shield 等语义类型聚合稳定 Key，具备可逆 Preview、整组 skipped 低亮和 ValueChanged/Added/Removed Playback；当前正式触发只连接明确许可事件下的可见 ValueChanged。下一步继续做整体 PIE 调参、音效预热、reduced-motion / 全局速度策略，以及等正式动态 Effect 事务落地后接入 Added/Removed；耐久、卡名、插画、稀有度与 Run 升级仍需各自权威变化事实。不复制第三方代码、shader 或资产。
+  - 说明：基础合同已完成显式空帧替换、Motion Mixer / 互斥 Transition Playback、真实 draw/discard/play anchors、Card Depth、单 Retainer 实时 Alpha 接触阴影、Drag Pickup、普通 Played 像素翻面收牌、Exhausted 消耗消散、成功 HandCard 目标刻印，以及 EndTurn `Sealing → Held → Releasing` 保留牌封存。所有 Battle PlayCard 已收口为 `SourceOut → PrimaryTarget → Outcome → SourceReturn` 命令编排；费用与 EffectBadge Preview/Rewrite 分别直接作用于现有局部数字 Image，命令 Outcome 可并行等待两者完成。EffectBadge 已按 Damage/Poison/Heal/Shield 等语义类型聚合稳定 Key，具备可逆 Preview、整组 skipped 低亮和 ValueChanged/Added/Removed Playback；当前正式触发只连接明确许可事件下的可见 ValueChanged。Battle/Run 来源级 Soft Sprite 与 Enter Sound 异步预热、局部 MID 提前建立和真实 Paint Ready Gate 已完成；下一步继续做整体 PIE 调参、Win64 Shipping PSO 冷启动、reduced-motion / 全局速度策略，以及等正式动态 Effect 事务落地后接入 Added/Removed。耐久、卡名、插画、稀有度与 Run 升级仍需各自权威变化事实。不复制第三方代码、shader 或资产。
 
 - [ ] **战斗规则内容化：按 authoring matrix 扩展正式卡牌 / 敌人内容**
   - 状态：`In Progress: 内容扩展`

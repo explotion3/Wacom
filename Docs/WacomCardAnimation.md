@@ -209,6 +209,8 @@ EndTurn phase plan 的 `TurnEndRetain` 阶段只消费 `CardsRetained.CardInstan
 
 当前 layer 可消费 `Drawn` hint，并由 Anchor `06 Transition Motion` 控制来源模式、offset、viewport anchor、scale、angle、duration、stagger、arc lift、ease 和播放期间交互阻塞；`07 Transition Audio` 控制抽牌入手音效，声音在对应 slot 实际启动入场 playback 时触发。
 
+四类 first-person Enter Sound 与卡面 Soft Sprite 在来源交付前由 Battle / Run 共用预热控制器异步驻留。播放边缘不再调用 `LoadSynchronous()`：Optional Sound 尚未驻留时跳过该次声音，但不延迟 Enter、伪造声音请求或阻塞输入；Required Sprite 正常预热后直接由 Soft Pointer `Get()` 命中，只有预热超时或非 first-person CardView 才保留同步完整性 fallback。Slot 还会提前建立 Cost / Badge 局部 MID，具体动画仍必须等待各自一次真实 Paint Generation，资源驻留不替代渲染 Ready Gate。
+
 Run default source 和 RunEvent / 菜单的 provider-backed menu lease 使用 `RunHandEntered` hint，并通过 `ApplyRuntimeCardLayerSourceLifecycleFrame` 提交 `PresentationFrame`；不再保留 entries-only raw menu lease 作为无动画旁路。若后续某类菜单确实需要跳过入场，应在 frame commit / 动画策略上显式表达，而不是绕开 Run workspace provider。
 
 `TurnStartDraw` 阶段会暂时不提交本次新出现的左右手 anchor entries，让普通抽牌先完成；随后 `TurnStartHandAnchorEnter` 提交完整 hand snapshot，并只为这些新出现的 anchor 播放 `HandAnchorEntered`。Battle entry reveal 也采用同样两段式：普通 opening `Drawn` frame 先播，播放结束后 bridge 再提交左右手 `HandAnchorEntered` follow-up frame。这个隐藏只是当前 v1 为了保证“抽牌后生成左右手”可见，不是完整阶段内临时布局系统。

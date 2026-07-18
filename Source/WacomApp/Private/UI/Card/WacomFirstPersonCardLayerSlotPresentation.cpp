@@ -1813,7 +1813,20 @@ void UWacomFirstPersonCardLayerSlotWidget::PlayPendingTransitionStartSound()
 	USoundBase* Sound = Request.Sound.Get();
 	if (!Sound)
 	{
-		Sound = Request.Sound.LoadSynchronous();
+		const FSoftObjectPath SoundPath = Request.Sound.ToSoftObjectPath();
+#if WITH_AUTOMATION_TESTS
+		++OptionalEnterSoundSkipCountForTest;
+#endif
+		if (!SoundPath.IsNull() && !WarnedUnavailableEnterSoundPaths.Contains(SoundPath))
+		{
+			WarnedUnavailableEnterSoundPaths.Add(SoundPath);
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("Skipping non-resident first-person card enter sound: %s"),
+				*SoundPath.ToString());
+		}
+		return;
 	}
 	if (Sound && GetWorld())
 	{

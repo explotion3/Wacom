@@ -225,6 +225,40 @@ UWacomCardView::UWacomCardView(const FObjectInitializer& ObjectInitializer)
 	}
 }
 
+void UWacomCardView::AppendPresentationSoftObjectPaths(
+	TArray<FSoftObjectPath>& OutPaths) const
+{
+	for (const TPair<int32, TSoftObjectPtr<UPaperSprite>>& Pair : CostDigitIcons)
+	{
+		if (!Pair.Value.IsNull())
+		{
+			OutPaths.Add(Pair.Value.ToSoftObjectPath());
+		}
+	}
+	for (const TPair<int32, TSoftObjectPtr<UPaperSprite>>& Pair : DurabilityDigitIcons)
+	{
+		if (!Pair.Value.IsNull())
+		{
+			OutPaths.Add(Pair.Value.ToSoftObjectPath());
+		}
+	}
+	for (const TPair<FGameplayTag, TSoftObjectPtr<UPaperSprite>>& Pair : RarityBorderSprites)
+	{
+		if (!Pair.Value.IsNull())
+		{
+			OutPaths.Add(Pair.Value.ToSoftObjectPath());
+		}
+	}
+	if (const UClass* BadgeClass = EffectBadgeWidgetClass.Get())
+	{
+		if (const UWacomCardEffectBadgeWidget* BadgeDefault =
+			BadgeClass->GetDefaultObject<UWacomCardEffectBadgeWidget>())
+		{
+			BadgeDefault->AppendPresentationSoftObjectPaths(OutPaths);
+		}
+	}
+}
+
 TSharedRef<SWidget> UWacomCardView::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
@@ -482,6 +516,7 @@ FWacomCardViewAutomationTestView UWacomCardView::GetAutomationTestViewForTest() 
 	View.bCostDigitRewriteMaterialActive = bCostDigitRewriteMaterialActive;
 	View.bCostDigitRewriteMaterialCached = CostDigitRewriteMaterialInstance != nullptr;
 	View.CostDigitRewriteMaterialCreateCount = CostDigitRewriteMaterialCreateCountForTest;
+	View.SpriteSynchronousFallbackCount = SpriteSynchronousFallbackCountForTest;
 	View.bCostDigitPreviewMaterialActive = bCostDigitPreviewMaterialActive;
 	View.CostDigitRewriteOldSprite = CostDigitRewriteOldSprite;
 	View.CostDigitRewriteNewSprite = CostDigitRewriteNewSprite;
@@ -925,6 +960,22 @@ void UWacomCardView::ResetEffectBadgeFeedback()
 		{
 			BadgeWidget->ResetEffectBadgeFeedback();
 		}
+	}
+}
+
+void UWacomCardView::PrimeCostDigitPresentationMaterial(UMaterialInterface* MaterialSource)
+{
+	if (!MaterialSource)
+	{
+		return;
+	}
+	if (!CostDigitRewriteMaterialInstance || CostDigitRewriteMaterialSource != MaterialSource)
+	{
+		CostDigitRewriteMaterialSource = MaterialSource;
+		CostDigitRewriteMaterialInstance = UMaterialInstanceDynamic::Create(MaterialSource, this);
+#if WITH_AUTOMATION_TESTS
+		++CostDigitRewriteMaterialCreateCountForTest;
+#endif
 	}
 }
 
@@ -1839,7 +1890,15 @@ void UWacomCardView::RebuildSpriteIconCaches()
 	{
 		if (!Pair.Value.IsNull())
 		{
-			if (UPaperSprite* Sprite = Pair.Value.LoadSynchronous())
+			UPaperSprite* Sprite = Pair.Value.Get();
+			if (!Sprite)
+			{
+#if WITH_AUTOMATION_TESTS
+				++SpriteSynchronousFallbackCountForTest;
+#endif
+				Sprite = Pair.Value.LoadSynchronous();
+			}
+			if (Sprite)
 			{
 				ResolvedCostDigitIcons.Add(Pair.Key, Sprite);
 			}
@@ -1850,7 +1909,15 @@ void UWacomCardView::RebuildSpriteIconCaches()
 	{
 		if (!Pair.Value.IsNull())
 		{
-			if (UPaperSprite* Sprite = Pair.Value.LoadSynchronous())
+			UPaperSprite* Sprite = Pair.Value.Get();
+			if (!Sprite)
+			{
+#if WITH_AUTOMATION_TESTS
+				++SpriteSynchronousFallbackCountForTest;
+#endif
+				Sprite = Pair.Value.LoadSynchronous();
+			}
+			if (Sprite)
 			{
 				ResolvedDurabilityDigitIcons.Add(Pair.Key, Sprite);
 			}
@@ -1861,7 +1928,15 @@ void UWacomCardView::RebuildSpriteIconCaches()
 	{
 		if (Pair.Key.IsValid() && !Pair.Value.IsNull())
 		{
-			if (UPaperSprite* Sprite = Pair.Value.LoadSynchronous())
+			UPaperSprite* Sprite = Pair.Value.Get();
+			if (!Sprite)
+			{
+#if WITH_AUTOMATION_TESTS
+				++SpriteSynchronousFallbackCountForTest;
+#endif
+				Sprite = Pair.Value.LoadSynchronous();
+			}
+			if (Sprite)
 			{
 				ResolvedRarityBorderSprites.Add(Pair.Key, Sprite);
 			}

@@ -10,11 +10,29 @@
 #include "RunStateTypes.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
+#include "UI/Card/WacomFirstPersonCardPresentationAssetCollector.h"
+#include "UI/Card/WacomFirstPersonCardPresentationPrewarmController.h"
 
 namespace
 {
 	const FName RunFirstPersonCardLayerSuppressedSourceId =
 		WacomFirstPersonCardLayerSourceIds::RunMenuSuppressed();
+
+	uint32 BuildPresentationAssetSetHash(
+		const FWacomFirstPersonCardPresentationAssetCollection& Collection)
+	{
+		uint32 Hash = 0;
+		for (const FSoftObjectPath& Path : Collection.RequiredVisualAssets)
+		{
+			Hash = HashCombineFast(Hash, GetTypeHash(Path));
+		}
+		Hash = HashCombineFast(Hash, 0x9E3779B9u);
+		for (const FSoftObjectPath& Path : Collection.OptionalAudioAssets)
+		{
+			Hash = HashCombineFast(Hash, GetTypeHash(Path));
+		}
+		return Hash == 0 ? 1u : Hash;
+	}
 
 	EWacomFirstPersonCardLayerFrameCommitMode ResolveRunCardLayerFrameCommitMode(
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame)
@@ -145,8 +163,21 @@ namespace
 
 UWacomRunFirstPersonCardSourceComponent::UWacomRunFirstPersonCardSourceComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+	PresentationPrewarm = MakeShared<FWacomFirstPersonCardPresentationPrewarmController>();
 	RunFirstPersonCardLayerSourceId = WacomFirstPersonCardLayerSourceIds::RunDefault();
+}
+
+UWacomRunFirstPersonCardSourceComponent::~UWacomRunFirstPersonCardSourceComponent() = default;
+
+void UWacomRunFirstPersonCardSourceComponent::TickComponent(
+	float DeltaTime,
+	ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	TickPresentationPrewarm(DeltaTime);
 }
 
 void UWacomRunFirstPersonCardSourceComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -294,6 +325,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
 	bLastHadAnchor = Anchor != nullptr;
 	if (!Anchor)
 	{
+		ResetPresentationPrewarm();
 		ResetBattleDeckRefreshDebugCounts();
 		ResetDefaultSourceRefreshKey();
 		RestoreMenuLeaseInteractionOverrides();
@@ -331,17 +363,13 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshDefaultBattleDeckSource(
 
 	FWacomFirstPersonCardLayerPresentationFrame Frame =
 		BuildDefaultSourcePresentationFrame(*Anchor, MoveTemp(Entries));
-	WriteRuntimeCardLayerFrame(
+	StageRuntimeCardLayerFrame(
 		*Anchor,
 		Frame);
 	StoreRunCardWorkspaceMetadata(WorkspaceSnapshot);
-	LastWrittenRuntimeSourceId = Frame.SourceId;
 	StoreDefaultSourceRefreshKey();
 	ClearDefaultSourceReconcileBlock();
 	LastRefreshResult = TEXT("Refreshed");
-#if WITH_AUTOMATION_TESTS
-	++DefaultSourceRefreshCountersForTest.RuntimeApplyCount;
-#endif
 	LogDebugState(TEXT("Refreshed"));
 	return true;
 }
@@ -646,6 +674,10 @@ void UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayer()
 
 void UWacomRunFirstPersonCardSourceComponent::ResetRunFirstPersonCardLayerMenuContext()
 {
+	// A menu-source revision may still be waiting on presentation assets. Cancel
+	// that generation before selecting the replacement source so a late async
+	// callback cannot restore the stale lease frame over the default source.
+	ResetPresentationPrewarm();
 	bSuppressedByGameMenu = false;
 	ActiveMenuLeaseId = NAME_None;
 	ActiveMenuLeaseSourceId = NAME_None;
@@ -669,6 +701,7 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshActiveMenuLease(bool bAllow
 	bLastHadAnchor = Anchor != nullptr;
 	if (!Anchor)
 	{
+		ResetPresentationPrewarm();
 		ResetProviderLeaseRefreshKey();
 		RestoreMenuLeaseInteractionOverrides();
 		LastEntryCount = 0;
@@ -703,12 +736,8 @@ bool UWacomRunFirstPersonCardSourceComponent::RefreshActiveMenuLease(bool bAllow
 			*Anchor,
 			ActiveMenuLeaseSourceId,
 			TArray<FWacomFirstPersonCardLayerEntry>(ActiveMenuLeaseEntries));
-	WriteRuntimeCardLayerFrame(*Anchor, Frame);
-	LastWrittenRuntimeSourceId = ActiveMenuLeaseSourceId;
+	StageRuntimeCardLayerFrame(*Anchor, Frame);
 	StoreProviderLeaseRefreshKey();
-#if WITH_AUTOMATION_TESTS
-	++ProviderLeaseRefreshCountersForTest.RuntimeApplyCount;
-#endif
 	ClearMenuLeaseReconcileBlock();
 	LastRefreshResult = TEXT("MenuLeaseRefreshed");
 	LogDebugState(TEXT("MenuLeaseRefreshed"));
@@ -786,6 +815,9 @@ bool UWacomRunFirstPersonCardSourceComponent::RebuildActiveMenuLeaseFromProvider
 
 bool UWacomRunFirstPersonCardSourceComponent::WriteSuppressedRuntimeCardLayerWithResult(FName Result)
 {
+	// Suppression is an immediate ownership boundary. Pending default/lease
+	// frames must never become visible after the game menu has taken control.
+	ResetPresentationPrewarm();
 	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor();
 	bLastHadAnchor = Anchor != nullptr;
 	if (!Anchor)
@@ -849,6 +881,7 @@ void UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerWithRe
 	FName Result,
 	bool bClearMenuContext)
 {
+	ResetPresentationPrewarm();
 	if (bClearMenuContext)
 	{
 		bSuppressedByGameMenu = false;
@@ -959,7 +992,9 @@ bool UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerMenuLe
 		return false;
 	}
 
-	const FName PreviousLeaseSourceId = ActiveMenuLeaseSourceId;
+	// Invalidate a lease frame that may still be loading before the default
+	// source is reconciled. The replacement source starts its own generation.
+	ResetPresentationPrewarm();
 	ActiveMenuLeaseId = NAME_None;
 	ActiveMenuLeaseSourceId = NAME_None;
 	ActiveMenuLeaseEntries.Reset();
@@ -967,16 +1002,6 @@ bool UWacomRunFirstPersonCardSourceComponent::ClearRunFirstPersonCardLayerMenuLe
 	ClearRunCardWorkspaceMetadata();
 	ResetDefaultSourceRefreshKey();
 	ResetProviderLeaseRefreshKey();
-
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor())
-	{
-		ClearRuntimeCardLayerEntries(*Anchor, PreviousLeaseSourceId);
-		bLastHadAnchor = true;
-	}
-	else
-	{
-		bLastHadAnchor = false;
-	}
 
 	ReconcileRunFirstPersonCardLayer(
 		/*bAllowDefaultSourceRevisionSkip*/ false,
@@ -1012,6 +1037,17 @@ UWacomRunFirstPersonCardSourceComponent::GetRunFirstPersonCardSourceDebugView() 
 	View.PendingDefaultSourceBlockReason = PendingDefaultSourceBlockReason;
 	View.bHasPendingMenuLeaseReconcile = bHasPendingMenuLeaseReconcile;
 	View.PendingMenuLeaseBlockReason = PendingMenuLeaseBlockReason;
+	if (PresentationPrewarm)
+	{
+		const FWacomFirstPersonCardPresentationPrewarmDebugView PrewarmView =
+			PresentationPrewarm->BuildDebugView();
+		View.PresentationPrewarmState = static_cast<int32>(PrewarmView.State);
+		View.PresentationPrewarmGeneration = static_cast<int32>(PrewarmView.Generation);
+		View.PresentationRequiredAssetCount = PrewarmView.RequiredAssetCount;
+		View.PresentationOptionalAssetCount = PrewarmView.OptionalAssetCount;
+		View.PresentationPrewarmElapsedSeconds = PrewarmView.ElapsedSeconds;
+	}
+	View.bPresentationSourceFrozenForPrewarm = PendingPresentationFrame.bValid;
 	return View;
 }
 
@@ -1048,7 +1084,15 @@ FString UWacomRunFirstPersonCardSourceComponent::GetRunFirstPersonCardSourceDebu
 			*View.LastMenuLeaseProviderResult.ToString(),
 			View.LastMenuLeaseProviderCandidateCount,
 			View.LastMenuLeaseProviderConsideredCount,
-			*View.LastMenuLeaseProviderDebugSummary);
+			*View.LastMenuLeaseProviderDebugSummary)
+		+ FString::Printf(
+			TEXT(" Prewarm{State=%d Generation=%d Frozen=%s Required=%d Optional=%d Elapsed=%.3f}"),
+			View.PresentationPrewarmState,
+			View.PresentationPrewarmGeneration,
+			View.bPresentationSourceFrozenForPrewarm ? TEXT("true") : TEXT("false"),
+			View.PresentationRequiredAssetCount,
+			View.PresentationOptionalAssetCount,
+			View.PresentationPrewarmElapsedSeconds);
 }
 
 void UWacomRunFirstPersonCardSourceComponent::LogRunFirstPersonCardSourceDebugSummary() const
@@ -1183,6 +1227,115 @@ void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerFrame(
 	LifecycleFrame.bSetInteractionEnabled = true;
 	LifecycleFrame.bInteractionEnabled = bEnableRuntimeInteraction;
 	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
+	LastWrittenRuntimeSourceId = Frame.SourceId;
+#if WITH_AUTOMATION_TESTS
+	if (Frame.SourceId == RunFirstPersonCardLayerSourceId)
+	{
+		++DefaultSourceRefreshCountersForTest.RuntimeApplyCount;
+	}
+	else if (!ActiveMenuLeaseSourceId.IsNone()
+		&& Frame.SourceId == ActiveMenuLeaseSourceId)
+	{
+		++ProviderLeaseRefreshCountersForTest.RuntimeApplyCount;
+	}
+#endif
+}
+
+bool UWacomRunFirstPersonCardSourceComponent::StageRuntimeCardLayerFrame(
+	UWacomFirstPersonCardAnchorComponent& Anchor,
+	const FWacomFirstPersonCardLayerPresentationFrame& Frame)
+{
+	if (!PresentationPrewarm)
+	{
+		PresentationPrewarm = MakeShared<FWacomFirstPersonCardPresentationPrewarmController>();
+	}
+	const FWacomFirstPersonCardPresentationAssetCollection Collection =
+		FWacomFirstPersonCardPresentationAssetCollector::Collect(Anchor);
+	const uint32 AssetSetHash = BuildPresentationAssetSetHash(Collection);
+
+	if (ActivePresentationAssetSetHash == AssetSetHash)
+	{
+		PresentationPrewarm->Tick(0.0f);
+		if (PresentationPrewarm->IsGateResolved())
+		{
+			WriteRuntimeCardLayerFrame(Anchor, Frame);
+			return true;
+		}
+	}
+	else
+	{
+		FWacomFirstPersonCardPresentationPrewarmRequest Request;
+		Request.ScopeId = TEXT("Run");
+		Request.RequiredVisualAssets = Collection.RequiredVisualAssets;
+		Request.OptionalAudioAssets = Collection.OptionalAudioAssets;
+		Request.TimeoutSeconds = 1.5f;
+		ActivePresentationAssetSetHash = AssetSetHash;
+		PendingPresentationFrame.Generation = PresentationPrewarm->Begin(Request);
+	}
+
+	PendingPresentationFrame.Anchor = &Anchor;
+	PendingPresentationFrame.Frame = Frame;
+	PendingPresentationFrame.Generation = PresentationPrewarm->GetGeneration();
+	PendingPresentationFrame.bValid = true;
+	if (Anchor.HasRuntimeCardLayerData())
+	{
+		const FName VisibleSourceId = Anchor.GetRuntimeCardLayerSourceId();
+		if (!VisibleSourceId.IsNone())
+		{
+			// Keep the current visual source in place while its replacement loads,
+			// but freeze card interaction so stale menu/default ownership cannot
+			// submit actions during the handoff.
+			FWacomFirstPersonCardLayerSourceLifecycleFrame FreezeFrame;
+			FreezeFrame.SourceId = VisibleSourceId;
+			FreezeFrame.bSetInteractionEnabled = true;
+			FreezeFrame.bInteractionEnabled = false;
+			FreezeFrame.bCancelActiveDrag = true;
+			Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(FreezeFrame);
+		}
+	}
+	SetComponentTickEnabled(true);
+	TickPresentationPrewarm(0.0f);
+	return true;
+}
+
+void UWacomRunFirstPersonCardSourceComponent::TickPresentationPrewarm(float DeltaTime)
+{
+	if (!PresentationPrewarm)
+	{
+		SetComponentTickEnabled(false);
+		return;
+	}
+	PresentationPrewarm->Tick(DeltaTime);
+	uint32 ResolvedGeneration = 0;
+	EWacomFirstPersonCardPresentationPrewarmState ResolvedState =
+		EWacomFirstPersonCardPresentationPrewarmState::Inactive;
+	if (PresentationPrewarm->ConsumeGateResolution(ResolvedGeneration, ResolvedState)
+		&& PendingPresentationFrame.bValid
+		&& PendingPresentationFrame.Generation == ResolvedGeneration)
+	{
+		if (UWacomFirstPersonCardAnchorComponent* Anchor = PendingPresentationFrame.Anchor.Get())
+		{
+			WriteRuntimeCardLayerFrame(*Anchor, PendingPresentationFrame.Frame);
+		}
+		PendingPresentationFrame = FPendingPresentationFrame();
+	}
+	const FWacomFirstPersonCardPresentationPrewarmDebugView View =
+		PresentationPrewarm->BuildDebugView();
+	SetComponentTickEnabled(
+		PendingPresentationFrame.bValid
+		|| (View.State == EWacomFirstPersonCardPresentationPrewarmState::TimedOut
+			&& !View.bRequiredLoadCompleted));
+}
+
+void UWacomRunFirstPersonCardSourceComponent::ResetPresentationPrewarm()
+{
+	PendingPresentationFrame = FPendingPresentationFrame();
+	ActivePresentationAssetSetHash = 0;
+	if (PresentationPrewarm)
+	{
+		PresentationPrewarm->Reset();
+	}
+	SetComponentTickEnabled(false);
 }
 
 void UWacomRunFirstPersonCardSourceComponent::ClearRuntimeCardLayerEntries(
@@ -1242,6 +1395,7 @@ void UWacomRunFirstPersonCardSourceComponent::ClearKnownRuntimeSources(
 
 void UWacomRunFirstPersonCardSourceComponent::UnbindRunSession()
 {
+	ResetPresentationPrewarm();
 	if (BoundRunSession)
 	{
 		BoundRunSession->OnRunStateChangedNative.RemoveAll(this);

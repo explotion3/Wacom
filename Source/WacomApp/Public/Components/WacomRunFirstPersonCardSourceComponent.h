@@ -11,6 +11,7 @@
 
 class URunSession;
 class UWacomFirstPersonCardAnchorComponent;
+class FWacomFirstPersonCardPresentationPrewarmController;
 struct FWacomFirstPersonCardLayerTestAccess;
 
 USTRUCT(BlueprintType)
@@ -89,6 +90,24 @@ struct WACOMAPP_API FWacomRunFirstPersonCardSourceDebugView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "菜单租约源最近一次待完成状态对齐的阻塞原因。"))
 	FName PendingMenuLeaseBlockReason = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "第一人称卡牌资源预热状态。0=Inactive，1=Loading，2=Ready，3=TimedOut，4=Failed，5=Cancelled。"))
+	int32 PresentationPrewarmState = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前卡牌资源预热代次。"))
+	int32 PresentationPrewarmGeneration = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前是否因资源预热冻结新的卡牌来源 Frame；探索输入不受影响。"))
+	bool bPresentationSourceFrozenForPrewarm = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前预热所需视觉资源数量。"))
+	int32 PresentationRequiredAssetCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前预热可选音频资源数量。"))
+	int32 PresentationOptionalAssetCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前预热已耗时，单位为秒。"))
+	float PresentationPrewarmElapsedSeconds = 0.0f;
 };
 
 #if WITH_AUTOMATION_TESTS
@@ -121,6 +140,7 @@ class WACOMAPP_API UWacomRunFirstPersonCardSourceComponent : public UActorCompon
 
 public:
 	UWacomRunFirstPersonCardSourceComponent();
+	virtual ~UWacomRunFirstPersonCardSourceComponent() override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|First Person Cards", meta = (ToolTip = "是否在探索期把 RunSession 的备战卡组写入第一人称卡牌层。关闭后会清理本 source，不影响战斗手牌 source。"))
 	bool bEnableRunFirstPersonCardLayer = true;
@@ -194,6 +214,10 @@ public:
 
 protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void TickComponent(
+		float DeltaTime,
+		ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction) override;
 
 	virtual UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
 
@@ -316,6 +340,11 @@ private:
 	void MarkMenuLeaseReconcileBlocked(FName Reason);
 	void ClearMenuLeaseReconcileBlock();
 	void ClearReconcileBlocks();
+	bool StageRuntimeCardLayerFrame(
+		UWacomFirstPersonCardAnchorComponent& Anchor,
+		const FWacomFirstPersonCardLayerPresentationFrame& Frame);
+	void TickPresentationPrewarm(float DeltaTime);
+	void ResetPresentationPrewarm();
 
 	UPROPERTY(Transient)
 	TObjectPtr<URunSession> BoundRunSession = nullptr;
@@ -350,6 +379,16 @@ private:
 	FName PendingDefaultSourceBlockReason = NAME_None;
 	bool bHasPendingMenuLeaseReconcile = false;
 	FName PendingMenuLeaseBlockReason = NAME_None;
+	struct FPendingPresentationFrame
+	{
+		TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> Anchor;
+		FWacomFirstPersonCardLayerPresentationFrame Frame;
+		uint32 Generation = 0;
+		bool bValid = false;
+	};
+	TSharedPtr<FWacomFirstPersonCardPresentationPrewarmController> PresentationPrewarm;
+	FPendingPresentationFrame PendingPresentationFrame;
+	uint32 ActivePresentationAssetSetHash = 0;
 #if WITH_AUTOMATION_TESTS
 	FWacomRunFirstPersonCardSourceRefreshCountersForTest
 		DefaultSourceRefreshCountersForTest;

@@ -4,6 +4,8 @@ Run after DreamShader generates M_FirstPersonCard_SurfaceEffects_HandTargetImpac
 This script intentionally does not load, save, or rebuild the pile-transfer Style.
 """
 
+import os
+
 import unreal
 
 
@@ -13,6 +15,9 @@ MATERIAL_INSTANCE_PATH = MATERIAL_DIR + "/MI_FirstPersonCard_SurfaceEffects_Hand
 STYLE_DIR = "/Game/Wacom/UI/Card/SurfaceEffects"
 STYLE_PATH = STYLE_DIR + "/DA_FPCardHandTargetImpactStyle_PixelStamp"
 PLAYER_BP_PATH = "/Game/Wacom/Core/Player/BP_WacomPlayerCharacter"
+MATERIAL_ONLY = os.environ.get(
+    "WACOM_HAND_TARGET_IMPACT_MATERIAL_ONLY", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def load_required(asset_path, label):
@@ -42,6 +47,10 @@ def load_or_create_material_instance(parent):
         "TargetImpactFragmentDensity": 0.16,
         "TargetImpactGlowStrength": 1.20,
         "TargetImpactPreviewStrength": 0.30,
+        "TargetImpactExitPaddingPixels": 12.0,
+        "TargetImpactTravelEndProgress": 0.90,
+        "TargetImpactFadeStartProgress": 0.86,
+        "TargetImpactFadeEndProgress": 1.0,
     }
     vector_values = {
         "TargetImpactPrimaryColor": unreal.LinearColor(0.58, 0.80, 1.0, 1.0),
@@ -108,6 +117,9 @@ def assign_style_to_player(style_asset):
 
 base_material = load_required(BASE_MATERIAL_PATH, "Hand-target impact DreamShader material")
 default_instance = load_or_create_material_instance(base_material)
-default_style = load_or_create_style(default_instance)
-assign_style_to_player(default_style)
-unreal.log("Wacom hand-target impact material instance and Style configured")
+if MATERIAL_ONLY:
+    unreal.log("Wacom hand-target impact material instance configured (material-only mode)")
+else:
+    default_style = load_or_create_style(default_instance)
+    assign_style_to_player(default_style)
+    unreal.log("Wacom hand-target impact material instance and Style configured")

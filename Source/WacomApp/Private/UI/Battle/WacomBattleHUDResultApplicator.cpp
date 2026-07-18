@@ -10,6 +10,10 @@
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
+#include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
+#include "UI/Card/WacomFirstPersonCardPresentationAssetCollector.h"
+#include "UI/Card/WacomFirstPersonCardPresentationPrewarmController.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 
 namespace
 {
@@ -32,8 +36,11 @@ namespace
 
 FWacomBattleHUDResultApplicator::FWacomBattleHUDResultApplicator(FWacomBattleHUDRuntime& InRuntime)
 	: Runtime(InRuntime)
+	, CardPresentationPrewarm(MakeUnique<FWacomFirstPersonCardPresentationPrewarmController>())
 {
 }
+
+FWacomBattleHUDResultApplicator::~FWacomBattleHUDResultApplicator() = default;
 
 void FWacomBattleHUDResultApplicator::BeginBattleEntryPresentation()
 {
@@ -43,6 +50,9 @@ void FWacomBattleHUDResultApplicator::BeginBattleEntryPresentation()
 	LastAppliedStateVersion = INDEX_NONE;
 	bEntryPresentationActive = true;
 	bInitializationApplied = false;
+	bCameraStageReady = false;
+	bPrewarmGateReady = false;
+	ResetCardPresentationPrewarm();
 	Runtime.SetBattleInputReady(false);
 	Runtime.SetFirstPersonBattleHandSuppressedForEntry(true);
 }
@@ -86,6 +96,7 @@ void FWacomBattleHUDResultApplicator::AttachInitializedBattleSession(
 	// before its snapshot can reach the first-person hand layer.
 	Runtime.SetBattleInputReady(false);
 	Runtime.SetFirstPersonBattleHandSuppressedForEntry(true);
+	BeginCardPresentationPrewarm();
 
 	Runtime.StoreFirstPersonCardTransitionEvents(Initialization.Events);
 	Runtime.NativeRefreshFromSnapshot(Initialization.PostSnapshot);
@@ -103,6 +114,7 @@ void FWacomBattleHUDResultApplicator::AttachInitializedBattleSession(
 	PendingInitializationSnapshot = Initialization.PostSnapshot;
 	LastAppliedStateVersion = Initialization.PostSnapshot.Version;
 	bInitializationApplied = true;
+	Tick(0.0f);
 }
 
 void FWacomBattleHUDResultApplicator::ReleaseBattleEntryPresentation()
@@ -124,11 +136,130 @@ void FWacomBattleHUDResultApplicator::ReleaseBattleEntryPresentation()
 		return;
 	}
 
+	bCameraStageReady = true;
+	TryReleaseBattleEntryPresentation();
+}
+
+void FWacomBattleHUDResultApplicator::Tick(float DeltaTime)
+{
+	if (!CardPresentationPrewarm)
+	{
+		return;
+	}
+	if (!bEntryPresentationActive)
+	{
+		const FWacomFirstPersonCardPresentationPrewarmDebugView View =
+			CardPresentationPrewarm->BuildDebugView();
+		if (View.State == EWacomFirstPersonCardPresentationPrewarmState::TimedOut
+			&& !View.bRequiredLoadCompleted)
+		{
+			CardPresentationPrewarm->Tick(DeltaTime);
+		}
+		return;
+	}
+	CardPresentationPrewarm->Tick(DeltaTime);
+	uint32 ResolvedGeneration = 0;
+	EWacomFirstPersonCardPresentationPrewarmState ResolvedState =
+		EWacomFirstPersonCardPresentationPrewarmState::Inactive;
+	if (CardPresentationPrewarm->ConsumeGateResolution(ResolvedGeneration, ResolvedState)
+		&& ResolvedGeneration == PrewarmGeneration)
+	{
+		bPrewarmGateReady = true;
+	}
+	TryReleaseBattleEntryPresentation();
+}
+
+void FWacomBattleHUDResultApplicator::BeginCardPresentationPrewarm()
+{
+	if (!CardPresentationPrewarm)
+	{
+		CardPresentationPrewarm = MakeUnique<FWacomFirstPersonCardPresentationPrewarmController>();
+	}
+	FWacomFirstPersonCardPresentationPrewarmRequest Request;
+	Request.ScopeId = TEXT("Battle");
+	Request.TimeoutSeconds = 1.5f;
+	if (UWacomFirstPersonCardAnchorComponent* Anchor =
+		Runtime.GetFirstPersonHandBridge().ResolveAnchor())
+	{
+		const FWacomFirstPersonCardPresentationAssetCollection Collection =
+			FWacomFirstPersonCardPresentationAssetCollector::Collect(*Anchor);
+		Request.RequiredVisualAssets = Collection.RequiredVisualAssets;
+		Request.OptionalAudioAssets = Collection.OptionalAudioAssets;
+	}
+	PrewarmGeneration = CardPresentationPrewarm->Begin(Request);
+}
+
+void FWacomBattleHUDResultApplicator::TryReleaseBattleEntryPresentation()
+{
+	if (!bEntryPresentationActive || !bInitializationApplied
+		|| !bCameraStageReady || !bPrewarmGateReady)
+	{
+		return;
+	}
+	if (!BoundSession.IsValid() || Runtime.GetSession() != BoundSession.Get())
+	{
+		CancelEntryPresentation();
+		return;
+	}
 	Runtime.SetFirstPersonBattleHandSuppressedForEntry(false);
 	Runtime.SetBattleInputReady(true);
 	Runtime.NativeRefreshFromSnapshot(PendingInitializationSnapshot);
 	bEntryPresentationActive = false;
 	PendingInitializationSnapshot = FBattleSnapshot();
+}
+
+void FWacomBattleHUDResultApplicator::ResetCardPresentationPrewarm()
+{
+	if (CardPresentationPrewarm)
+	{
+		CardPresentationPrewarm->Reset();
+	}
+	PrewarmGeneration = 0;
+}
+
+int32 FWacomBattleHUDResultApplicator::GetCardPresentationPrewarmState() const
+{
+	return CardPresentationPrewarm
+		? static_cast<int32>(CardPresentationPrewarm->BuildDebugView().State)
+		: static_cast<int32>(EWacomFirstPersonCardPresentationPrewarmState::Inactive);
+}
+
+uint32 FWacomBattleHUDResultApplicator::GetCardPresentationPrewarmGeneration() const
+{
+	return CardPresentationPrewarm
+		? CardPresentationPrewarm->BuildDebugView().Generation
+		: 0;
+}
+
+int32 FWacomBattleHUDResultApplicator::GetCardPresentationRequiredAssetCount() const
+{
+	return CardPresentationPrewarm
+		? CardPresentationPrewarm->BuildDebugView().RequiredAssetCount
+		: 0;
+}
+
+int32 FWacomBattleHUDResultApplicator::GetCardPresentationOptionalAssetCount() const
+{
+	return CardPresentationPrewarm
+		? CardPresentationPrewarm->BuildDebugView().OptionalAssetCount
+		: 0;
+}
+
+float FWacomBattleHUDResultApplicator::GetCardPresentationPrewarmElapsedSeconds() const
+{
+	return CardPresentationPrewarm
+		? CardPresentationPrewarm->BuildDebugView().ElapsedSeconds
+		: 0.0f;
+}
+
+bool FWacomBattleHUDResultApplicator::IsEntryWaitingForCamera() const
+{
+	return bEntryPresentationActive && !bCameraStageReady;
+}
+
+bool FWacomBattleHUDResultApplicator::IsEntryWaitingForCardPresentationPrewarm() const
+{
+	return bEntryPresentationActive && !bPrewarmGateReady;
 }
 
 void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
@@ -227,6 +358,9 @@ void FWacomBattleHUDResultApplicator::HandleSessionChanged(
 	PendingInitializationSnapshot = FBattleSnapshot();
 	bEntryPresentationActive = false;
 	bInitializationApplied = false;
+	bCameraStageReady = false;
+	bPrewarmGateReady = false;
+	ResetCardPresentationPrewarm();
 	LastAppliedStateVersion = NewSession
 		? NewSession->BuildSnapshot().Version
 		: INDEX_NONE;
@@ -239,6 +373,9 @@ void FWacomBattleHUDResultApplicator::CancelEntryPresentation()
 	PendingInitializationSnapshot = FBattleSnapshot();
 	bEntryPresentationActive = false;
 	bInitializationApplied = false;
+	bCameraStageReady = false;
+	bPrewarmGateReady = false;
+	ResetCardPresentationPrewarm();
 	LastAppliedStateVersion = CurrentSession
 		? CurrentSession->BuildSnapshot().Version
 		: INDEX_NONE;

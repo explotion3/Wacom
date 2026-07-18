@@ -27,6 +27,7 @@ struct FWacomCardEffectBadgeAutomationTestView
 	int32 LastFeedbackMaterialFailure = 0;
 	int32 DigitMaterialPoolSize = 0;
 	int32 DigitMaterialCreateCount = 0;
+	int32 SpriteSynchronousFallbackCount = 0;
 	FVector2D RootScale = FVector2D(1.0f, 1.0f);
 	float RootOpacity = 1.0f;
 	bool bHasFrameShadowImage = false;
@@ -48,6 +49,9 @@ class WACOMAPP_API UWacomCardEffectBadgeWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
+	/** Collects authored soft sprite resources without constructing or synchronously loading a widget. */
+	void AppendPresentationSoftObjectPaths(TArray<FSoftObjectPath>& OutPaths) const;
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|CardView")
 	void SetEffectBadgeData(const FWacomCardViewEffectBadge& InData);
 
@@ -138,6 +142,7 @@ private:
 	int32 DigitImageUpdateCountForTest = 0;
 	int32 LastFeedbackMaterialFailureForTest = 0;
 	int32 DigitMaterialCreateCountForTest = 0;
+	int32 SpriteSynchronousFallbackCountForTest = 0;
 #endif
 
 	void ApplyCurrentDataToWidgets();
@@ -158,6 +163,7 @@ private:
 		float Pulse);
 	void RestoreAuthoritativeDigitBrushes();
 	void ReleaseDigitMaterialPool();
+	void PrimeDigitMaterialPool();
 	void EnsureBadgeFrameShadowImage();
 	void RefreshBadgeFrameShadow();
 	void CacheAuthoredRootTransform();

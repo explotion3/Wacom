@@ -34,6 +34,8 @@ namespace
 	const FName HandTargetImpactTimeParameterName(TEXT("HandTargetImpactTime"));
 	const FName HandTargetImpactSeedParameterName(TEXT("HandTargetImpactSeed"));
 	const FName HandTargetImpactReducedMotionParameterName(TEXT("HandTargetImpactReducedMotion"));
+	const FName HandTargetImpactCardBodyRectMinParameterName(TEXT("HandTargetImpactCardBodyRectMin"));
+	const FName HandTargetImpactCardBodyRectMaxParameterName(TEXT("HandTargetImpactCardBodyRectMax"));
 	const FName DrawRevealEnabledParameterName(TEXT("DrawRevealEnabled"));
 	const FName DrawRevealProgressParameterName(TEXT("DrawRevealProgress"));
 	const FName DrawRevealReducedMotionParameterName(TEXT("DrawRevealReducedMotion"));
@@ -223,6 +225,21 @@ void UWacomFirstPersonCardViewWidget::SetEffectBadgeFeedbackConfig(
 	{
 		CardView->SetEffectBadgeFeedbackConfig(InConfig);
 	}
+}
+
+void UWacomFirstPersonCardViewWidget::PrimeLocalPresentationMaterials(
+	const FWacomFirstPersonCardDataRewriteConfig& DataRewriteConfig,
+	const FWacomFirstPersonCardEffectBadgeFeedbackConfig& EffectBadgeConfig)
+{
+	LastEffectBadgeFeedbackConfig = EffectBadgeConfig;
+	EnsureFallbackWidgetTree();
+	if (!CardView)
+	{
+		return;
+	}
+	CardView->PrimeCostDigitPresentationMaterial(
+		DataRewriteConfig.Style.DigitRewriteMaterialInstance);
+	CardView->SetEffectBadgeFeedbackConfig(EffectBadgeConfig);
 }
 
 void UWacomFirstPersonCardViewWidget::SetEffectBadgeFeedbackView(
@@ -968,12 +985,17 @@ void UWacomFirstPersonCardViewWidget::ApplyHandTargetImpactParameters(
 	Material.SetScalarParameterValue(
 		HandTargetImpactReducedMotionParameterName,
 		View.bReducedMotion ? 1.0f : 0.0f);
+	FLinearColor BodyRectMin;
+	FLinearColor BodyRectMax;
+	ResolveCardBodyUVRect(BodyRectMin, BodyRectMax);
+	Material.SetVectorParameterValue(HandTargetImpactCardBodyRectMinParameterName, BodyRectMin);
+	Material.SetVectorParameterValue(HandTargetImpactCardBodyRectMaxParameterName, BodyRectMax);
 	FVector2D SurfaceSize = Fake3DSurfaceRetainer
 		? Fake3DSurfaceRetainer->GetCachedGeometry().GetLocalSize()
 		: FVector2D::ZeroVector;
 	if (SurfaceSize.X <= 1.0f || SurfaceSize.Y <= 1.0f)
 	{
-		SurfaceSize = FVector2D(360.0f, 484.0f);
+		SurfaceSize = FVector2D(456.0f, 520.0f);
 	}
 	Material.SetVectorParameterValue(
 		SurfaceInvSizeParameterName,
@@ -1008,7 +1030,7 @@ void UWacomFirstPersonCardViewWidget::ApplyDrawRevealParameters(
 
 	FLinearColor BodyRectMin;
 	FLinearColor BodyRectMax;
-	ResolveDrawRevealCardBodyUVRect(BodyRectMin, BodyRectMax);
+	ResolveCardBodyUVRect(BodyRectMin, BodyRectMax);
 	Material.SetVectorParameterValue(DrawRevealCardBodyRectMinParameterName, BodyRectMin);
 	Material.SetVectorParameterValue(DrawRevealCardBodyRectMaxParameterName, BodyRectMax);
 
@@ -1107,7 +1129,7 @@ void UWacomFirstPersonCardViewWidget::ApplyRetainSealParameters(
 		FLinearColor(1.0f / SurfaceSize.X, 1.0f / SurfaceSize.Y, 0.0f, 0.0f));
 }
 
-bool UWacomFirstPersonCardViewWidget::ResolveDrawRevealCardBodyUVRect(
+bool UWacomFirstPersonCardViewWidget::ResolveCardBodyUVRect(
 	FLinearColor& OutMin,
 	FLinearColor& OutMax) const
 {

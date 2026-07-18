@@ -263,7 +263,7 @@ Battle 拖拽指针压中规则判定为有效的唯一手牌目标时，目标 
 
 目标仍在 Post Snapshot 的 Hand 时，Impact 始终追随最新布局并归位；目标进入普通弃牌批次时，Card Glyph Transfer 等待 Gate 后再从目标 Slot 的真实中心收束为牌印；目标进入 Exhaust 时，Gate 后把唯一 Retainer 的 Surface 所有权交给现有消耗效果。Style、MI、目标 Slot 或必要弃牌绑定无效时不等待，立即使用既有留手 / 弃牌 / 消耗路径。ForceComplete、BattleEnd、source clear、Slot 复用和 teardown 会清理 Preview、Commit、延迟离场和 Surface MID，不补播音效。Reduced Motion 把 Preview 改为静态弱刻印，Commit 改为约 `0.12s` 的材质闪现，并把 Gate 缩短到约 `0.04s`，不修改目标卡 Scale 或 Translation。
 
-制作真源为 `DShader/Material/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpact.dsm` 与 `DShader/Shared/WacomFirstPersonCardHandTargetImpact.dsh`；默认 MI 为 `/Game/DreamMaterials/Card/MI_FirstPersonCard_SurfaceEffects_HandTargetImpact_Default`，默认 Style 为 `/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardHandTargetImpactStyle_PixelStamp`。材质复用唯一 `Fake3DSurfaceRetainer`、Fake3D 投影与实时 Alpha 接触阴影，不裁切原卡面、不新增纹理，刻印和碎点不参与 shadow caster。MI 负责冰蓝 / 象牙金 / 紫红色板、网格、线宽、碎点和发光；DataAsset 只负责材质实例、时序、实体运动、ZOrder 和可选峰值声音。Anchor 制作入口为 `15 Card Hand Target Impact`。
+制作真源为 `DShader/Material/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpact.dsm` 与 `DShader/Shared/WacomFirstPersonCardHandTargetImpact.dsh`；默认 MI 为 `/Game/DreamMaterials/Card/MI_FirstPersonCard_SurfaceEffects_HandTargetImpact_Default`，默认 Style 为 `/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardHandTargetImpactStyle_PixelStamp`。材质复用唯一 `Fake3DSurfaceRetainer`、Fake3D 投影与实时 Alpha 接触阴影，不裁切原卡面、不新增纹理，刻印和碎点不参与 shadow caster。Commit 扫光使用 `CardContentSizeBox` 转换出的真实卡体 UV Rect，而不是 Retainer 全尺寸固定半径；默认持续外扩到卡体四边外约 `12px` 后才在尾段淡出，避免 Retainer bleed 变化时横线停留在卡牌上下边缘。MI 负责冰蓝 / 象牙金 / 紫红色板、网格、线宽、碎点、发光、越界 Padding 与尾段淡出；DataAsset 只负责材质实例、时序、实体运动、ZOrder 和可选峰值声音。Anchor 制作入口为 `15 Card Hand Target Impact`。
 
 ### 卡面费用变化像素重写
 
@@ -294,6 +294,12 @@ Layer 的每卡反馈容器是确定性的 Feedback Bundle，不再以单值 Map
 内部所有权已经收口为四层：`FWacomFirstPersonCardGestureController` 只持有 Pressed / Inspecting / Dragging / Aiming / Armed / Cancelled 手势事实；`FWacomFirstPersonCardInteractionFeedbackPlayback` 与独立 Drag Pickup Playback 只输出局部反馈；`FWacomFirstPersonCardSlotPresentationController` 统一持有 Enter/Exit、Departure、Reform、HandTarget、Draw/Gain Reveal、Retain、Cost 与 EffectBadge 等语义 Playback，并通过单一 Activity View 汇总 `NeedsTick / BlocksPresentation`，Slot 不再重复遍历各 Playback 判定阶段所有权；Motion Mixer 只消费最终 `FWacomFirstPersonCardLocalFeedbackView`，不读取计时器。延迟目标离场、费用重写交接、Surface Departure 身份和 Ready 冻结等瞬态编排事实同样属于 Controller 的 App-private Runtime State，不再展开在公共 Slot Widget 头文件中；Controller 的统一 Reset 会同时清除 Playback、Readiness、Surface 所有权和这些瞬态事实。Presentation Controller 内的 `FWacomFirstPersonCardPresentationReadinessCoordinator` 原子管理 Surface / CostDigit / EffectBadge 三路 Generation，`FWacomFirstPersonCardSurfaceEffectArbiter` 以 `Departure > CardUseReform > HandTargetImpact > DrawReveal > GainReveal > RetainSeal > Base` 的固定优先级拥有唯一 Retainer。Anchor 字段仍通过一个 `FWacomFirstPersonCardSlotRuntimeConfig` 原子传播到 Slot；等价刷新不会重置 Playback，单个子配置变化只清理对应能力。
 
 Pending Gate 计入阶段阻塞，但 Preview 预热保持非阻塞；超时 `0.75s` 后按各效果既有空间/无材质路径降级，不补播声音或伪造 Peak。Slot 身份复用、配置实际变化、ForceComplete、source clear、BattleEnd 与 teardown 会取消所有 Generation。费用数字按材质源复用一枚 MID，Badge 按最大位数保留 MID 池；普通显示仍恢复 PaperSprite Brush，不承担持续材质绘制。
+
+### 来源级冷启动资源预热
+
+Battle 与 Run 共用 App-private `FWacomFirstPersonCardPresentationPrewarmController`。它在 card source 交付首帧之前，从 `FirstPersonCardViewClass` 的 Widget Tree Archetype 递归收集 CardView / EffectBadge 的 Cost、Durability、Rarity、Badge Frame 与 Badge Digit 软资源，并把 `Drawn / Gained / RunHandEntered / HandAnchorEntered` 音效作为独立 Optional Audio 清单；收集过程不实例化 Widget，也不触发同步加载。Required Visual 与 Optional Audio 分别由 `FStreamableHandle` 驻留到 source 释放，Generation 使旧异步回调不能覆盖新来源。
+
+来源级 Prewarm 与 Slot 的 Paint Readiness 是两道不同门：Prewarm 消除软资源第一次解析的主线程成本，Readiness 保证具体 MID/Brush 已完成真实 Slate Paint。Battle 将资源门和相机 staging 并行，只有两者都完成才解除 hand suppression 与 `BattleInputReady`；Run 只冻结待替换的 card source，已有来源继续显示，探索、镜头与其它 UI 输入不受影响。Required Visual 最多等待 `1.5s`，超时后安全放行并让异步请求继续驻留；Sprite 可以走既有同步完整性 fallback，Optional Audio 永不在播放瞬间同步加载，未驻留时静默跳过并记录一次诊断。Slot 建立时预创建 Cost 与 Badge 局部 MID，但普通状态仍使用 PaperSprite Brush。
 
 ### Drag Pickup 与实验性 Surface Effect
 

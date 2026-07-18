@@ -21,6 +21,8 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpa
         ScalarParameter HandTargetImpactSeed = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=24; ];
         ScalarParameter HandTargetImpactReducedMotion = 0.0 [ Group="手牌目标刻印|运行时"; SortPriority=25; ];
         VectorParameter SurfaceInvSize = float4(0.00277778, 0.00206612, 0.0, 0.0) [ Group="手牌目标刻印|运行时"; SortPriority=26; ];
+        VectorParameter HandTargetImpactCardBodyRectMin = float4(0.105263, 0.092308, 0.0, 0.0) [ Group="手牌目标刻印|运行时"; SortPriority=27; ];
+        VectorParameter HandTargetImpactCardBodyRectMax = float4(0.894737, 0.907692, 0.0, 0.0) [ Group="手牌目标刻印|运行时"; SortPriority=28; ];
 
         VectorParameter TargetImpactPrimaryColor = float4(0.58, 0.80, 1.0, 1.0) [ Group="手牌目标刻印|材质实例"; SortPriority=30; ];
         VectorParameter TargetImpactSecondaryColor = float4(0.96, 0.82, 0.42, 1.0) [ Group="手牌目标刻印|材质实例"; SortPriority=31; ];
@@ -30,6 +32,10 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpa
         ScalarParameter TargetImpactFragmentDensity = 0.16 [ Group="手牌目标刻印|材质实例"; SortPriority=35; ];
         ScalarParameter TargetImpactGlowStrength = 1.20 [ Group="手牌目标刻印|材质实例"; SortPriority=36; ];
         ScalarParameter TargetImpactPreviewStrength = 0.30 [ Group="手牌目标刻印|材质实例"; SortPriority=37; ];
+        ScalarParameter TargetImpactExitPaddingPixels = 12.0 [ Group="手牌目标刻印|材质实例"; SortPriority=38; ];
+        ScalarParameter TargetImpactTravelEndProgress = 0.90 [ Group="手牌目标刻印|材质实例"; SortPriority=39; ];
+        ScalarParameter TargetImpactFadeStartProgress = 0.86 [ Group="手牌目标刻印|材质实例"; SortPriority=40; ];
+        ScalarParameter TargetImpactFadeEndProgress = 1.0 [ Group="手牌目标刻印|材质实例"; SortPriority=41; ];
 
         ScalarParameter ReferenceTiltDegrees = 9.0 [ Group="手牌目标刻印|投影制作"; SortPriority=50; ];
         ScalarParameter ForeshortenStrength = 0.025 [ Group="手牌目标刻印|投影制作"; SortPriority=51; ];
@@ -60,11 +66,13 @@ Shader(Name="DreamMaterials/Card/M_FirstPersonCard_SurfaceEffects_HandTargetImpa
         float3 surfaceColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=surface, R=true, G=true, B=true, A=false);
         float surfaceAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=surface, R=false, G=false, B=false, A=true);
         float2 surfaceInvSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=SurfaceInvSize, R=true, G=true, B=false, A=false);
+        float2 cardBodyRectMin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=HandTargetImpactCardBodyRectMin, R=true, G=true, B=false, A=false);
+        float2 cardBodyRectMax = UE.Expression(Class="ComponentMask", OutputType="float2", Input=HandTargetImpactCardBodyRectMax, R=true, G=true, B=false, A=false);
 
         float primaryMask;
         float secondaryMask;
         float fragmentMask;
-        WacomFirstPersonCard_ComputeHandTargetImpact(projectedUV, surfaceInvSize, HandTargetImpactPreviewAmount, HandTargetImpactCommitProgress, HandTargetImpactReducedMotion, HandTargetImpactSeed, TargetImpactGridColumns, TargetImpactLineWidth, TargetImpactFragmentDensity, primaryMask, secondaryMask, fragmentMask);
+        WacomFirstPersonCard_ComputeHandTargetImpact(projectedUV, surfaceInvSize, cardBodyRectMin, cardBodyRectMax, HandTargetImpactPreviewAmount, HandTargetImpactCommitProgress, HandTargetImpactReducedMotion, HandTargetImpactSeed, TargetImpactGridColumns, TargetImpactLineWidth, TargetImpactFragmentDensity, TargetImpactExitPaddingPixels, TargetImpactTravelEndProgress, TargetImpactFadeStartProgress, TargetImpactFadeEndProgress, primaryMask, secondaryMask, fragmentMask);
         float effectEnabled = saturate(HandTargetImpactEnabled);
         float previewWeight = lerp(max(TargetImpactPreviewStrength, 0.0), 1.0, saturate(HandTargetImpactCommitProgress));
         float stampMask = saturate(primaryMask * previewWeight + secondaryMask + fragmentMask) * surfaceAlpha * insideMask * effectEnabled;

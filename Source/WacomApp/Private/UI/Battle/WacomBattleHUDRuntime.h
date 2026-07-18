@@ -347,6 +347,7 @@ public:
 	FWacomBattleHUDCommandController& GetCommandController();
 	FWacomBattleDrawPileFeedbackController& GetDrawPileFeedbackController();
 	FWacomBattleHUDResultApplicator& GetResultApplicator();
+	const FWacomBattleHUDResultApplicator& GetResultApplicator() const;
 	FWacomBattleHUDCommandBarPresenter& GetCommandBarPresenter();
 	FWacomBattleHUDTargetingController& GetTargetingController();
 	FWacomBattleHUDSnapshotPresenter& GetSnapshotPresenter();
