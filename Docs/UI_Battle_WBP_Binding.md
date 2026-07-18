@@ -267,23 +267,24 @@ WBP 不应做：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `HpBar` | `UWacomProgressBar` | Required | 玩家 HP |
-| `ShieldText` | `TextBlock` | Optional | 护盾文本，0 时可隐藏 |
+| `VitalsTrackImage` | `Image` | Optional（正式 V2 必须） | 直接 UI 材质绘制权威 HP、延迟伤害、行动预测、低血和护盾外框 |
+| `HpValueText` | `TextBlock` | Optional（正式 V2 必须） | 居中显示 `当前 HP / 最大 HP`；Preview 显示 projected HP |
+| `ShieldValueRoot` | `SizeBox` 或其它 Widget | Optional（正式 V2 必须） | 右侧固定宽度的护盾数值根；护盾为零时 Hidden 而非 Collapsed |
+| `ShieldText` | `TextBlock` | Optional | 护盾绝对数值，不显示护盾进度 |
 | `StatusList` | `UWacomBattleStatusIconListWidget` | Optional | 玩家 runtime 状态图标行；为空状态时自动隐藏 |
-| `DamagePulseSurface` | `Border` | Required for impact feedback | HP 下降时的红色被动覆盖面；必须不可命中 |
-| `ShieldPulseSurface` | `Border` | Required for impact feedback | 护盾下降时的蓝色被动覆盖面；必须不可命中 |
+| `HpBar` | `UWacomProgressBar` | Optional legacy fallback | 缺少 V2 材质时保证 HP 仍可读；正式 V2 WBP 不依赖它 |
 
-正式 WBP 还必须提供 `DamagePulseAnimation` 与 `ShieldPulseAnimation`。两个动画只改变对应 Surface 的表现属性，不能提交命令、插值规则数值或改变输入模式；Root 与全部子控件保持 `HitTestInvisible`。
+正式 V2 WBP 不再提供 `DamagePulseSurface / ShieldPulseSurface` 或对应 UMG Animation。`UPlayerStatusBar` 的私有 Playback 只在 HP 延迟条、护盾反馈活动时推进，`VitalsTrackImage` 的材质参数负责局部表现；Root 与全部子控件保持 `HitTestInvisible`。
 
 制作提示：
 
 - 推荐把状态列表实例直接命名为 `StatusList`。C++ 会在 `StatusList` 未绑定时回退查找唯一一个 `UWacomBattleStatusIconListWidget` 子控件，但存在多个状态列表时不会猜测。
 - `StatusList` 只在 Snapshot 里有非 `Status.Shield` 状态时显示；单纯配置图标 Brush 不会让 PIE 自动出现状态。
-- Action Preview 不需要新增必绑控件。预览激活时，C++ 会用 Battle 规则层产出的 projected player state 覆盖 `HpBar / ShieldText / StatusList` 当前显示，并用可调透明度提示这是预览态；清理后恢复最近一次真实 Snapshot。
+- Action Preview 不降低整个状态栏透明度。材质同时显示权威 HP 与 projected 增减区段，中央文本和护盾数值显示 projected 值，`StatusList` 显示 projected statuses；清理后恢复最近一次真实 Snapshot，且不播放真实受击动画或音效。
 
 WBP 不应做：不提交玩家命令，不修改 BattleSession。
 
-编辑器关闭时可运行 `-run=WacomBuildPlayerStatusUI -BuildImpactFeedback`，为已识别的正式布局幂等补齐两个 Surface 与动画；再次执行不得产生语义修改。`-run=WacomBuildPlayerStatusUI -InspectOnly` 只读检查父类、基础状态栏布局、bindings、动画与命中策略。若同名控件/动画已被人工用于不兼容结构，工具停止并拒绝覆盖。
+编辑器关闭时可运行 `-run=WacomBuildPlayerStatusUI -BuildVitalsV2`，幂等重建已识别的状态栏、删除旧双脉冲动画、把 `BP_BattleHUD.PlayerStatusBar` 放到左上角 `(28,24)` 并把状态图标调整为 `32×32`。`-InspectOnly` 只读检查父类、bindings、材质、HUD Canvas 位置、图标尺寸和命中策略。旧 `-BuildImpactFeedback` 只作为命令行兼容别名保留，实际执行同一 V2 构建。
 
 ### WBP_BattleStatusIconList
 

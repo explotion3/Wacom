@@ -776,12 +776,13 @@ bool FWacomUIBattleFirstPersonNoTargetCommitShowsPlayerActionPreviewSpec::RunTes
 
 	TestEqual(TEXT("No-target action preview applies projected shield"),
 		ShieldText->GetText().ToString(),
-		FString(TEXT("护盾 10")));
+		FString(TEXT("10")));
 	TestEqual(TEXT("No-target action preview makes shield text visible"),
 		ShieldText->GetVisibility(),
 		ESlateVisibility::HitTestInvisible);
-	TestTrue(TEXT("No-target action preview applies preview opacity"),
-		PlayerStatusBar->GetRenderOpacity() < 1.0f);
+	TestEqual(TEXT("No-target action preview preserves full status-bar opacity"),
+		PlayerStatusBar->GetRenderOpacity(),
+		1.0f);
 
 	PlayerStatusBar->SetRenderOpacity(0.33f);
 	HUD->HandleFirstPersonCardDragUpdatedForTest(SourceCardId, DragView);
@@ -792,8 +793,8 @@ bool FWacomUIBattleFirstPersonNoTargetCommitShowsPlayerActionPreviewSpec::RunTes
 	DragView.GestureState = EWacomFirstPersonCardGestureState::DraggingNoTargetCard;
 	DragView.bCommitArmed = false;
 	HUD->HandleFirstPersonCardDragUpdatedForTest(SourceCardId, DragView);
-	TestEqual(TEXT("Leaving commit-ready clears player preview opacity"),
+	TestEqual(TEXT("Leaving commit-ready preserves externally authored opacity"),
 		PlayerStatusBar->GetRenderOpacity(),
-		1.0f);
+		0.33f);
 	return true;
 }

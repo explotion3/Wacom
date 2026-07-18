@@ -21,7 +21,7 @@
 
 namespace
 {
-	constexpr float DefaultIconSize = 26.0f;
+	constexpr float DefaultIconSize = 32.0f;
 	constexpr float DefaultIconSpacing = 4.0f;
 
 	void ConfigureDefaultBrush(FSlateBrush& Brush, const FLinearColor& Tint)
@@ -77,7 +77,7 @@ namespace
 		}
 
 		FSlateFontInfo Font = TextBlock->GetFont();
-		Font.Size = 9;
+		Font.Size = 11;
 		Font.TypefaceFontName = TEXT("Bold");
 		TextBlock->SetFont(Font);
 		TextBlock->SetColorAndOpacity(FSlateColor(FLinearColor::White));
@@ -141,7 +141,7 @@ TSharedRef<SWidget> UWacomBattleStatusIconWidget::RebuildWidget()
 		}
 
 		UBorder* GeneratedStackBadge = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("StackBadge"));
-		GeneratedStackBadge->SetBrushColor(FLinearColor(0.025f, 0.025f, 0.030f, 0.92f));
+		GeneratedStackBadge->SetBrushColor(FLinearColor(0.018f, 0.024f, 0.040f, 0.96f));
 		GeneratedStackBadge->SetPadding(FMargin(2.0f, 0.0f));
 		StackBadge = GeneratedStackBadge;
 		if (UOverlaySlot* BadgeSlot = Overlay->AddChildToOverlay(GeneratedStackBadge))

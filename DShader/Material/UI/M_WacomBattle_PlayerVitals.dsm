@@ -1,0 +1,163 @@
+import "Shared/WacomBattlePlayerVitals.dsh";
+
+Shader(Name="DreamMaterials/UI/M_WacomBattle_PlayerVitals")
+{
+    Properties = {
+        ScalarParameter HpCurrentPercent = 1.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=0;
+            Description="权威当前生命比例，由 UPlayerStatusBar 写入。";
+        ];
+        ScalarParameter HpTrailPercent = 1.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=10;
+            Description="延迟伤害条比例，由玩家状态 Playback 写入。";
+        ];
+        ScalarParameter HpPreviewPercent = 1.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=20;
+            Description="行动预测后的生命比例；无预览时等于当前生命。";
+        ];
+        ScalarParameter HpPreviewMode = 0.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=30;
+            Description="预测类型：0 无，1 增加，2 减少。";
+        ];
+        ScalarParameter LowHealthAmount = 0.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=40;
+            Description="低生命颜色混合量，0 到 1；不包含循环闪烁。";
+        ];
+        ScalarParameter ShieldVisible = 0.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=50;
+            Description="护盾外框和盾牌图标是否显示。";
+        ];
+        ScalarParameter ShieldPreviewMode = 0.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=60;
+            Description="护盾预测类型：0 无，1 增加，2 减少。";
+        ];
+        ScalarParameter DamagePulseAmount = 0.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=70;
+            Description="生命受击边框脉冲量，由 Playback 写入。";
+        ];
+        ScalarParameter ShieldPulseAmount = 0.0 [
+            Group="玩家状态栏|运行时";
+            SortPriority=80;
+            Description="护盾受击或破裂脉冲量，由 Playback 写入。";
+        ];
+
+        ScalarParameter PixelColumns = 340.0 [
+            Group="玩家状态栏|像素形状";
+            SortPriority=100;
+            Description="横向像素量化列数；默认 340 对应约 2 个逻辑像素一格，推荐 170 到 680。";
+        ];
+        ScalarParameter PixelRows = 23.0 [
+            Group="玩家状态栏|像素形状";
+            SortPriority=110;
+            Description="纵向像素量化行数；默认 23 对应约 2 个逻辑像素一格，推荐 12 到 46。";
+        ];
+
+        VectorParameter BackColor = float4(0.025, 0.040, 0.070, 0.96) [
+            Group="玩家状态栏|颜色";
+            SortPriority=120;
+            Description="空血条与内部底色。";
+        ];
+        VectorParameter FrameColor = float4(0.14, 0.22, 0.32, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=130;
+            Description="无护盾时的深靛蓝像素框颜色。";
+        ];
+        VectorParameter HpFillColor = float4(0.24, 0.84, 0.43, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=140;
+            Description="正常生命填充颜色。";
+        ];
+        VectorParameter LowHpColor = float4(0.94, 0.15, 0.09, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=150;
+            Description="低于制作阈值后的生命颜色。";
+        ];
+        VectorParameter DamageTrailColor = float4(0.95, 0.31, 0.18, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=160;
+            Description="延迟伤害区颜色。";
+        ];
+        VectorParameter PreviewGainColor = float4(0.42, 0.94, 0.68, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=170;
+            Description="生命增加预测区主色。";
+        ];
+        VectorParameter PreviewGainAccentColor = float4(0.96, 0.82, 0.42, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=180;
+            Description="生命增加预测区的少量暖金像素。";
+        ];
+        VectorParameter PreviewLossColor = float4(0.86, 0.22, 0.48, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=190;
+            Description="预计损失与生命受击强调色。";
+        ];
+        VectorParameter ShieldColor = float4(0.38, 0.78, 1.0, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=200;
+            Description="正常护盾外框和图标颜色。";
+        ];
+        VectorParameter ShieldGainColor = float4(0.96, 0.82, 0.42, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=210;
+            Description="护盾增加预测颜色。";
+        ];
+        VectorParameter ShieldLossColor = float4(0.90, 0.32, 0.62, 1.0) [
+            Group="玩家状态栏|颜色";
+            SortPriority=220;
+            Description="护盾减少预测颜色。";
+        ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "PremultipliedAlpha";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        WacomBattlePlayerVitals_Evaluate(
+            uv,
+            HpCurrentPercent,
+            HpTrailPercent,
+            HpPreviewPercent,
+            HpPreviewMode,
+            LowHealthAmount,
+            ShieldVisible,
+            ShieldPreviewMode,
+            DamagePulseAmount,
+            ShieldPulseAmount,
+            PixelColumns,
+            PixelRows,
+            BackColor,
+            FrameColor,
+            HpFillColor,
+            LowHpColor,
+            DamageTrailColor,
+            PreviewGainColor,
+            PreviewGainAccentColor,
+            PreviewLossColor,
+            ShieldColor,
+            ShieldGainColor,
+            ShieldLossColor,
+            Color,
+            Alpha);
+    }
+}

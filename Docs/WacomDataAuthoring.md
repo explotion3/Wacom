@@ -96,12 +96,14 @@ Snake 的 `-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用；`-Pr
 玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
 
 ```powershell
-# 为已识别的正式 PlayerStatusBar 补齐两个脉冲 Surface 和动画
--run=WacomBuildPlayerStatusUI -BuildImpactFeedback
+# 幂等构建 PlayerStatusBar V2、HUD 左上角位置和 32px 状态图标
+-run=WacomBuildPlayerStatusUI -BuildVitalsV2
 
-# 只读检查父类、基础状态栏布局、bindings、动画和命中策略
+# 只读检查父类、bindings、Vitals MI、HUD 位置、状态图标和命中策略
 -run=WacomBuildPlayerStatusUI -InspectOnly
 ```
+
+该 builder 只会把玩家状态条与状态图标子树统一设为 `HitTestInvisible`。保存 `BP_BattleHUD` 时只调整 `PlayerStatusBar` 的 Canvas 位置，禁止重写整棵 HUD 的命中可见性；只读审计还会确认 `CommandBar` 允许子按钮参与 Slate Hit Test，避免 Wait / EndTurn 失去点击。
 
 `DA_EnemyIntentPresentation_Default` 属于 UI-only 制作资产，不是战斗规则 schema。新增 Intent 图标时必须填写准确且唯一的稳定 `IntentId` 与有效 Brush；不允许用显示名、动画名或 effect 自动推断。空 ID、重复 ID 和无效 Brush 会被 Data Validation 拒绝；未配置 Intent 运行时使用 fallback 星形，不阻断战斗。
 

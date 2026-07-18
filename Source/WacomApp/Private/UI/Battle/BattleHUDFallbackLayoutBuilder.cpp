@@ -111,9 +111,9 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 	{
 		SetCanvasSlot(
 			Root->AddChildToCanvas(PlayerStatusBar),
-			FAnchors(0.0f, 1.0f),
-			FVector2D(0.0f, 1.0f),
-			FMargin(20.0f, -140.0f, 220.0f, 120.0f));
+			FAnchors(0.0f, 0.0f),
+			FVector2D(0.0f, 0.0f),
+			FMargin(28.0f, 24.0f, 680.0f, 86.0f));
 	}
 
 	if (UBattleCommandBarWidget* CommandBar = ConstructWidget(Context.WidgetTree, Context.CommandBar, TEXT("CommandBar")))

@@ -317,6 +317,7 @@ rg -n -C 3 "M_WacomCardSurfaceComposite|LogShaderCompilers: Error|LogMaterial: E
 - 正面结晶一类 Retainer Surface Effect 应把“卡体已组装可见度”和“外溢装饰像素”拆成两条 mask：前者同时裁切实时 `Texture.rgb/a` 并作为接触阴影 caster，后者只合成发光颜色/Alpha，绝不能写回 shadow caster。稳定结晶顺序使用 Card ID Seed、局部量化 UV 和 `.dsh` 自包含 hash；不要使用材质 `Time`、Noise Texture 或逐帧随机。稀有度色只在完成边缘阶段选择，不应预先改染完整卡面。
 - `M_FirstPersonCard_SurfaceEffects_GainReveal.dsm` 的生成资产、默认 MI 与 Style 由 `Scripts/SetupFirstPersonCardGainRevealAssets.py` 定向维护；设置 `WACOM_SKIP_GAIN_REVEAL_ANCHOR=1` 可在保留其它分支玩家 Blueprint 的情况下只重建材质与 Style。脚本不得调用其它 DreamShader 全量资产设置流程。
 - 长时间 Held 的封存刻印仍应使用临时 Surface MID，而不是把算法塞进普通手牌基础材质。`M_FirstPersonCard_SurfaceEffects_RetainSeal.dsm` 保留原始卡面 RGB/Alpha，并只把角标、外缘与中心方印作为额外预乘颜色合成；这些亮纹不能写回接触阴影 caster。`RetainSealPhase / Progress` 由 Playback 写入，Held 使用静态强度，不读取 `Time`。默认 MI、Style 与 Anchor 由 `Scripts/SetupFirstPersonCardRetainSealAssets.py` 定向维护；设置 `WACOM_SKIP_RETAIN_SEAL_ANCHOR=1` 可跳过玩家 Blueprint 保存。
+- Battle 玩家状态条的 `M_WacomBattle_PlayerVitals.dsm` 是直接绑定 `UImage` 的 UI 材质，不是 Retainer Effect。权威 HP、延迟伤害、Action Preview、护盾可见度和短反馈量由 `UPlayerStatusBar` 每次刷新/活动 Tick 显式写入；材质不读取 `Time`，低血也不循环闪烁。默认 MI 只由 `Scripts/SetupBattlePlayerVitalsAssets.py` 定向维护，WBP/HUD 布局则由 `WacomBuildPlayerStatusUI -BuildVitalsV2` 独立构建，两个工具不得互相保存对方负责的资产。
 
 ## 8. 性能原则
 

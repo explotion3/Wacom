@@ -1,0 +1,110 @@
+Function SelfContained WacomBattlePlayerVitals_Evaluate(
+    in float2 uv,
+    in float hpCurrentPercent,
+    in float hpTrailPercent,
+    in float hpPreviewPercent,
+    in float hpPreviewMode,
+    in float lowHealthAmount,
+    in float shieldVisible,
+    in float shieldPreviewMode,
+    in float damagePulseAmount,
+    in float shieldPulseAmount,
+    in float pixelColumns,
+    in float pixelRows,
+    in float4 backColor,
+    in float4 frameColor,
+    in float4 hpFillColor,
+    in float4 lowHpColor,
+    in float4 damageTrailColor,
+    in float4 previewGainColor,
+    in float4 previewGainAccentColor,
+    in float4 previewLossColor,
+    in float4 shieldColor,
+    in float4 shieldGainColor,
+    in float4 shieldLossColor,
+    out float3 visualColor,
+    out float visualAlpha)
+{
+    float2 safeGrid = float2(max(pixelColumns, 64.0), max(pixelRows, 8.0));
+    float2 pixelUV = (floor(saturate(uv) * safeGrid) + float2(0.5, 0.5)) / safeGrid;
+
+    float2 outerEdge = min(pixelUV, 1.0 - pixelUV);
+    float outer = step(0.008, outerEdge.x)
+        * step(0.075, outerEdge.y)
+        * step(0.045, outerEdge.x + outerEdge.y);
+
+    float2 innerEdge = min(pixelUV - float2(0.014, 0.135), float2(0.986, 0.865) - pixelUV);
+    float innerBody = step(0.0, innerEdge.x)
+        * step(0.0, innerEdge.y)
+        * step(0.026, innerEdge.x + innerEdge.y);
+    float frame = saturate(outer - innerBody);
+
+    float trackMinX = 0.030;
+    float trackMaxX = 0.902;
+    float trackMinY = 0.285;
+    float trackMaxY = 0.715;
+    float track = step(trackMinX, pixelUV.x)
+        * step(pixelUV.x, trackMaxX)
+        * step(trackMinY, pixelUV.y)
+        * step(pixelUV.y, trackMaxY);
+    float trackX = saturate((pixelUV.x - trackMinX) / max(trackMaxX - trackMinX, 0.001));
+
+    float currentPercent = saturate(hpCurrentPercent);
+    float trailPercent = max(currentPercent, saturate(hpTrailPercent));
+    float previewPercent = saturate(hpPreviewPercent);
+    float currentMask = track * step(trackX, currentPercent);
+    float trailMask = track * step(currentPercent, trackX) * step(trackX, trailPercent);
+
+    float previewGainMode = step(0.5, hpPreviewMode) * (1.0 - step(1.5, hpPreviewMode));
+    float previewLossMode = step(1.5, hpPreviewMode);
+    float previewGainMask = track
+        * step(currentPercent, trackX)
+        * step(trackX, previewPercent)
+        * previewGainMode;
+    float previewLossMask = track
+        * step(previewPercent, trackX)
+        * step(trackX, currentPercent)
+        * previewLossMode;
+
+    float previewStripe = fmod(floor(trackX * 96.0) + floor(pixelUV.y * safeGrid.y), 4.0);
+    float previewAccent = step(2.5, previewStripe);
+    float3 previewGainRgb = lerp(previewGainColor.rgb, previewGainAccentColor.rgb, previewAccent);
+
+    float3 hpRgb = lerp(hpFillColor.rgb, lowHpColor.rgb, saturate(lowHealthAmount));
+    float3 trackRgb = backColor.rgb;
+    trackRgb = lerp(trackRgb, damageTrailColor.rgb, trailMask);
+    trackRgb = lerp(trackRgb, hpRgb, currentMask);
+    trackRgb = lerp(trackRgb, previewGainRgb, previewGainMask);
+    trackRgb = lerp(trackRgb, previewLossColor.rgb, previewLossMask);
+
+    float shieldGainMode = step(0.5, shieldPreviewMode) * (1.0 - step(1.5, shieldPreviewMode));
+    float shieldLossMode = step(1.5, shieldPreviewMode);
+    float3 resolvedShieldColor = shieldColor.rgb;
+    resolvedShieldColor = lerp(resolvedShieldColor, shieldGainColor.rgb, shieldGainMode);
+    resolvedShieldColor = lerp(resolvedShieldColor, shieldLossColor.rgb, shieldLossMode);
+
+    float shieldFrame = frame * saturate(shieldVisible);
+    float2 shieldLocal = float2(
+        (pixelUV.x - 0.952) / 0.038,
+        (pixelUV.y - 0.50) / 0.30);
+    float shieldDistance = abs(shieldLocal.x) + abs(shieldLocal.y) * 0.72;
+    float shieldOuter = (1.0 - step(1.0, shieldDistance)) * saturate(shieldVisible);
+    float shieldInner = (1.0 - step(0.58, shieldDistance)) * saturate(shieldVisible);
+    float shieldIconRing = saturate(shieldOuter - shieldInner);
+    float shieldCore = (1.0 - step(0.20, length(shieldLocal))) * saturate(shieldVisible);
+
+    float framePulse = saturate(damagePulseAmount);
+    float shieldPulse = saturate(shieldPulseAmount);
+    float3 baseFrameRgb = frameColor.rgb;
+    baseFrameRgb = lerp(baseFrameRgb, previewLossColor.rgb, framePulse * 0.70);
+    float3 finalFrameRgb = lerp(baseFrameRgb, resolvedShieldColor, shieldFrame);
+    finalFrameRgb = finalFrameRgb * (1.0 + shieldPulse * shieldFrame * 0.45);
+
+    float bodyMask = saturate(innerBody + frame);
+    float3 bodyRgb = backColor.rgb * innerBody + finalFrameRgb * frame;
+    bodyRgb = lerp(bodyRgb, trackRgb, track);
+    bodyRgb = bodyRgb + resolvedShieldColor * (shieldIconRing + shieldCore * 0.55) * (1.0 + shieldPulse * 0.55);
+
+    visualAlpha = saturate(bodyMask + shieldIconRing + shieldCore);
+    visualColor = bodyRgb * visualAlpha;
+}

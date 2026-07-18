@@ -320,7 +320,7 @@ BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命�
 | `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用数量显示与收发反馈控件；牌堆类型由 WBP Image 图标表达，BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数`。可选 `PileFeedbackRoot` 统一承载图标+数字弹性 RenderTransform；缺失时兼容回退 `ReceiveFeedbackRoot`，再回退整个控件。Receive 与 Send 使用同一个组合 playback，不争用或覆盖 authored transform；Reduced Motion 仍更新数量但不播放变换。 |
 | `UWacomProgressBar` | `Wacom|Common UI|Progress Bar` | 通用数值进度条显示控件 |
 
-`UPlayerStatusBar` 在敌人行动 Impact 之后比较 Journal 的行动前后 `FPlayerSnapshot`：HP 下降播放 `DamagePulseAnimation`，护盾下降播放 `ShieldPulseAnimation`，两者同时下降则两个脉冲都播放而音效只选 Damage；仅状态变化只刷新状态图标。数值在 Impact 立即切换到权威值，不做 Tick 插值。Action Preview 仍只覆盖显示，不触发真实脉冲或音效；`NativeDestruct()` 停止瞬时动画。
+`UPlayerStatusBar` 是左上角被动 Vitals HUD：权威 HP / Shield 在敌人行动 Impact 立即刷新，HP 下降后保留约 `0.08s` 珊瑚红延迟区，再于约 `0.32s` 收束；护盾下降以外框和右侧绝对数值播放约 `0.16s` 压缩/亮起/回弹，破盾完成后才 Hidden，布局空间始终保留。HP 低于 `25%` 静态转为暖红，不循环闪烁。若同次同时扣 HP 与 Shield，视觉均可播放而声音只选 Damage。Action Preview 不降低整栏透明度，而是在 `VitalsTrackImage` 内绘制 projected 增减区段，并更新中央 HP、护盾数字和 projected statuses；清理 Preview 不触发真实反馈。Simplified Motion 保留数值与区段，关闭延迟收束和护盾变换。
 
 CommandBar 的轻量协议定义在 `BattleCommandBarTypes.h`：`EWacomBattleCommandId`、`FWacomBattleCommandButtonView` 和 `FWacomBattleCommandBarViewData` 可以被 HUD / runtime presenter / tests 直接使用；`BattleCommandBarWidget.h` 只承载 UMG Widget 实现与 WBP 制作面。当前 `WBP_BattleCommandBar` 推荐直接绑定 `WaitButton / EndTurnButton` 让资产控制位置，并在 CommandBar 上配置 `WaitIconBrush / EndTurnIconBrush`；`CommandButtonContainer` 仅作为未绑定按钮时的动态生成回退。CommandBar ViewData 构建收口在 App-private `FWacomBattleHUDCommandBarPresenter`，`FWacomBattleHUDRuntime` 只保留刷新入口和 command gate 查询。
 

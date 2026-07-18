@@ -243,7 +243,9 @@ bool FWacomUIBattlePlayerStatusBarActionPreviewSpec::RunTest(const FString& /*Pa
 	Widget->SetActionPreview(PreviewPlayer);
 
 	TestEqual(TEXT("Preview HP current"), HpBar->GetCurrent(), 9);
-	TestEqual(TEXT("Preview shield collapses at zero"), ShieldText->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Preview keeps the projected shield break visible"),
+		ShieldText->GetVisibility(),
+		ESlateVisibility::HitTestInvisible);
 	TArray<FWacomBattleStatusIconView> PreviewViews = StatusList->GetStatusIconViews();
 	TestEqual(TEXT("Preview has one status"), PreviewViews.Num(), 1);
 	if (PreviewViews.Num() == 1)
