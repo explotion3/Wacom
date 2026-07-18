@@ -63,8 +63,9 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	TestEqual(TEXT("Current starts at default rightmost card"), Model.GetCarry().CurrentIndex, 14);
 
 	const TArray<FWacomBackpackCarriedStripLayout> DefaultStrip =
-		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
-			15, 14, 14, FVector2D(600.0f, 400.0f), 1280.0f, 296.0f, 48.0f, 32.0f, 56.0f);
+		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
+			15, 14, 14, FVector2D(600.0f, 400.0f), 1280.0f, 296.0f,
+			5, 24.0f, 56.0f, 16.0f, 56.0f);
 	TestEqual(TEXT("Strip returns one transform per carried card"), DefaultStrip.Num(), 15);
 	for (const FWacomBackpackCarriedStripLayout& Card : DefaultStrip)
 	{
@@ -83,8 +84,9 @@ bool FWacomUIBackpackWorkspacePersistentCarrySpec::RunTest(const FString& Parame
 	Model.StepCurrentByWheel(1.0f);
 	TestEqual(TEXT("Wheel up moves current left"), Model.GetCarry().CurrentIndex, 13);
 	const TArray<FWacomBackpackCarriedStripLayout> LiftedStrip =
-		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
-			15, 13, 14, FVector2D(600.0f, 400.0f), 1280.0f, 296.0f, 48.0f, 32.0f, 56.0f);
+		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
+			15, 13, 14, FVector2D(600.0f, 400.0f), 1280.0f, 296.0f,
+			5, 24.0f, 56.0f, 16.0f, 56.0f);
 	TestTrue(TEXT("Only non-default current lifts"), LiftedStrip[13].bLifted);
 	TestFalse(TEXT("Default card remains unlifted after wheel"), LiftedStrip[14].bLifted);
 	TestTrue(TEXT("Wheel-selected current remains horizontally anchored to the pointer"),

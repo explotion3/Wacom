@@ -98,28 +98,32 @@ public:
 		meta = (ToolTip = "展开牌堆中悬停卡牌的上抬距离，单位为像素。推荐 32–64；不缩放卡面。"))
 	float ExpandedCardHoverLiftPixels = 48.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
-		meta = (ToolTip = "展开牌堆与多卡携带的默认相邻露出，单位为像素。默认 72，推荐 32–72；空间不足时可自动压缩，不改变 296×420 卡面尺寸。"))
-	float AdaptiveStripExposurePixels = 72.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
+		meta = (ToolTip = "中央完整展开窗口允许的最大卡牌数。默认 5，推荐 3–7；实际数量会根据工作台宽度自动降低。", ClampMin = "1"))
+	int32 FocusWindowMaximumCards = 5;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
-		meta = (ToolTip = "焦点卡左右卡组额外让位距离，单位为像素。默认 48，推荐 16–48；只影响外层姿态和牌框预留，不改变命中身份或规则。"))
-	float AdaptiveStripFocusSeparationPixels = 48.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
+		meta = (ToolTip = "中央窗口内完整卡面之间的边缘间隔，单位为像素。默认 24，推荐 8–32；不改变 296×420 卡面尺寸。"))
+	float FocusWindowFullGapPixels = 24.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
+		meta = (ToolTip = "中央窗口外压缩卡牌的期望可见露出，单位为像素。默认 56，推荐 32–72；空间不足时会自动减小。"))
+	float FocusWindowCompressedExposurePixels = 56.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
+		meta = (ToolTip = "压缩卡牌仍需保留的最小可见露出，单位为像素。默认 16，推荐 10–24；求解器会先减少完整窗口卡数来避免低于此值。"))
+	float FocusWindowMinimumExposurePixels = 16.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
 		meta = (ToolTip = "稳定命中条带切换焦点时的迟滞宽度，单位为像素。默认 8；用于避免边界来回振荡。"))
 	float FocusHitHysteresisPixels = 8.0f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
 		meta = (ToolTip = "展开牌堆邻居让位到新焦点布局的时间，单位为秒。默认 0.18；只动画局部位置和角度。"))
 	float FocusReflowSeconds = 0.18f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
-		meta = (ToolTip = "鼠标离开后焦点牌列返回中性紧凑牌列的时间，单位为秒。默认 0.14。"))
-	float FocusReturnSeconds = 0.14f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Adaptive Strip",
-		meta = (ToolTip = "鼠标离开展开牌框后开始恢复前的等待时间，单位为秒。默认 0.12；重新进入会取消恢复。"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
+		meta = (ToolTip = "鼠标离开实际卡身后取消活动焦点前的等待时间，单位为秒。默认 0.12；重新进入会取消计时，最后窗口位置保持冻结。"))
 	float FocusExitDelaySeconds = 0.12f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Carry",

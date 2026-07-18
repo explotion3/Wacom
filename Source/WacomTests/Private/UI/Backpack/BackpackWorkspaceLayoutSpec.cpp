@@ -121,9 +121,9 @@ bool FWacomUIBackpackWorkspaceLayoutContractSpec::RunTest(const FString& Paramet
 			if (Left.Cards.Num() > 1)
 			{
 				const float Exposure = Left.Cards[1].CardCenter.X - Left.Cards[0].CardCenter.X;
-				TestTrue(TEXT("Collapsed exposure stays 10-24; expanded strip stays at or below 48"),
+				TestTrue(TEXT("Collapsed exposure stays 10-24; expanded focus window remains ordered"),
 					bExpanded
-						? Exposure >= 0.0f && Exposure <= 48.0f + KINDA_SMALL_NUMBER
+						? Exposure > 0.0f && Exposure <= 244.0f + KINDA_SMALL_NUMBER
 						: Exposure >= 10.0f - KINDA_SMALL_NUMBER && Exposure <= 24.0f + KINDA_SMALL_NUMBER);
 			}
 		}

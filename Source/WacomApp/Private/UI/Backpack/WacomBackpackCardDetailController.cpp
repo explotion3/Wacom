@@ -5,6 +5,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
@@ -13,6 +14,34 @@ namespace
 {
 	const FVector2D CardDetailPanelEstimatedSize(360.f, 420.f);
 	constexpr float CardDetailPanelPadding = 12.f;
+
+	FSlateRect ConvertRectBetweenGeometries(
+		const FGeometry& SourceGeometry,
+		const FSlateRect& SourceLocalRect,
+		const FGeometry& TargetGeometry)
+	{
+		const FVector2D SourceCorners[] = {
+			FVector2D(SourceLocalRect.Left, SourceLocalRect.Top),
+			FVector2D(SourceLocalRect.Right, SourceLocalRect.Top),
+			FVector2D(SourceLocalRect.Right, SourceLocalRect.Bottom),
+			FVector2D(SourceLocalRect.Left, SourceLocalRect.Bottom),
+		};
+		FSlateRect Result(
+			TNumericLimits<float>::Max(),
+			TNumericLimits<float>::Max(),
+			TNumericLimits<float>::Lowest(),
+			TNumericLimits<float>::Lowest());
+		for (const FVector2D& SourceCorner : SourceCorners)
+		{
+			const FVector2D TargetPoint = TargetGeometry.AbsoluteToLocal(
+				SourceGeometry.LocalToAbsolute(SourceCorner));
+			Result.Left = FMath::Min(Result.Left, TargetPoint.X);
+			Result.Top = FMath::Min(Result.Top, TargetPoint.Y);
+			Result.Right = FMath::Max(Result.Right, TargetPoint.X);
+			Result.Bottom = FMath::Max(Result.Bottom, TargetPoint.Y);
+		}
+		return Result;
+	}
 }
 
 FWacomBackpackCardDetailController::FWacomBackpackCardDetailController(UWacomBackpackScreen& InScreen)
@@ -114,9 +143,33 @@ void FWacomBackpackCardDetailController::PositionNear(UWacomDeckCardWidget* Sour
 	}
 
 	const FGeometry& LayerGeometry = Screen.CardDetailLayer->GetCachedGeometry();
-	const FGeometry& SourceGeometry = SourceWidget->GetCachedGeometry();
-	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
-	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
+	FSlateRect AnchorRect;
+	FSlateRect WorkspaceLocalRect;
+	if (Screen.WorkspaceWidget
+		&& Screen.WorkspaceWidget->ResolveCardDetailAnchorRect(*SourceWidget, WorkspaceLocalRect))
+	{
+		const FGeometry& WorkspaceGeometry = Screen.WorkspaceWidget->GetCachedGeometry();
+		AnchorRect = ConvertRectBetweenGeometries(
+			WorkspaceGeometry,
+			WorkspaceLocalRect,
+			LayerGeometry);
+	}
+	else
+	{
+		const FGeometry& SourceGeometry = SourceWidget->GetCachedGeometry();
+		AnchorRect = ConvertRectBetweenGeometries(
+			SourceGeometry,
+			FSlateRect(
+				0.0f,
+				0.0f,
+				SourceGeometry.GetLocalSize().X,
+				SourceGeometry.GetLocalSize().Y),
+			LayerGeometry);
+	}
+	const FVector2D AnchorPosition(AnchorRect.Left, AnchorRect.Top);
+	const FVector2D AnchorSize(
+		AnchorRect.Right - AnchorRect.Left,
+		AnchorRect.Bottom - AnchorRect.Top);
 	const FVector2D LayerSize = LayerGeometry.GetLocalSize();
 	const FVector2D Position = ComputePanelPosition(
 		AnchorPosition,

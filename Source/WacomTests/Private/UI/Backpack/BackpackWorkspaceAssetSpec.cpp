@@ -485,10 +485,14 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			AssignedStyle->MinimumVisibleFraction, 0.3f);
 		TestEqual(TEXT("Workspace style keeps default current lift"),
 			AssignedStyle->CurrentCardLiftPixels, 56.0f);
-		TestEqual(TEXT("Workspace style keeps the authored adaptive-strip exposure"),
-			AssignedStyle->AdaptiveStripExposurePixels, 72.0f);
-		TestEqual(TEXT("Workspace style keeps the authored pile/carry focus separation"),
-			AssignedStyle->AdaptiveStripFocusSeparationPixels, 48.0f);
+		TestEqual(TEXT("Workspace style caps the focus window at five cards"),
+			AssignedStyle->FocusWindowMaximumCards, 5);
+		TestEqual(TEXT("Workspace style keeps the authored full-card gap"),
+			AssignedStyle->FocusWindowFullGapPixels, 24.0f);
+		TestEqual(TEXT("Workspace style keeps the desired compressed exposure"),
+			AssignedStyle->FocusWindowCompressedExposurePixels, 56.0f);
+		TestEqual(TEXT("Workspace style protects the minimum compressed exposure"),
+			AssignedStyle->FocusWindowMinimumExposurePixels, 16.0f);
 		TestEqual(TEXT("Workspace style keeps the stable-band hysteresis"),
 			AssignedStyle->FocusHitHysteresisPixels, 8.0f);
 	}

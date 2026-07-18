@@ -1082,15 +1082,17 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		Style->CardRenderSize.X,
 		WorkspaceSize.X - FMath::Max(0.0f, Style->PileEdgeMarginPixels) * 2.0f);
 	const TArray<FWacomBackpackCarriedStripLayout> Strip =
-		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
+		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
 			Carry.RemainingInstanceIds.Num(),
 			Carry.CurrentIndex,
 			Carry.DefaultIndex,
 			Carry.PointerPosition,
 			AvailableStripWidth,
 			Style->CardRenderSize.X,
-			Style->AdaptiveStripExposurePixels,
-			Style->AdaptiveStripFocusSeparationPixels,
+			Style->FocusWindowMaximumCards,
+			Style->FocusWindowFullGapPixels,
+			Style->FocusWindowCompressedExposurePixels,
+			Style->FocusWindowMinimumExposurePixels,
 			Style->CurrentCardLiftPixels);
 	FWacomBackpackWorkspaceStateStore& StateStore = GetWorkspaceStateStore(Run);
 	const FWacomBackpackZoneKey FluxZone = FWacomBackpackZoneKey::Make(EZoneKind::Backpack);

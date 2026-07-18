@@ -18,6 +18,7 @@ class UWacomBackpackZonePileWidget;
 struct FWacomBackpackZoneKey;
 class FWacomBackpackWorkspaceInteractionModel;
 class FWacomBackpackWorkspaceRuntime;
+class FWacomBackpackCardDetailController;
 struct FWacomBackpackWorkspaceReconciler;
 struct FWacomBackpackWorkspaceReleaseIntent;
 #if WITH_AUTOMATION_TESTS
@@ -274,7 +275,10 @@ private:
 		FSlateRect HeaderRect;
 		FSlateRect CorridorRect;
 		TArray<FWacomBackpackExpandedPileFocusCard> Cards;
+		/** 当前抬升并启用实时卡面的卡；离开后清空。 */
 		int32 FocusIndex = INDEX_NONE;
+		/** 最后一次驱动三段式窗口的位置；离开卡面后保留到牌堆收起。 */
+		int32 WindowFocusIndex = INDEX_NONE;
 		FVector2D PointerLocal = FVector2D::ZeroVector;
 		float ExitDelayRemainingSeconds = 0.0f;
 		bool bExitPending = false;
@@ -285,6 +289,14 @@ private:
 
 	void EnsureFallbackTree();
 	FReply HandleCardPointerDown(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
+	FReply HandleCardPointerDownAtLocal(
+		UWacomDeckCardWidget* CardWidget,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event,
+		bool bAllowPileHeaderReroute);
+	FReply TryHandleExpandedPileVisualPointerDown(
+		FVector2D PointerLocal,
+		const FPointerEvent& Event);
 	FReply HandleCardPointerMove(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FReply HandleCardPointerUp(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FReply HandlePilePointerDown(UWacomBackpackZonePileWidget* PileWidget, const FGeometry& Geometry, const FPointerEvent& Event);
@@ -320,12 +332,16 @@ private:
 	void UpdateCarryAnchor(FVector2D Pointer, bool bUpdateModel = true);
 	void ApplyCarryVisualAnchor(float DeltaTime);
 	void UpdateExpandedPileFocus(FVector2D PointerLocal);
+	int32 ResolveExpandedPileVisualHitIndex(
+		FVector2D PointerLocal,
+		bool bAllowCurrentFocusHysteresis) const;
 	void BeginExpandedPileFocusExit();
 	void TickExpandedPileFocusExit(float DeltaTime);
 	void SetExpandedPileFocusIndex(int32 FocusIndex);
 	void RebuildExpandedPileFocusLayout();
 	void SyncExpandedPileHitLayouts(bool bUseFocusedTargets);
 	void ClearExpandedPileFocus(bool bAnimateReturn, bool bBroadcastChange = true);
+	void ResetExpandedPileFocusWindow(bool bAnimateReturn, bool bBroadcastChange = true);
 	bool IsExpandedPileFocusAllowed() const;
 	bool IsExpandedPileFocusCard(const UWacomDeckCardWidget* CardWidget, int32* OutIndex = nullptr) const;
 	UWacomDeckCardWidget* GetPresentationFocusedCard() const;
@@ -341,6 +357,9 @@ private:
 	void BeginCarryPickupFeedback();
 	void CaptureReleasedVisualPoses(TConstArrayView<FGuid> InstanceIds);
 	FCardVisualPose CaptureCardVisualPose(const UWacomDeckCardWidget& Card) const;
+	bool ResolveCardDetailAnchorRect(
+		const UWacomDeckCardWidget& Card,
+		FSlateRect& OutWorkspaceLocalRect) const;
 	void FinalizeCompletedSettlements();
 	void CancelInteractionWithReturn();
 	void RestoreStaticCardParents();
@@ -353,6 +372,7 @@ private:
 	FWacomBackpackWorkspaceRuntime& GetRuntime();
 	const FWacomBackpackWorkspaceRuntime& GetRuntime() const;
 	const TArray<TWeakObjectPtr<UWacomBackpackZonePileWidget>>& GetRegisteredPileWidgets() const;
+	friend class FWacomBackpackCardDetailController;
 	friend struct FWacomBackpackWorkspaceReconciler;
 
 #if WITH_AUTOMATION_TESTS
@@ -403,6 +423,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 CarryVisualAnchorApplyCount = 0;
 	int32 ActiveBaseCardLayoutTransitionCount = 0;
 	int32 ExpandedPileFocusIndex = INDEX_NONE;
+	int32 ExpandedPileWindowFocusIndex = INDEX_NONE;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 	bool bExpandedPileFocusExitPending = false;
 	int32 FullPresentationRefreshCount = 0;

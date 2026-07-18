@@ -1007,11 +1007,12 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	Style->CurrentCardLiftPixels = 56.0f;
 	Style->CurrentCardZOrderBoost = 1000;
 	Style->PileCollapsedExposurePixels = 16.0f;
-	Style->AdaptiveStripExposurePixels = 72.0f;
-	Style->AdaptiveStripFocusSeparationPixels = 48.0f;
+	Style->FocusWindowMaximumCards = 5;
+	Style->FocusWindowFullGapPixels = 24.0f;
+	Style->FocusWindowCompressedExposurePixels = 56.0f;
+	Style->FocusWindowMinimumExposurePixels = 16.0f;
 	Style->FocusHitHysteresisPixels = 8.0f;
 	Style->FocusReflowSeconds = 0.18f;
-	Style->FocusReturnSeconds = 0.14f;
 	Style->FocusExitDelaySeconds = 0.12f;
 	Style->SettleSeconds = 0.18f;
 	Style->SelectionColor = FLinearColor(0.10f, 0.78f, 1.0f, 0.96f);

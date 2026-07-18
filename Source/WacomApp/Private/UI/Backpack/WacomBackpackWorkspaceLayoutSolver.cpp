@@ -9,78 +9,121 @@ bool RectanglesOverlap(const FSlateRect& A, const FSlateRect& B)
 	return A.Left < B.Right && A.Right > B.Left && A.Top < B.Bottom && A.Bottom > B.Top;
 }
 
-struct FAdaptiveStripMetrics
+struct FFocusWindowMetrics
 {
-	float ExposurePixels = 0.0f;
-	float FocusSeparationPixels = 0.0f;
-	float NeutralWidthPixels = 0.0f;
-	float ReservedWidthPixels = 0.0f;
+	int32 WindowCardCount = 0;
+	float CompressedExposurePixels = 0.0f;
+	float UsedWidthPixels = 0.0f;
 };
 
-FAdaptiveStripMetrics ResolveAdaptiveStripMetrics(
+FFocusWindowMetrics ResolveFocusWindowMetrics(
 	int32 CardCount,
 	float AvailableWidth,
 	float CardWidth,
-	float DesiredExposurePixels,
-	float DesiredFocusSeparationPixels)
+	int32 MaximumWindowCards,
+	float FullGapPixels,
+	float DesiredCompressedExposurePixels,
+	float MinimumExposurePixels)
 {
-	FAdaptiveStripMetrics Result;
+	FFocusWindowMetrics Result;
 	CardWidth = FMath::Max(1.0f, CardWidth);
 	AvailableWidth = FMath::Max(CardWidth, AvailableWidth);
 	if (CardCount <= 0)
 	{
 		return Result;
 	}
-	if (CardCount == 1)
+	MaximumWindowCards = FMath::Clamp(MaximumWindowCards, 1, CardCount);
+	FullGapPixels = FMath::Max(0.0f, FullGapPixels);
+	MinimumExposurePixels = FMath::Max(1.0f, MinimumExposurePixels);
+	DesiredCompressedExposurePixels = FMath::Max(
+		MinimumExposurePixels, DesiredCompressedExposurePixels);
+	for (int32 WindowCount = MaximumWindowCards; WindowCount >= 1; --WindowCount)
 	{
-		Result.NeutralWidthPixels = CardWidth;
-		Result.ReservedWidthPixels = CardWidth;
-		return Result;
+		const float WindowWidth = CardWidth * WindowCount
+			+ FullGapPixels * FMath::Max(0, WindowCount - 1);
+		const int32 CompressedCount = CardCount - WindowCount;
+		const float MinimumRequiredWidth = WindowWidth
+			+ MinimumExposurePixels * CompressedCount;
+		if (WindowCount == 1 || MinimumRequiredWidth <= AvailableWidth + KINDA_SMALL_NUMBER)
+		{
+			Result.WindowCardCount = WindowCount;
+			if (CompressedCount > 0)
+			{
+				Result.CompressedExposurePixels = FMath::Clamp(
+					(AvailableWidth - WindowWidth) / static_cast<float>(CompressedCount),
+					MinimumExposurePixels,
+					DesiredCompressedExposurePixels);
+			}
+			Result.UsedWidthPixels = WindowWidth
+				+ Result.CompressedExposurePixels * CompressedCount;
+			return Result;
+		}
 	}
-
-	const int32 FocusSideCount = FMath::Min(2, CardCount - 1);
-	const float MaximumFittingFocusSeparation = FocusSideCount > 0
-		? FMath::Max(0.0f, AvailableWidth - CardWidth) / FocusSideCount
-		: 0.0f;
-	Result.FocusSeparationPixels = FMath::Min(
-		FMath::Max(0.0f, DesiredFocusSeparationPixels),
-		MaximumFittingFocusSeparation);
-	const float WidthAvailableForExposure = FMath::Max(
-		0.0f,
-		AvailableWidth - CardWidth - Result.FocusSeparationPixels * FocusSideCount);
-	Result.ExposurePixels = FMath::Min(
-		FMath::Max(0.0f, DesiredExposurePixels),
-		WidthAvailableForExposure / static_cast<float>(CardCount - 1));
-	Result.NeutralWidthPixels = CardWidth
-		+ Result.ExposurePixels * static_cast<float>(CardCount - 1);
-	Result.ReservedWidthPixels = Result.NeutralWidthPixels
-		+ Result.FocusSeparationPixels * FocusSideCount;
 	return Result;
 }
 
-void BuildHorizontalHitBands(
+int32 ResolveFocusWindowStart(int32 CardCount, int32 WindowCardCount, int32 FocusIndex)
+{
+	if (CardCount <= 0 || WindowCardCount <= 0)
+	{
+		return INDEX_NONE;
+	}
+	if (FocusIndex == INDEX_NONE)
+	{
+		return FMath::Max(0, (CardCount - WindowCardCount) / 2);
+	}
+	const int32 LeftWindowSlots = FMath::Max(0, (WindowCardCount - 1) / 2);
+	return FMath::Clamp(
+		FocusIndex - LeftWindowSlots,
+		0,
+		FMath::Max(0, CardCount - WindowCardCount));
+}
+
+void BuildFocusWindowHitBands(
 	TConstArrayView<FWacomBackpackResolvedLayout> Layouts,
 	const FSlateRect& CorridorRect,
 	FVector2D CardSize,
+	int32 WindowStartIndex,
+	int32 WindowCardCount,
 	TArray<FSlateRect>& OutHitBands)
 {
 	OutHitBands.Reset();
 	OutHitBands.Reserve(Layouts.Num());
+	const int32 WindowEndIndex = WindowStartIndex + WindowCardCount - 1;
 	for (int32 Index = 0; Index < Layouts.Num(); ++Index)
 	{
-		const float Left = Index == 0
-			? FMath::Max(CorridorRect.Left,
-				Layouts[Index].CardCenter.X - CardSize.X * 0.5f)
-			: (Layouts[Index - 1].CardCenter.X + Layouts[Index].CardCenter.X) * 0.5f;
-		const float Right = Index + 1 == Layouts.Num()
-			? FMath::Min(CorridorRect.Right,
-				Layouts[Index].CardCenter.X + CardSize.X * 0.5f)
-			: (Layouts[Index].CardCenter.X + Layouts[Index + 1].CardCenter.X) * 0.5f;
+		const float CardLeft = Layouts[Index].CardCenter.X - CardSize.X * 0.5f;
+		const float CardRight = Layouts[Index].CardCenter.X + CardSize.X * 0.5f;
+		float Left = CardLeft;
+		float Right = CardRight;
+		if (Index < WindowStartIndex)
+		{
+			Right = Layouts[Index + 1].CardCenter.X - CardSize.X * 0.5f;
+		}
+		else if (Index > WindowEndIndex)
+		{
+			Left = Layouts[Index - 1].CardCenter.X + CardSize.X * 0.5f;
+		}
+		else
+		{
+			if (Index > WindowStartIndex)
+			{
+				const float PreviousRight = Layouts[Index - 1].CardCenter.X + CardSize.X * 0.5f;
+				Left = (PreviousRight + CardLeft) * 0.5f;
+			}
+			if (Index < WindowEndIndex)
+			{
+				const float NextLeft = Layouts[Index + 1].CardCenter.X - CardSize.X * 0.5f;
+				Right = (CardRight + NextLeft) * 0.5f;
+			}
+		}
 		const float CardTop = Layouts[Index].CardCenter.Y - CardSize.Y * 0.5f;
 		const float CardBottom = Layouts[Index].CardCenter.Y + CardSize.Y * 0.5f;
 		OutHitBands.Emplace(
-			FMath::Min(Left, Right), CardTop,
-			FMath::Max(Left, Right), CardBottom);
+			FMath::Clamp(FMath::Min(Left, Right), CorridorRect.Left, CorridorRect.Right),
+			CardTop,
+			FMath::Clamp(FMath::Max(Left, Right), CorridorRect.Left, CorridorRect.Right),
+			CardBottom);
 	}
 }
 }
@@ -214,8 +257,10 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 	FVector2D CardSize,
 	bool bExpanded,
 	float CollapsedExposurePixels,
-	float AdaptiveStripExposurePixels,
-	float AdaptiveStripFocusSeparationPixels,
+	int32 FocusWindowMaximumCards,
+	float FocusWindowFullGapPixels,
+	float FocusWindowCompressedExposurePixels,
+	float FocusWindowMinimumExposurePixels,
 	float EdgeMarginPixels,
 	float FocusLiftPixels)
 {
@@ -249,33 +294,36 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 		CardSize.X,
 		WorkspaceSize.X - EdgeMarginPixels * 2.0f);
 	float Exposure = FMath::Clamp(CollapsedExposurePixels, 10.0f, 24.0f);
-	FAdaptiveStripMetrics AdaptiveMetrics;
+	FFocusWindowMetrics FocusMetrics;
 	if (bExpanded)
 	{
-		AdaptiveMetrics = ResolveAdaptiveStripMetrics(
+		FocusMetrics = ResolveFocusWindowMetrics(
 			CardCount,
 			AvailableWidth,
 			CardSize.X,
-			AdaptiveStripExposurePixels,
-			AdaptiveStripFocusSeparationPixels);
-		Exposure = AdaptiveMetrics.ExposurePixels;
+			FocusWindowMaximumCards,
+			FocusWindowFullGapPixels,
+			FocusWindowCompressedExposurePixels,
+			FocusWindowMinimumExposurePixels);
+		Exposure = FocusMetrics.CompressedExposurePixels;
 	}
 	else if (CardCount <= 1)
 	{
 		Exposure = 0.0f;
 	}
-	const float NeutralUsedWidth = FMath::Min(
-		AvailableWidth,
-		CardSize.X + Exposure * FMath::Max(0, CardCount - 1));
-	if (CardCount > 1 && NeutralUsedWidth < CardSize.X + Exposure * (CardCount - 1))
+	float NeutralUsedWidth = bExpanded
+		? FocusMetrics.UsedWidthPixels
+		: FMath::Min(
+			AvailableWidth,
+			CardSize.X + Exposure * FMath::Max(0, CardCount - 1));
+	if (!bExpanded && CardCount > 1
+		&& NeutralUsedWidth < CardSize.X + Exposure * (CardCount - 1))
 	{
 		Exposure = FMath::Max(
 			1.0f,
 			(NeutralUsedWidth - CardSize.X) / static_cast<float>(CardCount - 1));
 	}
-	const float UsedWidth = bExpanded
-		? FMath::Max(NeutralUsedWidth, AdaptiveMetrics.ReservedWidthPixels)
-		: NeutralUsedWidth;
+	const float UsedWidth = NeutralUsedWidth;
 
 	const float SpaceRight = WorkspaceSize.X - EdgeMarginPixels - HeaderTopLeft.X;
 	const float SpaceLeft = HeaderTopLeft.X + HeaderSize.X - EdgeMarginPixels;
@@ -292,9 +340,7 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 			HeaderTopLeft.X + HeaderSize.X - UsedWidth,
 			EdgeMarginPixels,
 			FMath::Max(EdgeMarginPixels, WorkspaceSize.X - EdgeMarginPixels - UsedWidth));
-	const float StartX = bExpanded
-		? CorridorStartX + (UsedWidth - NeutralUsedWidth) * 0.5f
-		: Result.bOpensRight
+	const float StartX = Result.bOpensRight
 			? CorridorStartX
 			: CorridorStartX + UsedWidth - NeutralUsedWidth;
 
@@ -310,16 +356,50 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 			HeaderTopLeft.Y - 8.0f - CardSize.Y,
 			EdgeMarginPixels,
 			FMath::Max(EdgeMarginPixels, WorkspaceSize.Y - EdgeMarginPixels - CardSize.Y));
-	Result.Cards.Reserve(CardCount);
-	for (int32 Index = 0; Index < CardCount; ++Index)
+	if (bExpanded)
 	{
-		FWacomBackpackResolvedLayout Layout;
-		Layout.AngleDegrees = 0.0f;
-		Layout.CardCenter = FVector2D(
-			StartX + CardSize.X * 0.5f + Exposure * Index,
-			CardTop + CardSize.Y * 0.5f);
-		Layout.LayerRank = Index;
-		Result.Cards.Add(Layout);
+		TArray<FWacomBackpackResolvedLayout> BaseLayouts;
+		BaseLayouts.SetNum(CardCount);
+		for (FWacomBackpackResolvedLayout& Base : BaseLayouts)
+		{
+			Base.CardCenter.Y = CardTop + CardSize.Y * 0.5f;
+		}
+		const FSlateRect CardCorridor(
+			CorridorStartX,
+			CardTop,
+			CorridorStartX + UsedWidth,
+			CardTop + CardSize.Y);
+		const FWacomBackpackFocusWindowStripLayout FocusLayout =
+			BuildFocusWindowStripLayout(
+				CardCount,
+				INDEX_NONE,
+				CardCorridor,
+				CardSize,
+				BaseLayouts,
+				FocusWindowMaximumCards,
+				FocusWindowFullGapPixels,
+				FocusWindowCompressedExposurePixels,
+				FocusWindowMinimumExposurePixels);
+		Result.Cards = FocusLayout.Cards;
+		Result.FocusHitBands = FocusLayout.HitBands;
+		Result.FocusWindowStartIndex = FocusLayout.WindowStartIndex;
+		Result.FocusWindowCardCount = FocusLayout.WindowCardCount;
+		Result.EffectiveCompressedExposurePixels =
+			FocusLayout.EffectiveCompressedExposurePixels;
+	}
+	else
+	{
+		Result.Cards.Reserve(CardCount);
+		for (int32 Index = 0; Index < CardCount; ++Index)
+		{
+			FWacomBackpackResolvedLayout Layout;
+			Layout.AngleDegrees = 0.0f;
+			Layout.CardCenter = FVector2D(
+				StartX + CardSize.X * 0.5f + Exposure * Index,
+				CardTop + CardSize.Y * 0.5f);
+			Layout.LayerRank = Index;
+			Result.Cards.Add(Layout);
+		}
 	}
 
 	Result.FocusCorridorRect = FSlateRect(
@@ -329,8 +409,7 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 		FMath::Min(WorkspaceSize.Y - EdgeMarginPixels, CardTop + CardSize.Y));
 	if (bExpanded)
 	{
-		BuildHorizontalHitBands(
-			Result.Cards, Result.FocusCorridorRect, CardSize, Result.FocusHitBands);
+		// BuildFocusWindowStripLayout already publishes the segment-aware visible bands.
 	}
 
 	const FSlateRect CardsRect(
@@ -356,86 +435,86 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 	return Result;
 }
 
-FWacomBackpackAdaptiveStripLayout
-FWacomBackpackWorkspaceLayoutSolver::BuildAdaptiveStripLayout(
+FWacomBackpackFocusWindowStripLayout
+FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
 	int32 CardCount,
 	int32 FocusIndex,
 	const FSlateRect& CorridorRect,
 	FVector2D CardSize,
-	TConstArrayView<FWacomBackpackResolvedLayout> NeutralLayouts,
-	float BaseExposurePixels,
-	float FocusSeparationPixels)
+	TConstArrayView<FWacomBackpackResolvedLayout> BaseLayouts,
+	int32 MaximumWindowCards,
+	float FullGapPixels,
+	float CompressedExposurePixels,
+	float MinimumExposurePixels)
 {
-	FWacomBackpackAdaptiveStripLayout Result;
+	FWacomBackpackFocusWindowStripLayout Result;
 	Result.CorridorRect = CorridorRect;
-	if (CardCount <= 0 || NeutralLayouts.Num() < CardCount)
+	if (CardCount <= 0 || BaseLayouts.Num() < CardCount)
 	{
 		return Result;
 	}
 	CardSize.X = FMath::Max(1.0f, CardSize.X);
 	CardSize.Y = FMath::Max(1.0f, CardSize.Y);
 	const float CorridorWidth = FMath::Max(CardSize.X, CorridorRect.Right - CorridorRect.Left);
-	FocusIndex = FMath::Clamp(FocusIndex, 0, CardCount - 1);
-	const FAdaptiveStripMetrics Metrics = ResolveAdaptiveStripMetrics(
+	const FFocusWindowMetrics Metrics = ResolveFocusWindowMetrics(
 		CardCount,
 		CorridorWidth,
 		CardSize.X,
-		BaseExposurePixels,
-		FocusSeparationPixels);
-	Result.EffectiveExposurePixels = Metrics.ExposurePixels;
-	Result.EffectiveFocusSeparationPixels = Metrics.FocusSeparationPixels;
-	Result.ReservedWidthPixels = Metrics.ReservedWidthPixels;
-	const float NeutralStartX = CorridorRect.Left
-		+ (CorridorWidth - Metrics.NeutralWidthPixels) * 0.5f
+		MaximumWindowCards,
+		FullGapPixels,
+		CompressedExposurePixels,
+		MinimumExposurePixels);
+	Result.WindowCardCount = Metrics.WindowCardCount;
+	Result.WindowStartIndex = ResolveFocusWindowStart(
+		CardCount, Result.WindowCardCount, FocusIndex);
+	Result.EffectiveCompressedExposurePixels = Metrics.CompressedExposurePixels;
+	Result.ReservedWidthPixels = Metrics.UsedWidthPixels;
+	const int32 WindowEndIndex = Result.WindowStartIndex + Result.WindowCardCount - 1;
+	const float LayoutStartX = CorridorRect.Left
+		+ (CorridorWidth - Metrics.UsedWidthPixels) * 0.5f
 		+ CardSize.X * 0.5f;
+	const float WindowFirstCenterX = LayoutStartX
+		+ Result.WindowStartIndex * Metrics.CompressedExposurePixels;
+	const float WindowStep = CardSize.X + FMath::Max(0.0f, FullGapPixels);
+	const float WindowLastCenterX = WindowFirstCenterX
+		+ FMath::Max(0, Result.WindowCardCount - 1) * WindowStep;
 
 	Result.Cards.Reserve(CardCount);
 	for (int32 Index = 0; Index < CardCount; ++Index)
 	{
-		FWacomBackpackResolvedLayout Layout = NeutralLayouts[Index];
+		FWacomBackpackResolvedLayout Layout = BaseLayouts[Index];
 		Layout.AngleDegrees = 0.0f;
-		Layout.CardCenter.X = NeutralStartX + Metrics.ExposurePixels * Index;
-		if (Index < FocusIndex)
+		if (Index < Result.WindowStartIndex)
 		{
-			Layout.CardCenter.X -= Metrics.FocusSeparationPixels;
+			Layout.CardCenter.X = LayoutStartX
+				+ Index * Metrics.CompressedExposurePixels;
+			Layout.LayerRank = 1 + Index;
 		}
-		else if (Index > FocusIndex)
+		else if (Index <= WindowEndIndex)
 		{
-			Layout.CardCenter.X += Metrics.FocusSeparationPixels;
+			Layout.CardCenter.X = WindowFirstCenterX
+				+ (Index - Result.WindowStartIndex) * WindowStep;
+			Layout.LayerRank = CardCount + 1 + Index;
 		}
-		Layout.LayerRank = Index;
-		if (Index == FocusIndex)
+		else
 		{
-			Layout.LayerRank = CardCount * 3 + Index;
+			Layout.CardCenter.X = WindowLastCenterX
+				+ (Index - WindowEndIndex) * Metrics.CompressedExposurePixels;
+			Layout.LayerRank = 1 + (CardCount - 1 - Index);
+		}
+		if (FocusIndex != INDEX_NONE && Index == FocusIndex)
+		{
+			Layout.LayerRank = CardCount * 4 + Index;
 		}
 		Result.Cards.Add(Layout);
 	}
-	// With exactly two cards the authored stable corridor reserves one 32px side,
-	// not two half-empty sides. Align the solved pair toward its active separation
-	// side so either focus index remains inside the same count-resolved frame.
-	if (!Result.Cards.IsEmpty())
-	{
-		const float SolvedLeft = Result.Cards[0].CardCenter.X - CardSize.X * 0.5f;
-		const float SolvedRight = Result.Cards.Last().CardCenter.X + CardSize.X * 0.5f;
-		float AlignmentOffset = 0.0f;
-		if (SolvedLeft < CorridorRect.Left)
-		{
-			AlignmentOffset = CorridorRect.Left - SolvedLeft;
-		}
-		else if (SolvedRight > CorridorRect.Right)
-		{
-			AlignmentOffset = CorridorRect.Right - SolvedRight;
-		}
-		if (!FMath::IsNearlyZero(AlignmentOffset))
-		{
-			for (FWacomBackpackResolvedLayout& Card : Result.Cards)
-			{
-				Card.CardCenter.X += AlignmentOffset;
-			}
-		}
-	}
-	BuildHorizontalHitBands(
-		Result.Cards, Result.CorridorRect, CardSize, Result.HitBands);
+	BuildFocusWindowHitBands(
+		Result.Cards,
+		Result.CorridorRect,
+		CardSize,
+		Result.WindowStartIndex,
+		Result.WindowCardCount,
+		Result.HitBands);
 	return Result;
 }
 
@@ -568,15 +647,18 @@ FWacomBackpackResolvedLayout FWacomBackpackWorkspaceLayoutSolver::ResolveManualL
 	return Layout;
 }
 
-TArray<FWacomBackpackCarriedStripLayout> FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
+TArray<FWacomBackpackCarriedStripLayout>
+FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
 	int32 CardCount,
 	int32 CurrentIndex,
 	int32 DefaultIndex,
 	FVector2D PointerPosition,
 	float AvailableWidth,
 	float CardWidth,
-	float BaseExposurePixels,
-	float FocusSeparationPixels,
+	int32 MaximumWindowCards,
+	float FullGapPixels,
+	float CompressedExposurePixels,
+	float MinimumExposurePixels,
 	float CurrentCardLiftPixels)
 {
 	TArray<FWacomBackpackCarriedStripLayout> Layouts;
@@ -587,12 +669,25 @@ TArray<FWacomBackpackCarriedStripLayout> FWacomBackpackWorkspaceLayoutSolver::Bu
 	CurrentIndex = FMath::Clamp(CurrentIndex, 0, CardCount - 1);
 	DefaultIndex = FMath::Clamp(DefaultIndex, 0, CardCount - 1);
 	CurrentCardLiftPixels = FMath::Max(0.0f, CurrentCardLiftPixels);
-	const FAdaptiveStripMetrics Metrics = ResolveAdaptiveStripMetrics(
+	AvailableWidth = FMath::Max(CardWidth, AvailableWidth);
+	TArray<FWacomBackpackResolvedLayout> BaseLayouts;
+	BaseLayouts.SetNum(CardCount);
+	const FSlateRect CorridorRect(0.0f, 0.0f, AvailableWidth, 1.0f);
+	const FWacomBackpackFocusWindowStripLayout FocusLayout = BuildFocusWindowStripLayout(
 		CardCount,
-		AvailableWidth,
-		CardWidth,
-		BaseExposurePixels,
-		FocusSeparationPixels);
+		CurrentIndex,
+		CorridorRect,
+		FVector2D(CardWidth, 1.0f),
+		BaseLayouts,
+		MaximumWindowCards,
+		FullGapPixels,
+		CompressedExposurePixels,
+		MinimumExposurePixels);
+	if (!FocusLayout.Cards.IsValidIndex(CurrentIndex))
+	{
+		return Layouts;
+	}
+	const float FocusCenterX = FocusLayout.Cards[CurrentIndex].CardCenter.X;
 
 	Layouts.Reserve(CardCount);
 	for (int32 Index = 0; Index < CardCount; ++Index)
@@ -600,20 +695,12 @@ TArray<FWacomBackpackCarriedStripLayout> FWacomBackpackWorkspaceLayoutSolver::Bu
 		FWacomBackpackCarriedStripLayout Layout;
 		Layout.bCurrent = Index == CurrentIndex;
 		Layout.bLifted = Layout.bCurrent && CurrentIndex != DefaultIndex;
-		float RelativeX = static_cast<float>(Index - CurrentIndex) * Metrics.ExposurePixels;
-		if (Index < CurrentIndex)
-		{
-			RelativeX -= Metrics.FocusSeparationPixels;
-		}
-		else if (Index > CurrentIndex)
-		{
-			RelativeX += Metrics.FocusSeparationPixels;
-		}
+		const float RelativeX = FocusLayout.Cards[Index].CardCenter.X - FocusCenterX;
 		Layout.Transform.CardCenter = FVector2D(
 			PointerPosition.X + RelativeX,
 			PointerPosition.Y - (Layout.bLifted ? CurrentCardLiftPixels : 0.0f));
 		Layout.Transform.AngleDegrees = 0.0f;
-		Layout.Transform.LayerRank = Layout.bCurrent ? CardCount * 3 + Index : Index;
+		Layout.Transform.LayerRank = FocusLayout.Cards[Index].LayerRank;
 		Layouts.Add(Layout);
 	}
 	return Layouts;

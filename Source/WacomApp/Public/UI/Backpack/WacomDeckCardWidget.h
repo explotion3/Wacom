@@ -97,6 +97,9 @@ public:
 	bool IsMoveEnabled() const { return bCardInteractionEnabled && bWorkspaceInteractionEnabled; }
 	void SetWorkspaceInteractionEnabled(bool bEnabled);
 	bool IsWorkspaceInteractionEnabled() const { return bWorkspaceInteractionEnabled; }
+	/** 展开牌堆由 Workspace 统一做视觉命中；卡牌本身只渲染，不参与 Slate 指针路由。 */
+	void SetWorkspacePointerPassthrough(bool bEnabled);
+	bool IsWorkspacePointerPassthrough() const { return bWorkspacePointerPassthrough; }
 	/** 实体卡是否可进入工作台选择模型；与折叠牌堆禁止直接点卡的命中策略分离。 */
 	bool IsWorkspaceSelectionEnabled() const
 	{
@@ -216,6 +219,7 @@ private:
 	bool bRightClickToggleEnabled = false;
 	bool bCardInteractionEnabled = true;
 	bool bWorkspaceInteractionEnabled = true;
+	bool bWorkspacePointerPassthrough = false;
 	bool bWorkspaceSelected = false;
 	bool bWorkspaceCurrent = false;
 	EWacomBackpackDeckCardListReuseRole BackpackListReuseRole = EWacomBackpackDeckCardListReuseRole::PhysicalList;
@@ -228,6 +232,7 @@ private:
 	bool bHasAppliedBackpackRealtimePresentation = false;
 	FVector2D LastBackpackPresentationPointer = FVector2D::ZeroVector;
 	bool bLastBackpackPresentationCarrying = false;
+	void RefreshWorkspaceHitTestVisibility();
 	FVector2D BackpackLocalMotionTranslation = FVector2D::ZeroVector;
 	float BackpackLocalMotionAngleDegrees = 0.0f;
 

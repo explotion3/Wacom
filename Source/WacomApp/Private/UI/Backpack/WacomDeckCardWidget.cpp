@@ -59,6 +59,7 @@ void UWacomDeckCardWidget::SetStorageCardView(const FRunStorageCardView& Storage
 void UWacomDeckCardWidget::PrepareForBackpackListReuse(bool bPreserveTransientPresentation)
 {
 	UnbindWorkspacePointerEvents();
+	SetWorkspacePointerPassthrough(false);
 	SetWorkspaceVisualState(false, false, false);
 	SetWorkspaceInteractionEnabled(true);
 	SetWorkspaceReadOnlyKind(EWacomBackpackWorkspaceCardReadOnlyKind::None);
@@ -245,7 +246,20 @@ void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
 void UWacomDeckCardWidget::SetWorkspaceInteractionEnabled(bool bEnabled)
 {
 	bWorkspaceInteractionEnabled = bEnabled;
-	SetVisibility(bEnabled ? ESlateVisibility::Visible : ESlateVisibility::HitTestInvisible);
+	RefreshWorkspaceHitTestVisibility();
+}
+
+void UWacomDeckCardWidget::SetWorkspacePointerPassthrough(bool bEnabled)
+{
+	bWorkspacePointerPassthrough = bEnabled;
+	RefreshWorkspaceHitTestVisibility();
+}
+
+void UWacomDeckCardWidget::RefreshWorkspaceHitTestVisibility()
+{
+	SetVisibility(bWorkspaceInteractionEnabled && !bWorkspacePointerPassthrough
+		? ESlateVisibility::Visible
+		: ESlateVisibility::HitTestInvisible);
 }
 
 void UWacomDeckCardWidget::SetWorkspaceReadOnlyKind(

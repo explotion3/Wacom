@@ -536,6 +536,31 @@ void FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
 	Workspace.UpdateExpandedPileFocus(PointerLocal);
 }
 
+bool FWacomBackpackScreenTestAccess::PressExpandedPileVisualCard(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	FVector2D PointerLocal)
+{
+	TSet<FKey> PressedButtons{ EKeys::LeftMouseButton };
+	const FPointerEvent PointerDown(
+		0,
+		FVector2D::ZeroVector,
+		FVector2D::ZeroVector,
+		PressedButtons,
+		EKeys::LeftMouseButton,
+		0.0f,
+		FModifierKeysState());
+	return Workspace.TryHandleExpandedPileVisualPointerDown(
+		PointerLocal, PointerDown).IsEventHandled();
+}
+
+bool FWacomBackpackScreenTestAccess::ResolveWorkspaceCardDetailAnchorRect(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	UWacomDeckCardWidget& Card,
+	FSlateRect& OutWorkspaceLocalRect)
+{
+	return Workspace.ResolveCardDetailAnchorRect(Card, OutWorkspaceLocalRect);
+}
+
 void FWacomBackpackScreenTestAccess::TickWorkspaceBrowseExit(
 	UWacomBackpackWorkspaceWidget& Workspace,
 	float DeltaSeconds)

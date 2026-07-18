@@ -412,9 +412,17 @@ void FWacomBackpackWorkspaceMotionCoordinator::UpdateActiveDepth(
 	Input.PointerPosition = PointerLocal;
 	Input.CardCenter = WorkspaceGeometry.AbsoluteToLocal(
 		CardGeometry.LocalToAbsolute(CardGeometry.GetLocalSize() * 0.5f));
+	const float CardBaseAngleDegrees = Card->GetRenderTransformAngle();
+	const float CardBaseAngleRadians = FMath::DegreesToRadians(CardBaseAngleDegrees);
+	const FVector2D LocalMotionTranslation = Card->GetBackpackLocalMotionTranslation();
+	Input.CardCenter += FVector2D(
+		LocalMotionTranslation.X * FMath::Cos(CardBaseAngleRadians)
+			- LocalMotionTranslation.Y * FMath::Sin(CardBaseAngleRadians),
+		LocalMotionTranslation.X * FMath::Sin(CardBaseAngleRadians)
+			+ LocalMotionTranslation.Y * FMath::Cos(CardBaseAngleRadians));
 	Input.CardBodySize = CardGeometry.GetLocalSize();
 	Input.CardRenderScale = 1.0f;
-	Input.CardRenderAngleDegrees = Card->GetRenderTransformAngle()
+	Input.CardRenderAngleDegrees = CardBaseAngleDegrees
 		+ Card->GetBackpackLocalMotionAngle();
 	const FWacomFirstPersonCardDepthConfig Config = BuildDepthConfig(
 		Style.ActiveCardDepthMotion,

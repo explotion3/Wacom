@@ -44,6 +44,22 @@ bool ContainsPoint(const FSlateRect& Rect, FVector2D Point)
 		&& Point.Y >= Rect.Top && Point.Y <= Rect.Bottom;
 }
 
+FSlateRect BuildRotatedCardBounds(FVector2D Center, FVector2D Size, float AngleDegrees)
+{
+	const float Radians = FMath::DegreesToRadians(AngleDegrees);
+	const float AbsCos = FMath::Abs(FMath::Cos(Radians));
+	const float AbsSin = FMath::Abs(FMath::Sin(Radians));
+	const FVector2D HalfSize = Size * 0.5f;
+	const FVector2D AxisAlignedHalfSize(
+		AbsCos * HalfSize.X + AbsSin * HalfSize.Y,
+		AbsSin * HalfSize.X + AbsCos * HalfSize.Y);
+	return FSlateRect(
+		Center.X - AxisAlignedHalfSize.X,
+		Center.Y - AxisAlignedHalfSize.Y,
+		Center.X + AxisAlignedHalfSize.X,
+		Center.Y + AxisAlignedHalfSize.Y);
+}
+
 }
 
 TSharedRef<SWidget> UWacomBackpackWorkspaceWidget::RebuildWidget()
@@ -75,7 +91,14 @@ void UWacomBackpackWorkspaceWidget::NativeDestruct()
 	bDeferredCardFaceRenderRequested = false;
 	bDeferredCardFaceRenderActive = false;
 	CancelInteraction();
-	ClearExpandedPileFocus(false);
+	ResetExpandedPileFocusWindow(false);
+	for (FWacomBackpackExpandedPileFocusCard& Entry : ExpandedPileFocus.Cards)
+	{
+		if (UWacomDeckCardWidget* Card = Entry.Card.Get())
+		{
+			Card->SetWorkspacePointerPassthrough(false);
+		}
+	}
 	ExpandedPileFocus = FExpandedPileFocusState();
 	for (TWeakObjectPtr<UWacomDeckCardWidget>& CardWidget : BoundCardWidgets)
 	{
@@ -405,6 +428,13 @@ void UWacomBackpackWorkspaceWidget::SetExpandedPileFocusContract(
 	const FSlateRect& FocusCorridorRect,
 	TConstArrayView<FWacomBackpackExpandedPileFocusCard> Cards)
 {
+	for (FWacomBackpackExpandedPileFocusCard& Entry : ExpandedPileFocus.Cards)
+	{
+		if (UWacomDeckCardWidget* Card = Entry.Card.Get())
+		{
+			Card->SetWorkspacePointerPassthrough(false);
+		}
+	}
 	const FGuid NormalizedOwner = Zone == EZoneKind::SpecialZone ? OwnerInstanceId : FGuid();
 	bool bSameIdentity = ExpandedPileFocus.Zone == Zone
 		&& ExpandedPileFocus.OwnerInstanceId == NormalizedOwner
@@ -422,7 +452,7 @@ void UWacomBackpackWorkspaceWidget::SetExpandedPileFocusContract(
 	}
 	if (!bSameIdentity)
 	{
-		ClearExpandedPileFocus(false);
+		ResetExpandedPileFocusWindow(false);
 	}
 	ExpandedPileFocus.Zone = Zone;
 	ExpandedPileFocus.OwnerInstanceId = NormalizedOwner;
@@ -430,12 +460,21 @@ void UWacomBackpackWorkspaceWidget::SetExpandedPileFocusContract(
 	ExpandedPileFocus.CorridorRect = FocusCorridorRect;
 	ExpandedPileFocus.Cards.Reset(Cards.Num());
 	ExpandedPileFocus.Cards.Append(Cards.GetData(), Cards.Num());
-	if (!bSameIdentity || !ExpandedPileFocus.Cards.IsValidIndex(ExpandedPileFocus.FocusIndex))
+	for (FWacomBackpackExpandedPileFocusCard& Entry : ExpandedPileFocus.Cards)
+	{
+		if (UWacomDeckCardWidget* Card = Entry.Card.Get())
+		{
+			Card->SetWorkspacePointerPassthrough(true);
+		}
+	}
+	if (!bSameIdentity
+		|| !ExpandedPileFocus.Cards.IsValidIndex(ExpandedPileFocus.WindowFocusIndex))
 	{
 		ExpandedPileFocus.FocusIndex = INDEX_NONE;
+		ExpandedPileFocus.WindowFocusIndex = INDEX_NONE;
 		ExpandedPileFocusTargets.Reset();
 	}
-	else if (ExpandedPileFocus.FocusIndex != INDEX_NONE)
+	else if (ExpandedPileFocus.WindowFocusIndex != INDEX_NONE)
 	{
 		RebuildExpandedPileFocusLayout();
 	}
@@ -498,8 +537,10 @@ bool UWacomBackpackWorkspaceWidget::BeginPileCollapseAnimation(
 			Style->CardRenderSize,
 			false,
 			Style->PileCollapsedExposurePixels,
-			Style->AdaptiveStripExposurePixels,
-			Style->AdaptiveStripFocusSeparationPixels,
+			Style->FocusWindowMaximumCards,
+			Style->FocusWindowFullGapPixels,
+			Style->FocusWindowCompressedExposurePixels,
+			Style->FocusWindowMinimumExposurePixels,
 			Style->PileEdgeMarginPixels);
 	bool bAnimatedAny = false;
 	for (int32 CardIndex = 0; CardIndex < CollapsingCards.Num(); ++CardIndex)
@@ -524,6 +565,7 @@ bool UWacomBackpackWorkspaceWidget::BeginPileCollapseAnimation(
 	{
 		return false;
 	}
+	ResetExpandedPileFocusWindow(true);
 	bPileCollapseAnimationPending = true;
 	CollapsingPileZone = Zone;
 	CollapsingPileOwnerInstanceId = Zone == EZoneKind::SpecialZone ? OwnerInstanceId : FGuid();
@@ -603,33 +645,7 @@ void UWacomBackpackWorkspaceWidget::UpdateExpandedPileFocus(FVector2D PointerLoc
 		ClearExpandedPileFocus(false);
 		return;
 	}
-	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
-		? InteractionStyle.Get()
-		: GetDefault<UWacomBackpackWorkspaceStyle>();
-	int32 HitIndex = INDEX_NONE;
-	if (ExpandedPileFocus.Cards.IsValidIndex(ExpandedPileFocus.FocusIndex))
-	{
-		FSlateRect StickyBand = ExpandedPileFocus.Cards[
-			ExpandedPileFocus.FocusIndex].CurrentHitBand;
-		const float Hysteresis = FMath::Max(0.0f, Style->FocusHitHysteresisPixels);
-		StickyBand.Left -= Hysteresis;
-		StickyBand.Right += Hysteresis;
-		if (ContainsPoint(StickyBand, PointerLocal))
-		{
-			HitIndex = ExpandedPileFocus.FocusIndex;
-		}
-	}
-	if (HitIndex == INDEX_NONE)
-	{
-		for (int32 Index = 0; Index < ExpandedPileFocus.Cards.Num(); ++Index)
-		{
-			if (ContainsPoint(ExpandedPileFocus.Cards[Index].CurrentHitBand, PointerLocal))
-			{
-				HitIndex = Index;
-				break;
-			}
-		}
-	}
+	const int32 HitIndex = ResolveExpandedPileVisualHitIndex(PointerLocal, true);
 	if (HitIndex != INDEX_NONE)
 	{
 		ExpandedPileFocus.bExitPending = false;
@@ -684,6 +700,7 @@ void UWacomBackpackWorkspaceWidget::SetExpandedPileFocusIndex(int32 FocusIndex)
 		return;
 	}
 	ExpandedPileFocus.FocusIndex = FocusIndex;
+	ExpandedPileFocus.WindowFocusIndex = FocusIndex;
 	ExpandedPileFocus.bExitPending = false;
 	ExpandedPileFocus.ExitDelayRemainingSeconds = 0.0f;
 	RebuildExpandedPileFocusLayout();
@@ -695,7 +712,7 @@ void UWacomBackpackWorkspaceWidget::SetExpandedPileFocusIndex(int32 FocusIndex)
 void UWacomBackpackWorkspaceWidget::RebuildExpandedPileFocusLayout()
 {
 	ExpandedPileFocusTargets.Reset();
-	if (!ExpandedPileFocus.Cards.IsValidIndex(ExpandedPileFocus.FocusIndex))
+	if (!ExpandedPileFocus.Cards.IsValidIndex(ExpandedPileFocus.WindowFocusIndex))
 	{
 		return;
 	}
@@ -711,15 +728,17 @@ void UWacomBackpackWorkspaceWidget::RebuildExpandedPileFocusLayout()
 		Neutral.AngleDegrees = Card.NeutralAngleDegrees;
 		Neutral.LayerRank = Card.NeutralLayerRank;
 	}
-	const FWacomBackpackAdaptiveStripLayout Layout =
-		FWacomBackpackWorkspaceLayoutSolver::BuildAdaptiveStripLayout(
+	const FWacomBackpackFocusWindowStripLayout Layout =
+		FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
 			NeutralLayouts.Num(),
-			ExpandedPileFocus.FocusIndex,
+			ExpandedPileFocus.WindowFocusIndex,
 			ExpandedPileFocus.CorridorRect,
 			Style->CardRenderSize,
 			NeutralLayouts,
-			Style->AdaptiveStripExposurePixels,
-			Style->AdaptiveStripFocusSeparationPixels);
+			Style->FocusWindowMaximumCards,
+			Style->FocusWindowFullGapPixels,
+			Style->FocusWindowCompressedExposurePixels,
+			Style->FocusWindowMinimumExposurePixels);
 	for (int32 Index = 0; Index < Layout.Cards.Num(); ++Index)
 	{
 		UWacomDeckCardWidget* Card = ExpandedPileFocus.Cards[Index].Card.Get();
@@ -798,8 +817,101 @@ void UWacomBackpackWorkspaceWidget::ClearExpandedPileFocus(
 	bool bAnimateReturn,
 	bool bBroadcastChange)
 {
+	(void)bAnimateReturn;
 	const bool bHadFocus = ExpandedPileFocus.FocusIndex != INDEX_NONE;
+	const int32 PreviousFocusIndex = ExpandedPileFocus.FocusIndex;
 	ExpandedPileFocus.FocusIndex = INDEX_NONE;
+	ExpandedPileFocus.bExitPending = false;
+	ExpandedPileFocus.ExitDelayRemainingSeconds = 0.0f;
+	if (!bSimplifiedMotion && ExpandedPileFocus.Cards.IsValidIndex(PreviousFocusIndex))
+	{
+		const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+			? InteractionStyle.Get()
+			: GetDefault<UWacomBackpackWorkspaceStyle>();
+		ExpandedPileFocus.Cards[PreviousFocusIndex].CurrentHitBand.Top +=
+			Style->ExpandedCardHoverLiftPixels;
+		ExpandedPileFocus.Cards[PreviousFocusIndex].CurrentHitBand.Bottom +=
+			Style->ExpandedCardHoverLiftPixels;
+	}
+	SyncExpandedPileHitLayouts(!ExpandedPileFocusTargets.IsEmpty());
+	if (bHadFocus && bBroadcastChange)
+	{
+		OnBrowseFocusChangedNative.Broadcast(nullptr);
+	}
+	if (bHadFocus)
+	{
+		RefreshInteractionPresentation();
+		StartCardMotionTimer();
+	}
+}
+
+int32 UWacomBackpackWorkspaceWidget::ResolveExpandedPileVisualHitIndex(
+	FVector2D PointerLocal,
+	bool bAllowCurrentFocusHysteresis) const
+{
+	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+		? InteractionStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	auto ContainsVisualCard = [this, PointerLocal](int32 Index, float HorizontalMargin)
+	{
+		if (!ExpandedPileFocus.Cards.IsValidIndex(Index))
+		{
+			return false;
+		}
+		UWacomDeckCardWidget* Card = ExpandedPileFocus.Cards[Index].Card.Get();
+		const UCanvasPanelSlot* CardSlot = Card ? Cast<UCanvasPanelSlot>(Card->Slot) : nullptr;
+		if (!Card || !CardSlot)
+		{
+			return false;
+		}
+		const FCardVisualPose VisualPose = CaptureCardVisualPose(*Card);
+		const FVector2D VisualDelta = RotateVector(
+			PointerLocal - VisualPose.Center,
+			-VisualPose.AngleDegrees);
+		const FVector2D HalfSize = CardSlot->GetSize() * 0.5f;
+		return FMath::Abs(VisualDelta.X) <= HalfSize.X + FMath::Max(0.0f, HorizontalMargin)
+			&& FMath::Abs(VisualDelta.Y) <= HalfSize.Y;
+	};
+
+	int32 HitIndex = INDEX_NONE;
+	int32 HighestVisualZOrder = MIN_int32;
+	for (int32 Index = 0; Index < ExpandedPileFocus.Cards.Num(); ++Index)
+	{
+		UWacomDeckCardWidget* Card = ExpandedPileFocus.Cards[Index].Card.Get();
+		const UCanvasPanelSlot* CardSlot = Card ? Cast<UCanvasPanelSlot>(Card->Slot) : nullptr;
+		if (!CardSlot || !ContainsVisualCard(Index, 0.0f))
+		{
+			continue;
+		}
+		const int32 VisualZOrder = CardSlot->GetZOrder();
+		if (VisualZOrder > HighestVisualZOrder
+			|| (VisualZOrder == HighestVisualZOrder && Index > HitIndex))
+		{
+			HighestVisualZOrder = VisualZOrder;
+			HitIndex = Index;
+		}
+	}
+	if (HitIndex == INDEX_NONE
+		&& bAllowCurrentFocusHysteresis
+		&& ExpandedPileFocus.Cards.IsValidIndex(ExpandedPileFocus.FocusIndex)
+		&& ContainsVisualCard(
+			ExpandedPileFocus.FocusIndex,
+			FMath::Max(0.0f, Style->FocusHitHysteresisPixels)))
+	{
+		HitIndex = ExpandedPileFocus.FocusIndex;
+	}
+	return HitIndex;
+}
+
+void UWacomBackpackWorkspaceWidget::ResetExpandedPileFocusWindow(
+	bool bAnimateReturn,
+	bool bBroadcastChange)
+{
+	const bool bHadFocus = ExpandedPileFocus.FocusIndex != INDEX_NONE;
+	const bool bHadWindow = ExpandedPileFocus.WindowFocusIndex != INDEX_NONE
+		|| !ExpandedPileFocusTargets.IsEmpty();
+	ExpandedPileFocus.FocusIndex = INDEX_NONE;
+	ExpandedPileFocus.WindowFocusIndex = INDEX_NONE;
 	ExpandedPileFocus.bExitPending = false;
 	ExpandedPileFocus.ExitDelayRemainingSeconds = 0.0f;
 	ExpandedPileFocusTargets.Reset();
@@ -821,7 +933,7 @@ void UWacomBackpackWorkspaceWidget::ClearExpandedPileFocus(
 					*Card,
 					FVector2D::ZeroVector,
 					0.0f,
-					bAnimateReturn ? Style->FocusReturnSeconds : 0.0f,
+					bAnimateReturn ? Style->HoverExitSeconds : 0.0f,
 					bSimplifiedMotion || !bAnimateReturn);
 			}
 		}
@@ -830,7 +942,7 @@ void UWacomBackpackWorkspaceWidget::ClearExpandedPileFocus(
 	{
 		OnBrowseFocusChangedNative.Broadcast(nullptr);
 	}
-	if (bHadFocus)
+	if (bHadFocus || bHadWindow)
 	{
 		RefreshInteractionPresentation();
 		StartCardMotionTimer();
@@ -854,6 +966,16 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
 	const FGeometry& Geometry,
 	const FPointerEvent& Event)
 {
+	return HandleCardPointerDownAtLocal(
+		CardWidget, ToLocalPointer(Event), Event, true);
+}
+
+FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDownAtLocal(
+	UWacomDeckCardWidget* CardWidget,
+	FVector2D Pointer,
+	const FPointerEvent& Event,
+	bool bAllowPileHeaderReroute)
+{
 	if (!InteractionModel || !CardWidget || bCarryInputSuspended)
 	{
 		return FReply::Unhandled();
@@ -869,14 +991,14 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
 	{
 		return CardWidget->RequestBattleEnabledToggle() ? FReply::Handled() : FReply::Unhandled();
 	}
-	const FVector2D Pointer = ToLocalPointer(Event);
 	if (Event.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		// Static/settling cards render above the pile frame. A lifted or freshly
 		// released card can therefore receive the Slate pointer event even though
 		// the pointer is inside a pile header. The header owns that semantic region:
 		// reroute before card pickup so collapse and title dragging remain reachable.
-		if (TryBeginPileHeaderPress(Pointer, Event.IsControlDown()))
+		if (bAllowPileHeaderReroute
+			&& TryBeginPileHeaderPress(Pointer, Event.IsControlDown()))
 		{
 			return FReply::Handled().CaptureMouse(TakeWidget()).SetUserFocus(TakeWidget());
 		}
@@ -914,6 +1036,25 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
 	PendingPressPosition = Pointer;
 	bPendingControlDown = Event.IsControlDown();
 	return FReply::Handled().CaptureMouse(TakeWidget());
+}
+
+FReply UWacomBackpackWorkspaceWidget::TryHandleExpandedPileVisualPointerDown(
+	FVector2D PointerLocal,
+	const FPointerEvent& Event)
+{
+	if (ContainsPoint(ExpandedPileFocus.HeaderRect, PointerLocal))
+	{
+		return FReply::Unhandled();
+	}
+	const int32 VisualHitIndex = ResolveExpandedPileVisualHitIndex(PointerLocal, false);
+	if (!ExpandedPileFocus.Cards.IsValidIndex(VisualHitIndex))
+	{
+		return FReply::Unhandled();
+	}
+	UWacomDeckCardWidget* VisualHitCard =
+		ExpandedPileFocus.Cards[VisualHitIndex].Card.Get();
+	return HandleCardPointerDownAtLocal(
+		VisualHitCard, PointerLocal, Event, false);
 }
 
 FReply UWacomBackpackWorkspaceWidget::HandleCardPointerMove(
@@ -1077,9 +1218,23 @@ FReply UWacomBackpackWorkspaceWidget::HandlePilePointerDown(
 	{
 		return FReply::Unhandled();
 	}
+	const FVector2D Pointer = ToLocalPointer(Event);
+	const FWacomBackpackZonePileView& PileView = PileWidget->GetPileView();
+	const bool bMatchesExpandedPile = PileView.bExpanded
+		&& PileView.Zone == ExpandedPileFocus.Zone
+		&& (PileView.Zone != EZoneKind::SpecialZone
+			|| PileView.OwnerInstanceId == ExpandedPileFocus.OwnerInstanceId);
+	if (!PileWidget->WasLastPointerDownOnDragHandle() && bMatchesExpandedPile)
+	{
+		const FReply CardReply = TryHandleExpandedPileVisualPointerDown(Pointer, Event);
+		if (CardReply.IsEventHandled())
+		{
+			return CardReply;
+		}
+	}
 	BeginPendingPilePress(
 		*PileWidget,
-		ToLocalPointer(Event),
+		Pointer,
 		Event.IsControlDown(),
 		PileWidget->WasLastPointerDownOnDragHandle());
 	return FReply::Handled().CaptureMouse(TakeWidget()).SetUserFocus(TakeWidget());
@@ -1330,6 +1485,17 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonDown(
 	if (bCarryInputSuspended)
 	{
 		return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+	}
+	if (InteractionModel && !InteractionModel->IsCarrying()
+		&& (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton
+			|| InMouseEvent.GetEffectingButton() == EKeys::RightMouseButton))
+	{
+		const FReply CardReply = TryHandleExpandedPileVisualPointerDown(
+			ToLocalPointer(InMouseEvent), InMouseEvent);
+		if (CardReply.IsEventHandled())
+		{
+			return CardReply;
+		}
 	}
 	if (InteractionModel && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
@@ -1627,7 +1793,9 @@ void UWacomBackpackWorkspaceWidget::ApplyStaticCardPresentation(
 			TargetLocalAngle = -Base->AngleDegrees;
 		}
 		TargetLocalTranslation = RotateVector(ScreenDelta, -Base->AngleDegrees);
-		TargetDuration = Style.FocusReflowSeconds;
+		TargetDuration = ExpandedPileFocus.FocusIndex != INDEX_NONE
+			? Style.FocusReflowSeconds
+			: Style.HoverExitSeconds;
 	}
 	else if (bHovered)
 	{
@@ -1637,7 +1805,7 @@ void UWacomBackpackWorkspaceWidget::ApplyStaticCardPresentation(
 	}
 	else if (bPileFocusCard)
 	{
-		TargetDuration = Style.FocusReturnSeconds;
+		TargetDuration = Style.HoverExitSeconds;
 	}
 	GetRuntime().Motion.SetLocalPoseTarget(
 		CardWidget,
@@ -2259,15 +2427,17 @@ void UWacomBackpackWorkspaceWidget::RebuildCarryStripLayout()
 		Style->CardRenderSize.X,
 		GetLayoutSpaceSize().X - FMath::Max(0.0f, Style->PileEdgeMarginPixels) * 2.0f);
 	const TArray<FWacomBackpackCarriedStripLayout> Strip =
-		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedStripLayout(
+		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
 			Carry.RemainingInstanceIds.Num(),
 			Carry.CurrentIndex,
 			Carry.DefaultIndex,
 			FVector2D::ZeroVector,
 			AvailableWidth,
 			Style->CardRenderSize.X,
-			Style->AdaptiveStripExposurePixels,
-			Style->AdaptiveStripFocusSeparationPixels,
+			Style->FocusWindowMaximumCards,
+			Style->FocusWindowFullGapPixels,
+			Style->FocusWindowCompressedExposurePixels,
+			Style->FocusWindowMinimumExposurePixels,
 			0.0f);
 	const bool bAnimateReflow = !LastCarryStripInstanceIds.IsEmpty()
 		&& !Carry.bInitialReleaseGuardArmed
@@ -2442,6 +2612,61 @@ UWacomBackpackWorkspaceWidget::CaptureCardVisualPose(const UWacomDeckCardWidget&
 	Pose.Center += RotateVector(Card.GetBackpackLocalMotionTranslation(), BaseAngle);
 	Pose.AngleDegrees = BaseAngle + Card.GetBackpackLocalMotionAngle();
 	return Pose;
+}
+
+bool UWacomBackpackWorkspaceWidget::ResolveCardDetailAnchorRect(
+	const UWacomDeckCardWidget& Card,
+	FSlateRect& OutWorkspaceLocalRect) const
+{
+	const UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Card.Slot);
+	if (!CanvasSlot)
+	{
+		return false;
+	}
+	FCardVisualPose Pose = CaptureCardVisualPose(Card);
+	FVector2D CardSize = CanvasSlot->GetSize();
+	int32 PileFocusIndex = INDEX_NONE;
+	if (IsExpandedPileFocusCard(&Card, &PileFocusIndex)
+		&& PileFocusIndex == ExpandedPileFocus.FocusIndex)
+	{
+		if (const FBaseCardLayout* FocusTarget = ExpandedPileFocusTargets.Find(&Card))
+		{
+			const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+				? InteractionStyle.Get()
+				: GetDefault<UWacomBackpackWorkspaceStyle>();
+			Pose.Center = FocusTarget->Center;
+			Pose.AngleDegrees = FocusTarget->AngleDegrees;
+			CardSize = FocusTarget->Size;
+			if (!bSimplifiedMotion)
+			{
+				Pose.Center.Y -= Style->ExpandedCardHoverLiftPixels;
+				Pose.AngleDegrees = 0.0f;
+			}
+		}
+	}
+	else if (HoveredCardWidget.Get() == &Card)
+	{
+		const FBaseCardLayoutTransition* Transition = BaseCardLayoutTransitions.Find(&Card);
+		const FBaseCardLayout* Base = Transition
+			? &Transition->Target
+			: BaseCardLayouts.Find(&Card);
+		if (Base)
+		{
+			const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+				? InteractionStyle.Get()
+				: GetDefault<UWacomBackpackWorkspaceStyle>();
+			Pose.Center = Base->Center + RotateVector(
+				FVector2D(0.0f, -Style->ExpandedCardHoverLiftPixels),
+				Base->AngleDegrees);
+			Pose.AngleDegrees = 0.0f;
+			CardSize = Base->Size;
+		}
+	}
+	OutWorkspaceLocalRect = BuildRotatedCardBounds(
+		Pose.Center,
+		CardSize,
+		Pose.AngleDegrees);
+	return true;
 }
 
 void UWacomBackpackWorkspaceWidget::FinalizeCompletedSettlements()
@@ -3130,6 +3355,7 @@ FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAuto
 	View.CarryVisualAnchorApplyCount = CarryVisualAnchorApplyCount;
 	View.ActiveBaseCardLayoutTransitionCount = BaseCardLayoutTransitions.Num();
 	View.ExpandedPileFocusIndex = ExpandedPileFocus.FocusIndex;
+	View.ExpandedPileWindowFocusIndex = ExpandedPileFocus.WindowFocusIndex;
 	View.ExpandedPileFocusLayoutRebuildCount = ExpandedPileFocusLayoutRebuildCount;
 	View.bExpandedPileFocusExitPending = ExpandedPileFocus.bExitPending;
 	View.FullPresentationRefreshCount = FullPresentationRefreshCount;

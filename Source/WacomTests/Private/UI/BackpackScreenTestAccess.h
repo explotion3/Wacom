@@ -87,6 +87,13 @@ struct FWacomBackpackScreenTestAccess
 	static void MoveWorkspaceBrowsePointer(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		FVector2D PointerLocal);
+	static bool PressExpandedPileVisualCard(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		FVector2D PointerLocal);
+	static bool ResolveWorkspaceCardDetailAnchorRect(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		UWacomDeckCardWidget& Card,
+		FSlateRect& OutWorkspaceLocalRect);
 	static void TickWorkspaceBrowseExit(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		float DeltaSeconds);
