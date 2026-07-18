@@ -87,7 +87,7 @@ tags:
 
 Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共用 `FWacomCardMotionKernel`，确保 30/60/120 FPS 下指数收敛一致、旋转走最短路径，并允许从当前视觉姿态连续重定向。共享范围只包含数学与 DepthMotion 能力；Battle Slot 的出牌、瞄准、发牌、离场、Transition Hint 和音效播放仍由 first-person card layer 自己拥有，背包不得为了复用手感而接入这些状态机。
 
-背包外层 Canvas 位置是 Scene 基础布局，牌堆与多卡携带基础姿态统一为水平零旋转；`WBP_WacomDeckCardWidget.CardMotionRoot` 只叠加局部 Translation / Angle。成功释放先捕获当前视觉姿态，目标 Scene 到达后把同一 Widget 放到目标 B 的 Canvas 布局，再把视觉差值作为 `CardMotionRoot` 局部偏移 ease-out 到零；中途 Reconcile 或目标更新只能从当前视觉姿态重定向，禁止重新使用来源 A。背包的逻辑鼠标位置与视觉弹簧位置必须分离，规则判定始终使用无延迟指针。
+背包外层 Canvas 位置是 Scene 基础布局，牌堆与多卡携带基础姿态统一为水平零旋转；`WBP_WacomDeckCardWidget.CardMotionRoot` 只叠加局部 Translation / Angle。成功释放先捕获当前视觉姿态，目标 Scene 到达后把同一 Widget 放到目标 B 的 Canvas 布局，再把视觉差值作为 `CardMotionRoot` 局部偏移 ease-out 到零；中途 Reconcile 或目标更新只能从当前视觉姿态重定向，禁止重新使用来源 A。该瞬态层交接必须保留原 Widget 的 Retainer 捕获面与局部姿态；等价 Scene 绑定不得重复提交卡面数据、移动开关或 retained-rendering 模式，避免材质捕获重新建立时产生短暂空帧。背包的逻辑鼠标位置与视觉弹簧位置必须分离，规则判定始终使用无延迟指针。
 
 展开牌堆和多卡携带共用 `AdaptiveStrip` 纯布局合同，而不是复制 Godot 的逐卡 Tween：`296×420` 卡面保持固定尺寸和零旋转，相邻卡默认露出 `72px`，安全宽度不足时只压缩露出间距。焦点卡保持自身中性锚点，左右卡组各额外让位默认 `48px`；牌框按卡数、有效露出和最大两侧让位预留稳定走廊，Hover 期间不改框体。重排后按实际目标卡位生成横向连续、纵向严格贴合卡身的命中条带，上抬预留不参与命中，标题拖柄拥有最高输入优先级；即使上抬卡或收落卡的视觉暂时覆盖标题，卡牌收到的标题矩形 PointerDown 也必须由 Workspace 重路由给牌堆。框选则冻结当时的实际卡位与命中中心，完成后才恢复中性牌列。多卡携带当前卡中心固定在鼠标锚点，普通 PointerMove 只平移 `CarryRoot`，不重算牌列。
 
@@ -97,7 +97,7 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 `SettlementLayer` 在收落完成前继续拥有原卡牌 Widget，并且必须加入 Scene Reconciler 的现有实例搜索集合。Reconciler 按完整 ViewKey 去重：瞬态层中的权威 Widget 优先于静态副本，从而保证“框选—携带—放下—再次框选”不会产生重复卡面。
 
-浏览焦点使用完整显示身份与实际 Widget 引用，允许投影卡、特殊区主卡和负重卡共享详情与动效，同时保留只读规则。焦点卡是唯一实时卡面；邻居只移动缓存后的外层姿态。多卡携带的默认最右释放卡仍不抬升，滚轮新当前卡才上抬并获得最高 ZOrder；指针热路径始终只更新 `CarryRoot`，不能随卡数线性增加焦点求解或 Retainer 重绘。
+浏览焦点使用完整显示身份与实际 Widget 引用，允许投影卡、特殊区主卡和负重卡共享详情与动效，同时保留只读规则。焦点卡是唯一实时卡面；邻居只移动缓存后的外层姿态。多卡携带起手时默认最右释放卡保持平放；一旦滚轮发生过有效切换，之后滚轮选中的任意当前卡（含重新切回默认最右卡）都上抬并获得最高 ZOrder。指针热路径始终只更新 `CarryRoot`，不能随卡数线性增加焦点求解或 Retainer 重绘。
 
 ## §4 目标管线
 

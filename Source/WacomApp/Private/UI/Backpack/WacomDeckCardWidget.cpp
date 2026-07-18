@@ -42,24 +42,32 @@ void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZo
 
 void UWacomDeckCardWidget::SetStorageCardView(const FRunStorageCardView& StorageCardView)
 {
-	Card = StorageCardView.Instance.Definition;
+	UCardDefinition* NewCard = StorageCardView.Instance.Definition;
+	const bool bCardFaceChanged = Card != NewCard;
+	Card = NewCard;
 	InstanceId = StorageCardView.Instance.InstanceId;
 	FromZone = StorageCardView.PhysicalZone;
 	FromZoneOwnerInstanceId = (FromZone == EZoneKind::SpecialZone) ? StorageCardView.ZoneOwnerInstanceId : FGuid();
 	SetBattleEnabledBadgeVisible(StorageCardView.bShowBattleEnabledInSpecialZoneBadge);
 	SetRightClickToggleEnabled(StorageCardView.bCanToggleBattleEnabledInSpecialZone);
-	RefreshContentFromCard();
+	if (bCardFaceChanged)
+	{
+		RefreshContentFromCard();
+	}
 }
 
-void UWacomDeckCardWidget::PrepareForBackpackListReuse()
+void UWacomDeckCardWidget::PrepareForBackpackListReuse(bool bPreserveTransientPresentation)
 {
 	UnbindWorkspacePointerEvents();
 	SetWorkspaceVisualState(false, false, false);
 	SetWorkspaceInteractionEnabled(true);
 	SetWorkspaceReadOnlyKind(EWacomBackpackWorkspaceCardReadOnlyKind::None);
 	SetWorkspaceDisplayZone(FromZone, FromZoneOwnerInstanceId);
-	SetBackpackRealtimePresentation(false, FVector2D::ZeroVector, false);
-	ResetBackpackLocalMotionPose();
+	if (!bPreserveTransientPresentation)
+	{
+		SetBackpackRealtimePresentation(false, FVector2D::ZeroVector, false);
+		ResetBackpackLocalMotionPose();
+	}
 	SetRenderOpacity(1.0f);
 	SetProjectedFromBadgeText(FText::GetEmpty());
 	SetRightClickToggleEnabled(false);
@@ -226,6 +234,10 @@ float UWacomDeckCardWidget::GetBackpackLocalMotionAngle() const
 
 void UWacomDeckCardWidget::SetMoveEnabled(bool bEnabled)
 {
+	if (bCardInteractionEnabled == bEnabled)
+	{
+		return;
+	}
 	bCardInteractionEnabled = bEnabled;
 	RefreshContentFromCard();
 }

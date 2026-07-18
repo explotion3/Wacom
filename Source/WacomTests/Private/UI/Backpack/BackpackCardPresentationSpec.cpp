@@ -32,12 +32,13 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 	TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
 	Definition->CardId = TEXT("Backpack.Presentation.Budget");
 	TArray<TStrongObjectPtr<UWacomDeckCardWidget>> OwnedCards;
+	TArray<TSharedPtr<SWidget>> OwnedCardSlates;
 	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> Cards;
 	for (int32 Index = 0; Index < 2; ++Index)
 	{
 		TStrongObjectPtr<UWacomDeckCardWidget> Card(
 			NewObject<UWacomDeckCardWidget>(GetTransientPackage(), DeckCardClass));
-		Card->TakeWidget();
+		OwnedCardSlates.Add(Card->TakeWidget());
 		FCardInstance Instance;
 		Instance.InstanceId = FGuid(Index + 1, 22, 33, 44);
 		Instance.Definition = Definition.Get();
@@ -62,6 +63,23 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 	}
 	TestFalse(TEXT("Backpack cards start in static redraw mode"),
 		FirstFace->GetAutomationTestViewForTest().bRealtimePresentationEnabled);
+	const FWacomFirstPersonCardViewAutomationTestView StableFaceBaseline =
+		FirstFace->GetAutomationTestViewForTest();
+	FRunStorageCardView EquivalentView;
+	EquivalentView.Instance.InstanceId = OwnedCards[0]->GetCardInstanceId();
+	EquivalentView.Instance.Definition = Definition.Get();
+	EquivalentView.PhysicalZone = EZoneKind::Backpack;
+	OwnedCards[0]->SetStorageCardView(EquivalentView);
+	OwnedCards[0]->SetMoveEnabled(true);
+	OwnedCards[0]->SetBackpackCardFaceRetainedRenderingEnabled(true);
+	const FWacomFirstPersonCardViewAutomationTestView StableFaceAfterEquivalentBind =
+		FirstFace->GetAutomationTestViewForTest();
+	TestEqual(TEXT("Equivalent scene binding does not resubmit card face data"),
+		StableFaceAfterEquivalentBind.CardViewDataApplyCount,
+		StableFaceBaseline.CardViewDataApplyCount);
+	TestEqual(TEXT("Equivalent scene binding does not reapply Retainer capture mode"),
+		StableFaceAfterEquivalentBind.RetainedRenderingApplyCount,
+		StableFaceBaseline.RetainedRenderingApplyCount);
 
 	FWacomBackpackWorkspaceMotionCoordinator Controller;
 	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();

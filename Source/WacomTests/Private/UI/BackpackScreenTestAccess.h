@@ -81,6 +81,9 @@ struct FWacomBackpackScreenTestAccess
 	static bool StepWorkspaceCarryCurrentByWheel(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		float WheelDelta);
+	static void TickWorkspaceCardMotion(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		float DeltaSeconds);
 	static void MoveWorkspaceBrowsePointer(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		FVector2D PointerLocal);

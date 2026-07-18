@@ -41,6 +41,8 @@ struct WACOMAPP_API FWacomFirstPersonCardViewAutomationTestView
 	bool bRetainedRenderingEnabled = true;
 	bool bRealtimePresentationEnabled = true;
 	int32 PresentationRenderRequestCount = 0;
+	int32 CardViewDataApplyCount = 0;
+	int32 RetainedRenderingApplyCount = 0;
 	int32 RealtimePresentationApplyCount = 0;
 	int32 CardDepthApplyCount = 0;
 	uint32 SurfaceRequestedGeneration = 0;
@@ -177,6 +179,7 @@ private:
 	FWacomFirstPersonCardEffectBadgeFeedbackView LastEffectBadgeFeedbackView;
 	bool bBaseSurfaceEffectMaterialCached = false;
 	bool bRetainedRenderingEnabled = true;
+	bool bRetainedRenderingStateApplied = false;
 	bool bRealtimePresentationEnabled = true;
 	bool bRealtimePresentationStateApplied = false;
 	uint32 NextPresentationPreparationGeneration = 1;
@@ -191,6 +194,8 @@ private:
 	mutable uint32 EffectBadgePaintedGeneration = 0;
 	#if WITH_AUTOMATION_TESTS
 	int32 PresentationRenderRequestCount = 0;
+	int32 CardViewDataApplyCount = 0;
+	int32 RetainedRenderingApplyCount = 0;
 	int32 RealtimePresentationApplyCount = 0;
 	int32 CardDepthApplyCount = 0;
 	#endif

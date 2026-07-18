@@ -110,15 +110,26 @@ void UWacomFirstPersonCardViewWidget::RequestPresentationRender()
 
 void UWacomFirstPersonCardViewWidget::SetRetainedRenderingEnabled(bool bEnabled)
 {
-	bRetainedRenderingEnabled = bEnabled;
-	if (Fake3DSurfaceRetainer)
+	if (!Fake3DSurfaceRetainer)
 	{
-		Fake3DSurfaceRetainer->SetRetainRendering(bEnabled);
-		if (bEnabled)
-		{
-			Fake3DSurfaceRetainer->RequestRender();
-		}
+		bRetainedRenderingEnabled = bEnabled;
+		bRetainedRenderingStateApplied = false;
+		return;
 	}
+	if (bRetainedRenderingStateApplied && bRetainedRenderingEnabled == bEnabled)
+	{
+		return;
+	}
+	bRetainedRenderingEnabled = bEnabled;
+	#if WITH_AUTOMATION_TESTS
+	++RetainedRenderingApplyCount;
+	#endif
+	Fake3DSurfaceRetainer->SetRetainRendering(bEnabled);
+	if (bEnabled)
+	{
+		Fake3DSurfaceRetainer->RequestRender();
+	}
+	bRetainedRenderingStateApplied = true;
 }
 
 void UWacomFirstPersonCardViewWidget::SetRealtimePresentationEnabled(bool bEnabled)
@@ -598,6 +609,8 @@ UWacomFirstPersonCardViewWidget::GetAutomationTestViewForTest() const
 	View.bRetainedRenderingEnabled = bRetainedRenderingEnabled;
 	View.bRealtimePresentationEnabled = bRealtimePresentationEnabled;
 	View.PresentationRenderRequestCount = PresentationRenderRequestCount;
+	View.CardViewDataApplyCount = CardViewDataApplyCount;
+	View.RetainedRenderingApplyCount = RetainedRenderingApplyCount;
 	View.RealtimePresentationApplyCount = RealtimePresentationApplyCount;
 	View.CardDepthApplyCount = CardDepthApplyCount;
 	View.SurfaceRequestedGeneration = SurfaceRequestedGeneration;
@@ -647,6 +660,7 @@ TSharedRef<SWidget> UWacomFirstPersonCardViewWidget::RebuildWidget()
 void UWacomFirstPersonCardViewWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	bRetainedRenderingStateApplied = false;
 	bRealtimePresentationStateApplied = false;
 	ConfigureRetainerCaptureRootClipping();
 	if (!CardContentSizeBox && WidgetTree)
@@ -675,6 +689,7 @@ void UWacomFirstPersonCardViewWidget::NativeDestruct()
 		CardView->ResetCardSurfacePerspectiveView();
 	}
 	RestoreBaseSurfaceEffectMaterial();
+	bRetainedRenderingStateApplied = false;
 	ActiveSurfaceEffectMaterialInstance = nullptr;
 	ActiveSurfaceEffectMaterialSource = nullptr;
 	BaseSurfaceEffectMaterialInstance = nullptr;
@@ -1300,6 +1315,9 @@ FSlateRect UWacomFirstPersonCardViewWidget::ResolveInteractionCueRect(
 
 void UWacomFirstPersonCardViewWidget::ApplyPendingCardViewData()
 {
+	#if WITH_AUTOMATION_TESTS
+	++CardViewDataApplyCount;
+	#endif
 	if (CardView)
 	{
 		CardView->SetCardViewData(PendingCardViewData);

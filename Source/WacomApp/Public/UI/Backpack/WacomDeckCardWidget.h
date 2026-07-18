@@ -71,8 +71,11 @@ public:
 	/** 当前卡牌的特殊区 owner，仅 SpecialZone 来源有效。 */
 	FGuid GetFromZoneOwnerInstanceId() const { return FromZoneOwnerInstanceId; }
 
-	/** 父列表复用本 widget 前调用，清理投影角标、右键开关、拖拽透明度等视图残留。 */
-	void PrepareForBackpackListReuse();
+	/**
+	 * 父列表复用本 widget 前调用，清理投影角标、右键开关、拖拽透明度等视图残留。
+	 * 跨 Carry/Settlement 层交接时保留 Retainer 与局部姿态，避免目标 Scene 重绑造成一帧空白。
+	 */
+	void PrepareForBackpackListReuse(bool bPreserveTransientPresentation = false);
 
 	/** 父列表记录的增量复用角色，不进入蓝图合同。 */
 	void SetBackpackListReuseRole(EWacomBackpackDeckCardListReuseRole InRole) { BackpackListReuseRole = InRole; }

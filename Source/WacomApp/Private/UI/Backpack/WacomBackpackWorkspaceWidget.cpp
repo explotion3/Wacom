@@ -893,6 +893,7 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
 			CurrentStorageRevision);
 		if (bStarted)
 		{
+			bCarryCurrentExplicitlySelectedByWheel = false;
 			bPendingCardPress = false;
 			ClearExpandedPileFocus(true);
 			UpdateCarryAnchor(Pointer);
@@ -1045,6 +1046,7 @@ bool UWacomBackpackWorkspaceWidget::TryBeginCarryFromPendingPress(FVector2D Poin
 		return false;
 	}
 
+	bCarryCurrentExplicitlySelectedByWheel = false;
 	ClearExpandedPileFocus(true);
 	UpdateCarryAnchor(Pointer);
 	bCarryStripLayoutDirty = true;
@@ -1533,7 +1535,12 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseWheel(
 				}
 			}
 		}
+		const int32 PreviousIndex = PreviousCarry.CurrentIndex;
 		InteractionModel->StepCurrentByWheel(InMouseEvent.GetWheelDelta());
+		if (InteractionModel->GetCarry().CurrentIndex != PreviousIndex)
+		{
+			bCarryCurrentExplicitlySelectedByWheel = true;
+		}
 		bCarryStripLayoutDirty = true;
 		RebuildCarryStripLayout();
 		RefreshInteractionPresentation();
@@ -1780,6 +1787,7 @@ void UWacomBackpackWorkspaceWidget::CancelInteraction()
 	bHasQueuedCarryPointer = false;
 	bHasQueuedPilePointer = false;
 	bCarryStripLayoutDirty = false;
+	bCarryCurrentExplicitlySelectedByWheel = false;
 	PreviousCarryCurrentCard.Reset();
 	PendingReleasedVisualHandoffs.Reset();
 	PendingReleasedVisualPoses.Reset();
@@ -2304,14 +2312,15 @@ void UWacomBackpackWorkspaceWidget::RebuildCarryStripLayout()
 				TargetBase.ZOrder);
 			if (Runtime)
 			{
-				const bool bCurrentNonDefault = bCurrent
-					&& Carry.CurrentIndex != Carry.DefaultIndex;
-				const FVector2D TargetLocalTranslation = bCurrentNonDefault && !bSimplifiedMotion
+				const bool bCurrentShouldLift = bCurrent
+					&& (Carry.CurrentIndex != Carry.DefaultIndex
+						|| bCarryCurrentExplicitlySelectedByWheel);
+				const FVector2D TargetLocalTranslation = bCurrentShouldLift && !bSimplifiedMotion
 					? RotateVector(
 						FVector2D(0.0f, -Style->CurrentCardLiftPixels),
 						-TargetBase.AngleDegrees)
 					: FVector2D::ZeroVector;
-				const float TargetLocalAngle = bCurrentNonDefault && !bSimplifiedMotion
+				const float TargetLocalAngle = bCurrentShouldLift && !bSimplifiedMotion
 					? -TargetBase.AngleDegrees
 					: 0.0f;
 				if (bAnimateReflow)
@@ -2527,6 +2536,7 @@ void UWacomBackpackWorkspaceWidget::RestoreStaticCardParents()
 		CarryLayer->SetRenderTranslation(FVector2D::ZeroVector);
 	}
 	LastCarryStripInstanceIds.Reset();
+	bCarryCurrentExplicitlySelectedByWheel = false;
 	LastCarryStripCurrentIndex = INDEX_NONE;
 	LastCarryStripDefaultIndex = INDEX_NONE;
 	if (!InteractionModel || !InteractionModel->IsCarrying())

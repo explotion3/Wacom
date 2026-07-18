@@ -212,6 +212,8 @@ private:
 	bool bCarryStripLayoutDirty = false;
 	TArray<FGuid> LastCarryStripInstanceIds;
 	TWeakObjectPtr<UWacomDeckCardWidget> PreviousCarryCurrentCard;
+	/** 初始最右卡保持平放；发生过有效滚轮切换后，任何当前卡（含最右卡）都使用上抬反馈。 */
+	bool bCarryCurrentExplicitlySelectedByWheel = false;
 	/** 已提交释放、等待目标 Scene 消费的实体卡；期间禁止恢复来源基础布局。 */
 	TSet<FGuid> PendingReleasedVisualHandoffs;
 	struct FCardVisualPose

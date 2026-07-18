@@ -508,6 +508,27 @@ bool FWacomBackpackScreenTestAccess::StepWorkspaceCarryCurrentByWheel(
 	return Workspace.NativeOnMouseWheel(FGeometry(), WheelEvent).IsEventHandled();
 }
 
+void FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	float DeltaSeconds)
+{
+	const UWacomBackpackWorkspaceStyle* Style = Workspace.InteractionStyle.IsValid()
+		? Workspace.InteractionStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	float RemainingSeconds = FMath::Max(0.0f, DeltaSeconds);
+	while (RemainingSeconds > UE_SMALL_NUMBER)
+	{
+		const float StepSeconds = FMath::Min(RemainingSeconds, 1.0f / 60.0f);
+		Workspace.GetRuntime().Motion.Tick(
+			StepSeconds,
+			Workspace.GetCachedGeometry(),
+			*Style,
+			Workspace.bSimplifiedMotion);
+		RemainingSeconds -= StepSeconds;
+	}
+	Workspace.FinalizeCompletedSettlements();
+}
+
 void FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
 	UWacomBackpackWorkspaceWidget& Workspace,
 	FVector2D PointerLocal)

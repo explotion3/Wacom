@@ -157,6 +157,31 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 				*Workspace, -1.0f);
 			FWacomBackpackScreenTestAccess::StepWorkspaceCarryCurrentByWheel(
 				*Workspace, -1.0f);
+			const FWacomBackpackWorkspaceCarryState& ReturnedCarry = Model->GetCarry();
+			TestEqual(TEXT("Wheel can return to the default rightmost card"),
+				ReturnedCarry.CurrentIndex, ReturnedCarry.DefaultIndex);
+			FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
+				*Workspace, Style->CarryCurrentTransitionSeconds + 0.01f);
+			UWacomDeckCardWidget* ReturnedDefaultCard = nullptr;
+			if (ReturnedCarry.RemainingInstanceIds.IsValidIndex(ReturnedCarry.CurrentIndex))
+			{
+				const FGuid ReturnedId = ReturnedCarry.RemainingInstanceIds[ReturnedCarry.CurrentIndex];
+				for (UWacomDeckCardWidget* Card : Cards)
+				{
+					if (Card && Card->GetCardInstanceId() == ReturnedId)
+					{
+						ReturnedDefaultCard = Card;
+						break;
+					}
+				}
+			}
+			TestNotNull(TEXT("Returned default card remains available"), ReturnedDefaultCard);
+			if (ReturnedDefaultCard)
+			{
+				TestTrue(TEXT("Wheel-selected rightmost card lifts like every other current card"),
+					ReturnedDefaultCard->GetBackpackLocalMotionTranslation().Equals(
+						FVector2D(0.0f, -Style->CurrentCardLiftPixels), 0.1f));
+			}
 		}
 		const FWacomBackpackWorkspaceAutomationTestView AfterWheelHandoff =
 			Workspace->GetAutomationTestView();
@@ -262,6 +287,7 @@ bool FWacomUIBackpackCarryCrossZoneIdentitySpec::RunTest(const FString& Paramete
 	Instance.Definition = Definition.Get();
 	TStrongObjectPtr<UWacomDeckCardWidget> CarriedWidget(NewObject<UWacomDeckCardWidget>());
 	CarriedWidget->SetCard(Instance, EZoneKind::Backpack, FGuid());
+	CarriedWidget->ApplyBackpackLocalMotionPose(FVector2D(13.0f, -9.0f), 7.0f);
 	CarryCanvas->AddChildToCanvas(CarriedWidget.Get());
 
 	FWacomBackpackWorkspaceSceneCardEntry Desired;
@@ -298,6 +324,11 @@ bool FWacomUIBackpackCarryCrossZoneIdentitySpec::RunTest(const FString& Paramete
 		CarriedWidget->GetFromZone(), EZoneKind::BattleDeck);
 	TestEqual(TEXT("The reused widget remains in carry ownership until target layout"),
 		CarriedWidget->GetParent(), static_cast<UPanelWidget*>(CarryCanvas.Get()));
+	TestTrue(TEXT("Cross-zone handoff preserves the captured local pose"),
+		CarriedWidget->GetBackpackLocalMotionTranslation().Equals(
+			FVector2D(13.0f, -9.0f), 0.01f));
+	TestTrue(TEXT("Cross-zone handoff preserves the captured local angle"),
+		FMath::IsNearlyEqual(CarriedWidget->GetBackpackLocalMotionAngle(), 7.0f, 0.01f));
 	return true;
 }
 

@@ -206,7 +206,8 @@ void FWacomBackpackWorkspaceVisualRegistry::ReconcileCards(
 			OnRemovedWidget(Widget);
 		}
 
-		Widget->PrepareForBackpackListReuse();
+		const bool bPreserveTransientPresentation = PreserveCurrentParent(Widget);
+		Widget->PrepareForBackpackListReuse(bPreserveTransientPresentation);
 		Widget->SetStorageCardView(Desired.CardView);
 		Widget->SetMoveEnabled(true);
 		Widget->SetWorkspaceInteractionEnabled(Desired.bWorkspaceInteractive);
