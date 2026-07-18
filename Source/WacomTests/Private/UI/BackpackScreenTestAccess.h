@@ -10,11 +10,11 @@ class URunSession;
 class UWacomBackpackScreen;
 class UWacomBackpackWorkspaceWidget;
 class UWacomDeckCardWidget;
-class UWacomSpecialZoneWidget;
 enum class EZoneKind : uint8;
 struct FWacomBackpackScreenAutomationTestView;
 struct FWacomBackpackWorkspaceAutomationTestView;
 struct FWacomBackpackExpandedPileFocusCard;
+struct FWacomBackpackZonePileView;
 
 struct FWacomBackpackPickupPointerSequenceProbe
 {
@@ -47,7 +47,8 @@ struct FWacomBackpackScreenTestAccess
 	static UWacomDeckCardWidget* BattleDeckCard(const UWacomBackpackScreen& Screen, int32 Index);
 	static UWacomDeckCardWidget* FluxContentCard(const UWacomBackpackScreen& Screen, int32 Index);
 	static UWacomDeckCardWidget* BurdenCard(const UWacomBackpackScreen& Screen, int32 Index);
-	static UWacomSpecialZoneWidget* SpecialZone(const UWacomBackpackScreen& Screen, int32 Index);
+	static UWacomDeckCardWidget* SpecialOwnerCard(const UWacomBackpackScreen& Screen, FGuid OwnerInstanceId);
+	static UWacomDeckCardWidget* SpecialContentCard(const UWacomBackpackScreen& Screen, FGuid OwnerInstanceId, int32 Index);
 
 	static int32 RefreshApplyCount(const UWacomBackpackScreen& Screen);
 	static int32 RefreshSkipCount(const UWacomBackpackScreen& Screen);
@@ -97,6 +98,12 @@ struct FWacomBackpackScreenTestAccess
 		FVector2D HeaderStart,
 		FVector2D PointerEnd,
 		FVector2D TargetCardCenter);
+	static void ReconcileWorkspacePilesForTest(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		TConstArrayView<FWacomBackpackZonePileView> Views,
+		TConstArrayView<FSlateRect> Frames,
+		TConstArrayView<FSlateRect> Headers,
+		TConstArrayView<int32> LayerRanks);
 	static void ForgetWorkspacePileRegistry(UWacomBackpackWorkspaceWidget& Workspace);
 	static bool CommitWorkspaceReleaseBeforeTargetReconcile(
 		UWacomBackpackWorkspaceWidget& Workspace);
@@ -112,9 +119,20 @@ struct FWacomBackpackScreenTestAccess
 		UWacomBackpackScreen& Screen,
 		EZoneKind TargetZone,
 		FGuid TargetOwnerInstanceId = FGuid());
+	static bool ReleaseAllToPileWithSynchronousRefresh(
+		UWacomBackpackScreen& Screen,
+		EZoneKind TargetZone,
+		FGuid TargetOwnerInstanceId = FGuid());
+	static bool ClickExpandedPileHeaderThroughOverlappingCard(
+		UWacomBackpackScreen& Screen,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId = FGuid());
 	static void ActivateWorkspaceScreen(UWacomBackpackScreen& Screen);
 	static void DeactivateWorkspaceScreen(UWacomBackpackScreen& Screen);
 	static FWacomBackpackWorkspaceAutomationTestView WorkspaceView(const UWacomBackpackScreen& Screen);
+	static bool TickWorkspaceBaseCardLayoutTransitions(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		float DeltaSeconds);
 	static bool BeginDeleteConfirmation(UWacomBackpackScreen& Screen);
 	static bool BeginDeleteConfirmationForIds(
 		UWacomBackpackScreen& Screen,
@@ -130,12 +148,6 @@ struct FWacomBackpackScreenTestAccess
 	static bool ShowDetailForCardWidget(UWacomBackpackScreen& Screen, UWacomDeckCardWidget* SourceWidget);
 	static void HideDetail(UWacomBackpackScreen& Screen);
 
-	static FText ZoneTitleText(const UWacomSpecialZoneWidget& Zone);
-	static bool IsBattleReadyBadgeVisible(const UWacomSpecialZoneWidget& Zone);
-	static bool RequestContentCardBattleEnabledToggle(const UWacomSpecialZoneWidget& Zone, int32 Index);
-	static UWacomDeckCardWidget* OwnerCard(const UWacomSpecialZoneWidget& Zone);
-	static UWacomDeckCardWidget* ContentCard(const UWacomSpecialZoneWidget& Zone, int32 Index);
-	static int32 ContentCardCount(const UWacomSpecialZoneWidget& Zone);
 };
 
 #endif

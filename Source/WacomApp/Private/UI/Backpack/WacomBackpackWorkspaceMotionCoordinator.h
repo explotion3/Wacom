@@ -7,9 +7,18 @@
 #include "../Card/WacomFirstPersonCardDepthMotion.h"
 
 class UCanvasPanel;
+class UMaterialInterface;
 class UWacomBackpackWorkspaceStyle;
 class UWacomDeckCardWidget;
 struct FWacomBackpackWorkspaceCarryState;
+
+struct FWacomBackpackWorkspaceCardVisualState
+{
+	FLinearColor Tint = FLinearColor::White;
+	float Opacity = 1.0f;
+	float FeedbackOpacity = 0.0f;
+	UMaterialInterface* FeedbackMaterial = nullptr;
+};
 
 /**
  * Backpack-private card presentation owner.
@@ -18,9 +27,16 @@ struct FWacomBackpackWorkspaceCarryState;
  * active-card DepthMotion, pickup feedback and settlement completion. It never reads Run rules and
  * never enters the Battle slot / transition-hint state machine.
  */
-class WACOMAPP_API FWacomBackpackCardPresentationController
+class WACOMAPP_API FWacomBackpackWorkspaceMotionCoordinator
 {
 public:
+	static FWacomBackpackWorkspaceCardVisualState BuildVisualState(
+		const UWacomBackpackWorkspaceStyle& Style,
+		bool bSelected,
+		bool bCurrent,
+		bool bReadOnly,
+		bool bValidTarget = false,
+		bool bRejectedTarget = false);
 	void Reconcile(
 		TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
 		UWacomDeckCardWidget* FocusedCard,
@@ -61,10 +77,7 @@ public:
 	UWacomDeckCardWidget* GetActiveCard() const { return ActiveCard.Get(); }
 	int32 GetMovingCardCount() const { return LocalPoseMotions.Num(); }
 	int32 GetRealtimeCardCount() const { return ActiveCard.IsValid() ? 1 : 0; }
-	bool IsCardMoving(const UWacomDeckCardWidget& Card) const
-	{
-		return LocalPoseMotions.Contains(const_cast<UWacomDeckCardWidget*>(&Card));
-	}
+	bool IsCardMoving(const UWacomDeckCardWidget& Card) const;
 
 private:
 	struct FLocalPoseMotion

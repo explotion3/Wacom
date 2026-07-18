@@ -170,24 +170,12 @@ public:
 	float SettleSeconds = 0.18f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
-		meta = (ToolTip = "同区牌匣收拢到默认布局的时间，单位为秒。推荐 0.14–0.28；只影响表现。"))
-	float CollectSeconds = 0.2f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
-		meta = (ToolTip = "无效释放反馈持续时间，单位为秒。推荐 0.12–0.25；不改变失败事务的携带恢复语义。"))
-	float RejectedFeedbackSeconds = 0.16f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
 		meta = (ToolTip = "携带卡牌悬停在合法折叠牌堆后自动展开的延迟，单位为秒。推荐 0.25–0.5；离开或目标失效时取消。"))
 	float PileHoverExpandDelaySeconds = 0.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
 		meta = (ToolTip = "牌堆展开和收起的位移/角度动画时间，单位为秒。默认 0.18；简化动效模式会直接完成。"))
 	float PileExpandSeconds = 0.18f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Motion",
-		meta = (ToolTip = "整堆释放后收敛到吸附位置的时间，单位为秒。默认 0.12；直接拖动阶段保持一比一跟随。"))
-	float PileSnapSeconds = 0.12f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Color",
 		meta = (ToolTip = "框选矩形和已选卡牌的主色。建议保持与背景有明显对比；只影响表现。"))

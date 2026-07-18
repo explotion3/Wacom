@@ -38,7 +38,8 @@ bool FWacomUIBackpackPileMoveVisualHandoffSpec::RunTest(const FString& Parameter
 	const TArray<FSlateRect> FrameRects { FrameRect };
 	const TArray<FSlateRect> HeaderRects { HeaderRect };
 	const TArray<int32> LayerRanks { 1 };
-	Workspace->ReconcilePiles(PileViews, FrameRects, HeaderRects, LayerRanks);
+	FWacomBackpackScreenTestAccess::ReconcileWorkspacePilesForTest(
+		*Workspace, PileViews, FrameRects, HeaderRects, LayerRanks);
 
 	TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
 	Definition->CardId = TEXT("Backpack.PileMove.VisualHandoff");
@@ -48,7 +49,7 @@ bool FWacomUIBackpackPileMoveVisualHandoffSpec::RunTest(const FString& Parameter
 	TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
 	Card->SetCard(Instance, EZoneKind::BattleDeck, FGuid());
 	Card->SetWorkspaceDisplayZone(EZoneKind::BattleDeck, FGuid());
-	Workspace->GetCardCanvas()->AddChildToCanvas(Card.Get());
+	Workspace->GetStaticCardLayer()->AddChildToCanvas(Card.Get());
 	const FVector2D SourceCenter(250.0f, 300.0f);
 	Workspace->PrimeCardBaseLayout(
 		*Card, SourceCenter, FVector2D(220.0f, 320.0f), 0.0f, 1);

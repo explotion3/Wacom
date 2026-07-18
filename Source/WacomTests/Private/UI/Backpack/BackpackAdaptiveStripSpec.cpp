@@ -198,6 +198,7 @@ bool FWacomUIBackpackAdaptiveStripLayoutSpec::RunTest(const FString& Parameters)
 				Style->PileEdgeMarginPixels,
 				Style->ExpandedCardHoverLiftPixels);
 		TestTrue(TEXT("Authored small-count width remains compact"),
+
 			FMath::IsNearlyEqual(
 				Layout.FocusCorridorRect.Right - Layout.FocusCorridorRect.Left,
 				Case.Value,
@@ -246,7 +247,7 @@ bool FWacomUIBackpackAdaptiveStripInteractionSpec::RunTest(const FString& Parame
 		Instance.InstanceId = FGuid(Index + 1, 41, 42, 43);
 		Instance.Definition = Definition.Get();
 		Card->SetCard(Instance, EZoneKind::BattleDeck, FGuid());
-		Workspace->GetCardCanvas()->AddChildToCanvas(Card.Get());
+		Workspace->GetStaticCardLayer()->AddChildToCanvas(Card.Get());
 		Workspace->PrimeCardBaseLayout(
 			*Card,
 			Neutral.Cards[Index].CardCenter,

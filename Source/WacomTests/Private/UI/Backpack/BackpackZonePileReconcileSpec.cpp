@@ -49,7 +49,8 @@ bool FWacomUIBackpackZonePileVisualTreeReconcileSpec::RunTest(const FString& Par
 	};
 	const TArray<int32> Ranks { 1, 2 };
 
-	Workspace->ReconcilePiles(Views, Frames, Headers, Ranks);
+	FWacomBackpackScreenTestAccess::ReconcileWorkspacePilesForTest(
+		*Workspace, Views, Frames, Headers, Ranks);
 	UCanvasPanel* PileCanvas = Workspace->GetPileCanvas();
 	TestNotNull(TEXT("Workspace exposes its pile visual layer"), PileCanvas);
 	if (!PileCanvas)
@@ -65,7 +66,8 @@ bool FWacomUIBackpackZonePileVisualTreeReconcileSpec::RunTest(const FString& Par
 		// visual children after the transient registry has been cleared.
 		FWacomBackpackScreenTestAccess::ForgetWorkspacePileRegistry(*Workspace);
 		Views[Cycle % Views.Num()].bExpanded = !Views[Cycle % Views.Num()].bExpanded;
-		Workspace->ReconcilePiles(Views, Frames, Headers, Ranks);
+		FWacomBackpackScreenTestAccess::ReconcileWorkspacePilesForTest(
+			*Workspace, Views, Frames, Headers, Ranks);
 		TestEqual(
 			*FString::Printf(TEXT("Cycle %d leaves no orphaned pile visuals"), Cycle + 1),
 			PileCanvas->GetChildrenCount(),

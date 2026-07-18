@@ -77,7 +77,7 @@ tags:
 | `FWacomFirstPersonCardSlotPresentationController` | 单槽语义 Playback 生命周期、三路 Ready 协调、单 Retainer 所有权，以及统一 `NeedsTick / BlocksPresentation` Activity View | 不计算手牌布局、不读取 BattleSession |
 | `FWacomFirstPersonCardMotionMixer` | 合成布局、状态、手势/Transition 和统一 Local Feedback View | 不读取 Slot 计时器或配置制作字段 |
 | `FWacomCardMotionKernel` | App-private 帧率无关指数收敛、固定时长 ease-out、最短角度插值、到达判断 | 不持有 Widget、语义状态、规则或音效 |
-| `FWacomBackpackCardPresentationController` | 背包 Hover、拾起、滚轮当前卡、活动卡 DepthMotion 和收落的唯一局部运动所有者 | 不接入 Battle Slot、transition hint 或 Run 写 API |
+| `FWacomBackpackWorkspaceMotionCoordinator` | 背包 Hover、拾起、滚轮当前卡、活动卡 DepthMotion 和收落的唯一局部运动所有者 | App-private；不接入 Battle Slot、transition hint 或 Run 写 API |
 | `FWacomFirstPersonCardDetailMotionController` | Battle / Run 共用的详情面板预热、缓存、淡入淡出、scale、follow 和稳定换边 motion core | 不创建 panel，不读取规则状态，不决定详情数据来源 |
 | `UWacomFirstPersonCardViewWidget` / WBP | 卡面内容、overlay、材质参数、局部反馈图层 | 不决定手牌顺序、目标合法性或动画队列 |
 
@@ -89,9 +89,11 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 背包外层 Canvas 位置是 Scene 基础布局，牌堆与多卡携带基础姿态统一为水平零旋转；`WBP_WacomDeckCardWidget.CardMotionRoot` 只叠加局部 Translation / Angle。成功释放先捕获当前视觉姿态，目标 Scene 到达后把同一 Widget 放到目标 B 的 Canvas 布局，再把视觉差值作为 `CardMotionRoot` 局部偏移 ease-out 到零；中途 Reconcile 或目标更新只能从当前视觉姿态重定向，禁止重新使用来源 A。背包的逻辑鼠标位置与视觉弹簧位置必须分离，规则判定始终使用无延迟指针。
 
-展开牌堆和多卡携带共用 `AdaptiveStrip` 纯布局合同，而不是复制 Godot 的逐卡 Tween：`296×420` 卡面保持固定尺寸和零旋转，相邻卡默认露出 `48px`，安全宽度不足时只压缩露出间距。焦点卡保持自身中性锚点，左右卡组各额外让位默认 `32px`；牌框按卡数、有效露出和最大两侧让位预留稳定走廊，Hover 期间不改框体。重排后按实际目标卡位生成横向连续、纵向严格贴合卡身的命中条带，上抬预留不参与命中，标题拖柄拥有最高输入优先级；框选则冻结当时的实际卡位与命中中心，完成后才恢复中性牌列。多卡携带当前卡中心固定在鼠标锚点，普通 PointerMove 只平移 `CarryRoot`，不重算牌列。
+展开牌堆和多卡携带共用 `AdaptiveStrip` 纯布局合同，而不是复制 Godot 的逐卡 Tween：`296×420` 卡面保持固定尺寸和零旋转，相邻卡默认露出 `72px`，安全宽度不足时只压缩露出间距。焦点卡保持自身中性锚点，左右卡组各额外让位默认 `48px`；牌框按卡数、有效露出和最大两侧让位预留稳定走廊，Hover 期间不改框体。重排后按实际目标卡位生成横向连续、纵向严格贴合卡身的命中条带，上抬预留不参与命中，标题拖柄拥有最高输入优先级；即使上抬卡或收落卡的视觉暂时覆盖标题，卡牌收到的标题矩形 PointerDown 也必须由 Workspace 重路由给牌堆。框选则冻结当时的实际卡位与命中中心，完成后才恢复中性牌列。多卡携带当前卡中心固定在鼠标锚点，普通 PointerMove 只平移 `CarryRoot`，不重算牌列。
 
 背包牌列与运动制作参数由 `DA_BackpackWorkspaceStyle` 统一拥有，`WBP_BackpackScreen` 只通过普通资产引用消费，避免 Widget Blueprint 根详情内联 UObject。`AdaptiveStripFocusSeparationPixels` 是展开浏览与多卡携带共享的左右让位距离；调整一次即同时影响两条表现路径。普通左键按下可移动卡牌时必须在同一输入帧迁入 Carry 表现，不得把首次视觉启动推迟到下一次 PointerMove。
+
+背包运动由 `FWacomBackpackWorkspaceRuntime` 内的 Motion Coordinator 与 Workspace 单一按需 Slate 帧 `ActiveTimer` 驱动：Carry 视觉锚点、PileMove 指针采样、携带目标悬停展开、局部姿态、Settlement、焦点退出延迟与牌堆展开/收起基础布局过渡不得各自注册常驻或并行 Timer。基础布局过渡每帧只更新活动卡的 Canvas 布局和局部姿态，禁止调用全量 `RefreshInteractionPresentation()`、遍历静态卡、刷新 Snapshot 或触发 Scene Reconcile；牌堆收拢完成以实际过渡记录清空为准，不使用等时长回调。携带输入暂停只冻结鼠标/规则交互，不得中止已开始的视觉收拢；`Simplified Motion` 则在切换帧将所有基础布局过渡直接完成。几何稳定采样和下一帧 Retainer 补绘是仅有的独立一次性 Slate 任务。
 
 `SettlementLayer` 在收落完成前继续拥有原卡牌 Widget，并且必须加入 Scene Reconciler 的现有实例搜索集合。Reconciler 按完整 ViewKey 去重：瞬态层中的权威 Widget 优先于静态副本，从而保证“框选—携带—放下—再次框选”不会产生重复卡面。
 

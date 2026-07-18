@@ -118,7 +118,7 @@ bool FWacomUIBackpackWorkspacePartialPileReleaseSpec::RunTest(const FString& Par
 		? BeforeRelease.CarriedInstanceIds[BeforeRelease.CurrentCarryIndex]
 		: FGuid();
 
-	TestTrue(TEXT("Left release reaches the BattleDeck rack through the production Screen flow"),
+	TestTrue(TEXT("Left release reaches the BattleDeck pile through the production Screen flow"),
 		FWacomBackpackScreenTestAccess::ReleaseCurrentToPileWithSynchronousRefresh(
 			*Screen,
 			EZoneKind::BattleDeck));
@@ -142,6 +142,76 @@ bool FWacomUIBackpackWorkspacePartialPileReleaseSpec::RunTest(const FString& Par
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
 	TestEqual(TEXT("Both cards reach the target through consecutive left releases"),
 		Run->BuildBackpackStorageSnapshot().BattleDeckPhysicalCards.Num(), 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackWorkspaceEmptyPileBatchReceiveCollapseSpec,
+	"Wacom.UI.Backpack.Workspace.EmptyPileBatchReceiveCanCollapse",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackWorkspaceEmptyPileBatchReceiveCollapseSpec::RunTest(
+	const FString& Parameters)
+{
+	UObject* Outer = GetTransientPackage();
+	UCardDefinition* Bag = NewObject<UCardDefinition>(Outer);
+	Bag->CardId = TEXT("WorkspaceEmptyPile.Bag");
+	Bag->Physique.Capacity = 5;
+	UCardDefinition* FirstCard = NewObject<UCardDefinition>(Outer);
+	FirstCard->CardId = TEXT("WorkspaceEmptyPile.First");
+	UCardDefinition* SecondCard = NewObject<UCardDefinition>(Outer);
+	SecondCard->CardId = TEXT("WorkspaceEmptyPile.Second");
+	UCharacterDefinition* Character = NewObject<UCharacterDefinition>(Outer);
+	Character->CharacterId = TEXT("WorkspaceEmptyPile.Character");
+	Character->StarterDeck.Add(Bag);
+	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
+	TestTrue(TEXT("Empty-pile regression Run initializes"),
+		InitializeRunSessionForTest(*Run, Character).IsOk());
+	Run->AcquireCardToRun(FirstCard);
+	Run->AcquireCardToRun(SecondCard);
+
+	const FRunBackpackStorageSnapshot Snapshot = Run->BuildBackpackStorageSnapshot();
+	TestTrue(TEXT("Regression fixture starts with an empty BattleDeck"),
+		Snapshot.BattleDeckPhysicalCards.IsEmpty());
+	TArray<FGuid> SourceIds;
+	for (const FRunStorageCardView& Card : Snapshot.Flux.ContentCards)
+	{
+		if (Card.Instance.Definition == FirstCard || Card.Instance.Definition == SecondCard)
+		{
+			SourceIds.Add(Card.Instance.InstanceId);
+		}
+	}
+	TestEqual(TEXT("Two source cards are available for the batch move"), SourceIds.Num(), 2);
+	if (SourceIds.Num() != 2)
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UWacomBackpackScreen> Screen(
+		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
+	FWacomBackpackScreenTestAccess::ActivateZone(*Screen, EZoneKind::BattleDeck);
+	TestEqual(TEXT("The empty target pile expands before receiving cards"),
+		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen),
+		EZoneKind::BattleDeck);
+	TestTrue(TEXT("Both cards enter carry"),
+		FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(*Screen, SourceIds));
+	TestTrue(TEXT("A single batch release reaches the empty target pile"),
+		FWacomBackpackScreenTestAccess::ReleaseAllToPileWithSynchronousRefresh(
+			*Screen, EZoneKind::BattleDeck));
+	TestEqual(TEXT("The target pile now owns both cards"),
+		Run->BuildBackpackStorageSnapshot().BattleDeckPhysicalCards.Num(), 2);
+	TestEqual(TEXT("Receiving cards keeps the target pile expanded"),
+		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen),
+		EZoneKind::BattleDeck);
+	TestTrue(TEXT("The batch release completes carry before the collapse click"),
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
+
+	TestTrue(TEXT("A card intercepting the header still routes the click to the pile"),
+		FWacomBackpackScreenTestAccess::ClickExpandedPileHeaderThroughOverlappingCard(
+			*Screen, EZoneKind::BattleDeck));
+	TestEqual(TEXT("The populated target pile can collapse immediately after the batch move"),
+		FWacomBackpackScreenTestAccess::ActiveWorkspaceZone(*Screen),
+		EZoneKind::Backpack);
 	return true;
 }
 

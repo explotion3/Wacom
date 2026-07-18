@@ -17,7 +17,8 @@ class UWacomDeckCardWidget;
 class UWacomBackpackZonePileWidget;
 struct FWacomBackpackZoneKey;
 class FWacomBackpackWorkspaceInteractionModel;
-class FWacomBackpackCardPresentationController;
+class FWacomBackpackWorkspaceRuntime;
+struct FWacomBackpackWorkspaceReconciler;
 struct FWacomBackpackWorkspaceReleaseIntent;
 #if WITH_AUTOMATION_TESTS
 struct FWacomBackpackWorkspaceAutomationTestView;
@@ -69,11 +70,6 @@ public:
 		TSharedPtr<FWacomBackpackWorkspaceInteractionModel> InModel,
 		UWacomBackpackWorkspaceStyle* InStyle);
 	void BindWorkspaceCards(TConstArrayView<TObjectPtr<UWacomDeckCardWidget>> CardWidgets, uint64 StorageRevision);
-	void ReconcilePiles(
-		TConstArrayView<FWacomBackpackZonePileView> PileViews,
-		TConstArrayView<FSlateRect> PileFrameRects,
-		TConstArrayView<FSlateRect> PileHeaderRects,
-		TConstArrayView<int32> PileLayerRanks);
 	bool FindPileAtAbsolutePosition(
 		FVector2D AbsolutePosition,
 		EZoneKind& OutZone,
@@ -105,7 +101,7 @@ public:
 		int32 ZOrder);
 	void SetEmptyStateVisible(bool bVisible);
 	void SetManualLayoutCount(int32 Count) { ManualLayoutCount = FMath::Max(0, Count); }
-	UCanvasPanel* GetCardCanvas();
+	UCanvasPanel* GetStaticCardLayer();
 	UCanvasPanel* GetCarryCanvas();
 	UCanvasPanel* GetCarryActiveCanvas();
 	UCanvasPanel* GetSettlementCanvas();
@@ -127,10 +123,6 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> WorkspaceCanvas;
-
-	/** 旧 WBP 兼容名；正式资产使用 WorkspaceCanvas。 */
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UCanvasPanel> CardCanvas;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> PileFrameLayer;
@@ -172,11 +164,9 @@ private:
 	int32 ManualLayoutCount = 0;
 	int32 PileCount = 0;
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> InteractionModel;
-	TSharedPtr<FWacomBackpackCardPresentationController> CardPresentationController;
+	TSharedPtr<FWacomBackpackWorkspaceRuntime> Runtime;
 	TWeakObjectPtr<UWacomBackpackWorkspaceStyle> InteractionStyle;
 	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> BoundCardWidgets;
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UWacomBackpackZonePileWidget>> PileWidgets;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
 		meta = (ToolTip = "工作台内嵌区域牌堆 Widget 类。只显示 ViewData 并转发标题指针意图，不直接访问 RunSession。"))
@@ -191,6 +181,7 @@ private:
 	FVector2D PendingPileStartPosition = FVector2D::ZeroVector;
 	bool bPendingPilePress = false;
 	bool bPendingPileControlDown = false;
+	bool bPendingPilePressOnDragHandle = false;
 	TWeakObjectPtr<UWacomDeckCardWidget> HoveredCardWidget;
 	EZoneKind ExpandedContentZone = EZoneKind::Backpack;
 	FGuid ExpandedContentOwnerInstanceId;
@@ -199,6 +190,7 @@ private:
 	EZoneKind HoverExpandZone = EZoneKind::Backpack;
 	FGuid HoverExpandOwnerInstanceId;
 	bool bHoverExpandTimerActive = false;
+	float HoverExpandElapsedSeconds = 0.0f;
 	bool bSimplifiedMotion = false;
 	bool bPileCollapseAnimationPending = false;
 	EZoneKind CollapsingPileZone = EZoneKind::Backpack;
@@ -211,8 +203,10 @@ private:
 	bool bCarryVisualAnchorInitialized = false;
 	FVector2D QueuedCarryPointerLocal = FVector2D::ZeroVector;
 	FVector2D QueuedPilePointerLocal = FVector2D::ZeroVector;
-	bool bCarryPointerTrackingActive = false;
-	bool bPilePointerTrackingActive = false;
+	/** 唯一按需卡牌运动 ActiveTimer 的运行标记。 */
+	bool bCardMotionTimerActive = false;
+	/** 令已注册但被显式停止的旧 Timer 回调失效，避免生命周期重入。 */
+	uint64 CardMotionTimerGeneration = 0;
 	bool bHasQueuedCarryPointer = false;
 	bool bHasQueuedPilePointer = false;
 	bool bCarryStripLayoutDirty = false;
@@ -241,6 +235,16 @@ private:
 	bool bDeferredCardFaceRenderActive = false;
 	int32 DeferredCardFaceRenderPassCount = 0;
 	bool bCardFaceRetainedRenderingEnabled = true;
+#if WITH_AUTOMATION_TESTS
+	/** 全量交互表现刷新次数；用于证明动画热路径没有退回逐帧全卡刷新。 */
+	int32 FullPresentationRefreshCount = 0;
+	/** Screen 完成一次权威 Scene reconcile 后绑定卡牌集合的次数。 */
+	int32 WorkspaceSceneBindCount = 0;
+	/** 基础布局过渡的帧数；与全量刷新计数配合验证定向更新合同。 */
+	int32 BaseCardLayoutTransitionTickCount = 0;
+	/** 基础布局过渡实际更新的卡牌次数。 */
+	int32 BaseCardLayoutTransitionApplyCount = 0;
+#endif
 
 	struct FBaseCardLayout
 	{
@@ -260,7 +264,6 @@ private:
 	};
 	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayoutTransition> BaseCardLayoutTransitions;
 	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> SettlementTargets;
-	bool bBaseCardLayoutTransitionActive = false;
 
 	struct FExpandedPileFocusState
 	{
@@ -287,7 +290,10 @@ private:
 	void BeginPendingPilePress(
 		UWacomBackpackZonePileWidget& PileWidget,
 		FVector2D LocalPointer,
-		bool bControlDown);
+		bool bControlDown,
+		bool bOnDragHandle = false);
+	UWacomBackpackZonePileWidget* FindPileHeaderAt(FVector2D LocalPointer) const;
+	bool TryBeginPileHeaderPress(FVector2D LocalPointer, bool bControlDown);
 	bool TryBeginCarryFromPendingPress(FVector2D Pointer);
 	bool TryBeginPileMove(FVector2D Pointer);
 	bool TryBeginMarqueeFromPendingPilePress(FVector2D Pointer);
@@ -298,10 +304,14 @@ private:
 	void CommitPileMoveCardLayouts(const FWacomBackpackZoneKey& Zone, FVector2D FinalDelta);
 	FWacomBackpackZoneKey ResolveMarqueeSource(FVector2D LocalPointer) const;
 	void CancelHoverExpandTimer();
-	void StartBaseCardLayoutTransitions();
 	FReply BuildHandledPointerReply();
 	void BroadcastRelease(bool bReleaseAll);
 	void StartCardMotionTimer();
+	void StopCardMotionTimer();
+	bool TickBaseCardLayoutTransitions(float DeltaSeconds);
+	void ApplyStaticCardPresentation(
+		UWacomDeckCardWidget& CardWidget,
+		const UWacomBackpackWorkspaceStyle& Style);
 	void QueueCarryPointer(FVector2D Pointer);
 	void FlushQueuedCarryPointer();
 	void SyncCarryPointerForRelease(FVector2D Pointer);
@@ -338,6 +348,10 @@ private:
 	void ScheduleBoundCardFaceRender();
 	void FlushDeferredCardFaceRender();
 	bool AcceptStableLayoutGeometry(FVector2D LayoutSize);
+	FWacomBackpackWorkspaceRuntime& GetRuntime();
+	const FWacomBackpackWorkspaceRuntime& GetRuntime() const;
+	const TArray<TWeakObjectPtr<UWacomBackpackZonePileWidget>>& GetRegisteredPileWidgets() const;
+	friend struct FWacomBackpackWorkspaceReconciler;
 
 #if WITH_AUTOMATION_TESTS
 public:
@@ -389,6 +403,11 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 ExpandedPileFocusIndex = INDEX_NONE;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 	bool bExpandedPileFocusExitPending = false;
+	int32 FullPresentationRefreshCount = 0;
+	int32 WorkspaceSceneBindCount = 0;
+	int32 BaseCardLayoutTransitionTickCount = 0;
+	int32 BaseCardLayoutTransitionApplyCount = 0;
+	bool bCardMotionTimerActive = false;
 	TArray<FVector2D> ActiveBaseCardLayoutTransitionTargetCenters;
 	bool bHasExpandedContentBounds = false;
 	bool bPileCollapseAnimationPending = false;

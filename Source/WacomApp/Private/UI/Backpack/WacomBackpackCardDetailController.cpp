@@ -5,9 +5,9 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
-#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomCardPresentationBuilder.h"
 
 namespace
 {
@@ -45,7 +45,8 @@ bool FWacomBackpackCardDetailController::ShowForCardWidget(UWacomDeckCardWidget*
 		return false;
 	}
 
-	Panel->SetCardDetailData(UWacomBackpackScreenPresenter::BuildCardDetailViewData(SourceWidget->GetCard()));
+	Panel->SetCardDetailData(
+		UWacomCardPresentationBuilder::BuildCardDetailViewData(SourceWidget->GetCard()));
 	PositionNear(SourceWidget);
 	Panel->SetRenderOpacity(1.f);
 	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -72,7 +73,6 @@ void FWacomBackpackCardDetailController::HideIfSourceRemoved(UWacomDeckCardWidge
 
 UWacomCardDetailPanel* FWacomBackpackCardDetailController::EnsurePanel()
 {
-	Screen.EnsureRuntimeZoneWidgets();
 	if (!Screen.CardDetailLayer)
 	{
 		return nullptr;
@@ -118,7 +118,7 @@ void FWacomBackpackCardDetailController::PositionNear(UWacomDeckCardWidget* Sour
 	const FVector2D AnchorPosition = LayerGeometry.AbsoluteToLocal(SourceGeometry.GetAbsolutePosition());
 	const FVector2D AnchorSize = SourceGeometry.GetLocalSize();
 	const FVector2D LayerSize = LayerGeometry.GetLocalSize();
-	const FVector2D Position = UWacomBackpackScreenPresenter::ComputeCardDetailPanelPosition(
+	const FVector2D Position = ComputePanelPosition(
 		AnchorPosition,
 		AnchorSize,
 		LayerSize,
@@ -130,4 +130,23 @@ void FWacomBackpackCardDetailController::PositionNear(UWacomDeckCardWidget* Sour
 		DetailSlot->SetPosition(Position);
 		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
 	}
+}
+
+FVector2D FWacomBackpackCardDetailController::ComputePanelPosition(
+	FVector2D AnchorPosition,
+	FVector2D AnchorSize,
+	FVector2D LayerSize,
+	FVector2D PanelSize,
+	float Padding)
+{
+	const float MaxX = FMath::Max(0.0f, LayerSize.X - PanelSize.X);
+	const float MaxY = FMath::Max(0.0f, LayerSize.Y - PanelSize.Y);
+	float X = AnchorPosition.X + AnchorSize.X + Padding;
+	if (X + PanelSize.X > LayerSize.X)
+	{
+		X = AnchorPosition.X - PanelSize.X - Padding;
+	}
+	return FVector2D(
+		FMath::Clamp(X, 0.0f, MaxX),
+		FMath::Clamp(AnchorPosition.Y, 0.0f, MaxY));
 }

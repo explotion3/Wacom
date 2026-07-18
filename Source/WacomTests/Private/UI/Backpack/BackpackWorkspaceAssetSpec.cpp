@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Misc/AutomationTest.h"
+#include "Misc/PackageName.h"
 
 #if WITH_AUTOMATION_TESTS
 
@@ -66,6 +67,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Parameters)
 {
+	TestFalse(TEXT("Builder no longer authors the legacy BattleDeck zone asset"),
+		FPackageName::DoesPackageExist(TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackBattleDeckZone")));
+	TestFalse(TEXT("Builder no longer authors the legacy SpecialZone widget asset"),
+		FPackageName::DoesPackageExist(TEXT("/Game/Wacom/UI/Backpack/WBP_WacomSpecialZoneWidget")));
+
 	UClass* ScreenClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackScreen.WBP_BackpackScreen_C"));
 	UClass* WorkspaceClass = LoadBackpackWorkspaceWidgetClass(
@@ -201,7 +207,9 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			Cast<UButton>(ScreenTree->FindWidget(TEXT("ResetPilePositionsButton"))));
 		TestNull(TEXT("Formal screen removes old DeleteZoneHost"), ScreenTree->FindWidget(TEXT("DeleteZoneHost")));
 		TestNull(TEXT("Formal screen removes old BattleDeckZoneHost"), ScreenTree->FindWidget(TEXT("BattleDeckZoneHost")));
+		TestNull(TEXT("Formal screen removes old FluxContentDropTargetHost"), ScreenTree->FindWidget(TEXT("FluxContentDropTargetHost")));
 		TestNull(TEXT("Formal screen removes old SpecialZonesHost"), ScreenTree->FindWidget(TEXT("SpecialZonesHost")));
+		TestNull(TEXT("Formal screen removes old BurdenZoneHost"), ScreenTree->FindWidget(TEXT("BurdenZoneHost")));
 	}
 
 	UWidgetTree* WorkspaceTree = GetBackpackWorkspaceWidgetTree(WorkspaceClass);

@@ -47,7 +47,7 @@ bool FWacomUIBackpackSettlementSceneIdentitySpec::RunTest(const FString& Paramet
 
 	TStrongObjectPtr<UWacomBackpackWorkspaceWidget> Workspace(
 		NewObject<UWacomBackpackWorkspaceWidget>());
-	Workspace->TakeWidget();
+	const TSharedRef<SWidget> RetainedWorkspaceSlate = Workspace->TakeWidget();
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Interaction =
 		MakeShared<FWacomBackpackWorkspaceInteractionModel>();
 	Workspace->SetInteractionModel(Interaction, nullptr);
@@ -92,7 +92,7 @@ bool FWacomUIBackpackSettlementSceneIdentitySpec::RunTest(const FString& Paramet
 
 	UWacomDeckCardWidget* StaleDuplicate = NewObject<UWacomDeckCardWidget>(Workspace.Get());
 	StaleDuplicate->SetStorageCardView(Snapshot.Flux.ContentCards[0]);
-	Workspace->GetCardCanvas()->AddChildToCanvas(StaleDuplicate);
+	Workspace->GetStaticCardLayer()->AddChildToCanvas(StaleDuplicate);
 	TArray<TObjectPtr<UWacomDeckCardWidget>> DeduplicatedScene;
 	FWacomBackpackWorkspaceReconciler::Reconcile(
 		*Workspace, Snapshot, State, Interaction.Get(), nullptr,
@@ -144,7 +144,7 @@ bool FWacomUIBackpackRealPileSceneIdentitySpec::RunTest(const FString& Parameter
 
 	TStrongObjectPtr<UWacomBackpackWorkspaceWidget> Workspace(
 		NewObject<UWacomBackpackWorkspaceWidget>());
-	Workspace->TakeWidget();
+	const TSharedRef<SWidget> RetainedWorkspaceSlate = Workspace->TakeWidget();
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Interaction =
 		MakeShared<FWacomBackpackWorkspaceInteractionModel>();
 	Workspace->SetInteractionModel(Interaction, nullptr);
@@ -235,6 +235,31 @@ bool FWacomUIBackpackRealPileSceneIdentitySpec::RunTest(const FString& Parameter
 		ExpansionTransitionCount);
 	ExpandedCards = MoveTemp(ReconciledExpandedCards);
 	Workspace->BindWorkspaceCards(ExpandedCards, 1);
+	const FWacomBackpackWorkspaceAutomationTestView BeforeTransitionTick =
+		Workspace->GetAutomationTestView();
+	TestTrue(TEXT("The shared on-demand motion timer owns active base-layout transitions"),
+		BeforeTransitionTick.bCardMotionTimerActive);
+	FWacomBackpackScreenTestAccess::TickWorkspaceBaseCardLayoutTransitions(
+		*Workspace,
+		1.0f / 120.0f);
+	const FWacomBackpackWorkspaceAutomationTestView AfterTransitionTick =
+		Workspace->GetAutomationTestView();
+	TestEqual(TEXT("A base-layout animation frame never invokes a full presentation refresh"),
+		AfterTransitionTick.FullPresentationRefreshCount,
+		BeforeTransitionTick.FullPresentationRefreshCount);
+	TestEqual(TEXT("The targeted base-layout transition records one animation frame"),
+		AfterTransitionTick.BaseCardLayoutTransitionTickCount,
+		BeforeTransitionTick.BaseCardLayoutTransitionTickCount + 1);
+	TestEqual(TEXT("The transition frame updates only its active card set"),
+		AfterTransitionTick.BaseCardLayoutTransitionApplyCount
+			- BeforeTransitionTick.BaseCardLayoutTransitionApplyCount,
+		BeforeTransitionTick.ActiveBaseCardLayoutTransitionCount);
+	TestEqual(TEXT("Targeted base-layout updates and static presentation updates stay one-to-one"),
+		AfterTransitionTick.StaticCardPresentationUpdateCount
+			- BeforeTransitionTick.StaticCardPresentationUpdateCount,
+		BeforeTransitionTick.ActiveBaseCardLayoutTransitionCount);
+	TestTrue(TEXT("A 120 FPS transition step does not prematurely finish the expansion"),
+		AfterTransitionTick.ActiveBaseCardLayoutTransitionCount > 0);
 	TestEqual(TEXT("Expand reuses the same complete card set"), ExpandedCards.Num(), 6);
 	for (int32 Index = 0; Index < CollapsedCards.Num() && ExpandedCards.IsValidIndex(Index); ++Index)
 	{

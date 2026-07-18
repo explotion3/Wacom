@@ -5,7 +5,7 @@
 #if WITH_AUTOMATION_TESTS
 
 #include "Cards/CardDefinition.h"
-#include "UI/Backpack/WacomBackpackScreenPresenter.h"
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceSceneBuilder.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackZonePileViewSpec,
@@ -34,11 +34,10 @@ bool FWacomUIBackpackZonePileViewSpec::RunTest(const FString& Parameters)
 	Snapshot.SpecialZones.Add(Special);
 
 	const TArray<FWacomBackpackZonePileView> Views =
-		UWacomBackpackScreenPresenter::BuildWorkspacePileViews(
+		FWacomBackpackWorkspaceSceneBuilder::BuildPileViews(
 			Snapshot,
-			EZoneKind::SpecialZone,
-			Special.OwnerCard.Instance.InstanceId,
-			true);
+			FWacomBackpackZoneKey::Make(
+				EZoneKind::SpecialZone, Special.OwnerCard.Instance.InstanceId));
 	TestEqual(TEXT("Battle and Special become embedded piles"), Views.Num(), 2);
 	const FWacomBackpackZonePileView* SpecialPile = Views.FindByPredicate(
 		[](const FWacomBackpackZonePileView& View)

@@ -4,9 +4,10 @@
 
 #if WITH_AUTOMATION_TESTS
 
-#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackDeckCardListReconciler.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceLayoutSolver.h"
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceSceneBuilder.h"
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceVisualRegistry.h"
 #include "Blueprint/WidgetTree.h"
 #include "Cards/CardDefinition.h"
 #include "Components/CanvasPanel.h"
@@ -44,7 +45,7 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 			Instance.InstanceId = FGuid(Index + 1, CardCount, 3, 4);
 			Instance.Definition = Definition.Get();
 			Card->SetCard(Instance, EZoneKind::Backpack, FGuid());
-			Workspace->GetCardCanvas()->AddChildToCanvas(Card.Get());
+			Workspace->GetStaticCardLayer()->AddChildToCanvas(Card.Get());
 			Workspace->PrimeCardBaseLayout(
 				*Card,
 				FVector2D(180.0f + Index * 24.0f, 240.0f),
@@ -239,7 +240,7 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 		for (UWacomDeckCardWidget* Card : Cards)
 		{
 			TestEqual(TEXT("Cancel restores the original widget to StaticCardLayer"),
-				Card->GetParent(), static_cast<UPanelWidget*>(Workspace->GetCardCanvas()));
+				Card->GetParent(), static_cast<UPanelWidget*>(Workspace->GetStaticCardLayer()));
 		}
 	}
 	return true;
@@ -263,18 +264,19 @@ bool FWacomUIBackpackCarryCrossZoneIdentitySpec::RunTest(const FString& Paramete
 	CarriedWidget->SetCard(Instance, EZoneKind::Backpack, FGuid());
 	CarryCanvas->AddChildToCanvas(CarriedWidget.Get());
 
-	FWacomBackpackDeckCardListItem Desired;
+	FWacomBackpackWorkspaceSceneCardEntry Desired;
 	Desired.CardView.Instance = Instance;
 	Desired.CardView.PhysicalZone = EZoneKind::BattleDeck;
 	Desired.DisplayZone = FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck);
 	Desired.Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 	TArray<UPanelWidget*> SearchPanels { StaticCanvas.Get(), CarryCanvas.Get() };
-	TArray<FWacomBackpackDeckCardListItem> DesiredCards { Desired };
+	TArray<FWacomBackpackWorkspaceSceneCardEntry> DesiredCards { Desired };
 	TArray<TObjectPtr<UWacomDeckCardWidget>> Ordered;
 	int32 CreatedWidgetCount = 0;
-	FWacomBackpackDeckCardListReconciler::ReconcileAcrossPanels(
+	FWacomBackpackWorkspaceVisualRegistry Registry;
+	Registry.ReconcileCards(
 		SearchPanels,
-		StaticCanvas.Get(),
+		*StaticCanvas,
 		DesiredCards,
 		[Carried = CarriedWidget.Get()](const UWacomDeckCardWidget* Widget)
 		{
@@ -286,7 +288,7 @@ bool FWacomUIBackpackCarryCrossZoneIdentitySpec::RunTest(const FString& Paramete
 			return NewObject<UWacomDeckCardWidget>();
 		},
 		[](UWacomDeckCardWidget*) {},
-		&Ordered);
+		Ordered);
 
 	TestEqual(TEXT("Cross-zone handoff does not create a replacement widget"),
 		CreatedWidgetCount, 0);

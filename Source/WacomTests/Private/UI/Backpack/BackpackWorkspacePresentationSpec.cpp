@@ -4,8 +4,8 @@
 
 #if WITH_AUTOMATION_TESTS
 
-#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackWorkspaceCardFeedbackSpec,
@@ -21,24 +21,24 @@ bool FWacomUIBackpackWorkspaceCardFeedbackSpec::RunTest(const FString& Parameter
 	Style->RejectedTargetColor = FLinearColor(0.9f, 0.1f, 0.2f, 0.9f);
 
 	const FWacomBackpackWorkspaceCardVisualState Neutral =
-		UWacomBackpackScreenPresenter::BuildWorkspaceCardVisualState(
-			Style, false, false, false);
+		FWacomBackpackWorkspaceMotionCoordinator::BuildVisualState(
+			*Style, false, false, false);
 	TestEqual(TEXT("Neutral card keeps the feedback overlay hidden"), Neutral.FeedbackOpacity, 0.0f);
 
 	const FWacomBackpackWorkspaceCardVisualState Selected =
-		UWacomBackpackScreenPresenter::BuildWorkspaceCardVisualState(
-			Style, true, false, false);
+		FWacomBackpackWorkspaceMotionCoordinator::BuildVisualState(
+			*Style, true, false, false);
 	TestEqual(TEXT("Selected card uses the configured feedback opacity"), Selected.FeedbackOpacity, 0.24f);
 	TestEqual(TEXT("Selected card uses the configured selection color"), Selected.Tint, Style->SelectionColor);
 
 	const FWacomBackpackWorkspaceCardVisualState Valid =
-		UWacomBackpackScreenPresenter::BuildWorkspaceCardVisualState(
-			Style, true, false, false, true, false);
+		FWacomBackpackWorkspaceMotionCoordinator::BuildVisualState(
+			*Style, true, false, false, true, false);
 	TestEqual(TEXT("Valid target color overrides selection color"), Valid.Tint, Style->ValidTargetColor);
 
 	const FWacomBackpackWorkspaceCardVisualState Rejected =
-		UWacomBackpackScreenPresenter::BuildWorkspaceCardVisualState(
-			Style, true, false, true, true, true);
+		FWacomBackpackWorkspaceMotionCoordinator::BuildVisualState(
+			*Style, true, false, true, true, true);
 	TestEqual(TEXT("Rejected target color has the highest feedback priority"), Rejected.Tint, Style->RejectedTargetColor);
 	TestEqual(TEXT("Read-only state preserves its lower opacity"), Rejected.Opacity, 0.72f);
 

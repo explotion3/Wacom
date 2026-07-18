@@ -9,7 +9,7 @@
 #include "Components/TextBlock.h"
 
 #include "Cards/CardDefinition.h"
-#include "UI/Backpack/WacomBackpackScreenPresenter.h"
+#include "UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
@@ -74,13 +74,18 @@ void UWacomDeckCardWidget::UnbindWorkspacePointerEvents()
 
 void UWacomDeckCardWidget::SetWorkspaceVisualState(bool bSelected, bool bCurrent, bool bReadOnly)
 {
-	bWorkspaceSelected = bSelected;
-	bWorkspaceCurrent = bCurrent;
+	SetWorkspaceInteractionState(bSelected, bCurrent);
 	FWacomBackpackWorkspaceCardVisualState State;
 	State.Opacity = bReadOnly ? 0.72f : 1.0f;
 	State.Tint = bSelected ? FLinearColor(0.65f, 0.88f, 1.0f, 1.0f) : FLinearColor::White;
 	State.FeedbackOpacity = bSelected ? 0.22f : 0.0f;
 	ApplyWorkspaceVisualState(State);
+}
+
+void UWacomDeckCardWidget::SetWorkspaceInteractionState(bool bSelected, bool bCurrent)
+{
+	bWorkspaceSelected = bSelected;
+	bWorkspaceCurrent = bCurrent;
 }
 
 void UWacomDeckCardWidget::ApplyWorkspaceVisualState(

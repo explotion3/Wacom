@@ -127,19 +127,19 @@ tags:
   - 状态：`Done: formal/fallback assets, responsive matrix and final PIE complete`
   - 归属：App / UI / Editor / Tests
   - 入口：`specs/005-backpack-visual-production/`
-  - 说明：该轮完成全局 `1920×1080` DPI、Root/Main/Body/Workspace/Overlay Fill、Header Auto、固定卡面缩放和静态 Retainer，并通过四分辨率、16:10、超宽及高卡量验收。2026-07-16 后续内嵌牌堆改造已删除右侧 Rack，但继续沿用本轮的分辨率、卡面与 Retainer 合同。
+  - 说明：该轮完成全局 `1920×1080` DPI、Root/Main/Body/Workspace/Overlay Fill、Header Auto、固定卡面缩放和静态 Retainer，并通过四分辨率、16:10、超宽及高卡量验收。2026-07-16 后续内嵌牌堆改造已删除旧右侧区域栏，但继续沿用本轮的分辨率、卡面与 Retainer 合同。
 
 - [ ] **背包真实卡牌牌堆与携带性能改造**
   - 状态：`Implementation and automated/Builder verification complete; final PIE/Insights pending`
   - 归属：App / UI / Editor / Tests
   - 入口：[Backpack WBP 制作与绑定合同](./UI_Backpack_WBP_Binding.md) / [Wacom UI](./WacomUI.md)
-  - 说明：通量区保持统一自由工作台；备战、特殊和负重牌堆已迁移为折叠/展开共用的全部真实卡面。正式链路删除 Preview class/ViewData/Builder 依赖，新增 `WBP_BackpackZonePile` 与 Workspace 分层，DeckCard 改承载 `WBP_FPCardView`。携带路径使用单一 `CarryRoot` 锚点：静止 `CarryCache` 缓存非当前扇形卡，独立 `CarryActiveLayer` 只承载当前实时卡；鼠标移动不插值、不重算扇形、不全量刷新静态卡。跨区提交按 `InstanceId` 原位迁移同一实体 Widget，不再因 `PhysicalZone` 变化创建替代实例。牌堆 Reconcile 以实际 Canvas 子控件为视觉所有权真相并在 Destruct 主动清理，已消除反复展开/收起后累积不可交互牌堆框的问题；用户连续 10 次 PIE 验证通过。`WacomEditor -DisableUnity`、Builder 双跑 Hash、`Wacom.UI.Backpack` 71/71、`Wacom.Run.Backpack` 2/2 已通过；完成剩余 1/21 张携带手感与 Insights 观察后更新为 Done。对应阶段工件见 `specs/006-backpack-real-card-piles/`。
+	- 说明：通量区保持统一自由工作台；备战、特殊和负重牌堆已迁移为折叠/展开共用的全部真实卡面。正式链路删除 Preview class/ViewData/Builder 依赖，新增 `WBP_BackpackZonePile` 与 Workspace 分层，DeckCard 改承载 `WBP_FPCardView`。携带路径使用单一 `CarryRoot` 锚点：静止 `CarryCache` 缓存非当前卡，独立 `CarryActiveLayer` 只承载当前实时卡；鼠标移动不重算牌列、不全量刷新静态卡。跨区提交按 `InstanceId` 原位迁移同一实体 Widget，不再因 `PhysicalZone` 变化创建替代实例。2026-07-17 又完成内部收口：`FWacomBackpackWorkspaceSceneBuilder` 一次生成顺序对齐的卡牌、牌堆、布局与命中合同；`FWacomBackpackWorkspaceVisualRegistry` 以四个实际 Canvas 层为所有权真相并线性重建身份索引，统一清除重复卡与幽灵牌框；`FWacomBackpackWorkspaceRuntime` 作为单一 App-private 所有权根持有 Registry 和 Motion Coordinator。Carry、PileMove、携带目标悬停展开、局部姿态、Settlement、焦点退出和牌堆基础布局过渡共用一个按需帧 `ActiveTimer`，收拢完成由实际过渡结束触发。1945 行 Screen Spec 已拆为 CardView、EffectBadge、CardDetail 与 Screen Refresh/Projection 四个专题，AdaptiveStrip、Scene Builder、Registry 与 Motion Coordinator 契约由小型测试覆盖。自动化 379 项通过，Builder 双跑及六个正式资产 Hash 稳定；用户此前连续 10 次 PIE 验证通过，完成本轮最终 1/21 张携带 / Insights 观察后更新为 Done。对应阶段工件见 `specs/006-backpack-real-card-piles/`。
 
 - [x] **背包 Workspace 重构：正式实现、旧路径迁移与统一 PIE 验收完成**
   - 状态：`Done: C++ + formal WBP + DreamShader + legacy cleanup + final PIE complete`
   - 归属：Run / App / UI / Tests
   - 入口：`specs/003-backpack-workspace-refactor/`
-  - 说明：`specs/003-backpack-workspace-refactor/` 的 T001–T076 已全部完成，建立了 Workspace、同 Run 瞬态布局、框选与持续扇形携带、分层 Back、原子批量移动/销毁、确认恢复、正式 WBP/Style、静态 Retainer 卡面与 Wacom-native DreamShader 反馈。该轮的“单活动区 + 常驻 ZoneRack”表现结构已在 2026-07-16 内嵌牌堆改造中替换；规则事务与输入合同继续复用。
+  - 说明：`specs/003-backpack-workspace-refactor/` 的 T001–T076 已全部完成，建立了 Workspace、同 Run 瞬态布局、框选与持续扇形携带、分层 Back、原子批量移动/销毁、确认恢复、正式 WBP/Style、静态 Retainer 卡面与 Wacom-native DreamShader 反馈。该轮的“单活动区 + 常驻右侧区域栏”表现结构已在 2026-07-16 内嵌牌堆改造中替换；规则事务与输入合同继续复用。
   - 2026-07-14 Surface Foil 跟进（历史）：当时的 `WBP_BackpackCardView` 静态 wrapper 合同已由 2026-07-16 的 `specs/006-backpack-real-card-piles/` 取代；新正式路径直接复用 `WBP_FPCardView` 并通过单动态卡预算控制实时材质，不再扩展旧 wrapper。
   - 2026-07-15 T070 布局与卡面第一轮：24 张实体牌、4 个牌匣基线下，中央单活动区和高亮牌匣识别体感无延迟；用户明确豁免秒表记录并接受该定性结果，文档不虚构具体秒数。用户已确认三张卡的手动位置、角度和 ZOrder 在切区及同 Run 关闭/重开后保持，新 PIE Run 不继承旧布局；越界释放仍保留约 30% 卡牌主体；卡面静置保持完全不透明，费用/名称/耐久/出血徽章稳定，无冻结 Surface Foil 或采样清晰度变化。本轮无代码缺陷需要修复。
   - 2026-07-15 T070 事务、生命周期与表现轮：用户已确认活动区牌匣收拢、单张/整组跨区移动、容量与 stale 原子拒绝、批量销毁确认/取消/成功、切区取消、Deactivate/Reactivate、详情与确认焦点、键盘导航、反馈区分、命中几何及空闲表现均正常。携带中按 B 可关闭且重开后无捕获、扇形、旧选择或携带残留，鼠标/框选/卡牌点击立即可用。Escape 已定稿并完成分层 Back PIE：携带/框选/待决按压时先取消指针事务，下一次空闲 Escape 交给 CommonUI 关闭，B 始终直接关闭；实现和 `ScreenComposition` 自动化合同已补，`WacomEditor`、`Wacom.UI.Backpack` 63/63、`Wacom.Run.Backpack` 2/2 通过。T070 所有 PIE 项已完成，秒表项按用户明确豁免以“体感无延迟”收口。
@@ -265,7 +265,7 @@ tags:
   - 状态：`Done: Workspace/材质/旧路径清理与统一 PIE polish 完成`
   - 归属：UI / Run
   - 入口：[Roadmap: 背包 UI](./Roadmap.md#roadmap-backpack-ui)
-  - 说明：该轮完成正式 Screen、Workspace、DeleteConfirm、Style、反馈材质和旧单卡 UMG drag/drop owner 清理；当时的 Rack/Entry 已由 2026-07-16 内嵌牌堆改造正式删除。20–100 卡 PIE 未观察到明显空闲 Tick 或逐帧 Snapshot 重建，因此仍不提前实施虚拟列表。
+  - 说明：该轮完成正式 Screen、Workspace、DeleteConfirm、Style、反馈材质和旧单卡 UMG drag/drop owner 清理；当时的右侧区域控件已由 2026-07-16 内嵌牌堆改造正式删除。20–100 卡 PIE 未观察到明显空闲 Tick 或逐帧 Snapshot 重建，因此仍不提前实施虚拟列表。
 
 - [ ] **卡牌详情 token：ConditionTokenBuilder**
   - 状态：`Ready: 详情表现继续收口`

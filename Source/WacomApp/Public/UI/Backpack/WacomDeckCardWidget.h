@@ -113,6 +113,8 @@ public:
 	/** 清理父 Workspace 安装的指针转发，供复用和生命周期收口使用。 */
 	void UnbindWorkspacePointerEvents();
 	void SetWorkspaceVisualState(bool bSelected, bool bCurrent, bool bReadOnly);
+	/** 只更新选中/当前语义，由调用方随后一次性应用正式视觉状态。 */
+	void SetWorkspaceInteractionState(bool bSelected, bool bCurrent);
 	void ApplyWorkspaceVisualState(const FWacomBackpackWorkspaceCardVisualState& VisualState);
 	void RequestBackpackCardFaceRender();
 	void SetBackpackCardFaceRetainedRenderingEnabled(bool bEnabled);
@@ -130,8 +132,6 @@ public:
 		const FWacomFirstPersonCardDepthView& DepthView);
 	FVector2D GetBackpackLocalMotionTranslation() const;
 	float GetBackpackLocalMotionAngle() const;
-	bool IsWorkspaceSelected() const { return bWorkspaceSelected; }
-	bool IsWorkspaceCurrent() const { return bWorkspaceCurrent; }
 
 	DECLARE_DELEGATE_RetVal_ThreeParams(
 		FReply,

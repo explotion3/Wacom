@@ -35,7 +35,6 @@
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
-#include "UI/Backpack/WacomSpecialZoneWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
@@ -745,78 +744,6 @@ bool BuildWorkspaceBlueprint(UWidgetBlueprint& Blueprint)
 	return true;
 }
 
-bool BuildSpecialZoneBlueprint(UWidgetBlueprint& Blueprint)
-{
-	const FLinearColor TextPrimary(0.92f, 0.95f, 0.97f, 1.0f);
-	const FLinearColor TextSecondary(0.36f, 0.78f, 0.91f, 1.0f);
-
-	UBorder* Root = MakeWidget<UBorder>(Blueprint, TEXT("SpecialZoneBorder"));
-	Root->SetPadding(FMargin(14.0f, 12.0f));
-	Root->SetBrushColor(FLinearColor(0.035f, 0.049f, 0.071f, 1.0f));
-	Blueprint.WidgetTree->RootWidget = Root;
-
-	UVerticalBox* Content = MakeWidget<UVerticalBox>(Blueprint, TEXT("SpecialZoneContent"));
-	if (UBorderSlot* Slot = Cast<UBorderSlot>(Root->AddChild(Content)))
-	{
-		Slot->SetHorizontalAlignment(HAlign_Fill);
-		Slot->SetVerticalAlignment(VAlign_Fill);
-	}
-
-	UHorizontalBox* TitleRow = MakeWidget<UHorizontalBox>(Blueprint, TEXT("SpecialZoneTitleRow"));
-	UVerticalBoxSlot* TitleRowSlot = Content->AddChildToVerticalBox(TitleRow);
-	TitleRowSlot->SetSize(AutoSize());
-	TitleRowSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 10.0f));
-	UTextBlock* Title = MakeText(
-		Blueprint,
-		TEXT("TitleText"),
-		NSLOCTEXT("BackpackUIBuilder", "SpecialZoneTitle", "特殊存放区"),
-		18,
-		TextPrimary,
-		true);
-	TitleRow->AddChildToHorizontalBox(Title)->SetSize(FillSize());
-	UTextBlock* Badge = MakeText(
-		Blueprint,
-		TEXT("BattleReadyBadge"),
-		NSLOCTEXT("BackpackUIBuilder", "SpecialZoneBattleReady", "已入战"),
-		14,
-		TextSecondary,
-		true);
-	Badge->SetVisibility(ESlateVisibility::Collapsed);
-	if (UHorizontalBoxSlot* Slot = TitleRow->AddChildToHorizontalBox(Badge))
-	{
-		Slot->SetSize(AutoSize());
-		Slot->SetVerticalAlignment(VAlign_Center);
-		Slot->SetPadding(FMargin(12.0f, 0.0f, 0.0f, 0.0f));
-	}
-
-	UTextBlock* OwnerLabel = MakeText(
-		Blueprint,
-		TEXT("OwnerCardLabel"),
-		NSLOCTEXT("BackpackUIBuilder", "SpecialZoneOwnerCard", "主卡"),
-		14,
-		TextSecondary);
-	Content->AddChildToVerticalBox(OwnerLabel)->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
-	UWrapBox* OwnerHost = MakeWidget<UWrapBox>(Blueprint, TEXT("OwnerCardHost"), true);
-	OwnerHost->SetInnerSlotPadding(FVector2D(8.0f, 8.0f));
-	Content->AddChildToVerticalBox(OwnerHost)->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 12.0f));
-
-	UBorder* ContentHost = MakeWidget<UBorder>(Blueprint, TEXT("ContentDropTargetHost"), true);
-	ContentHost->SetPadding(FMargin(10.0f));
-	ContentHost->SetBrushColor(FLinearColor(0.018f, 0.027f, 0.043f, 1.0f));
-	UVerticalBoxSlot* ContentHostSlot = Content->AddChildToVerticalBox(ContentHost);
-	ContentHostSlot->SetSize(FillSize());
-	ContentHostSlot->SetHorizontalAlignment(HAlign_Fill);
-	ContentHostSlot->SetVerticalAlignment(VAlign_Fill);
-	UWrapBox* ContentCards = MakeWidget<UWrapBox>(Blueprint, TEXT("ContentCardsBox"), true);
-	ContentCards->SetInnerSlotPadding(FVector2D(8.0f, 8.0f));
-	if (UBorderSlot* Slot = Cast<UBorderSlot>(ContentHost->AddChild(ContentCards)))
-	{
-		Slot->SetHorizontalAlignment(HAlign_Fill);
-		Slot->SetVerticalAlignment(VAlign_Fill);
-	}
-	return true;
-}
-
 bool BuildDeleteConfirmBlueprint(UWidgetBlueprint& Blueprint)
 {
 	UOverlay* Root = MakeWidget<UOverlay>(Blueprint, TEXT("DeleteConfirmRoot"));
@@ -1087,8 +1014,6 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	Style->FocusReturnSeconds = 0.14f;
 	Style->FocusExitDelaySeconds = 0.12f;
 	Style->SettleSeconds = 0.18f;
-	Style->CollectSeconds = 0.20f;
-	Style->RejectedFeedbackSeconds = 0.16f;
 	Style->SelectionColor = FLinearColor(0.10f, 0.78f, 1.0f, 0.96f);
 	Style->CardStateOverlayOpacity = 0.20f;
 	Style->ValidTargetColor = FLinearColor(0.16f, 0.88f, 0.44f, 0.96f);
@@ -1126,11 +1051,9 @@ bool BuildBackpackUIContent()
 		TEXT("WBP_BackpackZonePile"), UWacomBackpackZonePileWidget::StaticClass(), false);
 	UWidgetBlueprint* Confirm = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackDeleteConfirm"), UWacomBackpackDeleteConfirmWidget::StaticClass());
-	UWidgetBlueprint* SpecialZone = LoadOrCreateWidgetBlueprint(
-		TEXT("WBP_WacomSpecialZoneWidget"), UWacomSpecialZoneWidget::StaticClass());
 	UWidgetBlueprint* Screen = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackScreen"), UWacomBackpackScreen::StaticClass());
-	if (!Workspace || !ZonePile || !Confirm || !SpecialZone || !Screen)
+	if (!Workspace || !ZonePile || !Confirm || !Screen)
 	{
 		return false;
 	}
@@ -1154,19 +1077,12 @@ bool BuildBackpackUIContent()
 	{
 		return false;
 	}
-	if (!BuildSpecialZoneBlueprint(*SpecialZone)
-		|| !CompileWidgetBlueprint(*SpecialZone)
-		|| !SaveTopLevelAsset(*SpecialZone))
-	{
-		return false;
-	}
 	if (!BuildScreenBlueprint(*Screen) || !CompileWidgetBlueprint(*Screen))
 	{
 		return false;
 	}
 	if (!SetObjectDefault(*Screen, TEXT("WorkspaceWidgetClass"), Workspace->GeneratedClass)
 		|| !SetObjectDefault(*Screen, TEXT("DeleteConfirmWidgetClass"), Confirm->GeneratedClass)
-		|| !SetObjectDefault(*Screen, TEXT("SpecialZoneWidgetClass"), SpecialZone->GeneratedClass)
 		|| !SetObjectDefault(*Screen, TEXT("WorkspaceStyle"), Style)
 		|| !SaveTopLevelAsset(*Screen))
 	{
@@ -1174,7 +1090,7 @@ bool BuildBackpackUIContent()
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[BackpackUIBuilder] Generated Screen with external WorkspaceStyle asset, unified Workspace, formal ZonePile, Confirm and SpecialZone; DeckCard hosts WBP_FPCardView"));
+		TEXT("[BackpackUIBuilder] Generated Screen with external WorkspaceStyle asset, unified Workspace, formal ZonePile and Confirm; DeckCard hosts WBP_FPCardView"));
 	return true;
 }
 }

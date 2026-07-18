@@ -12,12 +12,10 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
-#include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
-#include "UI/Backpack/WacomBackpackZoneSectionWidget.h"
 
 #define LOCTEXT_NAMESPACE "WacomBackpack"
 
@@ -31,86 +29,6 @@ UBorder* CreateBackpackSectionBorder(UWidgetTree* WidgetTree, FName Name, const 
 	return Border;
 }
 
-UVerticalBox* AddVerticalHostSection(UWidgetTree* WidgetTree, UVerticalBox* Parent, FName BorderName, const FLinearColor& Color, const FMargin& Padding)
-{
-	UBorder* Border = CreateBackpackSectionBorder(WidgetTree, BorderName, Color);
-	if (UVerticalBoxSlot* Slot = Parent->AddChildToVerticalBox(Border))
-	{
-		Slot->SetPadding(Padding);
-		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-	}
-
-	UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass());
-	Border->AddChild(Host);
-	return Host;
-}
-
-UPanelWidget* AddZoneSectionWidget(
-	UUserWidget* Owner,
-	UWidgetTree* WidgetTree,
-	UVerticalBox* Parent,
-	TSubclassOf<UWacomBackpackZoneSectionWidget> SectionClass,
-	const FText& Title,
-	const FMargin& Padding,
-	UWacomBackpackZoneSectionWidget** OutSection = nullptr)
-{
-	if (!Owner || !WidgetTree || !Parent)
-	{
-		return nullptr;
-	}
-
-	auto AttachSection = [Parent, &Padding](UWacomBackpackZoneSectionWidget* SectionToAttach)
-	{
-		if (UVerticalBoxSlot* Slot = Parent->AddChildToVerticalBox(SectionToAttach))
-		{
-			Slot->SetPadding(Padding);
-			Slot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-		}
-	};
-
-	auto CreateSection = [WidgetTree, &Title](UClass* ClassToUse)
-	{
-		UWacomBackpackZoneSectionWidget* Section = WidgetTree->ConstructWidget<UWacomBackpackZoneSectionWidget>(ClassToUse);
-		if (Section)
-		{
-			Section->SetZoneTitleText(Title);
-		}
-		return Section;
-	};
-
-	UClass* ClassToUse = SectionClass ? SectionClass.Get() : UWacomBackpackZoneSectionWidget::StaticClass();
-	UWacomBackpackZoneSectionWidget* Section = CreateSection(ClassToUse);
-	if (!Section)
-	{
-		return nullptr;
-	}
-
-	AttachSection(Section);
-	UPanelWidget* ContentHost = Section->EnsureContentHost();
-	if (!ContentHost && ClassToUse != UWacomBackpackZoneSectionWidget::StaticClass())
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[Backpack] %s 缺少 ContentHost 绑定，当前区块回退到 C++ 默认布局。"),
-			*GetNameSafe(ClassToUse));
-
-		Parent->RemoveChild(Section);
-		Section = CreateSection(UWacomBackpackZoneSectionWidget::StaticClass());
-		if (!Section)
-		{
-			return nullptr;
-		}
-		AttachSection(Section);
-		ContentHost = Section->EnsureContentHost();
-	}
-
-	if (OutSection)
-	{
-		*OutSection = Section;
-	}
-	return ContentHost;
-}
 }
 
 UTextBlock* FBackpackFallbackLayoutBuilder::CreateBackpackText(UWidgetTree* WidgetTree, FName Name, const FText& Text, int32 FontSize)
@@ -195,7 +113,7 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 
 	if (Context.TitleText && !*Context.TitleText)
 	{
-		*Context.TitleText = CreateBackpackText(WidgetTree, TEXT("TitleText"), LOCTEXT("Title", "背包"), 28);
+		*Context.TitleText = CreateBackpackText(WidgetTree, TEXT("TitleText"), LOCTEXT("Title", "背包工作台"), 28);
 		if (UHorizontalBoxSlot* Slot = TopRow->AddChildToHorizontalBox(Context.TitleText->Get()))
 		{
 			Slot->SetPadding(FMargin(8.f, 4.f));
@@ -313,134 +231,6 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		*Context.DeleteTargetHost = Host;
 	}
 
-	// 迁移期间保留旧 Host 供现有测试和详情链路复用，但不再作为可见的第二套区域 UI。
-	UVerticalBox* LegacyZones = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("LegacyZones"));
-	LegacyZones->SetVisibility(ESlateVisibility::Collapsed);
-	if (UVerticalBoxSlot* LegacySlot = MainVBox->AddChildToVerticalBox(LegacyZones))
-	{
-		LegacySlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-	}
-
-	if (Context.DeleteZoneHost)
-	{
-		*Context.DeleteZoneHost = AddZoneSectionWidget(
-			Context.Owner,
-			WidgetTree,
-			LegacyZones,
-			Context.DeleteZoneSectionWidgetClass,
-			LOCTEXT("DeleteZoneTitle", "[ 删牌区 ]"),
-			FMargin(0.f, 0.f, 0.f, 8.f));
-	}
-
-	UScrollBox* ContentScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("BackpackContentScroll"));
-	if (UVerticalBoxSlot* Slot = LegacyZones->AddChildToVerticalBox(ContentScroll))
-	{
-		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-	}
-
-	UVerticalBox* ZonesVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BackpackZonesVBox"));
-	ContentScroll->AddChild(ZonesVBox);
-
-	UWacomBackpackZoneSectionWidget* BattleDeckSectionRaw = nullptr;
-	if (Context.BattleDeckZoneHost)
-	{
-		*Context.BattleDeckZoneHost = AddZoneSectionWidget(
-			Context.Owner,
-			WidgetTree,
-			ZonesVBox,
-			Context.BattleDeckZoneSectionWidgetClass,
-			LOCTEXT("BattleDeckTitle", "[ 备战区 ]"),
-			FMargin(0.f, 0.f, 0.f, 8.f),
-			&BattleDeckSectionRaw);
-	}
-	if (Context.BattleDeckZoneSection)
-	{
-		*Context.BattleDeckZoneSection = BattleDeckSectionRaw;
-	}
-
-	UVerticalBox* BackpackVBox = AddVerticalHostSection(
-		WidgetTree,
-		ZonesVBox,
-		TEXT("BackpackBorder"),
-		FLinearColor(0.08f, 0.12f, 0.08f, 0.85f),
-		FMargin(0.f));
-
-	if (Context.BackpackTitleText)
-	{
-		*Context.BackpackTitleText = CreateBackpackText(WidgetTree, TEXT("BackpackTitleText"), LOCTEXT("BackpackTitle", "[ 背包区 ]"), 16);
-		if (UVerticalBoxSlot* Slot = BackpackVBox->AddChildToVerticalBox(Context.BackpackTitleText->Get()))
-		{
-			Slot->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-		}
-	}
-
-	UVerticalBox* FluxSection = AddVerticalHostSection(
-		WidgetTree,
-		BackpackVBox,
-		TEXT("FluxZoneBorder"),
-		FLinearColor(0.09f, 0.16f, 0.10f, 0.8f),
-		FMargin(0.f, 0.f, 0.f, 8.f));
-
-	UVerticalBox* FluxContentColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("FluxContentCardsColumn"));
-	if (UVerticalBoxSlot* ContentSlot = FluxSection->AddChildToVerticalBox(FluxContentColumn))
-	{
-		ContentSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-	}
-
-	UWacomBackpackZoneSectionWidget* FluxContentSectionRaw = nullptr;
-	if (Context.FluxContentDropTargetHost)
-	{
-		*Context.FluxContentDropTargetHost = AddZoneSectionWidget(
-			Context.Owner,
-			WidgetTree,
-			FluxContentColumn,
-			Context.FluxContentZoneSectionWidgetClass,
-			LOCTEXT("FluxContentCardsTitle", "[ 通量内容 ]"),
-			FMargin(0.f),
-			&FluxContentSectionRaw);
-	}
-	if (Context.FluxContentZoneSection)
-	{
-		*Context.FluxContentZoneSection = FluxContentSectionRaw;
-	}
-
-	UScrollBox* BackpackInnerScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("BackpackInnerScroll"));
-	if (UVerticalBoxSlot* Slot = BackpackVBox->AddChildToVerticalBox(BackpackInnerScroll))
-	{
-		Slot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
-		Slot->SetPadding(FMargin(0.f, 4.f, 0.f, 0.f));
-	}
-
-	UVerticalBox* BackpackInnerVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("BackpackInnerVBox"));
-	BackpackInnerScroll->AddChild(BackpackInnerVBox);
-
-	if (Context.SpecialZonesHost)
-	{
-		*Context.SpecialZonesHost = AddZoneSectionWidget(
-			Context.Owner,
-			WidgetTree,
-			BackpackInnerVBox,
-			Context.SpecialZonesSectionWidgetClass,
-			LOCTEXT("SpecialZonesTitle", "[ 特殊存放区 ]"),
-			FMargin(0.f, 0.f, 0.f, 8.f));
-	}
-
-	UWacomBackpackZoneSectionWidget* BurdenSectionRaw = nullptr;
-	if (Context.BurdenZoneHost)
-	{
-		*Context.BurdenZoneHost = AddZoneSectionWidget(
-			Context.Owner,
-			WidgetTree,
-			BackpackInnerVBox,
-			Context.BurdenZoneSectionWidgetClass,
-			LOCTEXT("BurdenZoneTitle", "[ 负重区 ] 0"),
-			FMargin(0.f),
-			&BurdenSectionRaw);
-	}
-	if (Context.BurdenZoneSection)
-	{
-		*Context.BurdenZoneSection = BurdenSectionRaw;
-	}
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -10,10 +10,10 @@
 #include "Characters/CharacterDefinition.h"
 #include "RunSession.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
-#include "UI/Backpack/WacomBackpackScreenPresenter.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/BackpackWorkspaceModelTestAccess.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceSceneBuilder.h"
 #include "UObject/StrongObjectPtr.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -65,8 +65,8 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(
 		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
-	const int32 ExpectedPileCount = UWacomBackpackScreenPresenter::BuildWorkspacePileViews(
-		Snapshot, EZoneKind::Backpack, FGuid(), false).Num();
+	const int32 ExpectedPileCount =
+		FWacomBackpackWorkspaceSceneBuilder::BuildPileViews(Snapshot, {}).Num();
 	int32 ExpectedWorkspaceCardCount = Snapshot.Flux.ContentCards.Num()
 		+ Snapshot.BattleDeckPhysicalCards.Num()
 		+ Snapshot.BattleDeckProjectedCards.Num()
@@ -231,9 +231,15 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 				TEXT("Zone switch redraw keeps every replacement card fully opaque"),
 				FMath::IsNearlyEqual(Opacity, 1.0f));
 		}
+		const int32 SceneBindCountBeforeReactivation =
+			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen).WorkspaceSceneBindCount;
 		FWacomBackpackScreenTestAccess::DeactivateWorkspaceScreen(*FormalScreen);
 		FWacomBackpackScreenTestAccess::ActivateWorkspaceScreen(*FormalScreen);
 		FWacomBackpackScreenTestAccess::FlushDeferredWorkspaceCardFaceRender(*FormalScreen);
+		TestEqual(
+			TEXT("Reactivating an unchanged constructed Workspace does not reconcile the Scene again"),
+			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen).WorkspaceSceneBindCount,
+			SceneBindCountBeforeReactivation);
 		TestTrue(
 			TEXT("Reactivation restores static retained rendering without a Tick-based repair"),
 			FWacomBackpackScreenTestAccess::WorkspaceView(*FormalScreen)

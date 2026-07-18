@@ -27,7 +27,6 @@ Run Snapshot / revision
 | `WBP_BackpackWorkspace` | `UWacomBackpackWorkspaceWidget`；统一 Canvas、框选和空状态 |
 | `WBP_BackpackZonePile` | `UWacomBackpackZonePileWidget`；牌堆框、标题、状态、拖柄与投放反馈 |
 | `WBP_BackpackDeleteConfirm` | `UWacomBackpackDeleteConfirmWidget`；批量销毁确认 |
-| `WBP_WacomSpecialZoneWidget` | `UWacomSpecialZoneWidget`；只供 fallback / 旧 Host 的只读兼容表现 |
 | `WBP_BackpackScreen.WorkspaceStyle` | 指向 `DA_BackpackWorkspaceStyle` 的普通资产引用；禁止在 Widget Blueprint 根详情中内联 UObject |
 | `DA_BackpackWorkspaceStyle` | `UWacomBackpackWorkspaceStyle`；工作台布局、牌堆、颜色和动效的正式运行时制作入口 |
 | `WBP_WacomDeckCardWidget` | 背包卡牌外壳；`CardFaceScaleBox=1.0`，内部直接承载现有 `WBP_FPCardView` |
@@ -81,7 +80,7 @@ Run Snapshot / revision
 
 ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折叠牌堆主体请求展开；从牌堆内容区域拖过框选阈值则进入该牌堆的 `Marquee`，不会误触展开。真实卡牌常驻 `StaticCardLayer`，携带时进入 `CarryRoot` 下两个携带分支，短时收落时进入 `SettlementLayer`。
 
-`PileFrameLayer` 的实际子控件树是牌堆视觉所有权真相，`PileWidgets` 只作为瞬态索引。Reconcile 必须从 Canvas 现有 `UWacomBackpackZonePileWidget` 子控件复用或移除实例，并在 `NativeDestruct` 主动解除委托和删除动态牌堆子控件；不得因 Slate/UMG Destruct→Construct 边界只清空索引而把旧牌堆遗留成不可交互的孤儿视觉。
+`PileFrameLayer` 与四个卡牌层的实际子控件树是视觉所有权真相。App-private `FWacomBackpackWorkspaceVisualRegistry` 每次 Scene reconcile 都从 Canvas 子控件线性重建 `ViewKey -> Card`、物理 `InstanceId -> Card` 和 `ZoneKey -> Pile` 索引；索引不是第二套 UObject 所有权。瞬态层中的权威卡优先于静态副本，跨区继续复用同一物理 Widget，重复静态副本和幽灵牌框当次移除。`NativeDestruct` 必须解除牌堆委托、删除动态牌堆子控件并清空 Runtime。
 
 ## 内嵌牌堆合同
 
@@ -95,11 +94,12 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 - 同时只展开一个牌堆。展开卡保持 `296×420` Battle 主体逻辑尺寸与卡面 `1.0` 固定缩放，使用默认 `72px` 相邻露出和零旋转，不使用滚动；安全宽度不足时只压缩露出间距，绝不缩放卡面。
 - 展开的备战区、特殊区和负重区使用数量自适应紧凑牌列。焦点卡保持中性锚点，左侧卡组整体左移默认 `48px`，右侧卡组整体右移默认 `48px`，不再摊开固定 `3–5` 张完整窗口。折叠牌堆保持原固定布局。
 - `WBP_BackpackScreen` 的 Class Defaults 通过 `WorkspaceStyle` 引用 `DA_BackpackWorkspaceStyle`；双击该资产进入全部制作字段。`AdaptiveStripFocusSeparationPixels` 同时控制展开牌堆与多卡携带的左右让位距离；当前正式资产值为 `48px`。`AdaptiveStripExposurePixels` 控制两种牌列的基础露出；当前正式资产值为 `72px`。运行时只消费这一个资产，避免牌堆与携带出现两套数值。
-- 展开布局按当前卡数预先计算稳定 `FrameRect` / 焦点走廊：宽度为卡宽、相邻露出与最多两侧让位预留之和。Hover 只能改变 `CardMotionRoot` 局部姿态，不能推动标题、牌框、避障矩形或持久化锚点。每次让位后由新的实际目标卡位重建命中条带：横向条带保持连续并使用默认 `8px` 切换迟滞，纵向范围严格等于当前实际卡身高度，不得把上抬预留走廊算入命中；标题拖柄矩形始终优先于卡牌 Hover，指针进入标题时立即清除浏览焦点。
+- 展开布局按当前卡数预先计算稳定 `FrameRect` / 焦点走廊：宽度为卡宽、相邻露出与最多两侧让位预留之和。Hover 只能改变 `CardMotionRoot` 局部姿态，不能推动标题、牌框、避障矩形或持久化锚点。每次让位后由新的实际目标卡位重建命中条带：横向条带保持连续并使用默认 `8px` 切换迟滞，纵向范围严格等于当前实际卡身高度，不得把上抬预留走廊算入命中；标题拖柄矩形始终优先于卡牌 Hover 和 PointerDown。即使上抬卡或 `SettlementLayer` 卡暂时覆盖标题，Workspace 也必须按标题矩形把事件重新路由到牌堆，不能误开始新一轮携带。
 - 焦点卡上抬并置顶，不缩放、不改卡面透明度；邻居仅水平移动外层局部姿态。鼠标离开牌框默认等待 `0.12s`，再用约 `0.14s` 返回中性水平牌列；重新进入会取消恢复。
 - 投影卡、特殊区主卡和负重卡可以进入焦点牌列、启用详情浏览和上抬反馈，但继续保持各自透明度、角标和只读语义，不能选择、框选或携带。
 - 牌堆释放吸附到默认 `16px` 网格或邻近边缘；主体允许部分重叠，但标题拖柄不能相互覆盖，且始终夹紧在 Workspace 内。
 - 普通动效只插值位置和角度；展开/收起默认 `0.18s`，吸附默认 `0.12s`。禁止卡面淡入和动态缩放。
+- Workspace 只能拥有一个按需帧 `ActiveTimer`。Carry、PileMove、携带目标悬停展开、焦点退出、局部姿态、Settlement 与展开/收起基础 Canvas 过渡全部并入该 Timer；每帧只更新指针锚点和活动 Motion Records，不能调用全量表现刷新、Snapshot 刷新或 Scene Reconcile。收起完成由实际布局过渡全部结束触发，不使用与 Style 时长平行的回调 Timer。几何稳定采样和下一帧 Retainer 补绘仍是独立一次性任务。这项为 C++ 性能合同，不需要新增 WBP 节点或改写 `DA_BackpackWorkspaceStyle`。
 - 展开/收起过渡使用一次捕获的固定起点和最终目标；同一 Snapshot 或稳定几何刷新重复提交相同目标时必须保留当前 elapsed transition，不得取消过渡并把整组卡牌瞬移到水平终点。收起时每张需要移动的卡必须直接前往最终折叠位置，禁止先聚到标题中心或其它共享中间点再二次排布；已处于最终位置的锚定卡不创建无意义过渡。
 - `Simplified` UI Motion 下展开、收起和吸附直接到达最终状态。
 
@@ -114,7 +114,7 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 - 空白 Workspace 是通量投放目标：通量卡只更新自由布局，其它实体卡通过现有原子移动进入通量区并保存释放位置。
 - 放回来源牌堆等价于收拢；放到其它牌堆走 `MoveInstancesAtomic`；无效目标保持携带并显示拒绝反馈，不允许部分提交。
 - 成功释放后，仍位于携带视觉分支的卡牌必须进入显式 pending visual handoff。Interaction Model 已移除卡牌但目标 Snapshot 尚未 reconcile 的窗口内，任何 Presentation 刷新、ActiveTimer 或 `SyncCarryLayer()` 都不得恢复来源 A 的基础布局。跨物理区提交虽然会改变正式 ViewKey 的 `PhysicalZone`，但 Reconciler 必须按 `InstanceId` 迁移同一个受保护实体 Widget，不能销毁 A 实例并创建 B 实例。目标 Scene 到达后把同一 Widget 重挂到 `SettlementLayer`：外层直接采用目标 B 的 Canvas 布局，`CardMotionRoot` 从捕获的实际释放姿态形成局部偏移并在默认 `0.18s` 内归零，因此视觉路径是“释放点 → B”，绝不经过来源 A。部分释放只收落已提交卡，其余卡继续携带并平滑重排；原子拒绝不启动收落。
-- Scene Reconciler 的现有实例搜索必须覆盖 `StaticCardLayer`、`CarryLayer`、`CarryActiveLayer` 和 `SettlementLayer`。完整 ViewKey 相同的卡只能保留一个 Widget；若旧刷新已同时留下静态副本和 Carry/Settlement 权威实例，优先保留瞬态层中的原 Widget 并立即移除静态副本，避免再次框选时出现不可交互残影。
+- Scene Builder 一次消费 Snapshot、Workspace State、精简 Carry 摘要、Style 和几何，输出顺序对齐的 Card Entries / Layouts、Pile Entries、展开边界与空状态；不得在 Card apply 阶段再次扫描全部牌堆。Visual Registry 的现有实例搜索覆盖 `StaticCardLayer`、`CarryLayer`、`CarryActiveLayer` 和 `SettlementLayer`。完整 ViewKey 相同的卡只能保留一个 Widget；若旧刷新已同时留下静态副本和 Carry/Settlement 权威实例，优先保留瞬态层中的原 Widget并立即移除静态副本，避免再次框选时出现不可交互残影。
 - 携带在合法折叠牌堆上停留约 `0.35s` 后自动展开；离开、取消、目标非法或来源 revision 漂移不得继续该自动展开请求。
 - Escape 依次取消确认或瞬态交互、收起展开牌堆，再交给 CommonUI 关闭背包；取消携带时从当前视觉姿态收落回来源布局。B 始终直接关闭并立即清理所有瞬态动画、Timer、父级与实时 Retainer。
 
@@ -140,13 +140,11 @@ Hover 卡使用局部 `48px` 上抬，紧凑牌列邻居默认约 `0.18s` 完成
 & 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomBuildBackpackUI -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
-Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 ZonePile、DeleteConfirm、兼容 SpecialZone 和 Screen。不再生成 `WBP_BackpackCardView`、Preview、Rack 或 Rack Entry。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
+Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 Workspace、ZonePile、DeleteConfirm 和 Screen。不再生成 `WBP_BackpackCardView`、Preview、Rack、Rack Entry、`WBP_BackpackBattleDeckZone` 或 `WBP_WacomSpecialZoneWidget`。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
 
-## Fallback 与迁移兼容
+## C++ fallback
 
-C++ fallback 保留 `DeleteZoneHost`、`BattleDeckZoneHost`、`FluxContentDropTargetHost`、`SpecialZonesHost`、`BurdenZoneHost` 等只读迁移 Host，用于缺失正式资产时观察 Snapshot；它们不拥有拖拽、移动或销毁输入，也不属于正式 WBP 制作合同。`CardDetailLayer` 仍可由 fallback 动态填充。
-
-局部 `WBP_BackpackBattleDeckZone` 等旧 Zone 外壳可以继续作为只读 fallback 资源，但不得重新接入正式 Screen 或复制 Workspace 输入状态机。
+C++ fallback 与正式 WBP 使用完全相同的数据流：`Snapshot -> WorkspaceReconciler -> Workspace`。它只构建顶部栏、`WorkspaceHost`、详情层、销毁确认层和操作按钮，不创建隐藏的备战、通量、特殊区或负重区列表，也不保留旧 Zone Host。`OpenNativeFallbackPIEValidation` 应验证同一套 Workspace 输入、卡牌身份复用和命令提交路径，而不是迁移期只读界面。
 
 ## 验证
 

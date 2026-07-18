@@ -10,37 +10,21 @@ class UPanelWidget;
 class UTextBlock;
 class UUserWidget;
 class UWidgetTree;
-class UWacomBackpackZoneSectionWidget;
 
 struct FBackpackFallbackLayoutBuilderContext
 {
 	UUserWidget* Owner = nullptr;
 	UWidgetTree* WidgetTree = nullptr;
 
-	TSubclassOf<UWacomBackpackZoneSectionWidget> DeleteZoneSectionWidgetClass;
-	TSubclassOf<UWacomBackpackZoneSectionWidget> BattleDeckZoneSectionWidgetClass;
-	TSubclassOf<UWacomBackpackZoneSectionWidget> FluxContentZoneSectionWidgetClass;
-	TSubclassOf<UWacomBackpackZoneSectionWidget> SpecialZonesSectionWidgetClass;
-	TSubclassOf<UWacomBackpackZoneSectionWidget> BurdenZoneSectionWidgetClass;
-
 	TObjectPtr<UTextBlock>* TitleText = nullptr;
 	TObjectPtr<UTextBlock>* GoldText = nullptr;
-	TObjectPtr<UTextBlock>* BackpackTitleText = nullptr;
 	TObjectPtr<UPanelWidget>* WorkspaceHost = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteTargetHost = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteConfirmHost = nullptr;
 	TObjectPtr<UButton>* ArrangeAllButton = nullptr;
 	TObjectPtr<UButton>* ResetPilePositionsButton = nullptr;
-	TObjectPtr<UPanelWidget>* DeleteZoneHost = nullptr;
-	TObjectPtr<UPanelWidget>* BattleDeckZoneHost = nullptr;
-	TObjectPtr<UPanelWidget>* FluxContentDropTargetHost = nullptr;
-	TObjectPtr<UPanelWidget>* SpecialZonesHost = nullptr;
-	TObjectPtr<UPanelWidget>* BurdenZoneHost = nullptr;
 	TObjectPtr<UCanvasPanel>* CardDetailLayer = nullptr;
 	TObjectPtr<UButton>* CloseButton = nullptr;
-	TObjectPtr<UWacomBackpackZoneSectionWidget>* BattleDeckZoneSection = nullptr;
-	TObjectPtr<UWacomBackpackZoneSectionWidget>* FluxContentZoneSection = nullptr;
-	TObjectPtr<UWacomBackpackZoneSectionWidget>* BurdenZoneSection = nullptr;
 };
 
 /**

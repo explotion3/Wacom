@@ -1,6 +1,6 @@
 // Copyright Wacom. All Rights Reserved.
 
-#include "UI/Backpack/WacomBackpackCardPresentationController.h"
+#include "UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 
 #include "Components/CanvasPanel.h"
 #include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
@@ -37,7 +37,45 @@ namespace
 	}
 }
 
-void FWacomBackpackCardPresentationController::Reconcile(
+FWacomBackpackWorkspaceCardVisualState
+FWacomBackpackWorkspaceMotionCoordinator::BuildVisualState(
+	const UWacomBackpackWorkspaceStyle& Style,
+	bool bSelected,
+	bool bCurrent,
+	bool bReadOnly,
+	bool bValidTarget,
+	bool bRejectedTarget)
+{
+	FWacomBackpackWorkspaceCardVisualState State;
+	State.FeedbackMaterial = Style.CardFeedbackMaterial;
+	State.Opacity = bReadOnly ? 0.72f : 1.0f;
+	if (bRejectedTarget)
+	{
+		State.Tint = Style.RejectedTargetColor;
+		State.FeedbackOpacity = Style.CardStateOverlayOpacity;
+	}
+	else if (bValidTarget)
+	{
+		State.Tint = Style.ValidTargetColor;
+		State.FeedbackOpacity = Style.CardStateOverlayOpacity;
+	}
+	else if (bSelected)
+	{
+		State.Tint = Style.SelectionColor;
+		State.FeedbackOpacity = Style.CardStateOverlayOpacity;
+	}
+	return State;
+}
+
+bool FWacomBackpackWorkspaceMotionCoordinator::IsCardMoving(
+	const UWacomDeckCardWidget& Card) const
+{
+	return LocalPoseMotions.Contains(
+		TWeakObjectPtr<UWacomDeckCardWidget>(
+			const_cast<UWacomDeckCardWidget*>(&Card)));
+}
+
+void FWacomBackpackWorkspaceMotionCoordinator::Reconcile(
 	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
 	UWacomDeckCardWidget* FocusedCard,
 	const FWacomBackpackWorkspaceCarryState* Carry,
@@ -88,7 +126,7 @@ void FWacomBackpackCardPresentationController::Reconcile(
 	UpdateActiveDepth(0.0f, WorkspaceGeometry, Style);
 }
 
-void FWacomBackpackCardPresentationController::UpdatePointer(
+void FWacomBackpackWorkspaceMotionCoordinator::UpdatePointer(
 	const FGeometry& WorkspaceGeometry,
 	FVector2D InPointerLocal,
 	bool bCarrying)
@@ -99,7 +137,7 @@ void FWacomBackpackCardPresentationController::UpdatePointer(
 	bActiveCardCarrying = bCarrying;
 }
 
-void FWacomBackpackCardPresentationController::SetLocalPoseTarget(
+void FWacomBackpackWorkspaceMotionCoordinator::SetLocalPoseTarget(
 	UWacomDeckCardWidget& Card,
 	FVector2D Translation,
 	float AngleDegrees,
@@ -140,7 +178,7 @@ void FWacomBackpackCardPresentationController::SetLocalPoseTarget(
 	Motion.bSettlement = false;
 }
 
-void FWacomBackpackCardPresentationController::SnapLocalPose(
+void FWacomBackpackWorkspaceMotionCoordinator::SnapLocalPose(
 	UWacomDeckCardWidget& Card,
 	FVector2D Translation,
 	float AngleDegrees)
@@ -149,7 +187,7 @@ void FWacomBackpackCardPresentationController::SnapLocalPose(
 	Card.ApplyBackpackLocalMotionPose(Translation, AngleDegrees);
 }
 
-void FWacomBackpackCardPresentationController::BeginCarryPickup(
+void FWacomBackpackWorkspaceMotionCoordinator::BeginCarryPickup(
 	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
 	float LiftPixels,
 	float DurationSeconds,
@@ -173,7 +211,7 @@ void FWacomBackpackCardPresentationController::BeginCarryPickup(
 	}
 }
 
-void FWacomBackpackCardPresentationController::BeginSettlement(
+void FWacomBackpackWorkspaceMotionCoordinator::BeginSettlement(
 	UWacomDeckCardWidget& Card,
 	FVector2D StartLocalTranslation,
 	float StartLocalAngleDegrees,
@@ -197,7 +235,7 @@ void FWacomBackpackCardPresentationController::BeginSettlement(
 	Motion.bSettlement = true;
 }
 
-void FWacomBackpackCardPresentationController::Tick(
+void FWacomBackpackWorkspaceMotionCoordinator::Tick(
 	float DeltaTime,
 	const FGeometry& WorkspaceGeometry,
 	const UWacomBackpackWorkspaceStyle& Style,
@@ -296,21 +334,21 @@ void FWacomBackpackCardPresentationController::Tick(
 	UpdateActiveDepth(SafeDeltaTime, WorkspaceGeometry, Style);
 }
 
-bool FWacomBackpackCardPresentationController::WantsTick() const
+bool FWacomBackpackWorkspaceMotionCoordinator::WantsTick() const
 {
 	return !LocalPoseMotions.IsEmpty()
 		|| !PickupCards.IsEmpty()
 		|| (ActiveCard.IsValid() && (bDepthPointerChanged || ActiveDepthMotion.IsInMotion()));
 }
 
-void FWacomBackpackCardPresentationController::ConsumeCompletedSettlements(
+void FWacomBackpackWorkspaceMotionCoordinator::ConsumeCompletedSettlements(
 	TArray<TWeakObjectPtr<UWacomDeckCardWidget>>& OutCards)
 {
 	OutCards.Append(CompletedSettlements);
 	CompletedSettlements.Reset();
 }
 
-void FWacomBackpackCardPresentationController::Reset()
+void FWacomBackpackWorkspaceMotionCoordinator::Reset()
 {
 	for (const TPair<TWeakObjectPtr<UWacomDeckCardWidget>, FLocalPoseMotion>& Pair : LocalPoseMotions)
 	{
@@ -338,7 +376,7 @@ void FWacomBackpackCardPresentationController::Reset()
 	LastPickupOffsetPixels = 0.0f;
 }
 
-void FWacomBackpackCardPresentationController::DisableActiveCard()
+void FWacomBackpackWorkspaceMotionCoordinator::DisableActiveCard()
 {
 	if (UWacomDeckCardWidget* Previous = ActiveCard.Get())
 	{
@@ -346,7 +384,7 @@ void FWacomBackpackCardPresentationController::DisableActiveCard()
 	}
 }
 
-void FWacomBackpackCardPresentationController::UpdateActiveDepth(
+void FWacomBackpackWorkspaceMotionCoordinator::UpdateActiveDepth(
 	float DeltaTime,
 	const FGeometry& WorkspaceGeometry,
 	const UWacomBackpackWorkspaceStyle& Style)

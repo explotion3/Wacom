@@ -4,7 +4,7 @@
 
 #if WITH_AUTOMATION_TESTS
 
-#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackCardPresentationController.h"
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "Cards/CardDefinition.h"
 #include "Components/CanvasPanel.h"
@@ -63,7 +63,7 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 	TestFalse(TEXT("Backpack cards start in static redraw mode"),
 		FirstFace->GetAutomationTestViewForTest().bRealtimePresentationEnabled);
 
-	FWacomBackpackCardPresentationController Controller;
+	FWacomBackpackWorkspaceMotionCoordinator Controller;
 	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
 	Controller.Reconcile(
 		Cards,
@@ -150,7 +150,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUIBackpackCardLocalPoseMotionSpec::RunTest(const FString& Parameters)
 {
 	TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
-	FWacomBackpackCardPresentationController Controller;
+	FWacomBackpackWorkspaceMotionCoordinator Controller;
 	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
 	const FVector2D InitialScale = Card->GetRenderTransform().Scale;
 	const float InitialOpacity = Card->GetRenderOpacity();
