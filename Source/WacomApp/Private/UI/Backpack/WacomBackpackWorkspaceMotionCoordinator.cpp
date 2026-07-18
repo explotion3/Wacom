@@ -187,6 +187,13 @@ void FWacomBackpackWorkspaceMotionCoordinator::SnapLocalPose(
 	Card.ApplyBackpackLocalMotionPose(Translation, AngleDegrees);
 }
 
+void FWacomBackpackWorkspaceMotionCoordinator::StopLocalPoseMotionPreservingCurrent(
+	UWacomDeckCardWidget& Card)
+{
+	LocalPoseMotions.Remove(&Card);
+	PickupCards.Remove(&Card);
+}
+
 void FWacomBackpackWorkspaceMotionCoordinator::BeginCarryPickup(
 	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
 	float LiftPixels,

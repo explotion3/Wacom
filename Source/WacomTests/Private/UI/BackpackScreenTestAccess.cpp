@@ -601,7 +601,20 @@ bool FWacomBackpackScreenTestAccess::MarqueeWorkspacePileContents(
 	const bool bBeganMarquee = Workspace.TryBeginMarqueeFromPendingPilePress(End);
 	Workspace.InteractionModel->UpdateMarquee(End);
 	Workspace.InteractionModel->CompleteMarquee();
+	Workspace.UpdateSelectionVisualFreezeLifetime();
 	return bBeganMarquee && !Workspace.InteractionModel->IsMarqueeActive();
+}
+
+void FWacomBackpackScreenTestAccess::ClearWorkspaceSelection(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	if (!Workspace.InteractionModel)
+	{
+		return;
+	}
+	Workspace.InteractionModel->ClickBlank();
+	Workspace.UpdateSelectionVisualFreezeLifetime();
+	Workspace.RefreshInteractionPresentation();
 }
 
 bool FWacomBackpackScreenTestAccess::CommitWorkspacePileMoveWithSynchronousTargetReconcile(
@@ -649,6 +662,45 @@ bool FWacomBackpackScreenTestAccess::CommitWorkspacePileMoveWithSynchronousTarge
 	Workspace.NativeOnMouseButtonUp(FGeometry(), PointerUp);
 	Workspace.OnPileMoveCommittedNative.Remove(Handle);
 	return bReconciled;
+}
+
+FWacomBackpackPileMoveCancelProbe FWacomBackpackScreenTestAccess::CancelWorkspacePileMove(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	EZoneKind Zone,
+	FGuid OwnerInstanceId,
+	FVector2D HeaderStart,
+	FVector2D PointerEnd)
+{
+	FWacomBackpackPileMoveCancelProbe Probe;
+	UWacomBackpackZonePileWidget* TargetPile = nullptr;
+	for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile :
+		Workspace.GetRegisteredPileWidgets())
+	{
+		UWacomBackpackZonePileWidget* Pile = WeakPile.Get();
+		if (Pile && Pile->GetPileView().HasSameIdentity(Zone, OwnerInstanceId))
+		{
+			TargetPile = Pile;
+			break;
+		}
+	}
+	UCanvasPanelSlot* PileSlot = TargetPile
+		? Cast<UCanvasPanelSlot>(TargetPile->Slot)
+		: nullptr;
+	if (!TargetPile || !PileSlot)
+	{
+		return Probe;
+	}
+
+	Probe.PilePositionBefore = PileSlot->GetPosition();
+	Probe.PileZOrderBefore = PileSlot->GetZOrder();
+	Workspace.BeginPendingPilePress(*TargetPile, HeaderStart, false, true);
+	Probe.bBeganMove = Workspace.TryBeginPileMove(PointerEnd);
+	Probe.PilePositionWhileMoving = PileSlot->GetPosition();
+	Probe.PileZOrderWhileMoving = PileSlot->GetZOrder();
+	Workspace.CancelInteraction();
+	Probe.PilePositionAfterCancel = PileSlot->GetPosition();
+	Probe.PileZOrderAfterCancel = PileSlot->GetZOrder();
+	return Probe;
 }
 
 void FWacomBackpackScreenTestAccess::ReconcileWorkspacePilesForTest(

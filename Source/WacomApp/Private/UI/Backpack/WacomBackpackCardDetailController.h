@@ -17,6 +17,8 @@ public:
 	FText GetNameText() const;
 
 	bool ShowForCardWidget(UWacomDeckCardWidget* SourceWidget);
+	/** 几何或 Scene 稳定后，重新定位仍可见且来源仍有效的详情面板。 */
+	bool RepositionVisibleSource();
 	void Hide();
 	void HideIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget);
 	UWacomCardDetailPanel* EnsurePanel();

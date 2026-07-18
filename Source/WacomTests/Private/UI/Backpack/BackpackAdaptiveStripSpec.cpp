@@ -8,6 +8,7 @@
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceLayoutSolver.h"
 #include "Cards/CardDefinition.h"
 #include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
@@ -59,16 +60,29 @@ FExpectedFocusWindowMetrics ResolveExpectedMetrics(
 	return Result;
 }
 
-int32 ResolveExpectedWindowStart(int32 CardCount, int32 WindowCount, int32 FocusIndex)
+int32 ResolveExpectedWindowStart(
+	int32 CardCount,
+	int32 WindowCount,
+	int32 FocusIndex,
+	int32 PreviousWindowStartIndex = INDEX_NONE)
 {
+	const int32 MaximumStart = FMath::Max(0, CardCount - WindowCount);
+	int32 WindowStart = PreviousWindowStartIndex == INDEX_NONE
+		? FMath::Max(0, (CardCount - WindowCount) / 2)
+		: FMath::Clamp(PreviousWindowStartIndex, 0, MaximumStart);
 	if (FocusIndex == INDEX_NONE)
 	{
-		return FMath::Max(0, (CardCount - WindowCount) / 2);
+		return WindowStart;
 	}
-	return FMath::Clamp(
-		FocusIndex - FMath::Max(0, (WindowCount - 1) / 2),
-		0,
-		FMath::Max(0, CardCount - WindowCount));
+	if (FocusIndex < WindowStart)
+	{
+		WindowStart = FocusIndex;
+	}
+	else if (FocusIndex >= WindowStart + WindowCount)
+	{
+		WindowStart = FocusIndex - WindowCount + 1;
+	}
+	return FMath::Clamp(WindowStart, 0, MaximumStart);
 }
 
 bool BandsAreHorizontallyContinuous(TConstArrayView<FSlateRect> Bands)
@@ -169,6 +183,7 @@ bool FWacomUIBackpackFocusWindowStripLayoutSpec::RunTest(const FString& Paramete
 					FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
 						CardCount,
 						FocusIndex,
+						Initial.FocusWindowStartIndex,
 						Initial.FocusCorridorRect,
 						Style->CardRenderSize,
 						Initial.Cards,
@@ -183,7 +198,10 @@ bool FWacomUIBackpackFocusWindowStripLayoutSpec::RunTest(const FString& Paramete
 				TestEqual(TEXT("Window follows the focus and clamps at both edges"),
 					Focused.WindowStartIndex,
 					ResolveExpectedWindowStart(
-						CardCount, Expected.WindowCardCount, FocusIndex));
+						CardCount,
+						Expected.WindowCardCount,
+						FocusIndex,
+						Initial.FocusWindowStartIndex));
 				TestTrue(TEXT("Focused visible bands remain continuous"),
 					BandsAreHorizontallyContinuous(Focused.HitBands));
 				int32 HighestRank = TNumericLimits<int32>::Lowest();
@@ -228,6 +246,39 @@ bool FWacomUIBackpackFocusWindowStripLayoutSpec::RunTest(const FString& Paramete
 		TwentyOneAt1280.FocusWindowCardCount, 3);
 	TestEqual(TEXT("1920-wide workspace resolves five full cards for 21-card pile"),
 		TwentyOneAt1920.FocusWindowCardCount, 5);
+
+	TArray<FWacomBackpackResolvedLayout> StableBases;
+	StableBases.SetNum(15);
+	const FSlateRect StableCorridor(20.0f, 100.0f, 1260.0f, 520.0f);
+	const FWacomBackpackFocusWindowStripLayout Centered =
+		FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
+			15, INDEX_NONE, INDEX_NONE, StableCorridor, Style->CardRenderSize,
+			StableBases, 5, 24.0f, 56.0f, 16.0f);
+	const FWacomBackpackFocusWindowStripLayout FocusStillInside =
+		FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
+			15, Centered.WindowStartIndex + 1, Centered.WindowStartIndex,
+			StableCorridor, Style->CardRenderSize, StableBases,
+			5, 24.0f, 56.0f, 16.0f);
+	TestEqual(TEXT("Focus inside the previous full window does not slide it"),
+		FocusStillInside.WindowStartIndex, Centered.WindowStartIndex);
+	const int32 LeftOutsideFocus = FMath::Max(0, Centered.WindowStartIndex - 1);
+	const FWacomBackpackFocusWindowStripLayout MinimalLeftSlide =
+		FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
+			15, LeftOutsideFocus, Centered.WindowStartIndex,
+			StableCorridor, Style->CardRenderSize, StableBases,
+			5, 24.0f, 56.0f, 16.0f);
+	TestEqual(TEXT("Focus left of the window only becomes its left edge"),
+		MinimalLeftSlide.WindowStartIndex, LeftOutsideFocus);
+	const int32 RightOutsideFocus = FMath::Min(
+		14, MinimalLeftSlide.WindowStartIndex + MinimalLeftSlide.WindowCardCount);
+	const FWacomBackpackFocusWindowStripLayout MinimalRightSlide =
+		FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
+			15, RightOutsideFocus, MinimalLeftSlide.WindowStartIndex,
+			StableCorridor, Style->CardRenderSize, StableBases,
+			5, 24.0f, 56.0f, 16.0f);
+	TestEqual(TEXT("Focus right of the window only becomes its right edge"),
+		MinimalRightSlide.WindowStartIndex,
+		RightOutsideFocus - MinimalRightSlide.WindowCardCount + 1);
 	return true;
 }
 
@@ -347,15 +398,32 @@ bool FWacomUIBackpackFocusWindowStripInteractionSpec::RunTest(const FString& Par
 	TestNull(TEXT("Exit clears the browse detail source"), LastBroadcastCard);
 
 	const FSlateRect& LeftEdgeBand = Initial.FocusHitBands[0];
+	const FVector2D LeftCardCenterBeforeActivation = Initial.Cards[0].CardCenter
+		+ OwnedCards[0]->GetBackpackLocalMotionTranslation();
 	FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
 		*Workspace,
 		FVector2D(
 			(LeftEdgeBand.Left + LeftEdgeBand.Right) * 0.5f,
 			(LeftEdgeBand.Top + LeftEdgeBand.Bottom) * 0.5f));
+	const FVector2D LeftCardCenterImmediatelyAfterActivation = Initial.Cards[0].CardCenter
+		+ OwnedCards[0]->GetBackpackLocalMotionTranslation();
+	TestTrue(TEXT("Focus activation keeps the pointed card at its current visual center"),
+		LeftCardCenterImmediatelyAfterActivation.Equals(
+			LeftCardCenterBeforeActivation, 0.1f));
+	TestEqual(TEXT("Edge focus records the minimally shifted window start"),
+		Workspace->GetAutomationTestView().ExpandedPileWindowStartIndex, 0);
+	Workspace->SetSimplifiedMotion(true);
+	TestTrue(TEXT("Simplified Motion clears expanded-focus spatial lift immediately"),
+		OwnedCards[0]->GetBackpackLocalMotionTranslation().Equals(
+			FVector2D::ZeroVector, 0.1f));
+	TestTrue(TEXT("Simplified Motion clears expanded-focus angle compensation"),
+		FMath::IsNearlyZero(OwnedCards[0]->GetBackpackLocalMotionAngle(), 0.1f));
+	Workspace->SetSimplifiedMotion(false);
 	const FWacomBackpackFocusWindowStripLayout FocusZeroLayout =
 		FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
 			Initial.Cards.Num(),
 			0,
+			Initial.FocusWindowStartIndex,
 			Initial.FocusCorridorRect,
 			Style->CardRenderSize,
 			Initial.Cards,
@@ -375,25 +443,76 @@ bool FWacomUIBackpackFocusWindowStripInteractionSpec::RunTest(const FString& Par
 	TestTrue(TEXT("Detail panel anchor uses the final expanded card position"),
 		DetailAnchorCenter.Equals(ExpectedDetailAnchorCenter, 0.1f));
 	FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(*Workspace, 0.06f);
-	const FVector2D CardOneVisualCenter = Initial.Cards[1].CardCenter
-		+ OwnedCards[1]->GetBackpackLocalMotionTranslation();
-	const FVector2D CardTwoVisualCenter = Initial.Cards[2].CardCenter
-		+ OwnedCards[2]->GetBackpackLocalMotionTranslation();
-	const float VisualOverlapLeft = FMath::Max(
-		CardOneVisualCenter.X - Style->CardRenderSize.X * 0.5f,
-		CardTwoVisualCenter.X - Style->CardRenderSize.X * 0.5f);
-	const float VisualOverlapRight = FMath::Min(
-		CardOneVisualCenter.X + Style->CardRenderSize.X * 0.5f,
-		CardTwoVisualCenter.X + Style->CardRenderSize.X * 0.5f);
+	TArray<FVector2D> VisualCenters;
+	TArray<FSlateRect> VisualRects;
+	VisualCenters.Reserve(OwnedCards.Num());
+	VisualRects.Reserve(OwnedCards.Num());
+	for (int32 CardIndex = 0; CardIndex < OwnedCards.Num(); ++CardIndex)
+	{
+		const FVector2D VisualCenter = Initial.Cards[CardIndex].CardCenter
+			+ OwnedCards[CardIndex]->GetBackpackLocalMotionTranslation();
+		VisualCenters.Add(VisualCenter);
+		VisualRects.Emplace(
+			VisualCenter.X - Style->CardRenderSize.X * 0.5f,
+			VisualCenter.Y - Style->CardRenderSize.Y * 0.5f,
+			VisualCenter.X + Style->CardRenderSize.X * 0.5f,
+			VisualCenter.Y + Style->CardRenderSize.Y * 0.5f);
+	}
+	FVector2D VisualOverlapPoint = FVector2D::ZeroVector;
+	UWacomDeckCardWidget* ExpectedTopmostCard = nullptr;
+	int32 ExpectedTopmostZOrder = MIN_int32;
+	int32 OverlappingCardCount = 0;
+	for (int32 LeftIndex = 0; LeftIndex < VisualRects.Num()
+		&& OverlappingCardCount < 2; ++LeftIndex)
+	{
+		for (int32 RightIndex = LeftIndex + 1; RightIndex < VisualRects.Num(); ++RightIndex)
+		{
+			const FSlateRect& LeftRect = VisualRects[LeftIndex];
+			const FSlateRect& RightRect = VisualRects[RightIndex];
+			const float IntersectionLeft = FMath::Max(LeftRect.Left, RightRect.Left);
+			const float IntersectionRight = FMath::Min(LeftRect.Right, RightRect.Right);
+			const float IntersectionTop = FMath::Max(LeftRect.Top, RightRect.Top);
+			const float IntersectionBottom = FMath::Min(LeftRect.Bottom, RightRect.Bottom);
+			if (IntersectionRight <= IntersectionLeft || IntersectionBottom <= IntersectionTop)
+			{
+				continue;
+			}
+			VisualOverlapPoint = FVector2D(
+				(IntersectionLeft + IntersectionRight) * 0.5f,
+				(IntersectionTop + IntersectionBottom) * 0.5f);
+			ExpectedTopmostCard = nullptr;
+			ExpectedTopmostZOrder = MIN_int32;
+			OverlappingCardCount = 0;
+			for (int32 CandidateIndex = 0; CandidateIndex < VisualRects.Num(); ++CandidateIndex)
+			{
+				if (!VisualRects[CandidateIndex].ContainsPoint(VisualOverlapPoint))
+				{
+					continue;
+				}
+				++OverlappingCardCount;
+				const UCanvasPanelSlot* CandidateSlot = Cast<UCanvasPanelSlot>(
+					OwnedCards[CandidateIndex]->Slot);
+				const int32 CandidateZOrder = CandidateSlot
+					? CandidateSlot->GetZOrder()
+					: MIN_int32;
+				if (CandidateZOrder >= ExpectedTopmostZOrder)
+				{
+					ExpectedTopmostZOrder = CandidateZOrder;
+					ExpectedTopmostCard = OwnedCards[CandidateIndex].Get();
+				}
+			}
+			if (OverlappingCardCount >= 2)
+			{
+				break;
+			}
+		}
+	}
 	TestTrue(TEXT("Reflow fixture has a visible overlap between moving cards"),
-		VisualOverlapRight > VisualOverlapLeft);
-	const FVector2D VisualOverlapPoint(
-		(VisualOverlapLeft + VisualOverlapRight) * 0.5f,
-		CardTwoVisualCenter.Y);
+		OverlappingCardCount >= 2);
 	FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
 		*Workspace, VisualOverlapPoint);
 	TestEqual(TEXT("Reflow hit testing follows the visually topmost card"),
-		LastBroadcastCard, OwnedCards[2].Get());
+		LastBroadcastCard, ExpectedTopmostCard);
 	const FVector2D FirstVisualCenterBeforeFocus = Initial.Cards[0].CardCenter
 		+ OwnedCards[0]->GetBackpackLocalMotionTranslation();
 	FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(

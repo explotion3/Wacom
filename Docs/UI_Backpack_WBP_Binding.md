@@ -94,21 +94,21 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 - 同时只展开一个牌堆。展开卡保持 `296×420` Battle 主体逻辑尺寸、卡面 `1.0` 固定缩放和零旋转，不使用滚动或裁切；布局由“左压缩堆 + 中央完整窗口 + 右压缩堆”组成，空间不足时减少完整窗口卡数并压缩外围露出，绝不缩放卡面。
 - 展开的备战区、特殊区和负重区使用 `FocusWindowStrip`：中央完整窗口按卡数和安全宽度动态取 `1–5` 张，完整卡默认间隔 `24px`；外围卡期望露出 `56px`，最低保持 `16px`，并藏在中央窗口首尾卡下方。首次展开使用牌列中部窗口，折叠牌堆保持原固定布局。
 - 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。`FocusWindowMaximumCards` 控制完整窗口上限，`FocusWindowFullGapPixels` 控制完整卡间隔，`FocusWindowCompressedExposurePixels` 控制外围期望露出，`FocusWindowMinimumExposurePixels` 是求解器缩减窗口前必须保护的最小露出。展开牌堆与多卡携带只消费这一套参数。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按 C++ 基线创建。
-- 展开布局按当前卡数和工作台几何预先计算稳定 `FrameRect` / 焦点走廊；焦点切换不能推动标题、牌框、避障矩形或持久化锚点。目标条带只服务布局合同；运行时浏览必须按当前插值后的视觉卡身与 Canvas ZOrder 命中，重叠位置选择实际显示在最上层的卡，纵向严格等于当前卡身，完整卡之间的真实空隙不命中卡牌。展开牌堆卡必须设为 pointer passthrough，由 Workspace 的同一个视觉命中解析器同时决定详情、Fake3D 和左键拾取；禁止卡牌自身 Slate 几何再形成第二套点击真相。详情面板使用 Workspace 给出的最终焦点卡视觉矩形，经 Workspace → Absolute → `CardDetailLayer` 四角转换后定位；不得读取外层卡槽的旧 `CachedGeometry`，也不得在 0.18 秒让位过程中逐帧抖动。默认 `8px` 横向迟滞只在没有其他实际卡身命中时保留当前焦点，不能盖过视觉上层邻卡；标题拖柄始终拥有最高输入优先级。即使上抬卡或 `SettlementLayer` 卡暂时覆盖标题，Workspace 也必须按标题矩形把事件重新路由到牌堆，不能误开始新一轮携带。
+- 展开布局按当前卡数和工作台几何预先计算稳定 `FrameRect` / 焦点走廊；焦点窗口以上一次窗口起点做最小滑动：焦点仍在窗口内时不移动窗口，越过左/右边界时只滑到把该卡纳入对应边缘。切换前捕获焦点卡当前视觉中心，并以局部姿态补偿保持该卡连续留在鼠标下；邻卡从当前视觉姿态重定向。焦点切换不能推动标题、牌框、避障矩形或持久化锚点。目标条带只服务布局合同；运行时浏览必须按当前插值后的视觉卡身与 Canvas ZOrder 命中，重叠位置选择实际显示在最上层的卡，纵向严格等于当前卡身，完整卡之间的真实空隙不命中卡牌。展开牌堆卡必须设为 pointer passthrough，由 Workspace 的同一个视觉命中解析器同时决定详情、Fake3D 和左键拾取；禁止卡牌自身 Slate 几何再形成第二套点击真相。详情面板使用 Workspace 给出的焦点卡视觉矩形，经 Workspace → Absolute → `CardDetailLayer` 四角转换后定位；同一来源可见期间，稳定几何或 Scene Reconcile 变化必须事件驱动地重新定位，但不得逐帧跟随。默认 `8px` 横向迟滞只在没有其他实际卡身命中时保留当前焦点，不能盖过视觉上层邻卡；标题拖柄始终拥有最高输入优先级。即使上抬卡或 `SettlementLayer` 卡暂时覆盖标题，Workspace 也必须按标题矩形把事件重新路由到牌堆，不能误开始新一轮携带。
 - 焦点卡上抬并置顶，不缩放、不改卡面透明度；邻居仅水平移动外层局部姿态。鼠标离开实际卡身后默认等待 `0.12s`，随后只清除上抬、详情和实时卡面，最后一次三段式窗口冻结到该牌堆收起或切换，不返回首次中央窗口。
 - 投影卡、特殊区主卡和负重卡可以进入焦点牌列、启用详情浏览和上抬反馈，但继续保持各自透明度、角标和只读语义，不能选择、框选或携带。
 - 牌堆释放吸附到默认 `16px` 网格或邻近边缘；主体允许部分重叠，但标题拖柄不能相互覆盖，且始终夹紧在 Workspace 内。
 - 普通动效只插值位置和角度；展开/收起默认 `0.18s`，吸附默认 `0.12s`。禁止卡面淡入和动态缩放。
 - Workspace 只能拥有一个按需帧 `ActiveTimer`。Carry、PileMove、携带目标悬停展开、焦点退出、局部姿态、Settlement 与展开/收起基础 Canvas 过渡全部并入该 Timer；每帧只更新指针锚点和活动 Motion Records，不能调用全量表现刷新、Snapshot 刷新或 Scene Reconcile。收起完成由实际布局过渡全部结束触发，不使用与 Style 时长平行的回调 Timer。几何稳定采样和下一帧 Retainer 补绘仍是独立一次性任务。这项为 C++ 性能合同，不需要新增 WBP 节点或改写 `DA_BackpackWorkspaceStyle`。
 - 展开/收起过渡使用一次捕获的固定起点和最终目标；同一 Snapshot 或稳定几何刷新重复提交相同目标时必须保留当前 elapsed transition，不得取消过渡并把整组卡牌瞬移到水平终点。收起时每张需要移动的卡必须直接前往最终折叠位置，禁止先聚到标题中心或其它共享中间点再二次排布；已处于最终位置的锚定卡不创建无意义过渡。
-- `Simplified` UI Motion 下展开、收起和吸附直接到达最终状态。
+- `Simplified` UI Motion 下展开、收起和吸附直接到达最终状态；通量 Hover、展开焦点和携带当前卡均不得产生空间上抬、角度补偿或视觉弹簧。运行中切换到 Simplified 时必须立即清除已有局部偏移并同步命中中心。
 
 ## 输入与事务合同
 
 Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / Suspended`。
 
-- 选择只属于一个来源区。通量背景框选只命中通量卡；折叠或展开牌堆的内容背景框选只命中该牌堆的可移动实体卡。折叠状态禁止卡牌本体直接点击，但不能因此从框选命中表移除实体卡；投影卡、特殊区主卡预览和负重卡始终只读。切换来源会清除旧选择。
-- `CardPress`、携带、整堆移动和 Suspended 会锁定或清除展开牌堆浏览焦点。框选开始时冻结当前实际卡位及对应命中中心，过程中不再因指针穿过卡牌触发让位；完成框选后才恢复中性紧凑牌列。
+- 选择只属于一个来源区。Interaction Model 只接收按物理 `InstanceId` 去重后的可移动实体卡；同一卡的投影、特殊区主卡预览和负重卡仅进入浏览表现，不得进入选择/携带命中表。通量背景框选只命中通量卡；折叠或展开牌堆的内容背景框选只命中该牌堆的可移动实体卡。折叠状态禁止卡牌本体直接点击，但不能因此从框选命中表移除实体卡；切换来源会清除旧选择。
+- `CardPress`、携带、整堆移动和 Suspended 会锁定或清除展开牌堆浏览焦点。框选或 Ctrl 选择开始时捕获当前实际卡位、角度和 ZOrder，停止未完成的局部重排并让 Interaction Model 使用这份视觉快照；冻结保持到选择清空、开始携带、牌堆收起或来源区切换，退出时从当前视觉姿态连续返回最后窗口，不得瞬移。
 - 普通左键按下任意可移动卡牌时，Interaction Model 必须在同一输入帧确定选择集合并进入 `Carry`；不得先清除浏览焦点后等待后续 `PointerMove`。对应第一次左键松开只消费起手释放保护并保持携带。Ctrl 点击继续作为多选编辑手势，不强制立即起手。
 - 当前框选仍使用“卡牌中心进入框选矩形”作为命中规则；接触即选属于后续体验优化。
 - 空白 Workspace 是通量投放目标：通量卡只更新自由布局，其它实体卡通过现有原子移动进入通量区并保存释放位置。
@@ -116,7 +116,7 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 - 成功释放后，仍位于携带视觉分支的卡牌必须进入显式 pending visual handoff。Interaction Model 已移除卡牌但目标 Snapshot 尚未 reconcile 的窗口内，任何 Presentation 刷新、ActiveTimer 或 `SyncCarryLayer()` 都不得恢复来源 A 的基础布局。跨物理区提交虽然会改变正式 ViewKey 的 `PhysicalZone`，但 Reconciler 必须按 `InstanceId` 迁移同一个受保护实体 Widget，不能销毁 A 实例并创建 B 实例。目标 Scene 到达后把同一 Widget 重挂到 `SettlementLayer`：外层直接采用目标 B 的 Canvas 布局，`CardMotionRoot` 从捕获的实际释放姿态形成局部偏移并在默认 `0.18s` 内归零，因此视觉路径是“释放点 → B”，绝不经过来源 A。Carry/Settlement 权威实例在 Scene 重绑时必须保留现有局部姿态和 Retainer 捕获面；相同卡定义、相同移动开关或相同 retained-rendering 模式不得重复提交卡面数据或重建捕获状态，避免释放瞬间出现一帧空白。部分释放只收落已提交卡，其余卡继续携带并平滑重排；原子拒绝不启动收落。
 - Scene Builder 一次消费 Snapshot、Workspace State、精简 Carry 摘要、Style 和几何，输出顺序对齐的 Card Entries / Layouts、Pile Entries、展开边界与空状态；不得在 Card apply 阶段再次扫描全部牌堆。Visual Registry 的现有实例搜索覆盖 `StaticCardLayer`、`CarryLayer`、`CarryActiveLayer` 和 `SettlementLayer`。完整 ViewKey 相同的卡只能保留一个 Widget；若旧刷新已同时留下静态副本和 Carry/Settlement 权威实例，优先保留瞬态层中的原 Widget并立即移除静态副本，避免再次框选时出现不可交互残影。
 - 携带在合法折叠牌堆上停留约 `0.35s` 后自动展开；离开、取消、目标非法或来源 revision 漂移不得继续该自动展开请求。
-- Escape 依次取消确认或瞬态交互、收起展开牌堆，再交给 CommonUI 关闭背包；取消携带时从当前视觉姿态收落回来源布局。B 始终直接关闭并立即清理所有瞬态动画、Timer、父级与实时 Retainer。
+- Escape 依次取消确认或瞬态交互、收起展开牌堆，再交给 CommonUI 关闭背包；取消携带时从当前视觉姿态收落回来源布局。整堆拖动开始时必须快照牌框 Canvas 位置与 ZOrder，取消时同时恢复牌框和所属卡牌，只有成功释放才清除快照并提交 Workspace State Store，保证 A/B 视觉与状态原子一致。B 始终直接关闭并立即清理所有瞬态动画、Timer、父级与实时 Retainer。
 
 ## Retainer 与卡面
 

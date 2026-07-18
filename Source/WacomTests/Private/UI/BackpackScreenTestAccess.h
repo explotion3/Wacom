@@ -33,6 +33,17 @@ struct FWacomBackpackPickupPointerSequenceProbe
 	int32 FirstRightReleaseAfterMissedPickupUpCount = 0;
 };
 
+struct FWacomBackpackPileMoveCancelProbe
+{
+	bool bBeganMove = false;
+	FVector2D PilePositionBefore = FVector2D::ZeroVector;
+	FVector2D PilePositionWhileMoving = FVector2D::ZeroVector;
+	FVector2D PilePositionAfterCancel = FVector2D::ZeroVector;
+	int32 PileZOrderBefore = 0;
+	int32 PileZOrderWhileMoving = 0;
+	int32 PileZOrderAfterCancel = 0;
+};
+
 struct FWacomBackpackScreenTestAccess
 {
 	static UWacomBackpackScreen* Create(UObject* Outer, URunSession* RunSession);
@@ -101,6 +112,8 @@ struct FWacomBackpackScreenTestAccess
 		UWacomBackpackWorkspaceWidget& Workspace,
 		EZoneKind Zone,
 		FGuid OwnerInstanceId = FGuid());
+	static void ClearWorkspaceSelection(
+		UWacomBackpackWorkspaceWidget& Workspace);
 	static bool CommitWorkspacePileMoveWithSynchronousTargetReconcile(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		UWacomDeckCardWidget& CardWidget,
@@ -108,6 +121,12 @@ struct FWacomBackpackScreenTestAccess
 		FVector2D HeaderStart,
 		FVector2D PointerEnd,
 		FVector2D TargetCardCenter);
+	static FWacomBackpackPileMoveCancelProbe CancelWorkspacePileMove(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId,
+		FVector2D HeaderStart,
+		FVector2D PointerEnd);
 	static void ReconcileWorkspacePilesForTest(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		TConstArrayView<FWacomBackpackZonePileView> Views,

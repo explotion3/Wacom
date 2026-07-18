@@ -89,7 +89,7 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 背包外层 Canvas 位置是 Scene 基础布局，牌堆与多卡携带基础姿态统一为水平零旋转；`WBP_WacomDeckCardWidget.CardMotionRoot` 只叠加局部 Translation / Angle。成功释放先捕获当前视觉姿态，目标 Scene 到达后把同一 Widget 放到目标 B 的 Canvas 布局，再把视觉差值作为 `CardMotionRoot` 局部偏移 ease-out 到零；中途 Reconcile 或目标更新只能从当前视觉姿态重定向，禁止重新使用来源 A。该瞬态层交接必须保留原 Widget 的 Retainer 捕获面与局部姿态；等价 Scene 绑定不得重复提交卡面数据、移动开关或 retained-rendering 模式，避免材质捕获重新建立时产生短暂空帧。背包的逻辑鼠标位置与视觉弹簧位置必须分离，规则判定始终使用无延迟指针。
 
-展开牌堆和多卡携带共用 `FocusWindowStrip` 纯布局合同，而不是复制 Godot 的每帧重排或逐卡 Tween：`296×420` 卡面保持固定尺寸和零旋转，中央完整窗口按数量与安全宽度动态取 `1–5` 张，完整卡默认间隔 `24px`；左右外围卡期望露出 `56px`、最低 `16px`，并压在窗口首尾卡下方。牌框按卡数与当前几何预留稳定走廊，焦点切换只重定向外层姿态。浏览命中必须按卡牌当前视觉姿态与 Canvas ZOrder 求解，不能提前使用 `0.18s` 重排动画的终点条带：重叠位置选择视觉最上层卡，纵向严格贴合当前卡身，完整卡之间的真实空隙不伪造卡牌命中，标题拖柄拥有最高输入优先级。展开牌堆卡自身不接收 Slate 指针；详情、Fake3D 和拾取统一由 Workspace 视觉命中解析器驱动，保证同一点始终属于同一张卡。Fake3D 的卡牌中心必须包含 `CardMotionRoot` 局部位移，与详情焦点使用同一视觉位置；详情面板则使用最终焦点姿态的稳定视觉矩形，并通过四角几何转换定位到详情层，避免读取旧卡槽或跟随让位动画抖动。框选冻结当时的实际卡位与命中中心；鼠标离开只取消活动焦点，最后窗口保持冻结。多卡携带以当前滚轮卡为窗口焦点并锚定鼠标，普通 PointerMove 仍只平移 `CarryRoot`，不重算窗口。
+展开牌堆和多卡携带共用 `FocusWindowStrip` 纯布局合同，而不是复制 Godot 的每帧重排或逐卡 Tween：`296×420` 卡面保持固定尺寸和零旋转，中央完整窗口按数量与安全宽度动态取 `1–5` 张，完整卡默认间隔 `24px`；左右外围卡期望露出 `56px`、最低 `16px`，并压在窗口首尾卡下方。窗口以上一次起点做最小滑动，焦点仍在窗口内时不移动，越界时只将它纳入相邻边缘；切换前捕获焦点卡当前视觉中心并用局部姿态补偿，保证焦点卡连续留在鼠标下，邻卡从当前姿态重定向。牌框按卡数与当前几何预留稳定走廊。浏览命中必须按卡牌当前视觉姿态与 Canvas ZOrder 求解，不能提前使用 `0.18s` 重排动画的终点条带：重叠位置选择视觉最上层卡，纵向严格贴合当前卡身，完整卡之间的真实空隙不伪造卡牌命中，标题拖柄拥有最高输入优先级。展开牌堆卡自身不接收 Slate 指针；详情、Fake3D 和拾取统一由 Workspace 视觉命中解析器驱动，保证同一点始终属于同一张卡。Fake3D 的卡牌中心必须包含 `CardMotionRoot` 局部位移，与详情焦点使用同一视觉位置；详情面板使用同一视觉矩形，并在稳定几何或 Scene Reconcile 变化时事件驱动地重新定位，不逐帧跟随。框选或 Ctrl 选择会停止相关局部运动并冻结当时的实际中心、角度与 ZOrder，直到选择生命周期结束；鼠标离开只取消活动焦点，最后窗口保持冻结。多卡携带以当前滚轮卡为窗口焦点并锚定鼠标，普通 PointerMove 仍只平移 `CarryRoot`，不重算窗口。
 
 背包牌列与运动制作参数由 `DA_BackpackWorkspaceStyle` 统一拥有，`WBP_BackpackScreen` 只通过普通资产引用消费，避免 Widget Blueprint 根详情内联 UObject。`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 同时驱动展开浏览与多卡携带；调整一次即影响两条表现路径。普通左键按下可移动卡牌时必须在同一输入帧迁入 Carry 表现，不得把首次视觉启动推迟到下一次 PointerMove。
 
@@ -97,7 +97,7 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 `SettlementLayer` 在收落完成前继续拥有原卡牌 Widget，并且必须加入 Scene Reconciler 的现有实例搜索集合。Reconciler 按完整 ViewKey 去重：瞬态层中的权威 Widget 优先于静态副本，从而保证“框选—携带—放下—再次框选”不会产生重复卡面。
 
-浏览焦点使用完整显示身份与实际 Widget 引用，允许投影卡、特殊区主卡和负重卡共享详情与动效，同时保留只读规则。焦点卡是唯一实时卡面；邻居只移动缓存后的外层姿态。多卡携带起手时默认最右释放卡保持平放；一旦滚轮发生过有效切换，之后滚轮选中的任意当前卡（含重新切回默认最右卡）都上抬并获得最高 ZOrder。指针热路径始终只更新 `CarryRoot`，不能随卡数线性增加焦点求解或 Retainer 重绘。
+浏览焦点使用完整显示身份与实际 Widget 引用，允许投影卡、特殊区主卡和负重卡共享详情与动效，同时保留只读规则；Interaction Model 则只接收按物理 `InstanceId` 去重后的可移动实体身份，不能让同 ID 投影覆盖实体来源。焦点卡是唯一实时卡面；邻居只移动缓存后的外层姿态。多卡携带起手时默认最右释放卡保持平放；一旦滚轮发生过有效切换，之后滚轮选中的任意当前卡（含重新切回默认最右卡）都上抬并获得最高 ZOrder。`Simplified Motion` 下普通 Hover、展开焦点与携带当前卡都不叠加空间上抬、角度补偿或视觉弹簧，模式切换必须清除既有偏移。指针热路径始终只更新 `CarryRoot`，不能随卡数线性增加焦点求解或 Retainer 重绘。
 
 ## §4 目标管线
 

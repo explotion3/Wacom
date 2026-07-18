@@ -95,7 +95,7 @@ Run / Backpack / Shop / RunEvent 的规则真相仍在 [WacomRun.md](./WacomRun.
 
 ### Backpack Workspace 输入与事务流
 
-正式结构是一个填满 GameMenu 的 `UWacomBackpackWorkspaceWidget`。通量区就是自由工作台；备战区、特殊区和非空负重区由 Scene Builder 一次投影为工作台内嵌牌堆，同时只展开一个。旧右侧区域栏与缩略 Preview 运行时链路、类和 WBP 已删除。卡牌按 `InstanceId + OwnerInstanceId + PhysicalZone + Role` reconcile；折叠与展开都持有全部真实卡面。BattleDeck projection 只读且不进入选择，SpecialZone 主卡作为正常不透明的只读第一张身份卡，负重卡保持锁定。
+正式结构是一个填满 GameMenu 的 `UWacomBackpackWorkspaceWidget`。通量区就是自由工作台；备战区、特殊区和非空负重区由 Scene Builder 一次投影为工作台内嵌牌堆，同时只展开一个。旧右侧区域栏与缩略 Preview 运行时链路、类和 WBP 已删除。视觉实例按 `InstanceId + OwnerInstanceId + PhysicalZone + Role` reconcile；Interaction Model 只接收按物理 `InstanceId` 去重后的可移动实体，BattleDeck projection、SpecialZone 主卡预览和负重卡只参与浏览，不能覆盖同 ID 实体的选择来源。折叠与展开都持有全部真实卡面。
 
 ```text
 Run Snapshot / revision
@@ -108,7 +108,7 @@ Run Snapshot / revision
   -> one notification -> reconcile
 ```
 
-Screen 持有输入租约和纯 interaction model；Workspace 用互斥的 `Idle / CardPress / Marquee / Carry / PileMove / Suspended` 统一处理单来源框选、拖动阈值、滚轮、按键、标题拖堆和鼠标捕获；DeckCard 只发指针意图，不创建独立 `UDragDropOperation`。牌堆位置、ZOrder、单一展开项和通量自由布局保存在 GameInstance Workspace State Store：同一 Run 重开保留，新 Run 清空，不进入 SaveGame。普通牌堆只允许标题拖动，释放按 16px 网格/边缘吸附并保证标题不重叠；通量整理避让牌堆、固定负重区和销毁区。折叠使用固定 `296×420` 卡牌、零旋转和 10–24px 水平露出；展开复用同一批 Widget，以 `FocusWindowStrip` 形成左右压缩堆和动态 `1–5` 张中央完整窗口，默认完整间隔 `24px`、外围期望露出 `56px`、最低露出 `16px`，不滚动、不裁切、不缩放卡面。Full Motion 只动画位置/角度，并以固定起点插值到最终目标；展开牌堆卡设为 pointer passthrough，浏览详情、Fake3D 与左键拾取统一由 Workspace 按当前视觉姿态和 Canvas ZOrder 解析，不能提前使用动画终点或卡牌旧 Slate 几何命中。稳定几何或等价 Snapshot 重复提交相同目标时保留进行中的 transition，禁止取消后整组瞬移。收起时每张卡直接过渡到各自的最终折叠槽位，不允许先汇聚到标题中心。Simplified 立即完成；Hover 只上抬和置顶，不缩放或改透明度，离开后冻结最后窗口直到牌堆收起。携带在合法折叠目标停留约 0.35s 后自动展开，失败保持完整携带，不产生部分提交。
+Screen 持有输入租约和纯 interaction model；Workspace 用互斥的 `Idle / CardPress / Marquee / Carry / PileMove / Suspended` 统一处理单来源框选、拖动阈值、滚轮、按键、标题拖堆和鼠标捕获；DeckCard 只发指针意图，不创建独立 `UDragDropOperation`。牌堆位置、ZOrder、单一展开项和通量自由布局保存在 GameInstance Workspace State Store：同一 Run 重开保留，新 Run 清空，不进入 SaveGame。普通牌堆只允许标题拖动，释放按 16px 网格/边缘吸附并保证标题不重叠；开始拖堆会快照牌框位置与 ZOrder，取消同时恢复牌框和卡牌，成功才提交 Store。通量整理避让牌堆、固定负重区和销毁区。折叠使用固定 `296×420` 卡牌、零旋转和 10–24px 水平露出；展开复用同一批 Widget，以 `FocusWindowStrip` 形成左右压缩堆和动态 `1–5` 张中央完整窗口，默认完整间隔 `24px`、外围期望露出 `56px`、最低露出 `16px`，不滚动、不裁切、不缩放卡面。焦点窗口以上次起点做最小滑动，焦点卡用当前视觉中心补偿留在鼠标下；展开牌堆卡设为 pointer passthrough，浏览详情、Fake3D 与左键拾取统一由 Workspace 按当前视觉姿态和 Canvas ZOrder 解析，不能提前使用动画终点或卡牌旧 Slate 几何命中。框选与 Ctrl 选择冻结屏幕所见中心、角度和 ZOrder，直到选择生命周期结束。稳定几何或等价 Snapshot 重复提交相同目标时保留进行中的 transition，禁止取消后整组瞬移。收起时每张卡直接过渡到各自的最终折叠槽位，不允许先汇聚到标题中心。Simplified 立即完成且不产生 Hover/焦点/携带空间上抬、角度补偿或视觉弹簧；离开后冻结最后窗口直到牌堆收起。携带在合法折叠目标停留约 0.35s 后自动展开，失败保持完整携带，不产生部分提交。
 
 背包表现制作值保存在 `DA_BackpackWorkspaceStyle`，`WBP_BackpackScreen.WorkspaceStyle` 只持有普通资产引用；禁止把 Style 作为 `Instanced/EditInlineNew` UObject 嵌入 Widget Blueprint 根详情。该 Style 资产是受版本控制的人工制作真相，Builder 只能创建缺失资产，不得在日常重建时覆盖或重新保存已有制作值。展开牌堆与多卡携带共享 `FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels`；编辑器入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。普通左键按下未选中的可移动卡也会在当帧完成选择与 `Carry` 迁移；首次松开只消费起手保护，不依赖后续鼠标位移才开始跟随。
 

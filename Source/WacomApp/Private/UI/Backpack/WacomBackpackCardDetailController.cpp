@@ -83,6 +83,17 @@ bool FWacomBackpackCardDetailController::ShowForCardWidget(UWacomDeckCardWidget*
 	return true;
 }
 
+bool FWacomBackpackCardDetailController::RepositionVisibleSource()
+{
+	UWacomDeckCardWidget* SourceWidget = Screen.CardDetailSourceWidget.Get();
+	if (!IsVisible() || !SourceWidget || !SourceWidget->GetCard())
+	{
+		return false;
+	}
+	PositionNear(SourceWidget);
+	return true;
+}
+
 void FWacomBackpackCardDetailController::Hide()
 {
 	if (Screen.CardDetailPanel)

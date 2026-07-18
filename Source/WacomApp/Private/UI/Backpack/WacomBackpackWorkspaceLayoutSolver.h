@@ -92,6 +92,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceLayoutSolver
 	static FWacomBackpackFocusWindowStripLayout BuildFocusWindowStripLayout(
 		int32 CardCount,
 		int32 FocusIndex,
+		int32 PreviousWindowStartIndex,
 		const FSlateRect& CorridorRect,
 		FVector2D CardSize,
 		TConstArrayView<FWacomBackpackResolvedLayout> BaseLayouts,
@@ -145,7 +146,9 @@ struct WACOMAPP_API FWacomBackpackWorkspaceLayoutSolver
 		float FullGapPixels,
 		float CompressedExposurePixels,
 		float MinimumExposurePixels,
-		float CurrentCardLiftPixels);
+		float CurrentCardLiftPixels,
+		int32 PreviousWindowStartIndex = INDEX_NONE,
+		int32* OutWindowStartIndex = nullptr);
 
 	static FVector2D ClampCardCenterToVisibleBounds(
 		FVector2D DesiredCenter,

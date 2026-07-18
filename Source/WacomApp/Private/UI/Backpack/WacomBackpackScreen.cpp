@@ -600,6 +600,7 @@ void UWacomBackpackScreen::RebuildWorkspaceChrome(const FRunBackpackStorageSnaps
 	WorkspaceWidget->BindWorkspaceCards(
 		ActiveWorkspaceCardWidgets,
 		Run->GetBackpackStorageSnapshotRevision());
+	GetCardDetailController().RepositionVisibleSource();
 }
 
 void UWacomBackpackScreen::RebuildWorkspaceFromCachedSnapshot()

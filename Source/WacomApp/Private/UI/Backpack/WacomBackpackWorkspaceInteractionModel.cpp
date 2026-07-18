@@ -67,7 +67,30 @@ void FWacomBackpackWorkspaceInteractionModel::NormalizeSelection()
 void FWacomBackpackWorkspaceInteractionModel::ReconcileCards(
 	TConstArrayView<FWacomBackpackWorkspaceCardHitRecord> Cards)
 {
-	AvailableCards = TArray<FWacomBackpackWorkspaceCardHitRecord>(Cards);
+	AvailableCards.Reset(Cards.Num());
+	TMap<FGuid, FWacomBackpackZoneKey> MovableSources;
+	for (const FWacomBackpackWorkspaceCardHitRecord& Card : Cards)
+	{
+		// Browse-only display identities never belong in the selection/carry table.
+		// Keeping this defensive filter here prevents a future caller from restoring
+		// the old "first matching InstanceId wins" ambiguity.
+		if (!Card.bMovable || !Card.InstanceId.IsValid())
+		{
+			continue;
+		}
+
+		if (const FWacomBackpackZoneKey* ExistingSource = MovableSources.Find(Card.InstanceId))
+		{
+			ensureMsgf(
+				*ExistingSource == Card.SourceZone,
+				TEXT("Backpack physical card %s was projected as movable from two sources."),
+				*Card.InstanceId.ToString());
+			continue;
+		}
+
+		MovableSources.Add(Card.InstanceId, Card.SourceZone);
+		AvailableCards.Add(Card);
+	}
 	NormalizeSelection();
 	if (IsCarrying())
 	{

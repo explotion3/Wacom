@@ -183,6 +183,16 @@ private:
 	bool bPendingPilePress = false;
 	bool bPendingPileControlDown = false;
 	bool bPendingPilePressOnDragHandle = false;
+	struct FPileMoveVisualSnapshot
+	{
+		TWeakObjectPtr<UWacomBackpackZonePileWidget> Pile;
+		EZoneKind Zone = EZoneKind::Backpack;
+		FGuid OwnerInstanceId;
+		FVector2D CanvasPosition = FVector2D::ZeroVector;
+		int32 ZOrder = 0;
+		bool bValid = false;
+	};
+	FPileMoveVisualSnapshot PileMoveVisualSnapshot;
 	TWeakObjectPtr<UWacomDeckCardWidget> HoveredCardWidget;
 	EZoneKind ExpandedContentZone = EZoneKind::Backpack;
 	FGuid ExpandedContentOwnerInstanceId;
@@ -225,6 +235,7 @@ private:
 	TMap<FGuid, FCardVisualPose> PendingReleasedVisualPoses;
 	int32 LastCarryStripCurrentIndex = INDEX_NONE;
 	int32 LastCarryStripDefaultIndex = INDEX_NONE;
+	int32 LastCarryStripWindowStartIndex = INDEX_NONE;
 	int32 CarryStripLayoutRebuildCount = 0;
 	int32 StaticCardPresentationUpdateCount = 0;
 	int32 CarryVisualAnchorApplyCount = 0;
@@ -279,12 +290,21 @@ private:
 		int32 FocusIndex = INDEX_NONE;
 		/** 最后一次驱动三段式窗口的位置；离开卡面后保留到牌堆收起。 */
 		int32 WindowFocusIndex = INDEX_NONE;
+		/** 上一次完整窗口起点；新焦点只做纳入所需的最小滑动。 */
+		int32 WindowStartIndex = INDEX_NONE;
+		/** 焦点切换瞬间的实际视觉中心，保证目标卡不离开鼠标。 */
+		FVector2D FocusAnchorCenter = FVector2D::ZeroVector;
+		bool bHasFocusAnchor = false;
 		FVector2D PointerLocal = FVector2D::ZeroVector;
 		float ExitDelayRemainingSeconds = 0.0f;
 		bool bExitPending = false;
 	};
 	FExpandedPileFocusState ExpandedPileFocus;
 	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> ExpandedPileFocusTargets;
+	/** 选择开始瞬间的实际画面；冻结期间同时作为呈现和框选命中真相。 */
+	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> SelectionFrozenLayouts;
+	EZoneKind SelectionFrozenZone = EZoneKind::Backpack;
+	FGuid SelectionFrozenOwnerInstanceId;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 
 	void EnsureFallbackTree();
@@ -316,6 +336,10 @@ private:
 	void QueuePilePointer(FVector2D Pointer);
 	void FlushQueuedPilePointer();
 	void CommitPileMoveCardLayouts(const FWacomBackpackZoneKey& Zone, FVector2D FinalDelta);
+	void CapturePileMoveVisualSnapshot(
+		UWacomBackpackZonePileWidget& Pile,
+		const FWacomBackpackZoneKey& Zone);
+	void RestoreAndClearPileMoveVisualSnapshot();
 	FWacomBackpackZoneKey ResolveMarqueeSource(FVector2D LocalPointer) const;
 	void CancelHoverExpandTimer();
 	FReply BuildHandledPointerReply();
@@ -342,6 +366,9 @@ private:
 	void SyncExpandedPileHitLayouts(bool bUseFocusedTargets);
 	void ClearExpandedPileFocus(bool bAnimateReturn, bool bBroadcastChange = true);
 	void ResetExpandedPileFocusWindow(bool bAnimateReturn, bool bBroadcastChange = true);
+	void BeginSelectionVisualFreeze(const FWacomBackpackZoneKey& SourceZone);
+	void EndSelectionVisualFreeze(bool bAnimateReturn);
+	void UpdateSelectionVisualFreezeLifetime();
 	bool IsExpandedPileFocusAllowed() const;
 	bool IsExpandedPileFocusCard(const UWacomDeckCardWidget* CardWidget, int32* OutIndex = nullptr) const;
 	UWacomDeckCardWidget* GetPresentationFocusedCard() const;
@@ -424,6 +451,9 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 ActiveBaseCardLayoutTransitionCount = 0;
 	int32 ExpandedPileFocusIndex = INDEX_NONE;
 	int32 ExpandedPileWindowFocusIndex = INDEX_NONE;
+	int32 ExpandedPileWindowStartIndex = INDEX_NONE;
+	int32 SelectionFrozenCardCount = 0;
+	bool bPileMoveRollbackSnapshotActive = false;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 	bool bExpandedPileFocusExitPending = false;
 	int32 FullPresentationRefreshCount = 0;

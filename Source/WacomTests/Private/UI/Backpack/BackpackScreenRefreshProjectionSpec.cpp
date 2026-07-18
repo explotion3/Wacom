@@ -357,6 +357,14 @@ bool FWacomUIBackpackScreenRemovesHoveredSourceAndHidesDetailSpec::RunTest(const
 	}
 	TestTrue(TEXT("Show detail for battle widget"), FWacomBackpackScreenTestAccess::ShowDetailForCardWidget(*Screen, BattleWidget));
 	TestTrue(TEXT("Detail visible before remove"), FWacomBackpackScreenTestAccess::IsDetailVisible(*Screen));
+	TestTrue(TEXT("Stable Workspace geometry change is accepted while detail is visible"),
+		FWacomBackpackScreenTestAccess::ApplyStableWorkspaceGeometry(
+			*Screen, FVector2D(1600.0f, 900.0f)));
+	TestTrue(TEXT("Same-source detail remains visible after geometry-triggered reconcile"),
+		FWacomBackpackScreenTestAccess::IsDetailVisible(*Screen));
+	TestEqual(TEXT("Geometry-triggered reposition keeps the same detail payload"),
+		FWacomBackpackScreenTestAccess::DetailNameText(*Screen).ToString(),
+		BattleCard->DisplayName.ToString());
 
 	const FGuid BattleId = Run->GetBattleDeck().IsValidIndex(0) ? Run->GetBattleDeck()[0].InstanceId : FGuid();
 	TestTrue(TEXT("Move battle card to backpack"), Run->MoveInstance(BattleId, EZoneKind::Backpack, FGuid()));

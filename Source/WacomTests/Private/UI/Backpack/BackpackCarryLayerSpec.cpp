@@ -56,6 +56,13 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 			OwnedCards.Add(MoveTemp(Card));
 		}
 		Workspace->BindWorkspaceCards(Cards, 17);
+		Workspace->SetSimplifiedMotion(true);
+		Workspace->SetHoveredCard(Cards[0]);
+		TestTrue(TEXT("Simplified flux hover has no spatial lift"),
+			Cards[0]->GetBackpackLocalMotionTranslation().Equals(
+				FVector2D::ZeroVector, 0.1f));
+		Workspace->ClearHoveredCard(Cards[0]);
+		Workspace->SetSimplifiedMotion(false);
 		Model->SelectAllMovable();
 		TestTrue(*FString::Printf(TEXT("%d cards begin carry"), CardCount),
 			Model->BeginCarry(Cards[0]->GetCardInstanceId(), FVector2D(300.0f, 220.0f), 17));
@@ -181,6 +188,14 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 				TestTrue(TEXT("Wheel-selected rightmost card lifts like every other current card"),
 					ReturnedDefaultCard->GetBackpackLocalMotionTranslation().Equals(
 						FVector2D(0.0f, -Style->CurrentCardLiftPixels), 0.1f));
+				Workspace->SetSimplifiedMotion(true);
+				TestTrue(TEXT("Runtime Simplified switch clears carried-card lift immediately"),
+					ReturnedDefaultCard->GetBackpackLocalMotionTranslation().Equals(
+						FVector2D::ZeroVector, 0.1f));
+				TestTrue(TEXT("Runtime Simplified switch clears carried-card angle compensation"),
+					FMath::IsNearlyZero(
+						ReturnedDefaultCard->GetBackpackLocalMotionAngle(), 0.1f));
+				Workspace->SetSimplifiedMotion(false);
 			}
 		}
 		const FWacomBackpackWorkspaceAutomationTestView AfterWheelHandoff =

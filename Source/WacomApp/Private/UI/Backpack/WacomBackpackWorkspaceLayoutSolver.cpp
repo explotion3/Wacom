@@ -62,21 +62,33 @@ FFocusWindowMetrics ResolveFocusWindowMetrics(
 	return Result;
 }
 
-int32 ResolveFocusWindowStart(int32 CardCount, int32 WindowCardCount, int32 FocusIndex)
+int32 ResolveFocusWindowStart(
+	int32 CardCount,
+	int32 WindowCardCount,
+	int32 FocusIndex,
+	int32 PreviousWindowStartIndex)
 {
 	if (CardCount <= 0 || WindowCardCount <= 0)
 	{
 		return INDEX_NONE;
 	}
+	const int32 MaximumStart = FMath::Max(0, CardCount - WindowCardCount);
+	int32 WindowStart = PreviousWindowStartIndex != INDEX_NONE
+		? FMath::Clamp(PreviousWindowStartIndex, 0, MaximumStart)
+		: FMath::Max(0, (CardCount - WindowCardCount) / 2);
 	if (FocusIndex == INDEX_NONE)
 	{
-		return FMath::Max(0, (CardCount - WindowCardCount) / 2);
+		return WindowStart;
 	}
-	const int32 LeftWindowSlots = FMath::Max(0, (WindowCardCount - 1) / 2);
-	return FMath::Clamp(
-		FocusIndex - LeftWindowSlots,
-		0,
-		FMath::Max(0, CardCount - WindowCardCount));
+	if (FocusIndex < WindowStart)
+	{
+		WindowStart = FocusIndex;
+	}
+	else if (FocusIndex >= WindowStart + WindowCardCount)
+	{
+		WindowStart = FocusIndex - WindowCardCount + 1;
+	}
+	return FMath::Clamp(WindowStart, 0, MaximumStart);
 }
 
 void BuildFocusWindowHitBands(
@@ -373,6 +385,7 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 			BuildFocusWindowStripLayout(
 				CardCount,
 				INDEX_NONE,
+				INDEX_NONE,
 				CardCorridor,
 				CardSize,
 				BaseLayouts,
@@ -439,6 +452,7 @@ FWacomBackpackFocusWindowStripLayout
 FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
 	int32 CardCount,
 	int32 FocusIndex,
+	int32 PreviousWindowStartIndex,
 	const FSlateRect& CorridorRect,
 	FVector2D CardSize,
 	TConstArrayView<FWacomBackpackResolvedLayout> BaseLayouts,
@@ -466,7 +480,7 @@ FWacomBackpackWorkspaceLayoutSolver::BuildFocusWindowStripLayout(
 		MinimumExposurePixels);
 	Result.WindowCardCount = Metrics.WindowCardCount;
 	Result.WindowStartIndex = ResolveFocusWindowStart(
-		CardCount, Result.WindowCardCount, FocusIndex);
+		CardCount, Result.WindowCardCount, FocusIndex, PreviousWindowStartIndex);
 	Result.EffectiveCompressedExposurePixels = Metrics.CompressedExposurePixels;
 	Result.ReservedWidthPixels = Metrics.UsedWidthPixels;
 	const int32 WindowEndIndex = Result.WindowStartIndex + Result.WindowCardCount - 1;
@@ -659,7 +673,9 @@ FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
 	float FullGapPixels,
 	float CompressedExposurePixels,
 	float MinimumExposurePixels,
-	float CurrentCardLiftPixels)
+	float CurrentCardLiftPixels,
+	int32 PreviousWindowStartIndex,
+	int32* OutWindowStartIndex)
 {
 	TArray<FWacomBackpackCarriedStripLayout> Layouts;
 	if (CardCount <= 0)
@@ -676,6 +692,7 @@ FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
 	const FWacomBackpackFocusWindowStripLayout FocusLayout = BuildFocusWindowStripLayout(
 		CardCount,
 		CurrentIndex,
+		PreviousWindowStartIndex,
 		CorridorRect,
 		FVector2D(CardWidth, 1.0f),
 		BaseLayouts,
@@ -683,6 +700,10 @@ FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
 		FullGapPixels,
 		CompressedExposurePixels,
 		MinimumExposurePixels);
+	if (OutWindowStartIndex)
+	{
+		*OutWindowStartIndex = FocusLayout.WindowStartIndex;
+	}
 	if (!FocusLayout.Cards.IsValidIndex(CurrentIndex))
 	{
 		return Layouts;

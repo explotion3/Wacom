@@ -86,6 +86,28 @@ bool FWacomUIBackpackWorkspaceSelectionSpec::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Selection switches atomically to the clicked source zone"),
 		Model.GetSelection().OrderedSelectedInstanceIds, TArray<FGuid>{ Second });
 	TestEqual(TEXT("Selection records its source zone"), Model.GetSelection().SourceZone, BattleZone);
+
+	// A special-zone physical card can also have a battle-deck projection with the
+	// same InstanceId. Browse-only projection order must never shadow the entity.
+	const FGuid SharedPhysicalIdentity(9, 9, 9, 9);
+	const FWacomBackpackZoneKey SpecialZone =
+		FWacomBackpackZoneKey::Make(EZoneKind::SpecialZone, FGuid(7, 7, 7, 7));
+	Model.CancelTransientState();
+	const TArray<FWacomBackpackWorkspaceCardHitRecord> SameIdentityCards = {
+		{ SharedPhysicalIdentity, BattleZone, FVector2D(100.0f), 10, false },
+		{ SharedPhysicalIdentity, SpecialZone, FVector2D(200.0f), 20, true },
+	};
+	Model.ReconcileCards(SameIdentityCards);
+	Model.ClickCard(SharedPhysicalIdentity, false);
+	TestEqual(TEXT("Read-only projection cannot shadow same-ID physical entity"),
+		Model.GetSelection().OrderedSelectedInstanceIds,
+		TArray<FGuid>{ SharedPhysicalIdentity });
+	TestEqual(TEXT("Same-ID physical entity keeps its movable source zone"),
+		Model.GetSelection().SourceZone,
+		SpecialZone);
+
+	Model.CancelTransientState();
+	Model.ReconcileCards(MultiZoneCards);
 	Model.BeginMarquee(BattleZone, FVector2D(150.0f, 50.0f), false);
 	Model.UpdateMarquee(FVector2D(350.0f, 150.0f));
 	Model.CompleteMarquee();

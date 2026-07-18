@@ -59,6 +59,41 @@ bool FWacomUIBackpackPileMoveVisualHandoffSpec::RunTest(const FString& Parameter
 	const FVector2D HeaderStart(100.0f, 100.0f);
 	const FVector2D PointerEnd(496.0f, 304.0f);
 	const FVector2D TargetCenter = SourceCenter + (PointerEnd - HeaderStart);
+	int32 CancelledCommitCount = 0;
+	const FDelegateHandle CancelledCommitHandle =
+		Workspace->OnPileMoveCommittedNative.AddLambda(
+			[&CancelledCommitCount](EZoneKind, FGuid, FVector2D)
+			{
+				++CancelledCommitCount;
+			});
+	const FWacomBackpackPileMoveCancelProbe CancelProbe =
+		FWacomBackpackScreenTestAccess::CancelWorkspacePileMove(
+			*Workspace,
+			EZoneKind::BattleDeck,
+			FGuid(),
+			HeaderStart,
+			PointerEnd);
+	Workspace->OnPileMoveCommittedNative.Remove(CancelledCommitHandle);
+	TestTrue(TEXT("Pile move begins before cancellation"), CancelProbe.bBeganMove);
+	TestFalse(TEXT("Pile frame visibly moved before cancellation"),
+		CancelProbe.PilePositionWhileMoving.Equals(CancelProbe.PilePositionBefore, 0.1f));
+	TestEqual(TEXT("Active pile move temporarily owns the front layer"),
+		CancelProbe.PileZOrderWhileMoving, 9000);
+	TestTrue(TEXT("ESC-style cancellation restores the exact pile frame position"),
+		CancelProbe.PilePositionAfterCancel.Equals(CancelProbe.PilePositionBefore, 0.1f));
+	TestEqual(TEXT("ESC-style cancellation restores the exact pile ZOrder"),
+		CancelProbe.PileZOrderAfterCancel, CancelProbe.PileZOrderBefore);
+	TestEqual(TEXT("Cancelled pile move never commits Workspace State Store intent"),
+		CancelledCommitCount, 0);
+	const UCanvasPanelSlot* CancelledCardSlot = Cast<UCanvasPanelSlot>(Card->Slot);
+	TestNotNull(TEXT("Cancelled pile card remains on a canvas"), CancelledCardSlot);
+	if (CancelledCardSlot)
+	{
+		TestTrue(TEXT("Cancelled pile card returns atomically to A"),
+			CancelledCardSlot->GetPosition().Equals(
+				SourceCenter - FVector2D(110.0f, 160.0f), 1.0f));
+	}
+
 	TestTrue(TEXT("Pile release reaches the synchronous target reconcile"),
 		FWacomBackpackScreenTestAccess::CommitWorkspacePileMoveWithSynchronousTargetReconcile(
 			*Workspace,

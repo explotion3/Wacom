@@ -9,6 +9,7 @@
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceStateSubsystem.h"
 #include "Cards/CardDefinition.h"
 #include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "../BackpackScreenTestAccess.h"
@@ -194,7 +195,7 @@ bool FWacomUIBackpackRealPileSceneIdentitySpec::RunTest(const FString& Parameter
 	TestEqual(TEXT("Collapsed pile marquee selects its movable physical card only"),
 		Interaction->GetSelection().OrderedSelectedInstanceIds,
 		TArray<FGuid>{ BattleId });
-	Interaction->ClickBlank();
+	FWacomBackpackScreenTestAccess::ClearWorkspaceSelection(*Workspace);
 	TestEqual(TEXT("Burden card remains normally opaque but locked"),
 		CollapsedCards[5]->GetWorkspaceReadOnlyKind(),
 		EWacomBackpackWorkspaceCardReadOnlyKind::BurdenLocked);
@@ -270,13 +271,29 @@ bool FWacomUIBackpackRealPileSceneIdentitySpec::RunTest(const FString& Parameter
 		ExpandedCards[3]->IsWorkspaceInteractionEnabled());
 	TestTrue(TEXT("Expanded Special content becomes operable"),
 		ExpandedCards[4]->IsWorkspaceInteractionEnabled());
+	const auto CaptureVisualCenter = [](const UWacomDeckCardWidget& Card)
+	{
+		const UCanvasPanelSlot* Slot = Cast<UCanvasPanelSlot>(Card.Slot);
+		return Slot
+			? Slot->GetPosition() + Slot->GetSize() * 0.5f
+				+ Card.GetBackpackLocalMotionTranslation()
+			: FVector2D::ZeroVector;
+	};
+	const FVector2D OwnerCenterBeforeSelection = CaptureVisualCenter(*ExpandedCards[3]);
+	const FVector2D ContentCenterBeforeSelection = CaptureVisualCenter(*ExpandedCards[4]);
 	TestTrue(TEXT("Expanded Special pile content drag starts and completes a marquee"),
 		FWacomBackpackScreenTestAccess::MarqueeWorkspacePileContents(
 			*Workspace, EZoneKind::SpecialZone, OwnerId));
+	TestTrue(TEXT("Marquee freezes the owner preview at its displayed animation frame"),
+		CaptureVisualCenter(*ExpandedCards[3]).Equals(OwnerCenterBeforeSelection, 0.1f));
+	TestTrue(TEXT("Marquee freezes selectable content at its displayed animation frame"),
+		CaptureVisualCenter(*ExpandedCards[4]).Equals(ContentCenterBeforeSelection, 0.1f));
+	TestEqual(TEXT("Expanded selection owns a visual snapshot for both browse identities"),
+		Workspace->GetAutomationTestView().SelectionFrozenCardCount, 2);
 	TestEqual(TEXT("Expanded pile marquee selects content but excludes its owner preview"),
 		Interaction->GetSelection().OrderedSelectedInstanceIds,
 		TArray<FGuid>{ ContentId });
-	Interaction->ClickBlank();
+	FWacomBackpackScreenTestAccess::ClearWorkspaceSelection(*Workspace);
 	const FWacomBackpackWorkspaceAutomationTestView PreCollapse =
 		Workspace->GetAutomationTestView();
 	TestTrue(TEXT("Expanded scene publishes content bounds before collapse"),

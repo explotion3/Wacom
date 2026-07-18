@@ -54,6 +54,8 @@ public:
 		float DurationSeconds,
 		bool bSimplifiedMotion);
 	void SnapLocalPose(UWacomDeckCardWidget& Card, FVector2D Translation, float AngleDegrees);
+	/** 停止局部运动但保留 Widget 当前姿态，供选择视觉快照接管。 */
+	void StopLocalPoseMotionPreservingCurrent(UWacomDeckCardWidget& Card);
 	void BeginCarryPickup(
 		TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
 		float LiftPixels,
