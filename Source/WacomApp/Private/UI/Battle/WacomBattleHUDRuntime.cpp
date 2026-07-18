@@ -24,6 +24,7 @@
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
+#include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 #include "UI/Battle/WacomBattleHUDSnapshotPresenter.h"
 #include "UI/Battle/WacomBattleHUDTargetingController.h"
@@ -251,6 +252,12 @@ void FWacomBattleHUDRuntime::NativeDestruct()
 	GetResultApplicator().HandleSessionChanged(GetSession(), nullptr);
 	bBattleInputReady = true;
 	bFirstPersonBattleHandSuppressedForEntry = false;
+	bEnemyActionPreviewActive = false;
+	if (EnemyInspectionCoordinator)
+	{
+		EnemyInspectionCoordinator->Shutdown();
+		EnemyInspectionCoordinator.Reset();
+	}
 	if (PresentationCoordinator)
 	{
 		PresentationCoordinator->Shutdown();
@@ -299,6 +306,7 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 
 	if (OldSession != NewSession)
 	{
+		GetEnemyInspectionCoordinator().CloseInspection(true);
 		bBattleInputReady = true;
 		bFirstPersonBattleHandSuppressedForEntry = false;
 		ClearBattlePresentationQueue();
@@ -343,6 +351,7 @@ void FWacomBattleHUDRuntime::NativeOnUIStateChanged(
 	if (NewState != EBattleUIState::Idle)
 	{
 		HideCardDetailPanel();
+		GetEnemyInspectionCoordinator().CloseInspection(true);
 	}
 	if (NewState == EBattleUIState::BattleEnd)
 	{
@@ -368,6 +377,7 @@ void FWacomBattleHUDRuntime::NativeOnUIStateChanged(
 	RefreshCommandBarFromSnapshot(Snapshot);
 	SyncFirstPersonBattleHandLayer(Snapshot);
 	SyncBattleEnemyPartWorldTargets(Snapshot);
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
 void FWacomBattleHUDRuntime::SetBattleInputReady(bool bReady)
@@ -378,6 +388,11 @@ void FWacomBattleHUDRuntime::SetBattleInputReady(bool bReady)
 	}
 
 	bBattleInputReady = bReady;
+	if (!bBattleInputReady)
+	{
+		GetEnemyInspectionCoordinator().CloseInspection(true);
+	}
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 	RefreshCommandBarFromCurrentSnapshot();
 }
 
@@ -639,6 +654,21 @@ FWacomBattleHUDSceneEnemyTargetCoordinator& FWacomBattleHUDRuntime::GetSceneEnem
 const FWacomBattleHUDSceneEnemyTargetCoordinator& FWacomBattleHUDRuntime::GetSceneEnemyTargetCoordinator() const
 {
 	return const_cast<FWacomBattleHUDRuntime*>(this)->GetSceneEnemyTargetCoordinator();
+}
+
+FWacomBattleHUDEnemyInspectionCoordinator& FWacomBattleHUDRuntime::GetEnemyInspectionCoordinator()
+{
+	if (!EnemyInspectionCoordinator)
+	{
+		EnemyInspectionCoordinator = MakeShared<FWacomBattleHUDEnemyInspectionCoordinator>(*this);
+	}
+	return *EnemyInspectionCoordinator;
+}
+
+const FWacomBattleHUDEnemyInspectionCoordinator&
+FWacomBattleHUDRuntime::GetEnemyInspectionCoordinator() const
+{
+	return const_cast<FWacomBattleHUDRuntime*>(this)->GetEnemyInspectionCoordinator();
 }
 
 FWacomBattleHUDCommandController& FWacomBattleHUDRuntime::GetCommandController()
@@ -1105,8 +1135,12 @@ void FWacomBattleHUDRuntime::ApplyActionPreviewPresentation(
 	ClearActionPreview();
 	if (!Presentation.bHasPreview)
 	{
+		bEnemyActionPreviewActive = false;
+		GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 		return;
 	}
+	bEnemyActionPreviewActive = true;
+	GetEnemyInspectionCoordinator().CloseInspection(true);
 
 	if (Presentation.bHasProjectedPlayer)
 	{
@@ -1119,15 +1153,42 @@ void FWacomBattleHUDRuntime::ApplyActionPreviewPresentation(
 	GetSceneEnemyTargetCoordinator().ApplyActionPreviewToEnemyPanels(
 		Presentation.ProjectedEnemyParts,
 		bApplyScenePartPreview);
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
 void FWacomBattleHUDRuntime::ClearActionPreview()
 {
+	bEnemyActionPreviewActive = false;
 	if (UPlayerStatusBar* PlayerStatusBar = Host().GetPlayerStatusBar())
 	{
 		PlayerStatusBar->ClearActionPreview();
 	}
 	GetSceneEnemyTargetCoordinator().ClearActionPreviewFromEnemyPanels();
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
+}
+
+bool FWacomBattleHUDRuntime::CanOpenEnemyInspection() const
+{
+	if (UIState != EBattleUIState::Idle
+		|| !bBattleInputReady
+		|| bEnemyActionPreviewActive
+		|| IsFirstPersonCardDragActiveForBattleSceneHover()
+		|| IsBattlePresentationBusy())
+	{
+		return false;
+	}
+
+	const UBattleSession* Session = GetSession();
+	return Session && Session->BuildSnapshot().Phase == EBattlePhase::PlayerAction;
+}
+
+bool FWacomBattleHUDRuntime::TryCloseEnemyInspection()
+{
+	if (UIState != EBattleUIState::Idle)
+	{
+		return false;
+	}
+	return GetEnemyInspectionCoordinator().TryCloseInspection();
 }
 
 FWacomBattleEnemyPartDragPredictionDebugInput
@@ -1293,7 +1354,9 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragStarted(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView)
 {
+	GetEnemyInspectionCoordinator().CloseInspection(true);
 	GetFirstPersonHandBridge().HandleDragStarted(CardInstanceId, DragView);
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
 void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragUpdated(
@@ -1308,6 +1371,7 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragReleased(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	GetFirstPersonHandBridge().HandleDragReleased(CardInstanceId, DragView);
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
 void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragCancelled(
@@ -1315,6 +1379,7 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragCancelled(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	GetFirstPersonHandBridge().HandleDragCancelled(CardInstanceId, DragView);
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
 void FWacomBattleHUDRuntime::UpdateFirstPersonCardDragTargetFeedback(
@@ -1450,6 +1515,9 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 	View.bEntryWaitingForCamera = ResultApplicatorView.IsEntryWaitingForCamera();
 	View.bEntryWaitingForCardPresentationPrewarm =
 		ResultApplicatorView.IsEntryWaitingForCardPresentationPrewarm();
+	View.bEnemyInspectionOpen = GetEnemyInspectionCoordinator().IsInspectionOpen();
+	View.EnemyInspectionSelectedPartIdentity =
+		GetEnemyInspectionCoordinator().GetSelectedPartIdentity();
 	if (PresentationCoordinator)
 	{
 		View.bPresentationPlanActive = PresentationCoordinator->IsPresentationPlanBusy();

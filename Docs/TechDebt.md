@@ -65,7 +65,8 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | HP 条瞬间跳变 | `SetPercent` 直接设值 | 加 `SetTargetPercent` + Tick / 动画插值 |
 | 场景敌人表现 polish | 主链路已拆成 `SceneEnemyHost + PartActor + WorldTargetBridge + Presentation`；TrainingWarrior 覆盖 Host Idle / Action / Destroyed，通用 Multi-Part Part Action 已支持精确身份 / Layer、barrier、watchdog 和 Destroyed 抢占，Snake Placeholder 覆盖三部位 VisualLayers 与逐层 Destroyed，但尚无正式美术和可配置的 Action Clip | 正式 Snake 素材到位后替换 `/Game/Wacom/Art/Placeholders/Enemies/Snake`、让 `-FailOnPlaceholder` 通过并为 13 个 Intent 显式制作 Style；继续补多层同步、材质描边、tooltip 和风险动效，只有复杂局部状态确有需要时再接 PaperZD/Animator |
 | Scene Enemy Panel 兼容资产命名 | 正式面板仍沿用既有 `BP_WacomBattleEnemyPanelWidget / BP_WacomBattleEnemyPartEntryWidget` 路径，避免本轮重命名波及地图与 Host 资产 | 等地图和 Host 资产可统一重存时，单独迁到 `WBP_` 命名并用 redirect / dependency audit 清理旧路径 |
-| 普通 Enemy Panel 部位上限 | 正式 WBP 对 1–4 个部位提供紧凑/展开布局；超过 4 个只给制作警告并继续运行 | 首个复杂 Boss 内容切片引入专用 Boss WidgetClass；不要把滚动、分页或 Phase UI 塞回普通面板 |
+| 普通 Enemy Panel 部位上限 | 正式 WBP 对 1–4 个部位提供等宽连续分段，双侧详情复用同一 ViewData；超过 4 个只给制作警告并继续运行 | 首个复杂 Boss 内容切片引入专用 Boss WidgetClass；不要把滚动、分页或 Phase UI 塞回普通面板 |
+| Enemy Inspection 详情深度 | 当前详情只展示 Snapshot 已有的 HP、Shield、Initiative、Intent 名称/先机/抵抗、Buff 与 Destroyed；不翻译 Intent effects，也不包含 Lore / 图鉴 | 等战斗策划冻结公开信息口径后新增独立 presentation facts；不要让 WBP 解析规则 effect 或直接读取 DataAsset 猜说明 |
 | Enemy Intent 图标扩展 | 单部位紧凑面板使用 UI-only `IntentId -> IconBrush` 精确映射，TrainingWarrior 三个 Intent 已有正式图标，未知 Intent 使用星形 fallback；未增加规则字段或基于 effect 的猜测 | 新正式敌人内容包在同一 Style 中显式补映射；若图标数量和主题变体明显增长，再拆按敌人家族/皮肤选择的 Style，不把 Intent 分类或伤害数字塞进本切片 |
 | Scene Enemy Host 旧原生面板 override | 老地图/Host 可能序列化了已改为 abstract 的原生 Panel class；`PostLoad()` 只在运行时把这个精确旧值视为未配置并回退项目默认 WBP，不修改 package | 下次有意重存相关地图/Host 时清空旧 override；完成资产审计后删除这条精确兼容分支 |
 | CombatLog 纯文字 | 常驻 CombatLog 暂不做图标、颜色、Niagara、音效或动画；旧 EventToast / BattleEventLogPanel / 单事件 legacy bridge 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |

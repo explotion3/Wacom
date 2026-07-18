@@ -352,6 +352,26 @@ void AWacomPlayerController::SetupInputComponent()
 
 bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
+	if ((Params.Key == EKeys::Escape || Params.Key == EKeys::Gamepad_FaceButton_Right)
+		&& Params.Event == IE_Pressed)
+	{
+		if (TryCancelFirstPersonCardKeyboardShortcutDrag())
+		{
+			return true;
+		}
+		if (UBattleHUD* HUD = GetActiveBattleHUD())
+		{
+			if (HUD->IsInTargetSelect())
+			{
+				HUD->CancelTargetSelect();
+				return true;
+			}
+			if (HUD->TryCloseEnemyInspection())
+			{
+				return true;
+			}
+		}
+	}
 	if (Params.Key == EKeys::RightMouseButton
 		&& Params.Event == IE_Pressed
 		&& TryCancelFirstPersonCardKeyboardShortcutDrag())

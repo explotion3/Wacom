@@ -25,6 +25,7 @@ class FWacomBattleHUDSceneEnemyTargetCoordinator
 {
 public:
 	explicit FWacomBattleHUDSceneEnemyTargetCoordinator(FWacomBattleHUDRuntime& InRuntime);
+	~FWacomBattleHUDSceneEnemyTargetCoordinator();
 
 	void SetSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
 	bool HasSceneEnemyHost() const;
@@ -52,6 +53,7 @@ public:
 		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts,
 		bool bApplyScenePartPreview = true) const;
 	void ClearActionPreviewFromEnemyPanels() const;
+	void RefreshEnemyPanelInspectionInteraction() const;
 
 	bool CanUpdateHoverProbe() const;
 	void TickHoverProbe(float DeltaTime);
@@ -128,4 +130,9 @@ private:
 		bool bHasTargetPreviewContext) const;
 	void ApplyActionPreviewToSceneParts(const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const;
 	void ClearActionPreviewFromSceneParts() const;
+	void BindHostInspectionDelegate(AWacomBattleEnemyActor& Host);
+	void UnbindHostInspectionDelegate(AWacomBattleEnemyActor& Host);
+	void HandleEnemyPanelInspectionRequested(
+		AWacomBattleEnemyActor* Host,
+		const FBattlePartSlotIdentity& PartIdentity);
 };

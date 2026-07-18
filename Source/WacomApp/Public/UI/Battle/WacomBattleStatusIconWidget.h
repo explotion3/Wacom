@@ -98,12 +98,24 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "返回当前缓存的状态图标展示数据。"))
 	TArray<FWacomBattleStatusIconView> GetStatusIconViews() const { return CurrentViews; }
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "设置紧凑模式最多显示的状态图标数。0 表示不限制；超出部分由 OverflowText 显示为 +N。"))
+	void SetMaxVisibleStatuses(int32 InMaxVisibleStatuses);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Status Icons")
+	int32 GetMaxVisibleStatuses() const { return MaxVisibleStatuses; }
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Status Icons")
+	int32 GetOverflowStatusCount() const { return OverflowStatusCount; }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativePreConstruct() override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> StatusContainer = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> OverflowText = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (AllowAbstract = "false", ToolTip = "列表中每个状态图标使用的 Widget 类。为空时使用 C++ 默认 UWacomBattleStatusIconWidget。"))
 	TSubclassOf<UWacomBattleStatusIconWidget> StatusIconWidgetClass;
@@ -143,6 +155,8 @@ private:
 	TArray<TObjectPtr<UWacomBattleStatusIconWidget>> IconWidgets;
 
 	bool bHasAssignedStatusIconViews = false;
+	int32 MaxVisibleStatuses = 0;
+	int32 OverflowStatusCount = 0;
 
 	TArray<FWacomBattleStatusIconView> BuildStatusIconViews(
 		const FGameplayTagContainer& InStatuses,

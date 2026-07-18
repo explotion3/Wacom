@@ -3,6 +3,8 @@
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 
 #include "Components/PanelWidget.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
@@ -23,6 +25,13 @@ namespace
 			Panel->AddChild(Child);
 		}
 		Panel->ShiftChild(DesiredIndex, Child);
+		if (UHorizontalBoxSlot* HorizontalSlot = Cast<UHorizontalBoxSlot>(Child->Slot))
+		{
+			HorizontalSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			HorizontalSlot->SetPadding(FMargin(0.0f));
+			HorizontalSlot->SetHorizontalAlignment(HAlign_Fill);
+			HorizontalSlot->SetVerticalAlignment(VAlign_Fill);
+		}
 	}
 
 	FName MakeWidgetObjectName(const FName StablePartKey)
@@ -88,6 +97,7 @@ bool UWacomBattleEnemyPanelWidget::SetActionPreviewPartViews(
 			}
 		}
 	}
+	ApplyInspectionInteractionState();
 	RefreshContextHighlight();
 	return bHasActionPreview;
 }
@@ -102,6 +112,7 @@ void UWacomBattleEnemyPanelWidget::ClearActionPreview()
 		}
 	}
 	bHasActionPreview = false;
+	ApplyInspectionInteractionState();
 	RefreshContextHighlight();
 }
 
@@ -144,6 +155,17 @@ void UWacomBattleEnemyPanelWidget::SetPartEntryWidgetClass(
 	SyncPartEntries();
 }
 
+void UWacomBattleEnemyPanelWidget::SetInspectionInteractionEnabled(const bool bEnabled)
+{
+	if (bInspectionInteractionEnabled == bEnabled)
+	{
+		return;
+	}
+
+	bInspectionInteractionEnabled = bEnabled;
+	ApplyInspectionInteractionState();
+}
+
 void UWacomBattleEnemyPanelWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -155,12 +177,12 @@ void UWacomBattleEnemyPanelWidget::NativeConstruct()
 void UWacomBattleEnemyPanelWidget::NativeDestruct()
 {
 	ClearPartEntries();
+	OnInspectionRequestedNative.Clear();
 	Super::NativeDestruct();
 }
 
 void UWacomBattleEnemyPanelWidget::RefreshHeader()
 {
-	const bool bContextActive = !HoveredPartSlotId.IsNone() || bHasActionPreview;
 	if (EnemyNameText)
 	{
 		EnemyNameText->SetText(bHasCurrentView
@@ -168,10 +190,7 @@ void UWacomBattleEnemyPanelWidget::RefreshHeader()
 				? FText::FromName(CurrentView.EnemySlotId)
 				: CurrentView.EnemyDisplayName)
 			: FText::GetEmpty());
-		EnemyNameText->SetVisibility(
-			bHasCurrentView && (!bCompactSinglePartPresentation || bContextActive)
-				? ESlateVisibility::HitTestInvisible
-				: ESlateVisibility::Collapsed);
+		EnemyNameText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (EnemyInitiativeText)
 	{
@@ -179,10 +198,7 @@ void UWacomBattleEnemyPanelWidget::RefreshHeader()
 			? FText::FromString(FString::Printf(
 				TEXT("INIT %d"), CurrentView.EnemyInitiativeSum))
 			: FText::GetEmpty());
-		EnemyInitiativeText->SetVisibility(
-			bHasCurrentView && !bCompactSinglePartPresentation
-				? ESlateVisibility::HitTestInvisible
-				: ESlateVisibility::Collapsed);
+		EnemyInitiativeText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -212,6 +228,8 @@ void UWacomBattleEnemyPanelWidget::SyncPartEntries()
 			: PartView.PartSlotId;
 		PartWidget->SetContextHighlighted(
 			!HoveredPartSlotId.IsNone() && EffectivePartSlotId == HoveredPartSlotId);
+		PartWidget->SetInspectionInteractionEnabled(
+			bInspectionInteractionEnabled && !bHasActionPreview);
 		SyncPanelChildAt(PartList, PartWidget, PartIndex);
 	}
 
@@ -221,6 +239,7 @@ void UWacomBattleEnemyPanelWidget::SyncPartEntries()
 		{
 			if (It.Value())
 			{
+				It.Value()->OnInspectionRequestedNative.RemoveAll(this);
 				It.Value()->CancelPendingPresentation();
 				PartList->RemoveChild(It.Value());
 			}
@@ -237,6 +256,7 @@ void UWacomBattleEnemyPanelWidget::ClearPartEntries()
 	{
 		if (Pair.Value)
 		{
+			Pair.Value->OnInspectionRequestedNative.RemoveAll(this);
 			Pair.Value->CancelPendingPresentation();
 		}
 	}
@@ -279,9 +299,39 @@ UWacomBattleEnemyPanelWidget::FindOrCreatePartEntryWidget(
 		PartWidget->SetIntroDelaySeconds(
 			AnimatedPartEntryKeys.Num() * EntryIntroStaggerSeconds);
 		AnimatedPartEntryKeys.Add(PartKey);
+		PartWidget->OnInspectionRequestedNative.RemoveAll(this);
+		PartWidget->OnInspectionRequestedNative.AddUObject(
+			this, &ThisClass::HandlePartInspectionRequested);
 		PartEntryWidgets.Add(PartKey, PartWidget);
 	}
 	return PartWidget;
+}
+
+void UWacomBattleEnemyPanelWidget::ApplyInspectionInteractionState()
+{
+	const bool bEnableEntries = bInspectionInteractionEnabled
+		&& bHasCurrentView
+		&& !bHasActionPreview;
+	for (TPair<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>>& Pair : PartEntryWidgets)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->SetInspectionInteractionEnabled(bEnableEntries);
+		}
+	}
+}
+
+void UWacomBattleEnemyPanelWidget::HandlePartInspectionRequested(
+	const FBattlePartSlotIdentity& PartIdentity)
+{
+	if (!bInspectionInteractionEnabled
+		|| bHasActionPreview
+		|| !PartIdentity.IsValidSlot())
+	{
+		return;
+	}
+
+	OnInspectionRequestedNative.Broadcast(PartIdentity);
 }
 
 FName UWacomBattleEnemyPanelWidget::BuildPartEntryWidgetKey(

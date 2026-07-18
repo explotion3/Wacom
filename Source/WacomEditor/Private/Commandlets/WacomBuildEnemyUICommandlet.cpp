@@ -4,6 +4,7 @@
 
 #include "ContentBuilders/EnemyUIWidgetBlueprintBuilder.h"
 #include "ContentBuilders/EnemySinglePartUIBuilder.h"
+#include "ContentBuilders/EnemySegmentedUIInspector.h"
 #include "Misc/Parse.h"
 
 UWacomBuildEnemyUICommandlet::UWacomBuildEnemyUICommandlet()
@@ -22,14 +23,17 @@ int32 UWacomBuildEnemyUICommandlet::Main(const FString& Params)
 		FParse::Param(*Params, TEXT("BuildSinglePartCompact"));
 	const bool bInspectSinglePartCompact =
 		FParse::Param(*Params, TEXT("InspectSinglePartCompact"));
+	const bool bInspectSegmentedVitals =
+		FParse::Param(*Params, TEXT("InspectSegmentedVitals"));
 	const int32 ModeCount = static_cast<int32>(bMigrateLegacy)
 		+ static_cast<int32>(bInspectOnly)
 		+ static_cast<int32>(bBuildSinglePartCompact)
-		+ static_cast<int32>(bInspectSinglePartCompact);
+		+ static_cast<int32>(bInspectSinglePartCompact)
+		+ static_cast<int32>(bInspectSegmentedVitals);
 	if (ModeCount != 1)
 	{
 		UE_LOG(LogTemp, Error,
-			TEXT("[WacomBuildEnemyUI] Choose exactly one mode: -MigrateLegacy, -InspectOnly, -BuildSinglePartCompact or -InspectSinglePartCompact"));
+			TEXT("[WacomBuildEnemyUI] Choose exactly one mode: -MigrateLegacy, -InspectOnly, -BuildSinglePartCompact, -InspectSinglePartCompact or -InspectSegmentedVitals"));
 		return 1;
 	}
 
@@ -39,16 +43,20 @@ int32 UWacomBuildEnemyUICommandlet::Main(const FString& Params)
 			? TEXT("InspectOnly")
 			: (bBuildSinglePartCompact
 				? TEXT("BuildSinglePartCompact")
-				: TEXT("InspectSinglePartCompact")));
+				: (bInspectSinglePartCompact
+					? TEXT("InspectSinglePartCompact")
+					: TEXT("InspectSegmentedVitals"))));
 	UE_LOG(LogTemp, Display, TEXT("[WacomBuildEnemyUI] Start mode=%s"), Mode);
 
-	const bool bSucceeded = bBuildSinglePartCompact || bInspectSinglePartCompact
+	const bool bSucceeded = bInspectSegmentedVitals
+		? Wacom::ContentBuilder::InspectEnemySegmentedUI()
+		: (bBuildSinglePartCompact || bInspectSinglePartCompact
 		? Wacom::ContentBuilder::ProcessEnemySinglePartUI(
 			bBuildSinglePartCompact,
 			bInspectSinglePartCompact)
 		: Wacom::ContentBuilder::ProcessEnemyUIWidgetBlueprints(
 			bMigrateLegacy,
-			bInspectOnly);
+			bInspectOnly));
 	if (!bSucceeded)
 	{
 		UE_LOG(LogTemp, Error, TEXT("[WacomBuildEnemyUI] Failed"));

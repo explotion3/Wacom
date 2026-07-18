@@ -788,11 +788,6 @@ namespace
 		ShieldContainer->SetVisibility(ESlateVisibility::Collapsed);
 		PlaceOnCanvas(Canvas, ShieldContainer, FVector2D(58.0f, 37.0f), FVector2D(184.0f, 12.0f));
 		MarkWidgetVariable(Blueprint, ShieldContainer);
-		UProgressBar* ShieldBar = Tree->ConstructWidget<UProgressBar>(
-			UProgressBar::StaticClass(), TEXT("ShieldBar"));
-		ConfigureProgressBar(ShieldBar, ShieldFill, 0.25f);
-		ShieldContainer->AddChildToOverlay(ShieldBar);
-		MarkWidgetVariable(Blueprint, ShieldBar);
 		UTextBlock* ShieldText = Tree->ConstructWidget<UTextBlock>(
 			UTextBlock::StaticClass(), TEXT("ShieldText"));
 		StyleText(ShieldText, FText::AsNumber(4), 11, Paper, TEXT("Bold"));
@@ -863,7 +858,6 @@ namespace
 			return false;
 		}
 		CDO->SetIntentPresentationStyle(IntentStyle);
-		CDO->SetDisplayCurrentHpOnly(true);
 		return SaveCompiledDefaults(Blueprint);
 	}
 
@@ -928,7 +922,6 @@ namespace
 			return false;
 		}
 		CDO->SetPartEntryWidgetClass(EntryClass);
-		CDO->SetCompactSinglePartPresentation(true);
 		return SaveCompiledDefaults(Blueprint);
 	}
 
@@ -996,7 +989,6 @@ namespace
 			{ TEXT("HpBar"), UProgressBar::StaticClass() },
 			{ TEXT("HpText"), UTextBlock::StaticClass() },
 			{ TEXT("ShieldContainer"), UWidget::StaticClass() },
-			{ TEXT("ShieldBar"), UProgressBar::StaticClass() },
 			{ TEXT("ShieldText"), UTextBlock::StaticClass() },
 			{ TEXT("InitiativeText"), UTextBlock::StaticClass() },
 			{ TEXT("InitiativeDiamond"), UWidget::StaticClass() },
@@ -1050,8 +1042,7 @@ namespace
 					Blueprint->GeneratedClass->GetDefaultObject())
 				: nullptr;
 		bValid &= CDO
-			&& CDO->GetIntentPresentationStyle() == ExpectedStyle
-			&& CDO->IsDisplayingCurrentHpOnly();
+			&& CDO->GetIntentPresentationStyle() == ExpectedStyle;
 		if (!bValid && bLogErrors)
 		{
 			UE_LOG(LogTemp, Error,
@@ -1082,8 +1073,7 @@ namespace
 					Blueprint->GeneratedClass->GetDefaultObject())
 				: nullptr;
 		bValid &= CDO
-			&& CDO->GetPartEntryWidgetClass().Get() == ExpectedEntryClass
-			&& CDO->IsCompactSinglePartPresentation();
+			&& CDO->GetPartEntryWidgetClass().Get() == ExpectedEntryClass;
 		if (!bValid && bLogErrors)
 		{
 			UE_LOG(LogTemp, Error,

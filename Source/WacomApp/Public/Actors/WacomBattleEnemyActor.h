@@ -23,9 +23,16 @@ class UWacomBattleEnemyHostAnimationStyle;
 class UWacomBattleEnemyPartImpactStyle;
 class UWacomBattleEnemyPartTargetPreviewStyle;
 class UWacomBattleEnemyPanelWidget;
+class AWacomBattleEnemyActor;
+struct FBattlePartSlotIdentity;
 struct FWacomBattleEnemyPartEntryViewData;
 struct FWacomBattleEnemyPanelViewData;
 struct FWacomBattleEnemyActionPlaybackCallbacks;
+
+DECLARE_MULTICAST_DELEGATE_TwoParams(
+	FWacomBattleEnemyHostInspectionRequestedNative,
+	AWacomBattleEnemyActor*,
+	const FBattlePartSlotIdentity&);
 
 UENUM(BlueprintType)
 enum class EWacomBattleEnemyHostVisualMode : uint8
@@ -425,6 +432,15 @@ public:
 	/** 设置当前 hover 的稳定 PartSlotId；NAME_None 清除 hover 上下文。 */
 	void SetEnemyPanelHoveredPart(FName PartSlotId);
 
+	/** HUD runtime 的事件驱动输入门禁；false 时头顶 Enemy Panel 完全点击穿透。 */
+	void SetEnemyPanelInspectionInteractionEnabled(bool bEnabled);
+	bool IsEnemyPanelInspectionInteractionEnabled() const
+	{
+		return bEnemyPanelInspectionInteractionEnabled;
+	}
+
+	FWacomBattleEnemyHostInspectionRequestedNative OnEnemyPanelInspectionRequestedNative;
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Scene Enemy|Debug",
 		meta = (ToolTip = "读取战斗场景敌人 Host 的只读诊断信息。"))
 	FWacomBattleSceneEnemyDebugView GetBattleSceneEnemyDebugView() const;
@@ -458,6 +474,8 @@ private:
 	void RefreshHostVisual();
 	void RefreshEnemyPanelWidgetComponent();
 	void RefreshEnemyPanelVisibility();
+	void BindEnemyPanelInspectionDelegate(UWacomBattleEnemyPanelWidget& PanelWidget);
+	void HandleEnemyPanelInspectionRequested(const FBattlePartSlotIdentity& PartIdentity);
 	FName GetHostVisualModeDebugName() const;
 	FName GetHostVisualAssetName() const;
 	int32 GetGeneratedHostVisualComponentCount() const;
@@ -473,6 +491,7 @@ private:
 	bool bRuntimeEncounterPresentationRetired = false;
 	bool bEnemyPanelHasViewData = false;
 	bool bEnemyPanelHasActionPreview = false;
+	bool bEnemyPanelInspectionInteractionEnabled = false;
 	FName EnemyPanelHoveredPartSlotId = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",

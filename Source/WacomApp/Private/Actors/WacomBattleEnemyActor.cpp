@@ -799,7 +799,10 @@ void AWacomBattleEnemyActor::SetEnemyPanelViewData(const FWacomBattleEnemyPanelV
 		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
 		PanelWidget->TakeWidget();
+		BindEnemyPanelInspectionDelegate(*PanelWidget);
 		PanelWidget->SetEnemyPanelViewData(ViewData);
+		PanelWidget->SetInspectionInteractionEnabled(
+			bEnemyPanelInspectionInteractionEnabled);
 	}
 	bEnemyPanelHasViewData = true;
 	RefreshEnemyPanelVisibility();
@@ -810,10 +813,12 @@ void AWacomBattleEnemyActor::ClearEnemyPanelViewData()
 	if (UWacomBattleEnemyPanelWidget* PanelWidget =
 		EnemyPanelWidgetComponent ? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()) : nullptr)
 	{
+		PanelWidget->SetInspectionInteractionEnabled(false);
 		PanelWidget->ClearEnemyPanelViewData();
 	}
 	bEnemyPanelHasViewData = false;
 	bEnemyPanelHasActionPreview = false;
+	bEnemyPanelInspectionInteractionEnabled = false;
 	EnemyPanelHoveredPartSlotId = NAME_None;
 	RefreshEnemyPanelVisibility();
 }
@@ -832,6 +837,7 @@ void AWacomBattleEnemyActor::SetEnemyPanelActionPreview(
 		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
 		PanelWidget->TakeWidget();
+		BindEnemyPanelInspectionDelegate(*PanelWidget);
 		bEnemyPanelHasActionPreview = PanelWidget->SetActionPreviewPartViews(PreviewParts);
 	}
 	RefreshEnemyPanelVisibility();
@@ -860,9 +866,45 @@ void AWacomBattleEnemyActor::SetEnemyPanelHoveredPart(const FName PartSlotId)
 	if (UWacomBattleEnemyPanelWidget* PanelWidget =
 		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
+		BindEnemyPanelInspectionDelegate(*PanelWidget);
 		PanelWidget->SetHoveredPartSlotId(PartSlotId);
 	}
 	RefreshEnemyPanelVisibility();
+}
+
+void AWacomBattleEnemyActor::SetEnemyPanelInspectionInteractionEnabled(const bool bEnabled)
+{
+	bEnemyPanelInspectionInteractionEnabled = bEnabled && bEnemyPanelHasViewData;
+	if (!EnemyPanelWidgetComponent)
+	{
+		return;
+	}
+
+	EnemyPanelWidgetComponent->InitWidget();
+	if (UWacomBattleEnemyPanelWidget* PanelWidget =
+		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	{
+		BindEnemyPanelInspectionDelegate(*PanelWidget);
+		PanelWidget->SetInspectionInteractionEnabled(
+			bEnemyPanelInspectionInteractionEnabled);
+	}
+}
+
+void AWacomBattleEnemyActor::BindEnemyPanelInspectionDelegate(
+	UWacomBattleEnemyPanelWidget& PanelWidget)
+{
+	PanelWidget.OnInspectionRequestedNative.RemoveAll(this);
+	PanelWidget.OnInspectionRequestedNative.AddUObject(
+		this, &ThisClass::HandleEnemyPanelInspectionRequested);
+}
+
+void AWacomBattleEnemyActor::HandleEnemyPanelInspectionRequested(
+	const FBattlePartSlotIdentity& PartIdentity)
+{
+	if (bEnemyPanelInspectionInteractionEnabled && PartIdentity.IsValidSlot())
+	{
+		OnEnemyPanelInspectionRequestedNative.Broadcast(this, PartIdentity);
+	}
 }
 
 FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const

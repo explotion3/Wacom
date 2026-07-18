@@ -276,6 +276,8 @@ UI 不可以：
 
 UI 允许不同业务按切片从 C++ fallback 迁移到正式 WBP，但必须保持同一被动边界。Scene Enemy Panel 已完成 WBP-only 迁移：`WacomApp` 的 abstract CommonUserWidget 父类只保留 ViewData、稳定条目复用、语义动画触发和生命周期；布局、字体、颜色、九宫格与动画属于 `/Game/Wacom/UI/Enemy` 的 WBP；Snapshot 转换只位于 App-private HUD coordinator。`WacomEditor` 独占旧空壳迁移、WidgetTree / animation 写入、编译保存和合同审计，运行时模块不得依赖 UMGEditor、MovieScene 制作 API 或资产写入。UI 当前事实集中记录在 `WacomUI.md`，WBP 绑定合同分别记录在 `UI_Backpack_WBP_Binding.md` 和 `UI_Battle_WBP_Binding.md`。
 
+Scene Enemy 紧凑条和双侧详情继续共享同一 ViewData 数据链。Scene coordinator 只构建一次 `FWacomBattleEnemyPanelViewData` 并推送给 Host 面板；检查协调器仅为这份只读事实附加当前选中的 `FBattlePartSlotIdentity`，不拉取 Session、不缓存第二份战斗状态。单/多部位 WBP 只改变条目排布；等宽 segment、Shield overlay、Buff overflow 和检查热区均属于表现合同。检查面板是 BattleHUD 私有生命周期中的非模态 viewport Widget，不新增领域 UI state；Runtime gate 统一负责 Idle 可点、拖卡/TargetSelect/Resolving/BattleEnd 自动关闭和 Escape 优先级。
+
 Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / RunEvent / Backpack Screen 读取 `URunSession` Snapshot 或 ViewData；Battle UI 保持 `FBattleSnapshot` 推送模型。两者都不直接修改规则状态。
 
 当前 UI 侧 ViewData / PresentationBuilder 包括卡牌展示、商店商品、RunEvent 结果、BattleEvent 表现、AppToast 和目标选择视图。它们属于 `WacomApp` 表现层。

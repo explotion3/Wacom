@@ -42,6 +42,7 @@ public class WacomEditor : ModuleRules
 			"Paper2D",
 			"ToolMenus",
 			"PropertyEditor",
+			"ToolsetRegistry",
 			"DataValidation",
 			"EnhancedInput",
 			"InputCore",

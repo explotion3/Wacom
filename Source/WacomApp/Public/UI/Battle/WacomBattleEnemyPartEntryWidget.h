@@ -9,12 +9,17 @@
 #include "WacomBattleEnemyPartEntryWidget.generated.h"
 
 class UProgressBar;
+class UButton;
 class UImage;
 class UTextBlock;
 class UWidget;
 class UWidgetAnimation;
 class UWacomBattleEnemyIntentPresentationStyle;
 class UWacomBattleStatusIconListWidget;
+
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FWacomBattleEnemyPartInspectionRequestedNative,
+	const FBattlePartSlotIdentity&);
 
 /**
  * 敌人聚合面板中的单个部位条目。
@@ -62,13 +67,11 @@ public:
 		return IntentPresentationStyle;
 	}
 
-	/** 紧凑单部位 WBP 只显示当前 HP；旧多部位 WBP 保持 Current/Max。 */
-	void SetDisplayCurrentHpOnly(bool bInDisplayCurrentHpOnly)
-	{
-		bDisplayCurrentHpOnly = bInDisplayCurrentHpOnly;
-		RefreshPresentation();
-	}
-	bool IsDisplayingCurrentHpOnly() const { return bDisplayCurrentHpOnly; }
+	/** 仅由 HUD runtime 在 Idle 且无拖卡/预览/结算时启用。 */
+	void SetInspectionInteractionEnabled(bool bEnabled);
+	bool IsInspectionInteractionEnabled() const { return bInspectionInteractionEnabled; }
+
+	FWacomBattleEnemyPartInspectionRequestedNative OnInspectionRequestedNative;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -82,7 +85,11 @@ private:
 		const FWacomBattleEnemyPartEntryViewData& PreviousView,
 		const FWacomBattleEnemyPartEntryViewData& NewView);
 	void RefreshContextPresentation(bool bPreviousContextActive);
+	void RefreshInspectionInteraction();
 	void CancelIntroTimer();
+
+	UFUNCTION()
+	void HandleInspectClicked();
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> PartNameText = nullptr;
@@ -96,8 +103,11 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> ShieldContainer = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UProgressBar> ShieldBar = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ShieldFrame = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ShieldBadge = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ShieldText = nullptr;
@@ -105,13 +115,13 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> InitiativeText = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> InitiativeDiamond = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> IntentDiamond = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> IntentIcon = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
@@ -127,6 +137,9 @@ private:
 	TObjectPtr<UWacomBattleStatusIconListWidget> StatusList = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> StatusOverflowText = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> ContextHighlight = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
@@ -135,8 +148,11 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> DestroyedOverlay = nullptr;
 
-	UPROPERTY(meta = (BindWidgetOptional))
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> DestroyedMark = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> InspectHitTarget = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
 	TObjectPtr<UWidgetAnimation> IntroAnimation = nullptr;
@@ -171,12 +187,11 @@ private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Intent", meta = (AllowPrivateAccess = "true", ToolTip = "紧凑敌人面板用于按稳定 IntentId 解析图标的 UI-only Style。为空时保留 WBP 默认图标，不影响规则。"))
 	TObjectPtr<UWacomBattleEnemyIntentPresentationStyle> IntentPresentationStyle = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Numbers", meta = (AllowPrivateAccess = "true", ToolTip = "开启后 HP 文本只显示当前值，例如 18；关闭时显示 Current/Max。只影响文本，不改变 HP 条比例。"))
-	bool bDisplayCurrentHpOnly = false;
-
 	FTimerHandle IntroTimerHandle;
 	float IntroDelaySeconds = 0.0f;
 	bool bHasReceivedViewData = false;
 	bool bHasActionPreview = false;
 	bool bContextHighlighted = false;
+	bool bInspectionInteractionEnabled = false;
+	bool bIntroPending = false;
 };

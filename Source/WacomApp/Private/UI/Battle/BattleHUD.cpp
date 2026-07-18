@@ -15,6 +15,7 @@
 #include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
+#include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Common/PileCountView.h"
@@ -444,6 +445,16 @@ bool UBattleHUD::TryStartFirstPersonBattleHandDragByIndex(
 void UBattleHUD::CancelTargetSelect()
 {
 	GetBattleHUDRuntime().CancelTargetSelect();
+}
+
+bool UBattleHUD::TryCloseEnemyInspection()
+{
+	return GetBattleHUDRuntime().TryCloseEnemyInspection();
+}
+
+bool UBattleHUD::IsEnemyInspectionOpen() const
+{
+	return GetBattleHUDRuntime().GetEnemyInspectionCoordinator().IsInspectionOpen();
 }
 
 void UBattleHUD::HandleCommandBarCommandRequested(EWacomBattleCommandId CommandId)

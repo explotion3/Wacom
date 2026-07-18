@@ -4,6 +4,7 @@
 
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
+#include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
 #include "UI/Card/WacomCardDetailTheme.h"
 #include "UI/Card/WacomCardExplanationLexicon.h"
 #include "UI/Events/WacomRunEventScreen.h"
@@ -213,6 +214,28 @@ bool UWacomUIDeveloperSettings::ValidateSettings(TArray<FText>& OutErrors) const
 				LOCTEXT("DefaultBattleEnemySinglePartPanelWidgetClassNotConstructible",
 					"DefaultBattleEnemySinglePartPanelWidgetClass 必须是可实例化的正式 WBP，当前类 {0} 为 abstract、deprecated 或已被新版本替代。"),
 				FText::FromString(PanelClass->GetPathName())));
+		}
+	}
+	if (DefaultBattleEnemyInspectionWidgetClass.IsNull())
+	{
+		OutErrors.Add(LOCTEXT(
+			"DefaultBattleEnemyInspectionWidgetClassNull",
+			"DefaultBattleEnemyInspectionWidgetClass 不能为空；Scene Enemy 点击检查需要正式双侧详情 WBP。"));
+	}
+	else
+	{
+		ValidateSoftClass(
+			DefaultBattleEnemyInspectionWidgetClass,
+			LOCTEXT("DefaultBattleEnemyInspectionWidgetClassLabel", "DefaultBattleEnemyInspectionWidgetClass"),
+			OutErrors);
+		if (UClass* InspectionClass = DefaultBattleEnemyInspectionWidgetClass.LoadSynchronous();
+			InspectionClass && InspectionClass->HasAnyClassFlags(
+				CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+		{
+			OutErrors.Add(FText::Format(
+				LOCTEXT("DefaultBattleEnemyInspectionWidgetClassNotConstructible",
+					"DefaultBattleEnemyInspectionWidgetClass 必须是可实例化的正式 WBP，当前类 {0} 不可实例化。"),
+				FText::FromString(InspectionClass->GetPathName())));
 		}
 	}
 	ValidateSoftObject(

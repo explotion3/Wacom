@@ -7,6 +7,7 @@
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/PanelWidget.h"
+#include "Components/Button.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/WidgetComponent.h"
@@ -176,10 +177,15 @@ bool FWacomUIBattleEnemyPanelFormalWBPContractSpec::RunTest(const FString& /*Par
 	}
 
 	const TArray<FName> PartBindings = {
-		TEXT("PartNameText"), TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"),
-		TEXT("ShieldText"), TEXT("InitiativeText"), TEXT("IntentText"),
+		TEXT("PartNameText"), TEXT("InitiativeDiamond"), TEXT("IntentDiamond"),
+		TEXT("IntentIcon"), TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"),
+		TEXT("ShieldFrame"), TEXT("ShieldBadge"), TEXT("ShieldText"),
+		TEXT("InitiativeText"), TEXT("IntentText"),
 		TEXT("ResistanceText"), TEXT("DetailsContainer"), TEXT("StatusList"),
-		TEXT("ContextHighlight"), TEXT("ActionPreviewOverlay"), TEXT("DestroyedOverlay") };
+		TEXT("StatusOverflowText"),
+		TEXT("ContextHighlight"), TEXT("ActionPreviewOverlay"), TEXT("DestroyedOverlay"),
+		TEXT("DestroyedMark"),
+		TEXT("InspectHitTarget") };
 	for (const FName Binding : PartBindings)
 	{
 		TestNotNull(*FString::Printf(TEXT("Part binding %s"), *Binding.ToString()),
@@ -198,20 +204,29 @@ bool FWacomUIBattleEnemyPanelFormalWBPContractSpec::RunTest(const FString& /*Par
 			Animation && !Animation->GetBindings().IsEmpty());
 	}
 
-	bool bAllWidgetsIgnoreHitTests = true;
-	Panel->WidgetTree->ForEachWidget([&bAllWidgetsIgnoreHitTests](UWidget* Widget)
+	bool bHitTestPolicyValid = true;
+	const UWidget* PanelRoot = Panel->WidgetTree->RootWidget;
+	const UWidget* PartEntryRoot = PartEntry->WidgetTree->RootWidget;
+	Panel->WidgetTree->ForEachWidget([&bHitTestPolicyValid, PanelRoot](UWidget* Widget)
 	{
-		bAllWidgetsIgnoreHitTests &= Widget
-			&& Widget->GetVisibility() != ESlateVisibility::Visible
-			&& Widget->GetVisibility() != ESlateVisibility::SelfHitTestInvisible;
+		bHitTestPolicyValid &= Widget && (Widget == PanelRoot
+			|| (Widget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
+				&& Widget->IsA<UPanelWidget>())
+			|| (Widget->GetVisibility() != ESlateVisibility::Visible
+				&& Widget->GetVisibility() != ESlateVisibility::SelfHitTestInvisible));
 	});
-	PartEntry->WidgetTree->ForEachWidget([&bAllWidgetsIgnoreHitTests](UWidget* Widget)
+	PartEntry->WidgetTree->ForEachWidget([&bHitTestPolicyValid, PartEntryRoot](UWidget* Widget)
 	{
-		bAllWidgetsIgnoreHitTests &= Widget
-			&& Widget->GetVisibility() != ESlateVisibility::Visible
-			&& Widget->GetVisibility() != ESlateVisibility::SelfHitTestInvisible;
+		const bool bExpectedButton = Widget && Widget->GetFName() == TEXT("InspectHitTarget")
+			&& Widget->IsA<UButton>();
+		bHitTestPolicyValid &= Widget && (Widget == PartEntryRoot
+			|| bExpectedButton
+			|| (Widget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
+				&& Widget->IsA<UPanelWidget>())
+			|| (Widget->GetVisibility() != ESlateVisibility::Visible
+				&& Widget->GetVisibility() != ESlateVisibility::SelfHitTestInvisible));
 	});
-	TestTrue(TEXT("Panel and entry trees never capture hit tests"), bAllWidgetsIgnoreHitTests);
+	TestTrue(TEXT("Only the explicit inspection hotspot captures hit tests"), bHitTestPolicyValid);
 
 	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
 	TestEqual(TEXT("Project default resolves to formal panel WBP"),
@@ -268,7 +283,7 @@ bool FWacomUIBattleEnemyPartEntryViewAndPreviewSpec::RunTest(const FString& /*Pa
 		return false;
 	}
 
-	TestEqual(TEXT("HP text"), HpText->GetText().ToString(), FString(TEXT("7/12")));
+	TestEqual(TEXT("HP text is current value only"), HpText->GetText().ToString(), FString(TEXT("7")));
 	TestTrue(TEXT("HP percent"), FMath::IsNearlyEqual(HpBar->GetPercent(), 7.0f / 12.0f));
 	TestEqual(TEXT("Shield text"), ShieldText->GetText().ToString(), FString(TEXT("4")));
 	TestEqual(TEXT("Initiative text"), InitiativeText->GetText().ToString(), FString(TEXT("3")));
@@ -282,9 +297,9 @@ bool FWacomUIBattleEnemyPartEntryViewAndPreviewSpec::RunTest(const FString& /*Pa
 	Widget->SetActionPreview(Preview);
 	TestTrue(TEXT("Preview active"), Widget->HasActionPreview());
 	TestEqual(TEXT("Preview does not mutate Snapshot facts"), Widget->GetPartEntryViewData().CurrentHp, 7);
-	TestEqual(TEXT("Preview updates displayed HP"), HpText->GetText().ToString(), FString(TEXT("2/12")));
+	TestEqual(TEXT("Preview updates displayed HP"), HpText->GetText().ToString(), FString(TEXT("2")));
 	Widget->ClearActionPreview();
-	TestEqual(TEXT("Clear restores Snapshot HP"), HpText->GetText().ToString(), FString(TEXT("7/12")));
+	TestEqual(TEXT("Clear restores Snapshot HP"), HpText->GetText().ToString(), FString(TEXT("7")));
 
 	View.bDestroyed = true;
 	View.CurrentHp = 0;
@@ -400,9 +415,15 @@ bool FWacomUIBattleEnemyPanelSingleHostStableEntriesSpec::RunTest(const FString&
 	TestEqual(TEXT("Head remains compact on tail hover"),
 		HeadPartEntry->WidgetTree->FindWidget(TEXT("DetailsContainer"))->GetVisibility(),
 		ESlateVisibility::Collapsed);
-	TestEqual(TEXT("Tail expands on tail hover"),
+	TestEqual(TEXT("Tail keeps inline details compact on hover"),
 		TailPartEntry->WidgetTree->FindWidget(TEXT("DetailsContainer"))->GetVisibility(),
+		ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Only the hovered Tail uses compact context highlight"),
+		TailPartEntry->WidgetTree->FindWidget(TEXT("ContextHighlight"))->GetVisibility(),
 		ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Unmatched Head has no compact context highlight"),
+		HeadPartEntry->WidgetTree->FindWidget(TEXT("ContextHighlight"))->GetVisibility(),
+		ESlateVisibility::Collapsed);
 	Panel->SetHoveredPartSlotId(NAME_None);
 
 	FWacomBattleEnemyPartEntryViewData TailPreview = Enemy.Parts[1];

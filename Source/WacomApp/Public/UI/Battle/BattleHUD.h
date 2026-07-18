@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Events/BattleEvent.h"
 #include "Resolution/BattleTargetValidationResult.h"
+#include "Runtime/BattlePartSlotIdentity.h"
 #include "UI/Battle/BattleCommandBarTypes.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
@@ -177,6 +178,8 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 	float CardPresentationPrewarmElapsedSeconds = 0.0f;
 	bool bEntryWaitingForCamera = false;
 	bool bEntryWaitingForCardPresentationPrewarm = false;
+	bool bEnemyInspectionOpen = false;
+	FBattlePartSlotIdentity EnemyInspectionSelectedPartIdentity;
 };
 #endif
 
@@ -324,6 +327,12 @@ public:
 	/** 取消目标选择（ESC、右键、再次点同一张牌等）。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "取消当前目标选择 UI 状态。只影响 HUD 选择流程，不直接修改 BattleSession。"))
 	void CancelTargetSelect();
+
+	/** Idle 下关闭非模态敌人详情；没有打开时返回 false，让 PlayerController 继续处理菜单 Back。 */
+	bool TryCloseEnemyInspection();
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Inspection")
+	bool IsEnemyInspectionOpen() const;
 
 	/**
 	 * 击倒事件 dialog 的选择入口（GDD §6）。

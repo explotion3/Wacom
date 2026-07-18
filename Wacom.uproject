@@ -80,6 +80,10 @@
 		{
 			"Name": "AllToolsets",
 			"Enabled": true
+		},
+		{
+			"Name": "ToolsetRegistry",
+			"Enabled": true
 		}
 	]
 }

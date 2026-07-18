@@ -14,6 +14,7 @@
 class UWacomActivatableWidget;
 class UWacomAppToastWidget;
 class UWacomBattleEnemyPanelWidget;
+class UWacomBattleEnemyInspectionWidget;
 class UWacomCardDetailTheme;
 class UWacomCardExplanationLexicon;
 class UWacomPrimaryGameLayout;
@@ -65,6 +66,10 @@ public:
 	/** 仅有一个有效 Definition PartSlot 时使用的紧凑敌人面板 WBP。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Battle", meta = (ToolTip = "单部位 Scene Enemy Host 的项目默认紧凑 WBP。Host 显式 EnemyPanelWidgetClass 优先；加载失败时回退 DefaultBattleEnemyPanelWidgetClass。"))
 	TSoftClassPtr<UWacomBattleEnemyPanelWidget> DefaultBattleEnemySinglePartPanelWidgetClass;
+
+	/** BattleHUD 独占的非模态双侧敌人详情 WBP。 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Battle", meta = (ToolTip = "点击 Scene Enemy 紧凑部位段时使用的双侧详情 WBP。必须继承 UWacomBattleEnemyInspectionWidget；为空或加载失败时详情入口会被禁用。"))
+	TSoftClassPtr<UWacomBattleEnemyInspectionWidget> DefaultBattleEnemyInspectionWidgetClass;
 
 	/** 卡牌详情说明模板 DataAsset；为空时使用 C++ fallback 模板。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Card Detail", meta = (ToolTip = "卡牌详情说明模板 DataAsset。用于把 Effect / Passive facts 编译为详情语义文档；为空时使用 C++ fallback 模板。"))

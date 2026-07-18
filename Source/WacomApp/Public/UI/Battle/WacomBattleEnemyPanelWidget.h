@@ -12,6 +12,10 @@ class UTextBlock;
 class UWidget;
 class UWacomBattleEnemyPartEntryWidget;
 
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FWacomBattleEnemyPanelInspectionRequestedNative,
+	const FBattlePartSlotIdentity&);
+
 /**
  * 单个 Scene Enemy Host 的头顶聚合面板。
  *
@@ -53,16 +57,11 @@ public:
 		return PartEntryWidgetClass;
 	}
 
-	/** Editor builder 为单部位紧凑 Panel 配置：常态隐藏名称和聚合 Initiative。 */
-	void SetCompactSinglePartPresentation(bool bInCompact)
-	{
-		bCompactSinglePartPresentation = bInCompact;
-		RefreshHeader();
-	}
-	bool IsCompactSinglePartPresentation() const
-	{
-		return bCompactSinglePartPresentation;
-	}
+	/** HUD runtime 的事件驱动输入门禁；禁用时整块头顶面板点击穿透。 */
+	void SetInspectionInteractionEnabled(bool bEnabled);
+	bool IsInspectionInteractionEnabled() const { return bInspectionInteractionEnabled; }
+
+	FWacomBattleEnemyPanelInspectionRequestedNative OnInspectionRequestedNative;
 
 protected:
 	virtual void NativeConstruct() override;
@@ -71,14 +70,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "面板内每个部位条目使用的正式 WBP 类。必须继承 UWacomBattleEnemyPartEntryWidget。"))
 	TSubclassOf<UWacomBattleEnemyPartEntryWidget> PartEntryWidgetClass;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "单部位紧凑 Panel 开启后，常态隐藏敌人名称和聚合 Initiative；hover 或 Action Preview 时只展开敌人名称。多部位正式 WBP 应保持关闭。"))
-	bool bCompactSinglePartPresentation = false;
-
 private:
 	void RefreshHeader();
 	void SyncPartEntries();
 	void ClearPartEntries();
 	void RefreshContextHighlight();
+	void ApplyInspectionInteractionState();
+	void HandlePartInspectionRequested(const FBattlePartSlotIdentity& PartIdentity);
 	UWacomBattleEnemyPartEntryWidget* FindOrCreatePartEntryWidget(
 		const FWacomBattleEnemyPartEntryViewData& PartView);
 	FName BuildPartEntryWidgetKey(const FWacomBattleEnemyPartEntryViewData& PartView) const;
@@ -109,4 +107,5 @@ private:
 	bool bHasCurrentView = false;
 	bool bHasActionPreview = false;
 	bool bSyncingPartEntries = false;
+	bool bInspectionInteractionEnabled = false;
 };

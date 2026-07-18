@@ -31,6 +31,7 @@ class FWacomBattleHUDCardDetailController;
 class FWacomBattleHUDCombatLogController;
 class FWacomBattleHUDCommandController;
 class FWacomBattleHUDCommandBarPresenter;
+class FWacomBattleHUDEnemyInspectionCoordinator;
 class FWacomBattleDrawPileFeedbackController;
 class FWacomBattleHUDFirstPersonHandBridge;
 class FWacomBattleHUDPresentationCoordinator;
@@ -271,6 +272,8 @@ public:
 		const FWacomBattleActionPreviewPresentation& Presentation,
 		bool bApplyScenePartPreview = true);
 	void ClearActionPreview();
+	bool CanOpenEnemyInspection() const;
+	bool TryCloseEnemyInspection();
 	FWacomBattleEnemyPartDragPredictionDebugInput BuildBattleSceneEnemyPartHoverPredictionInput(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);
@@ -344,6 +347,8 @@ public:
 	const FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator() const;
 	FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator();
 	const FWacomBattleHUDSceneEnemyTargetCoordinator& GetSceneEnemyTargetCoordinator() const;
+	FWacomBattleHUDEnemyInspectionCoordinator& GetEnemyInspectionCoordinator();
+	const FWacomBattleHUDEnemyInspectionCoordinator& GetEnemyInspectionCoordinator() const;
 	FWacomBattleHUDCommandController& GetCommandController();
 	FWacomBattleDrawPileFeedbackController& GetDrawPileFeedbackController();
 	FWacomBattleHUDResultApplicator& GetResultApplicator();
@@ -398,12 +403,14 @@ private:
 	TSharedPtr<FWacomBattleHUDFirstPersonHandBridge> FirstPersonHandBridge;
 	TSharedPtr<FWacomBattleHUDPresentationCoordinator> PresentationCoordinator;
 	TSharedPtr<FWacomBattleHUDSceneEnemyTargetCoordinator> SceneEnemyTargetCoordinator;
+	TSharedPtr<FWacomBattleHUDEnemyInspectionCoordinator> EnemyInspectionCoordinator;
 
 	EBattleUIState UIState = EBattleUIState::Idle;
 	FGuid PendingTargetingCardId;
 	bool bHasBroadcastBattleEnd = false;
 	bool bBattleInputReady = true;
 	bool bFirstPersonBattleHandSuppressedForEntry = false;
+	bool bEnemyActionPreviewActive = false;
 	FBattleSnapshot LastBattleSnapshot;
 	bool bHasLastBattleSnapshot = false;
 };

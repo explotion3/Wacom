@@ -14,6 +14,7 @@
  *   -run=WacomBuildEnemyUI -InspectOnly
  *   -run=WacomBuildEnemyUI -BuildSinglePartCompact
  *   -run=WacomBuildEnemyUI -InspectSinglePartCompact
+ *   -run=WacomBuildEnemyUI -InspectSegmentedVitals
  */
 UCLASS()
 class UWacomBuildEnemyUICommandlet final : public UCommandlet

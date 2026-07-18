@@ -3,6 +3,7 @@
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
 #include "Animation/WidgetAnimation.h"
+#include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
@@ -126,6 +127,17 @@ void UWacomBattleEnemyPartEntryWidget::SetContextHighlighted(const bool bHighlig
 	RefreshContextPresentation(bPreviousContextActive);
 }
 
+void UWacomBattleEnemyPartEntryWidget::SetInspectionInteractionEnabled(const bool bEnabled)
+{
+	if (bInspectionInteractionEnabled == bEnabled)
+	{
+		return;
+	}
+
+	bInspectionInteractionEnabled = bEnabled;
+	RefreshInspectionInteraction();
+}
+
 void UWacomBattleEnemyPartEntryWidget::SetIntroDelaySeconds(const float InDelaySeconds)
 {
 	IntroDelaySeconds = FMath::Max(0.0f, InDelaySeconds);
@@ -152,11 +164,26 @@ void UWacomBattleEnemyPartEntryWidget::SetIntentPresentationStyle(
 void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (InspectHitTarget)
+	{
+		InspectHitTarget->OnClicked.RemoveAll(this);
+		InspectHitTarget->OnClicked.AddDynamic(this, &ThisClass::HandleInspectClicked);
+	}
+	if (StatusList)
+	{
+		StatusList->SetMaxVisibleStatuses(3);
+	}
 	RefreshPresentation();
+	RefreshInspectionInteraction();
 }
 
 void UWacomBattleEnemyPartEntryWidget::NativeDestruct()
 {
+	if (InspectHitTarget)
+	{
+		InspectHitTarget->OnClicked.RemoveAll(this);
+	}
+	OnInspectionRequestedNative.Clear();
 	CancelPendingPresentation();
 	Super::NativeDestruct();
 }
@@ -164,13 +191,13 @@ void UWacomBattleEnemyPartEntryWidget::NativeDestruct()
 void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 {
 	const FWacomBattleEnemyPartEntryViewData& View = GetEffectivePartEntryViewData();
-	const bool bContextActive = bContextHighlighted || bHasActionPreview;
 
 	if (PartNameText)
 	{
 		PartNameText->SetText(View.PartDisplayName.IsEmpty()
 			? FText::FromName(View.PartSlotId)
 			: View.PartDisplayName);
+		PartNameText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (HpBar)
 	{
@@ -181,17 +208,7 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 	}
 	if (HpText)
 	{
-		HpText->SetText(bDisplayCurrentHpOnly
-			? FText::AsNumber(View.CurrentHp)
-			: FText::FromString(FString::Printf(
-				TEXT("%d/%d"), View.CurrentHp, View.MaxHp)));
-	}
-	if (ShieldBar)
-	{
-		const float ShieldFraction = View.MaxHp > 0
-			? static_cast<float>(View.Shield) / static_cast<float>(View.MaxHp)
-			: 0.0f;
-		ShieldBar->SetPercent(FMath::Clamp(ShieldFraction, 0.0f, 1.0f));
+		HpText->SetText(FText::AsNumber(View.CurrentHp));
 	}
 	if (ShieldText)
 	{
@@ -200,6 +217,18 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 	if (ShieldContainer)
 	{
 		ShieldContainer->SetVisibility(View.Shield > 0
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (ShieldFrame)
+	{
+		ShieldFrame->SetVisibility(View.Shield > 0
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (ShieldBadge)
+	{
+		ShieldBadge->SetVisibility(View.Shield > 0
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
@@ -223,24 +252,41 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 				TEXT("%s  %d"),
 				*View.CurrentIntentDisplayName.ToString(),
 				View.CurrentIntentInitiative)));
+		IntentText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (ResistanceText)
 	{
 		ResistanceText->SetText(FText::FromString(FString::Printf(
 			TEXT("RES %d"), View.CurrentIntentResistanceValue)));
+		ResistanceText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (StatusList)
 	{
+		// The compact-entry contract owns this limit independently of Slate
+		// construction order. A panel can push ViewData before a newly-created
+		// child has received NativeConstruct(), especially in WidgetComponent
+		// and automation contexts.
+		StatusList->SetMaxVisibleStatuses(3);
 		StatusList->SetStatuses(View.RuntimeStatuses, View.RuntimeStatusStacks);
 		StatusList->SetVisibility(View.RuntimeStatuses.IsEmpty()
 			? ESlateVisibility::Collapsed
 			: ESlateVisibility::HitTestInvisible);
 	}
-	if (DetailsContainer)
+	if (StatusOverflowText)
 	{
-		DetailsContainer->SetVisibility(bContextActive
+		const int32 OverflowCount = StatusList
+			? StatusList->GetOverflowStatusCount()
+			: FMath::Max(0, View.RuntimeStatuses.Num() - 3);
+		StatusOverflowText->SetText(OverflowCount > 0
+			? FText::FromString(FString::Printf(TEXT("+%d"), OverflowCount))
+			: FText::GetEmpty());
+		StatusOverflowText->SetVisibility(OverflowCount > 0
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
+	}
+	if (DetailsContainer)
+	{
+		DetailsContainer->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (ContextHighlight)
 	{
@@ -269,6 +315,7 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 
 	const float PreviewOpacity = bHasActionPreview ? ActionPreviewRenderOpacity : 1.0f;
 	SetRenderOpacity((View.bDestroyed ? 0.64f : 1.0f) * PreviewOpacity);
+	RefreshInspectionInteraction();
 }
 
 void UWacomBattleEnemyPartEntryWidget::ScheduleIntroAnimation()
@@ -280,6 +327,7 @@ void UWacomBattleEnemyPartEntryWidget::ScheduleIntroAnimation()
 		return;
 	}
 
+	bIntroPending = true;
 	SetVisibility(ESlateVisibility::Hidden);
 	FTimerDelegate Delegate = FTimerDelegate::CreateWeakLambda(this, [this]()
 	{
@@ -294,11 +342,48 @@ void UWacomBattleEnemyPartEntryWidget::ScheduleIntroAnimation()
 
 void UWacomBattleEnemyPartEntryWidget::PlayIntroAnimation()
 {
-	SetVisibility(ESlateVisibility::HitTestInvisible);
+	bIntroPending = false;
+	RefreshInspectionInteraction();
 	if (IntroAnimation)
 	{
 		PlayAnimation(IntroAnimation);
 	}
+}
+
+void UWacomBattleEnemyPartEntryWidget::RefreshInspectionInteraction()
+{
+	if (bIntroPending)
+	{
+		SetVisibility(ESlateVisibility::Hidden);
+		return;
+	}
+
+	const bool bCanInspect = bInspectionInteractionEnabled
+		&& !bHasActionPreview
+		&& bHasReceivedViewData
+		&& CurrentView.Identity.IsValidSlot();
+	SetVisibility(bCanInspect
+		? ESlateVisibility::SelfHitTestInvisible
+		: ESlateVisibility::HitTestInvisible);
+	if (InspectHitTarget)
+	{
+		InspectHitTarget->SetIsEnabled(bCanInspect);
+		InspectHitTarget->SetVisibility(bCanInspect
+			? ESlateVisibility::Visible
+			: ESlateVisibility::HitTestInvisible);
+	}
+}
+
+void UWacomBattleEnemyPartEntryWidget::HandleInspectClicked()
+{
+	if (!bInspectionInteractionEnabled
+		|| bHasActionPreview
+		|| !CurrentView.Identity.IsValidSlot())
+	{
+		return;
+	}
+
+	OnInspectionRequestedNative.Broadcast(CurrentView.Identity);
 }
 
 void UWacomBattleEnemyPartEntryWidget::PlayRealFactTransition(
@@ -376,4 +461,5 @@ void UWacomBattleEnemyPartEntryWidget::CancelIntroTimer()
 		}
 		IntroTimerHandle.Invalidate();
 	}
+	bIntroPending = false;
 }

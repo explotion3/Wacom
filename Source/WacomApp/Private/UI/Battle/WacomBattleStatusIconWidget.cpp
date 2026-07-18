@@ -270,6 +270,18 @@ void UWacomBattleStatusIconListWidget::SetStatusIconViews(const TArray<FWacomBat
 	RefreshDisplay();
 }
 
+void UWacomBattleStatusIconListWidget::SetMaxVisibleStatuses(const int32 InMaxVisibleStatuses)
+{
+	const int32 NewLimit = FMath::Max(0, InMaxVisibleStatuses);
+	if (MaxVisibleStatuses == NewLimit)
+	{
+		return;
+	}
+
+	MaxVisibleStatuses = NewLimit;
+	RefreshDisplay();
+}
+
 TSharedRef<SWidget> UWacomBattleStatusIconListWidget::RebuildWidget()
 {
 	if (!WidgetTree || !WidgetTree->RootWidget)
@@ -365,6 +377,19 @@ const FSlateBrush& UWacomBattleStatusIconListWidget::ResolveIconBrush(FGameplayT
 void UWacomBattleStatusIconListWidget::RefreshDisplay()
 {
 	SetVisibility(CurrentViews.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::HitTestInvisible);
+	const int32 VisibleStatusCount = MaxVisibleStatuses > 0
+		? FMath::Min(MaxVisibleStatuses, CurrentViews.Num())
+		: CurrentViews.Num();
+	OverflowStatusCount = FMath::Max(0, CurrentViews.Num() - VisibleStatusCount);
+	if (OverflowText)
+	{
+		OverflowText->SetText(OverflowStatusCount > 0
+			? FText::FromString(FString::Printf(TEXT("+%d"), OverflowStatusCount))
+			: FText::GetEmpty());
+		OverflowText->SetVisibility(OverflowStatusCount > 0
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
 
 	if (!StatusContainer || !WidgetTree)
 	{
@@ -378,7 +403,7 @@ void UWacomBattleStatusIconListWidget::RefreshDisplay()
 		? StatusIconWidgetClass.Get()
 		: UWacomBattleStatusIconWidget::StaticClass();
 
-	for (int32 Index = 0; Index < CurrentViews.Num(); ++Index)
+	for (int32 Index = 0; Index < VisibleStatusCount; ++Index)
 	{
 		const FWacomBattleStatusIconView& View = CurrentViews[Index];
 		UWacomBattleStatusIconWidget* IconWidget =

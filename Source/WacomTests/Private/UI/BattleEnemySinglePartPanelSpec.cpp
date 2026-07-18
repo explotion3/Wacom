@@ -219,14 +219,12 @@ bool FWacomUIBattleEnemySinglePartPanelAssetContractSpec::RunTest(const FString&
 	Panel->TakeWidget();
 	Entry->TakeWidget();
 
-	TestTrue(TEXT("Compact panel flag is authored"), Panel->IsCompactSinglePartPresentation());
 	TestEqual(TEXT("Compact panel entry class"), Panel->GetPartEntryWidgetClass().Get(), EntryClass);
-	TestTrue(TEXT("Compact entry displays current HP only"), Entry->IsDisplayingCurrentHpOnly());
 	TestEqual(TEXT("Compact entry style"), Entry->GetIntentPresentationStyle(), Style);
-	TestEqual(TEXT("Panel authored root is hit-test invisible"),
-		Panel->WidgetTree->RootWidget->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Entry authored root is hit-test invisible"),
-		Entry->WidgetTree->RootWidget->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Panel root exposes only child hit testing"),
+		Panel->WidgetTree->RootWidget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
+	TestEqual(TEXT("Entry root exposes only the inspection hotspot"),
+		Entry->WidgetTree->RootWidget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
 
 	const TArray<FName> PanelBindings = {
 		TEXT("EnemyNameText"), TEXT("EnemyInitiativeText"),
@@ -238,10 +236,12 @@ bool FWacomUIBattleEnemySinglePartPanelAssetContractSpec::RunTest(const FString&
 	}
 	const TArray<FName> EntryBindings = {
 		TEXT("InitiativeDiamond"), TEXT("IntentDiamond"), TEXT("IntentIcon"),
-		TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"), TEXT("ShieldBar"),
-		TEXT("ShieldText"), TEXT("StatusList"), TEXT("DetailsContainer"),
+		TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"),
+		TEXT("ShieldFrame"), TEXT("ShieldBadge"),
+		TEXT("ShieldText"), TEXT("StatusList"), TEXT("StatusOverflowText"),
+		TEXT("DetailsContainer"),
 		TEXT("ContextHighlight"), TEXT("ActionPreviewOverlay"),
-		TEXT("DestroyedOverlay"), TEXT("DestroyedMark") };
+		TEXT("DestroyedOverlay"), TEXT("DestroyedMark"), TEXT("InspectHitTarget") };
 	for (const FName Binding : EntryBindings)
 	{
 		TestNotNull(*FString::Printf(TEXT("Entry binding %s"), *Binding.ToString()),
@@ -282,7 +282,8 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	UTextBlock* HpText = FindWidget<UTextBlock>(Entry, TEXT("HpText"));
 	UProgressBar* HpBar = FindWidget<UProgressBar>(Entry, TEXT("HpBar"));
 	UWidget* ShieldContainer = FindWidget<UWidget>(Entry, TEXT("ShieldContainer"));
-	UProgressBar* ShieldBar = FindWidget<UProgressBar>(Entry, TEXT("ShieldBar"));
+	UWidget* ShieldFrame = FindWidget<UWidget>(Entry, TEXT("ShieldFrame"));
+	UWidget* ShieldBadge = FindWidget<UWidget>(Entry, TEXT("ShieldBadge"));
 	UTextBlock* ShieldText = FindWidget<UTextBlock>(Entry, TEXT("ShieldText"));
 	UTextBlock* InitiativeText = FindWidget<UTextBlock>(Entry, TEXT("InitiativeText"));
 	UImage* IntentIcon = FindWidget<UImage>(Entry, TEXT("IntentIcon"));
@@ -290,7 +291,8 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	if (!TestNotNull(TEXT("HP text"), HpText)
 		|| !TestNotNull(TEXT("HP bar"), HpBar)
 		|| !TestNotNull(TEXT("Shield container"), ShieldContainer)
-		|| !TestNotNull(TEXT("Shield bar"), ShieldBar)
+		|| !TestNotNull(TEXT("Shield frame"), ShieldFrame)
+		|| !TestNotNull(TEXT("Shield badge"), ShieldBadge)
 		|| !TestNotNull(TEXT("Shield text"), ShieldText)
 		|| !TestNotNull(TEXT("Initiative text"), InitiativeText)
 		|| !TestNotNull(TEXT("Intent icon"), IntentIcon)
@@ -304,9 +306,10 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	TestEqual(TEXT("HP text is current value only"), HpText->GetText().ToString(), FString(TEXT("18")));
 	TestTrue(TEXT("HP percent is 18/24"), FMath::IsNearlyEqual(HpBar->GetPercent(), 0.75f));
 	TestEqual(TEXT("Shield text is exact value"), ShieldText->GetText().ToString(), FString(TEXT("4")));
-	TestTrue(TEXT("Shield percent is 4/24"), FMath::IsNearlyEqual(ShieldBar->GetPercent(), 4.0f / 24.0f));
 	TestEqual(TEXT("Initiative value"), InitiativeText->GetText().ToString(), FString(TEXT("1")));
 	TestEqual(TEXT("Shield visible above zero"), ShieldContainer->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Shield frame visible above zero"), ShieldFrame->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Shield badge visible above zero"), ShieldBadge->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	UObject* AttackResource = IntentIcon->GetBrush().GetResourceObject();
 	TestNotNull(TEXT("Attack icon applied"), AttackResource);
 
@@ -319,7 +322,6 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	Entry->SetActionPreview(Preview);
 	TestEqual(TEXT("Preview HP is projected current value"), HpText->GetText().ToString(), FString(TEXT("12")));
 	TestEqual(TEXT("Preview shield exact number is not truncated"), ShieldText->GetText().ToString(), FString(TEXT("30")));
-	TestTrue(TEXT("Preview shield percent clamps to one"), FMath::IsNearlyEqual(ShieldBar->GetPercent(), 1.0f));
 	TestEqual(TEXT("Acting preview initiative is zero"), InitiativeText->GetText().ToString(), FString(TEXT("0")));
 	TestEqual(TEXT("Preview preserves current intent icon"),
 		IntentIcon->GetBrush().GetResourceObject(), AttackResource);
@@ -440,15 +442,15 @@ bool FWacomUIBattleEnemySinglePartPanelSelectionAndContextSpec::RunTest(const FS
 	TestEqual(TEXT("Details hidden in compact normal state"), Details->GetVisibility(), ESlateVisibility::Collapsed);
 
 	Panel->SetHoveredPartSlotId(TEXT("Body"));
-	TestEqual(TEXT("Hover expands enemy name"), EnemyName->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Hover expands matching details"), Details->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Hover keeps compact enemy name hidden"), EnemyName->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Hover keeps inline details hidden"), Details->GetVisibility(), ESlateVisibility::Collapsed);
 	Panel->SetHoveredPartSlotId(NAME_None);
 
 	FWacomBattleEnemyPartEntryViewData Preview = MakePartView(12, 24, 0, 0);
 	Preview.bActionPreviewWillAct = true;
 	TestTrue(TEXT("Preview accepted"), Panel->SetActionPreviewPartViews({ Preview }));
-	TestEqual(TEXT("Preview expands enemy name"), EnemyName->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Preview expands matching details"), Details->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Preview keeps compact enemy name hidden"), EnemyName->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Preview keeps inline details hidden"), Details->GetVisibility(), ESlateVisibility::Collapsed);
 	Panel->ClearActionPreview();
 	TestEqual(TEXT("Clearing context restores compact name"), EnemyName->GetVisibility(), ESlateVisibility::Collapsed);
 	TestEqual(TEXT("Clearing context restores compact details"), Details->GetVisibility(), ESlateVisibility::Collapsed);

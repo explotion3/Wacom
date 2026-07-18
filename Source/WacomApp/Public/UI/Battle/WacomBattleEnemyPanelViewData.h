@@ -93,3 +93,15 @@ struct WACOMAPP_API FWacomBattleEnemyPanelViewData
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
 	TArray<FWacomBattleEnemyPartEntryViewData> Parts;
 };
+
+USTRUCT(BlueprintType, meta = (ToolTip = "敌人双侧详情面板的只读展示数据。复用 Scene Enemy Panel ViewData，并记录当前选中的稳定部位身份。"))
+struct WACOMAPP_API FWacomBattleEnemyInspectionViewData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection")
+	FWacomBattleEnemyPanelViewData Enemy;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection")
+	FBattlePartSlotIdentity SelectedPartIdentity;
+};

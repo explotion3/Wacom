@@ -167,6 +167,12 @@ tags:
   - 归属：App / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
 
+- [x] **Scene Enemy UI：等宽分段生命条与双侧详情**
+  - 状态：`Done: C++ contract / WBP / lifecycle / automation`
+  - 归属：App / UI / Editor
+  - 入口：[WacomBattleUI.md](./WacomBattleUI.md#6-scene-enemy-ui) / [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md#enemy-panel-wbp)
+  - 说明：单/多部位敌人共用 Definition 顺序的 HP segment、Shield overlay 和三枚 Buff +N；详情面板复用同一 ViewData，并由稳定 Part identity、Idle input gate 与 BattleHUD 私有 coordinator 管理。后续只保留 Boss 专用面板、Intent effects 公开说明和视觉 polish，不建立第二套敌人状态数据链。
+
 - [ ] **战斗表现队列：快速连出后的视觉追赶 polish**
   - 状态：`Ready: 体验 polish`
   - 归属：App / UI
