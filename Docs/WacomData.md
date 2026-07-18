@@ -490,7 +490,7 @@ Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorM
 
 ## §13 正式 Floor 1 Production 内容合同
 
-`Floor.Main.01 / 蛇巢浅林` 的 15 个内容节点已完成 Production 内容设计冻结。它们继续使用本文件既有静态 schema，不新增字段、GameplayTag 或运行时能力。完整资产路径与制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)；本节记录长期规则内容事实。
+`Floor.Main.01 / 蛇巢浅林` 的 15 个内容节点已完成 Production 内容设计冻结，并已按冻结合同播种为 46 个静态 Production DataAsset。它们继续使用本文件既有 static schema，不新增字段、GameplayTag 或运行时能力。完整资产路径、seed-only 制作边界与验收门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)；本节记录长期规则内容事实。
 
 ### SerpentWood 敌人、部位与行为
 
@@ -522,7 +522,7 @@ Aid 固定使用 `Card.Keyword.Tool`，Destroy 固定使用 `Card.Keyword.Weapon
 
 描述模板固定为：伏草藏身/盘根护身使用“获得 `{Effect.0}` 护盾，使一个敌方部位的当前意图延后 `{Effect.1}` 点先机”；断牙毒刺/毒根突袭使用“造成 `{Effect.0}` 点伤害并施加 `{Effect.1}` 层中毒”；蜕甲壁垒、冠鳞庇护只描述获得 `{Effect.0}` 护盾；裂壳重击只描述造成 `{Effect.0}` 伤害；碎冠毒潮明确作用于所有存活敌方部位。占位索引不得脱离上表 Effects 顺序。
 
-拟态来源依次为 BrushSnake 的 Hide/Coil 与 Bite/Venom、MoltGuard 的 Harden+Brace 与 Snap/Slam、RootStalker 的 RootGuard+Tangle 与 Lunge/Sap、ShallowGuardian 的 Harden+CrownGuard 与 Sweep/Venom。完整 package、描述模板与十一 Part 映射见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4；八张 CardDefinition 作为 Spec 011 的 38 个核心资产之外的增量，未来 Production 总量为 46。
+拟态来源依次为 BrushSnake 的 Hide/Coil 与 Bite/Venom、MoltGuard 的 Harden+Brace 与 Snap/Slam、RootStalker 的 RootGuard+Tangle 与 Lunge/Sap、ShallowGuardian 的 Harden+CrownGuard 与 Sweep/Venom。完整 package、描述模板与十一 Part 映射见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4；八张 CardDefinition 作为 Spec 011 的 38 个核心资产之外的增量，已随本组 Production 内容一并落地，总量为 46。
 
 ### Encounter 梯度
 
@@ -570,7 +570,7 @@ Pickup 固定映射：
 
 `SerpentWood.MoltTrailKnown` 与 `SerpentWood.MarshRouteKnown` 是当前 Run 内的 FName RunFlag，不是 GameplayTag，也不承诺跨 SaveGame 恢复。全部条件、效果、负数恢复和扣费继续由现有 RunEvent working-state 事务原子解释。
 
-上述内容冻结关闭 Floor 1 的核心内容设计和八张击倒奖励卡内容 blocker，但没有创建任何资产。后续需要按 [WacomDataAuthoring.md](./WacomDataAuthoring.md) 创建、校验和审计 `38 core + 8 knockdown branch reward cards = 46` 个 Production DataAsset；正式世界关卡、背包容量取舍和其它击倒分支效果继续独立处理。
+上述合同已经落地为 `38 core + 8 knockdown branch reward cards = 46` 个 Production DataAsset：12 Card、4 Behavior、11 EnemyPart、4 Enemy、6 Encounter、4 RunEvent、4 Pickup 与 1 Shop。首次播种通过 exact seed-default、通用 Data Validation、真实加载与 AssetRegistry 计数/类型审计；所有 11 个 Part 使用显式 Aid/Destroy 引用且 legacy 为空。DisplayName、描述、战斗/经济数值与空美术引用仍是可人工调优字段；稳定 ID、class、引用、关键词、TargetMode、effect/condition/choice/slot/intent 的有序结构由制作校验守护。正式世界关卡、背包容量取舍、美术表现和平衡验收继续独立处理。
 
 ## §14 修改数据合同时的检查点
 

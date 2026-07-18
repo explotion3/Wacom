@@ -122,7 +122,7 @@ Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：
 - `WacomRun/Private/Exploration`：lifecycle、traversal、AP、Camp、Floor transition 和内容活动事务实现。
 - `WacomRun/Private/Credential`：稳定 Credential ID 的校验、幂等授予与入口持有求值；`FRunState::GrantedCredentialIds` 是唯一权威状态，App/Data 只转发静态声明或只读查询。
 - `WacomApp`：World 单向引用 Floor 的 `AWacomRunFloorSceneDescriptorActor`、App-private resolver、working Scene Registry、Spline、NodeAnchor、ContentHost、输入、镜头和结果表现；不得把 Actor 或世界坐标回写成规则真相。Descriptor 是需要关卡制作与 Blueprint 只读引用的反射 Actor；resolver、原子刷新状态和 Coordinator prepare/commit 仍是 Private 普通 C++。
-- `WacomEditor`：Journey/Floor validation、共用的 World-only read-only Scene validator、ToolMenus/validation commandlet，以及只拥有 Debug namespace 的可重复内容 builder。正式 map、Authoring 数据、Player/共享 Run Path Blueprint 只能由 builder 读取或哈希守卫，不能保存。
+- `WacomEditor`：Journey/Floor validation、共用的 World-only read-only Scene validator、ToolMenus/validation commandlet，以及只拥有 Debug namespace 的可重复内容 builder。另有 manifest-driven 的 Floor 1 Production seed-only 服务：它只在显式 `SeedMissing` 时创建 exact 46 个缺失 DataAsset，绝不覆盖或重存已有正确 class 资产；默认 structural inspection 守稳定身份与引用，strict seed-default comparison 只服务首次验收。该服务仍沿用 `WacomEditor → WacomData` 方向，不产生 runtime 依赖，也不拥有正式场景。正式 map、Authoring 数据、Player/共享 Run Path Blueprint 只能由 builder 读取或哈希守卫，不能保存。
 
 `URunSession::Initialize(FRunInitializationParams)` 使用完整 working state，成功时一次提交角色持有区、Journey/Floor、时间、压力和探索版本并返回 `FRunInitializationResult`；失败时保留旧 Session。App 和测试都必须显式消费该结果，不保留只返回 bool 的初始化入口。
 

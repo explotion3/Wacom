@@ -27,7 +27,7 @@ tags:
 
 ## 当前推进顺序
 
-1. 先收口剩余 P0 规则问题；击倒卡牌奖励粒度、运行时合同和 Floor 1 八张奖励卡内容已经完成，只剩其它非卡牌分支效果。
+1. 先收口剩余 P0 规则问题；击倒卡牌奖励粒度、运行时合同、Floor 1 八张奖励卡内容及其 Production 资产已经完成，只剩其它非卡牌分支效果。
 2. 再推进地图 / 节点服务。
 3. 地图口径确定后，再接击倒分支、RunEvent / Shop 的节点生成与存档恢复。
 4. UI WBP、表现 polish 和存档恢复按 Demo 范围穿插推进。
@@ -45,7 +45,7 @@ tags:
   - 状态：`Done: 分支字段、legacy fallback、原子结算、被动预览与 Production 门禁已落地`
   - 归属：Data / Battle / App / Editor / Tests
   - 入口：[WacomData.md](./WacomData.md) / [WacomBattle.md](./WacomBattle.md) / `specs/012-knockdown-branch-reward-baseline/`
-  - 说明：Aid/Destroy 显式字段使用统一查询，旧资产可 legacy-only 读取，混填为制作错误；FormalProduction 要求双分支显式配置。UI 只显示 Battle 奖励摘要。Floor 1 按四个敌人各一对的 8 个 CardId 已由 Spec 013 冻结完整卡牌字段与 package；资产仍待实现。
+  - 说明：Aid/Destroy 显式字段使用统一查询，旧资产可 legacy-only 读取，混填为制作错误；FormalProduction 要求双分支显式配置。UI 只显示 Battle 奖励摘要。Floor 1 按四个敌人各一对的 8 个 CardId 已由 Spec 013 冻结并由 Spec 014 创建，11 个正式 Part 已使用显式双分支引用且 legacy 为空。
 
 ## P0.5 近期架构规划
 
@@ -53,7 +53,7 @@ tags:
 	- 状态：`Done: 规则核心、Run Path、当前 Floor Map Screen、正式制作基线与隔离 Debug builder 已落地`
   - 归属：Map / Run / App
   - 入口：[WacomMap.md](./WacomMap.md) / [Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline、Debug-only builder 与 Journey 成功结算/主菜单交接已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结，Floor 1 的 15 个节点内容与 46 资产合同也已完成设计。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 Floor 1 的 46 DataAsset 实现、Floor 2/3 的 31 节点内容设计、正式 DataAsset/关卡、失败总结交接和 Camp handler/UI，不恢复已删除的原型轨道路径。
+	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline、Debug-only builder 与 Journey 成功结算/主菜单交接已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结，Floor 1 的 46 个 Production DataAsset 已创建并审计。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 Floor 2/3 的 31 节点内容设计、正式 Journey/Floor/map/Host、失败总结交接和 Camp handler/UI，不恢复已删除的原型轨道路径。
 	- 2026-07-15 地图闭环：单合法出口 W 自动前进，多合法出口使用道路入口选择，Anchored 无需点击 Actor 即可持续 cursor look；M / 手柄 View 打开当前 Floor 地图，死胡同默认聚焦最近的已完成节点，并可免费同层返回。
 
 - [ ] **Run Map 后续页面与交互扩展**
@@ -65,13 +65,13 @@ tags:
   - 状态：`Done: 三层身份、20 Node/21 Edge、内容槽、AP 与生产门禁已冻结`
   - 归属：Map / Run / Data / App
   - 入口：[WacomMap.md](./WacomMap.md) / `specs/007-formal-floor1-content-freeze/`
-  - 说明：正式身份为 `Journey.Main.01` 与 `Floor.Main.01/02/03`；Floor 1 冻结 20 Node/21 Edge、`4/6/4/4/1/1` 类型配比、15 个 Production 内容槽、四处 Camp 落点、`8–9 AP` 最短推进和 `14–15 AP` 完整探索。Authoring/Debug 资产保持独立，未创建 Production DataAsset/map。蛇印软锁已由独立 Credential 解除；Floor 2/3 图后续由 Spec 009 完成。
+  - 说明：正式身份为 `Journey.Main.01` 与 `Floor.Main.01/02/03`；Floor 1 冻结 20 Node/21 Edge、`4/6/4/4/1/1` 类型配比、15 个 Production 内容槽、四处 Camp 落点、`8–9 AP` 最短推进和 `14–15 AP` 完整探索。Authoring/Debug 资产保持独立；46 个静态 Production 内容 DataAsset 已创建，但 Production Journey/Floor/map 尚未创建。蛇印软锁已由独立 Credential 解除；Floor 2/3 图后续由 Spec 009 完成。
 
 - [x] **Floor 1 Production 内容合同冻结**
   - 状态：`Done: 15 个节点 Definition + 23 个支持资产合同已冻结`
   - 归属：Data / Battle / Run / Map
   - 入口：[WacomData.md](./WacomData.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/011-formal-floor1-production-content-freeze/`
-  - 说明：已冻结 4 Enemy、11 Part、4 Behavior、24 Intent、6 Encounter、4 核心 Card、4 Pickup、1 Shop 和 4 Event/13 Choice；战斗梯度为 `16 → 26–32 → 44 → 52 HP`，两条前半路线各有从 0 Gold 获得一次购买力的选择，Floor AP 保持 `8–9 / 14–15`。Spec 012 冻结四敌人各一对的奖励身份与运行时合同，Spec 013 冻结八张卡完整字段、package leaf、十一 Part 映射和 `14–17 / 20` 奖励量；没有创建任何 DataAsset，资产实现、世界权威与正式 PIE 继续独立处理。
+  - 说明：已冻结并播种 4 Enemy、11 Part、4 Behavior、24 Intent、6 Encounter、4 核心 Card、4 Pickup、1 Shop 和 4 Event/13 Choice；战斗梯度为 `16 → 26–32 → 44 → 52 HP`，两条前半路线各有从 0 Gold 获得一次购买力的选择，Floor AP 保持 `8–9 / 14–15`。Spec 012/013 的八张击倒奖励卡和十一 Part 映射也已随 Spec 014 落地；世界权威、美术/平衡与正式 PIE 继续独立处理。
 
 ## P1 近期实现候选
 
@@ -105,17 +105,17 @@ tags:
   - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/009-formal-floor23-journey-pacing-freeze/data-model.md`
   - 说明：制作 `MoltCavern` 的 15 个与 `VenomCore` 的 16 个非 Debug typed definitions，独立冻结敌人槽、事件选项、Shop 库存和奖励数值并补 Data Validation。蜕印 Pickup 必须同时授予 `Card.Run.MoltSeal` 与 `Credential.Run.MoltSeal`。
 
-- [ ] **Floor 1 Production 38 core + 8 branch reward DataAsset 实现与校验**
-  - 状态：`Ready for implementation: 46 个 package 与全部字段已冻结`
+- [x] **Floor 1 Production 38 core + 8 branch reward DataAsset 实现与校验**
+  - 状态：`Done: 46 个 package 已 seed-only 创建并完成真实资产、AssetRegistry、哈希与幂等审计`
   - 归属：Data / Editor / Tests
-  - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/011-formal-floor1-production-content-freeze/contracts/production-asset-manifest.md` / `specs/012-knockdown-branch-reward-baseline/contracts/production-migration-contract.md` / `specs/013-formal-floor1-knockdown-reward-content-freeze/contracts/production-readiness-contract.md`
-  - 说明：按 Spec 011 的 38 core package 与 Spec 013 的 8 card package 创建 46 个 DataAsset；三张 Starter 卡和现有 `PoisonFang` 只读。先创建八张卡，再装配 11 个正式 Part 的显式双分支并清空 legacy；补 Data Validation、生成内容 smoke、builder 双跑、依赖/failed-load/hash/dirty 审计与受影响 Battle/Run 测试。不得引用 Debug/Test/BadgeDisplayTests/TrainingWarrior，不得修改地图、材质、卡牌表现或其它 Agent 资产。
+  - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/014-formal-floor1-production-assets/`
+  - 说明：Spec 014 以 exact manifest 创建 12 Card、4 Behavior、11 Part、4 Enemy、6 Encounter、4 Event、4 Pickup 与 1 Shop；三张 Starter 卡和现有 `PoisonFang` 保持只读且哈希不变。46/46 真实加载、strict/structural validation、AssetRegistry class/count、forbidden reference、双跑幂等与 LFS 审计通过；没有修改地图、材质、卡牌表现、背包或其它 Agent 资产。
 
 - [ ] **Floor 1 Production DataAsset 与正式世界场景制作**
-  - 状态：`Blocked: readiness gate`
+  - 状态：`Ready for planning: 46 Definition gate complete; world authority still requires user decision`
   - 归属：Map / Data / App / Editor / Tests
   - 入口：`specs/009-formal-floor23-journey-pacing-freeze/contracts/journey-pacing-production-readiness.md`
-  - 说明：Credential、三层图和通用 Journey success 前置已完成；三层 46 个 Production definitions 和 AssetRegistry/引用/哈希权威审计完成后，另开实现切片创建 `/Game/Wacom/Data/Map/Production` 与 `/Game/Wacom/Maps/Run` 资产。不得盲目覆盖 `L_Exploration`，不得修改 Debug builder 写集合。
+  - 说明：Credential、三层图、通用 Journey success 与 Floor 1 的 46 个 Production definitions/审计前置已完成。下一切片需先确认新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01` 还是显式迁移 Authoring 场景，再创建 `/Game/Wacom/Data/Map/Production` Journey/Floor 与正式 Host/scene binding。不得盲目覆盖 `L_Exploration`，不得修改 Debug builder 写集合。
 
 - [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
   - 状态：`In Progress: JSON v2 + Placeholder 发布门槛已完成，外部依赖仍待分批迁移`

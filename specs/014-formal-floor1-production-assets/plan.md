@@ -28,14 +28,15 @@
 
 **Docs To Update**:
 
-- [ ] `Docs/WacomData.md`：记录 46 资产已实现、首次 seed 与后续结构权威边界。
-- [ ] `Docs/WacomDataAuthoring.md`：记录命令、三组、writer lease、report、double-run、禁止覆盖与人工调优合同。
-- [ ] `Docs/WacomBattle.md`：记录 11 Part 的正式双分支引用已落盘并通过 FormalProduction。
-- [ ] `Docs/WacomRun.md`：记录正式 Event/Pickup/Shop Definition 已存在，但尚未绑定 Production Floor/map。
-- [ ] `Docs/Architecture.md`：记录 seed-only Editor service、commandlet/Editor bridge 共用单一 manifest，runtime 依赖不变。
-- [ ] `Docs/TODO.md`：关闭 46 DataAsset 实现任务，保留正式 Journey/Floor/map/Host/PIE。
-- [ ] `Docs/Questions.md`：把世界资产权威问题前置条件更新为 46 资产已完成审计，不替用户选择地图权威。
-- [ ] `Docs/Roadmap.md`：将 Floor 1 击倒奖励卡从待制作改为待平衡/场景接入。
+- [x] `Docs/WacomData.md`：记录 46 资产已实现、首次 seed 与后续结构权威边界。
+- [x] `Docs/WacomDataAuthoring.md`：记录命令、三组、writer lease、report、double-run、禁止覆盖与人工调优合同。
+- [x] `Docs/WacomBattle.md`：记录 11 Part 的正式双分支引用已落盘并通过 FormalProduction。
+- [x] `Docs/WacomRun.md`：记录正式 Event/Pickup/Shop Definition 已存在，但尚未绑定 Production Floor/map。
+- [x] `Docs/WacomMap.md`：清除“Production DataAsset 尚未创建”的失效事实，不改变图、拓扑、AP 或世界权威。
+- [x] `Docs/Architecture.md`：记录 seed-only Editor service、commandlet/Editor bridge 共用单一 manifest，runtime 依赖不变。
+- [x] `Docs/TODO.md`：关闭 46 DataAsset 实现任务，保留正式 Journey/Floor/map/Host/PIE。
+- [x] `Docs/Questions.md`：把世界资产权威问题前置条件更新为 46 资产已完成审计，不替用户选择地图权威。
+- [x] `Docs/Roadmap.md`：将 Floor 1 击倒奖励卡从待制作改为待平衡/场景接入。
 
 **Owning Module(s)**: `WacomEditor`、`WacomTests`、Content packages。`WacomData/WacomBattle/WacomRun/WacomApp` 源码不修改。
 
@@ -229,18 +230,22 @@ Wacom.Data.FormalFloor1Content
 Wacom.Data.Card.Validation
 Wacom.Data.EnemyPart
 Wacom.Data.EnemyValidation
-Wacom.Data.EnemyBehavior
-Wacom.Data.Encounter
+Wacom.Data.EnemyValidation.Behavior
+Wacom.Battle.EnemyBehavior
+Wacom.Data.Validation.EncounterDefinition
 Wacom.Data.RunEvent.Validation
 Wacom.Data.Shop.Validation
-Wacom.Data.Pickup
+Wacom.Data.RunPickup
 Wacom.Battle.RuleContentMatrix
 Wacom.Battle.KnockdownReward
 Wacom.Run.BattleRewardCardsAddedToBackpack
 Wacom.Run.NotificationCoalescing
 Wacom.Run.Event
 Wacom.Run.Pickup
-Wacom.Run.Shop
+Wacom.Run.Deck.Shop
+Wacom.Run.NodeActivity.Shop
+Wacom.Run.VisitOwnership.Shop
+Wacom.Run.SnapshotRevisions.ShopMutationPaths
 ```
 
 实际前缀以 live test discovery 为准，记录发现数量和 pass/fail；不以不存在的别名伪造覆盖。

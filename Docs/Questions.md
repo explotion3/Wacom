@@ -63,7 +63,7 @@ Floor 1 八张分支奖励卡的费用、稀有度、关键词、效果、描述
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| Floor 1 Production 世界资产权威 | 正式图、身份和 `38 core + 8 branch reward` 完整内容合同已冻结，但 DataAsset/Host/map 尚未创建；`L_Exploration` 仍是 Authoring baseline | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是在 46 资产实现并完成 AssetRegistry/引用/哈希审计后显式迁移 Authoring 场景 |
+| Floor 1 Production 世界资产权威 | 46 个静态 Production DataAsset 已创建并完成 AssetRegistry/引用/哈希/幂等审计；Host/map 尚未创建，`L_Exploration` 仍是 Authoring baseline | 新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，还是显式迁移 Authoring 场景；任何选择都不得盲目覆盖人工调参或复用 Debug 权威 |
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |

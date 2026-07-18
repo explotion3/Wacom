@@ -63,7 +63,7 @@
 - [x] T036 Compile default Unity `WacomEditor Win64 Development` and record command/result/hash in `specs/014-formal-floor1-production-assets/quickstart.md`
 - [x] T037 Run `Wacom.Editor.FormalFloor1Content.Manifest` and affected transient validator/rule tests with `-NoDreamShaderEditorBridge`, recording discovered/pass/fail counts in `specs/014-formal-floor1-production-assets/quickstart.md`
 - [x] T038 Run inspect-only commandlet against absent target roots and prove zero content changes in `specs/014-formal-floor1-production-assets/quickstart.md`
-- [ ] T039 Stage only Spec 014, managed pointers, Editor service/adapters, and transient tests; confirm zero `.uasset/.umap`; commit `feat(editor): add formal floor1 content seeder`
+- [x] T039 Stage only Spec 014, managed pointers, Editor service/adapters, and transient tests; confirm zero `.uasset/.umap`; commit `feat(editor): add formal floor1 content seeder`
 
 ## Phase 5 — MCP Cards seed (12)
 
@@ -71,11 +71,11 @@
 
 **Independent Test**: Cards report 12 created/12 saved/0 failed; strict inspection and real Card tests pass; no non-Card package changes.
 
-- [ ] T040 Start the exact target Editor through `Scripts/Invoke-WacomUnrealMcp.ps1` using Role `run`, exact ProjectRoot/branch, and record session provenance in `specs/014-formal-floor1-production-assets/quickstart.md`
-- [ ] T041 AssertReady immediately before Cards mutation and acquire writer for the exact 12 package allowlist from `contracts/asset-manifest.md`
-- [ ] T042 Invoke `Wacom.BuildFormalFloor1Content SeedMissing Group=Cards CompareSeedDefaults` through the exact MCP Editor session and save the Cards JSON report
-- [ ] T043 Audit Git paths, 12 Card SHA-256, LFS status, report counts, Editor log, and allowlist before releasing the Cards writer; record audit JSON in `specs/014-formal-floor1-production-assets/quickstart.md`
-- [ ] T044 Run read-only Cards strict inspection and real Card validation tests without saving assets
+- [x] T040 Start the exact target Editor through `Scripts/Invoke-WacomUnrealMcp.ps1` using Role `run`, exact ProjectRoot/branch, and record session provenance in `specs/014-formal-floor1-production-assets/quickstart.md`
+- [x] T041 AssertReady immediately before Cards mutation and acquire writer for the exact 12 package allowlist from `contracts/asset-manifest.md`
+- [x] T042 Invoke `Wacom.BuildFormalFloor1Content SeedMissing Group=Cards CompareSeedDefaults` through the exact MCP Editor session and save the Cards JSON report
+- [x] T043 Audit Git paths, 12 Card SHA-256, LFS status, report counts, Editor log, and allowlist before releasing the Cards writer; record audit JSON in `specs/014-formal-floor1-production-assets/quickstart.md`
+- [x] T044 Run read-only Cards strict inspection and real Card validation tests without saving assets
 
 ## Phase 6 — MCP EnemyGraph seed (19)
 
@@ -83,10 +83,10 @@
 
 **Independent Test**: EnemyGraph report 19 created/19 saved/0 failed; 24 Intents and all 11 explicit Aid/Destroy mappings pass; no other package changes.
 
-- [ ] T045 AssertReady and acquire writer for the exact 19 EnemyGraph package allowlist
-- [ ] T046 Invoke `Wacom.BuildFormalFloor1Content SeedMissing Group=EnemyGraph CompareSeedDefaults` through MCP and save the EnemyGraph JSON report
-- [ ] T047 Audit Git paths, 19 hashes, LFS, 24 Intent/11 Part report facts, and allowlist before releasing the EnemyGraph writer; record audit JSON
-- [ ] T048 Run read-only strict inspection plus EnemyPart FormalProduction, Enemy, Behavior, Battle RuleContent, and KnockdownReward tests
+- [x] T045 AssertReady and acquire writer for the exact 19 EnemyGraph package allowlist
+- [x] T046 Invoke `Wacom.BuildFormalFloor1Content SeedMissing Group=EnemyGraph CompareSeedDefaults` through MCP and save the EnemyGraph JSON report
+- [x] T047 Audit Git paths, 19 hashes, LFS, 24 Intent/11 Part report facts, and allowlist before releasing the EnemyGraph writer; record audit JSON
+- [x] T048 Run read-only strict inspection plus EnemyPart FormalProduction, Enemy, Behavior, Battle RuleContent, and KnockdownReward tests
 
 ## Phase 7 — MCP NodeDefinitions seed (15)
 
@@ -94,23 +94,23 @@
 
 **Independent Test**: NodeDefinitions report 15 created/15 saved/0 failed; exact slots/choices/rewards/offers pass; four shared Shop dependencies remain byte-identical.
 
-- [ ] T049 Record pre-write SHA-256 for the four read-only Shop Card dependencies, AssertReady, and acquire writer for the exact 15 NodeDefinitions packages
-- [ ] T050 Invoke `Wacom.BuildFormalFloor1Content SeedMissing Group=NodeDefinitions CompareSeedDefaults` through MCP and save the NodeDefinitions JSON report
-- [ ] T051 Audit Git paths, 15 hashes, LFS, read-only dependency hashes, report, and allowlist before releasing the NodeDefinitions writer; record audit JSON
-- [ ] T052 Run read-only strict inspection plus Encounter/Event/Pickup/Shop and affected Run resolution tests
+- [x] T049 Record pre-write SHA-256 for the four read-only Shop Card dependencies, AssertReady, and acquire writer for the exact 15 NodeDefinitions packages
+- [x] T050 Invoke `Wacom.BuildFormalFloor1Content SeedMissing Group=NodeDefinitions CompareSeedDefaults` through MCP and save the NodeDefinitions JSON report
+- [x] T051 Audit Git paths, 15 hashes, LFS, read-only dependency hashes, report, and allowlist before releasing the NodeDefinitions writer; record audit JSON
+- [x] T052 Run read-only strict inspection plus Encounter/Event/Pickup/Shop and affected Run resolution tests
 
 ## Phase 8 — Idempotence, real-asset regression, and docs
 
-- [ ] T053 AssertReady and execute each of Cards/EnemyGraph/NodeDefinitions a second time with `SeedMissing CompareSeedDefaults`; record 0 created/0 saved and unchanged 46 hashes
+- [x] T053 AssertReady and execute each of Cards/EnemyGraph/NodeDefinitions a second time with `SeedMissing CompareSeedDefaults`; record 0 created/0 saved and unchanged 46 hashes
 - [x] T054 Add read-only real-asset smoke and exact structure tests in `Source/WacomTests/Private/Editor/FormalFloor1ContentAssetSpec.cpp`; compile it before Editor start and execute it only after all 46 assets exist
-- [ ] T055 Run AssetRegistry/failed-load/class/count/forbidden-reference audit for all 46 packages without saving
-- [ ] T056 Release all writer ownership, capture final MCP session/audit provenance, close Editor normally, and pass `AssertClosedForBuild`
-- [ ] T057 Compile final default Unity WacomEditor and run all focused prefixes listed in `specs/014-formal-floor1-production-assets/plan.md`
-- [ ] T058 Update `Docs/WacomData.md`, `Docs/WacomDataAuthoring.md`, `Docs/WacomBattle.md`, `Docs/WacomRun.md`, `Docs/Architecture.md`, `Docs/TODO.md`, `Docs/Questions.md`, and `Docs/Roadmap.md` with durable implemented facts
-- [ ] T059 Record Blueprint/PIE skips, balance/card-art/backpack risks, full validation matrix, report/audit paths, hashes, and changed binary paths in `specs/014-formal-floor1-production-assets/quickstart.md`
-- [ ] T060 Run Spec Kit consistency recheck, `git diff --check`, scope/forbidden-path audit, `git lfs status`, and `git lfs fsck`
-- [ ] T061 Stage the 46 `.uasset`, durable Docs, and final Spec ledger only; commit `feat(content): seed formal floor1 production assets`
-- [ ] T062 Confirm branch/worktree/LFS clean and produce the standard `Docs/AgentIntegrationWorkflow.md` handoff without merge or push
+- [x] T055 Run AssetRegistry/failed-load/class/count/forbidden-reference audit for all 46 packages without saving
+- [x] T056 Release all writer ownership, capture final MCP session/audit provenance, close Editor normally, and pass `AssertClosedForBuild`
+- [x] T057 Compile final default Unity WacomEditor and run all focused prefixes listed in `specs/014-formal-floor1-production-assets/plan.md`
+- [x] T058 Update `Docs/WacomData.md`, `Docs/WacomDataAuthoring.md`, `Docs/WacomBattle.md`, `Docs/WacomRun.md`, `Docs/WacomMap.md`, `Docs/Architecture.md`, `Docs/TODO.md`, `Docs/Questions.md`, and `Docs/Roadmap.md` with durable implemented facts
+- [x] T059 Record Blueprint/PIE skips, balance/card-art/backpack risks, full validation matrix, report/audit paths, hashes, and changed binary paths in `specs/014-formal-floor1-production-assets/quickstart.md`
+- [x] T060 Run Spec Kit consistency recheck, `git diff --check`, scope/forbidden-path audit, `git lfs status`, and `git lfs fsck`
+- [x] T061 Stage the 46 `.uasset`, durable Docs, and final Spec ledger only; commit `feat(content): seed formal floor1 production assets`
+- [x] T062 Confirm branch/worktree/LFS clean and produce the standard `Docs/AgentIntegrationWorkflow.md` handoff without merge or push
 
 ## Dependencies
 

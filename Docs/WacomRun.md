@@ -343,6 +343,8 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 - 已解锁入口继续按既有规则通过，不重复要求凭证。
 - `Credential.Run.SerpentSigil` 是正式 Floor 1→2 的稳定资格；`Card.Run.SerpentSigil` 只是同一次 Pickup 的实体展示奖励，拥有该卡不能反推 Credential。
 
+Floor 1 的 6 Encounter、4 RunEvent、4 Pickup 与 1 Shop Production Definition 已按上述通用合同创建并通过真实加载/结构回归；其中蛇印 Pickup 已静态绑定 `Card.Run.SerpentSigil + Credential.Run.SerpentSigil`。这些 DataAsset 只提供节点内容 payload，不等于 Production Journey/Floor、地图或 Host 已存在，也没有新增 Floor 1 专用 runtime 分支；在正式世界权威和场景绑定落地前不能宣称可玩 Golden Path。
+
 ### Run World Card Interaction
 
 探索期世界卡牌交互使用独立完成状态：`FRunState::CompletedRunWorldInteractionIds`。

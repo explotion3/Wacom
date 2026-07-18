@@ -259,7 +259,7 @@ Floor 1 的 15 个内容节点已完成 Production 内容设计冻结，不再�
 
 击倒奖励量按 Encounter 部位数固定为：必经 Scout + EliteSentinel + Guardian 共 11；Route A 增加 MoltGuard 3，Route B 增加双 BrushSnake 4，Route C 不增加 Encounter，Route D 增加 RootStalker 2。因此 A/C、B/C、A/D、B/D 四条关键路线分别获得 `14 / 15 / 16 / 17` 张分支奖励卡，完整探索全部六场 Encounter 最多获得 20 张。每个部位只获得所选 Aid 或 Destroy 的一张独立实例，允许重复；选择不额外消耗 AP。该体量是后续卡组/背包平衡和 PIE 的显式风险，不在本轮增加去重或替代奖励。
 
-Floor 1 核心内容与八张击倒奖励卡设计 blocker 已关闭，但没有创建任何 DataAsset、Host 或关卡。首层下一步需实现并验证 `38 core + 8 branch reward = 46` 个新 Production DataAsset；其它 Aid/Destroy/Withdraw 后果、背包容量、世界资产权威、正式场景和 Golden Path PIE 仍分别处理。精确静态内容合同见 [WacomData.md](./WacomData.md) §13，路径和 builder 边界见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。
+Floor 1 核心内容与八张击倒奖励卡设计 blocker 已关闭，`38 core + 8 branch reward = 46` 个静态 Production DataAsset 也已创建并通过真实加载、AssetRegistry、引用/哈希与幂等审计；Host、Production Journey/Floor DataAsset 和正式关卡仍未创建。其它 Aid/Destroy/Withdraw 后果、背包容量、世界资产权威、正式场景和 Golden Path PIE 继续分别处理。精确静态内容合同见 [WacomData.md](./WacomData.md) §13，路径和 seed-only 制作边界见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。
 
 ### Floor 2 节点与内容槽
 
