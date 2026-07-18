@@ -348,9 +348,15 @@ bool FWacomFirstPersonCardLayerDenyUsesInteractionFeedbackTest::RunTest(const FS
 	TestEqual(TEXT("Aim starts before invalid overlay"),
 		SlotWidget->GetGestureStateForFirstPersonLayer(),
 		EWacomFirstPersonCardGestureState::AimingTargetedCard);
-	SlotWidget->SetCardDragTargetAffordanceFeedback(
-		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget,
-		false);
+	const FWacomInteractionTargetHandle InvalidCardTarget =
+		FWacomInteractionTargetHandle::ForCardTarget(
+			FGuid::NewGuid(),
+			SlotWidget,
+			FVector2D(540.0f, 590.0f));
+	SlotWidget->SetCardDragFeedbackTarget(
+		InvalidCardTarget,
+		false,
+		EWacomFirstPersonCardDragTargetFeedbackState::InvalidCardTarget);
 
 	TestEqual(
 		TEXT("Invalid hover does not start deny cue"),
