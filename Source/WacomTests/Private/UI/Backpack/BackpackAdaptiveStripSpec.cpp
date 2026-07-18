@@ -163,6 +163,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUIBackpackCarryFocusWindowCompatibilitySpec::RunTest(const FString& Parameters)
 {
 	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
+	TestEqual(TEXT("Carry default exposes only the current card as a full card"),
+		Style->FocusWindowMaximumCards, 1);
 	int32 WindowStart = INDEX_NONE;
 	const FVector2D Pointer(800.0f, 500.0f);
 	const TArray<FWacomBackpackCarriedStripLayout> Carry =
@@ -181,10 +183,16 @@ bool FWacomUIBackpackCarryFocusWindowCompatibilitySpec::RunTest(const FString& P
 			INDEX_NONE,
 			&WindowStart);
 	TestEqual(TEXT("Carry still uses the existing FocusWindow card count"), Carry.Num(), 15);
-	TestTrue(TEXT("Carry still resolves its own window state"), WindowStart != INDEX_NONE);
+	TestEqual(TEXT("The one-card full window follows the current card"), WindowStart, 7);
 	TestTrue(TEXT("Carry current card remains anchored horizontally to the pointer"),
 		Carry.IsValidIndex(7)
 			&& FMath::IsNearlyEqual(Carry[7].Transform.CardCenter.X, Pointer.X, 0.1f));
+	TestTrue(TEXT("The immediate left card stays in the compressed segment"),
+		Carry.IsValidIndex(6)
+			&& Pointer.X - Carry[6].Transform.CardCenter.X < Style->CardRenderSize.X);
+	TestTrue(TEXT("The immediate right card stays in the compressed segment"),
+		Carry.IsValidIndex(8)
+			&& Carry[8].Transform.CardCenter.X - Pointer.X < Style->CardRenderSize.X);
 	return true;
 }
 

@@ -1013,7 +1013,7 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	Style->HandLensCompressedExposurePixels = 59.0f;
 	Style->HandLensMinimumExposurePixels = 16.0f;
 	Style->HandLensPromotionOverlapTolerancePixels = 178.0f;
-	Style->FocusWindowMaximumCards = 5;
+	Style->FocusWindowMaximumCards = 1;
 	Style->FocusWindowFullGapPixels = 24.0f;
 	Style->FocusWindowCompressedExposurePixels = 56.0f;
 	Style->FocusWindowMinimumExposurePixels = 16.0f;

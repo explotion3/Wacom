@@ -89,7 +89,7 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 背包外层 Canvas 位置是 Scene 基础布局，牌堆与多卡携带基础姿态统一为水平零旋转；`WBP_WacomDeckCardWidget.CardMotionRoot` 只叠加局部 Translation / Angle。成功释放先捕获当前视觉姿态，目标 Scene 到达后把同一 Widget 放到目标 B 的 Canvas 布局，再把视觉差值作为 `CardMotionRoot` 局部偏移 ease-out 到零；中途 Reconcile 或目标更新只能从当前视觉姿态重定向，禁止重新使用来源 A。该瞬态层交接必须保留原 Widget 的 Retainer 捕获面与局部姿态；等价 Scene 绑定不得重复提交卡面数据、移动开关或 retained-rendering 模式，避免材质捕获重新建立时产生短暂空帧。背包的逻辑鼠标位置与视觉弹簧位置必须分离，规则判定始终使用无延迟指针。
 
-正式展开牌堆使用 `HandLensStrip`，多卡携带继续使用原 `FocusWindowStrip`，两条路径不共享制作参数。Hand Lens 保持 `296×420` 卡面和零旋转：空间足够时全部完整展示；不足时由整条走廊中的连续鼠标横向位置求出左压缩堆、动态完整区和右压缩堆。布局目标默认以 `24px` 完整间隔、`59px` 期望露出、`16px` 最小露出和 `178px` 提升重叠容忍求解，整个牌列从当前视觉姿态以约 `0.32s` Ease-Out 滑向新目标。布局焦点不等于浏览卡：详情、Fake3D、上抬与拾取统一由卡牌当前视觉姿态和 Canvas ZOrder 决定；动画期间静止鼠标也会按需重新解析视觉卡身份，但同一透镜段内不会重复布局、刷新 Snapshot 或 Scene。框选、Ctrl 选择和整堆移动冻结屏幕所见姿态与透镜。鼠标离开只取消活动焦点，最后 Hand Lens 三段布局保持到牌堆收起。Carry 仍以滚轮当前卡为旧 FocusWindow 焦点并锚定鼠标，用户当前的 Carry 制作参数不受 Hand Lens 迁移影响。
+正式展开牌堆使用 `HandLensStrip`，多卡携带继续使用独立 `FocusWindowStrip`，两条路径不共享制作参数。Hand Lens 保持 `296×420` 卡面和零旋转：空间足够时全部完整展示；不足时由整条走廊中的连续鼠标横向位置求出左压缩堆、动态完整区和右压缩堆。布局目标默认以 `24px` 完整间隔、`59px` 期望露出、`16px` 最小露出和 `178px` 提升重叠容忍求解，整个牌列从当前视觉姿态以约 `0.32s` Ease-Out 滑向新目标。布局焦点不等于浏览卡：详情、Fake3D、上抬与拾取统一由卡牌当前视觉姿态和 Canvas ZOrder 决定；动画期间静止鼠标也会按需重新解析视觉卡身份，但同一透镜段内不会重复布局、刷新 Snapshot 或 Scene。框选、Ctrl 选择和整堆移动冻结屏幕所见姿态与透镜。鼠标离开只取消活动焦点，最后 Hand Lens 三段布局保持到牌堆收起。Carry 以滚轮当前卡为 FocusWindow 焦点并锚定鼠标，正式基线只完整展示当前卡一张，其余卡向左右压缩；Hand Lens 迁移和展开牌堆调参不会影响 Carry。
 
 背包牌列与运动制作参数由版本化的 `DA_BackpackWorkspaceStyle` 统一拥有，`WBP_BackpackScreen` 只通过普通资产引用消费，避免 Widget Blueprint 根详情内联 UObject。版本 2 将 `HandLens*` 参数限定为展开牌堆，将 `FocusWindow*` 参数限定为多卡携带；Builder 不得静默覆盖已有资产。普通左键按下可移动卡牌时必须在同一输入帧迁入 Carry 表现，不得把首次视觉启动推迟到下一次 PointerMove。
 

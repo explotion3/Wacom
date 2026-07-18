@@ -122,8 +122,8 @@ public:
 	float HandLensPromotionOverlapTolerancePixels = 178.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
-		meta = (ToolTip = "中央完整展开窗口允许的最大卡牌数。默认 5，推荐 3–7；实际数量会根据工作台宽度自动降低。", ClampMin = "1"))
-	int32 FocusWindowMaximumCards = 5;
+		meta = (ToolTip = "多卡携带时完整展示的最大卡牌数。默认 1，只完整展示当前滚轮卡；调高后会让相邻卡一并完整展开。", ClampMin = "1"))
+	int32 FocusWindowMaximumCards = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
 		meta = (ToolTip = "中央窗口内完整卡面之间的边缘间隔，单位为像素。默认 24，推荐 8–32；不改变 296×420 卡面尺寸。"))
