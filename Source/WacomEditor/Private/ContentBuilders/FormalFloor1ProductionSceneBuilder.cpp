@@ -722,6 +722,11 @@ namespace
 		{
 			OutErrors.Add(TEXT("FloorEntrance marker PersistentId property is unavailable"));
 		}
+		else if (PersistentIdProperty->HasAnyPropertyFlags(
+			CPF_DisableEditOnInstance))
+		{
+			OutErrors.Add(TEXT("FloorEntrance marker PersistentId must be instance editable"));
+		}
 		if (bHasInteractionTarget)
 		{
 			OutErrors.Add(TEXT("FloorEntrance marker must remain non-interactive"));
@@ -785,6 +790,8 @@ namespace
 			OutErrors.Add(TEXT("Could not add FloorEntrance marker PersistentId"));
 			return nullptr;
 		}
+		FBlueprintEditorUtils::SetBlueprintOnlyEditableFlag(
+			Blueprint, TEXT("PersistentId"), false);
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
 		FKismetEditorUtilities::CompileBlueprint(Blueprint);
 		if (Blueprint->Status == BS_Error || !Blueprint->GeneratedClass)
@@ -1336,12 +1343,20 @@ namespace
 				}
 				HostNodeIds.Add(Binding->NodeId);
 				const FName PersistentId = ReadPersistentId(*Actor);
-				if (PersistentId != PersistentIdForNode(Binding->NodeId)
-					|| PersistentIds.Contains(PersistentId))
+				const FName ExpectedPersistentId =
+					PersistentIdForNode(Binding->NodeId);
+				const bool bDuplicatePersistentId =
+					PersistentIds.Contains(PersistentId);
+				if (PersistentId != ExpectedPersistentId
+					|| bDuplicatePersistentId)
 				{
 					OutErrors.Add(FString::Printf(
-						TEXT("Content Host PersistentId mismatch/duplicate: %s"),
-						*Binding->NodeId.ToString()));
+						TEXT("Content Host PersistentId mismatch/duplicate: Node=%s Expected=%s Actual=%s Duplicate=%s Actor=%s"),
+						*Binding->NodeId.ToString(),
+						*ExpectedPersistentId.ToString(),
+						*PersistentId.ToString(),
+						bDuplicatePersistentId ? TEXT("true") : TEXT("false"),
+						*Actor->GetPathName()));
 				}
 				PersistentIds.Add(PersistentId);
 			}
@@ -1975,8 +1990,11 @@ namespace Wacom::ContentBuilder
 				++Report.MissingCount;
 				continue;
 			}
-			UObject* Existing = LoadObject<UObject>(
-				nullptr, *ObjectPathForPackage(Entry.PackagePath));
+			UObject* Existing = Entry.PackagePath == WorldPackage
+				? Cast<UObject>(UEditorLoadingAndSavingUtils::LoadMap(
+					Entry.PackagePath))
+				: LoadObject<UObject>(
+					nullptr, *ObjectPathForPackage(Entry.PackagePath));
 			if (!Existing || Existing->GetClass() != Entry.AssetClass)
 			{
 				EntryReport.State = EFormalFloor1ProductionSceneEntryState::Failed;
@@ -2129,8 +2147,11 @@ namespace Wacom::ContentBuilder
 					break;
 				}
 				UPackage::WaitForAsyncFileWrites();
-				UObject* Reloaded = LoadObject<UObject>(
-					nullptr, *ObjectPathForPackage(Entry.PackagePath));
+				UObject* Reloaded = Entry.PackagePath == WorldPackage
+					? Cast<UObject>(UEditorLoadingAndSavingUtils::LoadMap(
+						Entry.PackagePath))
+					: LoadObject<UObject>(
+						nullptr, *ObjectPathForPackage(Entry.PackagePath));
 				Errors.Reset();
 				if (!Reloaded || !ValidateLoadedManifestEntry(
 					Entry, *Reloaded, true, Errors))
