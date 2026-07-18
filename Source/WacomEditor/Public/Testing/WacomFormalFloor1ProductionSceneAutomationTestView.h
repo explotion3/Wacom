@@ -18,11 +18,23 @@ struct WACOMEDITOR_API FWacomFormalFloor1ProductionSceneAutomationSummary
 	TArray<FName> StableIds;
 };
 
+/** Read-only result of validating the seven persisted Production targets. */
+struct WACOMEDITOR_API FWacomFormalFloor1ProductionSceneRealAssetSummary
+{
+	int32 ExitCode = 0;
+	int32 ExistingCount = 0;
+	int32 FailedCount = 0;
+	int32 SavedCount = 0;
+	TArray<FString> Diagnostics;
+};
+
 struct WACOMEDITOR_API FWacomFormalFloor1ProductionSceneAutomationTestView
 {
 	static FWacomFormalFloor1ProductionSceneAutomationSummary GetManifestSummary();
 	static bool ValidateManifest(TArray<FString>& OutErrors);
 	static bool ValidateTransientFloor(TArray<FString>& OutErrors);
+	static FWacomFormalFloor1ProductionSceneRealAssetSummary
+		InspectRealAssets();
 	static bool ParseArguments(
 		const TArray<FString>& Arguments,
 		FString& OutCanonicalGroup,

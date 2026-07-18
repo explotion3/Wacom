@@ -82,6 +82,31 @@ bool FWacomFormalFloor1ProductionSceneAutomationTestView::ValidateTransientFloor
 		OutErrors);
 }
 
+FWacomFormalFloor1ProductionSceneRealAssetSummary
+FWacomFormalFloor1ProductionSceneAutomationTestView::InspectRealAssets()
+{
+	using namespace Wacom::ContentBuilder;
+	FFormalFloor1ProductionSceneBuildReport Report;
+	RunFormalFloor1ProductionSceneBuilder(
+		{TEXT("Inspect"), TEXT("Group=All"), TEXT("CompareSeedDefaults"),
+		 TEXT("Report=Saved/Automation/Spec015-real-assets.json")},
+		&Report);
+	FWacomFormalFloor1ProductionSceneRealAssetSummary Summary;
+	Summary.ExitCode = Report.ExitCode;
+	Summary.ExistingCount = Report.ExistingCount;
+	Summary.FailedCount = Report.FailedCount;
+	Summary.SavedCount = Report.SavedCount;
+	for (const FFormalFloor1ProductionSceneEntryReport& Entry : Report.Entries)
+	{
+		for (const FString& Diagnostic : Entry.Diagnostics)
+		{
+			Summary.Diagnostics.Add(FString::Printf(
+				TEXT("%s: %s"), *Entry.PackagePath, *Diagnostic));
+		}
+	}
+	return Summary;
+}
+
 bool FWacomFormalFloor1ProductionSceneAutomationTestView::ParseArguments(
 	const TArray<FString>& Arguments,
 	FString& OutCanonicalGroup,
