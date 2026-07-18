@@ -242,5 +242,5 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/013-formal-floor1-knockdown-reward-content-freeze/plan.md
+at specs/014-formal-floor1-production-assets/plan.md
 <!-- SPECKIT END -->
