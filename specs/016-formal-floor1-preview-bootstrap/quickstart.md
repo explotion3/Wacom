@@ -360,7 +360,9 @@ Authorization and finalization state:
 ```text
 User PIE authorization: received 2026-07-19
 Authoritative map hash: 2F22B9956FB05D0F1249D121010109208526873072B61BAE6224096888E921C1
-Commit count for Spec 016: pending finalization
+Commit count for Spec 016: 2
+Source/Spec/Docs commit: 3c4c22fd2722020df2a358c439f999b8c56e2391
+Content commit: this ledger's final HEAD; exact hash is reported in the handoff
 Merge main: forbidden
 Push: forbidden
 ```

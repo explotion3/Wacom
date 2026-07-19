@@ -125,9 +125,9 @@
 - [x] T053 Update `Docs/TODO.md`, `Docs/Questions.md`, and `Docs/TechDebt.md` with completed Preview capability and Production Journey removal blocker
 - [x] T054 Complete `quickstart.md` with build/test/MCP/writer/hash/AssetRegistry/Blueprint/PIE evidence and remaining risks
 - [x] T055 Run Spec Kit consistency recheck, `git diff --check`, forbidden-scope audit, `git status`, `git lfs status`, and `git lfs fsck`
-- [ ] T056 After user PIE authorization only, stage source/tests/Spec/Docs and create `feat(app): add run floor preview bootstrap`
-- [ ] T057 Stage only the Preview Blueprint/map plus final binary evidence updates and create `feat(content): enable floor1 preview startup`
-- [ ] T058 Confirm worktree/LFS clean and produce the standard `Docs/AgentIntegrationWorkflow.md` handoff; do not merge main or push
+- [x] T056 After user PIE authorization only, stage source/tests/Spec/Docs and create `feat(app): add run floor preview bootstrap`
+- [x] T057 Stage only the Preview Blueprint/map plus final binary evidence updates and create `feat(content): enable floor1 preview startup`
+- [x] T058 Confirm worktree/LFS clean and produce the standard `Docs/AgentIntegrationWorkflow.md` handoff; do not merge main or push
 
 ## Dependencies & execution order
 
