@@ -23,13 +23,15 @@ namespace Wacom::ContentBuilder
 		TObjectPtr<UEnemyDefinition> Enemy = nullptr;
 		TObjectPtr<UEncounterDefinition> Encounter = nullptr;
 		TObjectPtr<UBlueprint> HostBlueprint = nullptr;
+		TObjectPtr<UBlueprint> DebugHostBlueprint = nullptr;
 		bool bChanged = false;
 		TArray<FString> Errors;
 
 		bool IsSuccess() const
 		{
 			return RewardCard && Behavior && HeadPart && BodyPart && TailPart
-				&& Enemy && Encounter && HostBlueprint && Errors.IsEmpty();
+				&& Enemy && Encounter && HostBlueprint && DebugHostBlueprint
+				&& Errors.IsEmpty();
 		}
 	};
 

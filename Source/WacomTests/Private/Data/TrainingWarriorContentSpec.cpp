@@ -3,9 +3,9 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyHostAnimationStyle.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
+#include "Actors/WacomBattleEnemyPartAnimationStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
+#include "Data/EnemyHostComponentTestHelpers.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
@@ -45,7 +45,7 @@ namespace WacomTrainingWarriorContentSpec
 	const TCHAR* EncounterPath =
 		TEXT("/Game/Wacom/Data/Encounters/DA_Encounter_TrainingWarriorSingle.DA_Encounter_TrainingWarriorSingle");
 	const TCHAR* AnimationStylePath =
-		TEXT("/Game/Wacom/Data/Enemies/TrainingWarrior/DA_EnemyHostAnimation_TrainingWarrior.DA_EnemyHostAnimation_TrainingWarrior");
+		TEXT("/Game/Wacom/Data/Enemies/TrainingWarrior/DA_EnemyPartAnimation_TrainingWarrior.DA_EnemyPartAnimation_TrainingWarrior");
 	const TCHAR* HostPath =
 		TEXT("/Game/Wacom/Core/Enemy/BP_EnemyHost_TrainingWarrior.BP_EnemyHost_TrainingWarrior");
 	const FName BodySequenceId(TEXT("TrainingWarrior.Body.Sequence"));
@@ -168,15 +168,15 @@ bool FWacomDataTrainingWarriorAssetContractSpec::RunTest(
 	TestEqual(TEXT("Body PartId"), Part->PartId, FName(TEXT("TrainingWarrior.Body")));
 	TestEqual(TEXT("Body HP"), Part->MaxHp, 24);
 	TestEqual(TEXT("Body experience"), Part->ExperienceReward, 3);
-	TestTrue(TEXT("Legacy Body reward still references BrokenCleave"),
-		Part->KnockdownRewardCard.Get() == Card);
-	TestNull(TEXT("Legacy Body has no explicit Aid reward yet"),
-		Part->AidRewardCard.Get());
-	TestNull(TEXT("Legacy Body has no explicit Destroy reward yet"),
-		Part->DestroyRewardCard.Get());
-	TestTrue(TEXT("Unified Aid query reads legacy BrokenCleave"),
+	TestNull(TEXT("Legacy Body reward field is cleared"),
+		Part->KnockdownRewardCard.Get());
+	TestTrue(TEXT("Body Aid reward references BrokenCleave"),
+		Part->AidRewardCard.Get() == Card);
+	TestTrue(TEXT("Body Destroy reward references BrokenCleave"),
+		Part->DestroyRewardCard.Get() == Card);
+	TestTrue(TEXT("Unified Aid query reads explicit BrokenCleave"),
 		Part->ResolveKnockdownRewardCard(EKnockdownChoice::Aid) == Card);
-	TestTrue(TEXT("Unified Destroy query reads legacy BrokenCleave"),
+	TestTrue(TEXT("Unified Destroy query reads explicit BrokenCleave"),
 		Part->ResolveKnockdownRewardCard(EKnockdownChoice::Destroy) == Card);
 	TestNull(TEXT("Unified Withdraw query returns no reward"),
 		Part->ResolveKnockdownRewardCard(EKnockdownChoice::Withdraw));
@@ -434,8 +434,8 @@ bool FWacomDataTrainingWarriorHostAndArtSpec::RunTest(
 {
 	using namespace WacomTrainingWarriorContentSpec;
 	UBlueprint* HostBlueprint = LoadAsset<UBlueprint>(HostPath);
-	UWacomBattleEnemyHostAnimationStyle* Style =
-		LoadAsset<UWacomBattleEnemyHostAnimationStyle>(AnimationStylePath);
+	UWacomBattleEnemyPartAnimationStyle* Style =
+		LoadAsset<UWacomBattleEnemyPartAnimationStyle>(AnimationStylePath);
 	if (!TestNotNull(TEXT("TrainingWarrior Host Blueprint loads"), HostBlueprint)
 		|| !TestNotNull(TEXT("TrainingWarrior animation Style loads"), Style)
 		|| !TestNotNull(TEXT("TrainingWarrior Host generated class"),
@@ -450,46 +450,44 @@ bool FWacomDataTrainingWarriorHostAndArtSpec::RunTest(
 		return false;
 	}
 	TestEqual(TEXT("Host enemy slot"), Host->EnemySlotId, FName(TEXT("Enemy")));
-	TestEqual(TEXT("Host authoring mode"), Host->HostAuthoringMode,
-		EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual);
-	TestEqual(TEXT("Host visual mode"), Host->HostVisualMode,
-		EWacomBattleEnemyHostVisualMode::Flipbook);
-	TestNotNull(TEXT("Host Idle Flipbook"), Host->HostFlipbook.Get());
-	TestTrue(TEXT("Host references semantic animation Style"),
-		Host->HostAnimationStyle.Get() == Style);
 	TestNotNull(TEXT("Host formal impact Style"), Host->DefaultImpactStyle.Get());
 	TestNotNull(TEXT("Host formal target preview Style"),
 		Host->DefaultTargetPreviewStyle.Get());
-	TestEqual(TEXT("Host Idle play rate"), Host->HostFlipbookPlayRate, 1.0f);
-	TestTrue(TEXT("Host Idle loops"), Host->bLoopHostFlipbook);
-	TestTrue(TEXT("Host Idle auto plays"), Host->bAutoPlayHostFlipbook);
 
 	const FWacomBattleSceneEnemyHostAuthoringReport Report =
 		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
 	TestTrue(TEXT("Host authoring report is Ready"), Report.bAuthoringReady);
-	TestEqual(TEXT("Host has one Body PartActor"), Report.PartActorCount, 1);
-	const TArray<AWacomBattleEnemyPartActor*> Parts = Host->GetBattleEnemyPartActors();
-	TestEqual(TEXT("Host production topology has one part"), Parts.Num(), 1);
-	if (Parts.Num() == 1 && Parts[0])
+	TestEqual(TEXT("Host has one Body Part component"), Report.PartComponentCount, 1);
+	const Wacom::Tests::EnemyHostComponents::FPartTemplates Body =
+		Wacom::Tests::EnemyHostComponents::Find(*HostBlueprint, TEXT("Body"));
+	if (TestNotNull(TEXT("Host Body Part component"), Body.Part)
+		&& TestNotNull(TEXT("Host Body Flipbook layer"), Body.Flipbook)
+		&& TestNotNull(TEXT("Host Body ImpactAnchor"), Body.ImpactAnchor))
 	{
-		TestEqual(TEXT("Host PartSlotId"), Parts[0]->PartSlotId, FName(TEXT("Body")));
-		TestEqual(TEXT("Host derived PartId"), Parts[0]->PartId,
+		TestEqual(TEXT("Host PartSlotId"), Body.Part->PartSlotId, FName(TEXT("Body")));
+		TestEqual(TEXT("Host derived PartId"), Body.Part->PartId,
 			FName(TEXT("TrainingWarrior.Body")));
-		TestEqual(TEXT("Host Body default HitBounds"), Parts[0]->HitBoundsExtent,
+		TestEqual(TEXT("Host Body default HitBounds"), Body.Part->GetUnscaledBoxExtent(),
 			FVector(55.0, 45.0, 55.0));
 		TestEqual(TEXT("Host Body ImpactAnchor has no offset"),
-			Parts[0]->ImpactAnchorRelativeLocation, FVector::ZeroVector);
-		TestEqual(TEXT("Host Body has no VisualLayers"), Parts[0]->VisualLayers.Num(), 0);
+			Body.ImpactAnchor->GetRelativeLocation(), FVector::ZeroVector);
+		TestTrue(TEXT("Body owns semantic animation Style"),
+			Body.Part->PartAnimationStyle.Get() == Style);
+		TestNotNull(TEXT("Body Idle Flipbook"), Body.Flipbook->GetFlipbook());
+		TestEqual(TEXT("Body stable LayerId"), Body.Flipbook->LayerId,
+			FName(TEXT("TrainingWarrior.Body.Main")));
+		TestEqual(TEXT("Body Idle play rate"), Body.Flipbook->GetPlayRate(), 1.0f);
+		TestTrue(TEXT("Body Idle loops"), Body.Flipbook->IsLooping());
 	}
 
-	const FWacomBattleEnemyHostAnimationClip* Attack =
+	const FWacomBattleEnemyPartAnimationClip* Attack =
 		Style->ResolveActionClip(TEXT("TrainingWarrior.Body.Attack"));
-	const FWacomBattleEnemyHostAnimationClip* Guard =
+	const FWacomBattleEnemyPartAnimationClip* Guard =
 		Style->ResolveActionClip(TEXT("TrainingWarrior.Body.Guard"));
-	const FWacomBattleEnemyHostAnimationClip* Cleave =
+	const FWacomBattleEnemyPartAnimationClip* Cleave =
 		Style->ResolveActionClip(TEXT("TrainingWarrior.Body.Cleave"));
-	const FWacomBattleEnemyHostAnimationClip* Destroyed =
-		Style->ResolveDestroyedClip();
+	const FWacomBattleEnemyPartAnimationClip* Destroyed =
+		Style->ResolveEnemyDestroyedClip();
 	if (TestNotNull(TEXT("Attack resolves through Default Action"), Attack)
 		&& TestNotNull(TEXT("Guard resolves explicit Block"), Guard)
 		&& TestNotNull(TEXT("Cleave resolves explicit Cleave"), Cleave)
@@ -503,7 +501,7 @@ bool FWacomDataTrainingWarriorHostAndArtSpec::RunTest(
 		TestEqual(TEXT("Guard play rate"), Guard->PlayRate, 1.0f);
 		TestEqual(TEXT("Cleave play rate"), Cleave->PlayRate, 0.75f);
 		TestEqual(TEXT("Destroyed play rate"), Destroyed->PlayRate, 0.75f);
-		for (const FWacomBattleEnemyHostAnimationClip* Clip :
+		for (const FWacomBattleEnemyPartAnimationClip* Clip :
 			{ Attack, Guard, Cleave, Destroyed })
 		{
 			TestTrue(TEXT("Semantic clip is runtime usable"), Clip->IsRuntimeUsable());

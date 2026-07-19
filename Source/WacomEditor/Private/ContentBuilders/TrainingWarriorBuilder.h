@@ -10,7 +10,7 @@ class UEncounterDefinition;
 class UEnemyBehaviorDefinition;
 class UEnemyDefinition;
 class UEnemyPartDefinition;
-class UWacomBattleEnemyHostAnimationStyle;
+class UWacomBattleEnemyPartAnimationStyle;
 
 namespace Wacom::ContentBuilder
 {
@@ -21,7 +21,7 @@ namespace Wacom::ContentBuilder
 		TObjectPtr<UEnemyBehaviorDefinition> Behavior = nullptr;
 		TObjectPtr<UEnemyDefinition> Enemy = nullptr;
 		TObjectPtr<UEncounterDefinition> Encounter = nullptr;
-		TObjectPtr<UWacomBattleEnemyHostAnimationStyle> AnimationStyle = nullptr;
+		TObjectPtr<UWacomBattleEnemyPartAnimationStyle> AnimationStyle = nullptr;
 		TObjectPtr<UBlueprint> HostBlueprint = nullptr;
 		bool bChanged = false;
 		TArray<FString> Errors;

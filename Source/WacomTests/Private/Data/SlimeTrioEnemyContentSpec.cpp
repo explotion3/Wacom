@@ -4,12 +4,11 @@
 
 #include "../../../WacomEditor/Private/ContentBuilders/SlimeTrioBuilder.h"
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
+#include "Data/EnemyHostComponentTestHelpers.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
-#include "Components/ChildActorComponent.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
@@ -64,44 +63,6 @@ namespace WacomSlimeTrioEnemyContentSpec
 					}))
 			{
 				return IntentSet;
-			}
-		}
-		return nullptr;
-	}
-
-	AWacomBattleEnemyPartActor* FindPart(
-		AWacomBattleEnemyActor& Host,
-		FName PartSlotId)
-	{
-		for (AWacomBattleEnemyPartActor* Part : Host.GetBattleEnemyPartActors())
-		{
-			if (Part && Part->PartSlotId == PartSlotId)
-			{
-				return Part;
-			}
-		}
-		return nullptr;
-	}
-
-	UChildActorComponent* FindPartComponent(
-		AWacomBattleEnemyActor& Host,
-		const AWacomBattleEnemyPartActor& Part)
-	{
-		UBlueprintGeneratedClass* BlueprintClass =
-			Cast<UBlueprintGeneratedClass>(Host.GetClass());
-		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
-		{
-			return nullptr;
-		}
-		for (USCS_Node* Node : BlueprintClass->SimpleConstructionScript->GetAllNodes())
-		{
-			UChildActorComponent* Component = Node
-				? Cast<UChildActorComponent>(
-					Node->GetActualComponentTemplate(BlueprintClass))
-				: nullptr;
-			if (Component && Component->GetChildActorTemplate() == &Part)
-			{
-				return Component;
 			}
 		}
 		return nullptr;
@@ -311,12 +272,7 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 		return false;
 	}
 
-	TestEqual(TEXT("Multi-part authoring mode"), Host->HostAuthoringMode,
-		EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers);
 	TestEqual(TEXT("EnemySlotId"), Host->EnemySlotId, FName(TEXT("Enemy")));
-	TestNull(TEXT("No Host Sprite"), Host->HostSprite.Get());
-	TestNull(TEXT("No Host Flipbook"), Host->HostFlipbook.Get());
-	TestNull(TEXT("No Host animation Style"), Host->HostAnimationStyle.Get());
 	TestTrue(TEXT("Uses project default multi-part panel"),
 		!Host->EnemyPanelWidgetClass);
 	TestNotNull(TEXT("Formal impact Style"), Host->DefaultImpactStyle.Get());
@@ -326,7 +282,7 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 	const FWacomBattleSceneEnemyHostAuthoringReport Report =
 		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
 	TestTrue(TEXT("Authoring Report is Ready"), Report.bAuthoringReady);
-	TestEqual(TEXT("Exactly three PartActors"), Report.PartActorCount, 3);
+	TestEqual(TEXT("Exactly three Part components"), Report.PartComponentCount, 3);
 	FDataValidationContext HostValidation;
 	TestEqual(TEXT("Host validation"), Host->IsDataValid(HostValidation),
 		EDataValidationResult::Valid);
@@ -358,8 +314,9 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 			FLinearColor(0.86f, 0.92f, 1.0f, 1.0f), 30,
 			TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Right"), 3 },
 	};
-	const TArray<AWacomBattleEnemyPartActor*> OrderedParts =
-		Host->GetBattleEnemyPartActors();
+	const TArray<Wacom::Tests::EnemyHostComponents::FPartTemplates> OrderedParts =
+		Wacom::Tests::EnemyHostComponents::OrderByDefinition(
+			*Blueprint, Host->EnemyDefinition);
 	TestEqual(TEXT("SCS Part count"), OrderedParts.Num(), 3);
 	UPaperFlipbook* ExpectedIdle = LoadAsset<UPaperFlipbook>(FString::Printf(
 		TEXT("%s/Flipbooks/PF_Enemy_SlimeTrioPlaceholder_Idle.PF_Enemy_SlimeTrioPlaceholder_Idle"),
@@ -370,12 +327,14 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 		++Index)
 	{
 		TestEqual(FString::Printf(TEXT("SCS order %d"), Index),
-			OrderedParts[Index] ? OrderedParts[Index]->PartSlotId : NAME_None,
+			OrderedParts[Index].Part ? OrderedParts[Index].Part->PartSlotId : NAME_None,
 			Expectations[Index].SlotId);
 	}
 	for (const FPresentationExpectation& Expected : Expectations)
 	{
-		AWacomBattleEnemyPartActor* Part = FindPart(*Host, Expected.SlotId);
+		const Wacom::Tests::EnemyHostComponents::FPartTemplates Templates =
+			Wacom::Tests::EnemyHostComponents::Find(*Blueprint, Expected.SlotId);
+		UWacomBattleEnemyPartComponent* Part = Templates.Part;
 		if (!TestNotNull(
 			FString::Printf(TEXT("%s PartActor"), *Expected.SlotId.ToString()),
 			Part))
@@ -383,31 +342,33 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 			continue;
 		}
 		TestEqual(TEXT("Derived PartId"), Part->PartId, Expected.PartId);
-		TestEqual(TEXT("HitBounds"), Part->HitBoundsExtent, Expected.Bounds);
-		TestEqual(TEXT("ImpactAnchor"), Part->ImpactAnchorRelativeLocation,
-			FVector::ZeroVector);
+		TestEqual(TEXT("Part viewport transform"),
+			Part->GetRelativeLocation(), Expected.Location);
+		TestEqual(TEXT("HitBounds"), Part->GetUnscaledBoxExtent(), Expected.Bounds);
+		if (TestNotNull(TEXT("ImpactAnchor"), Templates.ImpactAnchor))
+		{
+			TestEqual(TEXT("ImpactAnchor transform"),
+				Templates.ImpactAnchor->GetRelativeLocation(), FVector::ZeroVector);
+		}
 		TestEqual(TEXT("Destroyed swap marker"),
 			Part->DestroyedVisualSwapNormalizedTime, 0.35f);
 		TestNull(TEXT("No action animation Style"),
 			Part->PartAnimationStyle.Get());
-		TestEqual(TEXT("One VisualLayer"), Part->VisualLayers.Num(), 1);
-		if (Part->VisualLayers.Num() == 1)
+		UWacomBattleEnemyPartFlipbookLayerComponent* Layer = Templates.Flipbook;
+		if (TestNotNull(TEXT("One typed Flipbook layer"), Layer))
 		{
-			const FWacomBattleEnemyPartVisualLayer& Layer = Part->VisualLayers[0];
-			TestEqual(TEXT("Stable LayerId"), Layer.LayerId,
+			TestEqual(TEXT("Stable LayerId"), Layer->LayerId,
 				FName(*FString::Printf(TEXT("SlimeTrio.%s.Main"),
 					*Expected.SlotId.ToString())));
-			TestEqual(TEXT("Flipbook layer mode"), Layer.LayerMode,
-				EWacomBattleEnemyPartVisualLayerMode::Flipbook);
 			TestTrue(TEXT("All parts share Idle"),
-				Layer.Flipbook.Get() == ExpectedIdle);
-			TestEqual(TEXT("Idle offset"), Layer.FlipbookStartTimeSeconds,
+				Layer->GetFlipbook() == ExpectedIdle);
+			TestEqual(TEXT("Idle offset"), Layer->InitialPlaybackPositionSeconds,
 				Expected.StartTime);
-			TestEqual(TEXT("Visual scale"), Layer.RelativeScale3D,
+			TestEqual(TEXT("Visual scale"), Layer->GetRelativeScale3D(),
 				FVector(Expected.Scale));
-			TestEqual(TEXT("Visual tint"), Layer.Tint, Expected.Tint);
-			TestEqual(TEXT("Sort order"), Layer.SortOrder, Expected.SortOrder);
-			UPaperFlipbook* Destroyed = Layer.DestroyedFlipbook.Get();
+			TestEqual(TEXT("Visual tint"), Layer->GetSpriteColor(), Expected.Tint);
+			TestEqual(TEXT("Sort order"), Layer->TranslucencySortPriority, Expected.SortOrder);
+			UPaperFlipbook* Destroyed = Layer->DestroyedFlipbook.Get();
 			if (TestNotNull(TEXT("Destroyed Flipbook"), Destroyed))
 			{
 				TestEqual(TEXT("Destroyed name"), Destroyed->GetName(),
@@ -428,12 +389,6 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 							== ExpectedDestroyedSprite);
 				}
 			}
-		}
-		UChildActorComponent* Component = FindPartComponent(*Host, *Part);
-		if (TestNotNull(TEXT("Part SCS component"), Component))
-		{
-			TestEqual(TEXT("Part relative location"),
-				Component->GetRelativeLocation(), Expected.Location);
 		}
 	}
 
@@ -505,7 +460,7 @@ bool FWacomDataSlimeTrioBuilderIdempotenceSpec::RunTest(
 		if (TestNotNull(TEXT("Idempotent Host CDO"), Host))
 		{
 			TestEqual(TEXT("Idempotent Host keeps three SCS parts"),
-				Host->GetBattleEnemyPartActors().Num(), 3);
+				Wacom::Tests::EnemyHostComponents::Collect(*Result.HostBlueprint).Num(), 3);
 		}
 	}
 	return true;

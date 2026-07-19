@@ -3,15 +3,14 @@
 #include "ContentBuilders/SnakeBuilder.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
 #include "Authoring/WacomBattleSceneEnemyHostAuthoring.h"
 #include "Cards/CardDefinition.h"
 #include "Cards/CardEffect.h"
-#include "Components/ChildActorComponent.h"
 #include "ContentBuilders/ContentBuilderHelpers.h"
+#include "ContentBuilders/EnemyHostComponentBuilderHelpers.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
@@ -39,6 +38,8 @@ namespace
 		TEXT("/Game/Wacom/Art/Placeholders/Enemies/Snake");
 	const FString SnakeHostPackage =
 		TEXT("/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake");
+	const FString SnakeDebugHostPackage =
+		TEXT("/Game/Wacom/Core/Enemy/BP_SnakeHost_Debug");
 
 	struct FSnakePartPresentationSpec
 	{
@@ -158,137 +159,48 @@ namespace
 		return Effect;
 	}
 
-	bool VisualLayerEquals(
-		const FWacomBattleEnemyPartVisualLayer& Left,
-		const FWacomBattleEnemyPartVisualLayer& Right)
-	{
-		return Left.LayerId == Right.LayerId
-			&& Left.LayerMode == Right.LayerMode
-			&& Left.Sprite == Right.Sprite
-			&& Left.Flipbook == Right.Flipbook
-			&& Left.DestroyedSprite == Right.DestroyedSprite
-			&& Left.DestroyedFlipbook == Right.DestroyedFlipbook
-			&& Left.DestroyedFlipbookPlayRate == Right.DestroyedFlipbookPlayRate
-			&& Left.FlipbookPlayRate == Right.FlipbookPlayRate
-			&& Left.bLoopFlipbook == Right.bLoopFlipbook
-			&& Left.FlipbookStartTimeSeconds == Right.FlipbookStartTimeSeconds
-			&& Left.bAutoPlayFlipbook == Right.bAutoPlayFlipbook
-			&& Left.RelativeLocation == Right.RelativeLocation
-			&& Left.RelativeRotation == Right.RelativeRotation
-			&& Left.RelativeScale3D == Right.RelativeScale3D
-			&& Left.SortOrder == Right.SortOrder
-			&& Left.Tint == Right.Tint
-			&& Left.MaterialOverride == Right.MaterialOverride
-			&& Left.bCastShadow == Right.bCastShadow
-			&& Left.bVisible == Right.bVisible;
-	}
-
-	UChildActorComponent* FindPartComponent(
-		const AWacomBattleEnemyActor& Host,
-		const AWacomBattleEnemyPartActor& Part)
-	{
-		UBlueprintGeneratedClass* BlueprintClass =
-			Cast<UBlueprintGeneratedClass>(Host.GetClass());
-		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
-		{
-			return nullptr;
-		}
-		for (USCS_Node* Node : BlueprintClass->SimpleConstructionScript->GetAllNodes())
-		{
-			UChildActorComponent* Component = Node
-				? Cast<UChildActorComponent>(
-					Node->GetActualComponentTemplate(BlueprintClass))
-				: nullptr;
-			if (Component && Component->GetChildActorTemplate() == &Part)
-			{
-				return Component;
-			}
-		}
-		return nullptr;
-	}
-
-	AWacomBattleEnemyPartActor* FindPartBySlot(
-		AWacomBattleEnemyActor& Host,
-		FName PartSlotId)
-	{
-		for (AWacomBattleEnemyPartActor* Part : Host.GetBattleEnemyPartActors())
-		{
-			if (Part && Part->PartSlotId == PartSlotId)
-			{
-				return Part;
-			}
-		}
-		return nullptr;
-	}
-
 	bool ApplyPartPresentation(
-		AWacomBattleEnemyPartActor& Part,
-		UChildActorComponent& PartComponent,
+		UBlueprint& Blueprint,
 		const FSnakePartPresentationSpec& Spec,
 		UPaperFlipbook& IdleFlipbook,
 		UPaperFlipbook& DestroyedFlipbook)
 	{
-		bool bChanged = false;
-		bChanged |= AssignIfDifferent(
-			Part, Part.HitBoundsExtent, Spec.HitBoundsExtent);
-		bChanged |= AssignIfDifferent(
-			Part, Part.ImpactAnchorRelativeLocation, FVector::ZeroVector);
-		bChanged |= AssignIfDifferent(
-			Part, Part.DestroyedVisualSwapNormalizedTime, 0.35f);
-
-		FWacomBattleEnemyPartVisualLayer Layer;
-		Layer.LayerId = FName(*FString::Printf(
+		Wacom::EnemyHostComponentBuilder::FFlipbookPartSpec ComponentSpec;
+		ComponentSpec.PartSlotId = Spec.PartSlotId;
+		ComponentSpec.PartId = Spec.PartId;
+		ComponentSpec.LayerId = FName(*FString::Printf(
 			TEXT("Snake.%s.Main"), *Spec.PartSlotId.ToString()));
-		Layer.LayerMode = EWacomBattleEnemyPartVisualLayerMode::Flipbook;
-		Layer.Flipbook = &IdleFlipbook;
-		Layer.DestroyedFlipbook = &DestroyedFlipbook;
-		Layer.DestroyedFlipbookPlayRate = 1.0f;
-		Layer.FlipbookPlayRate = 1.0f;
-		Layer.bLoopFlipbook = true;
-		Layer.FlipbookStartTimeSeconds = Spec.IdleOffsetSeconds;
-		Layer.bAutoPlayFlipbook = true;
-		Layer.RelativeScale3D = FVector(Spec.VisualScale);
-		Layer.SortOrder = Spec.SortOrder;
-		Layer.Tint = Spec.Tint;
-		Layer.bVisible = true;
-		if (Part.VisualLayers.Num() != 1
-			|| !VisualLayerEquals(Part.VisualLayers[0], Layer))
-		{
-			Part.Modify();
-			Part.VisualLayers = { MoveTemp(Layer) };
-			bChanged = true;
-		}
-
-		if (PartComponent.GetRelativeLocation() != Spec.RelativeLocation)
-		{
-			PartComponent.Modify();
-			PartComponent.SetRelativeLocation(Spec.RelativeLocation);
-			bChanged = true;
-		}
-
-		if (bChanged)
-		{
-			Part.RefreshAuthoringState();
-		}
-		return bChanged;
+		ComponentSpec.RelativeLocation = Spec.RelativeLocation;
+		ComponentSpec.HitBoundsExtent = Spec.HitBoundsExtent;
+		ComponentSpec.VisualScale = FVector(Spec.VisualScale);
+		ComponentSpec.IdleOffsetSeconds = Spec.IdleOffsetSeconds;
+		ComponentSpec.Tint = Spec.Tint;
+		ComponentSpec.SortOrder = Spec.SortOrder;
+		ComponentSpec.IdleFlipbook = &IdleFlipbook;
+		ComponentSpec.DestroyedFlipbook = &DestroyedFlipbook;
+		return Wacom::EnemyHostComponentBuilder::ApplyFlipbookPart(
+			Blueprint, ComponentSpec);
 	}
 
 	UBlueprint* BuildHostBlueprint(
 		UEnemyDefinition& Enemy,
 		UPaperFlipbook& IdleFlipbook,
+		const FString& HostPackage,
+		FName HostAssetName,
+		const TCHAR* HostLabel,
 		bool& bOutChanged,
 		TArray<FString>& OutErrors)
 	{
-		UPackage* Package = FindOrCreatePackage(SnakeHostPackage);
+		UPackage* Package = FindOrCreatePackage(HostPackage);
 		if (!Package)
 		{
-			OutErrors.Add(TEXT("Could not create Snake Host package"));
+			OutErrors.Add(FString::Printf(
+				TEXT("Could not create %s package"), HostLabel));
 			return nullptr;
 		}
 
-		const FName AssetName(TEXT("BP_EnemyHost_Snake"));
 		UObject* ExistingObject = StaticFindObject(
-			UObject::StaticClass(), Package, *AssetName.ToString());
+			UObject::StaticClass(), Package, *HostAssetName.ToString());
 		UBlueprint* Blueprint = Cast<UBlueprint>(ExistingObject);
 		bool bChanged = false;
 		if (ExistingObject && !Blueprint)
@@ -303,7 +215,7 @@ namespace
 			Blueprint = FKismetEditorUtilities::CreateBlueprint(
 				AWacomBattleEnemyActor::StaticClass(),
 				Package,
-				AssetName,
+				HostAssetName,
 				BPTYPE_Normal,
 				UBlueprint::StaticClass(),
 				UBlueprintGeneratedClass::StaticClass());
@@ -336,10 +248,6 @@ namespace
 		bChanged |= AssignIfDifferent(*Host, Host->EnemySlotId, FName(TEXT("Enemy")));
 		bChanged |= AssignIfDifferent(
 			*Host,
-			Host->HostAuthoringMode,
-			EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers);
-		bChanged |= AssignIfDifferent(
-			*Host,
 			Host->DefaultImpactStyle,
 			TObjectPtr<UWacomBattleEnemyPartImpactStyle>(ImpactStyle));
 		bChanged |= AssignIfDifferent(
@@ -347,22 +255,9 @@ namespace
 			Host->DefaultTargetPreviewStyle,
 			TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle>(TargetPreviewStyle));
 		bChanged |= AssignIfDifferent(
-			*Host, Host->HostSprite, TObjectPtr<UPaperSprite>(nullptr));
-		bChanged |= AssignIfDifferent(
-			*Host, Host->HostFlipbook, TObjectPtr<UPaperFlipbook>(nullptr));
-		bChanged |= AssignIfDifferent(
-			*Host,
-			Host->HostAnimationStyle,
-			TObjectPtr<UWacomBattleEnemyHostAnimationStyle>(nullptr));
-		bChanged |= AssignIfDifferent(*Host, Host->bHostVisualVisible, false);
-		bChanged |= AssignIfDifferent(*Host, Host->bAutoPlayHostFlipbook, false);
-		bChanged |= AssignIfDifferent(
 			*Host,
 			Host->EnemyPanelWidgetClass,
 			TSubclassOf<UWacomBattleEnemyPanelWidget>());
-		bChanged |= AssignIfDifferent(*Host, Host->bApplyAttachedPartBadgeStagger, true);
-		bChanged |= AssignIfDifferent(*Host, Host->BadgeStaggerHorizontalStep, 28.0f);
-		bChanged |= AssignIfDifferent(*Host, Host->BadgeStaggerVerticalStep, 18.0f);
 
 		TArray<AWacomBattleEnemyActor*> HostsToSync = { Host };
 		const TArray<FWacomBattleSceneEnemyHostSyncResult> SyncResults =
@@ -395,13 +290,10 @@ namespace
 		}
 		for (const FSnakePartPresentationSpec& Spec : GetSnakePartPresentationSpecs())
 		{
-			AWacomBattleEnemyPartActor* Part = FindPartBySlot(*Host, Spec.PartSlotId);
-			UChildActorComponent* PartComponent = Part
-				? FindPartComponent(*Host, *Part)
-				: nullptr;
 			UPaperFlipbook* DestroyedFlipbook = LoadGeneratedAsset<UPaperFlipbook>(
 				SnakePlaceholderArtRoot / TEXT("Flipbooks") / Spec.DestroyedFlipbookName);
-			if (!Part || !PartComponent || Part->PartId != Spec.PartId
+			if (!Wacom::EnemyHostComponentBuilder::FindPartTemplates(
+					*Blueprint, Spec.PartSlotId).IsComplete()
 				|| !DestroyedFlipbook)
 			{
 				OutErrors.Add(FString::Printf(
@@ -410,7 +302,7 @@ namespace
 				return nullptr;
 			}
 			bChanged |= ApplyPartPresentation(
-				*Part, *PartComponent, Spec, IdleFlipbook, *DestroyedFlipbook);
+				*Blueprint, Spec, IdleFlipbook, *DestroyedFlipbook);
 		}
 
 		if (bChanged)
@@ -428,15 +320,15 @@ namespace
 		const FWacomBattleSceneEnemyHostAuthoringReport Report = Host
 			? FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host)
 			: FWacomBattleSceneEnemyHostAuthoringReport{};
-		if (!Host || !Report.bAuthoringReady || Report.PartActorCount != 3)
+		if (!Host || !Report.bAuthoringReady || Report.PartComponentCount != 3)
 		{
 			OutErrors.Add(FString::Printf(
 				TEXT("Snake Host authoring report is %s with %d parts"),
 				*Report.AuthoringState.ToString(),
-				Report.PartActorCount));
+				Report.PartComponentCount));
 			return nullptr;
 		}
-		if (bChanged && !SaveAssetPackage(Package, Blueprint, SnakeHostPackage))
+		if (bChanged && !SaveAssetPackage(Package, Blueprint, HostPackage))
 		{
 			OutErrors.Add(TEXT("Snake Host Blueprint save failed"));
 			return nullptr;
@@ -444,7 +336,7 @@ namespace
 		UPackage::WaitForAsyncFileWrites();
 
 		UBlueprint* PersistedBlueprint =
-			LoadGeneratedAsset<UBlueprint>(SnakeHostPackage);
+			LoadGeneratedAsset<UBlueprint>(HostPackage);
 		if (!PersistedBlueprint || !PersistedBlueprint->GeneratedClass)
 		{
 			OutErrors.Add(TEXT("Snake Host Blueprint reload verification failed"));
@@ -635,6 +527,21 @@ namespace Wacom::ContentBuilder
 		Result.HostBlueprint = BuildHostBlueprint(
 			*Result.Enemy,
 			*IdleFlipbook,
+			SnakeHostPackage,
+			TEXT("BP_EnemyHost_Snake"),
+			TEXT("Snake Host"),
+			Result.bChanged,
+			Result.Errors);
+		if (!Result.HostBlueprint)
+		{
+			return Result;
+		}
+		Result.DebugHostBlueprint = BuildHostBlueprint(
+			*Result.Enemy,
+			*IdleFlipbook,
+			SnakeDebugHostPackage,
+			TEXT("BP_SnakeHost_Debug"),
+			TEXT("Debug Snake Host"),
 			Result.bChanged,
 			Result.Errors);
 		return Result;

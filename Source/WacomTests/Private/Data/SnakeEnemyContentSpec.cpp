@@ -4,13 +4,12 @@
 
 #include "../../../WacomEditor/Private/ContentBuilders/SnakeBuilder.h"
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
+#include "Data/EnemyHostComponentTestHelpers.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Cards/CardDefinition.h"
-#include "Components/ChildActorComponent.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
@@ -56,44 +55,6 @@ namespace WacomSnakeEnemyContentSpec
 					}))
 			{
 				return IntentSet;
-			}
-		}
-		return nullptr;
-	}
-
-	AWacomBattleEnemyPartActor* FindPart(
-		AWacomBattleEnemyActor& Host,
-		FName PartSlotId)
-	{
-		for (AWacomBattleEnemyPartActor* Part : Host.GetBattleEnemyPartActors())
-		{
-			if (Part && Part->PartSlotId == PartSlotId)
-			{
-				return Part;
-			}
-		}
-		return nullptr;
-	}
-
-	UChildActorComponent* FindPartComponent(
-		AWacomBattleEnemyActor& Host,
-		const AWacomBattleEnemyPartActor& Part)
-	{
-		UBlueprintGeneratedClass* BlueprintClass =
-			Cast<UBlueprintGeneratedClass>(Host.GetClass());
-		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
-		{
-			return nullptr;
-		}
-		for (USCS_Node* Node : BlueprintClass->SimpleConstructionScript->GetAllNodes())
-		{
-			UChildActorComponent* Component = Node
-				? Cast<UChildActorComponent>(
-					Node->GetActualComponentTemplate(BlueprintClass))
-				: nullptr;
-			if (Component && Component->GetChildActorTemplate() == &Part)
-			{
-				return Component;
 			}
 		}
 		return nullptr;
@@ -185,8 +146,12 @@ bool FWacomDataSnakeAssetContractSpec::RunTest(const FString& /*Parameters*/)
 			Expected.Part->MaxHp, Expected.MaxHp);
 		TestEqual(FString::Printf(TEXT("Part %d experience"), Index),
 			Expected.Part->ExperienceReward, Expected.Experience);
-		TestTrue(FString::Printf(TEXT("Part %d PoisonFang reward"), Index),
-			Expected.Part->KnockdownRewardCard.Get() == Reward);
+		TestNull(FString::Printf(TEXT("Part %d legacy reward is cleared"), Index),
+			Expected.Part->KnockdownRewardCard.Get());
+		TestTrue(FString::Printf(TEXT("Part %d Aid PoisonFang reward"), Index),
+			Expected.Part->AidRewardCard.Get() == Reward);
+		TestTrue(FString::Printf(TEXT("Part %d Destroy PoisonFang reward"), Index),
+			Expected.Part->DestroyRewardCard.Get() == Reward);
 	}
 
 	struct FIntentExpectation
@@ -329,36 +294,22 @@ bool FWacomDataSnakeHostAndPlaceholderArtSpec::RunTest(
 		return false;
 	}
 
-	TestEqual(TEXT("Snake Host mode is MultiPartVisualLayers"),
-		Host->HostAuthoringMode,
-		EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers);
 	TestEqual(TEXT("Snake Host EnemySlotId"), Host->EnemySlotId,
 		FName(TEXT("Enemy")));
 	TestTrue(TEXT("Snake Host references generated Snake definition"),
 		Host->EnemyDefinition.Get()
 			== FWacomGeneratedBattleContentAssets::LoadSnake(*this));
-	TestNull(TEXT("Snake Host has no Sprite"), Host->HostSprite.Get());
-	TestNull(TEXT("Snake Host has no Flipbook"), Host->HostFlipbook.Get());
-	TestNull(TEXT("Snake Host has no semantic Host animation Style"),
-		Host->HostAnimationStyle.Get());
 	TestTrue(TEXT("Snake uses project default multi-part panel"),
 		!Host->EnemyPanelWidgetClass);
 	TestNotNull(TEXT("Snake Host uses formal impact Style"),
 		Host->DefaultImpactStyle.Get());
 	TestNotNull(TEXT("Snake Host uses formal target preview Style"),
 		Host->DefaultTargetPreviewStyle.Get());
-	TestTrue(TEXT("Snake badge stagger enabled"),
-		Host->bApplyAttachedPartBadgeStagger);
-	TestEqual(TEXT("Snake badge horizontal step"),
-		Host->BadgeStaggerHorizontalStep, 28.0f);
-	TestEqual(TEXT("Snake badge vertical step"),
-		Host->BadgeStaggerVerticalStep, 18.0f);
-
 	const FWacomBattleSceneEnemyHostAuthoringReport Report =
 		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
 	TestTrue(TEXT("Snake Host Authoring Report is Ready"), Report.bAuthoringReady);
-	TestEqual(TEXT("Snake Host has exactly three PartActors"),
-		Report.PartActorCount, 3);
+	TestEqual(TEXT("Snake Host has exactly three Part components"),
+		Report.PartComponentCount, 3);
 
 	struct FPresentationExpectation
 	{
@@ -386,15 +337,16 @@ bool FWacomDataSnakeHostAndPlaceholderArtSpec::RunTest(
 			FLinearColor(0.82f, 0.90f, 1.0f, 1.0f), 10,
 			TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Tail") },
 	};
-	const TArray<AWacomBattleEnemyPartActor*> OrderedParts =
-		Host->GetBattleEnemyPartActors();
+	const TArray<Wacom::Tests::EnemyHostComponents::FPartTemplates> OrderedParts =
+		Wacom::Tests::EnemyHostComponents::OrderByDefinition(
+			*Blueprint, Host->EnemyDefinition);
 	TestEqual(TEXT("Snake SCS Part order count"), OrderedParts.Num(), 3);
 	for (int32 Index = 0;
 		Index < OrderedParts.Num() && Index < Expectations.Num();
 		++Index)
 	{
 		TestEqual(FString::Printf(TEXT("Snake SCS Part order %d"), Index),
-			OrderedParts[Index] ? OrderedParts[Index]->PartSlotId : NAME_None,
+			OrderedParts[Index].Part ? OrderedParts[Index].Part->PartSlotId : NAME_None,
 			Expectations[Index].SlotId);
 	}
 	UPaperFlipbook* ExpectedIdle = LoadAsset<UPaperFlipbook>(
@@ -402,7 +354,9 @@ bool FWacomDataSnakeHostAndPlaceholderArtSpec::RunTest(
 	TestNotNull(TEXT("Shared Snake Placeholder Idle loads"), ExpectedIdle);
 	for (const FPresentationExpectation& Expected : Expectations)
 	{
-		AWacomBattleEnemyPartActor* Part = FindPart(*Host, Expected.SlotId);
+		const Wacom::Tests::EnemyHostComponents::FPartTemplates Templates =
+			Wacom::Tests::EnemyHostComponents::Find(*Blueprint, Expected.SlotId);
+		UWacomBattleEnemyPartComponent* Part = Templates.Part;
 		if (!TestNotNull(
 			FString::Printf(TEXT("%s PartActor"), *Expected.SlotId.ToString()),
 			Part))
@@ -410,46 +364,41 @@ bool FWacomDataSnakeHostAndPlaceholderArtSpec::RunTest(
 			continue;
 		}
 		TestEqual(TEXT("Derived PartId"), Part->PartId, Expected.PartId);
-		TestEqual(TEXT("HitBounds"), Part->HitBoundsExtent, Expected.Bounds);
-		TestEqual(TEXT("ImpactAnchor"), Part->ImpactAnchorRelativeLocation,
-			FVector::ZeroVector);
+		TestEqual(TEXT("Part viewport transform"),
+			Part->GetRelativeLocation(), Expected.Location);
+		TestEqual(TEXT("HitBounds"), Part->GetUnscaledBoxExtent(), Expected.Bounds);
+		if (TestNotNull(TEXT("ImpactAnchor"), Templates.ImpactAnchor))
+		{
+			TestEqual(TEXT("ImpactAnchor transform"),
+				Templates.ImpactAnchor->GetRelativeLocation(), FVector::ZeroVector);
+		}
 		TestEqual(TEXT("Destroyed swap marker"),
 			Part->DestroyedVisualSwapNormalizedTime, 0.35f);
-		TestEqual(TEXT("One VisualLayer per Snake Part"),
-			Part->VisualLayers.Num(), 1);
-		if (Part->VisualLayers.Num() == 1)
+		UWacomBattleEnemyPartFlipbookLayerComponent* Layer = Templates.Flipbook;
+		if (TestNotNull(TEXT("One typed Flipbook layer per Snake Part"), Layer))
 		{
-			const FWacomBattleEnemyPartVisualLayer& Layer = Part->VisualLayers[0];
-			TestEqual(TEXT("Stable LayerId"), Layer.LayerId,
+			TestEqual(TEXT("Stable LayerId"), Layer->LayerId,
 				FName(*FString::Printf(TEXT("Snake.%s.Main"),
 					*Expected.SlotId.ToString())));
-			TestEqual(TEXT("Layer mode"), Layer.LayerMode,
-				EWacomBattleEnemyPartVisualLayerMode::Flipbook);
-			TestNotNull(TEXT("Idle Flipbook"), Layer.Flipbook.Get());
+			TestNotNull(TEXT("Idle Flipbook"), Layer->GetFlipbook());
 			TestTrue(TEXT("All Snake parts share the formal Placeholder Idle"),
-				Layer.Flipbook.Get() == ExpectedIdle);
-			TestEqual(TEXT("Idle offset"), Layer.FlipbookStartTimeSeconds,
+				Layer->GetFlipbook() == ExpectedIdle);
+			TestEqual(TEXT("Idle offset"), Layer->InitialPlaybackPositionSeconds,
 				Expected.StartTime);
-			TestEqual(TEXT("Visual scale"), Layer.RelativeScale3D,
+			TestEqual(TEXT("Visual scale"), Layer->GetRelativeScale3D(),
 				FVector(Expected.Scale));
-			TestEqual(TEXT("Visual tint"), Layer.Tint, Expected.Tint);
-			TestEqual(TEXT("Visual sort order"), Layer.SortOrder,
+			TestEqual(TEXT("Visual tint"), Layer->GetSpriteColor(), Expected.Tint);
+			TestEqual(TEXT("Visual sort order"), Layer->TranslucencySortPriority,
 				Expected.SortOrder);
 			TestNotNull(TEXT("Destroyed Flipbook"),
-				Layer.DestroyedFlipbook.Get());
-			if (Layer.DestroyedFlipbook)
+				Layer->DestroyedFlipbook.Get());
+			if (Layer->DestroyedFlipbook)
 			{
 				TestEqual(TEXT("Destroyed Flipbook name"),
-					Layer.DestroyedFlipbook->GetName(), FString(Expected.DestroyedName));
+					Layer->DestroyedFlipbook->GetName(), FString(Expected.DestroyedName));
 				TestEqual(TEXT("Destroyed Flipbook is single-frame"),
-					Layer.DestroyedFlipbook->GetNumKeyFrames(), 1);
+					Layer->DestroyedFlipbook->GetNumKeyFrames(), 1);
 			}
-		}
-		UChildActorComponent* Component = FindPartComponent(*Host, *Part);
-		if (TestNotNull(TEXT("Part SCS component"), Component))
-		{
-			TestEqual(TEXT("Part SCS relative location"),
-				Component->GetRelativeLocation(), Expected.Location);
 		}
 	}
 
@@ -555,7 +504,7 @@ bool FWacomDataSnakeBuilderIdempotenceSpec::RunTest(
 		if (TestNotNull(TEXT("Idempotent Host CDO"), Host))
 		{
 			TestEqual(TEXT("Idempotent Host keeps three SCS parts"),
-				Host->GetBattleEnemyPartActors().Num(), 3);
+				Wacom::Tests::EnemyHostComponents::Collect(*Result.HostBlueprint).Num(), 3);
 		}
 	}
 	return true;

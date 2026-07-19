@@ -3,8 +3,7 @@
 #include "ContentBuilders/TrainingWarriorBuilder.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyHostAnimationStyle.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
+#include "Actors/WacomBattleEnemyPartAnimationStyle.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
@@ -13,6 +12,7 @@
 #include "Cards/CardDefinition.h"
 #include "Cards/CardEffect.h"
 #include "ContentBuilders/ContentBuilderHelpers.h"
+#include "ContentBuilders/EnemyHostComponentBuilderHelpers.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
@@ -97,7 +97,7 @@ namespace
 
 	UBlueprint* BuildHostBlueprint(
 		UEnemyDefinition& Enemy,
-		UWacomBattleEnemyHostAnimationStyle& AnimationStyle,
+		UWacomBattleEnemyPartAnimationStyle& AnimationStyle,
 		UPaperFlipbook& IdleFlipbook,
 		bool& bOutChanged,
 		TArray<FString>& OutErrors)
@@ -163,24 +163,8 @@ namespace
 
 		bChanged |= AssignIfDifferent(*Host, Host->EnemyDefinition, TObjectPtr<UEnemyDefinition>(&Enemy));
 		bChanged |= AssignIfDifferent(*Host, Host->EnemySlotId, FName(TEXT("Enemy")));
-		bChanged |= AssignIfDifferent(
-			*Host,
-			Host->HostAuthoringMode,
-			EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual);
 		bChanged |= AssignIfDifferent(*Host, Host->DefaultImpactStyle, TObjectPtr<UWacomBattleEnemyPartImpactStyle>(ImpactStyle));
 		bChanged |= AssignIfDifferent(*Host, Host->DefaultTargetPreviewStyle, TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle>(TargetPreviewStyle));
-		bChanged |= AssignIfDifferent(
-			*Host,
-			Host->HostVisualMode,
-			EWacomBattleEnemyHostVisualMode::Flipbook);
-		bChanged |= AssignIfDifferent(*Host, Host->HostSprite, TObjectPtr<UPaperSprite>(nullptr));
-		bChanged |= AssignIfDifferent(*Host, Host->HostFlipbook, TObjectPtr<UPaperFlipbook>(&IdleFlipbook));
-		bChanged |= AssignIfDifferent(*Host, Host->HostAnimationStyle, TObjectPtr<UWacomBattleEnemyHostAnimationStyle>(&AnimationStyle));
-		bChanged |= AssignIfDifferent(*Host, Host->HostFlipbookPlayRate, 1.0f);
-		bChanged |= AssignIfDifferent(*Host, Host->bLoopHostFlipbook, true);
-		bChanged |= AssignIfDifferent(*Host, Host->HostFlipbookStartTimeSeconds, 0.0f);
-		bChanged |= AssignIfDifferent(*Host, Host->bAutoPlayHostFlipbook, true);
-		bChanged |= AssignIfDifferent(*Host, Host->bHostVisualVisible, true);
 
 		TArray<AWacomBattleEnemyActor*> HostsToSync = { Host };
 		const TArray<FWacomBattleSceneEnemyHostSyncResult> SyncResults =
@@ -213,45 +197,21 @@ namespace
 			}
 		}
 
-		const TArray<AWacomBattleEnemyPartActor*> Parts =
-			Host->GetBattleEnemyPartActors();
-		if (Parts.Num() != 1 || !Parts[0]
-			|| Parts[0]->PartSlotId != FName(TEXT("Body"))
-			|| Parts[0]->PartId != FName(TEXT("TrainingWarrior.Body")))
+		Wacom::EnemyHostComponentBuilder::FFlipbookPartSpec BodySpec;
+		BodySpec.PartSlotId = TEXT("Body");
+		BodySpec.PartId = TEXT("TrainingWarrior.Body");
+		BodySpec.LayerId = TEXT("TrainingWarrior.Body.Main");
+		BodySpec.HitBoundsExtent = FVector(55.0f, 45.0f, 55.0f);
+		BodySpec.IdleFlipbook = &IdleFlipbook;
+		BodySpec.AnimationStyle = &AnimationStyle;
+		if (!Wacom::EnemyHostComponentBuilder::FindPartTemplates(
+				*Blueprint, BodySpec.PartSlotId).IsComplete())
 		{
-			OutErrors.Add(TEXT("TrainingWarrior Host must contain exactly one derived Body PartActor"));
+			OutErrors.Add(TEXT("TrainingWarrior Host must contain one complete Body component hierarchy"));
 			return nullptr;
 		}
-
-		AWacomBattleEnemyPartActor& BodyPart = *Parts[0];
-		bool bPartChanged = false;
-		bPartChanged |= AssignIfDifferent(
-			BodyPart, BodyPart.HitBoundsExtent, FVector(55.0, 45.0, 55.0));
-		bPartChanged |= AssignIfDifferent(
-			BodyPart, BodyPart.ImpactAnchorRelativeLocation, FVector::ZeroVector);
-		if (!BodyPart.VisualLayers.IsEmpty())
-		{
-			BodyPart.Modify();
-			BodyPart.VisualLayers.Reset();
-			bPartChanged = true;
-		}
-		if (bPartChanged)
-		{
-			BodyPart.RefreshAuthoringState();
-			bChanged = true;
-		}
-
-		const FWacomBattleSceneEnemyHostAuthoringReport Report =
-			FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
-		if (!Report.bAuthoringReady || Report.PartActorCount != 1)
-		{
-			OutErrors.Add(FString::Printf(
-				TEXT("TrainingWarrior Host authoring report is %s with %d parts"),
-				*Report.AuthoringState.ToString(),
-				Report.PartActorCount));
-			return nullptr;
-		}
-
+		bChanged |= Wacom::EnemyHostComponentBuilder::ApplyFlipbookPart(
+			*Blueprint, BodySpec);
 		if (bChanged)
 		{
 			FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
@@ -259,9 +219,28 @@ namespace
 		FKismetEditorUtilities::CompileBlueprint(Blueprint);
 		if (Blueprint->Status == BS_Error || !Blueprint->GeneratedClass)
 		{
-			OutErrors.Add(TEXT("TrainingWarrior Host Blueprint compile failed"));
+			OutErrors.Add(TEXT("TrainingWarrior Host Blueprint compile before validation failed"));
 			return nullptr;
 		}
+		Host = Cast<AWacomBattleEnemyActor>(
+			Blueprint->GeneratedClass->GetDefaultObject());
+		if (!Host)
+		{
+			OutErrors.Add(TEXT("TrainingWarrior Host CDO missing before validation"));
+			return nullptr;
+		}
+
+		const FWacomBattleSceneEnemyHostAuthoringReport Report =
+			FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
+		if (!Report.bAuthoringReady || Report.PartComponentCount != 1)
+		{
+			OutErrors.Add(FString::Printf(
+				TEXT("TrainingWarrior Host authoring report is %s with %d parts"),
+				*Report.AuthoringState.ToString(),
+				Report.PartComponentCount));
+			return nullptr;
+		}
+
 		if (bChanged && !SaveBlueprint(*Package, *Blueprint, TrainingWarriorHostPackage))
 		{
 			OutErrors.Add(TEXT("TrainingWarrior Host Blueprint save failed"));
@@ -435,32 +414,34 @@ namespace Wacom::ContentBuilder
 		}
 
 		Result.AnimationStyle =
-			BuildDataAsset<UWacomBattleEnemyHostAnimationStyle>(
+			BuildDataAsset<UWacomBattleEnemyPartAnimationStyle>(
 				MakePackagePath(
 					TrainingWarriorDataRoot,
-					TEXT("DA_EnemyHostAnimation_TrainingWarrior")),
-				TEXT("DA_EnemyHostAnimation_TrainingWarrior"),
+					TEXT("DA_EnemyPartAnimation_TrainingWarrior")),
+				TEXT("DA_EnemyPartAnimation_TrainingWarrior"),
 				[AttackFlipbook, BlockFlipbook, CleaveFlipbook, DestroyedFlipbook](
-					UWacomBattleEnemyHostAnimationStyle& Style)
+					UWacomBattleEnemyPartAnimationStyle& Style)
 				{
+					Style.TargetVisualLayerId = TEXT("TrainingWarrior.Body.Main");
 					Style.DefaultActionClip.Flipbook = AttackFlipbook;
 					Style.DefaultActionClip.PlayRate = 0.75f;
 					Style.DefaultActionClip.ImpactNormalizedTime = 0.55f;
 					Style.ActionClipsByIntentId.Reset();
-					FWacomBattleEnemyHostAnimationClip GuardClip;
+					FWacomBattleEnemyPartAnimationClip GuardClip;
 					GuardClip.Flipbook = BlockFlipbook;
 					GuardClip.PlayRate = 1.0f;
 					GuardClip.ImpactNormalizedTime = 0.55f;
 					Style.ActionClipsByIntentId.Add(
 						TEXT("TrainingWarrior.Body.Guard"), GuardClip);
-					FWacomBattleEnemyHostAnimationClip CleaveClip;
+					FWacomBattleEnemyPartAnimationClip CleaveClip;
 					CleaveClip.Flipbook = CleaveFlipbook;
 					CleaveClip.PlayRate = 0.75f;
 					CleaveClip.ImpactNormalizedTime = 0.55f;
 					Style.ActionClipsByIntentId.Add(
 						TEXT("TrainingWarrior.Body.Cleave"), CleaveClip);
-					Style.DestroyedClip.Flipbook = DestroyedFlipbook;
-					Style.DestroyedClip.PlayRate = 0.75f;
+					Style.EnemyDestroyedClip.Flipbook = DestroyedFlipbook;
+					Style.EnemyDestroyedClip.PlayRate = 0.75f;
+					Style.EnemyDestroyedClip.ImpactNormalizedTime = 0.55f;
 				},
 				Result.bChanged,
 				Result.Errors);
