@@ -4,7 +4,6 @@
 
 #include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
@@ -20,13 +19,13 @@
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "AssetRegistry/IAssetRegistry.h"
-#include "Components/ChildActorComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
 #include "ContentBuilders/ContentBuilderHelpers.h"
+#include "ContentBuilders/EnemyHostComponentBuilderHelpers.h"
 #include "Dom/JsonObject.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Engine/Blueprint.h"
@@ -405,32 +404,6 @@ namespace
 			});
 	}
 
-	UChildActorComponent* FindPartComponent(
-		const AWacomBattleEnemyActor& Host,
-		const AWacomBattleEnemyPartActor& Part)
-	{
-		const UBlueprintGeneratedClass* BlueprintClass =
-			Cast<UBlueprintGeneratedClass>(Host.GetClass());
-		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
-		{
-			return nullptr;
-		}
-		for (USCS_Node* Node :
-			BlueprintClass->SimpleConstructionScript->GetAllNodes())
-		{
-			UChildActorComponent* Component = Node
-				? Cast<UChildActorComponent>(
-					Node->GetActualComponentTemplate(
-						const_cast<UBlueprintGeneratedClass*>(BlueprintClass)))
-				: nullptr;
-			if (Component && Component->GetChildActorTemplate() == &Part)
-			{
-				return Component;
-			}
-		}
-		return nullptr;
-	}
-
 	FVector PartLayoutLocation(const int32 PartCount, const int32 Index)
 	{
 		static const TArray<TArray<FVector>> Layouts =
@@ -446,6 +419,39 @@ namespace
 			&& Layouts[PartCount].IsValidIndex(Index)
 			? Layouts[PartCount][Index]
 			: FVector(Index * 80.0, 0.0, 0.0);
+	}
+
+	float PartVisualScale(const FEnemyHostSeed& Seed)
+	{
+		return Seed.VisualScale
+			/ FMath::Sqrt(static_cast<float>(FMath::Max(Seed.ExpectedParts, 1)));
+	}
+
+	FName PartLayerId(const FEnemyHostSeed& Seed, const FName PartSlotId)
+	{
+		return FName(*FString::Printf(
+			TEXT("%s.%s.Main"), Seed.Archetype, *PartSlotId.ToString()));
+	}
+
+	Wacom::EnemyHostComponentBuilder::FFlipbookPartSpec MakePartSpec(
+		const FEnemyHostSeed& Seed,
+		const FEnemyPartSlot& PartSlot,
+		const int32 Index,
+		UPaperFlipbook& Placeholder)
+	{
+		Wacom::EnemyHostComponentBuilder::FFlipbookPartSpec Spec;
+		Spec.PartSlotId = PartSlot.PartSlotId;
+		Spec.PartId = PartSlot.PartDef ? PartSlot.PartDef->PartId : NAME_None;
+		Spec.LayerId = PartLayerId(Seed, PartSlot.PartSlotId);
+		Spec.RelativeLocation =
+			PartLayoutLocation(Seed.ExpectedParts, Index) * Seed.VisualScale;
+		Spec.HitBoundsExtent =
+			FVector(62.0f, 48.0f, 62.0f) * Seed.VisualScale;
+		Spec.VisualScale = FVector(PartVisualScale(Seed));
+		Spec.Tint = Seed.Tint;
+		Spec.SortOrder = Index;
+		Spec.IdleFlipbook = &Placeholder;
+		return Spec;
 	}
 
 	bool ValidateEnemyHostBlueprint(
@@ -464,7 +470,9 @@ namespace
 			Blueprint.GeneratedClass->GetDefaultObject());
 		const UEnemyDefinition* ExpectedEnemy = ResolveRequiredAsset<UEnemyDefinition>(
 			Seed.EnemyPackagePath, OutErrors);
-		if (!Host || !ExpectedEnemy)
+		UPaperFlipbook* ExpectedPlaceholder = ResolveRequiredAsset<UPaperFlipbook>(
+			*PlaceholderIdlePackage, OutErrors);
+		if (!Host || !ExpectedEnemy || !ExpectedPlaceholder)
 		{
 			OutErrors.Add(TEXT("Enemy Host CDO or definition is missing"));
 			return false;
@@ -477,68 +485,75 @@ namespace
 		{
 			OutErrors.Add(TEXT("Enemy Host prefab must not hardcode an Encounter slot"));
 		}
-		if (Host->HostAuthoringMode
-			!= EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
-			|| Host->HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
-			|| !Host->HostFlipbook
-			|| !Host->HostFlipbook->GetPathName().StartsWith(
-				TEXT("/Game/Wacom/Art/Placeholders/")))
-		{
-			OutErrors.Add(TEXT("Enemy Host must use the controlled placeholder flipbook"));
-		}
 		if (Host->FindComponentByClass<UWacomRunMapNodeBindingComponent>())
 		{
 			OutErrors.Add(TEXT("Enemy Host prefab must not carry RunMapNodeBinding"));
 		}
 
-		const TArray<AWacomBattleEnemyPartActor*> Parts =
-			Host->GetBattleEnemyPartActors();
-		if (Parts.Num() != Seed.ExpectedParts
-			|| ExpectedEnemy->Parts.Num() != Seed.ExpectedParts)
+		if (ExpectedEnemy->Parts.Num() != Seed.ExpectedParts)
 		{
 			OutErrors.Add(FString::Printf(
-				TEXT("Enemy Host expected %d parts, got %d (definition %d)"),
-				Seed.ExpectedParts, Parts.Num(), ExpectedEnemy->Parts.Num()));
+				TEXT("Enemy Host expected %d definition parts, got %d"),
+				Seed.ExpectedParts, ExpectedEnemy->Parts.Num()));
 		}
 		TSet<FName> SeenSlots;
-		for (const AWacomBattleEnemyPartActor* Part : Parts)
+		for (int32 Index = 0; Index < ExpectedEnemy->Parts.Num(); ++Index)
 		{
-			if (!Part || Part->PartSlotId.IsNone()
-				|| SeenSlots.Contains(Part->PartSlotId))
+			const FEnemyPartSlot& ExpectedPart = ExpectedEnemy->Parts[Index];
+			const auto Templates =
+				Wacom::EnemyHostComponentBuilder::FindPartTemplates(
+					const_cast<UBlueprint&>(Blueprint), ExpectedPart.PartSlotId);
+			if (ExpectedPart.PartSlotId.IsNone()
+				|| SeenSlots.Contains(ExpectedPart.PartSlotId)
+				|| !ExpectedPart.PartDef
+				|| !Templates.IsComplete())
 			{
-				OutErrors.Add(TEXT("Enemy Host contains a null/duplicate part slot"));
+				OutErrors.Add(FString::Printf(
+					TEXT("Enemy Host contains an invalid/incomplete typed part: %s"),
+					*ExpectedPart.PartSlotId.ToString()));
 				continue;
 			}
-			SeenSlots.Add(Part->PartSlotId);
-			const FEnemyPartSlot* ExpectedPart =
-				ExpectedEnemy->Parts.FindByPredicate(
-					[Part](const FEnemyPartSlot& Candidate)
-					{
-						return Candidate.PartSlotId == Part->PartSlotId;
-					});
-			if (!ExpectedPart || !ExpectedPart->PartDef
-				|| Part->PartId != ExpectedPart->PartDef->PartId)
+			SeenSlots.Add(ExpectedPart.PartSlotId);
+			const auto ExpectedSpec = MakePartSpec(
+				Seed, ExpectedPart, Index, *ExpectedPlaceholder);
+			if (Templates.Part->PartSlotId != ExpectedPart.PartSlotId
+				|| Templates.Part->PartId != ExpectedPart.PartDef->PartId)
 			{
 				OutErrors.Add(FString::Printf(
 					TEXT("Enemy Host part identity mismatch: %s"),
-					*Part->PartSlotId.ToString()));
+					*ExpectedPart.PartSlotId.ToString()));
 			}
-			if (Part->HitBoundsExtent.GetMin() <= 0.0)
+			if (Templates.Part->GetUnscaledBoxExtent()
+					!= ExpectedSpec.HitBoundsExtent
+				|| Templates.Part->GetRelativeLocation()
+					!= ExpectedSpec.RelativeLocation)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Enemy Host part has invalid hit bounds: %s"),
-					*Part->PartSlotId.ToString()));
+					TEXT("Enemy Host part geometry mismatch: %s"),
+					*ExpectedPart.PartSlotId.ToString()));
+			}
+			if (Templates.Visual->GetFlipbook() != ExpectedPlaceholder
+				|| Templates.Visual->LayerId != ExpectedSpec.LayerId
+				|| Templates.Visual->GetRelativeScale3D()
+					!= ExpectedSpec.VisualScale
+				|| Templates.Visual->GetSpriteColor() != ExpectedSpec.Tint
+				|| Templates.Visual->TranslucencySortPriority
+					!= ExpectedSpec.SortOrder)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Enemy Host typed placeholder mismatch: %s"),
+					*ExpectedPart.PartSlotId.ToString()));
 			}
 		}
 		const FWacomBattleSceneEnemyHostAuthoringReport AuthoringReport =
 			FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
 		if (!AuthoringReport.bAuthoringReady
-			|| AuthoringReport.PartActorCount != Seed.ExpectedParts)
+			|| AuthoringReport.PartComponentCount != Seed.ExpectedParts)
 		{
 			OutErrors.Add(FString::Printf(
 				TEXT("Enemy Host authoring report is %s with %d parts"),
 				*AuthoringReport.AuthoringState.ToString(),
-				AuthoringReport.PartActorCount));
+				AuthoringReport.PartComponentCount));
 		}
 		return OutErrors.IsEmpty();
 	}
@@ -574,21 +589,12 @@ namespace
 		Host->Modify();
 		Host->EnemyDefinition = Enemy;
 		Host->EnemySlotId = NAME_None;
-		Host->HostAuthoringMode =
-			EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual;
-		Host->HostVisualMode = EWacomBattleEnemyHostVisualMode::Flipbook;
-		Host->HostSprite = nullptr;
-		Host->HostFlipbook = Placeholder;
-		Host->HostVisualRelativeScale3D = FVector(Seed.VisualScale);
-		Host->HostVisualTint = Seed.Tint;
-		Host->bHostVisualVisible = true;
-		Host->bAutoPlayHostFlipbook = true;
-		Host->bLoopHostFlipbook = true;
 		Host->DefaultImpactStyle = LoadObject<UWacomBattleEnemyPartImpactStyle>(
 			nullptr, *ObjectPathForPackage(ImpactStylePackage));
 		Host->DefaultTargetPreviewStyle =
 			LoadObject<UWacomBattleEnemyPartTargetPreviewStyle>(
 				nullptr, *ObjectPathForPackage(TargetPreviewStylePackage));
+		Host->EnemyPanelWidgetClass = nullptr;
 
 		const TArray<AWacomBattleEnemyActor*> HostsToSync = {Host};
 		const TArray<FWacomBattleSceneEnemyHostSyncResult> Results =
@@ -615,26 +621,20 @@ namespace
 			OutErrors.Add(TEXT("Enemy Host CDO did not regenerate"));
 			return nullptr;
 		}
-		const TArray<AWacomBattleEnemyPartActor*> Parts =
-			Host->GetBattleEnemyPartActors();
-		for (int32 Index = 0; Index < Parts.Num(); ++Index)
+		for (int32 Index = 0; Index < Enemy->Parts.Num(); ++Index)
 		{
-			AWacomBattleEnemyPartActor* Part = Parts[Index];
-			UChildActorComponent* Component = Part
-				? FindPartComponent(*Host, *Part) : nullptr;
-			if (!Part || !Component)
+			const FEnemyPartSlot& PartSlot = Enemy->Parts[Index];
+			if (!PartSlot.PartDef
+				|| !Wacom::EnemyHostComponentBuilder::FindPartTemplates(
+					*Blueprint, PartSlot.PartSlotId).IsComplete())
 			{
-				OutErrors.Add(TEXT("Enemy Host part presentation template is missing"));
+				OutErrors.Add(FString::Printf(
+					TEXT("Enemy Host typed part hierarchy is missing: %s"),
+					*PartSlot.PartSlotId.ToString()));
 				return nullptr;
 			}
-			Part->Modify();
-			Component->Modify();
-			Part->HitBoundsExtent = FVector(62.0f, 48.0f, 62.0f)
-				* Seed.VisualScale;
-			Part->VisualLayers.Reset();
-			Component->SetRelativeLocation(
-				PartLayoutLocation(Parts.Num(), Index) * Seed.VisualScale);
-			Part->RefreshAuthoringState();
+			Wacom::EnemyHostComponentBuilder::ApplyFlipbookPart(
+				*Blueprint, MakePartSpec(Seed, PartSlot, Index, *Placeholder));
 		}
 		FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
 		FKismetEditorUtilities::CompileBlueprint(Blueprint);
