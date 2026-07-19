@@ -6,7 +6,11 @@
 
 UWacomBattleEnemyPartFlipbookLayerComponent::UWacomBattleEnemyPartFlipbookLayerComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	// UPaperFlipbookComponent advances playback from its component tick. Keep that
+	// base contract in both PIE and editor viewports; runtime state controls
+	// playback through Play/Stop instead of disabling the component tick.
+	PrimaryComponentTick.bCanEverTick = true;
+	bTickInEditor = true;
 	SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetGenerateOverlapEvents(false);
 	SetCastShadow(false);

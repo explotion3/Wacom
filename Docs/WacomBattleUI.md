@@ -165,7 +165,7 @@ AWacomBattleEnemyActor
 
 - `UWacomBattleEnemyPartComponent` 的 Component Transform 是部位位置唯一真相，`BoxExtent` 是 hover、点击与拖卡 HitBounds 唯一真相。
 - 内容人员填写 `PartSlotId`；`PartId` 由 `EnemyDefinition.Parts` 派生。规则顺序、HUD 顺序和 registry 顺序都来自 Definition，不按组件名、创建顺序或 Actor 名推断。
-- Sprite/Flipbook Layer 必须是 Part 的直接 typed 子组件。其真实 Paper2D Transform、资源、Tint、Material、Sort、播放配置就是视口制作数据，不再存在生成 VisualLayers、Host 整体视觉或 ChildActor 镜像。
+- Sprite/Flipbook Layer 必须是 Part 的直接 typed 子组件。其真实 Paper2D Transform、资源、Tint、Material、Sort、播放配置就是视口制作数据，不再存在生成 VisualLayers、Host 整体视觉或 ChildActor 镜像。Flipbook Layer 保留 `UPaperFlipbookComponent` 的组件 Tick 与 Editor Tick 合同，因此 authored Idle 在 Blueprint 视口和 PIE 中都持续播放；运行时暂停、恢复或换片只使用 Paper2D 播放状态，不通过关闭组件 Tick 实现。
 - ImpactAnchor 必须是 Part 的直接 typed 子组件；缺失时运行时回退到 Part 原点。视觉透明区域、排序和尺寸不改变目标身份。
 - TrainingWarrior 是一个 Body Part；Snake 与 SlimeTrio 是三个 Part。系统不再区分 Simple Host 与 Multi-Part 模式，Host 本身不持有 Sprite、Flipbook 或 Animation Style。
 
