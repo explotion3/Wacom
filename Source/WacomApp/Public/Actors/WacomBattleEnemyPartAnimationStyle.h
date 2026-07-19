@@ -64,7 +64,12 @@ public:
 		meta = (ToolTip = "IntentId 到部位行动动画的显式映射。精确映射优先于 DefaultActionClip；IntentId 必须非空，不会根据名称或效果猜测。"))
 	TMap<FName, FWacomBattleEnemyPartAnimationClip> ActionClipsByIntentId;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Part Animation|Destroyed",
+		meta = (ToolTip = "可选的整只敌人终态动画。Host 内最多一个 Part Style 可以配置；使用同一个 TargetVisualLayerId，播放完成后停在最后一帧。"))
+	FWacomBattleEnemyPartAnimationClip EnemyDestroyedClip;
+
 	const FWacomBattleEnemyPartAnimationClip* ResolveActionClip(FName IntentId) const;
+	const FWacomBattleEnemyPartAnimationClip* ResolveEnemyDestroyedClip() const;
 
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;

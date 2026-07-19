@@ -20,8 +20,10 @@ class USceneComponent;
 class UWidgetComponent;
 class UWacomBattleEnemyHostVisualComponent;
 class UWacomBattleEnemyHostAnimationStyle;
+class UWacomBattleEnemyPartComponent;
 class UWacomBattleEnemyPartImpactStyle;
 class UWacomBattleEnemyPartTargetPreviewStyle;
+class UWacomBattleEnemySceneRuntimeComponent;
 class UWacomBattleEnemyPanelWidget;
 class AWacomBattleEnemyActor;
 struct FBattlePartSlotIdentity;
@@ -379,6 +381,21 @@ public:
 		meta = (ToolTip = "返回当前 Host 的敌人槽位 ID。正式多敌人身份由 BattleTrigger.SceneEnemyHostSlots 注入；这里不根据 Actor 名称或空值推断。"))
 	FName GetEffectiveEnemySlotId() const;
 
+	/** 返回 Host 唯一的 typed scene runtime；不供 Blueprint 制作或持久化引用。 */
+	UWacomBattleEnemySceneRuntimeComponent* GetEnemySceneRuntimeComponent() const
+	{
+		return EnemySceneRuntimeComponent;
+	}
+
+	/** 按 EnemyDefinition.Parts 顺序返回已注册的真实 Part 组件。 */
+	TArray<UWacomBattleEnemyPartComponent*> GetBattleEnemyPartComponents() const;
+
+	/** typed Part/Layer/Anchor 注册状态变化时使运行时拓扑失效。 */
+	void NotifyEnemySceneComponentTopologyChanged();
+
+	/** 新组件架构的 topology revision；只随 typed hierarchy 变化，不随 Snapshot 或 Transform 变化。 */
+	uint32 GetEnemySceneComponentTopologyRevision() const;
+
 	/**
 	 * 为 BattleHUD runtime registry 建立一次轻量场景绑定。
 	 * 只扫描 live PartActor 并同步身份、Host 表现语境与 Badge 布局；不重建 Host/Part 视觉或制作状态。
@@ -509,6 +526,10 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Internal",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Host 整体视觉生成组件。只负责 PaperSprite / PaperFlipbook 生命周期，不参与命中或战斗目标绑定。"))
 	TObjectPtr<UWacomBattleEnemyHostVisualComponent> HostVisualComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, Transient, Category = "Wacom|Battle|Scene Enemy|Internal",
+		meta = (AllowPrivateAccess = "true", ToolTip = "Host 唯一的组件化场景运行时。只管理绑定与表现生命周期，不生成或拥有制作期视觉组件。"))
+	TObjectPtr<UWacomBattleEnemySceneRuntimeComponent> EnemySceneRuntimeComponent = nullptr;
 
 	uint32 RuntimePartTopologyRevision = 0;
 };

@@ -14,6 +14,8 @@
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Components/WacomBattleEnemyHostVisualComponent.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
+#include "Components/WacomBattleEnemySceneRuntimeComponent.h"
 #include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -170,6 +172,9 @@ AWacomBattleEnemyActor::AWacomBattleEnemyActor()
 	HostVisualComponent =
 		CreateDefaultSubobject<UWacomBattleEnemyHostVisualComponent>(TEXT("HostVisualComponent"));
 	HostVisualComponent->bEditableWhenInherited = false;
+
+	EnemySceneRuntimeComponent =
+		CreateDefaultSubobject<UWacomBattleEnemySceneRuntimeComponent>(TEXT("EnemySceneRuntime"));
 }
 
 void AWacomBattleEnemyActor::PostLoad()
@@ -211,6 +216,35 @@ void AWacomBattleEnemyActor::BeginPlay()
 	RefreshEnemyPanelWidgetComponent();
 	TArray<AWacomBattleEnemyPartActor*> RuntimePartActors;
 	InitializeRuntimeSceneBinding(RuntimePartActors);
+	if (EnemySceneRuntimeComponent)
+	{
+		EnemySceneRuntimeComponent->RefreshTypedHierarchy();
+	}
+}
+
+TArray<UWacomBattleEnemyPartComponent*> AWacomBattleEnemyActor::GetBattleEnemyPartComponents() const
+{
+	TArray<UWacomBattleEnemyPartComponent*> Parts;
+	if (EnemySceneRuntimeComponent)
+	{
+		EnemySceneRuntimeComponent->GetOrderedPartComponents(Parts);
+	}
+	return Parts;
+}
+
+void AWacomBattleEnemyActor::NotifyEnemySceneComponentTopologyChanged()
+{
+	if (EnemySceneRuntimeComponent)
+	{
+		EnemySceneRuntimeComponent->NotifyTypedHierarchyChanged();
+	}
+}
+
+uint32 AWacomBattleEnemyActor::GetEnemySceneComponentTopologyRevision() const
+{
+	return EnemySceneRuntimeComponent
+		? EnemySceneRuntimeComponent->GetTopologyRevision()
+		: 0;
 }
 
 bool AWacomBattleEnemyActor::HasHostVisualResource() const

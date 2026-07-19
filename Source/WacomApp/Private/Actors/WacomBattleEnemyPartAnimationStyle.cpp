@@ -19,6 +19,16 @@ UWacomBattleEnemyPartAnimationStyle::ResolveActionClip(FName IntentId) const
 	return DefaultActionClip.IsRuntimeUsable() ? &DefaultActionClip : nullptr;
 }
 
+const FWacomBattleEnemyPartAnimationClip*
+UWacomBattleEnemyPartAnimationStyle::ResolveEnemyDestroyedClip() const
+{
+	return EnemyDestroyedClip.Flipbook
+		&& FMath::IsFinite(EnemyDestroyedClip.PlayRate)
+		&& EnemyDestroyedClip.PlayRate > 0.0f
+		? &EnemyDestroyedClip
+		: nullptr;
+}
+
 #if WITH_EDITOR
 EDataValidationResult UWacomBattleEnemyPartAnimationStyle::IsDataValid(
 	FDataValidationContext& Context) const
@@ -69,6 +79,15 @@ EDataValidationResult UWacomBattleEnemyPartAnimationStyle::IsDataValid(
 	};
 
 	RejectClip(LOCTEXT("DefaultActionLabel", "DefaultActionClip"), DefaultActionClip, false);
+	if (EnemyDestroyedClip.Flipbook
+		&& (!FMath::IsFinite(EnemyDestroyedClip.PlayRate)
+			|| EnemyDestroyedClip.PlayRate <= 0.0f))
+	{
+		Context.AddError(LOCTEXT(
+			"InvalidEnemyDestroyedClip",
+			"EnemyDestroyedClip 的 PlayRate 必须是有限正数；终态 Clip 忽略 ImpactNormalizedTime。"));
+		Result = EDataValidationResult::Invalid;
+	}
 	for (const TPair<FName, FWacomBattleEnemyPartAnimationClip>& Pair : ActionClipsByIntentId)
 	{
 		if (Pair.Key.IsNone())
