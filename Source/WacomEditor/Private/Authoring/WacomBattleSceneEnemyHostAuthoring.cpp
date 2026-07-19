@@ -3,10 +3,10 @@
 #include "Authoring/WacomBattleSceneEnemyHostAuthoring.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
-#include "Components/ChildActorComponent.h"
-#include "Components/WacomBattleEnemyPartChildActorComponent.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
+#include "Components/WacomBattleEnemyPartFlipbookLayerComponent.h"
+#include "Components/WacomBattleEnemyPartImpactAnchorComponent.h"
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "Engine/SCS_Node.h"
@@ -23,104 +23,30 @@ namespace
 	const TCHAR* DebugSnakeEnemyPath =
 		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake.DA_Enemy_Snake");
 
-	struct FDebugSnakeHostPartSpec
+	FString SanitizeComponentSuffix(FName PartSlotId)
 	{
-		FName PartId = NAME_None;
-		FName PartSlotId = NAME_None;
-		FVector RelativeLocation = FVector::ZeroVector;
-	};
-
-	const TArray<FDebugSnakeHostPartSpec>& GetDebugSnakeHostPartSpecs()
-	{
-		static const TArray<FDebugSnakeHostPartSpec> Specs = {
-			{ TEXT("Snake.Head"), TEXT("Head"), FVector(96.0f, -6.0f, 16.0f) },
-			{ TEXT("Snake.Body"), TEXT("Body"), FVector(0.0f, 0.0f, 0.0f) },
-			{ TEXT("Snake.Tail"), TEXT("Tail"), FVector(-92.0f, 16.0f, -8.0f) }
-		};
-		return Specs;
-	}
-
-	void MarkObjectEdited(UObject* Object)
-	{
-		if (Object)
-		{
-			Object->Modify();
-			Object->MarkPackageDirty();
-		}
-	}
-
-	void CollectInstanceChildActorComponents(
-		const AWacomBattleEnemyActor& Host,
-		TArray<UChildActorComponent*>& OutComponents)
-	{
-		Host.GetComponents<UChildActorComponent>(OutComponents);
-	}
-
-	void CollectBlueprintTemplateChildActorComponents(
-		const AWacomBattleEnemyActor& Host,
-		TArray<UChildActorComponent*>& OutComponents)
-	{
-		UBlueprintGeneratedClass* BlueprintClass =
-			Cast<UBlueprintGeneratedClass>(Host.GetClass());
-		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
-		{
-			return;
-		}
-
-		for (USCS_Node* Node : BlueprintClass->SimpleConstructionScript->GetAllNodes())
-		{
-			if (Node)
-			{
-				if (UChildActorComponent* Component = Cast<UChildActorComponent>(
-					Node->GetActualComponentTemplate(BlueprintClass)))
-				{
-					OutComponents.AddUnique(Component);
-				}
-			}
-		}
-	}
-
-	UChildActorComponent* FindChildActorComponentForPart(
-		const AWacomBattleEnemyActor& Host,
-		const AWacomBattleEnemyPartActor& PartActor)
-	{
-		TArray<UChildActorComponent*> Components;
-		CollectInstanceChildActorComponents(Host, Components);
-		if (Components.IsEmpty())
-		{
-			CollectBlueprintTemplateChildActorComponents(Host, Components);
-		}
-
-		for (UChildActorComponent* Component : Components)
-		{
-			if (!Component)
-			{
-				continue;
-			}
-			if (Component->GetChildActor() == &PartActor
-				|| Component->GetChildActorTemplate() == &PartActor)
-			{
-				return Component;
-			}
-		}
-		return nullptr;
-	}
-
-	FName BuildEnemyPartComponentBaseName(FName PartSlotId)
-	{
-		FString SanitizedSlotId = PartSlotId.ToString();
-		for (TCHAR& Character : SanitizedSlotId)
+		FString Result = PartSlotId.ToString();
+		for (TCHAR& Character : Result)
 		{
 			if (!FChar::IsAlnum(Character) && Character != TEXT('_'))
 			{
 				Character = TEXT('_');
 			}
 		}
-		if (SanitizedSlotId.IsEmpty())
-		{
-			SanitizedSlotId = TEXT("Part");
-		}
-		return FName(*FString::Printf(TEXT("EnemyPart_%s"), *SanitizedSlotId));
+		return Result.IsEmpty() ? FString(TEXT("Part")) : Result;
+	}
+
+	FName BuildName(const TCHAR* Prefix, FName PartSlotId)
+	{
+		return FName(*FString::Printf(TEXT("%s_%s"), Prefix,
+			*SanitizeComponentSuffix(PartSlotId)));
+	}
+
+	void MarkEdited(UObject& Object)
+	{
+		Object.SetFlags(RF_Transactional);
+		Object.Modify();
+		Object.MarkPackageDirty();
 	}
 
 	UBlueprint* ResolveOwningBlueprint(const AWacomBattleEnemyActor& Host)
@@ -129,7 +55,6 @@ namespace
 		{
 			return nullptr;
 		}
-
 		const UBlueprintGeneratedClass* BlueprintClass =
 			Cast<UBlueprintGeneratedClass>(Host.GetClass());
 		return BlueprintClass
@@ -137,199 +62,175 @@ namespace
 			: nullptr;
 	}
 
-	bool ApplyDerivedPartIdentity(
-		AWacomBattleEnemyPartActor& PartActor,
-		FName PartSlotId,
-		FName PartId)
+	bool IsEditorAuthoringHost(const AWacomBattleEnemyActor& Host)
 	{
-		if (PartActor.PartSlotId == PartSlotId && PartActor.PartId == PartId)
-		{
-			return false;
-		}
-
-		PartActor.SetFlags(RF_Transactional);
-		MarkObjectEdited(&PartActor);
-		PartActor.PartSlotId = PartSlotId;
-		PartActor.PartId = PartId;
-		PartActor.RefreshAuthoringState();
-		return true;
+		const UWorld* World = Host.GetWorld();
+		return !World || !World->IsGameWorld();
 	}
 
-	bool ApplyDerivedPartIdentityToAllRepresentations(
-		const AWacomBattleEnemyActor& Host,
-		AWacomBattleEnemyPartActor& PartActor,
-		FName PartSlotId,
-		FName PartId)
+	USCS_Node* CreateSCSNode(
+		USimpleConstructionScript& SCS,
+		UClass& ComponentClass,
+		FName BaseName)
 	{
-		TArray<AWacomBattleEnemyPartActor*> Representations = { &PartActor };
-		bool bChanged = false;
-		if (UChildActorComponent* Component =
-			FindChildActorComponentForPart(Host, PartActor))
-		{
-			if (UWacomBattleEnemyPartChildActorComponent* IdentityComponent =
-				Cast<UWacomBattleEnemyPartChildActorComponent>(Component))
-			{
-				MarkObjectEdited(IdentityComponent);
-				IdentityComponent->SetStoredPartIdentity(PartSlotId, PartId);
-				bChanged = true;
-			}
-			Representations.AddUnique(
-				Cast<AWacomBattleEnemyPartActor>(Component->GetChildActor()));
-			Representations.AddUnique(
-				Cast<AWacomBattleEnemyPartActor>(Component->GetChildActorTemplate()));
-		}
-
-		for (AWacomBattleEnemyPartActor* Representation : Representations)
-		{
-			if (Representation)
-			{
-				bChanged |= ApplyDerivedPartIdentity(
-					*Representation,
-					PartSlotId,
-					PartId);
-			}
-		}
-		return bChanged;
+		const FName UniqueName = SCS.GenerateNewComponentName(&ComponentClass, BaseName);
+		return SCS.CreateNode(&ComponentClass, UniqueName);
 	}
 
-	void SetDerivedPartChildActorClass(
-		UChildActorComponent& Component,
-		FName PartSlotId,
-		FName PartId)
-	{
-		if (!Component.IsTemplate())
-		{
-			Component.SetChildActorClass(AWacomBattleEnemyPartActor::StaticClass());
-			return;
-		}
-
-		AWacomBattleEnemyPartActor* InitialTemplate =
-			NewObject<AWacomBattleEnemyPartActor>(
-				GetTransientPackage(),
-				NAME_None,
-				RF_ArchetypeObject | RF_Transactional | RF_Transient);
-		InitialTemplate->PartSlotId = PartSlotId;
-		InitialTemplate->PartId = PartId;
-		Component.SetChildActorClass(
-			AWacomBattleEnemyPartActor::StaticClass(),
-			InitialTemplate);
-	}
-
-	UChildActorComponent* CreateBlueprintPartComponent(
+	UWacomBattleEnemyPartComponent* CreateBlueprintPart(
 		AWacomBattleEnemyActor& Host,
 		UBlueprint& Blueprint,
 		FName PartSlotId,
 		FName PartId)
 	{
-		USimpleConstructionScript* ConstructionScript = Blueprint.SimpleConstructionScript;
-		if (!ConstructionScript)
+		USimpleConstructionScript* SCS = Blueprint.SimpleConstructionScript;
+		if (!SCS)
 		{
 			return nullptr;
 		}
+		MarkEdited(Blueprint);
+		MarkEdited(*SCS);
 
-		MarkObjectEdited(&Blueprint);
-		MarkObjectEdited(ConstructionScript);
-		const FName ComponentName = ConstructionScript->GenerateNewComponentName(
-			UChildActorComponent::StaticClass(),
-			BuildEnemyPartComponentBaseName(PartSlotId));
-		USCS_Node* Node = ConstructionScript->CreateNode(
-			UChildActorComponent::StaticClass(),
-			ComponentName);
-		if (!Node)
+		USCS_Node* PartNode = CreateSCSNode(
+			*SCS,
+			*UWacomBattleEnemyPartComponent::StaticClass(),
+			BuildName(TEXT("Part"), PartSlotId));
+		if (!PartNode)
 		{
 			return nullptr;
 		}
-
-		ConstructionScript->AddNode(Node);
+		SCS->AddNode(PartNode);
 		if (Host.GetRootComponent())
 		{
-			Node->SetParent(Host.GetRootComponent());
+			PartNode->SetParent(Host.GetRootComponent());
 		}
-
-		UChildActorComponent* Component =
-			Cast<UChildActorComponent>(Node->ComponentTemplate);
-		if (!Component)
+		UWacomBattleEnemyPartComponent* Part =
+			Cast<UWacomBattleEnemyPartComponent>(PartNode->ComponentTemplate);
+		if (!Part)
 		{
-			ConstructionScript->RemoveNode(Node);
+			SCS->RemoveNode(PartNode);
 			return nullptr;
 		}
+		MarkEdited(*Part);
+		Part->PartSlotId = PartSlotId;
+		Part->SetDerivedPartId(PartId);
+		Part->SetRelativeTransform(FTransform::Identity);
 
-		MarkObjectEdited(Component);
-		Component->SetRelativeTransform(FTransform::Identity);
-		SetDerivedPartChildActorClass(*Component, PartSlotId, PartId);
-		if (AWacomBattleEnemyPartActor* TemplatePart =
-			Cast<AWacomBattleEnemyPartActor>(Component->GetChildActorTemplate()))
+		USCS_Node* VisualNode = CreateSCSNode(
+			*SCS,
+			*UWacomBattleEnemyPartFlipbookLayerComponent::StaticClass(),
+			BuildName(TEXT("Visual_Main"), PartSlotId));
+		USCS_Node* AnchorNode = CreateSCSNode(
+			*SCS,
+			*UWacomBattleEnemyPartImpactAnchorComponent::StaticClass(),
+			BuildName(TEXT("ImpactAnchor"), PartSlotId));
+		if (!VisualNode || !AnchorNode)
 		{
-			ApplyDerivedPartIdentity(*TemplatePart, PartSlotId, PartId);
+			SCS->RemoveNode(PartNode);
+			return nullptr;
+		}
+		PartNode->AddChildNode(VisualNode);
+		PartNode->AddChildNode(AnchorNode);
+		if (UWacomBattleEnemyPartFlipbookLayerComponent* Visual =
+			Cast<UWacomBattleEnemyPartFlipbookLayerComponent>(VisualNode->ComponentTemplate))
+		{
+			MarkEdited(*Visual);
+			Visual->LayerId = FName(*FString::Printf(TEXT("%s.Main"), *PartSlotId.ToString()));
+			Visual->SetRelativeTransform(FTransform::Identity);
+		}
+		if (UWacomBattleEnemyPartImpactAnchorComponent* Anchor =
+			Cast<UWacomBattleEnemyPartImpactAnchorComponent>(AnchorNode->ComponentTemplate))
+		{
+			MarkEdited(*Anchor);
+			Anchor->SetRelativeTransform(FTransform::Identity);
+		}
+		return Part;
+	}
+
+	template <typename TComponent>
+	TComponent* CreateInstanceComponent(
+		AWacomBattleEnemyActor& Host,
+		USceneComponent& Parent,
+		FName BaseName)
+	{
+		const FName UniqueName = MakeUniqueObjectName(&Host, TComponent::StaticClass(), BaseName);
+		TComponent* Component = NewObject<TComponent>(
+			&Host, UniqueName, RF_Transactional);
+		if (!Component)
+		{
+			return nullptr;
+		}
+		Component->CreationMethod = EComponentCreationMethod::Instance;
+		Host.AddInstanceComponent(Component);
+		Component->SetupAttachment(&Parent);
+		Component->SetRelativeTransform(FTransform::Identity);
+		Component->OnComponentCreated();
+		if (Host.GetWorld())
+		{
+			Component->RegisterComponent();
 		}
 		return Component;
 	}
 
-	UChildActorComponent* CreateInstancePartComponent(
+	UWacomBattleEnemyPartComponent* CreateInstancePart(
 		AWacomBattleEnemyActor& Host,
 		FName PartSlotId,
 		FName PartId)
 	{
-		EObjectFlags ObjectFlags = RF_Transactional;
-		if (Host.HasAnyFlags(RF_ArchetypeObject))
-		{
-			ObjectFlags |= RF_ArchetypeObject;
-		}
-		const FName ComponentName = MakeUniqueObjectName(
-			&Host,
-			UChildActorComponent::StaticClass(),
-			BuildEnemyPartComponentBaseName(PartSlotId));
-		UWacomBattleEnemyPartChildActorComponent* Component =
-			NewObject<UWacomBattleEnemyPartChildActorComponent>(
-				&Host,
-				ComponentName,
-				ObjectFlags);
-		if (!Component)
+		USceneComponent* Root = Host.GetRootComponent();
+		if (!Root)
 		{
 			return nullptr;
 		}
-
-		MarkObjectEdited(&Host);
-		Component->CreationMethod = EComponentCreationMethod::Instance;
-		Host.AddInstanceComponent(Component);
-		Component->SetupAttachment(Host.GetRootComponent());
-		Component->SetRelativeTransform(FTransform::Identity);
-		Component->SetStoredPartIdentity(PartSlotId, PartId);
-		SetDerivedPartChildActorClass(*Component, PartSlotId, PartId);
-		MarkObjectEdited(Component);
-
-		if (AWacomBattleEnemyPartActor* TemplatePart =
-			Cast<AWacomBattleEnemyPartActor>(Component->GetChildActorTemplate()))
+		MarkEdited(Host);
+		UWacomBattleEnemyPartComponent* Part =
+			CreateInstanceComponent<UWacomBattleEnemyPartComponent>(
+				Host, *Root, BuildName(TEXT("Part"), PartSlotId));
+		if (!Part)
 		{
-			ApplyDerivedPartIdentity(*TemplatePart, PartSlotId, PartId);
+			return nullptr;
 		}
-		if (Host.GetWorld())
+		Part->PartSlotId = PartSlotId;
+		Part->SetDerivedPartId(PartId);
+		UWacomBattleEnemyPartFlipbookLayerComponent* Visual =
+			CreateInstanceComponent<UWacomBattleEnemyPartFlipbookLayerComponent>(
+				Host, *Part, BuildName(TEXT("Visual_Main"), PartSlotId));
+		UWacomBattleEnemyPartImpactAnchorComponent* Anchor =
+			CreateInstanceComponent<UWacomBattleEnemyPartImpactAnchorComponent>(
+				Host, *Part, BuildName(TEXT("ImpactAnchor"), PartSlotId));
+		if (!Visual || !Anchor)
 		{
-			Component->OnComponentCreated();
-			Component->RegisterComponent();
+			return nullptr;
 		}
-		if (AWacomBattleEnemyPartActor* LivePart =
-			Cast<AWacomBattleEnemyPartActor>(Component->GetChildActor()))
-		{
-			ApplyDerivedPartIdentity(*LivePart, PartSlotId, PartId);
-		}
-		return Component;
+		Visual->LayerId = FName(*FString::Printf(TEXT("%s.Main"), *PartSlotId.ToString()));
+		return Part;
 	}
 
-	UChildActorComponent* CreatePartComponent(
+	UWacomBattleEnemyPartComponent* CreatePart(
 		AWacomBattleEnemyActor& Host,
 		FName PartSlotId,
 		FName PartId)
 	{
 		if (UBlueprint* Blueprint = ResolveOwningBlueprint(Host))
 		{
-			return CreateBlueprintPartComponent(
-				Host,
-				*Blueprint,
-				PartSlotId,
-				PartId);
+			return CreateBlueprintPart(Host, *Blueprint, PartSlotId, PartId);
 		}
-		return CreateInstancePartComponent(Host, PartSlotId, PartId);
+		return CreateInstancePart(Host, PartSlotId, PartId);
+	}
+
+	bool ApplyDerivedIdentity(
+		UWacomBattleEnemyPartComponent& Part,
+		FName PartSlotId,
+		FName PartId)
+	{
+		if (Part.PartSlotId == PartSlotId && Part.PartId == PartId)
+		{
+			return false;
+		}
+		MarkEdited(Part);
+		Part.PartSlotId = PartSlotId;
+		Part.SetDerivedPartId(PartId);
+		return true;
 	}
 
 	void CopyResultToHost(
@@ -341,57 +242,6 @@ namespace
 		Host.AuthoringLastUpdatedPartSlotIds = Result.UpdatedPartSlotIds;
 		Host.AuthoringLastInvalidDefinitionPartSlotIds =
 			Result.InvalidDefinitionPartSlotIds;
-	}
-
-	bool IsEditorAuthoringHost(const AWacomBattleEnemyActor& Host)
-	{
-		const UWorld* World = Host.GetWorld();
-		return !World || !World->IsGameWorld();
-	}
-
-	bool DebugSnakePartIdentityMatchesSpec(
-		const AWacomBattleEnemyPartActor& PartActor,
-		const FDebugSnakeHostPartSpec& Spec)
-	{
-		return PartActor.GetEffectivePartDefinitionId() == Spec.PartId
-			|| PartActor.GetEffectivePartSlotId() == Spec.PartSlotId;
-	}
-
-	void ConfigureDebugSnakePart(
-		AWacomBattleEnemyPartActor& PartActor,
-		const FDebugSnakeHostPartSpec& Spec)
-	{
-		MarkObjectEdited(&PartActor);
-		if (Spec.PartSlotId == FName(TEXT("Head")))
-		{
-			PartActor.ConfigureDebugSnakeHeadSample();
-		}
-		else if (Spec.PartSlotId == FName(TEXT("Body")))
-		{
-			PartActor.ConfigureDebugSnakeBodySample();
-		}
-		else
-		{
-			PartActor.ConfigureDebugSnakeTailSample();
-		}
-	}
-
-	void ApplyDebugSnakeRelativeLocation(
-		const AWacomBattleEnemyActor& Host,
-		AWacomBattleEnemyPartActor& PartActor,
-		const FVector& RelativeLocation)
-	{
-		if (UChildActorComponent* Component =
-			FindChildActorComponentForPart(Host, PartActor))
-		{
-			MarkObjectEdited(Component);
-			Component->SetRelativeLocation(RelativeLocation);
-		}
-		else if (PartActor.GetAttachParentActor() == &Host)
-		{
-			MarkObjectEdited(&PartActor);
-			PartActor.SetActorRelativeLocation(RelativeLocation);
-		}
 	}
 }
 
@@ -405,110 +255,92 @@ FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition(
 		FWacomBattleSceneEnemyHostAuthoringReport Report;
 		int32 ResultIndex = INDEX_NONE;
 	};
-
 	TArray<FWacomBattleSceneEnemyHostSyncResult> Results;
 	TArray<FHostWork> Work;
-	TSet<AWacomBattleEnemyActor*> SeenHosts;
-	bool bHasPlannedMutation = false;
+	TSet<AWacomBattleEnemyActor*> Seen;
+	bool bNeedsTransaction = false;
 	for (AWacomBattleEnemyActor* Host : Hosts)
 	{
-		if (!Host || SeenHosts.Contains(Host))
+		if (!Host || Seen.Contains(Host))
 		{
 			continue;
 		}
-		SeenHosts.Add(Host);
-
+		Seen.Add(Host);
 		FWacomBattleSceneEnemyHostSyncResult& Result = Results.AddDefaulted_GetRef();
 		Result.Host = Host;
-		FHostWork& HostWork = Work.AddDefaulted_GetRef();
-		HostWork.Host = Host;
-		HostWork.Report = FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
-		HostWork.ResultIndex = Results.Num() - 1;
-		Result.InvalidDefinitionPartSlotIds =
-			HostWork.Report.InvalidDefinitionPartSlotIds;
-		bHasPlannedMutation |= IsEditorAuthoringHost(*Host)
-			&& HostWork.Report.bHasValidDefinitionParts
-			&& !HostWork.Report.SyncPlan.IsEmpty();
+		FHostWork& Entry = Work.AddDefaulted_GetRef();
+		Entry.Host = Host;
+		Entry.Report = FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
+		Entry.ResultIndex = Results.Num() - 1;
+		Result.InvalidDefinitionPartSlotIds = Entry.Report.InvalidDefinitionPartSlotIds;
+		bNeedsTransaction |= IsEditorAuthoringHost(*Host) && !Entry.Report.SyncPlan.IsEmpty();
 	}
 
 	TUniquePtr<FScopedTransaction> Transaction;
-	if (bHasPlannedMutation)
+	if (bNeedsTransaction)
 	{
 		Transaction = MakeUnique<FScopedTransaction>(
-			LOCTEXT("SyncEnemyHostPartsTransaction", "同步敌人 Host 部位"));
+			LOCTEXT("SyncEnemyHostPartsTransaction", "从 EnemyDefinition 同步敌人部位组件"));
 	}
 
-	for (FHostWork& HostWork : Work)
+	for (FHostWork& Entry : Work)
 	{
-		AWacomBattleEnemyActor& Host = *HostWork.Host;
-		FWacomBattleSceneEnemyHostSyncResult& Result = Results[HostWork.ResultIndex];
+		AWacomBattleEnemyActor& Host = *Entry.Host;
+		FWacomBattleSceneEnemyHostSyncResult& Result = Results[Entry.ResultIndex];
 		if (!IsEditorAuthoringHost(Host))
 		{
 			Result.ResultCode = TEXT("EditorOnly");
 			CopyResultToHost(Host, Result);
 			continue;
 		}
-		if (!HostWork.Report.bHasEnemyDefinition)
+		if (!Entry.Report.bHasEnemyDefinition)
 		{
 			Result.ResultCode = TEXT("MissingEnemyDefinition");
 			CopyResultToHost(Host, Result);
 			continue;
 		}
-		if (!HostWork.Report.bHasValidDefinitionParts)
+		if (!Entry.Report.bHasValidDefinitionParts)
 		{
 			Result.ResultCode = TEXT("NoValidDefinitionParts");
 			CopyResultToHost(Host, Result);
 			continue;
 		}
 
-		for (const FWacomBattleSceneEnemyPartSyncPlanEntry& Entry :
-			HostWork.Report.SyncPlan)
+		for (const FWacomBattleSceneEnemyPartSyncPlanEntry& Operation : Entry.Report.SyncPlan)
 		{
-			bool bOperationApplied = false;
-			if (Entry.Operation ==
-				EWacomBattleSceneEnemyPartSyncOperation::UpdateDerivedPartId)
+			bool bApplied = false;
+			if (Operation.Operation == EWacomBattleSceneEnemyPartSyncOperation::AddMissingPart)
 			{
-				if (AWacomBattleEnemyPartActor* ExistingPart =
-					Entry.ExistingPartActor.Get())
+				bApplied = CreatePart(
+					Host, Operation.PartSlotId, Operation.DerivedPartId) != nullptr;
+				if (bApplied)
 				{
-					bOperationApplied = ApplyDerivedPartIdentityToAllRepresentations(
-						Host,
-						*ExistingPart,
-						Entry.PartSlotId,
-						Entry.DerivedPartId);
-				}
-				if (bOperationApplied)
-				{
-					Result.UpdatedPartSlotIds.Add(Entry.PartSlotId);
-				}
-			}
-			else
-			{
-				bOperationApplied = CreatePartComponent(
-					Host,
-					Entry.PartSlotId,
-					Entry.DerivedPartId) != nullptr;
-				if (bOperationApplied)
-				{
-					Result.AddedPartSlotIds.Add(Entry.PartSlotId);
+					Result.AddedPartSlotIds.Add(Operation.PartSlotId);
 					Result.bAddedPart = true;
 				}
 			}
-
-			if (!bOperationApplied)
+			else if (UWacomBattleEnemyPartComponent* Part =
+				Operation.ExistingPartComponent.Get())
 			{
-				Result.FailedPartSlotIds.Add(Entry.PartSlotId);
+				bApplied = ApplyDerivedIdentity(
+					*Part, Operation.PartSlotId, Operation.DerivedPartId);
+				if (bApplied)
+				{
+					Result.UpdatedPartSlotIds.Add(Operation.PartSlotId);
+				}
 			}
-			Result.bChanged |= bOperationApplied;
+			if (!bApplied)
+			{
+				Result.FailedPartSlotIds.Add(Operation.PartSlotId);
+			}
+			Result.bChanged |= bApplied;
 		}
 
 		if (!Result.FailedPartSlotIds.IsEmpty())
 		{
-			Result.ResultCode = Result.bChanged
-				? FName(TEXT("PartiallyApplied"))
-				: FName(TEXT("ApplyFailed"));
+			Result.ResultCode = Result.bChanged ? FName(TEXT("PartiallyApplied")) : FName(TEXT("ApplyFailed"));
 		}
-		else if (!HostWork.Report.InvalidDefinitionPartSlotIds.IsEmpty())
+		else if (!Entry.Report.InvalidDefinitionPartSlotIds.IsEmpty())
 		{
 			Result.ResultCode = TEXT("AppliedWithInvalidDefinitionSlots");
 		}
@@ -519,11 +351,7 @@ FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition(
 
 		if (Result.bChanged)
 		{
-			if (Result.bAddedPart)
-			{
-				Host.InvalidateRuntimePartTopology();
-			}
-			Host.RefreshAttachedPartBadgeLayout();
+			Host.NotifyEnemySceneComponentTopologyChanged();
 			if (UBlueprint* Blueprint = ResolveOwningBlueprint(Host))
 			{
 				if (Result.bAddedPart)
@@ -538,7 +366,6 @@ FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition(
 		}
 		CopyResultToHost(Host, Result);
 	}
-
 	return Results;
 }
 
@@ -549,69 +376,30 @@ FName FWacomBattleSceneEnemyHostAuthoring::ConfigureDebugSnakeSample(
 	{
 		return TEXT("EditorOnly");
 	}
-
 	const FScopedTransaction Transaction(
-		LOCTEXT("ConfigureDebugSnakeTransaction", "配置敌人 Host 蛇样例"));
-	MarkObjectEdited(&Host);
+		LOCTEXT("ConfigureDebugSnakeTransaction", "配置组件化敌人 Host 蛇样例"));
+	MarkEdited(Host);
 	Host.EnemyDefinition = LoadObject<UEnemyDefinition>(nullptr, DebugSnakeEnemyPath);
 	Host.EnemySlotId = TEXT("Enemy");
-	Host.bApplyAttachedPartBadgeStagger = true;
-	Host.BadgeStaggerHorizontalStep = 28.0f;
-	Host.BadgeStaggerVerticalStep = 18.0f;
-
-	const TArray<FDebugSnakeHostPartSpec>& Specs = GetDebugSnakeHostPartSpecs();
-	TArray<AWacomBattleEnemyPartActor*> CandidateParts = Host.GetBattleEnemyPartActors();
-	TArray<AWacomBattleEnemyPartActor*> AssignedParts;
-	AssignedParts.SetNumZeroed(Specs.Num());
-	TSet<AWacomBattleEnemyPartActor*> UsedParts;
-	for (int32 SpecIndex = 0; SpecIndex < Specs.Num(); ++SpecIndex)
+	const TArray<FWacomBattleSceneEnemyHostSyncResult> Results =
+		SyncPartsFromDefinition(TArray<AWacomBattleEnemyActor*>{ &Host });
+	const TMap<FName, FVector> Locations = {
+		{ TEXT("Head"), FVector(96.0f, -6.0f, 16.0f) },
+		{ TEXT("Body"), FVector::ZeroVector },
+		{ TEXT("Tail"), FVector(-92.0f, 16.0f, -8.0f) }
+	};
+	for (UWacomBattleEnemyPartComponent* Part : Host.GetBattleEnemyPartComponents())
 	{
-		for (AWacomBattleEnemyPartActor* PartActor : CandidateParts)
+		if (Part)
 		{
-			if (PartActor
-				&& !UsedParts.Contains(PartActor)
-				&& DebugSnakePartIdentityMatchesSpec(*PartActor, Specs[SpecIndex]))
+			if (const FVector* Location = Locations.Find(Part->PartSlotId))
 			{
-				AssignedParts[SpecIndex] = PartActor;
-				UsedParts.Add(PartActor);
-				break;
+				MarkEdited(*Part);
+				Part->SetRelativeLocation(*Location);
 			}
 		}
 	}
-	for (int32 SpecIndex = 0; SpecIndex < Specs.Num(); ++SpecIndex)
-	{
-		if (AssignedParts[SpecIndex])
-		{
-			continue;
-		}
-		for (AWacomBattleEnemyPartActor* PartActor : CandidateParts)
-		{
-			if (PartActor && !UsedParts.Contains(PartActor))
-			{
-				AssignedParts[SpecIndex] = PartActor;
-				UsedParts.Add(PartActor);
-				break;
-			}
-		}
-	}
-
-	int32 UpdatedPartCount = 0;
-	for (int32 SpecIndex = 0; SpecIndex < Specs.Num(); ++SpecIndex)
-	{
-		if (AWacomBattleEnemyPartActor* PartActor = AssignedParts[SpecIndex])
-		{
-			ConfigureDebugSnakePart(*PartActor, Specs[SpecIndex]);
-			ApplyDebugSnakeRelativeLocation(
-				Host,
-				*PartActor,
-				Specs[SpecIndex].RelativeLocation);
-			++UpdatedPartCount;
-		}
-	}
-	Host.RefreshAttachedPartBadgeLayout();
-	return UpdatedPartCount == Specs.Num()
-		? FName(TEXT("Applied"))
-		: FName(TEXT("AppliedWithMissingParts"));
+	return Results.IsEmpty() ? FName(TEXT("ApplyFailed")) : Results[0].ResultCode;
 }
 
 #undef LOCTEXT_NAMESPACE

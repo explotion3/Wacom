@@ -17,9 +17,7 @@ private:
 	TArray<AWacomBattleEnemyActor*> GetLiveHosts() const;
 	FText BuildAuthoringReportText() const;
 	bool CanSyncParts() const;
-	bool CanConfigureDebugSnake() const;
 	FReply HandleSyncParts();
-	FReply HandleConfigureDebugSnake();
 
 	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> Hosts;
 	IDetailLayoutBuilder* ActiveDetailBuilder = nullptr;

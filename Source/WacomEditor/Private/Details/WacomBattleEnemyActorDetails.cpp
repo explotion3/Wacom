@@ -87,25 +87,9 @@ void FWacomBattleEnemyActorDetails::CustomizeDetails(
 		.Text(LOCTEXT("SyncPartsButton", "从 EnemyDefinition 同步部位"))
 		.ToolTipText(LOCTEXT(
 			"SyncPartsTooltip",
-			"显式应用上方只读报告中的同步计划。Blueprint 模板写入 SCS；关卡实例只修改当前实例；保留已有位置、命中体、ImpactAnchor 和 VisualLayers；不删除 surplus 部位。"))
+			"显式应用只读同步计划。Blueprint 写入真实 SCS Part、Visual_Main 与 ImpactAnchor；关卡实例写入 transactional InstanceComponent。保留已有 Transform、BoxExtent、视觉和 Anchor，不删除 surplus 部位。"))
 		.IsEnabled(this, &FWacomBattleEnemyActorDetails::CanSyncParts)
 		.OnClicked(this, &FWacomBattleEnemyActorDetails::HandleSyncParts)
-	];
-
-	IDetailCategoryBuilder& DebugCategory = DetailBuilder.EditCategory(
-		TEXT("Wacom|Battle|Scene Enemy|Advanced Debug"),
-		LOCTEXT("AdvancedDebugCategory", "Wacom | Battle | Scene Enemy | Advanced Debug"));
-	DebugCategory.InitiallyCollapsed(true);
-	DebugCategory.AddCustomRow(LOCTEXT("SnakeSampleFilter", "配置蛇样例"))
-	.WholeRowContent()
-	[
-		SNew(SButton)
-		.Text(LOCTEXT("SnakeSampleButton", "配置 Debug 蛇样例"))
-		.ToolTipText(LOCTEXT(
-			"SnakeSampleTooltip",
-			"只用于开发样例：给当前单选 Host 及其已有三个部位写入蛇身份、示例位置和 Badge stagger；不会生成缺失部位。"))
-		.IsEnabled(this, &FWacomBattleEnemyActorDetails::CanConfigureDebugSnake)
-		.OnClicked(this, &FWacomBattleEnemyActorDetails::HandleConfigureDebugSnake)
 	];
 }
 
@@ -138,23 +122,25 @@ FText FWacomBattleEnemyActorDetails::BuildAuthoringReportText() const
 		return FText::FromString(FString::Printf(
 			TEXT("Host: %s\n")
 			TEXT("状态: %s  Ready: %s\n")
-			TEXT("Host Visual 有效: %s  Animation Style 适用: %s  缺视觉层槽位: [%s]\n")
-			TEXT("部位: %d  待新增: %d  待修正: %d\n")
+			TEXT("Part: %d  Flipbook Layer: %d  Sprite Layer: %d\n")
+			TEXT("待新增: %d  待修正: %d  缺视觉层槽位: [%s]\n")
 			TEXT("PartSlotIds: [%s]\nPartIds: [%s]\n")
 			TEXT("缺失 Definition 槽位: [%s]  缺失 Definition PartId: [%s]\n")
 			TEXT("未知槽位: [%s]  未知 PartId: [%s]\n")
 			TEXT("重复槽位: [%s]  Identity mismatch: [%s]\n")
 			TEXT("无效 Definition 槽位: [%s]\nSurplus: [%s]\n")
+			TEXT("重复 LayerId: [%s]  错误父级: [%s]\n")
+			TEXT("多 Anchor: [%s]  空视觉: [%s]  动画 Style: [%s]  Terminal 冲突: [%s]\n")
 			TEXT("最近同步: %s  Added: [%s]  Updated: [%s]  Invalid: [%s]"),
 			*Host.GetName(),
 			*Report.AuthoringState.ToString(),
 			Report.bAuthoringReady ? TEXT("是") : TEXT("否"),
-			Report.bUsingHostVisual ? TEXT("是") : TEXT("否"),
-			Report.bHostAnimationStyleApplicable ? TEXT("是") : TEXT("否"),
-			*JoinNames(Report.MissingVisualLayerPartSlotIds),
-			Report.PartActorCount,
+			Report.PartComponentCount,
+			Report.FlipbookLayerCount,
+			Report.SpriteLayerCount,
 			Report.GetAddMissingPartCount(),
 			Report.GetUpdateDerivedPartIdCount(),
+			*JoinNames(Report.MissingVisualLayerPartSlotIds),
 			*JoinNames(Report.AttachedPartSlotIds),
 			*JoinNames(Report.AttachedPartIds),
 			*JoinNames(Report.IdentityAudit.MissingDefinitionPartSlotIds),
@@ -164,7 +150,13 @@ FText FWacomBattleEnemyActorDetails::BuildAuthoringReportText() const
 			*JoinNames(Report.IdentityAudit.DuplicatePartSlotIds),
 			*JoinNames(Report.IdentityAudit.PartDefinitionMismatchSlotIds),
 			*JoinNames(Report.InvalidDefinitionPartSlotIds),
-			*JoinStrings(Report.IdentityAudit.SurplusPartActorNames),
+			*JoinStrings(Report.IdentityAudit.SurplusPartComponentNames),
+			*JoinNames(Report.DuplicateLayerIds),
+			*JoinStrings(Report.InvalidParentComponentNames),
+			*JoinNames(Report.MultipleImpactAnchorPartSlotIds),
+			*JoinNames(Report.EmptyVisualPartSlotIds),
+			*JoinNames(Report.InvalidAnimationStylePartSlotIds),
+			*JoinNames(Report.TerminalAnimationConflictPartSlotIds),
 			*Host.AuthoringLastPartSyncResult.ToString(),
 			*JoinNames(Host.AuthoringLastAddedPartSlotIds),
 			*JoinNames(Host.AuthoringLastUpdatedPartSlotIds),
@@ -184,7 +176,7 @@ FText FWacomBattleEnemyActorDetails::BuildAuthoringReportText() const
 		AddCount += Report.GetAddMissingPartCount();
 		UpdateCount += Report.GetUpdateDerivedPartIdCount();
 		InvalidCount += Report.InvalidDefinitionPartSlotIds.Num();
-		SurplusCount += Report.IdentityAudit.SurplusPartActorNames.Num();
+		SurplusCount += Report.IdentityAudit.SurplusPartComponentNames.Num();
 	}
 	return FText::Format(
 		LOCTEXT(
@@ -211,13 +203,6 @@ bool FWacomBattleEnemyActorDetails::CanSyncParts() const
 		}
 	}
 	return false;
-}
-
-bool FWacomBattleEnemyActorDetails::CanConfigureDebugSnake() const
-{
-	const TArray<AWacomBattleEnemyActor*> LiveHosts = GetLiveHosts();
-	return LiveHosts.Num() == 1
-		&& (!LiveHosts[0]->GetWorld() || !LiveHosts[0]->GetWorld()->IsGameWorld());
 }
 
 FReply FWacomBattleEnemyActorDetails::HandleSyncParts()
@@ -254,28 +239,6 @@ FReply FWacomBattleEnemyActorDetails::HandleSyncParts()
 			: (WarningCount > 0
 				? SNotificationItem::CS_Pending
 				: SNotificationItem::CS_Success));
-	if (ActiveDetailBuilder)
-	{
-		ActiveDetailBuilder->ForceRefreshDetails();
-	}
-	return FReply::Handled();
-}
-
-FReply FWacomBattleEnemyActorDetails::HandleConfigureDebugSnake()
-{
-	const TArray<AWacomBattleEnemyActor*> LiveHosts = GetLiveHosts();
-	if (LiveHosts.Num() == 1)
-	{
-		const FName Result =
-			FWacomBattleSceneEnemyHostAuthoring::ConfigureDebugSnakeSample(*LiveHosts[0]);
-		ShowNotification(
-			FText::Format(
-				LOCTEXT("SnakeResultNotification", "Debug 蛇样例结果：{0}"),
-				FText::FromName(Result)),
-			Result == FName(TEXT("Applied"))
-				? SNotificationItem::CS_Success
-				: SNotificationItem::CS_Pending);
-	}
 	if (ActiveDetailBuilder)
 	{
 		ActiveDetailBuilder->ForceRefreshDetails();

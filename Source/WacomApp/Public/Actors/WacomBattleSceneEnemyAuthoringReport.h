@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 
 class AWacomBattleEnemyActor;
-class AWacomBattleEnemyPartActor;
+class UWacomBattleEnemyPartComponent;
 
 enum class EWacomBattleSceneEnemyPartSyncOperation : uint8
 {
@@ -21,6 +21,8 @@ struct WACOMAPP_API FWacomBattleSceneEnemyHostIdentityAudit
 	TArray<FName> MissingDefinitionPartSlotIds;
 	TArray<FName> DuplicatePartSlotIds;
 	TArray<FName> PartDefinitionMismatchSlotIds;
+	TArray<FString> SurplusPartComponentNames;
+	// Temporary migration seam; removed with the legacy PartActor helpers in the final cutover.
 	TArray<FString> SurplusPartActorNames;
 };
 
@@ -30,15 +32,14 @@ struct WACOMAPP_API FWacomBattleSceneEnemyPartSyncPlanEntry
 		EWacomBattleSceneEnemyPartSyncOperation::AddMissingPart;
 	FName PartSlotId = NAME_None;
 	FName DerivedPartId = NAME_None;
-	TWeakObjectPtr<AWacomBattleEnemyPartActor> ExistingPartActor;
+	TWeakObjectPtr<UWacomBattleEnemyPartComponent> ExistingPartComponent;
 };
 
 /**
- * Pure, read-only snapshot of a Scene Enemy Host's authoring configuration.
+ * Scene Enemy Host 的纯只读组件制作报告。
  *
- * Building this report may inspect live ChildActor instances and Blueprint component
- * templates, but it must never refresh visuals, write identity, create components or
- * dirty packages. WacomEditor consumes SyncPlan explicitly when the author requests it.
+ * Evaluator 只读取 EnemyDefinition 与 typed SCS/实例组件层级；不会刷新视觉、
+ * 写身份、创建组件、Modify 对象或标记 Package。Editor 同步服务显式消费 SyncPlan。
  */
 struct WACOMAPP_API FWacomBattleSceneEnemyHostAuthoringReport
 {
@@ -46,15 +47,25 @@ struct WACOMAPP_API FWacomBattleSceneEnemyHostAuthoringReport
 	bool bAuthoringReady = false;
 	bool bHasEnemyDefinition = false;
 	bool bHasValidDefinitionParts = false;
+	int32 PartComponentCount = 0;
+	// Temporary migration seam; removed after content/tests switch to typed components.
+	int32 PartActorCount = 0;
+	int32 FlipbookLayerCount = 0;
+	int32 SpriteLayerCount = 0;
 	bool bUsingHostVisual = false;
 	bool bHostAnimationStyleApplicable = true;
-	int32 PartActorCount = 0;
 
 	TArray<FName> AttachedPartIds;
 	TArray<FName> AttachedPartSlotIds;
 	TArray<FName> StableSceneTargetIds;
 	TArray<FName> InvalidDefinitionPartSlotIds;
 	TArray<FName> MissingVisualLayerPartSlotIds;
+	TArray<FName> DuplicateLayerIds;
+	TArray<FString> InvalidParentComponentNames;
+	TArray<FName> MultipleImpactAnchorPartSlotIds;
+	TArray<FName> EmptyVisualPartSlotIds;
+	TArray<FName> InvalidAnimationStylePartSlotIds;
+	TArray<FName> TerminalAnimationConflictPartSlotIds;
 	FWacomBattleSceneEnemyHostIdentityAudit IdentityAudit;
 	TArray<FWacomBattleSceneEnemyPartSyncPlanEntry> SyncPlan;
 
