@@ -121,8 +121,8 @@ Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：
 - `WacomRun/Public/Exploration`：Snapshot、事件、C++-only Command/Result 与 opaque token；`FRunState` 组合持有 time/exploration runtime state。
 - `WacomRun/Private/Exploration`：lifecycle、traversal、AP、Camp、Floor transition 和内容活动事务实现。
 - `WacomRun/Private/Credential`：稳定 Credential ID 的校验、幂等授予与入口持有求值；`FRunState::GrantedCredentialIds` 是唯一权威状态，App/Data 只转发静态声明或只读查询。
-- `WacomApp`：World 单向引用 Floor 的 `AWacomRunFloorSceneDescriptorActor`、App-private resolver、working Scene Registry、Spline、NodeAnchor、ContentHost、输入、镜头和结果表现；不得把 Actor 或世界坐标回写成规则真相。Descriptor 是需要关卡制作与 Blueprint 只读引用的反射 Actor；resolver、原子刷新状态和 Coordinator prepare/commit 仍是 Private 普通 C++。
-- `WacomEditor`：Journey/Floor validation、共用的 World-only read-only Scene validator、ToolMenus/validation commandlet，以及只拥有 Debug namespace 的可重复内容 builder。另有 manifest-driven 的 Floor 1 Production seed-only 服务：它只在显式 `SeedMissing` 时创建 exact 46 个缺失 DataAsset，绝不覆盖或重存已有正确 class 资产；默认 structural inspection 守稳定身份与引用，strict seed-default comparison 只服务首次验收。该服务仍沿用 `WacomEditor → WacomData` 方向，不产生 runtime 依赖，也不拥有正式场景。正式 map、Authoring 数据、Player/共享 Run Path Blueprint 只能由 builder 读取或哈希守卫，不能保存。
+- `WacomApp`：World 单向引用 Floor 的 `AWacomRunFloorSceneDescriptorActor`、App-private resolver、working Scene Registry、Spline、NodeAnchor、ContentHost、输入、镜头和结果表现；不得把 Actor 或世界坐标回写成规则真相。Descriptor 是需要关卡制作与 Blueprint 只读引用的反射 Actor；resolver、原子刷新状态和 Coordinator prepare/commit 仍是 Private 普通 C++。新 Run 的 Journey 选择经过 `AWacomGameMode` 的非反射虚函数：基础实现投影 `DefaultJourneyDefinition`，Editor PIE-only Preview 子类可从唯一 Descriptor 构造 GameMode-owned transient Journey，但不改变 `WacomRun` 或静态 DataAsset。
+- `WacomEditor`：Journey/Floor validation、共用的 World-only read-only Scene validator、ToolMenus/validation commandlet，以及只拥有 Debug namespace 的可重复内容 builder。另有 manifest-driven 的 Floor 1 Production seed-only 服务：它只在显式 `SeedMissing` 时创建 exact 46 个缺失 DataAsset，绝不覆盖或重存已有正确 class 资产；默认 structural inspection 守稳定身份与引用，strict seed-default comparison 只服务首次验收。Floor 1 Preview bootstrap 复用同一只读 scene validator，写权限严格缩到 Preview GameMode Blueprint 与现有 Production map 两个 Package，只创建缺失 Preview BP、设置 map override/Entry PlayerStart，并做同命令幂等复核。两种服务都保持 `WacomEditor → WacomData/WacomApp` 既有方向，不产生 runtime 反向依赖。
 
 `URunSession::Initialize(FRunInitializationParams)` 使用完整 working state，成功时一次提交角色持有区、Journey/Floor、时间、压力和探索版本并返回 `FRunInitializationResult`；失败时保留旧 Session。App 和测试都必须显式消费该结果，不保留只返回 bool 的初始化入口。
 
@@ -314,7 +314,7 @@ Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / 
 2. `WacomRun`：RunSession、背包、SpecialZone、负重、经验/压力、商店、RunEvent、战斗结果回传、SaveGame schema。
 3. `WacomApp`：GameMode、PlayerController、世界交互接口、CommonUI 层级、探索 HUD、BattleHUD、Backpack / Shop / RunEvent Screen、AppToast。
 4. `WacomData`：卡牌、敌人、角色、商店、RunEvent 静态定义和生成内容。
-5. `WacomEditor`：内容 commandlet、Shop / RunEvent / Map Data Validation、Run Floor Scene validator、Debug-only Run fixture builder，以及 exact-manifest、initial-only 的 Floor 1 Production DataAsset/scene seeder；Production seeder 只创建缺失 package，不覆盖已有资产或拥有后续人工调参。
+5. `WacomEditor`：内容 commandlet、Shop / RunEvent / Map Data Validation、Run Floor Scene validator、Debug-only Run fixture builder，以及 exact-manifest、initial-only 的 Floor 1 Production DataAsset/scene seeder；Production seeder 只创建缺失 package，不覆盖已有资产或拥有后续人工调参。Floor 1 Preview bootstrap 另以双 Package allowlist 提供 PIE-only GameMode/PlayerStart 接线，不是正式 Journey builder。
 6. 自动化测试覆盖 Battle / Run / UI / Data validation 关键规则。
 
 ## 12. 自动化测试重点

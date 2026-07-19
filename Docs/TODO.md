@@ -117,6 +117,12 @@ tags:
   - 入口：[WacomMap.md](./WacomMap.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/015-formal-floor1-production-scene-baseline/`
   - 说明：已选择新建 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，未迁移或修改 `L_Exploration`。Exact 7-package seeder 创建 `DA_Floor_Main_01`、4 个可复用 SerpentWood 灰盒 Enemy Host、非交互 Exit marker 和 20/21 场景；已有资产只读，第二次运行 `0 created / 0 saved`。完整 Journey、Floor 2/3、跨层 travel、正式美术和 Golden Path PIE 仍是后续任务。
 
+- [x] **Floor 1 直接关卡 Preview 启动层**
+  - 状态：`Done: PIE-only transient Journey、双 Package bootstrap、自动化与用户 Golden Path PIE 已通过`
+  - 归属：App / Editor / Tests / Map
+  - 入口：[WacomApp.md](./WacomApp.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/016-formal-floor1-preview-bootstrap/`
+  - 说明：只支持在 Editor 中直接打开 `L_Run_Floor_Main_01` PIE。基础 GameMode Journey 解析语义保持不变；Preview GameMode 从唯一 Descriptor 构造 transient 单层 Journey，双 Package bootstrap 只创建 Preview BP 并设置 map override/Entry PlayerStart。用户已验收 Entry、镜头/W/S、HUD/手牌、M/ESC 点击、路径、战斗与内容交互返回、Exit dead end；主菜单仍进入 `L_Exploration`。Preview 不提供跨层、成功总结、存档或发行启动，完整 Production Journey 落地后必须移除。
+
 - [ ] **Production Journey 与 Floor 2/3 场景/跨层交接**
   - 状态：`Blocked: Floor 2/3 definitions/maps and FloorId-to-world handoff are absent`
   - 归属：Map / Data / App / Editor / Tests

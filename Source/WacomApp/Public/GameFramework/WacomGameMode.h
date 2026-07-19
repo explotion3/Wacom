@@ -68,6 +68,15 @@ class WACOMAPP_API AWacomGameMode : public AGameModeBase
 public:
 	AWacomGameMode();
 
+	/**
+	 * 解析本次新 Run 初始化使用的 Journey。
+	 *
+	 * 基础 GameMode 保持现有语义，直接返回 DefaultJourneyDefinition。
+	 * 特殊 Editor-only 启动层可以覆写此 C++ seam，但不得把解析规则扩散到
+	 * PlayerController、Blueprint 或 RunSession。
+	 */
+	virtual UWacomJourneyDefinition* ResolveJourneyDefinitionForNewRun();
+
 	// ---- 存档系统总开关 ----
 
 	/**

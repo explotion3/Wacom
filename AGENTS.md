@@ -242,5 +242,5 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/015-formal-floor1-production-scene-baseline/plan.md
+at specs/016-formal-floor1-preview-bootstrap/plan.md
 <!-- SPECKIT END -->

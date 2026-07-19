@@ -46,6 +46,11 @@ AWacomGameMode::AWacomGameMode()
 	DefaultPawnClass      = AWacomPlayerCharacter::StaticClass();
 }
 
+UWacomJourneyDefinition* AWacomGameMode::ResolveJourneyDefinitionForNewRun()
+{
+	return DefaultJourneyDefinition;
+}
+
 FName AWacomGameMode::GetJourneySummaryMainMenuLevelPackagePathForTravel()
 {
 	return JourneySummaryMainMenuPackagePath;

@@ -69,6 +69,8 @@ Floor 1 八张分支奖励卡的费用、稀有度、关键词、效果、描述
 
 Floor 1 世界资产权威已由 Spec 015 关闭：采用独立新建的 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，不迁移、不覆盖 `L_Exploration`，也不复用 Debug map 作为 Production 权威。跨层 world handoff 和 Floor 2/3 场景仍是实现任务，不再是 Floor 1 权威选择问题。
 
+Floor 1 本地启动口径由 Spec 016 关闭：完整 Production Journey 缺失期间，只允许 Editor PIE-only Preview GameMode 从关卡唯一 Descriptor 构造 transient 单层 Journey；主菜单和发行启动不切到该地图。地图上的 Preview override 是明确 release blocker，不再把“临时改用 GM_Wacom 或创建空壳正式 Journey”作为候选方案。
+
 ---
 
 <a id="questions-ui"></a>

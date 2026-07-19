@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 
 class UClass;
+class UWorld;
 class UWacomFloorMapDefinition;
 
 namespace Wacom::ContentBuilder
@@ -85,6 +86,11 @@ namespace Wacom::ContentBuilder
 		bool bCompareSeedDefaults,
 		TArray<FString>& OutErrors);
 	bool ValidateFormalFloor1ProductionTransientFloor(TArray<FString>& OutErrors);
+	/** Reuse the exact persisted Spec 015 world contract without running its builder. */
+	bool ValidateFormalFloor1ProductionWorld(
+		UWorld& World,
+		UWacomFloorMapDefinition& Floor,
+		TArray<FString>& OutErrors);
 	int32 RunFormalFloor1ProductionSceneBuilder(
 		const TArray<FString>& Arguments,
 		FFormalFloor1ProductionSceneBuildReport* OutReport = nullptr);

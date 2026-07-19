@@ -1661,6 +1661,14 @@ namespace
 
 namespace Wacom::ContentBuilder
 {
+	bool ValidateFormalFloor1ProductionWorld(
+		UWorld& World,
+		UWacomFloorMapDefinition& Floor,
+		TArray<FString>& OutErrors)
+	{
+		return ValidateProductionWorld(World, Floor, OutErrors);
+	}
+
 	const TArray<FFormalFloor1ProductionSceneManifestEntry>&
 	GetFormalFloor1ProductionSceneManifest()
 	{

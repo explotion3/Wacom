@@ -50,7 +50,11 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 |---|---|---|
 | `L_MainMenu` | `AWacomMenuGameMode` | 主菜单，不 Spawn 探索 Pawn；注入主菜单 ViewData，并处理菜单 Action、确认、退出和 travel |
 | `L_Exploration` | `AWacomGameMode` | 探索主流程，持有 GameFlowState，进入 / 退出战斗，初始化探索 HUD |
-| `L_Run_Floor_Main_01` | 未接入完整 Production Journey | Floor 1 Production 灰盒与本地 Scene Binding 验证；不是当前主菜单启动目标 |
+| `L_Run_Floor_Main_01` | `GM_WacomRunFloorPreview`（仅 Editor PIE） | Floor 1 Production 灰盒与本地 Scene Binding/交互验证；不是当前主菜单或发行启动目标 |
+
+新 Run 初始化统一经过 `AWacomGameMode::ResolveJourneyDefinitionForNewRun()` 这一非反射 C++ seam。基础实现仍精确返回 `DefaultJourneyDefinition`，因此 `L_Exploration`、Authoring、Debug 和未来 Production Journey 的现有配置语义不变；`AWacomPlayerController` 只消费解析结果并交给 `URunSession::Initialize()`，不自行推断关卡或 Floor。
+
+`AWacomRunFloorPreviewGameMode` 只在 Editor PIE 中工作。它从当前 World 唯一 `AWacomRunFloorSceneDescriptorActor` 读取精确 Floor，构造由 GameMode 持有的 `RF_Transient` 单层 Journey：`JourneyId=Journey.Preview.<FloorId>`、标题为 `[Preview] <Floor DisplayName>`、角色来自 Preview GameMode 配置，`SuccessTerminalNode` 为空，AP/Decay 沿用 Journey 默认值。同一次 PIE 重复解析返回同一实例；Descriptor 缺失/重复、Floor 无效、角色缺失、非 PIE 环境或解析后的 Descriptor/Floor 漂移都 fail closed。它不写 DataAsset、不改变 `WacomRun` 合同，也不能作为 Standalone、发行或主菜单启动路径。
 
 当前 `EGameFlowState` 包含：
 
@@ -105,7 +109,7 @@ Floor 1 Production 灰盒中的 `Node.Exit.01` 当前使用非交互 marker，�
 
 主要职责：
 
-- BeginPlay 创建并持有 `URunSession`。
+- BeginPlay 创建并持有 `URunSession`，并通过当前 `AWacomGameMode` 的 Journey resolver 取得新 Run 定义；基础 GameMode 仍返回 `DefaultJourneyDefinition`，PlayerController 不读取 Descriptor 来拼 Journey。
 - 新探索状态有效时，先从当前 World 唯一 `AWacomRunFloorSceneDescriptorActor` 解析显式 Floor，再在独立 working `FWacomRunSceneBindingRegistry` 中完整枚举和校验 Anchor/Path/Branch/content host；Snapshot 版本与 Floor 两次复核后，Coordinator 预检和 Registry 安装一次提交。任一步失败都保留旧 Registry、Coordinator 版本、Traversal、Pawn Transform 和 HUD 表现。Coordinator 继续只应用显式 Begin / Complete / Cancel Resolution，不自行判断地图合法性。
 - 初始化 `UWacomInputContextCoordinatorSubsystem`，提供探索 / 战斗 mapping context 给 coordinator。
 - 处理探索交互、地图、暂停菜单、背包、商店、RunEvent 打开请求；具体 GameMenu 打开、关闭、异步 Push 和 Shop / RunEvent rollback 由私有 `FWacomExplorationScreenRouter` 承接。

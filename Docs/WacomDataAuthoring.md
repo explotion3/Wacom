@@ -392,6 +392,17 @@ Floor 1 Production 场景入口是 `WacomBuildFormalFloor1ProductionScene` comma
 
 该入口只能通过正式 Unreal MCP writer lease 保存 exact package allowlist；Editor 生命周期内不切 branch、不更新 HEAD、不编译。保存后必须做 AssetRegistry/failed-load、五个 Blueprint compile、Floor/scene validator、SHA-256、Git LFS 和第二次幂等审计。它不是可重复覆盖的关卡 builder；首次播种后世界 transform、Host 摆放和 Blueprint 表现都转为人工权威。
 
+Floor 1 直接关卡 PIE 使用独立 Preview bootstrap，而不修改上述七包 seeder 或创建正式 Journey。控制台入口固定为 `WacomSeedFormalFloor1PreviewBootstrap`，唯一允许保存的两个 Package 是：
+
+```text
+/Game/Wacom/Run/Preview/GM_WacomRunFloorPreview
+/Game/Wacom/Maps/Run/L_Run_Floor_Main_01
+```
+
+Preview GameMode Blueprint 只允许缺失时创建，父类必须是 `AWacomRunFloorPreviewGameMode`；它从 `/Game/Wacom/Core/GameModes/GM_Wacom` 复制 PlayerController、DefaultPawn/PlayerCharacter、Character、BattleHUD、ExplorationHUD 和 JourneySummary 表现配置，并强制 `DefaultJourneyDefinition=null`。若同名资产已存在但父类、编译状态或任一配置不符，命令拒绝覆盖。地图修改面只允许把 World Settings GameMode Override 指向 Preview Blueprint，并在缺失时于唯一 `Node.Entry` Anchor transform 创建一个无 Run 身份的 `PlayerStart_FloorMain01Preview`；任何其它 PlayerStart、未知 GameMode、场景合同漂移或无效 Entry 都 fail closed。
+
+该命令每次运行前后都复用 Spec 015 的严格场景校验，不调用 Spec 014/015/Debug builder，不修改 Floor 图、Anchor、Path、BranchTarget、Host 或人工 transform；保存并重载后必须在同一命令内完成第二遍 `0 created / 0 modified / 0 saved`。它只服务 Editor PIE，地图引用 Preview GameMode 是 release blocker；完整 Production Journey/Floor 2/3 启动接管后必须移除这项依赖。
+
 每个可独立加载的 Run Floor map 必须放置且只放置一个 `AWacomRunFloorSceneDescriptorActor` 并引用对应 Floor。场景验证可从编辑器执行 `Tools -> Wacom -> Validate Current Run Floor`，或从命令行执行：
 
 ```powershell

@@ -183,9 +183,11 @@ void AWacomPlayerController::BeginPlay()
 		if (!RunSession)
 		{
 			RunSession = NewObject<URunSession>(this);
+			UWacomJourneyDefinition* ResolvedJourney =
+				GM->ResolveJourneyDefinitionForNewRun();
 			FRunInitializationParams InitializationParams;
 			InitializationParams.Character = GM->DefaultCharacter;
-			InitializationParams.Journey = GM->DefaultJourneyDefinition;
+			InitializationParams.Journey = ResolvedJourney;
 			const FRunInitializationResult Initialization =
 				RunSession->Initialize(InitializationParams);
 			if (!Initialization.IsOk())
@@ -193,7 +195,7 @@ void AWacomPlayerController::BeginPlay()
 				UE_LOG(LogTemp, Warning,
 					TEXT("[WacomPlayerController] RunSession 初始化失败：Character=%s Journey=%s Detail=%s"),
 					*GetNameSafe(GM->DefaultCharacter),
-					*GetNameSafe(GM->DefaultJourneyDefinition),
+					*GetNameSafe(ResolvedJourney),
 					*Initialization.Status.Detail.ToString());
 			}
 		}

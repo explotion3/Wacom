@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；蛇印/蜕印资格使用独立持久 Credential，Floor 1 的敌人、奖励、事件、Shop 与 `38 core + 8 branch reward = 46` 个未来资产合同也已冻结。但尚未创建 Production DataAsset 或世界关卡，`L_Exploration` 继续承接 Authoring baseline，不是正式 Floor 1。生产实现仍受三层 46 个节点 Definition 的实际制作、各层支持内容资产和资产权威审计阻塞；真实 Golden Path PIE 须在 Production 资产轮完成。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；Floor 1 的 46 个 Production 内容 DataAsset、`DA_Floor_Main_01` 与独立 `L_Run_Floor_Main_01` 灰盒已经创建。当前只提供直接打开 Floor 1 的 Editor PIE Preview；完整 Production Journey、Floor 2/3 内容/场景、跨层 world handoff 和发行启动仍未落地，`L_Exploration` 继续承接主菜单 Authoring baseline，不是正式 Floor 1。
 
 ## §1 两层图合同
 
@@ -263,6 +263,8 @@ Floor 1 核心内容与八张击倒奖励卡设计 blocker 已关闭，`38 core 
 
 `L_Run_Floor_Main_01` 固定使用世界 `+X` 作为推进方向，`-Y` 为地图语义左路，`+Y` 为右路；两轮分岔分别保持 A/C 在左、B/D 在右。场景精确包含 `1 Descriptor / 20 Anchor / 21 Path / 4 BranchTarget / 16 content Host / 8 enemy Host / 11 viewpoint`。四个 Navigation 节点不放 content Host；其余 Host 使用 `<FloorId>.<NodeId>` 的 `PersistentId`，Floor typed payload 仍是规则真相。`Node.Exit.01` 当前只放置带 Node binding 的可见灰盒 marker，不实现 `IWacomWorldInteractable`、Floor travel 或 Level Blueprint 逻辑，不能被视为跨层已完成。
 
+为验证这张独立关卡，本地 Editor PIE 使用通用 `GM_WacomRunFloorPreview` 和唯一 `PlayerStart_FloorMain01Preview`。PlayerStart 精确复用 `Node.Entry` Anchor transform，但不携带 NodeId、PersistentId 或 generated ownership；Preview Journey 只在内存中包含 Descriptor 指向的 `DA_Floor_Main_01`，没有 success terminal。该启动层不改变主菜单目标、不创建 `Journey.Main.01`、不让 Exit 可交互，也不代表跨层或 Journey Golden Path 已完成。地图对 Preview GameMode 的引用是发布阻塞，完整三层 Journey 启动落地后必须替换。
+
 ### Floor 2 节点与内容槽
 
 | NodeId | NodeType | 内容职责 / 预留 Production ID | Camp |
@@ -385,7 +387,7 @@ Guardian 无出边，战斗胜利后由通用 Journey success 合同完成 Journ
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
 - 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结敌人槽、事件选项、Shop Offers 与奖励数值；Floor 2/3 的 31 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。
 - 蛇印和蜕印都采用表现卡 + 独立 Credential：必经 Pickup 原子授予两者，删牌流程不影响资格，入口只检查 Credential。
-- Floor 2/3 缺图、通用 Journey success 与 Floor 1 内容设计 blocker 已关闭。Production Journey/Floor DataAsset 与正式关卡仍受三层 46 个节点 Definition 的实际制作、首层 31 个支持资产（含 8 张击倒奖励卡）、Floor 2/3 支持内容设计和资产权威审计阻塞；禁止创建空壳资产或用 Debug 内容绕过。
+- Floor 2/3 图设计、通用 Journey success 与 Floor 1 内容/资产/灰盒 blocker 已关闭。剩余 Production 阻塞是 `DA_Journey_Main_01`、Floor 2/3 的 31 个内容槽与支持资产、Floor 2/3 DataAsset/场景、跨层 world handoff、正式美术和平衡验收；禁止创建空壳资产或用 Debug/Preview 内容绕过。
 
 Floor 1 默认 MapPosition 与原始冻结证据见 `specs/007-formal-floor1-content-freeze/`；Floor 2/3 默认 MapPosition、完整 Edge 表、Journey pacing 与当前 Production readiness gate 见 `specs/009-formal-floor23-journey-pacing-freeze/`。上述长期身份、拓扑、配比和阻塞事实以本节为准。
 
