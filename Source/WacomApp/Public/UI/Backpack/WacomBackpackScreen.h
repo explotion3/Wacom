@@ -267,9 +267,6 @@ private:
 	int32 WorkspaceMutationRefreshDeferralDepth = 0;
 	bool bWorkspaceMutationRefreshDeferred = false;
 
-	UPROPERTY(Transient)
-	TArray<TObjectPtr<UWacomDeckCardWidget>> ActiveWorkspaceCardWidgets;
-
 #if WITH_AUTOMATION_TESTS
 	URunSession* RunSessionOverrideForTest = nullptr;
 #endif

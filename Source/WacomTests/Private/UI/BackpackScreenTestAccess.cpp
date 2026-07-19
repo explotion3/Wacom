@@ -67,6 +67,27 @@ FWacomBackpackScreenAutomationTestView FWacomBackpackScreenTestAccess::View(cons
 	return Screen.GetAutomationTestViewForTest();
 }
 
+TArray<UWacomDeckCardWidget*> FWacomBackpackScreenTestAccess::WorkspaceCards(
+	const UWacomBackpackScreen& Screen)
+{
+	TArray<UWacomDeckCardWidget*> Cards;
+	if (!Screen.WorkspaceWidget)
+	{
+		return Cards;
+	}
+	const TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Registered =
+		Screen.WorkspaceWidget->GetBoundCardWidgets();
+	Cards.Reserve(Registered.Num());
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& Card : Registered)
+	{
+		if (UWacomDeckCardWidget* Widget = Card.Get())
+		{
+			Cards.Add(Widget);
+		}
+	}
+	return Cards;
+}
+
 FText FWacomBackpackScreenTestAccess::BuildMoveZoneNameText(EZoneKind Zone)
 {
 	return FWacomBackpackCommandFlow::BuildMoveZoneNameText(Zone);
@@ -84,7 +105,7 @@ FText FWacomBackpackScreenTestAccess::BuildDeleteFailureToastText(FName Disabled
 
 UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::BattleDeckCard(const UWacomBackpackScreen& Screen, int32 Index)
 {
-	for (UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	for (UWacomDeckCardWidget* CardWidget : WorkspaceCards(Screen))
 	{
 		if (CardWidget && CardWidget->GetWorkspaceDisplayZone() == EZoneKind::BattleDeck && Index-- == 0)
 		{
@@ -96,7 +117,7 @@ UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::BattleDeckCard(const UWaco
 
 UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::FluxContentCard(const UWacomBackpackScreen& Screen, int32 Index)
 {
-	for (UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	for (UWacomDeckCardWidget* CardWidget : WorkspaceCards(Screen))
 	{
 		if (CardWidget && CardWidget->GetWorkspaceDisplayZone() == EZoneKind::Backpack && Index-- == 0)
 		{
@@ -108,7 +129,7 @@ UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::FluxContentCard(const UWac
 
 UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::BurdenCard(const UWacomBackpackScreen& Screen, int32 Index)
 {
-	for (UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	for (UWacomDeckCardWidget* CardWidget : WorkspaceCards(Screen))
 	{
 		if (CardWidget && CardWidget->GetWorkspaceDisplayZone() == EZoneKind::BurdenZone && Index-- == 0)
 		{
@@ -122,7 +143,7 @@ UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::SpecialOwnerCard(
 	const UWacomBackpackScreen& Screen,
 	FGuid OwnerInstanceId)
 {
-	for (UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	for (UWacomDeckCardWidget* CardWidget : WorkspaceCards(Screen))
 	{
 		if (CardWidget
 			&& CardWidget->GetWorkspaceDisplayZone() == EZoneKind::SpecialZone
@@ -140,7 +161,7 @@ UWacomDeckCardWidget* FWacomBackpackScreenTestAccess::SpecialContentCard(
 	FGuid OwnerInstanceId,
 	int32 Index)
 {
-	for (UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	for (UWacomDeckCardWidget* CardWidget : WorkspaceCards(Screen))
 	{
 		if (CardWidget
 			&& CardWidget->GetWorkspaceDisplayZone() == EZoneKind::SpecialZone
@@ -229,8 +250,9 @@ bool FWacomBackpackScreenTestAccess::WorkspaceOwnsPointerInput(const UWacomBackp
 TArray<FVector2D> FWacomBackpackScreenTestAccess::WorkspaceCardPositions(const UWacomBackpackScreen& Screen)
 {
 	TArray<FVector2D> Positions;
-	Positions.Reserve(Screen.ActiveWorkspaceCardWidgets.Num());
-	for (const UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	const TArray<UWacomDeckCardWidget*> Cards = WorkspaceCards(Screen);
+	Positions.Reserve(Cards.Num());
+	for (const UWacomDeckCardWidget* CardWidget : Cards)
 	{
 		const UCanvasPanelSlot* CanvasSlot = CardWidget
 			? Cast<UCanvasPanelSlot>(CardWidget->Slot)
@@ -244,8 +266,9 @@ TArray<float> FWacomBackpackScreenTestAccess::WorkspaceCardRenderOpacities(
 	const UWacomBackpackScreen& Screen)
 {
 	TArray<float> Opacities;
-	Opacities.Reserve(Screen.ActiveWorkspaceCardWidgets.Num());
-	for (const UWacomDeckCardWidget* CardWidget : Screen.ActiveWorkspaceCardWidgets)
+	const TArray<UWacomDeckCardWidget*> Cards = WorkspaceCards(Screen);
+	Opacities.Reserve(Cards.Num());
+	for (const UWacomDeckCardWidget* CardWidget : Cards)
 	{
 		Opacities.Add(CardWidget ? CardWidget->GetRenderOpacity() : -1.0f);
 	}
@@ -280,9 +303,10 @@ bool FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(
 	UWacomBackpackScreen& Screen,
 	int32 CardIndex)
 {
+	const TArray<UWacomDeckCardWidget*> Cards = WorkspaceCards(Screen);
 	if (!Screen.WorkspaceWidget || !Screen.WorkspaceInteractionModel
-		|| !Screen.ActiveWorkspaceCardWidgets.IsValidIndex(CardIndex)
-		|| !Screen.ActiveWorkspaceCardWidgets[CardIndex])
+		|| !Cards.IsValidIndex(CardIndex)
+		|| !Cards[CardIndex])
 	{
 		return false;
 	}
@@ -299,7 +323,7 @@ bool FWacomBackpackScreenTestAccess::MarqueeCrossingCardPreservesMouseCapture(
 		0.0f,
 		FModifierKeysState());
 	const FReply Reply = Screen.WorkspaceWidget->HandleCardPointerMove(
-		Screen.ActiveWorkspaceCardWidgets[CardIndex],
+		Cards[CardIndex],
 		FGeometry(),
 		PointerMove);
 	const bool bPreserved = Screen.WorkspaceInteractionModel->IsMarqueeActive()
@@ -314,9 +338,10 @@ bool FWacomBackpackScreenTestAccess::MarqueeCompletesWhenReleasedOverCard(
 	UWacomBackpackScreen& Screen,
 	int32 CardIndex)
 {
+	const TArray<UWacomDeckCardWidget*> Cards = WorkspaceCards(Screen);
 	if (!Screen.WorkspaceWidget || !Screen.WorkspaceInteractionModel
-		|| !Screen.ActiveWorkspaceCardWidgets.IsValidIndex(CardIndex)
-		|| !Screen.ActiveWorkspaceCardWidgets[CardIndex])
+		|| !Cards.IsValidIndex(CardIndex)
+		|| !Cards[CardIndex])
 	{
 		return false;
 	}
@@ -332,7 +357,7 @@ bool FWacomBackpackScreenTestAccess::MarqueeCompletesWhenReleasedOverCard(
 		0.0f,
 		FModifierKeysState());
 	const FReply Reply = Screen.WorkspaceWidget->HandleCardPointerUp(
-		Screen.ActiveWorkspaceCardWidgets[CardIndex],
+		Cards[CardIndex],
 		FGeometry(),
 		PointerUp);
 	const bool bCompleted = !Screen.WorkspaceInteractionModel->IsMarqueeActive()
@@ -804,14 +829,15 @@ void FWacomBackpackScreenTestAccess::ActivateZone(
 
 bool FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(UWacomBackpackScreen& Screen, int32 CardIndex)
 {
-	if (!Screen.WorkspaceInteractionModel || !Screen.ActiveWorkspaceCardWidgets.IsValidIndex(CardIndex)
-		|| !Screen.ActiveWorkspaceCardWidgets[CardIndex])
+	const TArray<UWacomDeckCardWidget*> Cards = WorkspaceCards(Screen);
+	if (!Screen.WorkspaceInteractionModel || !Cards.IsValidIndex(CardIndex)
+		|| !Cards[CardIndex])
 	{
 		return false;
 	}
 	Screen.WorkspaceInteractionModel->SelectAllMovable();
 	const bool bStarted = Screen.WorkspaceInteractionModel->BeginCarry(
-		Screen.ActiveWorkspaceCardWidgets[CardIndex]->GetCardInstanceId(),
+		Cards[CardIndex]->GetCardInstanceId(),
 		FVector2D(500.0f, 350.0f),
 		Screen.GetRunSession() ? Screen.GetRunSession()->GetBackpackStorageSnapshotRevision() : 0);
 	if (Screen.WorkspaceWidget)
@@ -961,7 +987,7 @@ bool FWacomBackpackScreenTestAccess::ClickExpandedPileHeaderThroughOverlappingCa
 		}
 	}
 	UWacomDeckCardWidget* OverlappingCard = nullptr;
-	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : Workspace->BoundCardWidgets)
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : Workspace->GetBoundCardWidgets())
 	{
 		UWacomDeckCardWidget* Card = WeakCard.Get();
 		if (Card && Card->IsMoveEnabled()

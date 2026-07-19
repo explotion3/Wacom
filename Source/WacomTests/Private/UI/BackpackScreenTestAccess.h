@@ -177,6 +177,8 @@ struct FWacomBackpackScreenTestAccess
 	static bool ShowDetailForCardWidget(UWacomBackpackScreen& Screen, UWacomDeckCardWidget* SourceWidget);
 	static void HideDetail(UWacomBackpackScreen& Screen);
 
+private:
+	static TArray<UWacomDeckCardWidget*> WorkspaceCards(const UWacomBackpackScreen& Screen);
 };
 
 #endif

@@ -312,7 +312,6 @@ bool FWacomUIBackpackCarryCrossZoneIdentitySpec::RunTest(const FString& Paramete
 	Desired.Role = EWacomBackpackDeckCardListReuseRole::PhysicalList;
 	TArray<UPanelWidget*> SearchPanels { StaticCanvas.Get(), CarryCanvas.Get() };
 	TArray<FWacomBackpackWorkspaceSceneCardEntry> DesiredCards { Desired };
-	TArray<TObjectPtr<UWacomDeckCardWidget>> Ordered;
 	int32 CreatedWidgetCount = 0;
 	FWacomBackpackWorkspaceVisualRegistry Registry;
 	Registry.ReconcileCards(
@@ -328,8 +327,9 @@ bool FWacomUIBackpackCarryCrossZoneIdentitySpec::RunTest(const FString& Paramete
 			++CreatedWidgetCount;
 			return NewObject<UWacomDeckCardWidget>();
 		},
-		[](UWacomDeckCardWidget*) {},
-		Ordered);
+		[](UWacomDeckCardWidget*) {});
+	const TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Ordered =
+		Registry.GetCardWidgets();
 
 	TestEqual(TEXT("Cross-zone handoff does not create a replacement widget"),
 		CreatedWidgetCount, 0);

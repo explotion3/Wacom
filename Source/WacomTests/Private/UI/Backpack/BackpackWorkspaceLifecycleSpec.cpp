@@ -65,6 +65,10 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 
 	TStrongObjectPtr<UWacomBackpackScreen> Screen(
 		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
+	// These interaction checks exercise Slate capture replies. Keep the Screen's
+	// Slate root alive for the complete scenario so Workspace NativeDestruct is not
+	// triggered between consecutive synthetic pointer gestures.
+	const TSharedRef<SWidget> RetainedScreenSlate = Screen->TakeWidget();
 	const int32 ExpectedPileCount =
 		FWacomBackpackWorkspaceSceneBuilder::BuildPileViews(Snapshot, {}).Num();
 	int32 ExpectedWorkspaceCardCount = Snapshot.Flux.ContentCards.Num()
@@ -149,6 +153,7 @@ bool FWacomUIBackpackWorkspaceScreenCompositionSpec::RunTest(const FString& Para
 	TestNotNull(TEXT("Formal Backpack screen instantiates for zone-switch regression"), FormalScreen.Get());
 	if (FormalScreen)
 	{
+		const TSharedRef<SWidget> RetainedFormalScreenSlate = FormalScreen->TakeWidget();
 		TestTrue(TEXT("Formal WBP workspace child fills its overlay host"),
 			FWacomBackpackScreenTestAccess::WorkspaceChildFillsHost(*FormalScreen));
 		TestTrue(TEXT("Formal WBP workspace owns blank-area pointer input"),

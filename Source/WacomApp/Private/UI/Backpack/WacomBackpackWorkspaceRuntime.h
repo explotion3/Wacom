@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "WacomBackpackWorkspaceMotionCoordinator.h"
+#include "WacomBackpackWorkspaceVisualState.h"
 #include "WacomBackpackWorkspaceVisualRegistry.h"
 
 /**
@@ -16,11 +17,13 @@ class FWacomBackpackWorkspaceRuntime
 {
 public:
 	FWacomBackpackWorkspaceVisualRegistry Visuals;
+	FWacomBackpackWorkspaceVisualState VisualState;
 	FWacomBackpackWorkspaceMotionCoordinator Motion;
 
 	void Reset(bool bRemovePileWidgets)
 	{
 		Motion.Reset();
+		VisualState.Reset();
 		Visuals.ResetPiles(bRemovePileWidgets);
 		Visuals.ResetIndexes();
 	}

@@ -146,6 +146,7 @@ tags:
   - 归属：App / UI / Editor / Tests
   - 入口：[Backpack WBP 制作与绑定合同](./UI_Backpack_WBP_Binding.md) / [Wacom UI](./WacomUI.md)
 	- 说明：通量区保持统一自由工作台；备战、特殊和负重牌堆已迁移为折叠/展开共用的全部真实卡面。正式链路删除 Preview class/ViewData/Builder 依赖，新增 `WBP_BackpackZonePile` 与 Workspace 分层，DeckCard 改承载 `WBP_FPCardView`。携带路径使用单一 `CarryRoot` 锚点：静止 `CarryCache` 缓存非当前卡，独立 `CarryActiveLayer` 只承载当前实时卡；鼠标移动不重算牌列、不全量刷新静态卡。跨区提交按 `InstanceId` 原位迁移同一实体 Widget，不再因 `PhysicalZone` 变化创建替代实例。2026-07-17 又完成内部收口：`FWacomBackpackWorkspaceSceneBuilder` 一次生成顺序对齐的卡牌、牌堆、布局与命中合同；`FWacomBackpackWorkspaceVisualRegistry` 以四个实际 Canvas 层为所有权真相并线性重建身份索引，统一清除重复卡与幽灵牌框；`FWacomBackpackWorkspaceRuntime` 作为单一 App-private 所有权根持有 Registry 和 Motion Coordinator。Carry、PileMove、携带目标悬停展开、局部姿态、Settlement、焦点退出和牌堆基础布局过渡共用一个按需帧 `ActiveTimer`，收拢完成由实际过渡结束触发。1945 行 Screen Spec 已拆为 CardView、EffectBadge、CardDetail 与 Screen Refresh/Projection 四个专题，FocusWindowStrip、Scene Builder、Registry 与 Motion Coordinator 契约由小型测试覆盖。自动化 379 项通过，Builder 双跑及六个正式资产 Hash 稳定；用户此前连续 10 次 PIE 验证通过，完成本轮最终 1/21 张携带 / Insights 观察后更新为 Done。对应阶段工件见 `specs/006-backpack-real-card-piles/`。
+	- 2026-07-19 内部收口：删除 Screen / Workspace / Registry 三份平行卡牌名册，Registry 现在持有 Scene 顺序的唯一弱引用名册；基础布局、连续过渡、选择冻结、Settlement 与释放交接迁入 Runtime Visual State，Scene reconcile 的过期身份清理和基础过渡插值不再由 Widget 逐容器维护。
 
 - [x] **背包 Workspace 重构：正式实现、旧路径迁移与统一 PIE 验收完成**
   - 状态：`Done: C++ + formal WBP + DreamShader + legacy cleanup + final PIE complete`

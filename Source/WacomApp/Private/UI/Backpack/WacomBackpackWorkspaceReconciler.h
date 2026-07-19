@@ -23,5 +23,6 @@ struct WACOMAPP_API FWacomBackpackWorkspaceReconciler
 		const UWacomBackpackWorkspaceStyle* Style,
 		TFunctionRef<UWacomDeckCardWidget*(const FRunStorageCardView&)> CreateWidget,
 		TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget,
-		TArray<TObjectPtr<UWacomDeckCardWidget>>* OutOrderedWidgets = nullptr);
+		TArray<TObjectPtr<UWacomDeckCardWidget>>* OutOrderedWidgets = nullptr,
+		uint64 StorageRevision = 0);
 };

@@ -466,10 +466,10 @@ FWacomBackpackScreenAutomationTestView UWacomBackpackScreen::GetAutomationTestVi
 	View.ListRefreshSkipCount = Counters.ListRefreshSkipCount;
 	View.SnapshotBuildCount = Counters.SnapshotBuildCount;
 	View.SnapshotRevisionSkipCount = Counters.SnapshotRevisionSkipCount;
-	View.WorkspaceCardCount = ActiveWorkspaceCardWidgets.Num();
 	if (WorkspaceWidget)
 	{
 		const FWacomBackpackWorkspaceAutomationTestView WorkspaceView = WorkspaceWidget->GetAutomationTestView();
+		View.WorkspaceCardCount = WorkspaceView.WorkspaceCardCount;
 		View.WorkspacePileCount = WorkspaceView.PileCount;
 		View.ActiveWorkspaceZone = WorkspaceView.ActiveZone;
 		View.ActiveWorkspaceOwnerInstanceId = WorkspaceView.ActiveZoneOwnerInstanceId;
@@ -524,11 +524,9 @@ void UWacomBackpackScreen::RebuildAll()
 		GetStorageRefreshGate().ForgetRunSession();
 		GetWorkspaceStateStore(nullptr);
 		bHasLastAppliedStorageSnapshot = false;
-		ActiveWorkspaceCardWidgets.Reset();
-		if (WorkspaceWidget && WorkspaceWidget->GetStaticCardLayer())
+		if (WorkspaceWidget)
 		{
-			WorkspaceWidget->GetStaticCardLayer()->ClearChildren();
-			WorkspaceWidget->SetEmptyStateVisible(true);
+			WorkspaceWidget->ResetWorkspaceScene();
 		}
 		HideCardDetailPanel();
 		ResetBackpackRefreshDirtyGate();
@@ -596,9 +594,7 @@ void UWacomBackpackScreen::RebuildWorkspaceChrome(const FRunBackpackStorageSnaps
 		WorkspaceStyle,
 		[this](const FRunStorageCardView& CardView) { return CreateCardWidget(CardView); },
 		[this](UWacomDeckCardWidget* RemovedWidget) { HideCardDetailPanelIfSourceRemoved(RemovedWidget); },
-		&ActiveWorkspaceCardWidgets);
-	WorkspaceWidget->BindWorkspaceCards(
-		ActiveWorkspaceCardWidgets,
+		nullptr,
 		Run->GetBackpackStorageSnapshotRevision());
 	GetCardDetailController().RepositionVisibleSource();
 }

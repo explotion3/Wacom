@@ -80,7 +80,7 @@ Run Snapshot / revision
 
 ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折叠牌堆主体请求展开；从牌堆内容区域拖过框选阈值则进入该牌堆的 `Marquee`，不会误触展开。真实卡牌常驻 `StaticCardLayer`，携带时进入 `CarryRoot` 下两个携带分支，短时收落时进入 `SettlementLayer`。
 
-`PileFrameLayer` 与四个卡牌层的实际子控件树是视觉所有权真相。App-private `FWacomBackpackWorkspaceVisualRegistry` 每次 Scene reconcile 都从 Canvas 子控件线性重建 `ViewKey -> Card`、物理 `InstanceId -> Card` 和 `ZoneKey -> Pile` 索引；索引不是第二套 UObject 所有权。瞬态层中的权威卡优先于静态副本，跨区继续复用同一物理 Widget，重复静态副本和幽灵牌框当次移除。`NativeDestruct` 必须解除牌堆委托、删除动态牌堆子控件并清空 Runtime。
+`PileFrameLayer` 与四个卡牌层的实际子控件树是视觉所有权真相。App-private `FWacomBackpackWorkspaceVisualRegistry` 每次 Scene reconcile 都从 Canvas 子控件线性重建 `ViewKey -> Card`、物理 `InstanceId -> Card` 和 `ZoneKey -> Pile` 索引，并持有 Scene 顺序的唯一弱引用卡牌名册；Screen 与 Workspace 不得复制第二份长期数组。瞬态层中的权威卡优先于静态副本，跨区继续复用同一物理 Widget，重复静态副本和幽灵牌框当次移除。基础布局、过渡、选择冻结、Settlement 与释放交接统一由 `FWacomBackpackWorkspaceRuntime` 内的 App-private Visual State 持有，Scene reconcile 只通过它清理不可见身份和连续重定向活动过渡。`NativeDestruct` 必须解除卡牌/牌堆委托、删除动态牌堆子控件，并一次清空 Registry、Visual State 与 Motion Coordinator。
 
 ## 内嵌牌堆合同
 

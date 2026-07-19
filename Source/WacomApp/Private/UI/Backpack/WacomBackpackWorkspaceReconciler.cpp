@@ -22,7 +22,8 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 	const UWacomBackpackWorkspaceStyle* Style,
 	TFunctionRef<UWacomDeckCardWidget*(const FRunStorageCardView&)> CreateWidget,
 	TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget,
-	TArray<TObjectPtr<UWacomDeckCardWidget>>* OutOrderedWidgets)
+	TArray<TObjectPtr<UWacomDeckCardWidget>>* OutOrderedWidgets,
+	uint64 StorageRevision)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_WorkspaceReconcile);
 	UCanvasPanel* StaticCanvas = Workspace.GetStaticCardLayer();
@@ -84,7 +85,7 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		SearchPanels.Add(SettlementCanvas);
 	}
 
-	TArray<TObjectPtr<UWacomDeckCardWidget>> OrderedWidgets;
+	Workspace.PrepareForWorkspaceCardReconcile();
 	Workspace.GetRuntime().Visuals.ReconcileCards(
 		SearchPanels,
 		*StaticCanvas,
@@ -94,14 +95,15 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 			return Workspace.ShouldPreserveCardParent(Widget);
 		},
 		CreateWidget,
-		OnRemovedWidget,
-		OrderedWidgets);
+		OnRemovedWidget);
+	const TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> OrderedWidgets =
+		Workspace.GetRuntime().Visuals.GetCardWidgets();
 
 	const int32 AlignedCardCount = FMath::Min3(
 		OrderedWidgets.Num(), Scene.Cards.Num(), Scene.CardLayouts.Num());
 	for (int32 Index = 0; Index < AlignedCardCount; ++Index)
 	{
-		UWacomDeckCardWidget* CardWidget = OrderedWidgets[Index];
+		UWacomDeckCardWidget* CardWidget = OrderedWidgets[Index].Get();
 		if (!CardWidget)
 		{
 			continue;
@@ -182,8 +184,17 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		Scene.ExpandedZone.Zone, Scene.ExpandedZone.OwnerInstanceId);
 	Workspace.SetManualLayoutCount(Scene.ManualFluxLayoutCount);
 	Workspace.SetEmptyStateVisible(Scene.bFluxEmpty);
+	Workspace.BindRegisteredWorkspaceCards(StorageRevision);
 	if (OutOrderedWidgets)
 	{
-		*OutOrderedWidgets = MoveTemp(OrderedWidgets);
+		OutOrderedWidgets->Reset();
+		OutOrderedWidgets->Reserve(OrderedWidgets.Num());
+		for (const TWeakObjectPtr<UWacomDeckCardWidget>& Card : OrderedWidgets)
+		{
+			if (UWacomDeckCardWidget* Widget = Card.Get())
+			{
+				OutOrderedWidgets->Add(Widget);
+			}
+		}
 	}
 }

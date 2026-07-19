@@ -117,11 +117,10 @@ void FWacomBackpackWorkspaceVisualRegistry::ReconcileCards(
 	TConstArrayView<FWacomBackpackWorkspaceSceneCardEntry> DesiredCards,
 	TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent,
 	TFunctionRef<UWacomDeckCardWidget*(const FRunStorageCardView&)> CreateWidget,
-	TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget,
-	TArray<TObjectPtr<UWacomDeckCardWidget>>& OutOrderedWidgets)
+	TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget)
 {
-	OutOrderedWidgets.Reset();
-	OutOrderedWidgets.Reserve(DesiredCards.Num());
+	OrderedCards.Reset();
+	OrderedCards.Reserve(DesiredCards.Num());
 	CardsByViewKey.Reset();
 	PhysicalCardsByInstanceId.Reset();
 
@@ -217,7 +216,7 @@ void FWacomBackpackWorkspaceVisualRegistry::ReconcileCards(
 		Widget->SetBackpackListReuseRole(Desired.Role);
 		Widget->SetProjectedFromBadgeText(Desired.ProjectedBadgeText);
 		Used.Add(Widget);
-		OutOrderedWidgets.Add(Widget);
+		OrderedCards.Add(Widget);
 		if (!PreserveCurrentParent(Widget))
 		{
 			MoveToPanelIndex(DestinationPanel, *Widget, StaticIndex++);
@@ -244,8 +243,9 @@ void FWacomBackpackWorkspaceVisualRegistry::ReconcileCards(
 
 	CardsByViewKey.Reset();
 	PhysicalCardsByInstanceId.Reset();
-	for (UWacomDeckCardWidget* Card : OutOrderedWidgets)
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : OrderedCards)
 	{
+		UWacomDeckCardWidget* Card = WeakCard.Get();
 		if (!Card)
 		{
 			continue;
@@ -255,6 +255,20 @@ void FWacomBackpackWorkspaceVisualRegistry::ReconcileCards(
 		if (IsPhysicalVisualRole(Key.Role))
 		{
 			PhysicalCardsByInstanceId.Add(Key.InstanceId, Card);
+		}
+	}
+}
+
+void FWacomBackpackWorkspaceVisualRegistry::ReplaceOrderedCards(
+	TConstArrayView<TObjectPtr<UWacomDeckCardWidget>> Cards)
+{
+	OrderedCards.Reset();
+	OrderedCards.Reserve(Cards.Num());
+	for (UWacomDeckCardWidget* Card : Cards)
+	{
+		if (Card)
+		{
+			OrderedCards.Add(Card);
 		}
 	}
 }
@@ -378,5 +392,6 @@ void FWacomBackpackWorkspaceVisualRegistry::ResetIndexes()
 {
 	CardsByViewKey.Reset();
 	PhysicalCardsByInstanceId.Reset();
+	OrderedCards.Reset();
 	PilesByZone.Reset();
 }

@@ -18,9 +18,12 @@ class UWacomBackpackZonePileWidget;
 struct FWacomBackpackZoneKey;
 class FWacomBackpackWorkspaceInteractionModel;
 class FWacomBackpackWorkspaceRuntime;
+class FWacomBackpackWorkspaceVisualState;
 class FWacomBackpackCardDetailController;
 struct FWacomBackpackWorkspaceReconciler;
 struct FWacomBackpackWorkspaceReleaseIntent;
+struct FWacomBackpackWorkspaceCardLayout;
+struct FWacomBackpackWorkspaceCardVisualPose;
 #if WITH_AUTOMATION_TESTS
 struct FWacomBackpackWorkspaceAutomationTestView;
 struct FWacomBackpackScreenTestAccess;
@@ -91,6 +94,8 @@ public:
 	void SetCardFaceRetainedRenderingEnabled(bool bEnabled);
 	void SetCarryInputSuspended(bool bSuspended);
 	void CancelInteraction();
+	/** Run/Scene 失效时清空所有运行时视觉与交互身份，但保留 WBP 层级本身。 */
+	void ResetWorkspaceScene();
 	void ApplyCardLayout(UWidget& CardWidget, FVector2D CardCenter, FVector2D CardSize, float AngleDegrees, int32 ZOrder);
 	void ApplyCardBaseLayout(UWidget& CardWidget, FVector2D CardCenter, FVector2D CardSize, float AngleDegrees, int32 ZOrder);
 	bool HasCardBaseLayout(const UWidget& CardWidget) const;
@@ -167,7 +172,6 @@ private:
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> InteractionModel;
 	TSharedPtr<FWacomBackpackWorkspaceRuntime> Runtime;
 	TWeakObjectPtr<UWacomBackpackWorkspaceStyle> InteractionStyle;
-	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> BoundCardWidgets;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
 		meta = (ToolTip = "工作台内嵌区域牌堆 Widget 类。只显示 ViewData 并转发标题指针意图，不直接访问 RunSession。"))
@@ -225,14 +229,6 @@ private:
 	TWeakObjectPtr<UWacomDeckCardWidget> PreviousCarryCurrentCard;
 	/** 初始最右卡保持平放；发生过有效滚轮切换后，任何当前卡（含最右卡）都使用上抬反馈。 */
 	bool bCarryCurrentExplicitlySelectedByWheel = false;
-	/** 已提交释放、等待目标 Scene 消费的实体卡；期间禁止恢复来源基础布局。 */
-	TSet<FGuid> PendingReleasedVisualHandoffs;
-	struct FCardVisualPose
-	{
-		FVector2D Center = FVector2D::ZeroVector;
-		float AngleDegrees = 0.0f;
-	};
-	TMap<FGuid, FCardVisualPose> PendingReleasedVisualPoses;
 	int32 LastCarryStripCurrentIndex = INDEX_NONE;
 	int32 LastCarryStripDefaultIndex = INDEX_NONE;
 	int32 LastCarryStripWindowStartIndex = INDEX_NONE;
@@ -260,25 +256,6 @@ private:
 	int32 BaseCardLayoutTransitionApplyCount = 0;
 #endif
 
-	struct FBaseCardLayout
-	{
-		FVector2D Center = FVector2D::ZeroVector;
-		FVector2D Size = FVector2D::ZeroVector;
-		float AngleDegrees = 0.0f;
-		int32 ZOrder = 0;
-	};
-	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> BaseCardLayouts;
-	struct FBaseCardLayoutTransition
-	{
-		FBaseCardLayout Start;
-		FBaseCardLayout Current;
-		FBaseCardLayout Target;
-		float ElapsedSeconds = 0.0f;
-		float DurationSeconds = 0.0f;
-	};
-	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayoutTransition> BaseCardLayoutTransitions;
-	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> SettlementTargets;
-
 	struct FExpandedPileFocusState
 	{
 		EZoneKind Zone = EZoneKind::Backpack;
@@ -300,14 +277,15 @@ private:
 		bool bExitPending = false;
 	};
 	FExpandedPileFocusState ExpandedPileFocus;
-	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> ExpandedPileFocusTargets;
-	/** 选择开始瞬间的实际画面；冻结期间同时作为呈现和框选命中真相。 */
-	TMap<TWeakObjectPtr<UWacomDeckCardWidget>, FBaseCardLayout> SelectionFrozenLayouts;
 	EZoneKind SelectionFrozenZone = EZoneKind::Backpack;
 	FGuid SelectionFrozenOwnerInstanceId;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 
 	void EnsureFallbackTree();
+	void PrepareForWorkspaceCardReconcile();
+	void BindRegisteredWorkspaceCards(uint64 StorageRevision);
+	void UnbindWorkspaceCards();
+	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> GetBoundCardWidgets() const;
 	FReply HandleCardPointerDown(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FReply HandleCardPointerDownAtLocal(
 		UWacomDeckCardWidget* CardWidget,
@@ -376,8 +354,8 @@ private:
 	UWacomDeckCardWidget* GetPresentationFocusedCard() const;
 	void RetargetCardLocalPoseFromVisual(
 		UWacomDeckCardWidget& Card,
-		const FCardVisualPose& VisualPose,
-		const FBaseCardLayout& TargetBase,
+		const FWacomBackpackWorkspaceCardVisualPose& VisualPose,
+		const FWacomBackpackWorkspaceCardLayout& TargetBase,
 		FVector2D TargetLocalTranslation,
 		float TargetLocalAngle,
 		float DurationSeconds);
@@ -385,7 +363,8 @@ private:
 	void RebuildCarryStripLayout();
 	void BeginCarryPickupFeedback();
 	void CaptureReleasedVisualPoses(TConstArrayView<FGuid> InstanceIds);
-	FCardVisualPose CaptureCardVisualPose(const UWacomDeckCardWidget& Card) const;
+	FWacomBackpackWorkspaceCardVisualPose CaptureCardVisualPose(
+		const UWacomDeckCardWidget& Card) const;
 	bool ResolveCardDetailAnchorRect(
 		const UWacomDeckCardWidget& Card,
 		FSlateRect& OutWorkspaceLocalRect) const;
@@ -400,6 +379,8 @@ private:
 	bool AcceptStableLayoutGeometry(FVector2D LayoutSize);
 	FWacomBackpackWorkspaceRuntime& GetRuntime();
 	const FWacomBackpackWorkspaceRuntime& GetRuntime() const;
+	FWacomBackpackWorkspaceVisualState& GetVisualState();
+	const FWacomBackpackWorkspaceVisualState& GetVisualState() const;
 	const TArray<TWeakObjectPtr<UWacomBackpackZonePileWidget>>& GetRegisteredPileWidgets() const;
 	friend class FWacomBackpackCardDetailController;
 	friend struct FWacomBackpackWorkspaceReconciler;
@@ -432,6 +413,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 DefaultCarryIndex = INDEX_NONE;
 	int32 ManualLayoutCount = 0;
 	int32 PileCount = 0;
+	int32 WorkspaceCardCount = 0;
 	bool bInitialReleaseGuardArmed = false;
 	bool bMouseCaptured = false;
 	bool bDeleteConfirmationPending = false;

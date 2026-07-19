@@ -55,8 +55,13 @@ public:
 		TConstArrayView<FWacomBackpackWorkspaceSceneCardEntry> DesiredCards,
 		TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent,
 		TFunctionRef<UWacomDeckCardWidget*(const FRunStorageCardView&)> CreateWidget,
-		TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget,
-		TArray<TObjectPtr<UWacomDeckCardWidget>>& OutOrderedWidgets);
+		TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget);
+
+	/**
+	 * 为不经过 Scene reconcile 的原生测试/兜底入口接管有序卡牌名册。
+	 * 正式运行时名册由 ReconcileCards 生成；调用方不得另存第二份长期数组。
+	 */
+	void ReplaceOrderedCards(TConstArrayView<TObjectPtr<UWacomDeckCardWidget>> Cards);
 
 	void ReconcilePiles(
 		UUserWidget& Owner,
@@ -67,6 +72,10 @@ public:
 
 	UWacomDeckCardWidget* FindPhysicalCard(FGuid InstanceId) const;
 	UWacomBackpackZonePileWidget* FindPile(const FWacomBackpackZoneKey& Zone) const;
+	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> GetCardWidgets() const
+	{
+		return OrderedCards;
+	}
 	const TArray<TWeakObjectPtr<UWacomBackpackZonePileWidget>>& GetPileWidgets() const
 	{
 		return OrderedPiles;
@@ -78,6 +87,8 @@ public:
 private:
 	TMap<FWacomBackpackWorkspaceCardViewKey, TWeakObjectPtr<UWacomDeckCardWidget>> CardsByViewKey;
 	TMap<FGuid, TWeakObjectPtr<UWacomDeckCardWidget>> PhysicalCardsByInstanceId;
+	/** Scene 顺序的唯一卡牌视觉名册；不构成 UObject 所有权。 */
+	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> OrderedCards;
 	TMap<FWacomBackpackZoneKey, TWeakObjectPtr<UWacomBackpackZonePileWidget>> PilesByZone;
 	TArray<TWeakObjectPtr<UWacomBackpackZonePileWidget>> OrderedPiles;
 };
