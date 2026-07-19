@@ -179,12 +179,12 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 
 	if (UBattleCombatLogFeedWidget* CombatLogFeed = ConstructWidget(Context.WidgetTree, Context.CombatLogFeed, TEXT("CombatLogFeed")))
 	{
-		CombatLogFeed->SetVisibility(ESlateVisibility::Collapsed);
+		CombatLogFeed->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		SetCanvasSlot(
 			Root->AddChildToCanvas(CombatLogFeed),
-			FAnchors(1.0f, 0.24f),
-			FVector2D(1.0f, 0.0f),
-			FMargin(-20.0f, 0.0f, 420.0f, 360.0f),
+			FAnchors(0.0f, 0.0f),
+			FVector2D::ZeroVector,
+			FMargin(28.0f, 122.0f, 420.0f, 190.0f),
 			7);
 	}
 

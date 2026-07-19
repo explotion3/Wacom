@@ -49,27 +49,72 @@ namespace
 		return nullptr;
 	}
 
-const FEnemyPartSnapshot* FindEnemyPart(const FBattleSnapshot& Snapshot, const FBattlePartSlotIdentity& PartKey)
-{
-	if (!PartKey.IsValidSlot())
+	const FHandCardSnapshot* FindHandCard(
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot,
+		const FGuid& CardInstanceId)
 	{
-		return nullptr;
+		if (const FHandCardSnapshot* Card = FindHandCard(PostCommandSnapshot, CardInstanceId))
+		{
+			return Card;
+		}
+		return FindHandCard(PreCommandSnapshot, CardInstanceId);
 	}
+
+	const FEnemyPartSnapshot* FindEnemyPart(const FBattleSnapshot& Snapshot, const FBattlePartSlotIdentity& PartKey)
+	{
+		if (!PartKey.IsValidSlot())
+		{
+			return nullptr;
+		}
 
 		for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
 		{
 			for (const FEnemyPartSnapshot& Part : Enemy.Parts)
 			{
-			if (Part.Identity == PartKey)
-			{
-				return &Part;
-			}
+				if (Part.Identity == PartKey)
+				{
+					return &Part;
+				}
 			}
 		}
-	return nullptr;
-}
+		return nullptr;
+	}
 
-EWacomBattleEventVisualTone ToneForCommand(EWacomBattleCombatLogCommandKind CommandKind)
+	const FEnemyPartSnapshot* FindEnemyPart(
+		const FBattleSnapshot& Snapshot,
+		const FBattleEnemyPartKey& PartKey)
+	{
+		if (!PartKey.IsValidKey())
+		{
+			return nullptr;
+		}
+		for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
+		{
+			for (const FEnemyPartSnapshot& Part : Enemy.Parts)
+			{
+				if (Part.PartKey == PartKey)
+				{
+					return &Part;
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	const FEnemyPartSnapshot* FindEnemyPart(
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot,
+		const FBattleEnemyPartKey& PartKey)
+	{
+		if (const FEnemyPartSnapshot* Part = FindEnemyPart(PostCommandSnapshot, PartKey))
+		{
+			return Part;
+		}
+		return FindEnemyPart(PreCommandSnapshot, PartKey);
+	}
+
+	EWacomBattleEventVisualTone ToneForCommand(EWacomBattleCombatLogCommandKind CommandKind)
 	{
 		switch (CommandKind)
 		{
@@ -208,6 +253,234 @@ EWacomBattleEventVisualTone ToneForCommand(EWacomBattleCombatLogCommandKind Comm
 			}
 		}
 	}
+
+	int32 ResolveRootSequence(const TArray<FBattleEvent>& Events, EBattleEventType PreferredType)
+	{
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type == PreferredType)
+			{
+				return Event.Sequence;
+			}
+		}
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Sequence > 0)
+			{
+				return Event.Sequence;
+			}
+		}
+		return 0;
+	}
+
+	FWacomBattleCombatActivityRowView MakePlayerRootRow(
+		const FWacomBattleCombatLogCommandContext& Context,
+		const TArray<FBattleEvent>& Events)
+	{
+		FWacomBattleCombatActivityRowView Row;
+		Row.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+		Row.VisualTone = ToneForCommand(Context.CommandKind);
+		switch (Context.CommandKind)
+		{
+		case EWacomBattleCombatLogCommandKind::PlayCard:
+			Row.SourceEventType = EBattleEventType::CardPlayed;
+			Row.MessageText = Context.CardName.IsEmpty() ? LOCTEXT("ActivityUnknownCard", "未知卡牌") : Context.CardName;
+			Row.IconKey = TEXT("Player");
+			Row.EventSequence = ResolveRootSequence(Events, EBattleEventType::CardPlayed);
+			break;
+		case EWacomBattleCombatLogCommandKind::Wait:
+			Row.SourceEventType = EBattleEventType::WaitPerformed;
+			Row.MessageText = LOCTEXT("ActivityWait", "等待");
+			Row.IconKey = TEXT("Wait");
+			Row.EventSequence = ResolveRootSequence(Events, EBattleEventType::WaitPerformed);
+			break;
+		case EWacomBattleCombatLogCommandKind::KnockdownChoice:
+			Row.SourceEventType = EBattleEventType::KnockdownChoiceMade;
+			Row.MessageText = FText::FromString(UWacomBattleEventPresentationBuilder::FormatKnockdownChoice(Context.KnockdownChoice));
+			Row.IconKey = TEXT("KnockdownChoice");
+			Row.EventSequence = ResolveRootSequence(Events, EBattleEventType::KnockdownChoiceMade);
+			break;
+		default:
+			break;
+		}
+		return Row;
+	}
+
+	FText ResolveEnemyIntentName(
+		const FBattleEvent& Event,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot)
+	{
+		const FEnemyPartSnapshot* Part = FindEnemyPart(PreCommandSnapshot, Event.ActorEnemyPartKey);
+		if (!Part)
+		{
+			Part = FindEnemyPart(PostCommandSnapshot, Event.ActorEnemyPartKey);
+		}
+		if (Part && Part->CurrentIntent.IntentId == Event.IntentId && !Part->CurrentIntent.DisplayName.IsEmpty())
+		{
+			return Part->CurrentIntent.DisplayName;
+		}
+		return Event.IntentId.IsNone()
+			? LOCTEXT("ActivityEnemyAction", "敌人行动")
+			: FText::FromName(Event.IntentId);
+	}
+
+	FWacomBattleCombatActivityGroupView MakeEnemyActionGroup(
+		const FBattleEvent& Event,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot)
+	{
+		FWacomBattleCombatActivityGroupView Group;
+		Group.TurnNumber = FMath::Max(PreCommandSnapshot.TurnNumber, 1);
+		Group.RootAction.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+		Group.RootAction.SourceEventType = EBattleEventType::EnemyPartActed;
+		Group.RootAction.MessageText = ResolveEnemyIntentName(Event, PreCommandSnapshot, PostCommandSnapshot);
+		if (Event.Count <= 0)
+		{
+			Group.RootAction.MessageText = FText::Format(
+				LOCTEXT("ActivityEnemyActionSkipped", "{0}（跳过）"),
+				Group.RootAction.MessageText);
+		}
+		Group.RootAction.VisualTone = EWacomBattleEventVisualTone::Danger;
+		Group.RootAction.IconKey = TEXT("Intent");
+		Group.RootAction.IntentId = Event.IntentId;
+		Group.RootAction.EventSequence = Event.Sequence;
+		return Group;
+	}
+
+	bool IsCompactActivityResult(EBattleEventType Type)
+	{
+		switch (Type)
+		{
+		case EBattleEventType::InitiativeHit:
+		case EBattleEventType::ResistanceResolved:
+		case EBattleEventType::PerfectReleaseResolved:
+		case EBattleEventType::DamageDealt:
+		case EBattleEventType::StatusApplied:
+		case EBattleEventType::CardStatusChanged:
+		case EBattleEventType::EnemyInitiativeChanged:
+		case EBattleEventType::EnemyPartHpEmptied:
+		case EBattleEventType::EnemyKnockdown:
+		case EBattleEventType::KnockdownChoiceRequested:
+		case EBattleEventType::PassiveTriggered:
+		case EBattleEventType::CardDiscarded:
+		case EBattleEventType::CardExhausted:
+		case EBattleEventType::CardGained:
+		case EBattleEventType::CardRuntimeCostChanged:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	FText ResolveEventTargetName(
+		const FBattleEvent& Event,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot)
+	{
+		if (const FEnemyPartSnapshot* Part = FindEnemyPart(
+			PreCommandSnapshot,
+			PostCommandSnapshot,
+			Event.ActorEnemyPartKey))
+		{
+			return MakePartName(Part);
+		}
+		if (const FHandCardSnapshot* Card = FindHandCard(
+			PreCommandSnapshot,
+			PostCommandSnapshot,
+			Event.CardInstanceId))
+		{
+			return MakeCardName(Card);
+		}
+		return FText::GetEmpty();
+	}
+
+	FText MakeSignedDeltaText(int32 Amount)
+	{
+		return FText::FromString(Amount > 0
+			? FString::Printf(TEXT("+%d"), Amount)
+			: FString::FromInt(Amount));
+	}
+
+	FText BuildActivityResultText(
+		const FBattleEvent& Event,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot)
+	{
+		const FText TargetName = ResolveEventTargetName(Event, PreCommandSnapshot, PostCommandSnapshot);
+		FText Result;
+		switch (Event.Type)
+		{
+		case EBattleEventType::DamageDealt:
+			Result = Event.Tag.IsValid()
+				? FText::Format(LOCTEXT("ActivityTaggedDamage", "{0}造成 {1} 点伤害"), FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(Event.Tag)), FText::AsNumber(Event.Amount))
+				: FText::Format(LOCTEXT("ActivityDamage", "受到 {0} 点伤害"), FText::AsNumber(Event.Amount));
+			break;
+		case EBattleEventType::StatusApplied:
+			Result = FText::Format(
+				LOCTEXT("ActivityStatusApplied", "{0} {1}"),
+				FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(Event.Tag)),
+				MakeSignedDeltaText(Event.Amount));
+			break;
+		case EBattleEventType::CardStatusChanged:
+			Result = FText::Format(
+				LOCTEXT("ActivityCardStatusChanged", "{0} {1}"),
+				FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(Event.Tag)),
+				MakeSignedDeltaText(Event.Amount));
+			break;
+		case EBattleEventType::EnemyInitiativeChanged:
+			Result = FText::Format(LOCTEXT("ActivityInitiativeChanged", "先机 {0}"), MakeSignedDeltaText(Event.Amount));
+			break;
+		case EBattleEventType::PassiveTriggered:
+			Result = Event.Tag.IsValid()
+				? FText::Format(LOCTEXT("ActivityPassive", "{0}触发"), FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(Event.Tag)))
+				: LOCTEXT("ActivityPassiveFallback", "被动效果触发");
+			break;
+		case EBattleEventType::CardDiscarded:
+			Result = LOCTEXT("ActivityCardDiscarded", "弃置");
+			break;
+		case EBattleEventType::CardExhausted:
+			Result = LOCTEXT("ActivityCardExhausted", "消耗");
+			break;
+		case EBattleEventType::CardGained:
+			Result = Event.CardDefinition
+				? FText::Format(LOCTEXT("ActivityCardGainedNamed", "获得「{0}」"), FText::FromString(UWacomBattleEventPresentationBuilder::FormatCardName(Event.CardDefinition.Get())))
+				: LOCTEXT("ActivityCardGained", "获得卡牌");
+			break;
+		case EBattleEventType::CardRuntimeCostChanged:
+			Result = FText::Format(LOCTEXT("ActivityCostChanged", "费用 {0}"), MakeSignedDeltaText(Event.Amount));
+			break;
+		default:
+			Result = FText::FromString(UWacomBattleEventPresentationBuilder::FormatEventForPlayer(Event));
+			break;
+		}
+
+		if (!TargetName.IsEmpty() && !Result.IsEmpty())
+		{
+			return FText::Format(LOCTEXT("ActivityTargetResult", "{0}：{1}"), TargetName, Result);
+		}
+		return Result;
+	}
+
+	FWacomBattleCombatActivityRowView MakeResultRow(
+		const FBattleEvent& Event,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot)
+	{
+		const FBattleEventPresentationView EventView =
+			UWacomBattleEventPresentationBuilder::BuildEventPresentationView(Event);
+		FWacomBattleCombatActivityRowView Row;
+		Row.RowKind = EWacomBattleCombatActivityRowKind::Result;
+		Row.SourceEventType = Event.Type;
+		Row.MessageText = BuildActivityResultText(Event, PreCommandSnapshot, PostCommandSnapshot);
+		Row.VisualTone = EventView.VisualTone;
+		Row.IconKey = EventView.IconKey != NAME_None
+			? EventView.IconKey
+			: *StaticEnum<EBattleEventType>()->GetNameStringByValue(static_cast<int64>(Event.Type));
+		Row.IconTag = Event.Tag;
+		Row.EventSequence = Event.Sequence;
+		return Row;
+	}
 }
 
 FWacomBattleCombatLogCommandContext UWacomBattleCombatLogBuilder::BuildSystemCommandContext(
@@ -319,6 +592,64 @@ FWacomBattleCombatLogBlockView UWacomBattleCombatLogBuilder::BuildCombatLogBlock
 
 	Block.bShouldDisplay = !Block.HeaderText.IsEmpty() || !Block.DetailLines.IsEmpty();
 	return Block;
+}
+
+FWacomBattleCombatActivityBatchView UWacomBattleCombatLogBuilder::BuildCombatActivityBatch(
+	const FWacomBattleCombatLogCommandContext& Context,
+	const TArray<FBattleEvent>& Events,
+	const FBattleSnapshot& PreCommandSnapshot,
+	const FBattleSnapshot& PostCommandSnapshot)
+{
+	FWacomBattleCombatActivityBatchView Batch;
+	if (Context.CommandKind == EWacomBattleCombatLogCommandKind::System)
+	{
+		Batch.bSetTurnImmediately = true;
+		Batch.PresentedTurnNumber = FMath::Max(PostCommandSnapshot.TurnNumber, 1);
+		return Batch;
+	}
+
+	FWacomBattleCombatActivityGroupView* CurrentGroup = nullptr;
+	if (Context.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
+		|| Context.CommandKind == EWacomBattleCombatLogCommandKind::Wait
+		|| Context.CommandKind == EWacomBattleCombatLogCommandKind::KnockdownChoice)
+	{
+		FWacomBattleCombatActivityGroupView& Group = Batch.Groups.AddDefaulted_GetRef();
+		Group.TurnNumber = FMath::Max(PreCommandSnapshot.TurnNumber, 1);
+		Group.RootAction = MakePlayerRootRow(Context, Events);
+		CurrentGroup = &Group;
+	}
+
+	for (const FBattleEvent& Event : Events)
+	{
+		if (Event.Type == EBattleEventType::EnemyPartActed)
+		{
+			CurrentGroup = &Batch.Groups.Add_GetRef(MakeEnemyActionGroup(
+				Event,
+				PreCommandSnapshot,
+				PostCommandSnapshot));
+			continue;
+		}
+		if (!CurrentGroup || !IsCompactActivityResult(Event.Type))
+		{
+			continue;
+		}
+		FWacomBattleCombatActivityRowView Row = MakeResultRow(
+			Event,
+			PreCommandSnapshot,
+			PostCommandSnapshot);
+		if (!Row.MessageText.IsEmpty())
+		{
+			CurrentGroup->ResultRows.Add(MoveTemp(Row));
+		}
+	}
+
+	if (Context.CommandKind == EWacomBattleCombatLogCommandKind::EndTurn
+		&& PostCommandSnapshot.TurnNumber > PreCommandSnapshot.TurnNumber)
+	{
+		Batch.bAdvanceTurnAfterPlayback = true;
+		Batch.PresentedTurnNumber = PostCommandSnapshot.TurnNumber;
+	}
+	return Batch;
 }
 
 FString UWacomBattleCombatLogBuilder::FormatCombatLogBlockForLog(

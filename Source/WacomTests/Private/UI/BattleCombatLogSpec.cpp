@@ -233,40 +233,46 @@ bool FWacomUIBattleCombatLogBuilderMoveEventsSpec::RunTest(const FString& /*Para
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCombatLogFeedSpec,
-	"Wacom.UI.Battle.CombatLog.Feed.MirrorsBlocksAndTrims",
+	"Wacom.UI.Battle.CombatActivity.Feed.ThreeRowsAndPersistentFooter",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 {
 	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>());
-	Feed->MaxVisibleBlocks = 2;
 	Feed->TakeWidget();
-	TestTrue(TEXT("Feed fallback owns a scroll box"), Feed->HasScrollBoxForTest());
 
-	FWacomBattleCombatLogBlockView Hidden;
-	Hidden.bShouldDisplay = false;
-	Hidden.HeaderText = FText::FromString(TEXT("隐藏"));
+	FWacomBattleCombatActivityBatchView Batch;
+	Batch.bSetTurnImmediately = true;
+	Batch.PresentedTurnNumber = 2;
+	FWacomBattleCombatActivityGroupView& Group = Batch.Groups.AddDefaulted_GetRef();
+	Group.TurnNumber = 2;
+	Group.RootAction.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+	Group.RootAction.MessageText = FText::FromString(TEXT("毒牙"));
+	Group.RootAction.IconKey = TEXT("Player");
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		FWacomBattleCombatActivityRowView& Result = Group.ResultRows.AddDefaulted_GetRef();
+		Result.MessageText = FText::FromString(FString::Printf(TEXT("结果%d"), Index + 1));
+		Result.EventSequence = Index + 1;
+	}
+	Feed->EnqueueCombatActivityBatch(Batch);
+	Feed->AdvanceActivityPlaybackForTest(1.0f);
+	Feed->AdvanceActivityPlaybackForTest(1.0f);
 
-	FWacomBattleCombatLogBlockView First;
-	First.bShouldDisplay = true;
-	First.HeaderText = FText::FromString(TEXT("打出「毒牙」"));
+	TestEqual(TEXT("Feed retains at most three transient rows"), Feed->GetVisibleActivityRowCount(), 3);
+	TestEqual(TEXT("Footer uses presented turn"), Feed->GetPresentedTurnNumber(), 2);
+	TestNotNull(TEXT("Footer keeps last root action"), Feed->GetLastRootActionForTest());
+	for (int32 Index = 0; Index < 8; ++Index)
+	{
+		Feed->AdvanceActivityPlaybackForTest(1.0f);
+	}
+	TestEqual(TEXT("Transient rows collapse after the queue drains"), Feed->GetVisibleActivityRowCount(), 0);
+	TestNotNull(TEXT("Last root action persists after row collapse"), Feed->GetLastRootActionForTest());
+	TestEqual(TEXT("Turn footer persists after row collapse"), Feed->GetPresentedTurnNumber(), 2);
 
-	FWacomBattleCombatLogBlockView Second;
-	Second.bShouldDisplay = true;
-	Second.HeaderText = FText::FromString(TEXT("等待"));
-
-	FWacomBattleCombatLogBlockView Third;
-	Third.bShouldDisplay = true;
-	Third.HeaderText = FText::FromString(TEXT("结束回合"));
-
-	Feed->SetCombatLogBlocks({ Hidden, First, Second, Third });
-
-	TestEqual(TEXT("Feed filters hidden and trims"), Feed->GetVisibleBlockCount(), 2);
-	TestEqual(TEXT("Feed keeps recent second block"), Feed->GetCurrentBlocks()[0].HeaderText.ToString(), FString(TEXT("等待")));
-	TestEqual(TEXT("Feed keeps latest block"), Feed->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("结束回合")));
-
-	Feed->ClearCombatLog();
-	TestEqual(TEXT("Feed clears blocks"), Feed->GetVisibleBlockCount(), 0);
+	Feed->ClearCombatActivity();
+	TestEqual(TEXT("Feed clears transient rows"), Feed->GetVisibleActivityRowCount(), 0);
+	TestEqual(TEXT("Feed clears presented turn"), Feed->GetPresentedTurnNumber(), 0);
 
 	return true;
 }
@@ -308,14 +314,13 @@ bool FWacomUIBattleHUDCombatLogSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("HUD combat log history trims to max"), HUD->GetBattleCombatLogBlockCount(), 2);
 	TestEqual(TEXT("HUD keeps recent second block"), HUD->GetBattleCombatLogHistoryForTest()[0].HeaderText.ToString(), FString(TEXT("等待")));
 	TestEqual(TEXT("HUD keeps latest block"), HUD->GetBattleCombatLogHistoryForTest()[1].HeaderText.ToString(), FString(TEXT("战斗胜利")));
-	TestEqual(TEXT("Feed mirrors combat log blocks"), Feed->GetVisibleBlockCount(), 2);
-	TestEqual(TEXT("Feed latest text"), Feed->GetCurrentBlocks()[1].HeaderText.ToString(), FString(TEXT("战斗胜利")));
+	TestEqual(TEXT("Appending history alone does not replay transient activity"), Feed->GetVisibleActivityRowCount(), 0);
 
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 	HUD->SetSession(Session.Get());
 	HUD->SetSession(nullptr);
 	TestEqual(TEXT("Session change clears HUD history"), HUD->GetBattleCombatLogBlockCount(), 0);
-	TestEqual(TEXT("Session change clears feed"), Feed->GetVisibleBlockCount(), 0);
+	TestEqual(TEXT("Session change clears activity feed"), Feed->GetVisibleActivityRowCount(), 0);
 
 	return true;
 }
@@ -350,8 +355,10 @@ bool FWacomUIBattleHUDInitializationResultPresentedOnceSpec::RunTest(const FStri
 
 	TestTrue(TEXT("Attach presents initial visible battle events immediately"),
 		HUD->GetBattleCombatLogBlockCount() > 0);
-	TestTrue(TEXT("Combat log feed receives initial visible battle events"),
-		Feed->GetVisibleBlockCount() > 0);
+	TestEqual(TEXT("Initialization does not create transient activity rows"),
+		Feed->GetVisibleActivityRowCount(),
+		0);
+	TestEqual(TEXT("Initialization sets activity footer to first turn"), Feed->GetPresentedTurnNumber(), 1);
 
 	const TArray<FWacomBattleCombatLogBlockView> InitialBlocks = HUD->GetBattleCombatLogHistoryForTest();
 	const bool bHasBattleStarted = InitialBlocks.ContainsByPredicate(
@@ -439,9 +446,7 @@ bool FWacomUIBattleHUDCombatLogControllerContractSpec::RunTest(const FString& /*
 	TestEqual(TEXT("HUD history keeps recent block"),
 		HUD->GetBattleCombatLogHistoryForTest()[0].HeaderText.ToString(),
 		FString(TEXT("第二块")));
-	TestEqual(TEXT("Feed mirrors controller history through HUD"),
-		Feed->GetVisibleBlockCount(),
-		HUD->GetBattleCombatLogBlockCount());
+	TestEqual(TEXT("History append does not replay transient feed"), Feed->GetVisibleActivityRowCount(), 0);
 
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* Character = Fx.MakeCharacter(
@@ -457,7 +462,7 @@ bool FWacomUIBattleHUDCombatLogControllerContractSpec::RunTest(const FString& /*
 		HUD->GetBattleCombatLogBlockCount() > 0);
 	Harness->SetSession(nullptr);
 	TestEqual(TEXT("Session clear clears combat log through HUD"), HUD->GetBattleCombatLogBlockCount(), 0);
-	TestEqual(TEXT("Session clear syncs feed through HUD"), Feed->GetVisibleBlockCount(), 0);
+	TestEqual(TEXT("Session clear resets activity feed through HUD"), Feed->GetVisibleActivityRowCount(), 0);
 
 	return true;
 }

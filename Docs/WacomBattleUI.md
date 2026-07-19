@@ -37,7 +37,8 @@ BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`�
 | 场景敌人 | `FWacomBattleHUDSceneEnemyTargetCoordinator` | 同步当前 Trigger Host registry 的 PartActor bridge 和 cue |
 | 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier、EndTurn 与通用 command phase plan（普通弃牌 / Deck Step） |
 | 表现计时 | `FWacomBattlePresentationTimerOwner` | App-private keyed timer ownership；统一撤销 Queue Advance、Plan Poll 和 Stack Entry Exit，隔离 World teardown |
-| Combat Log | `FWacomBattleHUDCombatLogController` | history、trim、feed sync、readable log |
+| Combat Log / Activity | `FWacomBattleHUDCombatLogController` | 完整 history/回合分区、短时 activity batch 投影与 Footer 持久状态 |
+| Battle Secondary Panel | `FWacomBattleSecondaryPanelCoordinator` | `UI.Layer.GameMenu` 异步 Push、命令门控、关闭与战斗内详情偏好 |
 | First-person hand | `FWacomBattleHUDFirstPersonHandBridge + FWacomBattleFirstPersonDropResolver + FWacomBattleHandPresentationController + FWacomFirstPersonCardLayerPresentationFrame` | runtime hand presentation frame、drag preview/release、drop intent / hand-card affordance 解析、Drawn transaction |
 | Card Detail | `FWacomBattleHUDCardDetailController + FWacomFirstPersonCardDetailMotionController` | first-person viewport 详情 source guard、共享 motion / cache core |
 
@@ -88,12 +89,20 @@ HUD 状态入口：
 |---|---|---|
 | Presentation coordinator | `FWacomBattleHUDPresentationCoordinator` | TargetCue、短暂停顿、击倒 modal、BattleEnd signal、card stack boundary、EndTurn phase plan |
 | Presentation Stack | `UBattlePresentationStackWidget` | 已提交但表现仍在追赶的卡牌小堆叠 |
-| Combat Log | `UBattleCombatLogFeedWidget + UWacomBattleCombatLogBuilder` | 玩家可读命令块和事件 detail line |
+| Combat Activity | `UBattleCombatLogFeedWidget + FWacomBattleCombatActivityPlayback` | 三行短时活动播报与“最后行动 + 当前回合” Footer |
+| Combat Log History | `FWacomBattleHUDCombatLogController + UWacomBattleCombatLogBuilder` | 最多 80 个完整命令块，并维护按回合分区的只读行动组历史 |
+| Combat Log Details | `UWacomBattleCombatLogDetailsScreen + FWacomBattleSecondaryPanelCoordinator` | 左侧 680px 二级面板，简略/详细切换和 Battle 命令门控 |
 | UE_LOG | readable log | 开发诊断 |
 
-`UWacomBattleCombatLogBuilder` 是当前正式 BattleHUD 玩家日志命令块 Builder。它把一次成功 HUD command 后消费到的事件批次聚合成 `FWacomBattleCombatLogBlockView`。规则层不新增 batch id；当前 UI 事实是一次成功 HUD 命令后的事件批次就是一个 combat log block。
+`UWacomBattleCombatLogBuilder` 同时生成两种 UI-only 投影。`FWacomBattleCombatLogBlockView` 是完整历史命令块；`FWacomBattleCombatActivityBatchView` 是常驻 HUD 的短时活动批次。两者消费同一 Command Context、Events 和 Pre/Post Snapshot，不修改 `WacomBattle` 事件，也不从本地化文案反推规则语义。
 
-`UBattleCombatLogFeedWidget` 是 BattleHUD 内部常驻滚动记录，默认承接本场最近玩家可读命令块。`UBattleCombatLogBlockWidget` 显示单个命令块和 detail line。正式 Details 配置位于 `Wacom|Battle|Combat Log|Authoring`。
+`FWacomBattleHUDCombatLogController` 继续持有最多 80 个完整历史命令块，不再把整份历史反复提交给常驻 Feed。`UBattleCombatLogFeedWidget` 现在是固定三行、完全非阻塞的活动播报器：玩家根行动显示玩家头像与卡名，敌人根行动显示 Intent 图标与名称，结果按事件顺序逐条进入；多目标结果不聚合。新行从底部进入，最多保留三行，队列收束后只保留最后根行动图标。Footer 始终显示沙漏与“表现已经推进到”的回合数；EndTurn 的新回合只在敌人行动批次播放完后更新。初始化只设置第 1 回合，不播放战斗开始、开场抽牌等临时行。
+
+常驻播报的 Root 和临时 Row 都不命中；只有 Footer 的最后行动按钮可点击。按钮调用 `UBattleHUD::RequestOpenCombatLogDetails()`：HUD 仍广播 `OnCombatLogDetailsRequestedNative`，同时由 `FWacomBattleSecondaryPanelCoordinator` 向 `UI.Layer.GameMenu` 异步 Push `UWacomBattleCombatLogDetailsScreen`。Screen 打开时复制 Controller 的回合分区历史，不访问 `UBattleSession`，也不轮询规则状态。
+
+详细日志默认使用简略模式，只显示回合开始/结束分割线和根行动；“查看详情”展开每个根行动下的全部结果行。偏好只在当前战斗内记忆。Screen 使用 `All + NoCapture`，因此镜头和后台 Battle Presentation 继续运行；独立 `bSecondaryPanelOpen` gate 禁止卡牌、Wait、EndTurn、目标提交和世界点击。打开前会中性取消当前拖拽/目标选择。Backdrop、关闭按钮、Esc、右键和 Gamepad B 都只关闭一次，关闭后下一帧恢复游戏 Viewport focus。BattleEnd、Session 切换、Push 失败和 HUD teardown 必须释放 gate，并重置战斗内偏好。
+
+正式 `WBP_BattleCombatLogFeed / WBP_BattleCombatActivityRow / WBP_BattleCombatLogDetailsScreen / WBP_BattleCombatLogTurnDivider`、默认 `DA_BattleCombatActivityStyle_Default` 和中性像素图标图集由 `WacomBuildCombatActivityUI` 确定性生成。`BP_BattleHUD.CombatLogFeed` 必须嵌入正式 Feed WBP 生成类，才能继承 Style、Row Class 和 Footer 图标；Builder 会把已知的原生 Feed 定向替换为该 WBP，并保留其有效 Canvas Slot。Builder 首次把 Feed 迁到玩家状态栏下方 `(28,122)`、`420×190`；写入位置合同后保留有效的人工 Canvas Offset。运行时不再把旧 ScrollBox/BlocksBox 临时适配为 Feed，资产失效只走原生 C++ fallback。`-InspectOnly` 必须完全只读，重复 `-Build` 必须无资产差异。
 
 `UBattlePresentationStackWidget` 是只读小卡表现 backlog，不是规则栈或交互入口。它用完整 `UWacomCardView` 作为 mini card，显示已提交但表现边界尚未释放的卡牌。正式 Details 配置位于 `Wacom|Battle|Presentation Stack|Authoring`。
 
@@ -116,7 +125,7 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 
 ## §4 Event Presentation Helper
 
-`UWacomBattleEventPresentationBuilder`、`FBattleEventPresentationView` 和 `EWacomBattleEventVisualTone` 是 UI-only 单事件展示词汇。它们被 Combat Log detail line 复用，用于生成玩家可读中文文案、tone 和 icon；新的 BattleHUD WBP 不应直接消费 raw `FBattleEvent`。
+`UWacomBattleEventPresentationBuilder`、`FBattleEventPresentationView` 和 `EWacomBattleEventVisualTone` 是 UI-only 单事件展示词汇。它们被完整 Combat Log detail line 与常驻活动结果行复用，用于生成玩家可读中文文案、tone 和 icon；新的 BattleHUD WBP 不应直接消费 raw `FBattleEvent`。
 
 分类口径：
 
@@ -353,6 +362,8 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 测试不 include BattleHUD 私有 helper header，也不为生产 HUD 增加 Blueprint-visible 测试 API。只读诊断通过 `FWacomBattleHUDAutomationTestView` 聚合；Battle scene target click / probe 通过 `FWacomBattleSceneTargetClickTestAccess` 驱动。
 
 `Source/WacomTests/Private/UI/BattleHUDCommandFlowSpec.cpp` 承载 BattleHUD 命令和目标选择的专题合同测试，覆盖 `FWacomBattleHUDCommandController` / `FWacomBattleHUDTargetingController` 对外表现。`Source/WacomTests/Private/UI/BattleCombatLogSpec.cpp` 承载 Combat Log builder、feed、HUD history 和 `FWacomBattleHUDCombatLogController` 的专题合同测试，统一前缀为 `Wacom.UI.Battle.CombatLog`。`Source/WacomTests/Private/UI/BattlePresentationStackSpec.cpp` 承载 `UBattlePresentationStackWidget` / `UBattlePresentationStackEntryWidget` 的纯展示合同测试。`Source/WacomTests/Private/UI/BattlePresentationQueueSpec.cpp` 承载 BattleHUD presentation queue / turn-boundary / pending barrier / BattleEnd 清理 / knockdown 延迟展示合同测试；`BattlePresentationTimerLifecycleSpec.cpp` 以 `Wacom.UI.Battle.PresentationTimerLifecycle` 专门覆盖 Queue 与 Stack timer 在 clear、HUD teardown 和原始 World 后续 tick 下不会回调已释放状态。`Source/WacomTests/Private/UI/BattleInteractionTargetSpec.cpp` 承载 battle scene enemy part world target bridge 和 scene click / probe 的 `Wacom.UI.Battle.InteractionTarget` 合同测试。`Source/WacomTests/Private/UI/BattleSceneEnemyTargetRegistrySpec.cpp` 承载 battle scene enemy target registry 专题合同测试，覆盖 Trigger scene enemy host slot -> HUD registry、current-host filtering、trigger authoring validation 和 registry-routed cue / hover / drag preview。`Source/WacomTests/Private/UI/BattleSceneEnemyHoverProbeSpec.cpp` 承载 battle scene enemy hover probe 专题合同测试，覆盖 hover visual priority、HUD hover probe bridge、TargetSelect hover prediction、无效目标清理、pending / drag / BattleEnd gate 和 hover debug summary。`Source/WacomTests/Private/UI/BattleHUDFirstPersonSpec.cpp` 承载 BattleHUD first-person hand / first-person card detail 专题合同测试，覆盖 hand bridge clear、Anchor interaction、first-person detail host、readability motion 和 inspect hover guard。`Source/WacomTests/Private/UI/BattleSceneEnemyActorSpec.cpp` 承载 battle scene enemy actor 专题合同测试，当前覆盖 hand snapshot swift prediction facts、prediction widget facade、PartActor facade / presentation setup、bridge runtime facts、world target handle、host visual / hit-only part、host visual routing、host identity / child actor scan、runtime facts / host counts、debug snake child actor authoring、part slot identity / duplicate validation、hover / drag prediction badge、prediction badge offset、badge layout stagger / debug summary、VisualLayers refresh / validation 和 blueprint default authoring 分支。`BattleWidgetSpec.cpp` 保留 fallback layout、event presentation 和其他跨专题旧测试并继续分批收口。
+
+短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、三行 Feed、Footer 和详情打开请求。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
 
 `Source/WacomTests/Private/UI/BattleEnemyPanelSpec.cpp` 承载通用 `Wacom.UI.Battle.EnemyPanel`；`BattleEnemySinglePartPanelSpec.cpp` 承载 `Wacom.UI.Battle.EnemyPanel.SinglePartCompact`，验证单/多部位类解析、正式 WBP 与 Intent Style 合同、数值、Preview、hover 和动画优先级。状态图标复用另由 `Wacom.UI.Battle.StatusIcons.EnemyPartUsesFormalStatusList` 覆盖。测试必须实例化正式 WBP，不再直接 `NewObject` abstract 原生父类或锁定旧 C++ fallback WidgetTree。
 

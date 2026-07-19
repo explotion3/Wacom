@@ -289,6 +289,7 @@ bool FWacomBattleHUDFirstPersonHandBridge::ShouldEnableFirstPersonBattleHandInte
 {
 	return ShouldUseFirstPersonBattleHandLayer()
 		&& Runtime.IsBattleInputReady()
+		&& !Runtime.IsSecondaryPanelOpen()
 		&& !Runtime.IsBattlePresentationPlanBusy();
 }
 

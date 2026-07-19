@@ -159,6 +159,7 @@ void UBattleHUD::NativeConstruct()
 		CommandBar->OnBattleCommandRequested.RemoveAll(this);
 		CommandBar->OnBattleCommandRequested.AddDynamic(this, &UBattleHUD::HandleCommandBarCommandRequested);
 	}
+	BindCombatLogFeedForRuntime();
 	GetBattleHUDRuntime().NativeConstruct();
 }
 
@@ -168,6 +169,7 @@ void UBattleHUD::NativeDestruct()
 	{
 		CommandBar->OnBattleCommandRequested.RemoveAll(this);
 	}
+	UnbindCombatLogFeedForRuntime();
 	if (BattleHUDRuntime)
 	{
 		BattleHUDRuntime->NativeDestruct();
@@ -252,6 +254,7 @@ void UBattleHUD::RebuildChildBattleWidgetsForRuntime()
 	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
 	if (CombatLogFeed) { ChildBattleWidgets.Add(CombatLogFeed); }
 	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
+	BindCombatLogFeedForRuntime();
 
 	if (UBattleSession* CurrentSession = GetInjectedBattleSession())
 	{
@@ -360,6 +363,17 @@ FBattleTargetSelectionView UBattleHUD::BuildTargetSelectionView() const
 int32 UBattleHUD::GetBattleCombatLogBlockCount() const
 {
 	return GetBattleHUDRuntime().GetBattleCombatLogBlockCount();
+}
+
+const TArray<FWacomBattleCombatLogBlockView>& UBattleHUD::GetBattleCombatLogHistory() const
+{
+	return GetBattleHUDRuntime().GetBattleCombatLogHistory();
+}
+
+const TArray<FWacomBattleCombatLogTurnSectionView>&
+UBattleHUD::GetBattleCombatLogDetailsHistory() const
+{
+	return GetBattleHUDRuntime().GetBattleCombatLogDetailsHistory();
 }
 
 bool UBattleHUD::IsBattlePresentationBusy() const
@@ -935,6 +949,37 @@ void UBattleHUD::HandleFirstPersonCardLayerPileTransferProgress(
 	GetBattleHUDRuntime().HandleFirstPersonCardLayerPileTransferProgress(Progress);
 }
 
+void UBattleHUD::RequestOpenCombatLogDetails()
+{
+	GetBattleHUDRuntime().RequestOpenCombatLogDetails();
+	OnCombatLogDetailsRequestedNative.Broadcast();
+}
+
+void UBattleHUD::BindCombatLogFeedForRuntime()
+{
+	if (!CombatLogFeed)
+	{
+		return;
+	}
+	CombatLogFeed->OnCombatLogDetailsRequestedNative().RemoveAll(this);
+	CombatLogFeed->OnCombatLogDetailsRequestedNative().AddUObject(
+		this,
+		&UBattleHUD::HandleCombatLogDetailsRequested);
+}
+
+void UBattleHUD::UnbindCombatLogFeedForRuntime()
+{
+	if (CombatLogFeed)
+	{
+		CombatLogFeed->OnCombatLogDetailsRequestedNative().RemoveAll(this);
+	}
+}
+
+void UBattleHUD::HandleCombatLogDetailsRequested()
+{
+	RequestOpenCombatLogDetails();
+}
+
 void UBattleHUD::HandleFirstPersonCardLayerEnterTransitionStarted(
 	const FWacomFirstPersonCardEnterTransitionStartedView& View)
 {
@@ -1131,6 +1176,11 @@ void UBattleHUD::SetBattleInputReadyForAutomationTest(bool bReady)
 void UBattleHUD::SetFirstPersonBattleHandSuppressedForAutomationTest(bool bSuppressed)
 {
 	GetBattleHUDRuntime().SetFirstPersonBattleHandSuppressedForEntry(bSuppressed);
+}
+
+void UBattleHUD::SetSecondaryPanelOpenForAutomationTest(bool bOpen)
+{
+	GetBattleHUDRuntime().SetSecondaryPanelOpen(bOpen);
 }
 
 void UBattleHUD::ApplyCommandResolutionForAutomationTest(

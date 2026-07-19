@@ -14,4 +14,5 @@ namespace WacomUITags
 	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_RunEventScreen, "UI.Widget.RunEventScreen");
 	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_PauseMenuScreen, "UI.Widget.PauseMenuScreen");
 	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_SettingsScreen, "UI.Widget.SettingsScreen");
+	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_BattleCombatLogDetailsScreen, "UI.Widget.BattleCombatLogDetailsScreen");
 }

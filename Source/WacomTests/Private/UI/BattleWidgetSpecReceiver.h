@@ -12,10 +12,13 @@
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
+#include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
+#include "UI/Battle/WacomBattleSecondaryPanelScreenBase.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Common/PileCountView.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/Button.h"
+#include "Components/CheckBox.h"
 #include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
@@ -25,6 +28,65 @@
 #include "BattleWidgetSpecReceiver.generated.h"
 
 struct FWacomBattleSceneTargetClickTestAccess;
+
+UCLASS()
+class UWacomBattleCombatLogDetailsScreenTest : public UWacomBattleCombatLogDetailsScreen
+{
+	GENERATED_BODY()
+
+public:
+	TOptional<FUIInputConfig> GetDesiredInputConfigForTest() const
+	{
+		return GetDesiredInputConfig();
+	}
+
+	FReply PressKeyForTest(const FKey& Key)
+	{
+		return NativeOnKeyDown(
+			FGeometry(),
+			FKeyEvent(Key, FModifierKeysState(), 0, false, 0, 0));
+	}
+
+	FReply PressMouseButtonForTest(const FKey& Key)
+	{
+		const TSet<FKey> PressedButtons = { Key };
+		return NativeOnMouseButtonDown(
+			FGeometry(),
+			FPointerEvent(
+				0,
+				0,
+				FVector2D::ZeroVector,
+				FVector2D::ZeroVector,
+				PressedButtons,
+				Key,
+				0.0f,
+				FModifierKeysState()));
+	}
+
+	void ClickBackdropForTest()
+	{
+		if (BackdropButton)
+		{
+			BackdropButton->OnClicked.Broadcast();
+		}
+	}
+
+	void ClickCloseForTest()
+	{
+		if (CloseButton)
+		{
+			CloseButton->OnClicked.Broadcast();
+		}
+	}
+
+	void SetDetailsCheckedForTest(bool bChecked)
+	{
+		if (DetailsToggle)
+		{
+			DetailsToggle->OnCheckStateChanged.Broadcast(bChecked);
+		}
+	}
+};
 
 UCLASS()
 class AWacomBattleHUDLocalPlayerControllerTest : public APlayerController
@@ -374,6 +436,16 @@ public:
 		return ShouldEnableFirstPersonBattleHandInteraction();
 	}
 
+	void SetSecondaryPanelOpenForTest(bool bOpen)
+	{
+		SetSecondaryPanelOpenForAutomationTest(bOpen);
+	}
+
+	bool IsSecondaryPanelOpenForTest() const
+	{
+		return AutomationViewForTest().bSecondaryPanelOpen;
+	}
+
 	void ClearTargetSelectionStateForTest()
 	{
 		ClearTargetSelectionStateForAutomationTest();
@@ -566,11 +638,13 @@ public:
 
 	void SetCombatLogFeedForTest(UBattleCombatLogFeedWidget* InFeed)
 	{
+		UnbindCombatLogFeedForRuntime();
 		CombatLogFeed = InFeed;
 		if (InFeed)
 		{
 			ChildBattleWidgets.AddUnique(InFeed);
 		}
+		BindCombatLogFeedForRuntime();
 	}
 
 	void SetPresentationStackForTest(UBattlePresentationStackWidget* InStack)
@@ -653,6 +727,11 @@ public:
 		}
 
 		return TArray<FWacomBattleCombatLogBlockView>();
+	}
+
+	TArray<FWacomBattleCombatLogTurnSectionView> GetBattleCombatLogDetailsHistoryForTest() const
+	{
+		return GetBattleCombatLogDetailsHistory();
 	}
 
 	void AppendBattleCombatLogBlockForTest(const FWacomBattleCombatLogBlockView& Block)

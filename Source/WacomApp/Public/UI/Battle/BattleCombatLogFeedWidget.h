@@ -3,67 +3,116 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Settings/WacomLocalSettingsTypes.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "BattleCombatLogFeedWidget.generated.h"
 
-class UBattleCombatLogBlockWidget;
+class UBattleCombatActivityRowWidget;
+class UButton;
+class UImage;
 class UPanelWidget;
-class UScrollBox;
 class UTextBlock;
+class UWacomBattleCombatActivityStyle;
+class UWacomSettingsSubsystem;
+class FWacomBattleCombatActivityPlayback;
 
-/**
- * Compact always-visible recent combat log feed owned by BattleHUD.
- */
-UCLASS(Blueprintable, meta = (ToolTip = "正式 BattleHUD 常驻玩家战斗记录 Feed。WBP 绑定滚动容器和命令块样式，只显示 CombatLogBuilder 生成的 UI ViewData，不提交战斗命令。"))
+DECLARE_MULTICAST_DELEGATE(FWacomBattleCombatLogDetailsRequestedNative);
+
+/** Fixed three-line BattleHUD activity broadcaster plus persistent footer. */
+UCLASS(Blueprintable, meta = (ToolTip = "BattleHUD 常驻三行活动播报器。完整战斗日志由 HUD Controller 另行保存；本 Widget 只播放短时活动并发送详情打开意图。"))
 class WACOMAPP_API UBattleCombatLogFeedWidget : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Combat Log|Authoring", meta = (ClampMin = "1", UIMin = "10", UIMax = "300", ToolTip = "常驻战斗记录滚动框最多保留的命令块数量。超过后只保留最近 N 条。"))
-	int32 MaxVisibleBlocks = 80;
+	UBattleCombatLogFeedWidget(const FObjectInitializer& ObjectInitializer);
+	virtual ~UBattleCombatLogFeedWidget() override;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Combat Log|Authoring", meta = (ToolTip = "追加新战斗记录后是否自动滚动到最新命令块。"))
-	bool bAutoScrollToLatest = true;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Combat Activity|Authoring",
+		meta = (ToolTip = "常驻活动播报器的图标与播放样式。为空时使用 C++ 安全默认值和通用图标。"))
+	TObjectPtr<UWacomBattleCombatActivityStyle> ActivityStyle = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Combat Log|Authoring", meta = (ToolTip = "常驻战斗记录中单个命令块使用的 Widget 类。为空时使用 C++ fallback。"))
-	TSubclassOf<UBattleCombatLogBlockWidget> BlockWidgetClass;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Combat Activity|Authoring",
+		meta = (ToolTip = "活动播报单行使用的 Widget 类。为空时使用 C++ fallback UBattleCombatActivityRowWidget。"))
+	TSubclassOf<UBattleCombatActivityRowWidget> ActivityRowWidgetClass;
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "刷新常驻战斗记录显示的命令块 ViewData。只更新 UI，不提交或重放战斗命令。"))
-	void SetCombatLogBlocks(const TArray<FWacomBattleCombatLogBlockView>& Blocks);
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "把一次已结算命令的活动批次加入非阻塞 FIFO 播报队列。不会提交或阻塞 Battle 命令。"))
+	void EnqueueCombatActivityBatch(const FWacomBattleCombatActivityBatchView& Batch);
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "清空当前常驻战斗记录显示。只影响该 Widget 的 UI 缓存，不修改 BattleSession。"))
-	void ClearCombatLog();
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "设置 Footer 显示的表现回合数。EndTurn 应在敌人活动播报完成后调用。"))
+	void SetPresentedTurnNumber(int32 TurnNumber);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "当前 Feed 中保留的命令块数量。"))
-	int32 GetVisibleBlockCount() const { return CurrentBlocks.Num(); }
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "清空短时活动、Footer 与播放状态。只影响 UI。"))
+	void ClearCombatActivity();
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "当前 Feed 显示的命令块 ViewData 副本。只用于展示或调试读取。"))
-	TArray<FWacomBattleCombatLogBlockView> GetCurrentBlocks() const { return CurrentBlocks; }
+	void RestorePersistentState(int32 TurnNumber, const FWacomBattleCombatActivityRowView* LastRootAction);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Activity")
+	int32 GetVisibleActivityRowCount() const;
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Activity")
+	int32 GetPresentedTurnNumber() const;
+
+	FWacomBattleCombatLogDetailsRequestedNative& OnCombatLogDetailsRequestedNative()
+	{
+		return CombatLogDetailsRequestedNative;
+	}
 
 #if WITH_AUTOMATION_TESTS
-	bool HasScrollBoxForTest() const { return BlocksScrollBox != nullptr; }
+	void AdvanceActivityPlaybackForTest(float DeltaTime);
+	TArray<FWacomBattleCombatActivityRowView> GetVisibleActivityRowsForTest() const;
+	const FWacomBattleCombatActivityRowView* GetLastRootActionForTest() const;
+	bool IsPlaybackPendingForTest() const;
+	bool IsReducedMotionForTest() const { return bRuntimeSimplifiedMotion; }
+	void RequestDetailsForTest() { HandleLastActionClicked(); }
 #endif
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
+	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual void NativeOnSessionChanged(UBattleSession* OldSession, UBattleSession* NewSession) override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UPanelWidget> BlocksBox;
+	TObjectPtr<UPanelWidget> ActivityRowsBox;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UScrollBox> BlocksScrollBox;
+	TObjectPtr<UButton> LastActionButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UTextBlock> TitleText;
+	TObjectPtr<UImage> LastActionIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidget> TurnRoot;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> TurnIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> TurnText;
 
 private:
-	UPROPERTY(Transient)
-	TArray<FWacomBattleCombatLogBlockView> CurrentBlocks;
+	FWacomBattleCombatActivityPlayback* Playback = nullptr;
 
-	void TrimToVisibleBlocks();
-	void RebuildBlockWidgets();
-	UBattleCombatLogBlockWidget* CreateBlockWidget(const FWacomBattleCombatLogBlockView& Block);
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UBattleCombatActivityRowWidget>> ActivityRowWidgets;
+
+	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
+	FDelegateHandle RuntimeSettingsChangedHandle;
+	bool bRuntimeSimplifiedMotion = false;
+	FWacomBattleCombatLogDetailsRequestedNative CombatLogDetailsRequestedNative;
+
+	UFUNCTION()
+	void HandleLastActionClicked();
+
+	void EnsureRuntimeBindings();
+	void EnsureRowWidgets();
+	void RefreshPlaybackPresentation();
+	void RefreshFooter();
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(const FWacomLocalSettingsSnapshot& Snapshot, EWacomRuntimeSettingsChangeReason Reason);
+	FSlateBrush ResolveActivityIconBrush(const FWacomBattleCombatActivityRowView& Row) const;
 };

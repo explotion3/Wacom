@@ -23,6 +23,13 @@ enum class EWacomBattleCombatLogCommandKind : uint8
 	KnockdownChoice UMETA(DisplayName = "KnockdownChoice"),
 };
 
+UENUM(BlueprintType, meta = (ToolTip = "BattleHUD 常驻活动播报中的行类型。根行动用于更新底部最后行动入口，结果行只参与短时滚动播报。"))
+enum class EWacomBattleCombatActivityRowKind : uint8
+{
+	RootAction UMETA(DisplayName = "Root Action"),
+	Result UMETA(DisplayName = "Result"),
+};
+
 USTRUCT(BlueprintType, meta = (ToolTip = "正式 Combat Log 构建命令块时使用的 UI-only 命令上下文。由 BattleHUD 在提交命令前后构造，不写入战斗规则状态。"))
 struct WACOMAPP_API FWacomBattleCombatLogCommandContext
 {
@@ -104,6 +111,88 @@ struct WACOMAPP_API FWacomBattleCombatLogBlockView
 	FName IconKey = NAME_None;
 };
 
+/** BattleHUD 三行短时活动播报中的一行。只承载 UI 语义，不写规则状态。 */
+USTRUCT(BlueprintType, meta = (ToolTip = "BattleHUD 常驻活动播报中的单行 ViewData。图标由 IconKey、IconTag 或 IntentId 在 UI Style 中解析。"))
+struct WACOMAPP_API FWacomBattleCombatActivityRowView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	EWacomBattleCombatActivityRowKind RowKind = EWacomBattleCombatActivityRowKind::Result;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	EBattleEventType SourceEventType = EBattleEventType::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	FText MessageText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	EWacomBattleEventVisualTone VisualTone = EWacomBattleEventVisualTone::Neutral;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	FName IconKey = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	FGameplayTag IconTag;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	FName IntentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	int32 EventSequence = 0;
+};
+
+/** 一次玩家或敌人根行动，以及按规则事件顺序排列的可见结果。 */
+USTRUCT(BlueprintType, meta = (ToolTip = "BattleHUD 常驻活动播报的一组根行动与结果行。多目标结果保持逐条记录。"))
+struct WACOMAPP_API FWacomBattleCombatActivityGroupView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	FWacomBattleCombatActivityRowView RootAction;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	TArray<FWacomBattleCombatActivityRowView> ResultRows;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	int32 TurnNumber = 0;
+};
+
+/** 一次已结算命令投影出的活动播报批次。 */
+USTRUCT(BlueprintType, meta = (ToolTip = "一次 Battle 命令产生的常驻活动播报批次。回合数字只在批次尾部按表现顺序推进。"))
+struct WACOMAPP_API FWacomBattleCombatActivityBatchView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	TArray<FWacomBattleCombatActivityGroupView> Groups;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	bool bSetTurnImmediately = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	bool bAdvanceTurnAfterPlayback = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity")
+	int32 PresentedTurnNumber = 0;
+};
+
+/** 详细战斗日志中的一个回合分区。由 HUD 表现层维护，不写入规则状态。 */
+USTRUCT(BlueprintType, meta = (ToolTip = "战斗日志详情页的单回合只读 ViewData。包含该回合的行动组以及是否已经正式结束。"))
+struct WACOMAPP_API FWacomBattleCombatLogTurnSectionView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	int32 TurnNumber = 1;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	bool bCompleted = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	TArray<FWacomBattleCombatActivityGroupView> Groups;
+};
+
 /**
  * 构建正式 Battle Combat Log 命令块。
  *
@@ -139,6 +228,13 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "把一次成功 HUD 命令后消费到的规则事件聚合成正式 Combat Log 命令块。"))
 	static FWacomBattleCombatLogBlockView BuildCombatLogBlock(
+		const FWacomBattleCombatLogCommandContext& Context,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "把一次成功 HUD 命令投影为 BattleHUD 三行活动播报批次。只生成 UI ViewData，不修改战斗状态。"))
+	static FWacomBattleCombatActivityBatchView BuildCombatActivityBatch(
 		const FWacomBattleCombatLogCommandContext& Context,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PreCommandSnapshot,

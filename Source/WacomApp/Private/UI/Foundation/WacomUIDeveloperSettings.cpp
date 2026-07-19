@@ -5,6 +5,7 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
+#include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 #include "UI/Card/WacomCardDetailTheme.h"
 #include "UI/Card/WacomCardExplanationLexicon.h"
 #include "UI/Events/WacomRunEventScreen.h"
@@ -52,6 +53,10 @@ namespace
 		if (WidgetTag == WacomUITags::UI_Widget_SettingsScreen.GetTag())
 		{
 			return UWacomSettingsScreen::StaticClass();
+		}
+		if (WidgetTag == WacomUITags::UI_Widget_BattleCombatLogDetailsScreen.GetTag())
+		{
+			return UWacomBattleCombatLogDetailsScreen::StaticClass();
 		}
 		if (WidgetTag == WacomTags::UI_Widget_RunMapScreen.GetTag())
 		{

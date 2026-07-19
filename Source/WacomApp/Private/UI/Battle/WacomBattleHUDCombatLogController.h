@@ -30,8 +30,21 @@ public:
 	{
 		return BattleCombatLogHistory;
 	}
+	const TArray<FWacomBattleCombatLogTurnSectionView>& GetDetailsHistory() const
+	{
+		return BattleCombatLogDetailsHistory;
+	}
 
 private:
 	FWacomBattleHUDRuntime& Runtime;
 	TArray<FWacomBattleCombatLogBlockView> BattleCombatLogHistory;
+	TArray<FWacomBattleCombatLogTurnSectionView> BattleCombatLogDetailsHistory;
+	TOptional<FWacomBattleCombatActivityRowView> LastProjectedRootAction;
+	int32 LastProjectedTurnNumber = 0;
+
+	void AppendHistoryBlock(const FWacomBattleCombatLogBlockView& Block);
+	void SubmitActivityBatch(const FWacomBattleCombatActivityBatchView& Batch);
+	FWacomBattleCombatLogTurnSectionView& EnsureDetailsTurnSection(int32 TurnNumber);
+	void AppendDetailsBatch(const FWacomBattleCombatActivityBatchView& Batch);
+	void TrimDetailsHistory();
 };

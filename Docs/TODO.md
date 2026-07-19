@@ -49,6 +49,12 @@ tags:
 
 ## P0.5 近期架构规划
 
+- [x] **Battle Combat Log 详细二级菜单**
+  - 状态：`Done: 常驻三行播报、按回合详细面板、打开/关闭输入与命令门控均已完成`
+  - 归属：Battle UI / CommonUI
+  - 入口：[WacomBattleUI.md](./WacomBattleUI.md#3-combat-log-与-presentation-stack) / [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md#combat-log-wbp)
+  - 说明：通过 `FWacomBattleSecondaryPanelCoordinator` 在 `UI.Layer.GameMenu` 打开可滚动详细日志，复用 Controller 的只读回合分区历史；页面保持镜头和后台表现运行，但独立门控 Battle 命令，不反向修改规则事件。
+
 - [x] **WacomMap 总体规划：新建地图 / 节点 / 通道规则文档入口**
 	- 状态：`Done: 规则核心、Run Path、当前 Floor Map Screen、正式制作基线与隔离 Debug builder 已落地`
   - 归属：Map / Run / App

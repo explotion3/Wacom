@@ -37,6 +37,7 @@ class FWacomBattleHUDFirstPersonHandBridge;
 class FWacomBattleHUDPresentationCoordinator;
 class FWacomBattleHUDResultApplicator;
 class FWacomBattleHUDSceneEnemyTargetCoordinator;
+class FWacomBattleSecondaryPanelCoordinator;
 struct FWacomBattleActionPreviewPresentation;
 class FWacomBattleHUDSnapshotPresenter;
 class FWacomBattleHUDTargetingController;
@@ -162,9 +163,14 @@ public:
 
 	FBattleTargetSelectionView BuildTargetSelectionView() const;
 	int32 GetBattleCombatLogBlockCount() const;
+	const TArray<FWacomBattleCombatLogBlockView>& GetBattleCombatLogHistory() const;
+	const TArray<FWacomBattleCombatLogTurnSectionView>& GetBattleCombatLogDetailsHistory() const;
 	bool IsBattlePresentationBusy() const;
 	bool IsBattlePresentationPlanBusy() const;
 	bool CanSubmitPlayerActionCommand() const;
+	void SetSecondaryPanelOpen(bool bOpen);
+	bool IsSecondaryPanelOpen() const { return bSecondaryPanelOpen; }
+	bool RequestOpenCombatLogDetails();
 	bool HasPendingTurnBoundaryCommand() const;
 	FText GetPendingTurnBoundaryCommandText() const;
 	void RefreshCommandBarFromSnapshot(const FBattleSnapshot& Snapshot);
@@ -356,6 +362,7 @@ public:
 	FWacomBattleHUDCommandBarPresenter& GetCommandBarPresenter();
 	FWacomBattleHUDTargetingController& GetTargetingController();
 	FWacomBattleHUDSnapshotPresenter& GetSnapshotPresenter();
+	FWacomBattleSecondaryPanelCoordinator& GetSecondaryPanelCoordinator();
 
 #if WITH_AUTOMATION_TESTS
 	void PlayBattlePresentationCueForTest(EBattleEventType SourceEventType, const FBattlePartSlotIdentity& TargetPartKey, int32 Amount);
@@ -404,11 +411,13 @@ private:
 	TSharedPtr<FWacomBattleHUDPresentationCoordinator> PresentationCoordinator;
 	TSharedPtr<FWacomBattleHUDSceneEnemyTargetCoordinator> SceneEnemyTargetCoordinator;
 	TSharedPtr<FWacomBattleHUDEnemyInspectionCoordinator> EnemyInspectionCoordinator;
+	TSharedPtr<FWacomBattleSecondaryPanelCoordinator> SecondaryPanelCoordinator;
 
 	EBattleUIState UIState = EBattleUIState::Idle;
 	FGuid PendingTargetingCardId;
 	bool bHasBroadcastBattleEnd = false;
 	bool bBattleInputReady = true;
+	bool bSecondaryPanelOpen = false;
 	bool bFirstPersonBattleHandSuppressedForEntry = false;
 	bool bEnemyActionPreviewActive = false;
 	FBattleSnapshot LastBattleSnapshot;

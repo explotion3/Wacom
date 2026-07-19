@@ -26,6 +26,7 @@
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
 #include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
+#include "UI/Battle/WacomBattleSecondaryPanelCoordinator.h"
 #include "UI/Battle/WacomBattleHUDSnapshotPresenter.h"
 #include "UI/Battle/WacomBattleHUDTargetingController.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
@@ -249,6 +250,12 @@ void FWacomBattleHUDRuntime::NativeConstruct()
 
 void FWacomBattleHUDRuntime::NativeDestruct()
 {
+	if (SecondaryPanelCoordinator)
+	{
+		SecondaryPanelCoordinator->Shutdown(true);
+		SecondaryPanelCoordinator.Reset();
+	}
+	bSecondaryPanelOpen = false;
 	GetResultApplicator().HandleSessionChanged(GetSession(), nullptr);
 	bBattleInputReady = true;
 	bFirstPersonBattleHandSuppressedForEntry = false;
@@ -292,6 +299,10 @@ void FWacomBattleHUDRuntime::NativeRefreshFromSnapshot(
 	GetSnapshotPresenter().RefreshFromSnapshot(Snapshot);
 	if (Snapshot.Phase == EBattlePhase::BattleEnd && !bHasBroadcastBattleEnd)
 	{
+		if (SecondaryPanelCoordinator)
+		{
+			SecondaryPanelCoordinator->Shutdown(true);
+		}
 		ClearActionPreview();
 		bHasBroadcastBattleEnd = true;
 		RuntimeHost.BroadcastBattleEnd(Snapshot.Outcome);
@@ -307,6 +318,11 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 	if (OldSession != NewSession)
 	{
 		GetEnemyInspectionCoordinator().CloseInspection(true);
+		if (SecondaryPanelCoordinator)
+		{
+			SecondaryPanelCoordinator->Shutdown(true);
+		}
+		bSecondaryPanelOpen = false;
 		bBattleInputReady = true;
 		bFirstPersonBattleHandSuppressedForEntry = false;
 		ClearBattlePresentationQueue();
@@ -355,6 +371,10 @@ void FWacomBattleHUDRuntime::NativeOnUIStateChanged(
 	}
 	if (NewState == EBattleUIState::BattleEnd)
 	{
+		if (SecondaryPanelCoordinator)
+		{
+			SecondaryPanelCoordinator->Shutdown(true);
+		}
 		ClearActionPreview();
 		ClearBattleSceneEnemyPartHoverProbe(TEXT("BattleEnd"));
 	}
@@ -444,6 +464,17 @@ int32 FWacomBattleHUDRuntime::GetBattleCombatLogBlockCount() const
 	return GetCombatLogController().GetBlockCount();
 }
 
+const TArray<FWacomBattleCombatLogBlockView>& FWacomBattleHUDRuntime::GetBattleCombatLogHistory() const
+{
+	return GetCombatLogController().GetHistory();
+}
+
+const TArray<FWacomBattleCombatLogTurnSectionView>&
+FWacomBattleHUDRuntime::GetBattleCombatLogDetailsHistory() const
+{
+	return GetCombatLogController().GetDetailsHistory();
+}
+
 bool FWacomBattleHUDRuntime::IsBattlePresentationBusy() const
 {
 	return PresentationCoordinator && PresentationCoordinator->IsBusy();
@@ -456,7 +487,7 @@ bool FWacomBattleHUDRuntime::IsBattlePresentationPlanBusy() const
 
 bool FWacomBattleHUDRuntime::CanSubmitPlayerActionCommand() const
 {
-	if (!bBattleInputReady)
+	if (!bBattleInputReady || bSecondaryPanelOpen)
 	{
 		return false;
 	}
@@ -687,6 +718,34 @@ FWacomBattleHUDResultApplicator& FWacomBattleHUDRuntime::GetResultApplicator()
 		ResultApplicator = MakeUnique<FWacomBattleHUDResultApplicator>(*this);
 	}
 	return *ResultApplicator;
+}
+
+void FWacomBattleHUDRuntime::SetSecondaryPanelOpen(bool bOpen)
+{
+	if (bSecondaryPanelOpen == bOpen)
+	{
+		return;
+	}
+	bSecondaryPanelOpen = bOpen;
+	RefreshCommandBarFromCurrentSnapshot();
+	if (UBattleSession* Session = GetSession())
+	{
+		SyncFirstPersonBattleHandLayer(Session->BuildSnapshot());
+	}
+}
+
+bool FWacomBattleHUDRuntime::RequestOpenCombatLogDetails()
+{
+	return GetSecondaryPanelCoordinator().RequestOpenCombatLogDetails();
+}
+
+FWacomBattleSecondaryPanelCoordinator& FWacomBattleHUDRuntime::GetSecondaryPanelCoordinator()
+{
+	if (!SecondaryPanelCoordinator)
+	{
+		SecondaryPanelCoordinator = MakeShared<FWacomBattleSecondaryPanelCoordinator>(*this);
+	}
+	return *SecondaryPanelCoordinator;
 }
 
 const FWacomBattleHUDResultApplicator& FWacomBattleHUDRuntime::GetResultApplicator() const
@@ -1518,6 +1577,7 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 	View.bEnemyInspectionOpen = GetEnemyInspectionCoordinator().IsInspectionOpen();
 	View.EnemyInspectionSelectedPartIdentity =
 		GetEnemyInspectionCoordinator().GetSelectedPartIdentity();
+	View.bSecondaryPanelOpen = bSecondaryPanelOpen;
 	if (PresentationCoordinator)
 	{
 		View.bPresentationPlanActive = PresentationCoordinator->IsPresentationPlanBusy();

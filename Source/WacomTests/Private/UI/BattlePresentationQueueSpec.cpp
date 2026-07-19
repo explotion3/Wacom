@@ -315,9 +315,9 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	const int32 VersionBeforeEndTurn = Session->BuildSnapshot().Version;
 	HUD->OnEndTurnRequested();
 	TestTrue(TEXT("End turn resolves immediately when stack is empty"), Session->BuildSnapshot().Version > VersionBeforeEndTurn);
-	TestEqual(TEXT("Scrollable feed mirrors combat log history"),
-		CombatLogFeed->GetVisibleBlockCount(),
-		HUD->GetBattleCombatLogBlockCount());
+	TestTrue(TEXT("Combat activity feed receives resolved command activity"),
+		CombatLogFeed->GetVisibleActivityRowCount() > 0
+		|| CombatLogFeed->IsPlaybackPendingForTest());
 
 	Harness->SettlePresentationQueue();
 	TestFalse(TEXT("Queue no longer busy"), HUD->IsBattlePresentationBusy());

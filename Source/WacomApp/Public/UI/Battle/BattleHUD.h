@@ -42,6 +42,7 @@ enum class EWacomBattleHUDTurnBoundaryCommand : uint8;
 
 /** 战斗结束时的原生委托。参数为战斗结果。 */
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnBattleEndedNative, EBattleOutcome);
+DECLARE_MULTICAST_DELEGATE(FOnCombatLogDetailsRequestedNative);
 
 /**
  * 单个敌方部位的目标选择表现视图。
@@ -180,6 +181,7 @@ struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 	bool bEntryWaitingForCardPresentationPrewarm = false;
 	bool bEnemyInspectionOpen = false;
 	FBattlePartSlotIdentity EnemyInspectionSelectedPartIdentity;
+	bool bSecondaryPanelOpen = false;
 };
 #endif
 
@@ -349,6 +351,13 @@ public:
 	 */
 	FOnBattleEndedNative OnBattleEndedNative;
 
+	/** 常驻活动 Footer 请求打开完整战斗日志时广播。HUD 同时通过 Secondary Panel coordinator 执行正式 Push。 */
+	FOnCombatLogDetailsRequestedNative OnCombatLogDetailsRequestedNative;
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Log",
+		meta = (ToolTip = "请求打开完整战斗日志二级面板，并广播 native UI 意图。不会提交 Battle 命令或暂停后台表现。"))
+	void RequestOpenCombatLogDetails();
+
 	// ---- 状态机查询（供子 Widget 做视觉反馈）----
 
 	/** 当前是否正在选目标。UI 可据此高亮可选敌方部位。 */
@@ -365,6 +374,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log")
 	int32 GetBattleCombatLogBlockCount() const;
+
+	/** Native read-only legacy block history retained for diagnostics and compatibility. */
+	const TArray<FWacomBattleCombatLogBlockView>& GetBattleCombatLogHistory() const;
+
+	/** Native read-only, turn-grouped history for the Combat Log details screen. */
+	const TArray<FWacomBattleCombatLogTurnSectionView>& GetBattleCombatLogDetailsHistory() const;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Presentation Flow", meta = (ToolTip = "当前 BattleHUD 表现队列或表现栈是否仍在播放。只读查询，不提交命令。"))
 	bool IsBattlePresentationBusy() const;
@@ -470,6 +485,9 @@ private:
 	FWacomBattleHUDRuntime& GetBattleHUDRuntime();
 	const FWacomBattleHUDRuntime& GetBattleHUDRuntime() const;
 	void RebuildChildBattleWidgetsForRuntime();
+	void BindCombatLogFeedForRuntime();
+	void UnbindCombatLogFeedForRuntime();
+	void HandleCombatLogDetailsRequested();
 	void RefreshChildBattleWidgetsFromSnapshotForRuntime(const FBattleSnapshot& Snap);
 	void BindFirstPersonCardLayerInteractionsForRuntime(UWacomFirstPersonCardAnchorComponent& Anchor);
 	void UnbindFirstPersonCardLayerInteractionsForRuntime(UWacomFirstPersonCardAnchorComponent& Anchor);
@@ -538,6 +556,7 @@ private:
 	void QueuePendingTurnBoundaryWaitForAutomationTest();
 	void SetBattleInputReadyForAutomationTest(bool bReady);
 	void SetFirstPersonBattleHandSuppressedForAutomationTest(bool bSuppressed);
+	void SetSecondaryPanelOpenForAutomationTest(bool bOpen);
 	void ApplyCommandResolutionForAutomationTest(
 		class UBattleSession* SourceSession,
 		const FWacomBattleCombatLogCommandContext& LogContext,

@@ -135,6 +135,8 @@ Details / Blueprint 分类口径：
 
 CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。通用菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入。Backpack / Shop / RunEvent 这类 Run 领域 GameMenu Screen 继承 `UWacomRunMenuWidgetBase`，Run first-person menu lease / drop 合同由该 Run 专用父类承载。
 
+Battle 二级信息面板是明确例外：`UWacomBattleSecondaryPanelScreenBase` 仍 Push 到 `UI.Layer.GameMenu`，但返回 `All + NoCapture`，不取得 Menu/UIOnly 的镜头锁。它只负责 Backdrop、关闭按钮、Esc、右键、Gamepad B 与 Viewport focus 恢复；战斗命令抑制由 BattleHUD 的 secondary-panel coordinator 独立持有。这样战斗表现与镜头继续运行，同时卡牌、Wait、EndTurn、目标提交和世界点击不会穿透。新的 Battle 敌人/人物/牌堆详情页应复用此基类和 coordinator，而不是复制一套输入 gate。
+
 项目 `GameViewportClientClassName` 使用 `UWacomGameViewportClient : UCommonGameViewportClient`。Battle / Exploration 保持 `All + NoCapture`；该模式下 UE 不保证首次 mouse-down 进入 `ViewportClient::InputKey()`，因此 ViewportClient 在 `Init()` 注册 App-private Slate `IInputProcessor`，在 `DetachViewportClient()` / `BeginDestroy()` 幂等注销。Processor 位于 `Game` priority bucket，在 Widget 路由前只仲裁一条跨 Widget 的 first-person card 输入：右键按下、指针命中路径包含当前 GameViewport 且正式拖拽来源为 `KeyboardShortcut` 时，请求 PlayerController / Anchor 中性取消并消费事件。鼠标来源拖拽、Viewport 外点击和其它右键全部继续交给 Slate、CommonUI 与 gameplay 原路由；`HandleRerouteInput()` / PlayerController `InputKey()` 只保留为其它捕获模式 fallback。该 seam 不提交 Battle / Run 命令，也不依赖鼠标当前命中某个 Slot，因此快捷键瞄准世界目标时仍可在所属 GameViewport 任意位置取消。更换 GameViewportClient 配置或 native 实现后必须完整重启编辑器再做 PIE 验收。
 
 战斗 HUD 和探索 HUD 仍声明自身期望的 UI input config，但底层 gameplay profile 由 `UWacomInputContextCoordinatorSubsystem` 统一应用。探索期固定使用 Run Tunnel 输入模型：Coordinator 切到 `All + NoCapture`、显示鼠标并保持探索 IMC。
