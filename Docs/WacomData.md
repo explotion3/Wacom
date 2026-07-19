@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-07-17
+updated: 2026-07-19
 tags:
   - wacom/data
   - wacom/dataasset
@@ -576,7 +576,80 @@ Pickup 固定映射：
 
 上述合同已经落地为 `38 core + 8 knockdown branch reward cards = 46` 个 Production DataAsset：12 Card、4 Behavior、11 EnemyPart、4 Enemy、6 Encounter、4 RunEvent、4 Pickup 与 1 Shop。首次播种通过 exact seed-default、通用 Data Validation、真实加载与 AssetRegistry 计数/类型审计；所有 11 个 Part 使用显式 Aid/Destroy 引用且 legacy 为空。DisplayName、描述、战斗/经济数值与空美术引用仍是可人工调优字段；稳定 ID、class、引用、关键词、TargetMode、effect/condition/choice/slot/intent 的有序结构由制作校验守护。正式世界关卡、背包容量取舍、美术表现和平衡验收继续独立处理。
 
-## §14 修改数据合同时的检查点
+## §14 正式 Floor 2 Production 内容合同
+
+`Floor.Main.02 / 蛇蜕洞窟` 的 15 个内容节点已完成 Production 内容设计冻结，共预留 47 个未来 DataAsset。它们全部使用本文件现有 schema，不新增字段、GameplayTag 或运行时规则；截至本节更新时资产尚未创建，不能把文档冻结视作 Data Validation、AssetRegistry 或 PIE 已通过。精确 package 和制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4，完整设计证据见 `specs/017-formal-floor2-production-content-freeze/`。
+
+### MoltCavern 敌人、部位与行为
+
+四个敌人各使用一个 `Default` phase Behavior，每个部位有独立 `Sequence` IntentSet；`CooldownSelections=0`，无 selector rule 或 fallback。Damage/Poison/Slow 指向 Player，Shield 指向行动部位自身。Slow 使用当前 `Default / TargetCardCount=1` 投递。
+
+| EnemyId | Part HP / EXP | Sequence Intent contract |
+|---|---|---|
+| `Enemy.MoltCavern.ScaleCrawler` | Head `9/1`；Body `12/1` | Head: StoneBite `D4/I3/R4` → Venom `Poison1/I5`; Body: Skitter `D3/I2/R3` → Castoff `Shield3/I2` → Coil `Slow1/I4` |
+| `Enemy.MoltCavern.StoneScaleGuard` | Head `10/1`；Carapace `18/2`；Tail `8/1` | Head: CrushBite `D5/I3/R5` → DustSpit `Poison1/I5`; Carapace: LithicHarden `Shield7/I2` → Ram `D5/I4/R6`; Tail: Sweep `D3/I2/R3` → Brace `Shield3/I2` |
+| `Enemy.MoltCavern.VenomHunter` | Head `12/2`；Coil `15/2`；VenomSac `7/1` | Head: Pounce `D6/I4/R6` → Fang `Poison2/I5`; Coil: Bind `Slow2/I4` → Crush `D5/I3/R5` → Veil `Shield4/I2`; VenomSac: VenomBurst `Poison2/I5` → GuardSac `Shield3/I2` |
+| `Enemy.MoltCavern.CavernGuardian` | Head `16/2`；Body `28/4`；Tail `14/2`；MoltCore `12/2` | Head: DeepBite `D7/I3/R7` → VenomFlood `Poison2/I5`; Body: CaveCrush `D8/I4/R8` → MoltWall `Shield9/I2`; Tail: RockSweep `D5/I2/R5` → Pin `Slow2/I4`; MoltCore: CorePulse `Poison2/I5` → ShedWard `Shield6/I2` |
+
+BehaviorId、PartId、IntentSetId、IntentId 分别使用 `MoltCavern.<Archetype>.Behavior`、`MoltCavern.<Archetype>.<Part>`、`...Sequence` 与 `...<Intent>`。四敌人总 HP/EXP 为 `21/2`、`36/4`、`34/5`、`70/10`；共有 12 Part 与 26 Intent。所有正式 Part 必须显式引用所属 Archetype 的 Aid/Destroy 卡对并清空 deprecated `KnockdownRewardCard`。
+
+### MoltCavern Encounter 梯度
+
+| EncounterDefinitionId | EnemySlots | Total HP |
+|---|---|---:|
+| `Encounter.MoltCavern.ScaleScout` | `Scout → ScaleCrawler` | 21 |
+| `Encounter.MoltCavern.StoneScaleGuard` | `Guard → StoneScaleGuard` | 36 |
+| `Encounter.MoltCavern.HatcheryAmbush` | `Left/Right → ScaleCrawler` | 42 |
+| `Encounter.MoltCavern.BridgeSentinel` | `Sentinel → StoneScaleGuard` | 36 |
+| `Encounter.MoltCavern.VenomHunter` | `Hunter → VenomHunter` | 34 |
+| `Encounter.MoltCavern.EliteMolter` | `Guard → StoneScaleGuard`, `Scout → ScaleCrawler` | 57 |
+| `Encounter.MoltCavern.CavernGuardian` | `Guardian → CavernGuardian` | 70 |
+
+单场最多两个敌人；阶段梯度为 `21 → 34–42 → 36 → 57 → 70 HP`。`bBoss=true` 继续只属于 Floor 2 `Node.Guardian.01` payload。
+
+### 固定卡、Pickup 与 Shop
+
+| CardId | Static contract |
+|---|---|
+| `Reward.MoltCavern.GlowcapPoultice` | 菌光药膏；`1 / Blue / Tool / None`；Heal 6 → Player |
+| `Reward.MoltCavern.CrystalWard` | 晶脉护符；`0 / Blue / Tool / None`；Shield 5 → Player |
+| `Reward.MoltCavern.VenomShard` | 毒晶尖刺；`1 / Blue / Weapon / SingleEnemyPart`；Damage 4 → Poison 2 |
+| `Card.Run.MoltSeal` | 深窟蜕印；`1 / Blue / 无关键词 / None`；Draw 2 from `CardLocation.Draw` |
+
+Pickup 映射固定为 FungalCache→GlowcapPoultice、MineralCache→CrystalWard、VenomCrystalCache→VenomShard、MoltSeal→`Card.Run.MoltSeal + Credential.Run.MoltSeal`。入口只检查独立 Credential，不能从表现卡存在性推断资格。
+
+`Shop.MoltCavern.DeepWayfarer` 按顺序出售 `Reward.SerpentWood.HerbalPoultice(3)`、`Starter.ChitinWard(3)`、`Starter.MoltCut(4)`、`Reward.MoltCavern.GlowcapPoultice(4)`、`Reward.MoltCavern.VenomShard(5)`。前三张外部卡保持只读；不配置随机池或动态价格。
+
+### MoltCavern 击倒分支奖励卡
+
+| CardId | 名称 | Cost / Rarity / Keyword | TargetMode | Ordered Effects |
+|---|---|---|---|---|
+| `Reward.MoltCavern.ScaleCrawler.Aid` | 鳞影潜行 | `1 / Blue / Tool` | SingleEnemyPart | Shield 3 → Player；Slow 1 → target |
+| `Reward.MoltCavern.ScaleCrawler.Destroy` | 裂鳞毒牙 | `1 / Blue / Weapon` | SingleEnemyPart | Damage 4；Poison 1 |
+| `Reward.MoltCavern.StoneScaleGuard.Aid` | 石甲壁垒 | `1 / Blue / Tool` | None | Shield 9 → Player |
+| `Reward.MoltCavern.StoneScaleGuard.Destroy` | 崩岩重击 | `1 / Blue / Weapon` | SingleEnemyPart | Damage 7 |
+| `Reward.MoltCavern.VenomHunter.Aid` | 毒泉缠守 | `1 / Blue / Tool` | SingleEnemyPart | Shield 4 → Player；Slow 2 → target |
+| `Reward.MoltCavern.VenomHunter.Destroy` | 猎毒突刺 | `1 / Blue / Weapon` | SingleEnemyPart | Damage 6；Poison 2 |
+| `Reward.MoltCavern.CavernGuardian.Aid` | 洞壳庇护 | `1 / Yellow / Tool` | None | Shield 13 → Player |
+| `Reward.MoltCavern.CavernGuardian.Destroy` | 碎窟毒潮 | `2 / Yellow / Weapon` | AllEnemyParts | Damage 5；Poison 2，均作用于所有存活敌方部位 |
+
+十二张新卡均为零 Physique，无 Swift、Exhaust、PerfectRelease、ZoneHook 或 Passive。每个已处理部位只获得所选分支的一张独立实例；同卡允许重复，不增加去重、领取上限或 AP。
+
+### MoltCavern RunEvent
+
+三个 Event 都是 `Start` 单节点、terminal、Automatic、完成并关闭事件，无 CardPayment，共 10 个 Choice：
+
+| EventId | Choice contract |
+|---|---|
+| `Event.MoltCavern.CastoffEcho` | `ReadRitePattern`: set RitePatternKnown；`GatherScaleDust`: Gold +3, Misdeed +2；`RestAmongCastoffs`: Fatigue -2 |
+| `Event.MoltCavern.LostDelver` | `GuideToOldWell`: set DelverRouteKnown, Misdeed -2；`TakeAbandonedPack`: Gold +4, Misdeed +3；`ShareRations`: Fatigue -3 |
+| `Event.MoltCavern.MoltingRite` | `RepeatKnownRite`: require RitePatternKnown, Fatigue -3；`FollowDelverMarks`: require DelverRouteKnown, Wound -2；`OfferCoin`: MinGold 3, Gold -3, Misdeed -2；`ForcePassage`: Fatigue +5, Wound +1 |
+
+两个 flag 的完整 FName 分别为 `MoltCavern.RitePatternKnown` 与 `MoltCavern.DelverRouteKnown`，继续只存在于当前 Run 内存态。A/B 取金选项从 0 Gold 均能购买至少一个商品；选择情报则服务 D 路事件。
+
+Floor 2 内容总量冻结为 47：`4 Enemy + 4 Behavior + 12 Part + 7 Encounter + 3 Event + 4 Pickup + 1 Shop + 12 Card`。设计 blocker 已关闭，但资产仍未创建；后续必须独立完成受控播种、真实加载、Data Validation、AssetRegistry、引用/哈希、幂等与 LFS 验证。Floor 3 内容设计继续独立保留。
+
+## §15 修改数据合同时的检查点
 
 修改 DataAsset 字段或新增静态数据能力时，先确认：
 

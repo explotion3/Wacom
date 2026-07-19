@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-battle
 status: active
-updated: 2026-07-11
+updated: 2026-07-19
 tags:
   - wacom/battle
   - wacom/rules
@@ -548,6 +548,8 @@ Battle 只负责产出战后包。疲劳、伤口、经验、获得卡、撤离�
 - `KnockdownChoiceRequested` 事件只通知 UI 需要展示选择面板；`FBattleEvent.Count` 的旧位掩码仅保留日志兼容，不作为 UI 读取合同。
 
 Floor 1 SerpentWood Production 内容使用“每敌人一对 Definition、每部位一次选择”的固定配置：四个敌人共八张 Aid/Destroy 卡，十一 Part 分别显式引用所属敌人的同一卡对并清空 legacy。上述 8 张 CardDefinition 与 11 个 EnemyPartDefinition 已创建，并通过真实资产 exact-structure、FormalProduction 与 `Wacom.Battle.KnockdownReward` 回归；这只证明静态合同和现有原子授予路径，不代表卡牌强度或表现已验收。每个击倒事件只授予所选分支的一张独立 Card Instance；同敌多部位、同 Archetype 多 Encounter 实例允许产生重复卡，不增加 per-enemy claimed state、去重、领取上限或替代奖励。按当前 Floor 1 Encounter 组合，四条关键路线分别产生 14、15、16、17 个击倒奖励选择，完整探索为 20；这些选择不新增 AP。具体卡牌字段见 [WacomData §13](./WacomData.md)，package 与 Part 映射见 [WacomDataAuthoring §4](./WacomDataAuthoring.md)。
+
+Floor 2 MoltCavern 延续同一运行时合同，但当前只完成内容设计冻结、尚未创建资产：ScaleCrawler、StoneScaleGuard、VenomHunter、CavernGuardian 各预留一对 Aid/Destroy CardDefinition，12 个 Part 全部显式引用所属敌人的卡对并要求 legacy 为空。四条关键路线的部位奖励量为 `17 / 18 / 17 / 18`，完整探索为 24；依旧每个已处理部位只授予所选分支的一张独立 Card Instance，允许重复且不新增 AP、claimed state、去重、容量门槛或替代奖励。完整卡牌字段见 [WacomData §14](./WacomData.md)，47-package 制作边界见 [WacomDataAuthoring §4](./WacomDataAuthoring.md)；真实 Battle/Run 验证必须等待后续资产轮。
 
 `Outcome=Undetermined` 不结算压力；它只用于异常路径或玩家取消。
 

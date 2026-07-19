@@ -2,7 +2,7 @@
 type: question-index
 scope: wacom-open-decisions
 status: active
-updated: 2026-07-18
+updated: 2026-07-19
 tags:
   - wacom/questions
   - wacom/docs
@@ -53,6 +53,8 @@ tags:
 | Run 失败统一总结交接 | Journey success 已有独立 Outcome/summary/event、passive Screen 与主菜单 handoff；Defeat、压力满和手指耗尽目前只结束活动 Run，不进入该成功页面 | 三种失败是否共用一个失败摘要；失败原因、战斗细节、进度统计与返回目标分别显示什么 |
 
 Floor 1 八张分支奖励卡的费用、稀有度、关键词、效果、描述模板、package leaf、十一 Part 映射与 `14–17 / 20` 奖励量已由 Spec 013 关闭，不再作为开放问题。背包容量和其它非卡牌击倒后果仍按上表独立确认。
+
+Floor 2 四敌人的八张 Aid/Destroy 卡、十二 Part 映射、允许重复、`17–18 / 24` 奖励量、固定 Pickup 卡、三个 Event/十 Choice 与 DeepWayfarer 库存/价格已由 Spec 017 关闭，不再作为开放问题。该冻结没有改变上表的背包容量、其它非卡牌击倒后果或失败总结问题，也不代表 47 个 DataAsset 已创建。
 
 ---
 

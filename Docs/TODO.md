@@ -2,7 +2,7 @@
 type: task-index
 scope: wacom-short-term
 status: active
-updated: 2026-07-18
+updated: 2026-07-19
 tags:
   - wacom/todo
   - wacom/docs
@@ -53,7 +53,7 @@ tags:
 	- 状态：`Done: 规则核心、Run Path、当前 Floor Map Screen、正式制作基线与隔离 Debug builder 已落地`
   - 归属：Map / Run / App
   - 入口：[WacomMap.md](./WacomMap.md) / [Roadmap: 地图与探索](./Roadmap.md#roadmap-map) / [Questions: Run、探索与地图](./Questions.md#questions-run-map)
-	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline、Debug-only builder 与 Journey 成功结算/主菜单交接已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结，Floor 1 的 46 个 Production DataAsset 与独立 Floor/map/Host 灰盒已创建并审计。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是完整 Production Journey、Floor 2/3 内容与场景、跨层 world transition、失败总结交接和 Camp handler/UI，不恢复已删除的原型轨道路径。
+	- 说明：Logical Map Graph、Action Point、节点生命周期与类型、同层 Map Travel、不可逆 Floor Transition、Floor Exposure、Camp Action / Camp Activity、节点内容原子结算、原子初始化、Run Path Traversal、当前 Floor Map Screen、Descriptor-first 原子场景绑定、只读 Validator、Authoring baseline、Debug-only builder 与 Journey 成功结算/主菜单交接已经落地；正式三层各 20 节点/21 边图、`26–28 / 44–46 AP` 总节奏、蛇印/蜕印稳定身份和独立持久 Credential 均已冻结，Floor 1 的 46 个 Production DataAsset 与独立 Floor/map/Host 灰盒已创建并审计，Floor 2 的 47 个支持资产内容合同已冻结。每日预算保持 `2 / 6 / 2 / 2 / 1`；Dusk 保留 Picnic，Night 选择 Camp / Night Exploration。下一步是 Floor 2 资产/场景、Floor 3 内容/资产/场景、完整 Production Journey、跨层 world transition、失败总结交接和 Camp handler/UI，不恢复已删除的原型轨道路径。
 	- 2026-07-15 地图闭环：单合法出口 W 自动前进，多合法出口使用道路入口选择，Anchored 无需点击 Actor 即可持续 cursor look；M / 手柄 View 打开当前 Floor 地图，死胡同默认聚焦最近的已完成节点，并可免费同层返回。
 
 - [ ] **Run Map 后续页面与交互扩展**
@@ -99,11 +99,23 @@ tags:
   - 入口：[WacomRun.md](./WacomRun.md) / [WacomApp.md](./WacomApp.md)
   - 说明：复用 JourneySummary 的 passive Screen/handoff 方向，另案冻结失败原因、摘要字段、事件时点、是否保留战斗结果细节和返回主菜单口径。不得把成功事件或成功文案反向复用于失败。
 
-- [ ] **Floor 2/3 Production 内容 Definition 制作**
-  - 状态：`Ready for design: 31 个内容槽与命名已冻结`
+- [x] **Floor 2 Production 内容合同冻结**
+  - 状态：`Done: 15 个节点 Definition、4 敌人/12 Part/26 Intent、12 卡与 47-package future manifest 已冻结`
+  - 归属：Data / Battle / Run / Map
+  - 入口：[WacomData.md](./WacomData.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/017-formal-floor2-production-content-freeze/`
+  - 说明：MoltCavern 已冻结 7 Encounter、3 Event/10 Choice、4 Pickup、1 Shop、4 Enemy、4 Behavior、12 Part 和 12 Card；战斗 HP 为 `21/36/42/36/34/57/70`，关键路线奖励 `17/18/17/18`、完整探索 24，AP 保持 `8–9 / 14–15`。本项只完成设计，不代表资产已创建。
+
+- [ ] **Floor 2 Production 47 DataAsset 实现与校验**
+  - 状态：`Ready after Spec 017 integration`
   - 归属：Data / Editor / Tests
-  - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/009-formal-floor23-journey-pacing-freeze/data-model.md`
-  - 说明：制作 `MoltCavern` 的 15 个与 `VenomCore` 的 16 个非 Debug typed definitions，独立冻结敌人槽、事件选项、Shop 库存和奖励数值并补 Data Validation。蜕印 Pickup 必须同时授予 `Card.Run.MoltSeal` 与 `Credential.Run.MoltSeal`。
+  - 入口：[WacomDataAuthoring.md](./WacomDataAuthoring.md) / `specs/017-formal-floor2-production-content-freeze/contracts/production-readiness-gate.md`
+  - 说明：按 exact 47-package manifest 提供 inspect-first、seed-missing-only 制作服务，使用精确 Unreal MCP writer allowlist；完成真实加载、通用/FormalProduction validation、AssetRegistry、forbidden closure、哈希、双跑幂等、LFS 与 Battle/Run smoke。不得覆盖人工调参或顺带修改地图、Character、卡牌表现及其它 Agent 资产。
+
+- [ ] **Floor 3 Production 内容合同与资产**
+  - 状态：`Ready for design: 16 个节点职责与命名已冻结`
+  - 归属：Data / Battle / Run / Map / Editor / Tests
+  - 入口：[WacomMap.md](./WacomMap.md) / `specs/009-formal-floor23-journey-pacing-freeze/data-model.md`
+  - 说明：独立冻结 `VenomCore` 的敌人、Encounter、Event、Pickup、击倒奖励与终局内容，再另轮制作和验证 Production DataAsset；不得复制 MoltCavern 数值或用 Debug 内容占位。
 
 - [x] **Floor 1 Production 38 core + 8 branch reward DataAsset 实现与校验**
   - 状态：`Done: 46 个 package 已 seed-only 创建并完成真实资产、AssetRegistry、哈希与幂等审计`
@@ -124,10 +136,10 @@ tags:
   - 说明：只支持在 Editor 中直接打开 `L_Run_Floor_Main_01` PIE。基础 GameMode Journey 解析语义保持不变；Preview GameMode 从唯一 Descriptor 构造 transient 单层 Journey，双 Package bootstrap 只创建 Preview BP 并设置 map override/Entry PlayerStart。用户已验收 Entry、镜头/W/S、HUD/手牌、M/ESC 点击、路径、战斗与内容交互返回、Exit dead end；主菜单仍进入 `L_Exploration`。Preview 不提供跨层、成功总结、存档或发行启动，完整 Production Journey 落地后必须移除。
 
 - [ ] **Production Journey 与 Floor 2/3 场景/跨层交接**
-  - 状态：`Blocked: Floor 2/3 definitions/maps and FloorId-to-world handoff are absent`
+  - 状态：`Blocked: Floor 2 assets, Floor 2/3 maps, Floor 3 content and FloorId-to-world handoff are absent`
   - 归属：Map / Data / App / Editor / Tests
   - 入口：[WacomMap.md](./WacomMap.md) / `specs/009-formal-floor23-journey-pacing-freeze/`
-  - 说明：创建 `DA_Journey_Main_01`、Floor 2/3 Production DataAsset 与 world，配置 SuccessTerminalNode，并实现由 App flow 消费 Floor transition result 的 FloorId-to-world handoff。不得在 Floor 1 Exit marker 或 Level Blueprint 中硬编码 travel。
+  - 说明：Floor 2 内容设计已冻结但 47 资产尚未创建；Floor 3 仍待内容设计。完成两层 Production DataAsset/world 后创建 `DA_Journey_Main_01`、配置 SuccessTerminalNode，并由 App flow 消费 Floor transition result 完成 FloorId-to-world handoff。不得在 Floor 1 Exit marker 或 Level Blueprint 中硬编码 travel。
 
 - [ ] **正式资产依赖审计与 `/Game/Wacom` 迁移**
   - 状态：`In Progress: JSON v2 + Placeholder 发布门槛已完成，外部依赖仍待分批迁移`

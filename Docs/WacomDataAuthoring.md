@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-07-18
+updated: 2026-07-19
 tags:
   - wacom/data
   - wacom/authoring
@@ -217,7 +217,7 @@ Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtur
 /Game/Wacom/Maps/Run/L_Run_Floor_Main_03
 ```
 
-这些路径当前不存在，也不授权 builder 或迁移脚本创建。正式三层各 20 Node/21 Edge canonical graph、内容槽、跨层门槛与 Journey 节奏见 [WacomMap](./WacomMap.md#wacommap) §9；不得创建最小空壳图、伪 FloorEntrance 或 terminal Actor 特例绕过 Production readiness gate。
+其中 `DA_Floor_Main_01` 与 `L_Run_Floor_Main_01` 已由独立 Floor 1 Production 场景轮创建；`DA_Journey_Main_01`、Floor 2/3 FloorDefinition 与 world 仍不存在，也不授权通用 builder 或迁移脚本顺带创建。正式三层各 20 Node/21 Edge canonical graph、内容槽、跨层门槛与 Journey 节奏见 [WacomMap](./WacomMap.md#wacommap) §9；不得创建最小空壳图、伪 FloorEntrance 或 terminal Actor 特例绕过 Production readiness gate。
 
 正式内容 Host 的 `PersistentId` 不另建人工注册表，统一按 `<FloorId>.<NodeId>` 派生。例如 `Node.Route.A.01` 在正式首层的 runtime key 为 `Floor.Main.01.Node.Route.A.01`；Host 的 `RunMapNodeBinding.NodeId/NodeType` 仍必须等于 Floor DataAsset 节点。Navigation 没有内容 Host PersistentId，Path/Branch 在单 Floor World 内继续只保存 EdgeId。
 
@@ -341,6 +341,60 @@ Card.Run.MoltSeal
 Credential.Run.MoltSeal
 ```
 
+### Floor 2 MoltCavern Production 内容制作合同
+
+Spec 017 已将上述 15 个节点从“只预留职责”升级为完整内容设计合同，未来新增资产总量精确为 47：
+
+| Type | Count | Contract |
+|---|---:|---|
+| Encounter Definition | 7 | `Encounter.MoltCavern.*` 七个节点内容 |
+| RunEvent Definition | 3 | CastoffEcho / LostDelver / MoltingRite |
+| Pickup Definition | 4 | FungalCache / MineralCache / VenomCrystalCache / MoltSeal |
+| Shop Definition | 1 | `Shop.MoltCavern.DeepWayfarer` |
+| Card Definition | 12 | 4 固定 Pickup/Run 卡 + 8 Aid/Destroy 卡 |
+| Enemy Definition | 4 | ScaleCrawler / StoneScaleGuard / VenomHunter / CavernGuardian |
+| Enemy Behavior Definition | 4 | 每敌人一份 `Default` + per-Part `Sequence` |
+| Enemy Part Definition | 12 | `2 + 3 + 3 + 4` 个部位 |
+| **Production total** | **47** | 未来 exact manifest；当前尚未创建 |
+
+主题路径固定为：
+
+```text
+/Game/Wacom/Data/Enemies/MoltCavern/<Archetype>/
+/Game/Wacom/Data/Encounters/MoltCavern/
+/Game/Wacom/Data/Events/MoltCavern/
+/Game/Wacom/Data/Pickups/MoltCavern/
+/Game/Wacom/Data/Shops/MoltCavern/
+/Game/Wacom/Data/Cards/Rewards/MoltCavern/
+/Game/Wacom/Data/Cards/Rewards/MoltCavern/<Archetype>/
+/Game/Wacom/Data/Cards/Run/MoltCavern/
+```
+
+Enemy 资产 leaf 使用 `DA_Enemy_<Archetype>`、`DA_Behavior_<Archetype>`、`DA_Part_<Archetype>_<Part>`；其它 leaf 使用 `DA_Encounter_<Slot>`、`DA_Event_<Slot>`、`DA_Pickup_<Slot>`、`DA_Shop_DeepWayfarer` 与 `DA_Card_<CardName>`。精确 47-package 表见 `specs/017-formal-floor2-production-content-freeze/contracts/production-asset-manifest.md`；后续 writer allowlist 必须从该 exact set 明确列出，不能扫描整个主题目录扩大保存范围。
+
+四个 EnemyId 为：
+
+```text
+Enemy.MoltCavern.ScaleCrawler
+Enemy.MoltCavern.StoneScaleGuard
+Enemy.MoltCavern.VenomHunter
+Enemy.MoltCavern.CavernGuardian
+```
+
+BehaviorId 使用 `MoltCavern.<Archetype>.Behavior`，PartId 使用 `MoltCavern.<Archetype>.<Part>`，IntentSet/Intent 分别追加 `.Sequence` 与 `.<Intent>`。所有 12 个正式 Part 必须显式配置同 Archetype 的 `Reward.MoltCavern.<Archetype>.Aid/Destroy` 并清空 deprecated `KnockdownRewardCard`；未来必须通过现有 `FormalProduction` profile。
+
+卡牌路径细分：四张固定卡中 GlowcapPoultice、CrystalWard、VenomShard 位于 Rewards/MoltCavern 根，MoltSeal 位于 Cards/Run/MoltCavern；八张分支卡按 Archetype 子目录保存。DeepWayfarer 只读引用以下既有 package，不计入 47，也不得由未来 Floor 2 seeder 保存：
+
+```text
+/Game/Wacom/Data/Cards/Rewards/SerpentWood/DA_Card_HerbalPoultice
+/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_ChitinWard
+/Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut
+```
+
+未来 Floor 2 制作入口必须采用与 Floor 1 一致的正式原则，而不是复制一个会覆盖已有资产的 builder：默认 inspect-only、显式 seed-missing-only、错误 class/结构 fail closed、已有正确 class 永不覆盖或恢复默认值、保存范围精确受 writer allowlist 限制。真实交付必须补通用/strict Data Validation、47/47 load 与 AssetRegistry class/count、forbidden dependency closure、前后 SHA-256、双跑 `0 created / 0 saved`、Git LFS fsck 和受影响 Battle/Run smoke。DisplayName、描述和批准的平衡字段后续允许人工调优；stable ID、class、引用、关键词、TargetMode、effect/condition/choice/slot/intent 有序结构由校验守护。
+
+Production Definition 不得引用 Debug、Authoring、`Test.*`、BadgeDisplayTests、TrainingWarrior、Character、地图、Host、UI、材质或卡牌表现资产。`DA_Character_BugGirl` 的既有 StarterDeck 污染是用户已接受的外部问题：不属于 Floor 2 manifest，不在本轮修改，也不能通过削弱 validator 隐藏或误报为 closure 通过。
+
 Floor 3 为 16 个内容节点预留 `VenomCore` namespace：
 
 ```text
@@ -364,7 +418,7 @@ Pickup.VenomCore.VenomReservoir
 Pickup.VenomCore.CoreBoon
 ```
 
-三层共 46 个节点内容槽。Floor 1 的 15 个槽已经由 Spec 011 冻结敌人组合、事件选项、库存和奖励数值，并由 Spec 014 创建 46 个支持 DataAsset；Floor 1 Floor/map/Host 灰盒由 Spec 015 独立落地。Floor 2/3 的 31 个槽仍只冻结职责和命名入口。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
+三层共 46 个节点内容槽。Floor 1 的 15 个槽已经由 Spec 011 冻结并由 Spec 014 创建 46 个支持 DataAsset，Floor/map/Host 灰盒由 Spec 015 独立落地；Floor 2 的 15 个槽已经由 Spec 017 冻结为 47 个未来支持 DataAsset，但尚未创建；Floor 3 的 16 个槽仍只冻结职责和命名入口。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
 
 `Pickup.SerpentWood.SerpentSigil` 的正式 Definition 必须以 Card 作为固定主奖励，并在 `GrantedCredentialIds` 中授予 `Credential.Run.SerpentSigil`；`Node.Exit.01` 的 FloorEntrance 只在 `RequiredCredentialIds` 中引用该 Credential，不把 `Card.Run.SerpentSigil` 写回 `OwnedCardRequirements`。两者由同一稳定 ID 对接，但表现卡和资格状态互不推断。
 
@@ -374,7 +428,7 @@ Floor 3 `Node.Guardian.01` 是无出边的 success terminal，不配置 FloorEnt
 
 Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
 
-蛇印任务凭证门禁、Floor 2/3 图冻结、通用 Journey success、Floor 1 内容与击倒分支奖励合同均已冻结；Floor 1 的 46 个 Production DataAsset 已完成 seed-only 创建、真实加载、通用/strict validation、AssetRegistry/引用/哈希与双跑幂等审计。Floor 1 世界资产权威也已选择“新建独立 Production map”，并由下述 Spec 015 seeder 建立 Floor/map/Host 灰盒。剩余 Production 阻塞是 Floor 2/3 的 31 个内容槽设计与资产、完整 Production Journey、Floor 2/3 Floor/map、跨层 world transition、正式美术和平衡验收；这些工作不得反向覆盖已人工调优的 46 个资产或迁移 `L_Exploration`。Floor 1 原始图门禁见 `specs/007-formal-floor1-content-freeze/`，通用 Credential 合同见 `specs/008-run-credential/`，图与 pacing readiness 见 `specs/009-formal-floor23-journey-pacing-freeze/`，成功合同见 `specs/010-journey-success-settlement-baseline/`，内容与奖励冻结证据见 Spec 011–013，实际内容播种见 Spec 014，场景播种与审计见 `specs/015-formal-floor1-production-scene-baseline/`。
+蛇印/蜕印凭证门禁、Floor 2/3 图、通用 Journey success、Floor 1 内容/奖励以及 Floor 2 内容设计均已冻结。Floor 1 的 46 个 Production DataAsset 与 Floor/map/Host 灰盒已完成真实审计；Floor 2 的 47 个 DataAsset、Floor/map/Host 仍未创建。剩余 Production 阻塞是 Floor 2 资产与场景、Floor 3 内容设计/资产/场景、完整 Production Journey、跨层 world transition、正式美术和平衡验收；这些工作不得反向覆盖已人工调优的 Floor 1 资产或迁移 `L_Exploration`。Floor 1 原始图门禁见 Spec 007，通用 Credential 见 Spec 008，图/pacing 见 Spec 009，成功合同见 Spec 010，Floor 1 内容/资产见 Spec 011–015，Floor 2 内容冻结见 `specs/017-formal-floor2-production-content-freeze/`。
 
 Floor 1 Production 场景入口是 `WacomBuildFormalFloor1ProductionScene` commandlet 与 `Wacom.BuildFormalFloor1ProductionScene` Editor console command。二者共享 exact 7-package manifest，分组为 `Floor=1`、`EnemyHosts=4`、`Scene=2`：
 

@@ -2,7 +2,7 @@
 type: domain-design
 scope: wacom-map
 status: core-implemented
-updated: 2026-07-18
+updated: 2026-07-19
 tags:
   - wacom/map
   - wacom/run
@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；Floor 1 的 46 个 Production 内容 DataAsset、`DA_Floor_Main_01` 与独立 `L_Run_Floor_Main_01` 灰盒已经创建。当前只提供直接打开 Floor 1 的 Editor PIE Preview；完整 Production Journey、Floor 2/3 内容/场景、跨层 world handoff 和发行启动仍未落地，`L_Exploration` 继续承接主菜单 Authoring baseline，不是正式 Floor 1。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；Floor 1 的 46 个 Production 内容 DataAsset、`DA_Floor_Main_01` 与独立 `L_Run_Floor_Main_01` 灰盒已经创建，Floor 2 的 47 个支持资产内容合同已冻结但尚未制作。当前只提供直接打开 Floor 1 的 Editor PIE Preview；完整 Production Journey、Floor 2 资产/场景、Floor 3 内容/资产/场景、跨层 world handoff 和发行启动仍未落地，`L_Exploration` 继续承接主菜单 Authoring baseline，不是正式 Floor 1。
 
 ## §1 两层图合同
 
@@ -317,6 +317,34 @@ Node.Key.01 -Edge.Main.03-> Node.Junction.03
 
 所有 20 个节点从 Entry 可达；A/B 汇合到 `Node.Junction.02`，C/D 汇合到 `Node.Key.01`。最短推进为 `8–9 AP`，完整探索为 `14–15 AP`，差值只来自 Floor 2 Shop 的首次成功交易。
 
+### Floor 2 Production 内容与路线节奏
+
+Floor 2 的 15 个内容节点已由 Spec 017 冻结为完整 Production 内容合同，但 47 个支持 DataAsset 尚未创建。战斗组合与 HP：
+
+| Node | Encounter | Composition | Total HP |
+|---|---|---|---:|
+| `Node.Main.01` | `Encounter.MoltCavern.ScaleScout` | ScaleCrawler | 21 |
+| `Node.Route.A.02` | `Encounter.MoltCavern.StoneScaleGuard` | StoneScaleGuard | 36 |
+| `Node.Route.B.01` | `Encounter.MoltCavern.HatcheryAmbush` | 2 × ScaleCrawler | 42 |
+| `Node.Route.C.02` | `Encounter.MoltCavern.BridgeSentinel` | StoneScaleGuard | 36 |
+| `Node.Route.D.01` | `Encounter.MoltCavern.VenomHunter` | VenomHunter | 34 |
+| `Node.Main.02` | `Encounter.MoltCavern.EliteMolter` | StoneScaleGuard + ScaleCrawler | 57 |
+| `Node.Guardian.01` | `Encounter.MoltCavern.CavernGuardian` | CavernGuardian | 70 |
+
+路线内容与经济：
+
+- Route A：CastoffEcho 可选择记录 `MoltCavern.RitePatternKnown`、`Gold +3 / Misdeed +2` 或 `Fatigue -2`；随后 StoneScaleGuard 与 GlowcapPoultice Pickup。
+- Route B：双 ScaleCrawler、CrystalWard Pickup 和 LostDelver；事件可选择 `DelverRouteKnown / Misdeed -2`、`Gold +4 / Misdeed +3` 或 `Fatigue -3`。
+- Route C：DeepWayfarer 固定出售 HerbalPoultice(3)、ChitinWard(3)、MoltCut(4)、GlowcapPoultice(4)、VenomShard(5)，随后再次面对 StoneScaleGuard。A/B 取金路线从 0 Gold 均能完成至少一次购买。
+- Route D：VenomHunter、MoltingRite 与 VenomShard Pickup；已知 RitePattern 可 `Fatigue -3`，已知 DelverRoute 可 `Wound -2`，也可支付 3 Gold 并 `Misdeed -2`，或强闯承受 `Fatigue +5 / Wound +1`。
+- `Node.Key.01` 固定授予 `Card.Run.MoltSeal + Credential.Run.MoltSeal`；Floor 3 入口只检查独立 Credential。
+
+三个 RunEvent 的全部选择都为 terminal Automatic，成功固定 1 AP；Encounter/Treasure 与 Shop 首购继续沿用现有成本。因此 Floor 2 仍为 `8–9 / 14–15 AP`，唯一 1 AP 差值来自 Shop 首次成功购买。
+
+击倒奖励量由部位数直接推导：必经 ScaleScout 2 + EliteMolter 5 + CavernGuardian 4 = 11；Route A 增加 StoneScaleGuard 3，Route B 增加双 ScaleCrawler 4，Route C 增加 BridgeSentinel 3，Route D 增加 VenomHunter 3。因此 A/C、B/C、A/D、B/D 分别产生 `17 / 18 / 17 / 18` 张分支奖励卡，完整探索七场 Encounter 为 24。每个部位只获得所选 Aid 或 Destroy 的一张独立实例，允许重复且不增加 AP；背包膨胀继续作为后续平衡/PIE 风险，不在本轮增加去重或替代奖励。
+
+精确敌人、卡牌、Event 与 Shop 字段见 [WacomData.md](./WacomData.md) §14，47-package 路径与制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。Floor 2 内容设计 blocker 已关闭；DataAsset、Floor/map/Host、跨层 handoff 与 Golden Path 仍未完成。
+
 ### Floor 3 节点与内容槽
 
 | NodeId | NodeType | 内容职责 / 预留 Production ID | Camp |
@@ -385,11 +413,11 @@ Guardian 无出边，战斗胜利后由通用 Journey success 合同完成 Journ
 - `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v5 已通用持久化 Credential、Outcome 与最近一次成功摘要；探索图进度仍未进入磁盘 schema。
 - 内容 Host 的跨 Floor runtime `PersistentId` 固定按 `<FloorId>.<NodeId>` 派生，例如 `Floor.Main.01.Node.Route.A.01`。Actor Label、资产名、GUID、坐标和 transform 都不是身份。
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
-- 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结敌人槽、事件选项、Shop Offers 与奖励数值；Floor 2/3 的 31 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。
+- 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结并创建支持资产；Floor 2 的 15 个节点已冻结敌人槽、事件选项、Shop Offers、奖励数值与 47-package future manifest，但尚未创建资产；Floor 3 的 16 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。
 - 蛇印和蜕印都采用表现卡 + 独立 Credential：必经 Pickup 原子授予两者，删牌流程不影响资格，入口只检查 Credential。
-- Floor 2/3 图设计、通用 Journey success 与 Floor 1 内容/资产/灰盒 blocker 已关闭。剩余 Production 阻塞是 `DA_Journey_Main_01`、Floor 2/3 的 31 个内容槽与支持资产、Floor 2/3 DataAsset/场景、跨层 world handoff、正式美术和平衡验收；禁止创建空壳资产或用 Debug/Preview 内容绕过。
+- Floor 2/3 图设计、通用 Journey success、Floor 1 内容/资产/灰盒与 Floor 2 内容设计 blocker 已关闭。剩余 Production 阻塞是 `DA_Journey_Main_01`、Floor 2 的 47 个支持 DataAsset 与场景、Floor 3 的内容设计/资产/场景、跨层 world handoff、正式美术和平衡验收；禁止创建空壳资产或用 Debug/Preview 内容绕过。
 
-Floor 1 默认 MapPosition 与原始冻结证据见 `specs/007-formal-floor1-content-freeze/`；Floor 2/3 默认 MapPosition、完整 Edge 表、Journey pacing 与当前 Production readiness gate 见 `specs/009-formal-floor23-journey-pacing-freeze/`。上述长期身份、拓扑、配比和阻塞事实以本节为准。
+Floor 1 默认 MapPosition 与原始冻结证据见 `specs/007-formal-floor1-content-freeze/`；Floor 2/3 默认 MapPosition、完整 Edge 表与 Journey pacing 见 Spec 009；Floor 2 的 47-package 内容和 readiness gate 见 `specs/017-formal-floor2-production-content-freeze/`。上述长期身份、拓扑、配比和阻塞事实以本节为准。
 
 ## §10 尚待确认
 
