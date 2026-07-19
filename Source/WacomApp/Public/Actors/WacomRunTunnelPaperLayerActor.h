@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Containers/Ticker.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "WacomRunTunnelPaperLayerActor.generated.h"
@@ -10,6 +11,9 @@ class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class UStaticMeshComponent;
 class UTexture2D;
+#if WITH_AUTOMATION_TESTS
+struct FWacomRunTunnelPaperLayerActorTestAccess;
+#endif
 
 /**
  * Reusable visual-only paper layer for Run Tunnel scene authoring.
@@ -27,6 +31,8 @@ public:
 
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
+	virtual void PreSave(FObjectPreSaveContext ObjectSaveContext) override;
+	virtual void BeginDestroy() override;
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run Tunnel|Paper Layer")
 	UStaticMeshComponent* GetPaperPlaneComponent() const { return PaperPlaneComponent; }
@@ -74,6 +80,10 @@ public:
 	bool bApplyMaterialOnConstruction = true;
 
 private:
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomRunTunnelPaperLayerActorTestAccess;
+#endif
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run Tunnel|Paper Layer",
 		meta = (AllowPrivateAccess = "true", ToolTip = "纸片显示用 Plane 静态网格体组件。默认使用 Engine BasicShapes Plane，蓝图子类可替换。"))
 	TObjectPtr<UStaticMeshComponent> PaperPlaneComponent = nullptr;
@@ -85,6 +95,14 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> DynamicPaperMaterial = nullptr;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> DynamicPaperMaterialSource = nullptr;
+
+	FTSTicker::FDelegateHandle DeferredPreviewRefreshHandle;
+
 	int32 ResolveTextureIndex() const;
 	int32 BuildStableRandomSeed() const;
+	UMaterialInterface* ResolvePaperMaterialSource() const;
+	void RestoreAuthoredMaterialForSerialization();
+	void ScheduleEditorPreviewRefreshAfterSave();
 };

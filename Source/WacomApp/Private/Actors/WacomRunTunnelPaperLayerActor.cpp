@@ -2,11 +2,13 @@
 
 #include "Actors/WacomRunTunnelPaperLayerActor.h"
 
+#include "Containers/Ticker.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+#include "UObject/ObjectSaveContext.h"
 
 AWacomRunTunnelPaperLayerActor::AWacomRunTunnelPaperLayerActor()
 {
@@ -47,28 +49,56 @@ void AWacomRunTunnelPaperLayerActor::BeginPlay()
 	RefreshPaperLayerMaterial();
 }
 
+void AWacomRunTunnelPaperLayerActor::PreSave(FObjectPreSaveContext ObjectSaveContext)
+{
+	RestoreAuthoredMaterialForSerialization();
+	ScheduleEditorPreviewRefreshAfterSave();
+	Super::PreSave(ObjectSaveContext);
+}
+
+void AWacomRunTunnelPaperLayerActor::BeginDestroy()
+{
+	if (DeferredPreviewRefreshHandle.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(DeferredPreviewRefreshHandle);
+		DeferredPreviewRefreshHandle.Reset();
+	}
+
+	Super::BeginDestroy();
+}
+
 void AWacomRunTunnelPaperLayerActor::RefreshPaperLayerMaterial()
 {
 	LastAppliedTextureIndex = INDEX_NONE;
-	DynamicPaperMaterial = nullptr;
 
 	if (!PaperPlaneComponent)
 	{
 		return;
 	}
 
-	UMaterialInterface* SourceMaterial = PaperMaterial;
+	UMaterialInterface* SourceMaterial = ResolvePaperMaterialSource();
 	if (!SourceMaterial)
 	{
-		SourceMaterial = PaperPlaneComponent->GetMaterial(0);
-	}
-
-	if (!SourceMaterial)
-	{
+		DynamicPaperMaterial = nullptr;
+		DynamicPaperMaterialSource = nullptr;
 		return;
 	}
 
-	DynamicPaperMaterial = PaperPlaneComponent->CreateDynamicMaterialInstance(0, SourceMaterial);
+	const bool bCanReusePreviewMaterial = DynamicPaperMaterial
+		&& DynamicPaperMaterialSource == SourceMaterial
+		&& PaperPlaneComponent->GetMaterial(0) == DynamicPaperMaterial;
+	if (!bCanReusePreviewMaterial)
+	{
+		PaperPlaneComponent->SetMaterial(0, SourceMaterial);
+		DynamicPaperMaterial = PaperPlaneComponent->CreateDynamicMaterialInstance(
+			0,
+			SourceMaterial);
+		if (DynamicPaperMaterial)
+		{
+			DynamicPaperMaterial->SetFlags(RF_Transient);
+		}
+		DynamicPaperMaterialSource = SourceMaterial;
+	}
 	if (!DynamicPaperMaterial || TextureParameterName.IsNone())
 	{
 		return;
@@ -82,6 +112,55 @@ void AWacomRunTunnelPaperLayerActor::RefreshPaperLayerMaterial()
 
 	DynamicPaperMaterial->SetTextureParameterValue(TextureParameterName, PaperTextures[TextureIndex]);
 	LastAppliedTextureIndex = TextureIndex;
+}
+
+UMaterialInterface* AWacomRunTunnelPaperLayerActor::ResolvePaperMaterialSource() const
+{
+	if (PaperMaterial)
+	{
+		return PaperMaterial;
+	}
+	if (DynamicPaperMaterialSource)
+	{
+		return DynamicPaperMaterialSource;
+	}
+	return PaperPlaneComponent ? PaperPlaneComponent->GetMaterial(0) : nullptr;
+}
+
+void AWacomRunTunnelPaperLayerActor::RestoreAuthoredMaterialForSerialization()
+{
+	if (PaperPlaneComponent
+		&& DynamicPaperMaterial
+		&& PaperPlaneComponent->GetMaterial(0) == DynamicPaperMaterial)
+	{
+		PaperPlaneComponent->SetMaterial(0, DynamicPaperMaterialSource);
+	}
+	DynamicPaperMaterial = nullptr;
+	DynamicPaperMaterialSource = nullptr;
+}
+
+void AWacomRunTunnelPaperLayerActor::ScheduleEditorPreviewRefreshAfterSave()
+{
+#if WITH_EDITOR
+	if (!bApplyMaterialOnConstruction
+		|| HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+		|| DeferredPreviewRefreshHandle.IsValid())
+	{
+		return;
+	}
+
+	DeferredPreviewRefreshHandle = FTSTicker::GetCoreTicker().AddTicker(
+		FTickerDelegate::CreateWeakLambda(this, [this](float)
+		{
+			DeferredPreviewRefreshHandle.Reset();
+			if (!HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+				&& !IsUnreachable())
+			{
+				RefreshPaperLayerMaterial();
+			}
+			return false;
+		}));
+#endif
 }
 
 void AWacomRunTunnelPaperLayerActor::RerollTextureSelection()
