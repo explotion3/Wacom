@@ -58,6 +58,9 @@ public:
 
 	int32 GetRegisteredPartCount() const { return RegisteredParts.Num(); }
 	int32 GetRegistryRevision() const { return RegistryRevision; }
+	int32 GetHoverProbeTraceCount() const { return HoverProbeTraceCount; }
+	int32 GetHoverPreviewBuildCount() const { return HoverPreviewBuildCount; }
+	int32 GetHoverPreviewReuseCount() const { return HoverPreviewReuseCount; }
 
 private:
 	struct FPartEntry
@@ -72,6 +75,7 @@ private:
 		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
 		FName ObservedEnemySlotId = NAME_None;
 		uint32 ObservedTopologyRevision = 0;
+		int32 ObservedPanelSnapshotVersion = INDEX_NONE;
 		TArray<FPartEntry> Parts;
 	};
 
@@ -92,6 +96,14 @@ private:
 	FWacomInteractionTargetHandle HoveredHandle;
 	float HoverProbeElapsedSeconds = 0.0f;
 	int32 RegistryRevision = 0;
+	bool bHoverPresentationCacheValid = false;
+	int32 HoverPresentationSnapshotVersion = INDEX_NONE;
+	EBattleUIState HoverPresentationUIState = EBattleUIState::Idle;
+	FGuid HoverPresentationPendingCardId;
+	FGuid HoverPresentationWorldTargetId;
+	int32 HoverProbeTraceCount = 0;
+	int32 HoverPreviewBuildCount = 0;
+	int32 HoverPreviewReuseCount = 0;
 
 	bool HasSameSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts) const;
 	bool IsRegistryTopologyCurrent() const;
@@ -105,11 +117,12 @@ private:
 
 	bool TryBuildHoverTargetPreviewContext(
 		const FWacomInteractionTargetHandle& TargetHandle,
-		FBattleSnapshot& OutSnapshot,
+		const FBattleSnapshot*& OutSnapshot,
 		const FHandCardSnapshot*& OutSourceSnapshot,
 		FBattleCardActionPreview& OutActionPreview,
 		FBattleCardTargetPreview& OutTargetPreview,
 		FWacomBattleEnemyPartDragPredictionDebugInput& OutPredictionInput) const;
+	void ResetHoverPresentationCache();
 	bool TryFindPendingTargetingCardSlot(FWacomFirstPersonCardLayerSlotView& OutSlotView) const;
 	void ApplyHoverTargetPreview(
 		const FWacomBattleCardTargetPreviewPresentation& Presentation,

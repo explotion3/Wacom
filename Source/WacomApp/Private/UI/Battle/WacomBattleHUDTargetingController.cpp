@@ -48,6 +48,15 @@ void FWacomBattleHUDTargetingController::CancelTargetSelect()
 
 FBattleTargetSelectionView FWacomBattleHUDTargetingController::BuildTargetSelectionView() const
 {
+	const UBattleSession* Session = Runtime.GetSession();
+	return Session
+		? BuildTargetSelectionView(Session->BuildSnapshot())
+		: FBattleTargetSelectionView();
+}
+
+FBattleTargetSelectionView FWacomBattleHUDTargetingController::BuildTargetSelectionView(
+	const FBattleSnapshot& Snapshot) const
+{
 	FBattleTargetSelectionView View;
 	View.bIsTargetSelecting =
 		Runtime.GetUIState() == EBattleUIState::TargetSelect
@@ -59,8 +68,6 @@ FBattleTargetSelectionView FWacomBattleHUDTargetingController::BuildTargetSelect
 	{
 		return View;
 	}
-
-	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	int32 TargetablePartCapacity = 0;
 	for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
 	{

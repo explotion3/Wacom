@@ -459,6 +459,13 @@ FBattleTargetSelectionView FWacomBattleHUDRuntime::BuildTargetSelectionView() co
 	return const_cast<FWacomBattleHUDRuntime*>(this)->GetTargetingController().BuildTargetSelectionView();
 }
 
+FBattleTargetSelectionView FWacomBattleHUDRuntime::BuildTargetSelectionView(
+	const FBattleSnapshot& Snapshot) const
+{
+	return const_cast<FWacomBattleHUDRuntime*>(this)
+		->GetTargetingController().BuildTargetSelectionView(Snapshot);
+}
+
 int32 FWacomBattleHUDRuntime::GetBattleCombatLogBlockCount() const
 {
 	return GetCombatLogController().GetBlockCount();
@@ -1237,8 +1244,9 @@ bool FWacomBattleHUDRuntime::CanOpenEnemyInspection() const
 		return false;
 	}
 
-	const UBattleSession* Session = GetSession();
-	return Session && Session->BuildSnapshot().Phase == EBattlePhase::PlayerAction;
+	return GetSession()
+		&& HasLastBattleSnapshot()
+		&& GetLastBattleSnapshot().Phase == EBattlePhase::PlayerAction;
 }
 
 bool FWacomBattleHUDRuntime::TryCloseEnemyInspection()
@@ -1553,6 +1561,9 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 	View.PresentationTargetCount = BattlePresentationTargetRegistry ? BattlePresentationTargetRegistry->Num() : 0;
 	View.SceneEnemyPartComponentCount = GetSceneEnemyTargetCoordinator().GetRegisteredPartCount();
 	View.SceneEnemyTargetRegistryRevision = GetSceneEnemyTargetCoordinator().GetRegistryRevision();
+	View.SceneEnemyHoverProbeTraceCount = GetSceneEnemyTargetCoordinator().GetHoverProbeTraceCount();
+	View.SceneEnemyHoverPreviewBuildCount = GetSceneEnemyTargetCoordinator().GetHoverPreviewBuildCount();
+	View.SceneEnemyHoverPreviewReuseCount = GetSceneEnemyTargetCoordinator().GetHoverPreviewReuseCount();
 	View.PresentationStackEntries = PresentationCoordinator ? &PresentationCoordinator->GetStackEntries() : &EmptyEntries;
 	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;
 	View.bHasLastBattleSnapshot = bHasLastBattleSnapshot;

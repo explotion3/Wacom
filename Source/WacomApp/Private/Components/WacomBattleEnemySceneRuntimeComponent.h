@@ -38,10 +38,11 @@ public:
 	uint32 GetTopologyRevision() const;
 
 	void InitializeRuntimeSceneBinding(FName EncounterId, FName EnemySlotId);
-	bool SyncPartFromBattleSnapshot(
+	bool ApplyPartSnapshotFacts(
 		UWacomBattleEnemyPartComponent& Part,
-		const FBattleSnapshot& Snapshot,
-		FEnemyPartSnapshot* OutMatchedPart = nullptr);
+		const FEnemyPartSnapshot* SnapshotPart,
+		bool bTargetable,
+		FName TargetDisabledReason);
 	void ClearPartBattleBinding(UWacomBattleEnemyPartComponent& Part, bool bClearRuntimeFacts = true);
 	void ClearAllBattleBindings(bool bClearRuntimeFacts = true);
 	bool IsPartBound(const UWacomBattleEnemyPartComponent& Part) const;

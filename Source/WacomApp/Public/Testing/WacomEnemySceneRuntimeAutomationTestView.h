@@ -10,6 +10,7 @@
 class AWacomBattleEnemyActor;
 class UWacomBattleEnemyPartComponent;
 struct FBattleSnapshot;
+struct FWacomBattleEnemyPartDragPredictionDebugInput;
 
 /** Non-reflected automation seam for the App-private enemy scene runtime. */
 struct WACOMAPP_API FWacomEnemySceneRuntimeAutomationTestView
@@ -33,6 +34,13 @@ struct WACOMAPP_API FWacomEnemySceneRuntimeAutomationTestView
 		FName IntentId,
 		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
 	static void CancelAction(
+		AWacomBattleEnemyActor& Host,
+		UWacomBattleEnemyPartComponent& Part);
+	static void SetHoverPrediction(
+		AWacomBattleEnemyActor& Host,
+		UWacomBattleEnemyPartComponent& Part,
+		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput);
+	static void ClearHoverPrediction(
 		AWacomBattleEnemyActor& Host,
 		UWacomBattleEnemyPartComponent& Part);
 };

@@ -175,6 +175,10 @@ Host Details 的“从 EnemyDefinition 同步部位”由 `WacomEditor` 独占�
 
 `UWacomBattleEnemySceneRuntimeComponent` 在 Host 内集中管理 typed Part 的运行时身份、Snapshot facts、targetable、hover、preview、prediction、cue、Action、Destroyed、Niagara、声音、Widget 与 watchdog。它只在组件注册、注销、销毁或显式 topology 通知时重建缓存；普通 Snapshot 不扫描层级、不改 Transform、不重置 Flipbook，也不重建 authored 组件。
 
+普通 Snapshot Sync 以 HUD 已收到的同一份 `FBattleSnapshot` 为输入：coordinator 一次建立 Enemy/Part/targetability 索引，Panel 按 `Snapshot.Version` 去重，SceneRuntime 只应用发生变化的 facts。Target Selection 不得为每个同步批次再向 Session 拉第二份 Snapshot。重复的 targetable、hover、drag preview 和 Action Preview 不重新缩放组件、不重启反馈，也不重复写 Prediction Widget。
+
+Hover Probe 的射线频率由 `BattleSceneEnemyPartHoverProbeIntervalSeconds` 控制；逐帧 gate 只读取 HUD 缓存的最新 Snapshot phase，不调用 `UBattleSession::BuildSnapshot()`。同一 `WorldTargetId + Snapshot.Version + UIState + PendingCardId` 复用已生成的 Action Preview/目标表现。Part Prediction Widget 是 transient runtime component：隐藏状态零创建，首次 hover/preview 时惰性创建，之后显隐复用，Battle retirement、Host EndPlay 或 HUD/source teardown 时销毁；Widget 仍只消费 Prediction View，不读规则状态。
+
 HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 identity，不再缓存 Bridge/Presentation Actor 适配器。场景射线优先读取 `HitResult.Component` 上的 `IWacomInteractionTargetProvider`；Actor fallback 只服务非战斗世界目标。BattleTrigger 仍按 Encounter 顺序把 `EnemySlotId -> Host` 交给 HUD，Host runtime 再为 Part 解析 `EncounterId + EnemySlotId + PartSlotId + PartInstanceId`。
 
 确认、伤害、目标预演与 Destroyed 使用 Part 上的反馈设置，并复用 Host 默认 `UWacomBattleEnemyPartImpactStyle` / `UWacomBattleEnemyPartTargetPreviewStyle`。粒子在 typed ImpactAnchor 生成；缺 Style/System/MI 时只跳过对应装饰，不阻塞 cue、破损换图或规则结算。Destroyed 在 marker 到点时原地切换真实 Sprite/Flipbook Layer，组件指针和 topology revision 不变。
@@ -283,7 +287,7 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 
 测试不 include BattleHUD 私有 helper header，也不为生产 HUD 增加 Blueprint-visible 测试 API。只读诊断通过 `FWacomBattleHUDAutomationTestView` 聚合；Battle scene target click / probe 通过 `FWacomBattleSceneTargetClickTestAccess` 驱动。
 
-`BattleHUDCommandFlowSpec.cpp`、`BattleCombatLogSpec.cpp`、`BattlePresentationStackSpec.cpp` 与 `BattlePresentationQueueSpec.cpp` 分别覆盖命令、日志、Stack 和队列表现；`BattlePresentationTimerLifecycleSpec.cpp` 覆盖 teardown 后弱 timer 不回调释放状态。Scene Enemy 新架构集中在 `EnemySceneComponentAuthoringSpec.cpp`、`BattleEnemySceneComponentRuntimeSpec.cpp` 与 `EnemySceneLegacyAuditSpec.cpp`：验证 Definition 同步、typed hierarchy、视口数据不被刷新覆盖、零 Legacy Package 引用，以及四个 Host / 两张地图可加载。其它 HUD/first-person 测试通过 `FWacomBattleHUDTestHarness` 创建真实 typed Part Component，不再复建 Actor/Bridge 测试夹具。
+`BattleHUDCommandFlowSpec.cpp`、`BattleCombatLogSpec.cpp`、`BattlePresentationStackSpec.cpp` 与 `BattlePresentationQueueSpec.cpp` 分别覆盖命令、日志、Stack 和队列表现；`BattlePresentationTimerLifecycleSpec.cpp` 覆盖 teardown 后弱 timer 不回调释放状态。Scene Enemy 新架构集中在 `EnemySceneComponentAuthoringSpec.cpp`、`BattleEnemySceneComponentRuntimeSpec.cpp`、`BattleEnemySceneRuntimePerformanceSpec.cpp` 与 `EnemySceneLegacyAuditSpec.cpp`：验证 Definition 同步、typed hierarchy、视口数据不被刷新覆盖、Snapshot/Prediction no-op 与惰性复用、零 Legacy Package 引用，以及四个 Host / 两张地图可加载。其它 HUD/first-person 测试通过 `FWacomBattleHUDTestHarness` 创建真实 typed Part Component，不再复建 Actor/Bridge 测试夹具。
 
 短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、三行 Feed、Footer 和详情打开请求。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
 

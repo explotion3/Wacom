@@ -161,6 +161,7 @@ public:
 	UWorld* GetWorld() const { return RuntimeHost.GetWorld(); }
 
 	FBattleTargetSelectionView BuildTargetSelectionView() const;
+	FBattleTargetSelectionView BuildTargetSelectionView(const FBattleSnapshot& Snapshot) const;
 	int32 GetBattleCombatLogBlockCount() const;
 	const TArray<FWacomBattleCombatLogBlockView>& GetBattleCombatLogHistory() const;
 	const TArray<FWacomBattleCombatLogTurnSectionView>& GetBattleCombatLogDetailsHistory() const;

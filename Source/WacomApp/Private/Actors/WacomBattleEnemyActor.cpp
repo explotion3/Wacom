@@ -265,6 +265,10 @@ void AWacomBattleEnemyActor::ClearEnemyPanelActionPreview()
 
 void AWacomBattleEnemyActor::SetEnemyPanelHoveredPart(FName PartSlotId)
 {
+	if (EnemyPanelHoveredPartSlotId == PartSlotId)
+	{
+		return;
+	}
 	if (!EnemyPanelWidgetComponent)
 	{
 		return;
@@ -282,7 +286,12 @@ void AWacomBattleEnemyActor::SetEnemyPanelHoveredPart(FName PartSlotId)
 
 void AWacomBattleEnemyActor::SetEnemyPanelInspectionInteractionEnabled(bool bEnabled)
 {
-	bEnemyPanelInspectionInteractionEnabled = bEnabled && bEnemyPanelHasViewData;
+	const bool bNewEnabled = bEnabled && bEnemyPanelHasViewData;
+	if (bEnemyPanelInspectionInteractionEnabled == bNewEnabled)
+	{
+		return;
+	}
+	bEnemyPanelInspectionInteractionEnabled = bNewEnabled;
 	if (!EnemyPanelWidgetComponent)
 	{
 		return;

@@ -16,6 +16,7 @@ public:
 	void HandleEnemyPartClicked(const FWacomInteractionTargetHandle& TargetHandle);
 	void CancelTargetSelect();
 	FBattleTargetSelectionView BuildTargetSelectionView() const;
+	FBattleTargetSelectionView BuildTargetSelectionView(const FBattleSnapshot& Snapshot) const;
 	void ClearTargetSelection();
 
 private:

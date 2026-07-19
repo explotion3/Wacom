@@ -7,6 +7,7 @@
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomBattleEnemySceneRuntimeComponent.h"
+#include "Snapshots/BattleSnapshot.h"
 
 void FWacomEnemySceneRuntimeAutomationTestView::InitializeBinding(
 	AWacomBattleEnemyActor& Host,
@@ -25,7 +26,25 @@ bool FWacomEnemySceneRuntimeAutomationTestView::SyncPart(
 	const FBattleSnapshot& Snapshot)
 {
 	UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent();
-	return Runtime && Runtime->SyncPartFromBattleSnapshot(Part, Snapshot);
+	if (!Runtime)
+	{
+		return false;
+	}
+	const FEnemyPartSnapshot* Match = nullptr;
+	for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
+	{
+		if (Enemy.EncounterId != Snapshot.EncounterId
+			|| Enemy.EnemySlotId != Host.GetEffectiveEnemySlotId())
+		{
+			continue;
+		}
+		Match = Enemy.Parts.FindByPredicate([&Part](const FEnemyPartSnapshot& Candidate)
+		{
+			return Candidate.PartSlotId == Part.PartSlotId;
+		});
+		break;
+	}
+	return Runtime->ApplyPartSnapshotFacts(Part, Match, false, TEXT("Automation"));
 }
 
 void FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(
@@ -62,6 +81,31 @@ void FWacomEnemySceneRuntimeAutomationTestView::CancelAction(
 	if (UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent())
 	{
 		Runtime->CancelPartActionAnimation(Part);
+	}
+}
+
+void FWacomEnemySceneRuntimeAutomationTestView::SetHoverPrediction(
+	AWacomBattleEnemyActor& Host,
+	UWacomBattleEnemyPartComponent& Part,
+	const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput)
+{
+	if (UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent())
+	{
+		Runtime->SetPartHoverProbeState(
+			Part,
+			Part.BuildWorldTargetHandle(),
+			TEXT("AutomationHover"),
+			PredictionInput);
+	}
+}
+
+void FWacomEnemySceneRuntimeAutomationTestView::ClearHoverPrediction(
+	AWacomBattleEnemyActor& Host,
+	UWacomBattleEnemyPartComponent& Part)
+{
+	if (UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent())
+	{
+		Runtime->ClearPartHoverProbeState(Part, TEXT("AutomationClear"));
 	}
 }
 

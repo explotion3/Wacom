@@ -617,9 +617,21 @@ bool FWacomUIBattleFirstPersonSceneHoverPreviewReusesStableDetailSpec::RunTest(c
 		SceneEnemy.Parts[0]);
 
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest(0.03f);
+	const FWacomBattleHUDAutomationTestView FirstHoverView = HUD->AutomationViewForTest();
+	TestEqual(TEXT("First scene hover performs one trace"),
+		FirstHoverView.SceneEnemyHoverProbeTraceCount, 1);
+	TestEqual(TEXT("First scene hover builds one preview"),
+		FirstHoverView.SceneEnemyHoverPreviewBuildCount, 1);
 	TestFalse(TEXT("Detail is initially pending hover delay after scene hover"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest(0.05f);
+	const FWacomBattleHUDAutomationTestView RepeatedHoverView = HUD->AutomationViewForTest();
+	TestEqual(TEXT("Stable scene hover still refreshes the trace at its interval"),
+		RepeatedHoverView.SceneEnemyHoverProbeTraceCount, 2);
+	TestEqual(TEXT("Stable scene hover does not rebuild the action preview"),
+		RepeatedHoverView.SceneEnemyHoverPreviewBuildCount, 1);
+	TestEqual(TEXT("Stable scene hover reuses cached presentation"),
+		RepeatedHoverView.SceneEnemyHoverPreviewReuseCount, 1);
 	TestFalse(TEXT("Detail remains hidden before repeat hover"),
 		HUD->IsFirstPersonCardDetailPanelVisibleForTest());
 
