@@ -608,7 +608,13 @@ namespace
 			return nullptr;
 		}
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
-		FKismetEditorUtilities::CompileBlueprint(Blueprint);
+		// Sync creates the typed Part and ImpactAnchor templates first. The visual
+		// layer templates are added immediately after this transitional compile,
+		// so final CDO validation would otherwise reject the intentionally
+		// incomplete hierarchy before ApplyFlipbookPart can finish it.
+		FKismetEditorUtilities::CompileBlueprint(
+			Blueprint,
+			EBlueprintCompileOptions::SkipDefaultObjectValidation);
 		if (Blueprint->Status == BS_Error || !Blueprint->GeneratedClass)
 		{
 			OutErrors.Add(TEXT("Enemy Host Blueprint compile after sync failed"));
