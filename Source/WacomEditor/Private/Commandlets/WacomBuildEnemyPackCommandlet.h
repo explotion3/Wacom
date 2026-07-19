@@ -11,6 +11,7 @@
  *
  * 用法：
  *   -run=WacomBuildEnemyPack -Pack=TrainingWarrior [-PromoteArt] [-ForceArtRefresh]
+ *   -run=WacomBuildEnemyPack -Pack=Snake|SlimeTrio [-PromotePlaceholderArt] [-ForceArtRefresh]
  */
 UCLASS()
 class UWacomBuildEnemyPackCommandlet : public UCommandlet

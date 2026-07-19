@@ -35,4 +35,10 @@ namespace Wacom::ContentBuilder
 
 	/** 只读验证已提交的 Snake 占位素材及三个单帧 Destroyed Flipbook。 */
 	FEnemyPackArtPromotionResult ValidateSnakePlaceholderArt();
+
+	/** 将本地 Slime Idle 闭包晋升为 SlimeTrio 独立的发布阻断占位素材。 */
+	FEnemyPackArtPromotionResult PromoteSlimeTrioPlaceholderArt(bool bForceRefresh);
+
+	/** 只读验证已提交的 SlimeTrio 占位素材及三个单帧 Destroyed Flipbook。 */
+	FEnemyPackArtPromotionResult ValidateSlimeTrioPlaceholderArt();
 }

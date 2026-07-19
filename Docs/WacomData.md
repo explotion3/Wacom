@@ -261,6 +261,8 @@ Selector condition 当前支持 `Always`、自身 HP 阈值、同单位任意部
 
 Body 的现有二进制资产仍通过 legacy `KnockdownRewardCard` 给 Aid / Destroy 提供 `Reward.BrokenCleave`（“残缺横斩”）：White、Weapon、1 费、`TargetMode=AllEnemyParts`，对每个存活敌方部位造成 3 伤害。它没有 Physique、被动、ZoneHook、PerfectRelease 或专用插画；CardView 使用既有 fallback。Withdraw 不获得该卡。TrainingWarrior builder 的未来写入已改为同时填写两个显式字段并清空 legacy，但在授权资产迁移前不会执行或重存现有资产。
 
+开发敌人 SlimeTrio 同样只使用现有 schema：`EnemyId=Enemy.SlimeTrio`、默认行为 `SlimeTrio.Behavior`，Definition 顺序固定为 Left / Core / Right。Left 为 HP 12 / XP 1，按 Bump（先机 2、抵抗 3、玩家伤害 3）→ Coat（先机 3、自身护盾 3）循环；Core 为 HP 20 / XP 2，按 Slam（先机 4、抵抗 6、玩家伤害 6）→ Harden（先机 3、自身护盾 5）循环；Right 为 HP 12 / XP 1，按 Bump（先机 2、抵抗 3、玩家伤害 3）→ ToxicSpit（先机 4、玩家中毒 1）循环。三个 Part 的 Aid、Destroy 和 legacy Knockdown 奖励均为空。单敌人 Encounter 使用 `EncounterDefinitionId=Encounter.SlimeTrio.Single` 与 `EnemySlotId=Enemy`。
+
 ```cpp
 USTRUCT(BlueprintType)
 struct FIntentDefinition
@@ -314,6 +316,8 @@ struct FEncounterEnemySlot
 当前 `UEncounterDefinition` 是静态数据合同，不保存运行态进度。正式场景入口由 `ABattleTriggerActor.EncounterDefinition` 引用它；进入战斗时 App 层把 `EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。Battle 仍只消费 `FBattleInitParams`，Run 仍用场景 Trigger 的 `PersistentId` 作为撤离重入进度 key，不直接持有 Encounter 资产。
 
 当前生成内容包含 `DA_Encounter_SnakeSingle`：`EncounterDefinitionId=Encounter.Snake.Single`，单个 `EnemySlotId=Enemy` 引用 `DA_Enemy_Snake`。`DA_Enemy_Snake` 通过 `DefaultBehavior=DA_Behavior_Snake` 绑定 Head / Body / Tail 三套 `Sequence` intent set，三份 `DA_Part_Snake_*` 只保存 HP、经验和毒牙奖励。关卡 Trigger 应优先引用该 Encounter，再用 `SceneEnemyHostSlots[Enemy]` 绑定场景中的 Snake Host prefab。
+
+SlimeTrio 的生成 Encounter 为 `DA_Encounter_SlimeTrioSingle`：`EncounterDefinitionId=Encounter.SlimeTrio.Single`，单个 `EnemySlotId=Enemy` 引用 `DA_Enemy_SlimeTrio`。它是独立开发内容，不替换 Snake；临时 PIE Trigger 应将同一 slot 映射到 `BP_EnemyHost_SlimeTrio`，不保存正式地图。
 
 ## §6 Character Definition
 

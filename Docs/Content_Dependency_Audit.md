@@ -2,7 +2,7 @@
 type: content-audit
 scope: wacom-content
 status: active
-updated: 2026-07-17
+updated: 2026-07-19
 tags:
   - wacom/content
   - wacom/assets
@@ -86,6 +86,23 @@ JSON schema v2 使用稳定排序且不写时间戳，除原有分类、引用�
 | 发布门槛 | `WacomAuditContentDependencies -FailOnPlaceholder` 必须失败，直到占位包被正式素材替换并删除 |
 
 Snake 不接受 `-PromoteArt`，避免把 Slime 占位冒充正式美术；`-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用。正式蛇素材到位后应晋升到 `/Game/Wacom/Art/Enemies/Snake`，切换 `BP_EnemyHost_Snake` 引用并删除已知生成的 Placeholder package，发布审计才允许通过。
+
+## SlimeTrio 独立受控占位美术包（2026-07-19）
+
+项目所有者于 2026-07-19 允许同一个 Slime 闭包为 SlimeTrio 再生成一份独立、可提交但不可出货的 Placeholder。该许可只覆盖版本化开发、构建与 PIE 验证，不构成正式发布许可，也不扩大 Snake 的授权语义。
+
+| 项目 | 路径 / 结果 |
+|---|---|
+| 原始本地目录 | `/Game/Art/PaperAssets/Enemies/Slime` |
+| 独立占位目标 | `/Game/Wacom/Art/Placeholders/Enemies/SlimeTrio` |
+| 占位闭包 | 1 Idle Flipbook、4 Sprite、1 Texture、Left / Core / Right 三个生成的 Destroyed Flipbook，共 9 个 package |
+| 终态帧 | Left=Idle 1、Core=Idle 2、Right=Idle 3 |
+| 晋升命令 | `-run=WacomBuildEnemyPack -Pack=SlimeTrio -PromotePlaceholderArt` |
+| 日常重建 | `-run=WacomBuildEnemyPack -Pack=SlimeTrio`，只读取已提交 `/Game/Wacom` 资产 |
+| 依赖结果 | SlimeTrio Host 与 Placeholder 闭包对 `/Game/Art`、`/Game/Asset`、`/Game/DreamMaterials` 必须为 0 |
+| 发布门槛 | 与全部 Placeholder 相同，`WacomAuditContentDependencies -FailOnPlaceholder` 必须失败 |
+
+SlimeTrio 拒绝 `-PromoteArt`，`-ForceArtRefresh` 只允许与显式 `-PromotePlaceholderArt` 同用。推广器的单帧 Flipbook 配置是 manifest-owned 的通用能力；Snake 原有 Head=3、Body=2、Tail=1 合同保持不变。正式 SlimeTrio 素材到位后应迁入 `/Game/Wacom/Art/Enemies/SlimeTrio`、切换 Host 引用并删除已知占位包。
 
 主要直接引用源：
 

@@ -8,6 +8,7 @@
 #include "ContentBuilders/RunEventBuilder.h"
 #include "ContentBuilders/ShopBuilder.h"
 #include "ContentBuilders/SnakeBuilder.h"
+#include "ContentBuilders/SlimeTrioBuilder.h"
 #include "ContentBuilders/TrainingWarriorBuilder.h"
 
 #include "Characters/CharacterDefinition.h"
@@ -46,6 +47,23 @@ int32 UWacomRegenerateContentCommandlet::Main(const FString& /*Params*/)
 	UE_LOG(LogTemp, Display,
 		TEXT("[WacomRegenerateContent] Snake built (changed=%s)"),
 		Snake.bChanged ? TEXT("true") : TEXT("false"));
+
+	const Wacom::ContentBuilder::FSlimeTrioBuildResult SlimeTrio =
+		Wacom::ContentBuilder::BuildSlimeTrioContent();
+	if (!SlimeTrio.IsSuccess())
+	{
+		for (const FString& Error : SlimeTrio.Errors)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[WacomRegenerateContent] SlimeTrio: %s"), *Error);
+		}
+		UE_LOG(LogTemp, Error,
+			TEXT("[WacomRegenerateContent] BuildSlimeTrioContent failed"));
+		return 10;
+	}
+	UE_LOG(LogTemp, Display,
+		TEXT("[WacomRegenerateContent] SlimeTrio built (changed=%s)"),
+		SlimeTrio.bChanged ? TEXT("true") : TEXT("false"));
 
 	const Wacom::ContentBuilder::FTrainingWarriorBuildResult TrainingWarrior =
 		Wacom::ContentBuilder::BuildTrainingWarriorContent();

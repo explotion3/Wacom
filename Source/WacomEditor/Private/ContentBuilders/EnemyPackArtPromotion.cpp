@@ -27,6 +27,13 @@ namespace
 		int32 FrameCount;
 	};
 
+	struct FGeneratedSingleFrameFlipbookSpec
+	{
+		const TCHAR* AssetName;
+		const TCHAR* SourceFormalState;
+		int32 SourceFrameIndex;
+	};
+
 	struct FEnemyArtPromotionManifest
 	{
 		const TCHAR* Label;
@@ -37,24 +44,8 @@ namespace
 		FString SourceTextureName;
 		FString TargetTextureName;
 		TArray<FAnimationPromotionSpec> Animations;
-		bool bBuildSnakeDestroyedFlipbooks = false;
+		TArray<FGeneratedSingleFrameFlipbookSpec> GeneratedSingleFrameFlipbooks;
 	};
-
-	struct FSnakeDestroyedFlipbookSpec
-	{
-		const TCHAR* PartName;
-		int32 SourceFrameIndex;
-	};
-
-	const TArray<FSnakeDestroyedFlipbookSpec>& GetSnakeDestroyedSpecs()
-	{
-		static const TArray<FSnakeDestroyedFlipbookSpec> Specs = {
-			{ TEXT("Head"), 3 },
-			{ TEXT("Body"), 2 },
-			{ TEXT("Tail"), 1 },
-		};
-		return Specs;
-	}
 
 	const FEnemyArtPromotionManifest& GetTrainingWarriorManifest()
 	{
@@ -73,7 +64,7 @@ namespace
 				{ TEXT("Cleave"), TEXT("Cleave"), 11 },
 				{ TEXT("Downed"), TEXT("Destroyed"), 4 },
 			},
-			false,
+			{},
 		};
 		return Manifest;
 	}
@@ -91,7 +82,33 @@ namespace
 			{
 				{ TEXT("Idle"), TEXT("Idle"), 4 },
 			},
-			true,
+			{
+				{ TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Head"), TEXT("Idle"), 3 },
+				{ TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Body"), TEXT("Idle"), 2 },
+				{ TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Tail"), TEXT("Idle"), 1 },
+			},
+		};
+		return Manifest;
+	}
+
+	const FEnemyArtPromotionManifest& GetSlimeTrioPlaceholderManifest()
+	{
+		static const FEnemyArtPromotionManifest Manifest = {
+			TEXT("SlimeTrioPlaceholder"),
+			TEXT("/Game/Art/PaperAssets/Enemies/Slime"),
+			TEXT("/Game/Wacom/Art/Placeholders/Enemies/SlimeTrio"),
+			TEXT("Slime__"),
+			TEXT("SlimeTrioPlaceholder"),
+			TEXT("Slime"),
+			TEXT("T_Enemy_SlimeTrioPlaceholder_Slime"),
+			{
+				{ TEXT("Idle"), TEXT("Idle"), 4 },
+			},
+			{
+				{ TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Left"), TEXT("Idle"), 1 },
+				{ TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Core"), TEXT("Idle"), 2 },
+				{ TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Right"), TEXT("Idle"), 3 },
+			},
 		};
 		return Manifest;
 	}
@@ -149,12 +166,25 @@ namespace
 			FrameIndex);
 	}
 
-	FString SnakeDestroyedFlipbookPackage(const TCHAR* PartName)
+	FString GeneratedSingleFrameFlipbookPackage(
+		const FEnemyArtPromotionManifest& Manifest,
+		const FGeneratedSingleFrameFlipbookSpec& Spec)
 	{
 		return FString::Printf(
-			TEXT("%s/Flipbooks/PF_Enemy_SnakePlaceholder_Destroyed_%s"),
-			*GetSnakePlaceholderManifest().TargetRoot,
-			PartName);
+			TEXT("%s/Flipbooks/%s"),
+			*Manifest.TargetRoot,
+			Spec.AssetName);
+	}
+
+	const FAnimationPromotionSpec* FindAnimationByFormalState(
+		const FEnemyArtPromotionManifest& Manifest,
+		const TCHAR* FormalState)
+	{
+		return Manifest.Animations.FindByPredicate(
+			[FormalState](const FAnimationPromotionSpec& Candidate)
+			{
+				return FCString::Stricmp(Candidate.FormalState, FormalState) == 0;
+			});
 	}
 
 	void BuildManifestMaps(
@@ -194,14 +224,12 @@ namespace
 			}
 		}
 
-		if (Manifest.bBuildSnakeDestroyedFlipbooks)
+		for (const FGeneratedSingleFrameFlipbookSpec& Spec
+			: Manifest.GeneratedSingleFrameFlipbooks)
 		{
-			for (const FSnakeDestroyedFlipbookSpec& Spec : GetSnakeDestroyedSpecs())
-			{
-				OutTargetClasses.Add(
-					SnakeDestroyedFlipbookPackage(Spec.PartName),
-					UPaperFlipbook::StaticClass());
-			}
+			OutTargetClasses.Add(
+				GeneratedSingleFrameFlipbookPackage(Manifest, Spec),
+				UPaperFlipbook::StaticClass());
 		}
 	}
 
@@ -539,31 +567,77 @@ namespace
 		return OutErrors.IsEmpty();
 	}
 
-	bool BuildSnakeDestroyedFlipbooks(
+	bool SaveCopiedManifestAssets(
+		const FEnemyArtPromotionManifest& Manifest,
+		TArray<FString>& OutErrors)
+	{
+		TMap<FString, FString> CopyMap;
+		TMap<FString, UClass*> SourceClasses;
+		TMap<FString, UClass*> TargetClasses;
+		BuildManifestMaps(Manifest, CopyMap, SourceClasses, TargetClasses);
+		for (const TPair<FString, FString>& Entry : CopyMap)
+		{
+			UObject* Asset = LoadExactAsset(Entry.Value);
+			if (!Asset || !Asset->GetPackage())
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Could not load copied %s asset for explicit save: %s"),
+					Manifest.Label,
+					*Entry.Value));
+				continue;
+			}
+			if (!SaveAssetPackage(Asset->GetPackage(), Asset, Entry.Value))
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("Could not explicitly save copied %s asset: %s"),
+					Manifest.Label,
+					*Entry.Value));
+			}
+		}
+		return OutErrors.IsEmpty();
+	}
+
+	bool BuildGeneratedSingleFrameFlipbooks(
+		const FEnemyArtPromotionManifest& Manifest,
 		bool& bOutChanged,
 		TArray<FString>& OutErrors)
 	{
-		const FEnemyArtPromotionManifest& Manifest = GetSnakePlaceholderManifest();
-		const FAnimationPromotionSpec& IdleSpec = Manifest.Animations[0];
-		for (const FSnakeDestroyedFlipbookSpec& Spec : GetSnakeDestroyedSpecs())
+		for (const FGeneratedSingleFrameFlipbookSpec& Spec
+			: Manifest.GeneratedSingleFrameFlipbooks)
 		{
+			const FAnimationPromotionSpec* SourceAnimation =
+				FindAnimationByFormalState(Manifest, Spec.SourceFormalState);
+			if (!SourceAnimation
+				|| Spec.SourceFrameIndex < 0
+				|| Spec.SourceFrameIndex >= SourceAnimation->FrameCount)
+			{
+				OutErrors.Add(FString::Printf(
+					TEXT("%s generated flipbook has invalid source frame: %s"),
+					Manifest.Label,
+					Spec.AssetName));
+				continue;
+			}
 			UPaperSprite* SourceSprite = Cast<UPaperSprite>(LoadExactAsset(
-				TargetSpritePackage(Manifest, IdleSpec, Spec.SourceFrameIndex)));
+				TargetSpritePackage(
+					Manifest, *SourceAnimation, Spec.SourceFrameIndex)));
 			if (!SourceSprite)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Missing Snake placeholder source sprite for %s destroyed flipbook"),
-					Spec.PartName));
+					TEXT("Missing %s source sprite for generated flipbook %s"),
+					Manifest.Label,
+					Spec.AssetName));
 				continue;
 			}
 
-			const FString PackagePath = SnakeDestroyedFlipbookPackage(Spec.PartName);
+			const FString PackagePath =
+				GeneratedSingleFrameFlipbookPackage(Manifest, Spec);
 			const FName AssetName(*FPackageName::GetLongPackageAssetName(PackagePath));
 			UPackage* Package = FindOrCreatePackage(PackagePath);
 			if (!Package)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Could not create Snake placeholder destroyed package: %s"),
+					TEXT("Could not create %s generated flipbook package: %s"),
+					Manifest.Label,
 					*PackagePath));
 				continue;
 			}
@@ -574,7 +648,8 @@ namespace
 			if (ExistingObject && !Flipbook)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Snake placeholder destroyed asset has an unexpected class: %s"),
+					TEXT("%s generated asset has an unexpected class: %s"),
+					Manifest.Label,
 					*PackagePath));
 				continue;
 			}
@@ -591,7 +666,8 @@ namespace
 			if (!Flipbook)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Could not create Snake placeholder destroyed flipbook: %s"),
+					TEXT("Could not create %s generated flipbook: %s"),
+					Manifest.Label,
 					*PackagePath));
 				continue;
 			}
@@ -614,7 +690,8 @@ namespace
 				if (!SaveAssetPackage(Package, Flipbook, PackagePath))
 				{
 					OutErrors.Add(FString::Printf(
-						TEXT("Could not save Snake placeholder destroyed flipbook: %s"),
+						TEXT("Could not save %s generated flipbook: %s"),
+						Manifest.Label,
 						*PackagePath));
 					continue;
 				}
@@ -624,25 +701,35 @@ namespace
 		return OutErrors.IsEmpty();
 	}
 
-	bool ValidateSnakeDestroyedFlipbooks(TArray<FString>& OutErrors)
+	bool ValidateGeneratedSingleFrameFlipbooks(
+		const FEnemyArtPromotionManifest& Manifest,
+		TArray<FString>& OutErrors)
 	{
-		const FEnemyArtPromotionManifest& Manifest = GetSnakePlaceholderManifest();
-		const FAnimationPromotionSpec& IdleSpec = Manifest.Animations[0];
-		for (const FSnakeDestroyedFlipbookSpec& Spec : GetSnakeDestroyedSpecs())
+		for (const FGeneratedSingleFrameFlipbookSpec& Spec
+			: Manifest.GeneratedSingleFrameFlipbooks)
 		{
+			const FAnimationPromotionSpec* SourceAnimation =
+				FindAnimationByFormalState(Manifest, Spec.SourceFormalState);
+			const bool bHasValidSourceFrame = SourceAnimation
+				&& Spec.SourceFrameIndex >= 0
+				&& Spec.SourceFrameIndex < SourceAnimation->FrameCount;
 			UPaperFlipbook* Flipbook = Cast<UPaperFlipbook>(LoadExactAsset(
-				SnakeDestroyedFlipbookPackage(Spec.PartName)));
-			UPaperSprite* ExpectedSprite = Cast<UPaperSprite>(LoadExactAsset(
-				TargetSpritePackage(Manifest, IdleSpec, Spec.SourceFrameIndex)));
-			if (!Flipbook || Flipbook->GetNumKeyFrames() != 1
+				GeneratedSingleFrameFlipbookPackage(Manifest, Spec)));
+			UPaperSprite* ExpectedSprite = bHasValidSourceFrame
+				? Cast<UPaperSprite>(LoadExactAsset(TargetSpritePackage(
+					Manifest, *SourceAnimation, Spec.SourceFrameIndex)))
+				: nullptr;
+			if (!bHasValidSourceFrame || !Flipbook || !ExpectedSprite
+				|| Flipbook->GetNumKeyFrames() != 1
 				|| Flipbook->GetKeyFrameChecked(0).Sprite != ExpectedSprite
 				|| Flipbook->GetKeyFrameChecked(0).FrameRun != 1
 				|| !FMath::IsNearlyEqual(Flipbook->GetFramesPerSecond(), 1.0f)
 				|| Flipbook->GetTotalDuration() <= 0.0f)
 			{
 				OutErrors.Add(FString::Printf(
-					TEXT("Snake placeholder destroyed flipbook contract is invalid: %s"),
-					Spec.PartName));
+					TEXT("%s generated flipbook contract is invalid: %s"),
+					Manifest.Label,
+					Spec.AssetName));
 			}
 		}
 		return OutErrors.IsEmpty();
@@ -659,9 +746,11 @@ namespace
 		Result.ExpectedAssetCount = TargetClasses.Num();
 		Result.bSucceeded = ValidateExpectedPackages(
 			GetAssetRegistry(), TargetClasses, Result.Errors);
-		if (Result.bSucceeded && Manifest.bBuildSnakeDestroyedFlipbooks)
+		if (Result.bSucceeded
+			&& !Manifest.GeneratedSingleFrameFlipbooks.IsEmpty())
 		{
-			Result.bSucceeded = ValidateSnakeDestroyedFlipbooks(Result.Errors);
+			Result.bSucceeded = ValidateGeneratedSingleFrameFlipbooks(
+				Manifest, Result.Errors);
 		}
 		return Result;
 	}
@@ -705,6 +794,7 @@ namespace
 		}
 		Result.bCopiedAssets = true;
 		FixupPromotedManifestReferences(Manifest, Result.Errors);
+		SaveCopiedManifestAssets(Manifest, Result.Errors);
 		UPackage::WaitForAsyncFileWrites();
 		if (!Result.Errors.IsEmpty())
 		{
@@ -715,10 +805,11 @@ namespace
 			{ Manifest.TargetRoot },
 			/*bForceRescan*/ true,
 			/*bIgnoreDenyListScanFilters*/ true);
-		if (Manifest.bBuildSnakeDestroyedFlipbooks)
+		if (!Manifest.GeneratedSingleFrameFlipbooks.IsEmpty())
 		{
 			bool bGeneratedChanged = false;
-			BuildSnakeDestroyedFlipbooks(bGeneratedChanged, Result.Errors);
+			BuildGeneratedSingleFrameFlipbooks(
+				Manifest, bGeneratedChanged, Result.Errors);
 			UPackage::WaitForAsyncFileWrites();
 			AssetRegistry.ScanPathsSynchronous(
 				{ Manifest.TargetRoot },
@@ -757,5 +848,15 @@ namespace Wacom::ContentBuilder
 	FEnemyPackArtPromotionResult PromoteSnakePlaceholderArt(bool bForceRefresh)
 	{
 		return PromoteManifest(GetSnakePlaceholderManifest(), bForceRefresh);
+	}
+
+	FEnemyPackArtPromotionResult ValidateSlimeTrioPlaceholderArt()
+	{
+		return ValidateManifestTargets(GetSlimeTrioPlaceholderManifest());
+	}
+
+	FEnemyPackArtPromotionResult PromoteSlimeTrioPlaceholderArt(bool bForceRefresh)
+	{
+		return PromoteManifest(GetSlimeTrioPlaceholderManifest(), bForceRefresh);
 	}
 }

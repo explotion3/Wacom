@@ -45,6 +45,7 @@ Builder 当前职责：
 | Builder | 产物 |
 |---|---|
 | `BuildSnakeContent()` | 幂等生成 Snake 规则数据、`DA_Encounter_SnakeSingle` 与 `BP_EnemyHost_Snake`；只读取已提交的 `/Game/Wacom` Placeholder |
+| `BuildSlimeTrioContent()` | 幂等生成 SlimeTrio 规则数据、`DA_Encounter_SlimeTrioSingle` 与 `BP_EnemyHost_SlimeTrio`；只读取独立的已提交 Placeholder |
 | `BuildEncounterContent()` | 其它旧 Encounter 生成入口；单蛇 Encounter 已由 `BuildSnakeContent()` 统一拥有 |
 | `BuildTrainingWarriorContent()` | TrainingWarrior 规则数据、奖励卡、语义动画 Style、Host Blueprint 与单敌人 Encounter；只读取正式 `/Game/Wacom` 素材 |
 | `BuildBugGirlContent()` | 虫妹角色、左右手、伙伴初始牌、容器 / 功能卡、starter pack、debug key、卡对卡测试卡、badge 测试卡 |
@@ -82,6 +83,18 @@ Snake 使用同一套 manifest-driven enemy-pack 服务，但素材语义是“�
 ```
 
 Snake 的 `-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用；`-PromoteArt` 会明确失败。晋升闭包固定为一个 Slime Idle Flipbook、四个 Sprite 和一个 Texture，另从正式副本生成 Head / Body / Tail 三个单帧 Destroyed Flipbook。目标完整时不复制，本地 `/Game/Art` 可以缺席；目标不完整时必须显式晋升。`WacomRegenerateContent` 只消费已经提交的 `/Game/Wacom/Art/Placeholders/Enemies/Snake`，不会执行素材晋升。
+
+SlimeTrio 复用同一个 manifest-driven 晋升实现，但拥有独立目标包和稳定身份，不引用或修改 Snake Placeholder：
+
+```powershell
+# 首次晋升 Slime Idle，并从帧 1 / 2 / 3 生成 Left / Core / Right 终态
+-run=WacomBuildEnemyPack -Pack=SlimeTrio -PromotePlaceholderArt
+
+# 日常重建 SlimeTrio 数据、Encounter 与三部位 Host
+-run=WacomBuildEnemyPack -Pack=SlimeTrio
+```
+
+SlimeTrio 同样拒绝 `-PromoteArt`，`-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用。日常命令和 `WacomRegenerateContent` 只消费 `/Game/Wacom/Art/Placeholders/Enemies/SlimeTrio`，不读取 ignored `/Game/Art`。三个 Part 暂不配置行动动画或奖励卡；不能用 Idle 冒充攻击动画。
 
 单部位敌人紧凑 UI 使用独立、幂等的 Editor builder，不接入 `WacomRegenerateContent`，也不触碰旧 Enemy WBP：
 
@@ -136,6 +149,7 @@ Snake 的 `-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用；`-Pr
 | 蛇部位 | Head / Body / Tail 配置 HP、经验和毒牙奖励；部位资产不承载行为，行为统一写入 `DA_Behavior_Snake` |
 | `DA_Encounter_SnakeSingle` | 正式单蛇 Encounter 样例，`EncounterDefinitionId=Encounter.Snake.Single`，`EnemySlots[0]=Enemy -> DA_Enemy_Snake` |
 | Snake Host 内容包 | `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`；`MultiPartVisualLayers` 下按 Definition 顺序生成 Head / Body / Tail，每段使用错帧 Slime Idle 与独立单帧 Destroyed，占位资产禁止正式出包 |
+| SlimeTrio 内容包 | `Enemy.SlimeTrio`，Left / Core / Right 三部位；`BP_EnemyHost_SlimeTrio` 横向复用独立 Slime Placeholder Idle，以错帧、尺寸和 Tint 区分，局部 Destroyed 互不影响；无奖励卡和行动动画，禁止正式出包 |
 | TrainingWarrior 内容包 | `DA_Enemy_TrainingWarrior`、单 Body Part、Attack → Guard → Cleave 行为、`DA_Encounter_TrainingWarriorSingle`、语义动画 Style 与 `BP_EnemyHost_TrainingWarrior` |
 | `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡和 badge 测试卡 |
 | `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力与显式 Action Point policy |
@@ -395,6 +409,7 @@ Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
 | 测试入口 | 目的 |
 |---|---|
 | `Wacom.Data.GeneratedContent.DefinitionAssetValidation` | 读取生成角色、卡牌、Snake 敌人、Snake Behavior、部位、单蛇 Encounter，并统一跑 DataAsset validator |
+| `Wacom.Data.Enemy.SlimeTrio` | 验证 SlimeTrio 稳定 ID、规则数值、Placeholder 闭包、三部位 Host authoring 合同，以及 Builder 幂等性 |
 | `Wacom.Data.BattleStarterContent.StarterPackAssetValidation` | 检查 starter pack 核心字段、BugGirl 初始牌组排除关系、测试卡不进入 StarterDeck 和 Snake Behavior intent set |
 | `Wacom.Data.BattleStarterContent.BadgeDisplayTestCardAssetValidation` | 检查 badge 测试卡、DebugSnake 商店 0 金币出售和 CardPresentationBuilder badge view |
 | `Wacom.Data.Shop.DebugSnakeAssetValidation` | 验证 DebugSnake 商店能通过 validator |

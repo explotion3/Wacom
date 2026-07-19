@@ -133,6 +133,8 @@ Debug 蛇 Host 样例流程：创建一个 `AWacomBattleEnemyActor` Host 蓝图�
 
 正式 Snake prefab 为 `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`，不修改 `BP_SnakeHost_Debug`。它由 Editor Builder 通过通用 Definition 同步生成 Head / Body / Tail，使用 `MultiPartVisualLayers`：三个 Part 分别位于 `(96,-6,16)`、`(0,0,0)`、`(-92,16,-8)`，`HitBoundsExtent` 为 `(42,38,42)`、`(62,46,42)`、`(48,34,34)`。每个 Part 的唯一 VisualLayer 复用受控 Slime Placeholder Idle，但拥有自己的 Destroyed Flipbook；局部破坏只换对应 Part，其余 target 继续有效。该 Host 没有整体 Downed Clip，且在正式行动素材到位前不配置 Part Animation Style；最终部位破坏后保留局部终态，直到 BattleTrigger 完成返回探索 barrier 后统一隐藏并禁用。
 
+`BP_EnemyHost_SlimeTrio` 是独立的三部位开发敌人：Left / Core / Right 横向位于 `(-88,8,-6)`、`(0,0,8)`、`(88,-8,-6)`，每段使用自己的 `HitBounds` 和稳定 `SlimeTrio.<Part>.Main` LayerId。三段只复用独立晋升后的 Placeholder Idle，不读取运行时 `/Game/Art`，并各自拥有单帧 Destroyed；命中、hover、拖卡预测和 Destroyed cue 始终按完整 `Enemy + PartSlotId` 路由，不按 Actor 名或视觉顺序推断。未破坏段在其它段进入终态后仍可交互，最终由既有 Encounter retirement 一次退役整个 Host。
+
 场景敌人行动的 timer 与 barrier 不归 Host/Part Actor 或 target bridge 所有。App-private `FWacomBattleEnemyActionPlayback` 统一管理 Impact、watchdog、cancel 和 serial；Host / PartActor 只把动作请求转给自己的视觉 Adapter，Bridge 仍只维护稳定 target identity。Actor 退役、source clear 或 EndPlay 会取消当前播放：未触发的 Impact 被丢弃，completion barrier 被释放，旧弱 timer 不能在新战斗中回调；Destroyed 抢占 Part Action 时先应用局部终态，再完成被取消的行动 barrier，不短暂恢复 Idle。
 
 HUD 的 Queue Advance、Presentation Plan Poll 和 Stack Entry Exit 也不归场景 Actor 或 Bridge 所有；它们由 App-private `FWacomBattlePresentationTimerOwner` 按稳定 key 统一管理。场景 Host/Part 销毁只通过既有 coordinator clear / retirement 路径释放表现语义，不直接操作 HUD TimerManager；HUD 在 World teardown 时可以遗弃业务回调，让 TimerManager 中残留的弱 delegate 安全失效。

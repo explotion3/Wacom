@@ -201,7 +201,7 @@ tags:
   - 状态：`In Progress: Simple / Multi-Part 通用行动层已完成，剩余正式美术与高级表现`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：TrainingWarrior 已验证正式 Simple Host 与语义动画；通用 Multi-Part Part Action 已按完整稳定身份、精确 Layer、完成 barrier 和 watchdog 接线。`BP_EnemyHost_Snake` 当前仍只使用会阻止发布的 Slime Placeholder，因缺少正式行动素材而故意不配置 Style。后续优先制作正式 Snake Head / Body / Tail Idle / Action 素材并迁到 `/Game/Wacom/Art/Enemies/Snake`，再补 13 个 Intent 的显式 Style 映射；材质描边、贴近部位 tooltip、风险动效、PaperZD/Animator 和 Status Badge 美术替换继续独立切片。
+  - 说明：TrainingWarrior 已验证正式 Simple Host 与语义动画；通用 Multi-Part Part Action 已按完整稳定身份、精确 Layer、完成 barrier 和 watchdog 接线。`BP_EnemyHost_Snake` 与开发敌人 `BP_EnemyHost_SlimeTrio` 当前都使用会阻止发布的独立 Slime Placeholder，因缺少正式行动素材而故意不配置 Style。后续优先制作正式 Snake 和 SlimeTrio 分段 Idle / Action 素材，分别迁到 `/Game/Wacom/Art/Enemies/<Pack>` 并补显式 Intent Style；材质描边、贴近部位 tooltip、风险动效、PaperZD/Animator 和 Status Badge 美术替换继续独立切片。
 
 - [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
   - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`

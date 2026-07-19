@@ -200,6 +200,16 @@ Host / Part Action Clip 共享 `ImpactNormalizedTime`（默认 `0.55`）和 `OnI
 
 每个 Part 只有一个 `Snake.<Part>.Main` Flipbook VisualLayer，复用 `/Game/Wacom/Art/Placeholders/Enemies/Snake` 的 Idle，并绑定自己的单帧 Destroyed Flipbook；局部换图 marker 保持 `0.35`。该 Slime 组合可提交和开发验证，但发布审计必须用 `-FailOnPlaceholder` 阻止出包。通用 Part Action runtime 已可用，但正式 Snake prefab 当前故意不配置 `PartAnimationStyle`，因为没有获准提交的 Head / Body / Tail 行动素材；因此三段仍只持续错帧 Idle。最后部位破坏后保持三个局部终态，等待返回探索镜头后统一退役。
 
+开发敌人 SlimeTrio 使用独立 `/Game/Wacom/Core/Enemy/BP_EnemyHost_SlimeTrio` 和 `/Game/Wacom/Art/Placeholders/Enemies/SlimeTrio`，不会覆盖 Snake。Definition 顺序固定为 Left / Core / Right，Host 使用 `MultiPartVisualLayers` 并自动选择普通多部位面板：
+
+| PartSlotId | Relative Location | PartId | HitBoundsExtent | Visual scale | Idle offset | Sort |
+|---|---:|---|---:|---:|---:|---:|
+| `Left` | `(-88,8,-6)` | `SlimeTrio.Left` | `(46,38,40)` | `0.90` | `0.00s` | 10 |
+| `Core` | `(0,0,8)` | `SlimeTrio.Core` | `(56,44,48)` | `1.10` | `0.04s` | 20 |
+| `Right` | `(88,-8,-6)` | `SlimeTrio.Right` | `(46,38,40)` | `0.90` | `0.08s` | 30 |
+
+每段只有一个 `SlimeTrio.<Part>.Main` Flipbook VisualLayer，三段共享 Idle，分别绑定由 Idle 帧 1 / 2 / 3 生成的 Left / Core / Right 单帧 Destroyed，换图 marker 为 `0.35`。局部破坏只替换对应段，其余 target 继续有效；最终部位破坏后保持全部局部终态，返回探索后由 Trigger 统一退役。当前素材没有行动动画，因此三个 Part 的 `PartAnimationStyle` 必须为空，行动请求按正式缺 Clip 合同同步完成。
+
 `EnemySlotId` 由 Host / Trigger 注入，不在 PartActor 模板里手填。Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对应 `UEnemyPartDefinition::PartId`，`PartSlotId` 必须对应 `UEnemyDefinition.Parts[].PartSlotId`。蛇的正式绑定身份是 `Enemy + Head/Body/Tail`，不是 `Enemy + Snake.Head/Snake.Body/Snake.Tail`。
 
 Host Details 的“从 EnemyDefinition 同步部位”是显式、幂等的通用制作入口。`WacomEditor` 先为全部选中 Host 建立纯报告，再用一次 `FScopedTransaction` 应用计划：仅按 `PartSlotId` 匹配定义，为已有唯一槽位派生 `PartId`，为缺失槽位新增零相对变换、默认 facade 的 PartActor ChildActorComponent。Host Blueprint 模板上的新增部位写入 SCS，并在 Compile / Save / Reload 后保留；关卡 Host 实例上的新增部位是 transactional InstanceComponent，不反向修改来源 Blueprint。同步不覆盖已有位置、`HitBoundsExtent`、`ImpactAnchorRelativeLocation` 或 `VisualLayers`；空、未知和重复部位只标记为 surplus，不静默删除；无效定义槽位跳过并进入 Last Sync。无实际变化时不创建事务、不 dirty package；创建失败明确返回 `ApplyFailed / PartiallyApplied`。Actor 上不再暴露旧 `CallInEditor` 同步函数。
