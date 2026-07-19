@@ -14,7 +14,7 @@
 
 namespace
 {
-	FString ObjectPathForPackage(const FString& PackagePath)
+	FString ProductionSceneObjectPathForPackage(const FString& PackagePath)
 	{
 		return PackagePath + TEXT(".")
 			+ FPackageName::GetLongPackageAssetName(PackagePath);
@@ -71,7 +71,7 @@ bool FWacomFormalFloor1ProductionSceneAssetRegistrySpec::RunTest(
 	for (const FString& PackagePath : BlueprintPackages())
 	{
 		UBlueprint* Blueprint = LoadObject<UBlueprint>(
-			nullptr, *ObjectPathForPackage(PackagePath));
+			nullptr, *ProductionSceneObjectPathForPackage(PackagePath));
 		TestNotNull(*FString::Printf(TEXT("Blueprint loads: %s"),
 			*PackagePath), Blueprint);
 		if (!Blueprint)
@@ -84,7 +84,7 @@ bool FWacomFormalFloor1ProductionSceneAssetRegistrySpec::RunTest(
 	}
 
 	UBlueprint* Marker = LoadObject<UBlueprint>(nullptr,
-		*ObjectPathForPackage(BlueprintPackages().Last()));
+		*ProductionSceneObjectPathForPackage(BlueprintPackages().Last()));
 	const FNameProperty* PersistentIdProperty = Marker && Marker->GeneratedClass
 		? FindFProperty<FNameProperty>(Marker->GeneratedClass, TEXT("PersistentId"))
 		: nullptr;
