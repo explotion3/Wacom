@@ -2084,7 +2084,7 @@ void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyAnimationStep(
 		Runtime.GetSceneEnemyTargetCoordinator();
 	if (bDestroyed)
 	{
-		SceneEnemyCoordinator.PlayHostDestroyedAnimation(
+		SceneEnemyCoordinator.PlayEnemyDestroyedAnimation(
 			ActingPartKey.GetEffectiveEnemySlotId(),
 			MoveTemp(Callbacks.OnCompleted));
 		return;

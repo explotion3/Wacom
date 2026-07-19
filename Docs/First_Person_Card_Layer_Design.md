@@ -398,7 +398,7 @@ First-person drag target 来源：
 | Run world object | `FWacomRunFirstPersonCardDropCoordinator` world receiver adapter probes `Interaction.Target.Run.Object` | Run world card drop receiver + RunSession |
 | Run menu zone | Registered `UWacomRunMenuDropTargetWidget` | Owning menu submit policy |
 
-Battle enemy world target 只来自当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge。旧敌方 2D fallback 已删除，不再作为 first-person drag/drop target 或 TargetCue 注册入口。
+Battle enemy world target 只来自当前 SceneEnemyHost registry 中的 `UWacomBattleEnemyPartComponent`；命中优先读取 `HitResult.Component` 上的 Target Provider。旧敌方 2D fallback 与 Actor/Bridge 适配路径已删除，不再作为 first-person drag/drop target 或 TargetCue 注册入口。
 
 Battle 目标合法性由 `UBattleSession::ValidateTargetWithCard()` 和 PlayCard resolver 判定。Run world drop 合法性由 receiver 和 `URunSession::ValidateRunWorldCardInteraction()` 判定。Run menu Zone drop 默认 probe-only，只有 owning menu 明确接管时才提交。
 

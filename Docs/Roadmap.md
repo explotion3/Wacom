@@ -125,8 +125,8 @@ tags:
 | 主题与样式 | Widget Blueprint 纯色块 + 文字 | 美术阶段只改 WBP，C++ 协议不动 |
 | 手牌布局 | BattleHUD 已统一使用 first-person card layer；旧 2D hand 已删除 | 继续调 first-person hand 的扇形、层级、命中、读牌和拖拽手感 |
 | 战斗卡牌拖拽 | first-person card layer 已支持拖拽到敌方部位和手牌目标 | HD-2D 表现阶段继续完善场景部位高亮、悬停反馈和目标确认表现 |
-| 目标选择 3D 射线 | 旧 2D EnemyPartWidget 已删除；当前点击、hover、drag preview 走 SceneEnemyHost / PartActor / WorldTargetBridge | 继续完善场景部位高亮、点击反馈、材质描边、tooltip、命中手感和正式动画 |
-| 敌人表现正式化 | 当前支持普通小怪 Host 整体 sprite / flipbook + hit-only 部位，以及精英 / Boss PartActor VisualLayers | 保存正式蛇 Host prefab、美术替换、描边材质、tooltip、风险动效、PaperZD / Animator 状态机和更多敌人包 |
+| 目标选择 3D 射线 | 旧 2D EnemyPartWidget 已删除；当前点击、hover、drag preview 直接命中 Host 下的 typed Part Component | 继续完善场景部位高亮、材质描边、tooltip 和命中手感 |
+| 敌人表现正式化 | 单/多部位统一为 Host + typed Part/Sprite/Flipbook/Anchor Component；视口组件即制作真相 | 替换 Snake / SlimeTrio Placeholder，补正式行动素材、描边、tooltip、风险动效与需要时的 PaperZD / Animator 状态机 |
 | CombatLog / 表现队列 | BattleHUD 使用常驻可滚动 CombatLog 命令块和事件明细；旧日志抽屉与 EventToast 已删除 | 升级为事件表现调度器，接 Niagara、音效、tone 颜色、icon、筛选、事件详情和战后回放 |
 | 击倒事件 Dialog 美术 | C++ fallback 已有三按钮及 Aid/Destroy 奖励文本；`AidRewardText / DestroyRewardText` 等 BindWidget 锚点就位 | 美术阶段配正式 WBP 和排版；保持 Battle ViewData 被动输入，不引入完整 CardView 或新焦点流 |
 

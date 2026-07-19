@@ -2,32 +2,18 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 
-#include "Actors/WacomBattleEnemyPartActor.h"
-#include "Actors/WacomBattleEnemyHostAnimationStyle.h"
-#include "Actors/WacomBattleSceneEnemyAuthoringHelpers.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
-#include "Engine/BlueprintGeneratedClass.h"
-#include "Engine/World.h"
-#include "Engine/SCS_Node.h"
-#include "Engine/SimpleConstructionScript.h"
-#include "Components/ChildActorComponent.h"
+#include "Blueprint/UserWidget.h"
 #include "Components/SceneComponent.h"
-#include "Components/WidgetComponent.h"
-#include "Components/WacomBattleEnemyHostVisualComponent.h"
 #include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomBattleEnemySceneRuntimeComponent.h"
-#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
+#include "Components/WidgetComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
-#include "PaperFlipbook.h"
-#include "PaperFlipbookComponent.h"
-#include "PaperSprite.h"
-#include "PaperSpriteComponent.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyUILayerPolicy.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
-#include "Blueprint/UserWidget.h"
 
 namespace
 {
@@ -37,192 +23,73 @@ namespace
 		{
 			return false;
 		}
-
-		TMap<FName, int32> SlotCounts;
-		for (const FEnemyPartSlot& PartSlot : Definition->Parts)
+		TMap<FName, int32> Counts;
+		for (const FEnemyPartSlot& Slot : Definition->Parts)
 		{
-			if (!PartSlot.PartSlotId.IsNone())
+			if (!Slot.PartSlotId.IsNone())
 			{
-				SlotCounts.FindOrAdd(PartSlot.PartSlotId) += 1;
+				Counts.FindOrAdd(Slot.PartSlotId)++;
 			}
 		}
-
-		int32 ValidPartCount = 0;
-		for (const FEnemyPartSlot& PartSlot : Definition->Parts)
+		int32 ValidCount = 0;
+		for (const FEnemyPartSlot& Slot : Definition->Parts)
 		{
-			const bool bValid = !PartSlot.PartSlotId.IsNone()
-				&& SlotCounts.FindRef(PartSlot.PartSlotId) == 1
-				&& PartSlot.PartDef
-				&& !PartSlot.PartDef->PartId.IsNone();
-			ValidPartCount += bValid ? 1 : 0;
+			ValidCount += !Slot.PartSlotId.IsNone()
+				&& Counts.FindRef(Slot.PartSlotId) == 1
+				&& Slot.PartDef
+				&& !Slot.PartDef->PartId.IsNone() ? 1 : 0;
 		}
-		return ValidPartCount == 1;
+		return ValidCount == 1;
 	}
 
-	bool IsConstructibleEnemyPanelClass(
-		const TSubclassOf<UWacomBattleEnemyPanelWidget> PanelClass)
+	bool IsConstructiblePanelClass(TSubclassOf<UWacomBattleEnemyPanelWidget> PanelClass)
 	{
-		return PanelClass
-			&& !PanelClass->HasAnyClassFlags(
-				CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists);
+		return PanelClass && !PanelClass->HasAnyClassFlags(
+			CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists);
 	}
 
-	void ConfigureEnemyPanelScreenLayer(UWidgetComponent& Component)
+	void ConfigurePanelLayer(UWidgetComponent& Component)
 	{
 		Component.SetInitialSharedLayerName(
 			WacomBattleEnemyUILayerPolicy::CompactPanelSharedLayerName);
 		Component.SetInitialLayerZOrder(
 			WacomBattleEnemyUILayerPolicy::CompactPanelZOrder);
 	}
-
-	AWacomBattleEnemyPartActor* ResolveChildActorComponentPartActor(
-		UChildActorComponent* ChildActorComponent,
-		bool bAllowTemplateFallback)
-	{
-		if (!ChildActorComponent)
-		{
-			return nullptr;
-		}
-
-		if (AWacomBattleEnemyPartActor* PartActor =
-			Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActor()))
-		{
-			return PartActor;
-		}
-
-		return bAllowTemplateFallback
-			? Cast<AWacomBattleEnemyPartActor>(ChildActorComponent->GetChildActorTemplate())
-			: nullptr;
-	}
-
-	void CollectInstanceChildActorComponents(
-		const AWacomBattleEnemyActor& Host,
-		TArray<UChildActorComponent*>& OutChildActorComponents)
-	{
-		Host.GetComponents<UChildActorComponent>(OutChildActorComponents);
-	}
-
-	void CollectBlueprintTemplateChildActorComponents(
-		const AWacomBattleEnemyActor& Host,
-		TArray<UChildActorComponent*>& OutChildActorComponents)
-	{
-		UBlueprintGeneratedClass* BlueprintClass = Cast<UBlueprintGeneratedClass>(Host.GetClass());
-		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
-		{
-			return;
-		}
-
-		for (USCS_Node* Node : BlueprintClass->SimpleConstructionScript->GetAllNodes())
-		{
-			if (!Node)
-			{
-				continue;
-			}
-
-			UChildActorComponent* ChildActorComponent =
-				Cast<UChildActorComponent>(Node->GetActualComponentTemplate(BlueprintClass));
-			if (ChildActorComponent)
-			{
-				OutChildActorComponents.AddUnique(ChildActorComponent);
-			}
-		}
-	}
-
-	void CollectChildActorComponentsForPartDiscovery(
-		const AWacomBattleEnemyActor& Host,
-		TArray<UChildActorComponent*>& OutChildActorComponents,
-		bool& bOutAllowTemplateFallback)
-	{
-		OutChildActorComponents.Reset();
-
-		CollectInstanceChildActorComponents(Host, OutChildActorComponents);
-		if (OutChildActorComponents.Num() > 0)
-		{
-			bOutAllowTemplateFallback = Host.IsTemplate();
-			return;
-		}
-
-		CollectBlueprintTemplateChildActorComponents(Host, OutChildActorComponents);
-		bOutAllowTemplateFallback = true;
-	}
-
 }
 
 AWacomBattleEnemyActor::AWacomBattleEnemyActor()
 {
 	PrimaryActorTick.bCanEverTick = false;
-
 	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
 	RootComponent = SceneRoot;
 
 	EnemyPanelWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("EnemyPanelWidget"));
 	EnemyPanelWidgetComponent->SetupAttachment(SceneRoot);
-	ConfigureEnemyPanelScreenLayer(*EnemyPanelWidgetComponent);
+	ConfigurePanelLayer(*EnemyPanelWidgetComponent);
 	EnemyPanelWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
 	EnemyPanelWidgetComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	EnemyPanelWidgetComponent->SetVisibility(false, true);
-
-	HostVisualRoot = CreateDefaultSubobject<USceneComponent>(TEXT("HostVisualRoot"));
-	HostVisualRoot->SetupAttachment(SceneRoot);
-	HostVisualRoot->SetRelativeLocation(FVector::ZeroVector);
-	HostVisualRoot->SetRelativeRotation(FRotator::ZeroRotator);
-	HostVisualRoot->SetRelativeScale3D(FVector::OneVector);
-	HostVisualRoot->bEditableWhenInherited = false;
-
-	HostVisualComponent =
-		CreateDefaultSubobject<UWacomBattleEnemyHostVisualComponent>(TEXT("HostVisualComponent"));
-	HostVisualComponent->bEditableWhenInherited = false;
 
 	EnemySceneRuntimeComponent =
 		CreateDefaultSubobject<UWacomBattleEnemySceneRuntimeComponent>(TEXT("EnemySceneRuntime"));
 }
 
-void AWacomBattleEnemyActor::PostLoad()
-{
-	Super::PostLoad();
-	if (EnemyPanelWidgetComponent)
-	{
-		// Existing Host Blueprints may have serialized the engine default screen layer.
-		// PostLoad runs before registration and migrates them without resaving assets.
-		ConfigureEnemyPanelScreenLayer(*EnemyPanelWidgetComponent);
-	}
-	if (EnemyPanelWidgetComponent
-		&& EnemyPanelWidgetComponent->GetWidgetClass()
-			== UWacomBattleEnemyPanelWidget::StaticClass())
-	{
-		// 旧 Host/关卡实例会把已经移除的 native fallback 直接保存在组件上。
-		// 组件注册早于 OnConstruction，必须在 PostLoad 先清掉抽象类，随后再由
-		// RefreshEnemyPanelWidgetComponent 解析 Host override / 项目默认正式 WBP。
-		EnemyPanelWidgetComponent->SetWidgetClass(nullptr);
-	}
-}
-
 void AWacomBattleEnemyActor::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
-	RefreshHostVisual();
 	RefreshEnemyPanelWidgetComponent();
-	RefreshBattleEnemyPartAuthoringState();
+	NotifyEnemySceneComponentTopologyChanged();
 }
 
 void AWacomBattleEnemyActor::BeginPlay()
 {
 	Super::BeginPlay();
-	if (bRuntimeEncounterPresentationRetired)
-	{
-		return;
-	}
-	RefreshHostVisual();
 	RefreshEnemyPanelWidgetComponent();
-	TArray<AWacomBattleEnemyPartActor*> RuntimePartActors;
-	InitializeRuntimeSceneBinding(RuntimePartActors);
-	if (EnemySceneRuntimeComponent)
-	{
-		EnemySceneRuntimeComponent->RefreshTypedHierarchy();
-	}
+	NotifyEnemySceneComponentTopologyChanged();
 }
 
-TArray<UWacomBattleEnemyPartComponent*> AWacomBattleEnemyActor::GetBattleEnemyPartComponents() const
+TArray<UWacomBattleEnemyPartComponent*>
+AWacomBattleEnemyActor::GetBattleEnemyPartComponents() const
 {
 	TArray<UWacomBattleEnemyPartComponent*> Parts;
 	if (EnemySceneRuntimeComponent)
@@ -247,67 +114,31 @@ uint32 AWacomBattleEnemyActor::GetEnemySceneComponentTopologyRevision() const
 		: 0;
 }
 
-bool AWacomBattleEnemyActor::HasHostVisualResource() const
+void AWacomBattleEnemyActor::ResetRuntimeScenePresentationForBattle()
 {
-	switch (HostVisualMode)
+	SetActorHiddenInGame(false);
+	SetActorEnableCollision(true);
+	if (EnemySceneRuntimeComponent)
 	{
-	case EWacomBattleEnemyHostVisualMode::Flipbook:
-		return HostFlipbook != nullptr;
-	case EWacomBattleEnemyHostVisualMode::StaticSprite:
-	default:
-		return HostSprite != nullptr;
+		EnemySceneRuntimeComponent->RefreshTypedHierarchy();
+		EnemySceneRuntimeComponent->ResetRuntimeScenePresentationForBattle();
 	}
 }
 
-bool AWacomBattleEnemyActor::IsHostVisualActive() const
+void AWacomBattleEnemyActor::RetireRuntimeEncounterPresentation()
 {
-	return bHostVisualVisible && HasHostVisualResource();
-}
-
-UPaperSpriteComponent* AWacomBattleEnemyActor::GetGeneratedHostSpriteVisualComponent() const
-{
-	return HostVisualComponent
-		? HostVisualComponent->GetGeneratedHostSpriteVisualComponent()
-		: nullptr;
-}
-
-UPaperFlipbookComponent* AWacomBattleEnemyActor::GetGeneratedHostFlipbookVisualComponent() const
-{
-	return HostVisualComponent
-		? HostVisualComponent->GetGeneratedHostFlipbookVisualComponent()
-		: nullptr;
-}
-
-void AWacomBattleEnemyActor::RefreshHostVisual()
-{
-	if (!HostVisualComponent)
+	ClearEnemyPanelViewData();
+	if (EnemySceneRuntimeComponent)
 	{
-		return;
+		EnemySceneRuntimeComponent->RetireRuntimeEncounterPresentation();
 	}
+	SetActorEnableCollision(false);
+	SetActorHiddenInGame(true);
+}
 
-	USceneComponent* AttachParent = HostVisualRoot.Get();
-	if (!AttachParent)
-	{
-		AttachParent = SceneRoot.Get();
-	}
-
-	HostVisualComponent->RefreshHostVisual(
-		AttachParent,
-		HostVisualMode == EWacomBattleEnemyHostVisualMode::Flipbook,
-		HostSprite,
-		HostFlipbook,
-		HostVisualRelativeLocation,
-		HostVisualRelativeRotation,
-		HostVisualRelativeScale3D,
-		HostVisualSortOrder,
-		HostVisualTint,
-		HostVisualMaterialOverride,
-		bHostVisualCastShadow,
-		bHostVisualVisible,
-		HostFlipbookPlayRate,
-		bLoopHostFlipbook,
-		HostFlipbookStartTimeSeconds,
-		bAutoPlayHostFlipbook);
+bool AWacomBattleEnemyActor::IsRuntimeEncounterPresentationRetired() const
+{
+	return EnemySceneRuntimeComponent && EnemySceneRuntimeComponent->IsRuntimeRetired();
 }
 
 void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
@@ -316,61 +147,33 @@ void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
 	{
 		return;
 	}
-	ConfigureEnemyPanelScreenLayer(*EnemyPanelWidgetComponent);
-
-	TSubclassOf<UWacomBattleEnemyPanelWidget> ResolvedPanelClass = EnemyPanelWidgetClass;
-	if (ResolvedPanelClass == UWacomBattleEnemyPanelWidget::StaticClass())
-	{
-		// 早期资产会把 native C++ fallback 序列化成 Host override。该类现在是
-		// abstract 被动 WBP 父类；不要求重存关卡，按“未配置 override”迁移到项目默认类。
-		ResolvedPanelClass = nullptr;
-	}
-	if (!ResolvedPanelClass)
+	ConfigurePanelLayer(*EnemyPanelWidgetComponent);
+	TSubclassOf<UWacomBattleEnemyPanelWidget> Resolved = EnemyPanelWidgetClass;
+	if (!Resolved)
 	{
 		if (const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>())
 		{
 			if (HasExactlyOneValidDefinitionPart(EnemyDefinition))
 			{
-				ResolvedPanelClass =
-					Settings->DefaultBattleEnemySinglePartPanelWidgetClass.LoadSynchronous();
-				if (!IsConstructibleEnemyPanelClass(ResolvedPanelClass))
+				Resolved = Settings->DefaultBattleEnemySinglePartPanelWidgetClass.LoadSynchronous();
+				if (!IsConstructiblePanelClass(Resolved))
 				{
-					UE_LOG(LogTemp, Error,
-						TEXT("[WacomBattleEnemyActor] Compact single-part enemy panel class unresolved; falling back: Host=%s Class=%s"),
-						*GetName(),
-						ResolvedPanelClass ? *ResolvedPanelClass->GetPathName() : TEXT("None"));
-					ResolvedPanelClass = nullptr;
+					Resolved = nullptr;
 				}
 			}
-
-			if (!ResolvedPanelClass)
+			if (!Resolved)
 			{
-				ResolvedPanelClass = Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
+				Resolved = Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
 			}
 		}
 	}
-
-	if (!ResolvedPanelClass)
+	if (!IsConstructiblePanelClass(Resolved))
 	{
-		UE_LOG(LogTemp, Error,
-			TEXT("[WacomBattleEnemyActor] Enemy panel class unresolved: Host=%s"),
-			*GetName());
 		EnemyPanelWidgetComponent->SetWidgetClass(nullptr);
 		EnemyPanelWidgetComponent->SetVisibility(false, true);
 		return;
 	}
-	if (!IsConstructibleEnemyPanelClass(ResolvedPanelClass))
-	{
-		UE_LOG(LogTemp, Error,
-			TEXT("[WacomBattleEnemyActor] Enemy panel class is not constructible: Host=%s Class=%s"),
-			*GetName(), *ResolvedPanelClass->GetPathName());
-		EnemyPanelWidgetComponent->SetWidgetClass(nullptr);
-		EnemyPanelWidgetComponent->SetVisibility(false, true);
-		return;
-	}
-
-	const TSubclassOf<UUserWidget> WidgetClass = ResolvedPanelClass.Get();
-	EnemyPanelWidgetComponent->SetWidgetClass(WidgetClass);
+	EnemyPanelWidgetComponent->SetWidgetClass(Resolved.Get());
 	EnemyPanelWidgetComponent->SetRelativeLocation(EnemyPanelRelativeLocation);
 	EnemyPanelWidgetComponent->SetDrawAtDesiredSize(bEnemyPanelDrawAtDesiredSize);
 	EnemyPanelWidgetComponent->SetPivot(FVector2D(0.5f, 1.0f));
@@ -387,473 +190,27 @@ void AWacomBattleEnemyActor::RefreshEnemyPanelVisibility()
 	{
 		return;
 	}
-
-	const bool bHasInteractionContext =
+	const bool bHasContext =
 		!EnemyPanelHoveredPartSlotId.IsNone() || bEnemyPanelHasActionPreview;
 	EnemyPanelWidgetComponent->SetVisibility(
-		bEnemyPanelHasViewData && (bEnemyPanelVisibleByDefault || bHasInteractionContext),
-		true);
+		bEnemyPanelHasViewData && (bEnemyPanelVisibleByDefault || bHasContext), true);
 }
 
-FName AWacomBattleEnemyActor::GetHostVisualModeDebugName() const
-{
-	return IsHostVisualActive()
-		? FName(WacomBattleSceneEnemyAuthoring::GetHostVisualModeDebugString(HostVisualMode))
-		: NAME_None;
-}
-
-FName AWacomBattleEnemyActor::GetHostVisualAssetName() const
-{
-	if (!IsHostVisualActive())
-	{
-		return NAME_None;
-	}
-
-	switch (HostVisualMode)
-	{
-	case EWacomBattleEnemyHostVisualMode::Flipbook:
-		return HostFlipbook ? FName(*HostFlipbook->GetName()) : NAME_None;
-	case EWacomBattleEnemyHostVisualMode::StaticSprite:
-	default:
-		return HostSprite ? FName(*HostSprite->GetName()) : NAME_None;
-	}
-}
-
-int32 AWacomBattleEnemyActor::GetGeneratedHostVisualComponentCount() const
-{
-	return HostVisualComponent
-		? HostVisualComponent->GetGeneratedHostVisualComponentCount()
-		: 0;
-}
-
-int32 AWacomBattleEnemyActor::GetRegisteredHostVisualComponentCount() const
-{
-	return HostVisualComponent
-		? HostVisualComponent->GetRegisteredHostVisualComponentCount()
-		: 0;
-}
-
-int32 AWacomBattleEnemyActor::GetVisibleHostVisualComponentCount() const
-{
-	return HostVisualComponent
-		? HostVisualComponent->GetVisibleHostVisualComponentCount()
-		: 0;
-}
-
-FName AWacomBattleEnemyActor::GetEffectiveEnemySlotId() const
-{
-	return EnemySlotId;
-}
-
-TArray<AWacomBattleEnemyPartActor*>
-AWacomBattleEnemyActor::BuildAttachedBattleEnemyPartActors() const
-{
-	TArray<AWacomBattleEnemyPartActor*> PartActors;
-
-	TArray<UChildActorComponent*> ChildActorComponents;
-	bool bAllowTemplateFallback = false;
-	CollectChildActorComponentsForPartDiscovery(*this, ChildActorComponents, bAllowTemplateFallback);
-	for (UChildActorComponent* ChildActorComponent : ChildActorComponents)
-	{
-		if (!ChildActorComponent)
-		{
-			continue;
-		}
-
-		if (AWacomBattleEnemyPartActor* PartActor =
-			ResolveChildActorComponentPartActor(ChildActorComponent, bAllowTemplateFallback))
-		{
-			PartActors.AddUnique(PartActor);
-		}
-	}
-
-	TArray<AActor*> AttachedActors;
-	GetAttachedActors(AttachedActors, /*bResetArray*/ true, /*bRecursivelyIncludeAttachedActors*/ true);
-	for (AActor* AttachedActor : AttachedActors)
-	{
-		if (AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(AttachedActor))
-		{
-			PartActors.AddUnique(PartActor);
-		}
-	}
-
-	const TMap<FName, int32> DefinitionPartOrder =
-		WacomBattleSceneEnemyAuthoring::BuildDefinitionPartOrder(EnemyDefinition);
-	PartActors.StableSort([&DefinitionPartOrder](
-		const AWacomBattleEnemyPartActor& Left,
-		const AWacomBattleEnemyPartActor& Right)
-	{
-		const int32* LeftDefinitionIndex = DefinitionPartOrder.Find(Left.GetEffectivePartDefinitionId());
-		const int32* RightDefinitionIndex = DefinitionPartOrder.Find(Right.GetEffectivePartDefinitionId());
-		const int32 LeftRank = LeftDefinitionIndex ? *LeftDefinitionIndex : MAX_int32;
-		const int32 RightRank = RightDefinitionIndex ? *RightDefinitionIndex : MAX_int32;
-		return LeftRank < RightRank;
-	});
-	return PartActors;
-}
-
-TArray<AWacomBattleEnemyPartActor*>
-AWacomBattleEnemyActor::GetBattleEnemyPartActors() const
-{
-	return BuildAttachedBattleEnemyPartActors();
-}
-
-void AWacomBattleEnemyActor::SyncHostIdentityToPartActors() const
-{
-	const FName EffectiveEnemySlotId = GetEffectiveEnemySlotId();
-	const bool bHostVisualActive = IsHostVisualActive();
-	for (AWacomBattleEnemyPartActor* PartActor : GetBattleEnemyPartActors())
-	{
-		if (PartActor)
-		{
-			PartActor->SetEnemySlotId(EffectiveEnemySlotId);
-			PartActor->SetHostVisualContext(bHostVisualActive);
-			PartActor->SetHostImpactStyle(DefaultImpactStyle);
-			PartActor->SetHostTargetPreviewStyle(DefaultTargetPreviewStyle);
-		}
-	}
-}
-
-void AWacomBattleEnemyActor::InitializeRuntimeSceneBinding(
-	TArray<AWacomBattleEnemyPartActor*>& OutPartActors) const
-{
-	if (bRuntimeEncounterPresentationRetired)
-	{
-		OutPartActors.Reset();
-		return;
-	}
-
-	OutPartActors = BuildAttachedBattleEnemyPartActors();
-	OutPartActors.RemoveAll([](const AWacomBattleEnemyPartActor* PartActor)
-	{
-		return !IsValid(PartActor) || PartActor->IsActorBeingDestroyed();
-	});
-
-	TArray<FVector> BadgeOffsets;
-	TArray<int32> BadgeIndices;
-	ApplyRuntimeBadgeLayout(OutPartActors, BadgeOffsets, BadgeIndices);
-
-	const FName EffectiveEnemySlotId = GetEffectiveEnemySlotId();
-	const bool bHostVisualActive = IsHostVisualActive();
-	for (int32 Index = 0; Index < OutPartActors.Num(); ++Index)
-	{
-		if (AWacomBattleEnemyPartActor* PartActor = OutPartActors[Index])
-		{
-			PartActor->ApplyRuntimeHostContext(
-				EffectiveEnemySlotId,
-				bHostVisualActive,
-				DefaultImpactStyle,
-				DefaultTargetPreviewStyle,
-				BadgeIndices[Index],
-				BadgeOffsets[Index]);
-		}
-	}
-}
-
-void AWacomBattleEnemyActor::PlayRuntimeHostActionAnimation(
-	FName IntentId,
-	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
-{
-	const FWacomBattleEnemyHostAnimationClip* Clip = HostAnimationStyle
-		? HostAnimationStyle->ResolveActionClip(IntentId)
-		: nullptr;
-	if (bRuntimeEncounterPresentationRetired
-		|| HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
-		|| HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
-		|| !IsHostVisualActive()
-		|| !HostVisualComponent
-		|| !Clip)
-	{
-		Callbacks.CompleteImmediately();
-		return;
-	}
-
-	HostVisualComponent->PlayRuntimeOneShot(
-		Clip->Flipbook,
-		Clip->PlayRate,
-		Clip->ImpactNormalizedTime,
-		IntentId,
-		false,
-		MoveTemp(Callbacks));
-}
-
-void AWacomBattleEnemyActor::PlayRuntimeHostDestroyedAnimation(
-	TFunction<void()>&& Completion)
-{
-	const FWacomBattleEnemyHostAnimationClip* Clip = HostAnimationStyle
-		? HostAnimationStyle->ResolveDestroyedClip()
-		: nullptr;
-	if (bRuntimeEncounterPresentationRetired
-		|| HostAuthoringMode != EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual
-		|| HostVisualMode != EWacomBattleEnemyHostVisualMode::Flipbook
-		|| !IsHostVisualActive()
-		|| !HostVisualComponent
-		|| !Clip)
-	{
-		if (Completion)
-		{
-			Completion();
-		}
-		return;
-	}
-
-	HostVisualComponent->PlayRuntimeOneShot(
-		Clip->Flipbook,
-		Clip->PlayRate,
-		Clip->ImpactNormalizedTime,
-		NAME_None,
-		true,
-		FWacomBattleEnemyActionPlaybackCallbacks{
-			TFunction<void()>(),
-			MoveTemp(Completion) });
-}
-
-void AWacomBattleEnemyActor::ResetRuntimeHostAnimation()
-{
-	if (!bRuntimeEncounterPresentationRetired && HostVisualComponent)
-	{
-		HostVisualComponent->ResetRuntimePlaybackToIdle();
-	}
-}
-
-void AWacomBattleEnemyActor::ResetRuntimeScenePresentationForBattle()
-{
-	ResetRuntimeHostAnimation();
-	if (bRuntimeEncounterPresentationRetired)
-	{
-		return;
-	}
-
-	for (AWacomBattleEnemyPartActor* PartActor : BuildAttachedBattleEnemyPartActors())
-	{
-		if (IsValid(PartActor) && !PartActor->IsActorBeingDestroyed())
-		{
-			PartActor->ResetRuntimeDestroyedVisualState();
-		}
-	}
-}
-
-void AWacomBattleEnemyActor::CancelRuntimeHostAnimation()
-{
-	if (HostVisualComponent)
-	{
-		HostVisualComponent->CancelRuntimePlayback();
-	}
-}
-
-void AWacomBattleEnemyActor::RetireRuntimeEncounterPresentation()
-{
-	if (bRuntimeEncounterPresentationRetired)
-	{
-		return;
-	}
-
-	bRuntimeEncounterPresentationRetired = true;
-	CancelRuntimeHostAnimation();
-	ClearEnemyPanelActionPreview();
-	ClearEnemyPanelViewData();
-	for (AWacomBattleEnemyPartActor* PartActor : BuildAttachedBattleEnemyPartActors())
-	{
-		if (IsValid(PartActor) && !PartActor->IsActorBeingDestroyed())
-		{
-			PartActor->RetireRuntimeEncounterPresentation();
-		}
-	}
-
-	SetActorEnableCollision(false);
-	SetActorHiddenInGame(true);
-}
-
-void AWacomBattleEnemyActor::InvalidateRuntimePartTopology()
-{
-	++RuntimePartTopologyRevision;
-}
-
-void AWacomBattleEnemyActor::ApplyRuntimeBadgeLayout(
-	const TArray<AWacomBattleEnemyPartActor*>& PartActors,
-	TArray<FVector>& OutOffsets,
-	TArray<int32>& OutIndices) const
-{
-	OutOffsets.Init(FVector::ZeroVector, PartActors.Num());
-	OutIndices.Init(INDEX_NONE, PartActors.Num());
-	const float CenterIndex = PartActors.Num() > 0
-		? (static_cast<float>(PartActors.Num() - 1) * 0.5f)
-		: 0.0f;
-
-	if (!bApplyAttachedPartBadgeStagger)
-	{
-		return;
-	}
-
-	for (int32 Index = 0; Index < PartActors.Num(); ++Index)
-	{
-		const float RelativeIndex = static_cast<float>(Index) - CenterIndex;
-		OutOffsets[Index] = FVector(
-			0.0f,
-			RelativeIndex * BadgeStaggerHorizontalStep,
-			FMath::Abs(RelativeIndex) * BadgeStaggerVerticalStep);
-		OutIndices[Index] = Index;
-	}
-}
-
-void AWacomBattleEnemyActor::RefreshBattleEnemyPartAuthoringState() const
-{
-	const_cast<AWacomBattleEnemyActor*>(this)->RefreshHostVisual();
-	SyncHostIdentityToPartActors();
-	for (AWacomBattleEnemyPartActor* PartActor : GetBattleEnemyPartActors())
-	{
-		if (PartActor)
-		{
-			PartActor->RefreshAuthoringState();
-		}
-	}
-}
-
-void AWacomBattleEnemyActor::RefreshAttachedPartBadgeLayout() const
-{
-	RefreshBattleEnemyPartAuthoringState();
-	const TArray<AWacomBattleEnemyPartActor*> PartActors = GetBattleEnemyPartActors();
-	const float CenterIndex = PartActors.Num() > 0
-		? (static_cast<float>(PartActors.Num() - 1) * 0.5f)
-		: 0.0f;
-
-	for (int32 Index = 0; Index < PartActors.Num(); ++Index)
-	{
-		AWacomBattleEnemyPartActor* PartActor = PartActors[Index];
-		if (!PartActor)
-		{
-			continue;
-		}
-
-		FVector StaggerOffset = FVector::ZeroVector;
-		int32 StaggerIndex = INDEX_NONE;
-		if (bApplyAttachedPartBadgeStagger)
-		{
-			const float RelativeIndex = static_cast<float>(Index) - CenterIndex;
-			StaggerOffset = FVector(
-				0.0f,
-				RelativeIndex * BadgeStaggerHorizontalStep,
-				FMath::Abs(RelativeIndex) * BadgeStaggerVerticalStep);
-			StaggerIndex = Index;
-		}
-		PartActor->SetBadgeLayoutStagger(StaggerIndex, StaggerOffset);
-	}
-}
-
-FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebugView() const
-{
-	return GetBattleSceneEnemyDebugViewForHUD(nullptr);
-}
-
-FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebugViewForHUD(
-	const UBattleHUD* HUD) const
-{
-	FWacomBattleSceneEnemyDebugView View;
-	const FWacomBattleSceneEnemyHostAuthoringReport AuthoringReport =
-		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*this);
-	View.ActorName = GetName();
-	View.EnemyDefinitionName = EnemyDefinition ? FName(*EnemyDefinition->GetName()) : NAME_None;
-	View.EnemyId = EnemyDefinition ? EnemyDefinition->EnemyId : NAME_None;
-	View.EnemySlotId = GetEffectiveEnemySlotId();
-	View.AuthoringMode = WacomBattleSceneEnemyAuthoring::GetHostAuthoringModeDebugString(
-		HostAuthoringMode);
-	View.HostVisualMode = GetHostVisualModeDebugName();
-	View.bUsingHostVisual = AuthoringReport.bUsingHostVisual;
-	View.bRuntimeEncounterPresentationRetired = bRuntimeEncounterPresentationRetired;
-	View.HostVisualAssetName = GetHostVisualAssetName();
-	View.HostAnimationStyleAssetName = HostAnimationStyle
-		? FName(*HostAnimationStyle->GetName())
-		: NAME_None;
-	if (HostVisualComponent)
-	{
-		View.CurrentHostAnimationClipName = HostVisualComponent->GetCurrentRuntimeClipName();
-		View.CurrentHostAnimationIntentId = HostVisualComponent->GetCurrentRuntimeIntentId();
-		View.bHostAnimationPlaybackActive = HostVisualComponent->IsRuntimePlaybackActive();
-		View.bHostAnimationTerminalState = HostVisualComponent->IsRuntimeTerminalState();
-		View.HostAnimationPlayCount = HostVisualComponent->GetRuntimePlaybackCount();
-		View.HostAnimationWatchdogCompletionCount =
-			HostVisualComponent->GetRuntimeWatchdogCompletionCount();
-		View.HostAnimationImpactNormalizedTime =
-			HostVisualComponent->GetCurrentRuntimeImpactNormalizedTime();
-		View.bHostAnimationImpactFired = HostVisualComponent->HasRuntimeImpactFired();
-		View.HostAnimationImpactCount = HostVisualComponent->GetRuntimeImpactCount();
-		View.HostAnimationWatchdogForcedImpactCount =
-			HostVisualComponent->GetRuntimeWatchdogForcedImpactCount();
-	}
-	View.GeneratedHostVisualComponentCount = GetGeneratedHostVisualComponentCount();
-	View.RegisteredHostVisualComponentCount = GetRegisteredHostVisualComponentCount();
-	View.VisibleHostVisualComponentCount = GetVisibleHostVisualComponentCount();
-	View.bUsedByBattleHUD = HUD && HUD->IsBattleSceneEnemyHostInCurrentRegistry(this);
-	View.ActiveBattleHUDName = HUD ? HUD->GetName() : TEXT("None");
-
-	const TArray<AWacomBattleEnemyPartActor*> PartActors = GetBattleEnemyPartActors();
-	View.AttachedPartActorCount = AuthoringReport.PartActorCount;
-	View.AttachedPartIds = AuthoringReport.AttachedPartIds;
-	View.AttachedPartSlotIds = AuthoringReport.AttachedPartSlotIds;
-	View.StableSceneTargetIds = AuthoringReport.StableSceneTargetIds;
-	for (const AWacomBattleEnemyPartActor* PartActor : PartActors)
-	{
-		if (PartActor)
-		{
-			const FWacomBattleSceneEnemyPartDebugView PartView =
-				PartActor->GetBattleSceneEnemyPartDebugView();
-			if (PartView.BridgeDebugView.bBoundToSnapshot)
-			{
-				++View.BoundPartActorCount;
-			}
-			else
-			{
-				++View.UnboundPartActorCount;
-			}
-			if (PartView.PresentationDebugView.bHasRuntimePartFacts)
-			{
-				++View.RuntimeFactsPartActorCount;
-				View.RuntimeInitiativeTotal += PartView.PresentationDebugView.CurrentInitiative;
-			}
-			if (PartView.PresentationDebugView.bHoverActive)
-			{
-				++View.HoveredPartActorCount;
-			}
-			if (PartView.PresentationDebugView.PredictionView.bVisible)
-			{
-				++View.PredictionVisiblePartActorCount;
-			}
-			if (PartView.BadgeLayoutStaggerIndex != INDEX_NONE)
-			{
-				++View.BadgeLayoutAppliedPartActorCount;
-			}
-		}
-	}
-	View.UnknownPartIds = AuthoringReport.IdentityAudit.UnknownPartIds;
-	View.UnknownPartSlotIds = AuthoringReport.IdentityAudit.UnknownPartSlotIds;
-	View.MissingDefinitionPartIds = AuthoringReport.IdentityAudit.MissingDefinitionPartIds;
-	View.MissingDefinitionPartSlotIds =
-		AuthoringReport.IdentityAudit.MissingDefinitionPartSlotIds;
-	View.DuplicatePartSlotIds = AuthoringReport.IdentityAudit.DuplicatePartSlotIds;
-	View.PartDefinitionMismatchSlotIds =
-		AuthoringReport.IdentityAudit.PartDefinitionMismatchSlotIds;
-	View.SurplusPartActorNames = AuthoringReport.IdentityAudit.SurplusPartActorNames;
-	View.AuthoringState = AuthoringReport.AuthoringState;
-	View.bAuthoringReady = AuthoringReport.bAuthoringReady;
-	return View;
-}
-
-void AWacomBattleEnemyActor::SetEnemyPanelViewData(const FWacomBattleEnemyPanelViewData& ViewData)
+void AWacomBattleEnemyActor::SetEnemyPanelViewData(
+	const FWacomBattleEnemyPanelViewData& ViewData)
 {
 	if (!EnemyPanelWidgetComponent)
 	{
 		return;
 	}
-
 	EnemyPanelWidgetComponent->InitWidget();
-	if (UWacomBattleEnemyPanelWidget* PanelWidget =
-		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	if (UWacomBattleEnemyPanelWidget* Panel = Cast<UWacomBattleEnemyPanelWidget>(
+		EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
-		PanelWidget->TakeWidget();
-		BindEnemyPanelInspectionDelegate(*PanelWidget);
-		PanelWidget->SetEnemyPanelViewData(ViewData);
-		PanelWidget->SetInspectionInteractionEnabled(
-			bEnemyPanelInspectionInteractionEnabled);
+		Panel->TakeWidget();
+		BindEnemyPanelInspectionDelegate(*Panel);
+		Panel->SetEnemyPanelViewData(ViewData);
+		Panel->SetInspectionInteractionEnabled(bEnemyPanelInspectionInteractionEnabled);
 	}
 	bEnemyPanelHasViewData = true;
 	RefreshEnemyPanelVisibility();
@@ -861,11 +218,12 @@ void AWacomBattleEnemyActor::SetEnemyPanelViewData(const FWacomBattleEnemyPanelV
 
 void AWacomBattleEnemyActor::ClearEnemyPanelViewData()
 {
-	if (UWacomBattleEnemyPanelWidget* PanelWidget =
-		EnemyPanelWidgetComponent ? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()) : nullptr)
+	if (UWacomBattleEnemyPanelWidget* Panel = EnemyPanelWidgetComponent
+		? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject())
+		: nullptr)
 	{
-		PanelWidget->SetInspectionInteractionEnabled(false);
-		PanelWidget->ClearEnemyPanelViewData();
+		Panel->SetInspectionInteractionEnabled(false);
+		Panel->ClearEnemyPanelViewData();
 	}
 	bEnemyPanelHasViewData = false;
 	bEnemyPanelHasActionPreview = false;
@@ -881,63 +239,60 @@ void AWacomBattleEnemyActor::SetEnemyPanelActionPreview(
 	{
 		return;
 	}
-
 	bEnemyPanelHasActionPreview = false;
 	EnemyPanelWidgetComponent->InitWidget();
-	if (UWacomBattleEnemyPanelWidget* PanelWidget =
-		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	if (UWacomBattleEnemyPanelWidget* Panel = Cast<UWacomBattleEnemyPanelWidget>(
+		EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
-		PanelWidget->TakeWidget();
-		BindEnemyPanelInspectionDelegate(*PanelWidget);
-		bEnemyPanelHasActionPreview = PanelWidget->SetActionPreviewPartViews(PreviewParts);
+		Panel->TakeWidget();
+		BindEnemyPanelInspectionDelegate(*Panel);
+		bEnemyPanelHasActionPreview = Panel->SetActionPreviewPartViews(PreviewParts);
 	}
 	RefreshEnemyPanelVisibility();
 }
 
 void AWacomBattleEnemyActor::ClearEnemyPanelActionPreview()
 {
-	if (UWacomBattleEnemyPanelWidget* PanelWidget =
-		EnemyPanelWidgetComponent ? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()) : nullptr)
+	if (UWacomBattleEnemyPanelWidget* Panel = EnemyPanelWidgetComponent
+		? Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject())
+		: nullptr)
 	{
-		PanelWidget->ClearActionPreview();
+		Panel->ClearActionPreview();
 	}
 	bEnemyPanelHasActionPreview = false;
 	RefreshEnemyPanelVisibility();
 }
 
-void AWacomBattleEnemyActor::SetEnemyPanelHoveredPart(const FName PartSlotId)
+void AWacomBattleEnemyActor::SetEnemyPanelHoveredPart(FName PartSlotId)
 {
 	if (!EnemyPanelWidgetComponent)
 	{
 		return;
 	}
-
 	EnemyPanelHoveredPartSlotId = PartSlotId;
 	EnemyPanelWidgetComponent->InitWidget();
-	if (UWacomBattleEnemyPanelWidget* PanelWidget =
-		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	if (UWacomBattleEnemyPanelWidget* Panel = Cast<UWacomBattleEnemyPanelWidget>(
+		EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
-		BindEnemyPanelInspectionDelegate(*PanelWidget);
-		PanelWidget->SetHoveredPartSlotId(PartSlotId);
+		BindEnemyPanelInspectionDelegate(*Panel);
+		Panel->SetHoveredPartSlotId(PartSlotId);
 	}
 	RefreshEnemyPanelVisibility();
 }
 
-void AWacomBattleEnemyActor::SetEnemyPanelInspectionInteractionEnabled(const bool bEnabled)
+void AWacomBattleEnemyActor::SetEnemyPanelInspectionInteractionEnabled(bool bEnabled)
 {
 	bEnemyPanelInspectionInteractionEnabled = bEnabled && bEnemyPanelHasViewData;
 	if (!EnemyPanelWidgetComponent)
 	{
 		return;
 	}
-
 	EnemyPanelWidgetComponent->InitWidget();
-	if (UWacomBattleEnemyPanelWidget* PanelWidget =
-		Cast<UWacomBattleEnemyPanelWidget>(EnemyPanelWidgetComponent->GetUserWidgetObject()))
+	if (UWacomBattleEnemyPanelWidget* Panel = Cast<UWacomBattleEnemyPanelWidget>(
+		EnemyPanelWidgetComponent->GetUserWidgetObject()))
 	{
-		BindEnemyPanelInspectionDelegate(*PanelWidget);
-		PanelWidget->SetInspectionInteractionEnabled(
-			bEnemyPanelInspectionInteractionEnabled);
+		BindEnemyPanelInspectionDelegate(*Panel);
+		Panel->SetInspectionInteractionEnabled(bEnemyPanelInspectionInteractionEnabled);
 	}
 }
 
@@ -958,15 +313,45 @@ void AWacomBattleEnemyActor::HandleEnemyPanelInspectionRequested(
 	}
 }
 
-FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const
+FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebugView() const
 {
-	return GetBattleSceneEnemyDebugSummaryForHUD(nullptr);
+	return GetBattleSceneEnemyDebugViewForHUD(nullptr);
 }
 
-FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummaryForHUD(const UBattleHUD* HUD) const
+FWacomBattleSceneEnemyDebugView AWacomBattleEnemyActor::GetBattleSceneEnemyDebugViewForHUD(
+	const UBattleHUD* HUD) const
 {
-	const FWacomBattleSceneEnemyDebugView View = GetBattleSceneEnemyDebugViewForHUD(HUD);
-	return WacomBattleSceneEnemyAuthoring::FormatHostDebugSummary(View);
+	FWacomBattleSceneEnemyDebugView View;
+	View.ActorName = GetName();
+	View.EnemyDefinitionName = EnemyDefinition ? EnemyDefinition->GetFName() : NAME_None;
+	View.EnemyId = EnemyDefinition ? EnemyDefinition->EnemyId : NAME_None;
+	View.EnemySlotId = EnemySlotId;
+	const FWacomBattleSceneEnemyHostAuthoringReport Report =
+		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*this);
+	View.AuthoringState = Report.AuthoringState;
+	View.bAuthoringReady = Report.bAuthoringReady;
+	View.PartComponentCount = Report.PartComponentCount;
+	View.PartSlotIds = Report.AttachedPartSlotIds;
+	View.PartIds = Report.AttachedPartIds;
+	View.bRuntimeEncounterPresentationRetired = IsRuntimeEncounterPresentationRetired();
+	View.bUsedByBattleHUD = HUD && HUD->IsBattleSceneEnemyHostInCurrentRegistry(this);
+	View.ActiveBattleHUDName = View.bUsedByBattleHUD ? HUD->GetName() : FString();
+	return View;
+}
+
+FString AWacomBattleEnemyActor::GetBattleSceneEnemyDebugSummary() const
+{
+	const FWacomBattleSceneEnemyDebugView View = GetBattleSceneEnemyDebugView();
+	return FString::Printf(
+		TEXT("EnemyScene{Actor=%s Definition=%s EnemyId=%s EnemySlotId=%s State=%s Ready=%s Parts=%d Retired=%s}"),
+		*View.ActorName,
+		*View.EnemyDefinitionName.ToString(),
+		*View.EnemyId.ToString(),
+		*View.EnemySlotId.ToString(),
+		*View.AuthoringState.ToString(),
+		View.bAuthoringReady ? TEXT("true") : TEXT("false"),
+		View.PartComponentCount,
+		View.bRuntimeEncounterPresentationRetired ? TEXT("true") : TEXT("false"));
 }
 
 void AWacomBattleEnemyActor::LogBattleSceneEnemyDebugSummary() const
@@ -979,14 +364,25 @@ void AWacomBattleEnemyActor::LogBattleSceneEnemyDebugSummary() const
 void AWacomBattleEnemyActor::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	RefreshBattleEnemyPartAuthoringState();
+	RefreshEnemyPanelWidgetComponent();
+	NotifyEnemySceneComponentTopologyChanged();
 }
 
-EDataValidationResult AWacomBattleEnemyActor::IsDataValid(FDataValidationContext& Context) const
+EDataValidationResult AWacomBattleEnemyActor::IsDataValid(
+	FDataValidationContext& Context) const
 {
-	return WacomBattleSceneEnemyAuthoring::ValidateHostPlacement(
-		*this,
-		Context,
-		Super::IsDataValid(Context));
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	const FWacomBattleSceneEnemyHostAuthoringReport Report =
+		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*this);
+	if (!Report.bAuthoringReady)
+	{
+		Context.AddError(FText::Format(
+			NSLOCTEXT("WacomBattleEnemyActor", "InvalidComponentHierarchy",
+				"敌人 Host {0} 的组件化制作报告为 {1}；请在 Details 同步部位并修正层级/资源错误。"),
+			FText::FromString(GetName()),
+			FText::FromName(Report.AuthoringState)));
+		Result = EDataValidationResult::Invalid;
+	}
+	return Result;
 }
 #endif

@@ -15,8 +15,7 @@
 class FWacomBattleHUDRuntime;
 class UBattleHUD;
 class UBattleSession;
-class UWacomBattleEnemyPartPresentationComponent;
-class UWacomBattleEnemyPartWorldTargetBridgeComponent;
+class UWacomBattleEnemyPartComponent;
 class UWacomFirstPersonCardAnchorComponent;
 struct FBattleCardTargetPreview;
 struct FBattleEvent;
@@ -178,7 +177,7 @@ private:
 	FWacomBattleFirstPersonDropResolver DropResolver;
 	FWacomBattleHandPresentationController PresentationController;
 	TWeakObjectPtr<UWacomFirstPersonCardAnchorComponent> LastAnchor;
-	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> CurrentDragPreviewPresentation;
+	TWeakObjectPtr<UWacomBattleEnemyPartComponent> CurrentDragPreviewPart;
 	FWacomBattleCardTargetPreviewPresentationStateKey ActiveTargetPreviewState;
 	FWacomBattleActionPreviewRequestKey ActiveActionPreviewRequestKey;
 	FWacomFirstPersonCardDragView ActiveDragView;

@@ -34,7 +34,7 @@ BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`�
 | Snapshot presentation | `FWacomBattleHUDSnapshotPresenter` | Snapshot 刷新顺序、pile count、battle end 清理、child fanout 前后协作 |
 | 命令提交 | `FWacomBattleHUDCommandController` | 玩家意图与目标校验、命令前 Snapshot / 表现上下文、构造并提交唯一 BattleSession command；不应用结果 |
 | 目标选择 | `FWacomBattleHUDTargetingController` | 维护 TargetSelect UI state、pending card 和点击入口 |
-| 场景敌人 | `FWacomBattleHUDSceneEnemyTargetCoordinator` | 同步当前 Trigger Host registry 的 PartActor bridge 和 cue |
+| 场景敌人 | `FWacomBattleHUDSceneEnemyTargetCoordinator` | 同步当前 Trigger Host registry 的 typed Part Component、UI 与 cue |
 | 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier、EndTurn 与通用 command phase plan（普通弃牌 / Deck Step） |
 | 表现计时 | `FWacomBattlePresentationTimerOwner` | App-private keyed timer ownership；统一撤销 Queue Advance、Plan Poll 和 Stack Entry Exit，隔离 World teardown |
 | Combat Log / Activity | `FWacomBattleHUDCombatLogController` | 完整 history/回合分区、短时 activity batch 投影与 Footer 持久状态 |
@@ -146,129 +146,51 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 
 ## §6 Scene Enemy UI
 
-敌人常驻状态阅读已经收敛到敌人 Host 头顶的 screen-space 聚合面板：`AWacomBattleEnemyActor.EnemyPanelWidgetComponent` 承载 abstract `UWacomBattleEnemyPanelWidget` 的正式 WBP。App-private scene-enemy coordinator 是唯一 `FBattleSnapshot.Enemies -> FWacomBattleEnemyPanelViewData` 构建者；一个 Host 面板实例只消费一个 Enemy view，面板内按稳定 `EnemySlotId + PartSlotId` 创建、排序和复用 `UWacomBattleEnemyPartEntryWidget`。Widget 不持有 BattleSession、不读取 Snapshot、不使用 Tick，也不创建 C++ fallback 布局。普通部位 hover 复用所属敌人的聚合面板响应；`AWacomBattleEnemyPartActor` / `UWacomBattleEnemyPartPresentationComponent` 不再创建部位级常驻状态 Badge。
+Scene Enemy UI 保持单向数据链：`FBattleSnapshot -> FWacomBattleHUDSceneEnemyTargetCoordinator -> FWacomBattleEnemyPanelViewData -> passive WBP`。`AWacomBattleEnemyActor.EnemyPanelWidgetComponent` 每个 Host 只承载一个敌人面板；条目按稳定 `EnemySlotId + PartSlotId` 与 `EnemyDefinition.Parts` 顺序复用。Widget 不持有 `BattleSession`、不读取 Snapshot、不使用 Tick，也不修改战斗状态。
 
-正式资产沿用兼容路径 `/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget` 与 `/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget`。WBP 独占布局、字体、颜色、九宫格和 `Intro / Damage / Shield / Destroyed / Context` 动画；C++ 只应用 ViewData 和触发语义动画。单部位与多部位现在共用同一紧凑语义：每个部位上排显示 Initiative 与 Intent，中间只有一条独立按 `CurrentHp / MaxHp` 填充且只写当前 HP 数字的生命段，下排最多显示 3 个 Buff 和 `+N`。Shield 不再占用第二条进度条；正护盾以不参与布局宽度的蓝色九宫格外框、盾牌徽章和准确数值覆盖在本部位 HP 段上，零护盾整体折叠。Preview 只覆盖 projected HP / Shield / Initiative / Status 显示，清理后恢复真实 Snapshot 值，且绝不触发真实 Damage / Shield / Destroyed pulse；同次真实刷新有多个变化时按 `Destroyed > Damage > Shield` 只播放最高语义。Destroyed 部位保留原段位、变暗并显示终态覆盖，不折叠或重排。新条目使用弱对象 timer 执行 `0.045s` stagger，clear / destruct 会清理 timer 和动画。
+正式面板资产继续使用 `/Game/Wacom/UI/Enemy` 下的单部位、多部位与详情 WBP。紧凑条中每个部位显示 Initiative、Intent、独立 HP 段、Shield 外框/徽章与 Buff；多部位等宽连接，Destroyed 段保留位置。Preview 只覆盖 projected facts，不触发真实 Damage、Shield 或 Destroyed pulse。详情点击只在 Idle、无拖卡、无 TargetSelect、无表现结算时开放；点击上报完整 `FBattlePartSlotIdentity`，由 BattleHUD 内唯一 inspection coordinator 切换或关闭详情。BattleEnd、Host/Part 移除、source clear 与 HUD destruct 强制清理。
 
-恰好包含一个有效 Definition PartSlot 的 Host 默认使用 `/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget` 与 `WBP_WacomBattleEnemySinglePartEntryWidget`，并保持约 `250 x 84`。多部位面板把同一条目按 `EnemyDefinition.Parts` 顺序放进 `HorizontalBox`，每段固定等宽 Fill，段间只保留像素分隔线；段宽不按 MaxHP 分配，因此低 HP 部位的 Initiative / Intent / Buff 不会被挤到相邻段。两者消费完全相同的 `FWacomBattleEnemyPanelViewData`，不建立单部位专用 Snapshot 链。紧凑条不再显示敌人名、部位名、Intent 名称或 Resistance；这些事实只进入详情面板。Destroyed 优先显示 `X` 并抑制 Initiative / Intent change pulse。显式 `EnemyPanelWidgetClass` 始终拥有最高优先级。
+### 唯一场景制作结构
 
-紧凑条的点击只代表“检查部位”的 UI 意图。`UWacomBattleEnemyPartEntryWidget` 通过透明 `InspectHitTarget` 向 Panel、Host 和 scene-enemy coordinator 上报完整 `FBattlePartSlotIdentity`；只有 `EBattleUIState::Idle`、PlayerAction、没有拖卡、Action Preview 或表现结算时才启用。Host 的 screen-space `WidgetComponent` 固定进入专用 `WacomBattleEnemyPanelScreenLayer`，层级 `8000`：它高于默认 viewport / BattleHUD，保证真实 Slate 点击能到达热区；低于详情面板 `8500` 和 first-person 手牌 `9996`。按钮自身为 `Visible` 还不够：从 `InspectHitTarget`、动态 `PartList` 到各自 Root 的完整祖先链都必须允许子控件命中，只能使用 `Visible` 或 `SelfHitTestInvisible`；任何 `HitTestInvisible` 祖先都会使按钮永久不可点击。TargetSelect、拖卡、Resolving、BattleEnd 和 source clear 会立即关闭详情并把紧凑条恢复为 `HitTestInvisible`，此时专用层不会阻挡 BattleHUD 世界目标射线或 first-person 手牌输入。Escape / Back 先取消既有拖卡或目标选择，随后才在 Idle 关闭详情；不新增 `Inspect` Battle UI state，也不依赖焦点或 Tick。
+所有敌人，无论单部位或多部位，都使用同一组件层级：
 
-BattleHUD 生命周期内只维护一个 `/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionWidget`。App-private `FWacomBattleHUDEnemyInspectionCoordinator` 把现有 `FWacomBattleEnemyPanelViewData` 与选中的稳定 Part identity 组合成 `FWacomBattleEnemyInspectionViewData`：点击同一部位关闭，点击其它部位或其它敌人原地切换；Snapshot 刷新复用同一个 Widget 和 Definition 顺序的导航 Row。左侧显示敌人名、剩余部位整体状态和部位导航；右侧显示选中部位的当前/最大 HP、Shield、Initiative、Intent 名称、Intent Initiative、Resistance、完整 Buff / 层数和 Destroyed 状态。左右面板各自从屏幕侧边进入，中央战场与底部手牌不被遮罩或暂停。BattleEnd、Host/Part 移除、session/source clear 和 HUD destruct 会强制清理。
-
-`FWacomBattleEnemyPartEntryViewData.CurrentIntentId` 是图标选择的稳定表现事实。`DA_EnemyIntentPresentation_Default` 只做准确 `IntentId -> Brush` 映射，不读取显示名、不分析效果；未命中映射时使用白色四角星。Action Preview 若表明部位即将行动，Initiative 显示 `0`，但 Intent ID、名称、意图先机和抵抗继续使用命令前 Snapshot 的当前 Intent，不提前展示行动完成后才轮换出的下一 Intent。Preview 变化不触发 Initiative / Intent pulse。
-
-Host 类解析顺序为：显式 `EnemyPanelWidgetClass` override；恰好一个有效 Definition PartSlot 时的 `DefaultBattleEnemySinglePartPanelWidgetClass`；其它情况的 `DefaultBattleEnemyPanelWidgetClass`。单部位默认类无效时记录错误并回退多部位默认类；最终无有效类时隐藏面板，不实例化完整原生 fallback。WidgetComponent 默认 `DrawAtDesiredSize=true`、Pivot `(0.5, 1.0)`，1–4 个部位向上增长；关闭 Desired Size 才使用固定 `EnemyPanelDrawSize`。普通面板超过 4 个 Definition PartSlot 时只给制作警告，未来由 Boss 专用 WidgetClass 承接。`bEnemyPanelVisibleByDefault=false` 时，面板仅在 hover 或有效 Preview 上下文显示。
-
-场景敌人视觉绑定正式入口是 `ABattleTriggerActor.SceneEnemyHostSlots + AWacomBattleEnemyActor + AWacomBattleEnemyPartActor`；规则敌人列表由 `ABattleTriggerActor.EncounterDefinition` 转换成 `FBattleInitParams.EnemySlots`。新制作应把敌人做成 Host 蓝图 prefab：给 Host 配置 `EnemyDefinition`，在 Host Details 点击“从 EnemyDefinition 同步部位”，由 Editor service 从纯 Authoring Report 的计划生成 / 对齐 ChildActorComponent，再摆放各部位的命中与视觉；然后在 Trigger 选好 `EncounterDefinition` 后执行 `SyncSceneEnemyHostSlotsFromEncounter()`，在生成的 `SceneEnemyHostSlots` 中按 `EnemySlotId` 绑定对应 Host。
-
-Trigger 显式 `SceneEnemyHostSlots.EnemySlotId` 必须填写且不重复，并对应 `EncounterDefinition.EnemySlots[].EnemySlotId`。配置 `EncounterDefinition` 的正式 Trigger 必须用 `SceneEnemyHostSlots` 覆盖每个有效 EnemySlotId；缺 Host、漏映射或多余 EnemySlotId 都是编辑器验证错误。进入战斗时 GameMode 把当前 Trigger 的 Host 列表传给 BattleHUD，HUD 只同步当前 Host registry 中扫描到的 PartActor bridge。HUD registry 是 Host 列表，不维护“主 Host”兼容缓存。
-
-敌人视觉有两条正式制作模式：
-
-- `HostAuthoringMode=SimpleHostVisual` 推荐用于普通小怪：在 `AWacomBattleEnemyActor` 的 `Presentation|Host Visual` 配整体 `PaperSprite` 或 `PaperFlipbook`，Head / Body / Tail 等子 `AWacomBattleEnemyPartActor` 只负责 `PartId / PartSlotId / HitBounds`、target bridge、Presentation、预测和状态 Badge。PartActor 没有 `VisualLayers` 时进入 `HitOnly` 视觉模式，自身不生成可见体；反馈、Badge 和预测仍跟随该部位自身的 Presentation。
-- `HostAuthoringMode=MultiPartVisualLayers` 用于多部位精英 / Boss：PartActor 是单个规则部位的表现容器。`HitBounds` 是唯一 hover、点击和拖卡命中范围；`VisualLayers` 只负责多张图的相对位置、旋转、缩放、排序、颜色、显隐和轻量序列帧播放。每层用 `LayerMode` 选择 `StaticSprite` 或 `Flipbook`，并可选配置同模式的 `DestroyedSprite / DestroyedFlipbook`；破损 Flipbook 以正数 `DestroyedFlipbookPlayRate` 非循环播放并保持末帧。`VisualLayers` 非空时优先于 Host 的 HitOnly 语境；为空且没有 Host 整体视觉时进入 `None / MissingVisualResource` 诊断。制作模式只改变 validator / Details 诊断，不清除或转换已有视觉资源。
-
-`SimpleHostVisual` 的 Flipbook Host 可以配置 `UWacomBattleEnemyHostAnimationStyle`。现有 `HostFlipbook` 始终是 Idle 真源；Style 只声明 `DefaultActionClip`、显式 `IntentId -> Clip` 和 `DestroyedClip`。显式 Intent 映射优先于默认 Action，运行时不根据 Intent、Actor 或资产名称猜测动画。Clip 资源和正数有限 `PlayRate` 由 Data Validation 检查；Host 配置 Style 但不是有效的 Simple Flipbook Host 时进入制作警告。
-
-本地 PIE 可以执行 `Scripts/SetupBattleEnemyHostAnimationPIEAssets.py`，幂等生成 `/Game/Art/WacomPIE/EnemyHostAnimation/DA_EnemyHostAnimation_BattleWarrior_PIE` 和 `BP_SnakeHost_BattleWarrior_PIE`。脚本使用本地 `PaperAssets/Party/BattleWarrior` 的 Idle、Attack、Block、Cleave 和 Downed，只配置复制出来的 Debug Snake Host；不会修改正式 `/Game/Wacom` Host。`/Game/Art` 由 worktree 的 D 盘 Junction 提供且被 Git 忽略，这组资产只用于 PIE，不代表授权、Git LFS 或正式出货接入已经完成。运行命令：
-
-```powershell
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Worktree>\Wacom.uproject' -ExecutePythonScript='<Worktree>\Scripts\SetupBattleEnemyHostAnimationPIEAssets.py' -Unattended -NoSplash -NullRHI
+```text
+AWacomBattleEnemyActor
+├─ EnemySceneRuntime
+├─ Part_*      [UWacomBattleEnemyPartComponent : UBoxComponent]
+│  ├─ Visual_* [UWacomBattleEnemyPartFlipbookLayerComponent / SpriteLayerComponent]
+│  └─ ImpactAnchor [UWacomBattleEnemyPartImpactAnchorComponent]
+└─ EnemyPanel
 ```
 
-正式 TrainingWarrior 不再走这条 PIE 脚本。`BP_EnemyHost_TrainingWarrior` 使用 `/Game/Wacom/Art/Enemies/TrainingWarrior` 下已晋升并由 Git LFS 管理的 Idle / Attack / Block / Cleave / Destroyed：Idle 循环 1.0；Attack 故意从 Style 的 Default Action 以 0.75 播放；`TrainingWarrior.Body.Guard` 显式映射 Block 1.0；`TrainingWarrior.Body.Cleave` 显式映射 Cleave 0.75；整体破坏映射 Destroyed 0.75。Host 只有一个 hit-only Body PartActor，命中与拖卡沿用正式 Pixel Style。正式运行时不加载 `/Game/Art`，也不根据动画名称猜 Intent。
+- `UWacomBattleEnemyPartComponent` 的 Component Transform 是部位位置唯一真相，`BoxExtent` 是 hover、点击与拖卡 HitBounds 唯一真相。
+- 内容人员填写 `PartSlotId`；`PartId` 由 `EnemyDefinition.Parts` 派生。规则顺序、HUD 顺序和 registry 顺序都来自 Definition，不按组件名、创建顺序或 Actor 名推断。
+- Sprite/Flipbook Layer 必须是 Part 的直接 typed 子组件。其真实 Paper2D Transform、资源、Tint、Material、Sort、播放配置就是视口制作数据，不再存在生成 VisualLayers、Host 整体视觉或 ChildActor 镜像。
+- ImpactAnchor 必须是 Part 的直接 typed 子组件；缺失时运行时回退到 Part 原点。视觉透明区域、排序和尺寸不改变目标身份。
+- TrainingWarrior 是一个 Body Part；Snake 与 SlimeTrio 是三个 Part。系统不再区分 Simple Host 与 Multi-Part 模式，Host 本身不持有 Sprite、Flipbook 或 Animation Style。
 
-每个 PartActor 原生携带一个无碰撞 `ImpactAnchor`，默认位于 `HitBounds` 中心；`ImpactAnchorRelativeLocation` 以厘米为单位，只用于世界命中特效的美术微调，不改变命中盒、目标身份或 Battle 规则。HitOnly 与 VisualLayers 两条制作路径共享这一合同。Authoring Status / debug view / summary 会报告锚点组件名和世界位置，非有限偏移会被 Data Validation 判为错误。
+Host Details 的“从 EnemyDefinition 同步部位”由 `WacomEditor` 独占写入：为缺失槽位创建 Part、默认 `Visual_Main` Flipbook Layer 和 ImpactAnchor；已有部位只修正派生 `PartId`。同步保留 Component Transform、BoxExtent、Layer、资源与 Anchor，不删除 surplus，不在 PIE/game world 写入；无变化不创建事务、不 dirty package。纯 Authoring Report 与 Validator 只读检查缺失/重复/未知槽位、PartId mismatch、重复 LayerId、错误父子关系、多 Anchor、空视觉、无效 Animation Style 与 terminal clip 冲突。
 
-Host 整体视觉的 `HostVisualMaterialOverride / bHostVisualCastShadow` 和每个 VisualLayer 的 `MaterialOverride / bCastShadow` 会应用到动态生成的 `UPaperSpriteComponent / UPaperFlipbookComponent`。需要 Sprite 投射阴影时，材质覆盖应使用 Paper2D 的 `MaskedLitSpriteMaterial` 或等效 lit masked 材质，并确保场景光源开启阴影；默认字段为空 / false 时保持无材质覆盖、无投影。
+### Runtime registry 与表现
 
-Host 整体视觉和 PartActor `VisualLayers` 的生成组件会在构造 / Details 刷新 / 显式刷新时重建，并在 PIE / runtime `BeginPlay` 再刷新一次，保证蓝图视口和实际运行一致。生成的 PaperSprite / PaperFlipbook 组件只在 Actor 拥有有效 `World` 时注册；蓝图模板、CDO 或 Details 预览这类无 World 场景只更新配置和诊断缓存。
+`UWacomBattleEnemySceneRuntimeComponent` 在 Host 内集中管理 typed Part 的运行时身份、Snapshot facts、targetable、hover、preview、prediction、cue、Action、Destroyed、Niagara、声音、Widget 与 watchdog。它只在组件注册、注销、销毁或显式 topology 通知时重建缓存；普通 Snapshot 不扫描层级、不改 Transform、不重置 Flipbook，也不重建 authored 组件。
 
-Details 制作分组按主路径整理：Host 的 `Identity` 配置 `EnemyDefinition / EnemySlotId`，`Authoring` 选择 `HostAuthoringMode` 并提供定义同步 / 非生成刷新按钮，`Presentation|Host Visual` 配普通怪整体 sprite / flipbook，`Presentation|Host Animation` 配语义动画 Style，`Presentation|Badge Layout` 配部位 Badge 错开，`Authoring Status` 显示只读制作诊断和最近同步结果，`Debug Sample` 只放开发样例按钮。PartActor 的 `Identity` 主要填写 `PartSlotId`，`PartId` 由定义同步派生，`Collision` 配置 `HitBoundsExtent`；普通怪 PartActor 可以不配独立视觉，精英 / Boss 正式美术走 `Visual Layers`。PartActor 不再提供旧 StaticMesh 原型可见体入口。
+HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 identity，不再缓存 Bridge/Presentation Actor 适配器。场景射线优先读取 `HitResult.Component` 上的 `IWacomInteractionTargetProvider`；Actor fallback 只服务非战斗世界目标。BattleTrigger 仍按 Encounter 顺序把 `EnemySlotId -> Host` 交给 HUD，Host runtime 再为 Part 解析 `EncounterId + EnemySlotId + PartSlotId + PartInstanceId`。
 
-Host Details 的 `Authoring Report`、Host validator、debug view 和 summary 使用同一个实时纯报告，不再依赖 Actor 上缓存的“当前 Authoring Status”。Host `AuthoringState=Ready` 表示 `EnemyDefinition`、子 PartActor、`PartId` 和 `PartSlotId` 对齐；常见异常包括 `MissingEnemyDefinition`、`NoPartActors`、`DuplicatePartSlotIds`、`PartSlotMismatch` 和 `PartDefinitionMismatch`。报告还显示待新增、待修正、无效定义槽位和 surplus；重复读取报告或运行 `IsDataValid()` 不得改变身份、组件、VisualLayers、Flipbook 播放、topology revision、Last Sync 或 package dirty 状态。PartActor 仍保留自身的制作状态预览，区分 `UsingVisualLayers`、`HitOnly`、`MissingIdentity`、`InvalidHitBounds` 和 `MissingVisualResource`。
+确认、伤害、目标预演与 Destroyed 使用 Part 上的反馈设置，并复用 Host 默认 `UWacomBattleEnemyPartImpactStyle` / `UWacomBattleEnemyPartTargetPreviewStyle`。粒子在 typed ImpactAnchor 生成；缺 Style/System/MI 时只跳过对应装饰，不阻塞 cue、破损换图或规则结算。Destroyed 在 marker 到点时原地切换真实 Sprite/Flipbook Layer，组件指针和 topology revision 不变。
 
-Host 整体视觉和 `VisualLayers` 都只属于表现层。有效 `EnemyPartActed`（`Count > 0`）在 presentation queue 中保留完整 `FBattlePartSlotIdentity` 并严格串行；`SimpleHostVisual` 继续调用 Host Animation Style，`MultiPartVisualLayers` 则精确调用匹配 PartActor 的 `UWacomBattleEnemyPartAnimationStyle`。缺 Host、Part、Style、Clip 或有效目标层时同步完成请求，不按 Intent 名、Actor 名、Layer 顺序或首个部位猜测。
+`UWacomBattleEnemyPartAnimationStyle` 用精确 `TargetVisualLayerId`、Default Action 与 `IntentId -> Clip` 驱动同一 Part 的真实 Flipbook Layer；不根据名称或层顺序猜测。Clip 的 `ImpactNormalizedTime` 把 Enemy Action Journal 分成 `OnImpact` 与 `OnCompleted`：Impact 才推送行动后 Combat facts，完成才释放下一行动 barrier。共享 App-private playback 统一 weak timer、watchdog、serial 与 exactly-once；cancel 丢弃旧 Impact但完成 barrier。Style 可选 `EnemyDestroyedClip`，同一 Host 最多一个 Part Style 拥有整体死亡 Clip；TrainingWarrior Body 用它播放 Downed，Snake/SlimeTrio 当前只保留逐部位终态。
 
-Part Animation Style 只声明一个稳定 `TargetVisualLayerId`、`DefaultActionClip` 和显式 `IntentId -> Clip`；显式映射优先于默认 Action，Destroyed 仍由 VisualLayer 自身的 `DestroyedFlipbook` 合同拥有。行动在同一个 `UPaperFlipbookComponent` 上非循环播放，以 `OnFinishedPlaying` 和一次性 duration watchdog 作为队列 barrier，结束后恢复 authored Flipbook、PlayRate、Looping、StartTime 与 AutoPlay。Destroyed 优先并会安全结束残留 Action；Snapshot refresh、相同 Host 设置和无拓扑变化的 registry 操作不会重播或重置。复杂多层联动、PaperZD 与 Boss Phase 仍留给后续能力。
+BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、preview、panel；同批队列只保留弱 Host/Part 引用完成已排队 Action 或 terminal clip。真正的探索场景退役仍由 BattleTrigger 在胜利结算和返回镜头 barrier 完成后执行：清运行时表现、隐藏 Host、关闭 Part collision，最后销毁 Trigger。Withdraw、Defeat、Undetermined 或结算失败不退役。
 
-Host / Part Action Clip 共享 `ImpactNormalizedTime`（默认 `0.55`）和 `OnImpact / OnCompleted` 双阶段合同。队列开始行动时保持 Journal 的行动前 Combat facts；Impact timer 到点才应用对应 `SnapshotAfter` 的玩家 HP、护盾、状态与敌人护盾、Intent、Initiative 等 Combat facts，动画真正结束后才释放下一行动的 barrier。提前完成或 watchdog 会先补发一次 Impact 再 Complete；缺失 Host、Style、Clip、Layer 或 World 时两个回调按同样顺序同步完成。`Count == 0` 不播动画但立即应用行动后 facts，因此中毒等行动后结算仍可反馈。Combat-only refresh 不同步手牌、牌堆或 first-person transition；Journal 缺失或序号不匹配时不猜中间状态，最终权威 Snapshot 仍负责回收。
+### 正式内容口径
 
-上述双阶段生命周期只有一个实现：App-private `FWacomBattleEnemyActionPlayback` 持有弱 UObject timer、watchdog、serial 和 exactly-once 回调状态。Host / Part visual component 不再各自保存 timer 或 pending callback，只负责原地换片与完成后的视觉收尾。natural finish / watchdog 会补发尚未到达的 Impact；cancel 不提交旧 Impact但一定完成 barrier；后续播放通过 serial 令旧 timer 和回调失效。Host Destroyed 复用同一生命周期但不创建 Impact timer，并保持末帧终态。
+- `BP_EnemyHost_TrainingWarrior`：Body Part 的 `Visual_Main` 使用正式 Idle，`DA_EnemyPartAnimation_TrainingWarrior` 映射 Attack/Guard/Cleave，并把 Downed 配为 `EnemyDestroyedClip`。
+- `BP_EnemyHost_Snake` 与 `BP_SnakeHost_Debug`：Head/Body/Tail typed Part，各自一个 `Snake.<Part>.Main` Flipbook Layer与单帧 Destroyed；当前没有 Action Style。
+- `BP_EnemyHost_SlimeTrio`：Left/Core/Right typed Part，各自一个 `SlimeTrio.<Part>.Main` Flipbook Layer与单帧 Destroyed；当前没有 Action Style。
+- Snake/SlimeTrio 的 Placeholder 仍必须被发布审计 `-FailOnPlaceholder` 阻止出包。
 
-表现编排自身的短延时不由 Queue、Plan 或 Stack 分散持有。App-private `FWacomBattlePresentationTimerOwner` 以 `EventQueueAdvance`、`PresentationPlanPoll` 和带 Stack Entry Id 的 `StackEntryExit` 为稳定 key，保存注册时的原始 World、handle、serial 与业务回调；引擎 TimerManager 只持有弱 owner delegate。正式 `Shutdown / ClearQueue / ClearPresentationPlan / ClearBattlePresentationStack` 精确撤销对应 key，HUD 在 World 已不可访问的析构路径只遗弃 owner 回调，旧 timer 即使晚到也因弱 owner / serial 失效。该收敛不改变 `0.16s` Queue 延时、`0.03s` Plan Poll、`0.01s` Stack Exit、已有 barrier 或视觉顺序；cancel 也不会补发 Impact 或虚构完成后的表现事实。
-
-正式 Snake prefab 为 `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`。它绑定 `DA_Enemy_Snake`、`EnemySlotId=Enemy`，使用 `MultiPartVisualLayers`，清空 Host Sprite、Flipbook、Animation Style 和面板 override；三部位 Definition 因此自动使用现有多部位 WBP。Builder 必须通过 `FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition()` 生成三个 ChildActorComponent，再按稳定槽位配置：
-
-| PartSlotId | Relative Location | PartId | HitBoundsExtent | Visual scale | Idle offset |
-|---|---:|---|---:|---:|---:|
-| `Head` | `(96,-6,16)` | `Snake.Head` | `(42,38,42)` | `0.85` | `0.00s` |
-| `Body` | `(0,0,0)` | `Snake.Body` | `(62,46,42)` | `1.00` | `0.04s` |
-| `Tail` | `(-92,16,-8)` | `Snake.Tail` | `(48,34,34)` | `0.70` | `0.08s` |
-
-每个 Part 只有一个 `Snake.<Part>.Main` Flipbook VisualLayer，复用 `/Game/Wacom/Art/Placeholders/Enemies/Snake` 的 Idle，并绑定自己的单帧 Destroyed Flipbook；局部换图 marker 保持 `0.35`。该 Slime 组合可提交和开发验证，但发布审计必须用 `-FailOnPlaceholder` 阻止出包。通用 Part Action runtime 已可用，但正式 Snake prefab 当前故意不配置 `PartAnimationStyle`，因为没有获准提交的 Head / Body / Tail 行动素材；因此三段仍只持续错帧 Idle。最后部位破坏后保持三个局部终态，等待返回探索镜头后统一退役。
-
-开发敌人 SlimeTrio 使用独立 `/Game/Wacom/Core/Enemy/BP_EnemyHost_SlimeTrio` 和 `/Game/Wacom/Art/Placeholders/Enemies/SlimeTrio`，不会覆盖 Snake。Definition 顺序固定为 Left / Core / Right，Host 使用 `MultiPartVisualLayers` 并自动选择普通多部位面板：
-
-| PartSlotId | Relative Location | PartId | HitBoundsExtent | Visual scale | Idle offset | Sort |
-|---|---:|---|---:|---:|---:|---:|
-| `Left` | `(-88,8,-6)` | `SlimeTrio.Left` | `(46,38,40)` | `0.90` | `0.00s` | 10 |
-| `Core` | `(0,0,8)` | `SlimeTrio.Core` | `(56,44,48)` | `1.10` | `0.04s` | 20 |
-| `Right` | `(88,-8,-6)` | `SlimeTrio.Right` | `(46,38,40)` | `0.90` | `0.08s` | 30 |
-
-每段只有一个 `SlimeTrio.<Part>.Main` Flipbook VisualLayer，三段共享 Idle，分别绑定由 Idle 帧 1 / 2 / 3 生成的 Left / Core / Right 单帧 Destroyed，换图 marker 为 `0.35`。局部破坏只替换对应段，其余 target 继续有效；最终部位破坏后保持全部局部终态，返回探索后由 Trigger 统一退役。当前素材没有行动动画，因此三个 Part 的 `PartAnimationStyle` 必须为空，行动请求按正式缺 Clip 合同同步完成。
-
-`EnemySlotId` 由 Host / Trigger 注入，不在 PartActor 模板里手填。Host validation 会同时检查 `PartId` 与 `PartSlotId`：`PartId` 必须对应 `UEnemyPartDefinition::PartId`，`PartSlotId` 必须对应 `UEnemyDefinition.Parts[].PartSlotId`。蛇的正式绑定身份是 `Enemy + Head/Body/Tail`，不是 `Enemy + Snake.Head/Snake.Body/Snake.Tail`。
-
-Host Details 的“从 EnemyDefinition 同步部位”是显式、幂等的通用制作入口。`WacomEditor` 先为全部选中 Host 建立纯报告，再用一次 `FScopedTransaction` 应用计划：仅按 `PartSlotId` 匹配定义，为已有唯一槽位派生 `PartId`，为缺失槽位新增零相对变换、默认 facade 的 PartActor ChildActorComponent。Host Blueprint 模板上的新增部位写入 SCS，并在 Compile / Save / Reload 后保留；关卡 Host 实例上的新增部位是 transactional InstanceComponent，不反向修改来源 Blueprint。同步不覆盖已有位置、`HitBoundsExtent`、`ImpactAnchorRelativeLocation` 或 `VisualLayers`；空、未知和重复部位只标记为 surplus，不静默删除；无效定义槽位跳过并进入 Last Sync。无实际变化时不创建事务、不 dirty package；创建失败明确返回 `ApplyFailed / PartiallyApplied`。Actor 上不再暴露旧 `CallInEditor` 同步函数。
-
-Host 的 `RefreshBattleEnemyPartAuthoringState()` 仍是 Construction / 显式表现刷新入口：它可以刷新 Host visual、扫描 PartActor 并更新 Part 表现状态，但不负责纯报告求值、Validator 或 runtime Snapshot sync。它不会创建 PartActor，也不会自动补齐身份；需要生成或派生时使用 Host Details 的正式同步按钮。
-
-Trigger 正式单蛇配置使用生成资产 `DA_Encounter_SnakeSingle`：`PersistentId` 填关卡唯一值，`EncounterDefinition=DA_Encounter_SnakeSingle`；执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 `SceneEnemyHostSlots[0].EnemySlotId=Enemy`，再把 `SceneEnemyHostSlots[0].SceneEnemyHost` 指向关卡里的 Snake Host 实例。`EncounterDefinition` 正式入口不能缺 Host 映射。
-
-Debug 蛇样例已迁入 Host Details 的 `Advanced Debug` 折叠区，只支持单选 Host，并由 `WacomEditor` 使用独立事务执行。先在 Host 蓝图中放好 Head / Body / Tail 三个 PartActor，再点击“配置 Debug 蛇样例”；该操作扫描 live 子 Actor 和 ChildActor template 并写入样例身份、位置与 badge stagger，不自动创建缺失部位，也不创建正式美术资产。普通蛇的正式美术由 Host `Presentation|Host Visual` 配整体图，精英 / Boss 才优先在各 PartActor 配 `VisualLayers`。
-
-Host 蓝图视口中的 `SnakeHeadPart / SnakeBodyPart / SnakeTailPart` 是 `ChildActorComponent`；关卡 Outliner 会在 Host 实例下显示它们生成出来的 `WacomBattleEnemyPartActor...` 子 Actor，这是正常现象。运行时和摆放校验优先使用这些已生成的真实子 Actor；只有蓝图模板 / CDO 等没有生成实例的场景才读取 ChildActor 模板，避免同一组 Head / Body / Tail 被重复计入 Host registry。
-
-每个 PartActor 默认携带两类运行时组件：
-
-- `UWacomBattleEnemyPartWorldTargetBridgeComponent`：只负责 `EncounterId / EnemySlotId / PartSlotId -> PartInstanceId` 绑定、当前 HUD registry 标记、targetable 绑定诊断，以及把运行时身份写入 `UWacomInteractionTargetComponent`。
-- `UWacomBattleEnemyPartPresentationComponent`：负责 hover target、TargetSelect 可选提示、first-person drag preview、`TargetConfirmed / DamageDealt / EnemyPartHpEmptied` 语义 Cue Playback、只读预测 Widget 和常驻状态 Badge。Cue Playback 互斥并按 `Destroyed > Damage > TargetConfirmed` 覆盖，只在活动期间 Tick；Cue 不再写敌人 Scale。普通 Hover / Targetable 仍使用轻量 authored scale；拖卡已经锁定具体世界部位时恢复 authored base scale，由独立像素目标框承担空间提示，不再叠加旧 `1.08x` Drag Preview 放大。
-
-Cue 的持续时间优先读取 `FWacomBattlePresentationTargetCue.Duration`，无效时使用 PartActor 的 `CueHoldSeconds`。`TargetConfirmed=0.24s`、`Damage=0.30s`；世界伤害批次在首个 Damage 前保留约 `0.14s` 的确认可读窗口，随后 Presentation Queue 仍按伤害事件顺序逐条播放。Cue 的 `Seed` 只服务稳定的表现随机：确认由来源卡实例与目标部位构造，伤害由事件 Sequence、目标部位和实际 HP 损失构造；它不是 Battle RNG，也不参与规则恢复。解绑、BattleEnd、EndPlay、目标组件/Style 切换和 reset 会清理 Playback、关闭 Tick、立即停用 Niagara 并恢复 authored scale。
-
-世界目标确认、伤害与部位破坏反馈使用 `UWacomBattleEnemyPartImpactStyle` 和一个由 Part Presentation 按需创建、复用的 `UNiagaraComponent`。Style 解析顺序固定为 `PartActor.ImpactStyleOverride -> EnemyHost.DefaultImpactStyle -> None`；关闭 Part 的 `bEnableImpactFeedback` 或缺失 Style/System/MI 时仍消费 Cue，但不创建 VFX，也不会阻止破损资源终态。`TargetConfirmed` 使用角部像素刻线收束与语义中心方印，`Damage` 使用中心硬闪、菱形冲击环和短程像素碎片；`Destroyed` 使用不受 Flash Off 影响的中心硬质裂印 / 角部撕裂结构和可被 Reduced Motion / DecorativeIntensity 关闭的远距大碎块。三者读取当前 PartActor 的 `HitBounds`，按摄像机平面投影得到基准直径，并由 Style 的 fallback / min / max 控制异常尺寸。
-
-`EnemyPartHpEmptied` 被 Playback 接受后立即开始 Destroyed 粒子；当 0.30 秒 Cue 进度跨过 `DestroyedVisualSwapNormalizedTime`（默认 `0.35`）时，VisualLayer Component 在原有 Paper 组件上调用 `SetSprite / SetFlipbook`，不执行 `RefreshVisualLayers()`。缺少对应破损资源的层保持 authored 资源；HitOnly Part 只有局部粒子，整体终态仍由 Host Downed 承担。重复 Cue 幂等，强制完成 Cue 会先应用终态；初次绑定已 destroyed Snapshot 直接恢复终态且不重播粒子。普通 Snapshot、相同 Host 重设和 topology rebuild 不恢复终态；新战斗首次接管 Host 时统一恢复 Host Idle 与全部 Part authored 资源。
-
-拖卡悬停世界部位使用独立的 `UWacomBattleEnemyPartTargetPreviewStyle`、App-private Preview Playback 和第二个按需创建/复用的 Niagara Component。Style 解析顺序为 `PartActor.TargetPreviewStyleOverride -> EnemyHost.DefaultTargetPreviewStyle -> None`；它与短时 Impact Component 分离，因此持续悬停不会占用或重启 TargetConfirmed / Damage。有效目标显示覆盖整个 `HitBounds` 摄像机平面投影的冰蓝/象牙金四角像素框，并在中心保留空心菱形；进入约 `0.18s` 从 `1.12x` 收束，停留阶段只做弱亮度呼吸。无效世界目标显示暗紫红断裂框且没有中心菱形。切换或离开约 `0.10s` 淡出；预测 Badge 继续解释先机和拒绝原因。`UIMotionMode=Simplified` 直接显示静态语义框，`FlashEffectMode=Off` 只关闭呼吸辉光，不隐藏有效/无效判定。
-
-Niagara 公共合同固定为 `User.EffectKind / Duration / Intensity / Seed / DecorativeIntensity / ReducedMotion / ImpactMaterial / PlaneRight / PlaneUp / TargetDiameter`；目标预演分支另外使用 `TargetWidth / TargetHeight / PreviewAmount / PreviewValidity / PreviewPulse`。`EffectKind=0/1/2/3` 分别表示 TargetConfirmed、Damage、TargetPreview、Destroyed。Damage 强度只改变视觉密度/尺寸，公式为 `clamp(0.75 + sqrt(max(实际 HP 损失, 0)) * 0.10, 0.80, 1.80)`，不延长 Cue；Destroyed 默认强度和覆盖倍率均为 `1.35`。特效平面使用当前玩家摄像机 Right/Up，在 `ImpactAnchor` 朝摄像机方向偏移 Style 指定距离（默认 `2cm`），保留正常深度遮挡。`UIMotionMode=Simplified` 由 Niagara 保留静态语义方印 / 裂印并关闭收束、扩散和碎片位移；`FlashEffectMode=Reduced/Off` 只把装饰强度降为 `35%/0%`，语义中心方印、裂印、破损换图和声音保留。设置在每次 Cue 或 Preview 开始时快照。
-
-视觉真源为 `DShader/Material/World/M_WacomBattleEnemyPartImpactPixel.dsm` 与 `DShader/Shared/WacomBattleEnemyPartImpactPixel.dsh`，命中默认 MI 为 `/Game/DreamMaterials/World/MI_WacomBattleEnemyPartImpactPixel_Default`，目标预演默认 MI 为 `/Game/DreamMaterials/World/MI_WacomBattleEnemyPartTargetPreviewPixel_Default`。材质是 `Surface / Unlit / Translucent / TwoSided`，开启 Niagara Sprite usage，不读取贴图、Time 或 Noise。Impact 粒子的 Dynamic Material Parameter 为 `X=ShapeKind、Y=NormalizedAge、Z=PaletteVariant、W=Semantic/Decorative`；TargetPreview 为 `X=PreviewShape、Y=PreviewAmount、Z=Validity、W=Pulse×DecorativeIntensity`。DataAsset 管理 System、MI、节奏、覆盖尺寸、摄像机偏移和可选声音，颜色、像素密度、线宽和辉光只在 MI 调整。
-
-Niagara Graph 的项目真源是现有 System 资产加 WacomEditor-only 生成器：`WacomBuildBattleEnemyPartImpactNiagara` 会验证十五个 User Parameter、`ConfirmStamp / DamageCoreWave / DamageFragments / DestroyedFracture / DestroyedFragments / TargetPreview` 六个 Emitter 和 Sprite Renderer 的 `User.ImpactMaterial / Particles.DynamicMaterialParameter` 绑定，再按版本化生成合同幂等重建 Burst、Spawn/Update 属性与四通道写入并强制编译。缺少生成型 Emitter 时生成器会从现有 ConfirmStamp 模板补齐；合同版本、Emitter、Renderer、参数和编译全部有效时直接跳过 package 写入，避免随机节点 GUID 造成资产噪音。生成器依赖 UE 5.8 的 experimental Niagara external-edit API，因此严格留在 `WacomEditor/Private`；升级引擎时必须先重跑生成和编译验证，不能让运行时模块依赖 NiagaraEditor。编辑器关闭后可执行：
-
-```powershell
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Worktree>\Wacom.uproject' -run=WacomBuildBattleEnemyPartImpactNiagara -Unattended -NoSplash -NullRHI -NoDreamShaderEditorBridge
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Worktree>\Wacom.uproject' -ExecutePythonScript='<Worktree>\Scripts\SetupBattleEnemyPartImpactAssets.py' -Unattended -NoSplash -NullRHI -NoDreamShaderEditorBridge
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Worktree>\Wacom.uproject' -ExecutePythonScript='<Worktree>\Scripts\SetupBattleEnemyPartTargetPreviewAssets.py' -Unattended -NoSplash -NullRHI
-```
-
-第一条命令负责 Niagara Stack 和编译合同；后两条分别配置 Impact 与 TargetPreview 的 MI/Style/Debug Snake 引用，Python 不反射编辑 Niagara Graph。TargetPreview 脚本不会覆盖现有 Impact Style 的人工声音、强度和覆盖范围。日常美术调参不应改生成的 Set Variables 表达式：颜色、像素密度、线宽和辉光改对应默认 MI；伤害强度、预演时序/覆盖、摄像机偏移和声音改对应 Style；命中位置改 PartActor 的 `ImpactAnchorRelativeLocation`。只有视觉算法、粒子数量、世界尺寸或时间比例改变时才修改 WacomEditor 生成器并重建 System。
-
-BattleHUD scene enemy coordinator 成对缓存 Bridge 和 Presentation：target handle 解析走 Bridge，表现 target 注册和反馈走 Presentation。target handle 必须携带完整 `EncounterId + EnemySlotId + PartSlotId` 才能命中当前 registry；`SourceObject` 即使指向当前 PartActor，也不会替代或修正错误 key。Host / PartActor debug summary 会合并两者事实用于 PIE 排查，但 passive UI 和 BattleSession 不依赖这个合并 debug。
-
-Scene enemy 生命周期分为四条路径。构造、Details 修改和显式 Authoring 刷新可以重建 Host visual、PartActor `VisualLayers`、扫描 ChildActor 并更新制作诊断；Host/Part `BeginPlay` 或 HUD Host registry 变化时执行一次 runtime scene binding，注入 EnemySlotId、Host Style、视觉语境和稳定 Badge stagger；普通 `FBattleSnapshot` 刷新只更新 Bridge runtime facts、EnemyPanel view data、targetable、hover、prediction、drag preview 和 cue 状态；presentation event playback 只在现有 Host Flipbook 组件上原地切换语义 Clip。普通 Snapshot 和 event playback 都不调用 Host/Part Authoring refresh，不重建 PaperSprite/PaperFlipbook，也不重扫 Actor 层级。
-
-BattleTrigger 的 runtime preparation 与 Host Authoring 也保持分离：`BuildBattleSceneEnemyHosts()` 只按 `EncounterDefinition.EnemySlots` 顺序解析有效 `SceneEnemyHostSlots`、向 Host 注入临时 `EnemySlotId` 并导出 Host 列表，不刷新 Host/Part Authoring Status，也不重建 Host visual 或 `VisualLayers`。PartActor 身份和 Host context 由 HUD registry 的 `InitializeRuntimeSceneBinding()` 统一注入。Trigger `GetBattleTriggerDebugView()` 复用无副作用的绑定解析，不修改 Host；coordinator 同时观察 Host 指针、`EnemySlotId` 和 topology revision，只有 Host 集合、身份或真实拓扑变化时才重建 registry。
-
-`FWacomBattleHUDSceneEnemyTargetCoordinator` 只在 Host 集合变化、Host runtime topology revision 变化或已有 Host/Part 弱引用失效时重建 target registry。稳定拓扑下 Bridge/Presentation entry 和按 `EncounterId + EnemySlotId + PartSlotId` 注册的 BattlePresentation target 保持不变；Host identity 或拓扑重建不会重置正在播放的语义 Clip。BattleEnd Snapshot 到达时立即注销 Part target / presentation registry，并清理 hover、drag、panel 和 targetable；coordinator 只保留 Host 弱引用及最终 `bAllPartsDestroyed` facts，供已排队的整体 Destroyed 动画完成。`BattleEndSignal`、HUD shutdown、Session/source clear 或 Host 销毁会清空 retiring Host 并使旧回调失效；新战斗首次接管 Host 时恢复 Idle 和非终态。运行时不得通过 Tick 轮询 Actor 层级；显式动态 attach/detach live PartActor 的调用方必须通知 Host topology 失效。
-
-HUD 的 retiring Host 只是一条“完成 Downed 后清队列”的 Battle 表现生命周期，不负责探索场景销毁。非撤离 Victory 成功提交给 Run 后，GameMode 立即禁用当前 BattleTrigger，并把有效 Trigger 弱引用交给返回探索双 barrier；镜头返回与 ExitBattle 后置工作都完成时，Trigger 才统一退役 Encounter 内 Host/Part 并销毁自身。这个阶段不刷新 Authoring、不重建 Host visual/VisualLayers，也不恢复终态 Flipbook；退出 PIE、对象提前销毁或弱引用失效时不会留下 HUD barrier。Aid 与 Destroy 都沿用同一个非撤离 Victory 合同；Withdraw、Defeat、Undetermined 和结算失败保留场景。
-
-BattleHUD 不再构建或绑定敌方 2D fallback；点击、hover、drag target handle 全部通过当前 SceneEnemyHost registry 中的 PartActor / WorldTargetBridge 完成。`EncounterDefinition` 正式入口缺 Host 会被编辑器验证阻止。点击、hover、drag target handle 的详细合同见 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
+Enemy Panel、Intent 图标、双侧详情、Action Preview、PlayerStatusBar Impact pulse 与 first-person hand 数据链不因场景组件重构而改变。
 ## §7 First-person Battle Hand
 
 BattleHUD 战斗手牌运行时只使用 first-person card layer。`UBattleHUD` 不再公开 `BattleHandPresentationMode`，也不再绑定、创建、隐藏或恢复旧 2D hand。C++ fallback BattleHUD 只构建状态、CommandBar、牌堆、CombatLogFeed 和 PresentationStack，不再构建 legacy 2D hand 或敌方 2D fallback。
@@ -361,13 +283,13 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 
 测试不 include BattleHUD 私有 helper header，也不为生产 HUD 增加 Blueprint-visible 测试 API。只读诊断通过 `FWacomBattleHUDAutomationTestView` 聚合；Battle scene target click / probe 通过 `FWacomBattleSceneTargetClickTestAccess` 驱动。
 
-`Source/WacomTests/Private/UI/BattleHUDCommandFlowSpec.cpp` 承载 BattleHUD 命令和目标选择的专题合同测试，覆盖 `FWacomBattleHUDCommandController` / `FWacomBattleHUDTargetingController` 对外表现。`Source/WacomTests/Private/UI/BattleCombatLogSpec.cpp` 承载 Combat Log builder、feed、HUD history 和 `FWacomBattleHUDCombatLogController` 的专题合同测试，统一前缀为 `Wacom.UI.Battle.CombatLog`。`Source/WacomTests/Private/UI/BattlePresentationStackSpec.cpp` 承载 `UBattlePresentationStackWidget` / `UBattlePresentationStackEntryWidget` 的纯展示合同测试。`Source/WacomTests/Private/UI/BattlePresentationQueueSpec.cpp` 承载 BattleHUD presentation queue / turn-boundary / pending barrier / BattleEnd 清理 / knockdown 延迟展示合同测试；`BattlePresentationTimerLifecycleSpec.cpp` 以 `Wacom.UI.Battle.PresentationTimerLifecycle` 专门覆盖 Queue 与 Stack timer 在 clear、HUD teardown 和原始 World 后续 tick 下不会回调已释放状态。`Source/WacomTests/Private/UI/BattleInteractionTargetSpec.cpp` 承载 battle scene enemy part world target bridge 和 scene click / probe 的 `Wacom.UI.Battle.InteractionTarget` 合同测试。`Source/WacomTests/Private/UI/BattleSceneEnemyTargetRegistrySpec.cpp` 承载 battle scene enemy target registry 专题合同测试，覆盖 Trigger scene enemy host slot -> HUD registry、current-host filtering、trigger authoring validation 和 registry-routed cue / hover / drag preview。`Source/WacomTests/Private/UI/BattleSceneEnemyHoverProbeSpec.cpp` 承载 battle scene enemy hover probe 专题合同测试，覆盖 hover visual priority、HUD hover probe bridge、TargetSelect hover prediction、无效目标清理、pending / drag / BattleEnd gate 和 hover debug summary。`Source/WacomTests/Private/UI/BattleHUDFirstPersonSpec.cpp` 承载 BattleHUD first-person hand / first-person card detail 专题合同测试，覆盖 hand bridge clear、Anchor interaction、first-person detail host、readability motion 和 inspect hover guard。`Source/WacomTests/Private/UI/BattleSceneEnemyActorSpec.cpp` 承载 battle scene enemy actor 专题合同测试，当前覆盖 hand snapshot swift prediction facts、prediction widget facade、PartActor facade / presentation setup、bridge runtime facts、world target handle、host visual / hit-only part、host visual routing、host identity / child actor scan、runtime facts / host counts、debug snake child actor authoring、part slot identity / duplicate validation、hover / drag prediction badge、prediction badge offset、badge layout stagger / debug summary、VisualLayers refresh / validation 和 blueprint default authoring 分支。`BattleWidgetSpec.cpp` 保留 fallback layout、event presentation 和其他跨专题旧测试并继续分批收口。
+`BattleHUDCommandFlowSpec.cpp`、`BattleCombatLogSpec.cpp`、`BattlePresentationStackSpec.cpp` 与 `BattlePresentationQueueSpec.cpp` 分别覆盖命令、日志、Stack 和队列表现；`BattlePresentationTimerLifecycleSpec.cpp` 覆盖 teardown 后弱 timer 不回调释放状态。Scene Enemy 新架构集中在 `EnemySceneComponentAuthoringSpec.cpp`、`BattleEnemySceneComponentRuntimeSpec.cpp` 与 `EnemySceneLegacyAuditSpec.cpp`：验证 Definition 同步、typed hierarchy、视口数据不被刷新覆盖、零 Legacy Package 引用，以及四个 Host / 两张地图可加载。其它 HUD/first-person 测试通过 `FWacomBattleHUDTestHarness` 创建真实 typed Part Component，不再复建 Actor/Bridge 测试夹具。
 
 短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、三行 Feed、Footer 和详情打开请求。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
 
 `Source/WacomTests/Private/UI/BattleEnemyPanelSpec.cpp` 承载通用 `Wacom.UI.Battle.EnemyPanel`；`BattleEnemySinglePartPanelSpec.cpp` 承载 `Wacom.UI.Battle.EnemyPanel.SinglePartCompact`，验证单/多部位类解析、正式 WBP 与 Intent Style 合同、数值、Preview、hover 和动画优先级。状态图标复用另由 `Wacom.UI.Battle.StatusIcons.EnemyPartUsesFormalStatusList` 覆盖。测试必须实例化正式 WBP，不再直接 `NewObject` abstract 原生父类或锁定旧 C++ fallback WidgetTree。
 
-`Source/WacomTests/Private/UI/BattleSceneEnemyFeedbackPlaybackSpec.cpp` 单独覆盖互斥 Cue Playback、持久缩放优先级、清理和 ImpactAnchor 两条制作路径，避免继续扩大 `BattleSceneEnemyActorSpec.cpp`。`Source/WacomTests/Private/UI/BattleSceneEnemyDestroyedFeedbackSpec.cpp` 单独覆盖 Destroyed EffectKind、35% 原地换图、组件 / topology 稳定、Snapshot fallback、禁用粒子和新战斗恢复，统一前缀为 `Wacom.UI.Battle.BattleSceneEnemyDestroyedFeedback`。`Source/WacomTests/Private/UI/BattleSceneEnemyAuthoringSyncSpec.cpp` 单独覆盖 EnemyDefinition → Host PartActor 的派生、补缺、保留、幂等、无效定义和 surplus 合同，统一前缀为 `Wacom.UI.Battle.BattleSceneEnemyAuthoringSync`。`Source/WacomTests/Private/UI/BattleSceneEnemyHostAnimationSpec.cpp` 单独覆盖 Style 解析、原地 Flipbook 播放、真实完成 / watchdog barrier、串行动作、整体 Destroyed、BattleEnd retiring Host 和重入清理，统一前缀为 `Wacom.UI.Battle.BattleSceneEnemyHostAnimation`。
+Enemy Action / cue / Destroyed 生命周期由 `BattleEnemyActionImpactSpec.cpp`、`BattlePresentationQueueSpec.cpp` 与 `BattleEnemySceneComponentRuntimeSpec.cpp` 组合覆盖；内容合同由 `TrainingWarriorContentSpec.cpp`、`SnakeEnemyContentSpec.cpp`、`SlimeTrioEnemyContentSpec.cpp` 覆盖。测试通过 production automation view 读取 runtime debug，不在 `WacomApp/Public` 扩散 Blueprint-visible 测试 API。
 
 推荐自动化前缀：
 

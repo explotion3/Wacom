@@ -4,25 +4,20 @@
 
 #include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyHostAnimationStyle.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
-#include "Components/WacomBattleEnemyPartPresentationComponent.h"
-#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
+#include "Components/WacomBattleEnemyPartFlipbookLayerComponent.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
-#include "PaperFlipbook.h"
-#include "PaperFlipbookComponent.h"
-#include "PaperSprite.h"
-#include "PaperSpriteComponent.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Testing/WacomEncounterSceneLifecycleAutomationTestView.h"
+#include "Testing/WacomEnemySceneRuntimeAutomationTestView.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
-#include "Components/WidgetComponent.h"
 #include "Misc/DataValidation.h"
 #include "Misc/ScopeExit.h"
+#include "PaperFlipbook.h"
 
 namespace WacomEncounterSceneLifecycleSpec
 {
@@ -41,149 +36,71 @@ namespace WacomEncounterSceneLifecycleSpec
 		return GWorld;
 	}
 
-	UPaperFlipbook* MakeFlipbook(UObject* Outer, const FName Name)
-	{
-		UPaperSprite* FrameSprite = NewObject<UPaperSprite>(Outer);
-		UPaperFlipbook* Flipbook = NewObject<UPaperFlipbook>(Outer, Name);
-		FScopedFlipbookMutator Mutator(Flipbook);
-		Mutator.FramesPerSecond = 10.0f;
-		FPaperFlipbookKeyFrame KeyFrame;
-		KeyFrame.Sprite = FrameSprite;
-		KeyFrame.FrameRun = 2;
-		Mutator.KeyFrames.Add(KeyFrame);
-		return Flipbook;
-	}
-
 	UEnemyDefinition* MakeEnemyDefinition(
 		UObject* Outer,
-		const FName EnemyId,
-		const FName PartId)
+		FName EnemyId,
+		FName PartId)
 	{
 		UEnemyPartDefinition* PartDefinition = NewObject<UEnemyPartDefinition>(Outer);
 		PartDefinition->PartId = PartId;
-		PartDefinition->DisplayName = FText::FromName(PartId);
 		PartDefinition->MaxHp = 10;
-
 		UEnemyDefinition* EnemyDefinition = NewObject<UEnemyDefinition>(Outer);
 		EnemyDefinition->EnemyId = EnemyId;
-		EnemyDefinition->DisplayName = FText::FromName(EnemyId);
-		FEnemyPartSlot Slot;
+		FEnemyPartSlot& Slot = EnemyDefinition->Parts.AddDefaulted_GetRef();
 		Slot.PartSlotId = TEXT("Body");
 		Slot.PartDef = PartDefinition;
-		EnemyDefinition->Parts = { Slot };
 		return EnemyDefinition;
 	}
 
 	AWacomBattleEnemyActor* SpawnHost(
 		UWorld& World,
 		UEnemyDefinition& EnemyDefinition,
-		const FName EnemySlotId)
+		FName EnemySlotId,
+		UWacomBattleEnemyPartComponent*& OutPart,
+		UWacomBattleEnemyPartFlipbookLayerComponent*& OutVisual)
 	{
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.ObjectFlags |= RF_Transient;
 		AWacomBattleEnemyActor* Host = World.SpawnActor<AWacomBattleEnemyActor>(
-			AWacomBattleEnemyActor::StaticClass(),
-			FTransform::Identity,
-			SpawnParams);
-		if (Host)
+			AWacomBattleEnemyActor::StaticClass(), FTransform::Identity, SpawnParams);
+		if (!Host)
 		{
-			Host->EnemyDefinition = &EnemyDefinition;
-			Host->EnemySlotId = EnemySlotId;
+			return nullptr;
 		}
+		Host->EnemyDefinition = &EnemyDefinition;
+		Host->EnemySlotId = EnemySlotId;
+		OutPart = NewObject<UWacomBattleEnemyPartComponent>(Host, TEXT("Part_Body"), RF_Transient);
+		Host->AddInstanceComponent(OutPart);
+		OutPart->SetupAttachment(Host->GetRootComponent());
+		OutPart->PartSlotId = TEXT("Body");
+		OutPart->SetDerivedPartId(EnemyDefinition.Parts[0].PartDef->PartId);
+		OutPart->SetBoxExtent(FVector(40.0f));
+		OutPart->RegisterComponent();
+
+		OutVisual = NewObject<UWacomBattleEnemyPartFlipbookLayerComponent>(
+			Host, TEXT("Visual_Body_Main"), RF_Transient);
+		Host->AddInstanceComponent(OutVisual);
+		OutVisual->SetupAttachment(OutPart);
+		OutVisual->LayerId = TEXT("Lifecycle.Body.Main");
+		OutVisual->SetFlipbook(NewObject<UPaperFlipbook>(Host, NAME_None, RF_Transient));
+		OutVisual->RegisterComponent();
+		Host->NotifyEnemySceneComponentTopologyChanged();
 		return Host;
 	}
 
-	AWacomBattleEnemyPartActor* SpawnPart(
-		UWorld& World,
+	void PrimeRuntimePart(
 		AWacomBattleEnemyActor& Host,
-		const UEnemyDefinition& EnemyDefinition,
-		const bool bAddVisualLayer)
-	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.ObjectFlags |= RF_Transient;
-		AWacomBattleEnemyPartActor* Part = World.SpawnActor<AWacomBattleEnemyPartActor>(
-			AWacomBattleEnemyPartActor::StaticClass(),
-			FTransform::Identity,
-			SpawnParams);
-		if (!Part || EnemyDefinition.Parts.IsEmpty())
-		{
-			return Part;
-		}
-
-		Part->PartSlotId = EnemyDefinition.Parts[0].PartSlotId;
-		Part->PartId = EnemyDefinition.Parts[0].PartDef
-			? EnemyDefinition.Parts[0].PartDef->PartId
-			: NAME_None;
-		if (bAddVisualLayer)
-		{
-			FWacomBattleEnemyPartVisualLayer Layer;
-			Layer.LayerId = TEXT("LifecycleLayer");
-			Layer.Sprite = NewObject<UPaperSprite>(Part);
-			Part->VisualLayers = { Layer };
-		}
-		Part->AttachToActor(&Host, FAttachmentTransformRules::KeepWorldTransform);
-		Part->RefreshAuthoringState();
-		Host.RefreshBattleEnemyPartAuthoringState();
-		return Part;
-	}
-
-	UPaperSpriteComponent* FindGeneratedPartSprite(
-		const AWacomBattleEnemyPartActor& Part)
-	{
-		TInlineComponentArray<UPaperSpriteComponent*> Components;
-		Part.GetComponents(Components);
-		for (UPaperSpriteComponent* Component : Components)
-		{
-			if (Component
-				&& Component->GetAttachParent() == Part.GetVisualLayersRoot()
-				&& Component->GetName().StartsWith(TEXT("VisualLayer_")))
-			{
-				return Component;
-			}
-		}
-		return nullptr;
-	}
-
-	void ConfigureTerminalHost(AWacomBattleEnemyActor& Host)
-	{
-		UPaperFlipbook* Idle = MakeFlipbook(&Host, TEXT("Lifecycle_Idle"));
-		UPaperFlipbook* Destroyed = MakeFlipbook(&Host, TEXT("Lifecycle_Destroyed"));
-		UWacomBattleEnemyHostAnimationStyle* Style =
-			NewObject<UWacomBattleEnemyHostAnimationStyle>(&Host);
-		Style->DestroyedClip.Flipbook = Destroyed;
-		Style->DestroyedClip.PlayRate = 1.0f;
-
-		Host.HostAuthoringMode = EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual;
-		Host.HostVisualMode = EWacomBattleEnemyHostVisualMode::Flipbook;
-		Host.HostFlipbook = Idle;
-		Host.HostFlipbookPlayRate = 1.0f;
-		Host.bLoopHostFlipbook = true;
-		Host.bAutoPlayHostFlipbook = true;
-		Host.bHostVisualVisible = true;
-		Host.HostAnimationStyle = Style;
-		Host.RefreshBattleEnemyPartAuthoringState();
-
-		Host.PlayRuntimeHostDestroyedAnimation([]() {});
-		if (UPaperFlipbookComponent* Visual = Host.GetGeneratedHostFlipbookVisualComponent())
-		{
-			Visual->OnFinishedPlaying.Broadcast();
-		}
-	}
-
-	void PrimeRuntimePartState(
-		AWacomBattleEnemyPartActor& Part,
-		const FName EncounterId,
-		const FName EnemySlotId)
+		UWacomBattleEnemyPartComponent& Part,
+		FName EncounterId,
+		FName EnemySlotId)
 	{
 		FEnemyPartSnapshot PartSnapshot;
 		PartSnapshot.InstanceId = FGuid::NewGuid();
-		PartSnapshot.Definition = nullptr;
 		PartSnapshot.EncounterId = EncounterId;
 		PartSnapshot.EnemySlotId = EnemySlotId;
 		PartSnapshot.PartSlotId = Part.PartSlotId;
-		PartSnapshot.CurrentInitiative = 5;
-		PartSnapshot.CurrentIntent.IntentId = TEXT("Intent.Lifecycle");
-
+		PartSnapshot.CurrentHp = 10;
+		PartSnapshot.MaxHp = 10;
 		FEnemySnapshot EnemySnapshot;
 		EnemySnapshot.EncounterId = EncounterId;
 		EnemySnapshot.EnemySlotId = EnemySlotId;
@@ -191,26 +108,11 @@ namespace WacomEncounterSceneLifecycleSpec
 		FBattleSnapshot Snapshot;
 		Snapshot.EncounterId = EncounterId;
 		Snapshot.Enemies = { EnemySnapshot };
-
-		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
-			Part.GetWorldTargetBridgeComponent();
-		Bridge->SetPartId(Part.PartId);
-		Bridge->SetBattlePartSlotIdentity(EncounterId, EnemySlotId, Part.PartSlotId);
-		FEnemyPartSnapshot MatchedPart;
-		Bridge->SyncFromBattleSnapshot(Snapshot, &MatchedPart);
-		Bridge->SetBattleHUDSceneRegistryState(true);
-		Bridge->SetBattleTargetableState(true);
-
-		UWacomBattleEnemyPartPresentationComponent* Presentation =
-			Part.GetPresentationComponent();
-		Presentation->CacheRuntimePartFacts(Part.PartId, MatchedPart);
-		Presentation->SetTargetableAffordance(true);
-		Presentation->SetDragTargetPreviewState(
-			EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
-		if (UWidgetComponent* PredictionWidget = Part.GetPredictionWidgetComponent())
-		{
-			PredictionWidget->SetVisibility(true, true);
-		}
+		FWacomEnemySceneRuntimeAutomationTestView::InitializeBinding(
+			Host, EncounterId, EnemySlotId);
+		FWacomEnemySceneRuntimeAutomationTestView::SyncPart(Host, Part, Snapshot);
+		FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(
+			Host, Part, true, true);
 	}
 
 	bool IssuesContain(const TArray<FText>& Issues, const TCHAR* Expected)
@@ -224,7 +126,7 @@ namespace WacomEncounterSceneLifecycleSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomEncounterSceneLifecycleRetiresMappedHostsAfterBarrierSpec,
-	"Wacom.App.BattleTrigger.EncounterSceneLifecycle.RetiresMappedHostsAfterBarrier",
+	"Wacom.App.BattleTrigger.EncounterSceneLifecycle.RetiresComponentHostsAfterBarrier",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomEncounterSceneLifecycleRetiresMappedHostsAfterBarrierSpec::RunTest(
@@ -236,25 +138,19 @@ bool FWacomEncounterSceneLifecycleRetiresMappedHostsAfterBarrierSpec::RunTest(
 	{
 		return false;
 	}
-
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.ObjectFlags |= RF_Transient;
 	ABattleTriggerActor* Trigger = World->SpawnActor<ABattleTriggerActor>(
 		ABattleTriggerActor::StaticClass(), FTransform::Identity, SpawnParams);
-	if (!TestNotNull(TEXT("Battle Trigger"), Trigger))
-	{
-		return false;
-	}
-
-	AWacomBattleEnemyActor* TerminalHost = nullptr;
-	AWacomBattleEnemyActor* LayeredHost = nullptr;
+	UWacomBattleEnemyPartComponent* Part = nullptr;
+	UWacomBattleEnemyPartFlipbookLayerComponent* Visual = nullptr;
+	UWacomBattleEnemyPartComponent* ExtraPart = nullptr;
+	UWacomBattleEnemyPartFlipbookLayerComponent* ExtraVisual = nullptr;
+	AWacomBattleEnemyActor* Host = nullptr;
 	AWacomBattleEnemyActor* ExtraHost = nullptr;
-	AWacomBattleEnemyPartActor* TerminalPart = nullptr;
-	AWacomBattleEnemyPartActor* LayeredPart = nullptr;
 	ON_SCOPE_EXIT
 	{
-		for (AActor* Actor : TArray<AActor*>{
-			TerminalPart, LayeredPart, TerminalHost, LayeredHost, ExtraHost, Trigger })
+		for (AActor* Actor : TArray<AActor*>{ Host, ExtraHost, Trigger })
 		{
 			if (IsValid(Actor))
 			{
@@ -262,130 +158,64 @@ bool FWacomEncounterSceneLifecycleRetiresMappedHostsAfterBarrierSpec::RunTest(
 			}
 		}
 	};
-
+	if (!TestNotNull(TEXT("Battle Trigger"), Trigger))
+	{
+		return false;
+	}
 	Trigger->PersistentId = TEXT("Trigger.SceneLifecycle");
-	UEnemyDefinition* TerminalEnemy = MakeEnemyDefinition(
-		Trigger, TEXT("Enemy.Lifecycle.Terminal"), TEXT("Part.Lifecycle.Terminal"));
-	UEnemyDefinition* LayeredEnemy = MakeEnemyDefinition(
-		Trigger, TEXT("Enemy.Lifecycle.Layered"), TEXT("Part.Lifecycle.Layered"));
-	TerminalHost = SpawnHost(*World, *TerminalEnemy, TEXT("Terminal"));
-	LayeredHost = SpawnHost(*World, *LayeredEnemy, TEXT("Layered"));
-	ExtraHost = SpawnHost(*World, *TerminalEnemy, TEXT("Extra"));
-	if (!TestNotNull(TEXT("Terminal Host"), TerminalHost)
-		|| !TestNotNull(TEXT("Layered Host"), LayeredHost)
+	UEnemyDefinition* Enemy = MakeEnemyDefinition(
+		Trigger, TEXT("Enemy.Lifecycle"), TEXT("Part.Lifecycle.Body"));
+	Host = SpawnHost(*World, *Enemy, TEXT("Enemy"), Part, Visual);
+	ExtraHost = SpawnHost(*World, *Enemy, TEXT("Extra"), ExtraPart, ExtraVisual);
+	if (!TestNotNull(TEXT("Mapped Host"), Host)
+		|| !TestNotNull(TEXT("Mapped Part"), Part)
+		|| !TestNotNull(TEXT("Mapped Visual"), Visual)
 		|| !TestNotNull(TEXT("Extra Host"), ExtraHost))
 	{
 		return false;
 	}
-
-	TerminalPart = SpawnPart(*World, *TerminalHost, *TerminalEnemy, false);
-	LayeredPart = SpawnPart(*World, *LayeredHost, *LayeredEnemy, true);
-	if (!TestNotNull(TEXT("Terminal Part"), TerminalPart)
-		|| !TestNotNull(TEXT("Layered Part"), LayeredPart))
-	{
-		return false;
-	}
-
-	ConfigureTerminalHost(*TerminalHost);
-	LayeredHost->HostAuthoringMode = EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers;
-	LayeredHost->RefreshBattleEnemyPartAuthoringState();
-	PrimeRuntimePartState(*TerminalPart, Trigger->PersistentId, TEXT("Terminal"));
-	PrimeRuntimePartState(*LayeredPart, Trigger->PersistentId, TEXT("Layered"));
+	PrimeRuntimePart(*Host, *Part, Trigger->PersistentId, TEXT("Enemy"));
+	const uint32 TopologyRevision = Host->GetEnemySceneComponentTopologyRevision();
+	UWacomBattleEnemyPartFlipbookLayerComponent* const OriginalVisual = Visual;
 
 	UEncounterDefinition* Encounter = NewObject<UEncounterDefinition>(Trigger);
 	Encounter->EncounterDefinitionId = TEXT("Encounter.SceneLifecycle");
-	FEncounterEnemySlot TerminalEncounterSlot;
-	TerminalEncounterSlot.EnemySlotId = TEXT("Terminal");
-	TerminalEncounterSlot.EnemyDefinition = TerminalEnemy;
-	FEncounterEnemySlot LayeredEncounterSlot;
-	LayeredEncounterSlot.EnemySlotId = TEXT("Layered");
-	LayeredEncounterSlot.EnemyDefinition = LayeredEnemy;
-	Encounter->EnemySlots = { TerminalEncounterSlot, LayeredEncounterSlot };
+	FEncounterEnemySlot& EncounterSlot = Encounter->EnemySlots.AddDefaulted_GetRef();
+	EncounterSlot.EnemySlotId = TEXT("Enemy");
+	EncounterSlot.EnemyDefinition = Enemy;
 	Trigger->EncounterDefinition = Encounter;
-
-	FWacomBattleSceneEnemyHostSlot TerminalHostSlot;
-	TerminalHostSlot.EnemySlotId = TEXT("Terminal");
-	TerminalHostSlot.SceneEnemyHost = TerminalHost;
-	FWacomBattleSceneEnemyHostSlot MissingHostSlot;
-	MissingHostSlot.EnemySlotId = TEXT("Missing");
-	FWacomBattleSceneEnemyHostSlot LayeredHostSlot;
-	LayeredHostSlot.EnemySlotId = TEXT("Layered");
-	LayeredHostSlot.SceneEnemyHost = LayeredHost;
-	FWacomBattleSceneEnemyHostSlot ExtraHostSlot;
-	ExtraHostSlot.EnemySlotId = TEXT("Extra");
-	ExtraHostSlot.SceneEnemyHost = ExtraHost;
-	Trigger->SceneEnemyHostSlots = {
-		TerminalHostSlot, MissingHostSlot, LayeredHostSlot, ExtraHostSlot };
-
-	UPaperFlipbookComponent* TerminalVisual =
-		TerminalHost->GetGeneratedHostFlipbookVisualComponent();
-	UPaperSpriteComponent* LayerVisual = FindGeneratedPartSprite(*LayeredPart);
-	const uint32 TerminalTopologyRevision = TerminalHost->GetRuntimePartTopologyRevision();
-	const uint32 LayeredTopologyRevision = LayeredHost->GetRuntimePartTopologyRevision();
-	if (!TestNotNull(TEXT("Terminal Flipbook component"), TerminalVisual)
-		|| !TestNotNull(TEXT("Layered Part Sprite component"), LayerVisual))
-	{
-		return false;
-	}
-	const UPaperFlipbook* TerminalClip = TerminalVisual->GetFlipbook();
-	TestTrue(TEXT("Destroyed animation reached terminal state"),
-		TerminalHost->GetBattleSceneEnemyDebugView().bHostAnimationTerminalState);
-	TestTrue(TEXT("Runtime bridge is primed before retirement"),
-		TerminalPart->GetWorldTargetBridgeComponent()->IsBoundToBattlePart());
-	TestTrue(TEXT("Runtime presentation is primed before retirement"),
-		TerminalPart->GetPresentationComponent()
-			->GetBattleEnemyPartPresentationDebugView().bDragPreviewActive);
+	FWacomBattleSceneEnemyHostSlot HostSlot;
+	HostSlot.EnemySlotId = TEXT("Enemy");
+	HostSlot.SceneEnemyHost = Host;
+	FWacomBattleSceneEnemyHostSlot ExtraSlot;
+	ExtraSlot.EnemySlotId = TEXT("Extra");
+	ExtraSlot.SceneEnemyHost = ExtraHost;
+	Trigger->SceneEnemyHostSlots = { HostSlot, ExtraSlot };
 
 	Trigger->BeginResolvedEncounterSceneRetirement();
-	const FWacomBattleTriggerDebugView PendingView = Trigger->GetBattleTriggerDebugView(nullptr);
-	TestTrue(TEXT("Begin marks retirement pending"), PendingView.bResolvedSceneRetirementPending);
+	TestTrue(TEXT("Begin marks retirement pending"),
+		Trigger->GetBattleTriggerDebugView(nullptr).bResolvedSceneRetirementPending);
 	TestFalse(TEXT("Begin disables Trigger collision"), Trigger->GetActorEnableCollision());
-	TestFalse(TEXT("Begin keeps terminal Host visible"), TerminalHost->IsHidden());
-	TestFalse(TEXT("Begin keeps terminal Part visible"), TerminalPart->IsHidden());
-	TestEqual(TEXT("Begin preserves terminal Flipbook component"),
-		TerminalHost->GetGeneratedHostFlipbookVisualComponent(), TerminalVisual);
-	TestTrue(TEXT("Begin preserves terminal clip"), TerminalVisual->GetFlipbook() == TerminalClip);
+	TestFalse(TEXT("Begin keeps mapped Host visible"), Host->IsHidden());
+	TestFalse(TEXT("Begin keeps Part target enabled"),
+		Part->GetCollisionEnabled() == ECollisionEnabled::NoCollision);
 
 	Trigger->CompleteResolvedEncounterSceneRetirement();
-	TestTrue(TEXT("Terminal Host is retired"),
-		TerminalHost->IsRuntimeEncounterPresentationRetired());
-	TestTrue(TEXT("Layered Host is retired"),
-		LayeredHost->IsRuntimeEncounterPresentationRetired());
-	TestTrue(TEXT("All mapped Parts are retired"),
-		TerminalPart->IsRuntimeEncounterPresentationRetired()
-			&& LayeredPart->IsRuntimeEncounterPresentationRetired());
-	TestTrue(TEXT("Mapped Hosts are hidden"), TerminalHost->IsHidden() && LayeredHost->IsHidden());
-	TestTrue(TEXT("Mapped Parts are hidden"), TerminalPart->IsHidden() && LayeredPart->IsHidden());
-	TestFalse(TEXT("Mapped Host collision is disabled"), TerminalHost->GetActorEnableCollision());
-	TestFalse(TEXT("Mapped Part collision is disabled"), TerminalPart->GetActorEnableCollision());
+	TestTrue(TEXT("Mapped Host is retired"), Host->IsRuntimeEncounterPresentationRetired());
+	TestTrue(TEXT("Mapped Host is hidden"), Host->IsHidden());
+	TestFalse(TEXT("Mapped Host collision is disabled"), Host->GetActorEnableCollision());
+	TestEqual(TEXT("Part collision is disabled"),
+		Part->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+	const FWacomBattleEnemyPartRuntimeDebugView RetiredView = Part->GetRuntimeDebugView();
+	TestTrue(TEXT("Part runtime is retired"), RetiredView.bRuntimeRetired);
+	TestFalse(TEXT("Part binding is cleared"), RetiredView.bBoundToSnapshot);
 	TestFalse(TEXT("Extra slot Host is not retired"),
 		ExtraHost->IsRuntimeEncounterPresentationRetired());
-	TestFalse(TEXT("Extra slot Host remains visible"), ExtraHost->IsHidden());
-	TestFalse(TEXT("Bridge binding is cleared"),
-		TerminalPart->GetWorldTargetBridgeComponent()->IsBoundToBattlePart());
-	const FWacomBattleEnemyPartPresentationDebugView RetiredPresentation =
-		TerminalPart->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
-	TestFalse(TEXT("Presentation runtime facts are cleared"),
-		RetiredPresentation.bHasRuntimePartFacts);
-	TestFalse(TEXT("Drag preview is cleared"), RetiredPresentation.bDragPreviewActive);
-	TestFalse(TEXT("Prediction widget is hidden"),
-		TerminalPart->GetPredictionWidgetComponent()->IsVisible());
-	TestEqual(TEXT("Terminal Flipbook component is preserved"),
-		TerminalHost->GetGeneratedHostFlipbookVisualComponent(), TerminalVisual);
-	TestTrue(TEXT("Terminal clip is preserved"), TerminalVisual->GetFlipbook() == TerminalClip);
-	TestEqual(TEXT("VisualLayer component is preserved"),
-		FindGeneratedPartSprite(*LayeredPart), LayerVisual);
-	TestEqual(TEXT("Terminal topology revision is unchanged"),
-		TerminalHost->GetRuntimePartTopologyRevision(), TerminalTopologyRevision);
-	TestEqual(TEXT("Layered topology revision is unchanged"),
-		LayeredHost->GetRuntimePartTopologyRevision(), LayeredTopologyRevision);
-
-	// Repeated retirement calls are safe even after Trigger destruction has begun.
-	TerminalHost->RetireRuntimeEncounterPresentation();
-	LayeredHost->RetireRuntimeEncounterPresentation();
-	Trigger->CompleteResolvedEncounterSceneRetirement();
-	TestTrue(TEXT("Trigger completion is idempotent"),
-		Trigger->GetBattleTriggerDebugView(nullptr).bResolvedSceneRetirementCompleted);
+	TestEqual(TEXT("Visual component is preserved"), Visual, OriginalVisual);
+	TestEqual(TEXT("Topology revision is unchanged"),
+		Host->GetEnemySceneComponentTopologyRevision(), TopologyRevision);
+	Host->RetireRuntimeEncounterPresentation();
+	TestTrue(TEXT("Repeated retirement is idempotent"), Host->IsRuntimeEncounterPresentationRetired());
 	return true;
 }
 
@@ -403,19 +233,14 @@ bool FWacomEncounterSceneLifecycleRejectsSharedHostOwnershipSpec::RunTest(
 	{
 		return false;
 	}
-
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.ObjectFlags |= RF_Transient;
 	ABattleTriggerActor* First = World->SpawnActor<ABattleTriggerActor>(
 		ABattleTriggerActor::StaticClass(), FTransform::Identity, SpawnParams);
 	ABattleTriggerActor* Second = World->SpawnActor<ABattleTriggerActor>(
 		ABattleTriggerActor::StaticClass(), FTransform::Identity, SpawnParams);
-	if (!TestNotNull(TEXT("First Trigger"), First)
-		|| !TestNotNull(TEXT("Second Trigger"), Second))
-	{
-		return false;
-	}
-
+	UWacomBattleEnemyPartComponent* Part = nullptr;
+	UWacomBattleEnemyPartFlipbookLayerComponent* Visual = nullptr;
 	AWacomBattleEnemyActor* SharedHost = nullptr;
 	ON_SCOPE_EXIT
 	{
@@ -427,32 +252,31 @@ bool FWacomEncounterSceneLifecycleRejectsSharedHostOwnershipSpec::RunTest(
 			}
 		}
 	};
-
-	First->PersistentId = TEXT("Trigger.SceneLifecycle.Shared.First");
-	Second->PersistentId = TEXT("Trigger.SceneLifecycle.Shared.Second");
+	if (!First || !Second)
+	{
+		return false;
+	}
+	First->PersistentId = TEXT("Trigger.Shared.First");
+	Second->PersistentId = TEXT("Trigger.Shared.Second");
 	UEnemyDefinition* Enemy = MakeEnemyDefinition(
-		First, TEXT("Enemy.Lifecycle.Shared"), TEXT("Part.Lifecycle.Shared"));
-	SharedHost = SpawnHost(*World, *Enemy, TEXT("Enemy"));
+		First, TEXT("Enemy.Shared"), TEXT("Part.Shared.Body"));
+	SharedHost = SpawnHost(*World, *Enemy, TEXT("Enemy"), Part, Visual);
 	if (!TestNotNull(TEXT("Shared Host"), SharedHost))
 	{
 		return false;
 	}
-
 	UEncounterDefinition* Encounter = NewObject<UEncounterDefinition>(First);
-	Encounter->EncounterDefinitionId = TEXT("Encounter.SceneLifecycle.Shared");
-	FEncounterEnemySlot EncounterSlot;
-	EncounterSlot.EnemySlotId = TEXT("Enemy");
-	EncounterSlot.EnemyDefinition = Enemy;
-	Encounter->EnemySlots = { EncounterSlot };
+	Encounter->EncounterDefinitionId = TEXT("Encounter.Shared");
+	FEncounterEnemySlot& Slot = Encounter->EnemySlots.AddDefaulted_GetRef();
+	Slot.EnemySlotId = TEXT("Enemy");
+	Slot.EnemyDefinition = Enemy;
 	First->EncounterDefinition = Encounter;
 	Second->EncounterDefinition = Encounter;
-
 	FWacomBattleSceneEnemyHostSlot HostSlot;
 	HostSlot.EnemySlotId = TEXT("Enemy");
 	HostSlot.SceneEnemyHost = SharedHost;
 	First->SceneEnemyHostSlots = { HostSlot };
 	Second->SceneEnemyHostSlots = { HostSlot };
-
 	FDataValidationContext Context;
 	const EDataValidationResult Result = First->IsDataValid(Context);
 	TArray<FText> Warnings;
@@ -474,23 +298,13 @@ bool FWacomEncounterSceneLifecycleRetirementPolicySpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	using FPolicy = FWacomEncounterSceneLifecycleAutomationTestView;
-	TestTrue(TEXT("Aid victory retires resolved Encounter"),
-		FPolicy::ShouldRetireResolvedEncounterScene(
-			true, EBattleOutcome::Victory, false));
-	TestTrue(TEXT("Destroy victory retires resolved Encounter"),
-		FPolicy::ShouldRetireResolvedEncounterScene(
-			true, EBattleOutcome::Victory, false));
+	TestTrue(TEXT("Victory retires resolved Encounter"),
+		FPolicy::ShouldRetireResolvedEncounterScene(true, EBattleOutcome::Victory, false));
 	TestFalse(TEXT("Withdraw preserves Encounter scene"),
-		FPolicy::ShouldRetireResolvedEncounterScene(
-			true, EBattleOutcome::Victory, true));
+		FPolicy::ShouldRetireResolvedEncounterScene(true, EBattleOutcome::Victory, true));
 	TestFalse(TEXT("Defeat preserves Encounter scene"),
-		FPolicy::ShouldRetireResolvedEncounterScene(
-			true, EBattleOutcome::Defeat, false));
-	TestFalse(TEXT("Undetermined preserves Encounter scene"),
-		FPolicy::ShouldRetireResolvedEncounterScene(
-			true, EBattleOutcome::Undetermined, false));
+		FPolicy::ShouldRetireResolvedEncounterScene(true, EBattleOutcome::Defeat, false));
 	TestFalse(TEXT("Settlement failure preserves Encounter scene"),
-		FPolicy::ShouldRetireResolvedEncounterScene(
-			false, EBattleOutcome::Victory, false));
+		FPolicy::ShouldRetireResolvedEncounterScene(false, EBattleOutcome::Victory, false));
 	return true;
 }

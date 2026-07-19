@@ -43,24 +43,30 @@ namespace
 		const AWacomBattleEnemyActor& Host,
 		const USceneComponent& Component)
 	{
-		if (Component.GetAttachParent())
-		{
-			return Component.GetAttachParent();
-		}
 		UBlueprintGeneratedClass* BlueprintClass =
 			Cast<UBlueprintGeneratedClass>(Host.GetClass());
-		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)
+		if (BlueprintClass && BlueprintClass->SimpleConstructionScript)
 		{
-			return nullptr;
-		}
-		for (USCS_Node* Node : BlueprintClass->SimpleConstructionScript->GetAllNodes())
-		{
-			if (Node && Node->GetActualComponentTemplate(BlueprintClass) == &Component)
+			const TArray<USCS_Node*> Nodes =
+				BlueprintClass->SimpleConstructionScript->GetAllNodes();
+			for (USCS_Node* Node : Nodes)
 			{
-				return Node->GetParentComponentTemplate(BlueprintClass);
+				if (Node && Node->GetActualComponentTemplate(BlueprintClass) == &Component)
+				{
+					for (USCS_Node* CandidateParent : Nodes)
+					{
+						if (CandidateParent
+							&& CandidateParent->GetChildNodes().Contains(Node))
+						{
+							return Cast<USceneComponent>(
+								CandidateParent->GetActualComponentTemplate(BlueprintClass));
+						}
+					}
+					return Node->GetParentComponentTemplate(BlueprintClass);
+				}
 			}
 		}
-		return nullptr;
+		return Component.GetAttachParent();
 	}
 
 	bool IsDirectChild(
@@ -113,7 +119,6 @@ namespace
 			{
 				Report.IdentityAudit.UnknownPartSlotIds.AddUnique(Part->PartSlotId);
 				Report.IdentityAudit.SurplusPartComponentNames.AddUnique(Part->GetName());
-				Report.IdentityAudit.SurplusPartActorNames.AddUnique(Part->GetName());
 			}
 			if (Part->PartId.IsNone()
 				|| !DefinitionPartIds.FindKey(Part->PartId))
@@ -189,7 +194,6 @@ FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(
 	CollectTypedComponents(Host, Sprites);
 	CollectTypedComponents(Host, Anchors);
 	Report.PartComponentCount = Parts.Num();
-	Report.PartActorCount = Report.PartComponentCount;
 	Report.FlipbookLayerCount = Flipbooks.Num();
 	Report.SpriteLayerCount = Sprites.Num();
 

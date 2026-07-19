@@ -337,9 +337,9 @@ public:
 		return TArray<FWacomFirstPersonCardLayerFeedbackHint>();
 	}
 
-	int32 GetBattleSceneEnemyPartWorldTargetBridgeCountForTest() const
+	int32 GetBattleSceneEnemyPartComponentCountForTest() const
 	{
-		return AutomationViewForTest().SceneEnemyPartWorldTargetBridgeCount;
+		return AutomationViewForTest().SceneEnemyPartComponentCount;
 	}
 
 	int32 GetBattleSceneEnemyTargetRegistryRevisionForTest() const

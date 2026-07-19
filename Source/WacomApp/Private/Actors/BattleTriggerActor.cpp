@@ -868,7 +868,7 @@ FWacomBattleTriggerDebugView ABattleTriggerActor::GetBattleTriggerDebugView(
 	{
 		if (Host)
 		{
-			View.SceneEnemyHostPartCount += Host->GetBattleEnemyPartActors().Num();
+			View.SceneEnemyHostPartCount += Host->GetBattleEnemyPartComponents().Num();
 		}
 	}
 	View.bSceneEnemyHostDefinitionMatches = true;

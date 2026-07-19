@@ -24,7 +24,4 @@ class WACOMEDITOR_API FWacomBattleSceneEnemyHostAuthoring
 public:
 	static TArray<FWacomBattleSceneEnemyHostSyncResult> SyncPartsFromDefinition(
 		TConstArrayView<AWacomBattleEnemyActor*> Hosts);
-
-	/** Legacy debug sample retained behind the Host Details Advanced/Debug section. */
-	static FName ConfigureDebugSnakeSample(AWacomBattleEnemyActor& Host);
 };

@@ -201,7 +201,7 @@ FWacomBattleCardDropResolveResult FWacomBattleFirstPersonDropResolver::ResolveDr
 	{
 	case EWacomInteractionTargetKind::World:
 	{
-		if (!Runtime.ResolveBattleEnemyPartWorldTargetBridge(CandidateTarget))
+		if (!Runtime.ResolveBattleEnemyPartComponent(CandidateTarget))
 		{
 			Result.IntentKind = EWacomBattleCardDropIntentKind::Reject;
 			Result.RejectReason = EWacomBattleCardDropRejectReason::InvalidWorldTarget;

@@ -3,22 +3,18 @@
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
+#include "Components/WacomBattleEnemySceneRuntimeComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
-#include "Components/WacomBattleEnemyPartPresentationComponent.h"
-#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
-#include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Resolution/BattleCardActionPreview.h"
 #include "Resolution/BattleCardTargetPreview.h"
-#include "Resolution/BattleTargetValidationResult.h"
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
-#include "UI/Battle/WacomBattleCardPresentationHelper.h"
+#include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "UI/Battle/WacomBattleEnemyPanelViewData.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
 #include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
@@ -26,92 +22,47 @@
 
 namespace
 {
-	const TCHAR* LexToStringForSceneEnemyTarget(EWacomBattleTargetRejectReason RejectReason)
+	const FHandCardSnapshot* FindHandCard(
+		const FBattleSnapshot& Snapshot, const FGuid& InstanceId)
 	{
-		switch (RejectReason)
+		return Snapshot.Hand.Cards.FindByPredicate(
+			[&InstanceId](const FHandCardSnapshot& Card)
+			{
+				return Card.InstanceId == InstanceId;
+			});
+	}
+
+	FName LexRejectReason(EWacomBattleTargetRejectReason Reason)
+	{
+		switch (Reason)
 		{
 		case EWacomBattleTargetRejectReason::None: return TEXT("None");
 		case EWacomBattleTargetRejectReason::InvalidTarget: return TEXT("InvalidTarget");
-		case EWacomBattleTargetRejectReason::SourceCardInvalid: return TEXT("SourceCardInvalid");
-		case EWacomBattleTargetRejectReason::SourceCardNotInHand: return TEXT("SourceCardNotInHand");
-		case EWacomBattleTargetRejectReason::SourceCardMissingDefinition: return TEXT("SourceCardMissingDefinition");
-		case EWacomBattleTargetRejectReason::SourceCardFrozen: return TEXT("SourceCardFrozen");
-		case EWacomBattleTargetRejectReason::UnsupportedWorldTarget: return TEXT("UnsupportedWorldTarget");
-		case EWacomBattleTargetRejectReason::InvalidWorldTarget: return TEXT("InvalidWorldTarget");
-		case EWacomBattleTargetRejectReason::UnsupportedCardTarget: return TEXT("UnsupportedCardTarget");
-		case EWacomBattleTargetRejectReason::TargetCardInvalid: return TEXT("TargetCardInvalid");
-		case EWacomBattleTargetRejectReason::TargetCardNotInHand: return TEXT("TargetCardNotInHand");
-		case EWacomBattleTargetRejectReason::SelfTarget: return TEXT("SelfTarget");
-		case EWacomBattleTargetRejectReason::UnsupportedNormalHandCardTarget: return TEXT("UnsupportedNormalHandCardTarget");
-		case EWacomBattleTargetRejectReason::UnsupportedHandAnchorTarget: return TEXT("UnsupportedHandAnchorTarget");
-		case EWacomBattleTargetRejectReason::MissingRequiredTargetKeyword: return TEXT("MissingRequiredTargetKeyword");
-		case EWacomBattleTargetRejectReason::BlockedTargetKeyword: return TEXT("BlockedTargetKeyword");
-		case EWacomBattleTargetRejectReason::UnsupportedZoneTarget: return TEXT("UnsupportedZoneTarget");
-		case EWacomBattleTargetRejectReason::TargetIdentityMismatch: return TEXT("TargetIdentityMismatch");
 		case EWacomBattleTargetRejectReason::NotEnoughInitiative: return TEXT("NotEnoughInitiative");
-		default: return TEXT("Unknown");
+		case EWacomBattleTargetRejectReason::TargetIdentityMismatch: return TEXT("TargetIdentityMismatch");
+		default: return TEXT("Rejected");
 		}
 	}
 
-	const FHandCardSnapshot* FindHandCardSnapshotForSceneEnemyTarget(
-		const FBattleSnapshot& Snapshot,
-		const FGuid& CardInstanceId)
+	FWacomBattleEnemyPartDragPredictionDebugInput BuildPredictionInput(
+		const FGuid& SourceId,
+		const FHandCardSnapshot& Source,
+		const FBattleCardTargetPreview& Preview)
 	{
-		if (!CardInstanceId.IsValid())
-		{
-			return nullptr;
-		}
-
-		for (const FHandCardSnapshot& CardSnapshot : Snapshot.Hand.Cards)
-		{
-			if (CardSnapshot.InstanceId == CardInstanceId)
-			{
-				return &CardSnapshot;
-			}
-		}
-		return nullptr;
+		FWacomBattleEnemyPartDragPredictionDebugInput Result;
+		Result.bHasSourceCard = true;
+		Result.SourceCardInstanceId = SourceId;
+		Result.SourceCardRuntimeCost = Preview.bHasPreview
+			? Preview.SourceCardRuntimeCost : Source.RuntimeCost;
+		Result.bSourceCardSwift = Preview.bHasPreview
+			? Preview.bSourceCardSwift : Source.bIsSwift;
+		Result.bPreviewCanSubmit = Preview.Validation.bCanTarget;
+		Result.PreviewRejectReason = LexRejectReason(Preview.Validation.RejectReason);
+		return Result;
 	}
 
-	FWacomBattleEnemyPartDragPredictionDebugInput BuildHoverPredictionInputFromPreview(
-		const FGuid& SourceCardInstanceId,
-		const FHandCardSnapshot& SourceSnapshot,
-		const FBattleCardTargetPreview& TargetPreview)
-	{
-		FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
-		PredictionInput.bHasSourceCard = true;
-		PredictionInput.SourceCardInstanceId = SourceCardInstanceId;
-		PredictionInput.SourceCardRuntimeCost = TargetPreview.bHasPreview
-			? TargetPreview.SourceCardRuntimeCost
-			: SourceSnapshot.RuntimeCost;
-		PredictionInput.bSourceCardSwift = TargetPreview.bHasPreview
-			? TargetPreview.bSourceCardSwift
-			: SourceSnapshot.bIsSwift;
-		PredictionInput.bPreviewCanSubmit = TargetPreview.Validation.bCanTarget;
-		PredictionInput.PreviewRejectReason =
-			FName(LexToStringForSceneEnemyTarget(TargetPreview.Validation.RejectReason));
-		return PredictionInput;
-	}
-
-	bool DoesPreviewPartMatchBridge(
-		const FWacomBattleEnemyPartEntryViewData& PreviewPart,
-		const UWacomBattleEnemyPartWorldTargetBridgeComponent& Bridge)
-	{
-		if (PreviewPart.PartInstanceId.IsValid()
-			&& PreviewPart.PartInstanceId == Bridge.GetPartInstanceId())
-		{
-			return true;
-		}
-
-		const FBattlePartSlotIdentity& Identity = PreviewPart.Identity;
-		return Identity.IsValidSlot()
-			&& Identity.EncounterId == Bridge.GetBoundEncounterId()
-			&& Identity.GetEffectiveEnemySlotId() == Bridge.GetBoundEnemySlotId()
-			&& Identity.GetEffectivePartSlotId() == Bridge.GetBoundPartSlotId();
-	}
-
-	FWacomBattleEnemyPanelViewData BuildEnemyPanelViewData(
-		const FBattleSnapshot& Snapshot,
-		const FEnemySnapshot& Enemy)
+	FWacomBattleEnemyPanelViewData BuildPanelView(
+		const FBattleSnapshot& Snapshot, const FEnemySnapshot& Enemy)
 	{
 		FWacomBattleEnemyPanelViewData View;
 		View.EncounterId = Snapshot.EncounterId;
@@ -119,47 +70,54 @@ namespace
 		View.UnitKey = Enemy.UnitKey;
 		View.EnemyDefinition = Enemy.Definition;
 		View.EnemyDisplayName = Enemy.Definition
-			? Enemy.Definition->DisplayName
-			: FText::FromName(Enemy.EnemySlotId);
+			? Enemy.Definition->DisplayName : FText::FromName(Enemy.EnemySlotId);
 		View.EnemyInitiativeSum = Enemy.InitiativeSum;
 		View.bAllPartsDestroyed = Enemy.bAllPartsDestroyed;
-		View.Parts.Reserve(Enemy.Parts.Num());
-
 		for (const FEnemyPartSnapshot& Part : Enemy.Parts)
 		{
-			FWacomBattleEnemyPartEntryViewData PartView;
-			PartView.PartInstanceId = Part.InstanceId;
-			PartView.Identity = Part.Identity;
-			PartView.EnemySlotId = Part.EnemySlotId;
-			PartView.PartSlotId = Part.PartSlotId;
-			PartView.PartDisplayName = Part.Definition
-				? Part.Definition->DisplayName
-				: FText::FromName(Part.PartSlotId);
-			PartView.CurrentHp = Part.CurrentHp;
-			PartView.MaxHp = Part.MaxHp;
-			PartView.Shield = Part.Shield;
-			PartView.CurrentInitiative = Part.CurrentInitiative;
-			PartView.CurrentIntentId = Part.CurrentIntentId;
-			PartView.CurrentIntentDisplayName = Part.CurrentIntent.DisplayName;
-			PartView.CurrentIntentInitiative = Part.CurrentIntent.Initiative;
-			PartView.CurrentIntentResistanceValue = Part.CurrentIntent.ResistanceValue;
-			PartView.RuntimeStatuses = Part.Statuses;
-			PartView.RuntimeStatusStacks = Part.StatusStacks;
-			PartView.bDestroyed = Part.bDestroyed;
-			View.Parts.Add(MoveTemp(PartView));
+			FWacomBattleEnemyPartEntryViewData& Item = View.Parts.AddDefaulted_GetRef();
+			Item.PartInstanceId = Part.InstanceId;
+			Item.Identity = Part.Identity;
+			Item.EnemySlotId = Part.EnemySlotId;
+			Item.PartSlotId = Part.PartSlotId;
+			Item.PartDisplayName = Part.Definition
+				? Part.Definition->DisplayName : FText::FromName(Part.PartSlotId);
+			Item.CurrentHp = Part.CurrentHp;
+			Item.MaxHp = Part.MaxHp;
+			Item.Shield = Part.Shield;
+			Item.CurrentInitiative = Part.CurrentInitiative;
+			Item.CurrentIntentId = Part.CurrentIntentId;
+			Item.CurrentIntentDisplayName = Part.CurrentIntent.DisplayName;
+			Item.CurrentIntentInitiative = Part.CurrentIntent.Initiative;
+			Item.CurrentIntentResistanceValue = Part.CurrentIntent.ResistanceValue;
+			Item.RuntimeStatuses = Part.Statuses;
+			Item.RuntimeStatusStacks = Part.StatusStacks;
+			Item.bDestroyed = Part.bDestroyed;
 		}
 		return View;
 	}
+
+	bool PreviewMatchesPart(
+		const FWacomBattleEnemyPartEntryViewData& Preview,
+		const UWacomBattleEnemyPartComponent& Part)
+	{
+		const FWacomInteractionTargetHandle Handle = Part.BuildWorldTargetHandle();
+		return Preview.Identity.IsValidSlot()
+			&& Preview.Identity.EncounterId == Handle.EncounterId
+			&& Preview.Identity.GetEffectiveEnemySlotId() == Handle.EnemySlotId
+			&& Preview.Identity.GetEffectivePartSlotId() == Handle.PartSlotId;
+	}
 }
 
-FWacomBattleHUDSceneEnemyTargetCoordinator::FWacomBattleHUDSceneEnemyTargetCoordinator(FWacomBattleHUDRuntime& InRuntime)
+FWacomBattleHUDSceneEnemyTargetCoordinator::FWacomBattleHUDSceneEnemyTargetCoordinator(
+	FWacomBattleHUDRuntime& InRuntime)
 	: Runtime(InRuntime)
 {
 }
 
 FWacomBattleHUDSceneEnemyTargetCoordinator::~FWacomBattleHUDSceneEnemyTargetCoordinator()
 {
-	for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
 		if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
 		{
@@ -171,25 +129,22 @@ FWacomBattleHUDSceneEnemyTargetCoordinator::~FWacomBattleHUDSceneEnemyTargetCoor
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::HasSameSceneEnemyHosts(
 	const TArray<AWacomBattleEnemyActor*>& InHosts) const
 {
-	TArray<AWacomBattleEnemyActor*> ValidUniqueHosts;
+	TArray<AWacomBattleEnemyActor*> Valid;
 	for (AWacomBattleEnemyActor* Host : InHosts)
 	{
 		if (IsValid(Host) && !Host->IsActorBeingDestroyed())
 		{
-			ValidUniqueHosts.AddUnique(Host);
+			Valid.AddUnique(Host);
 		}
 	}
-
-	if (ValidUniqueHosts.Num() != SceneEnemyHosts.Num())
+	if (Valid.Num() != SceneEnemyHosts.Num())
 	{
 		return false;
 	}
-
-	for (int32 Index = 0; Index < ValidUniqueHosts.Num(); ++Index)
+	for (int32 Index = 0; Index < Valid.Num(); ++Index)
 	{
-		const AWacomBattleEnemyActor* Host = ValidUniqueHosts[Index];
-		if (SceneEnemyHosts[Index].Host.Get() != Host
-			|| SceneEnemyHosts[Index].ObservedEnemySlotId != Host->GetEffectiveEnemySlotId())
+		if (SceneEnemyHosts[Index].Host.Get() != Valid[Index]
+			|| SceneEnemyHosts[Index].ObservedEnemySlotId != Valid[Index]->GetEffectiveEnemySlotId())
 		{
 			return false;
 		}
@@ -202,12 +157,9 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
 {
 	if (HasSameSceneEnemyHosts(InHosts))
 	{
-		for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
+		if (!IsRegistryTopologyCurrent())
 		{
-			if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
-			{
-				BindHostInspectionDelegate(*Host);
-			}
+			RebuildRegistry();
 		}
 		if (UBattleSession* Session = Runtime.GetSession())
 		{
@@ -216,67 +168,27 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
 		return;
 	}
 
-	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> PreviouslyActiveHosts;
-	for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
-	{
-		if (Entry.Host.IsValid())
-		{
-			PreviouslyActiveHosts.AddUnique(Entry.Host);
-		}
-	}
-
-	TArray<AWacomBattleEnemyActor*> ValidUniqueNewHosts;
-	for (AWacomBattleEnemyActor* Host : InHosts)
-	{
-		if (IsValid(Host) && !Host->IsActorBeingDestroyed())
-		{
-			ValidUniqueNewHosts.AddUnique(Host);
-		}
-	}
-
 	ClearActiveWorldTargets(TEXT("SceneEnemyHostsChanged"));
 	ClearRetiringHosts(true);
-	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& PreviousHost : PreviouslyActiveHosts)
+	for (AWacomBattleEnemyActor* Host : InHosts)
 	{
-		AWacomBattleEnemyActor* Host = PreviousHost.Get();
-		if (Host && !ValidUniqueNewHosts.Contains(Host))
+		if (!IsValid(Host) || Host->IsActorBeingDestroyed()
+			|| SceneEnemyHosts.ContainsByPredicate(
+				[Host](const FHostEntry& Entry) { return Entry.Host.Get() == Host; }))
 		{
-			Host->CancelRuntimeHostAnimation();
+			continue;
 		}
+		Host->ResetRuntimeScenePresentationForBattle();
+		FHostEntry& Entry = SceneEnemyHosts.AddDefaulted_GetRef();
+		Entry.Host = Host;
+		Entry.ObservedEnemySlotId = Host->GetEffectiveEnemySlotId();
+		BindHostInspectionDelegate(*Host);
 	}
-
-	for (AWacomBattleEnemyActor* Host : ValidUniqueNewHosts)
-	{
-		const bool bAlreadyAdded = SceneEnemyHosts.ContainsByPredicate(
-			[Host](const FSceneEnemyHostEntry& Entry)
-			{
-				return Entry.Host.Get() == Host;
-			});
-		if (!bAlreadyAdded)
-		{
-			const bool bWasAlreadyActive = PreviouslyActiveHosts.ContainsByPredicate(
-				[Host](const TWeakObjectPtr<AWacomBattleEnemyActor>& PreviousHost)
-				{
-					return PreviousHost.Get() == Host;
-				});
-			if (!bWasAlreadyActive)
-			{
-				Host->ResetRuntimeScenePresentationForBattle();
-			}
-			FSceneEnemyHostEntry& Entry = SceneEnemyHosts.AddDefaulted_GetRef();
-			Entry.Host = Host;
-			Entry.ObservedEnemySlotId = Host->GetEffectiveEnemySlotId();
-			Entry.ObservedTopologyRevision = Host->GetRuntimePartTopologyRevision();
-			BindHostInspectionDelegate(*Host);
-		}
-	}
-
-	if (SceneEnemyHosts.Num() == 0)
+	if (SceneEnemyHosts.IsEmpty())
 	{
 		Runtime.GetEnemyInspectionCoordinator().CloseInspection(true);
 		return;
 	}
-
 	RebuildRegistry();
 	if (UBattleSession* Session = Runtime.GetSession())
 	{
@@ -286,259 +198,203 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SetSceneEnemyHosts(
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::HasSceneEnemyHost() const
 {
-	for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
-	{
-		if (Entry.Host.IsValid())
-		{
-			return true;
-		}
-	}
-	return false;
+	return SceneEnemyHosts.ContainsByPredicate(
+		[](const FHostEntry& Entry) { return Entry.Host.IsValid(); });
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsSceneEnemyHostInCurrentRegistry(
 	const AWacomBattleEnemyActor* Host) const
 {
-	if (!IsValid(Host))
-	{
-		return false;
-	}
+	return IsValid(Host) && SceneEnemyHosts.ContainsByPredicate(
+		[Host](const FHostEntry& Entry) { return Entry.Host.Get() == Host; });
+}
 
-	for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
+UWacomBattleEnemyPartComponent*
+FWacomBattleHUDSceneEnemyTargetCoordinator::ResolvePartComponent(
+	const FWacomInteractionTargetHandle& Handle) const
+{
+	if (!Handle.HasBattlePartSlotIdentity())
 	{
-		if (Entry.Host.Get() == Host)
+		return nullptr;
+	}
+	for (FPartEntry* Entry : RegisteredParts)
+	{
+		UWacomBattleEnemyPartComponent* Part = Entry ? Entry->Part.Get() : nullptr;
+		if (Part && Entry->ObservedIdentity.EncounterId == Handle.EncounterId
+			&& Entry->ObservedIdentity.GetEffectiveEnemySlotId() == Handle.EnemySlotId
+			&& Entry->ObservedIdentity.GetEffectivePartSlotId() == Handle.PartSlotId)
 		{
-			return true;
+			return Part;
 		}
 	}
-	return false;
+	return nullptr;
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsWorldTargetInCurrentRegistry(
-	const FWacomInteractionTargetHandle& TargetHandle) const
+	const FWacomInteractionTargetHandle& Handle) const
 {
-	return ResolveWorldTargetBridge(TargetHandle) != nullptr;
+	return ResolvePartComponent(Handle) != nullptr;
 }
 
-UWacomBattleEnemyPartWorldTargetBridgeComponent*
-FWacomBattleHUDSceneEnemyTargetCoordinator::ResolveWorldTargetBridge(
-	const FWacomInteractionTargetHandle& TargetHandle) const
+bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsPartInCurrentRegistry(
+	const UWacomBattleEnemyPartComponent* Part) const
 {
-	if (!TargetHandle.HasBattlePartSlotIdentity())
-	{
-		return nullptr;
-	}
-
-	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
-	{
-		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get();
-		if (!IsValid(Bridge) || !Bridge->IsBoundToBattlePart())
-		{
-			continue;
-		}
-
-		if (Bridge->GetBoundEncounterId() == TargetHandle.EncounterId
-			&& Bridge->GetBoundEnemySlotId() == TargetHandle.EnemySlotId
-			&& Bridge->GetBoundPartSlotId() == TargetHandle.PartSlotId)
-		{
-			return Bridge;
-		}
-	}
-
-	return nullptr;
+	return IsValid(Part) && RegisteredParts.ContainsByPredicate(
+		[Part](const FPartEntry* Entry) { return Entry && Entry->Part.Get() == Part; });
 }
 
-UWacomBattleEnemyPartPresentationComponent*
-FWacomBattleHUDSceneEnemyTargetCoordinator::ResolveWorldTargetPresentation(
-	const FWacomInteractionTargetHandle& TargetHandle) const
+void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegisteredPartPointers()
 {
-	const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = ResolveWorldTargetBridge(TargetHandle);
-	if (!Bridge)
+	RegisteredParts.Reset();
+	for (FHostEntry& Host : SceneEnemyHosts)
 	{
-		return nullptr;
-	}
-
-	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
-	{
-		if (Entry.Bridge.Get() == Bridge)
+		for (FPartEntry& Part : Host.Parts)
 		{
-			return Entry.Presentation.Get();
+			RegisteredParts.Add(&Part);
 		}
 	}
-	return nullptr;
-}
-
-bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsBridgeInCurrentRegistry(
-	const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const
-{
-	if (!IsValid(Bridge))
-	{
-		return false;
-	}
-
-	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
-	{
-		if (Entry.Bridge.Get() == Bridge)
-		{
-			return true;
-		}
-	}
-	return false;
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::RebuildRegistry()
 {
 	ClearRegistryEntries(TEXT("RegistryRebuilt"));
-	FName RuntimeEncounterId = NAME_None;
+	FName EncounterId = NAME_None;
 	if (UBattleSession* Session = Runtime.GetSession())
 	{
-		RuntimeEncounterId = Session->BuildSnapshot().EncounterId;
+		EncounterId = Session->BuildSnapshot().EncounterId;
 	}
-	SceneEnemyHosts.RemoveAll([](const FSceneEnemyHostEntry& Entry)
+	SceneEnemyHosts.RemoveAll([](const FHostEntry& Entry)
 	{
 		const AWacomBattleEnemyActor* Host = Entry.Host.Get();
 		return !IsValid(Host) || Host->IsActorBeingDestroyed();
 	});
-
-	for (FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
+	for (FHostEntry& HostEntry : SceneEnemyHosts)
 	{
 		AWacomBattleEnemyActor* Host = HostEntry.Host.Get();
-		if (!IsValid(Host) || Host->IsActorBeingDestroyed())
+		UWacomBattleEnemySceneRuntimeComponent* Scene =
+			Host ? Host->GetEnemySceneRuntimeComponent() : nullptr;
+		if (!Scene)
 		{
 			continue;
 		}
-
-		TArray<AWacomBattleEnemyPartActor*> RuntimePartActors;
-		Host->InitializeRuntimeSceneBinding(RuntimePartActors);
+		Scene->InitializeRuntimeSceneBinding(
+			EncounterId, Host->GetEffectiveEnemySlotId());
 		HostEntry.ObservedEnemySlotId = Host->GetEffectiveEnemySlotId();
-		HostEntry.ObservedTopologyRevision = Host->GetRuntimePartTopologyRevision();
-		HostEntry.RuntimeParts.Reset();
-		for (AWacomBattleEnemyPartActor* PartActor : RuntimePartActors)
+		HostEntry.ObservedTopologyRevision = Host->GetEnemySceneComponentTopologyRevision();
+		HostEntry.Parts.Reset();
+		for (UWacomBattleEnemyPartComponent* Part : Host->GetBattleEnemyPartComponents())
 		{
-			if (!IsValid(PartActor) || PartActor->IsActorBeingDestroyed())
+			if (!IsValid(Part) || !Part->IsRegistered())
 			{
 				continue;
 			}
-
-			if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
-				PartActor->GetWorldTargetBridgeComponent())
-			{
-				if (Bridge->IsRegistered())
-				{
-					FSceneEnemyRuntimePartEntry RuntimePartEntry;
-					RuntimePartEntry.PartActor = PartActor;
-					RuntimePartEntry.ObservedIdentity = FBattlePartSlotIdentity::Make(
-						RuntimeEncounterId,
-						HostEntry.ObservedEnemySlotId,
-						PartActor->GetEffectivePartSlotId());
-					HostEntry.RuntimeParts.Add(MoveTemp(RuntimePartEntry));
-
-					FSceneEnemyPartWorldTargetEntry Entry;
-					Entry.Bridge = Bridge;
-					Entry.Presentation = PartActor->GetPresentationComponent();
-					SceneEnemyPartWorldTargets.Add(Entry);
-					Bridge->SetBattleHUDSceneRegistryState(true);
-				}
-			}
+			FPartEntry& Entry = HostEntry.Parts.AddDefaulted_GetRef();
+			Entry.Part = Part;
+			Entry.ObservedIdentity = FBattlePartSlotIdentity::Make(
+				EncounterId, HostEntry.ObservedEnemySlotId, Part->PartSlotId);
+			Scene->SetPartRegisteredWithHUD(*Part, true);
 		}
 	}
+	RebuildRegisteredPartPointers();
 	++RegistryRevision;
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsRegistryTopologyCurrent() const
 {
-	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
-		const AWacomBattleEnemyActor* Host = HostEntry.Host.Get();
-		if (!IsValid(Host)
-			|| Host->IsActorBeingDestroyed()
-			|| HostEntry.ObservedEnemySlotId != Host->GetEffectiveEnemySlotId()
-			|| HostEntry.ObservedTopologyRevision != Host->GetRuntimePartTopologyRevision())
+		const AWacomBattleEnemyActor* Host = Entry.Host.Get();
+		if (!IsValid(Host) || Host->IsActorBeingDestroyed()
+			|| Entry.ObservedEnemySlotId != Host->GetEffectiveEnemySlotId()
+			|| Entry.ObservedTopologyRevision != Host->GetEnemySceneComponentTopologyRevision())
 		{
 			return false;
 		}
-	}
-
-	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
-	{
-		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get();
-		const UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get();
-		const AActor* Owner = Bridge ? Bridge->GetOwner() : nullptr;
-		if (!IsValid(Bridge)
-			|| !Bridge->IsRegistered()
-			|| !IsValid(Presentation)
-			|| !IsValid(Owner)
-			|| Owner->IsActorBeingDestroyed())
+		for (const FPartEntry& PartEntry : Entry.Parts)
 		{
-			return false;
+			if (!PartEntry.Part.IsValid() || !PartEntry.Part->IsRegistered())
+			{
+				return false;
+			}
 		}
 	}
 	return true;
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearPresentationTargetRegistration(
-	FSceneEnemyPartWorldTargetEntry& Entry)
+	FPartEntry& Entry)
 {
 	if (Entry.bPresentationTargetRegistered)
 	{
-		Runtime.UnregisterBattlePresentationTarget(Entry.RegisteredTargetIdentity);
+		Runtime.UnregisterBattlePresentationTarget(Entry.ObservedIdentity);
 		Entry.bPresentationTargetRegistered = false;
-		Entry.RegisteredTargetIdentity = FBattlePartSlotIdentity();
 	}
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::EnsurePresentationTargetRegistration(
-	FSceneEnemyPartWorldTargetEntry& Entry,
-	UWacomBattleEnemyPartPresentationComponent& Presentation,
-	const FBattlePartSlotIdentity& TargetIdentity)
+	FPartEntry& Entry)
 {
-	if (Entry.bPresentationTargetRegistered
-		&& Entry.RegisteredTargetIdentity == TargetIdentity
-		&& Runtime.IsBattlePresentationTargetRegisteredForOwner(&Presentation))
+	UWacomBattleEnemyPartComponent* Part = Entry.Part.Get();
+	if (!Part)
 	{
 		return;
 	}
-
+	if (Entry.bPresentationTargetRegistered
+		&& Runtime.IsBattlePresentationTargetRegisteredForOwner(Part))
+	{
+		return;
+	}
 	ClearPresentationTargetRegistration(Entry);
-	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> WeakPresentation = &Presentation;
+	TWeakObjectPtr<UWacomBattleEnemyPartComponent> WeakPart = Part;
 	Runtime.RegisterBattlePresentationTarget(
-		TargetIdentity,
-		&Presentation,
-		[WeakPresentation](const FWacomBattlePresentationTargetCue& Cue)
+		Entry.ObservedIdentity,
+		Part,
+		[WeakPart](const FWacomBattlePresentationTargetCue& Cue)
 		{
-			if (UWacomBattleEnemyPartPresentationComponent* StrongPresentation = WeakPresentation.Get())
+			UWacomBattleEnemyPartComponent* StrongPart = WeakPart.Get();
+			AWacomBattleEnemyActor* Host = StrongPart
+				? StrongPart->GetOwningEnemyHost() : nullptr;
+			if (StrongPart && Host && Host->GetEnemySceneRuntimeComponent())
 			{
-				StrongPresentation->PlayBattlePresentationCue(Cue);
+				Host->GetEnemySceneRuntimeComponent()->PlayPartPresentationCue(
+					*StrongPart, Cue);
 			}
 		});
-	Entry.RegisteredTargetIdentity = TargetIdentity;
 	Entry.bPresentationTargetRegistered = true;
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearRegistryEntries(FName Reason)
 {
-	for (FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
+	for (FPartEntry* Entry : RegisteredParts)
 	{
-		ClearPresentationTargetRegistration(Entry);
-		if (UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get())
+		if (!Entry)
 		{
-			Presentation->ClearDragTargetPreviewState();
-			Presentation->ClearHoverProbeState(Reason);
-			Presentation->ClearActionPreviewPartView();
-			Presentation->SetTargetableAffordance(false);
-			Presentation->ClearRuntimePartFacts();
+			continue;
 		}
-
-		if (UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get())
+		ClearPresentationTargetRegistration(*Entry);
+		UWacomBattleEnemyPartComponent* Part = Entry->Part.Get();
+		AWacomBattleEnemyActor* Host = Part ? Part->GetOwningEnemyHost() : nullptr;
+		UWacomBattleEnemySceneRuntimeComponent* Scene =
+			Host ? Host->GetEnemySceneRuntimeComponent() : nullptr;
+		if (Part && Scene)
 		{
-			Bridge->SetBattleHUDSceneRegistryState(false);
-			Bridge->ClearBattleBinding();
+			Scene->ClearPartDragTargetPreviewState(*Part);
+			Scene->ClearPartHoverProbeState(*Part, Reason);
+			Scene->ClearPartActionPreview(*Part);
+			Scene->SetPartTargetable(*Part, false, Reason);
+			Scene->SetPartRegisteredWithHUD(*Part, false);
+			Scene->ClearPartBattleBinding(*Part);
 		}
 	}
-	SceneEnemyPartWorldTargets.Reset();
+	RegisteredParts.Reset();
+	for (FHostEntry& Host : SceneEnemyHosts)
+	{
+		Host.Parts.Reset();
+	}
 }
 
-void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleSnapshot& Snapshot)
+void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(
+	const FBattleSnapshot& Snapshot)
 {
 	if (Snapshot.Phase == EBattlePhase::BattleEnd)
 	{
@@ -546,13 +402,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 		RetireWorldTargetsForBattleEnd(Snapshot);
 		return;
 	}
-	if (Snapshot.Phase == EBattlePhase::None)
-	{
-		ClearWorldTargets();
-		return;
-	}
-
-	if (!HasSceneEnemyHost())
+	if (Snapshot.Phase == EBattlePhase::None || !HasSceneEnemyHost())
 	{
 		ClearWorldTargets();
 		return;
@@ -562,137 +412,71 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(const FBattleS
 		RebuildRegistry();
 	}
 
-	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
+	for (const FHostEntry& HostEntry : SceneEnemyHosts)
 	{
-		if (AWacomBattleEnemyActor* Host = HostEntry.Host.Get())
-		{
-			const FEnemySnapshot* MatchedEnemy = Snapshot.Enemies.FindByPredicate(
-				[EnemySlotId = HostEntry.ObservedEnemySlotId](const FEnemySnapshot& Enemy)
-				{
-					return Enemy.EnemySlotId == EnemySlotId;
-				});
-			if (MatchedEnemy)
-			{
-				const FWacomBattleEnemyPanelViewData PanelView =
-					BuildEnemyPanelViewData(Snapshot, *MatchedEnemy);
-				Host->SetEnemyPanelViewData(PanelView);
-				Runtime.GetEnemyInspectionCoordinator().UpdateEnemyView(PanelView);
-			}
-			else
-			{
-				if (Runtime.GetEnemyInspectionCoordinator().IsInspectingEnemySlot(
-					HostEntry.ObservedEnemySlotId))
-				{
-					Runtime.GetEnemyInspectionCoordinator().CloseInspection(true);
-				}
-				Host->ClearEnemyPanelViewData();
-			}
-		}
-	}
-
-	const FBattleTargetSelectionView TargetSelectionView = Runtime.BuildTargetSelectionView();
-	for (FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
-	{
-		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get();
-		if (!IsValid(Bridge))
+		AWacomBattleEnemyActor* Host = HostEntry.Host.Get();
+		if (!Host)
 		{
 			continue;
 		}
-
-		if (AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(Bridge->GetOwner()))
+		const FEnemySnapshot* Enemy = Snapshot.Enemies.FindByPredicate(
+			[Slot = HostEntry.ObservedEnemySlotId](const FEnemySnapshot& Item)
+			{
+				return Item.EnemySlotId == Slot;
+			});
+		if (Enemy)
 		{
-			Bridge->SetBattlePartSlotIdentity(
-				Snapshot.EncounterId,
-				PartActor->EnemySlotId,
-				PartActor->GetEffectivePartSlotId());
+			const FWacomBattleEnemyPanelViewData View = BuildPanelView(Snapshot, *Enemy);
+			Host->SetEnemyPanelViewData(View);
+			Runtime.GetEnemyInspectionCoordinator().UpdateEnemyView(View);
 		}
-		FEnemyPartSnapshot MatchedPart;
-		const bool bBound = Bridge->SyncFromBattleSnapshot(Snapshot, &MatchedPart);
-		UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get();
-		bool bNewTargetable = false;
-		FName NewDisabledReason = NAME_None;
+		else
+		{
+			Host->ClearEnemyPanelViewData();
+		}
+	}
+
+	const FBattleTargetSelectionView Selection = Runtime.BuildTargetSelectionView();
+	for (FPartEntry* Entry : RegisteredParts)
+	{
+		UWacomBattleEnemyPartComponent* Part = Entry ? Entry->Part.Get() : nullptr;
+		AWacomBattleEnemyActor* Host = Part ? Part->GetOwningEnemyHost() : nullptr;
+		UWacomBattleEnemySceneRuntimeComponent* Scene =
+			Host ? Host->GetEnemySceneRuntimeComponent() : nullptr;
+		if (!Part || !Scene)
+		{
+			continue;
+		}
+		FEnemyPartSnapshot Matched;
+		const bool bBound = Scene->SyncPartFromBattleSnapshot(*Part, Snapshot, &Matched);
+		bool bTargetable = false;
+		FName DisabledReason = NAME_None;
 		if (bBound)
 		{
-			for (const FBattleTargetablePartView& PartView : TargetSelectionView.TargetableParts)
+			for (const FBattleTargetablePartView& View : Selection.TargetableParts)
 			{
-				if (PartView.PartInstanceId == Bridge->GetPartInstanceId())
+				if (View.PartInstanceId == Matched.InstanceId)
 				{
-					bNewTargetable = PartView.bTargetable;
-					NewDisabledReason = PartView.DisabledReason;
+					bTargetable = View.bTargetable;
+					DisabledReason = View.DisabledReason;
 					break;
 				}
 			}
 		}
-		Bridge->SetBattleTargetableState(bNewTargetable, NewDisabledReason);
-
-		if (!Presentation)
-		{
-			ClearPresentationTargetRegistration(Entry);
-			continue;
-		}
-
+		Scene->SetPartTargetable(*Part, bTargetable, DisabledReason);
 		if (bBound)
 		{
-			Presentation->CacheRuntimePartFacts(Bridge->PartId, MatchedPart);
+			EnsurePresentationTargetRegistration(*Entry);
 		}
 		else
 		{
-			if (MatchedPart.InstanceId.IsValid())
-			{
-				Presentation->CacheRuntimePartFacts(Bridge->PartId, MatchedPart);
-			}
-			else
-			{
-				Presentation->ClearRuntimePartFacts();
-			}
-			Presentation->ClearDragTargetPreviewState();
-			Presentation->ClearHoverProbeState(TEXT("BindingCleared"));
-			Presentation->ClearActionPreviewPartView();
-			Presentation->SetTargetableAffordance(false);
-			ClearPresentationTargetRegistration(Entry);
-			continue;
+			ClearPresentationTargetRegistration(*Entry);
+			Scene->ClearPartDragTargetPreviewState(*Part);
+			Scene->ClearPartHoverProbeState(*Part, TEXT("BindingCleared"));
+			Scene->ClearPartActionPreview(*Part);
 		}
-		Presentation->SetTargetableAffordance(bNewTargetable);
-
-		EnsurePresentationTargetRegistration(
-			Entry,
-			*Presentation,
-			FBattlePartSlotIdentity(
-				Bridge->GetBoundEncounterId(),
-				Bridge->GetBoundEnemySlotId(),
-				Bridge->GetBoundPartSlotId()));
 	}
 	RefreshEnemyPanelInspectionInteraction();
-}
-
-void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
-{
-	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> ActiveHosts;
-	TArray<TWeakObjectPtr<AWacomBattleEnemyPartActor>> ActiveParts;
-	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
-	{
-		ActiveHosts.AddUnique(HostEntry.Host);
-		for (const FSceneEnemyRuntimePartEntry& RuntimePart : HostEntry.RuntimeParts)
-		{
-			ActiveParts.AddUnique(RuntimePart.PartActor);
-		}
-	}
-	ClearActiveWorldTargets(TEXT("WorldTargetsCleared"));
-	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& HostPtr : ActiveHosts)
-	{
-		if (AWacomBattleEnemyActor* Host = HostPtr.Get())
-		{
-			Host->CancelRuntimeHostAnimation();
-		}
-	}
-	for (const TWeakObjectPtr<AWacomBattleEnemyPartActor>& PartPtr : ActiveParts)
-	{
-		if (AWacomBattleEnemyPartActor* PartActor = PartPtr.Get())
-		{
-			PartActor->CancelRuntimePartActionAnimation();
-		}
-	}
-	ClearRetiringHosts(true);
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearActiveWorldTargets(FName Reason)
@@ -700,59 +484,61 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearActiveWorldTargets(FName R
 	Runtime.GetEnemyInspectionCoordinator().CloseInspection(true);
 	Runtime.ClearFirstPersonCardDragTargetFeedback();
 	ClearHoverProbe(Reason);
-
-	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
-		if (AWacomBattleEnemyActor* Host = HostEntry.Host.Get())
+		if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
 		{
 			UnbindHostInspectionDelegate(*Host);
 			Host->SetEnemyPanelInspectionInteractionEnabled(false);
 			Host->ClearEnemyPanelViewData();
 		}
 	}
-
 	ClearRegistryEntries(Reason);
 	SceneEnemyHosts.Reset();
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearWorldTargets()
+{
+	TArray<TWeakObjectPtr<AWacomBattleEnemyActor>> Hosts;
+	for (const FHostEntry& Entry : SceneEnemyHosts)
+	{
+		Hosts.AddUnique(Entry.Host);
+	}
+	ClearActiveWorldTargets(TEXT("WorldTargetsCleared"));
+	for (const TWeakObjectPtr<AWacomBattleEnemyActor>& HostPtr : Hosts)
+	{
+		if (AWacomBattleEnemyActor* Host = HostPtr.Get())
+		{
+			if (UWacomBattleEnemySceneRuntimeComponent* Scene = Host->GetEnemySceneRuntimeComponent())
+			{
+				Scene->CancelAllPlayback(true);
+			}
+		}
+	}
+	ClearRetiringHosts(true);
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::RetireWorldTargetsForBattleEnd(
 	const FBattleSnapshot& Snapshot)
 {
-	if (SceneEnemyHosts.IsEmpty())
+	for (const FHostEntry& Active : SceneEnemyHosts)
 	{
-		return;
-	}
-
-	for (const FSceneEnemyHostEntry& ActiveEntry : SceneEnemyHosts)
-	{
-		AWacomBattleEnemyActor* Host = ActiveEntry.Host.Get();
-		if (!IsValid(Host) || Host->IsActorBeingDestroyed())
+		AWacomBattleEnemyActor* Host = Active.Host.Get();
+		if (!Host)
 		{
 			continue;
 		}
-
-		const FEnemySnapshot* EnemySnapshot = Snapshot.Enemies.FindByPredicate(
-			[EnemySlotId = ActiveEntry.ObservedEnemySlotId](const FEnemySnapshot& Enemy)
+		const FEnemySnapshot* Enemy = Snapshot.Enemies.FindByPredicate(
+			[Slot = Active.ObservedEnemySlotId](const FEnemySnapshot& Item)
 			{
-				return Enemy.EnemySlotId == EnemySlotId;
+				return Item.EnemySlotId == Slot;
 			});
-		FRetiringSceneEnemyHostEntry* RetiringEntry =
-			RetiringSceneEnemyHosts.FindByPredicate(
-				[Host](const FRetiringSceneEnemyHostEntry& Entry)
-				{
-					return Entry.Host.Get() == Host;
-				});
-		if (!RetiringEntry)
-		{
-			RetiringEntry = &RetiringSceneEnemyHosts.AddDefaulted_GetRef();
-		}
-		RetiringEntry->Host = Host;
-		RetiringEntry->ObservedEnemySlotId = ActiveEntry.ObservedEnemySlotId;
-		RetiringEntry->bAllPartsDestroyed =
-			EnemySnapshot && EnemySnapshot->bAllPartsDestroyed;
-		RetiringEntry->RuntimeParts = ActiveEntry.RuntimeParts;
+		FRetiringHostEntry& Retiring = RetiringSceneEnemyHosts.AddDefaulted_GetRef();
+		Retiring.Host = Host;
+		Retiring.ObservedEnemySlotId = Active.ObservedEnemySlotId;
+		Retiring.bAllPartsDestroyed = Enemy && Enemy->bAllPartsDestroyed;
+		Retiring.Parts = Active.Parts;
 	}
-
 	ClearActiveWorldTargets(TEXT("BattleEnd"));
 }
 
@@ -766,119 +552,75 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::PlaySceneEnemyActionAnimation(
 		Callbacks.CompleteImmediately();
 		return;
 	}
-
 	auto TryPlay = [&ActingPartKey, IntentId, &Callbacks](
-		AWacomBattleEnemyActor* Host,
-		const TArray<FSceneEnemyRuntimePartEntry>& RuntimeParts)
+		AWacomBattleEnemyActor* Host, const TArray<FPartEntry>& Parts)
 	{
-		if (!IsValid(Host) || Host->IsActorBeingDestroyed())
-		{
-			return false;
-		}
-
-		const FSceneEnemyRuntimePartEntry* RuntimePart = RuntimeParts.FindByPredicate(
-			[&ActingPartKey](const FSceneEnemyRuntimePartEntry& Candidate)
+		const FPartEntry* Entry = Parts.FindByPredicate(
+			[&ActingPartKey](const FPartEntry& Candidate)
 			{
 				return Candidate.ObservedIdentity.MatchesRuntimeSlot(ActingPartKey);
 			});
-		if (!RuntimePart)
+		UWacomBattleEnemyPartComponent* Part = Entry ? Entry->Part.Get() : nullptr;
+		UWacomBattleEnemySceneRuntimeComponent* Scene =
+			Host ? Host->GetEnemySceneRuntimeComponent() : nullptr;
+		if (!Part || !Scene)
 		{
 			return false;
 		}
-
-		if (Host->HostAuthoringMode == EWacomBattleEnemyHostAuthoringMode::SimpleHostVisual)
-		{
-			Host->PlayRuntimeHostActionAnimation(IntentId, MoveTemp(Callbacks));
-			return true;
-		}
-
-		if (Host->HostAuthoringMode == EWacomBattleEnemyHostAuthoringMode::MultiPartVisualLayers)
-		{
-			AWacomBattleEnemyPartActor* PartActor = RuntimePart->PartActor.Get();
-			if (IsValid(PartActor) && !PartActor->IsActorBeingDestroyed())
-			{
-				PartActor->PlayRuntimePartActionAnimation(IntentId, MoveTemp(Callbacks));
-			}
-			else
-			{
-				Callbacks.CompleteImmediately();
-			}
-			return true;
-		}
-
-		return false;
+		Scene->PlayPartActionAnimation(*Part, IntentId, MoveTemp(Callbacks));
+		return true;
 	};
-
-	for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
-		AWacomBattleEnemyActor* Host = Entry.Host.Get();
-		if (TryPlay(Host, Entry.RuntimeParts))
-		{
-			return;
-		}
+		if (TryPlay(Entry.Host.Get(), Entry.Parts)) return;
 	}
-	for (const FRetiringSceneEnemyHostEntry& Entry : RetiringSceneEnemyHosts)
+	for (const FRetiringHostEntry& Entry : RetiringSceneEnemyHosts)
 	{
-		AWacomBattleEnemyActor* Host = Entry.Host.Get();
-		if (TryPlay(Host, Entry.RuntimeParts))
-		{
-			return;
-		}
+		if (TryPlay(Entry.Host.Get(), Entry.Parts)) return;
 	}
-
 	Callbacks.CompleteImmediately();
 }
 
-void FWacomBattleHUDSceneEnemyTargetCoordinator::PlayHostDestroyedAnimation(
-	FName EnemySlotId,
-	TFunction<void()>&& Completion)
+void FWacomBattleHUDSceneEnemyTargetCoordinator::PlayEnemyDestroyedAnimation(
+	FName EnemySlotId, TFunction<void()>&& Completion)
 {
-	for (const FSceneEnemyHostEntry& Entry : SceneEnemyHosts)
+	auto TryPlay = [&Completion, EnemySlotId](
+		AWacomBattleEnemyActor* Host, FName Slot, bool bDestroyed)
 	{
-		AWacomBattleEnemyActor* Host = Entry.Host.Get();
-		if (Entry.ObservedEnemySlotId == EnemySlotId
-			&& IsValid(Host)
-			&& !Host->IsActorBeingDestroyed()
-			&& IsActiveEnemyAllPartsDestroyed(EnemySlotId))
+		if (Slot != EnemySlotId || !bDestroyed || !Host
+			|| !Host->GetEnemySceneRuntimeComponent())
 		{
-			Host->PlayRuntimeHostDestroyedAnimation(MoveTemp(Completion));
-			return;
+			return false;
 		}
-	}
-	for (const FRetiringSceneEnemyHostEntry& Entry : RetiringSceneEnemyHosts)
+		Host->GetEnemySceneRuntimeComponent()->PlayEnemyDestroyedAnimation(
+			MoveTemp(Completion));
+		return true;
+	};
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
-		AWacomBattleEnemyActor* Host = Entry.Host.Get();
-		if (Entry.ObservedEnemySlotId == EnemySlotId
-			&& Entry.bAllPartsDestroyed
-			&& IsValid(Host)
-			&& !Host->IsActorBeingDestroyed())
-		{
-			Host->PlayRuntimeHostDestroyedAnimation(MoveTemp(Completion));
-			return;
-		}
+		if (TryPlay(Entry.Host.Get(), Entry.ObservedEnemySlotId,
+			IsActiveEnemyAllPartsDestroyed(EnemySlotId))) return;
 	}
-
-	if (Completion)
+	for (const FRetiringHostEntry& Entry : RetiringSceneEnemyHosts)
 	{
-		Completion();
+		if (TryPlay(Entry.Host.Get(), Entry.ObservedEnemySlotId,
+			Entry.bAllPartsDestroyed)) return;
 	}
+	if (Completion) Completion();
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsActiveEnemyAllPartsDestroyed(
 	FName EnemySlotId) const
 {
 	const UBattleSession* Session = Runtime.GetSession();
-	if (!Session)
-	{
-		return false;
-	}
+	if (!Session) return false;
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
-	const FEnemySnapshot* EnemySnapshot = Snapshot.Enemies.FindByPredicate(
-		[EnemySlotId](const FEnemySnapshot& Enemy)
+	const FEnemySnapshot* Enemy = Snapshot.Enemies.FindByPredicate(
+		[EnemySlotId](const FEnemySnapshot& Item)
 		{
-			return Enemy.EnemySlotId == EnemySlotId;
+			return Item.EnemySlotId == EnemySlotId;
 		});
-	return EnemySnapshot && EnemySnapshot->bAllPartsDestroyed;
+	return Enemy && Enemy->bAllPartsDestroyed;
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearRetiringHosts(
@@ -886,17 +628,13 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearRetiringHosts(
 {
 	if (bCancelPendingPlayback)
 	{
-		for (const FRetiringSceneEnemyHostEntry& Entry : RetiringSceneEnemyHosts)
+		for (const FRetiringHostEntry& Entry : RetiringSceneEnemyHosts)
 		{
 			if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
 			{
-				Host->CancelRuntimeHostAnimation();
-			}
-			for (const FSceneEnemyRuntimePartEntry& RuntimePart : Entry.RuntimeParts)
-			{
-				if (AWacomBattleEnemyPartActor* PartActor = RuntimePart.PartActor.Get())
+				if (UWacomBattleEnemySceneRuntimeComponent* Scene = Host->GetEnemySceneRuntimeComponent())
 				{
-					PartActor->CancelRuntimePartActionAnimation();
+					Scene->CancelAllPlayback(true);
 				}
 			}
 		}
@@ -906,51 +644,70 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearRetiringHosts(
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyActionPreviewToEnemyPanels(
 	const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts,
-	const bool bApplyScenePartPreview) const
+	bool bApplyScenePartPreview) const
 {
-	if (PreviewParts.IsEmpty())
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
-		ClearActionPreviewFromSceneParts();
-		return;
-	}
-
-	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
-	{
-		if (AWacomBattleEnemyActor* Host = HostEntry.Host.Get())
+		if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
 		{
 			Host->SetEnemyPanelActionPreview(PreviewParts);
 		}
 	}
-
-	if (bApplyScenePartPreview)
-	{
-		ApplyActionPreviewToSceneParts(PreviewParts);
-	}
-	else
-	{
-		ClearActionPreviewFromSceneParts();
-	}
+	if (bApplyScenePartPreview) ApplyActionPreviewToSceneParts(PreviewParts);
+	else ClearActionPreviewFromSceneParts();
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearActionPreviewFromEnemyPanels() const
 {
-	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
-		if (AWacomBattleEnemyActor* Host = HostEntry.Host.Get())
+		if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
 		{
 			Host->ClearEnemyPanelActionPreview();
 		}
 	}
-
 	ClearActionPreviewFromSceneParts();
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyActionPreviewToSceneParts(
+	const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const
+{
+	for (FPartEntry* Entry : RegisteredParts)
+	{
+		UWacomBattleEnemyPartComponent* Part = Entry ? Entry->Part.Get() : nullptr;
+		AWacomBattleEnemyActor* Host = Part ? Part->GetOwningEnemyHost() : nullptr;
+		UWacomBattleEnemySceneRuntimeComponent* Scene = Host
+			? Host->GetEnemySceneRuntimeComponent() : nullptr;
+		if (!Part || !Scene) continue;
+		const FWacomBattleEnemyPartEntryViewData* Match = PreviewParts.FindByPredicate(
+			[Part](const FWacomBattleEnemyPartEntryViewData& Item)
+			{
+				return PreviewMatchesPart(Item, *Part);
+			});
+		if (Match) Scene->SetPartActionPreview(*Part, *Match);
+		else Scene->ClearPartActionPreview(*Part);
+	}
+}
+
+void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearActionPreviewFromSceneParts() const
+{
+	for (FPartEntry* Entry : RegisteredParts)
+	{
+		UWacomBattleEnemyPartComponent* Part = Entry ? Entry->Part.Get() : nullptr;
+		AWacomBattleEnemyActor* Host = Part ? Part->GetOwningEnemyHost() : nullptr;
+		if (Part && Host && Host->GetEnemySceneRuntimeComponent())
+		{
+			Host->GetEnemySceneRuntimeComponent()->ClearPartActionPreview(*Part);
+		}
+	}
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::RefreshEnemyPanelInspectionInteraction() const
 {
 	const bool bEnabled = Runtime.CanOpenEnemyInspection();
-	for (const FSceneEnemyHostEntry& HostEntry : SceneEnemyHosts)
+	for (const FHostEntry& Entry : SceneEnemyHosts)
 	{
-		if (AWacomBattleEnemyActor* Host = HostEntry.Host.Get())
+		if (AWacomBattleEnemyActor* Host = Entry.Host.Get())
 		{
 			Host->SetEnemyPanelInspectionInteractionEnabled(bEnabled);
 		}
@@ -976,77 +733,21 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::HandleEnemyPanelInspectionReque
 	AWacomBattleEnemyActor* Host,
 	const FBattlePartSlotIdentity& PartIdentity)
 {
-	if (!Runtime.CanOpenEnemyInspection()
-		|| !IsValid(Host)
-		|| !PartIdentity.IsValidSlot())
-	{
-		return;
-	}
-
-	const FSceneEnemyHostEntry* HostEntry = SceneEnemyHosts.FindByPredicate(
-		[Host](const FSceneEnemyHostEntry& Entry)
-		{
-			return Entry.Host.Get() == Host;
-		});
+	if (!Runtime.CanOpenEnemyInspection() || !Host || !PartIdentity.IsValidSlot()) return;
+	const FHostEntry* Entry = SceneEnemyHosts.FindByPredicate(
+		[Host](const FHostEntry& Item) { return Item.Host.Get() == Host; });
 	UBattleSession* Session = Runtime.GetSession();
-	if (!HostEntry || !Session
-		|| PartIdentity.GetEffectiveEnemySlotId() != HostEntry->ObservedEnemySlotId)
-	{
-		return;
-	}
-
+	if (!Entry || !Session) return;
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FEnemySnapshot* Enemy = Snapshot.Enemies.FindByPredicate(
-		[EnemySlotId = HostEntry->ObservedEnemySlotId](const FEnemySnapshot& Candidate)
+		[Slot = Entry->ObservedEnemySlotId](const FEnemySnapshot& Item)
 		{
-			return Candidate.EnemySlotId == EnemySlotId;
+			return Item.EnemySlotId == Slot;
 		});
-	if (!Enemy)
+	if (Enemy)
 	{
-		return;
-	}
-
-	Runtime.GetEnemyInspectionCoordinator().ToggleInspection(
-		BuildEnemyPanelViewData(Snapshot, *Enemy),
-		PartIdentity);
-}
-
-void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyActionPreviewToSceneParts(
-	const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const
-{
-	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
-	{
-		UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge = Entry.Bridge.Get();
-		UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get();
-		if (!IsValid(Bridge) || !Bridge->IsBoundToBattlePart() || !Presentation)
-		{
-			continue;
-		}
-
-		const FWacomBattleEnemyPartEntryViewData* MatchedPreview = PreviewParts.FindByPredicate(
-			[Bridge](const FWacomBattleEnemyPartEntryViewData& PreviewPart)
-			{
-				return DoesPreviewPartMatchBridge(PreviewPart, *Bridge);
-			});
-		if (MatchedPreview)
-		{
-			Presentation->SetActionPreviewPartView(*MatchedPreview);
-		}
-		else
-		{
-			Presentation->ClearActionPreviewPartView();
-		}
-	}
-}
-
-void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearActionPreviewFromSceneParts() const
-{
-	for (const FSceneEnemyPartWorldTargetEntry& Entry : SceneEnemyPartWorldTargets)
-	{
-		if (UWacomBattleEnemyPartPresentationComponent* Presentation = Entry.Presentation.Get())
-		{
-			Presentation->ClearActionPreviewPartView();
-		}
+		Runtime.GetEnemyInspectionCoordinator().ToggleInspection(
+			BuildPanelView(Snapshot, *Enemy), PartIdentity);
 	}
 }
 
@@ -1054,47 +755,47 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::TickHoverProbe(float DeltaTime)
 {
 	if (!CanUpdateHoverProbe())
 	{
-		const bool bPreserveFirstPersonDragPreview =
-			Runtime.IsFirstPersonCardDragActiveForBattleSceneHover();
-		ClearHoverProbe(
-			TEXT("ProbeGated"),
-			!bPreserveFirstPersonDragPreview);
+		ClearHoverProbe(TEXT("ProbeGated"),
+			!Runtime.IsFirstPersonCardDragActiveForBattleSceneHover());
 		HoverProbeElapsedSeconds = 0.0f;
 		return;
 	}
-
 	HoverProbeElapsedSeconds += FMath::Max(0.0f, DeltaTime);
-	if (HoverProbeElapsedSeconds
-		< FMath::Max(0.01f, Runtime.Host().GetBattleSceneEnemyPartHoverProbeIntervalSeconds()))
+	if (HoverProbeElapsedSeconds < FMath::Max(
+		0.01f, Runtime.Host().GetBattleSceneEnemyPartHoverProbeIntervalSeconds()))
 	{
 		return;
 	}
-
 	HoverProbeElapsedSeconds = 0.0f;
 	UpdateHoverProbe();
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ClearHoverProbe(
-	FName Reason,
-	bool bClearFirstPersonTargetPreviewLayer)
+	FName Reason, bool bClearFirstPersonTargetPreviewLayer)
 {
-	if (UWacomBattleEnemyPartPresentationComponent* Presentation = HoveredPresentation.Get())
+	if (UWacomBattleEnemyPartComponent* Part = HoveredPart.Get())
 	{
-		Presentation->ClearHoverProbeState(Reason);
+		if (AWacomBattleEnemyActor* Host = Part->GetOwningEnemyHost())
+		{
+			if (UWacomBattleEnemySceneRuntimeComponent* Scene = Host->GetEnemySceneRuntimeComponent())
+			{
+				Scene->ClearPartHoverProbeState(*Part, Reason);
+			}
+		}
 	}
 	if (AWacomBattleEnemyActor* Host = HoveredEnemyHost.Get())
 	{
 		Host->SetEnemyPanelHoveredPart(NAME_None);
 	}
-
-	HoveredPresentation.Reset();
+	HoveredPart.Reset();
 	HoveredEnemyHost.Reset();
 	HoveredHandle = FWacomInteractionTargetHandle();
 	if (bClearFirstPersonTargetPreviewLayer)
 	{
 		Runtime.GetFirstPersonHandBridge().ClearTargetPreviewLayer();
 	}
-	if (Runtime.GetUIState() == EBattleUIState::TargetSelect && Runtime.GetPendingTargetingCardId().IsValid())
+	if (Runtime.GetUIState() == EBattleUIState::TargetSelect
+		&& Runtime.GetPendingTargetingCardId().IsValid())
 	{
 		Runtime.HideFirstPersonCardDetailPanelForSource(Runtime.GetPendingTargetingCardId());
 	}
@@ -1108,103 +809,62 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::CanUpdateHoverProbe() const
 	{
 		return false;
 	}
-
-	const UBattleSession* CurrentSession = Runtime.GetSession();
-	if (!CurrentSession)
-	{
-		return false;
-	}
-
-	return CurrentSession->BuildSnapshot().Phase == EBattlePhase::PlayerAction;
+	const UBattleSession* Session = Runtime.GetSession();
+	return Session && Session->BuildSnapshot().Phase == EBattlePhase::PlayerAction;
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::UpdateHoverProbe()
 {
-	FWacomInteractionTargetHandle TargetHandle;
-	const AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(Runtime.GetOwningPlayer());
-	const bool bHasTarget =
-		WacomPC
-		&& WacomPC->TryProbeBattleSceneInteractionTarget(TargetHandle)
-		&& TargetHandle.TargetKind == EWacomInteractionTargetKind::World
-		&& TargetHandle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart)
-		&& TargetHandle.HasBattlePartSlotIdentity();
-
-	if (!bHasTarget)
+	FWacomInteractionTargetHandle Handle;
+	const AWacomPlayerController* PC = Cast<AWacomPlayerController>(Runtime.GetOwningPlayer());
+	const bool bHasTarget = PC
+		&& PC->TryProbeBattleSceneInteractionTarget(Handle)
+		&& Handle.TargetKind == EWacomInteractionTargetKind::World
+		&& Handle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart)
+		&& Handle.HasBattlePartSlotIdentity();
+	UWacomBattleEnemyPartComponent* Part = bHasTarget ? ResolvePartComponent(Handle) : nullptr;
+	if (!Part)
 	{
 		ClearHoverProbe(TEXT("NoTarget"));
 		return;
 	}
-
-	UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge =
-		ResolveWorldTargetBridge(TargetHandle);
-	if (!Bridge)
+	AWacomBattleEnemyActor* Host = Part->GetOwningEnemyHost();
+	UWacomBattleEnemySceneRuntimeComponent* Scene = Host
+		? Host->GetEnemySceneRuntimeComponent() : nullptr;
+	if (!Host || !Scene)
 	{
-		ClearHoverProbe(TEXT("MissingBridge"));
+		ClearHoverProbe(TEXT("MissingRuntime"));
 		return;
 	}
-
-	UWacomBattleEnemyPartPresentationComponent* Presentation =
-		ResolveWorldTargetPresentation(TargetHandle);
-	if (!Presentation)
-	{
-		ClearHoverProbe(TEXT("MissingPresentation"));
-		return;
-	}
-
-	AWacomBattleEnemyActor* HoveredHost = nullptr;
-	if (const AWacomBattleEnemyPartActor* PartActor = Cast<AWacomBattleEnemyPartActor>(Bridge->GetOwner()))
-	{
-		HoveredHost = Cast<AWacomBattleEnemyActor>(PartActor->GetAttachParentActor());
-	}
-
-	if (HoveredPresentation.Get() != Presentation)
+	if (HoveredPart.Get() != Part)
 	{
 		ClearHoverProbe(TEXT("TargetChanged"));
-		HoveredPresentation = Presentation;
-		HoveredEnemyHost = HoveredHost;
+		HoveredPart = Part;
+		HoveredEnemyHost = Host;
 	}
+	HoveredHandle = Handle;
+	Host->SetEnemyPanelHoveredPart(Part->PartSlotId);
 
-	HoveredHandle = TargetHandle;
-	if (HoveredHost)
-	{
-		HoveredHost->SetEnemyPanelHoveredPart(Bridge->GetBoundPartSlotId());
-	}
-
-	FBattleSnapshot CurrentSnapshot;
-	const FHandCardSnapshot* SourceSnapshot = nullptr;
+	FBattleSnapshot Snapshot;
+	const FHandCardSnapshot* Source = nullptr;
 	FBattleCardActionPreview ActionPreview;
 	FBattleCardTargetPreview TargetPreview;
-	FWacomBattleCardTargetPreviewPresentation TargetPreviewPresentation;
-	FWacomBattleActionPreviewPresentation ActionPreviewPresentation;
-	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
-	const bool bHasTargetPreviewContext =
-		TryBuildHoverTargetPreviewContext(
-			TargetHandle,
-			CurrentSnapshot,
-			SourceSnapshot,
-			ActionPreview,
-			TargetPreview,
-			PredictionInput);
-	if (bHasTargetPreviewContext && TargetPreview.bHasPreview)
+	FWacomBattleEnemyPartDragPredictionDebugInput Prediction;
+	FWacomBattleActionPreviewPresentation ActionPresentation;
+	FWacomBattleCardTargetPreviewPresentation TargetPresentation;
+	const bool bHasContext = TryBuildHoverTargetPreviewContext(
+		Handle, Snapshot, Source, ActionPreview, TargetPreview, Prediction);
+	if (bHasContext && TargetPreview.bHasPreview)
 	{
-		ActionPreviewPresentation =
-			WacomBattleCardPresentation::BuildActionPreviewPresentation(
-				CurrentSnapshot,
-				ActionPreview);
-		TargetPreviewPresentation = ActionPreviewPresentation.TargetPreviewPresentation;
+		ActionPresentation = WacomBattleCardPresentation::BuildActionPreviewPresentation(
+			Snapshot, ActionPreview);
+		TargetPresentation = ActionPresentation.TargetPreviewPresentation;
 	}
-	Presentation->SetHoverProbeState(
-		TargetHandle,
-		TEXT("Hovered"),
-		PredictionInput);
-	ApplyHoverTargetPreview(
-		TargetPreviewPresentation,
-		bHasTargetPreviewContext);
-	if (ActionPreviewPresentation.bHasPreview)
+	Scene->SetPartHoverProbeState(*Part, Handle, TEXT("Hovered"), Prediction);
+	ApplyHoverTargetPreview(TargetPresentation, bHasContext);
+	if (ActionPresentation.bHasPreview)
 	{
-		Runtime.ApplyActionPreviewPresentation(
-			ActionPreviewPresentation,
-			/*bApplyScenePartPreview=*/false);
+		Runtime.ApplyActionPreviewPresentation(ActionPresentation, false);
 	}
 }
 
@@ -1212,19 +872,14 @@ FWacomBattleEnemyPartDragPredictionDebugInput
 FWacomBattleHUDSceneEnemyTargetCoordinator::BuildHoverPredictionInput(
 	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	FBattleSnapshot CurrentSnapshot;
-	const FHandCardSnapshot* SourceSnapshot = nullptr;
+	FBattleSnapshot Snapshot;
+	const FHandCardSnapshot* Source = nullptr;
 	FBattleCardActionPreview ActionPreview;
 	FBattleCardTargetPreview TargetPreview;
-	FWacomBattleEnemyPartDragPredictionDebugInput PredictionInput;
+	FWacomBattleEnemyPartDragPredictionDebugInput Prediction;
 	TryBuildHoverTargetPreviewContext(
-		TargetHandle,
-		CurrentSnapshot,
-		SourceSnapshot,
-		ActionPreview,
-		TargetPreview,
-		PredictionInput);
-	return PredictionInput;
+		TargetHandle, Snapshot, Source, ActionPreview, TargetPreview, Prediction);
+	return Prediction;
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryBuildHoverTargetPreviewContext(
@@ -1240,55 +895,32 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryBuildHoverTargetPreviewConte
 	OutTargetPreview = FBattleCardTargetPreview();
 	OutPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 	if (Runtime.GetUIState() != EBattleUIState::TargetSelect
-		|| !Runtime.GetPendingTargetingCardId().IsValid())
-	{
-		return false;
-	}
-
-	const UBattleSession* CurrentSession = Runtime.GetSession();
-	if (!CurrentSession)
-	{
-		return false;
-	}
-
-	OutSnapshot = CurrentSession->BuildSnapshot();
-	OutSourceSnapshot =
-		FindHandCardSnapshotForSceneEnemyTarget(OutSnapshot, Runtime.GetPendingTargetingCardId());
-	if (!OutSourceSnapshot)
-	{
-		return false;
-	}
-
-	OutActionPreview =
-		CurrentSession->BuildCardActionPreview(Runtime.GetPendingTargetingCardId(), TargetHandle);
+		|| !Runtime.GetPendingTargetingCardId().IsValid()) return false;
+	const UBattleSession* Session = Runtime.GetSession();
+	if (!Session) return false;
+	OutSnapshot = Session->BuildSnapshot();
+	OutSourceSnapshot = FindHandCard(OutSnapshot, Runtime.GetPendingTargetingCardId());
+	if (!OutSourceSnapshot) return false;
+	OutActionPreview = Session->BuildCardActionPreview(
+		Runtime.GetPendingTargetingCardId(), TargetHandle);
 	OutTargetPreview = OutActionPreview.TargetPreview;
-	OutPredictionInput =
-		BuildHoverPredictionInputFromPreview(
-			Runtime.GetPendingTargetingCardId(),
-			*OutSourceSnapshot,
-			OutTargetPreview);
+	OutPredictionInput = BuildPredictionInput(
+		Runtime.GetPendingTargetingCardId(), *OutSourceSnapshot, OutTargetPreview);
 	return true;
 }
 
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryFindPendingTargetingCardSlot(
 	FWacomFirstPersonCardLayerSlotView& OutSlotView) const
 {
-	if (!Runtime.GetPendingTargetingCardId().IsValid())
+	if (!Runtime.GetPendingTargetingCardId().IsValid()) return false;
+	const UWacomFirstPersonCardAnchorComponent* Anchor =
+		Runtime.ResolveActiveFirstPersonCardAnchor();
+	if (!Anchor) return false;
+	for (const FWacomFirstPersonCardLayerSlotView& Slot : Anchor->BuildActiveCardLayerSlotViews())
 	{
-		return false;
-	}
-
-	const UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor();
-	if (!Anchor)
-	{
-		return false;
-	}
-
-	for (const FWacomFirstPersonCardLayerSlotView& SlotView : Anchor->BuildActiveCardLayerSlotViews())
-	{
-		if (SlotView.Entry.CardInstanceId == Runtime.GetPendingTargetingCardId() && SlotView.bProjected)
+		if (Slot.Entry.CardInstanceId == Runtime.GetPendingTargetingCardId() && Slot.bProjected)
 		{
-			OutSlotView = SlotView;
+			OutSlotView = Slot;
 			return true;
 		}
 	}
@@ -1296,48 +928,37 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryFindPendingTargetingCardSlot
 }
 
 void FWacomBattleHUDSceneEnemyTargetCoordinator::ApplyHoverTargetPreview(
-	const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation,
+	const FWacomBattleCardTargetPreviewPresentation& Presentation,
 	bool bHasTargetPreviewContext) const
 {
-	if (!bHasTargetPreviewContext
-		|| Runtime.GetUIState() != EBattleUIState::TargetSelect
+	if (!bHasTargetPreviewContext || Runtime.GetUIState() != EBattleUIState::TargetSelect
 		|| !Runtime.GetPendingTargetingCardId().IsValid())
 	{
 		Runtime.GetFirstPersonHandBridge().ClearTargetPreviewLayer();
 		return;
 	}
-
-	FWacomFirstPersonCardLayerSlotView SourceSlotView;
-	if (!TryFindPendingTargetingCardSlot(SourceSlotView))
+	FWacomFirstPersonCardLayerSlotView SourceSlot;
+	if (!TryFindPendingTargetingCardSlot(SourceSlot)) return;
+	FWacomBattleHUDFirstPersonHandBridge& Bridge = Runtime.GetFirstPersonHandBridge();
+	if (!Presentation.bHasPreview)
 	{
-		return;
-	}
-
-	FWacomBattleHUDFirstPersonHandBridge& FirstPersonHandBridge = Runtime.GetFirstPersonHandBridge();
-	if (!TargetPreviewPresentation.bHasPreview)
-	{
-		FirstPersonHandBridge.ClearTargetPreviewLayer();
+		Bridge.ClearTargetPreviewLayer();
 		Runtime.HideFirstPersonCardDetailPanelForSource(Runtime.GetPendingTargetingCardId());
 		return;
 	}
-
-	const bool bCanReuseActiveTargetPreview =
-		Runtime.IsCurrentFirstPersonCardDetailSource(Runtime.GetPendingTargetingCardId())
-		&& FirstPersonHandBridge.IsSameActiveTargetPreviewState(TargetPreviewPresentation);
-	if (bCanReuseActiveTargetPreview)
+	if (Runtime.IsCurrentFirstPersonCardDetailSource(Runtime.GetPendingTargetingCardId())
+		&& Bridge.IsSameActiveTargetPreviewState(Presentation))
 	{
-		Runtime.UpdateFirstPersonCardDetailSlot(SourceSlotView);
-		Runtime.PositionFirstPersonCardDetailPanelBesideSlot(SourceSlotView);
+		Runtime.UpdateFirstPersonCardDetailSlot(SourceSlot);
+		Runtime.PositionFirstPersonCardDetailPanelBesideSlot(SourceSlot);
 		return;
 	}
-
-	FirstPersonHandBridge.ApplyTargetPreviewPresentationToLayer(TargetPreviewPresentation);
-	FirstPersonHandBridge.StoreActiveTargetPreviewState(TargetPreviewPresentation);
+	Bridge.ApplyTargetPreviewPresentationToLayer(Presentation);
+	Bridge.StoreActiveTargetPreviewState(Presentation);
 	Runtime.SetFirstPersonCardDetailSource(Runtime.GetPendingTargetingCardId());
-	if (TargetPreviewPresentation.bHasSourceCardDetailViewData)
+	if (Presentation.bHasSourceCardDetailViewData)
 	{
 		Runtime.ShowFirstPersonCardDetailAtSlot(
-			TargetPreviewPresentation.SourceCardDetailViewData,
-			SourceSlotView);
+			Presentation.SourceCardDetailViewData, SourceSlot);
 	}
 }

@@ -22,8 +22,7 @@ class UBattleSession;
 class UPlayerStatusBar;
 class UPileCountView;
 class UWidget;
-class UWacomBattleEnemyPartPresentationComponent;
-class UWacomBattleEnemyPartWorldTargetBridgeComponent;
+class UWacomBattleEnemyPartComponent;
 class UWacomCardDetailPanel;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomGameUIManagerSubsystem;
@@ -270,7 +269,7 @@ public:
 	bool IsBattleSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const;
 	bool IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(const FWacomInteractionTargetHandle& TargetHandle) const;
 	void RebuildBattleSceneEnemyPartWorldTargetRegistry();
-	bool IsBattleSceneEnemyPartBridgeInCurrentRegistry(const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
+	bool IsBattleSceneEnemyPartInCurrentRegistry(const UWacomBattleEnemyPartComponent* Part) const;
 	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snapshot);
 	void ClearBattleEnemyPartWorldTargets();
 	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
@@ -332,9 +331,7 @@ public:
 		const FGuid& SourceCardId,
 		const FBattleSnapshot& Snapshot,
 		const UBattleSession& BattleSession) const;
-	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveBattleEnemyPartWorldTargetBridge(
-		const FWacomInteractionTargetHandle& TargetHandle) const;
-	UWacomBattleEnemyPartPresentationComponent* ResolveBattleEnemyPartWorldTargetPresentation(
+	UWacomBattleEnemyPartComponent* ResolveBattleEnemyPartComponent(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 	bool ProbeFirstPersonCardDragTarget(
 		const FGuid& CardInstanceId,

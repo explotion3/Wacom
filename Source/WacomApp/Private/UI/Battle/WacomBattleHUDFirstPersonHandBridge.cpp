@@ -6,8 +6,9 @@
 
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
-#include "Components/WacomBattleEnemyPartPresentationComponent.h"
-#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Actors/WacomBattleEnemyActor.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
+#include "Components/WacomBattleEnemySceneRuntimeComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "Resolution/BattleCardActionPreview.h"
 #include "Resolution/BattleCardTargetPreview.h"
@@ -23,6 +24,28 @@ namespace
 	const FName FirstPersonBattleHandLayerSourceId =
 		WacomFirstPersonCardLayerSourceIds::BattleHand();
 	constexpr float PendingHandAnchorEnterFrameTimeoutSeconds = 4.0f;
+
+	void ClearPartDragPreview(UWacomBattleEnemyPartComponent* Part)
+	{
+		AWacomBattleEnemyActor* Host = Part ? Part->GetOwningEnemyHost() : nullptr;
+		if (Part && Host && Host->GetEnemySceneRuntimeComponent())
+		{
+			Host->GetEnemySceneRuntimeComponent()->ClearPartDragTargetPreviewState(*Part);
+		}
+	}
+
+	void SetPartDragPreview(
+		UWacomBattleEnemyPartComponent* Part,
+		EWacomFirstPersonCardDragTargetFeedbackState State,
+		const FWacomBattleEnemyPartDragPredictionDebugInput& Prediction)
+	{
+		AWacomBattleEnemyActor* Host = Part ? Part->GetOwningEnemyHost() : nullptr;
+		if (Part && Host && Host->GetEnemySceneRuntimeComponent())
+		{
+			Host->GetEnemySceneRuntimeComponent()->SetPartDragTargetPreviewState(
+				*Part, State, Prediction);
+		}
+	}
 
 	const FHandCardSnapshot* FindHandCardSnapshotForFirstPersonHandBridge(
 		const FBattleSnapshot& Snapshot,
@@ -686,11 +709,8 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragReleased(
 	bHasActiveCardTargetHandle = false;
 	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
 	Runtime.ClearBattleSceneEnemyPartHoverProbe(TEXT("FirstPersonDragReleased"));
-	if (UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = CurrentDragPreviewPresentation.Get())
-	{
-		PreviewPresentation->ClearDragTargetPreviewState();
-	}
-	CurrentDragPreviewPresentation.Reset();
+	ClearPartDragPreview(CurrentDragPreviewPart.Get());
+	CurrentDragPreviewPart.Reset();
 	ClearTargetPreviewLayer();
 	Runtime.ForceHideCardDetailHost(EWacomBattleHUDCardDetailHost::FirstPersonViewport);
 
@@ -810,7 +830,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	EWacomFirstPersonCardDragTargetFeedbackState FeedbackState =
 		EWacomFirstPersonCardDragTargetFeedbackState::None;
 	TOptional<FVector2D> FeedbackTargetPosition;
-	UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = nullptr;
+	UWacomBattleEnemyPartComponent* PreviewPart = nullptr;
 	FBattleSnapshot CurrentSnapshot;
 	FBattleCardTargetPreview TargetPreview;
 	FWacomBattleCardTargetPreviewPresentation TargetPreviewPresentation;
@@ -861,7 +881,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	}
 	if (DropResult.TargetHandle.TargetKind == EWacomInteractionTargetKind::World)
 	{
-		PreviewPresentation = Runtime.ResolveBattleEnemyPartWorldTargetPresentation(DropResult.TargetHandle);
+		PreviewPart = Runtime.ResolveBattleEnemyPartComponent(DropResult.TargetHandle);
 	}
 
 	const bool bShouldBuildActionPreview =
@@ -1002,16 +1022,12 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 		}
 	}
 
-	if (CurrentDragPreviewPresentation.Get() != PreviewPresentation)
+	if (CurrentDragPreviewPart.Get() != PreviewPart)
 	{
-		if (UWacomBattleEnemyPartPresentationComponent* PreviousPresentation =
-			CurrentDragPreviewPresentation.Get())
-		{
-			PreviousPresentation->ClearDragTargetPreviewState();
-		}
-		CurrentDragPreviewPresentation = PreviewPresentation;
+		ClearPartDragPreview(CurrentDragPreviewPart.Get());
+		CurrentDragPreviewPart = PreviewPart;
 	}
-	if (PreviewPresentation)
+	if (PreviewPart)
 	{
 		FWacomBattleEnemyPartDragPredictionDebugInput PredictionDebugInput;
 		PredictionDebugInput.SourceCardInstanceId = CardInstanceId;
@@ -1045,7 +1061,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 				PredictionDebugInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
 			}
 		}
-		PreviewPresentation->SetDragTargetPreviewState(FeedbackState, PredictionDebugInput);
+		SetPartDragPreview(PreviewPart, FeedbackState, PredictionDebugInput);
 	}
 
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor())
@@ -1093,11 +1109,8 @@ bool FWacomBattleHUDFirstPersonHandBridge::ApplyActiveCardTargetPreview(
 
 void FWacomBattleHUDFirstPersonHandBridge::ClearDragTargetFeedback(bool bClearFirstPersonCardLayerFeedback)
 {
-	if (UWacomBattleEnemyPartPresentationComponent* PreviewPresentation = CurrentDragPreviewPresentation.Get())
-	{
-		PreviewPresentation->ClearDragTargetPreviewState();
-	}
-	CurrentDragPreviewPresentation.Reset();
+	ClearPartDragPreview(CurrentDragPreviewPart.Get());
+	CurrentDragPreviewPart.Reset();
 	ClearTargetPreviewLayer();
 	if (!bClearFirstPersonCardLayerFeedback)
 	{

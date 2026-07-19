@@ -181,7 +181,7 @@ tags:
   - 状态：`Done: 主链路已落地`
   - 归属：Data / Battle / Run / App / Editor
   - 入口：`specs/002-enemy-system-refactor/`
-  - 说明：稳定 enemy key、Run 撤离重入进度、command / snapshot / event / result packet、行为数据化、Encounter 接线、SceneEnemyHost registry、Host 整体视觉、PartActor hit-only / VisualLayers 和 BattleHUD 场景目标主链路已落地。长期事实已回写到 `Docs/WacomBattle.md`、`Docs/WacomData.md`、`Docs/WacomRun.md`、`Docs/WacomWorldInteraction.md`、`Docs/WacomBattleUI.md` 和 `Docs/WacomDataAuthoring.md`；`specs/002-enemy-system-refactor/` 只保留为阶段性规划和最终搜索 / 验证清单。
+  - 说明：稳定 enemy key、Run 撤离重入、command / snapshot / event / result packet、行为数据化与 Encounter 接线已落地；场景表现现统一为单 Host + typed Part/Visual/Anchor Component + SceneRuntime，旧 PartActor/ChildActor/HostVisual/Bridge 双路径已删除。长期事实已回写到对应 Battle、Data、Run、WorldInteraction、BattleUI 与 DataAuthoring 文档。
 
 - [x] **UI Ownership / BattleHUD 私有 coordinator 拆分**
   - 状态：`Done`
@@ -229,10 +229,10 @@ tags:
   - 说明：卡牌注册、六个定位容器、Runtime Location 与顺序已收口到 `CardZoneAggregate`；Effect、EndTurn、HandLimit、奖励和 Companion 统一由 `BattleCardZoneTransition` 消费 typed facts，旧 post-move event API 已删除。
 
 - [ ] **战斗场景敌人表现 polish：正式美术、描边、tooltip 和高级动画状态机**
-  - 状态：`In Progress: Simple / Multi-Part 通用行动层已完成，剩余正式美术与高级表现`
+  - 状态：`In Progress: 统一组件化行动层已完成，剩余正式美术与高级表现`
   - 归属：App / UI / Battle World Target
   - 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomBattleUI.md](./WacomBattleUI.md)
-  - 说明：TrainingWarrior 已验证正式 Simple Host 与语义动画；通用 Multi-Part Part Action 已按完整稳定身份、精确 Layer、完成 barrier 和 watchdog 接线。`BP_EnemyHost_Snake` 与开发敌人 `BP_EnemyHost_SlimeTrio` 当前都使用会阻止发布的独立 Slime Placeholder，因缺少正式行动素材而故意不配置 Style。后续优先制作正式 Snake 和 SlimeTrio 分段 Idle / Action 素材，分别迁到 `/Game/Wacom/Art/Enemies/<Pack>` 并补显式 Intent Style；材质描边、贴近部位 tooltip、风险动效、PaperZD/Animator 和 Status Badge 美术替换继续独立切片。
+  - 说明：TrainingWarrior、Snake、SlimeTrio 已全部迁到同一 typed Part/Layer runtime；行动按稳定 Part identity 和精确 Layer 串行，terminal clip 由唯一 Part Style 承担。Snake 与 SlimeTrio 仍使用会阻止发布的 Placeholder 且无 Action Style；后续补正式分段 Idle/Action 素材、Intent 映射、描边、tooltip、风险动效与必要时的 PaperZD/Animator。
 
 - [x] **Battle 世界目标 TargetConfirmed + Damage：消费 Enemy Part Cue Playback + ImpactAnchor**
   - 状态：`Done: Niagara 像素确认 / 伤害反馈已接线`
@@ -244,13 +244,13 @@ tags:
   - 状态：`Done: 两段像素崩裂 + 35% 原地破损换图`
   - 归属：App / Battle World Presentation
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
-  - 说明：消费既有最高优先级 `Destroyed` Cue 与 ImpactAnchor，先播放语义裂印和可关闭位移的大碎块，再在默认 35% 处原地替换配置了 `DestroyedSprite / DestroyedFlipbook` 的 VisualLayer；缺失资源保持原图，HitOnly 只播放粒子并继续由 Host Downed 承担整体终态。组件、registry topology 和规则事件不变；攻击方向、局部材质闪白和镜头震动留给独立切片。
+  - 说明：消费既有最高优先级 `Destroyed` Cue 与 typed ImpactAnchor，先播放语义裂印和可关闭位移的大碎块，再在默认 35% 处原地替换 Part 的真实 Sprite/Flipbook Layer；缺失资源保持原图，整体终态由唯一 `EnemyDestroyedClip` owner 承担。组件、registry topology 和规则事件不变。
 
-- [x] **Multi-Part Enemy Part 语义行动动画层**
+- [x] **Enemy Part 语义行动动画层**
   - 状态：`Done: 完整 Part key 路由 + 原地 Flipbook barrier`
   - 归属：App / Battle World Presentation
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md)
-  - 说明：`EnemyPartActed Count > 0` 现在从 queue 到 scene coordinator 保留完整 Part key；Simple Host 继续播放 Host Style，Multi-Part 精确播放匹配 PartActor 的一个目标 Flipbook Layer。Host / Part 已共用 App-private playback 生命周期，统一弱 timer、serial、Impact / Complete exactly-once、watchdog 与 cancel 语义；Destroyed 抢占、BattleEnd retiring Part 与重新入战恢复已覆盖。正式 Snake Style 等待正式行动素材后再制作。
+  - 说明：`EnemyPartActed Count > 0` 从 queue 到 scene coordinator 保留完整 Part key，并精确播放匹配 typed Part 的目标 Flipbook Layer。所有敌人共用 App-private playback 生命周期，统一 weak timer、serial、Impact / Complete exactly-once、watchdog 与 cancel；Destroyed 抢占、BattleEnd retiring Part 与重新入战恢复已覆盖。正式 Snake Style 等待正式行动素材。
 
 - [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
 	- 状态：`Done: Trigger 已接线`

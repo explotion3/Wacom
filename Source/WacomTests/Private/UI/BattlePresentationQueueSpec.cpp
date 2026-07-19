@@ -2,11 +2,10 @@
 
 #include "Misc/AutomationTest.h"
 
-#include "Actors/WacomBattleEnemyPartActor.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Commands/BattleCommand.h"
-#include "Components/WacomBattleEnemyPartPresentationComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Events/BattleEvent.h"
@@ -457,17 +456,15 @@ bool FWacomUIBattlePresentationQueueDamageCueSpec::RunTest(const FString& /*Para
 	HUD->EnqueueBattlePresentationEventsForTest({ Event });
 
 	World->GetTimerManager().Tick(0.01f);
-	FWacomBattleEnemyPartPresentationDebugView View =
-		SceneEnemy.Parts[0]->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+	FWacomBattleEnemyPartRuntimeDebugView View =
+		SceneEnemy.Parts[0]->GetRuntimeDebugView();
 	TestEqual(TEXT("Damage waits for the short TargetConfirmed readability lead"), View.CuePlayCount, 0);
 	TestTrue(TEXT("Queue stays busy during the confirmation lead"), HUD->IsBattlePresentationBusy());
 
 	HUD->AdvanceBattlePresentationQueueForTest();
-	View = SceneEnemy.Parts[0]->GetPresentationComponent()->GetBattleEnemyPartPresentationDebugView();
+	View = SceneEnemy.Parts[0]->GetRuntimeDebugView();
 	TestEqual(TEXT("Target cue plays for damage event"), View.CuePlayCount, 1);
 	TestEqual(TEXT("Target cue playback kind is damage"), View.LastCueKind, FName(TEXT("Damage")));
-	TestEqual(TEXT("Target cue type is damage"), View.LastCueType, EBattleEventType::DamageDealt);
-	TestEqual(TEXT("Target cue carries damage amount"), View.LastCueAmount, 7);
 	TestTrue(TEXT("Damage cue uses the more readable 0.30 second duration"),
 		FMath::IsNearlyEqual(View.CuePlaybackDurationSeconds, 0.30f));
 

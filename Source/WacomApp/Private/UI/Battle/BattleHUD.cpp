@@ -766,10 +766,10 @@ void UBattleHUD::RebuildBattleSceneEnemyPartWorldTargetRegistry()
 	GetBattleHUDRuntime().RebuildBattleSceneEnemyPartWorldTargetRegistry();
 }
 
-bool UBattleHUD::IsBattleSceneEnemyPartBridgeInCurrentRegistry(
-	const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const
+bool UBattleHUD::IsBattleSceneEnemyPartInCurrentRegistry(
+	const UWacomBattleEnemyPartComponent* Part) const
 {
-	return GetBattleHUDRuntime().IsBattleSceneEnemyPartBridgeInCurrentRegistry(Bridge);
+	return GetBattleHUDRuntime().IsBattleSceneEnemyPartInCurrentRegistry(Part);
 }
 
 void UBattleHUD::SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap)
@@ -1037,16 +1037,10 @@ TArray<FWacomFirstPersonCardTargetAffordance> UBattleHUD::BuildFirstPersonCardTa
 	return GetBattleHUDRuntime().BuildFirstPersonCardTargetAffordances(SourceCardId, Snapshot, BattleSession);
 }
 
-UWacomBattleEnemyPartWorldTargetBridgeComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetBridge(
+UWacomBattleEnemyPartComponent* UBattleHUD::ResolveBattleEnemyPartComponent(
 	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	return GetBattleHUDRuntime().ResolveBattleEnemyPartWorldTargetBridge(TargetHandle);
-}
-
-UWacomBattleEnemyPartPresentationComponent* UBattleHUD::ResolveBattleEnemyPartWorldTargetPresentation(
-	const FWacomInteractionTargetHandle& TargetHandle) const
-{
-	return GetBattleHUDRuntime().ResolveBattleEnemyPartWorldTargetPresentation(TargetHandle);
+	return GetBattleHUDRuntime().ResolveBattleEnemyPartComponent(TargetHandle);
 }
 
 bool UBattleHUD::ProbeFirstPersonCardDragTarget(

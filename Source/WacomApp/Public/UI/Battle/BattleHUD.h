@@ -18,8 +18,7 @@ class UWacomBattleWidgetBase;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
-class UWacomBattleEnemyPartPresentationComponent;
-class UWacomBattleEnemyPartWorldTargetBridgeComponent;
+class UWacomBattleEnemyPartComponent;
 class AWacomBattleEnemyActor;
 class APlayerController;
 class FWacomBattleHUDRuntime;
@@ -160,7 +159,7 @@ struct WACOMAPP_API FWacomBattleCardDropResolveResult
 struct WACOMAPP_API FWacomBattleHUDAutomationTestView
 {
 	int32 PresentationTargetCount = 0;
-	int32 SceneEnemyPartWorldTargetBridgeCount = 0;
+	int32 SceneEnemyPartComponentCount = 0;
 	int32 SceneEnemyTargetRegistryRevision = 0;
 	const TArray<FWacomBattlePresentationStackEntryView>* PresentationStackEntries = nullptr;
 	const TArray<FWacomBattleCombatLogBlockView>* CombatLogHistory = nullptr;
@@ -607,8 +606,8 @@ private:
 	FVector2D GetLastFirstPersonCardDetailPanelPosition() const;
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;
 	void RebuildBattleSceneEnemyPartWorldTargetRegistry();
-	bool IsBattleSceneEnemyPartBridgeInCurrentRegistry(
-		const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
+	bool IsBattleSceneEnemyPartInCurrentRegistry(
+		const UWacomBattleEnemyPartComponent* Part) const;
 	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap);
 	void ClearBattleEnemyPartWorldTargets();
 	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
@@ -658,9 +657,7 @@ private:
 		const FGuid& SourceCardId,
 		const FBattleSnapshot& Snapshot,
 		const UBattleSession& BattleSession) const;
-	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveBattleEnemyPartWorldTargetBridge(
-		const FWacomInteractionTargetHandle& TargetHandle) const;
-	UWacomBattleEnemyPartPresentationComponent* ResolveBattleEnemyPartWorldTargetPresentation(
+	UWacomBattleEnemyPartComponent* ResolveBattleEnemyPartComponent(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 	bool ProbeFirstPersonCardDragTarget(
 		const FGuid& CardInstanceId,

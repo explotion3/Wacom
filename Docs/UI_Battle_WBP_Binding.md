@@ -24,7 +24,7 @@ tags:
 - WBP 不直接调用或缓存 `UBattleSession`，不消费或修改 `BattleState`，不自行解析 `FBattleEvent` 作为规则状态；`UWacomBattleWidgetBase.SetSession / GetSession` 不再暴露给 Blueprint，只保留为旧 C++ 兼容 wrapper。正式 C++ owner 注入使用 `SetInjectedBattleSession / GetInjectedBattleSession`。
 - `BindWidgetOptional` 缺失不会崩溃，但对应区域不会显示或刷新；required binding 缺失会导致父类构造失败或控件不可用。
 - 正式 BattleHUD 常驻区域使用 `CombatLogFeed + BattleCombatActivityRow`；完整 `BattleCombatLogBlock` 只供后续详细日志页面复用。旧 `EventLogPanel / EventToast` 已删除。
-- Scene enemy authoring、PartActor debug summary 和 target handle 细节只在 [WacomWorldInteraction.md](./WacomWorldInteraction.md) 维护。
+- Scene enemy component authoring、Part runtime debug 和 target handle 细节只在 [WacomWorldInteraction.md](./WacomWorldInteraction.md) 维护。
 
 ## WBP_BattleHUD
 
@@ -53,7 +53,7 @@ WBP 不应做：
 - 不绑定旧 `HandPanel` 或 `CardDetailLayer` 作为 BattleHUD runtime 路径。
 - 不直接 Push 击倒弹窗、直接消费 `FBattleEvent`、提交 Battle 规则命令或维护表现队列。
 - 不把 `BattlePresentationStack` 做成可点击、可拖拽或规则栈。
-- 不绑定敌方 2D fallback widget。正式场景敌人走 `SceneEnemyHostSlots + AWacomBattleEnemyActor` prefab，并由 Host 蓝图/子 Actor 明确声明 PartActor。配置 `EncounterDefinition` 的 Trigger 必须执行 `SyncSceneEnemyHostSlotsFromEncounter()` 并用 `SceneEnemyHostSlots` 覆盖每个 EnemySlotId。
+- 不绑定敌方 2D fallback widget。正式场景敌人走 `SceneEnemyHostSlots + AWacomBattleEnemyActor` prefab；每个 Host Blueprint 直接以 `UWacomBattleEnemyPartComponent` 和其 typed Visual/ImpactAnchor 子组件声明部位。配置 `EncounterDefinition` 的 Trigger 必须执行 `SyncSceneEnemyHostSlotsFromEncounter()` 并用 `SceneEnemyHostSlots` 覆盖每个 EnemySlotId。
 - 不读取或假设 `Snapshot.Enemy`。敌人快照只在 `FBattleSnapshot.Enemies` 中，BattleHUD C++ 会把目标选择、日志和场景 bridge 同步到所有 enemy slot；WBP 不应自行维护第一敌人的兼容显示。
 
 最小 PIE 验收：
@@ -63,7 +63,7 @@ WBP 不应做：
 - `CombatLogFeed` 最多显示三行短时活动；播放结束后只保留最后根行动按钮和当前回合。除最后行动按钮外不遮挡 HUD、手牌或世界目标。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 抽牌从 `DrawPileMotionAnchor`（或 `DrawPileView` 中心）进入；弃牌飞向 `DiscardPileMotionAnchor`（或 `DiscardPileView` 中心）。配置有效 Card Use Surface Effect 时，无目标牌与目标牌都停在提交位置播放当前 Style（默认像素翻面收牌，旧菱形波可切回）；`PlayTargetMotionAnchor` 和真实目标坐标仍会采集，但只供效果失效时的旧空间离场 fallback 与未来目标命中反馈使用。
-- 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 扫描到的 PartActor Status Badge 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
+- 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 的 typed Part registry 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
 
 当前 `FBattleSnapshot.PileCounts` 额外公开 `PlayedCount`（本回合使用牌堆数量）。本轮 WBP 合同不要求新增 `PlayedPileView`，正式 HUD 仍只绑定并显示抽牌堆、弃牌堆和消耗牌堆三项；`UBattleHUD` 会把 `DiscardCount` 与 `PlayedCount` 合并显示在 `DiscardPileView` 上，`PlayedCount > 0` 时显示为类似 `2+3` 的复合数量。
 
@@ -552,7 +552,7 @@ Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresent
 - CommandBar 里的 Wait / EndTurn 可点击并由 HUD runtime view data 控制可用性。
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Activity 连续追加时最多三行并按顺序顶出；只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。
-- 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；PartActor 只显示 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
+- 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；`UWacomBattleEnemyPartComponent` 及其 runtime 只承载 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
 - TrainingWarrior 自动使用单部位紧凑面板：Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；多部位 Snake 仍使用原面板。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。
 - 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget / EventLogPanel / EventToast / WBP_BattleEnemyPartStatusBadgeWidget` 已删除，不再作为 BattleHUD 制作入口。

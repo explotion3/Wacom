@@ -4,7 +4,7 @@
 
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Blueprint/WidgetTree.h"
-#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "GameFramework/WacomPlayerController.h"
@@ -1165,10 +1165,10 @@ void FWacomBattleHUDRuntime::RebuildBattleSceneEnemyPartWorldTargetRegistry()
 	}
 }
 
-bool FWacomBattleHUDRuntime::IsBattleSceneEnemyPartBridgeInCurrentRegistry(
-	const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const
+bool FWacomBattleHUDRuntime::IsBattleSceneEnemyPartInCurrentRegistry(
+	const UWacomBattleEnemyPartComponent* Part) const
 {
-	return GetSceneEnemyTargetCoordinator().IsBridgeInCurrentRegistry(Bridge);
+	return GetSceneEnemyTargetCoordinator().IsPartInCurrentRegistry(Part);
 }
 
 void FWacomBattleHUDRuntime::SyncBattleEnemyPartWorldTargets(
@@ -1474,18 +1474,11 @@ FWacomBattleHUDRuntime::BuildFirstPersonCardTargetAffordances(
 	return GetFirstPersonHandBridge().BuildCardTargetAffordances(SourceCardId, Snapshot, BattleSession);
 }
 
-UWacomBattleEnemyPartWorldTargetBridgeComponent*
-FWacomBattleHUDRuntime::ResolveBattleEnemyPartWorldTargetBridge(
+UWacomBattleEnemyPartComponent*
+FWacomBattleHUDRuntime::ResolveBattleEnemyPartComponent(
 	const FWacomInteractionTargetHandle& TargetHandle) const
 {
-	return GetSceneEnemyTargetCoordinator().ResolveWorldTargetBridge(TargetHandle);
-}
-
-UWacomBattleEnemyPartPresentationComponent*
-FWacomBattleHUDRuntime::ResolveBattleEnemyPartWorldTargetPresentation(
-	const FWacomInteractionTargetHandle& TargetHandle) const
-{
-	return GetSceneEnemyTargetCoordinator().ResolveWorldTargetPresentation(TargetHandle);
+	return GetSceneEnemyTargetCoordinator().ResolvePartComponent(TargetHandle);
 }
 
 bool FWacomBattleHUDRuntime::ProbeFirstPersonCardDragTarget(
@@ -1558,7 +1551,7 @@ FWacomBattleHUDAutomationTestView FWacomBattleHUDRuntime::GetAutomationTestViewF
 
 	FWacomBattleHUDAutomationTestView View;
 	View.PresentationTargetCount = BattlePresentationTargetRegistry ? BattlePresentationTargetRegistry->Num() : 0;
-	View.SceneEnemyPartWorldTargetBridgeCount = GetSceneEnemyTargetCoordinator().GetRegisteredBridgeCount();
+	View.SceneEnemyPartComponentCount = GetSceneEnemyTargetCoordinator().GetRegisteredPartCount();
 	View.SceneEnemyTargetRegistryRevision = GetSceneEnemyTargetCoordinator().GetRegistryRevision();
 	View.PresentationStackEntries = PresentationCoordinator ? &PresentationCoordinator->GetStackEntries() : &EmptyEntries;
 	View.CombatLogHistory = CombatLogController ? &CombatLogController->GetHistory() : &EmptyHistory;

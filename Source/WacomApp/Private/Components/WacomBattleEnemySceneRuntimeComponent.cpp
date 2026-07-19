@@ -110,6 +110,7 @@ namespace
 
 		FName LastCueKind = TEXT("None");
 		int32 CuePlayCount = 0;
+		float CuePlaybackDurationSeconds = 0.0f;
 		FName CurrentAnimationIntentId = NAME_None;
 		bool bTerminalPlayback = false;
 
@@ -831,7 +832,19 @@ FWacomBattleEnemyPartRuntimeDebugView UWacomBattleEnemySceneRuntimeComponent::Bu
 	View.ActionPlaybackCount = State->ActionPlayback
 		? State->ActionPlayback->GetView().PlaybackCount
 		: 0;
+	if (State->ActionPlayback)
+	{
+		const FWacomBattleEnemyActionPlaybackView& PlaybackView =
+			State->ActionPlayback->GetView();
+		View.bActionPlaybackActive = PlaybackView.bActive;
+		View.bActionImpactFired = PlaybackView.bImpactFired;
+		View.ActionImpactCount = PlaybackView.ImpactCount;
+		View.ActionWatchdogCompletionCount = PlaybackView.WatchdogCompletionCount;
+	}
 	View.DestroyedVisualApplyCount = State->DestroyedVisualApplyCount;
+	View.LastCueKind = State->LastCueKind;
+	View.CuePlayCount = State->CuePlayCount;
+	View.CuePlaybackDurationSeconds = State->CuePlaybackDurationSeconds;
 	return View;
 }
 
@@ -1111,6 +1124,7 @@ void UWacomBattleEnemySceneRuntimeComponent::PlayPartPresentationCue(
 	const FWacomBattleEnemyPartCuePlaybackView& CueView = State->CuePlayback->GetView();
 	State->LastCueKind = FWacomBattleEnemyPartCuePlayback::KindToName(CueView.Kind);
 	++State->CuePlayCount;
+	State->CuePlaybackDurationSeconds = CueView.DurationSeconds;
 	if (CueView.Kind == EWacomBattleEnemyPartCuePlaybackKind::Destroyed)
 	{
 		State->bAwaitingDestroyedCue = false;

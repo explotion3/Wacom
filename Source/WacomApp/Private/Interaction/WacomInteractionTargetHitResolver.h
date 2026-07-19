@@ -10,8 +10,8 @@ struct FHitResult;
 namespace WacomInteractionTargetHitResolver
 {
 	/**
-	 * 从命中 Actor 的组件中查找首个 IWacomInteractionTargetProvider，
-	 * 构建统一的世界交互目标 handle。
+	 * 优先读取实际 Hit Component 的 IWacomInteractionTargetProvider；只有普通世界目标
+	 * 没有 component provider 时才回退扫描 Actor，避免多部位 Host 命中串位。
 	 */
 	FWacomInteractionTargetHandle BuildWorldTargetHandleFromHit(const FHitResult& HitResult);
 }

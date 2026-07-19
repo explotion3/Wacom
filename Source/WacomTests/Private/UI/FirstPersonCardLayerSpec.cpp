@@ -4,7 +4,7 @@
 
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/SplineComponent.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomCursorLookDriverComponent.h"
@@ -461,7 +461,7 @@ namespace WacomFirstPersonCardLayerSpec
 	struct FSceneEnemyHostActors
 	{
 		AWacomBattleEnemyActor* Host = nullptr;
-		TArray<AWacomBattleEnemyPartActor*> Parts;
+		TArray<UWacomBattleEnemyPartComponent*> Parts;
 	};
 
 	FSceneEnemyHostActors SpawnSceneEnemyHost(
@@ -485,35 +485,33 @@ namespace WacomFirstPersonCardLayerSpec
 		Result.Host->EnemyDefinition = EnemyDefinition;
 		for (int32 Index = 0; Index < PartIds.Num(); ++Index)
 		{
-			AWacomBattleEnemyPartActor* PartActor =
-				World.SpawnActor<AWacomBattleEnemyPartActor>(
-					AWacomBattleEnemyPartActor::StaticClass(),
-					FTransform(FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f)),
-					SpawnParams);
-			if (!PartActor)
+			UWacomBattleEnemyPartComponent* PartComponent =
+				NewObject<UWacomBattleEnemyPartComponent>(
+					Result.Host,
+					*FString::Printf(TEXT("LayerTestPart_%d"), Index),
+					RF_Transient);
+			if (!PartComponent)
 			{
 				continue;
 			}
 
-			Result.Parts.Add(PartActor);
-			PartActor->PartId = PartIds[Index];
-			PartActor->PartSlotId = PartIds[Index];
-			PartActor->AttachToActor(Result.Host, FAttachmentTransformRules::KeepWorldTransform);
+			Result.Host->AddInstanceComponent(PartComponent);
+			PartComponent->SetupAttachment(Result.Host->GetRootComponent());
+			PartComponent->SetRelativeLocation(
+				FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f));
+			PartComponent->SetBoxExtent(FVector(40.f));
+			PartComponent->SetDerivedPartId(PartIds[Index]);
+			PartComponent->PartSlotId = PartIds[Index];
+			PartComponent->RegisterComponent();
+			Result.Parts.Add(PartComponent);
 		}
 
-		Result.Host->RefreshBattleEnemyPartAuthoringState();
+		Result.Host->NotifyEnemySceneComponentTopologyChanged();
 		return Result;
 	}
 
 	void DestroySceneEnemyHost(FSceneEnemyHostActors& Actors)
 	{
-		for (AWacomBattleEnemyPartActor* PartActor : Actors.Parts)
-		{
-			if (IsValid(PartActor))
-			{
-				PartActor->Destroy();
-			}
-		}
 		Actors.Parts.Reset();
 
 		if (IsValid(Actors.Host))

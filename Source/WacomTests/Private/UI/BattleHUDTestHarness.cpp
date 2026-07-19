@@ -3,8 +3,8 @@
 #include "BattleHUDTestHarness.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Components/WacomBattleCameraLookComponent.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -206,24 +206,29 @@ FWacomBattleHUDTestSceneEnemyHost& FWacomBattleHUDTestHarness::AttachSceneEnemyH
 	CurrentSceneEnemyHost.Host->EnemyDefinition = EnemyDefinition;
 	for (int32 Index = 0; Index < PartIds.Num(); ++Index)
 	{
-		AWacomBattleEnemyPartActor* PartActor =
-			StrongWorld->SpawnActor<AWacomBattleEnemyPartActor>(
-				AWacomBattleEnemyPartActor::StaticClass(),
-				FTransform(FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f)),
-				SpawnParams);
-		if (!PartActor)
+		UWacomBattleEnemyPartComponent* PartComponent =
+			NewObject<UWacomBattleEnemyPartComponent>(
+				CurrentSceneEnemyHost.Host,
+				*FString::Printf(TEXT("TestPart_%d"), Index),
+				RF_Transient);
+		if (!PartComponent)
 		{
 			continue;
 		}
 
-		CurrentSceneEnemyHost.Parts.Add(PartActor);
-		PartActor->PartId = PartIds[Index];
-		PartActor->PartSlotId =
+		CurrentSceneEnemyHost.Host->AddInstanceComponent(PartComponent);
+		PartComponent->SetupAttachment(CurrentSceneEnemyHost.Host->GetRootComponent());
+		PartComponent->SetRelativeLocation(
+			FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f));
+		PartComponent->SetBoxExtent(FVector(40.f));
+		PartComponent->SetDerivedPartId(PartIds[Index]);
+		PartComponent->PartSlotId =
 			ResolvePartSlotIdForDefinitionPart(EnemyDefinition, PartIds[Index]);
-		PartActor->AttachToActor(CurrentSceneEnemyHost.Host, FAttachmentTransformRules::KeepWorldTransform);
+		PartComponent->RegisterComponent();
+		CurrentSceneEnemyHost.Parts.Add(PartComponent);
 	}
 
-	CurrentSceneEnemyHost.Host->RefreshBattleEnemyPartAuthoringState();
+	CurrentSceneEnemyHost.Host->NotifyEnemySceneComponentTopologyChanged();
 	return CurrentSceneEnemyHost;
 }
 
@@ -305,13 +310,6 @@ void FWacomBattleHUDTestHarness::SettlePresentationQueueAndExitStack(int32 MaxSt
 
 void FWacomBattleHUDTestHarness::DestroySceneEnemyHost(FWacomBattleHUDTestSceneEnemyHost& Actors)
 {
-	for (AWacomBattleEnemyPartActor* PartActor : Actors.Parts)
-	{
-		if (IsValid(PartActor))
-		{
-			PartActor->Destroy();
-		}
-	}
 	Actors.Parts.Reset();
 
 	if (IsValid(Actors.Host))

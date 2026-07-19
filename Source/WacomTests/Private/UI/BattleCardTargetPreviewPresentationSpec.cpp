@@ -3,7 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
 #include "BattleHUDTestHarness.h"
 #include "BattleSceneTargetClickTestAccess.h"
 #include "Cards/CardDefinition.h"
@@ -38,7 +38,7 @@ namespace
 	struct FPreviewSceneEnemyHostActors
 	{
 		AWacomBattleEnemyActor* Host = nullptr;
-		TArray<AWacomBattleEnemyPartActor*> Parts;
+		TArray<UWacomBattleEnemyPartComponent*> Parts;
 	};
 
 	UWorld* FindAutomationWorldForTargetPreviewPresentation()
@@ -116,33 +116,26 @@ namespace
 
 		const FName PartId = ResolveFirstPartIdForTargetPreviewPresentation(EnemyDefinition);
 		Actors.Host->EnemyDefinition = EnemyDefinition;
-		AWacomBattleEnemyPartActor* PartActor =
-			World.SpawnActor<AWacomBattleEnemyPartActor>(
-				AWacomBattleEnemyPartActor::StaticClass(),
-				FTransform(FVector(100.0f, 0.0f, 0.0f)),
-				SpawnParams);
-		if (PartActor)
+		UWacomBattleEnemyPartComponent* Part = NewObject<UWacomBattleEnemyPartComponent>(
+			Actors.Host, TEXT("Part_Test"), RF_Transient);
+		if (Part)
 		{
-			PartActor->PartId = PartId;
-			PartActor->PartSlotId =
+			Actors.Host->AddInstanceComponent(Part);
+			Part->SetupAttachment(Actors.Host->GetRootComponent());
+			Part->SetRelativeLocation(FVector(100.0f, 0.0f, 0.0f));
+			Part->SetDerivedPartId(PartId);
+			Part->PartSlotId =
 				ResolvePartSlotIdForTargetPreviewPresentation(EnemyDefinition, PartId);
-			PartActor->AttachToActor(Actors.Host, FAttachmentTransformRules::KeepWorldTransform);
-			Actors.Parts.Add(PartActor);
+			Part->RegisterComponent();
+			Actors.Parts.Add(Part);
 		}
 
-		Actors.Host->RefreshBattleEnemyPartAuthoringState();
+		Actors.Host->NotifyEnemySceneComponentTopologyChanged();
 		return Actors;
 	}
 
 	void DestroySceneEnemyHostForTargetPreviewPresentation(FPreviewSceneEnemyHostActors& Actors)
 	{
-		for (AWacomBattleEnemyPartActor* PartActor : Actors.Parts)
-		{
-			if (IsValid(PartActor))
-			{
-				PartActor->Destroy();
-			}
-		}
 		Actors.Parts.Reset();
 
 		if (IsValid(Actors.Host))
@@ -467,8 +460,8 @@ bool FWacomUIBattleFirstPersonEnemyPreviewReusesStableDetailSpec::RunTest(const 
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHit(
 		PC,
-		SceneEnemy.Parts[0],
-		SceneEnemy.Parts[0]->GetHitBounds());
+		SceneEnemy.Host,
+		SceneEnemy.Parts[0]);
 
 	FWacomFirstPersonCardDragView FirstDragView =
 		MakeTargetedDragViewForTargetPreviewPresentation(SourceCardId, FVector2D(500.0f, 600.0f));
@@ -620,8 +613,8 @@ bool FWacomUIBattleFirstPersonSceneHoverPreviewReusesStableDetailSpec::RunTest(c
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHit(
 		PC,
-		SceneEnemy.Parts[0],
-		SceneEnemy.Parts[0]->GetHitBounds());
+		SceneEnemy.Host,
+		SceneEnemy.Parts[0]);
 
 	HUD->TickBattleSceneEnemyPartHoverProbeForTest(0.03f);
 	TestFalse(TEXT("Detail is initially pending hover delay after scene hover"),

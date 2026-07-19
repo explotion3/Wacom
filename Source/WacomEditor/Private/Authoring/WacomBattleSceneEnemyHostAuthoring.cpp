@@ -20,9 +20,6 @@
 
 namespace
 {
-	const TCHAR* DebugSnakeEnemyPath =
-		TEXT("/Game/Wacom/Data/Enemies/Snake/DA_Enemy_Snake.DA_Enemy_Snake");
-
 	FString SanitizeComponentSuffix(FName PartSlotId)
 	{
 		FString Result = PartSlotId.ToString();
@@ -367,39 +364,6 @@ FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition(
 		CopyResultToHost(Host, Result);
 	}
 	return Results;
-}
-
-FName FWacomBattleSceneEnemyHostAuthoring::ConfigureDebugSnakeSample(
-	AWacomBattleEnemyActor& Host)
-{
-	if (!IsEditorAuthoringHost(Host))
-	{
-		return TEXT("EditorOnly");
-	}
-	const FScopedTransaction Transaction(
-		LOCTEXT("ConfigureDebugSnakeTransaction", "配置组件化敌人 Host 蛇样例"));
-	MarkEdited(Host);
-	Host.EnemyDefinition = LoadObject<UEnemyDefinition>(nullptr, DebugSnakeEnemyPath);
-	Host.EnemySlotId = TEXT("Enemy");
-	const TArray<FWacomBattleSceneEnemyHostSyncResult> Results =
-		SyncPartsFromDefinition(TArray<AWacomBattleEnemyActor*>{ &Host });
-	const TMap<FName, FVector> Locations = {
-		{ TEXT("Head"), FVector(96.0f, -6.0f, 16.0f) },
-		{ TEXT("Body"), FVector::ZeroVector },
-		{ TEXT("Tail"), FVector(-92.0f, 16.0f, -8.0f) }
-	};
-	for (UWacomBattleEnemyPartComponent* Part : Host.GetBattleEnemyPartComponents())
-	{
-		if (Part)
-		{
-			if (const FVector* Location = Locations.Find(Part->PartSlotId))
-			{
-				MarkEdited(*Part);
-				Part->SetRelativeLocation(*Location);
-			}
-		}
-	}
-	return Results.IsEmpty() ? FName(TEXT("ApplyFailed")) : Results[0].ResultCode;
 }
 
 #undef LOCTEXT_NAMESPACE

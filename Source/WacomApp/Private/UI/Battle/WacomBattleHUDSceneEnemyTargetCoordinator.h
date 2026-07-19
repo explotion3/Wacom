@@ -8,19 +8,17 @@
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
 class AWacomBattleEnemyActor;
-class AWacomBattleEnemyPartActor;
 class FWacomBattleHUDRuntime;
-class UWacomBattleEnemyPartPresentationComponent;
-class UWacomBattleEnemyPartWorldTargetBridgeComponent;
+class UWacomBattleEnemyPartComponent;
 struct FBattleSnapshot;
 struct FBattleCardActionPreview;
 struct FBattleCardTargetPreview;
 struct FHandCardSnapshot;
 struct FWacomFirstPersonCardLayerSlotView;
-struct FWacomBattlePresentationTargetCue;
-struct FWacomBattleEnemyPartDragPredictionDebugInput;
 struct FWacomBattleEnemyActionPlaybackCallbacks;
+struct FWacomBattleEnemyPartDragPredictionDebugInput;
 
+/** HUD 对 typed Enemy Part hierarchy 的唯一 registry 与表现路由。 */
 class FWacomBattleHUDSceneEnemyTargetCoordinator
 {
 public:
@@ -30,13 +28,10 @@ public:
 	void SetSceneEnemyHosts(const TArray<AWacomBattleEnemyActor*>& InHosts);
 	bool HasSceneEnemyHost() const;
 	bool IsSceneEnemyHostInCurrentRegistry(const AWacomBattleEnemyActor* Host) const;
-
-	bool IsWorldTargetInCurrentRegistry(const FWacomInteractionTargetHandle& TargetHandle) const;
-	UWacomBattleEnemyPartWorldTargetBridgeComponent* ResolveWorldTargetBridge(
-		const FWacomInteractionTargetHandle& TargetHandle) const;
-	UWacomBattleEnemyPartPresentationComponent* ResolveWorldTargetPresentation(
-		const FWacomInteractionTargetHandle& TargetHandle) const;
-	bool IsBridgeInCurrentRegistry(const UWacomBattleEnemyPartWorldTargetBridgeComponent* Bridge) const;
+	bool IsWorldTargetInCurrentRegistry(const FWacomInteractionTargetHandle& Handle) const;
+	UWacomBattleEnemyPartComponent* ResolvePartComponent(
+		const FWacomInteractionTargetHandle& Handle) const;
+	bool IsPartInCurrentRegistry(const UWacomBattleEnemyPartComponent* Part) const;
 
 	void RebuildRegistry();
 	void SyncWorldTargets(const FBattleSnapshot& Snapshot);
@@ -45,10 +40,9 @@ public:
 		const FBattlePartSlotIdentity& ActingPartKey,
 		FName IntentId,
 		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
-	void PlayHostDestroyedAnimation(
-		FName EnemySlotId,
-		TFunction<void()>&& Completion);
+	void PlayEnemyDestroyedAnimation(FName EnemySlotId, TFunction<void()>&& Completion);
 	void ClearRetiringHosts(bool bCancelPendingPlayback);
+
 	void ApplyActionPreviewToEnemyPanels(
 		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts,
 		bool bApplyScenePartPreview = true) const;
@@ -62,45 +56,38 @@ public:
 	FWacomBattleEnemyPartDragPredictionDebugInput BuildHoverPredictionInput(
 		const FWacomInteractionTargetHandle& TargetHandle) const;
 
-	int32 GetRegisteredBridgeCount() const { return SceneEnemyPartWorldTargets.Num(); }
+	int32 GetRegisteredPartCount() const { return RegisteredParts.Num(); }
 	int32 GetRegistryRevision() const { return RegistryRevision; }
 
 private:
-	struct FSceneEnemyRuntimePartEntry
+	struct FPartEntry
 	{
-		TWeakObjectPtr<AWacomBattleEnemyPartActor> PartActor;
+		TWeakObjectPtr<UWacomBattleEnemyPartComponent> Part;
 		FBattlePartSlotIdentity ObservedIdentity;
+		bool bPresentationTargetRegistered = false;
 	};
 
-	struct FSceneEnemyHostEntry
+	struct FHostEntry
 	{
 		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
 		FName ObservedEnemySlotId = NAME_None;
 		uint32 ObservedTopologyRevision = 0;
-		TArray<FSceneEnemyRuntimePartEntry> RuntimeParts;
+		TArray<FPartEntry> Parts;
 	};
 
-	struct FSceneEnemyPartWorldTargetEntry
-	{
-		TWeakObjectPtr<UWacomBattleEnemyPartWorldTargetBridgeComponent> Bridge;
-		TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> Presentation;
-		FBattlePartSlotIdentity RegisteredTargetIdentity;
-		bool bPresentationTargetRegistered = false;
-	};
-
-	struct FRetiringSceneEnemyHostEntry
+	struct FRetiringHostEntry
 	{
 		TWeakObjectPtr<AWacomBattleEnemyActor> Host;
 		FName ObservedEnemySlotId = NAME_None;
 		bool bAllPartsDestroyed = false;
-		TArray<FSceneEnemyRuntimePartEntry> RuntimeParts;
+		TArray<FPartEntry> Parts;
 	};
 
 	FWacomBattleHUDRuntime& Runtime;
-	TArray<FSceneEnemyHostEntry> SceneEnemyHosts;
-	TArray<FRetiringSceneEnemyHostEntry> RetiringSceneEnemyHosts;
-	TArray<FSceneEnemyPartWorldTargetEntry> SceneEnemyPartWorldTargets;
-	TWeakObjectPtr<UWacomBattleEnemyPartPresentationComponent> HoveredPresentation;
+	TArray<FHostEntry> SceneEnemyHosts;
+	TArray<FRetiringHostEntry> RetiringSceneEnemyHosts;
+	TArray<FPartEntry*> RegisteredParts;
+	TWeakObjectPtr<UWacomBattleEnemyPartComponent> HoveredPart;
 	TWeakObjectPtr<AWacomBattleEnemyActor> HoveredEnemyHost;
 	FWacomInteractionTargetHandle HoveredHandle;
 	float HoverProbeElapsedSeconds = 0.0f;
@@ -112,11 +99,10 @@ private:
 	void RetireWorldTargetsForBattleEnd(const FBattleSnapshot& Snapshot);
 	bool IsActiveEnemyAllPartsDestroyed(FName EnemySlotId) const;
 	void ClearRegistryEntries(FName Reason);
-	void ClearPresentationTargetRegistration(FSceneEnemyPartWorldTargetEntry& Entry);
-	void EnsurePresentationTargetRegistration(
-		FSceneEnemyPartWorldTargetEntry& Entry,
-		UWacomBattleEnemyPartPresentationComponent& Presentation,
-		const FBattlePartSlotIdentity& TargetIdentity);
+	void EnsurePresentationTargetRegistration(FPartEntry& Entry);
+	void ClearPresentationTargetRegistration(FPartEntry& Entry);
+	void RebuildRegisteredPartPointers();
+
 	bool TryBuildHoverTargetPreviewContext(
 		const FWacomInteractionTargetHandle& TargetHandle,
 		FBattleSnapshot& OutSnapshot,
@@ -126,9 +112,10 @@ private:
 		FWacomBattleEnemyPartDragPredictionDebugInput& OutPredictionInput) const;
 	bool TryFindPendingTargetingCardSlot(FWacomFirstPersonCardLayerSlotView& OutSlotView) const;
 	void ApplyHoverTargetPreview(
-		const FWacomBattleCardTargetPreviewPresentation& TargetPreviewPresentation,
+		const FWacomBattleCardTargetPreviewPresentation& Presentation,
 		bool bHasTargetPreviewContext) const;
-	void ApplyActionPreviewToSceneParts(const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const;
+	void ApplyActionPreviewToSceneParts(
+		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const;
 	void ClearActionPreviewFromSceneParts() const;
 	void BindHostInspectionDelegate(AWacomBattleEnemyActor& Host);
 	void UnbindHostInspectionDelegate(AWacomBattleEnemyActor& Host);

@@ -4,11 +4,12 @@
 #include "Misc/ScopeExit.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
 #include "Cards/CardDefinition.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "Enemies/EnemyDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -166,7 +167,7 @@ namespace WacomFirstPersonCardLayerDropIntentSpec
 	struct FSceneEnemyHostActors
 	{
 		AWacomBattleEnemyActor* Host = nullptr;
-		TArray<AWacomBattleEnemyPartActor*> Parts;
+		TArray<UWacomBattleEnemyPartComponent*> Parts;
 	};
 
 	static FSceneEnemyHostActors SpawnSceneEnemyHost(
@@ -190,35 +191,30 @@ namespace WacomFirstPersonCardLayerDropIntentSpec
 		Result.Host->EnemyDefinition = EnemyDefinition;
 		for (int32 Index = 0; Index < PartIds.Num(); ++Index)
 		{
-			AWacomBattleEnemyPartActor* PartActor =
-				World.SpawnActor<AWacomBattleEnemyPartActor>(
-					AWacomBattleEnemyPartActor::StaticClass(),
-					FTransform(FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f)),
-					SpawnParams);
-			if (!PartActor)
+			UWacomBattleEnemyPartComponent* Part = NewObject<UWacomBattleEnemyPartComponent>(
+				Result.Host,
+				*FString::Printf(TEXT("Part_%d"), Index),
+				RF_Transient);
+			if (!Part)
 			{
 				continue;
 			}
-
-			Result.Parts.Add(PartActor);
-			PartActor->PartId = PartIds[Index];
-			PartActor->PartSlotId = PartIds[Index];
-			PartActor->AttachToActor(Result.Host, FAttachmentTransformRules::KeepWorldTransform);
+			Result.Host->AddInstanceComponent(Part);
+			Part->SetupAttachment(Result.Host->GetRootComponent());
+			Part->SetRelativeLocation(FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f));
+			Part->SetDerivedPartId(PartIds[Index]);
+			Part->PartSlotId = EnemyDefinition && EnemyDefinition->Parts.IsValidIndex(Index)
+				? EnemyDefinition->Parts[Index].PartSlotId : PartIds[Index];
+			Part->RegisterComponent();
+			Result.Parts.Add(Part);
 		}
 
-		Result.Host->RefreshBattleEnemyPartAuthoringState();
+		Result.Host->NotifyEnemySceneComponentTopologyChanged();
 		return Result;
 	}
 
 	static void DestroySceneEnemyHost(FSceneEnemyHostActors& Actors)
 	{
-		for (AWacomBattleEnemyPartActor* PartActor : Actors.Parts)
-		{
-			if (IsValid(PartActor))
-			{
-				PartActor->Destroy();
-			}
-		}
 		Actors.Parts.Reset();
 
 		if (IsValid(Actors.Host))
@@ -1508,7 +1504,7 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
 	WacomFirstPersonCardLayerDropIntentSpec::SettleBattlePresentationQueue(*HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
-	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Parts[0], SceneEnemy.Parts[0]->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Host, SceneEnemy.Parts[0]);
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerDropIntentSpec::MakeDropDragView(
 		CardId,
@@ -1588,8 +1584,7 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	HUD->SetBattleSceneEnemyHostsForTest({ CurrentHost.Host });
 	WacomFirstPersonCardLayerDropIntentSpec::SettleBattlePresentationQueue(*HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
-	OtherHost.Parts[0]->GetInteractionTargetComponent()->SetTargetId(PartId);
-	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, OtherHost.Parts[0], OtherHost.Parts[0]->GetHitBounds());
+	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, OtherHost.Host, OtherHost.Parts[0]);
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerDropIntentSpec::MakeDropDragView(
 		CardId,

@@ -206,7 +206,7 @@ class UEnemyPartDefinition : public UPrimaryDataAsset
 
 | 字段 | 语义 |
 |---|---|
-| `PartId` | 部位 authored id，例如 `Snake.Head`；SceneEnemy PartActor authoring 用它校验静态部位定义。 |
+| `PartId` | 部位定义 id，例如 `Snake.Head`；SceneEnemy Part Component 从 `EnemyDefinition.Parts` 派生并只读显示。 |
 | `MaxHp` | 部位初始生命上限。 |
 | `ExperienceReward` | 部位破坏后给玩家的经验记账。 |
 | `AidRewardCard` | Aid 分支显式奖励卡；正式 Production Part 必须填写。 |

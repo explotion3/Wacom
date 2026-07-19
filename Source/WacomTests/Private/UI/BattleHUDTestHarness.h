@@ -6,7 +6,6 @@
 #include "UObject/StrongObjectPtr.h"
 
 class AWacomBattleEnemyActor;
-class AWacomBattleEnemyPartActor;
 class AWacomBattleHUDLocalPlayerControllerTest;
 class AWacomPlayerCharacter;
 class UBattleCombatLogFeedWidget;
@@ -18,6 +17,7 @@ class UPlayerStatusBar;
 class UWacomBattleCommandBarTestProbe;
 class UWacomBattleCameraLookComponent;
 class UWacomBattleHUDDetailTest;
+class UWacomBattleEnemyPartComponent;
 class UWacomFirstPersonCardAnchorComponent;
 
 struct FWacomBattlePresentationStackEntryView;
@@ -26,7 +26,7 @@ struct FWacomInitializedBattleSession;
 struct FWacomBattleHUDTestSceneEnemyHost
 {
 	AWacomBattleEnemyActor* Host = nullptr;
-	TArray<AWacomBattleEnemyPartActor*> Parts;
+	TArray<UWacomBattleEnemyPartComponent*> Parts;
 };
 
 class FWacomBattleHUDTestHarness

@@ -18,7 +18,6 @@
 #include "Components/BoxComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Components/WacomRunPathTraversalComponent.h"
 #include "UI/RunPathTraversalTestAccess.h"

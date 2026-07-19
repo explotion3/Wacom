@@ -3,7 +3,6 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
-#include "Actors/WacomBattleEnemyPartActor.h"
 #include "Cards/CardDefinition.h"
 #include "Characters/CharacterDefinition.h"
 #include "Commands/BattleCommand.h"
@@ -21,8 +20,7 @@
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "Events/BattleEvent.h"
 
-#include "Components/WacomBattleEnemyPartPresentationComponent.h"
-#include "Components/WacomBattleEnemyPartWorldTargetBridgeComponent.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/EngineTypes.h"
@@ -50,35 +48,10 @@ namespace WacomBattleWidgetSpec
 		return GWorld;
 	}
 
-	FWacomInteractionTargetHandle MakeBattleEnemyPartHandle(
-		UObject* SourceObject,
-		const FGuid& WorldTargetId,
-		FName StableTargetId,
-		FName EncounterId,
-		FName EnemySlotId,
-		FName PartSlotId,
-		const FVector2D& ScreenPosition = FVector2D(240.0f, 120.0f))
-	{
-		const FName EffectiveStableTargetId = StableTargetId.IsNone() ? FName(TEXT("Test.Part.Head")) : StableTargetId;
-		const FName EffectiveEncounterId = EncounterId.IsNone() ? FName(TEXT("Encounter.Test")) : EncounterId;
-		const FName EffectiveEnemySlotId = EnemySlotId.IsNone() ? FName(TEXT("Enemy")) : EnemySlotId;
-		const FName EffectivePartSlotId = PartSlotId.IsNone() ? FName(TEXT("Head")) : PartSlotId;
-		return FWacomInteractionTargetHandle::ForWorldTarget(
-			WorldTargetId,
-			SourceObject,
-			FVector::ZeroVector,
-			ScreenPosition,
-			WacomTags::Interaction_Target_Battle_EnemyPart,
-			EffectiveStableTargetId,
-			EffectiveEncounterId,
-			EffectiveEnemySlotId,
-			EffectivePartSlotId);
-	}
-
 	struct FSceneEnemyHostActors
 	{
 		AWacomBattleEnemyActor* Host = nullptr;
-		TArray<AWacomBattleEnemyPartActor*> Parts;
+		TArray<UWacomBattleEnemyPartComponent*> Parts;
 	};
 
 	FName ResolvePartSlotIdForDefinitionPart(
@@ -98,21 +71,6 @@ namespace WacomBattleWidgetSpec
 			}
 		}
 		return NAME_None;
-	}
-
-	void AttachPartActorToHost(
-		AWacomBattleEnemyActor* Host,
-		FName PartId,
-		AWacomBattleEnemyPartActor* PartActor)
-	{
-		if (!Host || !PartActor)
-		{
-			return;
-		}
-
-		PartActor->PartId = PartId;
-		PartActor->PartSlotId = ResolvePartSlotIdForDefinitionPart(Host->EnemyDefinition, PartId);
-		PartActor->AttachToActor(Host, FAttachmentTransformRules::KeepWorldTransform);
 	}
 
 	FSceneEnemyHostActors SpawnSceneEnemyHost(
@@ -136,33 +94,34 @@ namespace WacomBattleWidgetSpec
 		Result.Host->EnemyDefinition = EnemyDefinition;
 		for (int32 Index = 0; Index < PartIds.Num(); ++Index)
 		{
-			AWacomBattleEnemyPartActor* PartActor =
-				World.SpawnActor<AWacomBattleEnemyPartActor>(
-					AWacomBattleEnemyPartActor::StaticClass(),
-					FTransform(FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f)),
-					SpawnParams);
-			if (!PartActor)
+			UWacomBattleEnemyPartComponent* PartComponent =
+				NewObject<UWacomBattleEnemyPartComponent>(
+					Result.Host,
+					*FString::Printf(TEXT("OtherTestPart_%d"), Index),
+					RF_Transient);
+			if (!PartComponent)
 			{
 				continue;
 			}
 
-			Result.Parts.Add(PartActor);
-			AttachPartActorToHost(Result.Host, PartIds[Index], PartActor);
+			Result.Host->AddInstanceComponent(PartComponent);
+			PartComponent->SetupAttachment(Result.Host->GetRootComponent());
+			PartComponent->SetRelativeLocation(
+				FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f));
+			PartComponent->SetBoxExtent(FVector(40.f));
+			PartComponent->SetDerivedPartId(PartIds[Index]);
+			PartComponent->PartSlotId =
+				ResolvePartSlotIdForDefinitionPart(EnemyDefinition, PartIds[Index]);
+			PartComponent->RegisterComponent();
+			Result.Parts.Add(PartComponent);
 		}
 
-		Result.Host->RefreshBattleEnemyPartAuthoringState();
+		Result.Host->NotifyEnemySceneComponentTopologyChanged();
 		return Result;
 	}
 
 	void DestroySceneEnemyHost(FSceneEnemyHostActors& Actors)
 	{
-		for (AWacomBattleEnemyPartActor* PartActor : Actors.Parts)
-		{
-			if (IsValid(PartActor))
-			{
-				PartActor->Destroy();
-			}
-		}
 		Actors.Parts.Reset();
 
 		if (IsValid(Actors.Host))
@@ -528,45 +487,31 @@ bool FWacomUIBattleHUDSceneEnemyCoordinatorLifecycleSpec::RunTest(const FString&
 	TestFalse(TEXT("HUD registry rejects unconfigured scene enemy host"),
 		HUD->IsBattleSceneEnemyHostInCurrentRegistry(OtherHost.Host));
 	TestEqual(TEXT("Coordinator exposes only current host bridges through HUD"),
-		HUD->GetBattleSceneEnemyPartWorldTargetBridgeCountForTest(),
+		HUD->GetBattleSceneEnemyPartComponentCountForTest(),
 		3);
 
-	AWacomBattleEnemyPartActor* CurrentPart = CurrentHost.Parts[0];
-	AWacomBattleEnemyPartActor* OtherPart = OtherHost.Parts[0];
-	const FWacomInteractionTargetHandle CurrentHandle = WacomBattleWidgetSpec::MakeBattleEnemyPartHandle(
-		CurrentPart->GetInteractionTargetComponent(),
-		CurrentPart->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
-		CurrentPart->GetEffectivePartDefinitionId(),
-		CurrentPart->GetWorldTargetBridgeComponent()->GetBoundEncounterId(),
-		CurrentPart->GetWorldTargetBridgeComponent()->GetBoundEnemySlotId(),
-		CurrentPart->GetWorldTargetBridgeComponent()->GetBoundPartSlotId(),
-		FVector2D(640.0f, 360.0f));
-	const FWacomInteractionTargetHandle OtherHandle = WacomBattleWidgetSpec::MakeBattleEnemyPartHandle(
-		OtherPart->GetInteractionTargetComponent(),
-		OtherPart->GetWorldTargetBridgeComponent()->GetPartInstanceId(),
-		OtherPart->GetEffectivePartDefinitionId(),
-		OtherPart->GetWorldTargetBridgeComponent()->GetBoundEncounterId(),
-		OtherPart->GetWorldTargetBridgeComponent()->GetBoundEnemySlotId(),
-		OtherPart->GetWorldTargetBridgeComponent()->GetBoundPartSlotId(),
-		FVector2D(720.0f, 360.0f));
+	UWacomBattleEnemyPartComponent* CurrentPart = CurrentHost.Parts[0];
+	UWacomBattleEnemyPartComponent* OtherPart = OtherHost.Parts[0];
+	const FWacomInteractionTargetHandle CurrentHandle = CurrentPart->BuildWorldTargetHandle();
+	const FWacomInteractionTargetHandle OtherHandle = OtherPart->BuildWorldTargetHandle();
 
 	TestTrue(TEXT("Current host part is accepted by HUD registry"),
 		HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(CurrentHandle));
 	TestFalse(TEXT("Other host part is filtered by HUD registry"),
 		HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(OtherHandle));
-	TestTrue(TEXT("Current bridge is bound to snapshot"),
-		CurrentPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bBoundToSnapshot);
-	TestFalse(TEXT("Other bridge remains unbound"),
-		OtherPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bBoundToSnapshot);
+	TestTrue(TEXT("Current part is bound to snapshot"),
+		CurrentPart->GetRuntimeDebugView().bBoundToSnapshot);
+	TestFalse(TEXT("Other part remains unbound"),
+		OtherPart->GetRuntimeDebugView().bBoundToSnapshot);
 
 	HUD->SetSession(nullptr);
 	TestFalse(TEXT("Session clear removes scene enemy host"),
 		HUD->IsBattleSceneEnemyHostInCurrentRegistry(CurrentHost.Host));
 	TestEqual(TEXT("Session clear removes bridge registry"),
-		HUD->GetBattleSceneEnemyPartWorldTargetBridgeCountForTest(),
+		HUD->GetBattleSceneEnemyPartComponentCountForTest(),
 		0);
-	TestFalse(TEXT("Session clear unbinds current bridge"),
-		CurrentPart->GetWorldTargetBridgeComponent()->GetBattleWorldTargetDebugView().bBoundToSnapshot);
+	TestFalse(TEXT("Session clear unbinds current part"),
+		CurrentPart->GetRuntimeDebugView().bBoundToSnapshot);
 
 	return true;
 }

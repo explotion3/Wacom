@@ -22,8 +22,6 @@ struct WACOMAPP_API FWacomBattleSceneEnemyHostIdentityAudit
 	TArray<FName> DuplicatePartSlotIds;
 	TArray<FName> PartDefinitionMismatchSlotIds;
 	TArray<FString> SurplusPartComponentNames;
-	// Temporary migration seam; removed with the legacy PartActor helpers in the final cutover.
-	TArray<FString> SurplusPartActorNames;
 };
 
 struct WACOMAPP_API FWacomBattleSceneEnemyPartSyncPlanEntry
@@ -48,12 +46,8 @@ struct WACOMAPP_API FWacomBattleSceneEnemyHostAuthoringReport
 	bool bHasEnemyDefinition = false;
 	bool bHasValidDefinitionParts = false;
 	int32 PartComponentCount = 0;
-	// Temporary migration seam; removed after content/tests switch to typed components.
-	int32 PartActorCount = 0;
 	int32 FlipbookLayerCount = 0;
 	int32 SpriteLayerCount = 0;
-	bool bUsingHostVisual = false;
-	bool bHostAnimationStyleApplicable = true;
 
 	TArray<FName> AttachedPartIds;
 	TArray<FName> AttachedPartSlotIds;
