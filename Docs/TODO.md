@@ -417,6 +417,12 @@ tags:
   - 入口：[WacomData.md](./WacomData.md) / [DreamShader_Production_Guide.md](./DreamShader_Production_Guide.md)
   - 说明：核心卡面已经支持可选 `CardIllustrationDepthMap`；普通卡继续使用统一凹入层。后续为高稀有度或重点卡牌使用原始透明插画生成 Image2 深度初稿，保持同构图并量化为五级灰度，人工确认后再写入 CardDefinition，不批量伪造所有卡牌深度。
 
+- [x] **Enemy HUD V3：战术铭牌与敌情档案**
+  - 状态：`Done: 单/多部位统一树、Vitals Material 与双侧档案已落地`
+  - 归属：Battle UI / Enemy Presentation
+  - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)
+  - 说明：六个稳定 WBP 已原地重建；单段 `268 × 92`，多段最小 `116 × 92` 等宽连接。朱红 HP、电蓝 Shield、琥珀 Initiative、Intent 图标、Buff 溢出、Destroyed 与 Action Preview 共用 Enemy Vitals Material；双侧档案显示完整 Snapshot facts。旧 Enemy UI mutation builders 和专用 MCP toolset 已删除，只保留 `-InspectEnemyHUD` 只读审计。剩余工作仅为 TrainingWarrior / Snake / SlimeTrio 在三种目标分辨率的人工 PIE 美术节奏验收，以及未来 Boss 专用 UI。
+
 ## 维护规则
 
 > [!tip] 新任务放哪

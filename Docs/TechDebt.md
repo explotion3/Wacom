@@ -71,7 +71,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | Scene Enemy Panel 兼容资产命名 | 正式面板仍沿用既有 `BP_WacomBattleEnemyPanelWidget / BP_WacomBattleEnemyPartEntryWidget` 路径，避免本轮重命名波及地图与 Host 资产 | 等地图和 Host 资产可统一重存时，单独迁到 `WBP_` 命名并用 redirect / dependency audit 清理旧路径 |
 | 普通 Enemy Panel 部位上限 | 正式 WBP 对 1–4 个部位提供等宽连续分段，双侧详情复用同一 ViewData；超过 4 个只给制作警告并继续运行 | 首个复杂 Boss 内容切片引入专用 Boss WidgetClass；不要把滚动、分页或 Phase UI 塞回普通面板 |
 | Enemy Inspection 详情深度 | 当前详情只展示 Snapshot 已有的 HP、Shield、Initiative、Intent 名称/先机/抵抗、Buff 与 Destroyed；不翻译 Intent effects，也不包含 Lore / 图鉴 | 等战斗策划冻结公开信息口径后新增独立 presentation facts；不要让 WBP 解析规则 effect 或直接读取 DataAsset 猜说明 |
-| Enemy Intent 图标扩展 | 单部位紧凑面板使用 UI-only `IntentId -> IconBrush` 精确映射，TrainingWarrior 三个 Intent 已有正式图标，未知 Intent 使用星形 fallback；未增加规则字段或基于 effect 的猜测 | 新正式敌人内容包在同一 Style 中显式补映射；若图标数量和主题变体明显增长，再拆按敌人家族/皮肤选择的 Style，不把 Intent 分类或伤害数字塞进本切片 |
+| Enemy Intent 图标扩展 | 单/多部位紧凑面板与敌情档案统一使用 UI-only `IntentId -> IconBrush` 精确映射，TrainingWarrior 三个 Intent 已有正式图标，未知 Intent 使用星形 fallback；未增加规则字段或基于 effect 的猜测 | 新正式敌人内容包在同一 Style 中显式补映射；若图标数量和主题变体明显增长，再拆按敌人家族/皮肤选择的 Style，不把 Intent 分类或伤害数字塞进紧凑 HUD |
 | Scene Enemy Host 旧原生面板 override | 老地图/Host 可能序列化了已改为 abstract 的原生 Panel class；`PostLoad()` 只在运行时把这个精确旧值视为未配置并回退项目默认 WBP，不修改 package | 下次有意重存相关地图/Host 时清空旧 override；完成资产审计后删除这条精确兼容分支 |
 | Combat Log 战后回放与筛选未实现 | 固定视口流式播报、按回合分区的详细日志 Screen、简略/详细切换和独立 Battle 命令 gate 已接入；打开时复制当前历史，不在页面内轮询 | 若后续需要类型筛选、搜索、导出或战后回放，基于只读 `FWacomBattleCombatLogTurnSectionView` 扩展，不把完整历史重新塞回常驻 Feed，也不让 Screen 读取 `UBattleSession` |
 | 击倒 Dialog C++ 布局 | CanvasPanel + Border + Button + Aid/Destroy 奖励文本硬编码；行为和连续刷新已由 ViewData 测试覆盖 | 正式 `WBP_KnockdownChoiceDialog` 承接同名 BindWidget 锚点并只调整视觉；不要在 WBP 复制奖励查询、可用性或焦点规则 |

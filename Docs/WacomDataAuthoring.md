@@ -96,20 +96,14 @@ SlimeTrio 复用同一个 manifest-driven 晋升实现，但拥有独立目标�
 
 SlimeTrio 同样拒绝 `-PromoteArt`，`-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用。日常命令和 `WacomRegenerateContent` 只消费 `/Game/Wacom/Art/Placeholders/Enemies/SlimeTrio`，不读取 ignored `/Game/Art`。三个 Part 暂不配置行动动画或奖励卡；不能用 Idle 冒充攻击动画。
 
-单部位敌人紧凑 UI 使用独立、幂等的 Editor builder，不接入 `WacomRegenerateContent`，也不触碰旧 Enemy WBP：
+Enemy HUD V3 已完成一次性原地迁移。正式 WBP 此后由 Designer / 受控 Editor 资产操作维护，`WacomBuildEnemyUI` 不再提供会覆盖 WidgetTree 的 mutation mode，只保留只读合同审计：
 
 ```powershell
-# 创建或更新受合同标记管理的新 WBP、Intent Style 与四张像素图标
--run=WacomBuildEnemyUI -BuildSinglePartCompact
-
-# 只读检查父类、bindings、动画、Style 映射和图标资源
--run=WacomBuildEnemyUI -InspectSinglePartCompact
-
-# 只读检查正式 v2 分段生命条、详情面板与完整 Slate 命中祖先链
--run=WacomBuildEnemyUI -InspectSegmentedVitals
+# 检查六个 WBP、字体、材质、像素纹理、Intent Style 与命中路径
+-run=WacomBuildEnemyUI -InspectEnemyHUD
 ```
 
-正式 v2 WBP 的命中修复只能通过 `UWacomEnemyUIToolset::NormalizeInteractiveHitTestPaths()` 在 Writer Package allowlist 内执行。该工具只接受六个已知 Enemy UI 包，只把交互按钮、动态条目容器及其路径上的 `HitTestInvisible` 改为保留子控件命中的 Visibility；遇到 Hidden / Collapsed 路径会拒绝，不会擅自显示内容或修改布局。
+命令永远不 dirty 或保存 Package。Enemy UI 的旧 `-MigrateLegacy`、`-BuildSinglePartCompact`、`-InspectSegmentedVitals` 和专用 MCP mutation toolset 已删除，避免后续重建器覆盖人工视觉。需要修改 WBP 时必须按 `Docs/UnrealMCPWorkflow.md` 保护工作区和 Package 白名单，Compile / Save / Reload 后再运行只读检查。
 
 玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
 
@@ -188,7 +182,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - Sprite/Flipbook Layer 的 Destroyed 资源是可选制作数据；Validator 棻查资源类型、有限正数 Destroyed PlayRate 与 `[0,1]` 换图时机。运行时在真实 authored Paper2D Component 上原地换图，不创建 VisualLayer 镜像。
 - `UWacomBattleEnemyPartAnimationStyle` 可选，不影响未配置 Action 素材的 Host Ready。它必须精确指向同一 Part 下唯一 Flipbook `LayerId`；Intent key、Flipbook、PlayRate 与 Impact marker 必须有效。可选 `EnemyDestroyedClip` 在同一 Host 最多出现一次；同步服务不会猜 Clip、Intent 或 terminal owner。
 - Host / Part Action Clip 的 `ImpactNormalizedTime` 必须是有限 `[0,1]`，默认和 TrainingWarrior 正式内容均为 `0.55`。它表示行动动画中应用 Journal 行动后 Combat facts 的语义命中点；Destroyed Clip 不消费该字段。内容人员应按接触帧调整，而不是用动画名称或效果类型推断。
-- 普通 Scene Enemy UI 不需要在 EnemyDefinition 增加额外字段。恰好一个有效 PartSlot 自动使用单段 WBP；2–4 个有效 PartSlot 使用 Definition 顺序的等宽连续分段，不按 MaxHP 分配宽度。每段 HP、Shield、Initiative、Intent 和 Buff 都来自已有 Snapshot ViewData；Shield 只改变本段外框与徽章，零值不占布局。超过 4 个部位继续给制作警告并应显式配置未来 Boss WidgetClass。Intent 图标仍由 UI-only Style 精确映射，详情面板不从 Intent effects 自动生成伤害或状态说明。
+- 普通 Scene Enemy UI 不需要在 EnemyDefinition 增加额外字段。恰好一个有效 PartSlot 自动使用 `268 × 92` 单段 WBP；2–4 个有效 PartSlot 使用 Definition 顺序、每段至少 `116 × 92` 的等宽连续分段，不按 MaxHP 分配宽度。每段 HP、Shield、Initiative、Intent 和 Buff 都来自已有 Snapshot ViewData；Shield 只改变本段电蓝外框与徽章，零值不占布局。超过 4 个部位继续给制作警告并应显式配置未来 Boss WidgetClass。Intent 图标仍由 UI-only Style 精确映射，详情面板不从 Intent effects 自动生成伤害或状态说明。
 - 正式 Pixel Impact System 的 Graph 只由 `WacomBuildBattleEnemyPartImpactNiagara` 写入。当前生成合同包含六个 Emitter 和固定 `EffectKind=0/1/2/3` 映射；TargetPreview 分支还必须暴露 `User.PreviewMode` 与 `User.AvailabilityIconSize`，分别控制 Available 中心图标和 Valid/Invalid Hover 框。运行 `-InspectOnly` 只读验证版本、User Parameter、Renderer 和编译结果。`Scripts/SetupBattleEnemyPartImpactAssets.py` 幂等写入 Destroyed Style 数值但不覆盖人工声音引用，也不会在已有 DreamShader 材质 / MI 合同正确时重存它们；`Scripts/SetupBattleEnemyPartTargetPreviewAssets.py` 只定向维护目标预演 MI 参数，不修改 Host/Part Blueprint。
 - EnemyBehavior 校验 `BehaviorId`、phase、intent set、intent、selector rule、condition、cooldown authoring 和敌人意图 effect contract；可选传入 owning EnemyDefinition 时，会额外校验 `AppliesToPartSlotId / PartDestroyed` 等部位槽引用。
 - Character 会校验 `StarterDeck` 不包含左右手卡。

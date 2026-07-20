@@ -131,6 +131,8 @@ Details / Blueprint 分类口径：
 
 业务目录只保存业务 Widget 本体。例如 `WBP_BattleCommandButton` 位于 `/Game/Wacom/UI/Battle/Action/`，但它引用的 `tiny_menu_Button`、`MyCommonTextStyle` 等通用样式应位于 `/Game/Wacom/UI/Style/...`。新增按钮或文字样式时，优先复用 UI/Style 下的资产；只有样式语义确实只属于某个业务界面时，才放入该业务目录并在对应 WBP 绑定文档说明。
 
+Enemy HUD 的紧凑数字使用 `/Game/Wacom/UI/Foundation/Fonts/Silkscreen/F_Silkscreen` Runtime Composite Font，来源 FontFace 为 Regular / Bold。它只服务拉丁数字、基本符号与短英文战术标识；中文敌人名、部位名和详情文案继续使用项目现有中文 UI 字体，不允许依赖 Silkscreen 的缺字 fallback 猜测排版。字体采用 SIL Open Font License 1.1，来源与随附许可记录见 [ThirdPartyLicenses.md](./ThirdPartyLicenses.md)。
+
 ## §5 Input 与 Menu Back
 
 CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。通用菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入。Backpack / Shop / RunEvent 这类 Run 领域 GameMenu Screen 继承 `UWacomRunMenuWidgetBase`，Run first-person menu lease / drop 合同由该 Run 专用父类承载。

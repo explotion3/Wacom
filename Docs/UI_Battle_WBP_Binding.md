@@ -512,39 +512,41 @@ Builder 只管理上述两个 WBP、默认 Style 和 Registry 合同；当前正
 
 ## Enemy Panel WBP
 
-### 通用 Panel：单段与多段
+### 唯一完整 Panel / Entry 树
 
-`BP_WacomBattleEnemyPanelWidget` 和 `WBP_WacomBattleEnemySinglePartPanelWidget` 都继承 `UWacomBattleEnemyPanelWidget`，消费同一份 `FWacomBattleEnemyPanelViewData`。单部位默认类仍由 Host 自动选择；显式 Host override 优先。两者都必须提供：
+`BP_WacomBattleEnemyPanelWidget` 与 `BP_WacomBattleEnemyPartEntryWidget` 是唯一完整 WidgetTree。`WBP_WacomBattleEnemySinglePartPanelWidget` 和 `WBP_WacomBattleEnemySinglePartEntryWidget` 必须分别直接继承前两者，只提供单段默认宽度和 Entry class，不得复制绑定或布局。四者消费同一份 `FWacomBattleEnemyPanelViewData`；显式 Host override 仍优先于自动单/多部位选择。
+
+Panel 必需绑定：
 
 | 控件名 | 类型 | 运行时职责 |
 |---|---|---|
-| `EnemyNameText` | `TextBlock` | 兼容绑定，紧凑条中常态折叠 |
-| `EnemyInitiativeText` | `TextBlock` | 兼容绑定，紧凑条中常态折叠 |
+| `PanelRoot` | `SizeBox` | 多段自然宽度；单段派生类注入 `268` 宽度，统一高 `92` |
 | `PartList` | `HorizontalBox` | 按 Definition / ViewData 顺序承载等宽部位段 |
-| `PanelContextHighlight` | `Widget` | hover / projected context 的非交互强调 |
 
-`PartList` 每个 child slot 由 C++ 设置 `Fill + zero padding`；HP 较少的部位也获得完整段宽。Panel 按稳定 `EnemySlotId + PartSlotId` 复用条目，只有部位真正移除、Battle clear 或 destruct 才移除。多部位普通面板支持 2–4 段；更多部位使用未来 Boss WidgetClass。Root 必须是 `SelfHitTestInvisible`，Panel 自身不建立拦截层；`PartList` 及其直到 Root 的所有祖先都必须是 `Visible` 或 `SelfHitTestInvisible`，因为动态加入的 Part Entry 需要穿过这条 Slate 命中路径。
+`PartList` 每个 child slot 由 C++ 设置 `Fill + zero padding`。每个条目至少 `116 × 92`，不按 MaxHP 分配宽度。Panel 按稳定 `EnemySlotId + PartSlotId` 复用条目；Destroyed 不移除或重排，只有部位真正移除、Battle clear 或 destruct 才删除。普通面板支持 1–4 段，更多部位使用 Boss WidgetClass。
 
-### 通用 Part Entry：分段生命条
-
-`BP_WacomBattleEnemyPartEntryWidget` 和 `WBP_WacomBattleEnemySinglePartEntryWidget` 都继承 `UWacomBattleEnemyPartEntryWidget`。单部位约 `250 × 84`，多部位只是横向等宽复用同一个语义条目。
+Part Entry 必需绑定：
 
 | 控件名 | 类型 | 运行时职责 |
 |---|---|---|
-| `InitiativeDiamond` / `InitiativeText` | `Widget` / `TextBlock` | 段上方当前 Initiative；旧多部位资产也应提供 |
-| `IntentDiamond` / `IntentIcon` | `Widget` / `Image` | 段上方准确 Intent 图标；未知映射显示 Style fallback |
-| `HpBar` / `HpText` | `ProgressBar` / `TextBlock` | 本段 `CurrentHp / MaxHp`；文字只显示当前 HP |
-| `ShieldContainer` | `Overlay` 或等价 Widget | 不参与段宽；Shield 为 0 时整体折叠 |
-| `ShieldFrame` | `Image/Border` | 引用 `T_UI_EnemyShieldFrame_9Slice`，DrawAs Box 的蓝色外框 |
-| `ShieldBadge` / `ShieldText` | `Widget` / `TextBlock` | 引用 `T_UI_EnemyShieldBadge` 的盾牌徽章与准确护盾数字 |
-| `StatusList` / `StatusOverflowText` | `UWacomBattleStatusIconListWidget` / `TextBlock` | 段下方最多 3 枚；独立文本显示 `+N`，不要求修改共享 StatusList WBP |
-| `InspectHitTarget` | `Button` | 唯一命中热区；只上报完整 `FBattlePartSlotIdentity` |
-| `PartNameText` / `IntentText` / `ResistanceText` / `DetailsContainer` | 对应旧类型 | 兼容必绑但在紧凑条中折叠；完整文字由详情面板显示 |
-| `ContextHighlight` / `ActionPreviewOverlay` / `DestroyedOverlay` / `DestroyedMark` | `Widget` | hover、Preview 与终态覆盖；Destroyed 不移除段 |
+| `PartEntryRoot` | `SizeBox` | `MinDesiredWidth=116`、`Height=92` |
+| `VitalsTrackImage` | `Image` | 使用 `M_UI_EnemyVitalsTrack` 绘制 HP、残影、Preview、Shield 与段边缘 |
+| `HpText` | `TextBlock` | 当前 HP，Silkscreen Bold 18 |
+| `ShieldValueRoot` / `ShieldText` | `Widget` / `TextBlock` | 电蓝外框、盾徽与准确数值；零 Shield 折叠，数字为 Silkscreen Bold 14 |
+| `InitiativeSocket` / `InitiativeText` | `Widget` / `TextBlock` | 琥珀槽与当前 Initiative；数字为 Silkscreen Bold 16 |
+| `IntentSocket` / `IntentIcon` / `OutgoingIntentIcon` | `Widget` / `Image` / `Image` | 当前 Intent 与擦除阶段的旧 Intent 图标 |
+| `StatusList` / `StatusOverflowText` | `UWacomBattleStatusIconListWidget` / `TextBlock` | 常态最多三枚并显示 `+N` |
+| `ContextSurface` | `Widget` | hover / Preview 定位框，不参与输入 |
+| `DestroyedSurface` / `DestroyedMark` | `Widget` | 失色、裂痕与 `X` 终态，不移除段 |
+| `InspectHitTarget` | `Button` | 唯一命中热区，只上报完整 `FBattlePartSlotIdentity` |
 
-不再制作或使用独立 `ShieldBar`。Shield Frame / Badge 由 projected ViewData 同步显隐，但 Preview 不触发真实 Shield pulse。必需动画仍为 `IntroAnimation`、`DamagePulseAnimation`、`ShieldPulseAnimation`、`DestroyedPulseAnimation`、`ContextHighlightAnimation`；单部位资产继续提供 `InitiativePulseAnimation` 与 `IntentChangedAnimation`。Entry Root 是 `SelfHitTestInvisible`，仅 `InspectHitTarget` 可命中；Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时启用按钮。`InspectHitTarget` 到 Entry Root 的每一级容器都必须允许子控件命中，装饰面可以保持 `HitTestInvisible`，但不能作为热区祖先。WBP 不自行设置 viewport ZOrder；Host 的 `WidgetComponent` 统一使用专用 `WacomBattleEnemyPanelScreenLayer@8000`，详情 WBP 位于 `8500`。禁用检查时 Entry 与热区必须回到 `HitTestInvisible`，否则会阻断 BattleHUD 的世界目标点击。
+旧 `EnemyNameText / PartNameText / IntentText / ResistanceText / DetailsContainer / HpBar / ShieldContainer / ShieldFrame / ShieldBadge / ActionPreviewOverlay` 不属于紧凑 HUD 合同，也不得作为 optional compatibility binding 重新加入。名字、Intent 文本和 Resistance 只在敌情档案显示。
 
-Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default`，只接受准确 `IntentId -> IconBrush`，不得按显示名或 effects 猜图标。
+Entry 必需动画与标准时长：`IntroAnimation=220ms`、`DamageImpactAnimation=220ms`、`ShieldImpactAnimation=180ms`、`ShieldBreakAnimation=240ms`、`InitiativeStepAnimation=120ms`、`IntentChangeAnimation=180ms`、`ContextAnimation=120ms`、`DestroyedAnimation=300ms`。HP 真实下降时 Material 先保留旧比例 `90ms`，再按 `220ms` 收束；Preview 只写 projected Material 参数，不触发上述事实动画。
+
+Panel / Entry Root 必须是 `SelfHitTestInvisible`，装饰控件全部不可命中，仅 `InspectHitTarget` 可见命中。Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时启用按钮；禁用时 Entry 与热点回到 `HitTestInvisible`，不能阻断世界目标点击。Host 的 `WidgetComponent` 使用 `WacomBattleEnemyPanelScreenLayer@8000`，详情位于 `8500`。
+
+Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default`，只接受准确 `IntentId -> IconBrush`；未知 ID 使用白色四角星 fallback，不按显示名或 effects 猜图标。
 
 ### WBP_WacomBattleEnemyInspectionWidget
 
@@ -552,33 +554,31 @@ Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresent
 
 | 控件名 | 类型 | 运行时职责 |
 |---|---|---|
-| `LeftPanel` / `RightPanel` | `Widget` | 双侧可动画容器；中央区域保持空且不可命中 |
+| `LeftPanel` / `RightPanel` | `SizeBox` | `220 × 520` 左侧部位栏与 `420 × 560` 右侧档案；中央保持空且不可命中 |
 | `EnemyNameText` / `EnemyStateText` | `TextBlock` | 敌人名与剩余/已击破整体状态 |
 | `PartNavigator` | `PanelWidget` | Definition 顺序的稳定部位导航 Row |
 | `SelectedPartNameText` | `TextBlock` | 当前部位名 |
 | `HpBar` / `HpText` | `ProgressBar` / `TextBlock` | 当前/最大 HP 详情 |
 | `ShieldContainer` / `ShieldText` | `Widget` / `TextBlock` | 准确 Shield；零值折叠 |
 | `InitiativeText` | `TextBlock` | 当前 Initiative |
-| `IntentText` / `ResistanceText` | `TextBlock` | Intent 名称，以及 Intent Initiative / Resistance |
+| `IntentIcon` / `IntentText` / `ResistanceText` | `Image` / `TextBlock` | Intent 图标、名称，以及 Intent Initiative / Resistance |
 | `StatusList` | `UWacomBattleStatusIconListWidget` | 完整 Buff 与层数，不限制 3 枚 |
 | `DestroyedOverlay` | `Widget` | 当前部位终态 |
 | `CloseButton` | `Button` | 被动 Close 请求 |
 
-必需动画：`OpenLeftAnimation`、`OpenRightAnimation`、`CloseAnimation`，都必须有真实 widget binding。Root 为 `SelfHitTestInvisible`；只有 `CloseButton` 和部位 Row 按钮可命中。`PartNavigator`、`CloseButton` 及其祖先链必须允许子控件命中。开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭或清理。
+必需动画：`OpenLeftAnimation=180ms`、`OpenRightAnimation=240ms`、`CloseAnimation=160ms`，都必须有真实 widget binding。左栏先进入，右栏由弱 Timer 延迟 `40ms`；clear / destruct 取消该 Timer。Root 为 `SelfHitTestInvisible`；只有 `CloseButton` 和部位 Row 按钮可命中。`PartNavigator`、`CloseButton` 及其祖先链必须允许子控件命中。开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭或清理。
 
 ### WBP_WacomBattleEnemyInspectionPartRowWidget
 
 父类：`UWacomBattleEnemyInspectionPartRowWidget`。必需绑定为 `PartSelectButton`、`PartNameText`、`HpText`、`ShieldContainer`、`ShieldText`、`InitiativeText`、`SelectionHighlight`、`DestroyedOverlay`。Root 为 `SelfHitTestInvisible`，仅 `PartSelectButton` 可命中；按钮到 Root 的祖先链必须允许子控件命中，点击只广播稳定 Part identity。
 
-资产修改只通过受控 Editor / MCP 写入。只读合同检查使用：
+资产修改只通过受控 Editor 写入。只读合同检查使用：
 
 ```powershell
--run=WacomBuildEnemyUI -InspectSegmentedVitals
+-run=WacomBuildEnemyUI -InspectEnemyHUD
 ```
 
-该模式验证四个紧凑 WBP、详情 WBP / Row、Shield Frame / Badge、父类、required bindings、动画、HorizontalBox 和命中策略；永远不修改资产。旧 `-MigrateLegacy / -BuildSinglePartCompact` 只服务 v1 生成资产，不得覆盖标记为 segmented v2 的人工正式布局。
-
-单部位几何由 Panel 独占：`SinglePartPanelRoot` 固定宽度 `250`，Entry 不得再声明宽度或最小宽度，`CompactSize` 只保留 `84` 的行高。这样 `WidgetComponent.DrawAtDesiredSize` 与运行时 `HorizontalBox Fill` 只有一个水平尺寸真相，避免固定宽度、最小宽度和 Fill 叠加导致拉伸或空白。`-InspectSegmentedVitals` 会验证这一合同。
+该模式验证六个 WBP 的父子关系、required bindings、动画、字体、Material、像素纹理采样、Intent Style、尺寸和完整命中路径；永远不修改资产。旧 mutation builders 与 Enemy UI 专用 MCP toolset 已删除，不能用生成器重新覆盖人工正式布局。
 
 ## PIE Smoke Checklist
 
