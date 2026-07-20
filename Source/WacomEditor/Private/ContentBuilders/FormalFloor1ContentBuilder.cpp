@@ -1323,204 +1323,13 @@ namespace
 
 namespace Wacom::ContentBuilder
 {
+	const FFormalProductionContentProfile& GetFormalFloor1ContentProfile();
+
 	const TArray<FFormalFloor1ContentManifestEntry>& GetFormalFloor1ContentManifest()
 	{
 		static const TArray<FFormalFloor1ContentManifestEntry> Manifest = BuildManifest();
 		return Manifest;
 	}
-
-	bool ParseFormalFloor1ContentOptions(
-		const TArray<FString>& Arguments,
-		FFormalFloor1ContentOptions& OutOptions,
-		TArray<FString>& OutErrors)
-	{
-		OutOptions = FFormalFloor1ContentOptions();
-		bool bSawGroup = false;
-		bool bSawReport = false;
-		for (FString Argument : Arguments)
-		{
-			while (Argument.RemoveFromStart(TEXT("-")))
-			{
-			}
-			if (Argument.Equals(TEXT("SeedMissing"), ESearchCase::IgnoreCase))
-			{
-				if (OutOptions.bSeedMissing)
-				{
-					OutErrors.Add(TEXT("SeedMissing was specified more than once"));
-				}
-				OutOptions.bSeedMissing = true;
-				continue;
-			}
-			if (Argument.Equals(TEXT("CompareSeedDefaults"), ESearchCase::IgnoreCase))
-			{
-				if (OutOptions.bCompareSeedDefaults)
-				{
-					OutErrors.Add(TEXT("CompareSeedDefaults was specified more than once"));
-				}
-				OutOptions.bCompareSeedDefaults = true;
-				continue;
-			}
-			FString Value;
-			if (Argument.StartsWith(TEXT("Group="), ESearchCase::IgnoreCase))
-			{
-				Value = Argument.Mid(FCString::Strlen(TEXT("Group=")));
-				if (bSawGroup)
-				{
-					OutErrors.Add(TEXT("Group was specified more than once"));
-				}
-				bSawGroup = true;
-				if (Value.Equals(TEXT("Cards"), ESearchCase::IgnoreCase))
-				{
-					OutOptions.Group = EFormalFloor1ContentGroup::Cards;
-				}
-				else if (Value.Equals(TEXT("EnemyGraph"), ESearchCase::IgnoreCase))
-				{
-					OutOptions.Group = EFormalFloor1ContentGroup::EnemyGraph;
-				}
-				else if (Value.Equals(TEXT("NodeDefinitions"), ESearchCase::IgnoreCase))
-				{
-					OutOptions.Group = EFormalFloor1ContentGroup::NodeDefinitions;
-				}
-				else if (Value.Equals(TEXT("All"), ESearchCase::IgnoreCase))
-				{
-					OutOptions.Group = EFormalFloor1ContentGroup::All;
-				}
-				else
-				{
-					OutErrors.Add(FString::Printf(TEXT("Invalid Group: %s"), *Value));
-				}
-				continue;
-			}
-			if (Argument.StartsWith(TEXT("Report="), ESearchCase::IgnoreCase))
-			{
-				Value = Argument.Mid(FCString::Strlen(TEXT("Report=")));
-				if (bSawReport)
-				{
-					OutErrors.Add(TEXT("Report was specified more than once"));
-				}
-				bSawReport = true;
-				OutOptions.ReportPath = Value.TrimQuotes();
-				if (OutOptions.ReportPath.IsEmpty())
-				{
-					OutErrors.Add(TEXT("Report path cannot be empty"));
-				}
-				continue;
-			}
-			OutErrors.Add(FString::Printf(TEXT("Unknown argument: %s"), *Argument));
-		}
-		return OutErrors.IsEmpty();
-	}
-
-	bool ValidateFormalFloor1ContentManifest(TArray<FString>& OutErrors)
-	{
-		const TArray<FFormalFloor1ContentManifestEntry>& Manifest =
-			GetFormalFloor1ContentManifest();
-		if (Manifest.Num() != 46)
-		{
-			OutErrors.Add(FString::Printf(TEXT("Expected 46 manifest entries, got %d"),
-				Manifest.Num()));
-		}
-		TSet<FString> Packages;
-		TSet<FName> StableIds;
-		TSet<FString> ObjectPaths;
-		int32 CardsGroupCount = 0;
-		int32 EnemyGraphGroupCount = 0;
-		int32 NodeDefinitionsGroupCount = 0;
-		TMap<UClass*, int32> ClassCounts;
-		for (const FFormalFloor1ContentManifestEntry& Entry : Manifest)
-		{
-			if (!FPackageName::IsValidLongPackageName(Entry.PackagePath))
-			{
-				OutErrors.Add(FString::Printf(TEXT("Invalid package path: %s"),
-					*Entry.PackagePath));
-			}
-			if (!Entry.PackagePath.StartsWith(TEXT("/Game/Wacom/Data/")))
-			{
-				OutErrors.Add(FString::Printf(TEXT("Package outside formal data root: %s"),
-					*Entry.PackagePath));
-			}
-			if (Packages.Contains(Entry.PackagePath))
-			{
-				OutErrors.Add(FString::Printf(TEXT("Duplicate package: %s"),
-					*Entry.PackagePath));
-			}
-			Packages.Add(Entry.PackagePath);
-			const FString ObjectPath = ObjectPathForPackage(Entry.PackagePath);
-			if (ObjectPaths.Contains(ObjectPath))
-			{
-				OutErrors.Add(FString::Printf(TEXT("Duplicate object path: %s"),
-					*ObjectPath));
-			}
-			ObjectPaths.Add(ObjectPath);
-			if (Entry.StableId.IsNone() || StableIds.Contains(Entry.StableId))
-			{
-				OutErrors.Add(FString::Printf(TEXT("Missing or duplicate stable id: %s"),
-					*Entry.StableId.ToString()));
-			}
-			StableIds.Add(Entry.StableId);
-			if (!Entry.AssetClass)
-			{
-				OutErrors.Add(FString::Printf(TEXT("Missing class: %s"), *Entry.PackagePath));
-			}
-			else
-			{
-				ClassCounts.FindOrAdd(Entry.AssetClass)++;
-			}
-			switch (Entry.Group)
-			{
-			case EFormalFloor1ContentGroup::Cards: ++CardsGroupCount; break;
-			case EFormalFloor1ContentGroup::EnemyGraph: ++EnemyGraphGroupCount; break;
-			case EFormalFloor1ContentGroup::NodeDefinitions: ++NodeDefinitionsGroupCount; break;
-			case EFormalFloor1ContentGroup::All:
-				OutErrors.Add(FString::Printf(TEXT("Manifest entry cannot use All group: %s"),
-					*Entry.PackagePath));
-				break;
-			}
-		}
-		if (CardsGroupCount != 12 || EnemyGraphGroupCount != 19
-			|| NodeDefinitionsGroupCount != 15)
-		{
-			OutErrors.Add(FString::Printf(TEXT("Group counts are %d/%d/%d, expected 12/19/15"),
-				CardsGroupCount, EnemyGraphGroupCount, NodeDefinitionsGroupCount));
-		}
-		const TArray<TPair<UClass*, int32>> ExpectedClassCounts =
-		{
-			{UCardDefinition::StaticClass(), 12},
-			{UEnemyBehaviorDefinition::StaticClass(), 4},
-			{UEnemyPartDefinition::StaticClass(), 11},
-			{UEnemyDefinition::StaticClass(), 4},
-			{UEncounterDefinition::StaticClass(), 6},
-			{UWacomRunEventDefinition::StaticClass(), 4},
-			{UWacomRunPickupDefinition::StaticClass(), 4},
-			{UShopDefinition::StaticClass(), 1},
-		};
-		for (const TPair<UClass*, int32>& Expected : ExpectedClassCounts)
-		{
-			const int32 Actual = ClassCounts.FindRef(Expected.Key);
-			if (Actual != Expected.Value)
-			{
-				OutErrors.Add(FString::Printf(TEXT("Class %s count is %d, expected %d"),
-					*GetNameSafe(Expected.Key), Actual, Expected.Value));
-			}
-		}
-		if (CardSeeds().Num() != 12 || PartSeeds().Num() != 11
-			|| EnemySeeds().Num() != 4 || IntentSeeds().Num() != 24
-			|| EncounterSeeds().Num() != 6)
-		{
-			OutErrors.Add(TEXT("Seed table counts do not match the frozen content contract"));
-		}
-		for (const FString& ReadOnlyPackage :
-			{ChitinWardPackage, AntennaSearchPackage, MoltCutPackage, PoisonFangPackage})
-		{
-			if (Packages.Contains(ReadOnlyPackage))
-			{
-				OutErrors.Add(FString::Printf(TEXT("Read-only dependency is writable: %s"),
-					*ReadOnlyPackage));
-			}
-		}
-		return OutErrors.IsEmpty();
-	}
-
 	bool ValidateFormalFloor1TransientDefaults(TArray<FString>& OutErrors)
 	{
 		if (!ValidateFormalFloor1ContentManifest(OutErrors))
@@ -1535,7 +1344,9 @@ namespace Wacom::ContentBuilder
 		{
 			TStrongObjectPtr<UObject> Expected(nullptr);
 			TArray<FString> EntryErrors;
-			if (!BuildExpectedObject(Entry, ObjectsByPackage, Expected, EntryErrors))
+			if (!BuildFormalProductionExpectedObject(
+				GetFormalFloor1ContentProfile(), Entry, ObjectsByPackage,
+				Expected, EntryErrors))
 			{
 				for (const FString& Error : EntryErrors)
 				{
@@ -1627,7 +1438,9 @@ namespace Wacom::ContentBuilder
 		}
 		TMap<FString, UObject*> ObjectsByPackage;
 		TStrongObjectPtr<UObject> Expected(nullptr);
-		if (!BuildExpectedObject(*Entry, ObjectsByPackage, Expected, OutErrors))
+		if (!BuildFormalProductionExpectedObject(
+			GetFormalFloor1ContentProfile(), *Entry, ObjectsByPackage,
+			Expected, OutErrors))
 		{
 			return false;
 		}
@@ -1640,355 +1453,101 @@ namespace Wacom::ContentBuilder
 		Tuned->Rarity = WacomTags::Card_Rarity_Blue;
 		Tuned->Effects[0].Magnitude = 6;
 		TArray<FString> StructuralErrors;
-		if (!CompareEditableProperties(
+		if (!CompareFormalProductionEditableProperties(
 			*Tuned.Get(), *Expected.Get(), false, StructuralErrors))
 		{
 			OutErrors.Add(TEXT("Structural comparison rejected approved tunable drift"));
 			OutErrors.Append(StructuralErrors);
 		}
 		TArray<FString> StrictErrors;
-		if (CompareEditableProperties(*Tuned.Get(), *Expected.Get(), true, StrictErrors))
+		if (CompareFormalProductionEditableProperties(
+			*Tuned.Get(), *Expected.Get(), true, StrictErrors))
 		{
 			OutErrors.Add(TEXT("Strict comparison accepted seed-default drift"));
 		}
 		Tuned->CardId = TEXT("Reward.SerpentWood.InvalidIdentity");
 		StructuralErrors.Reset();
-		if (CompareEditableProperties(*Tuned.Get(), *Expected.Get(), false, StructuralErrors))
+		if (CompareFormalProductionEditableProperties(
+			*Tuned.Get(), *Expected.Get(), false, StructuralErrors))
 		{
 			OutErrors.Add(TEXT("Structural comparison accepted stable identity drift"));
 		}
 		return OutErrors.IsEmpty();
 	}
 
+	const FFormalProductionContentProfile& GetFormalFloor1ContentProfile()
+	{
+		static const FFormalProductionContentProfile Profile = []
+		{
+			FFormalProductionContentProfile Result;
+			Result.LogLabel = TEXT("FormalFloor1Content");
+			Result.ReportFolder = TEXT("FormalFloor1Content");
+			Result.Manifest = &GetFormalFloor1ContentManifest();
+			Result.ExpectedCardsCount = 12;
+			Result.ExpectedEnemyGraphCount = 19;
+			Result.ExpectedNodeDefinitionsCount = 15;
+			Result.ExpectedClassCounts =
+			{
+				{UCardDefinition::StaticClass(), 12},
+				{UEnemyBehaviorDefinition::StaticClass(), 4},
+				{UEnemyPartDefinition::StaticClass(), 11},
+				{UEnemyDefinition::StaticClass(), 4},
+				{UEncounterDefinition::StaticClass(), 6},
+				{UWacomRunEventDefinition::StaticClass(), 4},
+				{UWacomRunPickupDefinition::StaticClass(), 4},
+				{UShopDefinition::StaticClass(), 1},
+			};
+			Result.ReadOnlyDependencies =
+			{
+				ChitinWardPackage,
+				AntennaSearchPackage,
+				MoltCutPackage,
+				PoisonFangPackage,
+			};
+			Result.ConfigureExpected = ConfigureExpected;
+			Result.ValidateProfileSpecific = [](TArray<FString>& OutErrors)
+			{
+				if (CardSeeds().Num() != 12 || PartSeeds().Num() != 11
+					|| EnemySeeds().Num() != 4 || IntentSeeds().Num() != 24
+					|| EncounterSeeds().Num() != 6)
+				{
+					OutErrors.Add(TEXT(
+						"Seed table counts do not match the frozen content contract"));
+				}
+				return OutErrors.IsEmpty();
+			};
+			return Result;
+		}();
+		return Profile;
+	}
+
+	bool ParseFormalFloor1ContentOptions(
+		const TArray<FString>& Arguments,
+		FFormalFloor1ContentOptions& OutOptions,
+		TArray<FString>& OutErrors)
+	{
+		return ParseFormalProductionContentOptions(Arguments, OutOptions, OutErrors);
+	}
+
+	bool ValidateFormalFloor1ContentManifest(TArray<FString>& OutErrors)
+	{
+		return ValidateFormalProductionContentManifest(
+			GetFormalFloor1ContentProfile(), OutErrors);
+	}
+
 	bool ValidateFormalFloor1LoadedAssets(
 		const bool bCompareSeedDefaults,
 		TArray<FString>& OutErrors)
 	{
-		if (!ValidateFormalFloor1ContentManifest(OutErrors))
-		{
-			return false;
-		}
-
-		TMap<FString, UObject*> ObjectsByPackage;
-		for (const FFormalFloor1ContentManifestEntry& Entry :
-			GetFormalFloor1ContentManifest())
-		{
-			UObject* Asset = LoadObject<UObject>(
-				nullptr, *ObjectPathForPackage(Entry.PackagePath));
-			if (!Asset)
-			{
-				OutErrors.Add(FString::Printf(TEXT("%s: asset failed to load"),
-					*Entry.PackagePath));
-				continue;
-			}
-			if (Asset->GetClass() != Entry.AssetClass)
-			{
-				OutErrors.Add(FString::Printf(
-					TEXT("%s: class is %s, expected %s"),
-					*Entry.PackagePath, *GetNameSafe(Asset->GetClass()),
-					*GetNameSafe(Entry.AssetClass)));
-				continue;
-			}
-			ObjectsByPackage.Add(Entry.PackagePath, Asset);
-		}
-		if (ObjectsByPackage.Num() != GetFormalFloor1ContentManifest().Num())
-		{
-			return false;
-		}
-
-		for (const FFormalFloor1ContentManifestEntry& Entry :
-			GetFormalFloor1ContentManifest())
-		{
-			TArray<FString> EntryErrors;
-			UObject* Asset = ObjectsByPackage.FindRef(Entry.PackagePath);
-			if (!Asset || !ValidateActualAgainstExpected(
-				*Asset, Entry, ObjectsByPackage,
-				bCompareSeedDefaults, EntryErrors))
-			{
-				for (const FString& Error : EntryErrors)
-				{
-					OutErrors.Add(Entry.StableId.ToString() + TEXT(": ") + Error);
-				}
-			}
-		}
-		return OutErrors.IsEmpty();
+		return ValidateFormalProductionLoadedAssets(
+			GetFormalFloor1ContentProfile(), bCompareSeedDefaults, OutErrors);
 	}
 
 	int32 RunFormalFloor1ContentBuilder(
 		const TArray<FString>& Arguments,
 		FFormalFloor1ContentBuildReport* OutReport)
 	{
-		FFormalFloor1ContentBuildReport Report;
-		TArray<FString> ParseErrors;
-		if (!ParseFormalFloor1ContentOptions(Arguments, Report.Options, ParseErrors))
-		{
-			Report.ExitCode = 2;
-			Report.FailureCategory = TEXT("Arguments");
-			for (const FString& Error : ParseErrors)
-			{
-				UE_LOG(LogTemp, Error, TEXT("[FormalFloor1Content] %s"), *Error);
-			}
-			if (OutReport) { *OutReport = Report; }
-			return Report.ExitCode;
-		}
-		Report.ReportPath = Report.Options.ReportPath;
-		const TArray<FFormalFloor1ContentManifestEntry>& Manifest =
-			GetFormalFloor1ContentManifest();
-		Report.ManifestCount = Manifest.Num();
-		TArray<FString> ManifestErrors;
-		if (!ValidateFormalFloor1ContentManifest(ManifestErrors))
-		{
-			Report.ExitCode = 1;
-			Report.FailureCategory = TEXT("Manifest");
-			for (const FString& Error : ManifestErrors)
-			{
-				UE_LOG(LogTemp, Error, TEXT("[FormalFloor1Content] %s"), *Error);
-			}
-			if (!WriteReportJson(Report))
-			{
-				Report.ExitCode = 3;
-				Report.FailureCategory = TEXT("ReportWrite");
-			}
-			if (OutReport) { *OutReport = Report; }
-			return Report.ExitCode;
-		}
-
-		TArray<int32> SelectedManifestIndices;
-		TMap<FString, UObject*> LoadedObjects;
-		for (int32 ManifestIndex = 0; ManifestIndex < Manifest.Num(); ++ManifestIndex)
-		{
-			const FFormalFloor1ContentManifestEntry& Entry = Manifest[ManifestIndex];
-			if (FPackageName::DoesPackageExist(Entry.PackagePath))
-			{
-				if (UObject* Existing = LoadObject<UObject>(
-					nullptr, *ObjectPathForPackage(Entry.PackagePath)))
-				{
-					LoadedObjects.Add(Entry.PackagePath, Existing);
-				}
-			}
-			if (!IsSelected(Entry, Report.Options.Group))
-			{
-				continue;
-			}
-			SelectedManifestIndices.Add(ManifestIndex);
-			FFormalFloor1ContentEntryReport& EntryReport = Report.Entries.AddDefaulted_GetRef();
-			EntryReport.PackagePath = Entry.PackagePath;
-			EntryReport.ClassName = GetNameSafe(Entry.AssetClass);
-			EntryReport.StableId = Entry.StableId;
-		}
-		Report.SelectedCount = SelectedManifestIndices.Num();
-
-		bool bPreflightFailed = false;
-		for (int32 SelectedIndex = 0; SelectedIndex < SelectedManifestIndices.Num(); ++SelectedIndex)
-		{
-			const auto& Entry = Manifest[SelectedManifestIndices[SelectedIndex]];
-			auto& EntryReport = Report.Entries[SelectedIndex];
-			if (!FPackageName::DoesPackageExist(Entry.PackagePath))
-			{
-				EntryReport.State = EFormalFloor1ContentEntryState::Missing;
-				++Report.MissingCount;
-				continue;
-			}
-			UObject* Existing = LoadedObjects.FindRef(Entry.PackagePath);
-			if (!Existing)
-			{
-				EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-				EntryReport.Diagnostics.Add(TEXT("Package exists but the expected object failed to load"));
-				++Report.FailedCount;
-				bPreflightFailed = true;
-				continue;
-			}
-			if (Existing->GetClass() != Entry.AssetClass)
-			{
-				EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-				EntryReport.Diagnostics.Add(FString::Printf(
-					TEXT("Wrong class %s; expected %s"),
-					*GetNameSafe(Existing->GetClass()), *GetNameSafe(Entry.AssetClass)));
-				++Report.FailedCount;
-				bPreflightFailed = true;
-			}
-			else
-			{
-				EntryReport.State = EFormalFloor1ContentEntryState::Existing;
-			}
-		}
-
-		if (Report.Options.bSeedMissing && !bPreflightFailed)
-		{
-			TMap<FString, UObject*> PreflightObjects = LoadedObjects;
-			TArray<TStrongObjectPtr<UObject>> PreflightKeepAlive;
-			for (int32 SelectedIndex = 0; SelectedIndex < SelectedManifestIndices.Num(); ++SelectedIndex)
-			{
-				const auto& Entry = Manifest[SelectedManifestIndices[SelectedIndex]];
-				TStrongObjectPtr<UObject> Expected(nullptr);
-				TArray<FString> Errors;
-				if (!BuildExpectedObject(Entry, PreflightObjects, Expected, Errors))
-				{
-					auto& EntryReport = Report.Entries[SelectedIndex];
-					EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-					EntryReport.Diagnostics.Append(Errors);
-					++Report.FailedCount;
-					bPreflightFailed = true;
-					break;
-				}
-				if (!PreflightObjects.Contains(Entry.PackagePath))
-				{
-					PreflightObjects.Add(Entry.PackagePath, Expected.Get());
-					PreflightKeepAlive.Add(MoveTemp(Expected));
-				}
-			}
-		}
-
-		if (!Report.Options.bSeedMissing)
-		{
-			for (int32 SelectedIndex = 0; SelectedIndex < SelectedManifestIndices.Num(); ++SelectedIndex)
-			{
-				const auto& Entry = Manifest[SelectedManifestIndices[SelectedIndex]];
-				auto& EntryReport = Report.Entries[SelectedIndex];
-				if (EntryReport.State == EFormalFloor1ContentEntryState::Missing)
-				{
-					EntryReport.Diagnostics.Add(TEXT("Package is missing in inspect-only mode"));
-					continue;
-				}
-				if (EntryReport.State == EFormalFloor1ContentEntryState::Failed)
-				{
-					continue;
-				}
-				TArray<FString> Errors;
-				UObject* Existing = LoadedObjects.FindRef(Entry.PackagePath);
-				if (!Existing || !ValidateActualAgainstExpected(
-					*Existing, Entry, LoadedObjects,
-					Report.Options.bCompareSeedDefaults, Errors))
-				{
-					EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-					EntryReport.Diagnostics.Append(Errors);
-					++Report.FailedCount;
-				}
-				else
-				{
-					++Report.ExistingCount;
-				}
-			}
-			Report.ExitCode = (Report.FailedCount == 0 && Report.MissingCount == 0) ? 0 : 1;
-			Report.FailureCategory = Report.ExitCode == 0 ? TEXT("") : TEXT("Validation");
-		}
-		else if (bPreflightFailed)
-		{
-			Report.ExitCode = 1;
-			Report.FailureCategory = TEXT("Preflight");
-		}
-		else
-		{
-			Report.MissingCount = 0;
-			for (int32 SelectedIndex = 0; SelectedIndex < SelectedManifestIndices.Num(); ++SelectedIndex)
-			{
-				const auto& Entry = Manifest[SelectedManifestIndices[SelectedIndex]];
-				auto& EntryReport = Report.Entries[SelectedIndex];
-				if (EntryReport.State == EFormalFloor1ContentEntryState::Existing)
-				{
-					TArray<FString> Errors;
-					UObject* Existing = LoadedObjects.FindRef(Entry.PackagePath);
-					if (!Existing || !ValidateActualAgainstExpected(
-						*Existing, Entry, LoadedObjects,
-						Report.Options.bCompareSeedDefaults, Errors))
-					{
-						EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-						EntryReport.Diagnostics.Append(Errors);
-						++Report.FailedCount;
-						Report.ExitCode = 1;
-						Report.FailureCategory = TEXT("Validation");
-						break;
-					}
-					++Report.ExistingCount;
-					continue;
-				}
-
-				UPackage* Package = CreatePackage(*Entry.PackagePath);
-				const FName AssetName(*FPackageName::GetLongPackageAssetName(Entry.PackagePath));
-				UObject* Asset = Package
-					? NewObject<UObject>(Package, Entry.AssetClass, AssetName,
-						RF_Public | RF_Standalone | RF_Transactional)
-					: nullptr;
-				TArray<FString> Errors;
-				const FResolveObject Resolver = [&LoadedObjects](const FString& PackagePath)
-				{
-					return ResolveObject(PackagePath, LoadedObjects);
-				};
-				if (!Package || !Asset
-					|| !ConfigureExpected(*Asset, Entry, Resolver, Errors)
-					|| !ValidateWithSharedRules(*Asset, Errors))
-				{
-					EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-					EntryReport.Diagnostics.Append(Errors);
-					if (EntryReport.Diagnostics.IsEmpty())
-					{
-						EntryReport.Diagnostics.Add(TEXT("Could not create/configure asset"));
-					}
-					++Report.FailedCount;
-					Report.ExitCode = 3;
-					Report.FailureCategory = TEXT("Create");
-					break;
-				}
-				LoadedObjects.Add(Entry.PackagePath, Asset);
-				TArray<FString> ComparisonErrors;
-				if (!ValidateActualAgainstExpected(
-					*Asset, Entry, LoadedObjects, true, ComparisonErrors))
-				{
-					EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-					EntryReport.Diagnostics.Append(ComparisonErrors);
-					++Report.FailedCount;
-					Report.ExitCode = 3;
-					Report.FailureCategory = TEXT("CreateValidation");
-					break;
-				}
-				if (!SaveAssetPackage(Package, Asset, Entry.PackagePath))
-				{
-					EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-					EntryReport.Diagnostics.Add(TEXT("SavePackage failed"));
-					++Report.FailedCount;
-					Report.ExitCode = 3;
-					Report.FailureCategory = TEXT("Save");
-					break;
-				}
-				UPackage::WaitForAsyncFileWrites();
-				UObject* Reloaded = LoadObject<UObject>(
-					nullptr, *ObjectPathForPackage(Entry.PackagePath));
-				if (!Reloaded || Reloaded->GetClass() != Entry.AssetClass)
-				{
-					EntryReport.State = EFormalFloor1ContentEntryState::Failed;
-					EntryReport.Diagnostics.Add(TEXT("Post-save load/class check failed"));
-					++Report.FailedCount;
-					Report.ExitCode = 3;
-					Report.FailureCategory = TEXT("Reload");
-					break;
-				}
-				EntryReport.State = EFormalFloor1ContentEntryState::Created;
-				EntryReport.bSaved = true;
-				++Report.CreatedCount;
-				++Report.SavedCount;
-			}
-			if (Report.ExitCode == 0 && Report.FailedCount == 0)
-			{
-				Report.FailureCategory.Reset();
-			}
-		}
-
-		if (!WriteReportJson(Report))
-		{
-			UE_LOG(LogTemp, Error, TEXT("[FormalFloor1Content] Failed to write report: %s"),
-				*Report.ReportPath);
-			Report.ExitCode = 3;
-			Report.FailureCategory = TEXT("ReportWrite");
-		}
-		UE_LOG(LogTemp, Display,
-			TEXT("[FormalFloor1Content] Group=%s Created=%d Existing=%d Missing=%d Failed=%d Saved=%d Report=%s Exit=%d"),
-			*GroupToString(Report.Options.Group), Report.CreatedCount,
-			Report.ExistingCount, Report.MissingCount, Report.FailedCount,
-			Report.SavedCount, *Report.ReportPath, Report.ExitCode);
-		if (OutReport)
-		{
-			*OutReport = Report;
-		}
-		return Report.ExitCode;
+		return RunFormalProductionContentSeedService(
+			GetFormalFloor1ContentProfile(), Arguments, OutReport);
 	}
 }

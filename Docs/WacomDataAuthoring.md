@@ -343,7 +343,7 @@ Credential.Run.MoltSeal
 
 ### Floor 2 MoltCavern Production 内容制作合同
 
-Spec 017 已将上述 15 个节点从“只预留职责”升级为完整内容设计合同，未来新增资产总量精确为 47：
+Spec 017 已将上述 15 个节点从“只预留职责”升级为完整内容设计合同，Spec 018 已按该合同创建并验证精确 47 个资产：
 
 | Type | Count | Contract |
 |---|---:|---|
@@ -355,7 +355,7 @@ Spec 017 已将上述 15 个节点从“只预留职责”升级为完整内容�
 | Enemy Definition | 4 | ScaleCrawler / StoneScaleGuard / VenomHunter / CavernGuardian |
 | Enemy Behavior Definition | 4 | 每敌人一份 `Default` + per-Part `Sequence` |
 | Enemy Part Definition | 12 | `2 + 3 + 3 + 4` 个部位 |
-| **Production total** | **47** | 未来 exact manifest；当前尚未创建 |
+| **Production total** | **47** | exact manifest 已创建；首次 strict 验收完成 |
 
 主题路径固定为：
 
@@ -370,7 +370,7 @@ Spec 017 已将上述 15 个节点从“只预留职责”升级为完整内容�
 /Game/Wacom/Data/Cards/Run/MoltCavern/
 ```
 
-Enemy 资产 leaf 使用 `DA_Enemy_<Archetype>`、`DA_Behavior_<Archetype>`、`DA_Part_<Archetype>_<Part>`；其它 leaf 使用 `DA_Encounter_<Slot>`、`DA_Event_<Slot>`、`DA_Pickup_<Slot>`、`DA_Shop_DeepWayfarer` 与 `DA_Card_<CardName>`。精确 47-package 表见 `specs/017-formal-floor2-production-content-freeze/contracts/production-asset-manifest.md`；后续 writer allowlist 必须从该 exact set 明确列出，不能扫描整个主题目录扩大保存范围。
+Enemy 资产 leaf 使用 `DA_Enemy_<Archetype>`、`DA_Behavior_<Archetype>`、`DA_Part_<Archetype>_<Part>`；其它 leaf 使用 `DA_Encounter_<Slot>`、`DA_Event_<Slot>`、`DA_Pickup_<Slot>`、`DA_Shop_DeepWayfarer` 与 `DA_Card_<CardName>`。精确 47-package 表见 Spec 017 的 production manifest 与 Spec 018 的 asset manifest；writer allowlist 必须从该 exact set 明确列出，不能扫描整个主题目录扩大保存范围。
 
 四个 EnemyId 为：
 
@@ -381,7 +381,7 @@ Enemy.MoltCavern.VenomHunter
 Enemy.MoltCavern.CavernGuardian
 ```
 
-BehaviorId 使用 `MoltCavern.<Archetype>.Behavior`，PartId 使用 `MoltCavern.<Archetype>.<Part>`，IntentSet/Intent 分别追加 `.Sequence` 与 `.<Intent>`。所有 12 个正式 Part 必须显式配置同 Archetype 的 `Reward.MoltCavern.<Archetype>.Aid/Destroy` 并清空 deprecated `KnockdownRewardCard`；未来必须通过现有 `FormalProduction` profile。
+BehaviorId 使用 `MoltCavern.<Archetype>.Behavior`，PartId 使用 `MoltCavern.<Archetype>.<Part>`，IntentSet/Intent 分别追加 `.Sequence` 与 `.<Intent>`。所有 12 个正式 Part 已显式配置同 Archetype 的 `Reward.MoltCavern.<Archetype>.Aid/Destroy` 并清空 deprecated `KnockdownRewardCard`；后续修改仍必须通过 `FormalProduction` profile。
 
 卡牌路径细分：四张固定卡中 GlowcapPoultice、CrystalWard、VenomShard 位于 Rewards/MoltCavern 根，MoltSeal 位于 Cards/Run/MoltCavern；八张分支卡按 Archetype 子目录保存。DeepWayfarer 只读引用以下既有 package，不计入 47，也不得由未来 Floor 2 seeder 保存：
 
@@ -391,7 +391,7 @@ BehaviorId 使用 `MoltCavern.<Archetype>.Behavior`，PartId 使用 `MoltCavern.
 /Game/Wacom/Data/Cards/BugGirl/StarterPack/DA_Card_Starter_MoltCut
 ```
 
-未来 Floor 2 制作入口必须采用与 Floor 1 一致的正式原则，而不是复制一个会覆盖已有资产的 builder：默认 inspect-only、显式 seed-missing-only、错误 class/结构 fail closed、已有正确 class 永不覆盖或恢复默认值、保存范围精确受 writer allowlist 限制。真实交付必须补通用/strict Data Validation、47/47 load 与 AssetRegistry class/count、forbidden dependency closure、前后 SHA-256、双跑 `0 created / 0 saved`、Git LFS fsck 和受影响 Battle/Run smoke。DisplayName、描述和批准的平衡字段后续允许人工调优；stable ID、class、引用、关键词、TargetMode、effect/condition/choice/slot/intent 有序结构由校验守护。
+Floor 1/2 现共用 `WacomEditor/Private` 的 formal production seed service；主题差异仅由 profile 提供 manifest、稳定身份、初始字段、只读依赖和特有不变量。Floor 2 入口为 commandlet `WacomBuildFormalFloor2Content` 与 Editor command `Wacom.BuildFormalFloor2Content`，参数固定为 `Group=Cards|EnemyGraph|NodeDefinitions|All`、`SeedMissing`、`CompareSeedDefaults` 与 `Report=`。默认 inspect-only；仅 `SeedMissing` 创建缺失 package；错误 class/结构在首次保存前 fail closed；已有正确 class 永不覆盖、重存或恢复 seed defaults；`Force/Replace/Regenerate` 与未知参数被拒绝。首次交付已通过 47/47 load、AssetRegistry allowlist closure、SHA-256、三组第二遍 `0 created / 0 saved`、Git LFS 与 Battle/Run smoke。DisplayName、描述和批准的平衡字段后续允许人工调优；stable ID、class、引用、关键词、TargetMode、effect/condition/choice/slot/intent 有序结构由校验守护。
 
 Production Definition 不得引用 Debug、Authoring、`Test.*`、BadgeDisplayTests、TrainingWarrior、Character、地图、Host、UI、材质或卡牌表现资产。`DA_Character_BugGirl` 的既有 StarterDeck 污染是用户已接受的外部问题：不属于 Floor 2 manifest，不在本轮修改，也不能通过削弱 validator 隐藏或误报为 closure 通过。
 
@@ -418,7 +418,7 @@ Pickup.VenomCore.VenomReservoir
 Pickup.VenomCore.CoreBoon
 ```
 
-三层共 46 个节点内容槽。Floor 1 的 15 个槽已经由 Spec 011 冻结并由 Spec 014 创建 46 个支持 DataAsset，Floor/map/Host 灰盒由 Spec 015 独立落地；Floor 2 的 15 个槽已经由 Spec 017 冻结为 47 个未来支持 DataAsset，但尚未创建；Floor 3 的 16 个槽仍只冻结职责和命名入口。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
+三层共 46 个节点内容槽。Floor 1 的 15 个槽已经由 Spec 011 冻结并由 Spec 014 创建 46 个支持 DataAsset，Floor/map/Host 灰盒由 Spec 015 独立落地；Floor 2 的 15 个槽已经由 Spec 017 冻结并由 Spec 018 创建 47 个支持 DataAsset；Floor 3 的 16 个槽仍只冻结职责和命名入口。现有 `DA_Event_Debug*`、`DA_Shop_Debug*`、`DA_Pickup_Debug*`、`DA_RunWorldCardInteraction_Debug*` 与 `DA_Card_DebugKey` 只能服务 Debug/测试，不得作为 Production typed payload、蛇印/蜕印或终局占位。
 
 `Pickup.SerpentWood.SerpentSigil` 的正式 Definition 必须以 Card 作为固定主奖励，并在 `GrantedCredentialIds` 中授予 `Credential.Run.SerpentSigil`；`Node.Exit.01` 的 FloorEntrance 只在 `RequiredCredentialIds` 中引用该 Credential，不把 `Card.Run.SerpentSigil` 写回 `OwnedCardRequirements`。两者由同一稳定 ID 对接，但表现卡和资格状态互不推断。
 
@@ -428,7 +428,7 @@ Floor 3 `Node.Guardian.01` 是无出边的 success terminal，不配置 FloorEnt
 
 Map validator 会拒绝空/重复 Credential requirement，以及不存在于入口前置不可绕过固定 Pickup 中的 grant。现有 Debug Pickup 默认 grant 数组为空，不能被晋升或复制成 Production 蛇印入口占位。
 
-蛇印/蜕印凭证门禁、Floor 2/3 图、通用 Journey success、Floor 1 内容/奖励以及 Floor 2 内容设计均已冻结。Floor 1 的 46 个 Production DataAsset 与 Floor/map/Host 灰盒已完成真实审计；Floor 2 的 47 个 DataAsset、Floor/map/Host 仍未创建。剩余 Production 阻塞是 Floor 2 资产与场景、Floor 3 内容设计/资产/场景、完整 Production Journey、跨层 world transition、正式美术和平衡验收；这些工作不得反向覆盖已人工调优的 Floor 1 资产或迁移 `L_Exploration`。Floor 1 原始图门禁见 Spec 007，通用 Credential 见 Spec 008，图/pacing 见 Spec 009，成功合同见 Spec 010，Floor 1 内容/资产见 Spec 011–015，Floor 2 内容冻结见 `specs/017-formal-floor2-production-content-freeze/`。
+蛇印/蜕印凭证门禁、Floor 2/3 图、通用 Journey success、Floor 1 内容/奖励以及 Floor 2 内容均已冻结。Floor 1 的 46 个 Production DataAsset 与 Floor/map/Host 灰盒已完成真实审计；Floor 2 的 47 个 DataAsset 也已完成真实加载、闭包、哈希与幂等审计，但 Floor/map/Host 尚未创建。剩余 Production 阻塞是 Floor 2 场景、Floor 3 内容设计/资产/场景、完整 Production Journey、跨层 world transition、正式美术和平衡验收；这些工作不得反向覆盖已人工调优的 Floor 1/2 资产或迁移 `L_Exploration`。Floor 1 原始图门禁见 Spec 007，通用 Credential 见 Spec 008，图/pacing 见 Spec 009，成功合同见 Spec 010，Floor 1 内容/资产见 Spec 011–015，Floor 2 内容与资产见 Spec 017–018。
 
 Floor 1 Production 场景入口是 `WacomBuildFormalFloor1ProductionScene` commandlet 与 `Wacom.BuildFormalFloor1ProductionScene` Editor console command。二者共享 exact 7-package manifest，分组为 `Floor=1`、`EnemyHosts=4`、`Scene=2`：
 
@@ -500,6 +500,9 @@ Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
 | `Wacom.Battle.GeneratedStarterContent` | 使用真实生成资产进入 `UBattleSession`，验证核心卡牌、辅助卡和 Snake 意图能产生预期 Snapshot/Event |
 | `Wacom.Editor.FormalFloor1Content.Manifest` | 对 exact 46-entry manifest、分组、seed-only/no-overwrite、stable/strict comparator 与冻结结构做 transient 验证 |
 | `Wacom.Data.FormalFloor1Content` | 真实加载 46 个 SerpentWood Production DataAsset，核对 class/count、稳定 ID/引用、有序结构与首次 seed defaults |
+| `Wacom.Editor.FormalProductionContentSeedService` | 验证 Floor 1/2 共用 parser、inspect-only、no-overwrite、comparator 与 profile facade 一致性 |
+| `Wacom.Editor.FormalFloor2Content.Manifest` | 对 exact 47-entry manifest、分组、synthetic missing inspect、transient defaults 与 comparator 边界做验证 |
+| `Wacom.Data.FormalFloor2Content` | 真实加载 47 个 MoltCavern DataAsset，核对 strict defaults、稳定引用与 AssetRegistry allowlist closure |
 
 这些测试证明“生成/播种资产字段仍符合当前合同”，不是正式内容平衡、卡牌表现或世界场景验收。
 

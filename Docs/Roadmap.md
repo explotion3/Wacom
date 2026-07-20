@@ -68,7 +68,7 @@ tags:
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
 | 击倒事件三选一具体效果 | 当前框架见 [WacomBattle.md](./WacomBattle.md) / [WacomRun.md](./WacomRun.md)，开放决策见 [Questions: 击倒与战后结算](./Questions.md#questions-knockdown) | 探索事件 / 地图节点系统接入后，按击倒选择触发左手 buff、永久强化部位、特殊节点等实际效果 |
-| 击倒奖励卡内容制作 | Aid/Destroy 显式字段、legacy fallback、统一查询、原子授予、简单预览和 Production validation 已落地；Floor 1 的 8 卡/11 Part 已随 exact 46-package seed 完成真实审计，Floor 2 的 8 卡/12 Part 与 `17–18 / 24` 产量已由 Spec 017 冻结但尚未创建 | Floor 1 只做强度、Card Art/表现与背包膨胀验收；Floor 2 按 47-package manifest 受控制作并补真实验证。不要另建节点奖励表、让 UI 读取规则资产或用 seeder 覆盖已有内容 |
+| 击倒奖励卡内容制作 | Aid/Destroy 显式字段、legacy fallback、统一查询、原子授予、简单预览和 Production validation 已落地；Floor 1 的 8 卡/11 Part 与 Floor 2 的 8 卡/12 Part 均已随 exact manifest 完成真实资产审计 | 两层继续做强度、Card Art/表现与背包膨胀验收；不要另建节点奖励表、让 UI 读取规则资产或用 seeder 覆盖已有内容 |
 | 左右手永久缺失可用性 | 待确认口径见 [Questions: 手牌、区域与抽牌](./Questions.md#questions-hand) / [Questions: 击倒与战后结算](./Questions.md#questions-knockdown) | 等 Run / Battle 中永久失去左 / 右手字段确定后，在击倒可用性 helper 中禁用对应分支 |
 
 ---
@@ -79,7 +79,7 @@ tags:
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
 | Floor 1 Production 场景 | `DA_Floor_Main_01 + L_Run_Floor_Main_01 + 4 Enemy Host + Exit marker` 灰盒已建立并通过本地 scene/asset/幂等审计 | 替换敌人 Placeholder、人工美术与碰撞调优；不得让 seeder 覆盖已有资产 |
-| Floor 2 Production 内容与场景 | 15 个节点内容已冻结为 exact 47-package manifest；敌人/Encounter、Event、Shop、Pickup、击倒奖励和 `8–9 / 14–15 AP` 已确定，但资产和场景都不存在 | 先按受控 seed-missing-only 工具创建/验证 47 DataAsset，再独立制作 Floor/map/Host；不得用 Debug、Character 或 Floor 1 资产复制占位 |
+| Floor 2 Production 内容与场景 | 15 个节点内容与 exact 47-package DataAsset 已创建并通过 strict load、闭包、哈希、LFS 和 Battle/Run smoke；`8–9 / 14–15 AP` 不变，场景尚不存在 | 独立制作 Floor/map/Host 与敌人表现，再做跨层和 Golden Path PIE；不得用 Debug、Character 或 Floor 1 资产复制占位，也不得让 seeder 覆盖 47 个已有资产 |
 | Floor 3 Production 内容与场景 | 20 Node/21 Edge、16 个节点职责、终局 Guardian 和 `10 / 16 AP` 已冻结，具体内容和资产未设计 | 独立冻结 VenomCore 内容，再制作 DataAsset/world/Host，不直接套用 MoltCavern 数值 |
 | Journey 与跨层场景 | Logical Map Graph、Map Travel、Floor Transition 规则和 Journey success 已落地；Floor 1 Exit 当前是非交互 marker | Floor 2/3 内容与场景就绪后创建 Production Journey，并由 App flow 实现 FloorId-to-world handoff，再执行完整 Golden Path PIE |
 | 自由探索 Session 边界 | 仍复用 `RunSession` | 若自由探索规则明显区别于 Run，需确认是否新建区域探索 session |

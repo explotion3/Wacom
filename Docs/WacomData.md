@@ -578,7 +578,7 @@ Pickup 固定映射：
 
 ## §14 正式 Floor 2 Production 内容合同
 
-`Floor.Main.02 / 蛇蜕洞窟` 的 15 个内容节点已完成 Production 内容设计冻结，共预留 47 个未来 DataAsset。它们全部使用本文件现有 schema，不新增字段、GameplayTag 或运行时规则；截至本节更新时资产尚未创建，不能把文档冻结视作 Data Validation、AssetRegistry 或 PIE 已通过。精确 package 和制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4，完整设计证据见 `specs/017-formal-floor2-production-content-freeze/`。
+`Floor.Main.02 / 蛇蜕洞窟` 的 15 个内容节点已完成 Production 内容设计冻结，并已按 exact manifest 播种为 47 个 DataAsset。它们全部使用本文件现有 schema，不新增字段、GameplayTag 或运行时规则；真实资产已通过 strict seed-default、Data Validation、AssetRegistry allowlist closure、Battle/Run smoke、SHA-256 与 LFS 幂等门禁。Floor 2 Floor/map/Host、跨层 world handoff 和 PIE 尚未制作或验证。精确 package 和制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4，设计证据见 Spec 017，落地证据见 `specs/018-formal-floor2-production-assets/`。
 
 ### MoltCavern 敌人、部位与行为
 
@@ -647,7 +647,7 @@ Pickup 映射固定为 FungalCache→GlowcapPoultice、MineralCache→CrystalWar
 
 两个 flag 的完整 FName 分别为 `MoltCavern.RitePatternKnown` 与 `MoltCavern.DelverRouteKnown`，继续只存在于当前 Run 内存态。A/B 取金选项从 0 Gold 均能购买至少一个商品；选择情报则服务 D 路事件。
 
-Floor 2 内容总量冻结为 47：`4 Enemy + 4 Behavior + 12 Part + 7 Encounter + 3 Event + 4 Pickup + 1 Shop + 12 Card`。设计 blocker 已关闭，但资产仍未创建；后续必须独立完成受控播种、真实加载、Data Validation、AssetRegistry、引用/哈希、幂等与 LFS 验证。Floor 3 内容设计继续独立保留。
+Floor 2 内容总量已落地为 47：`4 Enemy + 4 Behavior + 12 Part + 7 Encounter + 3 Event + 4 Pickup + 1 Shop + 12 Card`。所有 12 个 Part 使用显式 Aid/Destroy 引用且 legacy 为空；首次播种和连续 strict inspect 均通过，seeder 不拥有后续人工调参。Floor 2 场景、正式敌人表现、跨层和 Golden Path PIE 继续独立处理，Floor 3 内容设计仍单独保留。
 
 ## §15 修改数据合同时的检查点
 

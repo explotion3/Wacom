@@ -54,7 +54,7 @@ tags:
 
 Floor 1 八张分支奖励卡的费用、稀有度、关键词、效果、描述模板、package leaf、十一 Part 映射与 `14–17 / 20` 奖励量已由 Spec 013 关闭，不再作为开放问题。背包容量和其它非卡牌击倒后果仍按上表独立确认。
 
-Floor 2 四敌人的八张 Aid/Destroy 卡、十二 Part 映射、允许重复、`17–18 / 24` 奖励量、固定 Pickup 卡、三个 Event/十 Choice 与 DeepWayfarer 库存/价格已由 Spec 017 关闭，不再作为开放问题。该冻结没有改变上表的背包容量、其它非卡牌击倒后果或失败总结问题，也不代表 47 个 DataAsset 已创建。
+Floor 2 四敌人的八张 Aid/Destroy 卡、十二 Part 映射、允许重复、`17–18 / 24` 奖励量、固定 Pickup 卡、三个 Event/十 Choice 与 DeepWayfarer 库存/价格已由 Spec 017 关闭，47 个对应 DataAsset 已由 Spec 018 创建并通过真实规则/闭包门禁。该落地没有改变上表的背包容量、其它非卡牌击倒后果或失败总结问题，也不代表 Floor 2 场景或 PIE 已完成。
 
 ---
 

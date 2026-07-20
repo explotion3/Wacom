@@ -15,7 +15,7 @@ tags:
 > 本文记录 Logical Map Graph、Map Node Lifecycle、Map Travel、Floor Transition 与 Floor Exposure 的已确认规则。Run 时间、压力、背包和事件事实仍见 [WacomRun.md](./WacomRun.md)；Run Path 移动与场景表现见 [WacomApp.md](./WacomApp.md)。
 
 > [!warning] 当前阶段
-> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；Floor 1 的 46 个 Production 内容 DataAsset、`DA_Floor_Main_01` 与独立 `L_Run_Floor_Main_01` 灰盒已经创建，Floor 2 的 47 个支持资产内容合同已冻结但尚未制作。当前只提供直接打开 Floor 1 的 Editor PIE Preview；完整 Production Journey、Floor 2 资产/场景、Floor 3 内容/资产/场景、跨层 world handoff 和发行启动仍未落地，`L_Exploration` 继续承接主菜单 Authoring baseline，不是正式 Floor 1。
+> 地图静态合同、原子初始化、节点生命周期、Traversal Ticket、同层 Map Travel、Action Point、节点活动、Camp、不可逆跨层、Run Path 场景适配、当前 Floor Map Screen、制作校验、Debug Journey 与 Journey 成功结算/主菜单交接已落地。正式 `Journey.Main.01` 的三层各 20 节点/21 边图、内容槽、稳定身份和 `26–28 / 44–46 AP` 总节奏均已冻结；Floor 1 的 46 个 Production 内容 DataAsset、`DA_Floor_Main_01` 与独立 `L_Run_Floor_Main_01` 灰盒已经创建，Floor 2 的 47 个支持 DataAsset 也已创建。当前只提供直接打开 Floor 1 的 Editor PIE Preview；完整 Production Journey、Floor 2 Floor/map/Host、Floor 3 内容/资产/场景、跨层 world handoff 和发行启动仍未落地，`L_Exploration` 继续承接主菜单 Authoring baseline，不是正式 Floor 1。
 
 ## §1 两层图合同
 
@@ -146,7 +146,7 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - 首版使用手工 Logical Map Graph 和手工 Run Path 场景，不实现 runtime PCG。
 - 每个 Floor 使用一个 DataAsset 作为 Logical Map Graph 的规则真源，保存稳定 FloorId、NodeId、有向 Edge、地图 UI 坐标、内容定义和入口条件。
 - 每个可独立加载的 Run Floor World 必须且只能放置一个 `AWacomRunFloorSceneDescriptorActor`，由 World 单向引用其 Floor DataAsset。Descriptor 不复制 Node/Edge、不保存 Run 状态，也不让 Floor 反向引用 World。
-- 当前资产分为三类：`L_Exploration + DA_Journey_LevelAuthoring + DA_Floor_LevelAuthoring_01 + GM_Wacom` 是人工制作基线；`DA_Journey_Debug + DA_Floor_Debug_01 + GM_WacomRunDebug + L_RunExploration_Debug` 是 Debug builder 独占夹具；`DA_Floor_Main_01 + L_Run_Floor_Main_01` 是独立的 Floor 1 Production 灰盒基线。Production Journey 与 Floor 2/3 仍未创建。Authoring baseline 的当前 8 节点图不得被存档、内容文档或后续代码默认视为正式 Floor 1。
+- 当前资产分为三类：`L_Exploration + DA_Journey_LevelAuthoring + DA_Floor_LevelAuthoring_01 + GM_Wacom` 是人工制作基线；`DA_Journey_Debug + DA_Floor_Debug_01 + GM_WacomRunDebug + L_RunExploration_Debug` 是 Debug builder 独占夹具；`DA_Floor_Main_01 + L_Run_Floor_Main_01` 是独立的 Floor 1 Production 灰盒基线。Floor 2 的 47 个静态内容 DataAsset 已存在，但 Production Journey、Floor 2/3 FloorDefinition 与 world 仍未创建。Authoring baseline 的当前 8 节点图不得被存档、内容文档或后续代码默认视为正式 Floor 1。
 - 静态地图 DataAsset 类型属于 `WacomData`；Map Node Lifecycle、Action Point、Map Travel、Floor Transition 与 Floor Exposure 的运行时规则属于 `WacomRun` 内部的深层地图 Module，不新增 UE `.Build.cs` 模块。
 - 场景 Actor / Component 只提供 `NodeId / EdgeId / NodeAnchor / content host` 映射；Actor 连线和关卡坐标不能成为 Logical Map Graph 的规则真相。`AWacomRunPathBranchTargetActor` 只广播 EdgeId，`AWacomRunPathSegmentActor` 只保存 EdgeId + Spline，`UWacomRunMapNodeBindingComponent` 只声明 Host 的 NodeId + NodeType。
 - 现有 Battle / Shop / RunEvent / Treasure Host 为复用外围 flow 可以保留 Definition 字段作为 façade mirror；Scene Validator 要求它与 Floor typed payload 一致。规则层只认 Floor DataAsset，Host 不得反向生成或覆盖地图内容。
@@ -319,7 +319,7 @@ Node.Key.01 -Edge.Main.03-> Node.Junction.03
 
 ### Floor 2 Production 内容与路线节奏
 
-Floor 2 的 15 个内容节点已由 Spec 017 冻结为完整 Production 内容合同，但 47 个支持 DataAsset 尚未创建。战斗组合与 HP：
+Floor 2 的 15 个内容节点已由 Spec 017 冻结为完整 Production 内容合同，47 个支持 DataAsset 已由 Spec 018 创建并通过真实资产门禁。战斗组合与 HP：
 
 | Node | Encounter | Composition | Total HP |
 |---|---|---|---:|
@@ -343,7 +343,7 @@ Floor 2 的 15 个内容节点已由 Spec 017 冻结为完整 Production 内容�
 
 击倒奖励量由部位数直接推导：必经 ScaleScout 2 + EliteMolter 5 + CavernGuardian 4 = 11；Route A 增加 StoneScaleGuard 3，Route B 增加双 ScaleCrawler 4，Route C 增加 BridgeSentinel 3，Route D 增加 VenomHunter 3。因此 A/C、B/C、A/D、B/D 分别产生 `17 / 18 / 17 / 18` 张分支奖励卡，完整探索七场 Encounter 为 24。每个部位只获得所选 Aid 或 Destroy 的一张独立实例，允许重复且不增加 AP；背包膨胀继续作为后续平衡/PIE 风险，不在本轮增加去重或替代奖励。
 
-精确敌人、卡牌、Event 与 Shop 字段见 [WacomData.md](./WacomData.md) §14，47-package 路径与制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。Floor 2 内容设计 blocker 已关闭；DataAsset、Floor/map/Host、跨层 handoff 与 Golden Path 仍未完成。
+精确敌人、卡牌、Event 与 Shop 字段见 [WacomData.md](./WacomData.md) §14，47-package 路径与制作门禁见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) §4。Floor 2 内容设计与静态 DataAsset blocker 已关闭；Floor/map/Host、跨层 handoff 与 Golden Path 仍未完成。
 
 ### Floor 3 节点与内容槽
 
@@ -413,7 +413,7 @@ Guardian 无出边，战斗胜利后由通用 Journey success 合同完成 Journ
 - `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v5 已通用持久化 Credential、Outcome 与最近一次成功摘要；探索图进度仍未进入磁盘 schema。
 - 内容 Host 的跨 Floor runtime `PersistentId` 固定按 `<FloorId>.<NodeId>` 派生，例如 `Floor.Main.01.Node.Route.A.01`。Actor Label、资产名、GUID、坐标和 transform 都不是身份。
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
-- 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结并创建支持资产；Floor 2 的 15 个节点已冻结敌人槽、事件选项、Shop Offers、奖励数值与 47-package future manifest，但尚未创建资产；Floor 3 的 16 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。
+- 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结并创建支持资产；Floor 2 的 15 个节点已冻结敌人槽、事件选项、Shop Offers、奖励数值并创建 exact 47-package 资产；Floor 3 的 16 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。
 - 蛇印和蜕印都采用表现卡 + 独立 Credential：必经 Pickup 原子授予两者，删牌流程不影响资格，入口只检查 Credential。
 - Floor 2/3 图设计、通用 Journey success、Floor 1 内容/资产/灰盒与 Floor 2 内容设计 blocker 已关闭。剩余 Production 阻塞是 `DA_Journey_Main_01`、Floor 2 的 47 个支持 DataAsset 与场景、Floor 3 的内容设计/资产/场景、跨层 world handoff、正式美术和平衡验收；禁止创建空壳资产或用 Debug/Preview 内容绕过。
 

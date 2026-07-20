@@ -347,6 +347,8 @@ Pickup 和 Run world card interaction 都以场景 `PersistentId` 写入 RunStat
 
 Floor 1 的 6 Encounter、4 RunEvent、4 Pickup 与 1 Shop Production Definition 已按上述通用合同创建并通过真实加载/结构回归；其中蛇印 Pickup 已静态绑定 `Card.Run.SerpentSigil + Credential.Run.SerpentSigil`。这些 DataAsset 只提供节点内容 payload，不等于 Production Journey/Floor、地图或 Host 已存在，也没有新增 Floor 1 专用 runtime 分支；在正式世界权威和场景绑定落地前不能宣称可玩 Golden Path。
 
+Floor 2 的 7 Encounter、3 RunEvent、4 Pickup 与 1 Shop Definition 也已按同一通用合同创建并通过真实加载、strict 结构与 Run smoke；MoltSeal Pickup 同时授予 `Card.Run.MoltSeal + Credential.Run.MoltSeal`，DeepWayfarer 继续使用既有 Shop 事务，事件和拾取不增加 Floor 2 专用 runtime 分支。47 个静态内容资产不等于 Floor/map/Host、跨层 handoff 或 Golden Path 已就绪。
+
 ### Run World Card Interaction
 
 探索期世界卡牌交互使用独立完成状态：`FRunState::CompletedRunWorldInteractionIds`。
