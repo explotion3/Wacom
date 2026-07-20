@@ -134,6 +134,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
 	TArray<FRunShopOfferInput> BuildResolvedOffers() const;
 
+	/** 解析商品与可选强化服务，构建传给 RunSession 的规范商店访问请求。 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Shop")
+	FRunShopVisitRequest BuildResolvedVisitRequest() const;
+
 	bool TryBuildShopEntryViewStageRequest(FWacomFirstPersonViewStageRequest& OutRequest) const;
 
 	/** 返回鼠标 hover 到 ClickBounds 时应显示的提示文本。 */

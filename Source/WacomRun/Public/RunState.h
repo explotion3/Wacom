@@ -56,6 +56,48 @@ struct WACOMRUN_API FRunShopOfferInput
 	int32 Price = 0;
 };
 
+/** 商店强化服务中一档由“当前稀有度”索引的权威价格。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopCardUpgradePriceInput
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
+	FGameplayTag FromRarity;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade", meta = (ToolTip = "从该稀有度强化到下一档所需金币；0 表示免费服务，负数无效。"))
+	int32 Price = 0;
+};
+
+/** 一次商店访问携带的静态强化服务配置；RunSession 会复制为当前 Run 的内存态事实。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopCardUpgradeServiceInput
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
+	bool bEnabled = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
+	TArray<FRunShopCardUpgradePriceInput> Prices;
+};
+
+/** 打开商店的规范请求；商品与强化服务属于同一次访问。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopVisitRequest
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop")
+	FName ShopId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop")
+	TArray<FRunShopOfferInput> Offers;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
+	FRunShopCardUpgradeServiceInput CardUpgradeService;
+};
+
 /** Run 内保存的一条商店商品状态。 */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunShopOffer
@@ -83,6 +125,59 @@ struct WACOMRUN_API FRunShopState
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	TArray<FRunShopOffer> Offers;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FRunShopCardUpgradeServiceInput CardUpgradeService;
+};
+
+/** 当前拥有的一张实体卡在当前商店中的只读强化报价。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopCardUpgradeQuote
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FGuid InstanceId;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	TObjectPtr<UCardDefinition> CurrentDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	TObjectPtr<UCardDefinition> NextDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FName UpgradeFamilyId = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FGameplayTag CurrentRarity;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FGameplayTag NextRarity;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	int32 Price = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	bool bCanUpgrade = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FName DisabledReason = NAME_None;
+};
+
+/** 被动 UI 提交的乐观并发请求；Definition guard 用于拒绝过期报价。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopCardUpgradeCommand
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
+	FGuid InstanceId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
+	TObjectPtr<UCardDefinition> ExpectedCurrentDefinition = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
+	TObjectPtr<UCardDefinition> ExpectedNextDefinition = nullptr;
 };
 
 /** 当前商店 UI/测试可读取的只读快照。 */
@@ -102,6 +197,12 @@ struct WACOMRUN_API FRunShopSnapshot
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	TArray<FRunShopOffer> Offers;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FRunShopCardUpgradeServiceInput CardUpgradeService;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	TArray<FRunShopCardUpgradeQuote> CardUpgradeQuotes;
 };
 
 /** 一次商店购买的显式事务结果。 */
@@ -123,6 +224,42 @@ struct WACOMRUN_API FRunShopPurchaseResult
 	bool bVisitClosedAfterPurchase = false;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
+	int32 ActionPointCost = 0;
+
+	FRunExplorationResolution ExplorationResolution;
+};
+
+/** 一次商店卡牌强化的显式原子事务结果。 */
+USTRUCT(BlueprintType)
+struct WACOMRUN_API FRunShopCardUpgradeResult
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	bool bSucceeded = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FName DisabledReason = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	FGuid InstanceId;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	TObjectPtr<UCardDefinition> PreviousDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	TObjectPtr<UCardDefinition> NewDefinition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	int32 GoldCost = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	bool bFirstTransactionThisVisit = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	bool bVisitClosedAfterUpgrade = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
 	int32 ActionPointCost = 0;
 
 	FRunExplorationResolution ExplorationResolution;
@@ -517,7 +654,7 @@ struct WACOMRUN_API FRunState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	FName ActiveShopId = NAME_None;
 
-	/** 当前商店访问内是否买过至少一件商品。关闭商店时据此消耗 1 节点。 */
+	/** 当前商店访问内是否完成过购买或卡牌强化。字段名为兼容保留；首次成功交易负责 1 AP 结算。 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	bool bShopVisitHasPurchase = false;
 

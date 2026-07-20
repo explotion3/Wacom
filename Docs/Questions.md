@@ -65,9 +65,10 @@ Floor 2 四敌人的八张 Aid/Destroy 卡、十二 Part 映射、允许重复�
 |---|---|---|
 | 自由探索 Run 边界 | 当前自由探索仍复用 `RunSession` | 是否新建区域探索 session，或继续让 `RunSession` 承载所有战外状态 |
 | 突袭正式规则 | 文档中尚未收口 | 触发来源、先手规则、地图消耗、战斗初始化参数和逃离规则 |
-| Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、卡牌强化正式事务及 Camp Screen |
+| Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay；Shop 卡牌强化事务已独立落地 | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、是否另设 Camp 强化及 Camp Screen |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |
+| Shop 强化内容与表现 | 不可变链、原子交易、AP、Quote/Result 与 Save v5 兼容已冻结；现有 Shop 默认关闭服务 | 首批正式卡牌各档数值、各 Shop 分档价格、双页签视觉和确认/Toast 由 Spec 020 冻结 |
 
 Floor 1 世界资产权威已由 Spec 015 关闭：采用独立新建的 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，不迁移、不覆盖 `L_Exploration`，也不复用 Debug map 作为 Production 权威。跨层 world handoff 和 Floor 2/3 场景仍是实现任务，不再是 Floor 1 权威选择问题。
 

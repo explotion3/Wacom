@@ -77,6 +77,8 @@ UCLASS(BlueprintType)
 class UCardDefinition : public UPrimaryDataAsset
 {
     FName CardId;
+    FName UpgradeFamilyId;
+    TObjectPtr<UCardDefinition> NextUpgradeDefinition;
     FText DisplayName;
     FText Description;
     TObjectPtr<UTexture2D> CardIllustration;
@@ -99,6 +101,8 @@ class UCardDefinition : public UPrimaryDataAsset
 | 字段 | 语义 |
 |---|---|
 | `CardId` | 内容稳定 ID；用于 debug、测试和运行时实例引用来源，不是 UObject path |
+| `UpgradeFamilyId` | 同一强化链共享的稳定身份；未配置时 `ResolveUpgradeFamilyId()` 兼容回退到自身 `CardId` |
+| `NextUpgradeDefinition` | 下一稀有度的独立不可变 CardDefinition；运行时强化只替换卡牌实例引用，不改写 DataAsset |
 | `DisplayName / Description` | UI 展示文本；规则不从中文自然语言解析效果。`Description` 仍可服务小卡紧凑描述或其它旧 UI；expanded detail 只在没有任何结构化 `Effects / Passives / outcome` section 时把它作为普通正文回退，不解析旧占位。常规详情正文由 `Effects / Passives` 通过 WacomApp 的 semantic explanation document 生成 |
 | `CardIllustration` | 卡牌主题插画 `Texture2D`。第一人称卡面复合材质优先使用该纹理；旧卡为空时沿用实际 CardView（第一人称为 `WBP_FirstPersonCardView`）的 authored `CardArt` Brush。稀有度边框不使用本字段，继续由 CardView 的 `RarityBorderSprites` 以 `PaperSprite` 图集区域解析 |
 | `CardIllustrationDepthMap` | 可选的纯表现灰度深度图。黑色更深、白色更靠近实体 Frame、中灰为 authored 基准；第一人称卡面量化为约 5 级并限制在 Frame 后方。为空时整张插画仍按统一凹入深度显示，不影响规则、Snapshot 或存档。推荐导入为 `Masks / sRGB=false / Nearest / NoMipmaps / UI` |
@@ -148,6 +152,12 @@ struct FCardPhysique
 - `CapacityEffect` 为空表示 A 类容器；有效 tag 表示 B 类容器并展开 SpecialZone。当前已接入的具体效果见 [WacomGameplayTags.md](./WacomGameplayTags.md#cardcapacityeffect)。
 
 容器在 Run 层的容量与背包规则见 [WacomRun.md](./WacomRun.md)，容量效果入战结算见 [WacomBattle.md](./WacomBattle.md)。
+
+### 不可变卡牌强化链
+
+卡牌强化使用独立 Definition 链，合法稀有度边固定为 `White -> Blue -> Yellow -> Purple`。链上每个版本必须有唯一 `CardId` 并共享非空 `UpgradeFamilyId`；旧资产不配置新字段时仍可正常加载，但只表现为不可强化。`MatchesCardIdOrUpgradeFamily()` 统一回答“当前 CardId 或所属强化族是否命中”，不把同族兄弟版本视为精确 Definition 相等。
+
+`Purple`、`Intrinsic`、`Card.Run.*` 任务卡以及 `Physique.Capacity > 0` 的容器卡禁止配置下一段。相邻版本允许调整卡名、描述、卡面表现、`BaseCost`，以及现有效果/PerfectRelease 效果的 `Magnitude` 或 `Duration`；不得改变 Keyword、TargetMode、TargetFilter、Physique、Effect 数量/顺序/类型/目标、ZoneHook 或 Passive。每一步除稀有度外至少要有一个实际规则数值变化。完整链还必须无循环、无合流、无分叉和跨级；这些制作约束由 WacomEditor catalog validation 检查，不进入运行时 UI。
 
 <a id="wacomdata-enemy-part"></a>
 ## §4 Enemy Definition
@@ -353,6 +363,7 @@ class UShopDefinition : public UPrimaryDataAsset
     FName ShopId;
     FText DisplayName;
     TArray<FShopOfferDefinition> Offers;
+    FShopCardUpgradeServiceDefinition CardUpgradeService;
 };
 
 USTRUCT(BlueprintType)
@@ -361,11 +372,18 @@ struct FShopOfferDefinition
     TObjectPtr<UCardDefinition> CardDefinition;
     int32 Price = 0;
 };
+
+struct FShopCardUpgradeServiceDefinition
+{
+    bool bEnabled = false;
+    TArray<FShopCardUpgradePriceDefinition> Prices;
+};
 ```
 
 - `ShopId` 是内容 ID，不替代场景 `AWacomShopTriggerActor.PersistentId`。
 - `Offers` 不能为空；剧情空商店后续需要显式字段表达。
 - `Price=0` 是合法免费商品；负数无效。
+- 强化服务默认关闭；开启后按“当前稀有度”精确配置单步价格。White、Blue、Yellow 可定价且允许 0 Gold，重复稀有度、负价格或 Intrinsic/Purple 价格属于制作错误；未配置某一档表示该商店不提供该档强化，Quote 会明确返回价格缺失。
 - RunSession 使用场景 `PersistentId` 保存本次 Run 内的购买状态和库存访问。
 
 ## §8 Pickup Definition

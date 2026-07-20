@@ -171,6 +171,8 @@ Run menu / world drop 与 Battle 共用 first-person Slot 的无效目标提示�
 
 Definition 仍然用于资产语义：`AcquireCardToRun()` / 战斗奖励 / 商店购买 / 世界拾取表达“获得一张某种卡”；RunEvent / DataAsset 可以表达“交出一张某种卡”，由 RunEvent 执行路径在运行态选择一张匹配 instance。玩家直接操作某张已拥有卡时必须先解析到 `InstanceId`。
 
+卡牌版本身份分为两档：`AllowedCardDefinitions` 始终精确匹配当前 Definition；`AllowedCardIds` 同时匹配当前 `CardId` 或 `ResolveUpgradeFamilyId()`。Workspace、地图/节点资格、Run world interaction 和 RunEvent 卡牌支付共用 `UCardDefinition::MatchesCardIdOrUpgradeFamily()`，因此强化后的同一族卡仍可满足稳定 ID 条件，但同族兄弟版本不能绕过精确 Definition 条件。
+
 ### 容器分类
 
 卡牌容量来自 `CardDefinition.Physique.Capacity`。
@@ -227,30 +229,32 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 销毁 B 主卡时，它的 SpecialZone 内卡退回 Backpack；装不下则进 BurdenZone。
 - 移除非容量卡后允许从负重区回填；移除容量来源卡后不做回填，只处理容量缩小导致的超容。
 
-删牌换金币当前是简易数值：白卡 +1，蓝卡 +2。UI 拖拽删除使用 `DeleteCardForGoldByInstance()`；RunEvent 等资产语义仍可用 Definition 表达“移除一张匹配卡”，但不通过 `URunSession` 公开 deck wrapper。金币是 Run 内资源，但当前不写入 SaveGame。
+删牌换金币统一由 WacomRun 查询：White +1、Blue +2、Yellow +3、Purple +4、Intrinsic +0。UI 卡面展示调用同一查询，不维护第二份稀有度映射。UI 拖拽删除使用 `DeleteCardForGoldByInstance()`；RunEvent 等资产语义仍可用 Definition 表达“移除一张匹配卡”，但不通过 `URunSession` 公开 deck wrapper。金币是 Run 内资源，但当前不写入 SaveGame。
 
 ## §6 商店事务
 
 商店运行态以场景入口的 `PersistentId` 为 key，而不是以 `UShopDefinition.ShopId` 为 key。
 
-`AWacomShopTriggerActor.PersistentId` 传给 `URunSession::BeginShopVisit(ShopId, Offers)`。第一次打开该 `ShopId` 时，用传入 Offers 建库存；再次打开同一 `ShopId` 时保留库存和已购买状态，忽略新 Offers。
+`AWacomShopTriggerActor.PersistentId` 与静态商品/强化服务共同组成 `FRunShopVisitRequest`，由 Trigger -> PlayerController -> ScreenRouter -> `URunSession::BeginShopVisitRequest()` 传递。第一次打开该 `ShopId` 时，用请求建立库存和本 Run 内的强化服务配置；再次打开同一 `ShopId` 时保留已有 ShopState。旧 `BeginShopVisit(ShopId, Offers)` 仍是兼容入口，等价于强化服务关闭。
 
 正式 C++ UI 路径使用 `BeginShopVisitWithResult()` / `EndShopVisitIfOwnedWithResult()`。二者返回 `FRunShopVisitResult`，同时携带 visit ownership token 和本次节点活动的 `FRunExplorationResolution`；购买继续由 `FRunShopPurchaseResult.ExplorationResolution` 携带同一规则结果。App 必须按 Begin、每次成功 Purchase、End / rollback 的实际提交顺序消费这些结果，不能只观察 `RunStateChanged` 后拉取最新 Snapshot 来推断版本。
 
 `UShopDefinition.ShopId` 是静态内容 ID。多个场景商店可以引用同一份 `UShopDefinition`，但只要 Actor `PersistentId` 不同，它们就是不同库存。
 
-购买规则：
+商店交易规则：
 
 - 打开商店不消耗 Action Point。
-- 成功购买会扣金币、获得卡牌、标记 Offer 已购买。
-- 本次访问第一次成功购买与 1 Action Point 原子提交；同次访问后续购买为 0。
-- 浏览、失败购买和空手关闭为 0；`EndShopVisit` 不再补扣成本。
-- 第一次购买耗尽当前时段时，结果同时关闭 visit，App 立即关闭 Shop Screen。
+- 成功购买会扣金币、获得卡牌、标记 Offer 已购买；成功强化会扣金币，并只把指定 `InstanceId` 的 Definition 替换为下一不可变版本。
+- 强化可作用于 Backpack、BattleDeck、BurdenZone 或 SpecialZone 中的实体卡；必须保留 InstanceId、区域、顺序、SpecialZone 标记与容器关系。
+- `FRunShopSnapshot` 暴露静态强化服务和每个 owned instance 的被动 `FRunShopCardUpgradeQuote`。UI 提交的 `FRunShopCardUpgradeCommand` 同时携带预期当前/下一 Definition；RunSession 重新权威计算链、价格、资格与金币，拒绝过期 Quote。
+- 本次访问第一次成功交易（购买或强化）与 1 Action Point 原子提交；同次访问后续任一种交易均为 0。兼容字段 `bShopVisitHasPurchase` / `bHasPurchaseThisVisit` 的实际语义现为“本访问已有成功交易”。
+- 浏览、失败购买、失败强化和空手关闭为 0；`EndShopVisit` 不再补扣成本。失败或过期请求保持零修改、零 revision、零广播。
+- 第一次交易耗尽当前时段时，结果同时关闭 visit，App 立即关闭 Shop Screen；同卡可在链与金币允许时连续单步强化。
 - `ShopId == NAME_None`、无效 Offer、重复购买、商品为空、负价格、金币不足等失败路径不修改 RunState。
 - 同一时刻只能存在一个 active shop visit；重入 Begin 会被 Run 层拒绝，不依赖旧 UI 先完成关闭。
 - App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；迟到的旧 Screen 不得结束新访问。token 不进入 RunState/SaveGame。
 
-当前 `ShopStates` 只保存在 Run 内存态，不写入 SaveGame。Actor 商品来源、Definition 字段和 Validate Map/Level 口径见 [WacomData.md](./WacomData.md)、[WacomDataAuthoring.md](./WacomDataAuthoring.md) 和 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
+当前 `ShopStates` 与强化报价只保存在 Run 内存态，不写入 SaveGame。卡牌实例仍按 SaveGame v5 的 `DefinitionAssetPath` 保存当前强化版本和原 InstanceId，schema 无需升级；读档不会恢复活动 Shop 或旧 Quote。Actor 商品来源、Definition 字段和 Validate Map/Level 口径见 [WacomData.md](./WacomData.md)、[WacomDataAuthoring.md](./WacomDataAuthoring.md) 和 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
 ## §7 RunEvent 事务
 

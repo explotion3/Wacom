@@ -18,7 +18,7 @@ class UCardDefinition;
  *
  * 字段语义：
  *   - `InstanceId`：全局唯一 GUID，进入背包系统时用 `FGuid::NewGuid()` 一次性分配，之后只读。
- *   - `Definition`：指向卡牌静态数据；一旦设置不再改写。
+ *   - `Definition`：指向卡牌静态数据；只有 Run 权威商店强化事务可在保留 InstanceId/区域的前提下替换为下一版本。
  *   - `bBattleEnabledInSpecialZone`：仅当本 instance 位于某 SpecialZone 时有意义。
  *       true  = 随对应 B 主卡入战参战；
  *       false = 仅"被特殊收纳"不参战。

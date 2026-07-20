@@ -621,10 +621,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	bool BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
 
-	/** C++ 正式入口：同时返回 visit ownership 与探索版本结果。 */
+	/** C++ 规范入口：同一次访问原子接收商品与可选强化服务。 */
+	bool BeginShopVisitRequest(const FRunShopVisitRequest& Request);
+
+	/** 旧 C++ 兼容入口：不启用强化服务。 */
 	FRunShopVisitResult BeginShopVisitWithResult(
 		FName ShopId,
 		const TArray<FRunShopOfferInput>& Offers);
+
+	/** C++ 正式入口：同时返回 visit ownership 与探索版本结果。 */
+	FRunShopVisitResult BeginShopVisitWithResult(const FRunShopVisitRequest& Request);
 
 	/** C++ UI ownership token for the currently active shop visit. */
 	FGuid GetActiveShopVisitToken() const { return ActiveShopVisitToken; }
@@ -647,7 +653,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Shop")
 	bool IsShopVisitActive() const { return !RunState.ActiveShopId.IsNone(); }
 
-	/** 当前商店访问是否已经买过至少一件商品。 */
+	/** 当前商店访问是否已经完成过购买或强化；字段名为旧 API 兼容保留。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Shop")
 	bool HasCurrentShopVisitPurchase() const { return RunState.bShopVisitHasPurchase; }
 
@@ -662,6 +668,10 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	FRunShopPurchaseResult PurchaseShopOffer(FGuid OfferId);
+
+	/** 在当前商店按权威报价强化一张精确实体卡；失败和过期请求均零修改、零广播。 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
+	FRunShopCardUpgradeResult UpgradeOwnedCardAtShop(const FRunShopCardUpgradeCommand& Command);
 
 	/**
 	 * 从商店购买一张卡。
@@ -868,6 +878,16 @@ private:
 
 	/** 商店关闭的无 ownership 内部实现；公开 UI 路径应使用 owned result 入口。 */
 	FRunShopVisitResult EndShopVisitWithResult();
+
+	/** 购买与强化共用的首次交易 AP / NodeActivity working-state 结算。 */
+	bool SettleShopCommerceInWorkingState(
+		FRunState& WorkingState,
+		TOptional<FRunNodeActivityTicket>& WorkingActivity,
+		bool bFirstTransactionThisVisit,
+		FRunExplorationResolution& OutExplorationResolution,
+		int32& OutActionPointCost,
+		bool& bOutVisitClosed,
+		FName& OutDisabledReason) const;
 	/** 私有路径：AcquireCardToRun 的"不广播"版本，供复合 Run 操作统一尾部广播。 */
 	bool AcquireCardToRunInternal(UCardDefinition* Card);
 

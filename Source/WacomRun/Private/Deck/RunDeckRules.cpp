@@ -631,6 +631,14 @@ int32 FRunDeckRules::GetDeleteGoldRewardForCard(const UCardDefinition* Card)
 	{
 		return 2;
 	}
+	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Yellow))
+	{
+		return 3;
+	}
+	if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Purple))
+	{
+		return 4;
+	}
 	return 0;
 }
 

@@ -2215,6 +2215,18 @@ bool AWacomPlayerController::RequestOpenShop(
 	return FWacomExplorationScreenRouter::OpenShop(*this, ShopId, Offers, StageRequest);
 }
 
+bool AWacomPlayerController::RequestOpenShop(const FRunShopVisitRequest& Request)
+{
+	return FWacomExplorationScreenRouter::OpenShop(*this, Request);
+}
+
+bool AWacomPlayerController::RequestOpenShop(
+	const FRunShopVisitRequest& Request,
+	const FWacomFirstPersonViewStageRequest& StageRequest)
+{
+	return FWacomExplorationScreenRouter::OpenShop(*this, Request, StageRequest);
+}
+
 void AWacomPlayerController::BeginGameMenuViewpointStageTransition(FName DebugReason)
 {
 	bGameMenuViewpointStageTransitionActive = true;

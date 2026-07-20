@@ -8,6 +8,7 @@ class AWacomPlayerController;
 class UWacomRunEventDefinition;
 struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
+struct FRunShopVisitRequest;
 
 /**
  * 探索期 GameMenu 界面的私有打开流程 helper。
@@ -26,6 +27,11 @@ struct FWacomExplorationScreenRouter
 		AWacomPlayerController& PC,
 		FName ShopId,
 		const TArray<FRunShopOfferInput>& Offers,
+		const FWacomFirstPersonViewStageRequest& StageRequest);
+	static bool OpenShop(AWacomPlayerController& PC, const FRunShopVisitRequest& Request);
+	static bool OpenShop(
+		AWacomPlayerController& PC,
+		const FRunShopVisitRequest& Request,
 		const FWacomFirstPersonViewStageRequest& StageRequest);
 	static bool OpenRunEvent(AWacomPlayerController& PC, FName PersistentId, UWacomRunEventDefinition* EventDefinition);
 	static bool OpenRunEvent(

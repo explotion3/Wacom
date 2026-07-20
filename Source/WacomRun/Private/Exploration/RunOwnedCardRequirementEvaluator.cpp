@@ -24,7 +24,11 @@ namespace
 		if (bHasDefinitionWhitelist)
 		{
 			const bool bDefinitionAllowed = Requirement.AllowedCardDefinitions.Contains(Definition);
-			const bool bCardIdAllowed = Requirement.AllowedCardIds.Contains(Definition->CardId);
+			const bool bCardIdAllowed = Requirement.AllowedCardIds.ContainsByPredicate(
+				[Definition](const FName AllowedCardId)
+				{
+					return Definition->MatchesCardIdOrUpgradeFamily(AllowedCardId);
+				});
 			if (!bDefinitionAllowed && !bCardIdAllowed)
 			{
 				return false;

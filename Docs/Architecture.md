@@ -134,6 +134,8 @@ Journey success 继续遵守既有依赖方向：`WacomData` 只声明 `DisplayN
 
 击倒分支奖励同样沿用单向依赖：`WacomData` 的 `UEnemyPartDefinition` 保存 Aid/Destroy 静态引用并提供唯一 legacy-compatible C++ 查询；`WacomBattle` 在原有选择事务中消费查询，同时生成不含规则对象的只读奖励摘要；`WacomApp` 的 Dialog 只渲染摘要并提交选择意图；`WacomEditor` 用 General/FormalProduction profile 管制作门禁；`WacomRun` 继续只消费 `FBattleGainedCard.SourceChoice` 和 Card Definition。不得让 App 直接读取 Part Definition、让 Editor validator 进入 runtime、或为奖励预览新增 Battle/Run 状态和模块依赖。
 
+商店卡牌强化也保持 `WacomData -> WacomRun -> WacomApp`：Data 声明不可变 Definition 链和 Shop 静态价格，Editor 校验局部结构与完整 catalog 图；Run 聚合根按 InstanceId 在 working state 中权威重算 Quote、扣费、替换 Definition 并复用 commerce/AP settlement；App 只转发 visit request、展示只读 Quote/Result 和提交带 Definition guard 的意图。Battle 继续只消费 Run 构造的当前 Definition，SaveGame v5 继续保存该 DefinitionAssetPath；没有新增模块依赖、GameplayTag 或 schema。静态 Definition 永不在运行时被改写。
+
 ## 5. 目录结构
 
 模块层：

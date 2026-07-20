@@ -3,6 +3,7 @@
 #include "WacomCardFaceViewDataBuilder.h"
 
 #include "Cards/CardDefinition.h"
+#include "RunSession.h"
 #include "Tags/WacomGameplayTags.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardFaceViewDataBuilder"
@@ -94,23 +95,6 @@ namespace WacomCardFaceViewDataBuilder
 			}
 
 			return FText::FromString(Text);
-		}
-
-		int32 GetDeleteValueFromRarity(const UCardDefinition* Card)
-		{
-			if (!Card)
-			{
-				return 0;
-			}
-			if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_White))
-			{
-				return 1;
-			}
-			if (Card->Rarity.MatchesTagExact(WacomTags::Card_Rarity_Blue))
-			{
-				return 2;
-			}
-			return 0;
 		}
 
 		FText BuildPhysiqueText(const UCardDefinition* Card)
@@ -289,7 +273,7 @@ namespace WacomCardFaceViewDataBuilder
 		Data.Art = Card ? Card->CardIllustration : nullptr;
 		Data.ArtDepthMap = Card ? Card->CardIllustrationDepthMap : nullptr;
 		Data.Rarity = Card ? Card->Rarity : FGameplayTag();
-		Data.Value = GetDeleteValueFromRarity(Card);
+		Data.Value = URunSession::GetDeleteGoldRewardForCard(Card);
 		Data.bShowValue = Data.Value > 0;
 		Data.PhysiqueText = BuildPhysiqueText(Card);
 		Data.bShowPhysique = !Data.PhysiqueText.IsEmpty();

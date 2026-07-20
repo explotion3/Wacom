@@ -293,10 +293,17 @@ tags:
   - 归属：Run / Data / App
   - 入口：[Roadmap: 探索事件](./Roadmap.md#roadmap-runevent)
 
-- [ ] **商店正式化：随机商品池、价格公式、正式 WBP、存档接入**
+- [x] **商店卡牌强化规则与制作合同基线**
+  - 状态：`Done: Spec 019 runtime/data contract complete`
+  - 归属：Run / Data / App / Editor
+  - 入口：[WacomRun.md](./WacomRun.md) / [WacomData.md](./WacomData.md)
+  - 说明：已实现不可变单步强化链、catalog/Shop 制作校验、按 InstanceId 原子替换 Definition、被动 Quote/Result、购买/强化共享首次交易 AP、升级族资格兼容、Save v5 当前 Definition roundtrip 和五档回收价值。未创建任何强化资产、Shop WBP 或价格内容。
+
+- [ ] **商店正式化：强化双页签与内容、随机商品池、价格公式、正式 WBP、存档接入**
   - 状态：`Blocked: 地图节点 / 存档口径`
   - 归属：Run / Data / App
   - 入口：[Roadmap: 商店](./Roadmap.md#roadmap-shop)
+  - 说明：下一近程切片由 Spec 020 负责购买/强化双页签、前后对比、确认、AppToast，以及首批正式强化链和 Shop 价格；随机池、刷新和 ShopState 存档仍另案处理。
 
 - [x] **背包正式 WBP 与交互 polish**
   - 状态：`Done: Workspace/材质/旧路径清理与统一 PIE polish 完成`

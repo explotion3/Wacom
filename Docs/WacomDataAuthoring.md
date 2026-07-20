@@ -181,7 +181,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 当前校验边界：
 
-- Card / EnemyPart / Enemy / EnemyBehavior / Character 校验 ID、基础数值、必填引用、数组索引、Gameplay tag 命名空间和当前 battle rule content contract。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量或生成资产路径。
+- Card / EnemyPart / Enemy / EnemyBehavior / Character 校验 ID、基础数值、必填引用、数组索引、Gameplay tag 命名空间和当前 battle rule content contract。Card 的局部校验还检查下一段稀有度、同族身份、禁止卡种、结构不漂移和实际数值变化；catalog 校验负责跨资产的 CardId/链唯一性、循环、合流与分叉。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量或生成资产路径。
 - Enemy 校验 `PartSlotId` 必填且不重复，并在配置 `DefaultBehavior / BehaviorOverride / InitialIntentSetId` 时检查对应 phase 和 intent set 是否存在。
 - Scene Enemy Host 的诊断与写入严格分层，不属于 `WacomData` schema 或 Validator mutation。`WacomApp` 的纯 Authoring Report 只读取 Host 的 typed Part/Layer/Anchor SCS 层级与 `EnemyDefinition`；`WacomEditor` 的显式同步为缺失槽位创建 `UWacomBattleEnemyPartComponent`、默认 `Visual_Main` Flipbook Layer 和 ImpactAnchor，并从 `PartDefinition.PartId` 派生 `PartId`。已有 Component Transform、BoxExtent、Paper2D 属性、Layer 与 Anchor 保留；surplus 不删除，多选共用事务，无变化不 dirty package。
 - Host validator 检查重复/未知 PartSlotId、PartId mismatch、缺失视觉、重复 LayerId、Visual/Anchor 非直接子组件、多 Anchor、无效 Style 与多个 terminal clip owner。Validator、Report、Map Validate 都不生成、删除或改写组件。
@@ -192,7 +192,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - 正式 Pixel Impact System 的 Graph 只由 `WacomBuildBattleEnemyPartImpactNiagara` 写入。当前生成合同包含六个 Emitter 和固定 `EffectKind=0/1/2/3` 映射；TargetPreview 分支还必须暴露 `User.PreviewMode` 与 `User.AvailabilityIconSize`，分别控制 Available 中心图标和 Valid/Invalid Hover 框。运行 `-InspectOnly` 只读验证版本、User Parameter、Renderer 和编译结果。`Scripts/SetupBattleEnemyPartImpactAssets.py` 幂等写入 Destroyed Style 数值但不覆盖人工声音引用，也不会在已有 DreamShader 材质 / MI 合同正确时重存它们；`Scripts/SetupBattleEnemyPartTargetPreviewAssets.py` 只定向维护目标预演 MI 参数，不修改 Host/Part Blueprint。
 - EnemyBehavior 校验 `BehaviorId`、phase、intent set、intent、selector rule、condition、cooldown authoring 和敌人意图 effect contract；可选传入 owning EnemyDefinition 时，会额外校验 `AppliesToPartSlotId / PartDestroyed` 等部位槽引用。
 - Character 会校验 `StarterDeck` 不包含左右手卡。
-- Shop 校验 `ShopId`、`Offers`、Offer 卡牌和非负价格；不校验重复商品、价格平衡或商品池规则。
+- Shop 校验 `ShopId`、`Offers`、Offer 卡牌和非负价格；强化服务开启时还要求至少一条 White/Blue/Yellow 当前稀有度价格、每档最多一条且价格非负，并拒绝 Intrinsic/Purple/未知稀有度。未配置的合法稀有度在该 Shop 中不可强化。Validator 不决定价格平衡、随机商品池或具体强化数值。
 - RunEvent 校验事件图结构、ID、引用、NextNode、卡牌条件 / 效果、卡牌支付筛选和 ZoneId、事件状态目标、RunFlag、压力 ID，以及 `Automatic / Free / Fixed` Action Point policy。正成本非 terminal choice 是错误；早期由 effect 单独扣减探索预算的做法已删除。金币门槛 / 扣费组合中的 authoring 风险可以给 warning。
 - RunPickupDefinition 校验固定单一主奖励配置：`PickupId`、奖励类型、金币数量或卡牌引用；可选 `GrantedCredentialIds` 必须全部非 `None` 且 Definition 内唯一。
 - RunWorldCardInteractionDefinition 校验 `InteractionId`、至少一个正向卡牌筛选和有效奖励项。
@@ -200,6 +200,12 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - Map Floor 与每个 Node 的 `DisplayName` 必填；`ShortDescription` 可空。`MapPosition` 合法闭区间是 `[0,1920] × [0,1080]`，越界或完全重合为 error，节点中心距离小于 `48 px` 为 warning；这些坐标不参与规则距离或合法性。
 
 不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
+
+### Card Upgrade 链制作
+
+每个强化等级必须是独立 `UCardDefinition` package；不要复制一张卡后保留相同 `CardId`，也不要让运行时修改 DataAsset 的 Rarity/Effect。相邻版本填写同一个显式 `UpgradeFamilyId`，前一版本的 `NextUpgradeDefinition` 只指向下一稀有度，Purple 末端保持空。旧卡不准备进入强化系统时两个新字段都保持空。
+
+单资产 Data Validation 会沿可达链检查合法边和结构稳定性；正式 manifest、定向制作工具或内容测试还必须把整组候选传给 `FWacomCardUpgradeCatalogValidation::Validate()`，以捕获只看单链无法发现的重复 CardId、多个前驱、同族多根、合流或环。Shop 价格表只决定当前商店开放的稀有度档和金币，不应复制卡牌数值。Spec 019 没有创建或保存任何 Card/Shop 资产；首批 Production 链、价格和 WBP 由 Spec 020 单独授权后制作。
 
 Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
 

@@ -234,6 +234,12 @@ WacomApp 负责调用 UI shell，但不在本文定义具体 UI 视觉和刷新�
 
 原生 fallback 在 `AidButton / DestroyButton` 下提供 `AidRewardText / DestroyRewardText`；正式 WBP 可通过同名 `BindWidgetOptional` 锚点替换布局。`NativeConstruct` 和每次 `SetContext` 使用同一刷新路径，因此连续多部位击倒不会保留上一部位的奖励文字或按钮状态。Modal layer、必须三选一、ESC/Back 拦截、BattleHUD 命令提交和 deactivate 时机保持不变；完整 CardView、缩略图和新焦点流不属于该 Dialog。
 
+### Shop 卡牌强化被动合同
+
+Shop Trigger 只把 `UShopDefinition` 的商品与可选强化价格转成 `FRunShopVisitRequest`，PlayerController / ScreenRouter 只负责访问生命周期和请求转发；是否可强化、实际价格、金币、过期 Definition 与原子提交都由 RunSession 权威决定。`FRunShopSnapshot.CardUpgradeQuotes` 和 `FRunShopCardUpgradeResult` 是 App 可消费的被动数据，Widget 不读取或修改 CardDefinition 链，也不能自行推断资格。
+
+当前 Shop Screen 仍只呈现购买列表，本轮没有新增 WBP、页签、确认弹窗或 Toast。正式“购买 / 强化”双页签、前后字段比较、确认与结果反馈由 Spec 020 接入；接入时 Screen 只提交 Quote 中的 InstanceId 与预期 Definition guard。卡牌回收金币展示统一调用 `URunSession::GetDeleteGoldRewardForCard()`，不再在 App 维护稀有度价格副本。
+
 ### GameMenu viewpoint staging
 
 GameMenu viewpoint staging 是 Exploration GameMenu 的通用临时镜头站位流程，当前接入者是 Shop 和 RunEvent，共用同一套 PlayerController 状态和 Run Path return flow。`AWacomShopTriggerActor.ShopEntryViewpoint` 是商店入口的可选第一人称镜头站位；`AWacomRunEventTriggerActor.RunEventEntryViewpoint` 是事件入口的可选第一人称镜头站位。未配置时沿用普通路径：Shop 为 `BeginShopVisit -> Push ShopScreen`，RunEvent 为 `BeginRunEvent -> Push RunEventScreen`。配置后，Trigger 会构造 `FWacomFirstPersonViewStageRequest`：Shop 使用 `Reason=ShopEntry`，RunEvent 使用 `Reason=RunEventEntry`，`DebugSource` 优先使用 `PersistentId`，并复制 viewpoint 的 View Transform、blend 时间、曲线和 ease power。

@@ -134,7 +134,7 @@ bool FRunEventExecutor::DoesCardMatchPaymentFilter(
 				continue;
 			}
 			bHasIdentityFilter = true;
-			if (AllowedCardId == Card->CardId)
+			if (Card->MatchesCardIdOrUpgradeFamily(AllowedCardId))
 			{
 				bMatchesIdentityFilter = true;
 				break;

@@ -3,11 +3,196 @@
 #include "Shops/RunShopTransaction.h"
 
 #include "Cards/CardDefinition.h"
+#include "Deck/RunDeckRules.h"
+#include "Tags/WacomGameplayTags.h"
 
-FRunShopState FRunShopTransaction::BuildShopStateFromInputs(const TArray<FRunShopOfferInput>& Inputs)
+namespace
+{
+	bool IsRunStateActiveForShop(const FRunState& State)
+	{
+		return State.Outcome == ERunOutcome::InProgress
+			&& State.FingerCount > 0
+			&& State.Pressure.GetTotal() < 100;
+	}
+
+	bool IsForbiddenUpgradeCard(const UCardDefinition* Card)
+	{
+		return !Card
+			|| Card->Rarity == WacomTags::Card_Rarity_Intrinsic
+			|| Card->CardId.ToString().StartsWith(TEXT("Card.Run."), ESearchCase::CaseSensitive)
+			|| Card->Physique.Capacity > 0;
+	}
+
+	bool IsDirectUpgradeRarity(const FGameplayTag& From, const FGameplayTag& To)
+	{
+		return (From == WacomTags::Card_Rarity_White && To == WacomTags::Card_Rarity_Blue)
+			|| (From == WacomTags::Card_Rarity_Blue && To == WacomTags::Card_Rarity_Yellow)
+			|| (From == WacomTags::Card_Rarity_Yellow && To == WacomTags::Card_Rarity_Purple);
+	}
+
+	bool IsRuntimeUpgradeLinkValid(const UCardDefinition* Current, const UCardDefinition* Next)
+	{
+		return Current
+			&& Next
+			&& !IsForbiddenUpgradeCard(Current)
+			&& !IsForbiddenUpgradeCard(Next)
+			&& !Current->UpgradeFamilyId.IsNone()
+			&& Current->ResolveUpgradeFamilyId() == Next->ResolveUpgradeFamilyId()
+			&& IsDirectUpgradeRarity(Current->Rarity, Next->Rarity);
+	}
+
+	bool TryResolveUpgradePrice(
+		const FRunShopCardUpgradeServiceInput& Service,
+		const FGameplayTag& FromRarity,
+		int32& OutPrice)
+	{
+		bool bFound = false;
+		OutPrice = 0;
+		for (const FRunShopCardUpgradePriceInput& Entry : Service.Prices)
+		{
+			if (Entry.FromRarity != FromRarity)
+			{
+				continue;
+			}
+			if (bFound || Entry.Price < 0)
+			{
+				return false;
+			}
+			bFound = true;
+			OutPrice = Entry.Price;
+		}
+		return bFound;
+	}
+
+	FCardInstance* FindMutableOwnedCardInstance(FRunState& State, const FRunOwnedCardLocation& Location)
+	{
+		TArray<FCardInstance>* Pile = nullptr;
+		switch (Location.Zone)
+		{
+		case EZoneKind::Backpack:
+			Pile = &State.Backpack;
+			break;
+		case EZoneKind::BattleDeck:
+			Pile = &State.BattleDeck;
+			break;
+		case EZoneKind::BurdenZone:
+			Pile = &State.BurdenZone;
+			break;
+		case EZoneKind::SpecialZone:
+			if (FSpecialZone* Zone = State.SpecialZones.FindByPredicate(
+				[&Location](const FSpecialZone& Candidate)
+				{
+					return Candidate.OwnerInstanceId == Location.ZoneOwnerInstanceId;
+				}))
+			{
+				Pile = &Zone->Cards;
+			}
+			break;
+		default:
+			break;
+		}
+
+		return Pile
+			&& Pile->IsValidIndex(Location.CardIndex)
+			&& (*Pile)[Location.CardIndex].InstanceId == Location.Instance.InstanceId
+			? &(*Pile)[Location.CardIndex]
+			: nullptr;
+	}
+
+	FRunShopCardUpgradeQuote BuildUpgradeQuote(
+		const FRunState& State,
+		const FRunShopState& ShopState,
+		const FCardInstance& Instance)
+	{
+		FRunShopCardUpgradeQuote Quote;
+		Quote.InstanceId = Instance.InstanceId;
+		Quote.CurrentDefinition = Instance.Definition;
+		if (!Instance.InstanceId.IsValid())
+		{
+			Quote.DisabledReason = TEXT("InvalidCardInstanceId");
+			return Quote;
+		}
+		if (!Instance.Definition)
+		{
+			Quote.DisabledReason = TEXT("MissingCardDefinition");
+			return Quote;
+		}
+
+		const UCardDefinition* Current = Instance.Definition;
+		Quote.UpgradeFamilyId = Current->ResolveUpgradeFamilyId();
+		Quote.CurrentRarity = Current->Rarity;
+		Quote.NextDefinition = Current->NextUpgradeDefinition;
+		if (Quote.NextDefinition)
+		{
+			Quote.NextRarity = Quote.NextDefinition->Rarity;
+		}
+
+		if (!IsRunStateActiveForShop(State))
+		{
+			Quote.DisabledReason = TEXT("RunNotActive");
+			return Quote;
+		}
+		if (State.ActiveShopId.IsNone())
+		{
+			Quote.DisabledReason = TEXT("ShopVisitNotActive");
+			return Quote;
+		}
+		if (!ShopState.CardUpgradeService.bEnabled)
+		{
+			Quote.DisabledReason = TEXT("CardUpgradeServiceDisabled");
+			return Quote;
+		}
+		if (IsForbiddenUpgradeCard(Current))
+		{
+			Quote.DisabledReason = TEXT("CardUpgradeIneligible");
+			return Quote;
+		}
+		if (!Quote.NextDefinition)
+		{
+			Quote.DisabledReason = TEXT("NoNextUpgrade");
+			return Quote;
+		}
+		if (!IsRuntimeUpgradeLinkValid(Current, Quote.NextDefinition))
+		{
+			Quote.DisabledReason = TEXT("InvalidUpgradeChain");
+			return Quote;
+		}
+		if (!TryResolveUpgradePrice(
+			ShopState.CardUpgradeService,
+			Current->Rarity,
+			Quote.Price))
+		{
+			Quote.DisabledReason = TEXT("UpgradePriceMissing");
+			return Quote;
+		}
+		if (State.Gold < Quote.Price)
+		{
+			Quote.DisabledReason = TEXT("InsufficientGold");
+			return Quote;
+		}
+
+		Quote.bCanUpgrade = true;
+		return Quote;
+	}
+
+	void AppendUpgradeQuotes(
+		const FRunState& State,
+		const FRunShopState& ShopState,
+		const TArray<FCardInstance>& Instances,
+		TArray<FRunShopCardUpgradeQuote>& OutQuotes)
+	{
+		for (const FCardInstance& Instance : Instances)
+		{
+			OutQuotes.Add(BuildUpgradeQuote(State, ShopState, Instance));
+		}
+	}
+}
+
+FRunShopState FRunShopTransaction::BuildShopStateFromRequest(const FRunShopVisitRequest& Request)
 {
 	FRunShopState State;
-	for (const FRunShopOfferInput& Input : Inputs)
+	State.CardUpgradeService = Request.CardUpgradeService;
+	for (const FRunShopOfferInput& Input : Request.Offers)
 	{
 		if (!Input.CardDefinition)
 		{
@@ -35,9 +220,9 @@ FRunShopState FRunShopTransaction::BuildShopStateFromInputs(const TArray<FRunSho
 	return State;
 }
 
-bool FRunShopTransaction::BeginVisit(FRunState& State, FName ShopId, const TArray<FRunShopOfferInput>& Offers)
+bool FRunShopTransaction::BeginVisit(FRunState& State, const FRunShopVisitRequest& Request)
 {
-	if (ShopId.IsNone())
+	if (Request.ShopId.IsNone())
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("[RunShopTransaction] BeginShopVisit: ShopId 为 None，拒绝"));
@@ -51,14 +236,25 @@ bool FRunShopTransaction::BeginVisit(FRunState& State, FName ShopId, const TArra
 		return false;
 	}
 
-	if (!State.ShopStates.Contains(ShopId))
+	if (!State.ShopStates.Contains(Request.ShopId))
 	{
-		State.ShopStates.Add(ShopId, BuildShopStateFromInputs(Offers));
+		State.ShopStates.Add(Request.ShopId, BuildShopStateFromRequest(Request));
 	}
 
-	State.ActiveShopId = ShopId;
+	State.ActiveShopId = Request.ShopId;
 	State.bShopVisitHasPurchase = false;
 	return true;
+}
+
+bool FRunShopTransaction::BeginVisit(
+	FRunState& State,
+	const FName ShopId,
+	const TArray<FRunShopOfferInput>& Offers)
+{
+	FRunShopVisitRequest Request;
+	Request.ShopId = ShopId;
+	Request.Offers = Offers;
+	return BeginVisit(State, Request);
 }
 
 bool FRunShopTransaction::EndVisit(FRunState& State)
@@ -83,6 +279,14 @@ FRunShopSnapshot FRunShopTransaction::BuildSnapshot(const FRunState& State)
 	if (const FRunShopState* ShopState = State.ShopStates.Find(State.ActiveShopId))
 	{
 		Snapshot.Offers = ShopState->Offers;
+		Snapshot.CardUpgradeService = ShopState->CardUpgradeService;
+		AppendUpgradeQuotes(State, *ShopState, State.Backpack, Snapshot.CardUpgradeQuotes);
+		AppendUpgradeQuotes(State, *ShopState, State.BattleDeck, Snapshot.CardUpgradeQuotes);
+		AppendUpgradeQuotes(State, *ShopState, State.BurdenZone, Snapshot.CardUpgradeQuotes);
+		for (const FSpecialZone& Zone : State.SpecialZones)
+		{
+			AppendUpgradeQuotes(State, *ShopState, Zone.Cards, Snapshot.CardUpgradeQuotes);
+		}
 	}
 
 	return Snapshot;
@@ -195,4 +399,71 @@ bool FRunShopTransaction::PurchaseCard(FRunState& State, UCardDefinition* Card, 
 	}
 
 	return true;
+}
+
+FRunShopCardUpgradeResult FRunShopTransaction::UpgradeOwnedCard(
+	FRunState& State,
+	const FRunShopCardUpgradeCommand& Command)
+{
+	FRunShopCardUpgradeResult Result;
+	Result.InstanceId = Command.InstanceId;
+	if (!IsRunStateActiveForShop(State))
+	{
+		Result.DisabledReason = TEXT("RunNotActive");
+		return Result;
+	}
+	if (State.ActiveShopId.IsNone())
+	{
+		Result.DisabledReason = TEXT("ShopVisitNotActive");
+		return Result;
+	}
+	const FRunShopState* ShopState = State.ShopStates.Find(State.ActiveShopId);
+	if (!ShopState)
+	{
+		Result.DisabledReason = TEXT("ShopStateMissing");
+		return Result;
+	}
+
+	FRunOwnedCardLocation Location;
+	if (!FRunDeckRules::FindOwnedCardInstance(State, Command.InstanceId, Location))
+	{
+		Result.DisabledReason = Command.InstanceId.IsValid()
+			? FName(TEXT("CardNotOwned"))
+			: FName(TEXT("InvalidCardInstanceId"));
+		return Result;
+	}
+
+	const FRunShopCardUpgradeQuote Quote = BuildUpgradeQuote(State, *ShopState, Location.Instance);
+	Result.PreviousDefinition = Quote.CurrentDefinition;
+	Result.NewDefinition = Quote.NextDefinition;
+	if (!Quote.bCanUpgrade)
+	{
+		Result.DisabledReason = Quote.DisabledReason;
+		return Result;
+	}
+	if (Command.ExpectedCurrentDefinition != Quote.CurrentDefinition)
+	{
+		Result.DisabledReason = TEXT("StaleCurrentDefinition");
+		return Result;
+	}
+	if (Command.ExpectedNextDefinition != Quote.NextDefinition)
+	{
+		Result.DisabledReason = TEXT("StaleNextDefinition");
+		return Result;
+	}
+
+	FCardInstance* MutableInstance = FindMutableOwnedCardInstance(State, Location);
+	if (!MutableInstance)
+	{
+		Result.DisabledReason = TEXT("CardLocationChanged");
+		return Result;
+	}
+
+	Result.bFirstTransactionThisVisit = !State.bShopVisitHasPurchase;
+	Result.GoldCost = Quote.Price;
+	State.Gold -= Quote.Price;
+	MutableInstance->Definition = Quote.NextDefinition;
+	State.bShopVisitHasPurchase = true;
+	Result.bSucceeded = true;
+	return Result;
 }

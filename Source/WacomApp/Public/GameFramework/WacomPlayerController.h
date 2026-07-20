@@ -50,6 +50,7 @@ struct FWacomRunFloorSceneBindingAutomationTestView;
 struct FWacomCardDetailViewData;
 struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
+struct FRunShopVisitRequest;
 struct FInputKeyEventArgs;
 struct FHitResult;
 struct FWacomExplorationScreenRouter;
@@ -311,6 +312,10 @@ public:
 	bool RequestOpenShop(
 		FName ShopId,
 		const TArray<FRunShopOfferInput>& Offers,
+		const FWacomFirstPersonViewStageRequest& StageRequest);
+	bool RequestOpenShop(const FRunShopVisitRequest& Request);
+	bool RequestOpenShop(
+		const FRunShopVisitRequest& Request,
 		const FWacomFirstPersonViewStageRequest& StageRequest);
 	bool IsGameMenuViewpointStageTransitionActive() const { return bGameMenuViewpointStageTransitionActive; }
 	bool IsGameMenuViewpointReturnArmed() const { return bGameMenuViewpointReturnArmed; }

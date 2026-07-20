@@ -325,8 +325,7 @@ namespace
 
 	bool BeginShopVisitForAsyncPush(
 		TWeakObjectPtr<AWacomPlayerController> WeakPC,
-		FName ShopId,
-		TArray<FRunShopOfferInput> Offers,
+		FRunShopVisitRequest VisitRequest,
 		FGuid& OutVisitToken,
 		FName& OutFailureReason)
 	{
@@ -335,12 +334,12 @@ namespace
 		if (!RunSession)
 		{
 			OutFailureReason = TEXT("BeginShopVisitFailed");
-			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop.AsyncPush: BeginShopVisit 失败 ShopId=%s"), *ShopId.ToString());
+			UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] OpenShop.AsyncPush: BeginShopVisit 失败 ShopId=%s"), *VisitRequest.ShopId.ToString());
 			return false;
 		}
 
 		const FRunShopVisitResult VisitResult =
-			RunSession->BeginShopVisitWithResult(ShopId, Offers);
+			RunSession->BeginShopVisitWithResult(VisitRequest);
 		if (!VisitResult.bSucceeded)
 		{
 			OutFailureReason = VisitResult.DisabledReason.IsNone()
@@ -348,7 +347,7 @@ namespace
 				: VisitResult.DisabledReason;
 			UE_LOG(LogTemp, Warning,
 				TEXT("[WacomPlayerController] OpenShop.AsyncPush: BeginShopVisit 失败 ShopId=%s Detail=%s"),
-				*ShopId.ToString(),
+				*VisitRequest.ShopId.ToString(),
 				*OutFailureReason.ToString());
 			return false;
 		}
@@ -359,7 +358,7 @@ namespace
 			OutFailureReason = TEXT("MissingShopVisitToken");
 			UE_LOG(LogTemp, Error,
 				TEXT("[WacomPlayerController] OpenShop.AsyncPush: 成功结果违反 visit token 合同 ShopId=%s"),
-				*ShopId.ToString());
+				*VisitRequest.ShopId.ToString());
 			return false;
 		}
 		if (!PC->ApplyRunNodeActivityResolutionForPresentation(
@@ -422,8 +421,7 @@ namespace
 	void PushShopScreenAsync(
 		AWacomPlayerController& PC,
 		UWacomGameUIManagerSubsystem& UIManager,
-		FName ShopId,
-		const TArray<FRunShopOfferInput>& Offers,
+		const FRunShopVisitRequest& VisitRequest,
 		bool bReturnToRunPathAfterClose)
 	{
 		TWeakObjectPtr<AWacomPlayerController> WeakPC(&PC);
@@ -441,9 +439,9 @@ namespace
 		{
 			return CanPushExplorationGameMenu(WeakPC, WeakUIManager, TEXT("OpenShop.AsyncPush"));
 		};
-		Request.BeforePush = [WeakPC, ShopId, Offers, ShopVisitToken](FName& OutFailureReason)
+		Request.BeforePush = [WeakPC, VisitRequest, ShopVisitToken](FName& OutFailureReason)
 		{
-			return BeginShopVisitForAsyncPush(WeakPC, ShopId, Offers, *ShopVisitToken, OutFailureReason);
+			return BeginShopVisitForAsyncPush(WeakPC, VisitRequest, *ShopVisitToken, OutFailureReason);
 		};
 		Request.AfterPush = [](UCommonActivatableWidget& PushedWidget, FName& OutFailureReason)
 		{
@@ -457,7 +455,7 @@ namespace
 		{
 			RollbackShopAsyncPush(WeakPC, *ShopVisitToken, FailureReason);
 		};
-		Request.OnComplete = [WeakPC, ShopId, bReturnToRunPathAfterClose](const FWacomAsyncWidgetPushResult& Result)
+		Request.OnComplete = [WeakPC, VisitRequest, bReturnToRunPathAfterClose](const FWacomAsyncWidgetPushResult& Result)
 		{
 			if (AWacomPlayerController* PC = WeakPC.Get())
 			{
@@ -477,7 +475,7 @@ namespace
 					EndGameMenuTransitionSuppressionOnFailure(WeakPC, Result);
 				}
 			}
-			LogShopAsyncPushResult(Result, ShopId);
+			LogShopAsyncPushResult(Result, VisitRequest.ShopId);
 		};
 		UIManager.PushRegisteredWidgetToLayerAsync(MoveTemp(Request));
 	}
@@ -909,8 +907,18 @@ void FWacomExplorationScreenRouter::CloseTopGameMenu(AWacomPlayerController& PC)
 
 bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName ShopId, const TArray<FRunShopOfferInput>& Offers)
 {
+	FRunShopVisitRequest Request;
+	Request.ShopId = ShopId;
+	Request.Offers = Offers;
+	return OpenShop(PC, Request);
+}
+
+bool FWacomExplorationScreenRouter::OpenShop(
+	AWacomPlayerController& PC,
+	const FRunShopVisitRequest& Request)
+{
 	UWacomGameUIManagerSubsystem* UIManager = nullptr;
-	if (!PrepareOpenShopMenu(PC, ShopId, TEXT("OpenShop"), UIManager))
+	if (!PrepareOpenShopMenu(PC, Request.ShopId, TEXT("OpenShop"), UIManager))
 	{
 		return false;
 	}
@@ -918,8 +926,7 @@ bool FWacomExplorationScreenRouter::OpenShop(AWacomPlayerController& PC, FName S
 	PushShopScreenAsync(
 		PC,
 		*UIManager,
-		ShopId,
-		Offers,
+		Request,
 		/*bReturnToRunPathAfterClose*/false);
 	return true;
 }
@@ -930,13 +937,24 @@ bool FWacomExplorationScreenRouter::OpenShop(
 	const TArray<FRunShopOfferInput>& Offers,
 	const FWacomFirstPersonViewStageRequest& StageRequest)
 {
+	FRunShopVisitRequest Request;
+	Request.ShopId = ShopId;
+	Request.Offers = Offers;
+	return OpenShop(PC, Request, StageRequest);
+}
+
+bool FWacomExplorationScreenRouter::OpenShop(
+	AWacomPlayerController& PC,
+	const FRunShopVisitRequest& Request,
+	const FWacomFirstPersonViewStageRequest& StageRequest)
+{
 	if (!StageRequest.bHasViewTransform)
 	{
-		return OpenShop(PC, ShopId, Offers);
+		return OpenShop(PC, Request);
 	}
 
 	UWacomGameUIManagerSubsystem* UIManager = nullptr;
-	if (!PrepareOpenShopMenu(PC, ShopId, TEXT("OpenShop.Staged"), UIManager))
+	if (!PrepareOpenShopMenu(PC, Request.ShopId, TEXT("OpenShop.Staged"), UIManager))
 	{
 		return false;
 	}
@@ -947,7 +965,7 @@ bool FWacomExplorationScreenRouter::OpenShop(
 		StageRequest,
 		FName(TEXT("ShopEntry")),
 		TEXT("OpenShop.Staged"),
-		[ShopId, Offers](
+		[Request](
 			AWacomPlayerController& PC,
 			UWacomGameUIManagerSubsystem& UIManager,
 			bool bReturnToRunPathAfterClose)
@@ -955,8 +973,7 @@ bool FWacomExplorationScreenRouter::OpenShop(
 			PushShopScreenAsync(
 				PC,
 				UIManager,
-				ShopId,
-				Offers,
+				Request,
 				bReturnToRunPathAfterClose);
 		});
 }

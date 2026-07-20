@@ -213,7 +213,11 @@ namespace
 		{
 			bIdentityMatches |= AllowedDefinition == Card;
 		}
-		bIdentityMatches |= Requirement.AllowedCardIds.Contains(Card->CardId);
+		bIdentityMatches |= Requirement.AllowedCardIds.ContainsByPredicate(
+			[Card](const FName AllowedCardId)
+			{
+				return Card->MatchesCardIdOrUpgradeFamily(AllowedCardId);
+			});
 		return bIdentityMatches
 			&& Card->Keywords.HasAll(Requirement.RequiredKeywords)
 			&& !Card->Keywords.HasAny(Requirement.BlockedKeywords);

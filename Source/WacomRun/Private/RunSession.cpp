@@ -220,6 +220,18 @@ namespace
 				});
 	}
 
+	bool MatchesAnyCardIdOrUpgradeFamily(
+		const TArray<FName>& AllowedCardIds,
+		const UCardDefinition* Definition)
+	{
+		return Definition
+			&& AllowedCardIds.ContainsByPredicate(
+				[Definition](const FName AllowedCardId)
+				{
+					return Definition->MatchesCardIdOrUpgradeFamily(AllowedCardId);
+				});
+	}
+
 	bool ContainsGuid(const TArray<FGuid>& Guids, FGuid Guid)
 	{
 		return Guids.ContainsByPredicate(
@@ -275,7 +287,7 @@ namespace
 			const bool bMatchesDefinition =
 				ContainsCardDefinition(Request.AllowedCardDefinitions, Definition);
 			const bool bMatchesCardId =
-				Request.AllowedCardIds.Contains(Definition->CardId);
+				MatchesAnyCardIdOrUpgradeFamily(Request.AllowedCardIds, Definition);
 			if (!bMatchesDefinition && !bMatchesCardId)
 			{
 				return false;
@@ -2378,7 +2390,7 @@ FRunWorldCardInteractionValidation URunSession::ValidateRunWorldCardInteraction(
 		const bool bMatchesDefinition =
 			ContainsCardDefinition(Request.AllowedCardDefinitions, SourceDefinition);
 		const bool bMatchesCardId =
-			Request.AllowedCardIds.Contains(SourceDefinition->CardId);
+			MatchesAnyCardIdOrUpgradeFamily(Request.AllowedCardIds, SourceDefinition);
 		if (!bMatchesDefinition && !bMatchesCardId)
 		{
 			return RejectWith(TEXT("CardNotAccepted"));
@@ -2509,9 +2521,23 @@ bool URunSession::BeginShopVisit(FName ShopId, const TArray<FRunShopOfferInput>&
 	return BeginShopVisitWithResult(ShopId, Offers).bSucceeded;
 }
 
+bool URunSession::BeginShopVisitRequest(const FRunShopVisitRequest& Request)
+{
+	return BeginShopVisitWithResult(Request).bSucceeded;
+}
+
 FRunShopVisitResult URunSession::BeginShopVisitWithResult(
 	const FName ShopId,
 	const TArray<FRunShopOfferInput>& Offers)
+{
+	FRunShopVisitRequest Request;
+	Request.ShopId = ShopId;
+	Request.Offers = Offers;
+	return BeginShopVisitWithResult(Request);
+}
+
+FRunShopVisitResult URunSession::BeginShopVisitWithResult(
+	const FRunShopVisitRequest& Request)
 {
 	FRunShopVisitResult Result;
 	Result.ExplorationResolution.VersionBefore =
@@ -2574,7 +2600,7 @@ FRunShopVisitResult URunSession::BeginShopVisitWithResult(
 		Result.ExplorationResolution.Status = FWacomStatus::Ok();
 	}
 
-	if (!FRunShopTransaction::BeginVisit(WorkingState, ShopId, Offers))
+	if (!FRunShopTransaction::BeginVisit(WorkingState, Request))
 	{
 		Result.DisabledReason = TEXT("ShopVisitBeginFailed");
 		Result.ExplorationResolution.Status = FWacomStatus::Fail(
@@ -2805,6 +2831,93 @@ FRunShopSnapshot URunSession::BuildCurrentShopSnapshot() const
 	return FRunShopTransaction::BuildSnapshot(RunState);
 }
 
+bool URunSession::SettleShopCommerceInWorkingState(
+	FRunState& WorkingState,
+	TOptional<FRunNodeActivityTicket>& WorkingActivity,
+	const bool bFirstTransactionThisVisit,
+	FRunExplorationResolution& OutExplorationResolution,
+	int32& OutActionPointCost,
+	bool& bOutVisitClosed,
+	FName& OutDisabledReason) const
+{
+	OutExplorationResolution = FRunExplorationResolution();
+	OutExplorationResolution.VersionBefore =
+		RunState.ExplorationState.ExplorationStateVersion;
+	OutExplorationResolution.VersionAfter = OutExplorationResolution.VersionBefore;
+	OutExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+	OutActionPointCost = 0;
+	bOutVisitClosed = false;
+	OutDisabledReason = NAME_None;
+
+	const bool bUsesFormalExploration =
+		RunState.ExplorationState.JourneyDefinition
+		&& RunState.ExplorationState.ExplorationStateVersion > 0;
+	if (!bUsesFormalExploration)
+	{
+		// 旧 RunSession 仍允许购买/强化，但不存在可回传的正式地图生命周期。
+		OutExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			TEXT("LegacyRunSessionHasNoExplorationResult"));
+		return true;
+	}
+
+	if (bFirstTransactionThisVisit)
+	{
+		if (!WorkingActivity.IsSet()
+			|| WorkingActivity->Kind != ERunNodeActivityKind::Shop
+			|| !FRunNodeActivityModule::Matches(
+				WorkingState,
+				WorkingActivity,
+				WorkingActivity.GetValue()))
+		{
+			OutDisabledReason = TEXT("ShopActivityTicketMismatch");
+			return false;
+		}
+
+		bool bActivityContinues = false;
+		FRunNodeActivityTicket UpdatedTicket;
+		OutExplorationResolution.Status = FRunNodeActivityModule::SpendAndContinue(
+			WorkingState,
+			WorkingActivity,
+			WorkingActivity.GetValue(),
+			/*ActionPointCost=*/1,
+			/*bResolveNode=*/true,
+			bActivityContinues,
+			UpdatedTicket,
+			OutExplorationResolution.Events);
+		if (!OutExplorationResolution.IsOk())
+		{
+			OutDisabledReason = OutExplorationResolution.Status.Detail;
+			OutExplorationResolution.Events.Reset();
+			OutExplorationResolution.VersionAfter = OutExplorationResolution.VersionBefore;
+			OutExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+			return false;
+		}
+		OutActionPointCost = 1;
+		if (!bActivityContinues)
+		{
+			if (!FRunShopTransaction::EndVisit(WorkingState))
+			{
+				OutDisabledReason = TEXT("ShopVisitEndFailed");
+				OutExplorationResolution.Events.Reset();
+				OutExplorationResolution.VersionAfter = OutExplorationResolution.VersionBefore;
+				OutExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+				return false;
+			}
+			bOutVisitClosed = true;
+		}
+	}
+	else
+	{
+		OutExplorationResolution.Status = FWacomStatus::Ok();
+	}
+
+	OutExplorationResolution.VersionAfter =
+		WorkingState.ExplorationState.ExplorationStateVersion;
+	OutExplorationResolution.PostSnapshot = FRunMapModule::BuildSnapshot(WorkingState);
+	return true;
+}
+
 FRunShopPurchaseResult URunSession::PurchaseShopOffer(FGuid OfferId)
 {
 	FRunShopPurchaseResult Result;
@@ -2837,66 +2950,16 @@ FRunShopPurchaseResult URunSession::PurchaseShopOffer(FGuid OfferId)
 		return Result;
 	}
 
-	const bool bUsesFormalExploration =
-		RunState.ExplorationState.JourneyDefinition
-		&& RunState.ExplorationState.ExplorationStateVersion > 0;
-	if (bUsesFormalExploration)
+	if (!SettleShopCommerceInWorkingState(
+		WorkingState,
+		WorkingActivity,
+		bFirstPurchaseThisVisit,
+		Result.ExplorationResolution,
+		Result.ActionPointCost,
+		Result.bVisitClosedAfterPurchase,
+		Result.DisabledReason))
 	{
-		Result.ExplorationResolution.VersionBefore =
-			RunState.ExplorationState.ExplorationStateVersion;
-		if (bFirstPurchaseThisVisit)
-		{
-			if (!WorkingActivity.IsSet()
-				|| WorkingActivity->Kind != ERunNodeActivityKind::Shop
-				|| !FRunNodeActivityModule::Matches(
-					WorkingState,
-					WorkingActivity,
-					WorkingActivity.GetValue()))
-			{
-				Result.DisabledReason = TEXT("ShopActivityTicketMismatch");
-				return Result;
-			}
-
-			bool bActivityContinues = false;
-			FRunNodeActivityTicket UpdatedTicket;
-			Result.ExplorationResolution.Status = FRunNodeActivityModule::SpendAndContinue(
-				WorkingState,
-				WorkingActivity,
-				WorkingActivity.GetValue(),
-				/*ActionPointCost=*/1,
-				/*bResolveNode=*/true,
-				bActivityContinues,
-				UpdatedTicket,
-				Result.ExplorationResolution.Events);
-			if (!Result.ExplorationResolution.IsOk())
-			{
-				Result.DisabledReason = Result.ExplorationResolution.Status.Detail;
-				Result.ExplorationResolution.Events.Reset();
-				Result.ExplorationResolution.VersionAfter =
-					Result.ExplorationResolution.VersionBefore;
-				Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
-				return Result;
-			}
-			Result.ActionPointCost = 1;
-			if (!bActivityContinues)
-			{
-				FRunShopTransaction::EndVisit(WorkingState);
-				Result.bVisitClosedAfterPurchase = true;
-			}
-		}
-		else
-		{
-			Result.ExplorationResolution.Status = FWacomStatus::Ok();
-		}
-		Result.ExplorationResolution.VersionAfter =
-			WorkingState.ExplorationState.ExplorationStateVersion;
-		Result.ExplorationResolution.PostSnapshot = FRunMapModule::BuildSnapshot(WorkingState);
-	}
-	else
-	{
-		Result.ExplorationResolution.Status = FWacomStatus::Fail(
-			EWacomError::InvalidState,
-			TEXT("LegacyRunSessionHasNoExplorationResult"));
+		return Result;
 	}
 
 	RunState = MoveTemp(WorkingState);
@@ -2908,6 +2971,69 @@ FRunShopPurchaseResult URunSession::PurchaseShopOffer(FGuid OfferId)
 		ActiveShopVisitToken.Invalidate();
 	}
 
+	MarkRunUiSnapshotsDirty(
+		MakeRunUiSnapshotDirtyFlags(
+			ERunUiSnapshotDirtyFlags::BackpackStorage,
+			ERunUiSnapshotDirtyFlags::Shop,
+			ERunUiSnapshotDirtyFlags::Economy));
+	NotifyRunStateChanged();
+	return Result;
+}
+
+FRunShopCardUpgradeResult URunSession::UpgradeOwnedCardAtShop(
+	const FRunShopCardUpgradeCommand& Command)
+{
+	FRunShopCardUpgradeResult Result;
+	Result.InstanceId = Command.InstanceId;
+	Result.ExplorationResolution.VersionBefore =
+		RunState.ExplorationState.ExplorationStateVersion;
+	Result.ExplorationResolution.VersionAfter =
+		Result.ExplorationResolution.VersionBefore;
+	Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+	if (!IsRunActive())
+	{
+		Result.DisabledReason = TEXT("RunNotActive");
+		Result.ExplorationResolution.Status = FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			Result.DisabledReason);
+		return Result;
+	}
+
+	FRunState WorkingState = RunState;
+	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
+	Result = FRunShopTransaction::UpgradeOwnedCard(WorkingState, Command);
+	if (!Result.bSucceeded)
+	{
+		Result.ExplorationResolution.VersionBefore =
+			RunState.ExplorationState.ExplorationStateVersion;
+		Result.ExplorationResolution.VersionAfter =
+			Result.ExplorationResolution.VersionBefore;
+		Result.ExplorationResolution.PostSnapshot = BuildExplorationSnapshot();
+		return Result;
+	}
+
+	if (!SettleShopCommerceInWorkingState(
+		WorkingState,
+		WorkingActivity,
+		Result.bFirstTransactionThisVisit,
+		Result.ExplorationResolution,
+		Result.ActionPointCost,
+		Result.bVisitClosedAfterUpgrade,
+		Result.DisabledReason))
+	{
+		Result.bSucceeded = false;
+		Result.GoldCost = 0;
+		Result.ActionPointCost = 0;
+		Result.bVisitClosedAfterUpgrade = false;
+		return Result;
+	}
+
+	RunState = MoveTemp(WorkingState);
+	ActiveNodeActivityTicket = MoveTemp(WorkingActivity);
+	if (Result.bVisitClosedAfterUpgrade)
+	{
+		ActiveShopVisitToken.Invalidate();
+	}
 	MarkRunUiSnapshotsDirty(
 		MakeRunUiSnapshotDirtyFlags(
 			ERunUiSnapshotDirtyFlags::BackpackStorage,

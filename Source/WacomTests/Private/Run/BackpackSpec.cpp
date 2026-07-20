@@ -32,7 +32,7 @@
  *       Companion 卡 → 嗜血 +1
  *       按 Backpack → BattleDeck → BurdenZone → SpecialZones 优先级移除一张
  *   - DestroyCardByInstance：按 InstanceId 精确销毁已拥有卡，不发金币
- *   - DeleteCardForGoldByInstance：白=1 / 蓝=2
+ *   - DeleteCardForGoldByInstance：白=1 / 蓝=2 / 黄=3 / 紫=4 / 固有=0
  *   - MoveInstance 进出 BattleDeck 边界规则
  *   - BuildInitParamsForBattle 用 BattleDeck 而不是 StarterDeck
  *   - 金币 AddGold / RemoveGold
@@ -1001,10 +1001,12 @@ bool FWacomRunDeckDeleteCardForGoldByRaritySpec::RunTest(const FString& /*Parame
 
 	UCardDefinition* WhiteCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
 	UCardDefinition* BlueCard  = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Blue);
+	UCardDefinition* YellowCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Yellow);
+	UCardDefinition* PurpleCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Purple);
 	UCardDefinition* Bag = MakeBagCard(Fx, 5);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ WhiteCard, BlueCard, Bag });
+		{ WhiteCard, BlueCard, YellowCard, PurpleCard, Bag });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	InitializeRunSessionForTest(*Run, Char).IsOk();
 
@@ -1017,6 +1019,14 @@ bool FWacomRunDeckDeleteCardForGoldByRaritySpec::RunTest(const FString& /*Parame
 	TestTrue(TEXT("Delete blue card succeeded"),
 		DeleteFirstOwnedDefinitionForGold(Run, BlueCard));
 	TestEqual(TEXT("Blue card → +2 gold (total 3)"), Run->GetGold(), 3);
+
+	TestTrue(TEXT("Delete yellow card succeeded"),
+		DeleteFirstOwnedDefinitionForGold(Run, YellowCard));
+	TestEqual(TEXT("Yellow card → +3 gold (total 6)"), Run->GetGold(), 6);
+
+	TestTrue(TEXT("Delete purple card succeeded"),
+		DeleteFirstOwnedDefinitionForGold(Run, PurpleCard));
+	TestEqual(TEXT("Purple card → +4 gold (total 10)"), Run->GetGold(), 10);
 
 	return true;
 }

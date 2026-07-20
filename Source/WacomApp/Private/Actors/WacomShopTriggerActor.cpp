@@ -183,6 +183,28 @@ TArray<FRunShopOfferInput> AWacomShopTriggerActor::BuildResolvedOffers() const
 	return ResolvedOffers;
 }
 
+FRunShopVisitRequest AWacomShopTriggerActor::BuildResolvedVisitRequest() const
+{
+	FRunShopVisitRequest Request;
+	Request.ShopId = PersistentId;
+	Request.Offers = BuildResolvedOffers();
+	if (!ShopDefinition)
+	{
+		return Request;
+	}
+
+	Request.CardUpgradeService.bEnabled = ShopDefinition->CardUpgradeService.bEnabled;
+	Request.CardUpgradeService.Prices.Reserve(ShopDefinition->CardUpgradeService.Prices.Num());
+	for (const FShopCardUpgradePriceDefinition& PriceDefinition : ShopDefinition->CardUpgradeService.Prices)
+	{
+		FRunShopCardUpgradePriceInput PriceInput;
+		PriceInput.FromRarity = PriceDefinition.FromRarity;
+		PriceInput.Price = PriceDefinition.Price;
+		Request.CardUpgradeService.Prices.Add(PriceInput);
+	}
+	return Request;
+}
+
 bool AWacomShopTriggerActor::TryInteract_Implementation(AWacomPlayerController* PC)
 {
 	if (!CanInteract_Implementation(PC))
@@ -192,7 +214,7 @@ bool AWacomShopTriggerActor::TryInteract_Implementation(AWacomPlayerController* 
 
 	FWacomFirstPersonViewStageRequest StageRequest;
 	TryBuildShopEntryViewStageRequest(StageRequest);
-	return PC->RequestOpenShop(PersistentId, BuildResolvedOffers(), StageRequest);
+	return PC->RequestOpenShop(BuildResolvedVisitRequest(), StageRequest);
 }
 
 bool AWacomShopTriggerActor::TryBuildShopEntryViewStageRequest(
