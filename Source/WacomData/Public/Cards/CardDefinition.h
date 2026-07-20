@@ -51,6 +51,22 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	FName CardId;
 
+	/**
+	 * 强化链稳定身份。同一条强化链的所有独立 CardDefinition 必须显式填写同一个值。
+	 * 未加入强化链的旧卡可以留空，C++ 查询会兼容回退到 CardId。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Upgrade",
+		meta = (ToolTip = "卡牌强化族稳定 ID。同一强化链的所有版本必须相同；未加入强化链的旧卡可留空并回退到 CardId。"))
+	FName UpgradeFamilyId = NAME_None;
+
+	/**
+	 * 直接下一稀有度的不可变 CardDefinition。为空表示当前没有下一层。
+	 * 只允许 White→Blue→Yellow→Purple；具体结构一致性由 WacomEditor validator 检查。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Upgrade",
+		meta = (ToolTip = "直接下一稀有度的卡牌定义。只允许 White→Blue→Yellow→Purple；运行时强化会替换卡牌实例的 Definition，不会修改本资产。"))
+	TObjectPtr<UCardDefinition> NextUpgradeDefinition = nullptr;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	FText DisplayName;
 
@@ -96,4 +112,10 @@ public:
 	/** 被动触发。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	TArray<FCardPassive> Passives;
+
+	/** 未配置 UpgradeFamilyId 的旧卡兼容回退到 CardId。 */
+	FName ResolveUpgradeFamilyId() const;
+
+	/** Candidate 同时允许匹配当前版本 CardId 或稳定强化族 ID；None 永不匹配。 */
+	bool MatchesCardIdOrUpgradeFamily(FName Candidate) const;
 };

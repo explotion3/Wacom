@@ -3,6 +3,7 @@
 #include "Validation/ShopDefinitionValidation.h"
 
 #include "Shops/ShopDefinition.h"
+#include "Tags/WacomGameplayTags.h"
 
 #define LOCTEXT_NAMESPACE "WacomShopDefinitionValidation"
 
@@ -57,6 +58,44 @@ bool FWacomShopDefinitionValidation::Validate(
 		{
 			AddValidationError(OutErrors,
 				FormatValidationError(TEXT("Offer {0} 的 Price 不能为负数。"), IndexText));
+		}
+	}
+
+	if (ShopDefinition->CardUpgradeService.bEnabled)
+	{
+		if (ShopDefinition->CardUpgradeService.Prices.IsEmpty())
+		{
+			AddValidationError(OutErrors,
+				LOCTEXT("MissingCardUpgradePrices", "启用 CardUpgradeService 时 Prices 不能为空。"));
+		}
+
+		TSet<FGameplayTag> SeenRarities;
+		for (int32 Index = 0; Index < ShopDefinition->CardUpgradeService.Prices.Num(); ++Index)
+		{
+			const FShopCardUpgradePriceDefinition& Price =
+				ShopDefinition->CardUpgradeService.Prices[Index];
+			const bool bSupportedRarity =
+				Price.FromRarity.MatchesTagExact(WacomTags::Card_Rarity_White)
+				|| Price.FromRarity.MatchesTagExact(WacomTags::Card_Rarity_Blue)
+				|| Price.FromRarity.MatchesTagExact(WacomTags::Card_Rarity_Yellow);
+			if (!bSupportedRarity)
+			{
+				AddValidationError(OutErrors, FText::FromString(FString::Printf(
+					TEXT("CardUpgradeService.Prices[%d].FromRarity 只允许 White、Blue 或 Yellow。"),
+					Index)));
+			}
+			if (Price.Price < 0)
+			{
+				AddValidationError(OutErrors, FText::FromString(FString::Printf(
+					TEXT("CardUpgradeService.Prices[%d].Price 不能为负数。"), Index)));
+			}
+			if (SeenRarities.Contains(Price.FromRarity))
+			{
+				AddValidationError(OutErrors, FText::FromString(FString::Printf(
+					TEXT("CardUpgradeService.Prices[%d].FromRarity 重复：%s。"),
+					Index, *Price.FromRarity.ToString())));
+			}
+			SeenRarities.Add(Price.FromRarity);
 		}
 	}
 

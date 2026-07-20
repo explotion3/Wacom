@@ -1,6 +1,7 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Validation/CardDefinitionValidation.h"
+#include "Validation/CardUpgradeCatalogValidation.h"
 
 #include "Cards/CardDefinition.h"
 #include "Rules/BattleRuleContentContract.h"
@@ -402,6 +403,8 @@ bool FWacomCardDefinitionValidation::Validate(
 
 		ValidatePassive(Passive, PassiveLabel, CardDefinition->TargetMode, OutErrors);
 	}
+
+	FWacomCardUpgradeCatalogValidation::AppendReachableChainErrors(CardDefinition, OutErrors);
 
 	return OutErrors.IsEmpty();
 }
