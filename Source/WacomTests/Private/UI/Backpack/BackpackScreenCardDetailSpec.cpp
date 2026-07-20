@@ -8,6 +8,8 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
+#include "UI/Backpack/WacomBackpackZonePileTypes.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
@@ -149,6 +151,44 @@ bool FWacomUIBackpackCardDetailPanelSectionsSpec::RunTest(const FString& /*Param
 	TestEqual(TEXT("First section is description"), Panel->GetSectionTitleText(0).ToString(), TEXT("描述"));
 	TestEqual(TEXT("Second section is passive"), Panel->GetSectionTitleText(1).ToString(), TEXT("被动"));
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackVisualIdentityAndDropFeedbackSpec,
+	"Wacom.UI.Backpack.Visual.IdentityAndDropFeedback",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackVisualIdentityAndDropFeedbackSpec::RunTest(const FString& /*Parameters*/)
+{
+	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
+	const FLinearColor Battle = Style->ResolveZoneAppearance(EZoneKind::BattleDeck).AccentColor;
+	const FLinearColor Special = Style->ResolveZoneAppearance(EZoneKind::SpecialZone).AccentColor;
+	const FLinearColor Burden = Style->ResolveZoneAppearance(EZoneKind::BurdenZone).AccentColor;
+	TestFalse(TEXT("Battle and Special have distinct semantic colors"), Battle.Equals(Special));
+	TestFalse(TEXT("Battle and Burden have distinct semantic colors"), Battle.Equals(Burden));
+	TestFalse(TEXT("Special and Burden have distinct semantic colors"), Special.Equals(Burden));
+
+	FWacomBackpackDropFeedbackView Feedback;
+	TestFalse(TEXT("None feedback remains hidden"), Feedback.IsVisible());
+	Feedback.State = EWacomBackpackDropFeedbackState::Valid;
+	Feedback.CurrentCount = 7;
+	Feedback.IncomingCount = 3;
+	Feedback.Capacity = 18;
+	Feedback.bHasCapacity = true;
+	TestTrue(TEXT("Valid feedback becomes visible"), Feedback.IsVisible());
+	TestFalse(TEXT("Valid feedback is not rejected"), Feedback.IsRejected());
+	Feedback.State = EWacomBackpackDropFeedbackState::Rejected;
+	TestTrue(TEXT("Rejected feedback reports rejected semantics"), Feedback.IsRejected());
+	Feedback.State = EWacomBackpackDropFeedbackState::Destructive;
+	TestTrue(TEXT("Destructive feedback remains visible"), Feedback.IsVisible());
+
+	TestFalse(TEXT("1280 logical pixels uses floating details"),
+		FWacomBackpackCardDetailController::ShouldUseDockedMode(1280.0f, 1600.0f));
+	TestTrue(TEXT("Breakpoint uses docked details"),
+		FWacomBackpackCardDetailController::ShouldUseDockedMode(1600.0f, 1600.0f));
+	TestTrue(TEXT("Ultrawide uses docked details"),
+		FWacomBackpackCardDetailController::ShouldUseDockedMode(2560.0f, 1600.0f));
 	return true;
 }
 

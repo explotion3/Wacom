@@ -547,16 +547,20 @@ FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 			? CorridorStartX
 			: CorridorStartX + UsedWidth - NeutralUsedWidth;
 
+	const float ExpandedLiftClearance = bExpanded
+		? FMath::Max(0.0f, FocusLiftPixels)
+		: 0.0f;
 	const float SpaceBelow = WorkspaceSize.Y - EdgeMarginPixels - (HeaderTopLeft.Y + HeaderSize.Y);
 	const float SpaceAbove = HeaderTopLeft.Y - EdgeMarginPixels;
-	const bool bOpenBelow = SpaceBelow >= CardSize.Y + 8.0f || SpaceBelow >= SpaceAbove;
+	const bool bOpenBelow = SpaceBelow >= CardSize.Y + 8.0f + ExpandedLiftClearance
+		|| SpaceBelow >= SpaceAbove;
 	const float CardTop = bOpenBelow
 		? FMath::Clamp(
-			HeaderTopLeft.Y + HeaderSize.Y + 8.0f,
+			HeaderTopLeft.Y + HeaderSize.Y + 8.0f + ExpandedLiftClearance,
 			EdgeMarginPixels,
 			FMath::Max(EdgeMarginPixels, WorkspaceSize.Y - EdgeMarginPixels - CardSize.Y))
 		: FMath::Clamp(
-			HeaderTopLeft.Y - 8.0f - CardSize.Y,
+			HeaderTopLeft.Y - 8.0f - ExpandedLiftClearance - CardSize.Y,
 			EdgeMarginPixels,
 			FMath::Max(EdgeMarginPixels, WorkspaceSize.Y - EdgeMarginPixels - CardSize.Y));
 	if (bExpanded)

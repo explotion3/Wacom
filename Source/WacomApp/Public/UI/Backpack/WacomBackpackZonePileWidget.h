@@ -8,7 +8,9 @@
 #include "WacomBackpackZonePileWidget.generated.h"
 
 class UBorder;
+class UImage;
 class UTextBlock;
+class UWacomBackpackWorkspaceStyle;
 
 /** 工作台内的被动区域牌堆；只显示 ViewData 并把标题指针事件转交给 Workspace。 */
 UCLASS(Blueprintable)
@@ -27,7 +29,9 @@ public:
 
 	void SetPileView(const FWacomBackpackZonePileView& InView);
 	const FWacomBackpackZonePileView& GetPileView() const { return PileView; }
-	void SetDropPreviewState(bool bVisible, bool bRejected);
+	void SetVisualStyle(UWacomBackpackWorkspaceStyle* InStyle);
+	void SetDropFeedbackView(const FWacomBackpackDropFeedbackView& InView);
+	const FWacomBackpackDropFeedbackView& GetDropFeedbackView() const { return DropFeedbackView; }
 	void SetResolvedGeometry(const FSlateRect& InFrameRect, const FSlateRect& InHeaderRect);
 	FSlateRect GetResolvedFrameRect() const { return ResolvedFrameRect; }
 	FSlateRect GetResolvedHeaderRect() const { return ResolvedHeaderRect; }
@@ -46,10 +50,19 @@ protected:
 	TObjectPtr<UBorder> DragHandle;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> AccentStrip;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> ZoneIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TitleText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> CountText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> CountBadge;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> StatusText;
@@ -57,14 +70,21 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> DropFeedback;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DropFeedbackText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DropFeedbackCountText;
+
 private:
 	FWacomBackpackZonePileView PileView;
 	FSlateRect ResolvedFrameRect;
 	FSlateRect ResolvedHeaderRect;
-	bool bDropPreviewVisible = false;
-	bool bDropPreviewRejected = false;
+	TWeakObjectPtr<UWacomBackpackWorkspaceStyle> VisualStyle;
+	FWacomBackpackDropFeedbackView DropFeedbackView;
 	bool bLastPointerDownOnDragHandle = false;
 
 	void EnsureFallbackTree();
 	void ApplyView();
+	void ApplyDropFeedback();
 };

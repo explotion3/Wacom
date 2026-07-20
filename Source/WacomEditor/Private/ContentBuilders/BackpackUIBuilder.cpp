@@ -12,6 +12,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/InvalidationBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
@@ -24,6 +25,7 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Components/WrapBox.h"
+#include "Engine/Texture2D.h"
 #include "HAL/FileManager.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "Kismet2/KismetEditorUtilities.h"
@@ -35,6 +37,7 @@
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
+#include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
@@ -45,6 +48,231 @@ namespace Wacom::ContentBuilder
 namespace
 {
 const TCHAR* BackpackUIRoot = TEXT("/Game/Wacom/UI/Backpack");
+const TCHAR* BackpackVisualRoot = TEXT("/Game/Wacom/UI/Backpack/Visual");
+
+FString PackagePath(const TCHAR* AssetName, const TCHAR* RootPath);
+FString ObjectPath(const TCHAR* AssetName, const TCHAR* RootPath);
+bool SaveTopLevelAsset(UObject& Asset);
+
+enum class EBackpackVisualGlyph : uint8
+{
+	BattleIcon,
+	SpecialIcon,
+	BurdenIcon,
+	DeleteIcon,
+	BattleFrame,
+	SpecialFrame,
+	BurdenFrame,
+	DeleteFrame,
+};
+
+struct FBackpackVisualAssets
+{
+	TObjectPtr<UTexture2D> BattleIcon;
+	TObjectPtr<UTexture2D> SpecialIcon;
+	TObjectPtr<UTexture2D> BurdenIcon;
+	TObjectPtr<UTexture2D> DeleteIcon;
+	TObjectPtr<UTexture2D> BattleFrame;
+	TObjectPtr<UTexture2D> SpecialFrame;
+	TObjectPtr<UTexture2D> BurdenFrame;
+	TObjectPtr<UTexture2D> DeleteFrame;
+
+	bool IsComplete() const
+	{
+		return BattleIcon && SpecialIcon && BurdenIcon && DeleteIcon
+			&& BattleFrame && SpecialFrame && BurdenFrame && DeleteFrame;
+	}
+};
+
+void DrawPixel(TArray<FColor>& Pixels, int32 Size, int32 X, int32 Y, int32 Thickness = 1)
+{
+	for (int32 DY = 0; DY < Thickness; ++DY)
+	{
+		for (int32 DX = 0; DX < Thickness; ++DX)
+		{
+			const int32 PX = X + DX;
+			const int32 PY = Y + DY;
+			if (PX >= 0 && PX < Size && PY >= 0 && PY < Size)
+			{
+				Pixels[PY * Size + PX] = FColor::White;
+			}
+		}
+	}
+}
+
+void DrawLine(TArray<FColor>& Pixels, int32 Size, FIntPoint A, FIntPoint B, int32 Thickness = 1)
+{
+	int32 X = A.X;
+	int32 Y = A.Y;
+	const int32 DX = FMath::Abs(B.X - A.X);
+	const int32 SX = A.X < B.X ? 1 : -1;
+	const int32 DY = -FMath::Abs(B.Y - A.Y);
+	const int32 SY = A.Y < B.Y ? 1 : -1;
+	int32 Error = DX + DY;
+	for (;;)
+	{
+		DrawPixel(Pixels, Size, X, Y, Thickness);
+		if (X == B.X && Y == B.Y)
+		{
+			break;
+		}
+		const int32 TwiceError = Error * 2;
+		if (TwiceError >= DY) { Error += DY; X += SX; }
+		if (TwiceError <= DX) { Error += DX; Y += SY; }
+	}
+}
+
+void DrawRect(TArray<FColor>& Pixels, int32 Size, int32 L, int32 T, int32 R, int32 B, int32 Thickness)
+{
+	DrawLine(Pixels, Size, FIntPoint(L, T), FIntPoint(R, T), Thickness);
+	DrawLine(Pixels, Size, FIntPoint(R, T), FIntPoint(R, B), Thickness);
+	DrawLine(Pixels, Size, FIntPoint(R, B), FIntPoint(L, B), Thickness);
+	DrawLine(Pixels, Size, FIntPoint(L, B), FIntPoint(L, T), Thickness);
+}
+
+TArray<FColor> BuildBackpackVisualPixels(EBackpackVisualGlyph Glyph, int32 Size)
+{
+	TArray<FColor> Pixels;
+	Pixels.Init(FColor(255, 255, 255, 0), Size * Size);
+	if (Glyph == EBackpackVisualGlyph::BattleIcon)
+	{
+		DrawRect(Pixels, Size, 12, 18, 42, 48, 3);
+		DrawRect(Pixels, Size, 18, 12, 48, 42, 3);
+		DrawRect(Pixels, Size, 24, 6, 54, 36, 3);
+	}
+	else if (Glyph == EBackpackVisualGlyph::SpecialIcon)
+	{
+		DrawLine(Pixels, Size, FIntPoint(32, 6), FIntPoint(56, 32), 3);
+		DrawLine(Pixels, Size, FIntPoint(56, 32), FIntPoint(32, 58), 3);
+		DrawLine(Pixels, Size, FIntPoint(32, 58), FIntPoint(8, 32), 3);
+		DrawLine(Pixels, Size, FIntPoint(8, 32), FIntPoint(32, 6), 3);
+		DrawRect(Pixels, Size, 27, 27, 36, 36, 2);
+	}
+	else if (Glyph == EBackpackVisualGlyph::BurdenIcon)
+	{
+		DrawRect(Pixels, Size, 12, 27, 52, 56, 4);
+		DrawLine(Pixels, Size, FIntPoint(20, 28), FIntPoint(20, 19), 4);
+		DrawLine(Pixels, Size, FIntPoint(20, 19), FIntPoint(27, 10), 4);
+		DrawLine(Pixels, Size, FIntPoint(27, 10), FIntPoint(38, 10), 4);
+		DrawLine(Pixels, Size, FIntPoint(38, 10), FIntPoint(46, 19), 4);
+		DrawLine(Pixels, Size, FIntPoint(46, 19), FIntPoint(46, 28), 4);
+		DrawRect(Pixels, Size, 29, 38, 35, 49, 2);
+	}
+	else if (Glyph == EBackpackVisualGlyph::DeleteIcon)
+	{
+		DrawLine(Pixels, Size, FIntPoint(13, 8), FIntPoint(48, 8), 3);
+		DrawLine(Pixels, Size, FIntPoint(48, 8), FIntPoint(54, 50), 3);
+		DrawLine(Pixels, Size, FIntPoint(54, 50), FIntPoint(35, 55), 3);
+		DrawLine(Pixels, Size, FIntPoint(27, 55), FIntPoint(10, 51), 3);
+		DrawLine(Pixels, Size, FIntPoint(10, 51), FIntPoint(13, 8), 3);
+		DrawLine(Pixels, Size, FIntPoint(33, 12), FIntPoint(25, 28), 4);
+		DrawLine(Pixels, Size, FIntPoint(25, 28), FIntPoint(38, 34), 4);
+		DrawLine(Pixels, Size, FIntPoint(38, 34), FIntPoint(29, 53), 4);
+	}
+	else if (Glyph == EBackpackVisualGlyph::BattleFrame)
+	{
+		DrawRect(Pixels, Size, 2, 2, 61, 61, 2);
+		DrawRect(Pixels, Size, 7, 7, 56, 56, 1);
+	}
+	else if (Glyph == EBackpackVisualGlyph::SpecialFrame)
+	{
+		const TArray<FIntPoint> Points = {
+			{8, 2}, {55, 2}, {62, 9}, {62, 54},
+			{55, 61}, {8, 61}, {1, 54}, {1, 9}, {8, 2}};
+		for (int32 Index = 1; Index < Points.Num(); ++Index)
+		{
+			DrawLine(Pixels, Size, Points[Index - 1], Points[Index], 2);
+		}
+	}
+	else if (Glyph == EBackpackVisualGlyph::BurdenFrame)
+	{
+		DrawRect(Pixels, Size, 2, 2, 61, 61, 4);
+		for (int32 X : {12, 30, 48})
+		{
+			DrawRect(Pixels, Size, X, 2, X + 5, 8, 2);
+		}
+	}
+	else
+	{
+		DrawRect(Pixels, Size, 2, 2, 61, 61, 3);
+		for (int32 Offset = 10; Offset <= 46; Offset += 12)
+		{
+			DrawLine(Pixels, Size, FIntPoint(Offset, 2), FIntPoint(Offset + 10, 12), 2);
+			DrawLine(Pixels, Size, FIntPoint(Offset, 51), FIntPoint(Offset + 10, 61), 2);
+		}
+	}
+	return Pixels;
+}
+
+UTexture2D* LoadOrCreateBackpackVisualTexture(const TCHAR* Name, EBackpackVisualGlyph Glyph)
+{
+	if (UTexture2D* Existing = LoadObject<UTexture2D>(nullptr, *ObjectPath(Name, BackpackVisualRoot)))
+	{
+		return Existing;
+	}
+	UPackage* Package = CreatePackage(*PackagePath(Name, BackpackVisualRoot));
+	if (!Package)
+	{
+		return nullptr;
+	}
+	constexpr int32 TextureSize = 64;
+	UTexture2D* Texture = NewObject<UTexture2D>(
+		Package, Name, RF_Public | RF_Standalone | RF_Transactional);
+	if (!Texture)
+	{
+		return nullptr;
+	}
+	const TArray<FColor> Pixels = BuildBackpackVisualPixels(Glyph, TextureSize);
+	Texture->Source.Init(
+		TextureSize, TextureSize, 1, 1, TSF_BGRA8,
+		reinterpret_cast<const uint8*>(Pixels.GetData()));
+	Texture->CompressionSettings = TC_EditorIcon;
+	Texture->MipGenSettings = TMGS_NoMipmaps;
+	Texture->LODGroup = TEXTUREGROUP_UI;
+	Texture->Filter = TF_Nearest;
+	Texture->AddressX = TA_Clamp;
+	Texture->AddressY = TA_Clamp;
+	Texture->NeverStream = true;
+	Texture->SRGB = true;
+	FAssetRegistryModule::AssetCreated(Texture);
+	Texture->PostEditChange();
+	return SaveTopLevelAsset(*Texture) ? Texture : nullptr;
+}
+
+FSlateBrush MakeBackpackIconBrush(UTexture2D* Texture)
+{
+	FSlateBrush Brush;
+	Brush.SetResourceObject(Texture);
+	Brush.DrawAs = ESlateBrushDrawType::Image;
+	Brush.ImageSize = FVector2D(24.0f, 24.0f);
+	Brush.TintColor = FSlateColor(FLinearColor::White);
+	return Brush;
+}
+
+FSlateBrush MakeBackpackFrameBrush(UTexture2D* Texture)
+{
+	FSlateBrush Brush;
+	Brush.SetResourceObject(Texture);
+	Brush.DrawAs = ESlateBrushDrawType::Box;
+	Brush.ImageSize = FVector2D(64.0f, 64.0f);
+	Brush.Margin = FMargin(0.22f);
+	Brush.TintColor = FSlateColor(FLinearColor::White);
+	return Brush;
+}
+
+FBackpackVisualAssets BuildBackpackVisualAssets()
+{
+	FBackpackVisualAssets Assets;
+	Assets.BattleIcon = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackZone_Battle"), EBackpackVisualGlyph::BattleIcon);
+	Assets.SpecialIcon = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackZone_Special"), EBackpackVisualGlyph::SpecialIcon);
+	Assets.BurdenIcon = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackZone_Burden"), EBackpackVisualGlyph::BurdenIcon);
+	Assets.DeleteIcon = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackZone_Delete"), EBackpackVisualGlyph::DeleteIcon);
+	Assets.BattleFrame = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackFrame_Battle"), EBackpackVisualGlyph::BattleFrame);
+	Assets.SpecialFrame = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackFrame_Special"), EBackpackVisualGlyph::SpecialFrame);
+	Assets.BurdenFrame = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackFrame_Burden"), EBackpackVisualGlyph::BurdenFrame);
+	Assets.DeleteFrame = LoadOrCreateBackpackVisualTexture(TEXT("T_BackpackFrame_Delete"), EBackpackVisualGlyph::DeleteFrame);
+	return Assets;
+}
 
 FSlateChildSize FillSize(float Value = 1.0f)
 {
@@ -551,7 +779,7 @@ bool PatchBackpackDeckCardFace()
 	return true;
 }
 
-constexpr TCHAR ZonePileBuilderContract[] = TEXT("Wacom.Backpack.ZonePile.RealCards.v1");
+constexpr TCHAR ZonePileBuilderContract[] = TEXT("Wacom.Backpack.ZonePile.VisualIdentity.v2");
 
 bool IsZonePileBlueprintCurrent(const UWidgetBlueprint& Blueprint)
 {
@@ -565,16 +793,26 @@ bool IsZonePileBlueprintCurrent(const UWidgetBlueprint& Blueprint)
 	UWidgetTree* Tree = Blueprint.WidgetTree;
 	const UBorder* Frame = Cast<UBorder>(Tree->FindWidget(TEXT("FrameBorder")));
 	const UBorder* DragHandle = Cast<UBorder>(Tree->FindWidget(TEXT("DragHandle")));
+	const UBorder* AccentStrip = Cast<UBorder>(Tree->FindWidget(TEXT("AccentStrip")));
+	const UImage* ZoneIcon = Cast<UImage>(Tree->FindWidget(TEXT("ZoneIcon")));
 	const UTextBlock* Title = Cast<UTextBlock>(Tree->FindWidget(TEXT("TitleText")));
 	const UTextBlock* Count = Cast<UTextBlock>(Tree->FindWidget(TEXT("CountText")));
+	const UBorder* CountBadge = Cast<UBorder>(Tree->FindWidget(TEXT("CountBadge")));
 	const UTextBlock* Status = Cast<UTextBlock>(Tree->FindWidget(TEXT("StatusText")));
 	const UBorder* DropFeedback = Cast<UBorder>(Tree->FindWidget(TEXT("DropFeedback")));
+	const UTextBlock* DropFeedbackText = Cast<UTextBlock>(Tree->FindWidget(TEXT("DropFeedbackText")));
+	const UTextBlock* DropFeedbackCountText = Cast<UTextBlock>(Tree->FindWidget(TEXT("DropFeedbackCountText")));
 	return Frame && Frame->bIsVariable
 		&& DragHandle && DragHandle->bIsVariable
+		&& AccentStrip && AccentStrip->bIsVariable
+		&& ZoneIcon && ZoneIcon->bIsVariable
 		&& Title && Title->bIsVariable
 		&& Count && Count->bIsVariable
+		&& CountBadge && CountBadge->bIsVariable
 		&& Status && Status->bIsVariable
 		&& DropFeedback && DropFeedback->bIsVariable
+		&& DropFeedbackText && DropFeedbackText->bIsVariable
+		&& DropFeedbackCountText && DropFeedbackCountText->bIsVariable
 		&& !Tree->FindWidget(TEXT("PreviewHost"));
 }
 
@@ -592,6 +830,15 @@ bool BuildZonePileBlueprint(UWidgetBlueprint& Blueprint)
 		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
 		Slot->SetOffsets(FMargin(0.0f));
 	}
+	UBorder* AccentStrip = MakeWidget<UBorder>(Blueprint, TEXT("AccentStrip"), true);
+	AccentStrip->SetBrushColor(FLinearColor(0.36f, 0.70f, 0.86f, 1.0f));
+	AccentStrip->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* Slot = Root->AddChildToCanvas(AccentStrip))
+	{
+		Slot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 0.0f));
+		Slot->SetOffsets(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
+		Slot->SetZOrder(1);
+	}
 
 	UBorder* DragHandle = MakeWidget<UBorder>(Blueprint, TEXT("DragHandle"), true);
 	DragHandle->SetPadding(FMargin(10.0f, 7.0f));
@@ -604,6 +851,17 @@ bool BuildZonePileBlueprint(UWidgetBlueprint& Blueprint)
 	}
 	UHorizontalBox* Header = MakeWidget<UHorizontalBox>(Blueprint, TEXT("Header"));
 	DragHandle->AddChild(Header);
+	USizeBox* IconSize = MakeWidget<USizeBox>(Blueprint, TEXT("ZoneIconSize"));
+	IconSize->SetWidthOverride(24.0f);
+	IconSize->SetHeightOverride(24.0f);
+	if (UHorizontalBoxSlot* Slot = Header->AddChildToHorizontalBox(IconSize))
+	{
+		Slot->SetVerticalAlignment(VAlign_Center);
+		Slot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+	}
+	UImage* ZoneIcon = MakeWidget<UImage>(Blueprint, TEXT("ZoneIcon"), true);
+	ZoneIcon->SetVisibility(ESlateVisibility::Collapsed);
+	IconSize->AddChild(ZoneIcon);
 	UTextBlock* Title = MakeText(
 		Blueprint, TEXT("TitleText"),
 		NSLOCTEXT("BackpackUIBuilder", "PileTitle", "区域牌堆"),
@@ -613,18 +871,21 @@ bool BuildZonePileBlueprint(UWidgetBlueprint& Blueprint)
 		Slot->SetSize(FillSize());
 		Slot->SetVerticalAlignment(VAlign_Center);
 	}
-	UTextBlock* Count = MakeText(
-		Blueprint, TEXT("CountText"), FText::FromString(TEXT("0")),
-		17, FLinearColor(0.55f, 0.86f, 0.98f, 1.0f), true);
-	if (UHorizontalBoxSlot* Slot = Header->AddChildToHorizontalBox(Count))
+	UBorder* CountBadge = MakeWidget<UBorder>(Blueprint, TEXT("CountBadge"), true);
+	CountBadge->SetPadding(FMargin(8.0f, 3.0f));
+	if (UHorizontalBoxSlot* Slot = Header->AddChildToHorizontalBox(CountBadge))
 	{
 		Slot->SetSize(AutoSize());
 		Slot->SetVerticalAlignment(VAlign_Center);
 	}
+	UTextBlock* Count = MakeText(
+		Blueprint, TEXT("CountText"), FText::FromString(TEXT("0")),
+		17, FLinearColor(0.55f, 0.86f, 0.98f, 1.0f), true);
+	CountBadge->AddChild(Count);
 
 	UTextBlock* Status = MakeText(
 		Blueprint, TEXT("StatusText"),
-		NSLOCTEXT("BackpackUIBuilder", "PileExpandHint", "点击牌堆展开"),
+		FText::GetEmpty(),
 		14, FLinearColor(0.62f, 0.70f, 0.78f, 1.0f), true);
 	Status->SetJustification(ETextJustify::Center);
 	Status->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -645,6 +906,30 @@ bool BuildZonePileBlueprint(UWidgetBlueprint& Blueprint)
 		Slot->SetOffsets(FMargin(0.0f));
 		Slot->SetZOrder(3);
 	}
+	UVerticalBox* FeedbackContent = MakeWidget<UVerticalBox>(Blueprint, TEXT("DropFeedbackContent"));
+	DropFeedback->AddChild(FeedbackContent);
+	UTextBlock* DropFeedbackText = MakeText(
+		Blueprint, TEXT("DropFeedbackText"), FText::GetEmpty(), 17,
+		FLinearColor(0.98f, 0.98f, 0.96f, 1.0f), true);
+	DropFeedbackText->SetAutoWrapText(true);
+	DropFeedbackText->SetJustification(ETextJustify::Center);
+	FeedbackContent->AddChildToVerticalBox(DropFeedbackText)->SetSize(FillSize());
+	UTextBlock* DropFeedbackCountText = MakeText(
+		Blueprint, TEXT("DropFeedbackCountText"), FText::GetEmpty(), 15,
+		FLinearColor(0.98f, 0.98f, 0.96f, 1.0f), true);
+	DropFeedbackCountText->SetJustification(ETextJustify::Center);
+	FeedbackContent->AddChildToVerticalBox(DropFeedbackCountText)->SetSize(AutoSize());
+	return true;
+}
+
+bool BuildBackpackCardDetailBlueprint(UWidgetBlueprint& Blueprint)
+{
+	UBorder* Root = MakeWidget<UBorder>(Blueprint, TEXT("BackpackDetailFrame"));
+	Blueprint.WidgetTree->RootWidget = Root;
+	Root->SetPadding(FMargin(18.0f));
+	Root->SetBrushColor(FLinearColor(0.028f, 0.041f, 0.058f, 0.985f));
+	UVerticalBox* Sections = MakeWidget<UVerticalBox>(Blueprint, TEXT("SectionsBox"), true);
+	Root->AddChild(Sections);
 	return true;
 }
 
@@ -914,7 +1199,7 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 	WorkspacePanelSlot->SetSize(FillSize());
 	WorkspacePanelSlot->SetHorizontalAlignment(HAlign_Fill);
 	WorkspacePanelSlot->SetVerticalAlignment(VAlign_Fill);
-	WorkspacePanelSlot->SetPadding(FMargin(0.0f, 0.0f, 14.0f, 0.0f));
+	WorkspacePanelSlot->SetPadding(FMargin(0.0f));
 	UOverlay* WorkspaceOverlay = MakeWidget<UOverlay>(Blueprint, TEXT("WorkspaceOverlay"));
 	if (UBorderSlot* Slot = Cast<UBorderSlot>(WorkspacePanel->AddChild(WorkspaceOverlay)))
 	{
@@ -942,18 +1227,73 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 		Slot->SetHorizontalAlignment(HAlign_Fill);
 		Slot->SetVerticalAlignment(VAlign_Fill);
 	}
-	UBorder* DeleteBackground = MakeWidget<UBorder>(Blueprint, TEXT("DeleteTargetBackground"));
+	UBorder* DeleteBackground = MakeWidget<UBorder>(Blueprint, TEXT("DeleteTargetBackground"), true);
 	DeleteBackground->SetBrushColor(FLinearColor(0.30f, 0.045f, 0.052f, 0.96f));
 	DeleteBackground->SetPadding(FMargin(12.0f));
 	DeleteTargetHost->AddChildToOverlay(DeleteBackground);
+	UBorder* DeleteOutline = MakeWidget<UBorder>(Blueprint, TEXT("DeleteTargetOutline"), true);
+	DeleteOutline->SetBrushColor(FLinearColor(0.84f, 0.22f, 0.20f, 0.42f));
+	DeleteOutline->SetVisibility(ESlateVisibility::HitTestInvisible);
+	DeleteTargetHost->AddChildToOverlay(DeleteOutline);
+	UVerticalBox* DeleteContent = MakeWidget<UVerticalBox>(Blueprint, TEXT("DeleteTargetContent"));
+	if (UOverlaySlot* Slot = DeleteTargetHost->AddChildToOverlay(DeleteContent))
+	{
+		Slot->SetHorizontalAlignment(HAlign_Center);
+		Slot->SetVerticalAlignment(VAlign_Center);
+	}
+	USizeBox* DeleteIconSize = MakeWidget<USizeBox>(Blueprint, TEXT("DeleteTargetIconSize"));
+	DeleteIconSize->SetWidthOverride(30.0f);
+	DeleteIconSize->SetHeightOverride(30.0f);
+	if (UVerticalBoxSlot* Slot = DeleteContent->AddChildToVerticalBox(DeleteIconSize))
+	{
+		Slot->SetHorizontalAlignment(HAlign_Center);
+	}
+	UImage* DeleteIcon = MakeWidget<UImage>(Blueprint, TEXT("DeleteTargetIcon"), true);
+	DeleteIcon->SetVisibility(ESlateVisibility::Collapsed);
+	DeleteIconSize->AddChild(DeleteIcon);
 	UTextBlock* DeleteLabel = MakeText(
 		Blueprint,
 		TEXT("DeleteTargetLabel"),
-		NSLOCTEXT("BackpackUIBuilder", "DeleteTarget", "拖到这里批量销毁"),
+		NSLOCTEXT("BackpackUIBuilder", "DeleteTarget", "销毁区"),
 		18,
-		FLinearColor(1.0f, 0.76f, 0.70f, 1.0f));
+		FLinearColor(1.0f, 0.76f, 0.70f, 1.0f),
+		true);
 	DeleteLabel->SetJustification(ETextJustify::Center);
-	if (UOverlaySlot* Slot = DeleteTargetHost->AddChildToOverlay(DeleteLabel))
+	DeleteContent->AddChildToVerticalBox(DeleteLabel)->SetHorizontalAlignment(HAlign_Center);
+	UTextBlock* DeleteCountText = MakeText(
+		Blueprint,
+		TEXT("DeleteTargetCountText"),
+		FText::GetEmpty(),
+		14,
+		FLinearColor(1.0f, 0.84f, 0.80f, 1.0f),
+		true);
+	DeleteCountText->SetJustification(ETextJustify::Center);
+	DeleteCountText->SetVisibility(ESlateVisibility::Collapsed);
+	DeleteContent->AddChildToVerticalBox(DeleteCountText)->SetHorizontalAlignment(HAlign_Center);
+
+	USizeBox* DetailDockSize = MakeWidget<USizeBox>(Blueprint, TEXT("CardDetailDockSize"), true);
+	DetailDockSize->SetWidthOverride(360.0f);
+	DetailDockSize->SetVisibility(ESlateVisibility::Collapsed);
+	if (UHorizontalBoxSlot* Slot = Body->AddChildToHorizontalBox(DetailDockSize))
+	{
+		Slot->SetVerticalAlignment(VAlign_Fill);
+		Slot->SetPadding(FMargin(14.0f, 0.0f, 0.0f, 0.0f));
+	}
+	UBorder* DetailDockBorder = MakeWidget<UBorder>(Blueprint, TEXT("CardDetailDockBorder"));
+	DetailDockBorder->SetPadding(FMargin(12.0f));
+	DetailDockBorder->SetBrushColor(FLinearColor(0.028f, 0.041f, 0.058f, 0.985f));
+	DetailDockSize->AddChild(DetailDockBorder);
+	UOverlay* DetailDockHost = MakeWidget<UOverlay>(Blueprint, TEXT("CardDetailDockHost"), true);
+	DetailDockBorder->AddChild(DetailDockHost);
+	UTextBlock* DetailEmptyText = MakeText(
+		Blueprint,
+		TEXT("CardDetailEmptyText"),
+		NSLOCTEXT("BackpackUIBuilder", "DetailEmpty", "将鼠标移到卡牌上查看详情"),
+		15,
+		FLinearColor(0.50f, 0.58f, 0.66f, 1.0f),
+		true);
+	DetailEmptyText->SetJustification(ETextJustify::Center);
+	if (UOverlaySlot* Slot = DetailDockHost->AddChildToOverlay(DetailEmptyText))
 	{
 		Slot->SetHorizontalAlignment(HAlign_Center);
 		Slot->SetVerticalAlignment(VAlign_Center);
@@ -976,7 +1316,7 @@ bool BuildScreenBlueprint(UWidgetBlueprint& Blueprint)
 	return true;
 }
 
-UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
+UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle(const FBackpackVisualAssets& Assets)
 {
 	const TCHAR* AssetName = TEXT("DA_BackpackWorkspaceStyle");
 	if (UWacomBackpackWorkspaceStyle* ExistingStyle =
@@ -1001,6 +1341,14 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle()
 	}
 	FAssetRegistryModule::AssetCreated(Style);
 	Style->AssetVersion = UWacomBackpackWorkspaceStyle::CurrentAssetVersion;
+	Style->BattleDeckAppearance.IconBrush = MakeBackpackIconBrush(Assets.BattleIcon);
+	Style->BattleDeckAppearance.FrameBrush = MakeBackpackFrameBrush(Assets.BattleFrame);
+	Style->SpecialZoneAppearance.IconBrush = MakeBackpackIconBrush(Assets.SpecialIcon);
+	Style->SpecialZoneAppearance.FrameBrush = MakeBackpackFrameBrush(Assets.SpecialFrame);
+	Style->BurdenZoneAppearance.IconBrush = MakeBackpackIconBrush(Assets.BurdenIcon);
+	Style->BurdenZoneAppearance.FrameBrush = MakeBackpackFrameBrush(Assets.BurdenFrame);
+	Style->DestructiveAppearance.IconBrush = MakeBackpackIconBrush(Assets.DeleteIcon);
+	Style->DestructiveAppearance.FrameBrush = MakeBackpackFrameBrush(Assets.DeleteFrame);
 	Style->CardRenderSize = FVector2D(296.0f, 420.0f);
 	Style->MinimumVisibleFraction = 0.3f;
 	Style->DefaultCardSpacing = FVector2D(36.0f, 44.0f);
@@ -1046,7 +1394,12 @@ bool BuildBackpackUIContent()
 		return false;
 	}
 
-	UWacomBackpackWorkspaceStyle* Style = BuildWorkspaceStyle();
+	const FBackpackVisualAssets VisualAssets = BuildBackpackVisualAssets();
+	if (!VisualAssets.IsComplete())
+	{
+		return false;
+	}
+	UWacomBackpackWorkspaceStyle* Style = BuildWorkspaceStyle(VisualAssets);
 	if (!Style)
 	{
 		return false;
@@ -1058,9 +1411,11 @@ bool BuildBackpackUIContent()
 		TEXT("WBP_BackpackZonePile"), UWacomBackpackZonePileWidget::StaticClass(), false);
 	UWidgetBlueprint* Confirm = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackDeleteConfirm"), UWacomBackpackDeleteConfirmWidget::StaticClass());
+	UWidgetBlueprint* Detail = LoadOrCreateWidgetBlueprint(
+		TEXT("WBP_BackpackCardDetailPanel"), UWacomCardDetailPanel::StaticClass());
 	UWidgetBlueprint* Screen = LoadOrCreateWidgetBlueprint(
 		TEXT("WBP_BackpackScreen"), UWacomBackpackScreen::StaticClass());
-	if (!Workspace || !ZonePile || !Confirm || !Screen)
+	if (!Workspace || !ZonePile || !Confirm || !Detail || !Screen)
 	{
 		return false;
 	}
@@ -1084,12 +1439,19 @@ bool BuildBackpackUIContent()
 	{
 		return false;
 	}
+	if (!BuildBackpackCardDetailBlueprint(*Detail)
+		|| !CompileWidgetBlueprint(*Detail)
+		|| !SaveTopLevelAsset(*Detail))
+	{
+		return false;
+	}
 	if (!BuildScreenBlueprint(*Screen) || !CompileWidgetBlueprint(*Screen))
 	{
 		return false;
 	}
 	if (!SetObjectDefault(*Screen, TEXT("WorkspaceWidgetClass"), Workspace->GeneratedClass)
 		|| !SetObjectDefault(*Screen, TEXT("DeleteConfirmWidgetClass"), Confirm->GeneratedClass)
+		|| !SetObjectDefault(*Screen, TEXT("CardDetailPanelClass"), Detail->GeneratedClass)
 		|| !SetObjectDefault(*Screen, TEXT("WorkspaceStyle"), Style)
 		|| !SaveTopLevelAsset(*Screen))
 	{

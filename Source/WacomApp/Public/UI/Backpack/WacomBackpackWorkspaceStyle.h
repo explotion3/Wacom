@@ -4,9 +4,34 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "RunStateTypes.h"
+#include "Styling/SlateBrush.h"
 #include "WacomBackpackWorkspaceStyle.generated.h"
 
 class UMaterialInterface;
+
+/** 可换皮的区域视觉外观；所有字段只影响 UMG 表现。 */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomBackpackZoneAppearance
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Visual",
+		meta = (ToolTip = "区域标题、强调色带和图标的主色；应与其它区域保持可辨识差异。"))
+	FLinearColor AccentColor = FLinearColor(0.36f, 0.70f, 0.86f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Visual",
+		meta = (ToolTip = "区域牌框与标题底板的中性表面色；建议保持低对比，避免压过卡面。"))
+	FLinearColor SurfaceColor = FLinearColor(0.035f, 0.055f, 0.078f, 0.96f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Visual",
+		meta = (ToolTip = "区域单色图标 Brush；推荐使用透明蒙版纹理，运行时会乘以 AccentColor。"))
+	FSlateBrush IconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Visual",
+		meta = (ToolTip = "区域九宫格轮廓 Brush；为空时使用纯色 Border fallback。"))
+	FSlateBrush FrameBrush;
+};
 
 /** 背包活动卡的 Fake3D、速度倾斜和接触阴影制作参数。 */
 USTRUCT(BlueprintType)
@@ -63,10 +88,14 @@ class WACOMAPP_API UWacomBackpackWorkspaceStyle : public UDataAsset
 
 public:
 	/** 当前制作资产版本。运行时与 Builder 禁止静默迁移已有资产。 */
-	static constexpr int32 CurrentAssetVersion = 2;
+	static constexpr int32 CurrentAssetVersion = 3;
+
+	UWacomBackpackWorkspaceStyle();
+
+	const FWacomBackpackZoneAppearance& ResolveZoneAppearance(EZoneKind Zone) const;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Version",
-		meta = (ToolTip = "背包工作台 Style 资产版本。版本 2 引入展开牌堆 Hand Lens；仅允许通过明确的白名单资产迁移修改已有资产。"))
+		meta = (ToolTip = "背包工作台 Style 资产版本。版本 3 引入通用区域视觉、响应式详情栏和完整投放反馈；仅允许通过明确的白名单资产迁移修改已有资产。"))
 	int32 AssetVersion = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Layout",
@@ -219,6 +248,46 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Color",
 		meta = (ToolTip = "被拒绝牌匣目标预览颜色。建议与合法目标区分明显；只影响表现。"))
 	FLinearColor RejectedTargetColor = FLinearColor(1.0f, 0.22f, 0.18f, 0.9f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Zone Visual",
+		meta = (ToolTip = "备战区视觉：冷蓝色、卡组图标和双线轮廓。仅影响表现。"))
+	FWacomBackpackZoneAppearance BattleDeckAppearance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Zone Visual",
+		meta = (ToolTip = "特殊区视觉：紫色、菱形图标和切角轮廓。仅影响表现。"))
+	FWacomBackpackZoneAppearance SpecialZoneAppearance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Zone Visual",
+		meta = (ToolTip = "负重区视觉：琥珀色、负重图标和警示轮廓。仅影响表现。"))
+	FWacomBackpackZoneAppearance BurdenZoneAppearance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Zone Visual",
+		meta = (ToolTip = "销毁区视觉：红色、破损卡牌图标和危险轮廓。仅影响表现。"))
+	FWacomBackpackZoneAppearance DestructiveAppearance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Zone Visual",
+		meta = (ToolTip = "未展开牌框的轮廓不透明度。推荐 0.55–0.8；不改变卡牌透明度。", ClampMin = "0.0", ClampMax = "1.0"))
+	float InactivePileFrameOpacity = 0.68f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Zone Visual",
+		meta = (ToolTip = "投放目标覆盖层的不透明度。推荐 0.12–0.28；覆盖层始终不参与命中。", ClampMin = "0.0", ClampMax = "1.0"))
+	float DropFeedbackFillOpacity = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Detail",
+		meta = (ToolTip = "详情层切换为右侧固定检查栏所需的最小逻辑宽度，单位为像素。默认 1600；低于该值使用避让浮层。"))
+	float DetailDockBreakpointPixels = 1600.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Detail",
+		meta = (ToolTip = "宽屏固定详情检查栏宽度，单位为像素。默认 360；会减少工作台可用宽度。"))
+	float DetailDockWidthPixels = 360.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Detail",
+		meta = (ToolTip = "窄屏避让浮层尺寸，单位为像素。默认 340×420；面板会夹紧在屏幕安全区域。"))
+	FVector2D DetailFloatingSize = FVector2D(340.0f, 420.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Detail",
+		meta = (ToolTip = "详情浮层与卡牌及屏幕边缘的安全间距，单位为像素。推荐 8–24。"))
+	float DetailPanelPaddingPixels = 12.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Material",
 		meta = (ToolTip = "可选的背包卡牌反馈材质。用于 fake-3D、选中或目标反馈；留空时工作台必须保持完整功能，材质不得改变命中几何。"))

@@ -12,6 +12,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
+#include "Components/Image.h"
 #include "Components/InvalidationBox.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
@@ -32,6 +33,7 @@
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UObject/StrongObjectPtr.h"
@@ -78,6 +80,8 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackWorkspace.WBP_BackpackWorkspace_C"));
 	UClass* ConfirmClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackDeleteConfirm.WBP_BackpackDeleteConfirm_C"));
+	UClass* DetailClass = LoadBackpackWorkspaceWidgetClass(
+		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackCardDetailPanel.WBP_BackpackCardDetailPanel_C"));
 	UClass* DeckCardClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget_C"));
 	UClass* BackpackCardFaceClass = LoadBackpackWorkspaceWidgetClass(
@@ -102,6 +106,8 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		WorkspaceClass && WorkspaceClass->IsChildOf(UWacomBackpackWorkspaceWidget::StaticClass()));
 	TestTrue(TEXT("Formal confirm uses passive DeleteConfirm parent"),
 		ConfirmClass && ConfirmClass->IsChildOf(UWacomBackpackDeleteConfirmWidget::StaticClass()));
+	TestTrue(TEXT("Backpack detail panel uses the shared passive detail parent"),
+		DetailClass && DetailClass->IsChildOf(UWacomCardDetailPanel::StaticClass()));
 	TestTrue(TEXT("Backpack card uses passive DeckCard parent"),
 		DeckCardClass && DeckCardClass->IsChildOf(UWacomDeckCardWidget::StaticClass()));
 	TestTrue(TEXT("Backpack card face reuses the first-person wrapper parent"),
@@ -112,7 +118,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestTrue(TEXT("Formal pile uses passive ZonePile parent"),
 		ZonePileClass && ZonePileClass->IsChildOf(UWacomBackpackZonePileWidget::StaticClass()));
 	TestNotNull(TEXT("Formal workspace style asset loads"), Style);
-	if (!ScreenClass || !WorkspaceClass || !ConfirmClass || !Style)
+	if (!ScreenClass || !WorkspaceClass || !ConfirmClass || !DetailClass || !Style)
 	{
 		return false;
 	}
@@ -127,6 +133,8 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		UHorizontalBox* Body = Cast<UHorizontalBox>(ScreenTree->FindWidget(TEXT("Body")));
 		UOverlay* WorkspaceHost = Cast<UOverlay>(ScreenTree->FindWidget(TEXT("WorkspaceHost")));
 		UCanvasPanel* CardDetailLayer = Cast<UCanvasPanel>(ScreenTree->FindWidget(TEXT("CardDetailLayer")));
+		UOverlay* CardDetailDockHost = Cast<UOverlay>(ScreenTree->FindWidget(TEXT("CardDetailDockHost")));
+		USizeBox* CardDetailDockSize = Cast<USizeBox>(ScreenTree->FindWidget(TEXT("CardDetailDockSize")));
 		UOverlay* DeleteConfirmHost = Cast<UOverlay>(ScreenTree->FindWidget(TEXT("DeleteConfirmHost")));
 
 		TestNotNull(TEXT("Formal screen owns the CommonUI fill root"), RootFrame);
@@ -194,6 +202,10 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			}
 		};
 		TestOverlayFill(TEXT("CardDetailLayer"), CardDetailLayer);
+		TestNotNull(TEXT("Screen binds a fixed-width detail dock host"), CardDetailDockHost);
+		TestNotNull(TEXT("Screen binds a responsive detail dock size"), CardDetailDockSize);
+		TestNotNull(TEXT("Screen binds the empty detail hint"),
+			Cast<UTextBlock>(ScreenTree->FindWidget(TEXT("CardDetailEmptyText"))));
 		TestOverlayFill(TEXT("DeleteConfirmHost"), DeleteConfirmHost);
 		if (DeleteConfirmHost)
 		{
@@ -202,6 +214,10 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		}
 		TestNull(TEXT("Screen removes the legacy ZoneRackHost"), ScreenTree->FindWidget(TEXT("ZoneRackHost")));
 		TestNotNull(TEXT("Screen binds DeleteTargetHost"), Cast<UOverlay>(ScreenTree->FindWidget(TEXT("DeleteTargetHost"))));
+		TestNotNull(TEXT("Delete target binds its passive background"), Cast<UBorder>(ScreenTree->FindWidget(TEXT("DeleteTargetBackground"))));
+		TestNotNull(TEXT("Delete target binds its hit-test invisible outline"), Cast<UBorder>(ScreenTree->FindWidget(TEXT("DeleteTargetOutline"))));
+		TestNotNull(TEXT("Delete target binds its semantic icon"), Cast<UImage>(ScreenTree->FindWidget(TEXT("DeleteTargetIcon"))));
+		TestNotNull(TEXT("Delete target binds its capacity/count line"), Cast<UTextBlock>(ScreenTree->FindWidget(TEXT("DeleteTargetCountText"))));
 		TestNotNull(TEXT("Screen binds ArrangeAllButton"), Cast<UButton>(ScreenTree->FindWidget(TEXT("ArrangeAllButton"))));
 		TestNotNull(TEXT("Screen binds ResetPilePositionsButton"),
 			Cast<UButton>(ScreenTree->FindWidget(TEXT("ResetPilePositionsButton"))));
@@ -437,8 +453,10 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 
 	UWidgetTree* ZonePileTree = GetBackpackWorkspaceWidgetTree(ZonePileClass);
 	for (const FName BindingName : {
-		FName(TEXT("FrameBorder")), FName(TEXT("DragHandle")), FName(TEXT("TitleText")),
-		FName(TEXT("CountText")), FName(TEXT("StatusText")), FName(TEXT("DropFeedback")) })
+		FName(TEXT("FrameBorder")), FName(TEXT("DragHandle")), FName(TEXT("AccentStrip")),
+		FName(TEXT("ZoneIcon")), FName(TEXT("TitleText")), FName(TEXT("CountBadge")),
+		FName(TEXT("CountText")), FName(TEXT("StatusText")), FName(TEXT("DropFeedback")),
+		FName(TEXT("DropFeedbackText")), FName(TEXT("DropFeedbackCountText")) })
 	{
 		TestNotNull(*FString::Printf(TEXT("Formal ZonePile binds %s"), *BindingName.ToString()),
 			ZonePileTree ? ZonePileTree->FindWidget(BindingName) : nullptr);
@@ -450,6 +468,11 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		FindFProperty<FProperty>(ScreenClass, TEXT("ZoneRackWidgetClass")));
 	TestEqual(TEXT("Screen CDO selects formal confirmation class"),
 		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("DeleteConfirmWidgetClass")), static_cast<UObject*>(ConfirmClass));
+	TestEqual(TEXT("Screen CDO selects the backpack-specific detail class"),
+		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("CardDetailPanelClass")), static_cast<UObject*>(DetailClass));
+	UWidgetTree* DetailTree = GetBackpackWorkspaceWidgetTree(DetailClass);
+	TestNotNull(TEXT("Backpack detail WBP binds the shared SectionsBox contract"),
+		DetailTree ? Cast<UVerticalBox>(DetailTree->FindWidget(TEXT("SectionsBox"))) : nullptr);
 	FObjectPropertyBase* WorkspaceStyleProperty =
 		FindFProperty<FObjectPropertyBase>(ScreenClass, TEXT("WorkspaceStyle"));
 	TestNotNull(TEXT("Screen exposes the workspace style as an editable object property"),
@@ -479,6 +502,14 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestNotNull(TEXT("Formal workspace feedback material loads"), FeedbackMaterial);
 	if (AssignedStyle)
 	{
+		TestNotNull(TEXT("Battle visual icon is authored"),
+			AssignedStyle->BattleDeckAppearance.IconBrush.GetResourceObject());
+		TestNotNull(TEXT("Special visual icon is authored"),
+			AssignedStyle->SpecialZoneAppearance.IconBrush.GetResourceObject());
+		TestNotNull(TEXT("Burden visual icon is authored"),
+			AssignedStyle->BurdenZoneAppearance.IconBrush.GetResourceObject());
+		TestNotNull(TEXT("Delete visual icon is authored"),
+			AssignedStyle->DestructiveAppearance.IconBrush.GetResourceObject());
 		TestEqual(TEXT("Workspace style selects formal feedback material"),
 			AssignedStyle->CardFeedbackMaterial.Get(), FeedbackMaterial);
 		TestEqual(TEXT("Workspace style keeps 30 percent minimum visibility"),

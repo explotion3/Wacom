@@ -78,7 +78,14 @@ public:
 		FVector2D AbsolutePosition,
 		EZoneKind& OutZone,
 		FGuid& OutOwnerInstanceId) const;
-	void SetPileDropPreview(EZoneKind Zone, FGuid OwnerInstanceId, bool bVisible, bool bRejected);
+	bool FindPileView(
+		EZoneKind Zone,
+		FGuid OwnerInstanceId,
+		FWacomBackpackZonePileView& OutView) const;
+	void SetPileDropFeedback(
+		EZoneKind Zone,
+		FGuid OwnerInstanceId,
+		const FWacomBackpackDropFeedbackView& Feedback);
 	void SetExpandedContentBounds(EZoneKind Zone, FGuid OwnerInstanceId, const FSlateRect& LocalBounds);
 	void SetExpandedPileFocusContract(
 		EZoneKind Zone,

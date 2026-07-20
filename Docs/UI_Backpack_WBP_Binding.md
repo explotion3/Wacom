@@ -27,6 +27,7 @@ Run Snapshot / revision
 | `WBP_BackpackWorkspace` | `UWacomBackpackWorkspaceWidget`；统一 Canvas、框选和空状态 |
 | `WBP_BackpackZonePile` | `UWacomBackpackZonePileWidget`；牌堆框、标题、状态、拖柄与投放反馈 |
 | `WBP_BackpackDeleteConfirm` | `UWacomBackpackDeleteConfirmWidget`；批量销毁确认 |
+| `WBP_BackpackCardDetailPanel` | `UWacomCardDetailPanel`；背包专用中性检查栏外观，继续消费通用 `FWacomCardDetailViewData` |
 | `WBP_BackpackScreen.WorkspaceStyle` | 指向 `DA_BackpackWorkspaceStyle` 的普通资产引用；禁止在 Widget Blueprint 根详情中内联 UObject |
 | `DA_BackpackWorkspaceStyle` | `UWacomBackpackWorkspaceStyle`；工作台布局、牌堆、颜色和动效的正式运行时制作入口 |
 | `WBP_WacomDeckCardWidget` | 背包卡牌外壳；`CardFaceScaleBox=1.0`，内部直接承载现有 `WBP_FPCardView` |
@@ -41,8 +42,16 @@ Run Snapshot / revision
 | `GoldText` | `TextBlock` | 当前金币 |
 | `WorkspaceHost` | `PanelWidget` | 唯一 Workspace 宿主，必须水平和垂直 Fill |
 | `DeleteTargetHost` | `PanelWidget` | 工作台右下固定批量销毁目标 |
+| `DeleteTargetBackground` | `Border` | 销毁区低对比底板；携带进入时转为危险投放面 |
+| `DeleteTargetOutline` | `Border` | 可着色危险九宫格轮廓；始终 `HitTestInvisible` |
+| `DeleteTargetIcon` | `Image` | 可着色的破损卡牌图标，始终不参与命中 |
+| `DeleteTargetLabel` | `TextBlock` | 销毁区名称或释放提示 |
+| `DeleteTargetCountText` | `TextBlock` | 携带数量预览，无携带时隐藏 |
 | `DeleteConfirmHost` | `PanelWidget` | 销毁确认覆盖层，初始 `Collapsed` |
-| `CardDetailLayer` | `CanvasPanel` | 卡牌详情覆盖层 |
+| `CardDetailLayer` | `CanvasPanel` | 窄屏卡牌详情避让浮层 |
+| `CardDetailDockSize` | `SizeBox` | 宽屏固定详情栏宽度；低于断点时 `Collapsed` |
+| `CardDetailDockHost` | `PanelWidget` | 宽屏详情面板宿主，复用同一详情 Widget |
+| `CardDetailEmptyText` | `TextBlock` | 宽屏无浏览焦点时的轻量提示 |
 | `ArrangeAllButton` | `Button` | “整理通量卡牌”；只清通量自由布局 |
 | `ResetPilePositionsButton` | `Button` | “重置牌堆位置”；恢复默认牌堆位置并收起展开项 |
 | `CloseButton` | `Button` | 关闭背包 |
@@ -73,10 +82,15 @@ Run Snapshot / revision
 |---|---|---|
 | `FrameBorder` | `Border` | 随布局求解后的完整视觉边界扩大；自身不抢卡牌输入 |
 | `DragHandle` | `Border` | 标题拖柄；只有从这里按下并越过阈值才移动整堆 |
+| `AccentStrip` | `Border` | 区域语义色带；始终 `HitTestInvisible` |
+| `ZoneIcon` | `Image` | 区域单色图标；Brush 由 Style 提供并乘以语义色 |
 | `TitleText` | `TextBlock` | 区域名称 |
+| `CountBadge` | `Border` | 独立数量/容量标签底板 |
 | `CountText` | `TextBlock` | 实体数量、容量和可选投影摘要 |
-| `StatusText` | `TextBlock` | 展开/收起提示或负重警告 |
-| `DropFeedback` | `Border` | 合法/拒绝投放反馈，初始 `Collapsed` |
+| `StatusText` | `TextBlock` | 仅显示空状态或负重警告；不得常驻原型操作说明 |
+| `DropFeedback` | `Border` | 完整牌堆投放遮罩，初始 `Collapsed` 且 `HitTestInvisible` |
+| `DropFeedbackText` | `TextBlock` | 目标名称、确认或拒绝原因 |
+| `DropFeedbackCountText` | `TextBlock` | 容量预览，例如 `7 + 3 / 18` |
 
 ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折叠牌堆主体请求展开；从牌堆内容区域拖过框选阈值则进入该牌堆的 `Marquee`，不会误触展开。真实卡牌常驻 `StaticCardLayer`，携带时进入 `CarryRoot` 下两个携带分支，短时收落时进入 `SettlementLayer`。
 
@@ -93,7 +107,11 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 - 只有标题拖柄可移动整堆；标题或牌堆主体短点切换展开，内容区域拖动则在超过默认 `5px` 阈值后切换为该来源区框选，打开新堆时旧堆先收拢。
 - 同时只展开一个牌堆。展开卡保持 `296×420` Battle 主体逻辑尺寸、卡面 `1.0` 固定缩放和零旋转，不使用滚动或裁切；布局由“左压缩堆 + 中央完整窗口 + 右压缩堆”组成，空间不足时减少完整窗口卡数并压缩外围露出，绝不缩放卡面。
 - 展开的备战区、特殊区和负重区使用 `HandLensStrip`：空间足够时全部卡牌完整居中展示；空间不足时形成“左压缩堆 + 动态完整区 + 右压缩堆”。布局由鼠标在整条稳定走廊中的连续横向位置驱动，不再限制固定 `1–5` 张。完整卡默认间隔 `24px`，外围期望露出 `59px`、严格下限 `16px`；严格布局仍有空间时可在边界重叠不超过 `178px` 的前提下优先从右、再从左提升一张完整卡。折叠牌堆保持原固定布局。
-- 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。展开牌堆只消费 `HandLensFullGapPixels / HandLensCompressedExposurePixels / HandLensMinimumExposurePixels / HandLensPromotionOverlapTolerancePixels`；`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 保留给多卡携带，用户制作值互不覆盖。多卡携带的 `FocusWindowMaximumCards` 正式基线为 `1`，因此只完整展示当前滚轮卡，其余卡进入左右压缩段；仍可在 Style 中调高以同时完整展示相邻卡。Style 版本 2 是 Hand Lens 首个显式资产版本。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按版本 2 基线创建，已有资产只能通过带版本条件和 Package 白名单的定向迁移升级。
+- 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。展开牌堆只消费 `HandLensFullGapPixels / HandLensCompressedExposurePixels / HandLensMinimumExposurePixels / HandLensPromotionOverlapTolerancePixels`；`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 保留给多卡携带，用户制作值互不覆盖。多卡携带的 `FocusWindowMaximumCards` 正式基线为 `1`，因此只完整展示当前滚轮卡，其余卡进入左右压缩段；仍可在 Style 中调高以同时完整展示相邻卡。Style 版本 3 增加 `BattleDeckAppearance / SpecialZoneAppearance / BurdenZoneAppearance / DestructiveAppearance`、投放反馈透明度和详情响应式尺寸；已有运动和用户微调值不变。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按当前基线创建，已有资产只能通过带版本条件和 Package 白名单的定向迁移升级。
+- 牌堆身份使用颜色、单色图标和轮廓三重编码：备战冷蓝双线框、特殊紫色切角框、负重琥珀加重警示框、销毁红色破损卡牌与危险框。图标和九宫格纹理由 Builder 在缺失时确定性创建，Style Brush 保持可着色；不得在卡牌材质或 Run 规则中硬编码区域主题。
+- 标题拖柄必须始终位于可见卡身上方。展开牌堆基础卡位需预留 `ExpandedCardHoverLiftPixels` 的垂直净空，使焦点卡上抬后仍不覆盖标题；不得仅靠提高整个牌框层级而截断卡牌输入。
+- 投放反馈为 `None / Valid / Rejected / Destructive` 四态 ViewData。合法目标使用区域强调色和容量预览，拒绝显示规则层返回的原因，危险状态只用于销毁目标；所有反馈层均 `HitTestInvisible`，原子拒绝后保持携带。
+- 详情响应式模式由 Screen 几何决定：逻辑宽度不低于 `DetailDockBreakpointPixels`（基线 1600）时预留 `DetailDockWidthPixels`（基线 360）的固定检查栏；窄屏把同一详情 Widget 重挂到 `CardDetailLayer`，使用 `DetailFloatingSize` 并在卡牌相反侧夹紧。模式切换不得重建卡牌或详情 Widget，也不得改变 Workspace Snapshot。
 - 展开布局按当前卡数和工作台几何预先计算稳定 `FrameRect` / 透镜走廊；鼠标横坐标映射为 `0..CardCount-1` 的连续 `LensFocus`，只有左堆、完整区、右堆的目标身份发生变化时才重排，同一段内移动只更新 Fake3D。整个牌列从当前视觉姿态平滑滑向新目标，默认约 `0.32s` Ease-Out；透镜布局焦点与浏览卡身份必须分离。目标条带只服务布局诊断；运行时浏览、详情、Fake3D 和左键拾取必须统一按当前插值后的视觉卡身与 Canvas ZOrder 命中，重叠位置选择实际显示在最上层的卡，纵向严格等于当前卡身，完整卡之间的真实空隙不命中卡牌。动画期间即使鼠标静止，按需 Motion Timer 也要重新解析鼠标下的视觉卡，但不得重算透镜或刷新 Snapshot。标题拖柄始终拥有最高输入优先级；进入标题冻结最后透镜布局并清除浏览焦点。详情面板使用 Workspace 捕获的实际视觉矩形，经 Workspace → Absolute → `CardDetailLayer` 四角转换后定位。
 - 展开牌堆可按住左 Shift 临时锁定当前 Hand Lens 三段布局。锁定只阻止 `LensFocus` 驱动的新布局求解，实际视觉卡身命中、详情、Fake3D 和普通左键拾取仍正常；松开左 Shift 后立即使用最新缓存鼠标位置恢复重排。开始携带、框选、CardPress、整堆移动、Suspended、收起/切换牌堆、失焦或关闭背包时必须清除该瞬态锁定。Ctrl 多选合同不变。
 - 焦点卡上抬并置顶，不缩放、不改卡面透明度；邻居仅水平移动外层局部姿态。鼠标离开实际卡身后默认等待 `0.12s`，随后只清除上抬、详情和实时卡面，最后一次三段式窗口冻结到该牌堆收起或切换，不返回首次中央窗口。
@@ -141,7 +159,7 @@ Hover 卡使用局部 `48px` 上抬，紧凑牌列邻居默认约 `0.18s` 完成
 & 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomBuildBackpackUI -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
-Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 Workspace、ZonePile、DeleteConfirm 和 Screen。不再生成 `WBP_BackpackCardView`、Preview、Rack、Rack Entry、`WBP_BackpackBattleDeckZone` 或 `WBP_WacomSpecialZoneWidget`。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
+Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 Workspace、ZonePile、DeleteConfirm、背包专用 Detail 和 Screen。中性区域图标/框体纹理只在缺失时创建，已有同路径资产不得被重画。不再生成 `WBP_BackpackCardView`、Preview、Rack、Rack Entry、`WBP_BackpackBattleDeckZone` 或 `WBP_WacomSpecialZoneWidget`。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
 
 ## C++ fallback
 

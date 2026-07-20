@@ -8,8 +8,11 @@
 #include "WacomBackpackScreen.generated.h"
 
 class UButton;
+class UBorder;
 class UCanvasPanel;
+class UImage;
 class UPanelWidget;
+class USizeBox;
 class UTextBlock;
 class UCardDefinition;
 class URunSession;
@@ -107,6 +110,21 @@ protected:
 	TObjectPtr<UPanelWidget> DeleteTargetHost;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> DeleteTargetBackground;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UBorder> DeleteTargetOutline;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> DeleteTargetIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DeleteTargetLabel;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> DeleteTargetCountText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> DeleteConfirmHost;
 
 	/** 将当前区域的手动位置、角度和层级恢复为确定性默认布局。 */
@@ -117,9 +135,19 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> ResetPilePositionsButton;
 
-	/** WBP 可绑定的详情悬浮层。推荐 CanvasPanel，详情面板会定位在悬停卡牌旁边。 */
+	/** 窄屏详情悬浮层；面板会避让卡牌并夹紧到安全区域。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> CardDetailLayer;
+
+	/** 宽屏固定详情检查栏 Host。始终保留宽度，Hover 不改变工作台几何。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> CardDetailDockHost;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> CardDetailDockSize;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> CardDetailEmptyText;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomBackpackWorkspaceWidget> WorkspaceWidget;
@@ -195,6 +223,13 @@ private:
 	void HandleWorkspaceInteractionChanged();
 	void HandleWorkspaceBrowseFocusChanged(UWacomDeckCardWidget* SourceWidget);
 	void HandleWorkspaceLayoutGeometryReady(FVector2D LayoutSize);
+	void UpdateCardDetailPlacementMode();
+	void UpdateDeleteTargetPresentation(
+		bool bCarrying,
+		bool bPointerInside,
+		int32 CardCount);
+	void SetCardDetailOccupied(bool bOccupied);
+	bool IsCardDetailDocked() const { return bCardDetailDocked; }
 	void ApplyOwningLayerTransitionState(bool bTransitioning);
 	void BindOwningLayerTransition();
 	void UnbindOwningLayerTransition();
@@ -252,6 +287,7 @@ private:
 	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
 	FDelegateHandle RuntimeSettingsChangedHandle;
 	bool bOwningLayerTransitioning = false;
+	bool bCardDetailDocked = false;
 	bool bHasPendingPileExpansionAfterCollapse = false;
 	bool bPendingPileExpansionRequiresCarryHover = false;
 	EZoneKind PendingPileExpansionZone = EZoneKind::Backpack;

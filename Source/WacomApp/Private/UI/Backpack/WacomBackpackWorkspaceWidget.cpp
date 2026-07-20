@@ -375,11 +375,27 @@ bool UWacomBackpackWorkspaceWidget::FindPileAtAbsolutePosition(
 	return false;
 }
 
-void UWacomBackpackWorkspaceWidget::SetPileDropPreview(
+bool UWacomBackpackWorkspaceWidget::FindPileView(
 	EZoneKind Zone,
 	FGuid OwnerInstanceId,
-	bool bVisible,
-	bool bRejected)
+	FWacomBackpackZonePileView& OutView) const
+{
+	for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile : GetRegisteredPileWidgets())
+	{
+		const UWacomBackpackZonePileWidget* Pile = WeakPile.Get();
+		if (Pile && Pile->GetPileView().HasSameIdentity(Zone, OwnerInstanceId))
+		{
+			OutView = Pile->GetPileView();
+			return true;
+		}
+	}
+	return false;
+}
+
+void UWacomBackpackWorkspaceWidget::SetPileDropFeedback(
+	EZoneKind Zone,
+	FGuid OwnerInstanceId,
+	const FWacomBackpackDropFeedbackView& Feedback)
 {
 	UWacomBackpackZonePileWidget* TargetPile = nullptr;
 	for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile : GetRegisteredPileWidgets())
@@ -389,14 +405,17 @@ void UWacomBackpackWorkspaceWidget::SetPileDropPreview(
 			&& Pile->GetPileView().HasSameIdentity(Zone, OwnerInstanceId);
 		if (Pile)
 		{
-			Pile->SetDropPreviewState(bVisible && bTarget, bRejected);
+			Pile->SetDropFeedbackView(bTarget
+				? Feedback
+				: FWacomBackpackDropFeedbackView());
 		}
 		if (bTarget)
 		{
 			TargetPile = Pile;
 		}
 	}
-	if (!bVisible || bRejected || !TargetPile || TargetPile->GetPileView().bExpanded
+	if (!Feedback.IsVisible() || Feedback.IsRejected()
+		|| !TargetPile || TargetPile->GetPileView().bExpanded
 		|| !InteractionModel || !InteractionModel->IsCarrying())
 	{
 		CancelHoverExpandTimer();
@@ -2344,7 +2363,10 @@ void UWacomBackpackWorkspaceWidget::SetCarryInputSuspended(bool bSuspended)
 void UWacomBackpackWorkspaceWidget::CancelInteraction()
 {
 	SetExpandedPileLensInputLocked(false, false);
-	SetPileDropPreview(EZoneKind::Backpack, FGuid(), false, false);
+	SetPileDropFeedback(
+		EZoneKind::Backpack,
+		FGuid(),
+		FWacomBackpackDropFeedbackView());
 	CancelHoverExpandTimer();
 	ClearExpandedPileFocus(false);
 	EndSelectionVisualFreeze(false);
@@ -2636,6 +2658,7 @@ void UWacomBackpackWorkspaceWidget::StartCardMotionTimer()
 		FWidgetActiveTimerDelegate::CreateLambda(
 			[WeakThis, TimerGeneration](double, float DeltaSeconds)
 			{
+				TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameMotionTick);
 				UWacomBackpackWorkspaceWidget* Self = WeakThis.Get();
 				if (!Self || !Self->bCardMotionTimerActive
 					|| Self->CardMotionTimerGeneration != TimerGeneration)

@@ -8,8 +8,13 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
+#include "Components/VerticalBox.h"
+#include "Components/VerticalBoxSlot.h"
 #include "InputCoreTypes.h"
+#include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 
 #define LOCTEXT_NAMESPACE "WacomBackpackZonePile"
 
@@ -23,6 +28,12 @@ TSharedRef<SWidget> UWacomBackpackZonePileWidget::RebuildWidget()
 void UWacomBackpackZonePileWidget::SetPileView(const FWacomBackpackZonePileView& InView)
 {
 	PileView = InView;
+	ApplyView();
+}
+
+void UWacomBackpackZonePileWidget::SetVisualStyle(UWacomBackpackWorkspaceStyle* InStyle)
+{
+	VisualStyle = InStyle;
 	ApplyView();
 }
 
@@ -45,19 +56,11 @@ void UWacomBackpackZonePileWidget::SetResolvedGeometry(
 	}
 }
 
-void UWacomBackpackZonePileWidget::SetDropPreviewState(bool bVisible, bool bRejected)
+void UWacomBackpackZonePileWidget::SetDropFeedbackView(
+	const FWacomBackpackDropFeedbackView& InView)
 {
-	bDropPreviewVisible = bVisible;
-	bDropPreviewRejected = bRejected;
-	if (DropFeedback)
-	{
-		DropFeedback->SetBrushColor(bRejected
-			? FLinearColor(1.0f, 0.12f, 0.08f, 0.78f)
-			: FLinearColor(0.12f, 0.85f, 0.42f, 0.72f));
-		DropFeedback->SetVisibility(bVisible
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-	}
+	DropFeedbackView = InView;
+	ApplyDropFeedback();
 }
 
 FReply UWacomBackpackZonePileWidget::NativeOnMouseButtonDown(
@@ -98,6 +101,15 @@ void UWacomBackpackZonePileWidget::EnsureFallbackTree()
 		FrameSlot->SetOffsets(FMargin(0.0f));
 	}
 
+	AccentStrip = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("AccentStrip"));
+	AccentStrip->SetVisibility(ESlateVisibility::HitTestInvisible);
+	if (UCanvasPanelSlot* AccentSlot = Root->AddChildToCanvas(AccentStrip))
+	{
+		AccentSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 0.0f));
+		AccentSlot->SetOffsets(FMargin(0.0f, 0.0f, 0.0f, 4.0f));
+		AccentSlot->SetZOrder(1);
+	}
+
 	DragHandle = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DragHandle"));
 	DragHandle->SetPadding(FMargin(8.0f, 6.0f));
 	DragHandle->SetBrushColor(FLinearColor(0.08f, 0.13f, 0.19f, 1.0f));
@@ -110,13 +122,31 @@ void UWacomBackpackZonePileWidget::EnsureFallbackTree()
 	UHorizontalBox* Header = WidgetTree->ConstructWidget<UHorizontalBox>(
 		UHorizontalBox::StaticClass(), TEXT("Header"));
 	DragHandle->AddChild(Header);
+	USizeBox* IconSize = WidgetTree->ConstructWidget<USizeBox>(
+		USizeBox::StaticClass(), TEXT("ZoneIconSize"));
+	IconSize->SetWidthOverride(26.0f);
+	IconSize->SetHeightOverride(26.0f);
+	if (UHorizontalBoxSlot* IconSlot = Header->AddChildToHorizontalBox(IconSize))
+	{
+		IconSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+		IconSlot->SetVerticalAlignment(VAlign_Center);
+	}
+	ZoneIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("ZoneIcon"));
+	ZoneIcon->SetVisibility(ESlateVisibility::Collapsed);
+	IconSize->AddChild(ZoneIcon);
 	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
 	if (UHorizontalBoxSlot* HeaderSlot = Header->AddChildToHorizontalBox(TitleText))
 	{
 		HeaderSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 	}
+	CountBadge = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("CountBadge"));
+	CountBadge->SetPadding(FMargin(8.0f, 2.0f));
+	if (UHorizontalBoxSlot* BadgeSlot = Header->AddChildToHorizontalBox(CountBadge))
+	{
+		BadgeSlot->SetVerticalAlignment(VAlign_Center);
+	}
 	CountText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("CountText"));
-	Header->AddChildToHorizontalBox(CountText);
+	CountBadge->AddChild(CountText);
 
 	StatusText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("StatusText"));
 	StatusText->SetJustification(ETextJustify::Center);
@@ -138,10 +168,57 @@ void UWacomBackpackZonePileWidget::EnsureFallbackTree()
 		DropSlot->SetOffsets(FMargin(0.0f));
 		DropSlot->SetZOrder(3);
 	}
+	UVerticalBox* FeedbackContent = WidgetTree->ConstructWidget<UVerticalBox>(
+		UVerticalBox::StaticClass(), TEXT("DropFeedbackContent"));
+	DropFeedback->SetContent(FeedbackContent);
+	DropFeedbackText = WidgetTree->ConstructWidget<UTextBlock>(
+		UTextBlock::StaticClass(), TEXT("DropFeedbackText"));
+	DropFeedbackText->SetJustification(ETextJustify::Center);
+	DropFeedbackText->SetAutoWrapText(true);
+	FeedbackContent->AddChildToVerticalBox(DropFeedbackText);
+	DropFeedbackCountText = WidgetTree->ConstructWidget<UTextBlock>(
+		UTextBlock::StaticClass(), TEXT("DropFeedbackCountText"));
+	DropFeedbackCountText->SetJustification(ETextJustify::Center);
+	FeedbackContent->AddChildToVerticalBox(DropFeedbackCountText);
 }
 
 void UWacomBackpackZonePileWidget::ApplyView()
 {
+	const UWacomBackpackWorkspaceStyle* Style = VisualStyle.IsValid()
+		? VisualStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	const FWacomBackpackZoneAppearance& Appearance = Style->ResolveZoneAppearance(PileView.Zone);
+	if (FrameBorder)
+	{
+		if (Appearance.FrameBrush.GetResourceObject())
+		{
+			FrameBorder->SetBrush(Appearance.FrameBrush);
+			FrameBorder->SetBrushColor(Appearance.AccentColor);
+		}
+		else
+		{
+			FrameBorder->SetBrushColor(Appearance.SurfaceColor);
+		}
+		FrameBorder->SetRenderOpacity(PileView.bExpanded
+			? 1.0f
+			: FMath::Clamp(Style->InactivePileFrameOpacity, 0.0f, 1.0f));
+	}
+	if (AccentStrip)
+	{
+		AccentStrip->SetBrushColor(Appearance.AccentColor);
+	}
+	if (ZoneIcon)
+	{
+		const bool bHasIcon = Appearance.IconBrush.GetResourceObject() != nullptr;
+		if (bHasIcon)
+		{
+			ZoneIcon->SetBrush(Appearance.IconBrush);
+			ZoneIcon->SetColorAndOpacity(Appearance.AccentColor);
+		}
+		ZoneIcon->SetVisibility(bHasIcon
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
 	if (TitleText)
 	{
 		TitleText->SetText(PileView.Title);
@@ -158,24 +235,96 @@ void UWacomBackpackZonePileWidget::ApplyView()
 				Count, FText::AsNumber(PileView.ProjectedCount));
 		}
 		CountText->SetText(Count);
+		CountText->SetColorAndOpacity(FSlateColor(FLinearColor(0.94f, 0.96f, 0.98f, 1.0f)));
+	}
+	if (CountBadge)
+	{
+		FLinearColor BadgeColor = Appearance.AccentColor;
+		BadgeColor.A = PileView.bExpanded ? 0.34f : 0.22f;
+		CountBadge->SetBrushColor(BadgeColor);
 	}
 	if (StatusText)
 	{
+		const bool bShowStatus = PileView.bWarning || PileView.CardCount <= 0;
 		StatusText->SetText(PileView.bWarning
 			? LOCTEXT("BurdenWarning", "负重警告")
-			: (PileView.bExpanded
-				? LOCTEXT("CollapseHint", "点击标题收起")
-				: LOCTEXT("ExpandHint", "点击牌堆展开")));
+			: LOCTEXT("EmptyPile", "暂无卡牌"));
+		StatusText->SetVisibility(bShowStatus
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
 	}
 	if (DragHandle)
 	{
-		DragHandle->SetBrushColor(PileView.bWarning
-			? FLinearColor(0.34f, 0.07f, 0.075f, 1.0f)
-			: (PileView.bExpanded
-				? FLinearColor(0.08f, 0.38f, 0.52f, 1.0f)
-				: FLinearColor(0.08f, 0.13f, 0.19f, 1.0f)));
+		FLinearColor HeaderColor = Appearance.SurfaceColor;
+		if (PileView.bExpanded)
+		{
+			HeaderColor = FMath::Lerp(HeaderColor, Appearance.AccentColor, 0.28f);
+		}
+		if (PileView.bWarning)
+		{
+			HeaderColor = FMath::Lerp(HeaderColor, Style->RejectedTargetColor, 0.32f);
+		}
+		HeaderColor.A = 1.0f;
+		DragHandle->SetBrushColor(HeaderColor);
 	}
-	SetDropPreviewState(bDropPreviewVisible, bDropPreviewRejected);
+	ApplyDropFeedback();
+}
+
+void UWacomBackpackZonePileWidget::ApplyDropFeedback()
+{
+	if (!DropFeedback)
+	{
+		return;
+	}
+	const UWacomBackpackWorkspaceStyle* Style = VisualStyle.IsValid()
+		? VisualStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	FLinearColor Color = Style->ResolveZoneAppearance(PileView.Zone).AccentColor;
+	switch (DropFeedbackView.State)
+	{
+	case EWacomBackpackDropFeedbackState::Rejected:
+		Color = Style->RejectedTargetColor;
+		break;
+	case EWacomBackpackDropFeedbackState::Destructive:
+		Color = Style->DestructiveAppearance.AccentColor;
+		break;
+	case EWacomBackpackDropFeedbackState::Valid:
+	case EWacomBackpackDropFeedbackState::None:
+	default:
+		break;
+	}
+	Color.A = FMath::Clamp(Style->DropFeedbackFillOpacity, 0.0f, 1.0f);
+	DropFeedback->SetBrushColor(Color);
+	DropFeedback->SetVisibility(DropFeedbackView.IsVisible()
+		? ESlateVisibility::HitTestInvisible
+		: ESlateVisibility::Collapsed);
+	if (DropFeedbackText)
+	{
+		DropFeedbackText->SetText(DropFeedbackView.Message);
+		DropFeedbackText->SetColorAndOpacity(FSlateColor(FLinearColor(0.98f, 0.98f, 0.96f, 1.0f)));
+	}
+	if (DropFeedbackCountText)
+	{
+		FText CapacityPreviewText = FText::GetEmpty();
+		if (DropFeedbackView.bHasCapacity)
+		{
+			CapacityPreviewText = FText::Format(
+				LOCTEXT("DropCapacityPreview", "{0} + {1} / {2}"),
+				FText::AsNumber(DropFeedbackView.CurrentCount),
+				FText::AsNumber(DropFeedbackView.IncomingCount),
+				FText::AsNumber(DropFeedbackView.Capacity));
+		}
+		else if (DropFeedbackView.IncomingCount > 0)
+		{
+			CapacityPreviewText = FText::Format(
+				LOCTEXT("DropCountPreview", "{0} 张卡牌"),
+				FText::AsNumber(DropFeedbackView.IncomingCount));
+		}
+		DropFeedbackCountText->SetText(CapacityPreviewText);
+		DropFeedbackCountText->SetVisibility(CapacityPreviewText.IsEmpty()
+			? ESlateVisibility::Collapsed
+			: ESlateVisibility::HitTestInvisible);
+	}
 }
 
 #undef LOCTEXT_NAMESPACE

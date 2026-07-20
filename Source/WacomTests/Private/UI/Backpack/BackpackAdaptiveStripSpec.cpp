@@ -152,6 +152,18 @@ bool FWacomUIBackpackHandLensStripLayoutSpec::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Pile frame contains the stable Hand Lens corridor"),
 		StablePile.FrameRect.Left <= StablePile.FocusCorridorRect.Left
 			&& StablePile.FrameRect.Right >= StablePile.FocusCorridorRect.Right);
+	if (StablePile.Cards.Num() > 0)
+	{
+		const float FocusedCardTop = StablePile.Cards[0].CardCenter.Y
+			- Style->CardRenderSize.Y * 0.5f
+			- Style->ExpandedCardHoverLiftPixels;
+		const float FocusedCardBottom = StablePile.Cards[0].CardCenter.Y
+			+ Style->CardRenderSize.Y * 0.5f
+			- Style->ExpandedCardHoverLiftPixels;
+		const bool bHeaderClear = FocusedCardTop >= StablePile.HeaderRect.Bottom + 7.9f
+			|| FocusedCardBottom <= StablePile.HeaderRect.Top - 7.9f;
+		TestTrue(TEXT("Expanded hover lift preserves title drag-handle clearance"), bHeaderClear);
+	}
 	return true;
 }
 

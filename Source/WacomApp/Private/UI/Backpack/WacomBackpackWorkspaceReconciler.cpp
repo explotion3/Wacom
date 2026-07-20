@@ -61,8 +61,9 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 			*PileCanvas,
 			Workspace.PileWidgetClass,
 			Scene.Piles,
-			[&Workspace](UWacomBackpackZonePileWidget& Pile)
+			[&Workspace, &ResolvedStyle](UWacomBackpackZonePileWidget& Pile)
 			{
+				Pile.SetVisualStyle(const_cast<UWacomBackpackWorkspaceStyle*>(&ResolvedStyle));
 				Pile.OnPilePointerDownNative.BindUObject(
 					&Workspace,
 					&UWacomBackpackWorkspaceWidget::HandlePilePointerDown);

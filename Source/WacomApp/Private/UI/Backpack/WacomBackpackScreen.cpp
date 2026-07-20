@@ -5,14 +5,18 @@
 #define LOCTEXT_NAMESPACE "WacomBackpack"
 
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/BorderSlot.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/SizeBoxSlot.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
@@ -124,7 +128,7 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 	if (!CardDetailPanelClass)
 	{
 		CardDetailPanelClass = LoadOptionalWidgetClass<UWacomCardDetailPanel>(
-			TEXT("/Game/Wacom/UI/Card/WBP_CardDetailPanel.WBP_CardDetailPanel_C"));
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackCardDetailPanel.WBP_BackpackCardDetailPanel_C"));
 	}
 	if (!WorkspaceWidgetClass)
 	{
@@ -173,10 +177,18 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 			&GoldText,
 			&WorkspaceHost,
 			&DeleteTargetHost,
+			&DeleteTargetBackground,
+			&DeleteTargetOutline,
+			&DeleteTargetIcon,
+			&DeleteTargetLabel,
+			&DeleteTargetCountText,
 			&DeleteConfirmHost,
 			&ArrangeAllButton,
 			&ResetPilePositionsButton,
 			&CardDetailLayer,
+			&CardDetailDockHost,
+			&CardDetailDockSize,
+			&CardDetailEmptyText,
 			&CloseButton
 		});
 	}
@@ -191,6 +203,8 @@ void UWacomBackpackScreen::NativeConstruct()
 	EnsureWorkspaceWidgets();
 	BindOwningLayerTransition();
 	BindRuntimeSettings();
+	UpdateCardDetailPlacementMode();
+	UpdateDeleteTargetPresentation(false, false, 0);
 
 	if (CloseButton)
 	{
@@ -219,6 +233,7 @@ void UWacomBackpackScreen::NativeDestruct()
 	UnbindOwningLayerTransition();
 	UnbindRuntimeSettings();
 	bOwningLayerTransitioning = false;
+	bCardDetailDocked = false;
 	if (CardDetailController)
 	{
 		CardDetailController->Hide();
@@ -758,11 +773,46 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 	if (WorkspaceInteractionModel && WorkspaceInteractionModel->IsCarrying())
 	{
 		HideCardDetailPanel();
+		const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
+		const bool bDeleteTarget = IsWorkspaceDeleteTarget();
+		UpdateDeleteTargetPresentation(
+			true,
+			bDeleteTarget,
+			Carry.RemainingInstanceIds.Num());
+		if (bDeleteTarget)
+		{
+			if (WorkspaceWidget)
+			{
+				WorkspaceWidget->SetPileDropFeedback(
+					EZoneKind::Backpack,
+					FGuid(),
+					FWacomBackpackDropFeedbackView());
+			}
+			return;
+		}
 		FWacomBackpackZoneKey Target;
 		if (ResolveWorkspacePileTarget(Target) && WorkspaceWidget)
 		{
-			const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
-			bool bRejected = false;
+			FWacomBackpackDropFeedbackView Feedback;
+			Feedback.State = EWacomBackpackDropFeedbackState::Valid;
+			FWacomBackpackZonePileView TargetView;
+			if (WorkspaceWidget->FindPileView(Target.Zone, Target.OwnerInstanceId, TargetView))
+			{
+				Feedback.CurrentCount = TargetView.CardCount;
+				Feedback.Capacity = TargetView.Capacity;
+				Feedback.bHasCapacity = TargetView.bHasCapacity;
+			}
+			const bool bReturningToSource = Carry.SourceZone == Target;
+			Feedback.IncomingCount = bReturningToSource
+				? 0
+				: Carry.RemainingInstanceIds.Num();
+			Feedback.Message = FText::Format(
+				bReturningToSource
+					? LOCTEXT("ReturnToPileFeedback", "放回 {0}")
+					: LOCTEXT("MoveToPileFeedback", "放入 {0}"),
+				TargetView.Title.IsEmpty()
+					? LOCTEXT("UnknownPileFeedback", "目标区域")
+					: TargetView.Title);
 			if (!(Carry.SourceZone == Target))
 			{
 				const FRunDeckBatchMoveRequest PreviewRequest = FWacomBackpackCommandFlow::BuildBatchMoveRequest(
@@ -770,24 +820,156 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 					Target,
 					Carry.RemainingInstanceIds);
 				URunSession* Run = GetRunSession();
-				bRejected = !Run || !Run->ValidateMoveInstancesAtomic(PreviewRequest).bCanExecute;
+				FRunDeckBatchOperationValidation Validation;
+				if (Run)
+				{
+					Validation = Run->ValidateMoveInstancesAtomic(PreviewRequest);
+				}
+				if (!Run || !Validation.bCanExecute)
+				{
+					Feedback.State = EWacomBackpackDropFeedbackState::Rejected;
+					Feedback.Message = FWacomBackpackCommandFlow::BuildMoveFailureToastText(
+						Run ? Validation.DisabledReason : NAME_None);
+				}
 			}
-			WorkspaceWidget->SetPileDropPreview(
-				Target.Zone, Target.OwnerInstanceId, true, bRejected);
+			WorkspaceWidget->SetPileDropFeedback(
+				Target.Zone, Target.OwnerInstanceId, Feedback);
 			return;
 		}
+		if (WorkspaceWidget)
+		{
+			WorkspaceWidget->SetPileDropFeedback(
+				EZoneKind::Backpack,
+				FGuid(),
+				FWacomBackpackDropFeedbackView());
+		}
+		return;
 	}
+	UpdateDeleteTargetPresentation(false, false, 0);
 	if (WorkspaceWidget)
 	{
-		WorkspaceWidget->SetPileDropPreview(EZoneKind::Backpack, FGuid(), false, false);
+		WorkspaceWidget->SetPileDropFeedback(
+			EZoneKind::Backpack,
+			FGuid(),
+			FWacomBackpackDropFeedbackView());
 	}
 }
 
 void UWacomBackpackScreen::HandleWorkspaceLayoutGeometryReady(FVector2D LayoutSize)
 {
+	UpdateCardDetailPlacementMode();
 	if (LayoutSize.X > 1.0f && LayoutSize.Y > 1.0f)
 	{
 		RebuildWorkspaceFromCachedSnapshot();
+	}
+}
+
+void UWacomBackpackScreen::UpdateCardDetailPlacementMode()
+{
+	const UWacomBackpackWorkspaceStyle* Style = WorkspaceStyle
+		? WorkspaceStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	float LogicalWidth = GetCachedGeometry().GetLocalSize().X;
+	if (LogicalWidth <= 1.0f)
+	{
+		const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
+		LogicalWidth = UWidgetLayoutLibrary::GetViewportSize(this).X / ViewportScale;
+	}
+	const bool bShouldDock = CardDetailDockHost
+		&& CardDetailDockSize
+		&& FWacomBackpackCardDetailController::ShouldUseDockedMode(
+			LogicalWidth,
+			Style->DetailDockBreakpointPixels);
+	if (CardDetailDockSize)
+	{
+		CardDetailDockSize->SetWidthOverride(FMath::Max(1.0f, Style->DetailDockWidthPixels));
+		CardDetailDockSize->SetVisibility(bShouldDock
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	const bool bModeChanged = bCardDetailDocked != bShouldDock;
+	bCardDetailDocked = bShouldDock;
+	if (bModeChanged && CardDetailController)
+	{
+		CardDetailController->RepositionVisibleSource();
+	}
+	SetCardDetailOccupied(IsCardDetailPanelVisible());
+}
+
+void UWacomBackpackScreen::UpdateDeleteTargetPresentation(
+	bool bCarrying,
+	bool bPointerInside,
+	int32 CardCount)
+{
+	const UWacomBackpackWorkspaceStyle* Style = WorkspaceStyle
+		? WorkspaceStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	const FWacomBackpackZoneAppearance& Appearance = Style->DestructiveAppearance;
+	if (DeleteTargetBackground)
+	{
+		FLinearColor Surface = Appearance.SurfaceColor;
+		if (bPointerInside)
+		{
+			Surface = FMath::Lerp(Surface, Appearance.AccentColor, 0.42f);
+		}
+		else if (bCarrying)
+		{
+			Surface = FMath::Lerp(Surface, Appearance.AccentColor, 0.16f);
+		}
+		Surface.A = bCarrying ? 0.96f : 0.72f;
+		DeleteTargetBackground->SetBrushColor(Surface);
+	}
+	if (DeleteTargetOutline)
+	{
+		if (Appearance.FrameBrush.GetResourceObject())
+		{
+			DeleteTargetOutline->SetBrush(Appearance.FrameBrush);
+		}
+		FLinearColor Outline = Appearance.AccentColor;
+		Outline.A = bPointerInside ? 1.0f : (bCarrying ? 0.78f : 0.42f);
+		DeleteTargetOutline->SetBrushColor(Outline);
+		DeleteTargetOutline->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	if (DeleteTargetIcon)
+	{
+		const bool bHasIcon = Appearance.IconBrush.GetResourceObject() != nullptr;
+		if (bHasIcon)
+		{
+			DeleteTargetIcon->SetBrush(Appearance.IconBrush);
+			DeleteTargetIcon->SetColorAndOpacity(Appearance.AccentColor);
+		}
+		DeleteTargetIcon->SetVisibility(bHasIcon
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (DeleteTargetLabel)
+	{
+		DeleteTargetLabel->SetText(bPointerInside
+			? LOCTEXT("DeleteTargetRelease", "释放以销毁")
+			: (bCarrying
+				? LOCTEXT("DeleteTargetCarry", "拖到这里销毁")
+				: LOCTEXT("DeleteTargetIdle", "销毁区")));
+	}
+	if (DeleteTargetCountText)
+	{
+		DeleteTargetCountText->SetText(CardCount > 0
+			? FText::Format(
+				LOCTEXT("DeleteTargetCardCount", "{0} 张卡牌"),
+				FText::AsNumber(CardCount))
+			: FText::GetEmpty());
+		DeleteTargetCountText->SetVisibility(CardCount > 0
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+}
+
+void UWacomBackpackScreen::SetCardDetailOccupied(bool bOccupied)
+{
+	if (CardDetailEmptyText)
+	{
+		CardDetailEmptyText->SetVisibility(!bOccupied && bCardDetailDocked
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
 	}
 }
 

@@ -4,7 +4,10 @@
 
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/OverlaySlot.h"
+#include "Components/PanelWidget.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
+#include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
@@ -12,9 +15,6 @@
 
 namespace
 {
-	const FVector2D CardDetailPanelEstimatedSize(360.f, 420.f);
-	constexpr float CardDetailPanelPadding = 12.f;
-
 	FSlateRect ConvertRectBetweenGeometries(
 		const FGeometry& SourceGeometry,
 		const FSlateRect& SourceLocalRect,
@@ -80,6 +80,7 @@ bool FWacomBackpackCardDetailController::ShowForCardWidget(UWacomDeckCardWidget*
 	Panel->SetRenderOpacity(1.f);
 	Panel->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Screen.CardDetailSourceWidget = SourceWidget;
+	Screen.SetCardDetailOccupied(true);
 	return true;
 }
 
@@ -90,6 +91,7 @@ bool FWacomBackpackCardDetailController::RepositionVisibleSource()
 	{
 		return false;
 	}
+	AttachPanelToCurrentHost();
 	PositionNear(SourceWidget);
 	return true;
 }
@@ -101,6 +103,7 @@ void FWacomBackpackCardDetailController::Hide()
 		Screen.CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	Screen.CardDetailSourceWidget = nullptr;
+	Screen.SetCardDetailOccupied(false);
 }
 
 void FWacomBackpackCardDetailController::HideIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget)
@@ -113,13 +116,14 @@ void FWacomBackpackCardDetailController::HideIfSourceRemoved(UWacomDeckCardWidge
 
 UWacomCardDetailPanel* FWacomBackpackCardDetailController::EnsurePanel()
 {
-	if (!Screen.CardDetailLayer)
+	if (!Screen.CardDetailLayer && !Screen.CardDetailDockHost)
 	{
 		return nullptr;
 	}
 
 	if (Screen.CardDetailPanel)
 	{
+		AttachPanelToCurrentHost();
 		return Screen.CardDetailPanel;
 	}
 
@@ -137,21 +141,58 @@ UWacomCardDetailPanel* FWacomBackpackCardDetailController::EnsurePanel()
 	Screen.CardDetailPanel->SetVisibility(ESlateVisibility::Collapsed);
 	Screen.CardDetailPanel->SetIsEnabled(true);
 	Screen.CardDetailPanel->SetRenderOpacity(1.f);
-	if (UCanvasPanelSlot* DetailSlot = Screen.CardDetailLayer->AddChildToCanvas(Screen.CardDetailPanel))
-	{
-		DetailSlot->SetAutoSize(false);
-		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
-		DetailSlot->SetZOrder(1);
-	}
+	AttachPanelToCurrentHost();
 	return Screen.CardDetailPanel;
+}
+
+bool FWacomBackpackCardDetailController::AttachPanelToCurrentHost()
+{
+	if (!Screen.CardDetailPanel)
+	{
+		return false;
+	}
+	UPanelWidget* DesiredHost = Screen.IsCardDetailDocked()
+		? Screen.CardDetailDockHost.Get()
+		: Screen.CardDetailLayer.Get();
+	if (!DesiredHost)
+	{
+		return false;
+	}
+	if (Screen.CardDetailPanel->GetParent() != DesiredHost)
+	{
+		Screen.CardDetailPanel->RemoveFromParent();
+		DesiredHost->AddChild(Screen.CardDetailPanel);
+	}
+	if (UOverlaySlot* OverlaySlot = Cast<UOverlaySlot>(Screen.CardDetailPanel->Slot))
+	{
+		OverlaySlot->SetHorizontalAlignment(HAlign_Fill);
+		OverlaySlot->SetVerticalAlignment(VAlign_Fill);
+	}
+	if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(Screen.CardDetailPanel->Slot))
+	{
+		const UWacomBackpackWorkspaceStyle* Style = Screen.WorkspaceStyle
+			? Screen.WorkspaceStyle.Get()
+			: GetDefault<UWacomBackpackWorkspaceStyle>();
+		CanvasSlot->SetAutoSize(false);
+		CanvasSlot->SetSize(Style->DetailFloatingSize);
+		CanvasSlot->SetZOrder(1);
+	}
+	return true;
 }
 
 void FWacomBackpackCardDetailController::PositionNear(UWacomDeckCardWidget* SourceWidget)
 {
-	if (!SourceWidget || !Screen.CardDetailLayer || !Screen.CardDetailPanel)
+	if (!SourceWidget || !Screen.CardDetailPanel || Screen.IsCardDetailDocked())
 	{
 		return;
 	}
+	if (!Screen.CardDetailLayer || !AttachPanelToCurrentHost())
+	{
+		return;
+	}
+	const UWacomBackpackWorkspaceStyle* Style = Screen.WorkspaceStyle
+		? Screen.WorkspaceStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
 
 	const FGeometry& LayerGeometry = Screen.CardDetailLayer->GetCachedGeometry();
 	FSlateRect AnchorRect;
@@ -186,13 +227,13 @@ void FWacomBackpackCardDetailController::PositionNear(UWacomDeckCardWidget* Sour
 		AnchorPosition,
 		AnchorSize,
 		LayerSize,
-		CardDetailPanelEstimatedSize,
-		CardDetailPanelPadding);
+		Style->DetailFloatingSize,
+		Style->DetailPanelPaddingPixels);
 
 	if (UCanvasPanelSlot* DetailSlot = Cast<UCanvasPanelSlot>(Screen.CardDetailPanel->Slot))
 	{
 		DetailSlot->SetPosition(Position);
-		DetailSlot->SetSize(CardDetailPanelEstimatedSize);
+		DetailSlot->SetSize(Style->DetailFloatingSize);
 	}
 }
 
@@ -213,4 +254,11 @@ FVector2D FWacomBackpackCardDetailController::ComputePanelPosition(
 	return FVector2D(
 		FMath::Clamp(X, 0.0f, MaxX),
 		FMath::Clamp(AnchorPosition.Y, 0.0f, MaxY));
+}
+
+bool FWacomBackpackCardDetailController::ShouldUseDockedMode(
+	float LogicalWidth,
+	float BreakpointPixels)
+{
+	return LogicalWidth >= FMath::Max(1.0f, BreakpointPixels);
 }

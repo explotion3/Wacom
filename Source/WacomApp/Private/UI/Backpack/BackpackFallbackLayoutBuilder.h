@@ -5,8 +5,11 @@
 #include "CoreMinimal.h"
 
 class UButton;
+class UBorder;
 class UCanvasPanel;
+class UImage;
 class UPanelWidget;
+class USizeBox;
 class UTextBlock;
 class UUserWidget;
 class UWidgetTree;
@@ -20,10 +23,18 @@ struct FBackpackFallbackLayoutBuilderContext
 	TObjectPtr<UTextBlock>* GoldText = nullptr;
 	TObjectPtr<UPanelWidget>* WorkspaceHost = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteTargetHost = nullptr;
+	TObjectPtr<UBorder>* DeleteTargetBackground = nullptr;
+	TObjectPtr<UBorder>* DeleteTargetOutline = nullptr;
+	TObjectPtr<UImage>* DeleteTargetIcon = nullptr;
+	TObjectPtr<UTextBlock>* DeleteTargetLabel = nullptr;
+	TObjectPtr<UTextBlock>* DeleteTargetCountText = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteConfirmHost = nullptr;
 	TObjectPtr<UButton>* ArrangeAllButton = nullptr;
 	TObjectPtr<UButton>* ResetPilePositionsButton = nullptr;
 	TObjectPtr<UCanvasPanel>* CardDetailLayer = nullptr;
+	TObjectPtr<UPanelWidget>* CardDetailDockHost = nullptr;
+	TObjectPtr<USizeBox>* CardDetailDockSize = nullptr;
+	TObjectPtr<UTextBlock>* CardDetailEmptyText = nullptr;
 	TObjectPtr<UButton>* CloseButton = nullptr;
 };
 

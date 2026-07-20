@@ -22,6 +22,7 @@ public:
 	void Hide();
 	void HideIfSourceRemoved(UWacomDeckCardWidget* RemovedWidget);
 	UWacomCardDetailPanel* EnsurePanel();
+	bool AttachPanelToCurrentHost();
 	void PositionNear(UWacomDeckCardWidget* SourceWidget);
 	static FVector2D ComputePanelPosition(
 		FVector2D AnchorPosition,
@@ -29,6 +30,7 @@ public:
 		FVector2D LayerSize,
 		FVector2D PanelSize,
 		float Padding = 12.0f);
+	static bool ShouldUseDockedMode(float LogicalWidth, float BreakpointPixels);
 
 private:
 	UWacomBackpackScreen& Screen;

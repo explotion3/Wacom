@@ -9,6 +9,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
@@ -208,6 +209,43 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		}
 		*Context.WorkspaceHost = Host;
 	}
+	if (Context.CardDetailDockSize && Context.CardDetailDockHost)
+	{
+		USizeBox* DockSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(), TEXT("CardDetailDockSize"));
+		DockSize->SetWidthOverride(360.0f);
+		DockSize->SetVisibility(ESlateVisibility::Collapsed);
+		if (UHorizontalBoxSlot* DockSlot = WorkspaceRow->AddChildToHorizontalBox(DockSize))
+		{
+			DockSlot->SetVerticalAlignment(VAlign_Fill);
+			DockSlot->SetPadding(FMargin(12.0f, 0.0f, 0.0f, 0.0f));
+		}
+		UBorder* DockBorder = CreateBackpackSectionBorder(
+			WidgetTree,
+			TEXT("CardDetailDockBorder"),
+			FLinearColor(0.035f, 0.05f, 0.07f, 0.98f));
+		DockSize->AddChild(DockBorder);
+		UOverlay* DockHost = WidgetTree->ConstructWidget<UOverlay>(
+			UOverlay::StaticClass(), TEXT("CardDetailDockHost"));
+		DockBorder->AddChild(DockHost);
+		UTextBlock* Empty = CreateBackpackText(
+			WidgetTree,
+			TEXT("CardDetailEmptyText"),
+			LOCTEXT("DetailEmpty", "将鼠标移到卡牌上查看详情"),
+			15);
+		Empty->SetJustification(ETextJustify::Center);
+		if (UOverlaySlot* EmptySlot = DockHost->AddChildToOverlay(Empty))
+		{
+			EmptySlot->SetHorizontalAlignment(HAlign_Center);
+			EmptySlot->SetVerticalAlignment(VAlign_Center);
+		}
+		*Context.CardDetailDockSize = DockSize;
+		*Context.CardDetailDockHost = DockHost;
+		if (Context.CardDetailEmptyText)
+		{
+			*Context.CardDetailEmptyText = Empty;
+		}
+	}
 	if (Context.DeleteTargetHost)
 	{
 		USizeBox* DeleteSize = WidgetTree->ConstructWidget<USizeBox>(
@@ -222,13 +260,37 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		}
 		UBorder* DeleteBorder = CreateBackpackSectionBorder(
 			WidgetTree,
-			TEXT("DeleteTargetBorder"),
+			TEXT("DeleteTargetBackground"),
 			FLinearColor(0.32f, 0.07f, 0.07f, 0.95f));
 		DeleteSize->AddChild(DeleteBorder);
+		UOverlay* DeleteOverlay = WidgetTree->ConstructWidget<UOverlay>(
+			UOverlay::StaticClass(), TEXT("DeleteTargetOverlay"));
+		DeleteBorder->AddChild(DeleteOverlay);
+		UBorder* DeleteOutline = WidgetTree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(), TEXT("DeleteTargetOutline"));
+		DeleteOutline->SetVisibility(ESlateVisibility::HitTestInvisible);
+		DeleteOutline->SetBrushColor(FLinearColor(0.84f, 0.22f, 0.20f, 0.42f));
+		DeleteOverlay->AddChildToOverlay(DeleteOutline);
 		UVerticalBox* Host = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("DeleteTargetHost"));
-		DeleteBorder->AddChild(Host);
-		Host->AddChildToVerticalBox(CreateBackpackText(WidgetTree, TEXT("DeleteTargetText"), LOCTEXT("DeleteTarget", "销毁卡牌"), 16));
+		DeleteOverlay->AddChildToOverlay(Host);
+		UImage* DeleteIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("DeleteTargetIcon"));
+		DeleteIcon->SetVisibility(ESlateVisibility::Collapsed);
+		Host->AddChildToVerticalBox(DeleteIcon);
+		UTextBlock* DeleteLabel = CreateBackpackText(
+			WidgetTree, TEXT("DeleteTargetLabel"), LOCTEXT("DeleteTarget", "销毁区"), 16);
+		DeleteLabel->SetJustification(ETextJustify::Center);
+		Host->AddChildToVerticalBox(DeleteLabel);
+		UTextBlock* DeleteCount = CreateBackpackText(
+			WidgetTree, TEXT("DeleteTargetCountText"), FText::GetEmpty(), 13);
+		DeleteCount->SetJustification(ETextJustify::Center);
+		DeleteCount->SetVisibility(ESlateVisibility::Collapsed);
+		Host->AddChildToVerticalBox(DeleteCount);
 		*Context.DeleteTargetHost = Host;
+		if (Context.DeleteTargetBackground) { *Context.DeleteTargetBackground = DeleteBorder; }
+		if (Context.DeleteTargetOutline) { *Context.DeleteTargetOutline = DeleteOutline; }
+		if (Context.DeleteTargetIcon) { *Context.DeleteTargetIcon = DeleteIcon; }
+		if (Context.DeleteTargetLabel) { *Context.DeleteTargetLabel = DeleteLabel; }
+		if (Context.DeleteTargetCountText) { *Context.DeleteTargetCountText = DeleteCount; }
 	}
 
 }
