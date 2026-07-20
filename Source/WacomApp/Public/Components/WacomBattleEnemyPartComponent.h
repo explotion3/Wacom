@@ -100,6 +100,9 @@ struct WACOMAPP_API FWacomBattleEnemyPartRuntimeDebugView
 	int32 TargetableApplyCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName TargetPreviewKind = TEXT("None");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	bool bPredictionWidgetCreated = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
@@ -159,10 +162,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback|Target Preview",
 		meta = (ToolTip = "本部位拖卡目标预演 Style override。为空时使用 Host DefaultTargetPreviewStyle。"))
 	TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle> TargetPreviewStyleOverride = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
-		meta = (ToolTip = "TargetSelect 中目标可选时的整体视觉缩放倍率。建议 1.0–1.2；只影响表现。"))
-	float TargetableAffordanceScale = 1.06f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
 		meta = (ToolTip = "光标悬停部位时的整体视觉缩放倍率。建议 1.0–1.15；只影响表现。"))

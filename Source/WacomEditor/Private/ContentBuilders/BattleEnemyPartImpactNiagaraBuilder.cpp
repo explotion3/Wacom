@@ -24,7 +24,7 @@ namespace
 	constexpr TCHAR ImpactSystemObjectPath[] =
 		TEXT("/Game/Wacom/VFX/Battle/NS_WacomBattleEnemyPartImpact_Pixel.NS_WacomBattleEnemyPartImpact_Pixel");
 	const FName ImpactContractVersionMetadataKey(TEXT("WacomEnemyImpactContractVersion"));
-	constexpr TCHAR ImpactContractVersion[] = TEXT("2");
+	constexpr TCHAR ImpactContractVersion[] = TEXT("3");
 
 	constexpr TCHAR EmitterStatePath[] =
 		TEXT("/Niagara/Modules/Emitter/EmitterState.EmitterState");
@@ -570,7 +570,7 @@ namespace
 
 		const TCHAR* Shape = TEXT("Engine.ExecIndex == 0 ? 4.0 : 5.0");
 		const TCHAR* Size =
-			TEXT("Engine.ExecIndex == 0 ? float2(User.TargetWidth, User.TargetHeight) : float2(1.0, 1.0) * min(User.TargetWidth, User.TargetHeight) * 0.24");
+			TEXT("Engine.ExecIndex == 0 ? float2(User.TargetWidth, User.TargetHeight) : float2(1.0, 1.0) * User.AvailabilityIconSize");
 		TArray<FParameterExpression> Spawn = MakeCommonSpawnParameters(
 			TEXT("max(User.Duration, 0.01)"),
 			Shape,
@@ -593,17 +593,17 @@ namespace
 				TEXT("Particles.SpriteSize"),
 				Vec2Type,
 				FVector2f(16.0f),
-				TEXT("Particles.WacomInitialSpriteSize * (Particles.WacomShapeKind < 4.5 ? lerp(1.12, 1.0, saturate(User.PreviewAmount)) : 1.0)")),
+				TEXT("Particles.WacomInitialSpriteSize * (Particles.WacomShapeKind < 4.5 ? lerp(1.12, 1.0, saturate(User.PreviewAmount)) : lerp(0.82, 1.0, saturate(User.PreviewAmount)))")),
 			MakeParameterExpression(
 				TEXT("Particles.Color"),
 				ColorType,
 				FLinearColor::White,
-				TEXT("float4(1.0, 1.0, 1.0, saturate(User.PreviewAmount))")),
+				TEXT("float4(1.0, 1.0, 1.0, saturate(User.PreviewAmount) * (Engine.ExecIndex == 0 ? (1.0 - step(1.5, User.PreviewMode)) : step(1.5, User.PreviewMode)) * lerp(1.0, saturate(User.Intensity), step(1.5, User.PreviewMode)))")),
 			MakeParameterExpression(
 				TEXT("Particles.DynamicMaterialParameter"),
 				Vec4Type,
 				FVector4f(0.0f),
-				TEXT("float4(Particles.WacomShapeKind, saturate(User.PreviewAmount), saturate(User.PreviewValidity), saturate(User.PreviewPulse * User.DecorativeIntensity))")),
+				TEXT("float4(Particles.WacomShapeKind, saturate(User.PreviewAmount), User.PreviewMode, saturate(User.PreviewPulse * User.DecorativeIntensity))")),
 		};
 		return AddParticleScaffold(System, TargetPreviewEmitter, Spawn, Update, Context);
 	}
@@ -671,8 +671,9 @@ namespace
 			&& EnsureFloatUserParameter(System, TEXT("User.TargetWidth"), 96.0f)
 			&& EnsureFloatUserParameter(System, TEXT("User.TargetHeight"), 96.0f)
 			&& EnsureFloatUserParameter(System, TEXT("User.PreviewAmount"), 0.0f)
-			&& EnsureFloatUserParameter(System, TEXT("User.PreviewValidity"), 1.0f)
-			&& EnsureFloatUserParameter(System, TEXT("User.PreviewPulse"), 0.0f);
+			&& EnsureFloatUserParameter(System, TEXT("User.PreviewMode"), 1.0f)
+			&& EnsureFloatUserParameter(System, TEXT("User.PreviewPulse"), 0.0f)
+			&& EnsureFloatUserParameter(System, TEXT("User.AvailabilityIconSize"), 24.0f);
 	}
 
 	bool ValidateRequiredEmitters(
@@ -724,8 +725,9 @@ namespace
 			{ TEXT("User.TargetWidth"), FNiagaraTypeDefinition::GetFloatDef() },
 			{ TEXT("User.TargetHeight"), FNiagaraTypeDefinition::GetFloatDef() },
 			{ TEXT("User.PreviewAmount"), FNiagaraTypeDefinition::GetFloatDef() },
-			{ TEXT("User.PreviewValidity"), FNiagaraTypeDefinition::GetFloatDef() },
+			{ TEXT("User.PreviewMode"), FNiagaraTypeDefinition::GetFloatDef() },
 			{ TEXT("User.PreviewPulse"), FNiagaraTypeDefinition::GetFloatDef() },
+			{ TEXT("User.AvailabilityIconSize"), FNiagaraTypeDefinition::GetFloatDef() },
 		};
 
 		for (const TPair<FName, FNiagaraTypeDefinition>& Required : RequiredTypes)

@@ -15,11 +15,12 @@ struct FWacomBattleEnemyPartTargetPreviewFeedbackDebugView
 {
 	bool bNiagaraReady = false;
 	bool bEffectActive = false;
-	bool bValidTarget = false;
+	EWacomBattleEnemyPartTargetPreviewKind Kind = EWacomBattleEnemyPartTargetPreviewKind::None;
 	bool bReducedMotion = false;
 	float Amount = 0.0f;
 	float Pulse = 0.0f;
 	FVector2D TargetSizeCentimeters = FVector2D::ZeroVector;
+	float AvailabilityIconSizeCentimeters = 0.0f;
 	int32 ActivationCount = 0;
 };
 
@@ -54,6 +55,9 @@ private:
 		const UPrimitiveComponent* ImpactExtentSource,
 		const FVector& PlaneRight,
 		const FVector& PlaneUp);
+	static float ResolveAvailabilityIconSizeCentimeters(
+		const UWacomBattleEnemyPartTargetPreviewStyle& Style,
+		const FVector2D& TargetSizeCentimeters);
 
 	TWeakObjectPtr<UNiagaraComponent> NiagaraComponent;
 	TWeakObjectPtr<USceneComponent> AttachedImpactAnchor;

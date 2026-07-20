@@ -41,6 +41,30 @@ public:
 		meta = (ToolTip = "有效目标停留时的弱亮度呼吸周期，单位：秒。推荐 0.8–1.4；Reduced Motion 下禁用，不改变目标框尺寸。"))
 	float PulsePeriodSeconds = 0.95f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
+		meta = (ToolTip = "可用部位中心图标淡入到完整强度的时间，单位：秒。推荐 0.08–0.16；Simplified Motion 下直接显示最终状态。"))
+	float AvailabilityEnterSeconds = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
+		meta = (ToolTip = "可用部位中心图标在目标选择结束后的淡出时间，单位：秒。推荐 0.08–0.14；只影响表现。"))
+	float AvailabilityExitSeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
+		meta = (ToolTip = "中心图标尺寸相对 HitBounds 摄像机平面投影较短边的倍率。无单位；推荐 0.18–0.28。"))
+	float AvailabilityIconSizeMultiplier = 0.22f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
+		meta = (ToolTip = "中心图标最小尺寸，单位：厘米。用于保证小部位仍可读；推荐 10–16cm。"))
+	float MinimumAvailabilityIconSizeCentimeters = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
+		meta = (ToolTip = "中心图标最大尺寸，单位：厘米。用于避免 Boss 大部位图标过大；推荐 24–36cm。"))
+	float MaximumAvailabilityIconSizeCentimeters = 28.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
+		meta = (ToolTip = "可用中心图标的基础语义强度。无单位；推荐 0.20–0.40。Flash 设置只降低额外辉光，不隐藏该语义标记。"))
+	float AvailabilityBaseIntensity = 0.28f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Sizing",
 		meta = (ToolTip = "有效目标框相对 HitBounds 屏幕平面投影宽高的覆盖倍率。无单位；推荐 1.05–1.20，1.10 表示略越过命中边界。"))
 	float ValidCoverageMultiplier = 1.10f;

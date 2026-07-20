@@ -1,4 +1,4 @@
-"""Create the enemy-part target-preview MI/Style and bind the Debug Snake host.
+"""Create or update only the enemy-part target-preview MI and Style.
 
 This script intentionally does not rewrite the existing impact Style or its manually tuned
 TargetConfirmed/Damage values. The preview uses the TargetPreview emitter generated inside
@@ -14,7 +14,6 @@ PREVIEW_MI_PATH = MATERIAL_DIR + "/MI_WacomBattleEnemyPartTargetPreviewPixel_Def
 NIAGARA_SYSTEM_PATH = "/Game/Wacom/VFX/Battle/NS_WacomBattleEnemyPartImpact_Pixel"
 STYLE_DIR = "/Game/Wacom/UI/Battle/WorldImpact"
 STYLE_PATH = STYLE_DIR + "/DA_BattleEnemyPartTargetPreviewStyle_PixelLock"
-DEBUG_SNAKE_HOST_PATH = "/Game/Wacom/Core/Enemy/BP_SnakeHost_Debug"
 
 
 def load_required(asset_path, label):
@@ -54,12 +53,15 @@ def create_preview_material_instance(parent):
         "ImpactCoreBrightness": 1.25,
         "ImpactDecorativeGlow": 0.75,
         "ImpactPreviewGlow": 0.28,
+        "ImpactAvailabilityTargetOpacity": 1.0,
     }
     vector_values = {
         "ImpactPrimaryColor": unreal.LinearColor(0.58, 0.80, 1.0, 1.0),
         "ImpactSecondaryColor": unreal.LinearColor(0.96, 0.82, 0.42, 1.0),
         "ImpactAccentColor": unreal.LinearColor(0.88, 0.30, 0.72, 1.0),
         "ImpactInvalidTargetColor": unreal.LinearColor(0.68, 0.12, 0.30, 1.0),
+        "ImpactAvailabilityTargetColor": unreal.LinearColor(0.58, 0.80, 1.0, 1.0),
+        "ImpactAvailabilityAccentColor": unreal.LinearColor(0.96, 0.82, 0.42, 1.0),
     }
     for name, value in scalar_values.items():
         unreal.MaterialEditingLibrary.set_material_instance_scalar_parameter_value(
@@ -92,6 +94,12 @@ def create_preview_style(system, material_instance):
         "enter_seconds": 0.18,
         "exit_seconds": 0.10,
         "pulse_period_seconds": 0.95,
+        "availability_enter_seconds": 0.12,
+        "availability_exit_seconds": 0.10,
+        "availability_icon_size_multiplier": 0.22,
+        "minimum_availability_icon_size_centimeters": 12.0,
+        "maximum_availability_icon_size_centimeters": 28.0,
+        "availability_base_intensity": 0.28,
         "valid_coverage_multiplier": 1.10,
         "invalid_coverage_multiplier": 1.08,
         "fallback_size_centimeters": unreal.Vector2D(96.0, 96.0),
@@ -105,17 +113,9 @@ def create_preview_style(system, material_instance):
     return style_asset
 
 
-def assign_debug_snake_default(style):
-    host_blueprint = load_required(DEBUG_SNAKE_HOST_PATH, "Debug Snake Host")
-    host_cdo = unreal.get_default_object(host_blueprint.generated_class())
-    host_cdo.set_editor_property("default_target_preview_style", style)
-    unreal.EditorAssetLibrary.save_loaded_asset(host_blueprint)
-
-
 base_material = load_required(BASE_MATERIAL_PATH, "Enemy impact DreamShader material")
 validate_niagara_sprite_usage(base_material)
 system = load_required(NIAGARA_SYSTEM_PATH, "Enemy impact Niagara System")
 preview_instance = create_preview_material_instance(base_material)
-preview_style = create_preview_style(system, preview_instance)
-assign_debug_snake_default(preview_style)
-unreal.log("Wacom enemy-part pixel target-preview MI, Style and Debug Snake binding configured")
+create_preview_style(system, preview_instance)
+unreal.log("Wacom enemy-part pixel target-preview MI and Style configured")

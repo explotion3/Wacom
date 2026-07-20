@@ -29,8 +29,24 @@ namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate
 	const FName TargetWidthParameter(TEXT("User.TargetWidth"));
 	const FName TargetHeightParameter(TEXT("User.TargetHeight"));
 	const FName PreviewAmountParameter(TEXT("User.PreviewAmount"));
-	const FName PreviewValidityParameter(TEXT("User.PreviewValidity"));
+	const FName PreviewModeParameter(TEXT("User.PreviewMode"));
 	const FName PreviewPulseParameter(TEXT("User.PreviewPulse"));
+	const FName AvailabilityIconSizeParameter(TEXT("User.AvailabilityIconSize"));
+
+	float ToPreviewMode(EWacomBattleEnemyPartTargetPreviewKind Kind)
+	{
+		switch (Kind)
+		{
+		case EWacomBattleEnemyPartTargetPreviewKind::Valid:
+			return 1.0f;
+		case EWacomBattleEnemyPartTargetPreviewKind::Available:
+			return 2.0f;
+		case EWacomBattleEnemyPartTargetPreviewKind::Invalid:
+		case EWacomBattleEnemyPartTargetPreviewKind::None:
+		default:
+			return 0.0f;
+		}
+	}
 }
 
 bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
@@ -83,6 +99,11 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 		ImpactExtentSource,
 		PlaneRight,
 		PlaneUp);
+	const float AvailabilityIconSize = ResolveAvailabilityIconSizeCentimeters(
+		*Style,
+		TargetSize);
+	const bool bAvailability =
+		PlaybackView.Kind == EWacomBattleEnemyPartTargetPreviewKind::Available;
 	const bool bWasActive = DebugView.bEffectActive;
 	Component->SetWorldLocation(
 		ImpactAnchor->GetComponentLocation()
@@ -95,7 +116,9 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 		3600.0f);
 	Component->SetVariableFloat(
 		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::IntensityParameter,
-		1.0f);
+		bAvailability
+			? FMath::Clamp(Style->AvailabilityBaseIntensity, 0.0f, 1.0f)
+			: 1.0f);
 	Component->SetVariableInt(
 		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::SeedParameter,
 		GetTypeHash(OwnerComponent.GetOwner()));
@@ -127,11 +150,14 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PreviewAmountParameter,
 		FMath::Clamp(PlaybackView.Amount, 0.0f, 1.0f));
 	Component->SetVariableFloat(
-		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PreviewValidityParameter,
-		PlaybackView.Kind == EWacomBattleEnemyPartTargetPreviewKind::Valid ? 1.0f : 0.0f);
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PreviewModeParameter,
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::ToPreviewMode(PlaybackView.Kind));
 	Component->SetVariableFloat(
 		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::PreviewPulseParameter,
 		FMath::Clamp(PlaybackView.Pulse, 0.0f, 1.0f));
+	Component->SetVariableFloat(
+		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::AvailabilityIconSizeParameter,
+		AvailabilityIconSize);
 	if (!bWasActive)
 	{
 		Component->Activate(true);
@@ -140,11 +166,12 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 
 	DebugView.bNiagaraReady = true;
 	DebugView.bEffectActive = true;
-	DebugView.bValidTarget = PlaybackView.Kind == EWacomBattleEnemyPartTargetPreviewKind::Valid;
+	DebugView.Kind = PlaybackView.Kind;
 	DebugView.bReducedMotion = PlaybackView.bReducedMotion;
 	DebugView.Amount = PlaybackView.Amount;
 	DebugView.Pulse = PlaybackView.Pulse;
 	DebugView.TargetSizeCentimeters = TargetSize;
+	DebugView.AvailabilityIconSizeCentimeters = AvailabilityIconSize;
 	return true;
 }
 
@@ -157,6 +184,7 @@ void FWacomBattleEnemyPartTargetPreviewFeedbackController::FinishNaturally()
 	DebugView.bEffectActive = false;
 	DebugView.Amount = 0.0f;
 	DebugView.Pulse = 0.0f;
+	DebugView.Kind = EWacomBattleEnemyPartTargetPreviewKind::None;
 }
 
 void FWacomBattleEnemyPartTargetPreviewFeedbackController::ResetImmediate(bool bDestroyComponent)
@@ -176,6 +204,7 @@ void FWacomBattleEnemyPartTargetPreviewFeedbackController::ResetImmediate(bool b
 	DebugView.bNiagaraReady = NiagaraComponent.IsValid();
 	DebugView.Amount = 0.0f;
 	DebugView.Pulse = 0.0f;
+	DebugView.Kind = EWacomBattleEnemyPartTargetPreviewKind::None;
 }
 
 UNiagaraComponent* FWacomBattleEnemyPartTargetPreviewFeedbackController::ResolveOrCreateComponent(
@@ -244,7 +273,9 @@ FVector2D FWacomBattleEnemyPartTargetPreviewFeedbackController::ResolveTargetSiz
 
 	const float Coverage = Kind == EWacomBattleEnemyPartTargetPreviewKind::Invalid
 		? Style.InvalidCoverageMultiplier
-		: Style.ValidCoverageMultiplier;
+		: (Kind == EWacomBattleEnemyPartTargetPreviewKind::Valid
+			? Style.ValidCoverageMultiplier
+			: 1.0f);
 	Size *= FMath::Max(0.0f, Coverage);
 	const float LowerBound = FMath::Max(
 		KINDA_SMALL_NUMBER,
@@ -255,4 +286,27 @@ FVector2D FWacomBattleEnemyPartTargetPreviewFeedbackController::ResolveTargetSiz
 	Size.X = FMath::Clamp(Size.X, LowerBound, UpperBound);
 	Size.Y = FMath::Clamp(Size.Y, LowerBound, UpperBound);
 	return Size;
+}
+
+float FWacomBattleEnemyPartTargetPreviewFeedbackController::ResolveAvailabilityIconSizeCentimeters(
+	const UWacomBattleEnemyPartTargetPreviewStyle& Style,
+	const FVector2D& TargetSizeCentimeters)
+{
+	const float LowerBound = FMath::Max(
+		KINDA_SMALL_NUMBER,
+		FMath::Min(
+			Style.MinimumAvailabilityIconSizeCentimeters,
+			Style.MaximumAvailabilityIconSizeCentimeters));
+	const float UpperBound = FMath::Max(
+		LowerBound,
+		FMath::Max(
+			Style.MinimumAvailabilityIconSizeCentimeters,
+			Style.MaximumAvailabilityIconSizeCentimeters));
+	const float ShorterAxis = FMath::Max(
+		0.0f,
+		FMath::Min(TargetSizeCentimeters.X, TargetSizeCentimeters.Y));
+	return FMath::Clamp(
+		ShorterAxis * FMath::Max(0.0f, Style.AvailabilityIconSizeMultiplier),
+		LowerBound,
+		UpperBound);
 }

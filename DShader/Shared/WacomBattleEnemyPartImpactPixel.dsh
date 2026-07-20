@@ -7,9 +7,10 @@ Function SelfContained WacomBattleEnemyPartImpact_ComputeShape(
     in float normalizedAge,
     in float pixelColumns,
     in float outlineWidth,
-    in float previewValidity,
+    in float previewMode,
     out float shapeMask,
-    out float coreMask)
+    out float coreMask,
+    out float accentMask)
 {
     float safeColumns = max(4.0, pixelColumns);
     float2 pixelUV = (floor(uv * safeColumns) + float2(0.5, 0.5)) / safeColumns;
@@ -46,12 +47,18 @@ Function SelfContained WacomBattleEnemyPartImpact_ComputeShape(
         * step(absoluteCentered.y, previewFrameRadius);
     float2 previewPixelIndex = floor(pixelUV * safeColumns);
     float brokenCell = step(0.42, frac((previewPixelIndex.x * 0.754877666 + previewPixelIndex.y * 0.569840296)));
+    float validHover = 1.0 - step(0.5, abs(previewMode - 1.0));
     float previewFrame = saturate(previewHorizontal + previewVertical)
-        * lerp(brokenCell, 1.0, saturate(previewValidity));
+        * lerp(brokenCell, 1.0, validHover);
 
     float previewDiamondDistance = absoluteCentered.x + absoluteCentered.y;
-    float previewCore = step(abs(previewDiamondDistance - 0.24), safeWidth * 1.35)
-        * saturate(previewValidity);
+    float previewDiamond = step(abs(previewDiamondDistance - 0.24), safeWidth * 1.35);
+    float previewDotHorizontal = step(abs(absoluteCentered.x - 0.34), safeWidth * 1.5)
+        * step(absoluteCentered.y, safeWidth * 1.5);
+    float previewDotVertical = step(abs(absoluteCentered.y - 0.34), safeWidth * 1.5)
+        * step(absoluteCentered.x, safeWidth * 1.5);
+    float previewDots = saturate(previewDotHorizontal + previewDotVertical);
+    float previewCore = saturate(previewDiamond + previewDots);
 
     float isMote = 1.0 - step(0.5, abs(shapeKind - 0.0));
     float isCorner = 1.0 - step(0.5, abs(shapeKind - 1.0));
@@ -67,6 +74,7 @@ Function SelfContained WacomBattleEnemyPartImpact_ComputeShape(
         + previewFrame * isPreviewFrame
         + previewCore * isPreviewCore);
     coreMask = saturate(core * isCore + previewCore * isPreviewCore);
+    accentMask = previewDots * isPreviewCore;
 }
 
 Function SelfContained WacomBattleEnemyPartImpact_SelectPalette(
@@ -90,7 +98,7 @@ Function SelfContained WacomBattleEnemyPartImpact_SelectPalette(
 Function SelfContained WacomBattleEnemyPartImpact_ComposeAppearance(
     in float shapeKind,
     in float normalizedAge,
-    in float previewValidity,
+    in float previewMode,
     in float decorativeClass,
     in float shapeMask,
     in float coreMask,
@@ -99,6 +107,10 @@ Function SelfContained WacomBattleEnemyPartImpact_ComposeAppearance(
     in float3 primaryColor,
     in float3 secondaryColor,
     in float3 invalidTargetColor,
+    in float3 availabilityTargetColor,
+    in float3 availabilityAccentColor,
+    in float availabilityOpacity,
+    in float accentMask,
     in float impactDecorativeGlow,
     in float previewGlow,
     in float coreBrightness,
@@ -107,9 +119,15 @@ Function SelfContained WacomBattleEnemyPartImpact_ComposeAppearance(
 {
     float isPreview = step(3.5, shapeKind);
     float isPreviewCore = 1.0 - step(0.5, abs(shapeKind - 5.0));
-    float validity = saturate(previewValidity);
+    float validHover = 1.0 - step(0.5, abs(previewMode - 1.0));
+    float available = 1.0 - step(0.5, abs(previewMode - 2.0));
     float3 validPreviewColor = lerp(primaryColor, secondaryColor, isPreviewCore);
-    float3 previewColor = lerp(invalidTargetColor, validPreviewColor, validity);
+    float3 availabilityColor = lerp(
+        availabilityTargetColor,
+        availabilityAccentColor,
+        saturate(accentMask));
+    float3 hoverPreviewColor = lerp(invalidTargetColor, validPreviewColor, validHover);
+    float3 previewColor = lerp(hoverPreviewColor, availabilityColor, available);
     float3 paletteColor = lerp(impactPaletteColor, previewColor, isPreview);
 
     // Impact particles pass normalized age (0 -> 1). Preview particles pass the
@@ -120,6 +138,7 @@ Function SelfContained WacomBattleEnemyPartImpact_ComposeAppearance(
     float decorativeBrightness = lerp(impactBrightness, previewBrightness, isPreview);
     float brightness = decorativeBrightness + coreMask * max(0.0, coreBrightness - 1.0);
 
-    finalAlpha = saturate(shapeMask * lifeFade * particleAlpha);
+    float previewOpacity = lerp(1.0, saturate(availabilityOpacity), available);
+    finalAlpha = saturate(shapeMask * lifeFade * particleAlpha * previewOpacity);
     finalColor = paletteColor * brightness * finalAlpha;
 }

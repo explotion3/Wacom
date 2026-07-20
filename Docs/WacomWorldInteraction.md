@@ -117,7 +117,7 @@ HUD 对每个已接收 Snapshot 只构建一次 Scene Enemy sync frame，并将�
 
 射线命中优先从 `HitResult.Component` 查询 `IWacomInteractionTargetProvider`。Part Component 自身提供 `Interaction.Target.Battle.EnemyPart` handle；Actor 级 fallback 不为战斗部位修正错误 identity。first-person drag、普通 click、hover probe、prediction 与 TargetConfirmed 都消费同一稳定 handle。
 
-Action、Destroyed 与反馈全部原地操作 authored 组件：Part Animation Style 精确选择 `LayerId`；Destroyed 切换同一 Sprite/Flipbook Component；Impact/Preview Niagara 生成在 typed Anchor，缺 Anchor 回退 Part 原点。普通 Snapshot、相同 Host 设置和未变化 topology 不重置播放进度或组件指针。BattleEnd/source clear/EndPlay 清理动态组件、timer、delegate 与 barrier，但不销毁 authored Visual。
+Action、Destroyed 与反馈全部原地操作 authored 组件：Part Animation Style 精确选择 `LayerId`；Destroyed 切换同一 Sprite/Flipbook Component；Impact/Preview Niagara 生成在 typed Anchor，缺 Anchor 回退 Part 原点。拖出敌人目标卡时，SceneRuntime 将所有合法部位合成为 `Available` 中心标记；具体 Valid/Invalid Hover 在同一复用 Niagara Component 内覆盖它，离开悬浮后恢复 Available。目标可用性不再尝试缩放 Host 或 Visual Layer。普通 Snapshot、相同 Host 设置和未变化 topology 不重置播放进度或组件指针。BattleEnd/source clear/EndPlay 清理动态组件、timer、delegate 与 barrier，但不销毁 authored Visual。
 
 EnemyPanel 是 Host 的 screen-space 被动视图，不是 world target。Idle 时 `InspectHitTarget` 可以上报完整 Part identity；拖卡、TargetSelect、Resolving 与 BattleEnd 时恢复点击穿透，世界 HitBounds 路由继续有效。详情 coordinator 与面板只消费现有 ViewData，不修改 BattleSession。
 

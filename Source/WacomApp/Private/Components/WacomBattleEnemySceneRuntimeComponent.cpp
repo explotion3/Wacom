@@ -295,11 +295,7 @@ namespace
 			ApplyVisualScale(State, 1.0f);
 			return;
 		}
-		if (State.bTargetable)
-		{
-			ApplyVisualScale(State, Part->TargetableAffordanceScale);
-		}
-		else if (State.bHoverActive)
+		if (State.bHoverActive)
 		{
 			ApplyVisualScale(State, Part->HoverProbeScale);
 		}
@@ -540,6 +536,73 @@ namespace
 			Snapshot.FlashEffectMode);
 		bOutSimplifiedMotion = FWacomPresentationAccessibilityPolicy::UsesSimplifiedMotion(
 			Snapshot.UIMotionMode);
+	}
+
+	EWacomBattleEnemyPartTargetPreviewKind ResolveDesiredTargetPreviewKind(
+		const FPartRuntimeState& State)
+	{
+		if (!State.bBound || State.bDestroyed)
+		{
+			return EWacomBattleEnemyPartTargetPreviewKind::None;
+		}
+		if (State.bDragPreviewActive)
+		{
+			return State.DragPreviewState
+				== EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
+					? EWacomBattleEnemyPartTargetPreviewKind::Valid
+					: EWacomBattleEnemyPartTargetPreviewKind::Invalid;
+		}
+		return State.bTargetable
+			? EWacomBattleEnemyPartTargetPreviewKind::Available
+			: EWacomBattleEnemyPartTargetPreviewKind::None;
+	}
+
+	void RefreshTargetPreview(
+		UWacomBattleEnemySceneRuntimeComponent& Owner,
+		FPartRuntimeState& State)
+	{
+		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
+		if (!Part || !State.TargetPreviewPlayback || !State.TargetPreviewFeedback)
+		{
+			return;
+		}
+
+		const EWacomBattleEnemyPartTargetPreviewKind DesiredKind =
+			ResolveDesiredTargetPreviewKind(State);
+		const UWacomBattleEnemyPartTargetPreviewStyle* Style = Part->ResolveTargetPreviewStyle();
+		if (DesiredKind == EWacomBattleEnemyPartTargetPreviewKind::None
+			|| !Part->bEnableTargetPreviewFeedback
+			|| !Style
+			|| !Style->HasValidVisualAssets())
+		{
+			State.TargetPreviewPlayback->BeginExit();
+			if (State.TargetPreviewPlayback->GetView().bActive)
+			{
+				Owner.SetComponentTickEnabled(true);
+			}
+			return;
+		}
+
+		float FlashScale = 1.0f;
+		bool bSimplifiedMotion = false;
+		RefreshAccessibility(Owner, FlashScale, bSimplifiedMotion);
+		State.TargetPreviewFlashScale = FlashScale;
+		const bool bAvailability =
+			DesiredKind == EWacomBattleEnemyPartTargetPreviewKind::Available;
+		State.TargetPreviewPlayback->Begin(
+			DesiredKind,
+			bAvailability ? Style->AvailabilityEnterSeconds : Style->EnterSeconds,
+			bAvailability ? Style->AvailabilityExitSeconds : Style->ExitSeconds,
+			Style->PulsePeriodSeconds,
+			bSimplifiedMotion);
+		State.TargetPreviewFeedback->BeginOrUpdate(
+			Owner,
+			ResolveImpactAnchor(State),
+			Part,
+			Style,
+			State.TargetPreviewPlayback->GetView(),
+			FlashScale);
+		Owner.SetComponentTickEnabled(true);
 	}
 }
 
@@ -827,6 +890,7 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 		{
 			++State->SnapshotNoOpCount;
 		}
+		RefreshTargetPreview(*this, *State);
 		return false;
 	}
 
@@ -884,6 +948,7 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 	{
 		++State->SnapshotNoOpCount;
 	}
+	RefreshTargetPreview(*this, *State);
 	return State->bBound;
 }
 
@@ -967,6 +1032,7 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartTargetable(
 		State->TargetDisabledReason = DisabledReason;
 		++State->TargetableApplyCount;
 		RefreshPersistentScale(*State);
+		RefreshTargetPreview(*this, *State);
 	}
 }
 
@@ -1031,6 +1097,8 @@ FWacomBattleEnemyPartRuntimeDebugView UWacomBattleEnemySceneRuntimeComponent::Bu
 	View.SnapshotApplyCount = State->SnapshotApplyCount;
 	View.SnapshotNoOpCount = State->SnapshotNoOpCount;
 	View.TargetableApplyCount = State->TargetableApplyCount;
+	View.TargetPreviewKind = FWacomBattleEnemyPartTargetPreviewPlayback::KindToName(
+		ResolveDesiredTargetPreviewKind(*State));
 	View.bPredictionWidgetCreated = State->PredictionWidget.IsValid();
 	View.bPredictionWidgetVisible = State->PredictionWidget.IsValid()
 		&& State->PredictionWidget->IsVisible();
@@ -1399,39 +1467,7 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartDragTargetPreviewState(
 	State->bDragPreviewActive = bNewActive;
 	RefreshPersistentScale(*State);
 	RefreshPrediction(*this, *State);
-	if (!State->bDragPreviewActive)
-	{
-		if (State->TargetPreviewPlayback) State->TargetPreviewPlayback->BeginExit();
-		SetComponentTickEnabled(true);
-		return;
-	}
-	const UWacomBattleEnemyPartTargetPreviewStyle* Style = Part.ResolveTargetPreviewStyle();
-	if (!Part.bEnableTargetPreviewFeedback || !Style || !Style->HasValidVisualAssets())
-	{
-		return;
-	}
-	float FlashScale = 1.0f;
-	bool bSimplifiedMotion = false;
-	RefreshAccessibility(*this, FlashScale, bSimplifiedMotion);
-	State->TargetPreviewFlashScale = FlashScale;
-	const EWacomBattleEnemyPartTargetPreviewKind Kind =
-		PreviewState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
-			? EWacomBattleEnemyPartTargetPreviewKind::Valid
-			: EWacomBattleEnemyPartTargetPreviewKind::Invalid;
-	State->TargetPreviewPlayback->Begin(
-		Kind,
-		Style->EnterSeconds,
-		Style->ExitSeconds,
-		Style->PulsePeriodSeconds,
-		bSimplifiedMotion);
-	State->TargetPreviewFeedback->BeginOrUpdate(
-		*this,
-		ResolveImpactAnchor(*State),
-		&Part,
-		Style,
-		State->TargetPreviewPlayback->GetView(),
-		FlashScale);
-	SetComponentTickEnabled(true);
+	RefreshTargetPreview(*this, *State);
 }
 
 void UWacomBattleEnemySceneRuntimeComponent::ClearPartDragTargetPreviewState(
@@ -1452,8 +1488,7 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartDragTargetPreviewState(
 		State->DragPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 		RefreshPersistentScale(*State);
 		RefreshPrediction(*this, *State);
-		if (State->TargetPreviewPlayback) State->TargetPreviewPlayback->BeginExit();
-		SetComponentTickEnabled(true);
+		RefreshTargetPreview(*this, *State);
 	}
 }
 

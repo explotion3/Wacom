@@ -24,6 +24,7 @@ bool FWacomBattleEnemyPartTargetPreviewPlayback::Begin(
 		return false;
 	}
 
+	const bool bSameKind = View.Kind == Kind;
 	const bool bSameActiveKind = View.bActive
 		&& View.Kind == Kind
 		&& View.Phase != EWacomBattleEnemyPartTargetPreviewPhase::Exiting;
@@ -47,7 +48,9 @@ bool FWacomBattleEnemyPartTargetPreviewPlayback::Begin(
 	View.bActive = true;
 	PhaseElapsedSeconds = 0.0f;
 	HoldElapsedSeconds = 0.0f;
-	PhaseStartAmount = bReducedMotion ? 1.0f : View.Amount;
+	PhaseStartAmount = bReducedMotion
+		? 1.0f
+		: (bSameKind ? View.Amount : 0.0f);
 	View.Amount = PhaseStartAmount;
 	View.Pulse = 0.0f;
 	View.Phase = bReducedMotion
@@ -122,4 +125,21 @@ void FWacomBattleEnemyPartTargetPreviewPlayback::Reset()
 	PhaseElapsedSeconds = 0.0f;
 	HoldElapsedSeconds = 0.0f;
 	PhaseStartAmount = 0.0f;
+}
+
+FName FWacomBattleEnemyPartTargetPreviewPlayback::KindToName(
+	EWacomBattleEnemyPartTargetPreviewKind Kind)
+{
+	switch (Kind)
+	{
+	case EWacomBattleEnemyPartTargetPreviewKind::Available:
+		return TEXT("Available");
+	case EWacomBattleEnemyPartTargetPreviewKind::Valid:
+		return TEXT("ValidHover");
+	case EWacomBattleEnemyPartTargetPreviewKind::Invalid:
+		return TEXT("InvalidHover");
+	case EWacomBattleEnemyPartTargetPreviewKind::None:
+	default:
+		return TEXT("None");
+	}
 }

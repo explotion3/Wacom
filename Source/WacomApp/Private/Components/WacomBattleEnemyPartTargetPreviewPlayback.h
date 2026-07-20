@@ -9,6 +9,7 @@ enum class EWacomBattleEnemyPartTargetPreviewKind : uint8
 	None,
 	Valid,
 	Invalid,
+	Available,
 };
 
 enum class EWacomBattleEnemyPartTargetPreviewPhase : uint8
@@ -47,6 +48,8 @@ public:
 	{
 		return View;
 	}
+
+	static FName KindToName(EWacomBattleEnemyPartTargetPreviewKind Kind);
 
 private:
 	FWacomBattleEnemyPartTargetPreviewPlaybackView View;

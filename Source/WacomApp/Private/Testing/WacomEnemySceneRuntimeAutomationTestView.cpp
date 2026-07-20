@@ -109,4 +109,34 @@ void FWacomEnemySceneRuntimeAutomationTestView::ClearHoverPrediction(
 	}
 }
 
+void FWacomEnemySceneRuntimeAutomationTestView::SetDragTargetPreview(
+	AWacomBattleEnemyActor& Host,
+	UWacomBattleEnemyPartComponent& Part,
+	EWacomFirstPersonCardDragTargetFeedbackState PreviewState)
+{
+	if (UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent())
+	{
+		Runtime->SetPartDragTargetPreviewState(
+			Part,
+			PreviewState,
+			FWacomBattleEnemyPartDragPredictionDebugInput());
+	}
+}
+
+void FWacomEnemySceneRuntimeAutomationTestView::ClearDragTargetPreview(
+	AWacomBattleEnemyActor& Host,
+	UWacomBattleEnemyPartComponent& Part)
+{
+	if (UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent())
+	{
+		Runtime->ClearPartDragTargetPreviewState(Part);
+	}
+}
+
+FName FWacomEnemySceneRuntimeAutomationTestView::GetDesiredTargetPreviewKind(
+	const UWacomBattleEnemyPartComponent& Part)
+{
+	return Part.GetRuntimeDebugView().TargetPreviewKind;
+}
+
 #endif

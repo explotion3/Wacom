@@ -183,6 +183,8 @@ HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 id
 
 确认、伤害、目标预演与 Destroyed 使用 Part 上的反馈设置，并复用 Host 默认 `UWacomBattleEnemyPartImpactStyle` / `UWacomBattleEnemyPartTargetPreviewStyle`。粒子在 typed ImpactAnchor 生成；缺 Style/System/MI 时只跳过对应装饰，不阻塞 cue、破损换图或规则结算。Destroyed 在 marker 到点时原地切换真实 Sprite/Flipbook Layer，组件指针和 topology revision 不变。
 
+敌人目标选择的可用性由唯一 `UWacomBattleEnemySceneRuntimeComponent` 合成：已绑定且 `bTargetable` 的普通部位进入 `Available`，在各自 ImpactAnchor 显示低亮中心像素图标；当前悬浮部位的 `ValidHover / InvalidHover` 优先覆盖 Available，离开具体部位后恢复 Available。Niagara 复用同一 TargetPreview Component，并通过 `User.PreviewMode` 与 `User.AvailabilityIconSize` 互斥显示中心图标、有效框和无效断裂框。Targetable 不再缩放敌人视觉层；普通 HoverProbe 的 authored Scale 保持独立。重复 Snapshot 或相同 targetable 状态不会重启 Playback。
+
 `UWacomBattleEnemyPartAnimationStyle` 用精确 `TargetVisualLayerId`、Default Action 与 `IntentId -> Clip` 驱动同一 Part 的真实 Flipbook Layer；不根据名称或层顺序猜测。Clip 的 `ImpactNormalizedTime` 把 Enemy Action Journal 分成 `OnImpact` 与 `OnCompleted`：Impact 才推送行动后 Combat facts，完成才释放下一行动 barrier。共享 App-private playback 统一 weak timer、watchdog、serial 与 exactly-once；cancel 丢弃旧 Impact但完成 barrier。Style 可选 `EnemyDestroyedClip`，同一 Host 最多一个 Part Style 拥有整体死亡 Clip；TrainingWarrior Body 用它播放 Downed，Snake/SlimeTrio 当前只保留逐部位终态。
 
 BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、preview、panel；同批队列只保留弱 Host/Part 引用完成已排队 Action 或 terminal clip。真正的探索场景退役仍由 BattleTrigger 在胜利结算和返回镜头 barrier 完成后执行：清运行时表现、隐藏 Host、关闭 Part collision，最后销毁 Trigger。Withdraw、Defeat、Undetermined 或结算失败不退役。
