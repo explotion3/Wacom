@@ -98,9 +98,20 @@ struct FWacomBackpackScreenTestAccess
 	static void MoveWorkspaceBrowsePointer(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		FVector2D PointerLocal);
+	static void MoveWorkspaceBrowsePointerWithShiftState(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		FVector2D PointerLocal,
+		bool bLeftShiftDown,
+		bool bRightShiftDown = false);
+	static bool SetWorkspaceHandLensLock(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		bool bLocked,
+		bool bRepeat = false);
+	static void LoseWorkspaceKeyboardFocus(UWacomBackpackWorkspaceWidget& Workspace);
 	static bool PressExpandedPileVisualCard(
 		UWacomBackpackWorkspaceWidget& Workspace,
-		FVector2D PointerLocal);
+		FVector2D PointerLocal,
+		bool bLeftShiftDown = false);
 	static bool ResolveWorkspaceCardDetailAnchorRect(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		UWacomDeckCardWidget& Card,
@@ -135,7 +146,8 @@ struct FWacomBackpackScreenTestAccess
 		TConstArrayView<int32> LayerRanks);
 	static void ForgetWorkspacePileRegistry(UWacomBackpackWorkspaceWidget& Workspace);
 	static bool CommitWorkspaceReleaseBeforeTargetReconcile(
-		UWacomBackpackWorkspaceWidget& Workspace);
+		UWacomBackpackWorkspaceWidget& Workspace,
+		bool bReleaseAll = false);
 	static EZoneKind ActiveWorkspaceZone(const UWacomBackpackScreen& Screen);
 	static FGuid ActiveWorkspaceOwnerInstanceId(const UWacomBackpackScreen& Screen);
 	static void ActivateZone(UWacomBackpackScreen& Screen, EZoneKind Zone, FGuid OwnerInstanceId = FGuid());

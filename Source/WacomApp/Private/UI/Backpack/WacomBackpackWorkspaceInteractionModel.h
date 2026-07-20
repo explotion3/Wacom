@@ -11,6 +11,8 @@ struct FWacomBackpackWorkspaceCardHitRecord
 	FGuid InstanceId;
 	FWacomBackpackZoneKey SourceZone;
 	FVector2D CardCenter = FVector2D::ZeroVector;
+	FVector2D CardSize = FVector2D::ZeroVector;
+	float AngleDegrees = 0.0f;
 	int32 LayerRank = 0;
 	bool bMovable = true;
 

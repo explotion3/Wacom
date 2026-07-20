@@ -95,6 +95,7 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 - 展开的备战区、特殊区和负重区使用 `HandLensStrip`：空间足够时全部卡牌完整居中展示；空间不足时形成“左压缩堆 + 动态完整区 + 右压缩堆”。布局由鼠标在整条稳定走廊中的连续横向位置驱动，不再限制固定 `1–5` 张。完整卡默认间隔 `24px`，外围期望露出 `59px`、严格下限 `16px`；严格布局仍有空间时可在边界重叠不超过 `178px` 的前提下优先从右、再从左提升一张完整卡。折叠牌堆保持原固定布局。
 - 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。展开牌堆只消费 `HandLensFullGapPixels / HandLensCompressedExposurePixels / HandLensMinimumExposurePixels / HandLensPromotionOverlapTolerancePixels`；`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 保留给多卡携带，用户制作值互不覆盖。多卡携带的 `FocusWindowMaximumCards` 正式基线为 `1`，因此只完整展示当前滚轮卡，其余卡进入左右压缩段；仍可在 Style 中调高以同时完整展示相邻卡。Style 版本 2 是 Hand Lens 首个显式资产版本。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按版本 2 基线创建，已有资产只能通过带版本条件和 Package 白名单的定向迁移升级。
 - 展开布局按当前卡数和工作台几何预先计算稳定 `FrameRect` / 透镜走廊；鼠标横坐标映射为 `0..CardCount-1` 的连续 `LensFocus`，只有左堆、完整区、右堆的目标身份发生变化时才重排，同一段内移动只更新 Fake3D。整个牌列从当前视觉姿态平滑滑向新目标，默认约 `0.32s` Ease-Out；透镜布局焦点与浏览卡身份必须分离。目标条带只服务布局诊断；运行时浏览、详情、Fake3D 和左键拾取必须统一按当前插值后的视觉卡身与 Canvas ZOrder 命中，重叠位置选择实际显示在最上层的卡，纵向严格等于当前卡身，完整卡之间的真实空隙不命中卡牌。动画期间即使鼠标静止，按需 Motion Timer 也要重新解析鼠标下的视觉卡，但不得重算透镜或刷新 Snapshot。标题拖柄始终拥有最高输入优先级；进入标题冻结最后透镜布局并清除浏览焦点。详情面板使用 Workspace 捕获的实际视觉矩形，经 Workspace → Absolute → `CardDetailLayer` 四角转换后定位。
+- 展开牌堆可按住左 Shift 临时锁定当前 Hand Lens 三段布局。锁定只阻止 `LensFocus` 驱动的新布局求解，实际视觉卡身命中、详情、Fake3D 和普通左键拾取仍正常；松开左 Shift 后立即使用最新缓存鼠标位置恢复重排。开始携带、框选、CardPress、整堆移动、Suspended、收起/切换牌堆、失焦或关闭背包时必须清除该瞬态锁定。Ctrl 多选合同不变。
 - 焦点卡上抬并置顶，不缩放、不改卡面透明度；邻居仅水平移动外层局部姿态。鼠标离开实际卡身后默认等待 `0.12s`，随后只清除上抬、详情和实时卡面，最后一次三段式窗口冻结到该牌堆收起或切换，不返回首次中央窗口。
 - 投影卡、特殊区主卡和负重卡可以进入焦点牌列、启用详情浏览和上抬反馈，但继续保持各自透明度、角标和只读语义，不能选择、框选或携带。
 - 牌堆释放吸附到默认 `16px` 网格或邻近边缘；主体允许部分重叠，但标题拖柄不能相互覆盖，且始终夹紧在 Workspace 内。
@@ -110,7 +111,7 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 - 选择只属于一个来源区。Interaction Model 只接收按物理 `InstanceId` 去重后的可移动实体卡；同一卡的投影、特殊区主卡预览和负重卡仅进入浏览表现，不得进入选择/携带命中表。通量背景框选只命中通量卡；折叠或展开牌堆的内容背景框选只命中该牌堆的可移动实体卡。折叠状态禁止卡牌本体直接点击，但不能因此从框选命中表移除实体卡；切换来源会清除旧选择。
 - `CardPress`、携带、整堆移动和 Suspended 会锁定或清除展开牌堆浏览焦点。框选或 Ctrl 选择开始时捕获当前实际卡位、角度和 ZOrder，停止未完成的局部重排并让 Interaction Model 使用这份视觉快照；冻结保持到选择清空、开始携带、牌堆收起或来源区切换，退出时从当前视觉姿态连续返回最后窗口，不得瞬移。
 - 普通左键按下任意可移动卡牌时，Interaction Model 必须在同一输入帧确定选择集合并进入 `Carry`；不得先清除浏览焦点后等待后续 `PointerMove`。对应第一次左键松开只消费起手释放保护并保持携带。Ctrl 点击继续作为多选编辑手势，不强制立即起手。
-- 当前框选仍使用“卡牌中心进入框选矩形”作为命中规则；接触即选属于后续体验优化。
+- 框选使用屏幕所见卡牌本体作为命中真相：开始框选时捕获可移动卡的实际中心、固定卡面尺寸和当前角度，框选矩形与该有向卡身矩形相交即选中，边缘接触也算命中；只读卡和非来源区卡仍被排除。
 - 空白 Workspace 是通量投放目标：通量卡只更新自由布局，其它实体卡通过现有原子移动进入通量区并保存释放位置。
 - 放回来源牌堆等价于收拢；放到其它牌堆走 `MoveInstancesAtomic`；无效目标保持携带并显示拒绝反馈，不允许部分提交。
 - 成功释放后，仍位于携带视觉分支的卡牌必须进入显式 pending visual handoff。Interaction Model 已移除卡牌但目标 Snapshot 尚未 reconcile 的窗口内，任何 Presentation 刷新、ActiveTimer 或 `SyncCarryLayer()` 都不得恢复来源 A 的基础布局。跨物理区提交虽然会改变正式 ViewKey 的 `PhysicalZone`，但 Reconciler 必须按 `InstanceId` 迁移同一个受保护实体 Widget，不能销毁 A 实例并创建 B 实例。目标 Scene 到达后把同一 Widget 重挂到 `SettlementLayer`：外层直接采用目标 B 的 Canvas 布局，`CardMotionRoot` 从捕获的实际释放姿态形成局部偏移并在默认 `0.18s` 内归零，因此视觉路径是“释放点 → B”，绝不经过来源 A。Carry/Settlement 权威实例在 Scene 重绑时必须保留现有局部姿态和 Retainer 捕获面；相同卡定义、相同移动开关或相同 retained-rendering 模式不得重复提交卡面数据或重建捕获状态，避免释放瞬间出现一帧空白。部分释放只收落已提交卡，其余卡继续携带并平滑重排；原子拒绝不启动收落。

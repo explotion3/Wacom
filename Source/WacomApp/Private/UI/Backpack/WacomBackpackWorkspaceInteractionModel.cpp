@@ -2,6 +2,64 @@
 
 #include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 
+namespace
+{
+bool DoesCardBodyIntersectMarquee(
+	const FWacomBackpackWorkspaceCardHitRecord& Card,
+	const FVector2D& MarqueeMinimum,
+	const FVector2D& MarqueeMaximum)
+{
+	if (Card.CardSize.X <= UE_SMALL_NUMBER || Card.CardSize.Y <= UE_SMALL_NUMBER)
+	{
+		return Card.CardCenter.X >= MarqueeMinimum.X
+			&& Card.CardCenter.X <= MarqueeMaximum.X
+			&& Card.CardCenter.Y >= MarqueeMinimum.Y
+			&& Card.CardCenter.Y <= MarqueeMaximum.Y;
+	}
+
+	const FVector2D MarqueeCenter = (MarqueeMinimum + MarqueeMaximum) * 0.5f;
+	const FVector2D MarqueeHalfSize = (MarqueeMaximum - MarqueeMinimum) * 0.5f;
+	const FVector2D CardHalfSize(
+		FMath::Abs(Card.CardSize.X) * 0.5f,
+		FMath::Abs(Card.CardSize.Y) * 0.5f);
+	const float AngleRadians = FMath::DegreesToRadians(Card.AngleDegrees);
+	const FVector2D CardAxisX(FMath::Cos(AngleRadians), FMath::Sin(AngleRadians));
+	const FVector2D CardAxisY(-CardAxisX.Y, CardAxisX.X);
+	const FVector2D CenterDelta = Card.CardCenter - MarqueeCenter;
+	const auto IsSeparated = [](float CenterDistance, float FirstRadius, float SecondRadius)
+	{
+		return FMath::Abs(CenterDistance) > FirstRadius + SecondRadius + UE_KINDA_SMALL_NUMBER;
+	};
+
+	// SAT between the axis-aligned marquee and the card's screen-space oriented
+	// rectangle. Inclusive comparisons make an exact edge touch a valid hit.
+	if (IsSeparated(
+		CenterDelta.X,
+		MarqueeHalfSize.X,
+		FMath::Abs(CardAxisX.X) * CardHalfSize.X
+			+ FMath::Abs(CardAxisY.X) * CardHalfSize.Y)
+		|| IsSeparated(
+			CenterDelta.Y,
+			MarqueeHalfSize.Y,
+			FMath::Abs(CardAxisX.Y) * CardHalfSize.X
+				+ FMath::Abs(CardAxisY.Y) * CardHalfSize.Y)
+		|| IsSeparated(
+			FVector2D::DotProduct(CenterDelta, CardAxisX),
+			MarqueeHalfSize.X * FMath::Abs(CardAxisX.X)
+				+ MarqueeHalfSize.Y * FMath::Abs(CardAxisX.Y),
+			CardHalfSize.X)
+		|| IsSeparated(
+			FVector2D::DotProduct(CenterDelta, CardAxisY),
+			MarqueeHalfSize.X * FMath::Abs(CardAxisY.X)
+				+ MarqueeHalfSize.Y * FMath::Abs(CardAxisY.Y),
+			CardHalfSize.Y))
+	{
+		return false;
+	}
+	return true;
+}
+}
+
 const FWacomBackpackWorkspaceCardHitRecord* FWacomBackpackWorkspaceInteractionModel::FindCard(
 	FGuid InstanceId) const
 {
@@ -133,6 +191,8 @@ void FWacomBackpackWorkspaceInteractionModel::UpdateCardHitLayouts(
 		if (Existing)
 		{
 			Existing->CardCenter = Update.CardCenter;
+			Existing->CardSize = Update.CardSize;
+			Existing->AngleDegrees = Update.AngleDegrees;
 			Existing->LayerRank = Update.LayerRank;
 		}
 	}
@@ -235,8 +295,7 @@ void FWacomBackpackWorkspaceInteractionModel::CompleteMarquee()
 	for (const FWacomBackpackWorkspaceCardHitRecord& Card : AvailableCards)
 	{
 		if (Card.bMovable && Selection.bHasSourceZone && Card.SourceZone == Selection.SourceZone
-			&& Card.CardCenter.X >= Minimum.X && Card.CardCenter.X <= Maximum.X
-			&& Card.CardCenter.Y >= Minimum.Y && Card.CardCenter.Y <= Maximum.Y)
+			&& DoesCardBodyIntersectMarquee(Card, Minimum, Maximum))
 		{
 			Hits.Add(Card.InstanceId);
 		}

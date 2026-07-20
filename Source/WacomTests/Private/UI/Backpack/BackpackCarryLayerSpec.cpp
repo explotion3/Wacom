@@ -287,6 +287,102 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackRepeatedCarrySettlementLifetimeSpec,
+	"Wacom.UI.Backpack.Workspace.RepeatedCarrySettlementLifetime",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackRepeatedCarrySettlementLifetimeSpec::RunTest(const FString& Parameters)
+{
+	constexpr int32 CardCount = 7;
+	constexpr int32 RapidCycleCount = 12;
+	TStrongObjectPtr<UWacomBackpackWorkspaceWidget> Workspace(
+		NewObject<UWacomBackpackWorkspaceWidget>());
+	const TSharedRef<SWidget> WorkspaceSlate = Workspace->TakeWidget();
+	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Model =
+		MakeShared<FWacomBackpackWorkspaceInteractionModel>();
+	Workspace->SetInteractionModel(Model, nullptr);
+
+	TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
+	Definition->CardId = TEXT("Backpack.Carry.RepeatedSettlement");
+	TArray<TStrongObjectPtr<UWacomDeckCardWidget>> OwnedCards;
+	TArray<TObjectPtr<UWacomDeckCardWidget>> Cards;
+	for (int32 Index = 0; Index < CardCount; ++Index)
+	{
+		TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
+		FCardInstance Instance;
+		Instance.InstanceId = FGuid(Index + 1, 77, 88, 99);
+		Instance.Definition = Definition.Get();
+		Card->SetCard(Instance, EZoneKind::Backpack, FGuid());
+		Workspace->GetStaticCardLayer()->AddChildToCanvas(Card.Get());
+		Workspace->PrimeCardBaseLayout(
+			*Card,
+			FVector2D(180.0f + Index * 48.0f, 240.0f),
+			FVector2D(220.0f, 320.0f),
+			0.0f,
+			Index);
+		Cards.Add(Card.Get());
+		OwnedCards.Add(MoveTemp(Card));
+	}
+	Workspace->BindWorkspaceCards(Cards, 77);
+	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
+
+	for (int32 Cycle = 0; Cycle < RapidCycleCount; ++Cycle)
+	{
+		Model->SelectAllMovable();
+		TestTrue(*FString::Printf(TEXT("Cycle %d begins a multi-card carry"), Cycle),
+			Model->BeginCarry(Cards[0]->GetCardInstanceId(), FVector2D(500.0f, 350.0f), 77));
+		Workspace->RefreshInteractionPresentation();
+
+		if (Cycle > 0)
+		{
+			TestEqual(
+				*FString::Printf(TEXT("Cycle %d pickup consumes every previous settlement target"), Cycle),
+				Workspace->GetAutomationTestView().ActiveSettlementTargetCount,
+				0);
+		}
+
+		TestTrue(*FString::Printf(TEXT("Cycle %d commits the complete carried set"), Cycle),
+			FWacomBackpackScreenTestAccess::CommitWorkspaceReleaseBeforeTargetReconcile(
+				*Workspace, true));
+		for (int32 Index = 0; Index < Cards.Num(); ++Index)
+		{
+			Workspace->ApplyCardBaseLayout(
+				*Cards[Index],
+				FVector2D(240.0f + Index * 52.0f, 280.0f + Cycle),
+				FVector2D(220.0f, 320.0f),
+				0.0f,
+				Index);
+		}
+		TestEqual(*FString::Printf(TEXT("Cycle %d owns one settlement target per card"), Cycle),
+			Workspace->GetAutomationTestView().ActiveSettlementTargetCount,
+			CardCount);
+		if (Cycle + 1 < RapidCycleCount)
+		{
+			FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
+				*Workspace, Style->SettleSeconds * 0.25f);
+		}
+	}
+
+	FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
+		*Workspace, Style->SettleSeconds + 0.05f);
+	const FWacomBackpackWorkspaceAutomationTestView Final = Workspace->GetAutomationTestView();
+	TestEqual(TEXT("Repeated carry/release leaves no card in SettlementLayer"),
+		Final.SettlementCardCount, 0);
+	TestEqual(TEXT("Repeated carry/release leaves no settlement target"),
+		Final.ActiveSettlementTargetCount, 0);
+	TestEqual(TEXT("Repeated carry/release leaves no local card motion"),
+		Final.ActiveLocalMotionCardCount, 0);
+	TestEqual(TEXT("Repeated carry/release preserves exactly one visual per card"),
+		Final.WorkspaceCardCount, CardCount);
+	for (UWacomDeckCardWidget* Card : Cards)
+	{
+		TestEqual(TEXT("Every released card returns to StaticCardLayer"),
+			Card->GetParent(), static_cast<UPanelWidget*>(Workspace->GetStaticCardLayer()));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackCarryCrossZoneIdentitySpec,
 	"Wacom.UI.Backpack.Workspace.CarryCrossZoneIdentity",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

@@ -318,4 +318,180 @@ bool FWacomUIBackpackHandLensStripInteractionSpec::RunTest(const FString& Parame
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackHandLensStripShiftLockSpec,
+	"Wacom.UI.Backpack.Workspace.HandLensStrip.ShiftLock",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackHandLensStripShiftLockSpec::RunTest(const FString& Parameters)
+{
+	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
+	for (const int32 CardCount : { 7, 15, 21 })
+	{
+		TStrongObjectPtr<UWacomBackpackWorkspaceWidget> Workspace(
+			NewObject<UWacomBackpackWorkspaceWidget>());
+		const TSharedRef<SWidget> WorkspaceSlateRoot = Workspace->TakeWidget();
+		TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Model =
+			MakeShared<FWacomBackpackWorkspaceInteractionModel>();
+		Workspace->SetInteractionModel(Model, nullptr);
+		const FWacomBackpackResolvedPileContentLayout Initial =
+			FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
+				CardCount,
+				FVector2D(120.0f, 20.0f),
+				FVector2D(260.0f, 48.0f),
+				FVector2D(1920.0f, 1080.0f),
+				Style->CardRenderSize,
+				true,
+				Style->PileCollapsedExposurePixels,
+				Style->HandLensFullGapPixels,
+				Style->HandLensCompressedExposurePixels,
+				Style->HandLensMinimumExposurePixels,
+				Style->HandLensPromotionOverlapTolerancePixels,
+				Style->PileEdgeMarginPixels,
+				Style->ExpandedCardHoverLiftPixels);
+
+		TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
+		Definition->CardId = FName(*FString::Printf(TEXT("Backpack.HandLens.ShiftLock.%d"), CardCount));
+		TArray<TStrongObjectPtr<UWacomDeckCardWidget>> OwnedCards;
+		TArray<TObjectPtr<UWacomDeckCardWidget>> Cards;
+		TArray<FWacomBackpackExpandedPileFocusCard> FocusCards;
+		OwnedCards.Reserve(CardCount);
+		Cards.Reserve(CardCount);
+		FocusCards.Reserve(CardCount);
+		for (int32 Index = 0; Index < CardCount; ++Index)
+		{
+			TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
+			FCardInstance Instance;
+			Instance.InstanceId = FGuid(Index + 1, CardCount, 61, 62);
+			Instance.Definition = Definition.Get();
+			Card->SetCard(Instance, EZoneKind::BattleDeck, FGuid());
+			Workspace->GetStaticCardLayer()->AddChildToCanvas(Card.Get());
+			Workspace->PrimeCardBaseLayout(
+				*Card,
+				Initial.Cards[Index].CardCenter,
+				Style->CardRenderSize,
+				0.0f,
+				3000 + Initial.Cards[Index].LayerRank);
+			FWacomBackpackExpandedPileFocusCard& Focus = FocusCards.AddDefaulted_GetRef();
+			Focus.Card = Card.Get();
+			Focus.NeutralCenter = Initial.Cards[Index].CardCenter;
+			Focus.NeutralLayerRank = 3000 + Initial.Cards[Index].LayerRank;
+			Focus.NeutralHitBand = Initial.FocusHitBands[Index];
+			Focus.CurrentHitBand = Focus.NeutralHitBand;
+			Cards.Add(Card.Get());
+			OwnedCards.Add(MoveTemp(Card));
+		}
+		Workspace->BindWorkspaceCards(Cards, static_cast<uint64>(CardCount));
+		Workspace->SetExpandedPileFocusContract(
+			EZoneKind::BattleDeck,
+			FGuid(),
+			Initial.HeaderRect,
+			Initial.FocusCorridorRect,
+			FocusCards);
+
+		const FVector2D LeftPointer(
+			Initial.FocusCorridorRect.Left + 4.0f,
+			Initial.Cards[0].CardCenter.Y);
+		const FVector2D RightPointer(
+			Initial.FocusCorridorRect.Right - 4.0f,
+			Initial.Cards.Last().CardCenter.Y);
+		FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
+			*Workspace, LeftPointer);
+		const FWacomBackpackWorkspaceAutomationTestView BeforeLock =
+			Workspace->GetAutomationTestView();
+		TestTrue(TEXT("Left Shift is handled while a pile can browse"),
+			FWacomBackpackScreenTestAccess::SetWorkspaceHandLensLock(*Workspace, true));
+		TestTrue(TEXT("The Hand Lens exposes its transient lock state"),
+			Workspace->GetAutomationTestView().bExpandedPileLensInputLocked);
+		TestTrue(TEXT("Repeated Shift keydown is consumed without changing state"),
+			FWacomBackpackScreenTestAccess::SetWorkspaceHandLensLock(
+				*Workspace, true, true));
+
+		FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
+			*Workspace, RightPointer);
+		const FWacomBackpackWorkspaceAutomationTestView WhileLocked =
+			Workspace->GetAutomationTestView();
+		TestTrue(TEXT("Locked pointer movement keeps the continuous lens focus"),
+			FMath::IsNearlyEqual(
+				WhileLocked.ExpandedPileLensFocus,
+				BeforeLock.ExpandedPileLensFocus,
+				0.01f));
+		TestEqual(TEXT("Locked pointer movement does not rebuild Hand Lens layout"),
+			WhileLocked.ExpandedPileFocusLayoutRebuildCount,
+			BeforeLock.ExpandedPileFocusLayoutRebuildCount);
+		TestTrue(TEXT("Visual browsing remains active while layout is locked"),
+			WhileLocked.ExpandedPileFocusIndex != INDEX_NONE);
+		TestTrue(TEXT("Releasing Shift is handled while the lock is active"),
+			FWacomBackpackScreenTestAccess::SetWorkspaceHandLensLock(*Workspace, false));
+		const FWacomBackpackWorkspaceAutomationTestView AfterRelease =
+			Workspace->GetAutomationTestView();
+		TestFalse(TEXT("Releasing Shift clears the transient lens lock"),
+			AfterRelease.bExpandedPileLensInputLocked);
+		TestTrue(TEXT("Shift release immediately resumes from the latest pointer"),
+			AfterRelease.ExpandedPileLensFocus
+				> static_cast<float>(CardCount - 1) - 0.1f);
+		TestEqual(TEXT("Immediate resume rebuilds the changed Hand Lens segment once"),
+			AfterRelease.ExpandedPileFocusLayoutRebuildCount,
+			WhileLocked.ExpandedPileFocusLayoutRebuildCount + 1);
+
+		FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointerWithShiftState(
+			*Workspace, LeftPointer, false, true);
+		const FWacomBackpackWorkspaceAutomationTestView RightShift =
+			Workspace->GetAutomationTestView();
+		TestFalse(TEXT("Right Shift does not lock Hand Lens input"),
+			RightShift.bExpandedPileLensInputLocked);
+		TestTrue(TEXT("Right Shift pointer movement still drives Hand Lens"),
+			RightShift.ExpandedPileLensFocus < 0.1f);
+		FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointerWithShiftState(
+			*Workspace, RightPointer, true);
+		const FWacomBackpackWorkspaceAutomationTestView PointerLock =
+			Workspace->GetAutomationTestView();
+		TestTrue(TEXT("A left-Shift pointer event recovers a missed keydown"),
+			PointerLock.bExpandedPileLensInputLocked);
+		TestTrue(TEXT("Recovered pointer lock keeps the previous lens focus"),
+			PointerLock.ExpandedPileLensFocus < 0.1f);
+		FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointerWithShiftState(
+			*Workspace, RightPointer, false);
+		const FWacomBackpackWorkspaceAutomationTestView PointerUnlock =
+			Workspace->GetAutomationTestView();
+		TestFalse(TEXT("A pointer event without left Shift recovers a missed keyup"),
+			PointerUnlock.bExpandedPileLensInputLocked);
+		TestTrue(TEXT("Recovered keyup resumes from the latest pointer"),
+			PointerUnlock.ExpandedPileLensFocus
+				> static_cast<float>(CardCount - 1) - 0.1f);
+
+		if (CardCount == 7 && OwnedCards.IsValidIndex(PointerUnlock.ExpandedPileFocusIndex))
+		{
+			const FGuid ExpectedCarryId =
+				OwnedCards[PointerUnlock.ExpandedPileFocusIndex]->GetCardInstanceId();
+			FWacomBackpackScreenTestAccess::SetWorkspaceHandLensLock(*Workspace, true);
+			TestTrue(TEXT("Shift-locked pointer-down still begins normal carry"),
+				FWacomBackpackScreenTestAccess::PressExpandedPileVisualCard(
+					*Workspace, RightPointer, true));
+			const FWacomBackpackWorkspaceAutomationTestView Carry =
+				Workspace->GetAutomationTestView();
+			TestTrue(TEXT("Shift does not enter the Ctrl multi-selection path"),
+				Carry.CarriedInstanceIds.Num() == 1
+					&& Carry.CarriedInstanceIds[0] == ExpectedCarryId);
+			TestFalse(TEXT("Beginning carry clears the transient lens lock"),
+				Carry.bExpandedPileLensInputLocked);
+			Workspace->CancelInteraction();
+			FWacomBackpackScreenTestAccess::ClearWorkspaceSelection(*Workspace);
+			FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
+				*Workspace, LeftPointer);
+			FWacomBackpackScreenTestAccess::SetWorkspaceHandLensLock(*Workspace, true);
+			FWacomBackpackScreenTestAccess::LoseWorkspaceKeyboardFocus(*Workspace);
+			TestFalse(TEXT("Losing keyboard focus clears the transient lens lock"),
+				Workspace->GetAutomationTestView().bExpandedPileLensInputLocked);
+			FWacomBackpackScreenTestAccess::SetWorkspaceHandLensLock(*Workspace, true);
+			Workspace->SetExpandedPileFocusContract(
+				EZoneKind::Backpack, FGuid(), FSlateRect(), FSlateRect(), {});
+			TestFalse(TEXT("Collapsing the pile clears the transient lens lock"),
+				Workspace->GetAutomationTestView().bExpandedPileLensInputLocked);
+			continue;
+		}
+	}
+	return true;
+}
+
 #endif

@@ -192,6 +192,7 @@ void FWacomBackpackWorkspaceMotionCoordinator::StopLocalPoseMotionPreservingCurr
 {
 	LocalPoseMotions.Remove(&Card);
 	PickupCards.Remove(&Card);
+	CompletedSettlements.Remove(&Card);
 }
 
 void FWacomBackpackWorkspaceMotionCoordinator::BeginCarryPickup(

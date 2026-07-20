@@ -270,7 +270,13 @@ public:
 		return true;
 	}
 
+	bool CancelSettlementTarget(UWacomDeckCardWidget& Card)
+	{
+		return SettlementTargets.Remove(&Card) > 0;
+	}
+
 	bool HasActiveSettlements() const { return !SettlementTargets.IsEmpty(); }
+	int32 GetActiveSettlementCount() const { return SettlementTargets.Num(); }
 	bool HasReleasedHandoffs() const { return !PendingReleasedVisualHandoffs.IsEmpty(); }
 
 	void ResetTransientMotion()

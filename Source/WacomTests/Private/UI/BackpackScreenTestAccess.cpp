@@ -561,11 +561,83 @@ void FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
 	Workspace.UpdateExpandedPileFocus(PointerLocal);
 }
 
+void FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointerWithShiftState(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	FVector2D PointerLocal,
+	bool bLeftShiftDown,
+	bool bRightShiftDown)
+{
+	const FModifierKeysState Modifiers(
+		bLeftShiftDown,
+		bRightShiftDown,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false);
+	const FPointerEvent PointerMove(
+		0,
+		PointerLocal,
+		PointerLocal,
+		TSet<FKey>(),
+		EKeys::Invalid,
+		0.0f,
+		Modifiers);
+	Workspace.NativeOnMouseMove(FGeometry(), PointerMove);
+}
+
+bool FWacomBackpackScreenTestAccess::SetWorkspaceHandLensLock(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	bool bLocked,
+	bool bRepeat)
+{
+	const FModifierKeysState Modifiers(
+		bLocked,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false);
+	const FKeyEvent ShiftEvent(
+		EKeys::LeftShift,
+		Modifiers,
+		/*UserIndex*/ 0,
+		bRepeat,
+		/*CharacterCode*/ 0,
+		/*KeyCode*/ 0);
+	const FReply Reply = bLocked
+		? Workspace.NativeOnKeyDown(FGeometry(), ShiftEvent)
+		: Workspace.NativeOnKeyUp(FGeometry(), ShiftEvent);
+	return Reply.IsEventHandled();
+}
+
+void FWacomBackpackScreenTestAccess::LoseWorkspaceKeyboardFocus(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	Workspace.NativeOnFocusLost(FFocusEvent());
+}
+
 bool FWacomBackpackScreenTestAccess::PressExpandedPileVisualCard(
 	UWacomBackpackWorkspaceWidget& Workspace,
-	FVector2D PointerLocal)
+	FVector2D PointerLocal,
+	bool bLeftShiftDown)
 {
 	TSet<FKey> PressedButtons{ EKeys::LeftMouseButton };
+	const FModifierKeysState Modifiers(
+		bLeftShiftDown,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false);
 	const FPointerEvent PointerDown(
 		0,
 		FVector2D::ZeroVector,
@@ -573,7 +645,7 @@ bool FWacomBackpackScreenTestAccess::PressExpandedPileVisualCard(
 		PressedButtons,
 		EKeys::LeftMouseButton,
 		0.0f,
-		FModifierKeysState());
+		Modifiers);
 	return Workspace.TryHandleExpandedPileVisualPointerDown(
 		PointerLocal, PointerDown).IsEventHandled();
 }
@@ -781,7 +853,8 @@ void FWacomBackpackScreenTestAccess::ForgetWorkspacePileRegistry(
 }
 
 bool FWacomBackpackScreenTestAccess::CommitWorkspaceReleaseBeforeTargetReconcile(
-	UWacomBackpackWorkspaceWidget& Workspace)
+	UWacomBackpackWorkspaceWidget& Workspace,
+	bool bReleaseAll)
 {
 	const TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Model = Workspace.InteractionModel;
 	if (!Model || !Model->IsCarrying())
@@ -797,7 +870,7 @@ bool FWacomBackpackScreenTestAccess::CommitWorkspaceReleaseBeforeTargetReconcile
 			bCommitted = !Intent.InstanceIds.IsEmpty();
 		});
 	Model->NotifyReleaseGestureStarted();
-	Workspace.BroadcastRelease(false);
+	Workspace.BroadcastRelease(bReleaseAll);
 	Workspace.OnReleaseIntentNative.Remove(Handle);
 	return bCommitted;
 }

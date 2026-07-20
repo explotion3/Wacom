@@ -37,6 +37,51 @@ bool FWacomUIBackpackWorkspaceSelectionSpec::RunTest(const FString& Parameters)
 	Model.ClickBlank();
 	TestTrue(TEXT("Blank click clears selection"), Model.GetSelection().OrderedSelectedInstanceIds.IsEmpty());
 
+	// Marquee selection follows the card body that the player can see. Touching
+	// the visible edge counts even when the card center remains outside the box.
+	FWacomBackpackWorkspaceCardHitRecord BodyHitCard(
+		First,
+		FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck),
+		FVector2D(500.0f, 500.0f),
+		0,
+		true);
+	BodyHitCard.CardSize = FVector2D(100.0f, 160.0f);
+	FWacomBackpackWorkspaceInteractionModel BodyHitModel;
+	BodyHitModel.ReconcileCards(MakeArrayView(&BodyHitCard, 1));
+	BodyHitModel.BeginMarquee(
+		FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck),
+		FVector2D(400.0f, 430.0f),
+		false);
+	BodyHitModel.UpdateMarquee(FVector2D(450.0f, 470.0f));
+	BodyHitModel.CompleteMarquee();
+	TestEqual(TEXT("Marquee touching the visible card edge selects the card"),
+		BodyHitModel.GetSelection().OrderedSelectedInstanceIds,
+		TArray<FGuid>{ First });
+
+	BodyHitModel.CancelTransientState();
+	FWacomBackpackWorkspaceCardHitRecord RotatedBody = BodyHitCard;
+	RotatedBody.CardSize = FVector2D(100.0f, 200.0f);
+	RotatedBody.AngleDegrees = 90.0f;
+	BodyHitModel.UpdateCardHitLayouts(MakeArrayView(&RotatedBody, 1));
+	BodyHitModel.BeginMarquee(
+		FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck),
+		FVector2D(590.0f, 490.0f),
+		false);
+	BodyHitModel.UpdateMarquee(FVector2D(600.0f, 510.0f));
+	BodyHitModel.CompleteMarquee();
+	TestEqual(TEXT("Marquee intersects the card's rotated visible body"),
+		BodyHitModel.GetSelection().OrderedSelectedInstanceIds,
+		TArray<FGuid>{ First });
+
+	BodyHitModel.BeginMarquee(
+		FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck),
+		FVector2D(601.0f, 490.0f),
+		false);
+	BodyHitModel.UpdateMarquee(FVector2D(620.0f, 510.0f));
+	BodyHitModel.CompleteMarquee();
+	TestTrue(TEXT("Marquee outside the rotated card body does not select it"),
+		BodyHitModel.GetSelection().OrderedSelectedInstanceIds.IsEmpty());
+
 	const FWacomBackpackZoneKey BattleZone = FWacomBackpackZoneKey::Make(EZoneKind::BattleDeck);
 	Model.BeginMarquee(BattleZone, FVector2D(50.0f, 50.0f), false);
 	Model.UpdateMarquee(FVector2D(350.0f, 150.0f));

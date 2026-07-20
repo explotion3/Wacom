@@ -126,6 +126,8 @@ protected:
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual void NativeOnFocusLost(const FFocusEvent& InFocusEvent) override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UCanvasPanel> WorkspaceCanvas;
@@ -277,6 +279,8 @@ private:
 		bool bExitPending = false;
 	};
 	FExpandedPileFocusState ExpandedPileFocus;
+	/** 按住左 Shift 时仅冻结 Hand Lens 布局；实际视觉命中与详情仍跟随鼠标。 */
+	bool bExpandedPileLensInputLocked = false;
 	EZoneKind SelectionFrozenZone = EZoneKind::Backpack;
 	FGuid SelectionFrozenOwnerInstanceId;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
@@ -335,6 +339,8 @@ private:
 	void ApplyCarryVisualAnchor(float DeltaTime);
 	void UpdateExpandedPileFocus(FVector2D PointerLocal);
 	void UpdateExpandedPileLensFocus(FVector2D PointerLocal);
+	void SetExpandedPileLensInputLocked(bool bLocked, bool bResumeImmediately);
+	void SyncExpandedPileLensInputLockFromPointerEvent(const FPointerEvent& PointerEvent);
 	void RefreshExpandedPileVisualHitAtCachedPointer();
 	int32 ResolveExpandedPileVisualHitIndex(
 		FVector2D PointerLocal,
@@ -427,6 +433,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 CachedCarryCardCount = 0;
 	int32 ActiveCarryCardCount = 0;
 	int32 SettlementCardCount = 0;
+	int32 ActiveSettlementTargetCount = 0;
 	int32 ActiveLocalMotionCardCount = 0;
 	int32 RealtimeCardCount = 0;
 	int32 CarryStripLayoutRebuildCount = 0;
@@ -439,6 +446,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 ExpandedPileLensExpandedStartIndex = INDEX_NONE;
 	int32 ExpandedPileLensExpandedCardCount = 0;
 	int32 ExpandedPileLensRightStackCount = 0;
+	bool bExpandedPileLensInputLocked = false;
 	int32 SelectionFrozenCardCount = 0;
 	bool bPileMoveRollbackSnapshotActive = false;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
