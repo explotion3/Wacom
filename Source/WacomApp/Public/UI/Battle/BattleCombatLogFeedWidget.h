@@ -19,8 +19,8 @@ class FWacomBattleCombatActivityPlayback;
 
 DECLARE_MULTICAST_DELEGATE(FWacomBattleCombatLogDetailsRequestedNative);
 
-/** Fixed three-line BattleHUD activity broadcaster plus persistent footer. */
-UCLASS(Blueprintable, meta = (ToolTip = "BattleHUD 常驻三行活动播报器。完整战斗日志由 HUD Controller 另行保存；本 Widget 只播放短时活动并发送详情打开意图。"))
+/** Fixed-viewport BattleHUD streaming activity broadcaster plus persistent footer. */
+UCLASS(Blueprintable, meta = (ToolTip = "BattleHUD 常驻流式活动播报器。完整战斗日志由 HUD Controller 另行保存；本 Widget 只播放短时活动并发送详情打开意图。"))
 class WACOMAPP_API UBattleCombatLogFeedWidget : public UWacomBattleWidgetBase
 {
 	GENERATED_BODY()
@@ -98,6 +98,8 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UBattleCombatActivityRowWidget>> ActivityRowWidgets;
+	TArray<uint64> PresentedRowPlaybackIds;
+	TWeakObjectPtr<UClass> CachedActivityRowWidgetClass;
 
 	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
 	FDelegateHandle RuntimeSettingsChangedHandle;
@@ -108,7 +110,7 @@ private:
 	void HandleLastActionClicked();
 
 	void EnsureRuntimeBindings();
-	void EnsureRowWidgets();
+	void EnsureRowWidgets(int32 RequiredCount);
 	void RefreshPlaybackPresentation();
 	void RefreshFooter();
 	void BindRuntimeSettings();

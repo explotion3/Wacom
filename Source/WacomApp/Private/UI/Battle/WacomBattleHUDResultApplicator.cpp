@@ -50,6 +50,7 @@ void FWacomBattleHUDResultApplicator::BeginBattleEntryPresentation()
 	LastAppliedStateVersion = INDEX_NONE;
 	bEntryPresentationActive = true;
 	bInitializationApplied = false;
+	bInitialTurnActivityPresented = false;
 	bCameraStageReady = false;
 	bPrewarmGateReady = false;
 	ResetCardPresentationPrewarm();
@@ -204,6 +205,12 @@ void FWacomBattleHUDResultApplicator::TryReleaseBattleEntryPresentation()
 	Runtime.SetFirstPersonBattleHandSuppressedForEntry(false);
 	Runtime.SetBattleInputReady(true);
 	Runtime.NativeRefreshFromSnapshot(PendingInitializationSnapshot);
+	if (!bInitialTurnActivityPresented)
+	{
+		Runtime.GetCombatLogController().PresentInitialTurnActivity(
+			PendingInitializationSnapshot.TurnNumber);
+		bInitialTurnActivityPresented = true;
+	}
 	bEntryPresentationActive = false;
 	PendingInitializationSnapshot = FBattleSnapshot();
 }
@@ -358,6 +365,7 @@ void FWacomBattleHUDResultApplicator::HandleSessionChanged(
 	PendingInitializationSnapshot = FBattleSnapshot();
 	bEntryPresentationActive = false;
 	bInitializationApplied = false;
+	bInitialTurnActivityPresented = false;
 	bCameraStageReady = false;
 	bPrewarmGateReady = false;
 	ResetCardPresentationPrewarm();
@@ -373,6 +381,7 @@ void FWacomBattleHUDResultApplicator::CancelEntryPresentation()
 	PendingInitializationSnapshot = FBattleSnapshot();
 	bEntryPresentationActive = false;
 	bInitializationApplied = false;
+	bInitialTurnActivityPresented = false;
 	bCameraStageReady = false;
 	bPrewarmGateReady = false;
 	ResetCardPresentationPrewarm();

@@ -47,6 +47,13 @@ void FWacomBattleHUDCombatLogController::AppendBlock(
 		PostCommandSnapshot));
 }
 
+void FWacomBattleHUDCombatLogController::PresentInitialTurnActivity(const int32 TurnNumber)
+{
+	SubmitActivityBatch(
+		UWacomBattleCombatLogBuilder::BuildInitialTurnActivityBatch(TurnNumber),
+		false);
+}
+
 void FWacomBattleHUDCombatLogController::Clear()
 {
 	BattleCombatLogHistory.Reset();
@@ -79,9 +86,13 @@ void FWacomBattleHUDCombatLogController::SyncFeed()
 }
 
 void FWacomBattleHUDCombatLogController::SubmitActivityBatch(
-	const FWacomBattleCombatActivityBatchView& Batch)
+	const FWacomBattleCombatActivityBatchView& Batch,
+	const bool bAppendToDetailsHistory)
 {
-	AppendDetailsBatch(Batch);
+	if (bAppendToDetailsHistory)
+	{
+		AppendDetailsBatch(Batch);
+	}
 	if (Batch.bSetTurnImmediately || Batch.bAdvanceTurnAfterPlayback)
 	{
 		LastProjectedTurnNumber = Batch.PresentedTurnNumber;

@@ -93,17 +93,27 @@ void UBattleCombatActivityRowWidget::SetActivityRowData(
 	BP_OnActivityRowUpdated(CurrentRow);
 }
 
-void UBattleCombatActivityRowWidget::SetPlaybackPresentation(float Opacity, float TranslationY)
+void UBattleCombatActivityRowWidget::SetPlaybackPresentation(
+	const float Opacity,
+	const float ContentOpacity,
+	const float IconOpacity,
+	const float TranslationY)
 {
-	SetRenderOpacity(FMath::Clamp(Opacity, 0.0f, 1.0f));
-	SetRenderTranslation(FVector2D(0.0f, TranslationY));
+	PlaybackOpacity = FMath::Clamp(Opacity, 0.0f, 1.0f);
+	PlaybackContentOpacity = FMath::Clamp(ContentOpacity, 0.0f, 1.0f);
+	PlaybackIconOpacity = FMath::Clamp(IconOpacity, 0.0f, 1.0f);
+	PlaybackTranslationY = TranslationY;
+	ApplyPlaybackPresentation();
 }
 
 void UBattleCombatActivityRowWidget::ClearActivityRow()
 {
 	bHasRow = false;
-	SetRenderOpacity(1.0f);
-	SetRenderTranslation(FVector2D::ZeroVector);
+	PlaybackOpacity = 1.0f;
+	PlaybackContentOpacity = 1.0f;
+	PlaybackIconOpacity = 1.0f;
+	PlaybackTranslationY = 0.0f;
+	ApplyPlaybackPresentation();
 	SetVisibility(ESlateVisibility::Collapsed);
 }
 
@@ -125,14 +135,32 @@ void UBattleCombatActivityRowWidget::ApplyCurrentRow()
 		ActivityIcon->SetBrush(CurrentIconBrush);
 		ActivityIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
-	if (RowRoot)
-	{
-		const float RootAlpha = CurrentRow.RowKind == EWacomBattleCombatActivityRowKind::RootAction ? 0.84f : 0.66f;
-		RowRoot->SetBrushColor(FLinearColor(0.025f, 0.035f, 0.055f, RootAlpha));
-	}
 	if (IndentSpacer)
 	{
 		IndentSpacer->SetWidthOverride(
 			CurrentRow.RowKind == EWacomBattleCombatActivityRowKind::RootAction ? 0.0f : 22.0f);
+	}
+	ApplyPlaybackPresentation();
+}
+
+void UBattleCombatActivityRowWidget::ApplyPlaybackPresentation()
+{
+	SetRenderOpacity(PlaybackOpacity);
+	SetRenderTranslation(FVector2D(0.0f, PlaybackTranslationY));
+	if (ActivityText)
+	{
+		ActivityText->SetRenderOpacity(PlaybackContentOpacity);
+	}
+	if (ActivityIcon)
+	{
+		ActivityIcon->SetRenderOpacity(PlaybackIconOpacity);
+	}
+	if (RowRoot)
+	{
+		const float RootAlpha = CurrentRow.RowKind == EWacomBattleCombatActivityRowKind::RootAction
+			? 0.84f
+			: 0.66f;
+		RowRoot->SetBrushColor(FLinearColor(
+			0.025f, 0.035f, 0.055f, RootAlpha * PlaybackContentOpacity));
 	}
 }

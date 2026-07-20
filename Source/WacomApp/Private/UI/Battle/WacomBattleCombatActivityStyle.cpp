@@ -66,6 +66,10 @@ FSlateBrush UWacomBattleCombatActivityStyle::ResolveActivityIconBrush(
 	{
 		return WaitIconBrush;
 	}
+	if (Row.IconKey == TEXT("TurnStart"))
+	{
+		return TurnIconBrush;
+	}
 	if (Row.IconKey == TEXT("System"))
 	{
 		return SystemIconBrush;

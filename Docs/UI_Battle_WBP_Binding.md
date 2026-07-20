@@ -44,7 +44,7 @@ tags:
 | `DrawPileMotionAnchor` | `UWidget`，推荐 `SizeBox` | Optional | `Drawn` 卡牌的完整逻辑起点；缺失或几何无效时回退 `DrawPileView` 中心 |
 | `DiscardPileMotionAnchor` | `UWidget`，推荐 `SizeBox` | Optional | `Discarded` 卡牌的完整逻辑终点；缺失或几何无效时回退 `DiscardPileView` 中心 |
 | `PlayTargetMotionAnchor` | `UWidget`，推荐 `SizeBox` | Optional | 无真实目标 Played 的完整逻辑终点；真实目标坐标优先，缺失时回退旧 Played origin |
-| `CombatLogFeed` | `UBattleCombatLogFeedWidget` | Optional | 三行短时活动播报与“最后行动 + 当前回合” Footer |
+| `CombatLogFeed` | `UBattleCombatLogFeedWidget` | Optional | 固定视口流式活动播报与“最后行动 + 当前回合” Footer |
 | `BattlePresentationStack` | `UBattlePresentationStackWidget` | Optional | 已提交卡牌的只读表现 backlog |
 
 WBP 不应做：
@@ -60,7 +60,7 @@ WBP 不应做：
 
 - 玩家状态、牌堆数量、CommandBar 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - 拖牌指向合法敌人部位 / 手牌目标，或无目标卡已经达到 armed commit 可释放状态时，玩家状态条和敌人部位面板可以直接显示 Action Preview projected value；单纯拖出手牌区但未 armed、未指向有效目标或目标无效时不显示玩家侧收益预览。
-- `CombatLogFeed` 最多显示三行短时活动；播放结束后只保留最后根行动按钮和当前回合。除最后行动按钮外不遮挡 HUD、手牌或世界目标。
+- `CombatLogFeed` 在固定高度的裁切视口中流式显示短时活动；不再以三行做数据硬裁剪。根行动从底部最后行动槽出现，结果向上流动并随接近顶部加速淡出；收束时根行动只淡出文字和底板，图标原位交接为可点击入口。除交接完成后的最后行动按钮外不遮挡 HUD、手牌或世界目标。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 抽牌从 `DrawPileMotionAnchor`（或 `DrawPileView` 中心）进入；弃牌飞向 `DiscardPileMotionAnchor`（或 `DiscardPileView` 中心）。配置有效 Card Use Surface Effect 时，无目标牌与目标牌都停在提交位置播放当前 Style（默认像素翻面收牌，旧菱形波可切回）；`PlayTargetMotionAnchor` 和真实目标坐标仍会采集，但只供效果失效时的旧空间离场 fallback 与未来目标命中反馈使用。
 - 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 的 typed Part registry 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
@@ -181,14 +181,15 @@ WBP 合同：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `ActivityRowsBox` | `PanelWidget` | Optional | C++ 维护最多三个复用 Activity Row；必须 `HitTestInvisible` |
-| `LastActionButton` | `Button` | Optional | Footer 中唯一可点击入口；只广播详细日志打开意图 |
-| `LastActionIcon` | `Image` | Optional | 最后一个玩家/敌人根行动图标 |
+| `ActivityRowsViewport` | `SizeBox` | Optional | `140px` 固定高度活动视口；必须使用 `ClipToBounds` |
+| `ActivityRowsBox` | `CanvasPanel` | Optional | C++ 按活动数量扩展和回收 Row 池，应用 Playback 输出的 Y 与透明度；必须 `HitTestInvisible` |
+| `LastActionButton` | `Button` | Optional | Footer 中唯一可点击入口；最新根行动仍在播放时不可点击，原位图标交接完成后只广播详细日志打开意图 |
+| `LastActionIcon` | `Image` | Optional | 根行动文字/底板退场后在同一位置接管并保留的玩家/敌人根行动图标；不得与播放中的根行动图标同时显示 |
 | `TurnRoot` | `Widget` | Optional | 沙漏与回合数的稳定布局根；始终保留 |
 | `TurnIcon` | `Image` | Optional | 默认 Style 提供的中性像素沙漏图标 |
 | `TurnText` | `TextBlock` | Optional | 当前表现已推进到的回合数 |
 
-正式资产不再适配旧 `BlocksScrollBox / BlocksBox / TitleText`。`BP_BattleHUD.CombatLogFeed` 必须实际嵌入 `WBP_BattleCombatLogFeed` 生成类，不能只放一个原生 `UBattleCombatLogFeedWidget`，否则不会继承默认 Style、Row Class 和 Footer 图标。编辑器关闭时运行 `-run=WacomBuildCombatActivityUI -Build`，Builder 会把已识别旧 Feed 一次迁移为正式 WBP、三行活动区与 Footer，同时保留有效的人工 Canvas 位置；资产失效时原生 C++ 只提供行为等价的测试/降级布局，不在 PIE 中动态拼接正式 WBP。
+正式资产不再适配旧 `BlocksScrollBox / BlocksBox / TitleText`。`BP_BattleHUD.CombatLogFeed` 必须实际嵌入 `WBP_BattleCombatLogFeed` 生成类，不能只放一个原生 `UBattleCombatLogFeedWidget`，否则不会继承默认 Style、Row Class 和 Footer 图标。编辑器关闭时运行 `-run=WacomBuildCombatActivityUI -Build`，Builder 会把已识别旧 Feed 一次迁移为正式 WBP、固定裁切的 Canvas 流式活动区与 Footer，同时保留有效的人工 Canvas 位置；资产失效时原生 C++ 只提供行为等价的测试/降级布局，不在 PIE 中动态拼接正式 WBP。
 
 配置项：
 
@@ -207,7 +208,9 @@ WBP 不应做：
 最小 PIE 验收：
 
 - 玩家出牌显示头像与卡名，敌人行动显示 Intent 图标与名称，多目标结果逐条进入。
-- 同时最多三行；队列结束后临时行消失，Footer 的最后行动图标和沙漏回合数保留。
+- Battle Entry Gate 解除后显示一次“沙漏 + 第 1 回合开始”；文字和底板退场后沙漏原位成为首个可点击日志入口，且详细日志不重复增加行动组。
+- 行数不做三行数据硬裁剪；所有结果按顺序向上流动并在顶部自然退出。
+- 根行动从最后行动槽出现；队列结束时文字和底板淡出，图标不移动并原位交接给 Footer 按钮。
 - Root 与行不拦截 Wait、EndTurn、手牌和世界目标；只有最后行动按钮可点击。
 
 ### WBP_BattleCombatActivityRow
@@ -548,10 +551,10 @@ Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresent
 
 ## PIE Smoke Checklist
 
-- `WBP_BattleHUD` 能显示玩家状态、CommandBar、牌堆数量、三行 Combat Activity Feed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
+- `WBP_BattleHUD` 能显示玩家状态、CommandBar、牌堆数量、流式 Combat Activity Feed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
 - CommandBar 里的 Wait / EndTurn 可点击并由 HUD runtime view data 控制可用性。
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
-- Combat Activity 连续追加时最多三行并按顺序顶出；只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。
+- Combat Activity 连续追加时不丢弃第四行，按顺序向上流动并在顶部衰减；根行动图标原位交接后只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；`UWacomBattleEnemyPartComponent` 及其 runtime 只承载 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
 - TrainingWarrior 自动使用单部位紧凑面板：Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；多部位 Snake 仍使用原面板。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。

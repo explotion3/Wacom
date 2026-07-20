@@ -111,7 +111,7 @@ struct WACOMAPP_API FWacomBattleCombatLogBlockView
 	FName IconKey = NAME_None;
 };
 
-/** BattleHUD 三行短时活动播报中的一行。只承载 UI 语义，不写规则状态。 */
+/** BattleHUD 固定视口流式活动播报中的一行。只承载 UI 语义，不写规则状态。 */
 USTRUCT(BlueprintType, meta = (ToolTip = "BattleHUD 常驻活动播报中的单行 ViewData。图标由 IconKey、IconTag 或 IntentId 在 UI Style 中解析。"))
 struct WACOMAPP_API FWacomBattleCombatActivityRowView
 {
@@ -233,12 +233,15 @@ public:
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot);
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "把一次成功 HUD 命令投影为 BattleHUD 三行活动播报批次。只生成 UI ViewData，不修改战斗状态。"))
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "把一次成功 HUD 命令投影为 BattleHUD 流式活动播报批次。只生成 UI ViewData，不修改战斗状态。"))
 	static FWacomBattleCombatActivityBatchView BuildCombatActivityBatch(
 		const FWacomBattleCombatLogCommandContext& Context,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot);
+
+	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "为 Battle Entry Gate 解除后的首次可见状态构建一次回合开始活动。该 ViewData 不代表新增规则事件，也不应重复写入详细日志。"))
+	static FWacomBattleCombatActivityBatchView BuildInitialTurnActivityBatch(int32 TurnNumber);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "把 Combat Log 命令块格式化为 readable UE_LOG 字符串。只用于日志输出，不影响 UI 或规则。"))
 	static FString FormatCombatLogBlockForLog(const FWacomBattleCombatLogBlockView& Block);

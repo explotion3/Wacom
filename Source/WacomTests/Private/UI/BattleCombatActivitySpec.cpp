@@ -4,6 +4,7 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
 #include "Components/SizeBox.h"
@@ -55,6 +56,71 @@ namespace WacomBattleCombatActivitySpec
 			}
 		}
 	}
+
+	FWacomBattleCombatActivityBatchView MakeResultBatch(const int32 ResultCount)
+	{
+		FWacomBattleCombatActivityBatchView Batch;
+		FWacomBattleCombatActivityGroupView& Group = Batch.Groups.AddDefaulted_GetRef();
+		Group.RootAction.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+		Group.RootAction.MessageText = FText::FromString(TEXT("根行动"));
+		for (int32 Index = 0; Index < ResultCount; ++Index)
+		{
+			FWacomBattleCombatActivityRowView& Row = Group.ResultRows.AddDefaulted_GetRef();
+			Row.RowKind = EWacomBattleCombatActivityRowKind::Result;
+			Row.EventSequence = Index + 1;
+			Row.MessageText = FText::FromString(FString::Printf(TEXT("结果%d"), Index + 1));
+		}
+		return Batch;
+	}
+
+	const FWacomBattleCombatActivityRowPlaybackView* FindPlaybackRow(
+		const TArray<FWacomBattleCombatActivityRowPlaybackView>& Views,
+		const EWacomBattleCombatActivityRowKind RowKind,
+		const int32 EventSequence = INDEX_NONE)
+	{
+		return Views.FindByPredicate([RowKind, EventSequence](
+			const FWacomBattleCombatActivityRowPlaybackView& View)
+		{
+			return View.Row.RowKind == RowKind
+				&& (EventSequence == INDEX_NONE || View.Row.EventSequence == EventSequence);
+		});
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityInitialTurnSpec,
+	"Wacom.UI.Battle.CombatActivity.Builder.InitialTurnUsesHourglassRoot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityInitialTurnSpec::RunTest(const FString& /*Parameters*/)
+{
+	const FWacomBattleCombatActivityBatchView Batch =
+		UWacomBattleCombatLogBuilder::BuildInitialTurnActivityBatch(1);
+	TestTrue(TEXT("Initial turn sets the presented footer immediately"),
+		Batch.bSetTurnImmediately && Batch.PresentedTurnNumber == 1);
+	TestEqual(TEXT("Initial turn creates exactly one UI-only root group"), Batch.Groups.Num(), 1);
+	if (Batch.Groups.Num() != 1)
+	{
+		return false;
+	}
+
+	const FWacomBattleCombatActivityGroupView& Group = Batch.Groups[0];
+	TestEqual(TEXT("Initial turn group belongs to turn one"), Group.TurnNumber, 1);
+	TestTrue(TEXT("Initial turn root carries the dedicated UI semantics"),
+		Group.ResultRows.IsEmpty()
+		&& Group.RootAction.RowKind == EWacomBattleCombatActivityRowKind::RootAction
+		&& Group.RootAction.SourceEventType == EBattleEventType::TurnStarted
+		&& Group.RootAction.IconKey == TEXT("TurnStart")
+		&& Group.RootAction.MessageText.ToString() == TEXT("第1回合开始"));
+
+	TStrongObjectPtr<UWacomBattleCombatActivityStyle> Style(
+		NewObject<UWacomBattleCombatActivityStyle>(GetTransientPackage()));
+	Style->TurnIconBrush.SetImageSize(FVector2D(23.0f, 24.0f));
+	Style->SystemIconBrush.SetImageSize(FVector2D(11.0f, 12.0f));
+	const FSlateBrush Resolved = Style->ResolveActivityIconBrush(Group.RootAction);
+	TestTrue(TEXT("Turn-start root resolves the hourglass brush instead of generic system fallback"),
+		Resolved.GetImageSize().Equals(FVector2D(23.0f, 24.0f)));
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -226,6 +292,237 @@ bool FWacomUIBattleCombatActivitySimplifiedMotionSpec::RunTest(const FString& /*
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityStreamingRowsSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.StreamingRowsAreNotHardClippedAtThree",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityStreamingRowsSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleCombatActivityPlayback Playback;
+	FWacomBattleCombatActivityPlaybackConfig Config;
+	Config.EnterSeconds = 0.0f;
+	Config.ResultStaggerSeconds = 0.0f;
+	Config.MinimumResultStaggerSeconds = 0.0f;
+	Config.MinimumReadableSeconds = 10.0f;
+	Config.ShiftSeconds = 1.0f;
+	Config.BottomRowHoldSeconds = 10.0f;
+	Config.TopRowHoldSeconds = 10.0f;
+	Config.BottomRowFadeSeconds = 10.0f;
+	Config.TopRowFadeSeconds = 10.0f;
+	Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(16));
+	Playback.Tick(0.0f, Config);
+	Playback.Tick(0.0f, Config);
+
+	TestTrue(TEXT("Sixteen results coexist without a three-row data cap"),
+		Playback.GetVisibleRows().Num() >= 16);
+	for (int32 Sequence = 1; Sequence <= 16; ++Sequence)
+	{
+		TestNotNull(*FString::Printf(TEXT("Result %d is not dropped at emission"), Sequence),
+			WacomBattleCombatActivitySpec::FindPlaybackRow(
+				Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::Result, Sequence));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityDynamicRowPoolSpec,
+	"Wacom.UI.Battle.CombatActivity.Widget.DynamicRowPoolUsesCanvas",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityDynamicRowPoolSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UWacomBattleCombatActivityStyle> Style(
+		NewObject<UWacomBattleCombatActivityStyle>(GetTransientPackage()));
+	Style->EnterSeconds = 0.0f;
+	Style->ResultStaggerSeconds = 0.0f;
+	Style->MinimumResultStaggerSeconds = 0.0f;
+	Style->MinimumReadableSeconds = 10.0f;
+	Style->ShiftSeconds = 1.0f;
+	Style->BottomRowHoldSeconds = 10.0f;
+	Style->TopRowHoldSeconds = 10.0f;
+	Style->BottomRowFadeSeconds = 10.0f;
+	Style->TopRowFadeSeconds = 10.0f;
+
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(
+		NewObject<UBattleCombatLogFeedWidget>(GetTransientPackage()));
+	Feed->ActivityStyle = Style.Get();
+	const TSharedRef<SWidget> SlateWidget = Feed->TakeWidget();
+	Feed->EnqueueCombatActivityBatch(WacomBattleCombatActivitySpec::MakeResultBatch(16));
+	Feed->AdvanceActivityPlaybackForTest(0.0f);
+
+	UCanvasPanel* RowsCanvas = Feed->WidgetTree
+		? Cast<UCanvasPanel>(Feed->WidgetTree->FindWidget(TEXT("ActivityRowsBox")))
+		: nullptr;
+	TestNotNull(TEXT("Runtime Feed uses a Canvas activity viewport"), RowsCanvas);
+	TestEqual(TEXT("Playback exposes the root plus all sixteen results"),
+		Feed->GetVisibleActivityRowCount(), 17);
+	if (RowsCanvas)
+	{
+		TestEqual(TEXT("Dynamic row pool grows past the legacy three-row capacity"),
+			RowsCanvas->GetChildrenCount(), 17);
+		for (int32 ChildIndex = 0; ChildIndex < RowsCanvas->GetChildrenCount(); ++ChildIndex)
+		{
+			const UWidget* RowWidget = RowsCanvas->GetChildAt(ChildIndex);
+			TestTrue(TEXT("Every streamed row is positioned by a Canvas slot"),
+				RowWidget && RowWidget->Slot && RowWidget->Slot->IsA(UCanvasPanelSlot::StaticClass()));
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityRootProtectionSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.RootRemainsPinnedUntilResultsEmit",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityRootProtectionSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleCombatActivityPlayback Playback;
+	FWacomBattleCombatActivityPlaybackConfig Config;
+	Config.BottomRowHoldSeconds = 10.0f;
+	Config.TopRowHoldSeconds = 10.0f;
+	Config.BottomRowFadeSeconds = 10.0f;
+	Config.TopRowFadeSeconds = 10.0f;
+	Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(3));
+	Playback.Tick(0.0f, Config);
+
+	const FWacomBattleCombatActivityRowPlaybackView* Root =
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction);
+	TestTrue(TEXT("Root begins pinned"), Root && Root->bPinnedRoot);
+	TestTrue(TEXT("Root begins in the footer action lane"), Root
+		&& FMath::IsNearlyEqual(Root->LayoutY, 100.0f));
+	Playback.Tick(0.16f, Config);
+	Root = WacomBattleCombatActivitySpec::FindPlaybackRow(
+		Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction);
+	TestTrue(TEXT("Root stays pinned while results remain"), Root && Root->bPinnedRoot);
+	Playback.Tick(0.32f, Config);
+	Root = WacomBattleCombatActivitySpec::FindPlaybackRow(
+		Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction);
+	TestTrue(TEXT("Root is released after the final result emits"), Root && !Root->bPinnedRoot);
+	Config.BottomRowHoldSeconds = 0.0f;
+	Config.TopRowHoldSeconds = 0.0f;
+	Config.BottomRowFadeSeconds = 0.20f;
+	Config.TopRowFadeSeconds = 0.20f;
+	Playback.Tick(0.10f, Config);
+	Root = WacomBattleCombatActivitySpec::FindPlaybackRow(
+		Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction);
+	TestTrue(TEXT("Released root stays in the footer action lane during handoff"), Root
+		&& Root->bRootActionLane
+		&& Root->bFooterHandoffSource
+		&& FMath::IsNearlyEqual(Root->LayoutY, 100.0f));
+	TestTrue(TEXT("Root text and background fade before its icon"), Root
+		&& Root->ContentOpacity < Root->IconOpacity
+		&& FMath::IsNearlyEqual(Root->IconOpacity, 1.0f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityAdaptiveStaggerSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.AdaptiveBurstStagger",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityAdaptiveStaggerSpec::RunTest(const FString& /*Parameters*/)
+{
+	auto VerifyFirstEmission = [this](const int32 ResultCount, const float BeforeSeconds,
+		const float CrossingSeconds, const TCHAR* Label)
+	{
+		FWacomBattleCombatActivityPlayback Playback;
+		FWacomBattleCombatActivityPlaybackConfig Config;
+		Config.BottomRowHoldSeconds = 10.0f;
+		Config.TopRowHoldSeconds = 10.0f;
+		Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(ResultCount));
+		Playback.Tick(0.0f, Config);
+		Playback.Tick(BeforeSeconds, Config);
+		TestEqual(FString::Printf(TEXT("%s has not emitted before its adaptive boundary"), Label),
+			Playback.GetVisibleRows().Num(), 1);
+		Playback.Tick(CrossingSeconds, Config);
+		TestEqual(FString::Printf(TEXT("%s emits at its adaptive boundary"), Label),
+			Playback.GetVisibleRows().Num(), 2);
+	};
+
+	VerifyFirstEmission(6, 0.159f, 0.002f, TEXT("Six results"));
+	VerifyFirstEmission(7, 0.146f, 0.002f, TEXT("Seven results"));
+	VerifyFirstEmission(12, 0.079f, 0.002f, TEXT("Twelve results"));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityPositionFadeSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.TopRowsRetireFaster",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityPositionFadeSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleCombatActivityPlayback Playback;
+	FWacomBattleCombatActivityPlaybackConfig Config;
+	Config.EnterSeconds = 0.0f;
+	Config.ResultStaggerSeconds = 0.0f;
+	Config.MinimumResultStaggerSeconds = 0.0f;
+	Config.MinimumReadableSeconds = 10.0f;
+	Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(3));
+	Playback.Tick(0.0f, Config);
+	Playback.Tick(0.10f, Config);
+	// Keep the top row inside its accelerated fade window long enough to inspect it.
+	// A larger single tick legitimately completes and removes that row.
+	Playback.Tick(0.075f, Config);
+	Playback.Tick(0.02f, Config);
+
+	const FWacomBattleCombatActivityRowPlaybackView* Oldest =
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::Result, 1);
+	const FWacomBattleCombatActivityRowPlaybackView* Newest =
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::Result, 3);
+	TestTrue(TEXT("Top and bottom result rows remain available for comparison"), Oldest && Newest);
+	if (Oldest && Newest)
+	{
+		TestTrue(TEXT("Older top row has entered fade"), Oldest->Opacity < 1.0f);
+		TestTrue(TEXT("Bottom row remains fully readable"), FMath::IsNearlyEqual(Newest->Opacity, 1.0f));
+		TestTrue(TEXT("Top row is laid out above the newest row"), Oldest->LayoutY < Newest->LayoutY);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityResidentBudgetSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.ResidentBudgetPreservesOrder",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityResidentBudgetSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleCombatActivityPlayback Playback;
+	FWacomBattleCombatActivityPlaybackConfig Config;
+	Config.EnterSeconds = 0.0f;
+	Config.ResultStaggerSeconds = 0.0f;
+	Config.MinimumResultStaggerSeconds = 0.0f;
+	Config.MinimumReadableSeconds = 10.0f;
+	Config.ShiftSeconds = 10.0f;
+	Config.BottomRowHoldSeconds = 10.0f;
+	Config.TopRowHoldSeconds = 10.0f;
+	Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(40));
+	for (int32 TickIndex = 0; TickIndex < 5; ++TickIndex)
+	{
+		Playback.Tick(0.0f, Config);
+	}
+
+	TestTrue(TEXT("Resident rows stay within the internal safety budget"),
+		Playback.GetVisibleRows().Num() <= 32);
+	int32 LastSequence = 0;
+	for (const FWacomBattleCombatActivityRowPlaybackView& View : Playback.GetVisibleRows())
+	{
+		if (View.Row.RowKind == EWacomBattleCombatActivityRowKind::Result)
+		{
+			TestTrue(TEXT("Surviving results preserve event order"),
+				View.Row.EventSequence > LastSequence);
+			LastSequence = View.Row.EventSequence;
+		}
+	}
+	TestEqual(TEXT("Newest result survives budget eviction"), LastSequence, 40);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCombatActivityFormalAssetContractSpec,
 	"Wacom.UI.Battle.CombatActivity.Assets.FormalBuilderContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -262,12 +559,32 @@ bool FWacomUIBattleCombatActivityFormalAssetContractSpec::RunTest(const FString&
 		&& FeedBlueprint->ParentClass->IsChildOf(UBattleCombatLogFeedWidget::StaticClass()));
 	TestNotNull(TEXT("Feed activity rows binding"),
 		FeedBlueprint->WidgetTree->FindWidget(TEXT("ActivityRowsBox")));
+	const USizeBox* ActivityViewport = Cast<USizeBox>(
+		FeedBlueprint->WidgetTree->FindWidget(TEXT("ActivityRowsViewport")));
+	TestNotNull(TEXT("Feed has a clipped activity viewport"), ActivityViewport);
+	if (ActivityViewport)
+	{
+		TestEqual(TEXT("Activity viewport keeps the authored height"),
+			ActivityViewport->GetHeightOverride(), 140.0f);
+		TestEqual(TEXT("Activity viewport clips streaming rows"),
+			ActivityViewport->GetClipping(), EWidgetClipping::ClipToBounds);
+	}
+	TestTrue(TEXT("Activity rows use canvas positioning"),
+		FeedBlueprint->WidgetTree->FindWidget(TEXT("ActivityRowsBox"))->IsA(UCanvasPanel::StaticClass()));
 	const UButton* FooterButton = Cast<UButton>(
 		FeedBlueprint->WidgetTree->FindWidget(TEXT("LastActionButton")));
+	const USizeBox* LastActionSize = Cast<USizeBox>(
+		FeedBlueprint->WidgetTree->FindWidget(TEXT("LastActionSize")));
 	TestNotNull(TEXT("Feed footer button binding"), FooterButton);
+	TestNotNull(TEXT("Feed footer action size binding"), LastActionSize);
 	if (FooterButton)
 	{
 		TestFalse(TEXT("Footer button does not take keyboard focus"), FooterButton->GetIsFocusable());
+	}
+	if (LastActionSize)
+	{
+		TestTrue(TEXT("Persistent action icon overlays the root playback icon lane"),
+			LastActionSize->GetRenderTransform().Translation.Equals(FVector2D(0.0f, -47.0f)));
 	}
 	TestNotNull(TEXT("Feed turn icon binding"),
 		FeedBlueprint->WidgetTree->FindWidget(TEXT("TurnIcon")));
@@ -292,7 +609,12 @@ bool FWacomUIBattleCombatActivityFormalAssetContractSpec::RunTest(const FString&
 		TestTrue(TEXT("Feed default Row class is assigned"),
 			FeedDefaults->ActivityRowWidgetClass.Get() == RowBlueprint->GeneratedClass);
 	}
-	TestEqual(TEXT("Default Style keeps three rows"), Style->MaxVisibleRows, 3);
+	TestEqual(TEXT("Default Style keeps 140px activity viewport"),
+		Style->ActivityViewportHeightPixels, 140.0f);
+	TestEqual(TEXT("Default Style uses 40px activity rows"), Style->RowHeightPixels, 40.0f);
+	TestEqual(TEXT("Default Style uses 72px top fade band"), Style->TopFadeBandPixels, 72.0f);
+	TestEqual(TEXT("Default Style compresses burst stagger to 80ms"),
+		Style->MinimumResultStaggerSeconds, 0.08f);
 	TestTrue(TEXT("Atlas uses nearest filtering"), Atlas->Filter == TF_Nearest);
 	TestEqual(TEXT("Atlas width contains six 32px icons"),
 		static_cast<int32>(Atlas->Source.GetSizeX()), 192);

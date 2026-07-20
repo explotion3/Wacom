@@ -9,6 +9,8 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
@@ -32,13 +34,20 @@ namespace
 			? Style
 			: GetDefault<UWacomBattleCombatActivityStyle>();
 		FWacomBattleCombatActivityPlaybackConfig Config;
-		Config.MaxVisibleRows = Resolved->MaxVisibleRows;
 		Config.EnterSeconds = Resolved->EnterSeconds;
 		Config.ResultStaggerSeconds = Resolved->ResultStaggerSeconds;
+		Config.MinimumResultStaggerSeconds = Resolved->MinimumResultStaggerSeconds;
+		Config.BurstStaggerThreshold = Resolved->BurstStaggerThreshold;
+		Config.BurstStaggerFullCompressionCount = Resolved->BurstStaggerFullCompressionCount;
 		Config.MinimumReadableSeconds = Resolved->MinimumReadableSeconds;
 		Config.ShiftSeconds = Resolved->ShiftSeconds;
-		Config.EmptyHoldSeconds = Resolved->EmptyHoldSeconds;
-		Config.CollapseSeconds = Resolved->CollapseSeconds;
+		Config.BottomRowHoldSeconds = Resolved->BottomRowHoldSeconds;
+		Config.BottomRowFadeSeconds = Resolved->BottomRowFadeSeconds;
+		Config.TopRowHoldSeconds = Resolved->TopRowHoldSeconds;
+		Config.TopRowFadeSeconds = Resolved->TopRowFadeSeconds;
+		Config.ActivityViewportHeightPixels = Resolved->ActivityViewportHeightPixels;
+		Config.RowHeightPixels = Resolved->RowHeightPixels;
+		Config.TopFadeBandPixels = Resolved->TopFadeBandPixels;
 		Config.bReducedMotion = bReducedMotion;
 		Config.Normalize();
 		return Config;
@@ -75,11 +84,18 @@ TSharedRef<SWidget> UBattleCombatLogFeedWidget::RebuildWidget()
 		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		Frame->SetContent(Root);
 
-		ActivityRowsBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ActivityRowsBox"));
+		USizeBox* ActivityRowsViewport = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(), TEXT("ActivityRowsViewport"));
+		ActivityRowsViewport->SetHeightOverride(140.0f);
+		ActivityRowsViewport->SetClipping(EWidgetClipping::ClipToBounds);
+		ActivityRowsViewport->SetVisibility(ESlateVisibility::HitTestInvisible);
+		ActivityRowsBox = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("ActivityRowsBox"));
 		ActivityRowsBox->SetVisibility(ESlateVisibility::HitTestInvisible);
-		if (UVerticalBoxSlot* RowsSlot = Root->AddChildToVerticalBox(ActivityRowsBox))
+		ActivityRowsViewport->SetContent(ActivityRowsBox);
+		if (UVerticalBoxSlot* RowsSlot = Root->AddChildToVerticalBox(ActivityRowsViewport))
 		{
-			RowsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			RowsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+			RowsSlot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
 		}
 
 		UHorizontalBox* Footer = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Footer"));
@@ -90,6 +106,7 @@ TSharedRef<SWidget> UBattleCombatLogFeedWidget::RebuildWidget()
 		PRAGMA_DISABLE_DEPRECATION_WARNINGS
 		LastActionButton->IsFocusable = false;
 		PRAGMA_ENABLE_DEPRECATION_WARNINGS
+		LastActionButton->SetRenderTranslation(FVector2D(0.0f, -46.0f));
 		LastActionIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("LastActionIcon"));
 		LastActionIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
 		LastActionButton->SetContent(LastActionIcon);
@@ -120,7 +137,7 @@ void UBattleCombatLogFeedWidget::NativeConstruct()
 		Playback = new FWacomBattleCombatActivityPlayback();
 	}
 	EnsureRuntimeBindings();
-	EnsureRowWidgets();
+	EnsureRowWidgets(0);
 	if (LastActionButton)
 	{
 		LastActionButton->OnClicked.RemoveAll(this);
@@ -143,6 +160,8 @@ void UBattleCombatLogFeedWidget::NativeDestruct()
 		Playback->Reset();
 	}
 	ActivityRowWidgets.Reset();
+	PresentedRowPlaybackIds.Reset();
+	CachedActivityRowWidgetClass.Reset();
 	Super::NativeDestruct();
 }
 
@@ -201,6 +220,7 @@ void UBattleCombatLogFeedWidget::ClearCombatActivity()
 			RowWidget->ClearActivityRow();
 		}
 	}
+	PresentedRowPlaybackIds.Reset();
 	RefreshFooter();
 }
 
@@ -272,23 +292,23 @@ void UBattleCombatLogFeedWidget::EnsureRuntimeBindings()
 
 }
 
-void UBattleCombatLogFeedWidget::EnsureRowWidgets()
+void UBattleCombatLogFeedWidget::EnsureRowWidgets(const int32 RequiredCount)
 {
 	if (!ActivityRowsBox)
 	{
 		return;
 	}
-	const FWacomBattleCombatActivityPlaybackConfig Config = BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion);
-	if (ActivityRowWidgets.Num() == Config.MaxVisibleRows)
-	{
-		return;
-	}
-	ActivityRowsBox->ClearChildren();
-	ActivityRowWidgets.Reset();
 	UClass* RowClass = ActivityRowWidgetClass
 		? ActivityRowWidgetClass.Get()
 		: UBattleCombatActivityRowWidget::StaticClass();
-	for (int32 Index = 0; Index < Config.MaxVisibleRows; ++Index)
+	if (CachedActivityRowWidgetClass.Get() != RowClass)
+	{
+		ActivityRowsBox->ClearChildren();
+		ActivityRowWidgets.Reset();
+		PresentedRowPlaybackIds.Reset();
+		CachedActivityRowWidgetClass = RowClass;
+	}
+	while (ActivityRowWidgets.Num() < FMath::Max(0, RequiredCount))
 	{
 		UBattleCombatActivityRowWidget* RowWidget = GetWorld()
 			? CreateWidget<UBattleCombatActivityRowWidget>(this, RowClass)
@@ -300,16 +320,20 @@ void UBattleCombatLogFeedWidget::EnsureRowWidgets()
 		RowWidget->SetVisibility(ESlateVisibility::Collapsed);
 		ActivityRowsBox->AddChild(RowWidget);
 		ActivityRowWidgets.Add(RowWidget);
+		PresentedRowPlaybackIds.Add(0);
 	}
 }
 
 void UBattleCombatLogFeedWidget::RefreshPlaybackPresentation()
 {
 	EnsureRuntimeBindings();
-	EnsureRowWidgets();
 	const TArray<FWacomBattleCombatActivityRowPlaybackView>* Views = Playback
 		? &Playback->GetVisibleRows()
 		: nullptr;
+	const int32 RequiredCount = Views ? Views->Num() : 0;
+	EnsureRowWidgets(RequiredCount);
+	const FWacomBattleCombatActivityPlaybackConfig Config = BuildPlaybackConfig(
+		ActivityStyle, bRuntimeSimplifiedMotion);
 	for (int32 Index = 0; Index < ActivityRowWidgets.Num(); ++Index)
 	{
 		UBattleCombatActivityRowWidget* RowWidget = ActivityRowWidgets[Index];
@@ -320,11 +344,32 @@ void UBattleCombatLogFeedWidget::RefreshPlaybackPresentation()
 		if (!Views || !Views->IsValidIndex(Index))
 		{
 			RowWidget->ClearActivityRow();
+			if (PresentedRowPlaybackIds.IsValidIndex(Index))
+			{
+				PresentedRowPlaybackIds[Index] = 0;
+			}
 			continue;
 		}
 		const FWacomBattleCombatActivityRowPlaybackView& View = (*Views)[Index];
-		RowWidget->SetActivityRowData(View.Row, ResolveActivityIconBrush(View.Row));
-		RowWidget->SetPlaybackPresentation(View.Opacity, View.TranslationY);
+		if (!PresentedRowPlaybackIds.IsValidIndex(Index))
+		{
+			PresentedRowPlaybackIds.SetNum(ActivityRowWidgets.Num());
+		}
+		if (PresentedRowPlaybackIds[Index] != View.PlaybackId)
+		{
+			RowWidget->SetActivityRowData(View.Row, ResolveActivityIconBrush(View.Row));
+			PresentedRowPlaybackIds[Index] = View.PlaybackId;
+		}
+		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(RowWidget->Slot))
+		{
+			CanvasSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 0.0f));
+			CanvasSlot->SetAlignment(FVector2D::ZeroVector);
+			CanvasSlot->SetOffsets(FMargin(0.0f, View.LayoutY, 0.0f, Config.RowHeightPixels));
+			CanvasSlot->SetAutoSize(false);
+			CanvasSlot->SetZOrder(View.bRootActionLane ? 100 : Index);
+		}
+		RowWidget->SetPlaybackPresentation(
+			View.Opacity, View.ContentOpacity, View.IconOpacity, View.TranslationY);
 	}
 	RefreshFooter();
 }
@@ -332,13 +377,29 @@ void UBattleCombatLogFeedWidget::RefreshPlaybackPresentation()
 void UBattleCombatLogFeedWidget::RefreshFooter()
 {
 	const FWacomBattleCombatActivityRowView* LastRoot = Playback ? Playback->GetLastRootAction() : nullptr;
+	const bool bRootRowOwnsLastActionIcon = Playback
+		&& Playback->GetVisibleRows().ContainsByPredicate([](
+			const FWacomBattleCombatActivityRowPlaybackView& View)
+		{
+			return View.bFooterHandoffSource;
+		});
 	if (LastActionButton)
 	{
-		LastActionButton->SetVisibility(LastRoot ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+		LastActionButton->SetVisibility(!LastRoot
+			? ESlateVisibility::Collapsed
+			: (bRootRowOwnsLastActionIcon
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Visible));
 	}
-	if (LastActionIcon && LastRoot)
+	if (LastActionIcon)
 	{
-		LastActionIcon->SetBrush(ResolveActivityIconBrush(*LastRoot));
+		LastActionIcon->SetVisibility(LastRoot && !bRootRowOwnsLastActionIcon
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+		if (LastRoot)
+		{
+			LastActionIcon->SetBrush(ResolveActivityIconBrush(*LastRoot));
+		}
 	}
 	const int32 TurnNumber = Playback ? Playback->GetPresentedTurnNumber() : 0;
 	if (TurnRoot)

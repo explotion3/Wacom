@@ -25,7 +25,7 @@ struct WACOMAPP_API FWacomBattleCombatActivityTagIconEntry
 	FSlateBrush IconBrush;
 };
 
-/** BattleHUD 常驻三行活动播报器的 UI-only 样式。 */
+/** BattleHUD 常驻流式活动播报器的 UI-only 样式。 */
 UCLASS(BlueprintType, Const)
 class WACOMAPP_API UWacomBattleCombatActivityStyle : public UDataAsset
 {
@@ -57,7 +57,7 @@ public:
 	FSlateBrush WaitIconBrush;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Icons",
-		meta = (ToolTip = "系统类活动使用的通用图标 Brush。初始化事件不会进入短时播报。"))
+		meta = (ToolTip = "无法映射到专用图标的系统类活动所使用的通用 Brush。Battle 初始化的回合开始活动使用下方独立的沙漏 Brush。"))
 	FSlateBrush SystemIconBrush;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Icons",
@@ -65,12 +65,8 @@ public:
 	FSlateBrush FallbackIconBrush;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Icons",
-		meta = (ToolTip = "Footer 当前回合前显示的沙漏图标 Brush。推荐 18×18 至 24×24 的硬像素图标。"))
+		meta = (ToolTip = "Footer 当前回合及 Battle 初始化‘第 1 回合开始’根行动共用的沙漏图标 Brush。推荐 18×18 至 24×24 的硬像素图标。"))
 	FSlateBrush TurnIconBrush;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
-		meta = (ToolTip = "同时可见的短时活动行上限。正式布局推荐为 3；只影响播报行，不影响完整历史。"))
-	int32 MaxVisibleRows = 3;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
 		meta = (ToolTip = "新活动行淡入时间，单位秒。推荐 0.08–0.18。"))
@@ -81,6 +77,18 @@ public:
 	float ResultStaggerSeconds = 0.16f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
+		meta = (ToolTip = "大量结果积压时使用的最小错峰间隔，单位秒。推荐 0.06–0.12；不影响事件顺序。"))
+	float MinimumResultStaggerSeconds = 0.08f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
+		meta = (ToolTip = "剩余结果数超过该值后开始压缩错峰。推荐 4–8；只影响播报节奏。"))
+	int32 BurstStaggerThreshold = 6;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
+		meta = (ToolTip = "剩余结果数达到该值后使用最小错峰。推荐 10–16，必须高于开始压缩数量。"))
+	int32 BurstStaggerFullCompressionCount = 12;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
 		meta = (ToolTip = "每组最后一行发出后保留的最短可读时间，单位秒。推荐 0.65–1.20。"))
 	float MinimumReadableSeconds = 0.85f;
 
@@ -88,13 +96,33 @@ public:
 		meta = (ToolTip = "新行把旧行向上推动的过渡时间，单位秒。推荐 0.08–0.18。"))
 	float ShiftSeconds = 0.10f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
-		meta = (ToolTip = "队列清空后临时行继续停留的时间，单位秒。Footer 不受影响。"))
-	float EmptyHoldSeconds = 0.90f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Retirement",
+		meta = (ToolTip = "位于活动区域下方时，单行开始淡出前的停留时间，单位秒。推荐 0.65–1.10。"))
+	float BottomRowHoldSeconds = 0.85f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
-		meta = (ToolTip = "队列清空后临时行淡出的时间，单位秒。Footer 始终保留。"))
-	float CollapseSeconds = 0.18f;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Retirement",
+		meta = (ToolTip = "位于活动区域下方时，单行淡出时间，单位秒。推荐 0.18–0.32。"))
+	float BottomRowFadeSeconds = 0.24f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Retirement",
+		meta = (ToolTip = "靠近活动区域顶部时，单行开始淡出前的最短停留时间，单位秒。推荐 0.12–0.28。"))
+	float TopRowHoldSeconds = 0.18f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Retirement",
+		meta = (ToolTip = "靠近活动区域顶部时，单行完成淡出的最短时间，单位秒。推荐 0.08–0.18。"))
+	float TopRowFadeSeconds = 0.10f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Layout",
+		meta = (ToolTip = "短时播报活动视口高度，单位像素。正式 420×190 Feed 推荐 140；影响布局和位置衰减计算。"))
+	float ActivityViewportHeightPixels = 140.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Layout",
+		meta = (ToolTip = "单条活动行高度，单位像素。必须与 Row WBP 高度一致，正式布局推荐 40。"))
+	float RowHeightPixels = 40.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Retirement",
+		meta = (ToolTip = "从活动视口顶部向下计算的加速衰减区域高度，单位像素。推荐 56–88。"))
+	float TopFadeBandPixels = 72.0f;
 
 	const FSlateBrush* ResolveTagIcon(FGameplayTag Tag) const;
 	FSlateBrush ResolveActivityIconBrush(const FWacomBattleCombatActivityRowView& Row) const;

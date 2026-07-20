@@ -652,6 +652,26 @@ FWacomBattleCombatActivityBatchView UWacomBattleCombatLogBuilder::BuildCombatAct
 	return Batch;
 }
 
+FWacomBattleCombatActivityBatchView UWacomBattleCombatLogBuilder::BuildInitialTurnActivityBatch(
+	const int32 TurnNumber)
+{
+	const int32 SafeTurnNumber = FMath::Max(TurnNumber, 1);
+	FWacomBattleCombatActivityBatchView Batch;
+	Batch.bSetTurnImmediately = true;
+	Batch.PresentedTurnNumber = SafeTurnNumber;
+
+	FWacomBattleCombatActivityGroupView& Group = Batch.Groups.AddDefaulted_GetRef();
+	Group.TurnNumber = SafeTurnNumber;
+	Group.RootAction.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+	Group.RootAction.SourceEventType = EBattleEventType::TurnStarted;
+	Group.RootAction.MessageText = FText::Format(
+		LOCTEXT("ActivityInitialTurnStarted", "第{0}回合开始"),
+		FText::AsNumber(SafeTurnNumber));
+	Group.RootAction.VisualTone = EWacomBattleEventVisualTone::System;
+	Group.RootAction.IconKey = TEXT("TurnStart");
+	return Batch;
+}
+
 FString UWacomBattleCombatLogBuilder::FormatCombatLogBlockForLog(
 	const FWacomBattleCombatLogBlockView& Block)
 {

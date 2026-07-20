@@ -2,16 +2,38 @@
 
 #include "UI/Battle/WacomBattleCombatActivityPlayback.h"
 
+namespace
+{
+	constexpr int32 MaxResidentRows = 32;
+	constexpr int32 MaxEmissionsPerTick = 8;
+
+	float ResolveTopProximity(
+		const float RowCenterY,
+		const FWacomBattleCombatActivityPlaybackConfig& Config)
+	{
+		return 1.0f - FMath::Clamp(RowCenterY / Config.TopFadeBandPixels, 0.0f, 1.0f);
+	}
+}
+
 void FWacomBattleCombatActivityPlaybackConfig::Normalize()
 {
-	MaxVisibleRows = FMath::Max(1, MaxVisibleRows);
 	EnterSeconds = FMath::Max(0.0f, EnterSeconds);
 	ResultStaggerSeconds = FMath::Max(0.0f, ResultStaggerSeconds);
+	MinimumResultStaggerSeconds = FMath::Clamp(
+		MinimumResultStaggerSeconds, 0.0f, ResultStaggerSeconds);
+	BurstStaggerThreshold = FMath::Max(1, BurstStaggerThreshold);
+	BurstStaggerFullCompressionCount = FMath::Max(
+		BurstStaggerThreshold + 1, BurstStaggerFullCompressionCount);
 	MinimumReadableSeconds = FMath::Max(0.0f, MinimumReadableSeconds);
 	ShiftSeconds = FMath::Max(0.0f, ShiftSeconds);
-	EmptyHoldSeconds = FMath::Max(0.0f, EmptyHoldSeconds);
-	CollapseSeconds = FMath::Max(0.0f, CollapseSeconds);
-	RowShiftDistancePixels = FMath::Max(0.0f, RowShiftDistancePixels);
+	BottomRowHoldSeconds = FMath::Max(0.0f, BottomRowHoldSeconds);
+	BottomRowFadeSeconds = FMath::Max(0.0f, BottomRowFadeSeconds);
+	TopRowHoldSeconds = FMath::Clamp(TopRowHoldSeconds, 0.0f, BottomRowHoldSeconds);
+	TopRowFadeSeconds = FMath::Clamp(TopRowFadeSeconds, 0.0f, BottomRowFadeSeconds);
+	ActivityViewportHeightPixels = FMath::Max(1.0f, ActivityViewportHeightPixels);
+	RowHeightPixels = FMath::Clamp(RowHeightPixels, 1.0f, ActivityViewportHeightPixels);
+	TopFadeBandPixels = FMath::Clamp(
+		TopFadeBandPixels, 1.0f, ActivityViewportHeightPixels);
 }
 
 void FWacomBattleCombatActivityPlayback::Enqueue(const FWacomBattleCombatActivityBatchView& Batch)
@@ -29,7 +51,6 @@ void FWacomBattleCombatActivityPlayback::Enqueue(const FWacomBattleCombatActivit
 		return;
 	}
 	PendingBatches.Add(Batch);
-	EmptyElapsed = 0.0f;
 }
 
 void FWacomBattleCombatActivityPlayback::SetPresentedTurnNumber(int32 TurnNumber)
@@ -50,11 +71,8 @@ void FWacomBattleCombatActivityPlayback::Tick(
 	FWacomBattleCombatActivityPlaybackConfig Config = InConfig;
 	Config.Normalize();
 	const float SafeDelta = FMath::Max(0.0f, DeltaTime);
-	for (FVisibleRow& VisibleRow : VisibleRows)
-	{
-		VisibleRow.EnterElapsed += SafeDelta;
-		VisibleRow.ShiftElapsed += SafeDelta;
-	}
+
+	AdvanceRows(SafeDelta, Config);
 
 	if (!ActiveBatch.IsSet())
 	{
@@ -65,17 +83,29 @@ void FWacomBattleCombatActivityPlayback::Tick(
 	{
 		const FWacomBattleCombatActivityGroupView& Group = ActiveBatch->Groups[ActiveGroupIndex];
 		TimeSinceLastEmission += SafeDelta;
-		const float Stagger = Config.bReducedMotion ? 0.0f : Config.ResultStaggerSeconds;
+		int32 EmittedThisTick = 0;
 		while (NextResultRowIndex >= 0
 			&& NextResultRowIndex < Group.ResultRows.Num()
-			&& TimeSinceLastEmission + KINDA_SMALL_NUMBER >= Stagger)
+			&& EmittedThisTick < MaxEmissionsPerTick)
 		{
-			TimeSinceLastEmission = FMath::Max(0.0f, TimeSinceLastEmission - Stagger);
-			EmitRow(Group.ResultRows[NextResultRowIndex++], Config);
-			if (Stagger > 0.0f)
+			const int32 RemainingResultCount = Group.ResultRows.Num() - NextResultRowIndex;
+			const float Stagger = Config.bReducedMotion
+				? 0.0f
+				: ResolveResultStaggerSeconds(RemainingResultCount, Config);
+			if (TimeSinceLastEmission + KINDA_SMALL_NUMBER < Stagger)
 			{
 				break;
 			}
+			TimeSinceLastEmission = FMath::Max(0.0f, TimeSinceLastEmission - Stagger);
+			EmitRow(Group.ResultRows[NextResultRowIndex++], false, Config);
+			++EmittedThisTick;
+		}
+
+		if (!Group.ResultRows.IsEmpty()
+			&& NextResultRowIndex >= Group.ResultRows.Num()
+			&& ActiveRootPlaybackId != 0)
+		{
+			ReleaseActiveRoot(Config);
 		}
 
 		if (NextResultRowIndex >= Group.ResultRows.Num()
@@ -85,21 +115,7 @@ void FWacomBattleCombatActivityPlayback::Tick(
 		}
 	}
 
-	if (!ActiveBatch.IsSet() && PendingBatches.IsEmpty())
-	{
-		EmptyElapsed += SafeDelta;
-		const float CollapseEnd = Config.EmptyHoldSeconds + Config.CollapseSeconds;
-		if (!VisibleRows.IsEmpty()
-			&& (Config.CollapseSeconds <= 0.0f ? EmptyElapsed >= Config.EmptyHoldSeconds : EmptyElapsed >= CollapseEnd))
-		{
-			VisibleRows.Reset();
-		}
-	}
-	else
-	{
-		EmptyElapsed = 0.0f;
-	}
-
+	RetargetRows(Config);
 	RebuildViews(Config);
 }
 
@@ -110,10 +126,12 @@ void FWacomBattleCombatActivityPlayback::Reset()
 	ActiveGroupIndex = INDEX_NONE;
 	NextResultRowIndex = INDEX_NONE;
 	TimeSinceLastEmission = 0.0f;
-	EmptyElapsed = 0.0f;
 	VisibleRows.Reset();
 	VisibleRowViews.Reset();
 	LastRootAction.Reset();
+	ActiveRootPlaybackId = 0;
+	LastRootPlaybackId = 0;
+	NextPlaybackId = 1;
 	PresentedTurnNumber = 0;
 }
 
@@ -152,15 +170,28 @@ void FWacomBattleCombatActivityPlayback::StartCurrentGroup(
 	{
 		return;
 	}
+	ReleasePreviousRootLane();
 	const FWacomBattleCombatActivityGroupView& Group = ActiveBatch->Groups[ActiveGroupIndex];
 	LastRootAction = Group.RootAction;
 	if (Group.TurnNumber > 0 && PresentedTurnNumber <= 0)
 	{
 		PresentedTurnNumber = Group.TurnNumber;
 	}
-	EmitRow(Group.RootAction, Config);
+	ActiveRootPlaybackId = EmitRow(Group.RootAction, true, Config);
+	LastRootPlaybackId = ActiveRootPlaybackId;
 	NextResultRowIndex = 0;
 	TimeSinceLastEmission = 0.0f;
+}
+
+void FWacomBattleCombatActivityPlayback::ReleasePreviousRootLane()
+{
+	for (FVisibleRow& Row : VisibleRows)
+	{
+		if (Row.bExitingRoot)
+		{
+			Row.bExitingRoot = false;
+		}
+	}
 }
 
 void FWacomBattleCombatActivityPlayback::AdvanceAfterCurrentGroup(
@@ -170,6 +201,7 @@ void FWacomBattleCombatActivityPlayback::AdvanceAfterCurrentGroup(
 	{
 		return;
 	}
+	ReleaseActiveRoot(Config);
 	++ActiveGroupIndex;
 	if (ActiveBatch->Groups.IsValidIndex(ActiveGroupIndex))
 	{
@@ -187,55 +219,223 @@ void FWacomBattleCombatActivityPlayback::AdvanceAfterCurrentGroup(
 	StartNextBatch(Config);
 }
 
-void FWacomBattleCombatActivityPlayback::EmitRow(
+uint64 FWacomBattleCombatActivityPlayback::EmitRow(
 	const FWacomBattleCombatActivityRowView& Row,
+	const bool bPinnedRoot,
 	const FWacomBattleCombatActivityPlaybackConfig& Config)
 {
-	const bool bWillPushRowsUp = VisibleRows.Num() >= Config.MaxVisibleRows;
-	if (bWillPushRowsUp)
-	{
-		for (FVisibleRow& Existing : VisibleRows)
-		{
-			Existing.ShiftElapsed = 0.0f;
-		}
-	}
 	FVisibleRow& Added = VisibleRows.AddDefaulted_GetRef();
+	Added.PlaybackId = NextPlaybackId++;
+	if (Added.PlaybackId == 0)
+	{
+		Added.PlaybackId = NextPlaybackId++;
+	}
 	Added.Row = Row;
 	Added.EnterElapsed = Config.bReducedMotion ? Config.EnterSeconds : 0.0f;
+	Added.bRetirementProtected = bPinnedRoot;
+	Added.bPinnedRoot = bPinnedRoot;
+	const float RootActionLaneY = Config.ActivityViewportHeightPixels - Config.RowHeightPixels;
+	Added.CurrentY = RootActionLaneY;
+	Added.ShiftStartY = Added.CurrentY;
+	Added.TargetY = Added.CurrentY;
 	Added.ShiftElapsed = Config.ShiftSeconds;
-	if (VisibleRows.Num() > Config.MaxVisibleRows)
+	const uint64 AddedPlaybackId = Added.PlaybackId;
+	RetargetRows(Config);
+
+	while (VisibleRows.Num() > MaxResidentRows)
 	{
-		VisibleRows.RemoveAt(0, VisibleRows.Num() - Config.MaxVisibleRows);
+		int32 RemovalIndex = INDEX_NONE;
+		for (int32 Index = 0; Index < VisibleRows.Num(); ++Index)
+		{
+			if (!VisibleRows[Index].bRetirementProtected
+				&& VisibleRows[Index].CurrentY + Config.RowHeightPixels <= 0.0f)
+			{
+				RemovalIndex = Index;
+				break;
+			}
+		}
+		if (RemovalIndex == INDEX_NONE)
+		{
+			RemovalIndex = VisibleRows.IndexOfByPredicate([](const FVisibleRow& Row)
+			{
+				return !Row.bRetirementProtected;
+			});
+		}
+		if (RemovalIndex == INDEX_NONE)
+		{
+			break;
+		}
+		if (VisibleRows[RemovalIndex].PlaybackId == ActiveRootPlaybackId)
+		{
+			ActiveRootPlaybackId = 0;
+		}
+		if (VisibleRows[RemovalIndex].PlaybackId == LastRootPlaybackId)
+		{
+			LastRootPlaybackId = 0;
+		}
+		VisibleRows.RemoveAt(RemovalIndex);
 	}
+	return AddedPlaybackId;
+}
+
+void FWacomBattleCombatActivityPlayback::ReleaseActiveRoot(
+	const FWacomBattleCombatActivityPlaybackConfig& Config)
+{
+	if (ActiveRootPlaybackId == 0)
+	{
+		return;
+	}
+	for (FVisibleRow& Row : VisibleRows)
+	{
+		if (Row.PlaybackId != ActiveRootPlaybackId)
+		{
+			continue;
+		}
+		Row.bRetirementProtected = false;
+		Row.bPinnedRoot = false;
+		Row.bExitingRoot = true;
+		Row.UnprotectedElapsed = 0.0f;
+		break;
+	}
+	ActiveRootPlaybackId = 0;
+	RetargetRows(Config);
+}
+
+void FWacomBattleCombatActivityPlayback::RetargetRows(
+	const FWacomBattleCombatActivityPlaybackConfig& Config)
+{
+	const float RootActionLaneY = Config.ActivityViewportHeightPixels - Config.RowHeightPixels;
+	int32 ResultDepth = 0;
+	for (int32 Index = VisibleRows.Num() - 1; Index >= 0; --Index)
+	{
+		FVisibleRow& Row = VisibleRows[Index];
+		float NewTargetY = 0.0f;
+		if (Row.bPinnedRoot || Row.bExitingRoot)
+		{
+			NewTargetY = RootActionLaneY;
+		}
+		else
+		{
+			NewTargetY = RootActionLaneY
+				- Config.RowHeightPixels * static_cast<float>(++ResultDepth);
+		}
+
+		if (FMath::IsNearlyEqual(Row.TargetY, NewTargetY, KINDA_SMALL_NUMBER))
+		{
+			continue;
+		}
+		Row.ShiftStartY = Row.CurrentY;
+		Row.TargetY = NewTargetY;
+		Row.ShiftElapsed = Config.bReducedMotion ? Config.ShiftSeconds : 0.0f;
+		if (Config.bReducedMotion || Config.ShiftSeconds <= 0.0f)
+		{
+			Row.CurrentY = NewTargetY;
+		}
+	}
+}
+
+void FWacomBattleCombatActivityPlayback::AdvanceRows(
+	const float DeltaTime,
+	const FWacomBattleCombatActivityPlaybackConfig& Config)
+{
+	for (FVisibleRow& Row : VisibleRows)
+	{
+		Row.EnterElapsed += DeltaTime;
+		Row.ShiftElapsed += DeltaTime;
+		const float ShiftAmount = Config.ShiftSeconds <= 0.0f
+			? 1.0f
+			: FMath::Clamp(Row.ShiftElapsed / Config.ShiftSeconds, 0.0f, 1.0f);
+		const float SmoothedShift = FMath::InterpEaseOut(0.0f, 1.0f, ShiftAmount, 2.0f);
+		Row.CurrentY = Config.bReducedMotion
+			? Row.TargetY
+			: FMath::Lerp(Row.ShiftStartY, Row.TargetY, SmoothedShift);
+
+		if (Row.bRetirementProtected)
+		{
+			continue;
+		}
+		Row.UnprotectedElapsed += DeltaTime;
+		const float RowCenterY = Row.CurrentY + Config.RowHeightPixels * 0.5f;
+		const float TopProximity = ResolveTopProximity(RowCenterY, Config);
+		const float HoldSeconds = FMath::Lerp(
+			Config.BottomRowHoldSeconds, Config.TopRowHoldSeconds, TopProximity);
+		if (Row.UnprotectedElapsed + KINDA_SMALL_NUMBER < HoldSeconds)
+		{
+			continue;
+		}
+		const float FadeSeconds = FMath::Lerp(
+			Config.BottomRowFadeSeconds, Config.TopRowFadeSeconds, TopProximity);
+		Row.RetirementProgress = FadeSeconds <= 0.0f
+			? 1.0f
+			: FMath::Min(1.0f, Row.RetirementProgress + DeltaTime / FadeSeconds);
+	}
+
+	for (int32 Index = VisibleRows.Num() - 1; Index >= 0; --Index)
+	{
+		const FVisibleRow& Row = VisibleRows[Index];
+		const bool bOutsideViewport = Row.CurrentY + Config.RowHeightPixels <= 0.0f;
+		if (Row.RetirementProgress >= 1.0f || (bOutsideViewport && !Row.bRetirementProtected))
+		{
+			if (Row.PlaybackId == ActiveRootPlaybackId)
+			{
+				ActiveRootPlaybackId = 0;
+			}
+			if (Row.PlaybackId == LastRootPlaybackId)
+			{
+				LastRootPlaybackId = 0;
+			}
+			VisibleRows.RemoveAt(Index);
+		}
+	}
+}
+
+float FWacomBattleCombatActivityPlayback::ResolveResultStaggerSeconds(
+	const int32 RemainingResultCount,
+	const FWacomBattleCombatActivityPlaybackConfig& Config) const
+{
+	if (RemainingResultCount <= Config.BurstStaggerThreshold)
+	{
+		return Config.ResultStaggerSeconds;
+	}
+	const float CompressionAmount = FMath::Clamp(
+		static_cast<float>(RemainingResultCount - Config.BurstStaggerThreshold)
+			/ static_cast<float>(Config.BurstStaggerFullCompressionCount - Config.BurstStaggerThreshold),
+		0.0f,
+		1.0f);
+	return FMath::Lerp(
+		Config.ResultStaggerSeconds, Config.MinimumResultStaggerSeconds, CompressionAmount);
 }
 
 void FWacomBattleCombatActivityPlayback::RebuildViews(
 	const FWacomBattleCombatActivityPlaybackConfig& Config)
 {
 	VisibleRowViews.Reset(VisibleRows.Num());
-	float CollapseOpacity = 1.0f;
-	if (!HasPendingPlayback() && EmptyElapsed > Config.EmptyHoldSeconds)
-	{
-		CollapseOpacity = Config.CollapseSeconds <= 0.0f
-			? 0.0f
-			: 1.0f - FMath::Clamp(
-				(EmptyElapsed - Config.EmptyHoldSeconds) / Config.CollapseSeconds,
-				0.0f,
-				1.0f);
-	}
 	for (const FVisibleRow& VisibleRow : VisibleRows)
 	{
 		FWacomBattleCombatActivityRowPlaybackView& View = VisibleRowViews.AddDefaulted_GetRef();
+		View.PlaybackId = VisibleRow.PlaybackId;
 		View.Row = VisibleRow.Row;
+		View.LayoutY = VisibleRow.CurrentY;
+		View.bPinnedRoot = VisibleRow.bPinnedRoot;
+		View.bRootActionLane = VisibleRow.bPinnedRoot || VisibleRow.bExitingRoot;
+		View.bFooterHandoffSource = VisibleRow.PlaybackId == LastRootPlaybackId;
 		const float EnterAmount = Config.EnterSeconds <= 0.0f
 			? 1.0f
 			: FMath::Clamp(VisibleRow.EnterElapsed / Config.EnterSeconds, 0.0f, 1.0f);
-		const float ShiftAmount = Config.ShiftSeconds <= 0.0f
-			? 1.0f
-			: FMath::Clamp(VisibleRow.ShiftElapsed / Config.ShiftSeconds, 0.0f, 1.0f);
-		View.Opacity = EnterAmount * CollapseOpacity;
+		if (VisibleRow.bExitingRoot)
+		{
+			View.Opacity = EnterAmount;
+			View.ContentOpacity = 1.0f - VisibleRow.RetirementProgress;
+			View.IconOpacity = 1.0f;
+		}
+		else
+		{
+			View.Opacity = EnterAmount * (1.0f - VisibleRow.RetirementProgress);
+			View.ContentOpacity = 1.0f;
+			View.IconOpacity = 1.0f;
+		}
 		View.TranslationY = Config.bReducedMotion
 			? 0.0f
-			: (2.0f - EnterAmount - ShiftAmount) * Config.RowShiftDistancePixels;
+			: (1.0f - EnterAmount) * Config.RowHeightPixels;
 	}
 }

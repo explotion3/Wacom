@@ -68,6 +68,7 @@ private:
 	int32 LastAppliedStateVersion = INDEX_NONE;
 	bool bEntryPresentationActive = false;
 	bool bInitializationApplied = false;
+	bool bInitialTurnActivityPresented = false;
 	bool bBindingSessionInternally = false;
 	bool bCameraStageReady = false;
 	bool bPrewarmGateReady = false;

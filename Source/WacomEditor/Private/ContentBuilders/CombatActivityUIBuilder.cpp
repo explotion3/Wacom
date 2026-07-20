@@ -61,6 +61,8 @@ namespace
 		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusIconList.WBP_BattleStatusIconList_C");
 	constexpr TCHAR WidgetContractMarker[] =
 		TEXT("WacomCombatActivityWBP.ContractVersion=1");
+	constexpr TCHAR FeedWidgetContractMarker[] =
+		TEXT("WacomCombatActivityFeedWBP.ContractVersion=3");
 	constexpr TCHAR HudPlacementMarker[] =
 		TEXT("WacomCombatActivityHUDPlacement.ContractVersion=1");
 	constexpr TCHAR ContentContractKey[] = TEXT("WacomContract");
@@ -341,6 +343,26 @@ namespace
 		return Brush.GetResourceObject() != nullptr;
 	}
 
+	bool IsStreamingTimingValid(const UWacomBattleCombatActivityStyle& Style)
+	{
+		return Style.ResultStaggerSeconds >= 0.0f
+			&& Style.MinimumResultStaggerSeconds >= 0.0f
+			&& Style.MinimumResultStaggerSeconds <= Style.ResultStaggerSeconds
+			&& Style.BurstStaggerThreshold >= 1
+			&& Style.BurstStaggerFullCompressionCount > Style.BurstStaggerThreshold
+			&& Style.BottomRowHoldSeconds >= 0.0f
+			&& Style.BottomRowFadeSeconds >= 0.0f
+			&& Style.TopRowHoldSeconds >= 0.0f
+			&& Style.TopRowHoldSeconds <= Style.BottomRowHoldSeconds
+			&& Style.TopRowFadeSeconds >= 0.0f
+			&& Style.TopRowFadeSeconds <= Style.BottomRowFadeSeconds
+			&& Style.ActivityViewportHeightPixels > 0.0f
+			&& Style.RowHeightPixels > 0.0f
+			&& Style.RowHeightPixels <= Style.ActivityViewportHeightPixels
+			&& Style.TopFadeBandPixels > 0.0f
+			&& Style.TopFadeBandPixels <= Style.ActivityViewportHeightPixels;
+	}
+
 	const FSlateBrush* ResolveProtectedBrush(const UObject* Object, const FName PropertyName)
 	{
 		if (!Object)
@@ -406,7 +428,7 @@ namespace
 				&& IsBrushAssigned(Style->SystemIconBrush)
 				&& IsBrushAssigned(Style->FallbackIconBrush)
 				&& IsBrushAssigned(Style->TurnIconBrush)
-				&& Style->MaxVisibleRows == 3;
+				&& IsStreamingTimingValid(*Style);
 			if (!bReady)
 			{
 				UE_LOG(LogTemp, Error,
@@ -493,7 +515,7 @@ namespace
 			&& IsBrushAssigned(Style->SystemIconBrush)
 			&& IsBrushAssigned(Style->FallbackIconBrush)
 			&& IsBrushAssigned(Style->TurnIconBrush)
-			&& Style->MaxVisibleRows == 3;
+			&& IsStreamingTimingValid(*Style);
 		if (!bRequiredReady)
 		{
 			UE_LOG(LogTemp, Error, TEXT("[CombatActivityUIBuilder] Style contract incomplete: %s"),
@@ -719,7 +741,9 @@ namespace
 	bool BuildFeedBlueprint(UWidgetBlueprint& Blueprint)
 	{
 		ResetWidgetBlueprint(Blueprint,
-			TEXT("Builder-managed fixed three-row BattleHUD combat activity broadcaster and footer."));
+			FString::Printf(
+				TEXT("Builder-managed fixed-viewport streaming BattleHUD combat activity broadcaster and footer.\n%s"),
+				FeedWidgetContractMarker));
 		UWidgetTree* Tree = Blueprint.WidgetTree;
 		USizeBox* RootSize = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("CombatActivitySize"));
 		RootSize->SetWidthOverride(420.0f);
@@ -729,13 +753,20 @@ namespace
 		UVerticalBox* Root = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("Root"));
 		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		RootSize->AddChild(Root);
-		UVerticalBox* Rows = Tree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ActivityRowsBox"));
-		Rows->SetVisibility(ESlateVisibility::HitTestInvisible);
-		if (UVerticalBoxSlot* Slot = Root->AddChildToVerticalBox(Rows))
+		USizeBox* RowsViewport = Tree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(), TEXT("ActivityRowsViewport"));
+		RowsViewport->SetHeightOverride(140.0f);
+		RowsViewport->SetClipping(EWidgetClipping::ClipToBounds);
+		RowsViewport->SetVisibility(ESlateVisibility::HitTestInvisible);
+		if (UVerticalBoxSlot* Slot = Root->AddChildToVerticalBox(RowsViewport))
 		{
-			Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			Slot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 			Slot->SetPadding(FMargin(0.0f, 0.0f, 0.0f, 6.0f));
 		}
+		UCanvasPanel* Rows = Tree->ConstructWidget<UCanvasPanel>(
+			UCanvasPanel::StaticClass(), TEXT("ActivityRowsBox"));
+		Rows->SetVisibility(ESlateVisibility::HitTestInvisible);
+		RowsViewport->SetContent(Rows);
 		MarkWidgetVariable(Blueprint, *Rows);
 
 		USizeBox* FooterSize = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("FooterSize"));
@@ -749,6 +780,7 @@ namespace
 		USizeBox* ActionSize = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("LastActionSize"));
 		ActionSize->SetWidthOverride(38.0f);
 		ActionSize->SetHeightOverride(38.0f);
+		ActionSize->SetRenderTranslation(FVector2D(0.0f, -47.0f));
 		ActionSize->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		if (UHorizontalBoxSlot* Slot = Footer->AddChildToHorizontalBox(ActionSize))
 		{
@@ -1012,20 +1044,30 @@ namespace
 	{
 		const UWidget* RootSize = Blueprint.WidgetTree
 			? Blueprint.WidgetTree->FindWidget(TEXT("CombatActivitySize")) : nullptr;
+		const USizeBox* RowsViewport = Blueprint.WidgetTree
+			? Cast<USizeBox>(Blueprint.WidgetTree->FindWidget(TEXT("ActivityRowsViewport"))) : nullptr;
 		const UWidget* Rows = Blueprint.WidgetTree
 			? Blueprint.WidgetTree->FindWidget(TEXT("ActivityRowsBox")) : nullptr;
 		const UButton* Button = Blueprint.WidgetTree
 			? Cast<UButton>(Blueprint.WidgetTree->FindWidget(TEXT("LastActionButton"))) : nullptr;
+		const USizeBox* ActionSize = Blueprint.WidgetTree
+			? Cast<USizeBox>(Blueprint.WidgetTree->FindWidget(TEXT("LastActionSize"))) : nullptr;
 		const UBattleCombatLogFeedWidget* Defaults = Blueprint.GeneratedClass
 			? Cast<UBattleCombatLogFeedWidget>(Blueprint.GeneratedClass->GetDefaultObject()) : nullptr;
 		const bool bValid = Blueprint.ParentClass
 			&& Blueprint.ParentClass->IsChildOf(UBattleCombatLogFeedWidget::StaticClass())
-			&& Blueprint.BlueprintDescription.Contains(WidgetContractMarker)
+			&& Blueprint.BlueprintDescription.Contains(FeedWidgetContractMarker)
 			&& Blueprint.GeneratedClass
 			&& RootSize && RootSize->IsA(USizeBox::StaticClass())
 			&& RootSize->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
-			&& Rows && Rows->IsA(UVerticalBox::StaticClass())
+			&& RowsViewport
+			&& FMath::IsNearlyEqual(RowsViewport->GetHeightOverride(), 140.0f)
+			&& RowsViewport->GetClipping() == EWidgetClipping::ClipToBounds
+			&& RowsViewport->GetVisibility() == ESlateVisibility::HitTestInvisible
+			&& Rows && Rows->IsA(UCanvasPanel::StaticClass())
 			&& Rows->GetVisibility() == ESlateVisibility::HitTestInvisible
+			&& ActionSize
+			&& ActionSize->GetRenderTransform().Translation.Equals(FVector2D(0.0f, -47.0f))
 			&& Button && !Button->GetIsFocusable()
 			&& Button->GetVisibility() == ESlateVisibility::Visible
 			&& HasWidgetOfClass(Blueprint, TEXT("LastActionIcon"), UImage::StaticClass())

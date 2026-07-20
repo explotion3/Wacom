@@ -10,11 +10,15 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/WacomBattleCombatActivityStyle.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 
 #include "BattleHUDTestHarness.h"
 
+#include "Blueprint/WidgetTree.h"
+#include "Components/Button.h"
+#include "Components/Image.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "UObject/StrongObjectPtr.h"
@@ -233,13 +237,20 @@ bool FWacomUIBattleCombatLogBuilderMoveEventsSpec::RunTest(const FString& /*Para
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleCombatLogFeedSpec,
-	"Wacom.UI.Battle.CombatActivity.Feed.ThreeRowsAndPersistentFooter",
+	"Wacom.UI.Battle.CombatActivity.Feed.StreamingRowsAndPersistentFooter",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 {
+	TStrongObjectPtr<UWacomBattleCombatActivityStyle> Style(
+		NewObject<UWacomBattleCombatActivityStyle>(GetTransientPackage()));
+	Style->BottomRowHoldSeconds = 10.0f;
+	Style->TopRowHoldSeconds = 10.0f;
+	Style->BottomRowFadeSeconds = 10.0f;
+	Style->TopRowFadeSeconds = 10.0f;
 	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>());
-	Feed->TakeWidget();
+	Feed->ActivityStyle = Style.Get();
+	const TSharedRef<SWidget> SlateWidget = Feed->TakeWidget();
 
 	FWacomBattleCombatActivityBatchView Batch;
 	Batch.bSetTurnImmediately = true;
@@ -257,16 +268,29 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 	}
 	Feed->EnqueueCombatActivityBatch(Batch);
 	Feed->AdvanceActivityPlaybackForTest(1.0f);
-	Feed->AdvanceActivityPlaybackForTest(1.0f);
 
-	TestEqual(TEXT("Feed retains at most three transient rows"), Feed->GetVisibleActivityRowCount(), 3);
+	TestEqual(TEXT("Feed keeps the root and all four streamed results"),
+		Feed->GetVisibleActivityRowCount(), 5);
+	const UButton* LastActionButton = Feed->WidgetTree
+		? Cast<UButton>(Feed->WidgetTree->FindWidget(TEXT("LastActionButton")))
+		: nullptr;
+	const UImage* LastActionIcon = Feed->WidgetTree
+		? Cast<UImage>(Feed->WidgetTree->FindWidget(TEXT("LastActionIcon")))
+		: nullptr;
+	TestTrue(TEXT("Persistent footer icon stays hidden while the root row owns the icon"),
+		LastActionButton && LastActionButton->GetVisibility() == ESlateVisibility::HitTestInvisible
+		&& LastActionIcon && LastActionIcon->GetVisibility() == ESlateVisibility::Collapsed);
 	TestEqual(TEXT("Footer uses presented turn"), Feed->GetPresentedTurnNumber(), 2);
 	TestNotNull(TEXT("Footer keeps last root action"), Feed->GetLastRootActionForTest());
-	for (int32 Index = 0; Index < 8; ++Index)
-	{
-		Feed->AdvanceActivityPlaybackForTest(1.0f);
-	}
+	Style->BottomRowHoldSeconds = 0.0f;
+	Style->TopRowHoldSeconds = 0.0f;
+	Style->BottomRowFadeSeconds = 0.1f;
+	Style->TopRowFadeSeconds = 0.1f;
+	Feed->AdvanceActivityPlaybackForTest(0.2f);
 	TestEqual(TEXT("Transient rows collapse after the queue drains"), Feed->GetVisibleActivityRowCount(), 0);
+	TestTrue(TEXT("Footer icon becomes the clickable root icon after row handoff"),
+		LastActionButton && LastActionButton->GetVisibility() == ESlateVisibility::Visible
+		&& LastActionIcon && LastActionIcon->GetVisibility() == ESlateVisibility::HitTestInvisible);
 	TestNotNull(TEXT("Last root action persists after row collapse"), Feed->GetLastRootActionForTest());
 	TestEqual(TEXT("Turn footer persists after row collapse"), Feed->GetPresentedTurnNumber(), 2);
 
@@ -355,7 +379,7 @@ bool FWacomUIBattleHUDInitializationResultPresentedOnceSpec::RunTest(const FStri
 
 	TestTrue(TEXT("Attach presents initial visible battle events immediately"),
 		HUD->GetBattleCombatLogBlockCount() > 0);
-	TestEqual(TEXT("Initialization does not create transient activity rows"),
+	TestEqual(TEXT("Initialization waits for the entry gate before creating the turn-start activity"),
 		Feed->GetVisibleActivityRowCount(),
 		0);
 	TestEqual(TEXT("Initialization sets activity footer to first turn"), Feed->GetPresentedTurnNumber(), 1);
@@ -386,6 +410,19 @@ bool FWacomUIBattleHUDInitializationResultPresentedOnceSpec::RunTest(const FStri
 		HUD->GetBattleCombatLogBlockCount(),
 		1);
 	HUD->ReleaseBattleEntryPresentation();
+	TestEqual(TEXT("Entry release presents one turn-start root action"),
+		Feed->GetVisibleActivityRowCount(),
+		1);
+	const FWacomBattleCombatActivityRowView* InitialRoot = Feed->GetLastRootActionForTest();
+	TestTrue(TEXT("Initial turn activity becomes the footer handoff source"),
+		InitialRoot
+		&& InitialRoot->RowKind == EWacomBattleCombatActivityRowKind::RootAction
+		&& InitialRoot->IconKey == TEXT("TurnStart")
+		&& InitialRoot->MessageText.ToString() == TEXT("第1回合开始"));
+	const TArray<FWacomBattleCombatLogTurnSectionView>& InitialDetails =
+		HUD->GetBattleCombatLogDetailsHistory();
+	TestTrue(TEXT("UI-only turn-start activity does not duplicate the detailed history divider"),
+		InitialDetails.Num() == 1 && InitialDetails[0].Groups.IsEmpty());
 
 	const int32 EntryCountAfterAttach = HUD->GetBattleCombatLogBlockCount();
 	HUD->OnWaitRequested();

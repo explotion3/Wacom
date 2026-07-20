@@ -23,7 +23,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "设置活动行 ViewData 与已解析图标。只刷新 UI。"))
 	void SetActivityRowData(const FWacomBattleCombatActivityRowView& InRow, const FSlateBrush& InIconBrush);
 
-	void SetPlaybackPresentation(float Opacity, float TranslationY);
+	void SetPlaybackPresentation(float Opacity, float ContentOpacity, float IconOpacity,
+		float TranslationY);
 	void ClearActivityRow();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Activity")
@@ -55,6 +56,11 @@ private:
 
 	FSlateBrush CurrentIconBrush;
 	bool bHasRow = false;
+	float PlaybackOpacity = 1.0f;
+	float PlaybackContentOpacity = 1.0f;
+	float PlaybackIconOpacity = 1.0f;
+	float PlaybackTranslationY = 0.0f;
 
 	void ApplyCurrentRow();
+	void ApplyPlaybackPresentation();
 };

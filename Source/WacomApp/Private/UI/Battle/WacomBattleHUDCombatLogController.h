@@ -21,6 +21,7 @@ public:
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot);
+	void PresentInitialTurnActivity(int32 TurnNumber);
 	void Clear();
 	void Trim();
 	void SyncFeed();
@@ -43,7 +44,9 @@ private:
 	int32 LastProjectedTurnNumber = 0;
 
 	void AppendHistoryBlock(const FWacomBattleCombatLogBlockView& Block);
-	void SubmitActivityBatch(const FWacomBattleCombatActivityBatchView& Batch);
+	void SubmitActivityBatch(
+		const FWacomBattleCombatActivityBatchView& Batch,
+		bool bAppendToDetailsHistory = true);
 	FWacomBattleCombatLogTurnSectionView& EnsureDetailsTurnSection(int32 TurnNumber);
 	void AppendDetailsBatch(const FWacomBattleCombatActivityBatchView& Batch);
 	void TrimDetailsHistory();

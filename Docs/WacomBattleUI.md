@@ -89,14 +89,14 @@ HUD 状态入口：
 |---|---|---|
 | Presentation coordinator | `FWacomBattleHUDPresentationCoordinator` | TargetCue、短暂停顿、击倒 modal、BattleEnd signal、card stack boundary、EndTurn phase plan |
 | Presentation Stack | `UBattlePresentationStackWidget` | 已提交但表现仍在追赶的卡牌小堆叠 |
-| Combat Activity | `UBattleCombatLogFeedWidget + FWacomBattleCombatActivityPlayback` | 三行短时活动播报与“最后行动 + 当前回合” Footer |
+| Combat Activity | `UBattleCombatLogFeedWidget + FWacomBattleCombatActivityPlayback` | 固定裁切视口内的流式活动播报与“最后行动 + 当前回合” Footer |
 | Combat Log History | `FWacomBattleHUDCombatLogController + UWacomBattleCombatLogBuilder` | 最多 80 个完整命令块，并维护按回合分区的只读行动组历史 |
 | Combat Log Details | `UWacomBattleCombatLogDetailsScreen + FWacomBattleSecondaryPanelCoordinator` | 左侧 680px 二级面板，简略/详细切换和 Battle 命令门控 |
 | UE_LOG | readable log | 开发诊断 |
 
 `UWacomBattleCombatLogBuilder` 同时生成两种 UI-only 投影。`FWacomBattleCombatLogBlockView` 是完整历史命令块；`FWacomBattleCombatActivityBatchView` 是常驻 HUD 的短时活动批次。两者消费同一 Command Context、Events 和 Pre/Post Snapshot，不修改 `WacomBattle` 事件，也不从本地化文案反推规则语义。
 
-`FWacomBattleHUDCombatLogController` 继续持有最多 80 个完整历史命令块，不再把整份历史反复提交给常驻 Feed。`UBattleCombatLogFeedWidget` 现在是固定三行、完全非阻塞的活动播报器：玩家根行动显示玩家头像与卡名，敌人根行动显示 Intent 图标与名称，结果按事件顺序逐条进入；多目标结果不聚合。新行从底部进入，最多保留三行，队列收束后只保留最后根行动图标。Footer 始终显示沙漏与“表现已经推进到”的回合数；EndTurn 的新回合只在敌人行动批次播放完后更新。初始化只设置第 1 回合，不播放战斗开始、开场抽牌等临时行。
+`FWacomBattleHUDCombatLogController` 继续持有最多 80 个完整历史命令块，不再把整份历史反复提交给常驻 Feed。`UBattleCombatLogFeedWidget` 现在是固定 `140px` 裁切视口、完全非阻塞的流式活动播报器：玩家根行动显示玩家头像与卡名，敌人根行动显示 Intent 图标与名称，结果按事件顺序逐条进入；多目标结果不聚合。根行动从 Footer 最后行动槽所在的底部语义位出现，结果从该位置向上流动，越接近顶部越快淡出，不再对第四行做数据硬裁剪。当前根行动在全部结果发出前保持在底部行动槽；大批结果将错峰从 `0.16s` 自适应压缩至 `0.08s`。队列收束时根行动的文字与底板淡出，图标原位交接给可点击的 `LastActionButton`，而不是另行生成一枚重复图标。Footer 的沙漏与“表现已经推进到”的回合数始终显示；EndTurn 的新回合只在敌人行动批次播放完后更新。Battle 初始化仍立即建立详细日志的第 1 回合分区，但短时播报要等 Camera 与 Card Prewarm 两道 Entry Gate 都解除后才播放一次 UI-only 的“第 1 回合开始”；它不重复写入详细历史。战斗开始和开场抽牌等其它初始化事件仍不进入短时行。
 
 常驻播报的 Root 和临时 Row 都不命中；只有 Footer 的最后行动按钮可点击。按钮调用 `UBattleHUD::RequestOpenCombatLogDetails()`：HUD 仍广播 `OnCombatLogDetailsRequestedNative`，同时由 `FWacomBattleSecondaryPanelCoordinator` 向 `UI.Layer.GameMenu` 异步 Push `UWacomBattleCombatLogDetailsScreen`。Screen 打开时复制 Controller 的回合分区历史，不访问 `UBattleSession`，也不轮询规则状态。
 
@@ -289,7 +289,7 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 
 `BattleHUDCommandFlowSpec.cpp`、`BattleCombatLogSpec.cpp`、`BattlePresentationStackSpec.cpp` 与 `BattlePresentationQueueSpec.cpp` 分别覆盖命令、日志、Stack 和队列表现；`BattlePresentationTimerLifecycleSpec.cpp` 覆盖 teardown 后弱 timer 不回调释放状态。Scene Enemy 新架构集中在 `EnemySceneComponentAuthoringSpec.cpp`、`BattleEnemySceneComponentRuntimeSpec.cpp`、`BattleEnemySceneRuntimePerformanceSpec.cpp` 与 `EnemySceneLegacyAuditSpec.cpp`：验证 Definition 同步、typed hierarchy、视口数据不被刷新覆盖、Snapshot/Prediction no-op 与惰性复用、零 Legacy Package 引用，以及四个 Host / 两张地图可加载。其它 HUD/first-person 测试通过 `FWacomBattleHUDTestHarness` 创建真实 typed Part Component，不再复建 Actor/Bridge 测试夹具。
 
-短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、三行 Feed、Footer 和详情打开请求。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
+短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、流式 Row、根行动到 Footer 图标的原位交接和详情打开请求。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
 
 `Source/WacomTests/Private/UI/BattleEnemyPanelSpec.cpp` 承载通用 `Wacom.UI.Battle.EnemyPanel`；`BattleEnemySinglePartPanelSpec.cpp` 承载 `Wacom.UI.Battle.EnemyPanel.SinglePartCompact`，验证单/多部位类解析、正式 WBP 与 Intent Style 合同、数值、Preview、hover 和动画优先级。状态图标复用另由 `Wacom.UI.Battle.StatusIcons.EnemyPartUsesFormalStatusList` 覆盖。测试必须实例化正式 WBP，不再直接 `NewObject` abstract 原生父类或锁定旧 C++ fallback WidgetTree。
 
