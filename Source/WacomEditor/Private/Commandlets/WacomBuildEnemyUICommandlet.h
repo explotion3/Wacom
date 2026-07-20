@@ -7,14 +7,10 @@
 #include "WacomBuildEnemyUICommandlet.generated.h"
 
 /**
- * Scene Enemy Panel 正式 WBP 迁移与检查命令。
+ * Enemy HUD V3 只读资产合同检查命令。
  *
  * 用法：
- *   -run=WacomBuildEnemyUI -MigrateLegacy
- *   -run=WacomBuildEnemyUI -InspectOnly
- *   -run=WacomBuildEnemyUI -BuildSinglePartCompact
- *   -run=WacomBuildEnemyUI -InspectSinglePartCompact
- *   -run=WacomBuildEnemyUI -InspectSegmentedVitals
+ *   -run=WacomBuildEnemyUI -InspectEnemyHUD
  */
 UCLASS()
 class UWacomBuildEnemyUICommandlet final : public UCommandlet

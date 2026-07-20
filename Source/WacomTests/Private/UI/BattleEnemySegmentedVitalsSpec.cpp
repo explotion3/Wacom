@@ -2,13 +2,10 @@
 
 #include "Misc/AutomationTest.h"
 
-#include "Animation/WidgetAnimation.h"
-#include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
-#include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
@@ -17,6 +14,7 @@
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
+#include "UI/WacomBattleEnemyPartEntryWidgetTestAccess.h"
 
 namespace WacomBattleEnemySegmentedVitalsSpec
 {
@@ -101,9 +99,7 @@ namespace WacomBattleEnemySegmentedVitalsSpec
 
 	bool InvokeInspectionHandler(UWacomBattleEnemyPartEntryWidget* Entry)
 	{
-		UFunction* Function = Entry
-			? Entry->FindFunction(TEXT("HandleInspectClicked"))
-			: nullptr;
+		UFunction* Function = Entry ? Entry->FindFunction(TEXT("HandleInspectClicked")) : nullptr;
 		if (!Entry || !Function)
 		{
 			return false;
@@ -147,6 +143,10 @@ bool FWacomUIBattleEnemySegmentedVitalsLayoutSpec::RunTest(const FString& /*Para
 	}
 
 	const FName ExpectedOrder[] = { TEXT("Head"), TEXT("Body"), TEXT("Tail") };
+	const EWacomBattleEnemySegmentRole ExpectedRoles[] = {
+		EWacomBattleEnemySegmentRole::First,
+		EWacomBattleEnemySegmentRole::Middle,
+		EWacomBattleEnemySegmentRole::Last };
 	for (int32 Index = 0; Index < 3; ++Index)
 	{
 		UWacomBattleEnemyPartEntryWidget* Entry =
@@ -160,6 +160,10 @@ bool FWacomUIBattleEnemySegmentedVitalsLayoutSpec::RunTest(const FString& /*Para
 		const UHorizontalBoxSlot* Slot = Cast<UHorizontalBoxSlot>(Entry->Slot);
 		TestTrue(*FString::Printf(TEXT("Segment %d uses equal Fill sizing"), Index),
 			Slot && Slot->GetSize().SizeRule == ESlateSizeRule::Fill);
+		TestEqual(*FString::Printf(TEXT("Segment %d receives edge role"), Index),
+			FWacomBattleEnemyPartEntryWidgetTestAccess::GetSegmentRole(*Entry), ExpectedRoles[Index]);
+		TestEqual(TEXT("All segments receive the same count"),
+			FWacomBattleEnemyPartEntryWidgetTestAccess::GetSegmentCount(*Entry), 3);
 	}
 
 	UWacomBattleEnemyPartEntryWidget* HeadEntry =
@@ -169,23 +173,19 @@ bool FWacomUIBattleEnemySegmentedVitalsLayoutSpec::RunTest(const FString& /*Para
 	UWacomBattleEnemyPartEntryWidget* TailEntry =
 		Cast<UWacomBattleEnemyPartEntryWidget>(PartList->GetChildAt(2));
 	UTextBlock* HeadHpText = FindWidget<UTextBlock>(HeadEntry, TEXT("HpText"));
-	UProgressBar* HeadHpBar = FindWidget<UProgressBar>(HeadEntry, TEXT("HpBar"));
-	UWidget* HeadShield = FindWidget<UWidget>(HeadEntry, TEXT("ShieldContainer"));
-	UWidget* BodyShield = FindWidget<UWidget>(BodyEntry, TEXT("ShieldContainer"));
-	UWidget* BodyShieldFrame = FindWidget<UWidget>(BodyEntry, TEXT("ShieldFrame"));
-	UWidget* BodyShieldBadge = FindWidget<UWidget>(BodyEntry, TEXT("ShieldBadge"));
+	UWidget* HeadShield = FindWidget<UWidget>(HeadEntry, TEXT("ShieldValueRoot"));
+	UWidget* BodyShield = FindWidget<UWidget>(BodyEntry, TEXT("ShieldValueRoot"));
 	UTextBlock* BodyShieldText = FindWidget<UTextBlock>(BodyEntry, TEXT("ShieldText"));
-	UWidget* TailDestroyed = FindWidget<UWidget>(TailEntry, TEXT("DestroyedOverlay"));
+	UWidget* TailDestroyed = FindWidget<UWidget>(TailEntry, TEXT("DestroyedSurface"));
 	UWacomBattleStatusIconListWidget* HeadStatuses =
 		FindWidget<UWacomBattleStatusIconListWidget>(HeadEntry, TEXT("StatusList"));
 	UTextBlock* HeadStatusOverflow =
 		FindWidget<UTextBlock>(HeadEntry, TEXT("StatusOverflowText"));
 	if (!TestNotNull(TEXT("Head HP text"), HeadHpText)
-		|| !TestNotNull(TEXT("Head HP bar"), HeadHpBar)
-		|| !TestNotNull(TEXT("Body Shield container"), BodyShield)
-		|| !TestNotNull(TEXT("Body Shield frame"), BodyShieldFrame)
-		|| !TestNotNull(TEXT("Body Shield badge"), BodyShieldBadge)
+		|| !TestNotNull(TEXT("Head Shield root"), HeadShield)
+		|| !TestNotNull(TEXT("Body Shield root"), BodyShield)
 		|| !TestNotNull(TEXT("Body Shield text"), BodyShieldText)
+		|| !TestNotNull(TEXT("Tail Destroyed surface"), TailDestroyed)
 		|| !TestNotNull(TEXT("Head status list"), HeadStatuses)
 		|| !TestNotNull(TEXT("Head status overflow"), HeadStatusOverflow))
 	{
@@ -193,34 +193,30 @@ bool FWacomUIBattleEnemySegmentedVitalsLayoutSpec::RunTest(const FString& /*Para
 	}
 	TestEqual(TEXT("Compact HP text shows current value only"),
 		HeadHpText->GetText().ToString(), FString(TEXT("7")));
-	TestTrue(TEXT("Each segment uses its own HP ratio"),
-		FMath::IsNearlyEqual(HeadHpBar->GetPercent(), 7.0f / 12.0f));
-	TestEqual(TEXT("Zero Shield hides its overlay"),
-		HeadShield->GetVisibility(), ESlateVisibility::Collapsed);
-	TestEqual(TEXT("Positive Shield shows its overlay"),
-		BodyShield->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Positive Shield shows frame"),
-		BodyShieldFrame->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Positive Shield shows badge"),
-		BodyShieldBadge->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Shield badge keeps exact value"),
-		BodyShieldText->GetText().ToString(), FString(TEXT("19")));
+	TestTrue(TEXT("Each segment material uses its own HP ratio"),
+		FMath::IsNearlyEqual(
+			FWacomBattleEnemyPartEntryWidgetTestAccess::GetMaterialScalar(*HeadEntry, TEXT("HpCurrentPercent")),
+			7.0f / 12.0f));
+	TestEqual(TEXT("Zero Shield hides its overlay"), HeadShield->GetVisibility(), ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Positive Shield shows its overlay"), BodyShield->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Shield badge keeps exact value"), BodyShieldText->GetText().ToString(), FString(TEXT("19")));
 	TestTrue(TEXT("Destroyed segment remains in place"), PartList->GetChildAt(2) == TailEntry);
-	TestEqual(TEXT("Destroyed segment shows terminal overlay"),
+	TestEqual(TEXT("Destroyed segment shows terminal surface"),
 		TailDestroyed->GetVisibility(), ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Compact status list shows at most three icons"),
-		HeadStatuses->GetMaxVisibleStatuses(), 3);
-	TestEqual(TEXT("Compact status overflow is reported"),
-		HeadStatuses->GetOverflowStatusCount(), 2);
+	TestEqual(TEXT("Compact status list shows at most three icons"), HeadStatuses->GetMaxVisibleStatuses(), 3);
+	TestEqual(TEXT("Compact status overflow is reported"), HeadStatuses->GetOverflowStatusCount(), 2);
 	TestEqual(TEXT("Compact status overflow is visible as +N"),
 		HeadStatusOverflow->GetText().ToString(), FString(TEXT("+2")));
 
 	Body.CurrentHp = 9;
 	Body.Shield = 0;
-	TestTrue(TEXT("Projected part matches existing segment"),
-		Panel->SetActionPreviewPartViews({ Body }));
+	TestTrue(TEXT("Projected part matches existing segment"), Panel->SetActionPreviewPartViews({ Body }));
 	TestEqual(TEXT("Preview hides projected zero Shield without reflow"),
 		BodyShield->GetVisibility(), ESlateVisibility::Collapsed);
+	TestTrue(TEXT("Preview changes only the material preview HP"),
+		FMath::IsNearlyEqual(
+			FWacomBattleEnemyPartEntryWidgetTestAccess::GetMaterialScalar(*BodyEntry, TEXT("HpPreviewPercent")),
+			9.0f / 24.0f));
 	TestTrue(TEXT("Preview does not reorder segments"), PartList->GetChildAt(1) == BodyEntry);
 	Panel->ClearActionPreview();
 	TestEqual(TEXT("Clearing preview restores real Shield"),
@@ -248,46 +244,35 @@ bool FWacomUIBattleEnemySegmentedVitalsSinglePartAndInputSpec::RunTest(
 		return false;
 	}
 	Panel->TakeWidget();
+	TestTrue(TEXT("Single panel owns the 268 Slate-unit width"),
+		FMath::IsNearlyEqual(Panel->GetFixedPanelWidth(), 268.0f));
 	const FWacomBattleEnemyPartEntryViewData Body = MakePart(TEXT("Body"), 18, 24, 4, 1);
 	Panel->SetEnemyPanelViewData(MakeEnemy({ Body }));
 	UHorizontalBox* PartList = FindWidget<UHorizontalBox>(Panel, TEXT("PartList"));
-	if (!TestNotNull(TEXT("Single PartList is a HorizontalBox"), PartList)
+	if (!TestNotNull(TEXT("Single PartList is inherited HorizontalBox"), PartList)
 		|| !TestEqual(TEXT("Single enemy renders one segment"), PartList->GetChildrenCount(), 1))
 	{
 		return false;
 	}
 	UWacomBattleEnemyPartEntryWidget* Entry =
 		Cast<UWacomBattleEnemyPartEntryWidget>(PartList->GetChildAt(0));
-	if (!TestNotNull(TEXT("Single segmented entry"), Entry))
-	{
-		return false;
-	}
-	USizeBox* PanelRoot = FindWidget<USizeBox>(Panel, TEXT("SinglePartPanelRoot"));
-	USizeBox* EntryRoot = FindWidget<USizeBox>(Entry, TEXT("SinglePartEntryRoot"));
-	USizeBox* CompactSize = FindWidget<USizeBox>(Entry, TEXT("CompactSize"));
-	if (!TestNotNull(TEXT("Single panel owns its root size"), PanelRoot)
-		|| !TestNotNull(TEXT("Single entry root"), EntryRoot)
-		|| !TestNotNull(TEXT("Single entry compact height box"), CompactSize))
-	{
-		return false;
-	}
-	TestTrue(TEXT("Single panel owns the compact width"), PanelRoot->IsWidthOverride());
-	TestTrue(TEXT("Single panel width remains 250"),
-		FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 250.0f));
-	TestFalse(TEXT("Single panel does not duplicate width with a minimum"),
-		PanelRoot->IsMinDesiredWidthOverride());
-	TestFalse(TEXT("Single entry root does not own width"), EntryRoot->IsWidthOverride());
-	TestFalse(TEXT("Single entry root does not impose minimum width"),
-		EntryRoot->IsMinDesiredWidthOverride());
-	TestFalse(TEXT("Single entry content fills panel width"), CompactSize->IsWidthOverride());
-	TestTrue(TEXT("Single entry owns the compact row height"), CompactSize->IsHeightOverride());
-	TestTrue(TEXT("Single entry row height remains 84"),
-		FMath::IsNearlyEqual(CompactSize->GetHeightOverride(), 84.0f));
+	USizeBox* EntryRoot = FindWidget<USizeBox>(Entry, TEXT("PartEntryRoot"));
 	UButton* InspectButton = FindWidget<UButton>(Entry, TEXT("InspectHitTarget"));
-	if (!TestNotNull(TEXT("Inspection hotspot"), InspectButton))
+	if (!TestNotNull(TEXT("Single segmented entry"), Entry)
+		|| !TestNotNull(TEXT("Inherited V3 entry root"), EntryRoot)
+		|| !TestNotNull(TEXT("Inspection hotspot"), InspectButton))
 	{
 		return false;
 	}
+	TestEqual(TEXT("One part uses Single edge role"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::GetSegmentRole(*Entry),
+		EWacomBattleEnemySegmentRole::Single);
+	TestTrue(TEXT("Entry enforces the 116 Slate-unit minimum"),
+		EntryRoot->IsMinDesiredWidthOverride()
+		&& FMath::IsNearlyEqual(EntryRoot->GetMinDesiredWidth(), 116.0f));
+	TestTrue(TEXT("Entry enforces the 92 Slate-unit height"),
+		EntryRoot->IsHeightOverride()
+		&& FMath::IsNearlyEqual(EntryRoot->GetHeightOverride(), 92.0f));
 
 	int32 RequestCount = 0;
 	FBattlePartSlotIdentity RequestedIdentity;
@@ -302,6 +287,8 @@ bool FWacomUIBattleEnemySegmentedVitalsSinglePartAndInputSpec::RunTest(
 	TestEqual(TEXT("Enabled entry exposes child hit testing"),
 		Entry->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
 	TestTrue(TEXT("Enabled hotspot accepts input"), InspectButton->GetIsEnabled());
+	TestEqual(TEXT("Enabled hotspot is the only visible hit target"),
+		InspectButton->GetVisibility(), ESlateVisibility::Visible);
 	TestTrue(TEXT("Inspection handler is callable"), InvokeInspectionHandler(Entry));
 	TestEqual(TEXT("Click emits one request"), RequestCount, 1);
 	TestTrue(TEXT("Request keeps stable Part identity"), RequestedIdentity == Body.Identity);
@@ -310,16 +297,14 @@ bool FWacomUIBattleEnemySegmentedVitalsSinglePartAndInputSpec::RunTest(
 	Preview.CurrentHp = 10;
 	Panel->SetActionPreviewPartViews({ Preview });
 	TestFalse(TEXT("Preview disables inspection"), Entry->IsInspectionInteractionEnabled());
-	TestEqual(TEXT("Preview restores click-through"),
-		Entry->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Preview restores click-through"), Entry->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	TestFalse(TEXT("Preview disables hotspot input"), InspectButton->GetIsEnabled());
 	TestTrue(TEXT("Disabled handler remains safely callable"), InvokeInspectionHandler(Entry));
 	TestEqual(TEXT("Disabled hotspot cannot emit a second request"), RequestCount, 1);
 	Panel->ClearActionPreview();
 	TestTrue(TEXT("Clearing preview restores the Idle gate"), Entry->IsInspectionInteractionEnabled());
 	Panel->SetInspectionInteractionEnabled(false);
-	TestEqual(TEXT("Non-Idle gate is click-through"),
-		Entry->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Non-Idle gate is click-through"), Entry->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	Panel->ClearEnemyPanelViewData();
 	return true;
 }

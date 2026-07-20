@@ -6,14 +6,18 @@
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/Image.h"
 #include "Components/PanelWidget.h"
 #include "Components/ProgressBar.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "MovieScene.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
+#include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 
@@ -23,6 +27,8 @@ namespace WacomBattleEnemyInspectionSpec
 		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionWidget.WBP_WacomBattleEnemyInspectionWidget_C");
 	constexpr TCHAR RowClassPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionPartRowWidget.WBP_WacomBattleEnemyInspectionPartRowWidget_C");
+	constexpr TCHAR IntentStylePath[] =
+		TEXT("/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default.DA_EnemyIntentPresentation_Default");
 
 	UWorld* FindAutomationWorld()
 	{
@@ -66,6 +72,16 @@ namespace WacomBattleEnemyInspectionSpec
 			}
 		}
 		return nullptr;
+	}
+
+	float GetAuthoredAnimationEndTime(const UWidgetAnimation* Animation)
+	{
+		const double DisplayRate = Animation && Animation->MovieScene
+			? Animation->MovieScene->GetDisplayRate().AsDecimal() : 0.0;
+		return Animation && DisplayRate > 0.0
+			? FMath::Max(0.0f,
+				Animation->GetEndTime() - static_cast<float>(1.0 / DisplayRate))
+			: 0.0f;
 	}
 
 	FWacomBattleEnemyPartEntryViewData MakePart(
@@ -158,20 +174,40 @@ bool FWacomUIBattleEnemyInspectionAssetContractSpec::RunTest(const FString& /*Pa
 	Widget->TakeWidget();
 	TestEqual(TEXT("Inspection row class is authored"),
 		Widget->GetPartRowWidgetClass().Get(), RowClass);
+	UWacomBattleEnemyIntentPresentationStyle* IntentStyle =
+		LoadObject<UWacomBattleEnemyIntentPresentationStyle>(nullptr, IntentStylePath);
+	TestEqual(TEXT("Inspection uses formal Intent style"),
+		Widget->GetIntentPresentationStyle(), IntentStyle);
 	const TArray<FName> RequiredBindings = {
 		TEXT("LeftPanel"), TEXT("RightPanel"), TEXT("EnemyNameText"),
 		TEXT("EnemyStateText"), TEXT("PartNavigator"), TEXT("SelectedPartNameText"),
 		TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"), TEXT("ShieldText"),
-		TEXT("InitiativeText"), TEXT("IntentText"), TEXT("ResistanceText"),
+		TEXT("InitiativeText"), TEXT("IntentIcon"), TEXT("IntentText"), TEXT("ResistanceText"),
 		TEXT("StatusList"), TEXT("DestroyedOverlay"), TEXT("CloseButton") };
 	for (const FName Binding : RequiredBindings)
 	{
 		TestNotNull(*FString::Printf(TEXT("Inspection binding %s"), *Binding.ToString()),
 			Widget->WidgetTree->FindWidget(Binding));
 	}
-	TestNotNull(TEXT("Left opening animation"), FindAnimation(Widget, TEXT("OpenLeftAnimation")));
-	TestNotNull(TEXT("Right opening animation"), FindAnimation(Widget, TEXT("OpenRightAnimation")));
-	TestNotNull(TEXT("Closing animation"), FindAnimation(Widget, TEXT("CloseAnimation")));
+	UWidgetAnimation* OpenLeft = FindAnimation(Widget, TEXT("OpenLeftAnimation"));
+	UWidgetAnimation* OpenRight = FindAnimation(Widget, TEXT("OpenRightAnimation"));
+	UWidgetAnimation* Close = FindAnimation(Widget, TEXT("CloseAnimation"));
+	TestTrue(TEXT("Left opens over 180ms"),
+		OpenLeft && FMath::IsNearlyEqual(GetAuthoredAnimationEndTime(OpenLeft), 0.18f, 0.02f));
+	TestTrue(TEXT("Right opens over 240ms"),
+		OpenRight && FMath::IsNearlyEqual(GetAuthoredAnimationEndTime(OpenRight), 0.24f, 0.02f));
+	TestTrue(TEXT("Close resolves over 160ms"),
+		Close && FMath::IsNearlyEqual(GetAuthoredAnimationEndTime(Close), 0.16f, 0.02f));
+	USizeBox* LeftPanel = FindWidget<USizeBox>(Widget, TEXT("LeftPanel"));
+	USizeBox* RightPanel = FindWidget<USizeBox>(Widget, TEXT("RightPanel"));
+	TestTrue(TEXT("Left dossier column is 220 x 520"),
+		LeftPanel && LeftPanel->IsWidthOverride() && LeftPanel->IsHeightOverride()
+		&& FMath::IsNearlyEqual(LeftPanel->GetWidthOverride(), 220.0f)
+		&& FMath::IsNearlyEqual(LeftPanel->GetHeightOverride(), 520.0f));
+	TestTrue(TEXT("Right dossier is 420 x 560"),
+		RightPanel && RightPanel->IsWidthOverride() && RightPanel->IsHeightOverride()
+		&& FMath::IsNearlyEqual(RightPanel->GetWidthOverride(), 420.0f)
+		&& FMath::IsNearlyEqual(RightPanel->GetHeightOverride(), 560.0f));
 	TestEqual(TEXT("Root allows only child hit testing"),
 		Widget->WidgetTree->RootWidget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
 	Widget->CloseInspection(true);
@@ -212,6 +248,7 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 	UTextBlock* HpText = FindWidget<UTextBlock>(Widget, TEXT("HpText"));
 	UTextBlock* ShieldText = FindWidget<UTextBlock>(Widget, TEXT("ShieldText"));
 	UTextBlock* ResistanceText = FindWidget<UTextBlock>(Widget, TEXT("ResistanceText"));
+	UImage* IntentIcon = FindWidget<UImage>(Widget, TEXT("IntentIcon"));
 	UWacomBattleStatusIconListWidget* StatusList =
 		FindWidget<UWacomBattleStatusIconListWidget>(Widget, TEXT("StatusList"));
 	if (!TestNotNull(TEXT("Part navigator"), Navigator)
@@ -221,6 +258,7 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 		|| !TestNotNull(TEXT("HP text"), HpText)
 		|| !TestNotNull(TEXT("Shield text"), ShieldText)
 		|| !TestNotNull(TEXT("Resistance text"), ResistanceText)
+		|| !TestNotNull(TEXT("Intent icon"), IntentIcon)
 		|| !TestNotNull(TEXT("Full status list"), StatusList)
 		|| !TestEqual(TEXT("Definition order creates three navigation rows"),
 			Navigator->GetChildrenCount(), 3))
@@ -235,6 +273,8 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 	TestEqual(TEXT("Details show exact Shield"), ShieldText->GetText().ToString(), FString(TEXT("2")));
 	TestEqual(TEXT("Details show intent initiative and resistance"),
 		ResistanceText->GetText().ToString(), FString(TEXT("INIT 4   RES 5")));
+	TestNotNull(TEXT("Unknown Snake intent uses formal fallback icon"),
+		IntentIcon->GetBrush().GetResourceObject());
 	TestEqual(TEXT("Details do not truncate Buffs"), StatusList->GetMaxVisibleStatuses(), 0);
 	TestEqual(TEXT("Details retain all Buffs"), StatusList->GetStatusIconViews().Num(), 5);
 

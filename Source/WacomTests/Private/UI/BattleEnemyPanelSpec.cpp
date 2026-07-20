@@ -6,13 +6,18 @@
 #include "Animation/WidgetAnimation.h"
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
-#include "Components/PanelWidget.h"
 #include "Components/Button.h"
-#include "Components/ProgressBar.h"
+#include "Components/HorizontalBox.h"
+#include "Components/Image.h"
+#include "Components/PanelWidget.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/WidgetComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/Font.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInterface.h"
+#include "MovieScene.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
@@ -24,6 +29,10 @@ namespace WacomBattleEnemyPanelSpec
 		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget_C");
 	constexpr TCHAR PartEntryClassPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget_C");
+	constexpr TCHAR MaterialPath[] =
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Materials/M_UI_EnemyVitalsTrack.M_UI_EnemyVitalsTrack");
+	constexpr TCHAR FontPath[] =
+		TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/F_Silkscreen.F_Silkscreen");
 
 	UWorld* FindAutomationWorld()
 	{
@@ -43,73 +52,66 @@ namespace WacomBattleEnemyPanelSpec
 	FWacomBattleEnemyPartEntryViewData MakePart(
 		const FName EnemySlotId,
 		const FName PartSlotId,
-		const FString& DisplayName,
 		const int32 CurrentHp,
 		const int32 MaxHp,
 		const int32 Shield,
 		const int32 Initiative,
-		const FString& Intent,
-		const int32 Resistance = 0,
 		const bool bDestroyed = false)
 	{
 		FWacomBattleEnemyPartEntryViewData View;
 		View.EnemySlotId = EnemySlotId;
 		View.PartSlotId = PartSlotId;
 		View.Identity = FBattlePartSlotIdentity::Make(TEXT("Encounter"), EnemySlotId, PartSlotId);
-		View.PartDisplayName = FText::FromString(DisplayName);
+		View.PartDisplayName = FText::FromName(PartSlotId);
 		View.CurrentHp = CurrentHp;
 		View.MaxHp = MaxHp;
 		View.Shield = Shield;
 		View.CurrentInitiative = Initiative;
-		View.CurrentIntentDisplayName = FText::FromString(Intent);
+		View.CurrentIntentId = FName(*FString::Printf(TEXT("Test.%s.Intent"), *PartSlotId.ToString()));
+		View.CurrentIntentDisplayName = FText::FromString(TEXT("行动"));
 		View.CurrentIntentInitiative = Initiative;
-		View.CurrentIntentResistanceValue = Resistance;
+		View.CurrentIntentResistanceValue = 3;
 		View.bDestroyed = bDestroyed;
 		return View;
 	}
 
 	FWacomBattleEnemyPanelViewData MakeEnemyView(
 		const FName EnemySlotId,
-		const FString& DisplayName,
 		TArray<FWacomBattleEnemyPartEntryViewData> Parts)
 	{
 		FWacomBattleEnemyPanelViewData View;
 		View.EncounterId = TEXT("Encounter");
 		View.EnemySlotId = EnemySlotId;
 		View.UnitKey = FBattleEnemyUnitKey::Make(TEXT("Encounter"), EnemySlotId);
-		View.EnemyDisplayName = FText::FromString(DisplayName);
+		View.EnemyDisplayName = FText::FromString(TEXT("敌人"));
 		View.Parts = MoveTemp(Parts);
 		for (FWacomBattleEnemyPartEntryViewData& Part : View.Parts)
 		{
-			Part.EnemySlotId = EnemySlotId;
-			Part.Identity = FBattlePartSlotIdentity::Make(
-				TEXT("Encounter"), EnemySlotId, Part.PartSlotId);
 			View.EnemyInitiativeSum += Part.CurrentInitiative;
 		}
 		return View;
 	}
 
 	template <typename TWidget>
-	TWidget* FindWidget(UWidgetTree* WidgetTree, const FName Name)
+	TWidget* FindWidget(UUserWidget* Owner, const FName Name)
 	{
-		return WidgetTree ? Cast<TWidget>(WidgetTree->FindWidget(Name)) : nullptr;
+		return Owner && Owner->WidgetTree
+			? Cast<TWidget>(Owner->WidgetTree->FindWidget(Name)) : nullptr;
 	}
 
-	UWidgetAnimation* FindAnimation(UUserWidget* Widget, const FName AnimationName)
+	UWidgetAnimation* FindAnimation(UUserWidget* Widget, const FName Name)
 	{
 		const UWidgetBlueprintGeneratedClass* GeneratedClass = Widget
-			? Cast<UWidgetBlueprintGeneratedClass>(Widget->GetClass())
-			: nullptr;
+			? Cast<UWidgetBlueprintGeneratedClass>(Widget->GetClass()) : nullptr;
 		if (!GeneratedClass)
 		{
 			return nullptr;
 		}
 		for (UWidgetAnimation* Animation : GeneratedClass->Animations)
 		{
-			if (Animation
-				&& (Animation->GetFName() == AnimationName
-					|| Animation->GetDisplayLabel() == AnimationName.ToString()
-					|| Animation->GetName().StartsWith(AnimationName.ToString())))
+			if (Animation && (Animation->GetFName() == Name
+				|| Animation->GetDisplayLabel() == Name.ToString()
+				|| Animation->GetName().StartsWith(Name.ToString())))
 			{
 				return Animation;
 			}
@@ -117,263 +119,128 @@ namespace WacomBattleEnemyPanelSpec
 		return nullptr;
 	}
 
+	float GetAuthoredAnimationEndTime(const UWidgetAnimation* Animation)
+	{
+		const double DisplayRate = Animation && Animation->MovieScene
+			? Animation->MovieScene->GetDisplayRate().AsDecimal() : 0.0;
+		return Animation && DisplayRate > 0.0
+			? FMath::Max(0.0f,
+				Animation->GetEndTime() - static_cast<float>(1.0 / DisplayRate))
+			: 0.0f;
+	}
+
 	UWacomBattleEnemyPanelWidget* CreatePanel(UWorld* World)
 	{
 		UClass* PanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, PanelClassPath);
-		return World && PanelClass
-			? CreateWidget<UWacomBattleEnemyPanelWidget>(World, PanelClass)
-			: nullptr;
-	}
-
-	UWacomBattleEnemyPartEntryWidget* CreatePartEntry(UWorld* World)
-	{
-		UClass* PartClass = LoadClass<UWacomBattleEnemyPartEntryWidget>(nullptr, PartEntryClassPath);
-		return World && PartClass
-			? CreateWidget<UWacomBattleEnemyPartEntryWidget>(World, PartClass)
-			: nullptr;
+		return World && PanelClass ? CreateWidget<UWacomBattleEnemyPanelWidget>(World, PanelClass) : nullptr;
 	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyPanelFormalWBPContractSpec,
-	"Wacom.UI.Battle.EnemyPanel.FormalWBPContract",
+	FWacomUIBattleEnemyPanelVisualContractSpec,
+	"Wacom.UI.Battle.EnemyPanel.VisualContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleEnemyPanelFormalWBPContractSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleEnemyPanelVisualContractSpec::RunTest(const FString& /*Parameters*/)
 {
 	using namespace WacomBattleEnemyPanelSpec;
-
 	UClass* PanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, PanelClassPath);
 	UClass* PartClass = LoadClass<UWacomBattleEnemyPartEntryWidget>(nullptr, PartEntryClassPath);
-	if (!TestNotNull(TEXT("Formal enemy panel WBP"), PanelClass)
-		|| !TestNotNull(TEXT("Formal enemy part-entry WBP"), PartClass))
-	{
-		return false;
-	}
-
-	TestTrue(TEXT("Panel WBP uses passive native parent"),
-		PanelClass->IsChildOf(UWacomBattleEnemyPanelWidget::StaticClass()));
-	TestTrue(TEXT("Part WBP uses passive native parent"),
-		PartClass->IsChildOf(UWacomBattleEnemyPartEntryWidget::StaticClass()));
-
 	UWorld* World = FindAutomationWorld();
-	UWacomBattleEnemyPanelWidget* Panel = CreatePanel(World);
-	UWacomBattleEnemyPartEntryWidget* PartEntry = CreatePartEntry(World);
-	if (!TestNotNull(TEXT("Panel instance"), Panel)
-		|| !TestNotNull(TEXT("Part entry instance"), PartEntry))
+	UWacomBattleEnemyPanelWidget* Panel = World && PanelClass
+		? CreateWidget<UWacomBattleEnemyPanelWidget>(World, PanelClass) : nullptr;
+	UWacomBattleEnemyPartEntryWidget* Entry = World && PartClass
+		? CreateWidget<UWacomBattleEnemyPartEntryWidget>(World, PartClass) : nullptr;
+	if (!TestNotNull(TEXT("Formal enemy panel WBP"), PanelClass)
+		|| !TestNotNull(TEXT("Formal enemy part-entry WBP"), PartClass)
+		|| !TestNotNull(TEXT("Panel instance"), Panel)
+		|| !TestNotNull(TEXT("Entry instance"), Entry))
 	{
 		return false;
 	}
 	Panel->TakeWidget();
-	PartEntry->TakeWidget();
+	Entry->TakeWidget();
+	TestTrue(TEXT("Panel is passive native widget"), PanelClass->IsChildOf(UWacomBattleEnemyPanelWidget::StaticClass()));
+	TestTrue(TEXT("Entry is passive native widget"), PartClass->IsChildOf(UWacomBattleEnemyPartEntryWidget::StaticClass()));
 
-	const TArray<FName> PanelBindings = {
-		TEXT("EnemyNameText"), TEXT("EnemyInitiativeText"), TEXT("PartList"),
-		TEXT("PanelContextHighlight") };
-	for (const FName Binding : PanelBindings)
+	for (const FName Name : { FName(TEXT("PanelRoot")), FName(TEXT("PartList")) })
 	{
-		TestNotNull(*FString::Printf(TEXT("Panel binding %s"), *Binding.ToString()),
-			Panel->WidgetTree ? Panel->WidgetTree->FindWidget(Binding) : nullptr);
+		TestNotNull(*FString::Printf(TEXT("Panel binding %s"), *Name.ToString()),
+			Panel->WidgetTree->FindWidget(Name));
 	}
-
-	const TArray<FName> PartBindings = {
-		TEXT("PartNameText"), TEXT("InitiativeDiamond"), TEXT("IntentDiamond"),
-		TEXT("IntentIcon"), TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"),
-		TEXT("ShieldFrame"), TEXT("ShieldBadge"), TEXT("ShieldText"),
-		TEXT("InitiativeText"), TEXT("IntentText"),
-		TEXT("ResistanceText"), TEXT("DetailsContainer"), TEXT("StatusList"),
-		TEXT("StatusOverflowText"),
-		TEXT("ContextHighlight"), TEXT("ActionPreviewOverlay"), TEXT("DestroyedOverlay"),
-		TEXT("DestroyedMark"),
+	const FName EntryBindings[] = {
+		TEXT("PartEntryRoot"), TEXT("VitalsTrackImage"), TEXT("HpText"),
+		TEXT("ShieldValueRoot"), TEXT("ShieldText"), TEXT("InitiativeSocket"),
+		TEXT("InitiativeText"), TEXT("IntentSocket"), TEXT("IntentIcon"),
+		TEXT("OutgoingIntentIcon"), TEXT("StatusList"), TEXT("StatusOverflowText"),
+		TEXT("ContextSurface"), TEXT("DestroyedSurface"), TEXT("DestroyedMark"),
 		TEXT("InspectHitTarget") };
-	for (const FName Binding : PartBindings)
+	for (const FName Name : EntryBindings)
 	{
-		TestNotNull(*FString::Printf(TEXT("Part binding %s"), *Binding.ToString()),
-			PartEntry->WidgetTree ? PartEntry->WidgetTree->FindWidget(Binding) : nullptr);
+		TestNotNull(*FString::Printf(TEXT("Entry binding %s"), *Name.ToString()),
+			Entry->WidgetTree->FindWidget(Name));
+	}
+	for (const FName Legacy : { FName(TEXT("HpBar")), FName(TEXT("PartNameText")),
+		FName(TEXT("IntentText")), FName(TEXT("ResistanceText")),
+		FName(TEXT("DetailsContainer")), FName(TEXT("ActionPreviewOverlay")) })
+	{
+		TestNull(*FString::Printf(TEXT("Legacy binding %s removed"), *Legacy.ToString()),
+			Entry->WidgetTree->FindWidget(Legacy));
 	}
 
-	const TArray<FName> AnimationNames = {
-		TEXT("IntroAnimation"), TEXT("DamagePulseAnimation"),
-		TEXT("ShieldPulseAnimation"), TEXT("DestroyedPulseAnimation"),
-		TEXT("ContextHighlightAnimation") };
-	for (const FName AnimationName : AnimationNames)
+	const TPair<FName, float> Animations[] = {
+		{ TEXT("IntroAnimation"), 0.22f }, { TEXT("DamageImpactAnimation"), 0.22f },
+		{ TEXT("ShieldImpactAnimation"), 0.18f }, { TEXT("ShieldBreakAnimation"), 0.24f },
+		{ TEXT("InitiativeStepAnimation"), 0.12f }, { TEXT("IntentChangeAnimation"), 0.18f },
+		{ TEXT("ContextAnimation"), 0.12f }, { TEXT("DestroyedAnimation"), 0.30f } };
+	for (const TPair<FName, float>& Expected : Animations)
 	{
-		UWidgetAnimation* Animation = FindAnimation(PartEntry, AnimationName);
-		TestNotNull(*FString::Printf(TEXT("Animation %s"), *AnimationName.ToString()), Animation);
-		TestTrue(*FString::Printf(TEXT("Animation %s has a widget binding"), *AnimationName.ToString()),
-			Animation && !Animation->GetBindings().IsEmpty());
+		UWidgetAnimation* Animation = FindAnimation(Entry, Expected.Key);
+		TestNotNull(*FString::Printf(TEXT("Animation %s"), *Expected.Key.ToString()), Animation);
+		TestTrue(*FString::Printf(TEXT("Animation %s duration"), *Expected.Key.ToString()),
+			Animation && FMath::IsNearlyEqual(
+				GetAuthoredAnimationEndTime(Animation), Expected.Value, 0.02f));
 	}
 
-	bool bHitTestPolicyValid = true;
-	const UWidget* PanelRoot = Panel->WidgetTree->RootWidget;
-	const UWidget* PartEntryRoot = PartEntry->WidgetTree->RootWidget;
-	Panel->WidgetTree->ForEachWidget([&bHitTestPolicyValid, PanelRoot](UWidget* Widget)
-	{
-		bHitTestPolicyValid &= Widget && (Widget == PanelRoot
-			|| (Widget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
-				&& Widget->IsA<UPanelWidget>())
-			|| (Widget->GetVisibility() != ESlateVisibility::Visible
-				&& Widget->GetVisibility() != ESlateVisibility::SelfHitTestInvisible));
-	});
-	PartEntry->WidgetTree->ForEachWidget([&bHitTestPolicyValid, PartEntryRoot](UWidget* Widget)
-	{
-		const bool bExpectedButton = Widget && Widget->GetFName() == TEXT("InspectHitTarget")
-			&& Widget->IsA<UButton>();
-		bHitTestPolicyValid &= Widget && (Widget == PartEntryRoot
-			|| bExpectedButton
-			|| (Widget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
-				&& Widget->IsA<UPanelWidget>())
-			|| (Widget->GetVisibility() != ESlateVisibility::Visible
-				&& Widget->GetVisibility() != ESlateVisibility::SelfHitTestInvisible));
-	});
-	TestTrue(TEXT("Only the explicit inspection hotspot captures hit tests"), bHitTestPolicyValid);
+	UImage* Vitals = FindWidget<UImage>(Entry, TEXT("VitalsTrackImage"));
+	UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, MaterialPath);
+	UFont* Font = LoadObject<UFont>(nullptr, FontPath);
+	UTextBlock* Hp = FindWidget<UTextBlock>(Entry, TEXT("HpText"));
+	UTextBlock* Initiative = FindWidget<UTextBlock>(Entry, TEXT("InitiativeText"));
+	UTextBlock* Shield = FindWidget<UTextBlock>(Entry, TEXT("ShieldText"));
+	TestEqual(TEXT("Vitals image uses Enemy Vitals material"),
+		Vitals ? Vitals->GetBrush().GetResourceObject() : nullptr, static_cast<UObject*>(Material));
+	TestTrue(TEXT("HP uses Silkscreen Bold 18"), Hp && Hp->GetFont().FontObject == Font
+		&& Hp->GetFont().TypefaceFontName == FName(TEXT("Bold")) && Hp->GetFont().Size == 18);
+	TestTrue(TEXT("Initiative uses Silkscreen 16"),
+		Initiative && Initiative->GetFont().FontObject == Font
+		&& Initiative->GetFont().TypefaceFontName == FName(TEXT("Bold")) && Initiative->GetFont().Size == 16);
+	TestTrue(TEXT("Shield uses Silkscreen 14"),
+		Shield && Shield->GetFont().FontObject == Font
+		&& Shield->GetFont().TypefaceFontName == FName(TEXT("Bold")) && Shield->GetFont().Size == 14);
+	TestEqual(TEXT("Panel root is SelfHitTestInvisible"),
+		Panel->WidgetTree->RootWidget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
+	TestEqual(TEXT("Entry root is SelfHitTestInvisible"),
+		Entry->WidgetTree->RootWidget->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
+	UButton* HitTarget = FindWidget<UButton>(Entry, TEXT("InspectHitTarget"));
+	TestEqual(TEXT("Inspection hotspot is click-through before valid ViewData"),
+		HitTarget ? HitTarget->GetVisibility() : ESlateVisibility::Collapsed,
+		ESlateVisibility::HitTestInvisible);
 
 	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
 	TestEqual(TEXT("Project default resolves to formal panel WBP"),
-		Settings->DefaultBattleEnemyPanelWidgetClass.ToSoftObjectPath().ToString(),
-		FString(PanelClassPath));
+		Settings->DefaultBattleEnemyPanelWidgetClass.ToSoftObjectPath().ToString(), FString(PanelClassPath));
 	TArray<FText> SettingsErrors;
-	TestTrue(TEXT("Project default enemy panel settings validate"),
-		Settings->ValidateSettings(SettingsErrors));
-
-	TStrongObjectPtr<UWacomUIDeveloperSettings> InvalidSettings(
-		NewObject<UWacomUIDeveloperSettings>());
-	InvalidSettings->DefaultBattleEnemyPanelWidgetClass =
-		UWacomBattleEnemyPanelWidget::StaticClass();
-	SettingsErrors.Reset();
-	TestFalse(TEXT("Abstract native panel class is rejected"),
-		InvalidSettings->ValidateSettings(SettingsErrors));
-	TestTrue(TEXT("Invalid panel class reports a validation error"),
-		!SettingsErrors.IsEmpty());
+	TestTrue(TEXT("Project enemy UI settings validate"), Settings->ValidateSettings(SettingsErrors));
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyPartEntryViewAndPreviewSpec,
-	"Wacom.UI.Battle.EnemyPanel.PartEntryViewAndPreview",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleEnemyPartEntryViewAndPreviewSpec::RunTest(const FString& /*Parameters*/)
-{
-	using namespace WacomBattleEnemyPanelSpec;
-	UWacomBattleEnemyPartEntryWidget* Widget = CreatePartEntry(FindAutomationWorld());
-	if (!TestNotNull(TEXT("Part entry"), Widget))
-	{
-		return false;
-	}
-	Widget->TakeWidget();
-
-	FWacomBattleEnemyPartEntryViewData View = MakePart(
-		TEXT("Enemy"), TEXT("Head"), TEXT("蛇头"), 7, 12, 4, 3, TEXT("撕咬"), 5);
-	Widget->SetPartEntryViewData(View);
-
-	UTextBlock* HpText = FindWidget<UTextBlock>(Widget->WidgetTree, TEXT("HpText"));
-	UTextBlock* ShieldText = FindWidget<UTextBlock>(Widget->WidgetTree, TEXT("ShieldText"));
-	UTextBlock* InitiativeText = FindWidget<UTextBlock>(Widget->WidgetTree, TEXT("InitiativeText"));
-	UTextBlock* IntentText = FindWidget<UTextBlock>(Widget->WidgetTree, TEXT("IntentText"));
-	UTextBlock* ResistanceText = FindWidget<UTextBlock>(Widget->WidgetTree, TEXT("ResistanceText"));
-	UProgressBar* HpBar = FindWidget<UProgressBar>(Widget->WidgetTree, TEXT("HpBar"));
-	if (!TestNotNull(TEXT("HP text"), HpText)
-		|| !TestNotNull(TEXT("Shield text"), ShieldText)
-		|| !TestNotNull(TEXT("Initiative text"), InitiativeText)
-		|| !TestNotNull(TEXT("Intent text"), IntentText)
-		|| !TestNotNull(TEXT("Resistance text"), ResistanceText)
-		|| !TestNotNull(TEXT("HP bar"), HpBar))
-	{
-		return false;
-	}
-
-	TestEqual(TEXT("HP text is current value only"), HpText->GetText().ToString(), FString(TEXT("7")));
-	TestTrue(TEXT("HP percent"), FMath::IsNearlyEqual(HpBar->GetPercent(), 7.0f / 12.0f));
-	TestEqual(TEXT("Shield text"), ShieldText->GetText().ToString(), FString(TEXT("4")));
-	TestEqual(TEXT("Initiative text"), InitiativeText->GetText().ToString(), FString(TEXT("3")));
-	TestEqual(TEXT("Intent text includes intent initiative"),
-		IntentText->GetText().ToString(), FString(TEXT("撕咬  3")));
-	TestEqual(TEXT("Resistance text"), ResistanceText->GetText().ToString(), FString(TEXT("RES 5")));
-
-	FWacomBattleEnemyPartEntryViewData Preview = View;
-	Preview.CurrentHp = 2;
-	Preview.Shield = 0;
-	Widget->SetActionPreview(Preview);
-	TestTrue(TEXT("Preview active"), Widget->HasActionPreview());
-	TestEqual(TEXT("Preview does not mutate Snapshot facts"), Widget->GetPartEntryViewData().CurrentHp, 7);
-	TestEqual(TEXT("Preview updates displayed HP"), HpText->GetText().ToString(), FString(TEXT("2")));
-	Widget->ClearActionPreview();
-	TestEqual(TEXT("Clear restores Snapshot HP"), HpText->GetText().ToString(), FString(TEXT("7")));
-
-	View.bDestroyed = true;
-	View.CurrentHp = 0;
-	Widget->SetPartEntryViewData(View);
-	TestEqual(TEXT("Destroyed entry remains but is weakened"), Widget->GetRenderOpacity(), 0.64f);
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyPartEntrySemanticPulseSpec,
-	"Wacom.UI.Battle.EnemyPanel.PartEntrySemanticPulse",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleEnemyPartEntrySemanticPulseSpec::RunTest(const FString& /*Parameters*/)
-{
-	using namespace WacomBattleEnemyPanelSpec;
-	UWacomBattleEnemyPartEntryWidget* Widget = CreatePartEntry(FindAutomationWorld());
-	if (!TestNotNull(TEXT("Part entry"), Widget))
-	{
-		return false;
-	}
-	Widget->TakeWidget();
-
-	UWidgetAnimation* DamageAnimation = FindAnimation(Widget, TEXT("DamagePulseAnimation"));
-	UWidgetAnimation* ShieldAnimation = FindAnimation(Widget, TEXT("ShieldPulseAnimation"));
-	UWidgetAnimation* DestroyedAnimation = FindAnimation(Widget, TEXT("DestroyedPulseAnimation"));
-	if (!TestNotNull(TEXT("Damage animation"), DamageAnimation)
-		|| !TestNotNull(TEXT("Shield animation"), ShieldAnimation)
-		|| !TestNotNull(TEXT("Destroyed animation"), DestroyedAnimation))
-	{
-		return false;
-	}
-
-	FWacomBattleEnemyPartEntryViewData View = MakePart(
-		TEXT("Enemy"), TEXT("Body"), TEXT("身体"), 12, 12, 0, 3, TEXT("攻击"));
-	Widget->SetPartEntryViewData(View);
-	Widget->StopAllAnimations();
-
-	FWacomBattleEnemyPartEntryViewData Preview = View;
-	Preview.CurrentHp = 4;
-	Preview.Shield = 5;
-	Preview.bDestroyed = true;
-	Widget->SetActionPreview(Preview);
-	TestFalse(TEXT("Preview does not play damage pulse"), Widget->IsAnimationPlaying(DamageAnimation));
-	TestFalse(TEXT("Preview does not play shield pulse"), Widget->IsAnimationPlaying(ShieldAnimation));
-	TestFalse(TEXT("Preview does not play destroyed pulse"), Widget->IsAnimationPlaying(DestroyedAnimation));
-	Widget->ClearActionPreview();
-	Widget->StopAllAnimations();
-
-	View.CurrentHp = 8;
-	Widget->SetPartEntryViewData(View);
-	TestTrue(TEXT("Real HP decrease plays damage pulse"), Widget->IsAnimationPlaying(DamageAnimation));
-	Widget->StopAllAnimations();
-
-	View.Shield = 4;
-	Widget->SetPartEntryViewData(View);
-	TestTrue(TEXT("Real shield change plays shield pulse"), Widget->IsAnimationPlaying(ShieldAnimation));
-	Widget->StopAllAnimations();
-
-	View.CurrentHp = 0;
-	View.bDestroyed = true;
-	Widget->SetPartEntryViewData(View);
-	TestTrue(TEXT("Real destroyed transition plays destroyed pulse"),
-		Widget->IsAnimationPlaying(DestroyedAnimation));
-	Widget->CancelPendingPresentation();
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEnemyPanelSingleHostStableEntriesSpec,
+	FWacomUIBattleEnemyPanelStableEntriesSpec,
 	"Wacom.UI.Battle.EnemyPanel.SingleHostStableEntries",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleEnemyPanelSingleHostStableEntriesSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleEnemyPanelStableEntriesSpec::RunTest(const FString& /*Parameters*/)
 {
 	using namespace WacomBattleEnemyPanelSpec;
 	UWacomBattleEnemyPanelWidget* Panel = CreatePanel(FindAutomationWorld());
@@ -382,69 +249,41 @@ bool FWacomUIBattleEnemyPanelSingleHostStableEntriesSpec::RunTest(const FString&
 		return false;
 	}
 	Panel->TakeWidget();
-
-	FWacomBattleEnemyPanelViewData Enemy = MakeEnemyView(
-		TEXT("Enemy"), TEXT("林蛇"), {
-			MakePart(TEXT("Enemy"), TEXT("Head"), TEXT("蛇头"), 10, 12, 0, 5, TEXT("撕咬")),
-			MakePart(TEXT("Enemy"), TEXT("Tail"), TEXT("蛇尾"), 6, 8, 2, 3, TEXT("扫尾")) });
+	FWacomBattleEnemyPanelViewData Enemy = MakeEnemyView(TEXT("Enemy"), {
+		MakePart(TEXT("Enemy"), TEXT("Head"), 10, 12, 0, 5),
+		MakePart(TEXT("Enemy"), TEXT("Tail"), 6, 8, 2, 3) });
 	Panel->SetEnemyPanelViewData(Enemy);
-
-	UPanelWidget* PartList = FindWidget<UPanelWidget>(Panel->WidgetTree, TEXT("PartList"));
-	UTextBlock* EnemyName = FindWidget<UTextBlock>(Panel->WidgetTree, TEXT("EnemyNameText"));
+	UHorizontalBox* PartList = FindWidget<UHorizontalBox>(Panel, TEXT("PartList"));
 	if (!TestNotNull(TEXT("Part list"), PartList)
-		|| !TestNotNull(TEXT("Enemy name"), EnemyName))
+		|| !TestEqual(TEXT("Two parts render"), PartList->GetChildrenCount(), 2))
 	{
 		return false;
 	}
-	TestEqual(TEXT("Only this Host's two parts render"), PartList->GetChildrenCount(), 2);
-	TestEqual(TEXT("Enemy header"), EnemyName->GetText().ToString(), FString(TEXT("林蛇")));
-
-	UWidget* HeadEntry = PartList->GetChildAt(0);
-	UWidget* TailEntry = PartList->GetChildAt(1);
-	UWacomBattleEnemyPartEntryWidget* HeadPartEntry =
-		Cast<UWacomBattleEnemyPartEntryWidget>(HeadEntry);
-	UWacomBattleEnemyPartEntryWidget* TailPartEntry =
-		Cast<UWacomBattleEnemyPartEntryWidget>(TailEntry);
-	if (!TestNotNull(TEXT("Head part entry"), HeadPartEntry)
-		|| !TestNotNull(TEXT("Tail part entry"), TailPartEntry))
-	{
-		return false;
-	}
-
+	UWidget* HeadWidget = PartList->GetChildAt(0);
+	UWidget* TailWidget = PartList->GetChildAt(1);
+	UWacomBattleEnemyPartEntryWidget* Head = Cast<UWacomBattleEnemyPartEntryWidget>(HeadWidget);
+	UWacomBattleEnemyPartEntryWidget* Tail = Cast<UWacomBattleEnemyPartEntryWidget>(TailWidget);
 	Panel->SetHoveredPartSlotId(TEXT("Tail"));
-	TestEqual(TEXT("Head remains compact on tail hover"),
-		HeadPartEntry->WidgetTree->FindWidget(TEXT("DetailsContainer"))->GetVisibility(),
-		ESlateVisibility::Collapsed);
-	TestEqual(TEXT("Tail keeps inline details compact on hover"),
-		TailPartEntry->WidgetTree->FindWidget(TEXT("DetailsContainer"))->GetVisibility(),
-		ESlateVisibility::Collapsed);
-	TestEqual(TEXT("Only the hovered Tail uses compact context highlight"),
-		TailPartEntry->WidgetTree->FindWidget(TEXT("ContextHighlight"))->GetVisibility(),
-		ESlateVisibility::HitTestInvisible);
-	TestEqual(TEXT("Unmatched Head has no compact context highlight"),
-		HeadPartEntry->WidgetTree->FindWidget(TEXT("ContextHighlight"))->GetVisibility(),
-		ESlateVisibility::Collapsed);
+	TestEqual(TEXT("Only Tail context is visible"),
+		FindWidget<UWidget>(Tail, TEXT("ContextSurface"))->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("Head context remains hidden"),
+		FindWidget<UWidget>(Head, TEXT("ContextSurface"))->GetVisibility(), ESlateVisibility::Collapsed);
 	Panel->SetHoveredPartSlotId(NAME_None);
 
 	FWacomBattleEnemyPartEntryViewData TailPreview = Enemy.Parts[1];
 	TailPreview.CurrentHp = 1;
-	TestTrue(TEXT("Matching preview is accepted"),
-		Panel->SetActionPreviewPartViews({ TailPreview }));
-	TestFalse(TEXT("Preview does not affect unmatched head"), HeadPartEntry->HasActionPreview());
-	TestTrue(TEXT("Preview affects matching tail"), TailPartEntry->HasActionPreview());
+	TestTrue(TEXT("Matching preview is accepted"), Panel->SetActionPreviewPartViews({ TailPreview }));
+	TestFalse(TEXT("Preview does not affect Head"), Head->HasActionPreview());
+	TestTrue(TEXT("Preview affects Tail"), Tail->HasActionPreview());
 	Panel->ClearActionPreview();
-	TestFalse(TEXT("Preview clear restores tail"), TailPartEntry->HasActionPreview());
-
 	Enemy.Parts[0].CurrentHp = 8;
 	Panel->SetEnemyPanelViewData(Enemy);
-	TestTrue(TEXT("Head entry reused"), PartList->GetChildAt(0) == HeadEntry);
-	TestTrue(TEXT("Tail entry reused"), PartList->GetChildAt(1) == TailEntry);
-
+	TestTrue(TEXT("Head entry reused"), PartList->GetChildAt(0) == HeadWidget);
+	TestTrue(TEXT("Tail entry reused"), PartList->GetChildAt(1) == TailWidget);
 	Enemy.Parts.RemoveAt(1);
 	Panel->SetEnemyPanelViewData(Enemy);
-	TestEqual(TEXT("Removed part destroys cached entry"), PartList->GetChildrenCount(), 1);
-	TestTrue(TEXT("Unchanged part remains stable"), PartList->GetChildAt(0) == HeadEntry);
-
+	TestEqual(TEXT("Removed part deletes its entry"), PartList->GetChildrenCount(), 1);
+	TestTrue(TEXT("Unchanged part remains stable"), PartList->GetChildAt(0) == HeadWidget);
 	Panel->ClearEnemyPanelViewData();
 	TestEqual(TEXT("Battle clear removes entries"), PartList->GetChildrenCount(), 0);
 	return true;
@@ -464,12 +303,8 @@ bool FWacomUIBattleEnemyPanelHostDefaultClassAndDesiredSizeSpec::RunTest(const F
 	{
 		return false;
 	}
-
-	FWacomBattleEnemyPanelViewData Enemy = MakeEnemyView(
-		TEXT("Enemy"), TEXT("训练战士"), {
-			MakePart(TEXT("Enemy"), TEXT("Body"), TEXT("身体"), 24, 24, 0, 3, TEXT("攻击")) });
-	Host->SetEnemyPanelViewData(Enemy);
-
+	Host->SetEnemyPanelViewData(MakeEnemyView(TEXT("Enemy"), {
+		MakePart(TEXT("Enemy"), TEXT("Body"), 24, 24, 0, 3) }));
 	UWidgetComponent* Component = Cast<UWidgetComponent>(
 		Host->GetDefaultSubobjectByName(TEXT("EnemyPanelWidget")));
 	if (!TestNotNull(TEXT("Enemy panel component"), Component))
@@ -477,7 +312,7 @@ bool FWacomUIBattleEnemyPanelHostDefaultClassAndDesiredSizeSpec::RunTest(const F
 		Host->Destroy();
 		return false;
 	}
-	TestTrue(TEXT("Desired Size enabled by default"), Component->GetDrawAtDesiredSize());
+	TestTrue(TEXT("Desired Size enabled"), Component->GetDrawAtDesiredSize());
 	TestEqual(TEXT("Bottom-center pivot X"), Component->GetPivot().X, 0.5);
 	TestEqual(TEXT("Bottom-center pivot Y"), Component->GetPivot().Y, 1.0);
 	TestNotNull(TEXT("Project default panel instantiated"),

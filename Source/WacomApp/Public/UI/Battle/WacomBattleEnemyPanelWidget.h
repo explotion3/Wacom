@@ -8,8 +8,7 @@
 #include "WacomBattleEnemyPanelWidget.generated.h"
 
 class UPanelWidget;
-class UTextBlock;
-class UWidget;
+class USizeBox;
 class UWacomBattleEnemyPartEntryWidget;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(
@@ -57,6 +56,10 @@ public:
 		return PartEntryWidgetClass;
 	}
 
+	/** WBP 子类的类默认值：0 表示由分段数量决定宽度，正数表示固定铭牌宽度。 */
+	void SetFixedPanelWidth(float InWidth) { FixedPanelWidth = FMath::Max(0.0f, InWidth); }
+	float GetFixedPanelWidth() const { return FixedPanelWidth; }
+
 	/** HUD runtime 的事件驱动输入门禁；禁用时整块头顶面板点击穿透。 */
 	void SetInspectionInteractionEnabled(bool bEnabled);
 	bool IsInspectionInteractionEnabled() const { return bInspectionInteractionEnabled; }
@@ -64,6 +67,7 @@ public:
 	FWacomBattleEnemyPanelInspectionRequestedNative OnInspectionRequestedNative;
 
 protected:
+	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
@@ -71,10 +75,10 @@ protected:
 	TSubclassOf<UWacomBattleEnemyPartEntryWidget> PartEntryWidgetClass;
 
 private:
-	void RefreshHeader();
+	void ResolveAuthoredBindings();
+	void ApplyAuthoredGeometry();
 	void SyncPartEntries();
 	void ClearPartEntries();
-	void RefreshContextHighlight();
 	void ApplyInspectionInteractionState();
 	void HandlePartInspectionRequested(const FBattlePartSlotIdentity& PartIdentity);
 	UWacomBattleEnemyPartEntryWidget* FindOrCreatePartEntryWidget(
@@ -83,16 +87,13 @@ private:
 	bool DoesPartBelongToCurrentEnemy(const FWacomBattleEnemyPartEntryViewData& PartView) const;
 
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> EnemyNameText = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> EnemyInitiativeText = nullptr;
+	TObjectPtr<USizeBox> PanelRoot = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UPanelWidget> PartList = nullptr;
 
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> PanelContextHighlight = nullptr;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Layout", meta = (AllowPrivateAccess = "true", ToolTip = "头顶敌人铭牌的固定宽度，单位：Slate Unit。0 表示按部位数量与每段最小宽度自然增长；单部位正式 WBP 推荐 268。"))
+	float FixedPanelWidth = 0.0f;
 
 	UPROPERTY(Transient)
 	FWacomBattleEnemyPanelViewData CurrentView;

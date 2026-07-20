@@ -7,12 +7,9 @@
 #include "Editor.h"
 #include "EditorValidatorSubsystem.h"
 #include "Framework/Notifications/NotificationManager.h"
-#include "Misc/CoreDelegates.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 #include "ToolMenus.h"
-#include "ToolsetRegistry/UToolsetRegistry.h"
-#include "Toolsets/WacomEnemyUIToolset.h"
 #include "Validation/WacomCardDefinitionValidator.h"
 #include "Validation/WacomCharacterDefinitionValidator.h"
 #include "Validation/WacomEncounterDefinitionValidator.h"
@@ -86,20 +83,10 @@ void FWacomEditorModule::StartupModule()
 	ToolMenusStartupCallbackHandle = UToolMenus::RegisterStartupCallback(
 		FSimpleMulticastDelegate::FDelegate::CreateRaw(
 			this, &FWacomEditorModule::RegisterMenus));
-	ToolsetRegistrationCallbackHandle =
-		FCoreDelegates::OnAllModuleLoadingPhasesComplete.AddRaw(
-			this, &FWacomEditorModule::RegisterMcpToolsets);
 }
 
 void FWacomEditorModule::ShutdownModule()
 {
-	if (ToolsetRegistrationCallbackHandle.IsValid())
-	{
-		FCoreDelegates::OnAllModuleLoadingPhasesComplete.Remove(
-			ToolsetRegistrationCallbackHandle);
-		ToolsetRegistrationCallbackHandle.Reset();
-	}
-	UnregisterMcpToolsets();
 	if (ToolMenusStartupCallbackHandle.IsValid())
 	{
 		UToolMenus::UnRegisterStartupCallback(ToolMenusStartupCallbackHandle);
@@ -111,27 +98,6 @@ void FWacomEditorModule::ShutdownModule()
 	}
 	UnregisterDetailsCustomizations();
 	UnregisterEditorValidators();
-}
-
-void FWacomEditorModule::RegisterMcpToolsets()
-{
-	if (!UToolsetRegistry::IsToolsetClassRegistered(
-		UWacomEnemyUIToolset::StaticClass()))
-	{
-		UToolsetRegistry::RegisterToolsetClass(
-			UWacomEnemyUIToolset::StaticClass());
-	}
-}
-
-void FWacomEditorModule::UnregisterMcpToolsets()
-{
-	if (UToolsetRegistry::IsAvailable()
-		&& UToolsetRegistry::IsToolsetClassRegistered(
-			UWacomEnemyUIToolset::StaticClass()))
-	{
-		UToolsetRegistry::UnregisterToolsetClass(
-			UWacomEnemyUIToolset::StaticClass());
-	}
 }
 
 void FWacomEditorModule::RegisterDetailsCustomizations()

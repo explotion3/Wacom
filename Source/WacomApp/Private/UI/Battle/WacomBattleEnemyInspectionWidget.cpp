@@ -4,11 +4,14 @@
 
 #include "Animation/WidgetAnimation.h"
 #include "Components/Button.h"
+#include "Components/Image.h"
 #include "Components/PanelWidget.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
+#include "Engine/World.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
+#include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 
 namespace
@@ -94,10 +97,7 @@ void UWacomBattleEnemyInspectionWidget::OpenInspection()
 	{
 		PlayAnimation(OpenLeftAnimation);
 	}
-	if (OpenRightAnimation)
-	{
-		PlayAnimation(OpenRightAnimation);
-	}
+	ScheduleRightPanelOpen();
 }
 
 void UWacomBattleEnemyInspectionWidget::CloseInspection(const bool bImmediate)
@@ -109,6 +109,7 @@ void UWacomBattleEnemyInspectionWidget::CloseInspection(const bool bImmediate)
 	}
 
 	SetIsEnabled(false);
+	CancelRightPanelOpenTimer();
 	if (bImmediate || !CloseAnimation)
 	{
 		StopAllAnimations();
@@ -138,6 +139,17 @@ void UWacomBattleEnemyInspectionWidget::SetPartRowWidgetClass(
 	SyncPartRows();
 }
 
+void UWacomBattleEnemyInspectionWidget::SetIntentPresentationStyle(
+	UWacomBattleEnemyIntentPresentationStyle* InStyle)
+{
+	if (IntentPresentationStyle == InStyle)
+	{
+		return;
+	}
+	IntentPresentationStyle = InStyle;
+	RefreshSelectedPartDetails();
+}
+
 void UWacomBattleEnemyInspectionWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -157,6 +169,7 @@ void UWacomBattleEnemyInspectionWidget::NativeConstruct()
 
 void UWacomBattleEnemyInspectionWidget::NativeDestruct()
 {
+	CancelRightPanelOpenTimer();
 	if (CloseButton)
 	{
 		CloseButton->OnClicked.RemoveAll(this);
@@ -289,6 +302,14 @@ void UWacomBattleEnemyInspectionWidget::RefreshSelectedPartDetails()
 			? FText::FromName(Part->CurrentIntentId)
 			: Part->CurrentIntentDisplayName);
 	}
+	if (IntentIcon && IntentPresentationStyle)
+	{
+		if (const FSlateBrush* IntentBrush =
+			IntentPresentationStyle->ResolveIntentIcon(Part->CurrentIntentId))
+		{
+			IntentIcon->SetBrush(*IntentBrush);
+		}
+	}
 	if (ResistanceText)
 	{
 		ResistanceText->SetText(FText::FromString(FString::Printf(
@@ -378,4 +399,49 @@ void UWacomBattleEnemyInspectionWidget::HandleCloseAnimationFinished()
 	bOpen = false;
 	bClosing = false;
 	SetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UWacomBattleEnemyInspectionWidget::ScheduleRightPanelOpen()
+{
+	CancelRightPanelOpenTimer();
+	if (!OpenRightAnimation)
+	{
+		return;
+	}
+	if (!GetWorld())
+	{
+		PlayRightPanelOpen();
+		return;
+	}
+
+	FTimerDelegate Delegate = FTimerDelegate::CreateWeakLambda(this, [this]()
+	{
+		PlayRightPanelOpen();
+	});
+	GetWorld()->GetTimerManager().SetTimer(
+		RightPanelOpenTimerHandle,
+		MoveTemp(Delegate),
+		0.04f,
+		false);
+}
+
+void UWacomBattleEnemyInspectionWidget::PlayRightPanelOpen()
+{
+	RightPanelOpenTimerHandle.Invalidate();
+	if (bOpen && !bClosing && OpenRightAnimation)
+	{
+		PlayAnimation(OpenRightAnimation);
+	}
+}
+
+void UWacomBattleEnemyInspectionWidget::CancelRightPanelOpenTimer()
+{
+	if (RightPanelOpenTimerHandle.IsValid())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(RightPanelOpenTimerHandle);
+		}
+		RightPanelOpenTimerHandle.Invalidate();
+	}
 }

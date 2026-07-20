@@ -4,6 +4,6 @@
 
 namespace Wacom::ContentBuilder
 {
-	/** 只读检查分段敌人条、检查面板和护盾像素资产的正式合同。 */
-	bool InspectEnemySegmentedUI();
+	/** Enemy HUD V3 的只读资产、WBP、字体、材质与输入合同检查。 */
+	bool InspectEnemyHUD();
 }

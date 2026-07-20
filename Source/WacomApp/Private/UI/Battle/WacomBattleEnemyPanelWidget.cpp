@@ -2,10 +2,11 @@
 
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 
+#include "Blueprint/WidgetTree.h"
 #include "Components/PanelWidget.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
-#include "Components/TextBlock.h"
+#include "Components/SizeBox.h"
 #include "Components/Widget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
@@ -46,6 +47,18 @@ namespace
 		}
 		return FName(*FString::Printf(TEXT("EnemyPart_%s"), *ObjectName));
 	}
+
+	template <typename WidgetType>
+	void ResolveWidgetBinding(
+		UWidgetTree* WidgetTree,
+		TObjectPtr<WidgetType>& Binding,
+		const FName WidgetName)
+	{
+		if (!Binding && WidgetTree)
+		{
+			Binding = Cast<WidgetType>(WidgetTree->FindWidget(WidgetName));
+		}
+	}
 }
 
 void UWacomBattleEnemyPanelWidget::SetEnemyPanelViewData(
@@ -53,7 +66,6 @@ void UWacomBattleEnemyPanelWidget::SetEnemyPanelViewData(
 {
 	CurrentView = InView;
 	bHasCurrentView = true;
-	RefreshHeader();
 	SyncPartEntries();
 }
 
@@ -64,8 +76,6 @@ void UWacomBattleEnemyPanelWidget::ClearEnemyPanelViewData()
 	bHasCurrentView = false;
 	CurrentView = FWacomBattleEnemyPanelViewData();
 	ClearPartEntries();
-	RefreshHeader();
-	RefreshContextHighlight();
 }
 
 bool UWacomBattleEnemyPanelWidget::SetActionPreviewPartViews(
@@ -98,7 +108,6 @@ bool UWacomBattleEnemyPanelWidget::SetActionPreviewPartViews(
 		}
 	}
 	ApplyInspectionInteractionState();
-	RefreshContextHighlight();
 	return bHasActionPreview;
 }
 
@@ -113,7 +122,6 @@ void UWacomBattleEnemyPanelWidget::ClearActionPreview()
 	}
 	bHasActionPreview = false;
 	ApplyInspectionInteractionState();
-	RefreshContextHighlight();
 }
 
 void UWacomBattleEnemyPanelWidget::SetHoveredPartSlotId(const FName InPartSlotId)
@@ -139,7 +147,6 @@ void UWacomBattleEnemyPanelWidget::SetHoveredPartSlotId(const FName InPartSlotId
 			}
 		}
 	}
-	RefreshContextHighlight();
 }
 
 void UWacomBattleEnemyPanelWidget::SetPartEntryWidgetClass(
@@ -166,12 +173,24 @@ void UWacomBattleEnemyPanelWidget::SetInspectionInteractionEnabled(const bool bE
 	ApplyInspectionInteractionState();
 }
 
+void UWacomBattleEnemyPanelWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	ResolveAuthoredBindings();
+}
+
 void UWacomBattleEnemyPanelWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	RefreshHeader();
+	ResolveAuthoredBindings();
+	ApplyAuthoredGeometry();
 	SyncPartEntries();
-	RefreshContextHighlight();
+}
+
+void UWacomBattleEnemyPanelWidget::ResolveAuthoredBindings()
+{
+	ResolveWidgetBinding(WidgetTree, PanelRoot, TEXT("PanelRoot"));
+	ResolveWidgetBinding(WidgetTree, PartList, TEXT("PartList"));
 }
 
 void UWacomBattleEnemyPanelWidget::NativeDestruct()
@@ -181,24 +200,20 @@ void UWacomBattleEnemyPanelWidget::NativeDestruct()
 	Super::NativeDestruct();
 }
 
-void UWacomBattleEnemyPanelWidget::RefreshHeader()
+void UWacomBattleEnemyPanelWidget::ApplyAuthoredGeometry()
 {
-	if (EnemyNameText)
+	if (!PanelRoot)
 	{
-		EnemyNameText->SetText(bHasCurrentView
-			? (CurrentView.EnemyDisplayName.IsEmpty()
-				? FText::FromName(CurrentView.EnemySlotId)
-				: CurrentView.EnemyDisplayName)
-			: FText::GetEmpty());
-		EnemyNameText->SetVisibility(ESlateVisibility::Collapsed);
+		return;
 	}
-	if (EnemyInitiativeText)
+	PanelRoot->SetMinDesiredHeight(92.0f);
+	if (FixedPanelWidth > 0.0f)
 	{
-		EnemyInitiativeText->SetText(bHasCurrentView
-			? FText::FromString(FString::Printf(
-				TEXT("INIT %d"), CurrentView.EnemyInitiativeSum))
-			: FText::GetEmpty());
-		EnemyInitiativeText->SetVisibility(ESlateVisibility::Collapsed);
+		PanelRoot->SetWidthOverride(FixedPanelWidth);
+	}
+	else
+	{
+		PanelRoot->ClearWidthOverride();
 	}
 }
 
@@ -222,6 +237,7 @@ void UWacomBattleEnemyPanelWidget::SyncPartEntries()
 			continue;
 		}
 
+		PartWidget->SetSegmentLayout(PartIndex, CurrentView.Parts.Num());
 		PartWidget->SetPartEntryViewData(PartView);
 		const FName EffectivePartSlotId = PartView.Identity.IsValidSlot()
 			? PartView.Identity.GetEffectivePartSlotId()
@@ -247,7 +263,6 @@ void UWacomBattleEnemyPanelWidget::SyncPartEntries()
 			It.RemoveCurrent();
 		}
 	}
-	RefreshContextHighlight();
 }
 
 void UWacomBattleEnemyPanelWidget::ClearPartEntries()
@@ -267,18 +282,6 @@ void UWacomBattleEnemyPanelWidget::ClearPartEntries()
 	PartEntryWidgets.Reset();
 	AnimatedPartEntryKeys.Reset();
 	bHasActionPreview = false;
-}
-
-void UWacomBattleEnemyPanelWidget::RefreshContextHighlight()
-{
-	RefreshHeader();
-	if (PanelContextHighlight)
-	{
-		PanelContextHighlight->SetVisibility(
-			(!HoveredPartSlotId.IsNone() || bHasActionPreview)
-				? ESlateVisibility::HitTestInvisible
-				: ESlateVisibility::Collapsed);
-	}
 }
 
 UWacomBattleEnemyPartEntryWidget*

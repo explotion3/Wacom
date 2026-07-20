@@ -8,11 +8,13 @@
 #include "WacomBattleEnemyInspectionWidget.generated.h"
 
 class UButton;
+class UImage;
 class UPanelWidget;
 class UProgressBar;
 class UTextBlock;
 class UWidget;
 class UWidgetAnimation;
+class UWacomBattleEnemyIntentPresentationStyle;
 class UWacomBattleEnemyInspectionPartRowWidget;
 class UWacomBattleStatusIconListWidget;
 
@@ -41,6 +43,11 @@ public:
 	{
 		return PartRowWidgetClass;
 	}
+	void SetIntentPresentationStyle(UWacomBattleEnemyIntentPresentationStyle* InStyle);
+	UWacomBattleEnemyIntentPresentationStyle* GetIntentPresentationStyle() const
+	{
+		return IntentPresentationStyle;
+	}
 
 	FWacomBattleEnemyInspectionCloseRequestedNative OnCloseRequestedNative;
 	FWacomBattleEnemyInspectionSelectionRequestedNative OnSelectionRequestedNative;
@@ -52,6 +59,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection", meta = (ToolTip = "左侧部位导航使用的正式 WBP 类。"))
 	TSubclassOf<UWacomBattleEnemyInspectionPartRowWidget> PartRowWidgetClass;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection", meta = (ToolTip = "详情面板按稳定 IntentId 解析图标的 UI-only Style；不读取规则效果或名称推断。"))
+	TObjectPtr<UWacomBattleEnemyIntentPresentationStyle> IntentPresentationStyle = nullptr;
+
 private:
 	void SyncPartRows();
 	void ClearPartRows();
@@ -60,6 +70,9 @@ private:
 	bool EnsureValidSelection();
 	FName BuildPartRowKey(const FWacomBattleEnemyPartEntryViewData& PartView) const;
 	void HandlePartRowSelected(const FBattlePartSlotIdentity& PartIdentity);
+	void ScheduleRightPanelOpen();
+	void PlayRightPanelOpen();
+	void CancelRightPanelOpenTimer();
 
 	UFUNCTION()
 	void HandleCloseClicked();
@@ -104,6 +117,9 @@ private:
 	TObjectPtr<UTextBlock> IntentText = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> IntentIcon = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ResistanceText = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
@@ -129,6 +145,8 @@ private:
 
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UWacomBattleEnemyInspectionPartRowWidget>> PartRows;
+
+	FTimerHandle RightPanelOpenTimerHandle;
 
 	bool bHasViewData = false;
 	bool bOpen = false;

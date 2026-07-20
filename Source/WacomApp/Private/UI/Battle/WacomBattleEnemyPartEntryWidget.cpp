@@ -3,17 +3,90 @@
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
 #include "Animation/WidgetAnimation.h"
+#include "Blueprint/WidgetBlueprintGeneratedClass.h"
+#include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
-#include "Components/ProgressBar.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "Settings/WacomLocalSettingsTypes.h"
+#include "Settings/WacomSettingsSubsystem.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 
 namespace
 {
+	const FName HpCurrentPercentParameterName(TEXT("HpCurrentPercent"));
+	const FName HpTrailStartPercentParameterName(TEXT("HpTrailStartPercent"));
+	const FName HpPreviewPercentParameterName(TEXT("HpPreviewPercent"));
+	const FName HpPreviewModeParameterName(TEXT("HpPreviewMode"));
+	const FName DamageStartTimeParameterName(TEXT("DamageStartTime"));
+	const FName DamageTrailHoldParameterName(TEXT("DamageTrailHoldSeconds"));
+	const FName DamageTrailRecoveryParameterName(TEXT("DamageTrailRecoverySeconds"));
+	const FName ShieldVisibleParameterName(TEXT("ShieldVisible"));
+	const FName ShieldPreviewModeParameterName(TEXT("ShieldPreviewMode"));
+	const FName ShieldImpactStartTimeParameterName(TEXT("ShieldImpactStartTime"));
+	const FName SegmentRoleParameterName(TEXT("SegmentRole"));
+	const FName DestroyedAmountParameterName(TEXT("DestroyedAmount"));
+	const FName LowHealthAmountParameterName(TEXT("LowHealthAmount"));
+	const FName FlashIntensityParameterName(TEXT("FlashIntensity"));
+	const FName ReducedMotionParameterName(TEXT("ReducedMotion"));
+
+	constexpr float LowHealthThreshold = 0.25f;
+	constexpr float StandardDamageDurationSeconds = 0.22f;
+	constexpr float StandardShieldDurationSeconds = 0.18f;
+	constexpr float StandardShieldBreakDurationSeconds = 0.24f;
+	constexpr float StandardInitiativeDurationSeconds = 0.12f;
+	constexpr float StandardIntentDurationSeconds = 0.18f;
+	constexpr float StandardDestroyedDurationSeconds = 0.30f;
+	constexpr float StandardIntroDurationSeconds = 0.22f;
+
+	template <typename WidgetType>
+	void ResolveWidgetBinding(
+		UWidgetTree* WidgetTree,
+		TObjectPtr<WidgetType>& Binding,
+		const FName WidgetName)
+	{
+		if (!Binding && WidgetTree)
+		{
+			Binding = Cast<WidgetType>(WidgetTree->FindWidget(WidgetName));
+		}
+	}
+
+	void ResolveAnimationBinding(
+		const UClass* WidgetClass,
+		TObjectPtr<UWidgetAnimation>& Binding,
+		const FName AnimationName)
+	{
+		if (Binding)
+		{
+			return;
+		}
+		for (const UClass* Class = WidgetClass; Class; Class = Class->GetSuperClass())
+		{
+			const UWidgetBlueprintGeneratedClass* WidgetBlueprintClass =
+				Cast<UWidgetBlueprintGeneratedClass>(Class);
+			if (!WidgetBlueprintClass)
+			{
+				continue;
+			}
+			for (UWidgetAnimation* Animation : WidgetBlueprintClass->Animations)
+			{
+				if (Animation
+					&& (Animation->GetFName() == AnimationName
+						|| Animation->GetDisplayLabel() == AnimationName.ToString()))
+				{
+					Binding = Animation;
+					return;
+				}
+			}
+		}
+	}
+
 	bool AreEnemyPartStatusStacksEquivalent(
 		const TMap<FGameplayTag, int32>& Left,
 		const TMap<FGameplayTag, int32>& Right)
@@ -65,9 +138,19 @@ void UWacomBattleEnemyPartEntryWidget::SetPartEntryViewData(
 {
 	const FWacomBattleEnemyPartEntryViewData PreviousView = CurrentView;
 	const bool bHadViewData = bHasReceivedViewData;
+	if (bHadViewData && PreviousView.CurrentIntentId != InView.CurrentIntentId)
+	{
+		CaptureOutgoingIntent(PreviousView);
+	}
 
 	CurrentView = InView;
 	bHasReceivedViewData = true;
+	if (!bHadViewData)
+	{
+		DamageTrailStartPercent = ResolveHpPercent(CurrentView);
+		DamageStartTimeSeconds = -1000.0f;
+		ShieldImpactStartTimeSeconds = -1000.0f;
+	}
 	RefreshPresentation();
 
 	if (!bHadViewData)
@@ -143,10 +226,32 @@ void UWacomBattleEnemyPartEntryWidget::SetIntroDelaySeconds(const float InDelayS
 	IntroDelaySeconds = FMath::Max(0.0f, InDelaySeconds);
 }
 
+void UWacomBattleEnemyPartEntryWidget::SetSegmentLayout(
+	const int32 InPartIndex,
+	const int32 InPartCount)
+{
+	const int32 NewCount = FMath::Max(1, InPartCount);
+	const int32 NewIndex = FMath::Clamp(InPartIndex, 0, NewCount - 1);
+	const EWacomBattleEnemySegmentRole NewRole = ResolveSegmentRole(NewIndex, NewCount);
+	if (SegmentIndex == NewIndex && SegmentCount == NewCount && SegmentRole == NewRole)
+	{
+		return;
+	}
+
+	SegmentIndex = NewIndex;
+	SegmentCount = NewCount;
+	SegmentRole = NewRole;
+	ApplyVitalsMaterialPresentation();
+}
+
 void UWacomBattleEnemyPartEntryWidget::CancelPendingPresentation()
 {
 	CancelIntroTimer();
 	StopAllAnimations();
+	if (OutgoingIntentIcon)
+	{
+		OutgoingIntentIcon->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomBattleEnemyPartEntryWidget::SetIntentPresentationStyle(
@@ -161,9 +266,16 @@ void UWacomBattleEnemyPartEntryWidget::SetIntentPresentationStyle(
 	RefreshPresentation();
 }
 
+void UWacomBattleEnemyPartEntryWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	ResolveAuthoredBindings();
+}
+
 void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	ResolveAuthoredBindings();
 	if (InspectHitTarget)
 	{
 		InspectHitTarget->OnClicked.RemoveAll(this);
@@ -173,18 +285,67 @@ void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 	{
 		StatusList->SetMaxVisibleStatuses(3);
 	}
+	if (IntentChangeAnimation)
+	{
+		UnbindAllFromAnimationFinished(IntentChangeAnimation);
+		FWidgetAnimationDynamicEvent FinishedEvent;
+		FinishedEvent.BindDynamic(this, &ThisClass::HandleIntentChangeAnimationFinished);
+		BindToAnimationFinished(IntentChangeAnimation, FinishedEvent);
+	}
+	BindRuntimeSettings();
+	if (PartEntryRoot)
+	{
+		PartEntryRoot->SetMinDesiredWidth(116.0f);
+		PartEntryRoot->SetHeightOverride(92.0f);
+	}
+	EnsureVitalsMaterial();
 	RefreshPresentation();
 	RefreshInspectionInteraction();
 }
 
+void UWacomBattleEnemyPartEntryWidget::ResolveAuthoredBindings()
+{
+	ResolveWidgetBinding(WidgetTree, PartEntryRoot, TEXT("PartEntryRoot"));
+	ResolveWidgetBinding(WidgetTree, VitalsTrackImage, TEXT("VitalsTrackImage"));
+	ResolveWidgetBinding(WidgetTree, ShieldValueRoot, TEXT("ShieldValueRoot"));
+	ResolveWidgetBinding(WidgetTree, InitiativeSocket, TEXT("InitiativeSocket"));
+	ResolveWidgetBinding(WidgetTree, IntentSocket, TEXT("IntentSocket"));
+	ResolveWidgetBinding(WidgetTree, OutgoingIntentIcon, TEXT("OutgoingIntentIcon"));
+	ResolveWidgetBinding(WidgetTree, ContextSurface, TEXT("ContextSurface"));
+	ResolveWidgetBinding(WidgetTree, DestroyedSurface, TEXT("DestroyedSurface"));
+	ResolveWidgetBinding(WidgetTree, HpText, TEXT("HpText"));
+	ResolveWidgetBinding(WidgetTree, ShieldText, TEXT("ShieldText"));
+	ResolveWidgetBinding(WidgetTree, InitiativeText, TEXT("InitiativeText"));
+	ResolveWidgetBinding(WidgetTree, IntentIcon, TEXT("IntentIcon"));
+	ResolveWidgetBinding(WidgetTree, StatusList, TEXT("StatusList"));
+	ResolveWidgetBinding(WidgetTree, StatusOverflowText, TEXT("StatusOverflowText"));
+	ResolveWidgetBinding(WidgetTree, DestroyedMark, TEXT("DestroyedMark"));
+	ResolveWidgetBinding(WidgetTree, InspectHitTarget, TEXT("InspectHitTarget"));
+
+	ResolveAnimationBinding(GetClass(), IntroAnimation, TEXT("IntroAnimation"));
+	ResolveAnimationBinding(GetClass(), DamageImpactAnimation, TEXT("DamageImpactAnimation"));
+	ResolveAnimationBinding(GetClass(), ShieldImpactAnimation, TEXT("ShieldImpactAnimation"));
+	ResolveAnimationBinding(GetClass(), ShieldBreakAnimation, TEXT("ShieldBreakAnimation"));
+	ResolveAnimationBinding(GetClass(), InitiativeStepAnimation, TEXT("InitiativeStepAnimation"));
+	ResolveAnimationBinding(GetClass(), IntentChangeAnimation, TEXT("IntentChangeAnimation"));
+	ResolveAnimationBinding(GetClass(), ContextAnimation, TEXT("ContextAnimation"));
+	ResolveAnimationBinding(GetClass(), DestroyedAnimation, TEXT("DestroyedAnimation"));
+}
+
 void UWacomBattleEnemyPartEntryWidget::NativeDestruct()
 {
+	UnbindRuntimeSettings();
 	if (InspectHitTarget)
 	{
 		InspectHitTarget->OnClicked.RemoveAll(this);
 	}
+	if (IntentChangeAnimation)
+	{
+		UnbindAllFromAnimationFinished(IntentChangeAnimation);
+	}
 	OnInspectionRequestedNative.Clear();
 	CancelPendingPresentation();
+	RestoreVitalsMaterial();
 	Super::NativeDestruct();
 }
 
@@ -192,20 +353,6 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 {
 	const FWacomBattleEnemyPartEntryViewData& View = GetEffectivePartEntryViewData();
 
-	if (PartNameText)
-	{
-		PartNameText->SetText(View.PartDisplayName.IsEmpty()
-			? FText::FromName(View.PartSlotId)
-			: View.PartDisplayName);
-		PartNameText->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (HpBar)
-	{
-		const float HpFraction = View.MaxHp > 0
-			? static_cast<float>(View.CurrentHp) / static_cast<float>(View.MaxHp)
-			: 0.0f;
-		HpBar->SetPercent(FMath::Clamp(HpFraction, 0.0f, 1.0f));
-	}
 	if (HpText)
 	{
 		HpText->SetText(FText::AsNumber(View.CurrentHp));
@@ -213,24 +360,6 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 	if (ShieldText)
 	{
 		ShieldText->SetText(FText::AsNumber(View.Shield));
-	}
-	if (ShieldContainer)
-	{
-		ShieldContainer->SetVisibility(View.Shield > 0
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-	}
-	if (ShieldFrame)
-	{
-		ShieldFrame->SetVisibility(View.Shield > 0
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-	}
-	if (ShieldBadge)
-	{
-		ShieldBadge->SetVisibility(View.Shield > 0
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
 	}
 	if (InitiativeText)
 	{
@@ -243,22 +372,6 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 		{
 			IntentIcon->SetBrush(*IntentBrush);
 		}
-	}
-	if (IntentText)
-	{
-		IntentText->SetText(View.CurrentIntentDisplayName.IsEmpty()
-			? FText::FromString(TEXT("No intent"))
-			: FText::FromString(FString::Printf(
-				TEXT("%s  %d"),
-				*View.CurrentIntentDisplayName.ToString(),
-				View.CurrentIntentInitiative)));
-		IntentText->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (ResistanceText)
-	{
-		ResistanceText->SetText(FText::FromString(FString::Printf(
-			TEXT("RES %d"), View.CurrentIntentResistanceValue)));
-		ResistanceText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (StatusList)
 	{
@@ -284,28 +397,6 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
-	if (DetailsContainer)
-	{
-		DetailsContainer->SetVisibility(ESlateVisibility::Collapsed);
-	}
-	if (ContextHighlight)
-	{
-		ContextHighlight->SetVisibility(bContextHighlighted
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-	}
-	if (ActionPreviewOverlay)
-	{
-		ActionPreviewOverlay->SetVisibility(bHasActionPreview
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-	}
-	if (DestroyedOverlay)
-	{
-		DestroyedOverlay->SetVisibility(View.bDestroyed
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-	}
 	if (DestroyedMark)
 	{
 		DestroyedMark->SetVisibility(View.bDestroyed
@@ -313,9 +404,175 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 			: ESlateVisibility::Collapsed);
 	}
 
-	const float PreviewOpacity = bHasActionPreview ? ActionPreviewRenderOpacity : 1.0f;
-	SetRenderOpacity((View.bDestroyed ? 0.64f : 1.0f) * PreviewOpacity);
+	if (ShieldValueRoot)
+	{
+		ShieldValueRoot->SetVisibility(View.Shield > 0
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (ContextSurface)
+	{
+		ContextSurface->SetVisibility((bContextHighlighted || bHasActionPreview)
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (DestroyedSurface)
+	{
+		DestroyedSurface->SetVisibility(View.bDestroyed
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+
+	SetRenderOpacity(1.0f);
+	ApplyVitalsMaterialPresentation();
 	RefreshInspectionInteraction();
+}
+
+bool UWacomBattleEnemyPartEntryWidget::EnsureVitalsMaterial()
+{
+	if (!VitalsTrackImage)
+	{
+		return false;
+	}
+	if (VitalsMaterialInstance)
+	{
+		return true;
+	}
+
+	UMaterialInterface* Source = Cast<UMaterialInterface>(
+		VitalsTrackImage->GetBrush().GetResourceObject());
+	if (!Source)
+	{
+		return false;
+	}
+	if (UMaterialInstanceDynamic* Existing = Cast<UMaterialInstanceDynamic>(Source))
+	{
+		VitalsMaterialInstance = Existing;
+		return true;
+	}
+
+	VitalsSourceMaterial = Source;
+	VitalsMaterialInstance = VitalsTrackImage->GetDynamicMaterial();
+	return VitalsMaterialInstance != nullptr;
+}
+
+void UWacomBattleEnemyPartEntryWidget::ApplyVitalsMaterialPresentation()
+{
+	if (!bHasReceivedViewData || !EnsureVitalsMaterial())
+	{
+		return;
+	}
+
+	const FWacomBattleEnemyPartEntryViewData& DisplayView = GetEffectivePartEntryViewData();
+	const float BaseHpPercent = ResolveHpPercent(CurrentView);
+	const float DisplayHpPercent = ResolveHpPercent(DisplayView);
+	const float PreviewMode = bHasActionPreview
+		? (DisplayHpPercent < BaseHpPercent ? 1.0f
+			: (DisplayHpPercent > BaseHpPercent ? 2.0f : 0.0f))
+		: 0.0f;
+	const float ShieldPreviewMode = bHasActionPreview
+		? (DisplayView.Shield < CurrentView.Shield ? 1.0f
+			: (DisplayView.Shield > CurrentView.Shield ? 2.0f : 0.0f))
+		: 0.0f;
+	const bool bShieldVisible = CurrentView.Shield > 0 || DisplayView.Shield > 0;
+	const float LowHealthAmount = DisplayHpPercent > 0.0f
+		? FMath::Clamp((LowHealthThreshold - DisplayHpPercent) / LowHealthThreshold, 0.0f, 1.0f)
+		: 0.0f;
+	const float RecoverySeconds = bRuntimeSimplifiedMotion
+		? 0.001f
+		: FMath::Max(0.001f, DamageTrailRecoverySeconds);
+	const float HoldSeconds = bRuntimeSimplifiedMotion
+		? 0.0f
+		: FMath::Max(0.0f, DamageTrailHoldSeconds);
+
+	VitalsMaterialInstance->SetScalarParameterValue(
+		HpCurrentPercentParameterName, BaseHpPercent);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		HpTrailStartPercentParameterName, FMath::Max(BaseHpPercent, DamageTrailStartPercent));
+	VitalsMaterialInstance->SetScalarParameterValue(
+		HpPreviewPercentParameterName, DisplayHpPercent);
+	VitalsMaterialInstance->SetScalarParameterValue(HpPreviewModeParameterName, PreviewMode);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		DamageStartTimeParameterName, DamageStartTimeSeconds);
+	VitalsMaterialInstance->SetScalarParameterValue(DamageTrailHoldParameterName, HoldSeconds);
+	VitalsMaterialInstance->SetScalarParameterValue(DamageTrailRecoveryParameterName, RecoverySeconds);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		ShieldVisibleParameterName, bShieldVisible ? 1.0f : 0.0f);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		ShieldPreviewModeParameterName, ShieldPreviewMode);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		ShieldImpactStartTimeParameterName, ShieldImpactStartTimeSeconds);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		SegmentRoleParameterName, static_cast<float>(SegmentRole));
+	VitalsMaterialInstance->SetScalarParameterValue(
+		DestroyedAmountParameterName, DisplayView.bDestroyed ? 1.0f : 0.0f);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		LowHealthAmountParameterName, LowHealthAmount);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		FlashIntensityParameterName, RuntimeFlashIntensity);
+	VitalsMaterialInstance->SetScalarParameterValue(
+		ReducedMotionParameterName, bRuntimeSimplifiedMotion ? 1.0f : 0.0f);
+}
+
+void UWacomBattleEnemyPartEntryWidget::RestoreVitalsMaterial()
+{
+	if (VitalsTrackImage && VitalsSourceMaterial)
+	{
+		VitalsTrackImage->SetBrushFromMaterial(VitalsSourceMaterial);
+	}
+	VitalsMaterialInstance = nullptr;
+	VitalsSourceMaterial = nullptr;
+}
+
+void UWacomBattleEnemyPartEntryWidget::CaptureOutgoingIntent(
+	const FWacomBattleEnemyPartEntryViewData& PreviousView)
+{
+	if (!OutgoingIntentIcon || !IntentPresentationStyle)
+	{
+		return;
+	}
+	if (const FSlateBrush* PreviousBrush =
+		IntentPresentationStyle->ResolveIntentIcon(PreviousView.CurrentIntentId))
+	{
+		OutgoingIntentIcon->SetBrush(*PreviousBrush);
+		OutgoingIntentIcon->SetRenderOpacity(1.0f);
+		OutgoingIntentIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+}
+
+float UWacomBattleEnemyPartEntryWidget::ResolveWorldTimeSeconds() const
+{
+	return GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0f;
+}
+
+float UWacomBattleEnemyPartEntryWidget::ResolveHpPercent(
+	const FWacomBattleEnemyPartEntryViewData& View)
+{
+	return View.MaxHp > 0
+		? FMath::Clamp(
+			static_cast<float>(View.CurrentHp) / static_cast<float>(View.MaxHp),
+			0.0f,
+			1.0f)
+		: 0.0f;
+}
+
+EWacomBattleEnemySegmentRole UWacomBattleEnemyPartEntryWidget::ResolveSegmentRole(
+	const int32 PartIndex,
+	const int32 PartCount)
+{
+	if (PartCount <= 1)
+	{
+		return EWacomBattleEnemySegmentRole::Single;
+	}
+	if (PartIndex <= 0)
+	{
+		return EWacomBattleEnemySegmentRole::First;
+	}
+	if (PartIndex >= PartCount - 1)
+	{
+		return EWacomBattleEnemySegmentRole::Last;
+	}
+	return EWacomBattleEnemySegmentRole::Middle;
 }
 
 void UWacomBattleEnemyPartEntryWidget::ScheduleIntroAnimation()
@@ -344,10 +601,7 @@ void UWacomBattleEnemyPartEntryWidget::PlayIntroAnimation()
 {
 	bIntroPending = false;
 	RefreshInspectionInteraction();
-	if (IntroAnimation)
-	{
-		PlayAnimation(IntroAnimation);
-	}
+	PlaySemanticAnimation(IntroAnimation, StandardIntroDurationSeconds);
 }
 
 void UWacomBattleEnemyPartEntryWidget::RefreshInspectionInteraction()
@@ -390,45 +644,57 @@ void UWacomBattleEnemyPartEntryWidget::PlayRealFactTransition(
 	const FWacomBattleEnemyPartEntryViewData& PreviousView,
 	const FWacomBattleEnemyPartEntryViewData& NewView)
 {
-	UWidgetAnimation* PrimaryAnimation = nullptr;
 	if (!PreviousView.bDestroyed && NewView.bDestroyed)
 	{
-		PrimaryAnimation = DestroyedPulseAnimation;
+		DamageTrailStartPercent = ResolveHpPercent(PreviousView);
+		DamageStartTimeSeconds = ResolveWorldTimeSeconds();
+		PlaySemanticAnimation(DestroyedAnimation, StandardDestroyedDurationSeconds);
 	}
 	else if (NewView.CurrentHp < PreviousView.CurrentHp)
 	{
-		PrimaryAnimation = DamagePulseAnimation;
+		DamageTrailStartPercent = ResolveHpPercent(PreviousView);
+		DamageStartTimeSeconds = ResolveWorldTimeSeconds();
+		PlaySemanticAnimation(DamageImpactAnimation, StandardDamageDurationSeconds);
 	}
-	else if (NewView.Shield != PreviousView.Shield)
+	else if (NewView.CurrentHp > PreviousView.CurrentHp)
 	{
-		PrimaryAnimation = ShieldPulseAnimation;
+		DamageTrailStartPercent = ResolveHpPercent(NewView);
+		DamageStartTimeSeconds = -1000.0f;
 	}
 
-	if (PrimaryAnimation)
+	if (NewView.Shield != PreviousView.Shield)
 	{
-		StopAnimation(PrimaryAnimation);
-		PlayAnimation(PrimaryAnimation, 0.0f, 1,
-			EUMGSequencePlayMode::Forward, 1.0f, true);
+		ShieldImpactStartTimeSeconds = ResolveWorldTimeSeconds();
+		const bool bShieldBroken = PreviousView.Shield > 0 && NewView.Shield <= 0;
+		PlaySemanticAnimation(
+			bShieldBroken ? ShieldBreakAnimation.Get() : ShieldImpactAnimation.Get(),
+			bShieldBroken
+				? StandardShieldBreakDurationSeconds
+				: StandardShieldDurationSeconds);
 	}
+	ApplyVitalsMaterialPresentation();
 
 	if (NewView.bDestroyed)
 	{
+		if (OutgoingIntentIcon)
+		{
+			OutgoingIntentIcon->SetVisibility(ESlateVisibility::Collapsed);
+		}
 		return;
 	}
 
-	if (InitiativePulseAnimation
-		&& PreviousView.CurrentInitiative != NewView.CurrentInitiative)
+	if (PreviousView.CurrentInitiative != NewView.CurrentInitiative)
 	{
-		StopAnimation(InitiativePulseAnimation);
-		PlayAnimation(InitiativePulseAnimation, 0.0f, 1,
-			EUMGSequencePlayMode::Forward, 1.0f, true);
+		PlaySemanticAnimation(InitiativeStepAnimation, StandardInitiativeDurationSeconds);
 	}
-	if (IntentChangedAnimation
-		&& PreviousView.CurrentIntentId != NewView.CurrentIntentId)
+	if (PreviousView.CurrentIntentId != NewView.CurrentIntentId)
 	{
-		StopAnimation(IntentChangedAnimation);
-		PlayAnimation(IntentChangedAnimation, 0.0f, 1,
-			EUMGSequencePlayMode::Forward, 1.0f, true);
+		UWidgetAnimation* Animation = IntentChangeAnimation;
+		PlaySemanticAnimation(Animation, StandardIntentDurationSeconds);
+		if (!Animation || bRuntimeSimplifiedMotion)
+		{
+			HandleIntentChangeAnimationFinished();
+		}
 	}
 }
 
@@ -436,19 +702,115 @@ void UWacomBattleEnemyPartEntryWidget::RefreshContextPresentation(
 	const bool bPreviousContextActive)
 {
 	const bool bContextActive = bContextHighlighted || bHasActionPreview;
-	if (!ContextHighlightAnimation || bContextActive == bPreviousContextActive)
+	UWidgetAnimation* ResolvedAnimation = ContextAnimation;
+	if (!ResolvedAnimation || bRuntimeSimplifiedMotion
+		|| bContextActive == bPreviousContextActive)
 	{
 		return;
 	}
 
 	if (bContextActive)
 	{
-		PlayAnimationForward(ContextHighlightAnimation);
+		PlayAnimationForward(ResolvedAnimation);
 	}
 	else
 	{
-		PlayAnimationReverse(ContextHighlightAnimation);
+		PlayAnimationReverse(ResolvedAnimation);
 	}
+}
+
+void UWacomBattleEnemyPartEntryWidget::PlaySemanticAnimation(
+	UWidgetAnimation* Animation,
+	const float AuthoredDurationSeconds)
+{
+	if (!Animation || bRuntimeSimplifiedMotion)
+	{
+		return;
+	}
+	const float SourceDurationSeconds = FMath::Max(0.001f, Animation->GetEndTime());
+	const float PlaybackSpeed = SourceDurationSeconds
+		/ FMath::Max(0.001f, AuthoredDurationSeconds);
+	StopAnimation(Animation);
+	PlayAnimation(
+		Animation,
+		0.0f,
+		1,
+		EUMGSequencePlayMode::Forward,
+		PlaybackSpeed,
+		false);
+}
+
+void UWacomBattleEnemyPartEntryWidget::HandleIntentChangeAnimationFinished()
+{
+	if (OutgoingIntentIcon)
+	{
+		OutgoingIntentIcon->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+void UWacomBattleEnemyPartEntryWidget::BindRuntimeSettings()
+{
+	UWacomSettingsSubsystem* Settings = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (BoundSettingsSubsystem.Get() == Settings && RuntimeSettingsChangedHandle.IsValid())
+	{
+		HandleRuntimeSettingsChanged(
+			Settings->GetCurrentSnapshot(), EWacomRuntimeSettingsChangeReason::Startup);
+		return;
+	}
+
+	UnbindRuntimeSettings();
+	if (!Settings)
+	{
+		return;
+	}
+	BoundSettingsSubsystem = Settings;
+	RuntimeSettingsChangedHandle = Settings->OnRuntimeSettingsChangedNative().AddUObject(
+		this, &ThisClass::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		Settings->GetCurrentSnapshot(), EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomBattleEnemyPartEntryWidget::UnbindRuntimeSettings()
+{
+	if (UWacomSettingsSubsystem* Settings = BoundSettingsSubsystem.Get())
+	{
+		if (RuntimeSettingsChangedHandle.IsValid())
+		{
+			Settings->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+		}
+	}
+	BoundSettingsSubsystem.Reset();
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomBattleEnemyPartEntryWidget::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	const bool bNextSimplified = Snapshot.UIMotionMode == EWacomUIMotionMode::Simplified;
+	if (bNextSimplified && !bRuntimeSimplifiedMotion)
+	{
+		StopAllAnimations();
+		HandleIntentChangeAnimationFinished();
+		DamageTrailStartPercent = ResolveHpPercent(CurrentView);
+		DamageStartTimeSeconds = -1000.0f;
+	}
+	bRuntimeSimplifiedMotion = bNextSimplified;
+	switch (Snapshot.FlashEffectMode)
+	{
+	case EWacomFlashEffectMode::Reduced:
+		RuntimeFlashIntensity = 0.35f;
+		break;
+	case EWacomFlashEffectMode::Off:
+		RuntimeFlashIntensity = 0.0f;
+		break;
+	default:
+		RuntimeFlashIntensity = 1.0f;
+		break;
+	}
+	ApplyVitalsMaterialPresentation();
 }
 
 void UWacomBattleEnemyPartEntryWidget::CancelIntroTimer()

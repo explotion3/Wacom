@@ -1,20 +1,30 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "ContentBuilders/EnemySegmentedUIInspector.h"
+
 #include "ContentBuilders/EnemyUIHitTestPolicy.h"
 
 #include "Animation/WidgetAnimation.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/Border.h"
 #include "Components/HorizontalBox.h"
 #include "Components/Image.h"
 #include "Components/PanelWidget.h"
 #include "Components/ProgressBar.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
+#include "Engine/Font.h"
+#include "Engine/FontFace.h"
 #include "Engine/Texture2D.h"
+#include "Materials/Material.h"
+#include "Materials/MaterialInterface.h"
+#include "Misc/PackageName.h"
+#include "MovieScene.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
+#include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
@@ -22,321 +32,443 @@
 
 namespace
 {
-	constexpr TCHAR MultiPanelPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget");
-	constexpr TCHAR MultiEntryPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget");
-	constexpr TCHAR SinglePanelPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget.WBP_WacomBattleEnemySinglePartPanelWidget");
-	constexpr TCHAR SingleEntryPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget.WBP_WacomBattleEnemySinglePartEntryWidget");
-	constexpr TCHAR InspectionPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionWidget.WBP_WacomBattleEnemyInspectionWidget");
-	constexpr TCHAR InspectionRowPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionPartRowWidget.WBP_WacomBattleEnemyInspectionPartRowWidget");
-	constexpr TCHAR ShieldBadgePath[] =
-		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyShieldBadge.T_UI_EnemyShieldBadge");
-	constexpr TCHAR ShieldFramePath[] =
-		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyShieldFrame_9Slice.T_UI_EnemyShieldFrame_9Slice");
-	constexpr TCHAR SegmentedVitalsContractMarker[] =
-		TEXT("WacomEnemyPanelWBP.ContractVersion=2");
-	constexpr TCHAR InspectionContractMarker[] =
-		TEXT("WacomEnemyInspectionWBP.ContractVersion=1");
-	constexpr TCHAR InspectionRowContractMarker[] =
-		TEXT("WacomEnemyInspectionPartRowWBP.ContractVersion=1");
+	constexpr TCHAR MultiPanelPath[] = TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget");
+	constexpr TCHAR MultiEntryPath[] = TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget");
+	constexpr TCHAR SinglePanelPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget.WBP_WacomBattleEnemySinglePartPanelWidget");
+	constexpr TCHAR SingleEntryPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget.WBP_WacomBattleEnemySinglePartEntryWidget");
+	constexpr TCHAR InspectionPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionWidget.WBP_WacomBattleEnemyInspectionWidget");
+	constexpr TCHAR InspectionRowPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionPartRowWidget.WBP_WacomBattleEnemyInspectionPartRowWidget");
+	constexpr TCHAR IntentStylePath[] = TEXT("/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default.DA_EnemyIntentPresentation_Default");
+	constexpr TCHAR MaterialPath[] = TEXT("/Game/Wacom/UI/Enemy/Vitals/Materials/M_UI_EnemyVitalsTrack.M_UI_EnemyVitalsTrack");
+	constexpr TCHAR FontPath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/F_Silkscreen.F_Silkscreen");
+	constexpr TCHAR BoldFacePath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/FF_Silkscreen_Bold.FF_Silkscreen_Bold");
+	constexpr TCHAR RegularFacePath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/FF_Silkscreen_Regular.FF_Silkscreen_Regular");
+	constexpr TCHAR ContractMarker[] = TEXT("WacomEnemyHUD.ContractVersion=3");
+	constexpr TCHAR InspectionMarker[] = TEXT("WacomEnemyInspection.ContractVersion=2");
+	constexpr TCHAR LegacyPanelPackage[] = TEXT("/Game/Wacom/UI/Enemy/Textures/T_UI_PixelPanel_EnemyInfo_9Slice_512x160");
 
-	UWidgetBlueprint* LoadWidgetBlueprint(const TCHAR* Path)
+	const TCHAR* TexturePaths[] = {
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyPanelFrame_9Slice.T_UI_EnemyPanelFrame_9Slice"),
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyDossierFrame_9Slice.T_UI_EnemyDossierFrame_9Slice"),
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyShieldBadge.T_UI_EnemyShieldBadge"),
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyShieldFrame_9Slice.T_UI_EnemyShieldFrame_9Slice"),
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyInitiativeSocket.T_UI_EnemyInitiativeSocket"),
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyIntentSocket.T_UI_EnemyIntentSocket"),
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyDestroyedCrack.T_UI_EnemyDestroyedCrack"),
+		TEXT("/Game/Wacom/UI/Enemy/Intent/Textures/T_UI_EnemyIntent_Fallback.T_UI_EnemyIntent_Fallback"),
+		TEXT("/Game/Wacom/UI/Enemy/Intent/Textures/T_UI_EnemyIntent_Attack.T_UI_EnemyIntent_Attack"),
+		TEXT("/Game/Wacom/UI/Enemy/Intent/Textures/T_UI_EnemyIntent_Guard.T_UI_EnemyIntent_Guard"),
+		TEXT("/Game/Wacom/UI/Enemy/Intent/Textures/T_UI_EnemyIntent_Cleave.T_UI_EnemyIntent_Cleave"),
+	};
+
+	UWidgetBlueprint* LoadWBP(const TCHAR* Path)
 	{
-		return Cast<UWidgetBlueprint>(StaticLoadObject(
-			UWidgetBlueprint::StaticClass(), nullptr, Path));
+		return Cast<UWidgetBlueprint>(StaticLoadObject(UWidgetBlueprint::StaticClass(), nullptr, Path));
 	}
 
-	bool HasWidget(
-		const UWidgetBlueprint* Blueprint,
-		const FName Name,
-		const UClass* RequiredClass)
+	bool HasWidget(const UWidgetBlueprint* Blueprint, FName Name, const UClass* Class)
 	{
 		const UWidget* Widget = Blueprint && Blueprint->WidgetTree
 			? Blueprint->WidgetTree->FindWidget(Name)
 			: nullptr;
-		return Widget && Widget->IsA(RequiredClass);
+		return Widget && Widget->IsA(Class);
 	}
 
-	bool HasAnimation(const UWidgetBlueprint* Blueprint, const FName Name)
+	bool UsesBrushResource(const UWidgetBlueprint* Blueprint, const TCHAR* ResourcePath)
+	{
+		UObject* Expected = StaticLoadObject(UObject::StaticClass(), nullptr, ResourcePath);
+		if (!Blueprint || !Blueprint->WidgetTree || !Expected)
+		{
+			return false;
+		}
+
+		bool bFound = false;
+		Blueprint->WidgetTree->ForEachWidget([Expected, &bFound](UWidget* Widget)
+		{
+			if (bFound || !Widget)
+			{
+				return;
+			}
+			if (const UImage* Image = Cast<UImage>(Widget))
+			{
+				bFound = Image->GetBrush().GetResourceObject() == Expected;
+			}
+			else if (const UBorder* Border = Cast<UBorder>(Widget))
+			{
+				bFound = Border->Background.GetResourceObject() == Expected;
+			}
+			else if (const UButton* Button = Cast<UButton>(Widget))
+			{
+				const FButtonStyle& Style = Button->GetStyle();
+				bFound = Style.Normal.GetResourceObject() == Expected
+					|| Style.Hovered.GetResourceObject() == Expected
+					|| Style.Pressed.GetResourceObject() == Expected
+					|| Style.Disabled.GetResourceObject() == Expected;
+			}
+		});
+		if (!bFound)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[EnemyHUDInspector] Widget tree does not use required art resource: %s"),
+				ResourcePath);
+		}
+		return bFound;
+	}
+
+	UWidgetAnimation* FindAnimation(const UWidgetBlueprint* Blueprint, FName Name)
 	{
 		if (!Blueprint)
 		{
-			return false;
+			return nullptr;
 		}
-		for (const UWidgetAnimation* Animation : Blueprint->Animations)
+		for (UWidgetAnimation* Animation : Blueprint->Animations)
 		{
-			if (Animation
-				&& (Animation->GetFName() == Name
-					|| Animation->GetDisplayLabel() == Name.ToString())
-				&& !Animation->GetBindings().IsEmpty())
+			if (Animation && (Animation->GetFName() == Name || Animation->GetDisplayLabel() == Name.ToString()))
 			{
-				return true;
+				return Animation;
 			}
 		}
-		return false;
+		return nullptr;
 	}
 
-	bool IsExpectedInteractiveWidget(const UWidget* Widget)
+	bool HasAnimation(const UWidgetBlueprint* Blueprint, FName Name, float Duration)
 	{
-		if (!Widget || !Widget->IsA<UButton>())
-		{
-			return false;
-		}
-		const FName Name = Widget->GetFName();
-		return Name == TEXT("InspectHitTarget")
-			|| Name == TEXT("CloseButton")
-			|| Name == TEXT("PartSelectButton");
-	}
-
-	bool ValidateHitTestPolicy(const UWidgetBlueprint* Blueprint)
-	{
-		if (!Blueprint || !Blueprint->WidgetTree || !Blueprint->WidgetTree->RootWidget)
-		{
-			return false;
-		}
-
-		bool bValid = Blueprint->WidgetTree->RootWidget->GetVisibility()
-			== ESlateVisibility::SelfHitTestInvisible;
-		TArray<UWidget*> Widgets;
-		Blueprint->WidgetTree->GetAllWidgets(Widgets);
-		for (const UWidget* Widget : Widgets)
-		{
-			if (!Widget || Widget == Blueprint->WidgetTree->RootWidget)
-			{
-				continue;
-			}
-			const ESlateVisibility Visibility = Widget->GetVisibility();
-			const bool bValidContainer = Visibility == ESlateVisibility::SelfHitTestInvisible
-				&& Widget->IsA<UPanelWidget>();
-			bValid &= Visibility != ESlateVisibility::Visible
-				? Visibility != ESlateVisibility::SelfHitTestInvisible || bValidContainer
-				: IsExpectedInteractiveWidget(Widget);
-		}
-		return bValid
-			&& Wacom::ContentBuilder::EnemyUIHitTestPolicy::ValidateInteractiveRoutes(
-				*Blueprint);
-	}
-
-	bool ValidatePanel(const UWidgetBlueprint* Blueprint, const TCHAR* Label)
-	{
-		const UWacomBattleEnemyPanelWidget* PanelDefaults = Blueprint && Blueprint->GeneratedClass
-			? Cast<UWacomBattleEnemyPanelWidget>(Blueprint->GeneratedClass->GetDefaultObject())
-			: nullptr;
-		bool bValid = Blueprint
-			&& Blueprint->ParentClass
-			&& Blueprint->ParentClass->IsChildOf(UWacomBattleEnemyPanelWidget::StaticClass())
-			&& HasWidget(Blueprint, TEXT("EnemyNameText"), UTextBlock::StaticClass())
-			&& HasWidget(Blueprint, TEXT("EnemyInitiativeText"), UTextBlock::StaticClass())
-			&& HasWidget(Blueprint, TEXT("PartList"), UHorizontalBox::StaticClass())
-			&& HasWidget(Blueprint, TEXT("PanelContextHighlight"), UWidget::StaticClass())
-			&& PanelDefaults
-			&& PanelDefaults->GetPartEntryWidgetClass()
-			&& PanelDefaults->GetPartEntryWidgetClass()->IsChildOf(
-				UWacomBattleEnemyPartEntryWidget::StaticClass())
-			&& Blueprint->BlueprintDescription.Contains(
-				SegmentedVitalsContractMarker)
-			&& ValidateHitTestPolicy(Blueprint);
-		if (!bValid)
-		{
-			UE_LOG(LogTemp, Error, TEXT("[EnemySegmentedUIInspector] Invalid panel: %s"), Label);
-		}
-		return bValid;
-	}
-
-	bool ValidateEntry(const UWidgetBlueprint* Blueprint, const TCHAR* Label)
-	{
-		bool bValid = Blueprint
-			&& Blueprint->ParentClass
-			&& Blueprint->ParentClass->IsChildOf(UWacomBattleEnemyPartEntryWidget::StaticClass());
-		const TPair<FName, UClass*> Required[] = {
-			{ TEXT("InitiativeDiamond"), UWidget::StaticClass() },
-			{ TEXT("IntentDiamond"), UWidget::StaticClass() },
-			{ TEXT("IntentIcon"), UImage::StaticClass() },
-			{ TEXT("HpBar"), UProgressBar::StaticClass() },
-			{ TEXT("HpText"), UTextBlock::StaticClass() },
-			{ TEXT("ShieldContainer"), UWidget::StaticClass() },
-			{ TEXT("ShieldFrame"), UWidget::StaticClass() },
-			{ TEXT("ShieldBadge"), UWidget::StaticClass() },
-			{ TEXT("ShieldText"), UTextBlock::StaticClass() },
-			{ TEXT("InitiativeText"), UTextBlock::StaticClass() },
-			{ TEXT("IntentText"), UTextBlock::StaticClass() },
-			{ TEXT("StatusList"), UWacomBattleStatusIconListWidget::StaticClass() },
-			{ TEXT("StatusOverflowText"), UTextBlock::StaticClass() },
-			{ TEXT("DestroyedOverlay"), UWidget::StaticClass() },
-			{ TEXT("DestroyedMark"), UWidget::StaticClass() },
-			{ TEXT("InspectHitTarget"), UButton::StaticClass() },
-		};
-		for (const TPair<FName, UClass*>& Binding : Required)
-		{
-			bValid &= HasWidget(Blueprint, Binding.Key, Binding.Value);
-		}
-		bValid &= Blueprint
-			&& Blueprint->BlueprintDescription.Contains(
-				SegmentedVitalsContractMarker);
-		bValid &= ValidateHitTestPolicy(Blueprint);
-		if (!bValid)
-		{
-			UE_LOG(LogTemp, Error, TEXT("[EnemySegmentedUIInspector] Invalid part entry: %s"), Label);
-		}
-		return bValid;
-	}
-
-	bool ValidateSinglePartGeometry(
-		const UWidgetBlueprint* PanelBlueprint,
-		const UWidgetBlueprint* EntryBlueprint)
-	{
-		const USizeBox* PanelRoot = PanelBlueprint && PanelBlueprint->WidgetTree
-			? Cast<USizeBox>(PanelBlueprint->WidgetTree->FindWidget(TEXT("SinglePartPanelRoot")))
-			: nullptr;
-		const USizeBox* EntryRoot = EntryBlueprint && EntryBlueprint->WidgetTree
-			? Cast<USizeBox>(EntryBlueprint->WidgetTree->FindWidget(TEXT("SinglePartEntryRoot")))
-			: nullptr;
-		const USizeBox* CompactSize = EntryBlueprint && EntryBlueprint->WidgetTree
-			? Cast<USizeBox>(EntryBlueprint->WidgetTree->FindWidget(TEXT("CompactSize")))
-			: nullptr;
-		const bool bValid = PanelRoot
-			&& EntryRoot
-			&& CompactSize
-			&& PanelRoot->IsWidthOverride()
-			&& FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 250.0f)
-			&& !PanelRoot->IsMinDesiredWidthOverride()
-			&& !EntryRoot->IsWidthOverride()
-			&& !EntryRoot->IsMinDesiredWidthOverride()
-			&& !CompactSize->IsWidthOverride()
-			&& CompactSize->IsHeightOverride()
-			&& FMath::IsNearlyEqual(CompactSize->GetHeightOverride(), 84.0f);
+		const UWidgetAnimation* Animation = FindAnimation(Blueprint, Name);
+		const double DisplayRate = Animation && Animation->MovieScene
+			? Animation->MovieScene->GetDisplayRate().AsDecimal()
+			: 0.0;
+		const float AuthoredEndTime = Animation && DisplayRate > 0.0
+			? FMath::Max(0.0f,
+				Animation->GetEndTime() - static_cast<float>(1.0 / DisplayRate))
+			: 0.0f;
+		const bool bValid = Animation
+			&& Animation->MovieScene
+			&& !Animation->GetBindings().IsEmpty()
+			&& FMath::IsNearlyEqual(AuthoredEndTime, Duration, 0.02f);
 		if (!bValid)
 		{
 			UE_LOG(LogTemp, Error,
-				TEXT("[EnemySegmentedUIInspector] Invalid single-part geometry ownership"));
+				TEXT("[EnemyHUDInspector] Animation diagnostic %s: found=%s movieScene=%s bindings=%d authoredEnd=%.3f playbackEnd=%.3f expected=%.3f"),
+				*Name.ToString(),
+				Animation ? TEXT("true") : TEXT("false"),
+				Animation && Animation->MovieScene ? TEXT("true") : TEXT("false"),
+				Animation ? Animation->GetBindings().Num() : 0,
+				AuthoredEndTime,
+				Animation ? Animation->GetEndTime() : 0.0f,
+				Duration);
 		}
 		return bValid;
 	}
 
-	bool ValidateInspection(const UWidgetBlueprint* Blueprint)
+	bool ValidateHitTesting(const UWidgetBlueprint& Blueprint)
 	{
-		const UWacomBattleEnemyInspectionWidget* InspectionDefaults =
-			Blueprint && Blueprint->GeneratedClass
-				? Cast<UWacomBattleEnemyInspectionWidget>(
-					Blueprint->GeneratedClass->GetDefaultObject())
-				: nullptr;
-		bool bValid = Blueprint
-			&& Blueprint->ParentClass
-			&& Blueprint->ParentClass->IsChildOf(UWacomBattleEnemyInspectionWidget::StaticClass());
+		return Blueprint.WidgetTree
+			&& Blueprint.WidgetTree->RootWidget
+			&& Blueprint.WidgetTree->RootWidget->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
+			&& Wacom::ContentBuilder::EnemyUIHitTestPolicy::ValidateInteractiveRoutes(Blueprint);
+	}
+
+	bool ValidatePanel(const UWidgetBlueprint* Blueprint, bool bSingle, const UWidgetBlueprint* Entry)
+	{
+		if (!Blueprint || !Entry || !Blueprint->GeneratedClass || !Entry->GeneratedClass)
+		{
+			return false;
+		}
+		const UWacomBattleEnemyPanelWidget* Defaults = Cast<UWacomBattleEnemyPanelWidget>(
+			Blueprint->GeneratedClass->GetDefaultObject());
+		if (bSingle)
+		{
+			return Blueprint->ParentClass
+				&& Blueprint->ParentClass->IsChildOf(UWacomBattleEnemyPanelWidget::StaticClass())
+				&& Blueprint->ParentClass != UWacomBattleEnemyPanelWidget::StaticClass()
+				&& (!Blueprint->WidgetTree || !Blueprint->WidgetTree->RootWidget)
+				&& Blueprint->BlueprintDescription.Contains(ContractMarker)
+				&& Defaults
+				&& FMath::IsNearlyEqual(Defaults->GetFixedPanelWidth(), 268.0f)
+				&& Defaults->GetPartEntryWidgetClass().Get() == Entry->GeneratedClass;
+		}
+		return Blueprint->ParentClass == UWacomBattleEnemyPanelWidget::StaticClass()
+			&& Blueprint->BlueprintDescription.Contains(ContractMarker)
+			&& HasWidget(Blueprint, TEXT("PanelRoot"), USizeBox::StaticClass())
+			&& HasWidget(Blueprint, TEXT("PartList"), UHorizontalBox::StaticClass())
+			&& !HasWidget(Blueprint, TEXT("EnemyNameText"), UTextBlock::StaticClass())
+			&& !HasWidget(Blueprint, TEXT("PanelContextHighlight"), UWidget::StaticClass())
+			&& Defaults
+			&& FMath::IsNearlyZero(Defaults->GetFixedPanelWidth())
+			&& Defaults->GetPartEntryWidgetClass().Get() == Entry->GeneratedClass
+			&& ValidateHitTesting(*Blueprint);
+	}
+
+	bool ValidateEntry(const UWidgetBlueprint* Blueprint, bool bSingle, UFont* Font, UMaterial* Material)
+	{
+		if (!Blueprint || !Blueprint->GeneratedClass)
+		{
+			return false;
+		}
+		if (bSingle)
+		{
+			return Blueprint->ParentClass
+				&& Blueprint->ParentClass->IsChildOf(UWacomBattleEnemyPartEntryWidget::StaticClass())
+				&& Blueprint->ParentClass != UWacomBattleEnemyPartEntryWidget::StaticClass()
+				&& (!Blueprint->WidgetTree || !Blueprint->WidgetTree->RootWidget)
+				&& Blueprint->BlueprintDescription.Contains(ContractMarker);
+		}
+
 		const TPair<FName, UClass*> Required[] = {
-			{ TEXT("LeftPanel"), UWidget::StaticClass() },
-			{ TEXT("RightPanel"), UWidget::StaticClass() },
-			{ TEXT("EnemyNameText"), UTextBlock::StaticClass() },
-			{ TEXT("EnemyStateText"), UTextBlock::StaticClass() },
-			{ TEXT("PartNavigator"), UPanelWidget::StaticClass() },
-			{ TEXT("SelectedPartNameText"), UTextBlock::StaticClass() },
-			{ TEXT("HpBar"), UProgressBar::StaticClass() },
+			{ TEXT("PartEntryRoot"), USizeBox::StaticClass() },
+			{ TEXT("VitalsTrackImage"), UImage::StaticClass() },
 			{ TEXT("HpText"), UTextBlock::StaticClass() },
-			{ TEXT("ShieldContainer"), UWidget::StaticClass() },
+			{ TEXT("ShieldValueRoot"), UWidget::StaticClass() },
 			{ TEXT("ShieldText"), UTextBlock::StaticClass() },
+			{ TEXT("InitiativeSocket"), UWidget::StaticClass() },
 			{ TEXT("InitiativeText"), UTextBlock::StaticClass() },
-			{ TEXT("IntentText"), UTextBlock::StaticClass() },
-			{ TEXT("ResistanceText"), UTextBlock::StaticClass() },
+			{ TEXT("IntentSocket"), UWidget::StaticClass() },
+			{ TEXT("IntentIcon"), UImage::StaticClass() },
+			{ TEXT("OutgoingIntentIcon"), UImage::StaticClass() },
 			{ TEXT("StatusList"), UWacomBattleStatusIconListWidget::StaticClass() },
-			{ TEXT("DestroyedOverlay"), UWidget::StaticClass() },
-			{ TEXT("CloseButton"), UButton::StaticClass() },
+			{ TEXT("StatusOverflowText"), UTextBlock::StaticClass() },
+			{ TEXT("ContextSurface"), UWidget::StaticClass() },
+			{ TEXT("DestroyedSurface"), UWidget::StaticClass() },
+			{ TEXT("DestroyedMark"), UWidget::StaticClass() },
+			{ TEXT("InspectHitTarget"), UButton::StaticClass() },
 		};
+		bool bValid = true;
+		const auto CheckEntry = [&bValid](const FString& Contract, const bool bCondition)
+		{
+			bValid &= bCondition;
+			if (!bCondition)
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[EnemyHUDInspector] Base entry failed: %s"), *Contract);
+			}
+		};
+		CheckEntry(TEXT("parent class"),
+			Blueprint->ParentClass == UWacomBattleEnemyPartEntryWidget::StaticClass());
+		CheckEntry(TEXT("contract marker"),
+			Blueprint->BlueprintDescription.Contains(ContractMarker));
+		CheckEntry(TEXT("hit-test policy"), ValidateHitTesting(*Blueprint));
 		for (const TPair<FName, UClass*>& Binding : Required)
 		{
-			bValid &= HasWidget(Blueprint, Binding.Key, Binding.Value);
+			CheckEntry(FString::Printf(TEXT("binding %s"), *Binding.Key.ToString()),
+				HasWidget(Blueprint, Binding.Key, Binding.Value));
 		}
-		bValid &= HasAnimation(Blueprint, TEXT("OpenLeftAnimation"));
-		bValid &= HasAnimation(Blueprint, TEXT("OpenRightAnimation"));
-		bValid &= HasAnimation(Blueprint, TEXT("CloseAnimation"));
-		bValid &= InspectionDefaults
-			&& InspectionDefaults->GetPartRowWidgetClass()
-			&& InspectionDefaults->GetPartRowWidgetClass()->IsChildOf(
-				UWacomBattleEnemyInspectionPartRowWidget::StaticClass());
-		bValid &= Blueprint
-			&& Blueprint->BlueprintDescription.Contains(
-				InspectionContractMarker);
-		bValid &= ValidateHitTestPolicy(Blueprint);
-		if (!bValid)
+		const TPair<FName, float> Animations[] = {
+			{ TEXT("IntroAnimation"), 0.22f }, { TEXT("DamageImpactAnimation"), 0.22f },
+			{ TEXT("ShieldImpactAnimation"), 0.18f }, { TEXT("ShieldBreakAnimation"), 0.24f },
+			{ TEXT("InitiativeStepAnimation"), 0.12f }, { TEXT("IntentChangeAnimation"), 0.18f },
+			{ TEXT("ContextAnimation"), 0.12f }, { TEXT("DestroyedAnimation"), 0.30f },
+		};
+		for (const TPair<FName, float>& Animation : Animations)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[EnemySegmentedUIInspector] Invalid inspection WBP"));
+			CheckEntry(FString::Printf(TEXT("animation %s"), *Animation.Key.ToString()),
+				HasAnimation(Blueprint, Animation.Key, Animation.Value));
+		}
+		const UImage* Vitals = Cast<UImage>(Blueprint->WidgetTree->FindWidget(TEXT("VitalsTrackImage")));
+		CheckEntry(TEXT("vitals material"),
+			Vitals && Vitals->GetBrush().GetResourceObject() == Material);
+		const UTextBlock* HpText = Cast<UTextBlock>(Blueprint->WidgetTree->FindWidget(TEXT("HpText")));
+		const UTextBlock* Initiative = Cast<UTextBlock>(Blueprint->WidgetTree->FindWidget(TEXT("InitiativeText")));
+		const UTextBlock* Shield = Cast<UTextBlock>(Blueprint->WidgetTree->FindWidget(TEXT("ShieldText")));
+		CheckEntry(TEXT("HP font"), HpText && HpText->GetFont().FontObject == Font
+			&& HpText->GetFont().TypefaceFontName == FName(TEXT("Bold")) && HpText->GetFont().Size == 18);
+		CheckEntry(TEXT("initiative font"), Initiative && Initiative->GetFont().FontObject == Font
+			&& Initiative->GetFont().TypefaceFontName == FName(TEXT("Bold"))
+			&& Initiative->GetFont().Size == 16);
+		CheckEntry(TEXT("shield font"), Shield && Shield->GetFont().FontObject == Font
+			&& Shield->GetFont().TypefaceFontName == FName(TEXT("Bold")) && Shield->GetFont().Size == 14);
+		for (FName Legacy : { FName(TEXT("HpBar")), FName(TEXT("PartNameText")), FName(TEXT("IntentText")),
+			FName(TEXT("ResistanceText")), FName(TEXT("DetailsContainer")), FName(TEXT("ActionPreviewOverlay")) })
+		{
+			CheckEntry(FString::Printf(TEXT("legacy binding removed: %s"), *Legacy.ToString()),
+				!Blueprint->WidgetTree->FindWidget(Legacy));
 		}
 		return bValid;
 	}
 
 	bool ValidateInspectionRow(const UWidgetBlueprint* Blueprint)
 	{
-		bool bValid = Blueprint
-			&& Blueprint->ParentClass
-			&& Blueprint->ParentClass->IsChildOf(
-				UWacomBattleEnemyInspectionPartRowWidget::StaticClass());
 		const TPair<FName, UClass*> Required[] = {
-			{ TEXT("PartSelectButton"), UButton::StaticClass() },
-			{ TEXT("PartNameText"), UTextBlock::StaticClass() },
-			{ TEXT("HpText"), UTextBlock::StaticClass() },
-			{ TEXT("ShieldContainer"), UWidget::StaticClass() },
-			{ TEXT("ShieldText"), UTextBlock::StaticClass() },
-			{ TEXT("InitiativeText"), UTextBlock::StaticClass() },
-			{ TEXT("SelectionHighlight"), UWidget::StaticClass() },
-			{ TEXT("DestroyedOverlay"), UWidget::StaticClass() },
+			{ TEXT("PartSelectButton"), UButton::StaticClass() }, { TEXT("PartNameText"), UTextBlock::StaticClass() },
+			{ TEXT("HpText"), UTextBlock::StaticClass() }, { TEXT("ShieldContainer"), UWidget::StaticClass() },
+			{ TEXT("ShieldText"), UTextBlock::StaticClass() }, { TEXT("InitiativeText"), UTextBlock::StaticClass() },
+			{ TEXT("SelectionHighlight"), UWidget::StaticClass() }, { TEXT("DestroyedOverlay"), UWidget::StaticClass() },
 		};
+		bool bValid = Blueprint
+			&& Blueprint->ParentClass == UWacomBattleEnemyInspectionPartRowWidget::StaticClass()
+			&& Blueprint->BlueprintDescription.Contains(InspectionMarker)
+			&& ValidateHitTesting(*Blueprint);
 		for (const TPair<FName, UClass*>& Binding : Required)
 		{
 			bValid &= HasWidget(Blueprint, Binding.Key, Binding.Value);
 		}
-		bValid &= Blueprint
-			&& Blueprint->BlueprintDescription.Contains(
-				InspectionRowContractMarker);
-		bValid &= ValidateHitTestPolicy(Blueprint);
-		if (!bValid)
+		return bValid;
+	}
+
+	bool ValidateInspection(const UWidgetBlueprint* Blueprint, const UWidgetBlueprint* Row, UWacomBattleEnemyIntentPresentationStyle* Style)
+	{
+		const TPair<FName, UClass*> Required[] = {
+			{ TEXT("LeftPanel"), USizeBox::StaticClass() }, { TEXT("RightPanel"), USizeBox::StaticClass() },
+			{ TEXT("EnemyNameText"), UTextBlock::StaticClass() }, { TEXT("EnemyStateText"), UTextBlock::StaticClass() },
+			{ TEXT("PartNavigator"), UPanelWidget::StaticClass() }, { TEXT("SelectedPartNameText"), UTextBlock::StaticClass() },
+			{ TEXT("HpBar"), UProgressBar::StaticClass() }, { TEXT("HpText"), UTextBlock::StaticClass() },
+			{ TEXT("ShieldContainer"), UWidget::StaticClass() }, { TEXT("ShieldText"), UTextBlock::StaticClass() },
+			{ TEXT("InitiativeText"), UTextBlock::StaticClass() }, { TEXT("IntentIcon"), UImage::StaticClass() },
+			{ TEXT("IntentText"), UTextBlock::StaticClass() }, { TEXT("ResistanceText"), UTextBlock::StaticClass() },
+			{ TEXT("StatusList"), UWacomBattleStatusIconListWidget::StaticClass() },
+			{ TEXT("DestroyedOverlay"), UWidget::StaticClass() }, { TEXT("CloseButton"), UButton::StaticClass() },
+		};
+		const UWacomBattleEnemyInspectionWidget* Defaults = Blueprint && Blueprint->GeneratedClass
+			? Cast<UWacomBattleEnemyInspectionWidget>(Blueprint->GeneratedClass->GetDefaultObject())
+			: nullptr;
+		bool bValid = true;
+		const auto CheckInspection = [&bValid](const FString& Contract, const bool bCondition)
 		{
-			UE_LOG(LogTemp, Error, TEXT("[EnemySegmentedUIInspector] Invalid inspection row WBP"));
+			bValid &= bCondition;
+			if (!bCondition)
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[EnemyHUDInspector] Inspection failed: %s"), *Contract);
+			}
+		};
+		CheckInspection(TEXT("assets load"), Blueprint && Row);
+		if (!Blueprint || !Row)
+		{
+			return false;
+		}
+		CheckInspection(TEXT("parent class"),
+			Blueprint->ParentClass == UWacomBattleEnemyInspectionWidget::StaticClass());
+		CheckInspection(TEXT("contract marker"),
+			Blueprint->BlueprintDescription.Contains(InspectionMarker));
+		CheckInspection(TEXT("hit-test policy"), ValidateHitTesting(*Blueprint));
+		CheckInspection(TEXT("generated defaults"), Defaults != nullptr);
+		CheckInspection(TEXT("part row class"),
+			Defaults && Defaults->GetPartRowWidgetClass().Get() == Row->GeneratedClass);
+		CheckInspection(TEXT("intent presentation style"),
+			Defaults && Defaults->GetIntentPresentationStyle() == Style);
+		for (const TPair<FName, UClass*>& Binding : Required)
+		{
+			CheckInspection(FString::Printf(TEXT("binding %s"), *Binding.Key.ToString()),
+				HasWidget(Blueprint, Binding.Key, Binding.Value));
+		}
+		CheckInspection(TEXT("OpenLeftAnimation"),
+			HasAnimation(Blueprint, TEXT("OpenLeftAnimation"), 0.18f));
+		CheckInspection(TEXT("OpenRightAnimation"),
+			HasAnimation(Blueprint, TEXT("OpenRightAnimation"), 0.24f));
+		CheckInspection(TEXT("CloseAnimation"),
+			HasAnimation(Blueprint, TEXT("CloseAnimation"), 0.16f));
+		const USizeBox* Left = Blueprint && Blueprint->WidgetTree
+			? Cast<USizeBox>(Blueprint->WidgetTree->FindWidget(TEXT("LeftPanel"))) : nullptr;
+		const USizeBox* Right = Blueprint && Blueprint->WidgetTree
+			? Cast<USizeBox>(Blueprint->WidgetTree->FindWidget(TEXT("RightPanel"))) : nullptr;
+		CheckInspection(TEXT("left dossier dimensions"), Left && Left->IsWidthOverride() && Left->IsHeightOverride()
+			&& FMath::IsNearlyEqual(Left->GetWidthOverride(), 220.0f)
+			&& FMath::IsNearlyEqual(Left->GetHeightOverride(), 520.0f));
+		CheckInspection(TEXT("right dossier dimensions"), Right && Right->IsWidthOverride() && Right->IsHeightOverride()
+			&& FMath::IsNearlyEqual(Right->GetWidthOverride(), 420.0f)
+			&& FMath::IsNearlyEqual(Right->GetHeightOverride(), 560.0f));
+		return bValid;
+	}
+
+	bool ValidateTextures()
+	{
+		bool bValid = true;
+		for (const TCHAR* Path : TexturePaths)
+		{
+			const UTexture2D* Texture = Cast<UTexture2D>(StaticLoadObject(UTexture2D::StaticClass(), nullptr, Path));
+			const bool bTextureValid = Texture
+				&& Texture->LODGroup == TEXTUREGROUP_UI
+				&& Texture->Filter == TF_Nearest
+				&& Texture->MipGenSettings == TMGS_NoMipmaps
+				&& Texture->NeverStream;
+			bValid &= bTextureValid;
+			if (!bTextureValid)
+			{
+				UE_LOG(LogTemp, Error, TEXT("[EnemyHUDInspector] Invalid pixel texture: %s"), Path);
+			}
 		}
 		return bValid;
 	}
+
+	bool ValidateLegacyPanelRemoved()
+	{
+		if (!FPackageName::DoesPackageExist(LegacyPanelPackage))
+		{
+			return true;
+		}
+		TArray<FName> Referencers;
+		FAssetRegistryModule::GetRegistry().GetReferencers(
+			FName(LegacyPanelPackage), Referencers, UE::AssetRegistry::EDependencyCategory::Package);
+		if (!Referencers.IsEmpty())
+		{
+			UE_LOG(LogTemp, Error, TEXT("[EnemyHUDInspector] Legacy panel texture still has %d referencers"), Referencers.Num());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("[EnemyHUDInspector] Zero-reference legacy panel texture was not deleted"));
+		}
+		return false;
+	}
 }
 
-bool Wacom::ContentBuilder::InspectEnemySegmentedUI()
+bool Wacom::ContentBuilder::InspectEnemyHUD()
 {
-	const UWidgetBlueprint* MultiPanel = LoadWidgetBlueprint(MultiPanelPath);
-	const UWidgetBlueprint* MultiEntry = LoadWidgetBlueprint(MultiEntryPath);
-	const UWidgetBlueprint* SinglePanel = LoadWidgetBlueprint(SinglePanelPath);
-	const UWidgetBlueprint* SingleEntry = LoadWidgetBlueprint(SingleEntryPath);
-	const UWidgetBlueprint* Inspection = LoadWidgetBlueprint(InspectionPath);
-	const UWidgetBlueprint* InspectionRow = LoadWidgetBlueprint(InspectionRowPath);
-	const UTexture2D* ShieldBadge = Cast<UTexture2D>(StaticLoadObject(
-		UTexture2D::StaticClass(), nullptr, ShieldBadgePath));
-	const UTexture2D* ShieldFrame = Cast<UTexture2D>(StaticLoadObject(
-		UTexture2D::StaticClass(), nullptr, ShieldFramePath));
+	UWidgetBlueprint* MultiPanel = LoadWBP(MultiPanelPath);
+	UWidgetBlueprint* MultiEntry = LoadWBP(MultiEntryPath);
+	UWidgetBlueprint* SinglePanel = LoadWBP(SinglePanelPath);
+	UWidgetBlueprint* SingleEntry = LoadWBP(SingleEntryPath);
+	UWidgetBlueprint* Inspection = LoadWBP(InspectionPath);
+	UWidgetBlueprint* InspectionRow = LoadWBP(InspectionRowPath);
+	UFont* Font = Cast<UFont>(StaticLoadObject(UFont::StaticClass(), nullptr, FontPath));
+	UFontFace* Bold = Cast<UFontFace>(StaticLoadObject(UFontFace::StaticClass(), nullptr, BoldFacePath));
+	UFontFace* Regular = Cast<UFontFace>(StaticLoadObject(UFontFace::StaticClass(), nullptr, RegularFacePath));
+	UMaterial* Material = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, MaterialPath));
+	UWacomBattleEnemyIntentPresentationStyle* Style = Cast<UWacomBattleEnemyIntentPresentationStyle>(
+		StaticLoadObject(UWacomBattleEnemyIntentPresentationStyle::StaticClass(), nullptr, IntentStylePath));
 
-	bool bValid = ValidatePanel(MultiPanel, TEXT("multi-part"));
-	bValid &= ValidatePanel(SinglePanel, TEXT("single-part"));
-	bValid &= ValidateEntry(MultiEntry, TEXT("multi-part"));
-	bValid &= ValidateEntry(SingleEntry, TEXT("single-part"));
-	bValid &= ValidateSinglePartGeometry(SinglePanel, SingleEntry);
-	bValid &= ValidateInspection(Inspection);
-	bValid &= ValidateInspectionRow(InspectionRow);
-	bValid &= ShieldBadge && ShieldFrame
-		&& ShieldBadge->LODGroup == TEXTUREGROUP_UI
-		&& ShieldFrame->LODGroup == TEXTUREGROUP_UI
-		&& ShieldBadge->Filter == TF_Nearest
-		&& ShieldFrame->Filter == TF_Nearest
-		&& ShieldBadge->MipGenSettings == TMGS_NoMipmaps
-		&& ShieldFrame->MipGenSettings == TMGS_NoMipmaps;
-	if (!ShieldBadge || !ShieldFrame)
+	bool bValid = true;
+	const auto Check = [&bValid](const TCHAR* Contract, const bool bCondition)
 	{
-		UE_LOG(LogTemp, Error,
-			TEXT("[EnemySegmentedUIInspector] Missing Shield badge/frame texture"));
-	}
+		bValid &= bCondition;
+		if (!bCondition)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[EnemyHUDInspector] Contract failed: %s"), Contract);
+		}
+	};
+
+	Check(TEXT("formal assets load"), Font && Bold && Regular && Material && Style);
+	Check(TEXT("vitals material domain and blend mode"),
+		Material && Material->MaterialDomain == MD_UI && Material->BlendMode == BLEND_Translucent);
+	Check(TEXT("intent style has three explicit mappings"),
+		Style && Style->IntentIcons.Num() == 3);
+	Check(TEXT("pixel texture import settings"), ValidateTextures());
+	Check(TEXT("base part entry WBP"), ValidateEntry(MultiEntry, false, Font, Material));
+	Check(TEXT("single-part entry lightweight subclass"), ValidateEntry(SingleEntry, true, Font, Material));
+	Check(TEXT("base panel WBP"), ValidatePanel(MultiPanel, false, MultiEntry));
+	Check(TEXT("single-part panel lightweight subclass"), ValidatePanel(SinglePanel, true, SingleEntry));
+	Check(TEXT("inspection row WBP"), ValidateInspectionRow(InspectionRow));
+	Check(TEXT("inspection dossier WBP"), ValidateInspection(Inspection, InspectionRow, Style));
+	Check(TEXT("base panel uses formal panel frame"), UsesBrushResource(MultiPanel,
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyPanelFrame_9Slice.T_UI_EnemyPanelFrame_9Slice")));
+	Check(TEXT("part entry uses formal shield badge"), UsesBrushResource(MultiEntry,
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyShieldBadge.T_UI_EnemyShieldBadge")));
+	Check(TEXT("part entry uses formal initiative socket"), UsesBrushResource(MultiEntry,
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyInitiativeSocket.T_UI_EnemyInitiativeSocket")));
+	Check(TEXT("part entry uses formal intent socket"), UsesBrushResource(MultiEntry,
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyIntentSocket.T_UI_EnemyIntentSocket")));
+	Check(TEXT("part entry uses formal destroyed crack"), UsesBrushResource(MultiEntry,
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyDestroyedCrack.T_UI_EnemyDestroyedCrack")));
+	Check(TEXT("inspection dossier uses formal frame"), UsesBrushResource(Inspection,
+		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyDossierFrame_9Slice.T_UI_EnemyDossierFrame_9Slice")));
+	Check(TEXT("zero-reference legacy panel texture removed"), ValidateLegacyPanelRemoved());
 
 	if (bValid)
 	{
-		UE_LOG(LogTemp, Display,
-			TEXT("[EnemySegmentedUIInspector] Segmented vitals and inspection contracts are valid"));
+		UE_LOG(LogTemp, Display, TEXT("[EnemyHUDInspector] Enemy HUD V3 contract is valid"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[EnemyHUDInspector] Enemy HUD V3 contract failed"));
 	}
 	return bValid;
 }

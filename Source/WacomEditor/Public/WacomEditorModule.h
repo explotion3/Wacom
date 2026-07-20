@@ -22,11 +22,8 @@ private:
 	void RegisterDetailsCustomizations();
 	void UnregisterDetailsCustomizations();
 	void RegisterMenus();
-	void RegisterMcpToolsets();
-	void UnregisterMcpToolsets();
 	void ValidateCurrentRunFloor();
 
 	TArray<TStrongObjectPtr<UEditorValidatorBase>> RegisteredValidators;
 	FDelegateHandle ToolMenusStartupCallbackHandle;
-	FDelegateHandle ToolsetRegistrationCallbackHandle;
 };

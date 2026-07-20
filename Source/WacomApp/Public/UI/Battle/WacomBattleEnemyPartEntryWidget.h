@@ -8,14 +8,28 @@
 #include "WacomBattleEnemyPanelViewData.h"
 #include "WacomBattleEnemyPartEntryWidget.generated.h"
 
-class UProgressBar;
 class UButton;
 class UImage;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class UTextBlock;
+class USizeBox;
 class UWidget;
 class UWidgetAnimation;
+class UWacomSettingsSubsystem;
 class UWacomBattleEnemyIntentPresentationStyle;
 class UWacomBattleStatusIconListWidget;
+struct FWacomLocalSettingsSnapshot;
+enum class EWacomRuntimeSettingsChangeReason : uint8;
+
+/** Scene Enemy 连续生命条中的部位边缘语义。 */
+enum class EWacomBattleEnemySegmentRole : uint8
+{
+	Single,
+	First,
+	Middle,
+	Last,
+};
 
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FWacomBattleEnemyPartInspectionRequestedNative,
@@ -57,6 +71,9 @@ public:
 	/** Panel 创建新条目时设置一次错峰入场延迟。 */
 	void SetIntroDelaySeconds(float InDelaySeconds);
 
+	/** Panel 按 Definition 顺序注入分段位置；不改变稳定 Part identity。 */
+	void SetSegmentLayout(int32 InPartIndex, int32 InPartCount);
+
 	/** Panel 移除条目前取消弱 Timer 和正在播放的动画。 */
 	void CancelPendingPresentation();
 
@@ -74,11 +91,17 @@ public:
 	FWacomBattleEnemyPartInspectionRequestedNative OnInspectionRequestedNative;
 
 protected:
+	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
 private:
+	void ResolveAuthoredBindings();
 	void RefreshPresentation();
+	void ApplyVitalsMaterialPresentation();
+	bool EnsureVitalsMaterial();
+	void RestoreVitalsMaterial();
+	void CaptureOutgoingIntent(const FWacomBattleEnemyPartEntryViewData& PreviousView);
 	void ScheduleIntroAnimation();
 	void PlayIntroAnimation();
 	void PlayRealFactTransition(
@@ -87,27 +110,48 @@ private:
 	void RefreshContextPresentation(bool bPreviousContextActive);
 	void RefreshInspectionInteraction();
 	void CancelIntroTimer();
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
+	void PlaySemanticAnimation(UWidgetAnimation* Animation, float AuthoredDurationSeconds);
+	float ResolveWorldTimeSeconds() const;
+	static float ResolveHpPercent(const FWacomBattleEnemyPartEntryViewData& View);
+	static EWacomBattleEnemySegmentRole ResolveSegmentRole(int32 PartIndex, int32 PartCount);
 
 	UFUNCTION()
 	void HandleInspectClicked();
 
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> PartNameText = nullptr;
+	UFUNCTION()
+	void HandleIntentChangeAnimationFinished();
 
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UProgressBar> HpBar = nullptr;
+	TObjectPtr<USizeBox> PartEntryRoot = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> VitalsTrackImage = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ShieldValueRoot = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> InitiativeSocket = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> IntentSocket = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> OutgoingIntentIcon = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ContextSurface = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> DestroyedSurface = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> HpText = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> ShieldContainer = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> ShieldFrame = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> ShieldBadge = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ShieldText = nullptr;
@@ -116,37 +160,13 @@ private:
 	TObjectPtr<UTextBlock> InitiativeText = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> InitiativeDiamond = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> IntentDiamond = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> IntentIcon = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> IntentText = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> ResistanceText = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> DetailsContainer = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWacomBattleStatusIconListWidget> StatusList = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> StatusOverflowText = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> ContextHighlight = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> ActionPreviewOverlay = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UWidget> DestroyedOverlay = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> DestroyedMark = nullptr;
@@ -158,22 +178,25 @@ private:
 	TObjectPtr<UWidgetAnimation> IntroAnimation = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
-	TObjectPtr<UWidgetAnimation> DamagePulseAnimation = nullptr;
+	TObjectPtr<UWidgetAnimation> DamageImpactAnimation = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
-	TObjectPtr<UWidgetAnimation> ShieldPulseAnimation = nullptr;
+	TObjectPtr<UWidgetAnimation> ShieldImpactAnimation = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
-	TObjectPtr<UWidgetAnimation> DestroyedPulseAnimation = nullptr;
+	TObjectPtr<UWidgetAnimation> ShieldBreakAnimation = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
-	TObjectPtr<UWidgetAnimation> ContextHighlightAnimation = nullptr;
+	TObjectPtr<UWidgetAnimation> InitiativeStepAnimation = nullptr;
 
-	UPROPERTY(Transient, meta = (BindWidgetAnimOptional))
-	TObjectPtr<UWidgetAnimation> InitiativePulseAnimation = nullptr;
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> IntentChangeAnimation = nullptr;
 
-	UPROPERTY(Transient, meta = (BindWidgetAnimOptional))
-	TObjectPtr<UWidgetAnimation> IntentChangedAnimation = nullptr;
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> ContextAnimation = nullptr;
+
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	TObjectPtr<UWidgetAnimation> DestroyedAnimation = nullptr;
 
 	UPROPERTY(Transient)
 	FWacomBattleEnemyPartEntryViewData CurrentView;
@@ -181,17 +204,41 @@ private:
 	UPROPERTY(Transient)
 	FWacomBattleEnemyPartEntryViewData ActionPreviewView;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Preview", meta = (AllowPrivateAccess = "true", ToolTip = "Action Preview 激活时条目的整体透明度。单位：0-1；推荐 0.7-1.0，只影响表现。"))
-	float ActionPreviewRenderOpacity = 0.82f;
-
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Intent", meta = (AllowPrivateAccess = "true", ToolTip = "紧凑敌人面板用于按稳定 IntentId 解析图标的 UI-only Style。为空时保留 WBP 默认图标，不影响规则。"))
 	TObjectPtr<UWacomBattleEnemyIntentPresentationStyle> IntentPresentationStyle = nullptr;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Motion", meta = (AllowPrivateAccess = "true", ToolTip = "HP 真实下降后保留旧值残影的时间，单位：秒；推荐 0.05-0.15。只影响表现，不改变规则数值。"))
+	float DamageTrailHoldSeconds = 0.09f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Motion", meta = (AllowPrivateAccess = "true", ToolTip = "HP 伤害残影收缩到权威值的时间，单位：秒；推荐 0.15-0.30。只影响表现。"))
+	float DamageTrailRecoverySeconds = 0.22f;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> VitalsMaterialInstance = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> VitalsSourceMaterial = nullptr;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
+
+	FDelegateHandle RuntimeSettingsChangedHandle;
+
 	FTimerHandle IntroTimerHandle;
 	float IntroDelaySeconds = 0.0f;
+	float DamageTrailStartPercent = 0.0f;
+	float DamageStartTimeSeconds = -1000.0f;
+	float ShieldImpactStartTimeSeconds = -1000.0f;
+	float RuntimeFlashIntensity = 1.0f;
+	int32 SegmentIndex = 0;
+	int32 SegmentCount = 1;
+	EWacomBattleEnemySegmentRole SegmentRole = EWacomBattleEnemySegmentRole::Single;
 	bool bHasReceivedViewData = false;
 	bool bHasActionPreview = false;
 	bool bContextHighlighted = false;
 	bool bInspectionInteractionEnabled = false;
 	bool bIntroPending = false;
+	bool bRuntimeSimplifiedMotion = false;
+
+	friend struct FWacomBattleEnemyPartEntryWidgetTestAccess;
 };
