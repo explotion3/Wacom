@@ -16,6 +16,7 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Testing/WacomEnemySceneRuntimeAutomationTestView.h"
 #include "TimerManager.h"
 #include "UI/BattleSceneTargetClickTestAccess.h"
 #include "UI/BattleWidgetSpecReceiver.h"
@@ -1583,6 +1584,38 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	HUD->SetSession(Session);
 	HUD->SetBattleSceneEnemyHostsForTest({ CurrentHost.Host });
 	WacomFirstPersonCardLayerDropIntentSpec::SettleBattlePresentationQueue(*HUD);
+
+	// Build a valid typed world-target handle whose stable enemy identity is not
+	// part of this HUD's current scene-enemy registry. An unbound typed Part is a
+	// missing target; this test specifically exercises the later invalid-world path.
+	const FName OtherEnemySlotId(TEXT("OtherEnemy"));
+	OtherHost.Host->EnemySlotId = OtherEnemySlotId;
+	FBattleSnapshot OtherHostSnapshot = Snapshot;
+	if (!TestTrue(TEXT("Other host snapshot has an enemy"), OtherHostSnapshot.Enemies.Num() > 0))
+	{
+		return false;
+	}
+	OtherHostSnapshot.Enemies[0].EnemySlotId = OtherEnemySlotId;
+	FWacomEnemySceneRuntimeAutomationTestView::InitializeBinding(
+		*OtherHost.Host,
+		OtherHostSnapshot.EncounterId,
+		OtherEnemySlotId);
+	if (!TestTrue(TEXT("Other host part receives valid runtime facts"),
+		FWacomEnemySceneRuntimeAutomationTestView::SyncPart(
+			*OtherHost.Host,
+			*OtherHost.Parts[0],
+			OtherHostSnapshot)))
+	{
+		return false;
+	}
+	FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(
+		*OtherHost.Host,
+		*OtherHost.Parts[0],
+		true,
+		true);
+	TestTrue(TEXT("Other host produces a valid typed world target"),
+		OtherHost.Parts[0]->BuildWorldTargetHandle().IsValid());
+
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, OtherHost.Host, OtherHost.Parts[0]);
 
