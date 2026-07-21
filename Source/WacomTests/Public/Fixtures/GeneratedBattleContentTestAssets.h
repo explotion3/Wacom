@@ -67,6 +67,7 @@ struct WACOMTESTS_API FWacomGeneratedBattleContentAssets
 	static const TCHAR* SnakeTailPath();
 	static const TCHAR* SnakeSingleEncounterPath();
 	static const TCHAR* DebugSnakeShopPath();
+	static const TCHAR* TestShopUpgradeVenomProofWhitePath();
 
 	static TArray<const TCHAR*> StarterPackCardPaths();
 	static TArray<const TCHAR*> DebugAndTestCardPaths();

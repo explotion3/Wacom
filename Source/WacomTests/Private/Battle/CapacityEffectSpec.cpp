@@ -185,6 +185,17 @@ bool FWacomDataShopDebugSnakeAssetSpec::RunTest(const FString& /*Parameters*/)
 			ExpectedOffers[Index].Price);
 	}
 
+	TestTrue(TEXT("DebugSnake card upgrade service enabled"),
+		DebugShop->CardUpgradeService.bEnabled);
+	TestEqual(TEXT("DebugSnake card upgrade price count"),
+		DebugShop->CardUpgradeService.Prices.Num(), 3);
+	if (DebugShop->CardUpgradeService.Prices.Num() == 3)
+	{
+		TestEqual(TEXT("White upgrade price"), DebugShop->CardUpgradeService.Prices[0].Price, 2);
+		TestEqual(TEXT("Blue upgrade price"), DebugShop->CardUpgradeService.Prices[1].Price, 3);
+		TestEqual(TEXT("Yellow upgrade price"), DebugShop->CardUpgradeService.Prices[2].Price, 4);
+	}
+
 	return true;
 }
 

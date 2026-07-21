@@ -81,3 +81,4 @@
   - Four-file aggregate with the same sorted `path<TAB>UPPER_SHA256` UTF-8/LF algorithm: `A6712D2BC7B9186295109A38F521EFBE2B2A40A058BBB4B382829B57437778B4`.
 - All four targets resolve to Git LFS; `git lfs fsck` and `git diff --check` PASS. No map, Character, Production or shared CardView binary was saved.
 - Final refined PIE: user accepted the refined presentation and explicitly authorized commit. PIE did not rewrite any of the four target asset hashes. Commit gate opened only after Editor shutdown and `AssertClosedForBuild` passed.
+- Delivery was organized as the planned ordered pair: `feat(ui): add shop card upgrade flow`, then `feat(content): add debug shop upgrade vertical slice`; exact commit hashes are reported in the integration handoff.

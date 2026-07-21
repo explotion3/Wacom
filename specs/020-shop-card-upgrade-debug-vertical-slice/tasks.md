@@ -56,8 +56,8 @@
 
 - [x] T035 向用户交付一次性 PIE 路线并保持全部修改未提交
 - [x] T036 用户确认完整路线无问题；若有修复则重跑相关自动化和完整 PIE
-- [ ] T037 仅在用户确认后提交 `feat(ui): add shop card upgrade flow`
-- [ ] T038 仅在用户确认后提交 `feat(content): add debug shop upgrade vertical slice`
+- [x] T037 仅在用户确认后提交 `feat(ui): add shop card upgrade flow`
+- [x] T038 仅在用户确认后提交 `feat(content): add debug shop upgrade vertical slice`
 - [ ] T039 按 AgentIntegrationWorkflow 输出交接；不 merge、不 push
 
 ## Dependencies
