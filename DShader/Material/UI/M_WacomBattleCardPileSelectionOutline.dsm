@@ -1,0 +1,53 @@
+import "Shared/WacomBattleCardPileSelectionOutline.dsh";
+
+Shader(Name="DreamMaterials/UI/M_WacomBattleCardPileSelectionOutline")
+{
+    Properties = {
+        ScalarParameter SelectionAmount = 0.0 [ Group="牌堆选框|运行时"; SortPriority=0; Description="悬浮、焦点或点击锁定的选框强度。"; ];
+        ScalarParameter SelectionReducedMotion = 0.0 [ Group="牌堆选框|运行时"; SortPriority=1; Description="简化动效时固定流光位置。"; ];
+        ScalarParameter SelectionSeed = 0.0 [ Group="牌堆选框|运行时"; SortPriority=2; Description="按卡牌实例生成的稳定相位。"; ];
+
+        VectorParameter OutlinePrimaryColor = float4(0.50, 0.82, 1.0, 1.0) [ Group="牌堆选框|材质实例"; SortPriority=10; Description="低强度冰蓝主体颜色。"; ];
+        VectorParameter OutlineAccentColor = float4(0.96, 0.82, 0.42, 1.0) [ Group="牌堆选框|材质实例"; SortPriority=11; Description="沿外框移动的少量暖金高光。"; ];
+        ScalarParameter OutlineLineWidth = 0.012 [ Group="牌堆选框|材质实例"; SortPriority=12; Description="外框线宽，UV 单位；默认约 3 到 4 像素。"; ];
+        ScalarParameter OutlineFeatherWidth = 0.0025 [ Group="牌堆选框|材质实例"; SortPriority=13; Description="外框抗锯齿过渡宽度，保持较小以维持硬像素感。"; ];
+        ScalarParameter OutlineFlowWidth = 0.13 [ Group="牌堆选框|材质实例"; SortPriority=14; Description="流光沿周长覆盖的比例。"; ];
+        ScalarParameter OutlineFlowSpeed = 0.12 [ Group="牌堆选框|材质实例"; SortPriority=15; Description="流光每秒沿周长移动的速度。"; ];
+        ScalarParameter OutlineGlowStrength = 0.44 [ Group="牌堆选框|材质实例"; SortPriority=16; Description="流光高光相对主体的附加强度。"; ];
+    }
+
+    Settings = {
+        Domain = "UI";
+        ShadingModel = "Unlit";
+        BlendMode = "PremultipliedAlpha";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 uv = UE.TexCoord(Index=0);
+        float3 primaryColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=OutlinePrimaryColor, R=true, G=true, B=true, A=false);
+        float3 accentColor = UE.Expression(Class="ComponentMask", OutputType="float3", Input=OutlineAccentColor, R=true, G=true, B=true, A=false);
+        WacomBattleCardPileSelectionOutline_Evaluate(
+            uv,
+            SelectionAmount,
+            SelectionReducedMotion,
+            SelectionSeed,
+            UE.Time(),
+            OutlineLineWidth,
+            OutlineFeatherWidth,
+            OutlineFlowWidth,
+            OutlineFlowSpeed,
+            OutlineGlowStrength,
+            primaryColor,
+            accentColor,
+            Color,
+            Alpha);
+    }
+}

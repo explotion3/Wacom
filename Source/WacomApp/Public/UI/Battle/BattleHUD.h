@@ -9,6 +9,7 @@
 #include "UI/Battle/BattleCommandBarTypes.h"
 #include "UI/Battle/WacomBattleWidgetBase.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
+#include "UI/Battle/WacomBattleCardPileDetailsTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
@@ -360,6 +361,10 @@ public:
 		meta = (ToolTip = "请求打开完整战斗日志二级面板，并广播 native UI 意图。不会提交 Battle 命令或暂停后台表现。"))
 	void RequestOpenCombatLogDetails();
 
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Pile Details",
+		meta = (ToolTip = "请求打开指定分页的只读牌堆详情。表现忙碌或已有二级面板时安全拒绝，不排队。"))
+	void RequestOpenCardPileDetails(EWacomBattlePileDetailsTab InitialTab);
+
 	// ---- 状态机查询（供子 Widget 做视觉反馈）----
 
 	/** 当前是否正在选目标。UI 可据此高亮可选敌方部位。 */
@@ -489,7 +494,12 @@ private:
 	void RebuildChildBattleWidgetsForRuntime();
 	void BindCombatLogFeedForRuntime();
 	void UnbindCombatLogFeedForRuntime();
+	void BindPileDetailsRequestsForRuntime();
+	void UnbindPileDetailsRequestsForRuntime();
 	void HandleCombatLogDetailsRequested();
+	void HandleDrawPileDetailsRequested();
+	void HandleDiscardPileDetailsRequested();
+	void HandleExhaustPileDetailsRequested();
 	void RefreshChildBattleWidgetsFromSnapshotForRuntime(const FBattleSnapshot& Snap);
 	void BindFirstPersonCardLayerInteractionsForRuntime(UWacomFirstPersonCardAnchorComponent& Anchor);
 	void UnbindFirstPersonCardLayerInteractionsForRuntime(UWacomFirstPersonCardAnchorComponent& Anchor);

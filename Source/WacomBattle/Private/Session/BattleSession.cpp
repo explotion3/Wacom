@@ -13,6 +13,7 @@
 #include "Resolution/BattleCardActionPreviewBuilder.h"
 #include "Resolution/BattleCardTargetPreviewBuilder.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
+#include "Snapshots/BattlePileInspectionSnapshotBuilder.h"
 
 UBattleSession::UBattleSession()
 	: State(nullptr)
@@ -111,6 +112,15 @@ FBattleSnapshot UBattleSession::BuildSnapshot() const
 		return FBattleSnapshot{};
 	}
 	return FBattleSnapshotBuilder::Build(*State);
+}
+
+FBattlePileInspectionSnapshot UBattleSession::BuildPileInspectionSnapshot() const
+{
+	if (!State)
+	{
+		return FBattlePileInspectionSnapshot{};
+	}
+	return FBattlePileInspectionSnapshotBuilder::Build(*State);
 }
 
 bool UBattleSession::IsBattleEnded() const

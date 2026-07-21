@@ -1626,6 +1626,8 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerSourceLifecycleFrame
 	bool bTransitionPresentationEnabled = true;
 	bool bSetInteractionEnabled = false;
 	bool bInteractionEnabled = false;
+	bool bSetPresentationVisible = false;
+	bool bPresentationVisible = true;
 	bool bCancelActiveDrag = false;
 	bool bBroadcastDragCancel = true;
 	bool bSetPresentationAnchors = false;

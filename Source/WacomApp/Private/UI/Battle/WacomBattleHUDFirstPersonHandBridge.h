@@ -57,6 +57,7 @@ public:
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints);
 	void ClearLayer(bool bClearPendingTransitionEvents = true);
 	void SuppressLayerForEntry();
+	bool SetLayerPresentationVisible(bool bVisible);
 	void ApplyPileTransferHints(const TArray<FWacomFirstPersonCardPileTransferHint>& Hints);
 
 	bool ShouldUseFirstPersonBattleHandLayer() const;

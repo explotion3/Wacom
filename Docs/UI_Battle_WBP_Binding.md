@@ -39,7 +39,7 @@ tags:
 | `PlayerStatusBar` | `UPlayerStatusBar` | Optional | 玩家 HP / Shield / 状态图标显示 |
 | `CommandBar` | `UBattleCommandBarWidget` | Optional | Wait / EndTurn 命令按钮、等待值和 pending 文案 |
 | `DrawPileView` | `UPileCountView` | Optional | 抽牌堆数量 |
-| `DiscardPileView` | `UPileCountView` | Optional | 弃牌堆数量；当本回合使用牌堆非空时显示为 `弃牌堆数+本回合使用数`，例如 `2+3` |
+| `DiscardPileView` | `UPileCountView` | Optional | 弃牌堆数量；当本回合使用牌堆非空时显示为 `弃牌堆数+本回合使用数`，例如 `2+3`；详情页默认进入弃牌堆子区 |
 | `ExhaustPileView` | `UPileCountView` | Optional | 消耗牌堆数量 |
 | `DrawPileMotionAnchor` | `UWidget`，推荐 `SizeBox` | Optional | `Drawn` 卡牌的完整逻辑起点；缺失或几何无效时回退 `DrawPileView` 中心 |
 | `DiscardPileMotionAnchor` | `UWidget`，推荐 `SizeBox` | Optional | `Discarded` 卡牌的完整逻辑终点；缺失或几何无效时回退 `DiscardPileView` 中心 |
@@ -479,6 +479,37 @@ WBP 推荐结构：用 `PileFeedbackRoot` 包住牌堆 Image 与 `CountText`，�
 
 WBP 不应做：不修改牌堆或规则状态，不自行计算数量，也不为收发反馈建立会被连续触发反复重启的 UMG Animation。`UPileCountView` 会把 Receive / Send 短脉冲合成到同一个 playback，并在结束、Reset 或 Destruct 时精确恢复 authored RenderTransform；Reduced Motion 只更新数量，不修改 Transform。Send 参数直接在 `WBP_PileCountView` 的 `Wacom|Common UI|Pile Count|Send Feedback` 调整：默认先沿发出方向压缩 `1.5px`，再沿反方向后坐 `3px` 并单次回弹。它既可由真实 Battle `Drawn` Enter Started 驱动 DrawPile 发牌，也可由洗牌牌印真实 Launch 驱动 DiscardPile 离堆；Receive 同理服务普通弃牌抵达 DiscardPile 与洗牌抵达 DrawPile。`SetCount()`、Run 手牌进入或普通 Snapshot refresh 不会自行触发这些反馈。
 
+`UPileCountView` 的详情入口同样不包含 Battle 语义：鼠标左键、Enter、Space 或手柄确认只广播 native 请求。BattleHUD 分别把 Draw / Discard / Exhaust 实例映射到对应页签，并在 Entry 未完成、Presentation busy、BattleEnd 或已有二级面板时禁用焦点与请求；WBP 不自行打开 Screen。
+
+### WBP_BattleCardPileDetailsScreen
+
+父类：`UWacomBattleCardPileDetailsScreen`。资产路径：`/Game/Wacom/UI/Battle/PileDetails/WBP_BattleCardPileDetailsScreen`，注册键为 `UI.Widget.BattleCardPileDetailsScreen`。
+
+| 控件名 | 类型 | 运行时职责 |
+|---|---|---|
+| `BackdropButton` / `CloseButton` | `Button` | 面板外点击与显式关闭；其余 Esc、右键、手柄 B 由 Secondary Panel 基类处理 |
+| `NavigationRail` | `SizeBox` | 左侧约 `128px` 的牌区导航栏；保持独立宽度，不参与卡牌网格缩放 |
+| `DrawTabButton` / `DiscardTabButton` / `ExhaustTabButton` | `Button` | 三个主牌区图标页签；当前分页使用 Style 中的冰蓝/暖金选中色 |
+| `DrawTabIcon` / `DiscardTabIcon` / `ExhaustTabIcon` | `Image` | 复用现有 Draw / Discard / Exhaust 图标资产，不在 WBP 中复制纹理 |
+| `DiscardSectionRoot` | `HorizontalBox` | 仅 Discard 页显示 |
+| `DiscardSectionButton` / `PlayedSectionButton` | `Button` | 真正弃牌与本回合已使用两个独立区域，各自显示准确 Count |
+| `PanelSizeBox` | `SizeBox` | 使用全视口锚点并保留默认 `24px` 安全边距；不再限制为左侧 `680px` 面板 |
+| `CardGridSizeBox` | `SizeBox` | 承载填满剩余页面的卡牌网格 |
+| `VirtualizedCardTileView` | `UWacomBattleCardPileTileView` | 虚拟化逐实例网格，不一次创建整副牌完整 Widget |
+| `TitleText` / `EmptyText` | `TextBlock` | 当前区域与数量、空区域提示；Draw 顺序仍在规则层脱敏，但不显示说明文案 |
+| `DetailPanelHost` | `SizeBox` | Screen 级唯一详情宿主；运行时复用一个正式 `WBP_CardDetailPanel`，按悬浮/焦点条目几何在左右侧定位并限制在安全区 |
+
+### WBP_BattleCardPileEntry
+
+父类：`UBattleCardPileEntryWidget`。必需绑定为 `EntrySizeBox`、`SelectionOutlineImage` 与固定尺寸 `CardHost`。运行时依据 `DA_BattleCardPileDetailsStyle_Default.CardViewClass` 在 Host 中创建正式 `/Game/Wacom/UI/Card/WBP_CardView`，而不是创建只有 C++ fallback 排版的裸 `UWacomCardView`。默认卡体为项目原始 `296×420px`，Tile 条目再增加选框留白与网格间距；`CardHost` 必须保持显式宽高，不允许由 Fill 父槽把卡面非等比拉长。`SelectionOutlineImage` 位于 CardHost 下方，只有 Hover、焦点或点击锁定时才按需创建局部 MID；点击锁定只保留外框，详情仍由当前 Hover/焦点控制。条目回收时必须清除 MID、焦点委托和临时状态。
+
+```powershell
+-run=WacomBuildBattlePileDetailsUI -Build
+-run=WacomBuildBattlePileDetailsUI -InspectOnly
+```
+
+Builder 只管理上述两个 WBP、默认 Style 和 Registry 合同；当前正式合同为 v5（全屏虚拟化卡牌网格 + 单详情宿主 + 材质流光选框）。未知人工 WidgetTree 会失败而不是覆盖。第二次 Build 必须无语义变化。页面不提供排序控件，内部固定使用 `RuntimeCost → Name → InstanceId`；Draw 区始终隐藏真实牌序，但不显示额外提示。
+
 ## Enemy Panel WBP
 
 ### 通用 Panel：单段与多段
@@ -552,6 +583,7 @@ Intent 图标 Style 仍位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresent
 ## PIE Smoke Checklist
 
 - `WBP_BattleHUD` 能显示玩家状态、CommandBar、牌堆数量、流式 Combat Activity Feed 和 PresentationStack；敌人聚合面板不挂在 HUD Canvas，而挂在 `AWacomBattleEnemyActor` 头顶。
+- Draw / Discard / Exhaust 牌堆控件在无 Presentation busy 时可打开对应牌堆详情；Draw 显示顺序隐藏，Discard 能切换真实弃牌 / 本回合已使用，关闭后恢复游戏焦点。
 - CommandBar 里的 Wait / EndTurn 可点击并由 HUD runtime view data 控制可用性。
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Activity 连续追加时不丢弃第四行，按顺序向上流动并在顶部衰减；根行动图标原位交接后只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。

@@ -93,7 +93,8 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfigIfNeeded(
 			LastAppliedSlotRuntimeConfig,
 			Config.SlotRuntimeConfig)
 		|| bLastAppliedLogDiagnostics != Config.bLogSlotMotionDiagnostics
-		|| bLastAppliedInteractionEnabled != Config.bInteractionEnabled;
+		|| bLastAppliedInteractionEnabled != Config.bInteractionEnabled
+		|| bLastAppliedPresentationVisible != Config.bPresentationVisible;
 	if (bConfigChanged)
 	{
 		ApplyConfig(LayerWidget, Config);
@@ -109,6 +110,7 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfig(
 	LayerWidget.SetLogSlotMotionDiagnostics(Config.bLogSlotMotionDiagnostics);
 	LayerWidget.SetCardViewClass(Config.CardViewClass);
 	LayerWidget.SetCardLayerInteractionEnabled(Config.bInteractionEnabled);
+	LayerWidget.SetCardLayerPresentationVisible(Config.bPresentationVisible);
 
 	bHasAppliedConfig = true;
 	LastAppliedConfigHash = Config.ConfigHash;
@@ -116,6 +118,7 @@ void FWacomFirstPersonCardLayerOwner::ApplyConfig(
 	LastAppliedSlotRuntimeConfig = Config.SlotRuntimeConfig;
 	bLastAppliedLogDiagnostics = Config.bLogSlotMotionDiagnostics;
 	bLastAppliedInteractionEnabled = Config.bInteractionEnabled;
+	bLastAppliedPresentationVisible = Config.bPresentationVisible;
 #if WITH_AUTOMATION_TESTS
 	++ConfigApplyCountForTest;
 #endif
@@ -129,4 +132,5 @@ void FWacomFirstPersonCardLayerOwner::ResetConfigState()
 	LastAppliedSlotRuntimeConfig = FWacomFirstPersonCardSlotRuntimeConfig();
 	bLastAppliedLogDiagnostics = false;
 	bLastAppliedInteractionEnabled = false;
+	bLastAppliedPresentationVisible = true;
 }

@@ -1596,6 +1596,12 @@ void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerSourceLifecycleF
 	{
 		SetFirstPersonCardLayerInteractionEnabled(Frame.bInteractionEnabled);
 	}
+	if (Frame.bSetPresentationVisible
+		&& RuntimeState
+		&& RuntimeState->GetSourceId() == SourceId)
+	{
+		SetFirstPersonCardLayerPresentationVisible(Frame.bPresentationVisible);
+	}
 
 	if (Frame.bCancelActiveDrag && CardLayerWidget)
 	{
@@ -1633,6 +1639,10 @@ void UWacomFirstPersonCardAnchorComponent::ApplyRuntimeCardLayerPresentationFram
 
 	const bool bRuntimeSourceChanged =
 		RuntimeState->SetEntries(Frame.SourceId, Frame.Entries);
+	if (bRuntimeSourceChanged)
+	{
+		SetFirstPersonCardLayerPresentationVisible(true);
+	}
 	switch (Frame.CommitMode)
 	{
 	case EWacomFirstPersonCardLayerFrameCommitMode::PresentationFrame:
@@ -1900,6 +1910,20 @@ void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardLayerInteractionEna
 	if (CardLayerWidget)
 	{
 		CardLayerWidget->SetCardLayerInteractionEnabled(bFirstPersonCardLayerInteractionEnabled);
+	}
+}
+
+void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardLayerPresentationVisible(bool bVisible)
+{
+	if (bFirstPersonCardLayerPresentationVisible == bVisible)
+	{
+		return;
+	}
+	bFirstPersonCardLayerPresentationVisible = bVisible;
+	CachedPresentationVisible = bVisible;
+	if (CardLayerWidget)
+	{
+		CardLayerWidget->SetCardLayerPresentationVisible(bVisible);
 	}
 }
 
@@ -2342,6 +2366,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	const bool bRuntimeFlagsChanged =
 		!bHasCachedOwnerConfig
 		|| CachedInteractionEnabled != bFirstPersonCardLayerInteractionEnabled
+		|| CachedPresentationVisible != bFirstPersonCardLayerPresentationVisible
 		|| CachedLogDiagnostics != bLogCardLayerMotionDiagnostics;
 
 	const bool bCardViewClassChanged =
@@ -2360,6 +2385,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 		CachedSlotRuntimeConfig.Drag = BuildCardDragConfig(*this, ResolvedConfig);
 		CachedPileTransferConfig       = ResolvedConfig.PileTransfer;
 		CachedInteractionEnabled       = bFirstPersonCardLayerInteractionEnabled;
+		CachedPresentationVisible      = bFirstPersonCardLayerPresentationVisible;
 		CachedLogDiagnostics           = bLogCardLayerMotionDiagnostics;
 		CachedCardViewClass            = FirstPersonCardViewClass.Get();
 		bHasCachedOwnerConfig          = true;
@@ -2374,6 +2400,7 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 	OwnerConfig.PileTransferConfig        = CachedPileTransferConfig;
 	OwnerConfig.bLogSlotMotionDiagnostics  = CachedLogDiagnostics;
 	OwnerConfig.bInteractionEnabled       = CachedInteractionEnabled;
+	OwnerConfig.bPresentationVisible      = CachedPresentationVisible;
 
 	FWacomFirstPersonCardLayerOwnerUpdateInput UpdateInput;
 	UpdateInput.PlayerController = PC;

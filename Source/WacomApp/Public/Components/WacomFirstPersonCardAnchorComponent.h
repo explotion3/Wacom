@@ -1015,6 +1015,7 @@ private:
 	void ClearRuntimeCardLayerData(FName SourceId);
 	void ClearCardLayerVisualState();
 	void SetFirstPersonCardLayerInteractionEnabled(bool bEnabled);
+	void SetFirstPersonCardLayerPresentationVisible(bool bVisible);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomFirstPersonCardLayerWidget> CardLayerWidget;
@@ -1053,9 +1054,11 @@ private:
 	mutable TObjectPtr<UClass> CachedCardViewClass;
 	mutable uint32 CachedOwnerConfigHash = 0;
 	mutable bool CachedInteractionEnabled = false;
+	mutable bool CachedPresentationVisible = true;
 	mutable bool CachedLogDiagnostics = false;
 	mutable bool bHasCachedOwnerConfig = false;
 	bool bFirstPersonCardLayerInteractionEnabled = false;
+	bool bFirstPersonCardLayerPresentationVisible = true;
 	FDelegateHandle RuntimeSettingsChangedHandle;
 	float RuntimeDecorativeFlashIntensityScale = 1.0f;
 	bool bRuntimeSimplifiedMotion = false;

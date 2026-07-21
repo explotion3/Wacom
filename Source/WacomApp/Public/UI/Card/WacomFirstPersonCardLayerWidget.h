@@ -171,6 +171,8 @@ public:
 	void SetPileTransferHints(const TArray<FWacomFirstPersonCardPileTransferHint>& InHints);
 	void SetCardSlots(const TArray<FWacomFirstPersonCardLayerSlotView>& InSlots);
 	void SetCardLayerInteractionEnabled(bool bEnabled);
+	void SetCardLayerPresentationVisible(bool bVisible);
+	bool IsCardLayerPresentationVisible() const { return bCardLayerPresentationVisible; }
 	bool HasActivePresentationPlayback() const;
 	bool HasHandTargetImpactReachedPeak(const FGuid& CardInstanceId) const;
 	void ForceSettlePresentationPlayback();
@@ -287,6 +289,7 @@ private:
 	TSet<uint64> PlayedPileTransferKeys;
 	TArray<FWacomFirstPersonCardPileTransferHint> DeferredPileTransferHints;
 	bool bCardLayerInteractionEnabled = false;
+	bool bCardLayerPresentationVisible = true;
 	bool bLogSlotMotionDiagnostics = false;
 #if WITH_AUTOMATION_TESTS
 	FWacomFirstPersonCardLayerAutomationTestView GetAutomationTestViewForTest() const;

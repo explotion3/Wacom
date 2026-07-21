@@ -8,6 +8,7 @@
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
+#include "InputCoreTypes.h"
 
 namespace
 {
@@ -131,6 +132,7 @@ void UPileCountView::NativeDestruct()
 		PileFeedbackPlayback->Pulses.Reset();
 	}
 	RestorePileFeedbackAuthoredState();
+	PileDetailsRequestedNative.Clear();
 	Super::NativeDestruct();
 }
 
@@ -289,6 +291,45 @@ void UPileCountView::ResetSendFeedback()
 	{
 		EvaluateAndApplyPileFeedback(0.0f, false);
 	}
+}
+
+void UPileCountView::SetDetailsInteractionEnabled(bool bEnabled)
+{
+	if (bDetailsInteractionEnabled == bEnabled)
+	{
+		return;
+	}
+	bDetailsInteractionEnabled = bEnabled;
+	SetIsFocusable(bDetailsInteractionEnabled);
+}
+
+FReply UPileCountView::NativeOnMouseButtonDown(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	if (bDetailsInteractionEnabled
+		&& InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		PileDetailsRequestedNative.Broadcast();
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+}
+
+FReply UPileCountView::NativeOnKeyDown(
+	const FGeometry& InGeometry,
+	const FKeyEvent& InKeyEvent)
+{
+	const FKey Key = InKeyEvent.GetKey();
+	if (bDetailsInteractionEnabled
+		&& (Key == EKeys::Enter
+			|| Key == EKeys::SpaceBar
+			|| Key == EKeys::Gamepad_FaceButton_Bottom))
+	{
+		PileDetailsRequestedNative.Broadcast();
+		return FReply::Handled();
+	}
+	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
 }
 
 void UPileCountView::RefreshDisplay()

@@ -20,6 +20,7 @@ struct FWacomFirstPersonCardLayerOwnerConfig
 	FWacomFirstPersonCardPileTransferConfig PileTransferConfig;
 	bool bLogSlotMotionDiagnostics = false;
 	bool bInteractionEnabled = false;
+	bool bPresentationVisible = true;
 };
 
 struct FWacomFirstPersonCardLayerOwnerUpdateInput
@@ -71,6 +72,7 @@ private:
 	FWacomFirstPersonCardSlotRuntimeConfig LastAppliedSlotRuntimeConfig;
 	bool bLastAppliedLogDiagnostics = false;
 	bool bLastAppliedInteractionEnabled = false;
+	bool bLastAppliedPresentationVisible = true;
 #if WITH_AUTOMATION_TESTS
 	int32 ConfigApplyCountForTest = 0;
 #endif

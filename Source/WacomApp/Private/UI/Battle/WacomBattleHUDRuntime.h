@@ -169,8 +169,11 @@ public:
 	bool IsBattlePresentationPlanBusy() const;
 	bool CanSubmitPlayerActionCommand() const;
 	void SetSecondaryPanelOpen(bool bOpen);
+	bool SetFirstPersonBattleHandPresentationVisible(bool bVisible);
 	bool IsSecondaryPanelOpen() const { return bSecondaryPanelOpen; }
 	bool RequestOpenCombatLogDetails();
+	bool RequestOpenCardPileDetails(EWacomBattlePileDetailsTab InitialTab);
+	void RefreshPileDetailsInteractionState();
 	bool HasPendingTurnBoundaryCommand() const;
 	FText GetPendingTurnBoundaryCommandText() const;
 	void RefreshCommandBarFromSnapshot(const FBattleSnapshot& Snapshot);

@@ -18,6 +18,7 @@
 #include "Session/BattleResultPacket.h"
 #include "Session/BattleResolution.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "Snapshots/BattlePileInspectionSnapshot.h"
 #include "BattleSession.generated.h"
 
 class UCharacterDefinition;
@@ -250,6 +251,13 @@ public:
 	/** 构建当前战斗的只读快照。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle")
 	FBattleSnapshot BuildSnapshot() const;
+
+	/**
+	 * 按需构建牌堆详情使用的只读快照。Draw 区不会暴露真实抽取顺序。
+	 * 该接口不修改规则状态、事件序号或随机源。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Pile Inspection")
+	FBattlePileInspectionSnapshot BuildPileInspectionSnapshot() const;
 
 	/** 战斗是否已结束（Phase == BattleEnd）。 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle")

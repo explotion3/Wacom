@@ -1459,6 +1459,16 @@ void UWacomFirstPersonCardLayerWidget::SetCardLayerInteractionEnabled(bool bEnab
 	}
 }
 
+void UWacomFirstPersonCardLayerWidget::SetCardLayerPresentationVisible(bool bVisible)
+{
+	if (bCardLayerPresentationVisible == bVisible)
+	{
+		return;
+	}
+	bCardLayerPresentationVisible = bVisible;
+	ApplyLayerVisibility();
+}
+
 UWacomCardView* UWacomFirstPersonCardLayerWidget::GetCardViewAt(int32 Index) const
 {
 	const UWacomFirstPersonCardLayerSlotWidget* SlotWidget = GetSlotWidgetAt(Index);
@@ -1925,9 +1935,11 @@ UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::CreateSl
 
 void UWacomFirstPersonCardLayerWidget::ApplyLayerVisibility()
 {
-	const ESlateVisibility LayerVisibility = bCardLayerInteractionEnabled
-		? ESlateVisibility::SelfHitTestInvisible
-		: ESlateVisibility::HitTestInvisible;
+	const ESlateVisibility LayerVisibility = !bCardLayerPresentationVisible
+		? ESlateVisibility::Collapsed
+		: (bCardLayerInteractionEnabled
+			? ESlateVisibility::SelfHitTestInvisible
+			: ESlateVisibility::HitTestInvisible);
 	SetVisibility(LayerVisibility);
 	if (RootCanvas)
 	{

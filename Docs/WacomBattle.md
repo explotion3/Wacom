@@ -88,6 +88,8 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 
 商店强化发生在 Run 持有卡实例上：InstanceId 不变，只把该实例的静态 Definition 引用替换为链中下一版本。随后 `BuildInitParamsForBattle()` 自然把当前 Definition 投影到 `BattleDeckEntries`，Battle 因而读取新版本的费用、稀有度和效果；Battle 不解析强化族、不修改 DataAsset，也不新增公共强化合同。战斗中的临时 Cost modifier 仍属于 `FRuntimeCardInstance`，不能写回强化链。
 
+牌堆详情使用独立的按需只读合同 `UBattleSession::BuildPileInspectionSnapshot()`，不会扩大普通高频 `FBattleSnapshot`。返回值固定包含 Draw、Discard、Played 和 Exhaust 四个区域，每张实例只携带 Definition、位置、运行时费用、状态层数和临时关键词。Draw 区会在 Battle 层按 Definition 稳定路径与 InstanceId 重新排序并标记 `bOrderHidden=true`；调用方永远拿不到真实区域索引、抽取方向或内部抽牌顺序。构建检查快照不得发布事件、推进 Battle Version、消耗 RNG 或改变任意牌区。
+
 `FBattleSnapshot.Enemies` 是敌人快照的唯一 public 入口。它按初始化 `EnemySlots` 顺序输出 `FEnemySnapshot`，每个 enemy 下再输出 `Parts`。不再提供 `FBattleSnapshot.Enemy` 或“第一个敌人”别名；UI、日志、场景目标绑定和新测试都应遍历 `Enemies`，或在明确单敌人 fixture 中显式读取 `Enemies[0]`。敌方部位长期身份以 `EncounterId + EnemySlotId + PartSlotId` 为准；`PartId` 只保留在静态内容定义和 debug 语义中，不参与运行时目标匹配。
 
 ## §3 PlayCard 与目标合同

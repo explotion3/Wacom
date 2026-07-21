@@ -1,0 +1,38 @@
+Function SelfContained WacomBattleCardPileSelectionOutline_Evaluate(
+    in float2 uv,
+    in float selectionAmount,
+    in float reducedMotion,
+    in float seed,
+    in float timeSeconds,
+    in float lineWidth,
+    in float featherWidth,
+    in float flowWidth,
+    in float flowSpeed,
+    in float glowStrength,
+    in float3 primaryColor,
+    in float3 accentColor,
+    out float3 color,
+    out float alpha)
+{
+    float2 edgeDistance = min(uv, 1.0 - uv);
+    float distanceToEdge = min(edgeDistance.x, edgeDistance.y);
+    float safeLine = max(lineWidth, 0.0005);
+    float safeFeather = max(featherWidth, 0.0002);
+    float border = 1.0 - smoothstep(safeLine, safeLine + safeFeather, distanceToEdge);
+
+    float2 centered = uv - float2(0.5, 0.5);
+    float horizontalEdge = step(abs(centered.y), abs(centered.x));
+    float perimeterCoordinate = lerp(
+        uv.x + step(0.0, centered.y) * (2.0 - uv.x * 2.0),
+        uv.y + step(0.0, centered.x) * (2.0 - uv.y * 2.0),
+        horizontalEdge);
+    perimeterCoordinate = frac(perimeterCoordinate * 0.5 + seed);
+    float animatedPhase = frac(timeSeconds * max(flowSpeed, 0.0) + seed);
+    float phase = lerp(seed, animatedPhase, 1.0 - step(0.5, reducedMotion));
+    float wrappedDistance = abs(frac(perimeterCoordinate - phase + 0.5) - 0.5);
+    float highlight = 1.0 - smoothstep(max(flowWidth, 0.01), max(flowWidth, 0.01) * 1.8, wrappedDistance);
+
+    float amount = saturate(selectionAmount);
+    alpha = saturate(border * amount * (0.46 + highlight * max(glowStrength, 0.0)));
+    color = lerp(primaryColor, accentColor, highlight) * alpha;
+}

@@ -3,9 +3,21 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Snapshots/BattlePileInspectionSnapshot.h"
+#include "UI/Battle/WacomBattleCardPileDetailsTypes.h"
 
 class FWacomBattleHUDRuntime;
+class UCommonActivatableWidget;
+class UWacomBattleCardPileDetailsScreen;
 class UWacomBattleCombatLogDetailsScreen;
+class UWacomBattleSecondaryPanelScreenBase;
+
+enum class EWacomBattleSecondaryPanelKind : uint8
+{
+	None,
+	CombatLog,
+	CardPile
+};
 
 /** App-private owner for Battle GameMenu secondary panels and their command gate. */
 class FWacomBattleSecondaryPanelCoordinator
@@ -16,13 +28,17 @@ public:
 	~FWacomBattleSecondaryPanelCoordinator();
 
 	bool RequestOpenCombatLogDetails();
+	bool RequestOpenCardPileDetails(EWacomBattlePileDetailsTab InitialTab);
 	void Shutdown(bool bResetBattlePreference);
 
 	bool IsOpenOrPending() const { return bPushPending || ActiveScreen.IsValid(); }
 	bool IsShowingCombatLogDetails() const { return bShowCombatLogDetails; }
 
 private:
-	void AttachScreen(UWacomBattleCombatLogDetailsScreen& Screen);
+	bool BeginPush(EWacomBattleSecondaryPanelKind Kind, FGameplayTag WidgetTag, TSubclassOf<UCommonActivatableWidget> FallbackClass);
+	bool AttachPushedScreen(UCommonActivatableWidget& Pushed, FName& OutFailureReason);
+	void AttachCombatLogScreen(UWacomBattleCombatLogDetailsScreen& Screen);
+	void AttachCardPileScreen(UWacomBattleCardPileDetailsScreen& Screen);
 	void HandleScreenClosed();
 	void HandleDetailsModeChanged(bool bShowDetails);
 	void HandlePushCompleted(bool bSucceeded, FName FailureReason);
@@ -30,9 +46,13 @@ private:
 	bool IsCurrentRequest(int32 RequestGeneration) const;
 
 	FWacomBattleHUDRuntime& Runtime;
-	TWeakObjectPtr<UWacomBattleCombatLogDetailsScreen> ActiveScreen;
+	TWeakObjectPtr<UWacomBattleSecondaryPanelScreenBase> ActiveScreen;
+	FBattlePileInspectionSnapshot PendingPileSnapshot;
+	EWacomBattlePileDetailsTab PendingPileTab = EWacomBattlePileDetailsTab::Draw;
+	EWacomBattleSecondaryPanelKind PendingKind = EWacomBattleSecondaryPanelKind::None;
 	int32 Generation = 0;
 	bool bPushPending = false;
 	bool bShowCombatLogDetails = false;
+	bool bCardPileHandHidden = false;
 	bool bShuttingDown = false;
 };

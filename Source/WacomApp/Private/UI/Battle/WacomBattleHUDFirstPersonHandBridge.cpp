@@ -316,6 +316,21 @@ bool FWacomBattleHUDFirstPersonHandBridge::ShouldEnableFirstPersonBattleHandInte
 		&& !Runtime.IsBattlePresentationPlanBusy();
 }
 
+bool FWacomBattleHUDFirstPersonHandBridge::SetLayerPresentationVisible(bool bVisible)
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor();
+	if (!Anchor || Anchor->GetRuntimeCardLayerSourceId() != FirstPersonBattleHandLayerSourceId)
+	{
+		return false;
+	}
+	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame;
+	LifecycleFrame.SourceId = FirstPersonBattleHandLayerSourceId;
+	LifecycleFrame.bSetPresentationVisible = true;
+	LifecycleFrame.bPresentationVisible = bVisible;
+	Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
+	return true;
+}
+
 void FWacomBattleHUDFirstPersonHandBridge::BindLayerInteractions(UWacomFirstPersonCardAnchorComponent* Anchor)
 {
 	if (!Anchor)

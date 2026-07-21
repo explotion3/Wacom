@@ -4,8 +4,11 @@
 
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Session/BattleSession.h"
+#include "UI/Battle/WacomBattleCardPileDetailsScreen.h"
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
+#include "UI/Battle/WacomBattleSecondaryPanelScreenBase.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
 
@@ -21,6 +24,40 @@ FWacomBattleSecondaryPanelCoordinator::~FWacomBattleSecondaryPanelCoordinator()
 }
 
 bool FWacomBattleSecondaryPanelCoordinator::RequestOpenCombatLogDetails()
+{
+	return BeginPush(
+		EWacomBattleSecondaryPanelKind::CombatLog,
+		WacomUITags::UI_Widget_BattleCombatLogDetailsScreen.GetTag(),
+		UWacomBattleCombatLogDetailsScreen::StaticClass());
+}
+
+bool FWacomBattleSecondaryPanelCoordinator::RequestOpenCardPileDetails(
+	EWacomBattlePileDetailsTab InitialTab)
+{
+	UBattleSession* Session = Runtime.GetSession();
+	if (!Session
+		|| Runtime.IsBattlePresentationBusy()
+		|| !Runtime.CanSubmitPlayerActionCommand())
+	{
+		return false;
+	}
+	PendingPileSnapshot = Session->BuildPileInspectionSnapshot();
+	PendingPileTab = InitialTab;
+	const bool bStarted = BeginPush(
+		EWacomBattleSecondaryPanelKind::CardPile,
+		WacomUITags::UI_Widget_BattleCardPileDetailsScreen.GetTag(),
+		UWacomBattleCardPileDetailsScreen::StaticClass());
+	if (!bStarted)
+	{
+		PendingPileSnapshot = FBattlePileInspectionSnapshot();
+	}
+	return bStarted;
+}
+
+bool FWacomBattleSecondaryPanelCoordinator::BeginPush(
+	EWacomBattleSecondaryPanelKind Kind,
+	FGameplayTag WidgetTag,
+	TSubclassOf<UCommonActivatableWidget> FallbackClass)
 {
 	if (bPushPending || ActiveScreen.IsValid() || !Runtime.GetSession())
 	{
@@ -44,7 +81,6 @@ bool FWacomBattleSecondaryPanelCoordinator::RequestOpenCombatLogDetails()
 		return false;
 	}
 
-	// Menu ownership begins only after all active targeting/drag state was neutral-cancelled.
 	Runtime.CancelTargetSelect();
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
 	{
@@ -55,13 +91,14 @@ bool FWacomBattleSecondaryPanelCoordinator::RequestOpenCombatLogDetails()
 
 	bShuttingDown = false;
 	bPushPending = true;
+	PendingKind = Kind;
 	const int32 RequestGeneration = ++Generation;
 	TWeakPtr<FWacomBattleSecondaryPanelCoordinator> WeakThis = AsShared();
 
 	FWacomAsyncWidgetPushRequest Request;
 	Request.LayerTag = LayerTag;
-	Request.WidgetTag = WacomUITags::UI_Widget_BattleCombatLogDetailsScreen.GetTag();
-	Request.FallbackClass = UWacomBattleCombatLogDetailsScreen::StaticClass();
+	Request.WidgetTag = WidgetTag;
+	Request.FallbackClass = FallbackClass;
 	Request.OwningPlayer = PlayerController;
 	Request.bLogMissingEntry = true;
 	Request.CanPush = [WeakThis, RequestGeneration]()
@@ -78,14 +115,7 @@ bool FWacomBattleSecondaryPanelCoordinator::RequestOpenCombatLogDetails()
 			OutFailureReason = TEXT("StaleBattleSecondaryPanelRequest");
 			return false;
 		}
-		UWacomBattleCombatLogDetailsScreen* Screen = Cast<UWacomBattleCombatLogDetailsScreen>(&Pushed);
-		if (!Screen)
-		{
-			OutFailureReason = TEXT("WrongCombatLogDetailsScreenClass");
-			return false;
-		}
-		StrongThis->AttachScreen(*Screen);
-		return true;
+		return StrongThis->AttachPushedScreen(Pushed, OutFailureReason);
 	};
 	Request.Rollback = [WeakThis, RequestGeneration](FName FailureReason)
 	{
@@ -111,6 +141,34 @@ bool FWacomBattleSecondaryPanelCoordinator::RequestOpenCombatLogDetails()
 	return true;
 }
 
+bool FWacomBattleSecondaryPanelCoordinator::AttachPushedScreen(
+	UCommonActivatableWidget& Pushed,
+	FName& OutFailureReason)
+{
+	switch (PendingKind)
+	{
+	case EWacomBattleSecondaryPanelKind::CombatLog:
+		if (UWacomBattleCombatLogDetailsScreen* Screen = Cast<UWacomBattleCombatLogDetailsScreen>(&Pushed))
+		{
+			AttachCombatLogScreen(*Screen);
+			return true;
+		}
+		OutFailureReason = TEXT("WrongCombatLogDetailsScreenClass");
+		return false;
+	case EWacomBattleSecondaryPanelKind::CardPile:
+		if (UWacomBattleCardPileDetailsScreen* Screen = Cast<UWacomBattleCardPileDetailsScreen>(&Pushed))
+		{
+			AttachCardPileScreen(*Screen);
+			return true;
+		}
+		OutFailureReason = TEXT("WrongCardPileDetailsScreenClass");
+		return false;
+	default:
+		OutFailureReason = TEXT("MissingBattleSecondaryPanelKind");
+		return false;
+	}
+}
+
 void FWacomBattleSecondaryPanelCoordinator::Shutdown(bool bResetBattlePreference)
 {
 	bShuttingDown = true;
@@ -130,16 +188,21 @@ void FWacomBattleSecondaryPanelCoordinator::Shutdown(bool bResetBattlePreference
 	}
 	bPushPending = false;
 
-	if (UWacomBattleCombatLogDetailsScreen* Screen = ActiveScreen.Get())
+	if (UWacomBattleSecondaryPanelScreenBase* Screen = ActiveScreen.Get())
 	{
 		Screen->OnSecondaryPanelClosedNative().RemoveAll(this);
-		Screen->OnDetailsModeChangedNative().RemoveAll(this);
+		if (UWacomBattleCombatLogDetailsScreen* CombatLogScreen = Cast<UWacomBattleCombatLogDetailsScreen>(Screen))
+		{
+			CombatLogScreen->OnDetailsModeChangedNative().RemoveAll(this);
+		}
 		ActiveScreen.Reset();
 		if (Screen->IsActivated())
 		{
 			Screen->DeactivateWidget();
 		}
 	}
+	PendingKind = EWacomBattleSecondaryPanelKind::None;
+	PendingPileSnapshot = FBattlePileInspectionSnapshot();
 	ReleaseCommandGate();
 	if (bResetBattlePreference)
 	{
@@ -148,7 +211,7 @@ void FWacomBattleSecondaryPanelCoordinator::Shutdown(bool bResetBattlePreference
 	bShuttingDown = false;
 }
 
-void FWacomBattleSecondaryPanelCoordinator::AttachScreen(
+void FWacomBattleSecondaryPanelCoordinator::AttachCombatLogScreen(
 	UWacomBattleCombatLogDetailsScreen& Screen)
 {
 	ActiveScreen = &Screen;
@@ -159,19 +222,34 @@ void FWacomBattleSecondaryPanelCoordinator::AttachScreen(
 	Screen.SetCombatLogContext(Runtime.GetBattleCombatLogDetailsHistory(), bShowCombatLogDetails);
 }
 
+void FWacomBattleSecondaryPanelCoordinator::AttachCardPileScreen(
+	UWacomBattleCardPileDetailsScreen& Screen)
+{
+	ActiveScreen = &Screen;
+	Screen.OnSecondaryPanelClosedNative().RemoveAll(this);
+	Screen.OnSecondaryPanelClosedNative().AddSP(AsShared(), &FWacomBattleSecondaryPanelCoordinator::HandleScreenClosed);
+	Screen.SetPileDetailsContext(PendingPileSnapshot, PendingPileTab);
+	bCardPileHandHidden = Runtime.SetFirstPersonBattleHandPresentationVisible(false);
+}
+
 void FWacomBattleSecondaryPanelCoordinator::HandleScreenClosed()
 {
 	if (bShuttingDown)
 	{
 		return;
 	}
-	if (UWacomBattleCombatLogDetailsScreen* Screen = ActiveScreen.Get())
+	if (UWacomBattleSecondaryPanelScreenBase* Screen = ActiveScreen.Get())
 	{
 		Screen->OnSecondaryPanelClosedNative().RemoveAll(this);
-		Screen->OnDetailsModeChangedNative().RemoveAll(this);
+		if (UWacomBattleCombatLogDetailsScreen* CombatLogScreen = Cast<UWacomBattleCombatLogDetailsScreen>(Screen))
+		{
+			CombatLogScreen->OnDetailsModeChangedNative().RemoveAll(this);
+		}
 	}
 	ActiveScreen.Reset();
 	bPushPending = false;
+	PendingKind = EWacomBattleSecondaryPanelKind::None;
+	PendingPileSnapshot = FBattlePileInspectionSnapshot();
 	ReleaseCommandGate();
 }
 
@@ -192,15 +270,22 @@ void FWacomBattleSecondaryPanelCoordinator::HandlePushCompleted(
 	if (!FailureReason.IsNone())
 	{
 		UE_LOG(LogTemp, Warning,
-			TEXT("[BattleSecondaryPanel] Combat Log details push failed: %s"),
+			TEXT("[BattleSecondaryPanel] Secondary panel push failed: %s"),
 			*FailureReason.ToString());
 	}
 	ActiveScreen.Reset();
+	PendingKind = EWacomBattleSecondaryPanelKind::None;
+	PendingPileSnapshot = FBattlePileInspectionSnapshot();
 	ReleaseCommandGate();
 }
 
 void FWacomBattleSecondaryPanelCoordinator::ReleaseCommandGate()
 {
+	if (bCardPileHandHidden)
+	{
+		Runtime.SetFirstPersonBattleHandPresentationVisible(true);
+		bCardPileHandHidden = false;
+	}
 	Runtime.SetSecondaryPanelOpen(false);
 }
 

@@ -100,6 +100,10 @@ HUD 状态入口：
 
 常驻播报的 Root 和临时 Row 都不命中；只有 Footer 的最后行动按钮可点击。按钮调用 `UBattleHUD::RequestOpenCombatLogDetails()`：HUD 仍广播 `OnCombatLogDetailsRequestedNative`，同时由 `FWacomBattleSecondaryPanelCoordinator` 向 `UI.Layer.GameMenu` 异步 Push `UWacomBattleCombatLogDetailsScreen`。Screen 打开时复制 Controller 的回合分区历史，不访问 `UBattleSession`，也不轮询规则状态。
 
+`FWacomBattleSecondaryPanelCoordinator` 同时是 BattleHUD 唯一的二级面板所有者。牌堆入口由通用 `UPileCountView` 只广播“请求详情”，Draw / Discard / Exhaust 的 Battle 语义由 HUD 映射；Coordinator 在 Push 前按需复制 `BuildPileInspectionSnapshot()`，Screen 此后不再访问 Session。牌堆页使用全屏安全区：左侧图标栏切换 Draw、Discard（弃牌堆 / 本回合已使用两个子区）和 Exhaust，右侧虚拟化 `UTileView` 逐实例显示完整卡牌。页面不暴露排序入口，固定按 `RuntimeCost → Name → InstanceId` 稳定排序；规则层仍对 Draw 区做无序投影，但 UI 不再显示额外提示文案。每个条目通过 runtime `CardHost` 创建正式 `WBP_CardView`，按原始 `296×420px` 卡体展示，并用固定 Entry 尺寸与列数自适应避免非等比拉伸。Screen 只复用一个 `WBP_CardDetailPanel`：悬浮或手柄焦点稳定约 `0.10s` 后在卡牌左右安全空间显示并跟随滚动；点击只锁定条目流光外框，不让详情常驻。流光由条目活动时按需创建的局部 UI MID 绘制，非活动/回收条目不保留 MID。牌堆 Screen 成功 Attach 后只把当前 `BattleHand` Layer 的表现可见性设为 `Collapsed`；Slot、ViewData、MID 与 Transition 均保留，关闭后原样恢复且不重播入场。打开期间复用现有 `All + NoCapture` 输入合同：镜头与后台非阻塞表现继续，卡牌、Wait、EndTurn 与目标提交被门控。
+
+牌堆详情入口只在 Entry Gate 已完成、Battle 未结束、没有活动二级面板且 `IsBattlePresentationBusy()==false` 时启用。抽牌、弃牌、洗牌等 Presentation 活动期间点击不会排队，也不会提前暴露已经权威结算但尚未表现到达的结果；页面打开后消费一次副本，无需 Tick 轮询规则。
+
 详细日志默认使用简略模式，只显示回合开始/结束分割线和根行动；“查看详情”展开每个根行动下的全部结果行。偏好只在当前战斗内记忆。Screen 使用 `All + NoCapture`，因此镜头和后台 Battle Presentation 继续运行；独立 `bSecondaryPanelOpen` gate 禁止卡牌、Wait、EndTurn、目标提交和世界点击。打开前会中性取消当前拖拽/目标选择。Backdrop、关闭按钮、Esc、右键和 Gamepad B 都只关闭一次，关闭后下一帧恢复游戏 Viewport focus。BattleEnd、Session 切换、Push 失败和 HUD teardown 必须释放 gate，并重置战斗内偏好。
 
 正式 `WBP_BattleCombatLogFeed / WBP_BattleCombatActivityRow / WBP_BattleCombatLogDetailsScreen / WBP_BattleCombatLogTurnDivider`、默认 `DA_BattleCombatActivityStyle_Default` 和中性像素图标图集由 `WacomBuildCombatActivityUI` 确定性生成。`BP_BattleHUD.CombatLogFeed` 必须嵌入正式 Feed WBP 生成类，才能继承 Style、Row Class 和 Footer 图标；Builder 会把已知的原生 Feed 定向替换为该 WBP，并保留其有效 Canvas Slot。Builder 首次把 Feed 迁到玩家状态栏下方 `(28,122)`、`420×190`；写入位置合同后保留有效的人工 Canvas Offset。运行时不再把旧 ScrollBox/BlocksBox 临时适配为 Feed，资产失效只走原生 C++ fallback。`-InspectOnly` 必须完全只读，重复 `-Build` 必须无资产差异。
@@ -264,7 +268,7 @@ BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命�
 | `UPlayerStatusBar` | `Wacom|Battle|Player Status|Authoring` | 显示玩家 HP / Shield / runtime 状态图标 |
 | `UBattleCommandBarWidget / UWacomBattleCommandButtonWidget` | `Wacom|Battle|Command Bar|Authoring` | 被动显示 Wait / EndTurn 命令 view data，并把玩家意图广播回 BattleHUD |
 | `UWacomBattleStatusIconListWidget / UWacomBattleStatusIconWidget` | `Wacom|Battle|Status Icons|Authoring` | 共享状态图标列表和单个状态图标；玩家状态条正式使用，敌人部位条目可选接入 |
-| `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用数量显示与收发反馈控件；牌堆类型由 WBP Image 图标表达，BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数`。可选 `PileFeedbackRoot` 统一承载图标+数字弹性 RenderTransform；缺失时兼容回退 `ReceiveFeedbackRoot`，再回退整个控件。Receive 与 Send 使用同一个组合 playback，不争用或覆盖 authored transform；Reduced Motion 仍更新数量但不播放变换。 |
+| `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用数量显示、收发反馈与详情请求控件；牌堆类型由所有者/WBP 决定。BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数`，并把通用详情请求映射到牌堆页。可选 `PileFeedbackRoot` 统一承载图标+数字弹性 RenderTransform；缺失时兼容回退 `ReceiveFeedbackRoot`，再回退整个控件。Receive 与 Send 使用同一个组合 playback，不争用或覆盖 authored transform；Reduced Motion 仍更新数量但不播放变换。 |
 | `UWacomProgressBar` | `Wacom|Common UI|Progress Bar` | 通用数值进度条显示控件 |
 
 `UPlayerStatusBar` 是左上角被动 Vitals HUD：权威 HP / Shield 在敌人行动 Impact 立即刷新，HP 下降后保留约 `0.08s` 珊瑚红延迟区，再于约 `0.32s` 收束；护盾下降以外框和右侧绝对数值播放约 `0.16s` 压缩/亮起/回弹，破盾完成后才 Hidden，布局空间始终保留。HP 低于 `25%` 静态转为暖红，不循环闪烁。若同次同时扣 HP 与 Shield，视觉均可播放而声音只选 Damage。Action Preview 不降低整栏透明度，而是在 `VitalsTrackImage` 内绘制 projected 增减区段，并更新中央 HP、护盾数字和 projected statuses；清理 Preview 不触发真实反馈。Simplified Motion 保留数值与区段，关闭延迟收束和护盾变换。

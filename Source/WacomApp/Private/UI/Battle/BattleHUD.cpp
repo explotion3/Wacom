@@ -160,6 +160,7 @@ void UBattleHUD::NativeConstruct()
 		CommandBar->OnBattleCommandRequested.AddDynamic(this, &UBattleHUD::HandleCommandBarCommandRequested);
 	}
 	BindCombatLogFeedForRuntime();
+	BindPileDetailsRequestsForRuntime();
 	GetBattleHUDRuntime().NativeConstruct();
 }
 
@@ -170,6 +171,7 @@ void UBattleHUD::NativeDestruct()
 		CommandBar->OnBattleCommandRequested.RemoveAll(this);
 	}
 	UnbindCombatLogFeedForRuntime();
+	UnbindPileDetailsRequestsForRuntime();
 	if (BattleHUDRuntime)
 	{
 		BattleHUDRuntime->NativeDestruct();
@@ -255,6 +257,7 @@ void UBattleHUD::RebuildChildBattleWidgetsForRuntime()
 	if (CombatLogFeed) { ChildBattleWidgets.Add(CombatLogFeed); }
 	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
 	BindCombatLogFeedForRuntime();
+	BindPileDetailsRequestsForRuntime();
 
 	if (UBattleSession* CurrentSession = GetInjectedBattleSession())
 	{
@@ -955,6 +958,11 @@ void UBattleHUD::RequestOpenCombatLogDetails()
 	OnCombatLogDetailsRequestedNative.Broadcast();
 }
 
+void UBattleHUD::RequestOpenCardPileDetails(EWacomBattlePileDetailsTab InitialTab)
+{
+	GetBattleHUDRuntime().RequestOpenCardPileDetails(InitialTab);
+}
+
 void UBattleHUD::BindCombatLogFeedForRuntime()
 {
 	if (!CombatLogFeed)
@@ -978,6 +986,45 @@ void UBattleHUD::UnbindCombatLogFeedForRuntime()
 void UBattleHUD::HandleCombatLogDetailsRequested()
 {
 	RequestOpenCombatLogDetails();
+}
+
+void UBattleHUD::BindPileDetailsRequestsForRuntime()
+{
+	UnbindPileDetailsRequestsForRuntime();
+	if (DrawPileView)
+	{
+		DrawPileView->OnPileDetailsRequestedNative().AddUObject(this, &UBattleHUD::HandleDrawPileDetailsRequested);
+	}
+	if (DiscardPileView)
+	{
+		DiscardPileView->OnPileDetailsRequestedNative().AddUObject(this, &UBattleHUD::HandleDiscardPileDetailsRequested);
+	}
+	if (ExhaustPileView)
+	{
+		ExhaustPileView->OnPileDetailsRequestedNative().AddUObject(this, &UBattleHUD::HandleExhaustPileDetailsRequested);
+	}
+}
+
+void UBattleHUD::UnbindPileDetailsRequestsForRuntime()
+{
+	if (DrawPileView) { DrawPileView->OnPileDetailsRequestedNative().RemoveAll(this); }
+	if (DiscardPileView) { DiscardPileView->OnPileDetailsRequestedNative().RemoveAll(this); }
+	if (ExhaustPileView) { ExhaustPileView->OnPileDetailsRequestedNative().RemoveAll(this); }
+}
+
+void UBattleHUD::HandleDrawPileDetailsRequested()
+{
+	RequestOpenCardPileDetails(EWacomBattlePileDetailsTab::Draw);
+}
+
+void UBattleHUD::HandleDiscardPileDetailsRequested()
+{
+	RequestOpenCardPileDetails(EWacomBattlePileDetailsTab::Discard);
+}
+
+void UBattleHUD::HandleExhaustPileDetailsRequested()
+{
+	RequestOpenCardPileDetails(EWacomBattlePileDetailsTab::Exhaust);
 }
 
 void UBattleHUD::HandleFirstPersonCardLayerEnterTransitionStarted(

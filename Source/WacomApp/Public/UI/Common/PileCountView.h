@@ -11,6 +11,8 @@ class UWidget;
 struct FWacomPileFeedbackPlayback;
 struct FWacomPileCountViewTestAccess;
 
+DECLARE_MULTICAST_DELEGATE(FWacomPileDetailsRequestedNative);
+
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomPileReceiveFeedbackStyle
 {
@@ -142,11 +144,22 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Common UI|Pile Count|Send Feedback", meta = (ToolTip = "立即停止牌堆发牌反馈。若接收反馈仍在播放，会精确恢复并继续合成剩余接收反馈；不会改变当前显示数量。"))
 	void ResetSendFeedback();
 
+	/** Enables the generic details affordance. The owner maps this request to its own pile semantics. */
+	void SetDetailsInteractionEnabled(bool bEnabled);
+	bool IsDetailsInteractionEnabled() const { return bDetailsInteractionEnabled; }
+	FWacomPileDetailsRequestedNative& OnPileDetailsRequestedNative() { return PileDetailsRequestedNative; }
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativePreConstruct() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual FReply NativeOnMouseButtonDown(
+		const FGeometry& InGeometry,
+		const FPointerEvent& InMouseEvent) override;
+	virtual FReply NativeOnKeyDown(
+		const FGeometry& InGeometry,
+		const FKeyEvent& InKeyEvent) override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> CountText;
@@ -169,6 +182,8 @@ private:
 	FText CountDisplayText;
 	int32 Count = 0;
 	FWacomPileFeedbackPlayback* PileFeedbackPlayback = nullptr;
+	FWacomPileDetailsRequestedNative PileDetailsRequestedNative;
+	bool bDetailsInteractionEnabled = false;
 
 	void RefreshDisplay();
 	void EnsurePileFeedbackPlayback();

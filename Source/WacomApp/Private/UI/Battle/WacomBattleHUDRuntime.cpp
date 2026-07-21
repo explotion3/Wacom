@@ -27,6 +27,7 @@
 #include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
 #include "UI/Battle/WacomBattleHUDSceneEnemyTargetCoordinator.h"
 #include "UI/Battle/WacomBattleSecondaryPanelCoordinator.h"
+#include "UI/Common/PileCountView.h"
 #include "UI/Battle/WacomBattleHUDSnapshotPresenter.h"
 #include "UI/Battle/WacomBattleHUDTargetingController.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
@@ -291,6 +292,7 @@ void FWacomBattleHUDRuntime::NativeTick(float DeltaTime)
 	TickCardDetailMotion(DeltaTime);
 	TickBattleSceneEnemyPartHoverProbe(DeltaTime);
 	GetFirstPersonHandBridge().TickPendingPresentationFrames(DeltaTime);
+	RefreshPileDetailsInteractionState();
 }
 
 void FWacomBattleHUDRuntime::NativeRefreshFromSnapshot(
@@ -307,6 +309,7 @@ void FWacomBattleHUDRuntime::NativeRefreshFromSnapshot(
 		bHasBroadcastBattleEnd = true;
 		RuntimeHost.BroadcastBattleEnd(Snapshot.Outcome);
 	}
+	RefreshPileDetailsInteractionState();
 }
 
 void FWacomBattleHUDRuntime::NativeOnSessionChanged(
@@ -739,6 +742,12 @@ void FWacomBattleHUDRuntime::SetSecondaryPanelOpen(bool bOpen)
 	{
 		SyncFirstPersonBattleHandLayer(Session->BuildSnapshot());
 	}
+	RefreshPileDetailsInteractionState();
+}
+
+bool FWacomBattleHUDRuntime::SetFirstPersonBattleHandPresentationVisible(bool bVisible)
+{
+	return GetFirstPersonHandBridge().SetLayerPresentationVisible(bVisible);
 }
 
 bool FWacomBattleHUDRuntime::RequestOpenCombatLogDetails()
@@ -1464,6 +1473,25 @@ void FWacomBattleHUDRuntime::ClearFirstPersonCardDragTargetFeedback()
 bool FWacomBattleHUDRuntime::IsFirstPersonCardDragActiveForBattleSceneHover() const
 {
 	return GetFirstPersonHandBridge().IsFirstPersonCardDragActiveForBattleSceneHover();
+}
+
+bool FWacomBattleHUDRuntime::RequestOpenCardPileDetails(
+	EWacomBattlePileDetailsTab InitialTab)
+{
+	return GetSecondaryPanelCoordinator().RequestOpenCardPileDetails(InitialTab);
+}
+
+void FWacomBattleHUDRuntime::RefreshPileDetailsInteractionState()
+{
+	const bool bEnabled = GetSession()
+		&& bBattleInputReady
+		&& !bSecondaryPanelOpen
+		&& UIState == EBattleUIState::Idle
+		&& !IsBattlePresentationBusy()
+		&& !HasPendingTurnBoundaryCommand();
+	if (UPileCountView* View = RuntimeHost.GetDrawPileView()) { View->SetDetailsInteractionEnabled(bEnabled); }
+	if (UPileCountView* View = RuntimeHost.GetDiscardPileView()) { View->SetDetailsInteractionEnabled(bEnabled); }
+	if (UPileCountView* View = RuntimeHost.GetExhaustPileView()) { View->SetDetailsInteractionEnabled(bEnabled); }
 }
 
 FWacomBattleCardDropResolveResult FWacomBattleHUDRuntime::ResolveFirstPersonCardDropIntent(
