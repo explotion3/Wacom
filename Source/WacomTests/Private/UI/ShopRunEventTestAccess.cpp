@@ -28,6 +28,23 @@ bool FWacomShopRunEventTestAccess::PurchaseOfferAt(UWacomShopScreen& Screen, int
 	return Screen.PurchaseOfferByIndex(Index);
 }
 
+FWacomShopCardUpgradePresentationView FWacomShopRunEventTestAccess::UpgradeView(
+	const UWacomShopScreen& Screen,
+	int32 Index)
+{
+	return Screen.GetCachedUpgradeView(Index);
+}
+
+bool FWacomShopRunEventTestAccess::SelectUpgradeAt(UWacomShopScreen& Screen, int32 Index)
+{
+	return Screen.SelectUpgradeByIndex(Index);
+}
+
+bool FWacomShopRunEventTestAccess::UpgradeSelected(UWacomShopScreen& Screen)
+{
+	return Screen.UpgradeSelectedCardForTest();
+}
+
 FText FWacomShopRunEventTestAccess::FormatPurchaseFailureToast(FName DisabledReason)
 {
 	return UWacomShopScreen::BuildPurchaseFailureToastText(DisabledReason);

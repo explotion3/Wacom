@@ -238,7 +238,9 @@ WacomApp 负责调用 UI shell，但不在本文定义具体 UI 视觉和刷新�
 
 Shop Trigger 只把 `UShopDefinition` 的商品与可选强化价格转成 `FRunShopVisitRequest`，PlayerController / ScreenRouter 只负责访问生命周期和请求转发；是否可强化、实际价格、金币、过期 Definition 与原子提交都由 RunSession 权威决定。`FRunShopSnapshot.CardUpgradeQuotes` 和 `FRunShopCardUpgradeResult` 是 App 可消费的被动数据，Widget 不读取或修改 CardDefinition 链，也不能自行推断资格。
 
-当前 Shop Screen 仍只呈现购买列表，本轮没有新增 WBP、页签、确认弹窗或 Toast。正式“购买 / 强化”双页签、前后字段比较、确认与结果反馈由 Spec 020 接入；接入时 Screen 只提交 Quote 中的 InstanceId 与预期 Definition guard。卡牌回收金币展示统一调用 `URunSession::GetDeleteGoldRewardForCard()`，不再在 App 维护稀有度价格副本。
+`UWacomShopScreen` 与全局注册的 `/Game/Wacom/UI/Shop/WBP_ShopScreen` 现提供“购买 / 强化”双页签。强化页只列出存在下一 Definition 的实体 Instance，同 Definition 多实例不会合并；金币不足项保留可见但禁用。选择后用两张通用 `WBP_CardView` 展示当前/下一版本，并列出稀有度、费用和 Effect Magnitude/Duration 差异。下一版本卡面直接消费自身稀有度边框，并只把相对当前版本提高或降低的效果数字标为被动正/负语义色；该比较色不写入 CardDefinition，也不会延续到手牌、背包或战斗中的普通卡面。内联按钮只提交 Quote 中的 `InstanceId + ExpectedCurrentDefinition + ExpectedNextDefinition`，Screen flow 消费 Run 的权威 Result，显示稳定中文 Toast，并按 Exploration Resolution / visit close 语义收口；同名强化用“卡名（旧稀有度 → 新稀有度）”反馈，不弹第二个确认框。
+
+强化 service 关闭时隐藏强化页并保持旧商店 purchase-only 行为。Snapshot/Gold/Quote 刷新通过独立 signature 和 InstanceId reconciler 更新，保留仍合法的页签与选择；达到链末端后清除选择。Activate/Deactivate、RunSession 订阅、鼠标焦点和 ESC/Back 与购买页共用对称生命周期。C++ fallback 与 WBP 走同一被动合同，WBP 不引用 Debug 卡或 Shop 资产。卡牌回收金币展示继续统一调用 `URunSession::GetDeleteGoldRewardForCard()`。
 
 ### GameMenu viewpoint staging
 

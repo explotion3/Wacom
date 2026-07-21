@@ -19,6 +19,9 @@ struct FWacomShopRunEventTestAccess
 	static FWacomShopOfferPresentationView OfferView(const UWacomShopScreen& Screen, int32 Index);
 	static UWacomShopOfferRowWidget* OfferRow(const UWacomShopScreen& Screen, int32 Index);
 	static bool PurchaseOfferAt(UWacomShopScreen& Screen, int32 Index);
+	static FWacomShopCardUpgradePresentationView UpgradeView(const UWacomShopScreen& Screen, int32 Index);
+	static bool SelectUpgradeAt(UWacomShopScreen& Screen, int32 Index);
+	static bool UpgradeSelected(UWacomShopScreen& Screen);
 	static FText FormatPurchaseFailureToast(FName DisabledReason);
 
 	static FWacomRunEventScreenAutomationTestView View(const UWacomRunEventScreen& Screen);

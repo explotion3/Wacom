@@ -254,6 +254,8 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 同一时刻只能存在一个 active shop visit；重入 Begin 会被 Run 层拒绝，不依赖旧 UI 先完成关闭。
 - App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；迟到的旧 Screen 不得结束新访问。token 不进入 RunState/SaveGame。
 
+Debug 可玩竖切沿用同一事务，不增加测试专用购买或强化规则：在 `Journey.Debug / Floor.Debug.01 / Node.Entry` 且没有活动节点交互时，Editor-only 命令 `Wacom.Shop.SeedUpgradePIEValidation` 只把 Gold 补到 3；玩家仍需在 `Shop.Snake` 以 1 Gold 购买 White 测试卡，再由正式 `UpgradeOwnedCardAtShop()` 以 2 Gold 强化为 Blue。命令不发卡、离开 Entry 后拒绝、重复执行不继续加钱。首笔购买消耗本次访问唯一的 1 AP，随后强化为 0 AP；这只是 Debug 路线，Production 经济内容另案冻结。
+
 当前 `ShopStates` 与强化报价只保存在 Run 内存态，不写入 SaveGame。卡牌实例仍按 SaveGame v5 的 `DefinitionAssetPath` 保存当前强化版本和原 InstanceId，schema 无需升级；读档不会恢复活动 Shop 或旧 Quote。Actor 商品来源、Definition 字段和 Validate Map/Level 口径见 [WacomData.md](./WacomData.md)、[WacomDataAuthoring.md](./WacomDataAuthoring.md) 和 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
 ## §7 RunEvent 事务

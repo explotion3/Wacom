@@ -386,6 +386,8 @@ struct FShopCardUpgradeServiceDefinition
 - 强化服务默认关闭；开启后按“当前稀有度”精确配置单步价格。White、Blue、Yellow 可定价且允许 0 Gold，重复稀有度、负价格或 Intrinsic/Purple 价格属于制作错误；未配置某一档表示该商店不提供该档强化，Quote 会明确返回价格缺失。
 - RunSession 使用场景 `PersistentId` 保存本次 Run 内的购买状态和库存访问。
 
+Spec 020 的可玩竖切使用隔离的 Debug 强化族 `Test.ShopUpgrade.VenomProof`：White 版 `Damage 3 + Poison 1` 指向 Blue 版 `Damage 5 + Poison 2`，两版均显示为“试制毒牙”，并保持 `Weapon / SingleEnemyPart / Cost 1`。强化版本不靠改名表达状态，卡面用 White/Blue 稀有度边框区分；商店下一版本预览只对实际增强的数值使用正向语义色。`DA_Shop_DebugSnake` 在原 24 个 Offer 后追加 White 版（1 Gold），并启用 White/Blue/Yellow 的 `2/3/4 Gold` 强化价格。该链只用于验证购买后按同一 Instance 强化，不得进入 Production dependency closure，也不代表正式卡牌强化数值已冻结。
+
 ## §8 Pickup Definition
 
 `UWacomRunPickupDefinition` 是 Run world Pickup 的数据驱动奖励定义。它描述“这个拾取物给什么”，不保存“这个场景实例是否已拾取”。

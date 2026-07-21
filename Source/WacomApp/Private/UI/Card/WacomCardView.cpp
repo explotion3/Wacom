@@ -101,6 +101,7 @@ namespace
 				|| A[Index].bHasPreviewValue != B[Index].bHasPreviewValue
 				|| A[Index].PreviewValue != B[Index].PreviewValue
 				|| A[Index].bPreviewSkipped != B[Index].bPreviewSkipped
+				|| A[Index].ValueEmphasis != B[Index].ValueEmphasis
 				|| !AreCardViewTextViewsEquivalent(A[Index].DisplayText, B[Index].DisplayText))
 			{
 				return false;

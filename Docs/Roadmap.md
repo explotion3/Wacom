@@ -99,8 +99,8 @@ tags:
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
 | 商店内容 | 当前商店规则与数据入口见 [WacomRun.md](./WacomRun.md) / [WacomData.md](./WacomData.md) | 设计随机商品池、价格公式、库存刷新规则 |
-| 卡牌强化规则 | 不可变 Definition 链、制作校验、实例级原子交易、被动 Quote/Result、升级族匹配和 Save v5 当前版本持久化已落地 | Spec 020 冻结首批强化链与 Shop 价格；后续只通过 DataAsset 扩展，不复制运行时规则 |
-| 商店 UI | 当前 Screen 仍是 purchase-only；规则入口见 [WacomApp.md](./WacomApp.md) | Spec 020 实现购买/强化双页签、前后对比、确认与 AppToast；继续补商品卡面预览、hover 详情和售罄表现 |
+| 卡牌强化规则 | 不可变 Definition 链、制作校验、实例级原子交易、被动 Quote/Result、升级族匹配、Save v5 当前版本持久化和 Debug White→Blue 路线已落地 | 冻结首批 Production 强化链与正式 Shop 价格；后续只通过 DataAsset 扩展，不复制运行时规则 |
+| 商店 UI | 正式 `WBP_ShopScreen` 已全局注册，购买/强化双页签、InstanceId 列表、前后 CardView/字段差异、内联确认和 Toast 已接入 | PIE 通过后继续补 Production 视觉主题、商品 hover 详情、售罄表现；有性能证据后再考虑列表虚拟化 |
 | 商店存档 | 当前内存态边界见 [TechDebt: 数据与存档债](./TechDebt.md#techdebt-data-save) | 接入 SaveGame，并决定商店库存是否跨日或跨地图保留 |
 
 <a id="roadmap-save"></a>

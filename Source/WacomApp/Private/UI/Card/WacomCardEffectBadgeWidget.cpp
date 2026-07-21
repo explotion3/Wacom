@@ -29,6 +29,7 @@ namespace
 			&& A.bHasPreviewValue == B.bHasPreviewValue
 			&& A.PreviewValue == B.PreviewValue
 			&& A.bPreviewSkipped == B.bPreviewSkipped
+			&& A.ValueEmphasis == B.ValueEmphasis
 			&& AreTextViewsEquivalent(A.DisplayText, B.DisplayText);
 	}
 
@@ -65,6 +66,13 @@ UWacomCardEffectBadgeWidget::GetAutomationTestViewForTest() const
 	View.SpriteSynchronousFallbackCount = SpriteSynchronousFallbackCountForTest;
 	View.RootScale = GetRenderTransform().Scale;
 	View.RootOpacity = GetRenderOpacity();
+	if (DigitHost && DigitHost->GetChildrenCount() > 0)
+	{
+		if (const UImage* FirstDigit = Cast<UImage>(DigitHost->GetChildAt(0)))
+		{
+			View.DigitTint = FirstDigit->GetColorAndOpacity();
+		}
+	}
 	View.bHasFrameShadowImage = BadgeFrameShadowImage != nullptr;
 	View.bFrameShadowVisible = BadgeFrameShadowImage
 		&& BadgeFrameShadowImage->GetVisibility() != ESlateVisibility::Collapsed;
@@ -723,6 +731,7 @@ void UWacomCardEffectBadgeWidget::UpdateDigitImages()
 		}
 
 		SetSpriteBrush(*DigitImage, *Sprite, DigitDrawSize);
+		DigitImage->SetColorAndOpacity(ResolveValueTint());
 		DigitImage->SetVisibility(ESlateVisibility::HitTestInvisible);
 		if (UPanelSlot* AddedDigitSlot = DigitImage->Slot)
 		{
@@ -795,6 +804,20 @@ TArray<int32> UWacomCardEffectBadgeWidget::SplitIntoDigits(int32 Value) const
 	}
 
 	return Result;
+}
+
+FLinearColor UWacomCardEffectBadgeWidget::ResolveValueTint() const
+{
+	switch (CurrentData.ValueEmphasis)
+	{
+	case EWacomCardViewValueEmphasis::Increased:
+		return IncreasedValueTint;
+	case EWacomCardViewValueEmphasis::Decreased:
+		return DecreasedValueTint;
+	case EWacomCardViewValueEmphasis::Neutral:
+	default:
+		return FLinearColor::White;
+	}
 }
 
 void UWacomCardEffectBadgeWidget::SetSpriteBrush(UImage& Image, UPaperSprite& Sprite, const FVector2D& DesiredSize)

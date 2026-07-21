@@ -9,21 +9,28 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/PanelWidget.h"
 #include "Components/ScrollBox.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WidgetSwitcher.h"
 
 #include "GameFramework/WacomPlayerController.h"
 #include "RunSession.h"
 #include "RunState.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
+#include "UI/Card/WacomCardView.h"
 #include "UI/Shop/WacomShopOfferRowListReconciler.h"
 #include "UI/Shop/WacomShopOfferRowWidget.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "UI/Shop/WacomShopRefreshGate.h"
 #include "UI/Shop/WacomShopScreenFlow.h"
+#include "UI/Shop/WacomShopUpgradeRowListReconciler.h"
+#include "UI/Shop/WacomShopUpgradeRowWidget.h"
 
 namespace
 {
@@ -60,7 +67,7 @@ TSharedRef<SWidget> UWacomShopScreen::RebuildWidget()
 		{
 			PanelSlot->SetAnchors(FAnchors(0.5f, 0.5f));
 			PanelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
-			PanelSlot->SetOffsets(FMargin(-360.f, -260.f, 720.f, 520.f));
+			PanelSlot->SetOffsets(FMargin(-560.f, -360.f, 1120.f, 720.f));
 			PanelSlot->SetAutoSize(false);
 		}
 
@@ -82,22 +89,107 @@ TSharedRef<SWidget> UWacomShopScreen::RebuildWidget()
 			GoldSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
 		}
 
+		UHorizontalBox* Tabs = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("Tabs"));
+		if (UVerticalBoxSlot* TabsSlot = RootBox->AddChildToVerticalBox(Tabs))
+		{
+			TabsSlot->SetHorizontalAlignment(HAlign_Center);
+			TabsSlot->SetPadding(FMargin(0.f, 0.f, 0.f, 12.f));
+		}
+		PurchaseTabButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("PurchaseTabButton"));
+		UTextBlock* PurchaseTabText = MakeShopText(WidgetTree, TEXT("PurchaseTabText"), LOCTEXT("PurchaseTab", "购买"), 18);
+		PurchaseTabButton->AddChild(PurchaseTabText);
+		if (UHorizontalBoxSlot* TabSlot = Tabs->AddChildToHorizontalBox(PurchaseTabButton))
+		{
+			TabSlot->SetPadding(FMargin(0.f, 0.f, 8.f, 0.f));
+		}
+		UpgradeTabButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("UpgradeTabButton"));
+		UTextBlock* UpgradeTabText = MakeShopText(WidgetTree, TEXT("UpgradeTabText"), LOCTEXT("UpgradeTab", "强化"), 18);
+		UpgradeTabButton->AddChild(UpgradeTabText);
+		Tabs->AddChildToHorizontalBox(UpgradeTabButton);
+
+		PageSwitcher = WidgetTree->ConstructWidget<UWidgetSwitcher>(UWidgetSwitcher::StaticClass(), TEXT("PageSwitcher"));
+		if (UVerticalBoxSlot* SwitcherSlot = RootBox->AddChildToVerticalBox(PageSwitcher))
+		{
+			SwitcherSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+
+		UVerticalBox* PurchasePage = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("PurchasePage"));
+		PageSwitcher->AddChild(PurchasePage);
 		EmptyText = MakeShopText(WidgetTree, TEXT("EmptyText"), LOCTEXT("Empty", "暂无商品"), 18);
 		EmptyText->SetJustification(ETextJustify::Center);
-		if (UVerticalBoxSlot* EmptySlot = RootBox->AddChildToVerticalBox(EmptyText))
+		if (UVerticalBoxSlot* EmptySlot = PurchasePage->AddChildToVerticalBox(EmptyText))
 		{
 			EmptySlot->SetHorizontalAlignment(HAlign_Center);
 			EmptySlot->SetPadding(FMargin(0.f, 12.f));
 		}
-
 		UScrollBox* OfferScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("OfferScroll"));
-		if (UVerticalBoxSlot* ScrollSlot = RootBox->AddChildToVerticalBox(OfferScroll))
+		if (UVerticalBoxSlot* ScrollSlot = PurchasePage->AddChildToVerticalBox(OfferScroll))
 		{
 			ScrollSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		}
-
 		OfferList = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("OfferList"));
 		OfferScroll->AddChild(OfferList);
+
+		UHorizontalBox* UpgradePage = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("UpgradePage"));
+		PageSwitcher->AddChild(UpgradePage);
+		UVerticalBox* UpgradeColumn = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("UpgradeColumn"));
+		if (UHorizontalBoxSlot* UpgradeColumnSlot = UpgradePage->AddChildToHorizontalBox(UpgradeColumn))
+		{
+			UpgradeColumnSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			UpgradeColumnSlot->SetPadding(FMargin(0.f, 0.f, 18.f, 0.f));
+		}
+		UpgradeEmptyText = MakeShopText(WidgetTree, TEXT("UpgradeEmptyText"), LOCTEXT("UpgradeEmpty", "没有可强化的卡牌"), 18);
+		UpgradeEmptyText->SetJustification(ETextJustify::Center);
+		UpgradeColumn->AddChildToVerticalBox(UpgradeEmptyText);
+		UScrollBox* UpgradeScroll = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("UpgradeScroll"));
+		if (UVerticalBoxSlot* UpgradeScrollSlot = UpgradeColumn->AddChildToVerticalBox(UpgradeScroll))
+		{
+			UpgradeScrollSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+		UpgradeList = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("UpgradeList"));
+		UpgradeScroll->AddChild(UpgradeList);
+
+		UVerticalBox* Details = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("UpgradeDetails"));
+		if (UHorizontalBoxSlot* DetailsSlot = UpgradePage->AddChildToHorizontalBox(Details))
+		{
+			DetailsSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+		UHorizontalBox* CardCompare = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("CardCompare"));
+		if (UVerticalBoxSlot* CardCompareSlot = Details->AddChildToVerticalBox(CardCompare))
+		{
+			CardCompareSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+		}
+		auto AddCardView = [this, CardCompare](FName BoxName, FName ViewName) -> UWacomCardView*
+		{
+			USizeBox* Box = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), BoxName);
+			Box->SetWidthOverride(210.f);
+			Box->SetHeightOverride(300.f);
+			UWacomCardView* View = WidgetTree->ConstructWidget<UWacomCardView>(UWacomCardView::StaticClass(), ViewName);
+			Box->AddChild(View);
+			if (UHorizontalBoxSlot* CardSlot = CardCompare->AddChildToHorizontalBox(Box))
+			{
+				CardSlot->SetPadding(FMargin(4.f));
+			}
+			return View;
+		};
+		CurrentCardView = AddCardView(TEXT("CurrentCardBox"), TEXT("CurrentCardView"));
+		NextCardView = AddCardView(TEXT("NextCardBox"), TEXT("NextCardView"));
+		UpgradeDetailsText = MakeShopText(WidgetTree, TEXT("UpgradeDetailsText"), LOCTEXT("SelectUpgrade", "选择一张卡牌查看强化差异"), 16);
+		UpgradeDetailsText->SetAutoWrapText(true);
+		if (UVerticalBoxSlot* UpgradeDetailsSlot = Details->AddChildToVerticalBox(UpgradeDetailsText))
+		{
+			UpgradeDetailsSlot->SetPadding(FMargin(4.f, 8.f));
+		}
+		UpgradeActionButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("UpgradeActionButton"));
+		UpgradeActionText = MakeShopText(WidgetTree, TEXT("UpgradeActionText"), LOCTEXT("UpgradeActionEmpty", "请选择卡牌"), 17);
+		UpgradeActionText->SetJustification(ETextJustify::Center);
+		UpgradeActionButton->AddChild(UpgradeActionText);
+		if (UVerticalBoxSlot* UpgradeActionSlot = Details->AddChildToVerticalBox(UpgradeActionButton))
+		{
+			UpgradeActionSlot->SetHorizontalAlignment(HAlign_Center);
+			UpgradeActionSlot->SetPadding(FMargin(4.f, 8.f));
+		}
+		PageSwitcher->SetActiveWidgetIndex(0);
 
 		CloseButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("CloseButton"));
 		UTextBlock* CloseText = MakeShopText(WidgetTree, TEXT("CloseText"), LOCTEXT("Close", "关闭"), 18);
@@ -120,6 +212,18 @@ void UWacomShopScreen::NativeConstruct()
 	{
 		CloseButton->OnClicked.AddUniqueDynamic(this, &UWacomShopScreen::HandleCloseClicked);
 	}
+	if (PurchaseTabButton)
+	{
+		PurchaseTabButton->OnClicked.AddUniqueDynamic(this, &UWacomShopScreen::HandlePurchaseTabClicked);
+	}
+	if (UpgradeTabButton)
+	{
+		UpgradeTabButton->OnClicked.AddUniqueDynamic(this, &UWacomShopScreen::HandleUpgradeTabClicked);
+	}
+	if (UpgradeActionButton)
+	{
+		UpgradeActionButton->OnClicked.AddUniqueDynamic(this, &UWacomShopScreen::HandleUpgradeActionClicked);
+	}
 
 	TrySubscribeRunSession();
 	RefreshShop();
@@ -127,6 +231,22 @@ void UWacomShopScreen::NativeConstruct()
 
 void UWacomShopScreen::NativeDestruct()
 {
+	if (CloseButton)
+	{
+		CloseButton->OnClicked.RemoveDynamic(this, &UWacomShopScreen::HandleCloseClicked);
+	}
+	if (PurchaseTabButton)
+	{
+		PurchaseTabButton->OnClicked.RemoveDynamic(this, &UWacomShopScreen::HandlePurchaseTabClicked);
+	}
+	if (UpgradeTabButton)
+	{
+		UpgradeTabButton->OnClicked.RemoveDynamic(this, &UWacomShopScreen::HandleUpgradeTabClicked);
+	}
+	if (UpgradeActionButton)
+	{
+		UpgradeActionButton->OnClicked.RemoveDynamic(this, &UWacomShopScreen::HandleUpgradeActionClicked);
+	}
 	UnsubscribeRunSession();
 	Super::NativeDestruct();
 }
@@ -201,6 +321,15 @@ void UWacomShopScreen::RefreshShop()
 	}
 
 	RebuildOfferRows(Snapshot, CurrentGold);
+	RebuildUpgradeRows(Snapshot, CurrentGold);
+	if (!Snapshot.CardUpgradeService.bEnabled && ActivePage == EWacomShopPage::Upgrade)
+	{
+		SetActivePage(EWacomShopPage::Purchase);
+	}
+	else
+	{
+		SetActivePage(ActivePage);
+	}
 }
 
 void UWacomShopScreen::SuppressEndShopVisitOnNextDeactivate()
@@ -213,6 +342,24 @@ void UWacomShopScreen::HandleCloseClicked()
 	DeactivateWidget();
 }
 
+void UWacomShopScreen::HandlePurchaseTabClicked()
+{
+	SetActivePage(EWacomShopPage::Purchase);
+}
+
+void UWacomShopScreen::HandleUpgradeTabClicked()
+{
+	if (CachedShopSnapshot.CardUpgradeService.bEnabled)
+	{
+		SetActivePage(EWacomShopPage::Upgrade);
+	}
+}
+
+void UWacomShopScreen::HandleUpgradeActionClicked()
+{
+	UpgradeSelectedCard();
+}
+
 #if WITH_AUTOMATION_TESTS
 bool UWacomShopScreen::PurchaseOfferByIndex(int32 Index)
 {
@@ -221,6 +368,28 @@ bool UWacomShopScreen::PurchaseOfferByIndex(int32 Index)
 		return false;
 	}
 	return PurchaseOffer(CachedOfferIds[Index]);
+}
+
+bool UWacomShopScreen::SelectUpgradeByIndex(int32 Index)
+{
+	if (!CachedUpgradeViews.IsValidIndex(Index))
+	{
+		return false;
+	}
+	HandleUpgradeSelectionRequested(CachedUpgradeViews[Index].InstanceId);
+	return true;
+}
+
+bool UWacomShopScreen::UpgradeSelectedCardForTest()
+{
+	return UpgradeSelectedCard();
+}
+
+FWacomShopCardUpgradePresentationView UWacomShopScreen::GetCachedUpgradeView(int32 Index) const
+{
+	return CachedUpgradeViews.IsValidIndex(Index)
+		? CachedUpgradeViews[Index]
+		: FWacomShopCardUpgradePresentationView();
 }
 
 FWacomShopOfferPresentationView UWacomShopScreen::GetCachedOfferView(int32 Index) const
@@ -252,6 +421,16 @@ FWacomShopScreenAutomationTestView UWacomShopScreen::GetAutomationTestViewForTes
 	FWacomShopScreenAutomationTestView View;
 	View.DisplayedGoldText = GetDisplayedGoldText();
 	View.CachedOfferCount = CachedOfferIds.Num();
+	View.CachedUpgradeCount = CachedUpgradeViews.Num();
+	View.ActivePage = ActivePage;
+	View.SelectedUpgradeInstanceId = SelectedUpgradeInstanceId;
+	View.bUpgradeServiceVisible = CachedShopSnapshot.CardUpgradeService.bEnabled;
+	const FWacomShopCardUpgradePresentationView* Selected = CachedUpgradeViews.FindByPredicate(
+		[this](const FWacomShopCardUpgradePresentationView& Candidate)
+		{
+			return Candidate.InstanceId == SelectedUpgradeInstanceId;
+		});
+	View.bUpgradeActionEnabled = Selected && Selected->bCanUpgrade;
 	if (!ShopRefreshGate)
 	{
 		return View;
@@ -260,6 +439,8 @@ FWacomShopScreenAutomationTestView UWacomShopScreen::GetAutomationTestViewForTes
 	const FWacomShopRefreshGateCounters& Counters = ShopRefreshGate->GetCounters();
 	View.OfferRefreshApplyCount = Counters.OfferRefreshApplyCount;
 	View.OfferRefreshSkipCount = Counters.OfferRefreshSkipCount;
+	View.UpgradeRefreshApplyCount = Counters.UpgradeRefreshApplyCount;
+	View.UpgradeRefreshSkipCount = Counters.UpgradeRefreshSkipCount;
 	View.SnapshotBuildCount = Counters.SnapshotBuildCount;
 	View.SnapshotRevisionSkipCount = Counters.SnapshotRevisionSkipCount;
 	return View;
@@ -366,10 +547,131 @@ void UWacomShopScreen::RebuildOfferRows(const FRunShopSnapshot& Snapshot, int32 
 		});
 }
 
+void UWacomShopScreen::RebuildUpgradeRows(const FRunShopSnapshot& Snapshot, int32 CurrentGold)
+{
+	const bool bServiceEnabled = Snapshot.CardUpgradeService.bEnabled;
+	if (UpgradeTabButton)
+	{
+		UpgradeTabButton->SetVisibility(bServiceEnabled
+			? ESlateVisibility::Visible
+			: ESlateVisibility::Collapsed);
+		UpgradeTabButton->SetIsEnabled(bServiceEnabled);
+	}
+	if (!bServiceEnabled)
+	{
+		CachedUpgradeViews.Reset();
+		SelectedUpgradeInstanceId.Invalidate();
+		if (UpgradeList)
+		{
+			UpgradeList->ClearChildren();
+		}
+		ApplySelectedUpgradePresentation();
+		return;
+	}
+
+	if (GetShopRefreshGate().ShouldApplyUpgradeRows(Snapshot, CurrentGold))
+	{
+		CachedUpgradeViews = UWacomShopUpgradePresentationBuilder::BuildUpgradePresentationViews(Snapshot);
+		const bool bSelectionStillValid = CachedUpgradeViews.ContainsByPredicate(
+			[this](const FWacomShopCardUpgradePresentationView& Candidate)
+			{
+				return Candidate.InstanceId == SelectedUpgradeInstanceId;
+			});
+		if (!bSelectionStillValid)
+		{
+			SelectedUpgradeInstanceId.Invalidate();
+		}
+		FWacomShopUpgradeRowListReconciler::Reconcile(
+			UpgradeList,
+			CachedUpgradeViews,
+			SelectedUpgradeInstanceId,
+			[this](const FWacomShopCardUpgradePresentationView&) -> UWacomShopUpgradeRowWidget*
+			{
+				if (!WidgetTree)
+				{
+					return nullptr;
+				}
+				UWacomShopUpgradeRowWidget* Row = WidgetTree->ConstructWidget<UWacomShopUpgradeRowWidget>(
+					UWacomShopUpgradeRowWidget::StaticClass());
+				if (Row)
+				{
+					Row->OnSelectionRequestedNative.AddUObject(
+						this, &UWacomShopScreen::HandleUpgradeSelectionRequested);
+				}
+				return Row;
+			});
+	}
+	if (UpgradeEmptyText)
+	{
+		UpgradeEmptyText->SetVisibility(CachedUpgradeViews.IsEmpty()
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	ApplySelectedUpgradePresentation();
+}
+
+void UWacomShopScreen::ApplySelectedUpgradePresentation()
+{
+	const FWacomShopCardUpgradePresentationView* Selected = CachedUpgradeViews.FindByPredicate(
+		[this](const FWacomShopCardUpgradePresentationView& Candidate)
+		{
+			return Candidate.InstanceId == SelectedUpgradeInstanceId;
+		});
+	if (CurrentCardView)
+	{
+		CurrentCardView->SetVisibility(Selected ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		if (Selected)
+		{
+			CurrentCardView->SetCardViewData(Selected->CurrentCardViewData);
+		}
+	}
+	if (NextCardView)
+	{
+		NextCardView->SetVisibility(Selected ? ESlateVisibility::Visible : ESlateVisibility::Hidden);
+		if (Selected)
+		{
+			NextCardView->SetCardViewData(Selected->NextCardViewData);
+		}
+	}
+	if (UpgradeDetailsText)
+	{
+		UpgradeDetailsText->SetText(Selected
+			? Selected->ChangeSummaryText
+			: LOCTEXT("SelectUpgrade", "选择一张卡牌查看强化差异"));
+	}
+	if (UpgradeActionText)
+	{
+		UpgradeActionText->SetText(Selected
+			? Selected->ActionText
+			: LOCTEXT("UpgradeActionEmpty", "请选择卡牌"));
+	}
+	if (UpgradeActionButton)
+	{
+		UpgradeActionButton->SetIsEnabled(Selected && Selected->bCanUpgrade);
+	}
+}
+
+void UWacomShopScreen::SetActivePage(EWacomShopPage NewPage)
+{
+	if (NewPage == EWacomShopPage::Upgrade
+		&& !CachedShopSnapshot.CardUpgradeService.bEnabled)
+	{
+		NewPage = EWacomShopPage::Purchase;
+	}
+	ActivePage = NewPage;
+	if (PageSwitcher)
+	{
+		PageSwitcher->SetActiveWidgetIndex(ActivePage == EWacomShopPage::Purchase ? 0 : 1);
+	}
+}
+
 void UWacomShopScreen::ResetShopOfferRefreshDirtyGate()
 {
 	GetShopRefreshGate().Reset();
 	CachedShopSnapshot = FRunShopSnapshot();
+	CachedUpgradeViews.Reset();
+	SelectedUpgradeInstanceId.Invalidate();
+	ActivePage = EWacomShopPage::Purchase;
 }
 
 FWacomShopRefreshGate& UWacomShopScreen::GetShopRefreshGate()
@@ -384,6 +686,59 @@ FWacomShopRefreshGate& UWacomShopScreen::GetShopRefreshGate()
 void UWacomShopScreen::HandleOfferPurchaseRequested(FGuid OfferId)
 {
 	PurchaseOffer(OfferId);
+}
+
+void UWacomShopScreen::HandleUpgradeSelectionRequested(FGuid InstanceId)
+{
+	if (!CachedUpgradeViews.ContainsByPredicate(
+		[InstanceId](const FWacomShopCardUpgradePresentationView& Candidate)
+		{
+			return Candidate.InstanceId == InstanceId;
+		}))
+	{
+		return;
+	}
+	SelectedUpgradeInstanceId = InstanceId;
+	SetActivePage(EWacomShopPage::Upgrade);
+	FWacomShopUpgradeRowListReconciler::Reconcile(
+		UpgradeList,
+		CachedUpgradeViews,
+		SelectedUpgradeInstanceId,
+		[this](const FWacomShopCardUpgradePresentationView&) -> UWacomShopUpgradeRowWidget*
+		{
+			if (!WidgetTree)
+			{
+				return nullptr;
+			}
+			UWacomShopUpgradeRowWidget* Row = WidgetTree->ConstructWidget<UWacomShopUpgradeRowWidget>(
+				UWacomShopUpgradeRowWidget::StaticClass());
+			if (Row)
+			{
+				Row->OnSelectionRequestedNative.AddUObject(
+					this, &UWacomShopScreen::HandleUpgradeSelectionRequested);
+			}
+			return Row;
+		});
+	ApplySelectedUpgradePresentation();
+}
+
+bool UWacomShopScreen::UpgradeSelectedCard()
+{
+	const FWacomShopCardUpgradePresentationView* Selected = CachedUpgradeViews.FindByPredicate(
+		[this](const FWacomShopCardUpgradePresentationView& Candidate)
+		{
+			return Candidate.InstanceId == SelectedUpgradeInstanceId;
+		});
+	if (!Selected)
+	{
+		return false;
+	}
+	return FWacomShopScreenFlow::UpgradeCard(
+		*this,
+		Cast<AWacomPlayerController>(GetOwningPlayer()),
+		ResolveRunSession(),
+		ResolveToastSubsystem(),
+		*Selected);
 }
 
 bool UWacomShopScreen::PurchaseOffer(FGuid OfferId)

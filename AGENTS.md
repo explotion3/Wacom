@@ -242,5 +242,5 @@ Spec Kit 输出只能作为草案。实现前必须重新确认：`WacomRun` / `
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan
-at specs/019-shop-card-upgrade-baseline/plan.md
+at specs/020-shop-card-upgrade-debug-vertical-slice/plan.md
 <!-- SPECKIT END -->

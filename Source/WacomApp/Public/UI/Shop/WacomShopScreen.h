@@ -5,17 +5,28 @@
 #include "CoreMinimal.h"
 #include "UI/Run/WacomRunMenuWidgetBase.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
+#include "UI/Shop/WacomShopUpgradePresentationBuilder.h"
 #include "WacomShopScreen.generated.h"
 
 class UButton;
+class UWidgetSwitcher;
 class UTextBlock;
 class UVerticalBox;
+class UWacomCardView;
 class URunSession;
 class UWacomAppToastSubsystem;
 class UWacomShopOfferRowWidget;
+class UWacomShopUpgradeRowWidget;
 class FWacomShopRefreshGate;
 struct FRunShopOffer;
 struct FRunShopSnapshot;
+
+UENUM(BlueprintType)
+enum class EWacomShopPage : uint8
+{
+	Purchase,
+	Upgrade
+};
 
 #if WITH_AUTOMATION_TESTS
 struct FWacomShopScreenAutomationTestView
@@ -26,6 +37,13 @@ struct FWacomShopScreenAutomationTestView
 	int32 OfferRefreshSkipCount = 0;
 	int32 SnapshotBuildCount = 0;
 	int32 SnapshotRevisionSkipCount = 0;
+	int32 CachedUpgradeCount = 0;
+	int32 UpgradeRefreshApplyCount = 0;
+	int32 UpgradeRefreshSkipCount = 0;
+	EWacomShopPage ActivePage = EWacomShopPage::Purchase;
+	FGuid SelectedUpgradeInstanceId;
+	bool bUpgradeServiceVisible = false;
+	bool bUpgradeActionEnabled = false;
 };
 #endif
 
@@ -61,6 +79,15 @@ protected:
 	UFUNCTION()
 	void HandleCloseClicked();
 
+	UFUNCTION()
+	void HandlePurchaseTabClicked();
+
+	UFUNCTION()
+	void HandleUpgradeTabClicked();
+
+	UFUNCTION()
+	void HandleUpgradeActionClicked();
+
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TitleText;
 
@@ -71,7 +98,37 @@ protected:
 	TObjectPtr<UTextBlock> EmptyText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> PurchaseTabButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> UpgradeTabButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWidgetSwitcher> PageSwitcher;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UVerticalBox> OfferList;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UVerticalBox> UpgradeList;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> UpgradeEmptyText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWacomCardView> CurrentCardView;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UWacomCardView> NextCardView;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> UpgradeDetailsText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> UpgradeActionButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> UpgradeActionText;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CloseButton;
@@ -85,14 +142,22 @@ private:
 	FWacomShopOfferPresentationView GetCachedOfferView(int32 Index) const;
 	UWacomShopOfferRowWidget* GetOfferRowWidgetForTest(int32 Index) const;
 	bool PurchaseOfferByIndex(int32 Index);
+	bool SelectUpgradeByIndex(int32 Index);
+	bool UpgradeSelectedCardForTest();
+	FWacomShopCardUpgradePresentationView GetCachedUpgradeView(int32 Index) const;
 	static FText BuildPurchaseFailureToastText(FName DisabledReason);
 	FWacomShopScreenAutomationTestView GetAutomationTestViewForTest() const;
 #endif
 
 	void RebuildOfferRows(const FRunShopSnapshot& Snapshot, int32 CurrentGold);
+	void RebuildUpgradeRows(const FRunShopSnapshot& Snapshot, int32 CurrentGold);
+	void ApplySelectedUpgradePresentation();
+	void SetActivePage(EWacomShopPage NewPage);
 	UFUNCTION()
 	bool PurchaseOffer(FGuid OfferId);
+	bool UpgradeSelectedCard();
 	void HandleOfferPurchaseRequested(FGuid OfferId);
+	void HandleUpgradeSelectionRequested(FGuid InstanceId);
 	void HandleRunStateChanged();
 	void TrySubscribeRunSession();
 	void UnsubscribeRunSession();
@@ -106,6 +171,9 @@ private:
 	TArray<FWacomShopOfferPresentationView> CachedOfferViews;
 
 	UPROPERTY(Transient)
+	TArray<FWacomShopCardUpgradePresentationView> CachedUpgradeViews;
+
+	UPROPERTY(Transient)
 	FRunShopSnapshot CachedShopSnapshot;
 
 	TWeakObjectPtr<URunSession> SubscribedRunSession;
@@ -114,4 +182,6 @@ private:
 
 	bool bDidEndShopVisit = false;
 	FGuid OwnedShopVisitToken;
+	FGuid SelectedUpgradeInstanceId;
+	EWacomShopPage ActivePage = EWacomShopPage::Purchase;
 };

@@ -211,6 +211,15 @@ enum class EWacomCardViewEffectBadgeKind : uint8
 	Shield UMETA(DisplayName = "Shield")
 };
 
+/** Passive semantic tint for a compact numeric value. It never changes rules. */
+UENUM(BlueprintType)
+enum class EWacomCardViewValueEmphasis : uint8
+{
+	Neutral UMETA(DisplayName = "Neutral"),
+	Increased UMETA(DisplayName = "Increased"),
+	Decreased UMETA(DisplayName = "Decreased")
+};
+
 /**
  * One compact numeric badge shown around the card body.
  *
@@ -242,6 +251,10 @@ struct WACOMAPP_API FWacomCardViewEffectBadge
 	/** The whole semantic Badge has no applicable contribution for this preview target. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	bool bPreviewSkipped = false;
+
+	/** Static comparison emphasis used by passive inspectors such as Shop upgrade preview. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	EWacomCardViewValueEmphasis ValueEmphasis = EWacomCardViewValueEmphasis::Neutral;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	FText DisplayText;

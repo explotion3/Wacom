@@ -49,7 +49,7 @@ Builder 当前职责：
 | `BuildEncounterContent()` | 其它旧 Encounter 生成入口；单蛇 Encounter 已由 `BuildSnakeContent()` 统一拥有 |
 | `BuildTrainingWarriorContent()` | TrainingWarrior 规则数据、奖励卡、语义动画 Style、Host Blueprint 与单敌人 Encounter；只读取正式 `/Game/Wacom` 素材 |
 | `BuildBugGirlContent()` | 虫妹角色、左右手、伙伴初始牌、容器 / 功能卡、starter pack、debug key、卡对卡测试卡、badge 测试卡 |
-| `BuildShopContent()` | `DA_Shop_DebugSnake`，正式调试商品保留原价，测试 / 调试卡统一 0 金币 |
+| `BuildShopContent()` | `DA_Shop_DebugSnake`，保留原 24 个商品并追加 1 Gold 的 ShopUpgrade White 测试卡；强化服务价格固定为 White/Blue/Yellow `2/3/4` |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
 | `BuildRunPickupDefinitionContent()` | `DA_Pickup_DebugGold3`、`DA_Pickup_DebugPoisonFang` |
 | `BuildRunWorldCardInteractionDefinitionContent()` | `DA_RunWorldCardInteraction_DebugKeyGold3` |
@@ -151,7 +151,7 @@ SlimeTrio 同样拒绝 `-PromoteArt`，`-ForceArtRefresh` 只允许与 `-Promote
 | Snake Host 内容包 | `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`；按 Definition 顺序生成 Head / Body / Tail typed Part，每段直接拥有错帧 Slime Flipbook Layer 与独立单帧 Destroyed，占位资产禁止正式出包 |
 | SlimeTrio 内容包 | `Enemy.SlimeTrio`，Left / Core / Right 三部位；`BP_EnemyHost_SlimeTrio` 横向复用独立 Slime Placeholder Idle，以错帧、尺寸和 Tint 区分，局部 Destroyed 互不影响；无奖励卡和行动动画，禁止正式出包 |
 | TrainingWarrior 内容包 | `DA_Enemy_TrainingWarrior`、单 Body Part、Attack → Guard → Cleave 行为、`DA_Encounter_TrainingWarriorSingle`、语义动画 Style 与 `BP_EnemyHost_TrainingWarrior` |
-| `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡和 badge 测试卡 |
+| `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡、badge 测试卡和末尾的 ShopUpgrade White 测试卡；共 25 Offer |
 | `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力与显式 Action Point policy |
 | `DA_Event_DebugFlagReward` | RunFlag 与 `MinGold + AddGold(-N)` 组合样例 |
 | `DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
@@ -205,7 +205,18 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 每个强化等级必须是独立 `UCardDefinition` package；不要复制一张卡后保留相同 `CardId`，也不要让运行时修改 DataAsset 的 Rarity/Effect。相邻版本填写同一个显式 `UpgradeFamilyId`，前一版本的 `NextUpgradeDefinition` 只指向下一稀有度，Purple 末端保持空。旧卡不准备进入强化系统时两个新字段都保持空。
 
-单资产 Data Validation 会沿可达链检查合法边和结构稳定性；正式 manifest、定向制作工具或内容测试还必须把整组候选传给 `FWacomCardUpgradeCatalogValidation::Validate()`，以捕获只看单链无法发现的重复 CardId、多个前驱、同族多根、合流或环。Shop 价格表只决定当前商店开放的稀有度档和金币，不应复制卡牌数值。Spec 019 没有创建或保存任何 Card/Shop 资产；首批 Production 链、价格和 WBP 由 Spec 020 单独授权后制作。
+单资产 Data Validation 会沿可达链检查合法边和结构稳定性；正式 manifest、定向制作工具或内容测试还必须把整组候选传给 `FWacomCardUpgradeCatalogValidation::Validate()`，以捕获只看单链无法发现的重复 CardId、多个前驱、同族多根、合流或环。Shop 价格表只决定当前商店开放的稀有度档和金币，不应复制卡牌数值。
+
+Spec 020 只落地首条 Debug 竖切链和通用 Shop WBP：
+
+```text
+/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_White
+/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_Blue
+/Game/Wacom/Data/Shops/DA_Shop_DebugSnake
+/Game/Wacom/UI/Shop/WBP_ShopScreen
+```
+
+定向命令 `WacomSeedDebugShopUpgradeVerticalSlice` 的保存白名单只能是上述四个 Package；它以 missing-only / exact known-repair 方式创建或修复，不得调用全量 `WacomRegenerateContent`。WidgetTree 中每个 source widget 都必须持有稳定 GUID，卡牌 Damage/Poison Effect 必须显式填写 `Target.SingleEnemyPart`；二次执行必须为零创建、零修改、零保存。Debug Shop 的未来 builder defaults 已同步，但日常验证不得执行 builder 覆盖人工内容。Production 强化链和各正式 Shop 价格仍需独立内容冻结。
 
 Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
 
@@ -501,6 +512,7 @@ Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
 | `Wacom.Data.BattleStarterContent.BadgeDisplayTestCardAssetValidation` | 检查 badge 测试卡、DebugSnake 商店 0 金币出售和 CardPresentationBuilder badge view |
 | `Wacom.Data.Shop.DebugSnakeAssetValidation` | 验证 DebugSnake 商店能通过 validator |
 | `Wacom.Data.Shop.DebugSnakeAsset` | 验证商品顺序和价格，避免内容生成漂移 |
+| `Wacom.Editor.DebugShopUpgradeVerticalSlice` | 验证四 Package manifest、已知 repair 边界、AssetRegistry class/load、WBP compile/GUID/全局注册和命令存在 |
 | `Wacom.Data.RunEvent.DebugSnakeGiftAsset` | 验证蛇巢遗物事件节点、选项、条件、效果和毒牙引用 |
 | `Wacom.Data.RunEvent.DebugFlagRewardAsset` | 验证 RunFlag、金币门槛 / 扣费、奖励和 reset flags 样例 |
 | `Wacom.Battle.GeneratedStarterContent` | 使用真实生成资产进入 `UBattleSession`，验证核心卡牌、辅助卡和 Snake 意图能产生预期 Snapshot/Event |

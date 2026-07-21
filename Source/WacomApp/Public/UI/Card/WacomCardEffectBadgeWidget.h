@@ -30,6 +30,7 @@ struct FWacomCardEffectBadgeAutomationTestView
 	int32 SpriteSynchronousFallbackCount = 0;
 	FVector2D RootScale = FVector2D(1.0f, 1.0f);
 	float RootOpacity = 1.0f;
+	FLinearColor DigitTint = FLinearColor::White;
 	bool bHasFrameShadowImage = false;
 	bool bFrameShadowVisible = false;
 	FVector2D FrameShadowOffsetPixels = FVector2D::ZeroVector;
@@ -104,6 +105,12 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Effect Badge", meta = (ToolTip = "效果徽章中间数字图标的布局 Padding，单位为 UMG 布局像素。默认左右各 1，用于拉开三位图片数字间距。"))
 	FMargin InteriorDigitPadding = FMargin(1.0f, 0.0f, 1.0f, 0.0f);
 
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Effect Badge", meta = (ToolTip = "被动对比界面中数值提高时的数字叠色。只影响展示，不改变卡牌规则或普通卡面的颜色。"))
+	FLinearColor IncreasedValueTint = FLinearColor(0.25f, 1.0f, 0.62f, 1.0f);
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|CardView|Effect Badge", meta = (ToolTip = "被动对比界面中数值降低时的数字叠色。只影响展示，不改变卡牌规则或普通卡面的颜色。"))
+	FLinearColor DecreasedValueTint = FLinearColor(1.0f, 0.38f, 0.28f, 1.0f);
+
 private:
 	UPROPERTY(Transient)
 	FWacomCardViewEffectBadge CurrentData;
@@ -170,5 +177,6 @@ private:
 	void RestoreAuthoredRootTransform();
 	UImage* EnsureDigitImage(int32 Index);
 	TArray<int32> SplitIntoDigits(int32 Value) const;
+	FLinearColor ResolveValueTint() const;
 	static void SetSpriteBrush(UImage& Image, UPaperSprite& Sprite, const FVector2D& DesiredSize);
 };

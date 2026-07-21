@@ -34,8 +34,30 @@ void FWacomShopRefreshGate::Reset()
 {
 	LastOfferRefreshSignature = 0;
 	bHasLastOfferRefreshSignature = false;
+	LastUpgradeRefreshSignature = 0;
+	bHasLastUpgradeRefreshSignature = false;
 	LastSnapshotRevision = 0;
 	bHasLastSnapshotRevision = false;
+}
+
+bool FWacomShopRefreshGate::ShouldApplyUpgradeRows(
+	const FRunShopSnapshot& Snapshot,
+	int32 CurrentGold)
+{
+	const uint32 RefreshSignature = BuildUpgradeRefreshSignature(Snapshot, CurrentGold);
+	if (bHasLastUpgradeRefreshSignature && LastUpgradeRefreshSignature == RefreshSignature)
+	{
+#if WITH_AUTOMATION_TESTS
+		++Counters.UpgradeRefreshSkipCount;
+#endif
+		return false;
+	}
+	LastUpgradeRefreshSignature = RefreshSignature;
+	bHasLastUpgradeRefreshSignature = true;
+#if WITH_AUTOMATION_TESTS
+	++Counters.UpgradeRefreshApplyCount;
+#endif
+	return true;
 }
 
 EWacomShopSnapshotRefreshResult FWacomShopRefreshGate::BeginSnapshotRefresh(URunSession& RunSession)
@@ -92,6 +114,33 @@ uint32 FWacomShopRefreshGate::BuildOfferRefreshSignature(const FRunShopSnapshot&
 		Hash = HashCombine(Hash, GetTypeHash(Offer.CardDefinition ? Offer.CardDefinition->CardId : NAME_None));
 		Hash = HashCombine(Hash, static_cast<uint32>(Offer.Price));
 		Hash = HashCombine(Hash, Offer.bPurchased ? 1u : 0u);
+	}
+	return Hash;
+}
+
+uint32 FWacomShopRefreshGate::BuildUpgradeRefreshSignature(
+	const FRunShopSnapshot& Snapshot,
+	int32 CurrentGold)
+{
+	uint32 Hash = 2166136261u;
+	Hash = HashCombine(Hash, GetTypeHash(Snapshot.ShopId));
+	Hash = HashCombine(Hash, Snapshot.CardUpgradeService.bEnabled ? 1u : 0u);
+	Hash = HashCombine(Hash, static_cast<uint32>(CurrentGold));
+	for (const FRunShopCardUpgradePriceInput& Price : Snapshot.CardUpgradeService.Prices)
+	{
+		Hash = HashCombine(Hash, GetTypeHash(Price.FromRarity));
+		Hash = HashCombine(Hash, static_cast<uint32>(Price.Price));
+	}
+	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.CardUpgradeQuotes.Num()));
+	for (const FRunShopCardUpgradeQuote& Quote : Snapshot.CardUpgradeQuotes)
+	{
+		Hash = HashGuidForShopRefresh(Hash, Quote.InstanceId);
+		Hash = HashCombine(Hash, GetTypeHash(Quote.CurrentDefinition ? Quote.CurrentDefinition->CardId : NAME_None));
+		Hash = HashCombine(Hash, GetTypeHash(Quote.NextDefinition ? Quote.NextDefinition->CardId : NAME_None));
+		Hash = HashCombine(Hash, GetTypeHash(Quote.UpgradeFamilyId));
+		Hash = HashCombine(Hash, static_cast<uint32>(Quote.Price));
+		Hash = HashCombine(Hash, Quote.bCanUpgrade ? 1u : 0u);
+		Hash = HashCombine(Hash, GetTypeHash(Quote.DisabledReason));
 	}
 	return Hash;
 }
