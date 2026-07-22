@@ -18,10 +18,8 @@
 
 namespace WacomBattleEnemyInspectionInputSpec
 {
-	constexpr TCHAR MultiPartPanelClassPath[] =
+	constexpr TCHAR PanelClassPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget_C");
-	constexpr TCHAR SinglePartPanelClassPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget.WBP_WacomBattleEnemySinglePartPanelWidget_C");
 
 	UWorld* FindAutomationWorld()
 	{
@@ -101,10 +99,10 @@ namespace WacomBattleEnemyInspectionInputSpec
 	bool TestPanelHotspotPath(
 		FAutomationTestBase& Test,
 		UWorld& World,
-		const TCHAR* PanelClassPath,
+		const TCHAR* InPanelClassPath,
 		const FString& Label)
 	{
-		UClass* PanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, PanelClassPath);
+		UClass* PanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, InPanelClassPath);
 		UWacomBattleEnemyPanelWidget* Panel = PanelClass
 			? CreateWidget<UWacomBattleEnemyPanelWidget>(&World, PanelClass)
 			: nullptr;
@@ -221,7 +219,6 @@ bool FWacomUIBattleEnemyInspectionHotspotAncestrySpec::RunTest(
 		return false;
 	}
 
-	TestPanelHotspotPath(*this, *World, MultiPartPanelClassPath, TEXT("Multi-part"));
-	TestPanelHotspotPath(*this, *World, SinglePartPanelClassPath, TEXT("Single-part"));
+	TestPanelHotspotPath(*this, *World, PanelClassPath, TEXT("Unified"));
 	return !HasAnyErrors();
 }

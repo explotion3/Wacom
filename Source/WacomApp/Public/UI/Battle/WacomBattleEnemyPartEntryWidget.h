@@ -91,12 +91,10 @@ public:
 	FWacomBattleEnemyPartInspectionRequestedNative OnInspectionRequestedNative;
 
 protected:
-	virtual void NativeOnInitialized() override;
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 
 private:
-	void ResolveAuthoredBindings();
 	void RefreshPresentation();
 	void ApplyVitalsMaterialPresentation();
 	bool EnsureVitalsMaterial();

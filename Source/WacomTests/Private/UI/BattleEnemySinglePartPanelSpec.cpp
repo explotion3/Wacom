@@ -8,9 +8,11 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/HorizontalBox.h"
 #include "Components/Image.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/WidgetComponent.h"
 #include "Misc/DataValidation.h"
+#include "Misc/PackageName.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Enemies/EnemyDefinition.h"
@@ -24,13 +26,13 @@
 namespace WacomBattleEnemySinglePartPanelSpec
 {
 	constexpr TCHAR PanelClassPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget.WBP_WacomBattleEnemySinglePartPanelWidget_C");
-	constexpr TCHAR EntryClassPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget.WBP_WacomBattleEnemySinglePartEntryWidget_C");
-	constexpr TCHAR MultiPanelClassPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget_C");
-	constexpr TCHAR MultiEntryClassPath[] =
+	constexpr TCHAR EntryClassPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget_C");
+	constexpr TCHAR LegacySinglePanelPackage[] =
+		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget");
+	constexpr TCHAR LegacySingleEntryPackage[] =
+		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget");
 	constexpr TCHAR IntentStylePath[] =
 		TEXT("/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default.DA_EnemyIntentPresentation_Default");
 
@@ -134,7 +136,7 @@ namespace WacomBattleEnemySinglePartPanelSpec
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemySinglePartPanelAssetContractSpec,
-	"Wacom.UI.Battle.EnemyPanel.SinglePartCompact.AssetContract",
+	"Wacom.UI.Battle.EnemyPanel.UnifiedHierarchy.AssetContract",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEnemySinglePartPanelAssetContractSpec::RunTest(const FString& /*Parameters*/)
@@ -142,20 +144,22 @@ bool FWacomUIBattleEnemySinglePartPanelAssetContractSpec::RunTest(const FString&
 	using namespace WacomBattleEnemySinglePartPanelSpec;
 	UClass* PanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, PanelClassPath);
 	UClass* EntryClass = LoadClass<UWacomBattleEnemyPartEntryWidget>(nullptr, EntryClassPath);
-	UClass* MultiPanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, MultiPanelClassPath);
-	UClass* MultiEntryClass = LoadClass<UWacomBattleEnemyPartEntryWidget>(nullptr, MultiEntryClassPath);
 	UWacomBattleEnemyIntentPresentationStyle* Style =
 		LoadObject<UWacomBattleEnemyIntentPresentationStyle>(nullptr, IntentStylePath);
-	if (!TestNotNull(TEXT("Single panel WBP"), PanelClass)
-		|| !TestNotNull(TEXT("Single entry WBP"), EntryClass)
-		|| !TestNotNull(TEXT("Full panel WBP"), MultiPanelClass)
-		|| !TestNotNull(TEXT("Full entry WBP"), MultiEntryClass)
+	if (!TestNotNull(TEXT("Unified panel WBP"), PanelClass)
+		|| !TestNotNull(TEXT("Unified entry WBP"), EntryClass)
 		|| !TestNotNull(TEXT("Default Intent style"), Style))
 	{
 		return false;
 	}
-	TestEqual(TEXT("Single panel is a lightweight subclass"), PanelClass->GetSuperClass(), MultiPanelClass);
-	TestEqual(TEXT("Single entry is a lightweight subclass"), EntryClass->GetSuperClass(), MultiEntryClass);
+	TestEqual(TEXT("Unified panel directly inherits the native panel"),
+		PanelClass->GetSuperClass(), UWacomBattleEnemyPanelWidget::StaticClass());
+	TestEqual(TEXT("Unified entry directly inherits the native entry"),
+		EntryClass->GetSuperClass(), UWacomBattleEnemyPartEntryWidget::StaticClass());
+	TestFalse(TEXT("Legacy single panel package is removed"),
+		FPackageName::DoesPackageExist(LegacySinglePanelPackage));
+	TestFalse(TEXT("Legacy single entry package is removed"),
+		FPackageName::DoesPackageExist(LegacySingleEntryPackage));
 	TestEqual(TEXT("Three explicit TrainingWarrior intents"), Style->IntentIcons.Num(), 3);
 
 	const FSlateBrush* Fallback = Style->ResolveIntentIcon(NAME_None);
@@ -192,17 +196,22 @@ bool FWacomUIBattleEnemySinglePartPanelAssetContractSpec::RunTest(const FString&
 	}
 	Panel->TakeWidget();
 	Entry->TakeWidget();
-	TestTrue(TEXT("Single width is 268"), FMath::IsNearlyEqual(Panel->GetFixedPanelWidth(), 268.0f));
-	TestEqual(TEXT("Single panel uses lightweight entry class"), Panel->GetPartEntryWidgetClass().Get(), EntryClass);
-	TestEqual(TEXT("Single entry inherits Intent style"), Entry->GetIntentPresentationStyle(), Style);
-	TestNotNull(TEXT("Single entry inherits VitalsTrackImage"), FindWidget<UImage>(Entry, TEXT("VitalsTrackImage")));
-	TestNull(TEXT("Single entry does not restore legacy HpBar"), FindWidget<UWidget>(Entry, TEXT("HpBar")));
+	Panel->SetEnemyPanelViewData(MakePanelView());
+	USizeBox* PanelRoot = FindWidget<USizeBox>(Panel, TEXT("PanelRoot"));
+	TestTrue(TEXT("One-part layout owns the 268 Slate-unit width"),
+		PanelRoot && PanelRoot->IsWidthOverride()
+		&& FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 268.0f));
+	TestEqual(TEXT("Unified panel uses the unified entry class"), Panel->GetPartEntryWidgetClass().Get(), EntryClass);
+	TestEqual(TEXT("Unified entry owns the Intent style"), Entry->GetIntentPresentationStyle(), Style);
+	TestNotNull(TEXT("Unified entry owns VitalsTrackImage"), FindWidget<UImage>(Entry, TEXT("VitalsTrackImage")));
+	TestNull(TEXT("Unified entry does not restore legacy HpBar"), FindWidget<UWidget>(Entry, TEXT("HpBar")));
+	Panel->ClearEnemyPanelViewData();
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec,
-	"Wacom.UI.Battle.EnemyPanel.SinglePartCompact.ValuesAndPreview",
+	"Wacom.UI.Battle.EnemyPanel.UnifiedHierarchy.ValuesAndPreview",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FString& /*Parameters*/)
@@ -298,23 +307,21 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemySinglePartPanelSelectionSpec,
-	"Wacom.UI.Battle.EnemyPanel.SinglePartCompact.SelectionAndContext",
+	"Wacom.UI.Battle.EnemyPanel.UnifiedHierarchy.SelectionAndContext",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomUIBattleEnemySinglePartPanelSelectionSpec::RunTest(const FString& /*Parameters*/)
 {
 	using namespace WacomBattleEnemySinglePartPanelSpec;
-	UClass* SinglePanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, PanelClassPath);
-	UClass* MultiPanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, MultiPanelClassPath);
+	UClass* PanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, PanelClassPath);
 	const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>();
-	if (!TestNotNull(TEXT("Single panel class"), SinglePanelClass)
-		|| !TestNotNull(TEXT("Multi panel class"), MultiPanelClass)
+	if (!TestNotNull(TEXT("Unified panel class"), PanelClass)
 		|| !TestNotNull(TEXT("UI settings"), Settings))
 	{
 		return false;
 	}
-	TestEqual(TEXT("Project single default"),
-		Settings->DefaultBattleEnemySinglePartPanelWidgetClass.LoadSynchronous(), SinglePanelClass);
+	TestEqual(TEXT("Project has one enemy panel default"),
+		Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous(), PanelClass);
 
 	UWorld* World = FindAutomationWorld();
 	AWacomBattleEnemyActor* Host = World ? World->SpawnActor<AWacomBattleEnemyActor>() : nullptr;
@@ -331,25 +338,25 @@ bool FWacomUIBattleEnemySinglePartPanelSelectionSpec::RunTest(const FString& /*P
 	}
 	Host->EnemyDefinition = MakeDefinition(1);
 	Host->RerunConstructionScripts();
-	TestEqual(TEXT("One valid part selects single panel"), Component->GetWidgetClass().Get(), SinglePanelClass);
+	TestEqual(TEXT("One valid part selects unified panel"), Component->GetWidgetClass().Get(), PanelClass);
 	Host->EnemyDefinition = MakeDefinition(2);
 	Host->RerunConstructionScripts();
-	TestEqual(TEXT("Multiple valid parts select multi panel"), Component->GetWidgetClass().Get(), MultiPanelClass);
-	Host->EnemyPanelWidgetClass = MultiPanelClass;
+	TestEqual(TEXT("Multiple valid parts select the same unified panel"), Component->GetWidgetClass().Get(), PanelClass);
+	Host->EnemyPanelWidgetClass = PanelClass;
 	Host->EnemyDefinition = MakeDefinition(1);
 	Host->RerunConstructionScripts();
-	TestEqual(TEXT("Explicit Host override wins"), Component->GetWidgetClass().Get(), MultiPanelClass);
+	TestEqual(TEXT("Explicit Host override wins"), Component->GetWidgetClass().Get(), PanelClass);
 	Host->Destroy();
 
-	UWacomBattleEnemyPanelWidget* Panel = CreateWidget<UWacomBattleEnemyPanelWidget>(World, SinglePanelClass);
-	if (!TestNotNull(TEXT("Single panel"), Panel))
+	UWacomBattleEnemyPanelWidget* Panel = CreateWidget<UWacomBattleEnemyPanelWidget>(World, PanelClass);
+	if (!TestNotNull(TEXT("Unified panel"), Panel))
 	{
 		return false;
 	}
 	Panel->TakeWidget();
 	Panel->SetEnemyPanelViewData(MakePanelView());
 	UHorizontalBox* PartList = FindWidget<UHorizontalBox>(Panel, TEXT("PartList"));
-	if (!TestNotNull(TEXT("Inherited part list"), PartList)
+	if (!TestNotNull(TEXT("Authored part list"), PartList)
 		|| !TestEqual(TEXT("Exactly one entry"), PartList->GetChildrenCount(), 1))
 	{
 		return false;

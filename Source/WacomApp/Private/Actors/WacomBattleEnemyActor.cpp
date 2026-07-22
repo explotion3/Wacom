@@ -9,7 +9,6 @@
 #include "Components/WacomBattleEnemySceneRuntimeComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Enemies/EnemyDefinition.h"
-#include "Enemies/EnemyPartDefinition.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyUILayerPolicy.h"
@@ -17,31 +16,6 @@
 
 namespace
 {
-	bool HasExactlyOneValidDefinitionPart(const UEnemyDefinition* Definition)
-	{
-		if (!Definition)
-		{
-			return false;
-		}
-		TMap<FName, int32> Counts;
-		for (const FEnemyPartSlot& Slot : Definition->Parts)
-		{
-			if (!Slot.PartSlotId.IsNone())
-			{
-				Counts.FindOrAdd(Slot.PartSlotId)++;
-			}
-		}
-		int32 ValidCount = 0;
-		for (const FEnemyPartSlot& Slot : Definition->Parts)
-		{
-			ValidCount += !Slot.PartSlotId.IsNone()
-				&& Counts.FindRef(Slot.PartSlotId) == 1
-				&& Slot.PartDef
-				&& !Slot.PartDef->PartId.IsNone() ? 1 : 0;
-		}
-		return ValidCount == 1;
-	}
-
 	bool IsConstructiblePanelClass(TSubclassOf<UWacomBattleEnemyPanelWidget> PanelClass)
 	{
 		return PanelClass && !PanelClass->HasAnyClassFlags(
@@ -153,18 +127,7 @@ void AWacomBattleEnemyActor::RefreshEnemyPanelWidgetComponent()
 	{
 		if (const UWacomUIDeveloperSettings* Settings = GetDefault<UWacomUIDeveloperSettings>())
 		{
-			if (HasExactlyOneValidDefinitionPart(EnemyDefinition))
-			{
-				Resolved = Settings->DefaultBattleEnemySinglePartPanelWidgetClass.LoadSynchronous();
-				if (!IsConstructiblePanelClass(Resolved))
-				{
-					Resolved = nullptr;
-				}
-			}
-			if (!Resolved)
-			{
-				Resolved = Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
-			}
+			Resolved = Settings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous();
 		}
 	}
 	if (!IsConstructiblePanelClass(Resolved))

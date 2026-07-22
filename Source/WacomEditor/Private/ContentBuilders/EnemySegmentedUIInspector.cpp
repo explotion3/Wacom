@@ -32,10 +32,8 @@
 
 namespace
 {
-	constexpr TCHAR MultiPanelPath[] = TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget");
-	constexpr TCHAR MultiEntryPath[] = TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget");
-	constexpr TCHAR SinglePanelPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget.WBP_WacomBattleEnemySinglePartPanelWidget");
-	constexpr TCHAR SingleEntryPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget.WBP_WacomBattleEnemySinglePartEntryWidget");
+	constexpr TCHAR PanelPath[] = TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget");
+	constexpr TCHAR EntryPath[] = TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget");
 	constexpr TCHAR InspectionPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionWidget.WBP_WacomBattleEnemyInspectionWidget");
 	constexpr TCHAR InspectionRowPath[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionPartRowWidget.WBP_WacomBattleEnemyInspectionPartRowWidget");
 	constexpr TCHAR IntentStylePath[] = TEXT("/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default.DA_EnemyIntentPresentation_Default");
@@ -46,6 +44,20 @@ namespace
 	constexpr TCHAR ContractMarker[] = TEXT("WacomEnemyHUD.ContractVersion=3");
 	constexpr TCHAR InspectionMarker[] = TEXT("WacomEnemyInspection.ContractVersion=2");
 	constexpr TCHAR LegacyPanelPackage[] = TEXT("/Game/Wacom/UI/Enemy/Textures/T_UI_PixelPanel_EnemyInfo_9Slice_512x160");
+	constexpr TCHAR LegacySinglePanelPackage[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget");
+	constexpr TCHAR LegacySingleEntryPackage[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget");
+
+	struct FWidgetRequirement
+	{
+		FName Name;
+		UClass* Class;
+	};
+
+	struct FAnimationRequirement
+	{
+		FName Name;
+		float DurationSeconds;
+	};
 
 	const TCHAR* TexturePaths[] = {
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyPanelFrame_9Slice.T_UI_EnemyPanelFrame_9Slice"),
@@ -168,7 +180,7 @@ namespace
 			&& Wacom::ContentBuilder::EnemyUIHitTestPolicy::ValidateInteractiveRoutes(Blueprint);
 	}
 
-	bool ValidatePanel(const UWidgetBlueprint* Blueprint, bool bSingle, const UWidgetBlueprint* Entry)
+	bool ValidatePanel(const UWidgetBlueprint* Blueprint, const UWidgetBlueprint* Entry)
 	{
 		if (!Blueprint || !Entry || !Blueprint->GeneratedClass || !Entry->GeneratedClass)
 		{
@@ -176,17 +188,6 @@ namespace
 		}
 		const UWacomBattleEnemyPanelWidget* Defaults = Cast<UWacomBattleEnemyPanelWidget>(
 			Blueprint->GeneratedClass->GetDefaultObject());
-		if (bSingle)
-		{
-			return Blueprint->ParentClass
-				&& Blueprint->ParentClass->IsChildOf(UWacomBattleEnemyPanelWidget::StaticClass())
-				&& Blueprint->ParentClass != UWacomBattleEnemyPanelWidget::StaticClass()
-				&& (!Blueprint->WidgetTree || !Blueprint->WidgetTree->RootWidget)
-				&& Blueprint->BlueprintDescription.Contains(ContractMarker)
-				&& Defaults
-				&& FMath::IsNearlyEqual(Defaults->GetFixedPanelWidth(), 268.0f)
-				&& Defaults->GetPartEntryWidgetClass().Get() == Entry->GeneratedClass;
-		}
 		return Blueprint->ParentClass == UWacomBattleEnemyPanelWidget::StaticClass()
 			&& Blueprint->BlueprintDescription.Contains(ContractMarker)
 			&& HasWidget(Blueprint, TEXT("PanelRoot"), USizeBox::StaticClass())
@@ -194,27 +195,17 @@ namespace
 			&& !HasWidget(Blueprint, TEXT("EnemyNameText"), UTextBlock::StaticClass())
 			&& !HasWidget(Blueprint, TEXT("PanelContextHighlight"), UWidget::StaticClass())
 			&& Defaults
-			&& FMath::IsNearlyZero(Defaults->GetFixedPanelWidth())
 			&& Defaults->GetPartEntryWidgetClass().Get() == Entry->GeneratedClass
 			&& ValidateHitTesting(*Blueprint);
 	}
 
-	bool ValidateEntry(const UWidgetBlueprint* Blueprint, bool bSingle, UFont* Font, UMaterial* Material)
+	bool ValidateEntry(const UWidgetBlueprint* Blueprint, UFont* Font, UMaterial* Material)
 	{
 		if (!Blueprint || !Blueprint->GeneratedClass)
 		{
 			return false;
 		}
-		if (bSingle)
-		{
-			return Blueprint->ParentClass
-				&& Blueprint->ParentClass->IsChildOf(UWacomBattleEnemyPartEntryWidget::StaticClass())
-				&& Blueprint->ParentClass != UWacomBattleEnemyPartEntryWidget::StaticClass()
-				&& (!Blueprint->WidgetTree || !Blueprint->WidgetTree->RootWidget)
-				&& Blueprint->BlueprintDescription.Contains(ContractMarker);
-		}
-
-		const TPair<FName, UClass*> Required[] = {
+		const FWidgetRequirement Required[] = {
 			{ TEXT("PartEntryRoot"), USizeBox::StaticClass() },
 			{ TEXT("VitalsTrackImage"), UImage::StaticClass() },
 			{ TEXT("HpText"), UTextBlock::StaticClass() },
@@ -247,21 +238,21 @@ namespace
 		CheckEntry(TEXT("contract marker"),
 			Blueprint->BlueprintDescription.Contains(ContractMarker));
 		CheckEntry(TEXT("hit-test policy"), ValidateHitTesting(*Blueprint));
-		for (const TPair<FName, UClass*>& Binding : Required)
+		for (const FWidgetRequirement& Binding : Required)
 		{
-			CheckEntry(FString::Printf(TEXT("binding %s"), *Binding.Key.ToString()),
-				HasWidget(Blueprint, Binding.Key, Binding.Value));
+			CheckEntry(FString::Printf(TEXT("binding %s"), *Binding.Name.ToString()),
+				HasWidget(Blueprint, Binding.Name, Binding.Class));
 		}
-		const TPair<FName, float> Animations[] = {
+		const FAnimationRequirement Animations[] = {
 			{ TEXT("IntroAnimation"), 0.22f }, { TEXT("DamageImpactAnimation"), 0.22f },
 			{ TEXT("ShieldImpactAnimation"), 0.18f }, { TEXT("ShieldBreakAnimation"), 0.24f },
 			{ TEXT("InitiativeStepAnimation"), 0.12f }, { TEXT("IntentChangeAnimation"), 0.18f },
 			{ TEXT("ContextAnimation"), 0.12f }, { TEXT("DestroyedAnimation"), 0.30f },
 		};
-		for (const TPair<FName, float>& Animation : Animations)
+		for (const FAnimationRequirement& Animation : Animations)
 		{
-			CheckEntry(FString::Printf(TEXT("animation %s"), *Animation.Key.ToString()),
-				HasAnimation(Blueprint, Animation.Key, Animation.Value));
+			CheckEntry(FString::Printf(TEXT("animation %s"), *Animation.Name.ToString()),
+				HasAnimation(Blueprint, Animation.Name, Animation.DurationSeconds));
 		}
 		const UImage* Vitals = Cast<UImage>(Blueprint->WidgetTree->FindWidget(TEXT("VitalsTrackImage")));
 		CheckEntry(TEXT("vitals material"),
@@ -287,7 +278,7 @@ namespace
 
 	bool ValidateInspectionRow(const UWidgetBlueprint* Blueprint)
 	{
-		const TPair<FName, UClass*> Required[] = {
+		const FWidgetRequirement Required[] = {
 			{ TEXT("PartSelectButton"), UButton::StaticClass() }, { TEXT("PartNameText"), UTextBlock::StaticClass() },
 			{ TEXT("HpText"), UTextBlock::StaticClass() }, { TEXT("ShieldContainer"), UWidget::StaticClass() },
 			{ TEXT("ShieldText"), UTextBlock::StaticClass() }, { TEXT("InitiativeText"), UTextBlock::StaticClass() },
@@ -297,16 +288,16 @@ namespace
 			&& Blueprint->ParentClass == UWacomBattleEnemyInspectionPartRowWidget::StaticClass()
 			&& Blueprint->BlueprintDescription.Contains(InspectionMarker)
 			&& ValidateHitTesting(*Blueprint);
-		for (const TPair<FName, UClass*>& Binding : Required)
+		for (const FWidgetRequirement& Binding : Required)
 		{
-			bValid &= HasWidget(Blueprint, Binding.Key, Binding.Value);
+			bValid &= HasWidget(Blueprint, Binding.Name, Binding.Class);
 		}
 		return bValid;
 	}
 
 	bool ValidateInspection(const UWidgetBlueprint* Blueprint, const UWidgetBlueprint* Row, UWacomBattleEnemyIntentPresentationStyle* Style)
 	{
-		const TPair<FName, UClass*> Required[] = {
+		const FWidgetRequirement Required[] = {
 			{ TEXT("LeftPanel"), USizeBox::StaticClass() }, { TEXT("RightPanel"), USizeBox::StaticClass() },
 			{ TEXT("EnemyNameText"), UTextBlock::StaticClass() }, { TEXT("EnemyStateText"), UTextBlock::StaticClass() },
 			{ TEXT("PartNavigator"), UPanelWidget::StaticClass() }, { TEXT("SelectedPartNameText"), UTextBlock::StaticClass() },
@@ -345,10 +336,10 @@ namespace
 			Defaults && Defaults->GetPartRowWidgetClass().Get() == Row->GeneratedClass);
 		CheckInspection(TEXT("intent presentation style"),
 			Defaults && Defaults->GetIntentPresentationStyle() == Style);
-		for (const TPair<FName, UClass*>& Binding : Required)
+		for (const FWidgetRequirement& Binding : Required)
 		{
-			CheckInspection(FString::Printf(TEXT("binding %s"), *Binding.Key.ToString()),
-				HasWidget(Blueprint, Binding.Key, Binding.Value));
+			CheckInspection(FString::Printf(TEXT("binding %s"), *Binding.Name.ToString()),
+				HasWidget(Blueprint, Binding.Name, Binding.Class));
 		}
 		CheckInspection(TEXT("OpenLeftAnimation"),
 			HasAnimation(Blueprint, TEXT("OpenLeftAnimation"), 0.18f));
@@ -408,14 +399,34 @@ namespace
 		}
 		return false;
 	}
+
+	bool ValidateLegacyPackageRemoved(const TCHAR* PackageName, const TCHAR* Label)
+	{
+		if (!FPackageName::DoesPackageExist(PackageName))
+		{
+			return true;
+		}
+
+		TArray<FName> Referencers;
+		FAssetRegistryModule::GetRegistry().GetReferencers(
+			FName(PackageName), Referencers, UE::AssetRegistry::EDependencyCategory::Package);
+		Referencers.Sort(FNameLexicalLess());
+		UE_LOG(LogTemp, Error,
+			TEXT("[EnemyHUDInspector] Legacy %s package still exists with %d referencer(s): %s"),
+			Label,
+			Referencers.Num(),
+			*FString::JoinBy(Referencers, TEXT(", "), [](const FName Referencer)
+			{
+				return Referencer.ToString();
+			}));
+		return false;
+	}
 }
 
 bool Wacom::ContentBuilder::InspectEnemyHUD()
 {
-	UWidgetBlueprint* MultiPanel = LoadWBP(MultiPanelPath);
-	UWidgetBlueprint* MultiEntry = LoadWBP(MultiEntryPath);
-	UWidgetBlueprint* SinglePanel = LoadWBP(SinglePanelPath);
-	UWidgetBlueprint* SingleEntry = LoadWBP(SingleEntryPath);
+	UWidgetBlueprint* Panel = LoadWBP(PanelPath);
+	UWidgetBlueprint* Entry = LoadWBP(EntryPath);
 	UWidgetBlueprint* Inspection = LoadWBP(InspectionPath);
 	UWidgetBlueprint* InspectionRow = LoadWBP(InspectionRowPath);
 	UFont* Font = Cast<UFont>(StaticLoadObject(UFont::StaticClass(), nullptr, FontPath));
@@ -442,25 +453,27 @@ bool Wacom::ContentBuilder::InspectEnemyHUD()
 	Check(TEXT("intent style has three explicit mappings"),
 		Style && Style->IntentIcons.Num() == 3);
 	Check(TEXT("pixel texture import settings"), ValidateTextures());
-	Check(TEXT("base part entry WBP"), ValidateEntry(MultiEntry, false, Font, Material));
-	Check(TEXT("single-part entry lightweight subclass"), ValidateEntry(SingleEntry, true, Font, Material));
-	Check(TEXT("base panel WBP"), ValidatePanel(MultiPanel, false, MultiEntry));
-	Check(TEXT("single-part panel lightweight subclass"), ValidatePanel(SinglePanel, true, SingleEntry));
+	Check(TEXT("unified part entry WBP"), ValidateEntry(Entry, Font, Material));
+	Check(TEXT("unified panel WBP"), ValidatePanel(Panel, Entry));
 	Check(TEXT("inspection row WBP"), ValidateInspectionRow(InspectionRow));
 	Check(TEXT("inspection dossier WBP"), ValidateInspection(Inspection, InspectionRow, Style));
-	Check(TEXT("base panel uses formal panel frame"), UsesBrushResource(MultiPanel,
+	Check(TEXT("base panel uses formal panel frame"), UsesBrushResource(Panel,
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyPanelFrame_9Slice.T_UI_EnemyPanelFrame_9Slice")));
-	Check(TEXT("part entry uses formal shield badge"), UsesBrushResource(MultiEntry,
+	Check(TEXT("part entry uses formal shield badge"), UsesBrushResource(Entry,
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyShieldBadge.T_UI_EnemyShieldBadge")));
-	Check(TEXT("part entry uses formal initiative socket"), UsesBrushResource(MultiEntry,
+	Check(TEXT("part entry uses formal initiative socket"), UsesBrushResource(Entry,
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyInitiativeSocket.T_UI_EnemyInitiativeSocket")));
-	Check(TEXT("part entry uses formal intent socket"), UsesBrushResource(MultiEntry,
+	Check(TEXT("part entry uses formal intent socket"), UsesBrushResource(Entry,
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyIntentSocket.T_UI_EnemyIntentSocket")));
-	Check(TEXT("part entry uses formal destroyed crack"), UsesBrushResource(MultiEntry,
+	Check(TEXT("part entry uses formal destroyed crack"), UsesBrushResource(Entry,
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyDestroyedCrack.T_UI_EnemyDestroyedCrack")));
 	Check(TEXT("inspection dossier uses formal frame"), UsesBrushResource(Inspection,
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyDossierFrame_9Slice.T_UI_EnemyDossierFrame_9Slice")));
 	Check(TEXT("zero-reference legacy panel texture removed"), ValidateLegacyPanelRemoved());
+	Check(TEXT("legacy single-part panel removed"), ValidateLegacyPackageRemoved(
+		LegacySinglePanelPackage, TEXT("single-part panel")));
+	Check(TEXT("legacy single-part entry removed"), ValidateLegacyPackageRemoved(
+		LegacySingleEntryPackage, TEXT("single-part entry")));
 
 	if (bValid)
 	{

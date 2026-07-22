@@ -3,8 +3,6 @@
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
 #include "Animation/WidgetAnimation.h"
-#include "Blueprint/WidgetBlueprintGeneratedClass.h"
-#include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/Image.h"
 #include "Components/SizeBox.h"
@@ -44,48 +42,6 @@ namespace
 	constexpr float StandardIntentDurationSeconds = 0.18f;
 	constexpr float StandardDestroyedDurationSeconds = 0.30f;
 	constexpr float StandardIntroDurationSeconds = 0.22f;
-
-	template <typename WidgetType>
-	void ResolveWidgetBinding(
-		UWidgetTree* WidgetTree,
-		TObjectPtr<WidgetType>& Binding,
-		const FName WidgetName)
-	{
-		if (!Binding && WidgetTree)
-		{
-			Binding = Cast<WidgetType>(WidgetTree->FindWidget(WidgetName));
-		}
-	}
-
-	void ResolveAnimationBinding(
-		const UClass* WidgetClass,
-		TObjectPtr<UWidgetAnimation>& Binding,
-		const FName AnimationName)
-	{
-		if (Binding)
-		{
-			return;
-		}
-		for (const UClass* Class = WidgetClass; Class; Class = Class->GetSuperClass())
-		{
-			const UWidgetBlueprintGeneratedClass* WidgetBlueprintClass =
-				Cast<UWidgetBlueprintGeneratedClass>(Class);
-			if (!WidgetBlueprintClass)
-			{
-				continue;
-			}
-			for (UWidgetAnimation* Animation : WidgetBlueprintClass->Animations)
-			{
-				if (Animation
-					&& (Animation->GetFName() == AnimationName
-						|| Animation->GetDisplayLabel() == AnimationName.ToString()))
-				{
-					Binding = Animation;
-					return;
-				}
-			}
-		}
-	}
 
 	bool AreEnemyPartStatusStacksEquivalent(
 		const TMap<FGameplayTag, int32>& Left,
@@ -266,16 +222,9 @@ void UWacomBattleEnemyPartEntryWidget::SetIntentPresentationStyle(
 	RefreshPresentation();
 }
 
-void UWacomBattleEnemyPartEntryWidget::NativeOnInitialized()
-{
-	Super::NativeOnInitialized();
-	ResolveAuthoredBindings();
-}
-
 void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	ResolveAuthoredBindings();
 	if (InspectHitTarget)
 	{
 		InspectHitTarget->OnClicked.RemoveAll(this);
@@ -301,35 +250,6 @@ void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 	EnsureVitalsMaterial();
 	RefreshPresentation();
 	RefreshInspectionInteraction();
-}
-
-void UWacomBattleEnemyPartEntryWidget::ResolveAuthoredBindings()
-{
-	ResolveWidgetBinding(WidgetTree, PartEntryRoot, TEXT("PartEntryRoot"));
-	ResolveWidgetBinding(WidgetTree, VitalsTrackImage, TEXT("VitalsTrackImage"));
-	ResolveWidgetBinding(WidgetTree, ShieldValueRoot, TEXT("ShieldValueRoot"));
-	ResolveWidgetBinding(WidgetTree, InitiativeSocket, TEXT("InitiativeSocket"));
-	ResolveWidgetBinding(WidgetTree, IntentSocket, TEXT("IntentSocket"));
-	ResolveWidgetBinding(WidgetTree, OutgoingIntentIcon, TEXT("OutgoingIntentIcon"));
-	ResolveWidgetBinding(WidgetTree, ContextSurface, TEXT("ContextSurface"));
-	ResolveWidgetBinding(WidgetTree, DestroyedSurface, TEXT("DestroyedSurface"));
-	ResolveWidgetBinding(WidgetTree, HpText, TEXT("HpText"));
-	ResolveWidgetBinding(WidgetTree, ShieldText, TEXT("ShieldText"));
-	ResolveWidgetBinding(WidgetTree, InitiativeText, TEXT("InitiativeText"));
-	ResolveWidgetBinding(WidgetTree, IntentIcon, TEXT("IntentIcon"));
-	ResolveWidgetBinding(WidgetTree, StatusList, TEXT("StatusList"));
-	ResolveWidgetBinding(WidgetTree, StatusOverflowText, TEXT("StatusOverflowText"));
-	ResolveWidgetBinding(WidgetTree, DestroyedMark, TEXT("DestroyedMark"));
-	ResolveWidgetBinding(WidgetTree, InspectHitTarget, TEXT("InspectHitTarget"));
-
-	ResolveAnimationBinding(GetClass(), IntroAnimation, TEXT("IntroAnimation"));
-	ResolveAnimationBinding(GetClass(), DamageImpactAnimation, TEXT("DamageImpactAnimation"));
-	ResolveAnimationBinding(GetClass(), ShieldImpactAnimation, TEXT("ShieldImpactAnimation"));
-	ResolveAnimationBinding(GetClass(), ShieldBreakAnimation, TEXT("ShieldBreakAnimation"));
-	ResolveAnimationBinding(GetClass(), InitiativeStepAnimation, TEXT("InitiativeStepAnimation"));
-	ResolveAnimationBinding(GetClass(), IntentChangeAnimation, TEXT("IntentChangeAnimation"));
-	ResolveAnimationBinding(GetClass(), ContextAnimation, TEXT("ContextAnimation"));
-	ResolveAnimationBinding(GetClass(), DestroyedAnimation, TEXT("DestroyedAnimation"));
 }
 
 void UWacomBattleEnemyPartEntryWidget::NativeDestruct()

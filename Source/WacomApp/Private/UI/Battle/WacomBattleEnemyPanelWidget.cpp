@@ -2,7 +2,6 @@
 
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 
-#include "Blueprint/WidgetTree.h"
 #include "Components/PanelWidget.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -48,17 +47,6 @@ namespace
 		return FName(*FString::Printf(TEXT("EnemyPart_%s"), *ObjectName));
 	}
 
-	template <typename WidgetType>
-	void ResolveWidgetBinding(
-		UWidgetTree* WidgetTree,
-		TObjectPtr<WidgetType>& Binding,
-		const FName WidgetName)
-	{
-		if (!Binding && WidgetTree)
-		{
-			Binding = Cast<WidgetType>(WidgetTree->FindWidget(WidgetName));
-		}
-	}
 }
 
 void UWacomBattleEnemyPanelWidget::SetEnemyPanelViewData(
@@ -66,6 +54,7 @@ void UWacomBattleEnemyPanelWidget::SetEnemyPanelViewData(
 {
 	CurrentView = InView;
 	bHasCurrentView = true;
+	ApplyAuthoredGeometry();
 	SyncPartEntries();
 }
 
@@ -149,19 +138,6 @@ void UWacomBattleEnemyPanelWidget::SetHoveredPartSlotId(const FName InPartSlotId
 	}
 }
 
-void UWacomBattleEnemyPanelWidget::SetPartEntryWidgetClass(
-	TSubclassOf<UWacomBattleEnemyPartEntryWidget> InWidgetClass)
-{
-	if (PartEntryWidgetClass == InWidgetClass)
-	{
-		return;
-	}
-
-	PartEntryWidgetClass = InWidgetClass;
-	ClearPartEntries();
-	SyncPartEntries();
-}
-
 void UWacomBattleEnemyPanelWidget::SetInspectionInteractionEnabled(const bool bEnabled)
 {
 	if (bInspectionInteractionEnabled == bEnabled)
@@ -173,24 +149,11 @@ void UWacomBattleEnemyPanelWidget::SetInspectionInteractionEnabled(const bool bE
 	ApplyInspectionInteractionState();
 }
 
-void UWacomBattleEnemyPanelWidget::NativeOnInitialized()
-{
-	Super::NativeOnInitialized();
-	ResolveAuthoredBindings();
-}
-
 void UWacomBattleEnemyPanelWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	ResolveAuthoredBindings();
 	ApplyAuthoredGeometry();
 	SyncPartEntries();
-}
-
-void UWacomBattleEnemyPanelWidget::ResolveAuthoredBindings()
-{
-	ResolveWidgetBinding(WidgetTree, PanelRoot, TEXT("PanelRoot"));
-	ResolveWidgetBinding(WidgetTree, PartList, TEXT("PartList"));
 }
 
 void UWacomBattleEnemyPanelWidget::NativeDestruct()
@@ -207,9 +170,9 @@ void UWacomBattleEnemyPanelWidget::ApplyAuthoredGeometry()
 		return;
 	}
 	PanelRoot->SetMinDesiredHeight(92.0f);
-	if (FixedPanelWidth > 0.0f)
+	if (bHasCurrentView && CurrentView.Parts.Num() == 1)
 	{
-		PanelRoot->SetWidthOverride(FixedPanelWidth);
+		PanelRoot->SetWidthOverride(268.0f);
 	}
 	else
 	{

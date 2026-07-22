@@ -18,10 +18,8 @@
 
 namespace WacomBattleEnemySegmentedVitalsSpec
 {
-	constexpr TCHAR MultiPanelClassPath[] =
+	constexpr TCHAR PanelClassPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget_C");
-	constexpr TCHAR SinglePanelClassPath[] =
-		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget.WBP_WacomBattleEnemySinglePartPanelWidget_C");
 
 	UWorld* FindAutomationWorld()
 	{
@@ -117,7 +115,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUIBattleEnemySegmentedVitalsLayoutSpec::RunTest(const FString& /*Parameters*/)
 {
 	using namespace WacomBattleEnemySegmentedVitalsSpec;
-	UWacomBattleEnemyPanelWidget* Panel = CreatePanel(MultiPanelClassPath);
+	UWacomBattleEnemyPanelWidget* Panel = CreatePanel(PanelClassPath);
 	if (!TestNotNull(TEXT("Multi-part segmented panel"), Panel))
 	{
 		return false;
@@ -238,16 +236,18 @@ bool FWacomUIBattleEnemySegmentedVitalsSinglePartAndInputSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	using namespace WacomBattleEnemySegmentedVitalsSpec;
-	UWacomBattleEnemyPanelWidget* Panel = CreatePanel(SinglePanelClassPath);
+	UWacomBattleEnemyPanelWidget* Panel = CreatePanel(PanelClassPath);
 	if (!TestNotNull(TEXT("Single-part segmented panel"), Panel))
 	{
 		return false;
 	}
 	Panel->TakeWidget();
-	TestTrue(TEXT("Single panel owns the 268 Slate-unit width"),
-		FMath::IsNearlyEqual(Panel->GetFixedPanelWidth(), 268.0f));
 	const FWacomBattleEnemyPartEntryViewData Body = MakePart(TEXT("Body"), 18, 24, 4, 1);
 	Panel->SetEnemyPanelViewData(MakeEnemy({ Body }));
+	USizeBox* PanelRoot = FindWidget<USizeBox>(Panel, TEXT("PanelRoot"));
+	TestTrue(TEXT("One-part layout owns the 268 Slate-unit width"),
+		PanelRoot && PanelRoot->IsWidthOverride()
+		&& FMath::IsNearlyEqual(PanelRoot->GetWidthOverride(), 268.0f));
 	UHorizontalBox* PartList = FindWidget<UHorizontalBox>(Panel, TEXT("PartList"));
 	if (!TestNotNull(TEXT("Single PartList is inherited HorizontalBox"), PartList)
 		|| !TestEqual(TEXT("Single enemy renders one segment"), PartList->GetChildrenCount(), 1))
