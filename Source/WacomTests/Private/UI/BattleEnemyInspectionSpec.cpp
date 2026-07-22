@@ -105,7 +105,8 @@ namespace WacomBattleEnemyInspectionSpec
 		Part.CurrentIntentId = FName(*FString::Printf(TEXT("Snake.%s.Intent"), *PartSlotId.ToString()));
 		Part.CurrentIntentDisplayName = FText::FromString(TEXT("撕咬"));
 		Part.CurrentIntentInitiative = Initiative + 1;
-		Part.CurrentIntentResistanceValue = 5;
+		Part.bCurrentIntentIsAttack = true;
+		Part.CurrentIntentPeakAttackDamage = 5;
 		Part.bDestroyed = bDestroyed;
 		return Part;
 	}
@@ -271,8 +272,8 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 	TestEqual(TEXT("Selected Head name"), PartName->GetText().ToString(), FString(TEXT("Head")));
 	TestEqual(TEXT("Details show current and max HP"), HpText->GetText().ToString(), FString(TEXT("7 / 12")));
 	TestEqual(TEXT("Details show exact Shield"), ShieldText->GetText().ToString(), FString(TEXT("2")));
-	TestEqual(TEXT("Details show intent initiative and resistance"),
-		ResistanceText->GetText().ToString(), FString(TEXT("INIT 4   RES 5")));
+	TestEqual(TEXT("Details show intent initiative and attack damage"),
+		ResistanceText->GetText().ToString(), FString(TEXT("INIT 4   ATK 5")));
 	TestNotNull(TEXT("Unknown Snake intent uses formal fallback icon"),
 		IntentIcon->GetBrush().GetResourceObject());
 	TestEqual(TEXT("Details do not truncate Buffs"), StatusList->GetMaxVisibleStatuses(), 0);
@@ -304,9 +305,13 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 
 	View = Widget->GetInspectionViewData();
 	View.Enemy.Parts[1].CurrentHp = 12;
+	View.Enemy.Parts[1].bCurrentIntentIsAttack = false;
+	View.Enemy.Parts[1].CurrentIntentPeakAttackDamage = 0;
 	TestTrue(TEXT("Snapshot refresh updates existing widget"), Widget->SetInspectionViewData(View));
 	TestTrue(TEXT("Navigation row is reused"), Navigator->GetChildAt(0) == HeadRow);
 	TestEqual(TEXT("Selected Body HP refreshes in place"), HpText->GetText().ToString(), FString(TEXT("12 / 24")));
+	TestEqual(TEXT("Non-attack intent hides ATK"),
+		ResistanceText->GetText().ToString(), FString(TEXT("INIT 3")));
 
 	View.Enemy.Parts.RemoveAt(1);
 	TestTrue(TEXT("Removing selected part falls back to a valid part"),

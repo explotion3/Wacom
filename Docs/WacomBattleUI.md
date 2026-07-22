@@ -135,6 +135,8 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 
 `UWacomBattleEventPresentationBuilder`、`FBattleEventPresentationView` 和 `EWacomBattleEventVisualTone` 是 UI-only 单事件展示词汇。它们被完整 Combat Log detail line 与常驻活动结果行复用，用于生成玩家可读中文文案、tone 和 icon；新的 BattleHUD WBP 不应直接消费 raw `FBattleEvent`。
 
+`ResistanceResolved` 的展示只翻译 Battle 已判定的事实，不在 App 重算伤害。成功文案固定为 `抵抗成功：眩晕 +1（卡牌单段 P / 敌方单段 E）`，失败文案固定为 `抵抗失败（卡牌单段 P / 敌方单段 E）`。完整 history / details 在命令结算后立即包含该结果；常驻 Activity 仍由 Presentation Coordinator 在 `CommandOutcome` progress 释放，不能在卡牌动作开始时提前剧透。
+
 分类口径：
 
 | 类型 | 分类 | 语义 |
@@ -197,6 +199,8 @@ HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 id
 
 `UWacomBattleEnemyPartAnimationStyle` 用精确 `TargetVisualLayerId`、Default Action 与 `IntentId -> Clip` 驱动同一 Part 的真实 Flipbook Layer；不根据名称或层顺序猜测。Clip 的 `ImpactNormalizedTime` 把 Enemy Action Journal 分成 `OnImpact` 与 `OnCompleted`：Impact 才推送行动后 Combat facts，完成才释放下一行动 barrier。共享 App-private playback 统一 weak timer、watchdog、serial 与 exactly-once；cancel 丢弃旧 Impact但完成 barrier。Style 可选 `EnemyDestroyedClip`，同一 Host 最多一个 Part Style 拥有整体死亡 Clip；TrainingWarrior Body 用它播放 Downed，Snake/SlimeTrio 当前只保留逐部位终态。
 
+敌人当前意图的攻击属性完全来自 Snapshot：`bIsAttackIntent` 表示是否含有指向 Player 的正 Damage，`PeakAttackDamage` 是其最高单段值。敌情详情对攻击意图显示 `INIT n   ATK m`，非攻击意图只显示 `INIT n`；现有 WBP 内部 `ResistanceText` 绑定名只为避免资产绑定失效而保留，不再表达独立 Resistance 数值。
+
 BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、preview、panel；同批队列只保留弱 Host/Part 引用完成已排队 Action 或 terminal clip。真正的探索场景退役仍由 BattleTrigger 在胜利结算和返回镜头 barrier 完成后执行：清运行时表现、隐藏 Host、关闭 Part collision，最后销毁 Trigger。Withdraw、Defeat、Undetermined 或结算失败不退役。
 
 ### 正式内容口径
@@ -237,7 +241,7 @@ Battle hand 的场景化动画位置来自 BattleHUD UMG 几何，不来自 Batt
 
 源卡 EffectBadge 的 Preview 保持相同稳定身份，不把预测结果写回权威 `Value`：Builder 按 `Damage / Poison / Heal / Shield` 等卡面语义聚合同类型效果并生成 `Badge.<Kind>`；无条件贡献组成权威值，条件贡献只在目标预览判定生效时加入 `PreviewValue`。因此基础伤害与条件额外伤害共用一枚 Damage Badge，中毒仍使用独立 Poison Badge。只有整个语义组都 skipped 时才降低 Badge 亮度，不绘制像素叉；同组仍有基础贡献时保持正常显示。取消、切换目标和语义未变化的高频刷新只恢复或更新局部数字，不生成正式反馈。正式 `EffectBadgeChange` 需要 `CardRuntimeCostChanged / CardStatusChanged` 等许可事件和同一卡 Pre/Post Snapshot 的可见 Badge 差异同时成立；目标马上离手、弃牌或消耗时不播放短命重写。当前没有动态 Effect 增删事务，因此 App 不从 Badge 数组出现/消失自行伪造 Added/Removed 语义。
 
-Action Preview 的数值显示只在“有效释放语义”成立时启用：目标合法或无目标卡已经 armed、当前规则阶段是 `PlayerAction`、源卡通过完整 PlayCard preflight，且 `BuildCardActionPreview()` 生成 projected values。拖出手牌区但还没达到无目标提交距离、还没指向有效目标、目标无效或规则阶段不可提交时，不显示玩家侧收益或敌人净结果，只保留 hand / scene target 的轻量可作用对象提示。有效敌人部位目标上，`UPlayerStatusBar` 直接覆盖显示 projected HP / Shield / runtime statuses，`UWacomBattleEnemyPartEntryWidget` 直接覆盖显示 projected HP / Shield / Initiative / runtime statuses / destroyed；无目标卡的 projected player state 同样直接覆盖玩家状态条。所有预览都不显示箭头、公式、来源文案或 `+N/-N`。敌人部位若会因本次打牌立即行动，部位 UI 的先机显示为 `0`，代表“松手后会出手”，不显示行动后刷新出的下一意图先机。first-person 拖拽命中有效场景目标时，HUD 会把规则层返回的全部 projected enemy parts 应用到敌人聚合面板和场景部位 prediction badge；这意味着同一次出牌会触发多个部位行动时，非当前鼠标指向部位也会显示 projected 先机 / 行动风险。TargetSelect hover probe 只刷新目标预览和敌人面板，不打开场景部位 action preview badge，避免普通 hover 与正式拖拽释放预览混淆。
+Action Preview 的数值显示只在“有效释放语义”成立时启用：目标合法或无目标卡已经 armed、当前规则阶段是 `PlayerAction`、源卡通过完整 PlayCard preflight，且 `BuildCardActionPreview()` 生成 projected values。拖出手牌区但还没达到无目标提交距离、还没指向有效目标、目标无效或规则阶段不可提交时，不显示玩家侧收益或敌人净结果，只保留 hand / scene target 的轻量可作用对象提示。有效敌人部位目标上，`UPlayerStatusBar` 直接覆盖显示 projected HP / Shield / runtime statuses，`UWacomBattleEnemyPartEntryWidget` 直接覆盖显示 projected HP / Shield / Initiative / runtime statuses / destroyed；无目标卡的 projected player state 同样直接覆盖玩家状态条。所有预览都不显示箭头、公式、来源文案或 `+N/-N`。敌人部位若会因本次打牌到达行动边界，部位 UI 的先机显示为 `0`；规则 facts 用 `bWillAct` 表示会真实执行意图，用 `bWillSkipActionDueToStun` 表示会消费眩晕并跳过，两者不能混为同一攻击风险。`FBattleCardResistancePreview` 按稳定部位身份携带玩家峰值、敌方峰值和是否新增眩晕；失败比较即使没有 Snapshot 数值差异也必须保留。场景提示成功显示 `完美释放` 与 `抵抗 P > 攻击 E · 眩晕 +1`，若本次到达行动边界并立即消费则追加 `跳过行动`；失败显示 `抵抗 P ≤ 攻击 E`；非攻击意图只保留既有 `完美释放`。first-person 拖拽命中有效场景目标时，HUD 会把规则层返回的全部 projected enemy parts 和 Resistance facts 应用到敌人聚合面板及场景部位 prediction badge；TargetSelect hover probe 只刷新目标预览和敌人面板，不打开场景部位 action preview badge，避免普通 hover 与正式拖拽释放预览混淆。
 
 拖拽 release、cancel、离开目标、候选目标无效、snapshot version 变化、BattleEnd 或 UI state 退出时，bridge / runtime 会清理 preview entries 和 action preview，恢复基础 hand entries、当前详情、玩家状态条和敌人部位条目。Scene enemy hover / TargetSelect hover 也先构建同一份 `FWacomBattleActionPreviewPresentation` 再应用：场景目标反馈仍由 enemy presentation component 负责，卡面、详情、玩家状态条和敌人面板只消费该 presentation，不在 hover / drag 两条路径里重复拼。Preview semantic state 由 snapshot version、source id、目标身份和 preview facts hash 组成；同一 state 上的高频 hover / drag move 只允许更新指针反馈、敌人 hover 和详情位置，hand layer preview entries 与详情数据必须等 preview semantic state 变化后再重建。Active drag 期间，目标手牌 preview 的生命周期由 bridge 保存的 `ActiveDragView.CurrentTarget` / target preview state 决定，SlotWidget 重建或 hover/unhover 抖动不能作为清理 preview 的权威信号。
 
@@ -300,6 +304,8 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 测试不 include BattleHUD 私有 helper header，也不为生产 HUD 增加 Blueprint-visible 测试 API。只读诊断通过 `FWacomBattleHUDAutomationTestView` 聚合；Battle scene target click / probe 通过 `FWacomBattleSceneTargetClickTestAccess` 驱动。
 
 `BattleHUDCommandFlowSpec.cpp`、`BattleCombatLogSpec.cpp`、`BattlePresentationStackSpec.cpp` 与 `BattlePresentationQueueSpec.cpp` 分别覆盖命令、日志、Stack 和队列表现；`BattlePresentationTimerLifecycleSpec.cpp` 覆盖 teardown 后弱 timer 不回调释放状态。Scene Enemy 新架构集中在 `EnemySceneComponentAuthoringSpec.cpp`、`BattleEnemySceneComponentRuntimeSpec.cpp`、`BattleEnemySceneRuntimePerformanceSpec.cpp` 与 `EnemySceneLegacyAuditSpec.cpp`：验证 Definition 同步、typed hierarchy、视口数据不被刷新覆盖、Snapshot/Prediction no-op 与惰性复用、零 Legacy Package 引用，以及四个 Host / 两张地图可加载。其它 HUD/first-person 测试通过 `FWacomBattleHUDTestHarness` 创建真实 typed Part Component，不再复建 Actor/Bridge 测试夹具。
+
+`BattleResistancePresentationSpec.cpp` 使用 `Wacom.UI.Battle.Resistance` 验证成功 / 失败日志严格消费 `ResistanceResolved.Amount / Count / bSuccess`，不从 Snapshot 或卡面重新计算比较值；规则与 Action Preview 的完整抵抗矩阵由 `Wacom.Battle.Resistance` 负责。
 
 短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、流式 Row、根行动到 Footer 图标的原位交接和详情打开请求。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
 

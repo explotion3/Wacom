@@ -46,7 +46,7 @@ namespace WacomBattleCardRuntimeCostChangedSpec
 				Fixture.MakeNoopCard(0),
 				Fixture.MakeNoopCard(0),
 				{ SourceCard, TargetCard, Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) }),
-			Fixture.MakeSinglePartEnemy(/*Hp*/ 100, /*Initiative*/ 50, /*IntentResist*/ 0),
+			Fixture.MakeSinglePartEnemy(/*Hp*/ 100, /*Initiative*/ 50),
 			19);
 		if (!Test.TestNotNull(TEXT("Runtime-cost session"), Session))
 		{

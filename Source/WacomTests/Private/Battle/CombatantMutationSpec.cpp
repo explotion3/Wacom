@@ -124,7 +124,7 @@ bool FWacomBattleCombatantMutationDamageFactsSpec::RunTest(const FString& /*Para
 		UBattleSession* Session = MakeSessionWithCard(
 			Fixture,
 			Card,
-			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0));
+			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100));
 
 		const FBattleSnapshot Before = Session->BuildSnapshot();
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
@@ -154,7 +154,7 @@ bool FWacomBattleCombatantMutationDamageFactsSpec::RunTest(const FString& /*Para
 		UBattleSession* Session = MakeSessionWithCard(
 			Fixture,
 			Card,
-			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0));
+			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100));
 
 		const FBattleSnapshot Before = Session->BuildSnapshot();
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
@@ -189,7 +189,7 @@ bool FWacomBattleCombatantMutationDestructionOrderSpec::RunTest(const FString& /
 	UBattleSession* Session = MakeSessionWithCard(
 		Fixture,
 		Card,
-		Fixture.MakeSinglePartEnemy(/*Hp*/3, /*Initiative*/7, /*IntentResist*/0));
+		Fixture.MakeSinglePartEnemy(/*Hp*/3, /*Initiative*/7));
 
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
@@ -243,7 +243,7 @@ bool FWacomBattleCombatantMutationStatusProjectionSpec::RunTest(const FString& /
 	UBattleSession* Session = MakeSessionWithCard(
 		Fixture,
 		Card,
-		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0));
+		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100));
 
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);
@@ -279,7 +279,7 @@ bool FWacomBattleCombatantMutationPoisonOverkillSpec::RunTest(const FString& /*P
 	UBattleSession* Session = MakeSessionWithCard(
 		Fixture,
 		Card,
-		Fixture.MakeSinglePartEnemy(/*Hp*/2, /*Initiative*/100, /*IntentResist*/0));
+		Fixture.MakeSinglePartEnemy(/*Hp*/2, /*Initiative*/100));
 
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Before, Card->CardId);

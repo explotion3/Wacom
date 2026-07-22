@@ -17,7 +17,7 @@
  * 验证：事件流里 InitiativeHit 出现在 ResistanceResolved 之前，
  *       而 PerfectReleaseResolved 不存在（本卡没有 PerfectReleaseEffects，只验证顺序）。
  *
- * 另：非迅捷卡命中时伤害值 = Resistance，满足 CardResist > IntentResist 时应触发晕厥。
+ * 另：非迅捷卡命中时取双方最高单段伤害，卡牌严格大于敌方时应触发眩晕。
  */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomBattlePerfectReleaseSpec,
@@ -31,13 +31,13 @@ bool FWacomBattlePerfectReleaseSpec::RunTest(const FString& /*Parameters*/)
 	UCardDefinition* LH = Fx.MakeNoopCard(1);
 	UCardDefinition* RH = Fx.MakeNoopCard(1);
 
-	// Cost = 5, Damage = 10。敌人单部位 Init=5 → 命中；IntentResist=3 → CardResist(10) > IntentResist(3) → 晕厥。
+	// Cost = 5, Damage = 10。敌人单部位 Init=5 → 命中；CardPeak(10) > IntentPeak(1) → 眩晕。
 	UCardDefinition* HitCard = Fx.MakeSimpleDamageCard(/*Cost*/5, /*Dmg*/10);
 	TArray<UCardDefinition*> Deck = { HitCard };
 	for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 	UCharacterDefinition* Char  = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/5, /*IntentResist*/3);
+	UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/5);
 	UBattleSession*       S     = Fx.CreateSession(Char, Enemy, 1);
 
 	// 清掉 Initialize 的事件

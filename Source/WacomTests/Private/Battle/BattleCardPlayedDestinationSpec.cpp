@@ -103,7 +103,7 @@ bool FWacomBattleCardPlayedDestinationEventTest::RunTest(
 			LeftAnchor,
 			RightAnchor,
 			{ Normal, ExhaustSelf, Combo, ExplicitShuffle, Filler }),
-		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		/*Seed*/37);
 	const FBattleSnapshot Initial = Session->BuildSnapshot();
 	const FGuid NormalId = FWacomBattleFixture::FindHandInstanceByCardId(Initial, Normal->CardId);

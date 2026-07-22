@@ -68,7 +68,7 @@ bool FWacomBattleEffectChainContinuesAfterHandlerFailureSpec::RunTest(const FStr
 			Fixture.MakeNoopCard(0),
 			Fixture.MakeNoopCard(0),
 			{ Card, Filler, Filler, Filler, Filler }),
-		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		/*Seed*/1);
 
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(
@@ -122,7 +122,7 @@ bool FWacomBattleEffectChainScratchFailureAndIsolationSpec::RunTest(const FStrin
 			Fixture.MakeNoopCard(0),
 			Fixture.MakeNoopCard(0),
 			{ Card, Filler, Filler, Filler, Filler }),
-		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		/*Seed*/1);
 
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(

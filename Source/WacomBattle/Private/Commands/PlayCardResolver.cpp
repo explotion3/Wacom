@@ -91,7 +91,11 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 
 	TArray<FGuid> HitPartIds;
 	FInitiativeResolver::CollectInitiativeHits(PreCastInitiative, RuntimeCost, HitPartIds);
-	if (!bSwift && RuntimeCost > 0)
+	if (bSwift)
+	{
+		HitPartIds.Reset();
+	}
+	else if (RuntimeCost > 0)
 	{
 		HitPartIds.RemoveAll(
 			[&FrozenPartIdsAtPlayStart](const FGuid& PartId)
@@ -111,7 +115,14 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 		Events.Emit(Ev);
 	}
 
-	FInitiativeResolver::ResolveResistance(State, Events, *Def, RuntimeCost, HitPartIds, CardId);
+	FInitiativeResolver::ResolveResistance(
+		State,
+		Events,
+		*Def,
+		RuntimeCost,
+		SelectedPartId,
+		HitPartIds,
+		CardId);
 
 	// ================ 4. 主效果 ================
 	// 主效果自成一条词法 chain（与 ZoneHook / PerfectRelease / AfterPlayed 互不串）。

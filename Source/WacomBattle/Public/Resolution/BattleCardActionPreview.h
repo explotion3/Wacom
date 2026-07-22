@@ -18,8 +18,25 @@ struct WACOMBATTLE_API FBattleCardActionPreviewEnemyPartState
 {
 	FEnemyPartSnapshot Snapshot;
 
-	/** True when this part will act if the card is released. Display initiative as 0. */
+	/** True when this part executes its current intent if the card is released. */
 	bool bWillAct = false;
+
+	/** True when this part reaches its action boundary but Stunned skips the action. */
+	bool bWillSkipActionDueToStun = false;
+
+	/** True when RuntimeCost exactly matches this part's pre-play initiative. */
+	bool bPerfectReleaseCandidate = false;
+};
+
+/** One eligible resistance comparison produced by the copied action transaction. */
+struct WACOMBATTLE_API FBattleCardResistancePreview
+{
+	FGuid TargetEnemyPartInstanceId;
+	FBattlePartSlotIdentity TargetEnemyPartIdentity;
+	FBattleEnemyPartKey TargetEnemyPartKey;
+	int32 PlayerPeakSingleHitDamage = 0;
+	int32 EnemyPeakSingleHitDamage = 0;
+	bool bWillStun = false;
 };
 
 /**
@@ -43,6 +60,9 @@ struct WACOMBATTLE_API FBattleCardActionPreview
 	FHandQueueSnapshot ProjectedHand;
 
 	TArray<FBattleCardActionPreviewEnemyPartState> ProjectedEnemyParts;
+
+	/** Eligible comparisons only; failed comparisons remain present for UI feedback. */
+	TArray<FBattleCardResistancePreview> ResistancePreviews;
 
 	bool bHasUnresolvedFacts = false;
 	TArray<FGameplayTag> UnresolvedEffectTypes;

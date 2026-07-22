@@ -53,7 +53,7 @@ bool FWacomBattleCardZoneInvariantLifecycleSpec::RunTest(const FString& /*Parame
 			LeftHand,
 			RightHand,
 			{ Normal, DiscardSource, ExhaustSource, ExhaustTarget }),
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0),
 		/*Seed*/23);
 	if (!TestCardZoneInvariant(*this, TEXT("Initialize/initial draw"), Session))
 	{

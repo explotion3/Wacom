@@ -128,11 +128,23 @@ namespace
 		return nullptr;
 	}
 
+	struct FEnemyActionPreviewFacts
+	{
+		bool bWillAct = false;
+		bool bWillSkipActionDueToStun = false;
+	};
+
+	struct FActionPreviewEventFacts
+	{
+		TSet<FGuid> PerfectReleasePartIds;
+		TMap<FGuid, FEnemyActionPreviewFacts> EnemyActions;
+	};
+
 	void FillProjectedValues(
 		FBattleCardActionPreview& Preview,
 		const FBattleSnapshot& BaselineSnapshot,
 		const FBattleSnapshot& ProjectedSnapshot,
-		const TSet<FGuid>& WillActPartIds)
+		const FActionPreviewEventFacts& EventFacts)
 	{
 		if (HasPlayerChanged(BaselineSnapshot.Player, ProjectedSnapshot.Player))
 		{
@@ -149,10 +161,20 @@ namespace
 		{
 			for (const FEnemyPartSnapshot& ProjectedPart : Enemy.Parts)
 			{
-				const bool bWillAct = WillActPartIds.Contains(ProjectedPart.InstanceId);
+				const FEnemyActionPreviewFacts* EnemyAction =
+					EventFacts.EnemyActions.Find(ProjectedPart.InstanceId);
+				const bool bWillAct = EnemyAction && EnemyAction->bWillAct;
+				const bool bWillSkipActionDueToStun =
+					EnemyAction && EnemyAction->bWillSkipActionDueToStun;
+				const bool bPerfectReleaseCandidate =
+					EventFacts.PerfectReleasePartIds.Contains(ProjectedPart.InstanceId);
 				const FEnemyPartSnapshot* BaselinePart =
 					FindPartSnapshot(BaselineSnapshot, ProjectedPart.InstanceId);
-				if (!bWillAct && BaselinePart && !HasEnemyPartChanged(*BaselinePart, ProjectedPart))
+				if (!bWillAct
+					&& !bWillSkipActionDueToStun
+					&& !bPerfectReleaseCandidate
+					&& BaselinePart
+					&& !HasEnemyPartChanged(*BaselinePart, ProjectedPart))
 				{
 					continue;
 				}
@@ -160,7 +182,9 @@ namespace
 				FBattleCardActionPreviewEnemyPartState PartState;
 				PartState.Snapshot = ProjectedPart;
 				PartState.bWillAct = bWillAct;
-				if (bWillAct && !PartState.Snapshot.bDestroyed)
+				PartState.bWillSkipActionDueToStun = bWillSkipActionDueToStun;
+				PartState.bPerfectReleaseCandidate = bPerfectReleaseCandidate;
+				if ((bWillAct || bWillSkipActionDueToStun) && !PartState.Snapshot.bDestroyed)
 				{
 					PartState.Snapshot.CurrentInitiative = 0;
 				}
@@ -169,13 +193,42 @@ namespace
 		}
 	}
 
-	void CollectWillActPartIds(const TArray<FBattleEvent>& Events, TSet<FGuid>& OutPartIds)
+	void CollectPreviewEventFacts(
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& BaselineSnapshot,
+		FBattleCardActionPreview& Preview,
+		FActionPreviewEventFacts& OutFacts)
 	{
 		for (const FBattleEvent& Event : Events)
 		{
-			if (Event.Type == EBattleEventType::EnemyPartActed && Event.ActorInstanceId.IsValid())
+			if (Event.Type == EBattleEventType::InitiativeHit
+				&& Event.ActorInstanceId.IsValid())
 			{
-				OutPartIds.Add(Event.ActorInstanceId);
+				OutFacts.PerfectReleasePartIds.Add(Event.ActorInstanceId);
+			}
+			else if (Event.Type == EBattleEventType::EnemyPartActed
+				&& Event.ActorInstanceId.IsValid())
+			{
+				FEnemyActionPreviewFacts& Action =
+					OutFacts.EnemyActions.FindOrAdd(Event.ActorInstanceId);
+				Action.bWillAct |= Event.Count > 0;
+				Action.bWillSkipActionDueToStun |= Event.Count <= 0;
+			}
+			else if (Event.Type == EBattleEventType::ResistanceResolved
+				&& Event.ActorInstanceId.IsValid())
+			{
+				FBattleCardResistancePreview& Resistance =
+					Preview.ResistancePreviews.AddDefaulted_GetRef();
+				Resistance.TargetEnemyPartInstanceId = Event.ActorInstanceId;
+				Resistance.TargetEnemyPartKey = Event.ActorEnemyPartKey;
+				if (const FEnemyPartSnapshot* Part =
+					FindPartSnapshot(BaselineSnapshot, Event.ActorInstanceId))
+				{
+					Resistance.TargetEnemyPartIdentity = Part->Identity;
+				}
+				Resistance.PlayerPeakSingleHitDamage = Event.Amount;
+				Resistance.EnemyPeakSingleHitDamage = Event.Count;
+				Resistance.bWillStun = Event.bSuccess;
 			}
 		}
 	}
@@ -245,9 +298,13 @@ FBattleCardActionPreview FBattleCardActionPreviewBuilder::Build(
 	}
 
 	Preview.bHasPreview = true;
-	TSet<FGuid> WillActPartIds;
-	CollectWillActPartIds(ScratchEvents.Consume(), WillActPartIds);
+	FActionPreviewEventFacts EventFacts;
+	CollectPreviewEventFacts(
+		ScratchEvents.Consume(),
+		BaselineSnapshot,
+		Preview,
+		EventFacts);
 	const FBattleSnapshot ProjectedSnapshot = FBattleSnapshotBuilder::Build(WorkingState);
-	FillProjectedValues(Preview, BaselineSnapshot, ProjectedSnapshot, WillActPartIds);
+	FillProjectedValues(Preview, BaselineSnapshot, ProjectedSnapshot, EventFacts);
 	return Preview;
 }

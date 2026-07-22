@@ -123,7 +123,7 @@ bool FWacomBattleTurnLifecycleInitialStartSpec::RunTest(const FString& /*Paramet
 	RightHand = Fixture.MakeNoopCard(0);
 	const FWacomInitializedBattleSession Initialized = Fixture.CreateInitializedSession(
 		Fixture.MakeCharacter(LeftHand, RightHand, Deck),
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0),
 		/*Seed*/3);
 	UBattleSession* Session = Initialized.Session;
 
@@ -185,7 +185,7 @@ bool FWacomBattleTurnLifecycleNormalCompletionSpec::RunTest(const FString& /*Par
 	UCardDefinition* RightHand = nullptr;
 	UBattleSession* Session = CreateLifecycleSession(
 		Fixture,
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0),
 		Deck,
 		LeftHand,
 		RightHand,
@@ -306,7 +306,7 @@ bool FWacomBattleTurnLifecyclePreEnemyBattleEndSpec::RunTest(const FString& /*Pa
 	UCardDefinition* RightHand = nullptr;
 	UBattleSession* Session = CreateLifecycleSession(
 		Fixture,
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 1),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 1),
 		Deck,
 		LeftHand,
 		RightHand);
@@ -357,7 +357,7 @@ bool FWacomBattleTurnLifecyclePostEnemyBattleEndSpec::RunTest(const FString& /*P
 	UCardDefinition* RightHand = nullptr;
 	UBattleSession* Session = CreateLifecycleSession(
 		Fixture,
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 1000),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 1000),
 		Deck,
 		LeftHand,
 		RightHand);
@@ -410,7 +410,7 @@ bool FWacomBattleTurnLifecycleReservedTriggersSpec::RunTest(const FString& /*Par
 	UCardDefinition* RightHand = nullptr;
 	UBattleSession* Session = CreateLifecycleSession(
 		Fixture,
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0),
 		Deck,
 		LeftHand,
 		RightHand);

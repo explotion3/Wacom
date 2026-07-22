@@ -361,7 +361,7 @@ bool FWacomUIBattleHUDInitializationResultPresentedOnceSpec::RunTest(const FStri
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5);
 	const FWacomInitializedBattleSession Initialized =
 		Fx.CreateInitializedSession(Character, Enemy, 1);
 	UBattleSession* Session = Initialized.Session;
@@ -492,7 +492,7 @@ bool FWacomUIBattleHUDCombatLogControllerContractSpec::RunTest(const FString& /*
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
 	const FWacomInitializedBattleSession Initialized = Fx.CreateInitializedSession(
 		Character,
-		Fx.MakeSinglePartEnemy(20, 5, 0),
+		Fx.MakeSinglePartEnemy(20, 5),
 		1);
 	Harness->SetInitializedSession(Initialized);
 	TestTrue(TEXT("Initialized attach appends system-visible combat log"),

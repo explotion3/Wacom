@@ -71,7 +71,8 @@ namespace WacomBattleEnemyPanelSpec
 		View.CurrentIntentId = FName(*FString::Printf(TEXT("Test.%s.Intent"), *PartSlotId.ToString()));
 		View.CurrentIntentDisplayName = FText::FromString(TEXT("行动"));
 		View.CurrentIntentInitiative = Initiative;
-		View.CurrentIntentResistanceValue = 3;
+		View.bCurrentIntentIsAttack = true;
+		View.CurrentIntentPeakAttackDamage = 3;
 		View.bDestroyed = bDestroyed;
 		return View;
 	}

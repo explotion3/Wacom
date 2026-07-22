@@ -114,7 +114,7 @@ namespace
 			Fixture.MakeNoopCard(0),
 			{});
 		UEnemyDefinition* Enemy =
-			Fixture.MakeSinglePartEnemy(/*Hp*/EnemyHp, /*Initiative*/10, /*IntentResist*/0);
+			Fixture.MakeSinglePartEnemy(/*Hp*/EnemyHp, /*Initiative*/10);
 
 		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 		FBattleInitParams Params;
@@ -195,7 +195,7 @@ namespace
 		UBattleSession* Session = CreateDeckSession(
 			Fixture,
 			{ PoisonCard, StackDamageCard, ModifierDamageCard },
-			Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0));
+			Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*Damage*/0));
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		FWacomInteractionTargetHandle TargetHandle = MakeTargetPreviewFirstPartHandle(Snapshot);
 
@@ -293,7 +293,7 @@ namespace
 		UBattleSession* Session = CreateDeckSession(
 			Fixture,
 			{ DamageCard },
-			Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0));
+			Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0));
 		const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DamageCard->CardId);
 
@@ -313,7 +313,7 @@ namespace
 		UBattleSession* Session = CreateDeckSession(
 			Fixture,
 			{ SourceCard, TargetCard },
-			Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0));
+			Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0));
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceCard->CardId);
 		const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -348,7 +348,7 @@ namespace
 			UBattleSession* Session = CreateDeckSession(
 				Fixture,
 				{ SourceCard, TargetCard },
-				Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0));
+				Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0));
 			const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 			const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceCard->CardId);
 			const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -369,7 +369,7 @@ namespace
 			UBattleSession* Session = CreateDeckSession(
 				Fixture,
 				{ SourceCard, TargetCard },
-				Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0));
+				Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0));
 			const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 			const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceCard->CardId);
 			const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -390,7 +390,7 @@ namespace
 			UBattleSession* Session = CreateDeckSession(
 				Fixture,
 				{ SourceCard, TargetCard },
-				Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0));
+				Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0));
 			const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 			const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceCard->CardId);
 			const FGuid TargetId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);

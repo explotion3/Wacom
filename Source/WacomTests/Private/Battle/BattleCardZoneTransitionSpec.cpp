@@ -69,7 +69,7 @@ bool FWacomBattleRandomDiscardBatchTransitionSpec::RunTest(const FString& /*Para
 
 	UBattleSession* Session = Fixture.CreateSession(
 		Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		/*Seed*/19);
 	const FBattleSnapshot Before = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Before, DiscardSource->CardId);
@@ -213,7 +213,6 @@ bool FWacomBattleTurnEndHandTransitionOrderSpec::RunTest(const FString& /*Parame
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/100,
 			/*Initiative*/50,
-			/*IntentResist*/0,
 			/*Damage*/0),
 		/*Seed*/7);
 

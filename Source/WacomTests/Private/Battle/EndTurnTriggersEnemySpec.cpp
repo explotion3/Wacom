@@ -30,7 +30,7 @@ bool FWacomBattleEndTurnTriggersEnemySpec::RunTest(const FString& /*Parameters*/
 	UCharacterDefinition* Char  = Fx.MakeCharacter(LH, RH, Deck);
 
 	// Init=20 保证结束阶段敌人尚未行动过（纯由 EndTurn 触发）
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/20, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/20);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Before = S->BuildSnapshot();

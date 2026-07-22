@@ -76,9 +76,9 @@ namespace
 		case EBattleEventType::InitiativeHit:
 			return FString::Printf(TEXT("命中先机：%d"), E.Amount);
 		case EBattleEventType::ResistanceResolved:
-			return E.Tag.IsValid()
-				? FString::Printf(TEXT("抵抗成功：造成眩晕（卡牌 %d / 意图 %d）"), E.Amount, E.Count)
-				: FString::Printf(TEXT("抵抗未触发（卡牌 %d / 意图 %d）"), E.Amount, E.Count);
+			return E.bSuccess
+				? FString::Printf(TEXT("抵抗成功：眩晕 +1（卡牌单段 %d / 敌方单段 %d）"), E.Amount, E.Count)
+				: FString::Printf(TEXT("抵抗失败（卡牌单段 %d / 敌方单段 %d）"), E.Amount, E.Count);
 		case EBattleEventType::PerfectReleaseResolved:
 			return TEXT("完美释放");
 		case EBattleEventType::DamageDealt:

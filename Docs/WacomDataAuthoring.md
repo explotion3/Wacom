@@ -560,6 +560,8 @@ Magnitude 计算顺序：
 
 `FCardEffect` 保持兼容性的宽资产 schema，但战斗执行不会把 `TargetZone` 继续作为通用 MetaTag 透传。Private Effect Semantics 在 decode seam 按 EffectType 将它转换为 DrawSource、HandZone、Keyword 或 Status typed 参数；`Magnitude.Source.TargetStatusStacks` 的 Status 读取参数单独进入 magnitude plan。制作校验、正式执行和 Target Preview 均读取同一份 semantic definition。
 
+`FIntentDefinition` 不再包含手填 `ResistanceValue`。攻击意图由其 Effects 自动派生：至少一个 `Effect.Damage + Target.Player + Magnitude > 0` 时为攻击意图，抵抗比较值取这些 Damage Effects 的最高单段 Magnitude。内容作者只制作真实效果；调整意图 Damage 会同步改变敌情 `ATK`、Action Preview 和抵抗阈值，validator / runtime fixture 不接受第二份重复数值。
+
 `FIntentEffect` 额外包含窄类型 `FHandAfflictionDelivery`：
 
 ```cpp

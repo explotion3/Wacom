@@ -29,7 +29,7 @@ bool FWacomBattleDrawFiveSpec::RunTest(const FString& /*Parameters*/)
 		Deck.Add(Fx.MakeNoopCard(1));
 	}
 	UCharacterDefinition* Char  = Fx.MakeCharacter(LeftHand, RightHand, Deck);
-	UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(/*HP*/20, /*Init*/5, /*Resist*/0);
+	UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(/*HP*/20, /*Init*/5);
 	const FWacomInitializedBattleSession Initialized =
 		Fx.CreateInitializedSession(Char, Enemy, /*Seed*/12345);
 	UBattleSession* S = Initialized.Session;

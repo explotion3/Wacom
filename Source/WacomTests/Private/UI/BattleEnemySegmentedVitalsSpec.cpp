@@ -65,7 +65,8 @@ namespace WacomBattleEnemySegmentedVitalsSpec
 		Part.CurrentIntentId = FName(*FString::Printf(TEXT("Snake.%s.Intent"), *PartSlotId.ToString()));
 		Part.CurrentIntentDisplayName = FText::FromString(TEXT("行动"));
 		Part.CurrentIntentInitiative = Initiative;
-		Part.CurrentIntentResistanceValue = 3;
+		Part.bCurrentIntentIsAttack = true;
+		Part.CurrentIntentPeakAttackDamage = 3;
 		Part.bDestroyed = bDestroyed;
 		return Part;
 	}

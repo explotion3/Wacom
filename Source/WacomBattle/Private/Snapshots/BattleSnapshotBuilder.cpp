@@ -9,6 +9,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Resolution/BattleResistanceEvaluator.h"
 #include "Cards/CardDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Enemies/IntentDefinition.h"
@@ -41,10 +42,13 @@ namespace
 		if (!Part.CurrentIntentId.IsNone())
 		{
 			const FIntentDefinition& IntentDef = Part.CurrentIntent;
-			PartSnap.CurrentIntent.IntentId        = IntentDef.IntentId;
-			PartSnap.CurrentIntent.DisplayName     = IntentDef.DisplayName;
-			PartSnap.CurrentIntent.Initiative      = IntentDef.Initiative;
-			PartSnap.CurrentIntent.ResistanceValue = IntentDef.ResistanceValue;
+			PartSnap.CurrentIntent.IntentId    = IntentDef.IntentId;
+			PartSnap.CurrentIntent.DisplayName = IntentDef.DisplayName;
+			PartSnap.CurrentIntent.Initiative  = IntentDef.Initiative;
+			PartSnap.CurrentIntent.PeakAttackDamage =
+				FBattleResistanceEvaluator::EvaluateIntentPeakAttackDamage(IntentDef);
+			PartSnap.CurrentIntent.bIsAttackIntent =
+				PartSnap.CurrentIntent.PeakAttackDamage > 0;
 		}
 
 		return PartSnap;

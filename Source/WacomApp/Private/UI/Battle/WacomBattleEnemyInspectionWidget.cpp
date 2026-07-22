@@ -312,10 +312,15 @@ void UWacomBattleEnemyInspectionWidget::RefreshSelectedPartDetails()
 	}
 	if (ResistanceText)
 	{
-		ResistanceText->SetText(FText::FromString(FString::Printf(
-			TEXT("INIT %d   RES %d"),
-			Part->CurrentIntentInitiative,
-			Part->CurrentIntentResistanceValue)));
+		ResistanceText->SetText(FText::FromString(
+			Part->bCurrentIntentIsAttack
+				? FString::Printf(
+					TEXT("INIT %d   ATK %d"),
+					Part->CurrentIntentInitiative,
+					Part->CurrentIntentPeakAttackDamage)
+				: FString::Printf(
+					TEXT("INIT %d"),
+					Part->CurrentIntentInitiative)));
 	}
 	if (StatusList)
 	{

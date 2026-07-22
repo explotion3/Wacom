@@ -63,7 +63,7 @@ bool FWacomBattleEffectConditionNoneAlwaysExecutes::RunTest(const FString& /*Par
 	for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/50);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -106,7 +106,7 @@ bool FWacomBattleEffectConditionTargetHasStatusBlocksWhenAbsent::RunTest(const F
 	for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/50);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -161,7 +161,7 @@ bool FWacomBattleEffectConditionTargetHasStatusAllowsWhenPresent::RunTest(const 
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
 	// HP 足够承受多次中毒结算 + 条件伤害。
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/50);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();

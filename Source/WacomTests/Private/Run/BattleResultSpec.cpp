@@ -277,7 +277,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomRunBattleRewardCardsAddedToBackpackSpec::RunTest(const FString& /*Parameters*/)
 {
 	FWacomBattleFixture Fx;
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 1, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 1);
 
 	{
 		FRunResultFixture Fixture(Fx);

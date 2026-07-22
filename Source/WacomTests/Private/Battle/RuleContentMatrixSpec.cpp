@@ -176,8 +176,7 @@ namespace
 		UObject* Outer,
 		const TArray<FIntentEffect>& Effects,
 		int32 Hp = 100,
-		int32 Initiative = 5,
-		int32 ResistanceValue = 0)
+		int32 Initiative = 5)
 	{
 		UEnemyPartDefinition* Part = NewMatrixObject<UEnemyPartDefinition>(Outer);
 		Part->PartId = FName(*FString::Printf(TEXT("Matrix.Part.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
@@ -193,7 +192,6 @@ namespace
 		IntentEntry.Intent.IntentId = FName(*FString::Printf(TEXT("Matrix.Intent.%s"), *FGuid::NewGuid().ToString(EGuidFormats::Short)));
 		IntentEntry.Intent.DisplayName = FText::FromName(IntentEntry.Intent.IntentId);
 		IntentEntry.Intent.Initiative = Initiative;
-		IntentEntry.Intent.ResistanceValue = ResistanceValue;
 		IntentEntry.Intent.Effects = Effects;
 
 		FWacomEnemyIntentSetDefinition IntentSet;
@@ -271,7 +269,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 			MakeEffect(WacomTags::Effect_Damage, 4, WacomTags::Target_SingleEnemyPart)
 		});
 		ValidateCardForMatrix(Card, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Card }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -286,7 +284,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 			MakeEffect(WacomTags::Status_Shield, 5, WacomTags::Target_Player)
 		});
 		ValidateCardForMatrix(Card, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Card }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		PlayCardByDefinition(Session, Snapshot, Card, FGuid(), *this);
@@ -303,7 +301,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 			MakeEffect(WacomTags::Effect_ApplyStatus_Twilight, 4, WacomTags::Target_SingleEnemyPart)
 		});
 		ValidateCardForMatrix(Card, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/80, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/80, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Card }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -325,7 +323,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		});
 		UCardDefinition* Filler = MakeNoopMatrixCard(Outer, TEXT("Matrix.Draw.Filler"));
 		ValidateCardForMatrix(DrawCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { DrawCard, Filler, Filler, Filler, Filler, Filler }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const int32 DrawBefore = Snapshot.PileCounts.DrawCount;
@@ -350,7 +348,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 			MakeEffect(WacomTags::Effect_Discard, 1, WacomTags::Target_Player)
 		});
 		ValidateCardForMatrix(DiscardCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { DiscardCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FBattleResolution Resolution =
@@ -365,7 +363,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 			MakeEffect(WacomTags::Effect_ExhaustSelf, 0, WacomTags::Target_Self)
 		});
 		ValidateCardForMatrix(ExhaustCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { ExhaustCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const int32 ExhaustBefore = Snapshot.PileCounts.ExhaustCount;
@@ -402,7 +400,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 			MakeEffect(WacomTags::Effect_ModifyInitiative, -4, WacomTags::Target_SingleEnemyPart)
 		});
 		ValidateCardForMatrix(ModifyCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { ModifyCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -418,7 +416,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 			MakeEffect(WacomTags::Effect_RemoveStatus, 2, WacomTags::Target_SingleEnemyPart, WacomTags::Status_Twilight)
 		});
 		ValidateCardForMatrix(ApplyRemoveCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { ApplyRemoveCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -435,7 +433,7 @@ bool FWacomBattleRuleContentMatrixAllowedCardEffectsSpec::RunTest(const FString&
 		UCardDefinition* GainKeywordCard = MakeHandTargetCard(Outer, TEXT("Matrix.GainKeyword"),
 			MakeEffect(WacomTags::Effect_GainKeyword, 0, WacomTags::Target_SelectedHandCard, WacomTags::Card_Keyword_Companion));
 		ValidateCardForMatrix(GainKeywordCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { GainKeywordCard, TargetCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, GainKeywordCard->CardId);
@@ -467,7 +465,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 		Effect.MagnitudeSource = WacomTags::Magnitude_Source_RuntimeCost;
 		UCardDefinition* Card = MakeEnemyPartCard(Outer, TEXT("Matrix.RuntimeCostPoison"), { Effect }, /*Cost*/3);
 		ValidateCardForMatrix(Card, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/80, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/80, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Card }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -497,7 +495,6 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/80,
 			/*Initiative*/50,
-			/*IntentResist*/0,
 			/*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(
 			Fixture,
@@ -531,7 +528,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 		UCardDefinition* StackDamage = MakeEnemyPartCard(Outer, TEXT("Matrix.StackDamage"), { DamageEffect });
 		ValidateCardForMatrix(PoisonCard, *this);
 		ValidateCardForMatrix(StackDamage, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { PoisonCard, StackDamage }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -567,7 +564,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 			});
 			ValidateCardForMatrix(LeftCard, *this);
 			ValidateCardForMatrix(PoisonCard, *this);
-			UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+			UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*Damage*/0);
 			UBattleSession* Session = CreateMatrixSession(
 				Fixture,
 				MakeNoopMatrixCard(Outer, FName(*FString::Printf(TEXT("Matrix.Left.Condition.%d"), Seed))),
@@ -623,7 +620,7 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		Passive.Effects.Add(MakeEffect(WacomTags::Status_Shield, 4, WacomTags::Target_Player));
 		Card->Passives.Add(Passive);
 		ValidateCardForMatrix(Card, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Card }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		PlayCardByDefinition(Session, Snapshot, Card, FGuid(), *this);
@@ -642,7 +639,7 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		Target->Passives.Add(Passive);
 		ValidateCardForMatrix(Source, *this);
 		ValidateCardForMatrix(Target, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Source, Target }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Source->CardId);
@@ -668,7 +665,7 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		ValidateCardForMatrix(Companion, *this);
 		ValidateCardForMatrix(ReturnSource, *this);
 		ValidateCardForMatrix(ReturnCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { Companion, ReturnSource, ReturnCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid ReturnSourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ReturnSource->CardId);
@@ -696,7 +693,7 @@ bool FWacomBattleRuleContentMatrixPassiveSpec::RunTest(const FString& /*Paramete
 		});
 		ValidateCardForMatrix(TwilightWatcher, *this);
 		ValidateCardForMatrix(TwilightCard, *this);
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 		UBattleSession* Session = CreateSessionWithRequiredCards(Fixture, Outer, { TwilightWatcher, TwilightCard }, Enemy);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
@@ -730,7 +727,7 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 			Hook.ExtraEffects.Add(MakeEffect(WacomTags::Status_Shield, 3, WacomTags::Target_Player));
 			LeftCard->ZoneHooks.Add(Hook);
 			ValidateCardForMatrix(LeftCard, *this);
-			UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+			UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/50, /*Damage*/0);
 			UBattleSession* Session = CreateMatrixSession(
 				Fixture,
 				MakeNoopMatrixCard(Outer, FName(*FString::Printf(TEXT("Matrix.ZoneHook.LeftAnchor.%d"), Seed))),
@@ -772,7 +769,7 @@ bool FWacomBattleRuleContentMatrixZoneHookSpec::RunTest(const FString& /*Paramet
 			Hook.Trigger = WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit;
 			LeftCard->ZoneHooks.Add(Hook);
 			ValidateCardForMatrix(LeftCard, *this);
-			UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/5, /*IntentResist*/0, /*Damage*/0);
+			UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/50, /*Initiative*/5, /*Damage*/0);
 			UBattleSession* Session = CreateMatrixSession(
 				Fixture,
 				MakeNoopMatrixCard(Outer, FName(*FString::Printf(TEXT("Matrix.ZoneHookPerfect.LeftAnchor.%d"), Seed))),
@@ -947,7 +944,6 @@ bool FWacomBattleRuleContentMatrixReservedRejectedSpec::RunTest(const FString& /
 			FWacomEnemyBehaviorIntent IntentEntry;
 			IntentEntry.Intent.IntentId = TEXT("Matrix.Intent.Reject");
 			IntentEntry.Intent.Initiative = 1;
-			IntentEntry.Intent.ResistanceValue = 0;
 			IntentEntry.Intent.Effects = { Effect };
 
 			FWacomEnemyIntentSetDefinition IntentSet;

@@ -84,7 +84,7 @@ bool FWacomBattleRetainNormalCardKeepsSpec::RunTest(const FString& /*Parameters*
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
 
 	// 敌人先机高 + MaxHp 足够大，EndTurn 后玩家不死。
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/50, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/50);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -126,7 +126,7 @@ bool FWacomBattleRetainNormalCardDiscardsSpec::RunTest(const FString& /*Paramete
 	for (int32 i = 0; i < 15; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -187,7 +187,7 @@ bool FWacomBattleRetainBothZoneKeepsSpec::RunTest(const FString& /*Parameters*/)
 		for (int32 i = 0; i < 10; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50);
 		UBattleSession*   S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();
@@ -236,7 +236,7 @@ bool FWacomBattleRetainBothZoneDiscardsIfAnchorMissingSpec::RunTest(const FStrin
 		for (int32 i = 0; i < 10; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50);
 		UBattleSession*   S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();
@@ -297,7 +297,7 @@ bool FWacomBattleTurnStartDrawStopsAtHandLimitSpec::RunTest(const FString& /*Par
 		}
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50);
 		UBattleSession* S = Fx.CreateSession(Char, Enemy, Seed);
 
 		// 清掉初始化事件。第一轮结束后：保留 5 张 + 新抽 5 张 = 10，刚好不超限。

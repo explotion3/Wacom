@@ -233,6 +233,11 @@ namespace
 			&& A.bSourceCardSwift == B.bSourceCardSwift
 			&& A.bPerfectReleaseCandidate == B.bPerfectReleaseCandidate
 			&& A.bActionRisk == B.bActionRisk
+			&& A.bWillSkipActionDueToStun == B.bWillSkipActionDueToStun
+			&& A.bHasResistanceComparison == B.bHasResistanceComparison
+			&& A.ResistancePlayerPeakDamage == B.ResistancePlayerPeakDamage
+			&& A.ResistanceEnemyPeakDamage == B.ResistanceEnemyPeakDamage
+			&& A.bResistanceWillStun == B.bResistanceWillStun
 			&& A.RejectReason == B.RejectReason
 			&& A.MainText.EqualTo(B.MainText)
 			&& A.DetailText.EqualTo(B.DetailText);
@@ -493,15 +498,46 @@ namespace
 		}
 		if (State.bActionPreviewActive)
 		{
+			State.PredictionView = FWacomBattleEnemyPartPredictionView();
 			State.PredictionView.bVisible = true;
 			State.PredictionView.Mode = EWacomBattleEnemyPartPredictionMode::CardPrediction;
 			State.PredictionView.CurrentInitiative = State.CurrentInitiative;
 			State.PredictionView.PredictedInitiative = State.ActionPreviewView.CurrentInitiative;
 			State.PredictionView.bActionRisk = State.ActionPreviewView.bActionPreviewWillAct;
+			State.PredictionView.bWillSkipActionDueToStun =
+				State.ActionPreviewView.bActionPreviewWillSkipActionDueToStun;
+			State.PredictionView.bPerfectReleaseCandidate =
+				State.ActionPreviewView.bActionPreviewPerfectReleaseCandidate;
+			State.PredictionView.bHasResistanceComparison =
+				State.ActionPreviewView.bHasResistancePreview;
+			State.PredictionView.ResistancePlayerPeakDamage =
+				State.ActionPreviewView.ResistancePreviewPlayerPeakDamage;
+			State.PredictionView.ResistanceEnemyPeakDamage =
+				State.ActionPreviewView.ResistancePreviewEnemyPeakDamage;
+			State.PredictionView.bResistanceWillStun =
+				State.ActionPreviewView.bResistancePreviewWillStun;
 			State.PredictionView.MainText = FText::Format(
 				LOCTEXT("ActionPreview", "先机 {0} -> {1}"),
 				FText::AsNumber(State.CurrentInitiative),
 				FText::AsNumber(State.ActionPreviewView.CurrentInitiative));
+			if (State.ActionPreviewView.bHasResistancePreview)
+			{
+				State.PredictionView.DetailText = State.ActionPreviewView.bResistancePreviewWillStun
+					? FText::Format(
+						State.ActionPreviewView.bActionPreviewWillSkipActionDueToStun
+							? LOCTEXT("ResistanceSuccessSkip", "完美释放\n抵抗 {0} > 攻击 {1} · 眩晕 +1 · 跳过行动")
+							: LOCTEXT("ResistanceSuccess", "完美释放\n抵抗 {0} > 攻击 {1} · 眩晕 +1"),
+						FText::AsNumber(State.ActionPreviewView.ResistancePreviewPlayerPeakDamage),
+						FText::AsNumber(State.ActionPreviewView.ResistancePreviewEnemyPeakDamage))
+					: FText::Format(
+						LOCTEXT("ResistanceFailure", "完美释放\n抵抗 {0} ≤ 攻击 {1}"),
+						FText::AsNumber(State.ActionPreviewView.ResistancePreviewPlayerPeakDamage),
+						FText::AsNumber(State.ActionPreviewView.ResistancePreviewEnemyPeakDamage));
+			}
+			else if (State.ActionPreviewView.bActionPreviewPerfectReleaseCandidate)
+			{
+				State.PredictionView.DetailText = LOCTEXT("ActionPreviewPerfectRelease", "完美释放");
+			}
 		}
 		else if (State.bDragPreviewActive)
 		{

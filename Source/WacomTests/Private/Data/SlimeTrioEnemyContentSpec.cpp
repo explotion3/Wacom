@@ -158,28 +158,27 @@ bool FWacomDataSlimeTrioAssetContractSpec::RunTest(
 	{
 		FName IntentId;
 		int32 Initiative;
-		int32 Resistance;
 		int32 Magnitude;
 		FGameplayTag EffectType;
 		FGameplayTag Target;
 	};
 	const TMap<FName, TArray<FIntentExpectation>> ExpectedIntents = {
 		{ TEXT("SlimeTrio.Left.Sequence"), {
-			{ TEXT("SlimeTrio.Left.Bump"), 2, 3, 3,
+			{ TEXT("SlimeTrio.Left.Bump"), 2, 3,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("SlimeTrio.Left.Coat"), 3, 0, 3,
+			{ TEXT("SlimeTrio.Left.Coat"), 3, 3,
 				WacomTags::Status_Shield, WacomTags::Target_Self },
 		} },
 		{ TEXT("SlimeTrio.Core.Sequence"), {
-			{ TEXT("SlimeTrio.Core.Slam"), 4, 6, 6,
+			{ TEXT("SlimeTrio.Core.Slam"), 4, 6,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("SlimeTrio.Core.Harden"), 3, 0, 5,
+			{ TEXT("SlimeTrio.Core.Harden"), 3, 5,
 				WacomTags::Status_Shield, WacomTags::Target_Self },
 		} },
 		{ TEXT("SlimeTrio.Right.Sequence"), {
-			{ TEXT("SlimeTrio.Right.Bump"), 2, 3, 3,
+			{ TEXT("SlimeTrio.Right.Bump"), 2, 3,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("SlimeTrio.Right.ToxicSpit"), 4, 0, 1,
+			{ TEXT("SlimeTrio.Right.ToxicSpit"), 4, 1,
 				WacomTags::Effect_ApplyStatus_Poison, WacomTags::Target_Player },
 		} },
 	};
@@ -221,8 +220,6 @@ bool FWacomDataSlimeTrioAssetContractSpec::RunTest(
 			const FIntentExpectation& Expected = Pair.Value[Index];
 			TestEqual(TEXT("IntentId"), Intent.IntentId, Expected.IntentId);
 			TestEqual(TEXT("Initiative"), Intent.Initiative, Expected.Initiative);
-			TestEqual(TEXT("Resistance"),
-				Intent.ResistanceValue, Expected.Resistance);
 			TestEqual(TEXT("One effect"), Intent.Effects.Num(), 1);
 			if (Intent.Effects.Num() == 1)
 			{

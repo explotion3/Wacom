@@ -37,7 +37,7 @@ namespace WacomBattleCombatLogDetailsSpec
 				Fixture.MakeNoopCard(0),
 				Fixture.MakeNoopCard(0)
 			});
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 10, 0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 10);
 		return Fixture.CreateInitializedSession(Character, Enemy, 1);
 	}
 

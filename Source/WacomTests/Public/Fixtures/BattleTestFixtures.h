@@ -81,20 +81,20 @@ public:
 
 	/**
 	 * 构造一个简单"单部位敌人"。
-	 * Initiative 用作首意图先机；ResistanceValue 填 IntentResist。
+	 * Initiative 用作首意图先机。
 	 * 第一条意图是 Effect.Damage(1) 打玩家，作为占位。
 	 */
-	UEnemyDefinition* MakeSinglePartEnemy(int32 Hp, int32 Initiative, int32 IntentResist);
+	UEnemyDefinition* MakeSinglePartEnemy(int32 Hp, int32 Initiative);
 
 	/**
 	 * 构造一个简单"单部位敌人"，可指定第一条意图伤害。
 	 * 用于需要隔离敌方行动副作用的规则测试。
 	 */
-	UEnemyDefinition* MakeSinglePartEnemyWithIntentDamage(int32 Hp, int32 Initiative, int32 IntentResist, int32 Damage);
+	UEnemyDefinition* MakeSinglePartEnemyWithIntentDamage(int32 Hp, int32 Initiative, int32 Damage);
 
 	/**
 	 * 三部位敌人，先机分别为 [H, B, T]，HP 分别为 [HH, HB, HT]。
-	 * 意图都是 Damage(1) 打玩家，抵抗值 0。
+	 * 意图都是 Damage(1) 打玩家。
 	 */
 	UEnemyDefinition* MakeThreePartEnemy(int32 HH, int32 HB, int32 HT, int32 IH, int32 IB, int32 IT);
 

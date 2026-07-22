@@ -37,7 +37,7 @@ namespace WacomBattleReshufflePileFeedbackSpec
 			LeftHand,
 			RightHand,
 			{ Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) });
-		return Fixture.CreateSession(Character, Fixture.MakeSinglePartEnemy(20, 50, 0), 1);
+		return Fixture.CreateSession(Character, Fixture.MakeSinglePartEnemy(20, 50), 1);
 	}
 }
 

@@ -49,7 +49,7 @@ namespace WacomBattleCommandHandFeedbackPresentationSpec
 			});
 		return Fixture.CreateInitializedSession(
 			Character,
-			Fixture.MakeSinglePartEnemy(20, 50, 0),
+			Fixture.MakeSinglePartEnemy(20, 50),
 			31);
 	}
 }
@@ -209,7 +209,7 @@ bool FWacomUIBattleCommandCostRewritePhaseOrderTest::RunTest(
 			Fixture.MakeNoopCard(0),
 			{ SourceDefinition, TargetDefinition, Fixture.MakeNoopCard(0),
 				Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) }),
-		Fixture.MakeSinglePartEnemy(20, 50, 0),
+		Fixture.MakeSinglePartEnemy(20, 50),
 		43);
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
 		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
@@ -334,7 +334,7 @@ bool FWacomUIBattleCommandHandAnchorCostRewriteTest::RunTest(
 			Fixture.MakeNoopCard(0),
 			Fixture.MakeNoopCard(0),
 			{ SourceDefinition, Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) }),
-		Fixture.MakeSinglePartEnemy(20, 50, 0),
+		Fixture.MakeSinglePartEnemy(20, 50),
 		44);
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
 		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);

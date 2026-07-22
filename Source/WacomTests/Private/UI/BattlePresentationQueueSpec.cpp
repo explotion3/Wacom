@@ -173,7 +173,7 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ TargetCard, NoTargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
@@ -385,7 +385,7 @@ bool FWacomUIBattlePresentationStackEndTurnBarrierSpec::RunTest(const FString& /
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
@@ -460,7 +460,7 @@ bool FWacomUIBattlePresentationQueueDamageCueSpec::RunTest(const FString& /*Para
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 	const FGuid TargetPartId = FWacomBattleFixture::FindPartInstanceId(Session->BuildSnapshot(), 0);
 
@@ -642,7 +642,7 @@ bool FWacomUIBattlePresentationQueueClearsOnSessionChangeSpec::RunTest(const FSt
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	FActorSpawnParameters SpawnParams;
@@ -710,7 +710,7 @@ bool FWacomUIBattlePresentationQueueBattleEndClearsQueueSafelySpec::RunTest(cons
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Killer, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 5, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(10, 5);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	const FBattleSnapshot InitialSnapshot = Session->BuildSnapshot();
@@ -886,7 +886,7 @@ bool FWacomUIBattleHUDPresentationCoordinatorContractSpec::RunTest(const FString
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
@@ -994,7 +994,7 @@ bool FWacomUIBattleHUDPresentationCoordinatorTeardownSpec::RunTest(const FString
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 50);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =

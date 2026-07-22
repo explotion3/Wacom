@@ -42,7 +42,7 @@ namespace WacomBattleHUDResultApplicationSpec
 				Fixture.MakeNoopCard(0),
 				Fixture.MakeNoopCard(0)
 			});
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 50, 0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 50);
 		return Fixture.CreateInitializedSession(Character, Enemy, 1);
 	}
 }

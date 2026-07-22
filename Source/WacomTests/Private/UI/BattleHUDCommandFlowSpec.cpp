@@ -115,7 +115,7 @@ bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& 
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5);
 
 	{
 		UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
@@ -140,7 +140,7 @@ bool FWacomUIBattleHUDWaitEndTurnCancelTargetSelectSpec::RunTest(const FString& 
 			SecondFx.MakeNoopCard(0),
 			SecondFx.MakeNoopCard(0),
 			{ SecondFx.MakeNoopCard(0), SecondFx.MakeNoopCard(0), SecondFx.MakeNoopCard(0) });
-		UEnemyDefinition* SecondEnemy = SecondFx.MakeSinglePartEnemy(20, 5, 0);
+		UEnemyDefinition* SecondEnemy = SecondFx.MakeSinglePartEnemy(20, 5);
 		UBattleSession* Session = SecondFx.CreateSession(SecondCharacter, SecondEnemy, 1);
 		TStrongObjectPtr<UWacomBattleHUDDetailTest> HUD(NewObject<UWacomBattleHUDDetailTest>());
 		HUD->SetSession(Session);

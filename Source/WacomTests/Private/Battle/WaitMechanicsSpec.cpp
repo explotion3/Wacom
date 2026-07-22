@@ -27,7 +27,7 @@ bool FWacomBattleWaitMechanicsSpec::RunTest(const FString& /*Parameters*/)
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
 
 	// 敌人先机够高：20，避免等待触发行动导致判断混乱。
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/20, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/20);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	const FBattleSnapshot Before = S->BuildSnapshot();

@@ -47,6 +47,21 @@ struct WACOMAPP_API FWacomBattleEnemyPartPredictionView
 	bool bActionRisk = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Prediction")
+	bool bWillSkipActionDueToStun = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Prediction")
+	bool bHasResistanceComparison = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Prediction")
+	int32 ResistancePlayerPeakDamage = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Prediction")
+	int32 ResistanceEnemyPeakDamage = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Prediction")
+	bool bResistanceWillStun = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Prediction")
 	FName RejectReason = NAME_None;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Prediction")

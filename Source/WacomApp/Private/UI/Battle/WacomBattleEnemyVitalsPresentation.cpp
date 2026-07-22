@@ -273,13 +273,20 @@ bool FWacomBattleEnemyPartPresentationState::AreViewsEquivalent(
 		&& Left.CurrentIntentId == Right.CurrentIntentId
 		&& Left.CurrentIntentDisplayName.EqualTo(Right.CurrentIntentDisplayName)
 		&& Left.CurrentIntentInitiative == Right.CurrentIntentInitiative
-		&& Left.CurrentIntentResistanceValue == Right.CurrentIntentResistanceValue
+		&& Left.bCurrentIntentIsAttack == Right.bCurrentIntentIsAttack
+		&& Left.CurrentIntentPeakAttackDamage == Right.CurrentIntentPeakAttackDamage
 		&& Left.RuntimeStatuses.Num() == Right.RuntimeStatuses.Num()
 		&& Left.RuntimeStatuses.HasAllExact(Right.RuntimeStatuses)
 		&& Right.RuntimeStatuses.HasAllExact(Left.RuntimeStatuses)
 		&& AreStatusStacksEquivalent(Left.RuntimeStatusStacks, Right.RuntimeStatusStacks)
 		&& Left.bDestroyed == Right.bDestroyed
-		&& Left.bActionPreviewWillAct == Right.bActionPreviewWillAct;
+		&& Left.bActionPreviewWillAct == Right.bActionPreviewWillAct
+		&& Left.bActionPreviewWillSkipActionDueToStun == Right.bActionPreviewWillSkipActionDueToStun
+		&& Left.bActionPreviewPerfectReleaseCandidate == Right.bActionPreviewPerfectReleaseCandidate
+		&& Left.bHasResistancePreview == Right.bHasResistancePreview
+		&& Left.ResistancePreviewPlayerPeakDamage == Right.ResistancePreviewPlayerPeakDamage
+		&& Left.ResistancePreviewEnemyPeakDamage == Right.ResistancePreviewEnemyPeakDamage
+		&& Left.bResistancePreviewWillStun == Right.bResistancePreviewWillStun;
 }
 
 float FWacomBattleEnemyPartPresentationState::ResolveHpPercent(

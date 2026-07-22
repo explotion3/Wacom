@@ -103,7 +103,8 @@ namespace WacomBattleEnemySinglePartPanelSpec
 		View.CurrentIntentId = IntentId;
 		View.CurrentIntentDisplayName = FText::FromString(TEXT("攻击"));
 		View.CurrentIntentInitiative = Initiative;
-		View.CurrentIntentResistanceValue = 4;
+		View.bCurrentIntentIsAttack = true;
+		View.CurrentIntentPeakAttackDamage = 4;
 		return View;
 	}
 

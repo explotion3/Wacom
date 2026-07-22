@@ -29,7 +29,7 @@ namespace
 		int32 Hp,
 		int32 Initiative)
 	{
-		UEnemyDefinition* TemplateEnemy = Fx.MakeSinglePartEnemy(Hp, Initiative, /*IntentResist*/0);
+		UEnemyDefinition* TemplateEnemy = Fx.MakeSinglePartEnemy(Hp, Initiative);
 		return TemplateEnemy && TemplateEnemy->Parts.Num() > 0
 			? TemplateEnemy->Parts[0].PartDef
 			: nullptr;

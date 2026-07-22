@@ -157,7 +157,7 @@ namespace WacomFirstPersonCardLayerSpec
 
 	UBattleSession* CreateMinimalBattleSession(FWacomBattleFixture& Fixture)
 	{
-		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 0, 0);
+		UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(20, 0);
 		UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
 			Fixture.MakeNoopCard(0),
 			Fixture.MakeNoopCard(0),
@@ -4542,7 +4542,7 @@ bool FWacomFirstPersonCardLayerUnknownCardPlayedEventNoCommitHintTest::RunTest(c
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 	const FBattleSnapshot Previous = Session->BuildSnapshot();
 

@@ -76,7 +76,6 @@ namespace Wacom::ContentBuilder::FormalFloor2Private
 		const TCHAR* Suffix;
 		const TCHAR* DisplayName;
 		int32 Initiative;
-		int32 Resistance;
 		ESeedEffect Effect;
 		int32 Magnitude;
 		ESeedTarget Target;
@@ -242,32 +241,32 @@ namespace Wacom::ContentBuilder::FormalFloor2Private
 	{
 		static const TArray<FIntentSeed> Seeds =
 		{
-			{TEXT("ScaleCrawler"), TEXT("Head"), TEXT("StoneBite"), TEXT("石牙啃咬"), 3, 4, ESeedEffect::Damage, 4, ESeedTarget::Player},
-			{TEXT("ScaleCrawler"), TEXT("Head"), TEXT("Venom"), TEXT("注毒"), 5, 0, ESeedEffect::Poison, 1, ESeedTarget::Player},
-			{TEXT("ScaleCrawler"), TEXT("Body"), TEXT("Skitter"), TEXT("疾爬"), 2, 3, ESeedEffect::Damage, 3, ESeedTarget::Player},
-			{TEXT("ScaleCrawler"), TEXT("Body"), TEXT("Castoff"), TEXT("蜕鳞"), 2, 0, ESeedEffect::Shield, 3, ESeedTarget::Self},
-			{TEXT("ScaleCrawler"), TEXT("Body"), TEXT("Coil"), TEXT("缠绕"), 4, 0, ESeedEffect::Slow, 1, ESeedTarget::Player},
-			{TEXT("StoneScaleGuard"), TEXT("Head"), TEXT("CrushBite"), TEXT("碎咬"), 3, 5, ESeedEffect::Damage, 5, ESeedTarget::Player},
-			{TEXT("StoneScaleGuard"), TEXT("Head"), TEXT("DustSpit"), TEXT("尘毒"), 5, 0, ESeedEffect::Poison, 1, ESeedTarget::Player},
-			{TEXT("StoneScaleGuard"), TEXT("Carapace"), TEXT("LithicHarden"), TEXT("岩甲硬化"), 2, 0, ESeedEffect::Shield, 7, ESeedTarget::Self},
-			{TEXT("StoneScaleGuard"), TEXT("Carapace"), TEXT("Ram"), TEXT("岩壳冲撞"), 4, 6, ESeedEffect::Damage, 5, ESeedTarget::Player},
-			{TEXT("StoneScaleGuard"), TEXT("Tail"), TEXT("Sweep"), TEXT("尾扫"), 2, 3, ESeedEffect::Damage, 3, ESeedTarget::Player},
-			{TEXT("StoneScaleGuard"), TEXT("Tail"), TEXT("Brace"), TEXT("支撑"), 2, 0, ESeedEffect::Shield, 3, ESeedTarget::Self},
-			{TEXT("VenomHunter"), TEXT("Head"), TEXT("Pounce"), TEXT("扑猎"), 4, 6, ESeedEffect::Damage, 6, ESeedTarget::Player},
-			{TEXT("VenomHunter"), TEXT("Head"), TEXT("Fang"), TEXT("毒牙"), 5, 0, ESeedEffect::Poison, 2, ESeedTarget::Player},
-			{TEXT("VenomHunter"), TEXT("Coil"), TEXT("Bind"), TEXT("束缚"), 4, 0, ESeedEffect::Slow, 2, ESeedTarget::Player},
-			{TEXT("VenomHunter"), TEXT("Coil"), TEXT("Crush"), TEXT("绞压"), 3, 5, ESeedEffect::Damage, 5, ESeedTarget::Player},
-			{TEXT("VenomHunter"), TEXT("Coil"), TEXT("Veil"), TEXT("毒幕"), 2, 0, ESeedEffect::Shield, 4, ESeedTarget::Self},
-			{TEXT("VenomHunter"), TEXT("VenomSac"), TEXT("VenomBurst"), TEXT("毒囊迸发"), 5, 0, ESeedEffect::Poison, 2, ESeedTarget::Player},
-			{TEXT("VenomHunter"), TEXT("VenomSac"), TEXT("GuardSac"), TEXT("护囊"), 2, 0, ESeedEffect::Shield, 3, ESeedTarget::Self},
-			{TEXT("CavernGuardian"), TEXT("Head"), TEXT("DeepBite"), TEXT("深窟噬咬"), 3, 7, ESeedEffect::Damage, 7, ESeedTarget::Player},
-			{TEXT("CavernGuardian"), TEXT("Head"), TEXT("VenomFlood"), TEXT("毒潮"), 5, 0, ESeedEffect::Poison, 2, ESeedTarget::Player},
-			{TEXT("CavernGuardian"), TEXT("Body"), TEXT("CaveCrush"), TEXT("洞窟碾压"), 4, 8, ESeedEffect::Damage, 8, ESeedTarget::Player},
-			{TEXT("CavernGuardian"), TEXT("Body"), TEXT("MoltWall"), TEXT("蜕壳之壁"), 2, 0, ESeedEffect::Shield, 9, ESeedTarget::Self},
-			{TEXT("CavernGuardian"), TEXT("Tail"), TEXT("RockSweep"), TEXT("岩尾横扫"), 2, 5, ESeedEffect::Damage, 5, ESeedTarget::Player},
-			{TEXT("CavernGuardian"), TEXT("Tail"), TEXT("Pin"), TEXT("镇压"), 4, 0, ESeedEffect::Slow, 2, ESeedTarget::Player},
-			{TEXT("CavernGuardian"), TEXT("MoltCore"), TEXT("CorePulse"), TEXT("蜕核脉冲"), 5, 0, ESeedEffect::Poison, 2, ESeedTarget::Player},
-			{TEXT("CavernGuardian"), TEXT("MoltCore"), TEXT("ShedWard"), TEXT("蜕核护持"), 2, 0, ESeedEffect::Shield, 6, ESeedTarget::Self},
+			{TEXT("ScaleCrawler"), TEXT("Head"), TEXT("StoneBite"), TEXT("石牙啃咬"), 3, ESeedEffect::Damage, 4, ESeedTarget::Player},
+			{TEXT("ScaleCrawler"), TEXT("Head"), TEXT("Venom"), TEXT("注毒"), 5, ESeedEffect::Poison, 1, ESeedTarget::Player},
+			{TEXT("ScaleCrawler"), TEXT("Body"), TEXT("Skitter"), TEXT("疾爬"), 2, ESeedEffect::Damage, 3, ESeedTarget::Player},
+			{TEXT("ScaleCrawler"), TEXT("Body"), TEXT("Castoff"), TEXT("蜕鳞"), 2, ESeedEffect::Shield, 3, ESeedTarget::Self},
+			{TEXT("ScaleCrawler"), TEXT("Body"), TEXT("Coil"), TEXT("缠绕"), 4, ESeedEffect::Slow, 1, ESeedTarget::Player},
+			{TEXT("StoneScaleGuard"), TEXT("Head"), TEXT("CrushBite"), TEXT("碎咬"), 3, ESeedEffect::Damage, 5, ESeedTarget::Player},
+			{TEXT("StoneScaleGuard"), TEXT("Head"), TEXT("DustSpit"), TEXT("尘毒"), 5, ESeedEffect::Poison, 1, ESeedTarget::Player},
+			{TEXT("StoneScaleGuard"), TEXT("Carapace"), TEXT("LithicHarden"), TEXT("岩甲硬化"), 2, ESeedEffect::Shield, 7, ESeedTarget::Self},
+			{TEXT("StoneScaleGuard"), TEXT("Carapace"), TEXT("Ram"), TEXT("岩壳冲撞"), 4, ESeedEffect::Damage, 5, ESeedTarget::Player},
+			{TEXT("StoneScaleGuard"), TEXT("Tail"), TEXT("Sweep"), TEXT("尾扫"), 2, ESeedEffect::Damage, 3, ESeedTarget::Player},
+			{TEXT("StoneScaleGuard"), TEXT("Tail"), TEXT("Brace"), TEXT("支撑"), 2, ESeedEffect::Shield, 3, ESeedTarget::Self},
+			{TEXT("VenomHunter"), TEXT("Head"), TEXT("Pounce"), TEXT("扑猎"), 4, ESeedEffect::Damage, 6, ESeedTarget::Player},
+			{TEXT("VenomHunter"), TEXT("Head"), TEXT("Fang"), TEXT("毒牙"), 5, ESeedEffect::Poison, 2, ESeedTarget::Player},
+			{TEXT("VenomHunter"), TEXT("Coil"), TEXT("Bind"), TEXT("束缚"), 4, ESeedEffect::Slow, 2, ESeedTarget::Player},
+			{TEXT("VenomHunter"), TEXT("Coil"), TEXT("Crush"), TEXT("绞压"), 3, ESeedEffect::Damage, 5, ESeedTarget::Player},
+			{TEXT("VenomHunter"), TEXT("Coil"), TEXT("Veil"), TEXT("毒幕"), 2, ESeedEffect::Shield, 4, ESeedTarget::Self},
+			{TEXT("VenomHunter"), TEXT("VenomSac"), TEXT("VenomBurst"), TEXT("毒囊迸发"), 5, ESeedEffect::Poison, 2, ESeedTarget::Player},
+			{TEXT("VenomHunter"), TEXT("VenomSac"), TEXT("GuardSac"), TEXT("护囊"), 2, ESeedEffect::Shield, 3, ESeedTarget::Self},
+			{TEXT("CavernGuardian"), TEXT("Head"), TEXT("DeepBite"), TEXT("深窟噬咬"), 3, ESeedEffect::Damage, 7, ESeedTarget::Player},
+			{TEXT("CavernGuardian"), TEXT("Head"), TEXT("VenomFlood"), TEXT("毒潮"), 5, ESeedEffect::Poison, 2, ESeedTarget::Player},
+			{TEXT("CavernGuardian"), TEXT("Body"), TEXT("CaveCrush"), TEXT("洞窟碾压"), 4, ESeedEffect::Damage, 8, ESeedTarget::Player},
+			{TEXT("CavernGuardian"), TEXT("Body"), TEXT("MoltWall"), TEXT("蜕壳之壁"), 2, ESeedEffect::Shield, 9, ESeedTarget::Self},
+			{TEXT("CavernGuardian"), TEXT("Tail"), TEXT("RockSweep"), TEXT("岩尾横扫"), 2, ESeedEffect::Damage, 5, ESeedTarget::Player},
+			{TEXT("CavernGuardian"), TEXT("Tail"), TEXT("Pin"), TEXT("镇压"), 4, ESeedEffect::Slow, 2, ESeedTarget::Player},
+			{TEXT("CavernGuardian"), TEXT("MoltCore"), TEXT("CorePulse"), TEXT("蜕核脉冲"), 5, ESeedEffect::Poison, 2, ESeedTarget::Player},
+			{TEXT("CavernGuardian"), TEXT("MoltCore"), TEXT("ShedWard"), TEXT("蜕核护持"), 2, ESeedEffect::Shield, 6, ESeedTarget::Self},
 		};
 		return Seeds;
 	}
@@ -422,7 +421,6 @@ namespace Wacom::ContentBuilder::FormalFloor2Private
 					Seed.Archetype, PartSlot, IntentSeed.Suffix);
 				Intent.DisplayName = FText::FromString(IntentSeed.DisplayName);
 				Intent.Initiative = IntentSeed.Initiative;
-				Intent.ResistanceValue = IntentSeed.Resistance;
 				FIntentEffect& Effect = Intent.Effects.AddDefaulted_GetRef();
 				Effect.EffectType = EffectTag(IntentSeed.Effect);
 				Effect.Magnitude = IntentSeed.Magnitude;

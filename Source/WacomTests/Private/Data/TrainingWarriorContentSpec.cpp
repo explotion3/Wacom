@@ -202,15 +202,12 @@ bool FWacomDataTrainingWarriorAssetContractSpec::RunTest(
 				TEXT("TrainingWarrior.Body.Cleave")
 			};
 			const TArray<int32> ExpectedInitiatives = { 3, 2, 4 };
-			const TArray<int32> ExpectedResistance = { 4, 0, 7 };
 			for (int32 Index = 0; Index < IntentSet.Intents.Num(); ++Index)
 			{
 				TestEqual(FString::Printf(TEXT("Intent %d id"), Index),
 					IntentSet.Intents[Index].Intent.IntentId, ExpectedIds[Index]);
 				TestEqual(FString::Printf(TEXT("Intent %d initiative"), Index),
 					IntentSet.Intents[Index].Intent.Initiative, ExpectedInitiatives[Index]);
-				TestEqual(FString::Printf(TEXT("Intent %d resistance"), Index),
-					IntentSet.Intents[Index].Intent.ResistanceValue, ExpectedResistance[Index]);
 			}
 		}
 	}

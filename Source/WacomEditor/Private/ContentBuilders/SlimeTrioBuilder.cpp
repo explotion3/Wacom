@@ -112,14 +112,12 @@ namespace
 		FName IntentId,
 		const TCHAR* DisplayName,
 		int32 Initiative,
-		int32 ResistanceValue,
 		FIntentEffect Effect)
 	{
 		FWacomEnemyBehaviorIntent Entry;
 		Entry.Intent.IntentId = IntentId;
 		Entry.Intent.DisplayName = FText::FromString(DisplayName);
 		Entry.Intent.Initiative = Initiative;
-		Entry.Intent.ResistanceValue = ResistanceValue;
 		Entry.Intent.Effects = { MoveTemp(Effect) };
 		return Entry;
 	}
@@ -361,30 +359,30 @@ namespace Wacom::ContentBuilder
 						{
 							MakeBehaviorIntent(
 								TEXT("SlimeTrio.Left.Bump"), TEXT("Bump"),
-								2, 3, MakeDamage(3)),
+								2, MakeDamage(3)),
 							MakeBehaviorIntent(
 								TEXT("SlimeTrio.Left.Coat"), TEXT("Coat"),
-								3, 0, MakeShieldSelf(3)),
+								3, MakeShieldSelf(3)),
 						}),
 					MakeSequenceIntentSet(
 						TEXT("SlimeTrio.Core.Sequence"), TEXT("Core"),
 						{
 							MakeBehaviorIntent(
 								TEXT("SlimeTrio.Core.Slam"), TEXT("Slam"),
-								4, 6, MakeDamage(6)),
+								4, MakeDamage(6)),
 							MakeBehaviorIntent(
 								TEXT("SlimeTrio.Core.Harden"), TEXT("Harden"),
-								3, 0, MakeShieldSelf(5)),
+								3, MakeShieldSelf(5)),
 						}),
 					MakeSequenceIntentSet(
 						TEXT("SlimeTrio.Right.Sequence"), TEXT("Right"),
 						{
 							MakeBehaviorIntent(
 								TEXT("SlimeTrio.Right.Bump"), TEXT("Bump"),
-								2, 3, MakeDamage(3)),
+								2, MakeDamage(3)),
 							MakeBehaviorIntent(
 								TEXT("SlimeTrio.Right.ToxicSpit"), TEXT("Toxic Spit"),
-								4, 0, MakePoisonOnPlayer(1)),
+								4, MakePoisonOnPlayer(1)),
 						}),
 				};
 				Behavior.Phases = { MoveTemp(Phase) };

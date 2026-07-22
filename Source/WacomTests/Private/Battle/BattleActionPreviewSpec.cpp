@@ -116,7 +116,7 @@ bool FWacomBattleActionPreviewDamageAndEnemyActionSpec::RunTest(const FString& /
 	UBattleSession* Session = CreateActionPreviewSession(
 		Fixture,
 		{ DamageCard },
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/3, /*IntentResist*/99, /*Damage*/4));
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/3, /*Damage*/4));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DamageCard->CardId);
@@ -161,7 +161,7 @@ bool FWacomBattleActionPreviewShieldThenEnemyDamageSpec::RunTest(const FString& 
 	UBattleSession* Session = CreateActionPreviewSession(
 		Fixture,
 		{ ShieldCard },
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/3, /*IntentResist*/99, /*Damage*/3));
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/3, /*Damage*/3));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ShieldCard->CardId);
@@ -191,7 +191,7 @@ bool FWacomBattleActionPreviewSwiftSkipsInitiativeSpec::RunTest(const FString& /
 	UBattleSession* Session = CreateActionPreviewSession(
 		Fixture,
 		{ SwiftDamageCard },
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/3, /*IntentResist*/99, /*Damage*/4));
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/3, /*Damage*/4));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
@@ -263,8 +263,20 @@ bool FWacomBattleActionPreviewProjectsAllInitiativeZeroEnemyActionsSpec::RunTest
 		TestEqual(FString::Printf(TEXT("Part %d initiative displays action at zero"), PartIndex),
 			ProjectedPart->Snapshot.CurrentInitiative,
 			0);
-		TestTrue(FString::Printf(TEXT("Part %d is marked as about to act"), PartIndex),
-			ProjectedPart->bWillAct);
+		if (PartIndex == 0)
+		{
+			TestFalse(TEXT("Perfect-release target is not marked as an attack risk"),
+				ProjectedPart->bWillAct);
+			TestTrue(TEXT("Perfect-release target is marked as skipping due to stun"),
+				ProjectedPart->bWillSkipActionDueToStun);
+		}
+		else
+		{
+			TestTrue(FString::Printf(TEXT("Part %d is marked as about to act"), PartIndex),
+				ProjectedPart->bWillAct);
+			TestFalse(FString::Printf(TEXT("Part %d does not skip"), PartIndex),
+				ProjectedPart->bWillSkipActionDueToStun);
+		}
 	}
 	return true;
 }
@@ -287,7 +299,7 @@ bool FWacomBattleActionPreviewRandomFollowUpSpec::RunTest(const FString& /*Param
 	UBattleSession* Session = CreateActionPreviewSession(
 		Fixture,
 		{ RandomFollowUpCard },
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*IntentResist*/99, /*Damage*/0));
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snapshot, 0);
@@ -329,7 +341,7 @@ bool FWacomBattleActionPreviewAfterPlayedShieldSpec::RunTest(const FString& /*Pa
 	UBattleSession* Session = CreateActionPreviewSession(
 		Fixture,
 		{ Card },
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*IntentResist*/99, /*Damage*/0));
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Card->CardId);
@@ -357,7 +369,7 @@ bool FWacomBattleActionPreviewInvalidTargetSpec::RunTest(const FString& /*Parame
 	UBattleSession* Session = CreateActionPreviewSession(
 		Fixture,
 		{ Card },
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*IntentResist*/99, /*Damage*/0));
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Card->CardId);
@@ -386,7 +398,7 @@ bool FWacomBattleActionPreviewNoTargetPlayerShieldSpec::RunTest(const FString& /
 	UBattleSession* Session = CreateActionPreviewSession(
 		Fixture,
 		{ ShieldCard },
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*IntentResist*/99, /*Damage*/0));
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/20, /*Initiative*/10, /*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, ShieldCard->CardId);
@@ -435,7 +447,6 @@ bool FWacomBattleActionPreviewSelectedDiscardPassiveParitySpec::RunTest(const FS
 			Fixture.MakeSinglePartEnemyWithIntentDamage(
 				/*Hp*/50,
 				/*Initiative*/50,
-				/*IntentResist*/0,
 				/*Damage*/0),
 			Seed);
 	};
@@ -528,7 +539,6 @@ bool FWacomBattleActionPreviewSelectedDiscardUnresolvedPassiveSpec::RunTest(cons
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/50,
 			/*Initiative*/50,
-			/*IntentResist*/0,
 			/*Damage*/0),
 		/*Seed*/23);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();

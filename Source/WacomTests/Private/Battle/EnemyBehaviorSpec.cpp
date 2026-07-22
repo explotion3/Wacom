@@ -32,14 +32,12 @@ namespace
 	FWacomEnemyBehaviorIntent MakeEnemyBehaviorIntent(
 		FName IntentId,
 		int32 Initiative,
-		int32 Damage,
-		int32 PriorityResistance = 0)
+		int32 Damage)
 	{
 		FWacomEnemyBehaviorIntent IntentEntry;
 		IntentEntry.Intent.IntentId = IntentId;
 		IntentEntry.Intent.DisplayName = FText::FromName(IntentId);
 		IntentEntry.Intent.Initiative = Initiative;
-		IntentEntry.Intent.ResistanceValue = PriorityResistance;
 		IntentEntry.Intent.Effects = {
 			MakeEnemyBehaviorEffect(WacomTags::Effect_Damage, Damage, WacomTags::Target_Player)
 		};
@@ -146,7 +144,7 @@ namespace
 
 	UEnemyDefinition* MakeBehaviorEnemy(FWacomBattleFixture& Fx, UEnemyBehaviorDefinition* Behavior, int32 Hp = 30)
 	{
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemyWithIntentDamage(Hp, /*Initiative*/20, /*IntentResist*/0, /*Damage*/1);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemyWithIntentDamage(Hp, /*Initiative*/20, /*Damage*/1);
 		Enemy->DefaultBehavior = Behavior;
 		Enemy->DefaultPhaseId = TEXT("Default");
 		Enemy->Parts[0].PartSlotId = TEXT("Core");

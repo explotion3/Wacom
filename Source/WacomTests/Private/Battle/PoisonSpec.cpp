@@ -98,7 +98,7 @@ bool FWacomBattlePoisonTickOnCardPlaySpec::RunTest(const FString& /*Parameters*/
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
 
 	// 先机 20 足以让打牌之后敌方不行动（20 - 1 = 19 > 0）。
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/30, /*Init*/20, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/30, /*Init*/20);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -153,7 +153,7 @@ bool FWacomBattlePoisonTickOnEnemyActSpec::RunTest(const FString& /*Parameters*/
 
 	// 高先机避免打牌后触发敌方行动。
 	// 首意图 Damage=1 打玩家（fixture 硬编码）。
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/20, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/20);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -209,7 +209,7 @@ bool FWacomBattlePoisonPenetratesShieldSpec::RunTest(const FString& /*Parameters
 	for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(1)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/20, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/20);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -255,7 +255,7 @@ bool FWacomBattlePoisonStacksUnchangedSpec::RunTest(const FString& /*Parameters*
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
 
 	// 足够高的先机避免敌方行动干扰。血量 50 足以承受多次 -3。
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/30, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/50, /*Init*/30);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();

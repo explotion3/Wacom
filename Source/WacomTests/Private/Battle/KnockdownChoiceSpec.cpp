@@ -592,7 +592,7 @@ bool FWacomKnockdownChoiceWithdrawUnavailableOnLastLivingPartSpec::RunTest(const
 
 	UCardDefinition* Killer = nullptr;
 	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(50, 7, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(50, 7);
 	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
 
 	const FBattleSnapshot Snap0 = S->BuildSnapshot();
@@ -767,7 +767,7 @@ bool FWacomKnockdownChoiceVictoryClearsProgressSpec::RunTest(const FString& /*Pa
 	FWacomBattleFixture Fx;
 	UCardDefinition* Killer = nullptr;
 	UCharacterDefinition* Char = MakeStandardChar(Fx, &Killer);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(50, 7, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(50, 7);
 
 	FWacomRunExplorationFixture Exploration;
 	UWacomFloorMapDefinition* Floor =

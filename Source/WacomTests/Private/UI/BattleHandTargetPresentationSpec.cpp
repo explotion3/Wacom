@@ -43,7 +43,7 @@ namespace WacomBattleHandTargetPresentationSpec
 			});
 		return Fixture.CreateInitializedSession(
 			Character,
-			Fixture.MakeSinglePartEnemy(20, 50, 0),
+			Fixture.MakeSinglePartEnemy(20, 50),
 			37);
 	}
 }

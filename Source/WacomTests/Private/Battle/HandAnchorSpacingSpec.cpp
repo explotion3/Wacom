@@ -29,7 +29,7 @@ bool FWacomBattleHandAnchorSpacingSpec::RunTest(const FString& /*Parameters*/)
 			Deck.Add(Fx.MakeNoopCard(1));
 		}
 		UCharacterDefinition* Char  = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+		UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(20, 5);
 		UBattleSession*       S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		const FBattleSnapshot Snap = S->BuildSnapshot();

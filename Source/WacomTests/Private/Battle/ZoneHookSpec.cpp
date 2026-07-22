@@ -120,7 +120,7 @@ bool FWacomBattleZoneHookLeftHitSkipsInitiativePushSpec::RunTest(const FString& 
 		for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/3, /*Resist*/0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/100, /*Init*/3);
 		UBattleSession*   S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();
@@ -198,7 +198,7 @@ bool FWacomBattleZoneHookRightPlayTransfersCostSpec::RunTest(const FString& /*Pa
 		for (int32 i = 0; i < 4; ++i) { Deck.Add(Filler); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50);
 		UBattleSession*   S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();
@@ -274,7 +274,7 @@ bool FWacomBattleZoneHookRightPlayCostAccumulatesSpec::RunTest(const FString& /*
 		for (int32 i = 0; i < 4; ++i) { Deck.Add(Filler); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/500, /*Init*/50);
 		UBattleSession*   S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();
@@ -348,7 +348,7 @@ bool FWacomBattleEffectAddCostWorksOnSelfSpec::RunTest(const FString& /*Paramete
 	for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();
@@ -390,7 +390,7 @@ bool FWacomBattleEffectReduceCostClampsAtZeroSpec::RunTest(const FString& /*Para
 	for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50);
 	UBattleSession*   S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();

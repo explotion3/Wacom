@@ -97,7 +97,6 @@ bool FWacomBattleEndTurnPresentationJournalSpec::RunTest(const FString& /*Parame
 	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemyWithIntentDamage(
 		/*Hp*/40,
 		/*Initiative*/1,
-		/*IntentResist*/0,
 		/*Damage*/0);
 
 	UBattleSession* Session = nullptr;

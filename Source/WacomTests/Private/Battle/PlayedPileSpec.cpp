@@ -45,7 +45,7 @@ bool FWacomBattlePlayedPileReceivesOrdinaryPlayedCardsSpec::RunTest(const FStrin
 
 		UBattleSession* Session = Fx.CreateSession(
 			Fx.MakeCharacter(Fx.MakeNoopCard(/*Cost*/0), Fx.MakeNoopCard(/*Cost*/0), Deck),
-			Fx.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0),
+			Fx.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*Damage*/0),
 			Seed);
 
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
@@ -111,7 +111,7 @@ bool FWacomBattlePlayedPileExcludedFromSameTurnReshuffleSpec::RunTest(const FStr
 
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(/*Cost*/0), Fx.MakeNoopCard(/*Cost*/0), Deck),
-		Fx.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0, /*Damage*/0),
+		Fx.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/100, /*Damage*/0),
 		1);
 
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();

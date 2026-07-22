@@ -318,7 +318,7 @@ bool FWacomUIBattlePresentationStackUsesCardTargetPreviewSpec::RunTest(const FSt
 		Fixture.MakeNoopCard(0),
 		{ PoisonCard, PreviewDamageCard, Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) });
 	UEnemyDefinition* Enemy =
-		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0);
+		Fixture.MakeSinglePartEnemyWithIntentDamage(/*Hp*/100, /*Initiative*/50, /*Damage*/0);
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, /*Seed*/1);
 
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
@@ -402,7 +402,7 @@ bool FWacomUIBattleFirstPersonEnemyPreviewReusesStableDetailSpec::RunTest(const 
 		Fixture,
 		TEXT("UI.TargetPreview.RepeatMoveDamage"),
 		{ MakePreviewPresentationEffect(WacomTags::Effect_Damage, 4) });
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50);
 	UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
 		Fixture.MakeNoopCard(0),
 		Fixture.MakeNoopCard(0),
@@ -513,7 +513,7 @@ bool FWacomUIBattleFirstPersonSceneHoverPreviewReusesStableDetailSpec::RunTest(c
 		Fixture,
 		TEXT("UI.TargetPreview.SceneHoverDamage"),
 		{ MakePreviewPresentationEffect(WacomTags::Effect_Damage, 4) });
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50);
 	UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
 		Fixture.MakeNoopCard(0),
 		Fixture.MakeNoopCard(0),
@@ -660,7 +660,7 @@ bool FWacomUIBattleFirstPersonHandCardPreviewShowsOnFirstUpdateSpec::RunTest(con
 	FWacomBattleFixture Fixture;
 	UCardDefinition* SourceCard = Fixture.MakeHandCardCostModifierCard(/*Cost*/0, /*Magnitude*/2, /*bReduceCost*/false);
 	UCardDefinition* TargetCard = Fixture.MakeNoopCard(3);
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50);
 	UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
 		Fixture.MakeNoopCard(0),
 		Fixture.MakeNoopCard(0),
@@ -727,7 +727,7 @@ bool FWacomUIBattleFirstPersonNoTargetCommitShowsPlayerActionPreviewSpec::RunTes
 	ShieldEffect.Target = WacomTags::Target_Player;
 	ShieldCard->Effects = { ShieldEffect };
 
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50, /*IntentResist*/0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/50);
 	UCharacterDefinition* CharacterDefinition = Fixture.MakeCharacter(
 		Fixture.MakeNoopCard(0),
 		Fixture.MakeNoopCard(0),

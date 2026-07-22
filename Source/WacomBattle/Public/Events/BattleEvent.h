@@ -92,6 +92,7 @@ enum class EHandCardZoneMoveReason : uint8
  * - CardPlayed          ：CardInstanceId、ActorEnemyPartKey = 目标部位稳定 key
  * - CardPlayDestinationResolved：CardInstanceId、CardDestination = 打出结算后的最终区域
  * - InitiativeHit       ：ActorEnemyPartKey = 被命中部位、Amount = 本次 RuntimeCost
+ * - ResistanceResolved ：ActorEnemyPartKey = 比较部位、Amount = 玩家最高单段伤害、Count = 敌方最高单段伤害、bSuccess = 严格大于是否成立、成功时 Tag=Status.Stunned
  * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；全盾吸收为 0，overkill 只记剩余 HP，玩家目标时 key 为空
  * - StatusApplied       ：ActorEnemyPartKey、Tag = Status.*、Amount = 层数；玩家目标时 key 为空
  * - CardStatusChanged   ：CardInstanceId = 目标卡，Tag = Status.*、Amount = 本次 delta、Count = 变更后层数
@@ -157,6 +158,10 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 通用计数字段：抽牌数、连击次数等。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	int32 Count = 0;
+
+	/** 通用成功事实；当前由 ResistanceResolved 显式使用。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	bool bSuccess = false;
 
 	/** Deck step 完成后的抽牌堆数量；仅 CardsDrawn / DiscardPileReshuffledIntoDraw 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

@@ -36,7 +36,7 @@ bool FWacomBattleHandQueueRebuildAcrossTurnsSpec::RunTest(const FString& /*Param
 		TArray<UCardDefinition*> Deck;
 		for (int32 i = 0; i < 10; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 		UCharacterDefinition* Char  = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(1000, 100, 0);  // 无限耐打
+		UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(1000, 100);  // 无限耐打
 		UBattleSession*       S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap1 = S->BuildSnapshot();

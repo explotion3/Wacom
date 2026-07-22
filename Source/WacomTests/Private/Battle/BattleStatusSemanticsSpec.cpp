@@ -123,7 +123,7 @@ bool FWacomBattleStatusEnemySlowFreezeSpec::RunTest(const FString&)
 		Fixture, WacomTags::Effect_ApplyStatus_Slow, 1, 3);
 	UCardDefinition* Noop = Fixture.MakeNoopCard(2);
 	UCharacterDefinition* Character = MakeFiveCardCharacter(Fixture, { Freeze, Slow, Noop });
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 10, 0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 10);
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, 101);
 
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
@@ -175,7 +175,7 @@ bool FWacomBattleStatusEnemyTwilightSpec::RunTest(const FString&)
 	UCardDefinition* Twilight = MakeEnemyStatusCard(
 		Fixture, WacomTags::Effect_ApplyStatus_Twilight, 1, 3);
 	UCharacterDefinition* Character = MakeFiveCardCharacter(Fixture, { Twilight });
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 1, 0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 1);
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, 102);
 
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
@@ -209,7 +209,7 @@ bool FWacomBattleStatusPlayerSlowSpec::RunTest(const FString&)
 {
 	FWacomBattleFixture Fixture;
 	UCharacterDefinition* Character = MakeFiveCardCharacter(Fixture, {}, 1);
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 20, 0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 20);
 	ReplaceSinglePartIntentSequence(*Enemy, {
 		MakeIntent(TEXT("Intent.Slow"), 20,
 			{ MakePlayerStatusIntentEffect(WacomTags::Effect_ApplyStatus_Slow, 2, 2) }),
@@ -251,7 +251,7 @@ bool FWacomBattleStatusPlayerTwilightSpec::RunTest(const FString&)
 	UCardDefinition* Combo = Fixture.MakeNoopCard(0);
 	Combo->Keywords.AddTag(WacomTags::Card_Keyword_Combo);
 	UCharacterDefinition* Character = MakeFiveCardCharacter(Fixture, { Combo }, 0);
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 20, 0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 20);
 	ReplaceSinglePartIntentSequence(*Enemy, {
 		MakeIntent(TEXT("Intent.Twilight"), 20,
 			{ MakePlayerStatusIntentEffect(WacomTags::Effect_ApplyStatus_Twilight, 2) }),
@@ -334,7 +334,7 @@ bool FWacomBattleStatusPlayerFreezeSpec::RunTest(const FString&)
 {
 	FWacomBattleFixture Fixture;
 	UCharacterDefinition* Character = MakeFiveCardCharacter(Fixture, {}, 0);
-	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 20, 0);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(50, 20);
 	ReplaceSinglePartIntentSequence(*Enemy, {
 		MakeIntent(TEXT("Intent.Freeze"), 20,
 			{ MakePlayerStatusIntentEffect(WacomTags::Effect_ApplyStatus_Freeze, 1, 1) }),

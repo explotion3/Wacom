@@ -267,9 +267,11 @@ Cost 推进：
 
 多个部位可同时命中。对于本次会真实推进先机的卡，出牌开始时已冻结的部位不产生 InitiativeHit / Resistance / PerfectRelease；当前卡新施加的 Freeze 从下一张真实推进卡开始生效。迅捷卡不触发完美释放。主效果致死的部位不参与完美释放。
 
-`Resistance` 在先机命中时触发，且先于完美释放。卡牌抵抗值来自主效果中首个 `Effect.Damage` 的 FinalMagnitude；无伤害效果则为 0。意图抵抗值来自 `FIntentDefinition::ResistanceValue`；非攻击意图填 0。
+`Resistance` 在合法先机命中时判定，且先于 `PerfectReleaseEffects`。参与比较的部位必须同时满足：出牌前 `RuntimeCost == CurrentInitiative`、本卡对该部位存在条件成立且 FinalMagnitude 大于 0 的 `Effect.Damage` invocation、该部位当前意图存在指向 Player 且 Magnitude 大于 0 的 `Effect.Damage`。单体 / 全体不使用额外分支；目标集合直接来自 Damage Effect 的正式目标展开，因此非目标部位、条件失败伤害、0 伤害和非攻击意图都不产生抵抗比较。
 
-当 `CardResistance > IntentResistance` 时，该部位进入 `Status.Stunned`。抵抗不改变伤害、不改变先机、不阻止先机推进。
+玩家抵抗值取该目标全部合法 Damage invocation 中最高的单段 FinalMagnitude，不求和；FinalMagnitude 与正式效果执行、Target Preview 共用同一套目标条件、RuntimeCost / MagnitudeSource、Modifier 和 Weapon `+3` 求值。敌方攻击值取当前意图中全部 `Effect.Damage + Target.Player + Magnitude > 0` 的最高单段伤害；意图不再制作独立抵抗数值。`AllEnemyParts` 的条件和 FinalMagnitude 必须按各部位分别计算。
+
+当 `PlayerPeakDamage > EnemyPeakDamage` 时抵抗成功，通过正式状态入口给该部位增加 1 层 `Status.Stunned`；相等或更低时比较失败但仍发布 `ResistanceResolved`。抵抗不改变本卡伤害、不改变先机推进。眩晕可叠层；每次敌人到达行动边界时消费 1 层并跳过该次行动。迅捷卡不产生 `InitiativeHit`、Resistance 或 PerfectRelease；出牌开始时已冻结的部位也不参与这三类事实。
 
 UI 先机预测、scene part Status Badge 和拖卡 preview 只读取 Snapshot / validation 事实，不提交命令、不模拟完整 resolver。表现合同见 [WacomBattleUI.md](./WacomBattleUI.md)、[WacomWorldInteraction.md](./WacomWorldInteraction.md) 和 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
 
@@ -387,7 +389,7 @@ GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWaco
 - `Sequence` intent set 会按 authored 顺序选择下一条可用意图；运行时 `BehaviorSequenceCursor` 表示“下一次 Sequence 选择的起始索引”，初始化选中第一条后推进到第二条，第一次敌人行动后因此选择第二条。`Weighted` 使用战斗 RNG 在有效 rule 中确定性选择；`PriorityFirst` 选择最高优先级有效 rule。
 - selector condition 当前支持自身 HP 阈值、同单位任意部位 HP 阈值、部位已破坏、当前 phase、自身状态、玩家状态和冷却可用。
 - 每次部位行动后，无论执行还是因晕厥跳过，都会刷新到下一条当前意图；Freeze 不参与跳过行动。
-- Snapshot 暴露每个部位当前 `CurrentPhaseId / CurrentIntentSetId / CurrentIntentId`，以及当前意图的 `IntentId / DisplayName / Initiative / ResistanceValue`。
+- Snapshot 暴露每个部位当前 `CurrentPhaseId / CurrentIntentSetId / CurrentIntentId`，以及当前意图的 `IntentId / DisplayName / Initiative / bIsAttackIntent / PeakAttackDamage`。后两者由当前意图 Damage Effects 派生，不是资产手填字段。
 - 初始化和行动后意图刷新会发 `EnemyIntentSelected` 事件；初始化 phase 会发 `EnemyPhaseChanged` 事件。当前还没有 phase transition resolver，因此运行中 phase 变化事件只预留给后续 phase 切换规则。
 
 晕厥以层数模型记录。每次该部位行动时，无论执行意图还是跳过意图，都消耗 1 层；层数归零时移除 `Status.Stunned`。
@@ -468,7 +470,7 @@ BattleState
 | `CardPlayed` | 玩家打出卡牌 |
 | `CardPlayDestinationResolved` | 本次成功打出后的最终卡区事实；紧跟本次去向解析发布，`CardDestination` 为最终 `ECardLocation` |
 | `InitiativeHit` | 出牌前先机命中部位 |
-| `ResistanceResolved` | 抵抗判定完成 |
+| `ResistanceResolved` | 合法抵抗比较完成；`Amount=PlayerPeakDamage`、`Count=EnemyPeakDamage`、`bSuccess` 表示严格大于是否成立，成功时 `Tag=Status.Stunned`；失败比较也必须发布 |
 | `PerfectReleaseResolved` | 完美释放效果完成 |
 | `DamageDealt` | 实际扣血 |
 | `StatusApplied` | 状态层数施加 |

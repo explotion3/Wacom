@@ -22,10 +22,6 @@ struct WACOMDATA_API FIntentDefinition
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Intent")
 	int32 Initiative = 0;
 
-	/** 抵抗比较用数值。攻击意图通常填伤害值，非攻击填 0。 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Intent")
-	int32 ResistanceValue = 0;
-
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Intent")
 	TArray<FIntentEffect> Effects;
 };

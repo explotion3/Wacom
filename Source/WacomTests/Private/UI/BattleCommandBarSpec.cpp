@@ -86,7 +86,7 @@ bool FWacomUIBattleCommandBarRoutesRequestsThroughHUDSpec::RunTest(const FString
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 5);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, 1);
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =

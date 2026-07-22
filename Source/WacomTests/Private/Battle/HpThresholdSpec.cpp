@@ -54,7 +54,7 @@ namespace
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
 		// 单部位敌人，Initiative 高保证战斗一开始不会自动行动
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/200, /*Init*/100, /*Resist*/0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/200, /*Init*/100);
 		return Fx.CreateSession(Char, Enemy, /*Seed*/1);
 	}
 
@@ -197,7 +197,7 @@ bool FWacomBattleHpThresholdFirstTimeOnlySpec::RunTest(const FString& /*Paramete
 	for (int32 i = 0; i < 3; ++i) { Deck.Add(Fx.MakeNoopCard(1)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/200, /*Init*/100, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/200, /*Init*/100);
 	UBattleSession* S = Fx.CreateSession(Char, Enemy, /*Seed*/1);
 
 	// 第一张 → 70

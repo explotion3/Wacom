@@ -64,11 +64,12 @@ void UDebugBattleHUD::NativeRefreshFromSnapshot(const FBattleSnapshot& Snap)
 		for (int32 PartIndex = 0; PartIndex < Enemy.Parts.Num(); ++PartIndex)
 		{
 			const auto& P = Enemy.Parts[PartIndex];
-			Msg += FString::Printf(TEXT("  Part[%d] HP %d/%d  Init %d  Shield %d  Destroyed=%d  Intent=%s Init=%d Resist=%d"),
+			Msg += FString::Printf(TEXT("  Part[%d] HP %d/%d  Init %d  Shield %d  Destroyed=%d  Intent=%s Init=%d Attack=%d Peak=%d"),
 				PartIndex, P.CurrentHp, P.MaxHp, P.CurrentInitiative, P.Shield, (int32)P.bDestroyed,
 				*P.CurrentIntent.DisplayName.ToString(),
 				P.CurrentIntent.Initiative,
-				P.CurrentIntent.ResistanceValue);
+				(int32)P.CurrentIntent.bIsAttackIntent,
+				P.CurrentIntent.PeakAttackDamage);
 			Msg += LINE_TERMINATOR;
 		}
 	}

@@ -89,7 +89,7 @@ bool FWacomBattleSessionCompanionMaxHpBonusOnlyForCompanionSpec::RunTest(const F
 	}
 
 	UCharacterDefinition* Character = Fx.MakeCharacter(LeftHand, RightHand, Deck);
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/200, /*Initiative*/100, /*IntentResist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/200, /*Initiative*/100);
 	UBattleSession* Session = Fx.CreateSession(Character, Enemy, /*Seed*/1);
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();

@@ -36,7 +36,7 @@ bool FWacomBattleCommandResolutionAtomicSpec::RunTest(const FString& /*Parameter
 			Fixture.MakeNoopCard(0),
 			Fixture.MakeNoopCard(0),
 			{ Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) }),
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0),
 		/*Seed*/41);
 	const FBattleSnapshot BeforeFailure = Session->BuildSnapshot();
 	const FBattleResolution Failure = Session->ResolveCommand(

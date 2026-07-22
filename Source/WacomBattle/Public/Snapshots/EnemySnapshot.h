@@ -28,9 +28,13 @@ struct WACOMBATTLE_API FIntentSnapshot
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 Initiative = 0;
 
-	/** 抵抗比较用数值，来自当前意图定义。 */
+	/** 当前意图是否包含面向玩家的正伤害效果。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
-	int32 ResistanceValue = 0;
+	bool bIsAttackIntent = false;
+
+	/** 攻击意图的最高单段伤害；非攻击意图为 0。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	int32 PeakAttackDamage = 0;
 };
 
 /**

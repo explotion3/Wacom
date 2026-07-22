@@ -75,14 +75,12 @@ namespace
 		FName IntentId,
 		const TCHAR* DisplayName,
 		int32 Initiative,
-		int32 Resistance,
 		FIntentEffect Effect)
 	{
 		FWacomEnemyBehaviorIntent Result;
 		Result.Intent.IntentId = IntentId;
 		Result.Intent.DisplayName = FText::FromString(DisplayName);
 		Result.Intent.Initiative = Initiative;
-		Result.Intent.ResistanceValue = Resistance;
 		Result.Intent.Effects = { MoveTemp(Effect) };
 		return Result;
 	}
@@ -326,13 +324,13 @@ namespace Wacom::ContentBuilder
 				IntentSet.Intents = {
 					MakeBehaviorIntent(
 						TEXT("TrainingWarrior.Body.Attack"),
-						TEXT("Attack"), 3, 4, MakePlayerDamage(4)),
+						TEXT("Attack"), 3, MakePlayerDamage(4)),
 					MakeBehaviorIntent(
 						TEXT("TrainingWarrior.Body.Guard"),
-						TEXT("Guard"), 2, 0, MakeSelfShield(4)),
+						TEXT("Guard"), 2, MakeSelfShield(4)),
 					MakeBehaviorIntent(
 						TEXT("TrainingWarrior.Body.Cleave"),
-						TEXT("Cleave"), 4, 7, MakePlayerDamage(7)),
+						TEXT("Cleave"), 4, MakePlayerDamage(7)),
 				};
 				FWacomEnemyPhaseDefinition Phase;
 				Phase.PhaseId = TEXT("Default");

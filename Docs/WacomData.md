@@ -267,11 +267,11 @@ Selector condition 当前支持 `Always`、自身 HP 阈值、同单位任意部
 
 `FIntentDefinition` 和 `FIntentEffect` 是敌方意图的静态效果描述，只通过 `UEnemyBehaviorDefinition` 进入 Battle 运行时。当前敌人意图字段比卡牌效果更窄；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md#battle-rule-content-authoring-matrix)。
 
-首个正式动画敌人内容包是 TrainingWarrior，它只使用上述现有 schema：`EnemyId=Enemy.TrainingWarrior`，单一 `Body` 槽引用 `PartId=TrainingWarrior.Body`，HP 24、经验 3，默认行为 `TrainingWarrior.Behavior`。`Default` phase 的 `TrainingWarrior.Body.Sequence` 固定按 Attack（先机 3、抵抗 4、玩家伤害 4）→ Guard（先机 2、自身护盾 4）→ Cleave（先机 4、抵抗 7、玩家伤害 7）循环。单敌人 Encounter 使用 `EncounterDefinitionId=Encounter.TrainingWarrior.Single` 与 `EnemySlotId=Enemy`。
+首个正式动画敌人内容包是 TrainingWarrior，它只使用上述现有 schema：`EnemyId=Enemy.TrainingWarrior`，单一 `Body` 槽引用 `PartId=TrainingWarrior.Body`，HP 24、经验 3，默认行为 `TrainingWarrior.Behavior`。`Default` phase 的 `TrainingWarrior.Body.Sequence` 固定按 Attack（先机 3、玩家伤害 4）→ Guard（先机 2、自身护盾 4）→ Cleave（先机 4、玩家伤害 7）循环。攻击值由当前意图指向 Player 的最高单段 Damage 派生。单敌人 Encounter 使用 `EncounterDefinitionId=Encounter.TrainingWarrior.Single` 与 `EnemySlotId=Enemy`。
 
 Body 的现有二进制资产仍通过 legacy `KnockdownRewardCard` 给 Aid / Destroy 提供 `Reward.BrokenCleave`（“残缺横斩”）：White、Weapon、1 费、`TargetMode=AllEnemyParts`，对每个存活敌方部位造成 3 伤害。它没有 Physique、被动、ZoneHook、PerfectRelease 或专用插画；CardView 使用既有 fallback。Withdraw 不获得该卡。TrainingWarrior builder 的未来写入已改为同时填写两个显式字段并清空 legacy，但在授权资产迁移前不会执行或重存现有资产。
 
-开发敌人 SlimeTrio 同样只使用现有 schema：`EnemyId=Enemy.SlimeTrio`、默认行为 `SlimeTrio.Behavior`，Definition 顺序固定为 Left / Core / Right。Left 为 HP 12 / XP 1，按 Bump（先机 2、抵抗 3、玩家伤害 3）→ Coat（先机 3、自身护盾 3）循环；Core 为 HP 20 / XP 2，按 Slam（先机 4、抵抗 6、玩家伤害 6）→ Harden（先机 3、自身护盾 5）循环；Right 为 HP 12 / XP 1，按 Bump（先机 2、抵抗 3、玩家伤害 3）→ ToxicSpit（先机 4、玩家中毒 1）循环。三个 Part 的 Aid、Destroy 和 legacy Knockdown 奖励均为空。单敌人 Encounter 使用 `EncounterDefinitionId=Encounter.SlimeTrio.Single` 与 `EnemySlotId=Enemy`。
+开发敌人 SlimeTrio 同样只使用现有 schema：`EnemyId=Enemy.SlimeTrio`、默认行为 `SlimeTrio.Behavior`，Definition 顺序固定为 Left / Core / Right。Left 为 HP 12 / XP 1，按 Bump（先机 2、玩家伤害 3）→ Coat（先机 3、自身护盾 3）循环；Core 为 HP 20 / XP 2，按 Slam（先机 4、玩家伤害 6）→ Harden（先机 3、自身护盾 5）循环；Right 为 HP 12 / XP 1，按 Bump（先机 2、玩家伤害 3）→ ToxicSpit（先机 4、玩家中毒 1）循环。三个 Part 的 Aid、Destroy 和 legacy Knockdown 奖励均为空。单敌人 Encounter 使用 `EncounterDefinitionId=Encounter.SlimeTrio.Single` 与 `EnemySlotId=Enemy`。
 
 ```cpp
 USTRUCT(BlueprintType)
@@ -280,7 +280,6 @@ struct FIntentDefinition
     FName IntentId;
     FText DisplayName;
     int32 Initiative = 0;
-    int32 ResistanceValue = 0;
     TArray<FIntentEffect> Effects;
 };
 
@@ -518,14 +517,14 @@ Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorM
 
 ### SerpentWood 敌人、部位与行为
 
-四个敌人各使用一份 `Default` phase 的 `Sequence` Behavior；每个部位拥有显式 PartSlot/IntentSet。数值记法为 `Damage / Initiative / Resistance`，未写 Resistance 的状态/护盾意图固定为 0，所有 Duration 为 0。
+四个敌人各使用一份 `Default` phase 的 `Sequence` Behavior；每个部位拥有显式 PartSlot/IntentSet。伤害意图使用 `Damage / Initiative` 记法，状态/护盾意图只记录自身数值和 Initiative，所有 Duration 为 0。抵抗所比较的敌方攻击值由指向 Player 的最高单段 Damage 自动派生，不另行制作。
 
 | EnemyId | Part HP / EXP | Sequence Intent contract |
 |---|---|---|
-| `Enemy.SerpentWood.BrushSnake` | Head `7/1`；Body `9/1` | Head: Bite `3/3/3` → Venom `Poison1/I5`; Body: Rush `2/2/2` → Coil `Slow1/I4` → Hide `Shield2/I2` |
-| `Enemy.SerpentWood.MoltGuard` | Head `8/1`；Carapace `14/2`；Tail `6/1` | Head: Snap `4/3/4` → Spit `Poison1/I5`; Carapace: Harden `Shield5/I2` → Slam `4/4/5`; Tail: Sweep `2/2/2` → Brace `Shield2/I2` |
-| `Enemy.SerpentWood.RootStalker` | Head `10/2`；Coil `16/2` | Head: Lunge `5/4/5` → Sap `Poison1/I3`; Coil: Tangle `Slow2/I4` → Crush `4/3/4` → RootGuard `Shield3/I2` |
-| `Enemy.SerpentWood.ShallowGuardian` | Head `14/2`；Body `22/4`；Tail `10/2`；Crest `6/1` | Head: Bite `6/3/6` → Venom `Poison2/I5`; Body: Crush `6/4/7` → Harden `Shield6/I2`; Tail: Sweep `4/2/4` → Tangle `Slow1/I3`; Crest: Dread `Twilight1/I5` → CrownGuard `Shield4/I2` |
+| `Enemy.SerpentWood.BrushSnake` | Head `7/1`；Body `9/1` | Head: Bite `D3/I3` → Venom `Poison1/I5`; Body: Rush `D2/I2` → Coil `Slow1/I4` → Hide `Shield2/I2` |
+| `Enemy.SerpentWood.MoltGuard` | Head `8/1`；Carapace `14/2`；Tail `6/1` | Head: Snap `D4/I3` → Spit `Poison1/I5`; Carapace: Harden `Shield5/I2` → Slam `D4/I4`; Tail: Sweep `D2/I2` → Brace `Shield2/I2` |
+| `Enemy.SerpentWood.RootStalker` | Head `10/2`；Coil `16/2` | Head: Lunge `D5/I4` → Sap `Poison1/I3`; Coil: Tangle `Slow2/I4` → Crush `D4/I3` → RootGuard `Shield3/I2` |
+| `Enemy.SerpentWood.ShallowGuardian` | Head `14/2`；Body `22/4`；Tail `10/2`；Crest `6/1` | Head: Bite `D6/I3` → Venom `Poison2/I5`; Body: Crush `D6/I4` → Harden `Shield6/I2`; Tail: Sweep `D4/I2` → Tangle `Slow1/I3`; Crest: Dread `Twilight1/I5` → CrownGuard `Shield4/I2` |
 
 Damage/Poison/Slow/Twilight 均指向 Player，Shield 指向行动部位自身。Slow 使用现有玩家手牌 `Default / TargetCardCount=1` 投递；Twilight 使用现有整手牌语义。所有 11 个正式新部位必须清空 legacy `KnockdownRewardCard`，并按所属敌人显式引用一对 Aid/Destroy 奖励卡。奖励粒度固定为“每个敌人一对”，不是每个部位或节点各建一对；每个部位处理一次击倒选择并获得所选分支的一张独立卡实例，允许同卡重复。
 

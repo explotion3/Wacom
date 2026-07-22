@@ -39,7 +39,7 @@ bool FWacomBattleHandCapacitySpec::RunTest(const FString& /*Parameters*/)
 	TArray<UCardDefinition*> Deck;
 	for (int32 i = 0; i < 15; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition*     En   = Fx.MakeSinglePartEnemy(50, 50, 0);
+	UEnemyDefinition*     En   = Fx.MakeSinglePartEnemy(50, 50);
 	UBattleSession*       S    = Fx.CreateSession(Char, En, 1);
 
 	const FBattleSnapshot Snap = S->BuildSnapshot();

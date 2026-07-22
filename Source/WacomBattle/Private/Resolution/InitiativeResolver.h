@@ -40,14 +40,15 @@ public:
 		TArray<FGuid>& OutHitPartIds);
 
 	/**
-	 * 对命中部位执行抵抗判定。CardResistance > IntentResistance → 部位晕厥。
-	 * 晕厥用 Status.Stunned 层数模型记录，每次施加 1 层。
+	 * 对同时属于实际伤害目标且持有攻击意图的命中部位执行抵抗判定。
+	 * 玩家与敌方均比较最高单段伤害，严格大于时施加 1 层 Status.Stunned。
 	 */
 	static void ResolveResistance(
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const UCardDefinition& Def,
 		int32 RuntimeCost,
+		const FGuid& SelectedEnemyPartId,
 		const TArray<FGuid>& HitPartIds,
 		const FGuid& CardId);
 

@@ -55,7 +55,7 @@ bool FWacomBattleEffectDrawInsertsCardsAtRandomSpec::RunTest(const FString& /*Pa
 		}
 
 		UCharacterDefinition* Character = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/100, /*IntentResist*/0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/100);
 		UBattleSession* Session = Fx.CreateSession(Character, Enemy, Seed);
 
 		FBattleSnapshot Snap = Session->BuildSnapshot();
@@ -152,7 +152,7 @@ bool FWacomBattleEffectDrawStopsAtHandLimitSpec::RunTest(const FString& /*Parame
 		}
 
 		UCharacterDefinition* Character = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/100, /*IntentResist*/0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/50, /*Initiative*/100);
 		UBattleSession* Session = Fx.CreateSession(Character, Enemy, Seed);
 
 		FBattleSnapshot Snap = Session->BuildSnapshot();

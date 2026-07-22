@@ -32,7 +32,7 @@ bool FWacomBattleHandAnchorAfterPlaySpec::RunTest(const FString& /*Parameters*/)
 	for (int32 i = 0; i < 5; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-	UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(50, 10, 0);
+	UEnemyDefinition*     Enemy = Fx.MakeSinglePartEnemy(50, 10);
 	UBattleSession*       S     = Fx.CreateSession(Char, Enemy, 1);
 
 	FBattleSnapshot Snap = S->BuildSnapshot();

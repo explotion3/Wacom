@@ -27,7 +27,6 @@ namespace
 		IntentEntry.Intent.IntentId = IntentId;
 		IntentEntry.Intent.DisplayName = FText::FromName(IntentId);
 		IntentEntry.Intent.Initiative = 5;
-		IntentEntry.Intent.ResistanceValue = 1;
 		IntentEntry.Intent.Effects = { MakeBehaviorValidationIntentEffect() };
 		return IntentEntry;
 	}

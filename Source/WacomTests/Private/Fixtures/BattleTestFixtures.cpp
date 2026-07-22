@@ -30,14 +30,12 @@ namespace
 	FWacomEnemyBehaviorIntent MakeTestBehaviorIntent(
 		FName IntentId,
 		int32 Initiative,
-		int32 IntentResist,
 		int32 Damage)
 	{
 		FWacomEnemyBehaviorIntent IntentEntry;
 		IntentEntry.Intent.IntentId = IntentId;
 		IntentEntry.Intent.DisplayName = FText::FromName(IntentId);
 		IntentEntry.Intent.Initiative = Initiative;
-		IntentEntry.Intent.ResistanceValue = IntentResist;
 
 		FIntentEffect Eff;
 		Eff.EffectType = WacomTags::Effect_Damage;
@@ -205,15 +203,14 @@ UCardDefinition* FWacomBattleFixture::MakeDamageCardWithKeywords(int32 Cost, int
 	return Card;
 }
 
-UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemy(int32 Hp, int32 Initiative, int32 IntentResist)
+UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemy(int32 Hp, int32 Initiative)
 {
-	return MakeSinglePartEnemyWithIntentDamage(Hp, Initiative, IntentResist, /*Damage*/1);
+	return MakeSinglePartEnemyWithIntentDamage(Hp, Initiative, /*Damage*/1);
 }
 
 UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemyWithIntentDamage(
 	int32 Hp,
 	int32 Initiative,
-	int32 IntentResist,
 	int32 Damage)
 {
 	UEnemyPartDefinition* Part = NewTransient<UEnemyPartDefinition>();
@@ -230,7 +227,7 @@ UEnemyDefinition* FWacomBattleFixture::MakeSinglePartEnemyWithIntentDamage(
 	IntentSet.AppliesToPartSlotId = TEXT("Test.Part.Solo");
 	IntentSet.SelectorMode = EWacomEnemyIntentSelectorMode::Sequence;
 	IntentSet.Intents = {
-		MakeTestBehaviorIntent(TEXT("Test.Intent.BasicAttack"), Initiative, IntentResist, Damage)
+		MakeTestBehaviorIntent(TEXT("Test.Intent.BasicAttack"), Initiative, Damage)
 	};
 	FWacomEnemyPhaseDefinition Phase;
 	Phase.PhaseId = TEXT("Default");
@@ -294,7 +291,7 @@ UEnemyDefinition* FWacomBattleFixture::MakeThreePartEnemy(int32 HH, int32 HB, in
 		IntentSet.AppliesToPartSlotId = PartSlotId;
 		IntentSet.SelectorMode = EWacomEnemyIntentSelectorMode::Sequence;
 		IntentSet.Intents = {
-			MakeTestBehaviorIntent(PartSlotId, Initiative, /*IntentResist*/0, /*Damage*/1)
+			MakeTestBehaviorIntent(PartSlotId, Initiative, /*Damage*/1)
 		};
 		Phase.IntentSets.Add(IntentSet);
 	};

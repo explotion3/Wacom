@@ -682,7 +682,7 @@ bool FWacomFirstPersonCardLayerHUDDrawHintsSurviveOrdinaryRefreshTest::RunTest(c
 	}
 	UBattleSession* Session = Fixture.CreateSession(
 		Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-		Fixture.MakeSinglePartEnemy(20, 0, 0),
+		Fixture.MakeSinglePartEnemy(20, 0),
 		/*Seed*/ 7);
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
 		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);

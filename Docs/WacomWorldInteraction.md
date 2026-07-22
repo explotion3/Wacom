@@ -115,6 +115,8 @@ Host 的 `UWacomBattleEnemySceneRuntimeComponent` 按 typed hierarchy 建立 `FP
 
 HUD 对每个已接收 Snapshot 只构建一次 Scene Enemy sync frame，并将精确 Part facts 与 targetability 推给对应 typed Part；同一批次不从 Session 再建 Snapshot，也不在每个 Part 内重复扫描敌人数组。相同 facts 与交互状态是 no-op。Hover 射线只按配置间隔执行，稳定目标按 `WorldTargetId + Snapshot.Version + UIState + PendingCardId` 复用 preview；世界预测 Widget 首次需要显示时才创建，之后复用并在退役或 EndPlay 销毁。
 
+Scene Target 的完美释放 / 抵抗提示只消费 `FBattleCardActionPreview`：按稳定部位身份显示 Battle 给出的玩家峰值、敌方峰值、比较结果与 `bWillSkipActionDueToStun`，不得从卡牌 Effect、Intent 资产或卡面文本重算伤害。失败比较即使没有 Snapshot diff 也需要显示；非目标部位、非攻击意图和没有正伤害 invocation 的部位没有抵抗提示。
+
 射线命中优先从 `HitResult.Component` 查询 `IWacomInteractionTargetProvider`。Part Component 自身提供 `Interaction.Target.Battle.EnemyPart` handle；Actor 级 fallback 不为战斗部位修正错误 identity。first-person drag、普通 click、hover probe、prediction 与 TargetConfirmed 都消费同一稳定 handle。
 
 Action、Destroyed 与反馈全部原地操作 authored 组件：Part Animation Style 精确选择 `LayerId`；Destroyed 切换同一 Sprite/Flipbook Component；Impact/Preview Niagara 生成在 typed Anchor，缺 Anchor 回退 Part 原点。拖出敌人目标卡时，SceneRuntime 将所有合法部位合成为 `Available` 中心标记；具体 Valid/Invalid Hover 在同一复用 Niagara Component 内覆盖它，离开悬浮后恢复 Available。目标可用性不再尝试缩放 Host 或 Visual Layer。普通 Snapshot、相同 Host 设置和未变化 topology 不重置播放进度或组件指针。BattleEnd/source clear/EndPlay 清理动态组件、timer、delegate 与 barrier，但不销毁 authored Visual。

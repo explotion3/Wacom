@@ -52,7 +52,7 @@ namespace WacomBattleCardDataRewritePresentationSpec
 				Fixture.MakeNoopCard(0),
 				Fixture.MakeNoopCard(0),
 				{ OutSourceCard, OutTargetCard, Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) }),
-			Fixture.MakeSinglePartEnemy(/*Hp*/ 100, /*Initiative*/ 50, /*IntentResist*/ 0),
+			Fixture.MakeSinglePartEnemy(/*Hp*/ 100, /*Initiative*/ 50),
 			23);
 	}
 }

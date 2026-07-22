@@ -64,7 +64,7 @@ namespace
 
 		return Fixture.CreateSession(
 			Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 			1);
 	}
 }
@@ -131,7 +131,7 @@ bool FWacomBattleRandomDiscardEmitsCardDiscardedAndRunsOnDiscardSpec::RunTest(co
 
 		UBattleSession* Session = Fx.CreateSession(
 			Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Deck),
-			Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+			Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 			Seed);
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DiscardSource->CardId);
@@ -186,7 +186,7 @@ bool FWacomBattleDrawLimitDoesNotEmitHandLimitDiscardEventsSpec::RunTest(const F
 
 		UBattleSession* Candidate = Fx.CreateSession(
 			Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Deck),
-			Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100, /*IntentResist*/0),
+			Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/100),
 			Seed);
 		const FBattleSnapshot Snapshot = Candidate->BuildSnapshot();
 		SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, DrawCard->CardId);
@@ -262,7 +262,7 @@ bool FWacomBattleTurnEndDiscardRunsOnDiscardWithoutHandLimitEventSpec::RunTest(c
 
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Left, Right, Deck),
-		Fx.MakeSinglePartEnemyWithIntentDamage(/*Hp*/500, /*Initiative*/50, /*IntentResist*/0, /*Damage*/0),
+		Fx.MakeSinglePartEnemyWithIntentDamage(/*Hp*/500, /*Initiative*/50, /*Damage*/0),
 		1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid LeftId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, Left->CardId);
@@ -344,7 +344,7 @@ bool FWacomBattlePlayedCardDiscardDestinationDoesNotRunOnDiscardSpec::RunTest(co
 	UCardDefinition* PlayedCard = Fx.MakeOnDiscardShieldCard(/*Cost*/0, /*ShieldAmount*/9);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { PlayedCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid PlayedId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PlayedCard->CardId);

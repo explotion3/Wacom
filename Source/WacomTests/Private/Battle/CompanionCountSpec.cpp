@@ -93,7 +93,7 @@ Deck.Add(Fuxiao);  // First in array → bottom of DrawPile → drawn last → s
 for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50);
 		UBattleSession*   S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();
@@ -173,7 +173,7 @@ Deck.Add(Fuxiao);  // First in array → bottom of DrawPile → drawn last → s
 for (int32 i = 0; i < 14; ++i) { Deck.Add(Comp[i]); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50);
 		UBattleSession*   S     = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();
@@ -262,7 +262,7 @@ bool FWacomBattleCompanionCountHandLimitDiscardEventSpec::RunTest(const FString&
 		for (int32 i = 0; i < 10; ++i) { Deck.Add(Comp[i]); }
 
 		UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50, 0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(500, 50);
 		UBattleSession* S = Fx.CreateSession(Char, Enemy, Seed);
 
 		FBattleSnapshot Snap = S->BuildSnapshot();

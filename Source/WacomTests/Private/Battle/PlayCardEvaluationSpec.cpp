@@ -110,7 +110,6 @@ bool FWacomPlayCardEvaluationPreviewFocusSpec::RunTest(const FString& /*Paramete
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/20,
 			/*Initiative*/10,
-			/*IntentResist*/99,
 			/*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
@@ -319,7 +318,6 @@ bool FWacomPlayCardEvaluationStableKeyAuthoritySpec::RunTest(const FString& /*Pa
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/20,
 			/*Initiative*/10,
-			/*IntentResist*/99,
 			/*Damage*/0));
 
 	const FBattleSnapshot Before = Session->BuildSnapshot();
@@ -394,7 +392,6 @@ bool FWacomPlayCardEvaluationTargetKindPrioritySpec::RunTest(const FString& /*Pa
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/20,
 			/*Initiative*/10,
-			/*IntentResist*/99,
 			/*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
@@ -457,7 +454,6 @@ bool FWacomPlayCardEvaluationCostParitySpec::RunTest(const FString& /*Parameters
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/20,
 			/*Initiative*/3,
-			/*IntentResist*/99,
 			/*Damage*/0));
 
 	const FBattleSnapshot Before = Session->BuildSnapshot();
@@ -543,7 +539,6 @@ bool FWacomPlayCardEvaluationFormalStatusDetailSpec::RunTest(const FString& /*Pa
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/20,
 			/*Initiative*/10,
-			/*IntentResist*/99,
 			/*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
@@ -633,7 +628,6 @@ bool FWacomPlayCardEvaluationCanonicalCommandSpec::RunTest(const FString& /*Para
 		Fixture.MakeSinglePartEnemyWithIntentDamage(
 			/*Hp*/20,
 			/*Initiative*/10,
-			/*IntentResist*/99,
 			/*Damage*/0));
 
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();

@@ -21,6 +21,13 @@ struct FCardEffectChainBindings
 	FGuid SelectedHandCardId;
 };
 
+/** One resolved enemy-part invocation before the effect mutates battle state. */
+struct FCardEnemyPartEffectInvocation
+{
+	FGuid TargetEnemyPartInstanceId;
+	int32 FinalMagnitude = 0;
+};
+
 /**
  * Lexically-scoped card effect chain.
  *
@@ -99,6 +106,31 @@ public:
 		int32 RuntimeCost,
 		const FGuid& TargetEnemyPartId,
 		const FGuid& SourceCardId);
+
+	/**
+	 * Resolve one enemy-part invocation using the same target condition and
+	 * FinalMagnitude path as formal execution. Returns false for an invalid,
+	 * destroyed, or condition-rejected target.
+	 */
+	static bool TryEvaluateCardEffectForEnemyPart(
+		const FBattleState& State,
+		const FCardEffect& Effect,
+		int32 RuntimeCost,
+		const FGuid& SourceCardId,
+		const FGuid& TargetEnemyPartId,
+		int32& OutFinalMagnitude);
+
+	/**
+	 * Expand SelectedEnemyPart / AllEnemyParts and evaluate every surviving
+	 * invocation. Formal execution and pre-resolution resistance use this seam.
+	 */
+	static void BuildCardEnemyPartInvocations(
+		const FBattleState& State,
+		const FCardEffect& Effect,
+		int32 RuntimeCost,
+		const FGuid& SourceCardId,
+		const FGuid& SelectedEnemyPartId,
+		TArray<FCardEnemyPartEffectInvocation>& OutInvocations);
 
 private:
 	friend class FCardEffectChain;

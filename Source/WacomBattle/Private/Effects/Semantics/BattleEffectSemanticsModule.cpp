@@ -263,42 +263,63 @@ void FBattleEffectSemanticsModule::ExecuteCardEffects(
 		const EEffectTargetPlanKind TargetPlan = Semantics
 			? Semantics->BuildCardTargetPlan(Effect.Target)
 			: EEffectTargetPlanKind::None;
-		const int32 FinalMagnitude = FBattleEffectSemanticsModule::EvaluateCardFinalMagnitude(
-			*Chain.State,
-			Effect,
-			Chain.Bindings.RuntimeCost,
-			Chain.Bindings.SelectedEnemyPartId,
-			Chain.Bindings.SourceCardId);
 
 		if (TargetPlan == EEffectTargetPlanKind::AllEnemyParts)
 		{
-			for (FRuntimeEnemyPart& Part : Chain.State->Enemy.Parts)
+			TArray<FCardEnemyPartEffectInvocation> Invocations;
+			BuildCardEnemyPartInvocations(
+				*Chain.State,
+				Effect,
+				Chain.Bindings.RuntimeCost,
+				Chain.Bindings.SourceCardId,
+				Chain.Bindings.SelectedEnemyPartId,
+				Invocations);
+			for (const FCardEnemyPartEffectInvocation& Invocation : Invocations)
 			{
-				if (Part.bDestroyed)
-				{
-					continue;
-				}
-				if (!FConditionResolver::Evaluate(
-					*Chain.State,
-					Effect.Condition,
-					Chain.Bindings.SourceCardId,
-					Part.InstanceId))
-				{
-					continue;
-				}
 				ExecuteCardInvocation(
 					*Chain.State,
 					*Chain.Events,
 					Effect,
-					FinalMagnitude,
+					Invocation.FinalMagnitude,
 					Semantics,
 					TargetPlan,
 					Chain.Bindings,
 					Chain.LastShuffledCardId,
 					Chain.ShuffledCardIds,
 					Chain.OperationAdapter,
-					Part.InstanceId);
+					Invocation.TargetEnemyPartInstanceId);
 			}
+			continue;
+		}
+
+		if (TargetPlan == EEffectTargetPlanKind::SelectedEnemyPart)
+		{
+			TArray<FCardEnemyPartEffectInvocation> Invocations;
+			BuildCardEnemyPartInvocations(
+				*Chain.State,
+				Effect,
+				Chain.Bindings.RuntimeCost,
+				Chain.Bindings.SourceCardId,
+				Chain.Bindings.SelectedEnemyPartId,
+				Invocations);
+			if (Invocations.IsEmpty())
+			{
+				continue;
+			}
+			const FCardEnemyPartEffectInvocation& Invocation = Invocations[0];
+
+			ExecuteCardInvocation(
+				*Chain.State,
+				*Chain.Events,
+				Effect,
+				Invocation.FinalMagnitude,
+				Semantics,
+				TargetPlan,
+				Chain.Bindings,
+				Chain.LastShuffledCardId,
+				Chain.ShuffledCardIds,
+				Chain.OperationAdapter,
+				Invocation.TargetEnemyPartInstanceId);
 			continue;
 		}
 
@@ -310,6 +331,13 @@ void FBattleEffectSemanticsModule::ExecuteCardEffects(
 		{
 			continue;
 		}
+
+		const int32 FinalMagnitude = FBattleEffectSemanticsModule::EvaluateCardFinalMagnitude(
+			*Chain.State,
+			Effect,
+			Chain.Bindings.RuntimeCost,
+			Chain.Bindings.SelectedEnemyPartId,
+			Chain.Bindings.SourceCardId);
 
 		ExecuteCardInvocation(
 			*Chain.State,
@@ -394,11 +422,28 @@ void FBattleEffectSemanticsModule::ProjectCardChain(
 	for (int32 EffectIndex = 0; EffectIndex < Effects.Num(); ++EffectIndex)
 	{
 		const FCardEffect& Effect = Effects[EffectIndex];
-		if (!FConditionResolver::Evaluate(
-			State,
-			Effect.Condition,
-			Bindings.SourceCardId,
-			Bindings.SelectedEnemyPartId))
+		const FEffectSemanticDescriptor* Semantics = FindDescriptor(Effect.EffectType);
+		const EEffectTargetPlanKind TargetPlan = Semantics
+			? Semantics->BuildCardTargetPlan(Effect.Target)
+			: EEffectTargetPlanKind::None;
+		int32 FinalMagnitude = 0;
+		const bool bUseEnemyPartEvaluation = Bindings.SelectedEnemyPartId.IsValid()
+			&& (TargetPlan == EEffectTargetPlanKind::SelectedEnemyPart
+				|| TargetPlan == EEffectTargetPlanKind::AllEnemyParts);
+		const bool bCanProject = bUseEnemyPartEvaluation
+			? TryEvaluateCardEffectForEnemyPart(
+				State,
+				Effect,
+				Bindings.RuntimeCost,
+				Bindings.SourceCardId,
+				Bindings.SelectedEnemyPartId,
+				FinalMagnitude)
+			: FConditionResolver::Evaluate(
+				State,
+				Effect.Condition,
+				Bindings.SourceCardId,
+				Bindings.SelectedEnemyPartId);
+		if (!bCanProject)
 		{
 			OutPreview.Effects.Add(MakeSkippedPreview(
 				EffectIndex,
@@ -421,18 +466,20 @@ void FBattleEffectSemanticsModule::ProjectCardChain(
 		EffectPreview.EffectIndex = EffectIndex;
 		EffectPreview.EffectType = Effect.EffectType;
 		EffectPreview.Target = Effect.Target;
-		EffectPreview.Magnitude = EvaluateCardFinalMagnitude(
-			State,
-			Effect,
-			Bindings.RuntimeCost,
-			Bindings.SelectedEnemyPartId,
-			Bindings.SourceCardId);
+		EffectPreview.Magnitude = bUseEnemyPartEvaluation
+			? FinalMagnitude
+			: EvaluateCardFinalMagnitude(
+				State,
+				Effect,
+				Bindings.RuntimeCost,
+				Bindings.SelectedEnemyPartId,
+				Bindings.SourceCardId);
 		EffectPreview.bHasMagnitude = true;
 
 		if (Effect.Target == WacomTags::Target_SelectedHandCard && TargetHandCard)
 		{
 			EffectPreview.bTargetsSelectedHandCard = true;
-			if (const FEffectSemanticDescriptor* Semantics = FindDescriptor(Effect.EffectType))
+			if (Semantics)
 			{
 				Semantics->ProjectTargetPreview(
 					FEffectProjectionContext{
@@ -538,4 +585,78 @@ int32 FBattleEffectSemanticsModule::EvaluateCardFinalMagnitude(
 	}
 
 	return FinalMagnitude;
+}
+
+bool FBattleEffectSemanticsModule::TryEvaluateCardEffectForEnemyPart(
+	const FBattleState& State,
+	const FCardEffect& Effect,
+	const int32 RuntimeCost,
+	const FGuid& SourceCardId,
+	const FGuid& TargetEnemyPartId,
+	int32& OutFinalMagnitude)
+{
+	OutFinalMagnitude = 0;
+	const FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(State, TargetEnemyPartId);
+	if (!Part || Part->bDestroyed)
+	{
+		return false;
+	}
+	if (!FConditionResolver::Evaluate(
+		State,
+		Effect.Condition,
+		SourceCardId,
+		TargetEnemyPartId))
+	{
+		return false;
+	}
+
+	OutFinalMagnitude = EvaluateCardFinalMagnitude(
+		State,
+		Effect,
+		RuntimeCost,
+		TargetEnemyPartId,
+		SourceCardId);
+	return true;
+}
+
+void FBattleEffectSemanticsModule::BuildCardEnemyPartInvocations(
+	const FBattleState& State,
+	const FCardEffect& Effect,
+	const int32 RuntimeCost,
+	const FGuid& SourceCardId,
+	const FGuid& SelectedEnemyPartId,
+	TArray<FCardEnemyPartEffectInvocation>& OutInvocations)
+{
+	OutInvocations.Reset();
+	const FEffectSemanticDescriptor* Semantics = FindDescriptor(Effect.EffectType);
+	const EEffectTargetPlanKind TargetPlan = Semantics
+		? Semantics->BuildCardTargetPlan(Effect.Target)
+		: EEffectTargetPlanKind::None;
+
+	auto AddInvocation = [&](const FGuid& TargetPartId)
+	{
+		int32 FinalMagnitude = 0;
+		if (TryEvaluateCardEffectForEnemyPart(
+			State,
+			Effect,
+			RuntimeCost,
+			SourceCardId,
+			TargetPartId,
+			FinalMagnitude))
+		{
+			OutInvocations.Add({ TargetPartId, FinalMagnitude });
+		}
+	};
+
+	if (TargetPlan == EEffectTargetPlanKind::SelectedEnemyPart)
+	{
+		AddInvocation(SelectedEnemyPartId);
+	}
+	else if (TargetPlan == EEffectTargetPlanKind::AllEnemyParts)
+	{
+		for (const FRuntimeEnemyPart& Part : State.Enemy.Parts)
+		{
+			AddInvocation(Part.InstanceId);
+		}
+	}
 }

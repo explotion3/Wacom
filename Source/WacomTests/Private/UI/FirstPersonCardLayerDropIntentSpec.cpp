@@ -242,7 +242,7 @@ bool FWacomFirstPersonDropIntentNoTargetArmedTest::RunTest(const FString& Parame
 	UCardDefinition* NoTargetCard = Fx.MakeNoopCard(0);
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { NoTargetCard });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::None);
 
@@ -292,7 +292,7 @@ bool FWacomFirstPersonDropIntentNoTargetNotArmedTest::RunTest(const FString& Par
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::None);
 
@@ -342,7 +342,7 @@ bool FWacomFirstPersonDropIntentCardTargetProbeTest::RunTest(const FString& Para
 	UCardDefinition* TargetCard = Fx.MakeNoopCard(0);
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceCard, TargetCard });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
 	const FGuid TargetCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::None);
@@ -410,7 +410,7 @@ bool FWacomFirstPersonDropIntentValidHandCardTargetTest::RunTest(const FString& 
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -477,7 +477,7 @@ bool FWacomFirstPersonDropIntentSelectedZoneMoveCardTargetTest::RunTest(const FS
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -536,7 +536,7 @@ bool FWacomFirstPersonDropIntentSelectedZoneMoveHandAnchorRejectTest::RunTest(co
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid AnchorCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandAnchor(Snapshot);
@@ -604,7 +604,7 @@ bool FWacomFirstPersonDropIntentFilterRejectedCardTargetTest::RunTest(const FStr
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -679,7 +679,7 @@ bool FWacomFirstPersonDropIntentKeywordRejectDebugTest::RunTest(const FString& P
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -747,7 +747,7 @@ bool FWacomFirstPersonLayerDraggingHandCardBuildsAffordanceTest::RunTest(const F
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, NormalTargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid NormalTargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, NormalTargetCard->CardId);
@@ -906,7 +906,7 @@ bool FWacomFirstPersonLayerWorldTargetSourceDoesNotBuildHandCardAffordanceTest::
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, NormalTargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId =
 		WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
@@ -1066,7 +1066,7 @@ bool FWacomFirstPersonLayerKeywordFilterAffordanceTest::RunTest(const FString& P
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, CompanionTargetCard, PlainTargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid CompanionTargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, CompanionTargetCard->CardId);
@@ -1203,7 +1203,7 @@ bool FWacomFirstPersonDropIntentWrongKindCardTargetProbeTest::RunTest(const FStr
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeSimpleDamageCard(0, 1) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
 
@@ -1267,7 +1267,7 @@ bool FWacomFirstPersonDropIntentHandCardSelfTargetRejectTest::RunTest(const FStr
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { HandTargetCard });
 	UBattleSession* Session = Fx.CreateSession(
 		CharacterDefinition,
-		Fx.MakeSinglePartEnemy(20, 0, 0),
+		Fx.MakeSinglePartEnemy(20, 0),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(
@@ -1338,7 +1338,7 @@ bool FWacomFirstPersonDropIntentZoneRejectTest::RunTest(const FString& Parameter
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeSimpleDamageCard(0, 1) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::SingleEnemyPart);
 
@@ -1387,7 +1387,7 @@ bool FWacomFirstPersonDropIntentUIBlockedTest::RunTest(const FString& Parameters
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::None);
 
@@ -1463,7 +1463,7 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 	}
 
 	FWacomBattleFixture Fx;
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 0, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 0);
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeSimpleDamageCard(0, 1) });
 	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Enemy, 1);
@@ -1535,7 +1535,7 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	}
 
 	FWacomBattleFixture Fx;
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 0, 0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(20, 0);
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeSimpleDamageCard(0, 1) });
 	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Enemy, 1);
@@ -1646,7 +1646,7 @@ bool FWacomFirstPersonDropIntentPreviewReleaseConsistencyTest::RunTest(const FSt
 	FWacomBattleFixture Fx;
 	UCharacterDefinition* CharacterDefinition = Fx.MakeCharacter(
 		Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 0), 1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid CardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::None);
 
@@ -1705,7 +1705,7 @@ bool FWacomFirstPersonDropIntentReleaseOnCardTargetSubmitTest::RunTest(const FSt
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);
@@ -1779,7 +1779,7 @@ bool FWacomFirstPersonDropIntentLayerGestureCardTargetSubmitTest::RunTest(const 
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ SourceCard, TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 50), 1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceCardId = WacomFirstPersonCardLayerDropIntentSpec::FindFirstHandCardByTargetMode(Snapshot, ECardTargetMode::HandCard);
 	const FGuid TargetCardId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, TargetCard->CardId);

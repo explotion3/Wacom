@@ -48,8 +48,13 @@ struct WACOMAPP_API FWacomBattleEnemyPartEntryViewData
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
 	int32 CurrentIntentInitiative = 0;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
-	int32 CurrentIntentResistanceValue = 0;
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel",
+		meta = (ToolTip = "当前意图是否为面向玩家造成正伤害的攻击意图。"))
+	bool bCurrentIntentIsAttack = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel",
+		meta = (ToolTip = "当前攻击意图的最高单段伤害；非攻击意图为 0。"))
+	int32 CurrentIntentPeakAttackDamage = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
 	FGameplayTagContainer RuntimeStatuses;
@@ -62,6 +67,24 @@ struct WACOMAPP_API FWacomBattleEnemyPartEntryViewData
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "Action Preview 中该部位是否会在松手后立即行动。只用于 UI 表现，不写回战斗规则。"))
 	bool bActionPreviewWillAct = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "Action Preview 中该部位是否会到达行动边界但因眩晕跳过。只用于 UI 表现。"))
+	bool bActionPreviewWillSkipActionDueToStun = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "Action Preview 中该部位是否命中完美释放窗口。"))
+	bool bActionPreviewPerfectReleaseCandidate = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "Action Preview 是否包含该部位的合法抵抗比较。"))
+	bool bHasResistancePreview = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "抵抗预览中的玩家最高单段伤害。"))
+	int32 ResistancePreviewPlayerPeakDamage = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "抵抗预览中的敌方最高单段攻击伤害。"))
+	int32 ResistancePreviewEnemyPeakDamage = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "抵抗预览是否会施加一层眩晕。"))
+	bool bResistancePreviewWillStun = false;
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = "单个敌人的 HUD 展示数据。由 BattleHUD 从 FBattleSnapshot.Enemies 生成。"))

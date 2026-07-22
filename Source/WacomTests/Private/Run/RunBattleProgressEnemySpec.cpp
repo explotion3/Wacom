@@ -26,7 +26,7 @@ namespace
 		FName SharedPartId,
 		FName PartSlotId)
 	{
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/30, /*Initiative*/50, /*IntentResist*/0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/30, /*Initiative*/50);
 		if (!Enemy || Enemy->Parts.Num() == 0 || !Enemy->Parts[0].PartDef)
 		{
 			return nullptr;

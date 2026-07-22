@@ -102,7 +102,6 @@ namespace
 		const TCHAR* Suffix;
 		const TCHAR* DisplayName;
 		int32 Initiative;
-		int32 Resistance;
 		ESeedEffect Effect;
 		int32 Magnitude;
 		ESeedTarget Target;
@@ -269,30 +268,30 @@ namespace
 	{
 		static const TArray<FIntentSeed> Seeds =
 		{
-			{TEXT("BrushSnake"), TEXT("Head"), TEXT("Bite"), TEXT("啃咬"), 3, 3, ESeedEffect::Damage, 3, ESeedTarget::Player},
-			{TEXT("BrushSnake"), TEXT("Head"), TEXT("Venom"), TEXT("注毒"), 5, 0, ESeedEffect::Poison, 1, ESeedTarget::Player},
-			{TEXT("BrushSnake"), TEXT("Body"), TEXT("Rush"), TEXT("突进"), 2, 2, ESeedEffect::Damage, 2, ESeedTarget::Player},
-			{TEXT("BrushSnake"), TEXT("Body"), TEXT("Coil"), TEXT("缠绕"), 4, 0, ESeedEffect::Slow, 1, ESeedTarget::Player},
-			{TEXT("BrushSnake"), TEXT("Body"), TEXT("Hide"), TEXT("藏身"), 2, 0, ESeedEffect::Shield, 2, ESeedTarget::Self},
-			{TEXT("MoltGuard"), TEXT("Head"), TEXT("Snap"), TEXT("猛咬"), 3, 4, ESeedEffect::Damage, 4, ESeedTarget::Player},
-			{TEXT("MoltGuard"), TEXT("Head"), TEXT("Spit"), TEXT("喷毒"), 5, 0, ESeedEffect::Poison, 1, ESeedTarget::Player},
-			{TEXT("MoltGuard"), TEXT("Carapace"), TEXT("Harden"), TEXT("硬化"), 2, 0, ESeedEffect::Shield, 5, ESeedTarget::Self},
-			{TEXT("MoltGuard"), TEXT("Carapace"), TEXT("Slam"), TEXT("重压"), 4, 5, ESeedEffect::Damage, 4, ESeedTarget::Player},
-			{TEXT("MoltGuard"), TEXT("Tail"), TEXT("Sweep"), TEXT("横扫"), 2, 2, ESeedEffect::Damage, 2, ESeedTarget::Player},
-			{TEXT("MoltGuard"), TEXT("Tail"), TEXT("Brace"), TEXT("支撑"), 2, 0, ESeedEffect::Shield, 2, ESeedTarget::Self},
-			{TEXT("RootStalker"), TEXT("Head"), TEXT("Lunge"), TEXT("突刺"), 4, 5, ESeedEffect::Damage, 5, ESeedTarget::Player},
-			{TEXT("RootStalker"), TEXT("Head"), TEXT("Sap"), TEXT("毒液"), 3, 0, ESeedEffect::Poison, 1, ESeedTarget::Player},
-			{TEXT("RootStalker"), TEXT("Coil"), TEXT("Tangle"), TEXT("盘根"), 4, 0, ESeedEffect::Slow, 2, ESeedTarget::Player},
-			{TEXT("RootStalker"), TEXT("Coil"), TEXT("Crush"), TEXT("绞杀"), 3, 4, ESeedEffect::Damage, 4, ESeedTarget::Player},
-			{TEXT("RootStalker"), TEXT("Coil"), TEXT("RootGuard"), TEXT("根护"), 2, 0, ESeedEffect::Shield, 3, ESeedTarget::Self},
-			{TEXT("ShallowGuardian"), TEXT("Head"), TEXT("Bite"), TEXT("噬咬"), 3, 6, ESeedEffect::Damage, 6, ESeedTarget::Player},
-			{TEXT("ShallowGuardian"), TEXT("Head"), TEXT("Venom"), TEXT("剧毒"), 5, 0, ESeedEffect::Poison, 2, ESeedTarget::Player},
-			{TEXT("ShallowGuardian"), TEXT("Body"), TEXT("Crush"), TEXT("碾压"), 4, 7, ESeedEffect::Damage, 6, ESeedTarget::Player},
-			{TEXT("ShallowGuardian"), TEXT("Body"), TEXT("Harden"), TEXT("鳞甲硬化"), 2, 0, ESeedEffect::Shield, 6, ESeedTarget::Self},
-			{TEXT("ShallowGuardian"), TEXT("Tail"), TEXT("Sweep"), TEXT("尾扫"), 2, 4, ESeedEffect::Damage, 4, ESeedTarget::Player},
-			{TEXT("ShallowGuardian"), TEXT("Tail"), TEXT("Tangle"), TEXT("绞缠"), 3, 0, ESeedEffect::Slow, 1, ESeedTarget::Player},
-			{TEXT("ShallowGuardian"), TEXT("Crest"), TEXT("Dread"), TEXT("暮气"), 5, 0, ESeedEffect::Twilight, 1, ESeedTarget::Player, EHandAfflictionSelection::AllCurrentHandCards},
-			{TEXT("ShallowGuardian"), TEXT("Crest"), TEXT("CrownGuard"), TEXT("冠护"), 2, 0, ESeedEffect::Shield, 4, ESeedTarget::Self},
+			{TEXT("BrushSnake"), TEXT("Head"), TEXT("Bite"), TEXT("啃咬"), 3, ESeedEffect::Damage, 3, ESeedTarget::Player},
+			{TEXT("BrushSnake"), TEXT("Head"), TEXT("Venom"), TEXT("注毒"), 5, ESeedEffect::Poison, 1, ESeedTarget::Player},
+			{TEXT("BrushSnake"), TEXT("Body"), TEXT("Rush"), TEXT("突进"), 2, ESeedEffect::Damage, 2, ESeedTarget::Player},
+			{TEXT("BrushSnake"), TEXT("Body"), TEXT("Coil"), TEXT("缠绕"), 4, ESeedEffect::Slow, 1, ESeedTarget::Player},
+			{TEXT("BrushSnake"), TEXT("Body"), TEXT("Hide"), TEXT("藏身"), 2, ESeedEffect::Shield, 2, ESeedTarget::Self},
+			{TEXT("MoltGuard"), TEXT("Head"), TEXT("Snap"), TEXT("猛咬"), 3, ESeedEffect::Damage, 4, ESeedTarget::Player},
+			{TEXT("MoltGuard"), TEXT("Head"), TEXT("Spit"), TEXT("喷毒"), 5, ESeedEffect::Poison, 1, ESeedTarget::Player},
+			{TEXT("MoltGuard"), TEXT("Carapace"), TEXT("Harden"), TEXT("硬化"), 2, ESeedEffect::Shield, 5, ESeedTarget::Self},
+			{TEXT("MoltGuard"), TEXT("Carapace"), TEXT("Slam"), TEXT("重压"), 4, ESeedEffect::Damage, 4, ESeedTarget::Player},
+			{TEXT("MoltGuard"), TEXT("Tail"), TEXT("Sweep"), TEXT("横扫"), 2, ESeedEffect::Damage, 2, ESeedTarget::Player},
+			{TEXT("MoltGuard"), TEXT("Tail"), TEXT("Brace"), TEXT("支撑"), 2, ESeedEffect::Shield, 2, ESeedTarget::Self},
+			{TEXT("RootStalker"), TEXT("Head"), TEXT("Lunge"), TEXT("突刺"), 4, ESeedEffect::Damage, 5, ESeedTarget::Player},
+			{TEXT("RootStalker"), TEXT("Head"), TEXT("Sap"), TEXT("毒液"), 3, ESeedEffect::Poison, 1, ESeedTarget::Player},
+			{TEXT("RootStalker"), TEXT("Coil"), TEXT("Tangle"), TEXT("盘根"), 4, ESeedEffect::Slow, 2, ESeedTarget::Player},
+			{TEXT("RootStalker"), TEXT("Coil"), TEXT("Crush"), TEXT("绞杀"), 3, ESeedEffect::Damage, 4, ESeedTarget::Player},
+			{TEXT("RootStalker"), TEXT("Coil"), TEXT("RootGuard"), TEXT("根护"), 2, ESeedEffect::Shield, 3, ESeedTarget::Self},
+			{TEXT("ShallowGuardian"), TEXT("Head"), TEXT("Bite"), TEXT("噬咬"), 3, ESeedEffect::Damage, 6, ESeedTarget::Player},
+			{TEXT("ShallowGuardian"), TEXT("Head"), TEXT("Venom"), TEXT("剧毒"), 5, ESeedEffect::Poison, 2, ESeedTarget::Player},
+			{TEXT("ShallowGuardian"), TEXT("Body"), TEXT("Crush"), TEXT("碾压"), 4, ESeedEffect::Damage, 6, ESeedTarget::Player},
+			{TEXT("ShallowGuardian"), TEXT("Body"), TEXT("Harden"), TEXT("鳞甲硬化"), 2, ESeedEffect::Shield, 6, ESeedTarget::Self},
+			{TEXT("ShallowGuardian"), TEXT("Tail"), TEXT("Sweep"), TEXT("尾扫"), 2, ESeedEffect::Damage, 4, ESeedTarget::Player},
+			{TEXT("ShallowGuardian"), TEXT("Tail"), TEXT("Tangle"), TEXT("绞缠"), 3, ESeedEffect::Slow, 1, ESeedTarget::Player},
+			{TEXT("ShallowGuardian"), TEXT("Crest"), TEXT("Dread"), TEXT("暮气"), 5, ESeedEffect::Twilight, 1, ESeedTarget::Player, EHandAfflictionSelection::AllCurrentHandCards},
+			{TEXT("ShallowGuardian"), TEXT("Crest"), TEXT("CrownGuard"), TEXT("冠护"), 2, ESeedEffect::Shield, 4, ESeedTarget::Self},
 		};
 		return Seeds;
 	}
@@ -435,7 +434,6 @@ namespace
 					PartSlot, IntentSeed.Suffix);
 				Intent.DisplayName = FText::FromString(IntentSeed.DisplayName);
 				Intent.Initiative = IntentSeed.Initiative;
-				Intent.ResistanceValue = IntentSeed.Resistance;
 				FIntentEffect& Effect = Intent.Effects.AddDefaulted_GetRef();
 				Effect.EffectType = EffectTag(IntentSeed.Effect);
 				Effect.Magnitude = IntentSeed.Magnitude;
@@ -1036,7 +1034,6 @@ namespace
 					const FIntentDefinition& ExpectedIntent = ExpectedIntents[IntentIndex].Intent;
 					ActualIntent.DisplayName = ExpectedIntent.DisplayName;
 					ActualIntent.Initiative = ExpectedIntent.Initiative;
-					ActualIntent.ResistanceValue = ExpectedIntent.ResistanceValue;
 					if (ActualIntent.Effects.Num() == ExpectedIntent.Effects.Num())
 					{
 						for (int32 EffectIndex = 0;

@@ -38,7 +38,7 @@ namespace WacomBattleGainedPresentationSpec
 			LeftHand,
 			RightHand,
 			{ Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) });
-		return Fixture.CreateSession(Character, Fixture.MakeSinglePartEnemy(20, 50, 0), 1);
+		return Fixture.CreateSession(Character, Fixture.MakeSinglePartEnemy(20, 50), 1);
 	}
 
 	FBattleSnapshot MakeSnapshot(const TArray<FGuid>& HandIds, int32 DiscardCount = 0)

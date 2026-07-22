@@ -29,7 +29,7 @@ namespace
 			Fx.MakeNoopCard(0),
 			Fx.MakeNoopCard(0),
 			{});
-		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/20, /*Initiative*/10, /*IntentResist*/0);
+		UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*Hp*/20, /*Initiative*/10);
 
 		TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 		FBattleInitParams Params;

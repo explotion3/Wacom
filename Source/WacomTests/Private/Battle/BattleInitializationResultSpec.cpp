@@ -53,7 +53,7 @@ bool FWacomBattleInitializationResultAtomicSpec::RunTest(const FString& /*Parame
 		Fixture.MakeNoopCard(0),
 		{ Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) });
 	UEnemyDefinition* OriginalEnemy =
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0);
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0);
 	TStrongObjectPtr<UBattleSession> Session(NewObject<UBattleSession>());
 
 	const FBattleInitializationResult Initial =
@@ -104,7 +104,7 @@ bool FWacomBattleInitializationResultAtomicSpec::RunTest(const FString& /*Parame
 		Fixture.MakeNoopCard(0),
 		Fixture.MakeNoopCard(0),
 		{ Fixture.MakeNoopCard(0) });
-	UEnemyDefinition* RejectedEnemy = Fixture.MakeSinglePartEnemy(25, 4, 0);
+	UEnemyDefinition* RejectedEnemy = Fixture.MakeSinglePartEnemy(25, 4);
 	FBattleInitParams RejectedParams =
 		MakeInitParams(RejectedCharacter, RejectedEnemy, 202, TEXT("Duplicate"));
 	const FBattleEnemySlotInit DuplicateEnemySlot = RejectedParams.EnemySlots[0];

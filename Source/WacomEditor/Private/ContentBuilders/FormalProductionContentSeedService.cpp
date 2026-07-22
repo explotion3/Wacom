@@ -101,7 +101,6 @@ namespace Wacom::ContentBuilder::FormalProductionSeedPrivate
 					const FIntentDefinition& ExpectedIntent = ExpectedIntents[IntentIndex].Intent;
 					ActualIntent.DisplayName = ExpectedIntent.DisplayName;
 					ActualIntent.Initiative = ExpectedIntent.Initiative;
-					ActualIntent.ResistanceValue = ExpectedIntent.ResistanceValue;
 					if (ActualIntent.Effects.Num() == ExpectedIntent.Effects.Num())
 					{
 						for (int32 EffectIndex = 0;

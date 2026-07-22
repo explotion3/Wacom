@@ -383,7 +383,6 @@ bool FWacomUIBattleEnemyActionImpactWaitIntegrationSpec::RunTest(
 	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(
 		/*Hp*/30,
 		/*Initiative*/2,
-		/*IntentResist*/0,
 		/*Damage*/4);
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, /*Seed*/31);
 
@@ -473,7 +472,6 @@ bool FWacomUIBattleEnemyActionImpactEndTurnIntegrationSpec::RunTest(
 	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemyWithIntentDamage(
 		/*Hp*/30,
 		/*Initiative*/20,
-		/*IntentResist*/0,
 		/*Damage*/4);
 	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, /*Seed*/32);
 

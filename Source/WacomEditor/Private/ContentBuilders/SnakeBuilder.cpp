@@ -125,14 +125,12 @@ namespace
 		FName IntentId,
 		const TCHAR* DisplayName,
 		int32 Initiative,
-		int32 ResistanceValue,
 		FIntentEffect Effect)
 	{
 		FWacomEnemyBehaviorIntent Entry;
 		Entry.Intent.IntentId = IntentId;
 		Entry.Intent.DisplayName = FText::FromString(DisplayName);
 		Entry.Intent.Initiative = Initiative;
-		Entry.Intent.ResistanceValue = ResistanceValue;
 		Entry.Intent.Effects = { MoveTemp(Effect) };
 		return Entry;
 	}
@@ -401,27 +399,27 @@ namespace Wacom::ContentBuilder
 					MakeSequenceIntentSet(
 						TEXT("Snake.Head.Sequence"), TEXT("Head"),
 						{
-							MakeBehaviorIntent(TEXT("Snake.Head.Bite"), TEXT("Bite"), 3, 6, MakeDamage(6)),
-							MakeBehaviorIntent(TEXT("Snake.Head.Venom"), TEXT("Venom"), 5, 0, MakePoisonOnPlayer(2)),
-							MakeBehaviorIntent(TEXT("Snake.Head.Strike"), TEXT("Strike"), 4, 8, MakeDamage(8)),
-							MakeBehaviorIntent(TEXT("Snake.Head.CoiledGuard"), TEXT("Coiled Guard"), 2, 0, MakeShieldSelf(4)),
+							MakeBehaviorIntent(TEXT("Snake.Head.Bite"), TEXT("Bite"), 3, MakeDamage(6)),
+							MakeBehaviorIntent(TEXT("Snake.Head.Venom"), TEXT("Venom"), 5, MakePoisonOnPlayer(2)),
+							MakeBehaviorIntent(TEXT("Snake.Head.Strike"), TEXT("Strike"), 4, MakeDamage(8)),
+							MakeBehaviorIntent(TEXT("Snake.Head.CoiledGuard"), TEXT("Coiled Guard"), 2, MakeShieldSelf(4)),
 						}),
 					MakeSequenceIntentSet(
 						TEXT("Snake.Body.Sequence"), TEXT("Body"),
 						{
-							MakeBehaviorIntent(TEXT("Snake.Body.Constrict"), TEXT("Constrict"), 4, 0, MakeSlowOnPlayer(1)),
-							MakeBehaviorIntent(TEXT("Snake.Body.Harden"), TEXT("Harden"), 2, 0, MakeShieldSelf(5)),
-							MakeBehaviorIntent(TEXT("Snake.Body.Slam"), TEXT("Slam"), 3, 5, MakeDamage(5)),
-							MakeBehaviorIntent(TEXT("Snake.Body.VenomMist"), TEXT("Venom Mist"), 5, 0, MakePoisonOnPlayer(1)),
+							MakeBehaviorIntent(TEXT("Snake.Body.Constrict"), TEXT("Constrict"), 4, MakeSlowOnPlayer(1)),
+							MakeBehaviorIntent(TEXT("Snake.Body.Harden"), TEXT("Harden"), 2, MakeShieldSelf(5)),
+							MakeBehaviorIntent(TEXT("Snake.Body.Slam"), TEXT("Slam"), 3, MakeDamage(5)),
+							MakeBehaviorIntent(TEXT("Snake.Body.VenomMist"), TEXT("Venom Mist"), 5, MakePoisonOnPlayer(1)),
 						}),
 					MakeSequenceIntentSet(
 						TEXT("Snake.Tail.Sequence"), TEXT("Tail"),
 						{
-							MakeBehaviorIntent(TEXT("Snake.Tail.Sweep"), TEXT("Sweep"), 1, 3, MakeDamage(3)),
-							MakeBehaviorIntent(TEXT("Snake.Tail.Lash"), TEXT("Lash"), 2, 5, MakeDamage(5)),
-							MakeBehaviorIntent(TEXT("Snake.Tail.Whip"), TEXT("Whip"), 3, 4, MakeDamage(4)),
-							MakeBehaviorIntent(TEXT("Snake.Tail.Brace"), TEXT("Brace"), 2, 0, MakeShieldSelf(3)),
-							MakeBehaviorIntent(TEXT("Snake.Tail.Tangle"), TEXT("Tangle"), 4, 0, MakeSlowOnPlayer(1)),
+							MakeBehaviorIntent(TEXT("Snake.Tail.Sweep"), TEXT("Sweep"), 1, MakeDamage(3)),
+							MakeBehaviorIntent(TEXT("Snake.Tail.Lash"), TEXT("Lash"), 2, MakeDamage(5)),
+							MakeBehaviorIntent(TEXT("Snake.Tail.Whip"), TEXT("Whip"), 3, MakeDamage(4)),
+							MakeBehaviorIntent(TEXT("Snake.Tail.Brace"), TEXT("Brace"), 2, MakeShieldSelf(3)),
+							MakeBehaviorIntent(TEXT("Snake.Tail.Tangle"), TEXT("Tangle"), 4, MakeSlowOnPlayer(1)),
 						}),
 				};
 				Behavior.Phases = { MoveTemp(Phase) };

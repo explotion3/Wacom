@@ -32,7 +32,7 @@ bool FWacomBattleDiscardToDrawReshuffleFactSpec::RunTest(const FString&)
 	UCardDefinition* RightHand = Fixture.MakeNoopCard(0);
 	UBattleSession* Session = Fixture.CreateSession(
 		Fixture.MakeCharacter(LeftHand, RightHand, Deck),
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0),
 		17);
 
 	const FBattleSnapshot Before = Session->BuildSnapshot();
@@ -95,7 +95,7 @@ bool FWacomBattlePartialDrawBeforeReshuffleSpec::RunTest(const FString&)
 	}
 	UBattleSession* Session = Fixture.CreateSession(
 		Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0, 0),
+		Fixture.MakeSinglePartEnemyWithIntentDamage(100, 50, 0),
 		23);
 	TestEqual(TEXT("Two cards remain before end-turn draw"),
 		Session->BuildSnapshot().PileCounts.DrawCount,

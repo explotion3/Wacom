@@ -77,7 +77,7 @@ namespace
 
 		return Fixture.CreateSession(
 			Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 			1);
 	}
 
@@ -97,7 +97,7 @@ namespace
 
 		return Fixture.CreateSession(
 			Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 			1);
 	}
 
@@ -122,7 +122,7 @@ namespace
 
 		return Fixture.CreateSession(
 			Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+			Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 			1);
 	}
 
@@ -319,7 +319,7 @@ bool FWacomBattleImplicitFilterPreservesCostModifierAnchorBehaviorSpec::RunTest(
 	UCardDefinition* LeftDef = Fx.MakeNoopCard(0);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(LeftDef, Fx.MakeNoopCard(0), { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -350,7 +350,7 @@ bool FWacomBattleImplicitFilterPreservesSelectedDiscardExhaustAnchorRejectSpec::
 	UCardDefinition* LeftDef = Fx.MakeNoopCard(0);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(LeftDef, Fx.MakeNoopCard(0), { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -434,7 +434,7 @@ bool FWacomBattleRequiredKeywordAcceptsMatchingTargetSpec::RunTest(const FString
 		{ WacomTags::Card_Keyword_Companion });
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -465,7 +465,7 @@ bool FWacomBattleRequiredKeywordRejectsMissingTargetSpec::RunTest(const FString&
 	UCardDefinition* TargetDef = Fx.MakeNoopCard(/*Cost*/3);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -505,7 +505,7 @@ bool FWacomBattleBlockedKeywordRejectsMatchingTargetSpec::RunTest(const FString&
 		{ WacomTags::Card_Keyword_Weapon });
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -542,7 +542,7 @@ bool FWacomBattleBlockedKeywordAllowsNonMatchingTargetSpec::RunTest(const FStrin
 	UCardDefinition* TargetDef = Fx.MakeNoopCard(/*Cost*/3);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -586,7 +586,7 @@ bool FWacomBattleTemporaryKeywordCountsForHandCardTargetFilterSpec::RunTest(cons
 	UCardDefinition* TargetDef = Fx.MakeNoopCard(/*Cost*/3);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { GrantKeywordDef, SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -627,7 +627,7 @@ bool FWacomBattleHandAnchorAlsoUsesKeywordFilterWhenAllowedSpec::RunTest(const F
 	RightDef->Keywords.AddTag(WacomTags::Card_Keyword_Weapon);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(LeftDef, RightDef, { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -777,7 +777,7 @@ bool FWacomBattleSelectedHandCardZoneMoveRejectsAnchorsSpec::RunTest(const FStri
 	UCardDefinition* RightDef = Fx.MakeNoopCard(0);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(LeftDef, RightDef, { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -810,7 +810,7 @@ bool FWacomBattleSelectedHandCardZoneMoveRejectsInvalidTargetsSpec::RunTest(cons
 			Fx.MakeNoopCard(0),
 			Fx.MakeNoopCard(0),
 			{ SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -848,7 +848,7 @@ bool FWacomBattleCostModifierStillAllowsHandAnchorTargetsSpec::RunTest(const FSt
 	UCardDefinition* RightDef = Fx.MakeNoopCard(0);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(LeftDef, RightDef, { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -946,7 +946,7 @@ bool FWacomBattleValidateTargetExplainsUnsupportedAnchorForSelectedZoneMoveSpec:
 	UCardDefinition* LeftDef = Fx.MakeNoopCard(0);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(LeftDef, Fx.MakeNoopCard(0), { SourceDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);
@@ -971,7 +971,7 @@ bool FWacomBattleValidateTargetExplainsNonHandCardSourceSpec::RunTest(const FStr
 	UCardDefinition* TargetDef = Fx.MakeNoopCard(0);
 	UBattleSession* Session = Fx.CreateSession(
 		Fx.MakeCharacter(Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), { SourceDef, TargetDef, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) }),
-		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fx.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		1);
 	const FBattleSnapshot Snapshot = Session->BuildSnapshot();
 	const FGuid SourceId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, SourceDef->CardId);

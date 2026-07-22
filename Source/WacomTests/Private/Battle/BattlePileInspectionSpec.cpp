@@ -72,7 +72,7 @@ bool FWacomBattlePileInspectionReadOnlyOrderHiddenSpec::RunTest(
 
 	UBattleSession* Session = Fixture.CreateSession(
 		Fixture.MakeCharacter(Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0), Deck),
-		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50, /*IntentResist*/0),
+		Fixture.MakeSinglePartEnemy(/*Hp*/100, /*Initiative*/50),
 		/*Seed*/3721);
 	if (!TestNotNull(TEXT("Battle session created"), Session))
 	{

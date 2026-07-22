@@ -123,7 +123,6 @@ bool FWacomBattleActionExecutionDeterministicParitySpec::RunTest(const FString& 
 			Fixture.MakeSinglePartEnemyWithIntentDamage(
 				/*Hp*/30,
 				/*Initiative*/20,
-				/*IntentResist*/99,
 				/*Damage*/0),
 			Seed);
 	};
@@ -288,7 +287,6 @@ bool FWacomBattleActionPreviewCompanionRandomBranchSpec::RunTest(const FString& 
 			Fixture.MakeSinglePartEnemyWithIntentDamage(
 				/*Hp*/500,
 				/*Initiative*/50,
-				/*IntentResist*/0,
 				/*Damage*/0),
 			Seed);
 		const FBattleSnapshot Initial = Session->BuildSnapshot();

@@ -208,7 +208,7 @@ bool FWacomRunExperiencePartDestroyedRecordedInPacketSpec::RunTest(const FString
 	FWacomBattleFixture Fx;
 
 	// 1 HP 单部位 + 高先机敌人，便于一击破坏。
-	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/1, /*Init*/50, /*Resist*/0);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/1, /*Init*/50);
 	// fixture 不暴露 ExperienceReward 设置，但 Part 是 fixture 自己造的可以直接改。
 	for (FEnemyPartSlot& Slot : Enemy->Parts)
 	{

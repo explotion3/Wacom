@@ -81,7 +81,7 @@ bool FWacomBattleEnemyActionJournalCommandsSpec::RunTest(const FString& /*Parame
 		FWacomBattleFixture Fixture;
 		UBattleSession* Session = Fixture.CreateSession(
 			MakeJournalCharacter(Fixture, /*CardCost*/1),
-			Fixture.MakeSinglePartEnemyWithIntentDamage(50, /*Initiative*/1, 0, /*Damage*/5),
+			Fixture.MakeSinglePartEnemyWithIntentDamage(50, /*Initiative*/1, /*Damage*/5),
 			/*Seed*/7);
 		const FBattleSnapshot Before = Session->BuildSnapshot();
 		const FHandCardSnapshot* Card = Before.Hand.Cards.FindByPredicate(
@@ -104,7 +104,7 @@ bool FWacomBattleEnemyActionJournalCommandsSpec::RunTest(const FString& /*Parame
 		FWacomBattleFixture Fixture;
 		UBattleSession* Session = Fixture.CreateSession(
 			MakeJournalCharacter(Fixture, /*CardCost*/0),
-			Fixture.MakeSinglePartEnemyWithIntentDamage(50, /*Initiative*/2, 0, /*Damage*/4),
+			Fixture.MakeSinglePartEnemyWithIntentDamage(50, /*Initiative*/2, /*Damage*/4),
 			/*Seed*/8);
 		VerifySingleEnemyActionStep(
 			*this,
@@ -116,7 +116,7 @@ bool FWacomBattleEnemyActionJournalCommandsSpec::RunTest(const FString& /*Parame
 		FWacomBattleFixture Fixture;
 		UBattleSession* Session = Fixture.CreateSession(
 			MakeJournalCharacter(Fixture, /*CardCost*/0),
-			Fixture.MakeSinglePartEnemyWithIntentDamage(50, /*Initiative*/20, 0, /*Damage*/3),
+			Fixture.MakeSinglePartEnemyWithIntentDamage(50, /*Initiative*/20, /*Damage*/3),
 			/*Seed*/9);
 		VerifySingleEnemyActionStep(
 			*this,

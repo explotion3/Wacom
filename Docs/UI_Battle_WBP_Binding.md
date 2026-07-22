@@ -540,7 +540,7 @@ Part Entry 必需绑定：
 | `DestroyedSurface` / `DestroyedMark` | `Widget` | 失色、裂痕与 `X` 终态，不移除段 |
 | `InspectHitTarget` | `Button` | 唯一命中热区，只上报完整 `FBattlePartSlotIdentity` |
 
-旧 `EnemyNameText / PartNameText / IntentText / ResistanceText / DetailsContainer / HpBar / ShieldContainer / ShieldFrame / ShieldBadge / ActionPreviewOverlay` 不属于紧凑 HUD 合同，也不得作为 optional compatibility binding 重新加入。名字、Intent 文本和 Resistance 只在敌情档案显示。
+旧 `EnemyNameText / PartNameText / IntentText / ResistanceText / DetailsContainer / HpBar / ShieldContainer / ShieldFrame / ShieldBadge / ActionPreviewOverlay` 不属于紧凑 HUD 合同，也不得作为 optional compatibility binding 重新加入。名字、Intent 文本和派生攻击值只在敌情档案显示。
 
 Entry 必需动画与标准时长：`IntroAnimation=220ms`、`DamageImpactAnimation=220ms`、`ShieldImpactAnimation=180ms`、`ShieldBreakAnimation=240ms`、`InitiativeStepAnimation=120ms`、`IntentChangeAnimation=180ms`、`ContextAnimation=120ms`、`DestroyedAnimation=300ms`。HP 真实下降时 Material 先保留旧比例 `90ms`，再按 `220ms` 收束；Preview 只写 projected Material 参数，不触发上述事实动画。
 
@@ -563,7 +563,7 @@ Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Defa
 | `HpBar` / `HpText` | `ProgressBar` / `TextBlock` | 当前/最大 HP 详情 |
 | `ShieldContainer` / `ShieldText` | `Widget` / `TextBlock` | 准确 Shield；零值折叠 |
 | `InitiativeText` | `TextBlock` | 当前 Initiative |
-| `IntentIcon` / `IntentText` / `ResistanceText` | `Image` / `TextBlock` | Intent 图标、名称，以及 Intent Initiative / Resistance |
+| `IntentIcon` / `IntentText` / `ResistanceText` | `Image` / `TextBlock` | Intent 图标、名称，以及派生意图摘要；攻击意图显示 `INIT n   ATK m`，非攻击意图显示 `INIT n`。`ResistanceText` 仅保留为现有资产绑定名，不代表可制作 Resistance 字段 |
 | `StatusList` | `UWacomBattleStatusIconListWidget` | 完整 Buff 与层数，不限制 3 枚 |
 | `DestroyedOverlay` | `Widget` | 当前部位终态 |
 | `CloseButton` | `Button` | 被动 Close 请求 |
@@ -588,6 +588,7 @@ Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Defa
 - Draw / Discard / Exhaust 牌堆控件在无 Presentation busy 时可打开对应牌堆详情；Draw 显示顺序隐藏，Discard 能切换真实弃牌 / 本回合已使用，关闭后恢复游戏焦点。
 - CommandBar 里的 Wait / EndTurn 可点击并由 HUD runtime view data 控制可用性。
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
+- 敌情详情仅为攻击意图显示 `ATK`；拖拽完美释放攻击卡时，场景 prediction 分别显示抵抗成功 / 失败，立即消费眩晕的目标明确显示“跳过行动”。
 - Combat Activity 连续追加时不丢弃第四行，按顺序向上流动并在顶部衰减；根行动图标原位交接后只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；`UWacomBattleEnemyPartComponent` 及其 runtime 只承载 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
 - TrainingWarrior 与多部位 Snake 使用同一个 Panel / Entry class；TrainingWarrior 自动采用单段几何，Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；Snake 按 Definition 顺序生成等宽多段。

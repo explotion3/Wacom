@@ -63,7 +63,7 @@ namespace WacomBattleHUDFirstPersonSpec
 			Fixture.MakeNoopCard(0),
 			Fixture.MakeNoopCard(0),
 			{ Fixture.MakeNoopCard(0) });
-		return Fixture.CreateSession(CharacterDefinition, Fixture.MakeSinglePartEnemy(20, 5, 0), 1);
+		return Fixture.CreateSession(CharacterDefinition, Fixture.MakeSinglePartEnemy(20, 5), 1);
 	}
 
 	FBattleSnapshot MakeSnapshotWithHand(const TArray<FHandCardSnapshot>& Cards)
@@ -173,7 +173,7 @@ bool FWacomUIBattleHUDFirstPersonHandBridgeContractSpec::RunTest(const FString& 
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ TargetCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5), 1);
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
 		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
@@ -415,7 +415,7 @@ bool FWacomUIBattleHUDFirstPersonLateCleanupOwnershipSpec::RunTest(const FString
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ BattleCard, Fx.MakeNoopCard(0), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5, 0), 1);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5), 1);
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
 		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
 	if (!TestNotNull(TEXT("Battle card"), BattleCard)
@@ -511,7 +511,7 @@ bool FWacomUIBattleHUDFirstPersonHandShortcutByIndexSpec::RunTest(const FString&
 		Fx.MakeNoopCard(0),
 		Fx.MakeNoopCard(0),
 		{ Fx.MakeNoopCard(0), Fx.MakeSimpleDamageCard(0, 1), Fx.MakeNoopCard(0) });
-	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5, 0), 3);
+	UBattleSession* Session = Fx.CreateSession(CharacterDefinition, Fx.MakeSinglePartEnemy(20, 5), 3);
 
 	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
 		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);

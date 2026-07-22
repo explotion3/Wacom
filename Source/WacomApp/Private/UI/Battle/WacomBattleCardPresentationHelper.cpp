@@ -351,9 +351,12 @@ namespace WacomBattleCardPresentation
 	FWacomBattleEnemyPartEntryViewData BuildEnemyPartEntryViewDataFromPreviewSnapshot(
 		const FEnemyPartSnapshot& PartSnapshot,
 		const bool bWillAct,
+		const bool bWillSkipActionDueToStun,
+		const bool bPerfectReleaseCandidate,
 		const FEnemyPartSnapshot* BaselinePart)
 	{
-		const FEnemyPartSnapshot& IntentFacts = bWillAct && BaselinePart
+		const FEnemyPartSnapshot& IntentFacts =
+			(bWillAct || bWillSkipActionDueToStun) && BaselinePart
 			? *BaselinePart
 			: PartSnapshot;
 		FWacomBattleEnemyPartEntryViewData View;
@@ -371,11 +374,14 @@ namespace WacomBattleCardPresentation
 		View.CurrentIntentId = IntentFacts.CurrentIntentId;
 		View.CurrentIntentDisplayName = IntentFacts.CurrentIntent.DisplayName;
 		View.CurrentIntentInitiative = IntentFacts.CurrentIntent.Initiative;
-		View.CurrentIntentResistanceValue = IntentFacts.CurrentIntent.ResistanceValue;
+		View.bCurrentIntentIsAttack = IntentFacts.CurrentIntent.bIsAttackIntent;
+		View.CurrentIntentPeakAttackDamage = IntentFacts.CurrentIntent.PeakAttackDamage;
 		View.RuntimeStatuses = PartSnapshot.Statuses;
 		View.RuntimeStatusStacks = PartSnapshot.StatusStacks;
 		View.bDestroyed = PartSnapshot.bDestroyed;
 		View.bActionPreviewWillAct = bWillAct;
+		View.bActionPreviewWillSkipActionDueToStun = bWillSkipActionDueToStun;
+		View.bActionPreviewPerfectReleaseCandidate = bPerfectReleaseCandidate;
 		return View;
 	}
 
@@ -408,7 +414,53 @@ namespace WacomBattleCardPresentation
 				BuildEnemyPartEntryViewDataFromPreviewSnapshot(
 					PartState.Snapshot,
 					PartState.bWillAct,
+					PartState.bWillSkipActionDueToStun,
+					PartState.bPerfectReleaseCandidate,
 					BaselinePart));
+		}
+
+		for (const FBattleCardResistancePreview& Resistance : ActionPreview.ResistancePreviews)
+		{
+			FWacomBattleEnemyPartEntryViewData* View =
+				Presentation.ProjectedEnemyParts.FindByPredicate(
+					[&Resistance](const FWacomBattleEnemyPartEntryViewData& Candidate)
+					{
+						return Candidate.PartInstanceId == Resistance.TargetEnemyPartInstanceId
+							|| (Resistance.TargetEnemyPartIdentity.IsValidSlot()
+								&& Candidate.Identity == Resistance.TargetEnemyPartIdentity);
+					});
+			if (!View)
+			{
+				const FEnemyPartSnapshot* BaselinePart = nullptr;
+				for (const FEnemySnapshot& Enemy : Snapshot.Enemies)
+				{
+					BaselinePart = Enemy.Parts.FindByPredicate(
+						[&Resistance](const FEnemyPartSnapshot& Candidate)
+						{
+							return Candidate.InstanceId == Resistance.TargetEnemyPartInstanceId;
+						});
+					if (BaselinePart) break;
+				}
+				if (!BaselinePart)
+				{
+					continue;
+				}
+				View = &Presentation.ProjectedEnemyParts.Add_GetRef(
+					BuildEnemyPartEntryViewDataFromPreviewSnapshot(
+						*BaselinePart,
+						false,
+						false,
+						true,
+						BaselinePart));
+			}
+
+			View->bHasResistancePreview = true;
+			View->ResistancePreviewPlayerPeakDamage =
+				Resistance.PlayerPeakSingleHitDamage;
+			View->ResistancePreviewEnemyPeakDamage =
+				Resistance.EnemyPeakSingleHitDamage;
+			View->bResistancePreviewWillStun = Resistance.bWillStun;
+			View->bActionPreviewPerfectReleaseCandidate = true;
 		}
 		return Presentation;
 	}

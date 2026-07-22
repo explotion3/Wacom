@@ -91,7 +91,7 @@ FLinearColor UWacomBattleEnemyPartPredictionWidget::BuildBadgeColor() const
 	switch (CurrentView.Mode)
 	{
 	case EWacomBattleEnemyPartPredictionMode::CardPrediction:
-		if (CurrentView.bPerfectReleaseCandidate)
+		if (CurrentView.bResistanceWillStun || CurrentView.bPerfectReleaseCandidate)
 		{
 			return FLinearColor(0.08f, 0.48f, 0.24f, 0.92f);
 		}

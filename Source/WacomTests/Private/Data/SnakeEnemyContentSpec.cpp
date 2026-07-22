@@ -158,7 +158,6 @@ bool FWacomDataSnakeAssetContractSpec::RunTest(const FString& /*Parameters*/)
 	{
 		FName IntentId;
 		int32 Initiative;
-		int32 Resistance;
 		int32 Magnitude;
 		FGameplayTag EffectType;
 		FGameplayTag Target;
@@ -187,35 +186,35 @@ bool FWacomDataSnakeAssetContractSpec::RunTest(const FString& /*Parameters*/)
 	}
 	const TMap<FName, TArray<FIntentExpectation>> ExpectedIntents = {
 		{ TEXT("Snake.Head.Sequence"), {
-			{ TEXT("Snake.Head.Bite"), 3, 6, 6,
+			{ TEXT("Snake.Head.Bite"), 3, 6,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("Snake.Head.Venom"), 5, 0, 2,
+			{ TEXT("Snake.Head.Venom"), 5, 2,
 				WacomTags::Effect_ApplyStatus_Poison, WacomTags::Target_Player },
-			{ TEXT("Snake.Head.Strike"), 4, 8, 8,
+			{ TEXT("Snake.Head.Strike"), 4, 8,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("Snake.Head.CoiledGuard"), 2, 0, 4,
+			{ TEXT("Snake.Head.CoiledGuard"), 2, 4,
 				WacomTags::Status_Shield, WacomTags::Target_Self },
 		} },
 		{ TEXT("Snake.Body.Sequence"), {
-			{ TEXT("Snake.Body.Constrict"), 4, 0, 1,
+			{ TEXT("Snake.Body.Constrict"), 4, 1,
 				WacomTags::Effect_ApplyStatus_Slow, WacomTags::Target_Player },
-			{ TEXT("Snake.Body.Harden"), 2, 0, 5,
+			{ TEXT("Snake.Body.Harden"), 2, 5,
 				WacomTags::Status_Shield, WacomTags::Target_Self },
-			{ TEXT("Snake.Body.Slam"), 3, 5, 5,
+			{ TEXT("Snake.Body.Slam"), 3, 5,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("Snake.Body.VenomMist"), 5, 0, 1,
+			{ TEXT("Snake.Body.VenomMist"), 5, 1,
 				WacomTags::Effect_ApplyStatus_Poison, WacomTags::Target_Player },
 		} },
 		{ TEXT("Snake.Tail.Sequence"), {
-			{ TEXT("Snake.Tail.Sweep"), 1, 3, 3,
+			{ TEXT("Snake.Tail.Sweep"), 1, 3,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("Snake.Tail.Lash"), 2, 5, 5,
+			{ TEXT("Snake.Tail.Lash"), 2, 5,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("Snake.Tail.Whip"), 3, 4, 4,
+			{ TEXT("Snake.Tail.Whip"), 3, 4,
 				WacomTags::Effect_Damage, WacomTags::Target_Player },
-			{ TEXT("Snake.Tail.Brace"), 2, 0, 3,
+			{ TEXT("Snake.Tail.Brace"), 2, 3,
 				WacomTags::Status_Shield, WacomTags::Target_Self },
-			{ TEXT("Snake.Tail.Tangle"), 4, 0, 1,
+			{ TEXT("Snake.Tail.Tangle"), 4, 1,
 				WacomTags::Effect_ApplyStatus_Slow, WacomTags::Target_Player },
 		} },
 	};
@@ -242,8 +241,6 @@ bool FWacomDataSnakeAssetContractSpec::RunTest(const FString& /*Parameters*/)
 				Intent.IntentId, Expected.IntentId);
 			TestEqual(FString::Printf(TEXT("Intent %s initiative"), *Expected.IntentId.ToString()),
 				Intent.Initiative, Expected.Initiative);
-			TestEqual(FString::Printf(TEXT("Intent %s resistance"), *Expected.IntentId.ToString()),
-				Intent.ResistanceValue, Expected.Resistance);
 			TestEqual(FString::Printf(TEXT("Intent %s effect count"), *Expected.IntentId.ToString()),
 				Intent.Effects.Num(), 1);
 			if (Intent.Effects.Num() == 1)
