@@ -3,65 +3,90 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Session/BattleSession.h"
+#include "UI/Battle/WacomKnockdownChoiceDialogTypes.h"
 #include "UI/Foundation/WacomMenuWidgetBase.h"
 #include "WacomKnockdownChoiceDialog.generated.h"
 
-class UButton;
 class UTextBlock;
+class UWidget;
+class UWidgetAnimation;
+class UWacomKnockdownChoiceOptionWidget;
+
+/** Native-only command boundary. true means the Battle command committed successfully. */
+DECLARE_DELEGATE_RetVal_OneParam(
+	bool,
+	FWacomKnockdownChoiceSubmitDelegate,
+	EKnockdownChoice);
 
 /**
- * 击倒事件三选一面板（GDD §6 击倒事件）。Push 到 Modal 层。
+ * 击倒事件三选一 CommonUI Modal。
  *
- * 数据源：BattleHUD 调 UBattleSession::BuildPendingKnockdownChoiceView() 后
- * 调 SetContext 传入只读 ViewData。
- *
- * 三个按钮：
- *   - 援助（左）：Aid。当前不依赖左手牌当前是否在手牌区
- *   - 撤离（中）：Withdraw。敌人仍有存活部位时可用
- *   - 破坏（右）：Destroy。当前不依赖右手牌当前是否在手牌区
- *
- * 点击 → 通过 BattleHUD 提交 KnockdownChoice 命令 → 关闭自己（DeactivateWidget）
- *
- * 输入：Modal 层默认 Menu 模式（继承 UWacomMenuWidgetBase）。
- * 不响应 ESC（GDD：必须选）。父类的 ESC 关闭逻辑被 override。
+ * 正式运行由 WBP_BattleKnockdownChoiceDialog 提供布局；C++ fallback 保证配置缺失时
+ * PendingKnockdownChoice 仍可完成。Widget 只消费 UI ViewData，通过 native delegate
+ * 把 typed intent 交回 BattleHUD，不读取 BattleSession。
  */
-UCLASS(Blueprintable)
+UCLASS(Blueprintable, meta = (ToolTip = "击倒事件三选一 CommonUI Modal。只消费 UI ViewData，通过 BattleHUD native delegate 提交，不直接读取 BattleSession。"))
 class WACOMAPP_API UWacomKnockdownChoiceDialog : public UWacomMenuWidgetBase
 {
 	GENERATED_BODY()
 
 public:
-	/**
-	 * BattleHUD 在 push 后调用一次，传入面板上下文。
-	 *
-	 * @param InHUD                父 HUD（提交命令用）
-	 * @param InView               当前待处理击倒事件的可用性视图
-	 */
-	void SetContext(class UBattleHUD* InHUD, const FKnockdownChoiceView& InView);
+	/** Push 后配置一次当前 UI 数据与唯一命令提交入口。 */
+	void Configure(
+		const FWacomKnockdownChoiceDialogViewData& InViewData,
+		FWacomKnockdownChoiceSubmitDelegate InSubmitDelegate);
+
+	const FWacomKnockdownChoiceDialogViewData& GetCurrentViewData() const
+	{
+		return CurrentViewData;
+	}
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
-	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual void NativeDestruct() override;
+	virtual void NativeOnDeactivated() override;
+	virtual UWidget* NativeGetDesiredFocusTarget() const override;
+	virtual FReply NativeHandleBackRequested() override;
 
-	UFUNCTION() void HandleAidClicked();
-	UFUNCTION() void HandleWithdrawClicked();
-	UFUNCTION() void HandleDestroyClicked();
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TitleText;
 
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> TitleText;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> PartNameText;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton>    AidButton;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> AidRewardText;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton>    WithdrawButton;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton>    DestroyButton;
-	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DestroyRewardText;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> PartNameText;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWacomKnockdownChoiceOptionWidget> AidOption;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWacomKnockdownChoiceOptionWidget> WithdrawOption;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWacomKnockdownChoiceOptionWidget> DestroyOption;
+
+	/** 正式 WBP 提供的短促拒绝反馈；C++ 只触发，不定义视觉曲线。 */
+	UPROPERTY(Transient, meta = (BindWidgetAnimOptional))
+	TObjectPtr<UWidgetAnimation> SubmissionRejectedAnimation;
+
+	/** WBP 只播放提交失败反馈；不得在这里重新解释或修改规则。 */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Wacom|Battle|Knockdown Choice", DisplayName = "On Choice Submission Rejected", meta = (ToolTip = "BattleHUD 拒绝提交后触发的纯表现钩子。此时 C++ 已恢复按钮交互，WBP 只播放反馈。"))
+	void BP_OnChoiceSubmissionRejected(EKnockdownChoice Choice);
+
+	void HandleChoiceRequested(EKnockdownChoice Choice);
+	bool IsSubmitPending() const { return bSubmitPending; }
 
 private:
-	void ApplyCurrentView();
+	void ApplyCurrentViewData();
+	void BindOptionDelegates();
+	void UnbindOptionDelegates();
+	void SetAllOptionsInteractionEnabled(bool bEnabled);
+	void ResetTransientState();
+	const FWacomKnockdownChoiceOptionViewData* FindOptionViewData(
+		EKnockdownChoice Choice) const;
 
 	UPROPERTY(Transient)
-	TObjectPtr<UBattleHUD> OwningHUD = nullptr;
+	FWacomKnockdownChoiceDialogViewData CurrentViewData;
 
-	FKnockdownChoiceView CurrentView;
+	FWacomKnockdownChoiceSubmitDelegate SubmitDelegate;
+	bool bSubmitPending = false;
 };

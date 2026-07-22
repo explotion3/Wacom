@@ -71,6 +71,36 @@ BattleHUD 战斗手牌由 first-person card layer 提供，不再通过 WBP_Batt
 
 三个 MotionAnchor 推荐使用约 `8 x 8` 的无绘制 `SizeBox`，Visibility 设为 `HitTestInvisible`，不能设为 `Collapsed`。运行时读取缓存几何中心并转换成 DPI-aware 逻辑 viewport 坐标；MotionAnchor 不接收输入、不保存规则状态，也不需要 Blueprint Tick。移动 MotionAnchor 就是在调整完整起点 / 终点，C++ 不再在其上叠加旧位置 offset。当前 `BP_BattleHUD` 资产需要由 UI 制作者按上述准确命名添加可选控件；未添加期间 Draw / Discard 已通过现有 pile view 自动回退，PlayTarget 继续使用旧 Played origin。
 
+## WBP_BattleKnockdownChoiceDialog
+
+父类：`UWacomKnockdownChoiceDialog`
+
+正式资产路径：`/Game/Wacom/UI/Battle/Knockdown/WBP_BattleKnockdownChoiceDialog`
+
+注册：`UI.Widget.BattleKnockdownChoiceDialog`，Push 到 `UI.Layer.Modal`。BattleHUD 激活时提前解析并缓存；注册缺失、类加载失败或父类错误时回退功能性 C++ Dialog，避免 PendingKnockdownChoice 软锁。
+
+必需绑定：
+
+| 控件名 | 类型 | 合同 |
+|---|---|---|
+| `TitleText` | `TextBlock` | 标题；只显示 `FWacomKnockdownChoiceDialogViewData.TitleText` |
+| `PartNameText` | `TextBlock` | 当前被击倒部位文案 |
+| `AidOption` | `UWacomKnockdownChoiceOptionWidget` | 左侧较宽完整选项 |
+| `WithdrawOption` | `UWacomKnockdownChoiceOptionWidget` | 中央较窄选项；不作为默认焦点 |
+| `DestroyOption` | `UWacomKnockdownChoiceOptionWidget` | 右侧较宽完整选项 |
+
+设计画布约 `1040×620`，三联顺序固定为 Aid / Withdraw / Destroy。两侧奖励卡把通用 `296×420` 卡面等比缩放到约 `178×252`；禁止裁切、非等比拉伸或替换为 `WBP_FPCardView`。最终部位时 Withdraw 仍可见但灰显，并显示“敌人已无存活部位，无法撤离”。正式 WBP 提供 `SubmissionRejectedAnimation` 短促透明度脉冲；C++ 在提交失败并恢复交互后触发它，再调用可选的 `On Choice Submission Rejected` 蓝图扩展钩子。WBP 可继续制作入场/离场与 hover/focus 表现，但不解析 DisabledReason、奖励定义、Snapshot 或规则对象，也不调用 BattleSession。
+
+这两个正式 WBP 由 `WacomBuildKnockdownChoiceUI` 确定性 Builder 建立初始 WidgetTree 和 CDO 引用，制作方式与 `WBP_MainMenu` 相同：运行 Editor commandlet，而不是让运行时代码拼正式布局。Editor 关闭时可运行 `-run=WacomBuildKnockdownChoiceUI -Build`；只读审计使用 `-InspectOnly`。Builder 的写入范围硬限制为本节列出的 Dialog / Option 两个 Package，并按固定控件名检查父类、BindWidget 和通用 `WBP_CardView` 引用。
+
+## WBP_BattleKnockdownChoiceOption
+
+父类：`UWacomKnockdownChoiceOptionWidget`
+
+正式资产路径：`/Game/Wacom/UI/Battle/Knockdown/WBP_BattleKnockdownChoiceOption`
+
+必需绑定：`BranchLabelText`、`ChoiceLabelText`、`DescriptionText`、`RewardCardHost`、`RewardFallbackText`、`DisabledReasonText`。`RewardCardHost` 使用 `ScaleBox`，Option CDO 的 `RewardCardViewClass` 必须精确指向 `/Game/Wacom/UI/Card/WBP_CardView`。卡面及装饰必须 `HitTestInvisible`，整个 Option CommonButton 独占鼠标、键盘和手柄交互。无完整卡面时隐藏 Host 并显示 Builder 给出的 fallback 文案；真正无奖励时为“无卡牌奖励”。Aid / Destroy 说明必须明确“不消耗左手牌 / 不消耗右手牌”。
+
 ## WBP_FPCardView
 
 父类：`UWacomFirstPersonCardViewWidget`

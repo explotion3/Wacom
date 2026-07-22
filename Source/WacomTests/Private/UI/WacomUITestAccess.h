@@ -8,6 +8,7 @@
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "Input/Events.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
+#include "UI/Battle/WacomKnockdownChoiceOptionWidget.h"
 #include "UI/Foundation/WacomAppToastSubsystem.h"
 #include "UI/Foundation/WacomAppToastWidget.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
@@ -64,14 +65,19 @@ class UWacomKnockdownChoiceDialogInputProbe : public UWacomKnockdownChoiceDialog
 	GENERATED_BODY()
 
 public:
-	FString GetAidRewardText() const
+	UWacomKnockdownChoiceOptionWidget* GetAidOption() const
 	{
-		return AidRewardText ? AidRewardText->GetText().ToString() : FString();
+		return AidOption;
 	}
 
-	FString GetDestroyRewardText() const
+	UWacomKnockdownChoiceOptionWidget* GetWithdrawOption() const
 	{
-		return DestroyRewardText ? DestroyRewardText->GetText().ToString() : FString();
+		return WithdrawOption;
+	}
+
+	UWacomKnockdownChoiceOptionWidget* GetDestroyOption() const
+	{
+		return DestroyOption;
 	}
 
 	FString GetPartNameText() const
@@ -81,17 +87,35 @@ public:
 
 	bool IsAidButtonEnabled() const
 	{
-		return AidButton && AidButton->GetIsEnabled();
+		return AidOption && AidOption->GetIsEnabled()
+			&& AidOption->IsInteractionEnabled();
 	}
 
 	bool IsWithdrawButtonEnabled() const
 	{
-		return WithdrawButton && WithdrawButton->GetIsEnabled();
+		return WithdrawOption && WithdrawOption->GetIsEnabled()
+			&& WithdrawOption->IsInteractionEnabled();
 	}
 
 	bool IsDestroyButtonEnabled() const
 	{
-		return DestroyButton && DestroyButton->GetIsEnabled();
+		return DestroyOption && DestroyOption->GetIsEnabled()
+			&& DestroyOption->IsInteractionEnabled();
+	}
+
+	void SubmitChoice(EKnockdownChoice Choice)
+	{
+		HandleChoiceRequested(Choice);
+	}
+
+	bool HasSubmitPending() const
+	{
+		return IsSubmitPending();
+	}
+
+	UWidget* GetDesiredFocusTarget() const
+	{
+		return NativeGetDesiredFocusTarget();
 	}
 
 	FReply SendGamepadBackKeyDown()

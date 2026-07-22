@@ -87,7 +87,6 @@ public:
 		}
 	}
 };
-
 UCLASS()
 class AWacomBattleHUDLocalPlayerControllerTest : public APlayerController
 {
@@ -904,43 +903,4 @@ private:
 	TObjectPtr<UWorld> WorldOverride;
 
 	int32 BattleEndedCallbackCountForTest = 0;
-};
-
-UCLASS()
-class UWacomBattleKnockdownChoiceDialogTest : public UWacomKnockdownChoiceDialog
-{
-	GENERATED_BODY()
-
-public:
-	bool IsAidButtonEnabledForTest() const
-	{
-		return AidButton ? AidButton->GetIsEnabled() : false;
-	}
-
-	bool IsWithdrawButtonEnabledForTest() const
-	{
-		return WithdrawButton ? WithdrawButton->GetIsEnabled() : false;
-	}
-
-	bool IsDestroyButtonEnabledForTest() const
-	{
-		return DestroyButton ? DestroyButton->GetIsEnabled() : false;
-	}
-
-	FString GetPartNameTextForTest() const
-	{
-		return PartNameText ? PartNameText->GetText().ToString() : FString();
-	}
-
-	FReply PressEscapeForTest()
-	{
-		const FKeyEvent KeyEvent(EKeys::Escape, FModifierKeysState(), 0, false, 0, 0);
-		return NativeOnKeyDown(FGeometry(), KeyEvent);
-	}
-
-	FReply PressGamepadBackForTest()
-	{
-		const FKeyEvent KeyEvent(EKeys::Gamepad_FaceButton_Right, FModifierKeysState(), 0, false, 0, 0);
-		return NativeOnKeyDown(FGeometry(), KeyEvent);
-	}
 };

@@ -83,6 +83,8 @@ Wacom UI Settings 是顶层 UI WBP 的唯一项目级覆盖入口。未配置顶
 - `WidgetClasses` 的 tag 必须属于 `UI.Widget.*` 命名空间。
 - `WidgetClasses` 的 class 必须继承 `UWacomActivatableWidget`。
 - `UI.Widget.SettingsScreen` 必须继承 `UWacomSettingsScreen`；其它已知顶层 Screen tag 同样校验自己的具体 C++ 父类。
+- `UI.Widget.BattleKnockdownChoiceDialog` 必须继承 `UWacomKnockdownChoiceDialog`；正式类为 `/Game/Wacom/UI/Battle/Knockdown/WBP_BattleKnockdownChoiceDialog`。BattleHUD 激活时同步解析并缓存该类；条目缺失、加载失败或父类错误时使用功能性 C++ fallback，不允许让阻塞式击倒选择失去提交入口。
+- 击倒选择 Dialog / Option 的初始正式 WidgetTree 由 Editor-only `WacomBuildKnockdownChoiceUI` Builder 确定性生成；它只管理两个固定 Package，`-InspectOnly` 只读校验 Registry 目标、父类、BindWidget 与 `WBP_CardView` 引用。运行时不得调用 Builder，也不得把 C++ fallback 扩成第二套正式视觉。
 - `WidgetClasses` 中重复 tag 是错误。
 - `CardExplanationLexicon` 非空时必须继承 `UWacomCardExplanationLexicon`。
 - `CardDetailTheme` 非空时必须继承 `UWacomCardDetailTheme`。
@@ -146,6 +148,8 @@ Battle 二级信息面板是明确例外：`UWacomBattleSecondaryPanelScreenBase
 战斗 HUD 和探索 HUD 仍声明自身期望的 UI input config，但底层 gameplay profile 由 `UWacomInputContextCoordinatorSubsystem` 统一应用。探索期固定使用 Run Tunnel 输入模型：Coordinator 切到 `All + NoCapture`、显示鼠标并保持探索 IMC。
 
 `UWacomMenuWidgetBase` 负责 Menu 模式下的返回键口径：ESC 和 Gamepad FaceButton Right 触发 Back 请求，默认广播 `OnBackRequestedNative` 后 `DeactivateWidget()`。子类只在语义不同，例如 ConfirmDialog 把 Back 当 Cancel、MainMenu 把 Back 交给 App flow、TitleScreen 作为稳定根消费 Back 时覆盖。激活后的延迟焦点会优先使用 `NativeGetDesiredFocusTarget()`，再寻找第一个可交互 `UCommonButtonBase`，最后才兼容旧 `UButton`，因此标题页、主菜单、暂停菜单和 Settings fallback 都保持键盘 / 手柄可用。
+
+`UWacomKnockdownChoiceDialog` 是 Battle 领域的强制选择 Modal 例外：仍继承 Menu 基类以取得 UIOnly 输入和 CommonUI 焦点管理，但覆盖 `NativeHandleBackRequested()`，统一消费 ESC / Gamepad B 而不 Pop。其默认焦点顺序由 C++ 固定为 Aid → Destroy → Withdraw；WBP 不通过 Designer 顺序或事件图改写该规则。提交成功后 CommonUI Pop 并自动归还 Battle 输入，提交失败则保持 Modal active、恢复合法选项交互并只调用 WBP 反馈 hook。
 
 当前兼容例外：`UWacomMenuWidgetBase` 仍保留 deprecated Run first-person menu lease / drop Blueprint 钩子，用于旧资产节点编译和过渡；这些旧钩子只转发到 `UWacomRunMenuWidgetBase`，普通 MainMenu / Pause / Confirm 等 Foundation 菜单不会拥有 Run menu lease。lease / drop 数据 contract 位于 `UI/Run/`，具体规则仍由 `AWacomPlayerController`、Run menu drop coordinator 或 owning menu flow 提交。后续资产清理方向见 `Docs/TechDebt.md`，不要把新的 Run 规则或一次性菜单状态继续加到 Foundation 基类。
 

@@ -26,6 +26,7 @@ class UWacomBattleEnemyPartComponent;
 class UWacomCardDetailPanel;
 class UWacomFirstPersonCardAnchorComponent;
 class UWacomGameUIManagerSubsystem;
+class UWacomKnockdownChoiceDialog;
 class FWacomBattleHUDCardDetailController;
 class FWacomBattleHUDCombatLogController;
 class FWacomBattleHUDCommandController;
@@ -52,6 +53,7 @@ struct FWacomFirstPersonCardDragView;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardPointerView;
 struct FWacomBattleDrawPileFeedbackBatch;
+struct FWacomKnockdownChoiceDialogViewData;
 
 enum class EWacomBattleHUDCardDetailHost : uint8
 {
@@ -118,7 +120,11 @@ public:
 	void BindFirstPersonCardLayerInteractions(UWacomFirstPersonCardAnchorComponent& Anchor);
 	void UnbindFirstPersonCardLayerInteractions(UWacomFirstPersonCardAnchorComponent& Anchor);
 
-	void PushKnockdownChoiceDialog(const FKnockdownChoiceView& ChoiceView);
+	TSubclassOf<UWacomKnockdownChoiceDialog> GetKnockdownChoiceDialogClass() const;
+	void SetKnockdownChoiceDialogClass(
+		TSubclassOf<UWacomKnockdownChoiceDialog> DialogClass);
+	void PushKnockdownChoiceDialog(
+		const FWacomKnockdownChoiceDialogViewData& DialogViewData);
 
 private:
 	UBattleHUD& HUD;
@@ -188,6 +194,7 @@ public:
 		const TOptional<FVector2D>& InitialPointerWidgetPosition);
 	void CancelTargetSelect();
 	void OnKnockdownChoiceSelected(EKnockdownChoice Choice);
+	bool TrySubmitKnockdownChoice(EKnockdownChoice Choice);
 
 	void SubmitPlayCard(
 		const FGuid& CardId,

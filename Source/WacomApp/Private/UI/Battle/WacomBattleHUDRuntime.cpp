@@ -32,6 +32,7 @@
 #include "UI/Battle/WacomBattleHUDTargetingController.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
+#include "UI/Battle/WacomKnockdownChoiceDialogPresentationBuilder.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
@@ -194,7 +195,7 @@ void FWacomBattleHUDRuntimeHost::UnbindFirstPersonCardLayerInteractions(
 }
 
 void FWacomBattleHUDRuntimeHost::PushKnockdownChoiceDialog(
-	const FKnockdownChoiceView& ChoiceView)
+	const FWacomKnockdownChoiceDialogViewData& DialogViewData)
 {
 	UGameInstance* GameInstance = GetGameInstance();
 	UWacomGameUIManagerSubsystem* UIManager =
@@ -206,14 +207,38 @@ void FWacomBattleHUDRuntimeHost::PushKnockdownChoiceDialog(
 
 	UCommonActivatableWidget* Pushed = UIManager->PushContentToLayer(
 		WacomUITags::UI_Layer_Modal.GetTag(),
-		UWacomKnockdownChoiceDialog::StaticClass());
+		GetKnockdownChoiceDialogClass());
 	UWacomKnockdownChoiceDialog* Dialog = Cast<UWacomKnockdownChoiceDialog>(Pushed);
 	if (!Dialog)
 	{
 		return;
 	}
 
-	Dialog->SetContext(&HUD, ChoiceView);
+	FWacomKnockdownChoiceSubmitDelegate SubmitDelegate;
+	SubmitDelegate.BindUObject(&HUD, &UBattleHUD::TrySubmitKnockdownChoice);
+	Dialog->Configure(DialogViewData, MoveTemp(SubmitDelegate));
+}
+
+TSubclassOf<UWacomKnockdownChoiceDialog>
+FWacomBattleHUDRuntimeHost::GetKnockdownChoiceDialogClass() const
+{
+	if (HUD.KnockdownChoiceDialogClass)
+	{
+		return HUD.KnockdownChoiceDialogClass;
+	}
+	return TSubclassOf<UWacomKnockdownChoiceDialog>(
+		UWacomKnockdownChoiceDialog::StaticClass());
+}
+
+void FWacomBattleHUDRuntimeHost::SetKnockdownChoiceDialogClass(
+	TSubclassOf<UWacomKnockdownChoiceDialog> DialogClass)
+{
+	HUD.KnockdownChoiceDialogClass = DialogClass;
+	if (!HUD.KnockdownChoiceDialogClass)
+	{
+		HUD.KnockdownChoiceDialogClass =
+			UWacomKnockdownChoiceDialog::StaticClass();
+	}
 }
 
 FWacomBattleHUDRuntime::FWacomBattleHUDRuntime(UBattleHUD& InHUD)
@@ -225,6 +250,24 @@ FWacomBattleHUDRuntime::~FWacomBattleHUDRuntime() = default;
 
 void FWacomBattleHUDRuntime::NativeConstruct()
 {
+	if (UGameInstance* GameInstance = RuntimeHost.GetGameInstance())
+	{
+		if (UWacomGameUIManagerSubsystem* UIManager =
+			GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>())
+		{
+			const TSubclassOf<UWacomActivatableWidget> ResolvedClass =
+				UIManager->ResolveWidgetClass(
+					WacomUITags::UI_Widget_BattleKnockdownChoiceDialog.GetTag(),
+					UWacomKnockdownChoiceDialog::StaticClass());
+			RuntimeHost.SetKnockdownChoiceDialogClass(ResolvedClass.Get());
+		}
+	}
+	if (!RuntimeHost.GetKnockdownChoiceDialogClass())
+	{
+		RuntimeHost.SetKnockdownChoiceDialogClass(
+			UWacomKnockdownChoiceDialog::StaticClass());
+	}
+
 	if (!RuntimeHost.GetCardDetailPanelClass())
 	{
 		if (UClass* LoadedPanelClass = LoadClass<UWacomCardDetailPanel>(nullptr, CardDetailPanelPath))
@@ -585,7 +628,13 @@ void FWacomBattleHUDRuntime::CancelTargetSelect()
 
 void FWacomBattleHUDRuntime::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 {
-	GetCommandController().SubmitKnockdownChoice(Choice);
+	TrySubmitKnockdownChoice(Choice);
+}
+
+bool FWacomBattleHUDRuntime::TrySubmitKnockdownChoice(
+	EKnockdownChoice Choice)
+{
+	return GetCommandController().TrySubmitKnockdownChoice(Choice);
 }
 
 void FWacomBattleHUDRuntime::SubmitPlayCard(
@@ -1110,7 +1159,12 @@ void FWacomBattleHUDRuntime::PushPendingKnockdownChoiceDialog()
 		return;
 	}
 
-	RuntimeHost.PushKnockdownChoiceDialog(ChoiceView);
+	const FBattleSnapshot Snapshot = CurrentSession->BuildSnapshot();
+	const FWacomKnockdownChoiceDialogViewData DialogViewData =
+		FWacomKnockdownChoiceDialogPresentationBuilder::Build(
+			ChoiceView,
+			Snapshot);
+	RuntimeHost.PushKnockdownChoiceDialog(DialogViewData);
 }
 
 void FWacomBattleHUDRuntime::AdvanceBattlePresentationQueueOnce()

@@ -27,7 +27,7 @@ public:
 		const TOptional<FVector2D>& PresentationTargetWidgetPosition = TOptional<FVector2D>());
 	void SubmitWait();
 	void SubmitEndTurn();
-	void SubmitKnockdownChoice(EKnockdownChoice Choice);
+	bool TrySubmitKnockdownChoice(EKnockdownChoice Choice);
 
 private:
 	FWacomBattleHUDRuntime& Runtime;

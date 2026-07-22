@@ -19,6 +19,7 @@ class UWacomBattleWidgetBase;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
 class UWacomCardDetailPanel;
+class UWacomKnockdownChoiceDialog;
 class UWacomBattleEnemyPartComponent;
 class AWacomBattleEnemyActor;
 class APlayerController;
@@ -348,6 +349,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Commands", meta = (ToolTip = "击倒选择 dialog 的 BattleHUD 命令入口。Dialog 不直接提交 BattleSession，统一由 HUD 做命令后刷新和事件消费。"))
 	void OnKnockdownChoiceSelected(EKnockdownChoice Choice);
 
+	/** Native Dialog 使用的可确认提交入口。仅在命令成功 commit 时返回 true。 */
+	bool TrySubmitKnockdownChoice(EKnockdownChoice Choice);
+
 	/**
 	 * 战斗结束时广播（保证只广播一次）。
 	 * GameMode 绑定这个来触发 ExitBattle。
@@ -484,6 +488,10 @@ protected:
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardDetailPanel> FirstPersonCardDetailPanel;
+
+	/** BattleHUD 激活时解析并缓存的正式击倒选择 WBP；配置失败时为功能性 C++ fallback。 */
+	UPROPERTY(Transient)
+	TSubclassOf<UWacomKnockdownChoiceDialog> KnockdownChoiceDialogClass;
 
 	FWacomBattleHUDRuntime* BattleHUDRuntime = nullptr;
 

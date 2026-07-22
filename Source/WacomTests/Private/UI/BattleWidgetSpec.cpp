@@ -295,51 +295,6 @@ bool FWacomUIBattleHUDPileCountDisplaySpec::RunTest(const FString& /*Parameters*
 	return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleKnockdownChoiceDialogViewSpec,
-	"Wacom.UI.Battle.KnockdownChoiceDialogUsesViewData",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleKnockdownChoiceDialogViewSpec::RunTest(const FString& /*Parameters*/)
-{
-	TStrongObjectPtr<UWacomBattleKnockdownChoiceDialogTest> Dialog(
-		NewObject<UWacomBattleKnockdownChoiceDialogTest>());
-
-	FKnockdownChoiceView View;
-	View.bHasPendingChoice = true;
-	View.PartName = FText::FromString(TEXT("蛇尾"));
-	View.AidOption.Choice = EKnockdownChoice::Aid;
-	View.AidOption.bAvailable = true;
-	View.WithdrawOption.Choice = EKnockdownChoice::Withdraw;
-	View.WithdrawOption.bAvailable = false;
-	View.WithdrawOption.DisabledReason = FName(TEXT("NoLivingEnemyPart"));
-	View.DestroyOption.Choice = EKnockdownChoice::Destroy;
-	View.DestroyOption.bAvailable = true;
-
-	Dialog->TakeWidget();
-	Dialog->SetContext(nullptr, View);
-
-	TestEqual(TEXT("Part name comes from view data"), Dialog->GetPartNameTextForTest(), TEXT("蛇尾"));
-	TestTrue(TEXT("Aid button follows view availability"), Dialog->IsAidButtonEnabledForTest());
-	TestFalse(TEXT("Withdraw button follows view availability"), Dialog->IsWithdrawButtonEnabledForTest());
-	TestTrue(TEXT("Destroy button follows view availability"), Dialog->IsDestroyButtonEnabledForTest());
-
-	View.AidOption.bAvailable = false;
-	View.AidOption.DisabledReason = FName(TEXT("LeftHandMissing"));
-	View.WithdrawOption.bAvailable = true;
-	View.WithdrawOption.DisabledReason = FName(TEXT("None"));
-	View.DestroyOption.bAvailable = false;
-	View.DestroyOption.DisabledReason = FName(TEXT("RightHandMissing"));
-
-	Dialog->SetContext(nullptr, View);
-
-	TestFalse(TEXT("Aid button refreshes from updated view"), Dialog->IsAidButtonEnabledForTest());
-	TestTrue(TEXT("Withdraw button refreshes from updated view"), Dialog->IsWithdrawButtonEnabledForTest());
-	TestFalse(TEXT("Destroy button refreshes from updated view"), Dialog->IsDestroyButtonEnabledForTest());
-
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleHUDCardDetailDefaultsSpec,
 	"Wacom.UI.Battle.BattleHUD.FallbackLayout.CardDetailDefaults",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

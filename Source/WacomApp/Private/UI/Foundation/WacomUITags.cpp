@@ -16,4 +16,5 @@ namespace WacomUITags
 	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_SettingsScreen, "UI.Widget.SettingsScreen");
 	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_BattleCombatLogDetailsScreen, "UI.Widget.BattleCombatLogDetailsScreen");
 	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_BattleCardPileDetailsScreen, "UI.Widget.BattleCardPileDetailsScreen");
+	UE_DEFINE_GAMEPLAY_TAG(UI_Widget_BattleKnockdownChoiceDialog, "UI.Widget.BattleKnockdownChoiceDialog");
 }

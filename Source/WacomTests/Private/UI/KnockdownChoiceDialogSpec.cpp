@@ -2,44 +2,60 @@
 
 #include "Misc/AutomationTest.h"
 
-#include "Session/BattleSession.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/ScaleBox.h"
+#include "UI/Card/WacomCardView.h"
 #include "UI/WacomUITestAccess.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomKnockdownChoiceDialogSpec
 {
-	FKnockdownChoiceView MakeView(
-		const TCHAR* PartName,
-		const TCHAR* AidCardId,
-		const TCHAR* AidCardName,
-		const TCHAR* DestroyCardId,
-		const TCHAR* DestroyCardName)
+	FWacomKnockdownChoiceOptionViewData MakeOption(
+		EKnockdownChoice Choice,
+		bool bAvailable,
+		const TCHAR* Label)
 	{
-		FKnockdownChoiceView View;
-		View.bHasPendingChoice = true;
-		View.PartName = FText::FromString(PartName);
-		View.AidOption.Choice = EKnockdownChoice::Aid;
-		View.AidOption.bAvailable = true;
-		View.AidOption.bHasRewardCard = true;
-		View.AidOption.RewardCardId = FName(AidCardId);
-		View.AidOption.RewardCardName = FText::FromString(AidCardName);
-		View.WithdrawOption.Choice = EKnockdownChoice::Withdraw;
-		View.WithdrawOption.bAvailable = true;
-		View.DestroyOption.Choice = EKnockdownChoice::Destroy;
-		View.DestroyOption.bAvailable = true;
-		View.DestroyOption.bHasRewardCard = true;
-		View.DestroyOption.RewardCardId = FName(DestroyCardId);
-		View.DestroyOption.RewardCardName = FText::FromString(DestroyCardName);
+		FWacomKnockdownChoiceOptionViewData Option;
+		Option.Choice = Choice;
+		Option.bAvailable = bAvailable;
+		Option.ChoiceLabel = FText::FromString(Label);
+		Option.BranchLabel = FText::FromString(Label);
+		Option.RewardFallbackText = FText::FromString(TEXT("无卡牌奖励"));
+		return Option;
+	}
+
+	FWacomKnockdownChoiceDialogViewData MakeView()
+	{
+		FWacomKnockdownChoiceDialogViewData View;
+		View.TitleText = FText::FromString(TEXT("选择击倒结果"));
+		View.PartNameText = FText::FromString(TEXT("已击倒：蛇首"));
+		View.AidOption = MakeOption(EKnockdownChoice::Aid, true, TEXT("援助"));
+		View.WithdrawOption = MakeOption(EKnockdownChoice::Withdraw, true, TEXT("撤离"));
+		View.DestroyOption = MakeOption(EKnockdownChoice::Destroy, true, TEXT("破坏"));
 		return View;
 	}
-}
 
+	FWacomKnockdownChoiceSubmitDelegate MakeSubmitDelegate(
+		TFunction<bool(EKnockdownChoice)> Handler)
+	{
+		FWacomKnockdownChoiceSubmitDelegate Delegate;
+		Delegate.BindLambda(MoveTemp(Handler));
+		return Delegate;
+	}
+
+	UScaleBox* FindRewardHost(UWacomKnockdownChoiceOptionWidget* Option)
+	{
+		return Option && Option->WidgetTree
+			? Cast<UScaleBox>(Option->WidgetTree->FindWidget(TEXT("RewardCardHost")))
+			: nullptr;
+	}
+}
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomKnockdownChoiceDialogRewardBindingSpec,
-	"Wacom.UI.Battle.KnockdownChoice.RewardBindingAndRefresh",
+	FWacomKnockdownChoiceDialogRefreshSpec,
+	"Wacom.UI.Battle.KnockdownChoice.RefreshClearsAndReusesRewardCard",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomKnockdownChoiceDialogRewardBindingSpec::RunTest(
+bool FWacomKnockdownChoiceDialogRefreshSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	using namespace WacomKnockdownChoiceDialogSpec;
@@ -47,74 +63,100 @@ bool FWacomKnockdownChoiceDialogRewardBindingSpec::RunTest(
 		NewObject<UWacomKnockdownChoiceDialogInputProbe>());
 	Dialog->TakeWidget();
 
-	FKnockdownChoiceView View = MakeView(
-		TEXT("蛇首"),
-		TEXT("Reward.Test.Aid"), TEXT("援助卡"),
-		TEXT("Reward.Test.Destroy"), TEXT("破坏卡"));
-	Dialog->SetContext(nullptr, View);
-	TestEqual(TEXT("Part name binds on first context"),
-		Dialog->GetPartNameText(), FString(TEXT("蛇首")));
-	TestEqual(TEXT("Aid reward binds on first context"),
-		Dialog->GetAidRewardText(), FString(TEXT("奖励：援助卡")));
-	TestEqual(TEXT("Destroy reward binds on first context"),
-		Dialog->GetDestroyRewardText(), FString(TEXT("奖励：破坏卡")));
+	FWacomKnockdownChoiceDialogViewData View = MakeView();
+	View.AidOption.bHasRewardCard = true;
+	View.AidOption.bHasRewardCardView = true;
+	View.AidOption.RewardCardViewData.Name = FText::FromString(TEXT("援助卡"));
+	Dialog->Configure(View, MakeSubmitDelegate([](EKnockdownChoice) { return false; }));
 
-	View = MakeView(
-		TEXT("蛇尾"),
-		TEXT("Reward.Test.SecondAid"), TEXT("第二援助卡"),
-		TEXT("Reward.Test.SecondDestroy"), TEXT("第二破坏卡"));
-	View.AidOption.bAvailable = false;
-	View.WithdrawOption.bAvailable = false;
-	Dialog->SetContext(nullptr, View);
+	TestEqual(TEXT("Part name binds"),
+		Dialog->GetPartNameText(), FString(TEXT("已击倒：蛇首")));
+	UScaleBox* RewardHost = FindRewardHost(Dialog->GetAidOption());
+	if (!TestNotNull(TEXT("Aid reward host exists"), RewardHost))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Full reward creates exactly one card"), RewardHost->GetChildrenCount(), 1);
+	UWidget* FirstCard = RewardHost->GetChildAt(0);
 
-	TestEqual(TEXT("Part name refreshes on repeated SetContext"),
-		Dialog->GetPartNameText(), FString(TEXT("蛇尾")));
-	TestEqual(TEXT("Aid reward refreshes without stale text"),
-		Dialog->GetAidRewardText(), FString(TEXT("奖励：第二援助卡")));
-	TestEqual(TEXT("Destroy reward refreshes without stale text"),
-		Dialog->GetDestroyRewardText(), FString(TEXT("奖励：第二破坏卡")));
-	TestFalse(TEXT("Aid availability refreshes independently"),
-		Dialog->IsAidButtonEnabled());
-	TestFalse(TEXT("Withdraw availability refreshes independently"),
-		Dialog->IsWithdrawButtonEnabled());
-	TestTrue(TEXT("Destroy availability remains enabled"),
-		Dialog->IsDestroyButtonEnabled());
+	Dialog->Configure(View, MakeSubmitDelegate([](EKnockdownChoice) { return false; }));
+	TestEqual(TEXT("Repeated refresh does not duplicate card"), RewardHost->GetChildrenCount(), 1);
+	TestTrue(TEXT("Repeated refresh reuses card view"), RewardHost->GetChildAt(0) == FirstCard);
+
+	View.AidOption.bHasRewardCard = false;
+	View.AidOption.bHasRewardCardView = false;
+	View.AidOption.RewardCardViewData = FWacomCardViewData();
+	Dialog->Configure(View, MakeSubmitDelegate([](EKnockdownChoice) { return false; }));
+	TestEqual(TEXT("No reward clears old card"), RewardHost->GetChildrenCount(), 0);
+	TestTrue(TEXT("No reward does not disable available Aid"), Dialog->IsAidButtonEnabled());
 	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomKnockdownChoiceDialogEmptyRewardSpec,
-	"Wacom.UI.Battle.KnockdownChoice.EmptyRewardDoesNotDisable",
+	FWacomKnockdownChoiceDialogSubmitGateSpec,
+	"Wacom.UI.Battle.KnockdownChoice.SubmitGateAndFailureRecovery",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomKnockdownChoiceDialogEmptyRewardSpec::RunTest(
+bool FWacomKnockdownChoiceDialogSubmitGateSpec::RunTest(
 	const FString& /*Parameters*/)
 {
+	using namespace WacomKnockdownChoiceDialogSpec;
 	TStrongObjectPtr<UWacomKnockdownChoiceDialogInputProbe> Dialog(
 		NewObject<UWacomKnockdownChoiceDialogInputProbe>());
 	Dialog->TakeWidget();
 
-	FKnockdownChoiceView View;
-	View.bHasPendingChoice = true;
-	View.PartName = FText::FromString(TEXT("无奖励部位"));
-	View.AidOption.Choice = EKnockdownChoice::Aid;
-	View.AidOption.bAvailable = true;
-	View.DestroyOption.Choice = EKnockdownChoice::Destroy;
+	FWacomKnockdownChoiceDialogViewData View = MakeView();
 	View.DestroyOption.bAvailable = false;
-	View.DestroyOption.DisabledReason = TEXT("RightHandMissing");
-	View.WithdrawOption.Choice = EKnockdownChoice::Withdraw;
-	View.WithdrawOption.bAvailable = true;
-	Dialog->SetContext(nullptr, View);
+	int32 SubmitCount = 0;
+	Dialog->Configure(View, MakeSubmitDelegate([&SubmitCount](EKnockdownChoice)
+	{
+		++SubmitCount;
+		return false;
+	}));
 
-	TestEqual(TEXT("Empty Aid reward has explicit copy"),
-		Dialog->GetAidRewardText(), FString(TEXT("无卡牌奖励")));
-	TestEqual(TEXT("Empty Destroy reward has explicit copy"),
-		Dialog->GetDestroyRewardText(), FString(TEXT("无卡牌奖励")));
-	TestTrue(TEXT("Empty reward does not disable available Aid"),
-		Dialog->IsAidButtonEnabled());
-	TestFalse(TEXT("Destroy follows supplied disabled state, not reward"),
-		Dialog->IsDestroyButtonEnabled());
-	TestTrue(TEXT("Withdraw remains independent of reward preview"),
-		Dialog->IsWithdrawButtonEnabled());
+	Dialog->SubmitChoice(EKnockdownChoice::Destroy);
+	TestEqual(TEXT("Disabled option does not submit"), SubmitCount, 0);
+	Dialog->SubmitChoice(EKnockdownChoice::Aid);
+	TestEqual(TEXT("Available option submits"), SubmitCount, 1);
+	TestFalse(TEXT("Rejected submit releases gate"), Dialog->HasSubmitPending());
+	TestTrue(TEXT("Rejected submit restores Aid interaction"), Dialog->IsAidButtonEnabled());
+	TestFalse(TEXT("Rejected submit preserves Destroy disabled state"), Dialog->IsDestroyButtonEnabled());
+
+	Dialog->Configure(MakeView(), MakeSubmitDelegate([&SubmitCount](EKnockdownChoice)
+	{
+		++SubmitCount;
+		return true;
+	}));
+	Dialog->SubmitChoice(EKnockdownChoice::Aid);
+	Dialog->SubmitChoice(EKnockdownChoice::Aid);
+	TestEqual(TEXT("Successful double intent commits once"), SubmitCount, 2);
+	TestTrue(TEXT("Successful submit keeps gate locked until Modal deactivation"),
+		Dialog->HasSubmitPending());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomKnockdownChoiceDialogFocusAndBackSpec,
+	"Wacom.UI.Battle.KnockdownChoice.FocusOrderAndBackConsumption",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomKnockdownChoiceDialogFocusAndBackSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomKnockdownChoiceDialogSpec;
+	TStrongObjectPtr<UWacomKnockdownChoiceDialogInputProbe> Dialog(
+		NewObject<UWacomKnockdownChoiceDialogInputProbe>());
+	Dialog->TakeWidget();
+
+	FWacomKnockdownChoiceDialogViewData View = MakeView();
+	Dialog->Configure(View, MakeSubmitDelegate([](EKnockdownChoice) { return false; }));
+	TestTrue(TEXT("Aid is default focus"),
+		Dialog->GetDesiredFocusTarget() == Dialog->GetAidOption());
+
+	View.AidOption.bAvailable = false;
+	Dialog->Configure(View, MakeSubmitDelegate([](EKnockdownChoice) { return false; }));
+	TestTrue(TEXT("Destroy precedes Withdraw when Aid unavailable"),
+		Dialog->GetDesiredFocusTarget() == Dialog->GetDestroyOption());
+	TestTrue(TEXT("Gamepad B is consumed"), Dialog->SendGamepadBackKeyDown().IsEventHandled());
 	return true;
 }

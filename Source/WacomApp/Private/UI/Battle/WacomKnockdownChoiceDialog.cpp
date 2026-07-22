@@ -2,109 +2,44 @@
 
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
 
-#define LOCTEXT_NAMESPACE "WacomKnockdownChoice"
-
+#include "Animation/WidgetAnimation.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
-#include "Components/Button.h"
-#include "Components/CanvasPanel.h"
-#include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
+#include "Components/Overlay.h"
+#include "Components/OverlaySlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "UI/Battle/WacomKnockdownChoiceOptionWidget.h"
 
-#include "Commands/BattleCommand.h"
-#include "Session/BattleSession.h"
-#include "UI/Battle/BattleHUD.h"
-#include "Types/WacomEnums.h"
+#define LOCTEXT_NAMESPACE "WacomKnockdownChoiceDialog"
 
 namespace
 {
-	bool IsOptionAvailable(const FKnockdownChoiceView& View, EKnockdownChoice Choice)
-	{
-		switch (Choice)
-		{
-		case EKnockdownChoice::Aid:
-			return View.AidOption.bAvailable;
-		case EKnockdownChoice::Withdraw:
-			return View.WithdrawOption.bAvailable;
-		case EKnockdownChoice::Destroy:
-			return View.DestroyOption.bAvailable;
-		default:
-			return false;
-		}
-	}
-
-	UButton* MakeChoiceButton(UWidgetTree* Tree, FName Name, const FText& Label,
-		UHorizontalBox* Parent, float MinWidth)
-	{
-		USizeBox* Sizer = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Sizer->SetMinDesiredWidth(MinWidth);
-		Sizer->SetMinDesiredHeight(48.f);
-
-		UButton* Btn = Tree->ConstructWidget<UButton>(UButton::StaticClass(), Name);
-		UTextBlock* Text = Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
-		Text->SetText(Label);
-		Text->SetJustification(ETextJustify::Center);
-		FSlateFontInfo Font = Text->GetFont();
-		Font.Size = 16;
-		Text->SetFont(Font);
-		Btn->AddChild(Text);
-		Sizer->AddChild(Btn);
-
-		if (UHorizontalBoxSlot* S = Parent->AddChildToHorizontalBox(Sizer))
-		{
-			S->SetPadding(FMargin(8.f, 0.f));
-			S->SetVerticalAlignment(VAlign_Center);
-		}
-		return Btn;
-	}
-
-	UTextBlock* MakeRewardText(
+	UWacomKnockdownChoiceOptionWidget* AddFallbackOption(
 		UWidgetTree* Tree,
+		UHorizontalBox* Row,
 		FName Name,
-		UHorizontalBox* Parent,
 		float Width)
 	{
-		USizeBox* Sizer = Tree->ConstructWidget<USizeBox>(USizeBox::StaticClass());
-		Sizer->SetMinDesiredWidth(Width);
+		USizeBox* Sizer = Tree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass());
+		Sizer->SetWidthOverride(Width);
+		Sizer->SetHeightOverride(470.0f);
 
-		UTextBlock* Text =
-			Tree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), Name);
-		Text->SetJustification(ETextJustify::Center);
-		Text->SetAutoWrapText(true);
-		FSlateFontInfo Font = Text->GetFont();
-		Font.Size = 12;
-		Text->SetFont(Font);
-		Text->SetColorAndOpacity(FSlateColor(FLinearColor(0.75f, 0.82f, 0.95f)));
-		Sizer->AddChild(Text);
-
-		if (UHorizontalBoxSlot* Slot = Parent->AddChildToHorizontalBox(Sizer))
+		UWacomKnockdownChoiceOptionWidget* Option =
+			Tree->ConstructWidget<UWacomKnockdownChoiceOptionWidget>(
+				UWacomKnockdownChoiceOptionWidget::StaticClass(), Name);
+		Sizer->SetContent(Option);
+		if (UHorizontalBoxSlot* Slot = Row->AddChildToHorizontalBox(Sizer))
 		{
-			Slot->SetPadding(FMargin(8.f, 6.f, 8.f, 0.f));
-			Slot->SetVerticalAlignment(VAlign_Top);
+			Slot->SetPadding(FMargin(8.0f, 0.0f));
+			Slot->SetVerticalAlignment(VAlign_Fill);
 		}
-		return Text;
-	}
-
-	FText BuildRewardSummaryText(const FKnockdownChoiceOptionView& Option)
-	{
-		if (!Option.bHasRewardCard)
-		{
-			return LOCTEXT("NoCardReward", "无卡牌奖励");
-		}
-
-		const FText RewardName = !Option.RewardCardName.IsEmpty()
-			? Option.RewardCardName
-			: (Option.RewardCardId.IsNone()
-				? FText::GetEmpty()
-				: FText::FromName(Option.RewardCardId));
-		return RewardName.IsEmpty()
-			? LOCTEXT("NoCardReward", "无卡牌奖励")
-			: FText::Format(LOCTEXT("CardRewardFormat", "奖励：{0}"), RewardName);
+		return Option;
 	}
 }
 
@@ -117,179 +52,277 @@ TSharedRef<SWidget> UWacomKnockdownChoiceDialog::RebuildWidget()
 			WidgetTree = NewObject<UWidgetTree>(this, TEXT("WidgetTree_Default"));
 		}
 
-		UCanvasPanel* Root = WidgetTree->ConstructWidget<UCanvasPanel>(UCanvasPanel::StaticClass(), TEXT("Root"));
+		UOverlay* Root = WidgetTree->ConstructWidget<UOverlay>(
+			UOverlay::StaticClass(), TEXT("Root"));
+		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		WidgetTree->RootWidget = Root;
 
-		// 半透明背景
-		UBorder* DimBg = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("DimBg"));
-		DimBg->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 0.6f));
-		DimBg->SetPadding(FMargin(0.f));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(DimBg))
+		UBorder* DimBackdrop = WidgetTree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(), TEXT("DimBackdrop"));
+		DimBackdrop->SetBrushColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.70f));
+		if (UOverlaySlot* BackdropSlot = Root->AddChildToOverlay(DimBackdrop))
 		{
-			S->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
-			S->SetOffsets(FMargin(0.f));
+			BackdropSlot->SetHorizontalAlignment(HAlign_Fill);
+			BackdropSlot->SetVerticalAlignment(VAlign_Fill);
 		}
 
-		// 居中面板
-		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("Panel"));
-		Panel->SetBrushColor(FLinearColor(0.04f, 0.05f, 0.08f, 0.95f));
-		Panel->SetPadding(FMargin(28.f, 20.f));
-		if (UCanvasPanelSlot* S = Root->AddChildToCanvas(Panel))
+		USizeBox* PanelSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(), TEXT("PanelSize"));
+		PanelSize->SetWidthOverride(1040.0f);
+		PanelSize->SetHeightOverride(620.0f);
+		if (UOverlaySlot* PanelSlot = Root->AddChildToOverlay(PanelSize))
 		{
-			S->SetAnchors(FAnchors(0.5f, 0.5f));
-			S->SetAlignment(FVector2D(0.5f, 0.5f));
-			S->SetOffsets(FMargin(-260.f, -115.f, 520.f, 230.f));
-			S->SetAutoSize(false);
+			PanelSlot->SetHorizontalAlignment(HAlign_Center);
+			PanelSlot->SetVerticalAlignment(VAlign_Center);
 		}
 
-		UVerticalBox* VBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("VBox"));
-		Panel->AddChild(VBox);
+		UBorder* Panel = WidgetTree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(), TEXT("Panel"));
+		Panel->SetBrushColor(FLinearColor(0.025f, 0.032f, 0.052f, 0.99f));
+		Panel->SetPadding(FMargin(28.0f, 22.0f));
+		PanelSize->SetContent(Panel);
 
-		if (!TitleText)
-		{
-			TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
-			TitleText->SetText(LOCTEXT("Title", "击倒"));
-			TitleText->SetJustification(ETextJustify::Center);
-			FSlateFontInfo Font = TitleText->GetFont();
-			Font.Size = 24;
-			TitleText->SetFont(Font);
-			if (UVerticalBoxSlot* S = VBox->AddChildToVerticalBox(TitleText))
-			{
-				S->SetPadding(FMargin(0.f, 0.f, 0.f, 8.f));
-				S->SetHorizontalAlignment(HAlign_Center);
-			}
-		}
+		UVerticalBox* Column = WidgetTree->ConstructWidget<UVerticalBox>(
+			UVerticalBox::StaticClass(), TEXT("ContentColumn"));
+		Panel->SetContent(Column);
 
-		if (!PartNameText)
+		TitleText = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("TitleText"));
+		TitleText->SetText(LOCTEXT("FallbackTitle", "选择击倒结果"));
+		TitleText->SetJustification(ETextJustify::Center);
+		FSlateFontInfo TitleFont = TitleText->GetFont();
+		TitleFont.Size = 28;
+		TitleText->SetFont(TitleFont);
+		if (UVerticalBoxSlot* TitleSlot = Column->AddChildToVerticalBox(TitleText))
 		{
-			PartNameText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("PartNameText"));
-			PartNameText->SetText(LOCTEXT("PartNameInit", "部位"));
-			PartNameText->SetJustification(ETextJustify::Center);
-			FSlateFontInfo Font = PartNameText->GetFont();
-			Font.Size = 14;
-			PartNameText->SetFont(Font);
-			PartNameText->SetColorAndOpacity(FSlateColor(FLinearColor(0.85f, 0.85f, 0.85f)));
-			if (UVerticalBoxSlot* S = VBox->AddChildToVerticalBox(PartNameText))
-			{
-				S->SetPadding(FMargin(0.f, 0.f, 0.f, 16.f));
-				S->SetHorizontalAlignment(HAlign_Center);
-			}
+			TitleSlot->SetHorizontalAlignment(HAlign_Fill);
 		}
 
-		// 三个按钮（援助 / 撤离 / 破坏）
-		UHorizontalBox* BtnRow = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("BtnRow"));
-		if (UVerticalBoxSlot* S = VBox->AddChildToVerticalBox(BtnRow))
+		PartNameText = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), TEXT("PartNameText"));
+		PartNameText->SetJustification(ETextJustify::Center);
+		PartNameText->SetColorAndOpacity(FSlateColor(FLinearColor(0.72f, 0.77f, 0.88f)));
+		if (UVerticalBoxSlot* PartNameSlot = Column->AddChildToVerticalBox(PartNameText))
 		{
-			S->SetHorizontalAlignment(HAlign_Center);
+			PartNameSlot->SetPadding(FMargin(0.0f, 4.0f, 0.0f, 18.0f));
+			PartNameSlot->SetHorizontalAlignment(HAlign_Fill);
 		}
 
-		if (!AidButton)
+		UHorizontalBox* OptionsRow = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(), TEXT("OptionsRow"));
+		if (UVerticalBoxSlot* OptionsSlot = Column->AddChildToVerticalBox(OptionsRow))
 		{
-			AidButton = MakeChoiceButton(WidgetTree, TEXT("AidButton"), LOCTEXT("Aid", "援助（左手）"), BtnRow, 140.f);
-		}
-		if (!WithdrawButton)
-		{
-			WithdrawButton = MakeChoiceButton(WidgetTree, TEXT("WithdrawButton"), LOCTEXT("Withdraw", "撤离"), BtnRow, 100.f);
-		}
-		if (!DestroyButton)
-		{
-			DestroyButton = MakeChoiceButton(WidgetTree, TEXT("DestroyButton"), LOCTEXT("Destroy", "破坏（右手）"), BtnRow, 140.f);
+			OptionsSlot->SetHorizontalAlignment(HAlign_Center);
+			OptionsSlot->SetVerticalAlignment(VAlign_Fill);
 		}
 
-		UHorizontalBox* RewardRow = WidgetTree->ConstructWidget<UHorizontalBox>(
-			UHorizontalBox::StaticClass(), TEXT("RewardRow"));
-		if (UVerticalBoxSlot* S = VBox->AddChildToVerticalBox(RewardRow))
-		{
-			S->SetHorizontalAlignment(HAlign_Center);
-		}
-		if (!AidRewardText)
-		{
-			AidRewardText = MakeRewardText(
-				WidgetTree, TEXT("AidRewardText"), RewardRow, 140.f);
-		}
-		MakeRewardText(WidgetTree, TEXT("WithdrawRewardSpacer"), RewardRow, 100.f)
-			->SetVisibility(ESlateVisibility::Hidden);
-		if (!DestroyRewardText)
-		{
-			DestroyRewardText = MakeRewardText(
-				WidgetTree, TEXT("DestroyRewardText"), RewardRow, 140.f);
-		}
+		AidOption = AddFallbackOption(
+			WidgetTree, OptionsRow, TEXT("AidOption"), 340.0f);
+		WithdrawOption = AddFallbackOption(
+			WidgetTree, OptionsRow, TEXT("WithdrawOption"), 236.0f);
+		DestroyOption = AddFallbackOption(
+			WidgetTree, OptionsRow, TEXT("DestroyOption"), 340.0f);
 	}
+
 	return Super::RebuildWidget();
 }
 
 void UWacomKnockdownChoiceDialog::NativeConstruct()
 {
 	Super::NativeConstruct();
-
-	if (AidButton)      { AidButton     ->OnClicked.AddUniqueDynamic(this, &UWacomKnockdownChoiceDialog::HandleAidClicked); }
-	if (WithdrawButton) { WithdrawButton->OnClicked.AddUniqueDynamic(this, &UWacomKnockdownChoiceDialog::HandleWithdrawClicked); }
-	if (DestroyButton)  { DestroyButton ->OnClicked.AddUniqueDynamic(this, &UWacomKnockdownChoiceDialog::HandleDestroyClicked); }
-
-	ApplyCurrentView();
+	BindOptionDelegates();
+	ApplyCurrentViewData();
 }
 
-void UWacomKnockdownChoiceDialog::SetContext(UBattleHUD* InHUD, const FKnockdownChoiceView& InView)
+void UWacomKnockdownChoiceDialog::NativeDestruct()
 {
-	OwningHUD = InHUD;
-	CurrentView = InView;
-
-	// 即时应用（如果 NativeConstruct 已经跑过）。
-	ApplyCurrentView();
+	ResetTransientState();
+	Super::NativeDestruct();
 }
 
-void UWacomKnockdownChoiceDialog::ApplyCurrentView()
+void UWacomKnockdownChoiceDialog::NativeOnDeactivated()
 {
-	if (PartNameText) { PartNameText->SetText(CurrentView.PartName); }
-	if (AidButton) { AidButton->SetIsEnabled(CurrentView.AidOption.bAvailable); }
-	if (WithdrawButton) { WithdrawButton->SetIsEnabled(CurrentView.WithdrawOption.bAvailable); }
-	if (DestroyButton) { DestroyButton->SetIsEnabled(CurrentView.DestroyOption.bAvailable); }
-	if (AidRewardText)
+	ResetTransientState();
+	Super::NativeOnDeactivated();
+}
+
+void UWacomKnockdownChoiceDialog::Configure(
+	const FWacomKnockdownChoiceDialogViewData& InViewData,
+	FWacomKnockdownChoiceSubmitDelegate InSubmitDelegate)
+{
+	CurrentViewData = InViewData;
+	SubmitDelegate = MoveTemp(InSubmitDelegate);
+	bSubmitPending = false;
+	BindOptionDelegates();
+	ApplyCurrentViewData();
+}
+
+void UWacomKnockdownChoiceDialog::ApplyCurrentViewData()
+{
+	if (TitleText)
 	{
-		AidRewardText->SetText(BuildRewardSummaryText(CurrentView.AidOption));
+		TitleText->SetText(CurrentViewData.TitleText);
 	}
-	if (DestroyRewardText)
+	if (PartNameText)
 	{
-		DestroyRewardText->SetText(BuildRewardSummaryText(CurrentView.DestroyOption));
+		PartNameText->SetText(CurrentViewData.PartNameText);
+	}
+	if (AidOption)
+	{
+		AidOption->SetOptionViewData(CurrentViewData.AidOption);
+	}
+	if (WithdrawOption)
+	{
+		WithdrawOption->SetOptionViewData(CurrentViewData.WithdrawOption);
+	}
+	if (DestroyOption)
+	{
+		DestroyOption->SetOptionViewData(CurrentViewData.DestroyOption);
 	}
 }
 
-void UWacomKnockdownChoiceDialog::HandleAidClicked()
+void UWacomKnockdownChoiceDialog::BindOptionDelegates()
 {
-	if (OwningHUD && IsOptionAvailable(CurrentView, EKnockdownChoice::Aid))
+	UnbindOptionDelegates();
+	if (AidOption)
 	{
-		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Aid);
+		AidOption->OnChoiceRequestedNative().AddUObject(
+			this, &UWacomKnockdownChoiceDialog::HandleChoiceRequested);
+	}
+	if (WithdrawOption)
+	{
+		WithdrawOption->OnChoiceRequestedNative().AddUObject(
+			this, &UWacomKnockdownChoiceDialog::HandleChoiceRequested);
+	}
+	if (DestroyOption)
+	{
+		DestroyOption->OnChoiceRequestedNative().AddUObject(
+			this, &UWacomKnockdownChoiceDialog::HandleChoiceRequested);
+	}
+}
+
+void UWacomKnockdownChoiceDialog::UnbindOptionDelegates()
+{
+	if (AidOption)
+	{
+		AidOption->OnChoiceRequestedNative().RemoveAll(this);
+	}
+	if (WithdrawOption)
+	{
+		WithdrawOption->OnChoiceRequestedNative().RemoveAll(this);
+	}
+	if (DestroyOption)
+	{
+		DestroyOption->OnChoiceRequestedNative().RemoveAll(this);
+	}
+}
+
+const FWacomKnockdownChoiceOptionViewData*
+UWacomKnockdownChoiceDialog::FindOptionViewData(EKnockdownChoice Choice) const
+{
+	switch (Choice)
+	{
+	case EKnockdownChoice::Aid:
+		return &CurrentViewData.AidOption;
+	case EKnockdownChoice::Withdraw:
+		return &CurrentViewData.WithdrawOption;
+	case EKnockdownChoice::Destroy:
+		return &CurrentViewData.DestroyOption;
+	case EKnockdownChoice::None:
+	default:
+		return nullptr;
+	}
+}
+
+void UWacomKnockdownChoiceDialog::HandleChoiceRequested(
+	EKnockdownChoice Choice)
+{
+	const FWacomKnockdownChoiceOptionViewData* OptionView =
+		FindOptionViewData(Choice);
+	if (bSubmitPending || !OptionView || !OptionView->bAvailable)
+	{
+		return;
+	}
+
+	bSubmitPending = true;
+	SetAllOptionsInteractionEnabled(false);
+	const bool bSubmitted = SubmitDelegate.IsBound()
+		&& SubmitDelegate.Execute(Choice);
+	if (bSubmitted)
+	{
 		DeactivateWidget();
+		return;
 	}
+
+	bSubmitPending = false;
+	ApplyCurrentViewData();
+	if (SubmissionRejectedAnimation)
+	{
+		PlayAnimation(
+			SubmissionRejectedAnimation,
+			0.0f,
+			1,
+			EUMGSequencePlayMode::Forward,
+			1.0f,
+			/*bRestoreState*/true);
+	}
+	BP_OnChoiceSubmissionRejected(Choice);
 }
 
-void UWacomKnockdownChoiceDialog::HandleWithdrawClicked()
+void UWacomKnockdownChoiceDialog::SetAllOptionsInteractionEnabled(
+	bool bEnabled)
 {
-	if (OwningHUD && IsOptionAvailable(CurrentView, EKnockdownChoice::Withdraw))
+	const auto ApplyEnabled = [bEnabled](
+		UWacomKnockdownChoiceOptionWidget* Option)
 	{
-		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Withdraw);
-		DeactivateWidget();
-	}
+		if (!Option)
+		{
+			return;
+		}
+		Option->SetIsEnabled(bEnabled);
+		Option->SetIsInteractionEnabled(bEnabled);
+		Option->BP_OnInteractabilityChanged(bEnabled);
+	};
+	ApplyEnabled(AidOption);
+	ApplyEnabled(WithdrawOption);
+	ApplyEnabled(DestroyOption);
 }
 
-void UWacomKnockdownChoiceDialog::HandleDestroyClicked()
+UWidget* UWacomKnockdownChoiceDialog::NativeGetDesiredFocusTarget() const
 {
-	if (OwningHUD && IsOptionAvailable(CurrentView, EKnockdownChoice::Destroy))
+	const auto IsFocusableOption = [](const UWacomKnockdownChoiceOptionWidget* Option)
 	{
-		OwningHUD->OnKnockdownChoiceSelected(EKnockdownChoice::Destroy);
-		DeactivateWidget();
+		return Option
+			&& Option->GetIsEnabled()
+			&& Option->IsInteractionEnabled()
+			&& Option->GetVisibility() != ESlateVisibility::Collapsed
+			&& Option->GetVisibility() != ESlateVisibility::Hidden;
+	};
+
+	// 固定顺序：Aid -> Destroy -> Withdraw。Withdraw 永不作为正常默认项。
+	if (IsFocusableOption(AidOption))
+	{
+		return AidOption;
 	}
+	if (IsFocusableOption(DestroyOption))
+	{
+		return DestroyOption;
+	}
+	return IsFocusableOption(WithdrawOption) ? WithdrawOption.Get() : nullptr;
 }
 
-FReply UWacomKnockdownChoiceDialog::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
+FReply UWacomKnockdownChoiceDialog::NativeHandleBackRequested()
 {
-	// 击倒事件必须三选一，Back 不允许关闭。
-	if (InKeyEvent.GetKey() == EKeys::Escape
-		|| InKeyEvent.GetKey() == EKeys::Gamepad_FaceButton_Right)
-	{
-		return FReply::Handled();  // 吃掉 Back，不调父类 DeactivateWidget
-	}
-	return Super::NativeOnKeyDown(InGeometry, InKeyEvent);
+	// 击倒事件必须完成一个合法选择，Back / Escape / Gamepad B 只消费不关闭。
+	return FReply::Handled();
+}
+
+void UWacomKnockdownChoiceDialog::ResetTransientState()
+{
+	UnbindOptionDelegates();
+	SubmitDelegate.Unbind();
+	bSubmitPending = false;
+	CurrentViewData = FWacomKnockdownChoiceDialogViewData();
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -495,7 +495,12 @@ void UBattleHUD::HandleCommandBarCommandRequested(EWacomBattleCommandId CommandI
 
 void UBattleHUD::OnKnockdownChoiceSelected(EKnockdownChoice Choice)
 {
-	GetBattleHUDRuntime().OnKnockdownChoiceSelected(Choice);
+	TrySubmitKnockdownChoice(Choice);
+}
+
+bool UBattleHUD::TrySubmitKnockdownChoice(EKnockdownChoice Choice)
+{
+	return GetBattleHUDRuntime().TrySubmitKnockdownChoice(Choice);
 }
 
 void UBattleHUD::SubmitPlayCard(const FGuid& CardId, const FGuid& TargetPartId)

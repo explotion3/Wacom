@@ -249,18 +249,18 @@ void FWacomBattleHUDCommandController::SubmitEndTurn()
 	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
 }
 
-void FWacomBattleHUDCommandController::SubmitKnockdownChoice(
+bool FWacomBattleHUDCommandController::TrySubmitKnockdownChoice(
 	EKnockdownChoice Choice)
 {
 	if (Choice == EKnockdownChoice::None)
 	{
-		return;
+		return false;
 	}
 
 	UBattleSession* Session = Runtime.GetSession();
 	if (!Session)
 	{
-		return;
+		return false;
 	}
 
 	const FBattleSnapshot PreCommandSnapshot = Session->BuildSnapshot();
@@ -273,4 +273,5 @@ void FWacomBattleHUDCommandController::SubmitKnockdownChoice(
 	PresentationContext.CombatLogContext = LogContext;
 	PresentationContext.PreCommandSnapshot = PreCommandSnapshot;
 	Runtime.GetResultApplicator().ApplyCommandResolution(PresentationContext, Resolution);
+	return Resolution.IsOk();
 }
