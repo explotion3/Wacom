@@ -15,7 +15,6 @@
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
-#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
 #include "UI/Battle/WacomBattleHUDCommandController.h"
@@ -1264,8 +1263,7 @@ bool FWacomBattleHUDRuntime::CanUpdateBattleSceneEnemyPartHoverProbe() const
 }
 
 void FWacomBattleHUDRuntime::ApplyActionPreviewPresentation(
-	const FWacomBattleActionPreviewPresentation& Presentation,
-	const bool bApplyScenePartPreview)
+	const FWacomBattleActionPreviewPresentation& Presentation)
 {
 	ClearActionPreview();
 	if (!Presentation.bHasPreview)
@@ -1286,8 +1284,7 @@ void FWacomBattleHUDRuntime::ApplyActionPreviewPresentation(
 	}
 
 	GetSceneEnemyTargetCoordinator().ApplyActionPreviewToEnemyPanels(
-		Presentation.ProjectedEnemyParts,
-		bApplyScenePartPreview);
+		Presentation.ProjectedEnemyParts);
 	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
@@ -1325,13 +1322,6 @@ bool FWacomBattleHUDRuntime::TryCloseEnemyInspection()
 		return false;
 	}
 	return GetEnemyInspectionCoordinator().TryCloseInspection();
-}
-
-FWacomBattleEnemyPartDragPredictionDebugInput
-FWacomBattleHUDRuntime::BuildBattleSceneEnemyPartHoverPredictionInput(
-	const FWacomInteractionTargetHandle& TargetHandle) const
-{
-	return GetSceneEnemyTargetCoordinator().BuildHoverPredictionInput(TargetHandle);
 }
 
 void FWacomBattleHUDRuntime::TickBattleSceneEnemyPartHoverProbe(float DeltaTime)

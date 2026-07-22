@@ -12,7 +12,6 @@
 #include "UI/Battle/BattleHUDFallbackLayoutBuilder.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
-#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
@@ -793,12 +792,6 @@ void UBattleHUD::ClearBattleEnemyPartWorldTargets()
 bool UBattleHUD::CanUpdateBattleSceneEnemyPartHoverProbe() const
 {
 	return GetBattleHUDRuntime().CanUpdateBattleSceneEnemyPartHoverProbe();
-}
-
-FWacomBattleEnemyPartDragPredictionDebugInput UBattleHUD::BuildBattleSceneEnemyPartHoverPredictionInput(
-	const FWacomInteractionTargetHandle& TargetHandle) const
-{
-	return GetBattleHUDRuntime().BuildBattleSceneEnemyPartHoverPredictionInput(TargetHandle);
 }
 
 void UBattleHUD::TickBattleSceneEnemyPartHoverProbe(float DeltaTime)

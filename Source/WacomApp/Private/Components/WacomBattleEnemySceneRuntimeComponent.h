@@ -5,14 +5,12 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
-#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "WacomBattleEnemySceneRuntimeComponent.generated.h"
 
 class UWacomBattleEnemyPartComponent;
 struct FBattleSnapshot;
 struct FEnemyPartSnapshot;
-struct FWacomBattleEnemyPartEntryViewData;
 struct FWacomBattleEnemyPartRuntimeDebugView;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomInteractionTargetHandle;
@@ -76,19 +74,13 @@ public:
 	void ClearPartPresentation(UWacomBattleEnemyPartComponent& Part, FName Reason);
 	void SetPartDragTargetPreviewState(
 		UWacomBattleEnemyPartComponent& Part,
-		EWacomFirstPersonCardDragTargetFeedbackState PreviewState,
-		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput);
+		EWacomFirstPersonCardDragTargetFeedbackState PreviewState);
 	void ClearPartDragTargetPreviewState(UWacomBattleEnemyPartComponent& Part);
 	void SetPartHoverProbeState(
 		UWacomBattleEnemyPartComponent& Part,
 		const FWacomInteractionTargetHandle& TargetHandle,
-		FName Reason,
-		const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput);
+		FName Reason);
 	void ClearPartHoverProbeState(UWacomBattleEnemyPartComponent& Part, FName Reason);
-	void SetPartActionPreview(
-		UWacomBattleEnemyPartComponent& Part,
-		const FWacomBattleEnemyPartEntryViewData& PreviewView);
-	void ClearPartActionPreview(UWacomBattleEnemyPartComponent& Part);
 
 	int32 ApplyPartDestroyedVisualState(UWacomBattleEnemyPartComponent& Part);
 	void RestorePartAuthoredVisualState(UWacomBattleEnemyPartComponent& Part);

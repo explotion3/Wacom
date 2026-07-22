@@ -86,16 +86,14 @@ void FWacomEnemySceneRuntimeAutomationTestView::CancelAction(
 
 void FWacomEnemySceneRuntimeAutomationTestView::SetHoverPrediction(
 	AWacomBattleEnemyActor& Host,
-	UWacomBattleEnemyPartComponent& Part,
-	const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput)
+	UWacomBattleEnemyPartComponent& Part)
 {
 	if (UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent())
 	{
 		Runtime->SetPartHoverProbeState(
 			Part,
 			Part.BuildWorldTargetHandle(),
-			TEXT("AutomationHover"),
-			PredictionInput);
+			TEXT("AutomationHover"));
 	}
 }
 
@@ -116,10 +114,7 @@ void FWacomEnemySceneRuntimeAutomationTestView::SetDragTargetPreview(
 {
 	if (UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent())
 	{
-		Runtime->SetPartDragTargetPreviewState(
-			Part,
-			PreviewState,
-			FWacomBattleEnemyPartDragPredictionDebugInput());
+		Runtime->SetPartDragTargetPreviewState(Part, PreviewState);
 	}
 }
 

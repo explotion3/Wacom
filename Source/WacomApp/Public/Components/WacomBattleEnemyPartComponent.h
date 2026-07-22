@@ -5,8 +5,6 @@
 #include "CoreMinimal.h"
 #include "Components/BoxComponent.h"
 #include "Interaction/WacomInteractionTargetProvider.h"
-#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
-#include "UI/Battle/WacomBattleEnemyPartPredictionTypes.h"
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
 #endif
@@ -17,7 +15,6 @@ class UUserWidget;
 class UWacomBattleEnemyPartAnimationStyle;
 class UWacomBattleEnemyPartImpactStyle;
 class UWacomBattleEnemyPartTargetPreviewStyle;
-class UWacomBattleEnemyPartPredictionWidget;
 
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomBattleEnemyPartRuntimeDebugView
@@ -102,17 +99,6 @@ struct WACOMAPP_API FWacomBattleEnemyPartRuntimeDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName TargetPreviewKind = TEXT("None");
 
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	bool bPredictionWidgetCreated = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	bool bPredictionWidgetVisible = false;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	int32 PredictionWidgetCreateCount = 0;
-
-	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
-	int32 PredictionWidgetApplyCount = 0;
 };
 
 /**
@@ -170,30 +156,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
 		meta = (ToolTip = "确认、伤害和破坏 Cue 的默认保持时间，单位秒；建议 0.05–0.5 秒。"))
 	float CueHoldSeconds = 0.14f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Prediction",
-		meta = (ToolTip = "是否在部位上方显示行动预测 Widget。只影响 UI，不改变规则。"))
-	bool bEnablePredictionWidget = true;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Prediction",
-		meta = (ToolTip = "预测 Widget 类。为空时使用 C++ UWacomBattleEnemyPartPredictionWidget。"))
-	TSubclassOf<UWacomBattleEnemyPartPredictionWidget> PredictionWidgetClass;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Prediction",
-		meta = (ToolTip = "预测 Widget 相对 Part 的位置，单位厘米。"))
-	FVector PredictionRelativeLocation = FVector(0.0f, 0.0f, 90.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Prediction",
-		meta = (ToolTip = "预测 Widget 的 Slate 绘制尺寸，单位像素；建议 120×40 至 220×80。"))
-	FVector2D PredictionDrawSize = FVector2D(168.0f, 58.0f);
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Prediction",
-		meta = (ToolTip = "预测 Widget 渲染缩放；建议 0.6–1.2。"))
-	float PredictionBadgeScale = 0.92f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Prediction",
-		meta = (ToolTip = "预测可见时额外抬高距离，单位厘米；建议 0–100。"))
-	float PredictionBadgeZOffsetWhenVisible = 42.0f;
 
 	FName GetEffectivePartSlotId() const { return PartSlotId; }
 	FName GetEffectivePartDefinitionId() const { return PartId; }

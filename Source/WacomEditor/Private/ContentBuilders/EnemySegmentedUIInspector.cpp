@@ -477,8 +477,6 @@ bool Wacom::ContentBuilder::InspectEnemyHUD()
 			== Panel->GeneratedClass);
 	Check(TEXT("inspection row WBP"), ValidateInspectionRow(InspectionRow));
 	Check(TEXT("inspection dossier WBP"), ValidateInspection(Inspection, InspectionRow, Style));
-	Check(TEXT("base panel uses formal panel frame"), UsesBrushResource(Panel,
-		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyPanelFrame_9Slice.T_UI_EnemyPanelFrame_9Slice")));
 	Check(TEXT("part entry uses formal shield badge"), UsesBrushResource(Entry,
 		TEXT("/Game/Wacom/UI/Enemy/Vitals/Textures/T_UI_EnemyShieldBadge.T_UI_EnemyShieldBadge")));
 	Check(TEXT("part entry uses formal initiative socket"), UsesBrushResource(Entry,

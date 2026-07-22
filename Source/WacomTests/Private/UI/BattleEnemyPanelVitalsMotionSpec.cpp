@@ -95,6 +95,91 @@ namespace WacomBattleEnemyPanelVitalsMotionSpec
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyPanelActionPreviewFrameSpec,
+	"Wacom.UI.Battle.EnemyPanel.ActionPreviewFrame.SemanticsAndCleanup",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyPanelActionPreviewFrameSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleEnemyPanelVitalsMotionSpec;
+	UWorld* World = FindAutomationWorld();
+	UClass* EntryClass = LoadClass<UWacomBattleEnemyPartEntryWidget>(nullptr, EntryClassPath);
+	UWacomBattleEnemyPartEntryWidget* Entry = World && EntryClass
+		? CreateWidget<UWacomBattleEnemyPartEntryWidget>(World, EntryClass) : nullptr;
+	if (!TestNotNull(TEXT("Enemy Part Entry"), Entry))
+	{
+		return false;
+	}
+
+	const FWacomBattleEnemyPartEntryViewData View = MakeView();
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
+
+	FWacomBattleEnemyPartEntryViewData Preview = View;
+	Preview.bActionPreviewPerfectReleaseCandidate = true;
+	Preview.bHasResistancePreview = true;
+	Preview.ResistancePreviewPlayerPeakDamage = 7;
+	Preview.ResistancePreviewEnemyPeakDamage = 3;
+	Preview.bResistancePreviewWillStun = true;
+	Preview.bActionPreviewWillSkipActionDueToStun = true;
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetPreview(*Entry, Preview);
+	TestTrue(TEXT("Successful resistance shows perfect-release surface"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsPerfectReleasePreviewVisible(*Entry));
+	TestTrue(TEXT("Successful resistance shows compact comparison"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsResistanceComparisonVisible(*Entry));
+	TestTrue(TEXT("Successful resistance preserves outcome fact"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsResistancePreviewSuccessful(*Entry));
+	TestEqual(TEXT("Successful resistance player peak"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::GetPreviewPlayerPeakDamage(*Entry), 7);
+	TestEqual(TEXT("Successful resistance enemy peak"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::GetPreviewEnemyPeakDamage(*Entry), 3);
+	TestEqual(TEXT("Successful resistance comparator"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::GetPreviewComparator(*Entry), FString(TEXT(">")));
+	TestTrue(TEXT("Successful resistance exposes immediate skip"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::PreviewWillSkipActionDueToStun(*Entry));
+
+	Preview.ResistancePreviewPlayerPeakDamage = 3;
+	Preview.ResistancePreviewEnemyPeakDamage = 3;
+	Preview.bResistancePreviewWillStun = false;
+	Preview.bActionPreviewWillSkipActionDueToStun = false;
+	Preview.bActionPreviewWillAct = true;
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetPreview(*Entry, Preview);
+	TestFalse(TEXT("Equal resistance is a failure"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsResistancePreviewSuccessful(*Entry));
+	TestEqual(TEXT("Equal resistance uses less-than-or-equal comparator"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::GetPreviewComparator(*Entry), FString(TEXT("≤")));
+	TestTrue(TEXT("Failed resistance preserves enemy action risk"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::PreviewWillAct(*Entry));
+
+	Preview.bHasResistancePreview = false;
+	Preview.bActionPreviewWillAct = false;
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetPreview(*Entry, Preview);
+	TestTrue(TEXT("Perfect release against a non-attack intent keeps gold surface"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsPerfectReleasePreviewVisible(*Entry));
+	TestFalse(TEXT("Non-attack intent has no resistance comparison"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsResistanceComparisonVisible(*Entry));
+
+	Preview.bActionPreviewPerfectReleaseCandidate = false;
+	Preview.bActionPreviewWillAct = true;
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetPreview(*Entry, Preview);
+	TestFalse(TEXT("Ordinary action risk has no perfect-release surface"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsPerfectReleasePreviewVisible(*Entry));
+	TestTrue(TEXT("Ordinary action risk remains explicit"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::PreviewWillAct(*Entry));
+
+	FWacomLocalSettingsSnapshot Settings;
+	Settings.UIMotionMode = EWacomUIMotionMode::Simplified;
+	FWacomBattleEnemyPartEntryWidgetTestAccess::ApplyRuntimeSettings(*Entry, Settings);
+	TestTrue(TEXT("Reduced Motion keeps identical static action-preview semantics"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::PreviewWillAct(*Entry));
+
+	FWacomBattleEnemyPartEntryWidgetTestAccess::ClearPreview(*Entry);
+	TestFalse(TEXT("Preview teardown clears the compact frame"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsActionPreviewFrameActive(*Entry));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleEnemyPanelVitalsMotionSpec,
 	"Wacom.UI.Battle.EnemyPanel.VitalsMotion.RealFactsAndPreview",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

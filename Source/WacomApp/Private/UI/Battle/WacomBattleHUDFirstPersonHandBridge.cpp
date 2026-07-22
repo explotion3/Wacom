@@ -36,14 +36,13 @@ namespace
 
 	void SetPartDragPreview(
 		UWacomBattleEnemyPartComponent* Part,
-		EWacomFirstPersonCardDragTargetFeedbackState State,
-		const FWacomBattleEnemyPartDragPredictionDebugInput& Prediction)
+		EWacomFirstPersonCardDragTargetFeedbackState State)
 	{
 		AWacomBattleEnemyActor* Host = Part ? Part->GetOwningEnemyHost() : nullptr;
 		if (Part && Host && Host->GetEnemySceneRuntimeComponent())
 		{
 			Host->GetEnemySceneRuntimeComponent()->SetPartDragTargetPreviewState(
-				*Part, State, Prediction);
+				*Part, State);
 		}
 	}
 
@@ -1044,39 +1043,7 @@ void FWacomBattleHUDFirstPersonHandBridge::UpdateDragTargetFeedback(
 	}
 	if (PreviewPart)
 	{
-		FWacomBattleEnemyPartDragPredictionDebugInput PredictionDebugInput;
-		PredictionDebugInput.SourceCardInstanceId = CardInstanceId;
-		PredictionDebugInput.bPreviewCanSubmit = DropResult.bCanSubmit;
-		PredictionDebugInput.PreviewRejectReason =
-			FName(FWacomBattleFirstPersonDropResolver::LexToString(DropResult.RejectReason));
-		if (bHasTargetPreview)
-		{
-			PredictionDebugInput.bHasSourceCard = true;
-			PredictionDebugInput.SourceCardRuntimeCost = TargetPreview.SourceCardRuntimeCost;
-			PredictionDebugInput.bSourceCardSwift = TargetPreview.bSourceCardSwift;
-		}
-		else if (Runtime.HasLastBattleSnapshot())
-		{
-			if (const FHandCardSnapshot* SourceSnapshot =
-				FindHandCardSnapshotForFirstPersonHandBridge(Runtime.GetLastBattleSnapshot(), CardInstanceId))
-			{
-				PredictionDebugInput.bHasSourceCard = true;
-				PredictionDebugInput.SourceCardRuntimeCost = SourceSnapshot->RuntimeCost;
-				PredictionDebugInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
-			}
-		}
-		else if (const UBattleSession* CurrentSession = Runtime.GetSession())
-		{
-			const FBattleSnapshot PredictionSnapshot = CurrentSession->BuildSnapshot();
-			if (const FHandCardSnapshot* SourceSnapshot =
-				FindHandCardSnapshotForFirstPersonHandBridge(PredictionSnapshot, CardInstanceId))
-			{
-				PredictionDebugInput.bHasSourceCard = true;
-				PredictionDebugInput.SourceCardRuntimeCost = SourceSnapshot->RuntimeCost;
-				PredictionDebugInput.bSourceCardSwift = SourceSnapshot->bIsSwift;
-			}
-		}
-		SetPartDragPreview(PreviewPart, FeedbackState, PredictionDebugInput);
+		SetPartDragPreview(PreviewPart, FeedbackState);
 	}
 
 	if (UWacomFirstPersonCardAnchorComponent* Anchor = ResolveActiveAnchor())

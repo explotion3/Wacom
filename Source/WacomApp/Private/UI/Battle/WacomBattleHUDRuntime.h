@@ -45,7 +45,6 @@ struct FKnockdownChoiceView;
 struct FBattleInitializationResult;
 struct FBattleResolution;
 struct FBattleSnapshot;
-struct FWacomBattleEnemyPartDragPredictionDebugInput;
 struct FWacomBattlePresentationTargetCue;
 struct FWacomBattlePresentationProgress;
 struct FWacomCardDetailViewData;
@@ -287,13 +286,10 @@ public:
 	void ClearBattleEnemyPartWorldTargets();
 	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
 	void ApplyActionPreviewPresentation(
-		const FWacomBattleActionPreviewPresentation& Presentation,
-		bool bApplyScenePartPreview = true);
+		const FWacomBattleActionPreviewPresentation& Presentation);
 	void ClearActionPreview();
 	bool CanOpenEnemyInspection() const;
 	bool TryCloseEnemyInspection();
-	FWacomBattleEnemyPartDragPredictionDebugInput BuildBattleSceneEnemyPartHoverPredictionInput(
-		const FWacomInteractionTargetHandle& TargetHandle) const;
 	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);
 	void UpdateBattleSceneEnemyPartHoverProbe();
 	void ClearBattleSceneEnemyPartHoverProbe(FName Reason);

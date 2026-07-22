@@ -143,6 +143,11 @@ void UWacomBattleEnemyPartEntryWidget::ApplyRuntimePresentationPolicy(
 void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (IntentIcon)
+	{
+		AuthoredIntentIconTint = IntentIcon->GetColorAndOpacity();
+	}
+	ResetActionPreviewPresentation();
 	if (InspectHitTarget)
 	{
 		InspectHitTarget->OnClicked.RemoveAll(this);
@@ -181,6 +186,7 @@ void UWacomBattleEnemyPartEntryWidget::NativeDestruct()
 	}
 	OnInspectionRequestedNative.Clear();
 	CancelPendingPresentation();
+	ResetActionPreviewPresentation();
 	PresentationState->ResetTransientPresentation();
 	VitalsMaterialAdapter->RestoreAuthoredBrush();
 	Super::NativeDestruct();
@@ -258,9 +264,161 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
+	RefreshActionPreviewPresentation();
 	SetRenderOpacity(1.0f);
 	ApplyVitalsMaterialPresentation();
 	RefreshInspectionInteraction();
+}
+
+void UWacomBattleEnemyPartEntryWidget::RefreshActionPreviewPresentation()
+{
+	const FWacomBattleEnemyActionPreviewFrame Frame =
+		PresentationState->BuildActionPreviewFrame();
+	if (!Frame.bActive)
+	{
+		ResetActionPreviewPresentation();
+		return;
+	}
+
+	if (PerfectReleaseSurface)
+	{
+		PerfectReleaseSurface->SetVisibility(Frame.bPerfectRelease
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (ActionPreviewComparisonRoot)
+	{
+		ActionPreviewComparisonRoot->SetVisibility(Frame.bShowResistanceComparison
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (InitiativeSocket)
+	{
+		InitiativeSocket->SetVisibility(Frame.bShowResistanceComparison
+			? ESlateVisibility::Collapsed
+			: ESlateVisibility::HitTestInvisible);
+	}
+	if (IntentSocket)
+	{
+		IntentSocket->SetVisibility(Frame.bShowResistanceComparison
+			? ESlateVisibility::Collapsed
+			: ESlateVisibility::HitTestInvisible);
+	}
+	if (PreviewSkipMark)
+	{
+		PreviewSkipMark->SetVisibility(Frame.bWillSkipActionDueToStun
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+
+	if (!Frame.bShowResistanceComparison)
+	{
+		if (IntentIcon)
+		{
+			FLinearColor IntentTint = AuthoredIntentIconTint;
+			if (Frame.bWillSkipActionDueToStun)
+			{
+				IntentTint.A *= FMath::Clamp(ActionPreviewSkippedIntentOpacity, 0.0f, 1.0f);
+			}
+			else if (Frame.bWillAct)
+			{
+				IntentTint = ActionPreviewRiskIntentTint;
+			}
+			IntentIcon->SetColorAndOpacity(IntentTint);
+		}
+		return;
+	}
+
+	const bool bResistanceSuccess = Frame.ResistanceOutcome
+		== EWacomBattleEnemyResistancePreviewOutcome::Success;
+	const FLinearColor OutcomeTint = bResistanceSuccess
+		? ResistancePreviewSuccessTint
+		: ResistancePreviewFailureTint;
+	if (PreviewPlayerDamageIcon)
+	{
+		PreviewPlayerDamageIcon->SetColorAndOpacity(OutcomeTint);
+	}
+	if (PreviewPlayerDamageText)
+	{
+		PreviewPlayerDamageText->SetText(FText::AsNumber(Frame.PlayerPeakDamage));
+		PreviewPlayerDamageText->SetColorAndOpacity(FSlateColor(OutcomeTint));
+	}
+	if (PreviewComparatorText)
+	{
+		PreviewComparatorText->SetText(Frame.ComparatorText);
+		PreviewComparatorText->SetColorAndOpacity(FSlateColor(OutcomeTint));
+	}
+	if (PreviewEnemyAttackText)
+	{
+		PreviewEnemyAttackText->SetText(FText::AsNumber(Frame.EnemyPeakDamage));
+		PreviewEnemyAttackText->SetColorAndOpacity(FSlateColor(OutcomeTint));
+	}
+	if (PreviewEnemyIntentIcon)
+	{
+		if (IntentPresentationStyle)
+		{
+			if (const FSlateBrush* IntentBrush =
+				IntentPresentationStyle->ResolveIntentIcon(
+					PresentationState->GetDisplayView().CurrentIntentId))
+			{
+				PreviewEnemyIntentIcon->SetBrush(*IntentBrush);
+			}
+		}
+		FLinearColor IntentTint = OutcomeTint;
+		if (Frame.bWillSkipActionDueToStun)
+		{
+			IntentTint.A *= FMath::Clamp(ActionPreviewSkippedIntentOpacity, 0.0f, 1.0f);
+		}
+		PreviewEnemyIntentIcon->SetColorAndOpacity(IntentTint);
+	}
+}
+
+void UWacomBattleEnemyPartEntryWidget::ResetActionPreviewPresentation()
+{
+	if (PerfectReleaseSurface)
+	{
+		PerfectReleaseSurface->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (ActionPreviewComparisonRoot)
+	{
+		ActionPreviewComparisonRoot->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (PreviewSkipMark)
+	{
+		PreviewSkipMark->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (InitiativeSocket)
+	{
+		InitiativeSocket->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	if (IntentSocket)
+	{
+		IntentSocket->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	if (IntentIcon)
+	{
+		IntentIcon->SetColorAndOpacity(AuthoredIntentIconTint);
+	}
+	if (PreviewPlayerDamageIcon)
+	{
+		PreviewPlayerDamageIcon->SetColorAndOpacity(FLinearColor::White);
+	}
+	if (PreviewEnemyIntentIcon)
+	{
+		PreviewEnemyIntentIcon->SetColorAndOpacity(FLinearColor::White);
+	}
+	if (PreviewPlayerDamageText)
+	{
+		PreviewPlayerDamageText->SetText(FText::GetEmpty());
+	}
+	if (PreviewComparatorText)
+	{
+		PreviewComparatorText->SetText(FText::GetEmpty());
+	}
+	if (PreviewEnemyAttackText)
+	{
+		PreviewEnemyAttackText->SetText(FText::GetEmpty());
+	}
 }
 
 void UWacomBattleEnemyPartEntryWidget::ApplyVitalsMaterialPresentation()

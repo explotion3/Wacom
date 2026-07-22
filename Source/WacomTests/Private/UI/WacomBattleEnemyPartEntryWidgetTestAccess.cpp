@@ -100,6 +100,61 @@ bool FWacomBattleEnemyPartEntryWidgetTestAccess::IsUsingSimplifiedMotion(
 	return Widget.PresentationState->IsUsingSimplifiedMotion();
 }
 
+bool FWacomBattleEnemyPartEntryWidgetTestAccess::IsActionPreviewFrameActive(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().bActive;
+}
+
+bool FWacomBattleEnemyPartEntryWidgetTestAccess::IsPerfectReleasePreviewVisible(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().bPerfectRelease;
+}
+
+bool FWacomBattleEnemyPartEntryWidgetTestAccess::IsResistanceComparisonVisible(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().bShowResistanceComparison;
+}
+
+bool FWacomBattleEnemyPartEntryWidgetTestAccess::IsResistancePreviewSuccessful(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().ResistanceOutcome
+		== EWacomBattleEnemyResistancePreviewOutcome::Success;
+}
+
+bool FWacomBattleEnemyPartEntryWidgetTestAccess::PreviewWillAct(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().bWillAct;
+}
+
+bool FWacomBattleEnemyPartEntryWidgetTestAccess::PreviewWillSkipActionDueToStun(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().bWillSkipActionDueToStun;
+}
+
+int32 FWacomBattleEnemyPartEntryWidgetTestAccess::GetPreviewPlayerPeakDamage(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().PlayerPeakDamage;
+}
+
+int32 FWacomBattleEnemyPartEntryWidgetTestAccess::GetPreviewEnemyPeakDamage(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().EnemyPeakDamage;
+}
+
+FString FWacomBattleEnemyPartEntryWidgetTestAccess::GetPreviewComparator(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.PresentationState->BuildActionPreviewFrame().ComparatorText.ToString();
+}
+
 void FWacomBattleEnemyPartEntryWidgetTestAccess::ApplyRuntimeSettings(
 	UWacomBattleEnemyPartEntryWidget& Widget,
 	const FWacomLocalSettingsSnapshot& Snapshot)

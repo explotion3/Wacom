@@ -78,6 +78,8 @@ private:
 	void ApplyRuntimePresentationPolicy(bool bSimplifiedMotion, float FlashIntensity);
 
 	void RefreshPresentation();
+	void RefreshActionPreviewPresentation();
+	void ResetActionPreviewPresentation();
 	void ApplyVitalsMaterialPresentation();
 	void CaptureOutgoingIntent(const FWacomBattleEnemyPartEntryViewData& PreviousView);
 	void ScheduleIntroAnimation();
@@ -115,6 +117,30 @@ private:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> ContextSurface = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> PerfectReleaseSurface = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> ActionPreviewComparisonRoot = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> PreviewPlayerDamageIcon = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> PreviewPlayerDamageText = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> PreviewComparatorText = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> PreviewEnemyIntentIcon = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> PreviewEnemyAttackText = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> PreviewSkipMark = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> DestroyedSurface = nullptr;
@@ -176,9 +202,22 @@ private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Motion", meta = (AllowPrivateAccess = "true", ToolTip = "HP 伤害残影收缩到权威值的时间，单位：秒；推荐 0.15-0.30。只影响表现。"))
 	float DamageTrailRecoverySeconds = 0.22f;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Action Preview", meta = (AllowPrivateAccess = "true", ToolTip = "抵抗成功比较的颜色。只影响 Enemy Part Entry 的预测数字与图标，不改变规则。"))
+	FLinearColor ResistancePreviewSuccessTint = FLinearColor(0.34f, 0.90f, 0.55f, 1.0f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Action Preview", meta = (AllowPrivateAccess = "true", ToolTip = "抵抗失败或相等比较的颜色。只影响 Enemy Part Entry 的预测数字与图标，不改变规则。"))
+	FLinearColor ResistancePreviewFailureTint = FLinearColor(1.0f, 0.32f, 0.26f, 1.0f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Action Preview", meta = (AllowPrivateAccess = "true", ToolTip = "非抵抗 Action Preview 中敌人即将行动时的 Intent 警示颜色。只影响表现。"))
+	FLinearColor ActionPreviewRiskIntentTint = FLinearColor(1.0f, 0.36f, 0.18f, 1.0f);
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Action Preview", meta = (AllowPrivateAccess = "true", ClampMin = "0.0", ClampMax = "1.0", ToolTip = "敌人因眩晕跳过行动时 Intent 图标的透明度；合法范围固定为 0-1，推荐 0.25-0.45。"))
+	float ActionPreviewSkippedIntentOpacity = 0.35f;
+
 	TPimplPtr<FWacomBattleEnemyPartPresentationState> PresentationState;
 	TPimplPtr<FWacomBattleEnemyVitalsMaterialAdapter> VitalsMaterialAdapter;
 	FTimerHandle IntroTimerHandle;
+	FLinearColor AuthoredIntentIconTint = FLinearColor::White;
 	float IntroDelaySeconds = 0.0f;
 	bool bInspectionInteractionEnabled = false;
 	bool bIntroPending = false;

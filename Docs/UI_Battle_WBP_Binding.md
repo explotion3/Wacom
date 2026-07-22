@@ -568,6 +568,12 @@ Part Entry 必需绑定：
 | `StatusList` / `StatusOverflowText` | `UWacomBattleStatusIconListWidget` / `TextBlock` | 常态最多三枚并显示 `+N` |
 | `ContextSurface` | `Widget` | hover / Preview 定位框，不参与输入 |
 | `DestroyedSurface` / `DestroyedMark` | `Widget` | 失色、裂痕与 `X` 终态，不移除段 |
+| `PerfectReleaseSurface` | `Widget` | 完美释放金色静态边框；非完美时折叠，不承载输入 |
+| `ActionPreviewComparisonRoot` | `Widget` | 紧凑抵抗比较根；显示时临时替换 `InitiativeSocket + IntentSocket` 所占空间，必须不可命中 |
+| `PreviewPlayerDamageIcon` / `PreviewPlayerDamageText` | `Image` / `TextBlock` | 卡牌伤害标记与玩家最高单段伤害 |
+| `PreviewComparatorText` | `TextBlock` | 成功固定为 `>`，失败和相等固定为 `≤`；不能只靠颜色表达结果 |
+| `PreviewEnemyIntentIcon` / `PreviewEnemyAttackText` | `Image` / `TextBlock` | 当前敌方 Intent 图标与敌方最高单段伤害；图标来自现有 Intent Style |
+| `PreviewSkipMark` | `Widget` | 立即消费眩晕时覆盖斜线，并配合变暗 Intent 表达跳过 |
 | `InspectHitTarget` | `Button` | 唯一命中热区，只上报完整 `FBattlePartSlotIdentity` |
 
 旧 `EnemyNameText / PartNameText / IntentText / ResistanceText / DetailsContainer / HpBar / ShieldContainer / ShieldFrame / ShieldBadge / ActionPreviewOverlay` 不属于紧凑 HUD 合同，也不得作为 optional compatibility binding 重新加入。名字、Intent 文本和派生攻击值只在敌情档案显示。
@@ -575,6 +581,8 @@ Part Entry 必需绑定：
 Entry 必需动画与标准时长：`IntroAnimation=220ms`、`DamageImpactAnimation=220ms`、`ShieldImpactAnimation=180ms`、`ShieldBreakAnimation=240ms`、`InitiativeStepAnimation=120ms`、`IntentChangeAnimation=180ms`、`ContextAnimation=120ms`、`DestroyedAnimation=300ms`。HP 真实下降时 Material 先保留旧比例 `90ms`，再按 `220ms` 收束；Preview 只写 projected Material 参数，不触发上述事实动画。
 
 C++ 不重建这些曲线。App-private presentation state 将 Snapshot、Preview、Context 与 Local Settings 归约为 typed cue 和一次性 Material Frame；Entry 只把 Frame 写入材质/文本/图标，并将 cue 路由到上述 WBP Animation。每个 Panel 只订阅一次 `UWacomSettingsSubsystem`，统一向其稳定 Entry 推送 Simplified Motion 和 Flash policy；Entry 自身不订阅全局设置。
+
+Action Preview 继续只消费 `FWacomBattleEnemyPartEntryViewData`，Widget 不重算伤害或抵抗。普通 hover 只显示 `ContextSurface`；非完美有效攻击显示 projected 数值，`bWillAct` 让普通 Intent 使用暖红风险色；完美但非攻击意图只显示 `PerfectReleaseSurface`；合法抵抗显示 `P > E` 或 `P ≤ E`，成功时 projected `StatusList` 显示眩晕，立即跳过时 Intent 变暗并显示 `PreviewSkipMark`。清理、目标切换、Snapshot 变化、BattleEnd 与 Destruct 必须恢复权威数值、普通 Intent tint、`InitiativeSocket + IntentSocket` 和正常可见性。所有 Preview 装饰节点在显示时使用 `HitTestInvisible`；Reduced Motion 保留相同静态语义。
 
 Panel / Entry Root 必须是 `SelfHitTestInvisible`，装饰控件全部不可命中，仅 `InspectHitTarget` 可见命中。Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时启用按钮；禁用时 Entry 与热点回到 `HitTestInvisible`，不能阻断世界目标点击。Host 的 `WidgetComponent` 使用 `WacomBattleEnemyPanelScreenLayer@8000`，详情位于 `8500`。
 
@@ -618,9 +626,9 @@ Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Defa
 - Draw / Discard / Exhaust 牌堆控件在无 Presentation busy 时可打开对应牌堆详情；Draw 显示顺序隐藏，Discard 能切换真实弃牌 / 本回合已使用，关闭后恢复游戏焦点。
 - CommandBar 里的 Wait / EndTurn 可点击并由 HUD runtime view data 控制可用性。
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
-- 敌情详情仅为攻击意图显示 `ATK`；拖拽完美释放攻击卡时，场景 prediction 分别显示抵抗成功 / 失败，立即消费眩晕的目标明确显示“跳过行动”。
+- 敌情详情仅为攻击意图显示 `ATK`；拖拽完美释放攻击卡时，Enemy Entry 分别显示金色边框与紧凑 `P > E` / `P ≤ E`，立即消费眩晕时 Intent 变暗并显示斜线；场景部位上方不再出现文字浮层。
 - Combat Activity 连续追加时不丢弃第四行，按顺序向上流动并在顶部衰减；根行动图标原位交接后只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。
-- 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；`UWacomBattleEnemyPartComponent` 及其 runtime 只承载 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
+- 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；`UWacomBattleEnemyPartComponent` 及其 runtime 只承载 target、drag preview Niagara、Impact 与动作反馈，Action Preview 统一由所属敌人的聚合面板响应。
 - TrainingWarrior 与多部位 Snake 使用同一个 Panel / Entry class；TrainingWarrior 自动采用单段几何，Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；Snake 按 Definition 顺序生成等宽多段。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。
 - 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget / EventLogPanel / EventToast / WBP_BattleEnemyPartStatusBadgeWidget` 已删除，不再作为 BattleHUD 制作入口。

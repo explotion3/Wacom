@@ -54,6 +54,28 @@ struct FWacomBattleEnemyVitalsFrame
 	float ReducedMotion = 0.0f;
 };
 
+enum class EWacomBattleEnemyResistancePreviewOutcome : uint8
+{
+	None,
+	Success,
+	Failure,
+};
+
+/** Action Preview 的一次性紧凑语义帧；不持有 Widget，也不重算战斗规则。 */
+struct FWacomBattleEnemyActionPreviewFrame
+{
+	bool bActive = false;
+	bool bPerfectRelease = false;
+	bool bShowResistanceComparison = false;
+	bool bWillAct = false;
+	bool bWillSkipActionDueToStun = false;
+	int32 PlayerPeakDamage = 0;
+	int32 EnemyPeakDamage = 0;
+	EWacomBattleEnemyResistancePreviewOutcome ResistanceOutcome =
+		EWacomBattleEnemyResistancePreviewOutcome::None;
+	FText ComparatorText;
+};
+
 /**
  * 单个部位条目的纯表现状态。
  * Snapshot 更新产生 typed cue；Preview 只改变显示帧，不生成战斗事实 cue。
@@ -78,6 +100,7 @@ public:
 	FWacomBattleEnemyVitalsFrame BuildVitalsFrame(
 		float DamageTrailHoldSeconds,
 		float DamageTrailRecoverySeconds) const;
+	WACOMAPP_API FWacomBattleEnemyActionPreviewFrame BuildActionPreviewFrame() const;
 	void ResetTransientPresentation();
 
 	const FWacomBattleEnemyPartEntryViewData& GetRealView() const { return CurrentView; }

@@ -70,6 +70,8 @@ App / UI 对玩家已拥有卡提交精确 `InstanceId`，不以 Definition 指�
 
 本地机器设置由 `UWacomGameUserSettings` 持久化到 UE 的 `GameUserSettings.ini`，与玩家档案、活动旅程、滚动备份和 `WacomRunSaveGame` 完全分离。`DefaultEngine.ini` 通过 `GameUserSettingsClassName` 注册该类型；Wacom 自定义 schema 当前为 `1`。项目平衡档是首次启动和显式恢复默认的唯一来源：当前显示器桌面分辨率、无边框窗口、VSync 开、60 FPS、高画质、四路音量 / 视角响应 / 镜头运动 100%、不反转 Y、完整闪光与完整 UI 动效；无法取得桌面分辨率时先保留当前有效分辨率，再回退 `1280 × 720`。已有有效 ini 不会在启动时被覆盖；自定义 schema 无法迁移时只重置音量、视角响应、镜头运动和表现辅助字段，不清空 UE 持有的分辨率、窗口模式或画质数据。
 
+桌面主视图的项目级抗锯齿默认固定为 UE 5.8 `SMAA High + Color Edge`：`r.AntiAliasingMethod=5`、`r.SMAA.Quality=2`、`r.SMAA.EdgeMode=0`。该非时域路径优先保持 Paper2D、像素化场景反馈和快速第一人称镜头下的清晰边缘，不使用 TAA / TSR 的历史累积；移动端仍单独保持 `r.Mobile.AntiAliasing=1`（FXAA），本项不作为玩家本地设置暴露。
+
 `UWacomSettingsSubsystem` 是唯一编辑事务 owner：`BeginEdit()` 返回唯一 token 和当前 snapshot；`Preview()` 只即时应用四路音量、视角响应 / Y 反转、镜头运动、闪光模式和 UI 动效模式；显示、VSync、帧率上限与整体画质只在 `Apply()` 时生效。错误 token、过期 token、重复编辑、重复确认和重复撤销都被拒绝且无副作用。`Cancel()` 恢复编辑前的即时预览值且不写盘。
 
 分辨率或窗口模式变化后进入 15 秒确认态。此时引擎已应用候选视频模式，但不会调用 `SaveSettings()`；`ConfirmVideoMode()` 才确认并保存，`RevertVideoMode()` 或超时会恢复最后确认的视频模式，再保存同批次的其它设置。因此崩溃或强退不会把未确认的不可用分辨率写成下次启动配置。

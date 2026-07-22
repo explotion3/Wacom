@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Components/WidgetComponent.h"
 #include "Components/WacomBattleEnemyPartComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
@@ -11,7 +12,7 @@
 #include "Misc/ScopeExit.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Testing/WacomEnemySceneRuntimeAutomationTestView.h"
-#include "UI/Battle/WacomBattleEnemyPartDragPredictionTypes.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomEnemySceneRuntimePerformanceSpec
@@ -75,14 +76,21 @@ namespace WacomEnemySceneRuntimePerformanceSpec
 		Part.MaxHp = 12;
 		return Snapshot;
 	}
+
+	int32 CountWidgetComponents(const AWacomBattleEnemyActor& Host)
+	{
+		TInlineComponentArray<UWidgetComponent*> Components;
+		Host.GetComponents(Components);
+		return Components.Num();
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomEnemySceneRuntimeSnapshotAndPredictionReuseSpec,
-	"Wacom.UI.Battle.EnemyScene.RuntimePerformance.SnapshotAndPredictionReuse",
+	FWacomEnemySceneRuntimeSnapshotAndTargetPreviewSpec,
+	"Wacom.UI.Battle.EnemyScene.RuntimePerformance.SnapshotAndTargetPreview",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomEnemySceneRuntimeSnapshotAndPredictionReuseSpec::RunTest(
+bool FWacomEnemySceneRuntimeSnapshotAndTargetPreviewSpec::RunTest(
 	const FString& /*Parameters*/)
 {
 	using namespace WacomEnemySceneRuntimePerformanceSpec;
@@ -139,8 +147,7 @@ bool FWacomEnemySceneRuntimeSnapshotAndPredictionReuseSpec::RunTest(
 
 	const FWacomBattleEnemyPartRuntimeDebugView First = Part->GetRuntimeDebugView();
 	TestEqual(TEXT("First snapshot applies once"), First.SnapshotApplyCount, 1);
-	TestFalse(TEXT("Hidden prediction does not create a component"),
-		First.bPredictionWidgetCreated);
+	const int32 InitialWidgetComponentCount = CountWidgetComponents(*Host);
 
 	TestTrue(TEXT("Repeated snapshot remains bound"),
 		FWacomEnemySceneRuntimeAutomationTestView::SyncPart(*Host, *Part, Snapshot));
@@ -148,40 +155,26 @@ bool FWacomEnemySceneRuntimeSnapshotAndPredictionReuseSpec::RunTest(
 	TestEqual(TEXT("Repeated facts do not apply again"), Repeated.SnapshotApplyCount, 1);
 	TestEqual(TEXT("Repeated facts hit the no-op path"), Repeated.SnapshotNoOpCount, 1);
 
-	FWacomBattleEnemyPartDragPredictionDebugInput HoverInput;
-	FWacomEnemySceneRuntimeAutomationTestView::SetHoverPrediction(
-		*Host, *Part, HoverInput);
-	const FWacomBattleEnemyPartRuntimeDebugView Visible = Part->GetRuntimeDebugView();
-	TestTrue(TEXT("Visible prediction lazily creates its component"),
-		Visible.bPredictionWidgetCreated);
-	TestTrue(TEXT("Prediction widget is visible during hover"),
-		Visible.bPredictionWidgetVisible);
-	TestEqual(TEXT("Prediction component is created once"),
-		Visible.PredictionWidgetCreateCount, 1);
+	FWacomEnemySceneRuntimeAutomationTestView::SetHoverPrediction(*Host, *Part);
+	TestEqual(TEXT("Hover does not create an independent prediction widget component"),
+		CountWidgetComponents(*Host), InitialWidgetComponentCount);
 
-	FWacomEnemySceneRuntimeAutomationTestView::SetHoverPrediction(
-		*Host, *Part, HoverInput);
-	const FWacomBattleEnemyPartRuntimeDebugView Stable = Part->GetRuntimeDebugView();
-	TestEqual(TEXT("Identical hover does not recreate prediction"),
-		Stable.PredictionWidgetCreateCount, 1);
-	TestEqual(TEXT("Identical hover does not reapply prediction"),
-		Stable.PredictionWidgetApplyCount, Visible.PredictionWidgetApplyCount);
+	FWacomEnemySceneRuntimeAutomationTestView::SetHoverPrediction(*Host, *Part);
+	TestEqual(TEXT("Repeated hover keeps the scene component topology stable"),
+		CountWidgetComponents(*Host), InitialWidgetComponentCount);
 
 	FWacomEnemySceneRuntimeAutomationTestView::ClearHoverPrediction(*Host, *Part);
-	const FWacomBattleEnemyPartRuntimeDebugView Hidden = Part->GetRuntimeDebugView();
-	TestTrue(TEXT("Hidden prediction keeps the reusable component"),
-		Hidden.bPredictionWidgetCreated);
-	TestFalse(TEXT("Clearing hover hides prediction"), Hidden.bPredictionWidgetVisible);
+	TestEqual(TEXT("Clearing hover keeps the scene component topology stable"),
+		CountWidgetComponents(*Host), InitialWidgetComponentCount);
 
-	FWacomEnemySceneRuntimeAutomationTestView::SetHoverPrediction(
-		*Host, *Part, HoverInput);
-	const FWacomBattleEnemyPartRuntimeDebugView Reused = Part->GetRuntimeDebugView();
-	TestEqual(TEXT("Second hover reuses the same prediction component"),
-		Reused.PredictionWidgetCreateCount, 1);
+	FWacomEnemySceneRuntimeAutomationTestView::SetDragTargetPreview(
+		*Host, *Part, EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget);
+	TestEqual(TEXT("Drag target feedback remains Niagara-only"),
+		CountWidgetComponents(*Host), InitialWidgetComponentCount);
+	FWacomEnemySceneRuntimeAutomationTestView::ClearDragTargetPreview(*Host, *Part);
 
 	Host->RetireRuntimeEncounterPresentation();
-	const FWacomBattleEnemyPartRuntimeDebugView Retired = Part->GetRuntimeDebugView();
-	TestFalse(TEXT("Retirement destroys the transient prediction component"),
-		Retired.bPredictionWidgetCreated);
+	TestEqual(TEXT("Retirement has no prediction widget component to destroy"),
+		CountWidgetComponents(*Host), InitialWidgetComponentCount);
 	return true;
 }

@@ -176,11 +176,25 @@ bool FWacomUIBattleEnemyPanelVisualContractSpec::RunTest(const FString& /*Parame
 		TEXT("InitiativeText"), TEXT("IntentSocket"), TEXT("IntentIcon"),
 		TEXT("OutgoingIntentIcon"), TEXT("StatusList"), TEXT("StatusOverflowText"),
 		TEXT("ContextSurface"), TEXT("DestroyedSurface"), TEXT("DestroyedMark"),
+		TEXT("PerfectReleaseSurface"), TEXT("ActionPreviewComparisonRoot"),
+		TEXT("PreviewPlayerDamageIcon"), TEXT("PreviewPlayerDamageText"),
+		TEXT("PreviewComparatorText"), TEXT("PreviewEnemyIntentIcon"),
+		TEXT("PreviewEnemyAttackText"), TEXT("PreviewSkipMark"),
 		TEXT("InspectHitTarget") };
 	for (const FName Name : EntryBindings)
 	{
 		TestNotNull(*FString::Printf(TEXT("Entry binding %s"), *Name.ToString()),
 			Entry->WidgetTree->FindWidget(Name));
+	}
+	for (const FName PreviewRootName : {
+		FName(TEXT("PerfectReleaseSurface")),
+		FName(TEXT("ActionPreviewComparisonRoot")) })
+	{
+		const UWidget* PreviewRoot = Entry->WidgetTree->FindWidget(PreviewRootName);
+		TestTrue(
+			*FString::Printf(TEXT("Preview root %s never owns hit testing"), *PreviewRootName.ToString()),
+			PreviewRoot && PreviewRoot->GetVisibility() != ESlateVisibility::Visible
+				&& PreviewRoot->GetVisibility() != ESlateVisibility::SelfHitTestInvisible);
 	}
 	for (const FName Legacy : { FName(TEXT("HpBar")), FName(TEXT("PartNameText")),
 		FName(TEXT("IntentText")), FName(TEXT("ResistanceText")),

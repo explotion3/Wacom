@@ -37,7 +37,6 @@ struct FWacomBattlePresentationStackEntryView;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomFirstPersonCardDragView;
 struct FWacomCardDetailViewData;
-struct FWacomBattleEnemyPartDragPredictionDebugInput;
 enum class EWacomBattleHUDCardDetailHost : uint8;
 enum class EWacomBattleHUDTurnBoundaryCommand : uint8;
 
@@ -632,8 +631,6 @@ private:
 	void SyncBattleEnemyPartWorldTargets(const FBattleSnapshot& Snap);
 	void ClearBattleEnemyPartWorldTargets();
 	bool CanUpdateBattleSceneEnemyPartHoverProbe() const;
-	FWacomBattleEnemyPartDragPredictionDebugInput BuildBattleSceneEnemyPartHoverPredictionInput(
-		const FWacomInteractionTargetHandle& TargetHandle) const;
 	void TickBattleSceneEnemyPartHoverProbe(float DeltaTime);
 	void UpdateBattleSceneEnemyPartHoverProbe();
 	void ClearBattleSceneEnemyPartHoverProbe(FName Reason);

@@ -6,7 +6,6 @@
 #include "Actors/WacomBattleEnemyPartAnimationStyle.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
-#include "Blueprint/UserWidget.h"
 #include "Components/WacomBattleEnemyActionPlayback.h"
 #include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomBattleEnemyPartCuePlayback.h"
@@ -16,7 +15,6 @@
 #include "Components/WacomBattleEnemyPartSpriteLayerComponent.h"
 #include "Components/WacomBattleEnemyPartTargetPreviewFeedbackController.h"
 #include "Components/WacomBattleEnemyPartTargetPreviewPlayback.h"
-#include "Components/WidgetComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Engine/GameInstance.h"
@@ -28,12 +26,8 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomInteractionTargetTypes.h"
-#include "UI/Battle/WacomBattleEnemyPanelViewData.h"
-#include "UI/Battle/WacomBattleEnemyPartPredictionWidget.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UObject/StrongObjectPtr.h"
-
-#define LOCTEXT_NAMESPACE "WacomBattleEnemySceneRuntime"
 
 namespace
 {
@@ -78,16 +72,6 @@ namespace
 		TArray<FSpriteAuthoredState> Sprites;
 		TWeakObjectPtr<UWacomBattleEnemyPartImpactAnchorComponent> ImpactAnchor;
 		int32 ImpactAnchorCount = 0;
-		TWeakObjectPtr<UWidgetComponent> PredictionWidget;
-		TSubclassOf<UUserWidget> PredictionWidgetClass;
-		FVector AppliedPredictionRelativeLocation = FVector::ZeroVector;
-		FIntPoint AppliedPredictionDrawSize = FIntPoint::ZeroValue;
-		float AppliedPredictionBadgeScale = 1.0f;
-		float AppliedPredictionVisibleZOffset = 0.0f;
-		FWacomBattleEnemyPartPredictionView AppliedPredictionView;
-		bool bHasAppliedPredictionView = false;
-		int32 PredictionWidgetCreateCount = 0;
-		int32 PredictionWidgetApplyCount = 0;
 
 		FName EncounterId = NAME_None;
 		FName EnemySlotId = NAME_None;
@@ -111,13 +95,8 @@ namespace
 
 		bool bDragPreviewActive = false;
 		bool bHoverActive = false;
-		bool bActionPreviewActive = false;
 		EWacomFirstPersonCardDragTargetFeedbackState DragPreviewState =
 			EWacomFirstPersonCardDragTargetFeedbackState::None;
-		FWacomBattleEnemyPartDragPredictionDebugInput DragPredictionInput;
-		FWacomBattleEnemyPartDragPredictionDebugInput HoverPredictionInput;
-		FWacomBattleEnemyPartEntryViewData ActionPreviewView;
-		FWacomBattleEnemyPartPredictionView PredictionView;
 		FName HoverReason = NAME_None;
 		float TargetPreviewFlashScale = 1.0f;
 
@@ -196,53 +175,6 @@ namespace
 		return State.Part.Get();
 	}
 
-	void DestroyPredictionWidget(FPartRuntimeState& State)
-	{
-		if (UWidgetComponent* Widget = State.PredictionWidget.Get())
-		{
-			Widget->SetVisibility(false, true);
-			Widget->DestroyComponent();
-		}
-		State.PredictionWidget.Reset();
-		State.PredictionWidgetClass = nullptr;
-		State.bHasAppliedPredictionView = false;
-	}
-
-	bool PredictionInputsEqual(
-		const FWacomBattleEnemyPartDragPredictionDebugInput& A,
-		const FWacomBattleEnemyPartDragPredictionDebugInput& B)
-	{
-		return A.bHasSourceCard == B.bHasSourceCard
-			&& A.SourceCardInstanceId == B.SourceCardInstanceId
-			&& A.SourceCardRuntimeCost == B.SourceCardRuntimeCost
-			&& A.bSourceCardSwift == B.bSourceCardSwift
-			&& A.bPreviewCanSubmit == B.bPreviewCanSubmit
-			&& A.PreviewRejectReason == B.PreviewRejectReason;
-	}
-
-	bool PredictionViewsEqual(
-		const FWacomBattleEnemyPartPredictionView& A,
-		const FWacomBattleEnemyPartPredictionView& B)
-	{
-		return A.bVisible == B.bVisible
-			&& A.Mode == B.Mode
-			&& A.CurrentInitiative == B.CurrentInitiative
-			&& A.PredictedInitiative == B.PredictedInitiative
-			&& A.bHasSourceCard == B.bHasSourceCard
-			&& A.SourceCardRuntimeCost == B.SourceCardRuntimeCost
-			&& A.bSourceCardSwift == B.bSourceCardSwift
-			&& A.bPerfectReleaseCandidate == B.bPerfectReleaseCandidate
-			&& A.bActionRisk == B.bActionRisk
-			&& A.bWillSkipActionDueToStun == B.bWillSkipActionDueToStun
-			&& A.bHasResistanceComparison == B.bHasResistanceComparison
-			&& A.ResistancePlayerPeakDamage == B.ResistancePlayerPeakDamage
-			&& A.ResistanceEnemyPeakDamage == B.ResistanceEnemyPeakDamage
-			&& A.bResistanceWillStun == B.bResistanceWillStun
-			&& A.RejectReason == B.RejectReason
-			&& A.MainText.EqualTo(B.MainText)
-			&& A.DetailText.EqualTo(B.DetailText);
-	}
-
 	void ResetFeedbackControllers(FPartRuntimeState& State, bool bDestroyComponents)
 	{
 		if (State.CuePlayback)
@@ -265,12 +197,7 @@ namespace
 		State.bAwaitingDestroyedCue = false;
 		State.bDragPreviewActive = false;
 		State.bHoverActive = false;
-		State.bActionPreviewActive = false;
 		State.DragPreviewState = EWacomFirstPersonCardDragTargetFeedbackState::None;
-		State.DragPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
-		State.HoverPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
-		State.ActionPreviewView = FWacomBattleEnemyPartEntryViewData();
-		State.PredictionView = FWacomBattleEnemyPartPredictionView();
 	}
 
 	void ApplyVisualScale(FPartRuntimeState& State, float Scale)
@@ -308,250 +235,6 @@ namespace
 		{
 			ApplyVisualScale(State, 1.0f);
 		}
-	}
-
-	FWacomBattleEnemyPartPredictionView BuildPredictionView(
-		const FPartRuntimeState& State,
-		const FWacomBattleEnemyPartDragPredictionDebugInput& Input)
-	{
-		FWacomBattleEnemyPartPredictionView View;
-		View.bVisible = true;
-		View.CurrentInitiative = State.CurrentInitiative;
-		View.PredictedInitiative = State.CurrentInitiative;
-		View.bHasSourceCard = Input.bHasSourceCard;
-		View.SourceCardRuntimeCost = Input.SourceCardRuntimeCost;
-		View.bSourceCardSwift = Input.bSourceCardSwift;
-		if (!Input.bHasSourceCard)
-		{
-			View.Mode = EWacomBattleEnemyPartPredictionMode::HoverInitiative;
-			View.MainText = FText::Format(
-				LOCTEXT("HoverInitiative", "先机 {0}"),
-				FText::AsNumber(State.CurrentInitiative));
-			return View;
-		}
-		if (!Input.bPreviewCanSubmit)
-		{
-			View.Mode = EWacomBattleEnemyPartPredictionMode::Rejected;
-			View.RejectReason = Input.PreviewRejectReason.IsNone()
-				? FName(TEXT("Rejected"))
-				: Input.PreviewRejectReason;
-			View.MainText = LOCTEXT("Rejected", "不可释放");
-			return View;
-		}
-		View.Mode = EWacomBattleEnemyPartPredictionMode::CardPrediction;
-		if (!Input.bSourceCardSwift)
-		{
-			View.PredictedInitiative = State.CurrentInitiative - Input.SourceCardRuntimeCost;
-			View.bPerfectReleaseCandidate = Input.SourceCardRuntimeCost == State.CurrentInitiative;
-			View.bActionRisk = View.PredictedInitiative <= 0;
-			View.MainText = FText::Format(
-				LOCTEXT("Prediction", "先机 {0} -> {1}"),
-				FText::AsNumber(State.CurrentInitiative),
-				FText::AsNumber(View.PredictedInitiative));
-		}
-		else
-		{
-			View.MainText = FText::Format(
-				LOCTEXT("SwiftPrediction", "先机 {0}"),
-				FText::AsNumber(State.CurrentInitiative));
-			View.DetailText = LOCTEXT("Swift", "迅捷：不推进");
-		}
-		if (View.bPerfectReleaseCandidate)
-		{
-			View.DetailText = LOCTEXT("PerfectRelease", "完美释放");
-		}
-		else if (View.bActionRisk)
-		{
-			View.DetailText = LOCTEXT("ActionRisk", "行动风险");
-		}
-		return View;
-	}
-
-	UWidgetComponent* EnsurePredictionWidget(
-		UWacomBattleEnemySceneRuntimeComponent& Owner,
-		FPartRuntimeState& State)
-	{
-		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
-		AWacomBattleEnemyActor* Host = Cast<AWacomBattleEnemyActor>(Owner.GetOwner());
-		if (!Part || !Host || !Owner.GetWorld())
-		{
-			return nullptr;
-		}
-		const TSubclassOf<UUserWidget> DesiredClass = Part->PredictionWidgetClass
-			? TSubclassOf<UUserWidget>(Part->PredictionWidgetClass)
-			: TSubclassOf<UUserWidget>(UWacomBattleEnemyPartPredictionWidget::StaticClass());
-		if (UWidgetComponent* Existing = State.PredictionWidget.Get())
-		{
-			if (State.PredictionWidgetClass == DesiredClass)
-			{
-				return Existing;
-			}
-			DestroyPredictionWidget(State);
-		}
-
-		UWidgetComponent* Widget = NewObject<UWidgetComponent>(
-			Host,
-			MakeUniqueObjectName(Host, UWidgetComponent::StaticClass(), TEXT("EnemyPartPrediction")),
-			RF_Transient);
-		if (!Widget)
-		{
-			return nullptr;
-		}
-		Host->AddInstanceComponent(Widget);
-		Widget->CreationMethod = EComponentCreationMethod::Instance;
-		Widget->SetupAttachment(Part);
-		Widget->SetWidgetSpace(EWidgetSpace::Screen);
-		Widget->SetWidgetClass(DesiredClass);
-		Widget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Widget->SetGenerateOverlapEvents(false);
-		Widget->SetPivot(FVector2D(0.5f, 0.5f));
-		Widget->SetVisibility(false, true);
-		Widget->RegisterComponent();
-		State.PredictionWidget = Widget;
-		State.PredictionWidgetClass = DesiredClass;
-		State.bHasAppliedPredictionView = false;
-		++State.PredictionWidgetCreateCount;
-		return Widget;
-	}
-
-	void ApplyPredictionWidget(
-		UWacomBattleEnemySceneRuntimeComponent& Owner,
-		FPartRuntimeState& State)
-	{
-		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
-		if (!Part)
-		{
-			return;
-		}
-		UWidgetComponent* Widget = State.PredictionWidget.Get();
-		if (!State.PredictionView.bVisible && !Widget)
-		{
-			return;
-		}
-		if (State.PredictionView.bVisible)
-		{
-			Widget = EnsurePredictionWidget(Owner, State);
-		}
-		if (!Widget)
-		{
-			return;
-		}
-
-		const FIntPoint DrawSize(
-			FMath::Max(1, FMath::RoundToInt(Part->PredictionDrawSize.X)),
-			FMath::Max(1, FMath::RoundToInt(Part->PredictionDrawSize.Y)));
-		const FVector Location = Part->PredictionRelativeLocation + FVector(
-			0.0f,
-			0.0f,
-			State.PredictionView.bVisible
-				? FMath::Max(0.0f, Part->PredictionBadgeZOffsetWhenVisible)
-				: 0.0f);
-		const bool bConfigMatches = State.AppliedPredictionRelativeLocation == Location
-			&& State.AppliedPredictionDrawSize == DrawSize
-			&& FMath::IsNearlyEqual(State.AppliedPredictionBadgeScale, Part->PredictionBadgeScale)
-			&& FMath::IsNearlyEqual(
-				State.AppliedPredictionVisibleZOffset,
-				Part->PredictionBadgeZOffsetWhenVisible);
-		if (State.bHasAppliedPredictionView
-			&& bConfigMatches
-			&& PredictionViewsEqual(State.AppliedPredictionView, State.PredictionView))
-		{
-			return;
-		}
-
-		Widget->SetVisibility(State.PredictionView.bVisible, true);
-		Widget->SetRelativeLocation(Location);
-		Widget->SetDrawSize(DrawSize);
-		if (!Widget->GetUserWidgetObject())
-		{
-			Widget->InitWidget();
-		}
-		if (UUserWidget* UserWidget = Widget->GetUserWidgetObject())
-		{
-			UserWidget->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
-			UserWidget->SetRenderScale(FVector2D(Part->PredictionBadgeScale));
-			if (UWacomBattleEnemyPartPredictionWidget* Prediction =
-				Cast<UWacomBattleEnemyPartPredictionWidget>(UserWidget))
-			{
-				Prediction->SetPredictionView(State.PredictionView);
-			}
-		}
-		State.AppliedPredictionRelativeLocation = Location;
-		State.AppliedPredictionDrawSize = DrawSize;
-		State.AppliedPredictionBadgeScale = Part->PredictionBadgeScale;
-		State.AppliedPredictionVisibleZOffset = Part->PredictionBadgeZOffsetWhenVisible;
-		State.AppliedPredictionView = State.PredictionView;
-		State.bHasAppliedPredictionView = true;
-		++State.PredictionWidgetApplyCount;
-	}
-
-	void RefreshPrediction(
-		UWacomBattleEnemySceneRuntimeComponent& Owner,
-		FPartRuntimeState& State)
-	{
-		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
-		if (!Part || !Part->bEnablePredictionWidget || !State.PartInstanceId.IsValid() || State.bDestroyed)
-		{
-			State.PredictionView = FWacomBattleEnemyPartPredictionView();
-			ApplyPredictionWidget(Owner, State);
-			return;
-		}
-		if (State.bActionPreviewActive)
-		{
-			State.PredictionView = FWacomBattleEnemyPartPredictionView();
-			State.PredictionView.bVisible = true;
-			State.PredictionView.Mode = EWacomBattleEnemyPartPredictionMode::CardPrediction;
-			State.PredictionView.CurrentInitiative = State.CurrentInitiative;
-			State.PredictionView.PredictedInitiative = State.ActionPreviewView.CurrentInitiative;
-			State.PredictionView.bActionRisk = State.ActionPreviewView.bActionPreviewWillAct;
-			State.PredictionView.bWillSkipActionDueToStun =
-				State.ActionPreviewView.bActionPreviewWillSkipActionDueToStun;
-			State.PredictionView.bPerfectReleaseCandidate =
-				State.ActionPreviewView.bActionPreviewPerfectReleaseCandidate;
-			State.PredictionView.bHasResistanceComparison =
-				State.ActionPreviewView.bHasResistancePreview;
-			State.PredictionView.ResistancePlayerPeakDamage =
-				State.ActionPreviewView.ResistancePreviewPlayerPeakDamage;
-			State.PredictionView.ResistanceEnemyPeakDamage =
-				State.ActionPreviewView.ResistancePreviewEnemyPeakDamage;
-			State.PredictionView.bResistanceWillStun =
-				State.ActionPreviewView.bResistancePreviewWillStun;
-			State.PredictionView.MainText = FText::Format(
-				LOCTEXT("ActionPreview", "先机 {0} -> {1}"),
-				FText::AsNumber(State.CurrentInitiative),
-				FText::AsNumber(State.ActionPreviewView.CurrentInitiative));
-			if (State.ActionPreviewView.bHasResistancePreview)
-			{
-				State.PredictionView.DetailText = State.ActionPreviewView.bResistancePreviewWillStun
-					? FText::Format(
-						State.ActionPreviewView.bActionPreviewWillSkipActionDueToStun
-							? LOCTEXT("ResistanceSuccessSkip", "完美释放\n抵抗 {0} > 攻击 {1} · 眩晕 +1 · 跳过行动")
-							: LOCTEXT("ResistanceSuccess", "完美释放\n抵抗 {0} > 攻击 {1} · 眩晕 +1"),
-						FText::AsNumber(State.ActionPreviewView.ResistancePreviewPlayerPeakDamage),
-						FText::AsNumber(State.ActionPreviewView.ResistancePreviewEnemyPeakDamage))
-					: FText::Format(
-						LOCTEXT("ResistanceFailure", "完美释放\n抵抗 {0} ≤ 攻击 {1}"),
-						FText::AsNumber(State.ActionPreviewView.ResistancePreviewPlayerPeakDamage),
-						FText::AsNumber(State.ActionPreviewView.ResistancePreviewEnemyPeakDamage));
-			}
-			else if (State.ActionPreviewView.bActionPreviewPerfectReleaseCandidate)
-			{
-				State.PredictionView.DetailText = LOCTEXT("ActionPreviewPerfectRelease", "完美释放");
-			}
-		}
-		else if (State.bDragPreviewActive)
-		{
-			State.PredictionView = BuildPredictionView(State, State.DragPredictionInput);
-		}
-		else if (State.bHoverActive)
-		{
-			State.PredictionView = BuildPredictionView(State, State.HoverPredictionInput);
-		}
-		else
-		{
-			State.PredictionView = FWacomBattleEnemyPartPredictionView();
-		}
-		ApplyPredictionWidget(Owner, State);
 	}
 
 	void RefreshAccessibility(UActorComponent& Owner, float& OutFlashScale, bool& bOutSimplifiedMotion)
@@ -829,7 +512,6 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 			Removed.ActionPlayback->Cancel(false);
 		}
 		ResetFeedbackControllers(Removed, true);
-		DestroyPredictionWidget(Removed);
 	}
 	if (bTopologyChanged)
 	{
@@ -920,7 +602,6 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 		if (bFactsChanged)
 		{
 			++State->SnapshotApplyCount;
-			RefreshPrediction(*this, *State);
 		}
 		else
 		{
@@ -978,7 +659,6 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 	if (bFactsChanged)
 	{
 		++State->SnapshotApplyCount;
-		RefreshPrediction(*this, *State);
 	}
 	else
 	{
@@ -1010,7 +690,6 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartBattleBinding(
 	}
 	ResetFeedbackControllers(*State, false);
 	RefreshPersistentScale(*State);
-	RefreshPrediction(*this, *State);
 }
 
 void UWacomBattleEnemySceneRuntimeComponent::ClearAllBattleBindings(bool bClearRuntimeFacts)
@@ -1135,11 +814,6 @@ FWacomBattleEnemyPartRuntimeDebugView UWacomBattleEnemySceneRuntimeComponent::Bu
 	View.TargetableApplyCount = State->TargetableApplyCount;
 	View.TargetPreviewKind = FWacomBattleEnemyPartTargetPreviewPlayback::KindToName(
 		ResolveDesiredTargetPreviewKind(*State));
-	View.bPredictionWidgetCreated = State->PredictionWidget.IsValid();
-	View.bPredictionWidgetVisible = State->PredictionWidget.IsValid()
-		&& State->PredictionWidget->IsVisible();
-	View.PredictionWidgetCreateCount = State->PredictionWidgetCreateCount;
-	View.PredictionWidgetApplyCount = State->PredictionWidgetApplyCount;
 	return View;
 }
 
@@ -1476,14 +1150,12 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartPresentation(
 		ResetFeedbackControllers(*State, false);
 		State->HoverReason = Reason;
 		RefreshPersistentScale(*State);
-		RefreshPrediction(*this, *State);
 	}
 }
 
 void UWacomBattleEnemySceneRuntimeComponent::SetPartDragTargetPreviewState(
 	UWacomBattleEnemyPartComponent& Part,
-	EWacomFirstPersonCardDragTargetFeedbackState PreviewState,
-	const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput)
+	EWacomFirstPersonCardDragTargetFeedbackState PreviewState)
 {
 	FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr;
 	if (!State)
@@ -1493,16 +1165,13 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartDragTargetPreviewState(
 	const bool bNewActive = PreviewState == EWacomFirstPersonCardDragTargetFeedbackState::ValidWorldTarget
 		|| PreviewState == EWacomFirstPersonCardDragTargetFeedbackState::Invalid;
 	if (State->DragPreviewState == PreviewState
-		&& State->bDragPreviewActive == bNewActive
-		&& PredictionInputsEqual(State->DragPredictionInput, PredictionInput))
+		&& State->bDragPreviewActive == bNewActive)
 	{
 		return;
 	}
 	State->DragPreviewState = PreviewState;
-	State->DragPredictionInput = PredictionInput;
 	State->bDragPreviewActive = bNewActive;
 	RefreshPersistentScale(*State);
-	RefreshPrediction(*this, *State);
 	RefreshTargetPreview(*this, *State);
 }
 
@@ -1512,18 +1181,13 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartDragTargetPreviewState(
 	if (FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr)
 	{
 		if (!State->bDragPreviewActive
-			&& State->DragPreviewState == EWacomFirstPersonCardDragTargetFeedbackState::None
-			&& PredictionInputsEqual(
-				State->DragPredictionInput,
-				FWacomBattleEnemyPartDragPredictionDebugInput()))
+			&& State->DragPreviewState == EWacomFirstPersonCardDragTargetFeedbackState::None)
 		{
 			return;
 		}
 		State->bDragPreviewActive = false;
 		State->DragPreviewState = EWacomFirstPersonCardDragTargetFeedbackState::None;
-		State->DragPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 		RefreshPersistentScale(*State);
-		RefreshPrediction(*this, *State);
 		RefreshTargetPreview(*this, *State);
 	}
 }
@@ -1531,8 +1195,7 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartDragTargetPreviewState(
 void UWacomBattleEnemySceneRuntimeComponent::SetPartHoverProbeState(
 	UWacomBattleEnemyPartComponent& Part,
 	const FWacomInteractionTargetHandle& TargetHandle,
-	FName Reason,
-	const FWacomBattleEnemyPartDragPredictionDebugInput& PredictionInput)
+	FName Reason)
 {
 	if (!TargetHandle.HasBattlePartSlotIdentity())
 	{
@@ -1543,16 +1206,13 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartHoverProbeState(
 	{
 		const FName EffectiveReason = Reason.IsNone() ? FName(TEXT("Hovered")) : Reason;
 		if (State->bHoverActive
-			&& State->HoverReason == EffectiveReason
-			&& PredictionInputsEqual(State->HoverPredictionInput, PredictionInput))
+			&& State->HoverReason == EffectiveReason)
 		{
 			return;
 		}
 		State->bHoverActive = true;
 		State->HoverReason = EffectiveReason;
-		State->HoverPredictionInput = PredictionInput;
 		RefreshPersistentScale(*State);
-		RefreshPrediction(*this, *State);
 	}
 }
 
@@ -1563,51 +1223,13 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartHoverProbeState(
 	if (FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr)
 	{
 		if (!State->bHoverActive
-			&& State->HoverReason == Reason
-			&& PredictionInputsEqual(
-				State->HoverPredictionInput,
-				FWacomBattleEnemyPartDragPredictionDebugInput()))
+			&& State->HoverReason == Reason)
 		{
 			return;
 		}
 		State->bHoverActive = false;
 		State->HoverReason = Reason;
-		State->HoverPredictionInput = FWacomBattleEnemyPartDragPredictionDebugInput();
 		RefreshPersistentScale(*State);
-		RefreshPrediction(*this, *State);
-	}
-}
-
-void UWacomBattleEnemySceneRuntimeComponent::SetPartActionPreview(
-	UWacomBattleEnemyPartComponent& Part,
-	const FWacomBattleEnemyPartEntryViewData& PreviewView)
-{
-	if (FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr)
-	{
-		if (State->bActionPreviewActive
-			&& State->ActionPreviewView.CurrentInitiative == PreviewView.CurrentInitiative
-			&& State->ActionPreviewView.bActionPreviewWillAct == PreviewView.bActionPreviewWillAct)
-		{
-			return;
-		}
-		State->ActionPreviewView = PreviewView;
-		State->bActionPreviewActive = true;
-		RefreshPrediction(*this, *State);
-	}
-}
-
-void UWacomBattleEnemySceneRuntimeComponent::ClearPartActionPreview(
-	UWacomBattleEnemyPartComponent& Part)
-{
-	if (FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr)
-	{
-		if (!State->bActionPreviewActive)
-		{
-			return;
-		}
-		State->bActionPreviewActive = false;
-		State->ActionPreviewView = FWacomBattleEnemyPartEntryViewData();
-		RefreshPrediction(*this, *State);
 	}
 }
 
@@ -1635,7 +1257,6 @@ void UWacomBattleEnemySceneRuntimeComponent::ResetRuntimeScenePresentationForBat
 			}
 		}
 		ResetFeedbackControllers(State, false);
-		RefreshPrediction(*this, State);
 	}
 }
 
@@ -1650,7 +1271,6 @@ void UWacomBattleEnemySceneRuntimeComponent::RetireRuntimeEncounterPresentation(
 	for (FPartRuntimeState& State : Impl->Parts)
 	{
 		ResetFeedbackControllers(State, true);
-		DestroyPredictionWidget(State);
 		State.bBound = false;
 		State.bRegisteredWithHUD = false;
 		State.bTargetable = false;
@@ -1749,7 +1369,6 @@ void UWacomBattleEnemySceneRuntimeComponent::EndPlay(
 		for (FPartRuntimeState& State : Impl->Parts)
 		{
 			ResetFeedbackControllers(State, true);
-			DestroyPredictionWidget(State);
 		}
 		Impl->Parts.Reset();
 		Impl->ActivePlaybackLayer.Reset();
@@ -1758,5 +1377,3 @@ void UWacomBattleEnemySceneRuntimeComponent::EndPlay(
 	SetComponentTickEnabled(false);
 	Super::EndPlay(EndPlayReason);
 }
-
-#undef LOCTEXT_NAMESPACE

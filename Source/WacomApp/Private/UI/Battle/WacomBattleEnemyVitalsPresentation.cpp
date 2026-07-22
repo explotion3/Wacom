@@ -7,6 +7,8 @@
 #include "Materials/MaterialInterface.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
+#define LOCTEXT_NAMESPACE "WacomBattleEnemyVitalsPresentation"
+
 namespace
 {
 	const FName HpCurrentPercentParameterName(TEXT("HpCurrentPercent"));
@@ -245,6 +247,35 @@ FWacomBattleEnemyPartPresentationState::BuildVitalsFrame(
 	return Frame;
 }
 
+FWacomBattleEnemyActionPreviewFrame
+FWacomBattleEnemyPartPresentationState::BuildActionPreviewFrame() const
+{
+	FWacomBattleEnemyActionPreviewFrame Frame;
+	if (!bHasActionPreview)
+	{
+		return Frame;
+	}
+
+	const FWacomBattleEnemyPartEntryViewData& View = ActionPreviewView;
+	Frame.bActive = true;
+	Frame.bPerfectRelease = View.bActionPreviewPerfectReleaseCandidate;
+	Frame.bShowResistanceComparison = View.bHasResistancePreview;
+	Frame.bWillAct = View.bActionPreviewWillAct;
+	Frame.bWillSkipActionDueToStun = View.bActionPreviewWillSkipActionDueToStun;
+	Frame.PlayerPeakDamage = View.ResistancePreviewPlayerPeakDamage;
+	Frame.EnemyPeakDamage = View.ResistancePreviewEnemyPeakDamage;
+	if (Frame.bShowResistanceComparison)
+	{
+		Frame.ResistanceOutcome = View.bResistancePreviewWillStun
+			? EWacomBattleEnemyResistancePreviewOutcome::Success
+			: EWacomBattleEnemyResistancePreviewOutcome::Failure;
+		Frame.ComparatorText = View.bResistancePreviewWillStun
+			? LOCTEXT("ResistanceGreaterThan", ">")
+			: LOCTEXT("ResistanceLessThanOrEqual", "≤");
+	}
+	return Frame;
+}
+
 void FWacomBattleEnemyPartPresentationState::ResetTransientPresentation()
 {
 	bHasActionPreview = false;
@@ -396,3 +427,5 @@ FString FWacomBattleEnemyVitalsMaterialAdapter::GetReferencerName() const
 {
 	return TEXT("FWacomBattleEnemyVitalsMaterialAdapter");
 }
+
+#undef LOCTEXT_NAMESPACE

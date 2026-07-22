@@ -38,6 +38,23 @@ struct FWacomBattleEnemyPartEntryWidgetTestAccess
 		const UWacomBattleEnemyPartEntryWidget& Widget);
 	static bool IsUsingSimplifiedMotion(
 		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool IsActionPreviewFrameActive(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool IsPerfectReleasePreviewVisible(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool IsResistanceComparisonVisible(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool IsResistancePreviewSuccessful(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool PreviewWillAct(const UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool PreviewWillSkipActionDueToStun(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static int32 GetPreviewPlayerPeakDamage(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static int32 GetPreviewEnemyPeakDamage(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static FString GetPreviewComparator(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
 	static void ApplyRuntimeSettings(
 		UWacomBattleEnemyPartEntryWidget& Widget,
 		const FWacomLocalSettingsSnapshot& Snapshot);

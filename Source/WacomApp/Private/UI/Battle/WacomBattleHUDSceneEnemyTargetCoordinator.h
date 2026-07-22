@@ -12,11 +12,9 @@ class FWacomBattleHUDRuntime;
 class UWacomBattleEnemyPartComponent;
 struct FBattleSnapshot;
 struct FBattleCardActionPreview;
-struct FBattleCardTargetPreview;
 struct FHandCardSnapshot;
 struct FWacomFirstPersonCardLayerSlotView;
 struct FWacomBattleEnemyActionPlaybackCallbacks;
-struct FWacomBattleEnemyPartDragPredictionDebugInput;
 
 /** HUD 对 typed Enemy Part hierarchy 的唯一 registry 与表现路由。 */
 class FWacomBattleHUDSceneEnemyTargetCoordinator
@@ -44,8 +42,7 @@ public:
 	void ClearRetiringHosts(bool bCancelPendingPlayback);
 
 	void ApplyActionPreviewToEnemyPanels(
-		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts,
-		bool bApplyScenePartPreview = true) const;
+		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const;
 	void ClearActionPreviewFromEnemyPanels() const;
 	void RefreshEnemyPanelInspectionInteraction() const;
 
@@ -53,8 +50,6 @@ public:
 	void TickHoverProbe(float DeltaTime);
 	void UpdateHoverProbe();
 	void ClearHoverProbe(FName Reason, bool bClearFirstPersonTargetPreviewLayer = true);
-	FWacomBattleEnemyPartDragPredictionDebugInput BuildHoverPredictionInput(
-		const FWacomInteractionTargetHandle& TargetHandle) const;
 
 	int32 GetRegisteredPartCount() const { return RegisteredParts.Num(); }
 	int32 GetRegistryRevision() const { return RegistryRevision; }
@@ -117,19 +112,12 @@ private:
 
 	bool TryBuildHoverTargetPreviewContext(
 		const FWacomInteractionTargetHandle& TargetHandle,
-		const FBattleSnapshot*& OutSnapshot,
-		const FHandCardSnapshot*& OutSourceSnapshot,
-		FBattleCardActionPreview& OutActionPreview,
-		FBattleCardTargetPreview& OutTargetPreview,
-		FWacomBattleEnemyPartDragPredictionDebugInput& OutPredictionInput) const;
+		FBattleCardActionPreview& OutActionPreview) const;
 	void ResetHoverPresentationCache();
 	bool TryFindPendingTargetingCardSlot(FWacomFirstPersonCardLayerSlotView& OutSlotView) const;
 	void ApplyHoverTargetPreview(
 		const FWacomBattleCardTargetPreviewPresentation& Presentation,
 		bool bHasTargetPreviewContext) const;
-	void ApplyActionPreviewToSceneParts(
-		const TArray<FWacomBattleEnemyPartEntryViewData>& PreviewParts) const;
-	void ClearActionPreviewFromSceneParts() const;
 	void BindHostInspectionDelegate(AWacomBattleEnemyActor& Host);
 	void UnbindHostInspectionDelegate(AWacomBattleEnemyActor& Host);
 	void HandleEnemyPanelInspectionRequested(
