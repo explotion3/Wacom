@@ -537,7 +537,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 		const int32 HpAfterPoison = FWacomBattleFixture::FindPartHp(Snapshot, 0);
 		PlayCardByDefinition(Session, Snapshot, StackDamage, PartId, *this);
 		Snapshot = Session->BuildSnapshot();
-		TestEqual(TEXT("TargetStatusStacks damage uses current poison stacks plus poison tick"), FWacomBattleFixture::FindPartHp(Snapshot, 0), HpAfterPoison - 8);
+		TestEqual(TEXT("TargetStatusStacks damage uses current poison stacks plus poison tick"), FWacomBattleFixture::FindPartHp(Snapshot, 0), HpAfterPoison - 36);
 	}
 
 	{
@@ -585,7 +585,7 @@ bool FWacomBattleRuleContentMatrixMagnitudeConditionSpec::RunTest(const FString&
 			TestTrue(TEXT("Play left-zone modifier card"),
 				Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snapshot, LeftId, PartId)).IsOk());
 			Snapshot = Session->BuildSnapshot();
-			TestEqual(TEXT("Condition modifiers run in order with Self.InZone and Target.HasStatus"), FWacomBattleFixture::FindPartHp(Snapshot, 0), HpAfterPoison - 11);
+			TestEqual(TEXT("Condition modifiers run in order with Self.InZone and Target.HasStatus"), FWacomBattleFixture::FindPartHp(Snapshot, 0), HpAfterPoison - 18);
 			bCoveredLeftZone = true;
 		}
 		TestTrue(TEXT("At least one seed placed modifier card in Left zone"), bCoveredLeftZone);
@@ -830,7 +830,7 @@ bool FWacomBattleRuleContentMatrixEnemyIntentSpec::RunTest(const FString& /*Para
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
 		TestTrue(TEXT("End turn resolves player-targeting enemy intent"), Session->ResolveCommand(FBattleCommand::MakeEndTurn()).IsOk());
 		Snapshot = Session->BuildSnapshot();
-		TestEqual(TEXT("Enemy intent damages player and poison ticks after action"), Snapshot.Player.CurrentHp, Snapshot.Player.MaxHp - 9);
+		TestEqual(TEXT("Enemy intent damages player and poison ticks after action"), Snapshot.Player.CurrentHp, Snapshot.Player.MaxHp - 23);
 		TestEqual(TEXT("Enemy intent applies poison to player"), FWacomBattleFixture::GetStatusStacks(Snapshot.Player.StatusStacks, WacomTags::Status_Poison), 2);
 		int32 SlowCardCount = 0;
 		for (const FHandCardSnapshot& Card : Snapshot.Hand.Cards)

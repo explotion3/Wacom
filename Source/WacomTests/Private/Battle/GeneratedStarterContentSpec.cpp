@@ -42,12 +42,15 @@ namespace
 		UEnemyDefinition* Snake,
 		const TArray<UCardDefinition*>& RequiredCards,
 		int32 Seed,
-		int32 MinimumDeckSize = 8)
+		int32 MinimumDeckSize = 8,
+		int32 PlayerFingerCount = 50)
 	{
 		TArray<UCardDefinition*> Deck = RequiredCards;
 		PadDeckWithNoops(Fixture, Deck, MinimumDeckSize);
+		UCharacterDefinition* Character = MakeGeneratedContentCharacter(Fixture, Deck);
+		Character->FingerCount = PlayerFingerCount;
 		return Fixture.CreateSession(
-			MakeGeneratedContentCharacter(Fixture, Deck),
+			Character,
 			Snake,
 			Seed);
 	}
@@ -427,7 +430,7 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 			{
 				return FWacomBattleFixture::FindHandCardByCardId(Snapshot, PoisonFang->CardId) != nullptr
 					&& FWacomBattleFixture::FindHandCardByCardId(Snapshot, PoisonNeedle->CardId) != nullptr
-					&& FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head")) != nullptr;
+					&& FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body")) != nullptr;
 			},
 			*this,
 			TEXT("PoisonNeedle conditional damage"));
@@ -437,8 +440,8 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 		}
 
 		FBattleSnapshot Snapshot = Session->BuildSnapshot();
-		const FEnemyPartSnapshot* Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
-		if (!TestNotNull(TEXT("Snake.Head exists for conditional PoisonNeedle"), Head))
+		const FEnemyPartSnapshot* TargetPart = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
+		if (!TestNotNull(TEXT("Snake.Body exists for conditional PoisonNeedle"), TargetPart))
 		{
 			return false;
 		}
@@ -446,38 +449,38 @@ bool FWacomBattleGeneratedStarterConditionalPassiveZoneHookSpec::RunTest(const F
 		FGuid PoisonFangId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonFang->CardId);
 		TestTrue(TEXT("PoisonFang is in hand"), PoisonFangId.IsValid());
 		TestTrue(TEXT("Play PoisonFang"),
-			Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonFangId, Head->PartKey)).IsOk());
+			Session->ResolveCommand(FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonFangId, TargetPart->PartKey)).IsOk());
 		Snapshot = Session->BuildSnapshot();
-		Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
-		if (!TestNotNull(TEXT("Snake.Head exists after PoisonFang"), Head))
+		TargetPart = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
+		if (!TestNotNull(TEXT("Snake.Body exists after PoisonFang"), TargetPart))
 		{
 			return false;
 		}
 		TestEqual(TEXT("PoisonFang leaves Poison on target"),
-			FWacomBattleFixture::GetStatusStacks(Head->StatusStacks, WacomTags::Status_Poison),
+			FWacomBattleFixture::GetStatusStacks(TargetPart->StatusStacks, WacomTags::Status_Poison),
 			1);
-		const int32 HpBeforeNeedle = Head->CurrentHp;
-		const FGuid HeadInstanceId = Head->InstanceId;
+		const int32 HpBeforeNeedle = TargetPart->CurrentHp;
+		const FGuid TargetPartInstanceId = TargetPart->InstanceId;
 
 		const FGuid PoisonNeedleId = FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonNeedle->CardId);
 		TestTrue(TEXT("PoisonNeedle is in hand after PoisonFang"), PoisonNeedleId.IsValid());
 		const FBattleResolution Resolution = Session->ResolveCommand(
-			FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonNeedleId, Head->PartKey));
+			FBattleCommand::MakePlayCardOnEnemyPartKey(PoisonNeedleId, TargetPart->PartKey));
 		TestTrue(TEXT("Play PoisonNeedle against poisoned target"), Resolution.IsOk());
 		const TArray<FBattleEvent>& Events = Resolution.Events;
 		Snapshot = Session->BuildSnapshot();
-		Head = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Head"));
-		if (!TestNotNull(TEXT("Snake.Head exists after conditional PoisonNeedle"), Head))
+		TargetPart = FWacomBattleFixture::FindPartByPartId(Snapshot, TEXT("Snake.Body"));
+		if (!TestNotNull(TEXT("Snake.Body exists after conditional PoisonNeedle"), TargetPart))
 		{
 			return false;
 		}
 		TestEqual(TEXT("PoisonNeedle card damage includes conditional bonus"),
 			FWacomBattleFixture::SumDamageEventsForCard(Events, PoisonNeedleId),
 			9);
-		TestTrue(TEXT("PoisonNeedle plus real follow-up poison ticks reduce HP by at least conditional damage plus one tick"),
-			HpBeforeNeedle - Head->CurrentHp >= 10);
+		TestTrue(TEXT("PoisonNeedle follow-up poison contributes additional HP loss"),
+			HpBeforeNeedle - TargetPart->CurrentHp > 9);
 		TestTrue(TEXT("Conditional PoisonNeedle still includes poison tick event"),
-			FWacomBattleFixture::HasEventForActor(Events, EBattleEventType::DamageDealt, HeadInstanceId, WacomTags::Status_Poison));
+			FWacomBattleFixture::HasEventForActor(Events, EBattleEventType::DamageDealt, TargetPartInstanceId, WacomTags::Status_Poison));
 	}
 
 	{
@@ -608,7 +611,8 @@ bool FWacomBattleGeneratedSnakeIntentVariantsSpec::RunTest(const FString& /*Para
 		Snake,
 		{ Fixture.MakeNoopCard(/*Cost*/0), Fixture.MakeNoopCard(/*Cost*/0) },
 		/*Seed*/ 1,
-		/*MinimumDeckSize*/ 8);
+		/*MinimumDeckSize*/ 8,
+		/*PlayerFingerCount*/ 500);
 
 	bool bSawPlayerDamage = false;
 	bool bSawPlayerPoison = false;
@@ -667,6 +671,6 @@ bool FWacomBattleGeneratedSnakeIntentVariantsSpec::RunTest(const FString& /*Para
 	TestTrue(TEXT("Generated Snake intent sequence applies Poison to player"), bSawPlayerPoison);
 	TestTrue(TEXT("Generated Snake intent sequence materializes Slow on a hand card"), bSawPlayerSlow);
 	TestTrue(TEXT("Generated Snake intent sequence applies self Shield"), bSawEnemyShield);
-	TestTrue(TEXT("High HP fixture survives generated Snake smoke"), Final.Player.CurrentHp > 0);
+	TestTrue(TEXT("Elevated HP fixture survives generated Snake smoke"), Final.Player.CurrentHp > 0);
 	return true;
 }

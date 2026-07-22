@@ -171,15 +171,15 @@ bool FWacomBattleEffectConditionTargetHasStatusAllowsWhenPresent::RunTest(const 
 	TestTrue(TEXT("PoisonInHand"), PoisonId.IsValid());
 	TestTrue(TEXT("DmgInHand"),    DmgId.IsValid());
 
-	// 打施毒卡：施加 3 层中毒，立即结算 -3 HP。部位 HP 100 → 97。
+	// 打施毒卡：施加 3 层中毒，立即结算 -24 HP。部位 HP 100 → 76。
 	TestTrue(TEXT("PlayPoison"), S->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, PoisonId, PartId)).IsOk());
 	Snap = S->BuildSnapshot();
-	TestEqual(TEXT("PartHp after poison tick"), FWacomBattleFixture::FindPartHp(Snap, 0), 97);
+	TestEqual(TEXT("PartHp after poison tick"), FWacomBattleFixture::FindPartHp(Snap, 0), 76);
 
-	// 打条件伤害卡：条件成立（Poison 在）-> -5 HP。中毒会再结算 -3。
-	// 打牌后总 HP = 97 - 5 (伤害) - 3 (中毒) = 89。
+	// 打条件伤害卡：条件成立（Poison 在）-> -5 HP。中毒会再结算 -24。
+	// 打牌后总 HP = 76 - 5 (伤害) - 24 (中毒) = 47。
 	TestTrue(TEXT("PlayDmg"), S->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, DmgId, PartId)).IsOk());
 	Snap = S->BuildSnapshot();
-	TestEqual(TEXT("PartHp after conditional damage"), FWacomBattleFixture::FindPartHp(Snap, 0), 89);
+	TestEqual(TEXT("PartHp after conditional damage"), FWacomBattleFixture::FindPartHp(Snap, 0), 47);
 	return true;
 }

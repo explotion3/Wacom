@@ -15,6 +15,13 @@
 
 namespace
 {
+	constexpr int32 PoisonDamagePerStack = 8;
+
+	int32 CalculatePoisonDamage(const int32 PoisonStacks)
+	{
+		return PoisonStacks * PoisonDamagePerStack;
+	}
+
 	void EmitPendingStatusApplied(
 		FBattleEventBus& Events,
 		const FGameplayTag& Status,
@@ -81,7 +88,7 @@ namespace
 			{
 				FDamageMutationIntent Intent;
 				Intent.Target = FBattleCombatantHandle::Player();
-				Intent.RequestedDamage = *PlayerPoison;
+				Intent.RequestedDamage = CalculatePoisonDamage(*PlayerPoison);
 				Intent.ShieldInteraction = EDamageShieldInteraction::BypassShield;
 				Intent.CauseTag = WacomTags::Status_Poison;
 				FBattleCombatantMutationModule::ApplyDamage(State, Events, Intent);
@@ -101,7 +108,7 @@ namespace
 			}
 			FDamageMutationIntent Intent;
 			Intent.Target = FBattleCombatantHandle::EnemyPart(Part.InstanceId);
-			Intent.RequestedDamage = *Poison;
+			Intent.RequestedDamage = CalculatePoisonDamage(*Poison);
 			Intent.ShieldInteraction = EDamageShieldInteraction::BypassShield;
 			Intent.CauseTag = WacomTags::Status_Poison;
 			FBattleCombatantMutationModule::ApplyDamage(State, Events, Intent);

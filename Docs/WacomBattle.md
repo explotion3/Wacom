@@ -282,7 +282,7 @@ UI 先机预测、scene part Status Badge 和拖卡 preview 只读取 Snapshot /
 - 玩家每打出一张牌后，对敌我双方各结算一次当前中毒层数伤害。
 - 敌方部位每行动一次后，对敌我双方各结算一次当前中毒层数伤害。
 
-`Poison` 造成等于当前中毒层数的生命伤害，穿透护盾，层数不因结算而减少。`Effect.Heal` 治疗玩家时，移除治疗量 10% 的中毒层数，向下取整；层数为 0 时移除 `Status.Poison`。
+`Poison` 每层造成 8 点生命伤害，即单次结算伤害为当前中毒层数 × 8；玩家与敌方部位使用同一规则。中毒穿透护盾，层数不因结算而减少。`Effect.Heal` 治疗玩家时，移除治疗量 10% 的中毒层数，向下取整；层数为 0 时移除 `Status.Poison`。
 
 状态不共享一个万能存储。玩家/敌方部位的持久层数存于 Combatant `StatusStacks`；单卡层数存于 `FRuntimeCardInstance.StatusStacks`；尚未选择具体卡牌的玩家侧控制存于 `PendingHandAfflictions`。每种宿主都只有一份可变真相，Snapshot 的 `Statuses` 从正层数 facts 投影。当前不实现 timed status，Effect 的 `Duration` 不创建平行状态实例。
 
