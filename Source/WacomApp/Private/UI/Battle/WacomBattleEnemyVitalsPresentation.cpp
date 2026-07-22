@@ -11,25 +11,25 @@
 
 namespace
 {
-	const FName HpCurrentPercentParameterName(TEXT("HpCurrentPercent"));
-	const FName HpTrailStartPercentParameterName(TEXT("HpTrailStartPercent"));
-	const FName HpPreviewPercentParameterName(TEXT("HpPreviewPercent"));
-	const FName HpPreviewModeParameterName(TEXT("HpPreviewMode"));
-	const FName DamageStartTimeParameterName(TEXT("DamageStartTime"));
-	const FName DamageTrailHoldParameterName(TEXT("DamageTrailHoldSeconds"));
-	const FName DamageTrailRecoveryParameterName(TEXT("DamageTrailRecoverySeconds"));
-	const FName ShieldVisibleParameterName(TEXT("ShieldVisible"));
-	const FName ShieldPreviewModeParameterName(TEXT("ShieldPreviewMode"));
-	const FName ShieldImpactStartTimeParameterName(TEXT("ShieldImpactStartTime"));
-	const FName SegmentRoleParameterName(TEXT("SegmentRole"));
-	const FName DestroyedAmountParameterName(TEXT("DestroyedAmount"));
-	const FName LowHealthAmountParameterName(TEXT("LowHealthAmount"));
-	const FName FlashIntensityParameterName(TEXT("FlashIntensity"));
-	const FName ReducedMotionParameterName(TEXT("ReducedMotion"));
+	const FName EnemyHpCurrentPercentParameterName(TEXT("HpCurrentPercent"));
+	const FName EnemyHpTrailStartPercentParameterName(TEXT("HpTrailStartPercent"));
+	const FName EnemyHpPreviewPercentParameterName(TEXT("HpPreviewPercent"));
+	const FName EnemyHpPreviewModeParameterName(TEXT("HpPreviewMode"));
+	const FName EnemyDamageStartTimeParameterName(TEXT("DamageStartTime"));
+	const FName EnemyDamageTrailHoldParameterName(TEXT("DamageTrailHoldSeconds"));
+	const FName EnemyDamageTrailRecoveryParameterName(TEXT("DamageTrailRecoverySeconds"));
+	const FName EnemyShieldVisibleParameterName(TEXT("ShieldVisible"));
+	const FName EnemyShieldPreviewModeParameterName(TEXT("ShieldPreviewMode"));
+	const FName EnemyShieldImpactStartTimeParameterName(TEXT("ShieldImpactStartTime"));
+	const FName EnemySegmentRoleParameterName(TEXT("SegmentRole"));
+	const FName EnemyDestroyedAmountParameterName(TEXT("DestroyedAmount"));
+	const FName EnemyLowHealthAmountParameterName(TEXT("LowHealthAmount"));
+	const FName EnemyFlashIntensityParameterName(TEXT("FlashIntensity"));
+	const FName EnemyReducedMotionParameterName(TEXT("ReducedMotion"));
 
-	constexpr float LowHealthThreshold = 0.25f;
+	constexpr float EnemyLowHealthThreshold = 0.25f;
 
-	bool AreStatusStacksEquivalent(
+	bool AreEnemyStatusStacksEquivalent(
 		const TMap<FGameplayTag, int32>& Left,
 		const TMap<FGameplayTag, int32>& Right)
 	{
@@ -238,7 +238,7 @@ FWacomBattleEnemyPartPresentationState::BuildVitalsFrame(
 	Frame.DestroyedAmount = DisplayView.bDestroyed ? 1.0f : 0.0f;
 	Frame.LowHealthAmount = DisplayHpPercent > 0.0f
 		? FMath::Clamp(
-			(LowHealthThreshold - DisplayHpPercent) / LowHealthThreshold,
+			(EnemyLowHealthThreshold - DisplayHpPercent) / EnemyLowHealthThreshold,
 			0.0f,
 			1.0f)
 		: 0.0f;
@@ -309,7 +309,7 @@ bool FWacomBattleEnemyPartPresentationState::AreViewsEquivalent(
 		&& Left.RuntimeStatuses.Num() == Right.RuntimeStatuses.Num()
 		&& Left.RuntimeStatuses.HasAllExact(Right.RuntimeStatuses)
 		&& Right.RuntimeStatuses.HasAllExact(Left.RuntimeStatuses)
-		&& AreStatusStacksEquivalent(Left.RuntimeStatusStacks, Right.RuntimeStatusStacks)
+		&& AreEnemyStatusStacksEquivalent(Left.RuntimeStatusStacks, Right.RuntimeStatusStacks)
 		&& Left.bDestroyed == Right.bDestroyed
 		&& Left.bActionPreviewWillAct == Right.bActionPreviewWillAct
 		&& Left.bActionPreviewWillSkipActionDueToStun == Right.bActionPreviewWillSkipActionDueToStun
@@ -388,21 +388,21 @@ void FWacomBattleEnemyVitalsMaterialAdapter::ApplyFrame(
 	{
 		return;
 	}
-	MaterialInstance->SetScalarParameterValue(HpCurrentPercentParameterName, Frame.HpCurrentPercent);
-	MaterialInstance->SetScalarParameterValue(HpTrailStartPercentParameterName, Frame.HpTrailStartPercent);
-	MaterialInstance->SetScalarParameterValue(HpPreviewPercentParameterName, Frame.HpPreviewPercent);
-	MaterialInstance->SetScalarParameterValue(HpPreviewModeParameterName, Frame.HpPreviewMode);
-	MaterialInstance->SetScalarParameterValue(DamageStartTimeParameterName, Frame.DamageStartTimeSeconds);
-	MaterialInstance->SetScalarParameterValue(DamageTrailHoldParameterName, Frame.DamageTrailHoldSeconds);
-	MaterialInstance->SetScalarParameterValue(DamageTrailRecoveryParameterName, Frame.DamageTrailRecoverySeconds);
-	MaterialInstance->SetScalarParameterValue(ShieldVisibleParameterName, Frame.ShieldVisible);
-	MaterialInstance->SetScalarParameterValue(ShieldPreviewModeParameterName, Frame.ShieldPreviewMode);
-	MaterialInstance->SetScalarParameterValue(ShieldImpactStartTimeParameterName, Frame.ShieldImpactStartTimeSeconds);
-	MaterialInstance->SetScalarParameterValue(SegmentRoleParameterName, Frame.SegmentRole);
-	MaterialInstance->SetScalarParameterValue(DestroyedAmountParameterName, Frame.DestroyedAmount);
-	MaterialInstance->SetScalarParameterValue(LowHealthAmountParameterName, Frame.LowHealthAmount);
-	MaterialInstance->SetScalarParameterValue(FlashIntensityParameterName, Frame.FlashIntensity);
-	MaterialInstance->SetScalarParameterValue(ReducedMotionParameterName, Frame.ReducedMotion);
+	MaterialInstance->SetScalarParameterValue(EnemyHpCurrentPercentParameterName, Frame.HpCurrentPercent);
+	MaterialInstance->SetScalarParameterValue(EnemyHpTrailStartPercentParameterName, Frame.HpTrailStartPercent);
+	MaterialInstance->SetScalarParameterValue(EnemyHpPreviewPercentParameterName, Frame.HpPreviewPercent);
+	MaterialInstance->SetScalarParameterValue(EnemyHpPreviewModeParameterName, Frame.HpPreviewMode);
+	MaterialInstance->SetScalarParameterValue(EnemyDamageStartTimeParameterName, Frame.DamageStartTimeSeconds);
+	MaterialInstance->SetScalarParameterValue(EnemyDamageTrailHoldParameterName, Frame.DamageTrailHoldSeconds);
+	MaterialInstance->SetScalarParameterValue(EnemyDamageTrailRecoveryParameterName, Frame.DamageTrailRecoverySeconds);
+	MaterialInstance->SetScalarParameterValue(EnemyShieldVisibleParameterName, Frame.ShieldVisible);
+	MaterialInstance->SetScalarParameterValue(EnemyShieldPreviewModeParameterName, Frame.ShieldPreviewMode);
+	MaterialInstance->SetScalarParameterValue(EnemyShieldImpactStartTimeParameterName, Frame.ShieldImpactStartTimeSeconds);
+	MaterialInstance->SetScalarParameterValue(EnemySegmentRoleParameterName, Frame.SegmentRole);
+	MaterialInstance->SetScalarParameterValue(EnemyDestroyedAmountParameterName, Frame.DestroyedAmount);
+	MaterialInstance->SetScalarParameterValue(EnemyLowHealthAmountParameterName, Frame.LowHealthAmount);
+	MaterialInstance->SetScalarParameterValue(EnemyFlashIntensityParameterName, Frame.FlashIntensity);
+	MaterialInstance->SetScalarParameterValue(EnemyReducedMotionParameterName, Frame.ReducedMotion);
 }
 
 void FWacomBattleEnemyVitalsMaterialAdapter::RestoreAuthoredBrush()
