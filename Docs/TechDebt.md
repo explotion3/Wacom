@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-07-18
+updated: 2026-07-23
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -76,8 +76,10 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | Combat Log 战后回放与筛选未实现 | 固定视口流式播报、按回合分区的详细日志 Screen、简略/详细切换和独立 Battle 命令 gate 已接入；打开时复制当前历史，不在页面内轮询 | 若后续需要类型筛选、搜索、导出或战后回放，基于只读 `FWacomBattleCombatLogTurnSectionView` 扩展，不把完整历史重新塞回常驻 Feed，也不让 Screen 读取 `UBattleSession` |
 | UI Style 资产命名 V0 | 通用样式资产已迁到 `/Game/Wacom/UI/Style/`，但仍保留 `tiny_menu_Button`、`MyCommonTextStyle` 等原型命名 | 后续设计系统整理时统一命名为语义化 Style asset，例如 `WBPStyle_Button_CommandPrimary` / `TextStyle_CommandButton`，并通过资产审计确认没有旧路径引用后再重命名 |
 | Backpack UI C++ 默认布局 | 正式 Screen/Workspace/ZonePile/DeleteConfirm/Style 由 Builder 生成；旧右侧区域栏、缩略 Preview 与 `WBP_BackpackCardView` 生产链已删除。纯 C++ fallback 只构建同一 Workspace Host 和覆盖层，并消费同一 Scene Builder / Registry 数据流 | 保留行为等价 fallback，但不扩展为第二套视觉或输入结构；牌堆美术只修改正式 `WBP_BackpackZonePile`，真实卡面统一复用 `WBP_FPCardView`，不得复制 Workspace 输入或 Run 规则 |
+| Backpack Style v4 一次性迁移 Commandlet | backpack MCP 端口受 Windows excluded range 阻塞，用户明确授权 `WacomMigrateBackpackWorkspaceV4` 以九 Package 硬清单完成本轮 v3→v4；实现保留 `InspectOnly`、结构预检、清单外拒绝和幂等审计，不调用通用 Backpack Builder | 本分支资产集成到 main 且 main 上复跑 `InspectOnly=current`、资产绑定测试和 LFS/hash 审计后，删除 Commandlet 的 `-Apply` 路径及专用 migration 实现；长期保留正式资产合同与自动化测试，未来迁移重新走 MCP 或取得新的显式授权 |
+| Backpack v4 量化 Insights 基线 | 2026-07-23 用户已完成真实 PIE 整体验收并确认无问题；本轮没有交付可归档 trace 或 24/100 卡场景的具体 p95 数值，因此只记录定性通过，不填写推测数据 | 发版性能门禁或后续性能回归前，按 24/100 卡、背包关闭/开启/交互和 1280×720/1920×1080 矩阵补采 60 秒 Unreal Insights，记录 p95、最大卡顿与背包增量；没有回归证据时不阻塞本次功能集成 |
 | Shop 长列表 | Shop 的购买/强化双页签已分别使用 snapshot signature dirty gate；Offer 按商品 identity、Upgrade 按 InstanceId reconcile，但两页列表仍是普通 Panel | 商品量明显上升并有 profiler 证据时再迁 `ListView` / `TileView` 或正式虚拟化；迁移不得改变 Run Quote/Result 或 Screen flow |
-| 像素风 UI 分辨率适配 | 全局 UI 已统一为 `1920×1080` 封顶 DPI；背包正式 Screen 已移除固定 `1600×900` 子画布并改为 Fill，卡面以独立 ScaleBox 固定 `1.0`、Workspace 位置整数像素对齐，不按高度连续改写比例。桌面 PIE 已覆盖四档目标分辨率、16:10、超宽和 100 cards，用户未观察到布局、采样或明显空闲卡顿问题 | 仅保留跨平台非整数 DPI/不同抗锯齿管线和超过 100 张时的真实风险；出现目标平台证据或 profiler 瓶颈后再决定最近邻资源规范或虚拟化，不凭当前定性验收提前重构 |
+| 像素风 UI 分辨率适配 | 全局 UI 已统一为 `1920×1080` 封顶 DPI；背包正式 Screen 已移除固定 `1600×900` 子画布并改为 Fill，卡面 ScaleBox 的资产制作值保持 `1.0`、运行时固定应用 `CardDisplayScale=0.78`，Workspace 位置整数像素对齐，不按高度连续改写比例。桌面 PIE 已覆盖四档目标分辨率、16:10、超宽和 100 cards，用户未观察到布局、采样或明显空闲卡顿问题 | 仅保留跨平台非整数 DPI/不同抗锯齿管线和超过 100 张时的真实风险；出现目标平台证据或 profiler 瓶颈后再决定最近邻资源规范或虚拟化，不凭当前定性验收提前重构 |
 | 探索 HUD 时段总节点数 | 只显示剩余节点，没有本时段总节点快照 | `FRunState` 加 `TotalNodeCountForPhase`，或 HUD 在时段切换时记录初始值 |
 | AppToast C++ fallback 表现 | 未配置 settings 时仍使用文字 fallback；viewport 创建已受真实本地玩家 / `LocalPlayer` 条件保护，离屏自动化注入 Widget 不进入 viewport | 正式 WBP 后接颜色、图标、动画、音效和全局日志策略 |
 | PrimaryLayout 固定路径 fallback | PrimaryLayout 仍允许 settings -> 固定 `WBP_PrimaryGameLayout` 路径 fallback -> null | 资产路径稳定后评估是否也完全转为 settings-only |
@@ -138,6 +140,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 | Worktree 依赖 ignored Content | 开发期由 `InitializeWacomWorktree.ps1` 仅为 Art / Asset 建立独立 D 盘依赖层；`Content/DreamMaterials` 现有 61 个 `.uasset` 已整体由 Git LFS 管理。2026-07-16 只读 AssetRegistry 基线只剩 `/Game/DreamMaterials/M_Card_Step2_Inst` 没有本地磁盘资产 | 按 [`Content_Dependency_Audit.md`](./Content_Dependency_Audit.md) 继续确认 Art / Asset 所有权、登记第三方 manifest，并处理 `M_Card_Step2_Inst` 的旧引用或重建；最终删除对主工程 seed source 的依赖并启用外部依赖 gate |
 | 卡牌核心表面缺少独立 Finish Mask | 第一版分层视差使用现有插画 / Frame / Rarity 的 RGB 与 Alpha 程序化计算高光、金属明暗和虹彩，不要求内容团队补贴图 | 美术资产稳定后评估一张可选的打包 Mask（例如 R=金属、G=箔片、B=凹凸、A=虹彩）；只在能显著提升不同主题复用时加入 MI，不把单一卡牌特例写进规则数据 |
 | EffectBadge Added/Removed 缺少正式规则事务 | App 已有稳定 `PresentationKey`、ValueChanged/Added/Removed Hint、局部 Playback、移除后重排与新增展开能力；当前生产触发只接受 `CardRuntimeCostChanged / CardStatusChanged` 许可下的可见 ValueChanged，不从普通 Snapshot 数组差异推断增删 | 规则或升级系统引入动态 Effect 增删时，先定义明确事件/事务、来源与稳定 EffectIndex，再由 Battle Presentation 生成 Added/Removed Hint；随后补真实旧槽位几何缓存与 PIE 验收，禁止 Widget 自己把数组变化解释成规则事实 |
+| Battle 独立/unity 编译合同不完整 | 最新 `main=2af095a6` 的正式 unity 构建会把 `PlayerStatusBar.cpp` 与 `WacomBattleEnemyVitalsPresentation.cpp` 合并后暴露匿名命名空间同名常量/函数重定义；关闭 unity 后，`BattleHUDTestHarness.cpp` 又因只前向声明 `UBattleSession` 而无法独立实例化 `TStrongObjectPtr`。背包重构仅用验证专用 Target/include 补全生成测试二进制，两处临时改动均已恢复 | 为两个 Battle `.cpp` 使用文件级唯一内部名称或私有实现类型，并让使用 `TStrongObjectPtr<UBattleSession>` 的编译单元在实例化点包含 `Session/BattleSession.h`；随后同时运行正式 unity 和非 unity `WacomEditor` 构建，避免继续依赖 unity 偶然提供完整类型 |
 
 ---
 

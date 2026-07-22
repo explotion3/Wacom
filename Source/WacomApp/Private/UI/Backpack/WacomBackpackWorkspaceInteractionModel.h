@@ -43,12 +43,24 @@ struct FWacomBackpackWorkspaceCardHitRecord
 	}
 };
 
-/** 指针释放只产生意图；Screen 成功提交后再调用 CommitReleasedCards。 */
+/** 释放目标来源。Pointer 保持传统精确坐标；其余值是无鼠标语义目标。 */
+enum class EWacomBackpackWorkspaceReleaseTargetKind : uint8
+{
+	Pointer,
+	Flux,
+	Pile,
+	Delete
+};
+
+/** 释放只产生意图；Screen 成功提交后再调用 CommitReleasedCards。 */
 struct FWacomBackpackWorkspaceReleaseIntent
 {
 	TArray<FGuid> InstanceIds;
 	bool bConsumedByInitialReleaseGuard = false;
 	bool bReleaseAll = false;
+	EWacomBackpackWorkspaceReleaseTargetKind TargetKind =
+		EWacomBackpackWorkspaceReleaseTargetKind::Pointer;
+	FWacomBackpackZoneKey TargetZone;
 };
 
 /** 不依赖 Widget/Run 的背包选择、框选和持续携带状态机。 */
@@ -84,7 +96,11 @@ public:
 	void StepCurrentByWheel(float WheelDelta);
 	/** 新的释放手势已经按下；即使起手 PointerUp 丢失，也不能再吞掉这次手势的释放。 */
 	void NotifyReleaseGestureStarted();
-	FWacomBackpackWorkspaceReleaseIntent BuildReleaseIntent(bool bReleaseAll);
+	FWacomBackpackWorkspaceReleaseIntent BuildReleaseIntent(
+		bool bReleaseAll,
+		EWacomBackpackWorkspaceReleaseTargetKind TargetKind =
+			EWacomBackpackWorkspaceReleaseTargetKind::Pointer,
+		const FWacomBackpackZoneKey& TargetZone = FWacomBackpackZoneKey());
 	void CommitReleasedCards(TConstArrayView<FGuid> ReleasedInstanceIds);
 	void UpdateCarrySourceStorageRevision(uint64 SourceStorageRevision);
 	void SetCarryInputSuspended(bool bSuspended);

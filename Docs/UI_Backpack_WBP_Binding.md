@@ -27,10 +27,15 @@ Run Snapshot / revision
 | `WBP_BackpackWorkspace` | `UWacomBackpackWorkspaceWidget`；统一 Canvas、框选和空状态 |
 | `WBP_BackpackZonePile` | `UWacomBackpackZonePileWidget`；牌堆框、标题、状态、拖柄与投放反馈 |
 | `WBP_BackpackDeleteConfirm` | `UWacomBackpackDeleteConfirmWidget`；批量销毁确认 |
+| `WBP_BackpackControlsHelp` | `UWacomBackpackControlsHelpWidget`；被动操作说明层，打开时独占焦点，关闭后恢复原焦点 |
 | `WBP_BackpackCardDetailPanel` | `UWacomCardDetailPanel`；背包专用中性检查栏外观，继续消费通用 `FWacomCardDetailViewData` |
 | `WBP_BackpackScreen.WorkspaceStyle` | 指向 `DA_BackpackWorkspaceStyle` 的普通资产引用；禁止在 Widget Blueprint 根详情中内联 UObject |
 | `DA_BackpackWorkspaceStyle` | `UWacomBackpackWorkspaceStyle`；工作台布局、牌堆、颜色和动效的正式运行时制作入口 |
 | `WBP_WacomDeckCardWidget` | 背包卡牌外壳；`CardFaceScaleBox` 制作基线为 `1.0`，运行时按 Style 的统一显示缩放承载现有 `WBP_FPCardView` |
+| `Icons/T_BackpackState_Focus` | 64×64 透明像素图标；虚拟焦点，形状必须能脱离颜色识别 |
+| `Icons/T_BackpackState_Selected` | 64×64 透明像素图标；已选状态 |
+| `Icons/T_BackpackState_ValidDrop` | 64×64 透明像素图标；合法投放状态 |
+| `Icons/T_BackpackState_RejectedDrop` | 64×64 透明像素图标；拒绝投放状态 |
 
 `UWacomBackpackZonePileWidget` 保留行为等价的 C++ 被动 fallback，但正式制作必须使用 `WBP_BackpackZonePile`。旧 `UWacomBackpackPilePreviewWidget`、Preview ViewData、`PilePreviewWidgetClass` 和 `PreviewHost` 已删除；不得重新创建缩略卡链路。
 
@@ -45,6 +50,7 @@ Run Snapshot / revision
 | `DeleteTargetBackground` | `Border` | 销毁区低对比底板；携带进入时转为危险投放面 |
 | `DeleteTargetOutline` | `Border` | 可着色危险九宫格轮廓；始终 `HitTestInvisible` |
 | `DeleteTargetIcon` | `Image` | 可着色的破损卡牌图标，始终不参与命中 |
+| `DeleteTargetFocusIcon` | `Image` | 独立虚拟焦点图标；不得替代危险语义图标 |
 | `DeleteTargetLabel` | `TextBlock` | 销毁区名称或释放提示 |
 | `DeleteTargetCountText` | `TextBlock` | 携带数量预览，无携带时隐藏 |
 | `DeleteConfirmHost` | `PanelWidget` | 销毁确认覆盖层，初始 `Collapsed` |
@@ -54,6 +60,9 @@ Run Snapshot / revision
 | `CardDetailEmptyText` | `TextBlock` | 宽屏无浏览焦点时的轻量提示 |
 | `ArrangeAllButton` | `Button` | “整理通量卡牌”；只清通量自由布局 |
 | `ResetPilePositionsButton` | `Button` | “重置牌堆位置”；恢复默认牌堆位置并收起展开项 |
+| `InteractionHintText` | `TextBlock` | 独立情境提示条；按 CommonInput 当前输入类型及 Workspace 模式刷新 |
+| `ControlsHelpButton` | `Button` | 可聚焦“操作说明”入口；与 F1 打开同一个帮助层 |
+| `ControlsHelpHost` | `PanelWidget` | 被动模态帮助宿主；初始 `Collapsed`，不访问 Run |
 | `CloseButton` | `Button` | 关闭背包 |
 
 正式 Screen 不得包含 `ZoneRackHost`、`BattleDeckZoneHost`、`SpecialZonesHost` 或其它并行可操作 Zone 宿主。`DeleteTargetHost` 是 Workspace 上的覆盖层，不另占右侧栏。
@@ -84,6 +93,7 @@ Run Snapshot / revision
 | `DragHandle` | `Border` | 标题拖柄；只有从这里按下并越过阈值才移动整堆 |
 | `AccentStrip` | `Border` | 区域语义色带；始终 `HitTestInvisible` |
 | `ZoneIcon` | `Image` | 区域单色图标；Brush 由 Style 提供并乘以语义色 |
+| `NavigationFocusIcon` | `Image` | 独立虚拟焦点图标；牌堆投放反馈仍由 `DropFeedback` 表达 |
 | `TitleText` | `TextBlock` | 区域名称 |
 | `CountBadge` | `Border` | 独立数量/容量标签底板 |
 | `CountText` | `TextBlock` | 实体数量、容量和可选投影摘要 |
@@ -93,6 +103,8 @@ Run Snapshot / revision
 | `DropFeedbackCountText` | `TextBlock` | 容量预览，例如 `7 + 3 / 18` |
 
 ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折叠牌堆主体请求展开；从牌堆内容区域拖过框选阈值则进入该牌堆的 `Marquee`，不会误触展开。真实卡牌常驻 `StaticCardLayer`，携带时进入 `CarryRoot` 下两个携带分支，短时收落时进入 `SettlementLayer`。
+
+`WBP_WacomDeckCardWidget` 另须绑定两个互不替代的 `Image`：`WorkspaceFocusIcon` 显示虚拟焦点，`WorkspaceStateIcon` 显示 `Selected / ValidDrop / RejectedDrop`。两者允许同时可见；语义归约优先级固定为 `RejectedDrop > ValidDrop > Selected`。携带卡从 Screen 已完成的目标校验结果读取 Valid/Rejected，不得在卡牌 Widget 内重新猜测 Run 规则。
 
 `PileFrameLayer` 与四个卡牌层的实际子控件树是视觉所有权真相。App-private `FWacomBackpackWorkspaceVisualRegistry` 每次 Scene reconcile 都从 Canvas 子控件线性重建 `ViewKey -> Card`、物理 `InstanceId -> Card` 和 `ZoneKey -> Pile` 索引，并持有 Scene 顺序的唯一弱引用卡牌名册；Screen 与 Workspace 不得复制第二份长期数组。瞬态层中的权威卡优先于静态副本，跨区继续复用同一物理 Widget，重复静态副本和幽灵牌框当次移除。基础布局、过渡、选择冻结、Settlement 与释放交接统一由 `FWacomBackpackWorkspaceRuntime` 内的 App-private Visual State 持有，Scene reconcile 只通过它清理不可见身份和连续重定向活动过渡。`NativeDestruct` 必须解除卡牌/牌堆委托、删除动态牌堆子控件，并一次清空 Registry、Visual State 与 Motion Coordinator。
 
@@ -104,10 +116,10 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 - 特殊区第一张是真实主卡身份预览，之后是全部内容卡；主卡不可操作但保持正常不透明度并显示“主卡”标识。负重区显示全部负重卡并保持锁定。
 - 备战实体卡和投影卡都常驻；投影卡保持只读、`0.72` 透明度和来源角标。
 - 备战投影卡在展开区保持只读、半透明并显示来源角标，不参与选择、框选、携带或批量移动。
-- 只有标题拖柄可移动整堆；标题或牌堆主体短点切换展开，内容区域拖动则在超过默认 `5px` 阈值后切换为该来源区框选，打开新堆时旧堆先收拢。
+- 只有标题拖柄可移动整堆；标题或牌堆主体短点切换展开。卡牌、牌堆和内容区框选统一使用 Slate 的屏幕空间拖拽阈值（`FSlateApplication::HasTraveledFarEnoughToTriggerDrag`），由平台与 DPI 校准；不得再写本地坐标 `5px` 常量。打开新堆时旧堆先收拢。
 - 同时只展开一个牌堆。展开卡继续使用统一的固定背包显示缩放和零旋转，不使用滚动、裁切或按牌堆高度动态缩放；布局由“左压缩堆 + 中央完整窗口 + 右压缩堆”组成，空间不足时减少完整窗口卡数并压缩外围露出。
 - 展开的备战区、特殊区和负重区使用 `HandLensStrip`：空间足够时全部卡牌完整居中展示；空间不足时形成“左压缩堆 + 动态完整区 + 右压缩堆”。布局由鼠标在整条稳定走廊中的连续横向位置驱动，不再限制固定 `1–5` 张。完整卡默认间隔 `24px`，外围期望露出 `59px`、严格下限 `16px`；严格布局仍有空间时可在边界重叠不超过 `178px` 的前提下优先从右、再从左提升一张完整卡。折叠牌堆保持原固定布局。
-- 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。展开牌堆只消费 `HandLensFullGapPixels / HandLensCompressedExposurePixels / HandLensMinimumExposurePixels / HandLensPromotionOverlapTolerancePixels`；`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 保留给多卡携带，用户制作值互不覆盖。多卡携带的 `FocusWindowMaximumCards` 正式基线为 `1`，因此只完整展示当前滚轮卡，其余卡进入左右压缩段；仍可在 Style 中调高以同时完整展示相邻卡。Style 版本 3 增加 `BattleDeckAppearance / SpecialZoneAppearance / BurdenZoneAppearance / DestructiveAppearance`、投放反馈透明度和详情响应式尺寸；已有运动和用户微调值不变。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按当前基线创建，已有资产只能通过带版本条件和 Package 白名单的定向迁移升级。
+- 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。展开牌堆只消费 `HandLensFullGapPixels / HandLensCompressedExposurePixels / HandLensMinimumExposurePixels / HandLensPromotionOverlapTolerancePixels`；`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 保留给多卡携带，用户制作值互不覆盖。多卡携带的 `FocusWindowMaximumCards` 正式基线为 `1`，因此只完整展示当前滚轮卡，其余卡进入左右压缩段；仍可在 Style 中调高以同时完整展示相邻卡。Style 版本 4 在版本 3 的区域 Appearance、投放反馈和响应式详情之上增加四个可访问性图标 Brush；已有运动、Hand Lens 和用户微调值必须原样保留。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按当前基线创建。本轮 v3 → v4 已按用户明确授权通过下文一次性定向 Commandlet 完成；未来资产迁移仍须重新取得精确范围授权，不得扩展该 Commandlet 清单。
 - 牌堆身份使用颜色、单色图标和轮廓三重编码：备战冷蓝双线框、特殊紫色切角框、负重琥珀加重警示框、销毁红色破损卡牌与危险框。图标和九宫格纹理由 Builder 在缺失时确定性创建，Style Brush 保持可着色；不得在卡牌材质或 Run 规则中硬编码区域主题。
 - 标题拖柄必须始终位于可见卡身上方。展开牌堆基础卡位需预留 `ExpandedCardHoverLiftPixels` 的垂直净空，使焦点卡上抬后仍不覆盖标题；不得仅靠提高整个牌框层级而截断卡牌输入。
 - 投放反馈为 `None / Valid / Rejected / Destructive` 四态 ViewData。合法目标使用区域强调色和容量预览，拒绝显示规则层返回的原因，危险状态只用于销毁目标；所有反馈层均 `HitTestInvisible`，原子拒绝后保持携带。
@@ -125,6 +137,12 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 ## 输入与事务合同
 
 Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / Suspended`。
+
+`UWacomBackpackWorkspaceWidget` 只作为 UMG/Slate 适配器保留绑定、生命周期、输入入口、Canvas 应用和单一 ActiveTimer。`FWacomBackpackWorkspaceRuntime` 私有拥有：`GestureController`（屏幕空间阈值、按压、捕获、起手释放保护及牌堆回滚）、`NavigationController`（`InstanceId / Zone` 稳定虚拟焦点、空间邻居和语义目标）及 `PresentationController`（Hand Lens、选择冻结、Carry 编排、Hover 展开/收起和几何稳定状态）。Slate 焦点始终停留在 Workspace 根；这些控制器不访问 `URunSession`。
+
+无鼠标输入映射固定为：方向键/摇杆空间导航；Enter/A 拾取或向当前目标释放一张；Space/X 选择/取消；T/Y 空闲时切换特殊区卡牌状态、携带时释放全部；Q/E 与 LB/RB 切换当前携带卡；Esc/B 取消瞬态或返回；F1/界面按钮打开帮助层。Snapshot 等价刷新按 `InstanceId / Zone` 恢复虚拟焦点，身份消失时回退到最近可聚焦目标。无效牌堆仍可聚焦并显示 Rejected，但不得提交；规则原因由 Screen 的现有校验/Toast flow 提供。
+
+释放意图必须显式标注 `Pointer / Flux / Pile / Delete` 和目标 Zone。Pointer 保留精确坐标；Flux 释放会清除该卡手工布局并交给确定性布局器；Pile/Delete 分别复用现有原子移动和删除确认。Passive Widget 只广播意图，Run 写入仍由 Screen command flow 提交。
 
 - 选择只属于一个来源区。Interaction Model 只接收按物理 `InstanceId` 去重后的可移动实体卡；同一卡的投影、特殊区主卡预览和负重卡仅进入浏览表现，不得进入选择/携带命中表。通量背景框选只命中通量卡；折叠或展开牌堆的内容背景框选只命中该牌堆的可移动实体卡。折叠状态禁止卡牌本体直接点击，但不能因此从框选命中表移除实体卡；切换来源会清除旧选择。
 - `CardPress`、携带、整堆移动和 Suspended 会锁定或清除展开牌堆浏览焦点。框选或 Ctrl 选择开始时捕获当前实际卡位、角度和 ZOrder，停止未完成的局部重排并让 Interaction Model 使用这份视觉快照；冻结保持到选择清空、开始携带、牌堆收起或来源区切换，退出时从当前视觉姿态连续返回最后窗口，不得瞬移。
@@ -161,7 +179,28 @@ Hover 卡使用局部 `48px` 上抬，紧凑牌列邻居默认约 `0.18s` 完成
 & 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomBuildBackpackUI -Unattended -NoPause -NoSplash -NullRHI -DDC-ForceMemoryCache
 ```
 
-Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 Workspace、ZonePile、DeleteConfirm、背包专用 Detail 和 Screen。中性区域图标/框体纹理只在缺失时创建，已有同路径资产不得被重画。不再生成 `WBP_BackpackCardView`、Preview、Rack、Rack Entry、`WBP_BackpackBattleDeckZone` 或 `WBP_WacomSpecialZoneWidget`。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
+Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 Workspace、ZonePile、DeleteConfirm、背包专用 Detail 和 Screen。中性区域图标/框体纹理只在缺失时创建，已有同路径资产不得被重画。不再生成 `WBP_BackpackCardView`、Preview、Rack、Rack Entry、`WBP_BackpackBattleDeckZone` 或 `WBP_WacomSpecialZoneWidget`。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。禁止为 Style v4 运行会批量重存人工资产的通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
+
+### 一次性 Style v4 定向 Commandlet
+
+`WacomMigrateBackpackWorkspaceV4` 是用户为本轮明确授权的 MCP 外一次性迁移通道，不是新的通用 Builder。它先校验既有 WBP 父类、关键树形、可选槽位类型和 Style 版本，只允许保存以下九个固定 Package：
+
+- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_Focus`
+- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_Selected`
+- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_ValidDrop`
+- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_RejectedDrop`
+- `/Game/Wacom/UI/Backpack/WBP_BackpackControlsHelp`
+- `/Game/Wacom/UI/Backpack/WBP_BackpackScreen`
+- `/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget`
+- `/Game/Wacom/UI/Backpack/WBP_BackpackZonePile`
+- `/Game/Wacom/UI/Backpack/DA_BackpackWorkspaceStyle`
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomMigrateBackpackWorkspaceV4 -InspectOnly -Unattended -NoPause -NoSplash -NullRHI -nop4
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomMigrateBackpackWorkspaceV4 -Apply -Unattended -NoPause -NoSplash -NullRHI -nop4
+```
+
+`-InspectOnly` 全程不调用补丁函数、不保存资产；当前已满足时返回 `0`，合同有效但仍需迁移时返回 `2`。`-Apply` 只创建缺失的四张确定性 64×64 透明纹理和 Help WBP，只为三个既有 WBP 增加新绑定，并且只允许 Style 从 v3 补四个 Brush 后升到 v4；遇到未知 v4 绑定或清单外 Package 会拒绝。二次运行必须报告 `current=true / saved=0` 且九项 SHA-256 不变。该命令不得增加新 Package、迁移其它 UI 或替代 `Docs/UnrealMCPWorkflow.md` 的常规资产写入流程。
 
 ## C++ fallback
 
@@ -178,3 +217,6 @@ PIE 至少检查：
 - 整堆拖动、网格/边缘吸附、标题不重叠和主体部分重叠。
 - 携带悬停自动展开、跨区移动、原子拒绝、批量销毁和剩余携带。
 - 同 Run 关闭重开保留牌堆布局；新 Run 清空；Full/Simplified 动效均无淡入、动态缩放或首帧半透明。
+- 纯键盘和纯手柄完成浏览、选择、跨区移动、特殊牌切换、删除、整理和退出；帮助层关闭后焦点回到打开前控件，Deactivate 后不再响应 CommonInput 通知。
+- 灰度/色觉模拟下 Focus、Selected、ValidDrop、RejectedDrop 仍能按图形区分；Focus 与语义图标可同时显示。
+- 24 卡与 100 卡分别在 1280×720、1920×1080 预热 10 秒后采集 60 秒 Insights；空指针移动不得触发 Scene reconcile、完整 presentation refresh 或 carry-strip rebuild，实时 Retainer 不超过一个。16:10 与 2560×1080 仅作为布局门禁。

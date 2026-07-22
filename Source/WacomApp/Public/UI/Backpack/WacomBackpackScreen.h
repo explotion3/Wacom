@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CommonInputBaseTypes.h"
 #include "RunStateTypes.h"
 #include "UI/Run/WacomRunMenuWidgetBase.h"
 #include "WacomBackpackScreen.generated.h"
@@ -23,6 +24,8 @@ class UWacomRunViewModelProvider;
 class UWacomBackpackWorkspaceStyle;
 class UWacomBackpackWorkspaceWidget;
 class UWacomBackpackDeleteConfirmWidget;
+class UWacomBackpackControlsHelpWidget;
+class UCommonInputSubsystem;
 class UWacomPrimaryGameLayout;
 class UWacomSettingsSubsystem;
 class FWacomBackpackCardDetailController;
@@ -102,6 +105,16 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> GoldText;
 
+	/** 输入来源和当前交互模式驱动的简短操作提示；不承载空状态或规则警告。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UTextBlock> InteractionHintText;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> ControlsHelpButton;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> ControlsHelpHost;
+
 	/** 单一中央自由工作台 Host。WBP 可提供；未绑定时 fallback 自动创建。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> WorkspaceHost;
@@ -117,6 +130,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> DeleteTargetIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> DeleteTargetFocusIcon;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> DeleteTargetLabel;
@@ -155,6 +171,9 @@ protected:
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomBackpackDeleteConfirmWidget> DeleteConfirmWidget;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBackpackControlsHelpWidget> ControlsHelpWidget;
+
 	/** 关闭按钮（点击 = DeactivateWidget）。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> CloseButton;
@@ -167,6 +186,9 @@ protected:
 
 	UFUNCTION()
 	void HandleResetPilePositionsClicked();
+
+	UFUNCTION()
+	void HandleControlsHelpClicked();
 
 private:
 	UWacomRunViewModelProvider* GetProvider() const;
@@ -192,6 +214,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
 		meta = (ToolTip = "批量销毁确认 Widget 类。只显示数量和奖励并转发确认、取消意图。"))
 	TSubclassOf<UWacomBackpackDeleteConfirmWidget> DeleteConfirmWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Accessibility",
+		meta = (ToolTip = "背包操作说明层。保持被动，只显示 Screen 提供的输入提示。"))
+	TSubclassOf<UWacomBackpackControlsHelpWidget> ControlsHelpWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace Tuning",
 		meta = (ToolTip = "背包自由工作台的布局、牌列、颜色和动效制作参数资产。双击引用的 DA_BackpackWorkspaceStyle 可直接调整；不影响 Run 规则。"))
@@ -239,6 +265,13 @@ private:
 	void HandleRuntimeSettingsChanged(
 		const FWacomLocalSettingsSnapshot& Snapshot,
 		EWacomRuntimeSettingsChangeReason Reason);
+	void BindCommonInput();
+	void UnbindCommonInput();
+	void HandleInputMethodChanged(ECommonInputType InputType);
+	void RefreshInteractionHints();
+	void ShowControlsHelp();
+	void HideControlsHelp(bool bRestoreFocus);
+	bool IsControlsHelpVisible() const;
 	void CancelWorkspaceInteraction();
 	bool ResolveWorkspacePileTarget(FWacomBackpackZoneKey& OutTarget) const;
 	bool IsWorkspaceDeleteTarget() const;
@@ -285,7 +318,10 @@ private:
 	TSharedPtr<FWacomBackpackPendingDeleteConfirmation> PendingDeleteConfirmation;
 	TWeakObjectPtr<UWacomPrimaryGameLayout> BoundPrimaryLayout;
 	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
+	TWeakObjectPtr<UCommonInputSubsystem> BoundCommonInputSubsystem;
 	FDelegateHandle RuntimeSettingsChangedHandle;
+	ECommonInputType CurrentInputType = ECommonInputType::MouseAndKeyboard;
+	TWeakPtr<SWidget> FocusBeforeControlsHelp;
 	bool bOwningLayerTransitioning = false;
 	bool bCardDetailDocked = false;
 	bool bHasPendingPileExpansionAfterCollapse = false;

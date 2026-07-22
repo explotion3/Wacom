@@ -25,7 +25,9 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/Texture2D.h"
 #include "Materials/MaterialInterface.h"
+#include "UI/Backpack/WacomBackpackControlsHelpWidget.h"
 #include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
@@ -82,6 +84,8 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackDeleteConfirm.WBP_BackpackDeleteConfirm_C"));
 	UClass* DetailClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackCardDetailPanel.WBP_BackpackCardDetailPanel_C"));
+	UClass* ControlsHelpClass = LoadBackpackWorkspaceWidgetClass(
+		TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackControlsHelp.WBP_BackpackControlsHelp_C"));
 	UClass* DeckCardClass = LoadBackpackWorkspaceWidgetClass(
 		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget_C"));
 	UClass* BackpackCardFaceClass = LoadBackpackWorkspaceWidgetClass(
@@ -112,6 +116,9 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		ConfirmClass && ConfirmClass->IsChildOf(UWacomBackpackDeleteConfirmWidget::StaticClass()));
 	TestTrue(TEXT("Backpack detail panel uses the shared passive detail parent"),
 		DetailClass && DetailClass->IsChildOf(UWacomCardDetailPanel::StaticClass()));
+	TestTrue(TEXT("Backpack controls help uses the passive help parent"),
+		ControlsHelpClass
+			&& ControlsHelpClass->IsChildOf(UWacomBackpackControlsHelpWidget::StaticClass()));
 	TestTrue(TEXT("Backpack card uses passive DeckCard parent"),
 		DeckCardClass && DeckCardClass->IsChildOf(UWacomDeckCardWidget::StaticClass()));
 	TestTrue(TEXT("Backpack card face reuses the first-person wrapper parent"),
@@ -221,7 +228,11 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TestNotNull(TEXT("Delete target binds its passive background"), Cast<UBorder>(ScreenTree->FindWidget(TEXT("DeleteTargetBackground"))));
 		TestNotNull(TEXT("Delete target binds its hit-test invisible outline"), Cast<UBorder>(ScreenTree->FindWidget(TEXT("DeleteTargetOutline"))));
 		TestNotNull(TEXT("Delete target binds its semantic icon"), Cast<UImage>(ScreenTree->FindWidget(TEXT("DeleteTargetIcon"))));
+		TestNotNull(TEXT("Delete target binds its independent focus icon"), Cast<UImage>(ScreenTree->FindWidget(TEXT("DeleteTargetFocusIcon"))));
 		TestNotNull(TEXT("Delete target binds its capacity/count line"), Cast<UTextBlock>(ScreenTree->FindWidget(TEXT("DeleteTargetCountText"))));
+		TestNotNull(TEXT("Screen binds the contextual interaction hint"), Cast<UTextBlock>(ScreenTree->FindWidget(TEXT("InteractionHintText"))));
+		TestNotNull(TEXT("Screen binds the focusable controls-help button"), Cast<UButton>(ScreenTree->FindWidget(TEXT("ControlsHelpButton"))));
+		TestNotNull(TEXT("Screen binds the passive controls-help modal host"), Cast<UOverlay>(ScreenTree->FindWidget(TEXT("ControlsHelpHost"))));
 		TestNotNull(TEXT("Screen binds ArrangeAllButton"), Cast<UButton>(ScreenTree->FindWidget(TEXT("ArrangeAllButton"))));
 		TestNotNull(TEXT("Screen binds ResetPilePositionsButton"),
 			Cast<UButton>(ScreenTree->FindWidget(TEXT("ResetPilePositionsButton"))));
@@ -322,6 +333,12 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	UBorder* WorkspaceFeedbackOverlay = DeckCardTree
 		? Cast<UBorder>(DeckCardTree->FindWidget(TEXT("WorkspaceFeedbackOverlay")))
 		: nullptr;
+	UImage* WorkspaceFocusIcon = DeckCardTree
+		? Cast<UImage>(DeckCardTree->FindWidget(TEXT("WorkspaceFocusIcon")))
+		: nullptr;
+	UImage* WorkspaceStateIcon = DeckCardTree
+		? Cast<UImage>(DeckCardTree->FindWidget(TEXT("WorkspaceStateIcon")))
+		: nullptr;
 	UTextBlock* BattleEnabledBadge = DeckCardTree
 		? Cast<UTextBlock>(DeckCardTree->FindWidget(TEXT("BattleEnabledBadge")))
 		: nullptr;
@@ -367,6 +384,8 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			VAlign_Center);
 	}
 	TestNotNull(TEXT("Backpack card exposes a dedicated workspace feedback overlay"), WorkspaceFeedbackOverlay);
+	TestNotNull(TEXT("Backpack card binds an independent focus icon"), WorkspaceFocusIcon);
+	TestNotNull(TEXT("Backpack card binds an independent semantic-state icon"), WorkspaceStateIcon);
 	TestNotNull(TEXT("Backpack card keeps the battle-ready status badge"), BattleEnabledBadge);
 	TestNotNull(TEXT("Backpack card keeps the projected-source status badge"), ProjectedFromBadge);
 	if (WorkspaceFeedbackOverlay)
@@ -458,7 +477,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	UWidgetTree* ZonePileTree = GetBackpackWorkspaceWidgetTree(ZonePileClass);
 	for (const FName BindingName : {
 		FName(TEXT("FrameBorder")), FName(TEXT("DragHandle")), FName(TEXT("AccentStrip")),
-		FName(TEXT("ZoneIcon")), FName(TEXT("TitleText")), FName(TEXT("CountBadge")),
+		FName(TEXT("ZoneIcon")), FName(TEXT("NavigationFocusIcon")), FName(TEXT("TitleText")), FName(TEXT("CountBadge")),
 		FName(TEXT("CountText")), FName(TEXT("StatusText")), FName(TEXT("DropFeedback")),
 		FName(TEXT("DropFeedbackText")), FName(TEXT("DropFeedbackCountText")) })
 	{
@@ -474,6 +493,9 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("DeleteConfirmWidgetClass")), static_cast<UObject*>(ConfirmClass));
 	TestEqual(TEXT("Screen CDO selects the backpack-specific detail class"),
 		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("CardDetailPanelClass")), static_cast<UObject*>(DetailClass));
+	TestEqual(TEXT("Screen CDO selects the formal controls-help class"),
+		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("ControlsHelpWidgetClass")),
+		static_cast<UObject*>(ControlsHelpClass));
 	UWidgetTree* DetailTree = GetBackpackWorkspaceWidgetTree(DetailClass);
 	TestNotNull(TEXT("Backpack detail WBP binds the shared SectionsBox contract"),
 		DetailTree ? Cast<UVerticalBox>(DetailTree->FindWidget(TEXT("SectionsBox"))) : nullptr);
@@ -506,6 +528,35 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	TestNotNull(TEXT("Formal workspace feedback material loads"), FeedbackMaterial);
 	if (AssignedStyle)
 	{
+		UTexture2D* FocusTexture = LoadObject<UTexture2D>(nullptr,
+			TEXT("/Game/Wacom/UI/Backpack/Icons/T_BackpackState_Focus.T_BackpackState_Focus"));
+		UTexture2D* SelectedTexture = LoadObject<UTexture2D>(nullptr,
+			TEXT("/Game/Wacom/UI/Backpack/Icons/T_BackpackState_Selected.T_BackpackState_Selected"));
+		UTexture2D* ValidTexture = LoadObject<UTexture2D>(nullptr,
+			TEXT("/Game/Wacom/UI/Backpack/Icons/T_BackpackState_ValidDrop.T_BackpackState_ValidDrop"));
+		UTexture2D* RejectedTexture = LoadObject<UTexture2D>(nullptr,
+			TEXT("/Game/Wacom/UI/Backpack/Icons/T_BackpackState_RejectedDrop.T_BackpackState_RejectedDrop"));
+		TestNotNull(TEXT("Formal 64x64 focus icon texture loads"), FocusTexture);
+		TestNotNull(TEXT("Formal 64x64 selected icon texture loads"), SelectedTexture);
+		TestNotNull(TEXT("Formal 64x64 valid-drop icon texture loads"), ValidTexture);
+		TestNotNull(TEXT("Formal 64x64 rejected-drop icon texture loads"), RejectedTexture);
+		for (const UTexture2D* Texture : {
+			FocusTexture, SelectedTexture, ValidTexture, RejectedTexture })
+		{
+			if (Texture)
+			{
+				TestEqual(TEXT("Accessibility icon authored width is 64"), Texture->Source.GetSizeX(), int64(64));
+				TestEqual(TEXT("Accessibility icon authored height is 64"), Texture->Source.GetSizeY(), int64(64));
+			}
+		}
+		TestEqual(TEXT("Style binds the formal focus icon"),
+			AssignedStyle->FocusStateIconBrush.GetResourceObject(), static_cast<UObject*>(FocusTexture));
+		TestEqual(TEXT("Style binds the formal selected icon"),
+			AssignedStyle->SelectedStateIconBrush.GetResourceObject(), static_cast<UObject*>(SelectedTexture));
+		TestEqual(TEXT("Style binds the formal valid-drop icon"),
+			AssignedStyle->ValidDropStateIconBrush.GetResourceObject(), static_cast<UObject*>(ValidTexture));
+		TestEqual(TEXT("Style binds the formal rejected-drop icon"),
+			AssignedStyle->RejectedDropStateIconBrush.GetResourceObject(), static_cast<UObject*>(RejectedTexture));
 		TestNotNull(TEXT("Battle visual icon is authored"),
 			AssignedStyle->BattleDeckAppearance.IconBrush.GetResourceObject());
 		TestNotNull(TEXT("Special visual icon is authored"),

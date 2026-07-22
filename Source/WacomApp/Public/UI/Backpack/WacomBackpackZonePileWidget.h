@@ -33,6 +33,7 @@ public:
 	void SetDropFeedbackView(const FWacomBackpackDropFeedbackView& InView);
 	const FWacomBackpackDropFeedbackView& GetDropFeedbackView() const { return DropFeedbackView; }
 	void SetResolvedGeometry(const FSlateRect& InFrameRect, const FSlateRect& InHeaderRect);
+	void SetNavigationFocused(bool bFocused);
 	FSlateRect GetResolvedFrameRect() const { return ResolvedFrameRect; }
 	FSlateRect GetResolvedHeaderRect() const { return ResolvedHeaderRect; }
 	bool WasLastPointerDownOnDragHandle() const { return bLastPointerDownOnDragHandle; }
@@ -54,6 +55,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UImage> ZoneIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> NavigationFocusIcon;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> TitleText;
@@ -83,6 +87,7 @@ private:
 	TWeakObjectPtr<UWacomBackpackWorkspaceStyle> VisualStyle;
 	FWacomBackpackDropFeedbackView DropFeedbackView;
 	bool bLastPointerDownOnDragHandle = false;
+	bool bNavigationFocused = false;
 
 	void EnsureFallbackTree();
 	void ApplyView();

@@ -56,6 +56,21 @@ void UWacomBackpackZonePileWidget::SetResolvedGeometry(
 	}
 }
 
+void UWacomBackpackZonePileWidget::SetNavigationFocused(bool bFocused)
+{
+	bNavigationFocused = bFocused;
+	if (NavigationFocusIcon)
+	{
+		const UWacomBackpackWorkspaceStyle* Style = VisualStyle.IsValid()
+			? VisualStyle.Get()
+			: GetDefault<UWacomBackpackWorkspaceStyle>();
+		NavigationFocusIcon->SetBrush(Style->FocusStateIconBrush);
+		NavigationFocusIcon->SetVisibility(bNavigationFocused
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+}
+
 void UWacomBackpackZonePileWidget::SetDropFeedbackView(
 	const FWacomBackpackDropFeedbackView& InView)
 {
@@ -134,6 +149,17 @@ void UWacomBackpackZonePileWidget::EnsureFallbackTree()
 	ZoneIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("ZoneIcon"));
 	ZoneIcon->SetVisibility(ESlateVisibility::Collapsed);
 	IconSize->AddChild(ZoneIcon);
+	NavigationFocusIcon = WidgetTree->ConstructWidget<UImage>(
+		UImage::StaticClass(), TEXT("NavigationFocusIcon"));
+	NavigationFocusIcon->SetVisibility(ESlateVisibility::Collapsed);
+	if (UCanvasPanelSlot* FocusSlot = Root->AddChildToCanvas(NavigationFocusIcon))
+	{
+		FocusSlot->SetAnchors(FAnchors(1.0f, 0.0f));
+		FocusSlot->SetAlignment(FVector2D(1.0f, 0.0f));
+		FocusSlot->SetPosition(FVector2D(-8.0f, 8.0f));
+		FocusSlot->SetSize(FVector2D(32.0f, 32.0f));
+		FocusSlot->SetZOrder(5);
+	}
 	TitleText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("TitleText"));
 	if (UHorizontalBoxSlot* HeaderSlot = Header->AddChildToHorizontalBox(TitleText))
 	{
@@ -216,6 +242,13 @@ void UWacomBackpackZonePileWidget::ApplyView()
 			ZoneIcon->SetColorAndOpacity(Appearance.AccentColor);
 		}
 		ZoneIcon->SetVisibility(bHasIcon
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (NavigationFocusIcon)
+	{
+		NavigationFocusIcon->SetBrush(Style->FocusStateIconBrush);
+		NavigationFocusIcon->SetVisibility(bNavigationFocused
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}

@@ -78,6 +78,7 @@ tags:
 | `FWacomFirstPersonCardMotionMixer` | 合成布局、状态、手势/Transition 和统一 Local Feedback View | 不读取 Slot 计时器或配置制作字段 |
 | `FWacomCardMotionKernel` | App-private 帧率无关指数收敛、固定时长 ease-out、最短角度插值、到达判断 | 不持有 Widget、语义状态、规则或音效 |
 | `FWacomBackpackWorkspaceMotionCoordinator` | 背包 Hover、拾起、滚轮当前卡、活动卡 DepthMotion 和收落的唯一局部运动所有者 | App-private；不接入 Battle Slot、transition hint 或 Run 写 API |
+| `FWacomBackpackWorkspacePresentationController` | Hand Lens、选择冻结、Carry 编排、悬停展开/收起、指针合并和几何稳定状态 | App-private；Widget 只应用 UMG/Slate 结果，不读取 Run |
 | `FWacomFirstPersonCardDetailMotionController` | Battle / Run 共用的详情面板预热、缓存、淡入淡出、scale、follow 和稳定换边 motion core | 不创建 panel，不读取规则状态，不决定详情数据来源 |
 | `UWacomFirstPersonCardViewWidget` / WBP | 卡面内容、overlay、材质参数、局部反馈图层 | 不决定手牌顺序、目标合法性或动画队列 |
 
@@ -93,9 +94,9 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 展开牌堆提供左 Shift 临时布局锁：按住时保持当前 Hand Lens 目标并允许既有 Ease-Out 完成，不再依据后续 PointerMove 重算三段布局；视觉命中、详情、Fake3D 与拾取仍按实际卡身运行。松开时使用最新缓存指针立即恢复求解。该锁定不进入 Motion Coordinator、Workspace State Store 或 Style 资产，任何非 Idle 交互、牌堆切换、失焦与生命周期退出都会清除它。
 
-背包牌列与运动制作参数由版本化的 `DA_BackpackWorkspaceStyle` 统一拥有，`WBP_BackpackScreen` 只通过普通资产引用消费，避免 Widget Blueprint 根详情内联 UObject。版本 2 将 `HandLens*` 参数限定为展开牌堆，将 `FocusWindow*` 参数限定为多卡携带；Builder 不得静默覆盖已有资产。普通左键按下可移动卡牌时必须在同一输入帧迁入 Carry 表现，不得把首次视觉启动推迟到下一次 PointerMove。
+背包牌列与运动制作参数由版本化的 `DA_BackpackWorkspaceStyle` 统一拥有，`WBP_BackpackScreen` 只通过普通资产引用消费，避免 Widget Blueprint 根详情内联 UObject。版本 2 将 `HandLens*` 参数限定为展开牌堆，将 `FocusWindow*` 参数限定为多卡携带；版本 4 只新增 Focus/Selected/Valid/Rejected 可访问性 Brush，不得改写原有运动与 Hand Lens 制作值。Builder 不得静默覆盖已有资产。普通左键按下可移动卡牌时必须在同一输入帧迁入 Carry 表现，不得把首次视觉启动推迟到下一次 PointerMove。
 
-背包运动由 `FWacomBackpackWorkspaceRuntime` 内的 Motion Coordinator 与 Workspace 单一按需 Slate 帧 `ActiveTimer` 驱动：Carry 视觉锚点、PileMove 指针采样、携带目标悬停展开、局部姿态、Settlement、焦点退出延迟与牌堆展开/收起基础布局过渡不得各自注册常驻或并行 Timer。基础布局过渡每帧只更新活动卡的 Canvas 布局和局部姿态，禁止调用全量 `RefreshInteractionPresentation()`、遍历静态卡、刷新 Snapshot 或触发 Scene Reconcile；牌堆收拢完成以实际过渡记录清空为准，不使用等时长回调。携带输入暂停只冻结鼠标/规则交互，不得中止已开始的视觉收拢；`Simplified Motion` 则在切换帧将所有基础布局过渡直接完成。几何稳定采样和下一帧 Retainer 补绘是仅有的独立一次性 Slate 任务。
+背包运动由 `FWacomBackpackWorkspaceRuntime` 内的 Presentation Controller、Motion Coordinator 与 Workspace 单一按需 Slate 帧 `ActiveTimer` 驱动：Presentation Controller 持有 Hand Lens、选择冻结、Carry 指针/牌列、悬停展开和几何稳定状态；Motion Coordinator 持有逐卡局部姿态与活动卡 DepthMotion；Widget 只执行 Canvas/Retainer 应用。Carry 视觉锚点、PileMove 指针采样、携带目标悬停展开、局部姿态、Settlement、焦点退出延迟与牌堆展开/收起基础布局过渡不得各自注册常驻或并行 Timer。基础布局过渡每帧只更新活动卡的 Canvas 布局和局部姿态，禁止调用全量 `RefreshInteractionPresentation()`、遍历静态卡、刷新 Snapshot 或触发 Scene Reconcile；牌堆收拢完成以实际过渡记录清空为准，不使用等时长回调。携带输入暂停只冻结鼠标/规则交互，不得中止已开始的视觉收拢；`Simplified Motion` 则在切换帧将所有基础布局过渡直接完成，并继续保留焦点、语义图标和提示。几何稳定采样和下一帧 Retainer 补绘是仅有的独立一次性 Slate 任务。
 
 `SettlementLayer` 在收落完成前继续拥有原卡牌 Widget，并且必须加入 Scene Reconciler 的现有实例搜索集合。Reconciler 按完整 ViewKey 去重：瞬态层中的权威 Widget 优先于静态副本，从而保证“框选—携带—放下—再次框选”不会产生重复卡面。若玩家在收落完成前再次拿起同一卡牌，Carry 必须原子接管该 Widget：撤销旧 Settlement target、未消费的完成通知和旧局部运动后，再通过同一 Slate 保活入口从 Settlement 重挂到携带层；禁止让 Settlement 与 Carry 同时持有一张卡，否则按需帧 Timer 会被永远无法完成的旧目标持续唤醒。真正销毁、去重或删除卡牌时不使用保活迁移，仍正常释放其 Slate/Retainer 子树。
 

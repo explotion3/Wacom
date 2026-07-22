@@ -468,10 +468,15 @@ void FWacomBackpackWorkspaceInteractionModel::NotifyReleaseGestureStarted()
 	}
 }
 
-FWacomBackpackWorkspaceReleaseIntent FWacomBackpackWorkspaceInteractionModel::BuildReleaseIntent(bool bReleaseAll)
+FWacomBackpackWorkspaceReleaseIntent FWacomBackpackWorkspaceInteractionModel::BuildReleaseIntent(
+	bool bReleaseAll,
+	EWacomBackpackWorkspaceReleaseTargetKind TargetKind,
+	const FWacomBackpackZoneKey& TargetZone)
 {
 	FWacomBackpackWorkspaceReleaseIntent Intent;
 	Intent.bReleaseAll = bReleaseAll;
+	Intent.TargetKind = TargetKind;
+	Intent.TargetZone = TargetZone;
 	if (!IsCarrying())
 	{
 		return Intent;

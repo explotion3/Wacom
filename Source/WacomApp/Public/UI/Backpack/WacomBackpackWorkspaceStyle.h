@@ -88,7 +88,7 @@ class WACOMAPP_API UWacomBackpackWorkspaceStyle : public UDataAsset
 
 public:
 	/** 当前制作资产版本。运行时与 Builder 禁止静默迁移已有资产。 */
-	static constexpr int32 CurrentAssetVersion = 3;
+	static constexpr int32 CurrentAssetVersion = 4;
 
 	UWacomBackpackWorkspaceStyle();
 
@@ -103,7 +103,7 @@ public:
 	}
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Version",
-		meta = (ToolTip = "背包工作台 Style 资产版本。版本 3 引入通用区域视觉、响应式详情栏和完整投放反馈；仅允许通过明确的白名单资产迁移修改已有资产。"))
+		meta = (ToolTip = "背包工作台 Style 资产版本。版本 4 引入焦点、选择、合法与拒绝四种非颜色像素图标；仅允许通过明确的白名单资产迁移修改已有资产。"))
 	int32 AssetVersion = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Layout",
@@ -260,6 +260,22 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Color",
 		meta = (ToolTip = "被拒绝牌匣目标预览颜色。建议与合法目标区分明显；只影响表现。"))
 	FLinearColor RejectedTargetColor = FLinearColor(1.0f, 0.22f, 0.18f, 0.9f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Accessibility",
+		meta = (ToolTip = "虚拟焦点像素图标。推荐透明白色蒙版；卡牌、牌堆和销毁目标共同使用。"))
+	FSlateBrush FocusStateIconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Accessibility",
+		meta = (ToolTip = "已选择状态的像素图标。必须依靠轮廓形状即可与其它状态区分。"))
+	FSlateBrush SelectedStateIconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Accessibility",
+		meta = (ToolTip = "合法投放状态的像素图标。必须依靠轮廓形状即可与拒绝状态区分。"))
+	FSlateBrush ValidDropStateIconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Accessibility",
+		meta = (ToolTip = "拒绝投放状态的像素图标。必须依靠轮廓形状即可与合法状态区分。"))
+	FSlateBrush RejectedDropStateIconBrush;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Zone Visual",
 		meta = (ToolTip = "备战区视觉：冷蓝色、卡组图标和双线轮廓。仅影响表现。"))

@@ -9,6 +9,7 @@
 #include "WacomDeckCardWidget.generated.h"
 
 class UBorder;
+class UImage;
 class UTextBlock;
 class UCardDefinition;
 class UScaleBox;
@@ -16,6 +17,15 @@ class UWidget;
 class UWacomFirstPersonCardViewWidget;
 struct FWacomBackpackWorkspaceCardVisualState;
 struct FWacomFirstPersonCardDepthView;
+class UWacomBackpackWorkspaceStyle;
+
+enum class EWacomBackpackWorkspaceCardSemanticIcon : uint8
+{
+	None,
+	Selected,
+	ValidDrop,
+	RejectedDrop
+};
 
 enum class EWacomBackpackDeckCardListReuseRole : uint8
 {
@@ -121,6 +131,10 @@ public:
 	void SetWorkspaceVisualState(bool bSelected, bool bCurrent, bool bReadOnly);
 	/** 只更新选中/当前语义，由调用方随后一次性应用正式视觉状态。 */
 	void SetWorkspaceInteractionState(bool bSelected, bool bCurrent);
+	void SetWorkspaceAccessibilityState(
+		bool bNavigationFocused,
+		EWacomBackpackWorkspaceCardSemanticIcon SemanticIcon,
+		const UWacomBackpackWorkspaceStyle& Style);
 	void ApplyWorkspaceVisualState(const FWacomBackpackWorkspaceCardVisualState& VisualState);
 	void RequestBackpackCardFaceRender();
 	void SetBackpackCardFaceRetainedRenderingEnabled(bool bEnabled);
@@ -203,6 +217,13 @@ protected:
 	/** 不参与布局和命中的纯色反馈层；正式 WBP 将它放在卡面上方、角标下方。 */
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBorder> WorkspaceFeedbackOverlay;
+
+	/** 与语义状态独立，允许焦点和选择/投放状态同时可见。 */
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> WorkspaceFocusIcon;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UImage> WorkspaceStateIcon;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UTextBlock> BattleEnabledBadge;

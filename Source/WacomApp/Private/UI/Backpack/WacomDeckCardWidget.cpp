@@ -5,11 +5,13 @@
 #define LOCTEXT_NAMESPACE "WacomDeckCard"
 
 #include "Components/Border.h"
+#include "Components/Image.h"
 #include "Components/ScaleBox.h"
 #include "Components/TextBlock.h"
 
 #include "Cards/CardDefinition.h"
 #include "UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
+#include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
@@ -96,6 +98,45 @@ void UWacomDeckCardWidget::SetWorkspaceInteractionState(bool bSelected, bool bCu
 {
 	bWorkspaceSelected = bSelected;
 	bWorkspaceCurrent = bCurrent;
+}
+
+void UWacomDeckCardWidget::SetWorkspaceAccessibilityState(
+	bool bNavigationFocused,
+	EWacomBackpackWorkspaceCardSemanticIcon SemanticIcon,
+	const UWacomBackpackWorkspaceStyle& Style)
+{
+	if (WorkspaceFocusIcon)
+	{
+		WorkspaceFocusIcon->SetBrush(Style.FocusStateIconBrush);
+		WorkspaceFocusIcon->SetVisibility(bNavigationFocused
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (WorkspaceStateIcon)
+	{
+		const FSlateBrush* Brush = nullptr;
+		switch (SemanticIcon)
+		{
+		case EWacomBackpackWorkspaceCardSemanticIcon::Selected:
+			Brush = &Style.SelectedStateIconBrush;
+			break;
+		case EWacomBackpackWorkspaceCardSemanticIcon::ValidDrop:
+			Brush = &Style.ValidDropStateIconBrush;
+			break;
+		case EWacomBackpackWorkspaceCardSemanticIcon::RejectedDrop:
+			Brush = &Style.RejectedDropStateIconBrush;
+			break;
+		default:
+			break;
+		}
+		if (Brush)
+		{
+			WorkspaceStateIcon->SetBrush(*Brush);
+		}
+		WorkspaceStateIcon->SetVisibility(Brush
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomDeckCardWidget::ApplyWorkspaceVisualState(

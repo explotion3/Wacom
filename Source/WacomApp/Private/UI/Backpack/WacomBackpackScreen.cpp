@@ -21,6 +21,9 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Engine/GameInstance.h"
+#include "Engine/LocalPlayer.h"
+#include "CommonInputSubsystem.h"
+#include "Framework/Application/SlateApplication.h"
 #include "Misc/PackageName.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 
@@ -30,7 +33,9 @@
 #include "Settings/WacomSettingsSubsystem.h"
 #include "UI/Backpack/BackpackFallbackLayoutBuilder.h"
 #include "UI/Backpack/WacomBackpackCardDetailController.h"
+#include "UI/Backpack/WacomBackpackControlsHelpWidget.h"
 #include "UI/Backpack/WacomBackpackCommandFlow.h"
+#include "UI/Backpack/WacomBackpackInteractionHintPresenter.h"
 #include "UI/Backpack/WacomBackpackStorageRefreshGate.h"
 #include "UI/Backpack/WacomBackpackWorkspaceReconciler.h"
 #include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
@@ -138,6 +143,11 @@ UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectIniti
 	{
 		DeleteConfirmWidgetClass = UWacomBackpackDeleteConfirmWidget::StaticClass();
 	}
+	if (!ControlsHelpWidgetClass)
+	{
+		ControlsHelpWidgetClass = LoadOptionalWidgetClass<UWacomBackpackControlsHelpWidget>(
+			TEXT("/Game/Wacom/UI/Backpack/WBP_BackpackControlsHelp.WBP_BackpackControlsHelp_C"));
+	}
 }
 
 namespace
@@ -175,11 +185,15 @@ TSharedRef<SWidget> UWacomBackpackScreen::RebuildWidget()
 			WidgetTree,
 			&TitleText,
 			&GoldText,
+			&InteractionHintText,
+			&ControlsHelpButton,
+			&ControlsHelpHost,
 			&WorkspaceHost,
 			&DeleteTargetHost,
 			&DeleteTargetBackground,
 			&DeleteTargetOutline,
 			&DeleteTargetIcon,
+			&DeleteTargetFocusIcon,
 			&DeleteTargetLabel,
 			&DeleteTargetCountText,
 			&DeleteConfirmHost,
@@ -203,6 +217,7 @@ void UWacomBackpackScreen::NativeConstruct()
 	EnsureWorkspaceWidgets();
 	BindOwningLayerTransition();
 	BindRuntimeSettings();
+	BindCommonInput();
 	UpdateCardDetailPlacementMode();
 	UpdateDeleteTargetPresentation(false, false, 0);
 
@@ -219,8 +234,14 @@ void UWacomBackpackScreen::NativeConstruct()
 		ResetPilePositionsButton->OnClicked.AddUniqueDynamic(
 			this, &UWacomBackpackScreen::HandleResetPilePositionsClicked);
 	}
+	if (ControlsHelpButton)
+	{
+		ControlsHelpButton->OnClicked.AddUniqueDynamic(
+			this, &ThisClass::HandleControlsHelpClicked);
+	}
 
 	TrySubscribeAndRefresh();
+	RefreshInteractionHints();
 }
 
 void UWacomBackpackScreen::NativeDestruct()
@@ -232,6 +253,8 @@ void UWacomBackpackScreen::NativeDestruct()
 	ResetBackpackRefreshDirtyGate();
 	UnbindOwningLayerTransition();
 	UnbindRuntimeSettings();
+	UnbindCommonInput();
+	HideControlsHelp(false);
 	bOwningLayerTransitioning = false;
 	bCardDetailDocked = false;
 	if (CardDetailController)
@@ -260,6 +283,11 @@ void UWacomBackpackScreen::NativeDestruct()
 		ResetPilePositionsButton->OnClicked.RemoveDynamic(
 			this, &UWacomBackpackScreen::HandleResetPilePositionsClicked);
 	}
+	if (ControlsHelpButton)
+	{
+		ControlsHelpButton->OnClicked.RemoveDynamic(
+			this, &ThisClass::HandleControlsHelpClicked);
+	}
 	if (WorkspaceWidget)
 	{
 		WorkspaceWidget->OnLayoutGeometryReadyNative.RemoveAll(this);
@@ -277,6 +305,7 @@ void UWacomBackpackScreen::NativeOnActivated()
 {
 	Super::NativeOnActivated();
 	BindOwningLayerTransition();
+	BindCommonInput();
 	// CommonUI Stack 重新激活时可能错过事件；RefreshGate 会在 revision 变化时
 	// 重建权威 Scene，未变化时则保留现有 Widget 身份与缓存。
 	TrySubscribeAndRefresh();
@@ -285,6 +314,7 @@ void UWacomBackpackScreen::NativeOnActivated()
 		WorkspaceWidget->RequestLayoutGeometryRefresh();
 		WorkspaceWidget->SetKeyboardFocus();
 	}
+	RefreshInteractionHints();
 }
 
 void UWacomBackpackScreen::TrySubscribeAndRefresh()
@@ -357,6 +387,8 @@ URunSession* UWacomBackpackScreen::GetRunSession() const
 
 void UWacomBackpackScreen::NativeOnDeactivated()
 {
+	HideControlsHelp(false);
+	UnbindCommonInput();
 	CancelWorkspaceInteraction();
 	HideCardDetailPanel();
 	Super::NativeOnDeactivated();
@@ -434,6 +466,9 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 		WorkspaceWidget->OnPileCollapseAnimationFinishedNative.AddUObject(
 			this,
 			&UWacomBackpackScreen::HandlePileCollapseAnimationFinished);
+		WorkspaceWidget->OnControlsHelpRequestedNative.RemoveAll(this);
+		WorkspaceWidget->OnControlsHelpRequestedNative.AddUObject(
+			this, &ThisClass::ShowControlsHelp);
 	}
 	if (DeleteConfirmHost && !DeleteConfirmWidget)
 	{
@@ -446,6 +481,21 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 			DeleteConfirmWidget->OnConfirmNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceDeleteConfirmed);
 			DeleteConfirmWidget->OnCancelNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceDeleteCancelled);
 			AttachChildToHostAndFill(*DeleteConfirmHost, *DeleteConfirmWidget);
+		}
+	}
+	if (ControlsHelpHost && !ControlsHelpWidget)
+	{
+		UClass* ClassToUse = ControlsHelpWidgetClass
+			? ControlsHelpWidgetClass.Get()
+			: UWacomBackpackControlsHelpWidget::StaticClass();
+		ControlsHelpWidget = CreateWidget<UWacomBackpackControlsHelpWidget>(this, ClassToUse);
+		if (ControlsHelpWidget)
+		{
+			ControlsHelpWidget->OnCloseRequestedNative.RemoveAll(this);
+			ControlsHelpWidget->OnCloseRequestedNative.AddUObject(
+				this, &ThisClass::HideControlsHelp, true);
+			AttachChildToHostAndFill(*ControlsHelpHost, *ControlsHelpWidget);
+			ControlsHelpHost->SetVisibility(ESlateVisibility::Collapsed);
 		}
 	}
 }
@@ -770,6 +820,7 @@ void UWacomBackpackScreen::HandlePileCollapseAnimationFinished(
 
 void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 {
+	RefreshInteractionHints();
 	if (WorkspaceInteractionModel && WorkspaceInteractionModel->IsCarrying())
 	{
 		HideCardDetailPanel();
@@ -781,12 +832,30 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 			Carry.RemainingInstanceIds.Num());
 		if (bDeleteTarget)
 		{
+			const FRunDeckBatchDeleteRequest DeleteRequest =
+				FWacomBackpackCommandFlow::BuildBatchDeleteRequest(
+					Carry,
+					Carry.RemainingInstanceIds);
+			const FRunDeckBatchDeletePreview DeletePreview =
+				FWacomBackpackCommandFlow::PreviewBatchDelete(
+					GetRunSession(),
+					DeleteRequest);
+			const bool bDeleteAllowed = DeletePreview.Validation.bCanExecute;
 			if (WorkspaceWidget)
 			{
 				WorkspaceWidget->SetPileDropFeedback(
 					EZoneKind::Backpack,
 					FGuid(),
 					FWacomBackpackDropFeedbackView());
+				WorkspaceWidget->SetCarryDropFeedbackState(
+					bDeleteAllowed,
+					!bDeleteAllowed);
+			}
+			if (!bDeleteAllowed && DeleteTargetLabel)
+			{
+				DeleteTargetLabel->SetText(
+					FWacomBackpackCommandFlow::BuildDeleteFailureToastText(
+						DeletePreview.Validation.DisabledReason));
 			}
 			return;
 		}
@@ -834,6 +903,9 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 			}
 			WorkspaceWidget->SetPileDropFeedback(
 				Target.Zone, Target.OwnerInstanceId, Feedback);
+			WorkspaceWidget->SetCarryDropFeedbackState(
+				Feedback.State == EWacomBackpackDropFeedbackState::Valid,
+				Feedback.State == EWacomBackpackDropFeedbackState::Rejected);
 			return;
 		}
 		if (WorkspaceWidget)
@@ -842,12 +914,25 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 				EZoneKind::Backpack,
 				FGuid(),
 				FWacomBackpackDropFeedbackView());
+			EWacomBackpackWorkspaceReleaseTargetKind FocusedKind =
+				EWacomBackpackWorkspaceReleaseTargetKind::Pointer;
+			FWacomBackpackZoneKey FocusedZone;
+			const bool bSemanticFlux = WorkspaceWidget->GetFocusedReleaseTarget(
+				FocusedKind, FocusedZone)
+				&& FocusedKind == EWacomBackpackWorkspaceReleaseTargetKind::Flux;
+			const bool bPointerFlux = FSlateApplication::IsInitialized()
+				&& WorkspaceWidget->GetCachedGeometry().IsUnderLocation(
+					FSlateApplication::Get().GetCursorPos());
+			WorkspaceWidget->SetCarryDropFeedbackState(
+				bSemanticFlux || bPointerFlux,
+				false);
 		}
 		return;
 	}
 	UpdateDeleteTargetPresentation(false, false, 0);
 	if (WorkspaceWidget)
 	{
+		WorkspaceWidget->SetCarryDropFeedbackState(false, false);
 		WorkspaceWidget->SetPileDropFeedback(
 			EZoneKind::Backpack,
 			FGuid(),
@@ -939,6 +1024,20 @@ void UWacomBackpackScreen::UpdateDeleteTargetPresentation(
 			DeleteTargetIcon->SetColorAndOpacity(Appearance.AccentColor);
 		}
 		DeleteTargetIcon->SetVisibility(bHasIcon
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
+	}
+	if (DeleteTargetFocusIcon)
+	{
+		EWacomBackpackWorkspaceReleaseTargetKind FocusedKind =
+			EWacomBackpackWorkspaceReleaseTargetKind::Pointer;
+		FWacomBackpackZoneKey FocusedZone;
+		const bool bDeleteFocused = bCarrying
+			&& WorkspaceWidget
+			&& WorkspaceWidget->GetFocusedReleaseTarget(FocusedKind, FocusedZone)
+			&& FocusedKind == EWacomBackpackWorkspaceReleaseTargetKind::Delete;
+		DeleteTargetFocusIcon->SetBrush(Style->FocusStateIconBrush);
+		DeleteTargetFocusIcon->SetVisibility(bDeleteFocused
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
@@ -1079,10 +1178,149 @@ void UWacomBackpackScreen::HandleRuntimeSettingsChanged(
 	}
 }
 
+void UWacomBackpackScreen::BindCommonInput()
+{
+	ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
+	UCommonInputSubsystem* InputSubsystem = LocalPlayer
+		? LocalPlayer->GetSubsystem<UCommonInputSubsystem>()
+		: nullptr;
+	if (BoundCommonInputSubsystem.Get() == InputSubsystem)
+	{
+		if (InputSubsystem)
+		{
+			HandleInputMethodChanged(InputSubsystem->GetCurrentInputType());
+		}
+		return;
+	}
+
+	UnbindCommonInput();
+	BoundCommonInputSubsystem = InputSubsystem;
+	if (InputSubsystem)
+	{
+		InputSubsystem->OnInputMethodChangedNative.AddUObject(
+			this, &ThisClass::HandleInputMethodChanged);
+		HandleInputMethodChanged(InputSubsystem->GetCurrentInputType());
+	}
+}
+
+void UWacomBackpackScreen::UnbindCommonInput()
+{
+	if (UCommonInputSubsystem* InputSubsystem = BoundCommonInputSubsystem.Get())
+	{
+		InputSubsystem->OnInputMethodChangedNative.RemoveAll(this);
+	}
+	BoundCommonInputSubsystem.Reset();
+}
+
+void UWacomBackpackScreen::HandleInputMethodChanged(ECommonInputType InputType)
+{
+	CurrentInputType = InputType;
+	RefreshInteractionHints();
+}
+
+void UWacomBackpackScreen::RefreshInteractionHints()
+{
+	const EWacomBackpackWorkspaceInteractionMode InteractionMode = WorkspaceInteractionModel
+		? WorkspaceInteractionModel->GetMode()
+		: EWacomBackpackWorkspaceInteractionMode::Idle;
+	bool bExpandedPile = false;
+	if (URunSession* Run = GetRunSession())
+	{
+		bExpandedPile = GetWorkspaceStateStore(Run).GetExpandedPile().IsSet();
+	}
+	const FWacomBackpackInteractionHintView View =
+		FWacomBackpackInteractionHintPresenter::Build(
+			CurrentInputType,
+			InteractionMode,
+			bExpandedPile);
+	if (InteractionHintText)
+	{
+		InteractionHintText->SetText(View.ContextHint);
+	}
+	if (ControlsHelpWidget)
+	{
+		ControlsHelpWidget->SetHelpText(View.HelpText);
+	}
+}
+
+void UWacomBackpackScreen::HandleControlsHelpClicked()
+{
+	if (IsControlsHelpVisible())
+	{
+		HideControlsHelp(true);
+	}
+	else
+	{
+		ShowControlsHelp();
+	}
+}
+
+void UWacomBackpackScreen::ShowControlsHelp()
+{
+	EnsureWorkspaceWidgets();
+	if (!ControlsHelpHost || !ControlsHelpWidget || IsControlsHelpVisible())
+	{
+		return;
+	}
+
+	RefreshInteractionHints();
+	if (FSlateApplication::IsInitialized())
+	{
+		FocusBeforeControlsHelp = FSlateApplication::Get().GetUserFocusedWidget(0);
+	}
+	ControlsHelpHost->SetVisibility(ESlateVisibility::Visible);
+	ControlsHelpWidget->SetKeyboardFocus();
+}
+
+void UWacomBackpackScreen::HideControlsHelp(bool bRestoreFocus)
+{
+	if (ControlsHelpHost)
+	{
+		ControlsHelpHost->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (!bRestoreFocus)
+	{
+		FocusBeforeControlsHelp.Reset();
+		return;
+	}
+
+	bool bRestored = false;
+	if (FSlateApplication::IsInitialized())
+	{
+		if (const TSharedPtr<SWidget> PreviousFocus = FocusBeforeControlsHelp.Pin())
+		{
+			bRestored = FSlateApplication::Get().SetUserFocus(
+				0, PreviousFocus, EFocusCause::SetDirectly);
+		}
+	}
+	FocusBeforeControlsHelp.Reset();
+	if (!bRestored && WorkspaceWidget)
+	{
+		WorkspaceWidget->SetKeyboardFocus();
+	}
+}
+
+bool UWacomBackpackScreen::IsControlsHelpVisible() const
+{
+	return ControlsHelpHost
+		&& ControlsHelpHost->GetVisibility() != ESlateVisibility::Collapsed;
+}
+
 bool UWacomBackpackScreen::ResolveWorkspacePileTarget(FWacomBackpackZoneKey& OutTarget) const
 {
 	if (!WorkspaceWidget || !WorkspaceInteractionModel || !WorkspaceInteractionModel->IsCarrying())
 	{
+		return false;
+	}
+	EWacomBackpackWorkspaceReleaseTargetKind SemanticKind;
+	FWacomBackpackZoneKey SemanticZone;
+	if (WorkspaceWidget->GetFocusedReleaseTarget(SemanticKind, SemanticZone))
+	{
+		if (SemanticKind == EWacomBackpackWorkspaceReleaseTargetKind::Pile)
+		{
+			OutTarget = SemanticZone;
+			return OutTarget.IsValid();
+		}
 		return false;
 	}
 	const FVector2D AbsolutePointer = WorkspaceWidget->GetCachedGeometry().LocalToAbsolute(
@@ -1102,6 +1340,12 @@ bool UWacomBackpackScreen::IsWorkspaceDeleteTarget() const
 	if (!WorkspaceWidget || !DeleteTargetHost || !WorkspaceInteractionModel || !WorkspaceInteractionModel->IsCarrying())
 	{
 		return false;
+	}
+	EWacomBackpackWorkspaceReleaseTargetKind SemanticKind;
+	FWacomBackpackZoneKey SemanticZone;
+	if (WorkspaceWidget->GetFocusedReleaseTarget(SemanticKind, SemanticZone))
+	{
+		return SemanticKind == EWacomBackpackWorkspaceReleaseTargetKind::Delete;
 	}
 	const FVector2D AbsolutePointer = WorkspaceWidget->GetCachedGeometry().LocalToAbsolute(
 		WorkspaceInteractionModel->GetCarry().PointerPosition);
@@ -1237,6 +1481,19 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		? WorkspaceStyle.Get()
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
 	const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
+	if (Intent.TargetKind == EWacomBackpackWorkspaceReleaseTargetKind::Delete)
+	{
+		BeginWorkspaceDeleteConfirmation(Intent.InstanceIds);
+		return;
+	}
+	if (Intent.TargetKind == EWacomBackpackWorkspaceReleaseTargetKind::Pile)
+	{
+		if (Intent.TargetZone.IsValid())
+		{
+			HandleWorkspacePileReleaseIntent(Intent, Intent.TargetZone);
+		}
+		return;
+	}
 	if (IsWorkspaceDeleteTarget())
 	{
 		BeginWorkspaceDeleteConfirmation(Intent.InstanceIds);
@@ -1248,9 +1505,11 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		HandleWorkspacePileReleaseIntent(Intent, PileTarget);
 		return;
 	}
+	const bool bSemanticFlux =
+		Intent.TargetKind == EWacomBackpackWorkspaceReleaseTargetKind::Flux;
 	const FVector2D AbsolutePointer = WorkspaceWidget->GetCachedGeometry().LocalToAbsolute(
 		Carry.PointerPosition);
-	if (!WorkspaceWidget->GetCachedGeometry().IsUnderLocation(AbsolutePointer))
+	if (!bSemanticFlux && !WorkspaceWidget->GetCachedGeometry().IsUnderLocation(AbsolutePointer))
 	{
 		// 工作台外既不是通量空白，也不是合法目标；保持携带并显示拒绝状态。
 		WorkspaceWidget->RefreshInteractionPresentation();
@@ -1300,6 +1559,18 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 			StateStore.SetLayout(FluxZone, InstanceId, Entry);
 		}
 	};
+	auto ApplyFluxLayoutPolicy = [&]()
+	{
+		if (!bSemanticFlux)
+		{
+			SaveFluxLayouts();
+			return;
+		}
+		for (const FGuid InstanceId : Intent.InstanceIds)
+		{
+			StateStore.ClearLayout(FluxZone, InstanceId);
+		}
+	};
 	if (!(Carry.SourceZone == FluxZone))
 	{
 		const FRunDeckBatchMoveRequest Request = FWacomBackpackCommandFlow::BuildBatchMoveRequest(
@@ -1315,14 +1586,14 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 			WorkspaceWidget->RefreshInteractionPresentation();
 			return;
 		}
-		SaveFluxLayouts();
+		ApplyFluxLayoutPolicy();
 		WorkspaceInteractionModel->CommitReleasedCards(Intent.InstanceIds);
 		WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(Result.StorageRevision);
 		ResetBackpackRefreshDirtyGate();
 		EndWorkspaceMutationRefreshDeferral(true);
 		return;
 	}
-	SaveFluxLayouts();
+	ApplyFluxLayoutPolicy();
 	WorkspaceInteractionModel->CommitReleasedCards(Intent.InstanceIds);
 	RebuildWorkspaceFromCachedSnapshot();
 }
@@ -1356,6 +1627,13 @@ void UWacomBackpackScreen::HandleWorkspacePileReleaseIntent(
 		Carry,
 		PileTarget,
 		Intent.InstanceIds);
+	const FRunDeckBatchOperationValidation Validation =
+		Run->ValidateMoveInstancesAtomic(Request);
+	if (!Validation.bCanExecute)
+	{
+		WorkspaceWidget->RefreshInteractionPresentation();
+		return;
+	}
 	BeginWorkspaceMutationRefreshDeferral();
 	const FRunDeckBatchOperationResult Result = FWacomBackpackCommandFlow::SubmitBatchMove(*this, Run, Request);
 	if (Result.bSucceeded)
@@ -1532,15 +1810,28 @@ void UWacomBackpackScreen::HandleCloseClicked()
 
 FReply UWacomBackpackScreen::NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent)
 {
+	const FKey Key = InKeyEvent.GetKey();
+	if (Key == EKeys::F1)
+	{
+		HandleControlsHelpClicked();
+		return FReply::Handled();
+	}
+	if (IsControlsHelpVisible()
+		&& (Key == EKeys::Escape || Key == EKeys::Gamepad_FaceButton_Right))
+	{
+		HideControlsHelp(true);
+		return FReply::Handled();
+	}
+
 	// B 键关闭：和打开是同一个键，CommonUI Menu 模式下 EnhancedInput IA 被屏蔽，
 	// 必须在 widget 层自己拦。父类已经处理 ESC。
-	if (InKeyEvent.GetKey() == EKeys::B)
+	if (Key == EKeys::B)
 	{
 		CancelWorkspaceInteraction();
 		DeactivateWidget();
 		return FReply::Handled();
 	}
-	if (InKeyEvent.GetKey() == EKeys::Escape)
+	if (Key == EKeys::Escape || Key == EKeys::Gamepad_FaceButton_Right)
 	{
 		if (PendingDeleteConfirmation && PendingDeleteConfirmation->bPending)
 		{

@@ -11,6 +11,8 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
+#include "Framework/Application/SlateApplication.h"
+#include "UI/Backpack/WacomBackpackControlsHelpWidget.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Backpack/WacomBackpackDeleteConfirmWidget.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
@@ -488,7 +490,7 @@ void FWacomBackpackScreenTestAccess::FlushWorkspaceCarryPointer(
 			1.0f / 60.0f,
 			Workspace.GetCachedGeometry(),
 			*Style,
-			Workspace.bSimplifiedMotion);
+			Workspace.GetRuntime().Presentation.IsSimplifiedMotion());
 	}
 	Workspace.FinalizeCompletedSettlements();
 }
@@ -498,7 +500,7 @@ void FWacomBackpackScreenTestAccess::SendWorkspaceCarryPointerEvents(
 	UWacomDeckCardWidget& CardWidget,
 	TConstArrayView<FVector2D> PointerLocals)
 {
-	FVector2D Previous = Workspace.CarryAnchorLocal;
+	FVector2D Previous = Workspace.GetRuntime().Presentation.CarryAnchorLocal;
 	for (const FVector2D Pointer : PointerLocals)
 	{
 		const FVector2D PointerAbsolute =
@@ -548,7 +550,7 @@ void FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
 			StepSeconds,
 			Workspace.GetCachedGeometry(),
 			*Style,
-			Workspace.bSimplifiedMotion);
+			Workspace.GetRuntime().Presentation.IsSimplifiedMotion());
 		RemainingSeconds -= StepSeconds;
 	}
 	Workspace.FinalizeCompletedSettlements();
@@ -694,8 +696,14 @@ bool FWacomBackpackScreenTestAccess::MarqueeWorkspacePileContents(
 	const FVector2D End(Frame.Right - 4.0f, Frame.Bottom - 4.0f);
 	// Drive the same local-space state transition used by the runtime pointer
 	// handler without constructing an FReply for this unarranged unit fixture.
-	Workspace.BeginPendingPilePress(*TargetPile, Start, false);
-	const bool bBeganMarquee = Workspace.TryBeginMarqueeFromPendingPilePress(End);
+	const FPointerEvent PointerDown(
+		0, Start, Start, TSet<FKey>{ EKeys::LeftMouseButton },
+		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+	const FPointerEvent PointerMove(
+		0, End, Start, TSet<FKey>{ EKeys::LeftMouseButton },
+		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+	Workspace.BeginPendingPilePress(*TargetPile, Start, PointerDown, false);
+	const bool bBeganMarquee = Workspace.TryBeginMarqueeFromPendingPilePress(End, PointerMove);
 	Workspace.InteractionModel->UpdateMarquee(End);
 	Workspace.InteractionModel->CompleteMarquee();
 	Workspace.UpdateSelectionVisualFreezeLifetime();
@@ -731,7 +739,6 @@ bool FWacomBackpackScreenTestAccess::CommitWorkspacePileMoveWithSynchronousTarge
 	{
 		return false;
 	}
-	Workspace.PendingPileStartPosition = HeaderStart;
 	Workspace.InteractionModel->UpdatePileMove(PointerEnd);
 	Workspace.ApplyActivePileMove();
 	bool bReconciled = false;
@@ -790,8 +797,14 @@ FWacomBackpackPileMoveCancelProbe FWacomBackpackScreenTestAccess::CancelWorkspac
 
 	Probe.PilePositionBefore = PileSlot->GetPosition();
 	Probe.PileZOrderBefore = PileSlot->GetZOrder();
-	Workspace.BeginPendingPilePress(*TargetPile, HeaderStart, false, true);
-	Probe.bBeganMove = Workspace.TryBeginPileMove(PointerEnd);
+	const FPointerEvent PointerDown(
+		0, HeaderStart, HeaderStart, TSet<FKey>{ EKeys::LeftMouseButton },
+		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+	const FPointerEvent PointerMove(
+		0, PointerEnd, HeaderStart, TSet<FKey>{ EKeys::LeftMouseButton },
+		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
+	Workspace.BeginPendingPilePress(*TargetPile, HeaderStart, PointerDown, false, true);
+	Probe.bBeganMove = Workspace.TryBeginPileMove(PointerEnd, PointerMove);
 	Probe.PilePositionWhileMoving = PileSlot->GetPosition();
 	Probe.PileZOrderWhileMoving = PileSlot->GetZOrder();
 	Workspace.CancelInteraction();
@@ -870,7 +883,7 @@ bool FWacomBackpackScreenTestAccess::CommitWorkspaceReleaseBeforeTargetReconcile
 			bCommitted = !Intent.InstanceIds.IsEmpty();
 		});
 	Model->NotifyReleaseGestureStarted();
-	Workspace.BroadcastRelease(bReleaseAll);
+	Workspace.BroadcastPointerRelease(bReleaseAll);
 	Workspace.OnReleaseIntentNative.Remove(Handle);
 	return bCommitted;
 }
@@ -1082,8 +1095,16 @@ bool FWacomBackpackScreenTestAccess::ClickExpandedPileHeaderThroughOverlappingCa
 	const FVector2D HeaderCenter(
 		(Header.Left + Header.Right) * 0.5f,
 		(Header.Top + Header.Bottom) * 0.5f);
+	const FPointerEvent PointerDown(
+		0,
+		HeaderCenter,
+		HeaderCenter,
+		TSet<FKey>{ EKeys::LeftMouseButton },
+		EKeys::LeftMouseButton,
+		0.0f,
+		FModifierKeysState());
 	const bool bRoutedHeaderPress =
-		Workspace->TryBeginPileHeaderPress(HeaderCenter, false);
+		Workspace->TryBeginPileHeaderPress(HeaderCenter, PointerDown, false);
 	const FPointerEvent PointerUp(
 		0,
 		HeaderCenter,
@@ -1111,6 +1132,33 @@ void FWacomBackpackScreenTestAccess::DeactivateWorkspaceScreen(UWacomBackpackScr
 		Screen.ActivateWidget();
 	}
 	Screen.DeactivateWidget();
+}
+
+FWacomBackpackControlsHelpLifecycleProbe
+FWacomBackpackScreenTestAccess::ProbeControlsHelpLifecycle(
+	UWacomBackpackScreen& Screen)
+{
+	FWacomBackpackControlsHelpLifecycleProbe Probe;
+	if (!FSlateApplication::IsInitialized())
+	{
+		return Probe;
+	}
+	const TSharedRef<SWidget> ScreenSlate = Screen.TakeWidget();
+	FSlateApplication::Get().SetUserFocus(0, ScreenSlate, EFocusCause::SetDirectly);
+	const TWeakPtr<SWidget> FocusBefore =
+		FSlateApplication::Get().GetUserFocusedWidget(0);
+	Screen.ShowControlsHelp();
+	Probe.bOpened = Screen.IsControlsHelpVisible();
+	Probe.bPreviousFocusCaptured = Screen.ControlsHelpWidget
+		&& Screen.FocusBeforeControlsHelp.IsValid();
+	Screen.HideControlsHelp(true);
+	Probe.bFocusRestored = FocusBefore.IsValid()
+		&& FSlateApplication::Get().GetUserFocusedWidget(0) == FocusBefore.Pin();
+	Screen.ActivateWidget();
+	Screen.ShowControlsHelp();
+	Screen.DeactivateWidget();
+	Probe.bHiddenAfterDeactivate = !Screen.IsControlsHelpVisible();
+	return Probe;
 }
 
 FWacomBackpackWorkspaceAutomationTestView FWacomBackpackScreenTestAccess::WorkspaceView(

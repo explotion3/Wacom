@@ -22,6 +22,7 @@ class FWacomBackpackWorkspaceVisualState;
 class FWacomBackpackCardDetailController;
 struct FWacomBackpackWorkspaceReconciler;
 struct FWacomBackpackWorkspaceReleaseIntent;
+enum class EWacomBackpackWorkspaceReleaseTargetKind : uint8;
 struct FWacomBackpackWorkspaceCardLayout;
 struct FWacomBackpackWorkspaceCardVisualPose;
 #if WITH_AUTOMATION_TESTS
@@ -60,6 +61,7 @@ public:
 	DECLARE_MULTICAST_DELEGATE(FOnCollapseExpandedPileRequestedNative);
 	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnPileCollapseAnimationFinishedNative, EZoneKind, FGuid);
 	DECLARE_MULTICAST_DELEGATE_OneParam(FOnBrowseFocusChangedNative, UWacomDeckCardWidget*);
+	DECLARE_MULTICAST_DELEGATE(FOnControlsHelpRequestedNative);
 	FOnReleaseIntentNative OnReleaseIntentNative;
 	FOnInteractionChangedNative OnInteractionChangedNative;
 	FOnLayoutGeometryReadyNative OnLayoutGeometryReadyNative;
@@ -68,6 +70,7 @@ public:
 	FOnCollapseExpandedPileRequestedNative OnCollapseExpandedPileRequestedNative;
 	FOnPileCollapseAnimationFinishedNative OnPileCollapseAnimationFinishedNative;
 	FOnBrowseFocusChangedNative OnBrowseFocusChangedNative;
+	FOnControlsHelpRequestedNative OnControlsHelpRequestedNative;
 
 	void SetPresentedContentZone(EZoneKind Zone, FGuid OwnerInstanceId);
 	void SetInteractionModel(
@@ -82,10 +85,15 @@ public:
 		EZoneKind Zone,
 		FGuid OwnerInstanceId,
 		FWacomBackpackZonePileView& OutView) const;
+	bool GetFocusedReleaseTarget(
+		EWacomBackpackWorkspaceReleaseTargetKind& OutKind,
+		FWacomBackpackZoneKey& OutZone) const;
 	void SetPileDropFeedback(
 		EZoneKind Zone,
 		FGuid OwnerInstanceId,
 		const FWacomBackpackDropFeedbackView& Feedback);
+	/** Screen 校验目标后回写携带卡的非颜色语义；Rejected 优先于 Valid。 */
+	void SetCarryDropFeedbackState(bool bValid, bool bRejected);
 	void SetExpandedContentBounds(EZoneKind Zone, FGuid OwnerInstanceId, const FSlateRect& LocalBounds);
 	void SetExpandedPileFocusContract(
 		EZoneKind Zone,
@@ -134,6 +142,9 @@ protected:
 	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FNavigationReply NativeOnNavigation(
+		const FGeometry& InGeometry,
+		const FNavigationEvent& InNavigationEvent) override;
 	virtual void NativeOnFocusLost(const FFocusEvent& InFocusEvent) override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -186,70 +197,11 @@ private:
 		meta = (ToolTip = "工作台内嵌区域牌堆 Widget 类。只显示 ViewData 并转发标题指针意图，不直接访问 RunSession。"))
 	TSubclassOf<UWacomBackpackZonePileWidget> PileWidgetClass;
 
-	FGuid PendingCardPressId;
-	FVector2D PendingPressPosition = FVector2D::ZeroVector;
-	bool bPendingCardPress = false;
-	bool bPendingControlDown = false;
-	TWeakObjectPtr<UWacomBackpackZonePileWidget> PendingPileWidget;
-	FVector2D PendingPilePressPosition = FVector2D::ZeroVector;
-	FVector2D PendingPileStartPosition = FVector2D::ZeroVector;
-	bool bPendingPilePress = false;
-	bool bPendingPileControlDown = false;
-	bool bPendingPilePressOnDragHandle = false;
-	struct FPileMoveVisualSnapshot
-	{
-		TWeakObjectPtr<UWacomBackpackZonePileWidget> Pile;
-		EZoneKind Zone = EZoneKind::Backpack;
-		FGuid OwnerInstanceId;
-		FVector2D CanvasPosition = FVector2D::ZeroVector;
-		int32 ZOrder = 0;
-		bool bValid = false;
-	};
-	FPileMoveVisualSnapshot PileMoveVisualSnapshot;
-	TWeakObjectPtr<UWacomDeckCardWidget> HoveredCardWidget;
-	EZoneKind ExpandedContentZone = EZoneKind::Backpack;
-	FGuid ExpandedContentOwnerInstanceId;
-	FSlateRect ExpandedContentBounds;
-	bool bHasExpandedContentBounds = false;
-	EZoneKind HoverExpandZone = EZoneKind::Backpack;
-	FGuid HoverExpandOwnerInstanceId;
-	bool bHoverExpandTimerActive = false;
-	float HoverExpandElapsedSeconds = 0.0f;
-	bool bSimplifiedMotion = false;
-	bool bPileCollapseAnimationPending = false;
-	EZoneKind CollapsingPileZone = EZoneKind::Backpack;
-	FGuid CollapsingPileOwnerInstanceId;
 	uint64 CurrentStorageRevision = 0;
-	/** 精确逻辑指针；目标判定和 Run 命令永远使用本值。 */
-	FVector2D CarryAnchorLocal = FVector2D::ZeroVector;
-	/** 仅表现使用的轻微跟随锚点；受最大落后约束。 */
-	FVector2D CarryVisualAnchorLocal = FVector2D::ZeroVector;
-	bool bCarryVisualAnchorInitialized = false;
-	FVector2D QueuedCarryPointerLocal = FVector2D::ZeroVector;
-	FVector2D QueuedPilePointerLocal = FVector2D::ZeroVector;
 	/** 唯一按需卡牌运动 ActiveTimer 的运行标记。 */
 	bool bCardMotionTimerActive = false;
 	/** 令已注册但被显式停止的旧 Timer 回调失效，避免生命周期重入。 */
 	uint64 CardMotionTimerGeneration = 0;
-	bool bHasQueuedCarryPointer = false;
-	bool bHasQueuedPilePointer = false;
-	bool bCarryStripLayoutDirty = false;
-	TArray<FGuid> LastCarryStripInstanceIds;
-	TWeakObjectPtr<UWacomDeckCardWidget> PreviousCarryCurrentCard;
-	/** 初始最右卡保持平放；发生过有效滚轮切换后，任何当前卡（含最右卡）都使用上抬反馈。 */
-	bool bCarryCurrentExplicitlySelectedByWheel = false;
-	int32 LastCarryStripCurrentIndex = INDEX_NONE;
-	int32 LastCarryStripDefaultIndex = INDEX_NONE;
-	int32 LastCarryStripWindowStartIndex = INDEX_NONE;
-	int32 CarryStripLayoutRebuildCount = 0;
-	int32 StaticCardPresentationUpdateCount = 0;
-	int32 CarryVisualAnchorApplyCount = 0;
-	bool bCarryInputSuspended = false;
-	FVector2D StableLayoutSize = FVector2D::ZeroVector;
-	FVector2D PendingLayoutSize = FVector2D::ZeroVector;
-	int32 StableLayoutSampleCount = 0;
-	bool bHasStableLayoutSize = false;
-	bool bLayoutGeometryRefreshActive = false;
 	bool bDeferredCardFaceRenderRequested = false;
 	bool bDeferredCardFaceRenderActive = false;
 	int32 DeferredCardFaceRenderPassCount = 0;
@@ -264,33 +216,6 @@ private:
 	/** 基础布局过渡实际更新的卡牌次数。 */
 	int32 BaseCardLayoutTransitionApplyCount = 0;
 #endif
-
-	struct FExpandedPileFocusState
-	{
-		EZoneKind Zone = EZoneKind::Backpack;
-		FGuid OwnerInstanceId;
-		FSlateRect HeaderRect;
-		FSlateRect CorridorRect;
-		TArray<FWacomBackpackExpandedPileFocusCard> Cards;
-		/** 当前抬升并启用实时卡面的卡；离开后清空。 */
-		int32 FocusIndex = INDEX_NONE;
-		/** 0..Cards.Num()-1 的连续鼠标透镜位置；与实际浏览卡身份严格分离。 */
-		float LensFocus = 0.0f;
-		int32 LensLeftStackCount = 0;
-		int32 LensExpandedStartIndex = INDEX_NONE;
-		int32 LensExpandedCardCount = 0;
-		int32 LensRightStackCount = 0;
-		bool bHasLensLayout = false;
-		FVector2D PointerLocal = FVector2D::ZeroVector;
-		float ExitDelayRemainingSeconds = 0.0f;
-		bool bExitPending = false;
-	};
-	FExpandedPileFocusState ExpandedPileFocus;
-	/** 按住左 Shift 时仅冻结 Hand Lens 布局；实际视觉命中与详情仍跟随鼠标。 */
-	bool bExpandedPileLensInputLocked = false;
-	EZoneKind SelectionFrozenZone = EZoneKind::Backpack;
-	FGuid SelectionFrozenOwnerInstanceId;
-	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 
 	void EnsureFallbackTree();
 	void PrepareForWorkspaceCardReconcile();
@@ -313,13 +238,18 @@ private:
 	void BeginPendingPilePress(
 		UWacomBackpackZonePileWidget& PileWidget,
 		FVector2D LocalPointer,
+		const FPointerEvent& Event,
 		bool bControlDown,
 		bool bOnDragHandle = false);
 	UWacomBackpackZonePileWidget* FindPileHeaderAt(FVector2D LocalPointer) const;
-	bool TryBeginPileHeaderPress(FVector2D LocalPointer, bool bControlDown);
-	bool TryBeginCarryFromPendingPress(FVector2D Pointer);
-	bool TryBeginPileMove(FVector2D Pointer);
-	bool TryBeginMarqueeFromPendingPilePress(FVector2D Pointer);
+	bool TryBeginPileHeaderPress(
+		FVector2D LocalPointer,
+		const FPointerEvent& Event,
+		bool bControlDown);
+	bool TryBeginCarryFromPendingPress(FVector2D Pointer, const FPointerEvent& Event);
+	bool TryBeginPileMove(FVector2D Pointer, const FPointerEvent& Event);
+	bool TryBeginMarqueeFromPendingPilePress(FVector2D Pointer, const FPointerEvent& Event);
+	bool TryBeginMarqueeFromPendingBlankPress(FVector2D Pointer, const FPointerEvent& Event);
 	void ApplyActivePileMove();
 	void StartPilePointerTracking();
 	void QueuePilePointer(FVector2D Pointer);
@@ -332,7 +262,18 @@ private:
 	FWacomBackpackZoneKey ResolveMarqueeSource(FVector2D LocalPointer) const;
 	void CancelHoverExpandTimer();
 	FReply BuildHandledPointerReply();
-	void BroadcastRelease(bool bReleaseAll);
+	void BroadcastRelease(
+		bool bReleaseAll,
+		EWacomBackpackWorkspaceReleaseTargetKind TargetKind,
+		const FWacomBackpackZoneKey& TargetZone);
+	void BroadcastPointerRelease(bool bReleaseAll);
+	void ReconcileNavigationTargets();
+	void RefreshNavigationPresentation();
+	bool HandleNavigationPrimary(bool bReleaseAll);
+	bool HandleNavigationSelection();
+	bool HandleNavigationContextAction();
+	bool StepCarriedCard(int32 Direction);
+	void RelinquishSemanticNavigationForPointerInput();
 	void StartCardMotionTimer();
 	void StopCardMotionTimer();
 	bool TickBaseCardLayoutTransitions(float DeltaSeconds);

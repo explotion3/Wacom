@@ -102,6 +102,19 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		}
 		*Context.DeleteConfirmHost = Host;
 	}
+	if (Context.ControlsHelpHost)
+	{
+		UOverlay* HelpHost = WidgetTree->ConstructWidget<UOverlay>(
+			UOverlay::StaticClass(), TEXT("ControlsHelpHost"));
+		HelpHost->SetVisibility(ESlateVisibility::Collapsed);
+		if (UCanvasPanelSlot* HelpSlot = Root->AddChildToCanvas(HelpHost))
+		{
+			HelpSlot->SetAnchors(FAnchors(0.0f, 0.0f, 1.0f, 1.0f));
+			HelpSlot->SetOffsets(FMargin(0.0f));
+			HelpSlot->SetZOrder(30);
+		}
+		*Context.ControlsHelpHost = HelpHost;
+	}
 
 	UVerticalBox* MainVBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MainVBox"));
 	MainPanel->AddChild(MainVBox);
@@ -159,6 +172,22 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 			Context.ResetPilePositionsButton->Get()))
 		{
 			ButtonSlot->SetPadding(FMargin(8.f, 4.f));
+			ButtonSlot->SetVerticalAlignment(VAlign_Center);
+		}
+	}
+
+	if (Context.ControlsHelpButton && !*Context.ControlsHelpButton)
+	{
+		*Context.ControlsHelpButton = WidgetTree->ConstructWidget<UButton>(
+			UButton::StaticClass(), TEXT("ControlsHelpButton"));
+		UTextBlock* Label = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass());
+		Label->SetText(LOCTEXT("ControlsHelp", "操作说明"));
+		Label->SetJustification(ETextJustify::Center);
+		(*Context.ControlsHelpButton)->AddChild(Label);
+		if (UHorizontalBoxSlot* ButtonSlot = TopRow->AddChildToHorizontalBox(
+			Context.ControlsHelpButton->Get()))
+		{
+			ButtonSlot->SetPadding(FMargin(8.0f, 4.0f));
 			ButtonSlot->SetVerticalAlignment(VAlign_Center);
 		}
 	}
@@ -285,12 +314,39 @@ void FBackpackFallbackLayoutBuilder::Build(const FBackpackFallbackLayoutBuilderC
 		DeleteCount->SetJustification(ETextJustify::Center);
 		DeleteCount->SetVisibility(ESlateVisibility::Collapsed);
 		Host->AddChildToVerticalBox(DeleteCount);
+		UImage* DeleteFocusIcon = WidgetTree->ConstructWidget<UImage>(
+			UImage::StaticClass(), TEXT("DeleteTargetFocusIcon"));
+		DeleteFocusIcon->SetVisibility(ESlateVisibility::Collapsed);
+		if (UOverlaySlot* FocusSlot = DeleteOverlay->AddChildToOverlay(DeleteFocusIcon))
+		{
+			FocusSlot->SetHorizontalAlignment(HAlign_Right);
+			FocusSlot->SetVerticalAlignment(VAlign_Top);
+			FocusSlot->SetPadding(FMargin(8.0f));
+		}
 		*Context.DeleteTargetHost = Host;
 		if (Context.DeleteTargetBackground) { *Context.DeleteTargetBackground = DeleteBorder; }
 		if (Context.DeleteTargetOutline) { *Context.DeleteTargetOutline = DeleteOutline; }
 		if (Context.DeleteTargetIcon) { *Context.DeleteTargetIcon = DeleteIcon; }
+		if (Context.DeleteTargetFocusIcon) { *Context.DeleteTargetFocusIcon = DeleteFocusIcon; }
 		if (Context.DeleteTargetLabel) { *Context.DeleteTargetLabel = DeleteLabel; }
 		if (Context.DeleteTargetCountText) { *Context.DeleteTargetCountText = DeleteCount; }
+	}
+
+	if (Context.InteractionHintText && !*Context.InteractionHintText)
+	{
+		*Context.InteractionHintText = CreateBackpackText(
+			WidgetTree,
+			TEXT("InteractionHintText"),
+			LOCTEXT("DefaultInteractionHint", "鼠标拖动或方向键浏览　F1 操作说明"),
+			14);
+		(*Context.InteractionHintText)->SetAutoWrapText(true);
+		(*Context.InteractionHintText)->SetJustification(ETextJustify::Center);
+		if (UVerticalBoxSlot* HintSlot = MainVBox->AddChildToVerticalBox(
+			Context.InteractionHintText->Get()))
+		{
+			HintSlot->SetPadding(FMargin(8.0f, 8.0f, 8.0f, 0.0f));
+			HintSlot->SetHorizontalAlignment(HAlign_Fill);
+		}
 	}
 
 }

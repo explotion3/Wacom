@@ -3,7 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "WacomBackpackWorkspaceGestureController.h"
 #include "WacomBackpackWorkspaceMotionCoordinator.h"
+#include "WacomBackpackWorkspaceNavigationController.h"
+#include "WacomBackpackWorkspacePresentationController.h"
 #include "WacomBackpackWorkspaceVisualState.h"
 #include "WacomBackpackWorkspaceVisualRegistry.h"
 
@@ -19,10 +22,17 @@ public:
 	FWacomBackpackWorkspaceVisualRegistry Visuals;
 	FWacomBackpackWorkspaceVisualState VisualState;
 	FWacomBackpackWorkspaceMotionCoordinator Motion;
+	FWacomBackpackWorkspaceGestureController Gesture;
+	FWacomBackpackWorkspaceNavigationController Navigation;
+	FWacomBackpackWorkspacePresentationController Presentation;
 
 	void Reset(bool bRemovePileWidgets)
 	{
 		Motion.Reset();
+		Gesture.ResetTransient();
+		Gesture.PileMoveSnapshot.Reset();
+		Navigation.Clear();
+		Presentation.Reset();
 		VisualState.Reset();
 		Visuals.ResetPiles(bRemovePileWidgets);
 		Visuals.ResetIndexes();

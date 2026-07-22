@@ -282,6 +282,8 @@ Scene Enemy 紧凑条和双侧详情继续共享同一 ViewData 数据链。Scen
 
 Run 域 HUD 使用 `UWacomRunViewModelProvider` + `UWacomRunViewModel`；Shop / RunEvent / Backpack Screen 读取 `URunSession` Snapshot 或 ViewData；Battle UI 保持 `FBattleSnapshot` 推送模型。两者都不直接修改规则状态。
 
+Backpack Workspace 的领域边界保持为 `WacomRun` 拥有 storage、容量、原子交易和持久规则，`WacomApp` 拥有 Scene、Carry、Settlement、Details、输入与 UI 表现。`UWacomBackpackScreen` 是 UI 意图协调者，显式 `Pointer / Flux / Pile / Delete` release intent 只能经既有 command flow 调用 Run 写入口；Passive Widget 不直接写 Session。`FWacomBackpackWorkspaceRuntime` 作为 App-private 所有权根继续持有 Registry、Visual State 和 Motion Coordinator，并新增 Gesture / Navigation / Presentation Controller：分别承接 Slate 屏幕空间阈值与捕获、`InstanceId / Zone` 稳定虚拟焦点、Hand Lens/选择冻结/Carry/几何稳定表现状态。`UWacomBackpackWorkspaceWidget` 只保留 WBP/Slate 生命周期、输入入口、Canvas 应用和单一按需 ActiveTimer。跨 `Static / CarryCache / CarryActive / Settlement` 的卡牌迁移仍统一走 App-private `ReparentCardPreservingSlate`，保持同一 `SObjectWidget -> WBP_FPCardView -> Retainer` 子树连续；真正销毁或去重继续执行正常 Widget/Slate 释放。
+
 当前 UI 侧 ViewData / PresentationBuilder 包括卡牌展示、商店商品、RunEvent 结果、BattleEvent 表现、AppToast 和目标选择视图。它们属于 `WacomApp` 表现层。
 
 复杂 `WacomApp` Widget 流程不要扩成跨模块 Public API。Screen / HUD 负责 View 所有权、生命周期、绑定和重建；购买、选择、移动、删除、确认弹窗、Toast 和访问结束等编排应收口到 `WacomApp/Private` 的 coordinator / command flow helper。

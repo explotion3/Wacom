@@ -21,11 +21,15 @@ struct FBackpackFallbackLayoutBuilderContext
 
 	TObjectPtr<UTextBlock>* TitleText = nullptr;
 	TObjectPtr<UTextBlock>* GoldText = nullptr;
+	TObjectPtr<UTextBlock>* InteractionHintText = nullptr;
+	TObjectPtr<UButton>* ControlsHelpButton = nullptr;
+	TObjectPtr<UPanelWidget>* ControlsHelpHost = nullptr;
 	TObjectPtr<UPanelWidget>* WorkspaceHost = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteTargetHost = nullptr;
 	TObjectPtr<UBorder>* DeleteTargetBackground = nullptr;
 	TObjectPtr<UBorder>* DeleteTargetOutline = nullptr;
 	TObjectPtr<UImage>* DeleteTargetIcon = nullptr;
+	TObjectPtr<UImage>* DeleteTargetFocusIcon = nullptr;
 	TObjectPtr<UTextBlock>* DeleteTargetLabel = nullptr;
 	TObjectPtr<UTextBlock>* DeleteTargetCountText = nullptr;
 	TObjectPtr<UPanelWidget>* DeleteConfirmHost = nullptr;

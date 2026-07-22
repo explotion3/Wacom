@@ -2,7 +2,7 @@
 type: workflow
 scope: wacom-unreal-mcp
 status: active
-updated: 2026-07-18
+updated: 2026-07-23
 tags:
   - wacom/workflow
   - wacom/unreal
@@ -27,6 +27,19 @@ Subagent 不是固定前置条件：
 - Editor 关闭后，不把旧 asset agent 继续用于下一次 Editor 生命周期。
 
 无论由主会话还是 asset agent 调用，身份校验、写锁和 Package allowlist 完全相同。
+
+### 用户明确授权的一次性离线 Commandlet 例外
+
+MCP 仍是常规二进制资产 mutation 的正式入口。只有 MCP 因可复现的本机基础设施阻塞而不可用、用户明确授权本次替代路径，并且迁移能收敛为一次性代码时，才允许使用定向 Commandlet。此类例外必须同时满足：
+
+- Package 清单硬编码在实现内，运行参数不能扩大范围；保存函数对清单外 Package fail closed。
+- 提供真正只读的 `-InspectOnly` 和显式 `-Apply`；先检查 worktree、branch、HEAD、本 worktree Editor 进程及清单资产 Git 状态。
+- 先校验既有资产父类、版本和结构，禁止调用会重建或批量重存人工 WBP/Style 的通用 Builder。
+- 首次应用后必须再跑只读检查和二次幂等应用，要求 `saved=0` 且全部对象 SHA-256 不变。
+- 交接以 Commandlet manifest/audit log 代替 MCP Session/writer audit，并仍报告实际变化路径、Git LFS、对象哈希、Blueprint/自动化与 PIE 结果。
+- 例外只覆盖用户授权的该次清单，不得把 Commandlet 扩展成长期通用资产写入口；集成完成后按技术债清理 apply path。
+
+2026-07-23 唯一现行例外是背包 Style v4 的 `WacomMigrateBackpackWorkspaceV4`，其九项固定清单和命令见 [UI_Backpack_WBP_Binding.md](./UI_Backpack_WBP_Binding.md#一次性-style-v4-定向-commandlet)。原因是 backpack endpoint 的固定端口 8130 落入 Windows excluded port range；该授权不适用于其它资产或后续版本。
 
 ## 2. 固定端点
 

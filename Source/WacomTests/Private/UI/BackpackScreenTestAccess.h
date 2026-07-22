@@ -44,6 +44,14 @@ struct FWacomBackpackPileMoveCancelProbe
 	int32 PileZOrderAfterCancel = 0;
 };
 
+struct FWacomBackpackControlsHelpLifecycleProbe
+{
+	bool bOpened = false;
+	bool bPreviousFocusCaptured = false;
+	bool bFocusRestored = false;
+	bool bHiddenAfterDeactivate = false;
+};
+
 struct FWacomBackpackScreenTestAccess
 {
 	static UWacomBackpackScreen* Create(UObject* Outer, URunSession* RunSession);
@@ -170,6 +178,8 @@ struct FWacomBackpackScreenTestAccess
 		FGuid OwnerInstanceId = FGuid());
 	static void ActivateWorkspaceScreen(UWacomBackpackScreen& Screen);
 	static void DeactivateWorkspaceScreen(UWacomBackpackScreen& Screen);
+	static FWacomBackpackControlsHelpLifecycleProbe ProbeControlsHelpLifecycle(
+		UWacomBackpackScreen& Screen);
 	static FWacomBackpackWorkspaceAutomationTestView WorkspaceView(const UWacomBackpackScreen& Screen);
 	static bool TickWorkspaceBaseCardLayoutTransitions(
 		UWacomBackpackWorkspaceWidget& Workspace,
