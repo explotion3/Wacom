@@ -87,7 +87,7 @@ tags:
 
 Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共用 `FWacomCardMotionKernel`，确保 30/60/120 FPS 下指数收敛一致、旋转走最短路径，并允许从当前视觉姿态连续重定向。共享范围只包含数学与 DepthMotion 能力；Battle Slot 的出牌、瞄准、发牌、离场、Transition Hint 和音效播放仍由 first-person card layer 自己拥有，背包不得为了复用手感而接入这些状态机。
 
-背包外层 Canvas 位置是 Scene 基础布局，牌堆与多卡携带基础姿态统一为水平零旋转；`WBP_WacomDeckCardWidget.CardMotionRoot` 只叠加局部 Translation / Angle。成功释放先捕获当前视觉姿态，目标 Scene 到达后把同一 Widget 放到目标 B 的 Canvas 布局，再把视觉差值作为 `CardMotionRoot` 局部偏移 ease-out 到零；中途 Reconcile 或目标更新只能从当前视觉姿态重定向，禁止重新使用来源 A。该瞬态层交接必须保留原 Widget 的 Retainer 捕获面与局部姿态；等价 Scene 绑定不得重复提交卡面数据、移动开关或 retained-rendering 模式，避免材质捕获重新建立时产生短暂空帧。背包的逻辑鼠标位置与视觉弹簧位置必须分离，规则判定始终使用无延迟指针。
+背包外层 Canvas 位置是 Scene 基础布局，牌堆与多卡携带基础姿态统一为水平零旋转；`WBP_WacomDeckCardWidget.CardMotionRoot` 只叠加局部 Translation / Angle。成功释放先捕获当前视觉姿态，目标 Scene 到达后把同一 Widget 放到目标 B 的 Canvas 布局，再把视觉差值作为 `CardMotionRoot` 局部偏移 ease-out 到零；中途 Reconcile 或目标更新只能从当前视觉姿态重定向，禁止重新使用来源 A。该瞬态层交接必须保留原 Widget 的 Retainer 捕获面与局部姿态；等价 Scene 绑定不得重复提交卡面数据、移动开关或 retained-rendering 模式，避免材质捕获重新建立时产生短暂空帧。UMG 的 `RemoveFromParent()` 可能在目标 Panel 接管前释放唯一的 `SObjectWidget` 强引用并连带重建嵌套 Retainer，因此 `Static / CarryCache / CarryActive / Settlement` 之间必须通过统一 App-private 入口迁移：在一次原子 Remove/Add 期间短暂保活原卡牌 Slate 子树，目标层接管后立即释放临时引用。它不是第二套 Slate 所有权，也不允许长期缓存 `TSharedRef<SWidget>`。背包的逻辑鼠标位置与视觉弹簧位置必须分离，规则判定始终使用无延迟指针。
 
 正式展开牌堆使用 `HandLensStrip`，多卡携带继续使用独立 `FocusWindowStrip`，两条路径不共享制作参数。Hand Lens 保持 `296×420` 卡面和零旋转：空间足够时全部完整展示；不足时由整条走廊中的连续鼠标横向位置求出左压缩堆、动态完整区和右压缩堆。布局目标默认以 `24px` 完整间隔、`59px` 期望露出、`16px` 最小露出和 `178px` 提升重叠容忍求解，整个牌列从当前视觉姿态以约 `0.32s` Ease-Out 滑向新目标。布局焦点不等于浏览卡：详情、Fake3D、上抬与拾取统一由卡牌当前视觉姿态和 Canvas ZOrder 决定；动画期间静止鼠标也会按需重新解析视觉卡身份，但同一透镜段内不会重复布局、刷新 Snapshot 或 Scene。框选、Ctrl 选择和整堆移动冻结屏幕所见姿态与透镜。鼠标离开只取消活动焦点，最后 Hand Lens 三段布局保持到牌堆收起。Carry 以滚轮当前卡为 FocusWindow 焦点并锚定鼠标，正式基线只完整展示当前卡一张，其余卡向左右压缩；Hand Lens 迁移和展开牌堆调参不会影响 Carry。
 
@@ -97,7 +97,7 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 背包运动由 `FWacomBackpackWorkspaceRuntime` 内的 Motion Coordinator 与 Workspace 单一按需 Slate 帧 `ActiveTimer` 驱动：Carry 视觉锚点、PileMove 指针采样、携带目标悬停展开、局部姿态、Settlement、焦点退出延迟与牌堆展开/收起基础布局过渡不得各自注册常驻或并行 Timer。基础布局过渡每帧只更新活动卡的 Canvas 布局和局部姿态，禁止调用全量 `RefreshInteractionPresentation()`、遍历静态卡、刷新 Snapshot 或触发 Scene Reconcile；牌堆收拢完成以实际过渡记录清空为准，不使用等时长回调。携带输入暂停只冻结鼠标/规则交互，不得中止已开始的视觉收拢；`Simplified Motion` 则在切换帧将所有基础布局过渡直接完成。几何稳定采样和下一帧 Retainer 补绘是仅有的独立一次性 Slate 任务。
 
-`SettlementLayer` 在收落完成前继续拥有原卡牌 Widget，并且必须加入 Scene Reconciler 的现有实例搜索集合。Reconciler 按完整 ViewKey 去重：瞬态层中的权威 Widget 优先于静态副本，从而保证“框选—携带—放下—再次框选”不会产生重复卡面。若玩家在收落完成前再次拿起同一卡牌，Carry 必须原子接管该 Widget：撤销旧 Settlement target、未消费的完成通知和旧局部运动后再重挂载；禁止让 Settlement 与 Carry 同时持有一张卡，否则按需帧 Timer 会被永远无法完成的旧目标持续唤醒。
+`SettlementLayer` 在收落完成前继续拥有原卡牌 Widget，并且必须加入 Scene Reconciler 的现有实例搜索集合。Reconciler 按完整 ViewKey 去重：瞬态层中的权威 Widget 优先于静态副本，从而保证“框选—携带—放下—再次框选”不会产生重复卡面。若玩家在收落完成前再次拿起同一卡牌，Carry 必须原子接管该 Widget：撤销旧 Settlement target、未消费的完成通知和旧局部运动后，再通过同一 Slate 保活入口从 Settlement 重挂到携带层；禁止让 Settlement 与 Carry 同时持有一张卡，否则按需帧 Timer 会被永远无法完成的旧目标持续唤醒。真正销毁、去重或删除卡牌时不使用保活迁移，仍正常释放其 Slate/Retainer 子树。
 
 浏览焦点使用完整显示身份与实际 Widget 引用，允许投影卡、特殊区主卡和负重卡共享详情与动效，同时保留只读规则；Interaction Model 则只接收按物理 `InstanceId` 去重后的可移动实体身份，不能让同 ID 投影覆盖实体来源。焦点卡是唯一实时卡面；邻居只移动缓存后的外层姿态。多卡携带起手时默认最右释放卡保持平放；一旦滚轮发生过有效切换，之后滚轮选中的任意当前卡（含重新切回默认最右卡）都上抬并获得最高 ZOrder。`Simplified Motion` 下普通 Hover、展开焦点与携带当前卡都不叠加空间上抬、角度补偿或视觉弹簧，模式切换必须清除既有偏移。指针热路径始终只更新 `CarryRoot`，不能随卡数线性增加焦点求解或 Retainer 重绘。
 

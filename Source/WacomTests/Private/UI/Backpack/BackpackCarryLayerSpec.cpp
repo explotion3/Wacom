@@ -38,6 +38,7 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 		Definition->CardId = *FString::Printf(TEXT("Backpack.CarryLayer.%d"), CardCount);
 		TArray<TStrongObjectPtr<UWacomDeckCardWidget>> OwnedCards;
 		TArray<TObjectPtr<UWacomDeckCardWidget>> Cards;
+		TArray<const SWidget*> OriginalSlateWidgets;
 		for (int32 Index = 0; Index < CardCount; ++Index)
 		{
 			TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
@@ -52,6 +53,7 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 				FVector2D(220.0f, 320.0f),
 				0.0f,
 				Index);
+			OriginalSlateWidgets.Add(&Card->TakeWidget().Get());
 			Cards.Add(Card.Get());
 			OwnedCards.Add(MoveTemp(Card));
 		}
@@ -67,6 +69,12 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 		TestTrue(*FString::Printf(TEXT("%d cards begin carry"), CardCount),
 			Model->BeginCarry(Cards[0]->GetCardInstanceId(), FVector2D(300.0f, 220.0f), 17));
 		Workspace->RefreshInteractionPresentation();
+		for (int32 Index = 0; Index < Cards.Num(); ++Index)
+		{
+			TestTrue(
+				*FString::Printf(TEXT("%d-card pickup preserves Slate widget %d"), CardCount, Index),
+				&Cards[Index]->TakeWidget().Get() == OriginalSlateWidgets[Index]);
+		}
 
 		const FWacomBackpackWorkspaceAutomationTestView Started =
 			Workspace->GetAutomationTestView();
@@ -261,6 +269,8 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 			const FVector2D TargetCenter(920.0f, 510.0f);
 			Workspace->ApplyCardBaseLayout(
 				*Cards[0], TargetCenter, FVector2D(220.0f, 320.0f), 0.0f, 4000);
+			TestTrue(TEXT("Carry-to-settlement handoff preserves the Slate widget"),
+				&Cards[0]->TakeWidget().Get() == OriginalSlateWidgets[0]);
 			Workspace->RefreshInteractionPresentation();
 			TestEqual(TEXT("Committed release does not start a cached source-to-target transition"),
 				Workspace->GetAutomationTestView().ActiveBaseCardLayoutTransitionCount, 0);
@@ -282,6 +292,12 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 			TestEqual(TEXT("Cancel restores the original widget to StaticCardLayer"),
 				Card->GetParent(), static_cast<UPanelWidget*>(Workspace->GetStaticCardLayer()));
 		}
+		for (int32 Index = 0; Index < Cards.Num(); ++Index)
+		{
+			TestTrue(
+				*FString::Printf(TEXT("%d-card cancel preserves Slate widget %d"), CardCount, Index),
+				&Cards[Index]->TakeWidget().Get() == OriginalSlateWidgets[Index]);
+		}
 	}
 	return true;
 }
@@ -293,91 +309,110 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FWacomUIBackpackRepeatedCarrySettlementLifetimeSpec::RunTest(const FString& Parameters)
 {
-	constexpr int32 CardCount = 7;
-	constexpr int32 RapidCycleCount = 12;
-	TStrongObjectPtr<UWacomBackpackWorkspaceWidget> Workspace(
-		NewObject<UWacomBackpackWorkspaceWidget>());
-	const TSharedRef<SWidget> WorkspaceSlate = Workspace->TakeWidget();
-	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Model =
-		MakeShared<FWacomBackpackWorkspaceInteractionModel>();
-	Workspace->SetInteractionModel(Model, nullptr);
-
-	TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
-	Definition->CardId = TEXT("Backpack.Carry.RepeatedSettlement");
-	TArray<TStrongObjectPtr<UWacomDeckCardWidget>> OwnedCards;
-	TArray<TObjectPtr<UWacomDeckCardWidget>> Cards;
-	for (int32 Index = 0; Index < CardCount; ++Index)
+	const auto RunCardCount = [this](const int32 CardCount)
 	{
-		TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
-		FCardInstance Instance;
-		Instance.InstanceId = FGuid(Index + 1, 77, 88, 99);
-		Instance.Definition = Definition.Get();
-		Card->SetCard(Instance, EZoneKind::Backpack, FGuid());
-		Workspace->GetStaticCardLayer()->AddChildToCanvas(Card.Get());
-		Workspace->PrimeCardBaseLayout(
-			*Card,
-			FVector2D(180.0f + Index * 48.0f, 240.0f),
-			FVector2D(220.0f, 320.0f),
-			0.0f,
-			Index);
-		Cards.Add(Card.Get());
-		OwnedCards.Add(MoveTemp(Card));
-	}
-	Workspace->BindWorkspaceCards(Cards, 77);
-	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
+		constexpr int32 RapidCycleCount = 20;
+		TStrongObjectPtr<UWacomBackpackWorkspaceWidget> Workspace(
+			NewObject<UWacomBackpackWorkspaceWidget>());
+		const TSharedRef<SWidget> WorkspaceSlate = Workspace->TakeWidget();
+		TSharedPtr<FWacomBackpackWorkspaceInteractionModel> Model =
+			MakeShared<FWacomBackpackWorkspaceInteractionModel>();
+		Workspace->SetInteractionModel(Model, nullptr);
 
-	for (int32 Cycle = 0; Cycle < RapidCycleCount; ++Cycle)
-	{
-		Model->SelectAllMovable();
-		TestTrue(*FString::Printf(TEXT("Cycle %d begins a multi-card carry"), Cycle),
-			Model->BeginCarry(Cards[0]->GetCardInstanceId(), FVector2D(500.0f, 350.0f), 77));
-		Workspace->RefreshInteractionPresentation();
-
-		if (Cycle > 0)
+		TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
+		Definition->CardId = TEXT("Backpack.Carry.RepeatedSettlement");
+		TArray<TStrongObjectPtr<UWacomDeckCardWidget>> OwnedCards;
+		TArray<TObjectPtr<UWacomDeckCardWidget>> Cards;
+		TArray<const SWidget*> OriginalSlateWidgets;
+		for (int32 Index = 0; Index < CardCount; ++Index)
 		{
-			TestEqual(
-				*FString::Printf(TEXT("Cycle %d pickup consumes every previous settlement target"), Cycle),
-				Workspace->GetAutomationTestView().ActiveSettlementTargetCount,
-				0);
-		}
-
-		TestTrue(*FString::Printf(TEXT("Cycle %d commits the complete carried set"), Cycle),
-			FWacomBackpackScreenTestAccess::CommitWorkspaceReleaseBeforeTargetReconcile(
-				*Workspace, true));
-		for (int32 Index = 0; Index < Cards.Num(); ++Index)
-		{
-			Workspace->ApplyCardBaseLayout(
-				*Cards[Index],
-				FVector2D(240.0f + Index * 52.0f, 280.0f + Cycle),
+			TStrongObjectPtr<UWacomDeckCardWidget> Card(NewObject<UWacomDeckCardWidget>());
+			FCardInstance Instance;
+			Instance.InstanceId = FGuid(Index + 1, 77, 88, 99);
+			Instance.Definition = Definition.Get();
+			Card->SetCard(Instance, EZoneKind::Backpack, FGuid());
+			Workspace->GetStaticCardLayer()->AddChildToCanvas(Card.Get());
+			Workspace->PrimeCardBaseLayout(
+				*Card,
+				FVector2D(180.0f + Index * 48.0f, 240.0f),
 				FVector2D(220.0f, 320.0f),
 				0.0f,
 				Index);
+			OriginalSlateWidgets.Add(&Card->TakeWidget().Get());
+			Cards.Add(Card.Get());
+			OwnedCards.Add(MoveTemp(Card));
 		}
-		TestEqual(*FString::Printf(TEXT("Cycle %d owns one settlement target per card"), Cycle),
-			Workspace->GetAutomationTestView().ActiveSettlementTargetCount,
-			CardCount);
-		if (Cycle + 1 < RapidCycleCount)
-		{
-			FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
-				*Workspace, Style->SettleSeconds * 0.25f);
-		}
-	}
+		Workspace->BindWorkspaceCards(Cards, 77);
+		const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
 
-	FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
-		*Workspace, Style->SettleSeconds + 0.05f);
-	const FWacomBackpackWorkspaceAutomationTestView Final = Workspace->GetAutomationTestView();
-	TestEqual(TEXT("Repeated carry/release leaves no card in SettlementLayer"),
-		Final.SettlementCardCount, 0);
-	TestEqual(TEXT("Repeated carry/release leaves no settlement target"),
-		Final.ActiveSettlementTargetCount, 0);
-	TestEqual(TEXT("Repeated carry/release leaves no local card motion"),
-		Final.ActiveLocalMotionCardCount, 0);
-	TestEqual(TEXT("Repeated carry/release preserves exactly one visual per card"),
-		Final.WorkspaceCardCount, CardCount);
-	for (UWacomDeckCardWidget* Card : Cards)
+		for (int32 Cycle = 0; Cycle < RapidCycleCount; ++Cycle)
+		{
+			Model->SelectAllMovable();
+			TestTrue(*FString::Printf(TEXT("Cycle %d begins a multi-card carry"), Cycle),
+				Model->BeginCarry(Cards[0]->GetCardInstanceId(), FVector2D(500.0f, 350.0f), 77));
+			Workspace->RefreshInteractionPresentation();
+
+			if (Cycle > 0)
+			{
+				TestEqual(
+					*FString::Printf(TEXT("Cycle %d pickup consumes every previous settlement target"), Cycle),
+					Workspace->GetAutomationTestView().ActiveSettlementTargetCount,
+					0);
+			}
+
+			TestTrue(*FString::Printf(TEXT("Cycle %d commits the complete carried set"), Cycle),
+				FWacomBackpackScreenTestAccess::CommitWorkspaceReleaseBeforeTargetReconcile(
+					*Workspace, true));
+			for (int32 Index = 0; Index < Cards.Num(); ++Index)
+			{
+				Workspace->ApplyCardBaseLayout(
+					*Cards[Index],
+					FVector2D(240.0f + Index * 52.0f, 280.0f + Cycle),
+					FVector2D(220.0f, 320.0f),
+					0.0f,
+					Index);
+			}
+			TestEqual(*FString::Printf(TEXT("Cycle %d owns one settlement target per card"), Cycle),
+				Workspace->GetAutomationTestView().ActiveSettlementTargetCount,
+				CardCount);
+			for (int32 Index = 0; Index < Cards.Num(); ++Index)
+			{
+				TestTrue(
+					*FString::Printf(TEXT("Cycle %d preserves Slate widget %d"), Cycle, Index),
+					&Cards[Index]->TakeWidget().Get() == OriginalSlateWidgets[Index]);
+			}
+			if (Cycle + 1 < RapidCycleCount)
+			{
+				FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
+					*Workspace, Style->SettleSeconds * 0.25f);
+			}
+		}
+
+		FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
+			*Workspace, Style->SettleSeconds + 0.05f);
+		const FWacomBackpackWorkspaceAutomationTestView Final = Workspace->GetAutomationTestView();
+		TestEqual(TEXT("Repeated carry/release leaves no card in SettlementLayer"),
+			Final.SettlementCardCount, 0);
+		TestEqual(TEXT("Repeated carry/release leaves no settlement target"),
+			Final.ActiveSettlementTargetCount, 0);
+		TestEqual(TEXT("Repeated carry/release leaves no local card motion"),
+			Final.ActiveLocalMotionCardCount, 0);
+		TestEqual(TEXT("Repeated carry/release preserves exactly one visual per card"),
+			Final.WorkspaceCardCount, CardCount);
+		for (UWacomDeckCardWidget* Card : Cards)
+		{
+			TestEqual(TEXT("Every released card returns to StaticCardLayer"),
+				Card->GetParent(), static_cast<UPanelWidget*>(Workspace->GetStaticCardLayer()));
+		}
+		return true;
+	};
+
+	for (const int32 CardCount : { 1, 7, 21 })
 	{
-		TestEqual(TEXT("Every released card returns to StaticCardLayer"),
-			Card->GetParent(), static_cast<UPanelWidget*>(Workspace->GetStaticCardLayer()));
+		if (!RunCardCount(CardCount))
+		{
+			return false;
+		}
 	}
 	return true;
 }

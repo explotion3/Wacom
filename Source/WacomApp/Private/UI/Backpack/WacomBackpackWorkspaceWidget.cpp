@@ -12,6 +12,7 @@
 #include "InputCoreTypes.h"
 #include "Framework/Application/SlateApplication.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
+#include "UI/Backpack/WacomBackpackCardWidgetTransfer.h"
 #include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "UI/Backpack/WacomBackpackWorkspaceLayoutSolver.h"
 #include "UI/Backpack/WacomBackpackWorkspaceRuntime.h"
@@ -2407,8 +2408,7 @@ void UWacomBackpackWorkspaceWidget::CancelInteraction()
 		}
 		for (UWacomDeckCardWidget* Card : SettlingCards)
 		{
-			Card->RemoveFromParent();
-			StaticCardLayer->AddChildToCanvas(Card);
+			Wacom::Backpack::ReparentCardPreservingSlate(*StaticCardLayer, *Card);
 			if (const FWacomBackpackWorkspaceCardLayout* Base = GetVisualState().BaseLayouts().Find(Card))
 			{
 				ApplyCardLayout(*Card, Base->Center, Base->Size, Base->AngleDegrees, Base->ZOrder);
@@ -2509,8 +2509,7 @@ void UWacomBackpackWorkspaceWidget::CancelInteractionWithReturn()
 		{
 			continue;
 		}
-		Card->RemoveFromParent();
-		SettlementLayer->AddChildToCanvas(Card);
+		Wacom::Backpack::ReparentCardPreservingSlate(*SettlementLayer, *Card);
 		ApplyCardLayout(*Card, Target->Center, Target->Size, Target->AngleDegrees, Target->ZOrder);
 		GetVisualState().SetSettlementTarget(*Card, *Target);
 		GetRuntime().Motion.BeginSettlement(
@@ -2855,8 +2854,7 @@ void UWacomBackpackWorkspaceWidget::SyncCarryLayer()
 		}
 		if (Card->GetParent() != DesiredCarryLayer)
 		{
-			Card->RemoveFromParent();
-			DesiredCarryLayer->AddChildToCanvas(Card);
+			Wacom::Backpack::ReparentCardPreservingSlate(*DesiredCarryLayer, *Card);
 			Card->SetVisibility(ESlateVisibility::Visible);
 			bChanged = true;
 		}
@@ -2885,8 +2883,7 @@ void UWacomBackpackWorkspaceWidget::SyncCarryLayer()
 		{
 			continue;
 		}
-		Card->RemoveFromParent();
-		StaticCardLayer->AddChildToCanvas(Card);
+		Wacom::Backpack::ReparentCardPreservingSlate(*StaticCardLayer, *Card);
 		if (const FWacomBackpackWorkspaceCardLayout* Base = GetVisualState().BaseLayouts().Find(Card))
 		{
 			ApplyCardLayout(*Card, Base->Center, Base->Size, Base->AngleDegrees, Base->ZOrder);
@@ -3164,8 +3161,7 @@ void UWacomBackpackWorkspaceWidget::FinalizeCompletedSettlements()
 		{
 			continue;
 		}
-		Card->RemoveFromParent();
-		StaticCardLayer->AddChildToCanvas(Card);
+		Wacom::Backpack::ReparentCardPreservingSlate(*StaticCardLayer, *Card);
 		Card->ResetBackpackLocalMotionPose();
 		ApplyCardLayout(*Card, Final.Center, Final.Size, Final.AngleDegrees, Final.ZOrder);
 	}
@@ -3212,8 +3208,7 @@ void UWacomBackpackWorkspaceWidget::RestoreStaticCardParents()
 			bPreservedPendingHandoff = true;
 			continue;
 		}
-		Card->RemoveFromParent();
-		StaticCardLayer->AddChildToCanvas(Card);
+		Wacom::Backpack::ReparentCardPreservingSlate(*StaticCardLayer, *Card);
 		if (const FWacomBackpackWorkspaceCardLayout* Base = GetVisualState().BaseLayouts().Find(Card))
 		{
 			Card->ResetBackpackLocalMotionPose();
@@ -3651,8 +3646,8 @@ void UWacomBackpackWorkspaceWidget::ApplyCardBaseLayout(
 				: GetDefault<UWacomBackpackWorkspaceStyle>();
 			if (!bSimplifiedMotion && Style->SettleSeconds > 0.0f && SettlementLayer)
 			{
-				MutableDeckCard->RemoveFromParent();
-				SettlementLayer->AddChildToCanvas(MutableDeckCard);
+				Wacom::Backpack::ReparentCardPreservingSlate(
+					*SettlementLayer, *MutableDeckCard);
 				ApplyCardLayout(
 					*MutableDeckCard,
 					Target.Center,
@@ -3672,8 +3667,8 @@ void UWacomBackpackWorkspaceWidget::ApplyCardBaseLayout(
 			{
 				if (StaticCardLayer)
 				{
-					MutableDeckCard->RemoveFromParent();
-					StaticCardLayer->AddChildToCanvas(MutableDeckCard);
+					Wacom::Backpack::ReparentCardPreservingSlate(
+						*StaticCardLayer, *MutableDeckCard);
 				}
 				MutableDeckCard->ResetBackpackLocalMotionPose();
 				ApplyCardLayout(

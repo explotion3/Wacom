@@ -132,7 +132,7 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 - 框选使用屏幕所见卡牌本体作为命中真相：开始框选时捕获可移动卡的实际中心、固定卡面尺寸和当前角度，框选矩形与该有向卡身矩形相交即选中，边缘接触也算命中；只读卡和非来源区卡仍被排除。
 - 空白 Workspace 是通量投放目标：通量卡只更新自由布局，其它实体卡通过现有原子移动进入通量区并保存释放位置。
 - 放回来源牌堆等价于收拢；放到其它牌堆走 `MoveInstancesAtomic`；无效目标保持携带并显示拒绝反馈，不允许部分提交。
-- 成功释放后，仍位于携带视觉分支的卡牌必须进入显式 pending visual handoff。Interaction Model 已移除卡牌但目标 Snapshot 尚未 reconcile 的窗口内，任何 Presentation 刷新、ActiveTimer 或 `SyncCarryLayer()` 都不得恢复来源 A 的基础布局。跨物理区提交虽然会改变正式 ViewKey 的 `PhysicalZone`，但 Reconciler 必须按 `InstanceId` 迁移同一个受保护实体 Widget，不能销毁 A 实例并创建 B 实例。目标 Scene 到达后把同一 Widget 重挂到 `SettlementLayer`：外层直接采用目标 B 的 Canvas 布局，`CardMotionRoot` 从捕获的实际释放姿态形成局部偏移并在默认 `0.18s` 内归零，因此视觉路径是“释放点 → B”，绝不经过来源 A。Carry/Settlement 权威实例在 Scene 重绑时必须保留现有局部姿态和 Retainer 捕获面；相同卡定义、相同移动开关或相同 retained-rendering 模式不得重复提交卡面数据或重建捕获状态，避免释放瞬间出现一帧空白。部分释放只收落已提交卡，其余卡继续携带并平滑重排；原子拒绝不启动收落。
+- 成功释放后，仍位于携带视觉分支的卡牌必须进入显式 pending visual handoff。Interaction Model 已移除卡牌但目标 Snapshot 尚未 reconcile 的窗口内，任何 Presentation 刷新、ActiveTimer 或 `SyncCarryLayer()` 都不得恢复来源 A 的基础布局。跨物理区提交虽然会改变正式 ViewKey 的 `PhysicalZone`，但 Reconciler 必须按 `InstanceId` 迁移同一个受保护实体 Widget，不能销毁 A 实例并创建 B 实例。目标 Scene 到达后把同一 Widget 重挂到 `SettlementLayer`：外层直接采用目标 B 的 Canvas 布局，`CardMotionRoot` 从捕获的实际释放姿态形成局部偏移并在默认 `0.18s` 内归零，因此视觉路径是“释放点 → B”，绝不经过来源 A。所有 `Static / CarryCache / CarryActive / Settlement` 卡牌跨层迁移必须走 App-private 的 Slate 保活重挂载入口：只在一次 `RemoveFromParent → AddChild` 原子操作期间持有卡牌与目标 Panel 的 `TSharedRef<SWidget>`，使目标层接管同一个 `SObjectWidget`、`WBP_FPCardView`、`SRetainerWidget` 与 RenderTarget；禁止长期保存第二套 Slate 强引用。Carry/Settlement 权威实例在 Scene 重绑时必须保留现有局部姿态和 Retainer 捕获面；相同卡定义、相同移动开关或相同 retained-rendering 模式不得重复提交卡面数据或重建捕获状态，避免释放瞬间出现一帧空白。部分释放只收落已提交卡，其余卡继续携带并平滑重排；原子拒绝不启动收落。
 - Scene Builder 一次消费 Snapshot、Workspace State、精简 Carry 摘要、Style 和几何，输出顺序对齐的 Card Entries / Layouts、Pile Entries、展开边界与空状态；不得在 Card apply 阶段再次扫描全部牌堆。Visual Registry 的现有实例搜索覆盖 `StaticCardLayer`、`CarryLayer`、`CarryActiveLayer` 和 `SettlementLayer`。完整 ViewKey 相同的卡只能保留一个 Widget；若旧刷新已同时留下静态副本和 Carry/Settlement 权威实例，优先保留瞬态层中的原 Widget并立即移除静态副本，避免再次框选时出现不可交互残影。
 - 携带在合法折叠牌堆上停留约 `0.35s` 后自动展开；离开、取消、目标非法或来源 revision 漂移不得继续该自动展开请求。
 - Escape 依次取消确认或瞬态交互、收起展开牌堆，再交给 CommonUI 关闭背包；取消携带时从当前视觉姿态收落回来源布局。整堆拖动开始时必须快照牌框 Canvas 位置与 ZOrder，取消时同时恢复牌框和所属卡牌，只有成功释放才清除快照并提交 Workspace State Store，保证 A/B 视觉与状态原子一致。B 始终直接关闭并立即清理所有瞬态动画、Timer、父级与实时 Retainer。
@@ -140,6 +140,8 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 ## Retainer 与卡面
 
 完整工作台卡直接复用 Battle 的 `WBP_FPCardView`，因此沿用同一张卡面的边框、费用、稀有度、Fake3D、视差、接触阴影和表面材质；不复用 Battle Slot、发牌、出牌、目标、溶解或 transition hint 状态机。`WBP_WacomDeckCardWidget` 必须提供 `CardMotionRoot`，包装完整卡面、反馈和角标，用局部 Translation / Angle 表达 Hover、拾起、滚轮当前卡和 Settlement；外层 Canvas 始终只表达基础布局。卡面原生制作尺寸保持 `296×420`，`CardFaceScaleBox` 资产制作值保持 `1.0`，运行时统一应用 `CardDisplayScale`（基线 `0.78`）；布局、视觉卡身、命中、框选、Hand Lens 与 Carry 必须共同使用缩放后的尺寸。该缩放独立于 Battle/Run `PresentationScale`，也不能根据 Workspace 高度连续改写。滚轮切换时，新当前卡必须在 `CarryActiveLayer` 内获得独占最高 ZOrder；上一张卡可以暂留活动层完成回落，但不得遮挡新当前卡。
+
+携带版与静态版不存在两套卡面 WBP：跨层前后始终是同一个 `WBP_WacomDeckCardWidget -> WBP_FPCardView` 实例。父级迁移本身不得调用卡面数据绑定、切换 Retainer 模式或请求补绘；只有 Hover/Carry 当前卡等语义状态确实变化时，Motion Coordinator 才能更新实时表现策略。
 
 `WBP_BackpackScreen` 的 `WorkspaceStyle` 必须是指向 `DA_BackpackWorkspaceStyle` 的非 `Instanced` 资产引用。制作时从 Class Defaults 双击引用资产调整布局、牌列、颜色和动效参数。不得把 `UWacomBackpackWorkspaceStyle` 标记为 `EditInlineNew / DefaultToInstanced`，也不得在 Screen 属性上使用 `Instanced / ShowOnlyInnerProperties`；这些内联对象合同会让 UE 5.8 Widget Blueprint 的 PropertyEditor 在构建根节点详情时递归生成分类树并导致栈溢出。
 
@@ -167,7 +169,7 @@ C++ fallback 与正式 WBP 使用完全相同的数据流：`Snapshot -> Workspa
 
 ## 验证
 
-自动化至少覆盖：正式绑定无 Rack/Preview、单 `WBP_FPCardView` Retainer、特殊区主卡身份、投影只读浏览、0/1/2/3/5/7/15/21 张折叠/展开及数量自适应紧凑牌列、重排中当前视觉姿态与 ZOrder 命中、稳定牌框、1/7/15/21 张 CarryLayer 单锚点和滚轮让位、Settlement 跨刷新唯一实例、动态卡面数量上限、牌堆状态同 Run 保留/新 Run 清空、折叠/展开牌堆单来源框选与只读排除、标题拖动、Escape/B 清理和完整投放矩阵。
+自动化至少覆盖：正式绑定无 Rack/Preview、单 `WBP_FPCardView` Retainer、特殊区主卡身份、投影只读浏览、0/1/2/3/5/7/15/21 张折叠/展开及数量自适应紧凑牌列、重排中当前视觉姿态与 ZOrder 命中、稳定牌框、1/7/15/21 张 CarryLayer 单锚点和滚轮让位、跨层前后顶层与嵌套卡面的 Slate 指针连续、纯父级迁移不重写卡面/Retainer 策略、Settlement 跨刷新唯一实例、重复 20 轮携带/释放无残留、动态卡面数量上限、牌堆状态同 Run 保留/新 Run 清空、折叠/展开牌堆单来源框选与只读排除、标题拖动、Escape/B 清理和完整投放矩阵。
 
 PIE 至少检查：
 

@@ -6,6 +6,7 @@
 
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
+#include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackCardWidgetTransfer.h"
 #include "Cards/CardDefinition.h"
 #include "Components/CanvasPanel.h"
 #include "Components/ScaleBox.h"
@@ -13,6 +14,76 @@
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "UObject/StrongObjectPtr.h"
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBackpackCardSlateTransferSpec,
+	"Wacom.UI.Backpack.CardView.SlateTransfer",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBackpackCardSlateTransferSpec::RunTest(const FString& Parameters)
+{
+	UClass* DeckCardClass = LoadClass<UWacomDeckCardWidget>(
+		nullptr,
+		TEXT("/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget.WBP_WacomDeckCardWidget_C"));
+	TestNotNull(TEXT("Formal DeckCard class loads"), DeckCardClass);
+	if (!DeckCardClass)
+	{
+		return false;
+	}
+
+	TStrongObjectPtr<UCanvasPanel> SourcePanel(NewObject<UCanvasPanel>());
+	TStrongObjectPtr<UCanvasPanel> DestinationPanel(NewObject<UCanvasPanel>());
+	const TSharedRef<SWidget> SourceSlate = SourcePanel->TakeWidget();
+	const TSharedRef<SWidget> DestinationSlate = DestinationPanel->TakeWidget();
+	TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
+	Definition->CardId = TEXT("Backpack.Presentation.SlateTransfer");
+	TStrongObjectPtr<UWacomDeckCardWidget> Card(
+		NewObject<UWacomDeckCardWidget>(GetTransientPackage(), DeckCardClass));
+	FCardInstance Instance;
+	Instance.InstanceId = FGuid(91, 92, 93, 94);
+	Instance.Definition = Definition.Get();
+	Card->SetCard(Instance, EZoneKind::Backpack, FGuid());
+	SourcePanel->AddChildToCanvas(Card.Get());
+
+	UWacomFirstPersonCardViewWidget* CardFace =
+		Cast<UWacomFirstPersonCardViewWidget>(
+			Card->GetWidgetFromName(TEXT("BackpackCardView")));
+	TestNotNull(TEXT("DeckCard hosts WBP_FPCardView"), CardFace);
+	if (!CardFace)
+	{
+		return false;
+	}
+
+	const SWidget* OriginalCardSlate = &Card->TakeWidget().Get();
+	const SWidget* OriginalFaceSlate = &CardFace->TakeWidget().Get();
+	const FWacomFirstPersonCardViewAutomationTestView Baseline =
+		CardFace->GetAutomationTestViewForTest();
+	UPanelSlot* NewSlot = Wacom::Backpack::ReparentCardPreservingSlate(
+		*DestinationPanel, *Card);
+	TestNotNull(TEXT("Slate-preserving transfer creates the destination slot"), NewSlot);
+	TestEqual(TEXT("Card moves to the requested panel"),
+		Card->GetParent(), static_cast<UPanelWidget*>(DestinationPanel.Get()));
+	TestTrue(TEXT("Transfer preserves the DeckCard SObjectWidget"),
+		&Card->TakeWidget().Get() == OriginalCardSlate);
+	TestTrue(TEXT("Transfer preserves the nested WBP_FPCardView Slate subtree"),
+		&CardFace->TakeWidget().Get() == OriginalFaceSlate);
+
+	const FWacomFirstPersonCardViewAutomationTestView AfterTransfer =
+		CardFace->GetAutomationTestViewForTest();
+	TestEqual(TEXT("Transfer does not resubmit card face data"),
+		AfterTransfer.CardViewDataApplyCount, Baseline.CardViewDataApplyCount);
+	TestEqual(TEXT("Transfer does not reapply retained rendering policy"),
+		AfterTransfer.RetainedRenderingApplyCount, Baseline.RetainedRenderingApplyCount);
+	TestEqual(TEXT("Transfer does not reapply realtime presentation policy"),
+		AfterTransfer.RealtimePresentationApplyCount, Baseline.RealtimePresentationApplyCount);
+
+	UPanelSlot* ExistingSlot = Wacom::Backpack::ReparentCardPreservingSlate(
+		*DestinationPanel, *Card);
+	TestEqual(TEXT("A same-panel transfer is a no-op"), ExistingSlot, NewSlot);
+	TestEqual(TEXT("A same-panel transfer does not duplicate the card"),
+		DestinationPanel->GetChildrenCount(), 1);
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackCardPresentationBudgetSpec,

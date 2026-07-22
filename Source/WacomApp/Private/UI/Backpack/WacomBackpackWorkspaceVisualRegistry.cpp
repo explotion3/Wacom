@@ -6,6 +6,7 @@
 #include "Components/CanvasPanelSlot.h"
 #include "Components/PanelWidget.h"
 #include "Blueprint/UserWidget.h"
+#include "UI/Backpack/WacomBackpackCardWidgetTransfer.h"
 #include "UI/Backpack/WacomBackpackWorkspaceSceneBuilder.h"
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
@@ -53,8 +54,7 @@ void MoveToPanelIndex(UPanelWidget& Panel, UWacomDeckCardWidget& Widget, int32 I
 {
 	if (GetPanelParent(&Widget) != &Panel)
 	{
-		Widget.RemoveFromParent();
-		Panel.AddChild(&Widget);
+		Wacom::Backpack::ReparentCardPreservingSlate(Panel, Widget);
 	}
 	Panel.ShiftChild(Index, &Widget);
 }
