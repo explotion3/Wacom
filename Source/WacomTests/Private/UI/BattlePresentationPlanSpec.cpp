@@ -3,12 +3,15 @@
 #include "Misc/AutomationTest.h"
 
 #include "BattleHUDTestHarness.h"
+#include "Cards/CardDefinition.h"
+#include "Cards/CardEffect.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Events/BattleEvent.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "Presentation/BattlePresentationJournal.h"
 #include "Session/BattleSession.h"
+#include "Tags/WacomGameplayTags.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 
 #if WITH_AUTOMATION_TESTS
@@ -112,6 +115,22 @@ namespace WacomBattlePresentationPlanSpec
 			TEXT("Head"));
 		Event.Amount = 3;
 		return Event;
+	}
+
+	UCardDefinition* MakePoisonCardOnPart(
+		FWacomBattleFixture& Fixture,
+		int32 Cost,
+		int32 Stacks)
+	{
+		UCardDefinition* Card = Fixture.MakeNoopCard(Cost);
+		Card->TargetMode = ECardTargetMode::SingleEnemyPart;
+
+		FCardEffect Effect;
+		Effect.EffectType = WacomTags::Effect_ApplyStatus_Poison;
+		Effect.Magnitude = Stacks;
+		Effect.Target = WacomTags::Target_SingleEnemyPart;
+		Card->Effects.Add(Effect);
+		return Card;
 	}
 }
 
@@ -383,6 +402,119 @@ bool FWacomUIBattleEndTurnPresentationPlanSkipsExistingHandAnchorEnterTest::RunT
 	TestFalse(
 		TEXT("Existing hand anchor does not get a generated enter phase"),
 		StartedPhases.Contains(FName(TEXT("TurnStartHandAnchorEnter"))));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEndTurnPresentationPlanKeepsPostDrawKnockdownDialogTest,
+	"Wacom.UI.Battle.PresentationPlan.EndTurnKeepsPostDrawKnockdownDialog",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEndTurnPresentationPlanKeepsPostDrawKnockdownDialogTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattlePresentationPlanSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UCardDefinition* PoisonCard = MakePoisonCardOnPart(Fixture, /*Cost*/1, /*Stacks*/1);
+	TArray<UCardDefinition*> Deck = { PoisonCard };
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		Deck.Add(Fixture.MakeNoopCard(0));
+	}
+	UCharacterDefinition* Character = Fixture.MakeCharacter(
+		Fixture.MakeNoopCard(2),
+		Fixture.MakeNoopCard(2),
+		Deck);
+	UEnemyDefinition* Enemy = Fixture.MakeSinglePartEnemy(/*Hp*/16, /*Initiative*/20);
+	UBattleSession* Session = Fixture.CreateSession(Character, Enemy, /*Seed*/41);
+	if (!TestNotNull(TEXT("Battle session"), Session))
+	{
+		return false;
+	}
+
+	FBattleSnapshot Snapshot = Session->BuildSnapshot();
+	const FGuid PartInstanceId = FWacomBattleFixture::FindPartInstanceId(Snapshot, 0);
+	const FGuid PoisonCardInstanceId =
+		FWacomBattleFixture::FindHandInstanceByCardId(Snapshot, PoisonCard->CardId);
+	TestTrue(TEXT("Poison card is in hand"), PoisonCardInstanceId.IsValid());
+	TestTrue(
+		TEXT("Poison setup command resolves"),
+		Session->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(
+			Snapshot,
+			PoisonCardInstanceId,
+			PartInstanceId)).IsOk());
+
+	const FBattleResolution EndTurnResolution =
+		Session->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("Lethal poison EndTurn resolves"), EndTurnResolution.IsOk());
+	TestEqual(
+		TEXT("Lethal poison leaves the session waiting for knockdown choice"),
+		EndTurnResolution.PostSnapshot.Phase,
+		EBattlePhase::PendingKnockdownChoice);
+	const FBattlePresentationCheckpoint* DrawCheckpoint =
+		EndTurnResolution.PresentationJournal.Checkpoints.FindByPredicate(
+			[](const FBattlePresentationCheckpoint& Checkpoint)
+			{
+				return Checkpoint.Type ==
+					EBattlePresentationCheckpointType::TurnStartDrawResolved;
+			});
+	const FBattleEvent* KnockdownRequest = EndTurnResolution.Events.FindByPredicate(
+		[](const FBattleEvent& Event)
+		{
+			return Event.Type == EBattleEventType::KnockdownChoiceRequested;
+		});
+	TestNotNull(TEXT("EndTurn records its draw checkpoint"), DrawCheckpoint);
+	TestNotNull(TEXT("EndTurn emits a knockdown request"), KnockdownRequest);
+	TestTrue(
+		TEXT("Command pipeline appends the knockdown request after the draw checkpoint"),
+		DrawCheckpoint
+			&& KnockdownRequest
+			&& KnockdownRequest->Sequence > DrawCheckpoint->LastEventSequence);
+
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	Harness->SetSession(Session);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	TestTrue(
+		TEXT("EndTurn journal enqueues a presentation plan"),
+		HUD->EnqueueEndTurnPresentationPlanForTest(
+			EndTurnResolution.PresentationJournal,
+			EndTurnResolution.Events,
+			EndTurnResolution.PostSnapshot));
+	for (int32 Iteration = 0; HUD->IsBattlePresentationBusy() && Iteration < 128; ++Iteration)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+
+	const TArray<FName> StartedPhases = HUD->GetStartedPresentationPlanPhaseNamesForTest();
+	const int32 EnemyActionIndex = StartedPhases.IndexOfByKey(FName(TEXT("EnemyAction")));
+	const int32 DrawIndex = StartedPhases.IndexOfByKey(FName(TEXT("TurnStartDraw")));
+	const int32 DialogIndex = StartedPhases.IndexOfByKey(FName(TEXT("CommandBlockingDialog")));
+	TestTrue(TEXT("Enemy action phase is presented"), EnemyActionIndex != INDEX_NONE);
+	TestTrue(TEXT("Turn-start draw phase is presented"), DrawIndex != INDEX_NONE);
+	TestTrue(TEXT("Post-draw knockdown request becomes a blocking dialog phase"),
+		DialogIndex != INDEX_NONE);
+	TestTrue(TEXT("Knockdown dialog follows enemy action and draw presentation"),
+		EnemyActionIndex < DrawIndex && DrawIndex < DialogIndex);
+	TestTrue(TEXT("Pending choice remains available for the dialog"),
+		Session->BuildPendingKnockdownChoiceView().bHasPendingChoice);
 
 	return true;
 }

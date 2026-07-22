@@ -126,10 +126,11 @@ EndTurn 命令成功后，BattleHUD 会消费 `FBattlePresentationJournal`。当
 
 1. `TurnEndDiscard`：用 discard checkpoint snapshot 把非保留普通手牌原地收束为牌印并飞向弃牌堆；每枚抵达只增加一次表现计数，并在同一 progress 回调触发像素 Impact 与 `DiscardPileView` 接收脉冲。连续抵达的脉冲由 `UPileCountView` 叠加，最后一枚稍强；phase 完成或强制清理后恢复权威 Snapshot 数量与 authored RenderTransform，ForceComplete 不补播回弹。
 2. `TurnEndRetain`：只为 `CardsRetained.CardInstanceIds` 中仍在手牌的普通卡建立像素封存；左右手 Anchor 不参与。封存建立完成后进入非阻塞 Held，允许后续敌人行动和抽牌继续，但卡牌只保持低强度刻印与轻微抬升，不改变 authored hand ZOrder。
-3. `EnemyAction`：复用现有 battle event presentation queue 播放敌人行动相关 cue / delay / battle end / knockdown modal。
+3. `EnemyAction`：复用现有 battle event presentation queue 播放敌人行动相关 cue / delay / battle end；阻塞式击倒请求不混入该阶段。
 4. `TurnStartDraw`：用 draw checkpoint snapshot 播放新回合 `Drawn` 入场。
 5. `TurnStartHandAnchorEnter`：如果 draw checkpoint 中出现了上一手牌 checkpoint 没有的左/右手 anchor，则在普通抽牌后提交完整 hand snapshot，并播放 `HandAnchorEntered` 生成入手。
 6. `TurnStartRetainRelease`：向仍在最终手牌中的保留卡发送 `RetainedRelease`，等待刻印和额外 Retain Transform 缓出归零；缺少 draw checkpoint 时在本次 EndTurn 最后一个安全阶段执行。
+7. `CommandBlockingDialog`：若本次 EndTurn 产生 `KnockdownChoiceRequested`，在所有已解析回合阶段之后单独 Push 击倒 Modal。命令管线会在 EndTurn resolver 完成抽牌 checkpoint 后才把 pending knockdown 提升为请求事件，因此 coordinator 必须从整份 `FBattleResolution.Events` 显式收集该事件，不得依赖“抽牌前敌方事件”序号区间。
 
 手牌 phase 的完成条件由 first-person card layer 的 production playback 状态提供：仍有 active enter、exit outgoing、Retain Sealing/Releasing 或 Card Glyph Transfer 时保持 phase busy；Retain Held 明确不计入 busy，因此不会阻塞敌人行动与抽牌。普通弃牌和弃牌堆洗回使用传输种类加 Batch Sequence 去重并按 FIFO 播放，新批次不得强制完成前一批。timeout 不是直接跳过：触发时 coordinator 必须先 force-settle 当前 Anchor / Layer，清除 pending hints、Retain Held、Impact 和临时牌堆计数，再启动下一 phase，避免旧动画跨阶段重叠。没有 journal 或 journal 无有效 phase 时，非 EndTurn / fallback 路径继续使用原来的 loose event hints 与 event queue；loose `CardsRetained` 使用自动释放的短反馈，不会永久封存。
 

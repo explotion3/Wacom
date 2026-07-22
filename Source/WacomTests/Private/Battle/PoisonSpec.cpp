@@ -14,11 +14,13 @@
 /**
  * 中毒结算回归测试。
  *
- * 四条测试覆盖：
+ * 五条测试覆盖：
  *   - Wacom.Battle.Poison.TickOnCardPlay     玩家打牌后敌方中毒部位扣血
  *   - Wacom.Battle.Poison.TickOnEnemyAct     敌方部位行动后玩家中毒扣血
  *   - Wacom.Battle.Poison.PenetratesShield   Shield > 0 时中毒仍扣 HP
  *   - Wacom.Battle.Poison.StacksUnchanged    结算后层数不减
+ *   - Wacom.Battle.Poison.EndTurnLethalTriggersKnockdownThenVictory
+ *     敌方行动后中毒致死先进入击倒选择，选择后再结束战斗
  */
 
 namespace
@@ -281,6 +283,113 @@ bool FWacomBattlePoisonStacksUnchangedSpec::RunTest(const FString& /*Parameters*
 	const int32* PoisonStacks = PartSnap.StatusStacks.Find(WacomTags::Status_Poison);
 	TestTrue (TEXT("Stacks present"),      PoisonStacks != nullptr);
 	TestEqual(TEXT("Stacks still 3"),      PoisonStacks ? *PoisonStacks : -1, 3);
+
+	return true;
+}
+
+// ================================================================
+// Test 5: EndTurnLethalTriggersKnockdownThenVictory
+// 敌方部位行动后的中毒结算造成致死时，仍必须先请求击倒选择，再在选择后结束战斗。
+// ================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattlePoisonEndTurnLethalKnockdownSpec,
+	"Wacom.Battle.Poison.EndTurnLethalTriggersKnockdownThenVictory",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattlePoisonEndTurnLethalKnockdownSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleFixture Fx;
+
+	UCardDefinition* LH = Fx.MakeNoopCard(2);
+	UCardDefinition* RH = Fx.MakeNoopCard(2);
+	UCardDefinition* PoisonCard = MakePoisonCardOnPart(Fx, /*Cost*/1, /*Stacks*/1);
+	TArray<UCardDefinition*> Deck = { PoisonCard };
+	for (int32 i = 0; i < 4; ++i) { Deck.Add(Fx.MakeNoopCard(0)); }
+
+	UCharacterDefinition* Char = Fx.MakeCharacter(LH, RH, Deck);
+	UEnemyDefinition* Enemy = Fx.MakeSinglePartEnemy(/*HP*/16, /*Init*/20);
+	UBattleSession* S = Fx.CreateSession(Char, Enemy, 1);
+
+	FBattleSnapshot Snap = S->BuildSnapshot();
+	const FGuid PartId = FWacomBattleFixture::FindPartInstanceId(Snap, 0);
+	const FGuid PoisonId = FWacomBattleFixture::FindHandInstanceByCardId(Snap, PoisonCard->CardId);
+	TestTrue(TEXT("PoisonCardInHand"), PoisonId.IsValid());
+
+	TestTrue(TEXT("Apply one poison stack"),
+		S->ResolveCommand(FWacomBattleFixture::MakePlayCardOnPartInstance(Snap, PoisonId, PartId)).IsOk());
+	Snap = S->BuildSnapshot();
+	TestEqual(TEXT("First poison tick leaves part at eight HP"),
+		FWacomBattleFixture::FindPartHp(Snap, 0), 8);
+
+	const FBattleResolution EndTurnResolution =
+		S->ResolveCommand(FBattleCommand::MakeEndTurn());
+	TestTrue(TEXT("EndTurn resolves"), EndTurnResolution.IsOk());
+
+	Snap = S->BuildSnapshot();
+	const FEnemyPartSnapshot* Part = FWacomBattleFixture::GetEnemyPartSnapshot(Snap, 0);
+	TestTrue(TEXT("Poison destroys acting part"), Part && Part->bDestroyed);
+	TestEqual(TEXT("Poison lethal waits for knockdown choice"),
+		Snap.Phase, EBattlePhase::PendingKnockdownChoice);
+	TestTrue(TEXT("Pending choice view exists after poison lethal"),
+		S->BuildPendingKnockdownChoiceView().bHasPendingChoice);
+
+	int32 ActedIndex = INDEX_NONE;
+	int32 PoisonDamageIndex = INDEX_NONE;
+	int32 HpEmptiedIndex = INDEX_NONE;
+	int32 ChoiceRequestedIndex = INDEX_NONE;
+	int32 BattleEndedIndex = INDEX_NONE;
+	for (int32 Index = 0; Index < EndTurnResolution.Events.Num(); ++Index)
+	{
+		const FBattleEvent& Event = EndTurnResolution.Events[Index];
+		if (ActedIndex == INDEX_NONE && Event.Type == EBattleEventType::EnemyPartActed)
+		{
+			ActedIndex = Index;
+		}
+		else if (PoisonDamageIndex == INDEX_NONE
+			&& Event.Type == EBattleEventType::DamageDealt
+			&& Event.Tag == WacomTags::Status_Poison
+			&& Event.ActorInstanceId == PartId)
+		{
+			PoisonDamageIndex = Index;
+		}
+		else if (HpEmptiedIndex == INDEX_NONE
+			&& Event.Type == EBattleEventType::EnemyPartHpEmptied
+			&& Event.ActorInstanceId == PartId)
+		{
+			HpEmptiedIndex = Index;
+		}
+		else if (ChoiceRequestedIndex == INDEX_NONE
+			&& Event.Type == EBattleEventType::KnockdownChoiceRequested)
+		{
+			ChoiceRequestedIndex = Index;
+		}
+		else if (BattleEndedIndex == INDEX_NONE
+			&& Event.Type == EBattleEventType::BattleEnded)
+		{
+			BattleEndedIndex = Index;
+		}
+	}
+
+	TestTrue(TEXT("Enemy action precedes poison damage"),
+		ActedIndex != INDEX_NONE && ActedIndex < PoisonDamageIndex);
+	TestTrue(TEXT("Poison damage precedes HP emptied"),
+		PoisonDamageIndex != INDEX_NONE && PoisonDamageIndex < HpEmptiedIndex);
+	TestTrue(TEXT("HP emptied precedes knockdown request"),
+		HpEmptiedIndex != INDEX_NONE && HpEmptiedIndex < ChoiceRequestedIndex);
+	TestEqual(TEXT("Battle does not end before final knockdown choice"),
+		BattleEndedIndex, INDEX_NONE);
+
+	const FBattleResolution ChoiceResolution =
+		S->ResolveCommand(FBattleCommand::MakeKnockdownChoice(EKnockdownChoice::Aid));
+	TestTrue(TEXT("Final poison knockdown choice resolves"), ChoiceResolution.IsOk());
+	Snap = S->BuildSnapshot();
+	TestEqual(TEXT("Final poison knockdown ends battle"), Snap.Phase, EBattlePhase::BattleEnd);
+	TestEqual(TEXT("Final poison knockdown is victory"), Snap.Outcome, EBattleOutcome::Victory);
+	TestTrue(TEXT("Choice resolution emits BattleEnded"),
+		ChoiceResolution.Events.ContainsByPredicate([](const FBattleEvent& Event)
+		{
+			return Event.Type == EBattleEventType::BattleEnded;
+		}));
 
 	return true;
 }

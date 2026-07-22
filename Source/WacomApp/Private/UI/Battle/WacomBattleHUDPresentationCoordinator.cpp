@@ -444,6 +444,31 @@ namespace
 		return Result;
 	}
 
+	void AppendBlockingDialogPhase(
+		FWacomBattlePresentationPlan& Plan,
+		const TArray<FBattleEvent>& Events)
+	{
+		const TArray<FBattleEvent> BlockingDialogEvents = Events.FilterByPredicate(
+			[](const FBattleEvent& Event)
+			{
+				return IsBlockingDialogPresentationEvent(Event);
+			});
+		if (BlockingDialogEvents.IsEmpty())
+		{
+			return;
+		}
+
+		FWacomBattlePresentationPhase DialogPhase;
+		DialogPhase.Kind = EWacomBattlePresentationPhaseKind::CommandBlockingDialog;
+		DialogPhase.Events = BlockingDialogEvents;
+		DialogPhase.ReachedEventSequencesOnStart =
+			CollectReachedEventSequences(BlockingDialogEvents);
+		DialogPhase.OrderingSequence = FindFirstPositiveEventSequence(BlockingDialogEvents);
+		DialogPhase.CompletionPolicy =
+			EWacomBattlePresentationPhaseCompletionPolicy::EventQueue;
+		Plan.Phases.Add(MoveTemp(DialogPhase));
+	}
+
 	const FHandCardSnapshot* FindNormalHandCardSnapshot(
 		const FBattleSnapshot& Snapshot,
 		const FGuid& CardInstanceId)
@@ -1006,6 +1031,10 @@ namespace
 			Events,
 			EnemyFirstSequence,
 			EnemyLastSequence);
+		EnemyEvents.RemoveAll([](const FBattleEvent& Event)
+		{
+			return IsBlockingDialogPresentationEvent(Event);
+		});
 		if (!EnemyEvents.IsEmpty())
 		{
 			FWacomBattlePresentationPhase Phase;
@@ -1131,6 +1160,11 @@ namespace
 				Plan.PresentedTurnNumberOnCompletion = PostCommandSnapshot.TurnNumber;
 			}
 		}
+
+		// CommandPipeline promotes pending knockdowns only after EndTurn has completed
+		// its rule-owned draw checkpoint. Keep those post-draw blocking events as an
+		// explicit final phase instead of letting the draw range silently exclude them.
+		AppendBlockingDialogPhase(Plan, Events);
 
 		return Plan;
 	}
@@ -1931,23 +1965,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		NewPlan.Phases.Add(MoveTemp(ReturnPhase));
 	}
 
-	const TArray<FBattleEvent> BlockingDialogEvents = Resolution.Events.FilterByPredicate(
-		[](const FBattleEvent& Event)
-		{
-			return IsBlockingDialogPresentationEvent(Event);
-		});
-	if (!BlockingDialogEvents.IsEmpty())
-	{
-		FWacomBattlePresentationPhase DialogPhase;
-		DialogPhase.Kind = EWacomBattlePresentationPhaseKind::CommandBlockingDialog;
-		DialogPhase.Events = BlockingDialogEvents;
-		DialogPhase.ReachedEventSequencesOnStart =
-			CollectReachedEventSequences(BlockingDialogEvents);
-		DialogPhase.OrderingSequence = FindFirstPositiveEventSequence(BlockingDialogEvents);
-		DialogPhase.CompletionPolicy =
-			EWacomBattlePresentationPhaseCompletionPolicy::EventQueue;
-		NewPlan.Phases.Add(MoveTemp(DialogPhase));
-	}
+	AppendBlockingDialogPhase(NewPlan, Resolution.Events);
 
 	if (NewPlan.IsEmpty())
 	{
