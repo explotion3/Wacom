@@ -10,6 +10,9 @@
 class UPanelWidget;
 class USizeBox;
 class UWacomBattleEnemyPartEntryWidget;
+class UWacomSettingsSubsystem;
+struct FWacomLocalSettingsSnapshot;
+enum class EWacomRuntimeSettingsChangeReason : uint8;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FWacomBattleEnemyPanelInspectionRequestedNative,
@@ -27,25 +30,18 @@ class WACOMAPP_API UWacomBattleEnemyPanelWidget : public UCommonUserWidget
 	GENERATED_BODY()
 
 public:
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel")
 	void SetEnemyPanelViewData(const FWacomBattleEnemyPanelViewData& InView);
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel")
 	void ClearEnemyPanelViewData();
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel")
 	bool HasEnemyPanelViewData() const { return bHasCurrentView; }
 
-	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Enemy Panel")
 	const FWacomBattleEnemyPanelViewData& GetEnemyPanelViewData() const { return CurrentView; }
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "应用规则层生成的部位行动预览，只覆盖现有部位条目的显示。"))
 	bool SetActionPreviewPartViews(const TArray<FWacomBattleEnemyPartEntryViewData>& InPreviewParts);
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "清除全部部位行动预览。"))
 	void ClearActionPreview();
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Enemy Panel", meta = (ToolTip = "设置当前场景 hover 的稳定 PartSlotId；NAME_None 表示清除。"))
 	void SetHoveredPartSlotId(FName InPartSlotId);
 
 	TSubclassOf<UWacomBattleEnemyPartEntryWidget> GetPartEntryWidgetClass() const
@@ -71,6 +67,12 @@ private:
 	void SyncPartEntries();
 	void ClearPartEntries();
 	void ApplyInspectionInteractionState();
+	void ApplyRuntimePresentationPolicyToEntries();
+	void BindRuntimeSettings();
+	void UnbindRuntimeSettings();
+	void HandleRuntimeSettingsChanged(
+		const FWacomLocalSettingsSnapshot& Snapshot,
+		EWacomRuntimeSettingsChangeReason Reason);
 	void HandlePartInspectionRequested(const FBattlePartSlotIdentity& PartIdentity);
 	UWacomBattleEnemyPartEntryWidget* FindOrCreatePartEntryWidget(
 		const FWacomBattleEnemyPartEntryViewData& PartView);
@@ -92,9 +94,18 @@ private:
 	UPROPERTY(Transient)
 	TSet<FName> AnimatedPartEntryKeys;
 
+	UPROPERTY(Transient)
+	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
+
+	FDelegateHandle RuntimeSettingsChangedHandle;
+
 	FName HoveredPartSlotId = NAME_None;
+	float RuntimeFlashIntensity = 1.0f;
 	bool bHasCurrentView = false;
 	bool bHasActionPreview = false;
 	bool bSyncingPartEntries = false;
 	bool bInspectionInteractionEnabled = false;
+	bool bRuntimeSimplifiedMotion = false;
+
+	friend struct FWacomBattleEnemyPanelWidgetTestAccess;
 };

@@ -243,7 +243,7 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	}
 
 	FWacomBattleEnemyPartEntryViewData RealView = MakePartView();
-	Entry->SetPartEntryViewData(RealView);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, RealView);
 	if (!TestNotNull(TEXT("Vitals MID is created with first ViewData"),
 		FWacomBattleEnemyPartEntryWidgetTestAccess::GetVitalsMaterial(*Entry)))
 	{
@@ -263,7 +263,7 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	Preview.Shield = 30;
 	Preview.CurrentInitiative = 0;
 	Preview.bActionPreviewWillAct = true;
-	Entry->SetActionPreview(Preview);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetPreview(*Entry, Preview);
 	TestEqual(TEXT("Preview HP is projected"), HpText->GetText().ToString(), FString(TEXT("12")));
 	TestEqual(TEXT("Preview Shield number is not truncated"), ShieldText->GetText().ToString(), FString(TEXT("30")));
 	TestEqual(TEXT("Acting preview Initiative is zero"), InitiativeText->GetText().ToString(), FString(TEXT("0")));
@@ -276,7 +276,7 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	TestFalse(TEXT("Preview does not play Intent animation"),
 		Entry->IsAnimationPlaying(FindAnimation(Entry, TEXT("IntentChangeAnimation"))));
 
-	Entry->ClearActionPreview();
+	FWacomBattleEnemyPartEntryWidgetTestAccess::ClearPreview(*Entry);
 	TestEqual(TEXT("Clear preview restores HP"), HpText->GetText().ToString(), FString(TEXT("18")));
 	TestTrue(TEXT("Clear preview disables preview material mode"), FMath::IsNearlyZero(
 		FWacomBattleEnemyPartEntryWidgetTestAccess::GetMaterialScalar(*Entry, TEXT("HpPreviewMode"))));
@@ -284,7 +284,7 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	Changed.Shield = 0;
 	Changed.CurrentInitiative = 2;
 	Changed.CurrentIntentId = TEXT("TrainingWarrior.Body.Guard");
-	Entry->SetPartEntryViewData(Changed);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, Changed);
 	TestEqual(TEXT("Zero Shield collapses badge root"), ShieldRoot->GetVisibility(), ESlateVisibility::Collapsed);
 	TestTrue(TEXT("Real Initiative change animates"),
 		Entry->IsAnimationPlaying(FindAnimation(Entry, TEXT("InitiativeStepAnimation"))));
@@ -295,13 +295,13 @@ bool FWacomUIBattleEnemySinglePartPanelValuesAndPreviewSpec::RunTest(const FStri
 	Entry->StopAllAnimations();
 	Changed.CurrentHp = 0;
 	Changed.bDestroyed = true;
-	Entry->SetPartEntryViewData(Changed);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, Changed);
 	TestEqual(TEXT("Destroyed mark is visible"), DestroyedMark->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	TestTrue(TEXT("Destroyed transition animates"),
 		Entry->IsAnimationPlaying(FindAnimation(Entry, TEXT("DestroyedAnimation"))));
 	TestFalse(TEXT("Destroyed suppresses Initiative animation"),
 		Entry->IsAnimationPlaying(FindAnimation(Entry, TEXT("InitiativeStepAnimation"))));
-	Entry->CancelPendingPresentation();
+	FWacomBattleEnemyPartEntryWidgetTestAccess::CancelPresentation(*Entry);
 	return true;
 }
 

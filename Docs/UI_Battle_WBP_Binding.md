@@ -514,7 +514,7 @@ Builder 只管理上述两个 WBP、默认 Style 和 Registry 合同；当前正
 
 ### 唯一完整 Panel / Entry 树
 
-`BP_WacomBattleEnemyPanelWidget` 与 `BP_WacomBattleEnemyPartEntryWidget` 是唯一完整 WidgetTree。`WBP_WacomBattleEnemySinglePartPanelWidget` 和 `WBP_WacomBattleEnemySinglePartEntryWidget` 必须分别直接继承前两者，只提供单段默认宽度和 Entry class，不得复制绑定或布局。四者消费同一份 `FWacomBattleEnemyPanelViewData`；显式 Host override 仍优先于自动单/多部位选择。
+`BP_WacomBattleEnemyPanelWidget` 与 `BP_WacomBattleEnemyPartEntryWidget` 是紧凑 Enemy HUD 唯一 WidgetTree，直接继承各自 native class并使用正常 `BindWidget / BindWidgetAnim`。单部位与多部位都加载这两个类；运行时根据 ViewData 部位数把单段设为 `268 × 92`，多段清除固定宽度并在 `HorizontalBox` 中等宽 Fill。已删除两个 SinglePart 子 WBP、专用 DeveloperSetting 和按字符串遍历父层级的绑定补丁。显式 Host override 仍优先于唯一 `DefaultBattleEnemyPanelWidgetClass`。
 
 Panel 必需绑定：
 
@@ -543,6 +543,8 @@ Part Entry 必需绑定：
 旧 `EnemyNameText / PartNameText / IntentText / ResistanceText / DetailsContainer / HpBar / ShieldContainer / ShieldFrame / ShieldBadge / ActionPreviewOverlay` 不属于紧凑 HUD 合同，也不得作为 optional compatibility binding 重新加入。名字、Intent 文本和 Resistance 只在敌情档案显示。
 
 Entry 必需动画与标准时长：`IntroAnimation=220ms`、`DamageImpactAnimation=220ms`、`ShieldImpactAnimation=180ms`、`ShieldBreakAnimation=240ms`、`InitiativeStepAnimation=120ms`、`IntentChangeAnimation=180ms`、`ContextAnimation=120ms`、`DestroyedAnimation=300ms`。HP 真实下降时 Material 先保留旧比例 `90ms`，再按 `220ms` 收束；Preview 只写 projected Material 参数，不触发上述事实动画。
+
+C++ 不重建这些曲线。App-private presentation state 将 Snapshot、Preview、Context 与 Local Settings 归约为 typed cue 和一次性 Material Frame；Entry 只把 Frame 写入材质/文本/图标，并将 cue 路由到上述 WBP Animation。每个 Panel 只订阅一次 `UWacomSettingsSubsystem`，统一向其稳定 Entry 推送 Simplified Motion 和 Flash policy；Entry 自身不订阅全局设置。
 
 Panel / Entry Root 必须是 `SelfHitTestInvisible`，装饰控件全部不可命中，仅 `InspectHitTarget` 可见命中。Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时启用按钮；禁用时 Entry 与热点回到 `HitTestInvisible`，不能阻断世界目标点击。Host 的 `WidgetComponent` 使用 `WacomBattleEnemyPanelScreenLayer@8000`，详情位于 `8500`。
 
@@ -578,7 +580,7 @@ Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Defa
 -run=WacomBuildEnemyUI -InspectEnemyHUD
 ```
 
-该模式验证六个 WBP 的父子关系、required bindings、动画、字体、Material、像素纹理采样、Intent Style、尺寸和完整命中路径；永远不修改资产。旧 mutation builders 与 Enemy UI 专用 MCP toolset 已删除，不能用生成器重新覆盖人工正式布局。
+该模式验证四个 WBP 的直接父类、required bindings、动画、字体、Material、像素纹理采样、Intent Style、尺寸、完整命中路径和唯一默认类；同时要求两个旧 SinglePart Package 与旧 Config key 不存在。命令永远不修改资产。旧 mutation builders 与 Enemy UI 专用 MCP toolset 已删除，不能用生成器重新覆盖人工正式布局。
 
 ## PIE Smoke Checklist
 
@@ -588,6 +590,6 @@ Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Defa
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - Combat Activity 连续追加时不丢弃第四行，按顺序向上流动并在顶部衰减；根行动图标原位交接后只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；`UWacomBattleEnemyPartComponent` 及其 runtime 只承载 target、drag preview、prediction 等场景反馈，普通部位 hover 使用所属敌人的聚合面板响应。
-- TrainingWarrior 自动使用单部位紧凑面板：Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；多部位 Snake 仍使用原面板。
+- TrainingWarrior 与多部位 Snake 使用同一个 Panel / Entry class；TrainingWarrior 自动采用单段几何，Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；Snake 按 Definition 顺序生成等宽多段。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。
 - 旧 `WBP_CardWidget / WBP_HandPanel / WBP_EnemyInfoBar / WBP_EnemyPartWidget / EventLogPanel / EventToast / WBP_BattleEnemyPartStatusBadgeWidget` 已删除，不再作为 BattleHUD 制作入口。

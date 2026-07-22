@@ -4,16 +4,22 @@
 
 #include "Animation/WidgetAnimation.h"
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/HorizontalBox.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Settings/WacomLocalSettingsTypes.h"
+#include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
+#include "UI/WacomBattleEnemyPanelWidgetTestAccess.h"
 #include "UI/WacomBattleEnemyPartEntryWidgetTestAccess.h"
 
 namespace WacomBattleEnemyPanelVitalsMotionSpec
 {
 	constexpr TCHAR EntryClassPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPartEntryWidget.BP_WacomBattleEnemyPartEntryWidget_C");
+	constexpr TCHAR PanelClassPath[] =
+		TEXT("/Game/Wacom/UI/Enemy/BP_WacomBattleEnemyPanelWidget.BP_WacomBattleEnemyPanelWidget_C");
 
 	UWorld* FindAutomationWorld()
 	{
@@ -64,6 +70,28 @@ namespace WacomBattleEnemyPanelVitalsMotionSpec
 		View.CurrentIntentDisplayName = FText::FromString(TEXT("攻击"));
 		return View;
 	}
+
+	FWacomBattleEnemyPanelViewData MakePanelView()
+	{
+		FWacomBattleEnemyPanelViewData View;
+		View.EncounterId = TEXT("Encounter");
+		View.EnemySlotId = TEXT("Enemy");
+		View.UnitKey = FBattleEnemyUnitKey::Make(View.EncounterId, View.EnemySlotId);
+		FWacomBattleEnemyPartEntryViewData Head = MakeView();
+		Head.PartSlotId = TEXT("Head");
+		Head.Identity = FBattlePartSlotIdentity::Make(
+			View.EncounterId,
+			View.EnemySlotId,
+			Head.PartSlotId);
+		FWacomBattleEnemyPartEntryViewData Tail = MakeView();
+		Tail.PartSlotId = TEXT("Tail");
+		Tail.Identity = FBattlePartSlotIdentity::Make(
+			View.EncounterId,
+			View.EnemySlotId,
+			Tail.PartSlotId);
+		View.Parts = { Head, Tail };
+		return View;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -100,7 +128,7 @@ bool FWacomUIBattleEnemyPanelVitalsMotionSpec::RunTest(const FString& /*Paramete
 	}
 
 	FWacomBattleEnemyPartEntryViewData View = MakeView();
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	Entry->StopAllAnimations();
 
 	FWacomBattleEnemyPartEntryViewData Preview = View;
@@ -109,7 +137,7 @@ bool FWacomUIBattleEnemyPanelVitalsMotionSpec::RunTest(const FString& /*Paramete
 	Preview.CurrentInitiative = 0;
 	Preview.CurrentIntentId = TEXT("TrainingWarrior.Body.Guard");
 	Preview.bDestroyed = true;
-	Entry->SetActionPreview(Preview);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetPreview(*Entry, Preview);
 	TestTrue(TEXT("Preview HP parameter is projected"), FMath::IsNearlyEqual(
 		FWacomBattleEnemyPartEntryWidgetTestAccess::GetMaterialScalar(*Entry, TEXT("HpPreviewPercent")),
 		4.0f / 24.0f));
@@ -121,30 +149,30 @@ bool FWacomUIBattleEnemyPanelVitalsMotionSpec::RunTest(const FString& /*Paramete
 	TestFalse(TEXT("Preview does not play Initiative"), Entry->IsAnimationPlaying(Initiative));
 	TestFalse(TEXT("Preview does not play Intent"), Entry->IsAnimationPlaying(Intent));
 	TestFalse(TEXT("Preview does not play Destroyed"), Entry->IsAnimationPlaying(Destroyed));
-	Entry->ClearActionPreview();
+	FWacomBattleEnemyPartEntryWidgetTestAccess::ClearPreview(*Entry);
 	Entry->StopAllAnimations();
 
 	View.CurrentHp = 18;
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	TestTrue(TEXT("Real HP loss plays Damage once"), Entry->IsAnimationPlaying(Damage));
 	TestTrue(TEXT("Damage trail starts at previous HP"), FMath::IsNearlyEqual(
 		FWacomBattleEnemyPartEntryWidgetTestAccess::GetDamageTrailStartPercent(*Entry), 1.0f));
 	Entry->StopAllAnimations();
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	TestFalse(TEXT("Identical Snapshot does not replay Damage"), Entry->IsAnimationPlaying(Damage));
 
 	View.Shield = 2;
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	TestTrue(TEXT("Shield change plays Shield Impact"), Entry->IsAnimationPlaying(Shield));
 	Entry->StopAllAnimations();
 	View.Shield = 0;
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	TestTrue(TEXT("Positive to zero plays Shield Break"), Entry->IsAnimationPlaying(ShieldBreak));
 	Entry->StopAllAnimations();
 
 	View.CurrentInitiative = 1;
 	View.CurrentIntentId = TEXT("TrainingWarrior.Body.Guard");
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	TestTrue(TEXT("Real Initiative step animates"), Entry->IsAnimationPlaying(Initiative));
 	TestTrue(TEXT("Real Intent change animates"), Entry->IsAnimationPlaying(Intent));
 	Entry->StopAllAnimations();
@@ -153,13 +181,13 @@ bool FWacomUIBattleEnemyPanelVitalsMotionSpec::RunTest(const FString& /*Paramete
 	View.bDestroyed = true;
 	View.CurrentInitiative = 0;
 	View.CurrentIntentId = TEXT("TrainingWarrior.Body.Cleave");
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	TestTrue(TEXT("Destroyed transition animates"), Entry->IsAnimationPlaying(Destroyed));
 	TestFalse(TEXT("Destroyed suppresses Initiative"), Entry->IsAnimationPlaying(Initiative));
 	TestFalse(TEXT("Destroyed suppresses Intent"), Entry->IsAnimationPlaying(Intent));
 	TestTrue(TEXT("Destroyed material terminal amount"), FMath::IsNearlyEqual(
 		FWacomBattleEnemyPartEntryWidgetTestAccess::GetMaterialScalar(*Entry, TEXT("DestroyedAmount")), 1.0f));
-	Entry->CancelPendingPresentation();
+	FWacomBattleEnemyPartEntryWidgetTestAccess::CancelPresentation(*Entry);
 	return true;
 }
 
@@ -181,7 +209,7 @@ bool FWacomUIBattleEnemyPanelVitalsAccessibilitySpec::RunTest(const FString& /*P
 	}
 	Entry->TakeWidget();
 	FWacomBattleEnemyPartEntryViewData View = MakeView();
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	Entry->StopAllAnimations();
 
 	FWacomLocalSettingsSnapshot Settings;
@@ -208,10 +236,10 @@ bool FWacomUIBattleEnemyPanelVitalsAccessibilitySpec::RunTest(const FString& /*P
 		FWacomBattleEnemyPartEntryWidgetTestAccess::GetMaterialScalar(*Entry, TEXT("DamageTrailHoldSeconds"))));
 
 	View.CurrentHp = 12;
-	Entry->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Entry, View);
 	TestFalse(TEXT("Simplified Motion suppresses positional Damage animation"),
 		Entry->IsAnimationPlaying(FindAnimation(Entry, TEXT("DamageImpactAnimation"))));
-	Entry->CancelPendingPresentation();
+	FWacomBattleEnemyPartEntryWidgetTestAccess::CancelPresentation(*Entry);
 	for (const FName AnimationName : {
 		FName(TEXT("IntroAnimation")), FName(TEXT("DamageImpactAnimation")),
 		FName(TEXT("ShieldImpactAnimation")), FName(TEXT("ShieldBreakAnimation")),
@@ -222,5 +250,62 @@ bool FWacomUIBattleEnemyPanelVitalsAccessibilitySpec::RunTest(const FString& /*P
 			*FString::Printf(TEXT("Cancel stops %s"), *AnimationName.ToString()),
 			Entry->IsAnimationPlaying(FindAnimation(Entry, AnimationName)));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleEnemyPanelVitalsPanelSettingsSpec,
+	"Wacom.UI.Battle.EnemyPanel.VitalsMotion.PanelOwnsSettingsPolicy",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleEnemyPanelVitalsPanelSettingsSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleEnemyPanelVitalsMotionSpec;
+	UWorld* World = FindAutomationWorld();
+	UClass* PanelClass = LoadClass<UWacomBattleEnemyPanelWidget>(nullptr, PanelClassPath);
+	UWacomBattleEnemyPanelWidget* Panel = World && PanelClass
+		? CreateWidget<UWacomBattleEnemyPanelWidget>(World, PanelClass)
+		: nullptr;
+	if (!TestNotNull(TEXT("Enemy Panel"), Panel))
+	{
+		return false;
+	}
+	Panel->TakeWidget();
+	Panel->SetEnemyPanelViewData(MakePanelView());
+	UHorizontalBox* PartList = Panel->WidgetTree
+		? Cast<UHorizontalBox>(Panel->WidgetTree->FindWidget(TEXT("PartList")))
+		: nullptr;
+	if (!TestNotNull(TEXT("Panel PartList"), PartList)
+		|| !TestEqual(TEXT("Two stable entries"), PartList->GetChildrenCount(), 2))
+	{
+		return false;
+	}
+
+	FWacomLocalSettingsSnapshot Settings;
+	Settings.UIMotionMode = EWacomUIMotionMode::Simplified;
+	Settings.FlashEffectMode = EWacomFlashEffectMode::Reduced;
+	FWacomBattleEnemyPanelWidgetTestAccess::ApplyRuntimeSettings(*Panel, Settings);
+	for (int32 Index = 0; Index < PartList->GetChildrenCount(); ++Index)
+	{
+		UWacomBattleEnemyPartEntryWidget* Entry =
+			Cast<UWacomBattleEnemyPartEntryWidget>(PartList->GetChildAt(Index));
+		if (!TestNotNull(*FString::Printf(TEXT("Entry %d"), Index), Entry))
+		{
+			return false;
+		}
+		TestTrue(*FString::Printf(TEXT("Entry %d receives Simplified Motion"), Index),
+			FWacomBattleEnemyPartEntryWidgetTestAccess::IsUsingSimplifiedMotion(*Entry));
+		TestTrue(*FString::Printf(TEXT("Entry %d receives Flash Reduced"), Index),
+			FMath::IsNearlyEqual(
+				FWacomBattleEnemyPartEntryWidgetTestAccess::GetMaterialScalar(
+					*Entry,
+					TEXT("FlashIntensity")),
+				0.35f));
+	}
+
+	FWacomBattleEnemyPanelWidgetTestAccess::Destruct(*Panel);
+	TestFalse(TEXT("Panel destruct removes its settings subscription"),
+		FWacomBattleEnemyPanelWidgetTestAccess::HasRuntimeSettingsSubscription(*Panel));
 	return true;
 }

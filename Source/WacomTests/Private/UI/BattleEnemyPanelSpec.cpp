@@ -21,6 +21,7 @@
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
+#include "UI/WacomBattleEnemyPartEntryWidgetTestAccess.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomBattleEnemyPanelSpec
@@ -273,8 +274,10 @@ bool FWacomUIBattleEnemyPanelStableEntriesSpec::RunTest(const FString& /*Paramet
 	FWacomBattleEnemyPartEntryViewData TailPreview = Enemy.Parts[1];
 	TailPreview.CurrentHp = 1;
 	TestTrue(TEXT("Matching preview is accepted"), Panel->SetActionPreviewPartViews({ TailPreview }));
-	TestFalse(TEXT("Preview does not affect Head"), Head->HasActionPreview());
-	TestTrue(TEXT("Preview affects Tail"), Tail->HasActionPreview());
+	TestFalse(TEXT("Preview does not affect Head"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::HasPreview(*Head));
+	TestTrue(TEXT("Preview affects Tail"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::HasPreview(*Tail));
 	Panel->ClearActionPreview();
 	Enemy.Parts[0].CurrentHp = 8;
 	Panel->SetEnemyPanelViewData(Enemy);

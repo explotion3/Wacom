@@ -154,7 +154,8 @@ bool FWacomUIBattleEnemySegmentedVitalsLayoutSpec::RunTest(const FString& /*Para
 			return false;
 		}
 		TestEqual(*FString::Printf(TEXT("Segment %d keeps Definition order"), Index),
-			Entry->GetPartEntryViewData().PartSlotId, ExpectedOrder[Index]);
+			FWacomBattleEnemyPartEntryWidgetTestAccess::GetCurrentView(*Entry).PartSlotId,
+			ExpectedOrder[Index]);
 		const UHorizontalBoxSlot* Slot = Cast<UHorizontalBoxSlot>(Entry->Slot);
 		TestTrue(*FString::Printf(TEXT("Segment %d uses equal Fill sizing"), Index),
 			Slot && Slot->GetSize().SizeRule == ESlateSizeRule::Fill);
@@ -283,7 +284,8 @@ bool FWacomUIBattleEnemySegmentedVitalsSinglePartAndInputSpec::RunTest(
 			RequestedIdentity = Identity;
 		});
 	Panel->SetInspectionInteractionEnabled(true);
-	TestTrue(TEXT("Idle gate enables inspection"), Entry->IsInspectionInteractionEnabled());
+	TestTrue(TEXT("Idle gate enables inspection"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsInspectionInteractionEnabled(*Entry));
 	TestEqual(TEXT("Enabled entry exposes child hit testing"),
 		Entry->GetVisibility(), ESlateVisibility::SelfHitTestInvisible);
 	TestTrue(TEXT("Enabled hotspot accepts input"), InspectButton->GetIsEnabled());
@@ -296,13 +298,15 @@ bool FWacomUIBattleEnemySegmentedVitalsSinglePartAndInputSpec::RunTest(
 	FWacomBattleEnemyPartEntryViewData Preview = Body;
 	Preview.CurrentHp = 10;
 	Panel->SetActionPreviewPartViews({ Preview });
-	TestFalse(TEXT("Preview disables inspection"), Entry->IsInspectionInteractionEnabled());
+	TestFalse(TEXT("Preview disables inspection"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsInspectionInteractionEnabled(*Entry));
 	TestEqual(TEXT("Preview restores click-through"), Entry->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	TestFalse(TEXT("Preview disables hotspot input"), InspectButton->GetIsEnabled());
 	TestTrue(TEXT("Disabled handler remains safely callable"), InvokeInspectionHandler(Entry));
 	TestEqual(TEXT("Disabled hotspot cannot emit a second request"), RequestCount, 1);
 	Panel->ClearActionPreview();
-	TestTrue(TEXT("Clearing preview restores the Idle gate"), Entry->IsInspectionInteractionEnabled());
+	TestTrue(TEXT("Clearing preview restores the Idle gate"),
+		FWacomBattleEnemyPartEntryWidgetTestAccess::IsInspectionInteractionEnabled(*Entry));
 	Panel->SetInspectionInteractionEnabled(false);
 	TestEqual(TEXT("Non-Idle gate is click-through"), Entry->GetVisibility(), ESlateVisibility::HitTestInvisible);
 	Panel->ClearEnemyPanelViewData();

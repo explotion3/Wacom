@@ -7,6 +7,8 @@
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/Widget.h"
+#include "Settings/WacomLocalSettingsTypes.h"
+#include "Settings/WacomSettingsSubsystem.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
 namespace
@@ -152,12 +154,14 @@ void UWacomBattleEnemyPanelWidget::SetInspectionInteractionEnabled(const bool bE
 void UWacomBattleEnemyPanelWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	BindRuntimeSettings();
 	ApplyAuthoredGeometry();
 	SyncPartEntries();
 }
 
 void UWacomBattleEnemyPanelWidget::NativeDestruct()
 {
+	UnbindRuntimeSettings();
 	ClearPartEntries();
 	OnInspectionRequestedNative.Clear();
 	Super::NativeDestruct();
@@ -201,6 +205,9 @@ void UWacomBattleEnemyPanelWidget::SyncPartEntries()
 		}
 
 		PartWidget->SetSegmentLayout(PartIndex, CurrentView.Parts.Num());
+		PartWidget->ApplyRuntimePresentationPolicy(
+			bRuntimeSimplifiedMotion,
+			RuntimeFlashIntensity);
 		PartWidget->SetPartEntryViewData(PartView);
 		const FName EffectivePartSlotId = PartView.Identity.IsValidSlot()
 			? PartView.Identity.GetEffectivePartSlotId()
@@ -285,6 +292,79 @@ void UWacomBattleEnemyPanelWidget::ApplyInspectionInteractionState()
 			Pair.Value->SetInspectionInteractionEnabled(bEnableEntries);
 		}
 	}
+}
+
+void UWacomBattleEnemyPanelWidget::ApplyRuntimePresentationPolicyToEntries()
+{
+	for (TPair<FName, TObjectPtr<UWacomBattleEnemyPartEntryWidget>>& Pair : PartEntryWidgets)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->ApplyRuntimePresentationPolicy(
+				bRuntimeSimplifiedMotion,
+				RuntimeFlashIntensity);
+		}
+	}
+}
+
+void UWacomBattleEnemyPanelWidget::BindRuntimeSettings()
+{
+	UWacomSettingsSubsystem* Settings = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UWacomSettingsSubsystem>()
+		: nullptr;
+	if (BoundSettingsSubsystem.Get() == Settings && RuntimeSettingsChangedHandle.IsValid())
+	{
+		HandleRuntimeSettingsChanged(
+			Settings->GetCurrentSnapshot(),
+			EWacomRuntimeSettingsChangeReason::Startup);
+		return;
+	}
+
+	UnbindRuntimeSettings();
+	if (!Settings)
+	{
+		return;
+	}
+	BoundSettingsSubsystem = Settings;
+	RuntimeSettingsChangedHandle = Settings->OnRuntimeSettingsChangedNative().AddUObject(
+		this,
+		&ThisClass::HandleRuntimeSettingsChanged);
+	HandleRuntimeSettingsChanged(
+		Settings->GetCurrentSnapshot(),
+		EWacomRuntimeSettingsChangeReason::Startup);
+}
+
+void UWacomBattleEnemyPanelWidget::UnbindRuntimeSettings()
+{
+	if (UWacomSettingsSubsystem* Settings = BoundSettingsSubsystem.Get())
+	{
+		if (RuntimeSettingsChangedHandle.IsValid())
+		{
+			Settings->OnRuntimeSettingsChangedNative().Remove(RuntimeSettingsChangedHandle);
+		}
+	}
+	BoundSettingsSubsystem.Reset();
+	RuntimeSettingsChangedHandle.Reset();
+}
+
+void UWacomBattleEnemyPanelWidget::HandleRuntimeSettingsChanged(
+	const FWacomLocalSettingsSnapshot& Snapshot,
+	EWacomRuntimeSettingsChangeReason /*Reason*/)
+{
+	bRuntimeSimplifiedMotion = Snapshot.UIMotionMode == EWacomUIMotionMode::Simplified;
+	switch (Snapshot.FlashEffectMode)
+	{
+	case EWacomFlashEffectMode::Reduced:
+		RuntimeFlashIntensity = 0.35f;
+		break;
+	case EWacomFlashEffectMode::Off:
+		RuntimeFlashIntensity = 0.0f;
+		break;
+	default:
+		RuntimeFlashIntensity = 1.0f;
+		break;
+	}
+	ApplyRuntimePresentationPolicyToEntries();
 }
 
 void UWacomBattleEnemyPanelWidget::HandlePartInspectionRequested(

@@ -20,7 +20,9 @@
 #include "Engine/Texture2D.h"
 #include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
+#include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "MovieScene.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
@@ -28,6 +30,7 @@
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
+#include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "WidgetBlueprint.h"
 
 namespace
@@ -421,6 +424,18 @@ namespace
 			}));
 		return false;
 	}
+
+	bool ValidateLegacySinglePartConfigRemoved()
+	{
+		FString DefaultGameContents;
+		const FString DefaultGamePath = FPaths::Combine(
+			FPaths::ProjectConfigDir(),
+			TEXT("DefaultGame.ini"));
+		return FFileHelper::LoadFileToString(DefaultGameContents, *DefaultGamePath)
+			&& !DefaultGameContents.Contains(
+				TEXT("DefaultBattleEnemySinglePartPanelWidgetClass"),
+				ESearchCase::CaseSensitive);
+	}
 }
 
 bool Wacom::ContentBuilder::InspectEnemyHUD()
@@ -435,6 +450,7 @@ bool Wacom::ContentBuilder::InspectEnemyHUD()
 	UMaterial* Material = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr, MaterialPath));
 	UWacomBattleEnemyIntentPresentationStyle* Style = Cast<UWacomBattleEnemyIntentPresentationStyle>(
 		StaticLoadObject(UWacomBattleEnemyIntentPresentationStyle::StaticClass(), nullptr, IntentStylePath));
+	const UWacomUIDeveloperSettings* UISettings = GetDefault<UWacomUIDeveloperSettings>();
 
 	bool bValid = true;
 	const auto Check = [&bValid](const TCHAR* Contract, const bool bCondition)
@@ -455,6 +471,10 @@ bool Wacom::ContentBuilder::InspectEnemyHUD()
 	Check(TEXT("pixel texture import settings"), ValidateTextures());
 	Check(TEXT("unified part entry WBP"), ValidateEntry(Entry, Font, Material));
 	Check(TEXT("unified panel WBP"), ValidatePanel(Panel, Entry));
+	Check(TEXT("unique project default uses unified panel WBP"),
+		UISettings && Panel
+		&& UISettings->DefaultBattleEnemyPanelWidgetClass.LoadSynchronous()
+			== Panel->GeneratedClass);
 	Check(TEXT("inspection row WBP"), ValidateInspectionRow(InspectionRow));
 	Check(TEXT("inspection dossier WBP"), ValidateInspection(Inspection, InspectionRow, Style));
 	Check(TEXT("base panel uses formal panel frame"), UsesBrushResource(Panel,
@@ -474,6 +494,8 @@ bool Wacom::ContentBuilder::InspectEnemyHUD()
 		LegacySinglePanelPackage, TEXT("single-part panel")));
 	Check(TEXT("legacy single-part entry removed"), ValidateLegacyPackageRemoved(
 		LegacySingleEntryPackage, TEXT("single-part entry")));
+	Check(TEXT("legacy single-part DeveloperSettings key removed"),
+		ValidateLegacySinglePartConfigRemoved());
 
 	if (bValid)
 	{

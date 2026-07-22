@@ -16,6 +16,7 @@
 #include "UI/Battle/WacomBattleEnemyPanelViewData.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 #include "UI/Common/WacomProgressBar.h"
+#include "UI/WacomBattleEnemyPartEntryWidgetTestAccess.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomBattleStatusIconWidgetSpec
@@ -296,7 +297,7 @@ bool FWacomUIBattleEnemyPartUsesFormalStatusListSpec::RunTest(const FString& /*P
 	FWacomBattleEnemyPartEntryViewData View = MakeEnemyPartView();
 	View.RuntimeStatuses.AddTag(WacomTags::Status_Poison);
 	View.RuntimeStatusStacks.Add(WacomTags::Status_Poison, 2);
-	Widget->SetPartEntryViewData(View);
+	FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(*Widget, View);
 
 	UWacomBattleStatusIconListWidget* StatusList = FindStatusList(Widget->WidgetTree);
 	if (!TestNotNull(TEXT("Formal StatusList binding"), StatusList))

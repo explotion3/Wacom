@@ -99,11 +99,11 @@ SlimeTrio 同样拒绝 `-PromoteArt`，`-ForceArtRefresh` 只允许与 `-Promote
 Enemy HUD V3 已完成一次性原地迁移。正式 WBP 此后由 Designer / 受控 Editor 资产操作维护，`WacomBuildEnemyUI` 不再提供会覆盖 WidgetTree 的 mutation mode，只保留只读合同审计：
 
 ```powershell
-# 检查六个 WBP、字体、材质、像素纹理、Intent Style 与命中路径
+# 检查四个 WBP、唯一默认类、字体、材质、像素纹理、Intent Style 与命中路径
 -run=WacomBuildEnemyUI -InspectEnemyHUD
 ```
 
-命令永远不 dirty 或保存 Package。Enemy UI 的旧 `-MigrateLegacy`、`-BuildSinglePartCompact`、`-InspectSegmentedVitals` 和专用 MCP mutation toolset 已删除，避免后续重建器覆盖人工视觉。需要修改 WBP 时必须按 `Docs/UnrealMCPWorkflow.md` 保护工作区和 Package 白名单，Compile / Save / Reload 后再运行只读检查。
+命令永远不 dirty 或保存 Package。它还要求两个旧 SinglePart WBP Package、`DefaultBattleEnemySinglePartPanelWidgetClass` Config key 和手工继承绑定路径不存在。Enemy UI 的旧 `-MigrateLegacy`、`-BuildSinglePartCompact`、`-InspectSegmentedVitals` 和专用 MCP mutation toolset已删除，避免后续重建器覆盖人工视觉。需要修改 WBP 时必须按 `Docs/UnrealMCPWorkflow.md` 保护工作区和 Package 白名单，Compile / Save / Reload 后再运行只读检查。
 
 玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
 

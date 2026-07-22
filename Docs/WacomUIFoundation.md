@@ -133,6 +133,8 @@ Details / Blueprint 分类口径：
 
 Enemy HUD 的紧凑数字使用 `/Game/Wacom/UI/Foundation/Fonts/Silkscreen/F_Silkscreen` Runtime Composite Font，来源 FontFace 为 Regular / Bold。它只服务拉丁数字、基本符号与短英文战术标识；中文敌人名、部位名和详情文案继续使用项目现有中文 UI 字体，不允许依赖 Silkscreen 的缺字 fallback 猜测排版。字体采用 SIL Open Font License 1.1，来源与随附许可记录见 [ThirdPartyLicenses.md](./ThirdPartyLicenses.md)。
 
+Enemy Panel 是每个 Host 的唯一 Local Settings 订阅者。它把 Simplified Motion 与 Flash policy 推送给稳定复用的 Part Entry；Entry 不直接持有设置 Subsystem，也不建立逐部位订阅。Panel `NativeDestruct()` 集中解绑，Entry teardown 只停止自身动画、弱 Intro timer、MID 和瞬时 Intent 状态。
+
 ## §5 Input 与 Menu Back
 
 CommonUI 的 UIActionRouter 会把输入路由到最前面的可激活 Widget。通用菜单类界面继承 `UWacomMenuWidgetBase`，通过 `GetDesiredInputConfig()` 请求 Menu 输入。Backpack / Shop / RunEvent 这类 Run 领域 GameMenu Screen 继承 `UWacomRunMenuWidgetBase`，Run first-person menu lease / drop 合同由该 Run 专用父类承载。

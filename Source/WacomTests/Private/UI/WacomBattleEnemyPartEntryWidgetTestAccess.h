@@ -2,65 +2,43 @@
 
 #pragma once
 
-#include "Materials/MaterialInstanceDynamic.h"
 #include "Settings/WacomLocalSettingsTypes.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
+
+class UMaterialInstanceDynamic;
 
 /** WacomTests-private access to the non-reflected Enemy HUD presentation state. */
 struct FWacomBattleEnemyPartEntryWidgetTestAccess
 {
+	static void SetView(
+		UWacomBattleEnemyPartEntryWidget& Widget,
+		const FWacomBattleEnemyPartEntryViewData& View);
+	static void SetPreview(
+		UWacomBattleEnemyPartEntryWidget& Widget,
+		const FWacomBattleEnemyPartEntryViewData& View);
+	static void ClearPreview(UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool HasPreview(const UWacomBattleEnemyPartEntryWidget& Widget);
+	static const FWacomBattleEnemyPartEntryViewData& GetCurrentView(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static void CancelPresentation(UWacomBattleEnemyPartEntryWidget& Widget);
+	static bool IsInspectionInteractionEnabled(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+
 	static EWacomBattleEnemySegmentRole GetSegmentRole(
-		const UWacomBattleEnemyPartEntryWidget& Widget)
-	{
-		return Widget.SegmentRole;
-	}
-
-	static int32 GetSegmentCount(const UWacomBattleEnemyPartEntryWidget& Widget)
-	{
-		return Widget.SegmentCount;
-	}
-
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static int32 GetSegmentCount(const UWacomBattleEnemyPartEntryWidget& Widget);
 	static float GetMaterialScalar(
 		const UWacomBattleEnemyPartEntryWidget& Widget,
-		const FName ParameterName)
-	{
-		float Value = 0.0f;
-		return Widget.VitalsMaterialInstance
-			&& Widget.VitalsMaterialInstance->GetScalarParameterValue(ParameterName, Value)
-			? Value
-			: TNumericLimits<float>::Lowest();
-	}
-
+		FName ParameterName);
 	static UMaterialInstanceDynamic* GetVitalsMaterial(
-		const UWacomBattleEnemyPartEntryWidget& Widget)
-	{
-		return Widget.VitalsMaterialInstance;
-	}
-
+		const UWacomBattleEnemyPartEntryWidget& Widget);
 	static float GetDamageTrailStartPercent(
-		const UWacomBattleEnemyPartEntryWidget& Widget)
-	{
-		return Widget.DamageTrailStartPercent;
-	}
-
+		const UWacomBattleEnemyPartEntryWidget& Widget);
 	static float GetRuntimeFlashIntensity(
-		const UWacomBattleEnemyPartEntryWidget& Widget)
-	{
-		return Widget.RuntimeFlashIntensity;
-	}
-
+		const UWacomBattleEnemyPartEntryWidget& Widget);
 	static bool IsUsingSimplifiedMotion(
-		const UWacomBattleEnemyPartEntryWidget& Widget)
-	{
-		return Widget.bRuntimeSimplifiedMotion;
-	}
-
+		const UWacomBattleEnemyPartEntryWidget& Widget);
 	static void ApplyRuntimeSettings(
 		UWacomBattleEnemyPartEntryWidget& Widget,
-		const FWacomLocalSettingsSnapshot& Snapshot)
-	{
-		Widget.HandleRuntimeSettingsChanged(
-			Snapshot,
-			EWacomRuntimeSettingsChangeReason::Applied);
-	}
+		const FWacomLocalSettingsSnapshot& Snapshot);
 };
