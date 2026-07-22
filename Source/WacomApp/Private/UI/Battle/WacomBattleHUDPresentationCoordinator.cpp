@@ -415,6 +415,35 @@ namespace
 		return Result;
 	}
 
+	bool IsEventSequenceDeferredToEnemyImpact(
+		const int32 EventSequence,
+		const TArray<FBattlePresentationEnemyActionStep>& EnemyActionSteps)
+	{
+		return EventSequence > 0 && EnemyActionSteps.ContainsByPredicate(
+			[EventSequence](const FBattlePresentationEnemyActionStep& Step)
+			{
+				return Step.IsValid()
+					&& EventSequence >= Step.FirstEventSequence
+					&& EventSequence <= Step.LastEventSequence;
+			});
+	}
+
+	TArray<int32> CollectReachedEventSequences(
+		const TArray<FBattleEvent>& Events,
+		const TArray<FBattlePresentationEnemyActionStep>& EnemyActionSteps = {})
+	{
+		TArray<int32> Result;
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Sequence > 0
+				&& !IsEventSequenceDeferredToEnemyImpact(Event.Sequence, EnemyActionSteps))
+			{
+				Result.AddUnique(Event.Sequence);
+			}
+		}
+		return Result;
+	}
+
 	const FHandCardSnapshot* FindNormalHandCardSnapshot(
 		const FBattleSnapshot& Snapshot,
 		const FGuid& CardInstanceId)
@@ -565,7 +594,7 @@ namespace
 		return Hints;
 	}
 
-	int32 FindFirstHandOutcomeSequence(
+	TArray<int32> FindHandOutcomeSequences(
 		const TArray<FBattleEvent>& Events,
 		const TArray<FWacomFirstPersonCardLayerTransitionHint>& TransitionHints,
 		const TArray<FWacomFirstPersonCardLayerFeedbackHint>& FeedbackHints)
@@ -586,7 +615,7 @@ namespace
 			}
 		}
 
-		int32 Result = INDEX_NONE;
+		TArray<int32> Result;
 		for (const FBattleEvent& Event : Events)
 		{
 			if (Event.Sequence <= 0
@@ -608,12 +637,12 @@ namespace
 						return OutcomeCardIds.Contains(CardInstanceId);
 					});
 			}
-			if (bMatchesOutcomeCard
-				&& (Result == INDEX_NONE || Event.Sequence < Result))
+			if (bMatchesOutcomeCard)
 			{
-				Result = Event.Sequence;
+				Result.AddUnique(Event.Sequence);
 			}
 		}
+		Result.Sort();
 		return Result;
 	}
 
@@ -645,6 +674,10 @@ namespace
 		FWacomBattlePresentationPhase Phase;
 		Phase.Kind = EWacomBattlePresentationPhaseKind::HandDiscardGlyphTransfer;
 		Phase.OrderingSequence = Batch.Sequence;
+		if (Batch.Sequence > 0)
+		{
+			Phase.ReachedEventSequencesOnStart.Add(Batch.Sequence);
+		}
 		Phase.Snapshot = Snapshot;
 		Phase.TransitionHints = BuildTransitionHintsForCardIds(
 			Batch.CardInstanceIds,
@@ -758,6 +791,10 @@ namespace
 				FWacomBattlePresentationPhase Phase;
 				Phase.Kind = EWacomBattlePresentationPhaseKind::TurnStartDraw;
 				Phase.OrderingSequence = Step.EventSequence;
+				if (Step.EventSequence > 0)
+				{
+					Phase.ReachedEventSequencesOnStart.Add(Step.EventSequence);
+				}
 				Phase.Snapshot = BuildSnapshotWithoutHandCardIds(FinalSnapshot, HiddenIds);
 				Phase.Snapshot.PileCounts.DrawCount = Step.DrawPileCountAfter;
 				Phase.Snapshot.PileCounts.DiscardCount = Step.DiscardPileCountAfter;
@@ -788,6 +825,10 @@ namespace
 			FWacomBattlePresentationPhase Phase;
 			Phase.Kind = EWacomBattlePresentationPhaseKind::DeckReshuffle;
 			Phase.OrderingSequence = Step.EventSequence;
+			if (Step.EventSequence > 0)
+			{
+				Phase.ReachedEventSequencesOnStart.Add(Step.EventSequence);
+			}
 			TArray<FGuid> HiddenIds = FutureDrawnIds;
 			HiddenIds.Append(DeferredHandAnchorIds);
 			Phase.Snapshot = BuildSnapshotWithoutHandCardIds(FinalSnapshot, HiddenIds);
@@ -915,6 +956,10 @@ namespace
 				Hint.TargetAnchorKind = EWacomFirstPersonCardPresentationAnchorKind::DiscardPile;
 				Hint.Seed = HashCombineFast(GetTypeHash(Batch.Sequence), GetTypeHash(DiscardedCardIds.Num()));
 				Phase.PileTransferHints.Add(MoveTemp(Hint));
+				if (Batch.Sequence > 0)
+				{
+					Phase.ReachedEventSequencesOnStart.Add(Batch.Sequence);
+				}
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}
@@ -933,6 +978,12 @@ namespace
 				Phase.FeedbackHints = BuildRetainedFeedbackHintsForCardIds(
 					RetainedSealCardIds,
 					true);
+				for (int32 Sequence = RetainCheckpoint->FirstEventSequence;
+					Sequence > 0 && Sequence <= RetainCheckpoint->LastEventSequence;
+					++Sequence)
+				{
+					Phase.ReachedEventSequencesOnStart.Add(Sequence);
+				}
 				Plan.Phases.Add(MoveTemp(Phase));
 			}
 		}
@@ -966,6 +1017,9 @@ namespace
 			Phase.EnemyActionSteps = FilterEnemyActionStepsForEvents(
 				Journal.EnemyActionSteps,
 				Phase.Events);
+			Phase.ReachedEventSequencesOnStart = CollectReachedEventSequences(
+				Phase.Events,
+				Phase.EnemyActionSteps);
 			if (const FBattlePresentationEnemyActionStep* FirstActionStep =
 				FindFirstEnemyActionStep(Phase.EnemyActionSteps))
 			{
@@ -1011,6 +1065,12 @@ namespace
 					Phase.TransitionHints = BuildTransitionHintsForCardIds(
 						DrawnCardIds,
 						EWacomFirstPersonCardSlotTransitionKind::Drawn);
+					for (int32 Sequence = DrawCheckpoint->FirstEventSequence;
+						Sequence > 0 && Sequence <= DrawCheckpoint->LastEventSequence;
+						++Sequence)
+					{
+						Phase.ReachedEventSequencesOnStart.Add(Sequence);
+					}
 					Plan.Phases.Add(MoveTemp(Phase));
 				}
 			}
@@ -1047,6 +1107,28 @@ namespace
 				Phase.Snapshot = ReleaseSnapshot;
 				Phase.FeedbackHints = BuildRetainedReleaseHintsForCardIds(ReleaseCardIds);
 				Plan.Phases.Add(MoveTemp(Phase));
+			}
+		}
+
+		if (PostCommandSnapshot.Phase != EBattlePhase::BattleEnd
+			&& PostCommandSnapshot.TurnNumber > 0)
+		{
+			FWacomBattlePresentationPhase* FirstTurnStartPhase =
+				Plan.Phases.FindByPredicate(
+					[](const FWacomBattlePresentationPhase& Phase)
+					{
+						return Phase.Kind == EWacomBattlePresentationPhaseKind::TurnStartDraw
+							|| Phase.Kind == EWacomBattlePresentationPhaseKind::TurnStartHandAnchorEnter
+							|| Phase.Kind == EWacomBattlePresentationPhaseKind::TurnStartRetainRelease;
+					});
+			if (FirstTurnStartPhase)
+			{
+				FirstTurnStartPhase->PresentedTurnNumberOnStart =
+					PostCommandSnapshot.TurnNumber;
+			}
+			else
+			{
+				Plan.PresentedTurnNumberOnCompletion = PostCommandSnapshot.TurnNumber;
 			}
 		}
 
@@ -1241,7 +1323,8 @@ void FWacomBattleHUDPresentationCoordinator::EnqueueEvents(
 bool FWacomBattleHUDPresentationCoordinator::EnqueueEndTurnPresentationPlan(
 	const FBattlePresentationJournal& Journal,
 	const TArray<FBattleEvent>& Events,
-	const FBattleSnapshot& PostCommandSnapshot)
+	const FBattleSnapshot& PostCommandSnapshot,
+	const uint64 ActivityTransactionId)
 {
 	if (Journal.IsEmpty() || bProcessingPresentationPlan)
 	{
@@ -1250,6 +1333,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueEndTurnPresentationPlan(
 
 	FWacomBattlePresentationPlan NewPlan =
 		BuildEndTurnPresentationPlan(Journal, Events, PostCommandSnapshot);
+	NewPlan.ActivityTransactionId = ActivityTransactionId;
 	if (NewPlan.IsEmpty())
 	{
 		return false;
@@ -1266,6 +1350,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueEndTurnPresentationPlan(
 #endif
 	HandleQueueStarted();
 	RefreshCommandBar();
+	NotifyPresentationPlanStarted();
 	StartNextPresentationPlanPhase();
 	return true;
 }
@@ -1275,7 +1360,8 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 	const TArray<FBattleEvent>& Events,
 	const FBattleSnapshot& PreCommandSnapshot,
 	const FBattleSnapshot& PostCommandSnapshot,
-	int32 PresentationStackEntryId)
+	int32 PresentationStackEntryId,
+	const uint64 ActivityTransactionId)
 {
 	const TArray<FHandDiscardPresentationBatch> DiscardBatches =
 		BuildHandDiscardPresentationBatches(Events);
@@ -1346,6 +1432,8 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 			Checkpoint->Snapshot);
 		GainedPhase.FeedbackHints = Runtime.BuildFirstPersonCardFeedbackHints(
 			Checkpoint->Snapshot);
+		GainedPhase.ReachedEventSequencesOnStart =
+			CollectReachedEventSequences(GainedEvents);
 		Runtime.ClearPendingFirstPersonCardTransitionEvents();
 		if (!GainedPhase.TransitionHints.IsEmpty() || !GainedPhase.FeedbackHints.IsEmpty())
 		{
@@ -1362,6 +1450,9 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 		PreviousHandSnapshot,
 		BaseSnapshot);
 	HandPhase.FeedbackHints = Runtime.BuildFirstPersonCardFeedbackHints(BaseSnapshot);
+	HandPhase.ReachedEventSequencesOnStart = CollectReachedEventSequences(
+		HandResolutionEvents,
+		Journal.EnemyActionSteps);
 	Runtime.ClearPendingFirstPersonCardTransitionEvents();
 	TSet<FGuid> GlyphDiscardCardIds;
 	for (const FHandDiscardPresentationBatch& Batch : DiscardBatches)
@@ -1432,6 +1523,9 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 		EventPhase.EnemyActionSteps = FilterEnemyActionStepsForEvents(
 			Journal.EnemyActionSteps,
 			EventPhase.Events);
+		EventPhase.ReachedEventSequencesOnStart = CollectReachedEventSequences(
+			EventPhase.Events,
+			EventPhase.EnemyActionSteps);
 		EventPhase.PresentationStackEntryId = PresentationStackEntryId;
 		NewPlan.Phases.Add(MoveTemp(EventPhase));
 	}
@@ -1446,6 +1540,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 	{
 		return false;
 	}
+	NewPlan.ActivityTransactionId = ActivityTransactionId;
 
 	ClearPresentationPlan();
 	PresentationPlan = MoveTemp(NewPlan);
@@ -1466,6 +1561,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 	ActivePileTransferLastArrivedCount = 0;
 	HandleQueueStarted();
 	RefreshCommandBar();
+	NotifyPresentationPlanStarted();
 	StartNextPresentationPlanPhase();
 	return true;
 }
@@ -1473,7 +1569,8 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueueResolvedCommandPresentationP
 bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 	const FWacomBattleCommandPresentationContext& Context,
 	const FBattleResolution& Resolution,
-	int32 PresentationStackEntryId)
+	int32 PresentationStackEntryId,
+	const uint64 ActivityTransactionId)
 {
 	if (bProcessingPresentationPlan
 		|| !Context.PlayCardCommit.IsSet()
@@ -1698,10 +1795,14 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		}
 		HandOutcomePhase.FeedbackHints.Add(MoveTemp(OutcomeHint));
 	}
-	HandOutcomePhase.OrderingSequence = FindFirstHandOutcomeSequence(
+	HandOutcomePhase.ReachedEventSequencesOnStart = FindHandOutcomeSequences(
 		Resolution.Events,
 		HandOutcomePhase.TransitionHints,
 		HandOutcomePhase.FeedbackHints);
+	HandOutcomePhase.OrderingSequence =
+		HandOutcomePhase.ReachedEventSequencesOnStart.IsEmpty()
+		? INDEX_NONE
+		: HandOutcomePhase.ReachedEventSequencesOnStart[0];
 	if (!HandOutcomePhase.TransitionHints.IsEmpty()
 		|| !HandOutcomePhase.FeedbackHints.IsEmpty())
 	{
@@ -1730,6 +1831,9 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		EventPhase.EnemyActionSteps = FilterEnemyActionStepsForEvents(
 			Resolution.PresentationJournal.EnemyActionSteps,
 			EventPhase.Events);
+		EventPhase.ReachedEventSequencesOnStart = CollectReachedEventSequences(
+			EventPhase.Events,
+			EventPhase.EnemyActionSteps);
 		EventPhase.OrderingSequence = FindFirstPositiveEventSequence(QueueEvents);
 		EventPhase.bTargetAlreadyConfirmed =
 			Context.PlayCardCommit->TargetPartIdentity.IsValidSlot();
@@ -1743,6 +1847,64 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		BasePostSnapshot,
 		Resolution.PostSnapshot,
 		TArray<FGuid>());
+	TSet<int32> BoundOutcomeSequences;
+	for (const FWacomBattlePresentationPhase& Phase : OutcomePlan.Phases)
+	{
+		for (const int32 EventSequence : Phase.ReachedEventSequencesOnStart)
+		{
+			if (EventSequence > 0)
+			{
+				BoundOutcomeSequences.Add(EventSequence);
+			}
+		}
+	}
+	TArray<int32> UnboundOutcomeSequences;
+	for (const FBattleEvent& Event : Resolution.Events)
+	{
+		if (Event.Sequence <= 0
+			|| Event.Type == EBattleEventType::CardPlayed
+			|| Event.Type == EBattleEventType::CardPlayDestinationResolved
+			|| IsBlockingDialogPresentationEvent(Event)
+			|| BoundOutcomeSequences.Contains(Event.Sequence)
+			|| IsEventSequenceDeferredToEnemyImpact(
+				Event.Sequence,
+				Resolution.PresentationJournal.EnemyActionSteps))
+		{
+			continue;
+		}
+		UnboundOutcomeSequences.AddUnique(Event.Sequence);
+	}
+	UnboundOutcomeSequences.Sort();
+	if (!UnboundOutcomeSequences.IsEmpty())
+	{
+		FWacomBattlePresentationPhase* OutcomeBoundary =
+			OutcomePlan.Phases.FindByPredicate(
+				[](const FWacomBattlePresentationPhase& Phase)
+				{
+					return Phase.Kind == EWacomBattlePresentationPhaseKind::CommandOutcome
+						&& Phase.HasEventQueue();
+				});
+		if (!OutcomeBoundary)
+		{
+			OutcomeBoundary = OutcomePlan.Phases.FindByPredicate(
+				[](const FWacomBattlePresentationPhase& Phase)
+				{
+					return Phase.Kind == EWacomBattlePresentationPhaseKind::CommandOutcome;
+				});
+		}
+		if (!OutcomeBoundary)
+		{
+			FWacomBattlePresentationPhase& AddedBoundary =
+				OutcomePlan.Phases.AddDefaulted_GetRef();
+			AddedBoundary.Kind = EWacomBattlePresentationPhaseKind::CommandOutcome;
+			AddedBoundary.Snapshot = PreActionBasePostSnapshot;
+			OutcomeBoundary = &AddedBoundary;
+		}
+		OutcomeBoundary->ReachedEventSequencesOnStart.Append(UnboundOutcomeSequences);
+		OutcomeBoundary->ReachedEventSequencesOnStart.Sort();
+		OutcomeBoundary->OrderingSequence =
+			OutcomeBoundary->ReachedEventSequencesOnStart[0];
+	}
 	OutcomePlan.Phases.StableSort(
 		[](const FWacomBattlePresentationPhase& A, const FWacomBattlePresentationPhase& B)
 		{
@@ -1779,6 +1941,8 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 		FWacomBattlePresentationPhase DialogPhase;
 		DialogPhase.Kind = EWacomBattlePresentationPhaseKind::CommandBlockingDialog;
 		DialogPhase.Events = BlockingDialogEvents;
+		DialogPhase.ReachedEventSequencesOnStart =
+			CollectReachedEventSequences(BlockingDialogEvents);
 		DialogPhase.OrderingSequence = FindFirstPositiveEventSequence(BlockingDialogEvents);
 		DialogPhase.CompletionPolicy =
 			EWacomBattlePresentationPhaseCompletionPolicy::EventQueue;
@@ -1789,6 +1953,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 	{
 		return false;
 	}
+	NewPlan.ActivityTransactionId = ActivityTransactionId;
 
 	ClearPresentationPlan();
 	PresentationPlan = MoveTemp(NewPlan);
@@ -1802,6 +1967,7 @@ bool FWacomBattleHUDPresentationCoordinator::EnqueuePlayCardPresentationPlan(
 	bWaitingForPresentationPlanEventQueue = false;
 	HandleQueueStarted();
 	RefreshCommandBar();
+	NotifyPresentationPlanStarted();
 	StartNextPresentationPlanPhase();
 	return true;
 }
@@ -2044,6 +2210,10 @@ void FWacomBattleHUDPresentationCoordinator::HandleBattleEndStep()
 {
 	if (bProcessingPresentationPlan)
 	{
+		// Flush the transaction before the final snapshot broadcasts BattleEnd.
+		// External battle-end listeners may synchronously tear down this HUD; the
+		// semantic activity reached before that teardown must not be discarded.
+		NotifyPresentationPlanCompleted();
 		// BattleEnd is an authority boundary, not another authored outcome phase.
 		// Drop deferred return/dialog phases before the final snapshot broadcasts
 		// battle end, and settle any source card held hidden by reform-out.
@@ -2078,8 +2248,10 @@ void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyAnimationStep(
 	const FBattlePartSlotIdentity& ActingPartKey,
 	FName IntentId,
 	bool bDestroyed,
+	const int32 EventSequence,
 	FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks)
 {
+	HandleSceneEnemyActionStarted(EventSequence);
 	FWacomBattleHUDSceneEnemyTargetCoordinator& SceneEnemyCoordinator =
 		Runtime.GetSceneEnemyTargetCoordinator();
 	if (bDestroyed)
@@ -2093,6 +2265,20 @@ void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyAnimationStep(
 		ActingPartKey,
 		IntentId,
 		MoveTemp(Callbacks));
+}
+
+void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyActionStarted(
+	const int32 EventSequence)
+{
+	if (EventSequence > 0 && PresentationPlan.ActivityTransactionId != 0)
+	{
+		FWacomBattlePresentationProgress Progress;
+		Progress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+		Progress.Kind = EWacomBattlePresentationProgressKind::EnemyActionStarted;
+		Progress.FirstEventSequence = EventSequence;
+		Progress.LastEventSequence = EventSequence;
+		Runtime.NotifyBattlePresentationProgress(Progress);
+	}
 }
 
 void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyActionImpact(
@@ -2109,6 +2295,15 @@ void FWacomBattleHUDPresentationCoordinator::HandleSceneEnemyActionImpact(
 		PlayerStatusBar->PlayEnemyActionImpactFeedback(
 			ActionStep.SnapshotBefore.Player,
 			ActionStep.SnapshotAfter.Player);
+	}
+	if (PresentationPlan.ActivityTransactionId != 0)
+	{
+		FWacomBattlePresentationProgress Progress;
+		Progress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+		Progress.Kind = EWacomBattlePresentationProgressKind::EnemyActionImpact;
+		Progress.FirstEventSequence = ActionStep.FirstEventSequence;
+		Progress.LastEventSequence = ActionStep.LastEventSequence;
+		Runtime.NotifyBattlePresentationProgress(Progress);
 	}
 }
 
@@ -2228,6 +2423,8 @@ void FWacomBattleHUDPresentationCoordinator::ResetActivePileTransferFeedback()
 
 void FWacomBattleHUDPresentationCoordinator::ClearPresentationPlan()
 {
+	NotifyPresentationPlanCancelled(
+		EWacomBattlePresentationCancelPolicy::DiscardPending);
 	Runtime.CompleteActiveDrawPileFeedbackBatch();
 	if (bProcessingPresentationPlan && IsGlyphTransferPhase(ActivePresentationPlanPhaseKind))
 	{
@@ -2263,6 +2460,78 @@ void FWacomBattleHUDPresentationCoordinator::ClearPresentationPlan()
 	StartedPresentationPlanPhaseNamesForTest.Reset();
 	SubmittedPresentationPlanFeedbackHintsForTest.Reset();
 #endif
+}
+
+void FWacomBattleHUDPresentationCoordinator::NotifyPresentationPlanStarted()
+{
+	if (PresentationPlan.ActivityTransactionId == 0)
+	{
+		return;
+	}
+	FWacomBattlePresentationProgress Progress;
+	Progress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+	Progress.Kind = EWacomBattlePresentationProgressKind::PlanStarted;
+	Runtime.NotifyBattlePresentationProgress(Progress);
+}
+
+void FWacomBattleHUDPresentationCoordinator::NotifyPresentationPhaseStarted(
+	const FWacomBattlePresentationPhase& Phase)
+{
+	if (PresentationPlan.ActivityTransactionId == 0)
+	{
+		return;
+	}
+	if (Phase.PresentedTurnNumberOnStart > 0)
+	{
+		FWacomBattlePresentationProgress Progress;
+		Progress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+		Progress.Kind = EWacomBattlePresentationProgressKind::TurnAdvanced;
+		Progress.PresentedTurnNumber = Phase.PresentedTurnNumberOnStart;
+		Runtime.NotifyBattlePresentationProgress(Progress);
+	}
+	if (!Phase.ReachedEventSequencesOnStart.IsEmpty())
+	{
+		FWacomBattlePresentationProgress Progress;
+		Progress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+		Progress.Kind = EWacomBattlePresentationProgressKind::PhaseEventsReached;
+		Progress.EventSequences = Phase.ReachedEventSequencesOnStart;
+		Runtime.NotifyBattlePresentationProgress(Progress);
+	}
+}
+
+void FWacomBattleHUDPresentationCoordinator::NotifyPresentationPlanCompleted()
+{
+	if (PresentationPlan.ActivityTransactionId == 0)
+	{
+		return;
+	}
+	if (PresentationPlan.PresentedTurnNumberOnCompletion > 0)
+	{
+		FWacomBattlePresentationProgress TurnProgress;
+		TurnProgress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+		TurnProgress.Kind = EWacomBattlePresentationProgressKind::TurnAdvanced;
+		TurnProgress.PresentedTurnNumber =
+			PresentationPlan.PresentedTurnNumberOnCompletion;
+		Runtime.NotifyBattlePresentationProgress(TurnProgress);
+	}
+	FWacomBattlePresentationProgress Progress;
+	Progress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+	Progress.Kind = EWacomBattlePresentationProgressKind::PlanCompleted;
+	Runtime.NotifyBattlePresentationProgress(Progress);
+}
+
+void FWacomBattleHUDPresentationCoordinator::NotifyPresentationPlanCancelled(
+	const EWacomBattlePresentationCancelPolicy CancelPolicy)
+{
+	if (PresentationPlan.ActivityTransactionId == 0)
+	{
+		return;
+	}
+	FWacomBattlePresentationProgress Progress;
+	Progress.ActivityTransactionId = PresentationPlan.ActivityTransactionId;
+	Progress.Kind = EWacomBattlePresentationProgressKind::PlanCancelled;
+	Progress.CancelPolicy = CancelPolicy;
+	Runtime.NotifyBattlePresentationProgress(Progress);
 }
 
 void FWacomBattleHUDPresentationCoordinator::StartNextPresentationPlanPhase()
@@ -2303,6 +2572,7 @@ void FWacomBattleHUDPresentationCoordinator::StartNextPresentationPlanPhase()
 #if WITH_AUTOMATION_TESTS
 	StartedPresentationPlanPhaseNamesForTest.Add(GetActivePresentationPlanPhaseName());
 #endif
+	NotifyPresentationPhaseStarted(Phase);
 
 	if (Phase.HasTargetCue())
 	{
@@ -2529,6 +2799,7 @@ void FWacomBattleHUDPresentationCoordinator::PollActivePresentationPlanPhase()
 void FWacomBattleHUDPresentationCoordinator::FinishPresentationPlan()
 {
 	const int32 CompletionStackEntryId = ActivePresentationPlanCompletionStackEntryId;
+	NotifyPresentationPlanCompleted();
 	StopPresentationPlanTimer();
 	PresentationPlan = FWacomBattlePresentationPlan();
 	ActivePresentationPlanPhaseKind = EWacomBattlePresentationPhaseKind::None;

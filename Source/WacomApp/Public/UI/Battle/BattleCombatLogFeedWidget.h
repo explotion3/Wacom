@@ -40,7 +40,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "把一次已结算命令的活动批次加入非阻塞 FIFO 播报队列。不会提交或阻塞 Battle 命令。"))
 	void EnqueueCombatActivityBatch(const FWacomBattleCombatActivityBatchView& Batch);
 
-	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "设置 Footer 显示的表现回合数。EndTurn 应在敌人活动播报完成后调用。"))
+	/** C++ runtime path: begin a group at the presentation clock's semantic action boundary. */
+	void BeginSynchronizedCombatActivityGroup(
+		const FWacomBattleCombatActivityRowView& RootAction,
+		int32 TurnNumber);
+	/** C++ runtime path: release outcome rows reached by the presentation clock. */
+	void ReleaseSynchronizedCombatActivityResults(
+		const TArray<FWacomBattleCombatActivityRowView>& ResultRows);
+	/** C++ runtime path: release the active root after all unlocked results enter. */
+	void CompleteSynchronizedCombatActivityGroup();
+
+	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "设置 Footer 显示的表现回合数。正式 EndTurn 路径在首个新回合表现阶段开始前调用。"))
 	void SetPresentedTurnNumber(int32 TurnNumber);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "清空短时活动、Footer 与播放状态。只影响 UI。"))

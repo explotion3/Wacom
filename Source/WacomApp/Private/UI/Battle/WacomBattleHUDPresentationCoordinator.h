@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UI/Battle/BattlePresentationStackEntryWidget.h"
 #include "UI/Battle/WacomBattlePresentationPlan.h"
+#include "UI/Battle/WacomBattlePresentationProgress.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
 class FWacomBattleEventPresentationQueue;
@@ -53,17 +54,20 @@ public:
 	bool EnqueueEndTurnPresentationPlan(
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
-		const FBattleSnapshot& PostCommandSnapshot);
+		const FBattleSnapshot& PostCommandSnapshot,
+		uint64 ActivityTransactionId = 0);
 	bool EnqueueResolvedCommandPresentationPlan(
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot,
-		int32 PresentationStackEntryId = INDEX_NONE);
+		int32 PresentationStackEntryId = INDEX_NONE,
+		uint64 ActivityTransactionId = 0);
 	bool EnqueuePlayCardPresentationPlan(
 		const FWacomBattleCommandPresentationContext& Context,
 		const FBattleResolution& Resolution,
-		int32 PresentationStackEntryId);
+		int32 PresentationStackEntryId,
+		uint64 ActivityTransactionId = 0);
 	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void ClearQueue();
 	bool IsQueueBusy() const;
@@ -154,10 +158,12 @@ private:
 	void HandleBattleEndStep();
 	void HandleKnockdownChoiceDialogStep();
 	void HandleTargetCueStep(const FWacomBattlePresentationTargetCue& Cue);
+	void HandleSceneEnemyActionStarted(int32 EventSequence);
 	void HandleSceneEnemyAnimationStep(
 		const FBattlePartSlotIdentity& ActingPartKey,
 		FName IntentId,
 		bool bDestroyed,
+		int32 EventSequence,
 		FWacomBattleEnemyActionPlaybackCallbacks&& Callbacks);
 	void HandleSceneEnemyActionImpact(const FBattlePresentationEnemyActionStep& ActionStep);
 	void HandleCardStackBoundaryStep(int32 EntryId);
@@ -168,6 +174,10 @@ private:
 	void RestoreActiveReshufflePileCounts();
 	void ResetActivePileTransferFeedback();
 	void ClearPresentationPlan();
+	void NotifyPresentationPlanStarted();
+	void NotifyPresentationPhaseStarted(const FWacomBattlePresentationPhase& Phase);
+	void NotifyPresentationPlanCompleted();
+	void NotifyPresentationPlanCancelled(EWacomBattlePresentationCancelPolicy CancelPolicy);
 	void StartNextPresentationPlanPhase();
 	void StartHandPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);
 	void StartEventPresentationPlanPhase(FWacomBattlePresentationPhase&& Phase);

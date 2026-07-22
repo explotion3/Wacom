@@ -53,6 +53,91 @@ void FWacomBattleCombatActivityPlayback::Enqueue(const FWacomBattleCombatActivit
 	PendingBatches.Add(Batch);
 }
 
+void FWacomBattleCombatActivityPlayback::BeginSynchronizedGroup(
+	const FWacomBattleCombatActivityRowView& RootAction,
+	const int32 TurnNumber,
+	const FWacomBattleCombatActivityPlaybackConfig& InConfig)
+{
+	FWacomBattleCombatActivityPlaybackConfig Config = InConfig;
+	Config.Normalize();
+
+	// Runtime synchronized activity supersedes the legacy whole-batch scheduler.
+	// Visible rows are retained so the previous action can continue retiring.
+	PendingBatches.Reset();
+	ActiveBatch.Reset();
+	ActiveGroupIndex = INDEX_NONE;
+	NextResultRowIndex = INDEX_NONE;
+	TimeSinceLastEmission = 0.0f;
+
+	// A new semantic root must appear at the exact action boundary. If the
+	// previous impact's visual stagger has not drained yet (for example when an
+	// animation is skipped), catch it up before the new root so group ordering
+	// remains truthful.
+	for (const FWacomBattleCombatActivityRowView& PendingResult : PendingSynchronizedResults)
+	{
+		EmitRow(PendingResult, false, Config);
+	}
+	PendingSynchronizedResults.Reset();
+	SynchronizedTimeSinceLastEmission = 0.0f;
+	ReleaseActiveRoot(Config);
+	ReleasePreviousRootLane();
+	bCompleteSynchronizedGroupAfterResults = false;
+	LastRootAction = RootAction;
+	if (TurnNumber > 0 && PresentedTurnNumber <= 0)
+	{
+		PresentedTurnNumber = TurnNumber;
+	}
+	ActiveRootPlaybackId = EmitRow(RootAction, true, Config);
+	LastRootPlaybackId = ActiveRootPlaybackId;
+	RetargetRows(Config);
+	RebuildViews(Config);
+}
+
+void FWacomBattleCombatActivityPlayback::AppendSynchronizedResults(
+	const TArray<FWacomBattleCombatActivityRowView>& ResultRows,
+	const FWacomBattleCombatActivityPlaybackConfig& InConfig)
+{
+	if (ResultRows.IsEmpty())
+	{
+		return;
+	}
+	FWacomBattleCombatActivityPlaybackConfig Config = InConfig;
+	Config.Normalize();
+
+	const bool bCanEmitFirstImmediately = PendingSynchronizedResults.IsEmpty();
+	int32 FirstPendingIndex = 0;
+	if (bCanEmitFirstImmediately)
+	{
+		EmitRow(ResultRows[0], false, Config);
+		FirstPendingIndex = 1;
+		SynchronizedTimeSinceLastEmission = 0.0f;
+	}
+	for (int32 Index = FirstPendingIndex; Index < ResultRows.Num(); ++Index)
+	{
+		PendingSynchronizedResults.Add(ResultRows[Index]);
+	}
+	RetargetRows(Config);
+	RebuildViews(Config);
+}
+
+void FWacomBattleCombatActivityPlayback::CompleteSynchronizedGroup(
+	const FWacomBattleCombatActivityPlaybackConfig& InConfig)
+{
+	FWacomBattleCombatActivityPlaybackConfig Config = InConfig;
+	Config.Normalize();
+	if (PendingSynchronizedResults.IsEmpty())
+	{
+		ReleaseActiveRoot(Config);
+		bCompleteSynchronizedGroupAfterResults = false;
+	}
+	else
+	{
+		bCompleteSynchronizedGroupAfterResults = true;
+	}
+	RetargetRows(Config);
+	RebuildViews(Config);
+}
+
 void FWacomBattleCombatActivityPlayback::SetPresentedTurnNumber(int32 TurnNumber)
 {
 	PresentedTurnNumber = FMath::Max(0, TurnNumber);
@@ -115,6 +200,36 @@ void FWacomBattleCombatActivityPlayback::Tick(
 		}
 	}
 
+	if (!PendingSynchronizedResults.IsEmpty())
+	{
+		SynchronizedTimeSinceLastEmission += SafeDelta;
+		int32 EmittedThisTick = 0;
+		while (!PendingSynchronizedResults.IsEmpty()
+			&& EmittedThisTick < MaxEmissionsPerTick)
+		{
+			const float Stagger = Config.bReducedMotion
+				? 0.0f
+				: ResolveResultStaggerSeconds(PendingSynchronizedResults.Num(), Config);
+			if (SynchronizedTimeSinceLastEmission + KINDA_SMALL_NUMBER < Stagger)
+			{
+				break;
+			}
+			SynchronizedTimeSinceLastEmission = FMath::Max(
+				0.0f,
+				SynchronizedTimeSinceLastEmission - Stagger);
+			EmitRow(PendingSynchronizedResults[0], false, Config);
+			PendingSynchronizedResults.RemoveAt(0);
+			++EmittedThisTick;
+		}
+	}
+	if (PendingSynchronizedResults.IsEmpty()
+		&& bCompleteSynchronizedGroupAfterResults)
+	{
+		ReleaseActiveRoot(Config);
+		bCompleteSynchronizedGroupAfterResults = false;
+		SynchronizedTimeSinceLastEmission = 0.0f;
+	}
+
 	RetargetRows(Config);
 	RebuildViews(Config);
 }
@@ -123,9 +238,12 @@ void FWacomBattleCombatActivityPlayback::Reset()
 {
 	PendingBatches.Reset();
 	ActiveBatch.Reset();
+	PendingSynchronizedResults.Reset();
 	ActiveGroupIndex = INDEX_NONE;
 	NextResultRowIndex = INDEX_NONE;
 	TimeSinceLastEmission = 0.0f;
+	SynchronizedTimeSinceLastEmission = 0.0f;
+	bCompleteSynchronizedGroupAfterResults = false;
 	VisibleRows.Reset();
 	VisibleRowViews.Reset();
 	LastRootAction.Reset();
@@ -142,7 +260,10 @@ const FWacomBattleCombatActivityRowView* FWacomBattleCombatActivityPlayback::Get
 
 bool FWacomBattleCombatActivityPlayback::HasPendingPlayback() const
 {
-	return ActiveBatch.IsSet() || !PendingBatches.IsEmpty();
+	return ActiveBatch.IsSet()
+		|| !PendingBatches.IsEmpty()
+		|| !PendingSynchronizedResults.IsEmpty()
+		|| bCompleteSynchronizedGroupAfterResults;
 }
 
 bool FWacomBattleCombatActivityPlayback::IsTickRequired() const

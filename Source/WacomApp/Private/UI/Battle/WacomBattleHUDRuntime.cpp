@@ -898,6 +898,12 @@ void FWacomBattleHUDRuntime::AppendBattleCombatLogBlock(
 	GetCombatLogController().AppendBlock(Block);
 }
 
+void FWacomBattleHUDRuntime::NotifyBattlePresentationProgress(
+	const FWacomBattlePresentationProgress& Progress)
+{
+	GetCombatLogController().ApplyPresentationProgress(Progress);
+}
+
 void FWacomBattleHUDRuntime::StoreFirstPersonCardTransitionEvents(
 	const TArray<FBattleEvent>& Events)
 {

@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-07-14
+updated: 2026-07-23
 tags:
   - wacom/ui
   - wacom/cards
@@ -224,6 +224,8 @@ Run 探索期默认手牌和 provider-backed menu lease 的卡牌进入使用 `R
 `Played / Exhausted / Discarded` 都保留显式离场语义。`Discarded` 继续使用和 enter 对称的固定 elapsed 空间离场；普通成功使用映射为 `Played`，锁定提交成功当帧的位置和基础缩放，保留 Commit 局部脉冲，并默认播放约 `0.28s` 的单面像素翻面收牌：短促上提和像素闪边后，Slot 只在最终 RenderTransform 层压缩横轴并回正角度，直至形成约 `6%` 宽的发光侧边；最终进入 Exhaust 的牌映射为 `Exhausted`，继续使用约 `0.40s` 的 PixelAsh / OrderedDither 消耗消散。离开手牌的两种 Surface 离场由 App-private `FWacomFirstPersonCardSurfaceDeparturePlayback` 互斥管理，材质完成前 outgoing slot 不会移除。成功使用后仍存在于最终 Hand snapshot 的同一 Card ID 不创建 outgoing slot，而是收到 `CardUseReform` feedback hint：Slot 在提交位置翻到侧边，完全隐藏时切到最新布局目标，再反向展开并落定；没有左右手锚点时目标等于原位。旧 DiamondWave Style 仍可直接切换回中心向外消失 / 反向重构。普通使用 Style / Material Instance 无效时回退正常手牌重排；Exhaust Style、材质或噪声无效时回退 Discarded 空间离场，不能留下静止 slot。
 
 BattleHUD 每次提交 BattleHand presentation frame 时，把当前 UMG 几何中心转成 DPI-aware 逻辑 viewport 坐标，并随同一 source lifecycle frame 写入 `DrawPile / DiscardPile / PlayTarget` presentation anchors；Anchor runtime state 按 source 保存，source 切换、runtime clear 或 visual suppression 时清理。`Drawn` 使用 DrawPile 完整坐标作为起点，`Discarded` 使用 DiscardPile 完整坐标作为终点，二者不再叠加旧 authored offset；`RunHandEntered / Gained / HandAnchorEntered` 暂不使用这些 Battle 锚点。真实 Played target 与 PlayTarget 坐标合同继续保留：启用有效消散时不再驱动卡牌位移，供后续目标命中反馈消费；消散回退时仍按“真实目标 -> PlayTarget -> 旧 origin / offset”解析旧空间终点。Layer 只消费这些表现坐标，不重新判断目标是否合法。连续 `CardDiscarded / HandLimitDiscarded / CardExhausted` loose events 和 EndTurn discard phase 都携带稳定 `SequenceIndex / SequenceCount`；`DiscardedCardExitStaggerSeconds`（默认 `0.06s`）据此错峰启动，`CardSlotExitDuration` 控制单张离场时长。表现计划 phase 超时时必须先调用 Anchor / Layer force-settle，清除未应用 hint、把 active slot 收到最终目标并移除 outgoing slot，再进入下一 phase，不能让旧阶段动画与新阶段重叠。
+
+Battle command 的卡牌 phase 与 Combat Activity 共用 `FWacomBattleHUDPresentationCoordinator` 这一条语义时钟，但两者不互相拥有状态。完整 Combat Log / DetailsHistory 在命令结算后立即持久化；短时 Activity 只消费 coordinator 发布的 transaction progress。`CommandSourceOut` 开始时玩家根行动可见，`CommandOutcome`、牌面重写、弃牌 / 抽牌等 phase 只释放各自明确绑定的 Event Sequence；敌人根行动在 Scene Enemy 动画 start 释放，结果在真实 Impact 回调应用 `SnapshotAfter` 后释放。Card Layer 仍只消费 Snapshot、transition / feedback hint 和 force-settle，不读取日志事务、不推断事件是否应该播报，也不等待 Feed 的 `0.16s → 0.08s` 视觉错峰。Reduced Motion 和无 World 路径保持相同 phase / progress 顺序，只跳过动画时间。
 
 `bEnableReadableTransitionOrigins` 控制没有有效 presentation anchor 时的旧 origin / offset fallback，不关闭有限时长播放、错峰和弧线；有效的 Battle MotionAnchor 或真实 Played target 始终是完整空间事实。需要在 PIE 中验证抽牌、Run 手牌入场、战斗奖励卡或左右手生成手感时，优先调整 WBP MotionAnchor 位置和 `06 Transition Motion` 的非位置参数；不应在 BattleHUD、Run source 或 BattleSession 中硬编码动画位置、延迟或曲线。
 

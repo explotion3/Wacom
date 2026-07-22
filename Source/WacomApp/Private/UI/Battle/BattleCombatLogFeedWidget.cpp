@@ -197,6 +197,45 @@ void UBattleCombatLogFeedWidget::EnqueueCombatActivityBatch(
 	RefreshPlaybackPresentation();
 }
 
+void UBattleCombatLogFeedWidget::BeginSynchronizedCombatActivityGroup(
+	const FWacomBattleCombatActivityRowView& RootAction,
+	const int32 TurnNumber)
+{
+	if (!Playback)
+	{
+		Playback = new FWacomBattleCombatActivityPlayback();
+	}
+	Playback->BeginSynchronizedGroup(
+		RootAction,
+		TurnNumber,
+		BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion));
+	RefreshPlaybackPresentation();
+}
+
+void UBattleCombatLogFeedWidget::ReleaseSynchronizedCombatActivityResults(
+	const TArray<FWacomBattleCombatActivityRowView>& ResultRows)
+{
+	if (!Playback)
+	{
+		Playback = new FWacomBattleCombatActivityPlayback();
+	}
+	Playback->AppendSynchronizedResults(
+		ResultRows,
+		BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion));
+	RefreshPlaybackPresentation();
+}
+
+void UBattleCombatLogFeedWidget::CompleteSynchronizedCombatActivityGroup()
+{
+	if (!Playback)
+	{
+		return;
+	}
+	Playback->CompleteSynchronizedGroup(
+		BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion));
+	RefreshPlaybackPresentation();
+}
+
 void UBattleCombatLogFeedWidget::SetPresentedTurnNumber(int32 TurnNumber)
 {
 	if (!Playback)

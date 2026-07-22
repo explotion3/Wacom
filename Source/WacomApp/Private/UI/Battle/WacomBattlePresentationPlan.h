@@ -58,6 +58,8 @@ struct FWacomBattlePresentationPhase
 		EWacomBattlePresentationPhaseCompletionPolicy::PlaybackIdle;
 	FGuid CompletionCardInstanceId;
 	int32 OrderingSequence = INDEX_NONE;
+	TArray<int32> ReachedEventSequencesOnStart;
+	int32 PresentedTurnNumberOnStart = INDEX_NONE;
 	bool bTargetAlreadyConfirmed = false;
 
 	bool HasHandFrame() const
@@ -103,6 +105,8 @@ struct FWacomBattlePresentationPlan
 {
 	TArray<FWacomBattlePresentationPhase> Phases;
 	int32 CompletionStackEntryId = INDEX_NONE;
+	uint64 ActivityTransactionId = 0;
+	int32 PresentedTurnNumberOnCompletion = INDEX_NONE;
 
 	bool IsEmpty() const
 	{

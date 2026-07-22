@@ -395,6 +395,7 @@ void FWacomBattleEventPresentationQueue::Advance()
 		TWeakPtr<FWacomBattleEventPresentationQueue> WeakThis = AsShared();
 		if (Step.bSkipSceneEnemyAnimation)
 		{
+			Coordinator.HandleSceneEnemyActionStarted(Step.EventSequence);
 			DeliverSceneEnemyAnimationImpact(BarrierSerial);
 			CompleteSceneEnemyAnimationBarrier(BarrierSerial);
 		}
@@ -419,6 +420,7 @@ void FWacomBattleEventPresentationQueue::Advance()
 				Step.ActingPartKey,
 				Step.IntentId,
 				Step.bDestroyedHostAnimation,
+				Step.EventSequence,
 				MoveTemp(Callbacks));
 		}
 		if (bWaitingForSceneEnemyAnimation)

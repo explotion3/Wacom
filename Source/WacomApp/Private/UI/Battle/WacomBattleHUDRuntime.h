@@ -46,6 +46,7 @@ struct FBattleResolution;
 struct FBattleSnapshot;
 struct FWacomBattleEnemyPartDragPredictionDebugInput;
 struct FWacomBattlePresentationTargetCue;
+struct FWacomBattlePresentationProgress;
 struct FWacomCardDetailViewData;
 struct FWacomFirstPersonCardDragView;
 struct FWacomFirstPersonCardLayerSlotView;
@@ -225,6 +226,7 @@ public:
 	FVector2D GetLastFirstPersonCardDetailPanelPosition() const;
 
 	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
+	void NotifyBattlePresentationProgress(const FWacomBattlePresentationProgress& Progress);
 	void StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events);
 	void QueueDrawPileFeedbackBatch(const FWacomBattleDrawPileFeedbackBatch& Batch);
 	void PrepareDrawPileFeedbackForPresentationFrame(

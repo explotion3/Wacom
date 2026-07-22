@@ -3,12 +3,16 @@
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
 
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/WacomBattleCombatActivitySynchronizer.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 
 FWacomBattleHUDCombatLogController::FWacomBattleHUDCombatLogController(FWacomBattleHUDRuntime& InRuntime)
 	: Runtime(InRuntime)
+	, ActivitySynchronizer(MakeUnique<FWacomBattleCombatActivitySynchronizer>())
 {
 }
+
+FWacomBattleHUDCombatLogController::~FWacomBattleHUDCombatLogController() = default;
 
 void FWacomBattleHUDCombatLogController::AppendBlock(const FWacomBattleCombatLogBlockView& Block)
 {
@@ -47,6 +51,74 @@ void FWacomBattleHUDCombatLogController::AppendBlock(
 		PostCommandSnapshot));
 }
 
+uint64 FWacomBattleHUDCombatLogController::StageResolvedCommand(
+	const FWacomBattleCombatLogCommandContext& CommandContext,
+	const TArray<FBattleEvent>& Events,
+	const FBattleSnapshot& PreCommandSnapshot,
+	const FBattleSnapshot& PostCommandSnapshot)
+{
+	AppendHistoryBlock(UWacomBattleCombatLogBuilder::BuildCombatLogBlock(
+		CommandContext,
+		Events,
+		PreCommandSnapshot,
+		PostCommandSnapshot));
+	const FWacomBattleCombatActivityBatchView Batch =
+		UWacomBattleCombatLogBuilder::BuildCombatActivityBatch(
+			CommandContext,
+			Events,
+			PreCommandSnapshot,
+			PostCommandSnapshot);
+	AppendDetailsBatch(Batch);
+	return ActivitySynchronizer->Stage(Batch);
+}
+
+void FWacomBattleHUDCombatLogController::ApplyPresentationProgress(
+	const FWacomBattlePresentationProgress& Progress)
+{
+	bool bFlushedRemainder = false;
+	const TArray<FWacomBattleCombatActivityEmission> Emissions =
+		ActivitySynchronizer->ApplyProgress(Progress, bFlushedRemainder);
+	if (bFlushedRemainder)
+	{
+		TArray<FString> FlushedSequences;
+		for (const FWacomBattleCombatActivityEmission& Emission : Emissions)
+		{
+			if (Emission.Kind == EWacomBattleCombatActivityEmissionKind::BeginGroup
+				&& Emission.RootAction.EventSequence > 0)
+			{
+				FlushedSequences.Add(FString::FromInt(Emission.RootAction.EventSequence));
+			}
+			for (const FWacomBattleCombatActivityRowView& Row : Emission.ResultRows)
+			{
+				if (Row.EventSequence > 0)
+				{
+					FlushedSequences.Add(FString::FromInt(Row.EventSequence));
+				}
+			}
+		}
+		UE_LOG(LogTemp, Warning,
+			TEXT("[BattleCombatActivity] Presentation transaction %llu completed with pending activity sequences: %s"),
+			Progress.ActivityTransactionId,
+			*FString::Join(FlushedSequences, TEXT(",")));
+	}
+	ApplyActivityEmissions(Emissions);
+}
+
+void FWacomBattleHUDCombatLogController::FlushActivityTransaction(
+	const uint64 TransactionId)
+{
+	FWacomBattlePresentationProgress Progress;
+	Progress.ActivityTransactionId = TransactionId;
+	Progress.Kind = EWacomBattlePresentationProgressKind::PlanCompleted;
+	ApplyPresentationProgress(Progress);
+}
+
+void FWacomBattleHUDCombatLogController::DiscardActivityTransaction(
+	const uint64 TransactionId)
+{
+	ActivitySynchronizer->Discard(TransactionId);
+}
+
 void FWacomBattleHUDCombatLogController::PresentInitialTurnActivity(const int32 TurnNumber)
 {
 	SubmitActivityBatch(
@@ -58,6 +130,7 @@ void FWacomBattleHUDCombatLogController::Clear()
 {
 	BattleCombatLogHistory.Reset();
 	BattleCombatLogDetailsHistory.Reset();
+	ActivitySynchronizer->Clear();
 	LastProjectedRootAction.Reset();
 	LastProjectedTurnNumber = 0;
 	if (UBattleCombatLogFeedWidget* CombatLogFeed = Runtime.Host().GetCombatLogFeed())
@@ -82,6 +155,54 @@ void FWacomBattleHUDCombatLogController::SyncFeed()
 		CombatLogFeed->RestorePersistentState(
 			LastProjectedTurnNumber,
 			LastProjectedRootAction.IsSet() ? &LastProjectedRootAction.GetValue() : nullptr);
+	}
+}
+
+void FWacomBattleHUDCombatLogController::ApplyActivityEmissions(
+	const TArray<FWacomBattleCombatActivityEmission>& Emissions)
+{
+	UBattleCombatLogFeedWidget* CombatLogFeed = Runtime.Host().GetCombatLogFeed();
+	for (const FWacomBattleCombatActivityEmission& Emission : Emissions)
+	{
+		switch (Emission.Kind)
+		{
+		case EWacomBattleCombatActivityEmissionKind::BeginGroup:
+			LastProjectedRootAction = Emission.RootAction;
+			if (LastProjectedTurnNumber <= 0 && Emission.TurnNumber > 0)
+			{
+				LastProjectedTurnNumber = Emission.TurnNumber;
+			}
+			if (CombatLogFeed)
+			{
+				CombatLogFeed->BeginSynchronizedCombatActivityGroup(
+					Emission.RootAction,
+					Emission.TurnNumber);
+			}
+			break;
+
+		case EWacomBattleCombatActivityEmissionKind::AppendResults:
+			if (CombatLogFeed)
+			{
+				CombatLogFeed->ReleaseSynchronizedCombatActivityResults(
+					Emission.ResultRows);
+			}
+			break;
+
+		case EWacomBattleCombatActivityEmissionKind::SetTurn:
+			LastProjectedTurnNumber = FMath::Max(0, Emission.TurnNumber);
+			if (CombatLogFeed)
+			{
+				CombatLogFeed->SetPresentedTurnNumber(LastProjectedTurnNumber);
+			}
+			break;
+
+		case EWacomBattleCombatActivityEmissionKind::CompleteGroup:
+			if (CombatLogFeed)
+			{
+				CombatLogFeed->CompleteSynchronizedCombatActivityGroup();
+			}
+			break;
+		}
 	}
 }
 

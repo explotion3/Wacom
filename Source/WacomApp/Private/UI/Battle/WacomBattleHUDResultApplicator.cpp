@@ -304,7 +304,8 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 	}
 
 	LogResultApplicatorRawBattleEvents(Resolution.Events);
-	Runtime.GetCombatLogController().AppendBlock(
+	const uint64 ActivityTransactionId =
+		Runtime.GetCombatLogController().StageResolvedCommand(
 		Context.CombatLogContext,
 		Resolution.Events,
 		Context.PreCommandSnapshot,
@@ -314,7 +315,8 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 		&& Runtime.GetPresentationCoordinator().EnqueueEndTurnPresentationPlan(
 			Resolution.PresentationJournal,
 			Resolution.Events,
-			Resolution.PostSnapshot))
+			Resolution.PostSnapshot,
+			ActivityTransactionId))
 	{
 		return;
 	}
@@ -328,7 +330,8 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 		&& Runtime.GetPresentationCoordinator().EnqueuePlayCardPresentationPlan(
 			Context,
 			Resolution,
-			PresentationStackEntryId))
+			PresentationStackEntryId,
+			ActivityTransactionId))
 	{
 		return;
 	}
@@ -339,11 +342,13 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 			Resolution.Events,
 			Context.PreCommandSnapshot,
 			Resolution.PostSnapshot,
-			PresentationStackEntryId))
+			PresentationStackEntryId,
+			ActivityTransactionId))
 	{
 		return;
 	}
 
+	Runtime.GetCombatLogController().FlushActivityTransaction(ActivityTransactionId);
 	Runtime.StoreFirstPersonCardTransitionEvents(Resolution.Events);
 	Runtime.EnqueueBattlePresentationEvents(Resolution.Events, PresentationStackEntryId);
 	Runtime.NativeRefreshFromSnapshot(Resolution.PostSnapshot);

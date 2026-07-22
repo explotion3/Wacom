@@ -45,6 +45,15 @@ class WACOMAPP_API FWacomBattleCombatActivityPlayback
 {
 public:
 	void Enqueue(const FWacomBattleCombatActivityBatchView& Batch);
+	void BeginSynchronizedGroup(
+		const FWacomBattleCombatActivityRowView& RootAction,
+		int32 TurnNumber,
+		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
+	void AppendSynchronizedResults(
+		const TArray<FWacomBattleCombatActivityRowView>& ResultRows,
+		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
+	void CompleteSynchronizedGroup(
+		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
 	void SetPresentedTurnNumber(int32 TurnNumber);
 	void SetLastRootAction(const FWacomBattleCombatActivityRowView& RootAction);
 	void Tick(float DeltaTime, const FWacomBattleCombatActivityPlaybackConfig& InConfig);
@@ -75,9 +84,12 @@ private:
 
 	TArray<FWacomBattleCombatActivityBatchView> PendingBatches;
 	TOptional<FWacomBattleCombatActivityBatchView> ActiveBatch;
+	TArray<FWacomBattleCombatActivityRowView> PendingSynchronizedResults;
 	int32 ActiveGroupIndex = INDEX_NONE;
 	int32 NextResultRowIndex = INDEX_NONE;
 	float TimeSinceLastEmission = 0.0f;
+	float SynchronizedTimeSinceLastEmission = 0.0f;
+	bool bCompleteSynchronizedGroupAfterResults = false;
 	TArray<FVisibleRow> VisibleRows;
 	TArray<FWacomBattleCombatActivityRowPlaybackView> VisibleRowViews;
 	TOptional<FWacomBattleCombatActivityRowView> LastRootAction;

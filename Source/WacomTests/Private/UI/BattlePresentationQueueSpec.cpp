@@ -251,6 +251,39 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 		CombatLogCountBeforeTargetSelect + 1);
 	TestTrue(TEXT("Target submit block uses PlayCard header"),
 		HUD->GetBattleCombatLogHistoryForTest().Last().HeaderText.ToString().Contains(TEXT("打出")));
+	const TArray<FWacomBattleCombatLogTurnSectionView> DetailsAfterTargetSubmit =
+		HUD->GetBattleCombatLogDetailsHistoryForTest();
+	TestTrue(TEXT("Target submit immediately persists the complete details group"),
+		DetailsAfterTargetSubmit.ContainsByPredicate(
+			[](const FWacomBattleCombatLogTurnSectionView& TurnSection)
+			{
+				return TurnSection.Groups.ContainsByPredicate(
+					[](const FWacomBattleCombatActivityGroupView& Group)
+					{
+						return Group.RootAction.SourceEventType == EBattleEventType::CardPlayed
+							&& Group.ResultRows.ContainsByPredicate(
+								[](const FWacomBattleCombatActivityRowView& Row)
+								{
+									return Row.SourceEventType == EBattleEventType::DamageDealt;
+								});
+					});
+			}));
+	const TArray<FWacomBattleCombatActivityRowView> ActivityAtTargetSubmit =
+		CombatLogFeed->GetVisibleActivityRowsForTest();
+	TestTrue(TEXT("Player root appears when the command presentation starts"),
+		ActivityAtTargetSubmit.ContainsByPredicate(
+			[](const FWacomBattleCombatActivityRowView& Row)
+			{
+				return Row.RowKind == EWacomBattleCombatActivityRowKind::RootAction
+					&& Row.SourceEventType == EBattleEventType::CardPlayed;
+			}));
+	TestFalse(TEXT("Resolved damage stays hidden before CommandOutcome"),
+		ActivityAtTargetSubmit.ContainsByPredicate(
+			[](const FWacomBattleCombatActivityRowView& Row)
+			{
+				return Row.RowKind == EWacomBattleCombatActivityRowKind::Result
+					&& Row.SourceEventType == EBattleEventType::DamageDealt;
+			}));
 
 	TestFalse(TEXT("PlayCard presentation plan closes the player action command gate"),
 		HUD->CanSubmitPlayerActionCommand());
@@ -271,6 +304,13 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 	TestEqual(TEXT("Target PlayCard stack entry drains"), HUD->GetPresentationStackEntryCountForTest(), 0);
 	TestTrue(TEXT("Player action command gate reopens after PlayCard presentation"),
 		HUD->CanSubmitPlayerActionCommand());
+	TestTrue(TEXT("Damage result appears once the outcome phase has been reached"),
+		CombatLogFeed->GetVisibleActivityRowsForTest().ContainsByPredicate(
+			[](const FWacomBattleCombatActivityRowView& Row)
+			{
+				return Row.RowKind == EWacomBattleCombatActivityRowKind::Result
+					&& Row.SourceEventType == EBattleEventType::DamageDealt;
+			}));
 
 	const int32 VersionBeforeNoTargetSubmit = Session->BuildSnapshot().Version;
 	WacomBattlePresentationQueueSpec::ReleaseNoTargetCardForTest(*HUD, NoTargetCardId);

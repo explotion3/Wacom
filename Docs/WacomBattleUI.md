@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-07-18
+updated: 2026-07-23
 tags:
   - wacom/ui
   - wacom/battle
@@ -35,9 +35,9 @@ BattleHUD 和表现层读取敌人状态时只使用 `FBattleSnapshot.Enemies`�
 | 命令提交 | `FWacomBattleHUDCommandController` | 玩家意图与目标校验、命令前 Snapshot / 表现上下文、构造并提交唯一 BattleSession command；不应用结果 |
 | 目标选择 | `FWacomBattleHUDTargetingController` | 维护 TargetSelect UI state、pending card 和点击入口 |
 | 场景敌人 | `FWacomBattleHUDSceneEnemyTargetCoordinator` | 同步当前 Trigger Host registry 的 typed Part Component、UI 与 cue |
-| 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier、EndTurn 与通用 command phase plan（普通弃牌 / Deck Step） |
+| 表现队列 | `FWacomBattleHUDPresentationCoordinator` | target cue、modal、card stack、turn-boundary barrier、EndTurn 与通用 command phase plan（普通弃牌 / Deck Step），并作为短时 Activity 的唯一语义表现时钟 |
 | 表现计时 | `FWacomBattlePresentationTimerOwner` | App-private keyed timer ownership；统一撤销 Queue Advance、Plan Poll 和 Stack Entry Exit，隔离 World teardown |
-| Combat Log / Activity | `FWacomBattleHUDCombatLogController` | 完整 history/回合分区、短时 activity batch 投影与 Footer 持久状态 |
+| Combat Log / Activity | `FWacomBattleHUDCombatLogController + FWacomBattleCombatActivitySynchronizer` | 完整 history/回合分区立即持久化；短时 activity 事务暂存、按表现进度释放，并维护 Footer 持久状态 |
 | Battle Secondary Panel | `FWacomBattleSecondaryPanelCoordinator` | `UI.Layer.GameMenu` 异步 Push、命令门控、关闭与战斗内详情偏好 |
 | First-person hand | `FWacomBattleHUDFirstPersonHandBridge + FWacomBattleFirstPersonDropResolver + FWacomBattleHandPresentationController + FWacomFirstPersonCardLayerPresentationFrame` | runtime hand presentation frame、drag preview/release、drop intent / hand-card affordance 解析、Drawn transaction |
 | Card Detail | `FWacomBattleHUDCardDetailController + FWacomFirstPersonCardDetailMotionController` | first-person viewport 详情 source guard、共享 motion / cache core |
@@ -96,7 +96,11 @@ HUD 状态入口：
 
 `UWacomBattleCombatLogBuilder` 同时生成两种 UI-only 投影。`FWacomBattleCombatLogBlockView` 是完整历史命令块；`FWacomBattleCombatActivityBatchView` 是常驻 HUD 的短时活动批次。两者消费同一 Command Context、Events 和 Pre/Post Snapshot，不修改 `WacomBattle` 事件，也不从本地化文案反推规则语义。
 
-`FWacomBattleHUDCombatLogController` 继续持有最多 80 个完整历史命令块，不再把整份历史反复提交给常驻 Feed。`UBattleCombatLogFeedWidget` 现在是固定 `140px` 裁切视口、完全非阻塞的流式活动播报器：玩家根行动显示玩家头像与卡名，敌人根行动显示 Intent 图标与名称，结果按事件顺序逐条进入；多目标结果不聚合。根行动从 Footer 最后行动槽所在的底部语义位出现，结果从该位置向上流动，越接近顶部越快淡出，不再对第四行做数据硬裁剪。当前根行动在全部结果发出前保持在底部行动槽；大批结果将错峰从 `0.16s` 自适应压缩至 `0.08s`。队列收束时根行动的文字与底板淡出，图标原位交接给可点击的 `LastActionButton`，而不是另行生成一枚重复图标。Footer 的沙漏与“表现已经推进到”的回合数始终显示；EndTurn 的新回合只在敌人行动批次播放完后更新。Battle 初始化仍立即建立详细日志的第 1 回合分区，但短时播报要等 Camera 与 Card Prewarm 两道 Entry Gate 都解除后才播放一次 UI-only 的“第 1 回合开始”；它不重复写入详细历史。战斗开始和开场抽牌等其它初始化事件仍不进入短时行。
+`FWacomBattleHUDCombatLogController` 继续持有最多 80 个完整历史命令块。一次成功命令只构建一份 Log Block 与 Activity Batch：完整 History 和 DetailsHistory 在规则结算后立即追加，因此表现尚在播放时打开详情也能看到完整事实；Activity Batch 则由 App-private `FWacomBattleCombatActivitySynchronizer` 暂存为 HUD 生命周期内单调递增的事务。`FWacomBattleHUDPresentationCoordinator` 是唯一语义表现时钟：plan 开始释放玩家根行动，phase 开始按精确 Event Sequence 释放普通结果，敌人动画 start 释放对应 `EnemyPartActed` 根行动，真实 Impact 在应用 `SnapshotAfter` 和命中反馈后释放该 Journal 范围的结果，首个 `TurnStart*` phase 开始前更新 Footer。重复进度幂等，多敌人 Journal 范围互不串组；Widget 重建只恢复已经释放的最后根行动和回合数，不能从已结算 Snapshot 泄露未来结果。
+
+`UBattleCombatLogFeedWidget` 是固定 `140px` 裁切视口、完全非阻塞的视觉播放器：玩家根行动显示玩家头像与卡名，敌人根行动显示 Intent 图标与名称，结果按事件顺序逐条进入；多目标结果不聚合。同一语义边界解锁的多条结果作为一个批次进入，视觉层继续按 `0.16s` 向 `0.08s` 自适应短错峰，不反向控制 coordinator。根行动从 Footer 最后行动槽所在的底部语义位出现，结果从该位置向上流动，越接近顶部越快淡出，不再对第四行做数据硬裁剪。当前根行动在已解锁结果发出前保持在底部行动槽；新语义根行动到达而旧错峰尚未排空时，先按事件顺序追平旧结果，再同步显示新根行动。队列收束时根行动的文字与底板淡出，图标原位交接给可点击的 `LastActionButton`，而不是另行生成一枚重复图标。`EnqueueCombatActivityBatch` Blueprint 接口保留给初始化、独立 Widget 和兼容测试；正式同步运行路径使用 C++-only 的 begin / append / complete 增量入口，不增加 WBP 制作负担。
+
+Activity 事务的失败策略按生命周期区分：空 plan 或 plan 拒绝立即 flush；正常完成、phase timeout 和 BattleEnd 正常收束 flush 未匹配行并输出开发诊断；Session 切换、HUD teardown 或明确清空 Battle 则 discard 事务并清空 Feed，防止跨战斗泄漏。Reduced Motion 与无 World 自动化仍发布相同语义进度，只缩短或跳过视觉等待。Footer 始终表示“表现已经推进到”的回合；EndTurn 在第一个可见 `TurnStart*` phase 开始前更新，没有可见 TurnStart phase 时在等价完成边界更新，不再等待 Feed 淡出或整个 Activity 播放耗尽。Battle 初始化仍立即建立详细日志的第 1 回合分区，但短时播报要等 Camera 与 Card Prewarm 两道 Entry Gate 都解除后才播放一次 UI-only 的“第 1 回合开始”；它不重复写入详细历史。战斗开始和开场抽牌等其它初始化事件仍不进入短时行。
 
 常驻播报的 Root 和临时 Row 都不命中；只有 Footer 的最后行动按钮可点击。按钮调用 `UBattleHUD::RequestOpenCombatLogDetails()`：HUD 仍广播 `OnCombatLogDetailsRequestedNative`，同时由 `FWacomBattleSecondaryPanelCoordinator` 向 `UI.Layer.GameMenu` 异步 Push `UWacomBattleCombatLogDetailsScreen`。Screen 打开时复制 Controller 的回合分区历史，不访问 `UBattleSession`，也不轮询规则状态。
 
