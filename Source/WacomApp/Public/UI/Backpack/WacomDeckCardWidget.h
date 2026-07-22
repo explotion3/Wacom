@@ -124,6 +124,8 @@ public:
 	void ApplyWorkspaceVisualState(const FWacomBackpackWorkspaceCardVisualState& VisualState);
 	void RequestBackpackCardFaceRender();
 	void SetBackpackCardFaceRetainedRenderingEnabled(bool bEnabled);
+	/** 统一缩放完整背包卡面；Workspace 必须同时用相同缩放计算布局与命中。 */
+	void SetBackpackCardDisplayScale(float InScale);
 	/** 仅供背包表现控制器使用；开启 Fake3D/表面视差并切换实时 Retainer。 */
 	void SetBackpackRealtimePresentation(
 		bool bEnabled,
@@ -232,6 +234,7 @@ private:
 	bool bHasAppliedBackpackRealtimePresentation = false;
 	FVector2D LastBackpackPresentationPointer = FVector2D::ZeroVector;
 	bool bLastBackpackPresentationCarrying = false;
+	float BackpackCardDisplayScale = 1.0f;
 	void RefreshWorkspaceHitTestVisibility();
 	FVector2D BackpackLocalMotionTranslation = FVector2D::ZeroVector;
 	float BackpackLocalMotionAngleDegrees = 0.0f;

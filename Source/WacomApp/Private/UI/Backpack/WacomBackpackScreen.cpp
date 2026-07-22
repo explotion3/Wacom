@@ -1257,8 +1257,9 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		return;
 	}
 	const FVector2D WorkspaceSize = WorkspaceWidget->GetLayoutSpaceSize();
+	const FVector2D CardDisplaySize = Style->GetCardDisplaySize();
 	const float AvailableStripWidth = FMath::Max(
-		Style->CardRenderSize.X,
+		CardDisplaySize.X,
 		WorkspaceSize.X - FMath::Max(0.0f, Style->PileEdgeMarginPixels) * 2.0f);
 	const TArray<FWacomBackpackCarriedStripLayout> Strip =
 		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
@@ -1267,7 +1268,7 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 			Carry.DefaultIndex,
 			Carry.PointerPosition,
 			AvailableStripWidth,
-			Style->CardRenderSize.X,
+			CardDisplaySize.X,
 			Style->FocusWindowMaximumCards,
 			Style->FocusWindowFullGapPixels,
 			Style->FocusWindowCompressedExposurePixels,
@@ -1287,7 +1288,7 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 			const FVector2D ClampedCenter = FWacomBackpackWorkspaceLayoutSolver::ClampCardCenterToVisibleBounds(
 				Strip[CarryIndex].Transform.CardCenter,
 				WorkspaceSize,
-				Style->CardRenderSize,
+				CardDisplaySize,
 				Style->MinimumVisibleFraction);
 			FWacomBackpackWorkspaceLayoutEntry Entry;
 			Entry.NormalizedPosition = FVector2D(

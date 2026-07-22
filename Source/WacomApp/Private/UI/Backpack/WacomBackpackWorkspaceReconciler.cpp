@@ -102,6 +102,7 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 
 	const int32 AlignedCardCount = FMath::Min3(
 		OrderedWidgets.Num(), Scene.Cards.Num(), Scene.CardLayouts.Num());
+	const FVector2D CardDisplaySize = ResolvedStyle.GetCardDisplaySize();
 	for (int32 Index = 0; Index < AlignedCardCount; ++Index)
 	{
 		UWacomDeckCardWidget* CardWidget = OrderedWidgets[Index].Get();
@@ -110,14 +111,15 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 			continue;
 		}
 		const FWacomBackpackResolvedLayout& Layout = Scene.CardLayouts[Index];
+		CardWidget->SetBackpackCardDisplayScale(ResolvedStyle.GetSafeCardDisplayScale());
 		if (!Workspace.HasCardBaseLayout(*CardWidget))
 		{
 			Workspace.PrimeCardBaseLayout(
-				*CardWidget, Layout.CardCenter, ResolvedStyle.CardRenderSize,
+				*CardWidget, Layout.CardCenter, CardDisplaySize,
 				Layout.AngleDegrees, Layout.LayerRank);
 		}
 		Workspace.ApplyCardBaseLayout(
-			*CardWidget, Layout.CardCenter, ResolvedStyle.CardRenderSize,
+			*CardWidget, Layout.CardCenter, CardDisplaySize,
 			Layout.AngleDegrees, Layout.LayerRank);
 		CardWidget->SetWorkspaceInteractionEnabled(Scene.Cards[Index].bWorkspaceInteractive);
 		CardWidget->SetWorkspaceReadOnlyKind(Scene.Cards[Index].ReadOnlyKind);

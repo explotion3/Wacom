@@ -97,8 +97,8 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 		TestNotNull(TEXT("Current carry card has a canvas slot"), CurrentSlot);
 		if (CurrentSlot)
 		{
-			TestTrue(TEXT("Carry focus strip keeps the formal fixed card size"),
-				CurrentSlot->GetSize().Equals(Style->CardRenderSize, 0.1f));
+			TestTrue(TEXT("Carry focus strip keeps the formal backpack display size"),
+				CurrentSlot->GetSize().Equals(Style->GetCardDisplaySize(), 0.1f));
 			int32 HighestZOrder = TNumericLimits<int32>::Lowest();
 			for (UWacomDeckCardWidget* Card : Cards)
 			{

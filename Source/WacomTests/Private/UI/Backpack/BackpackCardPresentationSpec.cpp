@@ -8,6 +8,7 @@
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "Cards/CardDefinition.h"
 #include "Components/CanvasPanel.h"
+#include "Components/ScaleBox.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
@@ -31,6 +32,7 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 
 	TStrongObjectPtr<UCardDefinition> Definition(NewObject<UCardDefinition>());
 	Definition->CardId = TEXT("Backpack.Presentation.Budget");
+	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
 	TArray<TStrongObjectPtr<UWacomDeckCardWidget>> OwnedCards;
 	TArray<TSharedPtr<SWidget>> OwnedCardSlates;
 	TArray<TWeakObjectPtr<UWacomDeckCardWidget>> Cards;
@@ -39,6 +41,7 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 		TStrongObjectPtr<UWacomDeckCardWidget> Card(
 			NewObject<UWacomDeckCardWidget>(GetTransientPackage(), DeckCardClass));
 		OwnedCardSlates.Add(Card->TakeWidget());
+		Card->SetBackpackCardDisplayScale(Style->GetSafeCardDisplayScale());
 		FCardInstance Instance;
 		Instance.InstanceId = FGuid(Index + 1, 22, 33, 44);
 		Instance.Definition = Definition.Get();
@@ -57,6 +60,17 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 	UWacomFirstPersonCardViewWidget* SecondFace = CardFace(*OwnedCards[1]);
 	TestNotNull(TEXT("First DeckCard hosts WBP_FPCardView"), FirstFace);
 	TestNotNull(TEXT("Second DeckCard hosts WBP_FPCardView"), SecondFace);
+	UScaleBox* FirstScaleBox = Cast<UScaleBox>(
+		OwnedCards[0]->GetWidgetFromName(TEXT("CardFaceScaleBox")));
+	TestNotNull(TEXT("Formal DeckCard exposes its uniform face scale host"), FirstScaleBox);
+	if (FirstScaleBox)
+	{
+		TestTrue(TEXT("DeckCard applies the fixed backpack display scale at runtime"),
+			FMath::IsNearlyEqual(
+				FirstScaleBox->GetUserSpecifiedScale(),
+				Style->GetSafeCardDisplayScale(),
+				0.001f));
+	}
 	if (!FirstFace || !SecondFace)
 	{
 		return false;
@@ -82,7 +96,6 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 		StableFaceBaseline.RetainedRenderingApplyCount);
 
 	FWacomBackpackWorkspaceMotionCoordinator Controller;
-	const UWacomBackpackWorkspaceStyle* Style = GetDefault<UWacomBackpackWorkspaceStyle>();
 	Controller.Reconcile(
 		Cards,
 		OwnedCards[0].Get(),

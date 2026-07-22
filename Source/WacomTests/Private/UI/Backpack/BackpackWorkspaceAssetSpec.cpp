@@ -98,6 +98,10 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 	{
 		TestTrue(TEXT("Backpack uses the authored Battle card body size"),
 			Style->CardRenderSize.Equals(FVector2D(296.0f, 420.0f), 0.1f));
+		TestTrue(TEXT("Backpack applies its own fixed display scale"),
+			FMath::IsNearlyEqual(Style->CardDisplayScale, 0.78f, 0.001f));
+		TestTrue(TEXT("Backpack layout size matches its displayed card face"),
+			Style->GetCardDisplaySize().Equals(FVector2D(230.88f, 327.6f), 0.1f));
 	}
 
 	TestTrue(TEXT("Formal screen uses BackpackScreen parent"),
@@ -340,7 +344,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			CardFaceScaleBox->GetStretch(),
 			EStretch::UserSpecified);
 		TestTrue(
-			TEXT("Backpack preserves the full authored Battle card face size"),
+			TEXT("DeckCard asset keeps unit authoring scale for runtime Style control"),
 			FMath::IsNearlyEqual(CardFaceScaleBox->GetUserSpecifiedScale(), 1.0f));
 		TestEqual(
 			TEXT("Card face is the scale box content"),

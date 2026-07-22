@@ -572,7 +572,7 @@ bool UWacomBackpackWorkspaceWidget::BeginPileCollapseAnimation(
 			HeaderTopLeft,
 			HeaderSize,
 			GetLayoutSpaceSize(),
-			Style->CardRenderSize,
+			Style->GetCardDisplaySize(),
 			false,
 			Style->PileCollapsedExposurePixels,
 			Style->HandLensFullGapPixels,
@@ -769,7 +769,7 @@ bool UWacomBackpackWorkspaceWidget::RebuildExpandedPileFocusLayout()
 			NeutralLayouts.Num(),
 			ExpandedPileFocus.LensFocus,
 			ExpandedPileFocus.CorridorRect,
-			Style->CardRenderSize,
+			Style->GetCardDisplaySize(),
 			NeutralLayouts,
 			Style->HandLensFullGapPixels,
 			Style->HandLensCompressedExposurePixels,
@@ -812,7 +812,7 @@ bool UWacomBackpackWorkspaceWidget::RebuildExpandedPileFocusLayout()
 		}
 		FWacomBackpackWorkspaceCardLayout& Target = GetVisualState().ExpandedFocusLayouts().Add(Card);
 		Target.Center = Layout.Cards[Index].CardCenter;
-		Target.Size = Style->CardRenderSize;
+		Target.Size = Style->GetCardDisplaySize();
 		Target.AngleDegrees = Layout.Cards[Index].AngleDegrees;
 		Target.ZOrder = 6000 + Layout.Cards[Index].LayerRank;
 		if (Layout.VisibleBands.IsValidIndex(Index))
@@ -846,8 +846,8 @@ void UWacomBackpackWorkspaceWidget::SyncExpandedPileHitLayouts(bool bUseFocusedT
 		}
 		FVector2D Center = Entry.NeutralCenter;
 		FVector2D Size = InteractionStyle.IsValid()
-			? InteractionStyle->CardRenderSize
-			: GetDefault<UWacomBackpackWorkspaceStyle>()->CardRenderSize;
+			? InteractionStyle->GetCardDisplaySize()
+			: GetDefault<UWacomBackpackWorkspaceStyle>()->GetCardDisplaySize();
 		float AngleDegrees = Entry.NeutralAngleDegrees;
 		int32 LayerRank = Entry.NeutralLayerRank;
 		if (const FWacomBackpackWorkspaceCardLayout* Frozen = GetVisualState().SelectionFrozenLayouts().Find(Card))
@@ -2918,8 +2918,9 @@ void UWacomBackpackWorkspaceWidget::RebuildCarryStripLayout()
 	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
 		? InteractionStyle.Get()
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	const FVector2D CardDisplaySize = Style->GetCardDisplaySize();
 	const float AvailableWidth = FMath::Max(
-		Style->CardRenderSize.X,
+		CardDisplaySize.X,
 		GetLayoutSpaceSize().X - FMath::Max(0.0f, Style->PileEdgeMarginPixels) * 2.0f);
 	const TArray<FWacomBackpackCarriedStripLayout> Strip =
 		FWacomBackpackWorkspaceLayoutSolver::BuildCarriedFocusWindowLayout(
@@ -2928,7 +2929,7 @@ void UWacomBackpackWorkspaceWidget::RebuildCarryStripLayout()
 			Carry.DefaultIndex,
 			FVector2D::ZeroVector,
 			AvailableWidth,
-			Style->CardRenderSize.X,
+			CardDisplaySize.X,
 			Style->FocusWindowMaximumCards,
 			Style->FocusWindowFullGapPixels,
 			Style->FocusWindowCompressedExposurePixels,
@@ -2968,7 +2969,7 @@ void UWacomBackpackWorkspaceWidget::RebuildCarryStripLayout()
 				: Strip[Index].Transform.LayerRank;
 			FWacomBackpackWorkspaceCardLayout TargetBase;
 			TargetBase.Center = Strip[Index].Transform.CardCenter;
-			TargetBase.Size = Style->CardRenderSize;
+			TargetBase.Size = CardDisplaySize;
 			TargetBase.AngleDegrees = Strip[Index].Transform.AngleDegrees;
 			TargetBase.ZOrder = CarryZOrder;
 			ApplyCardLayout(

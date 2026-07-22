@@ -1350,6 +1350,7 @@ UWacomBackpackWorkspaceStyle* BuildWorkspaceStyle(const FBackpackVisualAssets& A
 	Style->DestructiveAppearance.IconBrush = MakeBackpackIconBrush(Assets.DeleteIcon);
 	Style->DestructiveAppearance.FrameBrush = MakeBackpackFrameBrush(Assets.DeleteFrame);
 	Style->CardRenderSize = FVector2D(296.0f, 420.0f);
+	Style->CardDisplayScale = 0.78f;
 	Style->MinimumVisibleFraction = 0.3f;
 	Style->DefaultCardSpacing = FVector2D(36.0f, 44.0f);
 	Style->WorkspacePadding = FVector2D(56.0f, 56.0f);

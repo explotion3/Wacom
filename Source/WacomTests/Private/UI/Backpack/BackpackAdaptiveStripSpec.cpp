@@ -66,7 +66,7 @@ bool FWacomUIBackpackHandLensStripLayoutSpec::RunTest(const FString& Parameters)
 						CardCount,
 						Focus,
 						Corridor,
-						Style->CardRenderSize,
+						Style->GetCardDisplaySize(),
 						Bases,
 						Style->HandLensFullGapPixels,
 						Style->HandLensCompressedExposurePixels,
@@ -93,9 +93,9 @@ bool FWacomUIBackpackHandLensStripLayoutSpec::RunTest(const FString& Parameters)
 					TestTrue(TEXT("Hand Lens cards remain unrotated"),
 						FMath::IsNearlyZero(Card.AngleDegrees));
 					TestTrue(TEXT("Every card remains inside the stable corridor"),
-						Card.CardCenter.X - Style->CardRenderSize.X * 0.5f
+						Card.CardCenter.X - Style->GetCardDisplaySize().X * 0.5f
 							>= Corridor.Left - 0.1f
-						&& Card.CardCenter.X + Style->CardRenderSize.X * 0.5f
+						&& Card.CardCenter.X + Style->GetCardDisplaySize().X * 0.5f
 							<= Corridor.Right + 0.1f);
 					if (Index > 0)
 					{
@@ -114,7 +114,7 @@ bool FWacomUIBackpackHandLensStripLayoutSpec::RunTest(const FString& Parameters)
 	}
 
 	const int32 FittingCount = 3;
-	const float FullWidth = FittingCount * Style->CardRenderSize.X
+	const float FullWidth = FittingCount * Style->GetCardDisplaySize().X
 		+ (FittingCount - 1) * Style->HandLensFullGapPixels;
 	const FSlateRect FittingCorridor(0.0f, 0.0f, FullWidth + 80.0f, 420.0f);
 	const FWacomBackpackHandLensStripLayout AllFit =
@@ -122,7 +122,7 @@ bool FWacomUIBackpackHandLensStripLayoutSpec::RunTest(const FString& Parameters)
 			FittingCount,
 			1.0f,
 			FittingCorridor,
-			Style->CardRenderSize,
+			Style->GetCardDisplaySize(),
 			BuildHorizontalBases(FittingCount, 210.0f),
 			Style->HandLensFullGapPixels,
 			Style->HandLensCompressedExposurePixels,
@@ -139,7 +139,7 @@ bool FWacomUIBackpackHandLensStripLayoutSpec::RunTest(const FString& Parameters)
 			FVector2D(48.0f, 120.0f),
 			FVector2D(260.0f, 48.0f),
 			FVector2D(1920.0f, 1080.0f),
-			Style->CardRenderSize,
+			Style->GetCardDisplaySize(),
 			true,
 			Style->PileCollapsedExposurePixels,
 			Style->HandLensFullGapPixels,
@@ -155,10 +155,10 @@ bool FWacomUIBackpackHandLensStripLayoutSpec::RunTest(const FString& Parameters)
 	if (StablePile.Cards.Num() > 0)
 	{
 		const float FocusedCardTop = StablePile.Cards[0].CardCenter.Y
-			- Style->CardRenderSize.Y * 0.5f
+			- Style->GetCardDisplaySize().Y * 0.5f
 			- Style->ExpandedCardHoverLiftPixels;
 		const float FocusedCardBottom = StablePile.Cards[0].CardCenter.Y
-			+ Style->CardRenderSize.Y * 0.5f
+			+ Style->GetCardDisplaySize().Y * 0.5f
 			- Style->ExpandedCardHoverLiftPixels;
 		const bool bHeaderClear = FocusedCardTop >= StablePile.HeaderRect.Bottom + 7.9f
 			|| FocusedCardBottom <= StablePile.HeaderRect.Top - 7.9f;
@@ -186,7 +186,7 @@ bool FWacomUIBackpackCarryFocusWindowCompatibilitySpec::RunTest(const FString& P
 			14,
 			Pointer,
 			1600.0f,
-			Style->CardRenderSize.X,
+			Style->GetCardDisplaySize().X,
 			Style->FocusWindowMaximumCards,
 			Style->FocusWindowFullGapPixels,
 			Style->FocusWindowCompressedExposurePixels,
@@ -201,10 +201,10 @@ bool FWacomUIBackpackCarryFocusWindowCompatibilitySpec::RunTest(const FString& P
 			&& FMath::IsNearlyEqual(Carry[7].Transform.CardCenter.X, Pointer.X, 0.1f));
 	TestTrue(TEXT("The immediate left card stays in the compressed segment"),
 		Carry.IsValidIndex(6)
-			&& Pointer.X - Carry[6].Transform.CardCenter.X < Style->CardRenderSize.X);
+			&& Pointer.X - Carry[6].Transform.CardCenter.X < Style->GetCardDisplaySize().X);
 	TestTrue(TEXT("The immediate right card stays in the compressed segment"),
 		Carry.IsValidIndex(8)
-			&& Carry[8].Transform.CardCenter.X - Pointer.X < Style->CardRenderSize.X);
+			&& Carry[8].Transform.CardCenter.X - Pointer.X < Style->GetCardDisplaySize().X);
 	return true;
 }
 
@@ -228,7 +228,7 @@ bool FWacomUIBackpackHandLensStripInteractionSpec::RunTest(const FString& Parame
 			FVector2D(120.0f, 20.0f),
 			FVector2D(260.0f, 48.0f),
 			FVector2D(1280.0f, 720.0f),
-			Style->CardRenderSize,
+			Style->GetCardDisplaySize(),
 			true,
 			Style->PileCollapsedExposurePixels,
 			Style->HandLensFullGapPixels,
@@ -254,7 +254,7 @@ bool FWacomUIBackpackHandLensStripInteractionSpec::RunTest(const FString& Parame
 		Workspace->PrimeCardBaseLayout(
 			*Card,
 			Initial.Cards[Index].CardCenter,
-			Style->CardRenderSize,
+			Style->GetCardDisplaySize(),
 			0.0f,
 			3000 + Initial.Cards[Index].LayerRank);
 		FWacomBackpackExpandedPileFocusCard& Focus = FocusCards.AddDefaulted_GetRef();
@@ -352,7 +352,7 @@ bool FWacomUIBackpackHandLensStripShiftLockSpec::RunTest(const FString& Paramete
 				FVector2D(120.0f, 20.0f),
 				FVector2D(260.0f, 48.0f),
 				FVector2D(1920.0f, 1080.0f),
-				Style->CardRenderSize,
+				Style->GetCardDisplaySize(),
 				true,
 				Style->PileCollapsedExposurePixels,
 				Style->HandLensFullGapPixels,
@@ -381,7 +381,7 @@ bool FWacomUIBackpackHandLensStripShiftLockSpec::RunTest(const FString& Paramete
 			Workspace->PrimeCardBaseLayout(
 				*Card,
 				Initial.Cards[Index].CardCenter,
-				Style->CardRenderSize,
+				Style->GetCardDisplaySize(),
 				0.0f,
 				3000 + Initial.Cards[Index].LayerRank);
 			FWacomBackpackExpandedPileFocusCard& Focus = FocusCards.AddDefaulted_GetRef();
@@ -442,9 +442,18 @@ bool FWacomUIBackpackHandLensStripShiftLockSpec::RunTest(const FString& Paramete
 		TestTrue(TEXT("Shift release immediately resumes from the latest pointer"),
 			AfterRelease.ExpandedPileLensFocus
 				> static_cast<float>(CardCount - 1) - 0.1f);
-		TestEqual(TEXT("Immediate resume rebuilds the changed Hand Lens segment once"),
+		const bool bSegmentChanged =
+			AfterRelease.ExpandedPileLensLeftStackCount
+				!= WhileLocked.ExpandedPileLensLeftStackCount
+			|| AfterRelease.ExpandedPileLensExpandedStartIndex
+				!= WhileLocked.ExpandedPileLensExpandedStartIndex
+			|| AfterRelease.ExpandedPileLensExpandedCardCount
+				!= WhileLocked.ExpandedPileLensExpandedCardCount
+			|| AfterRelease.ExpandedPileLensRightStackCount
+				!= WhileLocked.ExpandedPileLensRightStackCount;
+		TestEqual(TEXT("Immediate resume rebuilds only when the Hand Lens segment changes"),
 			AfterRelease.ExpandedPileFocusLayoutRebuildCount,
-			WhileLocked.ExpandedPileFocusLayoutRebuildCount + 1);
+			WhileLocked.ExpandedPileFocusLayoutRebuildCount + (bSegmentChanged ? 1 : 0));
 
 		FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointerWithShiftState(
 			*Workspace, LeftPointer, false, true);

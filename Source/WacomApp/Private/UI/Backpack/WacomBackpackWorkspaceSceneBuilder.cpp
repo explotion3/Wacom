@@ -238,9 +238,10 @@ FWacomBackpackWorkspaceScene FWacomBackpackWorkspaceSceneBuilder::Build(
 	}
 	Scene.FluxCardCount = Scene.Cards.Num();
 
+	const FVector2D CardDisplaySize = Style.GetCardDisplaySize();
 	const FVector2D HeaderSize(FMath::Max(260.0f, Style.PileCollapsedSize.X), 48.0f);
 	const FVector2D DefaultPileFootprint(
-		HeaderSize.X, HeaderSize.Y + Style.CardRenderSize.Y + 24.0f);
+		HeaderSize.X, HeaderSize.Y + CardDisplaySize.Y + 24.0f);
 	TArray<FSlateRect> OccupiedHeaders;
 	TArray<FSlateRect> Obstacles;
 	int32 MovablePileIndex = 0;
@@ -285,7 +286,7 @@ FWacomBackpackWorkspaceScene FWacomBackpackWorkspaceSceneBuilder::Build(
 		Pile.CardCount = Scene.Cards.Num() - Pile.CardStartIndex;
 		Pile.ContentLayout = FWacomBackpackWorkspaceLayoutSolver::BuildPileContentLayout(
 			Pile.CardCount, HeaderTopLeft, HeaderSize, WorkspaceSize,
-			Style.CardRenderSize, PileView.bExpanded,
+			CardDisplaySize, PileView.bExpanded,
 			Style.PileCollapsedExposurePixels, Style.HandLensFullGapPixels,
 			Style.HandLensCompressedExposurePixels,
 			Style.HandLensMinimumExposurePixels,
@@ -314,7 +315,7 @@ FWacomBackpackWorkspaceScene FWacomBackpackWorkspaceSceneBuilder::Build(
 	Scene.CardLayouts.SetNum(Scene.Cards.Num());
 	const TArray<FWacomBackpackResolvedLayout> FluxDefaults =
 		FWacomBackpackWorkspaceLayoutSolver::BuildDefaultLayoutAvoidingRectangles(
-			Scene.FluxCardCount, WorkspaceSize, Style.CardRenderSize,
+			Scene.FluxCardCount, WorkspaceSize, CardDisplaySize,
 			Style.DefaultCardSpacing, Style.WorkspacePadding, Obstacles);
 	for (int32 Index = 0; Index < Scene.FluxCardCount; ++Index)
 	{
@@ -330,7 +331,7 @@ FWacomBackpackWorkspaceScene FWacomBackpackWorkspaceSceneBuilder::Build(
 			if (Manual->bHasManualPlacement)
 			{
 				Resolved = FWacomBackpackWorkspaceLayoutSolver::ResolveManualLayout(
-					*Manual, WorkspaceSize, Style.CardRenderSize,
+					*Manual, WorkspaceSize, CardDisplaySize,
 					Style.MinimumVisibleFraction);
 			}
 		}

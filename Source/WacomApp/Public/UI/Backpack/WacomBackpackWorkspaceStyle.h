@@ -93,14 +93,26 @@ public:
 	UWacomBackpackWorkspaceStyle();
 
 	const FWacomBackpackZoneAppearance& ResolveZoneAppearance(EZoneKind Zone) const;
+	float GetSafeCardDisplayScale() const
+	{
+		return FMath::Max(CardDisplayScale, 0.01f);
+	}
+	FVector2D GetCardDisplaySize() const
+	{
+		return CardRenderSize * GetSafeCardDisplayScale();
+	}
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Version",
 		meta = (ToolTip = "背包工作台 Style 资产版本。版本 3 引入通用区域视觉、响应式详情栏和完整投放反馈；仅允许通过明确的白名单资产迁移修改已有资产。"))
 	int32 AssetVersion = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Layout",
-		meta = (ToolTip = "工作台卡牌渲染尺寸，单位为像素。默认 296×420，与 Battle 的正式卡牌主体制作尺寸一致；会影响默认布局、框选中心和边界约束，不改变规则。"))
+		meta = (ToolTip = "工作台卡牌的原生渲染尺寸，单位为像素。默认 296×420，与 Battle 正式卡面制作尺寸一致；最终布局和命中尺寸还会乘以 CardDisplayScale。"))
 	FVector2D CardRenderSize = FVector2D(296.0f, 420.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Layout",
+		meta = (ToolTip = "背包卡牌统一显示缩放。默认 0.78，推荐 0.68–0.9；卡面、布局、命中、框选、Hand Lens 与 Carry 会共同使用该值，不影响 Battle 卡牌尺寸。必须大于 0。", ClampMin = "0.01"))
+	float CardDisplayScale = 0.78f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Layout",
 		meta = (ToolTip = "卡牌放下后必须留在工作台内的最小可见比例。合法范围 0–1，推荐 0.3；会影响边界夹紧，不影响卡牌命中尺寸。", ClampMin = "0.0", ClampMax = "1.0"))
@@ -135,7 +147,7 @@ public:
 	float ExpandedCardHoverLiftPixels = 36.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Hand Lens Strip",
-		meta = (ToolTip = "展开牌堆 Hand Lens 完整卡之间的边缘间隔，单位为像素。版本 2 基线 24，推荐 0–32；不改变 296×420 卡面尺寸。"))
+		meta = (ToolTip = "展开牌堆 Hand Lens 完整卡之间的边缘间隔，单位为像素。版本 2 基线 24，推荐 0–32；不改变 CardDisplayScale 统一显示尺寸。"))
 	float HandLensFullGapPixels = 24.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Hand Lens Strip",
@@ -155,7 +167,7 @@ public:
 	int32 FocusWindowMaximumCards = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",
-		meta = (ToolTip = "中央窗口内完整卡面之间的边缘间隔，单位为像素。默认 24，推荐 8–32；不改变 296×420 卡面尺寸。"))
+		meta = (ToolTip = "中央窗口内完整卡面之间的边缘间隔，单位为像素。默认 24，推荐 8–32；不改变 CardDisplayScale 统一显示尺寸。"))
 	float FocusWindowFullGapPixels = 24.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Focus Window Strip",

@@ -30,7 +30,7 @@ Run Snapshot / revision
 | `WBP_BackpackCardDetailPanel` | `UWacomCardDetailPanel`；背包专用中性检查栏外观，继续消费通用 `FWacomCardDetailViewData` |
 | `WBP_BackpackScreen.WorkspaceStyle` | 指向 `DA_BackpackWorkspaceStyle` 的普通资产引用；禁止在 Widget Blueprint 根详情中内联 UObject |
 | `DA_BackpackWorkspaceStyle` | `UWacomBackpackWorkspaceStyle`；工作台布局、牌堆、颜色和动效的正式运行时制作入口 |
-| `WBP_WacomDeckCardWidget` | 背包卡牌外壳；`CardFaceScaleBox=1.0`，内部直接承载现有 `WBP_FPCardView` |
+| `WBP_WacomDeckCardWidget` | 背包卡牌外壳；`CardFaceScaleBox` 制作基线为 `1.0`，运行时按 Style 的统一显示缩放承载现有 `WBP_FPCardView` |
 
 `UWacomBackpackZonePileWidget` 保留行为等价的 C++ 被动 fallback，但正式制作必须使用 `WBP_BackpackZonePile`。旧 `UWacomBackpackPilePreviewWidget`、Preview ViewData、`PilePreviewWidgetClass` 和 `PreviewHost` 已删除；不得重新创建缩略卡链路。
 
@@ -100,12 +100,12 @@ ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折�
 
 - 备战区、特殊区是可移动普通牌堆；负重区是右上固定警告牌匣，销毁区固定在右下。
 - 折叠与展开复用同一批完整 `UWacomDeckCardWidget`；不得在展开时复制、替换或临时创建另一套卡牌。
-- 折叠牌堆显示全部真实卡面：固定 `296×420` Battle 主体逻辑尺寸、`1.0` 卡面缩放、零旋转、水平露出默认 `16px`（可在 `10–24px` 内适配），最前卡完整显示。
+- 折叠牌堆显示全部真实卡面：复用 `296×420` Battle 原生卡面，以 `CardDisplayScale=0.78` 的固定背包显示缩放得到约 `231×328` 的布局与命中尺寸；卡牌零旋转、水平露出默认 `16px`（可在 `10–24px` 内适配），最前卡完整显示。
 - 特殊区第一张是真实主卡身份预览，之后是全部内容卡；主卡不可操作但保持正常不透明度并显示“主卡”标识。负重区显示全部负重卡并保持锁定。
 - 备战实体卡和投影卡都常驻；投影卡保持只读、`0.72` 透明度和来源角标。
 - 备战投影卡在展开区保持只读、半透明并显示来源角标，不参与选择、框选、携带或批量移动。
 - 只有标题拖柄可移动整堆；标题或牌堆主体短点切换展开，内容区域拖动则在超过默认 `5px` 阈值后切换为该来源区框选，打开新堆时旧堆先收拢。
-- 同时只展开一个牌堆。展开卡保持 `296×420` Battle 主体逻辑尺寸、卡面 `1.0` 固定缩放和零旋转，不使用滚动或裁切；布局由“左压缩堆 + 中央完整窗口 + 右压缩堆”组成，空间不足时减少完整窗口卡数并压缩外围露出，绝不缩放卡面。
+- 同时只展开一个牌堆。展开卡继续使用统一的固定背包显示缩放和零旋转，不使用滚动、裁切或按牌堆高度动态缩放；布局由“左压缩堆 + 中央完整窗口 + 右压缩堆”组成，空间不足时减少完整窗口卡数并压缩外围露出。
 - 展开的备战区、特殊区和负重区使用 `HandLensStrip`：空间足够时全部卡牌完整居中展示；空间不足时形成“左压缩堆 + 动态完整区 + 右压缩堆”。布局由鼠标在整条稳定走廊中的连续横向位置驱动，不再限制固定 `1–5` 张。完整卡默认间隔 `24px`，外围期望露出 `59px`、严格下限 `16px`；严格布局仍有空间时可在边界重叠不超过 `178px` 的前提下优先从右、再从左提升一张完整卡。折叠牌堆保持原固定布局。
 - 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。展开牌堆只消费 `HandLensFullGapPixels / HandLensCompressedExposurePixels / HandLensMinimumExposurePixels / HandLensPromotionOverlapTolerancePixels`；`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 保留给多卡携带，用户制作值互不覆盖。多卡携带的 `FocusWindowMaximumCards` 正式基线为 `1`，因此只完整展示当前滚轮卡，其余卡进入左右压缩段；仍可在 Style 中调高以同时完整展示相邻卡。Style 版本 3 增加 `BattleDeckAppearance / SpecialZoneAppearance / BurdenZoneAppearance / DestructiveAppearance`、投放反馈透明度和详情响应式尺寸；已有运动和用户微调值不变。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按当前基线创建，已有资产只能通过带版本条件和 Package 白名单的定向迁移升级。
 - 牌堆身份使用颜色、单色图标和轮廓三重编码：备战冷蓝双线框、特殊紫色切角框、负重琥珀加重警示框、销毁红色破损卡牌与危险框。图标和九宫格纹理由 Builder 在缺失时确定性创建，Style Brush 保持可着色；不得在卡牌材质或 Run 规则中硬编码区域主题。
@@ -139,7 +139,7 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 
 ## Retainer 与卡面
 
-完整工作台卡直接复用 Battle 的 `WBP_FPCardView`，因此沿用同一张卡面的边框、费用、稀有度、Fake3D、视差、接触阴影和表面材质；不复用 Battle Slot、发牌、出牌、目标、溶解或 transition hint 状态机。`WBP_WacomDeckCardWidget` 必须提供 `CardMotionRoot`，包装完整卡面、反馈和角标，用局部 Translation / Angle 表达 Hover、拾起、滚轮当前卡和 Settlement；外层 Canvas 始终只表达基础布局。卡面保持固定 `296×420` Battle 主体逻辑尺寸、`CardFaceScaleBox=1.0`、单位 Render Scale 和完全不透明根节点；不能根据 Workspace 高度连续改写缩放。滚轮切换时，新当前卡必须在 `CarryActiveLayer` 内获得独占最高 ZOrder；上一张卡可以暂留活动层完成回落，但不得遮挡新当前卡。
+完整工作台卡直接复用 Battle 的 `WBP_FPCardView`，因此沿用同一张卡面的边框、费用、稀有度、Fake3D、视差、接触阴影和表面材质；不复用 Battle Slot、发牌、出牌、目标、溶解或 transition hint 状态机。`WBP_WacomDeckCardWidget` 必须提供 `CardMotionRoot`，包装完整卡面、反馈和角标，用局部 Translation / Angle 表达 Hover、拾起、滚轮当前卡和 Settlement；外层 Canvas 始终只表达基础布局。卡面原生制作尺寸保持 `296×420`，`CardFaceScaleBox` 资产制作值保持 `1.0`，运行时统一应用 `CardDisplayScale`（基线 `0.78`）；布局、视觉卡身、命中、框选、Hand Lens 与 Carry 必须共同使用缩放后的尺寸。该缩放独立于 Battle/Run `PresentationScale`，也不能根据 Workspace 高度连续改写。滚轮切换时，新当前卡必须在 `CarryActiveLayer` 内获得独占最高 ZOrder；上一张卡可以暂留活动层完成回落，但不得遮挡新当前卡。
 
 `WBP_BackpackScreen` 的 `WorkspaceStyle` 必须是指向 `DA_BackpackWorkspaceStyle` 的非 `Instanced` 资产引用。制作时从 Class Defaults 双击引用资产调整布局、牌列、颜色和动效参数。不得把 `UWacomBackpackWorkspaceStyle` 标记为 `EditInlineNew / DefaultToInstanced`，也不得在 Screen 属性上使用 `Instanced / ShowOnlyInnerProperties`；这些内联对象合同会让 UE 5.8 Widget Blueprint 的 PropertyEditor 在构建根节点详情时递归生成分类树并导致栈溢出。
 

@@ -19,6 +19,7 @@ void UWacomDeckCardWidget::NativeConstruct()
 	Super::NativeConstruct();
 
 	RefreshContentFromCard();
+	SetBackpackCardDisplayScale(BackpackCardDisplayScale);
 	bHasAppliedBackpackRealtimePresentation = false;
 	SetBackpackRealtimePresentation(
 		bBackpackRealtimePresentationEnabled,
@@ -137,6 +138,26 @@ void UWacomDeckCardWidget::SetBackpackCardFaceRetainedRenderingEnabled(bool bEna
 	if (BackpackCardView)
 	{
 		BackpackCardView->SetRetainedRenderingEnabled(bEnabled);
+	}
+}
+
+void UWacomDeckCardWidget::SetBackpackCardDisplayScale(float InScale)
+{
+	const float SafeScale = FMath::Max(InScale, 0.01f);
+	if (FMath::IsNearlyEqual(BackpackCardDisplayScale, SafeScale, 0.0001f)
+		&& (!CardFaceScaleBox
+			|| FMath::IsNearlyEqual(
+				CardFaceScaleBox->GetUserSpecifiedScale(), SafeScale, 0.0001f)))
+	{
+		return;
+	}
+	BackpackCardDisplayScale = SafeScale;
+	if (CardFaceScaleBox)
+	{
+		CardFaceScaleBox->SetStretch(EStretch::UserSpecified);
+		CardFaceScaleBox->SetStretchDirection(EStretchDirection::Both);
+		CardFaceScaleBox->SetUserSpecifiedScale(BackpackCardDisplayScale);
+		InvalidateLayoutAndVolatility();
 	}
 }
 
