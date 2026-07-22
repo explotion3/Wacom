@@ -22,7 +22,7 @@
 
 namespace
 {
-	const FHandCardSnapshot* FindHandCard(
+	const FHandCardSnapshot* FindHandCardForSceneEnemyTarget(
 		const FBattleSnapshot& Snapshot, const FGuid& InstanceId)
 	{
 		return Snapshot.Hand.Cards.FindByPredicate(
@@ -910,7 +910,7 @@ bool FWacomBattleHUDSceneEnemyTargetCoordinator::TryBuildHoverTargetPreviewConte
 	const UBattleSession* Session = Runtime.GetSession();
 	if (!Session || !Runtime.HasLastBattleSnapshot()) return false;
 	const FBattleSnapshot& Snapshot = Runtime.GetLastBattleSnapshot();
-	if (!FindHandCard(Snapshot, Runtime.GetPendingTargetingCardId())) return false;
+	if (!FindHandCardForSceneEnemyTarget(Snapshot, Runtime.GetPendingTargetingCardId())) return false;
 	OutActionPreview = Session->BuildCardActionPreview(
 		Runtime.GetPendingTargetingCardId(), TargetHandle);
 	return true;

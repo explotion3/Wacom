@@ -66,6 +66,7 @@ public:
 	{
 		return bFirstPersonCardDragActiveForBattleSceneHover;
 	}
+	bool TryGetActiveTargetSelectionCardId(FGuid& OutCardInstanceId) const;
 
 	UWacomFirstPersonCardAnchorComponent* ResolveAnchor() const;
 	UWacomFirstPersonCardAnchorComponent* ResolveActiveAnchor() const;
@@ -173,6 +174,7 @@ private:
 	void ApplyDragCameraLookOverrideToBattleCamera(
 		const FWacomFirstPersonCardDragView& DragView);
 	void ClearDragCameraLookOverride();
+	void RefreshWorldTargetAvailability();
 
 	FWacomBattleHUDRuntime& Runtime;
 	FWacomBattleFirstPersonDropResolver DropResolver;
@@ -191,6 +193,7 @@ private:
 	bool bHasActiveActionPreviewRequestKey = false;
 	bool bHasActiveDragView = false;
 	bool bHasActiveCardTargetHandle = false;
+	FGuid PublishedTargetSelectionCardInstanceId;
 	float PendingHandAnchorEnterFrameElapsedSeconds = 0.0f;
 
 	const FHandCardSnapshot* FindLastBattleHandCardSnapshot(const FGuid& CardInstanceId) const;

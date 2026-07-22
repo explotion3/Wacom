@@ -12,6 +12,7 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
+#include "UObject/UObjectGlobals.h"
 
 namespace WacomBattleEnemyPartImpactFeedbackPrivate
 {
@@ -260,9 +261,13 @@ UNiagaraComponent* FWacomBattleEnemyPartImpactFeedbackController::ResolveOrCreat
 	UNiagaraComponent* Component = NiagaraComponent.Get();
 	if (!Component)
 	{
+		const FName ComponentName = MakeUniqueObjectName(
+			Owner,
+			UNiagaraComponent::StaticClass(),
+			TEXT("WacomEnemyPartImpactNiagara"));
 		Component = NewObject<UNiagaraComponent>(
 			Owner,
-			TEXT("WacomEnemyPartImpactNiagara"),
+			ComponentName,
 			RF_Transient);
 		if (!Component)
 		{

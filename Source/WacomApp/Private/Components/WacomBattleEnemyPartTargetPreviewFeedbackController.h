@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomBattleEnemyPartTargetPreviewPlayback.h"
+#include "WacomBattleEnemyPartTargetPreviewPlayback.h"
 
 class UActorComponent;
 class UNiagaraComponent;
@@ -25,7 +25,7 @@ struct FWacomBattleEnemyPartTargetPreviewFeedbackDebugView
 };
 
 /** App-private owner of the reusable target-preview Niagara component for one enemy part. */
-class FWacomBattleEnemyPartTargetPreviewFeedbackController
+class WACOMAPP_API FWacomBattleEnemyPartTargetPreviewFeedbackController
 {
 public:
 	bool BeginOrUpdate(

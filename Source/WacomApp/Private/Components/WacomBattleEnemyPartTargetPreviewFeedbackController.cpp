@@ -11,6 +11,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
+#include "UObject/UObjectGlobals.h"
 
 // Use a named private namespace so adaptive unity builds cannot merge these
 // generic Niagara parameter constants with another controller's constants.
@@ -222,9 +223,13 @@ UNiagaraComponent* FWacomBattleEnemyPartTargetPreviewFeedbackController::Resolve
 	UNiagaraComponent* Component = NiagaraComponent.Get();
 	if (!Component)
 	{
+		const FName ComponentName = MakeUniqueObjectName(
+			Owner,
+			UNiagaraComponent::StaticClass(),
+			TEXT("WacomEnemyPartTargetPreviewNiagara"));
 		Component = NewObject<UNiagaraComponent>(
 			Owner,
-			TEXT("WacomEnemyPartTargetPreviewNiagara"),
+			ComponentName,
 			RF_Transient);
 		if (!Component)
 		{

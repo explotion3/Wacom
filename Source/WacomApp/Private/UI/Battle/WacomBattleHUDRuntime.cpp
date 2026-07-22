@@ -1544,6 +1544,12 @@ void FWacomBattleHUDRuntime::RefreshPileDetailsInteractionState()
 	if (UPileCountView* View = RuntimeHost.GetExhaustPileView()) { View->SetDetailsInteractionEnabled(bEnabled); }
 }
 
+bool FWacomBattleHUDRuntime::TryGetActiveFirstPersonTargetSelectionCardId(
+	FGuid& OutCardInstanceId) const
+{
+	return GetFirstPersonHandBridge().TryGetActiveTargetSelectionCardId(OutCardInstanceId);
+}
+
 FWacomBattleCardDropResolveResult FWacomBattleHUDRuntime::ResolveFirstPersonCardDropIntent(
 	const FGuid& CardInstanceId,
 	const FWacomFirstPersonCardDragView& DragView) const

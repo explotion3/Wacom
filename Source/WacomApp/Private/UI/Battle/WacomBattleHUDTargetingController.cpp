@@ -58,10 +58,16 @@ FBattleTargetSelectionView FWacomBattleHUDTargetingController::BuildTargetSelect
 	const FBattleSnapshot& Snapshot) const
 {
 	FBattleTargetSelectionView View;
-	View.bIsTargetSelecting =
-		Runtime.GetUIState() == EBattleUIState::TargetSelect
-		&& Runtime.GetPendingTargetingCardId().IsValid();
-	View.PendingCardInstanceId = View.bIsTargetSelecting ? Runtime.GetPendingTargetingCardId() : FGuid();
+	if (Runtime.GetUIState() == EBattleUIState::TargetSelect
+		&& Runtime.GetPendingTargetingCardId().IsValid())
+	{
+		View.PendingCardInstanceId = Runtime.GetPendingTargetingCardId();
+	}
+	else
+	{
+		Runtime.TryGetActiveFirstPersonTargetSelectionCardId(View.PendingCardInstanceId);
+	}
+	View.bIsTargetSelecting = View.PendingCardInstanceId.IsValid();
 
 	const UBattleSession* Session = Runtime.GetSession();
 	if (!Session)

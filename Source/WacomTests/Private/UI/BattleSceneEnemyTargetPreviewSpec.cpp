@@ -3,13 +3,18 @@
 #include "Misc/AutomationTest.h"
 
 #include "../../../WacomApp/Private/Components/WacomBattleEnemyPartTargetPreviewPlayback.h"
+#include "../../../WacomApp/Private/Components/WacomBattleEnemyPartTargetPreviewFeedbackController.h"
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Components/WacomBattleEnemyPartComponent.h"
+#include "../../../WacomApp/Private/Components/WacomBattleEnemySceneRuntimeComponent.h"
+#include "Components/SceneComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Misc/ScopeExit.h"
+#include "NiagaraComponent.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Testing/WacomEnemySceneRuntimeAutomationTestView.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
@@ -256,5 +261,103 @@ bool FWacomUIBattleSceneEnemyTargetPreviewStateCompositionSpec::RunTest(
 	TestEqual(TEXT("clearing selection removes preview"),
 		FWacomEnemySceneRuntimeAutomationTestView::GetDesiredTargetPreviewKind(*Part),
 		FName(TEXT("None")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleSceneEnemyTargetPreviewPerPartNiagaraOwnershipSpec,
+	"Wacom.UI.Battle.BattleSceneEnemyTargetPreview.MultiplePartsOwnIndependentNiagaraComponents",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleSceneEnemyTargetPreviewPerPartNiagaraOwnershipSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleSceneEnemyTargetPreviewSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	UWacomBattleEnemyPartTargetPreviewStyle* Style =
+		LoadObject<UWacomBattleEnemyPartTargetPreviewStyle>(
+			nullptr,
+			TEXT("/Game/Wacom/UI/Battle/WorldImpact/DA_BattleEnemyPartTargetPreviewStyle_PixelLock.DA_BattleEnemyPartTargetPreviewStyle_PixelLock"));
+	if (!TestNotNull(TEXT("Target preview style"), Style))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host = World->SpawnActor<AWacomBattleEnemyActor>(
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParams);
+	if (!TestNotNull(TEXT("Enemy host"), Host))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	UWacomBattleEnemySceneRuntimeComponent* Runtime = Host->GetEnemySceneRuntimeComponent();
+	if (!TestNotNull(TEXT("Enemy scene runtime"), Runtime))
+	{
+		return false;
+	}
+
+	auto AddAnchor = [Host](const FName Name)
+	{
+		USceneComponent* Anchor = NewObject<USceneComponent>(Host, Name, RF_Transient);
+		Host->AddInstanceComponent(Anchor);
+		Anchor->SetupAttachment(Host->GetRootComponent());
+		Anchor->RegisterComponent();
+		return Anchor;
+	};
+	USceneComponent* FirstAnchor = AddAnchor(TEXT("TargetPreviewAnchor_First"));
+	USceneComponent* SecondAnchor = AddAnchor(TEXT("TargetPreviewAnchor_Second"));
+
+	FWacomBattleEnemyPartTargetPreviewPlaybackView PlaybackView;
+	PlaybackView.bActive = true;
+	PlaybackView.Kind = EWacomBattleEnemyPartTargetPreviewKind::Available;
+	PlaybackView.Phase = EWacomBattleEnemyPartTargetPreviewPhase::Holding;
+	PlaybackView.Amount = 1.0f;
+
+	FWacomBattleEnemyPartTargetPreviewFeedbackController FirstController;
+	FWacomBattleEnemyPartTargetPreviewFeedbackController SecondController;
+	TestTrue(TEXT("First part starts target preview"), FirstController.BeginOrUpdate(
+		*Runtime, FirstAnchor, nullptr, Style, PlaybackView, 1.0f));
+	TestTrue(TEXT("Second part starts target preview"), SecondController.BeginOrUpdate(
+		*Runtime, SecondAnchor, nullptr, Style, PlaybackView, 1.0f));
+
+	TArray<UNiagaraComponent*> NiagaraComponents;
+	Host->GetComponents(NiagaraComponents);
+	NiagaraComponents.RemoveAll([](const UNiagaraComponent* Component)
+	{
+		return !Component
+			|| !Component->GetName().StartsWith(TEXT("WacomEnemyPartTargetPreviewNiagara"));
+	});
+	TestEqual(TEXT("Each part owns one preview Niagara component"), NiagaraComponents.Num(), 2);
+	if (NiagaraComponents.Num() == 2)
+	{
+		TestNotEqual(TEXT("Part preview components are distinct"),
+			NiagaraComponents[0],
+			NiagaraComponents[1]);
+		TestNotEqual(TEXT("Part preview components use distinct UObject names"),
+			NiagaraComponents[0]->GetFName(),
+			NiagaraComponents[1]->GetFName());
+	}
+
+	FirstController.ResetImmediate(false);
+	TestTrue(TEXT("Stopping one part does not deactivate the other"),
+		SecondController.GetDebugView().bEffectActive);
+	SecondController.ResetImmediate(true);
+	FirstController.ResetImmediate(true);
 	return true;
 }

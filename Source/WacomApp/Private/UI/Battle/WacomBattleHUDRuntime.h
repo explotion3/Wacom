@@ -333,6 +333,7 @@ public:
 	void UpdateFirstPersonCardDragTargetFeedback(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void ClearFirstPersonCardDragTargetFeedback();
 	bool IsFirstPersonCardDragActiveForBattleSceneHover() const;
+	bool TryGetActiveFirstPersonTargetSelectionCardId(FGuid& OutCardInstanceId) const;
 	FWacomBattleCardDropResolveResult ResolveFirstPersonCardDropIntent(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView) const;

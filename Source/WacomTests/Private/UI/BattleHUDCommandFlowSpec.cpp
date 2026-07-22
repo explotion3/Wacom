@@ -10,6 +10,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/BattleWidgetSpecReceiver.h"
+#include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomBattleHUDCommandFlowSpec
@@ -99,6 +100,29 @@ bool FWacomUIBattleHUDTargetSelectionViewSpec::RunTest(const FString& /*Paramete
 	const FBattleTargetSelectionView ClearedView = HUD->BuildTargetSelectionView();
 	TestFalse(TEXT("Cleared view is not selecting"), ClearedView.bIsTargetSelecting);
 	TestFalse(TEXT("Cleared view invalid pending card"), ClearedView.PendingCardInstanceId.IsValid());
+
+	HUD->SetBattleInputReadyForTest(true);
+	FWacomFirstPersonCardDragView DragView;
+	DragView.CardInstanceId = TargetCardId;
+	DragView.GestureState = EWacomFirstPersonCardGestureState::AimingTargetedCard;
+	HUD->HandleFirstPersonCardDragStartedForTest(TargetCardId, DragView);
+	const FBattleTargetSelectionView FirstPersonDragView = HUD->BuildTargetSelectionView();
+	TestTrue(TEXT("First-person targeted drag enters target selection"),
+		FirstPersonDragView.bIsTargetSelecting);
+	TestEqual(TEXT("First-person targeted drag owns selection card"),
+		FirstPersonDragView.PendingCardInstanceId,
+		TargetCardId);
+	TestTrue(TEXT("First-person drag exposes living head"),
+		FirstPersonDragView.TargetableParts[0].bTargetable);
+	TestFalse(TEXT("First-person drag still excludes destroyed body"),
+		FirstPersonDragView.TargetableParts[1].bTargetable);
+	TestTrue(TEXT("First-person drag exposes living tail"),
+		FirstPersonDragView.TargetableParts[2].bTargetable);
+
+	HUD->HandleFirstPersonCardDragCancelledForTest(TargetCardId, DragView);
+	const FBattleTargetSelectionView CancelledDragView = HUD->BuildTargetSelectionView();
+	TestFalse(TEXT("Cancelling first-person drag clears target selection"),
+		CancelledDragView.bIsTargetSelecting);
 
 	return true;
 }
