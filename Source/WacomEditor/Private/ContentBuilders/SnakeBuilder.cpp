@@ -79,6 +79,32 @@ namespace
 		return Specs;
 	}
 
+	const TArray<FSnakePartPresentationSpec>& GetSnakeDebugPartPresentationSpecs()
+	{
+		static const TArray<FSnakePartPresentationSpec> Specs = []
+		{
+			TArray<FSnakePartPresentationSpec> Result =
+				GetSnakePartPresentationSpecs();
+			for (FSnakePartPresentationSpec& Spec : Result)
+			{
+				if (Spec.PartSlotId == FName(TEXT("Head")))
+				{
+					Spec.RelativeLocation = FVector(-154.0f, -6.0f, 46.0f);
+				}
+				else if (Spec.PartSlotId == FName(TEXT("Body")))
+				{
+					Spec.RelativeLocation = FVector(0.0f, 0.0f, 70.0f);
+				}
+				else if (Spec.PartSlotId == FName(TEXT("Tail")))
+				{
+					Spec.RelativeLocation = FVector(118.0f, 16.0f, 72.0f);
+				}
+			}
+			return Result;
+		}();
+		return Specs;
+	}
+
 	template <typename T>
 	T* LoadGeneratedAsset(const FString& PackagePath)
 	{
@@ -183,6 +209,7 @@ namespace
 	UBlueprint* BuildHostBlueprint(
 		UEnemyDefinition& Enemy,
 		UPaperFlipbook& IdleFlipbook,
+		const TArray<FSnakePartPresentationSpec>& PresentationSpecs,
 		const FString& HostPackage,
 		FName HostAssetName,
 		const TCHAR* HostLabel,
@@ -286,7 +313,7 @@ namespace
 			OutErrors.Add(TEXT("Snake Host CDO was not regenerated"));
 			return nullptr;
 		}
-		for (const FSnakePartPresentationSpec& Spec : GetSnakePartPresentationSpecs())
+		for (const FSnakePartPresentationSpec& Spec : PresentationSpecs)
 		{
 			UPaperFlipbook* DestroyedFlipbook = LoadGeneratedAsset<UPaperFlipbook>(
 				SnakePlaceholderArtRoot / TEXT("Flipbooks") / Spec.DestroyedFlipbookName);
@@ -525,6 +552,7 @@ namespace Wacom::ContentBuilder
 		Result.HostBlueprint = BuildHostBlueprint(
 			*Result.Enemy,
 			*IdleFlipbook,
+			GetSnakePartPresentationSpecs(),
 			SnakeHostPackage,
 			TEXT("BP_EnemyHost_Snake"),
 			TEXT("Snake Host"),
@@ -537,6 +565,7 @@ namespace Wacom::ContentBuilder
 		Result.DebugHostBlueprint = BuildHostBlueprint(
 			*Result.Enemy,
 			*IdleFlipbook,
+			GetSnakeDebugPartPresentationSpecs(),
 			SnakeDebugHostPackage,
 			TEXT("BP_SnakeHost_Debug"),
 			TEXT("Debug Snake Host"),

@@ -62,7 +62,7 @@ namespace
 	constexpr TCHAR WidgetContractMarker[] =
 		TEXT("WacomCombatActivityWBP.ContractVersion=1");
 	constexpr TCHAR FeedWidgetContractMarker[] =
-		TEXT("WacomCombatActivityFeedWBP.ContractVersion=3");
+		TEXT("WacomCombatActivityFeedWBP.ContractVersion=4");
 	constexpr TCHAR HudPlacementMarker[] =
 		TEXT("WacomCombatActivityHUDPlacement.ContractVersion=1");
 	constexpr TCHAR ContentContractKey[] = TEXT("WacomContract");
@@ -356,6 +356,7 @@ namespace
 			&& Style.TopRowHoldSeconds <= Style.BottomRowHoldSeconds
 			&& Style.TopRowFadeSeconds >= 0.0f
 			&& Style.TopRowFadeSeconds <= Style.BottomRowFadeSeconds
+			&& Style.RootIconReplacementFadeSeconds >= 0.0f
 			&& Style.ActivityViewportHeightPixels > 0.0f
 			&& Style.RowHeightPixels > 0.0f
 			&& Style.RowHeightPixels <= Style.ActivityViewportHeightPixels
@@ -793,12 +794,12 @@ namespace
 		PRAGMA_ENABLE_DEPRECATION_WARNINGS
 		ActionButton->SetStyle(MakeInvisibleButtonStyle());
 		ActionButton->SetVisibility(ESlateVisibility::Visible);
+		ActionButton->SetToolTipText(NSLOCTEXT(
+			"WacomBattleCombatActivity",
+			"OpenCombatLogTooltip",
+			"打开战斗日志"));
 		ActionSize->AddChild(ActionButton);
 		MarkWidgetVariable(Blueprint, *ActionButton);
-		UImage* ActionIcon = Tree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("LastActionIcon"));
-		ActionIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
-		ActionButton->SetContent(ActionIcon);
-		MarkWidgetVariable(Blueprint, *ActionIcon);
 
 		UHorizontalBox* TurnRoot = Tree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TurnRoot"));
 		TurnRoot->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -1070,7 +1071,16 @@ namespace
 			&& ActionSize->GetRenderTransform().Translation.Equals(FVector2D(0.0f, -47.0f))
 			&& Button && !Button->GetIsFocusable()
 			&& Button->GetVisibility() == ESlateVisibility::Visible
-			&& HasWidgetOfClass(Blueprint, TEXT("LastActionIcon"), UImage::StaticClass())
+			&& Button->GetContent() == nullptr
+			&& Button->GetToolTipText().EqualTo(NSLOCTEXT(
+				"WacomBattleCombatActivity",
+				"OpenCombatLogTooltip",
+				"打开战斗日志"))
+			&& Button->GetStyle().Normal.DrawAs == ESlateBrushDrawType::NoDrawType
+			&& Button->GetStyle().Hovered.DrawAs == ESlateBrushDrawType::NoDrawType
+			&& Button->GetStyle().Pressed.DrawAs == ESlateBrushDrawType::NoDrawType
+			&& Button->GetStyle().Disabled.DrawAs == ESlateBrushDrawType::NoDrawType
+			&& !HasWidgetOfClass(Blueprint, TEXT("LastActionIcon"), UImage::StaticClass())
 			&& HasWidgetOfClass(Blueprint, TEXT("TurnRoot"), UWidget::StaticClass())
 			&& HasWidgetOfClass(Blueprint, TEXT("TurnIcon"), UImage::StaticClass())
 			&& HasWidgetOfClass(Blueprint, TEXT("TurnText"), UTextBlock::StaticClass())

@@ -102,11 +102,11 @@ HUD 状态入口：
 
 `FWacomBattleHUDCombatLogController` 继续持有最多 80 个完整历史命令块。一次成功命令只构建一份 Log Block 与 Activity Batch：完整 History 和 DetailsHistory 在规则结算后立即追加，因此表现尚在播放时打开详情也能看到完整事实；Activity Batch 则由 App-private `FWacomBattleCombatActivitySynchronizer` 暂存为 HUD 生命周期内单调递增的事务。`FWacomBattleHUDPresentationCoordinator` 是唯一语义表现时钟：plan 开始释放玩家根行动，phase 开始按精确 Event Sequence 释放普通结果，敌人动画 start 释放对应 `EnemyPartActed` 根行动，真实 Impact 在应用 `SnapshotAfter` 和命中反馈后释放该 Journal 范围的结果，首个 `TurnStart*` phase 开始前更新 Footer。重复进度幂等，多敌人 Journal 范围互不串组；Widget 重建只恢复已经释放的最后根行动和回合数，不能从已结算 Snapshot 泄露未来结果。
 
-`UBattleCombatLogFeedWidget` 是固定 `140px` 裁切视口、完全非阻塞的视觉播放器：玩家根行动显示玩家头像与卡名，敌人根行动显示 Intent 图标与名称，结果按事件顺序逐条进入；多目标结果不聚合。同一语义边界解锁的多条结果作为一个批次进入，视觉层继续按 `0.16s` 向 `0.08s` 自适应短错峰，不反向控制 coordinator。根行动从 Footer 最后行动槽所在的底部语义位出现，结果从该位置向上流动，越接近顶部越快淡出，不再对第四行做数据硬裁剪。当前根行动在已解锁结果发出前保持在底部行动槽；新语义根行动到达而旧错峰尚未排空时，先按事件顺序追平旧结果，再同步显示新根行动。队列收束时根行动的文字与底板淡出，图标原位交接给可点击的 `LastActionButton`，而不是另行生成一枚重复图标。`EnqueueCombatActivityBatch` Blueprint 接口保留给初始化、独立 Widget 和兼容测试；正式同步运行路径使用 C++-only 的 begin / append / complete 增量入口，不增加 WBP 制作负担。
+`UBattleCombatLogFeedWidget` 是固定 `140px` 裁切视口、完全非阻塞的视觉播放器：玩家根行动显示玩家头像与卡名，敌人根行动显示 Intent 图标与名称，结果按事件顺序逐条进入；多目标结果不聚合。同一语义边界解锁的多条结果作为一个批次进入，视觉层继续按 `0.16s` 向 `0.08s` 自适应短错峰，不反向控制 coordinator。根行动从 Footer 最后行动槽所在的底部语义位出现，结果从该位置向上流动，越接近顶部越快淡出，不再对第四行做数据硬裁剪。当前根行动在已解锁结果发出前保持在底部行动槽；新语义根行动到达而旧错峰尚未排空时，先按事件顺序追平旧结果，再同步显示新根行动。队列收束时，最新根行动 Row 只淡出文字与底板，原图标进入稳定 `IconResident` 状态；新的根行动到达才让上一枚图标用默认 `0.10s` 透明度交接退场。伤害、状态和抵抗等结果行不会替换常驻图标。`EnqueueCombatActivityBatch` Blueprint 接口保留给初始化、独立 Widget 和兼容测试；正式同步运行路径使用 C++-only 的 begin / append / complete 增量入口，不增加 WBP 制作负担。
 
 Activity 事务的失败策略按生命周期区分：空 plan 或 plan 拒绝立即 flush；正常完成、phase timeout 和 BattleEnd 正常收束 flush 未匹配行并输出开发诊断；Session 切换、HUD teardown 或明确清空 Battle 则 discard 事务并清空 Feed，防止跨战斗泄漏。Reduced Motion 与无 World 自动化仍发布相同语义进度，只缩短或跳过视觉等待。Footer 始终表示“表现已经推进到”的回合；EndTurn 在第一个可见 `TurnStart*` phase 开始前更新，没有可见 TurnStart phase 时在等价完成边界更新，不再等待 Feed 淡出或整个 Activity 播放耗尽。Battle 初始化仍立即建立详细日志的第 1 回合分区，但短时播报要等 Camera 与 Card Prewarm 两道 Entry Gate 都解除后才播放一次 UI-only 的“第 1 回合开始”；它不重复写入详细历史。战斗开始和开场抽牌等其它初始化事件仍不进入短时行。
 
-常驻播报的 Root 和临时 Row 都不命中；只有 Footer 的最后行动按钮可点击。按钮调用 `UBattleHUD::RequestOpenCombatLogDetails()`：HUD 仍广播 `OnCombatLogDetailsRequestedNative`，同时由 `FWacomBattleSecondaryPanelCoordinator` 向 `UI.Layer.GameMenu` 异步 Push `UWacomBattleCombatLogDetailsScreen`。Screen 打开时复制 Controller 的回合分区历史，不访问 `UBattleSession`，也不轮询规则状态。
+常驻播报的 Root 和临时 Row 都不命中；Footer 的 `LastActionButton` 是固定覆盖根行动图标槽的 `38×38` 透明命中框。它不再承载第二枚图标，也不因 Row 播放切换为 `HitTestInvisible`：没有已释放根行动时保持布局但 disabled，根行动释放后立即可点击，包括文字进入、停留、淡出和图标替换期间。按钮调用 `UBattleHUD::RequestOpenCombatLogDetails()`：HUD 仍广播 `OnCombatLogDetailsRequestedNative`，同时由 `FWacomBattleSecondaryPanelCoordinator` 向 `UI.Layer.GameMenu` 异步 Push `UWacomBattleCombatLogDetailsScreen`。Screen 打开时复制 Controller 的回合分区历史，不访问 `UBattleSession`，也不轮询规则状态。
 
 `FWacomBattleSecondaryPanelCoordinator` 同时是 BattleHUD 唯一的二级面板所有者。牌堆入口由通用 `UPileCountView` 只广播“请求详情”，Draw / Discard / Exhaust 的 Battle 语义由 HUD 映射；Coordinator 在 Push 前按需复制 `BuildPileInspectionSnapshot()`，Screen 此后不再访问 Session。牌堆页使用全屏安全区：左侧图标栏切换 Draw、Discard（弃牌堆 / 本回合已使用两个子区）和 Exhaust，右侧虚拟化 `UTileView` 逐实例显示完整卡牌。页面不暴露排序入口，固定按 `RuntimeCost → Name → InstanceId` 稳定排序；规则层仍对 Draw 区做无序投影，但 UI 不再显示额外提示文案。每个条目通过 runtime `CardHost` 创建正式 `WBP_CardView`，按原始 `296×420px` 卡体展示，并用固定 Entry 尺寸与列数自适应避免非等比拉伸。Screen 只复用一个 `WBP_CardDetailPanel`：悬浮或手柄焦点稳定约 `0.10s` 后在卡牌左右安全空间显示并跟随滚动；点击只锁定条目流光外框，不让详情常驻。流光由条目活动时按需创建的局部 UI MID 绘制，非活动/回收条目不保留 MID。牌堆 Screen 成功 Attach 后只把当前 `BattleHand` Layer 的表现可见性设为 `Collapsed`；Slot、ViewData、MID 与 Transition 均保留，关闭后原样恢复且不重播入场。打开期间复用现有 `All + NoCapture` 输入合同：镜头与后台非阻塞表现继续，卡牌、Wait、EndTurn 与目标提交被门控。
 
@@ -188,6 +188,8 @@ AWacomBattleEnemyActor
 
 Host Details 的“从 EnemyDefinition 同步部位”由 `WacomEditor` 独占写入：为缺失槽位创建 Part、默认 `Visual_Main` Flipbook Layer 和 ImpactAnchor；已有部位只修正派生 `PartId`。同步保留 Component Transform、BoxExtent、Layer、资源与 Anchor，不删除 surplus，不在 PIE/game world 写入；无变化不创建事务、不 dirty package。纯 Authoring Report 与 Validator 只读检查缺失/重复/未知槽位、PartId mismatch、重复 LayerId、错误父子关系、多 Anchor、空视觉、无效 Animation Style 与 terminal clip 冲突。
 
+Authoring Report 每次只审计一份真实制作拓扑：Blueprint CDO 从 SCS Component Template 读取制作数据，关卡与运行时 Host 实例只读取自身实例组件；不得把实例组件和其来源模板合并计数，否则合法部位会被误报为重复 `PartSlotId`。
+
 ### Runtime registry 与表现
 
 `UWacomBattleEnemySceneRuntimeComponent` 在 Host 内集中管理 typed Part 的运行时身份、Snapshot facts、targetable、hover、drag target feedback、cue、Action、Destroyed、Niagara、声音与 watchdog。它只在组件注册、注销、销毁或显式 topology 通知时重建缓存；普通 Snapshot 不扫描层级、不改 Transform、不重置 Flipbook，也不重建 authored 组件。Action Preview 不在 SceneRuntime 保存副本，只进入 Host 的 Enemy Panel。
@@ -211,7 +213,7 @@ BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、prev
 ### 正式内容口径
 
 - `BP_EnemyHost_TrainingWarrior`：Body Part 的 `Visual_Main` 使用正式 Idle，`DA_EnemyPartAnimation_TrainingWarrior` 映射 Attack/Guard/Cleave，并把 Downed 配为 `EnemyDestroyedClip`。
-- `BP_EnemyHost_Snake` 与 `BP_SnakeHost_Debug`：Head/Body/Tail typed Part，各自一个 `Snake.<Part>.Main` Flipbook Layer与单帧 Destroyed；当前没有 Action Style。
+- `BP_EnemyHost_Snake` 与 `BP_SnakeHost_Debug`：Head/Body/Tail typed Part，各自一个 `Snake.<Part>.Main` Flipbook Layer与单帧 Destroyed；当前没有 Action Style。正式 Host 使用通用 Snake 部位位置，Debug Host 使用 `L_Exploration` 制作布局 Head `(-154,-6,46)`、Body `(0,0,70)`、Tail `(118,16,72)`；两套位置分别由 Snake Builder 固化，避免重建覆盖关卡调试布局。
 - `BP_EnemyHost_SlimeTrio`：Left/Core/Right typed Part，各自一个 `SlimeTrio.<Part>.Main` Flipbook Layer与单帧 Destroyed；当前没有 Action Style。
 - Snake/SlimeTrio 的 Placeholder 仍必须被发布审计 `-FailOnPlaceholder` 阻止出包。
 
@@ -314,7 +316,7 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 
 `BattleResistancePresentationSpec.cpp` 使用 `Wacom.UI.Battle.Resistance` 验证成功 / 失败日志严格消费 `ResistanceResolved.Amount / Count / bSuccess`，不从 Snapshot 或卡面重新计算比较值；规则与 Action Preview 的完整抵抗矩阵由 `Wacom.Battle.Resistance` 负责。
 
-短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、流式 Row、根行动到 Footer 图标的原位交接和详情打开请求。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
+短时活动播报由 `BattleCombatActivitySpec.cpp` 负责，统一前缀为 `Wacom.UI.Battle.CombatActivity`；该文件验证活动投影、敌人分组、多目标逐条结果、流式 Row、最新根行动图标常驻与替换、透明详情命中框和重建恢复。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
 
 `Source/WacomTests/Private/UI/BattleEnemyPanelSpec.cpp` 承载 `Wacom.UI.Battle.EnemyPanel.VisualContract` 与稳定条目复用；`BattleEnemyPanelVitalsMotionSpec.cpp` 验证真实事实、typed cue、Material Frame、紧凑 Action Preview Frame、Reduced Motion 与清理生命周期；`BattleEnemySinglePartPanelSpec.cpp` 保留文件名但测试前缀已改为 `UnifiedHierarchy`，验证单/多部位共用同一正式类、唯一默认类和 `268 × 92` 单段合同；`BattleEnemySegmentedVitalsSpec.cpp` 验证多段角色、等宽顺序、Shield、Buff 与点击 gate。状态图标复用另由 `Wacom.UI.Battle.StatusIcons.EnemyPartUsesFormalStatusList` 覆盖。需要检查 WBP 绑定或动画的测试实例化正式 WBP；纯 App-private Preview Frame 测试可使用原生 Entry 验证无反射语义。
 

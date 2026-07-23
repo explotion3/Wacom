@@ -18,7 +18,6 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
-#include "Components/Image.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "UObject/StrongObjectPtr.h"
@@ -274,12 +273,9 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 	const UButton* LastActionButton = Feed->WidgetTree
 		? Cast<UButton>(Feed->WidgetTree->FindWidget(TEXT("LastActionButton")))
 		: nullptr;
-	const UImage* LastActionIcon = Feed->WidgetTree
-		? Cast<UImage>(Feed->WidgetTree->FindWidget(TEXT("LastActionIcon")))
-		: nullptr;
-	TestTrue(TEXT("Persistent footer icon stays hidden while the root row owns the icon"),
-		LastActionButton && LastActionButton->GetVisibility() == ESlateVisibility::HitTestInvisible
-		&& LastActionIcon && LastActionIcon->GetVisibility() == ESlateVisibility::Collapsed);
+	TestTrue(TEXT("Transparent details hitbox stays clickable while the root row plays"),
+		LastActionButton && LastActionButton->GetVisibility() == ESlateVisibility::Visible
+		&& LastActionButton->GetIsEnabled());
 	TestEqual(TEXT("Footer uses presented turn"), Feed->GetPresentedTurnNumber(), 2);
 	TestNotNull(TEXT("Footer keeps last root action"), Feed->GetLastRootActionForTest());
 	Style->BottomRowHoldSeconds = 0.0f;
@@ -287,16 +283,28 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 	Style->BottomRowFadeSeconds = 0.1f;
 	Style->TopRowFadeSeconds = 0.1f;
 	Feed->AdvanceActivityPlaybackForTest(0.2f);
-	TestEqual(TEXT("Transient rows collapse after the queue drains"), Feed->GetVisibleActivityRowCount(), 0);
-	TestTrue(TEXT("Footer icon becomes the clickable root icon after row handoff"),
+	TestEqual(TEXT("Only the latest root icon remains after transient rows drain"),
+		Feed->GetVisibleActivityRowCount(), 1);
+	TestTrue(TEXT("Transparent details hitbox remains clickable after content retires"),
 		LastActionButton && LastActionButton->GetVisibility() == ESlateVisibility::Visible
-		&& LastActionIcon && LastActionIcon->GetVisibility() == ESlateVisibility::HitTestInvisible);
-	TestNotNull(TEXT("Last root action persists after row collapse"), Feed->GetLastRootActionForTest());
+		&& LastActionButton->GetIsEnabled());
+	TestNotNull(TEXT("Last root action persists in its icon-only row"), Feed->GetLastRootActionForTest());
 	TestEqual(TEXT("Turn footer persists after row collapse"), Feed->GetPresentedTurnNumber(), 2);
 
 	Feed->ClearCombatActivity();
 	TestEqual(TEXT("Feed clears transient rows"), Feed->GetVisibleActivityRowCount(), 0);
 	TestEqual(TEXT("Feed clears presented turn"), Feed->GetPresentedTurnNumber(), 0);
+	TestTrue(TEXT("Clear keeps the transparent hitbox present but disables it"),
+		LastActionButton
+		&& LastActionButton->GetVisibility() == ESlateVisibility::Visible
+		&& !LastActionButton->GetIsEnabled());
+
+	Feed->RestorePersistentState(2, &Group.RootAction);
+	TestEqual(TEXT("Widget restore reconstructs one icon-only resident row"),
+		Feed->GetVisibleActivityRowCount(), 1);
+	TestTrue(TEXT("Restored resident immediately re-enables the transparent hitbox"),
+		LastActionButton && LastActionButton->GetIsEnabled());
+	Feed->ClearCombatActivity();
 
 	return true;
 }

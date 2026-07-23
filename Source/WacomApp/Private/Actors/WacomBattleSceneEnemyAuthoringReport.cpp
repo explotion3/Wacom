@@ -22,6 +22,12 @@ namespace
 		TArray<TComponent*>& OutComponents)
 	{
 		Host.GetComponents<TComponent>(OutComponents);
+		if (!Host.HasAnyFlags(RF_ClassDefaultObject))
+		{
+			OutComponents.Remove(nullptr);
+			return;
+		}
+
 		UBlueprintGeneratedClass* BlueprintClass =
 			Cast<UBlueprintGeneratedClass>(Host.GetClass());
 		if (!BlueprintClass || !BlueprintClass->SimpleConstructionScript)

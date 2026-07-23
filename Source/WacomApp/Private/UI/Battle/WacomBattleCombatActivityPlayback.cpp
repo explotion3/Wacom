@@ -4,7 +4,7 @@
 
 namespace
 {
-	constexpr int32 MaxResidentRows = 32;
+	constexpr int32 MaxTransientRows = 32;
 	constexpr int32 MaxEmissionsPerTick = 8;
 
 	float ResolveTopProximity(
@@ -30,6 +30,7 @@ void FWacomBattleCombatActivityPlaybackConfig::Normalize()
 	BottomRowFadeSeconds = FMath::Max(0.0f, BottomRowFadeSeconds);
 	TopRowHoldSeconds = FMath::Clamp(TopRowHoldSeconds, 0.0f, BottomRowHoldSeconds);
 	TopRowFadeSeconds = FMath::Clamp(TopRowFadeSeconds, 0.0f, BottomRowFadeSeconds);
+	RootIconReplacementFadeSeconds = FMath::Max(0.0f, RootIconReplacementFadeSeconds);
 	ActivityViewportHeightPixels = FMath::Max(1.0f, ActivityViewportHeightPixels);
 	RowHeightPixels = FMath::Clamp(RowHeightPixels, 1.0f, ActivityViewportHeightPixels);
 	TopFadeBandPixels = FMath::Clamp(
@@ -75,19 +76,24 @@ void FWacomBattleCombatActivityPlayback::BeginSynchronizedGroup(
 	// remains truthful.
 	for (const FWacomBattleCombatActivityRowView& PendingResult : PendingSynchronizedResults)
 	{
-		EmitRow(PendingResult, false, Config);
+		EmitRow(
+			PendingResult,
+			EWacomBattleCombatActivityRootVisualState::None,
+			Config);
 	}
 	PendingSynchronizedResults.Reset();
 	SynchronizedTimeSinceLastEmission = 0.0f;
-	ReleaseActiveRoot(Config);
-	ReleasePreviousRootLane();
+	PreparePreviousRootForReplacement(Config);
 	bCompleteSynchronizedGroupAfterResults = false;
 	LastRootAction = RootAction;
 	if (TurnNumber > 0 && PresentedTurnNumber <= 0)
 	{
 		PresentedTurnNumber = TurnNumber;
 	}
-	ActiveRootPlaybackId = EmitRow(RootAction, true, Config);
+	ActiveRootPlaybackId = EmitRow(
+		RootAction,
+		EWacomBattleCombatActivityRootVisualState::Pinned,
+		Config);
 	LastRootPlaybackId = ActiveRootPlaybackId;
 	RetargetRows(Config);
 	RebuildViews(Config);
@@ -108,7 +114,10 @@ void FWacomBattleCombatActivityPlayback::AppendSynchronizedResults(
 	int32 FirstPendingIndex = 0;
 	if (bCanEmitFirstImmediately)
 	{
-		EmitRow(ResultRows[0], false, Config);
+		EmitRow(
+			ResultRows[0],
+			EWacomBattleCombatActivityRootVisualState::None,
+			Config);
 		FirstPendingIndex = 1;
 		SynchronizedTimeSinceLastEmission = 0.0f;
 	}
@@ -143,10 +152,33 @@ void FWacomBattleCombatActivityPlayback::SetPresentedTurnNumber(int32 TurnNumber
 	PresentedTurnNumber = FMath::Max(0, TurnNumber);
 }
 
-void FWacomBattleCombatActivityPlayback::SetLastRootAction(
-	const FWacomBattleCombatActivityRowView& RootAction)
+void FWacomBattleCombatActivityPlayback::RestoreLastRootAction(
+	const FWacomBattleCombatActivityRowView& RootAction,
+	const FWacomBattleCombatActivityPlaybackConfig& InConfig)
 {
+	FWacomBattleCombatActivityPlaybackConfig Config = InConfig;
+	Config.Normalize();
 	LastRootAction = RootAction;
+	if (LastRootPlaybackId != 0)
+	{
+		for (FVisibleRow& Row : VisibleRows)
+		{
+			if (Row.PlaybackId == LastRootPlaybackId)
+			{
+				Row.Row = RootAction;
+				RebuildViews(Config);
+				return;
+			}
+		}
+	}
+
+	const uint64 RestoredPlaybackId = EmitRow(
+		RootAction,
+		EWacomBattleCombatActivityRootVisualState::IconResident,
+		Config);
+	LastRootPlaybackId = RestoredPlaybackId;
+	RetargetRows(Config);
+	RebuildViews(Config);
 }
 
 void FWacomBattleCombatActivityPlayback::Tick(
@@ -182,7 +214,10 @@ void FWacomBattleCombatActivityPlayback::Tick(
 				break;
 			}
 			TimeSinceLastEmission = FMath::Max(0.0f, TimeSinceLastEmission - Stagger);
-			EmitRow(Group.ResultRows[NextResultRowIndex++], false, Config);
+			EmitRow(
+				Group.ResultRows[NextResultRowIndex++],
+				EWacomBattleCombatActivityRootVisualState::None,
+				Config);
 			++EmittedThisTick;
 		}
 
@@ -217,7 +252,10 @@ void FWacomBattleCombatActivityPlayback::Tick(
 			SynchronizedTimeSinceLastEmission = FMath::Max(
 				0.0f,
 				SynchronizedTimeSinceLastEmission - Stagger);
-			EmitRow(PendingSynchronizedResults[0], false, Config);
+			EmitRow(
+				PendingSynchronizedResults[0],
+				EWacomBattleCombatActivityRootVisualState::None,
+				Config);
 			PendingSynchronizedResults.RemoveAt(0);
 			++EmittedThisTick;
 		}
@@ -268,7 +306,15 @@ bool FWacomBattleCombatActivityPlayback::HasPendingPlayback() const
 
 bool FWacomBattleCombatActivityPlayback::IsTickRequired() const
 {
-	return HasPendingPlayback() || !VisibleRows.IsEmpty();
+	if (HasPendingPlayback())
+	{
+		return true;
+	}
+	return VisibleRows.ContainsByPredicate([](const FVisibleRow& Row)
+	{
+		return Row.RootVisualState
+			!= EWacomBattleCombatActivityRootVisualState::IconResident;
+	});
 }
 
 void FWacomBattleCombatActivityPlayback::StartNextBatch(
@@ -291,28 +337,63 @@ void FWacomBattleCombatActivityPlayback::StartCurrentGroup(
 	{
 		return;
 	}
-	ReleasePreviousRootLane();
+	PreparePreviousRootForReplacement(Config);
 	const FWacomBattleCombatActivityGroupView& Group = ActiveBatch->Groups[ActiveGroupIndex];
 	LastRootAction = Group.RootAction;
 	if (Group.TurnNumber > 0 && PresentedTurnNumber <= 0)
 	{
 		PresentedTurnNumber = Group.TurnNumber;
 	}
-	ActiveRootPlaybackId = EmitRow(Group.RootAction, true, Config);
+	ActiveRootPlaybackId = EmitRow(
+		Group.RootAction,
+		EWacomBattleCombatActivityRootVisualState::Pinned,
+		Config);
 	LastRootPlaybackId = ActiveRootPlaybackId;
 	NextResultRowIndex = 0;
 	TimeSinceLastEmission = 0.0f;
 }
 
-void FWacomBattleCombatActivityPlayback::ReleasePreviousRootLane()
+void FWacomBattleCombatActivityPlayback::PreparePreviousRootForReplacement(
+	const FWacomBattleCombatActivityPlaybackConfig& Config)
 {
-	for (FVisibleRow& Row : VisibleRows)
+	// Keep at most one outgoing icon. If semantic roots arrive faster than the
+	// authored crossfade, the older outgoing row is no longer the last action
+	// and can be retired immediately.
+	for (int32 Index = VisibleRows.Num() - 1; Index >= 0; --Index)
 	{
-		if (Row.bExitingRoot)
+		if (VisibleRows[Index].RootVisualState
+			== EWacomBattleCombatActivityRootVisualState::Replacing)
 		{
-			Row.bExitingRoot = false;
+			VisibleRows.RemoveAt(Index);
 		}
 	}
+	if (Config.RootIconReplacementFadeSeconds <= 0.0f)
+	{
+		for (int32 Index = VisibleRows.Num() - 1; Index >= 0; --Index)
+		{
+			if (VisibleRows[Index].RootVisualState
+				!= EWacomBattleCombatActivityRootVisualState::None)
+			{
+				VisibleRows.RemoveAt(Index);
+			}
+		}
+		ActiveRootPlaybackId = 0;
+		RetargetRows(Config);
+		return;
+	}
+
+	for (FVisibleRow& Row : VisibleRows)
+	{
+		if (Row.RootVisualState == EWacomBattleCombatActivityRootVisualState::None)
+		{
+			continue;
+		}
+		Row.RootVisualState = EWacomBattleCombatActivityRootVisualState::Replacing;
+		Row.UnprotectedElapsed = 0.0f;
+		Row.IconRetirementProgress = 0.0f;
+	}
+	ActiveRootPlaybackId = 0;
+	RetargetRows(Config);
 }
 
 void FWacomBattleCombatActivityPlayback::AdvanceAfterCurrentGroup(
@@ -342,7 +423,7 @@ void FWacomBattleCombatActivityPlayback::AdvanceAfterCurrentGroup(
 
 uint64 FWacomBattleCombatActivityPlayback::EmitRow(
 	const FWacomBattleCombatActivityRowView& Row,
-	const bool bPinnedRoot,
+	const EWacomBattleCombatActivityRootVisualState RootVisualState,
 	const FWacomBattleCombatActivityPlaybackConfig& Config)
 {
 	FVisibleRow& Added = VisibleRows.AddDefaulted_GetRef();
@@ -353,8 +434,13 @@ uint64 FWacomBattleCombatActivityPlayback::EmitRow(
 	}
 	Added.Row = Row;
 	Added.EnterElapsed = Config.bReducedMotion ? Config.EnterSeconds : 0.0f;
-	Added.bRetirementProtected = bPinnedRoot;
-	Added.bPinnedRoot = bPinnedRoot;
+	Added.RootVisualState = RootVisualState;
+	if (RootVisualState == EWacomBattleCombatActivityRootVisualState::IconResident)
+	{
+		Added.EnterElapsed = Config.EnterSeconds;
+		Added.ContentRetirementProgress = 1.0f;
+		Added.ShiftElapsed = Config.ShiftSeconds;
+	}
 	const float RootActionLaneY = Config.ActivityViewportHeightPixels - Config.RowHeightPixels;
 	Added.CurrentY = RootActionLaneY;
 	Added.ShiftStartY = Added.CurrentY;
@@ -363,12 +449,26 @@ uint64 FWacomBattleCombatActivityPlayback::EmitRow(
 	const uint64 AddedPlaybackId = Added.PlaybackId;
 	RetargetRows(Config);
 
-	while (VisibleRows.Num() > MaxResidentRows)
+	auto CountTransientRows = [this]()
+	{
+		int32 Count = 0;
+		for (const FVisibleRow& VisibleRow : VisibleRows)
+		{
+			if (VisibleRow.RootVisualState
+				== EWacomBattleCombatActivityRootVisualState::None)
+			{
+				++Count;
+			}
+		}
+		return Count;
+	};
+	while (CountTransientRows() > MaxTransientRows)
 	{
 		int32 RemovalIndex = INDEX_NONE;
 		for (int32 Index = 0; Index < VisibleRows.Num(); ++Index)
 		{
-			if (!VisibleRows[Index].bRetirementProtected
+			if (VisibleRows[Index].RootVisualState
+					== EWacomBattleCombatActivityRootVisualState::None
 				&& VisibleRows[Index].CurrentY + Config.RowHeightPixels <= 0.0f)
 			{
 				RemovalIndex = Index;
@@ -379,7 +479,8 @@ uint64 FWacomBattleCombatActivityPlayback::EmitRow(
 		{
 			RemovalIndex = VisibleRows.IndexOfByPredicate([](const FVisibleRow& Row)
 			{
-				return !Row.bRetirementProtected;
+				return Row.RootVisualState
+					== EWacomBattleCombatActivityRootVisualState::None;
 			});
 		}
 		if (RemovalIndex == INDEX_NONE)
@@ -412,9 +513,11 @@ void FWacomBattleCombatActivityPlayback::ReleaseActiveRoot(
 		{
 			continue;
 		}
-		Row.bRetirementProtected = false;
-		Row.bPinnedRoot = false;
-		Row.bExitingRoot = true;
+		if (Row.RootVisualState != EWacomBattleCombatActivityRootVisualState::Pinned)
+		{
+			break;
+		}
+		Row.RootVisualState = EWacomBattleCombatActivityRootVisualState::ContentRetiring;
 		Row.UnprotectedElapsed = 0.0f;
 		break;
 	}
@@ -431,7 +534,7 @@ void FWacomBattleCombatActivityPlayback::RetargetRows(
 	{
 		FVisibleRow& Row = VisibleRows[Index];
 		float NewTargetY = 0.0f;
-		if (Row.bPinnedRoot || Row.bExitingRoot)
+		if (Row.RootVisualState != EWacomBattleCombatActivityRootVisualState::None)
 		{
 			NewTargetY = RootActionLaneY;
 		}
@@ -471,8 +574,20 @@ void FWacomBattleCombatActivityPlayback::AdvanceRows(
 			? Row.TargetY
 			: FMath::Lerp(Row.ShiftStartY, Row.TargetY, SmoothedShift);
 
-		if (Row.bRetirementProtected)
+		if (Row.RootVisualState == EWacomBattleCombatActivityRootVisualState::Pinned
+			|| Row.RootVisualState == EWacomBattleCombatActivityRootVisualState::IconResident)
 		{
+			continue;
+		}
+		if (Row.RootVisualState == EWacomBattleCombatActivityRootVisualState::Replacing)
+		{
+			const float ReplacementStep = Config.RootIconReplacementFadeSeconds <= 0.0f
+				? 1.0f
+				: DeltaTime / Config.RootIconReplacementFadeSeconds;
+			Row.ContentRetirementProgress = FMath::Min(
+				1.0f, Row.ContentRetirementProgress + ReplacementStep);
+			Row.IconRetirementProgress = FMath::Min(
+				1.0f, Row.IconRetirementProgress + ReplacementStep);
 			continue;
 		}
 		Row.UnprotectedElapsed += DeltaTime;
@@ -486,16 +601,30 @@ void FWacomBattleCombatActivityPlayback::AdvanceRows(
 		}
 		const float FadeSeconds = FMath::Lerp(
 			Config.BottomRowFadeSeconds, Config.TopRowFadeSeconds, TopProximity);
-		Row.RetirementProgress = FadeSeconds <= 0.0f
+		Row.ContentRetirementProgress = FadeSeconds <= 0.0f
 			? 1.0f
-			: FMath::Min(1.0f, Row.RetirementProgress + DeltaTime / FadeSeconds);
+			: FMath::Min(1.0f, Row.ContentRetirementProgress + DeltaTime / FadeSeconds);
+		if (Row.RootVisualState
+			== EWacomBattleCombatActivityRootVisualState::ContentRetiring
+			&& Row.ContentRetirementProgress >= 1.0f)
+		{
+			Row.RootVisualState = EWacomBattleCombatActivityRootVisualState::IconResident;
+			Row.UnprotectedElapsed = 0.0f;
+		}
 	}
 
 	for (int32 Index = VisibleRows.Num() - 1; Index >= 0; --Index)
 	{
 		const FVisibleRow& Row = VisibleRows[Index];
 		const bool bOutsideViewport = Row.CurrentY + Config.RowHeightPixels <= 0.0f;
-		if (Row.RetirementProgress >= 1.0f || (bOutsideViewport && !Row.bRetirementProtected))
+		const bool bTransientComplete = Row.RootVisualState
+				== EWacomBattleCombatActivityRootVisualState::None
+			&& (Row.ContentRetirementProgress >= 1.0f || bOutsideViewport);
+		const bool bReplacementComplete = Row.RootVisualState
+				== EWacomBattleCombatActivityRootVisualState::Replacing
+			&& Row.ContentRetirementProgress >= 1.0f
+			&& Row.IconRetirementProgress >= 1.0f;
+		if (bTransientComplete || bReplacementComplete)
 		{
 			if (Row.PlaybackId == ActiveRootPlaybackId)
 			{
@@ -537,23 +666,44 @@ void FWacomBattleCombatActivityPlayback::RebuildViews(
 		View.PlaybackId = VisibleRow.PlaybackId;
 		View.Row = VisibleRow.Row;
 		View.LayoutY = VisibleRow.CurrentY;
-		View.bPinnedRoot = VisibleRow.bPinnedRoot;
-		View.bRootActionLane = VisibleRow.bPinnedRoot || VisibleRow.bExitingRoot;
-		View.bFooterHandoffSource = VisibleRow.PlaybackId == LastRootPlaybackId;
+		View.bPinnedRoot = VisibleRow.RootVisualState
+			== EWacomBattleCombatActivityRootVisualState::Pinned;
+		View.bRootActionLane = VisibleRow.RootVisualState
+			!= EWacomBattleCombatActivityRootVisualState::None;
+		View.bLatestRootAction = VisibleRow.PlaybackId == LastRootPlaybackId;
+		View.bResidentLastActionIcon = VisibleRow.RootVisualState
+			== EWacomBattleCombatActivityRootVisualState::IconResident;
+		View.bReplacingLastActionIcon = VisibleRow.RootVisualState
+			== EWacomBattleCombatActivityRootVisualState::Replacing;
 		const float EnterAmount = Config.EnterSeconds <= 0.0f
 			? 1.0f
 			: FMath::Clamp(VisibleRow.EnterElapsed / Config.EnterSeconds, 0.0f, 1.0f);
-		if (VisibleRow.bExitingRoot)
+		if (VisibleRow.RootVisualState
+			== EWacomBattleCombatActivityRootVisualState::ContentRetiring
+			|| VisibleRow.RootVisualState
+				== EWacomBattleCombatActivityRootVisualState::IconResident)
 		{
 			View.Opacity = EnterAmount;
-			View.ContentOpacity = 1.0f - VisibleRow.RetirementProgress;
+			View.ContentOpacity = 1.0f - VisibleRow.ContentRetirementProgress;
 			View.IconOpacity = 1.0f;
+		}
+		else if (VisibleRow.RootVisualState
+			== EWacomBattleCombatActivityRootVisualState::Replacing)
+		{
+			View.Opacity = EnterAmount;
+			View.ContentOpacity = 1.0f - VisibleRow.ContentRetirementProgress;
+			View.IconOpacity = 1.0f - VisibleRow.IconRetirementProgress;
 		}
 		else
 		{
-			View.Opacity = EnterAmount * (1.0f - VisibleRow.RetirementProgress);
+			View.Opacity = EnterAmount;
 			View.ContentOpacity = 1.0f;
 			View.IconOpacity = 1.0f;
+			if (VisibleRow.RootVisualState
+				== EWacomBattleCombatActivityRootVisualState::None)
+			{
+				View.Opacity *= 1.0f - VisibleRow.ContentRetirementProgress;
+			}
 		}
 		View.TranslationY = Config.bReducedMotion
 			? 0.0f

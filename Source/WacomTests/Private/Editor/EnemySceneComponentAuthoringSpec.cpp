@@ -9,8 +9,10 @@
 #include "Components/WacomBattleEnemyPartFlipbookLayerComponent.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "Engine/Blueprint.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 #include "Misc/ScopeExit.h"
 #include "PaperFlipbook.h"
 #include "UObject/StrongObjectPtr.h"
@@ -157,5 +159,125 @@ bool FWacomEnemySceneComponentAuthoringSyncSpec::RunTest(const FString& /*Parame
 		Host->GetComponents().Num(), ComponentCountBefore);
 	TestEqual(TEXT("Second sync does not change topology revision"),
 		Host->GetEnemySceneComponentTopologyRevision(), RevisionBefore);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomEnemySceneBlueprintInstanceAuthoringReportSpec,
+	"Wacom.Editor.EnemyScene.ComponentAuthoring.BlueprintInstanceUsesOneAuthoredTopology",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomEnemySceneBlueprintInstanceAuthoringReportSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomEnemySceneComponentAuthoringSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	UBlueprint* Blueprint = LoadObject<UBlueprint>(
+		nullptr,
+		TEXT("/Game/Wacom/Core/Enemy/BP_SnakeHost_Debug.BP_SnakeHost_Debug"));
+	if (!TestNotNull(TEXT("Snake Host Blueprint"), Blueprint)
+		|| !TestNotNull(TEXT("Snake Host generated class"),
+			Blueprint ? Blueprint->GeneratedClass.Get() : nullptr))
+	{
+		return false;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.ObjectFlags |= RF_Transient;
+	AWacomBattleEnemyActor* Host = World->SpawnActor<AWacomBattleEnemyActor>(
+		Blueprint->GeneratedClass,
+		FVector::ZeroVector,
+		FRotator::ZeroRotator,
+		SpawnParams);
+	if (!TestNotNull(TEXT("Spawned Blueprint Host instance"), Host))
+	{
+		return false;
+	}
+	ON_SCOPE_EXIT
+	{
+		if (IsValid(Host))
+		{
+			Host->Destroy();
+		}
+	};
+
+	const FWacomBattleSceneEnemyHostAuthoringReport Report =
+		FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
+	TestEqual(TEXT("Blueprint instance reports exactly three authored Parts"),
+		Report.PartComponentCount, 3);
+	TestTrue(TEXT("Blueprint instance does not duplicate PartSlotIds"),
+		Report.IdentityAudit.DuplicatePartSlotIds.IsEmpty());
+	TestTrue(TEXT("Blueprint instance authoring report is Ready"),
+		Report.bAuthoringReady);
+
+	TArray<UWacomBattleEnemyPartComponent*> Parts;
+	Host->GetComponents(Parts);
+	const TMap<FName, FVector> ExpectedDebugLocations = {
+		{ TEXT("Head"), FVector(-154.0f, -6.0f, 46.0f) },
+		{ TEXT("Body"), FVector(0.0f, 0.0f, 70.0f) },
+		{ TEXT("Tail"), FVector(118.0f, 16.0f, 72.0f) },
+	};
+	for (const UWacomBattleEnemyPartComponent* Part : Parts)
+	{
+		const FVector* ExpectedLocation = Part
+			? ExpectedDebugLocations.Find(Part->PartSlotId)
+			: nullptr;
+		if (TestNotNull(TEXT("Debug Snake Part has an expected authored slot"),
+			ExpectedLocation))
+		{
+			TestEqual(
+				FString::Printf(TEXT("Debug Snake %s authored location"),
+					*Part->PartSlotId.ToString()),
+				Part->GetRelativeLocation(),
+				*ExpectedLocation);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomEnemySceneExplorationMapHostAuthoringReportSpec,
+	"Wacom.Editor.EnemyScene.ComponentAuthoring.ExplorationMapPlacedHostsUseInstanceTopology",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomEnemySceneExplorationMapHostAuthoringReportSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	UWorld* ExplorationWorld = LoadObject<UWorld>(
+		nullptr,
+		TEXT("/Game/Wacom/Maps/L_Exploration.L_Exploration"));
+	if (!TestNotNull(TEXT("Exploration world"), ExplorationWorld))
+	{
+		return false;
+	}
+
+	int32 MatchingHostCount = 0;
+	for (TActorIterator<AWacomBattleEnemyActor> It(ExplorationWorld); It; ++It)
+	{
+		AWacomBattleEnemyActor* Host = *It;
+		if (!Host || !Host->GetClass()->GetPathName().Equals(
+			TEXT("/Game/Wacom/Core/Enemy/BP_SnakeHost_Debug.BP_SnakeHost_Debug_C")))
+		{
+			continue;
+		}
+
+		++MatchingHostCount;
+		const FWacomBattleSceneEnemyHostAuthoringReport Report =
+			FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(*Host);
+		TestEqual(TEXT("Placed Snake Host reports exactly three authored Parts"),
+			Report.PartComponentCount, 3);
+		TestTrue(TEXT("Placed Snake Host has no duplicate PartSlotIds"),
+			Report.IdentityAudit.DuplicatePartSlotIds.IsEmpty());
+		TestTrue(TEXT("Placed Snake Host authoring report is Ready"),
+			Report.bAuthoringReady);
+	}
+
+	TestTrue(TEXT("Exploration map contains a placed Snake Host"),
+		MatchingHostCount > 0);
 	return true;
 }

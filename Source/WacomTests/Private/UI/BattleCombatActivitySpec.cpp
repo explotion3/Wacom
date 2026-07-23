@@ -249,9 +249,16 @@ bool FWacomUIBattleCombatActivityDetailsRequestSpec::RunTest(const FString& /*Pa
 	HUD->SetCombatLogFeedForTest(Feed.Get());
 	int32 RequestCount = 0;
 	HUD->OnCombatLogDetailsRequestedNative.AddLambda([&RequestCount]() { ++RequestCount; });
+	const UButton* LastActionButton = Feed->WidgetTree
+		? Cast<UButton>(Feed->WidgetTree->FindWidget(TEXT("LastActionButton")))
+		: nullptr;
 
 	Feed->RequestDetailsForTest();
 	TestEqual(TEXT("Footer without a root action is inert"), RequestCount, 0);
+	TestTrue(TEXT("Transparent details hitbox keeps its layout while no root exists"),
+		LastActionButton
+		&& LastActionButton->GetVisibility() == ESlateVisibility::Visible
+		&& !LastActionButton->GetIsEnabled());
 
 	FWacomBattleCombatActivityBatchView Batch;
 	Batch.bSetTurnImmediately = true;
@@ -261,6 +268,10 @@ bool FWacomUIBattleCombatActivityDetailsRequestSpec::RunTest(const FString& /*Pa
 	Group.RootAction.MessageText = FText::FromString(TEXT("泛滥"));
 	Group.RootAction.IconKey = TEXT("Player");
 	Feed->EnqueueCombatActivityBatch(Batch);
+	TestTrue(TEXT("Transparent details hitbox is clickable as soon as the root enters"),
+		LastActionButton
+		&& LastActionButton->GetVisibility() == ESlateVisibility::Visible
+		&& LastActionButton->GetIsEnabled());
 	Feed->RequestDetailsForTest();
 	TestEqual(TEXT("One click routes exactly one details request through HUD"), RequestCount, 1);
 	return true;
@@ -288,6 +299,29 @@ bool FWacomUIBattleCombatActivitySimplifiedMotionSpec::RunTest(const FString& /*
 	{
 		TestEqual(TEXT("Simplified playback disables row translation"), Playback.GetVisibleRows()[0].TranslationY, 0.0f);
 	}
+
+	Playback.Reset();
+	Config.BottomRowHoldSeconds = 0.0f;
+	Config.TopRowHoldSeconds = 0.0f;
+	Config.BottomRowFadeSeconds = 0.0f;
+	Config.TopRowFadeSeconds = 0.0f;
+	Config.RootIconReplacementFadeSeconds = 0.10f;
+	Group.RootAction.EventSequence = 10;
+	Playback.BeginSynchronizedGroup(Group.RootAction, 1, Config);
+	Playback.CompleteSynchronizedGroup(Config);
+	Playback.Tick(0.0f, Config);
+	FWacomBattleCombatActivityRowView NextRoot = Group.RootAction;
+	NextRoot.EventSequence = 20;
+	Playback.BeginSynchronizedGroup(NextRoot, 1, Config);
+	Playback.Tick(0.05f, Config);
+	const FWacomBattleCombatActivityRowPlaybackView* Outgoing =
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 10);
+	TestTrue(TEXT("Simplified replacement keeps a short opacity-only crossfade"),
+		Outgoing
+		&& Outgoing->IconOpacity > 0.0f
+		&& Outgoing->IconOpacity < 1.0f
+		&& FMath::IsNearlyZero(Outgoing->TranslationY));
 	return true;
 }
 
@@ -407,13 +441,168 @@ bool FWacomUIBattleCombatActivityRootProtectionSpec::RunTest(const FString& /*Pa
 	Playback.Tick(0.10f, Config);
 	Root = WacomBattleCombatActivitySpec::FindPlaybackRow(
 		Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction);
-	TestTrue(TEXT("Released root stays in the footer action lane during handoff"), Root
+	TestTrue(TEXT("Released root stays in the last-action lane while content retires"), Root
 		&& Root->bRootActionLane
-		&& Root->bFooterHandoffSource
+		&& Root->bLatestRootAction
 		&& FMath::IsNearlyEqual(Root->LayoutY, 100.0f));
 	TestTrue(TEXT("Root text and background fade before its icon"), Root
 		&& Root->ContentOpacity < Root->IconOpacity
 		&& FMath::IsNearlyEqual(Root->IconOpacity, 1.0f));
+	for (const FWacomBattleCombatActivityRowPlaybackView& View : Playback.GetVisibleRows())
+	{
+		if (View.Row.RowKind == EWacomBattleCombatActivityRowKind::Result)
+		{
+			TestFalse(TEXT("Result rows never replace the latest root icon"),
+				View.bLatestRootAction);
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityResidentRootSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.LatestRootBecomesStableResidentIcon",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityResidentRootSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleCombatActivityPlayback Playback;
+	FWacomBattleCombatActivityPlaybackConfig Config;
+	Config.EnterSeconds = 0.0f;
+	Config.ShiftSeconds = 0.0f;
+	Config.BottomRowHoldSeconds = 0.0f;
+	Config.TopRowHoldSeconds = 0.0f;
+	Config.BottomRowFadeSeconds = 0.10f;
+	Config.TopRowFadeSeconds = 0.10f;
+
+	FWacomBattleCombatActivityRowView Root;
+	Root.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+	Root.EventSequence = 10;
+	Root.MessageText = FText::FromString(TEXT("根行动"));
+	Playback.BeginSynchronizedGroup(Root, 1, Config);
+	Playback.CompleteSynchronizedGroup(Config);
+	Playback.Tick(0.10f, Config);
+
+	TestEqual(TEXT("Latest root remains as one visible resident row"),
+		Playback.GetVisibleRows().Num(), 1);
+	if (Playback.GetVisibleRows().Num() == 1)
+	{
+		const FWacomBattleCombatActivityRowPlaybackView& Resident = Playback.GetVisibleRows()[0];
+		TestTrue(TEXT("Resident keeps only the latest root icon"),
+			Resident.bLatestRootAction
+			&& Resident.bResidentLastActionIcon
+			&& FMath::IsNearlyZero(Resident.ContentOpacity)
+			&& FMath::IsNearlyEqual(Resident.IconOpacity, 1.0f));
+	}
+	TestFalse(TEXT("A stable resident icon does not keep the feed ticking"),
+		Playback.IsTickRequired());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityRootReplacementSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.NewRootCrossfadesPreviousResidentOnly",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityRootReplacementSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleCombatActivityPlayback Playback;
+	FWacomBattleCombatActivityPlaybackConfig Config;
+	Config.EnterSeconds = 0.12f;
+	Config.ShiftSeconds = 0.0f;
+	Config.BottomRowHoldSeconds = 0.0f;
+	Config.TopRowHoldSeconds = 0.0f;
+	Config.BottomRowFadeSeconds = 0.0f;
+	Config.TopRowFadeSeconds = 0.0f;
+	Config.RootIconReplacementFadeSeconds = 0.10f;
+
+	auto MakeRoot = [](const int32 Sequence, const TCHAR* Label)
+	{
+		FWacomBattleCombatActivityRowView Root;
+		Root.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+		Root.EventSequence = Sequence;
+		Root.MessageText = FText::FromString(Label);
+		return Root;
+	};
+
+	Playback.BeginSynchronizedGroup(MakeRoot(10, TEXT("玩家行动")), 1, Config);
+	Playback.CompleteSynchronizedGroup(Config);
+	Playback.Tick(0.0f, Config);
+	Playback.BeginSynchronizedGroup(MakeRoot(20, TEXT("敌人行动")), 1, Config);
+	TestEqual(TEXT("Replacement keeps one outgoing and one incoming root"),
+		Playback.GetVisibleRows().Num(), 2);
+	const FWacomBattleCombatActivityRowPlaybackView* Outgoing =
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 10);
+	const FWacomBattleCombatActivityRowPlaybackView* Incoming =
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 20);
+	TestTrue(TEXT("Only the previous latest icon enters replacement"),
+		Outgoing && Outgoing->bReplacingLastActionIcon && !Outgoing->bLatestRootAction);
+	TestTrue(TEXT("New semantic root immediately becomes the latest action"),
+		Incoming && Incoming->bPinnedRoot && Incoming->bLatestRootAction);
+
+	Playback.Tick(0.05f, Config);
+	Outgoing = WacomBattleCombatActivitySpec::FindPlaybackRow(
+		Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 10);
+	TestTrue(TEXT("Previous icon fades over the authored replacement duration"),
+		Outgoing && Outgoing->IconOpacity < 1.0f && Outgoing->IconOpacity > 0.0f);
+
+	Playback.Tick(0.05f, Config);
+	TestNull(TEXT("Previous icon is removed after the replacement crossfade"),
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 10));
+	TestNotNull(TEXT("Newest root remains after replacement"),
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 20));
+
+	Playback.BeginSynchronizedGroup(MakeRoot(30, TEXT("后续行动")), 1, Config);
+	Playback.BeginSynchronizedGroup(MakeRoot(40, TEXT("快速行动")), 1, Config);
+	TestNull(TEXT("Rapid roots immediately discard an older outgoing duplicate"),
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 20));
+	TestEqual(TEXT("Rapid replacement remains bounded to outgoing plus latest root"),
+		Playback.GetVisibleRows().Num(), 2);
+	Config.RootIconReplacementFadeSeconds = 0.0f;
+	Playback.BeginSynchronizedGroup(MakeRoot(50, TEXT("即时替换")), 1, Config);
+	TestEqual(TEXT("A zero replacement duration removes the previous icon immediately"),
+		Playback.GetVisibleRows().Num(), 1);
+	TestNotNull(TEXT("Zero-duration replacement keeps the newest root"),
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 50));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCombatActivityRestoreResidentSpec,
+	"Wacom.UI.Battle.CombatActivity.Playback.RestoreCreatesOneIconOnlyResident",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCombatActivityRestoreResidentSpec::RunTest(const FString& /*Parameters*/)
+{
+	FWacomBattleCombatActivityPlayback Playback;
+	FWacomBattleCombatActivityPlaybackConfig Config;
+	Config.EnterSeconds = 0.12f;
+	Config.ShiftSeconds = 0.10f;
+	FWacomBattleCombatActivityRowView Root;
+	Root.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+	Root.EventSequence = 77;
+	Root.MessageText = FText::FromString(TEXT("恢复行动"));
+
+	Playback.RestoreLastRootAction(Root, Config);
+	Playback.RestoreLastRootAction(Root, Config);
+	TestEqual(TEXT("Repeated persistent restore does not duplicate the resident row"),
+		Playback.GetVisibleRows().Num(), 1);
+	if (Playback.GetVisibleRows().Num() == 1)
+	{
+		const FWacomBattleCombatActivityRowPlaybackView& Resident = Playback.GetVisibleRows()[0];
+		TestTrue(TEXT("Restored row is immediately icon-only and motionless"),
+			Resident.bResidentLastActionIcon
+			&& FMath::IsNearlyZero(Resident.ContentOpacity)
+			&& FMath::IsNearlyEqual(Resident.IconOpacity, 1.0f)
+			&& FMath::IsNearlyZero(Resident.TranslationY));
+	}
+	TestFalse(TEXT("Restored stable resident does not require Tick"), Playback.IsTickRequired());
 	return true;
 }
 
@@ -506,18 +695,23 @@ bool FWacomUIBattleCombatActivityResidentBudgetSpec::RunTest(const FString& /*Pa
 		Playback.Tick(0.0f, Config);
 	}
 
-	TestTrue(TEXT("Resident rows stay within the internal safety budget"),
-		Playback.GetVisibleRows().Num() <= 32);
+	int32 TransientResultCount = 0;
 	int32 LastSequence = 0;
 	for (const FWacomBattleCombatActivityRowPlaybackView& View : Playback.GetVisibleRows())
 	{
 		if (View.Row.RowKind == EWacomBattleCombatActivityRowKind::Result)
 		{
+			++TransientResultCount;
 			TestTrue(TEXT("Surviving results preserve event order"),
 				View.Row.EventSequence > LastSequence);
 			LastSequence = View.Row.EventSequence;
 		}
 	}
+	TestTrue(TEXT("Transient result rows stay within the internal safety budget"),
+		TransientResultCount <= 32);
+	TestNotNull(TEXT("Root action is not charged against the transient row budget"),
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction));
 	TestEqual(TEXT("Newest result survives budget eviction"), LastSequence, 40);
 	return true;
 }
@@ -580,6 +774,10 @@ bool FWacomUIBattleCombatActivityFormalAssetContractSpec::RunTest(const FString&
 	if (FooterButton)
 	{
 		TestFalse(TEXT("Footer button does not take keyboard focus"), FooterButton->GetIsFocusable());
+		TestEqual(TEXT("Footer button remains a transparent hitbox without duplicate icon content"),
+			FooterButton->GetContent(), static_cast<UWidget*>(nullptr));
+		TestEqual(TEXT("Footer button exposes its combat-log tooltip"),
+			FooterButton->GetToolTipText().ToString(), FString(TEXT("打开战斗日志")));
 	}
 	if (LastActionSize)
 	{
@@ -588,6 +786,8 @@ bool FWacomUIBattleCombatActivityFormalAssetContractSpec::RunTest(const FString&
 	}
 	TestNotNull(TEXT("Feed turn icon binding"),
 		FeedBlueprint->WidgetTree->FindWidget(TEXT("TurnIcon")));
+	TestNull(TEXT("Legacy duplicate footer action icon removed"),
+		FeedBlueprint->WidgetTree->FindWidget(TEXT("LastActionIcon")));
 	TestNull(TEXT("Legacy BlocksBox removed"),
 		FeedBlueprint->WidgetTree->FindWidget(TEXT("BlocksBox")));
 
@@ -613,6 +813,8 @@ bool FWacomUIBattleCombatActivityFormalAssetContractSpec::RunTest(const FString&
 		Style->ActivityViewportHeightPixels, 140.0f);
 	TestEqual(TEXT("Default Style uses 40px activity rows"), Style->RowHeightPixels, 40.0f);
 	TestEqual(TEXT("Default Style uses 72px top fade band"), Style->TopFadeBandPixels, 72.0f);
+	TestEqual(TEXT("Default Style crossfades the previous resident icon in 100ms"),
+		Style->RootIconReplacementFadeSeconds, 0.10f);
 	TestEqual(TEXT("Default Style compresses burst stagger to 80ms"),
 		Style->MinimumResultStaggerSeconds, 0.08f);
 	TestTrue(TEXT("Atlas uses nearest filtering"), Atlas->Filter == TF_Nearest);

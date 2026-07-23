@@ -18,6 +18,7 @@ struct FWacomBattleCombatActivityPlaybackConfig
 	float BottomRowFadeSeconds = 0.24f;
 	float TopRowHoldSeconds = 0.18f;
 	float TopRowFadeSeconds = 0.10f;
+	float RootIconReplacementFadeSeconds = 0.10f;
 	float ActivityViewportHeightPixels = 140.0f;
 	float RowHeightPixels = 40.0f;
 	float TopFadeBandPixels = 72.0f;
@@ -37,7 +38,18 @@ struct FWacomBattleCombatActivityRowPlaybackView
 	float TranslationY = 0.0f;
 	bool bPinnedRoot = false;
 	bool bRootActionLane = false;
-	bool bFooterHandoffSource = false;
+	bool bLatestRootAction = false;
+	bool bResidentLastActionIcon = false;
+	bool bReplacingLastActionIcon = false;
+};
+
+enum class EWacomBattleCombatActivityRootVisualState : uint8
+{
+	None,
+	Pinned,
+	ContentRetiring,
+	IconResident,
+	Replacing,
 };
 
 /** App-private FIFO playback for the non-blocking BattleHUD combat activity broadcaster. */
@@ -55,7 +67,9 @@ public:
 	void CompleteSynchronizedGroup(
 		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
 	void SetPresentedTurnNumber(int32 TurnNumber);
-	void SetLastRootAction(const FWacomBattleCombatActivityRowView& RootAction);
+	void RestoreLastRootAction(
+		const FWacomBattleCombatActivityRowView& RootAction,
+		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
 	void Tick(float DeltaTime, const FWacomBattleCombatActivityPlaybackConfig& InConfig);
 	void Reset();
 
@@ -72,14 +86,14 @@ private:
 		FWacomBattleCombatActivityRowView Row;
 		float EnterElapsed = 0.0f;
 		float UnprotectedElapsed = 0.0f;
-		float RetirementProgress = 0.0f;
+		float ContentRetirementProgress = 0.0f;
+		float IconRetirementProgress = 0.0f;
 		float CurrentY = 0.0f;
 		float ShiftStartY = 0.0f;
 		float TargetY = 0.0f;
 		float ShiftElapsed = 0.0f;
-		bool bRetirementProtected = false;
-		bool bPinnedRoot = false;
-		bool bExitingRoot = false;
+		EWacomBattleCombatActivityRootVisualState RootVisualState =
+			EWacomBattleCombatActivityRootVisualState::None;
 	};
 
 	TArray<FWacomBattleCombatActivityBatchView> PendingBatches;
@@ -100,9 +114,12 @@ private:
 
 	void StartNextBatch(const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void StartCurrentGroup(const FWacomBattleCombatActivityPlaybackConfig& Config);
-	void ReleasePreviousRootLane();
+	void PreparePreviousRootForReplacement(
+		const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void AdvanceAfterCurrentGroup(const FWacomBattleCombatActivityPlaybackConfig& Config);
-	uint64 EmitRow(const FWacomBattleCombatActivityRowView& Row, bool bPinnedRoot,
+	uint64 EmitRow(
+		const FWacomBattleCombatActivityRowView& Row,
+		EWacomBattleCombatActivityRootVisualState RootVisualState,
 		const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void ReleaseActiveRoot(const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void RetargetRows(const FWacomBattleCombatActivityPlaybackConfig& Config);

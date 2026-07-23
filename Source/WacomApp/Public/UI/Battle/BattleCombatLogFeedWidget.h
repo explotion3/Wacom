@@ -92,9 +92,6 @@ protected:
 	TObjectPtr<UButton> LastActionButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
-	TObjectPtr<UImage> LastActionIcon;
-
-	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UWidget> TurnRoot;
 
 	UPROPERTY(meta = (BindWidgetOptional))

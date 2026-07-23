@@ -45,12 +45,25 @@ namespace
 		Config.BottomRowFadeSeconds = Resolved->BottomRowFadeSeconds;
 		Config.TopRowHoldSeconds = Resolved->TopRowHoldSeconds;
 		Config.TopRowFadeSeconds = Resolved->TopRowFadeSeconds;
+		Config.RootIconReplacementFadeSeconds = Resolved->RootIconReplacementFadeSeconds;
 		Config.ActivityViewportHeightPixels = Resolved->ActivityViewportHeightPixels;
 		Config.RowHeightPixels = Resolved->RowHeightPixels;
 		Config.TopFadeBandPixels = Resolved->TopFadeBandPixels;
 		Config.bReducedMotion = bReducedMotion;
 		Config.Normalize();
 		return Config;
+	}
+
+	FButtonStyle MakeInvisibleButtonStyle()
+	{
+		FSlateBrush NoDraw;
+		NoDraw.DrawAs = ESlateBrushDrawType::NoDrawType;
+		FButtonStyle Style;
+		Style.SetNormal(NoDraw);
+		Style.SetHovered(NoDraw);
+		Style.SetPressed(NoDraw);
+		Style.SetDisabled(NoDraw);
+		return Style;
 	}
 
 }
@@ -102,18 +115,29 @@ TSharedRef<SWidget> UBattleCombatLogFeedWidget::RebuildWidget()
 		Footer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		Root->AddChildToVerticalBox(Footer);
 
-		LastActionButton = WidgetTree->ConstructWidget<UButton>(UButton::StaticClass(), TEXT("LastActionButton"));
+		USizeBox* LastActionSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(), TEXT("LastActionSize"));
+		LastActionSize->SetWidthOverride(38.0f);
+		LastActionSize->SetHeightOverride(38.0f);
+		LastActionSize->SetRenderTranslation(FVector2D(0.0f, -47.0f));
+		LastActionSize->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		if (UHorizontalBoxSlot* ActionSlot = Footer->AddChildToHorizontalBox(LastActionSize))
+		{
+			ActionSlot->SetPadding(FMargin(2.0f, 0.0f, 8.0f, 0.0f));
+			ActionSlot->SetVerticalAlignment(VAlign_Center);
+		}
+
+		LastActionButton = WidgetTree->ConstructWidget<UButton>(
+			UButton::StaticClass(), TEXT("LastActionButton"));
 		PRAGMA_DISABLE_DEPRECATION_WARNINGS
 		LastActionButton->IsFocusable = false;
 		PRAGMA_ENABLE_DEPRECATION_WARNINGS
-		LastActionButton->SetRenderTranslation(FVector2D(0.0f, -46.0f));
-		LastActionIcon = WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), TEXT("LastActionIcon"));
-		LastActionIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
-		LastActionButton->SetContent(LastActionIcon);
-		if (UHorizontalBoxSlot* ActionSlot = Footer->AddChildToHorizontalBox(LastActionButton))
-		{
-			ActionSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
-		}
+		LastActionButton->SetStyle(MakeInvisibleButtonStyle());
+		LastActionButton->SetVisibility(ESlateVisibility::Visible);
+		LastActionButton->SetIsEnabled(false);
+		LastActionButton->SetToolTipText(
+			LOCTEXT("OpenCombatLogTooltip", "打开战斗日志"));
+		LastActionSize->SetContent(LastActionButton);
 
 		UHorizontalBox* RuntimeTurnRoot = WidgetTree->ConstructWidget<UHorizontalBox>(UHorizontalBox::StaticClass(), TEXT("TurnRoot"));
 		RuntimeTurnRoot->SetVisibility(ESlateVisibility::HitTestInvisible);
@@ -274,7 +298,9 @@ void UBattleCombatLogFeedWidget::RestorePersistentState(
 	Playback->SetPresentedTurnNumber(TurnNumber);
 	if (LastRootAction)
 	{
-		Playback->SetLastRootAction(*LastRootAction);
+		Playback->RestoreLastRootAction(
+			*LastRootAction,
+			BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion));
 	}
 	RefreshPlaybackPresentation();
 }
@@ -311,10 +337,6 @@ void UBattleCombatLogFeedWidget::EnsureRuntimeBindings()
 	if (!LastActionButton)
 	{
 		LastActionButton = Cast<UButton>(WidgetTree->FindWidget(TEXT("LastActionButton")));
-	}
-	if (!LastActionIcon)
-	{
-		LastActionIcon = Cast<UImage>(WidgetTree->FindWidget(TEXT("LastActionIcon")));
 	}
 	if (!TurnRoot)
 	{
@@ -405,7 +427,9 @@ void UBattleCombatLogFeedWidget::RefreshPlaybackPresentation()
 			CanvasSlot->SetAlignment(FVector2D::ZeroVector);
 			CanvasSlot->SetOffsets(FMargin(0.0f, View.LayoutY, 0.0f, Config.RowHeightPixels));
 			CanvasSlot->SetAutoSize(false);
-			CanvasSlot->SetZOrder(View.bRootActionLane ? 100 : Index);
+			CanvasSlot->SetZOrder(View.bRootActionLane
+				? (View.bLatestRootAction ? 100 : 90)
+				: Index);
 		}
 		RowWidget->SetPlaybackPresentation(
 			View.Opacity, View.ContentOpacity, View.IconOpacity, View.TranslationY);
@@ -416,29 +440,10 @@ void UBattleCombatLogFeedWidget::RefreshPlaybackPresentation()
 void UBattleCombatLogFeedWidget::RefreshFooter()
 {
 	const FWacomBattleCombatActivityRowView* LastRoot = Playback ? Playback->GetLastRootAction() : nullptr;
-	const bool bRootRowOwnsLastActionIcon = Playback
-		&& Playback->GetVisibleRows().ContainsByPredicate([](
-			const FWacomBattleCombatActivityRowPlaybackView& View)
-		{
-			return View.bFooterHandoffSource;
-		});
 	if (LastActionButton)
 	{
-		LastActionButton->SetVisibility(!LastRoot
-			? ESlateVisibility::Collapsed
-			: (bRootRowOwnsLastActionIcon
-				? ESlateVisibility::HitTestInvisible
-				: ESlateVisibility::Visible));
-	}
-	if (LastActionIcon)
-	{
-		LastActionIcon->SetVisibility(LastRoot && !bRootRowOwnsLastActionIcon
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-		if (LastRoot)
-		{
-			LastActionIcon->SetBrush(ResolveActivityIconBrush(*LastRoot));
-		}
+		LastActionButton->SetVisibility(ESlateVisibility::Visible);
+		LastActionButton->SetIsEnabled(LastRoot != nullptr);
 	}
 	const int32 TurnNumber = Playback ? Playback->GetPresentedTurnNumber() : 0;
 	if (TurnRoot)

@@ -60,7 +60,7 @@ WBP 不应做：
 
 - 玩家状态、牌堆数量、CommandBar 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - 拖牌指向合法敌人部位 / 手牌目标，或无目标卡已经达到 armed commit 可释放状态时，玩家状态条和敌人部位面板可以直接显示 Action Preview projected value；单纯拖出手牌区但未 armed、未指向有效目标或目标无效时不显示玩家侧收益预览。
-- `CombatLogFeed` 在固定高度的裁切视口中流式显示短时活动；不再以三行做数据硬裁剪。根行动从底部最后行动槽出现，结果向上流动并随接近顶部加速淡出；收束时根行动只淡出文字和底板，图标原位交接为可点击入口。除交接完成后的最后行动按钮外不遮挡 HUD、手牌或世界目标。
+- `CombatLogFeed` 在固定高度的裁切视口中流式显示短时活动；不再以三行做数据硬裁剪。根行动从底部最后行动槽出现，结果向上流动并随接近顶部加速淡出；收束时最新根行动只淡出文字和底板，原 Row 图标常驻，新的根行动才替换它。透明 `LastActionButton` 始终覆盖图标槽并在已有根行动时可点击，其余区域不遮挡 HUD、手牌或世界目标。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 抽牌从 `DrawPileMotionAnchor`（或 `DrawPileView` 中心）进入；弃牌飞向 `DiscardPileMotionAnchor`（或 `DiscardPileView` 中心）。配置有效 Card Use Surface Effect 时，无目标牌与目标牌都停在提交位置播放当前 Style（默认像素翻面收牌，旧菱形波可切回）；`PlayTargetMotionAnchor` 和真实目标坐标仍会采集，但只供效果失效时的旧空间离场 fallback 与未来目标命中反馈使用。
 - 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 的 typed Part registry 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
@@ -213,8 +213,7 @@ WBP 合同：
 |---|---|---|---|
 | `ActivityRowsViewport` | `SizeBox` | Optional | `140px` 固定高度活动视口；必须使用 `ClipToBounds` |
 | `ActivityRowsBox` | `CanvasPanel` | Optional | C++ 按活动数量扩展和回收 Row 池，应用 Playback 输出的 Y 与透明度；必须 `HitTestInvisible` |
-| `LastActionButton` | `Button` | Optional | Footer 中唯一可点击入口；最新根行动仍在播放时不可点击，原位图标交接完成后只广播详细日志打开意图 |
-| `LastActionIcon` | `Image` | Optional | 根行动文字/底板退场后在同一位置接管并保留的玩家/敌人根行动图标；不得与播放中的根行动图标同时显示 |
+| `LastActionButton` | `Button` | Optional | `38×38` 透明命中框，固定覆盖根行动图标槽；始终 `Visible`，无已释放根行动时 disabled，之后在 Row 播放全过程只广播详细日志打开意图 |
 | `TurnRoot` | `Widget` | Optional | 沙漏与回合数的稳定布局根；始终保留 |
 | `TurnIcon` | `Image` | Optional | 默认 Style 提供的中性像素沙漏图标 |
 | `TurnText` | `TextBlock` | Optional | 当前表现已推进到的回合数 |
@@ -227,6 +226,7 @@ WBP 合同：
 |---|---|
 | `ActivityStyle` | 玩家头像、Intent Style、Tag 图标、fallback 图标与播放时序 |
 | `ActivityRowWidgetClass` | 单行 Widget 类，推荐 `WBP_BattleCombatActivityRow` |
+| `ActivityStyle.RootIconReplacementFadeSeconds` | 新根行动到达时上一枚常驻图标的透明度退场时间；默认 `0.10s` |
 
 WBP 不应做：
 
@@ -238,10 +238,10 @@ WBP 不应做：
 最小 PIE 验收：
 
 - 玩家出牌显示头像与卡名，敌人行动显示 Intent 图标与名称，多目标结果逐条进入。
-- Battle Entry Gate 解除后显示一次“沙漏 + 第 1 回合开始”；文字和底板退场后沙漏原位成为首个可点击日志入口，且详细日志不重复增加行动组。
+- Battle Entry Gate 解除后显示一次“沙漏 + 第 1 回合开始”；根行动释放后沙漏槽立即可点击，文字和底板退场后沙漏仍由原 Row 常驻，且详细日志不重复增加行动组。
 - 行数不做三行数据硬裁剪；所有结果按顺序向上流动并在顶部自然退出。
-- 根行动从最后行动槽出现；队列结束时文字和底板淡出，图标不移动并原位交接给 Footer 按钮。
-- Root 与行不拦截 Wait、EndTurn、手牌和世界目标；只有最后行动按钮可点击。
+- 根行动从最后行动槽出现；队列结束时文字和底板淡出，图标留在原 Row。新根行动出现时旧图标短暂淡出，新图标接替；结果行不替换常驻图标。
+- Root 与行不拦截 Wait、EndTurn、手牌和世界目标；只有覆盖图标槽的透明最后行动按钮可点击。
 
 ### WBP_BattleCombatActivityRow
 
@@ -627,7 +627,7 @@ Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Defa
 - CommandBar 里的 Wait / EndTurn 可点击并由 HUD runtime view data 控制可用性。
 - `WBP_FPCardView` 的 `CardSizeBox` 主体命中范围正确，bleed 画布不扩大交互范围。
 - 敌情详情仅为攻击意图显示 `ATK`；拖拽完美释放攻击卡时，Enemy Entry 分别显示金色边框与紧凑 `P > E` / `P ≤ E`，立即消费眩晕时 Intent 变暗并显示斜线；场景部位上方不再出现文字浮层。
-- Combat Activity 连续追加时不丢弃第四行，按顺序向上流动并在顶部衰减；根行动图标原位交接后只有 Footer 最后行动按钮可命中，Presentation Stack 小卡不挡输入。
+- Combat Activity 连续追加时不丢弃第四行，按顺序向上流动并在顶部衰减；最新根行动图标留在原 Row，透明 Footer 命中框在根行动释放后始终可点击，Presentation Stack 小卡不挡输入。
 - 有 `SceneEnemyHostSlots` 的战斗中，每个 `AWacomBattleEnemyActor` 头顶的 EnemyPanel 能按敌人聚合展示所有部位状态；`UWacomBattleEnemyPartComponent` 及其 runtime 只承载 target、drag preview Niagara、Impact 与动作反馈，Action Preview 统一由所属敌人的聚合面板响应。
 - TrainingWarrior 与多部位 Snake 使用同一个 Panel / Entry class；TrainingWarrior 自动采用单段几何，Attack / Guard / Cleave 图标不同，HP 文本只显示当前值，Shield 为零时收起，hover / 拖卡时展开详情，Destroyed 显示 `X`；Snake 按 Definition 顺序生成等宽多段。
 - `EncounterDefinition` 正式入口必须配置 `SceneEnemyHostSlots`；推荐先执行 `SyncSceneEnemyHostSlotsFromEncounter()` 生成 slots，再逐项填写 Host。缺 Host、漏映射或多余 EnemySlotId 是摆放错误。

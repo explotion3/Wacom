@@ -112,6 +112,10 @@ public:
 		meta = (ToolTip = "靠近活动区域顶部时，单行完成淡出的最短时间，单位秒。推荐 0.08–0.18。"))
 	float TopRowFadeSeconds = 0.10f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Retirement",
+		meta = (ToolTip = "新根行动到达时，上一枚常驻行动图标淡出的时间，单位秒。推荐 0.08–0.14；只使用透明度，不改变布局。"))
+	float RootIconReplacementFadeSeconds = 0.10f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Layout",
 		meta = (ToolTip = "短时播报活动视口高度，单位像素。正式 420×190 Feed 推荐 140；影响布局和位置衰减计算。"))
 	float ActivityViewportHeightPixels = 140.0f;
