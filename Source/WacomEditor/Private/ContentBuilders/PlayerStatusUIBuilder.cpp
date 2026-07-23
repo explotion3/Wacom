@@ -9,6 +9,7 @@
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/PanelWidget.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -21,6 +22,7 @@
 #include "Misc/Paths.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
+#include "UI/Battle/WacomBattleStatusTooltipWidget.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
 
@@ -32,10 +34,12 @@ namespace
 		TEXT("/Game/Wacom/UI/Battle/BP_BattleHUD.BP_BattleHUD");
 	constexpr TCHAR StatusIconObjectPath[] =
 		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusIcon.WBP_BattleStatusIcon");
+	constexpr TCHAR StatusIconListObjectPath[] =
+		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusIconList.WBP_BattleStatusIconList");
+	constexpr TCHAR StatusTooltipObjectPath[] =
+		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusTooltip.WBP_BattleStatusTooltip");
 	constexpr TCHAR VitalsMaterialObjectPath[] =
 		TEXT("/Game/DreamMaterials/UI/MI_WacomBattle_PlayerVitals_Default.MI_WacomBattle_PlayerVitals_Default");
-	constexpr TCHAR ContractMarker[] = TEXT("WacomPlayerStatus.ContractVersion=2");
-
 	const FName DamageAnimationName(TEXT("DamagePulseAnimation"));
 	const FName ShieldAnimationName(TEXT("ShieldPulseAnimation"));
 
@@ -55,6 +59,8 @@ namespace
 
 	void MakeTreeNonHitTestable(UWidgetBlueprint& Blueprint)
 	{
+		const bool bAllowInteractiveDescendants = Blueprint.ParentClass
+			&& Blueprint.ParentClass->IsChildOf(UPlayerStatusBar::StaticClass());
 		TArray<UWidget*> Widgets;
 		Blueprint.WidgetTree->GetAllWidgets(Widgets);
 		for (UWidget* Widget : Widgets)
@@ -64,8 +70,33 @@ namespace
 				continue;
 			}
 			RegisterWidgetGuid(Blueprint, *Widget);
-			Widget->SetVisibility(ESlateVisibility::HitTestInvisible);
+			Widget->SetVisibility(bAllowInteractiveDescendants
+				? ESlateVisibility::SelfHitTestInvisible
+				: ESlateVisibility::HitTestInvisible);
 		}
+	}
+
+	bool AllowsChildHitTesting(const UWidget* Widget)
+	{
+		if (!Widget)
+		{
+			return false;
+		}
+		const ESlateVisibility Visibility = Widget->GetVisibility();
+		return Visibility == ESlateVisibility::Visible
+			|| Visibility == ESlateVisibility::SelfHitTestInvisible;
+	}
+
+	bool HasInteractiveAncestorPath(const UWidget* Widget)
+	{
+		for (const UWidget* Current = Widget; Current; Current = Current->GetParent())
+		{
+			if (!AllowsChildHitTesting(Current))
+			{
+				return false;
+			}
+		}
+		return Widget != nullptr;
 	}
 
 	void LogWidgetTreeForAudit(const UWidgetBlueprint& Blueprint)
@@ -202,6 +233,7 @@ namespace
 			&& ShieldRoot
 			&& ShieldText
 			&& StatusList
+			&& HasInteractiveAncestorPath(StatusList)
 			&& bLegacyAnimationsRemoved;
 	}
 
@@ -366,13 +398,27 @@ namespace
 		return true;
 	}
 
-	bool ConfigureStatusIcon(UWidgetBlueprint& Blueprint, const bool bInspectOnly)
+	bool ConfigureStatusIcon(
+		UWidgetBlueprint& Blueprint,
+		UClass* TooltipClass,
+		const bool bInspectOnly)
 	{
-		USizeBox* Root = FindUniqueWidgetOfType<USizeBox>(Blueprint);
+		UWidget* InteractionRoot = Blueprint.WidgetTree
+			? Blueprint.WidgetTree->RootWidget
+			: nullptr;
+		USizeBox* LayoutBox = FindUniqueWidgetOfType<USizeBox>(Blueprint);
+		UImage* IconImage = Blueprint.WidgetTree
+			? Cast<UImage>(Blueprint.WidgetTree->FindWidget(TEXT("IconImage")))
+			: nullptr;
 		UTextBlock* StackText = Blueprint.WidgetTree
 			? Cast<UTextBlock>(Blueprint.WidgetTree->FindWidget(TEXT("StackText")))
 			: nullptr;
-		if (!Root || !StackText)
+		UWacomBattleStatusIconWidget* Defaults = Blueprint.GeneratedClass
+			? Cast<UWacomBattleStatusIconWidget>(
+				Blueprint.GeneratedClass->GetDefaultObject())
+			: nullptr;
+		if (!InteractionRoot || !LayoutBox || !IconImage || !StackText
+			|| !Defaults || !TooltipClass)
 		{
 			LogWidgetTreeForAudit(Blueprint);
 			UE_LOG(LogTemp, Error,
@@ -380,9 +426,69 @@ namespace
 			return false;
 		}
 
-		const bool bReady = FMath::IsNearlyEqual(Root->GetWidthOverride(), 32.0f)
-			&& FMath::IsNearlyEqual(Root->GetHeightOverride(), 32.0f)
-			&& StackText->GetFont().Size == 11;
+		const bool bReady = FMath::IsNearlyEqual(LayoutBox->GetWidthOverride(), 32.0f)
+			&& FMath::IsNearlyEqual(LayoutBox->GetHeightOverride(), 32.0f)
+			&& StackText->GetFont().Size == 11
+			&& InteractionRoot->GetVisibility() == ESlateVisibility::Visible
+			&& IconImage->GetVisibility() == ESlateVisibility::HitTestInvisible
+			&& StackText->GetVisibility() == ESlateVisibility::HitTestInvisible
+			&& Defaults->GetStatusTooltipWidgetClass().Get() == TooltipClass;
+		if (bReady || bInspectOnly)
+		{
+			return bReady;
+		}
+
+		Blueprint.Modify();
+		InteractionRoot->Modify();
+		LayoutBox->Modify();
+		IconImage->Modify();
+		StackText->Modify();
+		Defaults->Modify();
+		LayoutBox->SetWidthOverride(32.0f);
+		LayoutBox->SetHeightOverride(32.0f);
+		InteractionRoot->SetVisibility(ESlateVisibility::Visible);
+		IconImage->SetVisibility(ESlateVisibility::HitTestInvisible);
+		StackText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Defaults->SetStatusTooltipWidgetClass(TooltipClass);
+		FSlateFontInfo Font = StackText->GetFont();
+		Font.Size = 11;
+		Font.TypefaceFontName = TEXT("Bold");
+		StackText->SetFont(Font);
+		StackText->SetShadowOffset(FVector2D(1.0f, 1.0f));
+		StackText->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.90f));
+		return true;
+	}
+
+	bool ConfigureStatusIconList(
+		UWidgetBlueprint& Blueprint,
+		UClass* TooltipClass,
+		const bool bInspectOnly)
+	{
+		UWidget* Root = Blueprint.WidgetTree
+			? Blueprint.WidgetTree->RootWidget
+			: nullptr;
+		UPanelWidget* StatusContainer = Blueprint.WidgetTree
+			? Cast<UPanelWidget>(Blueprint.WidgetTree->FindWidget(TEXT("StatusContainer")))
+			: nullptr;
+		UTextBlock* OverflowText = Blueprint.WidgetTree
+			? Cast<UTextBlock>(Blueprint.WidgetTree->FindWidget(TEXT("OverflowText")))
+			: nullptr;
+		UWacomBattleStatusIconListWidget* Defaults = Blueprint.GeneratedClass
+			? Cast<UWacomBattleStatusIconListWidget>(
+				Blueprint.GeneratedClass->GetDefaultObject())
+			: nullptr;
+		const bool bReady = Blueprint.ParentClass
+			&& Blueprint.ParentClass->IsChildOf(
+				UWacomBattleStatusIconListWidget::StaticClass())
+			&& Root
+			&& StatusContainer
+			&& OverflowText
+			&& AllowsChildHitTesting(Root)
+			&& AllowsChildHitTesting(StatusContainer)
+			&& OverflowText->GetVisibility() != ESlateVisibility::HitTestInvisible
+			&& Defaults
+			&& TooltipClass
+			&& Defaults->GetStatusTooltipWidgetClass().Get() == TooltipClass;
 		if (bReady || bInspectOnly)
 		{
 			return bReady;
@@ -390,15 +496,68 @@ namespace
 
 		Blueprint.Modify();
 		Root->Modify();
-		StackText->Modify();
-		Root->SetWidthOverride(32.0f);
-		Root->SetHeightOverride(32.0f);
-		FSlateFontInfo Font = StackText->GetFont();
-		Font.Size = 11;
-		Font.TypefaceFontName = TEXT("Bold");
-		StackText->SetFont(Font);
-		StackText->SetShadowOffset(FVector2D(1.0f, 1.0f));
-		StackText->SetShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.90f));
+		StatusContainer->Modify();
+		OverflowText->Modify();
+		Defaults->Modify();
+		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		StatusContainer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		OverflowText->SetVisibility(ESlateVisibility::Visible);
+		Defaults->SetStatusTooltipWidgetClass(TooltipClass);
+		return true;
+	}
+
+	bool ConfigureStatusTooltip(UWidgetBlueprint& Blueprint, const bool bInspectOnly)
+	{
+		USizeBox* Root = Blueprint.WidgetTree
+			? Cast<USizeBox>(Blueprint.WidgetTree->FindWidget(TEXT("TooltipRoot")))
+			: nullptr;
+		const FName RequiredBindings[] = {
+			TEXT("TooltipIcon"),
+			TEXT("TitleText"),
+			TEXT("StackText"),
+			TEXT("CoreEffectText"),
+			TEXT("TriggerTimingText"),
+			TEXT("StackPolicyText"),
+			TEXT("OverflowBodyText"),
+		};
+		bool bBindingsReady = Root != nullptr;
+		for (const FName Binding : RequiredBindings)
+		{
+			bBindingsReady &= Blueprint.WidgetTree
+				&& Blueprint.WidgetTree->FindWidget(Binding) != nullptr;
+		}
+		bool bTreeHitTestInvisible = Blueprint.WidgetTree != nullptr;
+		if (Blueprint.WidgetTree)
+		{
+			Blueprint.WidgetTree->ForEachWidget(
+				[&bTreeHitTestInvisible](UWidget* Widget)
+				{
+					bTreeHitTestInvisible &= Widget
+						&& Widget->GetVisibility() == ESlateVisibility::HitTestInvisible;
+				});
+		}
+		const bool bReady = Blueprint.ParentClass
+			&& Blueprint.ParentClass->IsChildOf(
+				UWacomBattleStatusTooltipWidget::StaticClass())
+			&& bBindingsReady
+			&& FMath::IsNearlyEqual(Root->GetWidthOverride(), 300.0f)
+			&& bTreeHitTestInvisible;
+		if (bReady || bInspectOnly)
+		{
+			return bReady;
+		}
+
+		Blueprint.Modify();
+		Root->Modify();
+		Root->SetWidthOverride(300.0f);
+		Blueprint.WidgetTree->ForEachWidget([](UWidget* Widget)
+		{
+			if (Widget)
+			{
+				Widget->Modify();
+				Widget->SetVisibility(ESlateVisibility::HitTestInvisible);
+			}
+		});
 		return true;
 	}
 
@@ -450,12 +609,17 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 		UWidgetBlueprint::StaticClass(), nullptr, BattleHudObjectPath));
 	UWidgetBlueprint* StatusIcon = Cast<UWidgetBlueprint>(StaticLoadObject(
 		UWidgetBlueprint::StaticClass(), nullptr, StatusIconObjectPath));
+	UWidgetBlueprint* StatusIconList = Cast<UWidgetBlueprint>(StaticLoadObject(
+		UWidgetBlueprint::StaticClass(), nullptr, StatusIconListObjectPath));
+	UWidgetBlueprint* StatusTooltip = Cast<UWidgetBlueprint>(StaticLoadObject(
+		UWidgetBlueprint::StaticClass(), nullptr, StatusTooltipObjectPath));
 	UMaterialInterface* VitalsMaterial = Cast<UMaterialInterface>(StaticLoadObject(
 		UMaterialInterface::StaticClass(), nullptr, VitalsMaterialObjectPath));
-	if (!Blueprint || !BattleHud || !StatusIcon || !VitalsMaterial)
+	if (!Blueprint || !BattleHud || !StatusIcon || !StatusIconList
+		|| !StatusTooltip || !VitalsMaterial || !StatusTooltip->GeneratedClass)
 	{
 		UE_LOG(LogTemp, Error,
-			TEXT("[PlayerStatusUIBuilder] Missing PlayerStatus WBP, BattleHUD WBP, or Vitals MI"));
+			TEXT("[PlayerStatusUIBuilder] Missing PlayerStatus, status inspection WBP, BattleHUD WBP, or Vitals MI"));
 		return false;
 	}
 	if (!IsRecognizedLayout(*Blueprint))
@@ -469,17 +633,30 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 	const bool bStatusReady = HasVitalsContract(*Blueprint);
 	const bool bStatusHasStaleGuids = HasStaleWidgetVariableGuids(*Blueprint);
 	const bool bHudReady = ConfigureBattleHudPlacement(*BattleHud, true);
-	const bool bStatusIconReady = ConfigureStatusIcon(*StatusIcon, true);
+	const bool bStatusTooltipReady = ConfigureStatusTooltip(*StatusTooltip, true);
+	const bool bStatusIconReady = ConfigureStatusIcon(
+		*StatusIcon,
+		StatusTooltip->GeneratedClass,
+		true);
+	const bool bStatusIconListReady = ConfigureStatusIconList(
+		*StatusIconList,
+		StatusTooltip->GeneratedClass,
+		true);
 	if (bInspectOnly)
 	{
-		if (!bStatusReady || !bHudReady || !bStatusIconReady)
+		if (!bStatusReady || !bHudReady || !bStatusIconReady
+			|| !bStatusIconListReady || !bStatusTooltipReady)
 		{
 			UE_LOG(LogTemp, Error,
-				TEXT("[PlayerStatusUIBuilder] V2 contract incomplete: Status=%d HUD=%d Icon=%d"),
-				bStatusReady, bHudReady, bStatusIconReady);
+				TEXT("[PlayerStatusUIBuilder] V3 contract incomplete: Status=%d HUD=%d Icon=%d List=%d Tooltip=%d"),
+				bStatusReady,
+				bHudReady,
+				bStatusIconReady,
+				bStatusIconListReady,
+				bStatusTooltipReady);
 			return false;
 		}
-		UE_LOG(LogTemp, Display, TEXT("[PlayerStatusUIBuilder] V2 contract ready"));
+		UE_LOG(LogTemp, Display, TEXT("[PlayerStatusUIBuilder] V3 contract ready"));
 		return true;
 	}
 
@@ -491,16 +668,10 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 		{
 			return false;
 		}
-		if (!Blueprint->BlueprintDescription.Contains(ContractMarker))
-		{
-			Blueprint->BlueprintDescription = Blueprint->BlueprintDescription.IsEmpty()
-				? FString(ContractMarker)
-				: Blueprint->BlueprintDescription + TEXT("\n") + ContractMarker;
-		}
 		if (!CompileAndSave(*Blueprint, true) || !HasVitalsContract(*Blueprint))
 		{
 			UE_LOG(LogTemp, Error,
-				TEXT("[PlayerStatusUIBuilder] Saved PlayerStatus WBP failed V2 validation"));
+				TEXT("[PlayerStatusUIBuilder] Saved PlayerStatus WBP failed V3 validation"));
 			return false;
 		}
 		bChanged = true;
@@ -521,9 +692,15 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 
 	if (!bStatusIconReady)
 	{
-		if (!ConfigureStatusIcon(*StatusIcon, false)
-			|| !CompileAndSave(*StatusIcon, true)
-			|| !ConfigureStatusIcon(*StatusIcon, true))
+		if (!ConfigureStatusIcon(
+				*StatusIcon,
+				StatusTooltip->GeneratedClass,
+				false)
+			|| !CompileAndSave(*StatusIcon, false)
+			|| !ConfigureStatusIcon(
+				*StatusIcon,
+				StatusTooltip->GeneratedClass,
+				true))
 		{
 			UE_LOG(LogTemp, Error,
 				TEXT("[PlayerStatusUIBuilder] Failed to persist status-icon styling"));
@@ -532,8 +709,40 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 		bChanged = true;
 	}
 
+	if (!bStatusIconListReady)
+	{
+		if (!ConfigureStatusIconList(
+				*StatusIconList,
+				StatusTooltip->GeneratedClass,
+				false)
+			|| !CompileAndSave(*StatusIconList, false)
+			|| !ConfigureStatusIconList(
+				*StatusIconList,
+				StatusTooltip->GeneratedClass,
+				true))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[PlayerStatusUIBuilder] Failed to persist status-list inspection contract"));
+			return false;
+		}
+		bChanged = true;
+	}
+
+	if (!bStatusTooltipReady)
+	{
+		if (!ConfigureStatusTooltip(*StatusTooltip, false)
+			|| !CompileAndSave(*StatusTooltip, true)
+			|| !ConfigureStatusTooltip(*StatusTooltip, true))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[PlayerStatusUIBuilder] Failed to persist status-tooltip contract"));
+			return false;
+		}
+		bChanged = true;
+	}
+
 	UE_LOG(LogTemp, Display,
-		TEXT("[PlayerStatusUIBuilder] V2 contract %s"),
+		TEXT("[PlayerStatusUIBuilder] V3 contract %s"),
 		bChanged ? TEXT("built") : TEXT("already ready"));
 	return true;
 }

@@ -288,11 +288,15 @@ Slot 释放结果必须在任何同步 HUD 回调前冻结。Layer 把解析后�
 
 BattleHUD 直接依赖的状态显示控件只刷新显示缓存，不提交命令、不修改规则状态。玩家和敌人 runtime 状态共用 `UWacomBattleStatusIconListWidget / UWacomBattleStatusIconWidget`：控件只消费 Snapshot / ViewData 中的 `Statuses / StatusStacks`，图标 Brush 由 WBP 变量配置，`Status.Shield` 仍由 HP / Shield UI 单独显示。状态图标控件提供 design-time preview 字段，方便在 UMG 视口调图标和层数；这些预览字段不进入运行时规则数据。Action Preview 激活时，玩家状态条和敌人部位条目读取 `WacomBattle` 产出的 projected state 覆盖当前显示；清理后恢复最近一次真实 Snapshot / ViewData。
 
+状态检视使用 Slate 原生 Tooltip 路径：图标 hover 时惰性创建 `UWacomBattleStatusTooltipWidget`，由引擎负责跟随鼠标、延迟、边缘翻转与视口 Clamp，不建立 HUD 跟随层或 Tick。`ToolTipWidgetDelegate` 必须在 Slate 属性同步前建立，状态刷新不得通过空 `ToolTipText` 清理它。Tooltip 固定显示核心效果、触发时机、叠层/清除三行，并按 `Player / EnemyPart` 宿主翻译同一状态的不同语义；Poison 的每层伤害和玩家治疗移除比例直接引用 `WacomBattleStatusRuleConstants`，App 不复制规则数值。未知状态使用非空回退说明。紧凑列表的 `+N` 由 `UWacomBattleStatusIconListWidget` 自己拥有，Tooltip 只列出稳定排序后被隐藏的状态。玩家状态、敌人 Entry 与敌情档案复用同一 Tooltip WBP。
+
+状态图标只在检视门禁开启时参与命中。玩家拖卡、TargetSelect 或 Action Preview 会立即把状态列表切回 `HitTestInvisible`；敌情档案在拖卡开始时关闭；BattleEnd、Session 切换与 Destruct 清除缓存。敌人 Entry 的状态图标点击只复用现有 `FBattlePartSlotIdentity` 敌情档案意图，不产生战斗命令。普通 `InspectHitTarget` 与 `StatusList` 都是合法输入路由，WBP 必须让 StatusList 绘制/命中在全覆盖检视按钮之上；Action Preview 或交互 gate 关闭时两条路径同时禁用。
+
 | 控件 | 分类 | 语义 |
 |---|---|---|
 | `UPlayerStatusBar` | `Wacom|Battle|Player Status|Authoring` | 显示玩家 HP / Shield / runtime 状态图标 |
 | `UBattleCommandBarWidget / UWacomBattleCommandButtonWidget` | `Wacom|Battle|Command Bar|Authoring` | 被动显示 Wait / EndTurn 命令 view data，并把玩家意图广播回 BattleHUD |
-| `UWacomBattleStatusIconListWidget / UWacomBattleStatusIconWidget` | `Wacom|Battle|Status Icons|Authoring` | 共享状态图标列表和单个状态图标；玩家状态条正式使用，敌人部位条目可选接入 |
+| `UWacomBattleStatusIconListWidget / UWacomBattleStatusIconWidget / UWacomBattleStatusTooltipWidget` | `Wacom|Battle|Status Icons|Authoring` | 共享状态图标列表、单个图标与三行规则 Tooltip；玩家、敌人 Entry 和敌情档案统一复用 |
 | `UPileCountView` | `Wacom|Common UI|Pile Count` | 通用数量显示、收发反馈与详情请求控件；牌堆类型由所有者/WBP 决定。BattleHUD 的弃牌堆格可显示 `弃牌堆数+本回合使用牌堆数`，并把通用详情请求映射到牌堆页。可选 `PileFeedbackRoot` 统一承载图标+数字弹性 RenderTransform；缺失时兼容回退 `ReceiveFeedbackRoot`，再回退整个控件。Receive 与 Send 使用同一个组合 playback，不争用或覆盖 authored transform；Reduced Motion 仍更新数量但不播放变换。 |
 | `UWacomProgressBar` | `Wacom|Common UI|Progress Bar` | 通用数值进度条显示控件 |
 
@@ -324,7 +328,7 @@ Battle UI 回归优先使用 `Source/WacomTests/Private/UI/BattleHUDTestHarness.
 
 短时活动播报统一使用 `Wacom.UI.Battle.CombatActivity` 前缀：`BattleCombatActivityProjectionFilterSpec.cpp` 固定短时白名单与完整 History / Details 保留合同，`BattleCombatActivityFlowControlSpec.cpp` 固定跨组 FIFO、容量背压、最短可读时间、单行准入 / 退场与 Reduced Motion，`BattleCombatActivityWidgetIdentitySpec.cpp` 固定顶部退场前后幸存 `PlaybackId` 继续使用同一 Row Widget，`BattleCombatActivitySpec.cpp` 继续验证敌人分组、多目标逐条结果、最新根行动图标常驻与替换、透明详情命中框和重建恢复。`BattleCombatLogDetailsSpec.cpp` 使用 `Wacom.UI.Battle.CombatLogDetails` 覆盖回合分区、简略/详细行、关闭输入、独立命令 gate 和正式 Builder 资产合同。`BattleCombatLogSpec.cpp` 继续验证完整文本历史与 Controller，不再要求常驻 Feed 镜像整份历史。
 
-`Source/WacomTests/Private/UI/BattleEnemyPanelSpec.cpp` 承载 `Wacom.UI.Battle.EnemyPanel.VisualContract` 与稳定条目复用；`BattleEnemyPanelVitalsMotionSpec.cpp` 验证真实事实、typed cue、Material Frame、紧凑 Action Preview Frame、Reduced Motion 与清理生命周期；`BattleEnemySinglePartPanelSpec.cpp` 保留文件名但测试前缀已改为 `UnifiedHierarchy`，验证单/多部位共用同一正式类、唯一默认类和 `268 × 92` 单段合同；`BattleEnemySegmentedVitalsSpec.cpp` 验证多段角色、等宽顺序、Shield、Buff 与点击 gate。状态图标复用另由 `Wacom.UI.Battle.StatusIcons.EnemyPartUsesFormalStatusList` 覆盖。需要检查 WBP 绑定或动画的测试实例化正式 WBP；纯 App-private Preview Frame 测试可使用原生 Entry 验证无反射语义。
+`Source/WacomTests/Private/UI/BattleEnemyPanelSpec.cpp` 承载 `Wacom.UI.Battle.EnemyPanel.VisualContract` 与稳定条目复用；`BattleEnemyPanelVitalsMotionSpec.cpp` 验证真实事实、typed cue、Material Frame、紧凑 Action Preview Frame、Reduced Motion 与清理生命周期；`BattleEnemySinglePartPanelSpec.cpp` 保留文件名但测试前缀已改为 `UnifiedHierarchy`，验证单/多部位共用同一正式类、唯一默认类和 `268 × 92` 单段合同；`BattleEnemySegmentedVitalsSpec.cpp` 验证多段角色、等宽顺序、Shield、Buff 与点击 gate。状态图标复用由 `Wacom.UI.Battle.StatusIcons` 覆盖，宿主说明、共享 Poison 常量、Tooltip 缓存、内部 Overflow 和敌情档案转发由小型 `Wacom.UI.Battle.StatusTooltip` spec 覆盖。需要检查 WBP 绑定或动画的测试实例化正式 WBP；纯 App-private Preview Frame 测试可使用原生 Entry 验证无反射语义。
 
 Enemy Action / cue / Destroyed 生命周期由 `BattleEnemyActionImpactSpec.cpp`、`BattlePresentationQueueSpec.cpp` 与 `BattleEnemySceneComponentRuntimeSpec.cpp` 组合覆盖；内容合同由 `TrainingWarriorContentSpec.cpp`、`SnakeEnemyContentSpec.cpp`、`SlimeTrioEnemyContentSpec.cpp` 覆盖。测试通过 production automation view 读取 runtime debug，不在 `WacomApp/Public` 扩散 Blueprint-visible 测试 API。
 

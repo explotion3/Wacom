@@ -110,7 +110,9 @@ bool FWacomUIBattleStatusIconListBuildsSortedViewsSpec::RunTest(const FString& /
 	TestTrue(TEXT("Twilight sorts before stunned"), Views[1].StatusTag == WacomTags::Status_Twilight);
 	TestEqual(TEXT("Zero stack displays as one"), Views[1].StackCount, 1);
 	TestTrue(TEXT("Stunned sorts last"), Views[2].StatusTag == WacomTags::Status_Stunned);
-	TestEqual(TEXT("List visible with statuses"), Widget->GetVisibility(), ESlateVisibility::HitTestInvisible);
+	TestEqual(TEXT("List exposes child hit testing with statuses"),
+		Widget->GetVisibility(),
+		ESlateVisibility::SelfHitTestInvisible);
 
 	UPanelWidget* Container = Widget->WidgetTree
 		? Cast<UPanelWidget>(Widget->WidgetTree->FindWidget(TEXT("StatusContainer")))

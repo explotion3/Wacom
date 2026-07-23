@@ -11,15 +11,14 @@
 #include "Initiative/BattleInitiativeTimelineModule.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Statuses/BattleStatusRuleConstants.h"
 #include "Tags/WacomGameplayTags.h"
 
 namespace
 {
-	constexpr int32 PoisonDamagePerStack = 8;
-
 	int32 CalculatePoisonDamage(const int32 PoisonStacks)
 	{
-		return PoisonStacks * PoisonDamagePerStack;
+		return PoisonStacks * WacomBattleStatusRuleConstants::PoisonDamagePerStack;
 	}
 
 	void EmitPendingStatusApplied(

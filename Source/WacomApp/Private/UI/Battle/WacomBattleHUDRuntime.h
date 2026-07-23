@@ -404,6 +404,8 @@ public:
 #endif
 
 private:
+	void RefreshStatusInspectionInteraction();
+
 	FWacomBattleHUDRuntimeHost RuntimeHost;
 	TUniquePtr<FWacomBattleHUDSnapshotPresenter> SnapshotPresenter;
 	TUniquePtr<FWacomBattleHUDCommandController> CommandController;

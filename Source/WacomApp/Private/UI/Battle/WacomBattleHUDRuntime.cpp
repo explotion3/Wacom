@@ -1269,10 +1269,12 @@ void FWacomBattleHUDRuntime::ApplyActionPreviewPresentation(
 	if (!Presentation.bHasPreview)
 	{
 		bEnemyActionPreviewActive = false;
+		RefreshStatusInspectionInteraction();
 		GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 		return;
 	}
 	bEnemyActionPreviewActive = true;
+	RefreshStatusInspectionInteraction();
 	GetEnemyInspectionCoordinator().CloseInspection(true);
 
 	if (Presentation.bHasProjectedPlayer)
@@ -1295,6 +1297,7 @@ void FWacomBattleHUDRuntime::ClearActionPreview()
 	{
 		PlayerStatusBar->ClearActionPreview();
 	}
+	RefreshStatusInspectionInteraction();
 	GetSceneEnemyTargetCoordinator().ClearActionPreviewFromEnemyPanels();
 	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
@@ -1482,6 +1485,7 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragStarted(
 {
 	GetEnemyInspectionCoordinator().CloseInspection(true);
 	GetFirstPersonHandBridge().HandleDragStarted(CardInstanceId, DragView);
+	RefreshStatusInspectionInteraction();
 	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
@@ -1497,6 +1501,7 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragReleased(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	GetFirstPersonHandBridge().HandleDragReleased(CardInstanceId, DragView);
+	RefreshStatusInspectionInteraction();
 	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
@@ -1505,7 +1510,22 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragCancelled(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	GetFirstPersonHandBridge().HandleDragCancelled(CardInstanceId, DragView);
+	RefreshStatusInspectionInteraction();
 	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
+}
+
+void FWacomBattleHUDRuntime::RefreshStatusInspectionInteraction()
+{
+	const bool bBattleStillActive = GetSession()
+		&& HasLastBattleSnapshot()
+		&& GetLastBattleSnapshot().Outcome == EBattleOutcome::Undetermined;
+	const bool bEnabled = bBattleStillActive
+		&& !bEnemyActionPreviewActive
+		&& !IsFirstPersonCardDragActiveForBattleSceneHover();
+	if (UPlayerStatusBar* PlayerStatusBar = Host().GetPlayerStatusBar())
+	{
+		PlayerStatusBar->SetStatusInspectionEnabled(bEnabled);
+	}
 }
 
 void FWacomBattleHUDRuntime::UpdateFirstPersonCardDragTargetFeedback(

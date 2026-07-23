@@ -20,6 +20,7 @@
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
+#include "Statuses/BattleStatusRuleConstants.h"
 #include "Statuses/BattleStatusSemanticsModule.h"
 #include "Initiative/BattleInitiativeTimelineModule.h"
 namespace WacomEffects
@@ -389,8 +390,10 @@ FEffectApplyResult HandleHeal(FEffectExecutionContext& Ctx)
 		HealAmount);
 	if (!HealResult.IsAccepted()) { return FEffectApplyResult::Failed(); }
 
-	// 移除 10% 中毒层数
-	const int32 Remove = FMath::FloorToInt32(static_cast<float>(HealAmount) * 0.1f);
+	// 移除治疗量固定比例的中毒层数；比例与 UI 状态说明共享同一规则常量。
+	const int32 Remove = FMath::FloorToInt32(
+		static_cast<float>(HealAmount)
+		* WacomBattleStatusRuleConstants::PlayerHealPoisonRemovalRatio);
 	if (Remove > 0)
 	{
 		FBattleCombatantMutationModule::RemoveStatusStacks(

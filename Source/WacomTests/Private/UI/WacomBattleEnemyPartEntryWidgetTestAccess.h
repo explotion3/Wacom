@@ -6,10 +6,12 @@
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 
 class UMaterialInstanceDynamic;
+class UWacomBattleStatusIconListWidget;
 
 /** WacomTests-private access to the non-reflected Enemy HUD presentation state. */
 struct FWacomBattleEnemyPartEntryWidgetTestAccess
 {
+	static void Construct(UWacomBattleEnemyPartEntryWidget& Widget);
 	static void SetView(
 		UWacomBattleEnemyPartEntryWidget& Widget,
 		const FWacomBattleEnemyPartEntryViewData& View);
@@ -22,6 +24,11 @@ struct FWacomBattleEnemyPartEntryWidgetTestAccess
 		const UWacomBattleEnemyPartEntryWidget& Widget);
 	static void CancelPresentation(UWacomBattleEnemyPartEntryWidget& Widget);
 	static bool IsInspectionInteractionEnabled(
+		const UWacomBattleEnemyPartEntryWidget& Widget);
+	static void SetInspectionInteractionEnabled(
+		UWacomBattleEnemyPartEntryWidget& Widget,
+		bool bEnabled);
+	static UWacomBattleStatusIconListWidget* GetStatusList(
 		const UWacomBattleEnemyPartEntryWidget& Widget);
 
 	static EWacomBattleEnemySegmentRole GetSegmentRole(

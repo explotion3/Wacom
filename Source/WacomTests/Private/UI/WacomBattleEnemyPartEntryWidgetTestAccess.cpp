@@ -5,6 +5,12 @@
 #include "../../../WacomApp/Private/UI/Battle/WacomBattleEnemyVitalsPresentation.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
+void FWacomBattleEnemyPartEntryWidgetTestAccess::Construct(
+	UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	Widget.NativeConstruct();
+}
+
 void FWacomBattleEnemyPartEntryWidgetTestAccess::SetView(
 	UWacomBattleEnemyPartEntryWidget& Widget,
 	const FWacomBattleEnemyPartEntryViewData& View)
@@ -48,6 +54,20 @@ bool FWacomBattleEnemyPartEntryWidgetTestAccess::IsInspectionInteractionEnabled(
 	const UWacomBattleEnemyPartEntryWidget& Widget)
 {
 	return Widget.IsInspectionInteractionEnabled();
+}
+
+void FWacomBattleEnemyPartEntryWidgetTestAccess::SetInspectionInteractionEnabled(
+	UWacomBattleEnemyPartEntryWidget& Widget,
+	const bool bEnabled)
+{
+	Widget.SetInspectionInteractionEnabled(bEnabled);
+}
+
+UWacomBattleStatusIconListWidget*
+FWacomBattleEnemyPartEntryWidgetTestAccess::GetStatusList(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.StatusList;
 }
 
 EWacomBattleEnemySegmentRole

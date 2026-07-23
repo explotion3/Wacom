@@ -179,15 +179,16 @@ bool FWacomUIBattleEnemySegmentedVitalsLayoutSpec::RunTest(const FString& /*Para
 	UWidget* TailDestroyed = FindWidget<UWidget>(TailEntry, TEXT("DestroyedSurface"));
 	UWacomBattleStatusIconListWidget* HeadStatuses =
 		FindWidget<UWacomBattleStatusIconListWidget>(HeadEntry, TEXT("StatusList"));
-	UTextBlock* HeadStatusOverflow =
-		FindWidget<UTextBlock>(HeadEntry, TEXT("StatusOverflowText"));
+	UTextBlock* HeadStatusOverflow = HeadStatuses
+		? FindWidget<UTextBlock>(HeadStatuses, TEXT("OverflowText"))
+		: nullptr;
 	if (!TestNotNull(TEXT("Head HP text"), HeadHpText)
 		|| !TestNotNull(TEXT("Head Shield root"), HeadShield)
 		|| !TestNotNull(TEXT("Body Shield root"), BodyShield)
 		|| !TestNotNull(TEXT("Body Shield text"), BodyShieldText)
 		|| !TestNotNull(TEXT("Tail Destroyed surface"), TailDestroyed)
 		|| !TestNotNull(TEXT("Head status list"), HeadStatuses)
-		|| !TestNotNull(TEXT("Head status overflow"), HeadStatusOverflow))
+		|| !TestNotNull(TEXT("Head status list-owned overflow"), HeadStatusOverflow))
 	{
 		return false;
 	}

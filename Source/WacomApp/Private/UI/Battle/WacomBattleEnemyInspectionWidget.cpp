@@ -93,6 +93,10 @@ void UWacomBattleEnemyInspectionWidget::OpenInspection()
 	bOpen = true;
 	SetIsEnabled(true);
 	SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+	if (StatusList)
+	{
+		StatusList->SetStatusInspectionEnabled(true);
+	}
 	if (OpenLeftAnimation)
 	{
 		PlayAnimation(OpenLeftAnimation);
@@ -109,6 +113,10 @@ void UWacomBattleEnemyInspectionWidget::CloseInspection(const bool bImmediate)
 	}
 
 	SetIsEnabled(false);
+	if (StatusList)
+	{
+		StatusList->SetStatusInspectionEnabled(false);
+	}
 	CancelRightPanelOpenTimer();
 	if (bImmediate || !CloseAnimation)
 	{
@@ -161,6 +169,10 @@ void UWacomBattleEnemyInspectionWidget::NativeConstruct()
 	if (StatusList)
 	{
 		StatusList->SetMaxVisibleStatuses(0);
+		StatusList->SetInspectionHost(
+			EWacomBattleStatusInspectionHost::EnemyPart);
+		StatusList->SetStatusIconActivationEnabled(false);
+		StatusList->SetStatusInspectionEnabled(false);
 	}
 	SetVisibility(ESlateVisibility::Collapsed);
 	SyncPartRows();
@@ -180,6 +192,10 @@ void UWacomBattleEnemyInspectionWidget::NativeDestruct()
 	}
 	StopAllAnimations();
 	ClearPartRows();
+	if (StatusList)
+	{
+		StatusList->SetStatusInspectionEnabled(false);
+	}
 	OnCloseRequestedNative.Clear();
 	OnSelectionRequestedNative.Clear();
 	bOpen = false;

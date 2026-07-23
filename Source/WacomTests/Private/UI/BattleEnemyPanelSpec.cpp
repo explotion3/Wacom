@@ -20,6 +20,7 @@
 #include "MovieScene.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
+#include "UI/Battle/WacomBattleStatusIconWidget.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "UI/WacomBattleEnemyPartEntryWidgetTestAccess.h"
 #include "UObject/StrongObjectPtr.h"
@@ -174,7 +175,7 @@ bool FWacomUIBattleEnemyPanelVisualContractSpec::RunTest(const FString& /*Parame
 		TEXT("PartEntryRoot"), TEXT("VitalsTrackImage"), TEXT("HpText"),
 		TEXT("ShieldValueRoot"), TEXT("ShieldText"), TEXT("InitiativeSocket"),
 		TEXT("InitiativeText"), TEXT("IntentSocket"), TEXT("IntentIcon"),
-		TEXT("OutgoingIntentIcon"), TEXT("StatusList"), TEXT("StatusOverflowText"),
+		TEXT("OutgoingIntentIcon"), TEXT("StatusList"),
 		TEXT("ContextSurface"), TEXT("DestroyedSurface"), TEXT("DestroyedMark"),
 		TEXT("PerfectReleaseSurface"), TEXT("ActionPreviewComparisonRoot"),
 		TEXT("PreviewPlayerDamageIcon"), TEXT("PreviewPlayerDamageText"),
@@ -186,6 +187,13 @@ bool FWacomUIBattleEnemyPanelVisualContractSpec::RunTest(const FString& /*Parame
 		TestNotNull(*FString::Printf(TEXT("Entry binding %s"), *Name.ToString()),
 			Entry->WidgetTree->FindWidget(Name));
 	}
+	UWacomBattleStatusIconListWidget* StatusList =
+		Cast<UWacomBattleStatusIconListWidget>(
+			Entry->WidgetTree->FindWidget(TEXT("StatusList")));
+	TestNotNull(TEXT("Status list owns OverflowText"),
+		StatusList && StatusList->WidgetTree
+			? StatusList->WidgetTree->FindWidget(TEXT("OverflowText"))
+			: nullptr);
 	for (const FName PreviewRootName : {
 		FName(TEXT("PerfectReleaseSurface")),
 		FName(TEXT("ActionPreviewComparisonRoot")) })
@@ -198,7 +206,8 @@ bool FWacomUIBattleEnemyPanelVisualContractSpec::RunTest(const FString& /*Parame
 	}
 	for (const FName Legacy : { FName(TEXT("HpBar")), FName(TEXT("PartNameText")),
 		FName(TEXT("IntentText")), FName(TEXT("ResistanceText")),
-		FName(TEXT("DetailsContainer")), FName(TEXT("ActionPreviewOverlay")) })
+		FName(TEXT("DetailsContainer")), FName(TEXT("ActionPreviewOverlay")),
+		FName(TEXT("StatusOverflowText")) })
 	{
 		TestNull(*FString::Printf(TEXT("Legacy binding %s removed"), *Legacy.ToString()),
 			Entry->WidgetTree->FindWidget(Legacy));

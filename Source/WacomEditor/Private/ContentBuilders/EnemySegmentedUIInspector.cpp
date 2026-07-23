@@ -44,7 +44,6 @@ namespace
 	constexpr TCHAR FontPath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/F_Silkscreen.F_Silkscreen");
 	constexpr TCHAR BoldFacePath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/FF_Silkscreen_Bold.FF_Silkscreen_Bold");
 	constexpr TCHAR RegularFacePath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/FF_Silkscreen_Regular.FF_Silkscreen_Regular");
-	constexpr TCHAR ContractMarker[] = TEXT("WacomEnemyHUD.ContractVersion=3");
 	constexpr TCHAR InspectionMarker[] = TEXT("WacomEnemyInspection.ContractVersion=2");
 	constexpr TCHAR LegacyPanelPackage[] = TEXT("/Game/Wacom/UI/Enemy/Textures/T_UI_PixelPanel_EnemyInfo_9Slice_512x160");
 	constexpr TCHAR LegacySinglePanelPackage[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget");
@@ -192,7 +191,6 @@ namespace
 		const UWacomBattleEnemyPanelWidget* Defaults = Cast<UWacomBattleEnemyPanelWidget>(
 			Blueprint->GeneratedClass->GetDefaultObject());
 		return Blueprint->ParentClass == UWacomBattleEnemyPanelWidget::StaticClass()
-			&& Blueprint->BlueprintDescription.Contains(ContractMarker)
 			&& HasWidget(Blueprint, TEXT("PanelRoot"), USizeBox::StaticClass())
 			&& HasWidget(Blueprint, TEXT("PartList"), UHorizontalBox::StaticClass())
 			&& !HasWidget(Blueprint, TEXT("EnemyNameText"), UTextBlock::StaticClass())
@@ -220,7 +218,6 @@ namespace
 			{ TEXT("IntentIcon"), UImage::StaticClass() },
 			{ TEXT("OutgoingIntentIcon"), UImage::StaticClass() },
 			{ TEXT("StatusList"), UWacomBattleStatusIconListWidget::StaticClass() },
-			{ TEXT("StatusOverflowText"), UTextBlock::StaticClass() },
 			{ TEXT("ContextSurface"), UWidget::StaticClass() },
 			{ TEXT("DestroyedSurface"), UWidget::StaticClass() },
 			{ TEXT("DestroyedMark"), UWidget::StaticClass() },
@@ -238,9 +235,26 @@ namespace
 		};
 		CheckEntry(TEXT("parent class"),
 			Blueprint->ParentClass == UWacomBattleEnemyPartEntryWidget::StaticClass());
-		CheckEntry(TEXT("contract marker"),
-			Blueprint->BlueprintDescription.Contains(ContractMarker));
 		CheckEntry(TEXT("hit-test policy"), ValidateHitTesting(*Blueprint));
+		const UWidget* StatusList = Blueprint->WidgetTree->FindWidget(TEXT("StatusList"));
+		const UWidget* InspectHitTarget =
+			Blueprint->WidgetTree->FindWidget(TEXT("InspectHitTarget"));
+		const UPanelWidget* SharedInputParent =
+			StatusList && InspectHitTarget
+			&& StatusList->GetParent() == InspectHitTarget->GetParent()
+				? StatusList->GetParent()
+				: nullptr;
+		CheckEntry(TEXT("status list owns overflow"),
+			!Blueprint->WidgetTree->FindWidget(TEXT("StatusOverflowText")));
+		CheckEntry(TEXT("status list authored interaction root"),
+			StatusList
+			&& (StatusList->GetVisibility() == ESlateVisibility::Visible
+				|| StatusList->GetVisibility()
+					== ESlateVisibility::SelfHitTestInvisible));
+		CheckEntry(TEXT("status list paints above shared inspect hit target"),
+			!SharedInputParent
+			|| SharedInputParent->GetChildIndex(StatusList)
+				> SharedInputParent->GetChildIndex(InspectHitTarget));
 		for (const FWidgetRequirement& Binding : Required)
 		{
 			CheckEntry(FString::Printf(TEXT("binding %s"), *Binding.Name.ToString()),
@@ -497,11 +511,11 @@ bool Wacom::ContentBuilder::InspectEnemyHUD()
 
 	if (bValid)
 	{
-		UE_LOG(LogTemp, Display, TEXT("[EnemyHUDInspector] Enemy HUD V3 contract is valid"));
+		UE_LOG(LogTemp, Display, TEXT("[EnemyHUDInspector] Enemy HUD V4 contract is valid"));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("[EnemyHUDInspector] Enemy HUD V3 contract failed"));
+		UE_LOG(LogTemp, Error, TEXT("[EnemyHUDInspector] Enemy HUD V4 contract failed"));
 	}
 	return bValid;
 }

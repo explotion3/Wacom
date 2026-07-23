@@ -156,6 +156,13 @@ void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 	if (StatusList)
 	{
 		StatusList->SetMaxVisibleStatuses(3);
+		StatusList->SetInspectionHost(
+			EWacomBattleStatusInspectionHost::EnemyPart);
+		StatusList->SetStatusIconActivationEnabled(true);
+		StatusList->OnStatusIconActivatedNative.RemoveAll(this);
+		StatusList->OnStatusIconActivatedNative.AddUObject(
+			this,
+			&ThisClass::HandleStatusIconActivated);
 	}
 	if (IntentChangeAnimation)
 	{
@@ -183,6 +190,11 @@ void UWacomBattleEnemyPartEntryWidget::NativeDestruct()
 	if (IntentChangeAnimation)
 	{
 		UnbindAllFromAnimationFinished(IntentChangeAnimation);
+	}
+	if (StatusList)
+	{
+		StatusList->OnStatusIconActivatedNative.RemoveAll(this);
+		StatusList->SetStatusInspectionEnabled(false);
 	}
 	OnInspectionRequestedNative.Clear();
 	CancelPendingPresentation();
@@ -224,21 +236,6 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 	{
 		StatusList->SetMaxVisibleStatuses(3);
 		StatusList->SetStatuses(View.RuntimeStatuses, View.RuntimeStatusStacks);
-		StatusList->SetVisibility(View.RuntimeStatuses.IsEmpty()
-			? ESlateVisibility::Collapsed
-			: ESlateVisibility::HitTestInvisible);
-	}
-	if (StatusOverflowText)
-	{
-		const int32 OverflowCount = StatusList
-			? StatusList->GetOverflowStatusCount()
-			: FMath::Max(0, View.RuntimeStatuses.Num() - 3);
-		StatusOverflowText->SetText(OverflowCount > 0
-			? FText::FromString(FString::Printf(TEXT("+%d"), OverflowCount))
-			: FText::GetEmpty());
-		StatusOverflowText->SetVisibility(OverflowCount > 0
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
 	}
 	if (DestroyedMark)
 	{
@@ -562,6 +559,11 @@ void UWacomBattleEnemyPartEntryWidget::RefreshInspectionInteraction()
 			? ESlateVisibility::Visible
 			: ESlateVisibility::HitTestInvisible);
 	}
+	if (StatusList)
+	{
+		StatusList->SetStatusInspectionEnabled(bCanInspect);
+		StatusList->SetStatusIconActivationEnabled(bCanInspect);
+	}
 }
 
 void UWacomBattleEnemyPartEntryWidget::HandleInspectClicked()
@@ -575,6 +577,12 @@ void UWacomBattleEnemyPartEntryWidget::HandleInspectClicked()
 		return;
 	}
 	OnInspectionRequestedNative.Broadcast(CurrentView.Identity);
+}
+
+void UWacomBattleEnemyPartEntryWidget::HandleStatusIconActivated(
+	const FWacomBattleStatusIconView& /*View*/)
+{
+	HandleInspectClicked();
 }
 
 void UWacomBattleEnemyPartEntryWidget::PlaySemanticAnimation(

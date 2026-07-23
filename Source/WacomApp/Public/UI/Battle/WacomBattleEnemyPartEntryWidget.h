@@ -19,6 +19,7 @@ class UWacomBattleEnemyIntentPresentationStyle;
 class UWacomBattleStatusIconListWidget;
 class FWacomBattleEnemyPartPresentationState;
 class FWacomBattleEnemyVitalsMaterialAdapter;
+struct FWacomBattleStatusIconView;
 struct FWacomBattleEnemyPartPresentationUpdate;
 enum class EWacomBattleEnemyMotionCue : uint8;
 
@@ -94,6 +95,8 @@ private:
 	UFUNCTION()
 	void HandleInspectClicked();
 
+	void HandleStatusIconActivated(const FWacomBattleStatusIconView& View);
+
 	UFUNCTION()
 	void HandleIntentChangeAnimationFinished();
 
@@ -159,9 +162,6 @@ private:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWacomBattleStatusIconListWidget> StatusList = nullptr;
-
-	UPROPERTY(meta = (BindWidget))
-	TObjectPtr<UTextBlock> StatusOverflowText = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> DestroyedMark = nullptr;

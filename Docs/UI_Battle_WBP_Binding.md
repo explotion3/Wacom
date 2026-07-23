@@ -372,24 +372,24 @@ WBP 不应做：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `VitalsTrackImage` | `Image` | Optional（正式 V2 必须） | 直接 UI 材质绘制权威 HP、延迟伤害、行动预测、低血和护盾外框 |
-| `HpValueText` | `TextBlock` | Optional（正式 V2 必须） | 居中显示 `当前 HP / 最大 HP`；Preview 显示 projected HP |
-| `ShieldValueRoot` | `SizeBox` 或其它 Widget | Optional（正式 V2 必须） | 右侧固定宽度的护盾数值根；护盾为零时 Hidden 而非 Collapsed |
+| `VitalsTrackImage` | `Image` | Optional（正式 V3 必须） | 直接 UI 材质绘制权威 HP、延迟伤害、行动预测、低血和护盾外框 |
+| `HpValueText` | `TextBlock` | Optional（正式 V3 必须） | 居中显示 `当前 HP / 最大 HP`；Preview 显示 projected HP |
+| `ShieldValueRoot` | `SizeBox` 或其它 Widget | Optional（正式 V3 必须） | 右侧固定宽度的护盾数值根；护盾为零时 Hidden 而非 Collapsed |
 | `ShieldText` | `TextBlock` | Optional | 护盾绝对数值，不显示护盾进度 |
 | `StatusList` | `UWacomBattleStatusIconListWidget` | Optional | 玩家 runtime 状态图标行；为空状态时自动隐藏 |
 | `HpBar` | `UWacomProgressBar` | Optional legacy fallback | 缺少 V2 材质时保证 HP 仍可读；正式 V2 WBP 不依赖它 |
 
-正式 V2 WBP 不再提供 `DamagePulseSurface / ShieldPulseSurface` 或对应 UMG Animation。`UPlayerStatusBar` 的私有 Playback 只在 HP 延迟条、护盾反馈活动时推进，`VitalsTrackImage` 的材质参数负责局部表现；Root 与全部子控件保持 `HitTestInvisible`。
+正式 V3 WBP 不再提供 `DamagePulseSurface / ShieldPulseSurface` 或对应 UMG Animation。`UPlayerStatusBar` 的私有 Playback 只在 HP 延迟条、护盾反馈活动时推进，`VitalsTrackImage` 的材质参数负责局部表现。Root 到 `StatusList` 的祖先链必须使用 `Visible / SelfHitTestInvisible` 保留子节点命中，其他视觉控件保持不可命中；运行时拖卡和 Action Preview 会由 C++ 临时关闭状态检视。
 
 制作提示：
 
 - 推荐把状态列表实例直接命名为 `StatusList`。C++ 会在 `StatusList` 未绑定时回退查找唯一一个 `UWacomBattleStatusIconListWidget` 子控件，但存在多个状态列表时不会猜测。
 - `StatusList` 只在 Snapshot 里有非 `Status.Shield` 状态时显示；单纯配置图标 Brush 不会让 PIE 自动出现状态。
-- Action Preview 不降低整个状态栏透明度。材质同时显示权威 HP 与 projected 增减区段，中央文本和护盾数值显示 projected 值，`StatusList` 显示 projected statuses；清理后恢复最近一次真实 Snapshot，且不播放真实受击动画或音效。
+- Action Preview 不降低整个状态栏透明度。材质同时显示权威 HP 与 projected 增减区段，中央文本和护盾数值显示 projected 值，`StatusList` 显示 projected statuses，但 Tooltip 在 Preview 期间关闭；清理后恢复最近一次真实 Snapshot，且不播放真实受击动画或音效。
 
 WBP 不应做：不提交玩家命令，不修改 BattleSession。
 
-编辑器关闭时可运行 `-run=WacomBuildPlayerStatusUI -BuildVitalsV2`，幂等重建已识别的状态栏、删除旧双脉冲动画、把 `BP_BattleHUD.PlayerStatusBar` 放到左上角 `(28,24)` 并把状态图标调整为 `32×32`。`-InspectOnly` 只读检查父类、bindings、材质、HUD Canvas 位置、图标尺寸和命中策略。旧 `-BuildImpactFeedback` 只作为命令行兼容别名保留，实际执行同一 V2 构建。
+编辑器关闭时可运行兼容命令 `-run=WacomBuildPlayerStatusUI -BuildVitalsV2`，幂等维护已识别的 V3 状态栏、状态列表、Tooltip、HUD 左上角位置和 `32×32` 图标合同。`-InspectOnly` 只读检查父类、bindings、材质、HUD Canvas 位置、Tooltip class、内部 Overflow 和完整命中路径。命令名保留 V2 仅为工具兼容，不代表当前资产合同版本。
 
 ### WBP_BattleStatusIconList
 
@@ -402,12 +402,14 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
 | `StatusContainer` | `HorizontalBox` 或其他 `PanelWidget` | Optional | C++ 动态填充状态图标；缺省时 fallback 创建水平列表 |
+| `OverflowText` | `TextBlock` | Optional（正式 V3 必须） | 紧凑模式显示 `+N`；命中后复用状态 Tooltip，只列出被隐藏的状态 |
 
 推荐 WBP 变量：
 
 | 属性 | 用途 |
 |---|---|
 | `StatusIconWidgetClass` | 每个状态图标使用的 Widget 类，推荐 `WBP_BattleStatusIcon` |
+| `StatusTooltipWidgetClass` | 图标和 `+N` 惰性创建的 Tooltip 类，正式资产使用 `WBP_BattleStatusTooltip` |
 | `PoisonIconBrush / SlowIconBrush / FreezeIconBrush / TwilightIconBrush / StunnedIconBrush` | 各正式状态的图标 Brush |
 | `FallbackStatusIconBrush` | 未知状态或未配置专用 Brush 时的图标 |
 | `bShowDesignTimePreview` | 设计器预览开关，默认开启；只影响 UMG 视口 |
@@ -419,6 +421,7 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 - `Status.Shield` 不显示在状态列表里，护盾仍由 HP / Shield UI 单独显示。
 - 空状态时列表整体折叠。
 - 运行时 Brush 会自动补一个默认图标尺寸，避免 Texture 已配置但 `ImageSize` 为空时在列表里按 0 尺寸排布。
+- Root 与 `StatusContainer` 使用 `SelfHitTestInvisible`；`OverflowText` 在出现时使用 `Visible`。禁止在 Enemy Entry 外再制作第二份 `StatusOverflowText`。
 
 ### WBP_BattleStatusIcon
 
@@ -439,8 +442,25 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 | `bShowDesignTimePreview` | 单独打开 Icon WBP 时显示预览内容，默认开启 |
 | `PreviewStatusTag / PreviewDisplayName / PreviewStackCount` | 单个 Icon 的设计器预览状态、名称和层数 |
 | `PreviewIconBrush` | 单个 Icon 的设计器预览图标；为空时优先使用 `IconImage` 在 WBP 中配置的 Brush |
+| `StatusTooltipWidgetClass` | 悬停时惰性创建的正式 `WBP_BattleStatusTooltip` |
 
-WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 `Status.Shield` 混入状态图标。
+Icon Root 运行时必须为 `Visible`，`IconImage / StackBadge / StackText` 等视觉子节点保持 `HitTestInvisible`。Widget 使用原生 `ToolTipWidgetDelegate`，并在 Slate 属性同步前建立委托；运行刷新和 WBP 不得再写 `ToolTipText`，否则会覆盖或移除原生 Tooltip 元数据。不创建 Tick、不自行计算屏幕位置。WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 `Status.Shield` 混入状态图标。
+
+### WBP_BattleStatusTooltip
+
+父类：`UWacomBattleStatusTooltipWidget`。资产路径：`/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusTooltip`。
+
+| 控件名 | 类型 | 运行时职责 |
+|---|---|---|
+| `TooltipRoot` | `SizeBox` | 默认宽度约 `300px`；深蓝半透明状态说明根 |
+| `TooltipIcon` | `Image` | 当前状态的 `28px` 图标；Overflow 模式折叠 |
+| `TitleText` / `StackText` | `TextBlock` | 状态中文名与当前层数，Overflow 模式标题为 `其他状态 · N` |
+| `CoreEffectText` | `TextBlock` | 第一行准确规则：核心效果 |
+| `TriggerTimingText` | `TextBlock` | 第二行准确规则：触发时机 |
+| `StackPolicyText` | `TextBlock` | 第三行准确规则：叠层、消耗或清除 |
+| `OverflowBodyText` | `TextBlock` | `+N` 模式按稳定顺序列出隐藏状态名称、层数和核心效果 |
+
+整棵 Tooltip 树必须是 `HitTestInvisible`。位置、鼠标跟随、边缘避让和关闭由 Slate 原生 Tooltip 管理；WBP 不创建 Canvas 跟随层、计时器或 Tick。
 
 ### WBP_BattleCommandBar
 
@@ -570,7 +590,7 @@ Part Entry 必需绑定：
 | `ShieldValueRoot` / `ShieldText` | `Widget` / `TextBlock` | 电蓝外框、盾徽与准确数值；零 Shield 折叠，数字为 Silkscreen Bold 14 |
 | `InitiativeSocket` / `InitiativeText` | `Widget` / `TextBlock` | 琥珀槽与当前 Initiative；数字为 Silkscreen Bold 16 |
 | `IntentSocket` / `IntentIcon` / `OutgoingIntentIcon` | `Widget` / `Image` / `Image` | 当前 Intent 与擦除阶段的旧 Intent 图标 |
-| `StatusList` / `StatusOverflowText` | `UWacomBattleStatusIconListWidget` / `TextBlock` | 常态最多三枚并显示 `+N` |
+| `StatusList` | `UWacomBattleStatusIconListWidget` | 常态最多三枚；列表内部 `OverflowText` 显示 `+N` 并负责隐藏状态 Tooltip |
 | `ContextSurface` | `Widget` | hover / Preview 定位框，不参与输入 |
 | `DestroyedSurface` / `DestroyedMark` | `Widget` | 失色、裂痕与 `X` 终态，不移除段 |
 | `PerfectReleaseSurface` | `Widget` | 完美释放金色静态边框；非完美时折叠，不承载输入 |
@@ -579,7 +599,7 @@ Part Entry 必需绑定：
 | `PreviewComparatorText` | `TextBlock` | 成功固定为 `>`，失败和相等固定为 `≤`；不能只靠颜色表达结果 |
 | `PreviewEnemyIntentIcon` / `PreviewEnemyAttackText` | `Image` / `TextBlock` | 当前敌方 Intent 图标与敌方最高单段伤害；图标来自现有 Intent Style |
 | `PreviewSkipMark` | `Widget` | 立即消费眩晕时覆盖斜线，并配合变暗 Intent 表达跳过 |
-| `InspectHitTarget` | `Button` | 唯一命中热区，只上报完整 `FBattlePartSlotIdentity` |
+| `InspectHitTarget` | `Button` | 普通部位检视热区，只上报完整 `FBattlePartSlotIdentity` |
 
 旧 `EnemyNameText / PartNameText / IntentText / ResistanceText / DetailsContainer / HpBar / ShieldContainer / ShieldFrame / ShieldBadge / ActionPreviewOverlay` 不属于紧凑 HUD 合同，也不得作为 optional compatibility binding 重新加入。名字、Intent 文本和派生攻击值只在敌情档案显示。
 
@@ -589,7 +609,7 @@ C++ 不重建这些曲线。App-private presentation state 将 Snapshot、Previe
 
 Action Preview 继续只消费 `FWacomBattleEnemyPartEntryViewData`，Widget 不重算伤害或抵抗。普通 hover 只显示 `ContextSurface`；非完美有效攻击显示 projected 数值，`bWillAct` 让普通 Intent 使用暖红风险色；完美但非攻击意图只显示 `PerfectReleaseSurface`；合法抵抗显示 `P > E` 或 `P ≤ E`，成功时 projected `StatusList` 显示眩晕，立即跳过时 Intent 变暗并显示 `PreviewSkipMark`。清理、目标切换、Snapshot 变化、BattleEnd 与 Destruct 必须恢复权威数值、普通 Intent tint、`InitiativeSocket + IntentSocket` 和正常可见性。所有 Preview 装饰节点在显示时使用 `HitTestInvisible`；Reduced Motion 保留相同静态语义。
 
-Panel / Entry Root 必须是 `SelfHitTestInvisible`，装饰控件全部不可命中，仅 `InspectHitTarget` 可见命中。Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时启用按钮；禁用时 Entry 与热点回到 `HitTestInvisible`，不能阻断世界目标点击。Host 的 `WidgetComponent` 使用 `WacomBattleEnemyPanelScreenLayer@8000`，详情位于 `8500`。
+Panel / Entry Root 必须是 `SelfHitTestInvisible`，装饰控件全部不可命中。`InspectHitTarget` 与 `StatusList` 是两条共享同一敌情档案意图的合法命中路径：StatusList 必须绘制并命中在全覆盖按钮之上，点击状态图标仍只上报完整 `FBattlePartSlotIdentity`。Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时同时启用两条路径；禁用时 Entry、按钮和状态列表回到 `HitTestInvisible`，不能阻断世界目标点击。Host 的 `WidgetComponent` 使用 `WacomBattleEnemyPanelScreenLayer@8000`，详情位于 `8500`。
 
 Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default`，只接受准确 `IntentId -> IconBrush`；未知 ID 使用白色四角星 fallback，不按显示名或 effects 猜图标。
 

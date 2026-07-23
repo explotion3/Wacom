@@ -243,6 +243,12 @@ void UPlayerStatusBar::NativeConstruct()
 	CaptureShieldAuthoredTransform();
 	EnsureVitalsMaterial();
 	BindRuntimeSettings();
+	if (UWacomBattleStatusIconListWidget* ResolvedStatusList = ResolveStatusListWidget())
+	{
+		ResolvedStatusList->SetInspectionHost(
+			EWacomBattleStatusInspectionHost::Player);
+		ResolvedStatusList->SetStatusIconActivationEnabled(false);
+	}
 	RefreshDisplay();
 }
 
@@ -268,6 +274,7 @@ void UPlayerStatusBar::SetActionPreview(const FPlayerSnapshot& ProjectedPlayer)
 	ActionPreviewPlayerView = ProjectedPlayer;
 	bHasActionPreview = true;
 	RefreshDisplay();
+	RefreshStatusInspectionInteraction();
 }
 
 void UPlayerStatusBar::ClearActionPreview()
@@ -279,6 +286,17 @@ void UPlayerStatusBar::ClearActionPreview()
 
 	bHasActionPreview = false;
 	RefreshDisplay();
+	RefreshStatusInspectionInteraction();
+}
+
+void UPlayerStatusBar::SetStatusInspectionEnabled(const bool bEnabled)
+{
+	if (bStatusInspectionAllowedByRuntime == bEnabled)
+	{
+		return;
+	}
+	bStatusInspectionAllowedByRuntime = bEnabled;
+	RefreshStatusInspectionInteraction();
 }
 
 void UPlayerStatusBar::PlayEnemyActionImpactFeedback(
@@ -342,6 +360,8 @@ void UPlayerStatusBar::NativeDestruct()
 {
 	UnbindRuntimeSettings();
 	bHasActionPreview = false;
+	bStatusInspectionAllowedByRuntime = false;
+	RefreshStatusInspectionInteraction();
 	if (VitalsPlayback)
 	{
 		VitalsPlayback->Reset(bHasBasePlayerView ? ResolveHpPercent(BasePlayerView) : 0.0f);
@@ -362,6 +382,7 @@ void UPlayerStatusBar::RefreshDisplay()
 		RefreshFromPlayerSnapshot(BasePlayerView);
 	}
 	ApplyVitalsPresentation();
+	RefreshStatusInspectionInteraction();
 }
 
 void UPlayerStatusBar::RefreshFromPlayerSnapshot(const FPlayerSnapshot& PlayerView)
@@ -392,6 +413,15 @@ void UPlayerStatusBar::RefreshFromPlayerSnapshot(const FPlayerSnapshot& PlayerVi
 	if (UWacomBattleStatusIconListWidget* ResolvedStatusList = ResolveStatusListWidget())
 	{
 		ResolvedStatusList->SetStatuses(PlayerView.Statuses, PlayerView.StatusStacks);
+	}
+}
+
+void UPlayerStatusBar::RefreshStatusInspectionInteraction()
+{
+	if (UWacomBattleStatusIconListWidget* ResolvedStatusList = ResolveStatusListWidget())
+	{
+		ResolvedStatusList->SetStatusInspectionEnabled(
+			bStatusInspectionAllowedByRuntime && !bHasActionPreview);
 	}
 }
 

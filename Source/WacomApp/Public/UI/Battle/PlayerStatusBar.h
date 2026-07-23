@@ -57,6 +57,9 @@ public:
 		const FPlayerSnapshot& PreviousPlayer,
 		const FPlayerSnapshot& CurrentPlayer);
 
+	/** 控制玩家状态图标是否可被鼠标检视；拖卡、TargetSelect 和 Action Preview 期间关闭。 */
+	void SetStatusInspectionEnabled(bool bEnabled);
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeConstruct() override;
@@ -124,6 +127,7 @@ private:
 
 	void RefreshDisplay();
 	void RefreshFromPlayerSnapshot(const FPlayerSnapshot& PlayerView);
+	void RefreshStatusInspectionInteraction();
 	UWacomBattleStatusIconListWidget* ResolveStatusListWidget();
 	bool EnsureVitalsMaterial();
 	void ApplyVitalsPresentation();
@@ -145,6 +149,7 @@ private:
 
 	bool bHasBasePlayerView = false;
 	bool bHasActionPreview = false;
+	bool bStatusInspectionAllowedByRuntime = true;
 	bool bRuntimeSimplifiedMotion = false;
 	float RuntimeFlashIntensity = 1.0f;
 

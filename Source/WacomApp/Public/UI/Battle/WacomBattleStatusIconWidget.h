@@ -12,6 +12,15 @@ class UImage;
 class UPanelWidget;
 class UTextBlock;
 class UWidget;
+class UWacomBattleStatusTooltipWidget;
+
+UENUM(BlueprintType, meta = (ToolTip = "状态说明所使用的宿主语义。只决定 UI 文案，不参与战斗规则判断。"))
+enum class EWacomBattleStatusInspectionHost : uint8
+{
+	Unknown UMETA(DisplayName = "未知"),
+	Player UMETA(DisplayName = "玩家"),
+	EnemyPart UMETA(DisplayName = "敌方部位"),
+};
 
 USTRUCT(BlueprintType, meta = (ToolTip = "Battle UI 状态图标的只读展示数据。由 Snapshot 中的 Statuses / StatusStacks 转换而来，不写入规则状态。"))
 struct WACOMAPP_API FWacomBattleStatusIconView
@@ -29,7 +38,24 @@ struct WACOMAPP_API FWacomBattleStatusIconView
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "状态图标 Brush。由状态列表控件按 WBP 变量配置解析。"))
 	FSlateBrush IconBrush;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "状态说明使用的宿主语义；同一状态可根据玩家或敌方部位显示不同规则。"))
+	EWacomBattleStatusInspectionHost InspectionHost =
+		EWacomBattleStatusInspectionHost::Unknown;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "Tooltip 第一行：状态的核心效果。"))
+	FText CoreEffectText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "Tooltip 第二行：状态的触发时机。"))
+	FText TriggerTimingText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "Tooltip 第三行：状态的叠层、消耗或清除规则。"))
+	FText StackPolicyText;
 };
+
+DECLARE_MULTICAST_DELEGATE_OneParam(
+	FWacomBattleStatusIconActivatedNative,
+	const FWacomBattleStatusIconView&);
 
 UCLASS(Blueprintable, meta = (ToolTip = "Battle 单个状态图标 Widget。显示状态图标和角落层数，只维护 UI 显示缓存。"))
 class WACOMAPP_API UWacomBattleStatusIconWidget : public UCommonUserWidget
@@ -37,15 +63,36 @@ class WACOMAPP_API UWacomBattleStatusIconWidget : public UCommonUserWidget
 	GENERATED_BODY()
 
 public:
+	UWacomBattleStatusIconWidget(const FObjectInitializer& ObjectInitializer);
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "设置单个状态图标展示数据。只刷新图标、层数和 tooltip，不修改 BattleSession。"))
 	void SetStatusIconView(const FWacomBattleStatusIconView& InView);
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Status Icons", meta = (ToolTip = "返回当前缓存的状态图标展示数据。"))
 	FWacomBattleStatusIconView GetStatusIconView() const { return CurrentView; }
 
+	void SetStatusInspectionEnabled(bool bEnabled);
+	bool IsStatusInspectionEnabled() const { return bStatusInspectionEnabled; }
+
+	void SetStatusActivationEnabled(bool bEnabled);
+	bool IsStatusActivationEnabled() const { return bStatusActivationEnabled; }
+
+	void SetStatusTooltipWidgetClass(
+		TSubclassOf<UWacomBattleStatusTooltipWidget> InTooltipWidgetClass);
+	TSubclassOf<UWacomBattleStatusTooltipWidget> GetStatusTooltipWidgetClass() const
+	{
+		return StatusTooltipWidgetClass;
+	}
+
+	FWacomBattleStatusIconActivatedNative OnStatusIconActivatedNative;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
+	virtual void SynchronizeProperties() override;
 	virtual void NativePreConstruct() override;
+	virtual FReply NativeOnMouseButtonUp(
+		const FGeometry& InGeometry,
+		const FPointerEvent& InMouseEvent) override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览开关。开启后，单独打开 WBP_BattleStatusIcon 时会显示 PreviewStatusTag / PreviewStackCount，而运行时仍只使用 SetStatusIconView 传入的数据。"))
 	bool bShowDesignTimePreview = true;
@@ -62,6 +109,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用图标 Brush。为空时优先使用 IconImage 当前在 WBP 中配置的 Brush；仍为空时使用 C++ 默认占位 Brush。"))
 	FSlateBrush PreviewIconBrush;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (AllowAbstract = "false", ToolTip = "鼠标悬停时惰性创建的状态说明 Widget 类。正式资产应使用 WBP_BattleStatusTooltip；为空时回退到 C++ 默认控件。"))
+	TSubclassOf<UWacomBattleStatusTooltipWidget> StatusTooltipWidgetClass;
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> IconImage = nullptr;
 
@@ -75,9 +125,17 @@ private:
 	UPROPERTY(Transient)
 	FWacomBattleStatusIconView CurrentView;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleStatusTooltipWidget> CachedTooltipWidget = nullptr;
+
 	bool bHasAssignedStatusIconView = false;
+	bool bStatusInspectionEnabled = true;
+	bool bStatusActivationEnabled = false;
 
 	FWacomBattleStatusIconView BuildDesignTimePreviewView() const;
+	void EnsureStatusTooltipBinding();
+	UFUNCTION()
+	UWidget* HandleBuildStatusTooltipWidget();
 	void RefreshDisplay();
 };
 
@@ -107,9 +165,30 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Status Icons")
 	int32 GetOverflowStatusCount() const { return OverflowStatusCount; }
 
+	void SetInspectionHost(EWacomBattleStatusInspectionHost InHost);
+	EWacomBattleStatusInspectionHost GetInspectionHost() const { return InspectionHost; }
+
+	void SetStatusInspectionEnabled(bool bEnabled);
+	bool IsStatusInspectionEnabled() const { return bStatusInspectionEnabled; }
+
+	void SetStatusIconActivationEnabled(bool bEnabled);
+	bool IsStatusIconActivationEnabled() const { return bStatusIconActivationEnabled; }
+
+	void SetStatusTooltipWidgetClass(
+		TSubclassOf<UWacomBattleStatusTooltipWidget> InTooltipWidgetClass);
+	TSubclassOf<UWacomBattleStatusTooltipWidget> GetStatusTooltipWidgetClass() const
+	{
+		return StatusTooltipWidgetClass;
+	}
+
+	TArray<FWacomBattleStatusIconView> GetHiddenStatusIconViews() const;
+
+	FWacomBattleStatusIconActivatedNative OnStatusIconActivatedNative;
+
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativePreConstruct() override;
+	virtual void NativeDestruct() override;
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UPanelWidget> StatusContainer = nullptr;
@@ -119,6 +198,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (AllowAbstract = "false", ToolTip = "列表中每个状态图标使用的 Widget 类。为空时使用 C++ 默认 UWacomBattleStatusIconWidget。"))
 	TSubclassOf<UWacomBattleStatusIconWidget> StatusIconWidgetClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (AllowAbstract = "false", ToolTip = "状态图标和 +N 溢出入口使用的 Tooltip Widget 类。正式资产应使用 WBP_BattleStatusTooltip；为空时回退到 C++ 默认控件。"))
+	TSubclassOf<UWacomBattleStatusTooltipWidget> StatusTooltipWidgetClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "Status.Poison 使用的图标 Brush。只影响 UI 外观，不改变中毒规则。"))
 	FSlateBrush PoisonIconBrush;
@@ -154,13 +236,25 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UWacomBattleStatusIconWidget>> IconWidgets;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleStatusTooltipWidget> CachedOverflowTooltipWidget = nullptr;
+
 	bool bHasAssignedStatusIconViews = false;
+	bool bStatusInspectionEnabled = true;
+	bool bStatusIconActivationEnabled = false;
 	int32 MaxVisibleStatuses = 0;
 	int32 OverflowStatusCount = 0;
+	EWacomBattleStatusInspectionHost InspectionHost =
+		EWacomBattleStatusInspectionHost::Unknown;
 
 	TArray<FWacomBattleStatusIconView> BuildStatusIconViews(
 		const FGameplayTagContainer& InStatuses,
 		const TMap<FGameplayTag, int32>& InStatusStacks) const;
 	const FSlateBrush& ResolveIconBrush(FGameplayTag StatusTag) const;
+	void NormalizeViewForInspection(FWacomBattleStatusIconView& InOutView) const;
+	void HandleStatusIconActivated(const FWacomBattleStatusIconView& View);
+	void EnsureOverflowTooltipBinding();
+	UFUNCTION()
+	UWidget* HandleBuildOverflowTooltipWidget();
 	void RefreshDisplay();
 };
