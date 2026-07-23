@@ -9,7 +9,7 @@
 
 namespace
 {
-	constexpr float DefaultIconSize = 32.0f;
+	constexpr float DefaultCatalogIconSize = 32.0f;
 	constexpr int32 UnknownStatusSortPriority = 1000;
 
 	FSlateBrush MakeFallbackBrush(const FLinearColor& Tint)
@@ -17,7 +17,7 @@ namespace
 		FSlateBrush Brush;
 		Brush.DrawAs = ESlateBrushDrawType::Box;
 		Brush.TintColor = FSlateColor(Tint);
-		Brush.SetImageSize(FVector2f(DefaultIconSize, DefaultIconSize));
+		Brush.SetImageSize(FVector2f(DefaultCatalogIconSize, DefaultCatalogIconSize));
 		return Brush;
 	}
 
