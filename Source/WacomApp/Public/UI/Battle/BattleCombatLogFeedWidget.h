@@ -12,6 +12,7 @@ class UBattleCombatActivityRowWidget;
 class UButton;
 class UImage;
 class UPanelWidget;
+class USizeBox;
 class UTextBlock;
 class UWacomBattleCombatActivityStyle;
 class UWacomSettingsSubsystem;
@@ -42,13 +43,17 @@ public:
 
 	/** C++ runtime path: begin a group at the presentation clock's semantic action boundary. */
 	void BeginSynchronizedCombatActivityGroup(
+		uint64 TransactionId,
+		int32 GroupIndex,
 		const FWacomBattleCombatActivityRowView& RootAction,
 		int32 TurnNumber);
 	/** C++ runtime path: release outcome rows reached by the presentation clock. */
 	void ReleaseSynchronizedCombatActivityResults(
+		uint64 TransactionId,
+		int32 GroupIndex,
 		const TArray<FWacomBattleCombatActivityRowView>& ResultRows);
-	/** C++ runtime path: release the active root after all unlocked results enter. */
-	void CompleteSynchronizedCombatActivityGroup();
+	/** C++ runtime path: mark every visual group in one presentation transaction complete. */
+	void CompleteSynchronizedCombatActivityTransaction(uint64 TransactionId);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Combat Activity", meta = (ToolTip = "设置 Footer 显示的表现回合数。正式 EndTurn 路径在首个新回合表现阶段开始前调用。"))
 	void SetPresentedTurnNumber(int32 TurnNumber);
@@ -89,6 +94,9 @@ protected:
 	TObjectPtr<UPanelWidget> ActivityRowsBox;
 
 	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<USizeBox> ActivityRowsViewport;
+
+	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UButton> LastActionButton;
 
 	UPROPERTY(meta = (BindWidgetOptional))
@@ -117,6 +125,7 @@ private:
 	void HandleLastActionClicked();
 
 	void EnsureRuntimeBindings();
+	void ApplyRuntimeGeometry();
 	void EnsureRowWidgets(int32 RequiredCount);
 	void RefreshPlaybackPresentation();
 	void RefreshFooter();

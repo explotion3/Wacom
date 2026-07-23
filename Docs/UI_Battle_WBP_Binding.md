@@ -60,7 +60,7 @@ WBP 不应做：
 
 - 玩家状态、牌堆数量、CommandBar 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - 拖牌指向合法敌人部位 / 手牌目标，或无目标卡已经达到 armed commit 可释放状态时，玩家状态条和敌人部位面板可以直接显示 Action Preview projected value；单纯拖出手牌区但未 armed、未指向有效目标或目标无效时不显示玩家侧收益预览。
-- `CombatLogFeed` 在固定高度的裁切视口中流式显示短时活动；不再以三行做数据硬裁剪。根行动从底部最后行动槽出现，结果向上流动并随接近顶部加速淡出；收束时最新根行动只淡出文字和底板，原 Row 图标常驻，新的根行动才替换它。透明 `LastActionButton` 始终覆盖图标槽并在已有根行动时可点击，其余区域不遮挡 HUD、手牌或世界目标。
+- `CombatLogFeed` 在裁切视口中流式显示核心短时活动。默认同时容纳五条历史 / 结果和一条当前根行动；这是视觉背压容量，不是数据裁剪，积压仍按跨组 FIFO 逐条进入。根行动从底部最后行动槽立即出现；连续敌人行动时，尚未读完的上一根行动进入上方历史流而不是被删除。结果和历史根行动达到最短可读时间后从顶部逐条退场；收束时最新根行动只淡出文字和底板，原 Row 图标常驻，新的根行动才替换它。透明 `LastActionButton` 始终覆盖图标槽并在已有根行动时可点击，其余区域不遮挡 HUD、手牌或世界目标。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 抽牌从 `DrawPileMotionAnchor`（或 `DrawPileView` 中心）进入；弃牌飞向 `DiscardPileMotionAnchor`（或 `DiscardPileView` 中心）。配置有效 Card Use Surface Effect 时，无目标牌与目标牌都停在提交位置播放当前 Style（默认像素翻面收牌，旧菱形波可切回）；`PlayTargetMotionAnchor` 和真实目标坐标仍会采集，但只供效果失效时的旧空间离场 fallback 与未来目标命中反馈使用。
 - 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 的 typed Part registry 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
@@ -211,7 +211,8 @@ WBP 合同：
 
 | 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
 |---|---|---|---|
-| `ActivityRowsViewport` | `SizeBox` | Optional | `140px` 固定高度活动视口；必须使用 `ClipToBounds` |
+| `CombatActivitySize` | `SizeBox` | WBP Root | WBP 可保留 `420×190` 制作基线；Native Feed 按五加一合同把运行时根高度扩到至少 `270px`，并以根宽 `420px` 保护父 Slot 构造期宽度，避免视口被裁切或 Feed 退化成 `1px` 竖线 |
+| `ActivityRowsViewport` | `SizeBox` | Optional | WBP 可保留 `140px` 制作基线；Native Feed 按五加一合同在运行时扩到至少 `220px`，必须使用 `ClipToBounds` |
 | `ActivityRowsBox` | `CanvasPanel` | Optional | C++ 按活动数量扩展和回收 Row 池，应用 Playback 输出的 Y 与透明度；必须 `HitTestInvisible` |
 | `LastActionButton` | `Button` | Optional | `38×38` 透明命中框，固定覆盖根行动图标槽；始终 `Visible`，无已释放根行动时 disabled，之后在 Row 播放全过程只广播详细日志打开意图 |
 | `TurnRoot` | `Widget` | Optional | 沙漏与回合数的稳定布局根；始终保留 |
@@ -227,6 +228,8 @@ WBP 合同：
 | `ActivityStyle` | 玩家头像、Intent Style、Tag 图标、fallback 图标与播放时序 |
 | `ActivityRowWidgetClass` | 单行 Widget 类，推荐 `WBP_BattleCombatActivityRow` |
 | `ActivityStyle.RootIconReplacementFadeSeconds` | 新根行动到达时上一枚常驻图标的透明度退场时间；默认 `0.10s` |
+| `ActivityStyle.MinimumResultVisibleSeconds` | 结果行开始退场前的最短完整可读时间；默认 `0.35s`，只影响短时 Feed 视觉节奏 |
+| `ActivityStyle.MinimumVisibleResultRows` | 底部当前根行动之外至少同时容纳的历史 / 结果行数；默认 `5`，Native Feed 会据此扩展视口与宿主高度 |
 
 WBP 不应做：
 
@@ -237,9 +240,11 @@ WBP 不应做：
 
 最小 PIE 验收：
 
-- 玩家出牌显示头像与卡名，敌人行动显示 Intent 图标与名称，多目标结果逐条进入。
+- 玩家出牌显示头像与卡名，敌人行动显示 Intent 图标与名称，多目标结果逐条进入。短时结果只显示正伤害、双方有效 Buff / Debuff、抵抗、部位破坏和击倒；其它事件仍可在完整日志查看。
 - Battle Entry Gate 解除后显示一次“沙漏 + 第 1 回合开始”；根行动释放后沙漏槽立即可点击，文字和底板退场后沙漏仍由原 Row 常驻，且详细日志不重复增加行动组。
-- 行数不做三行数据硬裁剪；所有结果按顺序向上流动并在顶部自然退出。
+- 新根行动不会强制追平上一组结果；它立即进入底部根行动槽，尚未读完的上一根行动转入上方历史流，所有结果使用 `TransactionId + GroupIndex` 的全局 FIFO，跨组不超车。
+- 默认五条历史 / 结果加一条当前根行动；满载时暂停结果准入，每次 Tick 最多进入一条，同时最多一条从顶部退场，所有已过滤结果最终都会显示。
+- 结果至少保持 `0.35s` 完整可读；Reduced Motion 取消位移但保留相同容量、FIFO 与串行退场语义。
 - 根行动从最后行动槽出现；队列结束时文字和底板淡出，图标留在原 Row。新根行动出现时旧图标短暂淡出，新图标接替；结果行不替换常驻图标。
 - Root 与行不拦截 Wait、EndTurn、手牌和世界目标；只有覆盖图标槽的透明最后行动按钮可点击。
 

@@ -3,6 +3,7 @@
 #include "Misc/AutomationTest.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/UserWidget.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
@@ -10,21 +11,44 @@
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
+#include "Framework/Application/SlateApplication.h"
+#include "Rendering/DrawElements.h"
 #include "Enemies/EnemyPartDefinition.h"
 #include "Snapshots/BattleSnapshot.h"
+#include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/BattleCombatActivityRowWidget.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
+#include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleCombatActivityStyle.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UObject/StrongObjectPtr.h"
 #include "WidgetBlueprint.h"
+#include "Widgets/SVirtualWindow.h"
+#include "Widgets/Layout/SBox.h"
 
 #include "../../../WacomApp/Private/UI/Battle/WacomBattleCombatActivityPlayback.h"
 
 namespace WacomBattleCombatActivitySpec
 {
+	UWorld* FindAutomationWorld()
+	{
+		if (GEngine)
+		{
+			for (const FWorldContext& Context : GEngine->GetWorldContexts())
+			{
+				if (UWorld* World = Context.World())
+				{
+					return World;
+				}
+			}
+		}
+		return GWorld;
+	}
+
 	FEnemyPartSnapshot MakePart(
 		const FBattleEnemyPartKey& Key,
 		const TCHAR* DisplayName,
@@ -147,6 +171,7 @@ bool FWacomUIBattleCombatActivityPlayerCommandSpec::RunTest(const FString& /*Par
 	Status.Type = EBattleEventType::StatusApplied;
 	Status.Sequence = 12;
 	Status.Amount = 1;
+	Status.Tag = WacomTags::Status_Poison;
 	FBattleEvent Internal;
 	Internal.Type = EBattleEventType::EnemyIntentSelected;
 	Internal.Sequence = 13;
@@ -166,9 +191,11 @@ bool FWacomUIBattleCombatActivityPlayerCommandSpec::RunTest(const FString& /*Par
 	const FWacomBattleCombatActivityGroupView& Group = Batch.Groups[0];
 	TestEqual(TEXT("Player root uses card name"), Group.RootAction.MessageText.ToString(), FString(TEXT("泛滥")));
 	TestEqual(TEXT("Player root uses player icon key"), Group.RootAction.IconKey, FName(TEXT("Player")));
-	TestEqual(TEXT("Only compact results are projected"), Group.ResultRows.Num(), 2);
-	TestEqual(TEXT("Result ordering follows event sequence"), Group.ResultRows[0].EventSequence, 11);
-	TestEqual(TEXT("Second result preserves order"), Group.ResultRows[1].EventSequence, 12);
+	TestEqual(TEXT("Only short-feed whitelist results are projected"), Group.ResultRows.Num(), 1);
+	if (Group.ResultRows.Num() == 1)
+	{
+		TestEqual(TEXT("Status result preserves event order"), Group.ResultRows[0].EventSequence, 12);
+	}
 	return true;
 }
 
@@ -204,6 +231,7 @@ bool FWacomUIBattleCombatActivityEnemyGroupsSpec::RunTest(const FString& /*Param
 	FirstStatus.Sequence = 21;
 	FirstStatus.ActorEnemyPartKey = FirstKey;
 	FirstStatus.Amount = 1;
+	FirstStatus.Tag = WacomTags::Status_Poison;
 	FBattleEvent SecondAct = FirstAct;
 	SecondAct.Sequence = 22;
 	SecondAct.ActorEnemyPartKey = SecondKey;
@@ -306,13 +334,14 @@ bool FWacomUIBattleCombatActivitySimplifiedMotionSpec::RunTest(const FString& /*
 	Config.BottomRowFadeSeconds = 0.0f;
 	Config.TopRowFadeSeconds = 0.0f;
 	Config.RootIconReplacementFadeSeconds = 0.10f;
+	Config.ActivityViewportHeightPixels = 220.0f;
 	Group.RootAction.EventSequence = 10;
-	Playback.BeginSynchronizedGroup(Group.RootAction, 1, Config);
-	Playback.CompleteSynchronizedGroup(Config);
+	Playback.BeginSynchronizedGroup(1, 0, Group.RootAction, 1, Config);
+	Playback.CompleteSynchronizedTransaction(1, Config);
 	Playback.Tick(0.0f, Config);
 	FWacomBattleCombatActivityRowView NextRoot = Group.RootAction;
 	NextRoot.EventSequence = 20;
-	Playback.BeginSynchronizedGroup(NextRoot, 1, Config);
+	Playback.BeginSynchronizedGroup(2, 0, NextRoot, 1, Config);
 	Playback.Tick(0.05f, Config);
 	const FWacomBattleCombatActivityRowPlaybackView* Outgoing =
 		WacomBattleCombatActivitySpec::FindPlaybackRow(
@@ -322,39 +351,6 @@ bool FWacomUIBattleCombatActivitySimplifiedMotionSpec::RunTest(const FString& /*
 		&& Outgoing->IconOpacity > 0.0f
 		&& Outgoing->IconOpacity < 1.0f
 		&& FMath::IsNearlyZero(Outgoing->TranslationY));
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleCombatActivityStreamingRowsSpec,
-	"Wacom.UI.Battle.CombatActivity.Playback.StreamingRowsAreNotHardClippedAtThree",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleCombatActivityStreamingRowsSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleCombatActivityPlayback Playback;
-	FWacomBattleCombatActivityPlaybackConfig Config;
-	Config.EnterSeconds = 0.0f;
-	Config.ResultStaggerSeconds = 0.0f;
-	Config.MinimumResultStaggerSeconds = 0.0f;
-	Config.MinimumReadableSeconds = 10.0f;
-	Config.ShiftSeconds = 1.0f;
-	Config.BottomRowHoldSeconds = 10.0f;
-	Config.TopRowHoldSeconds = 10.0f;
-	Config.BottomRowFadeSeconds = 10.0f;
-	Config.TopRowFadeSeconds = 10.0f;
-	Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(16));
-	Playback.Tick(0.0f, Config);
-	Playback.Tick(0.0f, Config);
-
-	TestTrue(TEXT("Sixteen results coexist without a three-row data cap"),
-		Playback.GetVisibleRows().Num() >= 16);
-	for (int32 Sequence = 1; Sequence <= 16; ++Sequence)
-	{
-		TestNotNull(*FString::Printf(TEXT("Result %d is not dropped at emission"), Sequence),
-			WacomBattleCombatActivitySpec::FindPlaybackRow(
-				Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::Result, Sequence));
-	}
 	return true;
 }
 
@@ -371,7 +367,9 @@ bool FWacomUIBattleCombatActivityDynamicRowPoolSpec::RunTest(const FString& /*Pa
 	Style->ResultStaggerSeconds = 0.0f;
 	Style->MinimumResultStaggerSeconds = 0.0f;
 	Style->MinimumReadableSeconds = 10.0f;
-	Style->ShiftSeconds = 1.0f;
+	Style->MinimumResultVisibleSeconds = 10.0f;
+	Style->ShiftSeconds = 0.0f;
+	Style->ActivityViewportHeightPixels = 800.0f;
 	Style->BottomRowHoldSeconds = 10.0f;
 	Style->TopRowHoldSeconds = 10.0f;
 	Style->BottomRowFadeSeconds = 10.0f;
@@ -382,7 +380,10 @@ bool FWacomUIBattleCombatActivityDynamicRowPoolSpec::RunTest(const FString& /*Pa
 	Feed->ActivityStyle = Style.Get();
 	const TSharedRef<SWidget> SlateWidget = Feed->TakeWidget();
 	Feed->EnqueueCombatActivityBatch(WacomBattleCombatActivitySpec::MakeResultBatch(16));
-	Feed->AdvanceActivityPlaybackForTest(0.0f);
+	for (int32 TickIndex = 0; TickIndex < 16; ++TickIndex)
+	{
+		Feed->AdvanceActivityPlaybackForTest(0.0f);
+	}
 
 	UCanvasPanel* RowsCanvas = Feed->WidgetTree
 		? Cast<UCanvasPanel>(Feed->WidgetTree->FindWidget(TEXT("ActivityRowsBox")))
@@ -431,6 +432,7 @@ bool FWacomUIBattleCombatActivityRootProtectionSpec::RunTest(const FString& /*Pa
 		Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction);
 	TestTrue(TEXT("Root stays pinned while results remain"), Root && Root->bPinnedRoot);
 	Playback.Tick(0.32f, Config);
+	Playback.Tick(0.16f, Config);
 	Root = WacomBattleCombatActivitySpec::FindPlaybackRow(
 		Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction);
 	TestTrue(TEXT("Root is released after the final result emits"), Root && !Root->bPinnedRoot);
@@ -479,8 +481,8 @@ bool FWacomUIBattleCombatActivityResidentRootSpec::RunTest(const FString& /*Para
 	Root.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
 	Root.EventSequence = 10;
 	Root.MessageText = FText::FromString(TEXT("根行动"));
-	Playback.BeginSynchronizedGroup(Root, 1, Config);
-	Playback.CompleteSynchronizedGroup(Config);
+	Playback.BeginSynchronizedGroup(1, 0, Root, 1, Config);
+	Playback.CompleteSynchronizedTransaction(1, Config);
 	Playback.Tick(0.10f, Config);
 
 	TestEqual(TEXT("Latest root remains as one visible resident row"),
@@ -525,10 +527,10 @@ bool FWacomUIBattleCombatActivityRootReplacementSpec::RunTest(const FString& /*P
 		return Root;
 	};
 
-	Playback.BeginSynchronizedGroup(MakeRoot(10, TEXT("玩家行动")), 1, Config);
-	Playback.CompleteSynchronizedGroup(Config);
+	Playback.BeginSynchronizedGroup(1, 0, MakeRoot(10, TEXT("玩家行动")), 1, Config);
+	Playback.CompleteSynchronizedTransaction(1, Config);
 	Playback.Tick(0.0f, Config);
-	Playback.BeginSynchronizedGroup(MakeRoot(20, TEXT("敌人行动")), 1, Config);
+	Playback.BeginSynchronizedGroup(2, 0, MakeRoot(20, TEXT("敌人行动")), 1, Config);
 	TestEqual(TEXT("Replacement keeps one outgoing and one incoming root"),
 		Playback.GetVisibleRows().Num(), 2);
 	const FWacomBattleCombatActivityRowPlaybackView* Outgoing =
@@ -556,17 +558,23 @@ bool FWacomUIBattleCombatActivityRootReplacementSpec::RunTest(const FString& /*P
 		WacomBattleCombatActivitySpec::FindPlaybackRow(
 			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 20));
 
-	Playback.BeginSynchronizedGroup(MakeRoot(30, TEXT("后续行动")), 1, Config);
-	Playback.BeginSynchronizedGroup(MakeRoot(40, TEXT("快速行动")), 1, Config);
-	TestNull(TEXT("Rapid roots immediately discard an older outgoing duplicate"),
+	Playback.BeginSynchronizedGroup(3, 0, MakeRoot(30, TEXT("后续行动")), 1, Config);
+	Playback.BeginSynchronizedGroup(4, 0, MakeRoot(40, TEXT("快速行动")), 1, Config);
+	const FWacomBattleCombatActivityRowPlaybackView* StreamedRoot20 =
 		WacomBattleCombatActivitySpec::FindPlaybackRow(
-			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 20));
-	TestEqual(TEXT("Rapid replacement remains bounded to outgoing plus latest root"),
-		Playback.GetVisibleRows().Num(), 2);
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 20);
+	const FWacomBattleCombatActivityRowPlaybackView* StreamedRoot30 =
+		WacomBattleCombatActivitySpec::FindPlaybackRow(
+			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 30);
+	TestTrue(TEXT("Rapid roots move unread actions into the stream"),
+		StreamedRoot20 && !StreamedRoot20->bRootActionLane
+		&& StreamedRoot30 && !StreamedRoot30->bRootActionLane);
+	TestEqual(TEXT("Rapid replacement keeps both readable history roots plus latest"),
+		Playback.GetVisibleRows().Num(), 3);
 	Config.RootIconReplacementFadeSeconds = 0.0f;
-	Playback.BeginSynchronizedGroup(MakeRoot(50, TEXT("即时替换")), 1, Config);
-	TestEqual(TEXT("A zero replacement duration removes the previous icon immediately"),
-		Playback.GetVisibleRows().Num(), 1);
+	Playback.BeginSynchronizedGroup(5, 0, MakeRoot(50, TEXT("即时替换")), 1, Config);
+	TestEqual(TEXT("Zero icon fade still preserves unread roots in the stream"),
+		Playback.GetVisibleRows().Num(), 4);
 	TestNotNull(TEXT("Zero-duration replacement keeps the newest root"),
 		WacomBattleCombatActivitySpec::FindPlaybackRow(
 			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction, 50));
@@ -649,13 +657,14 @@ bool FWacomUIBattleCombatActivityPositionFadeSpec::RunTest(const FString& /*Para
 	Config.ResultStaggerSeconds = 0.0f;
 	Config.MinimumResultStaggerSeconds = 0.0f;
 	Config.MinimumReadableSeconds = 10.0f;
+	Config.MinimumResultVisibleSeconds = 0.0f;
+	Config.ShiftSeconds = 0.0f;
 	Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(3));
 	Playback.Tick(0.0f, Config);
-	Playback.Tick(0.10f, Config);
-	// Keep the top row inside its accelerated fade window long enough to inspect it.
-	// A larger single tick legitimately completes and removes that row.
-	Playback.Tick(0.075f, Config);
-	Playback.Tick(0.02f, Config);
+	Playback.Tick(0.0f, Config);
+	Playback.Tick(0.0f, Config);
+	Playback.Tick(Config.TopRowHoldSeconds, Config);
+	Playback.Tick(Config.TopRowFadeSeconds * 0.5f, Config);
 
 	const FWacomBattleCombatActivityRowPlaybackView* Oldest =
 		WacomBattleCombatActivitySpec::FindPlaybackRow(
@@ -670,49 +679,6 @@ bool FWacomUIBattleCombatActivityPositionFadeSpec::RunTest(const FString& /*Para
 		TestTrue(TEXT("Bottom row remains fully readable"), FMath::IsNearlyEqual(Newest->Opacity, 1.0f));
 		TestTrue(TEXT("Top row is laid out above the newest row"), Oldest->LayoutY < Newest->LayoutY);
 	}
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleCombatActivityResidentBudgetSpec,
-	"Wacom.UI.Battle.CombatActivity.Playback.ResidentBudgetPreservesOrder",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomUIBattleCombatActivityResidentBudgetSpec::RunTest(const FString& /*Parameters*/)
-{
-	FWacomBattleCombatActivityPlayback Playback;
-	FWacomBattleCombatActivityPlaybackConfig Config;
-	Config.EnterSeconds = 0.0f;
-	Config.ResultStaggerSeconds = 0.0f;
-	Config.MinimumResultStaggerSeconds = 0.0f;
-	Config.MinimumReadableSeconds = 10.0f;
-	Config.ShiftSeconds = 10.0f;
-	Config.BottomRowHoldSeconds = 10.0f;
-	Config.TopRowHoldSeconds = 10.0f;
-	Playback.Enqueue(WacomBattleCombatActivitySpec::MakeResultBatch(40));
-	for (int32 TickIndex = 0; TickIndex < 5; ++TickIndex)
-	{
-		Playback.Tick(0.0f, Config);
-	}
-
-	int32 TransientResultCount = 0;
-	int32 LastSequence = 0;
-	for (const FWacomBattleCombatActivityRowPlaybackView& View : Playback.GetVisibleRows())
-	{
-		if (View.Row.RowKind == EWacomBattleCombatActivityRowKind::Result)
-		{
-			++TransientResultCount;
-			TestTrue(TEXT("Surviving results preserve event order"),
-				View.Row.EventSequence > LastSequence);
-			LastSequence = View.Row.EventSequence;
-		}
-	}
-	TestTrue(TEXT("Transient result rows stay within the internal safety budget"),
-		TransientResultCount <= 32);
-	TestNotNull(TEXT("Root action is not charged against the transient row budget"),
-		WacomBattleCombatActivitySpec::FindPlaybackRow(
-			Playback.GetVisibleRows(), EWacomBattleCombatActivityRowKind::RootAction));
-	TestEqual(TEXT("Newest result survives budget eviction"), LastSequence, 40);
 	return true;
 }
 
@@ -811,6 +777,8 @@ bool FWacomUIBattleCombatActivityFormalAssetContractSpec::RunTest(const FString&
 	}
 	TestEqual(TEXT("Default Style keeps 140px activity viewport"),
 		Style->ActivityViewportHeightPixels, 140.0f);
+	TestEqual(TEXT("Default Style expands runtime capacity to five history rows"),
+		Style->MinimumVisibleResultRows, 5);
 	TestEqual(TEXT("Default Style uses 40px activity rows"), Style->RowHeightPixels, 40.0f);
 	TestEqual(TEXT("Default Style uses 72px top fade band"), Style->TopFadeBandPixels, 72.0f);
 	TestEqual(TEXT("Default Style crossfades the previous resident icon in 100ms"),
@@ -841,6 +809,129 @@ bool FWacomUIBattleCombatActivityFormalAssetContractSpec::RunTest(const FString&
 		TestTrue(TEXT("HUD Feed has finite positive size"),
 			FMath::IsFinite(Offsets.Left) && FMath::IsFinite(Offsets.Top)
 			&& Offsets.Right > 0.0f && Offsets.Bottom > 0.0f);
+	}
+
+	UWorld* AutomationWorld = WacomBattleCombatActivitySpec::FindAutomationWorld();
+	const TSubclassOf<UUserWidget> RuntimeFeedClass(FeedBlueprint->GeneratedClass.Get());
+	TStrongObjectPtr<UBattleCombatLogFeedWidget> RuntimeFeed(
+		AutomationWorld
+			? CreateWidget<UBattleCombatLogFeedWidget>(
+				AutomationWorld, RuntimeFeedClass)
+			: nullptr);
+	TestNotNull(TEXT("Formal Feed can be instantiated through the real UMG path"), RuntimeFeed.Get());
+	if (!RuntimeFeed)
+	{
+		return false;
+	}
+	TStrongObjectPtr<UCanvasPanel> RuntimeHost(
+		NewObject<UCanvasPanel>(GetTransientPackage()));
+	RuntimeHost->AddChild(RuntimeFeed.Get());
+	UCanvasPanelSlot* RuntimeHostSlot = Cast<UCanvasPanelSlot>(RuntimeFeed->Slot);
+	if (RuntimeHostSlot && FeedSlot)
+	{
+		RuntimeHostSlot->SetAnchors(FeedSlot->GetAnchors());
+		RuntimeHostSlot->SetAlignment(FeedSlot->GetAlignment());
+		RuntimeHostSlot->SetOffsets(FeedSlot->GetOffsets());
+		RuntimeHostSlot->SetAutoSize(FeedSlot->GetAutoSize());
+	}
+	RuntimeFeed->TakeWidget();
+	const UWidget* RuntimeRootWidget = RuntimeFeed->WidgetTree
+		? RuntimeFeed->WidgetTree->RootWidget
+		: nullptr;
+	const USizeBox* RuntimeRootSize = Cast<USizeBox>(RuntimeRootWidget);
+	const USizeBox* RuntimeViewport = RuntimeFeed->WidgetTree
+		? Cast<USizeBox>(RuntimeFeed->WidgetTree->FindWidget(TEXT("ActivityRowsViewport")))
+		: nullptr;
+	TestTrue(TEXT("Formal Feed expands its runtime root instead of clipping the enlarged viewport"),
+		RuntimeRootSize && FMath::IsNearlyEqual(RuntimeRootSize->GetHeightOverride(), 270.0f));
+	TestTrue(TEXT("Formal Feed expands its runtime viewport to five plus one rows"),
+		RuntimeViewport && FMath::IsNearlyEqual(RuntimeViewport->GetHeightOverride(), 220.0f));
+	TestNotNull(TEXT("Formal Feed exposes its HUD host canvas slot"), RuntimeHostSlot);
+	if (RuntimeHostSlot)
+	{
+		TestEqual(TEXT("Runtime expansion preserves the authored feed width"),
+			RuntimeHostSlot->GetSize().X, 420.0);
+		TestEqual(TEXT("Formal Feed expands its runtime host to five plus one rows"),
+			RuntimeHostSlot->GetSize().Y, 270.0);
+	}
+
+	FWacomBattleCombatActivityRowView RootAction;
+	RootAction.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+	RootAction.EventSequence = 9001;
+	RootAction.MessageText = FText::FromString(TEXT("布局回归根行动"));
+	if (FSlateApplication::IsInitialized())
+	{
+		const TSubclassOf<UUserWidget> RuntimeHudClass(BattleHud->GeneratedClass.Get());
+		TStrongObjectPtr<UBattleHUD> RuntimeBattleHud(
+			AutomationWorld
+				? CreateWidget<UBattleHUD>(AutomationWorld, RuntimeHudClass)
+				: nullptr);
+		TestNotNull(TEXT("Formal BattleHUD can be instantiated through the real UMG path"),
+			RuntimeBattleHud.Get());
+		if (!RuntimeBattleHud)
+		{
+			return false;
+		}
+		const TSharedRef<SWidget> RuntimeHudSlate = RuntimeBattleHud->TakeWidget();
+		UBattleCombatLogFeedWidget* RuntimeHudFeed = RuntimeBattleHud->WidgetTree
+			? Cast<UBattleCombatLogFeedWidget>(
+				RuntimeBattleHud->WidgetTree->FindWidget(TEXT("CombatLogFeed")))
+			: nullptr;
+		TestNotNull(TEXT("Runtime BattleHUD exposes the formal CombatLogFeed"), RuntimeHudFeed);
+		if (!RuntimeHudFeed)
+		{
+			return false;
+		}
+		RuntimeHudFeed->BeginSynchronizedCombatActivityGroup(9001, 0, RootAction, 1);
+
+		FSlateApplication& Application = FSlateApplication::Get();
+		const TSharedRef<SVirtualWindow> Window = SNew(SVirtualWindow)
+			.Size(FVector2D(1920.0f, 1080.0f));
+		Window->SetContent(
+			SNew(SBox)
+			.WidthOverride(1920.0f)
+			.HeightOverride(1080.0f)
+			.HAlign(HAlign_Fill)
+			.VAlign(VAlign_Fill)
+			[
+				RuntimeHudSlate
+			]);
+		Application.RegisterVirtualWindow(Window);
+		Window->SlatePrepass(1.0f);
+		FSlateWindowElementList ElementList(Window);
+		Window->PaintWindow(
+			Application.GetCurrentTime(),
+			Application.GetDeltaTime(),
+			ElementList,
+			FWidgetStyle(),
+			true);
+
+		USizeBox* RuntimeHudViewport = RuntimeHudFeed->WidgetTree
+			? Cast<USizeBox>(RuntimeHudFeed->WidgetTree->FindWidget(TEXT("ActivityRowsViewport")))
+			: nullptr;
+		UCanvasPanel* RuntimeRowsCanvas = RuntimeHudFeed->WidgetTree
+			? Cast<UCanvasPanel>(RuntimeHudFeed->WidgetTree->FindWidget(TEXT("ActivityRowsBox")))
+			: nullptr;
+		UWidget* RuntimeRow = RuntimeRowsCanvas && RuntimeRowsCanvas->GetChildrenCount() > 0
+			? RuntimeRowsCanvas->GetChildAt(0)
+			: nullptr;
+		const FVector2D FeedGeometry = RuntimeHudFeed->GetCachedGeometry().GetLocalSize();
+		const FVector2D HudGeometry = RuntimeBattleHud->GetCachedGeometry().GetLocalSize();
+		const FVector2D ViewportGeometry = RuntimeHudViewport
+			? RuntimeHudViewport->GetCachedGeometry().GetLocalSize() : FVector2D::ZeroVector;
+		const FVector2D CanvasGeometry = RuntimeRowsCanvas
+			? RuntimeRowsCanvas->GetCachedGeometry().GetLocalSize() : FVector2D::ZeroVector;
+		const FVector2D RowGeometry = RuntimeRow
+			? RuntimeRow->GetCachedGeometry().GetLocalSize() : FVector2D::ZeroVector;
+		TestTrue(TEXT("Virtual GameViewport keeps the BattleHUD at full-screen width"),
+			HudGeometry.X >= 1920.0f);
+		TestTrue(TEXT("Formal Feed keeps its authored arranged width during construct"),
+			FeedGeometry.X >= 420.0f);
+		TestTrue(TEXT("Formal Feed viewport and rows canvas keep the feed width"),
+			ViewportGeometry.X >= 420.0f && CanvasGeometry.X >= 420.0f);
+		TestTrue(TEXT("Formal Feed row receives a readable arranged width"),
+			RuntimeRow && RowGeometry.X >= 400.0f);
+		Application.UnregisterVirtualWindow(Window);
 	}
 	return true;
 }

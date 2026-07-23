@@ -14,10 +14,11 @@ uint64 FWacomBattleCombatActivitySynchronizer::Stage(
 	FPendingTransaction& Transaction = PendingTransactions.Add(TransactionId);
 	Transaction.Batch = Batch;
 	Transaction.Groups.Reserve(Batch.Groups.Num());
-	for (const FWacomBattleCombatActivityGroupView& Group : Batch.Groups)
+	for (int32 GroupIndex = 0; GroupIndex < Batch.Groups.Num(); ++GroupIndex)
 	{
 		FPendingGroup& PendingGroup = Transaction.Groups.AddDefaulted_GetRef();
-		PendingGroup.Group = Group;
+		PendingGroup.Group = Batch.Groups[GroupIndex];
+		PendingGroup.GroupIndex = GroupIndex;
 	}
 	return TransactionId;
 }
@@ -182,7 +183,7 @@ FWacomBattleCombatActivitySynchronizer::Flush(
 	if (!Transaction->Groups.IsEmpty())
 	{
 		FWacomBattleCombatActivityEmission& Completion = Emissions.AddDefaulted_GetRef();
-		Completion.Kind = EWacomBattleCombatActivityEmissionKind::CompleteGroup;
+		Completion.Kind = EWacomBattleCombatActivityEmissionKind::CompleteTransaction;
 		Completion.TransactionId = TransactionId;
 	}
 
@@ -238,6 +239,7 @@ void FWacomBattleCombatActivitySynchronizer::EmitRootIfNeeded(
 	FWacomBattleCombatActivityEmission& Emission = OutEmissions.AddDefaulted_GetRef();
 	Emission.Kind = EWacomBattleCombatActivityEmissionKind::BeginGroup;
 	Emission.TransactionId = TransactionId;
+	Emission.GroupIndex = Group.GroupIndex;
 	Emission.RootAction = Group.Group.RootAction;
 	Emission.TurnNumber = Group.Group.TurnNumber;
 	Group.bRootReleased = true;
@@ -272,6 +274,7 @@ void FWacomBattleCombatActivitySynchronizer::EmitMatchingResults(
 	FWacomBattleCombatActivityEmission& Emission = OutEmissions.AddDefaulted_GetRef();
 	Emission.Kind = EWacomBattleCombatActivityEmissionKind::AppendResults;
 	Emission.TransactionId = TransactionId;
+	Emission.GroupIndex = Group.GroupIndex;
 	Emission.ResultRows = MoveTemp(ReleasedRows);
 }
 

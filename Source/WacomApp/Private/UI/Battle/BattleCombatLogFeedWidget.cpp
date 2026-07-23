@@ -40,14 +40,20 @@ namespace
 		Config.BurstStaggerThreshold = Resolved->BurstStaggerThreshold;
 		Config.BurstStaggerFullCompressionCount = Resolved->BurstStaggerFullCompressionCount;
 		Config.MinimumReadableSeconds = Resolved->MinimumReadableSeconds;
+		Config.MinimumResultVisibleSeconds = Resolved->MinimumResultVisibleSeconds;
 		Config.ShiftSeconds = Resolved->ShiftSeconds;
 		Config.BottomRowHoldSeconds = Resolved->BottomRowHoldSeconds;
 		Config.BottomRowFadeSeconds = Resolved->BottomRowFadeSeconds;
 		Config.TopRowHoldSeconds = Resolved->TopRowHoldSeconds;
 		Config.TopRowFadeSeconds = Resolved->TopRowFadeSeconds;
 		Config.RootIconReplacementFadeSeconds = Resolved->RootIconReplacementFadeSeconds;
-		Config.ActivityViewportHeightPixels = Resolved->ActivityViewportHeightPixels;
 		Config.RowHeightPixels = Resolved->RowHeightPixels;
+		const int32 MinimumVisibleRows = FMath::Max(1, Resolved->MinimumVisibleResultRows);
+		const float MinimumViewportHeight = Config.RowHeightPixels
+			* (static_cast<float>(MinimumVisibleRows) + 0.5f);
+		Config.ActivityViewportHeightPixels = FMath::Max(
+			Resolved->ActivityViewportHeightPixels,
+			MinimumViewportHeight);
 		Config.TopFadeBandPixels = Resolved->TopFadeBandPixels;
 		Config.bReducedMotion = bReducedMotion;
 		Config.Normalize();
@@ -97,7 +103,7 @@ TSharedRef<SWidget> UBattleCombatLogFeedWidget::RebuildWidget()
 		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 		Frame->SetContent(Root);
 
-		USizeBox* ActivityRowsViewport = WidgetTree->ConstructWidget<USizeBox>(
+		ActivityRowsViewport = WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("ActivityRowsViewport"));
 		ActivityRowsViewport->SetHeightOverride(140.0f);
 		ActivityRowsViewport->SetClipping(EWidgetClipping::ClipToBounds);
@@ -161,6 +167,7 @@ void UBattleCombatLogFeedWidget::NativeConstruct()
 		Playback = new FWacomBattleCombatActivityPlayback();
 	}
 	EnsureRuntimeBindings();
+	ApplyRuntimeGeometry();
 	EnsureRowWidgets(0);
 	if (LastActionButton)
 	{
@@ -222,6 +229,8 @@ void UBattleCombatLogFeedWidget::EnqueueCombatActivityBatch(
 }
 
 void UBattleCombatLogFeedWidget::BeginSynchronizedCombatActivityGroup(
+	const uint64 TransactionId,
+	const int32 GroupIndex,
 	const FWacomBattleCombatActivityRowView& RootAction,
 	const int32 TurnNumber)
 {
@@ -230,6 +239,8 @@ void UBattleCombatLogFeedWidget::BeginSynchronizedCombatActivityGroup(
 		Playback = new FWacomBattleCombatActivityPlayback();
 	}
 	Playback->BeginSynchronizedGroup(
+		TransactionId,
+		GroupIndex,
 		RootAction,
 		TurnNumber,
 		BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion));
@@ -237,6 +248,8 @@ void UBattleCombatLogFeedWidget::BeginSynchronizedCombatActivityGroup(
 }
 
 void UBattleCombatLogFeedWidget::ReleaseSynchronizedCombatActivityResults(
+	const uint64 TransactionId,
+	const int32 GroupIndex,
 	const TArray<FWacomBattleCombatActivityRowView>& ResultRows)
 {
 	if (!Playback)
@@ -244,18 +257,22 @@ void UBattleCombatLogFeedWidget::ReleaseSynchronizedCombatActivityResults(
 		Playback = new FWacomBattleCombatActivityPlayback();
 	}
 	Playback->AppendSynchronizedResults(
+		TransactionId,
+		GroupIndex,
 		ResultRows,
 		BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion));
 	RefreshPlaybackPresentation();
 }
 
-void UBattleCombatLogFeedWidget::CompleteSynchronizedCombatActivityGroup()
+void UBattleCombatLogFeedWidget::CompleteSynchronizedCombatActivityTransaction(
+	const uint64 TransactionId)
 {
 	if (!Playback)
 	{
 		return;
 	}
-	Playback->CompleteSynchronizedGroup(
+	Playback->CompleteSynchronizedTransaction(
+		TransactionId,
 		BuildPlaybackConfig(ActivityStyle, bRuntimeSimplifiedMotion));
 	RefreshPlaybackPresentation();
 }
@@ -333,7 +350,11 @@ void UBattleCombatLogFeedWidget::EnsureRuntimeBindings()
 	{
 		ActivityRowsBox = Cast<UPanelWidget>(WidgetTree->FindWidget(TEXT("ActivityRowsBox")));
 	}
-
+	if (!ActivityRowsViewport)
+	{
+		ActivityRowsViewport = Cast<USizeBox>(
+			WidgetTree->FindWidget(TEXT("ActivityRowsViewport")));
+	}
 	if (!LastActionButton)
 	{
 		LastActionButton = Cast<UButton>(WidgetTree->FindWidget(TEXT("LastActionButton")));
@@ -351,6 +372,37 @@ void UBattleCombatLogFeedWidget::EnsureRuntimeBindings()
 		TurnText = Cast<UTextBlock>(WidgetTree->FindWidget(TEXT("TurnText")));
 	}
 
+}
+
+void UBattleCombatLogFeedWidget::ApplyRuntimeGeometry()
+{
+	const FWacomBattleCombatActivityPlaybackConfig Config = BuildPlaybackConfig(
+		ActivityStyle, bRuntimeSimplifiedMotion);
+	const float DesiredViewportHeight = Config.ActivityViewportHeightPixels;
+	const float DesiredFeedHeight = DesiredViewportHeight + 50.0f;
+	float DesiredFeedWidth = 0.0f;
+	if (ActivityRowsViewport)
+	{
+		ActivityRowsViewport->SetHeightOverride(DesiredViewportHeight);
+	}
+	if (USizeBox* RootSize = WidgetTree
+		? Cast<USizeBox>(WidgetTree->RootWidget)
+		: nullptr)
+	{
+		DesiredFeedWidth = RootSize->GetWidthOverride();
+		RootSize->SetHeightOverride(DesiredFeedHeight);
+	}
+	if (UCanvasPanelSlot* HostSlot = Cast<UCanvasPanelSlot>(Slot))
+	{
+		FVector2D HostSize = HostSlot->GetSize();
+		const FVector2D DesiredHostSize(
+			FMath::Max(HostSize.X, DesiredFeedWidth),
+			FMath::Max(HostSize.Y, DesiredFeedHeight));
+		if (!HostSize.Equals(DesiredHostSize, KINDA_SMALL_NUMBER))
+		{
+			HostSlot->SetSize(DesiredHostSize);
+		}
+	}
 }
 
 void UBattleCombatLogFeedWidget::EnsureRowWidgets(const int32 RequiredCount)
@@ -388,6 +440,7 @@ void UBattleCombatLogFeedWidget::EnsureRowWidgets(const int32 RequiredCount)
 void UBattleCombatLogFeedWidget::RefreshPlaybackPresentation()
 {
 	EnsureRuntimeBindings();
+	ApplyRuntimeGeometry();
 	const TArray<FWacomBattleCombatActivityRowPlaybackView>* Views = Playback
 		? &Playback->GetVisibleRows()
 		: nullptr;

@@ -240,6 +240,13 @@ public:
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot);
 
+	/** C++ only: build the unfiltered activity-shaped projection used by DetailsHistory. */
+	static FWacomBattleCombatActivityBatchView BuildCombatLogDetailsBatch(
+		const FWacomBattleCombatLogCommandContext& Context,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot);
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|Battle|Combat Log", meta = (ToolTip = "为 Battle Entry Gate 解除后的首次可见状态构建一次回合开始活动。该 ViewData 不代表新增规则事件，也不应重复写入详细日志。"))
 	static FWacomBattleCombatActivityBatchView BuildInitialTurnActivityBatch(int32 TurnNumber);
 

@@ -11,7 +11,7 @@ enum class EWacomBattleCombatActivityEmissionKind : uint8
 	BeginGroup,
 	AppendResults,
 	SetTurn,
-	CompleteGroup,
+	CompleteTransaction,
 };
 
 /** Incremental UI-only output produced from staged Combat Activity and presentation progress. */
@@ -20,6 +20,7 @@ struct FWacomBattleCombatActivityEmission
 	EWacomBattleCombatActivityEmissionKind Kind =
 		EWacomBattleCombatActivityEmissionKind::BeginGroup;
 	uint64 TransactionId = 0;
+	int32 GroupIndex = INDEX_NONE;
 	FWacomBattleCombatActivityRowView RootAction;
 	TArray<FWacomBattleCombatActivityRowView> ResultRows;
 	int32 TurnNumber = 0;
@@ -48,6 +49,7 @@ private:
 	{
 		FWacomBattleCombatActivityGroupView Group;
 		TSet<int32> ReleasedResultIndices;
+		int32 GroupIndex = INDEX_NONE;
 		bool bRootReleased = false;
 	};
 

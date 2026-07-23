@@ -348,7 +348,7 @@ namespace
 		return Group;
 	}
 
-	bool IsCompactActivityResult(EBattleEventType Type)
+	bool IsCombatLogDetailsResult(const EBattleEventType Type)
 	{
 		switch (Type)
 		{
@@ -367,6 +367,23 @@ namespace
 		case EBattleEventType::CardExhausted:
 		case EBattleEventType::CardGained:
 		case EBattleEventType::CardRuntimeCostChanged:
+			return true;
+		default:
+			return false;
+		}
+	}
+
+	bool IsShortActivityResult(const FBattleEvent& Event)
+	{
+		switch (Event.Type)
+		{
+		case EBattleEventType::DamageDealt:
+			return Event.Amount > 0;
+		case EBattleEventType::StatusApplied:
+			return Event.Tag.IsValid() && Event.Amount != 0;
+		case EBattleEventType::ResistanceResolved:
+		case EBattleEventType::EnemyPartHpEmptied:
+		case EBattleEventType::EnemyKnockdown:
 			return true;
 		default:
 			return false;
@@ -480,6 +497,68 @@ namespace
 		Row.IconTag = Event.Tag;
 		Row.EventSequence = Event.Sequence;
 		return Row;
+	}
+
+	FWacomBattleCombatActivityBatchView BuildActivityBatch(
+		const FWacomBattleCombatLogCommandContext& Context,
+		const TArray<FBattleEvent>& Events,
+		const FBattleSnapshot& PreCommandSnapshot,
+		const FBattleSnapshot& PostCommandSnapshot,
+		const bool bShortActivity)
+	{
+		FWacomBattleCombatActivityBatchView Batch;
+		if (Context.CommandKind == EWacomBattleCombatLogCommandKind::System)
+		{
+			Batch.bSetTurnImmediately = true;
+			Batch.PresentedTurnNumber = FMath::Max(PostCommandSnapshot.TurnNumber, 1);
+			return Batch;
+		}
+
+		FWacomBattleCombatActivityGroupView* CurrentGroup = nullptr;
+		if (Context.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
+			|| Context.CommandKind == EWacomBattleCombatLogCommandKind::Wait
+			|| Context.CommandKind == EWacomBattleCombatLogCommandKind::KnockdownChoice)
+		{
+			FWacomBattleCombatActivityGroupView& Group = Batch.Groups.AddDefaulted_GetRef();
+			Group.TurnNumber = FMath::Max(PreCommandSnapshot.TurnNumber, 1);
+			Group.RootAction = MakePlayerRootRow(Context, Events);
+			CurrentGroup = &Group;
+		}
+
+		for (const FBattleEvent& Event : Events)
+		{
+			if (Event.Type == EBattleEventType::EnemyPartActed)
+			{
+				CurrentGroup = &Batch.Groups.Add_GetRef(MakeEnemyActionGroup(
+					Event,
+					PreCommandSnapshot,
+					PostCommandSnapshot));
+				continue;
+			}
+			const bool bIncludeResult = bShortActivity
+				? IsShortActivityResult(Event)
+				: IsCombatLogDetailsResult(Event.Type);
+			if (!CurrentGroup || !bIncludeResult)
+			{
+				continue;
+			}
+			FWacomBattleCombatActivityRowView Row = MakeResultRow(
+				Event,
+				PreCommandSnapshot,
+				PostCommandSnapshot);
+			if (!Row.MessageText.IsEmpty())
+			{
+				CurrentGroup->ResultRows.Add(MoveTemp(Row));
+			}
+		}
+
+		if (Context.CommandKind == EWacomBattleCombatLogCommandKind::EndTurn
+			&& PostCommandSnapshot.TurnNumber > PreCommandSnapshot.TurnNumber)
+		{
+			Batch.bAdvanceTurnAfterPlayback = true;
+			Batch.PresentedTurnNumber = PostCommandSnapshot.TurnNumber;
+		}
+		return Batch;
 	}
 }
 
@@ -600,56 +679,26 @@ FWacomBattleCombatActivityBatchView UWacomBattleCombatLogBuilder::BuildCombatAct
 	const FBattleSnapshot& PreCommandSnapshot,
 	const FBattleSnapshot& PostCommandSnapshot)
 {
-	FWacomBattleCombatActivityBatchView Batch;
-	if (Context.CommandKind == EWacomBattleCombatLogCommandKind::System)
-	{
-		Batch.bSetTurnImmediately = true;
-		Batch.PresentedTurnNumber = FMath::Max(PostCommandSnapshot.TurnNumber, 1);
-		return Batch;
-	}
+	return BuildActivityBatch(
+		Context,
+		Events,
+		PreCommandSnapshot,
+		PostCommandSnapshot,
+		true);
+}
 
-	FWacomBattleCombatActivityGroupView* CurrentGroup = nullptr;
-	if (Context.CommandKind == EWacomBattleCombatLogCommandKind::PlayCard
-		|| Context.CommandKind == EWacomBattleCombatLogCommandKind::Wait
-		|| Context.CommandKind == EWacomBattleCombatLogCommandKind::KnockdownChoice)
-	{
-		FWacomBattleCombatActivityGroupView& Group = Batch.Groups.AddDefaulted_GetRef();
-		Group.TurnNumber = FMath::Max(PreCommandSnapshot.TurnNumber, 1);
-		Group.RootAction = MakePlayerRootRow(Context, Events);
-		CurrentGroup = &Group;
-	}
-
-	for (const FBattleEvent& Event : Events)
-	{
-		if (Event.Type == EBattleEventType::EnemyPartActed)
-		{
-			CurrentGroup = &Batch.Groups.Add_GetRef(MakeEnemyActionGroup(
-				Event,
-				PreCommandSnapshot,
-				PostCommandSnapshot));
-			continue;
-		}
-		if (!CurrentGroup || !IsCompactActivityResult(Event.Type))
-		{
-			continue;
-		}
-		FWacomBattleCombatActivityRowView Row = MakeResultRow(
-			Event,
-			PreCommandSnapshot,
-			PostCommandSnapshot);
-		if (!Row.MessageText.IsEmpty())
-		{
-			CurrentGroup->ResultRows.Add(MoveTemp(Row));
-		}
-	}
-
-	if (Context.CommandKind == EWacomBattleCombatLogCommandKind::EndTurn
-		&& PostCommandSnapshot.TurnNumber > PreCommandSnapshot.TurnNumber)
-	{
-		Batch.bAdvanceTurnAfterPlayback = true;
-		Batch.PresentedTurnNumber = PostCommandSnapshot.TurnNumber;
-	}
-	return Batch;
+FWacomBattleCombatActivityBatchView UWacomBattleCombatLogBuilder::BuildCombatLogDetailsBatch(
+	const FWacomBattleCombatLogCommandContext& Context,
+	const TArray<FBattleEvent>& Events,
+	const FBattleSnapshot& PreCommandSnapshot,
+	const FBattleSnapshot& PostCommandSnapshot)
+{
+	return BuildActivityBatch(
+		Context,
+		Events,
+		PreCommandSnapshot,
+		PostCommandSnapshot,
+		false);
 }
 
 FWacomBattleCombatActivityBatchView UWacomBattleCombatLogBuilder::BuildInitialTurnActivityBatch(

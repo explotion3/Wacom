@@ -350,6 +350,7 @@ namespace
 			&& Style.MinimumResultStaggerSeconds <= Style.ResultStaggerSeconds
 			&& Style.BurstStaggerThreshold >= 1
 			&& Style.BurstStaggerFullCompressionCount > Style.BurstStaggerThreshold
+			&& Style.MinimumResultVisibleSeconds >= 0.0f
 			&& Style.BottomRowHoldSeconds >= 0.0f
 			&& Style.BottomRowFadeSeconds >= 0.0f
 			&& Style.TopRowHoldSeconds >= 0.0f
@@ -358,6 +359,7 @@ namespace
 			&& Style.TopRowFadeSeconds <= Style.BottomRowFadeSeconds
 			&& Style.RootIconReplacementFadeSeconds >= 0.0f
 			&& Style.ActivityViewportHeightPixels > 0.0f
+			&& Style.MinimumVisibleResultRows > 0
 			&& Style.RowHeightPixels > 0.0f
 			&& Style.RowHeightPixels <= Style.ActivityViewportHeightPixels
 			&& Style.TopFadeBandPixels > 0.0f

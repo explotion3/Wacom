@@ -18,6 +18,7 @@
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/SizeBox.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "UObject/StrongObjectPtr.h"
@@ -247,6 +248,7 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 	Style->TopRowHoldSeconds = 10.0f;
 	Style->BottomRowFadeSeconds = 10.0f;
 	Style->TopRowFadeSeconds = 10.0f;
+	Style->MinimumVisibleResultRows = 5;
 	TStrongObjectPtr<UBattleCombatLogFeedWidget> Feed(NewObject<UBattleCombatLogFeedWidget>());
 	Feed->ActivityStyle = Style.Get();
 	const TSharedRef<SWidget> SlateWidget = Feed->TakeWidget();
@@ -259,7 +261,7 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 	Group.RootAction.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
 	Group.RootAction.MessageText = FText::FromString(TEXT("毒牙"));
 	Group.RootAction.IconKey = TEXT("Player");
-	for (int32 Index = 0; Index < 4; ++Index)
+	for (int32 Index = 0; Index < 6; ++Index)
 	{
 		FWacomBattleCombatActivityRowView& Result = Group.ResultRows.AddDefaulted_GetRef();
 		Result.MessageText = FText::FromString(FString::Printf(TEXT("结果%d"), Index + 1));
@@ -267,9 +269,19 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 	}
 	Feed->EnqueueCombatActivityBatch(Batch);
 	Feed->AdvanceActivityPlaybackForTest(1.0f);
+	Feed->AdvanceActivityPlaybackForTest(0.16f);
+	Feed->AdvanceActivityPlaybackForTest(0.16f);
+	Feed->AdvanceActivityPlaybackForTest(0.16f);
+	Feed->AdvanceActivityPlaybackForTest(0.16f);
 
-	TestEqual(TEXT("Feed keeps the root and all four streamed results"),
-		Feed->GetVisibleActivityRowCount(), 5);
+	TestEqual(TEXT("Expanded feed applies backpressure after five readable results"),
+		Feed->GetVisibleActivityRowCount(), 6);
+	const USizeBox* ActivityRowsViewport = Feed->WidgetTree
+		? Cast<USizeBox>(Feed->WidgetTree->FindWidget(TEXT("ActivityRowsViewport")))
+		: nullptr;
+	TestTrue(TEXT("Runtime geometry expands the authored viewport for five plus one rows"),
+		ActivityRowsViewport
+		&& FMath::IsNearlyEqual(ActivityRowsViewport->GetHeightOverride(), 220.0f));
 	const UButton* LastActionButton = Feed->WidgetTree
 		? Cast<UButton>(Feed->WidgetTree->FindWidget(TEXT("LastActionButton")))
 		: nullptr;
@@ -282,7 +294,10 @@ bool FWacomUIBattleCombatLogFeedSpec::RunTest(const FString& /*Parameters*/)
 	Style->TopRowHoldSeconds = 0.0f;
 	Style->BottomRowFadeSeconds = 0.1f;
 	Style->TopRowFadeSeconds = 0.1f;
-	Feed->AdvanceActivityPlaybackForTest(0.2f);
+	for (int32 Step = 0; Step < 60; ++Step)
+	{
+		Feed->AdvanceActivityPlaybackForTest(0.1f);
+	}
 	TestEqual(TEXT("Only the latest root icon remains after transient rows drain"),
 		Feed->GetVisibleActivityRowCount(), 1);
 	TestTrue(TEXT("Transparent details hitbox remains clickable after content retires"),

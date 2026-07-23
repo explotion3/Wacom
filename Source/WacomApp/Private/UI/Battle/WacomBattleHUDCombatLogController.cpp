@@ -44,11 +44,17 @@ void FWacomBattleHUDCombatLogController::AppendBlock(
 		Events,
 		PreCommandSnapshot,
 		PostCommandSnapshot));
-	SubmitActivityBatch(UWacomBattleCombatLogBuilder::BuildCombatActivityBatch(
+	AppendDetailsBatch(UWacomBattleCombatLogBuilder::BuildCombatLogDetailsBatch(
 		CommandContext,
 		Events,
 		PreCommandSnapshot,
 		PostCommandSnapshot));
+	SubmitActivityBatch(UWacomBattleCombatLogBuilder::BuildCombatActivityBatch(
+		CommandContext,
+		Events,
+		PreCommandSnapshot,
+		PostCommandSnapshot),
+		false);
 }
 
 uint64 FWacomBattleHUDCombatLogController::StageResolvedCommand(
@@ -62,14 +68,20 @@ uint64 FWacomBattleHUDCombatLogController::StageResolvedCommand(
 		Events,
 		PreCommandSnapshot,
 		PostCommandSnapshot));
-	const FWacomBattleCombatActivityBatchView Batch =
+	const FWacomBattleCombatActivityBatchView DetailsBatch =
+		UWacomBattleCombatLogBuilder::BuildCombatLogDetailsBatch(
+			CommandContext,
+			Events,
+			PreCommandSnapshot,
+			PostCommandSnapshot);
+	AppendDetailsBatch(DetailsBatch);
+	const FWacomBattleCombatActivityBatchView ActivityBatch =
 		UWacomBattleCombatLogBuilder::BuildCombatActivityBatch(
 			CommandContext,
 			Events,
 			PreCommandSnapshot,
 			PostCommandSnapshot);
-	AppendDetailsBatch(Batch);
-	return ActivitySynchronizer->Stage(Batch);
+	return ActivitySynchronizer->Stage(ActivityBatch);
 }
 
 void FWacomBattleHUDCombatLogController::ApplyPresentationProgress(
@@ -175,6 +187,8 @@ void FWacomBattleHUDCombatLogController::ApplyActivityEmissions(
 			if (CombatLogFeed)
 			{
 				CombatLogFeed->BeginSynchronizedCombatActivityGroup(
+					Emission.TransactionId,
+					Emission.GroupIndex,
 					Emission.RootAction,
 					Emission.TurnNumber);
 			}
@@ -184,6 +198,8 @@ void FWacomBattleHUDCombatLogController::ApplyActivityEmissions(
 			if (CombatLogFeed)
 			{
 				CombatLogFeed->ReleaseSynchronizedCombatActivityResults(
+					Emission.TransactionId,
+					Emission.GroupIndex,
 					Emission.ResultRows);
 			}
 			break;
@@ -196,10 +212,11 @@ void FWacomBattleHUDCombatLogController::ApplyActivityEmissions(
 			}
 			break;
 
-		case EWacomBattleCombatActivityEmissionKind::CompleteGroup:
+		case EWacomBattleCombatActivityEmissionKind::CompleteTransaction:
 			if (CombatLogFeed)
 			{
-				CombatLogFeed->CompleteSynchronizedCombatActivityGroup();
+				CombatLogFeed->CompleteSynchronizedCombatActivityTransaction(
+					Emission.TransactionId);
 			}
 			break;
 		}

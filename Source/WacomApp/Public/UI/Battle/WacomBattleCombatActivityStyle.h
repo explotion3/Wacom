@@ -92,6 +92,10 @@ public:
 		meta = (ToolTip = "每组最后一行发出后保留的最短可读时间，单位秒。推荐 0.65–1.20。"))
 	float MinimumReadableSeconds = 0.85f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Retirement",
+		meta = (ToolTip = "结果行自进入活动视口起、允许开始退场前的最短可见时间，单位秒。默认 0.35，推荐 0.25–0.50；用于限制大量结果造成的快速消失，不影响完整日志。"))
+	float MinimumResultVisibleSeconds = 0.35f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Timing",
 		meta = (ToolTip = "新行把旧行向上推动的过渡时间，单位秒。推荐 0.08–0.18。"))
 	float ShiftSeconds = 0.10f;
@@ -117,8 +121,12 @@ public:
 	float RootIconReplacementFadeSeconds = 0.10f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Layout",
-		meta = (ToolTip = "短时播报活动视口高度，单位像素。正式 420×190 Feed 推荐 140；影响布局和位置衰减计算。"))
+		meta = (ToolTip = "短时播报基础活动视口高度，单位像素。旧正式 Feed 为 140；运行时还会按最少可见行数向上扩展，影响布局和位置衰减计算。"))
 	float ActivityViewportHeightPixels = 140.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Layout",
+		meta = (ToolTip = "短时播报至少同时容纳的历史/结果行数，不含底部当前根行动。默认 5；运行时会在既有 WBP 上扩展视口与宿主高度，不会截断积压数据。"))
+	int32 MinimumVisibleResultRows = 5;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Combat Activity|Layout",
 		meta = (ToolTip = "单条活动行高度，单位像素。必须与 Row WBP 高度一致，正式布局推荐 40。"))

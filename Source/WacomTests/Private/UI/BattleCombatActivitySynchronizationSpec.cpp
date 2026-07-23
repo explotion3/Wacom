@@ -77,6 +77,8 @@ bool FWacomUIBattleCombatActivitySynchronizationVisualStaggerSpec::RunTest(
 
 	FWacomBattleCombatActivityPlayback Playback;
 	Playback.BeginSynchronizedGroup(
+		1,
+		0,
 		MakeRow(
 			EWacomBattleCombatActivityRowKind::RootAction,
 			EBattleEventType::CardPlayed,
@@ -85,6 +87,8 @@ bool FWacomUIBattleCombatActivitySynchronizationVisualStaggerSpec::RunTest(
 		1,
 		Config);
 	Playback.AppendSynchronizedResults(
+		1,
+		0,
 		{
 			MakeRow(
 				EWacomBattleCombatActivityRowKind::Result,
@@ -119,8 +123,10 @@ bool FWacomUIBattleCombatActivitySynchronizationVisualStaggerSpec::RunTest(
 			12);
 	}
 
-	Playback.CompleteSynchronizedGroup(Config);
+	Playback.CompleteSynchronizedTransaction(1, Config);
 	Playback.BeginSynchronizedGroup(
+		2,
+		0,
 		MakeRow(
 			EWacomBattleCombatActivityRowKind::RootAction,
 			EBattleEventType::EnemyPartActed,
@@ -164,6 +170,10 @@ bool FWacomUIBattleCombatActivitySynchronizationPlayerProgressSpec::RunTest(
 		TestEqual(TEXT("Player root emission kind"),
 			Emissions[0].Kind,
 			EWacomBattleCombatActivityEmissionKind::BeginGroup);
+		TestEqual(TEXT("Player root keeps its transaction identity"),
+			Emissions[0].TransactionId, TransactionId);
+		TestEqual(TEXT("Player root keeps stable group zero"),
+			Emissions[0].GroupIndex, 0);
 		TestEqual(TEXT("Player root sequence"), Emissions[0].RootAction.EventSequence, 10);
 	}
 
@@ -185,6 +195,8 @@ bool FWacomUIBattleCombatActivitySynchronizationPlayerProgressSpec::RunTest(
 		TestEqual(TEXT("Outcome emission kind"),
 			Emissions[0].Kind,
 			EWacomBattleCombatActivityEmissionKind::AppendResults);
+		TestEqual(TEXT("Outcome stays attached to group zero"),
+			Emissions[0].GroupIndex, 0);
 		TestEqual(TEXT("All outcome rows unlock together"), Emissions[0].ResultRows.Num(), 2);
 		if (Emissions[0].ResultRows.Num() == 2)
 		{
@@ -209,7 +221,9 @@ bool FWacomUIBattleCombatActivitySynchronizationPlayerProgressSpec::RunTest(
 	{
 		TestEqual(TEXT("Completion emission kind"),
 			Emissions[0].Kind,
-			EWacomBattleCombatActivityEmissionKind::CompleteGroup);
+			EWacomBattleCombatActivityEmissionKind::CompleteTransaction);
+		TestEqual(TEXT("Completion closes the staged transaction"),
+			Emissions[0].TransactionId, TransactionId);
 	}
 	TestFalse(TEXT("Completed transaction is removed"),
 		Synchronizer.HasPendingTransaction(TransactionId));
@@ -249,6 +263,8 @@ bool FWacomUIBattleCombatActivitySynchronizationEnemyProgressSpec::RunTest(
 	TestEqual(TEXT("First enemy animation start releases its own root"), Emissions.Num(), 1);
 	if (Emissions.Num() == 1)
 	{
+		TestEqual(TEXT("First enemy uses stable group zero"),
+			Emissions[0].GroupIndex, 0);
 		TestEqual(TEXT("First enemy root sequence"), Emissions[0].RootAction.EventSequence, 20);
 	}
 
@@ -261,6 +277,8 @@ bool FWacomUIBattleCombatActivitySynchronizationEnemyProgressSpec::RunTest(
 	TestEqual(TEXT("First enemy impact releases one result batch"), Emissions.Num(), 1);
 	if (Emissions.Num() == 1 && Emissions[0].ResultRows.Num() == 1)
 	{
+		TestEqual(TEXT("First enemy impact stays on group zero"),
+			Emissions[0].GroupIndex, 0);
 		TestEqual(TEXT("First enemy impact does not consume the second range"),
 			Emissions[0].ResultRows[0].EventSequence,
 			21);
@@ -272,6 +290,8 @@ bool FWacomUIBattleCombatActivitySynchronizationEnemyProgressSpec::RunTest(
 	TestEqual(TEXT("Second enemy animation start releases a separate root"), Emissions.Num(), 1);
 	if (Emissions.Num() == 1)
 	{
+		TestEqual(TEXT("Second enemy uses stable group one"),
+			Emissions[0].GroupIndex, 1);
 		TestEqual(TEXT("Second enemy root sequence"), Emissions[0].RootAction.EventSequence, 30);
 	}
 
@@ -281,6 +301,8 @@ bool FWacomUIBattleCombatActivitySynchronizationEnemyProgressSpec::RunTest(
 	TestEqual(TEXT("Second enemy impact remains one ordered result batch"), Emissions.Num(), 1);
 	if (Emissions.Num() == 1 && Emissions[0].ResultRows.Num() == 2)
 	{
+		TestEqual(TEXT("Second enemy impact stays on group one"),
+			Emissions[0].GroupIndex, 1);
 		TestEqual(TEXT("Second enemy first result sequence"),
 			Emissions[0].ResultRows[0].EventSequence,
 			31);

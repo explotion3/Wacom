@@ -13,6 +13,7 @@ struct FWacomBattleCombatActivityPlaybackConfig
 	int32 BurstStaggerThreshold = 6;
 	int32 BurstStaggerFullCompressionCount = 12;
 	float MinimumReadableSeconds = 0.85f;
+	float MinimumResultVisibleSeconds = 0.35f;
 	float ShiftSeconds = 0.10f;
 	float BottomRowHoldSeconds = 0.85f;
 	float BottomRowFadeSeconds = 0.24f;
@@ -46,6 +47,7 @@ struct FWacomBattleCombatActivityRowPlaybackView
 enum class EWacomBattleCombatActivityRootVisualState : uint8
 {
 	None,
+	StreamedRoot,
 	Pinned,
 	ContentRetiring,
 	IconResident,
@@ -58,13 +60,18 @@ class WACOMAPP_API FWacomBattleCombatActivityPlayback
 public:
 	void Enqueue(const FWacomBattleCombatActivityBatchView& Batch);
 	void BeginSynchronizedGroup(
+		uint64 TransactionId,
+		int32 GroupIndex,
 		const FWacomBattleCombatActivityRowView& RootAction,
 		int32 TurnNumber,
 		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
 	void AppendSynchronizedResults(
+		uint64 TransactionId,
+		int32 GroupIndex,
 		const TArray<FWacomBattleCombatActivityRowView>& ResultRows,
 		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
-	void CompleteSynchronizedGroup(
+	void CompleteSynchronizedTransaction(
+		uint64 TransactionId,
 		const FWacomBattleCombatActivityPlaybackConfig& InConfig);
 	void SetPresentedTurnNumber(int32 TurnNumber);
 	void RestoreLastRootAction(
@@ -80,48 +87,106 @@ public:
 	bool IsTickRequired() const;
 
 private:
+	struct FGroupKey
+	{
+		uint64 TransactionId = 0;
+		int32 GroupIndex = INDEX_NONE;
+		bool bLegacy = false;
+
+		bool operator==(const FGroupKey& Other) const
+		{
+			return TransactionId == Other.TransactionId
+				&& GroupIndex == Other.GroupIndex
+				&& bLegacy == Other.bLegacy;
+		}
+	};
+
+	struct FQueuedGroup
+	{
+		FGroupKey Key;
+		uint64 RootPlaybackId = 0;
+		int32 PendingResultCount = 0;
+		bool bCompleted = false;
+		bool bRootReleased = false;
+		bool bHadResults = false;
+	};
+
+	struct FQueuedResult
+	{
+		FGroupKey GroupKey;
+		FWacomBattleCombatActivityRowView Row;
+	};
+
 	struct FVisibleRow
 	{
 		uint64 PlaybackId = 0;
 		FWacomBattleCombatActivityRowView Row;
 		float EnterElapsed = 0.0f;
 		float UnprotectedElapsed = 0.0f;
+		float PresentedElapsed = 0.0f;
 		float ContentRetirementProgress = 0.0f;
 		float IconRetirementProgress = 0.0f;
 		float CurrentY = 0.0f;
 		float ShiftStartY = 0.0f;
 		float TargetY = 0.0f;
 		float ShiftElapsed = 0.0f;
+		bool bResultRetiring = false;
 		EWacomBattleCombatActivityRootVisualState RootVisualState =
 			EWacomBattleCombatActivityRootVisualState::None;
 	};
 
 	TArray<FWacomBattleCombatActivityBatchView> PendingBatches;
 	TOptional<FWacomBattleCombatActivityBatchView> ActiveBatch;
-	TArray<FWacomBattleCombatActivityRowView> PendingSynchronizedResults;
+	TArray<FQueuedGroup> QueuedGroups;
+	TArray<FQueuedResult> PendingResults;
+	TOptional<FGroupKey> ActiveLegacyGroupKey;
 	int32 ActiveGroupIndex = INDEX_NONE;
-	int32 NextResultRowIndex = INDEX_NONE;
-	float TimeSinceLastEmission = 0.0f;
-	float SynchronizedTimeSinceLastEmission = 0.0f;
-	bool bCompleteSynchronizedGroupAfterResults = false;
+	float TimeSinceLastResultAdmission = 0.0f;
+	float LegacyGroupDrainedElapsed = 0.0f;
+	bool bResultAdmittedSinceLastTick = false;
 	TArray<FVisibleRow> VisibleRows;
 	TArray<FWacomBattleCombatActivityRowPlaybackView> VisibleRowViews;
 	TOptional<FWacomBattleCombatActivityRowView> LastRootAction;
 	uint64 ActiveRootPlaybackId = 0;
 	uint64 LastRootPlaybackId = 0;
 	uint64 NextPlaybackId = 1;
+	uint64 NextLegacyTransactionId = 1;
 	int32 PresentedTurnNumber = 0;
 
 	void StartNextBatch(const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void StartCurrentGroup(const FWacomBattleCombatActivityPlaybackConfig& Config);
+	FQueuedGroup* BeginGroup(
+		const FGroupKey& Key,
+		const FWacomBattleCombatActivityRowView& RootAction,
+		int32 TurnNumber,
+		const FWacomBattleCombatActivityPlaybackConfig& Config);
+	FQueuedGroup* FindGroup(const FGroupKey& Key);
+	const FQueuedGroup* FindGroup(const FGroupKey& Key) const;
+	void QueueResults(const FGroupKey& Key,
+		const TArray<FWacomBattleCombatActivityRowView>& Rows);
+	void CancelLegacyScheduling();
 	void PreparePreviousRootForReplacement(
 		const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void AdvanceAfterCurrentGroup(const FWacomBattleCombatActivityPlaybackConfig& Config);
+	bool TryAdmitNextResult(
+		const FWacomBattleCombatActivityPlaybackConfig& Config,
+		bool bIgnoreStagger);
+	bool CanAdmitResult(const FWacomBattleCombatActivityPlaybackConfig& Config) const;
+	int32 ResolveVisibleResultCapacity(
+		const FWacomBattleCombatActivityPlaybackConfig& Config) const;
+	int32 CountVisibleResults() const;
+	bool AreVisibleResultsShifting(
+		const FWacomBattleCombatActivityPlaybackConfig& Config) const;
 	uint64 EmitRow(
 		const FWacomBattleCombatActivityRowView& Row,
 		EWacomBattleCombatActivityRootVisualState RootVisualState,
 		const FWacomBattleCombatActivityPlaybackConfig& Config);
-	void ReleaseActiveRoot(const FWacomBattleCombatActivityPlaybackConfig& Config);
+	void ReleaseRoot(uint64 RootPlaybackId,
+		const FWacomBattleCombatActivityPlaybackConfig& Config);
+	void UpdateCompletedGroupRoots(
+		const FWacomBattleCombatActivityPlaybackConfig& Config);
+	void StartOldestResultRetirement(
+		const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void RetargetRows(const FWacomBattleCombatActivityPlaybackConfig& Config);
 	void AdvanceRows(float DeltaTime, const FWacomBattleCombatActivityPlaybackConfig& Config);
 	float ResolveResultStaggerSeconds(int32 RemainingResultCount,
