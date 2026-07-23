@@ -29,6 +29,7 @@ class UCommonInputSubsystem;
 class UWacomPrimaryGameLayout;
 class UWacomSettingsSubsystem;
 class FWacomBackpackCardDetailController;
+class FWacomBackpackPerformanceCaptureAccess;
 class FWacomBackpackStorageRefreshGate;
 class FWacomBackpackWorkspaceInteractionModel;
 struct FWacomBackpackWorkspaceStateStore;
@@ -300,6 +301,9 @@ private:
 
 #if WITH_AUTOMATION_TESTS
 	friend struct FWacomBackpackScreenTestAccess;
+#endif
+#if WITH_EDITOR
+	friend class FWacomBackpackPerformanceCaptureAccess;
 #endif
 	friend class FWacomBackpackCardDetailController;
 

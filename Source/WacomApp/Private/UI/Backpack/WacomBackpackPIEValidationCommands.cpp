@@ -10,6 +10,7 @@
 #include "HAL/IConsoleManager.h"
 #include "RunSession.h"
 #include "UI/Backpack/WacomBackpackPIEValidationState.h"
+#include "UI/Backpack/WacomBackpackPIEValidationSupport.h"
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
 #include "UI/Foundation/WacomUITags.h"
@@ -40,14 +41,14 @@ int32 CountOwnedCards(const FRunState& State)
 	return Count;
 }
 
-void SeedBackpackPIEValidationToTarget(UWorld* World, int32 OwnedCardTarget)
+bool SeedBackpackPIEValidationToTarget(UWorld* World, int32 OwnedCardTarget)
 {
 	AWacomPlayerController* PC = ResolveBackpackPIEPlayer(World);
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
 	if (!Run)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[BackpackPIE] 当前世界没有可用的 RunSession"));
-		return;
+		return false;
 	}
 
 	UCardDefinition* MovableCard = LoadObject<UCardDefinition>(
@@ -64,7 +65,7 @@ void SeedBackpackPIEValidationToTarget(UWorld* World, int32 OwnedCardTarget)
 			TEXT("[BackpackPIE] 验收卡牌资产缺失：Movable=%s SpecialOwner=%s"),
 			MovableCard ? TEXT("OK") : TEXT("Missing"),
 			SpecialZoneOwner ? TEXT("OK") : TEXT("Missing"));
-		return;
+		return false;
 	}
 
 	while (Run->GetRunState().SpecialZones.Num() < BackpackValidationSpecialZoneTarget)
@@ -98,6 +99,7 @@ void SeedBackpackPIEValidationToTarget(UWorld* World, int32 OwnedCardTarget)
 		Run->GetRunState().BattleDeck.Num(),
 		Run->GetRunState().BurdenZone.Num(),
 		Run->GetRunState().SpecialZones.Num());
+	return CountOwnedCards(Run->GetRunState()) >= OwnedCardTarget;
 }
 
 void SeedBackpackPIEValidation(UWorld* World)
@@ -110,7 +112,7 @@ void SeedDenseBackpackPIEValidation(UWorld* World)
 	SeedBackpackPIEValidationToTarget(World, BackpackValidationDenseOwnedCardTarget);
 }
 
-void OpenBackpackPIEValidation(
+bool OpenBackpackPIEValidation(
 	UWorld* World,
 	EWacomBackpackPIEValidationMode Mode,
 	bool bUseFormalWidgetClass)
@@ -130,7 +132,7 @@ void OpenBackpackPIEValidation(
 			PC ? TEXT("OK") : TEXT("Missing"),
 			Run ? TEXT("OK") : TEXT("Missing"),
 			UIManager ? TEXT("OK") : TEXT("Missing"));
-		return;
+		return false;
 	}
 
 	TSubclassOf<UWacomBackpackScreen> ScreenClass = UWacomBackpackScreen::StaticClass();
@@ -163,16 +165,16 @@ void OpenBackpackPIEValidation(
 			TEXT("[BackpackPIE] 验证界面已打开：Mode=%d Class=%s"),
 			static_cast<int32>(Mode),
 			*GetNameSafe(ScreenClass.Get()));
+		return true;
 	}
-	else
-	{
-		UE_LOG(
-			LogTemp,
-			Warning,
-			TEXT("[BackpackPIE] 验证界面打开失败：Mode=%d Class=%s"),
-			static_cast<int32>(Mode),
-			*GetNameSafe(ScreenClass.Get()));
-	}
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("[BackpackPIE] 验证界面打开失败：Mode=%d Class=%s"),
+		static_cast<int32>(Mode),
+		*GetNameSafe(ScreenClass.Get()));
+	return false;
 }
 
 void OpenEmptyBackpackPIEValidation(UWorld* World)
@@ -210,6 +212,40 @@ FAutoConsoleCommandWithWorld GOpenNativeFallbackBackpackPIEValidationCommand(
 	TEXT("Wacom.Backpack.OpenNativeFallbackPIEValidation"),
 	TEXT("仅编辑器：使用纯 C++ fallback Screen 和子控件打开当前背包，不修改 Run 状态。"),
 	FConsoleCommandWithWorldDelegate::CreateStatic(&OpenNativeFallbackBackpackPIEValidation));
+}
+
+namespace UE::Wacom::Backpack::PIEValidation
+{
+bool SeedToTarget(UWorld* World, int32 OwnedCardTarget)
+{
+	return SeedBackpackPIEValidationToTarget(World, OwnedCardTarget);
+}
+
+bool OpenFormalWorkspace(UWorld* World)
+{
+	return OpenBackpackPIEValidation(
+		World,
+		EWacomBackpackPIEValidationMode::None,
+		/*bUseFormalWidgetClass*/ true);
+}
+
+bool CloseWorkspace(UWorld* World)
+{
+	AWacomPlayerController* PC = ResolveBackpackPIEPlayer(World);
+	UGameInstance* GameInstance = PC ? PC->GetGameInstance() : nullptr;
+	UWacomGameUIManagerSubsystem* UIManager = GameInstance
+		? GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>()
+		: nullptr;
+	if (!UIManager)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[BackpackPIE] 无法关闭背包：UIManager 缺失"));
+		return false;
+	}
+
+	UIManager->CancelPendingAsyncPushToLayer(WacomUITags::UI_Layer_GameMenu);
+	UIManager->ClearLayer(WacomUITags::UI_Layer_GameMenu);
+	return true;
+}
 }
 
 EWacomBackpackPIEValidationMode GetWacomBackpackPIEValidationMode()

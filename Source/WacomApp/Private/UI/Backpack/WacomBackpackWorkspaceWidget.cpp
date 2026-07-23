@@ -4141,6 +4141,7 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 	if (Scheduler.HasWork(
 		EWacomBackpackWorkspaceFrameWork::GeometryStabilization))
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameGeometryStabilization);
 		FVector2D StableLayoutSize;
 		if (Scheduler.PushGeometrySample(
 			GetCachedGeometry().GetLocalSize(),
@@ -4158,6 +4159,7 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 		InteractionModel && InteractionModel->IsPileMoving();
 	if (bCarrying && FSlateApplication::IsInitialized())
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameCarryTracking);
 		const FVector2D LatestPointer =
 			GetCachedGeometry().AbsoluteToLocal(
 				FSlateApplication::Get().GetCursorPos());
@@ -4165,10 +4167,12 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 	}
 	if (bCarrying)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameCarryVisualAnchor);
 		ApplyCarryVisualAnchor(DeltaSeconds);
 	}
 	if (bPileMoving && FSlateApplication::IsInitialized())
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FramePileTracking);
 		QueuePilePointer(GetCachedGeometry().AbsoluteToLocal(
 			FSlateApplication::Get().GetCursorPos()));
 		FlushQueuedPilePointer();
@@ -4183,6 +4187,7 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
 	if (GetRuntime().Presentation.bHoverExpandTimerActive)
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameHoverExpandDelay);
 		if (!InteractionModel || !InteractionModel->IsCarrying())
 		{
 			CancelHoverExpandTimer();
@@ -4207,17 +4212,21 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 		}
 	}
 
-	TickBaseCardLayoutTransitions(DeltaSeconds);
-	if (Runtime)
 	{
-		GetRuntime().Motion.Tick(
-			DeltaSeconds,
-			GetCachedGeometry(),
-			*Style,
-			GetRuntime().Presentation.IsSimplifiedMotion());
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameLayoutAndMotion);
+		TickBaseCardLayoutTransitions(DeltaSeconds);
+		if (Runtime)
+		{
+			GetRuntime().Motion.Tick(
+				DeltaSeconds,
+				GetCachedGeometry(),
+				*Style,
+				GetRuntime().Presentation.IsSimplifiedMotion());
+		}
 	}
 	if (Scheduler.HasWork(EWacomBackpackWorkspaceFrameWork::SaleDeparture))
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameSaleDeparture);
 		const bool bHadSaleDepartureWork =
 			GetRuntime().SaleDeparture.HasWork();
 		GetRuntime().SaleDeparture.Tick(DeltaSeconds, this);
@@ -4233,9 +4242,12 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 				false);
 		}
 	}
-	RefreshExpandedPileVisualHitAtCachedPointer();
-	TickExpandedPileFocusExit(DeltaSeconds);
-	FinalizeCompletedSettlements();
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameFocusAndSettlement);
+		RefreshExpandedPileVisualHitAtCachedPointer();
+		TickExpandedPileFocusExit(DeltaSeconds);
+		FinalizeCompletedSettlements();
+	}
 
 	if (GetRuntime().Presentation.bPileCollapseAnimationPending
 		&& GetVisualState().BaseTransitions().IsEmpty())
@@ -4249,6 +4261,7 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 
 	if (Scheduler.IsDeferredCardFaceRenderReady())
 	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FrameDeferredCardFaceRender);
 		ExecuteDeferredCardFaceRender();
 	}
 
