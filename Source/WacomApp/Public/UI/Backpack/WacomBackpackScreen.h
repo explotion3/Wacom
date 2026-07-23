@@ -49,6 +49,12 @@ struct WACOMAPP_API FWacomBackpackScreenAutomationTestView
 	int32 SnapshotRevisionSkipCount = 0;
 	int32 WorkspacePileCount = 0;
 	int32 WorkspaceCardCount = 0;
+	int32 WorkspaceFocusRequestCount = 0;
+	bool bHasRunViewModelProviderSubscription = false;
+	bool bHasRuntimeSettingsSubscription = false;
+	bool bHasCommonInputSubscription = false;
+	bool bHasOwningLayerTransitionSubscription = false;
+	ECommonInputType CurrentInputType = ECommonInputType::MouseAndKeyboard;
 	EZoneKind ActiveWorkspaceZone = EZoneKind::Backpack;
 	FGuid ActiveWorkspaceOwnerInstanceId;
 };
@@ -92,9 +98,6 @@ protected:
 
 	/** 可测试覆写：生产路径仍从 OwningPlayer 拿当前 RunSession。 */
 	virtual URunSession* ResolveRunSession() const;
-
-	/** 订阅 Provider（如果还没订阅）+ 刷新一次。 */
-	void TrySubscribeAndRefresh();
 
 	/** SpecialZone 卡右键切换入战标记。 */
 	void HandleBattleEnabledToggle(FGuid InstanceId);
@@ -257,6 +260,10 @@ private:
 	void SetCardDetailOccupied(bool bOccupied);
 	bool IsCardDetailDocked() const { return bCardDetailDocked; }
 	void ApplyOwningLayerTransitionState(bool bTransitioning);
+	void BindActiveSubscriptions();
+	void UnbindActiveSubscriptions();
+	void BindRunViewModelProvider();
+	void UnbindRunViewModelProvider();
 	void BindOwningLayerTransition();
 	void UnbindOwningLayerTransition();
 	void HandleOwningLayerTransitioningChanged(FGameplayTag LayerTag, bool bTransitioning);
@@ -310,6 +317,11 @@ private:
 			ResetBackpackRefreshDirtyGate();
 		}
 	}
+	TWeakObjectPtr<UWacomRunViewModelProvider> RunViewModelProviderOverrideForTest;
+	TWeakObjectPtr<UWacomSettingsSubsystem> SettingsSubsystemOverrideForTest;
+	TWeakObjectPtr<UCommonInputSubsystem> CommonInputSubsystemOverrideForTest;
+	TWeakObjectPtr<UWacomPrimaryGameLayout> PrimaryLayoutOverrideForTest;
+	int32 WorkspaceFocusRequestCountForTest = 0;
 #endif
 
 	TSharedPtr<FWacomBackpackStorageRefreshGate> StorageRefreshGate;

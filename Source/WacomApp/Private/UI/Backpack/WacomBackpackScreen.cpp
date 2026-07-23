@@ -215,9 +215,6 @@ void UWacomBackpackScreen::NativeConstruct()
 	Super::NativeConstruct();
 
 	EnsureWorkspaceWidgets();
-	BindOwningLayerTransition();
-	BindRuntimeSettings();
-	BindCommonInput();
 	UpdateCardDetailPlacementMode();
 	UpdateDeleteTargetPresentation(false, false, 0);
 
@@ -240,7 +237,6 @@ void UWacomBackpackScreen::NativeConstruct()
 			this, &ThisClass::HandleControlsHelpClicked);
 	}
 
-	TrySubscribeAndRefresh();
 	RefreshInteractionHints();
 }
 
@@ -251,9 +247,7 @@ void UWacomBackpackScreen::NativeDestruct()
 	// The next construction must therefore perform an authoritative reconcile even
 	// when the Run storage revision itself has not changed.
 	ResetBackpackRefreshDirtyGate();
-	UnbindOwningLayerTransition();
-	UnbindRuntimeSettings();
-	UnbindCommonInput();
+	UnbindActiveSubscriptions();
 	HideControlsHelp(false);
 	bOwningLayerTransitioning = false;
 	bCardDetailDocked = false;
@@ -293,48 +287,75 @@ void UWacomBackpackScreen::NativeDestruct()
 		WorkspaceWidget->OnLayoutGeometryReadyNative.RemoveAll(this);
 	}
 
-	if (UWacomRunViewModelProvider* Provider = SubscribedProvider.Get())
-	{
-		Provider->OnRunViewModelRefreshedNative.RemoveAll(this);
-	}
-	SubscribedProvider = nullptr;
 	Super::NativeDestruct();
 }
 
 void UWacomBackpackScreen::NativeOnActivated()
 {
 	Super::NativeOnActivated();
-	BindOwningLayerTransition();
-	BindCommonInput();
+	BindActiveSubscriptions();
 	// CommonUI Stack 重新激活时可能错过事件；RefreshGate 会在 revision 变化时
 	// 重建权威 Scene，未变化时则保留现有 Widget 身份与缓存。
-	TrySubscribeAndRefresh();
+	RebuildAll();
 	if (WorkspaceWidget)
 	{
 		WorkspaceWidget->RequestLayoutGeometryRefresh();
 		WorkspaceWidget->SetKeyboardFocus();
+#if WITH_AUTOMATION_TESTS
+		++WorkspaceFocusRequestCountForTest;
+#endif
 	}
 	RefreshInteractionHints();
 }
 
-void UWacomBackpackScreen::TrySubscribeAndRefresh()
+void UWacomBackpackScreen::BindActiveSubscriptions()
 {
-	EnsureWorkspaceWidgets();
+	BindOwningLayerTransition();
+	BindRuntimeSettings();
+	BindCommonInput();
+	BindRunViewModelProvider();
+}
 
-	if (!SubscribedProvider.Get())
+void UWacomBackpackScreen::UnbindActiveSubscriptions()
+{
+	UnbindRunViewModelProvider();
+	UnbindCommonInput();
+	UnbindRuntimeSettings();
+	UnbindOwningLayerTransition();
+}
+
+void UWacomBackpackScreen::BindRunViewModelProvider()
+{
+	UWacomRunViewModelProvider* Provider = GetProvider();
+	if (SubscribedProvider.Get() == Provider)
 	{
-		if (UWacomRunViewModelProvider* Provider = GetProvider())
-		{
-			Provider->OnRunViewModelRefreshedNative.AddUObject(
-				this, &UWacomBackpackScreen::HandleViewModelRefreshed);
-			SubscribedProvider = Provider;
-		}
+		return;
 	}
-	RebuildAll();
+
+	UnbindRunViewModelProvider();
+	if (Provider)
+	{
+		Provider->OnRunViewModelRefreshedNative.AddUObject(
+			this, &UWacomBackpackScreen::HandleViewModelRefreshed);
+		SubscribedProvider = Provider;
+	}
+}
+
+void UWacomBackpackScreen::UnbindRunViewModelProvider()
+{
+	if (UWacomRunViewModelProvider* Provider = SubscribedProvider.Get())
+	{
+		Provider->OnRunViewModelRefreshedNative.RemoveAll(this);
+	}
+	SubscribedProvider = nullptr;
 }
 
 void UWacomBackpackScreen::HandleViewModelRefreshed()
 {
+	if (!IsActivated())
+	{
+		return;
+	}
 	if (WorkspaceMutationRefreshDeferralDepth > 0)
 	{
 		bWorkspaceMutationRefreshDeferred = true;
@@ -370,6 +391,12 @@ void UWacomBackpackScreen::EndWorkspaceMutationRefreshDeferral(bool bForceRefres
 
 UWacomRunViewModelProvider* UWacomBackpackScreen::GetProvider() const
 {
+#if WITH_AUTOMATION_TESTS
+	if (UWacomRunViewModelProvider* Override = RunViewModelProviderOverrideForTest.Get())
+	{
+		return Override;
+	}
+#endif
 	UGameInstance* GI = GetGameInstance();
 	return GI ? GI->GetSubsystem<UWacomRunViewModelProvider>() : nullptr;
 }
@@ -388,9 +415,9 @@ URunSession* UWacomBackpackScreen::GetRunSession() const
 void UWacomBackpackScreen::NativeOnDeactivated()
 {
 	HideControlsHelp(false);
-	UnbindCommonInput();
 	CancelWorkspaceInteraction();
 	HideCardDetailPanel();
+	UnbindActiveSubscriptions();
 	Super::NativeOnDeactivated();
 }
 
@@ -531,6 +558,13 @@ FWacomBackpackScreenAutomationTestView UWacomBackpackScreen::GetAutomationTestVi
 	View.ListRefreshSkipCount = Counters.ListRefreshSkipCount;
 	View.SnapshotBuildCount = Counters.SnapshotBuildCount;
 	View.SnapshotRevisionSkipCount = Counters.SnapshotRevisionSkipCount;
+	View.WorkspaceFocusRequestCount = WorkspaceFocusRequestCountForTest;
+	View.bHasRunViewModelProviderSubscription = SubscribedProvider != nullptr;
+	View.bHasRuntimeSettingsSubscription = BoundSettingsSubsystem.IsValid()
+		&& RuntimeSettingsChangedHandle.IsValid();
+	View.bHasCommonInputSubscription = BoundCommonInputSubsystem.IsValid();
+	View.bHasOwningLayerTransitionSubscription = BoundPrimaryLayout.IsValid();
+	View.CurrentInputType = CurrentInputType;
 	if (WorkspaceWidget)
 	{
 		const FWacomBackpackWorkspaceAutomationTestView WorkspaceView = WorkspaceWidget->GetAutomationTestView();
@@ -1084,12 +1118,18 @@ void UWacomBackpackScreen::ApplyOwningLayerTransitionState(bool bTransitioning)
 void UWacomBackpackScreen::BindOwningLayerTransition()
 {
 	UWacomPrimaryGameLayout* Layout = nullptr;
+#if WITH_AUTOMATION_TESTS
+	Layout = PrimaryLayoutOverrideForTest.Get();
+#endif
 	if (UGameInstance* GameInstance = GetGameInstance())
 	{
-		if (UWacomGameUIManagerSubsystem* UIManager =
-			GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>())
+		if (!Layout)
 		{
-			Layout = UIManager->GetPrimaryLayout();
+			if (UWacomGameUIManagerSubsystem* UIManager =
+				GameInstance->GetSubsystem<UWacomGameUIManagerSubsystem>())
+			{
+				Layout = UIManager->GetPrimaryLayout();
+			}
 		}
 	}
 
@@ -1130,9 +1170,14 @@ void UWacomBackpackScreen::HandleOwningLayerTransitioningChanged(
 
 void UWacomBackpackScreen::BindRuntimeSettings()
 {
-	UWacomSettingsSubsystem* Settings = GetGameInstance()
-		? GetGameInstance()->GetSubsystem<UWacomSettingsSubsystem>()
-		: nullptr;
+	UWacomSettingsSubsystem* Settings = nullptr;
+#if WITH_AUTOMATION_TESTS
+	Settings = SettingsSubsystemOverrideForTest.Get();
+#endif
+	if (!Settings && GetGameInstance())
+	{
+		Settings = GetGameInstance()->GetSubsystem<UWacomSettingsSubsystem>();
+	}
 	if (BoundSettingsSubsystem.Get() == Settings && RuntimeSettingsChangedHandle.IsValid())
 	{
 		HandleRuntimeSettingsChanged(
@@ -1180,10 +1225,17 @@ void UWacomBackpackScreen::HandleRuntimeSettingsChanged(
 
 void UWacomBackpackScreen::BindCommonInput()
 {
-	ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
-	UCommonInputSubsystem* InputSubsystem = LocalPlayer
-		? LocalPlayer->GetSubsystem<UCommonInputSubsystem>()
-		: nullptr;
+	UCommonInputSubsystem* InputSubsystem = nullptr;
+#if WITH_AUTOMATION_TESTS
+	InputSubsystem = CommonInputSubsystemOverrideForTest.Get();
+#endif
+	if (!InputSubsystem)
+	{
+		ULocalPlayer* LocalPlayer = GetOwningLocalPlayer();
+		InputSubsystem = LocalPlayer
+			? LocalPlayer->GetSubsystem<UCommonInputSubsystem>()
+			: nullptr;
+	}
 	if (BoundCommonInputSubsystem.Get() == InputSubsystem)
 	{
 		if (InputSubsystem)

@@ -100,7 +100,7 @@ Details / Blueprint 分类口径：
 | UI settings | `Wacom|UI Foundation|Settings` |
 | Widget registry entry | `Wacom|UI Foundation|Widget Registry` |
 
-`UWacomPrimaryGameLayout` 缓存每个 Layer Stack 的 `OnTransitioningChanged` 状态，并通过 native delegate 广播 Layer Tag 与开始/结束状态。该合同只暴露 CommonUI Shell 的表现生命周期，不承载业务状态；需要避免在层 Alpha 过渡中烘入离屏缓存的 Screen（当前包括承载 `WBP_FPCardView` 的背包卡面）应在 Construct/Activate 时查询当前状态、订阅变化，并在 Destruct 时解除订阅。背包在过渡中暂停 retained caching，结束后恢复静态按需补绘与“最多一张实时卡”的表现预算；不要用固定帧数或持续 Tick 猜测过渡结束时间。
+`UWacomPrimaryGameLayout` 缓存每个 Layer Stack 的 `OnTransitioningChanged` 状态，并通过 native delegate 广播 Layer Tag 与开始/结束状态。该合同只暴露 CommonUI Shell 的表现生命周期，不承载业务状态；需要避免在层 Alpha 过渡中烘入离屏缓存的 Screen（当前包括承载 `WBP_FPCardView` 的背包卡面）应在 Activate 时查询当前状态并订阅变化，在 Deactivate 时解除订阅，Destruct 再做幂等兜底。背包在过渡中暂停 retained caching，结束后恢复静态按需补绘与“最多一张实时卡”的表现预算；不要用固定帧数或持续 Tick 猜测过渡结束时间。
 
 ## §4 Activatable 与 Button 基类
 
@@ -179,7 +179,7 @@ Backpack 正式 Screen 直接 Fill `UI.Layer.GameMenu`，不再保留固定 `160
 
 CommonUI 继续拥有键盘和手柄的焦点导航。主菜单导航按钮与通用 `UWacomMenuButtonWidget` 都在 Construct / Destruct 中对称订阅 `UCommonButtonBase::OnFocusReceived / OnFocusLost`，将 CommonButton 内部 Slate 焦点与鼠标 Hover 合并为同一个强调状态；主菜单继续使用自己的底板、强调条、箭头和插值动画，Settings / Pause / Modal 共用按钮则使用深色底板、琥珀强调条和文字色反馈。`UWacomSettingsOptionRow` 额外通过 focus-path 事件统一处理“焦点在行本身、左右步进按钮或 Slider 内”的整行高亮，因此切换分类后落到选项行也有明确反馈。
 
-Backpack Workspace 是复合 Canvas，因此真实 Slate 焦点保持在 Workspace 根，由 App-private Navigation Controller 按 `InstanceId / Zone` 绘制虚拟焦点并执行空间导航；这不绕过 CommonUI 的 Screen 激活、返回和 Modal 焦点所有权。Backpack Screen 在 Activate/Construct 有效期订阅 `UCommonInputSubsystem` 输入类型变化，Deactivate/Destruct 对称退订；情境提示随鼠标键盘/手柄切换。操作说明层打开前保存当前 Slate 焦点，关闭后恢复，且 Focus 与 Selected/Valid/Rejected 使用独立图标，不依赖颜色。
+Backpack Workspace 是复合 Canvas，因此真实 Slate 焦点保持在 Workspace 根，由 App-private Navigation Controller 按 `InstanceId / Zone` 绘制虚拟焦点并执行空间导航；这不绕过 CommonUI 的 Screen 激活、返回和 Modal 焦点所有权。Backpack Screen 只在 Active 期间订阅 `UCommonInputSubsystem` 输入类型变化，Deactivate 立即退订，Destruct 做幂等兜底；重新 Activate 读取当前输入类型并刷新情境提示。操作说明层打开前保存当前 Slate 焦点，关闭后恢复，且 Focus 与 Selected/Valid/Rejected 使用独立图标，不依赖颜色。
 
 `UWacomGameViewportClient` 只在当前焦点属于已经声明项目焦点皮肤的 `UWacomMainMenuButtonWidget`、`UWacomMenuButtonWidget` 或 `UWacomSettingsOptionRow` 时抑制 UE 通用蓝色 `FocusRectangle`，避免同一控件同时绘制两套选中反馈。该策略不关闭全局 `RenderFocusRule`；其它尚未拥有自绘焦点反馈的控件仍保留引擎默认焦点框，同时不改变控件 focusability、CommonUI 导航、确认或焦点恢复所有权。
 

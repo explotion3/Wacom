@@ -114,7 +114,7 @@ Screen 持有输入租约和纯 interaction model；Workspace 用互斥的 `Idle
 
 背包表现制作值保存在 `DA_BackpackWorkspaceStyle`，`WBP_BackpackScreen.WorkspaceStyle` 只持有普通资产引用；禁止把 Style 作为 `Instanced/EditInlineNew` UObject 嵌入 Widget Blueprint 根详情。该 Style 资产是受版本控制的人工制作真相，Builder 只能创建缺失资产，不得在日常重建时覆盖或重新保存已有制作值。Style 版本 4 在版本 3 的通用区域 Appearance、可着色图标/九宫格 Brush、投放反馈与响应式详情尺寸之上增加 Focus、Selected、ValidDrop、RejectedDrop 四个 64×64 透明像素图标 Brush；原运动、Hand Lens 与用户微调参数必须原样保留。Focus 与语义状态图标允许同时显示，语义优先级为 `Rejected > Valid > Selected`，灰度下仍须依靠形状区分。区域采用颜色、图标和轮廓三重编码，卡牌透明度不参与区域层级表达。编辑器入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。v4 正式资产已完成集成，历史一次性迁移入口及专用实现已经删除；未来资产变更仍按 MCP 工作流或新的显式授权执行，不得恢复旧迁移路径。普通左键按下未选中的可移动卡也会在当帧完成选择与 `Carry` 迁移；首次松开只消费起手保护，不依赖后续鼠标位移才开始跟随。
 
-Backpack Screen 的 `InteractionHintText` 不复用 `StatusText`：它根据 CommonInput 当前鼠标键盘/手柄类型和 Workspace 模式显示短提示；`ControlsHelpButton` 或 F1 打开被动 `WBP_BackpackControlsHelp`。Screen 只在 Activate/Construct 有效期订阅输入类型变化，Deactivate/Destruct 严格退订；帮助层捕获打开前 Slate 焦点，关闭后恢复，且不直接修改 Run 状态。
+Backpack Screen 的 `InteractionHintText` 不复用 `StatusText`：它根据 CommonInput 当前鼠标键盘/手柄类型和 Workspace 模式显示短提示；`ControlsHelpButton` 或 F1 打开被动 `WBP_BackpackControlsHelp`。Widget 树内部按钮和子控件委托属于 Construct/Destruct 生命周期；Run ViewModel Provider、Local Settings、CommonInput 与 PrimaryLayout 层转场四类外部订阅只在 Screen Active 期间存在。Deactivate 先关闭帮助层、取消瞬态交互并隐藏详情，再集中退订；重新 Activate 会读取四个来源的当前状态、通过 RefreshGate 追赶一次权威 Snapshot，并把焦点交回 Workspace 根。帮助层捕获打开前 Slate 焦点，关闭后恢复，且不直接修改 Run 状态。
 
 背包详情使用同一个 `WBP_BackpackCardDetailPanel` 实例：逻辑宽度不低于 1600 时进入右侧固定检查栏并永久预留约 360px；更窄时重挂到全屏 `CardDetailLayer`，按卡牌相反侧定位并夹紧。投放反馈由 Screen 产生 `None / Valid / Rejected / Destructive` ViewData，牌堆和销毁区只被动显示；反馈遮罩永远不参与命中，不得改变 Hand Lens、框选或 Carry 热路径。
 

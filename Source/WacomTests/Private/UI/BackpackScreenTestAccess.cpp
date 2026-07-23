@@ -6,6 +6,7 @@
 
 #include "RunSession.h"
 #include "Blueprint/WidgetTree.h"
+#include "CommonInputSubsystem.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/OverlaySlot.h"
 #include "Components/VerticalBoxSlot.h"
@@ -20,6 +21,9 @@
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "Settings/WacomSettingsSubsystem.h"
+#include "UI/Foundation/WacomPrimaryGameLayout.h"
+#include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceSceneBuilder.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackCommandFlow.h"
@@ -1175,6 +1179,24 @@ void FWacomBackpackScreenTestAccess::DeactivateWorkspaceScreen(UWacomBackpackScr
 		Screen.ActivateWidget();
 	}
 	Screen.DeactivateWidget();
+}
+
+void FWacomBackpackScreenTestAccess::DestructWorkspaceScreen(UWacomBackpackScreen& Screen)
+{
+	Screen.NativeDestruct();
+}
+
+void FWacomBackpackScreenTestAccess::SetActiveSubscriptionSources(
+	UWacomBackpackScreen& Screen,
+	UWacomRunViewModelProvider* Provider,
+	UWacomSettingsSubsystem* Settings,
+	UCommonInputSubsystem* CommonInput,
+	UWacomPrimaryGameLayout* PrimaryLayout)
+{
+	Screen.RunViewModelProviderOverrideForTest = Provider;
+	Screen.SettingsSubsystemOverrideForTest = Settings;
+	Screen.CommonInputSubsystemOverrideForTest = CommonInput;
+	Screen.PrimaryLayoutOverrideForTest = PrimaryLayout;
 }
 
 FWacomBackpackControlsHelpLifecycleProbe

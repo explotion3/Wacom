@@ -4435,6 +4435,7 @@ FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAuto
 		bDeferredCardFaceRenderRequested || bDeferredCardFaceRenderActive;
 	View.DeferredCardFaceRenderPassCount = DeferredCardFaceRenderPassCount;
 	View.bCardFaceRetainedRenderingEnabled = bCardFaceRetainedRenderingEnabled;
+	View.bSimplifiedMotion = GetRuntime().Presentation.IsSimplifiedMotion();
 	View.CarryAnchorLocal = GetRuntime().Presentation.CarryAnchorLocal;
 	View.CarryVisualAnchorLocal = GetRuntime().Presentation.CarryVisualAnchorLocal;
 	View.CarryRootTranslation = CarryRoot ? CarryRoot->GetRenderTransform().Translation : FVector2D::ZeroVector;

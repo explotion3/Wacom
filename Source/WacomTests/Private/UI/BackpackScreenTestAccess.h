@@ -7,9 +7,13 @@
 #if WITH_AUTOMATION_TESTS
 
 class URunSession;
+class UCommonInputSubsystem;
 class UWacomBackpackScreen;
 class UWacomBackpackWorkspaceWidget;
 class UWacomDeckCardWidget;
+class UWacomPrimaryGameLayout;
+class UWacomRunViewModelProvider;
+class UWacomSettingsSubsystem;
 enum class EZoneKind : uint8;
 struct FWacomBackpackScreenAutomationTestView;
 struct FWacomBackpackWorkspaceAutomationTestView;
@@ -194,6 +198,13 @@ struct FWacomBackpackScreenTestAccess
 		FGuid OwnerInstanceId = FGuid());
 	static void ActivateWorkspaceScreen(UWacomBackpackScreen& Screen);
 	static void DeactivateWorkspaceScreen(UWacomBackpackScreen& Screen);
+	static void DestructWorkspaceScreen(UWacomBackpackScreen& Screen);
+	static void SetActiveSubscriptionSources(
+		UWacomBackpackScreen& Screen,
+		UWacomRunViewModelProvider* Provider,
+		UWacomSettingsSubsystem* Settings,
+		UCommonInputSubsystem* CommonInput,
+		UWacomPrimaryGameLayout* PrimaryLayout);
 	static FWacomBackpackControlsHelpLifecycleProbe ProbeControlsHelpLifecycle(
 		UWacomBackpackScreen& Screen);
 	static FWacomBackpackWorkspaceAutomationTestView WorkspaceView(const UWacomBackpackScreen& Screen);

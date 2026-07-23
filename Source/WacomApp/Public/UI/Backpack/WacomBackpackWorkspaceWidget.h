@@ -387,6 +387,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	bool bDeferredCardFaceRenderPending = false;
 	int32 DeferredCardFaceRenderPassCount = 0;
 	bool bCardFaceRetainedRenderingEnabled = true;
+	bool bSimplifiedMotion = false;
 	FVector2D CarryAnchorLocal = FVector2D::ZeroVector;
 	FVector2D CarryRootTranslation = FVector2D::ZeroVector;
 	FVector2D CarryVisualAnchorLocal = FVector2D::ZeroVector;
