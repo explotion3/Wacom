@@ -31,6 +31,7 @@ namespace
 {
 constexpr float LayoutGeometryTolerance = 0.5f;
 constexpr int32 RequiredStableLayoutSamples = 2;
+constexpr float ExpandedPilePointerStationaryTolerance = 0.25f;
 
 FVector2D RotateVector(FVector2D Vector, float AngleDegrees)
 {
@@ -172,6 +173,13 @@ void UWacomBackpackWorkspaceWidget::SetSimplifiedMotion(bool bSimplified)
 	{
 		ApplyCarryVisualAnchor(0.0f);
 		TickBaseCardLayoutTransitions(0.0f);
+	}
+	if (InteractionModel && InteractionModel->IsCarrying())
+	{
+		// CarryStrip owns the current-card lift/angle targets.  Motion mode
+		// changes must re-solve those targets even when carry membership and
+		// the current index are otherwise unchanged.
+		GetRuntime().Presentation.bCarryStripLayoutDirty = true;
 	}
 	RequestPresentationRefresh(
 		EWacomBackpackWorkspacePresentationDirty::All,
@@ -729,6 +737,8 @@ UWacomDeckCardWidget* UWacomBackpackWorkspaceWidget::GetPresentationFocusedCard(
 
 void UWacomBackpackWorkspaceWidget::UpdateExpandedPileFocus(FVector2D PointerLocal)
 {
+	const FVector2D PreviousPointerLocal =
+		GetRuntime().Presentation.ExpandedPileFocus.PointerLocal;
 	GetRuntime().Presentation.ExpandedPileFocus.PointerLocal = PointerLocal;
 	if (!IsExpandedPileFocusAllowed())
 	{
@@ -744,7 +754,15 @@ void UWacomBackpackWorkspaceWidget::UpdateExpandedPileFocus(FVector2D PointerLoc
 		return;
 	}
 	UpdateExpandedPileLensFocus(PointerLocal);
-	const int32 HitIndex = ResolveExpandedPileVisualHitIndex(PointerLocal, true);
+	const EExpandedPileHitResolveMode ResolveMode =
+		PointerLocal.Equals(
+			PreviousPointerLocal,
+			ExpandedPilePointerStationaryTolerance)
+		? EExpandedPileHitResolveMode::StationaryRetention
+		: EExpandedPileHitResolveMode::PointerAcquisition;
+	const int32 HitIndex = ResolveExpandedPileVisualHitIndex(
+		PointerLocal,
+		ResolveMode);
 	if (HitIndex != INDEX_NONE)
 	{
 		GetRuntime().Presentation.ExpandedPileFocus.bExitPending = false;
@@ -1098,7 +1116,7 @@ void UWacomBackpackWorkspaceWidget::RefreshExpandedPileVisualHitAtCachedPointer(
 	}
 	const int32 HitIndex = ResolveExpandedPileVisualHitIndex(
 		GetRuntime().Presentation.ExpandedPileFocus.PointerLocal,
-		true);
+		EExpandedPileHitResolveMode::StationaryRetention);
 	if (HitIndex != INDEX_NONE)
 	{
 		GetRuntime().Presentation.ExpandedPileFocus.bExitPending = false;
@@ -1113,12 +1131,14 @@ void UWacomBackpackWorkspaceWidget::RefreshExpandedPileVisualHitAtCachedPointer(
 
 int32 UWacomBackpackWorkspaceWidget::ResolveExpandedPileVisualHitIndex(
 	FVector2D PointerLocal,
-	bool bAllowCurrentFocusHysteresis) const
+	EExpandedPileHitResolveMode ResolveMode) const
 {
 	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
 		? InteractionStyle.Get()
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
-	auto ContainsVisualCard = [this, PointerLocal](int32 Index, float HorizontalMargin)
+	auto ContainsVisualCard = [this, PointerLocal](
+		int32 Index,
+		FVector2D Margin)
 	{
 		if (!GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(Index))
 		{
@@ -1135,9 +1155,84 @@ int32 UWacomBackpackWorkspaceWidget::ResolveExpandedPileVisualHitIndex(
 			PointerLocal - VisualPose.Center,
 			-VisualPose.AngleDegrees);
 		const FVector2D HalfSize = CardSlot->GetSize() * 0.5f;
-		return FMath::Abs(VisualDelta.X) <= HalfSize.X + FMath::Max(0.0f, HorizontalMargin)
-			&& FMath::Abs(VisualDelta.Y) <= HalfSize.Y;
+		return FMath::Abs(VisualDelta.X)
+				<= HalfSize.X + FMath::Max(0.0f, Margin.X)
+			&& FMath::Abs(VisualDelta.Y)
+				<= HalfSize.Y + FMath::Max(0.0f, Margin.Y);
 	};
+	auto ContainsStableFocusBand = [this, PointerLocal](
+		int32 Index,
+		float Margin)
+	{
+		if (!GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(Index))
+		{
+			return false;
+		}
+		const FSlateRect& StableBand =
+			GetRuntime().Presentation.ExpandedPileFocus.Cards[Index].CurrentHitBand;
+		if (StableBand.Right <= StableBand.Left
+			|| StableBand.Bottom <= StableBand.Top)
+		{
+			return false;
+		}
+		const float SafeMargin = FMath::Max(0.0f, Margin);
+		return PointerLocal.X >= StableBand.Left - SafeMargin
+			&& PointerLocal.X <= StableBand.Right + SafeMargin
+			&& PointerLocal.Y >= StableBand.Top - SafeMargin
+			&& PointerLocal.Y <= StableBand.Bottom + SafeMargin;
+	};
+	auto ContainsTargetCard = [this, PointerLocal](
+		int32 Index,
+		FVector2D Margin)
+	{
+		if (!GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(Index))
+		{
+			return false;
+		}
+		const UWacomDeckCardWidget* Card =
+			GetRuntime().Presentation.ExpandedPileFocus.Cards[Index].Card.Get();
+		const FWacomBackpackWorkspaceCardLayout* Target = Card
+			? GetVisualState().ExpandedFocusLayouts().Find(Card)
+			: nullptr;
+		if (!Target)
+		{
+			return false;
+		}
+		const FVector2D TargetDelta = RotateVector(
+			PointerLocal - Target->Center,
+			-Target->AngleDegrees);
+		const FVector2D HalfSize = Target->Size * 0.5f;
+		return FMath::Abs(TargetDelta.X)
+				<= HalfSize.X + FMath::Max(0.0f, Margin.X)
+			&& FMath::Abs(TargetDelta.Y)
+				<= HalfSize.Y + FMath::Max(0.0f, Margin.Y);
+	};
+	const int32 CurrentFocusIndex =
+		GetRuntime().Presentation.ExpandedPileFocus.FocusIndex;
+	const bool bHasCurrentFocus =
+		GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(
+			CurrentFocusIndex);
+	const float Hysteresis =
+		FMath::Max(0.0f, Style->FocusHitHysteresisPixels);
+	const FVector2D HysteresisMargin(Hysteresis, Hysteresis);
+	auto ShouldRetainCurrentFocus = [&]()
+	{
+		return bHasCurrentFocus
+			&& (ContainsVisualCard(CurrentFocusIndex, HysteresisMargin)
+				|| ContainsStableFocusBand(CurrentFocusIndex, Hysteresis)
+				|| ContainsTargetCard(CurrentFocusIndex, HysteresisMargin));
+	};
+
+	// A cached pointer is re-evaluated every scheduler frame after local motion.
+	// Preserve the identity acquired by the last real pointer move while the
+	// pointer remains inside that card's stable target body. Otherwise a lifted
+	// card reveals an overlapping neighbour, which then receives the Z boost and
+	// lift, creating a self-sustaining identity/Z-order loop.
+	if (ResolveMode == EExpandedPileHitResolveMode::StationaryRetention
+		&& ShouldRetainCurrentFocus())
+	{
+		return CurrentFocusIndex;
+	}
 
 	int32 HitIndex = INDEX_NONE;
 	int32 HighestVisualZOrder = MIN_int32;
@@ -1145,7 +1240,7 @@ int32 UWacomBackpackWorkspaceWidget::ResolveExpandedPileVisualHitIndex(
 	{
 		UWacomDeckCardWidget* Card = GetRuntime().Presentation.ExpandedPileFocus.Cards[Index].Card.Get();
 		const UCanvasPanelSlot* CardSlot = Card ? Cast<UCanvasPanelSlot>(Card->Slot) : nullptr;
-		if (!CardSlot || !ContainsVisualCard(Index, 0.0f))
+		if (!CardSlot || !ContainsVisualCard(Index, FVector2D::ZeroVector))
 		{
 			continue;
 		}
@@ -1157,14 +1252,9 @@ int32 UWacomBackpackWorkspaceWidget::ResolveExpandedPileVisualHitIndex(
 			HitIndex = Index;
 		}
 	}
-	if (HitIndex == INDEX_NONE
-		&& bAllowCurrentFocusHysteresis
-		&& GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(GetRuntime().Presentation.ExpandedPileFocus.FocusIndex)
-		&& ContainsVisualCard(
-			GetRuntime().Presentation.ExpandedPileFocus.FocusIndex,
-			FMath::Max(0.0f, Style->FocusHitHysteresisPixels)))
+	if (HitIndex == INDEX_NONE && ShouldRetainCurrentFocus())
 	{
-		HitIndex = GetRuntime().Presentation.ExpandedPileFocus.FocusIndex;
+		HitIndex = CurrentFocusIndex;
 	}
 	return HitIndex;
 }
@@ -1535,7 +1625,14 @@ FReply UWacomBackpackWorkspaceWidget::TryHandleExpandedPileVisualPointerDown(
 	{
 		return FReply::Unhandled();
 	}
-	const int32 VisualHitIndex = ResolveExpandedPileVisualHitIndex(PointerLocal, false);
+	const EExpandedPileHitResolveMode ResolveMode = PointerLocal.Equals(
+		GetRuntime().Presentation.ExpandedPileFocus.PointerLocal,
+		ExpandedPilePointerStationaryTolerance)
+		? EExpandedPileHitResolveMode::StationaryRetention
+		: EExpandedPileHitResolveMode::PointerAcquisition;
+	const int32 VisualHitIndex = ResolveExpandedPileVisualHitIndex(
+		PointerLocal,
+		ResolveMode);
 	if (!GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(VisualHitIndex))
 	{
 		return FReply::Unhandled();
@@ -2426,7 +2523,8 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseWheel(
 				CurrentCarry.RemainingInstanceIds[CurrentCarry.CurrentIndex]);
 		}
 		RequestPresentationRefresh(
-			EWacomBackpackWorkspacePresentationDirty::CarryStrip
+			EWacomBackpackWorkspacePresentationDirty::CarryTopology
+				| EWacomBackpackWorkspacePresentationDirty::CarryStrip
 				| EWacomBackpackWorkspacePresentationDirty::StaticCards
 				| EWacomBackpackWorkspacePresentationDirty::CardSemantics
 				| EWacomBackpackWorkspacePresentationDirty::MotionTarget

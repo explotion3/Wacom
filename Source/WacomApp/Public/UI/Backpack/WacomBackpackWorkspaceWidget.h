@@ -42,7 +42,11 @@ struct WACOMAPP_API FWacomBackpackExpandedPileFocusCard
 	int32 NeutralLayerRank = 0;
 	/** 无焦点水平布局的命中条带。 */
 	FSlateRect NeutralHitBand;
-	/** 当前展开后实际目标卡位的命中条带；每次让位重排后更新。 */
+	/**
+	 * 当前展开后实际目标卡位的稳定保留条带；每次让位重排后更新。
+	 * 新焦点仍按实际视觉卡身获取；动画帧内的缓存指针用该条带和目标卡身保持身份，
+	 * 抵消自身 Hover 上浮及重叠卡临时 ZOrder 变化造成的命中漂移。
+	 */
 	FSlateRect CurrentHitBand;
 };
 
@@ -331,9 +335,14 @@ private:
 	void SetExpandedPileLensInputLocked(bool bLocked, bool bResumeImmediately);
 	void SyncExpandedPileLensInputLockFromPointerEvent(const FPointerEvent& PointerEvent);
 	void RefreshExpandedPileVisualHitAtCachedPointer();
+	enum class EExpandedPileHitResolveMode : uint8
+	{
+		PointerAcquisition,
+		StationaryRetention
+	};
 	int32 ResolveExpandedPileVisualHitIndex(
 		FVector2D PointerLocal,
-		bool bAllowCurrentFocusHysteresis) const;
+		EExpandedPileHitResolveMode ResolveMode) const;
 	void BeginExpandedPileFocusExit();
 	void TickExpandedPileFocusExit(float DeltaTime);
 	void SetExpandedPileFocusIndex(int32 FocusIndex);
