@@ -57,12 +57,10 @@ private:
 	int32 LastProjectedTurnNumber = 0;
 
 	void AppendHistoryBlock(const FWacomBattleCombatLogBlockView& Block);
-	void SubmitActivityBatch(
-		const FWacomBattleCombatActivityBatchView& Batch,
-		bool bAppendToDetailsHistory = true);
+	void SubmitActivityBatch(const FWacomBattleCombatActivityBatchView& Batch);
 	void ApplyActivityEmissions(
 		const TArray<FWacomBattleCombatActivityEmission>& Emissions);
 	FWacomBattleCombatLogTurnSectionView& EnsureDetailsTurnSection(int32 TurnNumber);
-	void AppendDetailsBatch(const FWacomBattleCombatActivityBatchView& Batch);
+	void AppendDetailsBatch(const FWacomBattleCombatLogDetailsBatchView& Batch);
 	void TrimDetailsHistory();
 };

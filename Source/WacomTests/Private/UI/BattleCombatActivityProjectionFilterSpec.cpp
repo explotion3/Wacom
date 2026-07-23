@@ -26,6 +26,27 @@ namespace WacomBattleCombatActivityProjectionFilterSpec
 		return false;
 	}
 
+	bool ContainsResult(
+		const FWacomBattleCombatLogDetailsBatchView& Batch,
+		const EBattleEventType Type,
+		const int32 EventSequence = INDEX_NONE)
+	{
+		for (const FWacomBattleCombatLogDetailsGroupView& Group : Batch.Groups)
+		{
+			for (const FWacomBattleCombatLogDetailsEntryView& Entry :
+				Group.Entries)
+			{
+				if (Entry.SourceEventType == Type
+					&& (EventSequence == INDEX_NONE
+						|| Entry.EventSequence == EventSequence))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	bool ContainsDetailLine(
 		const FWacomBattleCombatLogBlockView& Block,
 		const EBattleEventType Type)
@@ -95,7 +116,7 @@ bool FWacomUIBattleCombatActivityProjectionFilterSpec::RunTest(const FString& /*
 	const FWacomBattleCombatActivityBatchView ShortBatch =
 		UWacomBattleCombatLogBuilder::BuildCombatActivityBatch(
 			Context, Events, Snapshot, Snapshot);
-	const FWacomBattleCombatActivityBatchView DetailsBatch =
+	const FWacomBattleCombatLogDetailsBatchView DetailsBatch =
 		UWacomBattleCombatLogBuilder::BuildCombatLogDetailsBatch(
 			Context, Events, Snapshot, Snapshot);
 	const FWacomBattleCombatLogBlockView FullBlock =
@@ -131,6 +152,14 @@ bool FWacomUIBattleCombatActivityProjectionFilterSpec::RunTest(const FString& /*
 		ContainsResult(DetailsBatch, EBattleEventType::PassiveTriggered));
 	TestTrue(TEXT("Details projection retains card cost changes"),
 		ContainsResult(DetailsBatch, EBattleEventType::CardRuntimeCostChanged));
+	TestFalse(TEXT("Details projection omits initiative hit process events"),
+		ContainsResult(DetailsBatch, EBattleEventType::InitiativeHit));
+	TestFalse(TEXT("Details projection omits initiative countdown changes"),
+		ContainsResult(DetailsBatch, EBattleEventType::EnemyInitiativeChanged));
+	TestTrue(TEXT("Diagnostic history retains initiative hit facts"),
+		ContainsDetailLine(FullBlock, EBattleEventType::InitiativeHit));
+	TestTrue(TEXT("Diagnostic history retains initiative countdown facts"),
+		ContainsDetailLine(FullBlock, EBattleEventType::EnemyInitiativeChanged));
 	TestTrue(TEXT("Full history retains passive notification"),
 		ContainsDetailLine(FullBlock, EBattleEventType::PassiveTriggered));
 	TestTrue(TEXT("Full history retains card flow"),

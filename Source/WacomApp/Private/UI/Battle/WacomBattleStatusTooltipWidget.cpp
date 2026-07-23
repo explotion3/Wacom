@@ -57,6 +57,20 @@ void UWacomBattleStatusTooltipWidget::SetStatusView(
 	CurrentStatusView = InView;
 	CurrentOverflowViews.Reset();
 	bShowingOverflow = false;
+	bShowingHistoricalStatusEvent = false;
+	HistoricalStatusDelta = 0;
+	RefreshDisplay();
+}
+
+void UWacomBattleStatusTooltipWidget::SetHistoricalStatusEventView(
+	const FWacomBattleStatusIconView& InView,
+	const int32 StatusDelta)
+{
+	CurrentStatusView = InView;
+	CurrentOverflowViews.Reset();
+	bShowingOverflow = false;
+	bShowingHistoricalStatusEvent = true;
+	HistoricalStatusDelta = StatusDelta;
 	RefreshDisplay();
 }
 
@@ -66,6 +80,8 @@ void UWacomBattleStatusTooltipWidget::SetOverflowViews(
 	CurrentStatusView = FWacomBattleStatusIconView();
 	CurrentOverflowViews = InHiddenViews;
 	bShowingOverflow = true;
+	bShowingHistoricalStatusEvent = false;
+	HistoricalStatusDelta = 0;
 	RefreshDisplay();
 }
 
@@ -209,9 +225,22 @@ void UWacomBattleStatusTooltipWidget::RefreshDisplay()
 	}
 	if (StackText)
 	{
-		StackText->SetText(FText::Format(
-			LOCTEXT("StackCount", "×{0}"),
-			FText::AsNumber(FMath::Max(1, CurrentStatusView.StackCount))));
+		if (bShowingHistoricalStatusEvent)
+		{
+			const FText SignedDelta = FText::FromString(
+				HistoricalStatusDelta > 0
+					? FString::Printf(TEXT("+%d"), HistoricalStatusDelta)
+					: FString::FromInt(HistoricalStatusDelta));
+			StackText->SetText(FText::Format(
+				LOCTEXT("HistoricalStatusDelta", "本次 {0}"),
+				SignedDelta));
+		}
+		else
+		{
+			StackText->SetText(FText::Format(
+				LOCTEXT("StackCount", "×{0}"),
+				FText::AsNumber(FMath::Max(1, CurrentStatusView.StackCount))));
+		}
 		StackText->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 	if (CoreEffectText)

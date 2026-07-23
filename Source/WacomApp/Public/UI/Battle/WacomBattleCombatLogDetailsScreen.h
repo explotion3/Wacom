@@ -3,9 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/Battle/BattleCombatActivityRowWidget.h"
 #include "UI/Battle/BattleCombatLogTurnDividerWidget.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
+#include "UI/Battle/WacomBattleCombatLogDetailsEntryWidget.h"
 #include "UI/Battle/WacomBattleSecondaryPanelScreenBase.h"
 #include "WacomBattleCombatLogDetailsScreen.generated.h"
 
@@ -33,10 +33,10 @@ public:
 	int32 GetRenderedEntryCount() const { return RenderedEntryCount; }
 	void SetAuthoringDefaults(
 		UWacomBattleCombatActivityStyle* InStyle,
-		TSubclassOf<UBattleCombatActivityRowWidget> InRowClass,
+		TSubclassOf<UWacomBattleCombatLogDetailsEntryWidget> InEntryClass,
 		TSubclassOf<UBattleCombatLogTurnDividerWidget> InDividerClass);
 	UWacomBattleCombatActivityStyle* GetActivityStyle() const { return ActivityStyle; }
-	UClass* GetActivityRowWidgetClass() const { return ActivityRowWidgetClass.Get(); }
+	UClass* GetDetailsEntryWidgetClass() const { return DetailsEntryWidgetClass.Get(); }
 	UClass* GetTurnDividerWidgetClass() const { return TurnDividerWidgetClass.Get(); }
 
 protected:
@@ -64,8 +64,8 @@ protected:
 	TObjectPtr<UWacomBattleCombatActivityStyle> ActivityStyle;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Combat Log Details",
-		meta = (ToolTip = "根行动和结果行使用的正式 Row Widget 类。"))
-	TSubclassOf<UBattleCombatActivityRowWidget> ActivityRowWidgetClass;
+		meta = (ToolTip = "根行动、结果与结果说明使用的正式自适应 Entry Widget 类。"))
+	TSubclassOf<UWacomBattleCombatLogDetailsEntryWidget> DetailsEntryWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Combat Log Details",
 		meta = (ToolTip = "回合开始和结束分割线使用的 Widget 类。"))
@@ -76,9 +76,10 @@ private:
 	void HandleDetailsToggleChanged(bool bIsChecked);
 
 	void ResolveRuntimeBindings();
+	void ClearRenderedEntries();
 	void RebuildHistory();
 	void AddTurnDivider(int32 TurnNumber, bool bIsStart);
-	void AddActivityRow(const FWacomBattleCombatActivityRowView& Row);
+	void AddDetailsEntry(const FWacomBattleCombatLogDetailsEntryView& Entry);
 	void ScrollToLatestNextTick();
 
 	UPROPERTY(Transient)

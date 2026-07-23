@@ -211,14 +211,22 @@ void UWacomGameUIManagerSubsystem::HandleWorldCleanup(UWorld* World, bool bSessi
 		CancelAllPendingAsyncPushes();
 		// 直接置空引用，不调 TearDown（World 正在销毁，Widget 可能已经无效）。
 		PrimaryLayout = nullptr;
+		ResetPrimaryLayoutViewportZOrderLeases();
 	}
 }
 
 void UWacomGameUIManagerSubsystem::TearDownPrimaryLayout()
 {
 	CancelAllPendingAsyncPushes();
+	// Invalidate leases before deactivating layer contents. A closing screen may
+	// attempt to release its already-invalid handle; it must not remount a root
+	// that is in the middle of teardown.
+	ResetPrimaryLayoutViewportZOrderLeases();
 
-	if (!PrimaryLayout) { return; }
+	if (!PrimaryLayout)
+	{
+		return;
+	}
 
 	// 先清空所有 Stack 的 Widget，确保所有 Activatable 都 OnDeactivated，
 	// 这样 CommonUI 的 ActionRouter 能释放 UIInputConfig。
@@ -261,6 +269,7 @@ void UWacomGameUIManagerSubsystem::EnsurePrimaryLayout(APlayerController* PC)
 	// 已有有效实例且仍挂在 Viewport：直接返回。
 	if (IsValid(PrimaryLayout) && PrimaryLayout->IsInViewport())
 	{
+		ApplyPrimaryLayoutViewportZOrder();
 		return;
 	}
 
@@ -278,9 +287,75 @@ void UWacomGameUIManagerSubsystem::EnsurePrimaryLayout(APlayerController* PC)
 		UE_LOG(LogTemp, Error, TEXT("[UIManager] CreateWidget<PrimaryLayout> 失败"));
 		return;
 	}
-	PrimaryLayout->AddToViewport();
+	AppliedPrimaryLayoutViewportZOrder = GetEffectivePrimaryLayoutViewportZOrder();
+	PrimaryLayout->AddToViewport(AppliedPrimaryLayoutViewportZOrder);
 
-	UE_LOG(LogTemp, Display, TEXT("[UIManager] PrimaryLayout 已创建并挂载到 Viewport"));
+	UE_LOG(LogTemp, Display,
+		TEXT("[UIManager] PrimaryLayout 已创建并挂载到 Viewport（ZOrder=%d）"),
+		AppliedPrimaryLayoutViewportZOrder);
+}
+
+uint64 UWacomGameUIManagerSubsystem::AcquirePrimaryLayoutViewportZOrderLease(
+	const int32 RequestedZOrder)
+{
+	uint64 LeaseId = NextPrimaryLayoutViewportZOrderLeaseId++;
+	if (LeaseId == 0)
+	{
+		LeaseId = NextPrimaryLayoutViewportZOrderLeaseId++;
+	}
+
+	PrimaryLayoutViewportZOrderLeases.Add(LeaseId, FMath::Max(0, RequestedZOrder));
+	ApplyPrimaryLayoutViewportZOrder();
+	return LeaseId;
+}
+
+void UWacomGameUIManagerSubsystem::ReleasePrimaryLayoutViewportZOrderLease(
+	const uint64 LeaseId)
+{
+	if (LeaseId == 0 || PrimaryLayoutViewportZOrderLeases.Remove(LeaseId) == 0)
+	{
+		return;
+	}
+	ApplyPrimaryLayoutViewportZOrder();
+}
+
+int32 UWacomGameUIManagerSubsystem::GetEffectivePrimaryLayoutViewportZOrder() const
+{
+	int32 EffectiveZOrder = 0;
+	for (const TPair<uint64, int32>& Lease : PrimaryLayoutViewportZOrderLeases)
+	{
+		EffectiveZOrder = FMath::Max(EffectiveZOrder, Lease.Value);
+	}
+	return EffectiveZOrder;
+}
+
+void UWacomGameUIManagerSubsystem::ApplyPrimaryLayoutViewportZOrder()
+{
+	const int32 RequestedZOrder = GetEffectivePrimaryLayoutViewportZOrder();
+	if (!IsValid(PrimaryLayout)
+		|| !PrimaryLayout->IsInViewport()
+		|| AppliedPrimaryLayoutViewportZOrder == RequestedZOrder)
+	{
+		return;
+	}
+
+	// UE 5.8 does not expose an outer viewport-slot Z-order setter for UUserWidget.
+	// Reattaching the already-built root is synchronous and preserves the CommonUI
+	// layer stacks and their active widgets while replacing only the viewport slot.
+	PrimaryLayout->RemoveFromParent();
+	if (!IsValid(PrimaryLayout))
+	{
+		return;
+	}
+	PrimaryLayout->AddToViewport(RequestedZOrder);
+	AppliedPrimaryLayoutViewportZOrder = RequestedZOrder;
+}
+
+void UWacomGameUIManagerSubsystem::ResetPrimaryLayoutViewportZOrderLeases()
+{
+	PrimaryLayoutViewportZOrderLeases.Reset();
+	NextPrimaryLayoutViewportZOrderLeaseId = 1;
+	AppliedPrimaryLayoutViewportZOrder = 0;
 }
 
 TSubclassOf<UWacomPrimaryGameLayout> UWacomGameUIManagerSubsystem::ResolvePrimaryLayoutClass() const

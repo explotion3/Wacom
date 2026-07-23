@@ -7,6 +7,7 @@
 #include "Session/BattleSession.h"
 #include "UI/Battle/WacomBattleCardPileDetailsScreen.h"
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
+#include "UI/Battle/WacomBattleViewportLayerPolicy.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Battle/WacomBattleSecondaryPanelScreenBase.h"
 #include "UI/Foundation/WacomGameUIManagerSubsystem.h"
@@ -82,11 +83,21 @@ bool FWacomBattleSecondaryPanelCoordinator::BeginPush(
 	}
 
 	Runtime.CancelTargetSelect();
-	if (UWacomFirstPersonCardAnchorComponent* Anchor = Runtime.ResolveActiveFirstPersonCardAnchor())
+	UWacomFirstPersonCardAnchorComponent* ActiveAnchor =
+		Runtime.ResolveActiveFirstPersonCardAnchor();
+	if (ActiveAnchor)
 	{
-		Anchor->CancelFirstPersonCardDragGesture(true);
+		ActiveAnchor->CancelFirstPersonCardDragGesture(true);
 	}
 	Runtime.HideCardDetailPanel();
+
+	const int32 RequestedViewportZOrder = ActiveAnchor
+		? WacomBattleViewportLayerPolicy::ResolveSecondaryPanelZOrder(
+			ActiveAnchor->CardLayerZOrder)
+		: WacomBattleViewportLayerPolicy::SecondaryPanelZOrder;
+	ViewportDepthLeaseOwner = UIManager;
+	ViewportDepthLeaseId =
+		UIManager->AcquirePrimaryLayoutViewportZOrderLease(RequestedViewportZOrder);
 	Runtime.SetSecondaryPanelOpen(true);
 
 	bShuttingDown = false;
@@ -286,7 +297,21 @@ void FWacomBattleSecondaryPanelCoordinator::ReleaseCommandGate()
 		Runtime.SetFirstPersonBattleHandPresentationVisible(true);
 		bCardPileHandHidden = false;
 	}
+	ReleaseViewportDepthLease();
 	Runtime.SetSecondaryPanelOpen(false);
+}
+
+void FWacomBattleSecondaryPanelCoordinator::ReleaseViewportDepthLease()
+{
+	if (ViewportDepthLeaseId != 0)
+	{
+		if (UWacomGameUIManagerSubsystem* UIManager = ViewportDepthLeaseOwner.Get())
+		{
+			UIManager->ReleasePrimaryLayoutViewportZOrderLease(ViewportDepthLeaseId);
+		}
+	}
+	ViewportDepthLeaseOwner.Reset();
+	ViewportDepthLeaseId = 0;
 }
 
 bool FWacomBattleSecondaryPanelCoordinator::IsCurrentRequest(int32 RequestGeneration) const

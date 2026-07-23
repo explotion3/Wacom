@@ -137,7 +137,7 @@ Anchor Details 分类使用稳定编号，当前口径如下：
 | `98 Experimental Surface Effect` | 暂不接入生产 Drag 的像素棱镜 Style / 参数原型；只为未来 CardDataChanged / Upgrade 效果保留 |
 | `99 Debug` | lifecycle 与 gesture diagnostics |
 
-`CardLayerWidgetClass` 和 `CardLayerZOrder` 是 Battle / Run runtime hand 共用的正式第一人称卡牌层配置。`HandCardRenderScale`、`HandMaxEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 都是 runtime hand 表现参数。Development Preview 与 Debug Projection Widget 已完整删除；自动化测试只保留无反射的 layout fixture builder，不会在 PIE 创建或切换预览层。
+`CardLayerWidgetClass` 和 `CardLayerZOrder` 是 Battle / Run runtime hand 共用的正式第一人称卡牌层配置。Battle 敌情档案按当前值解析到 `CardLayerZOrder + 1`，Combat Log / 牌堆等全屏二级面板通过 PrimaryLayout viewport-depth lease 解析到 `CardLayerZOrder + 2`；默认形成 hand `9996`、inspection `9997`、secondary panel `9998`，仍低于 first-person card detail `9999` 和 App Toast `10000`。不要用 WBP 内部 Canvas ZOrder 处理跨 Viewport root 的遮挡。`HandCardRenderScale`、`HandMaxEdgeDropPixels`、`bScaleEdgeDropByHandCount`、`ShortHandEdgeDropPixels`、`EdgeDropScaleMinCardCount` 和 `EdgeDropScaleMaxCardCount` 都是 runtime hand 表现参数。Development Preview 与 Debug Projection Widget 已完整删除；自动化测试只保留无反射的 layout fixture builder，不会在 PIE 创建或切换预览层。
 
 Anchor debug view 会报告 `RawCursorLookOffset`、`AppliedAnchorLookOffset`、`LookInfluenceYaw`、`LookInfluencePitch` 和 `bLookResponsiveProjection`。排查时可以用它区分“鼠标确实产生了 look offset”与“该 offset 是否被当前 ProjectionMode 应用到 hand anchor”。Debug view 不再报告 layout preset 状态。
 

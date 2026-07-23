@@ -258,13 +258,14 @@ bool FWacomUIBattlePresentationQueueNonblockingInputSpec::RunTest(const FString&
 			[](const FWacomBattleCombatLogTurnSectionView& TurnSection)
 			{
 				return TurnSection.Groups.ContainsByPredicate(
-					[](const FWacomBattleCombatActivityGroupView& Group)
+					[](const FWacomBattleCombatLogDetailsGroupView& Group)
 					{
 						return Group.RootAction.SourceEventType == EBattleEventType::CardPlayed
-							&& Group.ResultRows.ContainsByPredicate(
-								[](const FWacomBattleCombatActivityRowView& Row)
+							&& Group.Entries.ContainsByPredicate(
+								[](const FWacomBattleCombatLogDetailsEntryView& Entry)
 								{
-									return Row.SourceEventType == EBattleEventType::DamageDealt;
+									return Entry.SourceEventType
+										== EBattleEventType::DamageDealt;
 								});
 					});
 			}));

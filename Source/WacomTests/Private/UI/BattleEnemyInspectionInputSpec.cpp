@@ -14,7 +14,7 @@
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
 #include "UObject/UnrealType.h"
-#include "../../../WacomApp/Private/UI/Battle/WacomBattleEnemyUILayerPolicy.h"
+#include "../../../WacomApp/Private/UI/Battle/WacomBattleViewportLayerPolicy.h"
 
 namespace WacomBattleEnemyInspectionInputSpec
 {
@@ -190,15 +190,15 @@ bool FWacomUIBattleEnemyInspectionScreenLayerSpec::RunTest(const FString& /*Para
 		EnemyPanelComponent->GetWidgetSpace(), EWidgetSpace::Screen);
 	TestEqual(TEXT("Enemy panel uses its dedicated screen layer"),
 		ReadSharedLayerName(*EnemyPanelComponent),
-		WacomBattleEnemyUILayerPolicy::CompactPanelSharedLayerName);
+		WacomBattleViewportLayerPolicy::CompactPanelSharedLayerName);
 	TestEqual(TEXT("Enemy panel screen layer renders above the base BattleHUD"),
 		ReadLayerZOrder(*EnemyPanelComponent),
-		WacomBattleEnemyUILayerPolicy::CompactPanelZOrder);
+		WacomBattleViewportLayerPolicy::CompactPanelZOrder);
 	TestTrue(TEXT("Enemy panel screen layer is above default viewport/CommonUI content"),
 		ReadLayerZOrder(*EnemyPanelComponent) > 0);
 	TestTrue(TEXT("Enemy panel screen layer remains below the inspection overlay"),
 		ReadLayerZOrder(*EnemyPanelComponent)
-			< WacomBattleEnemyUILayerPolicy::InspectionPanelZOrder);
+			< WacomBattleViewportLayerPolicy::InspectionPanelZOrder);
 
 	return true;
 }

@@ -3,10 +3,11 @@
 #include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
 
 #include "Blueprint/UserWidget.h"
+#include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
-#include "UI/Battle/WacomBattleEnemyUILayerPolicy.h"
+#include "UI/Battle/WacomBattleViewportLayerPolicy.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 
 namespace
@@ -186,7 +187,13 @@ FWacomBattleHUDEnemyInspectionCoordinator::EnsureWidget()
 		return nullptr;
 	}
 
-	Created->AddToViewport(WacomBattleEnemyUILayerPolicy::InspectionPanelZOrder);
+	const UWacomFirstPersonCardAnchorComponent* ActiveAnchor =
+		Runtime.ResolveActiveFirstPersonCardAnchor();
+	const int32 InspectionViewportZOrder = ActiveAnchor
+		? WacomBattleViewportLayerPolicy::ResolveInspectionPanelZOrder(
+			ActiveAnchor->CardLayerZOrder)
+		: WacomBattleViewportLayerPolicy::InspectionPanelZOrder;
+	Created->AddToViewport(InspectionViewportZOrder);
 	Created->SetVisibility(ESlateVisibility::Collapsed);
 	InspectionWidget = Created;
 	BindWidgetDelegates(*Created);

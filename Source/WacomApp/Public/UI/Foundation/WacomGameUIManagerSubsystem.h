@@ -77,6 +77,19 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|UI Foundation|Shell Lifecycle", meta = (ToolTip = "返回当前由 UI manager 持有的 PrimaryLayout 实例；可能为空。只用于读取 UI shell 状态。"))
 	UWacomPrimaryGameLayout* GetPrimaryLayout() const { return PrimaryLayout; }
 
+	/**
+	 * Temporarily raises the PrimaryLayout viewport root to at least RequestedZOrder.
+	 * Multiple callers may hold independent leases; the greatest active request wins.
+	 * A return value of 0 is invalid.
+	 */
+	uint64 AcquirePrimaryLayoutViewportZOrderLease(int32 RequestedZOrder);
+
+	/** Releases a previously acquired viewport-depth lease. Unknown or zero handles are ignored. */
+	void ReleasePrimaryLayoutViewportZOrderLease(uint64 LeaseId);
+
+	/** Returns the effective root viewport Z order after all active leases are applied. */
+	int32 GetEffectivePrimaryLayoutViewportZOrder() const;
+
 	TSubclassOf<UWacomPrimaryGameLayout> ResolvePrimaryLayoutClass() const;
 
 	TSubclassOf<UWacomActivatableWidget> ResolveWidgetClass(
@@ -139,6 +152,8 @@ private:
 		FName FailureReason,
 		TSubclassOf<UCommonActivatableWidget> ResolvedClass = nullptr,
 		UCommonActivatableWidget* PushedWidget = nullptr);
+	void ApplyPrimaryLayoutViewportZOrder();
+	void ResetPrimaryLayoutViewportZOrderLeases();
 
 	struct FPendingAsyncWidgetPush
 	{
@@ -151,6 +166,9 @@ private:
 	FDelegateHandle WorldCleanupHandle;
 	int32 NextAsyncPushRequestId = 1;
 	TMap<FGameplayTag, FPendingAsyncWidgetPush> PendingAsyncWidgetPushes;
+	uint64 NextPrimaryLayoutViewportZOrderLeaseId = 1;
+	TMap<uint64, int32> PrimaryLayoutViewportZOrderLeases;
+	int32 AppliedPrimaryLayoutViewportZOrder = 0;
 
 private:
 	UPROPERTY(Transient)

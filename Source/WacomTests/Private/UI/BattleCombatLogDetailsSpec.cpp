@@ -9,16 +9,19 @@
 #include "CommonInputBaseTypes.h"
 #include "Components/Button.h"
 #include "Components/CheckBox.h"
+#include "Components/Image.h"
 #include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
+#include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
+#include "Components/WrapBox.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "Session/BattleSession.h"
-#include "UI/Battle/BattleCombatActivityRowWidget.h"
 #include "UI/Battle/BattleCombatLogTurnDividerWidget.h"
 #include "UI/Battle/WacomBattleCombatActivityStyle.h"
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
+#include "UI/Battle/WacomBattleCombatLogDetailsEntryWidget.h"
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 #include "UObject/StrongObjectPtr.h"
@@ -46,15 +49,21 @@ namespace WacomBattleCombatLogDetailsSpec
 		FWacomBattleCombatLogTurnSectionView Section;
 		Section.TurnNumber = 2;
 		Section.bCompleted = true;
-		FWacomBattleCombatActivityGroupView& Group = Section.Groups.AddDefaulted_GetRef();
+		FWacomBattleCombatLogDetailsGroupView& Group =
+			Section.Groups.AddDefaulted_GetRef();
 		Group.TurnNumber = 2;
-		Group.RootAction.RowKind = EWacomBattleCombatActivityRowKind::RootAction;
+		Group.RootAction.EntryKind =
+			EWacomBattleCombatLogDetailsEntryKind::RootAction;
+		Group.RootAction.Depth = 0;
 		Group.RootAction.MessageText = FText::FromString(TEXT("泛滥"));
 		Group.RootAction.IconKey = TEXT("Player");
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
-			FWacomBattleCombatActivityRowView& Result = Group.ResultRows.AddDefaulted_GetRef();
-			Result.RowKind = EWacomBattleCombatActivityRowKind::Result;
+			FWacomBattleCombatLogDetailsEntryView& Result =
+				Group.Entries.AddDefaulted_GetRef();
+			Result.EntryKind =
+				EWacomBattleCombatLogDetailsEntryKind::Result;
+			Result.Depth = 1;
 			Result.MessageText = FText::FromString(FString::Printf(TEXT("结果%d"), Index + 1));
 			Result.EventSequence = Index + 1;
 		}
@@ -259,9 +268,19 @@ bool FWacomUIBattleCombatLogDetailsFormalAssetSpec::RunTest(const FString& /*Par
 	UWidgetBlueprint* DividerBlueprint = Cast<UWidgetBlueprint>(StaticLoadObject(
 		UWidgetBlueprint::StaticClass(), nullptr,
 		TEXT("/Game/Wacom/UI/Battle/CombatLog/WBP_BattleCombatLogTurnDivider.WBP_BattleCombatLogTurnDivider")));
+	UWidgetBlueprint* EntryBlueprint = Cast<UWidgetBlueprint>(StaticLoadObject(
+		UWidgetBlueprint::StaticClass(), nullptr,
+		TEXT("/Game/Wacom/UI/Battle/CombatLog/WBP_BattleCombatLogDetailsEntry.WBP_BattleCombatLogDetailsEntry")));
+	UWidgetBlueprint* StatusTooltipBlueprint = Cast<UWidgetBlueprint>(
+		StaticLoadObject(
+			UWidgetBlueprint::StaticClass(), nullptr,
+			TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusTooltip.WBP_BattleStatusTooltip")));
 	TestNotNull(TEXT("Formal details Screen exists"), DetailsBlueprint);
 	TestNotNull(TEXT("Formal turn divider exists"), DividerBlueprint);
-	if (!DetailsBlueprint || !DividerBlueprint)
+	TestNotNull(TEXT("Formal details Entry exists"), EntryBlueprint);
+	TestNotNull(TEXT("Formal status Tooltip exists"), StatusTooltipBlueprint);
+	if (!DetailsBlueprint || !DividerBlueprint || !EntryBlueprint
+		|| !StatusTooltipBlueprint)
 	{
 		return false;
 	}
@@ -270,11 +289,49 @@ bool FWacomUIBattleCombatLogDetailsFormalAssetSpec::RunTest(const FString& /*Par
 		&& DetailsBlueprint->ParentClass->IsChildOf(UWacomBattleCombatLogDetailsScreen::StaticClass()));
 	TestTrue(TEXT("Divider parent contract"), DividerBlueprint->ParentClass
 		&& DividerBlueprint->ParentClass->IsChildOf(UBattleCombatLogTurnDividerWidget::StaticClass()));
+	TestTrue(TEXT("Details Entry parent contract"), EntryBlueprint->ParentClass
+		&& EntryBlueprint->ParentClass->IsChildOf(
+			UWacomBattleCombatLogDetailsEntryWidget::StaticClass()));
 	TestNotNull(TEXT("Details backdrop binding"), DetailsBlueprint->WidgetTree->FindWidget(TEXT("BackdropButton")));
 	TestNotNull(TEXT("Details panel binding"), DetailsBlueprint->WidgetTree->FindWidget(TEXT("PanelRoot")));
 	TestNotNull(TEXT("Details close binding"), DetailsBlueprint->WidgetTree->FindWidget(TEXT("CloseButton")));
 	TestNotNull(TEXT("Details toggle binding"), DetailsBlueprint->WidgetTree->FindWidget(TEXT("DetailsToggle")));
 	TestNotNull(TEXT("Details history list binding"), DetailsBlueprint->WidgetTree->FindWidget(TEXT("HistoryList")));
+	const USizeBox* EntrySize = Cast<USizeBox>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("DetailsEntrySize")));
+	const UWrapBox* ContentWrap = Cast<UWrapBox>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("ContentWrap")));
+	const UTextBlock* Target = Cast<UTextBlock>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("TargetText")));
+	const UTextBlock* Message = Cast<UTextBlock>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("MessageText")));
+	const UTextBlock* Value = Cast<UTextBlock>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("ValueText")));
+	TestNotNull(TEXT("Details Entry has an auto-height root"), EntrySize);
+	TestNotNull(TEXT("Details Entry has a wrapping content container"), ContentWrap);
+	TestNotNull(TEXT("Details Entry separates the target label"), Target);
+	TestNotNull(TEXT("Details Entry separates the result body"), Message);
+	TestNotNull(TEXT("Details Entry separates the result value"), Value);
+	if (EntrySize)
+	{
+		TestTrue(TEXT("Details Entry does not force a fixed height"),
+			EntrySize->GetHeightOverride() <= 0.0f);
+	}
+	if (Target)
+	{
+		TestTrue(TEXT("Target label supports wrapping"),
+			Target->GetAutoWrapText());
+	}
+	if (Message)
+	{
+		TestTrue(TEXT("Result body supports wrapping"),
+			Message->GetAutoWrapText());
+	}
+	if (Value)
+	{
+		TestTrue(TEXT("Result value supports wrapping"),
+			Value->GetAutoWrapText());
+	}
 
 	const UButton* Backdrop = Cast<UButton>(DetailsBlueprint->WidgetTree->FindWidget(TEXT("BackdropButton")));
 	const UButton* Close = Cast<UButton>(DetailsBlueprint->WidgetTree->FindWidget(TEXT("CloseButton")));
@@ -288,9 +345,22 @@ bool FWacomUIBattleCombatLogDetailsFormalAssetSpec::RunTest(const FString& /*Par
 	if (Defaults)
 	{
 		TestNotNull(TEXT("Details shares the combat activity Style"), Defaults->GetActivityStyle());
-		TestNotNull(TEXT("Details uses the formal activity Row class"), Defaults->GetActivityRowWidgetClass());
+		TestTrue(TEXT("Details uses the formal details Entry class"),
+			Defaults->GetDetailsEntryWidgetClass() == EntryBlueprint->GeneratedClass);
 		TestTrue(TEXT("Details uses the formal divider class"),
 			Defaults->GetTurnDividerWidgetClass() == DividerBlueprint->GeneratedClass);
+	}
+	const UWacomBattleCombatLogDetailsEntryWidget* EntryDefaults =
+		EntryBlueprint->GeneratedClass
+			? Cast<UWacomBattleCombatLogDetailsEntryWidget>(
+				EntryBlueprint->GeneratedClass->GetDefaultObject())
+			: nullptr;
+	TestNotNull(TEXT("Details Entry generated defaults"), EntryDefaults);
+	if (EntryDefaults)
+	{
+		TestTrue(TEXT("Details Entry uses the formal status Tooltip class"),
+			EntryDefaults->GetStatusTooltipWidgetClass().Get()
+				== StatusTooltipBlueprint->GeneratedClass);
 	}
 	return true;
 }

@@ -2,7 +2,6 @@
 
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 
-#include "UI/Battle/BattleCombatActivityRowWidget.h"
 #include "UI/Battle/BattleCombatLogTurnDividerWidget.h"
 #include "UI/Battle/WacomBattleCombatActivityStyle.h"
 
@@ -142,7 +141,7 @@ void UWacomBattleCombatLogDetailsScreen::NativeDestruct()
 	}
 	if (HistoryList)
 	{
-		HistoryList->ClearChildren();
+		ClearRenderedEntries();
 	}
 	Super::NativeDestruct();
 }
@@ -165,11 +164,11 @@ void UWacomBattleCombatLogDetailsScreen::SetCombatLogContext(
 
 void UWacomBattleCombatLogDetailsScreen::SetAuthoringDefaults(
 	UWacomBattleCombatActivityStyle* InStyle,
-	TSubclassOf<UBattleCombatActivityRowWidget> InRowClass,
+	TSubclassOf<UWacomBattleCombatLogDetailsEntryWidget> InEntryClass,
 	TSubclassOf<UBattleCombatLogTurnDividerWidget> InDividerClass)
 {
 	ActivityStyle = InStyle;
-	ActivityRowWidgetClass = InRowClass;
+	DetailsEntryWidgetClass = InEntryClass;
 	TurnDividerWidgetClass = InDividerClass;
 }
 
@@ -206,21 +205,22 @@ void UWacomBattleCombatLogDetailsScreen::RebuildHistory()
 	{
 		return;
 	}
-	HistoryList->ClearChildren();
+	ClearRenderedEntries();
 	RenderedEntryCount = 0;
 	bool bHasAnyActions = false;
 	for (const FWacomBattleCombatLogTurnSectionView& Section : HistorySnapshot)
 	{
 		AddTurnDivider(Section.TurnNumber, true);
-		for (const FWacomBattleCombatActivityGroupView& Group : Section.Groups)
+		for (const FWacomBattleCombatLogDetailsGroupView& Group : Section.Groups)
 		{
 			bHasAnyActions = true;
-			AddActivityRow(Group.RootAction);
+			AddDetailsEntry(Group.RootAction);
 			if (bShowDetails)
 			{
-				for (const FWacomBattleCombatActivityRowView& ResultRow : Group.ResultRows)
+				for (const FWacomBattleCombatLogDetailsEntryView& Entry :
+					Group.Entries)
 				{
-					AddActivityRow(ResultRow);
+					AddDetailsEntry(Entry);
 				}
 			}
 		}
@@ -246,6 +246,23 @@ void UWacomBattleCombatLogDetailsScreen::RebuildHistory()
 		EmptyText->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	ScrollToLatestNextTick();
+}
+
+void UWacomBattleCombatLogDetailsScreen::ClearRenderedEntries()
+{
+	if (!HistoryList)
+	{
+		return;
+	}
+	for (UWidget* Child : HistoryList->GetAllChildren())
+	{
+		if (UWacomBattleCombatLogDetailsEntryWidget* Entry =
+			Cast<UWacomBattleCombatLogDetailsEntryWidget>(Child))
+		{
+			Entry->ClearDetailsEntry();
+		}
+	}
+	HistoryList->ClearChildren();
 }
 
 void UWacomBattleCombatLogDetailsScreen::AddTurnDivider(int32 TurnNumber, bool bIsStart)
@@ -274,26 +291,42 @@ void UWacomBattleCombatLogDetailsScreen::AddTurnDivider(int32 TurnNumber, bool b
 	++RenderedEntryCount;
 }
 
-void UWacomBattleCombatLogDetailsScreen::AddActivityRow(
-	const FWacomBattleCombatActivityRowView& Row)
+void UWacomBattleCombatLogDetailsScreen::AddDetailsEntry(
+	const FWacomBattleCombatLogDetailsEntryView& Entry)
 {
-	UClass* RowClass = ActivityRowWidgetClass
-		? ActivityRowWidgetClass.Get()
-		: UBattleCombatActivityRowWidget::StaticClass();
-	UBattleCombatActivityRowWidget* RowWidget = GetWorld()
-		? CreateWidget<UBattleCombatActivityRowWidget>(this, RowClass)
-		: NewObject<UBattleCombatActivityRowWidget>(this, RowClass);
-	if (!RowWidget)
+	UClass* EntryClass = DetailsEntryWidgetClass
+		? DetailsEntryWidgetClass.Get()
+		: UWacomBattleCombatLogDetailsEntryWidget::StaticClass();
+	UWacomBattleCombatLogDetailsEntryWidget* EntryWidget = GetWorld()
+		? CreateWidget<UWacomBattleCombatLogDetailsEntryWidget>(
+			this,
+			EntryClass)
+		: NewObject<UWacomBattleCombatLogDetailsEntryWidget>(
+			this,
+			EntryClass);
+	if (!EntryWidget)
 	{
 		return;
 	}
+
+	FWacomBattleCombatActivityRowView IconRow;
+	IconRow.RowKind =
+		Entry.EntryKind == EWacomBattleCombatLogDetailsEntryKind::RootAction
+			? EWacomBattleCombatActivityRowKind::RootAction
+			: EWacomBattleCombatActivityRowKind::Result;
+	IconRow.SourceEventType = Entry.SourceEventType;
+	IconRow.VisualTone = Entry.VisualTone;
+	IconRow.IconKey = Entry.IconKey;
+	IconRow.IconTag = Entry.IconTag;
+	IconRow.IntentId = Entry.IntentId;
 	const FSlateBrush IconBrush = ActivityStyle
-		? ActivityStyle->ResolveActivityIconBrush(Row)
+		? ActivityStyle->ResolveActivityIconBrush(IconRow)
 		: *FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
-	RowWidget->SetActivityRowData(Row, IconBrush);
-	if (UVerticalBoxSlot* RowSlot = HistoryList->AddChildToVerticalBox(RowWidget))
+	EntryWidget->SetDetailsEntryData(Entry, IconBrush);
+	if (UVerticalBoxSlot* EntrySlot =
+		HistoryList->AddChildToVerticalBox(EntryWidget))
 	{
-		RowSlot->SetPadding(FMargin(0.0f, 2.0f));
+		EntrySlot->SetPadding(FMargin(0.0f, 2.0f));
 	}
 	++RenderedEntryCount;
 }

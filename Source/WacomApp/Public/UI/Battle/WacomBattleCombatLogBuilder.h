@@ -10,6 +10,7 @@
 #include "Snapshots/BattleSnapshot.h"
 #include "Types/WacomEnums.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
+#include "UI/Battle/WacomBattleStatusIconWidget.h"
 #include "WacomBattleCombatLogBuilder.generated.h"
 
 UENUM(BlueprintType, meta = (ToolTip = "正式 Battle Combat Log 的命令块类型。用于玩家可读战斗记录分组，不写入规则层。"))
@@ -28,6 +29,14 @@ enum class EWacomBattleCombatActivityRowKind : uint8
 {
 	RootAction UMETA(DisplayName = "Root Action"),
 	Result UMETA(DisplayName = "Result"),
+};
+
+UENUM(BlueprintType, meta = (ToolTip = "战斗日志详情页的条目层级类型。根行动、结果与结果说明分别对应深度 0、1、2。"))
+enum class EWacomBattleCombatLogDetailsEntryKind : uint8
+{
+	RootAction UMETA(DisplayName = "Root Action"),
+	Result UMETA(DisplayName = "Result"),
+	Fact UMETA(DisplayName = "Fact"),
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = "正式 Combat Log 构建命令块时使用的 UI-only 命令上下文。由 BattleHUD 在提交命令前后构造，不写入战斗规则状态。"))
@@ -177,6 +186,97 @@ struct WACOMAPP_API FWacomBattleCombatActivityBatchView
 	int32 PresentedTurnNumber = 0;
 };
 
+/** 战斗日志详情页的一条只读层级条目。与短时 Feed Row 分离，允许自动高度与结构化目标。 */
+USTRUCT(BlueprintType, meta = (ToolTip = "战斗日志二级菜单的一条层级化 ViewData。Depth 仅允许 0、1、2；Widget 只显示，不写规则状态。"))
+struct WACOMAPP_API FWacomBattleCombatLogDetailsEntryView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	EWacomBattleCombatLogDetailsEntryKind EntryKind =
+		EWacomBattleCombatLogDetailsEntryKind::Result;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details",
+		meta = (ToolTip = "视觉缩进深度。0=根行动，1=结果，2=结果说明。"))
+	int32 Depth = 1;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	EBattleEventType SourceEventType = EBattleEventType::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details",
+		meta = (ToolTip = "结构化目标标签，例如 [蛇·尾部]、[玩家] 或 [卡牌名]。"))
+	FText TargetLabel;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	FText MessageText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details",
+		meta = (ToolTip = "与正文分离的短数值，例如 30、+1。为空时不显示。"))
+	FText ValueText;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	EWacomBattleEventVisualTone VisualTone = EWacomBattleEventVisualTone::Neutral;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	FName IconKey = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	FGameplayTag IconTag;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	FName IntentId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	int32 EventSequence = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details",
+		meta = (ToolTip = "状态 Tooltip 的宿主语义。只影响说明文案，不参与规则。"))
+	EWacomBattleStatusInspectionHost StatusInspectionHost =
+		EWacomBattleStatusInspectionHost::Unknown;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details",
+		meta = (ToolTip = "历史状态事件本次层数变化；Tooltip 显示为本次 +N/-N，不代表当前总层数。"))
+	int32 StatusDelta = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	bool bShowStatusTooltip = false;
+};
+
+/** 一次玩家或敌人根行动及其有序详情条目。详情条目使用扁平 Depth 表达三级结构。 */
+USTRUCT(BlueprintType, meta = (ToolTip = "战斗日志详情页的一组根行动与有序结果。"))
+struct WACOMAPP_API FWacomBattleCombatLogDetailsGroupView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	FWacomBattleCombatLogDetailsEntryView RootAction;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	TArray<FWacomBattleCombatLogDetailsEntryView> Entries;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	int32 TurnNumber = 0;
+};
+
+/** 一次已结算命令立即写入详情历史的 UI-only 批次。 */
+USTRUCT(BlueprintType, meta = (ToolTip = "战斗日志详情页批次。与短时 Combat Activity 播放批次完全分离。"))
+struct WACOMAPP_API FWacomBattleCombatLogDetailsBatchView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	TArray<FWacomBattleCombatLogDetailsGroupView> Groups;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	bool bSetTurnImmediately = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	bool bAdvanceTurnAfterPlayback = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
+	int32 PresentedTurnNumber = 0;
+};
+
 /** 详细战斗日志中的一个回合分区。由 HUD 表现层维护，不写入规则状态。 */
 USTRUCT(BlueprintType, meta = (ToolTip = "战斗日志详情页的单回合只读 ViewData。包含该回合的行动组以及是否已经正式结束。"))
 struct WACOMAPP_API FWacomBattleCombatLogTurnSectionView
@@ -190,7 +290,7 @@ struct WACOMAPP_API FWacomBattleCombatLogTurnSectionView
 	bool bCompleted = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Combat Log Details")
-	TArray<FWacomBattleCombatActivityGroupView> Groups;
+	TArray<FWacomBattleCombatLogDetailsGroupView> Groups;
 };
 
 /**
@@ -240,8 +340,8 @@ public:
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot);
 
-	/** C++ only: build the unfiltered activity-shaped projection used by DetailsHistory. */
-	static FWacomBattleCombatActivityBatchView BuildCombatLogDetailsBatch(
+	/** C++ only: build the structured, player-visible projection used by DetailsHistory. */
+	static FWacomBattleCombatLogDetailsBatchView BuildCombatLogDetailsBatch(
 		const FWacomBattleCombatLogCommandContext& Context,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PreCommandSnapshot,

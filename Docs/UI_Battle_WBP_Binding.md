@@ -267,13 +267,13 @@ Row 必须 `HitTestInvisible`，不提供按钮、拖拽或 Battle 命令入口�
 
 ### Combat Activity Builder
 
-`WacomBuildCombatActivityUI` 管理正式 Feed、Row、详细 Screen、回合 Divider、默认 Style 和中性有限色像素图标图集。推荐顺序：
+`WacomBuildCombatActivityUI` 管理正式 Feed、短时 Row、详情专用 Entry、详细 Screen、回合 Divider、默认 Style 和中性有限色像素图标图集。推荐顺序：
 
 1. `-Build`：把已识别的原生 Feed 定向替换为正式 `WBP_BattleCombatLogFeed`、创建缺失资产，并首次把 `BP_BattleHUD.CombatLogFeed` 放到 `(28,122)`、`420×190`。
 2. `-InspectOnly`：只读验证父类、绑定、Class Defaults、图标、命中和 HUD 位置合同。
 3. 再次 `-Build`：不得产生新的资产差异。
 
-Feed/Row/Details/Divider WidgetTree 属于 Builder 管理。默认 Style 已存在时只补缺失引用，不覆盖人工时序或图标调参。首次 HUD 位置合同建立后，后续构建保留有效的人工 Canvas Offset，只审计尺寸和类型；未知人工旧布局会失败并停止，而不是覆盖。
+Feed/短时 Row/Details Entry/Details Screen/Divider WidgetTree 属于 Builder 管理。默认 Style 已存在时只补缺失引用，不覆盖人工时序或图标调参。首次 HUD 位置合同建立后，后续构建保留有效的人工 Canvas Offset，只审计尺寸和类型；未知人工旧布局会失败并停止，而不是覆盖。
 
 ### WBP_BattleCombatLogDetailsScreen
 
@@ -293,7 +293,28 @@ Feed/Row/Details/Divider WidgetTree 属于 Builder 管理。默认 Style 已存�
 | `HistoryList` | `VerticalBox` | Optional | 动态排列回合 Divider、根行动与结果行 |
 | `EmptyText` | `TextBlock` | Optional | 空历史显示“暂无战斗记录” |
 
-Screen Push 到 `UI.Layer.GameMenu`，但不继承普通 Menu/UIOnly 基类；它请求 `All + NoCapture`，保持镜头和后台 Battle Presentation。Battle 命令门控属于 HUD Coordinator，不得在 WBP 直接暂停 Session。Esc、右键、Gamepad B、Backdrop 和关闭按钮都走同一幂等关闭路径。
+Screen Push 到 `UI.Layer.GameMenu`，但不继承普通 Menu/UIOnly 基类；它请求 `All + NoCapture`，保持镜头和后台 Battle Presentation。`HistoryList` 只创建 `WBP_BattleCombatLogDetailsEntry`，不得回退复用固定高度的短时 `WBP_BattleCombatActivityRow`。简略模式只添加 Divider 与 Depth 0 根行动，详情模式再按原顺序添加 Depth 1/2。Battle 命令门控属于 HUD Coordinator，不得在 WBP 直接暂停 Session。Esc、右键、Gamepad B、Backdrop 和关闭按钮都走同一幂等关闭路径。
+
+### WBP_BattleCombatLogDetailsEntry
+
+父类：`UWacomBattleCombatLogDetailsEntryWidget`
+
+推荐资产路径：`/Game/Wacom/UI/Battle/CombatLog/WBP_BattleCombatLogDetailsEntry`
+
+| 控件名 | 推荐类型 | 绑定形状 | 运行时职责 |
+|---|---|---|---|
+| `DetailsEntrySize` | `SizeBox` | WBP Root / Optional | 只设最小高度，不得设置固定 Height Override；根行动约 40px，结果/说明约 34px，长文自动增高 |
+| `EntryRoot` | `Border` | Optional | 按根行动、结果、说明应用不同强度暗色底板；`SelfHitTestInvisible` |
+| `IndentSpacer` | `SizeBox` | Optional | C++ 按 Depth 写入 `0 / 28 / 52px` |
+| `EntryIconSize` / `EntryIcon` | `SizeBox` / `Image` | Optional | 根行动 28px、结果 24px；Depth 2 折叠图标；状态结果图标临时切换为 `Visible` 以承载标准 Slate Tooltip |
+| `ContentWrap` | `WrapBox` | WBP internal | 在剩余宽度内排列并换行 Target / Message / Value；不可命中 |
+| `TargetText` | `TextBlock` | Optional | 完整方括号目标，例如 `[蛇·尾部]`、`[玩家]` |
+| `MessageText` | `TextBlock` | Optional | 结果正文或结果说明；必须 `AutoWrapText` |
+| `ValueText` | `TextBlock` | Optional | 与正文分离的短数值，例如 `30`、`+1`；必须 `AutoWrapText` |
+
+Entry 只消费 `FWacomBattleCombatLogDetailsEntryView`，无 Tick、不提交命令、不读取 Session。正式默认 `StatusTooltipWidgetClass` 指向 `/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusTooltip`；只有 `StatusApplied` 图标可命中 Tooltip，显示 Catalog 中对应 Player / EnemyPart 三行规则，并用“本次 `+N/-N`”表达历史变化。详情状态图标不响应点击。模式切换、重建和 Destruct 必须解除 Tooltip delegate 并清除缓存。
+
+详情 ViewData 固定使用三级：Depth 0 根行动；Depth 1 伤害、状态、抵抗、完美释放、击破等结果；Depth 2 只承载单个事件能直接证明的说明，例如抵抗 `卡牌单段 P >/≤ 敌方单段 E`。敌方标签按 `[敌人·部位]` 显示，单部位简化为 `[敌人]`；`InitiativeHit / EnemyInitiativeChanged` 不进入玩家可见详情。
 
 ### WBP_BattleCombatLogTurnDivider
 
@@ -307,7 +328,7 @@ Screen Push 到 `UI.Layer.GameMenu`，但不继承普通 Menu/UIOnly 基类；�
 | `TurnText` | `TextBlock` | Optional | “第 N 回合开始/结束” |
 | `DividerLine` | `Image` | Optional | 开始/结束色的硬像素分割线 |
 
-Divider 与 Activity Row 都是只读展示，不提交命令，也不自行访问 Battle Session。
+Divider、Details Entry 与 Activity Row 都是只读展示，不提交命令，也不自行访问 Battle Session。
 
 ### WBP_BattleCombatLogBlock（旧完整文本兼容）
 
@@ -326,7 +347,7 @@ WBP 合同：
 
 - `SetCombatLogBlockData()` 保存完整 `FWacomBattleCombatLogBlockView` 并触发 `BP_OnCombatLogBlockUpdated`。
 - WBP 可读取 `VisualTone / IconKey` 调整样式。
-- 命令块只是显示组件，不提交战斗命令。新详细页面使用回合分区与 Activity Row，不再复制这条旧文本式图标解析路径。
+- 命令块只是显示组件，不提交战斗命令。新详细页面使用回合分区与 Details Entry，不再复制这条旧文本式图标解析路径。
 
 ## Presentation Stack WBP
 

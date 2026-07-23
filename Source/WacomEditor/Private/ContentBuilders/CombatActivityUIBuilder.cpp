@@ -22,6 +22,8 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WrapBox.h"
+#include "Components/WrapBoxSlot.h"
 #include "Engine/Texture2D.h"
 #include "HAL/FileManager.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -34,9 +36,11 @@
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattleCombatLogTurnDividerWidget.h"
 #include "UI/Battle/WacomBattleCombatActivityStyle.h"
+#include "UI/Battle/WacomBattleCombatLogDetailsEntryWidget.h"
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 #include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
+#include "UI/Battle/WacomBattleStatusTooltipWidget.h"
 #include "UObject/MetaData.h"
 #include "UObject/SavePackage.h"
 #include "WidgetBlueprint.h"
@@ -49,6 +53,8 @@ namespace
 	constexpr TCHAR FeedAssetName[] = TEXT("WBP_BattleCombatLogFeed");
 	constexpr TCHAR RowAssetName[] = TEXT("WBP_BattleCombatActivityRow");
 	constexpr TCHAR DividerAssetName[] = TEXT("WBP_BattleCombatLogTurnDivider");
+	constexpr TCHAR DetailsEntryAssetName[] =
+		TEXT("WBP_BattleCombatLogDetailsEntry");
 	constexpr TCHAR DetailsAssetName[] = TEXT("WBP_BattleCombatLogDetailsScreen");
 	constexpr TCHAR StyleAssetName[] = TEXT("DA_BattleCombatActivityStyle_Default");
 	constexpr TCHAR AtlasAssetName[] = TEXT("T_BattleCombatActivityIcons_Default");
@@ -58,6 +64,8 @@ namespace
 		TEXT("/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default.DA_EnemyIntentPresentation_Default");
 	constexpr TCHAR StatusCatalogObjectPath[] =
 		TEXT("/Game/Wacom/UI/Battle/Status/DA_BattleStatusPresentationCatalog.DA_BattleStatusPresentationCatalog");
+	constexpr TCHAR StatusTooltipObjectPath[] =
+		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusTooltip.WBP_BattleStatusTooltip");
 	constexpr TCHAR WidgetContractMarker[] =
 		TEXT("WacomCombatActivityWBP.ContractVersion=1");
 	constexpr TCHAR FeedWidgetContractMarker[] =
@@ -97,6 +105,7 @@ namespace
 		UWidgetBlueprint* RowBlueprint = nullptr;
 		UWidgetBlueprint* FeedBlueprint = nullptr;
 		UWidgetBlueprint* DividerBlueprint = nullptr;
+		UWidgetBlueprint* DetailsEntryBlueprint = nullptr;
 		UWidgetBlueprint* DetailsBlueprint = nullptr;
 	};
 
@@ -717,6 +726,127 @@ namespace
 		return CompileAndSave(Blueprint);
 	}
 
+	bool BuildDetailsEntryBlueprint(UWidgetBlueprint& Blueprint)
+	{
+		ResetWidgetBlueprint(
+			Blueprint,
+			TEXT("Builder-managed auto-height hierarchical Battle Combat Log details entry."));
+		UWidgetTree* Tree = Blueprint.WidgetTree;
+
+		USizeBox* Root = Tree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			TEXT("DetailsEntrySize"));
+		Root->SetMinDesiredHeight(34.0f);
+		Root->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Tree->RootWidget = Root;
+		MarkWidgetVariable(Blueprint, *Root);
+
+		UBorder* EntryRoot = Tree->ConstructWidget<UBorder>(
+			UBorder::StaticClass(),
+			TEXT("EntryRoot"));
+		EntryRoot->SetBrushColor(
+			FLinearColor(0.025f, 0.035f, 0.055f, 0.48f));
+		EntryRoot->SetPadding(FMargin(6.0f, 5.0f));
+		EntryRoot->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		Root->SetContent(EntryRoot);
+		MarkWidgetVariable(Blueprint, *EntryRoot);
+
+		UHorizontalBox* Row = Tree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(),
+			TEXT("EntryRow"));
+		Row->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		EntryRoot->SetContent(Row);
+
+		USizeBox* Indent = Tree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			TEXT("IndentSpacer"));
+		Indent->SetWidthOverride(0.0f);
+		Indent->SetHeightOverride(1.0f);
+		Indent->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Row->AddChildToHorizontalBox(Indent);
+		MarkWidgetVariable(Blueprint, *Indent);
+
+		USizeBox* EntryIconSizeBox = Tree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			TEXT("EntryIconSize"));
+		EntryIconSizeBox->SetWidthOverride(24.0f);
+		EntryIconSizeBox->SetHeightOverride(24.0f);
+		EntryIconSizeBox->SetVisibility(
+			ESlateVisibility::SelfHitTestInvisible);
+		if (UHorizontalBoxSlot* IconSlot =
+			Row->AddChildToHorizontalBox(EntryIconSizeBox))
+		{
+			IconSlot->SetPadding(FMargin(0.0f, 0.0f, 8.0f, 0.0f));
+			IconSlot->SetVerticalAlignment(VAlign_Top);
+		}
+		MarkWidgetVariable(Blueprint, *EntryIconSizeBox);
+
+		UImage* Icon = Tree->ConstructWidget<UImage>(
+			UImage::StaticClass(),
+			TEXT("EntryIcon"));
+		Icon->SetVisibility(ESlateVisibility::HitTestInvisible);
+		EntryIconSizeBox->SetContent(Icon);
+		MarkWidgetVariable(Blueprint, *Icon);
+
+		UWrapBox* ContentWrap = Tree->ConstructWidget<UWrapBox>(
+			UWrapBox::StaticClass(),
+			TEXT("ContentWrap"));
+		ContentWrap->SetInnerSlotPadding(FVector2D(5.0f, 2.0f));
+		ContentWrap->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+		if (UHorizontalBoxSlot* ContentSlot =
+			Row->AddChildToHorizontalBox(ContentWrap))
+		{
+			ContentSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+			ContentSlot->SetVerticalAlignment(VAlign_Center);
+		}
+
+		UTextBlock* Target = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(),
+			TEXT("TargetText"));
+		StyleText(
+			*Target,
+			16,
+			FLinearColor(0.72f, 0.80f, 0.90f, 1.0f));
+		Target->SetText(FText::FromString(TEXT("[敌人·部位]")));
+		Target->SetAutoWrapText(true);
+		Target->SetWrapTextAt(520.0f);
+		Target->SetVisibility(ESlateVisibility::HitTestInvisible);
+		ContentWrap->AddChildToWrapBox(Target);
+		MarkWidgetVariable(Blueprint, *Target);
+
+		UTextBlock* Message = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(),
+			TEXT("MessageText"));
+		StyleText(
+			*Message,
+			16,
+			FLinearColor(0.92f, 0.94f, 1.0f, 1.0f));
+		FSlateFontInfo MessageFont = Message->GetFont();
+		MessageFont.TypefaceFontName = TEXT("Regular");
+		Message->SetFont(MessageFont);
+		Message->SetText(FText::FromString(TEXT("受到伤害")));
+		Message->SetAutoWrapText(true);
+		Message->SetWrapTextAt(520.0f);
+		Message->SetVisibility(ESlateVisibility::HitTestInvisible);
+		ContentWrap->AddChildToWrapBox(Message);
+		MarkWidgetVariable(Blueprint, *Message);
+
+		UTextBlock* Value = Tree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(),
+			TEXT("ValueText"));
+		StyleText(
+			*Value,
+			16,
+			FLinearColor(0.98f, 0.80f, 0.30f, 1.0f));
+		Value->SetText(FText::AsNumber(30));
+		Value->SetAutoWrapText(true);
+		Value->SetWrapTextAt(520.0f);
+		Value->SetVisibility(ESlateVisibility::HitTestInvisible);
+		ContentWrap->AddChildToWrapBox(Value);
+		MarkWidgetVariable(Blueprint, *Value);
+		return CompileAndSave(Blueprint);
+	}
+
 	FButtonStyle MakeInvisibleButtonStyle()
 	{
 		FSlateBrush NoDraw;
@@ -1110,6 +1240,108 @@ namespace
 		return !bChanged || SaveCompiledDefaults(Blueprint);
 	}
 
+	bool ValidateDetailsEntryBlueprint(
+		const UWidgetBlueprint& Blueprint,
+		const UClass* ExpectedTooltipClass,
+		const bool bLogErrors)
+	{
+		const USizeBox* Root = Blueprint.WidgetTree
+			? Cast<USizeBox>(
+				Blueprint.WidgetTree->FindWidget(TEXT("DetailsEntrySize")))
+			: nullptr;
+		const UWidget* EntryRoot = Blueprint.WidgetTree
+			? Blueprint.WidgetTree->FindWidget(TEXT("EntryRoot"))
+			: nullptr;
+		const UWidget* Indent = Blueprint.WidgetTree
+			? Blueprint.WidgetTree->FindWidget(TEXT("IndentSpacer"))
+			: nullptr;
+		const UWidget* EntryIconSizeBox = Blueprint.WidgetTree
+			? Blueprint.WidgetTree->FindWidget(TEXT("EntryIconSize"))
+			: nullptr;
+		const UWidget* Icon = Blueprint.WidgetTree
+			? Blueprint.WidgetTree->FindWidget(TEXT("EntryIcon"))
+			: nullptr;
+		const UTextBlock* Target = Blueprint.WidgetTree
+			? Cast<UTextBlock>(
+				Blueprint.WidgetTree->FindWidget(TEXT("TargetText")))
+			: nullptr;
+		const UTextBlock* Message = Blueprint.WidgetTree
+			? Cast<UTextBlock>(
+				Blueprint.WidgetTree->FindWidget(TEXT("MessageText")))
+			: nullptr;
+		const UTextBlock* Value = Blueprint.WidgetTree
+			? Cast<UTextBlock>(
+				Blueprint.WidgetTree->FindWidget(TEXT("ValueText")))
+			: nullptr;
+		const UWacomBattleCombatLogDetailsEntryWidget* Defaults =
+			Blueprint.GeneratedClass
+				? Cast<UWacomBattleCombatLogDetailsEntryWidget>(
+					Blueprint.GeneratedClass->GetDefaultObject())
+				: nullptr;
+		const bool bValid = Blueprint.ParentClass
+			&& Blueprint.ParentClass->IsChildOf(
+				UWacomBattleCombatLogDetailsEntryWidget::StaticClass())
+			&& Blueprint.BlueprintDescription.Contains(WidgetContractMarker)
+			&& Blueprint.GeneratedClass
+			&& Root
+			&& Root->GetVisibility() == ESlateVisibility::SelfHitTestInvisible
+			&& Root->GetHeightOverride() <= 0.0f
+			&& EntryRoot
+			&& EntryRoot->IsA(UBorder::StaticClass())
+			&& EntryRoot->GetVisibility()
+				== ESlateVisibility::SelfHitTestInvisible
+			&& Indent
+			&& Indent->IsA(USizeBox::StaticClass())
+			&& Indent->GetVisibility() == ESlateVisibility::HitTestInvisible
+			&& EntryIconSizeBox
+			&& EntryIconSizeBox->IsA(USizeBox::StaticClass())
+			&& EntryIconSizeBox->GetVisibility()
+				== ESlateVisibility::SelfHitTestInvisible
+			&& Icon
+			&& Icon->IsA(UImage::StaticClass())
+			&& Icon->GetVisibility() == ESlateVisibility::HitTestInvisible
+			&& Target
+			&& Target->GetAutoWrapText()
+			&& Message
+			&& Message->GetAutoWrapText()
+			&& Value
+			&& Value->GetAutoWrapText()
+			&& Defaults
+			&& Defaults->GetStatusTooltipWidgetClass().Get()
+				== ExpectedTooltipClass;
+		if (!bValid && bLogErrors)
+		{
+			UE_LOG(
+				LogTemp,
+				Error,
+				TEXT("[CombatActivityUIBuilder] Details entry contract mismatch: %s"),
+				*Blueprint.GetPathName());
+		}
+		return bValid;
+	}
+
+	bool ConfigureDetailsEntryDefaults(
+		UWidgetBlueprint& Blueprint,
+		UClass* TooltipClass)
+	{
+		UWacomBattleCombatLogDetailsEntryWidget* Defaults =
+			Blueprint.GeneratedClass
+				? Cast<UWacomBattleCombatLogDetailsEntryWidget>(
+					Blueprint.GeneratedClass->GetDefaultObject())
+				: nullptr;
+		if (!Defaults || !TooltipClass)
+		{
+			return false;
+		}
+		if (Defaults->GetStatusTooltipWidgetClass().Get() == TooltipClass)
+		{
+			return true;
+		}
+		Defaults->Modify();
+		Defaults->SetStatusTooltipWidgetClass(TooltipClass);
+		return SaveCompiledDefaults(Blueprint);
+	}
+
 	bool ValidateTurnDividerBlueprint(const UWidgetBlueprint& Blueprint, bool bLogErrors)
 	{
 		const UWidget* Root = Blueprint.WidgetTree
@@ -1141,7 +1373,7 @@ namespace
 
 	bool ValidateDetailsBlueprint(
 		const UWidgetBlueprint& Blueprint,
-		const UClass* ExpectedRowClass,
+		const UClass* ExpectedEntryClass,
 		const UClass* ExpectedDividerClass,
 		const UWacomBattleCombatActivityStyle* ExpectedStyle,
 		bool bLogErrors)
@@ -1173,7 +1405,7 @@ namespace
 			&& HasWidgetOfClass(Blueprint, TEXT("HistoryList"), UVerticalBox::StaticClass())
 			&& Defaults
 			&& Defaults->GetActivityStyle() == ExpectedStyle
-			&& Defaults->GetActivityRowWidgetClass() == ExpectedRowClass
+			&& Defaults->GetDetailsEntryWidgetClass() == ExpectedEntryClass
 			&& Defaults->GetTurnDividerWidgetClass() == ExpectedDividerClass;
 		if (!bValid && bLogErrors)
 		{
@@ -1186,26 +1418,26 @@ namespace
 
 	bool ConfigureDetailsDefaults(
 		UWidgetBlueprint& Blueprint,
-		UClass* RowClass,
+		UClass* EntryClass,
 		UClass* DividerClass,
 		UWacomBattleCombatActivityStyle* Style)
 	{
 		UWacomBattleCombatLogDetailsScreen* Defaults = Blueprint.GeneratedClass
 			? Cast<UWacomBattleCombatLogDetailsScreen>(Blueprint.GeneratedClass->GetDefaultObject())
 			: nullptr;
-		if (!Defaults || !RowClass || !DividerClass || !Style)
+		if (!Defaults || !EntryClass || !DividerClass || !Style)
 		{
 			return false;
 		}
 		const bool bChanged = Defaults->GetActivityStyle() != Style
-			|| Defaults->GetActivityRowWidgetClass() != RowClass
+			|| Defaults->GetDetailsEntryWidgetClass() != EntryClass
 			|| Defaults->GetTurnDividerWidgetClass() != DividerClass;
 		if (!bChanged)
 		{
 			return true;
 		}
 		Defaults->Modify();
-		Defaults->SetAuthoringDefaults(Style, RowClass, DividerClass);
+		Defaults->SetAuthoringDefaults(Style, EntryClass, DividerClass);
 		return SaveCompiledDefaults(Blueprint);
 	}
 
@@ -1378,6 +1610,24 @@ bool Wacom::ContentBuilder::ProcessCombatActivityUI(bool bBuild, bool bInspectOn
 		return false;
 	}
 
+	UWidgetBlueprint* StatusTooltipBlueprint =
+		Cast<UWidgetBlueprint>(StaticLoadObject(
+			UWidgetBlueprint::StaticClass(),
+			nullptr,
+			StatusTooltipObjectPath));
+	if (!StatusTooltipBlueprint
+		|| !StatusTooltipBlueprint->GeneratedClass
+		|| !StatusTooltipBlueprint->GeneratedClass->IsChildOf(
+			UWacomBattleStatusTooltipWidget::StaticClass()))
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[CombatActivityUIBuilder] Formal status Tooltip is unavailable: %s"),
+			StatusTooltipObjectPath);
+		return false;
+	}
+
 	FWidgetBlueprintAsset RowAsset = LoadOrCreateWidgetBlueprint(
 		RowAssetName, UBattleCombatActivityRowWidget::StaticClass(), bBuild);
 	if (!RowAsset.Blueprint)
@@ -1402,6 +1652,49 @@ bool Wacom::ContentBuilder::ProcessCombatActivityUI(bool bBuild, bool bInspectOn
 		}
 	}
 	Assets.RowBlueprint = RowAsset.Blueprint;
+
+	FWidgetBlueprintAsset DetailsEntryAsset = LoadOrCreateWidgetBlueprint(
+		DetailsEntryAssetName,
+		UWacomBattleCombatLogDetailsEntryWidget::StaticClass(),
+		bBuild);
+	if (!DetailsEntryAsset.Blueprint)
+	{
+		return false;
+	}
+	if (!DetailsEntryAsset.bCreated
+		&& !DetailsEntryAsset.Blueprint->BlueprintDescription.Contains(
+			WidgetContractMarker))
+	{
+		UE_LOG(
+			LogTemp,
+			Error,
+			TEXT("[CombatActivityUIBuilder] Unknown manual Details Entry WBP detected; no overwrite: %s"),
+			*DetailsEntryAsset.Blueprint->GetPathName());
+		return false;
+	}
+	if (!ValidateDetailsEntryBlueprint(
+		*DetailsEntryAsset.Blueprint,
+		StatusTooltipBlueprint->GeneratedClass,
+		false))
+	{
+		if (!bBuild
+			|| !BuildDetailsEntryBlueprint(*DetailsEntryAsset.Blueprint)
+			|| !ConfigureDetailsEntryDefaults(
+				*DetailsEntryAsset.Blueprint,
+				StatusTooltipBlueprint->GeneratedClass)
+			|| !ValidateDetailsEntryBlueprint(
+				*DetailsEntryAsset.Blueprint,
+				StatusTooltipBlueprint->GeneratedClass,
+				true))
+		{
+			ValidateDetailsEntryBlueprint(
+				*DetailsEntryAsset.Blueprint,
+				StatusTooltipBlueprint->GeneratedClass,
+				true);
+			return false;
+		}
+	}
+	Assets.DetailsEntryBlueprint = DetailsEntryAsset.Blueprint;
 
 	FWidgetBlueprintAsset DividerAsset = LoadOrCreateWidgetBlueprint(
 		DividerAssetName, UBattleCombatLogTurnDividerWidget::StaticClass(), bBuild);
@@ -1475,7 +1768,7 @@ bool Wacom::ContentBuilder::ProcessCombatActivityUI(bool bBuild, bool bInspectOn
 	}
 	if (!ValidateDetailsBlueprint(
 		*DetailsAsset.Blueprint,
-		RowAsset.Blueprint->GeneratedClass,
+		DetailsEntryAsset.Blueprint->GeneratedClass,
 		DividerAsset.Blueprint->GeneratedClass,
 		Assets.Style,
 		false))
@@ -1483,19 +1776,19 @@ bool Wacom::ContentBuilder::ProcessCombatActivityUI(bool bBuild, bool bInspectOn
 		if (!bBuild || !BuildDetailsBlueprint(*DetailsAsset.Blueprint)
 			|| !ConfigureDetailsDefaults(
 				*DetailsAsset.Blueprint,
-				RowAsset.Blueprint->GeneratedClass,
+				DetailsEntryAsset.Blueprint->GeneratedClass,
 				DividerAsset.Blueprint->GeneratedClass,
 				Assets.Style)
 			|| !ValidateDetailsBlueprint(
 				*DetailsAsset.Blueprint,
-				RowAsset.Blueprint->GeneratedClass,
+				DetailsEntryAsset.Blueprint->GeneratedClass,
 				DividerAsset.Blueprint->GeneratedClass,
 				Assets.Style,
 				true))
 		{
 			ValidateDetailsBlueprint(
 				*DetailsAsset.Blueprint,
-				RowAsset.Blueprint->GeneratedClass,
+				DetailsEntryAsset.Blueprint->GeneratedClass,
 				DividerAsset.Blueprint->GeneratedClass,
 				Assets.Style,
 				true);
@@ -1513,9 +1806,10 @@ bool Wacom::ContentBuilder::ProcessCombatActivityUI(bool bBuild, bool bInspectOn
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[CombatActivityUIBuilder] Contract ready%s: Feed=%s Row=%s Details=%s Divider=%s Style=%s Atlas=%s"),
+		TEXT("[CombatActivityUIBuilder] Contract ready%s: Feed=%s Row=%s DetailsEntry=%s Details=%s Divider=%s Style=%s Atlas=%s"),
 		bInspectOnly ? TEXT(" (inspect only)") : TEXT(""),
 		*GetNameSafe(Assets.FeedBlueprint), *GetNameSafe(Assets.RowBlueprint),
+		*GetNameSafe(Assets.DetailsEntryBlueprint),
 		*GetNameSafe(Assets.DetailsBlueprint), *GetNameSafe(Assets.DividerBlueprint),
 		*GetNameSafe(Assets.Style), *GetNameSafe(Assets.Atlas));
 	return true;

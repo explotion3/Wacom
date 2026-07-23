@@ -53,8 +53,7 @@ void FWacomBattleHUDCombatLogController::AppendBlock(
 		CommandContext,
 		Events,
 		PreCommandSnapshot,
-		PostCommandSnapshot),
-		false);
+		PostCommandSnapshot));
 }
 
 uint64 FWacomBattleHUDCombatLogController::StageResolvedCommand(
@@ -68,7 +67,7 @@ uint64 FWacomBattleHUDCombatLogController::StageResolvedCommand(
 		Events,
 		PreCommandSnapshot,
 		PostCommandSnapshot));
-	const FWacomBattleCombatActivityBatchView DetailsBatch =
+	const FWacomBattleCombatLogDetailsBatchView DetailsBatch =
 		UWacomBattleCombatLogBuilder::BuildCombatLogDetailsBatch(
 			CommandContext,
 			Events,
@@ -134,8 +133,7 @@ void FWacomBattleHUDCombatLogController::DiscardActivityTransaction(
 void FWacomBattleHUDCombatLogController::PresentInitialTurnActivity(const int32 TurnNumber)
 {
 	SubmitActivityBatch(
-		UWacomBattleCombatLogBuilder::BuildInitialTurnActivityBatch(TurnNumber),
-		false);
+		UWacomBattleCombatLogBuilder::BuildInitialTurnActivityBatch(TurnNumber));
 }
 
 void FWacomBattleHUDCombatLogController::Clear()
@@ -224,13 +222,8 @@ void FWacomBattleHUDCombatLogController::ApplyActivityEmissions(
 }
 
 void FWacomBattleHUDCombatLogController::SubmitActivityBatch(
-	const FWacomBattleCombatActivityBatchView& Batch,
-	const bool bAppendToDetailsHistory)
+	const FWacomBattleCombatActivityBatchView& Batch)
 {
-	if (bAppendToDetailsHistory)
-	{
-		AppendDetailsBatch(Batch);
-	}
 	if (Batch.bSetTurnImmediately || Batch.bAdvanceTurnAfterPlayback)
 	{
 		LastProjectedTurnNumber = Batch.PresentedTurnNumber;
@@ -266,14 +259,14 @@ FWacomBattleHUDCombatLogController::EnsureDetailsTurnSection(int32 TurnNumber)
 }
 
 void FWacomBattleHUDCombatLogController::AppendDetailsBatch(
-	const FWacomBattleCombatActivityBatchView& Batch)
+	const FWacomBattleCombatLogDetailsBatchView& Batch)
 {
 	if (Batch.bSetTurnImmediately)
 	{
 		EnsureDetailsTurnSection(Batch.PresentedTurnNumber);
 	}
 
-	for (const FWacomBattleCombatActivityGroupView& Group : Batch.Groups)
+	for (const FWacomBattleCombatLogDetailsGroupView& Group : Batch.Groups)
 	{
 		EnsureDetailsTurnSection(Group.TurnNumber).Groups.Add(Group);
 	}

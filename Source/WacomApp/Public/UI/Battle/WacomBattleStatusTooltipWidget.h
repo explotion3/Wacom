@@ -24,11 +24,16 @@ class WACOMAPP_API UWacomBattleStatusTooltipWidget : public UCommonUserWidget
 
 public:
 	void SetStatusView(const FWacomBattleStatusIconView& InView);
+	void SetHistoricalStatusEventView(
+		const FWacomBattleStatusIconView& InView,
+		int32 StatusDelta);
 	void SetOverflowViews(const TArray<FWacomBattleStatusIconView>& InHiddenViews);
 
 	const FWacomBattleStatusIconView& GetStatusView() const { return CurrentStatusView; }
 	const TArray<FWacomBattleStatusIconView>& GetOverflowViews() const { return CurrentOverflowViews; }
 	bool IsShowingOverflow() const { return bShowingOverflow; }
+	bool IsShowingHistoricalStatusEvent() const { return bShowingHistoricalStatusEvent; }
+	int32 GetHistoricalStatusDelta() const { return HistoricalStatusDelta; }
 
 protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
@@ -65,4 +70,6 @@ private:
 	TArray<FWacomBattleStatusIconView> CurrentOverflowViews;
 
 	bool bShowingOverflow = false;
+	bool bShowingHistoricalStatusEvent = false;
+	int32 HistoricalStatusDelta = 0;
 };

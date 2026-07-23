@@ -11,6 +11,7 @@ class UCommonActivatableWidget;
 class UWacomBattleCardPileDetailsScreen;
 class UWacomBattleCombatLogDetailsScreen;
 class UWacomBattleSecondaryPanelScreenBase;
+class UWacomGameUIManagerSubsystem;
 
 enum class EWacomBattleSecondaryPanelKind : uint8
 {
@@ -43,6 +44,7 @@ private:
 	void HandleDetailsModeChanged(bool bShowDetails);
 	void HandlePushCompleted(bool bSucceeded, FName FailureReason);
 	void ReleaseCommandGate();
+	void ReleaseViewportDepthLease();
 	bool IsCurrentRequest(int32 RequestGeneration) const;
 
 	FWacomBattleHUDRuntime& Runtime;
@@ -50,6 +52,8 @@ private:
 	FBattlePileInspectionSnapshot PendingPileSnapshot;
 	EWacomBattlePileDetailsTab PendingPileTab = EWacomBattlePileDetailsTab::Draw;
 	EWacomBattleSecondaryPanelKind PendingKind = EWacomBattleSecondaryPanelKind::None;
+	TWeakObjectPtr<UWacomGameUIManagerSubsystem> ViewportDepthLeaseOwner;
+	uint64 ViewportDepthLeaseId = 0;
 	int32 Generation = 0;
 	bool bPushPending = false;
 	bool bShowCombatLogDetails = false;

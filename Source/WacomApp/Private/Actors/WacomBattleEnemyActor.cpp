@@ -11,7 +11,7 @@
 #include "Enemies/EnemyDefinition.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
-#include "UI/Battle/WacomBattleEnemyUILayerPolicy.h"
+#include "UI/Battle/WacomBattleViewportLayerPolicy.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 
 namespace
@@ -25,9 +25,9 @@ namespace
 	void ConfigurePanelLayer(UWidgetComponent& Component)
 	{
 		Component.SetInitialSharedLayerName(
-			WacomBattleEnemyUILayerPolicy::CompactPanelSharedLayerName);
+			WacomBattleViewportLayerPolicy::CompactPanelSharedLayerName);
 		Component.SetInitialLayerZOrder(
-			WacomBattleEnemyUILayerPolicy::CompactPanelZOrder);
+			WacomBattleViewportLayerPolicy::CompactPanelZOrder);
 	}
 }
 
