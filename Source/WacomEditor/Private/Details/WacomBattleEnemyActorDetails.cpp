@@ -130,6 +130,7 @@ FText FWacomBattleEnemyActorDetails::BuildAuthoringReportText() const
 			TEXT("重复槽位: [%s]  Identity mismatch: [%s]\n")
 			TEXT("无效 Definition 槽位: [%s]\nSurplus: [%s]\n")
 			TEXT("重复 LayerId: [%s]  错误父级: [%s]\n")
+			TEXT("交互层: [%s]  缺失: [%s]  歧义: [%s]  碰撞未就绪: [%s]  authored 碰撞异常: [%s]\n")
 			TEXT("多 Anchor: [%s]  空视觉: [%s]  动画 Style: [%s]  Terminal 冲突: [%s]\n")
 			TEXT("最近同步: %s  Added: [%s]  Updated: [%s]  Invalid: [%s]"),
 			*Host.GetName(),
@@ -153,6 +154,11 @@ FText FWacomBattleEnemyActorDetails::BuildAuthoringReportText() const
 			*JoinStrings(Report.IdentityAudit.SurplusPartComponentNames),
 			*JoinNames(Report.DuplicateLayerIds),
 			*JoinStrings(Report.InvalidParentComponentNames),
+			*JoinNames(Report.InteractionVisualLayerIds),
+			*JoinNames(Report.MissingInteractionLayerPartSlotIds),
+			*JoinNames(Report.AmbiguousInteractionLayerPartSlotIds),
+			*JoinNames(Report.InteractionCollisionNotReadyPartSlotIds),
+			*JoinNames(Report.UnexpectedVisualCollisionPartSlotIds),
 			*JoinNames(Report.MultipleImpactAnchorPartSlotIds),
 			*JoinNames(Report.EmptyVisualPartSlotIds),
 			*JoinNames(Report.InvalidAnimationStylePartSlotIds),

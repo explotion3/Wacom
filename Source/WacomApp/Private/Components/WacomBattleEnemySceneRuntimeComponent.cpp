@@ -12,6 +12,7 @@
 #include "Components/WacomBattleEnemyPartFlipbookLayerComponent.h"
 #include "Components/WacomBattleEnemyPartImpactAnchorComponent.h"
 #include "Components/WacomBattleEnemyPartImpactFeedbackController.h"
+#include "Components/WacomBattleEnemyPartOutlineFeedbackController.h"
 #include "Components/WacomBattleEnemyPartSpriteLayerComponent.h"
 #include "Components/WacomBattleEnemyPartTargetPreviewFeedbackController.h"
 #include "Components/WacomBattleEnemyPartTargetPreviewPlayback.h"
@@ -58,6 +59,7 @@ namespace
 			, ImpactFeedback(MakeUnique<FWacomBattleEnemyPartImpactFeedbackController>())
 			, TargetPreviewPlayback(MakeUnique<FWacomBattleEnemyPartTargetPreviewPlayback>())
 			, TargetPreviewFeedback(MakeUnique<FWacomBattleEnemyPartTargetPreviewFeedbackController>())
+			, OutlineFeedback(MakeUnique<FWacomBattleEnemyPartOutlineFeedbackController>())
 			, ActionPlayback(MakeUnique<FWacomBattleEnemyActionPlayback>())
 		{
 		}
@@ -72,6 +74,12 @@ namespace
 		TArray<FSpriteAuthoredState> Sprites;
 		TWeakObjectPtr<UWacomBattleEnemyPartImpactAnchorComponent> ImpactAnchor;
 		int32 ImpactAnchorCount = 0;
+		TWeakObjectPtr<UPrimitiveComponent> InteractionVisual;
+		TWeakObjectPtr<UPaperSprite> StableInteractionCollisionSprite;
+		bool bInteractionVisualResolved = false;
+		bool bInteractionCollisionReady = false;
+		bool bUsingBoxCollisionFallback = false;
+		bool bInteractionFallbackLogged = false;
 
 		FName EncounterId = NAME_None;
 		FName EnemySlotId = NAME_None;
@@ -81,6 +89,7 @@ namespace
 		bool bBound = false;
 		bool bRegisteredWithHUD = false;
 		bool bTargetable = false;
+		bool bTargetSelectionActive = false;
 		FName TargetDisabledReason = NAME_None;
 		bool bDestroyed = false;
 		bool bDestroyedVisualApplied = false;
@@ -110,6 +119,7 @@ namespace
 		TUniquePtr<FWacomBattleEnemyPartImpactFeedbackController> ImpactFeedback;
 		TUniquePtr<FWacomBattleEnemyPartTargetPreviewPlayback> TargetPreviewPlayback;
 		TUniquePtr<FWacomBattleEnemyPartTargetPreviewFeedbackController> TargetPreviewFeedback;
+		TUniquePtr<FWacomBattleEnemyPartOutlineFeedbackController> OutlineFeedback;
 		TUniquePtr<FWacomBattleEnemyActionPlayback> ActionPlayback;
 	};
 
@@ -193,6 +203,10 @@ namespace
 		{
 			State.TargetPreviewFeedback->ResetImmediate(bDestroyComponents);
 		}
+		if (State.OutlineFeedback)
+		{
+			State.OutlineFeedback->ResetImmediate(bDestroyComponents);
+		}
 		State.bDestroyedSwapPending = false;
 		State.bAwaitingDestroyedCue = false;
 		State.bDragPreviewActive = false;
@@ -200,40 +214,189 @@ namespace
 		State.DragPreviewState = EWacomFirstPersonCardDragTargetFeedbackState::None;
 	}
 
-	void ApplyVisualScale(FPartRuntimeState& State, float Scale)
+	void ClearInteractionCollisionConfiguration(FPartRuntimeState& State)
 	{
-		const float SafeScale = FMath::Max(1.0f, Scale);
 		for (FFlipbookAuthoredState& Layer : State.Flipbooks)
 		{
 			if (UWacomBattleEnemyPartFlipbookLayerComponent* Component = Layer.Component.Get())
 			{
-				Component->SetRelativeScale3D(Layer.RelativeScale * SafeScale);
+				Component->ClearInteractionCollision();
 			}
 		}
 		for (FSpriteAuthoredState& Layer : State.Sprites)
 		{
 			if (UWacomBattleEnemyPartSpriteLayerComponent* Component = Layer.Component.Get())
 			{
-				Component->SetRelativeScale3D(Layer.RelativeScale * SafeScale);
+				Component->ClearInteractionCollision();
 			}
+		}
+		State.InteractionVisual.Reset();
+		State.StableInteractionCollisionSprite.Reset();
+		State.bInteractionVisualResolved = false;
+		State.bInteractionCollisionReady = false;
+	}
+
+	void ResolveInteractionVisual(FPartRuntimeState& State)
+	{
+		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
+		ClearInteractionCollisionConfiguration(State);
+		if (!Part || Part->InteractionVisualLayerId.IsNone())
+		{
+			return;
+		}
+
+		int32 MatchCount = 0;
+		UWacomBattleEnemyPartFlipbookLayerComponent* FlipbookMatch = nullptr;
+		UWacomBattleEnemyPartSpriteLayerComponent* SpriteMatch = nullptr;
+		UPaperSprite* StableSprite = nullptr;
+		for (FFlipbookAuthoredState& Layer : State.Flipbooks)
+		{
+			UWacomBattleEnemyPartFlipbookLayerComponent* Component = Layer.Component.Get();
+			if (Component && Component->LayerId == Part->InteractionVisualLayerId)
+			{
+				++MatchCount;
+				FlipbookMatch = Component;
+				StableSprite = Layer.Flipbook.IsValid()
+					? Layer.Flipbook->GetSpriteAtFrame(0)
+					: nullptr;
+			}
+		}
+		for (FSpriteAuthoredState& Layer : State.Sprites)
+		{
+			UWacomBattleEnemyPartSpriteLayerComponent* Component = Layer.Component.Get();
+			if (Component && Component->LayerId == Part->InteractionVisualLayerId)
+			{
+				++MatchCount;
+				SpriteMatch = Component;
+				StableSprite = Layer.Sprite.Get();
+			}
+		}
+
+		State.bInteractionVisualResolved = MatchCount == 1;
+		if (!State.bInteractionVisualResolved)
+		{
+			return;
+		}
+		if (FlipbookMatch)
+		{
+			FlipbookMatch->ConfigureInteractionCollision(Part, StableSprite, false);
+			State.InteractionVisual = FlipbookMatch;
+			State.bInteractionCollisionReady = FlipbookMatch->IsInteractionCollisionReady();
+		}
+		else if (SpriteMatch)
+		{
+			SpriteMatch->ConfigureInteractionCollision(Part, StableSprite, false);
+			State.InteractionVisual = SpriteMatch;
+			State.bInteractionCollisionReady = SpriteMatch->IsInteractionCollisionReady();
+		}
+		State.StableInteractionCollisionSprite = StableSprite;
+	}
+
+	void RefreshInteractionCollision(FPartRuntimeState& State, bool bRuntimeRetired)
+	{
+		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
+		if (!Part)
+		{
+			return;
+		}
+		const bool bEnable = !bRuntimeRetired && State.bBound && !State.bDestroyed;
+		State.bUsingBoxCollisionFallback = !State.bInteractionCollisionReady;
+		if (State.bInteractionCollisionReady)
+		{
+			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			if (UWacomBattleEnemyPartFlipbookLayerComponent* FlipbookLayer =
+				Cast<UWacomBattleEnemyPartFlipbookLayerComponent>(State.InteractionVisual.Get()))
+			{
+				FlipbookLayer->ConfigureInteractionCollision(
+					Part,
+					State.StableInteractionCollisionSprite.Get(),
+					bEnable);
+			}
+			else if (UWacomBattleEnemyPartSpriteLayerComponent* SpriteLayer =
+				Cast<UWacomBattleEnemyPartSpriteLayerComponent>(State.InteractionVisual.Get()))
+			{
+				SpriteLayer->ConfigureInteractionCollision(
+					Part,
+					State.StableInteractionCollisionSprite.Get(),
+					bEnable);
+			}
+			State.bInteractionFallbackLogged = false;
+			return;
+		}
+
+		for (FFlipbookAuthoredState& Layer : State.Flipbooks)
+		{
+			if (UWacomBattleEnemyPartFlipbookLayerComponent* Component = Layer.Component.Get())
+			{
+				Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			}
+		}
+		for (FSpriteAuthoredState& Layer : State.Sprites)
+		{
+			if (UWacomBattleEnemyPartSpriteLayerComponent* Component = Layer.Component.Get())
+			{
+				Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			}
+		}
+		Part->SetCollisionEnabled(
+			bEnable ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+		if (bEnable && !State.bInteractionFallbackLogged)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[WacomEnemyInteraction] Part '%s' cannot resolve collision-ready InteractionVisualLayerId '%s'; temporary Box fallback enabled."),
+				*Part->GetPathName(),
+				*Part->InteractionVisualLayerId.ToString());
+			State.bInteractionFallbackLogged = true;
 		}
 	}
 
-	void RefreshPersistentScale(FPartRuntimeState& State)
+	UPrimitiveComponent* ResolveInteractionExtentSource(FPartRuntimeState& State)
 	{
-		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
-		if (!Part || State.bDragPreviewActive)
+		return State.bInteractionCollisionReady
+			? State.InteractionVisual.Get()
+			: State.Part.Get();
+	}
+
+	EWacomBattleEnemyPartOutlineState ResolveDesiredOutlineState(
+		const FPartRuntimeState& State)
+	{
+		if (!State.bBound || State.bDestroyed || !State.bInteractionVisualResolved)
 		{
-			ApplyVisualScale(State, 1.0f);
+			return EWacomBattleEnemyPartOutlineState::None;
+		}
+		if (State.bDragPreviewActive
+			&& State.DragPreviewState == EWacomFirstPersonCardDragTargetFeedbackState::Invalid)
+		{
+			return EWacomBattleEnemyPartOutlineState::None;
+		}
+		if (State.bHoverActive && (!State.bTargetSelectionActive || State.bTargetable))
+		{
+			return EWacomBattleEnemyPartOutlineState::Hovered;
+		}
+		return State.bTargetSelectionActive && State.bTargetable
+			? EWacomBattleEnemyPartOutlineState::Selectable
+			: EWacomBattleEnemyPartOutlineState::None;
+	}
+
+	void RefreshOutlineFeedback(
+		UWacomBattleEnemySceneRuntimeComponent& Owner,
+		FPartRuntimeState& State)
+	{
+		if (!State.OutlineFeedback)
+		{
 			return;
 		}
-		if (State.bHoverActive)
+		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
+		const EWacomBattleEnemyPartOutlineState Desired = ResolveDesiredOutlineState(State);
+		State.OutlineFeedback->BeginOrUpdate(
+			Owner,
+			State.InteractionVisual.Get(),
+			Part ? Part->ResolveTargetPreviewStyle() : nullptr,
+			Desired);
+		if (Desired != EWacomBattleEnemyPartOutlineState::None
+			&& State.OutlineFeedback->GetDebugView().bVisible)
 		{
-			ApplyVisualScale(State, Part->HoverProbeScale);
-		}
-		else
-		{
-			ApplyVisualScale(State, 1.0f);
+			Owner.SetComponentTickEnabled(true);
 		}
 	}
 
@@ -317,7 +480,7 @@ namespace
 		State.TargetPreviewFeedback->BeginOrUpdate(
 			Owner,
 			ResolveImpactAnchor(State),
-			Part,
+			ResolveInteractionExtentSource(State),
 			Style,
 			State.TargetPreviewPlayback->GetView(),
 			FlashScale);
@@ -366,7 +529,7 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 	Host->GetComponents(AllParts);
 	AllParts.RemoveAll([](const UWacomBattleEnemyPartComponent* Part)
 	{
-		return !IsValid(Part) || Part->GetOwner() == nullptr;
+		return !IsValid(Part) || !Part->IsRegistered() || Part->GetOwner() == nullptr;
 	});
 	AllParts.Sort([](const UWacomBattleEnemyPartComponent& Left, const UWacomBattleEnemyPartComponent& Right)
 	{
@@ -431,12 +594,16 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 		TArray<UWacomBattleEnemyPartFlipbookLayerComponent*> DirectFlipbooks =
 			AllFlipbooks.FilterByPredicate([Part](const UWacomBattleEnemyPartFlipbookLayerComponent* Layer)
 			{
-				return IsValid(Layer) && Layer->GetAttachParent() == Part;
+				return IsValid(Layer)
+					&& Layer->IsRegistered()
+					&& Layer->GetAttachParent() == Part;
 			});
 		TArray<UWacomBattleEnemyPartSpriteLayerComponent*> DirectSprites =
 			AllSprites.FilterByPredicate([Part](const UWacomBattleEnemyPartSpriteLayerComponent* Layer)
 			{
-				return IsValid(Layer) && Layer->GetAttachParent() == Part;
+				return IsValid(Layer)
+					&& Layer->IsRegistered()
+					&& Layer->GetAttachParent() == Part;
 			});
 		TArray<UWacomBattleEnemyPartImpactAnchorComponent*> DirectAnchors =
 			AllAnchors.FilterByPredicate([Part](const UWacomBattleEnemyPartImpactAnchorComponent* Anchor)
@@ -462,6 +629,18 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 			{
 				State.Flipbooks.Add(MoveTemp(PreviousFlipbooks[ExistingIndex]));
 				PreviousFlipbooks.RemoveAt(ExistingIndex);
+				if (!State.bBound)
+				{
+					FFlipbookAuthoredState& Authored = State.Flipbooks.Last();
+					Authored.Flipbook.Reset(Layer->GetFlipbook());
+					Authored.PlayRate = Layer->GetPlayRate();
+					Authored.PlaybackPosition = FMath::Max(
+						0.0f, Layer->InitialPlaybackPositionSeconds);
+					Authored.bLooping = Layer->IsLooping();
+					Authored.bPlaying = Layer->IsPlaying();
+					Authored.bVisible = Layer->IsVisible();
+					Authored.RelativeScale = Layer->GetRelativeScale3D();
+				}
 			}
 			else
 			{
@@ -489,6 +668,13 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 			{
 				State.Sprites.Add(MoveTemp(PreviousSprites[ExistingIndex]));
 				PreviousSprites.RemoveAt(ExistingIndex);
+				if (!State.bBound)
+				{
+					FSpriteAuthoredState& Authored = State.Sprites.Last();
+					Authored.Sprite.Reset(Layer->GetSprite());
+					Authored.bVisible = Layer->IsVisible();
+					Authored.RelativeScale = Layer->GetRelativeScale3D();
+				}
 			}
 			else
 			{
@@ -502,6 +688,11 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 		}
 		State.ImpactAnchor = DirectAnchors.IsEmpty() ? nullptr : DirectAnchors[0];
 		State.ImpactAnchorCount = DirectAnchors.Num();
+		UPrimitiveComponent* PreviousInteractionVisual = State.InteractionVisual.Get();
+		ResolveInteractionVisual(State);
+		bTopologyChanged |= PreviousInteractionVisual != State.InteractionVisual.Get();
+		RefreshInteractionCollision(State, Impl->bRuntimeRetired);
+		RefreshOutlineFeedback(*this, State);
 		Impl->Parts.Add(MoveTemp(State));
 	}
 
@@ -511,6 +702,7 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 		{
 			Removed.ActionPlayback->Cancel(false);
 		}
+		ClearInteractionCollisionConfiguration(Removed);
 		ResetFeedbackControllers(Removed, true);
 	}
 	if (bTopologyChanged)
@@ -570,6 +762,7 @@ void UWacomBattleEnemySceneRuntimeComponent::InitializeRuntimeSceneBinding(
 bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 	UWacomBattleEnemyPartComponent& Part,
 	const FEnemyPartSnapshot* SnapshotPart,
+	bool bInTargetSelectionActive,
 	bool bInTargetable,
 	FName InTargetDisabledReason)
 {
@@ -585,7 +778,9 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 			|| State->CurrentInitiative != 0
 			|| !State->CurrentIntentId.IsNone()
 			|| State->bDestroyed;
-		const bool bTargetableChanged = State->bTargetable || !State->TargetDisabledReason.IsNone();
+		const bool bTargetableChanged = State->bTargetSelectionActive
+			|| State->bTargetable
+			|| !State->TargetDisabledReason.IsNone();
 		State->bBound = false;
 		State->PartInstanceId.Invalidate();
 		State->CurrentInitiative = 0;
@@ -593,11 +788,11 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 		State->bDestroyed = false;
 		State->bAwaitingDestroyedCue = false;
 		State->bTargetable = false;
+		State->bTargetSelectionActive = false;
 		State->TargetDisabledReason = NAME_None;
 		if (bTargetableChanged)
 		{
 			++State->TargetableApplyCount;
-			RefreshPersistentScale(*State);
 		}
 		if (bFactsChanged)
 		{
@@ -608,6 +803,8 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 			++State->SnapshotNoOpCount;
 		}
 		RefreshTargetPreview(*this, *State);
+		RefreshInteractionCollision(*State, Impl->bRuntimeRetired);
+		RefreshOutlineFeedback(*this, *State);
 		return false;
 	}
 
@@ -647,14 +844,15 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 	State->bBound = bNewBound;
 	const bool bEffectiveTargetable = bNewBound && bInTargetable;
 	const FName EffectiveReason = bNewBound ? InTargetDisabledReason : NAME_None;
-	const bool bTargetableChanged = State->bTargetable != bEffectiveTargetable
+	const bool bTargetableChanged = State->bTargetSelectionActive != bInTargetSelectionActive
+		|| State->bTargetable != bEffectiveTargetable
 		|| State->TargetDisabledReason != EffectiveReason;
+	State->bTargetSelectionActive = bInTargetSelectionActive;
 	State->bTargetable = bEffectiveTargetable;
 	State->TargetDisabledReason = EffectiveReason;
 	if (bTargetableChanged)
 	{
 		++State->TargetableApplyCount;
-		RefreshPersistentScale(*State);
 	}
 	if (bFactsChanged)
 	{
@@ -665,6 +863,8 @@ bool UWacomBattleEnemySceneRuntimeComponent::ApplyPartSnapshotFacts(
 		++State->SnapshotNoOpCount;
 	}
 	RefreshTargetPreview(*this, *State);
+	RefreshInteractionCollision(*State, Impl->bRuntimeRetired);
+	RefreshOutlineFeedback(*this, *State);
 	return State->bBound;
 }
 
@@ -680,6 +880,7 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartBattleBinding(
 	State->bBound = false;
 	State->bRegisteredWithHUD = false;
 	State->bTargetable = false;
+	State->bTargetSelectionActive = false;
 	State->TargetDisabledReason = NAME_None;
 	if (bClearRuntimeFacts)
 	{
@@ -689,7 +890,8 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartBattleBinding(
 		State->bDestroyed = false;
 	}
 	ResetFeedbackControllers(*State, false);
-	RefreshPersistentScale(*State);
+	RefreshInteractionCollision(*State, Impl->bRuntimeRetired);
+	RefreshOutlineFeedback(*this, *State);
 }
 
 void UWacomBattleEnemySceneRuntimeComponent::ClearAllBattleBindings(bool bClearRuntimeFacts)
@@ -746,8 +948,8 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartTargetable(
 		State->bTargetable = bTargetable;
 		State->TargetDisabledReason = DisabledReason;
 		++State->TargetableApplyCount;
-		RefreshPersistentScale(*State);
 		RefreshTargetPreview(*this, *State);
+		RefreshOutlineFeedback(*this, *State);
 	}
 }
 
@@ -777,6 +979,7 @@ FWacomBattleEnemyPartRuntimeDebugView UWacomBattleEnemySceneRuntimeComponent::Bu
 	FWacomBattleEnemyPartRuntimeDebugView View;
 	View.PartSlotId = Part.PartSlotId;
 	View.PartId = Part.PartId;
+	View.InteractionVisualLayerId = Part.InteractionVisualLayerId;
 	const FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr;
 	if (!State)
 	{
@@ -793,6 +996,17 @@ FWacomBattleEnemyPartRuntimeDebugView UWacomBattleEnemySceneRuntimeComponent::Bu
 	View.FlipbookLayerCount = State->Flipbooks.Num();
 	View.SpriteLayerCount = State->Sprites.Num();
 	View.ImpactAnchorCount = State->ImpactAnchorCount;
+	View.bInteractionVisualResolved = State->bInteractionVisualResolved;
+	View.bInteractionCollisionReady = State->bInteractionCollisionReady;
+	View.bUsingBoxCollisionFallback = State->bUsingBoxCollisionFallback;
+	View.OutlineState = State->OutlineFeedback
+		? State->OutlineFeedback->GetDebugView().State
+		: FName(TEXT("None"));
+	View.bOutlineComponentCreated = State->OutlineFeedback
+		&& State->OutlineFeedback->GetDebugView().bComponentCreated;
+	View.OutlineComponentCreateCount = State->OutlineFeedback
+		? State->OutlineFeedback->GetDebugView().ComponentCreateCount
+		: 0;
 	View.ActionPlaybackCount = State->ActionPlayback
 		? State->ActionPlayback->GetView().PlaybackCount
 		: 0;
@@ -1109,7 +1323,7 @@ void UWacomBattleEnemySceneRuntimeComponent::PlayPartPresentationCue(
 		State->ImpactFeedback->PlayAcceptedCue(
 			*this,
 			ResolveImpactAnchor(*State),
-			&Part,
+			ResolveInteractionExtentSource(*State),
 			Part.ResolveImpactStyle(),
 			CueView.Kind,
 			EffectiveCue,
@@ -1149,7 +1363,7 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartPresentation(
 	{
 		ResetFeedbackControllers(*State, false);
 		State->HoverReason = Reason;
-		RefreshPersistentScale(*State);
+		RefreshOutlineFeedback(*this, *State);
 	}
 }
 
@@ -1171,8 +1385,8 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartDragTargetPreviewState(
 	}
 	State->DragPreviewState = PreviewState;
 	State->bDragPreviewActive = bNewActive;
-	RefreshPersistentScale(*State);
 	RefreshTargetPreview(*this, *State);
+	RefreshOutlineFeedback(*this, *State);
 }
 
 void UWacomBattleEnemySceneRuntimeComponent::ClearPartDragTargetPreviewState(
@@ -1187,8 +1401,8 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartDragTargetPreviewState(
 		}
 		State->bDragPreviewActive = false;
 		State->DragPreviewState = EWacomFirstPersonCardDragTargetFeedbackState::None;
-		RefreshPersistentScale(*State);
 		RefreshTargetPreview(*this, *State);
+		RefreshOutlineFeedback(*this, *State);
 	}
 }
 
@@ -1212,7 +1426,7 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartHoverProbeState(
 		}
 		State->bHoverActive = true;
 		State->HoverReason = EffectiveReason;
-		RefreshPersistentScale(*State);
+		RefreshOutlineFeedback(*this, *State);
 	}
 }
 
@@ -1229,7 +1443,7 @@ void UWacomBattleEnemySceneRuntimeComponent::ClearPartHoverProbeState(
 		}
 		State->bHoverActive = false;
 		State->HoverReason = Reason;
-		RefreshPersistentScale(*State);
+		RefreshOutlineFeedback(*this, *State);
 	}
 }
 
@@ -1246,7 +1460,6 @@ void UWacomBattleEnemySceneRuntimeComponent::ResetRuntimeScenePresentationForBat
 		if (UWacomBattleEnemyPartComponent* Part = State.Part.Get())
 		{
 			RestorePartAuthoredVisualState(*Part);
-			Part->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 			for (FFlipbookAuthoredState& Layer : State.Flipbooks)
 			{
 				if (auto* Component = Layer.Component.Get()) Component->SetVisibility(Layer.bVisible, true);
@@ -1257,6 +1470,8 @@ void UWacomBattleEnemySceneRuntimeComponent::ResetRuntimeScenePresentationForBat
 			}
 		}
 		ResetFeedbackControllers(State, false);
+		RefreshInteractionCollision(State, Impl->bRuntimeRetired);
+		RefreshOutlineFeedback(*this, State);
 	}
 }
 
@@ -1274,9 +1489,10 @@ void UWacomBattleEnemySceneRuntimeComponent::RetireRuntimeEncounterPresentation(
 		State.bBound = false;
 		State.bRegisteredWithHUD = false;
 		State.bTargetable = false;
+		State.bTargetSelectionActive = false;
 		if (UWacomBattleEnemyPartComponent* Part = State.Part.Get())
 		{
-			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			RefreshInteractionCollision(State, true);
 			for (FFlipbookAuthoredState& Layer : State.Flipbooks)
 			{
 				if (auto* Component = Layer.Component.Get()) Component->SetVisibility(false, true);
@@ -1341,7 +1557,7 @@ void UWacomBattleEnemySceneRuntimeComponent::TickComponent(
 				State.TargetPreviewFeedback->BeginOrUpdate(
 					*this,
 					ResolveImpactAnchor(State),
-					Part,
+					ResolveInteractionExtentSource(State),
 					Part->ResolveTargetPreviewStyle(),
 					View,
 					State.TargetPreviewFlashScale);
@@ -1351,6 +1567,10 @@ void UWacomBattleEnemySceneRuntimeComponent::TickComponent(
 				State.TargetPreviewFeedback->FinishNaturally();
 			}
 			bNeedsTick |= View.bActive;
+		}
+		if (State.OutlineFeedback)
+		{
+			bNeedsTick |= State.OutlineFeedback->Tick();
 		}
 	}
 	SetComponentTickEnabled(bNeedsTick);
@@ -1368,6 +1588,7 @@ void UWacomBattleEnemySceneRuntimeComponent::EndPlay(
 		}
 		for (FPartRuntimeState& State : Impl->Parts)
 		{
+			ClearInteractionCollisionConfiguration(State);
 			ResetFeedbackControllers(State, true);
 		}
 		Impl->Parts.Reset();

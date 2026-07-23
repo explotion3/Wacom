@@ -13,6 +13,9 @@
 #include "Engine/SimpleConstructionScript.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Enemies/EnemyPartDefinition.h"
+#include "PaperFlipbook.h"
+#include "PaperSprite.h"
+#include "PhysicsEngine/BodySetup.h"
 
 namespace
 {
@@ -218,6 +221,8 @@ FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(
 			Host.GetEffectiveEnemySlotId(), Part->PartSlotId));
 
 		int32 DirectVisualCount = 0;
+		int32 InteractionLayerCount = 0;
+		UPaperSprite* StableInteractionSprite = nullptr;
 		TMap<FName, int32> PartLayerCounts;
 		for (UWacomBattleEnemyPartFlipbookLayerComponent* Layer : Flipbooks)
 		{
@@ -236,6 +241,17 @@ FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(
 			{
 				Report.EmptyVisualPartSlotIds.AddUnique(Part->PartSlotId);
 			}
+			if (Layer->LayerId == Part->InteractionVisualLayerId)
+			{
+				++InteractionLayerCount;
+				StableInteractionSprite = Layer->GetFlipbook()
+					? Layer->GetFlipbook()->GetSpriteAtFrame(0)
+					: nullptr;
+			}
+			if (Layer->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				Report.UnexpectedVisualCollisionPartSlotIds.AddUnique(Part->PartSlotId);
+			}
 		}
 		for (UWacomBattleEnemyPartSpriteLayerComponent* Layer : Sprites)
 		{
@@ -250,10 +266,47 @@ FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(
 			{
 				Report.EmptyVisualPartSlotIds.AddUnique(Part->PartSlotId);
 			}
+			if (Layer->LayerId == Part->InteractionVisualLayerId)
+			{
+				++InteractionLayerCount;
+				StableInteractionSprite = Layer->GetSprite();
+			}
+			if (Layer->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				Report.UnexpectedVisualCollisionPartSlotIds.AddUnique(Part->PartSlotId);
+			}
 		}
 		if (DirectVisualCount == 0)
 		{
 			Report.MissingVisualLayerPartSlotIds.AddUnique(Part->PartSlotId);
+		}
+		Report.InteractionVisualLayerIds.Add(Part->InteractionVisualLayerId);
+		if (Part->InteractionVisualLayerId.IsNone() || InteractionLayerCount == 0)
+		{
+			Report.MissingInteractionLayerPartSlotIds.AddUnique(Part->PartSlotId);
+		}
+		else if (InteractionLayerCount > 1)
+		{
+			Report.AmbiguousInteractionLayerPartSlotIds.AddUnique(Part->PartSlotId);
+		}
+		if (InteractionLayerCount == 1)
+		{
+			const UBodySetup* BodySetup = StableInteractionSprite
+				? StableInteractionSprite->BodySetup
+				: nullptr;
+			if (!StableInteractionSprite
+				|| StableInteractionSprite->GetSpriteCollisionDomain()
+					!= ESpriteCollisionMode::Use3DPhysics
+				|| !BodySetup
+				|| BodySetup->AggGeom.GetElementCount() <= 0
+				|| !FMath::IsNearlyEqual(
+					StableInteractionSprite->GetCollisionThickness(),
+					12.0f,
+					0.1f))
+			{
+				Report.InteractionCollisionNotReadyPartSlotIds.AddUnique(
+					Part->PartSlotId);
+			}
 		}
 		int32 DirectAnchorCount = 0;
 		for (const UWacomBattleEnemyPartImpactAnchorComponent* Anchor : Anchors)
@@ -370,6 +423,10 @@ FWacomBattleSceneEnemyHostAuthoringEvaluator::Build(
 		&& Report.IdentityAudit.DuplicatePartSlotIds.IsEmpty()
 		&& Report.IdentityAudit.PartDefinitionMismatchSlotIds.IsEmpty();
 	const bool bHierarchyReady = Report.MissingVisualLayerPartSlotIds.IsEmpty()
+		&& Report.MissingInteractionLayerPartSlotIds.IsEmpty()
+		&& Report.AmbiguousInteractionLayerPartSlotIds.IsEmpty()
+		&& Report.InteractionCollisionNotReadyPartSlotIds.IsEmpty()
+		&& Report.UnexpectedVisualCollisionPartSlotIds.IsEmpty()
 		&& Report.DuplicateLayerIds.IsEmpty()
 		&& Report.InvalidParentComponentNames.IsEmpty()
 		&& Report.MultipleImpactAnchorPartSlotIds.IsEmpty()

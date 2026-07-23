@@ -39,6 +39,7 @@ public:
 	bool ApplyPartSnapshotFacts(
 		UWacomBattleEnemyPartComponent& Part,
 		const FEnemyPartSnapshot* SnapshotPart,
+		bool bTargetSelectionActive,
 		bool bTargetable,
 		FName TargetDisabledReason);
 	void ClearPartBattleBinding(UWacomBattleEnemyPartComponent& Part, bool bClearRuntimeFacts = true);

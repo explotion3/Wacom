@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Interaction/WacomInteractionTargetProvider.h"
 #include "PaperFlipbookComponent.h"
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
@@ -10,6 +11,8 @@
 #include "WacomBattleEnemyPartFlipbookLayerComponent.generated.h"
 
 class UPaperFlipbook;
+class UPaperSprite;
+class UWacomBattleEnemyPartComponent;
 
 /**
  * 敌人部位可直接在 Host Blueprint 视口中制作的 Flipbook 层。
@@ -19,7 +22,8 @@ class UPaperFlipbook;
  */
 UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent,
 	ToolTip = "敌人部位的真实 Flipbook 视觉层。必须直接挂在 Enemy Part 组件下，可在 Host Blueprint 视口直接调整。"))
-class WACOMAPP_API UWacomBattleEnemyPartFlipbookLayerComponent : public UPaperFlipbookComponent
+class WACOMAPP_API UWacomBattleEnemyPartFlipbookLayerComponent : public UPaperFlipbookComponent,
+	public IWacomInteractionTargetProvider
 {
 	GENERATED_BODY()
 
@@ -42,6 +46,18 @@ public:
 		meta = (ToolTip = "破损终态 Flipbook 播放倍率。必须为有限正数；非循环播放并停在最后一帧。"))
 	float DestroyedPlayRate = 1.0f;
 
+	/** Runtime-only：把本层绑定为 Part 的正式交互层，并固定 Idle 第一帧碰撞源。 */
+	void ConfigureInteractionCollision(
+		UWacomBattleEnemyPartComponent* InPart,
+		UPaperSprite* InStableCollisionSprite,
+		bool bEnableCollision);
+	void ClearInteractionCollision();
+	bool IsInteractionCollisionReady() const;
+	UPaperSprite* GetStableInteractionCollisionSprite() const;
+
+	virtual FWacomInteractionTargetHandle BuildWorldTargetHandle() const override;
+	virtual class UBodySetup* GetBodySetup() override;
+
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
@@ -49,4 +65,11 @@ public:
 protected:
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleEnemyPartComponent> InteractionPart = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPaperSprite> StableInteractionCollisionSprite = nullptr;
 };

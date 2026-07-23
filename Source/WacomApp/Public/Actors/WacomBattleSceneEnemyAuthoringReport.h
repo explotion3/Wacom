@@ -54,6 +54,11 @@ struct WACOMAPP_API FWacomBattleSceneEnemyHostAuthoringReport
 	TArray<FName> StableSceneTargetIds;
 	TArray<FName> InvalidDefinitionPartSlotIds;
 	TArray<FName> MissingVisualLayerPartSlotIds;
+	TArray<FName> MissingInteractionLayerPartSlotIds;
+	TArray<FName> AmbiguousInteractionLayerPartSlotIds;
+	TArray<FName> InteractionCollisionNotReadyPartSlotIds;
+	TArray<FName> UnexpectedVisualCollisionPartSlotIds;
+	TArray<FName> InteractionVisualLayerIds;
 	TArray<FName> DuplicateLayerIds;
 	TArray<FString> InvalidParentComponentNames;
 	TArray<FName> MultipleImpactAnchorPartSlotIds;

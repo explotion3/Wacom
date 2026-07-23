@@ -1,0 +1,74 @@
+// Copyright Wacom. All Rights Reserved.
+// Atlas-safe source-pixel dilation for the enemy interaction outline proxy.
+
+Function SelfContained WacomBattleEnemyPartInteractionOutline_MapSample(
+    in float2 sourceLocalUV,
+    in float2 sourceInvPixelSize,
+    in float2 atlasUVOrigin,
+    in float2 atlasUVAxisX,
+    in float2 atlasUVAxisY,
+    out float2 atlasUV,
+    out float insideMask)
+{
+    float2 halfSourcePixel = sourceInvPixelSize * 0.5;
+    float2 safeSourceUV = clamp(
+        sourceLocalUV,
+        halfSourcePixel,
+        float2(1.0, 1.0) - halfSourcePixel);
+    float2 aboveMinimum = step(float2(0.0, 0.0), sourceLocalUV);
+    float2 belowMaximum = step(sourceLocalUV, float2(1.0, 1.0));
+    insideMask = aboveMinimum.x * aboveMinimum.y
+        * belowMaximum.x * belowMaximum.y;
+    atlasUV = atlasUVOrigin
+        + safeSourceUV.x * atlasUVAxisX
+        + safeSourceUV.y * atlasUVAxisY;
+}
+
+Function SelfContained WacomBattleEnemyPartInteractionOutline_ResolveRings(
+    in float centerAlpha,
+    in float innerLeftAlpha,
+    in float innerRightAlpha,
+    in float innerTopAlpha,
+    in float innerBottomAlpha,
+    in float innerTopLeftAlpha,
+    in float innerTopRightAlpha,
+    in float innerBottomLeftAlpha,
+    in float innerBottomRightAlpha,
+    in float outerLeftAlpha,
+    in float outerRightAlpha,
+    in float outerTopAlpha,
+    in float outerBottomAlpha,
+    in float outerTopLeftAlpha,
+    in float outerTopRightAlpha,
+    in float outerBottomLeftAlpha,
+    in float outerBottomRightAlpha,
+    in float alphaThreshold,
+    in float outlineThicknessPixels,
+    out float innerRingAlpha,
+    out float outerRingAlpha)
+{
+    float centerMask = step(alphaThreshold, centerAlpha);
+    float dilatedOnePixelAlpha = centerMask;
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerLeftAlpha));
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerRightAlpha));
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerTopAlpha));
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerBottomAlpha));
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerTopLeftAlpha));
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerTopRightAlpha));
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerBottomLeftAlpha));
+    dilatedOnePixelAlpha = max(dilatedOnePixelAlpha, step(alphaThreshold, innerBottomRightAlpha));
+
+    float dilatedTwoPixelAlpha = dilatedOnePixelAlpha;
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerLeftAlpha));
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerRightAlpha));
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerTopAlpha));
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerBottomAlpha));
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerTopLeftAlpha));
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerTopRightAlpha));
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerBottomLeftAlpha));
+    dilatedTwoPixelAlpha = max(dilatedTwoPixelAlpha, step(alphaThreshold, outerBottomRightAlpha));
+
+    innerRingAlpha = saturate(dilatedOnePixelAlpha - centerMask);
+    outerRingAlpha = saturate(dilatedTwoPixelAlpha - dilatedOnePixelAlpha)
+        * step(1.5, outlineThicknessPixels);
+}

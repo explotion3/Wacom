@@ -107,9 +107,9 @@ KeyChest 是当前第一条 Run world card interaction 验证入口。普通 E �
 
 BattleTrigger 仍是 Encounter 与关卡 Host 映射的唯一入口：`EncounterDefinition.EnemySlots` 生成规则初始化，`SceneEnemyHostSlots` 按同一 `EnemySlotId` 顺序绑定 `AWacomBattleEnemyActor`。正式 Trigger 必须覆盖每个有效槽位，不能重复 Host，不能遗漏或添加 Encounter 外槽位；Details 同步按钮只补齐 slot 列表，不猜 Host。
 
-敌人场景目标只有一个制作结构：Host Actor 下直接放 typed Part Component，每个 Part 下直接放 typed Sprite/Flipbook Layer 与 ImpactAnchor。`PartSlotId` 对应 Definition 槽位，`PartId` 由定义派生；Component Transform、`BoxExtent` 和真实 Paper2D Component 属性是唯一制作真相。禁止 ChildActor、部位 Actor、生成 VisualLayers、Host 整体图和按名称/数组位置推断归属。
+敌人场景目标只有一个制作结构：Host Actor 下直接放 typed Part Component，每个 Part 下直接放 typed Sprite/Flipbook Layer 与 ImpactAnchor。`PartSlotId` 对应 Definition 槽位，`PartId` 由定义派生；Component Transform 和规则 identity 属于 Part，`InteractionVisualLayerId` 精确指定唯一正式交互视觉层。该层 authored Idle Sprite 或 Idle Flipbook 第一帧的 Paper2D 3D ShrinkWrapped BodySetup 是稳定命中真相；`BoxExtent` 仅保留配置故障 fallback。禁止 ChildActor、部位 Actor、生成 VisualLayers、Host 整体图和按名称/数组位置推断归属。
 
-`FWacomBattleSceneEnemyHostAuthoring` 在 Editor 中显式同步缺失 Part，并创建默认 `Visual_Main` 与 ImpactAnchor。它保留所有已有 Transform、HitBounds、Layer、资源和 Anchor，surplus 只报告不删除。Validator/Report 永远只读；Blueprint viewport、Compile/Save/Reload 后看到的组件就是运行时使用的组件。
+`FWacomBattleSceneEnemyHostAuthoring` 在 Editor 中显式同步缺失 Part，并创建默认 `Visual_Main`、匹配的 `InteractionVisualLayerId` 与 ImpactAnchor。它保留所有已有 Transform、兼容 BoxExtent、Layer、资源和 Anchor，surplus 只报告不删除。Validator/Report 永远只读，并拒绝 interaction ID 缺失/歧义、稳定首帧无 3D ShrinkWrapped BodySetup、非 `12cm` thickness 或 authored visual 带碰撞；Blueprint viewport、Compile/Save/Reload 后看到的组件就是运行时使用的组件。
 
 Host 的 `UWacomBattleEnemySceneRuntimeComponent` 按 typed hierarchy 建立 `FPartRuntimeState`。Topology 只在组件注册、注销、销毁或显式通知时变化；Snapshot 不扫描层级。HUD coordinator 直接登记 `UWacomBattleEnemyPartComponent` 与完整 `EncounterId + EnemySlotId + PartSlotId + PartInstanceId`，不再存在 Bridge/Presentation 双 registry。
 
@@ -117,9 +117,11 @@ HUD 对每个已接收 Snapshot 只构建一次 Scene Enemy sync frame，并将�
 
 Scene Target 的完美释放 / 抵抗提示只消费 `FBattleCardActionPreview`：按稳定部位身份把 Battle 给出的玩家峰值、敌方峰值、比较结果与 `bWillSkipActionDueToStun` 送入 Host Enemy Panel，不得从卡牌 Effect、Intent 资产或卡面文本重算伤害。Enemy Entry 使用金色 Surface、`P > E` / `P ≤ E`、projected 眩晕和变暗加斜线的 Intent 表达；不在 Part 上方显示长文字。失败比较即使没有 Snapshot diff 也需要显示；非目标部位、非攻击意图和没有正伤害 invocation 的部位没有抵抗比较。
 
-射线命中优先从 `HitResult.Component` 查询 `IWacomInteractionTargetProvider`。Part Component 自身提供 `Interaction.Target.Battle.EnemyPart` handle；Actor 级 fallback 不为战斗部位修正错误 identity。first-person drag、普通 click、hover probe、Action Preview 与 TargetConfirmed 都消费同一稳定 handle。
+指定 Sprite/Flipbook Layer 实现 `IWacomInteractionTargetProvider`，但只转发父 Part 构造的 `Interaction.Target.Battle.EnemyPart` handle；`SourceObject`、Encounter/Enemy/Part identity 与 registry ownership 仍属于 Part。Actor 级 fallback 不为战斗部位修正错误 identity，装饰层保持 `NoCollision` 且不能借 Actor fallback 变成 Part。first-person drag、普通 click、hover probe、Action Preview 与 TargetConfirmed 都消费同一稳定 handle。
 
-Action、Destroyed 与反馈全部原地操作 authored 组件：Part Animation Style 精确选择 `LayerId`；Destroyed 切换同一 Sprite/Flipbook Component；Impact/Preview Niagara 生成在 typed Anchor，缺 Anchor 回退 Part 原点。拖出敌人目标卡时，SceneRuntime 将所有合法部位合成为 `Available` 中心标记；具体 Valid/Invalid Hover 在同一复用 Niagara Component 内覆盖它，离开悬浮后恢复 Available。目标可用性不再尝试缩放 Host 或 Visual Layer。普通 Snapshot、相同 Host 设置和未变化 topology 不重置播放进度或组件指针。BattleEnd/source clear/EndPlay 清理动态组件、timer、delegate 与 barrier，但不销毁 authored Visual。
+Battle scene click、hover 与拖卡释放共用同一个二阶段屏幕查询：先用 `Visibility` Line Trace 接受严格 Sprite 轮廓；未命中 Part 时沿同一射线执行默认半径 `8cm` Sphere Sweep。宽松候选必须属于当前 BattleHUD registry，不能位于严格遮挡命中之后；重叠候选按屏幕 ImpactPoint 距离、射线深度和稳定 Part identity 依次排序。宽松区只改善输入容错，不改变描边、VFX、规则合法性或伤害范围。
+
+Action、Destroyed 与反馈全部原地操作 authored 组件：Part Animation Style 精确选择 `LayerId`；Destroyed 切换同一 Sprite/Flipbook Component，但命中继续使用 authored Idle/第一帧的稳定 BodySetup；Impact/Preview Niagara 生成在 typed Anchor，缺 Anchor 回退 Part 原点，尺寸优先读取 interaction visual bounds。拖出敌人目标卡时，SceneRuntime 将所有合法部位合成为 `Available` 中心标记；具体 Valid/Invalid Hover 在同一复用 Niagara Component 内覆盖它，离开悬浮后恢复 Available。合法 TargetSelect 与存活部位悬停使用 interaction visual 下方的 transient padded-quad ring-only 描边；原 Paper2D Component、材质和 scale 不变。代理画布增加最多 `2 source pixels` 的透明留白，C++ 从 Sprite baked XY/UV 解出 Atlas 局部坐标，材质把画布 UV counter-remap 回原源矩形并对每个采样应用 inside mask，禁止采到图集相邻 Sprite。`DShader/Material/World/M_WacomBattleEnemyPartInteractionOutline.dsm` 生成 `/Game/DreamMaterials/World/M_WacomBattleEnemyPartInteractionOutline`：可选态只显示一像素暖金内环，悬停态显示亮金内环与较暗第二像素外环，中心主体 Alpha 恒为零，并用轻微后向深度偏移避免 Paper2D 共面竞争。禁止用 C++ 手工 MaterialExpression 图、原 Sprite 整体缩放、全屏 CustomDepth 后处理或整块 silhouette 作为正式描边。非法与终态不显示。目标可用性不再缩放 Host 或 Visual Layer。普通 Snapshot、相同 Host 设置和未变化 topology 不重置播放进度、命中源或组件指针。BattleEnd/source clear/EndPlay 清理动态组件、描边、timer、delegate 与 barrier，但不销毁 authored Visual。
 
 EnemyPanel 是 Host 的 screen-space 被动视图，不是 world target。Idle 时 `InspectHitTarget` 可以上报完整 Part identity；拖卡、TargetSelect、Resolving 与 BattleEnd 时恢复点击穿透，世界 HitBounds 路由继续有效。详情 coordinator 与面板只消费现有 ViewData，不修改 BattleSession。
 

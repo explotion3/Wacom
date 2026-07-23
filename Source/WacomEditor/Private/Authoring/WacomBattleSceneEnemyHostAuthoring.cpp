@@ -112,6 +112,9 @@ namespace
 		Part->PartSlotId = PartSlotId;
 		Part->SetDerivedPartId(PartId);
 		Part->SetRelativeTransform(FTransform::Identity);
+		const FName MainLayerId = FName(*FString::Printf(
+			TEXT("%s.Main"), *PartSlotId.ToString()));
+		Part->InteractionVisualLayerId = MainLayerId;
 
 		USCS_Node* VisualNode = CreateSCSNode(
 			*SCS,
@@ -132,7 +135,7 @@ namespace
 			Cast<UWacomBattleEnemyPartFlipbookLayerComponent>(VisualNode->ComponentTemplate))
 		{
 			MarkEdited(*Visual);
-			Visual->LayerId = FName(*FString::Printf(TEXT("%s.Main"), *PartSlotId.ToString()));
+			Visual->LayerId = MainLayerId;
 			Visual->SetRelativeTransform(FTransform::Identity);
 		}
 		if (UWacomBattleEnemyPartImpactAnchorComponent* Anchor =
@@ -189,6 +192,9 @@ namespace
 		}
 		Part->PartSlotId = PartSlotId;
 		Part->SetDerivedPartId(PartId);
+		const FName MainLayerId = FName(*FString::Printf(
+			TEXT("%s.Main"), *PartSlotId.ToString()));
+		Part->InteractionVisualLayerId = MainLayerId;
 		UWacomBattleEnemyPartFlipbookLayerComponent* Visual =
 			CreateInstanceComponent<UWacomBattleEnemyPartFlipbookLayerComponent>(
 				Host, *Part, BuildName(TEXT("Visual_Main"), PartSlotId));
@@ -199,7 +205,7 @@ namespace
 		{
 			return nullptr;
 		}
-		Visual->LayerId = FName(*FString::Printf(TEXT("%s.Main"), *PartSlotId.ToString()));
+		Visual->LayerId = MainLayerId;
 		return Part;
 	}
 

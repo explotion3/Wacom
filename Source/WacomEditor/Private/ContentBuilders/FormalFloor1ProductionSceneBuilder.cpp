@@ -517,15 +517,14 @@ namespace
 			const auto ExpectedSpec = MakePartSpec(
 				Seed, ExpectedPart, Index, *ExpectedPlaceholder);
 			if (Templates.Part->PartSlotId != ExpectedPart.PartSlotId
-				|| Templates.Part->PartId != ExpectedPart.PartDef->PartId)
+				|| Templates.Part->PartId != ExpectedPart.PartDef->PartId
+				|| Templates.Part->InteractionVisualLayerId != ExpectedSpec.LayerId)
 			{
 				OutErrors.Add(FString::Printf(
 					TEXT("Enemy Host part identity mismatch: %s"),
 					*ExpectedPart.PartSlotId.ToString()));
 			}
-			if (Templates.Part->GetUnscaledBoxExtent()
-					!= ExpectedSpec.HitBoundsExtent
-				|| Templates.Part->GetRelativeLocation()
+			if (Templates.Part->GetRelativeLocation()
 					!= ExpectedSpec.RelativeLocation)
 			{
 				OutErrors.Add(FString::Printf(

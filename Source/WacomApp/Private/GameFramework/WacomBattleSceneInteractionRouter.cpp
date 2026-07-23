@@ -123,6 +123,12 @@ bool FWacomBattleSceneInteractionRouter::TryProbeInteractionTarget(
 	}
 
 	OutHandle = WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(HitResult);
+	if (!IsBattleEnemyPartWorldTargetHandle(OutHandle)
+		|| !HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(OutHandle))
+	{
+		OutHandle = FWacomInteractionTargetHandle();
+		return false;
+	}
 	if (OutHandle.IsValid())
 	{
 		OutHandle.WorldLocation = HitResult.Location;
@@ -158,6 +164,12 @@ bool FWacomBattleSceneInteractionRouter::TryProbeInteractionTargetAtWidgetPositi
 	}
 
 	OutHandle = WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(HitResult);
+	if (!IsBattleEnemyPartWorldTargetHandle(OutHandle)
+		|| !HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(OutHandle))
+	{
+		OutHandle = FWacomInteractionTargetHandle();
+		return false;
+	}
 	if (OutHandle.IsValid())
 	{
 		OutHandle.WorldLocation = HitResult.Location;

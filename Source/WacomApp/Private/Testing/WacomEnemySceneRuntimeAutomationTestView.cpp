@@ -23,7 +23,9 @@ void FWacomEnemySceneRuntimeAutomationTestView::InitializeBinding(
 bool FWacomEnemySceneRuntimeAutomationTestView::SyncPart(
 	AWacomBattleEnemyActor& Host,
 	UWacomBattleEnemyPartComponent& Part,
-	const FBattleSnapshot& Snapshot)
+	const FBattleSnapshot& Snapshot,
+	bool bTargetSelectionActive,
+	bool bTargetable)
 {
 	UWacomBattleEnemySceneRuntimeComponent* Runtime = Host.GetEnemySceneRuntimeComponent();
 	if (!Runtime)
@@ -44,7 +46,12 @@ bool FWacomEnemySceneRuntimeAutomationTestView::SyncPart(
 		});
 		break;
 	}
-	return Runtime->ApplyPartSnapshotFacts(Part, Match, false, TEXT("Automation"));
+	return Runtime->ApplyPartSnapshotFacts(
+		Part,
+		Match,
+		bTargetSelectionActive,
+		bTargetable,
+		bTargetable ? NAME_None : FName(TEXT("Automation")));
 }
 
 void FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(

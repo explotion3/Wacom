@@ -3,6 +3,9 @@
 #include "Components/WacomBattleEnemyPartFlipbookLayerComponent.h"
 
 #include "Components/WacomBattleEnemyPartComponent.h"
+#include "PaperSprite.h"
+#include "PhysicsEngine/BodySetup.h"
+#include "Types/WacomInteractionTargetTypes.h"
 
 UWacomBattleEnemyPartFlipbookLayerComponent::UWacomBattleEnemyPartFlipbookLayerComponent()
 {
@@ -14,6 +17,77 @@ UWacomBattleEnemyPartFlipbookLayerComponent::UWacomBattleEnemyPartFlipbookLayerC
 	SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetGenerateOverlapEvents(false);
 	SetCastShadow(false);
+}
+
+void UWacomBattleEnemyPartFlipbookLayerComponent::ConfigureInteractionCollision(
+	UWacomBattleEnemyPartComponent* InPart,
+	UPaperSprite* InStableCollisionSprite,
+	bool bEnableCollision)
+{
+	if (!IsRegistered())
+	{
+		InteractionPart = InPart;
+		StableInteractionCollisionSprite = InStableCollisionSprite;
+		return;
+	}
+	SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	InteractionPart = InPart;
+	StableInteractionCollisionSprite = InStableCollisionSprite;
+	RecreatePhysicsState();
+	SetCollisionObjectType(ECC_WorldDynamic);
+	SetCollisionResponseToAllChannels(ECR_Ignore);
+	SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	SetGenerateOverlapEvents(false);
+	SetCollisionEnabled(
+		bEnableCollision && IsInteractionCollisionReady()
+			? ECollisionEnabled::QueryOnly
+			: ECollisionEnabled::NoCollision);
+}
+
+void UWacomBattleEnemyPartFlipbookLayerComponent::ClearInteractionCollision()
+{
+	const bool bCanRecreatePhysics = IsRegistered();
+	if (bCanRecreatePhysics)
+	{
+		SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+	InteractionPart = nullptr;
+	StableInteractionCollisionSprite = nullptr;
+	if (bCanRecreatePhysics)
+	{
+		RecreatePhysicsState();
+	}
+}
+
+bool UWacomBattleEnemyPartFlipbookLayerComponent::IsInteractionCollisionReady() const
+{
+	const UBodySetup* BodySetup = StableInteractionCollisionSprite
+		? StableInteractionCollisionSprite->BodySetup
+		: nullptr;
+	return IsValid(InteractionPart)
+		&& IsValid(StableInteractionCollisionSprite)
+		&& BodySetup
+		&& BodySetup->AggGeom.GetElementCount() > 0;
+}
+
+UPaperSprite* UWacomBattleEnemyPartFlipbookLayerComponent::GetStableInteractionCollisionSprite() const
+{
+	return StableInteractionCollisionSprite;
+}
+
+FWacomInteractionTargetHandle
+UWacomBattleEnemyPartFlipbookLayerComponent::BuildWorldTargetHandle() const
+{
+	return InteractionPart
+		? InteractionPart->BuildWorldTargetHandle()
+		: FWacomInteractionTargetHandle();
+}
+
+UBodySetup* UWacomBattleEnemyPartFlipbookLayerComponent::GetBodySetup()
+{
+	return StableInteractionCollisionSprite && StableInteractionCollisionSprite->BodySetup
+		? StableInteractionCollisionSprite->BodySetup.Get()
+		: Super::GetBodySetup();
 }
 
 void UWacomBattleEnemyPartFlipbookLayerComponent::OnRegister()
@@ -28,11 +102,13 @@ void UWacomBattleEnemyPartFlipbookLayerComponent::OnRegister()
 
 void UWacomBattleEnemyPartFlipbookLayerComponent::OnUnregister()
 {
+	InteractionPart = nullptr;
+	StableInteractionCollisionSprite = nullptr;
+	Super::OnUnregister();
 	if (UWacomBattleEnemyPartComponent* Part = Cast<UWacomBattleEnemyPartComponent>(GetAttachParent()))
 	{
 		Part->NotifyTypedChildTopologyChanged();
 	}
-	Super::OnUnregister();
 }
 
 #if WITH_EDITOR

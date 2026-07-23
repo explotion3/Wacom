@@ -72,6 +72,7 @@ namespace
 	struct FSceneEnemyPartSyncFacts
 	{
 		const FEnemyPartSnapshot* SnapshotPart = nullptr;
+		bool bTargetSelectionActive = false;
 		bool bTargetable = false;
 		FName DisabledReason = NAME_None;
 	};
@@ -102,6 +103,7 @@ namespace
 						Part.PartSlotId);
 					FSceneEnemyPartSyncFacts& Facts = PartsByIdentity.Add(Identity);
 					Facts.SnapshotPart = &Part;
+					Facts.bTargetSelectionActive = Selection.bIsTargetSelecting;
 					if (const FBattleTargetablePartView* const* Targetable =
 						TargetabilityByInstance.Find(Part.InstanceId))
 					{
@@ -489,6 +491,7 @@ void FWacomBattleHUDSceneEnemyTargetCoordinator::SyncWorldTargets(
 		const bool bBound = Scene->ApplyPartSnapshotFacts(
 			*Part,
 			Facts ? Facts->SnapshotPart : nullptr,
+			Facts && Facts->bTargetSelectionActive,
 			Facts && Facts->bTargetable,
 			Facts ? Facts->DisabledReason : NAME_None);
 		if (bBound)

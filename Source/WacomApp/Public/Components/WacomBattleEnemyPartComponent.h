@@ -61,6 +61,27 @@ struct WACOMAPP_API FWacomBattleEnemyPartRuntimeDebugView
 	int32 ImpactAnchorCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName InteractionVisualLayerId = NAME_None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bInteractionVisualResolved = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bInteractionCollisionReady = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bUsingBoxCollisionFallback = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	FName OutlineState = TEXT("None");
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	bool bOutlineComponentCreated = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
+	int32 OutlineComponentCreateCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	int32 ActionPlaybackCount = 0;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
@@ -102,13 +123,14 @@ struct WACOMAPP_API FWacomBattleEnemyPartRuntimeDebugView
 };
 
 /**
- * 敌人场景部位的唯一制作与命中组件。
+ * 敌人场景部位的唯一身份与运行时所有者组件。
  *
- * 组件 Transform 是部位位置真相，BoxExtent 是命中范围真相。视觉层与 ImpactAnchor
- * 必须作为此组件的直接子组件；运行时身份和反馈由 Host 的 EnemySceneRuntime 管理。
+ * 组件 Transform 是部位位置真相；InteractionVisualLayerId 指定的 typed visual layer
+ * 提供正式精灵轮廓命中。BoxExtent 仅在正式碰撞源缺失时作为故障 fallback。视觉层与
+ * ImpactAnchor 必须作为此组件的直接子组件；运行时身份和反馈由 Host runtime 管理。
  */
 UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent,
-	ToolTip = "敌人场景部位。Transform 与 BoxExtent 可在 Host Blueprint 视口直接制作，并作为唯一运行时命中目标。"))
+	ToolTip = "敌人场景部位身份组件。Transform 与规则身份属于 Part；正式命中由 InteractionVisualLayerId 指定的 typed visual layer 提供，BoxExtent 仅作故障兜底。"))
 class WACOMAPP_API UWacomBattleEnemyPartComponent : public UBoxComponent,
 	public IWacomInteractionTargetProvider
 {
@@ -120,6 +142,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
 		meta = (ToolTip = "Host 内稳定部位槽位 ID，例如 Body、Head、Left。必须对应 EnemyDefinition.Parts[].PartSlotId。"))
 	FName PartSlotId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Interaction",
+		meta = (ToolTip = "本部位唯一正式交互视觉层 ID。运行时只在 Part 的直接 typed Sprite/Flipbook 子组件中精确解析；该层的 authored Idle Sprite 或 Idle Flipbook 第一帧提供稳定轮廓碰撞。"))
+	FName InteractionVisualLayerId = TEXT("Main");
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Identity",
 		meta = (ToolTip = "由 EnemyDefinition 对应 PartDefinition 派生的只读 PartId；请填写 PartSlotId 后使用 Host Details 同步。"))
@@ -148,10 +174,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback|Target Preview",
 		meta = (ToolTip = "本部位拖卡目标预演 Style override。为空时使用 Host DefaultTargetPreviewStyle。"))
 	TObjectPtr<UWacomBattleEnemyPartTargetPreviewStyle> TargetPreviewStyleOverride = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
-		meta = (ToolTip = "光标悬停部位时的整体视觉缩放倍率。建议 1.0–1.15；只影响表现。"))
-	float HoverProbeScale = 1.04f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Feedback",
 		meta = (ToolTip = "确认、伤害和破坏 Cue 的默认保持时间，单位秒；建议 0.05–0.5 秒。"))

@@ -149,6 +149,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Battle Debug", meta = (ToolTip = "开启后，战斗场景目标点击路由会输出 cursor trace 和句柄转发日志。默认关闭，不显示屏幕调试输出。"))
 	bool bLogBattleSceneTargetClickRouting = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Battle Targeting",
+		meta = (ToolTip = "精灵严格轮廓 Line Trace 未命中部位时，click、hover 与拖卡共同使用的输入容错 Sphere Sweep 半径，单位：厘米。默认 8cm；只扩大输入容错，不改变描边、VFX、伤害或 Battle 合法性。"))
+	float BattleEnemyPartLenientSweepRadiusCentimeters = 8.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Input|Run World Target", meta = (ToolTip = "开启后，探索期会低频 probe 鼠标下方的 Run World Target，并播放轻量预览。不会提交 Run 规则或替代 E 交互。"))
 	bool bEnableRunWorldTargetProbePreview = true;
 
@@ -365,6 +369,9 @@ protected:
 	virtual bool BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const;
 	virtual bool BuildBattleSceneInteractionTargetHitResultAtWidgetPosition(
 		const FVector2D& WidgetPosition,
+		FHitResult& OutHitResult) const;
+	bool BuildBattleSceneInteractionTargetHitResultAtScreenPosition(
+		const FVector2D& PixelPosition,
 		FHitResult& OutHitResult) const;
 	virtual bool BuildRunSceneClickHitResult(FHitResult& OutHitResult) const;
 	virtual bool BuildRunSceneInteractionTargetHitResultAtWidgetPosition(

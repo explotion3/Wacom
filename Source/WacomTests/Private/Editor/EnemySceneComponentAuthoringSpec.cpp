@@ -15,7 +15,10 @@
 #include "EngineUtils.h"
 #include "Misc/ScopeExit.h"
 #include "PaperFlipbook.h"
+#include "PaperSprite.h"
+#include "PhysicsEngine/BodySetup.h"
 #include "UObject/StrongObjectPtr.h"
+#include "UObject/UnrealType.h"
 
 namespace WacomEnemySceneComponentAuthoringSpec
 {
@@ -60,6 +63,36 @@ namespace WacomEnemySceneComponentAuthoringSpec
 			Slot.PartDef = Definition;
 		}
 		return Fixture;
+	}
+
+	UPaperFlipbook* MakeInteractionReadyFlipbook(UObject& Outer)
+	{
+		UPaperSprite* Sprite = NewObject<UPaperSprite>(&Outer, NAME_None, RF_Transient);
+		UBodySetup* BodySetup = NewObject<UBodySetup>(Sprite, NAME_None, RF_Transient);
+		BodySetup->AggGeom.BoxElems.Add(FKBoxElem(64.0f, 12.0f, 64.0f));
+		Sprite->BodySetup = BodySetup;
+		if (FByteProperty* CollisionDomain = FindFProperty<FByteProperty>(
+			UPaperSprite::StaticClass(), TEXT("SpriteCollisionDomain")))
+		{
+			CollisionDomain->SetPropertyValue_InContainer(
+				Sprite,
+				static_cast<uint8>(ESpriteCollisionMode::Use3DPhysics));
+		}
+		if (FFloatProperty* CollisionThickness = FindFProperty<FFloatProperty>(
+			UPaperSprite::StaticClass(), TEXT("CollisionThickness")))
+		{
+			CollisionThickness->SetPropertyValue_InContainer(Sprite, 12.0f);
+		}
+
+		UPaperFlipbook* Flipbook = NewObject<UPaperFlipbook>(
+			&Outer,
+			NAME_None,
+			RF_Transient);
+		FScopedFlipbookMutator Mutator(Flipbook);
+		FPaperFlipbookKeyFrame& KeyFrame = Mutator.KeyFrames.AddDefaulted_GetRef();
+		KeyFrame.Sprite = Sprite;
+		KeyFrame.FrameRun = 1;
+		return Flipbook;
 	}
 }
 
@@ -120,7 +153,7 @@ bool FWacomEnemySceneComponentAuthoringSyncSpec::RunTest(const FString& /*Parame
 		{
 			if (Layer && Layer->GetAttachParent() == Part)
 			{
-				Layer->SetFlipbook(NewObject<UPaperFlipbook>(Host, NAME_None, RF_Transient));
+				Layer->SetFlipbook(MakeInteractionReadyFlipbook(*Host));
 			}
 		}
 	}

@@ -29,6 +29,42 @@ public:
 		meta = (ToolTip = "目标预演 Sprite Renderer 使用的材质实例。材质负责有效/无效像素框配色、线宽和辉光。"))
 	TObjectPtr<UMaterialInterface> PreviewMaterialInstance = nullptr;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ToolTip = "敌人交互描边 padded-quad 代理使用的 ring-only Alpha 材质。为空时只关闭描边，不影响精灵轮廓命中、Niagara 预演或命令提交。"))
+	TObjectPtr<UMaterialInterface> OutlineMaterial = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ToolTip = "目标选择中合法但未悬停部位的暖金色描边颜色。该值作为 Unlit Emissive 线性颜色使用，推荐各通道不超过 1，避免曝光后洗白。"))
+	FLinearColor SelectableOutlineColor = FLinearColor(0.45f, 0.16f, 0.015f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ClampMin = "0.0", ClampMax = "2.0", ToolTip = "合法但未悬停描边向外扩张的源纹理像素数。合法范围 0–2，默认 1 source pixel；双环 shader 最多支持 2，只影响表现。"))
+	float SelectableOutlineThicknessSourcePixels = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", ToolTip = "合法但未悬停描边 Alpha。合法范围 0–1，默认 0.55。"))
+	float SelectableOutlineAlpha = 0.55f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ToolTip = "Idle 存活悬停或目标选择中合法悬停部位的亮金色描边颜色。该值作为 Unlit Emissive 线性颜色使用，推荐各通道不超过 1，避免曝光后洗白。"))
+	FLinearColor HoveredOutlineColor = FLinearColor(0.80f, 0.34f, 0.025f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ClampMin = "0.0", ClampMax = "2.0", ToolTip = "悬停描边向外扩张的源纹理像素数。合法范围 0–2，默认 2 source pixels；双环 shader 最多支持 2，只影响表现。"))
+	float HoveredOutlineThicknessSourcePixels = 2.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", ToolTip = "悬停描边 Alpha。合法范围 0–1，默认 0.95。"))
+	float HoveredOutlineAlpha = 0.95f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ToolTip = "第二个源像素描边环相对内环的颜色强度倍率。无单位，推荐 0.35–0.60；只在厚度达到 2 source pixels 时生效。"))
+	float OutlineOuterColorMultiplier = 0.45f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Outline",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", ToolTip = "第二个源像素描边环相对内环的 Alpha 倍率。合法范围 0–1，推荐 0.55–0.80；只在厚度达到 2 source pixels 时生效。"))
+	float OutlineOuterAlphaMultiplier = 0.70f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Timing",
 		meta = (ToolTip = "目标框从部位外侧收束到最终位置的时间，单位：秒。推荐 0.14–0.22；只影响表现，不延迟规则。"))
 	float EnterSeconds = 0.18f;
@@ -90,4 +126,5 @@ public:
 	float CameraDepthOffsetCentimeters = 2.0f;
 
 	bool HasValidVisualAssets() const;
+	bool HasValidOutlineAsset() const;
 };

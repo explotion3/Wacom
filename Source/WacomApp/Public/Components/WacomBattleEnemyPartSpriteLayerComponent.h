@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Interaction/WacomInteractionTargetProvider.h"
 #include "PaperSpriteComponent.h"
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
@@ -10,11 +11,13 @@
 #include "WacomBattleEnemyPartSpriteLayerComponent.generated.h"
 
 class UPaperSprite;
+class UWacomBattleEnemyPartComponent;
 
 /** 敌人部位可直接在 Host Blueprint 视口中制作的静态 Sprite 层。 */
 UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent,
 	ToolTip = "敌人部位的真实 Sprite 视觉层。必须直接挂在 Enemy Part 组件下，可在 Host Blueprint 视口直接调整。"))
-class WACOMAPP_API UWacomBattleEnemyPartSpriteLayerComponent : public UPaperSpriteComponent
+class WACOMAPP_API UWacomBattleEnemyPartSpriteLayerComponent : public UPaperSpriteComponent,
+	public IWacomInteractionTargetProvider
 {
 	GENERATED_BODY()
 
@@ -29,6 +32,18 @@ public:
 		meta = (ToolTip = "本层可选破损终态 Sprite。为空时部位 Destroyed 后保持原资源。"))
 	TObjectPtr<UPaperSprite> DestroyedSprite = nullptr;
 
+	/** Runtime-only：把本层绑定为 Part 的正式交互层，并固定其碰撞源。 */
+	void ConfigureInteractionCollision(
+		UWacomBattleEnemyPartComponent* InPart,
+		UPaperSprite* InStableCollisionSprite,
+		bool bEnableCollision);
+	void ClearInteractionCollision();
+	bool IsInteractionCollisionReady() const;
+	UPaperSprite* GetStableInteractionCollisionSprite() const;
+
+	virtual FWacomInteractionTargetHandle BuildWorldTargetHandle() const override;
+	virtual class UBodySetup* GetBodySetup() override;
+
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
@@ -36,4 +51,11 @@ public:
 protected:
 	virtual void OnRegister() override;
 	virtual void OnUnregister() override;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleEnemyPartComponent> InteractionPart = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UPaperSprite> StableInteractionCollisionSprite = nullptr;
 };

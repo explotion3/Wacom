@@ -107,6 +107,10 @@ namespace Wacom::EnemyHostComponentBuilder
 
 		bool bChanged = false;
 		bChanged |= SetIfDifferent(*Templates.Part, Templates.Part->PartSlotId, Spec.PartSlotId);
+		bChanged |= SetIfDifferent(
+			*Templates.Part,
+			Templates.Part->InteractionVisualLayerId,
+			Spec.LayerId);
 		if (Templates.Part->PartId != Spec.PartId)
 		{
 			Templates.Part->Modify();

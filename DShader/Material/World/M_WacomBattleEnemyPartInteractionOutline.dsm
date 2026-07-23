@@ -1,0 +1,214 @@
+import "Shared/WacomBattleEnemyPartInteractionOutline.dsh";
+
+Shader(Name="DreamMaterials/World/M_WacomBattleEnemyPartInteractionOutline")
+{
+    Properties = {
+        TextureSampleParameter2D SpriteTexture = Path(Engine, "/EngineResources/DefaultTexture") [
+            Group="敌人交互描边|运行时";
+            SortPriority=0;
+            Description="C++ 代理注入的当前 Paper2D 图集纹理；参数名必须保持为 SpriteTexture。";
+            SamplerType="Color";
+            SamplerSource="FromTextureAsset";
+        ];
+
+        VectorParameter OutlineAtlasUVOrigin = float4(0.0, 0.0, 0.0, 0.0) [
+            Group="敌人交互描边|运行时";
+            SortPriority=10;
+            Description="当前 Sprite 的局部左下角在图集中的 UV；C++ 从 BakedRenderData 写入 RG。";
+        ];
+
+        VectorParameter OutlineAtlasUVAxisX = float4(1.0, 0.0, 0.0, 0.0) [
+            Group="敌人交互描边|运行时";
+            SortPriority=20;
+            Description="Sprite 局部 X 轴横跨整个源矩形时的图集 UV 增量；支持旋转或倒置的图集映射。";
+        ];
+
+        VectorParameter OutlineAtlasUVAxisY = float4(0.0, 1.0, 0.0, 0.0) [
+            Group="敌人交互描边|运行时";
+            SortPriority=30;
+            Description="Sprite 局部 Y 轴横跨整个源矩形时的图集 UV 增量；支持 Paper2D 的 V 轴方向。";
+        ];
+
+        VectorParameter OutlineSourceInvPixelSize = float4(0.00390625, 0.00390625, 0.0, 0.0) [
+            Group="敌人交互描边|运行时";
+            SortPriority=40;
+            Description="Sprite 源矩形单个像素的局部 UV 尺寸；C++ 按当前 Sprite 写入 RG。";
+        ];
+
+        VectorParameter OutlineCanvasToSourceScale = float4(1.0, 1.0, 0.0, 0.0) [
+            Group="敌人交互描边|运行时";
+            SortPriority=50;
+            Description="带透明留白的代理画布到原 Sprite 源矩形的逆缩放；保证主体世界尺寸不随描边厚度变化。";
+        ];
+
+        ScalarParameter OutlineThicknessPixels = 1.0 [
+            Group="敌人交互描边|运行时";
+            SortPriority=60;
+            Description="描边厚度，单位为源纹理像素；1 显示内环，2 同时显示较暗外环。";
+        ];
+
+        VectorParameter OutlineColor = float4(0.80, 0.34, 0.025, 1.0) [
+            Group="敌人交互描边|运行时";
+            SortPriority=70;
+            Description="描边 Unlit 线性颜色；由目标预演 Style 按可选或悬停状态写入。";
+        ];
+
+        ScalarParameter OutlineOpacity = 1.0 [
+            Group="敌人交互描边|运行时";
+            SortPriority=80;
+            Description="描边透明度；由目标预演 Style 按可选或悬停状态写入。";
+        ];
+
+        ScalarParameter OutlineOuterColorMultiplier = 0.45 [
+            Group="敌人交互描边|运行时";
+            SortPriority=90;
+            Description="第二像素外环相对内环的颜色强度。";
+        ];
+
+        ScalarParameter OutlineOuterAlphaMultiplier = 0.70 [
+            Group="敌人交互描边|运行时";
+            SortPriority=100;
+            Description="第二像素外环相对内环的透明度。";
+        ];
+
+        ScalarParameter OutlineAlphaThreshold = 0.30 [
+            Group="敌人交互描边|制作";
+            SortPriority=110;
+            Description="把 Sprite Alpha 视作实体轮廓的阈值；默认 0.30，与 ShrinkWrapped 碰撞制作口径一致。";
+        ];
+    }
+
+    Settings = {
+        Domain = "Surface";
+        ShadingModel = "Unlit";
+        BlendMode = "Translucent";
+        TwoSided = true;
+    }
+
+    Outputs = {
+        float3 Color;
+        float Alpha;
+        Base.EmissiveColor = Color;
+        Base.Opacity = Alpha;
+    }
+
+    Graph = {
+        float2 proxyUV = UE.TexCoord(Index=0);
+        float2 atlasUVOrigin = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OutlineAtlasUVOrigin, R=true, G=true, B=false, A=false);
+        float2 atlasUVAxisX = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OutlineAtlasUVAxisX, R=true, G=true, B=false, A=false);
+        float2 atlasUVAxisY = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OutlineAtlasUVAxisY, R=true, G=true, B=false, A=false);
+        float2 sourceInvPixelSize = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OutlineSourceInvPixelSize, R=true, G=true, B=false, A=false);
+        float2 canvasToSourceScale = UE.Expression(Class="ComponentMask", OutputType="float2", Input=OutlineCanvasToSourceScale, R=true, G=true, B=false, A=false);
+        float2 sourceLocalUV = (proxyUV - float2(0.5, 0.5)) * canvasToSourceScale + float2(0.5, 0.5);
+        float2 innerStepX = float2(sourceInvPixelSize.x, 0.0);
+        float2 innerStepY = float2(0.0, sourceInvPixelSize.y);
+        float2 outerStepX = innerStepX * 2.0;
+        float2 outerStepY = innerStepY * 2.0;
+
+        float2 centerUV;
+        float centerInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, centerUV, centerInside);
+        float2 innerLeftUV;
+        float innerLeftInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - innerStepX, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerLeftUV, innerLeftInside);
+        float2 innerRightUV;
+        float innerRightInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + innerStepX, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerRightUV, innerRightInside);
+        float2 innerTopUV;
+        float innerTopInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - innerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerTopUV, innerTopInside);
+        float2 innerBottomUV;
+        float innerBottomInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + innerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerBottomUV, innerBottomInside);
+        float2 innerTopLeftUV;
+        float innerTopLeftInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - innerStepX - innerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerTopLeftUV, innerTopLeftInside);
+        float2 innerTopRightUV;
+        float innerTopRightInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + innerStepX - innerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerTopRightUV, innerTopRightInside);
+        float2 innerBottomLeftUV;
+        float innerBottomLeftInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - innerStepX + innerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerBottomLeftUV, innerBottomLeftInside);
+        float2 innerBottomRightUV;
+        float innerBottomRightInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + innerStepX + innerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, innerBottomRightUV, innerBottomRightInside);
+        float2 outerLeftUV;
+        float outerLeftInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - outerStepX, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerLeftUV, outerLeftInside);
+        float2 outerRightUV;
+        float outerRightInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + outerStepX, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerRightUV, outerRightInside);
+        float2 outerTopUV;
+        float outerTopInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - outerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerTopUV, outerTopInside);
+        float2 outerBottomUV;
+        float outerBottomInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + outerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerBottomUV, outerBottomInside);
+        float2 outerTopLeftUV;
+        float outerTopLeftInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - outerStepX - outerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerTopLeftUV, outerTopLeftInside);
+        float2 outerTopRightUV;
+        float outerTopRightInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + outerStepX - outerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerTopRightUV, outerTopRightInside);
+        float2 outerBottomLeftUV;
+        float outerBottomLeftInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV - outerStepX + outerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerBottomLeftUV, outerBottomLeftInside);
+        float2 outerBottomRightUV;
+        float outerBottomRightInside;
+        WacomBattleEnemyPartInteractionOutline_MapSample(sourceLocalUV + outerStepX + outerStepY, sourceInvPixelSize, atlasUVOrigin, atlasUVAxisX, atlasUVAxisY, outerBottomRightUV, outerBottomRightInside);
+
+        float4 center = SpriteTexture(Coordinates=centerUV);
+        float4 innerLeft = SpriteTexture(Coordinates=innerLeftUV);
+        float4 innerRight = SpriteTexture(Coordinates=innerRightUV);
+        float4 innerTop = SpriteTexture(Coordinates=innerTopUV);
+        float4 innerBottom = SpriteTexture(Coordinates=innerBottomUV);
+        float4 innerTopLeft = SpriteTexture(Coordinates=innerTopLeftUV);
+        float4 innerTopRight = SpriteTexture(Coordinates=innerTopRightUV);
+        float4 innerBottomLeft = SpriteTexture(Coordinates=innerBottomLeftUV);
+        float4 innerBottomRight = SpriteTexture(Coordinates=innerBottomRightUV);
+        float4 outerLeft = SpriteTexture(Coordinates=outerLeftUV);
+        float4 outerRight = SpriteTexture(Coordinates=outerRightUV);
+        float4 outerTop = SpriteTexture(Coordinates=outerTopUV);
+        float4 outerBottom = SpriteTexture(Coordinates=outerBottomUV);
+        float4 outerTopLeft = SpriteTexture(Coordinates=outerTopLeftUV);
+        float4 outerTopRight = SpriteTexture(Coordinates=outerTopRightUV);
+        float4 outerBottomLeft = SpriteTexture(Coordinates=outerBottomLeftUV);
+        float4 outerBottomRight = SpriteTexture(Coordinates=outerBottomRightUV);
+
+        float centerAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=center, R=false, G=false, B=false, A=true) * centerInside;
+        float innerLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerLeft, R=false, G=false, B=false, A=true) * innerLeftInside;
+        float innerRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerRight, R=false, G=false, B=false, A=true) * innerRightInside;
+        float innerTopAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerTop, R=false, G=false, B=false, A=true) * innerTopInside;
+        float innerBottomAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerBottom, R=false, G=false, B=false, A=true) * innerBottomInside;
+        float innerTopLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerTopLeft, R=false, G=false, B=false, A=true) * innerTopLeftInside;
+        float innerTopRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerTopRight, R=false, G=false, B=false, A=true) * innerTopRightInside;
+        float innerBottomLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerBottomLeft, R=false, G=false, B=false, A=true) * innerBottomLeftInside;
+        float innerBottomRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=innerBottomRight, R=false, G=false, B=false, A=true) * innerBottomRightInside;
+        float outerLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerLeft, R=false, G=false, B=false, A=true) * outerLeftInside;
+        float outerRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerRight, R=false, G=false, B=false, A=true) * outerRightInside;
+        float outerTopAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerTop, R=false, G=false, B=false, A=true) * outerTopInside;
+        float outerBottomAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerBottom, R=false, G=false, B=false, A=true) * outerBottomInside;
+        float outerTopLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerTopLeft, R=false, G=false, B=false, A=true) * outerTopLeftInside;
+        float outerTopRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerTopRight, R=false, G=false, B=false, A=true) * outerTopRightInside;
+        float outerBottomLeftAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerBottomLeft, R=false, G=false, B=false, A=true) * outerBottomLeftInside;
+        float outerBottomRightAlpha = UE.Expression(Class="ComponentMask", OutputType="float1", Input=outerBottomRight, R=false, G=false, B=false, A=true) * outerBottomRightInside;
+
+        float innerRingAlpha;
+        float outerRingAlpha;
+        WacomBattleEnemyPartInteractionOutline_ResolveRings(
+            centerAlpha,
+            innerLeftAlpha, innerRightAlpha, innerTopAlpha, innerBottomAlpha,
+            innerTopLeftAlpha, innerTopRightAlpha, innerBottomLeftAlpha, innerBottomRightAlpha,
+            outerLeftAlpha, outerRightAlpha, outerTopAlpha, outerBottomAlpha,
+            outerTopLeftAlpha, outerTopRightAlpha, outerBottomLeftAlpha, outerBottomRightAlpha,
+            OutlineAlphaThreshold,
+            OutlineThicknessPixels,
+            innerRingAlpha,
+            outerRingAlpha);
+
+        float3 outlineColorRGB = UE.Expression(Class="ComponentMask", OutputType="float3", Input=OutlineColor, R=true, G=true, B=true, A=false);
+        float opacity = saturate(OutlineOpacity);
+        Color = outlineColorRGB * (innerRingAlpha + outerRingAlpha * max(OutlineOuterColorMultiplier, 0.0));
+        Alpha = saturate(innerRingAlpha * opacity + outerRingAlpha * opacity * saturate(OutlineOuterAlphaMultiplier));
+    }
+}

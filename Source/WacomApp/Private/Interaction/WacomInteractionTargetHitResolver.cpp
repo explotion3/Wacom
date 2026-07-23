@@ -7,6 +7,7 @@
 #include "Engine/HitResult.h"
 #include "GameFramework/Actor.h"
 #include "Interaction/WacomInteractionTargetProvider.h"
+#include "Tags/WacomGameplayTags.h"
 
 namespace WacomInteractionTargetHitResolver
 {
@@ -40,7 +41,9 @@ namespace WacomInteractionTargetHitResolver
 			if (IWacomInteractionTargetProvider* Provider = Cast<IWacomInteractionTargetProvider>(Component))
 			{
 				FWacomInteractionTargetHandle Handle = Provider->BuildWorldTargetHandle();
-				if (Handle.IsValid())
+				if (Handle.IsValid()
+					&& !Handle.TargetTag.MatchesTagExact(
+						WacomTags::Interaction_Target_Battle_EnemyPart))
 				{
 					if (HitResult.HasValidHitObjectHandle() || HitResult.Location != FVector::ZeroVector)
 					{

@@ -9,3 +9,8 @@ bool UWacomBattleEnemyPartTargetPreviewStyle::HasValidVisualAssets() const
 {
 	return IsValid(PreviewSystem) && IsValid(PreviewMaterialInstance);
 }
+
+bool UWacomBattleEnemyPartTargetPreviewStyle::HasValidOutlineAsset() const
+{
+	return IsValid(OutlineMaterial);
+}

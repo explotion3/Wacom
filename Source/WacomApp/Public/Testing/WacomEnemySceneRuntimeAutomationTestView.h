@@ -22,7 +22,9 @@ struct WACOMAPP_API FWacomEnemySceneRuntimeAutomationTestView
 	static bool SyncPart(
 		AWacomBattleEnemyActor& Host,
 		UWacomBattleEnemyPartComponent& Part,
-		const FBattleSnapshot& Snapshot);
+		const FBattleSnapshot& Snapshot,
+		bool bTargetSelectionActive = false,
+		bool bTargetable = false);
 	static void SetRegisteredAndTargetable(
 		AWacomBattleEnemyActor& Host,
 		UWacomBattleEnemyPartComponent& Part,

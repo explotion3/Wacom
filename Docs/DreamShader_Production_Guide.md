@@ -117,6 +117,15 @@ Settings = {
 
 `Setup<Feature>Assets.py` 可以再次读取并验证该标记，作为旧生成资产的防御性修复；但脚本不能替代 `.dsm` 真源声明，否则编辑器自动生成后问题会复发。
 
+### 3.4 Paper2D Sprite 轮廓材质
+
+敌人部位交互描边使用 `Surface / Unlit / Translucent / TwoSided`，真源为 `DShader/Material/World/M_WacomBattleEnemyPartInteractionOutline.dsm` 与 `DShader/Shared/WacomBattleEnemyPartInteractionOutline.dsh`，生成资产固定为 `/Game/DreamMaterials/World/M_WacomBattleEnemyPartInteractionOutline`。
+
+- Paper2D 运行时代理依赖参数名 `SpriteTexture` 注入当前 Sprite 图集；代理是带最多两像素透明留白的 Plane，不复制或缩放原 Sprite Component。C++ 从 `BakedRenderData` 解出 `OutlineAtlasUVOrigin / AxisX / AxisY`，并写入 `OutlineSourceInvPixelSize / OutlineCanvasToSourceScale`；不能把 Sprite 当作独占整张纹理，也不能用包含 collision bounds 的 Component bounds 反推视觉矩形。
+- 上述 UV 参数都是 Vector Parameter，参与 UV 算术前必须用显式 `ComponentMask(OutputType="float2", R=true, G=true)`。直接把默认 `float3` 输出与 `float2` 方向相乘会在 PCD3D_SM6 报 `Arithmetic between types float3 and float2 are undefined`，并让运行时显示默认灰色材质。
+- 每个 Sprite sample 都先把 source-local UV clamp 到半像素安全区，再乘独立 inside mask，防止代理留白夹取 Atlas 相邻区域；随后显式用 `ComponentMask(OutputType="float1", A=true)` 读取 Alpha。`.dsh` helper 分别计算 `Dilated1 - CenterMask` 与 `Dilated2 - Dilated1`：一像素可选态只使用内环，两像素悬停态叠加较暗外环，材质不得输出中心主体。
+- `Scripts/SetupBattleEnemyPartInteractionAssets.py` 只把已生成父材质接到 Target Preview Style，不再创建第二套手工 MaterialExpression 图。NullRHI 的 `RecompileMaterial()` 不能替代一次带 `-AllowCommandletRendering` 的 PCD3D_SM6 定向生成与日志审计。
+
 ## 4. `.dsh` 的使用技巧
 
 复杂算法优先写成 `Function SelfContained`：

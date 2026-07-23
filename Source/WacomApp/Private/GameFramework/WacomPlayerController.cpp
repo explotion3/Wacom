@@ -22,12 +22,14 @@
 #include "Components/WacomRunPathTraversalComponent.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "GameFramework/WacomBattleSceneInteractionRouter.h"
+#include "GameFramework/WacomBattleEnemyPartInteractionQueryPolicy.h"
 #include "GameFramework/WacomRunWorldInteractionRouter.h"
 #include "GameFramework/WacomRunExplorationPresentationCoordinator.h"
 #include "GameFramework/WacomRunFloorSceneDescriptorResolver.h"
 #include "GameFramework/WacomRunPathBranchSelectionController.h"
 #include "GameFramework/WacomRunSceneBindingRegistry.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
+#include "Interaction/WacomInteractionTargetHitResolver.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -1155,15 +1157,7 @@ bool AWacomPlayerController::BuildBattleSceneInteractionTargetHitResultAtWidgetP
 {
 	const float ViewportScale = FMath::Max(0.01f, UWidgetLayoutLibrary::GetViewportScale(this));
 	const FVector2D PixelPosition = WidgetPosition * ViewportScale;
-	FVector WorldOrigin = FVector::ZeroVector;
-	FVector WorldDirection = FVector::ForwardVector;
-	if (!DeprojectScreenPositionToWorld(PixelPosition.X, PixelPosition.Y, WorldOrigin, WorldDirection))
-	{
-		return false;
-	}
-
-	const FVector TraceEnd = WorldOrigin + WorldDirection * 100000.0f;
-	return GetWorld() && GetWorld()->LineTraceSingleByChannel(OutHitResult, WorldOrigin, TraceEnd, ECC_Visibility);
+	return BuildBattleSceneInteractionTargetHitResultAtScreenPosition(PixelPosition, OutHitResult);
 }
 
 bool AWacomPlayerController::CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD) const
@@ -1181,7 +1175,159 @@ bool AWacomPlayerController::CanRouteBattleSceneTargetClick(UBattleHUD*& OutHUD)
 
 bool AWacomPlayerController::BuildBattleSceneClickHitResult(FHitResult& OutHitResult) const
 {
-	return GetHitResultUnderCursor(ECC_Visibility, false, OutHitResult);
+	float PixelX = 0.0f;
+	float PixelY = 0.0f;
+	return GetMousePosition(PixelX, PixelY)
+		&& BuildBattleSceneInteractionTargetHitResultAtScreenPosition(
+			FVector2D(PixelX, PixelY),
+			OutHitResult);
+}
+
+bool AWacomPlayerController::BuildBattleSceneInteractionTargetHitResultAtScreenPosition(
+	const FVector2D& PixelPosition,
+	FHitResult& OutHitResult) const
+{
+	OutHitResult = FHitResult();
+	UWorld* World = GetWorld();
+	UBattleHUD* HUD = GetActiveBattleHUD();
+	if (!World || !HUD)
+	{
+		return false;
+	}
+
+	FVector WorldOrigin = FVector::ZeroVector;
+	FVector WorldDirection = FVector::ForwardVector;
+	if (!DeprojectScreenPositionToWorld(
+		PixelPosition.X,
+		PixelPosition.Y,
+		WorldOrigin,
+		WorldDirection))
+	{
+		return false;
+	}
+	WorldDirection = WorldDirection.GetSafeNormal();
+	if (WorldDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	const FVector TraceEnd = WorldOrigin + WorldDirection * 100000.0f;
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(WacomBattleEnemyPartInteraction), false);
+	if (const APawn* ControlledPawn = GetPawn())
+	{
+		QueryParams.AddIgnoredActor(ControlledPawn);
+	}
+
+	auto ResolveCurrentRegistryPart = [HUD](
+		const FHitResult& Hit,
+		FWacomInteractionTargetHandle& OutHandle)
+	{
+		OutHandle = WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(Hit);
+		return OutHandle.IsValid()
+			&& OutHandle.TargetKind == EWacomInteractionTargetKind::World
+			&& OutHandle.TargetTag.MatchesTagExact(WacomTags::Interaction_Target_Battle_EnemyPart)
+			&& OutHandle.HasBattlePartSlotIdentity()
+			&& HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(OutHandle);
+	};
+
+	FHitResult StrictHit;
+	const bool bHasStrictBlockingHit = World->LineTraceSingleByChannel(
+		StrictHit,
+		WorldOrigin,
+		TraceEnd,
+		ECC_Visibility,
+		QueryParams);
+	FWacomInteractionTargetHandle StrictHandle;
+	if (bHasStrictBlockingHit && ResolveCurrentRegistryPart(StrictHit, StrictHandle))
+	{
+		OutHitResult = StrictHit;
+		return true;
+	}
+
+	const float SweepRadius = FMath::Max(
+		0.0f,
+		BattleEnemyPartLenientSweepRadiusCentimeters);
+	if (SweepRadius <= UE_SMALL_NUMBER)
+	{
+		return false;
+	}
+	const float OccluderDepth = bHasStrictBlockingHit
+		? FVector::DotProduct(StrictHit.ImpactPoint - WorldOrigin, WorldDirection)
+		: TNumericLimits<float>::Max();
+
+	TArray<FHitResult> SweepHits;
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+	World->SweepMultiByObjectType(
+		SweepHits,
+		WorldOrigin,
+		TraceEnd,
+		FQuat::Identity,
+		ObjectQueryParams,
+		FCollisionShape::MakeSphere(SweepRadius),
+		QueryParams);
+
+	TMap<FString, FWacomBattleEnemyPartInteractionQueryCandidate> Candidates;
+	for (const FHitResult& Hit : SweepHits)
+	{
+		FWacomInteractionTargetHandle Handle;
+		if (!ResolveCurrentRegistryPart(Hit, Handle))
+		{
+			continue;
+		}
+		const float TraceDepth = FVector::DotProduct(
+			Hit.ImpactPoint - WorldOrigin,
+			WorldDirection);
+		FVector2D HitScreenPosition = FVector2D::ZeroVector;
+		if (!ProjectWorldLocationToScreen(Hit.ImpactPoint, HitScreenPosition))
+		{
+			continue;
+		}
+		const FString StableIdentity = FString::Printf(
+			TEXT("%s|%s|%s|%s"),
+			*Handle.EncounterId.ToString(),
+			*Handle.EnemySlotId.ToString(),
+			*Handle.PartSlotId.ToString(),
+			*Handle.WorldTargetId.ToString());
+		FWacomBattleEnemyPartInteractionQueryCandidate Candidate;
+		Candidate.Hit = Hit;
+		Candidate.StableIdentity = StableIdentity;
+		Candidate.ScreenDistanceSquared = FVector2D::DistSquared(
+			PixelPosition,
+			HitScreenPosition);
+		Candidate.TraceDepth = TraceDepth;
+		Candidate.bInCurrentRegistry = true;
+		if (!FWacomBattleEnemyPartInteractionQueryPolicy::IsEligible(
+			Candidate,
+			OccluderDepth))
+		{
+			continue;
+		}
+		FWacomBattleEnemyPartInteractionQueryCandidate* Existing =
+			Candidates.Find(StableIdentity);
+		if (!Existing
+			|| FWacomBattleEnemyPartInteractionQueryPolicy::IsPreferred(
+				Candidate,
+				*Existing))
+		{
+			Candidates.Add(StableIdentity, MoveTemp(Candidate));
+		}
+	}
+
+	TArray<FWacomBattleEnemyPartInteractionQueryCandidate> Ordered;
+	Candidates.GenerateValueArray(Ordered);
+	Ordered.Sort([](
+		const FWacomBattleEnemyPartInteractionQueryCandidate& Left,
+		const FWacomBattleEnemyPartInteractionQueryCandidate& Right)
+	{
+		return FWacomBattleEnemyPartInteractionQueryPolicy::IsPreferred(Left, Right);
+	});
+	if (Ordered.IsEmpty())
+	{
+		return false;
+	}
+	OutHitResult = Ordered[0].Hit;
+	return true;
 }
 
 bool AWacomPlayerController::BuildRunSceneClickHitResult(FHitResult& OutHitResult) const
