@@ -30,6 +30,14 @@ void UWacomDeckCardWidget::NativeConstruct()
 	ApplyBackpackLocalMotionPose(
 		BackpackLocalMotionTranslation,
 		BackpackLocalMotionAngleDegrees);
+	if (WorkspaceFocusIcon)
+	{
+		WorkspaceFocusIcon->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (WorkspaceStateIcon)
+	{
+		WorkspaceStateIcon->SetVisibility(ESlateVisibility::Collapsed);
+	}
 }
 
 void UWacomDeckCardWidget::SetCard(const FCardInstance& Inst, EZoneKind InFromZone, FGuid InFromZoneOwnerInstanceId)
@@ -64,6 +72,7 @@ void UWacomDeckCardWidget::PrepareForBackpackListReuse(bool bPreserveTransientPr
 	UnbindWorkspacePointerEvents();
 	SetWorkspacePointerPassthrough(false);
 	SetWorkspaceVisualState(false, false, false);
+	ResetWorkspaceAccessibilityPaintState();
 	SetWorkspaceInteractionEnabled(true);
 	SetWorkspaceReadOnlyKind(EWacomBackpackWorkspaceCardReadOnlyKind::None);
 	SetWorkspaceDisplayZone(FromZone, FromZoneOwnerInstanceId);
@@ -105,38 +114,54 @@ void UWacomDeckCardWidget::SetWorkspaceAccessibilityState(
 	EWacomBackpackWorkspaceCardSemanticIcon SemanticIcon,
 	const UWacomBackpackWorkspaceStyle& Style)
 {
+	bWorkspaceNavigationFocused = bNavigationFocused;
+	WorkspaceSemanticIcon = SemanticIcon;
+	WorkspaceFocusPaintBrush = Style.FocusStateIconBrush;
+	switch (WorkspaceSemanticIcon)
+	{
+	case EWacomBackpackWorkspaceCardSemanticIcon::Selected:
+		WorkspaceSemanticPaintBrush = Style.SelectedStateIconBrush;
+		break;
+	case EWacomBackpackWorkspaceCardSemanticIcon::ValidDrop:
+		WorkspaceSemanticPaintBrush = Style.ValidDropStateIconBrush;
+		break;
+	case EWacomBackpackWorkspaceCardSemanticIcon::RejectedDrop:
+		WorkspaceSemanticPaintBrush = Style.RejectedDropStateIconBrush;
+		break;
+	default:
+		WorkspaceSemanticPaintBrush = FSlateBrush();
+		break;
+	}
+
+	// These authored Images remain part of the WBP compatibility contract, but
+	// native post-child paint is the sole runtime owner of the markers. Keeping
+	// the Images collapsed prevents Retainer/Overlay child order from competing.
 	if (WorkspaceFocusIcon)
 	{
-		WorkspaceFocusIcon->SetBrush(Style.FocusStateIconBrush);
-		WorkspaceFocusIcon->SetVisibility(bNavigationFocused
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
+		WorkspaceFocusIcon->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (WorkspaceStateIcon)
 	{
-		const FSlateBrush* Brush = nullptr;
-		switch (SemanticIcon)
-		{
-		case EWacomBackpackWorkspaceCardSemanticIcon::Selected:
-			Brush = &Style.SelectedStateIconBrush;
-			break;
-		case EWacomBackpackWorkspaceCardSemanticIcon::ValidDrop:
-			Brush = &Style.ValidDropStateIconBrush;
-			break;
-		case EWacomBackpackWorkspaceCardSemanticIcon::RejectedDrop:
-			Brush = &Style.RejectedDropStateIconBrush;
-			break;
-		default:
-			break;
-		}
-		if (Brush)
-		{
-			WorkspaceStateIcon->SetBrush(*Brush);
-		}
-		WorkspaceStateIcon->SetVisibility(Brush
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
+		WorkspaceStateIcon->SetVisibility(ESlateVisibility::Collapsed);
 	}
+	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UWacomDeckCardWidget::ResetWorkspaceAccessibilityPaintState()
+{
+	bWorkspaceNavigationFocused = false;
+	WorkspaceSemanticIcon = EWacomBackpackWorkspaceCardSemanticIcon::None;
+	WorkspaceFocusPaintBrush = FSlateBrush();
+	WorkspaceSemanticPaintBrush = FSlateBrush();
+	if (WorkspaceFocusIcon)
+	{
+		WorkspaceFocusIcon->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (WorkspaceStateIcon)
+	{
+		WorkspaceStateIcon->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
 void UWacomDeckCardWidget::ApplyWorkspaceVisualState(
@@ -264,6 +289,7 @@ void UWacomDeckCardWidget::ApplyBackpackLocalMotionPose(
 	MotionRoot->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
 	MotionRoot->SetRenderTranslation(Translation);
 	MotionRoot->SetRenderTransformAngle(AngleDegrees);
+	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
 void UWacomDeckCardWidget::ResetBackpackLocalMotionPose()

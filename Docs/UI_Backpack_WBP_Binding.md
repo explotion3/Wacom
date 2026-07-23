@@ -75,12 +75,12 @@ Run Snapshot / revision
 | `PileFrameLayer` | `CanvasPanel` | 牌堆框与标题层，不持有真实卡牌 |
 | `StaticCardLayer` | `CanvasPanel` | 通量与所有折叠/展开牌堆的常驻真实卡牌 |
 | `SettlementLayer` | `CanvasPanel` | 成功释放和 Escape 返回的高层收落；只暂存原 Widget，不复制卡牌 |
-| `MarqueeLayer` | `CanvasPanel` | 框选反馈层 |
+| `MarqueeLayer` | `CanvasPanel` | 框选反馈的兼容制作层；运行时最终矩形由 Workspace 原生绘制层负责 |
 | `CarryRoot` | `CanvasPanel` | 高 ZOrder 携带根；只应用受最大落后约束的视觉锚点，不承担规则命中 |
 | `CarryCache` | `InvalidationBox` | `CarryRoot` 下的静止缓存分支；不承担鼠标位移 |
 | `CarryLayer` | `CanvasPanel` | `CarryCache` 的唯一内容；持有除当前牌外的静态携带水平牌列 |
 | `CarryActiveLayer` | `CanvasPanel` | `CarryRoot` 下、位于缓存分支上方的实时分支；只持有当前最前卡 |
-| `SelectionMarquee` | `Border` | 框选矩形，初始 `Collapsed`，ZOrder 高于普通卡牌 |
+| `SelectionMarquee` | `Border` | 框选兼容绑定，始终 `Collapsed`；不得与 Workspace 原生最终绘制重复显示 |
 | `EmptyStateText` | `TextBlock` | “通量区暂无卡牌”；不代表其它牌堆为空 |
 
 `WorkspaceCanvas` 必须保持 `Visible`，不能改成 `SelfHitTestInvisible`，因为空白区域需要接收通量框选和释放。Screen 动态插入 Workspace 时必须按实际 Slot 类型设置 Fill，不能依赖 `UPanelWidget::AddChild` 默认槽位参数。
@@ -104,7 +104,9 @@ Run Snapshot / revision
 
 ZonePile 不包含 CardHost、PreviewHost 或规则按钮。短点标题或折叠牌堆主体请求展开；从牌堆内容区域拖过框选阈值则进入该牌堆的 `Marquee`，不会误触展开。真实卡牌常驻 `StaticCardLayer`，携带时进入 `CarryRoot` 下两个携带分支，短时收落时进入 `SettlementLayer`。
 
-`WBP_WacomDeckCardWidget` 另须绑定两个互不替代的 `Image`：`WorkspaceFocusIcon` 显示虚拟焦点，`WorkspaceStateIcon` 显示 `Selected / ValidDrop / RejectedDrop`。两者允许同时可见；语义归约优先级固定为 `RejectedDrop > ValidDrop > Selected`。携带卡从 Screen 已完成的目标校验结果读取 Valid/Rejected，不得在卡牌 Widget 内重新猜测 Run 规则。
+`WBP_WacomDeckCardWidget` 另须保留两个互不替代的兼容 `Image` 绑定：`WorkspaceFocusIcon` 对应虚拟焦点，`WorkspaceStateIcon` 对应 `Selected / ValidDrop / RejectedDrop`。运行时两者保持 `Collapsed`，DeckCard 只缓存按 `InstanceId` 归约后的权威焦点/语义状态与 Style Brush；实际 32×32 标记由 Workspace 在全部卡牌、兄弟 `SObjectWidget` 与 `WBP_FPCardView / Retainer` 子树完成之后集中原生绘制，并使用每张卡的最终几何显式跟随 `CardMotionRoot` 位移和旋转。不得改回每卡 `NativePaint + 1`：不同兄弟卡及 Retainer 缓存返回的局部 LayerId 不可比较，后绘制兄弟仍可能覆盖先前角标。焦点和语义标记允许同时可见，语义归约优先级固定为 `RejectedDrop > ValidDrop > Selected`。携带卡从 Screen 已完成的目标校验结果读取 Valid/Rejected，不得在卡牌 Widget 内重新猜测 Run 规则。
+
+Workspace 的统一 post-child overlay 顺序固定为：完整 UMG/Slate/Retainer 子树 → 经过卡牌视觉栈遮挡裁决的焦点/语义角标 → 活跃框选填充 → 2px 框选边框。角标仍高于所属卡自身的 Retainer，但其 32×32 有向矩形若与更高层卡身相交则整枚隐藏；视觉栈按 `Static < Settlement < CarryCache < CarryActive`、Canvas ZOrder 与同层子顺序比较，禁止下层携带卡角标穿透当前卡牌。框选矩形复用 `SelectionColor`，填充透明度复用 `CardStateOverlayOpacity`。`SelectionMarquee` 和 `MarqueeLayer` 只保留资产结构兼容与审计价值，不再拥有运行时绘制顺序。活跃框选的指针移动只能更新 Interaction Model 坐标并触发 Paint invalidation，不得调用完整 Presentation 刷新、Scene reconcile 或 Carry Strip rebuild。
 
 `PileFrameLayer` 与四个卡牌层的实际子控件树是视觉所有权真相。App-private `FWacomBackpackWorkspaceVisualRegistry` 每次 Scene reconcile 都从 Canvas 子控件线性重建 `ViewKey -> Card`、物理 `InstanceId -> Card` 和 `ZoneKey -> Pile` 索引，并持有 Scene 顺序的唯一弱引用卡牌名册；Screen 与 Workspace 不得复制第二份长期数组。瞬态层中的权威卡优先于静态副本，跨区继续复用同一物理 Widget，重复静态副本和幽灵牌框当次移除。基础布局、过渡、选择冻结、Settlement 与释放交接统一由 `FWacomBackpackWorkspaceRuntime` 内的 App-private Visual State 持有，Scene reconcile 只通过它清理不可见身份和连续重定向活动过渡。`NativeDestruct` 必须解除卡牌/牌堆委托、删除动态牌堆子控件，并一次清空 Registry、Visual State 与 Motion Coordinator。
 
@@ -219,4 +221,4 @@ PIE 至少检查：
 - 同 Run 关闭重开保留牌堆布局；新 Run 清空；Full/Simplified 动效均无淡入、动态缩放或首帧半透明。
 - 纯键盘和纯手柄完成浏览、选择、跨区移动、特殊牌切换、删除、整理和退出；帮助层关闭后焦点回到打开前控件，Deactivate 后不再响应 CommonInput 通知。
 - 灰度/色觉模拟下 Focus、Selected、ValidDrop、RejectedDrop 仍能按图形区分；Focus 与语义图标可同时显示。
-- 24 卡与 100 卡分别在 1280×720、1920×1080 预热 10 秒后采集 60 秒 Insights；空指针移动不得触发 Scene reconcile、完整 presentation refresh 或 carry-strip rebuild，实时 Retainer 不超过一个。16:10 与 2560×1080 仅作为布局门禁。
+- 24 卡与 100 卡分别在 1280×720、1920×1080 预热 10 秒后采集 60 秒 Insights；空指针移动和活跃框选矩形更新均不得触发 Scene reconcile、完整 presentation refresh 或 carry-strip rebuild，实时 Retainer 不超过一个。16:10 与 2560×1080 仅作为布局门禁。

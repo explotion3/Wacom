@@ -710,6 +710,49 @@ bool FWacomBackpackScreenTestAccess::MarqueeWorkspacePileContents(
 	return bBeganMarquee && !Workspace.InteractionModel->IsMarqueeActive();
 }
 
+FWacomBackpackMarqueePaintHotPathProbe
+FWacomBackpackScreenTestAccess::ProbeMarqueePaintHotPath(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	FVector2D Start,
+	FVector2D End)
+{
+	FWacomBackpackMarqueePaintHotPathProbe Probe;
+	if (!Workspace.InteractionModel)
+	{
+		return Probe;
+	}
+
+	Workspace.InteractionModel->BeginMarquee(
+		FWacomBackpackZoneKey::Make(EZoneKind::Backpack),
+		Start,
+		false);
+	Workspace.RefreshInteractionPresentation();
+	const FWacomBackpackWorkspaceAutomationTestView Before =
+		Workspace.GetAutomationTestView();
+	Probe.FullPresentationRefreshCountBefore = Before.FullPresentationRefreshCount;
+	Probe.WorkspaceSceneBindCountBefore = Before.WorkspaceSceneBindCount;
+	Probe.CarryStripLayoutRebuildCountBefore = Before.CarryStripLayoutRebuildCount;
+
+	const FPointerEvent PointerMove(
+		0,
+		End,
+		Start,
+		TSet<FKey>{ EKeys::LeftMouseButton },
+		EKeys::Invalid,
+		0.0f,
+		FModifierKeysState());
+	Probe.bMoveHandled = Workspace.NativeOnMouseMove(
+		Workspace.GetCachedGeometry(),
+		PointerMove).IsEventHandled();
+	const FWacomBackpackWorkspaceAutomationTestView After =
+		Workspace.GetAutomationTestView();
+	Probe.bMarqueeRemainsActive = Workspace.InteractionModel->IsMarqueeActive();
+	Probe.FullPresentationRefreshCountAfter = After.FullPresentationRefreshCount;
+	Probe.WorkspaceSceneBindCountAfter = After.WorkspaceSceneBindCount;
+	Probe.CarryStripLayoutRebuildCountAfter = After.CarryStripLayoutRebuildCount;
+	return Probe;
+}
+
 void FWacomBackpackScreenTestAccess::ClearWorkspaceSelection(
 	UWacomBackpackWorkspaceWidget& Workspace)
 {

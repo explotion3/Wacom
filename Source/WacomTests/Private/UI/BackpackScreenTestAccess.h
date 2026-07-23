@@ -52,6 +52,18 @@ struct FWacomBackpackControlsHelpLifecycleProbe
 	bool bHiddenAfterDeactivate = false;
 };
 
+struct FWacomBackpackMarqueePaintHotPathProbe
+{
+	bool bMoveHandled = false;
+	bool bMarqueeRemainsActive = false;
+	int32 FullPresentationRefreshCountBefore = 0;
+	int32 FullPresentationRefreshCountAfter = 0;
+	int32 WorkspaceSceneBindCountBefore = 0;
+	int32 WorkspaceSceneBindCountAfter = 0;
+	int32 CarryStripLayoutRebuildCountBefore = 0;
+	int32 CarryStripLayoutRebuildCountAfter = 0;
+};
+
 struct FWacomBackpackScreenTestAccess
 {
 	static UWacomBackpackScreen* Create(UObject* Outer, URunSession* RunSession);
@@ -131,6 +143,10 @@ struct FWacomBackpackScreenTestAccess
 		UWacomBackpackWorkspaceWidget& Workspace,
 		EZoneKind Zone,
 		FGuid OwnerInstanceId = FGuid());
+	static FWacomBackpackMarqueePaintHotPathProbe ProbeMarqueePaintHotPath(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		FVector2D Start,
+		FVector2D End);
 	static void ClearWorkspaceSelection(
 		UWacomBackpackWorkspaceWidget& Workspace);
 	static bool CommitWorkspacePileMoveWithSynchronousTargetReconcile(

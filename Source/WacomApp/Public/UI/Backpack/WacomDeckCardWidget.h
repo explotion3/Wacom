@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
 #include "RunStateTypes.h"
+#include "Styling/SlateBrush.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 #include "WacomDeckCardWidget.generated.h"
 
@@ -18,6 +19,10 @@ class UWacomFirstPersonCardViewWidget;
 struct FWacomBackpackWorkspaceCardVisualState;
 struct FWacomFirstPersonCardDepthView;
 class UWacomBackpackWorkspaceStyle;
+class UWacomBackpackWorkspaceWidget;
+#if WITH_AUTOMATION_TESTS
+struct FWacomBackpackWorkspaceCardTestAccess;
+#endif
 
 enum class EWacomBackpackWorkspaceCardSemanticIcon : uint8
 {
@@ -232,6 +237,8 @@ protected:
 	TObjectPtr<UTextBlock> ProjectedFromBadge;
 
 private:
+	friend class UWacomBackpackWorkspaceWidget;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UCardDefinition> Card = nullptr;
 
@@ -259,8 +266,18 @@ private:
 	void RefreshWorkspaceHitTestVisibility();
 	FVector2D BackpackLocalMotionTranslation = FVector2D::ZeroVector;
 	float BackpackLocalMotionAngleDegrees = 0.0f;
+	bool bWorkspaceNavigationFocused = false;
+	EWacomBackpackWorkspaceCardSemanticIcon WorkspaceSemanticIcon =
+		EWacomBackpackWorkspaceCardSemanticIcon::None;
+	FSlateBrush WorkspaceFocusPaintBrush;
+	FSlateBrush WorkspaceSemanticPaintBrush;
 
 	void SetRightClickToggleEnabled(bool bEnabled);
+	void ResetWorkspaceAccessibilityPaintState();
 	void RefreshContentFromCard();
 	FWacomCardViewData BuildCurrentCardViewData() const;
+
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomBackpackWorkspaceCardTestAccess;
+#endif
 };

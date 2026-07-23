@@ -23,6 +23,7 @@ class FWacomBackpackCardDetailController;
 struct FWacomBackpackWorkspaceReconciler;
 struct FWacomBackpackWorkspaceReleaseIntent;
 enum class EWacomBackpackWorkspaceReleaseTargetKind : uint8;
+enum class EWacomBackpackWorkspaceCardSemanticIcon : uint8;
 struct FWacomBackpackWorkspaceCardLayout;
 struct FWacomBackpackWorkspaceCardVisualPose;
 #if WITH_AUTOMATION_TESTS
@@ -140,6 +141,14 @@ protected:
 	virtual void NativeOnMouseLeave(const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseButtonUp(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 	virtual FReply NativeOnMouseWheel(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	virtual int32 NativePaint(
+		const FPaintArgs& Args,
+		const FGeometry& AllottedGeometry,
+		const FSlateRect& MyCullingRect,
+		FSlateWindowElementList& OutDrawElements,
+		int32 LayerId,
+		const FWidgetStyle& InWidgetStyle,
+		bool bParentEnabled) const override;
 	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FReply NativeOnKeyUp(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
 	virtual FNavigationReply NativeOnNavigation(
@@ -269,6 +278,10 @@ private:
 	void BroadcastPointerRelease(bool bReleaseAll);
 	void ReconcileNavigationTargets();
 	void RefreshNavigationPresentation();
+	void RefreshCardAccessibilityPresentation();
+	bool IsCardAccessibilityFocused(const UWacomDeckCardWidget& Card) const;
+	EWacomBackpackWorkspaceCardSemanticIcon ResolveCardAccessibilitySemanticIcon(
+		const UWacomDeckCardWidget& Card) const;
 	bool HandleNavigationPrimary(bool bReleaseAll);
 	bool HandleNavigationSelection();
 	bool HandleNavigationContextAction();

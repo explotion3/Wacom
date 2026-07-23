@@ -7,6 +7,7 @@
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/InvalidationBox.h"
+#include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
@@ -16,6 +17,7 @@
 #include "UI/Backpack/WacomBackpackWorkspaceAccessibility.h"
 #include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "UI/Backpack/WacomBackpackWorkspaceLayoutSolver.h"
+#include "UI/Backpack/WacomBackpackWorkspaceOverlayPainter.h"
 #include "UI/Backpack/WacomBackpackWorkspaceRuntime.h"
 #include "UI/Backpack/WacomBackpackWorkspaceSceneBuilder.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
@@ -75,6 +77,10 @@ void UWacomBackpackWorkspaceWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	GetRuntime();
+	if (SelectionMarquee)
+	{
+		SelectionMarquee->SetVisibility(ESlateVisibility::Collapsed);
+	}
 	if (StaticCardLayer && !GetRuntime().Presentation.bHasStableLayoutSize)
 	{
 		StaticCardLayer->SetVisibility(ESlateVisibility::Hidden);
@@ -450,33 +456,7 @@ void UWacomBackpackWorkspaceWidget::SetCarryDropFeedbackState(
 	}
 	Presentation.bCarryDropValid = bValid;
 	Presentation.bCarryDropRejected = bRejected;
-	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
-		? InteractionStyle.Get()
-		: GetDefault<UWacomBackpackWorkspaceStyle>();
-	const auto ApplyLayer = [this, Style](const UCanvasPanel* Layer)
-	{
-		if (!Layer)
-		{
-			return;
-		}
-		for (int32 Index = 0; Index < Layer->GetChildrenCount(); ++Index)
-		{
-			if (UWacomDeckCardWidget* Card =
-				Cast<UWacomDeckCardWidget>(Layer->GetChildAt(Index)))
-			{
-				Card->SetWorkspaceAccessibilityState(
-					false,
-					FWacomBackpackWorkspaceAccessibility::ResolveCardSemanticIcon(
-						InteractionModel
-							&& InteractionModel->IsSelected(Card->GetCardInstanceId()),
-						GetRuntime().Presentation.bCarryDropValid,
-						GetRuntime().Presentation.bCarryDropRejected),
-					*Style);
-			}
-		}
-	};
-	ApplyLayer(CarryLayer);
-	ApplyLayer(CarryActiveLayer);
+	RefreshCardAccessibilityPresentation();
 }
 
 void UWacomBackpackWorkspaceWidget::CancelHoverExpandTimer()
@@ -1453,7 +1433,7 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerMove(
 	if (InteractionModel->IsMarqueeActive())
 	{
 		InteractionModel->UpdateMarquee(Pointer);
-		RefreshInteractionPresentation();
+		Invalidate(EInvalidateWidgetReason::Paint);
 		return BuildHandledPointerReply();
 	}
 	if (InteractionModel->IsCarrying())
@@ -2053,7 +2033,7 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseMove(
 	if (InteractionModel->IsMarqueeActive())
 	{
 		InteractionModel->UpdateMarquee(ToLocalPointer(InMouseEvent));
-		RefreshInteractionPresentation();
+		Invalidate(EInvalidateWidgetReason::Paint);
 		return BuildHandledPointerReply();
 	}
 	UpdateExpandedPileFocus(ToLocalPointer(InMouseEvent));
@@ -2219,6 +2199,168 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseWheel(
 		return FReply::Handled();
 	}
 	return Super::NativeOnMouseWheel(InGeometry, InMouseEvent);
+}
+
+int32 UWacomBackpackWorkspaceWidget::NativePaint(
+	const FPaintArgs& Args,
+	const FGeometry& AllottedGeometry,
+	const FSlateRect& MyCullingRect,
+	FSlateWindowElementList& OutDrawElements,
+	int32 LayerId,
+	const FWidgetStyle& InWidgetStyle,
+	bool bParentEnabled) const
+{
+	const int32 ChildMaxLayerId = Super::NativePaint(
+		Args,
+		AllottedGeometry,
+		MyCullingRect,
+		OutDrawElements,
+		LayerId,
+		InWidgetStyle,
+		bParentEnabled);
+	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+		? InteractionStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+
+	// Card-local layer ids are only comparable inside one SObjectWidget subtree.
+	// Draw every marker from the complete Workspace child maximum so no later
+	// sibling Retainer can randomly cover it. Marker/card occlusion is resolved
+	// explicitly below so the centralized pass still obeys visual card stacking.
+	struct FOverlayCardEntry
+	{
+		const UWacomDeckCardWidget* Card = nullptr;
+		FWacomBackpackCardMarkerOccluder Body;
+	};
+	TArray<FOverlayCardEntry> OverlayCards;
+	OverlayCards.Reserve(GetBoundCardWidgets().Num());
+	int32 StableIndex = 0;
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : GetBoundCardWidgets())
+	{
+		const UWacomDeckCardWidget* Card = WeakCard.Get();
+		const UCanvasPanelSlot* CardSlot = Card ? Cast<UCanvasPanelSlot>(Card->Slot) : nullptr;
+		if (!Card || !CardSlot
+			|| Card->GetVisibility() == ESlateVisibility::Collapsed
+			|| Card->GetVisibility() == ESlateVisibility::Hidden)
+		{
+			++StableIndex;
+			continue;
+		}
+
+		FOverlayCardEntry& Entry = OverlayCards.AddDefaulted_GetRef();
+		Entry.Card = Card;
+		const UPanelWidget* Parent = Card->GetParent();
+		Entry.Body.Order.LayerPriority = Parent == CarryActiveLayer
+			? 4
+			: Parent == CarryLayer
+				? 3
+				: Parent == SettlementLayer
+					? 2
+					: Parent == StaticCardLayer
+						? 1
+						: 0;
+		Entry.Body.Order.ZOrder = CardSlot->GetZOrder();
+		Entry.Body.Order.ChildIndex = Parent ? Parent->GetChildIndex(Card) : INDEX_NONE;
+		Entry.Body.Order.StableIndex = StableIndex++;
+		const FWacomBackpackWorkspaceCardVisualPose Pose = CaptureCardVisualPose(*Card);
+		Entry.Body.Center = Pose.Center;
+		Entry.Body.Size = CardSlot->GetSize();
+		Entry.Body.AngleDegrees = Pose.AngleDegrees;
+	}
+
+	TArray<FWacomBackpackCardMarkerOccluder> CardBodies;
+	CardBodies.Reserve(OverlayCards.Num());
+	for (const FOverlayCardEntry& Entry : OverlayCards)
+	{
+		CardBodies.Add(Entry.Body);
+	}
+
+	int32 OverlayMaxLayerId = ChildMaxLayerId;
+	for (const FOverlayCardEntry& Entry : OverlayCards)
+	{
+		const UWacomDeckCardWidget* Card = Entry.Card;
+		FWacomBackpackCardOverlayPaintView CardView;
+		CardView.FocusBrush = Card->bWorkspaceNavigationFocused
+			? &Card->WorkspaceFocusPaintBrush
+			: nullptr;
+		CardView.SemanticBrush = Card->WorkspaceSemanticIcon
+			!= EWacomBackpackWorkspaceCardSemanticIcon::None
+			? &Card->WorkspaceSemanticPaintBrush
+			: nullptr;
+		CardView.LocalMotionTranslation = Card->GetBackpackLocalMotionTranslation();
+		CardView.LocalMotionAngleDegrees = Card->GetBackpackLocalMotionAngle();
+		if (CardView.FocusBrush)
+		{
+			const FVector2D FocusCenter =
+				FWacomBackpackWorkspaceOverlayPainter::ResolveCardMarkerCenter(
+					Entry.Body.Center,
+					Entry.Body.Size,
+					Entry.Body.AngleDegrees,
+					false,
+					CardView.IconSize,
+					CardView.Padding);
+			if (FWacomBackpackWorkspaceOverlayPainter::IsMarkerOccludedByHigherCard(
+					FocusCenter,
+					CardView.IconSize,
+					Entry.Body.AngleDegrees,
+					Entry.Body.Order,
+					CardBodies))
+			{
+				CardView.FocusBrush = nullptr;
+			}
+		}
+		if (CardView.SemanticBrush)
+		{
+			const FVector2D SemanticCenter =
+				FWacomBackpackWorkspaceOverlayPainter::ResolveCardMarkerCenter(
+					Entry.Body.Center,
+					Entry.Body.Size,
+					Entry.Body.AngleDegrees,
+					true,
+					CardView.IconSize,
+					CardView.Padding);
+			if (FWacomBackpackWorkspaceOverlayPainter::IsMarkerOccludedByHigherCard(
+					SemanticCenter,
+					CardView.IconSize,
+					Entry.Body.AngleDegrees,
+					Entry.Body.Order,
+					CardBodies))
+			{
+				CardView.SemanticBrush = nullptr;
+			}
+		}
+		FLinearColor CardTint = InWidgetStyle.GetColorAndOpacityTint();
+		CardTint.A *= Card->GetRenderOpacity();
+		OverlayMaxLayerId = FMath::Max(
+			OverlayMaxLayerId,
+			FWacomBackpackWorkspaceOverlayPainter::PaintCardMarkers(
+				Card->GetCachedGeometry(),
+				OutDrawElements,
+				ChildMaxLayerId,
+				CardView,
+				CardTint,
+				bParentEnabled));
+	}
+
+	if (!InteractionModel || !InteractionModel->IsMarqueeActive())
+	{
+		return OverlayMaxLayerId;
+	}
+	const FWacomBackpackWorkspaceSelectionState& Selection =
+		InteractionModel->GetSelection();
+	FWacomBackpackWorkspaceMarqueePaintView View;
+	View.bVisible = true;
+	View.Start = Selection.MarqueeStart;
+	View.End = Selection.MarqueeCurrent;
+	View.Color = Style->SelectionColor;
+	View.FillOpacity = Style->CardStateOverlayOpacity;
+	View.BorderThickness = 2.0f;
+	return FWacomBackpackWorkspaceOverlayPainter::PaintMarquee(
+		AllottedGeometry,
+		OutDrawElements,
+		OverlayMaxLayerId,
+		View,
+		InWidgetStyle.GetColorAndOpacityTint().A,
+		bParentEnabled);
 }
 
 FReply UWacomBackpackWorkspaceWidget::NativeOnKeyDown(
@@ -2409,9 +2551,6 @@ void UWacomBackpackWorkspaceWidget::ReconcileNavigationTargets()
 
 void UWacomBackpackWorkspaceWidget::RefreshNavigationPresentation()
 {
-	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
-		? InteractionStyle.Get()
-		: GetDefault<UWacomBackpackWorkspaceStyle>();
 	const bool bShowNavigationFocus =
 		GetRuntime().Navigation.IsSemanticFocusActive();
 	UWacomDeckCardWidget* FocusedCard = nullptr;
@@ -2428,18 +2567,8 @@ void UWacomBackpackWorkspaceWidget::RefreshNavigationPresentation()
 		{
 			FocusedCard = Card;
 		}
-		const bool bSelected = InteractionModel
-			&& InteractionModel->IsSelected(Card->GetCardInstanceId());
-		const bool bCarried = InteractionModel && InteractionModel->IsCarrying()
-			&& IsInCarryVisualLayer(Card);
-		Card->SetWorkspaceAccessibilityState(
-			bFocused,
-			FWacomBackpackWorkspaceAccessibility::ResolveCardSemanticIcon(
-				bSelected,
-				bCarried && GetRuntime().Presentation.bCarryDropValid,
-				bCarried && GetRuntime().Presentation.bCarryDropRejected),
-			*Style);
 	}
+	RefreshCardAccessibilityPresentation();
 	const FWacomBackpackWorkspaceNavigationTarget* Focused =
 		GetRuntime().Navigation.GetFocusedTarget();
 	for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile : GetRegisteredPileWidgets())
@@ -2458,6 +2587,51 @@ void UWacomBackpackWorkspaceWidget::RefreshNavigationPresentation()
 	{
 		OnBrowseFocusChangedNative.Broadcast(FocusedCard);
 	}
+}
+
+void UWacomBackpackWorkspaceWidget::RefreshCardAccessibilityPresentation()
+{
+	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+		? InteractionStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : GetBoundCardWidgets())
+	{
+		UWacomDeckCardWidget* Card = WeakCard.Get();
+		if (!Card)
+		{
+			continue;
+		}
+		Card->SetWorkspaceAccessibilityState(
+			IsCardAccessibilityFocused(*Card),
+			ResolveCardAccessibilitySemanticIcon(*Card),
+			*Style);
+	}
+	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+bool UWacomBackpackWorkspaceWidget::IsCardAccessibilityFocused(
+	const UWacomDeckCardWidget& Card) const
+{
+	return GetRuntime().Navigation.IsSemanticFocusActive()
+		&& GetRuntime().Navigation.IsCardFocused(Card.GetCardInstanceId());
+}
+
+EWacomBackpackWorkspaceCardSemanticIcon
+UWacomBackpackWorkspaceWidget::ResolveCardAccessibilitySemanticIcon(
+	const UWacomDeckCardWidget& Card) const
+{
+	const FGuid InstanceId = Card.GetCardInstanceId();
+	const bool bSelected = InteractionModel
+		&& Card.GetWorkspaceReadOnlyKind()
+			== EWacomBackpackWorkspaceCardReadOnlyKind::None
+		&& InteractionModel->IsSelected(InstanceId);
+	const bool bCarried = InteractionModel
+		&& InteractionModel->IsCarrying()
+		&& IsInCarryVisualLayer(&Card);
+	return FWacomBackpackWorkspaceAccessibility::ResolveCardSemanticIcon(
+		bSelected,
+		bCarried && GetRuntime().Presentation.bCarryDropValid,
+		bCarried && GetRuntime().Presentation.bCarryDropRejected);
 }
 
 void UWacomBackpackWorkspaceWidget::RelinquishSemanticNavigationForPointerInput()
@@ -2783,14 +2957,6 @@ void UWacomBackpackWorkspaceWidget::RefreshInteractionPresentation()
 				bSelected,
 				bCurrent,
 				bUseReadOnlyOpacity));
-		CardWidget->SetWorkspaceAccessibilityState(
-			GetRuntime().Navigation.IsSemanticFocusActive()
-				&& GetRuntime().Navigation.IsCardFocused(InstanceId),
-			FWacomBackpackWorkspaceAccessibility::ResolveCardSemanticIcon(
-				bSelected,
-				bInCarryLayer && GetRuntime().Presentation.bCarryDropValid,
-				bInCarryLayer && GetRuntime().Presentation.bCarryDropRejected),
-			*Style);
 	}
 
 	FVector2D PresentationPointer = Carry.PointerPosition;
@@ -2815,24 +2981,7 @@ void UWacomBackpackWorkspaceWidget::RefreshInteractionPresentation()
 
 	if (SelectionMarquee)
 	{
-		SelectionMarquee->SetVisibility(InteractionModel->IsMarqueeActive()
-			? ESlateVisibility::HitTestInvisible
-			: ESlateVisibility::Collapsed);
-		if (InteractionModel->IsMarqueeActive())
-		{
-			const FWacomBackpackWorkspaceSelectionState& Selection = InteractionModel->GetSelection();
-			const FVector2D Minimum(
-				FMath::Min(Selection.MarqueeStart.X, Selection.MarqueeCurrent.X),
-				FMath::Min(Selection.MarqueeStart.Y, Selection.MarqueeCurrent.Y));
-			const FVector2D Size(
-				FMath::Abs(Selection.MarqueeCurrent.X - Selection.MarqueeStart.X),
-				FMath::Abs(Selection.MarqueeCurrent.Y - Selection.MarqueeStart.Y));
-			if (UCanvasPanelSlot* MarqueeCanvasSlot = Cast<UCanvasPanelSlot>(SelectionMarquee->Slot))
-			{
-				MarqueeCanvasSlot->SetPosition(Minimum);
-				MarqueeCanvasSlot->SetSize(Size);
-			}
-		}
+		SelectionMarquee->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	RefreshNavigationPresentation();
 }

@@ -293,8 +293,32 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		TestEqual(TEXT("Dynamic current-card layer shares the moving root without entering the cache"),
 			static_cast<UWidget*>(CarryActiveLayer->GetParent()), CarryRoot);
 	}
-	TestNotNull(TEXT("Workspace binds SelectionMarquee"),
-		WorkspaceTree ? Cast<UBorder>(WorkspaceTree->FindWidget(TEXT("SelectionMarquee"))) : nullptr);
+	UCanvasPanel* MarqueeLayer = WorkspaceTree
+		? Cast<UCanvasPanel>(WorkspaceTree->FindWidget(TEXT("MarqueeLayer")))
+		: nullptr;
+	UBorder* SelectionMarquee = WorkspaceTree
+		? Cast<UBorder>(WorkspaceTree->FindWidget(TEXT("SelectionMarquee")))
+		: nullptr;
+	TestNotNull(TEXT("Workspace binds SelectionMarquee"), SelectionMarquee);
+	if (MarqueeLayer && SelectionMarquee)
+	{
+		TestEqual(TEXT("Compatibility marquee remains authored under MarqueeLayer"),
+			static_cast<UWidget*>(SelectionMarquee->GetParent()),
+			static_cast<UWidget*>(MarqueeLayer));
+		const UCanvasPanelSlot* MarqueeLayerSlot = Cast<UCanvasPanelSlot>(MarqueeLayer->Slot);
+		const UWidget* StaticCardLayerWidget =
+			WorkspaceTree->FindWidget(TEXT("StaticCardLayer"));
+		const UCanvasPanelSlot* StaticLayerSlot = StaticCardLayerWidget
+			? Cast<UCanvasPanelSlot>(StaticCardLayerWidget->Slot)
+			: nullptr;
+		TestNotNull(TEXT("MarqueeLayer keeps a WorkspaceCanvas slot"), MarqueeLayerSlot);
+		TestNotNull(TEXT("StaticCardLayer keeps a WorkspaceCanvas slot"), StaticLayerSlot);
+		if (MarqueeLayerSlot && StaticLayerSlot)
+		{
+			TestTrue(TEXT("Compatibility marquee layer remains authored above static cards"),
+				MarqueeLayerSlot->GetZOrder() > StaticLayerSlot->GetZOrder());
+		}
+	}
 	TestNotNull(TEXT("Workspace binds EmptyStateText"),
 		WorkspaceTree ? Cast<UTextBlock>(WorkspaceTree->FindWidget(TEXT("EmptyStateText"))) : nullptr);
 
