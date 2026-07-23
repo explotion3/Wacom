@@ -294,7 +294,9 @@ void FWacomBackpackScreenTestAccess::FlushDeferredWorkspaceCardFaceRender(
 {
 	if (Screen.WorkspaceWidget)
 	{
-		Screen.WorkspaceWidget->FlushDeferredCardFaceRender();
+		Screen.WorkspaceWidget->GetRuntime().FrameScheduler.BeginFrame();
+		Screen.WorkspaceWidget->FlushPresentationRefresh();
+		Screen.WorkspaceWidget->ExecuteDeferredCardFaceRender();
 	}
 }
 
@@ -587,21 +589,23 @@ void FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
 	UWacomBackpackWorkspaceWidget& Workspace,
 	float DeltaSeconds)
 {
-	const UWacomBackpackWorkspaceStyle* Style = Workspace.InteractionStyle.IsValid()
-		? Workspace.InteractionStyle.Get()
-		: GetDefault<UWacomBackpackWorkspaceStyle>();
 	float RemainingSeconds = FMath::Max(0.0f, DeltaSeconds);
 	while (RemainingSeconds > UE_SMALL_NUMBER)
 	{
 		const float StepSeconds = FMath::Min(RemainingSeconds, 1.0f / 60.0f);
-		Workspace.GetRuntime().Motion.Tick(
-			StepSeconds,
-			Workspace.GetCachedGeometry(),
-			*Style,
-			Workspace.GetRuntime().Presentation.IsSimplifiedMotion());
+		Workspace.RefreshFrameWorkFromState();
+		FWacomBackpackWorkspaceFrameScheduler& Scheduler =
+			Workspace.GetRuntime().FrameScheduler;
+		if (!Scheduler.WantsFrame())
+		{
+			break;
+		}
+		const uint64 Generation = Scheduler.IsTimerRegistered()
+			? Scheduler.GetTimerGeneration()
+			: Scheduler.MarkTimerRegistered();
+		Workspace.TickFrameScheduler(Generation, StepSeconds);
 		RemainingSeconds -= StepSeconds;
 	}
-	Workspace.FinalizeCompletedSettlements();
 }
 
 void FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(

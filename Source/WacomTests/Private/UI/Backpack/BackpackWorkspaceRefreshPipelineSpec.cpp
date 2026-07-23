@@ -135,6 +135,9 @@ bool FWacomUIBackpackWorkspaceRefreshPipelineHotPathSpec::RunTest(
 		AfterPointerSamples.CarryStripLayoutRebuildCount + 1);
 
 	Workspace->SetCarryDropFeedbackState(true, false);
+	FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
+		*Workspace,
+		1.0f / 60.0f);
 	const FWacomBackpackWorkspaceAutomationTestView AfterDropFeedback =
 		Workspace->GetAutomationTestView();
 	TestFalse(TEXT("Drop feedback scopes by carried InstanceIds instead of all cards"),

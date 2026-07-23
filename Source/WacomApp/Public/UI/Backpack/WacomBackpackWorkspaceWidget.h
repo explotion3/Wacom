@@ -208,12 +208,6 @@ private:
 	TSubclassOf<UWacomBackpackZonePileWidget> PileWidgetClass;
 
 	uint64 CurrentStorageRevision = 0;
-	/** 唯一按需卡牌运动 ActiveTimer 的运行标记。 */
-	bool bCardMotionTimerActive = false;
-	/** 令已注册但被显式停止的旧 Timer 回调失效，避免生命周期重入。 */
-	uint64 CardMotionTimerGeneration = 0;
-	bool bDeferredCardFaceRenderRequested = false;
-	bool bDeferredCardFaceRenderActive = false;
 	int32 DeferredCardFaceRenderPassCount = 0;
 	bool bCardFaceRetainedRenderingEnabled = true;
 #if WITH_AUTOMATION_TESTS
@@ -238,6 +232,7 @@ private:
 	int32 LocalCardApplyCount = 0;
 	bool bLastPresentationAppliedAllCards = false;
 	TArray<FGuid> LastPresentationAppliedInstanceIds;
+	int32 FrameSchedulerTickCount = 0;
 #endif
 
 	void EnsureFallbackTree();
@@ -315,8 +310,13 @@ private:
 	bool HandleNavigationContextAction();
 	bool StepCarriedCard(int32 Direction);
 	void RelinquishSemanticNavigationForPointerInput();
-	void StartCardMotionTimer();
-	void StopCardMotionTimer();
+	void WakeFrameScheduler();
+	void EnsureFrameSchedulerRunning();
+	void StopFrameScheduler();
+	void RefreshFrameWorkFromState();
+	EActiveTimerReturnType TickFrameScheduler(
+		uint64 TimerGeneration,
+		float DeltaSeconds);
 	bool TickBaseCardLayoutTransitions(float DeltaSeconds);
 	void ApplyStaticCardPresentation(
 		UWacomDeckCardWidget& CardWidget,
@@ -369,8 +369,8 @@ private:
 	bool IsInCarryVisualLayer(const UWidget* CardWidget) const;
 	bool IsInSettlementVisualLayer(const UWidget* CardWidget) const;
 	void RequestBoundCardFaceRenders();
-	void ScheduleBoundCardFaceRender();
-	void FlushDeferredCardFaceRender();
+	void RequestDeferredCardFaceRender();
+	void ExecuteDeferredCardFaceRender();
 	bool AcceptStableLayoutGeometry(FVector2D LayoutSize);
 	FWacomBackpackWorkspaceRuntime& GetRuntime();
 	const FWacomBackpackWorkspaceRuntime& GetRuntime() const;
@@ -458,7 +458,10 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 WorkspaceSceneBindCount = 0;
 	int32 BaseCardLayoutTransitionTickCount = 0;
 	int32 BaseCardLayoutTransitionApplyCount = 0;
-	bool bCardMotionTimerActive = false;
+	bool bFrameSchedulerActive = false;
+	uint64 FrameSchedulerGeneration = 0;
+	uint64 FrameSchedulerFrameSerial = 0;
+	int32 FrameSchedulerTickCount = 0;
 	TArray<FVector2D> ActiveBaseCardLayoutTransitionTargetCenters;
 	bool bHasExpandedContentBounds = false;
 	bool bPileCollapseAnimationPending = false;

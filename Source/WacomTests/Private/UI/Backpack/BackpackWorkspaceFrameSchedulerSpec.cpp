@@ -67,6 +67,7 @@ bool FWacomUIBackpackWorkspaceFrameSchedulerContractSpec::RunTest(
 	Scheduler.MarkTimerStopped(FirstGeneration);
 	TestFalse(TEXT("The current generation may stop itself"),
 		Scheduler.IsTimerRegistered());
+	Scheduler.SetWork(EWacomBackpackWorkspaceFrameWork::Settlement, false);
 
 	FVector2D StableSize = FVector2D::ZeroVector;
 	TestTrue(TEXT("Geometry stabilization starts once"),
@@ -103,6 +104,17 @@ bool FWacomUIBackpackWorkspaceFrameSchedulerContractSpec::RunTest(
 	Scheduler.BeginFrame();
 	TestTrue(TEXT("The in-frame request becomes ready one frame later"),
 		Scheduler.IsDeferredCardFaceRenderReady());
+	Scheduler.SuspendDeferredCardFaceRender();
+	TestFalse(TEXT("A hidden card layer suspends deferred work without losing it"),
+		Scheduler.HasWork(
+			EWacomBackpackWorkspaceFrameWork::DeferredCardFaceRender));
+	TestTrue(TEXT("Suspended deferred work remains pending"),
+		Scheduler.IsDeferredCardFaceRenderPending());
+	TestFalse(TEXT("Suspended deferred work does not create an empty frame loop"),
+		Scheduler.WantsFrame());
+	Scheduler.ResumeDeferredCardFaceRender();
+	TestTrue(TEXT("Visible retained rendering wakes the pending request"),
+		Scheduler.WantsFrame());
 
 	const uint64 ResetGeneration = Scheduler.MarkTimerRegistered();
 	Scheduler.Reset();

@@ -74,10 +74,7 @@ public:
 	int32 CarryVisualAnchorApplyCount = 0;
 
 	FVector2D StableLayoutSize = FVector2D::ZeroVector;
-	FVector2D PendingLayoutSize = FVector2D::ZeroVector;
-	int32 StableLayoutSampleCount = 0;
 	bool bHasStableLayoutSize = false;
-	bool bLayoutGeometryRefreshActive = false;
 
 	FExpandedPileFocusState ExpandedPileFocus;
 	bool bExpandedPileLensInputLocked = false;

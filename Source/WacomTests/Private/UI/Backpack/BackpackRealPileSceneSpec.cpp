@@ -238,8 +238,8 @@ bool FWacomUIBackpackRealPileSceneIdentitySpec::RunTest(const FString& Parameter
 	Workspace->BindWorkspaceCards(ExpandedCards, 1);
 	const FWacomBackpackWorkspaceAutomationTestView BeforeTransitionTick =
 		Workspace->GetAutomationTestView();
-	TestTrue(TEXT("The shared on-demand motion timer owns active base-layout transitions"),
-		BeforeTransitionTick.bCardMotionTimerActive);
+	TestTrue(TEXT("The shared frame scheduler owns active base-layout transitions"),
+		BeforeTransitionTick.bFrameSchedulerActive);
 	FWacomBackpackScreenTestAccess::TickWorkspaceBaseCardLayoutTransitions(
 		*Workspace,
 		1.0f / 120.0f);
