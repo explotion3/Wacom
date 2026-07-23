@@ -74,7 +74,6 @@ namespace WacomEncounterSceneLifecycleSpec
 		OutPart->SetupAttachment(Host->GetRootComponent());
 		OutPart->PartSlotId = TEXT("Body");
 		OutPart->SetDerivedPartId(EnemyDefinition.Parts[0].PartDef->PartId);
-		OutPart->SetBoxExtent(FVector(40.0f));
 		OutPart->RegisterComponent();
 
 		OutVisual = NewObject<UWacomBattleEnemyPartFlipbookLayerComponent>(

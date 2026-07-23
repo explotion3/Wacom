@@ -289,7 +289,6 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 		FName SlotId;
 		FName PartId;
 		FVector Location;
-		FVector Bounds;
 		float Scale;
 		float StartTime;
 		FLinearColor Tint;
@@ -299,15 +298,15 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 	};
 	const TArray<FPresentationExpectation> Expectations = {
 		{ TEXT("Left"), TEXT("SlimeTrio.Left"), FVector(-88, 8, -6),
-			FVector(46, 38, 40), 0.90f, 0.00f,
+			0.90f, 0.00f,
 			FLinearColor(0.84f, 1.0f, 0.90f, 1.0f), 10,
 			TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Left"), 1 },
 		{ TEXT("Core"), TEXT("SlimeTrio.Core"), FVector(0, 0, 8),
-			FVector(56, 44, 48), 1.10f, 0.04f,
+			1.10f, 0.04f,
 			FLinearColor::White, 20,
 			TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Core"), 2 },
 		{ TEXT("Right"), TEXT("SlimeTrio.Right"), FVector(88, -8, -6),
-			FVector(46, 38, 40), 0.90f, 0.08f,
+			0.90f, 0.08f,
 			FLinearColor(0.86f, 0.92f, 1.0f, 1.0f), 30,
 			TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Right"), 3 },
 	};
@@ -341,7 +340,6 @@ bool FWacomDataSlimeTrioHostAndPlaceholderArtSpec::RunTest(
 		TestEqual(TEXT("Derived PartId"), Part->PartId, Expected.PartId);
 		TestEqual(TEXT("Part viewport transform"),
 			Part->GetRelativeLocation(), Expected.Location);
-		TestEqual(TEXT("HitBounds"), Part->GetUnscaledBoxExtent(), Expected.Bounds);
 		if (TestNotNull(TEXT("ImpactAnchor"), Templates.ImpactAnchor))
 		{
 			TestEqual(TEXT("ImpactAnchor transform"),

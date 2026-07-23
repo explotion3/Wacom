@@ -445,8 +445,6 @@ namespace
 		Spec.LayerId = PartLayerId(Seed, PartSlot.PartSlotId);
 		Spec.RelativeLocation =
 			PartLayoutLocation(Seed.ExpectedParts, Index) * Seed.VisualScale;
-		Spec.HitBoundsExtent =
-			FVector(62.0f, 48.0f, 62.0f) * Seed.VisualScale;
 		Spec.VisualScale = FVector(PartVisualScale(Seed));
 		Spec.Tint = Seed.Tint;
 		Spec.SortOrder = Index;

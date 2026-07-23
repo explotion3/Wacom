@@ -42,7 +42,6 @@ namespace
 		FName PartSlotId;
 		FName PartId;
 		FVector RelativeLocation;
-		FVector HitBoundsExtent;
 		float VisualScale = 1.0f;
 		float IdleOffsetSeconds = 0.0f;
 		FLinearColor Tint = FLinearColor::White;
@@ -55,19 +54,19 @@ namespace
 		static const TArray<FSlimeTrioPartPresentationSpec> Specs = {
 			{
 				TEXT("Left"), TEXT("SlimeTrio.Left"),
-				FVector(-88.0f, 8.0f, -6.0f), FVector(46.0f, 38.0f, 40.0f),
+				FVector(-88.0f, 8.0f, -6.0f),
 				0.90f, 0.00f, FLinearColor(0.84f, 1.0f, 0.90f, 1.0f), 10,
 				TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Left")
 			},
 			{
 				TEXT("Core"), TEXT("SlimeTrio.Core"),
-				FVector(0.0f, 0.0f, 8.0f), FVector(56.0f, 44.0f, 48.0f),
+				FVector(0.0f, 0.0f, 8.0f),
 				1.10f, 0.04f, FLinearColor::White, 20,
 				TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Core")
 			},
 			{
 				TEXT("Right"), TEXT("SlimeTrio.Right"),
-				FVector(88.0f, -8.0f, -6.0f), FVector(46.0f, 38.0f, 40.0f),
+				FVector(88.0f, -8.0f, -6.0f),
 				0.90f, 0.08f, FLinearColor(0.86f, 0.92f, 1.0f, 1.0f), 30,
 				TEXT("PF_Enemy_SlimeTrioPlaceholder_Destroyed_Right")
 			},
@@ -147,7 +146,6 @@ namespace
 		ComponentSpec.LayerId = FName(*FString::Printf(
 			TEXT("SlimeTrio.%s.Main"), *Spec.PartSlotId.ToString()));
 		ComponentSpec.RelativeLocation = Spec.RelativeLocation;
-		ComponentSpec.HitBoundsExtent = Spec.HitBoundsExtent;
 		ComponentSpec.VisualScale = FVector(Spec.VisualScale);
 		ComponentSpec.IdleOffsetSeconds = Spec.IdleOffsetSeconds;
 		ComponentSpec.Tint = Spec.Tint;

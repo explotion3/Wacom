@@ -499,7 +499,6 @@ namespace WacomFirstPersonCardLayerSpec
 			PartComponent->SetupAttachment(Result.Host->GetRootComponent());
 			PartComponent->SetRelativeLocation(
 				FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f));
-			PartComponent->SetBoxExtent(FVector(40.f));
 			PartComponent->SetDerivedPartId(PartIds[Index]);
 			PartComponent->PartSlotId = PartIds[Index];
 			PartComponent->RegisterComponent();

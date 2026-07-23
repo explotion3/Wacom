@@ -167,11 +167,9 @@ bool FWacomEnemySceneComponentAuthoringSyncSpec::RunTest(const FString& /*Parame
 	if (Parts.Num() == 3)
 	{
 		Parts[0]->SetRelativeLocation(FVector(96.0f, -6.0f, 16.0f));
-		Parts[0]->SetBoxExtent(FVector(42.0f, 38.0f, 42.0f));
 		Parts[0]->SetDerivedPartId(TEXT("Wrong.Head"));
 	}
 	const FVector LocationBefore = Parts.IsEmpty() ? FVector::ZeroVector : Parts[0]->GetRelativeLocation();
-	const FVector ExtentBefore = Parts.IsEmpty() ? FVector::ZeroVector : Parts[0]->GetUnscaledBoxExtent();
 	const TArray<FWacomBattleSceneEnemyHostSyncResult> IdentityFix =
 		FWacomBattleSceneEnemyHostAuthoring::SyncPartsFromDefinition(
 			TArray<AWacomBattleEnemyActor*>{ Host });
@@ -179,7 +177,6 @@ bool FWacomEnemySceneComponentAuthoringSyncSpec::RunTest(const FString& /*Parame
 	if (!Parts.IsEmpty())
 	{
 		TestEqual(TEXT("Part transform preserved"), Parts[0]->GetRelativeLocation(), LocationBefore);
-		TestEqual(TEXT("Box extent preserved"), Parts[0]->GetUnscaledBoxExtent(), ExtentBefore);
 	}
 
 	const uint32 RevisionBefore = Host->GetEnemySceneComponentTopologyRevision();

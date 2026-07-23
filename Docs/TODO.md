@@ -349,7 +349,7 @@ tags:
   - 状态：`Ready: Graph/Style 已完成，等待手感验收`
   - 归属：App / Battle 表现 / VFX
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
-  - 说明：`NS_WacomBattleEnemyPartImpact_Pixel` 的六个 CPU Burst Emitter、四通道 Dynamic Material Parameter、默认 MI/Style 与 Debug Snake Host 绑定均已由 WacomEditor 生成流程完成；尺寸读取单个部位 `HitBounds` 的摄像机平面投影，Destroyed 默认约 `1.35x` 覆盖。剩余工作是 PIE 调整确认、伤害、崩裂的手感与遮挡，并在 Style 中指定正式 TargetConfirmed/Damage/Destroyed 音效。攻击方向、局部材质闪白和镜头震动留给后续切片。
+  - 说明：`NS_WacomBattleEnemyPartImpact_Pixel` 的六个 CPU Burst Emitter、四通道 Dynamic Material Parameter、默认 MI/Style 与 Debug Snake Host 绑定均已由 WacomEditor 生成流程完成；尺寸读取单个部位 interaction visual（配置异常时为 transient fallback）的摄像机平面投影，Destroyed 默认约 `1.35x` 覆盖。剩余工作是 PIE 调整确认、伤害、崩裂的手感与遮挡，并在 Style 中指定正式 TargetConfirmed/Damage/Destroyed 音效。攻击方向、局部材质闪白和镜头震动留给后续切片。
 
 - [x] **用编辑器迁移旧内容目录并清理 `_GAME` 临时蓝图目录**
   - 状态：`Done: Content Organization V1-A`

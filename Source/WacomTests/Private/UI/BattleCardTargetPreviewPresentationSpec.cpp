@@ -458,7 +458,7 @@ bool FWacomUIBattleFirstPersonEnemyPreviewReusesStableDetailSpec::RunTest(const 
 	HUD->SyncFirstPersonBattleHandLayerForTest(Snapshot);
 
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
-	FWacomBattleSceneTargetClickTestAccess::SetHit(
+	FWacomBattleSceneTargetClickTestAccess::SetPartHit(
 		PC,
 		SceneEnemy.Host,
 		SceneEnemy.Parts[0]);
@@ -611,7 +611,7 @@ bool FWacomUIBattleFirstPersonSceneHoverPreviewReusesStableDetailSpec::RunTest(c
 	}
 
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
-	FWacomBattleSceneTargetClickTestAccess::SetHit(
+	FWacomBattleSceneTargetClickTestAccess::SetPartHit(
 		PC,
 		SceneEnemy.Host,
 		SceneEnemy.Parts[0]);

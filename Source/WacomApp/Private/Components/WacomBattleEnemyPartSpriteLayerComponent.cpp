@@ -3,6 +3,7 @@
 #include "Components/WacomBattleEnemyPartSpriteLayerComponent.h"
 
 #include "Components/WacomBattleEnemyPartComponent.h"
+#include "Interaction/WacomInteractionCollisionChannels.h"
 #include "PaperSprite.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "Types/WacomInteractionTargetTypes.h"
@@ -32,7 +33,9 @@ void UWacomBattleEnemyPartSpriteLayerComponent::ConfigureInteractionCollision(
 	RecreatePhysicsState();
 	SetCollisionObjectType(ECC_WorldDynamic);
 	SetCollisionResponseToAllChannels(ECR_Ignore);
-	SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+	SetCollisionResponseToChannel(
+		Wacom::Interaction::BattleEnemyPartTraceChannel,
+		ECR_Block);
 	SetGenerateOverlapEvents(false);
 	SetCollisionEnabled(
 		bEnableCollision && IsInteractionCollisionReady()

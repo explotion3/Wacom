@@ -87,7 +87,7 @@ void FWacomBattleEnemyActorDetails::CustomizeDetails(
 		.Text(LOCTEXT("SyncPartsButton", "从 EnemyDefinition 同步部位"))
 		.ToolTipText(LOCTEXT(
 			"SyncPartsTooltip",
-			"显式应用只读同步计划。Blueprint 写入真实 SCS Part、Visual_Main 与 ImpactAnchor；关卡实例写入 transactional InstanceComponent。保留已有 Transform、BoxExtent、视觉和 Anchor，不删除 surplus 部位。"))
+			"显式应用只读同步计划。Blueprint 写入真实 SCS Part、Visual_Main 与 ImpactAnchor；关卡实例写入 transactional InstanceComponent。保留已有 Transform、视觉和 Anchor，不删除 surplus 部位；Part 不制作手工命中盒。"))
 		.IsEnabled(this, &FWacomBattleEnemyActorDetails::CanSyncParts)
 		.OnClicked(this, &FWacomBattleEnemyActorDetails::HandleSyncParts)
 	];

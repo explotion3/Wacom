@@ -62,7 +62,7 @@ bool FWacomBattleSceneInteractionRouter::TryRouteTargetClick(bool bRequireTarget
 		if (PlayerController.bLogBattleSceneTargetClickRouting)
 		{
 			UE_LOG(LogTemp, Display,
-				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NoVisibilityHit hud=%s inTargetSelect=%s"),
+				TEXT("[WacomBattleSceneClickRouter] NoRoute reason=NoBattleInteractionHit hud=%s inTargetSelect=%s"),
 				*GetBattleSceneDebugObjectName(HUD),
 				HUD && HUD->IsInTargetSelect() ? TEXT("true") : TEXT("false"));
 		}

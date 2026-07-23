@@ -11,6 +11,7 @@
 #include "Engine/World.h"
 #include "Fixtures/BattleTestFixtures.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Session/BattleSession.h"
 #include "UI/Battle/BattleCombatLogFeedWidget.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
@@ -220,7 +221,6 @@ FWacomBattleHUDTestSceneEnemyHost& FWacomBattleHUDTestHarness::AttachSceneEnemyH
 		PartComponent->SetupAttachment(CurrentSceneEnemyHost.Host->GetRootComponent());
 		PartComponent->SetRelativeLocation(
 			FVector(100.f * static_cast<float>(Index + 1), 0.f, 0.f));
-		PartComponent->SetBoxExtent(FVector(40.f));
 		PartComponent->SetDerivedPartId(PartIds[Index]);
 		PartComponent->PartSlotId =
 			ResolvePartSlotIdForDefinitionPart(EnemyDefinition, PartIds[Index]);

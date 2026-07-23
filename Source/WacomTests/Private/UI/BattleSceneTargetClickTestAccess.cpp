@@ -4,6 +4,9 @@
 
 #if WITH_AUTOMATION_TESTS
 
+#include "Components/PrimitiveComponent.h"
+#include "Components/WacomBattleEnemyPartComponent.h"
+#include "../../../WacomApp/Private/Interaction/WacomInteractionTargetHitResolver.h"
 #include "UI/BattleWidgetSpecReceiver.h"
 
 void FWacomBattleSceneTargetClickTestAccess::SetHUD(
@@ -25,6 +28,35 @@ void FWacomBattleSceneTargetClickTestAccess::SetHit(
 	{
 		PC->SetBattleSceneClickHitForTest(Actor, Component);
 	}
+}
+
+void FWacomBattleSceneTargetClickTestAccess::SetPartHit(
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC,
+	AActor* Actor,
+	UWacomBattleEnemyPartComponent* Part)
+{
+	UPrimitiveComponent* InteractionComponent = nullptr;
+	if (Part)
+	{
+		for (USceneComponent* Child : Part->GetAttachChildren())
+		{
+			UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Child);
+			if (!Primitive)
+			{
+				continue;
+			}
+			FHitResult CandidateHit;
+			CandidateHit.HitObjectHandle = FActorInstanceHandle(Actor);
+			CandidateHit.Component = Primitive;
+			if (WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(
+				CandidateHit).IsValid())
+			{
+				InteractionComponent = Primitive;
+				break;
+			}
+		}
+	}
+	SetHit(PC, Actor, InteractionComponent);
 }
 
 void FWacomBattleSceneTargetClickTestAccess::ClearHit(

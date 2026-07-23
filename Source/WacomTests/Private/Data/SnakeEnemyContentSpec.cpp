@@ -313,7 +313,6 @@ bool FWacomDataSnakeHostAndPlaceholderArtSpec::RunTest(
 		FName SlotId;
 		FName PartId;
 		FVector Location;
-		FVector Bounds;
 		float Scale;
 		float StartTime;
 		FLinearColor Tint;
@@ -322,15 +321,15 @@ bool FWacomDataSnakeHostAndPlaceholderArtSpec::RunTest(
 	};
 	const TArray<FPresentationExpectation> Expectations = {
 		{ TEXT("Head"), TEXT("Snake.Head"), FVector(96, -6, 16),
-			FVector(42, 38, 42), 0.85f, 0.00f,
+			0.85f, 0.00f,
 			FLinearColor(1.0f, 0.85f, 0.85f, 1.0f), 30,
 			TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Head") },
 		{ TEXT("Body"), TEXT("Snake.Body"), FVector::ZeroVector,
-			FVector(62, 46, 42), 1.00f, 0.04f,
+			1.00f, 0.04f,
 			FLinearColor::White, 20,
 			TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Body") },
 		{ TEXT("Tail"), TEXT("Snake.Tail"), FVector(-92, 16, -8),
-			FVector(48, 34, 34), 0.70f, 0.08f,
+			0.70f, 0.08f,
 			FLinearColor(0.82f, 0.90f, 1.0f, 1.0f), 10,
 			TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Tail") },
 	};
@@ -363,7 +362,6 @@ bool FWacomDataSnakeHostAndPlaceholderArtSpec::RunTest(
 		TestEqual(TEXT("Derived PartId"), Part->PartId, Expected.PartId);
 		TestEqual(TEXT("Part viewport transform"),
 			Part->GetRelativeLocation(), Expected.Location);
-		TestEqual(TEXT("HitBounds"), Part->GetUnscaledBoxExtent(), Expected.Bounds);
 		if (TestNotNull(TEXT("ImpactAnchor"), Templates.ImpactAnchor))
 		{
 			TestEqual(TEXT("ImpactAnchor transform"),

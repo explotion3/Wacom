@@ -7,6 +7,8 @@
 #include "../../../WacomApp/Private/Interaction/WacomInteractionTargetHitResolver.h"
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
+#include "Components/BoxComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomBattleEnemyPartSpriteLayerComponent.h"
@@ -24,6 +26,7 @@
 #include "Testing/WacomEnemySceneRuntimeAutomationTestView.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
+#include "Interaction/WacomInteractionCollisionChannels.h"
 #include "UObject/StrongObjectPtr.h"
 
 namespace WacomBattleEnemyInteractionVisualSpec
@@ -69,6 +72,31 @@ namespace WacomBattleEnemyInteractionVisualSpec
 		return Sprite;
 	}
 
+	UPaperSprite* MakeRenderBoundsOnlySprite(UObject& Outer)
+	{
+		UPaperSprite* Source = LoadObject<UPaperSprite>(
+			nullptr,
+			TEXT("/Game/Wacom/Art/Enemies/TrainingWarrior/Sprites/"
+				"SPR_Enemy_TrainingWarrior_Idle_00."
+				"SPR_Enemy_TrainingWarrior_Idle_00"));
+		UPaperSprite* Sprite = Source
+			? DuplicateObject<UPaperSprite>(Source, &Outer)
+			: nullptr;
+		if (Sprite)
+		{
+			Sprite->BodySetup = nullptr;
+		}
+		return Sprite;
+	}
+
+	enum class ECollisionFixtureMode : uint8
+	{
+		Stable,
+		InteractionVisualBoundsFallback,
+		DirectVisualUnionFallback,
+		DefaultSafetyFallback,
+	};
+
 	struct FFixture
 	{
 		TStrongObjectPtr<UEnemyDefinition> EnemyDefinition;
@@ -80,7 +108,9 @@ namespace WacomBattleEnemyInteractionVisualSpec
 		UPaperSprite* StableSprite = nullptr;
 		FBattleSnapshot Snapshot;
 
-		bool Initialize(UWorld& World)
+		bool Initialize(
+			UWorld& World,
+			ECollisionFixtureMode Mode = ECollisionFixtureMode::Stable)
 		{
 			PartDefinition.Reset(NewObject<UEnemyPartDefinition>(
 				GetTransientPackage(), NAME_None, RF_Transient));
@@ -111,16 +141,37 @@ namespace WacomBattleEnemyInteractionVisualSpec
 			Part->SetDerivedPartId(TEXT("Interaction.Body"));
 			Part->InteractionVisualLayerId = TEXT("Body.Main");
 
-			StableSprite = MakeCollisionSprite(*Host);
-			InteractionVisual = AddSceneComponent<UWacomBattleEnemyPartSpriteLayerComponent>(
-				*Host, *Part, TEXT("Visual_Body_Main"));
-			InteractionVisual->LayerId = TEXT("Body.Main");
-			InteractionVisual->SetSprite(StableSprite);
-			DecorationVisual = AddSceneComponent<UWacomBattleEnemyPartSpriteLayerComponent>(
-				*Host, *Part, TEXT("Visual_Body_Decoration"));
-			DecorationVisual->LayerId = TEXT("Body.Decoration");
-			DecorationVisual->SetSprite(NewObject<UPaperSprite>(
-				Host, NAME_None, RF_Transient));
+			if (Mode != ECollisionFixtureMode::DefaultSafetyFallback)
+			{
+				StableSprite = Mode == ECollisionFixtureMode::Stable
+					? MakeCollisionSprite(*Host)
+					: MakeRenderBoundsOnlySprite(*Host);
+				if (!StableSprite)
+				{
+					return false;
+				}
+				InteractionVisual =
+					AddSceneComponent<UWacomBattleEnemyPartSpriteLayerComponent>(
+						*Host, *Part, TEXT("Visual_Body_Main"));
+				InteractionVisual->LayerId = TEXT("Body.Main");
+				InteractionVisual->SetSprite(StableSprite);
+				DecorationVisual =
+					AddSceneComponent<UWacomBattleEnemyPartSpriteLayerComponent>(
+						*Host, *Part, TEXT("Visual_Body_Decoration"));
+				DecorationVisual->LayerId = Mode
+					== ECollisionFixtureMode::DirectVisualUnionFallback
+						? FName(TEXT("Body.Main"))
+						: FName(TEXT("Body.Decoration"));
+				DecorationVisual->SetSprite(
+					Mode == ECollisionFixtureMode::DirectVisualUnionFallback
+						? MakeRenderBoundsOnlySprite(*Host)
+						: NewObject<UPaperSprite>(
+							Host, NAME_None, RF_Transient));
+				if (Mode == ECollisionFixtureMode::DirectVisualUnionFallback)
+				{
+					DecorationVisual->SetRelativeLocation(FVector(32.0f, 0.0f, 0.0f));
+				}
+			}
 			Host->NotifyEnemySceneComponentTopologyChanged();
 
 			Snapshot.EncounterId = TEXT("Encounter.Interaction");
@@ -145,6 +196,23 @@ namespace WacomBattleEnemyInteractionVisualSpec
 				*Host, Snapshot.EncounterId, TEXT("Enemy"));
 			return FWacomEnemySceneRuntimeAutomationTestView::SyncPart(
 				*Host, *Part, Snapshot);
+		}
+
+		UBoxComponent* FindFallbackCollision() const
+		{
+			if (!Host || !Part)
+			{
+				return nullptr;
+			}
+			TArray<UBoxComponent*> Boxes;
+			Host->GetComponents(Boxes);
+			UBoxComponent** Match = Boxes.FindByPredicate([this](const UBoxComponent* Box)
+			{
+				return Box
+					&& Box->GetAttachParent() == Part
+					&& Box->HasAnyFlags(RF_Transient);
+			});
+			return Match ? *Match : nullptr;
 		}
 	};
 }
@@ -181,12 +249,23 @@ bool FWacomBattleEnemyInteractionVisualCollisionSpec::RunTest(const FString& /*P
 	TestTrue(TEXT("Interaction layer resolves exactly"), Debug.bInteractionVisualResolved);
 	TestTrue(TEXT("Stable collision is ready"), Debug.bInteractionCollisionReady);
 	TestFalse(TEXT("Box fallback is disabled"), Debug.bUsingBoxCollisionFallback);
+	TestEqual(TEXT("Stable collision source is explicit"),
+		Debug.InteractionCollisionSource, FName(TEXT("StableSpriteBodySetup")));
+	TestFalse(TEXT("Part is identity-only, not a PrimitiveComponent"),
+		Fixture.Part->IsA<UPrimitiveComponent>());
 	TestEqual(TEXT("Interaction visual owns query collision"),
 		Fixture.InteractionVisual->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
-	TestEqual(TEXT("Part box collision is disabled"),
-		Fixture.Part->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+	TestEqual(TEXT("Interaction visual blocks only the dedicated channel"),
+		Fixture.InteractionVisual->GetCollisionResponseToChannel(
+			Wacom::Interaction::BattleEnemyPartTraceChannel),
+		ECR_Block);
+	TestEqual(TEXT("Interaction visual does not block Visibility"),
+		Fixture.InteractionVisual->GetCollisionResponseToChannel(ECC_Visibility),
+		ECR_Ignore);
 	TestEqual(TEXT("Decoration remains non-colliding"),
 		Fixture.DecorationVisual->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+	TestNull(TEXT("Collision-ready Part never creates a transient fallback"),
+		Fixture.FindFallbackCollision());
 
 	const FWacomInteractionTargetHandle InteractionHandle =
 		Fixture.InteractionVisual->BuildWorldTargetHandle();
@@ -208,6 +287,113 @@ bool FWacomBattleEnemyInteractionVisualCollisionSpec::RunTest(const FString& /*P
 		Fixture.Host, NAME_None, RF_Transient));
 	TestTrue(TEXT("Runtime sprite swap keeps authored Idle collision BodySetup"),
 		Fixture.InteractionVisual->GetBodySetup() == StableBodySetup);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomBattleEnemyInteractionFallbackCollisionSpec,
+	"Wacom.UI.Battle.EnemyScene.InteractionVisual.TransientFallbackSourcesAndLifecycle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomBattleEnemyInteractionFallbackCollisionSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleEnemyInteractionVisualSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	const TArray<TPair<ECollisionFixtureMode, FName>> Cases =
+	{
+		{ ECollisionFixtureMode::InteractionVisualBoundsFallback,
+			TEXT("InteractionVisualBoundsFallback") },
+		{ ECollisionFixtureMode::DirectVisualUnionFallback,
+			TEXT("DirectVisualUnionFallback") },
+		{ ECollisionFixtureMode::DefaultSafetyFallback,
+			TEXT("DefaultSafetyFallback") },
+	};
+	for (const TPair<ECollisionFixtureMode, FName>& Case : Cases)
+	{
+		FFixture Fixture;
+		if (!TestTrue(TEXT("Fallback fixture binds"),
+			Fixture.Initialize(*World, Case.Key)))
+		{
+			continue;
+		}
+
+		TestNull(TEXT("Fallback is not created before HUD registration"),
+			Fixture.FindFallbackCollision());
+		FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(
+			*Fixture.Host, *Fixture.Part, true, false);
+		UBoxComponent* Fallback = Fixture.FindFallbackCollision();
+		if (TestNotNull(TEXT("Fallback is lazily created"), Fallback))
+		{
+			TestEqual(TEXT("Fallback source is diagnosed"),
+				Fixture.Part->GetRuntimeDebugView().InteractionCollisionSource,
+				Case.Value);
+			TestTrue(TEXT("Fallback compatibility flag remains available"),
+				Fixture.Part->GetRuntimeDebugView().bUsingBoxCollisionFallback);
+			TestEqual(TEXT("Fallback becomes query-only while registered"),
+				Fallback->GetCollisionEnabled(), ECollisionEnabled::QueryOnly);
+			TestEqual(TEXT("Fallback blocks only the dedicated channel"),
+				Fallback->GetCollisionResponseToChannel(
+					Wacom::Interaction::BattleEnemyPartTraceChannel),
+				ECR_Block);
+			TestEqual(TEXT("Fallback ignores Visibility"),
+				Fallback->GetCollisionResponseToChannel(ECC_Visibility),
+				ECR_Ignore);
+			TestFalse(TEXT("Fallback does not generate overlap events"),
+				Fallback->GetGenerateOverlapEvents());
+			TestTrue(TEXT("Fallback half extents respect the 6cm minimum"),
+				Fallback->GetUnscaledBoxExtent().GetMin() >= 6.0f);
+			if (Case.Key == ECollisionFixtureMode::DefaultSafetyFallback)
+			{
+				TestTrue(TEXT("No-visual fallback uses the fixed safety bounds"),
+					Fallback->GetUnscaledBoxExtent().Equals(
+						FVector(55.0f, 45.0f, 55.0f)));
+			}
+
+			FHitResult FallbackHit;
+			FallbackHit.Component = Fallback;
+			FallbackHit.HitObjectHandle = FActorInstanceHandle(Fixture.Host);
+			const FWacomInteractionTargetHandle Handle =
+				WacomInteractionTargetHitResolver::BuildWorldTargetHandleFromHit(
+					FallbackHit);
+			TestTrue(TEXT("Fallback forwards a valid Part handle"),
+				Handle.IsValid());
+			TestTrue(TEXT("Fallback SourceObject remains the identity Part"),
+				Handle.SourceObject.Get() == Fixture.Part);
+
+			TestTrue(TEXT("Repeated sync succeeds"),
+				FWacomEnemySceneRuntimeAutomationTestView::SyncPart(
+					*Fixture.Host, *Fixture.Part, Fixture.Snapshot));
+			TestTrue(TEXT("Repeated refresh reuses one fallback component"),
+				Fixture.FindFallbackCollision() == Fallback);
+			FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(
+				*Fixture.Host, *Fixture.Part, false, false);
+			TestEqual(TEXT("Registry removal immediately disables fallback"),
+				Fallback->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+			FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(
+				*Fixture.Host, *Fixture.Part, true, false);
+			Fixture.Snapshot.Enemies[0].Parts[0].bDestroyed = true;
+			TestFalse(TEXT("Destroyed snapshot removes the interactive binding"),
+				FWacomEnemySceneRuntimeAutomationTestView::SyncPart(
+					*Fixture.Host, *Fixture.Part, Fixture.Snapshot));
+			TestEqual(TEXT("Destroyed immediately disables fallback"),
+				Fallback->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+		}
+
+		Fixture.Host->RetireRuntimeEncounterPresentation();
+		if (UBoxComponent* RetiredFallback = Fixture.FindFallbackCollision())
+		{
+			TestEqual(TEXT("Retire keeps fallback disabled"),
+				RetiredFallback->GetCollisionEnabled(),
+				ECollisionEnabled::NoCollision);
+		}
+		Fixture.Host->Destroy();
+	}
 	return true;
 }
 

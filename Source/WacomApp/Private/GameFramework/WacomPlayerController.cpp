@@ -30,6 +30,7 @@
 #include "GameFramework/WacomRunSceneBindingRegistry.h"
 #include "Interaction/WacomRunWorldCardDropReceiver.h"
 #include "Interaction/WacomInteractionTargetHitResolver.h"
+#include "Interaction/WacomInteractionCollisionChannels.h"
 #include "GameFramework/WacomExplorationScreenRouter.h"
 #include "GameFramework/WacomGameMode.h"
 #include "GameFramework/WacomPlayerCharacter.h"
@@ -1230,15 +1231,33 @@ bool AWacomPlayerController::BuildBattleSceneInteractionTargetHitResultAtScreenP
 			&& HUD->IsBattleSceneEnemyPartWorldTargetInCurrentRegistry(OutHandle);
 	};
 
+	FHitResult VisibilityOccluderHit;
+	const bool bHasVisibilityOccluder = World->LineTraceSingleByChannel(
+		VisibilityOccluderHit,
+		WorldOrigin,
+		TraceEnd,
+		ECC_Visibility,
+		QueryParams);
+	const float OccluderDepth = bHasVisibilityOccluder
+		? FVector::DotProduct(
+			VisibilityOccluderHit.ImpactPoint - WorldOrigin,
+			WorldDirection)
+		: TNumericLimits<float>::Max();
+
 	FHitResult StrictHit;
 	const bool bHasStrictBlockingHit = World->LineTraceSingleByChannel(
 		StrictHit,
 		WorldOrigin,
 		TraceEnd,
-		ECC_Visibility,
+		Wacom::Interaction::BattleEnemyPartTraceChannel,
 		QueryParams);
 	FWacomInteractionTargetHandle StrictHandle;
-	if (bHasStrictBlockingHit && ResolveCurrentRegistryPart(StrictHit, StrictHandle))
+	const float StrictDepth = bHasStrictBlockingHit
+		? FVector::DotProduct(StrictHit.ImpactPoint - WorldOrigin, WorldDirection)
+		: TNumericLimits<float>::Max();
+	if (bHasStrictBlockingHit
+		&& StrictDepth <= OccluderDepth + UE_KINDA_SMALL_NUMBER
+		&& ResolveCurrentRegistryPart(StrictHit, StrictHandle))
 	{
 		OutHitResult = StrictHit;
 		return true;
@@ -1251,21 +1270,19 @@ bool AWacomPlayerController::BuildBattleSceneInteractionTargetHitResultAtScreenP
 	{
 		return false;
 	}
-	const float OccluderDepth = bHasStrictBlockingHit
-		? FVector::DotProduct(StrictHit.ImpactPoint - WorldOrigin, WorldDirection)
-		: TNumericLimits<float>::Max();
-
 	TArray<FHitResult> SweepHits;
-	FCollisionObjectQueryParams ObjectQueryParams;
-	ObjectQueryParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-	World->SweepMultiByObjectType(
+	FCollisionResponseParams LenientResponseParams;
+	LenientResponseParams.CollisionResponse.SetAllChannels(ECR_Ignore);
+	LenientResponseParams.CollisionResponse.SetResponse(ECC_WorldDynamic, ECR_Overlap);
+	World->SweepMultiByChannel(
 		SweepHits,
 		WorldOrigin,
 		TraceEnd,
 		FQuat::Identity,
-		ObjectQueryParams,
+		Wacom::Interaction::BattleEnemyPartTraceChannel,
 		FCollisionShape::MakeSphere(SweepRadius),
-		QueryParams);
+		QueryParams,
+		LenientResponseParams);
 
 	TMap<FString, FWacomBattleEnemyPartInteractionQueryCandidate> Candidates;
 	for (const FHitResult& Hit : SweepHits)

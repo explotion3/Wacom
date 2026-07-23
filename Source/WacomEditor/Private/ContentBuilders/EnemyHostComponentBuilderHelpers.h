@@ -87,7 +87,6 @@ namespace Wacom::EnemyHostComponentBuilder
 		FName PartId = NAME_None;
 		FName LayerId = NAME_None;
 		FVector RelativeLocation = FVector::ZeroVector;
-		FVector HitBoundsExtent = FVector(50.0f);
 		FVector VisualScale = FVector::OneVector;
 		float IdleOffsetSeconds = 0.0f;
 		FLinearColor Tint = FLinearColor::White;
@@ -131,13 +130,6 @@ namespace Wacom::EnemyHostComponentBuilder
 			Templates.Part->SetRelativeLocation(Spec.RelativeLocation);
 			bChanged = true;
 		}
-		if (Templates.Part->GetUnscaledBoxExtent() != Spec.HitBoundsExtent)
-		{
-			Templates.Part->Modify();
-			Templates.Part->SetBoxExtent(Spec.HitBoundsExtent, false);
-			bChanged = true;
-		}
-
 		bChanged |= SetIfDifferent(*Templates.Visual, Templates.Visual->LayerId, Spec.LayerId);
 		bChanged |= SetIfDifferent(
 			*Templates.Visual,

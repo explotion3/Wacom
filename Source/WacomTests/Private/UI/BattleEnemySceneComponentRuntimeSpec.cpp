@@ -118,7 +118,6 @@ bool FWacomEnemySceneComponentRuntimeHierarchySpec::RunTest(const FString& /*Par
 	Left->PartSlotId = TEXT("Left");
 	Left->SetDerivedPartId(TEXT("ComponentRuntime.Left"));
 	Left->SetRelativeLocation(FVector(-88.0f, 8.0f, -6.0f));
-	Left->SetBoxExtent(FVector(46.0f, 38.0f, 40.0f));
 
 	UWacomBattleEnemyPartFlipbookLayerComponent* DirectFlipbook =
 		AddSceneComponent<UWacomBattleEnemyPartFlipbookLayerComponent>(
@@ -156,7 +155,6 @@ bool FWacomEnemySceneComponentRuntimeHierarchySpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("One direct impact anchor is collected"), Before.ImpactAnchorCount, 1);
 	const uint32 RevisionBefore = Host->GetEnemySceneComponentTopologyRevision();
 	const FVector PartLocationBefore = Left->GetRelativeLocation();
-	const FVector ExtentBefore = Left->GetUnscaledBoxExtent();
 	const FVector VisualLocationBefore = DirectFlipbook->GetRelativeLocation();
 	const float PlaybackBefore = DirectFlipbook->GetPlaybackPosition();
 
@@ -164,7 +162,6 @@ bool FWacomEnemySceneComponentRuntimeHierarchySpec::RunTest(const FString& /*Par
 	TestEqual(TEXT("Idempotent refresh keeps topology revision"),
 		Host->GetEnemySceneComponentTopologyRevision(), RevisionBefore);
 	TestEqual(TEXT("Part viewport transform is preserved"), Left->GetRelativeLocation(), PartLocationBefore);
-	TestEqual(TEXT("Hit bounds are preserved"), Left->GetUnscaledBoxExtent(), ExtentBefore);
 	TestEqual(TEXT("Visual viewport transform is preserved"),
 		DirectFlipbook->GetRelativeLocation(), VisualLocationBefore);
 	TestEqual(TEXT("Refresh does not reset flipbook progress"),

@@ -5,16 +5,20 @@
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Actors/WacomBattleSceneEnemyAuthoringReport.h"
+#include "Components/PrimitiveComponent.h"
 #include "Data/EnemyHostComponentTestHelpers.h"
 #include "Engine/Blueprint.h"
+#include "Engine/CollisionProfile.h"
 #include "MaterialEditingLibrary.h"
 #include "Materials/Material.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Kismet2/KismetEditorUtilities.h"
 #include "PaperFlipbook.h"
 #include "PaperSprite.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "SpriteEditorOnlyTypes.h"
+#include "Interaction/WacomInteractionCollisionChannels.h"
 #include "UObject/UnrealType.h"
 
 namespace WacomEnemyInteractionAssetContractSpec
@@ -60,6 +64,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomEnemyInteractionAssetContractSpec::RunTest(const FString& /*Parameters*/)
 {
 	using namespace WacomEnemyInteractionAssetContractSpec;
+	TestEqual(TEXT("Dedicated trace channel keeps its configured project name"),
+		UCollisionProfile::Get()->ReturnChannelNameFromContainerIndex(
+			Wacom::Interaction::BattleEnemyPartTraceChannel),
+		FName(TEXT("WacomBattleInteraction")));
 	UMaterial* ExpectedOutlineMaterial = LoadObject<UMaterial>(
 		nullptr,
 		TEXT("/Game/DreamMaterials/World/M_WacomBattleEnemyPartInteractionOutline.M_WacomBattleEnemyPartInteractionOutline"));
@@ -185,6 +193,15 @@ bool FWacomEnemyInteractionAssetContractSpec::RunTest(const FString& /*Parameter
 		{
 			continue;
 		}
+		TestFalse(*FString::Printf(
+			TEXT("Host package is clean after read-only load: %s"),
+			*PackagePath),
+			Blueprint->GetOutermost()->IsDirty());
+		FKismetEditorUtilities::CompileBlueprint(Blueprint);
+		TestTrue(*FString::Printf(
+			TEXT("Host compiles after Part parent-class migration: %s"),
+			*PackagePath),
+			Blueprint->Status != BS_Error);
 		AWacomBattleEnemyActor* Host = Cast<AWacomBattleEnemyActor>(
 			Blueprint->GeneratedClass->GetDefaultObject());
 		if (!TestNotNull(*FString::Printf(TEXT("Host CDO: %s"), *PackagePath), Host))
@@ -220,6 +237,11 @@ bool FWacomEnemyInteractionAssetContractSpec::RunTest(const FString& /*Parameter
 				*Templates.Part->PartSlotId.ToString()),
 				Templates.Part->InteractionVisualLayerId,
 				Templates.Flipbook->LayerId);
+			TestFalse(*FString::Printf(
+				TEXT("Part is identity-only, not Primitive: %s/%s"),
+				*PackagePath,
+				*Templates.Part->PartSlotId.ToString()),
+				Templates.Part->IsA<UPrimitiveComponent>());
 			TestEqual(TEXT("Authored visual collision remains disabled"),
 				Templates.Flipbook->GetCollisionEnabled(),
 				ECollisionEnabled::NoCollision);

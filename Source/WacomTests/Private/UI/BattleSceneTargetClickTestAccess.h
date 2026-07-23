@@ -10,6 +10,7 @@ class AActor;
 class AWacomBattleSceneClickRouterPlayerControllerTest;
 class UBattleHUD;
 class UPrimitiveComponent;
+class UWacomBattleEnemyPartComponent;
 struct FWacomInteractionTargetHandle;
 
 struct FWacomBattleSceneTargetClickTestAccess
@@ -21,6 +22,10 @@ struct FWacomBattleSceneTargetClickTestAccess
 		AWacomBattleSceneClickRouterPlayerControllerTest* PC,
 		AActor* Actor,
 		UPrimitiveComponent* Component = nullptr);
+	static void SetPartHit(
+		AWacomBattleSceneClickRouterPlayerControllerTest* PC,
+		AActor* Actor,
+		UWacomBattleEnemyPartComponent* Part);
 	static void ClearHit(AWacomBattleSceneClickRouterPlayerControllerTest* PC);
 	static bool RouteClick(AWacomBattleSceneClickRouterPlayerControllerTest* PC);
 	static bool ProbeTarget(

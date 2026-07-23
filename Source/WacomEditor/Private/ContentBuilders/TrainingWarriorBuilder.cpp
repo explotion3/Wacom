@@ -199,7 +199,6 @@ namespace
 		BodySpec.PartSlotId = TEXT("Body");
 		BodySpec.PartId = TEXT("TrainingWarrior.Body");
 		BodySpec.LayerId = TEXT("TrainingWarrior.Body.Main");
-		BodySpec.HitBoundsExtent = FVector(55.0f, 45.0f, 55.0f);
 		BodySpec.IdleFlipbook = &IdleFlipbook;
 		BodySpec.AnimationStyle = &AnimationStyle;
 		if (!Wacom::EnemyHostComponentBuilder::FindPartTemplates(

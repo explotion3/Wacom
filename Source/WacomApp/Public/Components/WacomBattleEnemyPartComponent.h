@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/BoxComponent.h"
+#include "Components/SceneComponent.h"
 #include "Interaction/WacomInteractionTargetProvider.h"
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
@@ -72,6 +72,10 @@ struct WACOMAPP_API FWacomBattleEnemyPartRuntimeDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	bool bUsingBoxCollisionFallback = false;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug",
+		meta = (ToolTip = "当前交互碰撞来源：None、StableSpriteBodySetup、InteractionVisualBoundsFallback、DirectVisualUnionFallback 或 DefaultSafetyFallback。"))
+	FName InteractionCollisionSource = TEXT("None");
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Scene Enemy|Debug")
 	FName OutlineState = TEXT("None");
 
@@ -126,12 +130,12 @@ struct WACOMAPP_API FWacomBattleEnemyPartRuntimeDebugView
  * 敌人场景部位的唯一身份与运行时所有者组件。
  *
  * 组件 Transform 是部位位置真相；InteractionVisualLayerId 指定的 typed visual layer
- * 提供正式精灵轮廓命中。BoxExtent 仅在正式碰撞源缺失时作为故障 fallback。视觉层与
- * ImpactAnchor 必须作为此组件的直接子组件；运行时身份和反馈由 Host runtime 管理。
+ * 提供正式精灵轮廓命中。视觉层与 ImpactAnchor 必须作为此组件的直接子组件；
+ * 运行时身份和反馈由 Host runtime 管理，配置异常时由 Runtime 创建临时碰撞兜底。
  */
 UCLASS(ClassGroup = (Wacom), meta = (BlueprintSpawnableComponent,
-	ToolTip = "敌人场景部位身份组件。Transform 与规则身份属于 Part；正式命中由 InteractionVisualLayerId 指定的 typed visual layer 提供，BoxExtent 仅作故障兜底。"))
-class WACOMAPP_API UWacomBattleEnemyPartComponent : public UBoxComponent,
+	ToolTip = "敌人场景部位身份组件。Transform 与规则身份属于 Part；正式命中由 InteractionVisualLayerId 指定的 typed visual layer 提供。"))
+class WACOMAPP_API UWacomBattleEnemyPartComponent : public USceneComponent,
 	public IWacomInteractionTargetProvider
 {
 	GENERATED_BODY()

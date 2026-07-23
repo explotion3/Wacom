@@ -9,6 +9,7 @@
 #include "Components/WacomBattleEnemyActionPlayback.h"
 #include "Components/WacomBattleEnemyPartComponent.h"
 #include "Components/WacomBattleEnemyPartCuePlayback.h"
+#include "Components/WacomBattleEnemyPartFallbackCollisionComponent.h"
 #include "Components/WacomBattleEnemyPartFlipbookLayerComponent.h"
 #include "Components/WacomBattleEnemyPartImpactAnchorComponent.h"
 #include "Components/WacomBattleEnemyPartImpactFeedbackController.h"
@@ -20,6 +21,7 @@
 #include "Enemies/EnemyPartDefinition.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "PaperFlipbook.h"
 #include "PaperSprite.h"
 #include "Settings/WacomPresentationAccessibilityPolicy.h"
@@ -32,6 +34,12 @@
 
 namespace
 {
+	const FName InteractionCollisionSourceNone(TEXT("None"));
+	const FName InteractionCollisionSourceStableSprite(TEXT("StableSpriteBodySetup"));
+	const FName InteractionCollisionSourceVisualBounds(TEXT("InteractionVisualBoundsFallback"));
+	const FName InteractionCollisionSourceVisualUnion(TEXT("DirectVisualUnionFallback"));
+	const FName InteractionCollisionSourceDefault(TEXT("DefaultSafetyFallback"));
+
 	struct FFlipbookAuthoredState
 	{
 		TWeakObjectPtr<UWacomBattleEnemyPartFlipbookLayerComponent> Component;
@@ -76,10 +84,12 @@ namespace
 		int32 ImpactAnchorCount = 0;
 		TWeakObjectPtr<UPrimitiveComponent> InteractionVisual;
 		TWeakObjectPtr<UPaperSprite> StableInteractionCollisionSprite;
+		TWeakObjectPtr<UWacomBattleEnemyPartFallbackCollisionComponent> FallbackCollision;
 		bool bInteractionVisualResolved = false;
 		bool bInteractionCollisionReady = false;
 		bool bUsingBoxCollisionFallback = false;
 		bool bInteractionFallbackLogged = false;
+		FName InteractionCollisionSource = InteractionCollisionSourceNone;
 
 		FName EncounterId = NAME_None;
 		FName EnemySlotId = NAME_None;
@@ -234,6 +244,148 @@ namespace
 		State.StableInteractionCollisionSprite.Reset();
 		State.bInteractionVisualResolved = false;
 		State.bInteractionCollisionReady = false;
+		State.bUsingBoxCollisionFallback = false;
+		State.InteractionCollisionSource = InteractionCollisionSourceNone;
+		if (UWacomBattleEnemyPartFallbackCollisionComponent* Fallback =
+			State.FallbackCollision.Get())
+		{
+			Fallback->DisableFallbackCollision();
+		}
+	}
+
+	void DestroyFallbackCollision(FPartRuntimeState& State)
+	{
+		if (UWacomBattleEnemyPartFallbackCollisionComponent* Fallback =
+			State.FallbackCollision.Get())
+		{
+			Fallback->DestroyComponent();
+		}
+		State.FallbackCollision.Reset();
+		State.bUsingBoxCollisionFallback = false;
+		State.InteractionCollisionSource = InteractionCollisionSourceNone;
+	}
+
+	bool AccumulatePartLocalBounds(
+		FBox& InOutBounds,
+		const FBoxSphereBounds& ResourceBounds,
+		const USceneComponent& DirectVisual)
+	{
+		const FBoxSphereBounds PartLocalBounds =
+			ResourceBounds.TransformBy(DirectVisual.GetRelativeTransform());
+		const FVector Origin = PartLocalBounds.Origin;
+		const FVector Extent = PartLocalBounds.BoxExtent.GetAbs();
+		if (Origin.ContainsNaN()
+			|| Extent.ContainsNaN()
+			|| !FMath::IsFinite(Origin.X)
+			|| !FMath::IsFinite(Origin.Y)
+			|| !FMath::IsFinite(Origin.Z)
+			|| Extent.GetMax() <= UE_SMALL_NUMBER)
+		{
+			return false;
+		}
+		InOutBounds += Origin - Extent;
+		InOutBounds += Origin + Extent;
+		return true;
+	}
+
+	struct FFallbackBounds
+	{
+		FVector RelativeCenter = FVector::ZeroVector;
+		FVector HalfExtent = FVector(55.0f, 45.0f, 55.0f);
+		FName Source = InteractionCollisionSourceDefault;
+	};
+
+	FFallbackBounds ResolveFallbackBounds(const FPartRuntimeState& State)
+	{
+		FBox Bounds(ForceInit);
+		if (State.bInteractionVisualResolved)
+		{
+			if (const UPaperSprite* StableSprite =
+				State.StableInteractionCollisionSprite.Get())
+			{
+				if (const USceneComponent* InteractionVisual =
+					State.InteractionVisual.Get())
+				{
+					if (AccumulatePartLocalBounds(
+						Bounds,
+						StableSprite->GetRenderBounds(),
+						*InteractionVisual))
+					{
+						return FFallbackBounds{
+							Bounds.GetCenter(),
+							Bounds.GetExtent().ComponentMax(FVector(6.0f)),
+							InteractionCollisionSourceVisualBounds };
+					}
+				}
+			}
+		}
+
+		Bounds.Init();
+		bool bHasVisualBounds = false;
+		for (const FFlipbookAuthoredState& Layer : State.Flipbooks)
+		{
+			const UWacomBattleEnemyPartFlipbookLayerComponent* Component =
+				Layer.Component.Get();
+			const UPaperFlipbook* Flipbook = Layer.Flipbook.Get();
+			bHasVisualBounds |= Component
+				&& Flipbook
+				&& AccumulatePartLocalBounds(
+					Bounds,
+					Flipbook->GetRenderBounds(),
+					*Component);
+		}
+		for (const FSpriteAuthoredState& Layer : State.Sprites)
+		{
+			const UWacomBattleEnemyPartSpriteLayerComponent* Component =
+				Layer.Component.Get();
+			const UPaperSprite* Sprite = Layer.Sprite.Get();
+			bHasVisualBounds |= Component
+				&& Sprite
+				&& AccumulatePartLocalBounds(
+					Bounds,
+					Sprite->GetRenderBounds(),
+					*Component);
+		}
+		if (bHasVisualBounds && Bounds.IsValid)
+		{
+			return FFallbackBounds{
+				Bounds.GetCenter(),
+				Bounds.GetExtent().ComponentMax(FVector(6.0f)),
+				InteractionCollisionSourceVisualUnion };
+		}
+		return FFallbackBounds();
+	}
+
+	UWacomBattleEnemyPartFallbackCollisionComponent* EnsureFallbackCollision(
+		FPartRuntimeState& State)
+	{
+		if (UWacomBattleEnemyPartFallbackCollisionComponent* Existing =
+			State.FallbackCollision.Get())
+		{
+			return Existing;
+		}
+		UWacomBattleEnemyPartComponent* Part = State.Part.Get();
+		AActor* Owner = Part ? Part->GetOwner() : nullptr;
+		if (!Part || !Owner)
+		{
+			return nullptr;
+		}
+
+		UWacomBattleEnemyPartFallbackCollisionComponent* Fallback =
+			NewObject<UWacomBattleEnemyPartFallbackCollisionComponent>(
+				Owner,
+				NAME_None,
+				RF_Transient);
+		if (!Fallback)
+		{
+			return nullptr;
+		}
+		Owner->AddInstanceComponent(Fallback);
+		Fallback->SetupAttachment(Part);
+		Fallback->InitializeForPart(*Part);
+		Fallback->RegisterComponent();
+		State.FallbackCollision = Fallback;
+		return Fallback;
 	}
 
 	void ResolveInteractionVisual(FPartRuntimeState& State)
@@ -299,11 +451,12 @@ namespace
 		{
 			return;
 		}
-		const bool bEnable = !bRuntimeRetired && State.bBound && !State.bDestroyed;
-		State.bUsingBoxCollisionFallback = !State.bInteractionCollisionReady;
+		const bool bEnable = !bRuntimeRetired
+			&& State.bBound
+			&& State.bRegisteredWithHUD
+			&& !State.bDestroyed;
 		if (State.bInteractionCollisionReady)
 		{
-			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			if (UWacomBattleEnemyPartFlipbookLayerComponent* FlipbookLayer =
 				Cast<UWacomBattleEnemyPartFlipbookLayerComponent>(State.InteractionVisual.Get()))
 			{
@@ -320,6 +473,14 @@ namespace
 					State.StableInteractionCollisionSprite.Get(),
 					bEnable);
 			}
+			if (UWacomBattleEnemyPartFallbackCollisionComponent* Fallback =
+				State.FallbackCollision.Get())
+			{
+				Fallback->DisableFallbackCollision();
+			}
+			State.bUsingBoxCollisionFallback = false;
+			State.InteractionCollisionSource =
+				InteractionCollisionSourceStableSprite;
 			State.bInteractionFallbackLogged = false;
 			return;
 		}
@@ -338,14 +499,34 @@ namespace
 				Component->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			}
 		}
-		Part->SetCollisionEnabled(
-			bEnable ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+		const FFallbackBounds Bounds = ResolveFallbackBounds(State);
+		UWacomBattleEnemyPartFallbackCollisionComponent* Fallback =
+			State.FallbackCollision.Get();
+		if (!Fallback && bEnable)
+		{
+			Fallback = EnsureFallbackCollision(State);
+		}
+		if (Fallback)
+		{
+			Fallback->ConfigureFallbackBounds(
+				Bounds.RelativeCenter,
+				Bounds.HalfExtent,
+				bEnable);
+			State.bUsingBoxCollisionFallback = true;
+			State.InteractionCollisionSource = Bounds.Source;
+		}
+		else
+		{
+			State.bUsingBoxCollisionFallback = false;
+			State.InteractionCollisionSource = InteractionCollisionSourceNone;
+		}
 		if (bEnable && !State.bInteractionFallbackLogged)
 		{
 			UE_LOG(LogTemp, Warning,
-				TEXT("[WacomEnemyInteraction] Part '%s' cannot resolve collision-ready InteractionVisualLayerId '%s'; temporary Box fallback enabled."),
+				TEXT("[WacomEnemyInteraction] Part '%s' cannot resolve collision-ready InteractionVisualLayerId '%s'; transient fallback enabled from '%s'."),
 				*Part->GetPathName(),
-				*Part->InteractionVisualLayerId.ToString());
+				*Part->InteractionVisualLayerId.ToString(),
+				*State.InteractionCollisionSource.ToString());
 			State.bInteractionFallbackLogged = true;
 		}
 	}
@@ -354,7 +535,7 @@ namespace
 	{
 		return State.bInteractionCollisionReady
 			? State.InteractionVisual.Get()
-			: State.Part.Get();
+			: State.FallbackCollision.Get();
 	}
 
 	EWacomBattleEnemyPartOutlineState ResolveDesiredOutlineState(
@@ -703,6 +884,7 @@ void UWacomBattleEnemySceneRuntimeComponent::RefreshTypedHierarchy()
 			Removed.ActionPlayback->Cancel(false);
 		}
 		ClearInteractionCollisionConfiguration(Removed);
+		DestroyFallbackCollision(Removed);
 		ResetFeedbackControllers(Removed, true);
 	}
 	if (bTopologyChanged)
@@ -930,6 +1112,7 @@ void UWacomBattleEnemySceneRuntimeComponent::SetPartRegisteredWithHUD(
 	if (FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr)
 	{
 		State->bRegisteredWithHUD = bInRegistered;
+		RefreshInteractionCollision(*State, Impl->bRuntimeRetired);
 	}
 }
 
@@ -999,6 +1182,7 @@ FWacomBattleEnemyPartRuntimeDebugView UWacomBattleEnemySceneRuntimeComponent::Bu
 	View.bInteractionVisualResolved = State->bInteractionVisualResolved;
 	View.bInteractionCollisionReady = State->bInteractionCollisionReady;
 	View.bUsingBoxCollisionFallback = State->bUsingBoxCollisionFallback;
+	View.InteractionCollisionSource = State->InteractionCollisionSource;
 	View.OutlineState = State->OutlineFeedback
 		? State->OutlineFeedback->GetDebugView().State
 		: FName(TEXT("None"));
@@ -1589,6 +1773,7 @@ void UWacomBattleEnemySceneRuntimeComponent::EndPlay(
 		for (FPartRuntimeState& State : Impl->Parts)
 		{
 			ClearInteractionCollisionConfiguration(State);
+			DestroyFallbackCollision(State);
 			ResetFeedbackControllers(State, true);
 		}
 		Impl->Parts.Reset();

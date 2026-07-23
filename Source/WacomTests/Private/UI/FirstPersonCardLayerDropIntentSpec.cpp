@@ -1505,7 +1505,8 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 	HUD->SetBattleSceneEnemyHostsForTest({ SceneEnemy.Host });
 	WacomFirstPersonCardLayerDropIntentSpec::SettleBattlePresentationQueue(*HUD);
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
-	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, SceneEnemy.Host, SceneEnemy.Parts[0]);
+	FWacomBattleSceneTargetClickTestAccess::SetPartHit(
+		PC, SceneEnemy.Host, SceneEnemy.Parts[0]);
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerDropIntentSpec::MakeDropDragView(
 		CardId,
@@ -1617,7 +1618,8 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 		OtherHost.Parts[0]->BuildWorldTargetHandle().IsValid());
 
 	FWacomBattleSceneTargetClickTestAccess::SetHUD(PC, HUD);
-	FWacomBattleSceneTargetClickTestAccess::SetHit(PC, OtherHost.Host, OtherHost.Parts[0]);
+	FWacomBattleSceneTargetClickTestAccess::SetPartHit(
+		PC, OtherHost.Host, OtherHost.Parts[0]);
 
 	const FWacomFirstPersonCardDragView DragView = WacomFirstPersonCardLayerDropIntentSpec::MakeDropDragView(
 		CardId,

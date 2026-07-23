@@ -46,7 +46,6 @@ namespace
 		FName PartSlotId;
 		FName PartId;
 		FVector RelativeLocation;
-		FVector HitBoundsExtent;
 		float VisualScale = 1.0f;
 		float IdleOffsetSeconds = 0.0f;
 		FLinearColor Tint = FLinearColor::White;
@@ -59,19 +58,19 @@ namespace
 		static const TArray<FSnakePartPresentationSpec> Specs = {
 			{
 				TEXT("Head"), TEXT("Snake.Head"),
-				FVector(96.0f, -6.0f, 16.0f), FVector(42.0f, 38.0f, 42.0f),
+				FVector(96.0f, -6.0f, 16.0f),
 				0.85f, 0.0f, FLinearColor(1.0f, 0.85f, 0.85f, 1.0f), 30,
 				TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Head")
 			},
 			{
 				TEXT("Body"), TEXT("Snake.Body"),
-				FVector::ZeroVector, FVector(62.0f, 46.0f, 42.0f),
+				FVector::ZeroVector,
 				1.0f, 0.04f, FLinearColor::White, 20,
 				TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Body")
 			},
 			{
 				TEXT("Tail"), TEXT("Snake.Tail"),
-				FVector(-92.0f, 16.0f, -8.0f), FVector(48.0f, 34.0f, 34.0f),
+				FVector(-92.0f, 16.0f, -8.0f),
 				0.70f, 0.08f, FLinearColor(0.82f, 0.90f, 1.0f, 1.0f), 10,
 				TEXT("PF_Enemy_SnakePlaceholder_Destroyed_Tail")
 			},
@@ -195,7 +194,6 @@ namespace
 		ComponentSpec.LayerId = FName(*FString::Printf(
 			TEXT("Snake.%s.Main"), *Spec.PartSlotId.ToString()));
 		ComponentSpec.RelativeLocation = Spec.RelativeLocation;
-		ComponentSpec.HitBoundsExtent = Spec.HitBoundsExtent;
 		ComponentSpec.VisualScale = FVector(Spec.VisualScale);
 		ComponentSpec.IdleOffsetSeconds = Spec.IdleOffsetSeconds;
 		ComponentSpec.Tint = Spec.Tint;

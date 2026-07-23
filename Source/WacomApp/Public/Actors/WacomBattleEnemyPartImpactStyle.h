@@ -67,7 +67,7 @@ public:
 	float DestroyedCoverageMultiplier = 1.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
-		meta = (ToolTip = "无法取得有效 HitBounds 时使用的特效直径，单位：厘米。推荐 80–120cm；只影响表现，不影响命中范围。"))
+		meta = (ToolTip = "无法取得有效 interaction visual 或 transient fallback bounds 时使用的特效直径，单位：厘米。推荐 80–120cm；只影响表现，不影响命中范围。"))
 	float FallbackImpactDiameterCentimeters = 96.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
@@ -75,7 +75,7 @@ public:
 	float MinimumImpactDiameterCentimeters = 72.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
-		meta = (ToolTip = "自适应特效直径上限，单位：厘米。推荐 220–320cm；避免异常大 HitBounds 让特效覆盖整屏。"))
+		meta = (ToolTip = "自适应特效直径上限，单位：厘米。推荐 220–320cm；避免异常大视觉 bounds 让特效覆盖整屏。"))
 	float MaximumImpactDiameterCentimeters = 260.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Placement",

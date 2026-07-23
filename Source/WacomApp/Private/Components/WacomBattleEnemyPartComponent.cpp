@@ -88,14 +88,6 @@ namespace
 UWacomBattleEnemyPartComponent::UWacomBattleEnemyPartComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	InitBoxExtent(FVector(55.0f, 45.0f, 55.0f));
-	SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	SetCollisionObjectType(ECC_WorldDynamic);
-	SetCollisionResponseToAllChannels(ECR_Ignore);
-	SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
-	SetGenerateOverlapEvents(false);
-	SetHiddenInGame(true);
-	SetLineThickness(1.0f);
 }
 
 FName UWacomBattleEnemyPartComponent::GetStableSceneTargetId() const
@@ -263,12 +255,6 @@ EDataValidationResult UWacomBattleEnemyPartComponent::IsDataValid(
 			Context.AddError(FText::FromString(TEXT("Interaction visual 稳定 Sprite 的 Collision Thickness 必须为 12 cm。")));
 			Result = EDataValidationResult::Invalid;
 		}
-	}
-	const FVector Extent = GetUnscaledBoxExtent();
-	if (Extent.ContainsNaN() || Extent.GetMin() <= 0.0f)
-	{
-		Context.AddError(FText::FromString(TEXT("Enemy Part 的兼容 BoxExtent 必须是三个轴均为有限正数，确保正式碰撞异常时仍可故障兜底。")));
-		Result = EDataValidationResult::Invalid;
 	}
 	if (!FMath::IsFinite(DestroyedVisualSwapNormalizedTime)
 		|| DestroyedVisualSwapNormalizedTime < 0.0f

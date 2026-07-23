@@ -464,8 +464,6 @@ bool FWacomDataTrainingWarriorHostAndArtSpec::RunTest(
 		TestEqual(TEXT("Host PartSlotId"), Body.Part->PartSlotId, FName(TEXT("Body")));
 		TestEqual(TEXT("Host derived PartId"), Body.Part->PartId,
 			FName(TEXT("TrainingWarrior.Body")));
-		TestEqual(TEXT("Host Body default HitBounds"), Body.Part->GetUnscaledBoxExtent(),
-			FVector(55.0, 45.0, 55.0));
 		TestEqual(TEXT("Host Body ImpactAnchor has no offset"),
 			Body.ImpactAnchor->GetRelativeLocation(), FVector::ZeroVector);
 		TestTrue(TEXT("Body owns semantic animation Style"),
