@@ -16,17 +16,17 @@ class UWacomDeckCardWidget;
  *
  * Rules have already committed before an entry arrives here. This controller
  * only retains the original card Widget, gates its Retainer material, and
- * removes the visual when the FIFO departure completes.
+ * launches one randomized visual at a time before removing completed cards.
  */
 class FWacomBackpackWorkspaceSaleDepartureController
 {
 public:
 	static constexpr int32 MaximumConcurrentCards = 4;
-	static constexpr float FullMotionStaggerSeconds = 0.035f;
-	static constexpr float SimplifiedMotionStaggerSeconds = 0.02f;
+	static constexpr float FullMotionMinimumLaunchIntervalSeconds = 0.09f;
+	static constexpr float FullMotionMaximumLaunchIntervalSeconds = 0.12f;
+	static constexpr float SimplifiedMotionMinimumLaunchIntervalSeconds = 0.03f;
+	static constexpr float SimplifiedMotionMaximumLaunchIntervalSeconds = 0.04f;
 	static constexpr float SimplifiedMotionDurationSeconds = 0.12f;
-	static constexpr float MinimumStaggerScale = 0.65f;
-	static constexpr float MaximumStaggerScale = 1.35f;
 
 	bool Enqueue(
 		UWacomDeckCardWidget& Card,
@@ -59,7 +59,10 @@ public:
 	TArray<FGuid> GetPendingInstanceIdsForTest() const;
 	TArray<FGuid> GetActiveInstanceIdsForTest() const;
 	TMap<FGuid, float> GetSeedsForTest() const;
-	TMap<FGuid, float> GetActiveStartDelaysForTest() const;
+	float GetNextLaunchDelaySecondsForTest() const
+	{
+		return NextLaunchDelayRemainingSeconds;
+	}
 	TArray<UWacomDeckCardWidget*> GetActiveCardsForTest() const;
 	void ForceActiveReadinessForTest();
 #endif
@@ -73,12 +76,12 @@ private:
 		FWacomFirstPersonCardSurfaceDeparturePlayback Playback;
 		FWacomFirstPersonCardPresentationReadinessGate Readiness;
 		uint32 PreparationGeneration = 0;
-		float StartDelayRemainingSeconds = 0.0f;
 		float Seed = 0.0f;
-		float StaggerScale = 1.0f;
+		float LaunchIntervalUnit = 0.5f;
 		uint32 RandomOrderKey = 0;
 		bool bSimplifiedMotion = false;
-		bool bGroupSoundOwner = false;
+		bool bSoundOwner = false;
+		bool bPlaybackStarted = false;
 	};
 
 	TArray<TUniquePtr<FEntry>> PendingEntries;
@@ -87,15 +90,15 @@ private:
 	int32 MaximumObservedRealtimeCardCount = 0;
 	int32 CompletedCardCount = 0;
 	uint32 RandomBatchSequence = 0;
+	float NextLaunchDelayRemainingSeconds = -1.0f;
 
 	static bool IsStyleValid(
 		const FWacomFirstPersonCardPlayedDissolveStyleData& Style);
 	static uint32 MixRandomBits(uint32 Value);
 	float AllocateSeed(FGuid InstanceId);
-	void FillAvailableSlots();
-	void PrepareEntry(
-		FEntry& Entry,
-		float StartDelaySeconds,
-		bool bSoundOwner);
+	float ResolveLaunchIntervalSeconds(const FEntry& Entry) const;
+	bool HasEntryWaitingForReadiness() const;
+	void LaunchNextEntry();
+	void PrepareEntry(FEntry& Entry, bool bSoundOwner);
 	void FinishEntry(FEntry& Entry, bool bFailed);
 };

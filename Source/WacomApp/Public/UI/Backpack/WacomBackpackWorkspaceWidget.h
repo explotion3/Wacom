@@ -455,7 +455,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	TArray<FGuid> SaleDeparturePendingInstanceIds;
 	TArray<FGuid> SaleDepartureActiveInstanceIds;
 	TMap<FGuid, float> SaleDepartureSeeds;
-	TMap<FGuid, float> SaleDepartureActiveStartDelays;
+	float SaleDepartureNextLaunchDelaySeconds = -1.0f;
 	int32 CarryStripLayoutRebuildCount = 0;
 	int32 StaticCardPresentationUpdateCount = 0;
 	int32 CarryVisualAnchorApplyCount = 0;

@@ -5323,8 +5323,8 @@ FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAuto
 		GetRuntime().SaleDeparture.GetActiveInstanceIdsForTest();
 	View.SaleDepartureSeeds =
 		GetRuntime().SaleDeparture.GetSeedsForTest();
-	View.SaleDepartureActiveStartDelays =
-		GetRuntime().SaleDeparture.GetActiveStartDelaysForTest();
+	View.SaleDepartureNextLaunchDelaySeconds =
+		GetRuntime().SaleDeparture.GetNextLaunchDelaySecondsForTest();
 	View.CarryStripLayoutRebuildCount = GetRuntime().Presentation.CarryStripLayoutRebuildCount;
 	View.StaticCardPresentationUpdateCount = GetRuntime().Presentation.StaticCardPresentationUpdateCount;
 	View.CarryVisualAnchorApplyCount = GetRuntime().Presentation.CarryVisualAnchorApplyCount;

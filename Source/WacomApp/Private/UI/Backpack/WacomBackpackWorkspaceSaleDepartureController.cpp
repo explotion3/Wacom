@@ -109,10 +109,7 @@ void FWacomBackpackWorkspaceSaleDepartureController::RandomizePendingTail(
 			Entry.RandomOrderKey ^ 0xa511e9b3U);
 		const float Unit = static_cast<float>(
 			static_cast<double>(StaggerBits) / MAX_uint32);
-		Entry.StaggerScale = FMath::Lerp(
-			MinimumStaggerScale,
-			MaximumStaggerScale,
-			Unit);
+		Entry.LaunchIntervalUnit = Unit;
 	}
 
 	for (int32 Index = SafeFirstIndex + 1;
@@ -158,7 +155,31 @@ void FWacomBackpackWorkspaceSaleDepartureController::RandomizePendingTail(
 	}
 }
 
-void FWacomBackpackWorkspaceSaleDepartureController::FillAvailableSlots()
+float FWacomBackpackWorkspaceSaleDepartureController::ResolveLaunchIntervalSeconds(
+	const FEntry& Entry) const
+{
+	return Entry.bSimplifiedMotion
+		? FMath::Lerp(
+			SimplifiedMotionMinimumLaunchIntervalSeconds,
+			SimplifiedMotionMaximumLaunchIntervalSeconds,
+			Entry.LaunchIntervalUnit)
+		: FMath::Lerp(
+			FullMotionMinimumLaunchIntervalSeconds,
+			FullMotionMaximumLaunchIntervalSeconds,
+			Entry.LaunchIntervalUnit);
+}
+
+bool FWacomBackpackWorkspaceSaleDepartureController::HasEntryWaitingForReadiness()
+	const
+{
+	return ActiveEntries.ContainsByPredicate(
+		[](const TUniquePtr<FEntry>& Entry)
+		{
+			return Entry && !Entry->bPlaybackStarted;
+		});
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::LaunchNextEntry()
 {
 	if (PendingEntries.IsEmpty()
 		|| ActiveEntries.Num() >= MaximumConcurrentCards)
@@ -167,31 +188,11 @@ void FWacomBackpackWorkspaceSaleDepartureController::FillAvailableSlots()
 	}
 
 	const bool bWasIdle = ActiveEntries.IsEmpty();
-	float CumulativeDelaySeconds = 0.0f;
-	const int32 AvailableSlots =
-		MaximumConcurrentCards - ActiveEntries.Num();
-	const int32 StartCount = FMath::Min(
-		AvailableSlots,
-		PendingEntries.Num());
-	ActiveEntries.Reserve(ActiveEntries.Num() + StartCount);
-	for (int32 Index = 0; Index < StartCount; ++Index)
-	{
-		TUniquePtr<FEntry> Entry = MoveTemp(PendingEntries[0]);
-		PendingEntries.RemoveAt(0, 1, EAllowShrinking::No);
-		if (!bWasIdle || Index > 0)
-		{
-			const float BaseStaggerSeconds = Entry->bSimplifiedMotion
-				? SimplifiedMotionStaggerSeconds
-				: FullMotionStaggerSeconds;
-			CumulativeDelaySeconds +=
-				BaseStaggerSeconds * Entry->StaggerScale;
-		}
-		PrepareEntry(
-			*Entry,
-			CumulativeDelaySeconds,
-			bWasIdle && Index == 0);
-		ActiveEntries.Add(MoveTemp(Entry));
-	}
+	TUniquePtr<FEntry> Entry = MoveTemp(PendingEntries[0]);
+	PendingEntries.RemoveAt(0, 1, EAllowShrinking::No);
+	PrepareEntry(*Entry, bWasIdle);
+	ActiveEntries.Add(MoveTemp(Entry));
+	NextLaunchDelayRemainingSeconds = -1.0f;
 	MaximumObservedRealtimeCardCount = FMath::Max(
 		MaximumObservedRealtimeCardCount,
 		ActiveEntries.Num());
@@ -199,12 +200,10 @@ void FWacomBackpackWorkspaceSaleDepartureController::FillAvailableSlots()
 
 void FWacomBackpackWorkspaceSaleDepartureController::PrepareEntry(
 	FEntry& Entry,
-	float StartDelaySeconds,
 	bool bSoundOwner)
 {
-	Entry.bGroupSoundOwner = bSoundOwner;
-	Entry.StartDelayRemainingSeconds =
-		FMath::Max(0.0f, StartDelaySeconds);
+	Entry.bSoundOwner = bSoundOwner;
+	Entry.bPlaybackStarted = false;
 
 	FWacomFirstPersonCardSurfaceDeparturePlaybackConfig Config;
 	Config.Kind = EWacomFirstPersonCardSurfaceDepartureKind::ExhaustDissolve;
@@ -216,7 +215,7 @@ void FWacomBackpackWorkspaceSaleDepartureController::PrepareEntry(
 		: Entry.Style.ConfirmHoldSeconds;
 	Config.Seed = Entry.Seed;
 	Config.bReducedMotion = Entry.bSimplifiedMotion;
-	if (Entry.bGroupSoundOwner)
+	if (Entry.bSoundOwner)
 	{
 		Config.StartSound = Entry.Style.StartSound;
 		Config.SoundVolumeMultiplier = Entry.Style.StartSoundVolumeMultiplier;
@@ -277,8 +276,15 @@ void FWacomBackpackWorkspaceSaleDepartureController::Tick(
 	float DeltaSeconds,
 	UObject* WorldContext)
 {
-	FillAvailableSlots();
+	if (ActiveEntries.IsEmpty()
+		&& !PendingEntries.IsEmpty()
+		&& NextLaunchDelayRemainingSeconds < 0.0f)
+	{
+		LaunchNextEntry();
+	}
+
 	const float SafeDeltaSeconds = FMath::Clamp(DeltaSeconds, 0.0f, 0.1f);
+	bool bLaunchDelayArmedThisFrame = false;
 	for (int32 Index = ActiveEntries.Num() - 1; Index >= 0; --Index)
 	{
 		FEntry& Entry = *ActiveEntries[Index];
@@ -314,22 +320,20 @@ void FWacomBackpackWorkspaceSaleDepartureController::Tick(
 			continue;
 		}
 
-		float PlaybackDeltaSeconds = SafeDeltaSeconds;
-		if (Entry.StartDelayRemainingSeconds > 0.0f)
+		if (!Entry.bPlaybackStarted)
 		{
-			const float ConsumedDelay = FMath::Min(
-				Entry.StartDelayRemainingSeconds,
-				PlaybackDeltaSeconds);
-			Entry.StartDelayRemainingSeconds -= ConsumedDelay;
-			PlaybackDeltaSeconds -= ConsumedDelay;
-		}
-		if (Entry.StartDelayRemainingSeconds > 0.0f)
-		{
-			continue;
+			Entry.bPlaybackStarted = true;
+			if (!PendingEntries.IsEmpty()
+				&& NextLaunchDelayRemainingSeconds < 0.0f)
+			{
+				NextLaunchDelayRemainingSeconds =
+					ResolveLaunchIntervalSeconds(*PendingEntries[0]);
+				bLaunchDelayArmedThisFrame = true;
+			}
 		}
 
 		const FWacomFirstPersonCardSurfaceDepartureTickResult PlaybackView =
-			Entry.Playback.Tick(PlaybackDeltaSeconds);
+			Entry.Playback.Tick(SafeDeltaSeconds);
 		if (const TOptional<FWacomFirstPersonCardSurfaceDepartureSoundRequest> SoundRequest =
 				Entry.Playback.ConsumePendingSoundRequest();
 			SoundRequest.IsSet())
@@ -355,10 +359,43 @@ void FWacomBackpackWorkspaceSaleDepartureController::Tick(
 		}
 	}
 
-	// Refill every slot released this frame instead of waiting for an entire
-	// four-card group. The next randomized card overlaps the remaining
-	// departures while the realtime Retainer ceiling stays bounded.
-	FillAvailableSlots();
+	if (!PendingEntries.IsEmpty()
+		&& NextLaunchDelayRemainingSeconds < 0.0f
+		&& !HasEntryWaitingForReadiness())
+	{
+		if (ActiveEntries.IsEmpty())
+		{
+			LaunchNextEntry();
+		}
+		else
+		{
+			NextLaunchDelayRemainingSeconds =
+				ResolveLaunchIntervalSeconds(*PendingEntries[0]);
+			bLaunchDelayArmedThisFrame = true;
+		}
+	}
+
+	if (!PendingEntries.IsEmpty()
+		&& NextLaunchDelayRemainingSeconds >= 0.0f
+		&& !bLaunchDelayArmedThisFrame)
+	{
+		NextLaunchDelayRemainingSeconds = FMath::Max(
+			0.0f,
+			NextLaunchDelayRemainingSeconds - SafeDeltaSeconds);
+		if (NextLaunchDelayRemainingSeconds <= 0.0f
+			&& ActiveEntries.Num() < MaximumConcurrentCards)
+		{
+			// One scheduler decision launches exactly one card. Any remaining
+			// elapsed time is intentionally discarded so a slow frame cannot
+			// collapse several authored stagger events into a visible group.
+			LaunchNextEntry();
+		}
+	}
+
+	if (PendingEntries.IsEmpty())
+	{
+		NextLaunchDelayRemainingSeconds = -1.0f;
+	}
 }
 
 void FWacomBackpackWorkspaceSaleDepartureController::SetRetainedRenderingEnabled(
@@ -410,6 +447,7 @@ void FWacomBackpackWorkspaceSaleDepartureController::Reset(bool bRemoveWidgets)
 	MaximumObservedRealtimeCardCount = 0;
 	CompletedCardCount = 0;
 	RandomBatchSequence = 0;
+	NextLaunchDelayRemainingSeconds = -1.0f;
 }
 
 bool FWacomBackpackWorkspaceSaleDepartureController::ContainsCard(
@@ -485,20 +523,6 @@ FWacomBackpackWorkspaceSaleDepartureController::GetSeedsForTest() const
 	};
 	Append(PendingEntries);
 	Append(ActiveEntries);
-	return Result;
-}
-
-TMap<FGuid, float>
-FWacomBackpackWorkspaceSaleDepartureController::GetActiveStartDelaysForTest() const
-{
-	TMap<FGuid, float> Result;
-	for (const TUniquePtr<FEntry>& Entry : ActiveEntries)
-	{
-		if (Entry)
-		{
-			Result.Add(Entry->InstanceId, Entry->StartDelayRemainingSeconds);
-		}
-	}
 	return Result;
 }
 

@@ -83,14 +83,30 @@ void AdvanceReadySale(
 			DeltaSeconds);
 	}
 }
+
+void AdvanceReadySaleBySeconds(
+	UWacomBackpackScreen& Screen,
+	float TotalSeconds)
+{
+	float RemainingSeconds = FMath::Max(0.0f, TotalSeconds);
+	while (RemainingSeconds > KINDA_SMALL_NUMBER)
+	{
+		const float StepSeconds = FMath::Min(0.025f, RemainingSeconds);
+		FWacomBackpackScreenTestAccess::ForceWorkspaceSaleReadiness(Screen);
+		FWacomBackpackScreenTestAccess::TickWorkspaceSaleDeparture(
+			Screen,
+			StepSeconds);
+		RemainingSeconds -= StepSeconds;
+	}
+}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec,
-	"Wacom.UI.Backpack.Workspace.SaleDeparture.GroupingAndMaterial",
+	FWacomUIBackpackWorkspaceSaleDepartureSingleLaunchSpec,
+	"Wacom.UI.Backpack.Workspace.SaleDeparture.RandomSingleCardLaunchAndMaterial",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
+bool FWacomUIBackpackWorkspaceSaleDepartureSingleLaunchSpec::RunTest(
 	const FString& Parameters)
 {
 	UObject* Outer = GetTransientPackage();
@@ -190,43 +206,18 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 			*Fixture->Screen,
 			0.0f);
 		View = FWacomBackpackScreenTestAccess::WorkspaceView(*Fixture->Screen);
-		const int32 ExpectedFirstGroup = FMath::Min(4, CardCount);
 		TestEqual(
-			*FString::Printf(TEXT("%d first group is capped at four"), CardCount),
+			*FString::Printf(TEXT("%d first scheduler decision launches one card"), CardCount),
 			View.SaleDepartureActiveCardCount,
-			ExpectedFirstGroup);
-		TArray<FGuid> ExpectedOrder = RandomizedOrder;
-		ExpectedOrder.SetNum(ExpectedFirstGroup);
+			1);
 		TestEqual(
-			*FString::Printf(TEXT("%d active window follows randomized order"), CardCount),
-			View.SaleDepartureActiveInstanceIds,
-			ExpectedOrder);
-		float PreviousDelay = 0.0f;
-		for (int32 Index = 0; Index < ExpectedOrder.Num(); ++Index)
-		{
-			const float* Delay =
-				View.SaleDepartureActiveStartDelays.Find(ExpectedOrder[Index]);
-			if (Index == 0)
-			{
-				TestTrue(
-					*FString::Printf(TEXT("%d first randomized card starts immediately"), CardCount),
-					Delay && FMath::IsNearlyZero(*Delay));
-			}
-			else
-			{
-				const float Gap = Delay ? *Delay - PreviousDelay : 0.0f;
-				TestTrue(
-					*FString::Printf(TEXT("%d random full-motion gap %d stays bounded"), CardCount, Index),
-					Delay
-						&& Gap >= 0.035f * 0.65f - KINDA_SMALL_NUMBER
-						&& Gap <= 0.035f * 1.35f + KINDA_SMALL_NUMBER);
-			}
-			PreviousDelay = Delay ? *Delay : PreviousDelay;
-		}
+			*FString::Printf(TEXT("%d first launch uses randomized identity"), CardCount),
+			View.SaleDepartureActiveInstanceIds[0],
+			RandomizedOrder[0]);
 		TestEqual(
-			*FString::Printf(TEXT("%d remaining cards stay queued"), CardCount),
+			*FString::Printf(TEXT("%d remaining cards wait for individual launch decisions"), CardCount),
 			View.SaleDepartureQueuedCardCount,
-			CardCount - ExpectedFirstGroup);
+			CardCount - 1);
 		TestTrue(
 			*FString::Printf(TEXT("%d never exceeds four realtime Retainers"), CardCount),
 			View.RealtimeCardCount <= 4
@@ -249,47 +240,77 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 				Probe.bAccessibilityPresentationCleared);
 		}
 
-		AdvanceReadySale(*Fixture->Screen, 3);
-		const TArray<FWacomBackpackSaleCardSurfaceProbe> OverlapProbes =
-			FWacomBackpackScreenTestAccess::WorkspaceSaleSurfaceProbes(
+		const int32 ExpectedLaunchesBeforeCompletion =
+			FMath::Min(4, CardCount);
+		for (int32 ExpectedLaunchCount = 1;
+			ExpectedLaunchCount < ExpectedLaunchesBeforeCompletion;
+			++ExpectedLaunchCount)
+		{
+			FWacomBackpackScreenTestAccess::ForceWorkspaceSaleReadiness(
 				*Fixture->Screen);
-		TestEqual(
-			*FString::Printf(TEXT("%d randomized window remains concurrent"), CardCount),
-			OverlapProbes.Num(),
-			ExpectedFirstGroup);
-		for (const FWacomBackpackSaleCardSurfaceProbe& Probe : OverlapProbes)
-		{
-			TestTrue(TEXT("Concurrent cards have all entered the material dissolve"),
-				Probe.Amount > 0.0f && Probe.Amount < 1.0f);
-		}
-
-		if (CardCount > 4)
-		{
-			bool bObservedRollingRefill = false;
-			for (int32 Sample = 0; Sample < 8; ++Sample)
-			{
-				AdvanceReadySale(*Fixture->Screen, 1, 0.025f);
-				const FWacomBackpackWorkspaceAutomationTestView RollingView =
-					FWacomBackpackScreenTestAccess::WorkspaceView(
-						*Fixture->Screen);
-				if (RollingView.SaleDepartureCompletedCardCount > 0)
-				{
-					bObservedRollingRefill =
-						RollingView.SaleDepartureCompletedCardCount < 4
-						&& RollingView.SaleDepartureQueuedCardCount
-							< CardCount - ExpectedFirstGroup
-						&& RollingView.SaleDepartureActiveCardCount
-							== ExpectedFirstGroup;
-					break;
-				}
-			}
+			FWacomBackpackScreenTestAccess::TickWorkspaceSaleDeparture(
+				*Fixture->Screen,
+				0.0f);
+			View = FWacomBackpackScreenTestAccess::WorkspaceView(
+				*Fixture->Screen);
+			const float LaunchDelay =
+				View.SaleDepartureNextLaunchDelaySeconds;
 			TestTrue(
-				TEXT("First completed card refills the parallel window before its peers finish"),
-				bObservedRollingRefill);
+				*FString::Printf(
+					TEXT("%d launch interval %d is visibly staggered"),
+					CardCount,
+					ExpectedLaunchCount),
+				LaunchDelay >= 0.09f - KINDA_SMALL_NUMBER
+					&& LaunchDelay <= 0.12f + KINDA_SMALL_NUMBER);
+
+			AdvanceReadySaleBySeconds(
+				*Fixture->Screen,
+				LaunchDelay - 0.005f);
+			View = FWacomBackpackScreenTestAccess::WorkspaceView(
+				*Fixture->Screen);
+			TestEqual(
+				TEXT("No second card launches before the random interval expires"),
+				View.SaleDepartureActiveCardCount,
+				ExpectedLaunchCount);
+
+			AdvanceReadySaleBySeconds(*Fixture->Screen, 0.01f);
+			View = FWacomBackpackScreenTestAccess::WorkspaceView(
+				*Fixture->Screen);
+			TestEqual(
+				TEXT("Crossing one interval launches exactly one additional card"),
+				View.SaleDepartureActiveCardCount,
+				ExpectedLaunchCount + 1);
+			TArray<FGuid> ExpectedActiveOrder = RandomizedOrder;
+			ExpectedActiveOrder.SetNum(ExpectedLaunchCount + 1);
+			TestEqual(
+				TEXT("Single-card launches preserve the randomized queue order"),
+				View.SaleDepartureActiveInstanceIds,
+				ExpectedActiveOrder);
+			TestEqual(
+				TEXT("One scheduler event consumes exactly one queued identity"),
+				View.SaleDepartureQueuedCardCount,
+				CardCount - ExpectedLaunchCount - 1);
 		}
 
-		const int32 GroupCount = FMath::DivideAndRoundUp(CardCount, 4);
-		AdvanceReadySale(*Fixture->Screen, GroupCount * 7);
+		if (CardCount > 1)
+		{
+			const TArray<FWacomBackpackSaleCardSurfaceProbe> OverlapProbes =
+				FWacomBackpackScreenTestAccess::WorkspaceSaleSurfaceProbes(
+					*Fixture->Screen);
+			TestTrue(
+				TEXT("Individually launched cards overlap while earlier dissolves continue"),
+				OverlapProbes.Num() > 1);
+			TestTrue(
+				TEXT("Earlier card is already dissolving when the next card starts"),
+				OverlapProbes.ContainsByPredicate(
+					[](const FWacomBackpackSaleCardSurfaceProbe& Probe)
+					{
+						return Probe.Amount > 0.0f
+							&& Probe.Amount < 1.0f;
+					}));
+		}
+
+		AdvanceReadySale(*Fixture->Screen, CardCount * 3 + 5);
 		View = FWacomBackpackScreenTestAccess::WorkspaceView(*Fixture->Screen);
 		TestEqual(
 			*FString::Printf(TEXT("%d sale visuals all complete"), CardCount),
@@ -299,7 +320,7 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 			View.SaleDepartureQueuedCardCount, 0);
 		TestEqual(TEXT("Completed randomized queue has no active cards"),
 			View.SaleDepartureActiveCardCount, 0);
-		TestEqual(TEXT("Completed FIFO leaves no ghost Widgets"),
+		TestEqual(TEXT("Completed randomized queue leaves no ghost Widgets"),
 			View.SettlementCardCount, 0);
 	}
 	return true;
@@ -349,39 +370,24 @@ bool FWacomUIBackpackWorkspaceSaleDepartureAppendLifecycleSpec::RunTest(
 	const uint64 SchedulerGeneration =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Fixture->Screen)
 			.FrameSchedulerGeneration;
-	const FWacomBackpackWorkspaceAutomationTestView FirstGroupView =
+	FWacomBackpackScreenTestAccess::ForceWorkspaceSaleReadiness(
+		*Fixture->Screen);
+	FWacomBackpackScreenTestAccess::TickWorkspaceSaleDeparture(
+		*Fixture->Screen,
+		0.0f);
+	const FWacomBackpackWorkspaceAutomationTestView FirstLaunchView =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Fixture->Screen);
-	float PreviousSimplifiedDelay = 0.0f;
-	for (int32 Index = 0;
-		Index < FirstGroupView.SaleDepartureActiveInstanceIds.Num();
-		++Index)
-	{
-		const FGuid InstanceId =
-			FirstGroupView.SaleDepartureActiveInstanceIds[Index];
-		const float* Delay =
-			FirstGroupView.SaleDepartureActiveStartDelays.Find(InstanceId);
-		if (Index == 0)
-		{
-			TestTrue(TEXT("First simplified departure starts immediately"),
-				Delay && FMath::IsNearlyZero(*Delay));
-		}
-		else
-		{
-			const float Gap = Delay
-				? *Delay - PreviousSimplifiedDelay
-				: 0.0f;
-			TestTrue(
-				*FString::Printf(TEXT("Random simplified gap %d stays bounded"), Index),
-				Delay
-					&& Gap >= 0.02f * 0.65f - KINDA_SMALL_NUMBER
-					&& Gap <= 0.02f * 1.35f + KINDA_SMALL_NUMBER);
-		}
-		PreviousSimplifiedDelay = Delay
-			? *Delay
-			: PreviousSimplifiedDelay;
-	}
+	TestEqual(TEXT("Simplified queue initially launches one card"),
+		FirstLaunchView.SaleDepartureActiveCardCount, 1);
+	TestEqual(TEXT("Remaining first-batch cards stay pending"),
+		FirstLaunchView.SaleDepartureQueuedCardCount, 3);
+	TestTrue(TEXT("Simplified single-card interval is shortened but visible"),
+		FirstLaunchView.SaleDepartureNextLaunchDelaySeconds
+				>= 0.03f - KINDA_SMALL_NUMBER
+			&& FirstLaunchView.SaleDepartureNextLaunchDelaySeconds
+				<= 0.04f + KINDA_SMALL_NUMBER);
 
-	TestTrue(TEXT("Input remains available while first group dissolves"),
+	TestTrue(TEXT("Input remains available while first card dissolves"),
 		FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(
 			*Fixture->Screen,
 			SecondBatch));
@@ -390,8 +396,10 @@ bool FWacomUIBackpackWorkspaceSaleDepartureAppendLifecycleSpec::RunTest(
 		SecondBatch);
 	FWacomBackpackWorkspaceAutomationTestView View =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Fixture->Screen);
-	TestEqual(TEXT("Existing group remains active"), View.SaleDepartureActiveCardCount, 4);
-	TestEqual(TEXT("New atomic sale appends to FIFO"), View.SaleDepartureQueuedCardCount, 4);
+	TestEqual(TEXT("Existing single launch remains active"),
+		View.SaleDepartureActiveCardCount, 1);
+	TestEqual(TEXT("New atomic sale appends behind the pending first batch"),
+		View.SaleDepartureQueuedCardCount, 7);
 	TestEqual(TEXT("Repeated wake does not register a second Timer generation"),
 		View.FrameSchedulerGeneration, SchedulerGeneration);
 	TestTrue(TEXT("Simplified Motion still uses real material surfaces"),
