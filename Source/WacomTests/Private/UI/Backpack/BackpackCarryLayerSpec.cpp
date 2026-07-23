@@ -453,6 +453,7 @@ bool FWacomUIBackpackCarryCrossZoneIdentitySpec::RunTest(const FString& Paramete
 		{
 			return Widget == Carried;
 		},
+		[](const UWacomDeckCardWidget*) { return false; },
 		[&CreatedWidgetCount](const FRunStorageCardView&)
 		{
 			++CreatedWidgetCount;

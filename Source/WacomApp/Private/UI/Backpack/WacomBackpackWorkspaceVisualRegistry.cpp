@@ -71,7 +71,8 @@ uint32 GetTypeHash(const FWacomBackpackWorkspaceCardViewKey& Key)
 
 void FWacomBackpackWorkspaceVisualRegistry::RebuildCardIndexes(
 	TConstArrayView<UPanelWidget*> SearchPanels,
-	TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent)
+	TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent,
+	TFunctionRef<bool(const UWacomDeckCardWidget*)> ExcludeFromRegistry)
 {
 	CardsByViewKey.Reset();
 	PhysicalCardsByInstanceId.Reset();
@@ -85,6 +86,10 @@ void FWacomBackpackWorkspaceVisualRegistry::RebuildCardIndexes(
 		{
 			UWacomDeckCardWidget* Card = Cast<UWacomDeckCardWidget>(Panel->GetChildAt(Index));
 			if (!Card)
+			{
+				continue;
+			}
+			if (ExcludeFromRegistry(Card))
 			{
 				continue;
 			}
@@ -116,6 +121,7 @@ void FWacomBackpackWorkspaceVisualRegistry::ReconcileCards(
 	UPanelWidget& DestinationPanel,
 	TConstArrayView<FWacomBackpackWorkspaceSceneCardEntry> DesiredCards,
 	TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent,
+	TFunctionRef<bool(const UWacomDeckCardWidget*)> ExcludeFromRegistry,
 	TFunctionRef<UWacomDeckCardWidget*(const FRunStorageCardView&)> CreateWidget,
 	TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget)
 {
@@ -136,6 +142,10 @@ void FWacomBackpackWorkspaceVisualRegistry::ReconcileCards(
 		{
 			UWacomDeckCardWidget* Card = Cast<UWacomDeckCardWidget>(Panel->GetChildAt(Index));
 			if (!Card)
+			{
+				continue;
+			}
+			if (ExcludeFromRegistry(Card))
 			{
 				continue;
 			}

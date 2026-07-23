@@ -21,6 +21,7 @@
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomFirstPersonCardViewWidget.h"
 #include "Settings/WacomSettingsSubsystem.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
@@ -1312,6 +1313,77 @@ void FWacomBackpackScreenTestAccess::SubmitWorkspaceDelete(
 	TConstArrayView<FGuid> InstanceIds)
 {
 	Screen.SubmitWorkspaceDelete(InstanceIds);
+}
+
+void FWacomBackpackScreenTestAccess::SetWorkspaceSimplifiedMotion(
+	UWacomBackpackScreen& Screen,
+	bool bSimplified)
+{
+	if (Screen.WorkspaceWidget)
+	{
+		Screen.WorkspaceWidget->SetSimplifiedMotion(bSimplified);
+	}
+}
+
+void FWacomBackpackScreenTestAccess::TickWorkspaceSaleDeparture(
+	UWacomBackpackScreen& Screen,
+	float DeltaSeconds)
+{
+	if (Screen.WorkspaceWidget)
+	{
+		Screen.WorkspaceWidget->TickSaleDepartureForTest(DeltaSeconds);
+	}
+}
+
+void FWacomBackpackScreenTestAccess::ForceWorkspaceSaleReadiness(
+	UWacomBackpackScreen& Screen)
+{
+	if (Screen.WorkspaceWidget)
+	{
+		Screen.WorkspaceWidget->ForceSaleDepartureReadinessForTest();
+	}
+}
+
+TArray<FWacomBackpackSaleCardSurfaceProbe>
+FWacomBackpackScreenTestAccess::WorkspaceSaleSurfaceProbes(
+	UWacomBackpackScreen& Screen)
+{
+	TArray<FWacomBackpackSaleCardSurfaceProbe> Result;
+	if (!Screen.WorkspaceWidget)
+	{
+		return Result;
+	}
+	for (UWacomDeckCardWidget* Card :
+		Screen.WorkspaceWidget->GetActiveSaleDepartureCardsForTest())
+	{
+		if (!Card || !Card->BackpackCardView)
+		{
+			continue;
+		}
+		const FWacomFirstPersonCardViewAutomationTestView View =
+			Card->BackpackCardView->GetAutomationTestViewForTest();
+		FWacomBackpackSaleCardSurfaceProbe& Probe =
+			Result.AddDefaulted_GetRef();
+		Probe.InstanceId = Card->GetCardInstanceId();
+		Probe.bPlayedDissolveActive =
+			View.SurfaceEffectView.PlayedDissolve.bActive;
+		Probe.bUsingSurfaceEffectMaterial =
+			View.bUsingSurfaceEffectMaterial;
+		Probe.bRealtimePresentationEnabled =
+			View.bRealtimePresentationEnabled;
+		Probe.Amount = View.SurfaceEffectView.PlayedDissolve.Amount;
+		Probe.Seed = View.SurfaceEffectView.PlayedDissolve.Seed;
+	}
+	return Result;
+}
+
+void FWacomBackpackScreenTestAccess::ResetWorkspaceSaleDepartures(
+	UWacomBackpackScreen& Screen)
+{
+	if (Screen.WorkspaceWidget)
+	{
+		Screen.WorkspaceWidget->ResetSaleDepartures();
+	}
 }
 
 bool FWacomBackpackScreenTestAccess::HasRuntimeDeleteConfirmationWidget(

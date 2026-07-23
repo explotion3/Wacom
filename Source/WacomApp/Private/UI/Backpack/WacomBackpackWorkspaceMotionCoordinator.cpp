@@ -162,6 +162,18 @@ void FWacomBackpackWorkspaceMotionCoordinator::StopLocalPoseMotionPreservingCurr
 	CompletedSettlements.Remove(&Card);
 }
 
+void FWacomBackpackWorkspaceMotionCoordinator::ForgetCard(
+	UWacomDeckCardWidget& Card)
+{
+	StopLocalPoseMotionPreservingCurrent(Card);
+	if (ActiveCard.Get() == &Card)
+	{
+		DisableActiveCard();
+		ActiveCard.Reset();
+		ActiveDepthMotion.Reset();
+	}
+}
+
 void FWacomBackpackWorkspaceMotionCoordinator::BeginCarryPickup(
 	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
 	float LiftPixels,

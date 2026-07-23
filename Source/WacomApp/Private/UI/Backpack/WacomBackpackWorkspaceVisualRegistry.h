@@ -47,13 +47,15 @@ class WACOMAPP_API FWacomBackpackWorkspaceVisualRegistry
 public:
 	void RebuildCardIndexes(
 		TConstArrayView<UPanelWidget*> SearchPanels,
-		TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent);
+		TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent,
+		TFunctionRef<bool(const UWacomDeckCardWidget*)> ExcludeFromRegistry);
 
 	void ReconcileCards(
 		TConstArrayView<UPanelWidget*> SearchPanels,
 		UPanelWidget& DestinationPanel,
 		TConstArrayView<FWacomBackpackWorkspaceSceneCardEntry> DesiredCards,
 		TFunctionRef<bool(const UWacomDeckCardWidget*)> PreserveCurrentParent,
+		TFunctionRef<bool(const UWacomDeckCardWidget*)> ExcludeFromRegistry,
 		TFunctionRef<UWacomDeckCardWidget*(const FRunStorageCardView&)> CreateWidget,
 		TFunctionRef<void(UWacomDeckCardWidget*)> OnRemovedWidget);
 

@@ -18,10 +18,13 @@ class UWidget;
 class UWacomFirstPersonCardViewWidget;
 struct FWacomBackpackWorkspaceCardVisualState;
 struct FWacomFirstPersonCardDepthView;
+struct FWacomFirstPersonCardSurfaceEffectView;
 class UWacomBackpackWorkspaceStyle;
 class UWacomBackpackWorkspaceWidget;
+class FWacomBackpackWorkspaceSaleDepartureController;
 #if WITH_AUTOMATION_TESTS
 struct FWacomBackpackWorkspaceCardTestAccess;
+struct FWacomBackpackScreenTestAccess;
 #endif
 
 enum class EWacomBackpackWorkspaceCardSemanticIcon : uint8
@@ -238,6 +241,7 @@ protected:
 
 private:
 	friend class UWacomBackpackWorkspaceWidget;
+	friend class FWacomBackpackWorkspaceSaleDepartureController;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCardDefinition> Card = nullptr;
@@ -273,11 +277,21 @@ private:
 	FSlateBrush WorkspaceSemanticPaintBrush;
 
 	void SetRightClickToggleEnabled(bool bEnabled);
+	void ApplyBackpackSaleSurfaceView(
+		const FWacomFirstPersonCardSurfaceEffectView& View);
+	uint32 BeginBackpackSaleSurfacePreparation();
+	void RefreshBackpackSaleSurfacePreparation(uint32 Generation);
+	bool IsBackpackSaleSurfaceMaterialReady(uint32 Generation) const;
+	bool IsBackpackSaleSurfacePainted(uint32 Generation) const;
+	void CancelBackpackSaleSurfacePreparation();
+	void SetBackpackSaleSurfaceRealtime(bool bEnabled);
+	void ClearBackpackSaleSurfaceView();
 	void ResetWorkspaceAccessibilityPaintState();
 	void RefreshContentFromCard();
 	FWacomCardViewData BuildCurrentCardViewData() const;
 
 #if WITH_AUTOMATION_TESTS
 	friend struct FWacomBackpackWorkspaceCardTestAccess;
+	friend struct FWacomBackpackScreenTestAccess;
 #endif
 };

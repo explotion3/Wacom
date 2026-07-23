@@ -15,6 +15,7 @@ class UTextBlock;
 class UWacomBackpackWorkspaceStyle;
 class UWacomDeckCardWidget;
 class UWacomBackpackZonePileWidget;
+class UWacomFirstPersonCardPlayedDissolveStyle;
 struct FWacomBackpackZoneKey;
 class FWacomBackpackWorkspaceInteractionModel;
 class FWacomBackpackWorkspaceRuntime;
@@ -114,6 +115,10 @@ public:
 	void SetSimplifiedMotion(bool bSimplified);
 	void SetCardFaceRetainedRenderingEnabled(bool bEnabled);
 	void SetCarryInputSuspended(bool bSuspended);
+	/** 规则事务成功后接管原卡牌 Widget，并按当前携带顺序排入材质离场。 */
+	void BeginSaleDeparture(TConstArrayView<FGuid> InstanceIds);
+	/** Screen Deactivate/Workspace Reset 的幂等离场清理入口。 */
+	void ResetSaleDepartures();
 	void CancelInteraction();
 	/** Run/Scene 失效时清空所有运行时视觉与交互身份，但保留 WBP 层级本身。 */
 	void ResetWorkspaceScene();
@@ -206,6 +211,10 @@ private:
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> InteractionModel;
 	TSharedPtr<FWacomBackpackWorkspaceRuntime> Runtime;
 	TWeakObjectPtr<UWacomBackpackWorkspaceStyle> InteractionStyle;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomFirstPersonCardPlayedDissolveStyle>
+		ResolvedSaleDissolveStyle;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Backpack|Workspace",
 		meta = (ToolTip = "工作台内嵌区域牌堆 Widget 类。只显示 ViewData 并转发标题指针意图，不直接访问 RunSession。"))
@@ -375,6 +384,7 @@ private:
 	void FinalizeCompletedSettlements();
 	void CancelInteractionWithReturn();
 	void RestoreStaticCardParents();
+	bool IsSaleDepartureCard(const UWacomDeckCardWidget* CardWidget) const;
 	bool IsInCarryVisualLayer(const UWidget* CardWidget) const;
 	bool IsInSettlementVisualLayer(const UWidget* CardWidget) const;
 	void RequestBoundCardFaceRenders();
@@ -395,6 +405,9 @@ public:
 
 private:
 	friend struct FWacomBackpackScreenTestAccess;
+	void TickSaleDepartureForTest(float DeltaSeconds);
+	void ForceSaleDepartureReadinessForTest();
+	TArray<UWacomDeckCardWidget*> GetActiveSaleDepartureCardsForTest() const;
 #endif
 };
 
@@ -435,6 +448,14 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 ActiveSettlementTargetCount = 0;
 	int32 ActiveLocalMotionCardCount = 0;
 	int32 RealtimeCardCount = 0;
+	int32 SaleDepartureQueuedCardCount = 0;
+	int32 SaleDepartureActiveCardCount = 0;
+	int32 SaleDepartureCompletedCardCount = 0;
+	int32 SaleDepartureMaximumRealtimeCardCount = 0;
+	TArray<FGuid> SaleDeparturePendingInstanceIds;
+	TArray<FGuid> SaleDepartureActiveInstanceIds;
+	TMap<FGuid, float> SaleDepartureSeeds;
+	TMap<FGuid, float> SaleDepartureActiveStartDelays;
 	int32 CarryStripLayoutRebuildCount = 0;
 	int32 StaticCardPresentationUpdateCount = 0;
 	int32 CarryVisualAnchorApplyCount = 0;

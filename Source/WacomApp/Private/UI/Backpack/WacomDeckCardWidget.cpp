@@ -292,6 +292,70 @@ void UWacomDeckCardWidget::ApplyBackpackLocalMotionPose(
 	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+void UWacomDeckCardWidget::ApplyBackpackSaleSurfaceView(
+	const FWacomFirstPersonCardSurfaceEffectView& View)
+{
+	if (BackpackCardView)
+	{
+		BackpackCardView->SetCardSurfaceEffectView(View);
+	}
+}
+
+uint32 UWacomDeckCardWidget::BeginBackpackSaleSurfacePreparation()
+{
+	return BackpackCardView
+		? BackpackCardView->BeginSurfacePresentationPreparation()
+		: 0;
+}
+
+void UWacomDeckCardWidget::RefreshBackpackSaleSurfacePreparation(
+	uint32 Generation)
+{
+	if (BackpackCardView)
+	{
+		BackpackCardView->RefreshSurfacePresentationPreparation(Generation);
+	}
+}
+
+bool UWacomDeckCardWidget::IsBackpackSaleSurfaceMaterialReady(
+	uint32 Generation) const
+{
+	return BackpackCardView
+		&& BackpackCardView->IsSurfacePresentationMaterialReady(Generation);
+}
+
+bool UWacomDeckCardWidget::IsBackpackSaleSurfacePainted(
+	uint32 Generation) const
+{
+	return BackpackCardView
+		&& BackpackCardView->IsSurfacePresentationPainted(Generation);
+}
+
+void UWacomDeckCardWidget::CancelBackpackSaleSurfacePreparation()
+{
+	if (BackpackCardView)
+	{
+		BackpackCardView->CancelSurfacePresentationPreparation();
+	}
+}
+
+void UWacomDeckCardWidget::SetBackpackSaleSurfaceRealtime(bool bEnabled)
+{
+	if (BackpackCardView)
+	{
+		BackpackCardView->SetRealtimePresentationEnabled(bEnabled);
+	}
+}
+
+void UWacomDeckCardWidget::ClearBackpackSaleSurfaceView()
+{
+	if (BackpackCardView)
+	{
+		BackpackCardView->SetCardSurfaceEffectView(
+			FWacomFirstPersonCardSurfaceEffectView());
+	}
+}
+
 void UWacomDeckCardWidget::ResetBackpackLocalMotionPose()
 {
 	ApplyBackpackLocalMotionPose(FVector2D::ZeroVector, 0.0f);

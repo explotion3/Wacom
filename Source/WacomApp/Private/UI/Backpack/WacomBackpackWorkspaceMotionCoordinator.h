@@ -52,6 +52,8 @@ public:
 	void SnapLocalPose(UWacomDeckCardWidget& Card, FVector2D Translation, float AngleDegrees);
 	/** 停止局部运动但保留 Widget 当前姿态，供选择视觉快照接管。 */
 	void StopLocalPoseMotionPreservingCurrent(UWacomDeckCardWidget& Card);
+	/** 卡牌离开 Workspace Registry 时，终止其局部运动与唯一实时深度所有权。 */
+	void ForgetCard(UWacomDeckCardWidget& Card);
 	void BeginCarryPickup(
 		TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
 		float LiftPixels,

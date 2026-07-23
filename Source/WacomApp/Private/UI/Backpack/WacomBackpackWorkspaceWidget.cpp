@@ -24,6 +24,7 @@
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardMotionKernel.h"
+#include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 
 #define LOCTEXT_NAMESPACE "WacomBackpackWorkspace"
 
@@ -32,6 +33,7 @@ namespace
 constexpr float LayoutGeometryTolerance = 0.5f;
 constexpr int32 RequiredStableLayoutSamples = 2;
 constexpr float ExpandedPilePointerStationaryTolerance = 0.25f;
+constexpr int32 SaleDepartureZOrderBase = 20000;
 
 FVector2D RotateVector(FVector2D Vector, float AngleDegrees)
 {
@@ -160,6 +162,19 @@ void UWacomBackpackWorkspaceWidget::SetInteractionModel(
 {
 	InteractionModel = MoveTemp(InModel);
 	InteractionStyle = InStyle;
+	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+		? InteractionStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	ResolvedSaleDissolveStyle = Style
+		? Style->SaleDissolveStyle.LoadSynchronous()
+		: nullptr;
+	if (!ResolvedSaleDissolveStyle)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("Backpack sale dissolve style could not be resolved during Workspace binding."));
+	}
 }
 
 void UWacomBackpackWorkspaceWidget::SetSimplifiedMotion(bool bSimplified)
@@ -320,6 +335,10 @@ void UWacomBackpackWorkspaceWidget::BindRegisteredWorkspaceCards(uint64 StorageR
 		[this](const UWacomDeckCardWidget* Widget)
 		{
 			return ShouldPreserveCardParent(Widget);
+		},
+		[this](const UWacomDeckCardWidget* Widget)
+		{
+			return IsSaleDepartureCard(Widget);
 		});
 	RequestPresentationRefresh(
 		EWacomBackpackWorkspacePresentationDirty::All,
@@ -1511,6 +1530,10 @@ void UWacomBackpackWorkspaceWidget::SetCardFaceRetainedRenderingEnabled(bool bEn
 			CardWidget->SetBackpackCardFaceRetainedRenderingEnabled(bEnabled);
 		}
 	}
+	if (Runtime)
+	{
+		GetRuntime().SaleDeparture.SetRetainedRenderingEnabled(bEnabled);
+	}
 	if (bEnabled && GetRuntime().FrameScheduler.IsDeferredCardFaceRenderPending())
 	{
 		RequestDeferredCardFaceRender();
@@ -1519,6 +1542,8 @@ void UWacomBackpackWorkspaceWidget::SetCardFaceRetainedRenderingEnabled(bool bEn
 	{
 		GetRuntime().FrameScheduler.SuspendDeferredCardFaceRender();
 	}
+	RefreshFrameWorkFromState();
+	EnsureFrameSchedulerRunning();
 }
 
 FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDown(
@@ -3416,9 +3441,14 @@ void UWacomBackpackWorkspaceWidget::ReconcileMotionTarget()
 			DesiredCard = nullptr;
 		}
 	}
-	if (!DesiredCard)
+	if (!DesiredCard && !GetRuntime().SaleDeparture.HasWork())
 	{
 		DesiredCard = GetPresentationFocusedCard();
+	}
+	if (GetRuntime().SaleDeparture.HasWork())
+	{
+		DesiredCard = nullptr;
+		bDesiredCarrying = false;
 	}
 	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
 		? InteractionStyle.Get()
@@ -3567,6 +3597,145 @@ void UWacomBackpackWorkspaceWidget::SetCarryInputSuspended(bool bSuspended)
 	WakeFrameScheduler();
 }
 
+void UWacomBackpackWorkspaceWidget::BeginSaleDeparture(
+	TConstArrayView<FGuid> InstanceIds)
+{
+	if (!InteractionModel || !InteractionModel->IsCarrying()
+		|| InstanceIds.IsEmpty())
+	{
+		return;
+	}
+	if (!SettlementLayer)
+	{
+		EnsureFallbackTree();
+	}
+	if (!SettlementLayer)
+	{
+		return;
+	}
+
+	TSet<FGuid> RequestedIds;
+	RequestedIds.Reserve(InstanceIds.Num());
+	for (const FGuid InstanceId : InstanceIds)
+	{
+		if (InstanceId.IsValid())
+		{
+			RequestedIds.Add(InstanceId);
+		}
+	}
+	if (RequestedIds.IsEmpty())
+	{
+		return;
+	}
+
+	const FWacomBackpackWorkspaceCarryState& Carry =
+		InteractionModel->GetCarry();
+	TArray<FGuid> OrderedIds;
+	OrderedIds.Reserve(RequestedIds.Num());
+	if (Carry.RemainingInstanceIds.IsValidIndex(Carry.CurrentIndex))
+	{
+		const FGuid CurrentId = Carry.RemainingInstanceIds[Carry.CurrentIndex];
+		if (RequestedIds.Contains(CurrentId))
+		{
+			OrderedIds.Add(CurrentId);
+		}
+	}
+	for (const FGuid InstanceId : Carry.RemainingInstanceIds)
+	{
+		if (RequestedIds.Contains(InstanceId) && !OrderedIds.Contains(InstanceId))
+		{
+			OrderedIds.Add(InstanceId);
+		}
+	}
+	for (const FGuid InstanceId : InstanceIds)
+	{
+		if (RequestedIds.Contains(InstanceId) && !OrderedIds.Contains(InstanceId))
+		{
+			OrderedIds.Add(InstanceId);
+		}
+	}
+
+	const FWacomFirstPersonCardPlayedDissolveStyleData* DissolveStyle =
+		ResolvedSaleDissolveStyle
+			? &ResolvedSaleDissolveStyle->Style
+			: nullptr;
+	bool bQueuedAny = false;
+	int32 DepartureIndex = 0;
+	for (const FGuid InstanceId : OrderedIds)
+	{
+		UWacomDeckCardWidget* Card =
+			GetRuntime().Visuals.FindPhysicalCard(InstanceId);
+		UCanvasPanelSlot* ExistingSlot =
+			Card ? Cast<UCanvasPanelSlot>(Card->Slot) : nullptr;
+		if (!Card || !ExistingSlot)
+		{
+			continue;
+		}
+
+		const FWacomBackpackWorkspaceCardVisualPose Pose =
+			CaptureCardVisualPose(*Card);
+		const FVector2D CardSize = ExistingSlot->GetSize();
+		GetRuntime().Motion.ForgetCard(*Card);
+		GetVisualState().CancelSettlementTarget(*Card);
+		GetVisualState().BaseLayouts().Remove(Card);
+		GetVisualState().BaseTransitions().Remove(Card);
+		GetVisualState().SelectionFrozenLayouts().Remove(Card);
+		GetVisualState().ExpandedFocusLayouts().Remove(Card);
+		GetVisualState().RemoveReleasedHandoff(InstanceId);
+		Card->UnbindWorkspacePointerEvents();
+		Card->SetWorkspaceInteractionEnabled(false);
+		Card->SetWorkspacePointerPassthrough(true);
+		Card->ResetWorkspaceAccessibilityPaintState();
+		Wacom::Backpack::ReparentCardPreservingSlate(
+			*SettlementLayer,
+			*Card);
+		Card->ResetBackpackLocalMotionPose();
+		ApplyCardLayout(
+			*Card,
+			Pose.Center,
+			CardSize,
+			Pose.AngleDegrees,
+			SaleDepartureZOrderBase + DepartureIndex++);
+		Card->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+		if (!DissolveStyle
+			|| !GetRuntime().SaleDeparture.Enqueue(
+				*Card,
+				InstanceId,
+				*DissolveStyle,
+				GetRuntime().Presentation.IsSimplifiedMotion()))
+		{
+			UE_LOG(
+				LogTemp,
+				Warning,
+				TEXT("Backpack sold card %s has no valid dissolve contract; removing its committed sale visual."),
+				*InstanceId.ToString());
+			Card->RemoveFromParent();
+			continue;
+		}
+		bQueuedAny = true;
+	}
+
+	if (bQueuedAny)
+	{
+		// The sale group owns all realtime Retainers while active. Reconcile now
+		// so Hover/Carry depth cannot briefly register a fifth realtime card.
+		ReconcileMotionTarget();
+		RefreshFrameWorkFromState();
+		EnsureFrameSchedulerRunning();
+	}
+}
+
+void UWacomBackpackWorkspaceWidget::ResetSaleDepartures()
+{
+	if (!Runtime)
+	{
+		return;
+	}
+	GetRuntime().SaleDeparture.Reset(true);
+	RefreshFrameWorkFromState();
+}
+
 void UWacomBackpackWorkspaceWidget::CancelInteraction()
 {
 	SetExpandedPileLensInputLocked(false, false);
@@ -3604,7 +3773,10 @@ void UWacomBackpackWorkspaceWidget::CancelInteraction()
 			if (UWacomDeckCardWidget* Card = Cast<UWacomDeckCardWidget>(
 				SettlementLayer->GetChildAt(Index)))
 			{
-				SettlingCards.Add(Card);
+				if (!IsSaleDepartureCard(Card))
+				{
+					SettlingCards.Add(Card);
+				}
 			}
 		}
 		for (UWacomDeckCardWidget* Card : SettlingCards)
@@ -3635,6 +3807,7 @@ void UWacomBackpackWorkspaceWidget::CancelInteraction()
 
 void UWacomBackpackWorkspaceWidget::ResetWorkspaceScene()
 {
+	ResetSaleDepartures();
 	CancelInteraction();
 	ResetExpandedPileFocusWindow(false, false);
 	for (FWacomBackpackExpandedPileFocusCard& Entry : GetRuntime().Presentation.ExpandedPileFocus.Cards)
@@ -3877,6 +4050,16 @@ void UWacomBackpackWorkspaceWidget::RefreshFrameWorkFromState()
 	Scheduler.SetWork(
 		EWacomBackpackWorkspaceFrameWork::PileCollapse,
 		GetRuntime().Presentation.bPileCollapseAnimationPending);
+	const bool bCanAdvanceSaleDeparture =
+		GetRuntime().SaleDeparture.HasWork()
+		&& bCardFaceRetainedRenderingEnabled
+		&& GetRuntime().Presentation.bHasStableLayoutSize
+		&& SettlementLayer
+		&& SettlementLayer->GetVisibility() != ESlateVisibility::Hidden
+		&& SettlementLayer->GetVisibility() != ESlateVisibility::Collapsed;
+	Scheduler.SetWork(
+		EWacomBackpackWorkspaceFrameWork::SaleDeparture,
+		bCanAdvanceSaleDeparture);
 
 	if (Scheduler.IsDeferredCardFaceRenderPending())
 	{
@@ -4029,6 +4212,23 @@ EActiveTimerReturnType UWacomBackpackWorkspaceWidget::TickFrameScheduler(
 			*Style,
 			GetRuntime().Presentation.IsSimplifiedMotion());
 	}
+	if (Scheduler.HasWork(EWacomBackpackWorkspaceFrameWork::SaleDeparture))
+	{
+		const bool bHadSaleDepartureWork =
+			GetRuntime().SaleDeparture.HasWork();
+		GetRuntime().SaleDeparture.Tick(DeltaSeconds, this);
+		if (bHadSaleDepartureWork
+			&& !GetRuntime().SaleDeparture.HasWork())
+		{
+			// Restore the current Hover/Carry depth owner on the following frame.
+			// Frame-internal requests intentionally remain deferred by Scheduler.
+			RequestPresentationRefresh(
+				EWacomBackpackWorkspacePresentationDirty::MotionTarget,
+				{},
+				false,
+				false);
+		}
+	}
 	RefreshExpandedPileVisualHitAtCachedPointer();
 	TickExpandedPileFocusExit(DeltaSeconds);
 	FinalizeCompletedSettlements();
@@ -4080,6 +4280,12 @@ bool UWacomBackpackWorkspaceWidget::IsInCarryVisualLayer(const UWidget* CardWidg
 bool UWacomBackpackWorkspaceWidget::IsInSettlementVisualLayer(const UWidget* CardWidget) const
 {
 	return CardWidget && SettlementLayer && CardWidget->GetParent() == SettlementLayer;
+}
+
+bool UWacomBackpackWorkspaceWidget::IsSaleDepartureCard(
+	const UWacomDeckCardWidget* CardWidget) const
+{
+	return Runtime && GetRuntime().SaleDeparture.ContainsCard(CardWidget);
 }
 
 void UWacomBackpackWorkspaceWidget::SyncCarryLayer()
@@ -5051,6 +5257,24 @@ void UWacomBackpackWorkspaceWidget::SetEmptyStateVisible(bool bVisible)
 }
 
 #if WITH_AUTOMATION_TESTS
+void UWacomBackpackWorkspaceWidget::TickSaleDepartureForTest(
+	float DeltaSeconds)
+{
+	GetRuntime().SaleDeparture.Tick(DeltaSeconds, this);
+	RefreshFrameWorkFromState();
+}
+
+void UWacomBackpackWorkspaceWidget::ForceSaleDepartureReadinessForTest()
+{
+	GetRuntime().SaleDeparture.ForceActiveReadinessForTest();
+}
+
+TArray<UWacomDeckCardWidget*>
+UWacomBackpackWorkspaceWidget::GetActiveSaleDepartureCardsForTest() const
+{
+	return GetRuntime().SaleDeparture.GetActiveCardsForTest();
+}
+
 FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAutomationTestView() const
 {
 	FWacomBackpackWorkspaceAutomationTestView View;
@@ -5079,7 +5303,24 @@ FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAuto
 		: 0;
 	View.RealtimeCardCount = Runtime
 		? GetRuntime().Motion.GetRealtimeCardCount()
+			+ GetRuntime().SaleDeparture.GetRealtimeCardCount()
 		: 0;
+	View.SaleDepartureQueuedCardCount =
+		GetRuntime().SaleDeparture.GetQueuedCardCount();
+	View.SaleDepartureActiveCardCount =
+		GetRuntime().SaleDeparture.GetActiveCardCount();
+	View.SaleDepartureCompletedCardCount =
+		GetRuntime().SaleDeparture.GetCompletedCardCount();
+	View.SaleDepartureMaximumRealtimeCardCount =
+		GetRuntime().SaleDeparture.GetMaximumObservedRealtimeCardCount();
+	View.SaleDeparturePendingInstanceIds =
+		GetRuntime().SaleDeparture.GetPendingInstanceIdsForTest();
+	View.SaleDepartureActiveInstanceIds =
+		GetRuntime().SaleDeparture.GetActiveInstanceIdsForTest();
+	View.SaleDepartureSeeds =
+		GetRuntime().SaleDeparture.GetSeedsForTest();
+	View.SaleDepartureActiveStartDelays =
+		GetRuntime().SaleDeparture.GetActiveStartDelaysForTest();
 	View.CarryStripLayoutRebuildCount = GetRuntime().Presentation.CarryStripLayoutRebuildCount;
 	View.StaticCardPresentationUpdateCount = GetRuntime().Presentation.StaticCardPresentationUpdateCount;
 	View.CarryVisualAnchorApplyCount = GetRuntime().Presentation.CarryVisualAnchorApplyCount;

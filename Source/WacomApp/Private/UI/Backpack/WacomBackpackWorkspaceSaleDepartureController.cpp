@@ -1,0 +1,430 @@
+// Copyright Wacom. All Rights Reserved.
+
+#include "UI/Backpack/WacomBackpackWorkspaceSaleDepartureController.h"
+
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "UI/Backpack/WacomDeckCardWidget.h"
+
+namespace
+{
+FWacomFirstPersonCardSurfaceEffectView BuildSaleSurfaceView(
+	const FWacomFirstPersonCardSurfaceDepartureTickResult& PlaybackView,
+	const FWacomFirstPersonCardPlayedDissolveStyleData& Style)
+{
+	FWacomFirstPersonCardSurfaceEffectView View;
+	View.PlayedDissolve.bActive =
+		PlaybackView.Kind == EWacomFirstPersonCardSurfaceDepartureKind::ExhaustDissolve;
+	View.PlayedDissolve.bReducedMotion = PlaybackView.bReducedMotion;
+	View.PlayedDissolve.Amount = PlaybackView.Amount;
+	View.PlayedDissolve.TimeSeconds = PlaybackView.TimeSeconds;
+	View.PlayedDissolve.Seed = PlaybackView.Seed;
+	View.PlayedDissolve.Style = Style;
+	return View;
+}
+}
+
+bool FWacomBackpackWorkspaceSaleDepartureController::IsStyleValid(
+	const FWacomFirstPersonCardPlayedDissolveStyleData& Style)
+{
+	return Style.SurfaceEffectMaterial != nullptr
+		&& Style.NoiseTexture != nullptr
+		&& Style.DurationSeconds > KINDA_SMALL_NUMBER;
+}
+
+float FWacomBackpackWorkspaceSaleDepartureController::AllocateSeed(FGuid InstanceId)
+{
+	uint32 Candidate = GetTypeHash(InstanceId);
+	float Seed = static_cast<float>(
+		static_cast<double>(Candidate) / MAX_uint32);
+	while (UsedSeeds.Contains(Seed))
+	{
+		++Candidate;
+		Seed = static_cast<float>(
+			static_cast<double>(Candidate) / MAX_uint32);
+	}
+	UsedSeeds.Add(Seed);
+	return Seed;
+}
+
+bool FWacomBackpackWorkspaceSaleDepartureController::Enqueue(
+	UWacomDeckCardWidget& Card,
+	FGuid InstanceId,
+	const FWacomFirstPersonCardPlayedDissolveStyleData& Style,
+	bool bSimplifiedMotion)
+{
+	if (!InstanceId.IsValid() || ContainsInstanceId(InstanceId) || !IsStyleValid(Style))
+	{
+		return false;
+	}
+
+	TUniquePtr<FEntry> Entry = MakeUnique<FEntry>();
+	Entry->Card.Reset(&Card);
+	Entry->InstanceId = InstanceId;
+	Entry->Style = Style;
+	Entry->Seed = AllocateSeed(InstanceId);
+	Entry->bSimplifiedMotion = bSimplifiedMotion;
+	PendingEntries.Add(MoveTemp(Entry));
+	return true;
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::StartNextGroup()
+{
+	if (!ActiveEntries.IsEmpty() || PendingEntries.IsEmpty())
+	{
+		return;
+	}
+
+	const int32 GroupSize = FMath::Min(MaximumConcurrentCards, PendingEntries.Num());
+	ActiveEntries.Reserve(GroupSize);
+	for (int32 Index = 0; Index < GroupSize; ++Index)
+	{
+		TUniquePtr<FEntry> Entry = MoveTemp(PendingEntries[0]);
+		PendingEntries.RemoveAt(0, 1, EAllowShrinking::No);
+		PrepareEntry(*Entry, Index);
+		ActiveEntries.Add(MoveTemp(Entry));
+	}
+	MaximumObservedRealtimeCardCount = FMath::Max(
+		MaximumObservedRealtimeCardCount,
+		ActiveEntries.Num());
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::PrepareEntry(
+	FEntry& Entry,
+	int32 GroupIndex)
+{
+	Entry.bGroupSoundOwner = GroupIndex == 0;
+	Entry.StartDelayRemainingSeconds =
+		GroupIndex * (Entry.bSimplifiedMotion
+			? SimplifiedMotionStaggerSeconds
+			: FullMotionStaggerSeconds);
+
+	FWacomFirstPersonCardSurfaceDeparturePlaybackConfig Config;
+	Config.Kind = EWacomFirstPersonCardSurfaceDepartureKind::ExhaustDissolve;
+	Config.DurationSeconds = Entry.bSimplifiedMotion
+		? SimplifiedMotionDurationSeconds
+		: Entry.Style.DurationSeconds;
+	Config.ConfirmHoldSeconds = Entry.bSimplifiedMotion
+		? 0.0f
+		: Entry.Style.ConfirmHoldSeconds;
+	Config.Seed = Entry.Seed;
+	Config.bReducedMotion = Entry.bSimplifiedMotion;
+	if (Entry.bGroupSoundOwner)
+	{
+		Config.StartSound = Entry.Style.StartSound;
+		Config.SoundVolumeMultiplier = Entry.Style.StartSoundVolumeMultiplier;
+		Config.SoundPitchMultiplier = Entry.Style.StartSoundPitchMultiplier;
+		Config.SoundPitchVariation = Entry.Style.StartSoundPitchVariation;
+	}
+	Entry.Playback.Begin(Config);
+
+	if (UWacomDeckCardWidget* Card = Entry.Card.Get())
+	{
+		Card->ApplyBackpackSaleSurfaceView(BuildSaleSurfaceView(
+			Entry.Playback.BuildView(),
+			Entry.Style));
+		Entry.PreparationGeneration =
+			Card->BeginBackpackSaleSurfacePreparation();
+		Entry.Readiness.Begin(
+			Entry.PreparationGeneration,
+			Entry.PreparationGeneration != 0
+				&& Card->IsBackpackSaleSurfaceMaterialReady(
+					Entry.PreparationGeneration)
+				&& Card->IsBackpackSaleSurfacePainted(
+					Entry.PreparationGeneration));
+		Card->SetBackpackSaleSurfaceRealtime(true);
+		Card->RequestBackpackCardFaceRender();
+	}
+	else
+	{
+		Entry.Readiness.Begin(0);
+	}
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::FinishEntry(
+	FEntry& Entry,
+	bool bFailed)
+{
+	if (UWacomDeckCardWidget* Card = Entry.Card.Get())
+	{
+		Card->CancelBackpackSaleSurfacePreparation();
+		Card->SetBackpackSaleSurfaceRealtime(false);
+		Card->ClearBackpackSaleSurfaceView();
+		Card->RemoveFromParent();
+	}
+	if (bFailed)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("Backpack sale dissolve readiness failed for card %s; removing the committed sale visual safely."),
+			*Entry.InstanceId.ToString());
+	}
+	else
+	{
+		++CompletedCardCount;
+	}
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::Tick(
+	float DeltaSeconds,
+	UObject* WorldContext)
+{
+	StartNextGroup();
+	const float SafeDeltaSeconds = FMath::Clamp(DeltaSeconds, 0.0f, 0.1f);
+	for (int32 Index = ActiveEntries.Num() - 1; Index >= 0; --Index)
+	{
+		FEntry& Entry = *ActiveEntries[Index];
+		UWacomDeckCardWidget* Card = Entry.Card.Get();
+		if (!Card)
+		{
+			FinishEntry(Entry, true);
+			ActiveEntries.RemoveAt(Index, 1, EAllowShrinking::No);
+			continue;
+		}
+
+		Card->RefreshBackpackSaleSurfacePreparation(
+			Entry.PreparationGeneration);
+		const EWacomFirstPersonCardPresentationReadinessPollResult ReadinessResult =
+			Entry.Readiness.Poll(
+				SafeDeltaSeconds,
+				Card->IsBackpackSaleSurfaceMaterialReady(
+					Entry.PreparationGeneration),
+				Card->IsBackpackSaleSurfacePainted(
+					Entry.PreparationGeneration));
+		if (ReadinessResult
+			== EWacomFirstPersonCardPresentationReadinessPollResult::Failed)
+		{
+			FinishEntry(Entry, true);
+			ActiveEntries.RemoveAt(Index, 1, EAllowShrinking::No);
+			continue;
+		}
+		if (ReadinessResult
+				!= EWacomFirstPersonCardPresentationReadinessPollResult::Ready
+			&& ReadinessResult
+				!= EWacomFirstPersonCardPresentationReadinessPollResult::BecameReady)
+		{
+			continue;
+		}
+
+		float PlaybackDeltaSeconds = SafeDeltaSeconds;
+		if (Entry.StartDelayRemainingSeconds > 0.0f)
+		{
+			const float ConsumedDelay = FMath::Min(
+				Entry.StartDelayRemainingSeconds,
+				PlaybackDeltaSeconds);
+			Entry.StartDelayRemainingSeconds -= ConsumedDelay;
+			PlaybackDeltaSeconds -= ConsumedDelay;
+		}
+		if (Entry.StartDelayRemainingSeconds > 0.0f)
+		{
+			continue;
+		}
+
+		const FWacomFirstPersonCardSurfaceDepartureTickResult PlaybackView =
+			Entry.Playback.Tick(PlaybackDeltaSeconds);
+		if (const TOptional<FWacomFirstPersonCardSurfaceDepartureSoundRequest> SoundRequest =
+				Entry.Playback.ConsumePendingSoundRequest();
+			SoundRequest.IsSet())
+		{
+			const FWacomFirstPersonCardSurfaceDepartureSoundRequest& Request =
+				SoundRequest.GetValue();
+			if (USoundBase* Sound = Request.Sound.Get(); Sound && WorldContext)
+			{
+				UGameplayStatics::PlaySound2D(
+					WorldContext,
+					Sound,
+					Request.VolumeMultiplier,
+					Request.PitchMultiplier);
+			}
+		}
+		Card->ApplyBackpackSaleSurfaceView(BuildSaleSurfaceView(
+			PlaybackView,
+			Entry.Style));
+		if (PlaybackView.bCompleted)
+		{
+			FinishEntry(Entry, false);
+			ActiveEntries.RemoveAt(Index, 1, EAllowShrinking::No);
+		}
+	}
+
+	if (ActiveEntries.IsEmpty())
+	{
+		// The next FIFO group is prepared on the next scheduler frame so every
+		// completed group has a clean Retainer ownership boundary.
+		StartNextGroup();
+	}
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::SetRetainedRenderingEnabled(
+	bool bEnabled)
+{
+	const auto Apply = [bEnabled](const TArray<TUniquePtr<FEntry>>& Entries)
+	{
+		for (const TUniquePtr<FEntry>& Entry : Entries)
+		{
+			if (Entry)
+			{
+				if (UWacomDeckCardWidget* Card = Entry->Card.Get())
+				{
+					Card->SetBackpackCardFaceRetainedRenderingEnabled(bEnabled);
+				}
+			}
+		}
+	};
+	Apply(PendingEntries);
+	Apply(ActiveEntries);
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::Reset(bool bRemoveWidgets)
+{
+	const auto ResetEntries = [bRemoveWidgets](TArray<TUniquePtr<FEntry>>& Entries)
+	{
+		for (TUniquePtr<FEntry>& Entry : Entries)
+		{
+			if (!Entry)
+			{
+				continue;
+			}
+			if (UWacomDeckCardWidget* Card = Entry->Card.Get())
+			{
+				Card->CancelBackpackSaleSurfacePreparation();
+				Card->SetBackpackSaleSurfaceRealtime(false);
+				Card->ClearBackpackSaleSurfaceView();
+				if (bRemoveWidgets)
+				{
+					Card->RemoveFromParent();
+				}
+			}
+		}
+		Entries.Reset();
+	};
+	ResetEntries(ActiveEntries);
+	ResetEntries(PendingEntries);
+	UsedSeeds.Reset();
+	MaximumObservedRealtimeCardCount = 0;
+	CompletedCardCount = 0;
+}
+
+bool FWacomBackpackWorkspaceSaleDepartureController::ContainsCard(
+	const UWacomDeckCardWidget* Card) const
+{
+	const auto Contains = [Card](const TArray<TUniquePtr<FEntry>>& Entries)
+	{
+		return Entries.ContainsByPredicate(
+			[Card](const TUniquePtr<FEntry>& Entry)
+			{
+				return Entry && Entry->Card.Get() == Card;
+			});
+	};
+	return Contains(PendingEntries) || Contains(ActiveEntries);
+}
+
+bool FWacomBackpackWorkspaceSaleDepartureController::ContainsInstanceId(
+	FGuid InstanceId) const
+{
+	const auto Contains = [InstanceId](const TArray<TUniquePtr<FEntry>>& Entries)
+	{
+		return Entries.ContainsByPredicate(
+			[InstanceId](const TUniquePtr<FEntry>& Entry)
+			{
+				return Entry && Entry->InstanceId == InstanceId;
+			});
+	};
+	return Contains(PendingEntries) || Contains(ActiveEntries);
+}
+
+#if WITH_AUTOMATION_TESTS
+TArray<FGuid>
+FWacomBackpackWorkspaceSaleDepartureController::GetPendingInstanceIdsForTest() const
+{
+	TArray<FGuid> Result;
+	for (const TUniquePtr<FEntry>& Entry : PendingEntries)
+	{
+		if (Entry)
+		{
+			Result.Add(Entry->InstanceId);
+		}
+	}
+	return Result;
+}
+
+TArray<FGuid>
+FWacomBackpackWorkspaceSaleDepartureController::GetActiveInstanceIdsForTest() const
+{
+	TArray<FGuid> Result;
+	for (const TUniquePtr<FEntry>& Entry : ActiveEntries)
+	{
+		if (Entry)
+		{
+			Result.Add(Entry->InstanceId);
+		}
+	}
+	return Result;
+}
+
+TMap<FGuid, float>
+FWacomBackpackWorkspaceSaleDepartureController::GetSeedsForTest() const
+{
+	TMap<FGuid, float> Result;
+	const auto Append = [&Result](const TArray<TUniquePtr<FEntry>>& Entries)
+	{
+		for (const TUniquePtr<FEntry>& Entry : Entries)
+		{
+			if (Entry)
+			{
+				Result.Add(Entry->InstanceId, Entry->Seed);
+			}
+		}
+	};
+	Append(PendingEntries);
+	Append(ActiveEntries);
+	return Result;
+}
+
+TMap<FGuid, float>
+FWacomBackpackWorkspaceSaleDepartureController::GetActiveStartDelaysForTest() const
+{
+	TMap<FGuid, float> Result;
+	for (const TUniquePtr<FEntry>& Entry : ActiveEntries)
+	{
+		if (Entry)
+		{
+			Result.Add(Entry->InstanceId, Entry->StartDelayRemainingSeconds);
+		}
+	}
+	return Result;
+}
+
+TArray<UWacomDeckCardWidget*>
+FWacomBackpackWorkspaceSaleDepartureController::GetActiveCardsForTest() const
+{
+	TArray<UWacomDeckCardWidget*> Result;
+	for (const TUniquePtr<FEntry>& Entry : ActiveEntries)
+	{
+		if (Entry)
+		{
+			if (UWacomDeckCardWidget* Card = Entry->Card.Get())
+			{
+				Result.Add(Card);
+			}
+		}
+	}
+	return Result;
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::ForceActiveReadinessForTest()
+{
+	for (TUniquePtr<FEntry>& Entry : ActiveEntries)
+	{
+		if (Entry)
+		{
+			Entry->Readiness.Begin(
+				Entry->PreparationGeneration != 0
+					? Entry->PreparationGeneration
+					: 1,
+				true);
+		}
+	}
+}
+#endif

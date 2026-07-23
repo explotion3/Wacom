@@ -41,6 +41,7 @@ enum class EWacomBackpackWorkspaceFrameWork : uint16
 	FocusExitDelay = 1 << 7,
 	PileCollapse = 1 << 8,
 	DeferredCardFaceRender = 1 << 9,
+	SaleDeparture = 1 << 10,
 };
 ENUM_CLASS_FLAGS(EWacomBackpackWorkspaceFrameWork);
 

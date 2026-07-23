@@ -8,6 +8,7 @@
 #include "WacomBackpackWorkspaceMotionCoordinator.h"
 #include "WacomBackpackWorkspaceNavigationController.h"
 #include "WacomBackpackWorkspacePresentationController.h"
+#include "WacomBackpackWorkspaceSaleDepartureController.h"
 #include "WacomBackpackWorkspaceVisualState.h"
 #include "WacomBackpackWorkspaceVisualRegistry.h"
 
@@ -26,11 +27,13 @@ public:
 	FWacomBackpackWorkspaceGestureController Gesture;
 	FWacomBackpackWorkspaceNavigationController Navigation;
 	FWacomBackpackWorkspacePresentationController Presentation;
+	FWacomBackpackWorkspaceSaleDepartureController SaleDeparture;
 	FWacomBackpackWorkspaceFrameScheduler FrameScheduler;
 
 	void Reset(bool bRemovePileWidgets)
 	{
 		FrameScheduler.Reset();
+		SaleDeparture.Reset(true);
 		Motion.Reset();
 		Gesture.ResetTransient();
 		Gesture.PileMoveSnapshot.Reset();

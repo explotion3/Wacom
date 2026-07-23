@@ -415,6 +415,10 @@ URunSession* UWacomBackpackScreen::GetRunSession() const
 void UWacomBackpackScreen::NativeOnDeactivated()
 {
 	HideControlsHelp(false);
+	if (WorkspaceWidget)
+	{
+		WorkspaceWidget->ResetSaleDepartures();
+	}
 	CancelWorkspaceInteraction();
 	HideCardDetailPanel();
 	UnbindActiveSubscriptions();
@@ -665,6 +669,15 @@ void UWacomBackpackScreen::RebuildAll()
 	LastAppliedStorageSnapshot = Snapshot;
 
 	RebuildWorkspaceChrome(Snapshot);
+	if (WorkspaceInteractionModel && WorkspaceInteractionModel->IsCarrying())
+	{
+		// An authoritative refresh may preserve a still-valid Carry after an
+		// optimistic transaction was rejected. Advance its expected revision
+		// only after the accepted Snapshot has reconciled the carried identities,
+		// so a retry does not remain permanently stale.
+		WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(
+			Run->GetBackpackStorageSnapshotRevision());
+	}
 }
 
 void UWacomBackpackScreen::RebuildWorkspaceChrome(const FRunBackpackStorageSnapshot& Snapshot)
@@ -1427,6 +1440,12 @@ void UWacomBackpackScreen::SubmitWorkspaceDelete(TConstArrayView<FGuid> Instance
 	{
 		EndWorkspaceMutationRefreshDeferral(false);
 		return;
+	}
+	if (WorkspaceWidget)
+	{
+		// Capture and detach the original visual before the deferred authoritative
+		// Snapshot reconcile removes the sold identities from the Registry.
+		WorkspaceWidget->BeginSaleDeparture(InstanceIds);
 	}
 	WorkspaceInteractionModel->CommitReleasedCards(InstanceIds);
 	WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(Result.StorageRevision);

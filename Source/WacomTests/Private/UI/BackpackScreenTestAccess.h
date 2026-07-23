@@ -56,6 +56,16 @@ struct FWacomBackpackControlsHelpLifecycleProbe
 	bool bHiddenAfterDeactivate = false;
 };
 
+struct FWacomBackpackSaleCardSurfaceProbe
+{
+	FGuid InstanceId;
+	bool bPlayedDissolveActive = false;
+	bool bUsingSurfaceEffectMaterial = false;
+	bool bRealtimePresentationEnabled = false;
+	float Amount = 0.0f;
+	float Seed = 0.0f;
+};
+
 struct FWacomBackpackMarqueePaintHotPathProbe
 {
 	bool bMoveHandled = false;
@@ -219,6 +229,16 @@ struct FWacomBackpackScreenTestAccess
 	static void SubmitWorkspaceDelete(
 		UWacomBackpackScreen& Screen,
 		TConstArrayView<FGuid> InstanceIds);
+	static void SetWorkspaceSimplifiedMotion(
+		UWacomBackpackScreen& Screen,
+		bool bSimplified);
+	static void TickWorkspaceSaleDeparture(
+		UWacomBackpackScreen& Screen,
+		float DeltaSeconds);
+	static void ForceWorkspaceSaleReadiness(UWacomBackpackScreen& Screen);
+	static TArray<FWacomBackpackSaleCardSurfaceProbe>
+		WorkspaceSaleSurfaceProbes(UWacomBackpackScreen& Screen);
+	static void ResetWorkspaceSaleDepartures(UWacomBackpackScreen& Screen);
 	static bool HasRuntimeDeleteConfirmationWidget(const UWacomBackpackScreen& Screen);
 	static bool IsDeleteConfirmationHostVisible(const UWacomBackpackScreen& Screen);
 

@@ -37,6 +37,7 @@
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomCardDetailPanel.h"
 #include "UI/Card/WacomFirstPersonCardViewWidget.h"
+#include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UObject/StrongObjectPtr.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
@@ -112,7 +113,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		ScreenClass && ScreenClass->IsChildOf(UWacomBackpackScreen::StaticClass()));
 	TestTrue(TEXT("Formal workspace uses passive Workspace parent"),
 		WorkspaceClass && WorkspaceClass->IsChildOf(UWacomBackpackWorkspaceWidget::StaticClass()));
-	TestTrue(TEXT("Formal confirm uses passive DeleteConfirm parent"),
+	TestTrue(TEXT("Compatibility-only confirm asset keeps its passive parent"),
 		ConfirmClass && ConfirmClass->IsChildOf(UWacomBackpackDeleteConfirmWidget::StaticClass()));
 	TestTrue(TEXT("Backpack detail panel uses the shared passive detail parent"),
 		DetailClass && DetailClass->IsChildOf(UWacomCardDetailPanel::StaticClass()));
@@ -513,7 +514,7 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("WorkspaceWidgetClass")), static_cast<UObject*>(WorkspaceClass));
 	TestNull(TEXT("Screen class no longer exposes a ZoneRackWidgetClass dependency"),
 		FindFProperty<FProperty>(ScreenClass, TEXT("ZoneRackWidgetClass")));
-	TestEqual(TEXT("Screen CDO selects formal confirmation class"),
+	TestEqual(TEXT("Screen CDO preserves the inert confirmation class binding"),
 		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("DeleteConfirmWidgetClass")), static_cast<UObject*>(ConfirmClass));
 	TestEqual(TEXT("Screen CDO selects the backpack-specific detail class"),
 		ReadBackpackWorkspaceObjectDefault(ScreenClass, TEXT("CardDetailPanelClass")), static_cast<UObject*>(DetailClass));
@@ -591,6 +592,16 @@ bool FWacomUIBackpackWorkspaceFormalAssetBindingSpec::RunTest(const FString& Par
 			AssignedStyle->DestructiveAppearance.IconBrush.GetResourceObject());
 		TestEqual(TEXT("Workspace style selects formal feedback material"),
 			AssignedStyle->CardFeedbackMaterial.Get(), FeedbackMaterial);
+		UWacomFirstPersonCardPlayedDissolveStyle* SaleDissolveStyle =
+			AssignedStyle->SaleDissolveStyle.LoadSynchronous();
+		TestNotNull(TEXT("Workspace style resolves the formal sale dissolve"),
+			SaleDissolveStyle);
+		if (SaleDissolveStyle)
+		{
+			TestEqual(TEXT("Backpack sale reuses Exhausted Ordered Dither"),
+				SaleDissolveStyle->Style.EffectKind,
+				EWacomFirstPersonCardPlayedDissolveEffectKind::OrderedDither);
+		}
 		TestEqual(TEXT("Workspace style keeps 30 percent minimum visibility"),
 			AssignedStyle->MinimumVisibleFraction, 0.3f);
 		TestEqual(TEXT("Workspace style keeps default current lift"),

@@ -95,6 +95,10 @@ void FWacomBackpackWorkspaceReconciler::Reconcile(
 		{
 			return Workspace.ShouldPreserveCardParent(Widget);
 		},
+		[&Workspace](const UWacomDeckCardWidget* Widget)
+		{
+			return Workspace.IsSaleDepartureCard(Widget);
+		},
 		CreateWidget,
 		OnRemovedWidget);
 	const TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> OrderedWidgets =

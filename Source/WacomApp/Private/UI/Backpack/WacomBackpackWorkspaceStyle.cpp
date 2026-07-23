@@ -2,8 +2,13 @@
 
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 
+#include "UI/Card/WacomFirstPersonCardPlayedDissolveStyle.h"
+
 UWacomBackpackWorkspaceStyle::UWacomBackpackWorkspaceStyle()
 {
+	SaleDissolveStyle = TSoftObjectPtr<UWacomFirstPersonCardPlayedDissolveStyle>(
+		FSoftObjectPath(TEXT(
+			"/Game/Wacom/UI/Card/SurfaceEffects/DA_FPCardPlayedDissolveStyle_OrderedDither.DA_FPCardPlayedDissolveStyle_OrderedDither")));
 	BattleDeckAppearance.AccentColor = FLinearColor(0.36f, 0.70f, 0.86f, 1.0f);
 	BattleDeckAppearance.SurfaceColor = FLinearColor(0.035f, 0.060f, 0.086f, 0.96f);
 	SpecialZoneAppearance.AccentColor = FLinearColor(0.60f, 0.44f, 0.84f, 1.0f);

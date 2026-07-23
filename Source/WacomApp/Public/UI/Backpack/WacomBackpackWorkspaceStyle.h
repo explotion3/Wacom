@@ -9,6 +9,7 @@
 #include "WacomBackpackWorkspaceStyle.generated.h"
 
 class UMaterialInterface;
+class UWacomFirstPersonCardPlayedDissolveStyle;
 
 /** 可换皮的区域视觉外观；所有字段只影响 UMG 表现。 */
 USTRUCT(BlueprintType)
@@ -320,4 +321,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Material",
 		meta = (ToolTip = "可选的背包卡牌反馈材质。用于 fake-3D、选中或目标反馈；留空时工作台必须保持完整功能，材质不得改变命中几何。"))
 	TObjectPtr<UMaterialInterface> CardFeedbackMaterial = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Backpack|Material",
+		meta = (ToolTip = "出售成功后原卡牌 Widget 使用的离场材质 Style。默认复用战斗 Exhausted 的 Ordered Dither；运行时在界面激活阶段缓存，不在投放热路径同步加载。"))
+	TSoftObjectPtr<UWacomFirstPersonCardPlayedDissolveStyle> SaleDissolveStyle;
 };
