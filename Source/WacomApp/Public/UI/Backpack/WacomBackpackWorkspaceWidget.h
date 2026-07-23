@@ -24,8 +24,10 @@ struct FWacomBackpackWorkspaceReconciler;
 struct FWacomBackpackWorkspaceReleaseIntent;
 enum class EWacomBackpackWorkspaceReleaseTargetKind : uint8;
 enum class EWacomBackpackWorkspaceCardSemanticIcon : uint8;
+enum class EWacomBackpackWorkspacePresentationDirty : uint16;
 struct FWacomBackpackWorkspaceCardLayout;
 struct FWacomBackpackWorkspaceCardVisualPose;
+struct FWacomBackpackWorkspacePresentationRequest;
 #if WITH_AUTOMATION_TESTS
 struct FWacomBackpackWorkspaceAutomationTestView;
 struct FWacomBackpackScreenTestAccess;
@@ -106,7 +108,6 @@ public:
 	void SetHoveredCard(UWacomDeckCardWidget* CardWidget);
 	void ClearHoveredCard(UWacomDeckCardWidget* CardWidget);
 	void SetSimplifiedMotion(bool bSimplified);
-	void RefreshInteractionPresentation();
 	void SetCardFaceRetainedRenderingEnabled(bool bEnabled);
 	void SetCarryInputSuspended(bool bSuspended);
 	void CancelInteraction();
@@ -216,7 +217,7 @@ private:
 	int32 DeferredCardFaceRenderPassCount = 0;
 	bool bCardFaceRetainedRenderingEnabled = true;
 #if WITH_AUTOMATION_TESTS
-	/** 全量交互表现刷新次数；用于证明动画热路径没有退回逐帧全卡刷新。 */
+	/** 兼容旧测试视图；定向管线接入后必须保持为零。 */
 	int32 FullPresentationRefreshCount = 0;
 	/** Screen 完成一次权威 Scene reconcile 后绑定卡牌集合的次数。 */
 	int32 WorkspaceSceneBindCount = 0;
@@ -224,6 +225,19 @@ private:
 	int32 BaseCardLayoutTransitionTickCount = 0;
 	/** 基础布局过渡实际更新的卡牌次数。 */
 	int32 BaseCardLayoutTransitionApplyCount = 0;
+	int32 PresentationFlushCount = 0;
+	int32 NavigationTargetsApplyCount = 0;
+	int32 CarryTopologyApplyCount = 0;
+	int32 CarryStripApplyCount = 0;
+	int32 StaticCardStageApplyCount = 0;
+	int32 CardSemanticsStageApplyCount = 0;
+	int32 MotionTargetApplyCount = 0;
+	int32 NavigationPresentationApplyCount = 0;
+	int32 AccessibilityApplyCount = 0;
+	int32 PaintInvalidationApplyCount = 0;
+	int32 LocalCardApplyCount = 0;
+	bool bLastPresentationAppliedAllCards = false;
+	TArray<FGuid> LastPresentationAppliedInstanceIds;
 #endif
 
 	void EnsureFallbackTree();
@@ -276,9 +290,23 @@ private:
 		EWacomBackpackWorkspaceReleaseTargetKind TargetKind,
 		const FWacomBackpackZoneKey& TargetZone);
 	void BroadcastPointerRelease(bool bReleaseAll);
+	void RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty Reasons,
+		TConstArrayView<FGuid> CardInstanceIds = {},
+		bool bAllCards = false,
+		bool bFlushImmediately = true);
+	void FlushPresentationRefresh();
+	void ForEachPresentationCard(
+		const FWacomBackpackWorkspacePresentationRequest& Request,
+		TFunctionRef<void(UWacomDeckCardWidget&)> Apply);
 	void ReconcileNavigationTargets();
-	void RefreshNavigationPresentation();
-	void RefreshCardAccessibilityPresentation();
+	void RefreshNavigationPresentation(
+		const FWacomBackpackWorkspacePresentationRequest& Request);
+	void RefreshCardAccessibilityPresentation(
+		const FWacomBackpackWorkspacePresentationRequest& Request);
+	void ApplyCardSemanticsPresentation(
+		const FWacomBackpackWorkspacePresentationRequest& Request);
+	void ReconcileMotionTarget();
 	bool IsCardAccessibilityFocused(const UWacomDeckCardWidget& Card) const;
 	EWacomBackpackWorkspaceCardSemanticIcon ResolveCardAccessibilitySemanticIcon(
 		const UWacomDeckCardWidget& Card) const;
@@ -414,6 +442,19 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 	bool bExpandedPileFocusExitPending = false;
 	int32 FullPresentationRefreshCount = 0;
+	int32 PresentationFlushCount = 0;
+	int32 NavigationTargetsApplyCount = 0;
+	int32 CarryTopologyApplyCount = 0;
+	int32 CarryStripApplyCount = 0;
+	int32 StaticCardStageApplyCount = 0;
+	int32 CardSemanticsStageApplyCount = 0;
+	int32 MotionTargetApplyCount = 0;
+	int32 NavigationPresentationApplyCount = 0;
+	int32 AccessibilityApplyCount = 0;
+	int32 PaintInvalidationApplyCount = 0;
+	int32 LocalCardApplyCount = 0;
+	bool bLastPresentationAppliedAllCards = false;
+	TArray<FGuid> LastPresentationAppliedInstanceIds;
 	int32 WorkspaceSceneBindCount = 0;
 	int32 BaseCardLayoutTransitionTickCount = 0;
 	int32 BaseCardLayoutTransitionApplyCount = 0;

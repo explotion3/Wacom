@@ -64,6 +64,41 @@ FSlateRect BuildRotatedCardBounds(FVector2D Center, FVector2D Size, float AngleD
 		Center.Y + AxisAlignedHalfSize.Y);
 }
 
+TArray<FGuid> BuildChangedInstanceIds(
+	TConstArrayView<FGuid> Before,
+	TConstArrayView<FGuid> After)
+{
+	TSet<FGuid> BeforeSet;
+	TSet<FGuid> AfterSet;
+	BeforeSet.Reserve(Before.Num());
+	AfterSet.Reserve(After.Num());
+	for (const FGuid InstanceId : Before)
+	{
+		BeforeSet.Add(InstanceId);
+	}
+	for (const FGuid InstanceId : After)
+	{
+		AfterSet.Add(InstanceId);
+	}
+	TArray<FGuid> Changed;
+	Changed.Reserve(BeforeSet.Num() + AfterSet.Num());
+	for (const FGuid InstanceId : BeforeSet)
+	{
+		if (!AfterSet.Contains(InstanceId))
+		{
+			Changed.Add(InstanceId);
+		}
+	}
+	for (const FGuid InstanceId : AfterSet)
+	{
+		if (!BeforeSet.Contains(InstanceId))
+		{
+			Changed.Add(InstanceId);
+		}
+	}
+	return Changed;
+}
+
 }
 
 TSharedRef<SWidget> UWacomBackpackWorkspaceWidget::RebuildWidget()
@@ -140,7 +175,10 @@ void UWacomBackpackWorkspaceWidget::SetSimplifiedMotion(bool bSimplified)
 		ApplyCarryVisualAnchor(0.0f);
 		TickBaseCardLayoutTransitions(0.0f);
 	}
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 	SyncExpandedPileHitLayouts(!GetVisualState().ExpandedFocusLayouts().IsEmpty());
 	if (UWacomDeckCardWidget* FocusedCard = GetPresentationFocusedCard())
 	{
@@ -325,9 +363,10 @@ void UWacomBackpackWorkspaceWidget::BindRegisteredWorkspaceCards(uint64 StorageR
 		{
 			return ShouldPreserveCardParent(Widget);
 		});
-	ReconcileNavigationTargets();
-	SyncCarryLayer();
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 	if (StaticCardLayer)
 	{
 		StaticCardLayer->SetVisibility(
@@ -456,7 +495,15 @@ void UWacomBackpackWorkspaceWidget::SetCarryDropFeedbackState(
 	}
 	Presentation.bCarryDropValid = bValid;
 	Presentation.bCarryDropRejected = bRejected;
-	RefreshCardAccessibilityPresentation();
+	const TConstArrayView<FGuid> CarriedIds =
+		InteractionModel && InteractionModel->IsCarrying()
+		? TConstArrayView<FGuid>(
+			InteractionModel->GetCarry().RemainingInstanceIds)
+		: TConstArrayView<FGuid>();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		CarriedIds);
 }
 
 void UWacomBackpackWorkspaceWidget::CancelHoverExpandTimer()
@@ -623,7 +670,23 @@ bool UWacomBackpackWorkspaceWidget::BeginPileCollapseAnimation(
 			Base->ZOrder);
 		bAnimatedAny = true;
 	}
-	RefreshInteractionPresentation();
+	TArray<FGuid> ChangedInstanceIds;
+	ChangedInstanceIds.Reserve(CollapsingCards.Num());
+	for (const UWacomDeckCardWidget* Card : CollapsingCards)
+	{
+		if (Card)
+		{
+			ChangedInstanceIds.Add(Card->GetCardInstanceId());
+		}
+	}
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::NavigationTargets
+			| EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::NavigationPresentation
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
 	if (!bAnimatedAny || GetVisualState().BaseTransitions().IsEmpty()
 		|| Style->PileExpandSeconds <= 0.0f)
 	{
@@ -640,8 +703,21 @@ bool UWacomBackpackWorkspaceWidget::BeginPileCollapseAnimation(
 
 void UWacomBackpackWorkspaceWidget::SetHoveredCard(UWacomDeckCardWidget* CardWidget)
 {
+	TArray<FGuid> ChangedInstanceIds;
+	if (const UWacomDeckCardWidget* Previous =
+		GetRuntime().Presentation.HoveredCardWidget.Get())
+	{
+		ChangedInstanceIds.Add(Previous->GetCardInstanceId());
+	}
 	GetRuntime().Presentation.HoveredCardWidget = CardWidget;
-	RefreshInteractionPresentation();
+	if (CardWidget)
+	{
+		ChangedInstanceIds.AddUnique(CardWidget->GetCardInstanceId());
+	}
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget,
+		ChangedInstanceIds);
 	StartCardMotionTimer();
 }
 
@@ -649,8 +725,14 @@ void UWacomBackpackWorkspaceWidget::ClearHoveredCard(UWacomDeckCardWidget* CardW
 {
 	if (GetRuntime().Presentation.HoveredCardWidget.Get() == CardWidget)
 	{
+		const FGuid ChangedInstanceId = CardWidget
+			? CardWidget->GetCardInstanceId()
+			: FGuid();
 		GetRuntime().Presentation.HoveredCardWidget.Reset();
-		RefreshInteractionPresentation();
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget,
+			MakeArrayView(&ChangedInstanceId, ChangedInstanceId.IsValid() ? 1 : 0));
 		StartCardMotionTimer();
 	}
 }
@@ -765,11 +847,35 @@ void UWacomBackpackWorkspaceWidget::SetExpandedPileFocusIndex(int32 FocusIndex)
 	{
 		return;
 	}
+	TArray<FGuid> ChangedInstanceIds;
+	const int32 PreviousFocusIndex =
+		GetRuntime().Presentation.ExpandedPileFocus.FocusIndex;
+	if (GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(
+		PreviousFocusIndex))
+	{
+		if (const UWacomDeckCardWidget* Previous =
+			GetRuntime().Presentation.ExpandedPileFocus.Cards[
+				PreviousFocusIndex].Card.Get())
+		{
+			ChangedInstanceIds.Add(Previous->GetCardInstanceId());
+		}
+	}
 	GetRuntime().Presentation.ExpandedPileFocus.FocusIndex = FocusIndex;
 	GetRuntime().Presentation.ExpandedPileFocus.bExitPending = false;
 	GetRuntime().Presentation.ExpandedPileFocus.ExitDelayRemainingSeconds = 0.0f;
-	OnBrowseFocusChangedNative.Broadcast(GetRuntime().Presentation.ExpandedPileFocus.Cards[FocusIndex].Card.Get());
-	RefreshInteractionPresentation();
+	UWacomDeckCardWidget* FocusedCard =
+		GetRuntime().Presentation.ExpandedPileFocus.Cards[FocusIndex].Card.Get();
+	if (FocusedCard)
+	{
+		ChangedInstanceIds.AddUnique(FocusedCard->GetCardInstanceId());
+	}
+	OnBrowseFocusChangedNative.Broadcast(FocusedCard);
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
 	StartCardMotionTimer();
 }
 
@@ -911,7 +1017,20 @@ void UWacomBackpackWorkspaceWidget::ClearExpandedPileFocus(
 	bool bBroadcastChange)
 {
 	(void)bAnimateReturn;
-	const bool bHadFocus = GetRuntime().Presentation.ExpandedPileFocus.FocusIndex != INDEX_NONE;
+	const int32 PreviousFocusIndex =
+		GetRuntime().Presentation.ExpandedPileFocus.FocusIndex;
+	const bool bHadFocus = PreviousFocusIndex != INDEX_NONE;
+	FGuid PreviousFocusInstanceId;
+	if (GetRuntime().Presentation.ExpandedPileFocus.Cards.IsValidIndex(
+		PreviousFocusIndex))
+	{
+		if (const UWacomDeckCardWidget* Previous =
+			GetRuntime().Presentation.ExpandedPileFocus.Cards[
+				PreviousFocusIndex].Card.Get())
+		{
+			PreviousFocusInstanceId = Previous->GetCardInstanceId();
+		}
+	}
 	GetRuntime().Presentation.ExpandedPileFocus.FocusIndex = INDEX_NONE;
 	GetRuntime().Presentation.ExpandedPileFocus.bExitPending = false;
 	GetRuntime().Presentation.ExpandedPileFocus.ExitDelayRemainingSeconds = 0.0f;
@@ -922,7 +1041,14 @@ void UWacomBackpackWorkspaceWidget::ClearExpandedPileFocus(
 	}
 	if (bHadFocus)
 	{
-		RefreshInteractionPresentation();
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			MakeArrayView(
+				&PreviousFocusInstanceId,
+				PreviousFocusInstanceId.IsValid() ? 1 : 0));
 		StartCardMotionTimer();
 	}
 }
@@ -947,7 +1073,19 @@ void UWacomBackpackWorkspaceWidget::UpdateExpandedPileLensFocus(FVector2D Pointe
 		* static_cast<float>(GetRuntime().Presentation.ExpandedPileFocus.Cards.Num() - 1);
 	if (RebuildExpandedPileFocusLayout())
 	{
-		RefreshInteractionPresentation();
+		TArray<FGuid> ChangedInstanceIds;
+		for (const FWacomBackpackExpandedPileFocusCard& Entry :
+			GetRuntime().Presentation.ExpandedPileFocus.Cards)
+		{
+			if (const UWacomDeckCardWidget* Card = Entry.Card.Get())
+			{
+				ChangedInstanceIds.Add(Card->GetCardInstanceId());
+			}
+		}
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget,
+			ChangedInstanceIds);
 		StartCardMotionTimer();
 	}
 }
@@ -1123,7 +1261,21 @@ void UWacomBackpackWorkspaceWidget::ResetExpandedPileFocusWindow(
 	}
 	if (bHadFocus || bHadWindow)
 	{
-		RefreshInteractionPresentation();
+		TArray<FGuid> ChangedInstanceIds;
+		for (const FWacomBackpackExpandedPileFocusCard& Entry :
+			GetRuntime().Presentation.ExpandedPileFocus.Cards)
+		{
+			if (const UWacomDeckCardWidget* Card = Entry.Card.Get())
+			{
+				ChangedInstanceIds.Add(Card->GetCardInstanceId());
+			}
+		}
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		StartCardMotionTimer();
 	}
 }
@@ -1374,11 +1526,19 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDownAtLocal(
 			ClearExpandedPileFocus(true);
 			UpdateCarryAnchor(Pointer);
 			GetRuntime().Presentation.bCarryStripLayoutDirty = true;
-			SyncCarryLayer();
-			RebuildCarryStripLayout();
 			BeginCarryPickupFeedback();
 			StartCardMotionTimer();
-			RefreshInteractionPresentation();
+			RequestPresentationRefresh(
+				EWacomBackpackWorkspacePresentationDirty::NavigationTargets
+					| EWacomBackpackWorkspacePresentationDirty::CarryTopology
+					| EWacomBackpackWorkspacePresentationDirty::CarryStrip
+					| EWacomBackpackWorkspacePresentationDirty::StaticCards
+					| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+					| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+					| EWacomBackpackWorkspacePresentationDirty::NavigationPresentation
+					| EWacomBackpackWorkspacePresentationDirty::Accessibility
+					| EWacomBackpackWorkspacePresentationDirty::Paint,
+				InteractionModel->GetCarry().RemainingInstanceIds);
 			OnInteractionChangedNative.Broadcast();
 			return BuildHandledPointerReply();
 		}
@@ -1467,11 +1627,22 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerUp(
 	}
 	if (InteractionModel->IsMarqueeActive() && Event.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		const TArray<FGuid> PreviousSelection =
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 		InteractionModel->UpdateMarquee(ToLocalPointer(Event));
 		InteractionModel->CompleteMarquee();
 		UpdateSelectionVisualFreezeLifetime();
 		ClearExpandedPileFocus(true);
-		RefreshInteractionPresentation();
+		const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
+			PreviousSelection,
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds);
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled().ReleaseMouseCapture();
 	}
@@ -1484,11 +1655,22 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerUp(
 	FWacomBackpackPendingCardPress& CardPress = GetRuntime().Gesture.CardPress;
 	if (CardPress.bActive && Event.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		const TArray<FGuid> PreviousSelection =
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 		InteractionModel->ClickCard(CardPress.InstanceId, CardPress.bControlDown);
 		InteractionModel->SetCardPressActive(false);
 		CardPress.Reset();
 		UpdateSelectionVisualFreezeLifetime();
-		RefreshInteractionPresentation();
+		const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
+			PreviousSelection,
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds);
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled().ReleaseMouseCapture();
 	}
@@ -1504,6 +1686,8 @@ void UWacomBackpackWorkspaceWidget::BroadcastRelease(
 	{
 		return;
 	}
+	const TArray<FGuid> PreviousCarryIds =
+		InteractionModel->GetCarry().RemainingInstanceIds;
 	const FWacomBackpackWorkspaceReleaseIntent Intent = InteractionModel->BuildReleaseIntent(
 		bReleaseAll,
 		TargetKind,
@@ -1532,7 +1716,26 @@ void UWacomBackpackWorkspaceWidget::BroadcastRelease(
 			}
 		}
 	}
-	RefreshInteractionPresentation();
+	TArray<FGuid> ChangedInstanceIds = PreviousCarryIds;
+	if (InteractionModel->IsCarrying())
+	{
+		for (const FGuid InstanceId :
+			InteractionModel->GetCarry().RemainingInstanceIds)
+		{
+			ChangedInstanceIds.AddUnique(InstanceId);
+		}
+	}
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::NavigationTargets
+			| EWacomBackpackWorkspacePresentationDirty::CarryTopology
+			| EWacomBackpackWorkspacePresentationDirty::CarryStrip
+			| EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::NavigationPresentation
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
 	StartCardMotionTimer();
 	OnInteractionChangedNative.Broadcast();
 }
@@ -1577,11 +1780,19 @@ bool UWacomBackpackWorkspaceWidget::TryBeginCarryFromPendingPress(
 	ClearExpandedPileFocus(true);
 	UpdateCarryAnchor(Pointer);
 	GetRuntime().Presentation.bCarryStripLayoutDirty = true;
-	SyncCarryLayer();
-	RebuildCarryStripLayout();
 	BeginCarryPickupFeedback();
 	StartCardMotionTimer();
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::NavigationTargets
+			| EWacomBackpackWorkspacePresentationDirty::CarryTopology
+			| EWacomBackpackWorkspacePresentationDirty::CarryStrip
+			| EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::NavigationPresentation
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		InteractionModel->GetCarry().RemainingInstanceIds);
 	OnInteractionChangedNative.Broadcast();
 	return true;
 }
@@ -1736,6 +1947,8 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingPilePress(
 	const FWacomBackpackZoneKey SourceZone = FWacomBackpackZoneKey::Make(
 		Pile->GetPileView().Zone,
 		Pile->GetPileView().OwnerInstanceId);
+	const TArray<FGuid> PreviousSelection =
+		InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 	BeginSelectionVisualFreeze(SourceZone);
 	InteractionModel->BeginMarquee(
 		SourceZone,
@@ -1743,7 +1956,16 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingPilePress(
 		PilePress.bControlDown);
 	InteractionModel->UpdateMarquee(Pointer);
 	PilePress.Reset();
-	RefreshInteractionPresentation();
+	const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
+		PreviousSelection,
+		InteractionModel->GetSelection().OrderedSelectedInstanceIds);
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
 	return InteractionModel->IsMarqueeActive();
 }
 
@@ -1759,6 +1981,8 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingBlankPress(
 		return false;
 	}
 
+	const TArray<FGuid> PreviousSelection =
+		InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 	BeginSelectionVisualFreeze(MarqueePress.SourceZone);
 	InteractionModel->BeginMarquee(
 		MarqueePress.SourceZone,
@@ -1773,7 +1997,16 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingBlankPress(
 		ClearExpandedPileFocus(true);
 	}
 	MarqueePress.Reset();
-	RefreshInteractionPresentation();
+	const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
+		PreviousSelection,
+		InteractionModel->GetSelection().OrderedSelectedInstanceIds);
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
 	return InteractionModel->IsMarqueeActive();
 }
 
@@ -2141,22 +2374,44 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonUp(
 	}
 	if (InteractionModel->IsMarqueeActive() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		const TArray<FGuid> PreviousSelection =
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 		InteractionModel->UpdateMarquee(ToLocalPointer(InMouseEvent));
 		InteractionModel->CompleteMarquee();
 		UpdateSelectionVisualFreezeLifetime();
 		ClearExpandedPileFocus(true);
-		RefreshInteractionPresentation();
+		const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
+			PreviousSelection,
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds);
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled().ReleaseMouseCapture();
 	}
 	FWacomBackpackPendingMarqueePress& MarqueePress = GetRuntime().Gesture.MarqueePress;
 	if (MarqueePress.bActive && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
+		const TArray<FGuid> PreviousSelection =
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 		InteractionModel->ClickBlank();
 		MarqueePress.Reset();
 		UpdateSelectionVisualFreezeLifetime();
 		ClearExpandedPileFocus(true);
-		RefreshInteractionPresentation();
+		const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
+			PreviousSelection,
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds);
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled().ReleaseMouseCapture();
 	}
@@ -2171,9 +2426,11 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseWheel(
 		&& InteractionModel && InteractionModel->IsCarrying())
 	{
 		const FWacomBackpackWorkspaceCarryState& PreviousCarry = InteractionModel->GetCarry();
+		TArray<FGuid> ChangedInstanceIds;
 		if (PreviousCarry.RemainingInstanceIds.IsValidIndex(PreviousCarry.CurrentIndex))
 		{
 			const FGuid PreviousId = PreviousCarry.RemainingInstanceIds[PreviousCarry.CurrentIndex];
+			ChangedInstanceIds.Add(PreviousId);
 			for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : GetBoundCardWidgets())
 			{
 				UWacomDeckCardWidget* Card = WeakCard.Get();
@@ -2192,8 +2449,22 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseWheel(
 			GetRuntime().Presentation.bCarryCurrentExplicitlySelectedByWheel = true;
 		}
 		GetRuntime().Presentation.bCarryStripLayoutDirty = true;
-		RebuildCarryStripLayout();
-		RefreshInteractionPresentation();
+		const FWacomBackpackWorkspaceCarryState& CurrentCarry =
+			InteractionModel->GetCarry();
+		if (CurrentCarry.RemainingInstanceIds.IsValidIndex(
+			CurrentCarry.CurrentIndex))
+		{
+			ChangedInstanceIds.AddUnique(
+				CurrentCarry.RemainingInstanceIds[CurrentCarry.CurrentIndex]);
+		}
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::CarryStrip
+				| EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		StartCardMotionTimer();
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled();
@@ -2412,13 +2683,24 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnKeyDown(
 	}
 	if (InteractionModel && InKeyEvent.IsControlDown() && InKeyEvent.GetKey() == EKeys::A)
 	{
+		const TArray<FGuid> PreviousSelection =
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 		if (InteractionModel->GetSelection().bHasSourceZone)
 		{
 			BeginSelectionVisualFreeze(InteractionModel->GetSelection().SourceZone);
 		}
 		InteractionModel->SelectAllMovable();
 		UpdateSelectionVisualFreezeLifetime();
-		RefreshInteractionPresentation();
+		const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
+			PreviousSelection,
+			InteractionModel->GetSelection().OrderedSelectedInstanceIds);
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled();
 	}
@@ -2448,9 +2730,33 @@ FNavigationReply UWacomBackpackWorkspaceWidget::NativeOnNavigation(
 	const FNavigationEvent& InNavigationEvent)
 {
 	ReconcileNavigationTargets();
+	TArray<FGuid> ChangedInstanceIds;
+	if (const FWacomBackpackWorkspaceNavigationTarget* Previous =
+		GetRuntime().Navigation.GetFocusedTarget())
+	{
+		if (Previous->Kind == EWacomBackpackWorkspaceNavigationTargetKind::Card)
+		{
+			ChangedInstanceIds.Add(Previous->InstanceId);
+		}
+	}
 	if (GetRuntime().Navigation.Move(InNavigationEvent.GetNavigationType()))
 	{
-		RefreshNavigationPresentation();
+		if (const FWacomBackpackWorkspaceNavigationTarget* Current =
+			GetRuntime().Navigation.GetFocusedTarget())
+		{
+			if (Current->Kind
+				== EWacomBackpackWorkspaceNavigationTargetKind::Card)
+			{
+				ChangedInstanceIds.AddUnique(Current->InstanceId);
+			}
+		}
+		RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::StaticCards
+				| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+				| EWacomBackpackWorkspacePresentationDirty::NavigationPresentation
+				| EWacomBackpackWorkspacePresentationDirty::Accessibility
+				| EWacomBackpackWorkspacePresentationDirty::Paint,
+			ChangedInstanceIds);
 		OnInteractionChangedNative.Broadcast();
 		return FNavigationReply::Stop();
 	}
@@ -2549,26 +2855,26 @@ void UWacomBackpackWorkspaceWidget::ReconcileNavigationTargets()
 	GetRuntime().Navigation.ReconcileTargets(Targets);
 }
 
-void UWacomBackpackWorkspaceWidget::RefreshNavigationPresentation()
+void UWacomBackpackWorkspaceWidget::RefreshNavigationPresentation(
+	const FWacomBackpackWorkspacePresentationRequest& Request)
 {
+	(void)Request;
 	const bool bShowNavigationFocus =
 		GetRuntime().Navigation.IsSemanticFocusActive();
 	UWacomDeckCardWidget* FocusedCard = nullptr;
-	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : GetBoundCardWidgets())
+	if (bShowNavigationFocus)
 	{
-		UWacomDeckCardWidget* Card = WeakCard.Get();
-		if (!Card)
+		if (const FWacomBackpackWorkspaceNavigationTarget* Focused =
+			GetRuntime().Navigation.GetFocusedTarget())
 		{
-			continue;
-		}
-		const bool bFocused = bShowNavigationFocus
-			&& GetRuntime().Navigation.IsCardFocused(Card->GetCardInstanceId());
-		if (bFocused)
-		{
-			FocusedCard = Card;
+			if (Focused->Kind
+				== EWacomBackpackWorkspaceNavigationTargetKind::Card)
+			{
+				FocusedCard =
+					GetRuntime().Visuals.FindPhysicalCard(Focused->InstanceId);
+			}
 		}
 	}
-	RefreshCardAccessibilityPresentation();
 	const FWacomBackpackWorkspaceNavigationTarget* Focused =
 		GetRuntime().Navigation.GetFocusedTarget();
 	for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile : GetRegisteredPileWidgets())
@@ -2589,23 +2895,21 @@ void UWacomBackpackWorkspaceWidget::RefreshNavigationPresentation()
 	}
 }
 
-void UWacomBackpackWorkspaceWidget::RefreshCardAccessibilityPresentation()
+void UWacomBackpackWorkspaceWidget::RefreshCardAccessibilityPresentation(
+	const FWacomBackpackWorkspacePresentationRequest& Request)
 {
 	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
 		? InteractionStyle.Get()
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
-	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : GetBoundCardWidgets())
+	ForEachPresentationCard(
+		Request,
+		[this, Style](UWacomDeckCardWidget& Card)
 	{
-		UWacomDeckCardWidget* Card = WeakCard.Get();
-		if (!Card)
-		{
-			continue;
-		}
-		Card->SetWorkspaceAccessibilityState(
-			IsCardAccessibilityFocused(*Card),
-			ResolveCardAccessibilitySemanticIcon(*Card),
+		Card.SetWorkspaceAccessibilityState(
+			IsCardAccessibilityFocused(Card),
+			ResolveCardAccessibilitySemanticIcon(Card),
 			*Style);
-	}
+	});
 	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
@@ -2721,11 +3025,18 @@ bool UWacomBackpackWorkspaceWidget::HandleNavigationPrimary(bool bReleaseAll)
 	ClearExpandedPileFocus(true);
 	UpdateCarryAnchor(Target->Center);
 	GetRuntime().Presentation.bCarryStripLayoutDirty = true;
-	SyncCarryLayer();
-	RebuildCarryStripLayout();
 	BeginCarryPickupFeedback();
-	ReconcileNavigationTargets();
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::NavigationTargets
+			| EWacomBackpackWorkspacePresentationDirty::CarryTopology
+			| EWacomBackpackWorkspacePresentationDirty::CarryStrip
+			| EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::NavigationPresentation
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		InteractionModel->GetCarry().RemainingInstanceIds);
 	StartCardMotionTimer();
 	OnInteractionChangedNative.Broadcast();
 	return true;
@@ -2747,7 +3058,13 @@ bool UWacomBackpackWorkspaceWidget::HandleNavigationSelection()
 	}
 	InteractionModel->ClickCard(Target->InstanceId, true);
 	UpdateSelectionVisualFreezeLifetime();
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		MakeArrayView(&Target->InstanceId, 1));
 	OnInteractionChangedNative.Broadcast();
 	return true;
 }
@@ -2787,16 +3104,36 @@ bool UWacomBackpackWorkspaceWidget::StepCarriedCard(int32 Direction)
 	{
 		return false;
 	}
+	TArray<FGuid> ChangedInstanceIds;
 	const int32 PreviousIndex = InteractionModel->GetCarry().CurrentIndex;
+	if (InteractionModel->GetCarry().RemainingInstanceIds.IsValidIndex(
+		PreviousIndex))
+	{
+		ChangedInstanceIds.Add(
+			InteractionModel->GetCarry().RemainingInstanceIds[PreviousIndex]);
+	}
 	InteractionModel->StepCurrentByWheel(Direction < 0 ? 1.0f : -1.0f);
 	if (InteractionModel->GetCarry().CurrentIndex == PreviousIndex)
 	{
 		return true;
 	}
+	if (InteractionModel->GetCarry().RemainingInstanceIds.IsValidIndex(
+		InteractionModel->GetCarry().CurrentIndex))
+	{
+		ChangedInstanceIds.AddUnique(
+			InteractionModel->GetCarry().RemainingInstanceIds[
+				InteractionModel->GetCarry().CurrentIndex]);
+	}
 	GetRuntime().Presentation.bCarryCurrentExplicitlySelectedByWheel = true;
 	GetRuntime().Presentation.bCarryStripLayoutDirty = true;
-	RebuildCarryStripLayout();
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::CarryStrip
+			| EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
 	StartCardMotionTimer();
 	OnInteractionChangedNative.Broadcast();
 	return true;
@@ -2905,59 +3242,117 @@ void UWacomBackpackWorkspaceWidget::ApplyStaticCardPresentation(
 	++GetRuntime().Presentation.StaticCardPresentationUpdateCount;
 }
 
-void UWacomBackpackWorkspaceWidget::RefreshInteractionPresentation()
+void UWacomBackpackWorkspaceWidget::RequestPresentationRefresh(
+	EWacomBackpackWorkspacePresentationDirty Reasons,
+	TConstArrayView<FGuid> CardInstanceIds,
+	bool bAllCards,
+	bool bFlushImmediately)
 {
-	TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_FullPresentationRefresh);
+	GetRuntime().FrameScheduler.RequestPresentation(
+		Reasons,
+		CardInstanceIds,
+		bAllCards);
+	if (bFlushImmediately)
+	{
+		FlushPresentationRefresh();
+	}
+}
+
+void UWacomBackpackWorkspaceWidget::ForEachPresentationCard(
+	const FWacomBackpackWorkspacePresentationRequest& Request,
+	TFunctionRef<void(UWacomDeckCardWidget&)> Apply)
+{
+	if (Request.bAllCards)
+	{
+		for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard :
+			GetBoundCardWidgets())
+		{
+			if (UWacomDeckCardWidget* Card = WeakCard.Get())
+			{
+				Apply(*Card);
 #if WITH_AUTOMATION_TESTS
-	++FullPresentationRefreshCount;
+				++LocalCardApplyCount;
 #endif
+			}
+		}
+		return;
+	}
+
+	for (const FGuid InstanceId : Request.CardInstanceIds)
+	{
+		if (UWacomDeckCardWidget* Card =
+			GetRuntime().Visuals.FindPhysicalCard(InstanceId))
+		{
+			Apply(*Card);
+#if WITH_AUTOMATION_TESTS
+			++LocalCardApplyCount;
+#endif
+		}
+	}
+}
+
+void UWacomBackpackWorkspaceWidget::ApplyCardSemanticsPresentation(
+	const FWacomBackpackWorkspacePresentationRequest& Request)
+{
 	if (!InteractionModel)
 	{
 		return;
-	}
-	ReconcileNavigationTargets();
-	SyncCarryLayer();
-	if (GetRuntime().Presentation.bCarryStripLayoutDirty)
-	{
-		RebuildCarryStripLayout();
 	}
 	const FWacomBackpackWorkspaceCarryState& Carry = InteractionModel->GetCarry();
 	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
 		? InteractionStyle.Get()
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
-	FWacomBackpackWorkspaceMotionCoordinator& Motion = GetRuntime().Motion;
-	TMap<FGuid, int32> CarryIndices;
-	CarryIndices.Reserve(Carry.RemainingInstanceIds.Num());
-	for (int32 CarryIndex = 0; CarryIndex < Carry.RemainingInstanceIds.Num(); ++CarryIndex)
+	ForEachPresentationCard(
+		Request,
+		[this, &Carry, Style](UWacomDeckCardWidget& CardWidget)
 	{
-		CarryIndices.Add(Carry.RemainingInstanceIds[CarryIndex], CarryIndex);
-	}
-
-	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : GetBoundCardWidgets())
-	{
-		UWacomDeckCardWidget* CardWidget = WeakCard.Get();
-		if (!CardWidget)
-		{
-			continue;
-		}
-		const FGuid InstanceId = CardWidget->GetCardInstanceId();
-		const bool bInCarryLayer = IsInCarryVisualLayer(CardWidget);
-		const int32* FoundCarryIndex = bInCarryLayer ? CarryIndices.Find(InstanceId) : nullptr;
-		const int32 CarryIndex = FoundCarryIndex ? *FoundCarryIndex : INDEX_NONE;
-		ApplyStaticCardPresentation(*CardWidget, *Style);
+		const FGuid InstanceId = CardWidget.GetCardInstanceId();
+		const int32 CarryIndex = IsInCarryVisualLayer(&CardWidget)
+			? Carry.RemainingInstanceIds.IndexOfByKey(InstanceId)
+			: INDEX_NONE;
 		const bool bCurrent = CarryIndex != INDEX_NONE && CarryIndex == Carry.CurrentIndex;
 		const bool bSelected = InteractionModel->IsSelected(InstanceId)
-			&& CardWidget->GetWorkspaceReadOnlyKind()
+			&& CardWidget.GetWorkspaceReadOnlyKind()
 				== EWacomBackpackWorkspaceCardReadOnlyKind::None;
-		const bool bUseReadOnlyOpacity = CardWidget->UsesReadOnlyOpacity();
-		CardWidget->SetWorkspaceInteractionState(bSelected, bCurrent);
-		CardWidget->ApplyWorkspaceVisualState(
+		const bool bUseReadOnlyOpacity = CardWidget.UsesReadOnlyOpacity();
+		CardWidget.SetWorkspaceInteractionState(bSelected, bCurrent);
+		CardWidget.ApplyWorkspaceVisualState(
 			FWacomBackpackWorkspaceMotionCoordinator::BuildVisualState(
 				*Style,
 				bSelected,
 				bCurrent,
 				bUseReadOnlyOpacity));
+	});
+}
+
+void UWacomBackpackWorkspaceWidget::ReconcileMotionTarget()
+{
+	if (!InteractionModel)
+	{
+		return;
 	}
+
+	const FWacomBackpackWorkspaceCarryState& Carry = InteractionModel->GetCarry();
+	UWacomDeckCardWidget* DesiredCard = nullptr;
+	bool bDesiredCarrying = false;
+	if (InteractionModel->IsCarrying()
+		&& Carry.RemainingInstanceIds.IsValidIndex(Carry.CurrentIndex))
+	{
+		DesiredCard = GetRuntime().Visuals.FindPhysicalCard(
+			Carry.RemainingInstanceIds[Carry.CurrentIndex]);
+		bDesiredCarrying = DesiredCard && IsInCarryVisualLayer(DesiredCard);
+		if (!bDesiredCarrying)
+		{
+			DesiredCard = nullptr;
+		}
+	}
+	if (!DesiredCard)
+	{
+		DesiredCard = GetPresentationFocusedCard();
+	}
+	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+		? InteractionStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
 
 	FVector2D PresentationPointer = Carry.PointerPosition;
 	if (!InteractionModel->IsCarrying() && FSlateApplication::IsInitialized())
@@ -2965,25 +3360,118 @@ void UWacomBackpackWorkspaceWidget::RefreshInteractionPresentation()
 		PresentationPointer = GetCachedGeometry().AbsoluteToLocal(
 			FSlateApplication::Get().GetCursorPos());
 	}
-	Motion.Reconcile(
-		GetBoundCardWidgets(),
-		GetPresentationFocusedCard(),
-		InteractionModel->IsCarrying() ? &Carry : nullptr,
-		CarryActiveLayer ? CarryActiveLayer.Get() : CarryLayer.Get(),
+	GetRuntime().Motion.ReconcileActiveCard(
+		DesiredCard,
+		bDesiredCarrying,
 		GetCachedGeometry(),
 		PresentationPointer,
 		*Style,
 		GetRuntime().Presentation.IsSimplifiedMotion());
-	if (Motion.WantsTick() || !GetVisualState().BaseTransitions().IsEmpty())
+	if (GetRuntime().Motion.WantsTick()
+		|| !GetVisualState().BaseTransitions().IsEmpty())
 	{
 		StartCardMotionTimer();
 	}
+}
 
+void UWacomBackpackWorkspaceWidget::FlushPresentationRefresh()
+{
+	FWacomBackpackWorkspacePresentationRequest Request =
+		GetRuntime().FrameScheduler.ConsumePresentation();
+	if (Request.IsEmpty())
+	{
+		return;
+	}
+
+	TRACE_CPUPROFILER_EVENT_SCOPE(Wacom_Backpack_PresentationPipelineFlush);
+#if WITH_AUTOMATION_TESTS
+	++PresentationFlushCount;
+	bLastPresentationAppliedAllCards = Request.bAllCards;
+	LastPresentationAppliedInstanceIds = Request.CardInstanceIds.Array();
+#endif
+	if (!InteractionModel)
+	{
+		return;
+	}
+
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::NavigationTargets))
+	{
+		ReconcileNavigationTargets();
+#if WITH_AUTOMATION_TESTS
+		++NavigationTargetsApplyCount;
+#endif
+	}
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::CarryTopology))
+	{
+		SyncCarryLayer();
+#if WITH_AUTOMATION_TESTS
+		++CarryTopologyApplyCount;
+#endif
+	}
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::CarryStrip)
+		&& GetRuntime().Presentation.bCarryStripLayoutDirty)
+	{
+		RebuildCarryStripLayout();
+#if WITH_AUTOMATION_TESTS
+		++CarryStripApplyCount;
+#endif
+	}
+
+	const UWacomBackpackWorkspaceStyle* Style = InteractionStyle.IsValid()
+		? InteractionStyle.Get()
+		: GetDefault<UWacomBackpackWorkspaceStyle>();
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::StaticCards))
+	{
+		ForEachPresentationCard(
+			Request,
+			[this, Style](UWacomDeckCardWidget& Card)
+			{
+				ApplyStaticCardPresentation(Card, *Style);
+			});
+#if WITH_AUTOMATION_TESTS
+		++StaticCardStageApplyCount;
+#endif
+	}
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::CardSemantics))
+	{
+		ApplyCardSemanticsPresentation(Request);
+#if WITH_AUTOMATION_TESTS
+		++CardSemanticsStageApplyCount;
+#endif
+	}
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::MotionTarget))
+	{
+		ReconcileMotionTarget();
+#if WITH_AUTOMATION_TESTS
+		++MotionTargetApplyCount;
+#endif
+	}
+	if (Request.Has(
+		EWacomBackpackWorkspacePresentationDirty::NavigationPresentation))
+	{
+		RefreshNavigationPresentation(Request);
+#if WITH_AUTOMATION_TESTS
+		++NavigationPresentationApplyCount;
+#endif
+	}
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::Accessibility))
+	{
+		RefreshCardAccessibilityPresentation(Request);
+#if WITH_AUTOMATION_TESTS
+		++AccessibilityApplyCount;
+#endif
+	}
+	if (Request.Has(EWacomBackpackWorkspacePresentationDirty::Paint))
+	{
+		Invalidate(EInvalidateWidgetReason::Paint);
+#if WITH_AUTOMATION_TESTS
+		++PaintInvalidationApplyCount;
+#endif
+	}
 	if (SelectionMarquee)
 	{
 		SelectionMarquee->SetVisibility(ESlateVisibility::Collapsed);
 	}
-	RefreshNavigationPresentation();
 }
 
 void UWacomBackpackWorkspaceWidget::SetCarryInputSuspended(bool bSuspended)
@@ -3006,7 +3494,10 @@ void UWacomBackpackWorkspaceWidget::SetCarryInputSuspended(bool bSuspended)
 	{
 		StartCardMotionTimer();
 	}
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 }
 
 void UWacomBackpackWorkspaceWidget::CancelInteraction()
@@ -3067,7 +3558,10 @@ void UWacomBackpackWorkspaceWidget::CancelInteraction()
 	{
 		FSlateApplication::Get().ReleaseAllPointerCapture(0);
 	}
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 }
 
 void UWacomBackpackWorkspaceWidget::ResetWorkspaceScene()
@@ -3174,7 +3668,10 @@ void UWacomBackpackWorkspaceWidget::CancelInteractionWithReturn()
 	{
 		CarryRoot->SetRenderTranslation(FVector2D::ZeroVector);
 	}
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 	StartCardMotionTimer();
 }
 
@@ -3911,7 +4408,10 @@ bool UWacomBackpackWorkspaceWidget::AcceptStableLayoutGeometry(FVector2D LayoutS
 		StaticCardLayer->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
 	OnLayoutGeometryReadyNative.Broadcast(GetRuntime().Presentation.StableLayoutSize);
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 	ScheduleBoundCardFaceRender();
 	return true;
 }
@@ -3975,7 +4475,15 @@ void UWacomBackpackWorkspaceWidget::FlushDeferredCardFaceRender()
 		return;
 	}
 
-	RefreshInteractionPresentation();
+	RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::NavigationPresentation
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		{},
+		true);
 	RequestBoundCardFaceRenders();
 	++DeferredCardFaceRenderPassCount;
 }
@@ -4466,6 +4974,19 @@ FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAuto
 	View.ExpandedPileFocusLayoutRebuildCount = GetRuntime().Presentation.ExpandedPileFocusLayoutRebuildCount;
 	View.bExpandedPileFocusExitPending = GetRuntime().Presentation.ExpandedPileFocus.bExitPending;
 	View.FullPresentationRefreshCount = FullPresentationRefreshCount;
+	View.PresentationFlushCount = PresentationFlushCount;
+	View.NavigationTargetsApplyCount = NavigationTargetsApplyCount;
+	View.CarryTopologyApplyCount = CarryTopologyApplyCount;
+	View.CarryStripApplyCount = CarryStripApplyCount;
+	View.StaticCardStageApplyCount = StaticCardStageApplyCount;
+	View.CardSemanticsStageApplyCount = CardSemanticsStageApplyCount;
+	View.MotionTargetApplyCount = MotionTargetApplyCount;
+	View.NavigationPresentationApplyCount = NavigationPresentationApplyCount;
+	View.AccessibilityApplyCount = AccessibilityApplyCount;
+	View.PaintInvalidationApplyCount = PaintInvalidationApplyCount;
+	View.LocalCardApplyCount = LocalCardApplyCount;
+	View.bLastPresentationAppliedAllCards = bLastPresentationAppliedAllCards;
+	View.LastPresentationAppliedInstanceIds = LastPresentationAppliedInstanceIds;
 	View.WorkspaceSceneBindCount = WorkspaceSceneBindCount;
 	View.BaseCardLayoutTransitionTickCount = BaseCardLayoutTransitionTickCount;
 	View.BaseCardLayoutTransitionApplyCount = BaseCardLayoutTransitionApplyCount;

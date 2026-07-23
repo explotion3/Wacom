@@ -167,11 +167,9 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 		StableFaceBaseline.RetainedRenderingApplyCount);
 
 	FWacomBackpackWorkspaceMotionCoordinator Controller;
-	Controller.Reconcile(
-		Cards,
+	Controller.ReconcileActiveCard(
 		OwnedCards[0].Get(),
-		nullptr,
-		nullptr,
+		false,
 		FGeometry(),
 		FVector2D::ZeroVector,
 		*Style,
@@ -185,15 +183,9 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 
 	TStrongObjectPtr<UCanvasPanel> CarryLayer(NewObject<UCanvasPanel>());
 	CarryLayer->AddChild(OwnedCards[0].Get());
-	FWacomBackpackWorkspaceCarryState Carry;
-	Carry.RemainingInstanceIds.Add(OwnedCards[0]->GetCardInstanceId());
-	Carry.CurrentIndex = 0;
-	Carry.DefaultIndex = 0;
-	Controller.Reconcile(
-		Cards,
-		nullptr,
-		&Carry,
-		CarryLayer.Get(),
+	Controller.ReconcileActiveCard(
+		OwnedCards[0].Get(),
+		true,
 		FGeometry(),
 		FVector2D::ZeroVector,
 		*Style,
@@ -225,11 +217,9 @@ bool FWacomUIBackpackCardPresentationBudgetSpec::RunTest(const FString& Paramete
 	OwnedCards[1]->SetWorkspaceInteractionEnabled(false);
 	OwnedCards[1]->SetWorkspaceReadOnlyKind(
 		EWacomBackpackWorkspaceCardReadOnlyKind::BattleProjection);
-	Controller.Reconcile(
-		Cards,
+	Controller.ReconcileActiveCard(
 		OwnedCards[1].Get(),
-		nullptr,
-		nullptr,
+		false,
 		FGeometry(),
 		FVector2D::ZeroVector,
 		*Style,

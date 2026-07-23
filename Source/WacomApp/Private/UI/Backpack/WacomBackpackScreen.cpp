@@ -1468,7 +1468,6 @@ void UWacomBackpackScreen::HandleWorkspaceDeleteCancelled()
 	if (WorkspaceWidget)
 	{
 		WorkspaceWidget->SetCarryInputSuspended(false);
-		WorkspaceWidget->RefreshInteractionPresentation();
 		WorkspaceWidget->SetKeyboardFocus();
 	}
 	else if (WorkspaceInteractionModel)
@@ -1564,7 +1563,6 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 	if (!bSemanticFlux && !WorkspaceWidget->GetCachedGeometry().IsUnderLocation(AbsolutePointer))
 	{
 		// 工作台外既不是通量空白，也不是合法目标；保持携带并显示拒绝状态。
-		WorkspaceWidget->RefreshInteractionPresentation();
 		return;
 	}
 	const FVector2D WorkspaceSize = WorkspaceWidget->GetLayoutSpaceSize();
@@ -1635,7 +1633,6 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 		if (!Result.bSucceeded)
 		{
 			EndWorkspaceMutationRefreshDeferral(false);
-			WorkspaceWidget->RefreshInteractionPresentation();
 			return;
 		}
 		ApplyFluxLayoutPolicy();
@@ -1683,7 +1680,6 @@ void UWacomBackpackScreen::HandleWorkspacePileReleaseIntent(
 		Run->ValidateMoveInstancesAtomic(Request);
 	if (!Validation.bCanExecute)
 	{
-		WorkspaceWidget->RefreshInteractionPresentation();
 		return;
 	}
 	BeginWorkspaceMutationRefreshDeferral();
@@ -1695,10 +1691,6 @@ void UWacomBackpackScreen::HandleWorkspacePileReleaseIntent(
 		ResetBackpackRefreshDirtyGate();
 	}
 	EndWorkspaceMutationRefreshDeferral(Result.bSucceeded);
-	if (!Result.bSucceeded)
-	{
-		WorkspaceWidget->RefreshInteractionPresentation();
-	}
 }
 
 void UWacomBackpackScreen::CancelWorkspaceInteraction()

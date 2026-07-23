@@ -297,7 +297,7 @@ bool FWacomUIBackpackWorkspaceOverlayIdentitySpec::RunTest(const FString& Parame
 	Model->BeginMarquee(BattleZone, FVector2D::ZeroVector, false);
 	Model->UpdateMarquee(FVector2D(600.0f, 300.0f));
 	Model->CompleteMarquee();
-	Workspace->RefreshInteractionPresentation();
+	FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(*Workspace);
 	TestEqual(TEXT("Marquee selects every physical InstanceId sharing one card definition"),
 		Model->GetSelection().OrderedSelectedInstanceIds,
 		PhysicalIds);
@@ -315,7 +315,7 @@ bool FWacomUIBackpackWorkspaceOverlayIdentitySpec::RunTest(const FString& Parame
 	OwnedCards[1]->SetBackpackRealtimePresentation(true, FVector2D::ZeroVector, false);
 	TestTrue(TEXT("Clicking any selected physical card begins group carry"),
 		Model->BeginCarry(PhysicalIds[1], FVector2D(300.0f, 200.0f), 1));
-	Workspace->RefreshInteractionPresentation();
+	FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(*Workspace);
 	TestEqual(TEXT("Carry identity set exactly matches the visible selected-marker set"),
 		Model->GetCarry().RemainingInstanceIds,
 		PhysicalIds);

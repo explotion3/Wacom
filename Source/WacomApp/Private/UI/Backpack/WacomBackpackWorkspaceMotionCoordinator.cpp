@@ -2,8 +2,6 @@
 
 #include "UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 
-#include "Components/CanvasPanel.h"
-#include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 #include "UI/Card/WacomCardMotionKernel.h"
@@ -75,49 +73,18 @@ bool FWacomBackpackWorkspaceMotionCoordinator::IsCardMoving(
 			const_cast<UWacomDeckCardWidget*>(&Card)));
 }
 
-void FWacomBackpackWorkspaceMotionCoordinator::Reconcile(
-	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
-	UWacomDeckCardWidget* FocusedCard,
-	const FWacomBackpackWorkspaceCarryState* Carry,
-	const UCanvasPanel* CarryLayer,
+void FWacomBackpackWorkspaceMotionCoordinator::ReconcileActiveCard(
+	UWacomDeckCardWidget* DesiredCard,
+	bool bDesiredCarrying,
 	const FGeometry& WorkspaceGeometry,
 	FVector2D InPointerLocal,
 	const UWacomBackpackWorkspaceStyle& Style,
 	bool bSimplifiedMotion)
 {
-	UWacomDeckCardWidget* Desired = nullptr;
-	bool bDesiredCarrying = false;
-	if (Carry && CarryLayer && Carry->RemainingInstanceIds.IsValidIndex(Carry->CurrentIndex))
-	{
-		const FGuid CurrentId = Carry->RemainingInstanceIds[Carry->CurrentIndex];
-		for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : Cards)
-		{
-			UWacomDeckCardWidget* Card = WeakCard.Get();
-			if (Card && Card->GetParent() == CarryLayer && Card->GetCardInstanceId() == CurrentId)
-			{
-				Desired = Card;
-				bDesiredCarrying = true;
-				break;
-			}
-		}
-	}
-	if (!Desired && FocusedCard)
-	{
-		for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard : Cards)
-		{
-			UWacomDeckCardWidget* Card = WeakCard.Get();
-			if (Card == FocusedCard)
-			{
-				Desired = Card;
-				break;
-			}
-		}
-	}
-
-	if (ActiveCard.Get() != Desired)
+	if (ActiveCard.Get() != DesiredCard)
 	{
 		DisableActiveCard();
-		ActiveCard = Desired;
+		ActiveCard = DesiredCard;
 		ActiveDepthMotion.Reset();
 	}
 	bActiveCardCarrying = bDesiredCarrying;

@@ -68,7 +68,7 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 		Model->SelectAllMovable();
 		TestTrue(*FString::Printf(TEXT("%d cards begin carry"), CardCount),
 			Model->BeginCarry(Cards[0]->GetCardInstanceId(), FVector2D(300.0f, 220.0f), 17));
-		Workspace->RefreshInteractionPresentation();
+		FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(*Workspace);
 		for (int32 Index = 0; Index < Cards.Num(); ++Index)
 		{
 			TestTrue(
@@ -210,7 +210,7 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 			Workspace->GetAutomationTestView();
 		const int32 StaticUpdatesBeforeRepeatedPresentation =
 			AfterWheelHandoff.StaticCardPresentationUpdateCount;
-		Workspace->RefreshInteractionPresentation();
+		FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(*Workspace);
 		TestEqual(TEXT("Repeated presentation does not rewrite a carried current card as static"),
 			Workspace->GetAutomationTestView().StaticCardPresentationUpdateCount,
 			StaticUpdatesBeforeRepeatedPresentation);
@@ -271,7 +271,7 @@ bool FWacomUIBackpackCarryLayerAnchorSpec::RunTest(const FString& Parameters)
 				*Cards[0], TargetCenter, FVector2D(220.0f, 320.0f), 0.0f, 4000);
 			TestTrue(TEXT("Carry-to-settlement handoff preserves the Slate widget"),
 				&Cards[0]->TakeWidget().Get() == OriginalSlateWidgets[0]);
-			Workspace->RefreshInteractionPresentation();
+			FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(*Workspace);
 			TestEqual(TEXT("Committed release does not start a cached source-to-target transition"),
 				Workspace->GetAutomationTestView().ActiveBaseCardLayoutTransitionCount, 0);
 			const UCanvasPanelSlot* ReleasedSlot = Cast<UCanvasPanelSlot>(Cards[0]->Slot);
@@ -350,7 +350,7 @@ bool FWacomUIBackpackRepeatedCarrySettlementLifetimeSpec::RunTest(const FString&
 			Model->SelectAllMovable();
 			TestTrue(*FString::Printf(TEXT("Cycle %d begins a multi-card carry"), Cycle),
 				Model->BeginCarry(Cards[0]->GetCardInstanceId(), FVector2D(500.0f, 350.0f), 77));
-			Workspace->RefreshInteractionPresentation();
+			FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(*Workspace);
 
 			if (Cycle > 0)
 			{

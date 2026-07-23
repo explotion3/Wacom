@@ -109,6 +109,11 @@ struct FWacomBackpackScreenTestAccess
 		UWacomDeckCardWidget& CardWidget,
 		bool bPreselectCard = true);
 	static void FlushWorkspaceCarryPointer(UWacomBackpackWorkspaceWidget& Workspace);
+	static void RefreshWorkspacePresentation(
+		UWacomBackpackWorkspaceWidget& Workspace);
+	static bool ToggleWorkspaceCardSelection(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		UWacomDeckCardWidget& Card);
 	static void SendWorkspaceCarryPointerEvents(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		UWacomDeckCardWidget& CardWidget,

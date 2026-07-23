@@ -499,6 +499,50 @@ void FWacomBackpackScreenTestAccess::FlushWorkspaceCarryPointer(
 	Workspace.FinalizeCompletedSettlements();
 }
 
+void FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	Workspace.RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
+}
+
+bool FWacomBackpackScreenTestAccess::ToggleWorkspaceCardSelection(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	UWacomDeckCardWidget& Card)
+{
+	const FVector2D Pointer(120.0f, 120.0f);
+	const FModifierKeysState ControlModifier(
+		false, false, true, false, false, false, false, false, false);
+	const FPointerEvent PointerDown(
+		0,
+		Pointer,
+		Pointer,
+		TSet<FKey>{ EKeys::LeftMouseButton },
+		EKeys::LeftMouseButton,
+		0.0f,
+		ControlModifier);
+	const FPointerEvent PointerUp(
+		0,
+		Pointer,
+		Pointer,
+		TSet<FKey>(),
+		EKeys::LeftMouseButton,
+		0.0f,
+		ControlModifier);
+	const bool bDownHandled = Workspace.HandleCardPointerDownAtLocal(
+		&Card,
+		Pointer,
+		PointerDown,
+		false).IsEventHandled();
+	const bool bUpHandled = Workspace.HandleCardPointerUp(
+		&Card,
+		FGeometry(),
+		PointerUp).IsEventHandled();
+	return bDownHandled && bUpHandled;
+}
+
 void FWacomBackpackScreenTestAccess::SendWorkspaceCarryPointerEvents(
 	UWacomBackpackWorkspaceWidget& Workspace,
 	UWacomDeckCardWidget& CardWidget,
@@ -730,7 +774,10 @@ FWacomBackpackScreenTestAccess::ProbeMarqueePaintHotPath(
 		FWacomBackpackZoneKey::Make(EZoneKind::Backpack),
 		Start,
 		false);
-	Workspace.RefreshInteractionPresentation();
+	Workspace.RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 	const FWacomBackpackWorkspaceAutomationTestView Before =
 		Workspace.GetAutomationTestView();
 	Probe.FullPresentationRefreshCountBefore = Before.FullPresentationRefreshCount;
@@ -766,7 +813,10 @@ void FWacomBackpackScreenTestAccess::ClearWorkspaceSelection(
 	}
 	Workspace.InteractionModel->ClickBlank();
 	Workspace.UpdateSelectionVisualFreezeLifetime();
-	Workspace.RefreshInteractionPresentation();
+	Workspace.RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 }
 
 bool FWacomBackpackScreenTestAccess::CommitWorkspacePileMoveWithSynchronousTargetReconcile(
@@ -975,7 +1025,10 @@ bool FWacomBackpackScreenTestAccess::BeginWorkspaceCarry(UWacomBackpackScreen& S
 		Screen.GetRunSession() ? Screen.GetRunSession()->GetBackpackStorageSnapshotRevision() : 0);
 	if (Screen.WorkspaceWidget)
 	{
-		Screen.WorkspaceWidget->RefreshInteractionPresentation();
+		Screen.WorkspaceWidget->RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::All,
+			{},
+			true);
 	}
 	return bStarted;
 }
@@ -997,7 +1050,13 @@ bool FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(
 		InstanceIds[0],
 		FVector2D(500.0f, 350.0f),
 		Screen.GetRunSession() ? Screen.GetRunSession()->GetBackpackStorageSnapshotRevision() : 0);
-	if (Screen.WorkspaceWidget) Screen.WorkspaceWidget->RefreshInteractionPresentation();
+	if (Screen.WorkspaceWidget)
+	{
+		Screen.WorkspaceWidget->RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::All,
+			{},
+			true);
+	}
 	return bStarted;
 }
 
@@ -1009,7 +1068,10 @@ bool FWacomBackpackScreenTestAccess::BeginWorkspaceMarquee(UWacomBackpackScreen&
 	}
 
 	Screen.WorkspaceInteractionModel->BeginMarquee(FVector2D(20.0f, 20.0f), false);
-	Screen.WorkspaceWidget->RefreshInteractionPresentation();
+	Screen.WorkspaceWidget->RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
 	return Screen.WorkspaceInteractionModel->IsMarqueeActive();
 }
 

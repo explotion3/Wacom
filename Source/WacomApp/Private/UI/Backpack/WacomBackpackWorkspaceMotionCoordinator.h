@@ -6,11 +6,9 @@
 #include "Layout/Geometry.h"
 #include "../Card/WacomFirstPersonCardDepthMotion.h"
 
-class UCanvasPanel;
 class UMaterialInterface;
 class UWacomBackpackWorkspaceStyle;
 class UWacomDeckCardWidget;
-struct FWacomBackpackWorkspaceCarryState;
 
 struct FWacomBackpackWorkspaceCardVisualState
 {
@@ -37,11 +35,9 @@ public:
 		bool bReadOnly,
 		bool bValidTarget = false,
 		bool bRejectedTarget = false);
-	void Reconcile(
-		TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> Cards,
-		UWacomDeckCardWidget* FocusedCard,
-		const FWacomBackpackWorkspaceCarryState* Carry,
-		const UCanvasPanel* CarryLayer,
+	void ReconcileActiveCard(
+		UWacomDeckCardWidget* DesiredCard,
+		bool bDesiredCarrying,
 		const FGeometry& WorkspaceGeometry,
 		FVector2D PointerLocal,
 		const UWacomBackpackWorkspaceStyle& Style,
