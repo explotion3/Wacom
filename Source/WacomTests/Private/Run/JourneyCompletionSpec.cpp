@@ -189,7 +189,10 @@ bool FWacomJourneyCompletionAtomicSuccessSpec::RunTest(const FString& /*Paramete
 	Run->AcquireCardToRun(Reward);
 	FBattleInitParams RejectedBattleParams;
 	TestFalse(TEXT("Battle initialization is rejected after success"),
-		Run->BuildInitParamsForBattle(TEXT("Terminal"), RejectedBattleParams));
+		Run->BuildInitParamsForBattle(
+			Run->BuildExplorationSnapshot().CurrentNode,
+			TEXT("Terminal"),
+			RejectedBattleParams));
 	const FRunTreasureSettlementResult Pickup =
 		Run->CollectGoldPickup(TEXT("Pickup.AfterSuccess"), 2);
 	TestFalse(TEXT("Pickup is rejected after success"), Pickup.bSucceeded);

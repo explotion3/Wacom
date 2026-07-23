@@ -619,13 +619,6 @@ bool FWacomRunSnapshotRevisionsNonSnapshotMutationsSpec::RunTest(const FString& 
 	TestEqual(TEXT("Exploration command leaves shop revision"), After.Shop, Before.Shop);
 	TestEqual(TEXT("Exploration command leaves economy revision"), After.Economy, Before.Economy);
 
-	Before = CaptureRunUiRevisions(*Run);
-	Run->MarkTriggerDestroyed(TEXT("Revision.Trigger"));
-	After = CaptureRunUiRevisions(*Run);
-	TestEqual(TEXT("MarkTriggerDestroyed leaves backpack"), After.BackpackStorage, Before.BackpackStorage);
-	TestEqual(TEXT("MarkTriggerDestroyed leaves shop"), After.Shop, Before.Shop);
-	TestEqual(TEXT("MarkTriggerDestroyed leaves economy"), After.Economy, Before.Economy);
-
 	FWacomRunEventChoiceDefinition CloseChoice;
 	CloseChoice.ChoiceId = TEXT("Resolve");
 	CloseChoice.bCloseEventAfterResolve = true;

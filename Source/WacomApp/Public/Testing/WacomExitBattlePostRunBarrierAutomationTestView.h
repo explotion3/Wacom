@@ -6,13 +6,11 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-class ABattleTriggerActor;
-
 /** Non-reflected automation seam for the App-private ExitBattle barrier. */
 struct WACOMAPP_API FWacomExitBattlePostRunBarrierAutomationTestView
 {
 	FWacomExitBattlePostRunBarrierAutomationTestView(
-		ABattleTriggerActor& ResolvedEncounterTrigger,
+		TFunction<void()>&& OnResolvedEncounterRetirement,
 		TFunction<void()>&& OnReady);
 	~FWacomExitBattlePostRunBarrierAutomationTestView();
 

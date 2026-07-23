@@ -10,6 +10,7 @@ class AActor;
 class AWacomRunMapNodeAnchorActor;
 class AWacomRunPathBranchTargetActor;
 class AWacomRunPathSegmentActor;
+class UWacomRunEncounterSceneBindingComponent;
 class UWacomFloorMapDefinition;
 
 struct FWacomRunTraversalSceneBinding
@@ -23,6 +24,7 @@ struct FWacomRunTraversalSceneBinding
 	TWeakObjectPtr<AWacomRunMapNodeAnchorActor> SourceAnchor;
 	TWeakObjectPtr<AWacomRunMapNodeAnchorActor> TargetAnchor;
 	TWeakObjectPtr<AActor> ContentHost;
+	TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent> EncounterBinding;
 	FTransform CachedSourceTransform = FTransform::Identity;
 	FTransform CachedTargetTransform = FTransform::Identity;
 
@@ -40,11 +42,13 @@ public:
 	bool RegisterNodeAnchor(AWacomRunMapNodeAnchorActor& Anchor);
 	bool RegisterBranchTarget(AWacomRunPathBranchTargetActor& Target);
 	bool RegisterContentHost(FName NodeId, EWacomMapNodeType NodeType, AActor& Host);
+	bool RegisterEncounterBinding(UWacomRunEncounterSceneBindingComponent& Binding);
 	FWacomStatus ValidateComplete(const UWacomFloorMapDefinition& FloorDefinition) const;
 
 	void UnregisterPath(const AWacomRunPathSegmentActor& Path);
 	void UnregisterNodeAnchor(const AWacomRunMapNodeAnchorActor& Anchor);
 	void UnregisterContentHost(const AActor& Host);
+	void UnregisterEncounterBinding(const UWacomRunEncounterSceneBindingComponent& Binding);
 
 	FWacomRunTraversalSceneBinding PreflightTraversal(
 		const FRunExplorationSnapshot& Snapshot,
@@ -54,9 +58,11 @@ public:
 		const FWacomMapNodeHandle& TargetNode,
 		EWacomMapNodeType TargetNodeType,
 		AWacomRunMapNodeAnchorActor*& OutAnchor,
-		AActor*& OutContentHost) const;
+		AActor*& OutContentHost,
+		UWacomRunEncounterSceneBindingComponent*& OutEncounterBinding) const;
 
 	AWacomRunMapNodeAnchorActor* FindNodeAnchor(FName NodeId) const;
+	UWacomRunEncounterSceneBindingComponent* FindEncounterBinding(FName NodeId) const;
 	TArray<AWacomRunPathBranchTargetActor*> GetBranchTargets() const;
 
 private:
@@ -66,11 +72,13 @@ private:
 		TWeakObjectPtr<AActor> Host;
 	};
 
-	static bool RequiresContentHost(EWacomMapNodeType NodeType);
+	static bool RequiresStandaloneContentHost(EWacomMapNodeType NodeType);
 
 	FName FloorId = NAME_None;
 	TMap<FName, TWeakObjectPtr<AWacomRunPathSegmentActor>> PathsByEdgeId;
 	TMap<FName, TWeakObjectPtr<AWacomRunMapNodeAnchorActor>> AnchorsByNodeId;
 	TMap<FName, TWeakObjectPtr<AWacomRunPathBranchTargetActor>> BranchTargetsByEdgeId;
 	TMap<FName, FContentHostBinding> ContentHostsByNodeId;
+	TMap<FName, TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent>>
+		EncounterBindingsByNodeId;
 };

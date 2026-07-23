@@ -7,6 +7,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "Types/WacomEnums.h"
 #include "GameFramework/WacomGameFlowTypes.h"
+#include "Types/WacomResult.h"
 #include "UI/Menus/WacomJourneySummaryScreen.h"
 #include "WacomGameMode.generated.h"
 
@@ -16,9 +17,10 @@ class UBattleSession;
 class UWacomBattleWidgetBase;
 class UWacomExplorationHUD;
 class UBattleHUD;
-class ABattleTriggerActor;
 class AWacomPlayerController;
 class URunSession;
+class UEncounterDefinition;
+class UWacomRunEncounterSceneBindingComponent;
 struct FWacomJourneySummaryGameModeTestAccess;
 struct FRunExplorationResolution;
 
@@ -165,11 +167,13 @@ public:
 	// ---- 切换入口 ----
 
 	/**
-	 * 进入战斗。由 AWacomPlayerController::RequestEnterBattle 转发。
-	 * Trigger 必须提供 EncounterDefinition；真胜利后被 Destroy，撤离时保留以支持重入。
+	 * 从当前逻辑 Encounter Node 进入战斗。规则定义来自 Floor Node payload，
+	 * 场景 Host 与镜头来自 Anchor 上的 typed binding。
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
-	void EnterBattle(ABattleTriggerActor* Trigger);
+	FWacomStatus TryEnterBattle(
+		const FWacomMapNodeHandle& MapNodeHandle,
+		const UEncounterDefinition& EncounterDefinition,
+		UWacomRunEncounterSceneBindingComponent& SceneBinding);
 
 	/**
 	 * 退出战斗。战斗 UI 检测到 Phase == BattleEnd 时自动广播触发。
@@ -217,11 +221,14 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UBattleHUD> BattleHUD = nullptr;
 
-	UPROPERTY(Transient)
-	TObjectPtr<ABattleTriggerActor> PendingTrigger = nullptr;
+	FWacomMapNodeHandle PendingEncounterNode;
+	TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent> PendingEncounterSceneBinding;
+
+	TWeakObjectPtr<UEncounterDefinition> PendingEncounterDefinition;
 
 	/** 当前 Battle 唯一持有的 Encounter NodeActivity 票据；退出时必须提交或取消。 */
 	TOptional<FRunNodeActivityTicket> PendingEncounterActivity;
+	bool bBattleEntryInProgress = false;
 
 	/** HUD::OnBattleEndedNative 的订阅句柄，ExitBattle 时反注册。 */
 	FDelegateHandle BattleEndedHandle;

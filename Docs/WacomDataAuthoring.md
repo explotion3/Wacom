@@ -214,7 +214,9 @@ Spec 020 只落地首条 Debug 竖切链和通用 Shop WBP：
 
 Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
 
-当前 `L_Exploration` 使用 `/Game/Wacom/Data/Map/Authoring/DA_Floor_LevelAuthoring_01` 与 `DA_Journey_LevelAuthoring`。这是承接现有可玩图的过渡制作基线，不是正式 Floor 1；`GM_Wacom` 继续指向 Authoring Journey，Debug builder 禁止修改这三个正式/Authoring Package。正式设计已在 2026-07-17 独立冻结为 `Journey.Main.01` 与 `Floor.Main.01/02/03`，不会通过重命名或覆盖 Authoring/Debug 资产落地。
+当前 `L_Exploration` 使用 `/Game/Wacom/Data/Map/Authoring/DA_Floor_LevelAuthoring_01` 与 `DA_Journey_LevelAuthoring`。这是承接现有可玩图的过渡制作基线，不是正式 Floor 1；`GM_Wacom` 继续指向 Authoring Journey，Debug builder 禁止修改这些正式/Authoring DataAsset。Encounter 场景制作已统一为“Floor Node payload 保存规则 + 同 Node Anchor 上的 `UWacomRunEncounterSceneBindingComponent` 保存 Enemy Host/Viewpoint”；不再生成、同步或校验 `ABattleTriggerActor`。正式设计已在 2026-07-17 独立冻结为 `Journey.Main.01` 与 `Floor.Main.01/02/03`，不会通过重命名或覆盖 Authoring/Debug 资产落地。
+
+`L_Exploration`、`L_RunExploration_Debug` 与 `L_Run_Floor_Main_01` 已迁移为零 BattleTrigger；旧 `/Game/Wacom/Maps/BP_BattleTriggerActor` 与 `/Game/Wacom/Maps/SceneActor/BP_BattleTriggerActor` 已删除。Scene Registry / Validator 要求每个 Encounter Anchor 精确一个 binding，并拒绝缺失、重复、slot 不全、额外 slot、Host 为空/定义不符、同 binding 重复 Host、跨 Encounter 共享 Host，以及 Encounter 上残留的通用 content host。
 
 正式 Production Map 资产路径预留为：
 
@@ -230,7 +232,7 @@ Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtur
 
 其中 `DA_Floor_Main_01` 与 `L_Run_Floor_Main_01` 已由独立 Floor 1 Production 场景轮创建；`DA_Journey_Main_01`、Floor 2/3 FloorDefinition 与 world 仍不存在，也不授权通用 builder 或迁移脚本顺带创建。正式三层各 20 Node/21 Edge canonical graph、内容槽、跨层门槛与 Journey 节奏见 [WacomMap](./WacomMap.md#wacommap) §9；不得创建最小空壳图、伪 FloorEntrance 或 terminal Actor 特例绕过 Production readiness gate。
 
-正式内容 Host 的 `PersistentId` 不另建人工注册表，统一按 `<FloorId>.<NodeId>` 派生。例如 `Node.Route.A.01` 在正式首层的 runtime key 为 `Floor.Main.01.Node.Route.A.01`；Host 的 `RunMapNodeBinding.NodeId/NodeType` 仍必须等于 Floor DataAsset 节点。Navigation 没有内容 Host PersistentId，Path/Branch 在单 Floor World 内继续只保存 EdgeId。
+普通正式内容 Host 的 `PersistentId` 不另建人工注册表，统一按 `<FloorId>.<NodeId>` 派生。例如 `Node.Route.A.01` 在正式首层的 runtime key 为 `Floor.Main.01.Node.Route.A.01`；Host 的 `RunMapNodeBinding.NodeId/NodeType` 仍必须等于 Floor DataAsset 节点。Encounter 不创建独立 Host `PersistentId/RunMapNodeBinding`，而由 Node Anchor 自身的唯一 scene binding 绑定规则槽与 Enemy Host。Navigation 没有内容 Host PersistentId，Path/Branch 在单 Floor World 内继续只保存 EdgeId。
 
 Floor 1 为 15 个内容节点预留以下 Production definition IDs：
 
@@ -453,7 +455,7 @@ Floor 1 Production 场景入口是 `WacomBuildFormalFloor1ProductionScene` comma
 /Game/Wacom/Maps/Run/L_Run_Floor_Main_01
 ```
 
-默认运行只 inspect；只有显式 `SeedMissing` 才创建缺失 package，`Force` 被拒绝。已有正确 class 的资产不覆盖、不重存、不恢复 seed defaults；`CompareSeedDefaults` 仅用于首次播种和连续第二次 `0 created / 0 saved` 验收。四个 Enemy Host 通过现有 `SyncPartsFromDefinition` 初始生成 11 个 Part，使用受控 Placeholder 只服务灰盒可见性和命中制作验证；正式发布必须替换这些引用。新 map 固定 `1 Descriptor / 20 Anchors / 21 Paths / 4 BranchTargets / 16 content Hosts / 8 enemy Hosts / 11 viewpoints`，内容 Host 绑定真实 Spec 014 Definition，禁止 Debug/Authoring/Test/legacy-map 引用。Exit marker 只有可见 primitive、`RunMapNodeBinding` 与实例 `PersistentId`，没有交互、travel 或 Level Blueprint 规则。
+默认运行只 inspect；只有显式 `SeedMissing` 才创建缺失 package，`Force` 被拒绝。已有正确 class 的资产不覆盖、不重存、不恢复 seed defaults；`CompareSeedDefaults` 仅用于首次播种和连续第二次 `0 created / 0 saved` 验收。四个 Enemy Host 通过现有 `SyncPartsFromDefinition` 初始生成 11 个 Part，使用受控 Placeholder 只服务灰盒可见性和命中制作验证；正式发布必须替换这些引用。新 map 固定 `1 Descriptor / 20 Anchors / 21 Paths / 4 BranchTargets / 10 standalone content Hosts / 6 Encounter Anchor bindings / 8 enemy Hosts / 11 viewpoints`。Encounter builder 在既有 Anchor 上幂等创建唯一 binding 并填入规则槽、Host 与 Viewpoint；其它 content Host 绑定真实 Spec 014 Definition，禁止 Debug/Authoring/Test/legacy-map 引用。Exit marker 只有可见 primitive、`RunMapNodeBinding` 与实例 `PersistentId`，没有交互、travel 或 Level Blueprint 规则。
 
 该入口只能通过正式 Unreal MCP writer lease 保存 exact package allowlist；Editor 生命周期内不切 branch、不更新 HEAD、不编译。保存后必须做 AssetRegistry/failed-load、五个 Blueprint compile、Floor/scene validator、SHA-256、Git LFS 和第二次幂等审计。它不是可重复覆盖的关卡 builder；首次播种后世界 transform、Host 摆放和 Blueprint 表现都转为人工权威。
 

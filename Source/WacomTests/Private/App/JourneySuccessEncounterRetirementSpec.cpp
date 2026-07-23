@@ -2,8 +2,9 @@
 
 #include "Misc/AutomationTest.h"
 
-#include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
+#include "Actors/WacomRunMapNodeAnchorActor.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Engine/Engine.h"
@@ -33,7 +34,9 @@ namespace WacomJourneySuccessEncounterRetirementSpec
 	{
 		UWorld* World = nullptr;
 		AWacomGameMode* GameMode = nullptr;
-		ABattleTriggerActor* Trigger = nullptr;
+		AWacomRunMapNodeAnchorActor* Anchor = nullptr;
+		UWacomRunEncounterSceneBindingComponent* Binding = nullptr;
+		UEncounterDefinition* Encounter = nullptr;
 		AWacomBattleEnemyActor* Host = nullptr;
 
 		FHarness()
@@ -48,40 +51,45 @@ namespace WacomJourneySuccessEncounterRetirementSpec
 			SpawnParams.ObjectFlags |= RF_Transient;
 			GameMode = World->SpawnActor<AWacomGameMode>(
 				AWacomGameMode::StaticClass(), FTransform::Identity, SpawnParams);
-			Trigger = World->SpawnActor<ABattleTriggerActor>(
-				ABattleTriggerActor::StaticClass(), FTransform::Identity, SpawnParams);
+			Anchor = World->SpawnActor<AWacomRunMapNodeAnchorActor>(
+				AWacomRunMapNodeAnchorActor::StaticClass(),
+				FTransform::Identity,
+				SpawnParams);
 			Host = World->SpawnActor<AWacomBattleEnemyActor>(
 				AWacomBattleEnemyActor::StaticClass(), FTransform::Identity, SpawnParams);
-			if (!GameMode || !Trigger || !Host)
+			if (!GameMode || !Anchor || !Host)
 			{
 				return;
 			}
 
 			GameMode->SetSuppressJourneySummaryTravelForAutomation(true);
-			Trigger->PersistentId = TEXT("Trigger.Integration.JourneySuccess");
+			Anchor->NodeId = TEXT("Encounter.Integration.JourneySuccess");
+			Binding = NewObject<UWacomRunEncounterSceneBindingComponent>(
+				Anchor, TEXT("EncounterSceneBinding"), RF_Transient);
+			Anchor->AddInstanceComponent(Binding);
+			Binding->RegisterComponent();
 
-			UEnemyDefinition* Enemy = NewObject<UEnemyDefinition>(Trigger);
+			UEnemyDefinition* Enemy = NewObject<UEnemyDefinition>(Anchor);
 			Enemy->EnemyId = TEXT("Enemy.Integration.JourneySuccess");
 			Host->EnemyDefinition = Enemy;
 			Host->EnemySlotId = TEXT("Guardian");
 
-			UEncounterDefinition* Encounter = NewObject<UEncounterDefinition>(Trigger);
+			Encounter = NewObject<UEncounterDefinition>(Anchor);
 			Encounter->EncounterDefinitionId = TEXT("Encounter.Integration.JourneySuccess");
 			FEncounterEnemySlot EncounterSlot;
 			EncounterSlot.EnemySlotId = Host->EnemySlotId;
 			EncounterSlot.EnemyDefinition = Enemy;
 			Encounter->EnemySlots = { EncounterSlot };
-			Trigger->EncounterDefinition = Encounter;
 
 			FWacomBattleSceneEnemyHostSlot HostSlot;
 			HostSlot.EnemySlotId = Host->EnemySlotId;
 			HostSlot.SceneEnemyHost = Host;
-			Trigger->SceneEnemyHostSlots = { HostSlot };
+			Binding->SceneEnemyHostSlots = { HostSlot };
 		}
 
 		~FHarness()
 		{
-			for (AActor* Actor : TArray<AActor*>{ Host, Trigger, GameMode })
+			for (AActor* Actor : TArray<AActor*>{ Host, Anchor, GameMode })
 			{
 				if (::IsValid(Actor))
 				{
@@ -90,13 +98,15 @@ namespace WacomJourneySuccessEncounterRetirementSpec
 			}
 			World = nullptr;
 			GameMode = nullptr;
-			Trigger = nullptr;
+			Anchor = nullptr;
+			Binding = nullptr;
+			Encounter = nullptr;
 			Host = nullptr;
 		}
 
 		bool IsValid() const
 		{
-			return World && GameMode && Trigger && Host;
+			return World && GameMode && Anchor && Binding && Encounter && Host;
 		}
 	};
 }
@@ -115,11 +125,15 @@ bool FWacomJourneySuccessEncounterRetirementSpec::RunTest(const FString& /*Param
 		return false;
 	}
 
-	Harness.Trigger->BeginResolvedEncounterSceneRetirement();
+	Harness.Binding->BeginResolvedEncounterSceneRetirement();
 	int32 CallbackCount = 0;
 	bool bHostRetiredBeforeSummary = false;
 	FWacomExitBattlePostRunBarrierAutomationTestView Barrier(
-		*Harness.Trigger,
+		[&Harness]()
+		{
+			Harness.Binding->CompleteResolvedEncounterSceneRetirement(
+				*Harness.Encounter);
+		},
 		[&Harness, &CallbackCount, &bHostRetiredBeforeSummary]()
 		{
 			++CallbackCount;
@@ -173,10 +187,14 @@ bool FWacomOrdinaryVictoryEncounterRetirementAndRestoreSpec::RunTest(
 		return false;
 	}
 
-	Harness.Trigger->BeginResolvedEncounterSceneRetirement();
+	Harness.Binding->BeginResolvedEncounterSceneRetirement();
 	bool bHostRetiredBeforeRestore = false;
 	FWacomExitBattlePostRunBarrierAutomationTestView Barrier(
-		*Harness.Trigger,
+		[&Harness]()
+		{
+			Harness.Binding->CompleteResolvedEncounterSceneRetirement(
+				*Harness.Encounter);
+		},
 		[&Harness, &bHostRetiredBeforeRestore]()
 		{
 			bHostRetiredBeforeRestore =

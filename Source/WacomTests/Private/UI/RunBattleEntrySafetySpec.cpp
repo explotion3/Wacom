@@ -4,145 +4,152 @@
 
 #include "Misc/AutomationTest.h"
 
-#include "Actors/BattleTriggerActor.h"
-#include "Components/WacomRunFirstPersonCardSourceComponent.h"
-#include "Components/WacomRunMapNodeBindingComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Encounters/EncounterDefinition.h"
 #include "Enemies/EnemyDefinition.h"
 #include "Exploration/RunExplorationCommand.h"
 #include "Fixtures/WacomRunExplorationFixture.h"
-#include "GameFramework/WacomPlayerController.h"
 #include "Map/WacomFloorMapDefinition.h"
 #include "RunSession.h"
+#include "UI/PlayerControllerRunInteractionTestAccess.h"
+#include "UI/WacomShopRunEventTestProbes.h"
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/UnrealType.h"
 
 namespace WacomRunBattleEntrySafetySpec
 {
-	void InjectRunSession(AWacomPlayerController& PlayerController, URunSession& RunSession)
+	void InjectRunSession(
+		AWacomPlayerController& PlayerController,
+		URunSession& RunSession)
 	{
 		FObjectProperty* Property =
-			FindFProperty<FObjectProperty>(PlayerController.GetClass(), TEXT("RunSession"));
+			FindFProperty<FObjectProperty>(
+				PlayerController.GetClass(), TEXT("RunSession"));
 		if (Property)
 		{
-			Property->SetObjectPropertyValue_InContainer(&PlayerController, &RunSession);
+			Property->SetObjectPropertyValue_InContainer(
+				&PlayerController, &RunSession);
 		}
 	}
-
-	void ConfigureBattleTrigger(ABattleTriggerActor& Trigger)
-	{
-		UEnemyDefinition* Enemy = NewObject<UEnemyDefinition>(&Trigger);
-		Enemy->EnemyId = TEXT("Enemy.Test.RunBattleEntry");
-
-		UEncounterDefinition* Encounter = NewObject<UEncounterDefinition>(&Trigger);
-		Encounter->EncounterDefinitionId = TEXT("Encounter.Test.RunBattleEntry");
-		FEncounterEnemySlot& Slot = Encounter->EnemySlots.AddDefaulted_GetRef();
-		Slot.EnemySlotId = TEXT("Enemy");
-		Slot.EnemyDefinition = Enemy;
-		Trigger.EncounterDefinition = Encounter;
-		Trigger.PersistentId = TEXT("Battle.Test.RunBattleEntry");
-	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunBattleRejectedIntentPreservesHandTest,
-	"Wacom.UI.RunBattleEntry.RejectedIntentPreservesRunHand",
+	FWacomRunBattleRetryRequiresCommittedCurrentEncounterNodeTest,
+	"Wacom.UI.RunBattleEntry.RetryRequiresCommittedCurrentEncounterNode",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomRunBattleRejectedIntentPreservesHandTest::RunTest(const FString& Parameters)
-{
-	TStrongObjectPtr<AWacomPlayerController> PlayerController(
-		NewObject<AWacomPlayerController>(GetTransientPackage()));
-	UWacomRunFirstPersonCardSourceComponent* CardSource =
-		PlayerController->GetRunFirstPersonCardSourceComponent();
-	if (!TestNotNull(TEXT("PlayerController owns the Run card source"), CardSource))
-	{
-		return false;
-	}
-
-	PlayerController->SetRunFirstPersonCardLayerActive(true);
-	TestTrue(TEXT("Run hand source begins active"), CardSource->IsRunFirstPersonCardLayerActive());
-
-	// There is deliberately no World/GameMode, so the battle request is rejected.
-	PlayerController->RequestEnterBattle(nullptr);
-	TestTrue(TEXT("Rejected battle intent does not clear the Run hand source"),
-		CardSource->IsRunFirstPersonCardLayerActive());
-	return true;
-}
-
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomRunBattleBoundNodeAvailabilityTest,
-	"Wacom.UI.RunBattleEntry.BoundBattleRequiresCommittedCurrentNode",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
-
-bool FWacomRunBattleBoundNodeAvailabilityTest::RunTest(const FString& Parameters)
+bool FWacomRunBattleRetryRequiresCommittedCurrentEncounterNodeTest::RunTest(
+	const FString& /*Parameters*/)
 {
 	FWacomRunExplorationFixture Fixture;
-	UWacomFloorMapDefinition* Floor = Fixture.MakeLinearFloor(TEXT("Floor.Test.BattleEntry"), 2);
+	UWacomFloorMapDefinition* Floor =
+		Fixture.MakeLinearFloor(TEXT("Floor.Test.BattleEntry"), 2);
 	Floor->Nodes[1].NodeType = EWacomMapNodeType::Encounter;
+	UEncounterDefinition* Encounter =
+		NewObject<UEncounterDefinition>(Floor);
+	Encounter->EncounterDefinitionId =
+		TEXT("Encounter.Test.RunBattleEntry");
+	UEnemyDefinition* Enemy = NewObject<UEnemyDefinition>(Encounter);
+	Enemy->EnemyId = TEXT("Enemy.Test.RunBattleEntry");
+	FEncounterEnemySlot& EnemySlot =
+		Encounter->EnemySlots.AddDefaulted_GetRef();
+	EnemySlot.EnemySlotId = TEXT("Enemy");
+	EnemySlot.EnemyDefinition = Enemy;
+	Floor->Nodes[1].Content.Encounter.EncounterDefinition = Encounter;
+
 	const FWacomInitializedRunExplorationSession Initialized =
 		Fixture.CreateInitializedSession(
 			Fixture.MakeCharacter(),
-			Fixture.MakeJourney({ Floor }, TEXT("Journey.Test.BattleEntry")));
-	if (!TestTrue(TEXT("Run fixture initializes"), Initialized.Initialization.IsOk()))
+			Fixture.MakeJourney(
+				{ Floor }, TEXT("Journey.Test.BattleEntry")));
+	if (!TestTrue(
+		TEXT("Run fixture initializes"),
+		Initialized.Initialization.IsOk()))
 	{
 		return false;
 	}
 
-	TStrongObjectPtr<AWacomPlayerController> PlayerController(
-		NewObject<AWacomPlayerController>(GetTransientPackage()));
-	WacomRunBattleEntrySafetySpec::InjectRunSession(*PlayerController, *Initialized.Session);
-	TestTrue(TEXT("Run session injection is visible through the production accessor"),
-		PlayerController->GetRunSession() == Initialized.Session);
+	TStrongObjectPtr<AWacomPlayerControllerProbe> PlayerController(
+		NewObject<AWacomPlayerControllerProbe>(GetTransientPackage()));
+	WacomRunBattleEntrySafetySpec::InjectRunSession(
+		*PlayerController, *Initialized.Session);
+	TStrongObjectPtr<AActor> BindingOwner(
+		NewObject<AActor>(GetTransientPackage()));
+	TStrongObjectPtr<UWacomRunEncounterSceneBindingComponent> Binding(
+		NewObject<UWacomRunEncounterSceneBindingComponent>(
+			BindingOwner.Get()));
+	const FWacomMapNodeHandle EncounterNode =
+		{ Floor->FloorId, TEXT("Node.02") };
 
-	TStrongObjectPtr<ABattleTriggerActor> Trigger(
-		NewObject<ABattleTriggerActor>(GetTransientPackage()));
-	WacomRunBattleEntrySafetySpec::ConfigureBattleTrigger(*Trigger);
-	UWacomRunMapNodeBindingComponent* Binding =
-		NewObject<UWacomRunMapNodeBindingComponent>(Trigger.Get());
-	Trigger->AddInstanceComponent(Binding);
-	Binding->NodeId = TEXT("Node.02");
-	Binding->NodeType = EWacomMapNodeType::Encounter;
+	PlayerController->ArmCurrentEncounterRetry(
+		EncounterNode, *Binding, TEXT("Test"));
+	TestFalse(TEXT("Future Encounter node cannot arm retry"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			HasCurrentEncounterRetry(PlayerController.Get()));
 
-	TestFalse(TEXT("A future bound battle node is not interactable from the source node"),
-		Trigger->CanInteract_Implementation(PlayerController.Get()));
-	TestTrue(TEXT("Unavailable hover explains that the player must reach the node"),
-		Trigger->GetHoverPromptText(PlayerController.Get()).ToString().Contains(TEXT("抵达")));
-
-	const FRunExplorationSnapshot Initial = Initialized.Initialization.PostSnapshot;
-	const FRunExplorationResolution Begin = Initialized.Session->ResolveExplorationCommand(
-		FRunExplorationCommand::BeginTraversal(
-			{ Initial.CurrentNode.FloorId, TEXT("Edge.01") },
-			Initial.StateVersion));
+	const FRunExplorationSnapshot Initial =
+		Initialized.Initialization.PostSnapshot;
+	const FRunExplorationResolution Begin =
+		Initialized.Session->ResolveExplorationCommand(
+			FRunExplorationCommand::BeginTraversal(
+				{ Initial.CurrentNode.FloorId, TEXT("Edge.01") },
+				Initial.StateVersion));
 	if (!TestTrue(TEXT("Traversal begins"), Begin.IsOk())
-		|| !TestTrue(TEXT("Traversal returns a ticket"), Begin.TraversalTicket.IsSet()))
+		|| !TestTrue(
+			TEXT("Traversal returns a ticket"),
+			Begin.TraversalTicket.IsSet()))
 	{
 		return false;
 	}
-	TestFalse(TEXT("Battle remains unavailable while traversal owns the exploration transaction"),
-		Trigger->CanInteract_Implementation(PlayerController.Get()));
+	TestFalse(TEXT("Traversal in progress cannot expose retry"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			HasCurrentEncounterRetry(PlayerController.Get()));
 
-	const FRunExplorationResolution Complete = Initialized.Session->ResolveExplorationCommand(
-		FRunExplorationCommand::CompleteTraversal(Begin.TraversalTicket.GetValue()));
-	if (!TestTrue(TEXT("Traversal commits the target node"), Complete.IsOk()))
+	const FRunExplorationResolution Complete =
+		Initialized.Session->ResolveExplorationCommand(
+			FRunExplorationCommand::CompleteTraversal(
+				Begin.TraversalTicket.GetValue()));
+	if (!TestTrue(
+		TEXT("Traversal commits the target node"), Complete.IsOk()))
 	{
 		return false;
 	}
-	TestEqual(TEXT("The committed logical node matches the BattleTrigger binding"),
-		Complete.PostSnapshot.CurrentNode.NodeId,
-		Binding->NodeId);
-	TestTrue(TEXT("The bound battle becomes interactable after arrival commits"),
-		Trigger->CanInteract_Implementation(PlayerController.Get()));
+	TestEqual(TEXT("Committed node is the Encounter"),
+		Complete.PostSnapshot.CurrentNode, EncounterNode);
+	TestTrue(TEXT("Retry becomes available without a Pawn or distance"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			HasCurrentEncounterRetry(PlayerController.Get()));
+	TestTrue(TEXT("Retry owns the E prompt"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			CurrentInteractPrompt(PlayerController.Get())
+				.ToString().Contains(TEXT("重新挑战")));
+
+	PlayerController->ClearCurrentEncounterRetry();
+	TestFalse(TEXT("Leaving the Encounter hides the current retry prompt"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			HasCurrentEncounterRetry(PlayerController.Get()));
+	TestTrue(TEXT("Returning to a withdrawn Encounter restores manual retry"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			RestoreEncounterRetryForArrival(
+				PlayerController.Get(),
+				EncounterNode,
+				*Binding));
+	TestTrue(TEXT("Restored retry owns the E prompt"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			HasCurrentEncounterRetry(PlayerController.Get()));
 
 	const FRunExplorationResolution BeginEncounter =
-		Initialized.Session->BeginCurrentNodeActivity(ERunNodeActivityKind::Encounter);
-	if (!TestTrue(TEXT("Encounter activity can begin at the committed encounter node"),
-		BeginEncounter.IsOk()))
-	{
-		return false;
-	}
-	TestFalse(TEXT("A second interaction is rejected while the encounter transaction is active"),
-		Trigger->CanInteract_Implementation(PlayerController.Get()));
+		Initialized.Session->BeginCurrentNodeActivity(
+			ERunNodeActivityKind::Encounter);
+	TestTrue(TEXT("Encounter activity begins"), BeginEncounter.IsOk());
+	TestFalse(TEXT("Active Encounter transaction suppresses retry"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			HasCurrentEncounterRetry(PlayerController.Get()));
+
+	PlayerController->ClearCurrentEncounterRetry();
+	TestFalse(TEXT("Explicit clear removes retry"),
+		FWacomPlayerControllerRunInteractionTestAccess::
+			HasCurrentEncounterRetry(PlayerController.Get()));
 	return true;
 }
 

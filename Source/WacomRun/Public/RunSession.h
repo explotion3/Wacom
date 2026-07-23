@@ -774,23 +774,21 @@ public:
 	 *   - Params.RandomSeed = RunState.BattleSeed
 	 *   - Params.BattleDeckEntries = RunState.BattleDeck + 已启用入战的 SpecialZone 卡
 	 *   - Params.HighHpThreshold / LowHpThreshold = RunState 字段
-	 *   - Params.EncounterId = TriggerPersistentId（为空时使用默认 Encounter）
-	 *   - **Params.PreDestroyedParts**：若 TriggerPersistentId 非空且 RunState.BattleProgress
-	 *     中有该 Trigger 的进度，灌入已破坏的完整部位身份。
+	 *   - Params.EncounterId = EncounterDefinitionId
+	 *   - **Params.PreDestroyedParts**：从显式 MapNodeHandle 对应的
+	 *     RunState.BattleProgress 灌入已破坏的完整部位身份。
 	 *
-	 * RunSession 不读取、不接收、不写入敌人定义。调用方（当前为 GameMode / BattleTrigger）
+	 * RunSession 不读取、不接收、不写入敌人定义。调用方（当前为 GameMode）
 	 * 负责把 EncounterDefinition 转成 Params.EnemySlots。
 	 *
-	 * @param TriggerPersistentId    触发战斗的 Trigger 的持久化 ID。NAME_None 表示没有持久化进度
+	 * @param MapNodeHandle          触发战斗的显式 Floor Node 身份，也是撤离进度 key
+	 * @param EncounterDefinitionId  Floor Node payload 引用的 EncounterDefinitionId
 	 * @param OutParams              输出参数
 	 */
-	bool BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const;
-
-	/** SaveGame v3 兼容投影：记录已由 Map Node Resolved 判定完成的 Trigger。 */
-	void MarkTriggerDestroyed(FName PersistentId);
-
-	/** SaveGame v3 兼容投影：关卡加载时查询对应完成 Trigger。 */
-	bool IsTriggerDestroyed(FName PersistentId) const;
+	bool BuildInitParamsForBattle(
+		const FWacomMapNodeHandle& MapNodeHandle,
+		FName EncounterDefinitionId,
+		FBattleInitParams& OutParams) const;
 
 	/** 场景：记录玩家当前 Transform（用于下次启动恢复）。 */
 	void SetPlayerTransform(const FTransform& InTransform);

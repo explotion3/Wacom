@@ -2,7 +2,6 @@
 
 #include "ContentBuilders/FormalFloor1ProductionSceneBuilder.h"
 
-#include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
@@ -23,6 +22,7 @@
 #include "Components/SplineComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/WacomInteractionTargetComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
 #include "ContentBuilders/ContentBuilderHelpers.h"
 #include "ContentBuilders/EnemyHostComponentBuilderHelpers.h"
@@ -91,8 +91,6 @@ namespace
 		TEXT("/Game/Wacom/Run/Path/Blueprints/BP_WacomRunPathSegmentActor");
 	const FString BranchBlueprintPackage =
 		TEXT("/Game/Wacom/Run/Path/Blueprints/BP_WacomRunPathBranchTargetActor");
-	const FString BattleTriggerBlueprintPackage =
-		TEXT("/Game/Wacom/Maps/SceneActor/BP_BattleTriggerActor");
 	const FString EventTriggerBlueprintPackage =
 		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunEventTriggerActor");
 	const FString ShopTriggerBlueprintPackage =
@@ -940,23 +938,39 @@ namespace
 		return true;
 	}
 
-	bool ConfigureBattleHost(
+	bool ConfigureEncounterBinding(
 		UWorld& World,
-		ABattleTriggerActor& Trigger,
+		AWacomRunMapNodeAnchorActor& NodeAnchor,
 		const FWacomMapNodeDefinition& Node,
 		const UWacomFloorMapDefinition& Floor,
 		const TMap<const UEnemyDefinition*, UClass*>& EnemyHostClasses,
 		TArray<FString>& OutErrors)
 	{
-		Trigger.PersistentId = PersistentIdForNode(Node.NodeId);
-		Trigger.EncounterDefinition = Node.Content.Encounter.EncounterDefinition;
-		Trigger.TriggerRadius = 220.0f;
-		Trigger.SceneEnemyHostSlots.Reset();
-		if (!Trigger.EncounterDefinition)
+		UEncounterDefinition* EncounterDefinition =
+			Node.Content.Encounter.EncounterDefinition;
+		if (!EncounterDefinition)
 		{
-			OutErrors.Add(TEXT("Battle content Host has no EncounterDefinition"));
+			OutErrors.Add(TEXT("Encounter Node has no EncounterDefinition"));
 			return false;
 		}
+		UWacomRunEncounterSceneBindingComponent* Binding =
+			NodeAnchor.FindComponentByClass<UWacomRunEncounterSceneBindingComponent>();
+		if (!Binding)
+		{
+			Binding = NewObject<UWacomRunEncounterSceneBindingComponent>(
+				&NodeAnchor, TEXT("EncounterSceneBinding"), RF_Transactional);
+			if (!Binding)
+			{
+				OutErrors.Add(TEXT("Could not create Encounter Scene Binding"));
+				return false;
+			}
+			Binding->CreationMethod = EComponentCreationMethod::Instance;
+			NodeAnchor.AddInstanceComponent(Binding);
+			Binding->OnComponentCreated();
+			Binding->RegisterComponent();
+		}
+		Binding->Modify();
+		Binding->SceneEnemyHostSlots.Reset();
 		const FVector Anchor = WorldLocationForNode(Node.NodeId);
 		const FVector Arrival = ArrivalDirectionForNode(Floor, Node.NodeId);
 		const FVector Lateral = FVector::CrossProduct(FVector::UpVector, Arrival)
@@ -964,21 +978,21 @@ namespace
 		const FVector EnemyCenter = Anchor + Arrival * 720.0f;
 		const FVector ViewLocation = Anchor - Arrival * 360.0f
 			+ FVector(0.0, 0.0, 120.0f);
-		Trigger.BattleEntryViewpoint = SpawnViewpoint(
+		Binding->BattleEntryViewpoint = SpawnViewpoint(
 			World, TEXT("View_Battle_")
 				+ Node.NodeId.ToString().Replace(TEXT("."), TEXT("_")),
 			ViewLocation, EnemyCenter + FVector(0.0, 0.0, 70.0));
-		if (!Trigger.BattleEntryViewpoint)
+		if (!Binding->BattleEntryViewpoint)
 		{
 			OutErrors.Add(TEXT("Could not spawn Battle viewpoint"));
 			return false;
 		}
 
-		const int32 SlotCount = Trigger.EncounterDefinition->EnemySlots.Num();
+		const int32 SlotCount = EncounterDefinition->EnemySlots.Num();
 		for (int32 Index = 0; Index < SlotCount; ++Index)
 		{
 			const FEncounterEnemySlot& Slot =
-				Trigger.EncounterDefinition->EnemySlots[Index];
+				EncounterDefinition->EnemySlots[Index];
 			UClass* const* HostClass = EnemyHostClasses.Find(Slot.EnemyDefinition);
 			if (!HostClass || !*HostClass)
 			{
@@ -1006,9 +1020,17 @@ namespace
 				TEXT("Enemy_%s_%s"), *Node.NodeId.ToString().Replace(
 					TEXT("."), TEXT("_")), *Slot.EnemySlotId.ToString()));
 			FWacomBattleSceneEnemyHostSlot& HostSlot =
-				Trigger.SceneEnemyHostSlots.AddDefaulted_GetRef();
+				Binding->SceneEnemyHostSlots.AddDefaulted_GetRef();
 			HostSlot.EnemySlotId = Slot.EnemySlotId;
 			HostSlot.SceneEnemyHost = EnemyHost;
+		}
+		const FWacomStatus BindingStatus =
+			Binding->ValidateForEncounter(*EncounterDefinition);
+		if (!BindingStatus.IsOk())
+		{
+			OutErrors.Add(TEXT("Encounter Scene Binding invalid: ")
+				+ BindingStatus.Detail.ToString());
+			return false;
 		}
 		return true;
 	}
@@ -1046,15 +1068,7 @@ namespace
 		Host->SetActorLabel(TEXT("Host_")
 			+ Node.NodeId.ToString().Replace(TEXT("."), TEXT("_")));
 		const FName PersistentId = PersistentIdForNode(Node.NodeId);
-		if (ABattleTriggerActor* Battle = Cast<ABattleTriggerActor>(Host))
-		{
-			if (!ConfigureBattleHost(
-				World, *Battle, Node, Floor, EnemyHostClasses, OutErrors))
-			{
-				return nullptr;
-			}
-		}
-		else if (AWacomRunEventTriggerActor* Event =
+		if (AWacomRunEventTriggerActor* Event =
 			Cast<AWacomRunEventTriggerActor>(Host))
 		{
 			Event->PersistentId = PersistentId;
@@ -1105,8 +1119,6 @@ namespace
 		UClass* BranchClass = LoadBlueprintClass(
 			BranchBlueprintPackage, *AWacomRunPathBranchTargetActor::StaticClass(), OutErrors);
 		TMap<EWacomMapNodeType, UClass*> ContentClasses;
-		ContentClasses.Add(EWacomMapNodeType::Encounter, LoadBlueprintClass(
-			BattleTriggerBlueprintPackage, *ABattleTriggerActor::StaticClass(), OutErrors));
 		ContentClasses.Add(EWacomMapNodeType::RunEvent, LoadBlueprintClass(
 			EventTriggerBlueprintPackage, *AWacomRunEventTriggerActor::StaticClass(), OutErrors));
 		ContentClasses.Add(EWacomMapNodeType::Shop, LoadBlueprintClass(
@@ -1226,6 +1238,16 @@ namespace
 			{
 				continue;
 			}
+			if (Node.NodeType == EWacomMapNodeType::Encounter)
+			{
+				AWacomRunMapNodeAnchorActor* Anchor = Anchors.FindRef(Node.NodeId);
+				if (!Anchor || !ConfigureEncounterBinding(
+					World, *Anchor, Node, Floor, EnemyHostClasses, OutErrors))
+				{
+					return false;
+				}
+				continue;
+			}
 			if (!SpawnContentHost(
 				World, Node, Floor, ContentClasses, EnemyHostClasses, OutErrors))
 			{
@@ -1237,10 +1259,6 @@ namespace
 
 	FName ReadPersistentId(const AActor& Actor)
 	{
-		if (const ABattleTriggerActor* Battle = Cast<ABattleTriggerActor>(&Actor))
-		{
-			return Battle->PersistentId;
-		}
 		if (const AWacomRunEventTriggerActor* Event =
 			Cast<AWacomRunEventTriggerActor>(&Actor))
 		{
@@ -1313,6 +1331,29 @@ namespace
 			{
 				++AnchorCount;
 				AnchorIds.Add(Anchor->NodeId);
+				TArray<UWacomRunEncounterSceneBindingComponent*> EncounterBindings;
+				Anchor->GetComponents(EncounterBindings);
+				for (const UWacomRunEncounterSceneBindingComponent* Binding :
+					EncounterBindings)
+				{
+					++ContentHostCount;
+					if (!Binding || HostNodeIds.Contains(Anchor->NodeId))
+					{
+						OutErrors.Add(TEXT("Duplicate/null Encounter Anchor binding"));
+						continue;
+					}
+					HostNodeIds.Add(Anchor->NodeId);
+					const FWacomMapNodeDefinition* Node = Floor.FindNode(Anchor->NodeId);
+					if (!Node
+						|| Node->NodeType != EWacomMapNodeType::Encounter
+						|| !Node->Content.Encounter.EncounterDefinition
+						|| !Binding->ValidateForEncounter(
+							*Node->Content.Encounter.EncounterDefinition).IsOk())
+					{
+						OutErrors.Add(TEXT("Encounter Anchor binding is invalid: ")
+							+ Anchor->NodeId.ToString());
+					}
+				}
 			}
 			if (const AWacomRunPathSegmentActor* Path =
 				Cast<AWacomRunPathSegmentActor>(Actor))
@@ -1362,38 +1403,6 @@ namespace
 						*Actor->GetPathName()));
 				}
 				PersistentIds.Add(PersistentId);
-			}
-			if (const ABattleTriggerActor* Battle = Cast<ABattleTriggerActor>(Actor))
-			{
-				if (!Battle->EncounterDefinition
-					|| Battle->SceneEnemyHostSlots.Num()
-						!= Battle->EncounterDefinition->EnemySlots.Num())
-				{
-					OutErrors.Add(TEXT("Battle Host Encounter slot count mismatch"));
-					continue;
-				}
-				for (const FEncounterEnemySlot& EncounterSlot :
-					Battle->EncounterDefinition->EnemySlots)
-				{
-					const FWacomBattleSceneEnemyHostSlot* SceneSlot =
-						Battle->SceneEnemyHostSlots.FindByPredicate(
-							[&EncounterSlot](
-								const FWacomBattleSceneEnemyHostSlot& Candidate)
-							{
-								return Candidate.EnemySlotId
-									== EncounterSlot.EnemySlotId;
-							});
-					if (!SceneSlot || !SceneSlot->SceneEnemyHost
-						|| SceneSlot->SceneEnemyHost->EnemyDefinition
-							!= EncounterSlot.EnemyDefinition
-						|| SceneSlot->SceneEnemyHost->EnemySlotId
-							!= EncounterSlot.EnemySlotId)
-					{
-						OutErrors.Add(FString::Printf(
-							TEXT("Battle scene slot mismatch: %s"),
-							*EncounterSlot.EnemySlotId.ToString()));
-					}
-				}
 			}
 		}
 

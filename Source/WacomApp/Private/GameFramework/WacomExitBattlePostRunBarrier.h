@@ -4,13 +4,11 @@
 
 #include "CoreMinimal.h"
 
-#include "Actors/BattleTriggerActor.h"
-
 /**
  * ExitBattle 的双信号屏障。
  *
  * 镜头返回与 ExitBattle 后置工作都完成后，先统一退役已解决 Encounter 的
- * Trigger/Host，再执行 Journey Summary 或普通 Run 表现恢复回调。
+ * Encounter Host，再执行 Journey Summary 或普通 Run 表现恢复回调。
  */
 class FExitBattlePostRunBarrierState
 {
@@ -32,9 +30,9 @@ public:
 		TryComplete();
 	}
 
-	void SetResolvedEncounterTrigger(ABattleTriggerActor* InTrigger)
+	void SetResolvedEncounterRetirement(TFunction<void()>&& InRetirement)
 	{
-		WeakResolvedEncounterTrigger = InTrigger;
+		ResolvedEncounterRetirement = MoveTemp(InRetirement);
 	}
 
 private:
@@ -46,9 +44,9 @@ private:
 		}
 
 		bCompleted = true;
-		if (ABattleTriggerActor* Trigger = WeakResolvedEncounterTrigger.Get())
+		if (ResolvedEncounterRetirement)
 		{
-			Trigger->CompleteResolvedEncounterSceneRetirement();
+			ResolvedEncounterRetirement();
 		}
 		if (OnReady)
 		{
@@ -57,7 +55,7 @@ private:
 	}
 
 	TFunction<void()> OnReady;
-	TWeakObjectPtr<ABattleTriggerActor> WeakResolvedEncounterTrigger;
+	TFunction<void()> ResolvedEncounterRetirement;
 	bool bReturnCompleted = false;
 	bool bExitBattlePostRunReady = false;
 	bool bCompleted = false;

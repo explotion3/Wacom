@@ -54,6 +54,9 @@ bool FWacomRunExplorationDebugAssetBuilderSpec::RunTest(
 		Second.BranchEdgeIds, First.BranchEdgeIds);
 	TestEqual(TEXT("Host identities are stable"),
 		Second.HostNodeIds, First.HostNodeIds);
+	TestEqual(TEXT("Encounter binding identities are stable"),
+		Second.EncounterBindingNodeIds,
+		First.EncounterBindingNodeIds);
 	TestEqual(TEXT("Host authoring record count is stable"),
 		Second.ContentHosts.Num(), First.ContentHosts.Num());
 	for (int32 Index = 0;
@@ -82,10 +85,16 @@ bool FWacomRunExplorationDebugAssetBuilderSpec::RunTest(
 	TestEqual(TEXT("Seven Debug paths"), Second.PathEdgeIds.Num(), 7);
 	TestEqual(TEXT("Three Debug branch targets"), Second.BranchEdgeIds.Num(), 3);
 	TestEqual(TEXT("Six Debug activity hosts"), Second.HostNodeIds.Num(), 6);
+	TestEqual(TEXT("One Encounter Anchor binding"),
+		Second.EncounterBindingNodeIds.Num(), 1);
+	if (Second.EncounterBindingNodeIds.Num() == 1)
+	{
+		TestEqual(TEXT("Encounter binding belongs to Battle.Snake"),
+			Second.EncounterBindingNodeIds[0],
+			FName(TEXT("Battle.Snake")));
+	}
 	const TMap<FName, TPair<EWacomMapNodeType, FString>> ExpectedHosts =
 	{
-		{TEXT("Battle.Snake"), {EWacomMapNodeType::Encounter,
-			TEXT("/Game/Wacom/Maps/SceneActor/BP_BattleTriggerActor.BP_BattleTriggerActor_C")}},
 		{TEXT("Shop.Snake"), {EWacomMapNodeType::Shop,
 			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomShopTriggerActor.BP_WacomShopTriggerActor_C")}},
 		{TEXT("Event.SnakeGift"), {EWacomMapNodeType::RunEvent,
@@ -97,7 +106,7 @@ bool FWacomRunExplorationDebugAssetBuilderSpec::RunTest(
 		{TEXT("Event.FlagReward"), {EWacomMapNodeType::RunEvent,
 			TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomRunEventTriggerActor.BP_WacomRunEventTriggerActor_C")}},
 	};
-	TestEqual(TEXT("Six manual Host authoring records"),
+	TestEqual(TEXT("Five manual standalone Host authoring records"),
 		Second.ContentHosts.Num(), ExpectedHosts.Num());
 	for (const FWacomRunExplorationDebugContentHostAutomationRecord& Host :
 		Second.ContentHosts)

@@ -21,7 +21,7 @@
  * Save/Load 往返测试。
  *
  * 覆盖：
- *   - 字段往返无损（Character / BattleSeed / DestroyedTriggerIds / PlayerTransform / Outcome）
+ *   - 字段往返无损（Character / BattleSeed / PlayerTransform / Outcome）
  *   - HasSaveInSlot 前后返回值
  *   - 手动构造 SaveVersion > Current 的 SaveGame，ApplySaveGameToRunState 返回 false
  *   - ApplySaveGameToRunState(nullptr) 返回 false
@@ -73,8 +73,6 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	FRunState& SA = FWacomRunSessionTestAccess::GetMutableRunState(*A.Get());
 	SA.BattleSeed = 4242;
 	SA.Outcome = ERunOutcome::InProgress;
-	SA.DestroyedTriggerIds.Add(TEXT("Trigger_A"));
-	SA.DestroyedTriggerIds.Add(TEXT("Trigger_B"));
 	SA.PlayerTransform     = FTransform(FRotator(0, 90, 0), FVector(100, 200, 300));
 	SA.bHasPlayerTransform = true;
 
@@ -89,7 +87,6 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("BattleSeed passthrough"), Sg->BattleSeed, 4242);
 	TestEqual(TEXT("Outcome passthrough"), Sg->Outcome, ERunOutcome::InProgress);
 	TestFalse(TEXT("In-progress save has no completion summary"), Sg->bHasCompletionSummary);
-	TestEqual(TEXT("DestroyedTriggerIds count"), Sg->DestroyedTriggerIds.Num(), 2);
 	TestTrue(TEXT("bHasPlayerTransform passthrough"), Sg->bHasPlayerTransform);
 
 	// Apply 回一个新 Session B（Transient 对象 FSoftObjectPath::TryLoad 走内存查找，能找到）
@@ -103,26 +100,23 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	TestEqual(TEXT("Character roundtrip"), SB.Character.Get(), Char);
 	TestEqual(TEXT("BattleSeed roundtrip"), SB.BattleSeed, 4242);
 	TestEqual(TEXT("Outcome roundtrip"), SB.Outcome, ERunOutcome::InProgress);
-	TestTrue(TEXT("DestroyedTriggerIds has Trigger_A"), SB.DestroyedTriggerIds.Contains(TEXT("Trigger_A")));
-	TestTrue(TEXT("DestroyedTriggerIds has Trigger_B"), SB.DestroyedTriggerIds.Contains(TEXT("Trigger_B")));
-	TestEqual(TEXT("DestroyedTriggerIds count roundtrip"), SB.DestroyedTriggerIds.Num(), 2);
 	TestTrue(TEXT("bHasPlayerTransform roundtrip"), SB.bHasPlayerTransform);
 	TestTrue(TEXT("PlayerTransform location roundtrip"),
 		SB.PlayerTransform.GetLocation().Equals(FVector(100, 200, 300)));
 	TestTrue(TEXT("PlayerTransform rotation roundtrip"),
 		SB.PlayerTransform.Rotator().Equals(FRotator(0, 90, 0)));
 
-	// Schema 4 仍未持久化正式探索图状态。读档只恢复旧 Run/卡牌与 Credential 字段；
+	// Schema 5 仍未持久化正式探索图状态。读档只恢复旧 Run/卡牌与 Credential 字段；
 	// Journey/Floor/Node 必须由未来独立存档切片定义新 schema 后才能恢复。
-	TestNull(TEXT("Schema 4 does not restore Journey"),
+	TestNull(TEXT("Schema 5 does not restore Journey"),
 		SB.ExplorationState.JourneyDefinition.Get());
-	TestTrue(TEXT("Schema 4 does not restore FloorId"),
+	TestTrue(TEXT("Schema 5 does not restore FloorId"),
 		SB.ExplorationState.CurrentFloorId.IsNone());
-	TestTrue(TEXT("Schema 4 does not restore NodeId"),
+	TestTrue(TEXT("Schema 5 does not restore NodeId"),
 		SB.ExplorationState.CurrentNodeId.IsNone());
-	TestEqual(TEXT("Schema 4 does not restore floor progress"),
+	TestEqual(TEXT("Schema 5 does not restore floor progress"),
 		SB.ExplorationState.FloorProgress.Num(), 0);
-	TestEqual(TEXT("Schema 4 does not restore exploration version"),
+	TestEqual(TEXT("Schema 5 does not restore exploration version"),
 		SB.ExplorationState.ExplorationStateVersion, 0);
 
 	// ---- 版本拒绝：构造一个 SaveVersion > Current 的 SaveGame ----

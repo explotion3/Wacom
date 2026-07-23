@@ -18,6 +18,21 @@ FText FWacomPlayerControllerRunInteractionTestAccess::CurrentInteractPrompt(
 	return PC ? PC->ReadCurrentInteractPrompt() : FText::GetEmpty();
 }
 
+bool FWacomPlayerControllerRunInteractionTestAccess::HasCurrentEncounterRetry(
+	const AWacomPlayerControllerProbe* PC)
+{
+	return PC && PC->HasCurrentEncounterRetry();
+}
+
+bool FWacomPlayerControllerRunInteractionTestAccess::
+	RestoreEncounterRetryForArrival(
+		AWacomPlayerControllerProbe* PC,
+		const FWacomMapNodeHandle& Node,
+		UWacomRunEncounterSceneBindingComponent& Binding)
+{
+	return PC && PC->TryRestoreEncounterRetryForArrival(Node, Binding);
+}
+
 FString FWacomPlayerControllerRunInteractionTestAccess::RunWorldInteractableHoverDebugSummary(
 	const AWacomPlayerControllerProbe* PC)
 {

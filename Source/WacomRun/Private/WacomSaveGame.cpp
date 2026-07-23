@@ -91,8 +91,7 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 		[[fallthrough]];
 
 	case 2:
-		// v2 -> v3：移除 DefeatedEnemyAssetPaths。
-		// 战斗入口完成状态由 DestroyedTriggerIds 表达；无需从旧敌人资产列表迁移。
+		// v2 -> v3：移除 DefeatedEnemyAssetPaths。旧 Trigger 完成投影不再恢复。
 		SaveGame->SaveVersion = 3;
 		[[fallthrough]];
 

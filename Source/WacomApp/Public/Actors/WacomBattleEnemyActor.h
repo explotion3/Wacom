@@ -87,7 +87,7 @@ public:
 	TObjectPtr<UEnemyDefinition> EnemyDefinition = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Identity",
-		meta = (ToolTip = "Host 默认敌人槽位 ID。BattleTrigger 在战斗准备时按 Encounter 槽位注入。"))
+		meta = (ToolTip = "Host 默认敌人槽位 ID。Encounter Node 的场景绑定组件在战斗准备时按 Encounter 槽位注入。"))
 	FName EnemySlotId = TEXT("Enemy");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Scene Enemy|Presentation|Impact",

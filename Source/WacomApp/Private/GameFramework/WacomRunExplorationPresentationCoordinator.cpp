@@ -371,11 +371,13 @@ void FWacomRunExplorationPresentationCoordinator::HandleReachedEnd()
 
 	AWacomRunMapNodeAnchorActor* TargetAnchor = nullptr;
 	AActor* ContentHost = nullptr;
+	UWacomRunEncounterSceneBindingComponent* EncounterBinding = nullptr;
 	const FWacomStatus Preflight = Registry->RevalidateTarget(
 		ActiveSceneBinding->TargetNode,
 		ActiveSceneBinding->TargetNodeType,
 		TargetAnchor,
-		ContentHost);
+		ContentHost,
+		EncounterBinding);
 	if (!Preflight.IsOk())
 	{
 		CancelActiveTraversal(Preflight.Detail);
@@ -390,6 +392,8 @@ void FWacomRunExplorationPresentationCoordinator::HandleReachedEnd()
 		return;
 	}
 	const FWacomMapNodeHandle CommittedTarget = ActiveSceneBinding->TargetNode;
+	const EWacomMapNodeType CommittedTargetNodeType =
+		ActiveSceneBinding->TargetNodeType;
 	const FTransform CachedTarget = ActiveSceneBinding->CachedTargetTransform;
 	const FRunExplorationResolution Resolution = RunSession->ResolveExplorationCommand(
 		FRunExplorationCommand::CompleteTraversal(ActiveTicket.GetValue()));
@@ -417,9 +421,13 @@ void FWacomRunExplorationPresentationCoordinator::HandleReachedEnd()
 		return;
 	}
 	RefreshRouteChoiceState(Resolution.PostSnapshot);
-	if (ContentHost)
+	if (CommittedTargetNodeType != EWacomMapNodeType::Navigation)
 	{
-		NodeContentPresentationRequestedNative.Broadcast(CommittedTarget, ContentHost);
+		FWacomRunNodeContentArrivalRequest Arrival;
+		Arrival.Node = CommittedTarget;
+		Arrival.NodeType = CommittedTargetNodeType;
+		Arrival.AppliedVersion = LastAppliedVersion;
+		NodeContentPresentationRequestedNative.Broadcast(Arrival);
 	}
 }
 

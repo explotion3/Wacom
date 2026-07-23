@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomRunKeyChestActor.h"
 #include "Actors/WacomRunCardPickupActor.h"
 #include "Actors/WacomRunRewardPickupActor.h"
@@ -446,39 +445,6 @@ private:
 
 UCLASS()
 class AWacomShopTriggerClickProbe : public AWacomShopTriggerActor
-{
-	GENERATED_BODY()
-
-private:
-	friend struct FWacomRunWorldInteractionActorTestAccess;
-
-	int32 TryInteractCountForTest = 0;
-	bool bInteractResultForTest = true;
-
-	void SyncClickTargetForTest()
-	{
-		OnConstruction(FTransform::Identity);
-	}
-
-	virtual bool TryInteract_Implementation(AWacomPlayerController* PC) override
-	{
-		++TryInteractCountForTest;
-		LastInteractingPlayerControllerForTest = PC;
-		return bInteractResultForTest;
-	}
-
-	AWacomPlayerController* GetLastInteractingPlayerControllerForTest() const
-	{
-		return LastInteractingPlayerControllerForTest.Get();
-	}
-
-private:
-	UPROPERTY(Transient)
-	TWeakObjectPtr<AWacomPlayerController> LastInteractingPlayerControllerForTest;
-};
-
-UCLASS()
-class AWacomBattleTriggerClickProbe : public ABattleTriggerActor
 {
 	GENERATED_BODY()
 

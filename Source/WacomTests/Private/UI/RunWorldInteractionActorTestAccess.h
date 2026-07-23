@@ -6,7 +6,6 @@
 
 #if WITH_AUTOMATION_TESTS
 
-class AWacomBattleTriggerClickProbe;
 class AWacomGenericRunWorldClickableInteractableProbe;
 class AWacomPlayerController;
 class AWacomRunCardPickupClickProbe;
@@ -21,7 +20,6 @@ struct FWacomRunWorldInteractionActorTestAccess
 {
 	static void SyncClickTarget(AWacomRunEventTriggerClickProbe* Probe);
 	static void SyncClickTarget(AWacomShopTriggerClickProbe* Probe);
-	static void SyncClickTarget(AWacomBattleTriggerClickProbe* Probe);
 	static void SyncClickTarget(AWacomRunPickupClickProbe* Probe);
 	static void SyncClickTarget(AWacomRunCardPickupClickProbe* Probe);
 	static void SyncClickTarget(AWacomRunRewardPickupClickProbe* Probe);
@@ -34,7 +32,6 @@ struct FWacomRunWorldInteractionActorTestAccess
 
 	static int32 TryInteractCount(const AWacomRunEventTriggerClickProbe* Probe);
 	static int32 TryInteractCount(const AWacomShopTriggerClickProbe* Probe);
-	static int32 TryInteractCount(const AWacomBattleTriggerClickProbe* Probe);
 	static int32 TryInteractCount(const AWacomGenericRunWorldClickableInteractableProbe* Probe);
 	static int32 TryInteractCount(const AWacomRunWorldNonClickableInteractableProbe* Probe);
 
@@ -43,13 +40,10 @@ struct FWacomRunWorldInteractionActorTestAccess
 	static AWacomPlayerController* LastInteractingPlayerController(
 		const AWacomShopTriggerClickProbe* Probe);
 	static AWacomPlayerController* LastInteractingPlayerController(
-		const AWacomBattleTriggerClickProbe* Probe);
-	static AWacomPlayerController* LastInteractingPlayerController(
 		const AWacomGenericRunWorldClickableInteractableProbe* Probe);
 
 	static void SetInteractResult(AWacomRunEventTriggerClickProbe* Probe, bool bResult);
 	static void SetInteractResult(AWacomShopTriggerClickProbe* Probe, bool bResult);
-	static void SetInteractResult(AWacomBattleTriggerClickProbe* Probe, bool bResult);
 	static void SetInteractResult(AWacomGenericRunWorldClickableInteractableProbe* Probe, bool bResult);
 
 	static void SetCanInteract(AWacomRunWorldNonClickableInteractableProbe* Probe, bool bCanInteract);

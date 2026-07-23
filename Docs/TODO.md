@@ -255,23 +255,23 @@ tags:
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md)
   - 说明：`EnemyPartActed Count > 0` 从 queue 到 scene coordinator 保留完整 Part key，并精确播放匹配 typed Part 的目标 Flipbook Layer。所有敌人共用 App-private playback 生命周期，统一 weak timer、serial、Impact / Complete exactly-once、watchdog 与 cancel；Destroyed 抢占、BattleEnd retiring Part 与重新入战恢复已覆盖。正式 Snake Style 等待正式行动素材。
 
-- [x] **EncounterDefinition 运行时接线：BattleTrigger 引用 Encounter 并构造 Battle EnemySlots**
-	- 状态：`Done: Trigger 已接线`
+- [x] **EncounterDefinition 运行时接线：Floor Node arrival 构造 Battle EnemySlots**
+	- 状态：`Done: typed Node arrival + native TryEnterBattle`
 	- 归属：Data / Run / App / Battle
 	- 入口：[WacomData.md](./WacomData.md#wacomdata-encounter-definition) / [WacomRun.md](./WacomRun.md#wacomrun-battle-settlement)
-	- 说明：`ABattleTriggerActor.EncounterDefinition` 已转换为 `FBattleInitParams.EnemySlots`；运行态 `EncounterId` 仍用 Trigger `PersistentId`。旧单敌人 Trigger 入口已删除。
+	- 说明：Floor Node typed payload 的 `EncounterDefinition` 在成功 `CompleteTraversal + Anchor apply` 后由 App 转换为 `FBattleInitParams.EnemySlots`；运行态 `EncounterId` 使用 `EncounterDefinitionId`，撤离进度使用显式 `FWacomMapNodeHandle`。点击/Overlap 开战、Trigger API 与旧单敌人入口均已删除。
 
-- [x] **BattleTrigger 多 SceneEnemyHost 映射：EnemySlotId -> Host registry**
-	- 状态：`Done: Trigger 已接线`
+- [x] **Encounter Anchor 多 SceneEnemyHost 映射：EnemySlotId -> Host registry**
+	- 状态：`Done: typed scene binding`
 	- 归属：App / Battle World Target
 	- 入口：[WacomWorldInteraction.md](./WacomWorldInteraction.md#5-battle-scene-target) / [WacomBattleUI.md](./WacomBattleUI.md#6-scene-enemy-ui)
-	- 说明：`ABattleTriggerActor.SceneEnemyHostSlots` 已按 `EnemySlotId` 绑定多 Host；旧单 `SceneEnemyHost` Trigger 入口已删除。后续敌人方向集中到正式蛇 Host 蓝图 prefab 资产、正式美术样式和制作工具。
+	- 说明：`UWacomRunEncounterSceneBindingComponent.SceneEnemyHostSlots` 已按 `EnemySlotId` 绑定多 Host；规则定义只在 Floor Node，NodeId 只在 Owner Anchor。Registry / Validator 拒绝缺失、重复、额外、跨节点共享 Host 与通用 content host 混用。
 
 - [x] **Resolved Encounter Scene Host 退役生命周期**
-	- 状态：`Done: Downed -> 返回探索 barrier -> Trigger/Host/Part 退役`
+	- 状态：`Done: Downed -> 返回探索 barrier -> SceneBinding/Host/Part 退役`
 	- 归属：Run / App / Battle World Target
 	- 入口：[WacomRun.md](./WacomRun.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md#5-battle-scene-target) / [WacomBattleUI.md](./WacomBattleUI.md#6-scene-enemy-ui)
-	- 说明：非撤离 Victory 仅在 Encounter ticket 成功提交后退役；Trigger 先禁用交互，Host 完整保留 Destroyed/Downed 终态，返回镜头和 ExitBattle 后置工作都完成后才隐藏并禁用 Encounter 内 Host/Part。Withdraw、Defeat、Undetermined 和结算失败保留；SaveGame v3 继续用 `DestroyedTriggerIds` 作为 Map Node Resolved 的兼容投影。
+	- 说明：非撤离 Victory 仅在 Encounter ticket 成功提交后退役；weak scene binding 先进入 pending，Host 完整保留 Destroyed/Downed 终态，返回镜头和 ExitBattle 后置工作都完成后才隐藏并禁用 Encounter 内 Host/Part，Anchor 保留。Withdraw、Defeat、Undetermined 和结算失败保留；Withdraw/启动失败会让对应 `MapNodeHandle` 在本次 Run 内保持手动 E 重试要求，离开再进入也不恢复自动开战。`DestroyedTriggerIds` 已删除，正式存档恢复时需直接持久化 Node lifecycle。
 
 - [ ] **交互目标系统：Card-World / Card-Card drag resolver / Zone 命中来源接入**
   - 状态：`Ready: 剩余正式内容`

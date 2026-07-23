@@ -115,7 +115,7 @@ Battle presentation 的编排计时也统一留在 `WacomApp` Private。`FWacomB
 
 `/Game/Wacom/Art/Placeholders` 是受控开发资产而不是正式出货内容。依赖审计 JSON v2 单独列出该根目录，普通开发审计允许存在，发布审计必须启用 `-FailOnPlaceholder`。Snake 与 SlimeTrio 当前各自持有一份独立 Slime 占位闭包；未来正式素材替换必须切换对应 Host 引用、删除已知占位包并让发布 gate 通过，不能通过重命名或移动来规避 Placeholder 语义。
 
-完成 Encounter 的场景退役同样不进入 BattleHUD 或规则模块。`WacomRun` 的 Map Node `Resolved` 是完成真相；`WacomApp/GameMode` 只在同一 Encounter ticket 的非撤离 Victory 成功提交后启动退役，并复用返回探索的镜头 / 后置工作双 barrier。`ABattleTriggerActor` 独占 `EncounterDefinition + SceneEnemyHostSlots` 的场景映射：先禁用自身交互，待 barrier 完成后调用 Host runtime retirement、隐藏 Host 并关闭全部 Part component 碰撞，最后销毁 Trigger。BattleHUD 只负责完成 Destroyed 动画和清 target registry，不拥有探索场景 Actor 生命周期。
+完成 Encounter 的场景退役同样不进入 BattleHUD 或规则模块。`WacomRun` 的 Map Node `Resolved` 是完成真相；`WacomApp/GameMode` 只在同一 Encounter ticket 的非撤离 Victory 成功提交后启动退役，并复用返回探索的镜头 / 后置工作双 barrier。Floor Node payload 独占静态 `EncounterDefinition`，对应 Node Anchor 的 `UWacomRunEncounterSceneBindingComponent` 独占 `SceneEnemyHostSlots + BattleEntryViewpoint` 场景映射；GameMode 持有 weak binding callback，barrier 完成后调用 Host runtime retirement，Anchor 与 binding 保留。BattleHUD 只负责完成 Destroyed 动画和清 target registry，不拥有探索场景 Actor 生命周期。
 
 ### Logical Map Graph 边界
 
@@ -302,17 +302,17 @@ Backpack Workspace 的领域边界保持为 `WacomRun` 拥有 storage、容量�
 
 ## 10. 验证入口
 
-当前世界交互入口统一通过 `IWacomWorldInteractable`：
+普通 Run world 交互入口统一通过 `IWacomWorldInteractable`：
 
 ```text
 玩家进入交互半径
 -> Actor 注册为 CandidateInteractable
 -> PlayerController 选择最近且 CanInteract 的对象
 -> 按 E 调用 TryInteract
--> Battle / Shop / RunEvent 各自进入对应领域入口和 UI
+-> Shop / RunEvent 等进入对应领域入口和 UI
 ```
 
-当前实现的世界交互对象包括 BattleTrigger、ShopTrigger 和 RunEventTrigger。
+Encounter 不再属于上述世界交互：Run Path 的 `CompleteTraversal` 与目标 Anchor 应用成功后广播 typed arrival，App 通过 Node payload + Encounter scene binding 自动调用 `TryEnterBattle()`；撤离或启动失败会在 PlayerController 的本次 Run 内按 `MapNodeHandle` 保留手动重试要求，离开节点只隐藏提示，二次 arrival 只恢复 E 提示而不自动开战。E 重试只认当前逻辑节点，不依赖 Candidate、Overlap 或点击。当前普通世界交互对象包括 ShopTrigger、RunEventTrigger、Pickup 与 KeyChest 等。
 
 ## 11. 当前已落地骨架
 

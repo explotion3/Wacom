@@ -22,6 +22,7 @@ tags:
 
 世界交互入口分为 E 键、鼠标 hover、鼠标点击、first-person card drop 和 Run menu zone drop。所有入口最终都回到明确的领域出口：
 
+- Encounter 到达：Run Path `CompleteTraversal` 与目标 Anchor 应用成功后广播 typed arrival，由 App 调用 `AWacomGameMode::TryEnterBattle()`；撤离或启动失败后的 E 键只重试当前逻辑节点。
 - 普通探索交互：`IWacomWorldInteractable::TryInteract()`。
 - Battle target click / drag：`UBattleHUD` 将玩家意图转为 Battle command 或 target selection。
 - Run world card drop：`UWacomRunWorldCardDropReceiverComponent -> URunSession::Validate/SubmitRunWorldCardInteraction()`。
@@ -31,13 +32,12 @@ Actor 和 Widget 可以提供 target handle、debug view、hover prompt 和 prev
 
 ## §2 Run World Interactable Actor
 
-探索期 `E` 交互使用 `IWacomWorldInteractable`。进入范围时注册到 PlayerController，离开范围或销毁时反注册；多个候选重叠时按 `GetInteractLocation()` 选最近且 `CanInteract=true` 的对象。
+探索期普通 `E` 交互使用 `IWacomWorldInteractable`。进入范围时注册到 PlayerController，离开范围或销毁时反注册；多个候选重叠时按 `GetInteractLocation()` 选最近且 `CanInteract=true` 的对象。Encounter 开战不属于普通世界交互候选：从未撤离且没有启动失败记录的节点首次到达自动触发；撤离或启动失败会把该 `MapNodeHandle` 标记为本次 Run 内必须手动重试，E 重试只检查当前逻辑节点，不依赖距离、Overlap 或场景点击。离开节点会隐藏提示但保留标记，再次到达同一节点仍显示“按 E 重新挑战”，不得自动开战。
 
 正式可放置入口：
 
 | Actor | 用途 | 规则出口 |
 |---|---|---|
-| `ABattleTriggerActor` | 场景敌人战斗入口 | `AWacomGameMode::EnterBattle()` |
 | `AWacomShopTriggerActor` | 场景商店入口 | `URunSession::BeginShopVisit()` + Shop Screen flow |
 | `AWacomRunEventTriggerActor` | 场景探索事件入口 | `URunSession::BeginRunEvent()` + RunEvent Screen flow |
 | `AWacomRunPickupActor` | 金币 Pickup 快速入口 | `URunSession::CollectGoldPickup()` |
@@ -45,21 +45,21 @@ Actor 和 Widget 可以提供 target handle、debug view、hover prompt 和 prev
 | `AWacomRunRewardPickupActor` | 数据驱动 Pickup 推荐入口 | Gold / Card pickup 规则入口 |
 | `AWacomRunKeyChestActor` | Run world card interaction 验证入口 | `URunSession::SubmitRunWorldCardInteraction()` |
 
-关卡实例必须使用场景级唯一 `PersistentId` 作为运行时状态 key。静态 Definition 的 `EncounterDefinitionId / ShopId / EventId / PickupId / InteractionId` 是内容 ID、debug ID 或资产语义，不替代场景 `PersistentId`。
+参与普通 Run world 状态的关卡 Actor 必须使用场景级唯一 `PersistentId` 作为运行时状态 key。静态 Definition 的 `ShopId / EventId / PickupId / InteractionId` 是内容 ID、debug ID 或资产语义，不替代场景 `PersistentId`。Encounter 使用 `FWacomMapNodeHandle(FloorId + NodeId)` 作为撤离进度 key，并使用 `EncounterDefinitionId` 作为 Battle `EncounterId`，不再拥有独立 Trigger `PersistentId`。
 
 ### Authoring 口径
 
-- 正式关卡推荐使用 Definition 驱动的入口：`ABattleTriggerActor.EncounterDefinition`、`AWacomShopTriggerActor.ShopDefinition`、`AWacomRunEventTriggerActor.EventDefinition`、`AWacomRunRewardPickupActor.PickupDefinition`、`AWacomRunKeyChestActor.CardInteractionDefinition`。
+- Encounter 的静态规则只来自 `UWacomFloorMapDefinition` Node typed payload；对应 Node Anchor 上必须精确存在一个 `UWacomRunEncounterSceneBindingComponent`，只保存 `SceneEnemyHostSlots` 与可选 `BattleEntryViewpoint`。其它正式关卡入口继续使用 `AWacomShopTriggerActor.ShopDefinition`、`AWacomRunEventTriggerActor.EventDefinition`、`AWacomRunRewardPickupActor.PickupDefinition`、`AWacomRunKeyChestActor.CardInteractionDefinition`。
 - 当 Actor 绑定 Logical Map Node 时，上述 Definition 是复用现有 Trigger / Screen flow 的 façade mirror；`UWacomFloorMapDefinition` typed payload 是规则真相，Scene Validator 会阻止两者不一致。
 - 带 `UWacomRunMapNodeBindingComponent` 的世界交互 Actor 只有在绑定 `NodeId` 已成为 Run Snapshot 的当前节点，且节点类型与绑定类型一致时才参与 E 键、hover 和左键路由。未抵达或已经离开的节点 Actor 不显示可交互高亮、不消费点击，也不得启动 Shop / RunEvent 等镜头 staging。没有该绑定的独立原型 Actor 暂时保持原有直接交互语义。
-- `ABattleTriggerActor` 必须通过 `EncounterDefinition` 进入战斗，并用 `SceneEnemyHostSlots` 完成 Encounter enemy slot 到场景 Host 的映射。
+- Encounter binding 必须完整且唯一地把 Floor Node `EncounterDefinition.EnemySlots` 映射到场景 Host；同一 Host 不能被两个 Encounter Node 占用。Binding 缺失、重复、槽位不匹配或额外 Host 都会阻止 Scene Registry / Validator 通过。
 - `AWacomShopTriggerActor` 可选配置 `ShopEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到商店第一人称 View Pose，再打开 ShopScreen；关闭后先退 UI，再回当前 Run Path View。它不改变 `PersistentId`、`ShopDefinition`、`Offers`、库存持久化或购买规则。
 - `AWacomRunEventTriggerActor` 可选配置 `RunEventEntryViewpoint`。配置后只改变 App 层镜头 / hand staging：玩家先移动到事件第一人称 View Pose，再打开 RunEventScreen；关闭后先退 UI，再回当前 Run Path View。已完成事件仍只显示完成提示，不会触发 staging；该字段不改变 `PersistentId`、`EventDefinition`、完成状态或选项结算规则。
 - Definition 字段语义见 [WacomData.md](./WacomData.md)；生成样例和资产 validator 口径见 [WacomDataAuthoring.md](./WacomDataAuthoring.md)。
 - 专用 Pickup Actor 只作为快速验证入口保留；正式关卡优先使用 Definition 驱动入口，不把快速入口扩展成新的长期制作主线。
 - Blueprint 只放默认外观和可见 primitive，不写 EventGraph 规则逻辑、不直接调用 RunSession。
 - Prototype sample button 只用于 PIE / 开发验证；它们只改当前 Actor 配置和 facade 同步，不修改 RunState、不生成资产。
-- Floor 1 Production 灰盒使用真实 Definition 驱动的 6 个 Battle、1 个 Shop、4 个 RunEvent 和 4 个 RewardPickup Host；四个 Navigation 节点没有 content Host。所有实例使用 `Floor.Main.01.<NodeId>` 作为 `PersistentId`，并由 `UWacomRunMapNodeBindingComponent` 映射到对应 typed payload。
+- Floor 1 Production 灰盒的 6 个 Encounter 直接在对应 Node Anchor 上保存 typed binding 与 Enemy Host/Viewpoint；独立 content Host 只包括 1 个 Shop、4 个 RunEvent 和 4 个 RewardPickup，四个 Navigation 节点没有 content Host。普通 Host 使用 `Floor.Main.01.<NodeId>` 作为 `PersistentId` 并由 `UWacomRunMapNodeBindingComponent` 映射到 typed payload；Encounter 不再生成独立 content Host Actor。
 - `BP_WacomRunFloorEntranceMarker_Graybox` 不是正式可交互 Actor：它只有无碰撞可见 primitive、Node binding 和实例 `PersistentId`，不实现 `IWacomWorldInteractable`、click/hover bridge、Floor travel 或 Level Blueprint 逻辑。未来 FloorEntrance 交互与 world handoff 归 App flow，marker 不拥有规则。
 
 ### Data Validation 口径
@@ -105,7 +105,7 @@ KeyChest 是当前第一条 Run world card interaction 验证入口。普通 E �
 
 ## §5 Battle Scene Target
 
-BattleTrigger 仍是 Encounter 与关卡 Host 映射的唯一入口：`EncounterDefinition.EnemySlots` 生成规则初始化，`SceneEnemyHostSlots` 按同一 `EnemySlotId` 顺序绑定 `AWacomBattleEnemyActor`。正式 Trigger 必须覆盖每个有效槽位，不能重复 Host，不能遗漏或添加 Encounter 外槽位；Details 同步按钮只补齐 slot 列表，不猜 Host。
+Encounter 与关卡 Host 的唯一场景映射入口是 Encounter Node Anchor 上的 `UWacomRunEncounterSceneBindingComponent`：Floor Node `EncounterDefinition.EnemySlots` 生成规则初始化，binding 的 `SceneEnemyHostSlots` 按同一 `EnemySlotId` 顺序绑定 `AWacomBattleEnemyActor`。正式 binding 必须覆盖每个有效槽位，不能重复 Host、遗漏槽位、添加 Encounter 外槽位或跨节点共享 Host；它不复制 `EncounterDefinition / NodeId / PersistentId`。
 
 敌人场景目标只有一个制作结构：Host Actor 下直接放 typed Part Component，每个 Part 下直接放 typed Sprite/Flipbook Layer 与 ImpactAnchor。`PartSlotId` 对应 Definition 槽位，`PartId` 由定义派生；Component Transform 和规则 identity 属于纯 `USceneComponent` Part，它不再是 Primitive，也没有 authored BoxExtent。`InteractionVisualLayerId` 精确指定唯一正式交互视觉层，该层 authored Idle Sprite 或 Idle Flipbook 第一帧的 Paper2D 3D ShrinkWrapped BodySetup 是稳定命中真相。禁止 ChildActor、部位 Actor、生成 VisualLayers、Host 整体图和按名称/数组位置推断归属。
 
@@ -129,7 +129,7 @@ Action、Destroyed 与反馈全部原地操作 authored 组件：Part Animation 
 
 EnemyPanel 是 Host 的 screen-space 被动视图，不是 world target。Idle 时 `InspectHitTarget` 可以上报完整 Part identity；拖卡、TargetSelect、Resolving 与 BattleEnd 时恢复点击穿透，世界 interaction visual 路由继续有效。详情 coordinator 与面板只消费现有 ViewData，不修改 BattleSession。
 
-胜利后的场景退役由 BattleTrigger 承担。GameMode 在成功提交非撤离 Victory 后先禁用 Trigger，等待返回探索镜头与 ExitBattle barrier，再让 Host runtime 清理 Part 表现、隐藏 Host、关闭 Part collision 并销毁 Trigger。Withdraw、Defeat、Undetermined 和结算失败保留 Host；重新进入战斗会从 authored Layer 状态重新初始化。
+胜利后的场景退役由 GameMode 持有的 weak Encounter scene binding callback 承担。成功提交非撤离 Victory 后 binding 进入 pending，等待返回探索镜头与 ExitBattle barrier，再让对应 Host runtime 清理 Part 表现、隐藏 Host 并关闭交互；Node Anchor 与 binding 保留。Withdraw、Defeat、Undetermined 和结算失败保留 Host；撤离回探索及之后离开再进入同一节点都不自动重触发，E 重试会从 authored Layer 与该 Map Node 的内存态 `BattleProgress` 重新初始化。
 
 正式内容示例：TrainingWarrior 是单 Body Part；Snake 是 Head/Body/Tail；SlimeTrio 是 Left/Core/Right。它们使用同一 runtime、target、UI 与 authoring 路径，不再按单部位/多部位切换架构。
 ## §6 Run Menu Zone Target

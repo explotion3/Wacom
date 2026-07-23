@@ -680,7 +680,10 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 	{
 		FBattleInitParams Params;
 		const FName TriggerId(TEXT("TestTrigger"));
-		const bool bBuildOk = Run->BuildInitParamsForBattle(TriggerId, Params);
+		const bool bBuildOk = Run->BuildInitParamsForBattle(
+			Run->BuildExplorationSnapshot().CurrentNode,
+			TriggerId,
+			Params);
 		TestTrue(TEXT("Initial BuildInitParams"), bBuildOk);
 		TestEqual(TEXT("Initial EncounterId uses TriggerPersistentId"), Params.EncounterId, TriggerId);
 		TestEqual(TEXT("Initial PreDestroyedParts empty"), Params.PreDestroyedParts.Num(), 0);
@@ -740,7 +743,10 @@ bool FWacomKnockdownChoiceWithdrawPersistsProgressSpec::RunTest(const FString& /
 	// 第二场战斗（重入同一 Trigger）：BuildInitParamsForBattle 应灌入 PreDestroyedParts
 	{
 		FBattleInitParams Params;
-		const bool bOk = Run->BuildInitParamsForBattle(FName(TEXT("TestTrigger")), Params);
+		const bool bOk = Run->BuildInitParamsForBattle(
+			Run->BuildExplorationSnapshot().CurrentNode,
+			FName(TEXT("TestTrigger")),
+			Params);
 		TestTrue(TEXT("BuildInitParams"), bOk);
 		TestEqual(TEXT("EncounterId uses TriggerPersistentId"), Params.EncounterId, FName(TEXT("TestTrigger")));
 		TestEqual(TEXT("PreDestroyedParts 1 项"), Params.PreDestroyedParts.Num(), 1);

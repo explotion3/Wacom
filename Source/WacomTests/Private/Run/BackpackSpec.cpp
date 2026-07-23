@@ -1431,7 +1431,10 @@ bool FWacomRunDeckBuildInitParamsUsesBattleDeckSpec::RunTest(const FString& /*Pa
 	TestEqual(TEXT("BattleDeck size=1"), Run->GetBattleDeck().Num(), 1);
 
 	FBattleInitParams Params;
-	const bool bOk = Run->BuildInitParamsForBattle(FName(TEXT("Run.Deck.BuildInitParamsUsesBattleDeck")), Params);
+	const bool bOk = Run->BuildInitParamsForBattle(
+		Run->BuildExplorationSnapshot().CurrentNode,
+		FName(TEXT("Run.Deck.BuildInitParamsUsesBattleDeck")),
+		Params);
 	TestTrue(TEXT("BuildInitParams succeeded"), bOk);
 
 	TestEqual(TEXT("BattleDeckEntries has 1 card"),
@@ -1960,7 +1963,10 @@ bool FWacomRunDeckBuildInitParamsIncludesEnabledSpecialZoneSpec::RunTest(const F
 
 	FBattleInitParams Params;
 	TestTrue(TEXT("BuildInitParamsForBattle"),
-		Run->BuildInitParamsForBattle(FName(TEXT("Run.Deck.SpecialZoneEnabled")), Params));
+		Run->BuildInitParamsForBattle(
+			Run->BuildExplorationSnapshot().CurrentNode,
+			FName(TEXT("Run.Deck.SpecialZoneEnabled")),
+			Params));
 
 	int32 SpecialZoneEntries = 0;
 	for (const FBattleDeckEntry& Entry : Params.BattleDeckEntries)
@@ -2014,7 +2020,10 @@ bool FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec::RunTest(const FS
 
 	FBattleInitParams Params;
 	TestTrue(TEXT("Build params flag=false"),
-		Run->BuildInitParamsForBattle(FName(TEXT("Run.Deck.SpecialZoneScenarios")), Params));
+		Run->BuildInitParamsForBattle(
+			Run->BuildExplorationSnapshot().CurrentNode,
+			FName(TEXT("Run.Deck.SpecialZoneScenarios")),
+			Params));
 	TestEqual(TEXT("flag=false weapon not included"), Params.BattleDeckEntries.Num(), 2);
 
 	TestTrue(TEXT("Enable weapon"), Run->SetSpecialZoneCardBattleEnabled(WeaponId, true));
@@ -2022,7 +2031,10 @@ bool FWacomRunDeckBuildInitParamsSpecialZoneEntryScenariosSpec::RunTest(const FS
 
 	Params = FBattleInitParams();
 	TestTrue(TEXT("Build params owner in Backpack"),
-		Run->BuildInitParamsForBattle(FName(TEXT("Run.Deck.SpecialZoneScenarios")), Params));
+		Run->BuildInitParamsForBattle(
+			Run->BuildExplorationSnapshot().CurrentNode,
+			FName(TEXT("Run.Deck.SpecialZoneScenarios")),
+			Params));
 	TestEqual(TEXT("owner in Backpack weapon not included"), Params.BattleDeckEntries.Num(), 1);
 
 	return true;

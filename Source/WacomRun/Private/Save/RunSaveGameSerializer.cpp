@@ -118,7 +118,6 @@ UWacomSaveGame* FRunSaveGameSerializer::BuildSaveGameFromRunState(const FRunStat
 		Save->CompletionSummary.FinalPressure = State.CompletionSummary.FinalPressure;
 	}
 
-	Save->DestroyedTriggerIds = State.DestroyedTriggerIds.Array();
 	Save->GrantedCredentialIds = State.GrantedCredentialIds.Array();
 	Save->GrantedCredentialIds.Sort(FNameLexicalLess());
 	Save->PlayerTransform = State.PlayerTransform;
@@ -284,15 +283,6 @@ bool FRunSaveGameSerializer::TryApplySaveGameToRunState(UWacomSaveGame* SaveGame
 	TempState.GrantedCredentialIds = MoveTemp(GrantedCredentialIds);
 	TempState.PlayerTransform = SaveGame->PlayerTransform;
 	TempState.bHasPlayerTransform = SaveGame->bHasPlayerTransform;
-
-	TempState.DestroyedTriggerIds.Reset();
-	for (const FName& Id : SaveGame->DestroyedTriggerIds)
-	{
-		if (!Id.IsNone())
-		{
-			TempState.DestroyedTriggerIds.Add(Id);
-		}
-	}
 
 	const bool bAllInstanceArraysEmpty =
 		   SaveGame->Backpack.Num() == 0

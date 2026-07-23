@@ -25,15 +25,6 @@ void FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(
 }
 
 void FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(
-	AWacomBattleTriggerClickProbe* Probe)
-{
-	if (Probe)
-	{
-		Probe->SyncClickTargetForTest();
-	}
-}
-
-void FWacomRunWorldInteractionActorTestAccess::SyncClickTarget(
 	AWacomRunPickupClickProbe* Probe)
 {
 	if (Probe)
@@ -101,12 +92,6 @@ int32 FWacomRunWorldInteractionActorTestAccess::TryInteractCount(
 }
 
 int32 FWacomRunWorldInteractionActorTestAccess::TryInteractCount(
-	const AWacomBattleTriggerClickProbe* Probe)
-{
-	return Probe ? Probe->TryInteractCountForTest : 0;
-}
-
-int32 FWacomRunWorldInteractionActorTestAccess::TryInteractCount(
 	const AWacomGenericRunWorldClickableInteractableProbe* Probe)
 {
 	return Probe ? Probe->TryInteractCountForTest : 0;
@@ -134,13 +119,6 @@ FWacomRunWorldInteractionActorTestAccess::LastInteractingPlayerController(
 
 AWacomPlayerController*
 FWacomRunWorldInteractionActorTestAccess::LastInteractingPlayerController(
-	const AWacomBattleTriggerClickProbe* Probe)
-{
-	return Probe ? Probe->GetLastInteractingPlayerControllerForTest() : nullptr;
-}
-
-AWacomPlayerController*
-FWacomRunWorldInteractionActorTestAccess::LastInteractingPlayerController(
 	const AWacomGenericRunWorldClickableInteractableProbe* Probe)
 {
 	return Probe ? Probe->GetLastInteractingPlayerControllerForTest() : nullptr;
@@ -158,16 +136,6 @@ void FWacomRunWorldInteractionActorTestAccess::SetInteractResult(
 
 void FWacomRunWorldInteractionActorTestAccess::SetInteractResult(
 	AWacomShopTriggerClickProbe* Probe,
-	bool bResult)
-{
-	if (Probe)
-	{
-		Probe->bInteractResultForTest = bResult;
-	}
-}
-
-void FWacomRunWorldInteractionActorTestAccess::SetInteractResult(
-	AWacomBattleTriggerClickProbe* Probe,
 	bool bResult)
 {
 	if (Probe)

@@ -28,6 +28,7 @@ struct WACOMEDITOR_API FWacomRunExplorationDebugAssetBuilderAutomationSnapshot
 	TArray<FName> PathEdgeIds;
 	TArray<FName> BranchEdgeIds;
 	TArray<FName> HostNodeIds;
+	TArray<FName> EncounterBindingNodeIds;
 	TArray<FWacomRunExplorationDebugContentHostAutomationRecord> ContentHosts;
 	FString DescriptorFloorPath;
 	FString GameModeJourneyPath;

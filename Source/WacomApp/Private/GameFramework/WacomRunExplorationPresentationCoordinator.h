@@ -6,7 +6,6 @@
 #include "Exploration/RunExplorationResolution.h"
 #include "WacomRunSceneBindingRegistry.h"
 
-class AActor;
 class URunSession;
 class UWacomRunPathTraversalComponent;
 struct FWacomRunMapScreenFlowAutomationTestView;
@@ -68,10 +67,16 @@ struct FWacomRunMapTravelPresentationResult
 	}
 };
 
-DECLARE_MULTICAST_DELEGATE_TwoParams(
+struct FWacomRunNodeContentArrivalRequest
+{
+	FWacomMapNodeHandle Node;
+	EWacomMapNodeType NodeType = EWacomMapNodeType::Navigation;
+	int32 AppliedVersion = 0;
+};
+
+DECLARE_MULTICAST_DELEGATE_OneParam(
 	FWacomRunNodeContentPresentationRequestedNative,
-	const FWacomMapNodeHandle&,
-	AActor*);
+	const FWacomRunNodeContentArrivalRequest&);
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FWacomRunRouteChoiceStateChangedNative,
 	const FWacomRunRouteChoiceState&);

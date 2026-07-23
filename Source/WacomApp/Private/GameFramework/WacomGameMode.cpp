@@ -14,10 +14,10 @@
 #include "Enemies/EnemyDefinition.h"
 #include "Session/BattleSession.h"
 
-#include "Actors/BattleTriggerActor.h"
 #include "Camera/WacomFirstPersonViewStageCoordinator.h"
 #include "Camera/WacomFirstPersonViewStageReturnFlow.h"
 #include "Components/WacomBattleCameraLookComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "GameFramework/WacomExitBattlePostRunBarrier.h"
@@ -205,29 +205,11 @@ void AWacomGameMode::BootstrapRunFromSave()
 		UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] Bootstrap: 无有效存档，保持新 Run"));
 	}
 
-	// 读档成功：先清理已销毁的触发器，再传送玩家。
-	// 顺序关键：teleport 用 TeleportPhysics 会触发 Overlap；如果已销毁的 Trigger
-	// 还在场景里，teleport 到原来位置会立刻再次触发同一场战斗。
+	// 读档成功：恢复玩家位置。Encounter 节点生命周期尚未持久化，
+	// 早期场景触发器完成投影不再受支持。
 	if (bLoaded)
 	{
-		// 1. 退役存档中已标记为完成的 Encounter 场景，再销毁对应触发器。
-		// Trigger::BeginPlay 做过一次自销毁检查，但那时 Bootstrap 尚未加载存档，
-		// RunSession 是空的，所以还得在这里补一刀。先退役 Host，避免读档后留下 Idle 敌人。
-		for (TActorIterator<ABattleTriggerActor> It(GetWorld()); It; ++It)
-		{
-			ABattleTriggerActor* Trigger = *It;
-			if (Trigger
-				&& !Trigger->PersistentId.IsNone()
-				&& Run->IsTriggerDestroyed(Trigger->PersistentId))
-			{
-				UE_LOG(LogTemp, Display,
-					TEXT("[WacomGameMode] Bootstrap: 清理存档中已销毁的触发器 %s (id=%s)"),
-					*Trigger->GetName(), *Trigger->PersistentId.ToString());
-				Trigger->CompleteResolvedEncounterSceneRetirement();
-			}
-		}
-
-		// 2. 传送玩家到存档位置。
+		// 传送玩家到存档位置。
 		const FRunState& State = Run->GetRunState();
 		if (State.bHasPlayerTransform)
 		{
@@ -293,47 +275,74 @@ bool AWacomGameMode::SaveRunToSlot(const FString& SlotName, bool bQuiet) const
 	return Run->SaveToSlot(SlotName);
 }
 
-void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
+FWacomStatus AWacomGameMode::TryEnterBattle(
+	const FWacomMapNodeHandle& MapNodeHandle,
+	const UEncounterDefinition& EncounterDefinition,
+	UWacomRunEncounterSceneBindingComponent& SceneBinding)
 {
-	if (CurrentState == EGameFlowState::Battle)
+	if (CurrentState != EGameFlowState::Exploration
+		|| bBattleEntryInProgress
+		|| ActiveSession
+		|| BattleHUD
+		|| PendingEncounterActivity.IsSet())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] EnterBattle 被重复调用，忽略"));
-		return;
+		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("BattleEntryBusy"));
 	}
-	if (!Trigger)
+	TGuardValue<bool> EntryGuard(bBattleEntryInProgress, true);
+
+	if (!MapNodeHandle.IsValid()
+		|| EncounterDefinition.EncounterDefinitionId.IsNone())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] EnterBattle 缺少 BattleTrigger，忽略"));
-		return;
+		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("BattleEntryIdentityInvalid"));
 	}
 
+	const FWacomStatus SceneBindingStatus =
+		SceneBinding.ValidateForEncounter(EncounterDefinition);
+	if (!SceneBindingStatus.IsOk())
+	{
+		return SceneBindingStatus;
+	}
 	TArray<FBattleEnemySlotInit> EncounterEnemySlots;
-	Trigger->BuildBattleEnemySlots(EncounterEnemySlots);
+	SceneBinding.BuildBattleEnemySlots(EncounterDefinition, EncounterEnemySlots);
 	if (EncounterEnemySlots.Num() == 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomGameMode] EnterBattle 缺少有效 EncounterDefinition，忽略"));
-		return;
+		return FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			TEXT("BattleEntryEncounterEnemySlotsEmpty"));
 	}
 
 	if (!BattleHUDClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: BattleHUDClass 未配置"));
-		return;
+		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("BattleHUDClassMissing"));
 	}
 
 	APlayerController* PC = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
 	if (!PC)
 	{
-		UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] EnterBattle: 找不到 PlayerController"));
-		return;
+		return FWacomStatus::Fail(EWacomError::NotFound, TEXT("BattleEntryPlayerControllerMissing"));
 	}
 
 	AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC);
 	URunSession* Run = WacomPC ? WacomPC->GetRunSession() : nullptr;
 	if (!Run)
 	{
-		UE_LOG(LogTemp, Error,
-			TEXT("[WacomGameMode] EnterBattle: RunSession 未就位，拒绝脱离 RunState 的战斗"));
-		return;
+		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("BattleEntryRunSessionMissing"));
+	}
+
+	const FRunExplorationSnapshot RunSnapshot = Run->BuildExplorationSnapshot();
+	const FRunMapNodeSnapshot* CurrentNode = RunSnapshot.Nodes.FindByPredicate(
+		[&MapNodeHandle](const FRunMapNodeSnapshot& Node)
+		{
+			return Node.Handle == MapNodeHandle;
+		});
+	if (RunSnapshot.Outcome != ERunOutcome::InProgress
+		|| RunSnapshot.CurrentNode != MapNodeHandle
+		|| RunSnapshot.ActiveActivityKind != ERunExplorationActivityKind::None
+		|| !CurrentNode
+		|| CurrentNode->NodeType != EWacomMapNodeType::Encounter
+		|| CurrentNode->Lifecycle != ERunMapNodeLifecycle::Visited)
+	{
+		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("BattleEntryNodeStateInvalid"));
 	}
 
 	UGameInstance* GI = GetGameInstance();
@@ -341,9 +350,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		GI ? GI->GetSubsystem<UWacomGameUIManagerSubsystem>() : nullptr;
 	if (!UIManager)
 	{
-		UE_LOG(LogTemp, Error,
-			TEXT("[WacomGameMode] EnterBattle: 找不到 UWacomGameUIManagerSubsystem"));
-		return;
+		return FWacomStatus::Fail(EWacomError::NotFound, TEXT("BattleEntryUIManagerMissing"));
 	}
 
 	// 1) 创建 BattleSession + Initialize
@@ -356,15 +363,18 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		FirstEnemySlotDefinition = EncounterEnemySlots[0].Enemy;
 
 		// RunSession 是进入战斗的唯一规则入口：角色、种子、备战卡组和撤离重入进度都来自 RunState。
-		const FName TriggerPersistentId = Trigger ? Trigger->PersistentId : NAME_None;
-		if (!Run->BuildInitParamsForBattle(TriggerPersistentId, Params))
+		if (!Run->BuildInitParamsForBattle(
+			MapNodeHandle,
+			EncounterDefinition.EncounterDefinitionId,
+			Params))
 		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[WacomGameMode] EnterBattle: RunSession 无法构造战斗参数，拒绝 fallback 战斗"));
-			return;
+			return FWacomStatus::Fail(
+				EWacomError::InvalidState,
+				TEXT("BattleEntryInitParamsRejected"));
 		}
 
-		// 敌人侧由 App/Trigger 层负责：EncounterDefinition -> EnemySlots。
+		// 敌人侧由 App 的 Encounter scene binding 负责：
+		// EncounterDefinition -> EnemySlots。
 		Params.EnemySlots = MoveTemp(EncounterEnemySlots);
 		EnterBattleEnemySlotCount = Params.EnemySlots.Num() > 0 ? Params.EnemySlots.Num() : 1;
 
@@ -375,7 +385,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 			UE_LOG(LogTemp, Error, TEXT("[WacomGameMode] Session Initialize 失败 Code=%d"),
 				(int32)BattleInitialization.Status.Code);
 			ActiveSession = nullptr;
-			return;
+			return BattleInitialization.Status;
 		}
 	}
 
@@ -389,7 +399,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 			TEXT("[WacomGameMode] EnterBattle: 当前逻辑节点无法开始 Encounter，拒绝场景战斗。Detail=%s"),
 			*EncounterBegin.Status.Detail.ToString());
 		ActiveSession = nullptr;
-		return;
+		return EncounterBegin.Status;
 	}
 	if (!WacomPC->ApplyRunNodeActivityResolutionForPresentation(EncounterBegin))
 	{
@@ -408,7 +418,9 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 				*Cancellation.Status.Detail.ToString());
 		}
 		ActiveSession = nullptr;
-		return;
+		return FWacomStatus::Fail(
+			EWacomError::InvalidState,
+			TEXT("BattleEntryPresentationBeginFailed"));
 	}
 	PendingEncounterActivity = EncounterBegin.NodeActivityTicket.GetValue();
 
@@ -436,7 +448,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 		}
 		PendingEncounterActivity.Reset();
 		ActiveSession = nullptr;
-		return;
+		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("BattleHUDPushFailed"));
 	}
 
 	if (WacomPC)
@@ -447,7 +459,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	BattleHUD->BeginBattleEntryPresentation();
 	BattleHUD->AttachInitializedBattleSession(ActiveSession, MoveTemp(BattleInitialization));
 	TArray<AWacomBattleEnemyActor*> SceneEnemyHosts;
-	Trigger->BuildBattleSceneEnemyHosts(SceneEnemyHosts);
+	SceneBinding.BuildBattleSceneEnemyHosts(EncounterDefinition, SceneEnemyHosts);
 	BattleHUD->SetBattleSceneEnemyHosts(SceneEnemyHosts);
 
 	// 订阅战斗结束广播
@@ -474,7 +486,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	{
 		Pawn->SetExplorationInputEnabled(false);
 		FWacomFirstPersonViewStageRequest BattleEntryStageRequest;
-		Trigger->TryBuildBattleEntryViewStageRequest(BattleEntryStageRequest);
+		SceneBinding.TryBuildBattleEntryViewStageRequest(BattleEntryStageRequest);
 
 		const TWeakObjectPtr<AWacomGameMode> WeakGameMode(this);
 		const TWeakObjectPtr<AWacomPlayerCharacter> WeakPawn(Pawn);
@@ -506,7 +518,9 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 
 	// 5) 记录状态
 	CurrentState        = EGameFlowState::Battle;
-	PendingTrigger      = Trigger;
+	PendingEncounterNode = MapNodeHandle;
+	PendingEncounterSceneBinding = &SceneBinding;
+	PendingEncounterDefinition = const_cast<UEncounterDefinition*>(&EncounterDefinition);
 
 	// 战斗期间 Toast 应隐藏（即便候选列表非空）。
 	if (AWacomPlayerController* WPC = Cast<AWacomPlayerController>(PC))
@@ -517,6 +531,7 @@ void AWacomGameMode::EnterBattle(ABattleTriggerActor* Trigger)
 	UE_LOG(LogTemp, Display, TEXT("[WacomGameMode] EnterBattle 完成：FirstEnemySlotDefinition=%s EncounterSlots=%d"),
 		*GetNameSafe(FirstEnemySlotDefinition),
 		EnterBattleEnemySlotCount);
+	return FWacomStatus::Ok();
 }
 
 void AWacomGameMode::HandleBattleEnded(EBattleOutcome Outcome)
@@ -629,23 +644,66 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 				}
 			});
 
-	// Map Node 结算成功才是 Encounter 完成真相。SaveGame 的 Trigger Id 只是兼容投影；
-	// 先禁用 Trigger，Host 继续保留 Downed 终态，等返回探索双 barrier 完成后统一退役。
+	// Map Node 结算成功才是 Encounter 完成真相。Anchor 始终保留；
+	// Host 继续保留 Downed 终态，等返回探索双 barrier 完成后统一退役。
 	const bool bShouldRetireResolvedEncounterScene =
 		WacomResolvedEncounterSceneRetirementPolicy::ShouldRetire(
 			bEncounterSettlementSucceeded,
 			Packet.Outcome,
 			Packet.bWithdrawn);
-	if (bShouldRetireResolvedEncounterScene && PendingTrigger)
+	if (bShouldRetireResolvedEncounterScene)
 	{
-		if (Run && !PendingTrigger->PersistentId.IsNone())
+		UWacomRunEncounterSceneBindingComponent* SceneBinding =
+			PendingEncounterSceneBinding.Get();
+		UEncounterDefinition* EncounterDefinition = PendingEncounterDefinition.Get();
+		if (SceneBinding && EncounterDefinition)
 		{
-			Run->MarkTriggerDestroyed(PendingTrigger->PersistentId);
+			SceneBinding->BeginResolvedEncounterSceneRetirement();
+			const TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent> WeakBinding(
+				SceneBinding);
+			const TWeakObjectPtr<UEncounterDefinition> WeakEncounter(EncounterDefinition);
+			PostRunBarrier->SetResolvedEncounterRetirement(
+				[WeakBinding, WeakEncounter]()
+				{
+					UWacomRunEncounterSceneBindingComponent* StrongBinding =
+						WeakBinding.Get();
+					const UEncounterDefinition* StrongEncounter = WeakEncounter.Get();
+					if (StrongBinding && StrongEncounter)
+					{
+						StrongBinding->CompleteResolvedEncounterSceneRetirement(
+							*StrongEncounter);
+					}
+				});
 		}
-		PendingTrigger->BeginResolvedEncounterSceneRetirement();
-		PostRunBarrier->SetResolvedEncounterTrigger(PendingTrigger);
 	}
-	PendingTrigger = nullptr;
+
+	const bool bShouldArmEncounterRetry =
+		!bJourneySucceeded
+		&& Packet.Outcome != EBattleOutcome::Defeat
+		&& (!bEncounterSettlementSucceeded
+			|| Packet.bWithdrawn
+			|| Packet.Outcome == EBattleOutcome::Undetermined);
+	if (WacomPC)
+	{
+		if (bShouldArmEncounterRetry
+			&& PendingEncounterNode.IsValid()
+			&& PendingEncounterSceneBinding.IsValid())
+		{
+			WacomPC->ArmCurrentEncounterRetry(
+				PendingEncounterNode,
+				*PendingEncounterSceneBinding.Get(),
+				Packet.bWithdrawn
+					? FName(TEXT("BattleWithdrawn"))
+					: FName(TEXT("BattleEntryOrSettlementIncomplete")));
+		}
+		else
+		{
+			WacomPC->ClearCurrentEncounterRetry();
+		}
+	}
+	PendingEncounterNode = {};
+	PendingEncounterSceneBinding.Reset();
+	PendingEncounterDefinition.Reset();
 
 	// 2) Pop HUD + 清理 Session
 	if (UIManager && BattleHUD)
@@ -704,7 +762,7 @@ void AWacomGameMode::ExitBattle(EBattleOutcome Outcome)
 		? EGameFlowState::JourneySummary
 		: EGameFlowState::Exploration;
 
-	// 撤离回探索时玩家仍在 Sphere 内（不会再发 BeginOverlap），但候选列表里 Trigger 还在。
+	// 撤离回探索不会重新生成 arrival；当前节点的 E 重试由显式状态保持。
 	// Run 手牌和 Toast 等 return staging 完成后再恢复，避免退出战斗时从 Viewpoint 平移回样条。
 	PostRunBarrier->MarkExitBattlePostRunReady();
 

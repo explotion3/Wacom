@@ -4,15 +4,19 @@
 
 #include "Misc/AutomationTest.h"
 
+#include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomRunMapNodeAnchorActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Components/SplineComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Components/WacomRunPathTraversalComponent.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Fixtures/WacomRunExplorationFixture.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/WacomPlayerCharacter.h"
+#include "Encounters/EncounterDefinition.h"
+#include "Enemies/EnemyDefinition.h"
 #include "Map/WacomFloorMapDefinition.h"
 #include "Map/WacomJourneyDefinition.h"
 #include "RunSession.h"
@@ -68,10 +72,159 @@ namespace WacomRunCoordinatorSpec
 	{
 		UWacomFloorMapDefinition* Floor = Fixture.MakeLinearFloor();
 		Floor->Nodes[1].NodeType = EWacomMapNodeType::Encounter;
+		UEncounterDefinition* Encounter =
+			NewObject<UEncounterDefinition>(Floor);
+		Encounter->EncounterDefinitionId = TEXT("Encounter.Coordinator");
+		UEnemyDefinition* Enemy =
+			NewObject<UEnemyDefinition>(Encounter);
+		Enemy->EnemyId = TEXT("Enemy.Coordinator");
+		FEncounterEnemySlot& Slot =
+			Encounter->EnemySlots.AddDefaulted_GetRef();
+		Slot.EnemySlotId = TEXT("Enemy");
+		Slot.EnemyDefinition = Enemy;
+		Floor->Nodes[1].Content.Encounter.EncounterDefinition = Encounter;
 		return Fixture.CreateInitializedSession(
 			nullptr,
 			Fixture.MakeJourney({ Floor }));
 	}
+
+	UWacomRunEncounterSceneBindingComponent* AddEncounterBinding(
+		UWorld& World,
+		AWacomRunMapNodeAnchorActor& Anchor,
+		const FWacomInitializedRunExplorationSession& Initialized,
+		AWacomBattleEnemyActor*& OutHost)
+	{
+		OutHost = nullptr;
+		const UWacomJourneyDefinition* Journey =
+			Initialized.Session
+				? Initialized.Session->GetRunState()
+					.ExplorationState.JourneyDefinition
+				: nullptr;
+		const UWacomFloorMapDefinition* Floor =
+			Journey
+				? Journey->FindFloor(
+					Initialized.Initialization.PostSnapshot
+						.CurrentNode.FloorId)
+				: nullptr;
+		const FWacomMapNodeDefinition* Node =
+			Floor ? Floor->FindNode(TEXT("Node.02")) : nullptr;
+		const UEncounterDefinition* Encounter =
+			Node ? Node->Content.Encounter.EncounterDefinition.Get()
+				: nullptr;
+		if (!Encounter || Encounter->EnemySlots.Num() != 1)
+		{
+			return nullptr;
+		}
+
+		UWacomRunEncounterSceneBindingComponent* Binding =
+			NewObject<UWacomRunEncounterSceneBindingComponent>(
+				&Anchor, TEXT("EncounterSceneBinding"), RF_Transient);
+		Anchor.AddInstanceComponent(Binding);
+		Binding->RegisterComponent();
+		OutHost = World.SpawnActor<AWacomBattleEnemyActor>();
+		if (!OutHost)
+		{
+			return Binding;
+		}
+		OutHost->EnemyDefinition =
+			Encounter->EnemySlots[0].EnemyDefinition;
+		FWacomBattleSceneEnemyHostSlot& SceneSlot =
+			Binding->SceneEnemyHostSlots.AddDefaulted_GetRef();
+		SceneSlot.EnemySlotId =
+			Encounter->EnemySlots[0].EnemySlotId;
+		SceneSlot.SceneEnemyHost = OutHost;
+		return Binding;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomRunCoordinatorRejectsSharedEncounterHostAcrossNodesTest,
+	"Wacom.UI.RunSceneBinding.Encounter.RejectsSharedHostAcrossNodes",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomRunCoordinatorRejectsSharedEncounterHostAcrossNodesTest::RunTest(
+	const FString& Parameters)
+{
+	using namespace WacomRunCoordinatorSpec;
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomRunExplorationFixture Fixture;
+	UWacomFloorMapDefinition* Floor = Fixture.MakeLinearFloor();
+	UEnemyDefinition* Enemy = NewObject<UEnemyDefinition>(Floor);
+	Enemy->EnemyId = TEXT("Enemy.SharedSceneHost");
+	for (int32 Index = 0; Index < Floor->Nodes.Num(); ++Index)
+	{
+		FWacomMapNodeDefinition& Node = Floor->Nodes[Index];
+		Node.NodeType = EWacomMapNodeType::Encounter;
+		UEncounterDefinition* Encounter =
+			NewObject<UEncounterDefinition>(Floor);
+		Encounter->EncounterDefinitionId = FName(
+			*FString::Printf(TEXT("Encounter.SharedHost.%d"), Index));
+		FEncounterEnemySlot& RuleSlot =
+			Encounter->EnemySlots.AddDefaulted_GetRef();
+		RuleSlot.EnemySlotId = TEXT("Enemy");
+		RuleSlot.EnemyDefinition = Enemy;
+		Node.Content.Encounter.EncounterDefinition = Encounter;
+	}
+
+	AWacomRunPathSegmentActor* Path =
+		SpawnPath(*World, TEXT("Edge.01"), 100.0f);
+	AWacomRunMapNodeAnchorActor* Source =
+		SpawnAnchor(*World, TEXT("Node.01"), FVector::ZeroVector);
+	AWacomRunMapNodeAnchorActor* Target =
+		SpawnAnchor(*World, TEXT("Node.02"), FVector(100.0f, 0.0f, 0.0f));
+	AWacomBattleEnemyActor* SharedHost =
+		World->SpawnActor<AWacomBattleEnemyActor>();
+	if (!TestNotNull(TEXT("Shared Host"), SharedHost))
+	{
+		Path->Destroy();
+		Source->Destroy();
+		Target->Destroy();
+		return false;
+	}
+	SharedHost->EnemyDefinition = Enemy;
+
+	auto AddSharedBinding =
+		[SharedHost](AWacomRunMapNodeAnchorActor& Anchor)
+		{
+			UWacomRunEncounterSceneBindingComponent* Binding =
+				NewObject<UWacomRunEncounterSceneBindingComponent>(
+					&Anchor, NAME_None, RF_Transient);
+			Anchor.AddInstanceComponent(Binding);
+			Binding->RegisterComponent();
+			FWacomBattleSceneEnemyHostSlot& SceneSlot =
+				Binding->SceneEnemyHostSlots.AddDefaulted_GetRef();
+			SceneSlot.EnemySlotId = TEXT("Enemy");
+			SceneSlot.SceneEnemyHost = SharedHost;
+			return Binding;
+		};
+	UWacomRunEncounterSceneBindingComponent* SourceBinding =
+		AddSharedBinding(*Source);
+	UWacomRunEncounterSceneBindingComponent* TargetBinding =
+		AddSharedBinding(*Target);
+
+	FWacomRunExplorationPresentationAutomationTestView Registry;
+	Registry.ResetRegistry(Floor->FloorId);
+	TestTrue(TEXT("Registers path"), Registry.RegisterPath(*Path));
+	TestTrue(TEXT("Registers source"), Registry.RegisterNodeAnchor(*Source));
+	TestTrue(TEXT("Registers target"), Registry.RegisterNodeAnchor(*Target));
+	TestTrue(TEXT("Registers source Encounter binding"),
+		Registry.RegisterEncounterBinding(*SourceBinding));
+	TestTrue(TEXT("Registers target Encounter binding"),
+		Registry.RegisterEncounterBinding(*TargetBinding));
+	TestEqual(TEXT("A Scene Host cannot be owned by two Encounter nodes"),
+		Registry.ValidateRegistry(*Floor),
+		FName(TEXT("SceneEncounterHostSharedAcrossNodes")));
+
+	Path->Destroy();
+	Source->Destroy();
+	Target->Destroy();
+	SharedHost->Destroy();
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -101,7 +254,10 @@ bool FWacomRunCoordinatorPreflightAndCommitTest::RunTest(const FString& Paramete
 		*World, TEXT("Node.01"), FVector::ZeroVector);
 	AWacomRunMapNodeAnchorActor* Target = WacomRunCoordinatorSpec::SpawnAnchor(
 		*World, TEXT("Node.02"), FVector(100.0f, 0.0f, 0.0f));
-	AActor* ContentHost = World->SpawnActor<AActor>();
+	AWacomBattleEnemyActor* EncounterHost = nullptr;
+	UWacomRunEncounterSceneBindingComponent* EncounterBinding =
+		WacomRunCoordinatorSpec::AddEncounterBinding(
+			*World, *Target, Initialized, EncounterHost);
 
 	FWacomRunExplorationPresentationAutomationTestView Coordinator;
 	Coordinator.ResetRegistry(FloorId);
@@ -119,11 +275,11 @@ bool FWacomRunCoordinatorPreflightAndCommitTest::RunTest(const FString& Paramete
 	TestTrue(TEXT("Registers target"), Coordinator.RegisterNodeAnchor(*Target));
 	TestFalse(TEXT("Content node without typed host is rejected before rules"),
 		Coordinator.HandleBranchIntent(TEXT("Edge.01")));
-	TestEqual(TEXT("Missing host detail is explicit"),
+	TestEqual(TEXT("Missing Encounter binding detail is explicit"),
 		Coordinator.GetLastErrorDetail(),
-		FName(TEXT("TargetContentHostMissing")));
-	TestTrue(TEXT("Registers typed encounter host"), Coordinator.RegisterContentHost(
-		TEXT("Node.02"), EWacomMapNodeType::Encounter, *ContentHost));
+		FName(TEXT("TargetEncounterBindingMissing")));
+	TestTrue(TEXT("Registers typed Encounter binding"),
+		Coordinator.RegisterEncounterBinding(*EncounterBinding));
 	TestTrue(TEXT("Complete scene binding can begin"),
 		Coordinator.HandleBranchIntent(TEXT("Edge.01")));
 	TestTrue(TEXT("Coordinator owns active ticket"), Coordinator.HasActiveTraversal());
@@ -139,13 +295,26 @@ bool FWacomRunCoordinatorPreflightAndCommitTest::RunTest(const FString& Paramete
 	TestEqual(TEXT("Coordinator applied Begin and Complete versions"),
 		Coordinator.GetLastAppliedVersion(),
 		InitialVersion + 2);
+	TestEqual(TEXT("Encounter arrival broadcasts exactly once"),
+		Coordinator.GetArrivalRequestCount(), 1);
+	TestEqual(TEXT("Arrival carries committed NodeId"),
+		Coordinator.GetLastArrivalNodeId(), FName(TEXT("Node.02")));
+	TestEqual(TEXT("Arrival carries Encounter type"),
+		Coordinator.GetLastArrivalNodeType(),
+		EWacomMapNodeType::Encounter);
+	TestEqual(TEXT("Arrival carries committed applied version"),
+		Coordinator.GetLastArrivalAppliedVersion(),
+		Coordinator.GetLastAppliedVersion());
 
 	Coordinator.Shutdown();
 	Character->Destroy();
 	Path->Destroy();
 	Source->Destroy();
 	Target->Destroy();
-	ContentHost->Destroy();
+	if (EncounterHost)
+	{
+		EncounterHost->Destroy();
+	}
 	return true;
 }
 
@@ -175,16 +344,19 @@ bool FWacomRunCoordinatorTargetInvalidationCancelTest::RunTest(const FString& Pa
 		*World, TEXT("Node.01"), FVector::ZeroVector);
 	AWacomRunMapNodeAnchorActor* Target = WacomRunCoordinatorSpec::SpawnAnchor(
 		*World, TEXT("Node.02"), FVector(100.0f, 0.0f, 0.0f));
-	AActor* ContentHost = World->SpawnActor<AActor>();
+	AWacomBattleEnemyActor* EncounterHost = nullptr;
+	UWacomRunEncounterSceneBindingComponent* EncounterBinding =
+		WacomRunCoordinatorSpec::AddEncounterBinding(
+			*World, *Target, Initialized, EncounterHost);
 	FWacomRunExplorationPresentationAutomationTestView Coordinator;
 	Coordinator.ResetRegistry(FloorId);
 	Coordinator.RegisterPath(*Path);
 	Coordinator.RegisterNodeAnchor(*Source);
 	Coordinator.RegisterNodeAnchor(*Target);
-	Coordinator.RegisterContentHost(TEXT("Node.02"), EWacomMapNodeType::Encounter, *ContentHost);
+	Coordinator.RegisterEncounterBinding(*EncounterBinding);
 	TestTrue(TEXT("Coordinator initializes"), Coordinator.Initialize(*Initialized.Session, *Traversal));
 	TestTrue(TEXT("Traversal begins"), Coordinator.HandleBranchIntent(TEXT("Edge.01")));
-	Coordinator.UnregisterContentHost(*ContentHost);
+	Coordinator.UnregisterEncounterBinding(*EncounterBinding);
 	Traversal->HandleMoveInput(FVector2D(0.0f, 1.0f));
 	FWacomRunPathTraversalTestAccess::Tick(*Traversal, 1.5f);
 	TestFalse(TEXT("Invalid target causes ticket cancellation"), Coordinator.HasActiveTraversal());
@@ -200,7 +372,10 @@ bool FWacomRunCoordinatorTargetInvalidationCancelTest::RunTest(const FString& Pa
 	Path->Destroy();
 	Source->Destroy();
 	Target->Destroy();
-	ContentHost->Destroy();
+	if (EncounterHost)
+	{
+		EncounterHost->Destroy();
+	}
 	return true;
 }
 

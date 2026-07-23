@@ -9,7 +9,6 @@
 #include "InputCoreTypes.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 
-#include "Actors/BattleTriggerActor.h"
 #include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Camera/WacomFirstPersonViewStageReturnFlow.h"
 #include "Cards/CardDefinition.h"
@@ -19,6 +18,7 @@
 #include "Actors/WacomRunPathBranchTargetActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Components/WacomRunPathTraversalComponent.h"
 #include "Components/WacomRunWorldInteractionTargetBridgeComponent.h"
 #include "GameFramework/WacomBattleSceneInteractionRouter.h"
@@ -40,6 +40,8 @@
 #include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "Input/WacomInputContextCoordinatorSubsystem.h"
 #include "Map/WacomFloorMapDefinition.h"
+#include "Map/WacomJourneyDefinition.h"
+#include "Encounters/EncounterDefinition.h"
 #include "RunStateTypes.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
@@ -412,18 +414,6 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 }
 
 // ================ 战斗状态切换转发 ================
-
-void AWacomPlayerController::RequestEnterBattle(ABattleTriggerActor* Trigger)
-{
-	if (AWacomGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr)
-	{
-		GM->EnterBattle(Trigger);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[WacomPlayerController] RequestEnterBattle 时找不到 AWacomGameMode"));
-	}
-}
 
 void AWacomPlayerController::RequestExitBattle(EBattleOutcome Outcome)
 {
@@ -1484,6 +1474,15 @@ bool AWacomPlayerController::RefreshRunExplorationPresentationBinding()
 		{
 			return RejectRefresh(TEXT("SceneNodeAnchorRegistrationFailed"));
 		}
+		TInlineComponentArray<UWacomRunEncounterSceneBindingComponent*> EncounterBindings;
+		It->GetComponents(EncounterBindings);
+		for (UWacomRunEncounterSceneBindingComponent* Binding : EncounterBindings)
+		{
+			if (!Binding || !WorkingRegistry->RegisterEncounterBinding(*Binding))
+			{
+				return RejectRefresh(TEXT("SceneEncounterBindingRegistrationFailed"));
+			}
+		}
 	}
 	for (TActorIterator<AWacomRunPathBranchTargetActor> It(GetWorld()); It; ++It)
 	{
@@ -1572,6 +1571,9 @@ bool AWacomPlayerController::RefreshRunExplorationPresentationBinding()
 	RunExplorationPresentationCoordinator->OnRouteChoiceStateChangedNative().AddUObject(
 		this,
 		&AWacomPlayerController::HandleRunRouteChoiceStateChanged);
+	RunExplorationPresentationCoordinator->OnNodeContentPresentationRequestedNative().AddUObject(
+		this,
+		&AWacomPlayerController::HandleRunNodeContentArrival);
 
 	RunPathBranchSelectionController =
 		MakeShared<FWacomRunPathBranchSelectionController>();
@@ -1618,6 +1620,7 @@ void AWacomPlayerController::TeardownRunExplorationPresentationBinding()
 	if (RunExplorationPresentationCoordinator)
 	{
 		RunExplorationPresentationCoordinator->OnRouteChoiceStateChangedNative().RemoveAll(this);
+		RunExplorationPresentationCoordinator->OnNodeContentPresentationRequestedNative().RemoveAll(this);
 		RunExplorationPresentationCoordinator->Shutdown();
 		RunExplorationPresentationCoordinator.Reset();
 	}
@@ -1719,8 +1722,13 @@ void AWacomPlayerController::CancelRunMapScreenOpenRequest(
 
 void AWacomPlayerController::HandleRunPathBranchRequested(const FName EdgeId)
 {
-	if (!RunExplorationPresentationCoordinator
-		|| !RunExplorationPresentationCoordinator->HandleBranchIntent(EdgeId))
+	if (RunExplorationPresentationCoordinator
+		&& RunExplorationPresentationCoordinator->HandleBranchIntent(EdgeId))
+	{
+		ClearCurrentEncounterRetry();
+		return;
+	}
+	else
 	{
 		const FName Detail = RunExplorationPresentationCoordinator
 			? RunExplorationPresentationCoordinator->GetLastErrorDetail()
@@ -1741,6 +1749,7 @@ void AWacomPlayerController::HandleRunPathAnchoredForwardIntent()
 	switch (RunExplorationPresentationCoordinator->HandleForwardIntent())
 	{
 	case EWacomRunForwardIntentResult::Started:
+		ClearCurrentEncounterRetry();
 		break;
 	case EWacomRunForwardIntentResult::ChoiceRequired:
 		if (RunPathBranchSelectionController)
@@ -1787,6 +1796,160 @@ void AWacomPlayerController::HandleRunRouteChoiceStateChanged(
 	{
 		RunPathBranchSelectionController->ApplyRouteChoiceState(State);
 	}
+	RefreshInteractToast();
+}
+
+void AWacomPlayerController::HandleRunNodeContentArrival(
+	const FWacomRunNodeContentArrivalRequest& Request)
+{
+	if (Request.NodeType != EWacomMapNodeType::Encounter)
+	{
+		return;
+	}
+
+	UWacomRunEncounterSceneBindingComponent* Binding =
+		RunExplorationSceneBindingRegistry
+			? RunExplorationSceneBindingRegistry->FindEncounterBinding(Request.Node.NodeId)
+			: nullptr;
+	if (Binding && TryRestoreEncounterRetryForArrival(Request.Node, *Binding))
+	{
+		return;
+	}
+	if (!Binding || !TryEnterCurrentEncounter(Request.Node, *Binding, false))
+	{
+		if (Binding)
+		{
+			ArmCurrentEncounterRetry(
+				Request.Node,
+				*Binding,
+				TEXT("AutomaticBattleEntryFailed"));
+		}
+		if (UWacomAppToastSubsystem* Toast = ResolveAppToastSubsystem())
+		{
+			Toast->ShowWarning(
+				LOCTEXT("AutomaticBattleEntryFailed",
+					"战斗未能启动，按 E 重试"));
+		}
+	}
+}
+
+bool AWacomPlayerController::TryEnterCurrentEncounter(
+	const FWacomMapNodeHandle& Node,
+	UWacomRunEncounterSceneBindingComponent& Binding,
+	const bool bFromRetry)
+{
+	const UEncounterDefinition* EncounterDefinition = ResolveEncounterDefinition(Node);
+	AWacomGameMode* GameMode =
+		GetWorld() ? GetWorld()->GetAuthGameMode<AWacomGameMode>() : nullptr;
+	if (!EncounterDefinition || !GameMode)
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerController] Encounter 开战请求缺少定义或 GameMode。Node=%s/%s Retry=%s"),
+			*Node.FloorId.ToString(),
+			*Node.NodeId.ToString(),
+			bFromRetry ? TEXT("true") : TEXT("false"));
+		return false;
+	}
+
+	const FWacomStatus Result =
+		GameMode->TryEnterBattle(Node, *EncounterDefinition, Binding);
+	if (!Result.IsOk())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[WacomPlayerController] Encounter 开战被拒绝。Node=%s/%s Retry=%s Detail=%s"),
+			*Node.FloorId.ToString(),
+			*Node.NodeId.ToString(),
+			bFromRetry ? TEXT("true") : TEXT("false"),
+			*Result.Detail.ToString());
+		return false;
+	}
+
+	EncounterNodesRequiringManualRetry.Remove(Node);
+	ClearCurrentEncounterRetry();
+	return true;
+}
+
+const UEncounterDefinition* AWacomPlayerController::ResolveEncounterDefinition(
+	const FWacomMapNodeHandle& Node) const
+{
+	const UWacomJourneyDefinition* Journey = RunSession
+		? RunSession->GetRunState().ExplorationState.JourneyDefinition
+		: nullptr;
+	const UWacomFloorMapDefinition* Floor =
+		Journey ? Journey->FindFloor(Node.FloorId) : nullptr;
+	const FWacomMapNodeDefinition* Definition =
+		Floor ? Floor->FindNode(Node.NodeId) : nullptr;
+	return Definition && Definition->NodeType == EWacomMapNodeType::Encounter
+		? Definition->Content.Encounter.EncounterDefinition
+		: nullptr;
+}
+
+bool AWacomPlayerController::TryRestoreEncounterRetryForArrival(
+	const FWacomMapNodeHandle& Node,
+	UWacomRunEncounterSceneBindingComponent& Binding)
+{
+	if (!RunSession || !EncounterNodesRequiringManualRetry.Contains(Node))
+	{
+		return false;
+	}
+
+	const FRunExplorationSnapshot Snapshot = RunSession->BuildExplorationSnapshot();
+	if (Snapshot.Outcome != ERunOutcome::InProgress
+		|| Snapshot.CurrentNode != Node
+		|| Snapshot.ActiveActivityKind != ERunExplorationActivityKind::None)
+	{
+		return false;
+	}
+
+	PendingEncounterRetryNode = Node;
+	PendingEncounterRetryBinding = &Binding;
+	PendingEncounterRetryReason = TEXT("ManualRetryRequiredAfterArrival");
+	RefreshInteractToast();
+	return true;
+}
+
+bool AWacomPlayerController::HasCurrentEncounterRetry() const
+{
+	if (!RunSession
+		|| !PendingEncounterRetryNode.IsValid()
+		|| !PendingEncounterRetryBinding.IsValid())
+	{
+		return false;
+	}
+	const FRunExplorationSnapshot Snapshot = RunSession->BuildExplorationSnapshot();
+	if (Snapshot.Outcome != ERunOutcome::InProgress
+		|| Snapshot.CurrentNode != PendingEncounterRetryNode
+		|| Snapshot.ActiveActivityKind != ERunExplorationActivityKind::None)
+	{
+		return false;
+	}
+	const FRunMapNodeSnapshot* Node = Snapshot.Nodes.FindByPredicate(
+		[this](const FRunMapNodeSnapshot& Candidate)
+		{
+			return Candidate.Handle == PendingEncounterRetryNode;
+		});
+	return Node
+		&& Node->NodeType == EWacomMapNodeType::Encounter
+		&& Node->Lifecycle == ERunMapNodeLifecycle::Visited;
+}
+
+void AWacomPlayerController::ArmCurrentEncounterRetry(
+	const FWacomMapNodeHandle& Node,
+	UWacomRunEncounterSceneBindingComponent& Binding,
+	const FName Reason)
+{
+	EncounterNodesRequiringManualRetry.Add(Node);
+	PendingEncounterRetryNode = Node;
+	PendingEncounterRetryBinding = &Binding;
+	PendingEncounterRetryReason = Reason;
+	RefreshInteractToast();
+}
+
+void AWacomPlayerController::ClearCurrentEncounterRetry()
+{
+	PendingEncounterRetryNode = {};
+	PendingEncounterRetryBinding.Reset();
+	PendingEncounterRetryReason = NAME_None;
 	RefreshInteractToast();
 }
 
@@ -2237,16 +2400,6 @@ void AWacomPlayerController::UnregisterCandidateInteractable(AActor* Interactabl
 	}
 }
 
-void AWacomPlayerController::RegisterCandidateTrigger(ABattleTriggerActor* Trigger)
-{
-	RegisterCandidateInteractable(Trigger);
-}
-
-void AWacomPlayerController::UnregisterCandidateTrigger(ABattleTriggerActor* Trigger)
-{
-	UnregisterCandidateInteractable(Trigger);
-}
-
 AActor* AWacomPlayerController::PickClosestInteractable() const
 {
 	APawn* OwnedPawn = GetPawn();
@@ -2284,6 +2437,10 @@ AActor* AWacomPlayerController::PickClosestInteractable() const
 
 FText AWacomPlayerController::BuildCurrentInteractPrompt() const
 {
+	if (HasCurrentEncounterRetry())
+	{
+		return LOCTEXT("EncounterRetryPrompt", "按 E 重新挑战");
+	}
 	if (RunPathBranchSelectionController)
 	{
 		const FText RouteChoicePrompt =
@@ -2347,6 +2504,25 @@ void AWacomPlayerController::TryInteractFromConsole()
 {
 	if (!CanRouteRunScenePointerInput())
 	{
+		return;
+	}
+	if (HasCurrentEncounterRetry())
+	{
+		UWacomRunEncounterSceneBindingComponent* Binding =
+			PendingEncounterRetryBinding.Get();
+		if (Binding
+			&& !TryEnterCurrentEncounter(
+				PendingEncounterRetryNode,
+				*Binding,
+				true))
+		{
+			if (UWacomAppToastSubsystem* Toast = ResolveAppToastSubsystem())
+			{
+				Toast->ShowWarning(
+					LOCTEXT("EncounterRetryFailed",
+						"战斗未能启动，按 E 重试"));
+			}
+		}
 		return;
 	}
 	if (RunPathBranchSelectionController

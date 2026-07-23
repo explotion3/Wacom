@@ -136,13 +136,6 @@ namespace
 		return Summary;
 	}
 
-	FWacomMapNodeHandle ResolveEncounterProgressNode(const FRunState& State)
-	{
-		return FWacomMapNodeHandle{
-			State.ExplorationState.CurrentFloorId,
-			State.ExplorationState.CurrentNodeId };
-	}
-
 	ERunUiSnapshotDirtyFlags operator|(
 		ERunUiSnapshotDirtyFlags A,
 		ERunUiSnapshotDirtyFlags B)
@@ -196,11 +189,6 @@ namespace
 		// 原型内容规则：暮色引虫灯默认进入备战区，但仍作为 A 类容器贡献通量容量。
 		// 后续若类似规则增多，应抽成 Card/Character 数据字段，而不是继续扩硬编码列表。
 		return Card && Card->CardId == FName(TEXT("MuseiYinchongdeng"));
-	}
-
-	FName GetRunBattleEncounterId(FName TriggerPersistentId)
-	{
-		return TriggerPersistentId.IsNone() ? FName(TEXT("Encounter")) : TriggerPersistentId;
 	}
 
 	bool IsFluxContentCardDefinition(const UCardDefinition* Card)
@@ -1039,7 +1027,10 @@ FRunExplorationResolution URunSession::ResolveExplorationCommand(
 
 // ================ 战斗联动 ================
 
-bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleInitParams& OutParams) const
+bool URunSession::BuildInitParamsForBattle(
+	const FWacomMapNodeHandle& MapNodeHandle,
+	const FName EncounterDefinitionId,
+	FBattleInitParams& OutParams) const
 {
 	if (RunState.Outcome == ERunOutcome::Succeeded)
 	{
@@ -1050,9 +1041,15 @@ bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleIni
 		UE_LOG(LogTemp, Warning, TEXT("[RunSession] BuildInitParamsForBattle: RunState.Character 为空"));
 		return false;
 	}
+	if (!MapNodeHandle.IsValid() || EncounterDefinitionId.IsNone())
+	{
+		UE_LOG(LogTemp, Warning,
+			TEXT("[RunSession] BuildInitParamsForBattle: MapNodeHandle 或 EncounterDefinitionId 无效"));
+		return false;
+	}
 
 	OutParams.Character  = RunState.Character;
-	OutParams.EncounterId = GetRunBattleEncounterId(TriggerPersistentId);
+	OutParams.EncounterId = EncounterDefinitionId;
 	OutParams.RandomSeed = RunState.BattleSeed;
 
 	// 阈值常量从 RunState 灌入战内，而不是战内硬编码。
@@ -1099,56 +1096,28 @@ bool URunSession::BuildInitParamsForBattle(FName TriggerPersistentId, FBattleIni
 		}
 	}
 
-	// 撤离重入：灌入持久化破坏部位（如果该 Trigger 上次撤离时有记录）。
+	// 撤离重入：只按调用方显式传入的节点身份读取进度。
 	OutParams.PreDestroyedParts.Reset();
-	if (!TriggerPersistentId.IsNone())
+	if (const FBattleProgressSnapshot* Progress = RunState.BattleProgress.Find(MapNodeHandle))
 	{
-		const FWacomMapNodeHandle ProgressNode = ResolveEncounterProgressNode(RunState);
-		if (const FBattleProgressSnapshot* Progress = RunState.BattleProgress.Find(ProgressNode))
+		if (Progress->DestroyedPartKeys.Num() > 0)
 		{
-			if (Progress->DestroyedPartKeys.Num() > 0)
+			OutParams.PreDestroyedParts.Reserve(Progress->DestroyedPartKeys.Num());
+			for (const FBattleEnemyPartKey& DestroyedPartKey : Progress->DestroyedPartKeys)
 			{
-				OutParams.PreDestroyedParts.Reserve(Progress->DestroyedPartKeys.Num());
-				for (const FBattleEnemyPartKey& DestroyedPartKey : Progress->DestroyedPartKeys)
+				if (DestroyedPartKey.IsValidKey())
 				{
-					if (DestroyedPartKey.IsValidKey())
-					{
-						OutParams.PreDestroyedParts.AddUnique(
-							FBattlePartSlotIdentity::FromEnemyPartKey(DestroyedPartKey));
-					}
+					OutParams.PreDestroyedParts.AddUnique(
+						FBattlePartSlotIdentity::FromEnemyPartKey(DestroyedPartKey));
 				}
 			}
-			else if (Progress->DestroyedParts.Num() > 0)
-			{
-				OutParams.PreDestroyedParts = Progress->DestroyedParts;
-			}
+		}
+		else if (Progress->DestroyedParts.Num() > 0)
+		{
+			OutParams.PreDestroyedParts = Progress->DestroyedParts;
 		}
 	}
 	return true;
-}
-
-// ================ 场景状态 ================
-
-void URunSession::MarkTriggerDestroyed(FName PersistentId)
-{
-	if (RunState.Outcome == ERunOutcome::Succeeded)
-	{
-		return;
-	}
-	if (PersistentId.IsNone())
-	{
-		UE_LOG(LogTemp, Warning,
-			TEXT("[RunSession] MarkTriggerDestroyed 收到 NAME_None，忽略"));
-		return;
-	}
-	RunState.DestroyedTriggerIds.Add(PersistentId);
-	NotifyRunStateChanged();
-}
-
-bool URunSession::IsTriggerDestroyed(FName PersistentId) const
-{
-	if (PersistentId.IsNone()) { return false; }
-	return RunState.DestroyedTriggerIds.Contains(PersistentId);
 }
 
 void URunSession::SetPlayerTransform(const FTransform& InTransform)
@@ -1239,10 +1208,9 @@ bool URunSession::LoadFromSlot(const FString& SlotName)
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[RunSession] LoadFromSlot(%s) OK: Character=%s, Triggers=%d, HasPlayerTransform=%d"),
+		TEXT("[RunSession] LoadFromSlot(%s) OK: Character=%s, HasPlayerTransform=%d"),
 		*SlotName,
 		*GetNameSafe(RunState.Character),
-		RunState.DestroyedTriggerIds.Num(),
 		RunState.bHasPlayerTransform ? 1 : 0);
 	return true;
 }

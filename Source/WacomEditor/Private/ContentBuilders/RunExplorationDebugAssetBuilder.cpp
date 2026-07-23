@@ -2,7 +2,8 @@
 
 #include "ContentBuilders/RunExplorationDebugAssetBuilder.h"
 
-#include "Actors/BattleTriggerActor.h"
+#include "Actors/WacomFirstPersonViewpointActor.h"
+#include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomRunEventTriggerActor.h"
 #include "Actors/WacomRunFloorSceneDescriptorActor.h"
 #include "Actors/WacomRunKeyChestActor.h"
@@ -14,6 +15,7 @@
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Characters/CharacterDefinition.h"
 #include "Components/SplineComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
 #include "ContentBuilders/ContentBuilderHelpers.h"
 #include "Engine/Blueprint.h"
@@ -50,6 +52,8 @@ namespace
 		TEXT("/Game/Wacom/Debug/GameModes/GM_WacomRunDebug");
 	constexpr const TCHAR* DebugMapPackagePath =
 		TEXT("/Game/Wacom/Maps/Debug/L_RunExploration_Debug");
+	constexpr const TCHAR* DebugSnakeHostClassPath =
+		TEXT("/Game/Wacom/Core/Enemy/BP_SnakeHost_Debug.BP_SnakeHost_Debug_C");
 	const FName DebugGeneratedTag(TEXT("Wacom.Generated.RunExploration"));
 
 	struct FSharedBlueprintClasses
@@ -63,6 +67,12 @@ namespace
 	{
 		FTransform ActorTransform = FTransform::Identity;
 		TArray<FVector> SplinePoints;
+	};
+
+	struct FExistingEncounterPresentation
+	{
+		TArray<FWacomBattleSceneEnemyHostSlot> SceneEnemyHostSlots;
+		TObjectPtr<AWacomFirstPersonViewpointActor> BattleEntryViewpoint = nullptr;
 	};
 
 	FString MapDataRoot()
@@ -184,13 +194,6 @@ namespace
 	{
 		switch (Node.NodeType)
 		{
-		case EWacomMapNodeType::Encounter:
-			return FindActor<ABattleTriggerActor>(World,
-				[&Node](const ABattleTriggerActor& Actor)
-				{
-					return Actor.EncounterDefinition ==
-						Node.Content.Encounter.EncounterDefinition;
-				});
 		case EWacomMapNodeType::RunEvent:
 			return FindActor<AWacomRunEventTriggerActor>(World,
 				[&Node](const AWacomRunEventTriggerActor& Actor)
@@ -234,14 +237,6 @@ namespace
 		AActor* Host = nullptr;
 		switch (Node.NodeType)
 		{
-		case EWacomMapNodeType::Encounter:
-			if (ABattleTriggerActor* Actor = Cast<ABattleTriggerActor>(
-				World.SpawnActor<AActor>(ABattleTriggerActor::StaticClass(), Transform)))
-			{
-				Actor->EncounterDefinition = Node.Content.Encounter.EncounterDefinition;
-				Host = Actor;
-			}
-			break;
 		case EWacomMapNodeType::RunEvent:
 			if (AWacomRunEventTriggerActor* Actor = Cast<AWacomRunEventTriggerActor>(
 				World.SpawnActor<AActor>(AWacomRunEventTriggerActor::StaticClass(), Transform)))
@@ -339,6 +334,89 @@ namespace
 		return Descriptor;
 	}
 
+	bool EnsureDebugEncounterPresentation(
+		UWorld& World,
+		const FWacomMapNodeDefinition& Node,
+		AWacomRunMapNodeAnchorActor& Anchor,
+		UWacomRunEncounterSceneBindingComponent& Binding)
+	{
+		const UEncounterDefinition* EncounterDefinition =
+			Node.Content.Encounter.EncounterDefinition;
+		if (!EncounterDefinition)
+		{
+			return false;
+		}
+		if (Binding.ValidateForEncounter(*EncounterDefinition).IsOk())
+		{
+			return true;
+		}
+		if (EncounterDefinition->EnemySlots.Num() != 1)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder] Debug fallback supports exactly one Encounter enemy slot: NodeId=%s"),
+				*Node.NodeId.ToString());
+			return false;
+		}
+
+		UClass* SnakeHostClass = LoadObject<UClass>(
+			nullptr, DebugSnakeHostClassPath);
+		if (!SnakeHostClass
+			|| !SnakeHostClass->IsChildOf(AWacomBattleEnemyActor::StaticClass()))
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[RunExplorationDebugAssetBuilder] Missing Debug Snake Host class: %s"),
+				DebugSnakeHostClassPath);
+			return false;
+		}
+
+		const FEncounterEnemySlot& RuleSlot =
+			EncounterDefinition->EnemySlots[0];
+		const FVector Forward = Anchor.GetActorForwardVector();
+		const FVector HostLocation =
+			Anchor.GetActorLocation() + Forward * 620.0 + FVector(0.0, 0.0, 70.0);
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AWacomBattleEnemyActor* Host = Cast<AWacomBattleEnemyActor>(
+			World.SpawnActor<AActor>(
+				SnakeHostClass,
+				FTransform(
+					(Anchor.GetActorLocation() - HostLocation).Rotation(),
+					HostLocation),
+				SpawnParams));
+		AWacomFirstPersonViewpointActor* Viewpoint =
+			World.SpawnActor<AWacomFirstPersonViewpointActor>(
+				AWacomFirstPersonViewpointActor::StaticClass(),
+				FTransform(
+					(HostLocation - Anchor.GetActorLocation()).Rotation(),
+					Anchor.GetActorLocation() - Forward * 120.0
+						+ FVector(0.0, 0.0, 110.0)),
+				SpawnParams);
+		if (!Host || !Viewpoint)
+		{
+			if (Host)
+			{
+				World.DestroyActor(Host);
+			}
+			if (Viewpoint)
+			{
+				World.DestroyActor(Viewpoint);
+			}
+			return false;
+		}
+
+		Host->EnemySlotId = RuleSlot.EnemySlotId;
+		Host->SetActorLabel(TEXT("Enemy_Battle_Snake"));
+		Viewpoint->SetActorLabel(TEXT("View_Battle_Snake"));
+		Binding.SceneEnemyHostSlots.Reset();
+		FWacomBattleSceneEnemyHostSlot& HostSlot =
+			Binding.SceneEnemyHostSlots.AddDefaulted_GetRef();
+		HostSlot.EnemySlotId = RuleSlot.EnemySlotId;
+		HostSlot.SceneEnemyHost = Host;
+		Binding.BattleEntryViewpoint = Viewpoint;
+		return Binding.ValidateForEncounter(*EncounterDefinition).IsOk();
+	}
+
 	bool ConfigureDebugWorld(
 		UWorld& World,
 		UWacomFloorMapDefinition& Floor,
@@ -346,6 +424,7 @@ namespace
 		const FSharedBlueprintClasses& SharedClasses)
 	{
 		TMap<FName, FTransform> ExistingAnchorTransforms;
+		TMap<FName, FExistingEncounterPresentation> ExistingEncounters;
 		TMap<FName, FExistingPathPresentation> ExistingPaths;
 		TMap<FName, FTransform> ExistingBranchTransforms;
 		TArray<AActor*> GeneratedActors;
@@ -361,6 +440,14 @@ namespace
 				Cast<AWacomRunMapNodeAnchorActor>(Actor))
 			{
 				ExistingAnchorTransforms.Add(Anchor->NodeId, Anchor->GetActorTransform());
+				if (const UWacomRunEncounterSceneBindingComponent* Binding =
+					Anchor->FindComponentByClass<UWacomRunEncounterSceneBindingComponent>())
+				{
+					FExistingEncounterPresentation& Existing =
+						ExistingEncounters.Add(Anchor->NodeId);
+					Existing.SceneEnemyHostSlots = Binding->SceneEnemyHostSlots;
+					Existing.BattleEntryViewpoint = Binding->BattleEntryViewpoint;
+				}
 			}
 			else if (const AWacomRunPathSegmentActor* Path =
 				Cast<AWacomRunPathSegmentActor>(Actor))
@@ -415,12 +502,44 @@ namespace
 			Anchor->Tags.AddUnique(DebugGeneratedTag);
 			Anchor->SetActorLabel(FString::Printf(
 				TEXT("RunNode_%s"), *Node.NodeId.ToString()));
+			if (Node.NodeType == EWacomMapNodeType::Encounter)
+			{
+				UWacomRunEncounterSceneBindingComponent* Binding =
+					NewObject<UWacomRunEncounterSceneBindingComponent>(
+						Anchor, TEXT("EncounterSceneBinding"), RF_Transactional);
+				if (!Binding)
+				{
+					return false;
+				}
+				Binding->CreationMethod = EComponentCreationMethod::Instance;
+				if (const FExistingEncounterPresentation* Existing =
+					ExistingEncounters.Find(Node.NodeId))
+				{
+					Binding->SceneEnemyHostSlots = Existing->SceneEnemyHostSlots;
+					Binding->BattleEntryViewpoint = Existing->BattleEntryViewpoint;
+				}
+				Anchor->AddInstanceComponent(Binding);
+				Binding->OnComponentCreated();
+				Binding->RegisterComponent();
+				if (!EnsureDebugEncounterPresentation(
+					World, Node, *Anchor, *Binding))
+				{
+					UE_LOG(LogTemp, Error,
+						TEXT("[RunExplorationDebugAssetBuilder] Encounter Scene Binding is invalid: NodeId=%s"),
+						*Node.NodeId.ToString());
+					return false;
+				}
+			}
 			Anchors.Add(Node.NodeId, Anchor);
 		}
 
 		for (const FWacomMapNodeDefinition& Node : Floor.Nodes)
 		{
 			if (Node.NodeType == EWacomMapNodeType::Navigation)
+			{
+				continue;
+			}
+			if (Node.NodeType == EWacomMapNodeType::Encounter)
 			{
 				continue;
 			}

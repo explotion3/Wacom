@@ -9,6 +9,7 @@
 #include "Actors/WacomRunPathBranchTargetActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Components/SplineComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
 #include "Engine/Blueprint.h"
 #include "Engine/Level.h"
@@ -50,6 +51,7 @@ namespace WacomRunLevelAuthoringBaselineAssetContract
 		TMap<FName, FActorRecord> Paths;
 		TMap<FName, FActorRecord> Branches;
 		TSet<FName> ContentHostNodeIds;
+		TSet<FName> EncounterBindingNodeIds;
 		int32 GeneratedRunActorCount = 0;
 	};
 
@@ -146,6 +148,18 @@ namespace WacomRunLevelAuthoringBaselineAssetContract
 				if (Binding && !Binding->NodeId.IsNone())
 				{
 					Record.ContentHostNodeIds.Add(Binding->NodeId);
+				}
+			}
+			if (const AWacomRunMapNodeAnchorActor* EncounterAnchor =
+				Cast<AWacomRunMapNodeAnchorActor>(Actor))
+			{
+				TInlineComponentArray<
+					UWacomRunEncounterSceneBindingComponent*> EncounterBindings;
+				Actor->GetComponents(EncounterBindings);
+				if (!EncounterBindings.IsEmpty())
+				{
+					Record.EncounterBindingNodeIds.Add(
+						EncounterAnchor->NodeId);
 				}
 			}
 		}
@@ -280,7 +294,9 @@ bool FWacomRunLevelAuthoringBaselineAssetContractSpec::RunTest(
 	TestEqual(TEXT("Main Path identity count"), MainRecord.Paths.Num(), 7);
 	TestEqual(TEXT("Main Branch identity count"), MainRecord.Branches.Num(), 3);
 	TestEqual(TEXT("Main content host identity count"),
-		MainRecord.ContentHostNodeIds.Num(), 6);
+		MainRecord.ContentHostNodeIds.Num(), 5);
+	TestEqual(TEXT("Main Encounter binding identity count"),
+		MainRecord.EncounterBindingNodeIds.Num(), 1);
 	const TMap<FString, FGuid> BaselineGuids = BuildFormalMapBaselineGuids();
 	TestEqual(TEXT("Formal baseline GUID contract count"), BaselineGuids.Num(), 18);
 	VerifyFormalBaselineGuids(
@@ -321,6 +337,16 @@ bool FWacomRunLevelAuthoringBaselineAssetContractSpec::RunTest(
 	}
 	TestTrue(TEXT("Content host identities are preserved"),
 		bContentHostIdentitiesMatch);
+	bool bEncounterBindingIdentitiesMatch =
+		MainRecord.EncounterBindingNodeIds.Num()
+			== DebugRecord.EncounterBindingNodeIds.Num();
+	for (const FName NodeId : MainRecord.EncounterBindingNodeIds)
+	{
+		bEncounterBindingIdentitiesMatch &=
+			DebugRecord.EncounterBindingNodeIds.Contains(NodeId);
+	}
+	TestTrue(TEXT("Encounter binding identities are preserved"),
+		bEncounterBindingIdentitiesMatch);
 
 	// Debug map 与正式图共享逻辑身份和制作合同，但允许独立摆放调试几何。
 	// 端点、方向和绑定合法性由 Run scene validator/path tests 负责。

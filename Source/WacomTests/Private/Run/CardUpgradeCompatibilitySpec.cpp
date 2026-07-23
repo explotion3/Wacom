@@ -118,7 +118,10 @@ bool FWacomRunCardUpgradeIdentitySaveAndBattleSpec::RunTest(const FString& /*Par
 		Fixture.Run->ValidateRunWorldCardInteraction(WorldRequest).bCanSubmit);
 
 	FBattleInitParams BattleParams;
-	TestTrue(TEXT("Battle params build"), Fixture.Run->BuildInitParamsForBattle(TEXT("Upgrade.Compatibility.Encounter"), BattleParams));
+	TestTrue(TEXT("Battle params build"), Fixture.Run->BuildInitParamsForBattle(
+		Fixture.Run->BuildExplorationSnapshot().CurrentNode,
+		TEXT("Upgrade.Compatibility.Encounter"),
+		BattleParams));
 	TestEqual(TEXT("Battle receives one upgraded deck entry"), BattleParams.BattleDeckEntries.Num(), 1);
 	if (BattleParams.BattleDeckEntries.Num() == 1)
 	{

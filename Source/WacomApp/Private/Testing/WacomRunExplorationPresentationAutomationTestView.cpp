@@ -12,6 +12,21 @@ struct FWacomRunExplorationPresentationAutomationTestView::FImpl
 {
 	FWacomRunSceneBindingRegistry Registry;
 	FWacomRunExplorationPresentationCoordinator Coordinator;
+	int32 ArrivalRequestCount = 0;
+	FWacomRunNodeContentArrivalRequest LastArrivalRequest;
+
+	void BindArrivalObserver()
+	{
+		Coordinator.OnNodeContentPresentationRequestedNative().AddRaw(
+			this, &FImpl::HandleArrival);
+	}
+
+	void HandleArrival(
+		const FWacomRunNodeContentArrivalRequest& Request)
+	{
+		++ArrivalRequestCount;
+		LastArrivalRequest = Request;
+	}
 };
 
 FWacomRunExplorationPresentationAutomationTestView::
@@ -48,6 +63,13 @@ bool FWacomRunExplorationPresentationAutomationTestView::RegisterContentHost(
 	return Impl->Registry.RegisterContentHost(NodeId, NodeType, Host);
 }
 
+bool FWacomRunExplorationPresentationAutomationTestView::
+	RegisterEncounterBinding(
+		UWacomRunEncounterSceneBindingComponent& Binding)
+{
+	return Impl->Registry.RegisterEncounterBinding(Binding);
+}
+
 void FWacomRunExplorationPresentationAutomationTestView::UnregisterNodeAnchor(
 	const AWacomRunMapNodeAnchorActor& Anchor)
 {
@@ -60,11 +82,31 @@ void FWacomRunExplorationPresentationAutomationTestView::UnregisterContentHost(
 	Impl->Registry.UnregisterContentHost(Host);
 }
 
+void FWacomRunExplorationPresentationAutomationTestView::
+	UnregisterEncounterBinding(
+		const UWacomRunEncounterSceneBindingComponent& Binding)
+{
+	Impl->Registry.UnregisterEncounterBinding(Binding);
+}
+
+FName FWacomRunExplorationPresentationAutomationTestView::ValidateRegistry(
+	const UWacomFloorMapDefinition& FloorDefinition) const
+{
+	const FWacomStatus Status =
+		Impl->Registry.ValidateComplete(FloorDefinition);
+	return Status.IsOk() ? NAME_None : Status.Detail;
+}
+
 bool FWacomRunExplorationPresentationAutomationTestView::Initialize(
 	URunSession& Session,
 	UWacomRunPathTraversalComponent& TraversalComponent)
 {
-	return Impl->Coordinator.Initialize(Session, TraversalComponent, Impl->Registry);
+	if (!Impl->Coordinator.Initialize(Session, TraversalComponent, Impl->Registry))
+	{
+		return false;
+	}
+	Impl->BindArrivalObserver();
+	return true;
 }
 
 void FWacomRunExplorationPresentationAutomationTestView::Shutdown()
@@ -109,6 +151,30 @@ bool FWacomRunExplorationPresentationAutomationTestView::HasActiveTraversal() co
 int32 FWacomRunExplorationPresentationAutomationTestView::GetLastAppliedVersion() const
 {
 	return Impl->Coordinator.GetLastAppliedVersion();
+}
+
+int32 FWacomRunExplorationPresentationAutomationTestView::
+	GetArrivalRequestCount() const
+{
+	return Impl->ArrivalRequestCount;
+}
+
+FName FWacomRunExplorationPresentationAutomationTestView::
+	GetLastArrivalNodeId() const
+{
+	return Impl->LastArrivalRequest.Node.NodeId;
+}
+
+EWacomMapNodeType FWacomRunExplorationPresentationAutomationTestView::
+	GetLastArrivalNodeType() const
+{
+	return Impl->LastArrivalRequest.NodeType;
+}
+
+int32 FWacomRunExplorationPresentationAutomationTestView::
+	GetLastArrivalAppliedVersion() const
+{
+	return Impl->LastArrivalRequest.AppliedVersion;
 }
 
 FName FWacomRunExplorationPresentationAutomationTestView::GetLastErrorDetail() const

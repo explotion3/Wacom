@@ -393,7 +393,10 @@ bool FWacomBattleTargetIdentityRunProgressRestoresOnlyMatchingEnemySlotSpec::Run
 
 	FBattleInitParams ReentryParams;
 	const bool bBuildOk =
-		Run->BuildInitParamsForBattle(FName(TEXT("ProgressTrigger")), ReentryParams);
+		Run->BuildInitParamsForBattle(
+			Run->BuildExplorationSnapshot().CurrentNode,
+			FName(TEXT("ProgressTrigger")),
+			ReentryParams);
 	TestTrue(TEXT("Run builds reentry params"), bBuildOk);
 	TestEqual(TEXT("Run reentry EncounterId uses trigger id"),
 		ReentryParams.EncounterId,

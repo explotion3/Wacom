@@ -125,7 +125,7 @@ public:
 	 * 版本演进：
 	 *   v0 → v1: 保留位（首版默认结构，初始迁移占位）
 	 *   v1 → v2: 引入 Backpack/BattleDeck/BurdenZone/SpecialZones instance 列表
-	 *   v2 → v3: 移除 DefeatedEnemyAssetPaths；战斗入口完成状态只使用 DestroyedTriggerIds
+	 *   v2 → v3: 移除 DefeatedEnemyAssetPaths（旧 Trigger 完成投影不再受支持）
 	 *   v3 → v4: 引入独立于实体卡牌的 Run Credential 集合
 	 *   v4 → v5: 引入 Run Outcome 与独立 Journey 成功摘要
 	 */
@@ -191,14 +191,6 @@ public:
 	FRunCompletionSummarySaveEntry CompletionSummary;
 
 	// ---- 场景数据 ----
-
-	/**
-	 * 已被永久销毁的触发器 ID 列表。
-	 * SaveGame 里用 TArray 而不是 TSet，避免 FArchive 对 TSet 序列化的潜在兼容问题。
-	 * 内存里在 FRunState 做 TSet<FName>，拷贝时转换。
-	 */
-	UPROPERTY(SaveGame)
-	TArray<FName> DestroyedTriggerIds;
 
 	/**
 	 * 已获得的稳定 Run Credential ID。

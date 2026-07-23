@@ -5,7 +5,9 @@
 #include "Actors/WacomRunMapNodeAnchorActor.h"
 #include "Actors/WacomRunPathBranchTargetActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "GameFramework/Actor.h"
+#include "Encounters/EncounterDefinition.h"
 #include "Map/WacomFloorMapDefinition.h"
 
 namespace
@@ -23,6 +25,7 @@ void FWacomRunSceneBindingRegistry::Reset(const FName InFloorId)
 	AnchorsByNodeId.Reset();
 	BranchTargetsByEdgeId.Reset();
 	ContentHostsByNodeId.Reset();
+	EncounterBindingsByNodeId.Reset();
 }
 
 bool FWacomRunSceneBindingRegistry::RegisterPath(AWacomRunPathSegmentActor& Path)
@@ -66,6 +69,7 @@ FWacomStatus FWacomRunSceneBindingRegistry::ValidateComplete(
 
 	TSet<FName> ExpectedNodeIds;
 	TMap<FName, EWacomMapNodeType> ExpectedNodeTypes;
+	TSet<const AWacomBattleEnemyActor*> ClaimedEncounterHosts;
 	for (const FWacomMapNodeDefinition& Node : FloorDefinition.Nodes)
 	{
 		if (Node.NodeId.IsNone() || ExpectedNodeIds.Contains(Node.NodeId))
@@ -82,14 +86,54 @@ FWacomStatus FWacomRunSceneBindingRegistry::ValidateComplete(
 		}
 
 		const FContentHostBinding* Host = ContentHostsByNodeId.Find(Node.NodeId);
-		if (RequiresContentHost(Node.NodeType))
+		const TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent>* EncounterBinding =
+			EncounterBindingsByNodeId.Find(Node.NodeId);
+		if (Node.NodeType == EWacomMapNodeType::Encounter)
+		{
+			if (Host)
+			{
+				return FailIncompleteSceneBinding(TEXT("SceneEncounterStandaloneContentHostUnexpected"));
+			}
+			if (!EncounterBinding || !EncounterBinding->IsValid())
+			{
+				return FailIncompleteSceneBinding(TEXT("SceneEncounterBindingMissing"));
+			}
+			if (!Node.Content.Encounter.EncounterDefinition)
+			{
+				return FailIncompleteSceneBinding(TEXT("SceneEncounterDefinitionMissing"));
+			}
+			const FWacomStatus BindingStatus =
+				EncounterBinding->Get()->ValidateForEncounter(
+					*Node.Content.Encounter.EncounterDefinition);
+			if (!BindingStatus.IsOk())
+			{
+				return BindingStatus;
+			}
+			for (const FWacomBattleSceneEnemyHostSlot& Slot :
+				EncounterBinding->Get()->SceneEnemyHostSlots)
+			{
+				const AWacomBattleEnemyActor* SceneHost =
+					Slot.SceneEnemyHost.Get();
+				if (SceneHost && ClaimedEncounterHosts.Contains(SceneHost))
+				{
+					return FailIncompleteSceneBinding(
+						TEXT("SceneEncounterHostSharedAcrossNodes"));
+				}
+				ClaimedEncounterHosts.Add(SceneHost);
+			}
+		}
+		else if (RequiresStandaloneContentHost(Node.NodeType))
 		{
 			if (!Host || Host->NodeType != Node.NodeType || !Host->Host.IsValid())
 			{
 				return FailIncompleteSceneBinding(TEXT("SceneContentHostMissingOrMismatched"));
 			}
+			if (EncounterBinding)
+			{
+				return FailIncompleteSceneBinding(TEXT("SceneEncounterBindingUnexpected"));
+			}
 		}
-		else if (Host)
+		else if (Host || EncounterBinding)
 		{
 			return FailIncompleteSceneBinding(TEXT("SceneContentHostUnexpected"));
 		}
@@ -110,6 +154,17 @@ FWacomStatus FWacomRunSceneBindingRegistry::ValidateComplete(
 			|| !Pair.Value.Host.IsValid())
 		{
 			return FailIncompleteSceneBinding(TEXT("SceneContentHostUnexpected"));
+		}
+	}
+	for (const TPair<FName, TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent>>& Pair :
+		EncounterBindingsByNodeId)
+	{
+		const EWacomMapNodeType* ExpectedType = ExpectedNodeTypes.Find(Pair.Key);
+		if (!ExpectedType
+			|| *ExpectedType != EWacomMapNodeType::Encounter
+			|| !Pair.Value.IsValid())
+		{
+			return FailIncompleteSceneBinding(TEXT("SceneEncounterBindingUnexpected"));
 		}
 	}
 
@@ -176,7 +231,9 @@ bool FWacomRunSceneBindingRegistry::RegisterContentHost(
 	const EWacomMapNodeType NodeType,
 	AActor& Host)
 {
-	if (NodeId.IsNone() || !RequiresContentHost(NodeType) || ContentHostsByNodeId.Contains(NodeId))
+	if (NodeId.IsNone()
+		|| !RequiresStandaloneContentHost(NodeType)
+		|| ContentHostsByNodeId.Contains(NodeId))
 	{
 		return false;
 	}
@@ -184,6 +241,21 @@ bool FWacomRunSceneBindingRegistry::RegisterContentHost(
 	Binding.NodeType = NodeType;
 	Binding.Host = &Host;
 	ContentHostsByNodeId.Add(NodeId, Binding);
+	return true;
+}
+
+bool FWacomRunSceneBindingRegistry::RegisterEncounterBinding(
+	UWacomRunEncounterSceneBindingComponent& Binding)
+{
+	const AWacomRunMapNodeAnchorActor* Anchor =
+		Cast<AWacomRunMapNodeAnchorActor>(Binding.GetOwner());
+	if (!Anchor
+		|| Anchor->NodeId.IsNone()
+		|| EncounterBindingsByNodeId.Contains(Anchor->NodeId))
+	{
+		return false;
+	}
+	EncounterBindingsByNodeId.Add(Anchor->NodeId, &Binding);
 	return true;
 }
 
@@ -210,6 +282,18 @@ void FWacomRunSceneBindingRegistry::UnregisterContentHost(const AActor& Host)
 	for (auto It = ContentHostsByNodeId.CreateIterator(); It; ++It)
 	{
 		if (It.Value().Host.Get() == &Host)
+		{
+			It.RemoveCurrent();
+		}
+	}
+}
+
+void FWacomRunSceneBindingRegistry::UnregisterEncounterBinding(
+	const UWacomRunEncounterSceneBindingComponent& Binding)
+{
+	for (auto It = EncounterBindingsByNodeId.CreateIterator(); It; ++It)
+	{
+		if (It.Value().Get() == &Binding)
 		{
 			It.RemoveCurrent();
 		}
@@ -249,8 +333,14 @@ FWacomRunTraversalSceneBinding FWacomRunSceneBindingRegistry::PreflightTraversal
 		});
 	AWacomRunMapNodeAnchorActor* TargetAnchor = nullptr;
 	AActor* ContentHost = nullptr;
+	UWacomRunEncounterSceneBindingComponent* EncounterBinding = nullptr;
 	const FWacomStatus TargetStatus = TargetNode
-		? RevalidateTarget(Edge->TargetNode, TargetNode->NodeType, TargetAnchor, ContentHost)
+		? RevalidateTarget(
+			Edge->TargetNode,
+			TargetNode->NodeType,
+			TargetAnchor,
+			ContentHost,
+			EncounterBinding)
 		: FWacomStatus::Fail(EWacomError::NotFound, TEXT("TargetNodeSnapshotMissing"));
 	if (!TargetStatus.IsOk())
 	{
@@ -265,6 +355,7 @@ FWacomRunTraversalSceneBinding FWacomRunSceneBindingRegistry::PreflightTraversal
 	Result.SourceAnchor = SourceAnchor;
 	Result.TargetAnchor = TargetAnchor;
 	Result.ContentHost = ContentHost;
+	Result.EncounterBinding = EncounterBinding;
 	Result.CachedSourceTransform = SourceAnchor->GetViewTransform();
 	Result.CachedTargetTransform = TargetAnchor->GetViewTransform();
 	return Result;
@@ -274,10 +365,12 @@ FWacomStatus FWacomRunSceneBindingRegistry::RevalidateTarget(
 	const FWacomMapNodeHandle& TargetNode,
 	const EWacomMapNodeType TargetNodeType,
 	AWacomRunMapNodeAnchorActor*& OutAnchor,
-	AActor*& OutContentHost) const
+	AActor*& OutContentHost,
+	UWacomRunEncounterSceneBindingComponent*& OutEncounterBinding) const
 {
 	OutAnchor = nullptr;
 	OutContentHost = nullptr;
+	OutEncounterBinding = nullptr;
 	if (TargetNode.FloorId != FloorId)
 	{
 		return FWacomStatus::Fail(EWacomError::InvalidState, TEXT("SceneFloorMismatch"));
@@ -287,7 +380,14 @@ FWacomStatus FWacomRunSceneBindingRegistry::RevalidateTarget(
 	{
 		return FWacomStatus::Fail(EWacomError::NotFound, TEXT("TargetNodeAnchorMissing"));
 	}
-	if (!RequiresContentHost(TargetNodeType))
+	if (TargetNodeType == EWacomMapNodeType::Encounter)
+	{
+		OutEncounterBinding = FindEncounterBinding(TargetNode.NodeId);
+		return OutEncounterBinding
+			? FWacomStatus::Ok()
+			: FWacomStatus::Fail(EWacomError::NotFound, TEXT("TargetEncounterBindingMissing"));
+	}
+	if (!RequiresStandaloneContentHost(TargetNodeType))
 	{
 		return FWacomStatus::Ok();
 	}
@@ -303,6 +403,14 @@ FWacomStatus FWacomRunSceneBindingRegistry::RevalidateTarget(
 AWacomRunMapNodeAnchorActor* FWacomRunSceneBindingRegistry::FindNodeAnchor(const FName NodeId) const
 {
 	const TWeakObjectPtr<AWacomRunMapNodeAnchorActor>* Found = AnchorsByNodeId.Find(NodeId);
+	return Found ? Found->Get() : nullptr;
+}
+
+UWacomRunEncounterSceneBindingComponent*
+FWacomRunSceneBindingRegistry::FindEncounterBinding(const FName NodeId) const
+{
+	const TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent>* Found =
+		EncounterBindingsByNodeId.Find(NodeId);
 	return Found ? Found->Get() : nullptr;
 }
 
@@ -331,7 +439,9 @@ FWacomRunSceneBindingRegistry::GetBranchTargets() const
 	return Targets;
 }
 
-bool FWacomRunSceneBindingRegistry::RequiresContentHost(const EWacomMapNodeType NodeType)
+bool FWacomRunSceneBindingRegistry::RequiresStandaloneContentHost(
+	const EWacomMapNodeType NodeType)
 {
-	return NodeType != EWacomMapNodeType::Navigation;
+	return NodeType != EWacomMapNodeType::Navigation
+		&& NodeType != EWacomMapNodeType::Encounter;
 }

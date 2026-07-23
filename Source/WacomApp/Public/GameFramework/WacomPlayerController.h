@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Map/WacomMapTypes.h"
 #include "RunStateTypes.h"
 #include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
@@ -17,13 +18,14 @@ class UInputAction;
 class UWacomMenuWidgetBase;
 class UWacomRunMenuWidgetBase;
 class AWacomRunPathBranchTargetActor;
-class ABattleTriggerActor;
 class URunSession;
 class UBattleHUD;
 class UWacomRunEventDefinition;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunWorldCardDropReceiverComponent;
 class UWacomRunPathTraversalComponent;
+class UWacomRunEncounterSceneBindingComponent;
+class UEncounterDefinition;
 class UWacomGameViewportClient;
 class UWacomRunMenuDropTargetWidget;
 class UWacomAppToastSubsystem;
@@ -55,6 +57,7 @@ struct FInputKeyEventArgs;
 struct FHitResult;
 struct FWacomExplorationScreenRouter;
 struct FRunExplorationResolution;
+struct FWacomRunNodeContentArrivalRequest;
 
 /**
  * Wacom PlayerController。
@@ -79,10 +82,6 @@ class WACOMAPP_API AWacomPlayerController : public APlayerController
 
 public:
 	AWacomPlayerController();
-
-	/** 由 ABattleTriggerActor 交互时调用，转发到 GameMode。Trigger 必须携带 EncounterDefinition。 */
-	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
-	void RequestEnterBattle(ABattleTriggerActor* Trigger);
 
 	/** 外部手动结束战斗时调用，转发到 GameMode；正式 BattleEnd 主链路由 BattleHUD typed signal 驱动。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|GameFlow")
@@ -305,12 +304,6 @@ public:
 	/** 世界交互对象离开玩家交互范围或销毁时调用。 */
 	void UnregisterCandidateInteractable(AActor* InteractableActor);
 
-	/** Trigger 进入玩家 Sphere 时调用（由 BattleTriggerActor::HandleBeginOverlap）。兼容旧调用点。 */
-	void RegisterCandidateTrigger(ABattleTriggerActor* Trigger);
-
-	/** Trigger 离开玩家 Sphere 或销毁时调用。兼容旧调用点。 */
-	void UnregisterCandidateTrigger(ABattleTriggerActor* Trigger);
-
 	/** 由 ShopTriggerActor 调用：开始商店访问并 Push 商店界面。 */
 	bool RequestOpenShop(FName ShopId, const TArray<FRunShopOfferInput>& Offers);
 	bool RequestOpenShop(
@@ -342,6 +335,21 @@ public:
 	 * GameMode 在 EnterBattle / ExitBattle 时调用。
 	 */
 	void RefreshInteractToast();
+
+	/**
+	 * 自动启动失败或撤离返回后，为 Encounter Node 记录本次 Run 内的手动重试要求，
+	 * 并在该节点当前可交互时开启无距离 E 重试。
+	 */
+	void ArmCurrentEncounterRetry(
+		const FWacomMapNodeHandle& Node,
+		UWacomRunEncounterSceneBindingComponent& Binding,
+		FName Reason);
+
+	/**
+	 * 隐藏当前节点的 E 重试提示。离开节点不会遗忘该 Encounter 的手动重试要求；
+	 * 再次到达时会恢复提示，成功进入战斗时才消费该要求。
+	 */
+	void ClearCurrentEncounterRetry();
 
 protected:
 	virtual void BeginPlay() override;
@@ -416,6 +424,17 @@ private:
 	void HandleRunPathAnchoredForwardIntent();
 	void HandleRunPathAnchoredHorizontalIntent(int32 Direction);
 	void HandleRunRouteChoiceStateChanged(const struct FWacomRunRouteChoiceState& State);
+	void HandleRunNodeContentArrival(const FWacomRunNodeContentArrivalRequest& Request);
+	bool TryEnterCurrentEncounter(
+		const FWacomMapNodeHandle& Node,
+		UWacomRunEncounterSceneBindingComponent& Binding,
+		bool bFromRetry);
+	const UEncounterDefinition* ResolveEncounterDefinition(
+		const FWacomMapNodeHandle& Node) const;
+	bool TryRestoreEncounterRetryForArrival(
+		const FWacomMapNodeHandle& Node,
+		UWacomRunEncounterSceneBindingComponent& Binding);
+	bool HasCurrentEncounterRetry() const;
 	bool CanPresentRunMapScreen(
 		bool& bOutPreferRecommendedTarget,
 		FName* OutRejectDetail = nullptr) const;
@@ -544,6 +563,10 @@ private:
 	TArray<TWeakObjectPtr<AWacomRunPathBranchTargetActor>> BoundRunPathBranchTargets;
 	uint64 RunExplorationSceneBindingGeneration = 0;
 	FName RunExplorationSceneBindingLastFailureDetail = NAME_None;
+	TSet<FWacomMapNodeHandle> EncounterNodesRequiringManualRetry;
+	FWacomMapNodeHandle PendingEncounterRetryNode;
+	TWeakObjectPtr<UWacomRunEncounterSceneBindingComponent> PendingEncounterRetryBinding;
+	FName PendingEncounterRetryReason = NAME_None;
 #if WITH_DEV_AUTOMATION_TESTS
 	FName RunExplorationSceneBindingPreCommitFaultForAutomation = NAME_None;
 #endif

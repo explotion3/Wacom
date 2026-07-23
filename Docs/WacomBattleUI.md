@@ -200,7 +200,7 @@ Authoring Report 每次只审计一份真实制作拓扑：Blueprint CDO 从 SCS
 
 Hover Probe 的射线频率由 `BattleSceneEnemyPartHoverProbeIntervalSeconds` 控制；click、hover 与拖卡 widget-position probe 共用 PlayerController 的二阶段查询。先用 `Visibility` Line Trace 取得真实场景遮挡深度，再用 `WacomBattleInteraction` Line Trace 接受严格 Sprite 轮廓；未命中 Part 时才沿同一射线和专用通道做默认 `8cm` Sphere Sweep，只接受当前 HUD registry 的 battle part，并拒绝遮挡物之后的候选。容错区重叠时固定按屏幕空间 ImpactPoint 距离、射线深度和稳定 Part identity 决胜，不依赖组件遍历顺序。逐帧 gate 只读取 HUD 缓存的最新 Snapshot phase，不调用 `UBattleSession::BuildSnapshot()`。同一 `WorldTargetId + Snapshot.Version + UIState + PendingCardId` 复用已生成的 Action Preview/目标表现。SceneRuntime 不再创建部位上方的 transient Prediction `UWidgetComponent`；Available / Valid / Invalid 继续由同一 Niagara target-preview component 表达，规则投影只由 Enemy Panel 的稳定 Entry 显示。
 
-HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 identity，不再缓存 Bridge/Presentation Actor 适配器。场景射线优先读取 `HitResult.Component` 上的 `IWacomInteractionTargetProvider`；Actor fallback 只服务非战斗世界目标。BattleTrigger 仍按 Encounter 顺序把 `EnemySlotId -> Host` 交给 HUD，Host runtime 再为 Part 解析 `EncounterId + EnemySlotId + PartSlotId + PartInstanceId`。
+HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 identity，不再缓存 Bridge/Presentation Actor 适配器。场景射线优先读取 `HitResult.Component` 上的 `IWacomInteractionTargetProvider`；Actor fallback 只服务非战斗世界目标。Encounter Node Anchor 的 typed scene binding 按规则槽顺序把 `EnemySlotId -> Host` 交给 HUD，Host runtime 再为 Part 解析 `EncounterId + EnemySlotId + PartSlotId + PartInstanceId`。
 
 确认、伤害、目标预演与 Destroyed 使用 Part 上的反馈设置，并复用 Host 默认 `UWacomBattleEnemyPartImpactStyle` / `UWacomBattleEnemyPartTargetPreviewStyle`。SceneRuntime 从 interaction visual 的 authored Idle Sprite / Idle Flipbook 第一帧 `RenderBounds` 与该层世界 Transform 构造稳定 oriented Presentation Bounds；偏心 pivot、旋转和非等比缩放都按三个世界半轴投影到摄像机平面，不经过世界 AABB，也不读取当前动画帧或任何碰撞组件 Bounds。配置异常时只复用碰撞 fallback 的来源顺序（interaction visual authored bounds、直接 typed visual 并集、Part 原点安全 bounds），求值不依赖 transient fallback 是否已创建。Target Preview 的中心和宽高取该稳定视觉矩形；Impact VFX 仍在 typed ImpactAnchor 落点生成，缺 Anchor 回退 Part 原点，但直径取同一 Presentation Bounds。缺 Style/System/MI 时只跳过对应装饰，不阻塞 cue、破损换图或规则结算。Destroyed 在 marker 到点时原地切换真实 Sprite/Flipbook Layer，组件指针、稳定 Idle 碰撞源、Presentation Bounds 资源和 topology revision 不变。
 
@@ -214,7 +214,7 @@ HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 id
 
 敌人当前意图的攻击属性完全来自 Snapshot：`bIsAttackIntent` 表示是否含有指向 Player 的正 Damage，`PeakAttackDamage` 是其最高单段值。敌情详情对攻击意图显示 `INIT n   ATK m`，非攻击意图只显示 `INIT n`；现有 WBP 内部 `ResistanceText` 绑定名只为避免资产绑定失效而保留，不再表达独立 Resistance 数值。
 
-BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、preview、panel；同批队列只保留弱 Host/Part 引用完成已排队 Action 或 terminal clip。真正的探索场景退役仍由 BattleTrigger 在胜利结算和返回镜头 barrier 完成后执行：清运行时表现、隐藏 Host、关闭 Part collision，最后销毁 Trigger。Withdraw、Defeat、Undetermined 或结算失败不退役。
+BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、preview、panel；同批队列只保留弱 Host/Part 引用完成已排队 Action 或 terminal clip。真正的探索场景退役仍由 GameMode 的 weak Encounter scene binding callback 在胜利结算和返回镜头 barrier 完成后执行：清运行时表现、隐藏 Host 并关闭交互，Node Anchor 与 binding 保留。Withdraw、Defeat、Undetermined 或结算失败不退役。
 
 ### 正式内容口径
 

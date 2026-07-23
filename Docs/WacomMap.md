@@ -35,7 +35,7 @@ tags:
 
 通道采用两阶段提交：分支意图先经当前 Floor Scene Registry 验证 Path、source Anchor、target Anchor 和预期内容 Host，随后规则层返回一次性 Traversal Ticket；只有到达终点并再次验证场景绑定后才提交 target Node。中途退回起点提交 Cancel，逻辑节点始终留在 source。Complete 失败会显式补偿 Cancel 并回源；规则成功提交后禁止回源，目标 Actor 同帧失效时使用 Begin 阶段缓存的 target Transform，保证逻辑与画面停在同一侧。
 
-内容 Host 在场景中可见不等于可提交。带 `UWacomRunMapNodeBindingComponent` 的 Host 必须等待 target Node 完成上述 Complete、成为正式 current node，并确认当前没有其他探索事务后才开放交互。当前 BattleTrigger 已执行此门控：玩家在 Path 中途点击 Encounter 只得到“请先完成当前行动 / 抵达节点”的提示，不会提前开始 Encounter，也不会改变 Run 表现状态；Shop、RunEvent 与 Treasure 后续应沿用同一 Host availability 合同。
+内容 Host 在场景中可见不等于可提交。Encounter 不再拥有可点击 Host：Floor Node payload 保存静态 `EncounterDefinition`，对应 `AWacomRunMapNodeAnchorActor` 上的 `UWacomRunEncounterSceneBindingComponent` 只保存场景 Enemy Host 与可选战斗镜头。只有上述 Complete 成功、目标 Anchor 应用完成并成为正式 current `Visited Encounter` 后，App 才广播 typed arrival request 并自动尝试开战；中途、取消和提交失败都不会触发。Shop、RunEvent 与 Treasure 仍通过各自 `UWacomRunMapNodeBindingComponent` Host 等待 current node 与无活动探索事务后开放交互。
 
 ## §3 节点揭示与生命周期
 

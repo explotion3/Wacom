@@ -9,11 +9,12 @@
 struct FWacomExitBattlePostRunBarrierAutomationTestView::FImpl
 {
 	explicit FImpl(
-		ABattleTriggerActor& ResolvedEncounterTrigger,
+		TFunction<void()>&& OnResolvedEncounterRetirement,
 		TFunction<void()>&& OnReady)
 		: Barrier(MakeShared<FExitBattlePostRunBarrierState>(MoveTemp(OnReady)))
 	{
-		Barrier->SetResolvedEncounterTrigger(&ResolvedEncounterTrigger);
+		Barrier->SetResolvedEncounterRetirement(
+			MoveTemp(OnResolvedEncounterRetirement));
 	}
 
 	TSharedRef<FExitBattlePostRunBarrierState> Barrier;
@@ -21,9 +22,11 @@ struct FWacomExitBattlePostRunBarrierAutomationTestView::FImpl
 
 FWacomExitBattlePostRunBarrierAutomationTestView::
 	FWacomExitBattlePostRunBarrierAutomationTestView(
-		ABattleTriggerActor& ResolvedEncounterTrigger,
+		TFunction<void()>&& OnResolvedEncounterRetirement,
 		TFunction<void()>&& OnReady)
-	: Impl(MakeUnique<FImpl>(ResolvedEncounterTrigger, MoveTemp(OnReady)))
+	: Impl(MakeUnique<FImpl>(
+		MoveTemp(OnResolvedEncounterRetirement),
+		MoveTemp(OnReady)))
 {
 }
 

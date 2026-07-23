@@ -16,14 +16,21 @@ class UPrimitiveComponent;
 class URunSession;
 class UWacomAppToastSubsystem;
 class UWacomMenuWidgetBase;
+class UWacomRunEncounterSceneBindingComponent;
 class UWacomRunMenuDropTargetWidget;
 class UWacomRunWorldInteractionTargetBridgeComponent;
 class UWacomRunWorldCardDropReceiverComponent;
+struct FWacomMapNodeHandle;
 
 struct FWacomPlayerControllerRunInteractionTestAccess
 {
 	static AActor* ClosestInteractable(const AWacomPlayerControllerProbe* PC);
 	static FText CurrentInteractPrompt(const AWacomPlayerControllerProbe* PC);
+	static bool HasCurrentEncounterRetry(const AWacomPlayerControllerProbe* PC);
+	static bool RestoreEncounterRetryForArrival(
+		AWacomPlayerControllerProbe* PC,
+		const FWacomMapNodeHandle& Node,
+		UWacomRunEncounterSceneBindingComponent& Binding);
 	static FString RunWorldInteractableHoverDebugSummary(const AWacomPlayerControllerProbe* PC);
 
 	static void SetRunSceneHit(

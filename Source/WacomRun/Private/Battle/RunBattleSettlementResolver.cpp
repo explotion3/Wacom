@@ -117,7 +117,7 @@ bool FRunBattleSettlementResolver::Resolve(
 		}
 		else
 		{
-			// 真胜利：清理该 Trigger 的撤离进度；永久完成状态由 GameMode.MarkTriggerDestroyed 写入。
+			// 真胜利：清理该 Floor Node 的撤离进度；永久完成状态由 Node lifecycle 表达。
 			if (EncounterNode.IsValid())
 			{
 				State.BattleProgress.Remove(EncounterNode);

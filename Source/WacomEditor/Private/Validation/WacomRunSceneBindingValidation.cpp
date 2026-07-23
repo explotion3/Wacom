@@ -2,12 +2,14 @@
 
 #include "Validation/WacomRunSceneBindingValidation.h"
 
+#include "Actors/WacomBattleEnemyActor.h"
 #include "Actors/WacomRunFloorSceneDescriptorActor.h"
 #include "Actors/WacomRunMapNodeAnchorActor.h"
 #include "Actors/WacomRunPathBranchTargetActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Cards/CardDefinition.h"
 #include "Components/SplineComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -77,9 +79,10 @@ namespace
 		}
 	}
 
-	bool RequiresHost(const EWacomMapNodeType NodeType)
+	bool RequiresStandaloneHost(const EWacomMapNodeType NodeType)
 	{
-		return NodeType != EWacomMapNodeType::Navigation;
+		return NodeType != EWacomMapNodeType::Navigation
+			&& NodeType != EWacomMapNodeType::Encounter;
 	}
 
 	void AddAllowedContentObjects(
@@ -421,10 +424,16 @@ FWacomRunSceneBindingValidationReport FWacomRunSceneBindingValidation::ValidateL
 	}
 
 	TMap<FName, TArray<const AWacomRunMapNodeAnchorActor*>> AnchorsById;
+	TMap<FName, TArray<const UWacomRunEncounterSceneBindingComponent*>>
+		EncounterBindingsByNodeId;
+	TSet<const AWacomBattleEnemyActor*> ClaimedEncounterHosts;
 	for (TActorIterator<AWacomRunMapNodeAnchorActor> It(
 		const_cast<UWorld*>(World)); It; ++It)
 	{
-		if (It->NodeId.IsNone() || !FloorDefinition->FindNode(It->NodeId))
+		const FWacomMapNodeDefinition* Node = It->NodeId.IsNone()
+			? nullptr
+			: FloorDefinition->FindNode(It->NodeId);
+		if (!Node)
 		{
 			AddError(Report,
 				EWacomRunSceneBindingDiagnosticCode::NodeAnchorUnexpected,
@@ -434,6 +443,61 @@ FWacomRunSceneBindingValidationReport FWacomRunSceneBindingValidation::ValidateL
 			continue;
 		}
 		AnchorsById.FindOrAdd(It->NodeId).Add(*It);
+
+		TArray<UWacomRunEncounterSceneBindingComponent*> EncounterBindings;
+		It->GetComponents(EncounterBindings);
+		for (const UWacomRunEncounterSceneBindingComponent* Binding :
+			EncounterBindings)
+		{
+			if (Node->NodeType != EWacomMapNodeType::Encounter)
+			{
+				AddError(Report,
+					EWacomRunSceneBindingDiagnosticCode::EncounterBindingUnexpected,
+					Binding ? Binding->GetPathName() : It->GetPathName(),
+					FString::Printf(
+						TEXT("非 Encounter NodeAnchor %s 不应包含 Encounter Scene Binding。"),
+						*It->NodeId.ToString()));
+				continue;
+			}
+			EncounterBindingsByNodeId.FindOrAdd(It->NodeId).Add(Binding);
+			const UEncounterDefinition* EncounterDefinition =
+				Node->Content.Encounter.EncounterDefinition;
+			const FWacomStatus Status = Binding && EncounterDefinition
+				? Binding->ValidateForEncounter(*EncounterDefinition)
+				: FWacomStatus::Fail(
+					EWacomError::InvalidState,
+					TEXT("EncounterDefinitionOrBindingMissing"));
+			if (!Status.IsOk())
+			{
+				AddError(Report,
+					EWacomRunSceneBindingDiagnosticCode::EncounterBindingInvalid,
+					Binding ? Binding->GetPathName() : It->GetPathName(),
+					FString::Printf(
+						TEXT("Encounter NodeAnchor %s 的场景绑定无效：%s。"),
+						*It->NodeId.ToString(), *Status.Detail.ToString()));
+			}
+			if (Binding)
+			{
+				for (const FWacomBattleSceneEnemyHostSlot& Slot :
+					Binding->SceneEnemyHostSlots)
+				{
+					const AWacomBattleEnemyActor* SceneHost =
+						Slot.SceneEnemyHost.Get();
+					if (SceneHost
+						&& ClaimedEncounterHosts.Contains(SceneHost))
+					{
+						AddError(Report,
+							EWacomRunSceneBindingDiagnosticCode::EncounterBindingInvalid,
+							Binding->GetPathName(),
+							FString::Printf(
+								TEXT("Encounter NodeAnchor %s 的场景 Host %s 已被其它 Encounter 节点占用。"),
+								*It->NodeId.ToString(),
+								*SceneHost->GetName()));
+					}
+					ClaimedEncounterHosts.Add(SceneHost);
+				}
+			}
+		}
 	}
 	for (const FWacomMapNodeDefinition& Node : FloorDefinition->Nodes)
 	{
@@ -451,6 +515,30 @@ FWacomRunSceneBindingValidationReport FWacomRunSceneBindingValidation::ValidateL
 				MakeIdentityPath(*FloorDefinition, TEXT("Node"), Node.NodeId),
 				FString::Printf(TEXT("Floor 节点 %s 的 NodeAnchor 重复，当前数量=%d。"),
 					*Node.NodeId.ToString(), Count));
+		}
+		if (Node.NodeType != EWacomMapNodeType::Encounter)
+		{
+			continue;
+		}
+		const int32 BindingCount =
+			EncounterBindingsByNodeId.FindRef(Node.NodeId).Num();
+		if (BindingCount == 0)
+		{
+			AddError(Report,
+				EWacomRunSceneBindingDiagnosticCode::EncounterBindingMissing,
+				MakeIdentityPath(*FloorDefinition, TEXT("Node"), Node.NodeId),
+				FString::Printf(
+					TEXT("Encounter 节点 %s 的 NodeAnchor 缺少 Encounter Scene Binding。"),
+					*Node.NodeId.ToString()));
+		}
+		else if (BindingCount > 1)
+		{
+			AddError(Report,
+				EWacomRunSceneBindingDiagnosticCode::EncounterBindingDuplicate,
+				MakeIdentityPath(*FloorDefinition, TEXT("Node"), Node.NodeId),
+				FString::Printf(
+					TEXT("Encounter 节点 %s 的 NodeAnchor 存在重复 Encounter Scene Binding，当前数量=%d。"),
+					*Node.NodeId.ToString(), BindingCount));
 		}
 	}
 
@@ -558,7 +646,7 @@ FWacomRunSceneBindingValidationReport FWacomRunSceneBindingValidation::ValidateL
 			const FWacomMapNodeDefinition* Node = Binding
 				? FloorDefinition->FindNode(Binding->NodeId)
 				: nullptr;
-			if (!Node || !RequiresHost(Node->NodeType))
+			if (!Node || !RequiresStandaloneHost(Node->NodeType))
 			{
 				AddError(Report,
 					EWacomRunSceneBindingDiagnosticCode::ContentHostUnexpected,
@@ -582,7 +670,7 @@ FWacomRunSceneBindingValidationReport FWacomRunSceneBindingValidation::ValidateL
 	}
 	for (const FWacomMapNodeDefinition& Node : FloorDefinition->Nodes)
 	{
-		if (!RequiresHost(Node.NodeType))
+		if (!RequiresStandaloneHost(Node.NodeType))
 		{
 			continue;
 		}
@@ -632,6 +720,10 @@ const TCHAR* LexToString(const EWacomRunSceneBindingDiagnosticCode Code)
 	WACOM_DIAGNOSTIC_CASE(NodeAnchorMissing);
 	WACOM_DIAGNOSTIC_CASE(NodeAnchorDuplicate);
 	WACOM_DIAGNOSTIC_CASE(NodeAnchorUnexpected);
+	WACOM_DIAGNOSTIC_CASE(EncounterBindingMissing);
+	WACOM_DIAGNOSTIC_CASE(EncounterBindingDuplicate);
+	WACOM_DIAGNOSTIC_CASE(EncounterBindingUnexpected);
+	WACOM_DIAGNOSTIC_CASE(EncounterBindingInvalid);
 	WACOM_DIAGNOSTIC_CASE(EdgePathMissing);
 	WACOM_DIAGNOSTIC_CASE(EdgePathDuplicate);
 	WACOM_DIAGNOSTIC_CASE(EdgePathUnexpected);

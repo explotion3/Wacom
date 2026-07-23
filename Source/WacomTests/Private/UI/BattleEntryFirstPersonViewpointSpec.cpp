@@ -3,8 +3,8 @@
 #include "Misc/AutomationTest.h"
 
 #include "BattleHUDTestHarness.h"
-#include "Actors/BattleTriggerActor.h"
 #include "Actors/WacomFirstPersonViewpointActor.h"
+#include "Actors/WacomRunMapNodeAnchorActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/WacomFirstPersonViewStageCoordinator.h"
@@ -15,6 +15,7 @@
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/WacomFirstPersonViewStageBlendComponent.h"
 #include "Components/WacomRunPathTraversalComponent.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "UI/RunPathTraversalTestAccess.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -111,11 +112,12 @@ namespace WacomBattleEntryFirstPersonViewpointSpec
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBattleEntryViewpointTriggerStageRequestSpec,
-	"Wacom.UI.Battle.EntryFirstPersonViewpoint.TriggerBuildsOptionalStageRequest",
+	FWacomUIBattleEntryViewpointEncounterBindingStageRequestSpec,
+	"Wacom.UI.Battle.EntryFirstPersonViewpoint.EncounterBindingBuildsOptionalStageRequest",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBattleEntryViewpointTriggerStageRequestSpec::RunTest(const FString& /*Parameters*/)
+bool FWacomUIBattleEntryViewpointEncounterBindingStageRequestSpec::RunTest(
+	const FString& /*Parameters*/)
 {
 	UWorld* World = WacomBattleEntryFirstPersonViewpointSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -123,36 +125,48 @@ bool FWacomUIBattleEntryViewpointTriggerStageRequestSpec::RunTest(const FString&
 		return false;
 	}
 
-	ABattleTriggerActor* Trigger = World->SpawnActor<ABattleTriggerActor>();
+	AWacomRunMapNodeAnchorActor* Anchor =
+		World->SpawnActor<AWacomRunMapNodeAnchorActor>();
+	UWacomRunEncounterSceneBindingComponent* Binding =
+		Anchor
+			? NewObject<UWacomRunEncounterSceneBindingComponent>(
+				Anchor, TEXT("EncounterSceneBinding"), RF_Transient)
+			: nullptr;
+	if (Anchor && Binding)
+	{
+		Anchor->AddInstanceComponent(Binding);
+		Binding->RegisterComponent();
+	}
 	AWacomFirstPersonViewpointActor* Viewpoint =
 		World->SpawnActor<AWacomFirstPersonViewpointActor>();
-	if (!TestNotNull(TEXT("Trigger"), Trigger)
+	if (!TestNotNull(TEXT("Encounter Anchor"), Anchor)
+		|| !TestNotNull(TEXT("Encounter Binding"), Binding)
 		|| !TestNotNull(TEXT("Viewpoint"), Viewpoint))
 	{
 		if (Viewpoint)
 		{
 			Viewpoint->Destroy();
 		}
-		if (Trigger)
+		if (Anchor)
 		{
-			Trigger->Destroy();
+			Anchor->Destroy();
 		}
 		return false;
 	}
 
 	FWacomFirstPersonViewStageRequest StageRequest;
-	TestFalse(TEXT("Unconfigured trigger has no battle entry viewpoint"),
-		Trigger->TryBuildBattleEntryViewStageRequest(StageRequest));
+	TestFalse(TEXT("Unconfigured binding has no battle entry viewpoint"),
+		Binding->TryBuildBattleEntryViewStageRequest(StageRequest));
 	TestFalse(TEXT("Unconfigured request has no view transform"),
 		StageRequest.bHasViewTransform);
 
 	const FVector ViewLocation(320.0f, -140.0f, 180.0f);
 	const FRotator ViewRotation(11.0f, 75.0f, 0.0f);
 	Viewpoint->SetActorLocationAndRotation(ViewLocation, ViewRotation);
-	Trigger->BattleEntryViewpoint = Viewpoint;
+	Binding->BattleEntryViewpoint = Viewpoint;
 
-	TestTrue(TEXT("Configured trigger builds battle entry stage request"),
-		Trigger->TryBuildBattleEntryViewStageRequest(StageRequest));
+	TestTrue(TEXT("Configured binding builds battle entry stage request"),
+		Binding->TryBuildBattleEntryViewStageRequest(StageRequest));
 	TestTrue(TEXT("Stage request has view transform"),
 		StageRequest.bHasViewTransform);
 	TestEqual(TEXT("Stage request reason is battle entry"),
@@ -160,7 +174,7 @@ bool FWacomUIBattleEntryViewpointTriggerStageRequestSpec::RunTest(const FString&
 		FName(TEXT("BattleEntry")));
 	TestEqual(TEXT("Stage request debug source falls back to actor name"),
 		StageRequest.DebugSource,
-		FName(*Trigger->GetName()));
+		FName(*Anchor->GetName()));
 	TestTrue(TEXT("Stage request view location matches viewpoint"),
 		WacomBattleEntryFirstPersonViewpointSpec::IsNearlyEqual(
 			StageRequest.ViewTransform.GetLocation(),
@@ -182,12 +196,12 @@ bool FWacomUIBattleEntryViewpointTriggerStageRequestSpec::RunTest(const FString&
 	Viewpoint->StageBlendTimeSeconds = 0.35f;
 	Viewpoint->StageBlendCurve = EWacomFirstPersonViewStageBlendCurve::EaseOut;
 	Viewpoint->StageBlendEasePower = 3.0f;
-	Trigger->PersistentId = TEXT("Trigger.EntryView");
-	TestTrue(TEXT("Configured trigger rebuilds battle entry stage request"),
-		Trigger->TryBuildBattleEntryViewStageRequest(StageRequest));
-	TestEqual(TEXT("Stage request debug source prefers PersistentId"),
+	Anchor->NodeId = TEXT("Encounter.EntryView");
+	TestTrue(TEXT("Configured binding rebuilds battle entry stage request"),
+		Binding->TryBuildBattleEntryViewStageRequest(StageRequest));
+	TestEqual(TEXT("Stage request debug source prefers NodeId"),
 		StageRequest.DebugSource,
-		FName(TEXT("Trigger.EntryView")));
+		FName(TEXT("Encounter.EntryView")));
 	TestEqual(TEXT("Stage request copies viewpoint blend time"),
 		StageRequest.BlendTimeSeconds,
 		0.35f);
@@ -199,7 +213,7 @@ bool FWacomUIBattleEntryViewpointTriggerStageRequestSpec::RunTest(const FString&
 		3.0f);
 
 	Viewpoint->Destroy();
-	Trigger->Destroy();
+	Anchor->Destroy();
 	return true;
 }
 

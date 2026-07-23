@@ -8,6 +8,7 @@
 #include "Actors/WacomRunMapNodeAnchorActor.h"
 #include "Actors/WacomRunPathBranchTargetActor.h"
 #include "Actors/WacomRunPathSegmentActor.h"
+#include "Components/WacomRunEncounterSceneBindingComponent.h"
 #include "Components/WacomRunMapNodeBindingComponent.h"
 #include "ContentBuilders/RunExplorationDebugAssetBuilder.h"
 #include "Engine/Blueprint.h"
@@ -36,6 +37,7 @@ namespace
 		Snapshot.PathEdgeIds.Sort(FNameLexicalLess());
 		Snapshot.BranchEdgeIds.Sort(FNameLexicalLess());
 		Snapshot.HostNodeIds.Sort(FNameLexicalLess());
+		Snapshot.EncounterBindingNodeIds.Sort(FNameLexicalLess());
 		Snapshot.ContentHosts.Sort(
 			[](const FWacomRunExplorationDebugContentHostAutomationRecord& A,
 				const FWacomRunExplorationDebugContentHostAutomationRecord& B)
@@ -107,6 +109,13 @@ bool FWacomRunExplorationDebugAssetBuilderAutomationTestView::Build(
 			Cast<AWacomRunMapNodeAnchorActor>(Actor))
 		{
 			OutSnapshot.AnchorNodeIds.Add(Anchor->NodeId);
+			if (Anchor->FindComponentByClass<
+				UWacomRunEncounterSceneBindingComponent>())
+			{
+				OutSnapshot.HostNodeIds.Add(Anchor->NodeId);
+				OutSnapshot.EncounterBindingNodeIds.Add(
+					Anchor->NodeId);
+			}
 		}
 		if (const AWacomRunPathSegmentActor* Path =
 			Cast<AWacomRunPathSegmentActor>(Actor))

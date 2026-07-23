@@ -742,14 +742,10 @@ struct WACOMRUN_API FRunState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Completion")
 	FRunCompletionSummary CompletionSummary;
 
-	/** 已被永久销毁的场景触发器 ID 列表。 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")
-	TSet<FName> DestroyedTriggerIds;
-
 	/**
 	 * 战斗节点进度。
 	 *
-	 * Key = ABattleTriggerActor.PersistentId。Value = 该 Trigger 上次撤离时的破坏状态。
+	 * Key = Floor Node Handle。Value = 该 Encounter Node 上次撤离时的破坏状态。
 	 * 撤离写入 / 胜利清理 / 失败保留（Run 都结束了无意义保留与否）。
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run")

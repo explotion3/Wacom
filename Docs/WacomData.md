@@ -57,7 +57,7 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 | `UEnemyDefinition` | `Source/WacomData/Public/Enemies` | 敌人由哪些部位组成、默认行为资产和部位行为绑定 | Battle 初始化敌人 runtime state |
 | `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、经验、Aid/Destroy 分支奖励与 legacy 兼容来源 | Battle 执行部位行动和击倒选择 |
 | `UEnemyBehaviorDefinition` | `Source/WacomData/Public/Enemies` | 敌人 phase、intent set、selector rule 和意图候选 | Battle 刷新并执行敌方部位当前意图 |
-| `UEncounterDefinition` | `Source/WacomData/Public/Encounters` | 单场战斗包含哪些敌人槽，以及敌人槽顺序 | App 的 BattleTrigger 进入战斗前转换为 Battle init params |
+| `UEncounterDefinition` | `Source/WacomData/Public/Encounters` | 单场战斗包含哪些敌人槽，以及敌人槽顺序 | App 在 Encounter Node arrival 时转换为 Battle init params |
 | `UCharacterDefinition` | `Source/WacomData/Public/Characters` | 角色基础 HP、左右手固有卡、初始牌组 | Run 初始化角色和玩家卡池；Battle 读取入战卡组 |
 | `UShopDefinition` | `Source/WacomData/Public/Shops` | 固定商品列表和价格 | RunSession 按场景 shop visit 保存购买状态 |
 | `UWacomRunPickupDefinition` | `Source/WacomData/Public/Pickups` | 数据驱动拾取物奖励配置 | RunSession 使用场景 `PersistentId` 防重复拾取 |
@@ -322,7 +322,7 @@ struct FEncounterEnemySlot
 | `EnemySlotId` | Encounter 内稳定敌人槽 ID；后续映射到 Battle `EnemySlotId`，参与多敌人部位身份 |
 | `EnemyDefinition` | 敌人槽使用的静态敌人定义；不同槽可以引用同一个敌人定义 |
 
-当前 `UEncounterDefinition` 是静态数据合同，不保存运行态进度。正式场景入口由 `ABattleTriggerActor.EncounterDefinition` 引用它；进入战斗时 App 层把 `EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。Battle 仍只消费 `FBattleInitParams`，Run 仍用场景 Trigger 的 `PersistentId` 作为撤离重入进度 key，不直接持有 Encounter 资产。
+当前 `UEncounterDefinition` 是静态数据合同，不保存运行态进度。正式规则引用只存在于 `UWacomFloorMapDefinition` 的 Encounter Node typed payload；Node Anchor 的 `UWacomRunEncounterSceneBindingComponent` 只保存 Enemy Host 与可选镜头。到达提交后 App 层把 `EnemySlots` 转换为 `FBattleInitParams.EnemySlots`。Battle 仍只消费 `FBattleInitParams`，Run 用 `FWacomMapNodeHandle(FloorId + NodeId)` 作为撤离重入进度 key，不直接持有 Encounter 资产。
 
 当前生成内容包含 `DA_Encounter_SnakeSingle`：`EncounterDefinitionId=Encounter.Snake.Single`，单个 `EnemySlotId=Enemy` 引用 `DA_Enemy_Snake`。`DA_Enemy_Snake` 通过 `DefaultBehavior=DA_Behavior_Snake` 绑定 Head / Body / Tail 三套 `Sequence` intent set，三份 `DA_Part_Snake_*` 只保存 HP、经验和毒牙奖励。关卡 Trigger 应优先引用该 Encounter，再用 `SceneEnemyHostSlots[Enemy]` 绑定场景中的 Snake Host prefab。
 
