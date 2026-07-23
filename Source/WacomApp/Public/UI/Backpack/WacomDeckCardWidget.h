@@ -286,6 +286,7 @@ private:
 	void CancelBackpackSaleSurfacePreparation();
 	void SetBackpackSaleSurfaceRealtime(bool bEnabled);
 	void ClearBackpackSaleSurfaceView();
+	void PrepareForBackpackSaleDeparturePresentation();
 	void ResetWorkspaceAccessibilityPaintState();
 	void RefreshContentFromCard();
 	FWacomCardViewData BuildCurrentCardViewData() const;

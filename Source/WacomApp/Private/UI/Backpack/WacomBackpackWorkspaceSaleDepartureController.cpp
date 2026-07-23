@@ -47,6 +47,18 @@ float FWacomBackpackWorkspaceSaleDepartureController::AllocateSeed(FGuid Instanc
 	return Seed;
 }
 
+uint32 FWacomBackpackWorkspaceSaleDepartureController::MixRandomBits(uint32 Value)
+{
+	// A compact avalanche mix keeps scheduling deterministic for a committed
+	// batch while making neighboring carry positions visually unrelated.
+	Value ^= Value >> 16;
+	Value *= 0x7feb352dU;
+	Value ^= Value >> 15;
+	Value *= 0x846ca68bU;
+	Value ^= Value >> 16;
+	return Value;
+}
+
 bool FWacomBackpackWorkspaceSaleDepartureController::Enqueue(
 	UWacomDeckCardWidget& Card,
 	FGuid InstanceId,
@@ -68,20 +80,116 @@ bool FWacomBackpackWorkspaceSaleDepartureController::Enqueue(
 	return true;
 }
 
-void FWacomBackpackWorkspaceSaleDepartureController::StartNextGroup()
+void FWacomBackpackWorkspaceSaleDepartureController::RandomizePendingTail(
+	int32 FirstPendingIndex)
 {
-	if (!ActiveEntries.IsEmpty() || PendingEntries.IsEmpty())
+	const int32 SafeFirstIndex = FMath::Clamp(
+		FirstPendingIndex,
+		0,
+		PendingEntries.Num());
+	const int32 BatchSize = PendingEntries.Num() - SafeFirstIndex;
+	if (BatchSize <= 0)
 	{
 		return;
 	}
 
-	const int32 GroupSize = FMath::Min(MaximumConcurrentCards, PendingEntries.Num());
-	ActiveEntries.Reserve(GroupSize);
-	for (int32 Index = 0; Index < GroupSize; ++Index)
+	++RandomBatchSequence;
+	const uint32 BatchSalt = MixRandomBits(
+		RandomBatchSequence * 0x9e3779b9U
+		^ static_cast<uint32>(BatchSize));
+	TArray<FGuid> OriginalOrder;
+	OriginalOrder.Reserve(BatchSize);
+	for (int32 Index = SafeFirstIndex; Index < PendingEntries.Num(); ++Index)
+	{
+		FEntry& Entry = *PendingEntries[Index];
+		OriginalOrder.Add(Entry.InstanceId);
+		const uint32 IdentityHash = GetTypeHash(Entry.InstanceId);
+		Entry.RandomOrderKey = MixRandomBits(IdentityHash ^ BatchSalt);
+		const uint32 StaggerBits = MixRandomBits(
+			Entry.RandomOrderKey ^ 0xa511e9b3U);
+		const float Unit = static_cast<float>(
+			static_cast<double>(StaggerBits) / MAX_uint32);
+		Entry.StaggerScale = FMath::Lerp(
+			MinimumStaggerScale,
+			MaximumStaggerScale,
+			Unit);
+	}
+
+	for (int32 Index = SafeFirstIndex + 1;
+		Index < PendingEntries.Num();
+		++Index)
+	{
+		int32 Cursor = Index;
+		while (Cursor > SafeFirstIndex
+			&& PendingEntries[Cursor]->RandomOrderKey
+				< PendingEntries[Cursor - 1]->RandomOrderKey)
+		{
+			PendingEntries.Swap(Cursor, Cursor - 1);
+			--Cursor;
+		}
+	}
+
+	if (BatchSize > 1)
+	{
+		bool bMatchesOriginalOrder = true;
+		for (int32 Offset = 0; Offset < BatchSize; ++Offset)
+		{
+			if (PendingEntries[SafeFirstIndex + Offset]->InstanceId
+				!= OriginalOrder[Offset])
+			{
+				bMatchesOriginalOrder = false;
+				break;
+			}
+		}
+		if (bMatchesOriginalOrder)
+		{
+			// A random permutation may legitimately equal its input, but the
+			// authored effect promises a visibly shuffled departure order.
+			TUniquePtr<FEntry> First =
+				MoveTemp(PendingEntries[SafeFirstIndex]);
+			PendingEntries.RemoveAt(
+				SafeFirstIndex,
+				1,
+				EAllowShrinking::No);
+			PendingEntries.Insert(
+				MoveTemp(First),
+				SafeFirstIndex + BatchSize - 1);
+		}
+	}
+}
+
+void FWacomBackpackWorkspaceSaleDepartureController::FillAvailableSlots()
+{
+	if (PendingEntries.IsEmpty()
+		|| ActiveEntries.Num() >= MaximumConcurrentCards)
+	{
+		return;
+	}
+
+	const bool bWasIdle = ActiveEntries.IsEmpty();
+	float CumulativeDelaySeconds = 0.0f;
+	const int32 AvailableSlots =
+		MaximumConcurrentCards - ActiveEntries.Num();
+	const int32 StartCount = FMath::Min(
+		AvailableSlots,
+		PendingEntries.Num());
+	ActiveEntries.Reserve(ActiveEntries.Num() + StartCount);
+	for (int32 Index = 0; Index < StartCount; ++Index)
 	{
 		TUniquePtr<FEntry> Entry = MoveTemp(PendingEntries[0]);
 		PendingEntries.RemoveAt(0, 1, EAllowShrinking::No);
-		PrepareEntry(*Entry, Index);
+		if (!bWasIdle || Index > 0)
+		{
+			const float BaseStaggerSeconds = Entry->bSimplifiedMotion
+				? SimplifiedMotionStaggerSeconds
+				: FullMotionStaggerSeconds;
+			CumulativeDelaySeconds +=
+				BaseStaggerSeconds * Entry->StaggerScale;
+		}
+		PrepareEntry(
+			*Entry,
+			CumulativeDelaySeconds,
+			bWasIdle && Index == 0);
 		ActiveEntries.Add(MoveTemp(Entry));
 	}
 	MaximumObservedRealtimeCardCount = FMath::Max(
@@ -91,13 +199,12 @@ void FWacomBackpackWorkspaceSaleDepartureController::StartNextGroup()
 
 void FWacomBackpackWorkspaceSaleDepartureController::PrepareEntry(
 	FEntry& Entry,
-	int32 GroupIndex)
+	float StartDelaySeconds,
+	bool bSoundOwner)
 {
-	Entry.bGroupSoundOwner = GroupIndex == 0;
+	Entry.bGroupSoundOwner = bSoundOwner;
 	Entry.StartDelayRemainingSeconds =
-		GroupIndex * (Entry.bSimplifiedMotion
-			? SimplifiedMotionStaggerSeconds
-			: FullMotionStaggerSeconds);
+		FMath::Max(0.0f, StartDelaySeconds);
 
 	FWacomFirstPersonCardSurfaceDeparturePlaybackConfig Config;
 	Config.Kind = EWacomFirstPersonCardSurfaceDepartureKind::ExhaustDissolve;
@@ -170,7 +277,7 @@ void FWacomBackpackWorkspaceSaleDepartureController::Tick(
 	float DeltaSeconds,
 	UObject* WorldContext)
 {
-	StartNextGroup();
+	FillAvailableSlots();
 	const float SafeDeltaSeconds = FMath::Clamp(DeltaSeconds, 0.0f, 0.1f);
 	for (int32 Index = ActiveEntries.Num() - 1; Index >= 0; --Index)
 	{
@@ -248,12 +355,10 @@ void FWacomBackpackWorkspaceSaleDepartureController::Tick(
 		}
 	}
 
-	if (ActiveEntries.IsEmpty())
-	{
-		// The next FIFO group is prepared on the next scheduler frame so every
-		// completed group has a clean Retainer ownership boundary.
-		StartNextGroup();
-	}
+	// Refill every slot released this frame instead of waiting for an entire
+	// four-card group. The next randomized card overlaps the remaining
+	// departures while the realtime Retainer ceiling stays bounded.
+	FillAvailableSlots();
 }
 
 void FWacomBackpackWorkspaceSaleDepartureController::SetRetainedRenderingEnabled(
@@ -304,6 +409,7 @@ void FWacomBackpackWorkspaceSaleDepartureController::Reset(bool bRemoveWidgets)
 	UsedSeeds.Reset();
 	MaximumObservedRealtimeCardCount = 0;
 	CompletedCardCount = 0;
+	RandomBatchSequence = 0;
 }
 
 bool FWacomBackpackWorkspaceSaleDepartureController::ContainsCard(

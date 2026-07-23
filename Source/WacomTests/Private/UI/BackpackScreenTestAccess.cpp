@@ -7,6 +7,7 @@
 #include "RunSession.h"
 #include "Blueprint/WidgetTree.h"
 #include "CommonInputSubsystem.h"
+#include "Components/Border.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/OverlaySlot.h"
 #include "Components/VerticalBoxSlot.h"
@@ -1371,6 +1372,19 @@ FWacomBackpackScreenTestAccess::WorkspaceSaleSurfaceProbes(
 			View.bUsingSurfaceEffectMaterial;
 		Probe.bRealtimePresentationEnabled =
 			View.bRealtimePresentationEnabled;
+		Probe.bSelectionPresentationCleared =
+			!Card->bWorkspaceSelected
+			&& !Card->bWorkspaceCurrent;
+		Probe.bFeedbackOverlayCollapsed =
+			!Card->WorkspaceFeedbackOverlay
+			|| Card->WorkspaceFeedbackOverlay->GetVisibility()
+				== ESlateVisibility::Collapsed;
+		Probe.bAccessibilityPresentationCleared =
+			!Card->bWorkspaceNavigationFocused
+			&& Card->WorkspaceSemanticIcon
+				== EWacomBackpackWorkspaceCardSemanticIcon::None
+			&& Card->WorkspaceFocusPaintBrush.GetResourceObject() == nullptr
+			&& Card->WorkspaceSemanticPaintBrush.GetResourceObject() == nullptr;
 		Probe.Amount = View.SurfaceEffectView.PlayedDissolve.Amount;
 		Probe.Seed = View.SurfaceEffectView.PlayedDissolve.Seed;
 	}

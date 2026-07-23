@@ -62,6 +62,9 @@ struct FWacomBackpackSaleCardSurfaceProbe
 	bool bPlayedDissolveActive = false;
 	bool bUsingSurfaceEffectMaterial = false;
 	bool bRealtimePresentationEnabled = false;
+	bool bSelectionPresentationCleared = false;
+	bool bFeedbackOverlayCollapsed = false;
+	bool bAccessibilityPresentationCleared = false;
 	float Amount = 0.0f;
 	float Seed = 0.0f;
 };

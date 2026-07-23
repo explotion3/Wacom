@@ -143,7 +143,7 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 						Card.Instance.InstanceId);
 				}));
 		TestEqual(
-			*FString::Printf(TEXT("%d visuals enter FIFO"), CardCount),
+			*FString::Printf(TEXT("%d visuals enter randomized queue"), CardCount),
 			View.SaleDepartureQueuedCardCount,
 			CardCount);
 		TestEqual(
@@ -154,12 +154,24 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 			*FString::Printf(TEXT("%d visual poses remain in departure layer"), CardCount),
 			View.SettlementCardCount,
 			CardCount);
-		TestEqual(
-			*FString::Printf(TEXT("%d FIFO starts with current carry card"), CardCount),
-			View.SaleDeparturePendingInstanceIds.IsEmpty()
-				? FGuid()
-				: View.SaleDeparturePendingInstanceIds[0],
-			CurrentId);
+		TArray<FGuid> OriginalCarryOrder;
+		OriginalCarryOrder.Add(CurrentId);
+		for (const FGuid InstanceId : CarryView.CarriedInstanceIds)
+		{
+			if (InstanceId != CurrentId)
+			{
+				OriginalCarryOrder.Add(InstanceId);
+			}
+		}
+		if (CardCount > 1)
+		{
+			TestNotEqual(
+				*FString::Printf(TEXT("%d-card batch is visibly shuffled"), CardCount),
+				View.SaleDeparturePendingInstanceIds,
+				OriginalCarryOrder);
+		}
+		const TArray<FGuid> RandomizedOrder =
+			View.SaleDeparturePendingInstanceIds;
 		TestEqual(
 			*FString::Printf(TEXT("%d cards receive seeds"), CardCount),
 			View.SaleDepartureSeeds.Num(),
@@ -183,27 +195,33 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 			*FString::Printf(TEXT("%d first group is capped at four"), CardCount),
 			View.SaleDepartureActiveCardCount,
 			ExpectedFirstGroup);
-		TArray<FGuid> ExpectedOrder;
-		ExpectedOrder.Add(CurrentId);
-		for (const FGuid InstanceId : CarryView.CarriedInstanceIds)
-		{
-			if (InstanceId != CurrentId)
-			{
-				ExpectedOrder.Add(InstanceId);
-			}
-		}
+		TArray<FGuid> ExpectedOrder = RandomizedOrder;
 		ExpectedOrder.SetNum(ExpectedFirstGroup);
 		TestEqual(
-			*FString::Printf(TEXT("%d group preserves current-first carry order"), CardCount),
+			*FString::Printf(TEXT("%d active window follows randomized order"), CardCount),
 			View.SaleDepartureActiveInstanceIds,
 			ExpectedOrder);
+		float PreviousDelay = 0.0f;
 		for (int32 Index = 0; Index < ExpectedOrder.Num(); ++Index)
 		{
 			const float* Delay =
 				View.SaleDepartureActiveStartDelays.Find(ExpectedOrder[Index]);
-			TestTrue(
-				*FString::Printf(TEXT("%d full-motion stagger %d is exact"), CardCount, Index),
-				Delay && FMath::IsNearlyEqual(*Delay, Index * 0.035f));
+			if (Index == 0)
+			{
+				TestTrue(
+					*FString::Printf(TEXT("%d first randomized card starts immediately"), CardCount),
+					Delay && FMath::IsNearlyZero(*Delay));
+			}
+			else
+			{
+				const float Gap = Delay ? *Delay - PreviousDelay : 0.0f;
+				TestTrue(
+					*FString::Printf(TEXT("%d random full-motion gap %d stays bounded"), CardCount, Index),
+					Delay
+						&& Gap >= 0.035f * 0.65f - KINDA_SMALL_NUMBER
+						&& Gap <= 0.035f * 1.35f + KINDA_SMALL_NUMBER);
+			}
+			PreviousDelay = Delay ? *Delay : PreviousDelay;
 		}
 		TestEqual(
 			*FString::Printf(TEXT("%d remaining cards stay queued"), CardCount),
@@ -223,6 +241,51 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 				Probe.bUsingSurfaceEffectMaterial);
 			TestTrue(TEXT("Every active sold card owns a realtime Retainer"),
 				Probe.bRealtimePresentationEnabled);
+			TestTrue(TEXT("Sale clears selected/current presentation before dissolve"),
+				Probe.bSelectionPresentationCleared);
+			TestTrue(TEXT("Sale collapses the WBP feedback outline before dissolve"),
+				Probe.bFeedbackOverlayCollapsed);
+			TestTrue(TEXT("Sale clears native focus and semantic markers before dissolve"),
+				Probe.bAccessibilityPresentationCleared);
+		}
+
+		AdvanceReadySale(*Fixture->Screen, 3);
+		const TArray<FWacomBackpackSaleCardSurfaceProbe> OverlapProbes =
+			FWacomBackpackScreenTestAccess::WorkspaceSaleSurfaceProbes(
+				*Fixture->Screen);
+		TestEqual(
+			*FString::Printf(TEXT("%d randomized window remains concurrent"), CardCount),
+			OverlapProbes.Num(),
+			ExpectedFirstGroup);
+		for (const FWacomBackpackSaleCardSurfaceProbe& Probe : OverlapProbes)
+		{
+			TestTrue(TEXT("Concurrent cards have all entered the material dissolve"),
+				Probe.Amount > 0.0f && Probe.Amount < 1.0f);
+		}
+
+		if (CardCount > 4)
+		{
+			bool bObservedRollingRefill = false;
+			for (int32 Sample = 0; Sample < 8; ++Sample)
+			{
+				AdvanceReadySale(*Fixture->Screen, 1, 0.025f);
+				const FWacomBackpackWorkspaceAutomationTestView RollingView =
+					FWacomBackpackScreenTestAccess::WorkspaceView(
+						*Fixture->Screen);
+				if (RollingView.SaleDepartureCompletedCardCount > 0)
+				{
+					bObservedRollingRefill =
+						RollingView.SaleDepartureCompletedCardCount < 4
+						&& RollingView.SaleDepartureQueuedCardCount
+							< CardCount - ExpectedFirstGroup
+						&& RollingView.SaleDepartureActiveCardCount
+							== ExpectedFirstGroup;
+					break;
+				}
+			}
+			TestTrue(
+				TEXT("First completed card refills the parallel window before its peers finish"),
+				bObservedRollingRefill);
 		}
 
 		const int32 GroupCount = FMath::DivideAndRoundUp(CardCount, 4);
@@ -232,9 +295,9 @@ bool FWacomUIBackpackWorkspaceSaleDepartureGroupingSpec::RunTest(
 			*FString::Printf(TEXT("%d sale visuals all complete"), CardCount),
 			View.SaleDepartureCompletedCardCount,
 			CardCount);
-		TestEqual(TEXT("Completed FIFO has no queued cards"),
+		TestEqual(TEXT("Completed randomized queue has no queued cards"),
 			View.SaleDepartureQueuedCardCount, 0);
-		TestEqual(TEXT("Completed FIFO has no active cards"),
+		TestEqual(TEXT("Completed randomized queue has no active cards"),
 			View.SaleDepartureActiveCardCount, 0);
 		TestEqual(TEXT("Completed FIFO leaves no ghost Widgets"),
 			View.SettlementCardCount, 0);
@@ -288,6 +351,7 @@ bool FWacomUIBackpackWorkspaceSaleDepartureAppendLifecycleSpec::RunTest(
 			.FrameSchedulerGeneration;
 	const FWacomBackpackWorkspaceAutomationTestView FirstGroupView =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Fixture->Screen);
+	float PreviousSimplifiedDelay = 0.0f;
 	for (int32 Index = 0;
 		Index < FirstGroupView.SaleDepartureActiveInstanceIds.Num();
 		++Index)
@@ -296,9 +360,25 @@ bool FWacomUIBackpackWorkspaceSaleDepartureAppendLifecycleSpec::RunTest(
 			FirstGroupView.SaleDepartureActiveInstanceIds[Index];
 		const float* Delay =
 			FirstGroupView.SaleDepartureActiveStartDelays.Find(InstanceId);
-		TestTrue(
-			*FString::Printf(TEXT("Simplified-motion stagger %d is exact"), Index),
-			Delay && FMath::IsNearlyEqual(*Delay, Index * 0.02f));
+		if (Index == 0)
+		{
+			TestTrue(TEXT("First simplified departure starts immediately"),
+				Delay && FMath::IsNearlyZero(*Delay));
+		}
+		else
+		{
+			const float Gap = Delay
+				? *Delay - PreviousSimplifiedDelay
+				: 0.0f;
+			TestTrue(
+				*FString::Printf(TEXT("Random simplified gap %d stays bounded"), Index),
+				Delay
+					&& Gap >= 0.02f * 0.65f - KINDA_SMALL_NUMBER
+					&& Gap <= 0.02f * 1.35f + KINDA_SMALL_NUMBER);
+		}
+		PreviousSimplifiedDelay = Delay
+			? *Delay
+			: PreviousSimplifiedDelay;
 	}
 
 	TestTrue(TEXT("Input remains available while first group dissolves"),

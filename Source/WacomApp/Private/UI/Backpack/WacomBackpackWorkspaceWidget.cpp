@@ -3660,6 +3660,8 @@ void UWacomBackpackWorkspaceWidget::BeginSaleDeparture(
 			? &ResolvedSaleDissolveStyle->Style
 			: nullptr;
 	bool bQueuedAny = false;
+	const int32 FirstNewPendingIndex =
+		GetRuntime().SaleDeparture.GetQueuedCardCount();
 	int32 DepartureIndex = 0;
 	for (const FGuid InstanceId : OrderedIds)
 	{
@@ -3685,7 +3687,7 @@ void UWacomBackpackWorkspaceWidget::BeginSaleDeparture(
 		Card->UnbindWorkspacePointerEvents();
 		Card->SetWorkspaceInteractionEnabled(false);
 		Card->SetWorkspacePointerPassthrough(true);
-		Card->ResetWorkspaceAccessibilityPaintState();
+		Card->PrepareForBackpackSaleDeparturePresentation();
 		Wacom::Backpack::ReparentCardPreservingSlate(
 			*SettlementLayer,
 			*Card);
@@ -3718,6 +3720,8 @@ void UWacomBackpackWorkspaceWidget::BeginSaleDeparture(
 
 	if (bQueuedAny)
 	{
+		GetRuntime().SaleDeparture.RandomizePendingTail(
+			FirstNewPendingIndex);
 		// The sale group owns all realtime Retainers while active. Reconcile now
 		// so Hover/Carry depth cannot briefly register a fifth realtime card.
 		ReconcileMotionTarget();

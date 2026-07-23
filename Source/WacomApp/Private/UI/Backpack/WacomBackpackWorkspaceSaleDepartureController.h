@@ -25,12 +25,16 @@ public:
 	static constexpr float FullMotionStaggerSeconds = 0.035f;
 	static constexpr float SimplifiedMotionStaggerSeconds = 0.02f;
 	static constexpr float SimplifiedMotionDurationSeconds = 0.12f;
+	static constexpr float MinimumStaggerScale = 0.65f;
+	static constexpr float MaximumStaggerScale = 1.35f;
 
 	bool Enqueue(
 		UWacomDeckCardWidget& Card,
 		FGuid InstanceId,
 		const FWacomFirstPersonCardPlayedDissolveStyleData& Style,
 		bool bSimplifiedMotion);
+	/** Randomizes only the newly appended tail, preserving older sale batches. */
+	void RandomizePendingTail(int32 FirstPendingIndex);
 	void Tick(float DeltaSeconds, UObject* WorldContext);
 	void SetRetainedRenderingEnabled(bool bEnabled);
 	void Reset(bool bRemoveWidgets);
@@ -71,6 +75,8 @@ private:
 		uint32 PreparationGeneration = 0;
 		float StartDelayRemainingSeconds = 0.0f;
 		float Seed = 0.0f;
+		float StaggerScale = 1.0f;
+		uint32 RandomOrderKey = 0;
 		bool bSimplifiedMotion = false;
 		bool bGroupSoundOwner = false;
 	};
@@ -80,11 +86,16 @@ private:
 	TSet<float> UsedSeeds;
 	int32 MaximumObservedRealtimeCardCount = 0;
 	int32 CompletedCardCount = 0;
+	uint32 RandomBatchSequence = 0;
 
 	static bool IsStyleValid(
 		const FWacomFirstPersonCardPlayedDissolveStyleData& Style);
+	static uint32 MixRandomBits(uint32 Value);
 	float AllocateSeed(FGuid InstanceId);
-	void StartNextGroup();
-	void PrepareEntry(FEntry& Entry, int32 GroupIndex);
+	void FillAvailableSlots();
+	void PrepareEntry(
+		FEntry& Entry,
+		float StartDelaySeconds,
+		bool bSoundOwner);
 	void FinishEntry(FEntry& Entry, bool bFailed);
 };

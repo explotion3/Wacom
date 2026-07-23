@@ -164,6 +164,16 @@ void UWacomDeckCardWidget::ResetWorkspaceAccessibilityPaintState()
 	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
+void UWacomDeckCardWidget::PrepareForBackpackSaleDeparturePresentation()
+{
+	// Selection/current feedback belongs to the interactive card state, not to
+	// the committed sale result. Clear it before the dissolve material is
+	// prepared so neither the WBP overlay nor the native markers outlive the
+	// card's participation in selection/navigation.
+	SetWorkspaceVisualState(false, false, false);
+	ResetWorkspaceAccessibilityPaintState();
+}
+
 void UWacomDeckCardWidget::ApplyWorkspaceVisualState(
 	const FWacomBackpackWorkspaceCardVisualState& VisualState)
 {
