@@ -50,11 +50,14 @@
 ### Unreal MCP 使用
 
 - Unreal Editor 资产操作遵循 `Docs/UnrealMCPWorkflow.md`；固定 role、端口和默认权限以 `Scripts/UnrealMcp/Endpoints.json` 为准。
-- Subagent 不是固定前置条件。当前会话已经拥有目标 endpoint 的 Unreal 工具且身份校验通过时可直接调用；当前会话没有工具、Editor 已重启或二进制 mutation 风险高时，为本次 Editor 生命周期新建 disposable asset agent。
+- Unreal MCP 只能由当前任务的主会话直接调用。默认禁止 subagent、disposable asset agent 或其它委托会话连接 Unreal MCP、取得 writer lease、制作或保存 `.uasset/.umap`。
+- WBP、Blueprint、Niagara、Material、DreamShader 和其它依赖视觉迭代的资产操作必须由主会话亲自完成工具调用、检查实际变化、迭代效果并组织 PIE/截图验收；不得把完整资产制作任务交给 subagent 后仅接收结果。
+- 当前主会话没有加载目标 endpoint 工具、Editor 重启后工具不可用或存在多个 Editor 时，不得以此为理由创建 MCP subagent。应由主会话完成 named endpoint 配置、Editor 启动和 `AssertReady`；仍无法直接调用时暂停 mutation，报告阻塞并等待用户切换或重启到具备 MCP 工具的主会话。
+- Subagent 仍可在一般协作边界内执行不连接 Unreal MCP、也不读写 Unreal 二进制资产的独立文本/源码工作；这不构成 MCP mutation 例外。
 - MCP 不认识 Codex cwd。调用工具前必须用 `Scripts/Invoke-WacomUnrealMcp.ps1 -Action AssertReady` 校验准确 `.uproject`、PID、进程启动时间、SessionId、port owner、branch 和 HEAD；单独调用 `IsPIERunning` 不能证明 worktree 身份。
 - 任何资产 mutation 前必须取得单一 writer lease，并用完整 `/Game/...` Package allowlist 限制保存范围。`main` 和 `integration` endpoint 默认只读；只有用户明确授权本次资产范围后才能临时解除保护。
 - Editor 生命周期内不切 branch、不更新 HEAD、不运行 C++ 编译。保存并成功释放写锁、正常关闭 Editor，再用 `-Action AssertClosedForBuild` 通过编译门禁。
-- `.uasset/.umap` 不做文本合并。交接必须报告 MCP session provenance、writer audit、实际变化路径、Git LFS 状态和资产/PIE 验证。
+- `.uasset/.umap` 不做文本合并。交接必须报告主会话 task/thread ID、MCP session provenance、writer audit、实际变化路径、Git LFS 状态和资产/PIE 验证。
 
 ### Spec Kit 使用
 

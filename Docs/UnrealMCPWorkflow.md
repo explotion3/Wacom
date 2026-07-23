@@ -19,14 +19,17 @@ tags:
 
 主会话长期负责架构、代码、Git、冲突判断和最终验收。Unreal MCP 只是连接某个明确 Editor 实例的资产操作通道，不是项目身份来源。
 
-Subagent 不是固定前置条件：
+Unreal MCP 的调用所有权固定属于当前任务的主会话：
 
-- 当前会话已经拥有目标 named endpoint 的 Unreal 工具，并且启动脚本的身份校验通过时，主会话可以直接执行资产操作。
-- 当前会话启动时 MCP 离线、没有暴露 Unreal 工具，或 Editor 已关闭重开时，为本次 Editor 生命周期新建一个 disposable asset agent。
-- 多个 Editor 同时存在或修改高风险二进制资产时，优先使用 disposable asset agent，缩小误连和工具上下文残留风险。
-- Editor 关闭后，不把旧 asset agent 继续用于下一次 Editor 生命周期。
+- 主会话必须直接发现并调用目标 named endpoint 的 Unreal 工具；默认禁止 subagent、disposable asset agent 或其它委托会话连接 Unreal MCP。
+- 禁止 subagent 取得 writer lease、执行 mutation、保存 Package 或交付 `.uasset/.umap`。WBP、Blueprint、Niagara、Material、DreamShader 等需要持续视觉判断的制作必须由主会话亲自调用工具、检查每次变化并组织 PIE/截图验收。
+- 当前主会话启动时 MCP 离线、没有暴露 Unreal 工具、Editor 已关闭重开或同时存在多个 Editor，都不是创建 MCP subagent 的理由。主会话应完成端点配置、启动目标 Editor、执行 `AssertReady` 并重新发现工具。
+- 如果主会话仍无法获得目标 Unreal 工具，必须暂停资产 mutation，报告具体阻塞并等待用户重启或切换到具备 MCP 工具的主会话；不得通过委托规避工具缺失。
+- Subagent 可以执行不连接 Unreal MCP、也不读写 Unreal 二进制资产的独立文本或源码任务，但不能代替主会话承担资产制作、视觉迭代或 Editor 生命周期管理。
 
-无论由主会话还是 asset agent 调用，身份校验、写锁和 Package allowlist 完全相同。
+历史 `specs/`、quickstart 或交接记录中关于 disposable asset agent 的表述只记录当时做法，已被本节取代，不再构成现行授权。
+
+主会话直接调用仍必须完整执行身份校验、写锁和 Package allowlist；“主会话所有权”不会放宽任何写入门禁。
 
 ### 用户明确授权的一次性离线 Commandlet 例外
 
@@ -69,7 +72,7 @@ MCP 仍是常规二进制资产 mutation 的正式入口。只有 MCP 因可复�
 
 把输出的 `[mcp_servers.ue_wacom_*]` 段放入 `C:\Users\ahhh\.codex\config.toml`。这些 endpoint 均为 `required = false`，没有启动对应 Editor 时不应阻止 Codex 启动。
 
-首次完成这些用户级配置后重启 Codex 一次，让长生命周期主会话能够发现 named endpoint。以后 Editor 关闭重开不需要重启主会话；只有当前 task 没有加载对应 Unreal 工具时，才为新 Editor 生命周期创建 disposable asset agent。
+首次完成这些用户级配置后重启 Codex 一次，让长生命周期主会话能够发现 named endpoint。以后 Editor 关闭重开通常不需要重启主会话；如果当前 task 没有加载对应 Unreal 工具，应先在主会话重新发现工具。仍不可用时暂停 mutation，并让用户重启或切换到具备 MCP 工具的主会话，不创建 disposable asset agent。
 
 用户级 `config.toml`、本机进程号、SessionId 和 writer lease 不进入版本控制。仓库只跟踪端点定义、启动工具和本文合同。
 
@@ -158,6 +161,7 @@ $TaskId = '<current-codex-task-id>'
 
 取得写锁后：
 
+- 所有 MCP 工具调用都由 writer lease 中 `ThreadId` 对应的主会话直接发起；不得把 lease 或 endpoint 交给 subagent。
 - 同一 Editor 同时只允许这个 task 执行 mutation。
 - 优先调用 UMGToolSet、BlueprintTools、Niagara Toolsets 等专用工具，不用通用脚本绕过边界。
 - 只保存 allowlist 中的 Package；创建的关联资产也必须在取得写锁前列入 allowlist。
@@ -220,7 +224,7 @@ Editor、role port 或同一 `.uproject` 仍在运行时，归档会被拒绝。
 
 功能 Agent 的交接报告必须附上：
 
-- role、endpoint、SessionId 和 task ID；
+- role、endpoint、SessionId，以及直接调用 MCP 的主会话 task/thread ID；
 - writer audit JSON 路径；
 - mutation Package allowlist；
 - 实际变化的 `.uasset/.umap`；
@@ -230,16 +234,18 @@ Editor、role port 或同一 `.uproject` 仍在运行时，归档会被拒绝。
 集成会话按以下规则处理：
 
 1. 根据 commit 而不是运行中的 Editor 取文件。
-2. 对照 main 检查同路径 `.uasset/.umap` 是否已经变化。
-3. 同路径二进制发生重叠时停止；由用户指定权威版本，或让功能 Agent 基于权威版本重放编辑器操作。
-4. 不对 Unreal Package 做文本合并，不从其他 worktree 手工复制来源不明的资产。
-5. 重新检查 LFS attributes、pointer/object 完整性和 commit 中的实际路径。
+2. 核对 writer audit 中的 task/thread ID 属于该功能任务的主会话；若 mutation 来自 subagent 或 disposable asset agent，默认停止集成，并要求在主会话按权威基线重做。只有用户针对该份既有资产明确决定接受时，才能作为一次性历史例外继续审计。
+3. 对照 main 检查同路径 `.uasset/.umap` 是否已经变化。
+4. 同路径二进制发生重叠时停止；由用户指定权威版本，或让功能 Agent 基于权威版本重放编辑器操作。
+5. 不对 Unreal Package 做文本合并，不从其他 worktree 手工复制来源不明的资产。
+6. 重新检查 LFS attributes、pointer/object 完整性和 commit 中的实际路径。
 
 `main` 或 `integration` 上的 MCP 默认只用于只读检查。不得用它“顺手修好”候选提交中的二进制冲突。
 
 ## 8. 第一阶段运行清单
 
 - [ ] 用户级 Codex 配置已注册 6 个 named endpoint。
+- [ ] 当前任务的主会话直接拥有并调用目标 Unreal MCP 工具；没有 MCP subagent 或 disposable asset agent。
 - [ ] Editor 只通过准确 worktree 的启动命令打开。
 - [ ] `AssertReady` 在每次 MCP 操作前通过。
 - [ ] Mutation 前取得唯一 writer lease 和完整 Package allowlist。

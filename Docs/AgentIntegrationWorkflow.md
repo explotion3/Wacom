@@ -70,7 +70,7 @@ tags:
 
 `.uasset`、`.umap` 以及其他 UE 二进制 Package 不能可靠地逐行合并。发生同路径冲突时，必须确定权威版本，或让其中一个功能 Agent 基于最新集成结果在编辑器中重新应用改动。
 
-通过 Unreal MCP 修改资产时，还必须遵循 `Docs/UnrealMCPWorkflow.md`。MCP endpoint 可达只证明服务在线，不证明连接的是目标 worktree；必须保留经过身份校验的 session provenance、Package allowlist 和 writer audit。
+通过 Unreal MCP 修改资产时，还必须遵循 `Docs/UnrealMCPWorkflow.md`。MCP endpoint 可达只证明服务在线，不证明连接的是目标 worktree；必须保留经过身份校验的 session provenance、Package allowlist 和 writer audit。Unreal MCP mutation 必须由该功能任务的主会话直接执行；subagent/disposable asset agent 产出的二进制默认不进入正式集成。
 
 ### 2.5 验证分层但不重复造假
 
@@ -91,7 +91,7 @@ tags:
 - 只修改被分配的功能范围，保护其他 Agent 和用户的工作。
 - 开工前记录 base commit；需要依赖其他功能时显式报告。
 - 完成编译、定向测试及适用的 Blueprint/资产验证。
-- 使用 Unreal MCP mutation 时，在保存前取得 writer lease，交付 session provenance、Package allowlist 和 writer audit。
+- 使用 Unreal MCP mutation 时，由当前功能任务主会话直接取得 writer lease 和调用工具，交付主会话 task/thread ID、session provenance、Package allowlist 和 writer audit；不得委托 subagent 制作或保存 Unreal 二进制资产。
 - 把自身成果整理为一个或一组有序、可解释的 commit。
 - 交付前确认 worktree 干净。
 - 不 merge `main`、不 push、不删除自己的 branch/worktree，除非用户明确要求。
@@ -312,7 +312,7 @@ main 当前 HEAD
 
 未经用户确认，不因“提交较新”自动判定二进制资产权威版本。
 
-若修改来自 Unreal MCP，writer audit 只用于证明“哪个 Editor/branch/HEAD、哪个 task、允许保存哪些 Package、最终产生哪些 dirty paths”；它不能自动解决同路径冲突，也不能替代用户对权威资产的决定。集成会话应把 audit 中的 SHA-256、实际 commit blob/LFS object 和当前 main 同路径资产三者一起核对。
+若修改来自 Unreal MCP，writer audit 只用于证明“哪个 Editor/branch/HEAD、哪个主会话 task、允许保存哪些 Package、最终产生哪些 dirty paths”；它不能自动解决同路径冲突，也不能替代用户对权威资产的决定。集成会话应先确认 `ThreadId` 对应该功能任务的主会话，再把 audit 中的 SHA-256、实际 commit blob/LFS object 和当前 main 同路径资产三者一起核对。若 audit 或交接表明 mutation 来自 subagent/disposable asset agent，默认停止并要求主会话基于权威资产重做；用户可针对既有历史资产逐次决定是否接受，但该决定不形成后续授权。
 
 ### 9.3 DreamShader 与生成材质
 
@@ -343,6 +343,7 @@ Wacom 正式运行时材质需要同时考虑：
 
 - `.uasset`、`.umap` 和项目配置的其他二进制类型匹配 LFS attributes；
 - commit 中保存的是 LFS pointer，所指对象在本地可用；
+- Unreal MCP mutation 的 writer audit `ThreadId` 对应功能任务主会话，不是 subagent/disposable asset agent；
 - Unreal MCP writer audit 报告的 Package、dirty path 和哈希与实际提交一致；
 - checkout 后文件不是未解析 pointer 文本；
 - AssetRegistry 能加载正式引用；
