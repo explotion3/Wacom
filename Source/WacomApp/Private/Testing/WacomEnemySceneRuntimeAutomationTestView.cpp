@@ -141,4 +141,42 @@ FName FWacomEnemySceneRuntimeAutomationTestView::GetDesiredTargetPreviewKind(
 	return Part.GetRuntimeDebugView().TargetPreviewKind;
 }
 
+FName FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsSource(
+	const AWacomBattleEnemyActor& Host,
+	const UWacomBattleEnemyPartComponent& Part)
+{
+	const UWacomBattleEnemySceneRuntimeComponent* Runtime =
+		Host.GetEnemySceneRuntimeComponent();
+	return Runtime
+		? Runtime->GetPartPresentationBoundsSourceForAutomation(Part)
+		: NAME_None;
+}
+
+FVector FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsCenter(
+	const AWacomBattleEnemyActor& Host,
+	const UWacomBattleEnemyPartComponent& Part)
+{
+	const UWacomBattleEnemySceneRuntimeComponent* Runtime =
+		Host.GetEnemySceneRuntimeComponent();
+	return Runtime
+		? Runtime->GetPartPresentationBoundsCenterForAutomation(Part)
+		: FVector::ZeroVector;
+}
+
+FVector2D FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsProjectedSize(
+	const AWacomBattleEnemyActor& Host,
+	const UWacomBattleEnemyPartComponent& Part,
+	const FVector& PlaneRight,
+	const FVector& PlaneUp)
+{
+	const UWacomBattleEnemySceneRuntimeComponent* Runtime =
+		Host.GetEnemySceneRuntimeComponent();
+	return Runtime
+		? Runtime->GetPartPresentationBoundsProjectedSizeForAutomation(
+			Part,
+			PlaneRight,
+			PlaneUp)
+		: FVector2D::ZeroVector;
+}
+
 #endif

@@ -5,7 +5,6 @@
 #include "Actors/WacomBattleEnemyPartImpactStyle.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/ActorComponent.h"
-#include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInterface.h"
@@ -94,7 +93,7 @@ FWacomBattleEnemyPartImpactFeedbackController::BuildRequest(
 bool FWacomBattleEnemyPartImpactFeedbackController::PlayAcceptedCue(
 	UActorComponent& OwnerComponent,
 	USceneComponent* ImpactAnchor,
-	UPrimitiveComponent* ImpactExtentSource,
+	const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 	const UWacomBattleEnemyPartImpactStyle* Style,
 	EWacomBattleEnemyPartCuePlaybackKind PlaybackKind,
 	const FWacomBattlePresentationTargetCue& Cue,
@@ -152,7 +151,7 @@ bool FWacomBattleEnemyPartImpactFeedbackController::PlayAcceptedCue(
 	Request.TargetDiameterCentimeters = ResolveTargetDiameterCentimeters(
 		*Style,
 		Request.EffectKind,
-		ImpactExtentSource,
+		PresentationBounds,
 		PlaneRight,
 		PlaneUp);
 	DebugView.LastEffectKind = EffectKindToName(Request.EffectKind);
@@ -163,6 +162,7 @@ bool FWacomBattleEnemyPartImpactFeedbackController::PlayAcceptedCue(
 	DebugView.LastDecorativeIntensity = Request.DecorativeIntensity;
 	DebugView.LastTargetDiameterCentimeters = Request.TargetDiameterCentimeters;
 	DebugView.bLastReducedMotion = Request.bReducedMotion;
+	DebugView.PresentationBoundsSource = PresentationBounds.GetSource();
 
 	if (!Style->HasValidVisualAssets() || !IsValid(ImpactAnchor))
 	{
@@ -182,9 +182,10 @@ bool FWacomBattleEnemyPartImpactFeedbackController::PlayAcceptedCue(
 		return false;
 	}
 
-	Component->SetWorldLocation(
+	DebugView.LastEffectWorldLocation =
 		ImpactAnchor->GetComponentLocation()
-		+ CameraDirection * Request.CameraDepthOffsetCentimeters);
+		+ CameraDirection * Request.CameraDepthOffsetCentimeters;
+	Component->SetWorldLocation(DebugView.LastEffectWorldLocation);
 	Component->SetVariableInt(WacomBattleEnemyPartImpactFeedbackPrivate::EffectKindParameter,
 		WacomBattleEnemyPartImpactFeedbackPrivate::ToNiagaraEffectKind(Request.EffectKind));
 	Component->SetVariableFloat(
@@ -330,25 +331,19 @@ float FWacomBattleEnemyPartImpactFeedbackController::ResolveStablePitch(
 float FWacomBattleEnemyPartImpactFeedbackController::ResolveTargetDiameterCentimeters(
 	const UWacomBattleEnemyPartImpactStyle& Style,
 	EWacomBattleEnemyPartImpactEffectKind EffectKind,
-	const UPrimitiveComponent* ImpactExtentSource,
+	const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 	const FVector& PlaneRight,
 	const FVector& PlaneUp)
 {
 	float Diameter = Style.FallbackImpactDiameterCentimeters;
 	bool bHasProjectedDiameter = false;
-	if (IsValid(ImpactExtentSource))
+	const float ProjectedDiameter =
+		PresentationBounds.ProjectDiameterCentimeters(PlaneRight, PlaneUp);
+	if (FMath::IsFinite(ProjectedDiameter)
+		&& ProjectedDiameter > KINDA_SMALL_NUMBER)
 	{
-		const FVector Extent = ImpactExtentSource->Bounds.BoxExtent.GetAbs();
-		const FVector AbsRight = PlaneRight.GetAbs();
-		const FVector AbsUp = PlaneUp.GetAbs();
-		const float ProjectedHalfWidth = FVector::DotProduct(AbsRight, Extent);
-		const float ProjectedHalfHeight = FVector::DotProduct(AbsUp, Extent);
-		const float ProjectedDiameter = 2.0f * FMath::Max(ProjectedHalfWidth, ProjectedHalfHeight);
-		if (FMath::IsFinite(ProjectedDiameter) && ProjectedDiameter > KINDA_SMALL_NUMBER)
-		{
-			Diameter = ProjectedDiameter;
-			bHasProjectedDiameter = true;
-		}
+		Diameter = ProjectedDiameter;
+		bHasProjectedDiameter = true;
 	}
 
 	float CoverageMultiplier = Style.TargetConfirmedCoverageMultiplier;

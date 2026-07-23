@@ -53,6 +53,17 @@ struct WACOMAPP_API FWacomEnemySceneRuntimeAutomationTestView
 		UWacomBattleEnemyPartComponent& Part);
 	static FName GetDesiredTargetPreviewKind(
 		const UWacomBattleEnemyPartComponent& Part);
+	static FName GetPresentationBoundsSource(
+		const AWacomBattleEnemyActor& Host,
+		const UWacomBattleEnemyPartComponent& Part);
+	static FVector GetPresentationBoundsCenter(
+		const AWacomBattleEnemyActor& Host,
+		const UWacomBattleEnemyPartComponent& Part);
+	static FVector2D GetPresentationBoundsProjectedSize(
+		const AWacomBattleEnemyActor& Host,
+		const UWacomBattleEnemyPartComponent& Part,
+		const FVector& PlaneRight,
+		const FVector& PlaneUp);
 };
 
 #endif

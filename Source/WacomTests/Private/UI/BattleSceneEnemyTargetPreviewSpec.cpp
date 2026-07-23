@@ -331,10 +331,11 @@ bool FWacomUIBattleSceneEnemyTargetPreviewPerPartNiagaraOwnershipSpec::RunTest(
 
 	FWacomBattleEnemyPartTargetPreviewFeedbackController FirstController;
 	FWacomBattleEnemyPartTargetPreviewFeedbackController SecondController;
+	const FWacomBattleEnemyPartPresentationBounds InvalidBounds;
 	TestTrue(TEXT("First part starts target preview"), FirstController.BeginOrUpdate(
-		*Runtime, FirstAnchor, nullptr, Style, PlaybackView, 1.0f));
+		*Runtime, FirstAnchor, InvalidBounds, Style, PlaybackView, 1.0f));
 	TestTrue(TEXT("Second part starts target preview"), SecondController.BeginOrUpdate(
-		*Runtime, SecondAnchor, nullptr, Style, PlaybackView, 1.0f));
+		*Runtime, SecondAnchor, InvalidBounds, Style, PlaybackView, 1.0f));
 
 	TArray<UNiagaraComponent*> NiagaraComponents;
 	Host->GetComponents(NiagaraComponents);

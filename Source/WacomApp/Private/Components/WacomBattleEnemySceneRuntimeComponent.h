@@ -86,6 +86,17 @@ public:
 	int32 ApplyPartDestroyedVisualState(UWacomBattleEnemyPartComponent& Part);
 	void RestorePartAuthoredVisualState(UWacomBattleEnemyPartComponent& Part);
 
+#if WITH_DEV_AUTOMATION_TESTS
+	FName GetPartPresentationBoundsSourceForAutomation(
+		const UWacomBattleEnemyPartComponent& Part) const;
+	FVector GetPartPresentationBoundsCenterForAutomation(
+		const UWacomBattleEnemyPartComponent& Part) const;
+	FVector2D GetPartPresentationBoundsProjectedSizeForAutomation(
+		const UWacomBattleEnemyPartComponent& Part,
+		const FVector& PlaneRight,
+		const FVector& PlaneUp) const;
+#endif
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void TickComponent(

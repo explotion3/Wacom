@@ -3,11 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "WacomBattleEnemyPartPresentationBounds.h"
 #include "WacomBattleEnemyPartTargetPreviewPlayback.h"
 
 class UActorComponent;
 class UNiagaraComponent;
-class UPrimitiveComponent;
 class USceneComponent;
 class UWacomBattleEnemyPartTargetPreviewStyle;
 
@@ -21,6 +21,9 @@ struct FWacomBattleEnemyPartTargetPreviewFeedbackDebugView
 	float Pulse = 0.0f;
 	FVector2D TargetSizeCentimeters = FVector2D::ZeroVector;
 	float AvailabilityIconSizeCentimeters = 0.0f;
+	FName PresentationBoundsSource = NAME_None;
+	FVector PresentationBoundsWorldCenter = FVector::ZeroVector;
+	FVector TargetWorldCenter = FVector::ZeroVector;
 	int32 ActivationCount = 0;
 };
 
@@ -30,8 +33,8 @@ class WACOMAPP_API FWacomBattleEnemyPartTargetPreviewFeedbackController
 public:
 	bool BeginOrUpdate(
 		UActorComponent& OwnerComponent,
-		USceneComponent* ImpactAnchor,
-		UPrimitiveComponent* ImpactExtentSource,
+		USceneComponent* AttachmentParent,
+		const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 		const UWacomBattleEnemyPartTargetPreviewStyle* Style,
 		const FWacomBattleEnemyPartTargetPreviewPlaybackView& PlaybackView,
 		float DecorativeIntensity);
@@ -47,12 +50,12 @@ public:
 private:
 	UNiagaraComponent* ResolveOrCreateComponent(
 		UActorComponent& OwnerComponent,
-		USceneComponent& ImpactAnchor,
+		USceneComponent& AttachmentParent,
 		const UWacomBattleEnemyPartTargetPreviewStyle& Style);
 	static FVector2D ResolveTargetSizeCentimeters(
 		const UWacomBattleEnemyPartTargetPreviewStyle& Style,
 		EWacomBattleEnemyPartTargetPreviewKind Kind,
-		const UPrimitiveComponent* ImpactExtentSource,
+		const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 		const FVector& PlaneRight,
 		const FVector& PlaneUp);
 	static float ResolveAvailabilityIconSizeCentimeters(
@@ -60,7 +63,7 @@ private:
 		const FVector2D& TargetSizeCentimeters);
 
 	TWeakObjectPtr<UNiagaraComponent> NiagaraComponent;
-	TWeakObjectPtr<USceneComponent> AttachedImpactAnchor;
+	TWeakObjectPtr<USceneComponent> AttachedPart;
 	TWeakObjectPtr<const UWacomBattleEnemyPartTargetPreviewStyle> ActiveStyle;
 	FWacomBattleEnemyPartTargetPreviewFeedbackDebugView DebugView;
 };

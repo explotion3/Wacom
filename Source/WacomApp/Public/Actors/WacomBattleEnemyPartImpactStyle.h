@@ -55,15 +55,15 @@ public:
 	float DestroyedIntensity = 1.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
-		meta = (ToolTip = "TargetConfirmed 相对当前命中部位屏幕投影包围尺寸的覆盖倍率。无单位；推荐 1.1–1.4，1.2 表示刻印略大于该部位，不会覆盖整个敌人。"))
+		meta = (ToolTip = "TargetConfirmed 相对部位稳定 authored Idle visual 摄像机平面投影长边的覆盖倍率。无单位；推荐 1.1–1.4，1.2 表示刻印略大于该部位，不会覆盖整个敌人。"))
 	float TargetConfirmedCoverageMultiplier = 1.20f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
-		meta = (ToolTip = "Damage 冲击环相对当前命中部位屏幕投影包围尺寸的覆盖倍率。无单位；推荐 1.1–1.5，1.2 表示冲击环略越过该部位边缘。"))
+		meta = (ToolTip = "Damage 冲击环相对部位稳定 authored Idle visual 摄像机平面投影长边的覆盖倍率。无单位；推荐 1.1–1.5，1.2 表示冲击环略越过该部位边缘。"))
 	float DamageCoverageMultiplier = 1.20f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",
-		meta = (ToolTip = "Destroyed 崩裂相对当前部位屏幕投影包围尺寸的覆盖倍率。无单位；推荐 1.2–1.5。"))
+		meta = (ToolTip = "Destroyed 崩裂相对部位稳定 authored Idle visual 摄像机平面投影长边的覆盖倍率。无单位；推荐 1.2–1.5。"))
 	float DestroyedCoverageMultiplier = 1.35f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Impact|Sizing",

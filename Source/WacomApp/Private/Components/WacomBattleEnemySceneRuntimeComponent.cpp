@@ -14,6 +14,7 @@
 #include "Components/WacomBattleEnemyPartImpactAnchorComponent.h"
 #include "Components/WacomBattleEnemyPartImpactFeedbackController.h"
 #include "Components/WacomBattleEnemyPartOutlineFeedbackController.h"
+#include "Components/WacomBattleEnemyPartPresentationBounds.h"
 #include "Components/WacomBattleEnemyPartSpriteLayerComponent.h"
 #include "Components/WacomBattleEnemyPartTargetPreviewFeedbackController.h"
 #include "Components/WacomBattleEnemyPartTargetPreviewPlayback.h"
@@ -39,6 +40,7 @@ namespace
 	const FName InteractionCollisionSourceVisualBounds(TEXT("InteractionVisualBoundsFallback"));
 	const FName InteractionCollisionSourceVisualUnion(TEXT("DirectVisualUnionFallback"));
 	const FName InteractionCollisionSourceDefault(TEXT("DefaultSafetyFallback"));
+	const FName PresentationBoundsSourceStableVisual(TEXT("StableInteractionVisual"));
 
 	struct FFlipbookAuthoredState
 	{
@@ -327,11 +329,14 @@ namespace
 			const UWacomBattleEnemyPartFlipbookLayerComponent* Component =
 				Layer.Component.Get();
 			const UPaperFlipbook* Flipbook = Layer.Flipbook.Get();
+			const UPaperSprite* IdleSprite = Flipbook
+				? Flipbook->GetSpriteAtFrame(0)
+				: nullptr;
 			bHasVisualBounds |= Component
-				&& Flipbook
+				&& IdleSprite
 				&& AccumulatePartLocalBounds(
 					Bounds,
-					Flipbook->GetRenderBounds(),
+					IdleSprite->GetRenderBounds(),
 					*Component);
 		}
 		for (const FSpriteAuthoredState& Layer : State.Sprites)
@@ -354,6 +359,45 @@ namespace
 				InteractionCollisionSourceVisualUnion };
 		}
 		return FFallbackBounds();
+	}
+
+	FWacomBattleEnemyPartPresentationBounds ResolvePresentationBounds(
+		const FPartRuntimeState& State)
+	{
+		if (State.bInteractionVisualResolved)
+		{
+			const UPaperSprite* StableSprite =
+				State.StableInteractionCollisionSprite.Get();
+			const USceneComponent* InteractionVisual =
+				State.InteractionVisual.Get();
+			if (StableSprite && InteractionVisual)
+			{
+				const FWacomBattleEnemyPartPresentationBounds StableBounds =
+					FWacomBattleEnemyPartPresentationBounds::FromLocalBounds(
+						StableSprite->GetRenderBounds(),
+						InteractionVisual->GetComponentTransform(),
+						State.bInteractionCollisionReady
+							? PresentationBoundsSourceStableVisual
+							: InteractionCollisionSourceVisualBounds);
+				if (StableBounds.IsValid())
+				{
+					return StableBounds;
+				}
+			}
+		}
+
+		const UWacomBattleEnemyPartComponent* Part = State.Part.Get();
+		if (!Part)
+		{
+			return FWacomBattleEnemyPartPresentationBounds();
+		}
+		const FFallbackBounds Fallback = ResolveFallbackBounds(State);
+		return FWacomBattleEnemyPartPresentationBounds::FromLocalBounds(
+			FBoxSphereBounds(FBox::BuildAABB(
+				Fallback.RelativeCenter,
+				Fallback.HalfExtent)),
+			Part->GetComponentTransform(),
+			Fallback.Source);
 	}
 
 	UWacomBattleEnemyPartFallbackCollisionComponent* EnsureFallbackCollision(
@@ -531,13 +575,6 @@ namespace
 		}
 	}
 
-	UPrimitiveComponent* ResolveInteractionExtentSource(FPartRuntimeState& State)
-	{
-		return State.bInteractionCollisionReady
-			? State.InteractionVisual.Get()
-			: State.FallbackCollision.Get();
-	}
-
 	EWacomBattleEnemyPartOutlineState ResolveDesiredOutlineState(
 		const FPartRuntimeState& State)
 	{
@@ -660,8 +697,8 @@ namespace
 			bSimplifiedMotion);
 		State.TargetPreviewFeedback->BeginOrUpdate(
 			Owner,
-			ResolveImpactAnchor(State),
-			ResolveInteractionExtentSource(State),
+			Part,
+			ResolvePresentationBounds(State),
 			Style,
 			State.TargetPreviewPlayback->GetView(),
 			FlashScale);
@@ -1215,6 +1252,42 @@ FWacomBattleEnemyPartRuntimeDebugView UWacomBattleEnemySceneRuntimeComponent::Bu
 	return View;
 }
 
+#if WITH_DEV_AUTOMATION_TESTS
+
+FName UWacomBattleEnemySceneRuntimeComponent::GetPartPresentationBoundsSourceForAutomation(
+	const UWacomBattleEnemyPartComponent& Part) const
+{
+	const FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr;
+	return State
+		? ResolvePresentationBounds(*State).GetSource()
+		: NAME_None;
+}
+
+FVector UWacomBattleEnemySceneRuntimeComponent::GetPartPresentationBoundsCenterForAutomation(
+	const UWacomBattleEnemyPartComponent& Part) const
+{
+	const FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr;
+	return State
+		? ResolvePresentationBounds(*State).GetWorldCenter()
+		: FVector::ZeroVector;
+}
+
+FVector2D
+UWacomBattleEnemySceneRuntimeComponent::GetPartPresentationBoundsProjectedSizeForAutomation(
+	const UWacomBattleEnemyPartComponent& Part,
+	const FVector& PlaneRight,
+	const FVector& PlaneUp) const
+{
+	const FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr;
+	return State
+		? ResolvePresentationBounds(*State).ProjectSizeCentimeters(
+			PlaneRight,
+			PlaneUp)
+		: FVector2D::ZeroVector;
+}
+
+#endif
+
 void UWacomBattleEnemySceneRuntimeComponent::PlayPartActionAnimation(
 	UWacomBattleEnemyPartComponent& Part,
 	FName IntentId,
@@ -1507,7 +1580,7 @@ void UWacomBattleEnemySceneRuntimeComponent::PlayPartPresentationCue(
 		State->ImpactFeedback->PlayAcceptedCue(
 			*this,
 			ResolveImpactAnchor(*State),
-			ResolveInteractionExtentSource(*State),
+			ResolvePresentationBounds(*State),
 			Part.ResolveImpactStyle(),
 			CueView.Kind,
 			EffectiveCue,
@@ -1740,8 +1813,8 @@ void UWacomBattleEnemySceneRuntimeComponent::TickComponent(
 			{
 				State.TargetPreviewFeedback->BeginOrUpdate(
 					*this,
-					ResolveImpactAnchor(State),
-					ResolveInteractionExtentSource(State),
+					Part,
+					ResolvePresentationBounds(State),
 					Part->ResolveTargetPreviewStyle(),
 					View,
 					State.TargetPreviewFlashScale);

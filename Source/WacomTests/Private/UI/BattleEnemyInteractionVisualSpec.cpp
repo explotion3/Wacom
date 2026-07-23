@@ -65,7 +65,14 @@ namespace WacomBattleEnemyInteractionVisualSpec
 
 	UPaperSprite* MakeCollisionSprite(UObject& Outer)
 	{
-		UPaperSprite* Sprite = NewObject<UPaperSprite>(&Outer, NAME_None, RF_Transient);
+		UPaperSprite* Source = LoadObject<UPaperSprite>(
+			nullptr,
+			TEXT("/Game/Wacom/Art/Enemies/TrainingWarrior/Sprites/"
+				"SPR_Enemy_TrainingWarrior_Idle_00."
+				"SPR_Enemy_TrainingWarrior_Idle_00"));
+		UPaperSprite* Sprite = Source
+			? DuplicateObject<UPaperSprite>(Source, &Outer)
+			: NewObject<UPaperSprite>(&Outer, NAME_None, RF_Transient);
 		UBodySetup* BodySetup = NewObject<UBodySetup>(Sprite, NAME_None, RF_Transient);
 		BodySetup->AggGeom.BoxElems.Add(FKBoxElem(96.0f, 12.0f, 112.0f));
 		Sprite->BodySetup = BodySetup;
@@ -251,6 +258,11 @@ bool FWacomBattleEnemyInteractionVisualCollisionSpec::RunTest(const FString& /*P
 	TestFalse(TEXT("Box fallback is disabled"), Debug.bUsingBoxCollisionFallback);
 	TestEqual(TEXT("Stable collision source is explicit"),
 		Debug.InteractionCollisionSource, FName(TEXT("StableSpriteBodySetup")));
+	TestEqual(TEXT("Stable presentation bounds source is visual, not collision"),
+		FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsSource(
+			*Fixture.Host,
+			*Fixture.Part),
+		FName(TEXT("StableInteractionVisual")));
 	TestFalse(TEXT("Part is identity-only, not a PrimitiveComponent"),
 		Fixture.Part->IsA<UPrimitiveComponent>());
 	TestEqual(TEXT("Interaction visual owns query collision"),
@@ -283,10 +295,30 @@ bool FWacomBattleEnemyInteractionVisualCollisionSpec::RunTest(const FString& /*P
 			DecorationHit).IsValid());
 
 	UBodySetup* StableBodySetup = Fixture.InteractionVisual->GetBodySetup();
+	const FVector StablePresentationCenter =
+		FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsCenter(
+			*Fixture.Host,
+			*Fixture.Part);
+	const FVector2D StablePresentationSize =
+		FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsProjectedSize(
+			*Fixture.Host,
+			*Fixture.Part,
+			FVector::RightVector,
+			FVector::UpVector);
 	Fixture.InteractionVisual->SetSprite(NewObject<UPaperSprite>(
 		Fixture.Host, NAME_None, RF_Transient));
 	TestTrue(TEXT("Runtime sprite swap keeps authored Idle collision BodySetup"),
 		Fixture.InteractionVisual->GetBodySetup() == StableBodySetup);
+	TestTrue(TEXT("Runtime sprite swap keeps authored Idle presentation center"),
+		FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsCenter(
+			*Fixture.Host,
+			*Fixture.Part).Equals(StablePresentationCenter));
+	TestTrue(TEXT("Runtime sprite swap keeps authored Idle presentation size"),
+		FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsProjectedSize(
+			*Fixture.Host,
+			*Fixture.Part,
+			FVector::RightVector,
+			FVector::UpVector).Equals(StablePresentationSize));
 	return true;
 }
 
@@ -325,6 +357,11 @@ bool FWacomBattleEnemyInteractionFallbackCollisionSpec::RunTest(
 
 		TestNull(TEXT("Fallback is not created before HUD registration"),
 			Fixture.FindFallbackCollision());
+		TestEqual(TEXT("Presentation bounds share the authored fallback source"),
+			FWacomEnemySceneRuntimeAutomationTestView::GetPresentationBoundsSource(
+				*Fixture.Host,
+				*Fixture.Part),
+			Case.Value);
 		FWacomEnemySceneRuntimeAutomationTestView::SetRegisteredAndTargetable(
 			*Fixture.Host, *Fixture.Part, true, false);
 		UBoxComponent* Fallback = Fixture.FindFallbackCollision();

@@ -3,12 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Components/WacomBattleEnemyPartCuePlayback.h"
+#include "WacomBattleEnemyPartCuePlayback.h"
+#include "WacomBattleEnemyPartPresentationBounds.h"
 
 class UActorComponent;
 class UMaterialInterface;
 class UNiagaraComponent;
-class UPrimitiveComponent;
 class USceneComponent;
 class USoundBase;
 class UWacomBattleEnemyPartImpactStyle;
@@ -51,16 +51,18 @@ struct FWacomBattleEnemyPartImpactFeedbackDebugView
 	int32 SoundRequestCount = 0;
 	FName LastEffectKind = TEXT("None");
 	int32 LastEffectKindValue = INDEX_NONE;
+	FName PresentationBoundsSource = NAME_None;
+	FVector LastEffectWorldLocation = FVector::ZeroVector;
 };
 
 /** App-private owner of the one reusable Niagara component for an enemy part. */
-class FWacomBattleEnemyPartImpactFeedbackController
+class WACOMAPP_API FWacomBattleEnemyPartImpactFeedbackController
 {
 public:
 	bool PlayAcceptedCue(
 		UActorComponent& OwnerComponent,
 		USceneComponent* ImpactAnchor,
-		UPrimitiveComponent* ImpactExtentSource,
+		const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 		const UWacomBattleEnemyPartImpactStyle* Style,
 		EWacomBattleEnemyPartCuePlaybackKind PlaybackKind,
 		const FWacomBattlePresentationTargetCue& Cue,
@@ -92,7 +94,7 @@ private:
 	static float ResolveTargetDiameterCentimeters(
 		const UWacomBattleEnemyPartImpactStyle& Style,
 		EWacomBattleEnemyPartImpactEffectKind EffectKind,
-		const UPrimitiveComponent* ImpactExtentSource,
+		const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 		const FVector& PlaneRight,
 		const FVector& PlaneUp);
 

@@ -86,7 +86,7 @@ public:
 	float AvailabilityExitSeconds = 0.10f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
-		meta = (ToolTip = "中心图标尺寸相对 interaction visual（配置异常时为 transient fallback）摄像机平面投影较短边的倍率。无单位；推荐 0.18–0.28。"))
+		meta = (ToolTip = "中心图标尺寸相对稳定 authored Idle visual（配置异常时按同源视觉 bounds 降级）摄像机平面投影较短边的倍率。无单位；推荐 0.18–0.28。"))
 	float AvailabilityIconSizeMultiplier = 0.22f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Availability",
@@ -102,11 +102,11 @@ public:
 	float AvailabilityBaseIntensity = 0.28f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Sizing",
-		meta = (ToolTip = "有效目标框相对 interaction visual（配置异常时为 transient fallback）屏幕平面投影宽高的覆盖倍率。无单位；推荐 1.05–1.20，1.10 表示略越过命中边界。"))
+		meta = (ToolTip = "有效目标框相对稳定 authored Idle visual 摄像机平面投影宽高的覆盖倍率。无单位；推荐 1.05–1.20，1.10 表示略越过视觉边缘。"))
 	float ValidCoverageMultiplier = 1.10f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Sizing",
-		meta = (ToolTip = "无效断裂目标框相对 interaction visual（配置异常时为 transient fallback）屏幕平面投影宽高的覆盖倍率。无单位；推荐 1.02–1.15。"))
+		meta = (ToolTip = "无效断裂目标框相对稳定 authored Idle visual 摄像机平面投影宽高的覆盖倍率。无单位；推荐 1.02–1.15。"))
 	float InvalidCoverageMultiplier = 1.08f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Sizing",
@@ -122,7 +122,7 @@ public:
 	float MaximumAxisSizeCentimeters = 300.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Target Preview|Placement",
-		meta = (ToolTip = "目标框从 ImpactAnchor 朝当前摄像机偏移的距离，单位：厘米。推荐 1–4cm，用于避免与 PaperSprite 共面闪烁；不影响命中。"))
+		meta = (ToolTip = "目标框从稳定 authored Idle visual 中心朝当前摄像机偏移的距离，单位：厘米。推荐 1–4cm，用于避免与 PaperSprite 共面闪烁；不影响命中或 ImpactAnchor。"))
 	float CameraDepthOffsetCentimeters = 2.0f;
 
 	bool HasValidVisualAssets() const;

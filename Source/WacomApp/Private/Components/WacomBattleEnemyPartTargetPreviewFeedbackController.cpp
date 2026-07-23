@@ -5,7 +5,6 @@
 #include "Actors/WacomBattleEnemyPartTargetPreviewStyle.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/ActorComponent.h"
-#include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
@@ -52,14 +51,14 @@ namespace WacomBattleEnemyPartTargetPreviewFeedbackPrivate
 
 bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	UActorComponent& OwnerComponent,
-	USceneComponent* ImpactAnchor,
-	UPrimitiveComponent* ImpactExtentSource,
+	USceneComponent* AttachmentParent,
+	const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 	const UWacomBattleEnemyPartTargetPreviewStyle* Style,
 	const FWacomBattleEnemyPartTargetPreviewPlaybackView& PlaybackView,
 	float DecorativeIntensity)
 {
 	if (!PlaybackView.bActive || PlaybackView.Kind == EWacomBattleEnemyPartTargetPreviewKind::None
-		|| !IsValid(Style) || !Style->HasValidVisualAssets() || !IsValid(ImpactAnchor))
+		|| !IsValid(Style) || !Style->HasValidVisualAssets() || !IsValid(AttachmentParent))
 	{
 		DebugView.bEffectActive = false;
 		DebugView.bNiagaraReady = NiagaraComponent.IsValid();
@@ -70,13 +69,16 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	FVector PlaneRight = FVector::RightVector;
 	FVector PlaneUp = FVector::UpVector;
 	FVector CameraDirection = FVector::ForwardVector;
+	const FVector TargetWorldCenter = PresentationBounds.IsValid()
+		? PresentationBounds.GetWorldCenter()
+		: AttachmentParent->GetComponentLocation();
 	if (APlayerCameraManager* CameraManager = UGameplayStatics::GetPlayerCameraManager(World, 0))
 	{
 		const FRotationMatrix CameraMatrix(CameraManager->GetCameraRotation());
 		PlaneRight = CameraMatrix.GetUnitAxis(EAxis::Y);
 		PlaneUp = CameraMatrix.GetUnitAxis(EAxis::Z);
 		CameraDirection = (CameraManager->GetCameraLocation()
-			- ImpactAnchor->GetComponentLocation()).GetSafeNormal();
+			- TargetWorldCenter).GetSafeNormal();
 		if (CameraDirection.IsNearlyZero())
 		{
 			CameraDirection = -CameraMatrix.GetUnitAxis(EAxis::X);
@@ -85,7 +87,7 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 
 	UNiagaraComponent* Component = ResolveOrCreateComponent(
 		OwnerComponent,
-		*ImpactAnchor,
+		*AttachmentParent,
 		*Style);
 	if (!Component)
 	{
@@ -97,7 +99,7 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	const FVector2D TargetSize = ResolveTargetSizeCentimeters(
 		*Style,
 		PlaybackView.Kind,
-		ImpactExtentSource,
+		PresentationBounds,
 		PlaneRight,
 		PlaneUp);
 	const float AvailabilityIconSize = ResolveAvailabilityIconSizeCentimeters(
@@ -106,9 +108,10 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	const bool bAvailability =
 		PlaybackView.Kind == EWacomBattleEnemyPartTargetPreviewKind::Available;
 	const bool bWasActive = DebugView.bEffectActive;
-	Component->SetWorldLocation(
-		ImpactAnchor->GetComponentLocation()
-		+ CameraDirection * FMath::Max(0.0f, Style->CameraDepthOffsetCentimeters));
+	const FVector TargetWorldLocation =
+		TargetWorldCenter
+		+ CameraDirection * FMath::Max(0.0f, Style->CameraDepthOffsetCentimeters);
+	Component->SetWorldLocation(TargetWorldLocation);
 	Component->SetVariableInt(
 		WacomBattleEnemyPartTargetPreviewFeedbackPrivate::EffectKindParameter,
 		2);
@@ -173,6 +176,9 @@ bool FWacomBattleEnemyPartTargetPreviewFeedbackController::BeginOrUpdate(
 	DebugView.Pulse = PlaybackView.Pulse;
 	DebugView.TargetSizeCentimeters = TargetSize;
 	DebugView.AvailabilityIconSizeCentimeters = AvailabilityIconSize;
+	DebugView.PresentationBoundsSource = PresentationBounds.GetSource();
+	DebugView.PresentationBoundsWorldCenter = TargetWorldCenter;
+	DebugView.TargetWorldCenter = TargetWorldLocation;
 	return true;
 }
 
@@ -197,7 +203,7 @@ void FWacomBattleEnemyPartTargetPreviewFeedbackController::ResetImmediate(bool b
 		{
 			Component->DestroyComponent();
 			NiagaraComponent.Reset();
-			AttachedImpactAnchor.Reset();
+			AttachedPart.Reset();
 			ActiveStyle.Reset();
 		}
 	}
@@ -210,7 +216,7 @@ void FWacomBattleEnemyPartTargetPreviewFeedbackController::ResetImmediate(bool b
 
 UNiagaraComponent* FWacomBattleEnemyPartTargetPreviewFeedbackController::ResolveOrCreateComponent(
 	UActorComponent& OwnerComponent,
-	USceneComponent& ImpactAnchor,
+	USceneComponent& AttachmentParent,
 	const UWacomBattleEnemyPartTargetPreviewStyle& Style)
 {
 	AActor* Owner = OwnerComponent.GetOwner();
@@ -237,21 +243,23 @@ UNiagaraComponent* FWacomBattleEnemyPartTargetPreviewFeedbackController::Resolve
 		}
 		Component->SetAutoActivate(false);
 		Component->SetAutoDestroy(false);
-		Component->SetupAttachment(&ImpactAnchor);
+		Component->SetupAttachment(&AttachmentParent);
 		Owner->AddInstanceComponent(Component);
 		Component->RegisterComponentWithWorld(World);
 		NiagaraComponent = Component;
 	}
-	else if (AttachedImpactAnchor.Get() != &ImpactAnchor)
+	else if (AttachedPart.Get() != &AttachmentParent)
 	{
-		Component->AttachToComponent(&ImpactAnchor, FAttachmentTransformRules::KeepWorldTransform);
+		Component->AttachToComponent(
+			&AttachmentParent,
+			FAttachmentTransformRules::KeepWorldTransform);
 	}
 
 	if (Component->GetAsset() != Style.PreviewSystem)
 	{
 		Component->SetAsset(Style.PreviewSystem);
 	}
-	AttachedImpactAnchor = &ImpactAnchor;
+	AttachedPart = &AttachmentParent;
 	ActiveStyle = &Style;
 	return Component;
 }
@@ -259,21 +267,17 @@ UNiagaraComponent* FWacomBattleEnemyPartTargetPreviewFeedbackController::Resolve
 FVector2D FWacomBattleEnemyPartTargetPreviewFeedbackController::ResolveTargetSizeCentimeters(
 	const UWacomBattleEnemyPartTargetPreviewStyle& Style,
 	EWacomBattleEnemyPartTargetPreviewKind Kind,
-	const UPrimitiveComponent* ImpactExtentSource,
+	const FWacomBattleEnemyPartPresentationBounds& PresentationBounds,
 	const FVector& PlaneRight,
 	const FVector& PlaneUp)
 {
 	FVector2D Size = Style.FallbackSizeCentimeters.GetAbs();
-	if (IsValid(ImpactExtentSource))
+	const FVector2D ProjectedSize =
+		PresentationBounds.ProjectSizeCentimeters(PlaneRight, PlaneUp);
+	if (ProjectedSize.X > KINDA_SMALL_NUMBER
+		&& ProjectedSize.Y > KINDA_SMALL_NUMBER)
 	{
-		const FVector Extent = ImpactExtentSource->Bounds.BoxExtent.GetAbs();
-		const float ProjectedWidth = 2.0f * FVector::DotProduct(PlaneRight.GetAbs(), Extent);
-		const float ProjectedHeight = 2.0f * FVector::DotProduct(PlaneUp.GetAbs(), Extent);
-		if (FMath::IsFinite(ProjectedWidth) && FMath::IsFinite(ProjectedHeight)
-			&& ProjectedWidth > KINDA_SMALL_NUMBER && ProjectedHeight > KINDA_SMALL_NUMBER)
-		{
-			Size = FVector2D(ProjectedWidth, ProjectedHeight);
-		}
+		Size = ProjectedSize;
 	}
 
 	const float Coverage = Kind == EWacomBattleEnemyPartTargetPreviewKind::Invalid
