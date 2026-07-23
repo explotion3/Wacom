@@ -34,7 +34,6 @@ class FWacomBackpackWorkspaceInteractionModel;
 struct FWacomBackpackWorkspaceStateStore;
 struct FWacomBackpackWorkspaceReleaseIntent;
 struct FWacomBackpackZoneKey;
-struct FWacomBackpackPendingDeleteConfirmation;
 struct FWacomBackpackScreenTestAccess;
 struct FCardInstance;
 struct FWacomLocalSettingsSnapshot;
@@ -282,9 +281,7 @@ private:
 	void CancelWorkspaceInteraction();
 	bool ResolveWorkspacePileTarget(FWacomBackpackZoneKey& OutTarget) const;
 	bool IsWorkspaceDeleteTarget() const;
-	void BeginWorkspaceDeleteConfirmation(TConstArrayView<FGuid> InstanceIds);
-	void HandleWorkspaceDeleteConfirmed();
-	void HandleWorkspaceDeleteCancelled();
+	void SubmitWorkspaceDelete(TConstArrayView<FGuid> InstanceIds);
 	FWacomBackpackWorkspaceStateStore& GetWorkspaceStateStore(URunSession* Run);
 	void ResetBackpackRefreshDirtyGate();
 	void BeginWorkspaceMutationRefreshDeferral();
@@ -327,7 +324,6 @@ private:
 	TSharedPtr<FWacomBackpackStorageRefreshGate> StorageRefreshGate;
 	TSharedPtr<FWacomBackpackWorkspaceStateStore> WorkspaceStateFallback;
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> WorkspaceInteractionModel;
-	TSharedPtr<FWacomBackpackPendingDeleteConfirmation> PendingDeleteConfirmation;
 	TWeakObjectPtr<UWacomPrimaryGameLayout> BoundPrimaryLayout;
 	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
 	TWeakObjectPtr<UCommonInputSubsystem> BoundCommonInputSubsystem;

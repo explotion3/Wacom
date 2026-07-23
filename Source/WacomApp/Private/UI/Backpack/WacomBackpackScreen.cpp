@@ -497,18 +497,11 @@ void UWacomBackpackScreen::EnsureWorkspaceWidgets()
 		WorkspaceWidget->OnControlsHelpRequestedNative.AddUObject(
 			this, &ThisClass::ShowControlsHelp);
 	}
-	if (DeleteConfirmHost && !DeleteConfirmWidget)
+	// The legacy confirmation host remains bound for serialized WBP compatibility,
+	// but selling is now committed atomically as soon as a valid drop is released.
+	if (DeleteConfirmHost)
 	{
-		UClass* ClassToUse = DeleteConfirmWidgetClass
-			? DeleteConfirmWidgetClass.Get()
-			: UWacomBackpackDeleteConfirmWidget::StaticClass();
-		DeleteConfirmWidget = CreateWidget<UWacomBackpackDeleteConfirmWidget>(this, ClassToUse);
-		if (DeleteConfirmWidget)
-		{
-			DeleteConfirmWidget->OnConfirmNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceDeleteConfirmed);
-			DeleteConfirmWidget->OnCancelNative.AddUObject(this, &UWacomBackpackScreen::HandleWorkspaceDeleteCancelled);
-			AttachChildToHostAndFill(*DeleteConfirmHost, *DeleteConfirmWidget);
-		}
+		DeleteConfirmHost->SetVisibility(ESlateVisibility::Collapsed);
 	}
 	if (ControlsHelpHost && !ControlsHelpWidget)
 	{
@@ -1404,118 +1397,39 @@ bool UWacomBackpackScreen::IsWorkspaceDeleteTarget() const
 	return DeleteTargetHost->GetCachedGeometry().IsUnderLocation(AbsolutePointer);
 }
 
-void UWacomBackpackScreen::BeginWorkspaceDeleteConfirmation(TConstArrayView<FGuid> InstanceIds)
+void UWacomBackpackScreen::SubmitWorkspaceDelete(TConstArrayView<FGuid> InstanceIds)
 {
 	URunSession* Run = GetRunSession();
-	if (!Run || !WorkspaceInteractionModel || InstanceIds.IsEmpty())
+	if (!Run || !WorkspaceInteractionModel || !WorkspaceInteractionModel->IsCarrying()
+		|| InstanceIds.IsEmpty())
 	{
 		return;
 	}
-	const FWacomBackpackWorkspaceCarryState CarrySnapshot = WorkspaceInteractionModel->GetCarry();
+	const FWacomBackpackWorkspaceCarryState CarrySnapshot =
+		WorkspaceInteractionModel->GetCarry();
 	const FRunDeckBatchDeleteRequest Request = FWacomBackpackCommandFlow::BuildBatchDeleteRequest(
 		CarrySnapshot,
 		InstanceIds);
 	const FRunDeckBatchDeletePreview Preview = FWacomBackpackCommandFlow::PreviewBatchDelete(Run, Request);
 	if (!Preview.Validation.bCanExecute)
 	{
+		// Submit once to reuse the command flow's canonical failure toast. The Run
+		// operation is atomic and performs the same validation before any mutation.
+		FWacomBackpackCommandFlow::SubmitBatchDelete(*this, Run, Request);
 		return;
 	}
-	PendingDeleteConfirmation = MakeShared<FWacomBackpackPendingDeleteConfirmation>();
-	PendingDeleteConfirmation->bPending = true;
-	PendingDeleteConfirmation->SuspendedCarry = CarrySnapshot;
-	PendingDeleteConfirmation->RequestedInstanceIds = TArray<FGuid>(InstanceIds);
-	PendingDeleteConfirmation->PreviewCardCount = InstanceIds.Num();
-	PendingDeleteConfirmation->PreviewGoldReward = Preview.TotalGoldReward;
-	if (WorkspaceWidget)
-	{
-		WorkspaceWidget->SetCarryInputSuspended(true);
-	}
-	else
-	{
-		WorkspaceInteractionModel->SetCarryInputSuspended(true);
-	}
-	if (DeleteConfirmWidget)
-	{
-		DeleteConfirmWidget->SetPreview(InstanceIds.Num(), Preview.TotalGoldReward);
-	}
-	if (DeleteConfirmHost)
-	{
-		DeleteConfirmHost->SetVisibility(ESlateVisibility::Visible);
-	}
-	if (DeleteConfirmWidget)
-	{
-		DeleteConfirmWidget->FocusDefaultAction();
-	}
-}
-
-void UWacomBackpackScreen::HandleWorkspaceDeleteCancelled()
-{
-	if (PendingDeleteConfirmation && PendingDeleteConfirmation->bPending && WorkspaceInteractionModel)
-	{
-		WorkspaceInteractionModel->RestoreCarry(PendingDeleteConfirmation->SuspendedCarry);
-		// Atomic rejection caused by an unrelated storage revision must not strand the
-		// restored strip on an obsolete revision forever. Reconcile has already verified
-		// that the carried cards still exist in their source zone, so the same carry can
-		// be retried against the current snapshot without partially committing anything.
-		if (URunSession* Run = GetRunSession())
-		{
-			WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(
-				Run->GetBackpackStorageSnapshotRevision());
-		}
-	}
-	PendingDeleteConfirmation.Reset();
-	if (DeleteConfirmHost) DeleteConfirmHost->SetVisibility(ESlateVisibility::Collapsed);
-	if (WorkspaceWidget)
-	{
-		WorkspaceWidget->SetCarryInputSuspended(false);
-		WorkspaceWidget->SetKeyboardFocus();
-	}
-	else if (WorkspaceInteractionModel)
-	{
-		WorkspaceInteractionModel->SetCarryInputSuspended(false);
-	}
-}
-
-void UWacomBackpackScreen::HandleWorkspaceDeleteConfirmed()
-{
-	if (!PendingDeleteConfirmation || !PendingDeleteConfirmation->bPending)
-	{
-		return;
-	}
-	const FWacomBackpackWorkspaceCarryState SuspendedCarry =
-		PendingDeleteConfirmation->SuspendedCarry;
-	const TArray<FGuid> RequestedInstanceIds =
-		PendingDeleteConfirmation->RequestedInstanceIds;
-	const FRunDeckBatchDeleteRequest Request = FWacomBackpackCommandFlow::BuildBatchDeleteRequest(
-		SuspendedCarry,
-		RequestedInstanceIds);
 	BeginWorkspaceMutationRefreshDeferral();
 	const FRunDeckBatchOperationResult Result = FWacomBackpackCommandFlow::SubmitBatchDelete(
 		*this,
-		GetRunSession(),
+		Run,
 		Request);
 	if (!Result.bSucceeded)
 	{
-		HandleWorkspaceDeleteCancelled();
 		EndWorkspaceMutationRefreshDeferral(false);
 		return;
 	}
-	if (WorkspaceInteractionModel)
-	{
-		WorkspaceInteractionModel->RestoreCarry(SuspendedCarry);
-		WorkspaceInteractionModel->CommitReleasedCards(RequestedInstanceIds);
-		WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(Result.StorageRevision);
-	}
-	PendingDeleteConfirmation.Reset();
-	if (DeleteConfirmHost) DeleteConfirmHost->SetVisibility(ESlateVisibility::Collapsed);
-	if (WorkspaceWidget)
-	{
-		WorkspaceWidget->SetCarryInputSuspended(false);
-	}
-	else if (WorkspaceInteractionModel)
-	{
-		WorkspaceInteractionModel->SetCarryInputSuspended(false);
-	}
+	WorkspaceInteractionModel->CommitReleasedCards(InstanceIds);
+	WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(Result.StorageRevision);
 	ResetBackpackRefreshDirtyGate();
 	EndWorkspaceMutationRefreshDeferral(true);
 }
@@ -1534,7 +1448,7 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 	const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
 	if (Intent.TargetKind == EWacomBackpackWorkspaceReleaseTargetKind::Delete)
 	{
-		BeginWorkspaceDeleteConfirmation(Intent.InstanceIds);
+		SubmitWorkspaceDelete(Intent.InstanceIds);
 		return;
 	}
 	if (Intent.TargetKind == EWacomBackpackWorkspaceReleaseTargetKind::Pile)
@@ -1547,7 +1461,7 @@ void UWacomBackpackScreen::HandleWorkspaceReleaseIntent(
 	}
 	if (IsWorkspaceDeleteTarget())
 	{
-		BeginWorkspaceDeleteConfirmation(Intent.InstanceIds);
+		SubmitWorkspaceDelete(Intent.InstanceIds);
 		return;
 	}
 	FWacomBackpackZoneKey PileTarget;
@@ -1877,11 +1791,6 @@ FReply UWacomBackpackScreen::NativeOnKeyDown(const FGeometry& InGeometry, const 
 	}
 	if (Key == EKeys::Escape || Key == EKeys::Gamepad_FaceButton_Right)
 	{
-		if (PendingDeleteConfirmation && PendingDeleteConfirmation->bPending)
-		{
-			HandleWorkspaceDeleteCancelled();
-			return FReply::Handled();
-		}
 		if ((WorkspaceInteractionModel
 				&& WorkspaceInteractionModel->GetMode() != EWacomBackpackWorkspaceInteractionMode::Idle))
 		{

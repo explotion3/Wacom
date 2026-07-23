@@ -216,15 +216,11 @@ struct FWacomBackpackScreenTestAccess
 	static bool TickWorkspaceBaseCardLayoutTransitions(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		float DeltaSeconds);
-	static bool BeginDeleteConfirmation(UWacomBackpackScreen& Screen);
-	static bool BeginDeleteConfirmationForIds(
+	static void SubmitWorkspaceDelete(
 		UWacomBackpackScreen& Screen,
 		TConstArrayView<FGuid> InstanceIds);
-	static void ConfirmDelete(UWacomBackpackScreen& Screen);
-	static void CancelDelete(UWacomBackpackScreen& Screen);
-	static bool IsDeleteConfirmationPending(const UWacomBackpackScreen& Screen);
-	static int32 DeletePreviewCardCount(const UWacomBackpackScreen& Screen);
-	static int32 DeletePreviewGoldReward(const UWacomBackpackScreen& Screen);
+	static bool HasRuntimeDeleteConfirmationWidget(const UWacomBackpackScreen& Screen);
+	static bool IsDeleteConfirmationHostVisible(const UWacomBackpackScreen& Screen);
 
 	static bool IsDetailVisible(const UWacomBackpackScreen& Screen);
 	static FText DetailNameText(const UWacomBackpackScreen& Screen);

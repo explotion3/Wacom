@@ -15,11 +15,11 @@
 #include "UObject/StrongObjectPtr.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomUIBackpackWorkspaceDeleteRestoreSpec,
-	"Wacom.UI.Backpack.Workspace.DeleteConfirmationRestore",
+	FWacomUIBackpackWorkspaceImmediateDeleteSpec,
+	"Wacom.UI.Backpack.Workspace.ImmediateDeleteAtomic",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomUIBackpackWorkspaceDeleteRestoreSpec::RunTest(const FString& Parameters)
+bool FWacomUIBackpackWorkspaceImmediateDeleteSpec::RunTest(const FString& Parameters)
 {
 	UObject* Outer = GetTransientPackage();
 	UCardDefinition* Bag = NewObject<UCardDefinition>(Outer);
@@ -50,37 +50,43 @@ bool FWacomUIBackpackWorkspaceDeleteRestoreSpec::RunTest(const FString& Paramete
 		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
 	TestTrue(TEXT("Selected delete cards enter carry"),
 		FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(*Screen, DeleteIds));
-	const FWacomBackpackWorkspaceAutomationTestView BeforeConfirm =
+	const FWacomBackpackWorkspaceAutomationTestView BeforeRejectedDelete =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
-	TestTrue(TEXT("Delete confirmation opens"), FWacomBackpackScreenTestAccess::BeginDeleteConfirmation(*Screen));
-	TestEqual(TEXT("Confirmation shows batch count"), FWacomBackpackScreenTestAccess::DeletePreviewCardCount(*Screen), 2);
-	TestEqual(TEXT("Confirmation shows summed reward"), FWacomBackpackScreenTestAccess::DeletePreviewGoldReward(*Screen), 3);
-	FWacomBackpackScreenTestAccess::CancelDelete(*Screen);
-	const FWacomBackpackWorkspaceAutomationTestView AfterCancel =
-		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
-	TestEqual(TEXT("Cancel restores exact carry order"), AfterCancel.CarriedInstanceIds, BeforeConfirm.CarriedInstanceIds);
-	TestEqual(TEXT("Cancel restores current card"), AfterCancel.CurrentCarryIndex, BeforeConfirm.CurrentCarryIndex);
+	TestFalse(TEXT("Delete confirmation widget is not created"),
+		FWacomBackpackScreenTestAccess::HasRuntimeDeleteConfirmationWidget(*Screen));
+	TestFalse(TEXT("Delete confirmation host stays collapsed"),
+		FWacomBackpackScreenTestAccess::IsDeleteConfirmationHostVisible(*Screen));
 
-	TestTrue(TEXT("Confirmation reopens"), FWacomBackpackScreenTestAccess::BeginDeleteConfirmation(*Screen));
 	UCardDefinition* ExternalChange = NewObject<UCardDefinition>(Outer);
 	ExternalChange->CardId = TEXT("WorkspaceDelete.ExternalChange");
 	Run->AcquireCardToRun(ExternalChange);
-	FWacomBackpackScreenTestAccess::ConfirmDelete(*Screen);
-	TestTrue(TEXT("Stale confirm restores carry"),
-		!FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
-	TestTrue(TEXT("Stale confirm deletes zero cards"),
+	FWacomBackpackScreenTestAccess::SubmitWorkspaceDelete(*Screen, DeleteIds);
+	const FWacomBackpackWorkspaceAutomationTestView AfterRejectedDelete =
+		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
+	TestEqual(TEXT("Stale immediate delete preserves exact carry order"),
+		AfterRejectedDelete.CarriedInstanceIds,
+		BeforeRejectedDelete.CarriedInstanceIds);
+	TestEqual(TEXT("Stale immediate delete preserves current card"),
+		AfterRejectedDelete.CurrentCarryIndex,
+		BeforeRejectedDelete.CurrentCarryIndex);
+	TestTrue(TEXT("Stale immediate delete removes zero cards"),
 		Run->BuildBackpackStorageSnapshot().Flux.ContentCards.ContainsByPredicate(
 			[White](const FRunStorageCardView& View) { return View.Instance.Definition == White; }));
+	TestEqual(TEXT("Rejected immediate delete grants zero gold"), Run->GetGold(), 0);
 
 	FWacomBackpackScreenTestAccess::Refresh(*Screen);
-	TestTrue(TEXT("Restored carry retries after revision reconcile"),
-		FWacomBackpackScreenTestAccess::BeginDeleteConfirmation(*Screen));
-	FWacomBackpackScreenTestAccess::ConfirmDelete(*Screen);
-	TestTrue(TEXT("Successful confirm exits carry"),
+	FWacomBackpackScreenTestAccess::SubmitWorkspaceDelete(*Screen, DeleteIds);
+	TestTrue(TEXT("Successful immediate delete exits carry"),
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen).CarriedInstanceIds.IsEmpty());
-	TestFalse(TEXT("Successful confirm removes white"),
+	TestFalse(TEXT("Successful immediate delete removes white"),
 		Run->BuildBackpackStorageSnapshot().Flux.ContentCards.ContainsByPredicate(
 			[White](const FRunStorageCardView& View) { return View.Instance.Definition == White; }));
+	TestFalse(TEXT("Successful immediate delete removes blue"),
+		Run->BuildBackpackStorageSnapshot().Flux.ContentCards.ContainsByPredicate(
+			[Blue](const FRunStorageCardView& View) { return View.Instance.Definition == Blue; }));
+	TestEqual(TEXT("Successful immediate delete grants exact batch reward"), Run->GetGold(), 3);
+	TestFalse(TEXT("Immediate delete never opens the compatibility host"),
+		FWacomBackpackScreenTestAccess::IsDeleteConfirmationHostVisible(*Screen));
 	return true;
 }
 
@@ -134,36 +140,30 @@ bool FWacomUIBackpackWorkspacePartialDeletePreservesCarrySpec::RunTest(const FSt
 		FWacomBackpackScreenTestAccess::Create(Outer, Run.Get()));
 	TestTrue(TEXT("Two delete candidates enter carry"),
 		FWacomBackpackScreenTestAccess::BeginWorkspaceCarryForIds(*Screen, SourceIds));
-	const FWacomBackpackWorkspaceAutomationTestView BeforeConfirm =
+	const FWacomBackpackWorkspaceAutomationTestView BeforeDelete =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
-	const FGuid CurrentId = BeforeConfirm.CarriedInstanceIds.IsValidIndex(BeforeConfirm.CurrentCarryIndex)
-		? BeforeConfirm.CarriedInstanceIds[BeforeConfirm.CurrentCarryIndex]
+	const FGuid CurrentId = BeforeDelete.CarriedInstanceIds.IsValidIndex(BeforeDelete.CurrentCarryIndex)
+		? BeforeDelete.CarriedInstanceIds[BeforeDelete.CurrentCarryIndex]
 		: FGuid();
 	const TArray<FGuid> CurrentOnly{ CurrentId };
-	TestTrue(TEXT("Left delete release opens confirmation for the current card only"),
-		FWacomBackpackScreenTestAccess::BeginDeleteConfirmationForIds(*Screen, CurrentOnly));
-	TestEqual(TEXT("Single-card delete confirmation previews one card"),
-		FWacomBackpackScreenTestAccess::DeletePreviewCardCount(*Screen), 1);
-	const FWacomBackpackWorkspaceAutomationTestView DuringConfirm =
-		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
-	TestEqual(TEXT("The carried strip stays visible while delete input is suspended"),
-		DuringConfirm.CarriedInstanceIds, BeforeConfirm.CarriedInstanceIds);
-	TestFalse(TEXT("Delete confirmation releases Workspace mouse capture"),
-		DuringConfirm.bMouseCaptured);
-	FWacomBackpackScreenTestAccess::ConfirmDelete(*Screen);
+	FWacomBackpackScreenTestAccess::SubmitWorkspaceDelete(*Screen, CurrentOnly);
 
-	const FWacomBackpackWorkspaceAutomationTestView AfterConfirm =
+	const FWacomBackpackWorkspaceAutomationTestView AfterDelete =
 		FWacomBackpackScreenTestAccess::WorkspaceView(*Screen);
 	TestEqual(TEXT("The unreleased card resumes carry after current-card deletion"),
-		AfterConfirm.CarriedInstanceIds.Num(), 1);
+		AfterDelete.CarriedInstanceIds.Num(), 1);
 	TestFalse(TEXT("The deleted current card is removed from carry"),
-		AfterConfirm.CarriedInstanceIds.Contains(CurrentId));
-	TestFalse(TEXT("The confirmed current card is removed from storage"),
+		AfterDelete.CarriedInstanceIds.Contains(CurrentId));
+	TestFalse(TEXT("The released current card is removed from storage"),
 		Run->BuildBackpackStorageSnapshot().Flux.ContentCards.ContainsByPredicate(
 			[CurrentId](const FRunStorageCardView& View)
 			{
 				return View.Instance.InstanceId == CurrentId;
 			}));
+	TestFalse(TEXT("Partial immediate delete does not suspend carry input"),
+		AfterDelete.bCarryInputSuspended);
+	TestFalse(TEXT("Partial immediate delete never creates confirmation"),
+		FWacomBackpackScreenTestAccess::HasRuntimeDeleteConfirmationWidget(*Screen));
 	return true;
 }
 

@@ -1307,39 +1307,24 @@ bool FWacomBackpackScreenTestAccess::TickWorkspaceBaseCardLayoutTransitions(
 	return Workspace.TickBaseCardLayoutTransitions(DeltaSeconds);
 }
 
-bool FWacomBackpackScreenTestAccess::BeginDeleteConfirmation(UWacomBackpackScreen& Screen)
-{
-	if (!Screen.WorkspaceInteractionModel || !Screen.WorkspaceInteractionModel->IsCarrying()) return false;
-	Screen.BeginWorkspaceDeleteConfirmation(Screen.WorkspaceInteractionModel->GetCarry().RemainingInstanceIds);
-	return IsDeleteConfirmationPending(Screen);
-}
-
-bool FWacomBackpackScreenTestAccess::BeginDeleteConfirmationForIds(
+void FWacomBackpackScreenTestAccess::SubmitWorkspaceDelete(
 	UWacomBackpackScreen& Screen,
 	TConstArrayView<FGuid> InstanceIds)
 {
-	if (!Screen.WorkspaceInteractionModel || !Screen.WorkspaceInteractionModel->IsCarrying()
-		|| InstanceIds.IsEmpty())
-	{
-		return false;
-	}
-	Screen.BeginWorkspaceDeleteConfirmation(InstanceIds);
-	return IsDeleteConfirmationPending(Screen);
+	Screen.SubmitWorkspaceDelete(InstanceIds);
 }
 
-void FWacomBackpackScreenTestAccess::ConfirmDelete(UWacomBackpackScreen& Screen) { Screen.HandleWorkspaceDeleteConfirmed(); }
-void FWacomBackpackScreenTestAccess::CancelDelete(UWacomBackpackScreen& Screen) { Screen.HandleWorkspaceDeleteCancelled(); }
-bool FWacomBackpackScreenTestAccess::IsDeleteConfirmationPending(const UWacomBackpackScreen& Screen)
+bool FWacomBackpackScreenTestAccess::HasRuntimeDeleteConfirmationWidget(
+	const UWacomBackpackScreen& Screen)
 {
-	return Screen.PendingDeleteConfirmation && Screen.PendingDeleteConfirmation->bPending;
+	return Screen.DeleteConfirmWidget != nullptr;
 }
-int32 FWacomBackpackScreenTestAccess::DeletePreviewCardCount(const UWacomBackpackScreen& Screen)
+
+bool FWacomBackpackScreenTestAccess::IsDeleteConfirmationHostVisible(
+	const UWacomBackpackScreen& Screen)
 {
-	return Screen.PendingDeleteConfirmation ? Screen.PendingDeleteConfirmation->PreviewCardCount : 0;
-}
-int32 FWacomBackpackScreenTestAccess::DeletePreviewGoldReward(const UWacomBackpackScreen& Screen)
-{
-	return Screen.PendingDeleteConfirmation ? Screen.PendingDeleteConfirmation->PreviewGoldReward : 0;
+	return Screen.DeleteConfirmHost
+		&& Screen.DeleteConfirmHost->GetVisibility() != ESlateVisibility::Collapsed;
 }
 
 bool FWacomBackpackScreenTestAccess::IsDetailVisible(const UWacomBackpackScreen& Screen)

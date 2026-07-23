@@ -104,13 +104,3 @@ struct FWacomBackpackWorkspaceCarryState
 	uint64 SourceStorageRevision = 0;
 	TMap<FGuid, FWacomBackpackWorkspaceLayoutEntry> OriginalLayouts;
 };
-
-/** Delete confirm 暂停携带时保存的不可变恢复快照。 */
-struct FWacomBackpackPendingDeleteConfirmation
-{
-	bool bPending = false;
-	FWacomBackpackWorkspaceCarryState SuspendedCarry;
-	TArray<FGuid> RequestedInstanceIds;
-	int32 PreviewCardCount = 0;
-	int32 PreviewGoldReward = 0;
-};

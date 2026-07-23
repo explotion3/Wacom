@@ -420,7 +420,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	int32 WorkspaceCardCount = 0;
 	bool bInitialReleaseGuardArmed = false;
 	bool bMouseCaptured = false;
-	bool bDeleteConfirmationPending = false;
+	bool bCarryInputSuspended = false;
 	bool bDeferredCardFaceRenderPending = false;
 	int32 DeferredCardFaceRenderPassCount = 0;
 	bool bCardFaceRetainedRenderingEnabled = true;
