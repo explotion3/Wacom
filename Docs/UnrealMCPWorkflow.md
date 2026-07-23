@@ -37,9 +37,9 @@ MCP 仍是常规二进制资产 mutation 的正式入口。只有 MCP 因可复�
 - 先校验既有资产父类、版本和结构，禁止调用会重建或批量重存人工 WBP/Style 的通用 Builder。
 - 首次应用后必须再跑只读检查和二次幂等应用，要求 `saved=0` 且全部对象 SHA-256 不变。
 - 交接以 Commandlet manifest/audit log 代替 MCP Session/writer audit，并仍报告实际变化路径、Git LFS、对象哈希、Blueprint/自动化与 PIE 结果。
-- 例外只覆盖用户授权的该次清单，不得把 Commandlet 扩展成长期通用资产写入口；集成完成后按技术债清理 apply path。
+- 例外只覆盖用户授权的该次清单，不得把 Commandlet 扩展成长期通用资产写入口；集成与终态审计完成后必须删除整个一次性入口及专用实现。
 
-2026-07-23 唯一现行例外是背包 Style v4 的 `WacomMigrateBackpackWorkspaceV4`，其九项固定清单和命令见 [UI_Backpack_WBP_Binding.md](./UI_Backpack_WBP_Binding.md#一次性-style-v4-定向-commandlet)。原因是 backpack endpoint 的固定端口 8130 落入 Windows excluded port range；该授权不适用于其它资产或后续版本。
+当前没有现行的一次性离线 Commandlet 例外。历史授权不会自动延续到其它资产或后续版本；新的基础设施阻塞必须重新确认精确范围与替代方案。
 
 ## 2. 固定端点
 

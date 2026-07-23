@@ -183,26 +183,11 @@ Hover 卡使用局部 `48px` 上抬，紧凑牌列邻居默认约 `0.18s` 完成
 
 Builder 必须让 `WBP_WacomDeckCardWidget` 以 `CardMotionRoot -> 卡牌 Overlay -> CardFaceScaleBox -> WBP_FPCardView` 承载正式卡面，并让 Workspace 具备 `SettlementLayer`；同时编译保存 Workspace、ZonePile、DeleteConfirm、背包专用 Detail 和 Screen。中性区域图标/框体纹理只在缺失时创建，已有同路径资产不得被重画。不再生成 `WBP_BackpackCardView`、Preview、Rack、Rack Entry、`WBP_BackpackBattleDeckZone` 或 `WBP_WacomSpecialZoneWidget`。`DA_BackpackWorkspaceStyle` 是受版本控制的人工制作真相：Builder 只在资产缺失时用当前基线创建并保存，资产已存在时不得重写或重新保存任何 `EditAnywhere` 制作字段。新增字段使用 C++ 默认值；确需迁移既有资产时必须提交显式、带版本条件的定向迁移，不能把无条件赋值重新放回通用 Builder。禁止为 Style v4 运行会批量重存人工资产的通用 Builder。连续运行不得恢复已删除链路，也不得改变正式资产的绑定结构、制作参数或资产 Hash。
 
-### 一次性 Style v4 定向 Commandlet
+### Style v4 正式资产合同
 
-`WacomMigrateBackpackWorkspaceV4` 是用户为本轮明确授权的 MCP 外一次性迁移通道，不是新的通用 Builder。它先校验既有 WBP 父类、关键树形、可选槽位类型和 Style 版本，只允许保存以下九个固定 Package：
+Style v4 资产迁移已经完成并集成，历史一次性迁移入口及专用实现均已删除。正式资产必须继续提供 Focus、Selected、ValidDrop、RejectedDrop 四张 64×64 透明图标、被动帮助层，以及 Screen、DeckCard、ZonePile 和 Style 的对应绑定；不得通过通用 Backpack Builder 重写既有人工 WBP 或 Style 制作值。
 
-- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_Focus`
-- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_Selected`
-- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_ValidDrop`
-- `/Game/Wacom/UI/Backpack/Icons/T_BackpackState_RejectedDrop`
-- `/Game/Wacom/UI/Backpack/WBP_BackpackControlsHelp`
-- `/Game/Wacom/UI/Backpack/WBP_BackpackScreen`
-- `/Game/Wacom/UI/Card/WBP_WacomDeckCardWidget`
-- `/Game/Wacom/UI/Backpack/WBP_BackpackZonePile`
-- `/Game/Wacom/UI/Backpack/DA_BackpackWorkspaceStyle`
-
-```powershell
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomMigrateBackpackWorkspaceV4 -InspectOnly -Unattended -NoPause -NoSplash -NullRHI -nop4
-& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<Project>\Wacom.uproject' -run=WacomMigrateBackpackWorkspaceV4 -Apply -Unattended -NoPause -NoSplash -NullRHI -nop4
-```
-
-`-InspectOnly` 全程不调用补丁函数、不保存资产；当前已满足时返回 `0`，合同有效但仍需迁移时返回 `2`。`-Apply` 只创建缺失的四张确定性 64×64 透明纹理和 Help WBP，只为三个既有 WBP 增加新绑定，并且只允许 Style 从 v3 补四个 Brush 后升到 v4；遇到未知 v4 绑定或清单外 Package 会拒绝。二次运行必须报告 `current=true / saved=0` 且九项 SHA-256 不变。该命令不得增加新 Package、迁移其它 UI 或替代 `Docs/UnrealMCPWorkflow.md` 的常规资产写入流程。
+当前合同由 `Wacom.UI.Backpack.Workspace.FormalAssetBinding` 自动化测试持续验证。未来需要修改这些二进制资产时，必须重新遵循 `Docs/UnrealMCPWorkflow.md`，或针对新的精确资产范围取得新的显式授权；不得恢复或扩展已经清理的一次性迁移路径。
 
 ## C++ fallback
 
