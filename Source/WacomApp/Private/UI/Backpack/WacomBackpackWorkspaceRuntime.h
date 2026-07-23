@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "WacomBackpackWorkspaceFrameScheduler.h"
 #include "WacomBackpackWorkspaceGestureController.h"
 #include "WacomBackpackWorkspaceMotionCoordinator.h"
 #include "WacomBackpackWorkspaceNavigationController.h"
@@ -25,9 +26,11 @@ public:
 	FWacomBackpackWorkspaceGestureController Gesture;
 	FWacomBackpackWorkspaceNavigationController Navigation;
 	FWacomBackpackWorkspacePresentationController Presentation;
+	FWacomBackpackWorkspaceFrameScheduler FrameScheduler;
 
 	void Reset(bool bRemovePileWidgets)
 	{
+		FrameScheduler.Reset();
 		Motion.Reset();
 		Gesture.ResetTransient();
 		Gesture.PileMoveSnapshot.Reset();
