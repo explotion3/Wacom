@@ -108,14 +108,14 @@ Enemy HUD V3 已完成一次性原地迁移。正式 WBP 此后由 Designer / �
 玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
 
 ```powershell
-# 兼容命令名：幂等维护 PlayerStatusBar V3、HUD 左上角位置、32px 状态图标与状态 Tooltip
+# 兼容命令名：幂等维护 PlayerStatusBar V4、HUD 左上角位置、32px 状态图标与状态 Tooltip
 -run=WacomBuildPlayerStatusUI -BuildVitalsV2
 
 # 只读检查父类、bindings、Vitals MI、HUD 位置、状态图标/Tooltip、内部 Overflow 和命中策略
 -run=WacomBuildPlayerStatusUI -InspectOnly
 ```
 
-当前合同为 V3；`BuildVitalsV2` 仅保留命令行兼容名。Builder 会让玩家状态栏到 `StatusList` 的祖先链保留子节点命中，将单个状态图标 Root 设为 `Visible`、视觉子节点设为 `HitTestInvisible`，并验证 `WBP_BattleStatusTooltip` 整棵树不可命中。合同版本由父类、WidgetTree、绑定类型、CDO 类引用与命中路径共同判定，不依赖 `BlueprintDescription` 文本标记。保存 `BP_BattleHUD` 时仍只调整 `PlayerStatusBar` 的 Canvas 位置，禁止重写整棵 HUD 的命中可见性；只读审计还会确认 `CommandBar` 允许子按钮参与 Slate Hit Test，避免 Wait / EndTurn 失去点击。状态 Tooltip 与 Enemy Entry WBP 的人工修改必须继续通过 `Docs/UnrealMCPWorkflow.md` 的 writer lease 和 Package allowlist。
+当前合同为 V4；`BuildVitalsV2` 仅保留命令行兼容名。Builder 会让玩家状态栏到 `StatusList` 的祖先链保留子节点命中，将单个状态图标 Root 设为 `Visible`、视觉子节点设为 `HitTestInvisible`，验证 `WBP_BattleStatusTooltip` 整棵树不可命中，并要求 `/Game/Wacom/UI/Battle/Status/DA_BattleStatusPresentationCatalog` 通过 Data Validation。Catalog 是状态名称、Battle HUD 图标、排序和宿主 Tooltip 规则的唯一制作入口；状态列表 WBP、Combat Activity Style 与 Card Explanation Lexicon 不得再保存重复配置。合同版本由父类、WidgetTree、绑定类型、CDO 类引用、命中路径与 Catalog 合法性共同判定，不依赖 `BlueprintDescription` 文本标记。保存 `BP_BattleHUD` 时仍只调整 `PlayerStatusBar` 的 Canvas 位置，禁止重写整棵 HUD 的命中可见性；只读审计还会确认 `CommandBar` 允许子按钮参与 Slate Hit Test，避免 Wait / EndTurn 失去点击。状态资产修改必须继续通过 `Docs/UnrealMCPWorkflow.md` 的 writer lease 和 Package allowlist。
 
 `DA_EnemyIntentPresentation_Default` 属于 UI-only 制作资产，不是战斗规则 schema。新增 Intent 图标时必须填写准确且唯一的稳定 `IntentId` 与有效 Brush；不允许用显示名、动画名或 effect 自动推断。空 ID、重复 ID 和无效 Brush 会被 Data Validation 拒绝；未配置 Intent 运行时使用 fallback 星形，不阻断战斗。
 

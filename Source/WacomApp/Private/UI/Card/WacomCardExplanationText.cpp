@@ -3,6 +3,8 @@
 #include "WacomCardExplanationText.h"
 
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalogProvider.h"
 #include "UI/Card/WacomCardExplanationLexicon.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardExplanationText"
@@ -55,38 +57,10 @@ namespace WacomCardExplanationText
 
 	FText GetDisplayStatusName(
 		const FGameplayTag& StatusTag,
-		const UWacomCardExplanationLexicon* Lexicon)
+		const UWacomCardExplanationLexicon* /*Lexicon*/)
 	{
-		FText DisplayName;
-		if (Lexicon && Lexicon->FindTagDisplayName(StatusTag, DisplayName))
-		{
-			return DisplayName;
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Poison))
-		{
-			return LOCTEXT("StatusPoison", "中毒");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Slow))
-		{
-			return LOCTEXT("StatusSlow", "减速");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Freeze))
-		{
-			return LOCTEXT("StatusFreeze", "冻结");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Twilight))
-		{
-			return LOCTEXT("StatusTwilight", "暮气");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Stunned))
-		{
-			return LOCTEXT("StatusStunned", "眩晕");
-		}
-		if (StatusTag.MatchesTagExact(WacomTags::Status_Shield))
-		{
-			return LOCTEXT("StatusShield", "护盾");
-		}
-		return FText::FromString(GetDisplayTagLeafName(StatusTag));
+		return WacomBattleStatusPresentationCatalogProvider::GetCatalog()
+			.ResolveDisplayName(StatusTag);
 	}
 
 	FText ResolveNamedText(

@@ -18,6 +18,8 @@
 #include "InputCoreTypes.h"
 #include "Tags/WacomGameplayTags.h"
 #include "UI/Battle/WacomBattleEventPresentationBuilder.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalogProvider.h"
 #include "UI/Battle/WacomBattleStatusTooltipPresentation.h"
 #include "UI/Battle/WacomBattleStatusTooltipWidget.h"
 
@@ -52,16 +54,6 @@ namespace
 		{
 			Brush.SetImageSize(FVector2f(DefaultIconSize, DefaultIconSize));
 		}
-	}
-
-	int32 GetStatusSortOrder(const FGameplayTag& Tag)
-	{
-		if (Tag == WacomTags::Status_Poison) { return 0; }
-		if (Tag == WacomTags::Status_Slow) { return 1; }
-		if (Tag == WacomTags::Status_Freeze) { return 2; }
-		if (Tag == WacomTags::Status_Twilight) { return 3; }
-		if (Tag == WacomTags::Status_Stunned) { return 4; }
-		return 100;
 	}
 
 	FString MakeStatusIconWidgetName(const FWacomBattleStatusIconView& View, const int32 Index)
@@ -235,20 +227,19 @@ void UWacomBattleStatusIconWidget::NativePreConstruct()
 
 FWacomBattleStatusIconView UWacomBattleStatusIconWidget::BuildDesignTimePreviewView() const
 {
+	const UWacomBattleStatusPresentationCatalog& Catalog =
+		WacomBattleStatusPresentationCatalogProvider::GetCatalog();
 	FWacomBattleStatusIconView View;
 	View.StatusTag = PreviewStatusTag.IsValid()
 		? PreviewStatusTag
 		: WacomTags::Status_Poison;
-	View.DisplayName = PreviewDisplayName.IsEmpty()
-		? FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(View.StatusTag))
-		: PreviewDisplayName;
+	View.DisplayName = Catalog.ResolveDisplayName(View.StatusTag);
 	View.StackCount = FMath::Max(1, PreviewStackCount);
 	View.InspectionHost = EWacomBattleStatusInspectionHost::Player;
-	View.IconBrush = PreviewIconBrush;
-
-	if (!IsBrushConfigured(View.IconBrush) && IconImage)
+	if (const FSlateBrush* CatalogBrush =
+		Catalog.ResolveIconBrush(View.StatusTag))
 	{
-		View.IconBrush = IconImage->GetBrush();
+		View.IconBrush = *CatalogBrush;
 	}
 	if (!IsBrushConfigured(View.IconBrush))
 	{
@@ -340,13 +331,6 @@ UWacomBattleStatusIconListWidget::UWacomBattleStatusIconListWidget(const FObject
 {
 	StatusIconWidgetClass = UWacomBattleStatusIconWidget::StaticClass();
 	StatusTooltipWidgetClass = UWacomBattleStatusTooltipWidget::StaticClass();
-
-	ConfigureDefaultBrush(PoisonIconBrush, FLinearColor(0.24f, 0.72f, 0.28f, 1.0f));
-	ConfigureDefaultBrush(SlowIconBrush, FLinearColor(0.22f, 0.58f, 0.86f, 1.0f));
-	ConfigureDefaultBrush(FreezeIconBrush, FLinearColor(0.55f, 0.86f, 1.0f, 1.0f));
-	ConfigureDefaultBrush(TwilightIconBrush, FLinearColor(0.58f, 0.36f, 0.86f, 1.0f));
-	ConfigureDefaultBrush(StunnedIconBrush, FLinearColor(1.0f, 0.72f, 0.22f, 1.0f));
-	ConfigureDefaultBrush(FallbackStatusIconBrush, FLinearColor(0.70f, 0.72f, 0.76f, 1.0f));
 
 	PreviewStatuses.AddTag(WacomTags::Status_Poison);
 	PreviewStatuses.AddTag(WacomTags::Status_Slow);
@@ -547,16 +531,18 @@ TArray<FWacomBattleStatusIconView> UWacomBattleStatusIconListWidget::BuildStatus
 	const FGameplayTagContainer& InStatuses,
 	const TMap<FGameplayTag, int32>& InStatusStacks) const
 {
+	const UWacomBattleStatusPresentationCatalog& Catalog =
+		WacomBattleStatusPresentationCatalogProvider::GetCatalog();
 	TArray<FGameplayTag> Tags;
 	InStatuses.GetGameplayTagArray(Tags);
 	Tags.RemoveAll([](const FGameplayTag& Tag)
 	{
 		return !Tag.IsValid() || Tag == WacomTags::Status_Shield;
 	});
-	Tags.Sort([](const FGameplayTag& A, const FGameplayTag& B)
+	Tags.Sort([&Catalog](const FGameplayTag& A, const FGameplayTag& B)
 	{
-		const int32 AOrder = GetStatusSortOrder(A);
-		const int32 BOrder = GetStatusSortOrder(B);
+		const int32 AOrder = Catalog.ResolveSortPriority(A);
+		const int32 BOrder = Catalog.ResolveSortPriority(B);
 		if (AOrder != BOrder)
 		{
 			return AOrder < BOrder;
@@ -572,9 +558,12 @@ TArray<FWacomBattleStatusIconView> UWacomBattleStatusIconListWidget::BuildStatus
 
 		FWacomBattleStatusIconView View;
 		View.StatusTag = Tag;
-		View.DisplayName = FText::FromString(UWacomBattleEventPresentationBuilder::FormatStatusName(Tag));
+		View.DisplayName = Catalog.ResolveDisplayName(Tag);
 		View.StackCount = FMath::Max(1, Stack ? *Stack : 1);
-		View.IconBrush = ResolveIconBrush(Tag);
+		if (const FSlateBrush* IconBrush = Catalog.ResolveIconBrush(Tag))
+		{
+			View.IconBrush = *IconBrush;
+		}
 		EnsureUsableBrushSize(View.IconBrush);
 		NormalizeViewForInspection(View);
 		Views.Add(View);
@@ -582,34 +571,6 @@ TArray<FWacomBattleStatusIconView> UWacomBattleStatusIconListWidget::BuildStatus
 
 	return Views;
 }
-
-const FSlateBrush& UWacomBattleStatusIconListWidget::ResolveIconBrush(FGameplayTag StatusTag) const
-{
-	const FSlateBrush* Brush = nullptr;
-	if (StatusTag == WacomTags::Status_Poison)
-	{
-		Brush = &PoisonIconBrush;
-	}
-	else if (StatusTag == WacomTags::Status_Slow)
-	{
-		Brush = &SlowIconBrush;
-	}
-	else if (StatusTag == WacomTags::Status_Freeze)
-	{
-		Brush = &FreezeIconBrush;
-	}
-	else if (StatusTag == WacomTags::Status_Twilight)
-	{
-		Brush = &TwilightIconBrush;
-	}
-	else if (StatusTag == WacomTags::Status_Stunned)
-	{
-		Brush = &StunnedIconBrush;
-	}
-
-	return (Brush && IsBrushConfigured(*Brush)) ? *Brush : FallbackStatusIconBrush;
-}
-
 void UWacomBattleStatusIconListWidget::NormalizeViewForInspection(
 	FWacomBattleStatusIconView& InOutView) const
 {

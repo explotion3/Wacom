@@ -5,6 +5,7 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 #include "UI/Battle/WacomBattleCardPileDetailsScreen.h"
 #include "UI/Battle/WacomKnockdownChoiceDialog.h"
@@ -230,6 +231,19 @@ bool UWacomUIDeveloperSettings::ValidateSettings(TArray<FText>& OutErrors) const
 					"DefaultBattleEnemyInspectionWidgetClass 必须是可实例化的正式 WBP，当前类 {0} 不可实例化。"),
 				FText::FromString(InspectionClass->GetPathName())));
 		}
+	}
+	if (BattleStatusPresentationCatalog.IsNull())
+	{
+		OutErrors.Add(LOCTEXT(
+			"BattleStatusPresentationCatalogNull",
+			"BattleStatusPresentationCatalog 不能为空；Battle HUD 状态名称、图标和 Tooltip 需要正式 Catalog。"));
+	}
+	else
+	{
+		ValidateSoftObject(
+			BattleStatusPresentationCatalog,
+			LOCTEXT("BattleStatusPresentationCatalogLabel", "BattleStatusPresentationCatalog"),
+			OutErrors);
 	}
 	ValidateSoftObject(
 		CardExplanationLexicon,

@@ -128,13 +128,7 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 	TagDisplayNames = {
 		MakeTagDisplayEntry(WacomTags::HandZone_Left, LOCTEXT("DefaultHandZoneLeft", "左手区")),
 		MakeTagDisplayEntry(WacomTags::HandZone_Both, LOCTEXT("DefaultHandZoneBoth", "双手区")),
-		MakeTagDisplayEntry(WacomTags::HandZone_Right, LOCTEXT("DefaultHandZoneRight", "右手区")),
-		MakeTagDisplayEntry(WacomTags::Status_Poison, LOCTEXT("DefaultStatusPoison", "中毒")),
-		MakeTagDisplayEntry(WacomTags::Status_Slow, LOCTEXT("DefaultStatusSlow", "减速")),
-		MakeTagDisplayEntry(WacomTags::Status_Freeze, LOCTEXT("DefaultStatusFreeze", "冻结")),
-		MakeTagDisplayEntry(WacomTags::Status_Twilight, LOCTEXT("DefaultStatusTwilight", "暮气")),
-		MakeTagDisplayEntry(WacomTags::Status_Stunned, LOCTEXT("DefaultStatusStunned", "眩晕")),
-		MakeTagDisplayEntry(WacomTags::Status_Shield, LOCTEXT("DefaultStatusShield", "护盾"))
+		MakeTagDisplayEntry(WacomTags::HandZone_Right, LOCTEXT("DefaultHandZoneRight", "右手区"))
 	};
 
 	NamedTexts = {

@@ -4,6 +4,7 @@
 
 #include "Engine/DataTable.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
 #include "UI/Card/WacomCardDetailTheme.h"
 #include "UI/Card/WacomCardExplanationLexicon.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
@@ -26,6 +27,17 @@ namespace
 		if (Settings && !Settings->CardDetailTheme.IsNull())
 		{
 			return Settings->CardDetailTheme.LoadSynchronous();
+		}
+		return nullptr;
+	}
+
+	UWacomBattleStatusPresentationCatalog* LoadConfiguredStatusCatalog()
+	{
+		const UWacomUIDeveloperSettings* Settings =
+			GetDefault<UWacomUIDeveloperSettings>();
+		if (Settings && !Settings->BattleStatusPresentationCatalog.IsNull())
+		{
+			return Settings->BattleStatusPresentationCatalog.LoadSynchronous();
 		}
 		return nullptr;
 	}
@@ -131,7 +143,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 bool FWacomUICardDetailDefaultContentAssetsSpec::RunTest(const FString& /*Parameters*/)
 {
 	const UWacomCardExplanationLexicon* Lexicon = LoadConfiguredLexicon();
-	if (!TestNotNull(TEXT("Configured CardExplanationLexicon loads"), Lexicon))
+	const UWacomBattleStatusPresentationCatalog* StatusCatalog =
+		LoadConfiguredStatusCatalog();
+	if (!TestNotNull(TEXT("Configured CardExplanationLexicon loads"), Lexicon)
+		|| !TestNotNull(TEXT("Configured BattleStatusPresentationCatalog loads"),
+			StatusCatalog))
 	{
 		return false;
 	}
@@ -178,17 +194,38 @@ bool FWacomUICardDetailDefaultContentAssetsSpec::RunTest(const FString& /*Parame
 	TestTagDisplayName(*this, *Lexicon, WacomTags::HandZone_Left);
 	TestTagDisplayName(*this, *Lexicon, WacomTags::HandZone_Both);
 	TestTagDisplayName(*this, *Lexicon, WacomTags::HandZone_Right);
-	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Poison);
-	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Slow);
-	FText SlowDisplayName;
-	TestTrue(TEXT("Lexicon resolves Slow display name"),
-		Lexicon->FindTagDisplayName(WacomTags::Status_Slow, SlowDisplayName));
-	TestEqual(TEXT("Slow uses the canonical Chinese display name"),
-		SlowDisplayName.ToString(), FString(TEXT("减速")));
-	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Freeze);
-	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Twilight);
-	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Stunned);
-	TestTagDisplayName(*this, *Lexicon, WacomTags::Status_Shield);
+	const FGameplayTag StatusTags[] = {
+		WacomTags::Status_Poison.GetTag(),
+		WacomTags::Status_Slow.GetTag(),
+		WacomTags::Status_Freeze.GetTag(),
+		WacomTags::Status_Twilight.GetTag(),
+		WacomTags::Status_Stunned.GetTag(),
+		WacomTags::Status_Shield.GetTag(),
+	};
+	for (const FGameplayTag StatusTag : StatusTags)
+	{
+		FText LegacyDisplayName;
+		TestFalse(
+			FString::Printf(TEXT("Lexicon no longer owns status name %s"),
+				*StatusTag.ToString()),
+			Lexicon->FindTagDisplayName(StatusTag, LegacyDisplayName));
+		const FWacomBattleStatusPresentationEntry* StatusEntry =
+			StatusCatalog->FindEntry(StatusTag);
+		TestNotNull(
+			FString::Printf(TEXT("Status Catalog owns %s"),
+				*StatusTag.ToString()),
+			StatusEntry);
+		if (StatusEntry)
+		{
+			TestFalse(
+				FString::Printf(TEXT("Status Catalog name for %s is not empty"),
+					*StatusTag.ToString()),
+				StatusEntry->DisplayName.IsEmpty());
+		}
+	}
+	TestEqual(TEXT("Slow uses canonical Catalog display name"),
+		StatusCatalog->ResolveDisplayName(WacomTags::Status_Slow).ToString(),
+		FString(TEXT("减速")));
 
 	TestNamedText(*this, *Lexicon, WacomCardExplanationLexiconKeys::SectionDescriptionTitle);
 	TestNamedText(*this, *Lexicon, WacomCardExplanationLexiconKeys::SectionPassiveTitle);

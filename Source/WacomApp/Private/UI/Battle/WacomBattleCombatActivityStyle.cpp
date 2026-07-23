@@ -4,6 +4,8 @@
 
 #include "UI/Battle/WacomBattleCombatLogBuilder.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalogProvider.h"
 
 namespace
 {
@@ -38,6 +40,16 @@ FSlateBrush UWacomBattleCombatActivityStyle::ResolveActivityIconBrush(
 {
 	if (Row.IconTag.IsValid())
 	{
+		const UWacomBattleStatusPresentationCatalog& StatusCatalog =
+			WacomBattleStatusPresentationCatalogProvider::GetCatalog();
+		if (StatusCatalog.FindEntry(Row.IconTag))
+		{
+			if (const FSlateBrush* StatusBrush =
+				StatusCatalog.ResolveIconBrush(Row.IconTag))
+			{
+				return *StatusBrush;
+			}
+		}
 		if (const FSlateBrush* TagBrush = ResolveTagIcon(Row.IconTag))
 		{
 			return *TagBrush;

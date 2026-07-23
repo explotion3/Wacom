@@ -36,10 +36,9 @@
 #include "UI/Battle/WacomBattleCombatActivityStyle.h"
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
-#include "UI/Battle/WacomBattleStatusIconWidget.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
 #include "UObject/MetaData.h"
 #include "UObject/SavePackage.h"
-#include "UObject/UnrealType.h"
 #include "WidgetBlueprint.h"
 
 namespace
@@ -57,8 +56,8 @@ namespace
 		TEXT("/Game/Wacom/UI/Battle/BP_BattleHUD.BP_BattleHUD");
 	constexpr TCHAR IntentStyleObjectPath[] =
 		TEXT("/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default.DA_EnemyIntentPresentation_Default");
-	constexpr TCHAR StatusListClassPath[] =
-		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusIconList.WBP_BattleStatusIconList_C");
+	constexpr TCHAR StatusCatalogObjectPath[] =
+		TEXT("/Game/Wacom/UI/Battle/Status/DA_BattleStatusPresentationCatalog.DA_BattleStatusPresentationCatalog");
 	constexpr TCHAR WidgetContractMarker[] =
 		TEXT("WacomCombatActivityWBP.ContractVersion=1");
 	constexpr TCHAR FeedWidgetContractMarker[] =
@@ -366,38 +365,29 @@ namespace
 			&& Style.TopFadeBandPixels <= Style.ActivityViewportHeightPixels;
 	}
 
-	const FSlateBrush* ResolveProtectedBrush(const UObject* Object, const FName PropertyName)
+	bool HasCatalogStatusTagIcon(
+		const UWacomBattleCombatActivityStyle& Style,
+		const UWacomBattleStatusPresentationCatalog& Catalog)
 	{
-		if (!Object)
+		for (const FWacomBattleCombatActivityTagIconEntry& Entry : Style.TagIcons)
 		{
-			return nullptr;
+			if (Catalog.FindEntry(Entry.Tag))
+			{
+				return true;
+			}
 		}
-		const FStructProperty* Property = FindFProperty<FStructProperty>(Object->GetClass(), PropertyName);
-		if (!Property || Property->Struct != TBaseStructure<FSlateBrush>::Get())
-		{
-			return nullptr;
-		}
-		return Property->ContainerPtrToValuePtr<FSlateBrush>(Object);
+		return false;
 	}
 
-	bool AddMissingTagIcon(UWacomBattleCombatActivityStyle& Style, FGameplayTag Tag,
-		const FSlateBrush* SourceBrush)
+	bool IsStatusCatalogValid(
+		const UWacomBattleStatusPresentationCatalog* Catalog)
 	{
-		if (!Tag.IsValid() || !SourceBrush || !IsBrushAssigned(*SourceBrush))
+		if (!Catalog)
 		{
 			return false;
 		}
-		for (const FWacomBattleCombatActivityTagIconEntry& Entry : Style.TagIcons)
-		{
-			if (Entry.Tag == Tag)
-			{
-				return false;
-			}
-		}
-		FWacomBattleCombatActivityTagIconEntry& Entry = Style.TagIcons.AddDefaulted_GetRef();
-		Entry.Tag = Tag;
-		Entry.IconBrush = *SourceBrush;
-		return true;
+		FDataValidationContext Context;
+		return Catalog->IsDataValid(Context) == EDataValidationResult::Valid;
 	}
 
 	UWacomBattleCombatActivityStyle* EnsureStyle(UTexture2D* Atlas, bool bBuild)
@@ -410,6 +400,11 @@ namespace
 		const FString ObjectPath = MakeObjectPath(PackagePath);
 		UObject* Existing = StaticLoadObject(UObject::StaticClass(), nullptr, *ObjectPath);
 		UWacomBattleCombatActivityStyle* Style = Cast<UWacomBattleCombatActivityStyle>(Existing);
+		UWacomBattleStatusPresentationCatalog* StatusCatalog =
+			Cast<UWacomBattleStatusPresentationCatalog>(StaticLoadObject(
+				UWacomBattleStatusPresentationCatalog::StaticClass(),
+				nullptr,
+				StatusCatalogObjectPath));
 		if (Existing && !Style)
 		{
 			UE_LOG(LogTemp, Error, TEXT("[CombatActivityUIBuilder] Style has wrong class: %s"),
@@ -424,6 +419,8 @@ namespace
 		if (Style && !bBuild)
 		{
 			const bool bReady = HasManagedContentMarker(Style)
+				&& IsStatusCatalogValid(StatusCatalog)
+				&& !HasCatalogStatusTagIcon(*Style, *StatusCatalog)
 				&& IsBrushAssigned(Style->PlayerPortraitBrush)
 				&& IsBrushAssigned(Style->DamageIconBrush)
 				&& IsBrushAssigned(Style->CardFlowIconBrush)
@@ -455,10 +452,6 @@ namespace
 			Cast<UWacomBattleEnemyIntentPresentationStyle>(StaticLoadObject(
 				UWacomBattleEnemyIntentPresentationStyle::StaticClass(), nullptr,
 				IntentStyleObjectPath));
-		UClass* StatusListClass = LoadClass<UWacomBattleStatusIconListWidget>(
-			nullptr, StatusListClassPath);
-		const UObject* StatusDefaults = StatusListClass ? StatusListClass->GetDefaultObject() : nullptr;
-
 		bool bChanged = false;
 		auto FillBrush = [&Style, &bChanged](FSlateBrush& Target, const FSlateBrush& Value)
 		{
@@ -483,26 +476,21 @@ namespace
 			bChanged = true;
 		}
 
-		struct FStatusProperty
+		if (!StatusCatalog || !IsStatusCatalogValid(StatusCatalog))
 		{
-			FGameplayTag Tag;
-			FName Property;
-		};
-		const FStatusProperty StatusProperties[] = {
-			{ WacomTags::Status_Poison, TEXT("PoisonIconBrush") },
-			{ WacomTags::Status_Slow, TEXT("SlowIconBrush") },
-			{ WacomTags::Status_Freeze, TEXT("FreezeIconBrush") },
-			{ WacomTags::Status_Twilight, TEXT("TwilightIconBrush") },
-			{ WacomTags::Status_Stunned, TEXT("StunnedIconBrush") },
-		};
-		for (const FStatusProperty& Status : StatusProperties)
-		{
-			if (AddMissingTagIcon(*Style, Status.Tag,
-				ResolveProtectedBrush(StatusDefaults, Status.Property)))
+			UE_LOG(LogTemp, Error,
+				TEXT("[CombatActivityUIBuilder] Missing or invalid Battle Status Catalog: %s"),
+				StatusCatalogObjectPath);
+			return nullptr;
+		}
+		if (Style->TagIcons.RemoveAll(
+			[StatusCatalog](const FWacomBattleCombatActivityTagIconEntry& Entry)
 			{
-				Style->Modify();
-				bChanged = true;
-			}
+				return StatusCatalog->FindEntry(Entry.Tag) != nullptr;
+			}) > 0)
+		{
+			Style->Modify();
+			bChanged = true;
 		}
 
 		if (!HasManagedContentMarker(Style))

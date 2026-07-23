@@ -4,6 +4,8 @@
 
 #include "Cards/CardDefinition.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalogProvider.h"
 
 namespace
 {
@@ -143,31 +145,9 @@ FString UWacomBattleEventPresentationBuilder::FormatCardName(const UCardDefiniti
 
 FString UWacomBattleEventPresentationBuilder::FormatStatusName(FGameplayTag Tag)
 {
-	if (Tag == WacomTags::Status_Poison || Tag == WacomTags::Effect_ApplyStatus_Poison)
-	{
-		return TEXT("中毒");
-	}
-	if (Tag == WacomTags::Status_Slow || Tag == WacomTags::Effect_ApplyStatus_Slow)
-	{
-		return TEXT("减速");
-	}
-	if (Tag == WacomTags::Status_Freeze || Tag == WacomTags::Effect_ApplyStatus_Freeze)
-	{
-		return TEXT("冻结");
-	}
-	if (Tag == WacomTags::Status_Twilight || Tag == WacomTags::Effect_ApplyStatus_Twilight)
-	{
-		return TEXT("暮气");
-	}
-	if (Tag == WacomTags::Status_Stunned)
-	{
-		return TEXT("眩晕");
-	}
-	if (Tag == WacomTags::Status_Shield)
-	{
-		return TEXT("护盾");
-	}
-	return Tag.IsValid() ? Tag.ToString() : TEXT("状态");
+	return WacomBattleStatusPresentationCatalogProvider::GetCatalog()
+		.ResolveDisplayName(Tag)
+		.ToString();
 }
 
 FString UWacomBattleEventPresentationBuilder::FormatKnockdownChoice(EKnockdownChoice Choice)

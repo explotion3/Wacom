@@ -100,14 +100,8 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用状态 Tag。为空时默认按 Status.Poison 预览；只影响 UMG 视口预览，不写入 BattleSession。"))
 	FGameplayTag PreviewStatusTag;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用显示名。为空时按状态 Tag 自动格式化；只影响 UMG 视口预览。"))
-	FText PreviewDisplayName;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用层数。显示时最小按 1 处理；只影响 UMG 视口预览。"))
 	int32 PreviewStackCount = 2;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览用图标 Brush。为空时优先使用 IconImage 当前在 WBP 中配置的 Brush；仍为空时使用 C++ 默认占位 Brush。"))
-	FSlateBrush PreviewIconBrush;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (AllowAbstract = "false", ToolTip = "鼠标悬停时惰性创建的状态说明 Widget 类。正式资产应使用 WBP_BattleStatusTooltip；为空时回退到 C++ 默认控件。"))
 	TSubclassOf<UWacomBattleStatusTooltipWidget> StatusTooltipWidgetClass;
@@ -202,24 +196,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (AllowAbstract = "false", ToolTip = "状态图标和 +N 溢出入口使用的 Tooltip Widget 类。正式资产应使用 WBP_BattleStatusTooltip；为空时回退到 C++ 默认控件。"))
 	TSubclassOf<UWacomBattleStatusTooltipWidget> StatusTooltipWidgetClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "Status.Poison 使用的图标 Brush。只影响 UI 外观，不改变中毒规则。"))
-	FSlateBrush PoisonIconBrush;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "Status.Slow 使用的图标 Brush。只影响 UI 外观，不改变减速规则。"))
-	FSlateBrush SlowIconBrush;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "Status.Freeze 使用的图标 Brush。只影响 UI 外观，不改变冻结规则。"))
-	FSlateBrush FreezeIconBrush;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "Status.Twilight 使用的图标 Brush。只影响 UI 外观，不改变暮气规则。"))
-	FSlateBrush TwilightIconBrush;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "Status.Stunned 使用的图标 Brush。只影响 UI 外观，不改变眩晕规则。"))
-	FSlateBrush StunnedIconBrush;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Authoring", meta = (ToolTip = "未知状态或未配置专用 Brush 时使用的 fallback 图标 Brush。"))
-	FSlateBrush FallbackStatusIconBrush;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle|Status Icons|Preview", meta = (ToolTip = "设计器预览开关。开启后，WBP_BattleStatusIconList 会用 PreviewStatuses / PreviewStatusStacks 在 UMG 视口中生成示例状态；运行时仍只消费 Snapshot。"))
 	bool bShowDesignTimePreview = true;
 
@@ -250,7 +226,6 @@ private:
 	TArray<FWacomBattleStatusIconView> BuildStatusIconViews(
 		const FGameplayTagContainer& InStatuses,
 		const TMap<FGameplayTag, int32>& InStatusStacks) const;
-	const FSlateBrush& ResolveIconBrush(FGameplayTag StatusTag) const;
 	void NormalizeViewForInspection(FWacomBattleStatusIconView& InOutView) const;
 	void HandleStatusIconActivated(const FWacomBattleStatusIconView& View);
 	void EnsureOverflowTooltipBinding();

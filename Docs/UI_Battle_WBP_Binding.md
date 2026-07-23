@@ -410,18 +410,18 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 |---|---|
 | `StatusIconWidgetClass` | 每个状态图标使用的 Widget 类，推荐 `WBP_BattleStatusIcon` |
 | `StatusTooltipWidgetClass` | 图标和 `+N` 惰性创建的 Tooltip 类，正式资产使用 `WBP_BattleStatusTooltip` |
-| `PoisonIconBrush / SlowIconBrush / FreezeIconBrush / TwilightIconBrush / StunnedIconBrush` | 各正式状态的图标 Brush |
-| `FallbackStatusIconBrush` | 未知状态或未配置专用 Brush 时的图标 |
 | `bShowDesignTimePreview` | 设计器预览开关，默认开启；只影响 UMG 视口 |
 | `PreviewStatuses / PreviewStatusStacks` | 设计器预览用状态和层数，默认示例为 Poison / Slow / Freeze |
 
 刷新语义：
 
-- 固定顺序为 Poison、Slow、Freeze、Twilight、Stunned；未知状态按 tag 名排序。
+- 名称、图标和升序优先级来自 `DA_BattleStatusPresentationCatalog`；同优先级按完整 Tag 排序，未知状态排在正式条目之后。
 - `Status.Shield` 不显示在状态列表里，护盾仍由 HP / Shield UI 单独显示。
 - 空状态时列表整体折叠。
 - 运行时 Brush 会自动补一个默认图标尺寸，避免 Texture 已配置但 `ImageSize` 为空时在列表里按 0 尺寸排布。
 - Root 与 `StatusContainer` 使用 `SelfHitTestInvisible`；`OverflowText` 在出现时使用 `Visible`。禁止在 Enemy Entry 外再制作第二份 `StatusOverflowText`。
+
+正式状态制作入口只有 `/Game/Wacom/UI/Battle/Status/DA_BattleStatusPresentationCatalog`。每条 Entry 提供规范 `StatusTag`、可选 `LookupAliases`、中文名、HUD Brush、排序，以及 Player / EnemyPart 两组三行规则。`WBP_BattleStatusIconList` 不再保存按状态拆分的 Brush；Combat Activity 的 `TagIcons` 也不得重复配置 Catalog 状态。Poison 模板只可使用 `{PoisonDamagePerStack}` 与 `{PlayerHealPoisonRemovalPercent}`，具体值由 Battle 常量注入。
 
 ### WBP_BattleStatusIcon
 
@@ -440,8 +440,7 @@ WBP 不应做：不提交玩家命令，不修改 BattleSession。
 | 属性 | 用途 |
 |---|---|
 | `bShowDesignTimePreview` | 单独打开 Icon WBP 时显示预览内容，默认开启 |
-| `PreviewStatusTag / PreviewDisplayName / PreviewStackCount` | 单个 Icon 的设计器预览状态、名称和层数 |
-| `PreviewIconBrush` | 单个 Icon 的设计器预览图标；为空时优先使用 `IconImage` 在 WBP 中配置的 Brush |
+| `PreviewStatusTag / PreviewStackCount` | 单个 Icon 的设计器预览状态和层数；名称与图标从 Catalog 解析 |
 | `StatusTooltipWidgetClass` | 悬停时惰性创建的正式 `WBP_BattleStatusTooltip` |
 
 Icon Root 运行时必须为 `Visible`，`IconImage / StackBadge / StackText` 等视觉子节点保持 `HitTestInvisible`。Widget 使用原生 `ToolTipWidgetDelegate`，并在 Slate 属性同步前建立委托；运行刷新和 WBP 不得再写 `ToolTipText`，否则会覆盖或移除原生 Tooltip 元数据。不创建 Tick、不自行计算屏幕位置。WBP 不应做：不从规则层查询状态，不自行改状态层数，不把 `Status.Shield` 混入状态图标。

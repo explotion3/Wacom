@@ -22,8 +22,10 @@
 #include "Misc/Paths.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
+#include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
 #include "UI/Battle/WacomBattleStatusTooltipWidget.h"
 #include "UObject/SavePackage.h"
+#include "UObject/UnrealType.h"
 #include "WidgetBlueprint.h"
 
 namespace
@@ -38,10 +40,48 @@ namespace
 		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusIconList.WBP_BattleStatusIconList");
 	constexpr TCHAR StatusTooltipObjectPath[] =
 		TEXT("/Game/Wacom/UI/Battle/PlayerStatusBar/WBP_BattleStatusTooltip.WBP_BattleStatusTooltip");
+	constexpr TCHAR StatusCatalogObjectPath[] =
+		TEXT("/Game/Wacom/UI/Battle/Status/DA_BattleStatusPresentationCatalog.DA_BattleStatusPresentationCatalog");
 	constexpr TCHAR VitalsMaterialObjectPath[] =
 		TEXT("/Game/DreamMaterials/UI/MI_WacomBattle_PlayerVitals_Default.MI_WacomBattle_PlayerVitals_Default");
 	const FName DamageAnimationName(TEXT("DamagePulseAnimation"));
 	const FName ShieldAnimationName(TEXT("ShieldPulseAnimation"));
+
+	bool HasNoLegacyStatusPresentationProperties()
+	{
+		const FName IconLegacyProperties[] = {
+			TEXT("PreviewDisplayName"),
+			TEXT("PreviewIconBrush"),
+		};
+		for (const FName PropertyName : IconLegacyProperties)
+		{
+			if (FindFProperty<FProperty>(
+				UWacomBattleStatusIconWidget::StaticClass(),
+				PropertyName))
+			{
+				return false;
+			}
+		}
+
+		const FName ListLegacyProperties[] = {
+			TEXT("PoisonIconBrush"),
+			TEXT("SlowIconBrush"),
+			TEXT("FreezeIconBrush"),
+			TEXT("TwilightIconBrush"),
+			TEXT("StunnedIconBrush"),
+			TEXT("FallbackStatusIconBrush"),
+		};
+		for (const FName PropertyName : ListLegacyProperties)
+		{
+			if (FindFProperty<FProperty>(
+				UWacomBattleStatusIconListWidget::StaticClass(),
+				PropertyName))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
 
 	void RegisterWidgetGuid(UWidgetBlueprint& Blueprint, const UWidget& Widget)
 	{
@@ -613,10 +653,16 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 		UWidgetBlueprint::StaticClass(), nullptr, StatusIconListObjectPath));
 	UWidgetBlueprint* StatusTooltip = Cast<UWidgetBlueprint>(StaticLoadObject(
 		UWidgetBlueprint::StaticClass(), nullptr, StatusTooltipObjectPath));
+	UWacomBattleStatusPresentationCatalog* StatusCatalog =
+		Cast<UWacomBattleStatusPresentationCatalog>(StaticLoadObject(
+			UWacomBattleStatusPresentationCatalog::StaticClass(),
+			nullptr,
+			StatusCatalogObjectPath));
 	UMaterialInterface* VitalsMaterial = Cast<UMaterialInterface>(StaticLoadObject(
 		UMaterialInterface::StaticClass(), nullptr, VitalsMaterialObjectPath));
 	if (!Blueprint || !BattleHud || !StatusIcon || !StatusIconList
-		|| !StatusTooltip || !VitalsMaterial || !StatusTooltip->GeneratedClass)
+		|| !StatusTooltip || !StatusCatalog || !VitalsMaterial
+		|| !StatusTooltip->GeneratedClass)
 	{
 		UE_LOG(LogTemp, Error,
 			TEXT("[PlayerStatusUIBuilder] Missing PlayerStatus, status inspection WBP, BattleHUD WBP, or Vitals MI"));
@@ -642,22 +688,44 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 		*StatusIconList,
 		StatusTooltip->GeneratedClass,
 		true);
+	FDataValidationContext StatusCatalogValidationContext;
+	const bool bStatusCatalogReady =
+		StatusCatalog->IsDataValid(StatusCatalogValidationContext)
+			== EDataValidationResult::Valid;
+	const bool bLegacyPresentationFieldsRemoved =
+		HasNoLegacyStatusPresentationProperties();
 	if (bInspectOnly)
 	{
 		if (!bStatusReady || !bHudReady || !bStatusIconReady
-			|| !bStatusIconListReady || !bStatusTooltipReady)
+			|| !bStatusIconListReady || !bStatusTooltipReady
+			|| !bStatusCatalogReady || !bLegacyPresentationFieldsRemoved)
 		{
 			UE_LOG(LogTemp, Error,
-				TEXT("[PlayerStatusUIBuilder] V3 contract incomplete: Status=%d HUD=%d Icon=%d List=%d Tooltip=%d"),
+				TEXT("[PlayerStatusUIBuilder] V4 contract incomplete: Status=%d HUD=%d Icon=%d List=%d Tooltip=%d Catalog=%d LegacyFieldsRemoved=%d"),
 				bStatusReady,
 				bHudReady,
 				bStatusIconReady,
 				bStatusIconListReady,
-				bStatusTooltipReady);
+				bStatusTooltipReady,
+				bStatusCatalogReady,
+				bLegacyPresentationFieldsRemoved);
 			return false;
 		}
-		UE_LOG(LogTemp, Display, TEXT("[PlayerStatusUIBuilder] V3 contract ready"));
+		UE_LOG(LogTemp, Display, TEXT("[PlayerStatusUIBuilder] V4 contract ready"));
 		return true;
+	}
+	if (!bStatusCatalogReady)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[PlayerStatusUIBuilder] Battle Status Catalog is invalid: %s"),
+			StatusCatalogObjectPath);
+		return false;
+	}
+	if (!bLegacyPresentationFieldsRemoved)
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[PlayerStatusUIBuilder] Legacy status presentation fields still exist"));
+		return false;
 	}
 
 	bool bChanged = false;
@@ -742,7 +810,7 @@ bool Wacom::ContentBuilder::ProcessPlayerStatusVitalsUI(
 	}
 
 	UE_LOG(LogTemp, Display,
-		TEXT("[PlayerStatusUIBuilder] V3 contract %s"),
+		TEXT("[PlayerStatusUIBuilder] V4 contract %s"),
 		bChanged ? TEXT("built") : TEXT("already ready"));
 	return true;
 }
