@@ -24,7 +24,7 @@ ESlateDrawEffect ResolveDrawEffect(bool bParentEnabled)
 		: ESlateDrawEffect::DisabledEffect;
 }
 
-FVector2D RotateVector(FVector2D Vector, float AngleDegrees)
+FVector2D RotateBackpackOverlayVector(FVector2D Vector, float AngleDegrees)
 {
 	const float Radians = FMath::DegreesToRadians(AngleDegrees);
 	const float CosAngle = FMath::Cos(Radians);
@@ -69,10 +69,10 @@ bool DoOrientedRectsIntersect(
 		return false;
 	}
 
-	const FVector2D LeftAxisX = RotateVector(FVector2D(1.0f, 0.0f), LeftAngleDegrees);
-	const FVector2D LeftAxisY = RotateVector(FVector2D(0.0f, 1.0f), LeftAngleDegrees);
-	const FVector2D RightAxisX = RotateVector(FVector2D(1.0f, 0.0f), RightAngleDegrees);
-	const FVector2D RightAxisY = RotateVector(FVector2D(0.0f, 1.0f), RightAngleDegrees);
+	const FVector2D LeftAxisX = RotateBackpackOverlayVector(FVector2D(1.0f, 0.0f), LeftAngleDegrees);
+	const FVector2D LeftAxisY = RotateBackpackOverlayVector(FVector2D(0.0f, 1.0f), LeftAngleDegrees);
+	const FVector2D RightAxisX = RotateBackpackOverlayVector(FVector2D(1.0f, 0.0f), RightAngleDegrees);
+	const FVector2D RightAxisY = RotateBackpackOverlayVector(FVector2D(0.0f, 1.0f), RightAngleDegrees);
 	const FVector2D Delta = RightCenter - LeftCenter;
 	const FVector2D Axes[] = { LeftAxisX, LeftAxisY, RightAxisX, RightAxisY };
 	for (const FVector2D& Axis : Axes)
@@ -260,7 +260,7 @@ FVector2D FWacomBackpackWorkspaceOverlayPainter::ResolveCardMarkerCenter(
 	const FVector2D LocalCenter(
 		HorizontalOffset,
 		-HalfCard.Y + FMath::Max(0.0f, Padding) + HalfIcon.Y);
-	return CardCenter + RotateVector(LocalCenter, CardAngleDegrees);
+	return CardCenter + RotateBackpackOverlayVector(LocalCenter, CardAngleDegrees);
 }
 
 bool FWacomBackpackWorkspaceOverlayPainter::IsMarkerOccludedByHigherCard(
