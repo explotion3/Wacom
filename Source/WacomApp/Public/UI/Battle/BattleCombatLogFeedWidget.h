@@ -113,7 +113,8 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UBattleCombatActivityRowWidget>> ActivityRowWidgets;
-	TArray<uint64> PresentedRowPlaybackIds;
+	TMap<uint64, TWeakObjectPtr<UBattleCombatActivityRowWidget>>
+		ActivityRowWidgetsByPlaybackId;
 	TWeakObjectPtr<UClass> CachedActivityRowWidgetClass;
 
 	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
@@ -127,6 +128,10 @@ private:
 	void EnsureRuntimeBindings();
 	void ApplyRuntimeGeometry();
 	void EnsureRowWidgets(int32 RequiredCount);
+	UBattleCombatActivityRowWidget* AcquireRowWidget(
+		uint64 PlaybackId,
+		TSet<UBattleCombatActivityRowWidget*>& ReservedWidgets);
+	void ReleaseRetiredRowWidgets(const TSet<uint64>& VisiblePlaybackIds);
 	void RefreshPlaybackPresentation();
 	void RefreshFooter();
 	void BindRuntimeSettings();

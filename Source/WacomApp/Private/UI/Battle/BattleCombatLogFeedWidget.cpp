@@ -191,7 +191,7 @@ void UBattleCombatLogFeedWidget::NativeDestruct()
 		Playback->Reset();
 	}
 	ActivityRowWidgets.Reset();
-	PresentedRowPlaybackIds.Reset();
+	ActivityRowWidgetsByPlaybackId.Reset();
 	CachedActivityRowWidgetClass.Reset();
 	Super::NativeDestruct();
 }
@@ -300,7 +300,7 @@ void UBattleCombatLogFeedWidget::ClearCombatActivity()
 			RowWidget->ClearActivityRow();
 		}
 	}
-	PresentedRowPlaybackIds.Reset();
+	ActivityRowWidgetsByPlaybackId.Reset();
 	RefreshFooter();
 }
 
@@ -418,7 +418,7 @@ void UBattleCombatLogFeedWidget::EnsureRowWidgets(const int32 RequiredCount)
 	{
 		ActivityRowsBox->ClearChildren();
 		ActivityRowWidgets.Reset();
-		PresentedRowPlaybackIds.Reset();
+		ActivityRowWidgetsByPlaybackId.Reset();
 		CachedActivityRowWidgetClass = RowClass;
 	}
 	while (ActivityRowWidgets.Num() < FMath::Max(0, RequiredCount))
@@ -433,7 +433,51 @@ void UBattleCombatLogFeedWidget::EnsureRowWidgets(const int32 RequiredCount)
 		RowWidget->SetVisibility(ESlateVisibility::Collapsed);
 		ActivityRowsBox->AddChild(RowWidget);
 		ActivityRowWidgets.Add(RowWidget);
-		PresentedRowPlaybackIds.Add(0);
+	}
+}
+
+UBattleCombatActivityRowWidget* UBattleCombatLogFeedWidget::AcquireRowWidget(
+	const uint64 PlaybackId,
+	TSet<UBattleCombatActivityRowWidget*>& ReservedWidgets)
+{
+	if (const TWeakObjectPtr<UBattleCombatActivityRowWidget>* Existing =
+		ActivityRowWidgetsByPlaybackId.Find(PlaybackId))
+	{
+		if (UBattleCombatActivityRowWidget* ExistingWidget = Existing->Get())
+		{
+			ReservedWidgets.Add(ExistingWidget);
+			return ExistingWidget;
+		}
+		ActivityRowWidgetsByPlaybackId.Remove(PlaybackId);
+	}
+
+	for (UBattleCombatActivityRowWidget* Candidate : ActivityRowWidgets)
+	{
+		if (!Candidate || ReservedWidgets.Contains(Candidate))
+		{
+			continue;
+		}
+		ActivityRowWidgetsByPlaybackId.Add(PlaybackId, Candidate);
+		ReservedWidgets.Add(Candidate);
+		return Candidate;
+	}
+	return nullptr;
+}
+
+void UBattleCombatLogFeedWidget::ReleaseRetiredRowWidgets(
+	const TSet<uint64>& VisiblePlaybackIds)
+{
+	for (auto Iterator = ActivityRowWidgetsByPlaybackId.CreateIterator(); Iterator; ++Iterator)
+	{
+		if (VisiblePlaybackIds.Contains(Iterator.Key()))
+		{
+			continue;
+		}
+		if (UBattleCombatActivityRowWidget* RetiredWidget = Iterator.Value().Get())
+		{
+			RetiredWidget->ClearActivityRow();
+		}
+		Iterator.RemoveCurrent();
 	}
 }
 
@@ -448,31 +492,49 @@ void UBattleCombatLogFeedWidget::RefreshPlaybackPresentation()
 	EnsureRowWidgets(RequiredCount);
 	const FWacomBattleCombatActivityPlaybackConfig Config = BuildPlaybackConfig(
 		ActivityStyle, bRuntimeSimplifiedMotion);
-	for (int32 Index = 0; Index < ActivityRowWidgets.Num(); ++Index)
+	TSet<uint64> VisiblePlaybackIds;
+	if (Views)
 	{
-		UBattleCombatActivityRowWidget* RowWidget = ActivityRowWidgets[Index];
+		VisiblePlaybackIds.Reserve(Views->Num());
+		for (const FWacomBattleCombatActivityRowPlaybackView& View : *Views)
+		{
+			VisiblePlaybackIds.Add(View.PlaybackId);
+		}
+	}
+	ReleaseRetiredRowWidgets(VisiblePlaybackIds);
+
+	TSet<UBattleCombatActivityRowWidget*> ReservedWidgets;
+	ReservedWidgets.Reserve(VisiblePlaybackIds.Num());
+	for (const TPair<uint64, TWeakObjectPtr<UBattleCombatActivityRowWidget>>& Pair :
+		ActivityRowWidgetsByPlaybackId)
+	{
+		if (UBattleCombatActivityRowWidget* Widget = Pair.Value.Get())
+		{
+			ReservedWidgets.Add(Widget);
+		}
+	}
+
+	if (!Views)
+	{
+		RefreshFooter();
+		return;
+	}
+	for (int32 Index = 0; Index < Views->Num(); ++Index)
+	{
+		const FWacomBattleCombatActivityRowPlaybackView& View = (*Views)[Index];
+		const TWeakObjectPtr<UBattleCombatActivityRowWidget>* ExistingBinding =
+			ActivityRowWidgetsByPlaybackId.Find(View.PlaybackId);
+		const bool bNeedsInitialBinding =
+			!ExistingBinding || !ExistingBinding->IsValid();
+		UBattleCombatActivityRowWidget* RowWidget =
+			AcquireRowWidget(View.PlaybackId, ReservedWidgets);
 		if (!RowWidget)
 		{
 			continue;
 		}
-		if (!Views || !Views->IsValidIndex(Index))
-		{
-			RowWidget->ClearActivityRow();
-			if (PresentedRowPlaybackIds.IsValidIndex(Index))
-			{
-				PresentedRowPlaybackIds[Index] = 0;
-			}
-			continue;
-		}
-		const FWacomBattleCombatActivityRowPlaybackView& View = (*Views)[Index];
-		if (!PresentedRowPlaybackIds.IsValidIndex(Index))
-		{
-			PresentedRowPlaybackIds.SetNum(ActivityRowWidgets.Num());
-		}
-		if (PresentedRowPlaybackIds[Index] != View.PlaybackId)
+		if (bNeedsInitialBinding)
 		{
 			RowWidget->SetActivityRowData(View.Row, ResolveActivityIconBrush(View.Row));
-			PresentedRowPlaybackIds[Index] = View.PlaybackId;
 		}
 		if (UCanvasPanelSlot* CanvasSlot = Cast<UCanvasPanelSlot>(RowWidget->Slot))
 		{

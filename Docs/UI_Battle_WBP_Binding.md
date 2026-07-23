@@ -60,7 +60,7 @@ WBP 不应做：
 
 - 玩家状态、牌堆数量、CommandBar 和 CombatLogFeed 在 Snapshot 刷新后显示。
 - 拖牌指向合法敌人部位 / 手牌目标，或无目标卡已经达到 armed commit 可释放状态时，玩家状态条和敌人部位面板可以直接显示 Action Preview projected value；单纯拖出手牌区但未 armed、未指向有效目标或目标无效时不显示玩家侧收益预览。
-- `CombatLogFeed` 在裁切视口中流式显示核心短时活动。默认同时容纳五条历史 / 结果和一条当前根行动；这是视觉背压容量，不是数据裁剪，积压仍按跨组 FIFO 逐条进入。根行动从底部最后行动槽立即出现；连续敌人行动时，尚未读完的上一根行动进入上方历史流而不是被删除。结果和历史根行动达到最短可读时间后从顶部逐条退场；收束时最新根行动只淡出文字和底板，原 Row 图标常驻，新的根行动才替换它。透明 `LastActionButton` 始终覆盖图标槽并在已有根行动时可点击，其余区域不遮挡 HUD、手牌或世界目标。
+- `CombatLogFeed` 在裁切视口中流式显示核心短时活动。默认同时容纳五条历史 / 结果和一条当前根行动；这是视觉背压容量，不是数据裁剪，积压仍按跨组 FIFO 逐条进入。根行动从底部最后行动槽立即出现；连续敌人行动时，尚未读完的上一根行动进入上方历史流而不是被删除。结果和历史根行动达到最短可读时间后从顶部逐条退场；每个可见 Row 在完整生命周期内按 `PlaybackId` 固定复用同一个 Widget，邻近 Row 退场不得触发幸存文字和图标重新绑定。收束时最新根行动只淡出文字和底板，原 Row 图标常驻，新的根行动才替换它。透明 `LastActionButton` 始终覆盖图标槽并在已有根行动时可点击，其余区域不遮挡 HUD、手牌或世界目标。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
 - 抽牌从 `DrawPileMotionAnchor`（或 `DrawPileView` 中心）进入；弃牌飞向 `DiscardPileMotionAnchor`（或 `DiscardPileView` 中心）。配置有效 Card Use Surface Effect 时，无目标牌与目标牌都停在提交位置播放当前 Style（默认像素翻面收牌，旧菱形波可切回）；`PlayTargetMotionAnchor` 和真实目标坐标仍会采集，但只供效果失效时的旧空间离场 fallback 与未来目标命中反馈使用。
 - 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 的 typed Part registry 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
