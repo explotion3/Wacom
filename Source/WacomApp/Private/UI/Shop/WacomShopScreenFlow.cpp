@@ -8,46 +8,10 @@
 #include "UI/Foundation/WacomAppToastTypes.h"
 #include "UI/Shop/WacomShopPresentationBuilder.h"
 #include "UI/Shop/WacomShopScreen.h"
+#include "UI/Shop/WacomShopVisitPresentationFlow.h"
 #include "Cards/CardDefinition.h"
 
 #define LOCTEXT_NAMESPACE "WacomShopScreen"
-
-namespace
-{
-	const FWacomShopOfferPresentationView* FindCachedOfferView(
-		FGuid OfferId,
-		const TArray<FWacomShopOfferPresentationView>& CachedOfferViews)
-	{
-		return CachedOfferViews.FindByPredicate(
-			[OfferId](const FWacomShopOfferPresentationView& View)
-			{
-				return View.OfferId == OfferId;
-			});
-	}
-
-	void ShowPurchaseSuccessToast(
-		UWacomAppToastSubsystem* ToastSubsystem,
-		const FWacomShopOfferPresentationView* OfferView)
-	{
-		if (ToastSubsystem)
-		{
-			ToastSubsystem->ShowCardGained(OfferView ? OfferView->CardDefinition.Get() : nullptr);
-		}
-	}
-
-	void ShowPurchaseFailureToast(
-		UWacomAppToastSubsystem* ToastSubsystem,
-		const FWacomShopOfferPresentationView* OfferView)
-	{
-		const FText Message = FWacomShopScreenFlow::BuildPurchaseFailureToastText(
-			OfferView ? OfferView->DisabledReason : NAME_None);
-
-		if (ToastSubsystem)
-		{
-			ToastSubsystem->ShowWarning(Message);
-		}
-	}
-}
 
 void FWacomShopScreenFlow::EndShopVisitOnDeactivate(
 	AWacomPlayerController* PlayerController,
@@ -62,15 +26,8 @@ void FWacomShopScreenFlow::EndShopVisitOnDeactivate(
 
 	if (Run)
 	{
-		const FRunShopVisitResult Result =
-			Run->EndShopVisitIfOwnedWithResult(VisitToken);
-		if (Result.bSucceeded && PlayerController
-			&& !PlayerController->ApplyRunNodeActivityResolutionForPresentation(
-				Result.ExplorationResolution))
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[WacomShopScreenFlow] Shop End 结果未按序应用到 Run 表现"));
-		}
+		FWacomShopVisitPresentationFlow::EndVisitIfOwned(
+			PlayerController, Run, VisitToken);
 	}
 	bDidEndShopVisit = true;
 }
@@ -88,20 +45,16 @@ bool FWacomShopScreenFlow::PurchaseOffer(
 		return false;
 	}
 
-	const FWacomShopOfferPresentationView* OfferView = FindCachedOfferView(OfferId, CachedOfferViews);
-	const FRunShopPurchaseResult PurchaseResult = Run->PurchaseShopOffer(OfferId);
+	const FRunShopPurchaseResult PurchaseResult =
+		FWacomShopVisitPresentationFlow::PurchaseOffer(
+			PlayerController,
+			Run,
+			ToastSubsystem,
+			OfferId,
+			CachedOfferViews);
 	const bool bPurchased = PurchaseResult.bSucceeded;
 	if (bPurchased)
 	{
-		if (PurchaseResult.ExplorationResolution.IsOk()
-			&& PlayerController
-			&& !PlayerController->ApplyRunNodeActivityResolutionForPresentation(
-				PurchaseResult.ExplorationResolution))
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[WacomShopScreenFlow] Shop Purchase 结果未按序应用到 Run 表现"));
-		}
-		ShowPurchaseSuccessToast(ToastSubsystem, OfferView);
 		if (PurchaseResult.bVisitClosedAfterPurchase || !Run->IsShopVisitActive())
 		{
 			// 首次购买可能耗尽当前时段。规则结果已经关闭 visit；Screen 只负责
@@ -110,29 +63,13 @@ bool FWacomShopScreenFlow::PurchaseOffer(
 			return true;
 		}
 	}
-	else
-	{
-		ShowPurchaseFailureToast(ToastSubsystem, OfferView);
-	}
 	Screen.RefreshShop();
 	return bPurchased;
 }
 
 FText FWacomShopScreenFlow::BuildPurchaseFailureToastText(FName DisabledReason)
 {
-	if (DisabledReason == FName(TEXT("InsufficientGold")))
-	{
-		return LOCTEXT("PurchaseFailedInsufficientGold", "金币不足");
-	}
-	if (DisabledReason == FName(TEXT("Purchased")))
-	{
-		return LOCTEXT("PurchaseFailedPurchased", "该商品已购买");
-	}
-	if (DisabledReason == FName(TEXT("MissingCard")))
-	{
-		return LOCTEXT("PurchaseFailedMissingCard", "商品不可购买");
-	}
-	return LOCTEXT("PurchaseFailed", "购买失败");
+	return FWacomShopVisitPresentationFlow::BuildPurchaseFailureToastText(DisabledReason);
 }
 
 bool FWacomShopScreenFlow::UpgradeCard(

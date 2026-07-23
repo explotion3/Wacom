@@ -426,6 +426,23 @@ tags:
   - 入口：[WacomBattleUI.md](./WacomBattleUI.md) / [UI_Battle_WBP_Binding.md](./UI_Battle_WBP_Binding.md)
   - 说明：四个稳定 WBP 构成唯一 Panel/Entry 与双侧档案；两个 SinglePart 子 WBP、专用 Setting 和继承绑定补丁已删除。单段 `268 × 92`，多段最小 `116 × 92` 等宽连接。App-private typed state / Vitals Frame / Material Adapter 独占事实 diff、Preview 与 MID，Panel 每个 Host 只订阅一次 Local Settings，WBP 继续独占视觉曲线。旧 Enemy UI mutation builders 和专用 MCP toolset 已删除，只保留 `-InspectEnemyHUD` 只读审计。剩余工作仅为 TrainingWarrior / Snake / SlimeTrio 在三种目标分辨率的人工 PIE 美术节奏验收，以及未来 Boss 专用 UI。
 
+- [ ] **World Shop purchase-only C++ vertical slice**
+  - 状态：`Done: code/contract + reusable BP/DA；Pending: 权威 L_Exploration 接入与关卡内最终人工 PIE`
+  - 归属：Run UI / World Interaction / App
+  - 入口：[WacomApp.md](./WacomApp.md) / [WacomUI.md](./WacomUI.md) / [WacomWorldInteraction.md](./WacomWorldInteraction.md)
+  - 说明：已落地 2×4 Host/Anchor、透明 HUD、整卡购买、Mouse WidgetInteraction、Run live clamp、手牌 interaction-only suppression、ShopScreen fallback 和 transient PIE 命令；Floor 1 Production map 未修改。2026-07-23 PIE 回归移除了根 Button 默认白色四态画刷，并把 WidgetInteraction 附着到受控 Pawn；`UWacomGameViewportClient` preprocessor 正式转发 `All + NoCapture` 下的左键 press/release。世界卡面直接复用 `WBP_FirstPersonCardView`，以 `720×976` DrawSize、`0.10` world scale 做 2× supersampling。2026-07-24 将胜出的 `M_WorldCardSurface / Masked Exposure / 1.0` 通过 App-private adapter 接入正式商品，transient 距离改为 `320 cm`，并增加购买前后 Dump；免费购买、重复拒绝、StorageRevision 和售出 intent 合同已自动化通过。人工 PIE 暴露“首笔交易耗尽 AP 后立即关闭商店”，现已在 `WacomRun` 修正为 visit 内保持 0 AP、退出时才推进 phase。随后新增组合式 `AWacomWorldShopActor`、纯表现 `BP_WacomWorldShop` 和 8 商品、无强化的 `DA_Shop_LevelAuthoringSnake`，Floor 的 `Shop.Snake` 已切换到该 Definition。正式关卡候选摆放的 PIE 又暴露入口 `ClickBounds` 与商品共面并截断 Visibility trace；现由 App-private guard 在活动期间临时设为 `NoCollision`、返回 Run Path 后恢复，并新增对应回归合同。由于 `L_Exploration` 由另一地图会话并行维护，本提交不包含该 `.umap` 或它的精确摆放合同；本地候选 Host 与 Viewpoint 相距约 `980 cm`，待权威地图会话接入后再进行真实鼠标购买、退出/重进、曝光与场景构图人工 PIE。
+
+- [x] **World Card 世界空间材质选择 PIE**
+  - 状态：`Done: Wacom Masked Exposure / ExposureCompensationStrength=1.0 已选定并接入 World Shop`
+  - 归属：Card UI / World Presentation / App
+  - 入口：[WacomUI.md](./WacomUI.md)
+  - 说明：与交易和 Run 状态隔离的 transient 实验台完成一张屏幕参考和四种世界模式对照；人工确认 `Wacom Masked Exposure` 在强度 `1.0` 时最接近屏幕参考。正式材质 `/Game/Wacom/UI/Card/World/M_WorldCardSurface` 通过唯一 App-private adapter 接入 World Shop；实验台保留 `0..1` 运行时比较能力，正式商品固定 `1.0`。
+
+- [ ] **World Card Activities 后续活动**
+  - 状态：`Ready: 独立 Spec/切片`
+  - 归属：Run Event / Card UI
+  - 说明：三选一整卡选择、强化卡牌拖入场景槽、卡面关键词语义 Tooltip 分别作为后续活动实现；不得把它们塞回 purchase-only World Shop coordinator。
+
 ## 维护规则
 
 > [!tip] 新任务放哪

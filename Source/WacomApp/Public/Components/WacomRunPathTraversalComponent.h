@@ -4,6 +4,7 @@
 
 #include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Components/ActorComponent.h"
+#include "Components/WacomCursorLookDriverComponent.h"
 #include "CoreMinimal.h"
 #include "WacomRunPathTraversalComponent.generated.h"
 
@@ -114,6 +115,8 @@ public:
 		float Scale = 1.0f,
 		float InterpSpeedOverride = -1.0f);
 	void ClearCursorLookOverride();
+	/** 返回已包含本地设置响应强度与反转 Y 的当前 Run 观察参数副本。 */
+	FWacomCursorLookProfile GetLiveCursorLookProfile() const;
 
 	EWacomRunPathTraversalState GetTraversalState() const { return State; }
 	AWacomRunPathSegmentActor* GetActivePath() const { return ActivePath.Get(); }

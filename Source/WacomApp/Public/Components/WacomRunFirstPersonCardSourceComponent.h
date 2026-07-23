@@ -31,6 +31,9 @@ struct WACOMAPP_API FWacomRunFirstPersonCardSourceDebugView
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前是否被 GameMenu 压制。"))
 	bool bSuppressedByGameMenu = false;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "World Shop 是否只冻结了当前可见 Run 手牌的交互。卡牌 entries 和 transition hints 不变。"))
+	bool bInteractionSuppressedByWorldShop = false;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Run|First Person Cards|Debug", meta = (ToolTip = "当前是否存在活动菜单卡牌租约。"))
 	bool bHasActiveMenuLease = false;
 
@@ -170,6 +173,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	void SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed);
+
+	/** 只切换当前默认 Run 手牌交互，不清空 entries、不创建 menu lease、不播放入场 hint。 */
+	void SetRunFirstPersonCardLayerInteractionSuppressedByWorldShop(bool bSuppressed);
+	bool IsRunFirstPersonCardLayerInteractionSuppressedByWorldShop() const
+	{
+		return bInteractionSuppressedByWorldShop;
+	}
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	bool SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
@@ -354,6 +364,7 @@ private:
 
 	bool bRuntimeSourceActive = false;
 	bool bSuppressedByGameMenu = false;
+	bool bInteractionSuppressedByWorldShop = false;
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;

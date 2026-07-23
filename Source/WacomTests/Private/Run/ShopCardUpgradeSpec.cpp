@@ -259,12 +259,31 @@ bool FWacomRunShopCardUpgradeCommerceMatrixSpec::RunTest(const FString& /*Parame
 		FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Fixture.Session);
 		State.TimeState.CurrentTimePhase = ETimePhase::Morning;
 		State.TimeState.RemainingActionPoints = 1;
-		TestTrue(TEXT("Phase-advance visit begins"), Fixture.Session->BeginShopVisitRequest(Request));
+		const FRunShopVisitResult Begin =
+			Fixture.Session->BeginShopVisitWithResult(Request);
+		TestTrue(TEXT("Phase-advance visit begins"), Begin.bSucceeded);
 		const FRunShopCardUpgradeResult Upgrade = Fixture.Session->UpgradeOwnedCardAtShop(MakeCommand(Instance, Blue));
 		TestTrue(TEXT("Phase-ending upgrade succeeds"), Upgrade.bSucceeded);
-		TestTrue(TEXT("Phase-ending upgrade closes visit"), Upgrade.bVisitClosedAfterUpgrade);
-		TestFalse(TEXT("Closed visit is inactive"), Fixture.Session->IsShopVisitActive());
-		TestEqual(TEXT("Morning advances to Day"), Fixture.Session->BuildExplorationSnapshot().Time.CurrentTimePhase, ETimePhase::Day);
+		TestFalse(
+			TEXT("Phase-ending upgrade defers visit close"),
+			Upgrade.bVisitClosedAfterUpgrade);
+		TestTrue(TEXT("Visit stays active at zero AP"), Fixture.Session->IsShopVisitActive());
+		TestEqual(
+			TEXT("Morning remains active inside shop"),
+			Fixture.Session->BuildExplorationSnapshot().Time.CurrentTimePhase,
+			ETimePhase::Morning);
+		TestEqual(
+			TEXT("Upgrade consumes the last AP"),
+			Fixture.Session->BuildExplorationSnapshot().Time.RemainingActionPoints,
+			0);
+		TestTrue(
+			TEXT("Owned close succeeds"),
+			Fixture.Session->EndShopVisitIfOwnedWithResult(Begin.VisitToken).bSucceeded);
+		TestFalse(TEXT("Owned close ends visit"), Fixture.Session->IsShopVisitActive());
+		TestEqual(
+			TEXT("Leaving shop advances Morning to Day"),
+			Fixture.Session->BuildExplorationSnapshot().Time.CurrentTimePhase,
+			ETimePhase::Day);
 	}
 	return true;
 }

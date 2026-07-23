@@ -36,7 +36,8 @@ public:
 
 	/**
 	 * 在 activity 内提交行动点成本；未跨 phase 时重签同 token 的 ticket 并继续占有，
-	 * 跨 phase 时结束 activity。用于 Shop 首次购买后继续浏览。
+	 * 跨 phase 时结束 activity。bDeferPhaseAdvance 为 true 时，归零也继续占有，
+	 * 由 activity 的关闭路径负责推进阶段。
 	 */
 	static FWacomStatus SpendAndContinue(
 		FRunState& State,
@@ -44,6 +45,7 @@ public:
 		const FRunNodeActivityTicket& Ticket,
 		int32 ActionPointCost,
 		bool bResolveNode,
+		bool bDeferPhaseAdvance,
 		bool& bOutActivityContinues,
 		FRunNodeActivityTicket& OutUpdatedTicket,
 		TArray<FRunExplorationEvent>& OutEvents);

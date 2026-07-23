@@ -64,6 +64,31 @@ FWacomStatus FRunTimeModule::TrySpendActionPoints(
 	const int32 Cost,
 	TArray<FRunExplorationEvent>& OutEvents)
 {
+	return TrySpendActionPointsInternal(
+		State,
+		Cost,
+		/*bAdvanceWhenDepleted=*/true,
+		OutEvents);
+}
+
+FWacomStatus FRunTimeModule::TrySpendActionPointsDeferredAdvance(
+	FRunState& State,
+	const int32 Cost,
+	TArray<FRunExplorationEvent>& OutEvents)
+{
+	return TrySpendActionPointsInternal(
+		State,
+		Cost,
+		/*bAdvanceWhenDepleted=*/false,
+		OutEvents);
+}
+
+FWacomStatus FRunTimeModule::TrySpendActionPointsInternal(
+	FRunState& State,
+	const int32 Cost,
+	const bool bAdvanceWhenDepleted,
+	TArray<FRunExplorationEvent>& OutEvents)
+{
 	if (Cost <= 0)
 	{
 		return FWacomStatus::Fail(EWacomError::InvalidArgument, TEXT("InvalidActionPointCost"));
@@ -85,7 +110,8 @@ FWacomStatus FRunTimeModule::TrySpendActionPoints(
 	FRunState WorkingState = State;
 	TArray<FRunExplorationEvent> WorkingEvents;
 	WorkingState.TimeState.RemainingActionPoints -= Cost;
-	if (WorkingState.TimeState.RemainingActionPoints == 0)
+	if (bAdvanceWhenDepleted
+		&& WorkingState.TimeState.RemainingActionPoints == 0)
 	{
 		const FWacomStatus AdvanceStatus = AdvanceWorkingState(WorkingState, WorkingEvents);
 		if (!AdvanceStatus.IsOk())

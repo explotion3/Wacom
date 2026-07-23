@@ -12,9 +12,11 @@
 #include "GameFramework/Pawn.h"
 
 #include "Actors/WacomFirstPersonViewpointActor.h"
+#include "Actors/WacomWorldShopHostActor.h"
 #include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Shops/ShopDefinition.h"
+#include "UI/Shop/WacomWorldShopRoutePolicy.h"
 
 namespace
 {
@@ -214,23 +216,30 @@ bool AWacomShopTriggerActor::TryInteract_Implementation(AWacomPlayerController* 
 
 	FWacomFirstPersonViewStageRequest StageRequest;
 	TryBuildShopEntryViewStageRequest(StageRequest);
-	return PC->RequestOpenShop(BuildResolvedVisitRequest(), StageRequest);
+	return PC->RequestOpenShop(
+		BuildResolvedVisitRequest(),
+		StageRequest,
+		ResolveWorldShopHost());
 }
 
 bool AWacomShopTriggerActor::TryBuildShopEntryViewStageRequest(
 	FWacomFirstPersonViewStageRequest& OutRequest) const
 {
 	OutRequest = FWacomFirstPersonViewStageRequest();
-	if (!ShopEntryViewpoint)
+	const AWacomFirstPersonViewpointActor* ResolvedViewpoint =
+		ResolveShopEntryViewpoint();
+	if (!ResolvedViewpoint)
 	{
 		return false;
 	}
 
 	OutRequest.bHasViewTransform = true;
-	OutRequest.ViewTransform = ShopEntryViewpoint->GetActorTransform();
-	OutRequest.BlendTimeSeconds = FMath::Max(0.0f, ShopEntryViewpoint->StageBlendTimeSeconds);
-	OutRequest.BlendCurve = ShopEntryViewpoint->StageBlendCurve;
-	OutRequest.BlendEasePower = FMath::Max(0.01f, ShopEntryViewpoint->StageBlendEasePower);
+	OutRequest.ViewTransform = ResolvedViewpoint->GetActorTransform();
+	OutRequest.BlendTimeSeconds =
+		FMath::Max(0.0f, ResolvedViewpoint->StageBlendTimeSeconds);
+	OutRequest.BlendCurve = ResolvedViewpoint->StageBlendCurve;
+	OutRequest.BlendEasePower =
+		FMath::Max(0.01f, ResolvedViewpoint->StageBlendEasePower);
 	OutRequest.Reason = FName(TEXT("ShopEntry"));
 	OutRequest.DebugSource = PersistentId.IsNone()
 		? FName(*GetName())
@@ -238,14 +247,35 @@ bool AWacomShopTriggerActor::TryBuildShopEntryViewStageRequest(
 	return true;
 }
 
+AWacomFirstPersonViewpointActor*
+AWacomShopTriggerActor::ResolveShopEntryViewpoint() const
+{
+	return ShopEntryViewpoint;
+}
+
+AWacomWorldShopHostActor* AWacomShopTriggerActor::ResolveWorldShopHost() const
+{
+	return WorldShopHost;
+}
+
 FWacomShopTriggerDebugView AWacomShopTriggerActor::GetShopTriggerDebugView(
 	AWacomPlayerController* PC) const
 {
+	AWacomWorldShopHostActor* ResolvedWorldShopHost = ResolveWorldShopHost();
 	FWacomShopTriggerDebugView View;
 	View.ActorName = GetName();
 	View.PersistentId = PersistentId;
 	View.ShopDefinitionName = ShopDefinition ? ShopDefinition->GetName() : TEXT("None");
 	View.ResolvedOfferCount = BuildResolvedOffers().Num();
+	View.WorldShopHostName = ResolvedWorldShopHost
+		? ResolvedWorldShopHost->GetName()
+		: TEXT("None");
+	const FWacomWorldShopRouteDecision RouteDecision = FWacomWorldShopRoutePolicy::Evaluate(
+		BuildResolvedVisitRequest(),
+		ResolvedWorldShopHost,
+		PC ? PC->GetWorld() : GetWorld());
+	View.bWorldRouteEligible = RouteDecision.bUseWorldRoute;
+	View.WorldRouteReason = RouteDecision.Reason;
 	View.bCanInteract = CanInteract_Implementation(PC);
 	View.HoverPrompt = GetHoverPromptText(PC).ToString();
 
@@ -275,11 +305,14 @@ FString AWacomShopTriggerActor::GetShopTriggerDebugSummary(AWacomPlayerControlle
 	const FWacomRunWorldClickableInteractableDebugView ClickDebug =
 		GetRunWorldClickableDebugView_Implementation(PC);
 	return FString::Printf(
-		TEXT("ShopTrigger{Actor=%s PersistentId=%s ShopDef=%s Offers=%d CanInteract=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s Last=%s ClickDebug=%s}"),
+		TEXT("ShopTrigger{Actor=%s PersistentId=%s ShopDef=%s Offers=%d WorldHost=%s WorldEligible=%s WorldReason=%s CanInteract=%s ClickTarget=%s ClickStableId=%s HoverPrompt=%s Last=%s ClickDebug=%s}"),
 		*View.ActorName,
 		*View.PersistentId.ToString(),
 		*View.ShopDefinitionName,
 		View.ResolvedOfferCount,
+		*View.WorldShopHostName,
+		View.bWorldRouteEligible ? TEXT("true") : TEXT("false"),
+		*View.WorldRouteReason.ToString(),
 		View.bCanInteract ? TEXT("true") : TEXT("false"),
 		View.bClickTargetConfigured ? TEXT("true") : TEXT("false"),
 		*View.ClickTargetStableId.ToString(),
@@ -407,6 +440,24 @@ EDataValidationResult AWacomShopTriggerActor::IsDataValid(
 		if (Result != EDataValidationResult::Invalid)
 		{
 			Result = EDataValidationResult::Valid;
+		}
+	}
+
+	if (AWacomWorldShopHostActor* ResolvedWorldShopHost = ResolveWorldShopHost())
+	{
+		const FWacomWorldShopRouteDecision RouteDecision = FWacomWorldShopRoutePolicy::Evaluate(
+			BuildResolvedVisitRequest(),
+			ResolvedWorldShopHost,
+			GetWorld());
+		if (!RouteDecision.bUseWorldRoute)
+		{
+			Context.AddWarning(FText::Format(
+				LOCTEXT("WorldShopRouteFallback",
+					"Shop Trigger 世界商店配置将回退既有 ShopScreen：Actor={0} Host={1} Reason={2} OfferCount={3}。该回退不会截断商店访问。"),
+				FText::FromString(GetName()),
+				FText::FromString(ResolvedWorldShopHost->GetName()),
+				FText::FromName(RouteDecision.Reason),
+				FText::AsNumber(ResolvedOffers.Num())));
 		}
 	}
 

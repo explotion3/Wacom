@@ -644,7 +644,8 @@ public:
 	/**
 	 * 结束当前商店访问并清理访问标记。
 	 *
-	 * 关闭只结束访问；不会追加行动点成本。未购买时会取消 pending Shop activity。
+	 * 关闭不会追加行动点成本。未交易时取消 pending Shop activity；若首次交易已将
+	 * 行动点扣至 0，则在退出时完成此前延迟的阶段推进。
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Shop")
 	void EndShopVisit();
@@ -877,7 +878,10 @@ private:
 	/** 商店关闭的无 ownership 内部实现；公开 UI 路径应使用 owned result 入口。 */
 	FRunShopVisitResult EndShopVisitWithResult();
 
-	/** 购买与强化共用的首次交易 AP / NodeActivity working-state 结算。 */
+	/**
+	 * 购买与强化共用的首次交易 AP / NodeActivity working-state 结算。
+	 * 商店内耗尽 AP 时保留 visit，并把阶段推进延迟到关闭路径。
+	 */
 	bool SettleShopCommerceInWorkingState(
 		FRunState& WorkingState,
 		TOptional<FRunNodeActivityTicket>& WorkingActivity,

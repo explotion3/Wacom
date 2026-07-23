@@ -317,7 +317,7 @@ bool FWacomRunNotificationBattleUndeterminedSpec::RunTest(const FString& /*Param
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomRunNotificationEndShopVisitCoalescesSpec,
-	"Wacom.Run.NotificationCoalescing.EndShopVisitBroadcastsOnceWithoutDelayedCost",
+	"Wacom.Run.NotificationCoalescing.EndShopVisitBroadcastsOnceWithDeferredPhaseAdvance",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Parameters*/)
@@ -329,6 +329,10 @@ bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Pa
 
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	TestTrue(TEXT("Run initializes"), InitializeRunSessionForTest(*Run, Character, EWacomMapNodeType::Shop).IsOk());
+	FRunState& State = FWacomRunSessionTestAccess::GetMutableRunState(*Run);
+	State.TimeState.CurrentTimePhase = ETimePhase::Morning;
+	State.TimeState.RemainingActionPoints = 1;
+	const int32 DayActionPoints = State.TimeState.PhaseBudgets.Day;
 	Run->AddGold(5);
 	TestTrue(TEXT("Begin shop succeeds"),
 		Run->BeginShopVisit(
@@ -338,6 +342,9 @@ bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Pa
 	TestTrue(TEXT("Shop has offer"), Snapshot.Offers.Num() == 1);
 	const FGuid OfferId = Snapshot.Offers.IsValidIndex(0) ? Snapshot.Offers[0].OfferId : FGuid();
 	TestTrue(TEXT("Purchase succeeds"), Run->PurchaseShopOffer(OfferId).bSucceeded);
+	TestTrue(TEXT("Purchase keeps shop open at zero AP"), Run->IsShopVisitActive());
+	TestEqual(TEXT("Purchase defers phase"), Run->GetCurrentTimePhase(), ETimePhase::Morning);
+	TestEqual(TEXT("Purchase consumes final AP"), Run->GetRemainingActionPoints(), 0);
 
 	int32 BroadcastCount = 0;
 	Run->OnRunStateChangedNative.AddLambda([&BroadcastCount]()
@@ -345,13 +352,13 @@ bool FWacomRunNotificationEndShopVisitCoalescesSpec::RunTest(const FString& /*Pa
 		++BroadcastCount;
 	});
 
-	const int32 BeforeActionPoints = Run->GetRemainingActionPoints();
 	const FNotificationRevisionSnapshot Before = CaptureNotificationRevisions(*Run);
 	Run->EndShopVisit();
 	const FNotificationRevisionSnapshot After = CaptureNotificationRevisions(*Run);
 
 	TestEqual(TEXT("EndShopVisit broadcasts once"), BroadcastCount, 1);
-	TestEqual(TEXT("EndShopVisit adds no delayed cost"), Run->GetRemainingActionPoints(), BeforeActionPoints);
+	TestEqual(TEXT("EndShopVisit applies deferred phase"), Run->GetCurrentTimePhase(), ETimePhase::Day);
+	TestEqual(TEXT("EndShopVisit loads Day budget without extra cost"), Run->GetRemainingActionPoints(), DayActionPoints);
 	TestFalse(TEXT("Shop closed"), Run->IsShopVisitActive());
 	TestTrue(TEXT("EndShopVisit bumps shop revision"), After.Shop > Before.Shop);
 	TestEqual(TEXT("EndShopVisit leaves backpack revision"), After.BackpackStorage, Before.BackpackStorage);

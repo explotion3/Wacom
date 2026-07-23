@@ -37,6 +37,17 @@ public:
 				PointerEvent);
 	}
 
+	virtual bool HandleMouseButtonUpEvent(
+		FSlateApplication& SlateApp,
+		const FPointerEvent& PointerEvent) override
+	{
+		UWacomGameViewportClient* ViewportClientPtr = ViewportClient.Get();
+		return ViewportClientPtr
+			&& ViewportClientPtr->HandlePreprocessedMouseButtonUp(
+				SlateApp,
+				PointerEvent);
+	}
+
 	virtual void Tick(
 		const float /*DeltaTime*/,
 		FSlateApplication& /*SlateApp*/,
@@ -147,8 +158,18 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonDown(
 	FSlateApplication& SlateApp,
 	const FPointerEvent& PointerEvent)
 {
-	if (PointerEvent.GetEffectingButton() != EKeys::RightMouseButton
-		|| !IsPointerEventInsideOwnGameViewport(SlateApp, PointerEvent))
+	if (!IsPointerEventInsideOwnGameViewport(SlateApp, PointerEvent))
+	{
+		return false;
+	}
+	if (PointerEvent.GetEffectingButton() == EKeys::LeftMouseButton
+		&& TryRouteWorldShopPointerInput(
+			PointerEvent.GetInputDeviceId(),
+			IE_Pressed))
+	{
+		return true;
+	}
+	if (PointerEvent.GetEffectingButton() != EKeys::RightMouseButton)
 	{
 		return false;
 	}
@@ -157,6 +178,37 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonDown(
 		ResolveWacomPlayerController(PointerEvent.GetInputDeviceId());
 	return PlayerController
 		&& PlayerController->TryCancelFirstPersonCardKeyboardShortcutDrag();
+}
+
+bool UWacomGameViewportClient::HandlePreprocessedMouseButtonUp(
+	FSlateApplication& SlateApp,
+	const FPointerEvent& PointerEvent)
+{
+	if (PointerEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+	{
+		return false;
+	}
+	// Release 需要在鼠标离开 viewport 后仍能清理 WIC pressed 状态；
+	// 没有 World Shop owner 时 helper 会 fail closed，不影响普通 Slate 输入。
+	return TryRouteWorldShopPointerInput(
+		PointerEvent.GetInputDeviceId(),
+		IE_Released);
+}
+
+bool UWacomGameViewportClient::TryRouteWorldShopPointerInput(
+	FInputDeviceId DeviceId,
+	EInputEvent Event)
+{
+#if WITH_AUTOMATION_TESTS
+	if (WorldShopPointerRouteResultOverrideForAutomation.IsSet())
+	{
+		WorldShopPointerRouteEventsForAutomation.Add(Event);
+		return WorldShopPointerRouteResultOverrideForAutomation.GetValue();
+	}
+#endif
+
+	AWacomPlayerController* PlayerController = ResolveWacomPlayerController(DeviceId);
+	return PlayerController && PlayerController->TryRouteWorldShopPointerInput(Event);
 }
 
 bool UWacomGameViewportClient::IsPointerEventInsideOwnGameViewport(
@@ -222,6 +274,18 @@ void UWacomGameViewportClient::HandleRerouteInput(
 	EInputEvent EventType,
 	FReply& Reply)
 {
+	if (Key == EKeys::LeftMouseButton
+		&& (EventType == IE_Pressed || EventType == IE_Released))
+	{
+		AWacomPlayerController* PlayerController =
+			ResolveWacomPlayerController(DeviceId);
+		if (PlayerController
+			&& PlayerController->TryRouteWorldShopPointerInput(EventType))
+		{
+			Reply = FReply::Handled();
+			return;
+		}
+	}
 	if (Key == EKeys::RightMouseButton && EventType == IE_Pressed)
 	{
 		AWacomPlayerController* PlayerController =

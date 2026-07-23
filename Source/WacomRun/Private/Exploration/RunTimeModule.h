@@ -16,6 +16,14 @@ public:
 		FRunState& State,
 		int32 Cost,
 		TArray<FRunExplorationEvent>& OutEvents);
+	/**
+	 * 扣除行动点但在归零时保留当前阶段。调用方必须在其拥有的长生命周期
+	 * activity 结束后显式调用 AdvanceToNextPhase。
+	 */
+	static FWacomStatus TrySpendActionPointsDeferredAdvance(
+		FRunState& State,
+		int32 Cost,
+		TArray<FRunExplorationEvent>& OutEvents);
 	static FWacomStatus AdvanceToNextPhase(
 		FRunState& State,
 		TArray<FRunExplorationEvent>& OutEvents);
@@ -27,6 +35,11 @@ public:
 		TArray<FRunExplorationEvent>& OutEvents);
 
 private:
+	static FWacomStatus TrySpendActionPointsInternal(
+		FRunState& State,
+		int32 Cost,
+		bool bAdvanceWhenDepleted,
+		TArray<FRunExplorationEvent>& OutEvents);
 	static FWacomStatus AdvanceWorkingState(
 		FRunState& State,
 		TArray<FRunExplorationEvent>& OutEvents);

@@ -160,3 +160,25 @@ Binding 文档只记录 WBP 制作合约，不写规则真相。
 | [UI_RunMap_WBP_Binding.md](./UI_RunMap_WBP_Binding.md) | Run Map Screen、动态节点、1920×1080 画布和像素风状态合同 |
 
 需要知道“为什么这样做”时，回到本文和对应专题文档；需要知道“绑定哪个槽位”时，读 Binding 文档。
+
+## §8 World Shop card presentation
+
+World Shop 的每件商品由 `UWidgetComponent` 以 `EWidgetSpace::World` 渲染。`UWacomWorldShopCardWidget` 是被动 world-safe adapter：它直接创建精确的 `/Game/Wacom/UI/Card/WBP_FirstPersonCardView`，继续消费同一 `FWacomCardViewData` 和 `296×420` 卡身合同，但不把 HUD 专用 `/Game/Wacom/UI/Card/WBP_FPCardView` Retainer/Fake3D 包装嵌进 `WidgetComponent`。嵌套 Retainer 与世界 Widget 的离屏渲染会形成第二层 RenderTarget/颜色处理，在真实 PIE 中已表现为明显发白和对比度丢失，因此不是合法的世界卡面链路。
+
+World adapter 使用 `360×488` 逻辑设计面，Host 默认以 `720×976` DrawSize 做 2× supersampling，并用 `0.10` world scale 保持约 `72×98 cm` 的实体尺寸；价格/禁用状态占底部 `296×52`。这样世界商品与 HUD 手牌共享精确 CardView 资产、数据、卡身比例和材质语义，同时把 HUD-only Retainer、倾斜余量与手牌交互留在 first-person layer。整个 adapter 只有一个透明 Primary Action，卡面主体和底部价格区点击都提交同一个 `(OfferId, Generation)` intent，不另设 Buy 按钮。已购买商品保留原槽位并显示“已购买”，但 Widget 不再广播 intent；金币不足商品仍广播到权威购买入口以获得失败反馈，不使用 Slate Disabled Effect 洗白卡面。
+
+Primary Action 的 Normal/Hovered/Pressed/Disabled 画刷全部是 `FSlateNoResource`，不得以默认白色 Button brush 充当卡牌背景。正式包装与内层卡面使用 `SelfHitTestInvisible`，当前点击由整卡 action 接管；关键词语义 Tooltip 后续应在同一包装上增加明确的 world-interaction overlay/opt-in 命中模式，不得把活动规则塞进 Retainer 卡面。三选一与强化拖放区仍属于后续独立活动。
+
+`UWacomWorldShopHUDWidget` 的根是透明 `SelfHitTestInvisible` overlay，只显示金币和 Esc 提示，不覆盖场景颜色，也不拦截 World WidgetInteraction。商品 Widget 不读取或修改 Run 状态；刷新由 coordinator 读取最新 Shop snapshot 后重新投影 ViewData。
+
+成功交易不会仅因本次扣除了当前时段最后 1 点 Action Point 而关闭 World Shop。Run 会把剩余点保留为 0、继续持有 Shop visit；coordinator 刷新售出槽位并保持 LookOnly/WidgetInteraction，玩家仍可浏览或进行本访问内后续 0 AP 交易。只有 Esc、Host/Screen teardown 或其它权威 visit close 才退出表现；关闭结果若携带延迟的 phase advance，App 先应用该 `FRunExplorationResolution`，再恢复 Run Path。旧 ShopScreen 与 World Shop 共用这一条 `WacomRun` 规则。
+
+世界卡面曝光与合成模式通过独立 transient PIE 实验台验证，不直接拿正式商店承担材质试错。命令 `Wacom.WorldCardRender.OpenPIEValidation [OptionalCardDefinitionPath]` 会用同一个 `FWacomCardViewData` 同时创建一张屏幕空间参考卡，以及 `Engine Transparent`、`Engine Masked`、`Wacom Masked Raw`、`Wacom Masked Exposure` 四张相机相对世界卡；它们都直接使用精确的 `WBP_FirstPersonCardView`，世界卡统一为 `720×976` DrawSize 和 `0.10` world scale。该实验不打开 Shop Visit、不访问或修改 Run、金币、背包、手牌和购买状态，世界卡也没有碰撞、焦点或输入命中。
+
+正式基础材质 `/Game/Wacom/UI/Card/World/M_WorldCardSurface` 保持 `Surface / Unlit / Masked / Two Sided`，沿用 Widget 3D 的 `SlateUI`、`BackColor`、`TintColorAndOpacity`、`OpacityFromTexture` 与 Alpha 组合，并在最终 RGB 前加入 `EyeAdaptationInverse`。参数 `ExposureCompensationStrength` 的 `0` 表示不补偿，`1` 表示完整反曝光补偿；实验中可用 `Wacom.WorldCardRender.SetExposureStrength <0..1>` 实时比较。人工对照的胜出配置为 `Wacom Masked Exposure + 1.0`；App-private 材质适配器是路径、Masked MID 和参数写入的唯一运行时入口，正式 World Shop 固定使用 `1.0`，依赖缺失时在开始 Shop Visit 前 fail closed 并回退旧 ShopScreen。
+
+两个 transient 验证入口默认位于相机前 `320 cm`：渲染实验台继续逐帧相机相对，World Shop transient Host 只在打开时定位一次，Production Host transform 不受影响。`Wacom.WorldShop.DumpPIEValidation` 输出 World route/Host、Mouse WIC hover/hit、首件 Offer、金币、Backpack 与 StorageRevision，以及首件卡定义相对 Open 基线的持有数增量；它只用于验证，不修改交易或 Run 状态。
+
+正式关卡入口使用 `AWacomWorldShopActor` 组合既有 `AWacomShopTriggerActor`、内部 `AWacomWorldShopHostActor` ChildActor、内部 `AWacomFirstPersonViewpointActor` ChildActor、`UWacomRunMapNodeBindingComponent` 和独立 `PresentationRoot`。C++ 继续拥有路由、回退、Viewpoint 解析和数据校验；Blueprint 子类只制作无碰撞场景表现，不在 EventGraph 复制购买、Visit 或 Run 规则。`/Game/Wacom/Maps/SceneActor/BP_WacomWorldShop` 当前只增加 Backboard / Counter 两个无碰撞、无阴影 StaticMeshComponent，均附着于 `PresentationRoot`。正式 Host 进入 World Shop 活动后，App-private entry-bounds guard 会把同一组合 Actor 的入口 `ClickBounds` 临时设为 `NoCollision`，避免它在卡牌前截断 Mouse WidgetInteraction 的 `Visibility` trace；只有镜头完全返回 Run Path、活动结束后才恢复进入前的碰撞模式。
+
+`DA_Floor_LevelAuthoring_01` 的 `Shop.Snake` 已指向 purchase-only `/Game/Wacom/Data/Shops/DA_Shop_LevelAuthoringSnake`：8 个商品、第一件免费、强化服务关闭，避免 25 商品 + 强化服务越过 2×4 世界 Host 的合法路由矩阵。`L_Exploration` 的实例替换不属于本功能提交，由持有权威人工地图的会话放置 `BP_WacomWorldShop` 并保留 `PersistentId=Shop.Test.001`、`NodeId=Shop.Snake` 和 `200 cm` 触发半径。本地未提交候选构图为 Actor `(-440, 140, 120)`、内部 Host `(-940, 50, 200)`、内部 Viewpoint `(-1920, 50, 180)`；约 `980 cm` 的 Viewpoint 到 Host 距离会让商品偏小，只作为交接参考而不是正式地图锁定值。该 Authoring 内容不是 Floor 1 Production Shop，不能迁移进 `L_Run_Floor_Main_01` 或冒充 Production 数据。

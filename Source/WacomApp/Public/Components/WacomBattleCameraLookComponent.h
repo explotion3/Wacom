@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Components/WacomCursorLookDriverComponent.h"
 #include "WacomBattleCameraLookComponent.generated.h"
 
 class APlayerController;
@@ -39,11 +40,19 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Camera")
 	bool ActivateBattleCameraLook();
+	bool ActivateBattleCameraLookWithProfile(const FWacomCursorLookProfile& RuntimeProfile);
 
 	bool ActivateBattleCameraLookFromBaseRotation(
 		FRotator InBaseBattleRotation,
 		FRotator InBaseActorRotation,
 		bool bPreserveCurrentCursorLookOffset);
+	bool ActivateBattleCameraLookFromBaseRotationWithProfile(
+		FRotator InBaseBattleRotation,
+		FRotator InBaseActorRotation,
+		bool bPreserveCurrentCursorLookOffset,
+		const FWacomCursorLookProfile& RuntimeProfile);
+
+	FWacomCursorLookProfile GetAuthoredCursorLookProfile() const;
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Battle|Camera")
 	void DeactivateBattleCameraLook();
@@ -79,6 +88,8 @@ private:
 	bool bSavedUseControllerRotationRoll = false;
 	bool bHasSavedRotationPolicy = false;
 	bool bHasCursorLookOverride = false;
+	bool bUseRuntimeCursorLookProfile = false;
+	FWacomCursorLookProfile RuntimeCursorLookProfile;
 	FVector2D CursorLookOverrideNormalized = FVector2D::ZeroVector;
 	float CursorLookOverrideScale = 1.0f;
 	float CursorLookOverrideInterpSpeed = -1.0f;

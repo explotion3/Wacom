@@ -654,7 +654,10 @@ struct WACOMRUN_API FRunState
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	FName ActiveShopId = NAME_None;
 
-	/** 当前商店访问内是否完成过购买或卡牌强化。字段名为兼容保留；首次成功交易负责 1 AP 结算。 */
+	/**
+	 * 当前商店访问内是否完成过购买或卡牌强化。字段名为兼容保留；
+	 * 首次成功交易负责 1 AP 结算，归零后的阶段推进延迟到访问关闭。
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop")
 	bool bShopVisitHasPurchase = false;
 

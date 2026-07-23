@@ -49,6 +49,18 @@ bool FWacomGameViewportClientTestAccess::DispatchMouseButtonDown(
 				PointerEvent);
 }
 
+bool FWacomGameViewportClientTestAccess::DispatchMouseButtonUp(
+	UWacomGameViewportClient& ViewportClient,
+	const FPointerEvent& PointerEvent)
+{
+	return FSlateApplication::IsInitialized()
+		&& ViewportClient.FirstPersonCardInputPreProcessor.IsValid()
+		&& ViewportClient.FirstPersonCardInputPreProcessor
+			->HandleMouseButtonUpEvent(
+				FSlateApplication::Get(),
+				PointerEvent);
+}
+
 void FWacomGameViewportClientTestAccess::SetRouteOverrides(
 	UWacomGameViewportClient& ViewportClient,
 	TOptional<bool> bPointerInsideViewport,
@@ -57,6 +69,20 @@ void FWacomGameViewportClientTestAccess::SetRouteOverrides(
 	ViewportClient.PointerInsideViewportOverrideForAutomation =
 		bPointerInsideViewport;
 	ViewportClient.PlayerControllerOverrideForAutomation = PlayerController;
+}
+
+void FWacomGameViewportClientTestAccess::SetWorldShopPointerRouteOverride(
+	UWacomGameViewportClient& ViewportClient,
+	TOptional<bool> RouteResult)
+{
+	ViewportClient.WorldShopPointerRouteResultOverrideForAutomation = RouteResult;
+	ViewportClient.WorldShopPointerRouteEventsForAutomation.Reset();
+}
+
+const TArray<EInputEvent>& FWacomGameViewportClientTestAccess::GetWorldShopPointerRouteEvents(
+	const UWacomGameViewportClient& ViewportClient)
+{
+	return ViewportClient.WorldShopPointerRouteEventsForAutomation;
 }
 
 bool FWacomGameViewportClientTestAccess::HasProjectOwnedFocusPresentation(

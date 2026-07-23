@@ -67,7 +67,7 @@ Run 失败条件：
 Morning -> Day -> Dusk -> Night -> Sunrise -> Morning(次日)
 ```
 
-正式时间状态保存在 `FRunState::TimeState`。规则事务通过 private `FRunTimeModule::TrySpendActionPoints()` 原子消费 Action Point：成本不足、Night 尚未选择路线或存在其它活动时零修改；恰好耗尽时只推进一次时段并载入下一时段预算。移动、岔路选择、地图揭示和同层 Map Travel 不消耗 Action Point。
+正式时间状态保存在 `FRunState::TimeState`。普通规则事务通过 private `FRunTimeModule::TrySpendActionPoints()` 原子消费 Action Point：成本不足、Night 尚未选择路线或存在其它活动时零修改；恰好耗尽时只推进一次时段并载入下一时段预算。长生命周期活动可以使用明确的 deferred-advance 原语先扣到 0，但必须继续持有 activity，并在关闭事务中显式推进一次；当前只有 Shop 使用该能力。移动、岔路选择、地图揭示和同层 Map Travel 不消耗 Action Point。
 
 当前初始 Action Point：
 
@@ -248,8 +248,9 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 强化可作用于 Backpack、BattleDeck、BurdenZone 或 SpecialZone 中的实体卡；必须保留 InstanceId、区域、顺序、SpecialZone 标记与容器关系。
 - `FRunShopSnapshot` 暴露静态强化服务和每个 owned instance 的被动 `FRunShopCardUpgradeQuote`。UI 提交的 `FRunShopCardUpgradeCommand` 同时携带预期当前/下一 Definition；RunSession 重新权威计算链、价格、资格与金币，拒绝过期 Quote。
 - 本次访问第一次成功交易（购买或强化）与 1 Action Point 原子提交；同次访问后续任一种交易均为 0。兼容字段 `bShopVisitHasPurchase` / `bHasPurchaseThisVisit` 的实际语义现为“本访问已有成功交易”。
-- 浏览、失败购买、失败强化和空手关闭为 0；`EndShopVisit` 不再补扣成本。失败或过期请求保持零修改、零 revision、零广播。
-- 第一次交易耗尽当前时段时，结果同时关闭 visit，App 立即关闭 Shop Screen；同卡可在链与金币允许时连续单步强化。
+- 浏览、失败购买、失败强化和空手关闭为 0；`EndShopVisit` 不追加交易成本。失败或过期请求保持零修改、零 revision、零广播。
+- 第一次成功交易若耗尽当前时段，只把剩余 Action Point 扣到 0；当前 phase、Shop activity 和 visit 保持不变，玩家仍可浏览并进行本次访问内后续 0 AP 交易。`FRunShopPurchaseResult` / `FRunShopCardUpgradeResult` 不因此报告 visit closed。
+- 玩家通过 Esc、Screen/Host teardown 或其它 owned close 正常结束 visit 时，Run 先关闭 Shop activity，再把此前延迟的 phase 推进恰好一次并返回同一 `FRunExplorationResolution`；UI 不得在成功交易后自行提前关闭或推进。若首次交易未耗尽 Action Point，关闭只结束访问。
 - `ShopId == NAME_None`、无效 Offer、重复购买、商品为空、负价格、金币不足等失败路径不修改 RunState。
 - 同一时刻只能存在一个 active shop visit；重入 Begin 会被 Run 层拒绝，不依赖旧 UI 先完成关闭。
 - App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；迟到的旧 Screen 不得结束新访问。token 不进入 RunState/SaveGame。

@@ -45,6 +45,12 @@ private:
 	bool HandlePreprocessedMouseButtonDown(
 		FSlateApplication& SlateApp,
 		const FPointerEvent& PointerEvent);
+	bool HandlePreprocessedMouseButtonUp(
+		FSlateApplication& SlateApp,
+		const FPointerEvent& PointerEvent);
+	bool TryRouteWorldShopPointerInput(
+		FInputDeviceId DeviceId,
+		EInputEvent Event);
 	bool IsPointerEventInsideOwnGameViewport(
 		FSlateApplication& SlateApp,
 		const FPointerEvent& PointerEvent) const;
@@ -57,6 +63,8 @@ private:
 #if WITH_AUTOMATION_TESTS
 	TOptional<bool> PointerInsideViewportOverrideForAutomation;
 	TWeakObjectPtr<AWacomPlayerController> PlayerControllerOverrideForAutomation;
+	TOptional<bool> WorldShopPointerRouteResultOverrideForAutomation;
+	TArray<EInputEvent> WorldShopPointerRouteEventsForAutomation;
 #endif
 
 	friend class FWacomFirstPersonCardInputPreprocessor;

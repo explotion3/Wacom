@@ -166,7 +166,7 @@ Floor 1 Production 灰盒中的 `Node.Exit.01` 当前使用非交互 marker，�
 - Enhanced Input mapping context。
 - PlayerController `bEnableClickEvents / bEnableMouseOverEvents` owner lease。
 
-`UWacomGameViewportClient : UCommonGameViewportClient` 是极窄的 Slate 前置输入仲裁 owner，不替代 Coordinator 或 PlayerController。由于正式输入配置保持 `NoCapture`，ViewportClient 注册 `Game` priority 的 App-private `IInputProcessor`，在 Widget 路由前只处理“指针属于当前 GameViewport + 快捷键来源 first-person card active drag + 右键按下”的中性取消；其余输入返回未处理并继续正常路由。Viewport `HandleRerouteInput()` 和 PlayerController `InputKey()` 的同条件分支只作为其它捕获模式 fallback。
+`UWacomGameViewportClient : UCommonGameViewportClient` 是极窄的 Slate 前置输入仲裁 owner，不替代 Coordinator 或 PlayerController。由于正式输入配置保持 `NoCapture`，ViewportClient 注册 `Game` priority 的 App-private `IInputProcessor`，在 Widget 路由前处理两类已声明输入所有权：快捷键来源 first-person card active drag 的右键中性取消，以及 active World Shop 的左键 press/release。World Shop press 只在指针属于当前 GameViewport 时路由并消费；release 还负责在指针越界时成对清除已按下状态。其余输入返回未处理并继续正常路由。Viewport `HandleRerouteInput()` 和 PlayerController `InputKey()` 的同条件分支只作为其它捕获模式 fallback。
 
 当前上下文：
 
@@ -340,3 +340,15 @@ Run Floor 场景制作验证使用 `Tools -> Wacom -> Validate Current Run Floor
 - Shop UI：`Wacom.UI.Shop`
 - Run menu drop target：`Wacom.UI.RunMenuDropTarget`
 - Battle UI：`Wacom.UI.Battle`
+
+## §9 World Shop purchase-only route
+
+`AWacomShopTriggerActor::WorldShopHost` 是显式 opt-in 制作引用。请求必须是 purchase-only、Host 与玩家属于同一 World、Host Anchor 容量足够且配置合法，`AWacomPlayerController` 才把它交给 App-private `FWacomWorldShopActivityCoordinator`；缺 Host、非法 Host、容量不足、含 Card Upgrade 服务或当前输入 owner 冲突时，原始 `FRunShopVisitRequest` 与 stage request 完整回退既有 `UWacomShopScreen`，不会提前 Begin/End visit。
+
+World route 的唯一运行时 owner 位于 PlayerController：它按 `stage -> temporary cursor look -> BeginShopVisitWithResult -> resolution -> world widgets/HUD/input` 顺序进入；整卡 intent 按 `PurchaseShopOffer -> resolution -> refresh/teardown` 顺序提交；Esc 和 EndPlay 按 exact visit token 结束。`FWacomShopVisitPresentationFlow` 是旧 ShopScreen 与 World route 共用的 App-private 事务顺序 helper，Widget/Host 不持有 `URunSession`。
+
+Mouse `UWidgetInteractionComponent` 的领域 owner 仍由 PlayerController coordinator 管理，但组件实例附着到当前受控 Pawn；这是正式输入合同，使引擎自动 trace ignore 覆盖玩家 Capsule/子组件，避免相机起点先命中自己而吞掉免费购买。没有 Pawn 的过渡态才回退把组件附着到 PlayerController。`All + NoCapture` 下 Slate 可能先消费 mouse-down 而不调用 `PlayerController::InputKey`，因此正式左键链路是 `UWacomGameViewportClient` 的 Slate input preprocessor -> `AWacomPlayerController::TryRouteWorldShopPointerInput` -> coordinator/WIC；`HandleRerouteInput()` 与 `InputKey()` 只保留为其它捕获模式 fallback。每次 press 记录 owner、hovered component、hit-test-visible、命中 Actor/Component 和距离，供 transient PIE 精确诊断；Widget 仍只广播 intent，不直接购买。
+
+LookOnly 保留鼠标并冻结 Run Path 移动，默认复制 `UWacomRunPathTraversalComponent::GetLiveCursorLookProfile()`；Host 可用 `bOverrideCursorLookProfile` 提供本次活动的临时覆盖。`UWacomBattleCameraLookComponent` 的 runtime profile 与 authored Battle 字段分离，退出后不写回制作值。
+
+仅编辑器 PIE 可使用 `Wacom.WorldShop.OpenPIEValidation`：它复制当前世界第一个有效 Shop Trigger 的前 8 个商品、关闭副本的 Upgrade、令首件免费，并在镜头前创建 `RF_Transient` 2×4 Host。`Wacom.WorldShop.ClearPIEValidation` 关闭 visit 并销毁临时 Host；两条命令都不保存地图或资产。

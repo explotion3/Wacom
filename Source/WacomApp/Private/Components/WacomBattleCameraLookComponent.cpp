@@ -55,6 +55,7 @@ void UWacomBattleCameraLookComponent::TickComponent(
 
 bool UWacomBattleCameraLookComponent::ActivateBattleCameraLook()
 {
+	bUseRuntimeCursorLookProfile = false;
 	APlayerController* PC = GetOwnerPlayerController();
 	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
 	AWacomPlayerCharacter* Character = GetOwnerCharacter();
@@ -72,11 +73,25 @@ bool UWacomBattleCameraLookComponent::ActivateBattleCameraLook()
 		/*bResetCursorLookOffset*/true);
 }
 
+bool UWacomBattleCameraLookComponent::ActivateBattleCameraLookWithProfile(
+	const FWacomCursorLookProfile& RuntimeProfile)
+{
+	bUseRuntimeCursorLookProfile = true;
+	RuntimeCursorLookProfile = RuntimeProfile.Sanitized();
+	APlayerController* PC = GetOwnerPlayerController();
+	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
+	AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	return PC && Driver && Character
+		&& ActivateBattleCameraLookInternal(
+			*PC, *Driver, *Character, PC->GetControlRotation(), Character->GetActorRotation(), true);
+}
+
 bool UWacomBattleCameraLookComponent::ActivateBattleCameraLookFromBaseRotation(
 	FRotator InBaseBattleRotation,
 	FRotator InBaseActorRotation,
 	bool bPreserveCurrentCursorLookOffset)
 {
+	bUseRuntimeCursorLookProfile = false;
 	APlayerController* PC = GetOwnerPlayerController();
 	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
 	AWacomPlayerCharacter* Character = GetOwnerCharacter();
@@ -92,6 +107,38 @@ bool UWacomBattleCameraLookComponent::ActivateBattleCameraLookFromBaseRotation(
 		InBaseBattleRotation,
 		InBaseActorRotation,
 		/*bResetCursorLookOffset*/!bPreserveCurrentCursorLookOffset);
+}
+
+bool UWacomBattleCameraLookComponent::ActivateBattleCameraLookFromBaseRotationWithProfile(
+	FRotator InBaseBattleRotation,
+	FRotator InBaseActorRotation,
+	bool bPreserveCurrentCursorLookOffset,
+	const FWacomCursorLookProfile& RuntimeProfile)
+{
+	bUseRuntimeCursorLookProfile = true;
+	RuntimeCursorLookProfile = RuntimeProfile.Sanitized();
+	APlayerController* PC = GetOwnerPlayerController();
+	UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver();
+	AWacomPlayerCharacter* Character = GetOwnerCharacter();
+	return PC && Driver && Character
+		&& ActivateBattleCameraLookInternal(
+			*PC,
+			*Driver,
+			*Character,
+			InBaseBattleRotation,
+			InBaseActorRotation,
+			!bPreserveCurrentCursorLookOffset);
+}
+
+FWacomCursorLookProfile UWacomBattleCameraLookComponent::GetAuthoredCursorLookProfile() const
+{
+	FWacomCursorLookProfile Profile;
+	Profile.YawClampDegrees = YawClampDegrees;
+	Profile.PitchClampDegrees = PitchClampDegrees;
+	Profile.LookYawScale = LookYawScale;
+	Profile.LookPitchScale = LookPitchScale;
+	Profile.LookInterpSpeed = LookInterpSpeed;
+	return Profile.Sanitized();
 }
 
 bool UWacomBattleCameraLookComponent::ActivateBattleCameraLookInternal(
@@ -142,6 +189,7 @@ void UWacomBattleCameraLookComponent::DeactivateBattleCameraLook()
 	}
 
 	bBattleCameraLookActive = false;
+	bUseRuntimeCursorLookProfile = false;
 	ClearCursorLookOverride();
 	SetComponentTickEnabled(false);
 	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
@@ -167,6 +215,7 @@ void UWacomBattleCameraLookComponent::DeactivateBattleCameraLookPreservingView()
 	}
 
 	bBattleCameraLookActive = false;
+	bUseRuntimeCursorLookProfile = false;
 	ClearCursorLookOverride();
 	SetComponentTickEnabled(false);
 	if (UWacomCursorLookDriverComponent* Driver = GetCursorLookDriver())
@@ -185,19 +234,22 @@ void UWacomBattleCameraLookComponent::UpdateCursorLookOffset(float DeltaTime)
 		return;
 	}
 
+	const FWacomCursorLookProfile Profile = bUseRuntimeCursorLookProfile
+		? RuntimeCursorLookProfile
+		: GetAuthoredCursorLookProfile();
 	if (bHasCursorLookOverride)
 	{
 		const float Scale = FMath::Max(0.0f, CursorLookOverrideScale);
 		const float InterpSpeed = CursorLookOverrideInterpSpeed >= 0.0f
 			? CursorLookOverrideInterpSpeed
-			: LookInterpSpeed;
+			: Profile.LookInterpSpeed;
 		Driver->UpdateFromNormalizedCursor(
 			CursorLookOverrideNormalized,
 			DeltaTime,
-			YawClampDegrees,
-			PitchClampDegrees,
-			LookYawScale * Scale,
-			LookPitchScale * Scale,
+			Profile.YawClampDegrees,
+			Profile.PitchClampDegrees,
+			Profile.LookYawScale * Scale,
+			Profile.LookPitchScale * Scale,
 			InterpSpeed);
 		return;
 	}
@@ -205,11 +257,7 @@ void UWacomBattleCameraLookComponent::UpdateCursorLookOffset(float DeltaTime)
 	Driver->UpdateFromPlayerCursor(
 		PC,
 		DeltaTime,
-		YawClampDegrees,
-		PitchClampDegrees,
-		LookYawScale,
-		LookPitchScale,
-		LookInterpSpeed);
+		Profile);
 }
 
 void UWacomBattleCameraLookComponent::SetCursorLookOverrideNormalized(

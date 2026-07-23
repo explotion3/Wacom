@@ -61,6 +61,28 @@ namespace
 	}
 }
 
+bool FWacomCursorLookProfile::IsFinite() const
+{
+	return FMath::IsFinite(YawClampDegrees)
+		&& FMath::IsFinite(PitchClampDegrees)
+		&& FMath::IsFinite(LookYawScale)
+		&& FMath::IsFinite(LookPitchScale)
+		&& FMath::IsFinite(LookInterpSpeed);
+}
+
+FWacomCursorLookProfile FWacomCursorLookProfile::Sanitized() const
+{
+	FWacomCursorLookProfile Result = *this;
+	if (!Result.IsFinite())
+	{
+		return FWacomCursorLookProfile();
+	}
+	Result.YawClampDegrees = FMath::Abs(Result.YawClampDegrees);
+	Result.PitchClampDegrees = FMath::Abs(Result.PitchClampDegrees);
+	Result.LookInterpSpeed = FMath::Max(0.0f, Result.LookInterpSpeed);
+	return Result;
+}
+
 UWacomCursorLookDriverComponent::UWacomCursorLookDriverComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -117,6 +139,22 @@ bool UWacomCursorLookDriverComponent::UpdateFromPlayerCursor(
 	return true;
 }
 
+bool UWacomCursorLookDriverComponent::UpdateFromPlayerCursor(
+	APlayerController* PlayerController,
+	float DeltaTime,
+	const FWacomCursorLookProfile& Profile)
+{
+	const FWacomCursorLookProfile SafeProfile = Profile.Sanitized();
+	return UpdateFromPlayerCursor(
+		PlayerController,
+		DeltaTime,
+		SafeProfile.YawClampDegrees,
+		SafeProfile.PitchClampDegrees,
+		SafeProfile.LookYawScale,
+		SafeProfile.LookPitchScale,
+		SafeProfile.LookInterpSpeed);
+}
+
 void UWacomCursorLookDriverComponent::UpdateFromNormalizedCursor(
 	FVector2D NormalizedCursor,
 	float DeltaTime,
@@ -149,6 +187,22 @@ void UWacomCursorLookDriverComponent::UpdateFromNormalizedCursor(
 
 	CurrentYawOffset = FMath::FInterpTo(CurrentYawOffset, TargetYawOffset, DeltaTime, LookInterpSpeed);
 	CurrentPitchOffset = FMath::FInterpTo(CurrentPitchOffset, TargetPitchOffset, DeltaTime, LookInterpSpeed);
+}
+
+void UWacomCursorLookDriverComponent::UpdateFromNormalizedCursor(
+	FVector2D NormalizedCursor,
+	float DeltaTime,
+	const FWacomCursorLookProfile& Profile)
+{
+	const FWacomCursorLookProfile SafeProfile = Profile.Sanitized();
+	UpdateFromNormalizedCursor(
+		NormalizedCursor,
+		DeltaTime,
+		SafeProfile.YawClampDegrees,
+		SafeProfile.PitchClampDegrees,
+		SafeProfile.LookYawScale,
+		SafeProfile.LookPitchScale,
+		SafeProfile.LookInterpSpeed);
 }
 
 void UWacomCursorLookDriverComponent::ResetLookOffset()

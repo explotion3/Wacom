@@ -15,6 +15,7 @@
 #include "Exploration/RunFloorMapSnapshotBuilder.h"
 #include "Exploration/RunNodeActivityModule.h"
 #include "Exploration/RunMapModule.h"
+#include "Exploration/RunTimeModule.h"
 #include "Map/WacomFloorMapDefinition.h"
 #include "Map/WacomJourneyDefinition.h"
 #include "Pickups/RunPickupDefinition.h"
@@ -2757,6 +2758,11 @@ FRunShopVisitResult URunSession::EndShopVisitWithResult()
 
 	FRunState WorkingState = RunState;
 	TOptional<FRunNodeActivityTicket> WorkingActivity = ActiveNodeActivityTicket;
+	const bool bAdvanceDeferredShopPhase =
+		WorkingState.bShopVisitHasPurchase
+		&& WorkingState.TimeState.RemainingActionPoints == 0
+		&& WorkingActivity.IsSet()
+		&& WorkingActivity->Kind == ERunNodeActivityKind::Shop;
 	if (!FRunShopTransaction::EndVisit(WorkingState))
 	{
 		Result.DisabledReason = TEXT("ShopVisitEndFailed");
@@ -2773,6 +2779,18 @@ FRunShopVisitResult URunSession::EndShopVisitWithResult()
 			WorkingState,
 			WorkingActivity,
 			WorkingActivity.GetValue(),
+			Result.ExplorationResolution.Events);
+		if (!Result.ExplorationResolution.IsOk())
+		{
+			Result.DisabledReason = Result.ExplorationResolution.Status.Detail;
+			Result.ExplorationResolution.Events.Reset();
+			return Result;
+		}
+	}
+	if (bAdvanceDeferredShopPhase)
+	{
+		Result.ExplorationResolution.Status = FRunTimeModule::AdvanceToNextPhase(
+			WorkingState,
 			Result.ExplorationResolution.Events);
 		if (!Result.ExplorationResolution.IsOk())
 		{
@@ -2850,6 +2868,7 @@ bool URunSession::SettleShopCommerceInWorkingState(
 			WorkingActivity.GetValue(),
 			/*ActionPointCost=*/1,
 			/*bResolveNode=*/true,
+			/*bDeferPhaseAdvance=*/true,
 			bActivityContinues,
 			UpdatedTicket,
 			OutExplorationResolution.Events);

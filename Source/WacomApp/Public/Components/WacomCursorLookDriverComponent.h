@@ -8,6 +8,36 @@
 
 class APlayerController;
 
+/** 一组可在不同第一人称活动间复制、但不会改写组件制作值的鼠标观察参数。 */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomCursorLookProfile
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
+		meta = (Units = "deg", ToolTip = "最大水平观察偏移，单位度。推荐 6-18；只影响当前活动视角。"))
+	float YawClampDegrees = 12.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
+		meta = (Units = "deg", ToolTip = "最大垂直观察偏移，单位度。推荐 4-12；只影响当前活动视角。"))
+	float PitchClampDegrees = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
+		meta = (ToolTip = "水平鼠标响应倍率。推荐 0.5-2；不会修改来源组件的制作值。"))
+	float LookYawScale = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
+		meta = (ToolTip = "垂直鼠标响应倍率。推荐 0.5-2；负值可用于运行时反转 Y。"))
+	float LookPitchScale = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
+		meta = (ToolTip = "视角追随插值速度，单位 1/秒。0 表示立即到达，推荐 8-18。"))
+	float LookInterpSpeed = 12.0f;
+
+	bool IsFinite() const;
+	FWacomCursorLookProfile Sanitized() const;
+};
+
 /**
  * Shared cursor-to-look-offset driver.
  *
@@ -33,6 +63,11 @@ public:
 		float LookPitchScale = 1.0f,
 		float LookInterpSpeed = 0.0f);
 
+	bool UpdateFromPlayerCursor(
+		APlayerController* PlayerController,
+		float DeltaTime,
+		const FWacomCursorLookProfile& Profile);
+
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Camera|Cursor Look")
 	void UpdateFromNormalizedCursor(
 		FVector2D NormalizedCursor,
@@ -42,6 +77,11 @@ public:
 		float LookYawScale = 1.0f,
 		float LookPitchScale = 1.0f,
 		float LookInterpSpeed = 0.0f);
+
+	void UpdateFromNormalizedCursor(
+		FVector2D NormalizedCursor,
+		float DeltaTime,
+		const FWacomCursorLookProfile& Profile);
 
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Camera|Cursor Look")
 	void ResetLookOffset();

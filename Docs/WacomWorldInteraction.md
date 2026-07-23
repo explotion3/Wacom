@@ -175,3 +175,15 @@ Battle 已接入 `UBattleSession::ValidateTargetWithCard()`，用于 TargetSelec
 - Actor `ConfigureDebug...Sample` 按 `Wacom|...|Prototype` 分类保留，只用于开发验证样例配置。
 - 旧 Battle event log、旧 2D hand 和旧敌方 2D fallback 已删除；正式手牌走 first-person card layer，正式敌方目标走 SceneEnemyHost / typed Part Component。
 - `TryRouteBattleSceneTargetClick` 等 protected test seam 保留给自动化测试；测试侧应通过 `WacomTests/Private` access wrapper 使用，不扩散生产 public API。
+
+## §9 World Shop Host / Anchor
+
+`AWacomWorldShopHostActor` 是实体商店场景表现宿主，默认创建 2×4 个 `UWacomWorldShopOfferAnchorComponent`。Anchor 的 `SlotId` 和 `SlotOrder` 在同一 Host 内必须唯一；运行时按 `SlotOrder`、再按 `SlotId` 稳定排序，将 Shop snapshot 的 Offer 顺序映射到世界卡牌。Host 只保存 draw size、world scale、pivot、interaction distance、双面渲染和可选 Look profile，不保存库存、价格权威或购买状态。默认 `720×976` DrawSize 与 `0.10` world scale 对 `360×488` 逻辑卡面做 2× supersampling；世界卡面直接复用 `WBP_FirstPersonCardView`，不得嵌套 HUD 专用 `WBP_FPCardView` Retainer。
+
+`AWacomShopTriggerActor::WorldShopHost` 只启用 presentation route。Host 无效、有效 Anchor 少于 Offer、请求含 Upgrade 服务或引用属于其它 World 时 fail closed 到既有 ShopScreen，不把错误 Host 当规则失败，也不截断强化服务。正式关卡制作可原位放置/调整 Host 与 Anchor；不得用 Builder 覆盖人工地图布局。
+
+`AWacomWorldShopActor` 是正式关卡使用的组合式入口，并保持 `AWacomShopTriggerActor` 兼容血统。它内部持有 Host、Viewpoint 和 Run Map Node Binding；正式实例不得再填写旧的外部 `WorldShopHost / ShopEntryViewpoint` 引用。`PresentationRoot` 只控制 Host、点击范围和 Blueprint 场景表现；内部 Viewpoint 可独立保存站位，因此移动货架不会暗中改写玩家入场镜头。Blueprint 子类只负责展示组件，规则仍通过 `ShopDefinition -> Shop snapshot -> coordinator -> WacomRun`。
+
+`/Game/Wacom/Maps/SceneActor/BP_WacomWorldShop` 与 8 Anchor 的 purchase-only `DA_Shop_LevelAuthoringSnake` 已形成可复用 Authoring 入口，但本功能提交不修改并行维护中的 `L_Exploration`。权威地图会话接入时应让唯一正式实例继续绑定 `Shop.Snake / Shop.Test.001`，并移除旧的 legacy-only ShopTrigger；旧独立 Viewpoint Actor 可暂留为人工地图对象，但不得再被正式商店引用。Floor 1 Production map 未在本轮修改。
+
+World Shop 在 `All + NoCapture` 下的正式左键链路固定为 `UWacomGameViewportClient Slate input preprocessor -> AWacomPlayerController::TryRouteWorldShopPointerInput -> FWacomWorldShopWidgetInputRouter -> UWidgetInteractionComponent(Mouse) -> UWacomWorldShopCardWidget -> FWacomWorldShopActivityCoordinator -> URunSession::PurchaseShopOffer`。`PlayerController::InputKey` 与 Viewport `HandleRerouteInput()` 只作为其它捕获模式 fallback。WidgetInteraction 由受控 Pawn 持有，让引擎自动忽略玩家自身的 Capsule/组件；无 Pawn 时才回退到 PlayerController。活动拥有输入时，该 press/release 在手牌拖拽、Battle target、Run branch 和普通 world click 之前消费，避免一次点击穿透到多个系统。组合式正式 Host 还会通过 App-private guard 解析父 `AWacomShopTriggerActor`：Staging 开始时保存入口 `ClickBounds` 的碰撞模式并设为 `NoCollision`，返回 Run Path 完成后精确恢复；Transient Host 没有父 Trigger，因此不会触发该抑制。

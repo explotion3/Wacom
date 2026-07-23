@@ -64,6 +64,7 @@
 #include "UI/Map/WacomRunMapScreen.h"
 #include "UI/Map/WacomRunMapScreenFlow.h"
 #include "UI/Map/WacomRunMapOpenGuard.h"
+#include "UI/Shop/WacomWorldShopActivityCoordinator.h"
 #include "UI/ViewModels/WacomRunViewModelProvider.h"
 #include "Widgets/CommonActivatableWidgetContainer.h"
 #include "Framework/Application/SlateApplication.h"
@@ -237,6 +238,11 @@ void AWacomPlayerController::BeginPlay()
 
 void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (WorldShopActivityCoordinator)
+	{
+		WorldShopActivityCoordinator->Shutdown();
+		WorldShopActivityCoordinator.Reset();
+	}
 	TeardownRunExplorationPresentationBinding();
 	ClearRunFirstPersonCardLayer();
 	if (RunFirstPersonCardDetailController)
@@ -359,6 +365,12 @@ void AWacomPlayerController::SetupInputComponent()
 
 bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
+	if (WorldShopActivityCoordinator
+		&& WorldShopActivityCoordinator->IsOwningInput()
+		&& WorldShopActivityCoordinator->RouteInputKey(Params.Key, Params.Event))
+	{
+		return true;
+	}
 	if ((Params.Key == EKeys::Escape || Params.Key == EKeys::Gamepad_FaceButton_Right)
 		&& Params.Event == IE_Pressed)
 	{
@@ -1969,7 +1981,8 @@ bool AWacomPlayerController::IsInExplorationFlow() const
 bool AWacomPlayerController::CanRouteRunScenePointerInput() const
 {
 	return IsInExplorationFlow()
-		&& !HasActiveRunGameMenuOrTransitionSuppression();
+		&& !HasActiveRunGameMenuOrTransitionSuppression()
+		&& !(WorldShopActivityCoordinator && WorldShopActivityCoordinator->IsOwningInput());
 }
 
 void AWacomPlayerController::StartRunWorldTargetProbePreviewLoop()
@@ -2564,6 +2577,69 @@ bool AWacomPlayerController::RequestOpenShop(
 	const FWacomFirstPersonViewStageRequest& StageRequest)
 {
 	return FWacomExplorationScreenRouter::OpenShop(*this, Request, StageRequest);
+}
+
+bool AWacomPlayerController::RequestOpenShop(
+	const FRunShopVisitRequest& Request,
+	const FWacomFirstPersonViewStageRequest& StageRequest,
+	AWacomWorldShopHostActor* WorldShopHost)
+{
+	if (!CanRouteRunScenePointerInput())
+	{
+		return FWacomExplorationScreenRouter::OpenShop(*this, Request, StageRequest);
+	}
+	const EWacomWorldShopOpenResult Result = GetWorldShopActivityCoordinator().TryOpen(
+		*this,
+		Request,
+		StageRequest,
+		WorldShopHost);
+	if (Result == EWacomWorldShopOpenResult::Accepted)
+	{
+		return true;
+	}
+	if (Result == EWacomWorldShopOpenResult::NotEligible)
+	{
+		return FWacomExplorationScreenRouter::OpenShop(*this, Request, StageRequest);
+	}
+	return false;
+}
+
+bool AWacomPlayerController::IsWorldShopActive() const
+{
+	return WorldShopActivityCoordinator && WorldShopActivityCoordinator->IsActive();
+}
+
+bool AWacomPlayerController::TryRouteWorldShopPointerInput(EInputEvent Event)
+{
+	return (Event == IE_Pressed || Event == IE_Released)
+		&& WorldShopActivityCoordinator
+		&& WorldShopActivityCoordinator->IsOwningInput()
+		&& WorldShopActivityCoordinator->RouteInputKey(EKeys::LeftMouseButton, Event);
+}
+
+void AWacomPlayerController::CloseWorldShop()
+{
+	if (WorldShopActivityCoordinator)
+	{
+		WorldShopActivityCoordinator->Close(true);
+	}
+}
+
+void AWacomPlayerController::NotifyWorldShopHostEndPlay(AWacomWorldShopHostActor* Host)
+{
+	if (WorldShopActivityCoordinator && WorldShopActivityCoordinator->IsUsingHost(Host))
+	{
+		WorldShopActivityCoordinator->Close(true);
+	}
+}
+
+FWacomWorldShopActivityCoordinator& AWacomPlayerController::GetWorldShopActivityCoordinator()
+{
+	if (!WorldShopActivityCoordinator)
+	{
+		WorldShopActivityCoordinator = MakeShared<FWacomWorldShopActivityCoordinator>();
+	}
+	return *WorldShopActivityCoordinator;
 }
 
 void AWacomPlayerController::BeginGameMenuViewpointStageTransition(FName DebugReason)

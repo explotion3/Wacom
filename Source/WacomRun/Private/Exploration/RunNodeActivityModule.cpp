@@ -151,6 +151,7 @@ FWacomStatus FRunNodeActivityModule::SpendAndContinue(
 	const FRunNodeActivityTicket& Ticket,
 	const int32 ActionPointCost,
 	const bool bResolveNode,
+	const bool bDeferPhaseAdvance,
 	bool& bOutActivityContinues,
 	FRunNodeActivityTicket& OutUpdatedTicket,
 	TArray<FRunExplorationEvent>& OutEvents)
@@ -172,10 +173,15 @@ FWacomStatus FRunNodeActivityModule::SpendAndContinue(
 	const int32 DayBefore = WorkingState.TimeState.CurrentDayNumber;
 	const ETimePhase PhaseBefore = WorkingState.TimeState.CurrentTimePhase;
 	WorkingState.ExplorationState.ActiveActivityKind = ERunExplorationActivityKind::None;
-	const FWacomStatus SpendStatus = FRunTimeModule::TrySpendActionPoints(
-		WorkingState,
-		ActionPointCost,
-		WorkingEvents);
+	const FWacomStatus SpendStatus = bDeferPhaseAdvance
+		? FRunTimeModule::TrySpendActionPointsDeferredAdvance(
+			WorkingState,
+			ActionPointCost,
+			WorkingEvents)
+		: FRunTimeModule::TrySpendActionPoints(
+			WorkingState,
+			ActionPointCost,
+			WorkingEvents);
 	if (!SpendStatus.IsOk())
 	{
 		return SpendStatus;

@@ -13,6 +13,7 @@
 class USphereComponent;
 class UBoxComponent;
 class AWacomFirstPersonViewpointActor;
+class AWacomWorldShopHostActor;
 class UShopDefinition;
 class UWacomInteractionTargetComponent;
 class UWacomRunWorldInteractionTargetBridgeComponent;
@@ -34,6 +35,15 @@ struct WACOMAPP_API FWacomShopTriggerDebugView
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
 	int32 ResolvedOfferCount = 0;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FString WorldShopHostName;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	bool bWorldRouteEligible = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
+	FName WorldRouteReason = NAME_None;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Debug")
 	bool bCanInteract = false;
@@ -95,6 +105,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|Camera",
 		meta = (ToolTip = "可选商店入口第一人称镜头站位。配置后，玩家打开商店时会先移动到该 View Pose，再显示商店界面。"))
 	TObjectPtr<AWacomFirstPersonViewpointActor> ShopEntryViewpoint = nullptr;
+
+	/** 可选实体商店宿主；合法 purchase-only 请求使用 World route，其它情况完整回退 ShopScreen。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|World",
+		meta = (ToolTip = "可选第一人称实体商店 Host。必须有足够有效 Anchor；强化服务或非法 Host 会继续打开既有 ShopScreen，不会截断商店。"))
+	TObjectPtr<AWacomWorldShopHostActor> WorldShopHost = nullptr;
 
 	/** 触发半径（cm）。玩家进入该范围后，探索期按 E 可以打开商店。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop",
@@ -179,6 +194,21 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+	/**
+	 * 解析本次商店访问使用的入口 Viewpoint。
+	 *
+	 * 旧 Trigger 默认返回关卡手工引用；组合式正式商店可重写为内部 ChildActor，
+	 * 从而不需要 Blueprint Construction Script 拼接引用。
+	 */
+	virtual AWacomFirstPersonViewpointActor* ResolveShopEntryViewpoint() const;
+
+	/**
+	 * 解析本次商店访问使用的 World Shop Host。
+	 *
+	 * 旧 Trigger 默认返回关卡手工引用；组合式正式商店可重写为内部 ChildActor。
+	 */
+	virtual AWacomWorldShopHostActor* ResolveWorldShopHost() const;
 
 	UFUNCTION()
 	void HandleBeginOverlap(UPrimitiveComponent* OverlappedComp,

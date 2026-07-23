@@ -18,6 +18,7 @@ class UInputAction;
 class UWacomMenuWidgetBase;
 class UWacomRunMenuWidgetBase;
 class AWacomRunPathBranchTargetActor;
+class AWacomWorldShopHostActor;
 class URunSession;
 class UBattleHUD;
 class UWacomRunEventDefinition;
@@ -32,6 +33,7 @@ class UWacomAppToastSubsystem;
 class FWacomRunExplorationPresentationCoordinator;
 class FWacomRunPathBranchSelectionController;
 class FWacomRunMapScreenFlow;
+class FWacomWorldShopActivityCoordinator;
 class FWacomRunSceneBindingRegistry;
 class UWacomRunMapScreen;
 class UWacomFirstPersonCardAnchorComponent;
@@ -314,6 +316,15 @@ public:
 	bool RequestOpenShop(
 		const FRunShopVisitRequest& Request,
 		const FWacomFirstPersonViewStageRequest& StageRequest);
+	bool RequestOpenShop(
+		const FRunShopVisitRequest& Request,
+		const FWacomFirstPersonViewStageRequest& StageRequest,
+		AWacomWorldShopHostActor* WorldShopHost);
+	bool IsWorldShopActive() const;
+	/** CommonUI NoCapture 下由 GameViewport Slate preprocessor 转发真实左键。 */
+	bool TryRouteWorldShopPointerInput(EInputEvent Event);
+	void CloseWorldShop();
+	void NotifyWorldShopHostEndPlay(AWacomWorldShopHostActor* Host);
 	bool IsGameMenuViewpointStageTransitionActive() const { return bGameMenuViewpointStageTransitionActive; }
 	bool IsGameMenuViewpointReturnArmed() const { return bGameMenuViewpointReturnArmed; }
 	void BeginGameMenuViewpointStageTransition(FName DebugReason);
@@ -522,6 +533,7 @@ private:
 	bool TryReleaseFirstPersonCardActiveDragPointer();
 	bool TryCancelFirstPersonCardKeyboardShortcutDrag();
 	bool TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut();
+	FWacomWorldShopActivityCoordinator& GetWorldShopActivityCoordinator();
 	bool TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
 	bool ShouldHandleRunFirstPersonMenuDropProbe() const;
@@ -559,6 +571,7 @@ private:
 	TSharedPtr<FWacomRunExplorationPresentationCoordinator> RunExplorationPresentationCoordinator;
 	TSharedPtr<FWacomRunPathBranchSelectionController> RunPathBranchSelectionController;
 	TSharedPtr<FWacomRunMapScreenFlow> RunMapScreenFlow;
+	TSharedPtr<FWacomWorldShopActivityCoordinator> WorldShopActivityCoordinator;
 	TWeakObjectPtr<UWacomRunPathTraversalComponent> BoundRunPathTraversal;
 	TArray<TWeakObjectPtr<AWacomRunPathBranchTargetActor>> BoundRunPathBranchTargets;
 	uint64 RunExplorationSceneBindingGeneration = 0;

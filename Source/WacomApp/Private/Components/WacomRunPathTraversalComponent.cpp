@@ -249,6 +249,18 @@ void UWacomRunPathTraversalComponent::ClearCursorLookOverride()
 	CursorLookOverrideInterpSpeed = -1.0f;
 }
 
+FWacomCursorLookProfile UWacomRunPathTraversalComponent::GetLiveCursorLookProfile() const
+{
+	FWacomCursorLookProfile Profile;
+	Profile.YawClampDegrees = YawClampDegrees;
+	Profile.PitchClampDegrees = PitchClampDegrees;
+	Profile.LookYawScale = LookYawScale * RuntimeLookResponseStrength;
+	Profile.LookPitchScale = LookPitchScale * RuntimeLookResponseStrength
+		* (bRuntimeInvertLookY ? -1.0f : 1.0f);
+	Profile.LookInterpSpeed = LookInterpSpeed;
+	return Profile.Sanitized();
+}
+
 bool UWacomRunPathTraversalComponent::TryGetCurrentViewTransform(FTransform& OutViewTransform) const
 {
 	if (State == EWacomRunPathTraversalState::Inactive)
