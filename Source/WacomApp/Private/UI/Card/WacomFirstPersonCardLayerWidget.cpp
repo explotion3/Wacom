@@ -401,6 +401,7 @@ void UWacomFirstPersonCardLayerWidget::CancelCardDragGesture(bool bBroadcastCanc
 		}
 	}
 	ClearCurrentDragState(bBroadcastCancel);
+	bConsumeNextPointerReleaseAfterLockedClose = false;
 }
 
 bool UWacomFirstPersonCardLayerWidget::TryStartCardDragGesture(const FGuid& CardInstanceId)
@@ -1521,6 +1522,7 @@ void UWacomFirstPersonCardLayerWidget::SetCardLayerInteractionEnabled(bool bEnab
 		ClearCardPointerView(true);
 		ClearHoveredSlotState(true);
 		ClearCurrentDragState(true);
+		bConsumeNextPointerReleaseAfterLockedClose = false;
 	}
 }
 

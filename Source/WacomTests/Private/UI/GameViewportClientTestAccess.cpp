@@ -61,6 +61,17 @@ bool FWacomGameViewportClientTestAccess::DispatchMouseButtonUp(
 				PointerEvent);
 }
 
+bool FWacomGameViewportClientTestAccess::DispatchReroutedInput(
+	UWacomGameViewportClient& ViewportClient,
+	FKey Key,
+	EInputEvent Event)
+{
+	return ViewportClient.TryRouteReroutedInput(
+		FInputDeviceId::CreateFromInternalId(0),
+		Key,
+		Event);
+}
+
 void FWacomGameViewportClientTestAccess::SetRouteOverrides(
 	UWacomGameViewportClient& ViewportClient,
 	TOptional<bool> bPointerInsideViewport,
@@ -71,18 +82,25 @@ void FWacomGameViewportClientTestAccess::SetRouteOverrides(
 	ViewportClient.PlayerControllerOverrideForAutomation = PlayerController;
 }
 
-void FWacomGameViewportClientTestAccess::SetWorldShopPointerRouteOverride(
+void FWacomGameViewportClientTestAccess::SetPreUiInputRouteOverride(
 	UWacomGameViewportClient& ViewportClient,
 	TOptional<bool> RouteResult)
 {
-	ViewportClient.WorldShopPointerRouteResultOverrideForAutomation = RouteResult;
-	ViewportClient.WorldShopPointerRouteEventsForAutomation.Reset();
+	ViewportClient.PreUiInputRouteResultOverrideForAutomation = RouteResult;
+	ViewportClient.PreUiInputRouteKeysForAutomation.Reset();
+	ViewportClient.PreUiInputRouteEventsForAutomation.Reset();
 }
 
-const TArray<EInputEvent>& FWacomGameViewportClientTestAccess::GetWorldShopPointerRouteEvents(
+const TArray<FKey>& FWacomGameViewportClientTestAccess::GetPreUiInputRouteKeys(
 	const UWacomGameViewportClient& ViewportClient)
 {
-	return ViewportClient.WorldShopPointerRouteEventsForAutomation;
+	return ViewportClient.PreUiInputRouteKeysForAutomation;
+}
+
+const TArray<EInputEvent>& FWacomGameViewportClientTestAccess::GetPreUiInputRouteEvents(
+	const UWacomGameViewportClient& ViewportClient)
+{
+	return ViewportClient.PreUiInputRouteEventsForAutomation;
 }
 
 bool FWacomGameViewportClientTestAccess::HasProjectOwnedFocusPresentation(

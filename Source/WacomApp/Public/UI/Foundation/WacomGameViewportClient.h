@@ -13,11 +13,12 @@ struct FPointerEvent;
 struct FWacomGameViewportClientTestAccess;
 
 /**
- * CommonUI-compatible viewport input owner for Wacom-wide pre-UI gestures.
+ * CommonUI-compatible viewport adapter for Wacom-wide pre-UI gestures.
  *
  * Mouse button presses can be skipped by FSceneViewport::InputKey while the
- * viewport uses NoCapture. A scoped Slate input preprocessor therefore owns the
- * primary shortcut-drag cancel path; CommonUI rerouting remains a fallback.
+ * viewport uses NoCapture. A scoped Slate input preprocessor forwards the
+ * limited pointer subset to PlayerController's native pre-UI route; policy and
+ * gesture truth remain outside the ViewportClient.
  */
 UCLASS(Within = Engine, transient, config = Engine)
 class WACOMAPP_API UWacomGameViewportClient : public UCommonGameViewportClient
@@ -48,8 +49,14 @@ private:
 	bool HandlePreprocessedMouseButtonUp(
 		FSlateApplication& SlateApp,
 		const FPointerEvent& PointerEvent);
-	bool TryRouteWorldShopPointerInput(
+	bool TryRoutePreprocessedInput(
 		FInputDeviceId DeviceId,
+		FKey Key,
+		EInputEvent Event,
+		const TOptional<FVector2D>& AbsoluteScreenPosition);
+	bool TryRouteReroutedInput(
+		FInputDeviceId DeviceId,
+		FKey Key,
 		EInputEvent Event);
 	bool IsPointerEventInsideOwnGameViewport(
 		FSlateApplication& SlateApp,
@@ -63,8 +70,9 @@ private:
 #if WITH_AUTOMATION_TESTS
 	TOptional<bool> PointerInsideViewportOverrideForAutomation;
 	TWeakObjectPtr<AWacomPlayerController> PlayerControllerOverrideForAutomation;
-	TOptional<bool> WorldShopPointerRouteResultOverrideForAutomation;
-	TArray<EInputEvent> WorldShopPointerRouteEventsForAutomation;
+	TOptional<bool> PreUiInputRouteResultOverrideForAutomation;
+	TArray<FKey> PreUiInputRouteKeysForAutomation;
+	TArray<EInputEvent> PreUiInputRouteEventsForAutomation;
 #endif
 
 	friend class FWacomFirstPersonCardInputPreprocessor;

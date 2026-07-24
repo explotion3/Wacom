@@ -78,7 +78,7 @@ void FWacomRunFirstPersonCardDetailController::RemovePanelFromViewport()
 void FWacomRunFirstPersonCardDetailController::RefreshBinding()
 {
 	UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
+		PlayerController.ResolveFirstPersonCardAnchor();
 	UWacomFirstPersonCardAnchorComponent* CurrentBoundAnchor = BoundAnchor.Get();
 	const UWacomRunFirstPersonCardSourceComponent* Source =
 		PlayerController.GetRunFirstPersonCardSourceComponent();
@@ -447,7 +447,7 @@ void FWacomRunFirstPersonCardDetailController::ClearCurrentSource()
 bool FWacomRunFirstPersonCardDetailController::ShouldHandleCurrentSource() const
 {
 	const UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
+		PlayerController.ResolveFirstPersonCardAnchor();
 	const UWacomRunFirstPersonCardSourceComponent* Source =
 		PlayerController.GetRunFirstPersonCardSourceComponent();
 	if (!Anchor
@@ -525,7 +525,7 @@ bool FWacomRunFirstPersonCardDetailController::ShouldShowInspectDetail(
 	const FWacomFirstPersonCardDragView& DragView) const
 {
 	const UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
+		PlayerController.ResolveFirstPersonCardAnchor();
 	return DragView.GestureState == EWacomFirstPersonCardGestureState::Inspecting
 		&& Anchor
 		&& Anchor->bShowDetailDuringCardInspect

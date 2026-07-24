@@ -156,6 +156,8 @@ Run first-person hand 不直接等同于某个物理持有区。`URunSession::Bu
 
 正式 Run first-person source 对 `DefaultExploration` workspace 采用 RunFace 优先：已启用卡默认显示 Run Face，并附带只读 Battle alternate；未启用旧卡继续显示原 Battle Face 且不进入锁定翻面。provider-backed Run menu lease 同样采用 RunFace 优先显示，但本轮不开放锁定翻面，避免菜单拖放所有权与 hand 检视互相竞争。Battle hand 始终以 Battle Face 为环境默认面。四张首批样卡为触须探路、钥匙、蜕壳切和几丁护片。Room 动作、目标事务、数字成本、`ExhaustForCurrentRoom / ExhaustUntilCamp / ConsumePermanently` 运行态与 SaveGame 仍未接入；反面只读检视不能提交 Run world/menu drop。预热器仍只收集 Widget / 材质模板和声音；Definition 硬引用的共享或 Run override 插画沿既有对象引用加载，不扩展预热 manifest。
 
+Run default hand 的锁定检视、翻面、空白关闭、external pointer pump / release 和取消由 `AWacomPlayerController` 私有的 `FWacomFirstPersonCardInputRouter` 与 Battle hand 共用；Run source / Slot 仍拥有卡牌和手势真相，Router 不读取 RunFace、Definition 或 `URunSession`。Backpack、Run GameMenu 和 World Shop 继续通过既有 source lifecycle 禁用或取消 default hand；Router 不接管 Workspace、菜单 lease 或 World Shop 内部输入。数字键 `1~7` 仍只解析 BattleHUD hand，不启动 Run default hand。
+
 Run menu / world drop 与 Battle 共用 first-person Slot 的无效目标提示。正式 Drag 只有在 Run 已经解析出有效 Target Handle 且反馈为 `Invalid / InvalidCardTarget` 时，源卡才显示低强度像素括角；空白区域和 Probe 不显示。若玩家在该真实无效目标上释放，Slot 播放方向性压缩/回弹与边缘裂痕，但不会伪造 Run drop 命令；主动取消、快捷键右键取消、Inspect 返回和空白释放保持中性。该表现只消费 App 层目标校验事实，不修改 Run storage、menu drop 或 world interaction 规则。
 
 `FRunStorageCardView` 是背包 / SpecialZone / 投影列表的单卡只读 ViewData。它会显式携带 `bCanToggleBattleEnabledInSpecialZone` 与 `bShowBattleEnabledInSpecialZoneBadge`，App 列表和 Widget 只消费这些 affordance，不通过 `PhysicalZone`、`bBattleEnabledInSpecialZone` 或列表来源重新推断右键入战是否可用。

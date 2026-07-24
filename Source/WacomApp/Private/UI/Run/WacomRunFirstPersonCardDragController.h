@@ -16,11 +16,6 @@ public:
 	void RefreshBinding();
 	void UnbindCurrentBinding();
 
-	void PumpActiveDragPointer();
-	bool TryReleaseActiveDragPointer();
-	bool TryCancelKeyboardShortcutActiveDrag();
-	bool TryCancelActiveGestureForTurnBoundaryShortcut();
-
 	void HandleDragStarted(
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);

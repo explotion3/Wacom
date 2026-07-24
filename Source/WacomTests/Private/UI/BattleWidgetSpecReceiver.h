@@ -151,17 +151,19 @@ private:
 
 	bool InputRightMousePressedForTest()
 	{
-		FInputKeyEventArgs Args;
-		Args.Key = EKeys::RightMouseButton;
-		Args.Event = IE_Pressed;
-		return InputKey(Args);
+		return InputKeyForTest(EKeys::RightMouseButton, IE_Pressed);
 	}
 
 	bool InputLeftMouseReleasedForTest()
 	{
+		return InputKeyForTest(EKeys::LeftMouseButton, IE_Released);
+	}
+
+	bool InputKeyForTest(const FKey& Key, EInputEvent Event)
+	{
 		FInputKeyEventArgs Args;
-		Args.Key = EKeys::LeftMouseButton;
-		Args.Event = IE_Released;
+		Args.Key = Key;
+		Args.Event = Event;
 		return InputKey(Args);
 	}
 
@@ -173,6 +175,21 @@ private:
 	void PressEndTurnShortcutForTest()
 	{
 		OnEndTurnPressed();
+	}
+
+	void PressPlayCardShortcutForTest(int32 OneBasedIndex)
+	{
+		switch (OneBasedIndex)
+		{
+		case 1: OnPlayCard1(); break;
+		case 2: OnPlayCard2(); break;
+		case 3: OnPlayCard3(); break;
+		case 4: OnPlayCard4(); break;
+		case 5: OnPlayCard5(); break;
+		case 6: OnPlayCard6(); break;
+		case 7: OnPlayCard7(); break;
+		default: break;
+		}
 	}
 
 protected:

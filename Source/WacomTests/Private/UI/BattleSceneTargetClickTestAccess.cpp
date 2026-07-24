@@ -103,6 +103,14 @@ bool FWacomBattleSceneTargetClickTestAccess::InputLeftMouseReleased(
 	return PC ? PC->InputLeftMouseReleasedForTest() : false;
 }
 
+bool FWacomBattleSceneTargetClickTestAccess::InputKey(
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC,
+	const FKey& Key,
+	EInputEvent Event)
+{
+	return PC ? PC->InputKeyForTest(Key, Event) : false;
+}
+
 void FWacomBattleSceneTargetClickTestAccess::PressWaitShortcut(
 	AWacomBattleSceneClickRouterPlayerControllerTest* PC)
 {
@@ -118,6 +126,16 @@ void FWacomBattleSceneTargetClickTestAccess::PressEndTurnShortcut(
 	if (PC)
 	{
 		PC->PressEndTurnShortcutForTest();
+	}
+}
+
+void FWacomBattleSceneTargetClickTestAccess::PressPlayCardShortcut(
+	AWacomBattleSceneClickRouterPlayerControllerTest* PC,
+	int32 OneBasedIndex)
+{
+	if (PC)
+	{
+		PC->PressPlayCardShortcutForTest(OneBasedIndex);
 	}
 }
 

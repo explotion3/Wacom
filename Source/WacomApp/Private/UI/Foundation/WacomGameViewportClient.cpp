@@ -15,6 +15,7 @@
 #include "UI/Foundation/WacomMenuButtonWidget.h"
 #include "UI/Menus/WacomMainMenuScreen.h"
 #include "UI/Settings/WacomSettingsOptionRow.h"
+#include "UI/Card/WacomFirstPersonCardInputRouter.h"
 #include "Widgets/SViewport.h"
 
 class FWacomFirstPersonCardInputPreprocessor final : public IInputProcessor
@@ -162,30 +163,17 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonDown(
 	{
 		return false;
 	}
-	if (PointerEvent.GetEffectingButton() == EKeys::LeftMouseButton
-		&& TryRouteWorldShopPointerInput(
-			PointerEvent.GetInputDeviceId(),
-			IE_Pressed))
-	{
-		return true;
-	}
-	if (PointerEvent.GetEffectingButton() == EKeys::LeftMouseButton)
-	{
-		AWacomPlayerController* PlayerController =
-			ResolveWacomPlayerController(PointerEvent.GetInputDeviceId());
-		return PlayerController
-			&& PlayerController->TryRouteFirstPersonCardLockedInspectionPointerPress(
-				PointerEvent.GetScreenSpacePosition());
-	}
-	if (PointerEvent.GetEffectingButton() != EKeys::RightMouseButton)
+	const FKey Button = PointerEvent.GetEffectingButton();
+	if (Button != EKeys::LeftMouseButton
+		&& Button != EKeys::RightMouseButton)
 	{
 		return false;
 	}
-
-	AWacomPlayerController* PlayerController =
-		ResolveWacomPlayerController(PointerEvent.GetInputDeviceId());
-	return PlayerController
-		&& PlayerController->TryCancelFirstPersonCardKeyboardShortcutDrag();
+	return TryRoutePreprocessedInput(
+		PointerEvent.GetInputDeviceId(),
+		Button,
+		IE_Pressed,
+		FVector2D(PointerEvent.GetScreenSpacePosition()));
 }
 
 bool UWacomGameViewportClient::HandlePreprocessedMouseButtonUp(
@@ -196,34 +184,62 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonUp(
 	{
 		return false;
 	}
-	// Release 需要在鼠标离开 viewport 后仍能清理 WIC pressed 状态；
-	// 没有 World Shop owner 时 helper 会 fail closed，不影响普通 Slate 输入。
-	if (TryRouteWorldShopPointerInput(
+	// Release must remain routable after the pointer leaves the viewport so a
+	// pre-UI owner can clear its paired press without leaking into the world.
+	return TryRoutePreprocessedInput(
 		PointerEvent.GetInputDeviceId(),
-		IE_Released))
-	{
-		return true;
-	}
-	AWacomPlayerController* PlayerController =
-		ResolveWacomPlayerController(PointerEvent.GetInputDeviceId());
-	return PlayerController
-		&& PlayerController->TryConsumeFirstPersonCardLockedInspectionPointerRelease();
+		EKeys::LeftMouseButton,
+		IE_Released,
+		FVector2D(PointerEvent.GetScreenSpacePosition()));
 }
 
-bool UWacomGameViewportClient::TryRouteWorldShopPointerInput(
+bool UWacomGameViewportClient::TryRoutePreprocessedInput(
 	FInputDeviceId DeviceId,
-	EInputEvent Event)
+	FKey Key,
+	EInputEvent Event,
+	const TOptional<FVector2D>& AbsoluteScreenPosition)
 {
 #if WITH_AUTOMATION_TESTS
-	if (WorldShopPointerRouteResultOverrideForAutomation.IsSet())
+	if (PreUiInputRouteResultOverrideForAutomation.IsSet())
 	{
-		WorldShopPointerRouteEventsForAutomation.Add(Event);
-		return WorldShopPointerRouteResultOverrideForAutomation.GetValue();
+		PreUiInputRouteKeysForAutomation.Add(Key);
+		PreUiInputRouteEventsForAutomation.Add(Event);
+		return PreUiInputRouteResultOverrideForAutomation.GetValue();
 	}
 #endif
 
 	AWacomPlayerController* PlayerController = ResolveWacomPlayerController(DeviceId);
-	return PlayerController && PlayerController->TryRouteWorldShopPointerInput(Event);
+	if (!PlayerController)
+	{
+		return false;
+	}
+	FWacomFirstPersonCardInputEvent Input;
+	Input.Key = Key;
+	Input.Event = Event;
+	Input.Adapter = EWacomFirstPersonCardInputAdapter::SlatePreprocessor;
+	Input.AbsoluteScreenPosition = AbsoluteScreenPosition;
+	return PlayerController->TryRoutePreUiInput(Input);
+}
+
+bool UWacomGameViewportClient::TryRouteReroutedInput(
+	FInputDeviceId DeviceId,
+	FKey Key,
+	EInputEvent Event)
+{
+	AWacomPlayerController* PlayerController = ResolveWacomPlayerController(DeviceId);
+	if (!PlayerController)
+	{
+		return false;
+	}
+	FWacomFirstPersonCardInputEvent Input;
+	Input.Key = Key;
+	Input.Event = Event;
+	Input.Adapter = EWacomFirstPersonCardInputAdapter::ViewportReroute;
+	if (FSlateApplication::IsInitialized())
+	{
+		Input.AbsoluteScreenPosition = FSlateApplication::Get().GetCursorPos();
+	}
+	return PlayerController->TryRoutePreUiInput(Input);
 }
 
 bool UWacomGameViewportClient::IsPointerEventInsideOwnGameViewport(
@@ -289,24 +305,15 @@ void UWacomGameViewportClient::HandleRerouteInput(
 	EInputEvent EventType,
 	FReply& Reply)
 {
-	if (Key == EKeys::LeftMouseButton
-		&& (EventType == IE_Pressed || EventType == IE_Released))
+	const bool bLeftPointerEvent =
+		Key == EKeys::LeftMouseButton
+		&& (EventType == IE_Pressed || EventType == IE_Released);
+	const bool bRightPointerCancel =
+		Key == EKeys::RightMouseButton
+		&& EventType == IE_Pressed;
+	if (bLeftPointerEvent || bRightPointerCancel)
 	{
-		AWacomPlayerController* PlayerController =
-			ResolveWacomPlayerController(DeviceId);
-		if (PlayerController
-			&& PlayerController->TryRouteWorldShopPointerInput(EventType))
-		{
-			Reply = FReply::Handled();
-			return;
-		}
-	}
-	if (Key == EKeys::RightMouseButton && EventType == IE_Pressed)
-	{
-		AWacomPlayerController* PlayerController =
-			ResolveWacomPlayerController(DeviceId);
-		if (PlayerController
-			&& PlayerController->TryCancelFirstPersonCardKeyboardShortcutDrag())
+		if (TryRouteReroutedInput(DeviceId, Key, EventType))
 		{
 			Reply = FReply::Handled();
 			return;

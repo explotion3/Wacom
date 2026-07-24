@@ -51,7 +51,7 @@ bool FWacomWorldShopViewportInputSpec::RunTest(const FString& Parameters)
 		*ViewportClient,
 		true,
 		nullptr);
-	FWacomGameViewportClientTestAccess::SetWorldShopPointerRouteOverride(
+	FWacomGameViewportClientTestAccess::SetPreUiInputRouteOverride(
 		*ViewportClient,
 		true);
 	FWacomGameViewportClientTestAccess::RegisterInputPreProcessor(*ViewportClient);
@@ -69,16 +69,21 @@ bool FWacomWorldShopViewportInputSpec::RunTest(const FString& Parameters)
 			*ViewportClient,
 			LeftUp));
 
+	const TArray<FKey>& RoutedKeys =
+		FWacomGameViewportClientTestAccess::GetPreUiInputRouteKeys(*ViewportClient);
 	const TArray<EInputEvent>& RoutedEvents =
-		FWacomGameViewportClientTestAccess::GetWorldShopPointerRouteEvents(*ViewportClient);
+		FWacomGameViewportClientTestAccess::GetPreUiInputRouteEvents(*ViewportClient);
 	TestEqual(TEXT("press and release are routed exactly once"), RoutedEvents.Num(), 2);
-	if (RoutedEvents.Num() == 2)
+	TestEqual(TEXT("press and release retain their key identity"), RoutedKeys.Num(), 2);
+	if (RoutedEvents.Num() == 2 && RoutedKeys.Num() == 2)
 	{
+		TestEqual(TEXT("first key is left mouse"), RoutedKeys[0], EKeys::LeftMouseButton);
+		TestEqual(TEXT("second key is left mouse"), RoutedKeys[1], EKeys::LeftMouseButton);
 		TestEqual(TEXT("first event is press"), RoutedEvents[0], IE_Pressed);
 		TestEqual(TEXT("second event is release"), RoutedEvents[1], IE_Released);
 	}
 
-	FWacomGameViewportClientTestAccess::SetWorldShopPointerRouteOverride(
+	FWacomGameViewportClientTestAccess::SetPreUiInputRouteOverride(
 		*ViewportClient,
 		TOptional<bool>());
 	FWacomGameViewportClientTestAccess::SetRouteOverrides(

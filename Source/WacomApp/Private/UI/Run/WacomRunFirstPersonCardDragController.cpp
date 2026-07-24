@@ -16,7 +16,7 @@ FWacomRunFirstPersonCardDragController::FWacomRunFirstPersonCardDragController(
 void FWacomRunFirstPersonCardDragController::RefreshBinding()
 {
 	UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
+		PlayerController.ResolveFirstPersonCardAnchor();
 	UWacomFirstPersonCardAnchorComponent* CurrentBoundAnchor = BoundAnchor.Get();
 
 	const bool bShouldBind =
@@ -56,69 +56,6 @@ void FWacomRunFirstPersonCardDragController::UnbindCurrentBinding()
 		UnbindAnchor(*Anchor);
 	}
 	BoundAnchor.Reset();
-}
-
-void FWacomRunFirstPersonCardDragController::PumpActiveDragPointer()
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
-	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
-	{
-		return;
-	}
-
-	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
-	if (!PlayerController.TryGetMouseWidgetPosition(MouseWidgetPosition))
-	{
-		return;
-	}
-
-	Anchor->UpdateFirstPersonCardDragPointer(MouseWidgetPosition);
-}
-
-bool FWacomRunFirstPersonCardDragController::TryReleaseActiveDragPointer()
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
-	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
-	{
-		return false;
-	}
-
-	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
-	if (PlayerController.TryGetMouseWidgetPosition(MouseWidgetPosition))
-	{
-		Anchor->UpdateFirstPersonCardDragPointer(MouseWidgetPosition);
-		return Anchor->ReleaseFirstPersonCardDragGesture(MouseWidgetPosition);
-	}
-
-	return Anchor->ReleaseFirstPersonCardDragGestureAtCurrentPointer();
-}
-
-bool FWacomRunFirstPersonCardDragController::TryCancelKeyboardShortcutActiveDrag()
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
-	if (!Anchor || !Anchor->IsFirstPersonCardKeyboardShortcutDragGestureActive())
-	{
-		return false;
-	}
-
-	Anchor->CancelFirstPersonCardDragGesture(true);
-	return true;
-}
-
-bool FWacomRunFirstPersonCardDragController::TryCancelActiveGestureForTurnBoundaryShortcut()
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		PlayerController.ResolveFirstPersonCardAnchorForRunMenuProbe();
-	if (!Anchor || !Anchor->IsFirstPersonCardDragGestureActive())
-	{
-		return false;
-	}
-
-	Anchor->CancelFirstPersonCardDragGesture(true);
-	return true;
 }
 
 void FWacomRunFirstPersonCardDragController::HandleDragStarted(

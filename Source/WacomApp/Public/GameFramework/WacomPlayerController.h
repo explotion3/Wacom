@@ -41,6 +41,7 @@ class UWacomRunFirstPersonCardSourceComponent;
 class UWacomCardDetailPanel;
 class FWacomBattleSceneInteractionRouter;
 class FWacomRunWorldInteractionRouter;
+class FWacomFirstPersonCardInputRouter;
 class FWacomRunFirstPersonCardDetailController;
 class FWacomRunFirstPersonCardDragController;
 class FWacomRunFirstPersonCardDropCoordinator;
@@ -52,6 +53,7 @@ struct FWacomPlayerControllerRunInteractionTestAccess;
 struct FWacomRunFloorSceneBindingAutomationTestView;
 #endif
 struct FWacomCardDetailViewData;
+struct FWacomFirstPersonCardInputEvent;
 struct FWacomFirstPersonViewStageRequest;
 struct FRunShopOfferInput;
 struct FRunShopVisitRequest;
@@ -321,8 +323,6 @@ public:
 		const FWacomFirstPersonViewStageRequest& StageRequest,
 		AWacomWorldShopHostActor* WorldShopHost);
 	bool IsWorldShopActive() const;
-	/** CommonUI NoCapture 下由 GameViewport Slate preprocessor 转发真实左键。 */
-	bool TryRouteWorldShopPointerInput(EInputEvent Event);
 	void CloseWorldShop();
 	void NotifyWorldShopHostEndPlay(AWacomWorldShopHostActor* Host);
 	bool IsGameMenuViewpointStageTransitionActive() const { return bGameMenuViewpointStageTransitionActive; }
@@ -509,9 +509,6 @@ private:
 	void TickRunFirstPersonCardDetailForTest(float DeltaTime);
 #endif
 
-	/** 点击手牌 index（1-based，与按键对应）。 */
-	void RouteHandIndex(int32 OneBasedIndex);
-
 	void StartRunWorldTargetProbePreviewLoop();
 	void StopRunWorldTargetProbePreviewLoop();
 	bool ResolveRunWorldClickableInteractableFromHandle(
@@ -545,18 +542,12 @@ private:
 	FWacomRunFirstPersonCardDropCoordinator& GetRunFirstPersonCardDropCoordinator();
 	const FWacomRunFirstPersonCardDropCoordinator& GetRunFirstPersonCardDropCoordinator() const;
 	void RefreshRunFirstPersonMenuLeaseDragBinding();
-	void PumpFirstPersonCardActiveDragPointer();
-	bool TryReleaseFirstPersonCardActiveDragPointer();
-	bool TryCancelFirstPersonCardKeyboardShortcutDrag();
-	bool TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut();
-	bool TryToggleFirstPersonCardLockedFaceInspection();
-	bool TryCloseFirstPersonCardLockedFaceInspection();
-	bool TryRouteFirstPersonCardLockedInspectionPointerPress(
-		const FVector2D& AbsoluteScreenPosition);
-	bool TryConsumeFirstPersonCardLockedInspectionPointerRelease();
+	FWacomFirstPersonCardInputRouter& GetFirstPersonCardInputRouter();
+	const FWacomFirstPersonCardInputRouter& GetFirstPersonCardInputRouter() const;
+	bool TryRoutePreUiInput(const FWacomFirstPersonCardInputEvent& Input);
 	FWacomWorldShopActivityCoordinator& GetWorldShopActivityCoordinator();
 	bool TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition);
-	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;
+	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchor() const;
 	bool ShouldHandleRunFirstPersonMenuDropProbe() const;
 	bool ShouldHandleRunWorldCardDropProbe() const;
 	UWacomRunMenuWidgetBase* ResolveOwningMenuForActiveRunMenuLease(FName LeaseId) const;
@@ -585,6 +576,7 @@ private:
 
 	TSharedPtr<FWacomBattleSceneInteractionRouter> BattleSceneInteractionRouter;
 	TSharedPtr<FWacomRunWorldInteractionRouter> RunWorldInteractionRouter;
+	TSharedPtr<FWacomFirstPersonCardInputRouter> FirstPersonCardInputRouter;
 	TSharedPtr<FWacomRunFirstPersonCardDetailController> RunFirstPersonCardDetailController;
 	TSharedPtr<FWacomRunFirstPersonCardDragController> RunFirstPersonCardDragController;
 	TSharedPtr<FWacomRunFirstPersonCardDropCoordinator> RunFirstPersonCardDropCoordinator;
@@ -613,6 +605,7 @@ private:
 
 	friend class FWacomBattleSceneInteractionRouter;
 	friend class FWacomRunWorldInteractionRouter;
+	friend class FWacomFirstPersonCardInputRouter;
 	friend class FWacomRunFirstPersonCardDetailController;
 	friend class FWacomRunFirstPersonCardDragController;
 	friend class UWacomGameViewportClient;

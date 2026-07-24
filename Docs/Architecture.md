@@ -260,7 +260,7 @@ Event 用来记录结算过程，不作为战斗真相，只作为表现、日�
 
 不要在战斗中直接修改静态卡牌定义。Cost 修正、状态层数、卡牌临时变化都应写到运行时实例或战斗状态中。
 
-一卡两面继续遵守 `WacomData -> WacomRun / WacomBattle -> WacomApp`：`UCardDefinition` 持有共享身份、Battle Face v1 和可选 RunFace 静态合同；Run 的 `FCardInstance.InstanceId + Definition` 是唯一卡牌身份，face context 只是表现 / 事务语境，不创建副本、不进入 SaveGame，也不改变卡牌 Zone。`WacomApp` 的 `UWacomCardPresentationBuilder` 显式按 Battle / Run context 生成 passive ViewData；旧入口固定 Battle。Battle / Run source adapter 决定环境默认面并可附带另一面 ViewData，通用 Layer/Slot 只在 `InspectLocked` 中本地切换；PlayerController 与 BattleHUD bridge 仅路由 toggle/close 和当前面详情，WBP 不读取 Definition。锁定反面不能提交 Battle 命令或 Run drop。RunFace ActionTag 的规则解释、成本与使用后处置必须由未来 `WacomRun` Room / target transaction 承担，不能写进 Builder、Widget 或世界 Actor。
+一卡两面继续遵守 `WacomData -> WacomRun / WacomBattle -> WacomApp`：`UCardDefinition` 持有共享身份、Battle Face v1 和可选 RunFace 静态合同；Run 的 `FCardInstance.InstanceId + Definition` 是唯一卡牌身份，face context 只是表现 / 事务语境，不创建副本、不进入 SaveGame，也不改变卡牌 Zone。`WacomApp` 的 `UWacomCardPresentationBuilder` 显式按 Battle / Run context 生成 passive ViewData；旧入口固定 Battle。Battle / Run source adapter 决定环境默认面并可附带另一面 ViewData，通用 Layer/Slot 只在 `InspectLocked` 中本地切换；App-private `FWacomFirstPersonCardInputRouter` 只统一 Slate / Viewport / PlayerController / Enhanced Input 意图、external pointer 与取消优先级，Layer/Slot 继续拥有手势、命中、动画 gate 和 matching-release reservation 真相。World Shop 是 pre-UI 高优先级 owner；Backpack / CommonUI 通过 source lifecycle 取消手牌，Router 不扩张为全局输入管理器。WBP 不读取 Definition。锁定反面不能提交 Battle 命令或 Run drop。RunFace ActionTag 的规则解释、成本与使用后处置必须由未来 `WacomRun` Room / target transaction 承担，不能写进 Builder、Widget 或世界 Actor。
 
 ## 9. UI 与表现边界
 

@@ -25,14 +25,20 @@ struct FWacomGameViewportClientTestAccess
 	static bool DispatchMouseButtonUp(
 		UWacomGameViewportClient& ViewportClient,
 		const FPointerEvent& PointerEvent);
+	static bool DispatchReroutedInput(
+		UWacomGameViewportClient& ViewportClient,
+		FKey Key,
+		EInputEvent Event);
 	static void SetRouteOverrides(
 		UWacomGameViewportClient& ViewportClient,
 		TOptional<bool> bPointerInsideViewport,
 		AWacomPlayerController* PlayerController);
-	static void SetWorldShopPointerRouteOverride(
+	static void SetPreUiInputRouteOverride(
 		UWacomGameViewportClient& ViewportClient,
 		TOptional<bool> RouteResult);
-	static const TArray<EInputEvent>& GetWorldShopPointerRouteEvents(
+	static const TArray<FKey>& GetPreUiInputRouteKeys(
+		const UWacomGameViewportClient& ViewportClient);
+	static const TArray<EInputEvent>& GetPreUiInputRouteEvents(
 		const UWacomGameViewportClient& ViewportClient);
 	static bool HasProjectOwnedFocusPresentation(
 		const TSharedPtr<SWidget>& FocusedWidget);

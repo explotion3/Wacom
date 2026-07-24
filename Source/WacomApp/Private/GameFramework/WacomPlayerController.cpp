@@ -55,6 +55,7 @@
 #include "UI/Foundation/WacomPrimaryGameLayout.h"
 #include "UI/Foundation/WacomUITags.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomFirstPersonCardInputRouter.h"
 #include "UI/Card/WacomCardPresentationBuilder.h"
 #include "UI/Run/WacomRunFirstPersonCardDetailController.h"
 #include "UI/Run/WacomRunFirstPersonCardDropCoordinator.h"
@@ -243,6 +244,11 @@ void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		WorldShopActivityCoordinator->Shutdown();
 		WorldShopActivityCoordinator.Reset();
 	}
+	if (FirstPersonCardInputRouter)
+	{
+		FirstPersonCardInputRouter->ResetTransientState(false);
+		FirstPersonCardInputRouter.Reset();
+	}
 	TeardownRunExplorationPresentationBinding();
 	ClearRunFirstPersonCardLayer();
 	if (RunFirstPersonCardDetailController)
@@ -271,6 +277,10 @@ void AWacomPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AWacomPlayerController::SetPawn(APawn* InPawn)
 {
 	APawn* PreviousPawn = GetPawn();
+	if (PreviousPawn != InPawn && FirstPersonCardInputRouter)
+	{
+		FirstPersonCardInputRouter->ResetTransientState(true);
+	}
 	Super::SetPawn(InPawn);
 	if (PreviousPawn == InPawn)
 	{
@@ -317,7 +327,7 @@ void AWacomPlayerController::PlayerTick(float DeltaTime)
 	{
 		RunFirstPersonCardDetailController->TickMotion(DeltaTime);
 	}
-	PumpFirstPersonCardActiveDragPointer();
+	GetFirstPersonCardInputRouter().PumpActivePointer();
 }
 
 void AWacomPlayerController::SetupInputComponent()
@@ -365,29 +375,18 @@ void AWacomPlayerController::SetupInputComponent()
 
 bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 {
-	if (WorldShopActivityCoordinator
-		&& WorldShopActivityCoordinator->IsOwningInput()
-		&& WorldShopActivityCoordinator->RouteInputKey(Params.Key, Params.Event))
-	{
-		return true;
-	}
-	if ((Params.Key == EKeys::Tab || Params.Key == EKeys::Gamepad_RightShoulder)
-		&& Params.Event == IE_Pressed
-		&& TryToggleFirstPersonCardLockedFaceInspection())
+	FWacomFirstPersonCardInputEvent FirstPersonCardInput;
+	FirstPersonCardInput.Key = Params.Key;
+	FirstPersonCardInput.Event = Params.Event;
+	FirstPersonCardInput.Adapter =
+		EWacomFirstPersonCardInputAdapter::PlayerControllerInputKey;
+	if (TryRoutePreUiInput(FirstPersonCardInput))
 	{
 		return true;
 	}
 	if ((Params.Key == EKeys::Escape || Params.Key == EKeys::Gamepad_FaceButton_Right)
 		&& Params.Event == IE_Pressed)
 	{
-		if (TryCloseFirstPersonCardLockedFaceInspection())
-		{
-			return true;
-		}
-		if (TryCancelFirstPersonCardKeyboardShortcutDrag())
-		{
-			return true;
-		}
 		if (UBattleHUD* HUD = GetActiveBattleHUD())
 		{
 			if (HUD->IsInTargetSelect())
@@ -400,24 +399,6 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 				return true;
 			}
 		}
-	}
-	if (Params.Key == EKeys::RightMouseButton
-		&& Params.Event == IE_Pressed
-		&& TryCancelFirstPersonCardKeyboardShortcutDrag())
-	{
-		return true;
-	}
-	if (Params.Key == EKeys::LeftMouseButton
-		&& Params.Event == IE_Released
-		&& TryConsumeFirstPersonCardLockedInspectionPointerRelease())
-	{
-		return true;
-	}
-	if (Params.Key == EKeys::LeftMouseButton
-		&& Params.Event == IE_Released
-		&& TryReleaseFirstPersonCardActiveDragPointer())
-	{
-		return true;
 	}
 	if (Params.Key == EKeys::LeftMouseButton
 		&& Params.Event == IE_Released
@@ -795,6 +776,36 @@ AWacomPlayerController::GetRunFirstPersonCardDragController() const
 	return const_cast<AWacomPlayerController*>(this)->GetRunFirstPersonCardDragController();
 }
 
+FWacomFirstPersonCardInputRouter&
+AWacomPlayerController::GetFirstPersonCardInputRouter()
+{
+	if (!FirstPersonCardInputRouter)
+	{
+		FirstPersonCardInputRouter =
+			MakeShared<FWacomFirstPersonCardInputRouter>(*this);
+	}
+	return *FirstPersonCardInputRouter;
+}
+
+const FWacomFirstPersonCardInputRouter&
+AWacomPlayerController::GetFirstPersonCardInputRouter() const
+{
+	return const_cast<AWacomPlayerController*>(this)
+		->GetFirstPersonCardInputRouter();
+}
+
+bool AWacomPlayerController::TryRoutePreUiInput(
+	const FWacomFirstPersonCardInputEvent& Input)
+{
+	if (WorldShopActivityCoordinator
+		&& WorldShopActivityCoordinator->IsOwningInput()
+		&& WorldShopActivityCoordinator->RouteInputKey(Input.Key, Input.Event))
+	{
+		return true;
+	}
+	return GetFirstPersonCardInputRouter().RouteInput(Input);
+}
+
 FWacomRunFirstPersonCardDropCoordinator&
 AWacomPlayerController::GetRunFirstPersonCardDropCoordinator()
 {
@@ -830,7 +841,7 @@ AWacomPlayerController::GetRunFirstPersonCardDropCoordinator()
 		DropContext.ResolveFirstPersonCardAnchorFunc =
 			[this]()
 			{
-				return ResolveFirstPersonCardAnchorForRunMenuProbe();
+				return ResolveFirstPersonCardAnchor();
 			};
 		DropContext.ResolveRunSessionFunc =
 			[this]()
@@ -2111,7 +2122,7 @@ void AWacomPlayerController::RefreshRunFirstPersonMenuLeaseDragBinding()
 }
 
 UWacomFirstPersonCardAnchorComponent*
-AWacomPlayerController::ResolveFirstPersonCardAnchorForRunMenuProbe() const
+AWacomPlayerController::ResolveFirstPersonCardAnchor() const
 {
 	const AWacomPlayerCharacter* WacomCharacter = Cast<AWacomPlayerCharacter>(GetPawn());
 	return WacomCharacter ? WacomCharacter->GetFirstPersonCardAnchorComponent() : nullptr;
@@ -2125,58 +2136,6 @@ bool AWacomPlayerController::ShouldHandleRunFirstPersonMenuDropProbe() const
 bool AWacomPlayerController::ShouldHandleRunWorldCardDropProbe() const
 {
 	return GetRunFirstPersonCardDropCoordinator().ShouldHandleRunWorldCardDropProbe();
-}
-
-void AWacomPlayerController::PumpFirstPersonCardActiveDragPointer()
-{
-	GetRunFirstPersonCardDragController().PumpActiveDragPointer();
-}
-
-bool AWacomPlayerController::TryReleaseFirstPersonCardActiveDragPointer()
-{
-	return GetRunFirstPersonCardDragController().TryReleaseActiveDragPointer();
-}
-
-bool AWacomPlayerController::TryCancelFirstPersonCardKeyboardShortcutDrag()
-{
-	return GetRunFirstPersonCardDragController().TryCancelKeyboardShortcutActiveDrag();
-}
-
-bool AWacomPlayerController::TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut()
-{
-	return GetRunFirstPersonCardDragController().TryCancelActiveGestureForTurnBoundaryShortcut();
-}
-
-bool AWacomPlayerController::TryToggleFirstPersonCardLockedFaceInspection()
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		ResolveFirstPersonCardAnchorForRunMenuProbe();
-	return Anchor && Anchor->TryToggleFirstPersonCardLockedFace();
-}
-
-bool AWacomPlayerController::TryCloseFirstPersonCardLockedFaceInspection()
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		ResolveFirstPersonCardAnchorForRunMenuProbe();
-	return Anchor && Anchor->TryCloseFirstPersonCardLockedInspection();
-}
-
-bool AWacomPlayerController::TryRouteFirstPersonCardLockedInspectionPointerPress(
-	const FVector2D& AbsoluteScreenPosition)
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		ResolveFirstPersonCardAnchorForRunMenuProbe();
-	return Anchor
-		&& Anchor->TryRouteFirstPersonCardLockedInspectionPointerPress(
-			AbsoluteScreenPosition);
-}
-
-bool AWacomPlayerController::TryConsumeFirstPersonCardLockedInspectionPointerRelease()
-{
-	UWacomFirstPersonCardAnchorComponent* Anchor =
-		ResolveFirstPersonCardAnchorForRunMenuProbe();
-	return Anchor
-		&& Anchor->ConsumePendingFirstPersonCardLockedInspectionPointerRelease();
 }
 
 bool AWacomPlayerController::TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition)
@@ -2334,7 +2293,7 @@ void AWacomPlayerController::ApplyRunFirstPersonCardPointerCameraLookOverride(
 	}
 
 	const UWacomFirstPersonCardAnchorComponent* Anchor =
-		ResolveFirstPersonCardAnchorForRunMenuProbe();
+		ResolveFirstPersonCardAnchor();
 	if (!Anchor
 		|| !Anchor->bAllowCameraLookDuringCardPointer
 		|| Anchor->CardPointerCameraLookScale <= 0.0f)
@@ -2370,7 +2329,7 @@ void AWacomPlayerController::ApplyRunFirstPersonCardDragCameraLookOverride(
 	}
 
 	const UWacomFirstPersonCardAnchorComponent* Anchor =
-		ResolveFirstPersonCardAnchorForRunMenuProbe();
+		ResolveFirstPersonCardAnchor();
 	if (!Anchor
 		|| !Anchor->bAllowCameraLookDuringCardDrag
 		|| Anchor->CardDragCameraLookScale <= 0.0f)
@@ -2420,31 +2379,17 @@ void AWacomPlayerController::ClearRunWorldCardDropProbe()
 	GetRunFirstPersonCardDropCoordinator().ClearRunWorldCardDropProbe();
 }
 
-void AWacomPlayerController::RouteHandIndex(int32 OneBasedIndex)
-{
-	UBattleHUD* HUD = GetActiveBattleHUD();
-	if (!HUD) { return; }
-
-	TOptional<FVector2D> PointerWidgetPosition;
-	FVector2D MouseWidgetPosition = FVector2D::ZeroVector;
-	if (TryGetMouseWidgetPosition(MouseWidgetPosition))
-	{
-		PointerWidgetPosition = MouseWidgetPosition;
-	}
-	HUD->TryStartFirstPersonBattleHandDragByIndex(OneBasedIndex, PointerWidgetPosition);
-}
-
-void AWacomPlayerController::OnPlayCard1() { RouteHandIndex(1); }
-void AWacomPlayerController::OnPlayCard2() { RouteHandIndex(2); }
-void AWacomPlayerController::OnPlayCard3() { RouteHandIndex(3); }
-void AWacomPlayerController::OnPlayCard4() { RouteHandIndex(4); }
-void AWacomPlayerController::OnPlayCard5() { RouteHandIndex(5); }
-void AWacomPlayerController::OnPlayCard6() { RouteHandIndex(6); }
-void AWacomPlayerController::OnPlayCard7() { RouteHandIndex(7); }
+void AWacomPlayerController::OnPlayCard1() { GetFirstPersonCardInputRouter().TryStartBattleHandShortcut(1); }
+void AWacomPlayerController::OnPlayCard2() { GetFirstPersonCardInputRouter().TryStartBattleHandShortcut(2); }
+void AWacomPlayerController::OnPlayCard3() { GetFirstPersonCardInputRouter().TryStartBattleHandShortcut(3); }
+void AWacomPlayerController::OnPlayCard4() { GetFirstPersonCardInputRouter().TryStartBattleHandShortcut(4); }
+void AWacomPlayerController::OnPlayCard5() { GetFirstPersonCardInputRouter().TryStartBattleHandShortcut(5); }
+void AWacomPlayerController::OnPlayCard6() { GetFirstPersonCardInputRouter().TryStartBattleHandShortcut(6); }
+void AWacomPlayerController::OnPlayCard7() { GetFirstPersonCardInputRouter().TryStartBattleHandShortcut(7); }
 
 void AWacomPlayerController::OnWaitPressed()
 {
-	if (TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut())
+	if (GetFirstPersonCardInputRouter().TryCancelForTurnBoundary())
 	{
 		return;
 	}
@@ -2454,7 +2399,7 @@ void AWacomPlayerController::OnWaitPressed()
 
 void AWacomPlayerController::OnEndTurnPressed()
 {
-	if (TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut())
+	if (GetFirstPersonCardInputRouter().TryCancelForTurnBoundary())
 	{
 		return;
 	}
@@ -2723,14 +2668,6 @@ bool AWacomPlayerController::RequestOpenShop(
 bool AWacomPlayerController::IsWorldShopActive() const
 {
 	return WorldShopActivityCoordinator && WorldShopActivityCoordinator->IsActive();
-}
-
-bool AWacomPlayerController::TryRouteWorldShopPointerInput(EInputEvent Event)
-{
-	return (Event == IE_Pressed || Event == IE_Released)
-		&& WorldShopActivityCoordinator
-		&& WorldShopActivityCoordinator->IsOwningInput()
-		&& WorldShopActivityCoordinator->RouteInputKey(EKeys::LeftMouseButton, Event);
 }
 
 void AWacomPlayerController::CloseWorldShop()
