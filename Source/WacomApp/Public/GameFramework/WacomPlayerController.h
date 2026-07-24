@@ -412,6 +412,18 @@ protected:
 	void HandleRunFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleRunFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleRunFirstPersonCardLayerFaceInspectLocked(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleRunFirstPersonCardLayerFaceChanged(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleRunFirstPersonCardLayerFaceInspectClosed(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	virtual UWacomAppToastSubsystem* ResolveAppToastSubsystem() const;
 
 	/** 按当前候选对象计算显示的交互提示文案。 */
@@ -521,6 +533,10 @@ private:
 	bool BuildRunFirstPersonCardDetailViewData(
 		const FGuid& CardInstanceId,
 		FWacomCardDetailViewData& OutDetailData) const;
+	bool BuildRunFirstPersonCardDetailViewData(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		FWacomCardDetailViewData& OutDetailData) const;
 	void PrewarmRunFirstPersonCardDetailPanel();
 	void RefreshRunFirstPersonCardDetailBinding();
 	void HideRunFirstPersonCardDetailPanel();
@@ -533,6 +549,11 @@ private:
 	bool TryReleaseFirstPersonCardActiveDragPointer();
 	bool TryCancelFirstPersonCardKeyboardShortcutDrag();
 	bool TryCancelFirstPersonCardActiveGestureForTurnBoundaryShortcut();
+	bool TryToggleFirstPersonCardLockedFaceInspection();
+	bool TryCloseFirstPersonCardLockedFaceInspection();
+	bool TryRouteFirstPersonCardLockedInspectionPointerPress(
+		const FVector2D& AbsoluteScreenPosition);
+	bool TryConsumeFirstPersonCardLockedInspectionPointerRelease();
 	FWacomWorldShopActivityCoordinator& GetWorldShopActivityCoordinator();
 	bool TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition);
 	UWacomFirstPersonCardAnchorComponent* ResolveFirstPersonCardAnchorForRunMenuProbe() const;

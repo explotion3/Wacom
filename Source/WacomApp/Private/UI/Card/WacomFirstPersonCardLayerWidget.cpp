@@ -10,6 +10,7 @@
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Framework/Application/SlateUser.h"
+#include "InputCoreTypes.h"
 #include "Rendering/DrawElements.h"
 #include "UI/Card/WacomCardView.h"
 #include "UI/Card/WacomFirstPersonCardLayerConfigUtils.h"
@@ -108,6 +109,13 @@ namespace
 	{
 		return A.CardInstanceId == B.CardInstanceId
 			&& AreFirstPersonCardViewDataEquivalent(A.CardViewData, B.CardViewData)
+			&& A.DefaultFaceContext == B.DefaultFaceContext
+			&& A.bHasAlternateFace == B.bHasAlternateFace
+			&& (!A.bHasAlternateFace
+				|| AreFirstPersonCardViewDataEquivalent(
+					A.AlternateFaceCardViewData,
+					B.AlternateFaceCardViewData))
+			&& A.bAllowLockedFaceInspection == B.bAllowLockedFaceInspection
 			&& A.Zone == B.Zone
 			&& A.bIsHandAnchor == B.bIsHandAnchor
 			&& A.bIsPlayable == B.bIsPlayable
@@ -462,6 +470,14 @@ bool UWacomFirstPersonCardLayerWidget::ReleaseActiveDragGestureFromWidgetPositio
 		return false;
 	}
 
+	// Locked inspection owns pointer presses as view-only face toggles. The
+	// matching release must not enter the normal drag-release path, which would
+	// clear the gesture and accidentally close the inspection.
+	if (GestureSlot->IsLockedFaceInspectionActive())
+	{
+		return true;
+	}
+
 	const bool bSuppressHoverAfterRelease = ShouldSuppressOrdinaryHoverForDrag();
 	const bool bSuppressInspectDragPromotion =
 		GestureSlot->IsInspectScrubActiveForFirstPersonLayer()
@@ -496,7 +512,8 @@ bool UWacomFirstPersonCardLayerWidget::ReleaseActiveDragGestureAtCurrentPointer(
 
 bool UWacomFirstPersonCardLayerWidget::IsCardDragGestureActive() const
 {
-	return FindActiveGestureSlot() != nullptr;
+	const UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	return GestureSlot && !GestureSlot->IsLockedFaceInspectionActive();
 }
 
 bool UWacomFirstPersonCardLayerWidget::IsKeyboardShortcutCardDragGestureActive() const
@@ -504,6 +521,54 @@ bool UWacomFirstPersonCardLayerWidget::IsKeyboardShortcutCardDragGestureActive()
 	return IsCardDragGestureActive()
 		&& CurrentDragView.GestureSource
 			== EWacomFirstPersonCardGestureSource::KeyboardShortcut;
+}
+
+bool UWacomFirstPersonCardLayerWidget::IsLockedCardInspectionActive() const
+{
+	const UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	return GestureSlot && GestureSlot->IsLockedFaceInspectionActive();
+}
+
+bool UWacomFirstPersonCardLayerWidget::TryToggleLockedCardFace()
+{
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	return GestureSlot && GestureSlot->TryToggleLockedFaceInspection();
+}
+
+bool UWacomFirstPersonCardLayerWidget::TryCloseLockedCardInspection()
+{
+	UWacomFirstPersonCardLayerSlotWidget* GestureSlot = FindActiveGestureSlot();
+	return GestureSlot && GestureSlot->CloseLockedFaceInspection();
+}
+
+bool UWacomFirstPersonCardLayerWidget::TryRouteLockedCardInspectionPointerPress(
+	const FVector2D& AbsoluteScreenPosition)
+{
+	if (!IsLockedCardInspectionActive())
+	{
+		return false;
+	}
+
+	FVector2D WidgetPosition = FVector2D::ZeroVector;
+	if (ResolveAbsoluteScreenPositionToWidgetPosition(
+			AbsoluteScreenPosition,
+			WidgetPosition))
+	{
+		RoutePointerPressToActiveGesture(WidgetPosition);
+	}
+	else
+	{
+		TryCloseLockedCardInspection();
+		bConsumeNextPointerReleaseAfterLockedClose = true;
+	}
+	return true;
+}
+
+bool UWacomFirstPersonCardLayerWidget::ConsumePendingLockedInspectionPointerRelease()
+{
+	const bool bShouldConsume = bConsumeNextPointerReleaseAfterLockedClose;
+	bConsumeNextPointerReleaseAfterLockedClose = false;
+	return bShouldConsume;
 }
 
 void UWacomFirstPersonCardLayerWidget::ClearSlotMotionState()
@@ -1783,6 +1848,9 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	OnCardTargetHoveredNative.Clear();
 	OnCardTargetUnhoveredNative.Clear();
 	OnHoveredCardTargetUpdatedNative.Clear();
+	OnCardFaceInspectLockedNative.Clear();
+	OnCardFaceChangedNative.Clear();
+	OnCardFaceInspectClosedNative.Clear();
 	OnEnterTransitionStartedNative.Clear();
 	OnPileTransferProgressNative.Clear();
 	if (PileTransferWidget)
@@ -1803,6 +1871,7 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	PendingTransitionHintsByKey.Reset();
 	PlayedPileTransferKeys.Reset();
 	DeferredPileTransferHints.Reset();
+	bConsumeNextPointerReleaseAfterLockedClose = false;
 	Super::NativeDestruct();
 }
 
@@ -1818,6 +1887,19 @@ void UWacomFirstPersonCardLayerWidget::NativeTick(
 	}
 	LastMotionDebugView.OutgoingFinishedThisUpdate += RemoveOutgoingFinishedSlots();
 	RefreshSlotMotionDebugCounts();
+}
+
+FReply UWacomFirstPersonCardLayerWidget::NativeOnMouseButtonDown(
+	const FGeometry& InGeometry,
+	const FPointerEvent& InMouseEvent)
+{
+	if (InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton
+		&& TryRouteLockedCardInspectionPointerPress(
+			InMouseEvent.GetScreenSpacePosition()))
+	{
+		return FReply::Handled();
+	}
+	return Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
 }
 
 int32 UWacomFirstPersonCardLayerWidget::NativePaint(
@@ -2053,6 +2135,9 @@ void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayer
 	SlotWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	SlotWidget->OnCardDragReleasedNative.RemoveAll(this);
 	SlotWidget->OnCardDragCancelledNative.RemoveAll(this);
+	SlotWidget->OnCardFaceInspectLockedNative.RemoveAll(this);
+	SlotWidget->OnCardFaceChangedNative.RemoveAll(this);
+	SlotWidget->OnCardFaceInspectClosedNative.RemoveAll(this);
 	SlotWidget->OnEnterTransitionStartedNative.RemoveAll(this);
 	SlotWidget->SetOwningFirstPersonCardLayer(this);
 	SlotWidget->OnCardHoveredNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotHovered);
@@ -2070,6 +2155,15 @@ void UWacomFirstPersonCardLayerWidget::BindSlotWidget(UWacomFirstPersonCardLayer
 	SlotWidget->OnCardDragUpdatedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragUpdated);
 	SlotWidget->OnCardDragReleasedNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragReleased);
 	SlotWidget->OnCardDragCancelledNative.AddUObject(this, &UWacomFirstPersonCardLayerWidget::HandleSlotDragCancelled);
+	SlotWidget->OnCardFaceInspectLockedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardLayerWidget::HandleSlotFaceInspectLocked);
+	SlotWidget->OnCardFaceChangedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardLayerWidget::HandleSlotFaceChanged);
+	SlotWidget->OnCardFaceInspectClosedNative.AddUObject(
+		this,
+		&UWacomFirstPersonCardLayerWidget::HandleSlotFaceInspectClosed);
 	SlotWidget->OnEnterTransitionStartedNative.AddUObject(
 		this,
 		&UWacomFirstPersonCardLayerWidget::HandleSlotEnterTransitionStarted);
@@ -2095,6 +2189,9 @@ void UWacomFirstPersonCardLayerWidget::UnbindSlotWidget(UWacomFirstPersonCardLay
 	SlotWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	SlotWidget->OnCardDragReleasedNative.RemoveAll(this);
 	SlotWidget->OnCardDragCancelledNative.RemoveAll(this);
+	SlotWidget->OnCardFaceInspectLockedNative.RemoveAll(this);
+	SlotWidget->OnCardFaceChangedNative.RemoveAll(this);
+	SlotWidget->OnCardFaceInspectClosedNative.RemoveAll(this);
 	SlotWidget->OnEnterTransitionStartedNative.RemoveAll(this);
 	SlotWidget->SetOwningFirstPersonCardLayer(nullptr);
 }
@@ -3182,6 +3279,14 @@ UWacomFirstPersonCardLayerWidget::RouteSlotPointerReleasedAtWidgetPosition(
 		return FWacomFirstPersonCardPointerRouteResult::Unhandled();
 	}
 
+	// A card-body press while locked may start a local face transition, but it
+	// does not acquire mouse capture or become a gameplay drag. Consume its
+	// release without asking the slot to release the persistent inspect state.
+	if (GestureSlot->IsLockedFaceInspectionActive())
+	{
+		return FWacomFirstPersonCardPointerRouteResult::Handled();
+	}
+
 	const bool bSuppressHoverAfterRelease = ShouldSuppressOrdinaryHoverForDrag();
 	const bool bSuppressInspectDragPromotion =
 		GestureSlot->IsInspectScrubActiveForFirstPersonLayer()
@@ -3234,6 +3339,20 @@ bool UWacomFirstPersonCardLayerWidget::RoutePointerPressToActiveGesture(
 	if (!GestureSlot)
 	{
 		return false;
+	}
+
+	if (GestureSlot->IsLockedFaceInspectionActive())
+	{
+		if (GestureSlot->IsWidgetPositionInsideCardBodyForFirstPersonLayer(WidgetPosition))
+		{
+			GestureSlot->TryToggleLockedFaceInspection();
+		}
+		else
+		{
+			GestureSlot->CloseLockedFaceInspection();
+		}
+		bConsumeNextPointerReleaseAfterLockedClose = true;
+		return true;
 	}
 
 	const bool bSuppressInspectDragPromotion =
@@ -3586,6 +3705,31 @@ void UWacomFirstPersonCardLayerWidget::HandleSlotDragCancelled(
 		}
 	}
 	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UWacomFirstPersonCardLayerWidget::HandleSlotFaceInspectLocked(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	CurrentDragView = FWacomFirstPersonCardDragView();
+	OnCardFaceInspectLockedNative.Broadcast(CardInstanceId, FaceContext, SlotView);
+}
+
+void UWacomFirstPersonCardLayerWidget::HandleSlotFaceChanged(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	OnCardFaceChangedNative.Broadcast(CardInstanceId, FaceContext, SlotView);
+}
+
+void UWacomFirstPersonCardLayerWidget::HandleSlotFaceInspectClosed(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	OnCardFaceInspectClosedNative.Broadcast(CardInstanceId, FaceContext, SlotView);
 }
 
 void UWacomFirstPersonCardLayerWidget::HandleSlotEnterTransitionStarted(

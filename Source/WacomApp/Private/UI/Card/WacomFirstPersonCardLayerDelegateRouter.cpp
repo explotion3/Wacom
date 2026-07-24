@@ -36,6 +36,15 @@ void FWacomFirstPersonCardLayerDelegateRouter::Bind(UWacomFirstPersonCardLayerWi
 	LayerWidget->OnCardDragUpdatedNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandleDragUpdated);
 	LayerWidget->OnCardDragReleasedNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandleDragReleased);
 	LayerWidget->OnCardDragCancelledNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandleDragCancelled);
+	LayerWidget->OnCardFaceInspectLockedNative.AddRaw(
+		this,
+		&FWacomFirstPersonCardLayerDelegateRouter::HandleFaceInspectLocked);
+	LayerWidget->OnCardFaceChangedNative.AddRaw(
+		this,
+		&FWacomFirstPersonCardLayerDelegateRouter::HandleFaceChanged);
+	LayerWidget->OnCardFaceInspectClosedNative.AddRaw(
+		this,
+		&FWacomFirstPersonCardLayerDelegateRouter::HandleFaceInspectClosed);
 	LayerWidget->OnCardPointerMovedNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandlePointerMoved);
 	LayerWidget->OnCardPointerLeftNative.AddRaw(this, &FWacomFirstPersonCardLayerDelegateRouter::HandlePointerLeft);
 	LayerWidget->OnEnterTransitionStartedNative.AddRaw(
@@ -63,6 +72,9 @@ void FWacomFirstPersonCardLayerDelegateRouter::Unbind(UWacomFirstPersonCardLayer
 	LayerWidget->OnCardDragUpdatedNative.RemoveAll(this);
 	LayerWidget->OnCardDragReleasedNative.RemoveAll(this);
 	LayerWidget->OnCardDragCancelledNative.RemoveAll(this);
+	LayerWidget->OnCardFaceInspectLockedNative.RemoveAll(this);
+	LayerWidget->OnCardFaceChangedNative.RemoveAll(this);
+	LayerWidget->OnCardFaceInspectClosedNative.RemoveAll(this);
 	LayerWidget->OnCardPointerMovedNative.RemoveAll(this);
 	LayerWidget->OnCardPointerLeftNative.RemoveAll(this);
 	LayerWidget->OnEnterTransitionStartedNative.RemoveAll(this);
@@ -210,6 +222,39 @@ void FWacomFirstPersonCardLayerDelegateRouter::HandleDragCancelled(
 	if (Callbacks.DragCancelled)
 	{
 		Callbacks.DragCancelled(CardInstanceId, DragView);
+	}
+}
+
+void FWacomFirstPersonCardLayerDelegateRouter::HandleFaceInspectLocked(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (Callbacks.FaceInspectLocked)
+	{
+		Callbacks.FaceInspectLocked(CardInstanceId, FaceContext, SlotView);
+	}
+}
+
+void FWacomFirstPersonCardLayerDelegateRouter::HandleFaceChanged(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (Callbacks.FaceChanged)
+	{
+		Callbacks.FaceChanged(CardInstanceId, FaceContext, SlotView);
+	}
+}
+
+void FWacomFirstPersonCardLayerDelegateRouter::HandleFaceInspectClosed(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (Callbacks.FaceInspectClosed)
+	{
+		Callbacks.FaceInspectClosed(CardInstanceId, FaceContext, SlotView);
 	}
 }
 

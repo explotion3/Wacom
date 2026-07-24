@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-battle-ui
 status: active
-updated: 2026-07-23
+updated: 2026-07-24
 tags:
   - wacom/ui
   - wacom/battle
@@ -241,6 +241,10 @@ Battle / Run 共用的 first-person Slot 不再执行单卡视口底边钳制。
 Battle hand 与 Run hand 共用 App-private `FWacomFirstPersonCardPresentationScalePolicy`。全局 UI 仍参照 `1920 × 1080`，但 first-person 卡牌表现参照 `2560 × 1440`：720p 目标物理倍率 `0.5`、1080p 为 `0.75`、1440p 及以上封顶 `1.0`。倍率由 Anchor 写入 resolved runtime config 与 Slot view；BattleHUD 不自行计算或覆盖。卡牌 `296 × 420` 主体、手牌布局、语义转场、反馈位移、Aim Arrow 和 Card Glyph Transfer 使用同一局部空间倍率，时序和输入阈值不变。
 
 First-person hand 卡面和 first-person viewport 详情都从 `FHandCardSnapshot` 派生 `FWacomCardPresentationRuntimeContext`，再交给 `UWacomCardPresentationBuilder` 生成 ViewData。基础 runtime context 覆盖本场 `RuntimeCost` 与 `bIsPlayable`：卡面 Cost、disabled overlay、RuntimeCost-based 效果徽章和详情 `Sections` 会显示当前战斗事实；`Magnitude.Source.RuntimeCost` 一类数值来源会在 value run 中保留“相当于当前费用”等来源短语。详情面板正式渲染来源是 `FWacomCardDetailViewData.Sections`：Builder 按卡牌详情文档顺序组装 section，App-private `WacomCardExplanationCompiler` 从效果 / 被动 tag、runtime preview 和 `UWacomCardExplanationLexicon` 编译语义 `Blocks / Runs`；`UWacomCardDetailPanel` 只按 section 顺序渲染，不再按原始 `Passive.DisplayText` 或 token kind 推断分区。旧平行 `Description`、`ChangeLines`、`PassiveLines`、`TaskLines`、扁平 `TokenLines` 和旧 token flow 已从详情合同删除；`UCardDefinition::Description` 仅在该卡没有任何结构化详情 section 时作为普通正文回退，不解析旧 `{Effect.0}` 占位。费用变化、目标手牌 cost preview、被动正文和后续任务 / 预览内容都应反映到对应卡面数值或正式 `Sections` document。Battle 详情的数据来源和 source guard 仍由 `FWacomBattleHUDCardDetailController` 负责；预热、详情数据缓存、淡入淡出 / scale / follow motion 和稳定换边由 App-private `FWacomFirstPersonCardDetailMotionController` 与 Run first-person 详情共用。
+
+`UWacomCardPresentationBuilder` 现有无 Face Context 入口和现有 `RuntimeContext` 重载永久默认 `EWacomCardFaceContext::Battle`，确保 Backpack / Pile / Shop 等旧调用行为不变。显式 `BuildCardViewDataForFace / BuildCardDetailViewDataForFace` 及 C++ 的 `FaceContext + RuntimeContext` 路径可以投影同一 Definition 的 RunFace：Run 卡面名称 / 插画 / 深度图优先使用 Run override 并回退共享字段，`TypeText=探索`，只展示 RunFace 描述，隐藏 Battle Cost、Physique、Durability、Value、EffectBadge 与战斗 preview；Run runtime context 只读取 `bIsPlayable`。Battle hand entry 的默认 ViewData 始终保留实时费用、可用性和目标 preview，启用 RunFace 时附带静态 Run alternate；Run default hand 反向以 Run 为默认、静态 Battle 为 alternate，旧卡回退 Battle。Run menu lease 只采用 RunFace 优先显示，不开放锁定翻面。
+
+双面卡长按进入既有 `Inspecting` 后，按住期间移出 scrub 区仍可升级为正式拖拽；在检视区内松开才进入追加枚举值 `InspectLocked`。锁定态只允许单击卡体、`Tab` 或手柄 `RB/R1` 翻面；点击卡外、`Escape` 或手柄 `B` 关闭，外部点击的配对 release 被一次性消费，不能穿透到另一张卡或世界交互。翻面只修改卡槽内 CardView 的局部 X scale / opacity：Full Motion 约 `0.22s`，压缩到 `0.06` 并在中点替换 ViewData；Simplified Motion 约 `0.10s` 淡出换面。播放输入有单次 gate，不排队；同一卡牌的 hover、投影和布局刷新只更新检视基准，不关闭或送回手牌；source 切换、重新入场、正式拖拽、Battle/Run 交接、菜单接管、卡牌消失和 teardown 才恢复环境默认面与局部 Transform。详情按当前面按需重建并追加“单击卡牌 / Tab / RB 查看另一面”提示。该状态不生成 Battle command、Run drop 或规则事务，WBP 与 `UWacomCardDetailPanel` 仍只消费 ViewData。
 
 First-person 详情面板的 viewport 生命周期由 `FWacomFirstPersonCardDetailPanelHost` 统一处理：只有拥有真实 local player / LocalPlayer 的 context 才允许 `AddToViewport`，HUD-only 自动化或离屏预热只构建面板对象并验证 ViewData / motion state。详情面板内部的 section 动态创建收口在 App-private `WacomCardDetailWidgetFactory`；section 内正文由 `UWacomCardDetailRichTextBlock` 渲染 RichText，并自动注册详情 inline icon decorator。战斗详情与背包详情共用 `CardDetailTheme.StatusBrushes / IconBrushes`：它仍独占 RichText inline icon 的排版主题；状态中文名统一读取 `UWacomBattleStatusPresentationCatalog`，不再由 `UWacomCardExplanationLexicon.TagDisplayNames` 重复制作。显式 `{icon:EffectIcon}` 才显示效果图标。详情 Widget 不应直接用 `GetWorld()` 判断创建路径，避免无 World 的离屏场景污染日志。
 

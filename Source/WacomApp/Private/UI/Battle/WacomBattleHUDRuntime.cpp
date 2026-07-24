@@ -1514,6 +1514,39 @@ void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerDragCancelled(
 	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
 }
 
+void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerFaceInspectLocked(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetEnemyInspectionCoordinator().CloseInspection(true);
+	GetFirstPersonHandBridge().HandleFaceInspectLocked(
+		CardInstanceId,
+		FaceContext,
+		SlotView);
+	RefreshStatusInspectionInteraction();
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
+}
+
+void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerFaceChanged(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetFirstPersonHandBridge().HandleFaceChanged(
+		CardInstanceId,
+		FaceContext,
+		SlotView);
+}
+
+void FWacomBattleHUDRuntime::HandleFirstPersonCardLayerFaceInspectClosed(
+	const FGuid& CardInstanceId)
+{
+	GetFirstPersonHandBridge().HandleFaceInspectClosed(CardInstanceId);
+	RefreshStatusInspectionInteraction();
+	GetSceneEnemyTargetCoordinator().RefreshEnemyPanelInspectionInteraction();
+}
+
 void FWacomBattleHUDRuntime::RefreshStatusInspectionInteraction()
 {
 	const bool bBattleStillActive = GetSession()

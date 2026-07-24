@@ -32,6 +32,10 @@
 
 namespace
 {
+	constexpr float FullFaceFlipDurationSeconds = 0.22f;
+	constexpr float ReducedFaceFlipDurationSeconds = 0.10f;
+	constexpr float FullFaceFlipMinimumHorizontalScale = 0.06f;
+
 	bool IsCardTargetFocusFeedbackState(EWacomFirstPersonCardDragTargetFeedbackState FeedbackState)
 	{
 		return FeedbackState == EWacomFirstPersonCardDragTargetFeedbackState::CardProbe
@@ -215,6 +219,12 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotView(const FWacomFirstPersonCa
 void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	const FWacomFirstPersonCardLayerSlotView& InSlotView)
 {
+	const bool bPreserveLockedInspection =
+		CanPreserveLockedInspectionForSlotRefresh(InSlotView, false);
+	if (IsLockedFaceInspectionActive() && !bPreserveLockedInspection)
+	{
+		ClearGestureState(false);
+	}
 	const bool bCardIdentityChanged =
 		CurrentSlotView.Entry.CardInstanceId != InSlotView.Entry.CardInstanceId;
 	const bool bResetCardDepth =
@@ -264,7 +274,11 @@ void UWacomFirstPersonCardLayerSlotWidget::SetSlotViewImmediate(
 	CurrentSlotView = InSlotView;
 	bHasVisualSlotView = true;
 	RefreshPresentationTarget(true, EWacomFirstPersonCardMotionIntent::Layout);
-	VisualSlotView = TargetSlotView;
+	if (bPreserveLockedInspection)
+	{
+		RefreshPreservedLockedInspectionTarget(InSlotView);
+	}
+	VisualSlotView = GetEffectiveTargetSlotView();
 	ActiveMotionIntent = EWacomFirstPersonCardMotionIntent::Layout;
 	bIsExitingForFirstPersonLayer = false;
 	bUsesFixedExitTransitionPlayback = false;
@@ -328,6 +342,12 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 	bool bTreatAsNewSlot,
 	const TOptional<FWacomFirstPersonCardTransitionMotionProfile>& EnterProfileOverride)
 {
+	const bool bPreserveLockedInspection =
+		CanPreserveLockedInspectionForSlotRefresh(InTargetSlotView, bTreatAsNewSlot);
+	if (IsLockedFaceInspectionActive() && !bPreserveLockedInspection)
+	{
+		ClearGestureState(false);
+	}
 	if (!SlotMotionConfig.bEnabled)
 	{
 		SetSlotViewImmediate(InTargetSlotView);
@@ -382,6 +402,10 @@ void UWacomFirstPersonCardLayerSlotWidget::BeginSlotMotionWithEnterProfile(
 
 	CurrentSlotView = InTargetSlotView;
 	TargetSlotView = IncomingPresentationSlotView;
+	if (bPreserveLockedInspection)
+	{
+		RefreshPreservedLockedInspectionTarget(InTargetSlotView);
+	}
 	ActiveMotionIntent = bTreatAsNewSlot
 		? EWacomFirstPersonCardMotionIntent::Enter
 		: ResolveMotionIntentForPresentationChange(
@@ -684,6 +708,9 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeDestruct()
 	OnCardDragUpdatedNative.Clear();
 	OnCardDragReleasedNative.Clear();
 	OnCardDragCancelledNative.Clear();
+	OnCardFaceInspectLockedNative.Clear();
+	OnCardFaceChangedNative.Clear();
+	OnCardFaceInspectClosedNative.Clear();
 	OnEnterTransitionStartedNative.Clear();
 	CardView = nullptr;
 	RootOverlay = nullptr;
@@ -715,6 +742,7 @@ void UWacomFirstPersonCardLayerSlotWidget::NativeTick(
 	{
 		UpdateGesture(InDeltaTime, GestureRuntime().CurrentScreenPosition);
 	}
+	TickFaceFlip(InDeltaTime);
 	UpdatePressedFeedback(InDeltaTime);
 	TickRetainSealPlayback(InDeltaTime);
 	TickHandTargetImpactPlayback(InDeltaTime);
@@ -880,10 +908,189 @@ void UWacomFirstPersonCardLayerSlotWidget::ApplyCurrentSlotView()
 	EnsureCardView();
 	if (CardView)
 	{
-		CardView->SetCardViewData(CurrentSlotView.Entry.CardViewData);
+		CardView->SetCardViewData(ResolveCurrentFaceCardViewData());
 		ApplyCardDepthView();
 	}
 	UpdateVisibilityForInteractionMode();
+}
+
+const FWacomCardViewData&
+UWacomFirstPersonCardLayerSlotWidget::ResolveCurrentFaceCardViewData() const
+{
+	const FWacomFirstPersonCardLayerEntry& Entry = CurrentSlotView.Entry;
+	if (IsLockedFaceInspectionActive()
+		&& Entry.bHasAlternateFace
+		&& InspectedFaceContext != Entry.DefaultFaceContext)
+	{
+		return Entry.AlternateFaceCardViewData;
+	}
+	return Entry.CardViewData;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::IsLockedFaceInspectionActive() const
+{
+	return GestureRuntime().State == EWacomFirstPersonCardGestureState::InspectLocked;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::BeginLockedFaceInspection()
+{
+	InspectedFaceContext = CurrentSlotView.Entry.DefaultFaceContext;
+	PendingFaceContext = InspectedFaceContext;
+	bFaceFlipActive = false;
+	bFaceFlipDataSwapped = false;
+	FaceFlipElapsedSeconds = 0.0f;
+	ResetFaceFlipLocalPresentation();
+	ApplyCurrentSlotView();
+	OnCardFaceInspectLockedNative.Broadcast(
+		CurrentSlotView.Entry.CardInstanceId,
+		InspectedFaceContext,
+		VisualSlotView);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::TryToggleLockedFaceInspection()
+{
+	if (!IsLockedFaceInspectionActive()
+		|| bFaceFlipActive
+		|| !CurrentSlotView.Entry.bHasAlternateFace
+		|| !CurrentSlotView.Entry.bAllowLockedFaceInspection)
+	{
+		return false;
+	}
+
+	PendingFaceContext =
+		InspectedFaceContext == CurrentSlotView.Entry.DefaultFaceContext
+			? (CurrentSlotView.Entry.DefaultFaceContext == EWacomCardFaceContext::Battle
+				? EWacomCardFaceContext::Run
+				: EWacomCardFaceContext::Battle)
+			: CurrentSlotView.Entry.DefaultFaceContext;
+	bFaceFlipActive = true;
+	bFaceFlipDataSwapped = false;
+	FaceFlipElapsedSeconds = 0.0f;
+	UpdateWantsTick();
+	return true;
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CloseLockedFaceInspection()
+{
+	if (!IsLockedFaceInspectionActive())
+	{
+		return false;
+	}
+	ClearGestureState(false);
+	return true;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::EndLockedFaceInspection(
+	const bool bBroadcastClosed)
+{
+	if (!IsLockedFaceInspectionActive())
+	{
+		return;
+	}
+
+	CancelFaceFlipAndRestoreDefault();
+	if (bBroadcastClosed)
+	{
+		OnCardFaceInspectClosedNative.Broadcast(
+			CurrentSlotView.Entry.CardInstanceId,
+			CurrentSlotView.Entry.DefaultFaceContext,
+			VisualSlotView);
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::TickFaceFlip(const float DeltaTime)
+{
+	if (!bFaceFlipActive)
+	{
+		return;
+	}
+
+	const bool bReducedMotion = InteractionFeedbackConfig.bReduceInteractionMotion;
+	const float DurationSeconds = bReducedMotion
+		? ReducedFaceFlipDurationSeconds
+		: FullFaceFlipDurationSeconds;
+	FaceFlipElapsedSeconds += FMath::Max(0.0f, DeltaTime);
+	const float Progress = FMath::Clamp(
+		FaceFlipElapsedSeconds / FMath::Max(KINDA_SMALL_NUMBER, DurationSeconds),
+		0.0f,
+		1.0f);
+	const float HalfProgress = Progress < 0.5f
+		? Progress * 2.0f
+		: (Progress - 0.5f) * 2.0f;
+
+	if (!bFaceFlipDataSwapped && Progress >= 0.5f)
+	{
+		InspectedFaceContext = PendingFaceContext;
+		bFaceFlipDataSwapped = true;
+		ApplyCurrentSlotView();
+		OnCardFaceChangedNative.Broadcast(
+			CurrentSlotView.Entry.CardInstanceId,
+			InspectedFaceContext,
+			VisualSlotView);
+	}
+
+	if (bReducedMotion)
+	{
+		const float Opacity = Progress < 0.5f
+			? FMath::Lerp(1.0f, 0.0f, HalfProgress)
+			: FMath::Lerp(0.0f, 1.0f, HalfProgress);
+		ApplyFaceFlipLocalPresentation(1.0f, Opacity);
+	}
+	else
+	{
+		const float HorizontalScale = Progress < 0.5f
+			? FMath::Lerp(1.0f, FullFaceFlipMinimumHorizontalScale, HalfProgress)
+			: FMath::Lerp(FullFaceFlipMinimumHorizontalScale, 1.0f, HalfProgress);
+		ApplyFaceFlipLocalPresentation(HorizontalScale, 1.0f);
+	}
+
+	if (Progress >= 1.0f)
+	{
+		bFaceFlipActive = false;
+		bFaceFlipDataSwapped = false;
+		FaceFlipElapsedSeconds = 0.0f;
+		ResetFaceFlipLocalPresentation();
+	}
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::CancelFaceFlipAndRestoreDefault()
+{
+	bFaceFlipActive = false;
+	bFaceFlipDataSwapped = false;
+	FaceFlipElapsedSeconds = 0.0f;
+	InspectedFaceContext = CurrentSlotView.Entry.DefaultFaceContext;
+	PendingFaceContext = InspectedFaceContext;
+	ResetFaceFlipLocalPresentation();
+	ApplyCurrentSlotView();
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ApplyFaceFlipLocalPresentation(
+	const float HorizontalScale,
+	const float Opacity)
+{
+	if (!CardView)
+	{
+		return;
+	}
+	FWidgetTransform LocalTransform;
+	LocalTransform.Scale = FVector2D(
+		FMath::Max(0.01f, HorizontalScale),
+		1.0f);
+	CardView->SetRenderTransformPivot(FVector2D(0.5f, 0.5f));
+	CardView->SetRenderTransform(LocalTransform);
+	CardView->SetRenderOpacity(FMath::Clamp(Opacity, 0.0f, 1.0f));
+	Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::ResetFaceFlipLocalPresentation()
+{
+	if (!CardView)
+	{
+		return;
+	}
+	CardView->SetRenderTransform(FWidgetTransform());
+	CardView->SetRenderOpacity(1.0f);
+	Invalidate(EInvalidateWidgetReason::Paint);
 }
 
 UWacomCardView* UWacomFirstPersonCardLayerSlotWidget::GetInnerCardView() const
@@ -1092,6 +1299,34 @@ void UWacomFirstPersonCardLayerSlotWidget::BroadcastVisualSlotUpdatedIfNeeded(
 	FWacomFirstPersonCardLayerSlotView UpdatedSlotView = CurrentVisualSlotView;
 	UpdatedSlotView.bIsHovered = true;
 	OnCardVisualSlotUpdatedNative.Broadcast(CurrentSlotView.Entry.CardInstanceId, UpdatedSlotView);
+}
+
+bool UWacomFirstPersonCardLayerSlotWidget::CanPreserveLockedInspectionForSlotRefresh(
+	const FWacomFirstPersonCardLayerSlotView& InSlotView,
+	const bool bTreatAsNewSlot) const
+{
+	const FWacomFirstPersonCardLayerEntry& CurrentEntry = CurrentSlotView.Entry;
+	const FWacomFirstPersonCardLayerEntry& IncomingEntry = InSlotView.Entry;
+	return IsLockedFaceInspectionActive()
+		&& !bTreatAsNewSlot
+		&& CurrentSlotView.bProjected
+		&& InSlotView.bProjected
+		&& IncomingEntry.CardInstanceId.IsValid()
+		&& CurrentEntry.CardInstanceId == IncomingEntry.CardInstanceId
+		&& CurrentEntry.DefaultFaceContext == IncomingEntry.DefaultFaceContext
+		&& CurrentEntry.bHasAlternateFace
+		&& IncomingEntry.bHasAlternateFace
+		&& CurrentEntry.bAllowLockedFaceInspection
+		&& IncomingEntry.bAllowLockedFaceInspection
+		&& CurrentEntry.Zone == IncomingEntry.Zone
+		&& CurrentEntry.bIsHandAnchor == IncomingEntry.bIsHandAnchor;
+}
+
+void UWacomFirstPersonCardLayerSlotWidget::RefreshPreservedLockedInspectionTarget(
+	const FWacomFirstPersonCardLayerSlotView& InSlotView)
+{
+	GestureRuntime().StartSlotView = InSlotView;
+	UpdateGestureOverrideTarget();
 }
 
 FWacomFirstPersonCardLayerSlotView UWacomFirstPersonCardLayerSlotWidget::BuildInspectOverrideSlotView() const
@@ -1625,7 +1860,8 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 	const FWacomFirstPersonCardLayerSlotView& EffectiveTargetSlotView = GetEffectiveTargetSlotView();
 	const bool bGestureActive =
 		GestureRuntime().State != EWacomFirstPersonCardGestureState::Idle
-		&& GestureRuntime().State != EWacomFirstPersonCardGestureState::Cancelled;
+		&& GestureRuntime().State != EWacomFirstPersonCardGestureState::Cancelled
+		&& GestureRuntime().State != EWacomFirstPersonCardGestureState::InspectLocked;
 	FWacomFirstPersonCardSlotPresentationActivityInput PresentationActivityInput;
 	PresentationActivityInput.bSlotExiting = bIsExitingForFirstPersonLayer;
 	const FWacomFirstPersonCardSlotPresentationActivityView PresentationActivity =
@@ -1641,6 +1877,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateWantsTick()
 			|| VisualSlotView.ZOrder != EffectiveTargetSlotView.ZOrder))
 		|| bFeedbackActive
 		|| bGestureActive
+		|| bFaceFlipActive
 		|| (DragPickupPlayback && DragPickupPlayback->IsActive())
 		|| (CardDepthMotion && CardDepthMotion->IsInMotion());
 }

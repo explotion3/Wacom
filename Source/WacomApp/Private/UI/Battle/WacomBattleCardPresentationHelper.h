@@ -59,7 +59,14 @@ namespace WacomBattleCardPresentation
 	FWacomCardDetailViewData BuildCardDetailViewData(const FHandCardSnapshot& CardSnapshot);
 	FWacomCardDetailViewData BuildCardDetailViewData(
 		const FHandCardSnapshot& CardSnapshot,
+		EWacomCardFaceContext FaceContext);
+	FWacomCardDetailViewData BuildCardDetailViewData(
+		const FHandCardSnapshot& CardSnapshot,
 		const FBattleCardTargetPreview& TargetPreview);
+	FWacomCardDetailViewData BuildCardDetailViewData(
+		const FHandCardSnapshot& CardSnapshot,
+		const FBattleCardTargetPreview& TargetPreview,
+		EWacomCardFaceContext FaceContext);
 	EWacomFirstPersonCardInteractionIntent ResolveCardLayerInteractionIntent(
 		const FHandCardSnapshot& CardSnapshot);
 	FWacomFirstPersonCardLayerEntry BuildCardLayerEntry(const FHandCardSnapshot& CardSnapshot);

@@ -315,6 +315,15 @@ void UBattleHUD::BindFirstPersonCardLayerInteractionsForRuntime(
 	Anchor.OnFirstPersonCardLayerDragCancelled.AddUObject(
 		this,
 		&UBattleHUD::HandleFirstPersonCardLayerDragCancelled);
+	Anchor.OnFirstPersonCardLayerFaceInspectLocked.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerFaceInspectLocked);
+	Anchor.OnFirstPersonCardLayerFaceChanged.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerFaceChanged);
+	Anchor.OnFirstPersonCardLayerFaceInspectClosed.AddUObject(
+		this,
+		&UBattleHUD::HandleFirstPersonCardLayerFaceInspectClosed);
 	Anchor.OnFirstPersonCardLayerPileTransferProgress.AddUObject(
 		this,
 		&UBattleHUD::HandleFirstPersonCardLayerPileTransferProgress);
@@ -338,6 +347,9 @@ void UBattleHUD::UnbindFirstPersonCardLayerInteractionsForRuntime(
 	Anchor.OnFirstPersonCardLayerDragUpdated.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerDragReleased.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerDragCancelled.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerFaceInspectLocked.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerFaceChanged.RemoveAll(this);
+	Anchor.OnFirstPersonCardLayerFaceInspectClosed.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerPileTransferProgress.RemoveAll(this);
 	Anchor.OnFirstPersonCardLayerEnterTransitionStarted.RemoveAll(this);
 }
@@ -942,6 +954,36 @@ void UBattleHUD::HandleFirstPersonCardLayerDragCancelled(
 	const FWacomFirstPersonCardDragView& DragView)
 {
 	GetBattleHUDRuntime().HandleFirstPersonCardLayerDragCancelled(CardInstanceId, DragView);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerFaceInspectLocked(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerFaceInspectLocked(
+		CardInstanceId,
+		FaceContext,
+		SlotView);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerFaceChanged(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerFaceChanged(
+		CardInstanceId,
+		FaceContext,
+		SlotView);
+}
+
+void UBattleHUD::HandleFirstPersonCardLayerFaceInspectClosed(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext /*FaceContext*/,
+	const FWacomFirstPersonCardLayerSlotView& /*SlotView*/)
+{
+	GetBattleHUDRuntime().HandleFirstPersonCardLayerFaceInspectClosed(CardInstanceId);
 }
 
 void UBattleHUD::HandleFirstPersonCardLayerPileTransferProgress(

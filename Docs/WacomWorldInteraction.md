@@ -2,7 +2,7 @@
 type: interaction-contract
 scope: wacom-world-interaction
 status: active
-updated: 2026-07-18
+updated: 2026-07-24
 tags:
   - wacom/app
   - wacom/world-interaction
@@ -102,6 +102,8 @@ Run world click / hover 使用显式 opt-in：
 失败反馈属于 App 表现层：preview 阶段只更新轻量有效 / 无效反馈；release 命中过目标且提交失败时才发 AppToast。文案优先来自 receiver failure contract，没有 receiver 可询问时由 PlayerController 提供通用配置异常 fallback。
 
 KeyChest 是当前第一条 Run world card interaction 验证入口。普通 E 键或左键点击只显示“需要钥匙 / 宝箱已打开”提示，不直接结算奖励；拖卡成功后才提交 RunSession 事务。
+
+RunFace 基础合同尚未接管这条生产路径。当前 receiver 仍按 `AllowedCardDefinitions / AllowedCardIds / RequiredKeywords` 筛选并提交既有 `RunWorldCardInteraction` 事务，不读取 `FWacomRunCardFaceDefinition::PrimaryAction`、`TargetMode` 或 `UseDisposition`。后续接入时应由 Room / target adapter 把 RunFace 动作解释为明确请求，再由 `WacomRun` 原子校验成本、目标与处置；Widget 和世界 Actor 不得自行执行 ActionTag，也不能因静态 RunFace 已存在就跳过现有事务门禁。
 
 ## §5 Battle Scene Target
 

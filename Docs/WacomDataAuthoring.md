@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-07-19
+updated: 2026-07-24
 tags:
   - wacom/data
   - wacom/authoring
@@ -178,7 +178,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 当前校验边界：
 
-- Card / EnemyPart / Enemy / EnemyBehavior / Character 校验 ID、基础数值、必填引用、数组索引、Gameplay tag 命名空间和当前 battle rule content contract。Card 的局部校验还检查下一段稀有度、同族身份、禁止卡种、结构不漂移和实际数值变化；catalog 校验负责跨资产的 CardId/链唯一性、循环、合流与分叉。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量或生成资产路径。
+- Card / EnemyPart / Enemy / EnemyBehavior / Character 校验 ID、基础数值、必填引用、数组索引、Gameplay tag 命名空间和当前 battle rule content contract。Card 的局部校验还检查下一段稀有度、同族身份、禁止卡种、结构不漂移和实际数值变化；catalog 校验负责跨资产的 CardId/链唯一性、循环、合流与分叉。`RunFace.bEnabled=false` 时不产生迁移 warning；启用后要求探索描述非空、TargetMode 非 None、PrimaryAction 使用 `Run.Card.Action.*` 具体子标签且 Magnitude 大于 0。可选 Run 深度图覆盖与共享深度图使用同一推荐纹理设置 warning。本轮不要求强化链各段的 RunFace 完整性。首批样卡固定为触须探路 `Route/Reveal`、钥匙 `WorldTarget/Unlock`、蜕壳切 `WorldTarget/Break`、几丁护片 `WorldTarget/Feed`，Magnitude 均为 1、处置均为 `ExhaustForCurrentRoom`，名称与插画使用共享 fallback。一次性迁移 Commandlet 已在保存、重载与第二次 `saved=0` 审计后删除；正式源码不提供通用资产 mutation 入口。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量或生成资产路径。
 - Enemy 校验 `PartSlotId` 必填且不重复，并在配置 `DefaultBehavior / BehaviorOverride / InitialIntentSetId` 时检查对应 phase 和 intent set 是否存在。
 - Scene Enemy Host 的诊断与写入严格分层，不属于 `WacomData` schema 或 Validator mutation。`WacomApp` 的纯 Authoring Report 只读取 Host 的 typed Part/Layer/Anchor SCS 层级与 `EnemyDefinition`；`WacomEditor` 的显式同步为缺失槽位创建纯 `USceneComponent` 的 `UWacomBattleEnemyPartComponent`、默认 `Visual_Main` Flipbook Layer 和 ImpactAnchor，从 `PartDefinition.PartId` 派生 `PartId`，并把该 Main Layer 写入唯一 `InteractionVisualLayerId`。已有 Component Transform、Paper2D 属性、Layer 与 Anchor 保留；surplus 不删除，多选共用事务，无变化不 dirty package。Builder 与同步服务不再提供 `HitBoundsExtent` 或 BoxExtent 写入。正式 interaction Sprite 使用 authored Idle/Flipbook 第一帧、`Use3DPhysics + ShrinkWrapped`、Alpha Threshold `0.30`、Detail `0.65`、Simplify Epsilon `1.5px` 与 Collision Thickness `12cm`；非 interaction typed visual 必须保持 authored `NoCollision`。Report/Validator 将缺失或歧义 ID、空稳定帧、无 BodySetup/几何、错误 thickness 和运行时 transient fallback 全部视为正式内容错误；fallback 只防止运行时软锁，不能让资产通过校验。描边父材质只由 `DShader/Material/World/M_WacomBattleEnemyPartInteractionOutline.dsm` 生成到 `/Game/DreamMaterials/World/M_WacomBattleEnemyPartInteractionOutline`；`Scripts/SetupBattleEnemyPartInteractionAssets.py` 只接线 Style 与迁移 Host/Sprite，不创建或重建手工材质图。
 - Host validator 检查重复/未知 PartSlotId、PartId mismatch、缺失视觉、重复 LayerId、Visual/Anchor 非直接子组件、多 Anchor、无效 Style 与多个 terminal clip owner。Validator、Report、Map Validate 都不生成、删除或改写组件。

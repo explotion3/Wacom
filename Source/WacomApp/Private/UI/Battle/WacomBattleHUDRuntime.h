@@ -330,6 +330,15 @@ public:
 	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerFaceInspectLocked(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerFaceChanged(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerFaceInspectClosed(const FGuid& CardInstanceId);
 	void UpdateFirstPersonCardDragTargetFeedback(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void ClearFirstPersonCardDragTargetFeedback();
 	bool IsFirstPersonCardDragActiveForBattleSceneHover() const;

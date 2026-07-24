@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Cards/WacomCardFaceTypes.h"
 #include "CoreMinimal.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 
@@ -11,9 +12,11 @@ namespace WacomCardFaceViewDataBuilder
 {
 	FWacomCardViewData BuildCardViewData(
 		const UCardDefinition* Card,
+		EWacomCardFaceContext FaceContext,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext);
 
 	TArray<FWacomCardViewEffectBadge> BuildEffectBadges(
 		const UCardDefinition* Card,
+		EWacomCardFaceContext FaceContext,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext);
 }

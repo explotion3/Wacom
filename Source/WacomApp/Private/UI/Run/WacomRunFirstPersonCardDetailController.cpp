@@ -6,6 +6,7 @@
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "UI/Card/WacomCardDetailPanel.h"
+#include "UI/Card/WacomCardFaceInspectionPresentation.h"
 #include "UI/Card/WacomFirstPersonCardDetailPanelHost.h"
 
 namespace
@@ -100,6 +101,9 @@ void FWacomRunFirstPersonCardDetailController::RefreshBinding()
 		Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&PlayerController);
 		Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&PlayerController);
 		Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&PlayerController);
+		Anchor->OnFirstPersonCardLayerFaceInspectLocked.RemoveAll(&PlayerController);
+		Anchor->OnFirstPersonCardLayerFaceChanged.RemoveAll(&PlayerController);
+		Anchor->OnFirstPersonCardLayerFaceInspectClosed.RemoveAll(&PlayerController);
 		Anchor->OnFirstPersonCardLayerCardHovered.AddUObject(
 			&PlayerController,
 			&AWacomPlayerController::HandleRunFirstPersonCardLayerCardHovered);
@@ -115,6 +119,15 @@ void FWacomRunFirstPersonCardDetailController::RefreshBinding()
 		Anchor->OnFirstPersonCardLayerPointerLeft.AddUObject(
 			&PlayerController,
 			&AWacomPlayerController::HandleRunFirstPersonCardLayerPointerLeft);
+		Anchor->OnFirstPersonCardLayerFaceInspectLocked.AddUObject(
+			&PlayerController,
+			&AWacomPlayerController::HandleRunFirstPersonCardLayerFaceInspectLocked);
+		Anchor->OnFirstPersonCardLayerFaceChanged.AddUObject(
+			&PlayerController,
+			&AWacomPlayerController::HandleRunFirstPersonCardLayerFaceChanged);
+		Anchor->OnFirstPersonCardLayerFaceInspectClosed.AddUObject(
+			&PlayerController,
+			&AWacomPlayerController::HandleRunFirstPersonCardLayerFaceInspectClosed);
 		BoundAnchor = Anchor;
 	}
 
@@ -137,6 +150,9 @@ void FWacomRunFirstPersonCardDetailController::UnbindBinding(
 	Anchor->OnFirstPersonCardLayerHoveredCardLayoutUpdated.RemoveAll(&PlayerController);
 	Anchor->OnFirstPersonCardLayerPointerMoved.RemoveAll(&PlayerController);
 	Anchor->OnFirstPersonCardLayerPointerLeft.RemoveAll(&PlayerController);
+	Anchor->OnFirstPersonCardLayerFaceInspectLocked.RemoveAll(&PlayerController);
+	Anchor->OnFirstPersonCardLayerFaceChanged.RemoveAll(&PlayerController);
+	Anchor->OnFirstPersonCardLayerFaceInspectClosed.RemoveAll(&PlayerController);
 	PlayerController.ClearRunFirstPersonCardPointerCameraLookOverride();
 	if (BoundAnchor.Get() == Anchor)
 	{
@@ -388,6 +404,32 @@ void FWacomRunFirstPersonCardDetailController::FinishInspectDetail(
 	HideForSource(CardInstanceId);
 }
 
+void FWacomRunFirstPersonCardDetailController::HandleFaceInspectLocked(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	ShowFaceInspectionDetail(CardInstanceId, FaceContext, SlotView);
+}
+
+void FWacomRunFirstPersonCardDetailController::HandleFaceChanged(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!IsInspectHeldForSource(CardInstanceId))
+	{
+		return;
+	}
+	ShowFaceInspectionDetail(CardInstanceId, FaceContext, SlotView);
+}
+
+void FWacomRunFirstPersonCardDetailController::HandleFaceInspectClosed(
+	const FGuid& CardInstanceId)
+{
+	FinishInspectDetail(CardInstanceId);
+}
+
 void FWacomRunFirstPersonCardDetailController::SetCurrentSource(
 	const FGuid& CardInstanceId,
 	EWacomRunFirstPersonCardDetailHoldReason HoldReason)
@@ -447,6 +489,36 @@ bool FWacomRunFirstPersonCardDetailController::ShowAtSlotFromRunData(
 	}
 
 	return ShowAtSlot(CardInstanceId, DetailData, SlotView, HoldReason);
+}
+
+bool FWacomRunFirstPersonCardDetailController::ShowFaceInspectionDetail(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	if (!ShouldHandleCurrentSource()
+		|| !CardInstanceId.IsValid()
+		|| !SlotView.bProjected)
+	{
+		ForceHideAll();
+		return false;
+	}
+
+	FWacomCardDetailViewData DetailData;
+	if (!PlayerController.BuildRunFirstPersonCardDetailViewData(
+			CardInstanceId,
+			FaceContext,
+			DetailData))
+	{
+		ForceHideAll();
+		return false;
+	}
+	WacomCardFaceInspectionPresentation::AppendToggleHint(DetailData);
+	return ShowAtSlot(
+		CardInstanceId,
+		DetailData,
+		SlotView,
+		EWacomRunFirstPersonCardDetailHoldReason::Inspect);
 }
 
 bool FWacomRunFirstPersonCardDetailController::ShouldShowInspectDetail(

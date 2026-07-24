@@ -660,6 +660,18 @@ private:
 	void HandleFirstPersonCardLayerDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleFirstPersonCardLayerDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFirstPersonCardLayerFaceInspectLocked(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerFaceChanged(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFirstPersonCardLayerFaceInspectClosed(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleFirstPersonCardLayerPileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void HandleFirstPersonCardLayerEnterTransitionStarted(
 		const FWacomFirstPersonCardEnterTransitionStartedView& View);

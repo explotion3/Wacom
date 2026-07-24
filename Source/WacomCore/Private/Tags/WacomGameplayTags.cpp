@@ -23,6 +23,15 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_Purple,    "Card.Rarity.Purple");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Rarity_Intrinsic, "Card.Rarity.Intrinsic");
 
+	// -------- Run.Card.Action --------
+	UE_DEFINE_GAMEPLAY_TAG(Run_Card_Action,        "Run.Card.Action");
+	UE_DEFINE_GAMEPLAY_TAG(Run_Card_Action_Reveal, "Run.Card.Action.Reveal");
+	UE_DEFINE_GAMEPLAY_TAG(Run_Card_Action_Unlock, "Run.Card.Action.Unlock");
+	UE_DEFINE_GAMEPLAY_TAG(Run_Card_Action_Break,  "Run.Card.Action.Break");
+	UE_DEFINE_GAMEPLAY_TAG(Run_Card_Action_Fix,    "Run.Card.Action.Fix");
+	UE_DEFINE_GAMEPLAY_TAG(Run_Card_Action_Ignite, "Run.Card.Action.Ignite");
+	UE_DEFINE_GAMEPLAY_TAG(Run_Card_Action_Feed,   "Run.Card.Action.Feed");
+
 	// -------- HandZone --------
 	UE_DEFINE_GAMEPLAY_TAG(HandZone_Left,  "HandZone.Left");
 	UE_DEFINE_GAMEPLAY_TAG(HandZone_Both,  "HandZone.Both");

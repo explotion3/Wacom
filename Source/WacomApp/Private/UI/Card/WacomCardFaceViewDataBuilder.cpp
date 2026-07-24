@@ -23,6 +23,17 @@ namespace WacomCardFaceViewDataBuilder
 				: Card->DisplayName;
 		}
 
+		FText GetRunCardDisplayName(const UCardDefinition* Card)
+		{
+			if (!Card)
+			{
+				return LOCTEXT("UnknownRunCardName", "未知卡牌");
+			}
+			return Card->RunFace.DisplayNameOverride.IsEmpty()
+				? GetCardDisplayName(Card)
+				: Card->RunFace.DisplayNameOverride;
+		}
+
 		FString ShortGameplayTagName(const FGameplayTag& Tag)
 		{
 			FString TagName = Tag.GetTagName().ToString();
@@ -260,8 +271,32 @@ namespace WacomCardFaceViewDataBuilder
 
 	FWacomCardViewData BuildCardViewData(
 		const UCardDefinition* Card,
+		EWacomCardFaceContext FaceContext,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext)
 	{
+		if (FaceContext == EWacomCardFaceContext::Run)
+		{
+			FWacomCardViewData Data;
+			Data.Name = GetRunCardDisplayName(Card);
+			Data.TypeText = LOCTEXT("RunCardType", "探索");
+			Data.Description = Card ? Card->RunFace.Description : FText::GetEmpty();
+			Data.bShowCost = false;
+			Data.Art = Card && Card->RunFace.IllustrationOverride
+				? Card->RunFace.IllustrationOverride
+				: (Card ? Card->CardIllustration : nullptr);
+			Data.ArtDepthMap = Card && Card->RunFace.IllustrationDepthMapOverride
+				? Card->RunFace.IllustrationDepthMapOverride
+				: (Card ? Card->CardIllustrationDepthMap : nullptr);
+			Data.Rarity = Card ? Card->Rarity : FGameplayTag();
+			Data.bShowValue = false;
+			Data.bShowPhysique = false;
+			Data.bShowDurability = false;
+			Data.bDisabled = !Card
+				|| !Card->HasEnabledRunFace()
+				|| (RuntimeContext.bHasPlayableState && !RuntimeContext.bIsPlayable);
+			return Data;
+		}
+
 		FWacomCardViewData Data;
 		Data.Name = GetCardDisplayName(Card);
 		Data.TypeText = BuildTypeLine(Card);
@@ -289,7 +324,10 @@ namespace WacomCardFaceViewDataBuilder
 			Data.Durability = 0;
 			Data.bShowDurability = false;
 		}
-		Data.EffectBadges = BuildEffectBadges(Card, RuntimeContext);
+		Data.EffectBadges = BuildEffectBadges(
+			Card,
+			EWacomCardFaceContext::Battle,
+			RuntimeContext);
 		if (RuntimeContext.bHasPlayableState)
 		{
 			Data.bDisabled = !RuntimeContext.bIsPlayable;
@@ -299,10 +337,11 @@ namespace WacomCardFaceViewDataBuilder
 
 	TArray<FWacomCardViewEffectBadge> BuildEffectBadges(
 		const UCardDefinition* Card,
+		EWacomCardFaceContext FaceContext,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext)
 	{
 		TArray<FWacomCardViewEffectBadge> Badges;
-		if (!Card)
+		if (!Card || FaceContext == EWacomCardFaceContext::Run)
 		{
 			return Badges;
 		}

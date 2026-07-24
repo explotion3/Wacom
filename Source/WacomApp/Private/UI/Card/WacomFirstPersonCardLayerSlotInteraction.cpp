@@ -666,6 +666,17 @@ bool UWacomFirstPersonCardLayerSlotWidget::ReleaseGesture(
 	UpdateGesture(0.0f, ScreenPosition, bSuppressInspectDragPromotion, false);
 
 	const EWacomFirstPersonCardGestureState ReleaseState = GestureRuntime().State;
+	if (ReleaseState == EWacomFirstPersonCardGestureState::Inspecting
+		&& bSuppressInspectDragPromotion
+		&& CurrentSlotView.Entry.bHasAlternateFace
+		&& CurrentSlotView.Entry.bAllowLockedFaceInspection)
+	{
+		SetPressedForFirstPersonLayer(false);
+		SetGestureState(EWacomFirstPersonCardGestureState::InspectLocked, false);
+		BeginLockedFaceInspection();
+		UpdateWantsTick();
+		return true;
+	}
 	// Release delegates synchronously submit commands and may refresh the entire
 	// card layer. Capture the semantic outcome before broadcasting so that a
 	// successful refresh cannot clear GestureRuntime().bTargetValid and turn acceptance
@@ -776,6 +787,7 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGestureOverrideTarget()
 	switch (GestureRuntime().State)
 	{
 	case EWacomFirstPersonCardGestureState::Inspecting:
+	case EWacomFirstPersonCardGestureState::InspectLocked:
 		GestureRuntime().OverrideTargetSlotView = BuildInspectOverrideSlotView();
 		break;
 	case EWacomFirstPersonCardGestureState::DraggingNoTargetCard:
@@ -793,8 +805,13 @@ void UWacomFirstPersonCardLayerSlotWidget::UpdateGestureOverrideTarget()
 
 void UWacomFirstPersonCardLayerSlotWidget::ClearGestureState(bool bBroadcastCancel)
 {
+	const bool bWasLocked = IsLockedFaceInspectionActive();
 	const bool bHadGesture = GestureController->IsActive();
-	if (bHadGesture && bBroadcastCancel)
+	if (bWasLocked)
+	{
+		EndLockedFaceInspection(true);
+	}
+	if (bHadGesture && bBroadcastCancel && !bWasLocked)
 	{
 		BroadcastDragCancelled();
 	}

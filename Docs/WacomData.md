@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-07-19
+updated: 2026-07-24
 tags:
   - wacom/data
   - wacom/dataasset
@@ -53,7 +53,7 @@ WacomCore <- WacomData <- WacomBattle <- WacomRun <- WacomApp
 
 | 类型 | 位置 / 主要头文件 | 静态语义 | 运行时 owner |
 |---|---|---|---|
-| `UCardDefinition` | `Source/WacomData/Public/Cards` | 卡牌 ID、文案、费用、关键词、目标模式、效果、被动和身材 | Battle 创建 runtime card；Run 保存玩家持有卡牌实例 |
+| `UCardDefinition` | `Source/WacomData/Public/Cards` | 共享卡牌身份、Battle Face v1 字段与可选 RunFace 探索表面 | Battle 创建 runtime card；Run 保存玩家持有卡牌实例 |
 | `UEnemyDefinition` | `Source/WacomData/Public/Enemies` | 敌人由哪些部位组成、默认行为资产和部位行为绑定 | Battle 初始化敌人 runtime state |
 | `UEnemyPartDefinition` | `Source/WacomData/Public/Enemies` | 部位 HP、经验、Aid/Destroy 分支奖励与 legacy 兼容来源 | Battle 执行部位行动和击倒选择 |
 | `UEnemyBehaviorDefinition` | `Source/WacomData/Public/Enemies` | 敌人 phase、intent set、selector rule 和意图候选 | Battle 刷新并执行敌方部位当前意图 |
@@ -83,6 +83,7 @@ class UCardDefinition : public UPrimaryDataAsset
     FText Description;
     TObjectPtr<UTexture2D> CardIllustration;
     TObjectPtr<UTexture2D> CardIllustrationDepthMap;
+    FWacomRunCardFaceDefinition RunFace;
     int32 BaseCost = 0;
     FGameplayTag Rarity;
     FGameplayTagContainer Keywords;
@@ -106,6 +107,7 @@ class UCardDefinition : public UPrimaryDataAsset
 | `DisplayName / Description` | UI 展示文本；规则不从中文自然语言解析效果。`Description` 仍可服务小卡紧凑描述或其它旧 UI；expanded detail 只在没有任何结构化 `Effects / Passives / outcome` section 时把它作为普通正文回退，不解析旧占位。常规详情正文由 `Effects / Passives` 通过 WacomApp 的 semantic explanation document 生成 |
 | `CardIllustration` | 卡牌主题插画 `Texture2D`。第一人称卡面复合材质优先使用该纹理；旧卡为空时沿用实际 CardView（第一人称为 `WBP_FirstPersonCardView`）的 authored `CardArt` Brush。稀有度边框不使用本字段，继续由 CardView 的 `RarityBorderSprites` 以 `PaperSprite` 图集区域解析 |
 | `CardIllustrationDepthMap` | 可选的纯表现灰度深度图。黑色更深、白色更靠近实体 Frame、中灰为 authored 基准；第一人称卡面量化为约 5 级并限制在 Frame 后方。为空时整张插画仍按统一凹入深度显示，不影响规则、Snapshot 或存档。推荐导入为 `Masks / sRGB=false / Nearest / NoMipmaps / UI` |
+| `RunFace` | 同一 Definition 的探索表面静态合同；可覆盖名称、插画和深度图，保存探索描述、目标模式、唯一主动作和成功后的处置语义。关闭时旧资产继续是合法 Battle-only 卡 |
 | `BaseCost` | 基础费用；Battle 会叠加 runtime modifier 后 clamp |
 | `Rarity / Keywords` | 静态标签；标签定义见 [WacomGameplayTags.md](./WacomGameplayTags.md) |
 | `Physique` | 入战 HP、容量和后续耐久相关静态字段 |
@@ -113,6 +115,32 @@ class UCardDefinition : public UPrimaryDataAsset
 | `HandCardTargetFilter` | 仅 `TargetMode=HandCard` 的目标手牌资格过滤 |
 | `Effects / PerfectReleaseEffects` | 主效果与完美释放效果；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) |
 | `ZoneHooks / Passives` | 区域触发和被动触发静态配置；执行时机由 Battle 决定 |
+
+`CardId / UpgradeFamilyId / Rarity` 以及卡牌实例身份是两面共享事实。现有扁平 `BaseCost / Effects / PerfectReleaseEffects / ZoneHooks / Passives / TargetMode / HandCardTargetFilter / Physique` 明确定义为 **Battle Face v1**；切换到 Run Context 不会复制 `FCardInstance`、改变 `InstanceId` 或建立第二套 Definition。强化只替换同一实例的 Definition 引用，因此两面会一起切换到强化版本。
+
+RunFace 基础结构：
+
+```cpp
+struct FWacomRunCardFaceDefinition
+{
+    bool bEnabled = false;
+    FText DisplayNameOverride;
+    FText Description;
+    TObjectPtr<UTexture2D> IllustrationOverride;
+    TObjectPtr<UTexture2D> IllustrationDepthMapOverride;
+    EWacomRunCardTargetMode TargetMode = WorldTarget;
+    FWacomRunCardActionDefinition PrimaryAction;
+    EWacomRunCardUseDisposition UseDisposition = ExhaustForCurrentRoom;
+};
+```
+
+- `DisplayNameOverride / IllustrationOverride / IllustrationDepthMapOverride` 为空时回退到共享字段。
+- RunFace 只有一个 `PrimaryAction`，其 `ActionTag` 必须是 `Run.Card.Action.*` 的具体子标签，`Magnitude` 必须大于 0；具体语义由未来 Room / 目标事务解释。
+- RunFace 不保存 AP、压力或其它数字成本；成本属于目标 / Room 事务。`UseDisposition` 当前也只是静态意图，本轮没有创建 Room 内耗尽或 Camp 恢复的运行态。
+- `bEnabled=false` 时 Validator 完全跳过 RunFace，不产生迁移警告；启用后要求描述非空、目标非 `None` 且唯一动作合法。当前不要求强化链的每一段都配置 RunFace。
+- 所有正式可入战卡最终都应补齐 RunFace，但当前资产仍处于渐进迁移阶段。
+
+首批四张 RunFace 样卡已经迁移：`触须探路 = Route / Reveal / 1`、`钥匙 = WorldTarget / Unlock / 1`、`蜕壳切 = WorldTarget / Break / 1`、`几丁护片 = WorldTarget / Feed / 1`，处置均为 `ExhaustForCurrentRoom`。它们没有制作名称、插画或深度图 override，因此继续回退共享字段。Battle hand 仍以 Battle Face 为默认面；Run default hand 与 Run menu lease 对已启用卡默认投影 Run Face，未启用旧卡安全回退 Battle Face。另一面只在正式 Battle / Run default hand 的锁定检视中作为只读 ViewData 出现，不改变实例、Definition 或 Zone。
 
 `FWacomHandCardTargetFilter` 只影响玩家主动打出 `TargetMode=HandCard` 时的目标资格。UI 不直接解释它，而是读取 Battle validation / drop intent 的结果。
 

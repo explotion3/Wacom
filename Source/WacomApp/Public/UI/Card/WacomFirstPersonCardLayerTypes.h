@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/WacomCardFaceTypes.h"
 #include "Materials/MaterialInterface.h"
 #include "Types/WacomEnums.h"
 #include "Types/WacomInteractionTargetTypes.h"
@@ -74,7 +75,8 @@ enum class EWacomFirstPersonCardGestureState : uint8
 	DraggingNoTargetCard = 3 UMETA(DisplayName = "Dragging No Target Card"),
 	AimingTargetedCard = 4 UMETA(DisplayName = "Aiming Targeted Card"),
 	ArmedForCommit = 5 UMETA(DisplayName = "Armed For Commit"),
-	Cancelled = 6 UMETA(DisplayName = "Cancelled")
+	Cancelled = 6 UMETA(DisplayName = "Cancelled"),
+	InspectLocked = 7 UMETA(DisplayName = "Inspect Locked")
 };
 
 UENUM(BlueprintType)
@@ -1470,6 +1472,21 @@ struct WACOMAPP_API FWacomFirstPersonCardLayerEntry
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	FWacomCardViewData CardViewData;
+
+	/** 当前环境要求默认展示的卡面。CardViewData 始终与本字段对应。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	EWacomCardFaceContext DefaultFaceContext = EWacomCardFaceContext::Battle;
+
+	/** 可选的另一面表现数据；只供锁定检视使用，不改变卡牌身份或交互意图。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	FWacomCardViewData AlternateFaceCardViewData;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bHasAlternateFace = false;
+
+	/** 只有正式 Battle hand 与 Run default hand 打开；菜单 lease 即使展示 Run Face 也不进入锁定检视。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
+	bool bAllowLockedFaceInspection = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|First Person Card Layer")
 	EHandZone Zone = EHandZone::None;

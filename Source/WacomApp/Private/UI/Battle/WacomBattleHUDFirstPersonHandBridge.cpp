@@ -15,6 +15,7 @@
 #include "Session/BattleSession.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
+#include "UI/Card/WacomCardFaceInspectionPresentation.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Battle/WacomBattlePresentationTargetCue.h"
 #include "UI/Card/WacomFirstPersonCardLayerSourceIds.h"
@@ -557,6 +558,74 @@ void FWacomBattleHUDFirstPersonHandBridge::HandleDragStarted(
 	}
 
 	HandleDragUpdated(CardInstanceId, DragView);
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::HandleFaceInspectLocked(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	ClearPointerCameraLookOverride();
+	ClearDragCameraLookOverride();
+	bFirstPersonCardDragActiveForBattleSceneHover = false;
+	bHasActiveDragView = false;
+	ActiveDragCardInstanceId.Invalidate();
+	ActiveDragView = FWacomFirstPersonCardDragView();
+	ActiveCardTargetHandle = FWacomInteractionTargetHandle();
+	bHasActiveCardTargetHandle = false;
+	ClearDragTargetFeedback();
+
+	const FHandCardSnapshot* CardSnapshot =
+		FindLastBattleHandCardSnapshot(CardInstanceId);
+	if (!CardSnapshot || !CardSnapshot->Definition)
+	{
+		Runtime.ForceHideCardDetailHost(
+			EWacomBattleHUDCardDetailHost::FirstPersonViewport);
+		return;
+	}
+
+	FWacomCardDetailViewData DetailData =
+		WacomBattleCardPresentation::BuildCardDetailViewData(
+			*CardSnapshot,
+			FaceContext);
+	WacomCardFaceInspectionPresentation::AppendToggleHint(DetailData);
+	Runtime.SetFirstPersonCardDetailSource(CardInstanceId);
+	if (!Runtime.ShowFirstPersonCardDetailAtSlot(DetailData, SlotView))
+	{
+		Runtime.ClearFirstPersonCardDetailSource();
+	}
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::HandleFaceChanged(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	const FHandCardSnapshot* CardSnapshot =
+		FindLastBattleHandCardSnapshot(CardInstanceId);
+	if (!CardSnapshot || !CardSnapshot->Definition)
+	{
+		Runtime.ForceHideCardDetailHost(
+			EWacomBattleHUDCardDetailHost::FirstPersonViewport);
+		return;
+	}
+
+	FWacomCardDetailViewData DetailData =
+		WacomBattleCardPresentation::BuildCardDetailViewData(
+			*CardSnapshot,
+			FaceContext);
+	WacomCardFaceInspectionPresentation::AppendToggleHint(DetailData);
+	Runtime.SetFirstPersonCardDetailSource(CardInstanceId);
+	if (!Runtime.ShowFirstPersonCardDetailAtSlot(DetailData, SlotView))
+	{
+		Runtime.ClearFirstPersonCardDetailSource();
+	}
+}
+
+void FWacomBattleHUDFirstPersonHandBridge::HandleFaceInspectClosed(
+	const FGuid& CardInstanceId)
+{
+	Runtime.HideFirstPersonCardDetailPanelForSource(CardInstanceId);
 }
 
 void FWacomBattleHUDFirstPersonHandBridge::HandleDragUpdated(

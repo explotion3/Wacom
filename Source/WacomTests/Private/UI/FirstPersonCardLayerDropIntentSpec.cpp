@@ -1523,11 +1523,11 @@ bool FWacomFirstPersonDropIntentWorldTargetTest::RunTest(const FString& Paramete
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
-	FWacomFirstPersonDropIntentInvalidWorldTargetTest,
-	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.TargetedCardInvalidWorldRejectsWithoutSubmit",
+	FWacomFirstPersonDropIntentOutOfRegistryWorldTargetTest,
+	"Wacom.UI.FirstPersonCardLayer.DropIntentResolver.TargetedCardOutOfRegistryWorldIsFilteredAsMissing",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
-bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& Parameters)
+bool FWacomFirstPersonDropIntentOutOfRegistryWorldTargetTest::RunTest(const FString& Parameters)
 {
 	UWorld* World = WacomFirstPersonCardLayerDropIntentSpec::FindAutomationWorld();
 	if (!TestNotNull(TEXT("Automation world"), World))
@@ -1587,8 +1587,8 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 	WacomFirstPersonCardLayerDropIntentSpec::SettleBattlePresentationQueue(*HUD);
 
 	// Build a valid typed world-target handle whose stable enemy identity is not
-	// part of this HUD's current scene-enemy registry. An unbound typed Part is a
-	// missing target; this test specifically exercises the later invalid-world path.
+	// part of this HUD's current scene-enemy registry. The unified battle scene
+	// query rejects it at the registry boundary before the drop resolver sees it.
 	const FName OtherEnemySlotId(TEXT("OtherEnemy"));
 	OtherHost.Host->EnemySlotId = OtherEnemySlotId;
 	FBattleSnapshot OtherHostSnapshot = Snapshot;
@@ -1625,9 +1625,9 @@ bool FWacomFirstPersonDropIntentInvalidWorldTargetTest::RunTest(const FString& P
 		CardId,
 		EWacomFirstPersonCardGestureState::AimingTargetedCard);
 	const FWacomBattleCardDropResolveResult Result = HUD->ResolveFirstPersonCardDropIntentForTest(CardId, DragView);
-	TestEqual(TEXT("Invalid world target rejects"), Result.IntentKind, EWacomBattleCardDropIntentKind::Reject);
-	TestEqual(TEXT("Invalid world reason"), Result.RejectReason, EWacomBattleCardDropRejectReason::InvalidWorldTarget);
-	TestFalse(TEXT("Invalid world target cannot submit"), Result.bCanSubmit);
+	TestEqual(TEXT("Out-of-registry world target rejects"), Result.IntentKind, EWacomBattleCardDropIntentKind::Reject);
+	TestEqual(TEXT("Registry filtering presents no target"), Result.RejectReason, EWacomBattleCardDropRejectReason::MissingTarget);
+	TestFalse(TEXT("Out-of-registry world target cannot submit"), Result.bCanSubmit);
 
 	return true;
 }

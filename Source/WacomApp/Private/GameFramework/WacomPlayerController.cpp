@@ -371,9 +371,19 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 	{
 		return true;
 	}
+	if ((Params.Key == EKeys::Tab || Params.Key == EKeys::Gamepad_RightShoulder)
+		&& Params.Event == IE_Pressed
+		&& TryToggleFirstPersonCardLockedFaceInspection())
+	{
+		return true;
+	}
 	if ((Params.Key == EKeys::Escape || Params.Key == EKeys::Gamepad_FaceButton_Right)
 		&& Params.Event == IE_Pressed)
 	{
+		if (TryCloseFirstPersonCardLockedFaceInspection())
+		{
+			return true;
+		}
 		if (TryCancelFirstPersonCardKeyboardShortcutDrag())
 		{
 			return true;
@@ -394,6 +404,12 @@ bool AWacomPlayerController::InputKey(const FInputKeyEventArgs& Params)
 	if (Params.Key == EKeys::RightMouseButton
 		&& Params.Event == IE_Pressed
 		&& TryCancelFirstPersonCardKeyboardShortcutDrag())
+	{
+		return true;
+	}
+	if (Params.Key == EKeys::LeftMouseButton
+		&& Params.Event == IE_Released
+		&& TryConsumeFirstPersonCardLockedInspectionPointerRelease())
 	{
 		return true;
 	}
@@ -954,7 +970,44 @@ bool AWacomPlayerController::BuildRunFirstPersonCardDetailViewData(
 		return false;
 	}
 
-	OutDetailData = UWacomCardPresentationBuilder::BuildCardDetailViewData(Instance.Definition);
+	const EWacomCardFaceContext DefaultFaceContext =
+		Instance.Definition->HasEnabledRunFace()
+			? EWacomCardFaceContext::Run
+			: EWacomCardFaceContext::Battle;
+	return BuildRunFirstPersonCardDetailViewData(
+		CardInstanceId,
+		DefaultFaceContext,
+		OutDetailData);
+}
+
+bool AWacomPlayerController::BuildRunFirstPersonCardDetailViewData(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	FWacomCardDetailViewData& OutDetailData) const
+{
+	URunSession* Run = ResolveRunSessionForFirstPersonCardSource();
+	if (!Run || !CardInstanceId.IsValid())
+	{
+		return false;
+	}
+
+	FCardInstance Instance;
+	EZoneKind Zone = EZoneKind::Backpack;
+	FGuid ZoneOwnerInstanceId;
+	if (!Run->FindInstance(CardInstanceId, Instance, Zone, ZoneOwnerInstanceId)
+		|| !Instance.Definition)
+	{
+		return false;
+	}
+
+	if (FaceContext == EWacomCardFaceContext::Run
+		&& !Instance.Definition->HasEnabledRunFace())
+	{
+		return false;
+	}
+	OutDetailData = UWacomCardPresentationBuilder::BuildCardDetailViewDataForFace(
+		Instance.Definition,
+		FaceContext);
 	return true;
 }
 
@@ -2094,6 +2147,38 @@ bool AWacomPlayerController::TryCancelFirstPersonCardActiveGestureForTurnBoundar
 	return GetRunFirstPersonCardDragController().TryCancelActiveGestureForTurnBoundaryShortcut();
 }
 
+bool AWacomPlayerController::TryToggleFirstPersonCardLockedFaceInspection()
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		ResolveFirstPersonCardAnchorForRunMenuProbe();
+	return Anchor && Anchor->TryToggleFirstPersonCardLockedFace();
+}
+
+bool AWacomPlayerController::TryCloseFirstPersonCardLockedFaceInspection()
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		ResolveFirstPersonCardAnchorForRunMenuProbe();
+	return Anchor && Anchor->TryCloseFirstPersonCardLockedInspection();
+}
+
+bool AWacomPlayerController::TryRouteFirstPersonCardLockedInspectionPointerPress(
+	const FVector2D& AbsoluteScreenPosition)
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		ResolveFirstPersonCardAnchorForRunMenuProbe();
+	return Anchor
+		&& Anchor->TryRouteFirstPersonCardLockedInspectionPointerPress(
+			AbsoluteScreenPosition);
+}
+
+bool AWacomPlayerController::TryConsumeFirstPersonCardLockedInspectionPointerRelease()
+{
+	UWacomFirstPersonCardAnchorComponent* Anchor =
+		ResolveFirstPersonCardAnchorForRunMenuProbe();
+	return Anchor
+		&& Anchor->ConsumePendingFirstPersonCardLockedInspectionPointerRelease();
+}
+
 bool AWacomPlayerController::TryGetMouseWidgetPosition(FVector2D& OutWidgetPosition)
 {
 	if (FSlateApplication::IsInitialized())
@@ -2206,6 +2291,37 @@ void AWacomPlayerController::HandleRunFirstPersonCardLayerDragCancelled(
 {
 	ClearRunFirstPersonCardDragCameraLookOverride();
 	GetRunFirstPersonCardDragController().HandleDragCancelled(CardInstanceId, DragView);
+}
+
+void AWacomPlayerController::HandleRunFirstPersonCardLayerFaceInspectLocked(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	ClearRunFirstPersonCardDragCameraLookOverride();
+	GetRunFirstPersonCardDetailController().HandleFaceInspectLocked(
+		CardInstanceId,
+		FaceContext,
+		SlotView);
+}
+
+void AWacomPlayerController::HandleRunFirstPersonCardLayerFaceChanged(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext FaceContext,
+	const FWacomFirstPersonCardLayerSlotView& SlotView)
+{
+	GetRunFirstPersonCardDetailController().HandleFaceChanged(
+		CardInstanceId,
+		FaceContext,
+		SlotView);
+}
+
+void AWacomPlayerController::HandleRunFirstPersonCardLayerFaceInspectClosed(
+	const FGuid& CardInstanceId,
+	const EWacomCardFaceContext /*FaceContext*/,
+	const FWacomFirstPersonCardLayerSlotView& /*SlotView*/)
+{
+	GetRunFirstPersonCardDetailController().HandleFaceInspectClosed(CardInstanceId);
 }
 
 void AWacomPlayerController::ApplyRunFirstPersonCardPointerCameraLookOverride(

@@ -229,6 +229,51 @@ namespace
 			|| Tag == WacomTags::Card_Rarity_Intrinsic;
 	}
 
+	void ValidateRunFace(
+		const FWacomRunCardFaceDefinition& RunFace,
+		TArray<FText>& OutErrors)
+	{
+		if (!RunFace.bEnabled)
+		{
+			return;
+		}
+
+		if (RunFace.Description.IsEmpty())
+		{
+			AddValidationError(
+				OutErrors,
+				LOCTEXT("RunFaceMissingDescription", "RunFace.Description 启用后不能为空。"));
+		}
+
+		if (RunFace.TargetMode == EWacomRunCardTargetMode::None)
+		{
+			AddValidationError(
+				OutErrors,
+				LOCTEXT("RunFaceMissingTargetMode", "RunFace.TargetMode 启用后不能为 None。"));
+		}
+
+		const FGameplayTag ActionTag = RunFace.PrimaryAction.ActionTag;
+		if (!ActionTag.IsValid()
+			|| !ActionTag.MatchesTag(WacomTags::Run_Card_Action)
+			|| ActionTag.MatchesTagExact(WacomTags::Run_Card_Action))
+		{
+			AddValidationError(
+				OutErrors,
+				LOCTEXT(
+					"RunFaceInvalidActionTag",
+					"RunFace.PrimaryAction.ActionTag 必须是 Run.Card.Action.* 的具体动作标签。"));
+		}
+
+		if (RunFace.PrimaryAction.Magnitude <= 0)
+		{
+			AddValidationError(
+				OutErrors,
+				LOCTEXT(
+					"RunFaceInvalidMagnitude",
+					"RunFace.PrimaryAction.Magnitude 必须大于 0。"));
+		}
+	}
+
 	bool IsZoneHookTriggerTag(const FGameplayTag& Tag)
 	{
 		return Tag == WacomTags::ZoneHook_Trigger_OnPlay
@@ -350,6 +395,8 @@ bool FWacomCardDefinitionValidation::Validate(
 	{
 		AddValidationError(OutErrors, LOCTEXT("NegativeMaxHpBonus", "Physique.MaxHpBonus 不能为负数。"));
 	}
+
+	ValidateRunFace(CardDefinition->RunFace, OutErrors);
 
 	ValidateEffects(
 		CardDefinition->Effects,

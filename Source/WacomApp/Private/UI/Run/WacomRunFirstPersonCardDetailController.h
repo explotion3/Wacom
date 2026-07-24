@@ -74,6 +74,15 @@ public:
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardDragView& DragView);
 	void FinishInspectDetail(const FGuid& CardInstanceId);
+	void HandleFaceInspectLocked(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFaceChanged(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFaceInspectClosed(const FGuid& CardInstanceId);
 
 #if WITH_AUTOMATION_TESTS
 	bool IsPendingShowForTest() const { return MotionController.IsPendingShowForTest(); }
@@ -91,6 +100,10 @@ private:
 		const FGuid& CardInstanceId,
 		const FWacomFirstPersonCardLayerSlotView& SlotView,
 		EWacomRunFirstPersonCardDetailHoldReason HoldReason);
+	bool ShowFaceInspectionDetail(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	bool ShouldShowInspectDetail(const FWacomFirstPersonCardDragView& DragView) const;
 	bool ShowInspectDetail(
 		const FGuid& CardInstanceId,

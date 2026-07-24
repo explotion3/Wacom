@@ -12,3 +12,8 @@ bool UCardDefinition::MatchesCardIdOrUpgradeFamily(const FName Candidate) const
 	return !Candidate.IsNone()
 		&& (CardId == Candidate || ResolveUpgradeFamilyId() == Candidate);
 }
+
+bool UCardDefinition::HasEnabledRunFace() const
+{
+	return RunFace.bEnabled;
+}

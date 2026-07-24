@@ -2,7 +2,7 @@
 type: domain-spec
 scope: wacom-run
 status: active
-updated: 2026-07-14
+updated: 2026-07-24
 tags:
   - wacom/run
   - wacom/rules
@@ -130,6 +130,8 @@ LowHpThreshold  = 0.2
 
 Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCardInstance.InstanceId`，同名卡也必须作为独立 instance 管理。
 
+一卡两面不增加第二种实例。`UCardDefinition` 同时保存 Battle Face v1 与可选 `RunFace` 静态合同，`FCardInstance.InstanceId + Definition` 仍是唯一身份；强化替换 Definition 时两面随同一实例一起切换。当前 Run 物理区、SaveGame v5 和 Workspace 都不保存 active face，也不复制 Definition。active face 只属于 first-person 局部检视状态，退出锁定检视或来源切换后立即恢复环境默认面。
+
 当前四个物理持有区：
 
 | Zone | 规则 |
@@ -151,6 +153,8 @@ Run first-person hand 不直接等同于某个物理持有区。`URunSession::Bu
 - 未来如果 Run 专属手牌/行动牌组变成真实规则区，应先扩展物理区和存档/容量/移动规则，再让默认 workspace provider 改读该新区；first-person UI 不应因此重写。
 
 `UWacomRunFirstPersonCardSourceComponent` 在首次显示或切换 workspace / menu lease source 时，先通过共享 App-private card presentation prewarm 收集并异步驻留 first-person CardView 的数字、稀有度、Badge 等 Required Visual，以及四类 Optional Enter Sound。首次来源在 Ready/TimedOut 前保持隐藏；切换来源时旧来源继续显示，最新 revision 只保留一份待提交 Frame。预热只冻结这条 card source，不冻结探索、镜头或其它 Run UI 输入。菜单压制、lease 释放、source clear、RunSession 解绑和 EndPlay 都会取消旧 Generation，防止迟到回调覆盖新来源；`1.5s` 超时后安全提交最新 Frame，同时允许 Required Visual 请求继续完成驻留。
+
+正式 Run first-person source 对 `DefaultExploration` workspace 采用 RunFace 优先：已启用卡默认显示 Run Face，并附带只读 Battle alternate；未启用旧卡继续显示原 Battle Face 且不进入锁定翻面。provider-backed Run menu lease 同样采用 RunFace 优先显示，但本轮不开放锁定翻面，避免菜单拖放所有权与 hand 检视互相竞争。Battle hand 始终以 Battle Face 为环境默认面。四张首批样卡为触须探路、钥匙、蜕壳切和几丁护片。Room 动作、目标事务、数字成本、`ExhaustForCurrentRoom / ExhaustUntilCamp / ConsumePermanently` 运行态与 SaveGame 仍未接入；反面只读检视不能提交 Run world/menu drop。预热器仍只收集 Widget / 材质模板和声音；Definition 硬引用的共享或 Run override 插画沿既有对象引用加载，不扩展预热 manifest。
 
 Run menu / world drop 与 Battle 共用 first-person Slot 的无效目标提示。正式 Drag 只有在 Run 已经解析出有效 Target Handle 且反馈为 `Invalid / InvalidCardTarget` 时，源卡才显示低强度像素括角；空白区域和 Probe 不显示。若玩家在该真实无效目标上释放，Slot 播放方向性压缩/回弹与边缘裂痕，但不会伪造 Run drop 命令；主动取消、快捷键右键取消、Inspect 返回和空白释放保持中性。该表现只消费 App 层目标校验事实，不修改 Run storage、menu drop 或 world interaction 规则。
 

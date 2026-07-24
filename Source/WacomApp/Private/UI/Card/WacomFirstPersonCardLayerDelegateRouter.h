@@ -21,6 +21,9 @@ struct FWacomFirstPersonCardLayerDelegateRouterCallbacks
 	TFunction<void(const FGuid&, const FWacomFirstPersonCardDragView&)> DragUpdated;
 	TFunction<void(const FGuid&, const FWacomFirstPersonCardDragView&)> DragReleased;
 	TFunction<void(const FGuid&, const FWacomFirstPersonCardDragView&)> DragCancelled;
+	TFunction<void(const FGuid&, EWacomCardFaceContext, const FWacomFirstPersonCardLayerSlotView&)> FaceInspectLocked;
+	TFunction<void(const FGuid&, EWacomCardFaceContext, const FWacomFirstPersonCardLayerSlotView&)> FaceChanged;
+	TFunction<void(const FGuid&, EWacomCardFaceContext, const FWacomFirstPersonCardLayerSlotView&)> FaceInspectClosed;
 	TFunction<void(const FWacomFirstPersonCardPointerView&)> PointerMoved;
 	TFunction<void()> PointerLeft;
 	TFunction<void(const FWacomFirstPersonCardEnterTransitionStartedView&)> EnterTransitionStarted;
@@ -57,6 +60,18 @@ private:
 	void HandleDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleFaceInspectLocked(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFaceChanged(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleFaceInspectClosed(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandlePointerMoved(const FWacomFirstPersonCardPointerView& PointerView);
 	void HandlePointerLeft();
 	void HandleEnterTransitionStarted(

@@ -10,6 +10,7 @@
 #include "Cards/CardPhysique.h"
 #include "Cards/CardZoneHook.h"
 #include "Cards/CardPassive.h"
+#include "Cards/WacomCardFaceTypes.h"
 #include "CardDefinition.generated.h"
 
 class UTexture2D;
@@ -79,6 +80,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Presentation", meta = (ToolTip = "可选的插画局部深度图。黑色表示更深，白色表示更靠近实体卡框，中灰表示插画 authored 基准深度；推荐与 CardIllustration 同尺寸或同比例，使用 Masks、sRGB=false、Nearest、NoMipmaps。为空时整张插画仍按统一凹入深度显示。"))
 	TObjectPtr<UTexture2D> CardIllustrationDepthMap = nullptr;
 
+	/** 同一 CardDefinition 的探索表面。卡牌实例与 Definition 身份不会因表面切换而复制。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Run Face",
+		meta = (ToolTip = "同一卡牌定义的探索表面静态合同。关闭时旧卡牌仍可只使用 Battle Face；启用后由 Run Context 卡面 Builder 读取。"))
+	FWacomRunCardFaceDefinition RunFace;
+
+	// 以下 BaseCost / Effects / Passives / TargetMode 等扁平字段属于 Battle Face v1。
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	int32 BaseCost = 0;
 
@@ -118,4 +125,7 @@ public:
 
 	/** Candidate 同时允许匹配当前版本 CardId 或稳定强化族 ID；None 永不匹配。 */
 	bool MatchesCardIdOrUpgradeFamily(FName Candidate) const;
+
+	/** 是否具有已启用的探索表面。不会检查完整 authoring 合法性。 */
+	bool HasEnabledRunFace() const;
 };

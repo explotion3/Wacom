@@ -2557,6 +2557,36 @@ void UWacomFirstPersonCardAnchorComponent::ConfigureCardLayerDelegateRouter()
 	{
 		OnFirstPersonCardLayerDragCancelled.Broadcast(CardInstanceId, DragView);
 	};
+	Callbacks.FaceInspectLocked = [this](
+		const FGuid& CardInstanceId,
+		const EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		OnFirstPersonCardLayerFaceInspectLocked.Broadcast(
+			CardInstanceId,
+			FaceContext,
+			SlotView);
+	};
+	Callbacks.FaceChanged = [this](
+		const FGuid& CardInstanceId,
+		const EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		OnFirstPersonCardLayerFaceChanged.Broadcast(
+			CardInstanceId,
+			FaceContext,
+			SlotView);
+	};
+	Callbacks.FaceInspectClosed = [this](
+		const FGuid& CardInstanceId,
+		const EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView)
+	{
+		OnFirstPersonCardLayerFaceInspectClosed.Broadcast(
+			CardInstanceId,
+			FaceContext,
+			SlotView);
+	};
 	Callbacks.PointerMoved = [this](const FWacomFirstPersonCardPointerView& PointerView)
 	{
 		OnFirstPersonCardLayerPointerMoved.Broadcast(PointerView);
@@ -2709,4 +2739,33 @@ bool UWacomFirstPersonCardAnchorComponent::IsFirstPersonCardKeyboardShortcutDrag
 {
 	return CardLayerWidget
 		&& CardLayerWidget->IsKeyboardShortcutCardDragGestureActive();
+}
+
+bool UWacomFirstPersonCardAnchorComponent::IsFirstPersonCardLockedInspectionActive() const
+{
+	return CardLayerWidget && CardLayerWidget->IsLockedCardInspectionActive();
+}
+
+bool UWacomFirstPersonCardAnchorComponent::TryToggleFirstPersonCardLockedFace()
+{
+	return CardLayerWidget && CardLayerWidget->TryToggleLockedCardFace();
+}
+
+bool UWacomFirstPersonCardAnchorComponent::TryCloseFirstPersonCardLockedInspection()
+{
+	return CardLayerWidget && CardLayerWidget->TryCloseLockedCardInspection();
+}
+
+bool UWacomFirstPersonCardAnchorComponent::TryRouteFirstPersonCardLockedInspectionPointerPress(
+	const FVector2D& AbsoluteScreenPosition)
+{
+	return CardLayerWidget
+		&& CardLayerWidget->TryRouteLockedCardInspectionPointerPress(
+			AbsoluteScreenPosition);
+}
+
+bool UWacomFirstPersonCardAnchorComponent::ConsumePendingFirstPersonCardLockedInspectionPointerRelease()
+{
+	return CardLayerWidget
+		&& CardLayerWidget->ConsumePendingLockedInspectionPointerRelease();
 }

@@ -169,6 +169,14 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonDown(
 	{
 		return true;
 	}
+	if (PointerEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+	{
+		AWacomPlayerController* PlayerController =
+			ResolveWacomPlayerController(PointerEvent.GetInputDeviceId());
+		return PlayerController
+			&& PlayerController->TryRouteFirstPersonCardLockedInspectionPointerPress(
+				PointerEvent.GetScreenSpacePosition());
+	}
 	if (PointerEvent.GetEffectingButton() != EKeys::RightMouseButton)
 	{
 		return false;
@@ -190,9 +198,16 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonUp(
 	}
 	// Release 需要在鼠标离开 viewport 后仍能清理 WIC pressed 状态；
 	// 没有 World Shop owner 时 helper 会 fail closed，不影响普通 Slate 输入。
-	return TryRouteWorldShopPointerInput(
+	if (TryRouteWorldShopPointerInput(
 		PointerEvent.GetInputDeviceId(),
-		IE_Released);
+		IE_Released))
+	{
+		return true;
+	}
+	AWacomPlayerController* PlayerController =
+		ResolveWacomPlayerController(PointerEvent.GetInputDeviceId());
+	return PlayerController
+		&& PlayerController->TryConsumeFirstPersonCardLockedInspectionPointerRelease();
 }
 
 bool UWacomGameViewportClient::TryRouteWorldShopPointerInput(

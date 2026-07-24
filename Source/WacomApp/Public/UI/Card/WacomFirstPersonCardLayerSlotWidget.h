@@ -49,6 +49,11 @@ struct FWacomFirstPersonCardSlotPresentationControllerDeleter
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerSlotDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(
+	FWacomFirstPersonCardLayerSlotFaceInspectionNative,
+	const FGuid&,
+	EWacomCardFaceContext,
+	const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_OneParam(
 	FWacomFirstPersonCardLayerSlotEnterTransitionStartedNative,
 	const FWacomFirstPersonCardEnterTransitionStartedView&);
@@ -311,6 +316,10 @@ public:
 		const FVector2D& WidgetPosition,
 		bool bSuppressInspectDragPromotion = false);
 	void ClearInspectScrubGestureFromFirstPersonLayer();
+	bool IsLockedFaceInspectionActive() const;
+	EWacomCardFaceContext GetInspectedFaceContext() const { return InspectedFaceContext; }
+	bool TryToggleLockedFaceInspection();
+	bool CloseLockedFaceInspection();
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Card Layer")
 	bool IsHoveredForFirstPersonLayer() const { return bIsHoveredForFirstPersonLayer; }
@@ -327,6 +336,9 @@ public:
 	FWacomFirstPersonCardLayerSlotDragNative OnCardDragUpdatedNative;
 	FWacomFirstPersonCardLayerSlotDragNative OnCardDragReleasedNative;
 	FWacomFirstPersonCardLayerSlotDragNative OnCardDragCancelledNative;
+	FWacomFirstPersonCardLayerSlotFaceInspectionNative OnCardFaceInspectLockedNative;
+	FWacomFirstPersonCardLayerSlotFaceInspectionNative OnCardFaceChangedNative;
+	FWacomFirstPersonCardLayerSlotFaceInspectionNative OnCardFaceInspectClosedNative;
 	FWacomFirstPersonCardLayerSlotEnterTransitionStartedNative OnEnterTransitionStartedNative;
 
 protected:
@@ -390,6 +402,11 @@ private:
 	float CardUseImpactProgress = 0.0f;
 	float CardUseMotionAlpha = 0.0f;
 	float CardUseOpacityMultiplier = 1.0f;
+	EWacomCardFaceContext InspectedFaceContext = EWacomCardFaceContext::Battle;
+	EWacomCardFaceContext PendingFaceContext = EWacomCardFaceContext::Battle;
+	float FaceFlipElapsedSeconds = 0.0f;
+	bool bFaceFlipActive = false;
+	bool bFaceFlipDataSwapped = false;
 	bool bCardLayerInteractionEnabled = false;
 	bool bIsHoveredForFirstPersonLayer = false;
 	bool bHasVisualSlotView = false;
@@ -458,6 +475,13 @@ private:
 	FWacomFirstPersonCardGestureControllerState& GestureRuntime();
 	const FWacomFirstPersonCardGestureControllerState& GestureRuntime() const;
 	void ApplyCurrentSlotView();
+	const FWacomCardViewData& ResolveCurrentFaceCardViewData() const;
+	void BeginLockedFaceInspection();
+	void EndLockedFaceInspection(bool bBroadcastClosed);
+	void TickFaceFlip(float DeltaTime);
+	void CancelFaceFlipAndRestoreDefault();
+	void ApplyFaceFlipLocalPresentation(float HorizontalScale, float Opacity);
+	void ResetFaceFlipLocalPresentation();
 	void ApplyVisualSlotView();
 	void ApplySlotViewToWidget(const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void RefreshPresentationTarget(
@@ -483,6 +507,11 @@ private:
 	bool CanStartCardDragGesture() const;
 	bool IsNoTargetDragCard() const;
 	bool IsTargetedAimCard() const;
+	bool CanPreserveLockedInspectionForSlotRefresh(
+		const FWacomFirstPersonCardLayerSlotView& InSlotView,
+		bool bTreatAsNewSlot) const;
+	void RefreshPreservedLockedInspectionTarget(
+		const FWacomFirstPersonCardLayerSlotView& InSlotView);
 	FWacomFirstPersonCardLayerSlotView BuildInspectOverrideSlotView() const;
 	FWacomFirstPersonCardLayerSlotView BuildNoTargetDragOverrideSlotView() const;
 	FWacomFirstPersonCardLayerSlotView BuildAimOverrideSlotView() const;

@@ -16,7 +16,8 @@ namespace WacomCardDetailDocumentBuilder
 	{
 		FText GetCardDisplayName(
 			const UCardDefinition* Card,
-			const UWacomCardExplanationLexicon* Lexicon)
+			const UWacomCardExplanationLexicon* Lexicon,
+			EWacomCardFaceContext FaceContext)
 		{
 			if (!Card)
 			{
@@ -24,6 +25,11 @@ namespace WacomCardDetailDocumentBuilder
 					Lexicon,
 					WacomCardExplanationLexiconKeys::CardUnknownName,
 					LOCTEXT("UnknownCardName", "未知卡牌"));
+			}
+			if (FaceContext == EWacomCardFaceContext::Run
+				&& !Card->RunFace.DisplayNameOverride.IsEmpty())
+			{
+				return Card->RunFace.DisplayNameOverride;
 			}
 			return Card->DisplayName.IsEmpty()
 				? FText::FromName(Card->CardId)
@@ -57,14 +63,37 @@ namespace WacomCardDetailDocumentBuilder
 
 	FWacomCardDetailViewData BuildCardDetailViewData(
 		const UCardDefinition* Card,
+		EWacomCardFaceContext FaceContext,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext)
 	{
 		FWacomCardDetailViewData Data;
 		const UWacomCardExplanationLexicon* Lexicon =
 			WacomCardExplanationLexiconProvider::GetConfiguredLexicon();
-		Data.Name = GetCardDisplayName(Card, Lexicon);
+		Data.Name = GetCardDisplayName(Card, Lexicon, FaceContext);
 		if (!Card)
 		{
+			return Data;
+		}
+
+		if (FaceContext == EWacomCardFaceContext::Run)
+		{
+			if (!Card->RunFace.Description.IsEmpty())
+			{
+				TArray<FWacomCardDetailBlock> RunDescriptionBlocks;
+				RunDescriptionBlocks.Add(WacomCardExplanationCompiler::BuildPlainTextBlock(
+					FName(TEXT("Run.Description.Block")),
+					EWacomCardDetailBlockKind::Paragraph,
+					Card->RunFace.Description));
+				WacomCardExplanationCompiler::AddCardDetailSection(
+					Data,
+					FName(TEXT("Description")),
+					EWacomCardDetailSectionKind::Description,
+					ResolveSectionTitle(
+						Lexicon,
+						WacomCardExplanationLexiconKeys::SectionDescriptionTitle,
+						LOCTEXT("RunDescriptionSectionTitle", "描述")),
+					MoveTemp(RunDescriptionBlocks));
+			}
 			return Data;
 		}
 

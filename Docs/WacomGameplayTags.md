@@ -2,7 +2,7 @@
 type: tag-reference
 scope: wacom-gameplay-tags
 status: active
-updated: 2026-06-05
+updated: 2026-07-24
 tags:
   - wacom/data
   - wacom/gameplay-tags
@@ -23,6 +23,7 @@ tags:
 | `Card.Keyword.*` | 卡牌静态关键词和少量临时关键词 |
 | `Card.Rarity.*` | 卡牌稀有度 |
 | `Card.CapacityEffect.*` | 容器卡容量效果 |
+| `Run.Card.Action.*` | RunFace 唯一主动作的静态语义 |
 | `HandZone.*` | 战斗手牌区域 |
 | `Interaction.Target.*` | App target handle 的 world target 语义 |
 | `Effect.*` | 卡牌 / 敌人意图效果类型 |
@@ -59,6 +60,19 @@ tags:
 | `Card.Rarity.Yellow` | `Card_Rarity_Yellow` | 黄色 |
 | `Card.Rarity.Purple` | `Card_Rarity_Purple` | 紫色 |
 | `Card.Rarity.Intrinsic` | `Card_Rarity_Intrinsic` | 固有 |
+
+### Run.Card.Action
+
+`Run.Card.Action` 是 Validator 使用的根标签，不是可直接制作的动作；RunFace 必须选择下列具体子标签。动作的目标合法性、成本和结算由后续 Room / 目标事务定义，本轮只建立静态分类。
+
+| Tag | 代码名 | 说明 |
+|---|---|---|
+| `Run.Card.Action.Reveal` | `Run_Card_Action_Reveal` | 揭示路线、房间或隐藏信息 |
+| `Run.Card.Action.Unlock` | `Run_Card_Action_Unlock` | 解锁门、容器或机关 |
+| `Run.Card.Action.Break` | `Run_Card_Action_Break` | 破坏障碍或脆弱目标 |
+| `Run.Card.Action.Fix` | `Run_Card_Action_Fix` | 修复设施、路径或物件 |
+| `Run.Card.Action.Ignite` | `Run_Card_Action_Ignite` | 点燃可交互目标 |
+| `Run.Card.Action.Feed` | `Run_Card_Action_Feed` | 喂食生物或其它接收者 |
 
 ## §4 HandZone
 

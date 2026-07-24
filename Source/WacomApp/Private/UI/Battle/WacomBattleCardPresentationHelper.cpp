@@ -160,18 +160,46 @@ namespace WacomBattleCardPresentation
 
 	FWacomCardDetailViewData BuildCardDetailViewData(const FHandCardSnapshot& CardSnapshot)
 	{
-		return UWacomCardPresentationBuilder::BuildCardDetailViewData(
-			CardSnapshot.Definition,
-			BuildRuntimeContext(CardSnapshot));
+		return BuildCardDetailViewData(CardSnapshot, EWacomCardFaceContext::Battle);
+	}
+
+	FWacomCardDetailViewData BuildCardDetailViewData(
+		const FHandCardSnapshot& CardSnapshot,
+		const EWacomCardFaceContext FaceContext)
+	{
+		return FaceContext == EWacomCardFaceContext::Battle
+			? UWacomCardPresentationBuilder::BuildCardDetailViewData(
+				CardSnapshot.Definition,
+				FaceContext,
+				BuildRuntimeContext(CardSnapshot))
+			: UWacomCardPresentationBuilder::BuildCardDetailViewDataForFace(
+				CardSnapshot.Definition,
+				FaceContext);
 	}
 
 	FWacomCardDetailViewData BuildCardDetailViewData(
 		const FHandCardSnapshot& CardSnapshot,
 		const FBattleCardTargetPreview& TargetPreview)
 	{
-		return UWacomCardPresentationBuilder::BuildCardDetailViewData(
-			CardSnapshot.Definition,
-			BuildRuntimeContext(CardSnapshot, TargetPreview));
+		return BuildCardDetailViewData(
+			CardSnapshot,
+			TargetPreview,
+			EWacomCardFaceContext::Battle);
+	}
+
+	FWacomCardDetailViewData BuildCardDetailViewData(
+		const FHandCardSnapshot& CardSnapshot,
+		const FBattleCardTargetPreview& TargetPreview,
+		const EWacomCardFaceContext FaceContext)
+	{
+		return FaceContext == EWacomCardFaceContext::Battle
+			? UWacomCardPresentationBuilder::BuildCardDetailViewData(
+				CardSnapshot.Definition,
+				FaceContext,
+				BuildRuntimeContext(CardSnapshot, TargetPreview))
+			: UWacomCardPresentationBuilder::BuildCardDetailViewDataForFace(
+				CardSnapshot.Definition,
+				FaceContext);
 	}
 
 	EWacomFirstPersonCardInteractionIntent ResolveCardLayerInteractionIntent(
@@ -188,6 +216,16 @@ namespace WacomBattleCardPresentation
 		FWacomFirstPersonCardLayerEntry Entry;
 		Entry.CardInstanceId = CardSnapshot.InstanceId;
 		Entry.CardViewData = BuildCardViewData(CardSnapshot);
+		Entry.DefaultFaceContext = EWacomCardFaceContext::Battle;
+		if (CardSnapshot.Definition && CardSnapshot.Definition->HasEnabledRunFace())
+		{
+			Entry.AlternateFaceCardViewData =
+				UWacomCardPresentationBuilder::BuildCardViewDataForFace(
+					CardSnapshot.Definition,
+					EWacomCardFaceContext::Run);
+			Entry.bHasAlternateFace = true;
+			Entry.bAllowLockedFaceInspection = true;
+		}
 		Entry.Zone = CardSnapshot.Zone;
 		Entry.bIsHandAnchor = CardSnapshot.bIsHandAnchor;
 		Entry.bIsPlayable = CardSnapshot.bIsPlayable;

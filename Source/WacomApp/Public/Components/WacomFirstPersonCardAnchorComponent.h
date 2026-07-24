@@ -93,6 +93,11 @@ struct WACOMAPP_API FWacomFirstPersonCardAnchorAutomationTestView
 #endif
 
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerAnchorDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(
+	FWacomFirstPersonCardLayerAnchorFaceInspectionNative,
+	const FGuid&,
+	EWacomCardFaceContext,
+	const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerAnchorPointerNative, const FWacomFirstPersonCardPointerView&);
 DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerAnchorPointerExitNative);
 DECLARE_MULTICAST_DELEGATE_OneParam(
@@ -948,6 +953,12 @@ public:
 	bool ReleaseFirstPersonCardDragGestureAtCurrentPointer();
 	bool IsFirstPersonCardDragGestureActive() const;
 	bool IsFirstPersonCardKeyboardShortcutDragGestureActive() const;
+	bool IsFirstPersonCardLockedInspectionActive() const;
+	bool TryToggleFirstPersonCardLockedFace();
+	bool TryCloseFirstPersonCardLockedInspection();
+	bool TryRouteFirstPersonCardLockedInspectionPointerPress(
+		const FVector2D& AbsoluteScreenPosition);
+	bool ConsumePendingFirstPersonCardLockedInspectionPointerRelease();
 
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardHovered;
 	FWacomFirstPersonCardLayerAnchorInteractionNative OnFirstPersonCardLayerCardUnhovered;
@@ -959,6 +970,9 @@ public:
 	FWacomFirstPersonCardLayerAnchorDragNative OnFirstPersonCardLayerDragUpdated;
 	FWacomFirstPersonCardLayerAnchorDragNative OnFirstPersonCardLayerDragReleased;
 	FWacomFirstPersonCardLayerAnchorDragNative OnFirstPersonCardLayerDragCancelled;
+	FWacomFirstPersonCardLayerAnchorFaceInspectionNative OnFirstPersonCardLayerFaceInspectLocked;
+	FWacomFirstPersonCardLayerAnchorFaceInspectionNative OnFirstPersonCardLayerFaceChanged;
+	FWacomFirstPersonCardLayerAnchorFaceInspectionNative OnFirstPersonCardLayerFaceInspectClosed;
 	FWacomFirstPersonCardLayerAnchorPointerNative OnFirstPersonCardLayerPointerMoved;
 	FWacomFirstPersonCardLayerAnchorPointerExitNative OnFirstPersonCardLayerPointerLeft;
 	FWacomFirstPersonCardLayerAnchorEnterTransitionStartedNative OnFirstPersonCardLayerEnterTransitionStarted;

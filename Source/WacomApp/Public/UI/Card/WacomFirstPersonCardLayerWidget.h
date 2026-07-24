@@ -19,6 +19,11 @@ struct FWacomFirstPersonCardLayerTestAccess;
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerInteractionNative, const FGuid&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerTargetNative, const FWacomInteractionTargetHandle&, const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FWacomFirstPersonCardLayerDragNative, const FGuid&, const FWacomFirstPersonCardDragView&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(
+	FWacomFirstPersonCardLayerFaceInspectionNative,
+	const FGuid&,
+	EWacomCardFaceContext,
+	const FWacomFirstPersonCardLayerSlotView&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FWacomFirstPersonCardLayerPointerNative, const FWacomFirstPersonCardPointerView&);
 DECLARE_MULTICAST_DELEGATE(FWacomFirstPersonCardLayerPointerExitNative);
 DECLARE_MULTICAST_DELEGATE_OneParam(
@@ -164,6 +169,12 @@ public:
 	bool ReleaseActiveDragGestureAtCurrentPointer();
 	bool IsCardDragGestureActive() const;
 	bool IsKeyboardShortcutCardDragGestureActive() const;
+	bool IsLockedCardInspectionActive() const;
+	bool TryToggleLockedCardFace();
+	bool TryCloseLockedCardInspection();
+	bool TryRouteLockedCardInspectionPointerPress(
+		const FVector2D& AbsoluteScreenPosition);
+	bool ConsumePendingLockedInspectionPointerRelease();
 	void SetCardTransitionHints(const TArray<FWacomFirstPersonCardLayerTransitionHint>& InHints);
 	void SetCardFeedbackHints(const TArray<FWacomFirstPersonCardLayerFeedbackHint>& InHints);
 	void SetPresentationAnchors(const FWacomFirstPersonCardPresentationAnchorSet& InAnchors);
@@ -230,6 +241,9 @@ public:
 	FWacomFirstPersonCardLayerDragNative OnCardDragUpdatedNative;
 	FWacomFirstPersonCardLayerDragNative OnCardDragReleasedNative;
 	FWacomFirstPersonCardLayerDragNative OnCardDragCancelledNative;
+	FWacomFirstPersonCardLayerFaceInspectionNative OnCardFaceInspectLockedNative;
+	FWacomFirstPersonCardLayerFaceInspectionNative OnCardFaceChangedNative;
+	FWacomFirstPersonCardLayerFaceInspectionNative OnCardFaceInspectClosedNative;
 	FWacomFirstPersonCardLayerPointerNative OnCardPointerMovedNative;
 	FWacomFirstPersonCardLayerPointerExitNative OnCardPointerLeftNative;
 	FWacomFirstPersonCardLayerEnterTransitionStartedNative OnEnterTransitionStartedNative;
@@ -239,6 +253,9 @@ protected:
 	virtual TSharedRef<SWidget> RebuildWidget() override;
 	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
+	virtual FReply NativeOnMouseButtonDown(
+		const FGeometry& InGeometry,
+		const FPointerEvent& InMouseEvent) override;
 	virtual int32 NativePaint(
 		const FPaintArgs& Args,
 		const FGeometry& AllottedGeometry,
@@ -291,6 +308,7 @@ private:
 	bool bCardLayerInteractionEnabled = false;
 	bool bCardLayerPresentationVisible = true;
 	bool bLogSlotMotionDiagnostics = false;
+	bool bConsumeNextPointerReleaseAfterLockedClose = false;
 #if WITH_AUTOMATION_TESTS
 	FWacomFirstPersonCardLayerAutomationTestView GetAutomationTestViewForTest() const;
 	void TickSlotMotionForTest(float DeltaTime);
@@ -376,6 +394,18 @@ private:
 	void HandleSlotDragUpdated(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragReleased(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
 	void HandleSlotDragCancelled(const FGuid& CardInstanceId, const FWacomFirstPersonCardDragView& DragView);
+	void HandleSlotFaceInspectLocked(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotFaceChanged(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
+	void HandleSlotFaceInspectClosed(
+		const FGuid& CardInstanceId,
+		EWacomCardFaceContext FaceContext,
+		const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleSlotEnterTransitionStarted(
 		const FWacomFirstPersonCardEnterTransitionStartedView& View);
 	bool RoutePointerPressToActiveGesture(const FVector2D& WidgetPosition);

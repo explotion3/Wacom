@@ -56,16 +56,36 @@ namespace
 
 	FWacomFirstPersonCardLayerEntry BuildRunFirstPersonCardLayerEntryFromInstance(
 		const FCardInstance& Instance,
-		EWacomFirstPersonCardInteractionIntent InteractionIntent)
+		EWacomFirstPersonCardInteractionIntent InteractionIntent,
+		const bool bAllowLockedFaceInspection)
 	{
-		FWacomCardViewData CardViewData =
-			UWacomCardPresentationBuilder::BuildCardViewData(Instance.Definition);
-		CardViewData.bShowCost = true;
-		CardViewData.bDisabled = false;
-
 		FWacomFirstPersonCardLayerEntry Entry;
 		Entry.CardInstanceId = Instance.InstanceId;
-		Entry.CardViewData = MoveTemp(CardViewData);
+		if (Instance.Definition && Instance.Definition->HasEnabledRunFace())
+		{
+			FWacomCardPresentationRuntimeContext RunRuntimeContext;
+			RunRuntimeContext.bHasPlayableState = true;
+			RunRuntimeContext.bIsPlayable = true;
+			Entry.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(
+				Instance.Definition,
+				EWacomCardFaceContext::Run,
+				RunRuntimeContext);
+			Entry.DefaultFaceContext = EWacomCardFaceContext::Run;
+			Entry.AlternateFaceCardViewData =
+				UWacomCardPresentationBuilder::BuildCardViewDataForFace(
+					Instance.Definition,
+					EWacomCardFaceContext::Battle);
+			Entry.bHasAlternateFace = true;
+			Entry.bAllowLockedFaceInspection = bAllowLockedFaceInspection;
+		}
+		else
+		{
+			Entry.CardViewData =
+				UWacomCardPresentationBuilder::BuildCardViewData(Instance.Definition);
+			Entry.CardViewData.bShowCost = true;
+			Entry.CardViewData.bDisabled = false;
+			Entry.DefaultFaceContext = EWacomCardFaceContext::Battle;
+		}
 		Entry.Zone = EHandZone::None;
 		Entry.bIsHandAnchor = false;
 		Entry.bIsPlayable = true;
@@ -76,11 +96,13 @@ namespace
 
 	FWacomFirstPersonCardLayerEntry BuildRunFirstPersonCardLayerEntryFromWorkspaceEntry(
 		const FRunCardWorkspaceEntry& WorkspaceEntry,
-		EWacomFirstPersonCardInteractionIntent InteractionIntent)
+		EWacomFirstPersonCardInteractionIntent InteractionIntent,
+		const bool bAllowLockedFaceInspection)
 	{
 		return BuildRunFirstPersonCardLayerEntryFromInstance(
 			WorkspaceEntry.Instance,
-			InteractionIntent);
+			InteractionIntent,
+			bAllowLockedFaceInspection);
 	}
 
 	FRunCardWorkspaceRequest BuildDefaultRunCardWorkspaceRequest(
@@ -122,6 +144,8 @@ namespace
 		OutEntries.Reserve(Snapshot.Entries.Num());
 		const EWacomFirstPersonCardInteractionIntent InteractionIntent =
 			ResolveRunFirstPersonCardInteractionIntent(Snapshot.Kind);
+		const bool bAllowLockedFaceInspection =
+			Snapshot.Kind == ERunCardWorkspaceKind::DefaultExploration;
 		for (const FRunCardWorkspaceEntry& WorkspaceEntry : Snapshot.Entries)
 		{
 			if (!WorkspaceEntry.Instance.InstanceId.IsValid()
@@ -132,7 +156,8 @@ namespace
 			OutEntries.Add(
 				BuildRunFirstPersonCardLayerEntryFromWorkspaceEntry(
 					WorkspaceEntry,
-					InteractionIntent));
+					InteractionIntent,
+					bAllowLockedFaceInspection));
 		}
 	}
 

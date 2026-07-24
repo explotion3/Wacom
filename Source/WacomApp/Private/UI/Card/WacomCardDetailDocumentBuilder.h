@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "Cards/WacomCardFaceTypes.h"
 #include "CoreMinimal.h"
 #include "UI/Card/WacomCardPresentationTypes.h"
 
@@ -11,5 +12,6 @@ namespace WacomCardDetailDocumentBuilder
 {
 	FWacomCardDetailViewData BuildCardDetailViewData(
 		const UCardDefinition* Card,
+		EWacomCardFaceContext FaceContext,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext);
 }
