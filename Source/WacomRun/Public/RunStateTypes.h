@@ -168,6 +168,8 @@ namespace WacomRunDeckOperationReasons
 	WACOMRUN_API const FName& CardNotFound();
 	WACOMRUN_API const FName& Intrinsic();
 	WACOMRUN_API const FName& LastCapacityProvider();
+	WACOMRUN_API const FName& DeleteFunctionUnavailable();
+	WACOMRUN_API const FName& LastDeleteProviderRequiresSingleCard();
 	WACOMRUN_API const FName& FluxFull();
 	WACOMRUN_API const FName& BattleDeckFull();
 	WACOMRUN_API const FName& SpecialZoneMissing();
@@ -393,6 +395,10 @@ struct WACOMRUN_API FRunBackpackStorageSnapshot
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
 	int32 BurdenCount = 0;
+
+	/** 玩家当前是否持有至少一张 Card.Keyword.DeleteProvider 实体卡。 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck|Snapshot")
+	bool bDeleteFunctionAvailable = false;
 };
 
 /**

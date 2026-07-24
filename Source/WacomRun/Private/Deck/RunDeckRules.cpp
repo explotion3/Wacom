@@ -58,6 +58,36 @@ bool FRunDeckRules::IsContainerCard(const UCardDefinition* Card)
 	return Card != nullptr && Card->Physique.Capacity > 0;
 }
 
+bool FRunDeckRules::IsDeleteProviderCard(const UCardDefinition* Card)
+{
+	return Card != nullptr
+		&& Card->Keywords.HasTagExact(WacomTags::Card_Keyword_DeleteProvider);
+}
+
+bool FRunDeckRules::HasDeleteProvider(const FRunState& State)
+{
+	auto PileHasProvider = [](const TArray<FCardInstance>& Pile)
+	{
+		return Pile.ContainsByPredicate([](const FCardInstance& Instance)
+		{
+			return IsDeleteProviderCard(Instance.Definition);
+		});
+	};
+
+	if (PileHasProvider(State.Backpack)
+		|| PileHasProvider(State.BattleDeck)
+		|| PileHasProvider(State.BurdenZone))
+	{
+		return true;
+	}
+
+	return State.SpecialZones.ContainsByPredicate(
+		[&PileHasProvider](const FSpecialZone& SpecialZone)
+		{
+			return PileHasProvider(SpecialZone.Cards);
+		});
+}
+
 bool FRunDeckRules::IsTypeAContainerCard(const UCardDefinition* Card)
 {
 	return IsContainerCard(Card) && !Card->Physique.CapacityEffect.IsValid();
@@ -1141,6 +1171,12 @@ FRunDeckBatchDeletePreview FRunDeckRules::ValidateDeleteCardsForGoldAtomic(
 	{
 		return Preview;
 	}
+	if (!HasDeleteProvider(State))
+	{
+		Preview.Validation.bCanExecute = false;
+		Preview.Validation.DisabledReason = DeckReasons::DeleteFunctionUnavailable();
+		return Preview;
+	}
 
 	FRunState WorkingState = State;
 	for (const FGuid InstanceId : Request.InstanceIds)
@@ -1162,6 +1198,14 @@ FRunDeckBatchDeletePreview FRunDeckRules::ValidateDeleteCardsForGoldAtomic(
 			Preview.TotalGoldReward = 0;
 			return Preview;
 		}
+	}
+	if (!HasDeleteProvider(WorkingState) && Request.InstanceIds.Num() != 1)
+	{
+		Preview.Validation.bCanExecute = false;
+		Preview.Validation.DisabledReason =
+			DeckReasons::LastDeleteProviderRequiresSingleCard();
+		Preview.TotalGoldReward = 0;
+		return Preview;
 	}
 	return Preview;
 }

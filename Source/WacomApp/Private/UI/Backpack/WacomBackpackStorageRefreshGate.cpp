@@ -125,6 +125,7 @@ uint32 FWacomBackpackStorageRefreshGate::BuildRefreshSignature(const FRunBackpac
 	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.FluxContentCount));
 	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BattleDeckPhysicalCount));
 	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BurdenCount));
+	Hash = HashBoolForBackpackRefresh(Hash, Snapshot.bDeleteFunctionAvailable);
 	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.Flux.FluxCapacity));
 
 	Hash = HashCombine(Hash, static_cast<uint32>(Snapshot.BattleDeckPhysicalCards.Num()));

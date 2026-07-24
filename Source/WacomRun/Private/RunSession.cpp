@@ -1542,7 +1542,7 @@ bool URunSession::IsBagProviderCard(const UCardDefinition* Card)
 
 bool URunSession::IsDeleteProviderCard(const UCardDefinition* Card)
 {
-	return Card != nullptr && Card->Keywords.HasTagExact(WacomTags::Card_Keyword_DeleteProvider);
+	return FRunDeckRules::IsDeleteProviderCard(Card);
 }
 
 bool URunSession::IsIntrinsicCard(const UCardDefinition* Card)
@@ -1578,6 +1578,7 @@ FRunBackpackStorageSnapshot URunSession::BuildBackpackStorageSnapshot() const
 	Snapshot.BackpackPhysicalCount = RunState.Backpack.Num();
 	Snapshot.BattleDeckPhysicalCount = RunState.BattleDeck.Num();
 	Snapshot.BurdenCount = RunState.BurdenZone.Num();
+	Snapshot.bDeleteFunctionAvailable = IsDeleteFunctionAvailable();
 	Snapshot.Flux.FluxCapacity = Snapshot.FluxCapacity;
 
 	auto MakeCardView = [](const FCardInstance& Inst, EZoneKind PhysicalZone, FGuid ZoneOwnerInstanceId)
@@ -1843,29 +1844,7 @@ bool URunSession::IsDeleteFunctionAvailable() const
 	{
 		return false;
 	}
-	auto HasProvider = [](const TArray<FCardInstance>& Pile)
-	{
-		for (const FCardInstance& Inst : Pile)
-		{
-			if (IsDeleteProviderCard(Inst.Definition))
-			{
-				return true;
-			}
-		}
-		return false;
-	};
-	if (HasProvider(RunState.Backpack) || HasProvider(RunState.BattleDeck) || HasProvider(RunState.BurdenZone))
-	{
-		return true;
-	}
-	for (const FSpecialZone& SpecialZone : RunState.SpecialZones)
-	{
-		if (HasProvider(SpecialZone.Cards))
-		{
-			return true;
-		}
-	}
-	return false;
+	return FRunDeckRules::HasDeleteProvider(RunState);
 }
 
 bool URunSession::FindInstance(FGuid InstanceId, FCardInstance& OutInstance, EZoneKind& OutZone, FGuid& OutZoneOwnerInstanceId) const
@@ -2052,7 +2031,19 @@ FRunDeckOperationValidation URunSession::ValidateDeleteCardForGoldByInstance(FGu
 		Result.DisabledReason = TEXT("RunAlreadySucceeded");
 		return Result;
 	}
-	return FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
+	FRunDeckOperationValidation Result =
+		FRunDeckRules::ValidatePermanentRemoveInstance(RunState, InstanceId);
+	if (!Result.bCanExecute)
+	{
+		return Result;
+	}
+	if (!FRunDeckRules::HasDeleteProvider(RunState))
+	{
+		Result.bCanExecute = false;
+		Result.DisabledReason =
+			WacomRunDeckOperationReasons::DeleteFunctionUnavailable();
+	}
+	return Result;
 }
 
 // ================ §11.7 / 经济：金币 ================

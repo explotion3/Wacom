@@ -28,6 +28,8 @@ struct FRunDeckRules
 	static bool IsContainerCard(const UCardDefinition* Card);
 	static bool IsTypeAContainerCard(const UCardDefinition* Card);
 	static bool IsTypeBContainerCard(const UCardDefinition* Card);
+	static bool IsDeleteProviderCard(const UCardDefinition* Card);
+	static bool HasDeleteProvider(const FRunState& State);
 	static int32 GetSpecialZoneCapacity(const UCardDefinition* BCard);
 
 	static bool IsFluxContentCardDefinition(const UCardDefinition* Card);

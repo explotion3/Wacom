@@ -76,9 +76,12 @@ bool FWacomRunBackpackBatchDeleteAtomicSpec::RunTest(const FString& Parameters)
 {
 	UObject* Outer = GetTransientPackage();
 	UCardDefinition* Bag = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.Bag"), FGameplayTag(), 5);
+	UCardDefinition* Provider = MakeBatchDeleteCard(
+		Outer, TEXT("BatchDelete.Provider"), FGameplayTag());
+	Provider->Keywords.AddTag(WacomTags::Card_Keyword_DeleteProvider);
 	UCardDefinition* White = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.White"), WacomTags::Card_Rarity_White);
 	UCardDefinition* Blue = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.Blue"), WacomTags::Card_Rarity_Blue);
-	TStrongObjectPtr<URunSession> Run(MakeBatchDeleteRun(Outer, { Bag }));
+	TStrongObjectPtr<URunSession> Run(MakeBatchDeleteRun(Outer, { Bag, Provider }));
 	Run->AcquireCardToRun(White);
 	Run->AcquireCardToRun(Blue);
 	const FGuid WhiteId = FindDeleteCardId(Run->GetRunState(), White);
@@ -103,9 +106,14 @@ bool FWacomRunBackpackBatchDeleteAtomicSpec::RunTest(const FString& Parameters)
 	TestFalse(TEXT("Blue card is gone"), FindDeleteCardId(Run->GetRunState(), Blue).IsValid());
 
 	UCardDefinition* RollbackBag = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.RollbackBag"), FGameplayTag(), 5);
+	UCardDefinition* RollbackProvider = MakeBatchDeleteCard(
+		Outer, TEXT("BatchDelete.RollbackProvider"), FGameplayTag());
+	RollbackProvider->Keywords.AddTag(
+		WacomTags::Card_Keyword_DeleteProvider);
 	UCardDefinition* Valid = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.Valid"), WacomTags::Card_Rarity_White);
 	UCardDefinition* Intrinsic = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.Intrinsic"), WacomTags::Card_Rarity_Intrinsic);
-	TStrongObjectPtr<URunSession> RollbackRun(MakeBatchDeleteRun(Outer, { RollbackBag }));
+	TStrongObjectPtr<URunSession> RollbackRun(
+		MakeBatchDeleteRun(Outer, { RollbackBag, RollbackProvider }));
 	RollbackRun->AcquireCardToRun(Valid);
 	RollbackRun->AcquireCardToRun(Intrinsic);
 	const FGuid ValidId = FindDeleteCardId(RollbackRun->GetRunState(), Valid);
@@ -142,9 +150,15 @@ bool FWacomRunBackpackBatchDeleteAtomicSpec::RunTest(const FString& Parameters)
 
 	UCardDefinition* CapacityA = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.CapacityA"), FGameplayTag(), 1);
 	UCardDefinition* CapacityB = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.CapacityB"), FGameplayTag(), 1);
+	UCardDefinition* CapacityProvider = MakeBatchDeleteCard(
+		Outer, TEXT("BatchDelete.CapacityProvider"), FGameplayTag());
+	CapacityProvider->Keywords.AddTag(
+		WacomTags::Card_Keyword_DeleteProvider);
 	UCardDefinition* LoadA = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.LoadA"));
 	UCardDefinition* LoadB = MakeBatchDeleteCard(Outer, TEXT("BatchDelete.LoadB"));
-	TStrongObjectPtr<URunSession> BurdenRun(MakeBatchDeleteRun(Outer, { CapacityA, CapacityB }));
+	TStrongObjectPtr<URunSession> BurdenRun(
+		MakeBatchDeleteRun(
+			Outer, { CapacityA, CapacityB, CapacityProvider }));
 	BurdenRun->AcquireCardToRun(LoadA);
 	BurdenRun->AcquireCardToRun(LoadB);
 	EZoneKind CapacityZone = EZoneKind::Backpack;

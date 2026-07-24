@@ -67,6 +67,13 @@ namespace
 		return Card;
 	}
 
+	UCardDefinition* MakeSaleAbilityProviderCard(FWacomBattleFixture& Fx)
+	{
+		UCardDefinition* Card = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+		Card->Keywords.AddTag(WacomTags::Card_Keyword_DeleteProvider);
+		return Card;
+	}
+
 	UCardDefinition* MakeTypeAContainerCard(FWacomBattleFixture& Fx, int32 Capacity, FName CardId = NAME_None)
 	{
 		UCardDefinition* Card = Fx.MakeNoopCard(0);
@@ -611,6 +618,7 @@ bool FWacomRunDeckDestroyBugGirlBagAllowedWhenLanternProvidesCapacitySpec::RunTe
 	UCardDefinition* Normal3 = Fx.MakeNoopCard(0);
 	UCardDefinition* Bag = MakeBagCard(Fx, 4);
 	UCardDefinition* Lantern = MakeTypeAContainerCard(Fx, 3, TEXT("MuseiYinchongdeng"));
+	Lantern->Keywords.AddTag(WacomTags::Card_Keyword_DeleteProvider);
 
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
@@ -755,9 +763,10 @@ bool FWacomRunDeckDestroyCardFromAllOwnedZonesSpec::RunTest(const FString& /*Par
 	{
 		UCardDefinition* Bag = MakeBagCard(Fx, 8);
 		UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
+		UCardDefinition* DeleteProvider = MakeSaleAbilityProviderCard(Fx);
 		OutTarget = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
 
-		TArray<UCardDefinition*> Starter = { Bag, TypeB };
+		TArray<UCardDefinition*> Starter = { Bag, TypeB, DeleteProvider };
 		if (TargetZone == EZoneKind::BattleDeck)
 		{
 			Starter.Add(OutTarget);
@@ -1004,9 +1013,10 @@ bool FWacomRunDeckDeleteCardForGoldByRaritySpec::RunTest(const FString& /*Parame
 	UCardDefinition* YellowCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Yellow);
 	UCardDefinition* PurpleCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Purple);
 	UCardDefinition* Bag = MakeBagCard(Fx, 5);
+	UCardDefinition* DeleteProvider = MakeSaleAbilityProviderCard(Fx);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ WhiteCard, BlueCard, YellowCard, PurpleCard, Bag });
+		{ WhiteCard, BlueCard, YellowCard, PurpleCard, Bag, DeleteProvider });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	InitializeRunSessionForTest(*Run, Char).IsOk();
 
@@ -1044,9 +1054,10 @@ bool FWacomRunDeckDeleteCardForGoldFromBurdenAndSpecialZoneSpec::RunTest(const F
 	UCardDefinition* BlueCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Blue);
 	UCardDefinition* Bag = MakeBagCard(Fx, 8);
 	UCardDefinition* TypeB = MakeTypeBContainerCard(Fx, 3);
+	UCardDefinition* DeleteProvider = MakeSaleAbilityProviderCard(Fx);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ Bag, TypeB });
+		{ Bag, TypeB, DeleteProvider });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	InitializeRunSessionForTest(*Run, Char).IsOk();
 
@@ -1093,9 +1104,10 @@ bool FWacomRunDeckDeleteCardForGoldValidationSpec::RunTest(const FString& /*Para
 	UCardDefinition* IntrinsicCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_Intrinsic);
 	UCardDefinition* OnlyBag = MakeBagCard(Fx, 5);
 	UCardDefinition* MissingCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
+	UCardDefinition* DeleteProvider = MakeSaleAbilityProviderCard(Fx);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ WhiteCard, IntrinsicCard, OnlyBag });
+		{ WhiteCard, IntrinsicCard, OnlyBag, DeleteProvider });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	InitializeRunSessionForTest(*Run, Char).IsOk();
 
@@ -1129,9 +1141,10 @@ bool FWacomRunDeckDeleteCardForGoldByInstanceRemovesOnlyRequestedIdSpec::RunTest
 
 	UCardDefinition* SharedCard = MakeCardWithRarity(Fx, WacomTags::Card_Rarity_White);
 	UCardDefinition* Bag = MakeBagCard(Fx, 5);
+	UCardDefinition* DeleteProvider = MakeSaleAbilityProviderCard(Fx);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ Bag, SharedCard, SharedCard });
+		{ Bag, SharedCard, SharedCard, DeleteProvider });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	InitializeRunSessionForTest(*Run, Char).IsOk();
 
@@ -1185,9 +1198,10 @@ bool FWacomRunDeckDeleteSameDefinitionCapacityInstanceRulesSpec::RunTest(const F
 	FWacomBattleFixture Fx;
 
 	UCardDefinition* SharedContainer = MakeTypeAContainerCard(Fx, 3);
+	UCardDefinition* DeleteProvider = MakeSaleAbilityProviderCard(Fx);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ SharedContainer, SharedContainer });
+		{ SharedContainer, SharedContainer, DeleteProvider });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	InitializeRunSessionForTest(*Run, Char).IsOk();
 
@@ -1227,9 +1241,10 @@ bool FWacomRunDeckDeleteBMainInstanceClearsOnlyMatchingSpecialZoneSpec::RunTest(
 	UCardDefinition* SharedBMain = MakeTypeBContainerCard(Fx, 3);
 	UCardDefinition* FirstContent = Fx.MakeNoopCard(0);
 	UCardDefinition* SecondContent = Fx.MakeNoopCard(0);
+	UCardDefinition* DeleteProvider = MakeSaleAbilityProviderCard(Fx);
 	UCharacterDefinition* Char = Fx.MakeCharacter(
 		Fx.MakeNoopCard(1), Fx.MakeNoopCard(1),
-		{ TypeA, SharedBMain, SharedBMain });
+		{ TypeA, SharedBMain, SharedBMain, DeleteProvider });
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>());
 	InitializeRunSessionForTest(*Run, Char).IsOk();
 
