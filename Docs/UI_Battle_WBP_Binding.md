@@ -674,7 +674,9 @@ Tooltip 父类为 `UWacomBattleIntentTooltipWidget`，约 `320px` 宽；必需�
 | `DestroyedOverlay` | `Widget` | 当前部位终态 |
 | `CloseButton` | `Button` | 被动 Close 请求 |
 
-必需动画：`OpenLeftAnimation=180ms`、`OpenRightAnimation=240ms`、`CloseAnimation=160ms`，都必须有真实 widget binding。左栏先进入，右栏由弱 Timer 延迟 `40ms`；clear / destruct 取消该 Timer。Root 为 `SelfHitTestInvisible`；`CloseButton`、部位 Row 按钮和 `IntentTooltipTarget` 可命中，祖先链必须允许子控件命中。切换部位或 Intent 刷新会刷新 Intent Tooltip 与真实 StatusList；开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭并清理 Tooltip。
+必需动画：共享 `OpenAnimation≈240ms` 与 `CloseAnimation≈160ms`，都必须有真实 widget binding。`OpenAnimation` 在同一 MovieScene 内绑定 `LeftPanel` 与 `RightPanel`，右栏关键帧相对左栏延后约 `30–40ms`；禁止重新引入独立 `OpenLeftAnimation / OpenRightAnimation` 或 World Timer 拼接开场。敌人 Scene Host 注册后，HUD coordinator 会预创建并以 `Collapsed` 挂载档案 Widget，使首次点击不再同步加载 WBP、创建 Slate Tree 后才播放动画。
+
+Root 为 `SelfHitTestInvisible`。必需 `BackdropButton` 是 `InspectionRoot` 的第一个子节点，Canvas Anchors 必须铺满 `0,0 → 1,1`、Offsets 为零、样式透明且不可聚焦；它位于左右面板之后，仅消费面板外点击并广播同一关闭意图。`CloseButton`、部位 Row 按钮和 `IntentTooltipTarget` 可命中，祖先链必须允许子控件命中。切换部位或 Intent 刷新会刷新 Intent Tooltip 与真实 StatusList；开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭并清理 Tooltip。关闭动画尚未完成时再次打开，必须停止旧动画并从权威 ViewData 重播共享开场，不得遗留延时回调。
 
 ### WBP_WacomBattleEnemyInspectionPartRowWidget
 

@@ -82,9 +82,6 @@ private:
 	bool EnsureValidSelection();
 	FName BuildPartRowKey(const FWacomBattleEnemyPartEntryViewData& PartView) const;
 	void HandlePartRowSelected(const FBattlePartSlotIdentity& PartIdentity);
-	void ScheduleRightPanelOpen();
-	void PlayRightPanelOpen();
-	void CancelRightPanelOpenTimer();
 	void EnsureIntentTooltipBinding();
 	void RefreshIntentPresentation(
 		const FWacomBattleEnemyPartEntryViewData* Part);
@@ -97,7 +94,13 @@ private:
 	void HandleCloseClicked();
 
 	UFUNCTION()
+	void HandleBackdropClicked();
+
+	UFUNCTION()
 	void HandleCloseAnimationFinished();
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> BackdropButton = nullptr;
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWidget> LeftPanel = nullptr;
@@ -154,10 +157,7 @@ private:
 	TObjectPtr<UButton> CloseButton = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
-	TObjectPtr<UWidgetAnimation> OpenLeftAnimation = nullptr;
-
-	UPROPERTY(Transient, meta = (BindWidgetAnim))
-	TObjectPtr<UWidgetAnimation> OpenRightAnimation = nullptr;
+	TObjectPtr<UWidgetAnimation> OpenAnimation = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
 	TObjectPtr<UWidgetAnimation> CloseAnimation = nullptr;
@@ -170,8 +170,6 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomBattleIntentTooltipWidget> CachedIntentTooltipWidget = nullptr;
-
-	FTimerHandle RightPanelOpenTimerHandle;
 
 	bool bHasViewData = false;
 	bool bOpen = false;

@@ -1250,7 +1250,13 @@ void FWacomBattleHUDRuntime::PrimeReshufflePileFeedbackForTest(
 void FWacomBattleHUDRuntime::SetBattleSceneEnemyHosts(
 	const TArray<AWacomBattleEnemyActor*>& InHosts)
 {
-	GetSceneEnemyTargetCoordinator().SetSceneEnemyHosts(InHosts);
+	FWacomBattleHUDSceneEnemyTargetCoordinator& SceneCoordinator =
+		GetSceneEnemyTargetCoordinator();
+	SceneCoordinator.SetSceneEnemyHosts(InHosts);
+	if (SceneCoordinator.HasSceneEnemyHost())
+	{
+		GetEnemyInspectionCoordinator().PrewarmInspection();
+	}
 }
 
 bool FWacomBattleHUDRuntime::IsBattleSceneEnemyHostInCurrentRegistry(

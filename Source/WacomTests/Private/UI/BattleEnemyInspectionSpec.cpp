@@ -6,6 +6,8 @@
 #include "Blueprint/WidgetBlueprintGeneratedClass.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
 #include "Components/PanelWidget.h"
 #include "Components/ProgressBar.h"
@@ -194,6 +196,7 @@ bool FWacomUIBattleEnemyInspectionAssetContractSpec::RunTest(const FString& /*Pa
 	TestEqual(TEXT("Inspection uses formal Intent tooltip"),
 		Widget->GetIntentTooltipWidgetClass().Get(), IntentTooltipClass);
 	const TArray<FName> RequiredBindings = {
+		TEXT("BackdropButton"),
 		TEXT("LeftPanel"), TEXT("RightPanel"), TEXT("EnemyNameText"),
 		TEXT("EnemyStateText"), TEXT("PartNavigator"), TEXT("SelectedPartNameText"),
 		TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"), TEXT("ShieldText"),
@@ -218,13 +221,31 @@ bool FWacomUIBattleEnemyInspectionAssetContractSpec::RunTest(const FString& /*Pa
 		IntentTooltipTarget && IntentIcon
 		&& IntentTooltipTarget->GetContent() == IntentIcon
 		&& IntentIcon->GetParent() == IntentTooltipTarget);
-	UWidgetAnimation* OpenLeft = FindAnimation(Widget, TEXT("OpenLeftAnimation"));
-	UWidgetAnimation* OpenRight = FindAnimation(Widget, TEXT("OpenRightAnimation"));
+	UButton* BackdropButton = FindWidget<UButton>(Widget, TEXT("BackdropButton"));
+	const UCanvasPanel* InspectionRoot =
+		Cast<UCanvasPanel>(Widget->WidgetTree->RootWidget);
+	const UCanvasPanelSlot* BackdropSlot = BackdropButton
+		? Cast<UCanvasPanelSlot>(BackdropButton->Slot)
+		: nullptr;
+	TestTrue(TEXT("Backdrop is a non-focusable full-screen close surface"),
+		BackdropButton
+		&& !BackdropButton->GetIsFocusable()
+		&& BackdropButton->GetVisibility() == ESlateVisibility::Visible
+		&& InspectionRoot
+		&& BackdropButton->GetParent() == InspectionRoot
+		&& InspectionRoot->GetChildIndex(BackdropButton) == 0
+		&& BackdropSlot
+		&& BackdropSlot->GetAnchors().Minimum.Equals(FVector2D::ZeroVector)
+		&& BackdropSlot->GetAnchors().Maximum.Equals(FVector2D(1.0f, 1.0f)));
+	UWidgetAnimation* Open = FindAnimation(Widget, TEXT("OpenAnimation"));
 	UWidgetAnimation* Close = FindAnimation(Widget, TEXT("CloseAnimation"));
-	TestTrue(TEXT("Left opens over 180ms"),
-		OpenLeft && FMath::IsNearlyEqual(GetAuthoredAnimationEndTime(OpenLeft), 0.18f, 0.02f));
-	TestTrue(TEXT("Right opens over 240ms"),
-		OpenRight && FMath::IsNearlyEqual(GetAuthoredAnimationEndTime(OpenRight), 0.24f, 0.02f));
+	TestTrue(TEXT("Both dossier panels share one 240ms open timeline"),
+		Open && Open->GetBindings().Num() >= 2
+		&& FMath::IsNearlyEqual(GetAuthoredAnimationEndTime(Open), 0.24f, 0.02f));
+	TestNull(TEXT("Legacy left-only opening timeline is removed"),
+		FindAnimation(Widget, TEXT("OpenLeftAnimation")));
+	TestNull(TEXT("Legacy right-only opening timeline is removed"),
+		FindAnimation(Widget, TEXT("OpenRightAnimation")));
 	TestTrue(TEXT("Close resolves over 160ms"),
 		Close && FMath::IsNearlyEqual(GetAuthoredAnimationEndTime(Close), 0.16f, 0.02f));
 	USizeBox* LeftPanel = FindWidget<USizeBox>(Widget, TEXT("LeftPanel"));
@@ -381,13 +402,22 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 	int32 CloseRequestCount = 0;
 	Widget->OnCloseRequestedNative.AddLambda([&CloseRequestCount]() { ++CloseRequestCount; });
 	UButton* CloseButton = FindWidget<UButton>(Widget, TEXT("CloseButton"));
-	if (!TestNotNull(TEXT("Close button"), CloseButton))
+	UButton* BackdropButton = FindWidget<UButton>(Widget, TEXT("BackdropButton"));
+	if (!TestNotNull(TEXT("Close button"), CloseButton)
+		|| !TestNotNull(TEXT("Backdrop button"), BackdropButton))
 	{
 		return false;
 	}
+	TestTrue(TEXT("Backdrop handler is callable"),
+		InvokeWidgetHandler(Widget, TEXT("HandleBackdropClicked")));
+	TestEqual(TEXT("Backdrop emits one passive close request"), CloseRequestCount, 1);
+	Widget->CloseInspection(false);
+	Widget->OpenInspection();
+	TestTrue(TEXT("Reopen interrupts retirement without leaving the dossier closed"),
+		Widget->IsInspectionOpen());
 	TestTrue(TEXT("Close handler is callable"),
 		InvokeWidgetHandler(Widget, TEXT("HandleCloseClicked")));
-	TestEqual(TEXT("Close button emits one passive request"), CloseRequestCount, 1);
+	TestEqual(TEXT("Close button emits one additional passive request"), CloseRequestCount, 2);
 	Widget->CloseInspection(true);
 	TestFalse(TEXT("Immediate lifecycle clear closes the widget"), Widget->IsInspectionOpen());
 	TestNull(TEXT("Closed inspection does not build a stale Intent tooltip"),

@@ -18,6 +18,7 @@ public:
 	bool ToggleInspection(
 		const FWacomBattleEnemyPanelViewData& EnemyView,
 		const FBattlePartSlotIdentity& PartIdentity);
+	void PrewarmInspection();
 	void UpdateEnemyView(const FWacomBattleEnemyPanelViewData& EnemyView);
 	bool TryCloseInspection();
 	void CloseInspection(bool bImmediate);

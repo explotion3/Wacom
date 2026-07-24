@@ -71,6 +71,16 @@ bool FWacomBattleHUDEnemyInspectionCoordinator::ToggleInspection(
 	return true;
 }
 
+void FWacomBattleHUDEnemyInspectionCoordinator::PrewarmInspection()
+{
+	const APlayerController* OwningPlayer = Runtime.GetOwningPlayer();
+	if (!OwningPlayer || !OwningPlayer->GetLocalPlayer())
+	{
+		return;
+	}
+	EnsureWidget();
+}
+
 void FWacomBattleHUDEnemyInspectionCoordinator::UpdateEnemyView(
 	const FWacomBattleEnemyPanelViewData& EnemyView)
 {

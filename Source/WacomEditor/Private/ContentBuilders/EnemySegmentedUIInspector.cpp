@@ -9,6 +9,8 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/Border.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/HorizontalBox.h"
 #include "Components/Image.h"
 #include "Components/PanelWidget.h"
@@ -46,7 +48,8 @@ namespace
 	constexpr TCHAR FontPath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/F_Silkscreen.F_Silkscreen");
 	constexpr TCHAR BoldFacePath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/FF_Silkscreen_Bold.FF_Silkscreen_Bold");
 	constexpr TCHAR RegularFacePath[] = TEXT("/Game/Wacom/UI/Foundation/Fonts/Silkscreen/FF_Silkscreen_Regular.FF_Silkscreen_Regular");
-	constexpr TCHAR InspectionMarker[] = TEXT("WacomEnemyInspection.ContractVersion=2");
+	constexpr TCHAR InspectionMarker[] = TEXT("WacomEnemyInspection.ContractVersion=3");
+	constexpr TCHAR InspectionRowMarker[] = TEXT("WacomEnemyInspection.ContractVersion=2");
 	constexpr TCHAR LegacyPanelPackage[] = TEXT("/Game/Wacom/UI/Enemy/Textures/T_UI_PixelPanel_EnemyInfo_9Slice_512x160");
 	constexpr TCHAR LegacySinglePanelPackage[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartPanelWidget");
 	constexpr TCHAR LegacySingleEntryPackage[] = TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemySinglePartEntryWidget");
@@ -174,6 +177,57 @@ namespace
 				Duration);
 		}
 		return bValid;
+	}
+
+	bool AnimationBindsWidget(
+		const UWidgetAnimation* Animation,
+		const FName WidgetName)
+	{
+		if (!Animation)
+		{
+			return false;
+		}
+		for (const FWidgetAnimationBinding& Binding
+			: Animation->AnimationBindings)
+		{
+			if (Binding.WidgetName == WidgetName)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool IsInspectionBackdropValid(const UWidgetBlueprint& Blueprint)
+	{
+		const UButton* Backdrop = Blueprint.WidgetTree
+			? Cast<UButton>(
+				Blueprint.WidgetTree->FindWidget(TEXT("BackdropButton")))
+			: nullptr;
+		const UCanvasPanel* Root = Blueprint.WidgetTree
+			? Cast<UCanvasPanel>(Blueprint.WidgetTree->RootWidget)
+			: nullptr;
+		const UCanvasPanelSlot* Slot = Backdrop
+			? Cast<UCanvasPanelSlot>(Backdrop->Slot)
+			: nullptr;
+		if (!Backdrop
+			|| !Root
+			|| !Slot
+			|| Backdrop->GetParent() != Root
+			|| Root->GetChildIndex(Backdrop) != 0
+			|| Backdrop->GetIsFocusable()
+			|| Backdrop->GetVisibility() != ESlateVisibility::Visible)
+		{
+			return false;
+		}
+		const FAnchors Anchors = Slot->GetAnchors();
+		const FMargin Offsets = Slot->GetOffsets();
+		return Anchors.Minimum.Equals(FVector2D::ZeroVector)
+			&& Anchors.Maximum.Equals(FVector2D(1.0f, 1.0f))
+			&& Offsets.Left == 0.0f
+			&& Offsets.Top == 0.0f
+			&& Offsets.Right == 0.0f
+			&& Offsets.Bottom == 0.0f;
 	}
 
 	bool ValidateHitTesting(const UWidgetBlueprint& Blueprint)
@@ -370,7 +424,7 @@ namespace
 		};
 		bool bValid = Blueprint
 			&& Blueprint->ParentClass == UWacomBattleEnemyInspectionPartRowWidget::StaticClass()
-			&& Blueprint->BlueprintDescription.Contains(InspectionMarker)
+			&& Blueprint->BlueprintDescription.Contains(InspectionRowMarker)
 			&& ValidateHitTesting(*Blueprint);
 		for (const FWidgetRequirement& Binding : Required)
 		{
@@ -382,6 +436,7 @@ namespace
 	bool ValidateInspection(const UWidgetBlueprint* Blueprint, const UWidgetBlueprint* Row, UWacomBattleEnemyIntentPresentationStyle* Style)
 	{
 		const FWidgetRequirement Required[] = {
+			{ TEXT("BackdropButton"), UButton::StaticClass() },
 			{ TEXT("LeftPanel"), USizeBox::StaticClass() }, { TEXT("RightPanel"), USizeBox::StaticClass() },
 			{ TEXT("EnemyNameText"), UTextBlock::StaticClass() }, { TEXT("EnemyStateText"), UTextBlock::StaticClass() },
 			{ TEXT("PartNavigator"), UPanelWidget::StaticClass() }, { TEXT("SelectedPartNameText"), UTextBlock::StaticClass() },
@@ -434,10 +489,17 @@ namespace
 			CheckInspection(FString::Printf(TEXT("binding %s"), *Binding.Name.ToString()),
 				HasWidget(Blueprint, Binding.Name, Binding.Class));
 		}
-		CheckInspection(TEXT("OpenLeftAnimation"),
-			HasAnimation(Blueprint, TEXT("OpenLeftAnimation"), 0.18f));
-		CheckInspection(TEXT("OpenRightAnimation"),
-			HasAnimation(Blueprint, TEXT("OpenRightAnimation"), 0.24f));
+		CheckInspection(TEXT("full-screen non-focusable backdrop behind both panels"),
+			IsInspectionBackdropValid(*Blueprint));
+		const UWidgetAnimation* OpenAnimation =
+			FindAnimation(Blueprint, TEXT("OpenAnimation"));
+		CheckInspection(TEXT("OpenAnimation"),
+			HasAnimation(Blueprint, TEXT("OpenAnimation"), 0.24f)
+			&& AnimationBindsWidget(OpenAnimation, TEXT("LeftPanel"))
+			&& AnimationBindsWidget(OpenAnimation, TEXT("RightPanel")));
+		CheckInspection(TEXT("legacy split opening animations are absent"),
+			!FindAnimation(Blueprint, TEXT("OpenLeftAnimation"))
+			&& !FindAnimation(Blueprint, TEXT("OpenRightAnimation")));
 		CheckInspection(TEXT("CloseAnimation"),
 			HasAnimation(Blueprint, TEXT("CloseAnimation"), 0.16f));
 		const USizeBox* Left = Blueprint && Blueprint->WidgetTree

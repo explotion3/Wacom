@@ -9,7 +9,6 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
-#include "Engine/World.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentation.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
@@ -101,11 +100,10 @@ void UWacomBattleEnemyInspectionWidget::OpenInspection()
 		StatusList->SetStatusInspectionEnabled(true);
 	}
 	RefreshIntentPresentation(FindSelectedPart());
-	if (OpenLeftAnimation)
+	if (OpenAnimation)
 	{
-		PlayAnimation(OpenLeftAnimation);
+		PlayAnimation(OpenAnimation);
 	}
-	ScheduleRightPanelOpen();
 }
 
 void UWacomBattleEnemyInspectionWidget::CloseInspection(const bool bImmediate)
@@ -122,7 +120,6 @@ void UWacomBattleEnemyInspectionWidget::CloseInspection(const bool bImmediate)
 		StatusList->SetStatusInspectionEnabled(false);
 	}
 	ClearIntentPresentation();
-	CancelRightPanelOpenTimer();
 	if (bImmediate || !CloseAnimation)
 	{
 		StopAllAnimations();
@@ -191,6 +188,11 @@ void UWacomBattleEnemyInspectionWidget::NativeConstruct()
 		CloseButton->OnClicked.RemoveAll(this);
 		CloseButton->OnClicked.AddDynamic(this, &ThisClass::HandleCloseClicked);
 	}
+	if (BackdropButton)
+	{
+		BackdropButton->OnClicked.RemoveAll(this);
+		BackdropButton->OnClicked.AddDynamic(this, &ThisClass::HandleBackdropClicked);
+	}
 	if (StatusList)
 	{
 		StatusList->SetMaxVisibleStatuses(0);
@@ -206,10 +208,13 @@ void UWacomBattleEnemyInspectionWidget::NativeConstruct()
 
 void UWacomBattleEnemyInspectionWidget::NativeDestruct()
 {
-	CancelRightPanelOpenTimer();
 	if (CloseButton)
 	{
 		CloseButton->OnClicked.RemoveAll(this);
+	}
+	if (BackdropButton)
+	{
+		BackdropButton->OnClicked.RemoveAll(this);
 	}
 	if (CloseAnimation)
 	{
@@ -527,6 +532,11 @@ void UWacomBattleEnemyInspectionWidget::HandleCloseClicked()
 	OnCloseRequestedNative.Broadcast();
 }
 
+void UWacomBattleEnemyInspectionWidget::HandleBackdropClicked()
+{
+	OnCloseRequestedNative.Broadcast();
+}
+
 void UWacomBattleEnemyInspectionWidget::HandleCloseAnimationFinished()
 {
 	if (CloseAnimation)
@@ -536,49 +546,4 @@ void UWacomBattleEnemyInspectionWidget::HandleCloseAnimationFinished()
 	bOpen = false;
 	bClosing = false;
 	SetVisibility(ESlateVisibility::Collapsed);
-}
-
-void UWacomBattleEnemyInspectionWidget::ScheduleRightPanelOpen()
-{
-	CancelRightPanelOpenTimer();
-	if (!OpenRightAnimation)
-	{
-		return;
-	}
-	if (!GetWorld())
-	{
-		PlayRightPanelOpen();
-		return;
-	}
-
-	FTimerDelegate Delegate = FTimerDelegate::CreateWeakLambda(this, [this]()
-	{
-		PlayRightPanelOpen();
-	});
-	GetWorld()->GetTimerManager().SetTimer(
-		RightPanelOpenTimerHandle,
-		MoveTemp(Delegate),
-		0.04f,
-		false);
-}
-
-void UWacomBattleEnemyInspectionWidget::PlayRightPanelOpen()
-{
-	RightPanelOpenTimerHandle.Invalidate();
-	if (bOpen && !bClosing && OpenRightAnimation)
-	{
-		PlayAnimation(OpenRightAnimation);
-	}
-}
-
-void UWacomBattleEnemyInspectionWidget::CancelRightPanelOpenTimer()
-{
-	if (RightPanelOpenTimerHandle.IsValid())
-	{
-		if (UWorld* World = GetWorld())
-		{
-			World->GetTimerManager().ClearTimer(RightPanelOpenTimerHandle);
-		}
-		RightPanelOpenTimerHandle.Invalidate();
-	}
 }

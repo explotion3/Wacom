@@ -221,6 +221,8 @@ HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 id
 
 Intent Tooltip 只消费 `FIntentSnapshot.Effects` 传入的权威事实。App-private `FWacomBattleIntentPresentationBuilder` 仅负责中文、Status Catalog 图标/核心说明和布局；它只聚合相邻且效果、目标、Magnitude、Duration 完全相同的行，不能跨越其它效果合并。头顶与档案 Intent 图标使用标准 `ToolTipWidgetDelegate`，由 Slate 跟随鼠标和 Clamp；Tooltip 最多直接显示五行。敌情档案正文的 `StatusList` 只显示当前部位真实 Buff / Debuff，没有状态时保持空白，不把 Intent 效果混入状态区域。拖卡、TargetSelect、Action Preview、交互门禁关闭、部位破坏与 teardown 会立即清理 Tooltip；Action Preview 的抵抗比较图标不开放该入口。未知效果保留完整 GameplayTag、数值与未知目标回退，不静默隐藏。
 
+敌情档案在首个有效 Scene Enemy Host 注册时由 `FWacomBattleHUDEnemyInspectionCoordinator` 预创建并以 `Collapsed` 挂载，点击只刷新 ViewData、切换可见性并播放开场，不在输入帧同步加载 WBP 或创建 Widget Tree。档案使用覆盖 Viewport 的透明、不可聚焦 Backdrop；点击左右面板外的空白区域与点击关闭按钮发送同一被动关闭意图并消费该次点击。左右栏开场由一个约 `0.24s` 的 `OpenAnimation` 统一驱动，右栏在同一时间线内延后约两帧；不使用独立动画加弱 Timer，避免帧量化和首次构建共同造成卡顿。快速关闭再打开会停止退场动画并从当前权威 ViewData 重新开场。
+
 BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、preview、panel；同批队列只保留弱 Host/Part 引用完成已排队 Action 或 terminal clip。真正的探索场景退役仍由 GameMode 的 weak Encounter scene binding callback 在胜利结算和返回镜头 barrier 完成后执行：清运行时表现、隐藏 Host 并关闭交互，Node Anchor 与 binding 保留。Withdraw、Defeat、Undetermined 或结算失败不退役。
 
 ### 正式内容口径
