@@ -539,15 +539,17 @@ bool FWacomBackpackScreenTestAccess::ToggleWorkspaceCardSelection(
 		EKeys::LeftMouseButton,
 		0.0f,
 		ControlModifier);
-	const bool bDownHandled = Workspace.HandleCardPointerDownAtLocal(
-		&Card,
-		Pointer,
-		PointerDown,
-		false).IsEventHandled();
-	const bool bUpHandled = Workspace.HandleCardPointerUp(
-		&Card,
-		FGeometry(),
-		PointerUp).IsEventHandled();
+	FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+	const bool bDownHandled = IsWacomBackpackInputHandled(
+		Workspace.GetRuntime().Gesture.HandleCardPointerDown(
+			Host,
+			&Card,
+			PointerDown,
+			false));
+	const bool bUpHandled = IsWacomBackpackInputHandled(
+		Workspace.GetRuntime().Gesture.HandleCardPointerUp(
+			Host,
+			PointerUp));
 	return bDownHandled && bUpHandled;
 }
 
@@ -727,16 +729,21 @@ bool FWacomBackpackScreenTestAccess::PressExpandedPileVisualCard(
 		false,
 		false,
 		false);
+	const FVector2D PointerAbsolute =
+		Workspace.GetCachedGeometry().LocalToAbsolute(PointerLocal);
 	const FPointerEvent PointerDown(
 		0,
-		FVector2D::ZeroVector,
-		FVector2D::ZeroVector,
+		PointerAbsolute,
+		PointerAbsolute,
 		PressedButtons,
 		EKeys::LeftMouseButton,
 		0.0f,
 		Modifiers);
-	return Workspace.TryHandleExpandedPileVisualPointerDown(
-		PointerLocal, PointerDown).IsEventHandled();
+	FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+	return IsWacomBackpackInputHandled(
+		Workspace.GetRuntime().Gesture.HandleWorkspacePointerDown(
+			Host,
+			PointerDown));
 }
 
 bool FWacomBackpackScreenTestAccess::ResolveWorkspaceCardDetailAnchorRect(
@@ -784,18 +791,34 @@ bool FWacomBackpackScreenTestAccess::MarqueeWorkspacePileContents(
 	const FVector2D End(Frame.Right - 4.0f, Frame.Bottom - 4.0f);
 	// Drive the same local-space state transition used by the runtime pointer
 	// handler without constructing an FReply for this unarranged unit fixture.
+	const FVector2D StartAbsolute =
+		Workspace.GetCachedGeometry().LocalToAbsolute(Start);
+	const FVector2D EndAbsolute =
+		Workspace.GetCachedGeometry().LocalToAbsolute(End);
 	const FPointerEvent PointerDown(
-		0, Start, Start, TSet<FKey>{ EKeys::LeftMouseButton },
+		0, StartAbsolute, StartAbsolute,
+		TSet<FKey>{ EKeys::LeftMouseButton },
 		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
 	const FPointerEvent PointerMove(
-		0, End, Start, TSet<FKey>{ EKeys::LeftMouseButton },
+		0, EndAbsolute, StartAbsolute,
+		TSet<FKey>{ EKeys::LeftMouseButton },
 		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
-	Workspace.BeginPendingPilePress(*TargetPile, Start, PointerDown, false);
-	const bool bBeganMarquee = Workspace.TryBeginMarqueeFromPendingPilePress(End, PointerMove);
+	FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+	const bool bPressed = IsWacomBackpackInputHandled(
+		Workspace.GetRuntime().Gesture.HandlePilePointerDown(
+			Host,
+			TargetPile,
+			PointerDown));
+	const bool bBeganMarquee = IsWacomBackpackInputHandled(
+		Workspace.GetRuntime().Gesture.HandleWorkspacePointerMove(
+			Host,
+			PointerMove))
+		&& Workspace.InteractionModel->IsMarqueeActive();
 	Workspace.InteractionModel->UpdateMarquee(End);
 	Workspace.InteractionModel->CompleteMarquee();
 	Workspace.UpdateSelectionVisualFreezeLifetime();
-	return bBeganMarquee && !Workspace.InteractionModel->IsMarqueeActive();
+	return bPressed && bBeganMarquee
+		&& !Workspace.InteractionModel->IsMarqueeActive();
 }
 
 FWacomBackpackMarqueePaintHotPathProbe
@@ -934,14 +957,31 @@ FWacomBackpackPileMoveCancelProbe FWacomBackpackScreenTestAccess::CancelWorkspac
 
 	Probe.PilePositionBefore = PileSlot->GetPosition();
 	Probe.PileZOrderBefore = PileSlot->GetZOrder();
+	const FVector2D HeaderStartAbsolute =
+		Workspace.GetCachedGeometry().LocalToAbsolute(HeaderStart);
+	const FVector2D PointerEndAbsolute =
+		Workspace.GetCachedGeometry().LocalToAbsolute(PointerEnd);
 	const FPointerEvent PointerDown(
-		0, HeaderStart, HeaderStart, TSet<FKey>{ EKeys::LeftMouseButton },
+		0, HeaderStartAbsolute, HeaderStartAbsolute,
+		TSet<FKey>{ EKeys::LeftMouseButton },
 		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
 	const FPointerEvent PointerMove(
-		0, PointerEnd, HeaderStart, TSet<FKey>{ EKeys::LeftMouseButton },
+		0, PointerEndAbsolute, HeaderStartAbsolute,
+		TSet<FKey>{ EKeys::LeftMouseButton },
 		EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
-	Workspace.BeginPendingPilePress(*TargetPile, HeaderStart, PointerDown, false, true);
-	Probe.bBeganMove = Workspace.TryBeginPileMove(PointerEnd, PointerMove);
+	Workspace.GetRuntime().Gesture.BeginPilePress(
+		*TargetPile,
+		HeaderStart,
+		HeaderStartAbsolute,
+		HeaderStart,
+		false,
+		true);
+	FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+	Probe.bBeganMove = IsWacomBackpackInputHandled(
+		Workspace.GetRuntime().Gesture.HandleWorkspacePointerMove(
+			Host,
+			PointerMove))
+		&& Workspace.InteractionModel->IsPileMoving();
 	Probe.PilePositionWhileMoving = PileSlot->GetPosition();
 	Probe.PileZOrderWhileMoving = PileSlot->GetZOrder();
 	Workspace.CancelInteraction();
@@ -1244,20 +1284,27 @@ bool FWacomBackpackScreenTestAccess::ClickExpandedPileHeaderThroughOverlappingCa
 	const FVector2D HeaderCenter(
 		(Header.Left + Header.Right) * 0.5f,
 		(Header.Top + Header.Bottom) * 0.5f);
+	const FVector2D HeaderAbsolute =
+		Workspace->GetCachedGeometry().LocalToAbsolute(HeaderCenter);
 	const FPointerEvent PointerDown(
 		0,
-		HeaderCenter,
-		HeaderCenter,
+		HeaderAbsolute,
+		HeaderAbsolute,
 		TSet<FKey>{ EKeys::LeftMouseButton },
 		EKeys::LeftMouseButton,
 		0.0f,
 		FModifierKeysState());
-	const bool bRoutedHeaderPress =
-		Workspace->TryBeginPileHeaderPress(HeaderCenter, PointerDown, false);
+	FWacomBackpackWorkspaceRuntimeHost Host(*Workspace);
+	const bool bRoutedHeaderPress = IsWacomBackpackInputHandled(
+		Workspace->GetRuntime().Gesture.HandleCardPointerDown(
+			Host,
+			OverlappingCard,
+			PointerDown,
+			true));
 	const FPointerEvent PointerUp(
 		0,
-		HeaderCenter,
-		HeaderCenter,
+		HeaderAbsolute,
+		HeaderAbsolute,
 		TSet<FKey>(),
 		EKeys::LeftMouseButton,
 		0.0f,

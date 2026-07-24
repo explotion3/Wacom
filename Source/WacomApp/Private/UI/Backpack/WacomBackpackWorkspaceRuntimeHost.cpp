@@ -4,14 +4,20 @@
 
 #include "Components/Border.h"
 #include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Input/Events.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "UI/Backpack/WacomBackpackCardWidgetTransfer.h"
 #include "UI/Backpack/WacomBackpackWorkspaceFrameScheduler.h"
+#include "UI/Backpack/WacomBackpackWorkspaceGestureController.h"
 #include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
+#include "UI/Backpack/WacomBackpackWorkspaceLayoutSolver.h"
 #include "UI/Backpack/WacomBackpackWorkspaceRuntime.h"
 #include "UI/Backpack/WacomBackpackWorkspaceStyle.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
+#include "UI/Backpack/WacomBackpackZonePileWidget.h"
+#include "UI/Backpack/WacomDeckCardWidget.h"
 
 bool FWacomBackpackWorkspaceRuntimeHost::IsValid() const
 {
@@ -21,6 +27,23 @@ bool FWacomBackpackWorkspaceRuntimeHost::IsValid() const
 bool FWacomBackpackWorkspaceRuntimeHost::HasInteractionModel() const
 {
 	return Adapter.InteractionModel.IsValid();
+}
+
+FWacomBackpackWorkspaceInteractionModel*
+FWacomBackpackWorkspaceRuntimeHost::GetInteractionModel()
+{
+	return Adapter.InteractionModel.Get();
+}
+
+const FWacomBackpackWorkspaceInteractionModel*
+FWacomBackpackWorkspaceRuntimeHost::GetInteractionModel() const
+{
+	return Adapter.InteractionModel.Get();
+}
+
+uint64 FWacomBackpackWorkspaceRuntimeHost::GetCurrentStorageRevision() const
+{
+	return Adapter.CurrentStorageRevision;
 }
 
 FWacomBackpackWorkspaceFrameScheduler&
@@ -35,6 +58,13 @@ FWacomBackpackWorkspaceRuntimeHost::GetStyle() const
 	return Adapter.InteractionStyle.IsValid()
 		? *Adapter.InteractionStyle.Get()
 		: *GetDefault<UWacomBackpackWorkspaceStyle>();
+}
+
+FVector2D FWacomBackpackWorkspaceRuntimeHost::ToLocalPointer(
+	const FPointerEvent& Event) const
+{
+	return Adapter.GetCachedGeometry().AbsoluteToLocal(
+		Event.GetScreenSpacePosition());
 }
 
 void FWacomBackpackWorkspaceRuntimeHost::EnsureFrameSchedulerRunning()
@@ -209,6 +239,11 @@ FVector2D FWacomBackpackWorkspaceRuntimeHost::GetLocalGeometrySize() const
 	return Adapter.GetCachedGeometry().GetLocalSize();
 }
 
+FVector2D FWacomBackpackWorkspaceRuntimeHost::GetLayoutSpaceSize() const
+{
+	return Adapter.GetLayoutSpaceSize();
+}
+
 bool FWacomBackpackWorkspaceRuntimeHost::AcceptStableLayoutGeometry(
 	const FVector2D LayoutSize)
 {
@@ -230,6 +265,408 @@ bool FWacomBackpackWorkspaceRuntimeHost::IsPileMoving() const
 bool FWacomBackpackWorkspaceRuntimeHost::IsCarryInputSuspended() const
 {
 	return Adapter.GetRuntime().Presentation.IsCarryInputSuspended();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::
+	RelinquishSemanticNavigationForPointerInput()
+{
+	Adapter.RelinquishSemanticNavigationForPointerInput();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::SyncExpandedPileLensInputLock(
+	const FPointerEvent& Event)
+{
+	Adapter.SyncExpandedPileLensInputLockFromPointerEvent(Event);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::SetExpandedPileLensInputLocked(
+	const bool bLocked,
+	const bool bResumeImmediately)
+{
+	Adapter.SetExpandedPileLensInputLocked(bLocked, bResumeImmediately);
+}
+
+UWacomDeckCardWidget*
+FWacomBackpackWorkspaceRuntimeHost::ResolveExpandedPileVisualCard(
+	const FVector2D PointerLocal) const
+{
+	const FWacomBackpackWorkspacePresentationController& Presentation =
+		Adapter.GetRuntime().Presentation;
+	const FSlateRect& Header = Presentation.ExpandedPileFocus.HeaderRect;
+	if (PointerLocal.X >= Header.Left && PointerLocal.X <= Header.Right
+		&& PointerLocal.Y >= Header.Top && PointerLocal.Y <= Header.Bottom)
+	{
+		return nullptr;
+	}
+	const bool bStationary = PointerLocal.Equals(
+		Presentation.ExpandedPileFocus.PointerLocal,
+		0.5f);
+	const int32 HitIndex = Adapter.ResolveExpandedPileVisualHitIndex(
+		PointerLocal,
+		bStationary
+			? UWacomBackpackWorkspaceWidget::EExpandedPileHitResolveMode::
+				StationaryRetention
+			: UWacomBackpackWorkspaceWidget::EExpandedPileHitResolveMode::
+				PointerAcquisition);
+	return Presentation.ExpandedPileFocus.Cards.IsValidIndex(HitIndex)
+		? Presentation.ExpandedPileFocus.Cards[HitIndex].Card.Get()
+		: nullptr;
+}
+
+UWacomBackpackZonePileWidget*
+FWacomBackpackWorkspaceRuntimeHost::FindPileHeaderAt(
+	const FVector2D PointerLocal) const
+{
+	return Adapter.FindPileHeaderAt(PointerLocal);
+}
+
+bool FWacomBackpackWorkspaceRuntimeHost::DoesPileMatchExpandedFocus(
+	const UWacomBackpackZonePileWidget& Pile) const
+{
+	const FWacomBackpackZonePileView& View = Pile.GetPileView();
+	const FWacomBackpackWorkspacePresentationController& Presentation =
+		Adapter.GetRuntime().Presentation;
+	return View.bExpanded
+		&& View.Zone == Presentation.ExpandedPileFocus.Zone
+		&& (View.Zone != EZoneKind::SpecialZone
+			|| View.OwnerInstanceId
+				== Presentation.ExpandedPileFocus.OwnerInstanceId);
+}
+
+FWacomBackpackZoneKey
+FWacomBackpackWorkspaceRuntimeHost::ResolveMarqueeSource(
+	const FVector2D PointerLocal) const
+{
+	const FWacomBackpackWorkspacePresentationController& Presentation =
+		Adapter.GetRuntime().Presentation;
+	const FSlateRect& Bounds = Presentation.ExpandedContentBounds;
+	if (Presentation.bHasExpandedContentBounds
+		&& PointerLocal.X >= Bounds.Left
+		&& PointerLocal.X <= Bounds.Right
+		&& PointerLocal.Y >= Bounds.Top
+		&& PointerLocal.Y <= Bounds.Bottom)
+	{
+		return FWacomBackpackZoneKey::Make(
+			Presentation.ExpandedContentZone,
+			Presentation.ExpandedContentOwnerInstanceId);
+	}
+	return FWacomBackpackZoneKey::Make(EZoneKind::Backpack);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::
+	ReconcileExpandedPileFocusForMarqueeSource(
+		const FWacomBackpackZoneKey& SourceZone)
+{
+	const FWacomBackpackWorkspacePresentationController& Presentation =
+		Adapter.GetRuntime().Presentation;
+	const FWacomBackpackZoneKey FocusZone =
+		FWacomBackpackZoneKey::Make(
+			Presentation.ExpandedPileFocus.Zone,
+			Presentation.ExpandedPileFocus.OwnerInstanceId);
+	if (!(SourceZone == FocusZone)
+		|| Presentation.ExpandedPileFocus.FocusIndex == INDEX_NONE)
+	{
+		Adapter.ClearExpandedPileFocus(true);
+	}
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::ClearExpandedPileFocus(
+	const bool bAnimateReturn)
+{
+	Adapter.ClearExpandedPileFocus(bAnimateReturn);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::UpdateExpandedPileFocus(
+	const FVector2D PointerLocal)
+{
+	Adapter.UpdateExpandedPileFocus(PointerLocal);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BeginExpandedPileFocusExit()
+{
+	Adapter.BeginExpandedPileFocusExit();
+}
+
+bool FWacomBackpackWorkspaceRuntimeHost::HasPresentationFocusedCard() const
+{
+	return Adapter.GetPresentationFocusedCard() != nullptr;
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::UpdateMotionPointer(
+	const FVector2D PointerLocal)
+{
+	Adapter.GetRuntime().Motion.UpdatePointer(
+		Adapter.GetCachedGeometry(),
+		PointerLocal,
+		false);
+	Adapter.WakeFrameScheduler();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BeginSelectionVisualFreeze(
+	const FWacomBackpackZoneKey& SourceZone)
+{
+	Adapter.BeginSelectionVisualFreeze(SourceZone);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::EndSelectionVisualFreeze(
+	const bool bAnimateReturn)
+{
+	Adapter.EndSelectionVisualFreeze(bAnimateReturn);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::
+	UpdateSelectionVisualFreezeLifetime()
+{
+	Adapter.UpdateSelectionVisualFreezeLifetime();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::NotifyCarryStarted(
+	const FVector2D PointerLocal,
+	const TConstArrayView<FGuid> InstanceIds)
+{
+	SetExpandedPileLensInputLocked(false, false);
+	Adapter.EndSelectionVisualFreeze(false);
+	Adapter.GetRuntime().Presentation
+		.bCarryCurrentExplicitlySelectedByWheel = false;
+	Adapter.ClearExpandedPileFocus(true);
+	Adapter.UpdateCarryAnchor(PointerLocal);
+	Adapter.GetRuntime().Presentation.bCarryStripLayoutDirty = true;
+	Adapter.BeginCarryPickupFeedback();
+	Adapter.WakeFrameScheduler();
+	Adapter.RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::NavigationTargets
+			| EWacomBackpackWorkspacePresentationDirty::CarryTopology
+			| EWacomBackpackWorkspacePresentationDirty::CarryStrip
+			| EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::
+				NavigationPresentation
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		InstanceIds);
+	BroadcastInteractionChanged();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::NotifySelectionChanged(
+	const TConstArrayView<FGuid> ChangedInstanceIds,
+	const bool bBroadcast)
+{
+	Adapter.RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
+	if (bBroadcast)
+	{
+		BroadcastInteractionChanged();
+	}
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::InvalidatePaint()
+{
+	Adapter.Invalidate(EInvalidateWidgetReason::Paint);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::QueueCarryPointer(
+	const FVector2D PointerLocal)
+{
+	Adapter.QueueCarryPointer(PointerLocal);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::SyncCarryPointerForRelease(
+	const FVector2D PointerLocal)
+{
+	Adapter.SyncCarryPointerForRelease(PointerLocal);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BroadcastPointerRelease(
+	const bool bReleaseAll)
+{
+	Adapter.BroadcastPointerRelease(bReleaseAll);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BroadcastInteractionChanged()
+{
+	Adapter.OnInteractionChangedNative.Broadcast();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BroadcastPileExpansion(
+	UWacomBackpackZonePileWidget& Pile)
+{
+	Adapter.OnPileExpansionRequestedNative.Broadcast(
+		Pile.GetPileView().Zone,
+		Pile.GetPileView().OwnerInstanceId,
+		false);
+}
+
+FWacomBackpackPileMoveVisualSnapshot
+FWacomBackpackWorkspaceRuntimeHost::CapturePileMoveVisualSnapshot(
+	UWacomBackpackZonePileWidget& Pile,
+	const FWacomBackpackZoneKey& Zone) const
+{
+	FWacomBackpackPileMoveVisualSnapshot Snapshot;
+	if (const UCanvasPanelSlot* PileCanvasSlot =
+		Cast<UCanvasPanelSlot>(Pile.Slot))
+	{
+		Snapshot.Pile = &Pile;
+		Snapshot.Zone = Zone.Zone;
+		Snapshot.OwnerInstanceId = Zone.OwnerInstanceId;
+		Snapshot.CanvasPosition = PileCanvasSlot->GetPosition();
+		Snapshot.ZOrder = PileCanvasSlot->GetZOrder();
+		Snapshot.bValid = true;
+	}
+	return Snapshot;
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::RestorePileMoveVisualSnapshot(
+	const FWacomBackpackPileMoveVisualSnapshot& Snapshot)
+{
+	if (!Snapshot.bValid)
+	{
+		return;
+	}
+	if (UWacomBackpackZonePileWidget* Pile = Snapshot.Pile.Get())
+	{
+		if (UCanvasPanelSlot* PileCanvasSlot =
+			Cast<UCanvasPanelSlot>(Pile->Slot))
+		{
+			PileCanvasSlot->SetPosition(Snapshot.CanvasPosition);
+			PileCanvasSlot->SetZOrder(Snapshot.ZOrder);
+		}
+		Pile->SetRenderTranslation(FVector2D::ZeroVector);
+	}
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::QueuePilePointer(
+	const FVector2D PointerLocal)
+{
+	Adapter.QueuePilePointer(PointerLocal);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::FlushPilePointer()
+{
+	Adapter.FlushQueuedPilePointer();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::ApplyActivePileMove()
+{
+	Adapter.ApplyActivePileMove();
+}
+
+TArray<FSlateRect>
+FWacomBackpackWorkspaceRuntimeHost::CollectOccupiedPileHeaders(
+	const FWacomBackpackZoneKey& ExcludedZone) const
+{
+	TArray<FSlateRect> Headers;
+	for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile :
+		Adapter.GetRegisteredPileWidgets())
+	{
+		const UWacomBackpackZonePileWidget* Pile = WeakPile.Get();
+		if (!Pile || Pile->GetPileView().HasSameIdentity(
+			ExcludedZone.Zone,
+			ExcludedZone.OwnerInstanceId))
+		{
+			continue;
+		}
+		Headers.Add(Pile->GetResolvedHeaderRect());
+	}
+	return Headers;
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::CommitPileMoveVisual(
+	const FWacomBackpackWorkspacePileMoveState& Completed,
+	const FVector2D SnappedTopLeft)
+{
+	const FVector2D FinalDelta = SnappedTopLeft - Completed.PileStart;
+	Adapter.CommitPileMoveCardLayouts(Completed.Zone, FinalDelta);
+	for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile :
+		Adapter.GetRegisteredPileWidgets())
+	{
+		UWacomBackpackZonePileWidget* Pile = WeakPile.Get();
+		if (!Pile || !Pile->GetPileView().HasSameIdentity(
+			Completed.Zone.Zone,
+			Completed.Zone.OwnerInstanceId))
+		{
+			continue;
+		}
+		const FSlateRect Frame = Pile->GetResolvedFrameRect();
+		const FSlateRect Header = Pile->GetResolvedHeaderRect();
+		const FVector2D FrameOffset(
+			Frame.Left - Header.Left,
+			Frame.Top - Header.Top);
+		if (UCanvasPanelSlot* PileCanvasSlot =
+			Cast<UCanvasPanelSlot>(Pile->Slot))
+		{
+			PileCanvasSlot->SetPosition(SnappedTopLeft + FrameOffset);
+			Pile->SetRenderTranslation(FVector2D::ZeroVector);
+		}
+		break;
+	}
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BroadcastPileMoveCommitted(
+	const FWacomBackpackWorkspacePileMoveState& Completed,
+	const FVector2D SnappedTopLeft)
+{
+	const FVector2D WorkspaceSize = Adapter.GetLayoutSpaceSize();
+	Adapter.OnPileMoveCommittedNative.Broadcast(
+		Completed.Zone.Zone,
+		Completed.Zone.OwnerInstanceId,
+		FVector2D(
+			WorkspaceSize.X > 1.0f
+				? SnappedTopLeft.X / WorkspaceSize.X
+				: 0.0f,
+			WorkspaceSize.Y > 1.0f
+				? SnappedTopLeft.Y / WorkspaceSize.Y
+				: 0.0f));
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::RememberPreviousCarryCurrentCard(
+	const FGuid InstanceId)
+{
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard :
+		Adapter.GetBoundCardWidgets())
+	{
+		UWacomDeckCardWidget* Card = WeakCard.Get();
+		if (Card && Adapter.IsInCarryVisualLayer(Card)
+			&& Card->GetCardInstanceId() == InstanceId)
+		{
+			Adapter.GetRuntime().Presentation.PreviousCarryCurrentCard =
+				Card;
+			return;
+		}
+	}
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::NotifyCarryCurrentChanged(
+	const TConstArrayView<FGuid> ChangedInstanceIds,
+	const bool bIncludeCarryTopology,
+	const bool bCurrentChanged)
+{
+	if (bCurrentChanged)
+	{
+		Adapter.GetRuntime().Presentation
+			.bCarryCurrentExplicitlySelectedByWheel = true;
+	}
+	Adapter.GetRuntime().Presentation.bCarryStripLayoutDirty = true;
+	EWacomBackpackWorkspacePresentationDirty Reasons =
+		EWacomBackpackWorkspacePresentationDirty::CarryStrip
+		| EWacomBackpackWorkspacePresentationDirty::StaticCards
+		| EWacomBackpackWorkspacePresentationDirty::CardSemantics
+		| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+		| EWacomBackpackWorkspacePresentationDirty::Accessibility
+		| EWacomBackpackWorkspacePresentationDirty::Paint;
+	if (bIncludeCarryTopology)
+	{
+		Reasons |=
+			EWacomBackpackWorkspacePresentationDirty::CarryTopology;
+	}
+	Adapter.RequestPresentationRefresh(Reasons, ChangedInstanceIds);
+	Adapter.WakeFrameScheduler();
+	BroadcastInteractionChanged();
 }
 
 bool FWacomBackpackWorkspaceRuntimeHost::TryGetCursorLocalPosition(

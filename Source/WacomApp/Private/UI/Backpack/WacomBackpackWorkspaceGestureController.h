@@ -4,10 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "RunStateTypes.h"
+#include "WacomBackpackWorkspaceInput.h"
 #include "WacomBackpackWorkspaceTypes.h"
 
 struct FPointerEvent;
+class UWacomDeckCardWidget;
 class UWacomBackpackZonePileWidget;
+class FWacomBackpackWorkspaceRuntimeHost;
 
 struct FWacomBackpackPendingCardPress
 {
@@ -63,6 +66,36 @@ struct FWacomBackpackPendingMarqueePress
 class WACOMAPP_API FWacomBackpackWorkspaceGestureController
 {
 public:
+	EWacomBackpackWorkspaceInputReply HandleCardPointerDown(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		UWacomDeckCardWidget* CardWidget,
+		const FPointerEvent& Event,
+		bool bAllowPileHeaderReroute = true);
+	EWacomBackpackWorkspaceInputReply HandleCardPointerMove(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FPointerEvent& Event);
+	EWacomBackpackWorkspaceInputReply HandleCardPointerUp(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FPointerEvent& Event);
+	EWacomBackpackWorkspaceInputReply HandlePilePointerDown(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		UWacomBackpackZonePileWidget* PileWidget,
+		const FPointerEvent& Event);
+	EWacomBackpackWorkspaceInputReply HandleWorkspacePointerDown(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FPointerEvent& Event);
+	EWacomBackpackWorkspaceInputReply HandleWorkspacePointerMove(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FPointerEvent& Event);
+	EWacomBackpackWorkspaceInputReply HandleWorkspacePointerUp(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FPointerEvent& Event);
+	EWacomBackpackWorkspaceInputReply HandleMouseWheel(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FPointerEvent& Event);
+	void HandleMouseLeave(FWacomBackpackWorkspaceRuntimeHost& Host);
+	void CancelPending(FWacomBackpackWorkspaceRuntimeHost& Host);
+
 	void BeginCardPress(
 		FGuid InstanceId,
 		FVector2D LocalPosition,
@@ -125,6 +158,40 @@ public:
 
 private:
 	static bool HasDragThreshold(const FPointerEvent& Event, FVector2D ScreenOrigin);
+	EWacomBackpackWorkspaceInputReply TryHandleExpandedPileVisualPointerDown(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event);
+	bool TryBeginPileHeaderPress(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event,
+		bool bControlDown);
+	void BeginPendingPilePress(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		UWacomBackpackZonePileWidget& Pile,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event,
+		bool bControlDown,
+		bool bOnDragHandle);
+	bool TryBeginCarryFromPendingPress(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event);
+	bool TryBeginPileMove(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event);
+	bool TryBeginMarqueeFromPendingPilePress(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event);
+	bool TryBeginMarqueeFromPendingBlankPress(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		FVector2D PointerLocal,
+		const FPointerEvent& Event);
+	EWacomBackpackWorkspaceInputReply ResolveHandledPointerReply(
+		const FWacomBackpackWorkspaceRuntimeHost& Host) const;
 
 	FWacomBackpackPendingCardPress CardPress;
 	FWacomBackpackPendingPilePress PilePress;

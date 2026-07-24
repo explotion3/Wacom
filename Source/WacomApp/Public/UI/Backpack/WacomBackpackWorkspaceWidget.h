@@ -27,6 +27,7 @@ struct FWacomBackpackWorkspaceReleaseIntent;
 enum class EWacomBackpackWorkspaceReleaseTargetKind : uint8;
 enum class EWacomBackpackWorkspaceCardSemanticIcon : uint8;
 enum class EWacomBackpackWorkspacePresentationDirty : uint16;
+enum class EWacomBackpackWorkspaceInputReply : uint8;
 struct FWacomBackpackWorkspaceCardLayout;
 struct FWacomBackpackWorkspaceCardVisualPose;
 struct FWacomBackpackWorkspacePresentationRequest;
@@ -238,45 +239,17 @@ private:
 	void UnbindWorkspaceCards();
 	TConstArrayView<TWeakObjectPtr<UWacomDeckCardWidget>> GetBoundCardWidgets() const;
 	FReply HandleCardPointerDown(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
-	FReply HandleCardPointerDownAtLocal(
-		UWacomDeckCardWidget* CardWidget,
-		FVector2D PointerLocal,
-		const FPointerEvent& Event,
-		bool bAllowPileHeaderReroute);
-	FReply TryHandleExpandedPileVisualPointerDown(
-		FVector2D PointerLocal,
-		const FPointerEvent& Event);
 	FReply HandleCardPointerMove(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FReply HandleCardPointerUp(UWacomDeckCardWidget* CardWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FReply HandlePilePointerDown(UWacomBackpackZonePileWidget* PileWidget, const FGeometry& Geometry, const FPointerEvent& Event);
 	FVector2D ToLocalPointer(const FPointerEvent& Event) const;
-	void BeginPendingPilePress(
-		UWacomBackpackZonePileWidget& PileWidget,
-		FVector2D LocalPointer,
-		const FPointerEvent& Event,
-		bool bControlDown,
-		bool bOnDragHandle = false);
 	UWacomBackpackZonePileWidget* FindPileHeaderAt(FVector2D LocalPointer) const;
-	bool TryBeginPileHeaderPress(
-		FVector2D LocalPointer,
-		const FPointerEvent& Event,
-		bool bControlDown);
-	bool TryBeginCarryFromPendingPress(FVector2D Pointer, const FPointerEvent& Event);
-	bool TryBeginPileMove(FVector2D Pointer, const FPointerEvent& Event);
-	bool TryBeginMarqueeFromPendingPilePress(FVector2D Pointer, const FPointerEvent& Event);
-	bool TryBeginMarqueeFromPendingBlankPress(FVector2D Pointer, const FPointerEvent& Event);
 	void ApplyActivePileMove();
-	void StartPilePointerTracking();
 	void QueuePilePointer(FVector2D Pointer);
 	void FlushQueuedPilePointer();
 	void CommitPileMoveCardLayouts(const FWacomBackpackZoneKey& Zone, FVector2D FinalDelta);
-	void CapturePileMoveVisualSnapshot(
-		UWacomBackpackZonePileWidget& Pile,
-		const FWacomBackpackZoneKey& Zone);
-	void RestoreAndClearPileMoveVisualSnapshot();
-	FWacomBackpackZoneKey ResolveMarqueeSource(FVector2D LocalPointer) const;
 	void CancelHoverExpandTimer();
-	FReply BuildHandledPointerReply();
+	FReply ToSlateInputReply(EWacomBackpackWorkspaceInputReply Reply);
 	void BroadcastRelease(
 		bool bReleaseAll,
 		EWacomBackpackWorkspaceReleaseTargetKind TargetKind,
