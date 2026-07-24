@@ -675,9 +675,10 @@ namespace Wacom::ContentBuilder
 		//   关键词：Card.Keyword.DeleteProvider（玩家持有区至少一张就有删牌功能）
 		//   不带 BagProvider，与小布袋职责正交
 		//   原型规则：Run 初始化时默认进入 BattleDeck，但仍贡献通量容量。
-		// 当前简化：
+		// 当前正式合同：
 		//   - 不读耐久，自身打出无意义但合法（Cost=0，无主动效果）
-		//   - 删牌区始终显示，不绑定具体卡
+		//   - 删牌区始终显示；未持有 DeleteProvider 时锁定并显示 Rejected
+		//   - 最后一张 DeleteProvider 只能作为单卡事务出售
 		//   - 耐久和战斗主动效果暂不接入
 		FCardPhysique LanternPhysique;
 		LanternPhysique.Capacity = 3;

@@ -49,7 +49,7 @@ tags:
 | `Card.Keyword.Hand` | `Card_Keyword_Hand` | 手，左右手固有卡使用 |
 | `Card.Keyword.Exhaust` | `Card_Keyword_Exhaust` | 临时关键词：本卡打出后进入消耗牌堆 |
 | `Card.Keyword.BagProvider` | `Card_Keyword_BagProvider` | 历史 / 兼容内容标记；当前容量真相以 `Physique.Capacity > 0` 的容器卡为准 |
-| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌能力提供者；RunSession 可读取玩家持有区是否存在该 tag |
+| `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌换金币能力提供者；四种物理持有区任一实体卡带有该 tag 即启用出售，最后一张提供者只能单独出售 |
 
 ## §3 Card.Rarity
 

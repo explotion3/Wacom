@@ -170,6 +170,8 @@ Run menu / world drop 与 Battle 共用 first-person Slot 的无效目标提示�
 
 - 空集合、重复/无效 InstanceId、来源漂移、revision 漂移、失效 SpecialZone Owner 或任一单卡规则失败，整组零修改。
 - Run 先在 `FRunState` working copy 中按请求稳定顺序执行现有单卡规则；全部成功后才替换权威状态。
+- 删牌换金币要求事务开始时至少持有一张 `Card.Keyword.DeleteProvider` 实体卡；能力来源统一扫描 `Backpack`、`BattleDeck`、`BurdenZone` 和 `SpecialZones.Cards`，投影不重复计数。
+- 如果 working copy 完成整组永久移除后不再拥有 DeleteProvider，则本次请求必须恰好只有一张卡。最后一张提供者可以单独出售，但不能和普通卡、另一张提供者或任何其它卡组成同一批次。
 - 成功只推进一次 BackpackStorage revision、广播一次；批量销毁同时推进 Economy revision，但仍只广播一次。
 - 批量销毁奖励按当前单卡奖励规则求和，成功后一次性加金币；失败时奖励恒为 0。
 - 同区牌匣收拢属于 App 布局整理，不调用 Run move API，不改变物理顺序、revision 或 SaveGame。
@@ -225,7 +227,7 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 
 ### 永久销毁与金币
 
-永久销毁入口用于删牌、事件交出卡、未来出售或战败丢弃。统一规则由 `Private/Deck/RunDeckRules.*` 承接。
+永久销毁入口用于删牌、事件交出卡、未来出售或战败丢弃。统一规则由 `Private/Deck/RunDeckRules.*` 承接。DeleteProvider 只门禁“删牌换金币”事务；`DestroyCardByInstance()`、事件交卡和战败丢弃等非出售型永久移除不依赖该能力。
 
 当前保护规则：
 
@@ -235,7 +237,7 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 销毁 B 主卡时，它的 SpecialZone 内卡退回 Backpack；装不下则进 BurdenZone。
 - 移除非容量卡后允许从负重区回填；移除容量来源卡后不做回填，只处理容量缩小导致的超容。
 
-删牌换金币统一由 WacomRun 查询：White +1、Blue +2、Yellow +3、Purple +4、Intrinsic +0。UI 卡面展示调用同一查询，不维护第二份稀有度映射。UI 拖拽删除使用 `DeleteCardForGoldByInstance()`；RunEvent 等资产语义仍可用 Definition 表达“移除一张匹配卡”，但不通过 `URunSession` 公开 deck wrapper。金币是 Run 内资源，但当前不写入 SaveGame。
+删牌换金币统一由 WacomRun 查询：White +1、Blue +2、Yellow +3、Purple +4、Intrinsic +0。UI 卡面展示调用同一查询，不维护第二份稀有度映射。Workspace 统一通过 `ValidateDeleteCardsForGoldAtomic()` / `DeleteCardsForGoldAtomic()` 提交单张或批量出售；`DeleteCardForGoldByInstance()` 保留为遵循同一能力门禁的单卡入口。`FRunBackpackStorageSnapshot.bDeleteFunctionAvailable` 是 App 的只读可用性事实，不进入 SaveGame schema。RunEvent 等资产语义仍可用 Definition 表达“移除一张匹配卡”，但不通过 `URunSession` 公开 deck wrapper。金币是 Run 内资源，但当前不写入 SaveGame。
 
 ## §6 商店事务
 

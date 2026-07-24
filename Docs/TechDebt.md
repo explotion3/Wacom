@@ -29,7 +29,6 @@ tags:
 | `Magnitude.Source.TargetStatusStacks` 资产参数 | Public `FCardEffect` 仍借用 `TargetZone` 传 Status Tag；Private Effect Semantics 已在 decode seam 转成独立 magnitude plan | 只有在允许迁移现有 DataAsset schema 时，新增专用反射字段并提供资产迁移；运行时不再扩散该复用 |
 | `Effect.GainKeyword` / `Effect.RemoveStatus` 资产参数 | Public `FCardEffect` 仍借用 `TargetZone`；Private handler 已只消费 typed Keyword / Status 参数，不再存在 `EffectContext::MetaTag` | 只有在允许迁移现有 DataAsset schema 时，拆为专用反射 payload；保持 semantic definition 为唯一解释入口 |
 | `Effect.Shuffle.FromBothToOther` HandZone 参数 | 制作校验兼容接受任意 `HandZone.*`，但正式执行始终从 Both 选择；Effect Semantics 显式保留该兼容怪点 | 先确认是否要扩展为通用 FromZone，或收紧资产只允许 Both；确认后同步校验、内容迁移和规则测试 |
-| `IsDeleteFunctionAvailable` | 接口已存在，但当前 Run 删牌事务和背包 UI 仍按始终可删的简化口径工作 | 等删牌可用性口径确认后，Run 校验和 UI 显隐统一接入 |
 | 手牌锚点左右归属 | `FHandCardSnapshot` 不带左右手角色，UI 用遍历顺序启发式 | 给 `FHandCardSnapshot` 加 `EHandAnchorRole` 字段 |
 | BattleResult identity 兼容字段 | `FBattleResultPacket` 仍同时暴露 `PartId / Identity / PartKey`、`DestroyedParts / DestroyedPartKeys`；Run 撤离进度的新写入和 Run 结算日志已收敛为 key-first，GameMode 已删除按部位数量重新推断 Victory；`DestroyedParts` 仅作旧数据 / 手写 snapshot fallback | 继续把测试、日志和消费者迁到 `FBattleEnemyPartKey` / `DestroyedPartKeys`；确认没有资产 / 蓝图依赖后再降级或移除 legacy projection 字段 |
 

@@ -427,7 +427,8 @@ public:
 	/**
 	 * 删牌功能是否可用：玩家持有区至少存在一张 DeleteProvider 卡。
 	 *
-	 * 当前 UI 始终显示删牌区；本接口保留给后续按能力开关删牌入口。
+	 * 覆盖 Backpack / BattleDeck / BurdenZone / SpecialZones.Cards 的实体卡；
+	 * 投影不重复计数。UI 始终显示删牌区，但以 Snapshot 中的同一事实决定锁定表现。
 	 */
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	bool IsDeleteFunctionAvailable() const;
@@ -521,7 +522,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	FRunDeckOperationValidation ValidateDestroyCardByInstance(FGuid InstanceId) const;
 
-	/** 删牌区入口：按 instance 精确销毁一张卡并按稀有度发金币。 */
+	/** 删牌区入口：按 instance 精确出售一张卡；要求当前持有 DeleteProvider。 */
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|Deck")
 	bool DeleteCardForGoldByInstance(FGuid InstanceId);
 
@@ -536,7 +537,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Run|Deck")
 	FRunDeckOperationValidation ValidateDeleteCardForGoldByInstance(FGuid InstanceId) const;
 
-	/** C++-only 原子批量删牌预览；返回整组校验和预计总金币，不保留提交授权。 */
+	/** C++-only 原子批量删牌预览；含 DeleteProvider 与最后提供者单卡门禁。 */
 	FRunDeckBatchDeletePreview ValidateDeleteCardsForGoldAtomic(
 		const FRunDeckBatchDeleteRequest& Request) const;
 

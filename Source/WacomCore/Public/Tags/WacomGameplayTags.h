@@ -25,7 +25,7 @@ namespace WacomTags
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_Exhaust);
 	// 历史兼容关键词。当前容量与最后容量来源保护以 CardPhysique.Capacity 为准。
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_BagProvider);
-	// 删牌能力提供者。当前 UI 不依赖该 tag 判定删牌入口；保留给后续规则接入。
+	// 删牌换金币能力提供者。四种物理持有区的实体卡共同决定可用性。
 	WACOMCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Card_Keyword_DeleteProvider);
 
 	// -------- Card.Rarity --------
