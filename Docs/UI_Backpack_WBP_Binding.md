@@ -132,7 +132,7 @@ Workspace 的统一 post-child overlay 顺序固定为：完整 UMG/Slate/Retain
 - 投影卡、特殊区主卡和负重卡可以进入焦点牌列、启用详情浏览和上抬反馈，但继续保持各自透明度、角标和只读语义，不能选择、框选或携带。
 - 牌堆释放吸附到默认 `16px` 网格或邻近边缘；主体允许部分重叠，但标题拖柄不能相互覆盖，且始终夹紧在 Workspace 内。
 - 普通动效只插值位置和角度；展开/收起默认 `0.18s`，吸附默认 `0.12s`。禁止卡面淡入和动态缩放。
-- Workspace 只能拥有一个按需帧 `ActiveTimer`。Runtime 的 Frame Scheduler 统一承接带原因的 Presentation Dirty、稳定几何采样、Carry/PileMove 指针追踪、携带目标悬停展开、焦点退出、局部姿态、Settlement、出售离场、展开/收起基础 Canvas 过渡和延迟 Retainer 补绘；按“刷新 → 几何 → 指针/延迟 → 运动/Settlement/出售 → 最终视觉命中 → 收起交接 → 卡面补绘”的顺序推进。多个刷新请求同帧合并，局部卡牌按 `InstanceId` 取并集，全卡请求覆盖局部集合；帧内新增任务推迟到下一帧。收起完成由实际布局过渡全部结束触发，不使用与 Style 时长平行的回调 Timer。Retainer 最早在请求后的下一次 Slate 调度帧补绘；几何未稳定、卡层不可见或 retained rendering 暂停时保留请求但不空转。没有 Dirty、连续 Work 或到期补绘时 Timer 自动停止。这项为 C++ 性能合同，不需要新增 WBP 节点或重存 `DA_BackpackWorkspaceStyle`。
+- Workspace 只能拥有一个按需帧 `ActiveTimer`。`FrameScheduler` 只维护 Presentation Dirty、Frame Work、generation 和延迟补绘任务合同；`PresentationController` 决定并执行“刷新 → 几何 → 指针/延迟 → 运动/Settlement/出售 → 最终视觉命中 → 收起交接 → 卡面补绘”的固定阶段。`RuntimeHost` 只把当前 Geometry、Style、InteractionModel、Registry、Canvas 事实和 UMG/Slate 应用操作提供给 Controller，不保存平行状态。多个刷新请求同帧合并，局部卡牌按 `InstanceId` 取并集，全卡请求覆盖局部集合；帧内新增任务推迟到下一帧。收起完成由实际布局过渡全部结束触发，不使用与 Style 时长平行的回调 Timer。Retainer 最早在请求后的下一次 Slate 调度帧补绘；几何未稳定、卡层不可见或 retained rendering 暂停时保留请求但不空转。没有 Dirty、连续 Work 或到期补绘时 Timer 自动停止。这项为 C++ 性能合同，不需要新增 WBP 节点或重存 `DA_BackpackWorkspaceStyle`。
 - 展开/收起过渡使用一次捕获的固定起点和最终目标；同一 Snapshot 或稳定几何刷新重复提交相同目标时必须保留当前 elapsed transition，不得取消过渡并把整组卡牌瞬移到水平终点。收起时每张需要移动的卡必须直接前往最终折叠位置，禁止先聚到标题中心或其它共享中间点再二次排布；已处于最终位置的锚定卡不创建无意义过渡。
 - `Simplified` UI Motion 下展开、收起和吸附直接到达最终状态；通量 Hover、展开焦点和携带当前卡均不得产生空间上抬、角度补偿或视觉弹簧。运行中切换到 Simplified 时必须立即清除已有局部偏移并同步命中中心。
 
@@ -140,7 +140,7 @@ Workspace 的统一 post-child overlay 顺序固定为：完整 UMG/Slate/Retain
 
 Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / Suspended`。
 
-`UWacomBackpackWorkspaceWidget` 只作为 UMG/Slate 适配器保留绑定、生命周期、输入入口、Canvas 应用和单一 ActiveTimer。`FWacomBackpackWorkspaceRuntime` 私有拥有：`GestureController`（屏幕空间阈值、按压、捕获、起手释放保护及牌堆回滚）、`NavigationController`（`InstanceId / Zone` 稳定虚拟焦点、空间邻居和语义目标）、`PresentationController`（Hand Lens、选择冻结、Carry 编排和 Hover 展开/收起）及 `FrameScheduler`（Presentation Dirty / Frame Work 合并、稳定几何与延迟卡面补绘）。Slate 焦点始终停留在 Workspace 根；这些控制器不访问 `URunSession`。
+`UWacomBackpackWorkspaceWidget` 只作为 UMG/Slate Adapter 保留 WBP/fallback 绑定、Construct/Destruct、`NativeOn*` 输入入口、`NativePaint`、Screen/Reconciler 现有调用面、Canvas 应用和唯一 `RegisterActiveTimer`。Timer 回调只校验 Runtime generation 并转发 `PresentationController::TickFrame`；Widget 不直接组合 Refresh、Motion、Settlement、SaleDeparture 或 Retainer 阶段。`FWacomBackpackWorkspaceRuntime` 私有拥有：`GestureController`（屏幕空间阈值、按压、捕获、起手释放保护及牌堆回滚）、`NavigationController`（`InstanceId / Zone` 稳定虚拟焦点、空间邻居和语义目标）、`PresentationController`（Refresh Pipeline、Frame 阶段、Hand Lens、选择冻结、Carry、Settlement 和出售调度）及 `FrameScheduler`（dirty/work/generation/延迟任务合同）。`FWacomBackpackWorkspaceRuntimeHost` 是 Runtime 与 Adapter 的唯一 seam；Host 失效后陈旧回调必须停止，不能惰性重建 Runtime。Slate 焦点始终停留在 Workspace 根；这些控制器不访问 `URunSession`。
 
 无鼠标输入映射固定为：方向键/摇杆空间导航；Enter/A 拾取或向当前目标释放一张；Space/X 选择/取消；T/Y 空闲时切换特殊区卡牌状态、携带时释放全部；Q/E 与 LB/RB 切换当前携带卡；Esc/B 取消瞬态或返回；F1/界面按钮打开帮助层。Snapshot 等价刷新按 `InstanceId / Zone` 恢复虚拟焦点，身份消失时回退到最近可聚焦目标。无效牌堆仍可聚焦并显示 Rejected，但不得提交；规则原因由 Screen 的现有校验/Toast flow 提供。
 
