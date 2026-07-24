@@ -150,7 +150,7 @@ bool FWacomUIBackpackScreenActiveSubscriptionLifecycleSpec::RunTest(
 		return false;
 	}
 	TestTrue(TEXT("Inactive Run mutation succeeds"),
-		Run->DeleteCardForGoldByInstance(CardToDelete->Instance.InstanceId));
+		Run->DestroyCardByInstance(CardToDelete->Instance.InstanceId));
 	TestEqual(TEXT("Inactive Run mutation leaves the hidden Scene untouched"),
 		FWacomBackpackScreenTestAccess::WorkspaceCardCount(*Screen),
 		WorkspaceCardCountBeforeDeactivate);

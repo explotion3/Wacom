@@ -101,6 +101,18 @@ FText FWacomBackpackToastText::FormatDeleteFailureReasonForToast(FName DisabledR
 	{
 		return LOCTEXT("DeleteFailIntrinsic", "无法销毁：固有卡不能被销毁。");
 	}
+	if (DisabledReason == DeckReasons::DeleteFunctionUnavailable())
+	{
+		return LOCTEXT(
+			"DeleteFailFunctionUnavailable",
+			"无法销毁：需要持有删牌能力卡。");
+	}
+	if (DisabledReason == DeckReasons::LastDeleteProviderRequiresSingleCard())
+	{
+		return LOCTEXT(
+			"DeleteFailLastProviderBatch",
+			"无法销毁：最后一张删牌能力卡只能单独出售。");
+	}
 	if (DeckReasons::IsLastCapacityProvider(DisabledReason))
 	{
 		return LOCTEXT("DeleteFailLastCapacityProvider", "无法销毁：这是最后一张背包容量卡。");

@@ -646,10 +646,12 @@ void UWacomBackpackScreen::RebuildAll()
 		EmptySnapshot.FluxContentCount = 0;
 		EmptySnapshot.BattleDeckPhysicalCount = 0;
 		EmptySnapshot.BurdenCount = 0;
+		EmptySnapshot.bDeleteFunctionAvailable = false;
 
 		bHasLastAppliedStorageSnapshot = true;
 		LastAppliedStorageSnapshot = EmptySnapshot;
 		RebuildWorkspaceChrome(EmptySnapshot);
+		HandleWorkspaceInteractionChanged();
 		return;
 	}
 #endif
@@ -678,6 +680,7 @@ void UWacomBackpackScreen::RebuildAll()
 		WorkspaceInteractionModel->UpdateCarrySourceStorageRevision(
 			Run->GetBackpackStorageSnapshotRevision());
 	}
+	HandleWorkspaceInteractionChanged();
 }
 
 void UWacomBackpackScreen::RebuildWorkspaceChrome(const FRunBackpackStorageSnapshot& Snapshot)
@@ -866,21 +869,30 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 		HideCardDetailPanel();
 		const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
 		const bool bDeleteTarget = IsWorkspaceDeleteTarget();
-		UpdateDeleteTargetPresentation(
-			true,
-			bDeleteTarget,
-			Carry.RemainingInstanceIds.Num());
 		if (bDeleteTarget)
 		{
+			TArray<FGuid, TInlineAllocator<1>> PrimaryReleaseIds;
+			if (Carry.RemainingInstanceIds.IsValidIndex(Carry.CurrentIndex))
+			{
+				PrimaryReleaseIds.Add(
+					Carry.RemainingInstanceIds[Carry.CurrentIndex]);
+			}
 			const FRunDeckBatchDeleteRequest DeleteRequest =
 				FWacomBackpackCommandFlow::BuildBatchDeleteRequest(
 					Carry,
-					Carry.RemainingInstanceIds);
+					PrimaryReleaseIds);
 			const FRunDeckBatchDeletePreview DeletePreview =
 				FWacomBackpackCommandFlow::PreviewBatchDelete(
 					GetRunSession(),
 					DeleteRequest);
 			const bool bDeleteAllowed = DeletePreview.Validation.bCanExecute;
+			UpdateDeleteTargetPresentation(
+				true,
+				true,
+				Carry.RemainingInstanceIds.Num(),
+				bDeleteAllowed
+					? NAME_None
+					: DeletePreview.Validation.DisabledReason);
 			if (WorkspaceWidget)
 			{
 				WorkspaceWidget->SetPileDropFeedback(
@@ -891,14 +903,12 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 					bDeleteAllowed,
 					!bDeleteAllowed);
 			}
-			if (!bDeleteAllowed && DeleteTargetLabel)
-			{
-				DeleteTargetLabel->SetText(
-					FWacomBackpackCommandFlow::BuildDeleteFailureToastText(
-						DeletePreview.Validation.DisabledReason));
-			}
 			return;
 		}
+		UpdateDeleteTargetPresentation(
+			true,
+			false,
+			Carry.RemainingInstanceIds.Num());
 		FWacomBackpackZoneKey Target;
 		if (ResolveWorkspacePileTarget(Target) && WorkspaceWidget)
 		{
@@ -1024,22 +1034,34 @@ void UWacomBackpackScreen::UpdateCardDetailPlacementMode()
 void UWacomBackpackScreen::UpdateDeleteTargetPresentation(
 	bool bCarrying,
 	bool bPointerInside,
-	int32 CardCount)
+	int32 CardCount,
+	FName DisabledReason)
 {
 	const UWacomBackpackWorkspaceStyle* Style = WorkspaceStyle
 		? WorkspaceStyle.Get()
 		: GetDefault<UWacomBackpackWorkspaceStyle>();
 	const FWacomBackpackZoneAppearance& Appearance = Style->DestructiveAppearance;
+	const bool bDeleteFunctionAvailable = bHasLastAppliedStorageSnapshot
+		&& LastAppliedStorageSnapshot.bDeleteFunctionAvailable;
+	bDeleteTargetRejectedPresentation =
+		!bDeleteFunctionAvailable || !DisabledReason.IsNone();
 	if (DeleteTargetBackground)
 	{
 		FLinearColor Surface = Appearance.SurfaceColor;
-		if (bPointerInside)
+		if (bPointerInside && !bDeleteTargetRejectedPresentation)
 		{
 			Surface = FMath::Lerp(Surface, Appearance.AccentColor, 0.42f);
 		}
 		else if (bCarrying)
 		{
 			Surface = FMath::Lerp(Surface, Appearance.AccentColor, 0.16f);
+		}
+		if (bDeleteTargetRejectedPresentation)
+		{
+			Surface = FMath::Lerp(
+				Surface,
+				FLinearColor(0.08f, 0.08f, 0.08f, Surface.A),
+				0.52f);
 		}
 		Surface.A = bCarrying ? 0.96f : 0.72f;
 		DeleteTargetBackground->SetBrushColor(Surface);
@@ -1051,17 +1073,25 @@ void UWacomBackpackScreen::UpdateDeleteTargetPresentation(
 			DeleteTargetOutline->SetBrush(Appearance.FrameBrush);
 		}
 		FLinearColor Outline = Appearance.AccentColor;
-		Outline.A = bPointerInside ? 1.0f : (bCarrying ? 0.78f : 0.42f);
+		Outline.A = bPointerInside && !bDeleteTargetRejectedPresentation
+			? 1.0f
+			: (bCarrying ? 0.78f : 0.42f);
 		DeleteTargetOutline->SetBrushColor(Outline);
 		DeleteTargetOutline->SetVisibility(ESlateVisibility::HitTestInvisible);
 	}
 	if (DeleteTargetIcon)
 	{
-		const bool bHasIcon = Appearance.IconBrush.GetResourceObject() != nullptr;
+		const FSlateBrush& IconBrush = bDeleteTargetRejectedPresentation
+			? Style->RejectedDropStateIconBrush
+			: Appearance.IconBrush;
+		const bool bHasIcon = IconBrush.GetResourceObject() != nullptr;
 		if (bHasIcon)
 		{
-			DeleteTargetIcon->SetBrush(Appearance.IconBrush);
-			DeleteTargetIcon->SetColorAndOpacity(Appearance.AccentColor);
+			DeleteTargetIcon->SetBrush(IconBrush);
+			DeleteTargetIcon->SetColorAndOpacity(
+				bDeleteTargetRejectedPresentation
+					? FLinearColor::White
+					: Appearance.AccentColor);
 		}
 		DeleteTargetIcon->SetVisibility(bHasIcon
 			? ESlateVisibility::HitTestInvisible
@@ -1083,20 +1113,28 @@ void UWacomBackpackScreen::UpdateDeleteTargetPresentation(
 	}
 	if (DeleteTargetLabel)
 	{
-		DeleteTargetLabel->SetText(bPointerInside
-			? LOCTEXT("DeleteTargetRelease", "释放以销毁")
-			: (bCarrying
-				? LOCTEXT("DeleteTargetCarry", "拖到这里销毁")
-				: LOCTEXT("DeleteTargetIdle", "销毁区")));
+		DeleteTargetLabel->SetText(!DisabledReason.IsNone()
+			? FWacomBackpackCommandFlow::BuildDeleteFailureToastText(
+				DisabledReason)
+			: (bPointerInside && bDeleteFunctionAvailable
+				? LOCTEXT("DeleteTargetRelease", "释放以销毁")
+				: (bCarrying && bDeleteFunctionAvailable
+					? LOCTEXT("DeleteTargetCarry", "拖到这里销毁")
+					: LOCTEXT("DeleteTargetIdle", "销毁区"))));
 	}
 	if (DeleteTargetCountText)
 	{
-		DeleteTargetCountText->SetText(CardCount > 0
-			? FText::Format(
-				LOCTEXT("DeleteTargetCardCount", "{0} 张卡牌"),
-				FText::AsNumber(CardCount))
-			: FText::GetEmpty());
-		DeleteTargetCountText->SetVisibility(CardCount > 0
+		DeleteTargetCountText->SetText(!bDeleteFunctionAvailable
+			? LOCTEXT(
+				"DeleteTargetProviderRequired",
+				"需要删牌能力卡")
+			: (CardCount > 0
+				? FText::Format(
+					LOCTEXT("DeleteTargetCardCount", "{0} 张卡牌"),
+					FText::AsNumber(CardCount))
+				: FText::GetEmpty()));
+		DeleteTargetCountText->SetVisibility(
+			!bDeleteFunctionAvailable || CardCount > 0
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
@@ -1426,6 +1464,15 @@ void UWacomBackpackScreen::SubmitWorkspaceDelete(TConstArrayView<FGuid> Instance
 	const FRunDeckBatchDeletePreview Preview = FWacomBackpackCommandFlow::PreviewBatchDelete(Run, Request);
 	if (!Preview.Validation.bCanExecute)
 	{
+		UpdateDeleteTargetPresentation(
+			true,
+			IsWorkspaceDeleteTarget(),
+			CarrySnapshot.RemainingInstanceIds.Num(),
+			Preview.Validation.DisabledReason);
+		if (WorkspaceWidget)
+		{
+			WorkspaceWidget->SetCarryDropFeedbackState(false, true);
+		}
 		// Submit once to reuse the command flow's canonical failure toast. The Run
 		// operation is atomic and performs the same validation before any mutation.
 		FWacomBackpackCommandFlow::SubmitBatchDelete(*this, Run, Request);

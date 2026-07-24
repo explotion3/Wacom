@@ -34,6 +34,12 @@ TUniquePtr<FSaleDepartureFixture> BuildSaleFixture(
 		TEXT("WorkspaceSaleDeparture.Bag.%d"),
 		CardCount));
 	Bag->Physique.Capacity = CardCount + 4;
+	UCardDefinition* DeleteProvider = NewObject<UCardDefinition>(Outer);
+	DeleteProvider->CardId = FName(*FString::Printf(
+		TEXT("WorkspaceSaleDeparture.Provider.%d"),
+		CardCount));
+	DeleteProvider->Keywords.AddTag(
+		WacomTags::Card_Keyword_DeleteProvider);
 	UCardDefinition* SaleCard = NewObject<UCardDefinition>(Outer);
 	SaleCard->CardId = FName(*FString::Printf(
 		TEXT("WorkspaceSaleDeparture.Card.%d"),
@@ -44,6 +50,7 @@ TUniquePtr<FSaleDepartureFixture> BuildSaleFixture(
 		TEXT("WorkspaceSaleDeparture.Character.%d"),
 		CardCount));
 	Character->StarterDeck.Add(Bag);
+	Character->StarterDeck.Add(DeleteProvider);
 
 	TUniquePtr<FSaleDepartureFixture> Fixture =
 		MakeUnique<FSaleDepartureFixture>();

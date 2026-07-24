@@ -10,6 +10,7 @@
 #include "Components/Border.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/OverlaySlot.h"
+#include "Components/TextBlock.h"
 #include "Components/VerticalBoxSlot.h"
 #include "Input/Events.h"
 #include "InputCoreTypes.h"
@@ -1552,6 +1553,118 @@ bool FWacomBackpackScreenTestAccess::IsDeleteConfirmationHostVisible(
 {
 	return Screen.DeleteConfirmHost
 		&& Screen.DeleteConfirmHost->GetVisibility() != ESlateVisibility::Collapsed;
+}
+
+bool FWacomBackpackScreenTestAccess::IsDeleteTargetVisible(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.DeleteTargetHost
+		&& Screen.DeleteTargetHost->GetVisibility()
+			!= ESlateVisibility::Collapsed;
+}
+
+bool FWacomBackpackScreenTestAccess::IsDeleteTargetRejected(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.bDeleteTargetRejectedPresentation;
+}
+
+FText FWacomBackpackScreenTestAccess::DeleteTargetLabelText(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.DeleteTargetLabel
+		? Screen.DeleteTargetLabel->GetText()
+		: FText::GetEmpty();
+}
+
+FText FWacomBackpackScreenTestAccess::DeleteTargetSecondaryText(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.DeleteTargetCountText
+		? Screen.DeleteTargetCountText->GetText()
+		: FText::GetEmpty();
+}
+
+bool FWacomBackpackScreenTestAccess::FocusWorkspaceDeleteTarget(
+	UWacomBackpackScreen& Screen)
+{
+	if (!Screen.WorkspaceWidget || !Screen.WorkspaceInteractionModel
+		|| !Screen.WorkspaceInteractionModel->IsCarrying())
+	{
+		return false;
+	}
+	FWacomBackpackWorkspaceNavigationTarget DeleteTarget;
+	DeleteTarget.Kind =
+		EWacomBackpackWorkspaceNavigationTargetKind::Delete;
+	DeleteTarget.Center = FVector2D(100.0f, 100.0f);
+	Screen.WorkspaceWidget->GetRuntime().Navigation.ReconcileTargets(
+		TArray<FWacomBackpackWorkspaceNavigationTarget>{ DeleteTarget });
+	Screen.WorkspaceWidget->GetRuntime().Navigation.ActivateSemanticFocus();
+	Screen.HandleWorkspaceInteractionChanged();
+	EWacomBackpackWorkspaceReleaseTargetKind Kind =
+		EWacomBackpackWorkspaceReleaseTargetKind::Pointer;
+	FWacomBackpackZoneKey Zone;
+	return Screen.WorkspaceWidget->GetFocusedReleaseTarget(Kind, Zone)
+		&& Kind == EWacomBackpackWorkspaceReleaseTargetKind::Delete;
+}
+
+bool FWacomBackpackScreenTestAccess::IsWorkspaceCarryDropRejected(
+	const UWacomBackpackScreen& Screen)
+{
+	return Screen.WorkspaceWidget
+		&& Screen.WorkspaceWidget->GetRuntime()
+			.Presentation.bCarryDropRejected;
+}
+
+bool FWacomBackpackScreenTestAccess::SelectWorkspaceCarryInstance(
+	UWacomBackpackScreen& Screen,
+	FGuid InstanceId)
+{
+	if (!Screen.WorkspaceWidget || !Screen.WorkspaceInteractionModel
+		|| !Screen.WorkspaceInteractionModel->IsCarrying())
+	{
+		return false;
+	}
+	const FWacomBackpackWorkspaceCarryState& InitialCarry =
+		Screen.WorkspaceInteractionModel->GetCarry();
+	const int32 TargetIndex =
+		InitialCarry.RemainingInstanceIds.IndexOfByKey(InstanceId);
+	if (TargetIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	while (Screen.WorkspaceInteractionModel->GetCarry().CurrentIndex
+		> TargetIndex)
+	{
+		if (!StepWorkspaceCarryCurrentByWheel(
+			*Screen.WorkspaceWidget,
+			1.0f))
+		{
+			return false;
+		}
+	}
+	while (Screen.WorkspaceInteractionModel->GetCarry().CurrentIndex
+		< TargetIndex)
+	{
+		if (!StepWorkspaceCarryCurrentByWheel(
+			*Screen.WorkspaceWidget,
+			-1.0f))
+		{
+			return false;
+		}
+	}
+	return Screen.WorkspaceInteractionModel->GetCarry()
+		.RemainingInstanceIds.IsValidIndex(TargetIndex)
+		&& Screen.WorkspaceInteractionModel->GetCarry()
+			.RemainingInstanceIds[TargetIndex] == InstanceId;
+}
+
+bool FWacomBackpackScreenTestAccess::SendWorkspaceScreenKeyDown(
+	UWacomBackpackScreen& Screen,
+	const FKey& Key)
+{
+	return Screen.WorkspaceWidget
+		&& SendWorkspaceKeyDown(*Screen.WorkspaceWidget, Key);
 }
 
 bool FWacomBackpackScreenTestAccess::IsDetailVisible(const UWacomBackpackScreen& Screen)

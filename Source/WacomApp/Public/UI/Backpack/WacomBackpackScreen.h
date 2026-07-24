@@ -256,7 +256,8 @@ private:
 	void UpdateDeleteTargetPresentation(
 		bool bCarrying,
 		bool bPointerInside,
-		int32 CardCount);
+		int32 CardCount,
+		FName DisabledReason = NAME_None);
 	void SetCardDetailOccupied(bool bOccupied);
 	bool IsCardDetailDocked() const { return bCardDetailDocked; }
 	void ApplyOwningLayerTransitionState(bool bTransitioning);
@@ -328,6 +329,7 @@ private:
 	TSharedPtr<FWacomBackpackStorageRefreshGate> StorageRefreshGate;
 	TSharedPtr<FWacomBackpackWorkspaceStateStore> WorkspaceStateFallback;
 	TSharedPtr<FWacomBackpackWorkspaceInteractionModel> WorkspaceInteractionModel;
+	bool bDeleteTargetRejectedPresentation = false;
 	TWeakObjectPtr<UWacomPrimaryGameLayout> BoundPrimaryLayout;
 	TWeakObjectPtr<UWacomSettingsSubsystem> BoundSettingsSubsystem;
 	TWeakObjectPtr<UCommonInputSubsystem> BoundCommonInputSubsystem;

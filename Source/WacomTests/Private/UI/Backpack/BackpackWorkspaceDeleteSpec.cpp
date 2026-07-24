@@ -25,6 +25,10 @@ bool FWacomUIBackpackWorkspaceImmediateDeleteSpec::RunTest(const FString& Parame
 	UCardDefinition* Bag = NewObject<UCardDefinition>(Outer);
 	Bag->CardId = TEXT("WorkspaceDelete.Bag");
 	Bag->Physique.Capacity = 5;
+	UCardDefinition* DeleteProvider = NewObject<UCardDefinition>(Outer);
+	DeleteProvider->CardId = TEXT("WorkspaceDelete.Provider");
+	DeleteProvider->Keywords.AddTag(
+		WacomTags::Card_Keyword_DeleteProvider);
 	UCardDefinition* White = NewObject<UCardDefinition>(Outer);
 	White->CardId = TEXT("WorkspaceDelete.White");
 	White->Rarity = WacomTags::Card_Rarity_White;
@@ -34,6 +38,7 @@ bool FWacomUIBackpackWorkspaceImmediateDeleteSpec::RunTest(const FString& Parame
 	UCharacterDefinition* Character = NewObject<UCharacterDefinition>(Outer);
 	Character->CharacterId = TEXT("WorkspaceDelete.Character");
 	Character->StarterDeck.Add(Bag);
+	Character->StarterDeck.Add(DeleteProvider);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
 	TestTrue(TEXT("Delete restore Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(White);
@@ -101,6 +106,10 @@ bool FWacomUIBackpackWorkspacePartialDeletePreservesCarrySpec::RunTest(const FSt
 	UCardDefinition* Bag = NewObject<UCardDefinition>(Outer);
 	Bag->CardId = TEXT("WorkspacePartialDelete.Bag");
 	Bag->Physique.Capacity = 5;
+	UCardDefinition* DeleteProvider = NewObject<UCardDefinition>(Outer);
+	DeleteProvider->CardId = TEXT("WorkspacePartialDelete.Provider");
+	DeleteProvider->Keywords.AddTag(
+		WacomTags::Card_Keyword_DeleteProvider);
 	UCardDefinition* FirstCard = NewObject<UCardDefinition>(Outer);
 	FirstCard->CardId = TEXT("WorkspacePartialDelete.First");
 	FirstCard->Rarity = WacomTags::Card_Rarity_White;
@@ -110,6 +119,7 @@ bool FWacomUIBackpackWorkspacePartialDeletePreservesCarrySpec::RunTest(const FSt
 	UCharacterDefinition* Character = NewObject<UCharacterDefinition>(Outer);
 	Character->CharacterId = TEXT("WorkspacePartialDelete.Character");
 	Character->StarterDeck.Add(Bag);
+	Character->StarterDeck.Add(DeleteProvider);
 	TStrongObjectPtr<URunSession> Run(NewObject<URunSession>(Outer));
 	TestTrue(TEXT("Partial delete Run initializes"), InitializeRunSessionForTest(*Run, Character).IsOk());
 	Run->AcquireCardToRun(FirstCard);

@@ -266,6 +266,18 @@ struct FWacomBackpackScreenTestAccess
 	static void ResetWorkspaceSaleDepartures(UWacomBackpackScreen& Screen);
 	static bool HasRuntimeDeleteConfirmationWidget(const UWacomBackpackScreen& Screen);
 	static bool IsDeleteConfirmationHostVisible(const UWacomBackpackScreen& Screen);
+	static bool IsDeleteTargetVisible(const UWacomBackpackScreen& Screen);
+	static bool IsDeleteTargetRejected(const UWacomBackpackScreen& Screen);
+	static FText DeleteTargetLabelText(const UWacomBackpackScreen& Screen);
+	static FText DeleteTargetSecondaryText(const UWacomBackpackScreen& Screen);
+	static bool FocusWorkspaceDeleteTarget(UWacomBackpackScreen& Screen);
+	static bool IsWorkspaceCarryDropRejected(const UWacomBackpackScreen& Screen);
+	static bool SelectWorkspaceCarryInstance(
+		UWacomBackpackScreen& Screen,
+		FGuid InstanceId);
+	static bool SendWorkspaceScreenKeyDown(
+		UWacomBackpackScreen& Screen,
+		const FKey& Key);
 
 	static bool IsDetailVisible(const UWacomBackpackScreen& Screen);
 	static FText DetailNameText(const UWacomBackpackScreen& Screen);
