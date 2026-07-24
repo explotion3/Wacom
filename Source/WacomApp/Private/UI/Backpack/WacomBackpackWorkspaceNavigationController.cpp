@@ -2,6 +2,350 @@
 
 #include "UI/Backpack/WacomBackpackWorkspaceNavigationController.h"
 
+#include "Input/Events.h"
+#include "InputCoreTypes.h"
+#include "UI/Backpack/WacomBackpackWorkspaceInteractionModel.h"
+#include "UI/Backpack/WacomBackpackWorkspaceRuntimeHost.h"
+#include "UI/Backpack/WacomDeckCardWidget.h"
+
+namespace
+{
+TArray<FGuid> BuildChangedNavigationInstanceIds(
+	const TConstArrayView<FGuid> Before,
+	const TConstArrayView<FGuid> After)
+{
+	TArray<FGuid> Changed;
+	for (const FGuid InstanceId : Before)
+	{
+		if (!After.Contains(InstanceId))
+		{
+			Changed.Add(InstanceId);
+		}
+	}
+	for (const FGuid InstanceId : After)
+	{
+		if (!Before.Contains(InstanceId))
+		{
+			Changed.AddUnique(InstanceId);
+		}
+	}
+	return Changed;
+}
+}
+
+EWacomBackpackWorkspaceInputReply
+FWacomBackpackWorkspaceNavigationController::HandleKeyDown(
+	FWacomBackpackWorkspaceRuntimeHost& Host,
+	const FKeyEvent& Event)
+{
+	if (!Host.IsValid())
+	{
+		return EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
+	const FKey Key = Event.GetKey();
+	if (Key == EKeys::F1)
+	{
+		Host.BroadcastControlsHelpRequested();
+		return EWacomBackpackWorkspaceInputReply::Handled;
+	}
+	if (Key == EKeys::Enter
+		|| Key == EKeys::Gamepad_FaceButton_Bottom)
+	{
+		return HandlePrimary(Host, false)
+			? EWacomBackpackWorkspaceInputReply::Handled
+			: EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
+	if (Key == EKeys::SpaceBar
+		|| Key == EKeys::Gamepad_FaceButton_Left)
+	{
+		return HandleSelection(Host)
+			? EWacomBackpackWorkspaceInputReply::Handled
+			: EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
+	if (Key == EKeys::T
+		|| Key == EKeys::Gamepad_FaceButton_Top)
+	{
+		return HandleContextAction(Host)
+			? EWacomBackpackWorkspaceInputReply::Handled
+			: EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
+	if (Key == EKeys::Q || Key == EKeys::Gamepad_LeftShoulder)
+	{
+		return StepCarriedCard(Host, -1)
+			? EWacomBackpackWorkspaceInputReply::Handled
+			: EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
+	if (Key == EKeys::E || Key == EKeys::Gamepad_RightShoulder)
+	{
+		return StepCarriedCard(Host, 1)
+			? EWacomBackpackWorkspaceInputReply::Handled
+			: EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
+	if (Key == EKeys::LeftShift)
+	{
+		Host.SetExpandedPileLensInputLocked(true, false);
+		return Host.IsExpandedPileLensInputLocked()
+			? EWacomBackpackWorkspaceInputReply::Handled
+			: EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
+	if (Event.IsControlDown() && Key == EKeys::A
+		&& SelectAllMovable(Host))
+	{
+		return EWacomBackpackWorkspaceInputReply::Handled;
+	}
+	if (Key == EKeys::Escape
+		|| Key == EKeys::Gamepad_FaceButton_Right)
+	{
+		if (Host.HasCancelableInteraction())
+		{
+			Host.CancelInteraction(true);
+			Host.BroadcastInteractionChanged();
+			return EWacomBackpackWorkspaceInputReply::Handled;
+		}
+		if (Host.HasExpandedContent())
+		{
+			Host.BroadcastCollapseExpandedPileRequested();
+			return EWacomBackpackWorkspaceInputReply::Handled;
+		}
+	}
+	return EWacomBackpackWorkspaceInputReply::Unhandled;
+}
+
+EWacomBackpackWorkspaceInputReply
+FWacomBackpackWorkspaceNavigationController::HandleKeyUp(
+	FWacomBackpackWorkspaceRuntimeHost& Host,
+	const FKeyEvent& Event)
+{
+	if (Host.IsValid() && Event.GetKey() == EKeys::LeftShift
+		&& Host.IsExpandedPileLensInputLocked())
+	{
+		Host.SetExpandedPileLensInputLocked(false, true);
+		return EWacomBackpackWorkspaceInputReply::Handled;
+	}
+	return EWacomBackpackWorkspaceInputReply::Unhandled;
+}
+
+bool FWacomBackpackWorkspaceNavigationController::HandleNavigation(
+	FWacomBackpackWorkspaceRuntimeHost& Host,
+	const FNavigationEvent& Event)
+{
+	if (!Host.IsValid())
+	{
+		return false;
+	}
+	Host.ReconcileNavigationTargetsForInput();
+	TArray<FGuid> ChangedInstanceIds;
+	if (const FWacomBackpackWorkspaceNavigationTarget* Previous =
+		GetFocusedTarget())
+	{
+		if (Previous->Kind
+			== EWacomBackpackWorkspaceNavigationTargetKind::Card)
+		{
+			ChangedInstanceIds.Add(Previous->InstanceId);
+		}
+	}
+	if (!Move(Event.GetNavigationType()))
+	{
+		return false;
+	}
+	if (const FWacomBackpackWorkspaceNavigationTarget* Current =
+		GetFocusedTarget())
+	{
+		if (Current->Kind
+			== EWacomBackpackWorkspaceNavigationTargetKind::Card)
+		{
+			ChangedInstanceIds.AddUnique(Current->InstanceId);
+		}
+	}
+	Host.NotifyNavigationMoved(ChangedInstanceIds);
+	return true;
+}
+
+void FWacomBackpackWorkspaceNavigationController::HandleFocusLost(
+	FWacomBackpackWorkspaceRuntimeHost& Host)
+{
+	if (Host.IsValid())
+	{
+		Host.SetExpandedPileLensInputLocked(false, false);
+	}
+}
+
+bool FWacomBackpackWorkspaceNavigationController::HandlePrimary(
+	FWacomBackpackWorkspaceRuntimeHost& Host,
+	const bool bReleaseAll)
+{
+	FWacomBackpackWorkspaceInteractionModel* Model =
+		Host.GetInteractionModel();
+	if (!Model || Host.IsCarryInputSuspended())
+	{
+		return false;
+	}
+	Host.ReconcileNavigationTargetsForInput();
+	ActivateSemanticFocus();
+	const FWacomBackpackWorkspaceNavigationTarget* Target =
+		GetFocusedTarget();
+	if (!Target)
+	{
+		return false;
+	}
+	if (Model->IsCarrying())
+	{
+		EWacomBackpackWorkspaceReleaseTargetKind TargetKind;
+		FWacomBackpackZoneKey TargetZone;
+		if (!GetFocusedReleaseTarget(
+			true,
+			TargetKind,
+			TargetZone))
+		{
+			return false;
+		}
+		Host.BroadcastRelease(
+			bReleaseAll,
+			TargetKind,
+			TargetZone);
+		return true;
+	}
+	if (Target->Kind
+		== EWacomBackpackWorkspaceNavigationTargetKind::Pile)
+	{
+		Host.BroadcastPileExpansion(Target->Zone);
+		return true;
+	}
+	if (Target->Kind
+			!= EWacomBackpackWorkspaceNavigationTargetKind::Card
+		|| !Target->bActionable
+		|| !Model->BeginCarry(
+			Target->InstanceId,
+			Target->Center,
+			Host.GetCurrentStorageRevision()))
+	{
+		return false;
+	}
+	Model->NotifyReleaseGestureStarted();
+	Host.NotifyCarryStarted(
+		Target->Center,
+		Model->GetCarry().RemainingInstanceIds);
+	return true;
+}
+
+bool FWacomBackpackWorkspaceNavigationController::HandleSelection(
+	FWacomBackpackWorkspaceRuntimeHost& Host)
+{
+	FWacomBackpackWorkspaceInteractionModel* Model =
+		Host.GetInteractionModel();
+	if (!Model || Model->IsCarrying())
+	{
+		return false;
+	}
+	Host.ReconcileNavigationTargetsForInput();
+	const FWacomBackpackWorkspaceNavigationTarget* Target =
+		GetFocusedTarget();
+	if (!Target
+		|| Target->Kind
+			!= EWacomBackpackWorkspaceNavigationTargetKind::Card
+		|| !Target->bActionable)
+	{
+		return false;
+	}
+	const FGuid InstanceId = Target->InstanceId;
+	Model->ClickCard(InstanceId, true);
+	Host.UpdateSelectionVisualFreezeLifetime();
+	Host.NotifySelectionChanged(
+		MakeArrayView(&InstanceId, 1));
+	return true;
+}
+
+bool FWacomBackpackWorkspaceNavigationController::HandleContextAction(
+	FWacomBackpackWorkspaceRuntimeHost& Host)
+{
+	FWacomBackpackWorkspaceInteractionModel* Model =
+		Host.GetInteractionModel();
+	if (!Model)
+	{
+		return false;
+	}
+	if (Model->IsCarrying())
+	{
+		return HandlePrimary(Host, true);
+	}
+	Host.ReconcileNavigationTargetsForInput();
+	const FWacomBackpackWorkspaceNavigationTarget* Target =
+		GetFocusedTarget();
+	if (!Target
+		|| Target->Kind
+			!= EWacomBackpackWorkspaceNavigationTargetKind::Card)
+	{
+		return false;
+	}
+	UWacomDeckCardWidget* Card =
+		Host.FindBoundCard(Target->InstanceId);
+	return Card && Card->RequestBattleEnabledToggle();
+}
+
+bool FWacomBackpackWorkspaceNavigationController::StepCarriedCard(
+	FWacomBackpackWorkspaceRuntimeHost& Host,
+	const int32 Direction)
+{
+	FWacomBackpackWorkspaceInteractionModel* Model =
+		Host.GetInteractionModel();
+	if (!Model || !Model->IsCarrying()
+		|| Host.IsCarryInputSuspended() || Direction == 0)
+	{
+		return false;
+	}
+	TArray<FGuid> ChangedInstanceIds;
+	const int32 PreviousIndex = Model->GetCarry().CurrentIndex;
+	if (Model->GetCarry().RemainingInstanceIds.IsValidIndex(
+		PreviousIndex))
+	{
+		const FGuid PreviousId =
+			Model->GetCarry().RemainingInstanceIds[PreviousIndex];
+		ChangedInstanceIds.Add(PreviousId);
+		Host.RememberPreviousCarryCurrentCard(PreviousId);
+	}
+	Model->StepCurrentByWheel(Direction < 0 ? 1.0f : -1.0f);
+	if (Model->GetCarry().CurrentIndex == PreviousIndex)
+	{
+		return true;
+	}
+	if (Model->GetCarry().RemainingInstanceIds.IsValidIndex(
+		Model->GetCarry().CurrentIndex))
+	{
+		ChangedInstanceIds.AddUnique(
+			Model->GetCarry().RemainingInstanceIds[
+				Model->GetCarry().CurrentIndex]);
+	}
+	Host.NotifyCarryCurrentChanged(
+		ChangedInstanceIds,
+		false,
+		true);
+	return true;
+}
+
+bool FWacomBackpackWorkspaceNavigationController::SelectAllMovable(
+	FWacomBackpackWorkspaceRuntimeHost& Host)
+{
+	FWacomBackpackWorkspaceInteractionModel* Model =
+		Host.GetInteractionModel();
+	if (!Model)
+	{
+		return false;
+	}
+	const TArray<FGuid> Previous =
+		Model->GetSelection().OrderedSelectedInstanceIds;
+	if (Model->GetSelection().bHasSourceZone)
+	{
+		Host.BeginSelectionVisualFreeze(
+			Model->GetSelection().SourceZone);
+	}
+	Model->SelectAllMovable();
+	Host.UpdateSelectionVisualFreezeLifetime();
+	Host.NotifySelectionChanged(BuildChangedNavigationInstanceIds(
+		Previous,
+		Model->GetSelection().OrderedSelectedInstanceIds));
+	return true;
+}
+
 bool FWacomBackpackWorkspaceNavigationTarget::HasSameIdentity(
 	const FWacomBackpackWorkspaceNavigationTarget& Other) const
 {
@@ -136,4 +480,36 @@ bool FWacomBackpackWorkspaceNavigationController::IsCardFocused(FGuid InstanceId
 	return Target
 		&& Target->Kind == EWacomBackpackWorkspaceNavigationTargetKind::Card
 		&& Target->InstanceId == InstanceId;
+}
+
+bool FWacomBackpackWorkspaceNavigationController::
+	GetFocusedReleaseTarget(
+		const bool bIsCarrying,
+		EWacomBackpackWorkspaceReleaseTargetKind& OutKind,
+		FWacomBackpackZoneKey& OutZone) const
+{
+	const FWacomBackpackWorkspaceNavigationTarget* Target =
+		GetFocusedTarget();
+	if (!Target || !bSemanticFocusActive || !bIsCarrying)
+	{
+		return false;
+	}
+	OutZone = Target->Zone;
+	switch (Target->Kind)
+	{
+	case EWacomBackpackWorkspaceNavigationTargetKind::Flux:
+		OutKind =
+			EWacomBackpackWorkspaceReleaseTargetKind::Flux;
+		return true;
+	case EWacomBackpackWorkspaceNavigationTargetKind::Pile:
+		OutKind =
+			EWacomBackpackWorkspaceReleaseTargetKind::Pile;
+		return OutZone.IsValid();
+	case EWacomBackpackWorkspaceNavigationTargetKind::Delete:
+		OutKind =
+			EWacomBackpackWorkspaceReleaseTargetKind::Delete;
+		return true;
+	default:
+		return false;
+	}
 }

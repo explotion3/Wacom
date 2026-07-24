@@ -4,7 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Input/NavigationReply.h"
+#include "WacomBackpackWorkspaceInput.h"
 #include "WacomBackpackWorkspaceTypes.h"
+
+struct FKeyEvent;
+struct FNavigationEvent;
+class FWacomBackpackWorkspaceRuntimeHost;
+enum class EWacomBackpackWorkspaceReleaseTargetKind : uint8;
 
 enum class EWacomBackpackWorkspaceNavigationTargetKind : uint8
 {
@@ -32,6 +38,17 @@ struct WACOMAPP_API FWacomBackpackWorkspaceNavigationTarget
 class WACOMAPP_API FWacomBackpackWorkspaceNavigationController
 {
 public:
+	EWacomBackpackWorkspaceInputReply HandleKeyDown(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FKeyEvent& Event);
+	EWacomBackpackWorkspaceInputReply HandleKeyUp(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FKeyEvent& Event);
+	bool HandleNavigation(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		const FNavigationEvent& Event);
+	void HandleFocusLost(FWacomBackpackWorkspaceRuntimeHost& Host);
+
 	void ReconcileTargets(TConstArrayView<FWacomBackpackWorkspaceNavigationTarget> InTargets);
 	bool Move(EUINavigation Direction);
 	void ActivateSemanticFocus() { bSemanticFocusActive = true; }
@@ -41,8 +58,22 @@ public:
 
 	const FWacomBackpackWorkspaceNavigationTarget* GetFocusedTarget() const;
 	bool IsCardFocused(FGuid InstanceId) const;
+	bool GetFocusedReleaseTarget(
+		bool bIsCarrying,
+		EWacomBackpackWorkspaceReleaseTargetKind& OutKind,
+		FWacomBackpackZoneKey& OutZone) const;
 
 private:
+	bool HandlePrimary(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		bool bReleaseAll);
+	bool HandleSelection(FWacomBackpackWorkspaceRuntimeHost& Host);
+	bool HandleContextAction(FWacomBackpackWorkspaceRuntimeHost& Host);
+	bool StepCarriedCard(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		int32 Direction);
+	bool SelectAllMovable(FWacomBackpackWorkspaceRuntimeHost& Host);
+
 	TArray<FWacomBackpackWorkspaceNavigationTarget> Targets;
 	int32 FocusedIndex = INDEX_NONE;
 	bool bSemanticFocusActive = false;

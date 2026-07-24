@@ -9,6 +9,7 @@
 #include "InputCoreTypes.h"
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceGestureController.h"
+#include "BackpackWorkspaceGestureTestAccess.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackWorkspaceGestureThresholdSpec,
@@ -34,7 +35,12 @@ bool FWacomUIBackpackWorkspaceGestureThresholdSpec::RunTest(const FString& Param
 		0, Far, Near, Pressed, EKeys::LeftMouseButton, 0.0f, FModifierKeysState());
 
 	FWacomBackpackWorkspaceGestureController Gesture;
-	Gesture.BeginCardPress(FGuid::NewGuid(), FVector2D::ZeroVector, Origin, false);
+	FWacomBackpackWorkspaceGestureTestAccess::BeginCardPress(
+		Gesture,
+		FGuid::NewGuid(),
+		FVector2D::ZeroVector,
+		Origin,
+		false);
 	TestFalse(TEXT("Card press stays a click below Slate threshold"),
 		Gesture.HasCardDragThreshold(NearEvent));
 	TestTrue(TEXT("Card press becomes a drag above Slate threshold"),
@@ -42,8 +48,14 @@ bool FWacomUIBackpackWorkspaceGestureThresholdSpec::RunTest(const FString& Param
 
 	TStrongObjectPtr<UWacomBackpackZonePileWidget> Pile(
 		NewObject<UWacomBackpackZonePileWidget>());
-	Gesture.BeginPilePress(
-		*Pile, FVector2D::ZeroVector, Origin, FVector2D::ZeroVector, false, true);
+	FWacomBackpackWorkspaceGestureTestAccess::BeginPilePress(
+		Gesture,
+		*Pile,
+		FVector2D::ZeroVector,
+		Origin,
+		FVector2D::ZeroVector,
+		false,
+		true);
 	TestFalse(TEXT("Pile press stays a click below the same threshold"),
 		Gesture.HasPileDragThreshold(NearEvent));
 	TestTrue(TEXT("Pile press becomes a drag above the same threshold"),
@@ -54,7 +66,8 @@ bool FWacomUIBackpackWorkspaceGestureThresholdSpec::RunTest(const FString& Param
 	const FPointerEvent ShiftedFarEvent(
 		0, ShiftedFar, ShiftedOrigin, Pressed, EKeys::LeftMouseButton, 0.0f,
 		FModifierKeysState());
-	Gesture.BeginMarqueePress(
+	FWacomBackpackWorkspaceGestureTestAccess::BeginMarqueePress(
+		Gesture,
 		FWacomBackpackZoneKey::Make(EZoneKind::Backpack),
 		FVector2D::ZeroVector,
 		ShiftedOrigin,

@@ -19,6 +19,21 @@
 #include "UI/Backpack/WacomBackpackZonePileWidget.h"
 #include "UI/Backpack/WacomDeckCardWidget.h"
 
+namespace
+{
+FVector2D RotateBackpackRuntimeHostVector(
+	const FVector2D Vector,
+	const float AngleDegrees)
+{
+	const float Radians = FMath::DegreesToRadians(AngleDegrees);
+	const float CosAngle = FMath::Cos(Radians);
+	const float SinAngle = FMath::Sin(Radians);
+	return FVector2D(
+		Vector.X * CosAngle - Vector.Y * SinAngle,
+		Vector.X * SinAngle + Vector.Y * CosAngle);
+}
+}
+
 bool FWacomBackpackWorkspaceRuntimeHost::IsValid() const
 {
 	return ::IsValid(&Adapter) && Adapter.Runtime.IsValid();
@@ -270,7 +285,15 @@ bool FWacomBackpackWorkspaceRuntimeHost::IsCarryInputSuspended() const
 void FWacomBackpackWorkspaceRuntimeHost::
 	RelinquishSemanticNavigationForPointerInput()
 {
-	Adapter.RelinquishSemanticNavigationForPointerInput();
+	FWacomBackpackWorkspaceNavigationController& Navigation =
+		Adapter.GetRuntime().Navigation;
+	const bool bHadSemanticFocus =
+		Navigation.IsSemanticFocusActive();
+	Navigation.NotifyPointerInput();
+	if (bHadSemanticFocus)
+	{
+		Adapter.OnBrowseFocusChangedNative.Broadcast(nullptr);
+	}
 }
 
 void FWacomBackpackWorkspaceRuntimeHost::SyncExpandedPileLensInputLock(
@@ -667,6 +690,255 @@ void FWacomBackpackWorkspaceRuntimeHost::NotifyCarryCurrentChanged(
 	Adapter.RequestPresentationRefresh(Reasons, ChangedInstanceIds);
 	Adapter.WakeFrameScheduler();
 	BroadcastInteractionChanged();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::
+	ReconcileNavigationTargetsForInput()
+{
+	Adapter.ReconcileNavigationTargets();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::NotifyNavigationMoved(
+	const TConstArrayView<FGuid> ChangedInstanceIds)
+{
+	Adapter.RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::StaticCards
+			| EWacomBackpackWorkspacePresentationDirty::MotionTarget
+			| EWacomBackpackWorkspacePresentationDirty::
+				NavigationPresentation
+			| EWacomBackpackWorkspacePresentationDirty::Accessibility
+			| EWacomBackpackWorkspacePresentationDirty::Paint,
+		ChangedInstanceIds);
+	BroadcastInteractionChanged();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BroadcastRelease(
+	const bool bReleaseAll,
+	const EWacomBackpackWorkspaceReleaseTargetKind TargetKind,
+	const FWacomBackpackZoneKey& TargetZone)
+{
+	Adapter.BroadcastRelease(bReleaseAll, TargetKind, TargetZone);
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::BroadcastPileExpansion(
+	const FWacomBackpackZoneKey& Zone)
+{
+	Adapter.OnPileExpansionRequestedNative.Broadcast(
+		Zone.Zone,
+		Zone.OwnerInstanceId,
+		false);
+}
+
+UWacomDeckCardWidget*
+FWacomBackpackWorkspaceRuntimeHost::FindBoundCard(
+	const FGuid InstanceId) const
+{
+	for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard :
+		Adapter.GetBoundCardWidgets())
+	{
+		UWacomDeckCardWidget* Card = WeakCard.Get();
+		if (Card && Card->GetCardInstanceId() == InstanceId)
+		{
+			return Card;
+		}
+	}
+	return nullptr;
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::
+	BroadcastControlsHelpRequested()
+{
+	Adapter.OnControlsHelpRequestedNative.Broadcast();
+}
+
+bool FWacomBackpackWorkspaceRuntimeHost::
+	IsExpandedPileLensInputLocked() const
+{
+	return Adapter.GetRuntime().Presentation
+		.bExpandedPileLensInputLocked;
+}
+
+bool FWacomBackpackWorkspaceRuntimeHost::
+	HasCancelableInteraction() const
+{
+	return (Adapter.InteractionModel
+			&& (Adapter.InteractionModel->IsCarrying()
+				|| Adapter.InteractionModel->IsMarqueeActive()
+				|| Adapter.InteractionModel->IsPileMoving()))
+		|| Adapter.GetRuntime().Gesture.HasAnyPendingPress();
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::CancelInteraction(
+	const bool bAnimateCarryReturn)
+{
+	if (!IsValid())
+	{
+		return;
+	}
+	FWacomBackpackWorkspaceRuntime& Runtime = Adapter.GetRuntime();
+	FWacomBackpackWorkspaceInteractionModel* Model =
+		Adapter.InteractionModel.Get();
+	if (bAnimateCarryReturn && Model && Model->IsCarrying()
+		&& !Runtime.Presentation.IsSimplifiedMotion())
+	{
+		if (!Adapter.SettlementLayer)
+		{
+			Adapter.EnsureFallbackTree();
+		}
+		const UWacomBackpackWorkspaceStyle& Style = GetStyle();
+		const TArray<FGuid> ReturningIds =
+			Model->GetCarry().RemainingInstanceIds;
+		Adapter.CaptureReleasedVisualPoses(ReturningIds);
+		for (const TWeakObjectPtr<UWacomDeckCardWidget>& WeakCard :
+			Adapter.GetBoundCardWidgets())
+		{
+			UWacomDeckCardWidget* Card = WeakCard.Get();
+			if (!Card
+				|| !ReturningIds.Contains(Card->GetCardInstanceId()))
+			{
+				continue;
+			}
+			const FWacomBackpackWorkspaceCardLayout* Target =
+				Adapter.GetVisualState().BaseLayouts().Find(Card);
+			const FWacomBackpackWorkspaceCardVisualPose* Start =
+				Adapter.GetVisualState().FindReleasedVisualPose(
+					Card->GetCardInstanceId());
+			if (!Target || !Start || !Adapter.SettlementLayer)
+			{
+				continue;
+			}
+			Wacom::Backpack::ReparentCardPreservingSlate(
+				*Adapter.SettlementLayer,
+				*Card);
+			Adapter.ApplyCardLayout(
+				*Card,
+				Target->Center,
+				Target->Size,
+				Target->AngleDegrees,
+				Target->ZOrder);
+			Adapter.GetVisualState().SetSettlementTarget(
+				*Card,
+				*Target);
+			Runtime.Motion.BeginSettlement(
+				*Card,
+				RotateBackpackRuntimeHostVector(
+					Start->Center - Target->Center,
+					-Target->AngleDegrees),
+				FMath::FindDeltaAngleDegrees(
+					Target->AngleDegrees,
+					Start->AngleDegrees),
+				Style.CancelReturnSeconds,
+				false);
+		}
+		Runtime.Gesture.CancelPending(*this);
+		Model->CancelTransientState();
+		Adapter.StopFrameScheduler();
+		Runtime.Presentation.bHasQueuedCarryPointer = false;
+		Runtime.Presentation.bHasQueuedPilePointer = false;
+		Runtime.Presentation.bCarryStripLayoutDirty = false;
+		Adapter.GetVisualState().ResetReleasedHandoffs();
+		Runtime.Presentation.bCarryVisualAnchorInitialized = false;
+		if (Adapter.CarryRoot)
+		{
+			Adapter.CarryRoot->SetRenderTranslation(
+				FVector2D::ZeroVector);
+		}
+		if (FSlateApplication::IsInitialized())
+		{
+			FSlateApplication::Get().ReleaseAllPointerCapture(0);
+		}
+		Adapter.RequestPresentationRefresh(
+			EWacomBackpackWorkspacePresentationDirty::All,
+			{},
+			true);
+		Adapter.WakeFrameScheduler();
+		return;
+	}
+
+	Adapter.SetExpandedPileLensInputLocked(false, false);
+	Adapter.SetPileDropFeedback(
+		EZoneKind::Backpack,
+		FGuid(),
+		FWacomBackpackDropFeedbackView());
+	Adapter.CancelHoverExpandTimer();
+	Adapter.ClearExpandedPileFocus(false);
+	Adapter.EndSelectionVisualFreeze(false);
+	Runtime.Gesture.CancelPending(*this);
+	Runtime.Presentation.SetCarryInputSuspended(false);
+	Runtime.Presentation.bPileCollapseAnimationPending = false;
+	if (Model)
+	{
+		Model->CancelTransientState();
+	}
+	Adapter.StopFrameScheduler();
+	Runtime.Presentation.bHasQueuedCarryPointer = false;
+	Runtime.Presentation.bHasQueuedPilePointer = false;
+	Runtime.Presentation.bCarryStripLayoutDirty = false;
+	Runtime.Presentation.bCarryCurrentExplicitlySelectedByWheel = false;
+	Runtime.Presentation.PreviousCarryCurrentCard.Reset();
+	Adapter.GetVisualState().ResetTransientMotion();
+	Runtime.Motion.Reset();
+	if (Adapter.SettlementLayer && Adapter.StaticCardLayer)
+	{
+		TArray<UWacomDeckCardWidget*> SettlingCards;
+		for (int32 Index = 0;
+			Index < Adapter.SettlementLayer->GetChildrenCount();
+			++Index)
+		{
+			if (UWacomDeckCardWidget* Card =
+				Cast<UWacomDeckCardWidget>(
+					Adapter.SettlementLayer->GetChildAt(Index)))
+			{
+				if (!Adapter.IsSaleDepartureCard(Card))
+				{
+					SettlingCards.Add(Card);
+				}
+			}
+		}
+		for (UWacomDeckCardWidget* Card : SettlingCards)
+		{
+			Wacom::Backpack::ReparentCardPreservingSlate(
+				*Adapter.StaticCardLayer,
+				*Card);
+			if (const FWacomBackpackWorkspaceCardLayout* Base =
+				Adapter.GetVisualState().BaseLayouts().Find(Card))
+			{
+				Adapter.ApplyCardLayout(
+					*Card,
+					Base->Center,
+					Base->Size,
+					Base->AngleDegrees,
+					Base->ZOrder);
+			}
+		}
+	}
+	Adapter.RestoreStaticCardParents();
+	Runtime.Presentation.bCarryVisualAnchorInitialized = false;
+	Runtime.Presentation.CarryAnchorLocal = FVector2D::ZeroVector;
+	Runtime.Presentation.CarryVisualAnchorLocal =
+		FVector2D::ZeroVector;
+	Adapter.CancelHoverExpandTimer();
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().ReleaseAllPointerCapture(0);
+	}
+	Adapter.RequestPresentationRefresh(
+		EWacomBackpackWorkspacePresentationDirty::All,
+		{},
+		true);
+	Adapter.WakeFrameScheduler();
+}
+
+bool FWacomBackpackWorkspaceRuntimeHost::HasExpandedContent() const
+{
+	return Adapter.GetRuntime().Presentation
+		.bHasExpandedContentBounds;
+}
+
+void FWacomBackpackWorkspaceRuntimeHost::
+	BroadcastCollapseExpandedPileRequested()
+{
+	Adapter.OnCollapseExpandedPileRequestedNative.Broadcast();
 }
 
 bool FWacomBackpackWorkspaceRuntimeHost::TryGetCursorLocalPosition(

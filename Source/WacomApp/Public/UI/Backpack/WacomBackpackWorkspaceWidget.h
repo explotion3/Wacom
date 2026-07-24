@@ -274,11 +274,6 @@ private:
 	bool IsCardAccessibilityFocused(const UWacomDeckCardWidget& Card) const;
 	EWacomBackpackWorkspaceCardSemanticIcon ResolveCardAccessibilitySemanticIcon(
 		const UWacomDeckCardWidget& Card) const;
-	bool HandleNavigationPrimary(bool bReleaseAll);
-	bool HandleNavigationSelection();
-	bool HandleNavigationContextAction();
-	bool StepCarriedCard(int32 Direction);
-	void RelinquishSemanticNavigationForPointerInput();
 	void WakeFrameScheduler();
 	void EnsureFrameSchedulerRunning();
 	void StopFrameScheduler();
@@ -333,7 +328,6 @@ private:
 	bool ResolveCardDetailAnchorRect(
 		const UWacomDeckCardWidget& Card,
 		FSlateRect& OutWorkspaceLocalRect) const;
-	void CancelInteractionWithReturn();
 	void RestoreStaticCardParents();
 	bool IsSaleDepartureCard(const UWacomDeckCardWidget* CardWidget) const;
 	bool IsInCarryVisualLayer(const UWidget* CardWidget) const;

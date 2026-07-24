@@ -674,10 +674,13 @@ FWacomBackpackWorkspaceGestureController::HandleMouseWheel(
 	FWacomBackpackWorkspaceRuntimeHost& Host,
 	const FPointerEvent& Event)
 {
+	if (!Host.IsValid())
+	{
+		return EWacomBackpackWorkspaceInputReply::Unhandled;
+	}
 	FWacomBackpackWorkspaceInteractionModel* Model =
 		Host.GetInteractionModel();
-	if (!Host.IsValid() || Host.IsCarryInputSuspended()
-		|| !Model || !Model->IsCarrying())
+	if (Host.IsCarryInputSuspended() || !Model || !Model->IsCarrying())
 	{
 		return EWacomBackpackWorkspaceInputReply::Unhandled;
 	}

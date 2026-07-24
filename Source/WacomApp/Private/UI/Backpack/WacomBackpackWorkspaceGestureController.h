@@ -96,6 +96,27 @@ public:
 	void HandleMouseLeave(FWacomBackpackWorkspaceRuntimeHost& Host);
 	void CancelPending(FWacomBackpackWorkspaceRuntimeHost& Host);
 
+	bool HasCardDragThreshold(const FPointerEvent& Event) const;
+	bool HasPileDragThreshold(const FPointerEvent& Event) const;
+	bool HasMarqueeDragThreshold(const FPointerEvent& Event) const;
+	bool HasPendingCardPress() const { return CardPress.bActive; }
+	bool HasPendingPilePress() const { return PilePress.bActive; }
+	bool HasPendingMarqueePress() const { return MarqueePress.bActive; }
+	bool HasAnyPendingPress() const
+	{
+		return HasPendingCardPress()
+			|| HasPendingPilePress()
+			|| HasPendingMarqueePress();
+	}
+	bool HasPileMoveSnapshot() const { return PileMoveSnapshot.bValid; }
+
+	void ResetPendingPresses();
+	void Reset();
+
+private:
+	friend struct FWacomBackpackScreenTestAccess;
+	friend struct FWacomBackpackWorkspaceGestureTestAccess;
+
 	void BeginCardPress(
 		FGuid InstanceId,
 		FVector2D LocalPosition,
@@ -113,50 +134,11 @@ public:
 		FVector2D LocalPosition,
 		FVector2D ScreenPosition,
 		bool bControlDown);
-	bool HasCardDragThreshold(const FPointerEvent& Event) const;
-	bool HasPileDragThreshold(const FPointerEvent& Event) const;
-	bool HasMarqueeDragThreshold(const FPointerEvent& Event) const;
-	bool HasPendingCardPress() const { return CardPress.bActive; }
-	bool HasPendingPilePress() const { return PilePress.bActive; }
-	bool HasPendingMarqueePress() const { return MarqueePress.bActive; }
-	bool HasAnyPendingPress() const
-	{
-		return HasPendingCardPress()
-			|| HasPendingPilePress()
-			|| HasPendingMarqueePress();
-	}
-	bool HasPileMoveSnapshot() const { return PileMoveSnapshot.bValid; }
-
-	const FWacomBackpackPendingCardPress& GetCardPress() const
-	{
-		return CardPress;
-	}
-	const FWacomBackpackPendingPilePress& GetPilePress() const
-	{
-		return PilePress;
-	}
-	const FWacomBackpackPendingMarqueePress& GetMarqueePress() const
-	{
-		return MarqueePress;
-	}
-	const FWacomBackpackPileMoveVisualSnapshot& GetPileMoveSnapshot() const
-	{
-		return PileMoveSnapshot;
-	}
-
 	void ClearCardPress() { CardPress.Reset(); }
 	void ClearPilePress() { PilePress.Reset(); }
 	void ClearMarqueePress() { MarqueePress.Reset(); }
-	void SetPileMoveSnapshot(
-		const FWacomBackpackPileMoveVisualSnapshot& Snapshot)
-	{
-		PileMoveSnapshot = Snapshot;
-	}
 	void ClearPileMoveSnapshot() { PileMoveSnapshot.Reset(); }
-	void ResetPendingPresses();
-	void Reset();
 
-private:
 	static bool HasDragThreshold(const FPointerEvent& Event, FVector2D ScreenOrigin);
 	EWacomBackpackWorkspaceInputReply TryHandleExpandedPileVisualPointerDown(
 		FWacomBackpackWorkspaceRuntimeHost& Host,

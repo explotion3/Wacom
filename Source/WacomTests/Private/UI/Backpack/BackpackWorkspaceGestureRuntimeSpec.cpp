@@ -6,6 +6,7 @@
 
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceGestureController.h"
 #include "../../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceInput.h"
+#include "BackpackWorkspaceGestureTestAccess.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBackpackWorkspaceGestureRuntimeContractSpec,
@@ -29,7 +30,8 @@ bool FWacomUIBackpackWorkspaceGestureRuntimeContractSpec::RunTest(
 			EWacomBackpackWorkspaceInputReply::ReleaseCapture));
 
 	FWacomBackpackWorkspaceGestureController Gesture;
-	Gesture.BeginCardPress(
+	FWacomBackpackWorkspaceGestureTestAccess::BeginCardPress(
+		Gesture,
 		FGuid::NewGuid(),
 		FVector2D(10.0f, 20.0f),
 		FVector2D(100.0f, 200.0f),

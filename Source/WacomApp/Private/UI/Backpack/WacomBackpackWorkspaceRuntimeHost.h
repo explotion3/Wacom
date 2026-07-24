@@ -11,18 +11,20 @@ class UWacomDeckCardWidget;
 class FWacomBackpackWorkspaceFrameScheduler;
 class FWacomBackpackWorkspaceInteractionModel;
 struct FPointerEvent;
+struct FKeyEvent;
 struct FWacomBackpackPendingPilePress;
 struct FWacomBackpackPileMoveVisualSnapshot;
 struct FWacomBackpackWorkspacePileMoveState;
 struct FWacomBackpackZoneKey;
 struct FWacomBackpackWorkspacePresentationRequest;
+enum class EWacomBackpackWorkspaceReleaseTargetKind : uint8;
 
 /**
- * Presentation Runtime 与 UMG/Slate Adapter 之间的唯一 seam。
+ * Workspace Runtime Controller 与 UMG/Slate Adapter 之间的唯一 seam。
  *
- * Host 不拥有规则或表现状态；它只暴露当前几何、Style、Interaction/Registry
- * 事实和必须落到 UWidget/Slate 的应用操作。阶段顺序与帧工作推导由
- * FWacomBackpackWorkspacePresentationController 决定。
+ * Host 不拥有规则、手势、导航或表现状态；它只暴露当前几何、Style、
+ * Interaction/Registry 事实，以及必须落到 UWidget/Slate 的应用操作与
+ * 原生意图广播。各 Controller 通过语义操作使用 Host，不直接组合 Adapter 字段。
  */
 class WACOMAPP_API FWacomBackpackWorkspaceRuntimeHost
 {
@@ -129,6 +131,22 @@ public:
 		TConstArrayView<FGuid> ChangedInstanceIds,
 		bool bIncludeCarryTopology,
 		bool bCurrentChanged);
+	void ReconcileNavigationTargetsForInput();
+	void NotifyNavigationMoved(
+		TConstArrayView<FGuid> ChangedInstanceIds);
+	void BroadcastRelease(
+		bool bReleaseAll,
+		EWacomBackpackWorkspaceReleaseTargetKind TargetKind,
+		const FWacomBackpackZoneKey& TargetZone);
+	void BroadcastPileExpansion(
+		const FWacomBackpackZoneKey& Zone);
+	UWacomDeckCardWidget* FindBoundCard(FGuid InstanceId) const;
+	void BroadcastControlsHelpRequested();
+	bool IsExpandedPileLensInputLocked() const;
+	bool HasCancelableInteraction() const;
+	void CancelInteraction(bool bAnimateCarryReturn);
+	bool HasExpandedContent() const;
+	void BroadcastCollapseExpandedPileRequested();
 	bool TryGetCursorLocalPosition(FVector2D& OutPointerLocal) const;
 	void UpdateCarryAnchor(FVector2D PointerLocal);
 	void ApplyCarryVisualAnchor(float DeltaSeconds);

@@ -212,6 +212,18 @@ struct FWacomBackpackScreenTestAccess
 	static bool BeginWorkspaceMarquee(UWacomBackpackScreen& Screen);
 	static bool IsWorkspaceMarqueeActive(const UWacomBackpackScreen& Screen);
 	static bool PressWorkspaceEscape(UWacomBackpackScreen& Screen);
+	static bool SendWorkspaceKeyDown(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		const FKey& Key,
+		bool bControlDown = false);
+	static bool SendWorkspaceKeyUp(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		const FKey& Key);
+	static bool NavigateWorkspace(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		EUINavigation Direction);
+	static bool IsWorkspaceSemanticNavigationActive(
+		const UWacomBackpackWorkspaceWidget& Workspace);
 	static bool ReleaseCurrentToPileWithSynchronousRefresh(
 		UWacomBackpackScreen& Screen,
 		EZoneKind TargetZone,

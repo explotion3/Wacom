@@ -1179,6 +1179,65 @@ bool FWacomBackpackScreenTestAccess::PressWorkspaceEscape(UWacomBackpackScreen& 
 	return Screen.WorkspaceWidget->NativeOnKeyDown(FGeometry(), EscapeEvent).IsEventHandled();
 }
 
+bool FWacomBackpackScreenTestAccess::SendWorkspaceKeyDown(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	const FKey& Key,
+	const bool bControlDown)
+{
+	const FModifierKeysState Modifiers(
+		false,
+		false,
+		bControlDown,
+		false,
+		false,
+		false,
+		false,
+		false,
+		false);
+	const FKeyEvent Event(
+		Key,
+		Modifiers,
+		/*UserIndex*/ 0,
+		/*bIsRepeat*/ false,
+		/*CharacterCode*/ 0,
+		/*KeyCode*/ 0);
+	return Workspace.NativeOnKeyDown(FGeometry(), Event).IsEventHandled();
+}
+
+bool FWacomBackpackScreenTestAccess::SendWorkspaceKeyUp(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	const FKey& Key)
+{
+	const FKeyEvent Event(
+		Key,
+		FModifierKeysState(),
+		/*UserIndex*/ 0,
+		/*bIsRepeat*/ false,
+		/*CharacterCode*/ 0,
+		/*KeyCode*/ 0);
+	return Workspace.NativeOnKeyUp(FGeometry(), Event).IsEventHandled();
+}
+
+bool FWacomBackpackScreenTestAccess::NavigateWorkspace(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	const EUINavigation Direction)
+{
+	const FNavigationEvent Event(
+		FModifierKeysState(),
+		/*UserIndex*/ 0,
+		Direction,
+		ENavigationGenesis::Keyboard);
+	return Workspace.NativeOnNavigation(FGeometry(), Event)
+		.GetBoundaryRule() == EUINavigationRule::Stop;
+}
+
+bool FWacomBackpackScreenTestAccess::
+	IsWorkspaceSemanticNavigationActive(
+		const UWacomBackpackWorkspaceWidget& Workspace)
+{
+	return Workspace.GetRuntime().Navigation.IsSemanticFocusActive();
+}
+
 bool FWacomBackpackScreenTestAccess::ReleaseCurrentToPileWithSynchronousRefresh(
 	UWacomBackpackScreen& Screen,
 	EZoneKind TargetZone,
