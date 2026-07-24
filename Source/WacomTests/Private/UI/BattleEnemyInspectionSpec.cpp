@@ -18,8 +18,11 @@
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
+#include "UI/Battle/WacomBattleIntentEffectRowWidget.h"
+#include "UI/Battle/WacomBattleIntentTooltipWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
+#include "UI/WacomBattleEnemyInspectionWidgetTestAccess.h"
 
 namespace WacomBattleEnemyInspectionSpec
 {
@@ -29,6 +32,10 @@ namespace WacomBattleEnemyInspectionSpec
 		TEXT("/Game/Wacom/UI/Enemy/WBP_WacomBattleEnemyInspectionPartRowWidget.WBP_WacomBattleEnemyInspectionPartRowWidget_C");
 	constexpr TCHAR IntentStylePath[] =
 		TEXT("/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default.DA_EnemyIntentPresentation_Default");
+	constexpr TCHAR IntentTooltipClassPath[] =
+		TEXT("/Game/Wacom/UI/Enemy/Intent/WBP_BattleIntentTooltip.WBP_BattleIntentTooltip_C");
+	constexpr TCHAR IntentEffectRowClassPath[] =
+		TEXT("/Game/Wacom/UI/Enemy/Intent/WBP_BattleIntentEffectRow.WBP_BattleIntentEffectRow_C");
 
 	UWorld* FindAutomationWorld()
 	{
@@ -107,6 +114,11 @@ namespace WacomBattleEnemyInspectionSpec
 		Part.CurrentIntentInitiative = Initiative + 1;
 		Part.bCurrentIntentIsAttack = true;
 		Part.CurrentIntentPeakAttackDamage = 5;
+		FBattleIntentEffectSnapshot Damage;
+		Damage.EffectType = WacomTags::Effect_Damage;
+		Damage.Magnitude = 5;
+		Damage.TargetKind = EBattleIntentEffectTargetKind::Player;
+		Part.CurrentIntentEffects.Add(Damage);
 		Part.bDestroyed = bDestroyed;
 		return Part;
 	}
@@ -155,8 +167,16 @@ bool FWacomUIBattleEnemyInspectionAssetContractSpec::RunTest(const FString& /*Pa
 	using namespace WacomBattleEnemyInspectionSpec;
 	UClass* InspectionClass = LoadClass<UWacomBattleEnemyInspectionWidget>(nullptr, InspectionClassPath);
 	UClass* RowClass = LoadClass<UWacomBattleEnemyInspectionPartRowWidget>(nullptr, RowClassPath);
+	UClass* IntentTooltipClass =
+		LoadClass<UWacomBattleIntentTooltipWidget>(
+			nullptr, IntentTooltipClassPath);
+	UClass* IntentEffectRowClass =
+		LoadClass<UWacomBattleIntentEffectRowWidget>(
+			nullptr, IntentEffectRowClassPath);
 	if (!TestNotNull(TEXT("Inspection WBP"), InspectionClass)
-		|| !TestNotNull(TEXT("Inspection row WBP"), RowClass))
+		|| !TestNotNull(TEXT("Inspection row WBP"), RowClass)
+		|| !TestNotNull(TEXT("Intent tooltip WBP"), IntentTooltipClass)
+		|| !TestNotNull(TEXT("Intent effect row WBP"), IntentEffectRowClass))
 	{
 		return false;
 	}
@@ -179,17 +199,29 @@ bool FWacomUIBattleEnemyInspectionAssetContractSpec::RunTest(const FString& /*Pa
 		LoadObject<UWacomBattleEnemyIntentPresentationStyle>(nullptr, IntentStylePath);
 	TestEqual(TEXT("Inspection uses formal Intent style"),
 		Widget->GetIntentPresentationStyle(), IntentStyle);
+	TestEqual(TEXT("Inspection uses formal Intent tooltip"),
+		Widget->GetIntentTooltipWidgetClass().Get(), IntentTooltipClass);
+	TestEqual(TEXT("Inspection uses formal Intent effect row"),
+		Widget->GetIntentEffectRowWidgetClass().Get(), IntentEffectRowClass);
 	const TArray<FName> RequiredBindings = {
 		TEXT("LeftPanel"), TEXT("RightPanel"), TEXT("EnemyNameText"),
 		TEXT("EnemyStateText"), TEXT("PartNavigator"), TEXT("SelectedPartNameText"),
 		TEXT("HpBar"), TEXT("HpText"), TEXT("ShieldContainer"), TEXT("ShieldText"),
 		TEXT("InitiativeText"), TEXT("IntentIcon"), TEXT("IntentText"), TEXT("ResistanceText"),
+		TEXT("IntentTooltipTarget"), TEXT("IntentEffectsList"),
 		TEXT("StatusList"), TEXT("DestroyedOverlay"), TEXT("CloseButton") };
 	for (const FName Binding : RequiredBindings)
 	{
 		TestNotNull(*FString::Printf(TEXT("Inspection binding %s"), *Binding.ToString()),
 			Widget->WidgetTree->FindWidget(Binding));
 	}
+	UButton* IntentTooltipTarget =
+		FindWidget<UButton>(Widget, TEXT("IntentTooltipTarget"));
+	UImage* IntentIcon = FindWidget<UImage>(Widget, TEXT("IntentIcon"));
+	TestTrue(TEXT("Inspection Intent target owns only the icon-sized content"),
+		IntentTooltipTarget && IntentIcon
+		&& IntentTooltipTarget->GetContent() == IntentIcon
+		&& IntentIcon->GetParent() == IntentTooltipTarget);
 	UWidgetAnimation* OpenLeft = FindAnimation(Widget, TEXT("OpenLeftAnimation"));
 	UWidgetAnimation* OpenRight = FindAnimation(Widget, TEXT("OpenRightAnimation"));
 	UWidgetAnimation* Close = FindAnimation(Widget, TEXT("CloseAnimation"));
@@ -234,6 +266,7 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 		return false;
 	}
 	Widget->TakeWidget();
+	FWacomBattleEnemyInspectionWidgetTestAccess::Construct(*Widget);
 	FWacomBattleEnemyInspectionViewData View = MakeView(TEXT("Head"));
 	if (!TestTrue(TEXT("View is accepted"), Widget->SetInspectionViewData(View)))
 	{
@@ -250,6 +283,10 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 	UTextBlock* ShieldText = FindWidget<UTextBlock>(Widget, TEXT("ShieldText"));
 	UTextBlock* ResistanceText = FindWidget<UTextBlock>(Widget, TEXT("ResistanceText"));
 	UImage* IntentIcon = FindWidget<UImage>(Widget, TEXT("IntentIcon"));
+	UButton* IntentTooltipTarget =
+		FindWidget<UButton>(Widget, TEXT("IntentTooltipTarget"));
+	UPanelWidget* IntentEffectsList =
+		FindWidget<UPanelWidget>(Widget, TEXT("IntentEffectsList"));
 	UWacomBattleStatusIconListWidget* StatusList =
 		FindWidget<UWacomBattleStatusIconListWidget>(Widget, TEXT("StatusList"));
 	if (!TestNotNull(TEXT("Part navigator"), Navigator)
@@ -260,6 +297,8 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 		|| !TestNotNull(TEXT("Shield text"), ShieldText)
 		|| !TestNotNull(TEXT("Resistance text"), ResistanceText)
 		|| !TestNotNull(TEXT("Intent icon"), IntentIcon)
+		|| !TestNotNull(TEXT("Intent tooltip target"), IntentTooltipTarget)
+		|| !TestNotNull(TEXT("Intent full effects list"), IntentEffectsList)
 		|| !TestNotNull(TEXT("Full status list"), StatusList)
 		|| !TestEqual(TEXT("Definition order creates three navigation rows"),
 			Navigator->GetChildrenCount(), 3))
@@ -276,6 +315,10 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 		ResistanceText->GetText().ToString(), FString(TEXT("INIT 4   ATK 5")));
 	TestNotNull(TEXT("Unknown Snake intent uses formal fallback icon"),
 		IntentIcon->GetBrush().GetResourceObject());
+	TestTrue(TEXT("Selected intent tooltip delegate is bound"),
+		IntentTooltipTarget->ToolTipWidgetDelegate.IsBound());
+	TestEqual(TEXT("Full dossier renders every intent effect"),
+		IntentEffectsList->GetChildrenCount(), 1);
 	TestEqual(TEXT("Details do not truncate Buffs"), StatusList->GetMaxVisibleStatuses(), 0);
 	TestEqual(TEXT("Details retain all Buffs"), StatusList->GetStatusIconViews().Num(), 5);
 
@@ -302,6 +345,8 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 		Widget->GetInspectionViewData().SelectedPartIdentity.GetEffectivePartSlotId(),
 		FName(TEXT("Body")));
 	TestEqual(TEXT("Right details switch in place"), PartName->GetText().ToString(), FString(TEXT("Body")));
+	TestEqual(TEXT("Part switch rebuilds rather than appends effect rows"),
+		IntentEffectsList->GetChildrenCount(), 1);
 
 	View = Widget->GetInspectionViewData();
 	View.Enemy.Parts[1].CurrentHp = 12;
@@ -333,6 +378,8 @@ bool FWacomUIBattleEnemyInspectionSelectionAndLifecycleSpec::RunTest(
 	TestEqual(TEXT("Close button emits one passive request"), CloseRequestCount, 1);
 	Widget->CloseInspection(true);
 	TestFalse(TEXT("Immediate lifecycle clear closes the widget"), Widget->IsInspectionOpen());
+	TestEqual(TEXT("Close clears full intent effect rows"),
+		IntentEffectsList->GetChildrenCount(), 0);
 	Widget->ClearInspectionViewData();
 	TestEqual(TEXT("Battle clear removes cached navigation rows"), Navigator->GetChildrenCount(), 0);
 	return true;

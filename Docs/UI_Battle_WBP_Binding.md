@@ -620,6 +620,7 @@ Part Entry 必需绑定：
 | `PreviewEnemyIntentIcon` / `PreviewEnemyAttackText` | `Image` / `TextBlock` | 当前敌方 Intent 图标与敌方最高单段伤害；图标来自现有 Intent Style |
 | `PreviewSkipMark` | `Widget` | 立即消费眩晕时覆盖斜线，并配合变暗 Intent 表达跳过 |
 | `InspectHitTarget` | `Button` | 普通部位检视热区，只上报完整 `FBattlePartSlotIdentity` |
+| `IntentTooltipTarget` | `Button` | 透明、不可聚焦且直接包裹 `IntentIcon`；必须继承图标原 Slot，悬停显示精确 Intent Tooltip，点击复用同一部位检视意图 |
 
 旧 `EnemyNameText / PartNameText / IntentText / ResistanceText / DetailsContainer / HpBar / ShieldContainer / ShieldFrame / ShieldBadge / ActionPreviewOverlay` 不属于紧凑 HUD 合同，也不得作为 optional compatibility binding 重新加入。名字、Intent 文本和派生攻击值只在敌情档案显示。
 
@@ -629,9 +630,13 @@ C++ 不重建这些曲线。App-private presentation state 将 Snapshot、Previe
 
 Action Preview 继续只消费 `FWacomBattleEnemyPartEntryViewData`，Widget 不重算伤害或抵抗。普通 hover 只显示 `ContextSurface`；非完美有效攻击显示 projected 数值，`bWillAct` 让普通 Intent 使用暖红风险色；完美但非攻击意图只显示 `PerfectReleaseSurface`；合法抵抗显示 `P > E` 或 `P ≤ E`，成功时 projected `StatusList` 显示眩晕，立即跳过时 Intent 变暗并显示 `PreviewSkipMark`。清理、目标切换、Snapshot 变化、BattleEnd 与 Destruct 必须恢复权威数值、普通 Intent tint、`InitiativeSocket + IntentSocket` 和正常可见性。所有 Preview 装饰节点在显示时使用 `HitTestInvisible`；Reduced Motion 保留相同静态语义。
 
-Panel / Entry Root 必须是 `SelfHitTestInvisible`，装饰控件全部不可命中。`InspectHitTarget` 与 `StatusList` 是两条共享同一敌情档案意图的合法命中路径：StatusList 必须绘制并命中在全覆盖按钮之上，点击状态图标仍只上报完整 `FBattlePartSlotIdentity`。Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时同时启用两条路径；禁用时 Entry、按钮和状态列表回到 `HitTestInvisible`，不能阻断世界目标点击。Host 的 `WidgetComponent` 使用 `WacomBattleEnemyPanelScreenLayer@8000`，详情位于 `8500`。
+Panel / Entry Root 必须是 `SelfHitTestInvisible`，装饰控件全部不可命中。`InspectHitTarget`、`StatusList` 与 `IntentTooltipTarget` 是三条共享同一敌情档案意图的合法命中路径：StatusList 与 Intent 透明命中层必须绘制并命中在全覆盖按钮之上，点击仍只上报完整 `FBattlePartSlotIdentity`。`IntentTooltipTarget` 必须直接拥有 `IntentIcon`，禁止通过寻找祖先 Overlay 并 Fill 的方式扩大命中范围；显示普通 Intent 时，其祖先 `IntentSocket` 必须保持 `SelfHitTestInvisible`，运行时 Action Preview 恢复不得把它重置为会屏蔽子命中的 `HitTestInvisible`。Runtime 只在 Idle、无拖卡、无 Preview、无表现结算时同时启用这些路径；禁用时目标使用 `HitTestInvisible` 保留内部图标显示，不能阻断世界目标点击。Host 的 `WidgetComponent` 使用 `WacomBattleEnemyPanelScreenLayer@8000`，详情位于 `8500`。
 
-Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default`，只接受准确 `IntentId -> IconBrush`；未知 ID 使用白色四角星 fallback，不按显示名或 effects 猜图标。
+Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Default`。Intent Header 只接受准确 `IntentId -> IconBrush`，未知 ID 使用白色四角星 fallback；同一 Style 另外提供 Damage、Shield、未知效果的通用图标与色调。状态效果的名称、图标和规则说明只来自 Status Catalog，不在 Intent Style 重复制作。
+
+### WBP_BattleIntentTooltip / WBP_BattleIntentEffectRow
+
+Tooltip 父类为 `UWacomBattleIntentTooltipWidget`，约 `320px` 宽；必需绑定 `IntentIcon`、`IntentNameText`、`IntentMetaText`、`EffectsList` 和 `OverflowText`。Effect Row 父类为 `UWacomBattleIntentEffectRowWidget`，必需绑定 `EffectIcon`、`TargetText`、`EffectText` 和 `CoreRuleText`。两者均为被动、无 Tick、整棵树 `HitTestInvisible`；Tooltip 最多五行，溢出提示用户打开敌情档案。展示顺序来自 Battle facts，WBP 不读取 Behavior DataAsset、不解析条件、不重算数值。
 
 ### WBP_WacomBattleEnemyInspectionWidget
 
@@ -647,23 +652,26 @@ Intent Style 位于 `/Game/Wacom/UI/Enemy/Intent/DA_EnemyIntentPresentation_Defa
 | `ShieldContainer` / `ShieldText` | `Widget` / `TextBlock` | 准确 Shield；零值折叠 |
 | `InitiativeText` | `TextBlock` | 当前 Initiative |
 | `IntentIcon` / `IntentText` / `ResistanceText` | `Image` / `TextBlock` | Intent 图标、名称，以及派生意图摘要；攻击意图显示 `INIT n   ATK m`，非攻击意图显示 `INIT n`。`ResistanceText` 仅保留为现有资产绑定名，不代表可制作 Resistance 字段 |
+| `IntentTooltipTarget` | `Button` | 直接包裹选中部位 `IntentIcon` 的透明命中层；命中范围必须严格等于图标，悬停复用正式 Intent Tooltip |
+| `IntentEffectsList` | `PanelWidget` | 当前选中部位的完整、按执行顺序效果列表；不受 Tooltip 五行上限影响 |
 | `StatusList` | `UWacomBattleStatusIconListWidget` | 完整 Buff 与层数，不限制 3 枚 |
 | `DestroyedOverlay` | `Widget` | 当前部位终态 |
 | `CloseButton` | `Button` | 被动 Close 请求 |
 
-必需动画：`OpenLeftAnimation=180ms`、`OpenRightAnimation=240ms`、`CloseAnimation=160ms`，都必须有真实 widget binding。左栏先进入，右栏由弱 Timer 延迟 `40ms`；clear / destruct 取消该 Timer。Root 为 `SelfHitTestInvisible`；只有 `CloseButton` 和部位 Row 按钮可命中。`PartNavigator`、`CloseButton` 及其祖先链必须允许子控件命中。开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭或清理。
+必需动画：`OpenLeftAnimation=180ms`、`OpenRightAnimation=240ms`、`CloseAnimation=160ms`，都必须有真实 widget binding。左栏先进入，右栏由弱 Timer 延迟 `40ms`；clear / destruct 取消该 Timer。Root 为 `SelfHitTestInvisible`；`CloseButton`、部位 Row 按钮和 `IntentTooltipTarget` 可命中，祖先链必须允许子控件命中。切换部位或 Intent 刷新会重建效果列表；开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭并清理 Tooltip/列表。
 
 ### WBP_WacomBattleEnemyInspectionPartRowWidget
 
 父类：`UWacomBattleEnemyInspectionPartRowWidget`。必需绑定为 `PartSelectButton`、`PartNameText`、`HpText`、`ShieldContainer`、`ShieldText`、`InitiativeText`、`SelectionHighlight`、`DestroyedOverlay`。Root 为 `SelfHitTestInvisible`，仅 `PartSelectButton` 可命中；按钮到 Root 的祖先链必须允许子控件命中，点击只广播稳定 Part identity。
 
-资产修改只通过受控 Editor 写入。只读合同检查使用：
+Intent 说明资产允许使用下列窄范围、确定性 Commandlet 构建；它只修改两个 Intent WBP、Enemy Entry、Enemy Inspection 与 Intent Style：
 
 ```powershell
+-run=WacomBuildEnemyUI -BuildIntentInspection
 -run=WacomBuildEnemyUI -InspectEnemyHUD
 ```
 
-该模式验证四个 WBP 的直接父类、required bindings、动画、字体、Material、像素纹理采样、Intent Style、尺寸、完整命中路径和唯一默认类；同时要求两个旧 SinglePart Package 与旧 Config key 不存在。命令永远不修改资产。旧 mutation builders 与 Enemy UI 专用 MCP toolset 已删除，不能用生成器重新覆盖人工正式布局。
+`-BuildIntentInspection` 必须重复运行哈希稳定；`-InspectEnemyHUD` 永远不修改资产，并验证核心 WBP 与 Intent Tooltip/Row 的直接父类、required bindings、动画、字体、Material、像素纹理采样、Intent Style、完整命中路径和唯一默认类。旧通用 Enemy UI mutation builders 与专用 MCP toolset 仍保持删除，不能用生成器重写面板其它人工布局。
 
 ## PIE Smoke Checklist
 

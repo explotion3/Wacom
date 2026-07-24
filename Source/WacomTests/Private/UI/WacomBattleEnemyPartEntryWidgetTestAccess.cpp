@@ -3,6 +3,7 @@
 #include "UI/WacomBattleEnemyPartEntryWidgetTestAccess.h"
 
 #include "../../../WacomApp/Private/UI/Battle/WacomBattleEnemyVitalsPresentation.h"
+#include "Components/Button.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
 void FWacomBattleEnemyPartEntryWidgetTestAccess::Construct(
@@ -68,6 +69,18 @@ FWacomBattleEnemyPartEntryWidgetTestAccess::GetStatusList(
 	const UWacomBattleEnemyPartEntryWidget& Widget)
 {
 	return Widget.StatusList;
+}
+
+UButton* FWacomBattleEnemyPartEntryWidgetTestAccess::GetIntentTooltipTarget(
+	const UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.IntentTooltipTarget;
+}
+
+UWidget* FWacomBattleEnemyPartEntryWidgetTestAccess::BuildIntentTooltip(
+	UWacomBattleEnemyPartEntryWidget& Widget)
+{
+	return Widget.HandleBuildIntentTooltipWidget();
 }
 
 EWacomBattleEnemySegmentRole

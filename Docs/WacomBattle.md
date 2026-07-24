@@ -389,7 +389,8 @@ GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWaco
 - `Sequence` intent set 会按 authored 顺序选择下一条可用意图；运行时 `BehaviorSequenceCursor` 表示“下一次 Sequence 选择的起始索引”，初始化选中第一条后推进到第二条，第一次敌人行动后因此选择第二条。`Weighted` 使用战斗 RNG 在有效 rule 中确定性选择；`PriorityFirst` 选择最高优先级有效 rule。
 - selector condition 当前支持自身 HP 阈值、同单位任意部位 HP 阈值、部位已破坏、当前 phase、自身状态、玩家状态和冷却可用。
 - 每次部位行动后，无论执行还是因晕厥跳过，都会刷新到下一条当前意图；Freeze 不参与跳过行动。
-- Snapshot 暴露每个部位当前 `CurrentPhaseId / CurrentIntentSetId / CurrentIntentId`，以及当前意图的 `IntentId / DisplayName / Initiative / bIsAttackIntent / PeakAttackDamage`。后两者由当前意图 Damage Effects 派生，不是资产手填字段。
+- Snapshot 暴露每个部位当前 `CurrentPhaseId / CurrentIntentSetId / CurrentIntentId`，以及当前意图的 `IntentId / DisplayName / Initiative / bIsAttackIntent / PeakAttackDamage / Effects`。`bIsAttackIntent / PeakAttackDamage` 由当前意图 Damage Effects 派生，不是资产手填字段；`Effects` 按正式执行顺序逐条保存 `EffectType / Magnitude / Duration` 与规范化公开目标。Slow / Freeze 的 `Default` 交付在快照前通过 `GetCanonicalHandAfflictionSelection()` 归一为随机手牌，Twilight 归一为全部手牌；无当前 Intent 或已破坏部位的 `Effects` 必须为空。
+- `Effects` 是 Intent 公开预告的规则真相，不是 UI 对 Behavior DataAsset 的反射。当前 schema 没有条件效果或随机 Magnitude；未来新增时必须先由 Battle 解析为当前确定分支或公开范围，表现层不得自行猜测条件、目标或随机值。
 - 初始化和行动后意图刷新会发 `EnemyIntentSelected` 事件；初始化 phase 会发 `EnemyPhaseChanged` 事件。当前还没有 phase transition resolver，因此运行中 phase 变化事件只预留给后续 phase 切换规则。
 
 晕厥以层数模型记录。每次该部位行动时，无论执行意图还是跳过意图，都消耗 1 层；层数归零时移除 `Status.Stunned`。

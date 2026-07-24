@@ -56,6 +56,10 @@ struct WACOMAPP_API FWacomBattleEnemyPartEntryViewData
 		meta = (ToolTip = "当前攻击意图的最高单段伤害；非攻击意图为 0。"))
 	int32 CurrentIntentPeakAttackDamage = 0;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel",
+		meta = (ToolTip = "当前意图按正式执行顺序公开的结构化效果事实。UI 只做本地化与相邻同项聚合，不重算规则。"))
+	TArray<FBattleIntentEffectSnapshot> CurrentIntentEffects;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel")
 	FGameplayTagContainer RuntimeStatuses;
 

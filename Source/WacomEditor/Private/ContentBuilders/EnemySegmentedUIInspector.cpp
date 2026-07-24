@@ -29,6 +29,8 @@
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyPartEntryWidget.h"
+#include "UI/Battle/WacomBattleIntentEffectRowWidget.h"
+#include "UI/Battle/WacomBattleIntentTooltipWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 #include "UI/Foundation/WacomUIDeveloperSettings.h"
 #include "WidgetBlueprint.h"
@@ -182,6 +184,62 @@ namespace
 			&& Wacom::ContentBuilder::EnemyUIHitTestPolicy::ValidateInteractiveRoutes(Blueprint);
 	}
 
+	bool IntentTooltipTargetOwnsIcon(const UWidgetBlueprint* Blueprint)
+	{
+		const UButton* Target = Blueprint && Blueprint->WidgetTree
+			? Cast<UButton>(
+				Blueprint->WidgetTree->FindWidget(TEXT("IntentTooltipTarget")))
+			: nullptr;
+		const UImage* IntentIcon = Blueprint && Blueprint->WidgetTree
+			? Cast<UImage>(Blueprint->WidgetTree->FindWidget(TEXT("IntentIcon")))
+			: nullptr;
+		return Target && IntentIcon
+			&& Target->GetContent() == IntentIcon
+			&& IntentIcon->GetParent() == Target;
+	}
+
+	const UWidget* FindDirectChildUnder(
+		const UWidget* Descendant,
+		const UPanelWidget* Ancestor)
+	{
+		const UWidget* Current = Descendant;
+		while (Current && Current->GetParent() != Ancestor)
+		{
+			Current = Current->GetParent();
+		}
+		return Current;
+	}
+
+	bool PaintsAboveAtFirstSharedParent(
+		const UWidget* Foreground,
+		const UWidget* Background)
+	{
+		if (!Foreground || !Background)
+		{
+			return false;
+		}
+
+		for (const UPanelWidget* Parent = Foreground->GetParent();
+			Parent;
+			Parent = Parent->GetParent())
+		{
+			const UWidget* ForegroundBranch =
+				FindDirectChildUnder(Foreground, Parent);
+			const UWidget* BackgroundBranch =
+				FindDirectChildUnder(Background, Parent);
+			if (!ForegroundBranch || !BackgroundBranch
+				|| ForegroundBranch == BackgroundBranch)
+			{
+				continue;
+			}
+
+			return Parent->GetChildIndex(ForegroundBranch)
+				> Parent->GetChildIndex(BackgroundBranch);
+		}
+
+		return true;
+	}
+
 	bool ValidatePanel(const UWidgetBlueprint* Blueprint, const UWidgetBlueprint* Entry)
 	{
 		if (!Blueprint || !Entry || !Blueprint->GeneratedClass || !Entry->GeneratedClass)
@@ -222,6 +280,7 @@ namespace
 			{ TEXT("DestroyedSurface"), UWidget::StaticClass() },
 			{ TEXT("DestroyedMark"), UWidget::StaticClass() },
 			{ TEXT("InspectHitTarget"), UButton::StaticClass() },
+			{ TEXT("IntentTooltipTarget"), UButton::StaticClass() },
 		};
 		bool bValid = true;
 		const auto CheckEntry = [&bValid](const FString& Contract, const bool bCondition)
@@ -239,6 +298,8 @@ namespace
 		const UWidget* StatusList = Blueprint->WidgetTree->FindWidget(TEXT("StatusList"));
 		const UWidget* InspectHitTarget =
 			Blueprint->WidgetTree->FindWidget(TEXT("InspectHitTarget"));
+		const UWidget* IntentTooltipTarget =
+			Blueprint->WidgetTree->FindWidget(TEXT("IntentTooltipTarget"));
 		const UPanelWidget* SharedInputParent =
 			StatusList && InspectHitTarget
 			&& StatusList->GetParent() == InspectHitTarget->GetParent()
@@ -255,6 +316,12 @@ namespace
 			!SharedInputParent
 			|| SharedInputParent->GetChildIndex(StatusList)
 				> SharedInputParent->GetChildIndex(InspectHitTarget));
+		CheckEntry(TEXT("intent tooltip target paints above inspect hit target"),
+			PaintsAboveAtFirstSharedParent(
+				IntentTooltipTarget,
+				InspectHitTarget));
+		CheckEntry(TEXT("intent tooltip target owns exact IntentIcon bounds"),
+			IntentTooltipTargetOwnsIcon(Blueprint));
 		for (const FWidgetRequirement& Binding : Required)
 		{
 			CheckEntry(FString::Printf(TEXT("binding %s"), *Binding.Name.ToString()),
@@ -323,6 +390,8 @@ namespace
 			{ TEXT("InitiativeText"), UTextBlock::StaticClass() }, { TEXT("IntentIcon"), UImage::StaticClass() },
 			{ TEXT("IntentText"), UTextBlock::StaticClass() }, { TEXT("ResistanceText"), UTextBlock::StaticClass() },
 			{ TEXT("StatusList"), UWacomBattleStatusIconListWidget::StaticClass() },
+			{ TEXT("IntentTooltipTarget"), UButton::StaticClass() },
+			{ TEXT("IntentEffectsList"), UPanelWidget::StaticClass() },
 			{ TEXT("DestroyedOverlay"), UWidget::StaticClass() }, { TEXT("CloseButton"), UButton::StaticClass() },
 		};
 		const UWacomBattleEnemyInspectionWidget* Defaults = Blueprint && Blueprint->GeneratedClass
@@ -353,6 +422,12 @@ namespace
 			Defaults && Defaults->GetPartRowWidgetClass().Get() == Row->GeneratedClass);
 		CheckInspection(TEXT("intent presentation style"),
 			Defaults && Defaults->GetIntentPresentationStyle() == Style);
+		CheckInspection(TEXT("intent tooltip class"),
+			Defaults && Defaults->GetIntentTooltipWidgetClass() != nullptr);
+		CheckInspection(TEXT("intent effect row class"),
+			Defaults && Defaults->GetIntentEffectRowWidgetClass() != nullptr);
+		CheckInspection(TEXT("intent tooltip target owns exact IntentIcon bounds"),
+			IntentTooltipTargetOwnsIcon(Blueprint));
 		for (const FWidgetRequirement& Binding : Required)
 		{
 			CheckInspection(FString::Printf(TEXT("binding %s"), *Binding.Name.ToString()),

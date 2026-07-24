@@ -16,6 +16,8 @@ class UWidget;
 class UWidgetAnimation;
 class UWacomBattleEnemyIntentPresentationStyle;
 class UWacomBattleEnemyInspectionPartRowWidget;
+class UWacomBattleIntentEffectRowWidget;
+class UWacomBattleIntentTooltipWidget;
 class UWacomBattleStatusIconListWidget;
 
 DECLARE_MULTICAST_DELEGATE(FWacomBattleEnemyInspectionCloseRequestedNative);
@@ -48,6 +50,20 @@ public:
 	{
 		return IntentPresentationStyle;
 	}
+	void SetIntentEffectRowWidgetClass(
+		TSubclassOf<UWacomBattleIntentEffectRowWidget> InClass);
+	void SetIntentTooltipWidgetClass(
+		TSubclassOf<UWacomBattleIntentTooltipWidget> InClass);
+	TSubclassOf<UWacomBattleIntentEffectRowWidget>
+	GetIntentEffectRowWidgetClass() const
+	{
+		return IntentEffectRowWidgetClass;
+	}
+	TSubclassOf<UWacomBattleIntentTooltipWidget>
+	GetIntentTooltipWidgetClass() const
+	{
+		return IntentTooltipWidgetClass;
+	}
 
 	FWacomBattleEnemyInspectionCloseRequestedNative OnCloseRequestedNative;
 	FWacomBattleEnemyInspectionSelectionRequestedNative OnSelectionRequestedNative;
@@ -55,12 +71,19 @@ public:
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void SynchronizeProperties() override;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection", meta = (ToolTip = "左侧部位导航使用的正式 WBP 类。"))
 	TSubclassOf<UWacomBattleEnemyInspectionPartRowWidget> PartRowWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection", meta = (ToolTip = "详情面板按稳定 IntentId 解析图标的 UI-only Style；不读取规则效果或名称推断。"))
 	TObjectPtr<UWacomBattleEnemyIntentPresentationStyle> IntentPresentationStyle = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection", meta = (AllowAbstract = "false", ToolTip = "档案完整 Intent 效果列表使用的被动 Row 类。"))
+	TSubclassOf<UWacomBattleIntentEffectRowWidget> IntentEffectRowWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Inspection", meta = (AllowAbstract = "false", ToolTip = "档案 Intent 图标悬停时使用的被动 Tooltip 类。"))
+	TSubclassOf<UWacomBattleIntentTooltipWidget> IntentTooltipWidgetClass;
 
 private:
 	void SyncPartRows();
@@ -73,6 +96,13 @@ private:
 	void ScheduleRightPanelOpen();
 	void PlayRightPanelOpen();
 	void CancelRightPanelOpenTimer();
+	void EnsureIntentTooltipBinding();
+	void RefreshIntentPresentation(
+		const FWacomBattleEnemyPartEntryViewData* Part);
+	void ClearIntentPresentation();
+
+	UFUNCTION()
+	UWidget* HandleBuildIntentTooltipWidget();
 
 	UFUNCTION()
 	void HandleCloseClicked();
@@ -119,6 +149,12 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> IntentIcon = nullptr;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> IntentTooltipTarget = nullptr;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UPanelWidget> IntentEffectsList = nullptr;
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ResistanceText = nullptr;
 
@@ -146,9 +182,17 @@ private:
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UWacomBattleEnemyInspectionPartRowWidget>> PartRows;
 
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UWacomBattleIntentEffectRowWidget>> IntentEffectRows;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleIntentTooltipWidget> CachedIntentTooltipWidget = nullptr;
+
 	FTimerHandle RightPanelOpenTimerHandle;
 
 	bool bHasViewData = false;
 	bool bOpen = false;
 	bool bClosing = false;
+
+	friend struct FWacomBattleEnemyInspectionWidgetTestAccess;
 };

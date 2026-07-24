@@ -41,6 +41,15 @@ EDataValidationResult UWacomBattleEnemyIntentPresentationStyle::IsDataValid(
 			"Enemy Intent UI Style 配置错误：FallbackIconBrush 必须引用有效资源并具有正数 ImageSize。"));
 		Result = EDataValidationResult::Invalid;
 	}
+	if (!IsIconBrushUsable(DamageEffectIconBrush)
+		|| !IsIconBrushUsable(ShieldEffectIconBrush)
+		|| !IsIconBrushUsable(FallbackEffectIconBrush))
+	{
+		Context.AddError(LOCTEXT(
+			"InvalidEffectIcons",
+			"Enemy Intent UI Style 配置错误：Damage、Shield 与 Fallback Effect Brush 均必须引用有效资源并具有正数 ImageSize。"));
+		Result = EDataValidationResult::Invalid;
+	}
 
 	TSet<FName> SeenIntentIds;
 	for (int32 Index = 0; Index < IntentIcons.Num(); ++Index)

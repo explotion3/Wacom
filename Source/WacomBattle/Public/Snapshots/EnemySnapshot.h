@@ -11,6 +11,41 @@
 class UEnemyDefinition;
 class UEnemyPartDefinition;
 
+/** Enemy Intent 对玩家公开的规范化目标。UI 不需要读取 authoring DataAsset 推断目标语义。 */
+UENUM(BlueprintType)
+enum class EBattleIntentEffectTargetKind : uint8
+{
+	Unknown UMETA(DisplayName = "Unknown"),
+	Player UMETA(DisplayName = "Player"),
+	SelfEnemyPart UMETA(DisplayName = "Self Enemy Part"),
+	RandomPlayerHandCards UMETA(DisplayName = "Random Player Hand Cards"),
+	AllPlayerHandCards UMETA(DisplayName = "All Player Hand Cards"),
+};
+
+/** 当前 Intent 中一条按执行顺序保留的权威公开效果。 */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleIntentEffectSnapshot
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	FGameplayTag EffectType;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	EBattleIntentEffectTargetKind TargetKind =
+		EBattleIntentEffectTargetKind::Unknown;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	int32 Magnitude = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	int32 Duration = 0;
+
+	/** RandomPlayerHandCards 的不重复目标数量；其它目标为 0。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	int32 TargetCount = 0;
+};
+
 /**
  * 意图的只读快照。UI 展示"敌人接下来要干什么"。
  */
@@ -35,6 +70,10 @@ struct WACOMBATTLE_API FIntentSnapshot
 	/** 攻击意图的最高单段伤害；非攻击意图为 0。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	int32 PeakAttackDamage = 0;
+
+	/** 当前 Intent 的公开效果，保持正式执行顺序；UI 可做相邻等价行聚合但不得重排。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	TArray<FBattleIntentEffectSnapshot> Effects;
 };
 
 /**

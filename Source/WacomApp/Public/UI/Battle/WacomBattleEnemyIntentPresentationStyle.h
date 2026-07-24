@@ -44,6 +44,34 @@ public:
 		meta = (ToolTip = "稳定 IntentId 到图标的精确映射。新增敌人内容时在此补充条目；空或重复 IntentId 会由 Validator 拒绝。"))
 	TArray<FWacomBattleEnemyIntentIconEntry> IntentIcons;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Intent|Effects",
+		meta = (ToolTip = "Intent 详情中 Effect.Damage 使用的通用图标。必须配置有效资源。"))
+	FSlateBrush DamageEffectIconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Intent|Effects",
+		meta = (ToolTip = "Intent 详情中 Status.Shield 使用的通用图标。必须配置有效资源。"))
+	FSlateBrush ShieldEffectIconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Intent|Effects",
+		meta = (ToolTip = "未知 Intent 效果的安全回退图标。未知 GameplayTag 仍会完整显示。"))
+	FSlateBrush FallbackEffectIconBrush;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Intent|Effects",
+		meta = (ToolTip = "伤害效果行的 UI 色调，只影响表现。"))
+	FLinearColor DamageEffectTint = FLinearColor(1.0f, 0.36f, 0.28f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Intent|Effects",
+		meta = (ToolTip = "护盾效果行的 UI 色调，只影响表现。"))
+	FLinearColor ShieldEffectTint = FLinearColor(0.32f, 0.72f, 1.0f, 1.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Intent|Effects",
+		meta = (ToolTip = "状态效果行的 UI 色调；图标资源仍由状态 Catalog 提供。"))
+	FLinearColor StatusEffectTint = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Intent|Effects",
+		meta = (ToolTip = "未知效果行的 UI 色调，只影响表现。"))
+	FLinearColor UnknownEffectTint = FLinearColor(0.76f, 0.78f, 0.82f, 1.0f);
+
 	const FSlateBrush* ResolveIntentIcon(FName IntentId) const;
 	static bool IsIconBrushUsable(const FSlateBrush& Brush);
 

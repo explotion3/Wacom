@@ -11,7 +11,10 @@
 #include "Components/Widget.h"
 #include "Engine/World.h"
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
+#include "UI/Battle/WacomBattleEnemyIntentPresentation.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
+#include "UI/Battle/WacomBattleIntentEffectRowWidget.h"
+#include "UI/Battle/WacomBattleIntentTooltipWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 
 namespace
@@ -75,6 +78,7 @@ void UWacomBattleEnemyInspectionWidget::ClearInspectionViewData()
 	{
 		StatusList->SetStatusIconViews({});
 	}
+	ClearIntentPresentation();
 }
 
 void UWacomBattleEnemyInspectionWidget::OpenInspection()
@@ -97,6 +101,7 @@ void UWacomBattleEnemyInspectionWidget::OpenInspection()
 	{
 		StatusList->SetStatusInspectionEnabled(true);
 	}
+	RefreshIntentPresentation(FindSelectedPart());
 	if (OpenLeftAnimation)
 	{
 		PlayAnimation(OpenLeftAnimation);
@@ -117,6 +122,7 @@ void UWacomBattleEnemyInspectionWidget::CloseInspection(const bool bImmediate)
 	{
 		StatusList->SetStatusInspectionEnabled(false);
 	}
+	ClearIntentPresentation();
 	CancelRightPanelOpenTimer();
 	if (bImmediate || !CloseAnimation)
 	{
@@ -158,9 +164,44 @@ void UWacomBattleEnemyInspectionWidget::SetIntentPresentationStyle(
 	RefreshSelectedPartDetails();
 }
 
+void UWacomBattleEnemyInspectionWidget::SetIntentEffectRowWidgetClass(
+	TSubclassOf<UWacomBattleIntentEffectRowWidget> InClass)
+{
+	IntentEffectRowWidgetClass = InClass
+		? InClass
+		: TSubclassOf<UWacomBattleIntentEffectRowWidget>(
+			UWacomBattleIntentEffectRowWidget::StaticClass());
+	RefreshSelectedPartDetails();
+}
+
+void UWacomBattleEnemyInspectionWidget::SetIntentTooltipWidgetClass(
+	TSubclassOf<UWacomBattleIntentTooltipWidget> InClass)
+{
+	IntentTooltipWidgetClass = InClass
+		? InClass
+		: TSubclassOf<UWacomBattleIntentTooltipWidget>(
+			UWacomBattleIntentTooltipWidget::StaticClass());
+	CachedIntentTooltipWidget = nullptr;
+}
+
 void UWacomBattleEnemyInspectionWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (!IntentEffectRowWidgetClass)
+	{
+		IntentEffectRowWidgetClass =
+			UWacomBattleIntentEffectRowWidget::StaticClass();
+	}
+	if (!IntentTooltipWidgetClass)
+	{
+		IntentTooltipWidgetClass =
+			UWacomBattleIntentTooltipWidget::StaticClass();
+	}
+	EnsureIntentTooltipBinding();
+	if (IntentTooltipTarget)
+	{
+		IntentTooltipTarget->SynchronizeProperties();
+	}
 	if (CloseButton)
 	{
 		CloseButton->OnClicked.RemoveAll(this);
@@ -191,6 +232,11 @@ void UWacomBattleEnemyInspectionWidget::NativeDestruct()
 		UnbindAllFromAnimationFinished(CloseAnimation);
 	}
 	StopAllAnimations();
+	if (IntentTooltipTarget)
+	{
+		IntentTooltipTarget->ToolTipWidgetDelegate.Unbind();
+	}
+	ClearIntentPresentation();
 	ClearPartRows();
 	if (StatusList)
 	{
@@ -201,6 +247,12 @@ void UWacomBattleEnemyInspectionWidget::NativeDestruct()
 	bOpen = false;
 	bClosing = false;
 	Super::NativeDestruct();
+}
+
+void UWacomBattleEnemyInspectionWidget::SynchronizeProperties()
+{
+	EnsureIntentTooltipBinding();
+	Super::SynchronizeProperties();
 }
 
 void UWacomBattleEnemyInspectionWidget::SyncPartRows()
@@ -278,6 +330,7 @@ void UWacomBattleEnemyInspectionWidget::RefreshSelectedPartDetails()
 	const FWacomBattleEnemyPartEntryViewData* Part = FindSelectedPart();
 	if (!Part)
 	{
+		ClearIntentPresentation();
 		return;
 	}
 
@@ -348,6 +401,117 @@ void UWacomBattleEnemyInspectionWidget::RefreshSelectedPartDetails()
 			? ESlateVisibility::HitTestInvisible
 			: ESlateVisibility::Collapsed);
 	}
+	RefreshIntentPresentation(Part);
+}
+
+void UWacomBattleEnemyInspectionWidget::EnsureIntentTooltipBinding()
+{
+	if (IntentTooltipTarget
+		&& !IntentTooltipTarget->ToolTipWidgetDelegate.IsBound())
+	{
+		IntentTooltipTarget->ToolTipWidgetDelegate.BindDynamic(
+			this,
+			&ThisClass::HandleBuildIntentTooltipWidget);
+	}
+}
+
+void UWacomBattleEnemyInspectionWidget::RefreshIntentPresentation(
+	const FWacomBattleEnemyPartEntryViewData* Part)
+{
+	ClearIntentPresentation();
+	if (!Part || Part->bDestroyed || Part->CurrentIntentId.IsNone())
+	{
+		return;
+	}
+
+	const FWacomBattleIntentPresentationViewData FullView =
+		FWacomBattleIntentPresentationBuilder::Build(
+			*Part, IntentPresentationStyle);
+	if (IntentTooltipTarget)
+	{
+		const bool bCanInspectIntent = bOpen && !bClosing;
+		IntentTooltipTarget->SetIsEnabled(bCanInspectIntent);
+		IntentTooltipTarget->SetVisibility(bCanInspectIntent
+			? ESlateVisibility::Visible
+			: ESlateVisibility::HitTestInvisible);
+	}
+	if (CachedIntentTooltipWidget)
+	{
+		CachedIntentTooltipWidget->SetIntentViewData(
+			FWacomBattleIntentPresentationBuilder::Build(
+				*Part, IntentPresentationStyle, 5));
+	}
+	if (!IntentEffectsList)
+	{
+		return;
+	}
+	UClass* RowClass = IntentEffectRowWidgetClass
+		? IntentEffectRowWidgetClass.Get()
+		: UWacomBattleIntentEffectRowWidget::StaticClass();
+	for (int32 Index = 0; Index < FullView.EffectRows.Num(); ++Index)
+	{
+		UWacomBattleIntentEffectRowWidget* Row = GetWorld()
+			? CreateWidget<UWacomBattleIntentEffectRowWidget>(
+				GetWorld(),
+				RowClass)
+			: NewObject<UWacomBattleIntentEffectRowWidget>(
+				this,
+				RowClass);
+		if (!Row)
+		{
+			continue;
+		}
+		Row->SetEffectRowViewData(FullView.EffectRows[Index]);
+		IntentEffectsList->AddChild(Row);
+		IntentEffectRows.Add(Row);
+	}
+}
+
+void UWacomBattleEnemyInspectionWidget::ClearIntentPresentation()
+{
+	if (IntentEffectsList)
+	{
+		IntentEffectsList->ClearChildren();
+	}
+	IntentEffectRows.Reset();
+	if (IntentTooltipTarget)
+	{
+		IntentTooltipTarget->SetIsEnabled(false);
+		IntentTooltipTarget->SetVisibility(ESlateVisibility::HitTestInvisible);
+	}
+	if (CachedIntentTooltipWidget)
+	{
+		CachedIntentTooltipWidget->SetIntentViewData(
+			FWacomBattleIntentPresentationViewData());
+	}
+}
+
+UWidget* UWacomBattleEnemyInspectionWidget::HandleBuildIntentTooltipWidget()
+{
+	const FWacomBattleEnemyPartEntryViewData* Part = FindSelectedPart();
+	if (!bOpen || bClosing || !Part
+		|| Part->bDestroyed || Part->CurrentIntentId.IsNone())
+	{
+		return nullptr;
+	}
+	if (!CachedIntentTooltipWidget)
+	{
+		UClass* TooltipClass = IntentTooltipWidgetClass
+			? IntentTooltipWidgetClass.Get()
+			: UWacomBattleIntentTooltipWidget::StaticClass();
+		CachedIntentTooltipWidget = GetWorld()
+			? CreateWidget<UWacomBattleIntentTooltipWidget>(
+				GetWorld(), TooltipClass)
+			: NewObject<UWacomBattleIntentTooltipWidget>(
+				this, TooltipClass);
+	}
+	if (CachedIntentTooltipWidget)
+	{
+		CachedIntentTooltipWidget->SetIntentViewData(
+			FWacomBattleIntentPresentationBuilder::Build(
+				*Part, IntentPresentationStyle, 5));
+	}
+	return CachedIntentTooltipWidget;
 }
 
 const FWacomBattleEnemyPartEntryViewData*

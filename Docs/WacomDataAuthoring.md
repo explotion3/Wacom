@@ -96,14 +96,17 @@ SlimeTrio 复用同一个 manifest-driven 晋升实现，但拥有独立目标�
 
 SlimeTrio 同样拒绝 `-PromoteArt`，`-ForceArtRefresh` 只允许与 `-PromotePlaceholderArt` 同用。日常命令和 `WacomRegenerateContent` 只消费 `/Game/Wacom/Art/Placeholders/Enemies/SlimeTrio`，不读取 ignored `/Game/Art`。三个 Part 暂不配置行动动画或奖励卡；不能用 Idle 冒充攻击动画。
 
-Enemy HUD V3 已完成一次性原地迁移。正式 WBP 此后由 Designer / 受控 Editor 资产操作维护，`WacomBuildEnemyUI` 不再提供会覆盖 WidgetTree 的 mutation mode，只保留只读合同审计：
+Enemy HUD 的通用布局迁移已经完成，正式 Panel / Entry / Inspection 仍由 Designer 或受控 Editor 维护。`WacomBuildEnemyUI` 只保留一个窄范围 Intent 说明构建模式和完整只读合同审计：
 
 ```powershell
-# 检查四个 WBP、唯一默认类、字体、材质、像素纹理、Intent Style 与命中路径
+# 幂等创建/维护两个 Intent 说明 WBP，并只补 Entry/Inspection 的 Intent 命中层、完整效果列表与 Style 通用效果图标
+-run=WacomBuildEnemyUI -BuildIntentInspection
+
+# 检查核心 Enemy WBP、Intent Tooltip/Row、唯一默认类、字体、材质、Intent Style 与命中路径
 -run=WacomBuildEnemyUI -InspectEnemyHUD
 ```
 
-命令永远不 dirty 或保存 Package。它还要求两个旧 SinglePart WBP Package、`DefaultBattleEnemySinglePartPanelWidgetClass` Config key 和手工继承绑定路径不存在。Enemy UI 的旧 `-MigrateLegacy`、`-BuildSinglePartCompact`、`-InspectSegmentedVitals` 和专用 MCP mutation toolset已删除，避免后续重建器覆盖人工视觉。需要修改 WBP 时必须按 `Docs/UnrealMCPWorkflow.md` 保护工作区和 Package 白名单，Compile / Save / Reload 后再运行只读检查。
+`-BuildIntentInspection` 的保存范围固定为 `WBP_BattleIntentTooltip`、`WBP_BattleIntentEffectRow`、`BP_WacomBattleEnemyPartEntryWidget`、`WBP_WacomBattleEnemyInspectionWidget` 与 `DA_EnemyIntentPresentation_Default`，重复 Build 必须保持资产哈希稳定；它不得重建 Panel、地图或 Behavior。Builder 只允许让透明 `IntentTooltipTarget` 直接包裹原 `IntentIcon` 并继承其 Slot，禁止向任意祖先 Overlay 添加 Fill 命中层。`-InspectEnemyHUD` 永远不 dirty 或保存 Package，并验证该直接所有权。合同仍要求两个旧 SinglePart WBP Package、`DefaultBattleEnemySinglePartPanelWidgetClass` Config key 和手工继承绑定路径不存在。旧 `-MigrateLegacy`、`-BuildSinglePartCompact`、`-InspectSegmentedVitals` 和专用 MCP mutation toolset保持删除。
 
 玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
 
@@ -117,7 +120,7 @@ Enemy HUD V3 已完成一次性原地迁移。正式 WBP 此后由 Designer / �
 
 当前合同为 V4；`BuildVitalsV2` 仅保留命令行兼容名。Builder 会让玩家状态栏到 `StatusList` 的祖先链保留子节点命中，将单个状态图标 Root 设为 `Visible`、视觉子节点设为 `HitTestInvisible`，验证 `WBP_BattleStatusTooltip` 整棵树不可命中，并要求 `/Game/Wacom/UI/Battle/Status/DA_BattleStatusPresentationCatalog` 通过 Data Validation。Catalog 是状态名称、Battle HUD 图标、排序和宿主 Tooltip 规则的唯一制作入口；状态列表 WBP、Combat Activity Style 与 Card Explanation Lexicon 不得再保存重复配置。合同版本由父类、WidgetTree、绑定类型、CDO 类引用、命中路径与 Catalog 合法性共同判定，不依赖 `BlueprintDescription` 文本标记。保存 `BP_BattleHUD` 时仍只调整 `PlayerStatusBar` 的 Canvas 位置，禁止重写整棵 HUD 的命中可见性；只读审计还会确认 `CommandBar` 允许子按钮参与 Slate Hit Test，避免 Wait / EndTurn 失去点击。状态资产修改必须继续通过 `Docs/UnrealMCPWorkflow.md` 的 writer lease 和 Package allowlist。
 
-`DA_EnemyIntentPresentation_Default` 属于 UI-only 制作资产，不是战斗规则 schema。新增 Intent 图标时必须填写准确且唯一的稳定 `IntentId` 与有效 Brush；不允许用显示名、动画名或 effect 自动推断。空 ID、重复 ID 和无效 Brush 会被 Data Validation 拒绝；未配置 Intent 运行时使用 fallback 星形，不阻断战斗。
+`DA_EnemyIntentPresentation_Default` 属于 UI-only 制作资产，不是战斗规则 schema。新增 Intent 图标时必须填写准确且唯一的稳定 `IntentId` 与有效 Brush；不允许用显示名、动画名或 effect 自动推断。空 ID、重复 ID 和无效 Brush 会被 Data Validation 拒绝；未配置 Intent 运行时使用 fallback 星形，不阻断战斗。该 Style 还保存 Damage、Shield 与未知效果的通用 UI 图标/色调；状态效果继续复用 Battle Status Catalog，不在这里复制状态规则。
 
 ## §3 当前生成内容
 
@@ -182,7 +185,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 - Sprite/Flipbook Layer 的 Destroyed 资源是可选制作数据；Validator 棻查资源类型、有限正数 Destroyed PlayRate 与 `[0,1]` 换图时机。运行时在真实 authored Paper2D Component 上原地换图，不创建 VisualLayer 镜像。
 - `UWacomBattleEnemyPartAnimationStyle` 可选，不影响未配置 Action 素材的 Host Ready。它必须精确指向同一 Part 下唯一 Flipbook `LayerId`；Intent key、Flipbook、PlayRate 与 Impact marker 必须有效。可选 `EnemyDestroyedClip` 在同一 Host 最多出现一次；同步服务不会猜 Clip、Intent 或 terminal owner。
 - Host / Part Action Clip 的 `ImpactNormalizedTime` 必须是有限 `[0,1]`，默认和 TrainingWarrior 正式内容均为 `0.55`。它表示行动动画中应用 Journal 行动后 Combat facts 的语义命中点；Destroyed Clip 不消费该字段。内容人员应按接触帧调整，而不是用动画名称或效果类型推断。
-- 普通 Scene Enemy UI 不需要在 EnemyDefinition 增加额外字段。恰好一个有效 PartSlot 自动使用 `268 × 92` 单段 WBP；2–4 个有效 PartSlot 使用 Definition 顺序、每段至少 `116 × 92` 的等宽连续分段，不按 MaxHP 分配宽度。每段 HP、Shield、Initiative、Intent 和 Buff 都来自已有 Snapshot ViewData；Shield 只改变本段电蓝外框与徽章，零值不占布局。超过 4 个部位继续给制作警告并应显式配置未来 Boss WidgetClass。Intent 图标仍由 UI-only Style 精确映射，详情面板不从 Intent effects 自动生成伤害或状态说明。
+- 普通 Scene Enemy UI 不需要在 EnemyDefinition 增加额外字段。恰好一个有效 PartSlot 自动使用 `268 × 92` 单段 WBP；2–4 个有效 PartSlot 使用 Definition 顺序、每段至少 `116 × 92` 的等宽连续分段，不按 MaxHP 分配宽度。每段 HP、Shield、Initiative、Intent 和 Buff 都来自已有 Snapshot ViewData；Shield 只改变本段电蓝外框与徽章，零值不占布局。超过 4 个部位继续给制作警告并应显式配置未来 Boss WidgetClass。Intent Header 图标仍由 UI-only Style 精确映射；Tooltip 与详情效果列表只投影 Battle 已规范化的 `FIntentSnapshot.Effects`，不会读取 Behavior 或在 UI 中重算规则。
 - 正式 Pixel Impact System 的 Graph 只由 `WacomBuildBattleEnemyPartImpactNiagara` 写入。当前生成合同包含六个 Emitter 和固定 `EffectKind=0/1/2/3` 映射；TargetPreview 分支还必须暴露 `User.PreviewMode` 与 `User.AvailabilityIconSize`，分别控制 Available 中心图标和 Valid/Invalid Hover 框。运行 `-InspectOnly` 只读验证版本、User Parameter、Renderer 和编译结果。`Scripts/SetupBattleEnemyPartImpactAssets.py` 幂等写入 Destroyed Style 数值但不覆盖人工声音引用，也不会在已有 DreamShader 材质 / MI 合同正确时重存它们；`Scripts/SetupBattleEnemyPartTargetPreviewAssets.py` 只定向维护目标预演 MI 参数，不修改 Host/Part Blueprint。
 - EnemyBehavior 校验 `BehaviorId`、phase、intent set、intent、selector rule、condition、cooldown authoring 和敌人意图 effect contract；可选传入 owning EnemyDefinition 时，会额外校验 `AppliesToPartSlotId / PartDestroyed` 等部位槽引用。
 - Character 会校验 `StarterDeck` 不包含左右手卡。
@@ -563,6 +566,8 @@ Magnitude 计算顺序：
 `FCardEffect` 保持兼容性的宽资产 schema，但战斗执行不会把 `TargetZone` 继续作为通用 MetaTag 透传。Private Effect Semantics 在 decode seam 按 EffectType 将它转换为 DrawSource、HandZone、Keyword 或 Status typed 参数；`Magnitude.Source.TargetStatusStacks` 的 Status 读取参数单独进入 magnitude plan。制作校验、正式执行和 Target Preview 均读取同一份 semantic definition。
 
 `FIntentDefinition` 不再包含手填 `ResistanceValue`。攻击意图由其 Effects 自动派生：至少一个 `Effect.Damage + Target.Player + Magnitude > 0` 时为攻击意图，抵抗比较值取这些 Damage Effects 的最高单段 Magnitude。内容作者只制作真实效果；调整意图 Damage 会同步改变敌情 `ATK`、Action Preview 和抵抗阈值，validator / runtime fixture 不接受第二份重复数值。
+
+同一 Effects 也会按 authored 顺序进入 `FIntentSnapshot.Effects` 作为玩家可见的权威预告。Snapshot 会把 `Target.Player` 上的 Slow / Freeze / Twilight 通过正式 Hand Affliction canonical selection 规范化为“随机 N 张手牌”或“全部手牌”，而不是让 UI 读取 Behavior 重新推断。当前内容没有条件 Effect 或随机 Magnitude；未来若新增，必须先扩展 Battle 公共事实与校验，再允许内容制作，不能只在 Tooltip 文案层补猜测。
 
 `FIntentEffect` 额外包含窄类型 `FHandAfflictionDelivery`：
 

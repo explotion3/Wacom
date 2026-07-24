@@ -9,8 +9,10 @@
 #include "Components/TextBlock.h"
 #include "Components/Widget.h"
 #include "Engine/World.h"
+#include "UI/Battle/WacomBattleEnemyIntentPresentation.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
 #include "UI/Battle/WacomBattleEnemyVitalsPresentation.h"
+#include "UI/Battle/WacomBattleIntentTooltipWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 
 namespace
@@ -30,9 +32,20 @@ UWacomBattleEnemyPartEntryWidget::UWacomBattleEnemyPartEntryWidget(
 	, PresentationState(MakePimpl<FWacomBattleEnemyPartPresentationState>())
 	, VitalsMaterialAdapter(MakePimpl<FWacomBattleEnemyVitalsMaterialAdapter>())
 {
+	IntentTooltipWidgetClass = UWacomBattleIntentTooltipWidget::StaticClass();
 }
 
 UWacomBattleEnemyPartEntryWidget::~UWacomBattleEnemyPartEntryWidget() = default;
+
+void UWacomBattleEnemyPartEntryWidget::SetIntentTooltipWidgetClass(
+	TSubclassOf<UWacomBattleIntentTooltipWidget> InClass)
+{
+	IntentTooltipWidgetClass = InClass
+		? InClass
+		: TSubclassOf<UWacomBattleIntentTooltipWidget>(
+			UWacomBattleIntentTooltipWidget::StaticClass());
+	CachedIntentTooltipWidget = nullptr;
+}
 
 void UWacomBattleEnemyPartEntryWidget::SetPartEntryViewData(
 	const FWacomBattleEnemyPartEntryViewData& InView)
@@ -147,11 +160,19 @@ void UWacomBattleEnemyPartEntryWidget::NativeConstruct()
 	{
 		AuthoredIntentIconTint = IntentIcon->GetColorAndOpacity();
 	}
+	EnsureIntentTooltipBinding();
 	ResetActionPreviewPresentation();
 	if (InspectHitTarget)
 	{
 		InspectHitTarget->OnClicked.RemoveAll(this);
 		InspectHitTarget->OnClicked.AddDynamic(this, &ThisClass::HandleInspectClicked);
+	}
+	if (IntentTooltipTarget)
+	{
+		IntentTooltipTarget->OnClicked.RemoveAll(this);
+		IntentTooltipTarget->OnClicked.AddDynamic(
+			this, &ThisClass::HandleInspectClicked);
+		IntentTooltipTarget->SynchronizeProperties();
 	}
 	if (StatusList)
 	{
@@ -187,6 +208,12 @@ void UWacomBattleEnemyPartEntryWidget::NativeDestruct()
 	{
 		InspectHitTarget->OnClicked.RemoveAll(this);
 	}
+	if (IntentTooltipTarget)
+	{
+		IntentTooltipTarget->OnClicked.RemoveAll(this);
+		IntentTooltipTarget->ToolTipWidgetDelegate.Unbind();
+	}
+	CachedIntentTooltipWidget = nullptr;
 	if (IntentChangeAnimation)
 	{
 		UnbindAllFromAnimationFinished(IntentChangeAnimation);
@@ -202,6 +229,12 @@ void UWacomBattleEnemyPartEntryWidget::NativeDestruct()
 	PresentationState->ResetTransientPresentation();
 	VitalsMaterialAdapter->RestoreAuthoredBrush();
 	Super::NativeDestruct();
+}
+
+void UWacomBattleEnemyPartEntryWidget::SynchronizeProperties()
+{
+	EnsureIntentTooltipBinding();
+	Super::SynchronizeProperties();
 }
 
 void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
@@ -232,6 +265,7 @@ void UWacomBattleEnemyPartEntryWidget::RefreshPresentation()
 			IntentIcon->SetBrush(*IntentBrush);
 		}
 	}
+	RefreshIntentTooltipState();
 	if (StatusList)
 	{
 		StatusList->SetMaxVisibleStatuses(3);
@@ -299,7 +333,7 @@ void UWacomBattleEnemyPartEntryWidget::RefreshActionPreviewPresentation()
 	{
 		IntentSocket->SetVisibility(Frame.bShowResistanceComparison
 			? ESlateVisibility::Collapsed
-			: ESlateVisibility::HitTestInvisible);
+			: ESlateVisibility::SelfHitTestInvisible);
 	}
 	if (PreviewSkipMark)
 	{
@@ -390,7 +424,7 @@ void UWacomBattleEnemyPartEntryWidget::ResetActionPreviewPresentation()
 	}
 	if (IntentSocket)
 	{
-		IntentSocket->SetVisibility(ESlateVisibility::HitTestInvisible);
+		IntentSocket->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 	}
 	if (IntentIcon)
 	{
@@ -564,6 +598,81 @@ void UWacomBattleEnemyPartEntryWidget::RefreshInspectionInteraction()
 		StatusList->SetStatusInspectionEnabled(bCanInspect);
 		StatusList->SetStatusIconActivationEnabled(bCanInspect);
 	}
+	RefreshIntentTooltipState();
+}
+
+void UWacomBattleEnemyPartEntryWidget::EnsureIntentTooltipBinding()
+{
+	if (IntentTooltipTarget
+		&& !IntentTooltipTarget->ToolTipWidgetDelegate.IsBound())
+	{
+		IntentTooltipTarget->ToolTipWidgetDelegate.BindDynamic(
+			this,
+			&ThisClass::HandleBuildIntentTooltipWidget);
+	}
+}
+
+void UWacomBattleEnemyPartEntryWidget::RefreshIntentTooltipState()
+{
+	if (!IntentTooltipTarget || !PresentationState->HasRealView())
+	{
+		return;
+	}
+	const FWacomBattleEnemyPartEntryViewData& View =
+		PresentationState->GetRealView();
+	const bool bCanShow = bInspectionInteractionEnabled
+		&& !PresentationState->HasActionPreview()
+		&& View.Identity.IsValidSlot()
+		&& !View.bDestroyed
+		&& !View.CurrentIntentId.IsNone();
+	IntentTooltipTarget->SetIsEnabled(bCanShow);
+	IntentTooltipTarget->SetVisibility(bCanShow
+		? ESlateVisibility::Visible
+		: ESlateVisibility::HitTestInvisible);
+	if (CachedIntentTooltipWidget)
+	{
+		CachedIntentTooltipWidget->SetIntentViewData(
+			bCanShow
+				? FWacomBattleIntentPresentationBuilder::Build(
+					View, IntentPresentationStyle, 5)
+				: FWacomBattleIntentPresentationViewData());
+	}
+}
+
+UWidget* UWacomBattleEnemyPartEntryWidget::HandleBuildIntentTooltipWidget()
+{
+	if (!bInspectionInteractionEnabled
+		|| PresentationState->HasActionPreview()
+		|| !PresentationState->HasRealView())
+	{
+		return nullptr;
+	}
+	const FWacomBattleEnemyPartEntryViewData& View =
+		PresentationState->GetRealView();
+	if (!View.Identity.IsValidSlot()
+		|| View.bDestroyed
+		|| View.CurrentIntentId.IsNone())
+	{
+		return nullptr;
+	}
+	if (!CachedIntentTooltipWidget)
+	{
+		UClass* TooltipClass = IntentTooltipWidgetClass
+			? IntentTooltipWidgetClass.Get()
+			: UWacomBattleIntentTooltipWidget::StaticClass();
+		CachedIntentTooltipWidget = GetWorld()
+			? CreateWidget<UWacomBattleIntentTooltipWidget>(
+				GetWorld(), TooltipClass)
+			: NewObject<UWacomBattleIntentTooltipWidget>(
+				this, TooltipClass);
+	}
+	if (CachedIntentTooltipWidget)
+	{
+		CachedIntentTooltipWidget->SetIntentViewData(
+			FWacomBattleIntentPresentationBuilder::Build(
+				View, IntentPresentationStyle, 5));
+	}
+	return CachedIntentTooltipWidget;
 }
 
 void UWacomBattleEnemyPartEntryWidget::HandleInspectClicked()

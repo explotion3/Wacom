@@ -6,6 +6,7 @@
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Hand/HandZoneService.h"
+#include "Rules/BattleRuleContentContract.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
@@ -18,6 +19,59 @@
 
 namespace
 {
+	EBattleIntentEffectTargetKind ResolveIntentEffectTargetKind(
+		const FIntentEffect& Effect,
+		int32& OutTargetCount)
+	{
+		OutTargetCount = 0;
+		if (FWacomBattleRuleContentContract::EnemyIntentEffectUsesHandAfflictionDelivery(
+			Effect.EffectType,
+			Effect.Target))
+		{
+			const EHandAfflictionSelection Selection =
+				Effect.HandAffliction.Selection == EHandAfflictionSelection::Default
+				? FWacomBattleRuleContentContract::GetCanonicalHandAfflictionSelection(
+					Effect.EffectType)
+				: Effect.HandAffliction.Selection;
+			if (Selection == EHandAfflictionSelection::AllCurrentHandCards)
+			{
+				return EBattleIntentEffectTargetKind::AllPlayerHandCards;
+			}
+			if (Selection == EHandAfflictionSelection::RandomUnique)
+			{
+				OutTargetCount = FMath::Max(1, Effect.HandAffliction.TargetCardCount);
+				return EBattleIntentEffectTargetKind::RandomPlayerHandCards;
+			}
+		}
+		if (Effect.Target == WacomTags::Target_Player)
+		{
+			return EBattleIntentEffectTargetKind::Player;
+		}
+		if (Effect.Target == WacomTags::Target_Self)
+		{
+			return EBattleIntentEffectTargetKind::SelfEnemyPart;
+		}
+		return EBattleIntentEffectTargetKind::Unknown;
+	}
+
+	void BuildIntentEffectSnapshots(
+		const FIntentDefinition& Intent,
+		TArray<FBattleIntentEffectSnapshot>& OutEffects)
+	{
+		OutEffects.Reset(Intent.Effects.Num());
+		for (const FIntentEffect& Effect : Intent.Effects)
+		{
+			FBattleIntentEffectSnapshot& EffectSnapshot =
+				OutEffects.AddDefaulted_GetRef();
+			EffectSnapshot.EffectType = Effect.EffectType;
+			EffectSnapshot.Magnitude = Effect.Magnitude;
+			EffectSnapshot.Duration = Effect.Duration;
+			EffectSnapshot.TargetKind = ResolveIntentEffectTargetKind(
+				Effect,
+				EffectSnapshot.TargetCount);
+		}
+	}
+
 	FEnemyPartSnapshot BuildEnemyPartSnapshot(const FRuntimeEnemyPart& Part)
 	{
 		FEnemyPartSnapshot PartSnap;
@@ -39,7 +93,7 @@ namespace
 		PartSnap.Statuses          = FBattleCombatantStatusFacts::BuildTagProjection(Part.StatusStacks);
 		PartSnap.StatusStacks      = Part.StatusStacks;
 
-		if (!Part.CurrentIntentId.IsNone())
+		if (!Part.bDestroyed && !Part.CurrentIntentId.IsNone())
 		{
 			const FIntentDefinition& IntentDef = Part.CurrentIntent;
 			PartSnap.CurrentIntent.IntentId    = IntentDef.IntentId;
@@ -49,6 +103,9 @@ namespace
 				FBattleResistanceEvaluator::EvaluateIntentPeakAttackDamage(IntentDef);
 			PartSnap.CurrentIntent.bIsAttackIntent =
 				PartSnap.CurrentIntent.PeakAttackDamage > 0;
+			BuildIntentEffectSnapshots(
+				IntentDef,
+				PartSnap.CurrentIntent.Effects);
 		}
 
 		return PartSnap;

@@ -62,6 +62,7 @@ namespace
 			Item.CurrentIntentInitiative = Part.CurrentIntent.Initiative;
 			Item.bCurrentIntentIsAttack = Part.CurrentIntent.bIsAttackIntent;
 			Item.CurrentIntentPeakAttackDamage = Part.CurrentIntent.PeakAttackDamage;
+			Item.CurrentIntentEffects = Part.CurrentIntent.Effects;
 			Item.RuntimeStatuses = Part.Statuses;
 			Item.RuntimeStatusStacks = Part.StatusStacks;
 			Item.bDestroyed = Part.bDestroyed;

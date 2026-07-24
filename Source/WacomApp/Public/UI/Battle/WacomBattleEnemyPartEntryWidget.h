@@ -16,6 +16,7 @@ class USizeBox;
 class UWidget;
 class UWidgetAnimation;
 class UWacomBattleEnemyIntentPresentationStyle;
+class UWacomBattleIntentTooltipWidget;
 class UWacomBattleStatusIconListWidget;
 class FWacomBattleEnemyPartPresentationState;
 class FWacomBattleEnemyVitalsMaterialAdapter;
@@ -56,12 +57,19 @@ public:
 	{
 		return IntentPresentationStyle;
 	}
+	void SetIntentTooltipWidgetClass(
+		TSubclassOf<UWacomBattleIntentTooltipWidget> InClass);
+	TSubclassOf<UWacomBattleIntentTooltipWidget> GetIntentTooltipWidgetClass() const
+	{
+		return IntentTooltipWidgetClass;
+	}
 
 	FWacomBattleEnemyPartInspectionRequestedNative OnInspectionRequestedNative;
 
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
+	virtual void SynchronizeProperties() override;
 
 private:
 	void SetPartEntryViewData(const FWacomBattleEnemyPartEntryViewData& InView);
@@ -88,12 +96,17 @@ private:
 	void RouteMotionCues(const FWacomBattleEnemyPartPresentationUpdate& Update);
 	void RouteMotionCue(EWacomBattleEnemyMotionCue Cue);
 	void RefreshInspectionInteraction();
+	void EnsureIntentTooltipBinding();
+	void RefreshIntentTooltipState();
 	void CancelIntroTimer();
 	void PlaySemanticAnimation(UWidgetAnimation* Animation, float AuthoredDurationSeconds);
 	float ResolveWorldTimeSeconds() const;
 
 	UFUNCTION()
 	void HandleInspectClicked();
+
+	UFUNCTION()
+	UWidget* HandleBuildIntentTooltipWidget();
 
 	void HandleStatusIconActivated(const FWacomBattleStatusIconView& View);
 
@@ -160,6 +173,9 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UImage> IntentIcon = nullptr;
 
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UButton> IntentTooltipTarget = nullptr;
+
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UWacomBattleStatusIconListWidget> StatusList = nullptr;
 
@@ -195,6 +211,12 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Intent", meta = (AllowPrivateAccess = "true", ToolTip = "紧凑敌人面板用于按稳定 IntentId 解析图标的 UI-only Style。为空时保留 WBP 默认图标，不影响规则。"))
 	TObjectPtr<UWacomBattleEnemyIntentPresentationStyle> IntentPresentationStyle = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Intent", meta = (AllowPrivateAccess = "true", AllowAbstract = "false", ToolTip = "Intent 图标悬停时惰性创建的被动 Tooltip 类。正式资产使用 WBP_BattleIntentTooltip；为空时回退到 C++ 默认控件。"))
+	TSubclassOf<UWacomBattleIntentTooltipWidget> IntentTooltipWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWacomBattleIntentTooltipWidget> CachedIntentTooltipWidget = nullptr;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Battle|Enemy Panel|Motion", meta = (AllowPrivateAccess = "true", ToolTip = "HP 真实下降后保留旧值残影的时间，单位：秒；推荐 0.05-0.15。只影响表现，不改变规则数值。"))
 	float DamageTrailHoldSeconds = 0.09f;

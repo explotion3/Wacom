@@ -23,6 +23,7 @@ namespace Wacom::ContentBuilder::EnemyUIHitTestPolicy
 			const FName Name = Widget.GetFName();
 			if (Widget.IsA<UButton>()
 				&& (Name == TEXT("InspectHitTarget")
+					|| Name == TEXT("IntentTooltipTarget")
 					|| Name == TEXT("CloseButton")
 					|| Name == TEXT("PartSelectButton")))
 			{
