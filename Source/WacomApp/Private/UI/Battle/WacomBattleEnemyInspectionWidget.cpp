@@ -13,7 +13,6 @@
 #include "UI/Battle/WacomBattleEnemyInspectionPartRowWidget.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentation.h"
 #include "UI/Battle/WacomBattleEnemyIntentPresentationStyle.h"
-#include "UI/Battle/WacomBattleIntentEffectRowWidget.h"
 #include "UI/Battle/WacomBattleIntentTooltipWidget.h"
 #include "UI/Battle/WacomBattleStatusIconWidget.h"
 
@@ -164,16 +163,6 @@ void UWacomBattleEnemyInspectionWidget::SetIntentPresentationStyle(
 	RefreshSelectedPartDetails();
 }
 
-void UWacomBattleEnemyInspectionWidget::SetIntentEffectRowWidgetClass(
-	TSubclassOf<UWacomBattleIntentEffectRowWidget> InClass)
-{
-	IntentEffectRowWidgetClass = InClass
-		? InClass
-		: TSubclassOf<UWacomBattleIntentEffectRowWidget>(
-			UWacomBattleIntentEffectRowWidget::StaticClass());
-	RefreshSelectedPartDetails();
-}
-
 void UWacomBattleEnemyInspectionWidget::SetIntentTooltipWidgetClass(
 	TSubclassOf<UWacomBattleIntentTooltipWidget> InClass)
 {
@@ -187,11 +176,6 @@ void UWacomBattleEnemyInspectionWidget::SetIntentTooltipWidgetClass(
 void UWacomBattleEnemyInspectionWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
-	if (!IntentEffectRowWidgetClass)
-	{
-		IntentEffectRowWidgetClass =
-			UWacomBattleIntentEffectRowWidget::StaticClass();
-	}
 	if (!IntentTooltipWidgetClass)
 	{
 		IntentTooltipWidgetClass =
@@ -424,9 +408,6 @@ void UWacomBattleEnemyInspectionWidget::RefreshIntentPresentation(
 		return;
 	}
 
-	const FWacomBattleIntentPresentationViewData FullView =
-		FWacomBattleIntentPresentationBuilder::Build(
-			*Part, IntentPresentationStyle);
 	if (IntentTooltipTarget)
 	{
 		const bool bCanInspectIntent = bOpen && !bClosing;
@@ -441,39 +422,10 @@ void UWacomBattleEnemyInspectionWidget::RefreshIntentPresentation(
 			FWacomBattleIntentPresentationBuilder::Build(
 				*Part, IntentPresentationStyle, 5));
 	}
-	if (!IntentEffectsList)
-	{
-		return;
-	}
-	UClass* RowClass = IntentEffectRowWidgetClass
-		? IntentEffectRowWidgetClass.Get()
-		: UWacomBattleIntentEffectRowWidget::StaticClass();
-	for (int32 Index = 0; Index < FullView.EffectRows.Num(); ++Index)
-	{
-		UWacomBattleIntentEffectRowWidget* Row = GetWorld()
-			? CreateWidget<UWacomBattleIntentEffectRowWidget>(
-				GetWorld(),
-				RowClass)
-			: NewObject<UWacomBattleIntentEffectRowWidget>(
-				this,
-				RowClass);
-		if (!Row)
-		{
-			continue;
-		}
-		Row->SetEffectRowViewData(FullView.EffectRows[Index]);
-		IntentEffectsList->AddChild(Row);
-		IntentEffectRows.Add(Row);
-	}
 }
 
 void UWacomBattleEnemyInspectionWidget::ClearIntentPresentation()
 {
-	if (IntentEffectsList)
-	{
-		IntentEffectsList->ClearChildren();
-	}
-	IntentEffectRows.Reset();
 	if (IntentTooltipTarget)
 	{
 		IntentTooltipTarget->SetIsEnabled(false);

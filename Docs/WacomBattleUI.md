@@ -219,7 +219,7 @@ HUD coordinator 直接缓存 `UWacomBattleEnemyPartComponent` 与完整稳定 id
 
 敌人当前意图的攻击属性完全来自 Snapshot：`bIsAttackIntent` 表示是否含有指向 Player 的正 Damage，`PeakAttackDamage` 是其最高单段值。敌情详情对攻击意图显示 `INIT n   ATK m`，非攻击意图只显示 `INIT n`；现有 WBP 内部 `ResistanceText` 绑定名只为避免资产绑定失效而保留，不再表达独立 Resistance 数值。
 
-Intent Tooltip 与敌情档案效果列表只消费 `FIntentSnapshot.Effects` 传入的权威事实。App-private `FWacomBattleIntentPresentationBuilder` 仅负责中文、Status Catalog 图标/核心说明和布局；它只聚合相邻且效果、目标、Magnitude、Duration 完全相同的行，不能跨越其它效果合并。头顶与档案 Intent 图标使用标准 `ToolTipWidgetDelegate`，由 Slate 跟随鼠标和 Clamp；Tooltip 最多直接显示五行，档案显示完整可滚动列表。拖卡、TargetSelect、Action Preview、交互门禁关闭、部位破坏与 teardown 会立即清理 Tooltip；Action Preview 的抵抗比较图标不开放该入口。未知效果保留完整 GameplayTag、数值与未知目标回退，不静默隐藏。
+Intent Tooltip 只消费 `FIntentSnapshot.Effects` 传入的权威事实。App-private `FWacomBattleIntentPresentationBuilder` 仅负责中文、Status Catalog 图标/核心说明和布局；它只聚合相邻且效果、目标、Magnitude、Duration 完全相同的行，不能跨越其它效果合并。头顶与档案 Intent 图标使用标准 `ToolTipWidgetDelegate`，由 Slate 跟随鼠标和 Clamp；Tooltip 最多直接显示五行。敌情档案正文的 `StatusList` 只显示当前部位真实 Buff / Debuff，没有状态时保持空白，不把 Intent 效果混入状态区域。拖卡、TargetSelect、Action Preview、交互门禁关闭、部位破坏与 teardown 会立即清理 Tooltip；Action Preview 的抵抗比较图标不开放该入口。未知效果保留完整 GameplayTag、数值与未知目标回退，不静默隐藏。
 
 BattleEnd Snapshot 立即注销 target/presentation registry 并清 hover、preview、panel；同批队列只保留弱 Host/Part 引用完成已排队 Action 或 terminal clip。真正的探索场景退役仍由 GameMode 的 weak Encounter scene binding callback 在胜利结算和返回镜头 barrier 完成后执行：清运行时表现、隐藏 Host 并关闭交互，Node Anchor 与 binding 保留。Withdraw、Defeat、Undetermined 或结算失败不退役。
 

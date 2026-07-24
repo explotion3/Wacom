@@ -99,14 +99,14 @@ SlimeTrio 同样拒绝 `-PromoteArt`，`-ForceArtRefresh` 只允许与 `-Promote
 Enemy HUD 的通用布局迁移已经完成，正式 Panel / Entry / Inspection 仍由 Designer 或受控 Editor 维护。`WacomBuildEnemyUI` 只保留一个窄范围 Intent 说明构建模式和完整只读合同审计：
 
 ```powershell
-# 幂等创建/维护两个 Intent 说明 WBP，并只补 Entry/Inspection 的 Intent 命中层、完整效果列表与 Style 通用效果图标
+# 幂等创建/维护两个 Intent 说明 WBP，并维护 Entry/Inspection 的 Intent 命中层、清理 Inspection 旧正文效果列表与 Style 通用效果图标
 -run=WacomBuildEnemyUI -BuildIntentInspection
 
 # 检查核心 Enemy WBP、Intent Tooltip/Row、唯一默认类、字体、材质、Intent Style 与命中路径
 -run=WacomBuildEnemyUI -InspectEnemyHUD
 ```
 
-`-BuildIntentInspection` 的保存范围固定为 `WBP_BattleIntentTooltip`、`WBP_BattleIntentEffectRow`、`BP_WacomBattleEnemyPartEntryWidget`、`WBP_WacomBattleEnemyInspectionWidget` 与 `DA_EnemyIntentPresentation_Default`，重复 Build 必须保持资产哈希稳定；它不得重建 Panel、地图或 Behavior。Builder 只允许让透明 `IntentTooltipTarget` 直接包裹原 `IntentIcon` 并继承其 Slot，禁止向任意祖先 Overlay 添加 Fill 命中层。`-InspectEnemyHUD` 永远不 dirty 或保存 Package，并验证该直接所有权。合同仍要求两个旧 SinglePart WBP Package、`DefaultBattleEnemySinglePartPanelWidgetClass` Config key 和手工继承绑定路径不存在。旧 `-MigrateLegacy`、`-BuildSinglePartCompact`、`-InspectSegmentedVitals` 和专用 MCP mutation toolset保持删除。
+`-BuildIntentInspection` 的保存范围固定为 `WBP_BattleIntentTooltip`、`WBP_BattleIntentEffectRow`、`BP_WacomBattleEnemyPartEntryWidget`、`WBP_WacomBattleEnemyInspectionWidget` 与 `DA_EnemyIntentPresentation_Default`，重复 Build 必须保持资产哈希稳定；它不得重建 Panel、地图或 Behavior。Builder 只允许让透明 `IntentTooltipTarget` 直接包裹原 `IntentIcon` 并继承其 Slot，禁止向任意祖先 Overlay 添加 Fill 命中层；Inspection 中旧 `IntentEffectsBounds / IntentEffectsScroll / IntentEffectsList` 必须被移除，状态区域只由 `StatusList` 承担。`-InspectEnemyHUD` 永远不 dirty 或保存 Package，并验证图标直接所有权和旧正文列表不存在。合同仍要求两个旧 SinglePart WBP Package、`DefaultBattleEnemySinglePartPanelWidgetClass` Config key 和手工继承绑定路径不存在。旧 `-MigrateLegacy`、`-BuildSinglePartCompact`、`-InspectSegmentedVitals` 和专用 MCP mutation toolset保持删除。
 
 玩家状态栏的敌人行动命中反馈使用独立幂等 builder，同样不接入 `WacomRegenerateContent`：
 

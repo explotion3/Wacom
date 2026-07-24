@@ -670,18 +670,17 @@ Tooltip 父类为 `UWacomBattleIntentTooltipWidget`，约 `320px` 宽；必需�
 | `InitiativeText` | `TextBlock` | 当前 Initiative |
 | `IntentIcon` / `IntentText` / `ResistanceText` | `Image` / `TextBlock` | Intent 图标、名称，以及派生意图摘要；攻击意图显示 `INIT n   ATK m`，非攻击意图显示 `INIT n`。`ResistanceText` 仅保留为现有资产绑定名，不代表可制作 Resistance 字段 |
 | `IntentTooltipTarget` | `Button` | 直接包裹选中部位 `IntentIcon` 的透明命中层；命中范围必须严格等于图标，悬停复用正式 Intent Tooltip |
-| `IntentEffectsList` | `PanelWidget` | 当前选中部位的完整、按执行顺序效果列表；不受 Tooltip 五行上限影响 |
-| `StatusList` | `UWacomBattleStatusIconListWidget` | 完整 Buff 与层数，不限制 3 枚 |
+| `StatusList` | `UWacomBattleStatusIconListWidget` | 当前部位真实 Buff / Debuff 与层数，不限制 3 枚；没有状态时保持空白，不显示 Intent 效果 |
 | `DestroyedOverlay` | `Widget` | 当前部位终态 |
 | `CloseButton` | `Button` | 被动 Close 请求 |
 
-必需动画：`OpenLeftAnimation=180ms`、`OpenRightAnimation=240ms`、`CloseAnimation=160ms`，都必须有真实 widget binding。左栏先进入，右栏由弱 Timer 延迟 `40ms`；clear / destruct 取消该 Timer。Root 为 `SelfHitTestInvisible`；`CloseButton`、部位 Row 按钮和 `IntentTooltipTarget` 可命中，祖先链必须允许子控件命中。切换部位或 Intent 刷新会重建效果列表；开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭并清理 Tooltip/列表。
+必需动画：`OpenLeftAnimation=180ms`、`OpenRightAnimation=240ms`、`CloseAnimation=160ms`，都必须有真实 widget binding。左栏先进入，右栏由弱 Timer 延迟 `40ms`；clear / destruct 取消该 Timer。Root 为 `SelfHitTestInvisible`；`CloseButton`、部位 Row 按钮和 `IntentTooltipTarget` 可命中，祖先链必须允许子控件命中。切换部位或 Intent 刷新会刷新 Intent Tooltip 与真实 StatusList；开始拖卡、进入 TargetSelect / Resolving、BattleEnd、Host/Part 移除和 HUD destruct 会由 coordinator 关闭并清理 Tooltip。
 
 ### WBP_WacomBattleEnemyInspectionPartRowWidget
 
 父类：`UWacomBattleEnemyInspectionPartRowWidget`。必需绑定为 `PartSelectButton`、`PartNameText`、`HpText`、`ShieldContainer`、`ShieldText`、`InitiativeText`、`SelectionHighlight`、`DestroyedOverlay`。Root 为 `SelfHitTestInvisible`，仅 `PartSelectButton` 可命中；按钮到 Root 的祖先链必须允许子控件命中，点击只广播稳定 Part identity。
 
-Intent 说明资产允许使用下列窄范围、确定性 Commandlet 构建；它只修改两个 Intent WBP、Enemy Entry、Enemy Inspection 与 Intent Style：
+Intent 说明资产允许使用下列窄范围、确定性 Commandlet 构建；它维护两个 Intent WBP、Enemy Entry 的图标命中层、Enemy Inspection 的图标命中层与旧正文列表清理，以及 Intent Style：
 
 ```powershell
 -run=WacomBuildEnemyUI -BuildIntentInspection

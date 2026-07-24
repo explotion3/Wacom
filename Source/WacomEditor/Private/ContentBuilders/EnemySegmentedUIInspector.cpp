@@ -391,7 +391,6 @@ namespace
 			{ TEXT("IntentText"), UTextBlock::StaticClass() }, { TEXT("ResistanceText"), UTextBlock::StaticClass() },
 			{ TEXT("StatusList"), UWacomBattleStatusIconListWidget::StaticClass() },
 			{ TEXT("IntentTooltipTarget"), UButton::StaticClass() },
-			{ TEXT("IntentEffectsList"), UPanelWidget::StaticClass() },
 			{ TEXT("DestroyedOverlay"), UWidget::StaticClass() }, { TEXT("CloseButton"), UButton::StaticClass() },
 		};
 		const UWacomBattleEnemyInspectionWidget* Defaults = Blueprint && Blueprint->GeneratedClass
@@ -424,10 +423,12 @@ namespace
 			Defaults && Defaults->GetIntentPresentationStyle() == Style);
 		CheckInspection(TEXT("intent tooltip class"),
 			Defaults && Defaults->GetIntentTooltipWidgetClass() != nullptr);
-		CheckInspection(TEXT("intent effect row class"),
-			Defaults && Defaults->GetIntentEffectRowWidgetClass() != nullptr);
 		CheckInspection(TEXT("intent tooltip target owns exact IntentIcon bounds"),
 			IntentTooltipTargetOwnsIcon(Blueprint));
+		CheckInspection(TEXT("legacy dossier Intent effect widgets are absent"),
+			!HasWidget(Blueprint, TEXT("IntentEffectsBounds"), UWidget::StaticClass())
+			&& !HasWidget(Blueprint, TEXT("IntentEffectsScroll"), UWidget::StaticClass())
+			&& !HasWidget(Blueprint, TEXT("IntentEffectsList"), UWidget::StaticClass()));
 		for (const FWidgetRequirement& Binding : Required)
 		{
 			CheckInspection(FString::Printf(TEXT("binding %s"), *Binding.Name.ToString()),

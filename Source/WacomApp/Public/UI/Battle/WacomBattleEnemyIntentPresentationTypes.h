@@ -18,7 +18,7 @@ struct WACOMAPP_API FWacomBattleIntentEffectRowViewData
 	int32 RepeatCount = 1;
 };
 
-/** Shared presentation model used by the head-up Tooltip and enemy inspection. */
+/** Passive presentation model used by the head-up and enemy-inspection Intent tooltips. */
 struct WACOMAPP_API FWacomBattleIntentPresentationViewData
 {
 	FName IntentId = NAME_None;

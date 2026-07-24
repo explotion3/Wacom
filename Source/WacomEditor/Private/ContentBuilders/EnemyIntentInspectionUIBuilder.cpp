@@ -15,7 +15,6 @@
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
 #include "Components/PanelWidget.h"
-#include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -33,6 +32,7 @@
 #include "UI/Battle/WacomBattleIntentEffectRowWidget.h"
 #include "UI/Battle/WacomBattleIntentTooltipWidget.h"
 #include "UObject/SavePackage.h"
+#include "UObject/UObjectHash.h"
 #include "WidgetBlueprint.h"
 
 namespace
@@ -461,20 +461,6 @@ namespace
 		MarkWidgetVariable(Blueprint, *OverflowText);
 	}
 
-	UVerticalBox* FindVerticalBoxAncestor(UWidget* Widget)
-	{
-		for (UWidget* Current = Widget ? Widget->GetParent() : nullptr;
-			Current;
-			Current = Current->GetParent())
-		{
-			if (UVerticalBox* Vertical = Cast<UVerticalBox>(Current))
-			{
-				return Vertical;
-			}
-		}
-		return nullptr;
-	}
-
 	UWidget* FindDirectChildUnder(
 		UWidget* Descendant,
 		UPanelWidget* Ancestor)
@@ -623,47 +609,6 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 		return Target;
 	}
 
-	UPanelWidget* EnsureInspectionEffectList(UWidgetBlueprint& Blueprint)
-	{
-		if (UPanelWidget* Existing = Cast<UPanelWidget>(
-			Blueprint.WidgetTree->FindWidget(TEXT("IntentEffectsList"))))
-		{
-			return Existing;
-		}
-		UWidget* StatusList =
-			Blueprint.WidgetTree->FindWidget(TEXT("StatusList"));
-		UVerticalBox* Details = FindVerticalBoxAncestor(StatusList);
-		if (!Details)
-		{
-			UE_LOG(LogTemp, Error,
-				TEXT("[EnemyIntentUIBuilder] StatusList has no vertical details ancestor"));
-			return nullptr;
-		}
-		USizeBox* ScrollBounds =
-			Blueprint.WidgetTree->ConstructWidget<USizeBox>(
-				USizeBox::StaticClass(), TEXT("IntentEffectsBounds"));
-		ScrollBounds->SetMaxDesiredHeight(190.0f);
-		ScrollBounds->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		if (UVerticalBoxSlot* WidgetSlot =
-			Details->AddChildToVerticalBox(ScrollBounds))
-		{
-			WidgetSlot->SetPadding(FMargin(0.0f, 12.0f, 0.0f, 0.0f));
-			WidgetSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
-		}
-		UScrollBox* Scroll =
-			Blueprint.WidgetTree->ConstructWidget<UScrollBox>(
-				UScrollBox::StaticClass(), TEXT("IntentEffectsScroll"));
-		Scroll->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		ScrollBounds->AddChild(Scroll);
-		UVerticalBox* List =
-			Blueprint.WidgetTree->ConstructWidget<UVerticalBox>(
-				UVerticalBox::StaticClass(), TEXT("IntentEffectsList"));
-		List->SetVisibility(ESlateVisibility::HitTestInvisible);
-		Scroll->AddChild(List);
-		MarkWidgetVariable(Blueprint, *List);
-		return List;
-	}
-
 	bool SetBrushTexture(
 		FSlateBrush& Brush,
 		UObject* Resource,
@@ -721,6 +666,93 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 		return Widget && Widget->IsA(Class);
 	}
 
+	void CollectLegacyInspectionEffectWidgets(
+		const UWidgetBlueprint* Blueprint,
+		TArray<UWidget*>& OutWidgets)
+	{
+		if (!Blueprint || !Blueprint->WidgetTree)
+		{
+			return;
+		}
+
+		TArray<UObject*> TreeObjects;
+		GetObjectsWithOuter(
+			Blueprint->WidgetTree,
+			TreeObjects,
+			EGetObjectsFlags::IncludeNestedObjects);
+		for (UObject* Object : TreeObjects)
+		{
+			UWidget* Widget = Cast<UWidget>(Object);
+			if (Widget
+				&& (Widget->GetFName() == TEXT("IntentEffectsBounds")
+					|| Widget->GetFName() == TEXT("IntentEffectsScroll")
+					|| Widget->GetFName() == TEXT("IntentEffectsList")))
+			{
+				OutWidgets.AddUnique(Widget);
+			}
+		}
+	}
+
+	bool HasLegacyInspectionEffectWidgets(const UWidgetBlueprint* Blueprint)
+	{
+		TArray<UWidget*> LegacyWidgets;
+		CollectLegacyInspectionEffectWidgets(Blueprint, LegacyWidgets);
+		return !LegacyWidgets.IsEmpty();
+	}
+
+	bool RemoveLegacyInspectionEffectWidgets(
+		UWidgetBlueprint& Blueprint,
+		const bool bBuild,
+		bool& bOutChanged)
+	{
+		if (!HasLegacyInspectionEffectWidgets(&Blueprint))
+		{
+			return true;
+		}
+		if (!bBuild || !Blueprint.WidgetTree)
+		{
+			UE_LOG(LogTemp, Error,
+				TEXT("[EnemyIntentUIBuilder] Inspection still contains the legacy dossier Intent effect list"));
+			return false;
+		}
+
+		Blueprint.Modify();
+		Blueprint.WidgetTree->Modify();
+		TArray<UWidget*> LegacyWidgets;
+		CollectLegacyInspectionEffectWidgets(&Blueprint, LegacyWidgets);
+		for (UWidget* Widget : LegacyWidgets)
+		{
+			if (Widget && Widget->GetParent()
+				&& !Blueprint.WidgetTree->RemoveWidget(Widget))
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[EnemyIntentUIBuilder] Failed to detach legacy widget %s"),
+					*Widget->GetName());
+				return false;
+			}
+		}
+		for (UWidget* Widget : LegacyWidgets)
+		{
+			if (!Widget)
+			{
+				continue;
+			}
+			Blueprint.WidgetVariableNameToGuidMap.Remove(Widget->GetFName());
+			if (!Widget->Rename(
+				nullptr,
+				GetTransientPackage(),
+				REN_DontCreateRedirectors | REN_NonTransactional))
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[EnemyIntentUIBuilder] Failed to retire legacy widget %s"),
+					*Widget->GetName());
+				return false;
+			}
+		}
+		bOutChanged = true;
+		return true;
+	}
+
 	bool ValidateTooltipBlueprint(
 		const UWidgetBlueprint* Blueprint,
 		const UClass* EffectRowClass)
@@ -762,8 +794,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	bool ValidateExistingBindings(
 		const UWidgetBlueprint* Entry,
 		const UWidgetBlueprint* Inspection,
-		const UClass* TooltipClass,
-		const UClass* EffectRowClass)
+		const UClass* TooltipClass)
 	{
 		const UWacomBattleEnemyPartEntryWidget* EntryDefaults =
 			Entry && Entry->GeneratedClass
@@ -781,16 +812,13 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			&& HasWidget(
 				Inspection, TEXT("IntentTooltipTarget"), UButton::StaticClass())
 			&& HasIconOwnedIntentTooltipTarget(Inspection)
-			&& HasWidget(
-				Inspection, TEXT("IntentEffectsList"), UPanelWidget::StaticClass())
+			&& !HasLegacyInspectionEffectWidgets(Inspection)
 			&& EntryDefaults
 			&& EntryDefaults->GetIntentTooltipWidgetClass().Get() == TooltipClass
 			&& InspectionDefaults
 			&& InspectionDefaults->GetIntentPresentationStyle() != nullptr
 			&& InspectionDefaults->GetIntentTooltipWidgetClass().Get()
-				== TooltipClass
-			&& InspectionDefaults->GetIntentEffectRowWidgetClass().Get()
-				== EffectRowClass;
+				== TooltipClass;
 	}
 
 	bool Process(const bool bBuild)
@@ -950,14 +978,12 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			}
 			bInspectionChanged |= RepairedWidgetCount > 0;
 		}
-		if (!HasWidget(
-			Inspection, TEXT("IntentEffectsList"), UPanelWidget::StaticClass()))
+		if (!RemoveLegacyInspectionEffectWidgets(
+			*Inspection,
+			bBuild,
+			bInspectionChanged))
 		{
-			if (!bBuild || !EnsureInspectionEffectList(*Inspection))
-			{
-				return false;
-			}
-			bInspectionChanged = true;
+			return false;
 		}
 		if (bInspectionChanged && !CompileAndSave(*Inspection))
 		{
@@ -974,17 +1000,13 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			|| !ValidateExistingBindings(
 				Entry,
 				Inspection,
-				Tooltip.Blueprint->GeneratedClass,
-				EffectRow.Blueprint->GeneratedClass))
+				Tooltip.Blueprint->GeneratedClass))
 		{
 			if (!bBuild)
 			{
 				return false;
 			}
 			InspectionDefaults->SetIntentPresentationStyle(Style);
-			InspectionDefaults->SetIntentEffectRowWidgetClass(
-				TSubclassOf<UWacomBattleIntentEffectRowWidget>(
-					EffectRow.Blueprint->GeneratedClass.Get()));
 			InspectionDefaults->SetIntentTooltipWidgetClass(
 				TSubclassOf<UWacomBattleIntentTooltipWidget>(
 					Tooltip.Blueprint->GeneratedClass.Get()));
@@ -1012,8 +1034,7 @@ PRAGMA_ENABLE_DEPRECATION_WARNINGS
 			&& ValidateExistingBindings(
 				Entry,
 				Inspection,
-				Tooltip.Blueprint->GeneratedClass,
-				EffectRow.Blueprint->GeneratedClass);
+				Tooltip.Blueprint->GeneratedClass);
 	}
 }
 
