@@ -67,11 +67,17 @@ bool FWacomBackpackWorkspaceGestureController::HasMarqueeDragThreshold(
 	return MarqueePress.bActive && HasDragThreshold(Event, MarqueePress.ScreenPosition);
 }
 
-void FWacomBackpackWorkspaceGestureController::ResetTransient()
+void FWacomBackpackWorkspaceGestureController::ResetPendingPresses()
 {
 	CardPress.Reset();
 	PilePress.Reset();
 	MarqueePress.Reset();
+}
+
+void FWacomBackpackWorkspaceGestureController::Reset()
+{
+	ResetPendingPresses();
+	PileMoveSnapshot.Reset();
 }
 
 bool FWacomBackpackWorkspaceGestureController::HasDragThreshold(

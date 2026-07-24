@@ -1571,7 +1571,7 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerDownAtLocal(
 			SetExpandedPileLensInputLocked(false, false);
 			EndSelectionVisualFreeze(false);
 			GetRuntime().Presentation.bCarryCurrentExplicitlySelectedByWheel = false;
-			GetRuntime().Gesture.CardPress.Reset();
+			GetRuntime().Gesture.ClearCardPress();
 			ClearExpandedPileFocus(true);
 			UpdateCarryAnchor(Pointer);
 			GetRuntime().Presentation.bCarryStripLayoutDirty = true;
@@ -1708,14 +1708,15 @@ FReply UWacomBackpackWorkspaceWidget::HandleCardPointerUp(
 		BroadcastPointerRelease(Event.GetEffectingButton() == EKeys::RightMouseButton);
 		return BuildHandledPointerReply();
 	}
-	FWacomBackpackPendingCardPress& CardPress = GetRuntime().Gesture.CardPress;
+	const FWacomBackpackPendingCardPress CardPress =
+		GetRuntime().Gesture.GetCardPress();
 	if (CardPress.bActive && Event.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		const TArray<FGuid> PreviousSelection =
 			InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 		InteractionModel->ClickCard(CardPress.InstanceId, CardPress.bControlDown);
 		InteractionModel->SetCardPressActive(false);
-		CardPress.Reset();
+		GetRuntime().Gesture.ClearCardPress();
 		UpdateSelectionVisualFreezeLifetime();
 		const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
 			PreviousSelection,
@@ -1809,21 +1810,22 @@ bool UWacomBackpackWorkspaceWidget::TryBeginCarryFromPendingPress(
 	const FPointerEvent& Event)
 {
 	FWacomBackpackWorkspaceGestureController& Gesture = GetRuntime().Gesture;
-	if (!InteractionModel || !Gesture.CardPress.bActive
+	const FWacomBackpackPendingCardPress CardPress = Gesture.GetCardPress();
+	if (!InteractionModel || !CardPress.bActive
 		|| !Gesture.HasCardDragThreshold(Event))
 	{
 		return false;
 	}
 
-	if (!InteractionModel->IsSelected(Gesture.CardPress.InstanceId))
+	if (!InteractionModel->IsSelected(CardPress.InstanceId))
 	{
-		InteractionModel->ClickCard(Gesture.CardPress.InstanceId, false);
+		InteractionModel->ClickCard(CardPress.InstanceId, false);
 	}
 	const bool bStarted = InteractionModel->BeginCarry(
-		Gesture.CardPress.InstanceId,
+		CardPress.InstanceId,
 		Pointer,
 		CurrentStorageRevision);
-	Gesture.CardPress.Reset();
+	Gesture.ClearCardPress();
 	InteractionModel->SetCardPressActive(false);
 	if (!bStarted)
 	{
@@ -1956,7 +1958,7 @@ bool UWacomBackpackWorkspaceWidget::TryBeginPileMove(
 	const FPointerEvent& Event)
 {
 	FWacomBackpackWorkspaceGestureController& Gesture = GetRuntime().Gesture;
-	FWacomBackpackPendingPilePress& PilePress = Gesture.PilePress;
+	const FWacomBackpackPendingPilePress PilePress = Gesture.GetPilePress();
 	UWacomBackpackZonePileWidget* Pile = PilePress.Pile.Get();
 	if (!InteractionModel || !PilePress.bActive || !Pile
 		|| !Pile->GetPileView().bMovable
@@ -1975,10 +1977,10 @@ bool UWacomBackpackWorkspaceWidget::TryBeginPileMove(
 		PilePress.LocalPosition,
 		PilePress.PileStartPosition))
 	{
-		Gesture.PileMoveSnapshot.Reset();
+		Gesture.ClearPileMoveSnapshot();
 		return false;
 	}
-	PilePress.Reset();
+	Gesture.ClearPilePress();
 	QueuePilePointer(Pointer);
 	FlushQueuedPilePointer();
 	StartPilePointerTracking();
@@ -1991,7 +1993,7 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingPilePress(
 	const FPointerEvent& Event)
 {
 	FWacomBackpackWorkspaceGestureController& Gesture = GetRuntime().Gesture;
-	FWacomBackpackPendingPilePress& PilePress = Gesture.PilePress;
+	const FWacomBackpackPendingPilePress PilePress = Gesture.GetPilePress();
 	UWacomBackpackZonePileWidget* Pile = PilePress.Pile.Get();
 	if (!InteractionModel || !PilePress.bActive || !Pile
 		|| PilePress.bOnDragHandle
@@ -2011,7 +2013,7 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingPilePress(
 		PilePress.LocalPosition,
 		PilePress.bControlDown);
 	InteractionModel->UpdateMarquee(Pointer);
-	PilePress.Reset();
+	Gesture.ClearPilePress();
 	const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
 		PreviousSelection,
 		InteractionModel->GetSelection().OrderedSelectedInstanceIds);
@@ -2030,7 +2032,8 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingBlankPress(
 	const FPointerEvent& Event)
 {
 	FWacomBackpackWorkspaceGestureController& Gesture = GetRuntime().Gesture;
-	FWacomBackpackPendingMarqueePress& MarqueePress = Gesture.MarqueePress;
+	const FWacomBackpackPendingMarqueePress MarqueePress =
+		Gesture.GetMarqueePress();
 	if (!InteractionModel || !MarqueePress.bActive
 		|| !Gesture.HasMarqueeDragThreshold(Event))
 	{
@@ -2052,7 +2055,7 @@ bool UWacomBackpackWorkspaceWidget::TryBeginMarqueeFromPendingBlankPress(
 	{
 		ClearExpandedPileFocus(true);
 	}
-	MarqueePress.Reset();
+	Gesture.ClearMarqueePress();
 	const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
 		PreviousSelection,
 		InteractionModel->GetSelection().OrderedSelectedInstanceIds);
@@ -2175,8 +2178,7 @@ void UWacomBackpackWorkspaceWidget::CapturePileMoveVisualSnapshot(
 	UWacomBackpackZonePileWidget& Pile,
 	const FWacomBackpackZoneKey& Zone)
 {
-	FWacomBackpackPileMoveVisualSnapshot& Snapshot = GetRuntime().Gesture.PileMoveSnapshot;
-	Snapshot.Reset();
+	FWacomBackpackPileMoveVisualSnapshot Snapshot;
 	if (const UCanvasPanelSlot* PileCanvasSlot = Cast<UCanvasPanelSlot>(Pile.Slot))
 	{
 		Snapshot.Pile = &Pile;
@@ -2186,11 +2188,13 @@ void UWacomBackpackWorkspaceWidget::CapturePileMoveVisualSnapshot(
 		Snapshot.ZOrder = PileCanvasSlot->GetZOrder();
 		Snapshot.bValid = true;
 	}
+	GetRuntime().Gesture.SetPileMoveSnapshot(Snapshot);
 }
 
 void UWacomBackpackWorkspaceWidget::RestoreAndClearPileMoveVisualSnapshot()
 {
-	FWacomBackpackPileMoveVisualSnapshot& Snapshot = GetRuntime().Gesture.PileMoveSnapshot;
+	const FWacomBackpackPileMoveVisualSnapshot Snapshot =
+		GetRuntime().Gesture.GetPileMoveSnapshot();
 	if (Snapshot.bValid)
 	{
 		if (UWacomBackpackZonePileWidget* Pile = Snapshot.Pile.Get())
@@ -2203,7 +2207,7 @@ void UWacomBackpackWorkspaceWidget::RestoreAndClearPileMoveVisualSnapshot()
 			Pile->SetRenderTranslation(FVector2D::ZeroVector);
 		}
 	}
-	Snapshot.Reset();
+	GetRuntime().Gesture.ClearPileMoveSnapshot();
 }
 
 FWacomBackpackZoneKey UWacomBackpackWorkspaceWidget::ResolveMarqueeSource(FVector2D LocalPointer) const
@@ -2227,9 +2231,7 @@ FReply UWacomBackpackWorkspaceWidget::BuildHandledPointerReply()
 	if ((InteractionModel && (InteractionModel->IsCarrying()
 			|| InteractionModel->IsMarqueeActive()
 			|| InteractionModel->IsPileMoving()))
-		|| GetRuntime().Gesture.CardPress.bActive
-		|| GetRuntime().Gesture.PilePress.bActive
-		|| GetRuntime().Gesture.MarqueePress.bActive)
+		|| GetRuntime().Gesture.HasAnyPendingPress())
 	{
 		return Reply.CaptureMouse(TakeWidget()).SetUserFocus(TakeWidget());
 	}
@@ -2403,18 +2405,19 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonUp(
 				break;
 			}
 		}
-		GetRuntime().Gesture.PileMoveSnapshot.Reset();
+		GetRuntime().Gesture.ClearPileMoveSnapshot();
 		OnPileMoveCommittedNative.Broadcast(
 			Completed.Zone.Zone,
 			Completed.Zone.OwnerInstanceId,
 			FVector2D(
 				WorkspaceSize.X > 1.0f ? Snapped.X / WorkspaceSize.X : 0.0f,
 				WorkspaceSize.Y > 1.0f ? Snapped.Y / WorkspaceSize.Y : 0.0f));
-		GetRuntime().Gesture.PilePress.Reset();
+		GetRuntime().Gesture.ClearPilePress();
 		GetRuntime().Presentation.bHasQueuedPilePointer = false;
 		return FReply::Handled().ReleaseMouseCapture();
 	}
-	FWacomBackpackPendingPilePress& PilePress = GetRuntime().Gesture.PilePress;
+	const FWacomBackpackPendingPilePress PilePress =
+		GetRuntime().Gesture.GetPilePress();
 	if (PilePress.bActive && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		ClearExpandedPileFocus(true);
@@ -2425,7 +2428,7 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonUp(
 			OnPileExpansionRequestedNative.Broadcast(
 				Pile->GetPileView().Zone, Pile->GetPileView().OwnerInstanceId, false);
 		}
-		PilePress.Reset();
+		GetRuntime().Gesture.ClearPilePress();
 		return FReply::Handled().ReleaseMouseCapture();
 	}
 	if (InteractionModel->IsMarqueeActive() && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
@@ -2449,13 +2452,14 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnMouseButtonUp(
 		OnInteractionChangedNative.Broadcast();
 		return FReply::Handled().ReleaseMouseCapture();
 	}
-	FWacomBackpackPendingMarqueePress& MarqueePress = GetRuntime().Gesture.MarqueePress;
+	const FWacomBackpackPendingMarqueePress MarqueePress =
+		GetRuntime().Gesture.GetMarqueePress();
 	if (MarqueePress.bActive && InMouseEvent.GetEffectingButton() == EKeys::LeftMouseButton)
 	{
 		const TArray<FGuid> PreviousSelection =
 			InteractionModel->GetSelection().OrderedSelectedInstanceIds;
 		InteractionModel->ClickBlank();
-		MarqueePress.Reset();
+		GetRuntime().Gesture.ClearMarqueePress();
 		UpdateSelectionVisualFreezeLifetime();
 		ClearExpandedPileFocus(true);
 		const TArray<FGuid> ChangedInstanceIds = BuildChangedInstanceIds(
@@ -2764,8 +2768,8 @@ FReply UWacomBackpackWorkspaceWidget::NativeOnKeyDown(
 	const bool bHasCancelablePointerInteraction =
 		(InteractionModel
 			&& (InteractionModel->IsCarrying() || InteractionModel->IsMarqueeActive() || InteractionModel->IsPileMoving()))
-		|| GetRuntime().Gesture.CardPress.bActive
-		|| GetRuntime().Gesture.PilePress.bActive;
+		|| GetRuntime().Gesture.HasPendingCardPress()
+		|| GetRuntime().Gesture.HasPendingPilePress();
 	if ((Key == EKeys::Escape || Key == EKeys::Gamepad_FaceButton_Right)
 		&& bHasCancelablePointerInteraction)
 	{
@@ -3612,7 +3616,7 @@ void UWacomBackpackWorkspaceWidget::CancelInteraction()
 	ClearExpandedPileFocus(false);
 	EndSelectionVisualFreeze(false);
 	RestoreAndClearPileMoveVisualSnapshot();
-	GetRuntime().Gesture.ResetTransient();
+	GetRuntime().Gesture.ResetPendingPresses();
 	GetRuntime().Presentation.SetCarryInputSuspended(false);
 	GetRuntime().Presentation.bPileCollapseAnimationPending = false;
 	if (InteractionModel)
@@ -4928,7 +4932,8 @@ FWacomBackpackWorkspaceAutomationTestView UWacomBackpackWorkspaceWidget::GetAuto
 	View.ExpandedPileLensRightStackCount = GetRuntime().Presentation.ExpandedPileFocus.LensRightStackCount;
 	View.bExpandedPileLensInputLocked = GetRuntime().Presentation.bExpandedPileLensInputLocked;
 	View.SelectionFrozenCardCount = GetVisualState().SelectionFrozenLayouts().Num();
-	View.bPileMoveRollbackSnapshotActive = GetRuntime().Gesture.PileMoveSnapshot.bValid;
+	View.bPileMoveRollbackSnapshotActive =
+		GetRuntime().Gesture.HasPileMoveSnapshot();
 	View.ExpandedPileFocusLayoutRebuildCount = GetRuntime().Presentation.ExpandedPileFocusLayoutRebuildCount;
 	View.bExpandedPileFocusExitPending = GetRuntime().Presentation.ExpandedPileFocus.bExitPending;
 	View.FullPresentationRefreshCount = FullPresentationRefreshCount;

@@ -63,11 +63,6 @@ struct FWacomBackpackPendingMarqueePress
 class WACOMAPP_API FWacomBackpackWorkspaceGestureController
 {
 public:
-	FWacomBackpackPendingCardPress CardPress;
-	FWacomBackpackPendingPilePress PilePress;
-	FWacomBackpackPendingMarqueePress MarqueePress;
-	FWacomBackpackPileMoveVisualSnapshot PileMoveSnapshot;
-
 	void BeginCardPress(
 		FGuid InstanceId,
 		FVector2D LocalPosition,
@@ -88,8 +83,51 @@ public:
 	bool HasCardDragThreshold(const FPointerEvent& Event) const;
 	bool HasPileDragThreshold(const FPointerEvent& Event) const;
 	bool HasMarqueeDragThreshold(const FPointerEvent& Event) const;
-	void ResetTransient();
+	bool HasPendingCardPress() const { return CardPress.bActive; }
+	bool HasPendingPilePress() const { return PilePress.bActive; }
+	bool HasPendingMarqueePress() const { return MarqueePress.bActive; }
+	bool HasAnyPendingPress() const
+	{
+		return HasPendingCardPress()
+			|| HasPendingPilePress()
+			|| HasPendingMarqueePress();
+	}
+	bool HasPileMoveSnapshot() const { return PileMoveSnapshot.bValid; }
+
+	const FWacomBackpackPendingCardPress& GetCardPress() const
+	{
+		return CardPress;
+	}
+	const FWacomBackpackPendingPilePress& GetPilePress() const
+	{
+		return PilePress;
+	}
+	const FWacomBackpackPendingMarqueePress& GetMarqueePress() const
+	{
+		return MarqueePress;
+	}
+	const FWacomBackpackPileMoveVisualSnapshot& GetPileMoveSnapshot() const
+	{
+		return PileMoveSnapshot;
+	}
+
+	void ClearCardPress() { CardPress.Reset(); }
+	void ClearPilePress() { PilePress.Reset(); }
+	void ClearMarqueePress() { MarqueePress.Reset(); }
+	void SetPileMoveSnapshot(
+		const FWacomBackpackPileMoveVisualSnapshot& Snapshot)
+	{
+		PileMoveSnapshot = Snapshot;
+	}
+	void ClearPileMoveSnapshot() { PileMoveSnapshot.Reset(); }
+	void ResetPendingPresses();
+	void Reset();
 
 private:
 	static bool HasDragThreshold(const FPointerEvent& Event, FVector2D ScreenOrigin);
+
+	FWacomBackpackPendingCardPress CardPress;
+	FWacomBackpackPendingPilePress PilePress;
+	FWacomBackpackPendingMarqueePress MarqueePress;
+	FWacomBackpackPileMoveVisualSnapshot PileMoveSnapshot;
 };

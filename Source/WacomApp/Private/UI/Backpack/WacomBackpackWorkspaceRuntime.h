@@ -35,8 +35,7 @@ public:
 		FrameScheduler.Reset();
 		SaleDeparture.Reset(true);
 		Motion.Reset();
-		Gesture.ResetTransient();
-		Gesture.PileMoveSnapshot.Reset();
+		Gesture.Reset();
 		Navigation.Clear();
 		Presentation.Reset();
 		VisualState.Reset();

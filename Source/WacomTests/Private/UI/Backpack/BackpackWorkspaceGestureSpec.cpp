@@ -62,7 +62,7 @@ bool FWacomUIBackpackWorkspaceGestureThresholdSpec::RunTest(const FString& Param
 	TestTrue(TEXT("Marquee uses the same screen-space threshold at another origin"),
 		Gesture.HasMarqueeDragThreshold(ShiftedFarEvent));
 
-	Gesture.ResetTransient();
+	Gesture.ResetPendingPresses();
 	TestFalse(TEXT("Reset clears pending marquee press"),
 		Gesture.HasMarqueeDragThreshold(ShiftedFarEvent));
 	return true;
