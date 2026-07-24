@@ -18,6 +18,7 @@ enum class EZoneKind : uint8;
 struct FWacomBackpackScreenAutomationTestView;
 struct FWacomBackpackWorkspaceAutomationTestView;
 struct FWacomBackpackExpandedPileFocusCard;
+struct FWacomBackpackDropFeedbackView;
 struct FWacomBackpackZonePileView;
 
 struct FWacomBackpackPickupPointerSequenceProbe
@@ -271,6 +272,25 @@ struct FWacomBackpackScreenTestAccess
 	static FText DeleteTargetLabelText(const UWacomBackpackScreen& Screen);
 	static FText DeleteTargetSecondaryText(const UWacomBackpackScreen& Screen);
 	static bool FocusWorkspaceDeleteTarget(UWacomBackpackScreen& Screen);
+	static bool FocusWorkspacePileTarget(
+		UWacomBackpackScreen& Screen,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId = FGuid());
+	static FWacomBackpackDropFeedbackView WorkspacePileDropFeedback(
+		const UWacomBackpackScreen& Screen,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId = FGuid());
+	static bool CommitWorkspacePilePositionAndReadBack(
+		UWacomBackpackScreen& Screen,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId,
+		FVector2D NormalizedPosition,
+		FVector2D& OutNormalizedPosition);
+	static bool ReadWorkspacePilePosition(
+		UWacomBackpackScreen& Screen,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId,
+		FVector2D& OutNormalizedPosition);
 	static bool IsWorkspaceCarryDropRejected(const UWacomBackpackScreen& Screen);
 	static bool SelectWorkspaceCarryInstance(
 		UWacomBackpackScreen& Screen,

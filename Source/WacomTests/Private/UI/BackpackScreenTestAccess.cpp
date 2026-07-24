@@ -33,6 +33,7 @@
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceRuntime.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceRuntimeHost.h"
+#include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceStateSubsystem.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceTypes.h"
 
 UWacomBackpackScreen* FWacomBackpackScreenTestAccess::Create(UObject* Outer, URunSession* RunSession)
@@ -1606,6 +1607,106 @@ bool FWacomBackpackScreenTestAccess::FocusWorkspaceDeleteTarget(
 	FWacomBackpackZoneKey Zone;
 	return Screen.WorkspaceWidget->GetFocusedReleaseTarget(Kind, Zone)
 		&& Kind == EWacomBackpackWorkspaceReleaseTargetKind::Delete;
+}
+
+bool FWacomBackpackScreenTestAccess::FocusWorkspacePileTarget(
+	UWacomBackpackScreen& Screen,
+	EZoneKind Zone,
+	FGuid OwnerInstanceId)
+{
+	if (!Screen.WorkspaceWidget || !Screen.WorkspaceInteractionModel
+		|| !Screen.WorkspaceInteractionModel->IsCarrying())
+	{
+		return false;
+	}
+	FWacomBackpackWorkspaceNavigationTarget PileTarget;
+	PileTarget.Kind =
+		EWacomBackpackWorkspaceNavigationTargetKind::Pile;
+	PileTarget.Zone =
+		FWacomBackpackZoneKey::Make(Zone, OwnerInstanceId);
+	PileTarget.Center = FVector2D(100.0f, 100.0f);
+	Screen.WorkspaceWidget->GetRuntime().Navigation.ReconcileTargets(
+		TArray<FWacomBackpackWorkspaceNavigationTarget>{ PileTarget });
+	Screen.WorkspaceWidget->GetRuntime().Navigation.ActivateSemanticFocus();
+	Screen.HandleWorkspaceInteractionChanged();
+	EWacomBackpackWorkspaceReleaseTargetKind Kind =
+		EWacomBackpackWorkspaceReleaseTargetKind::Pointer;
+	FWacomBackpackZoneKey FocusedZone;
+	return Screen.WorkspaceWidget->GetFocusedReleaseTarget(
+			Kind,
+			FocusedZone)
+		&& Kind == EWacomBackpackWorkspaceReleaseTargetKind::Pile
+		&& FocusedZone == PileTarget.Zone;
+}
+
+FWacomBackpackDropFeedbackView
+FWacomBackpackScreenTestAccess::WorkspacePileDropFeedback(
+	const UWacomBackpackScreen& Screen,
+	EZoneKind Zone,
+	FGuid OwnerInstanceId)
+{
+	if (Screen.WorkspaceWidget)
+	{
+		for (const TWeakObjectPtr<UWacomBackpackZonePileWidget>& WeakPile :
+			Screen.WorkspaceWidget->GetRegisteredPileWidgets())
+		{
+			const UWacomBackpackZonePileWidget* Pile = WeakPile.Get();
+			if (Pile
+				&& Pile->GetPileView().HasSameIdentity(
+					Zone,
+					OwnerInstanceId))
+			{
+				return Pile->GetDropFeedbackView();
+			}
+		}
+	}
+	return FWacomBackpackDropFeedbackView();
+}
+
+bool FWacomBackpackScreenTestAccess::
+	CommitWorkspacePilePositionAndReadBack(
+		UWacomBackpackScreen& Screen,
+		EZoneKind Zone,
+		FGuid OwnerInstanceId,
+		FVector2D NormalizedPosition,
+		FVector2D& OutNormalizedPosition)
+{
+	URunSession* Run = Screen.GetRunSession();
+	if (!Run)
+	{
+		return false;
+	}
+	Screen.HandlePileMoveCommitted(
+		Zone,
+		OwnerInstanceId,
+		NormalizedPosition);
+	return ReadWorkspacePilePosition(
+		Screen,
+		Zone,
+		OwnerInstanceId,
+		OutNormalizedPosition);
+}
+
+bool FWacomBackpackScreenTestAccess::ReadWorkspacePilePosition(
+	UWacomBackpackScreen& Screen,
+	EZoneKind Zone,
+	FGuid OwnerInstanceId,
+	FVector2D& OutNormalizedPosition)
+{
+	URunSession* Run = Screen.GetRunSession();
+	if (!Run)
+	{
+		return false;
+	}
+	const FWacomBackpackWorkspacePileLayoutEntry* Entry =
+		Screen.GetWorkspaceStateStore(Run).FindPileLayout(
+			FWacomBackpackZoneKey::Make(Zone, OwnerInstanceId));
+	if (!Entry)
+	{
+		return false;
+	}
+	OutNormalizedPosition = Entry->NormalizedPosition;
+	return true;
 }
 
 bool FWacomBackpackScreenTestAccess::IsWorkspaceCarryDropRejected(

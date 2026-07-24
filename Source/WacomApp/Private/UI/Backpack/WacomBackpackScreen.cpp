@@ -104,6 +104,38 @@ void AttachChildToHostAndFill(UPanelWidget& Host, UWidget& Child)
 		CanvasSlot->SetAutoSize(false);
 	}
 }
+
+bool BuildExternalPileDropRejection(
+	const UWacomBackpackWorkspaceWidget* Workspace,
+	const FWacomBackpackWorkspaceCarryState& Carry,
+	const FWacomBackpackZoneKey& Target,
+	FWacomBackpackDropFeedbackView& OutFeedback)
+{
+	if (!Workspace || Carry.SourceZone == Target)
+	{
+		return false;
+	}
+
+	FWacomBackpackZonePileView TargetView;
+	if (!Workspace->FindPileView(
+			Target.Zone,
+			Target.OwnerInstanceId,
+			TargetView)
+		|| TargetView.bAcceptsExternalCardDrop)
+	{
+		return false;
+	}
+
+	OutFeedback.State = EWacomBackpackDropFeedbackState::Rejected;
+	OutFeedback.Message = LOCTEXT(
+		"BurdenExternalDropRejected",
+		"负重区只接收容量溢出的卡牌");
+	OutFeedback.CurrentCount = TargetView.CardCount;
+	OutFeedback.IncomingCount = Carry.RemainingInstanceIds.Num();
+	OutFeedback.Capacity = TargetView.Capacity;
+	OutFeedback.bHasCapacity = TargetView.bHasCapacity;
+	return true;
+}
 }
 
 UWacomBackpackScreen::UWacomBackpackScreen(const FObjectInitializer& ObjectInitializer)
@@ -913,42 +945,59 @@ void UWacomBackpackScreen::HandleWorkspaceInteractionChanged()
 		if (ResolveWorkspacePileTarget(Target) && WorkspaceWidget)
 		{
 			FWacomBackpackDropFeedbackView Feedback;
-			Feedback.State = EWacomBackpackDropFeedbackState::Valid;
-			FWacomBackpackZonePileView TargetView;
-			if (WorkspaceWidget->FindPileView(Target.Zone, Target.OwnerInstanceId, TargetView))
+			if (!BuildExternalPileDropRejection(
+				WorkspaceWidget,
+				Carry,
+				Target,
+				Feedback))
 			{
-				Feedback.CurrentCount = TargetView.CardCount;
-				Feedback.Capacity = TargetView.Capacity;
-				Feedback.bHasCapacity = TargetView.bHasCapacity;
-			}
-			const bool bReturningToSource = Carry.SourceZone == Target;
-			Feedback.IncomingCount = bReturningToSource
-				? 0
-				: Carry.RemainingInstanceIds.Num();
-			Feedback.Message = FText::Format(
-				bReturningToSource
-					? LOCTEXT("ReturnToPileFeedback", "放回 {0}")
-					: LOCTEXT("MoveToPileFeedback", "放入 {0}"),
-				TargetView.Title.IsEmpty()
-					? LOCTEXT("UnknownPileFeedback", "目标区域")
-					: TargetView.Title);
-			if (!(Carry.SourceZone == Target))
-			{
-				const FRunDeckBatchMoveRequest PreviewRequest = FWacomBackpackCommandFlow::BuildBatchMoveRequest(
-					Carry,
-					Target,
-					Carry.RemainingInstanceIds);
-				URunSession* Run = GetRunSession();
-				FRunDeckBatchOperationValidation Validation;
-				if (Run)
+				Feedback.State = EWacomBackpackDropFeedbackState::Valid;
+				FWacomBackpackZonePileView TargetView;
+				if (WorkspaceWidget->FindPileView(
+					Target.Zone,
+					Target.OwnerInstanceId,
+					TargetView))
 				{
-					Validation = Run->ValidateMoveInstancesAtomic(PreviewRequest);
+					Feedback.CurrentCount = TargetView.CardCount;
+					Feedback.Capacity = TargetView.Capacity;
+					Feedback.bHasCapacity = TargetView.bHasCapacity;
 				}
-				if (!Run || !Validation.bCanExecute)
+				const bool bReturningToSource = Carry.SourceZone == Target;
+				Feedback.IncomingCount = bReturningToSource
+					? 0
+					: Carry.RemainingInstanceIds.Num();
+				Feedback.Message = FText::Format(
+					bReturningToSource
+						? LOCTEXT("ReturnToPileFeedback", "放回 {0}")
+						: LOCTEXT("MoveToPileFeedback", "放入 {0}"),
+					TargetView.Title.IsEmpty()
+						? LOCTEXT("UnknownPileFeedback", "目标区域")
+						: TargetView.Title);
+				if (!bReturningToSource)
 				{
-					Feedback.State = EWacomBackpackDropFeedbackState::Rejected;
-					Feedback.Message = FWacomBackpackCommandFlow::BuildMoveFailureToastText(
-						Run ? Validation.DisabledReason : NAME_None);
+					const FRunDeckBatchMoveRequest PreviewRequest =
+						FWacomBackpackCommandFlow::BuildBatchMoveRequest(
+							Carry,
+							Target,
+							Carry.RemainingInstanceIds);
+					URunSession* Run = GetRunSession();
+					FRunDeckBatchOperationValidation Validation;
+					if (Run)
+					{
+						Validation = Run->ValidateMoveInstancesAtomic(
+							PreviewRequest);
+					}
+					if (!Run || !Validation.bCanExecute)
+					{
+						Feedback.State =
+							EWacomBackpackDropFeedbackState::Rejected;
+						Feedback.Message =
+							FWacomBackpackCommandFlow::
+								BuildMoveFailureToastText(
+									Run
+										? Validation.DisabledReason
+										: NAME_None);
+					}
 				}
 			}
 			WorkspaceWidget->SetPileDropFeedback(
@@ -1639,6 +1688,20 @@ void UWacomBackpackScreen::HandleWorkspacePileReleaseIntent(
 	}
 
 	const FWacomBackpackWorkspaceCarryState& Carry = WorkspaceInteractionModel->GetCarry();
+	FWacomBackpackDropFeedbackView RejectedFeedback;
+	if (BuildExternalPileDropRejection(
+		WorkspaceWidget,
+		Carry,
+		PileTarget,
+		RejectedFeedback))
+	{
+		WorkspaceWidget->SetPileDropFeedback(
+			PileTarget.Zone,
+			PileTarget.OwnerInstanceId,
+			RejectedFeedback);
+		WorkspaceWidget->SetCarryDropFeedbackState(false, true);
+		return;
+	}
 	if (Carry.SourceZone == PileTarget)
 	{
 		FWacomBackpackWorkspaceStateStore& Store = GetWorkspaceStateStore(Run);

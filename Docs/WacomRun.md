@@ -214,7 +214,9 @@ B 主卡只能位于 `Backpack` 或 `BattleDeck`，不能进入自己的 Special
 
 通量区超容时，普通卡和 A 类容器卡可进入 `BurdenZone`；B 主卡不会被挪入负重区。备战区超容时，卡优先回通量区，通量区接不住再进负重区。
 
-正式背包 UI 不暴露玩家主动拖入 `BurdenZone` 的 DropTarget。`BurdenZone` 能否接收某张卡仍属于 Run 规则 contract，由 `URunSession::ValidateMoveInstance` / `MoveInstance` 决定；App 层不再用额外 `InvalidTargetZone` 特判覆盖该规则。规则入口显式移动到 `BurdenZone` 时会刷新负重压力，但不会在同一事务里把该卡自动回填到其他可容纳区。
+正式背包 UI 会显示、命中并聚焦 `BurdenZone` 牌堆，但它不是玩家可主动存入的目标。来自 `Backpack / BattleDeck / SpecialZone` 的 Pointer 或无鼠标释放由 `WacomApp` 在调用 Run 预检/事务前统一 Rejected，保持 Carry 和 revision；`BurdenZone` 的 UI 入站只来自 `RecomputeBurden()`。`URunSession::ValidateMoveInstance` / `MoveInstance` 仍保留领域级显式移动 contract，供规则、测试和未来非背包流程使用；规则入口显式移动到 `BurdenZone` 时会刷新负重压力，但不会在同一事务里把该卡自动回填到其他可容纳区。
+
+`BurdenZone` 内的卡仍是完整已拥有实体，不是投影或只读副本。背包展开负重牌堆后可选择、框选、Carry、出售或向通量/备战/特殊区发起现有原子批量移动；目标容量、卡牌类型、DeleteProvider 和永久移除保护仍由 Run 权威校验。放回原负重堆是 App 布局收拢，不调用 Run mutation。
 
 负重压力公式：
 

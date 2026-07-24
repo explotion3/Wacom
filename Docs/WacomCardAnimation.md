@@ -100,7 +100,7 @@ Battle 的 `FWacomFirstPersonCardDepthMotion` 与 Backpack 的表现控制器共
 
 `SettlementLayer` 在收落完成前继续拥有原卡牌 Widget，并且必须加入 Scene Reconciler 的现有实例搜索集合。Reconciler 按完整 ViewKey 去重：瞬态层中的权威 Widget 优先于静态副本，从而保证“框选—携带—放下—再次框选”不会产生重复卡面。若玩家在收落完成前再次拿起同一卡牌，Carry 必须原子接管该 Widget：撤销旧 Settlement target、未消费的完成通知和旧局部运动后，再通过同一 Slate 保活入口从 Settlement 重挂到携带层；禁止让 Settlement 与 Carry 同时持有一张卡，否则按需帧 Timer 会被永远无法完成的旧目标持续唤醒。真正销毁、去重或删除卡牌时不使用保活迁移，仍正常释放其 Slate/Retainer 子树。
 
-浏览焦点使用完整显示身份与实际 Widget 引用，允许投影卡、特殊区主卡和负重卡共享详情与动效，同时保留只读规则；Interaction Model 则只接收按物理 `InstanceId` 去重后的可移动实体身份，不能让同 ID 投影覆盖实体来源。焦点卡是唯一实时卡面；邻居只移动缓存后的外层姿态。多卡携带起手时默认最右释放卡保持平放；一旦滚轮发生过有效切换，之后滚轮选中的任意当前卡（含重新切回默认最右卡）都上抬并获得最高 ZOrder。`Simplified Motion` 下普通 Hover、展开焦点与携带当前卡都不叠加空间上抬、角度补偿或视觉弹簧，模式切换必须清除既有偏移。指针热路径始终只更新 `CarryRoot`，不能随卡数线性增加焦点求解或 Retainer 重绘。
+浏览焦点使用完整显示身份与实际 Widget 引用，允许投影卡、特殊区主卡和负重卡共享详情与动效；其中投影和特殊区主卡保留只读规则，负重卡作为完整物理实体可进入选择与 Carry。Interaction Model 只接收按物理 `InstanceId` 去重后的可移动实体身份，不能让同 ID 投影覆盖实体来源。焦点卡是唯一实时卡面；邻居只移动缓存后的外层姿态。多卡携带起手时默认最右释放卡保持平放；一旦滚轮发生过有效切换，之后滚轮选中的任意当前卡（含重新切回默认最右卡）都上抬并获得最高 ZOrder。`Simplified Motion` 下普通 Hover、展开焦点与携带当前卡都不叠加空间上抬、角度补偿或视觉弹簧，模式切换必须清除既有偏移。指针热路径始终只更新 `CarryRoot`，不能随卡数线性增加焦点求解或 Retainer 重绘。
 
 ## §4 目标管线
 

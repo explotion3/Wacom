@@ -112,10 +112,10 @@ Workspace 的统一 post-child overlay 顺序固定为：完整 UMG/Slate/Retain
 
 ## 内嵌牌堆合同
 
-- 备战区、特殊区是可移动普通牌堆；负重区是右上固定警告牌匣，销毁区固定在右下。
+- 备战区、特殊区和负重区都是可移动牌堆；负重区继续使用警告外观，销毁区固定在右下。
 - 折叠与展开复用同一批完整 `UWacomDeckCardWidget`；不得在展开时复制、替换或临时创建另一套卡牌。
 - 折叠牌堆显示全部真实卡面：复用 `296×420` Battle 原生卡面，以 `CardDisplayScale=0.78` 的固定背包显示缩放得到约 `231×328` 的布局与命中尺寸；卡牌零旋转、水平露出默认 `16px`（可在 `10–24px` 内适配），最前卡完整显示。
-- 特殊区第一张是真实主卡身份预览，之后是全部内容卡；主卡不可操作但保持正常不透明度并显示“主卡”标识。负重区显示全部负重卡并保持锁定。
+- 特殊区第一张是真实主卡身份预览，之后是全部内容卡；主卡不可操作但保持正常不透明度并显示“主卡”标识。负重区显示全部负重实体卡；展开后使用普通实体卡的选择、框选、Carry、键盘和手柄合同。
 - 备战实体卡和投影卡都常驻；投影卡保持只读、`0.72` 透明度和来源角标。
 - 备战投影卡在展开区保持只读、半透明并显示来源角标，不参与选择、框选、携带或批量移动。
 - 只有标题拖柄可移动整堆；标题或牌堆主体短点切换展开。卡牌、牌堆和内容区框选统一使用 Slate 的屏幕空间拖拽阈值（`FSlateApplication::HasTraveledFarEnoughToTriggerDrag`），由平台与 DPI 校准；不得再写本地坐标 `5px` 常量。打开新堆时旧堆先收拢。
@@ -124,13 +124,13 @@ Workspace 的统一 post-child overlay 顺序固定为：完整 UMG/Slate/Retain
 - 编辑器调参入口为 `WBP_BackpackScreen → WorkspaceStyle → DA_BackpackWorkspaceStyle`。展开牌堆只消费 `HandLensFullGapPixels / HandLensCompressedExposurePixels / HandLensMinimumExposurePixels / HandLensPromotionOverlapTolerancePixels`；`FocusWindowMaximumCards / FocusWindowFullGapPixels / FocusWindowCompressedExposurePixels / FocusWindowMinimumExposurePixels` 保留给多卡携带，用户制作值互不覆盖。多卡携带的 `FocusWindowMaximumCards` 正式基线为 `1`，因此只完整展示当前滚轮卡，其余卡进入左右压缩段；仍可在 Style 中调高以同时完整展示相邻卡。Style 版本 4 在版本 3 的区域 Appearance、投放反馈和响应式详情之上增加四个可访问性图标 Brush；已有运动、Hand Lens 和用户微调值必须原样保留。Builder 对已有 Style 只复用、不写入、不保存；仅在资产缺失时按当前基线创建。v3 → v4 定向迁移已经完成且一次性实现已删除；当前正式合同由 `Wacom.UI.Backpack.Workspace.FormalAssetBinding` 验证。未来资产 mutation 必须重新取得精确范围授权并遵循 Unreal MCP 工作流。
 - 牌堆身份使用颜色、单色图标和轮廓三重编码：备战冷蓝双线框、特殊紫色切角框、负重琥珀加重警示框、销毁红色破损卡牌与危险框。图标和九宫格纹理由 Builder 在缺失时确定性创建，Style Brush 保持可着色；不得在卡牌材质或 Run 规则中硬编码区域主题。
 - 标题拖柄必须始终位于可见卡身上方。展开牌堆基础卡位需预留 `ExpandedCardHoverLiftPixels` 的垂直净空，使焦点卡上抬后仍不覆盖标题；不得仅靠提高整个牌框层级而截断卡牌输入。
-- 投放反馈为 `None / Valid / Rejected / Destructive` 四态 ViewData。合法目标使用区域强调色和容量预览，拒绝显示规则层返回的原因，危险状态只用于销毁目标；所有反馈层均 `HitTestInvisible`，原子拒绝后保持携带。
+- 投放反馈为 `None / Valid / Rejected / Destructive` 四态 ViewData。合法目标使用区域强调色和容量预览，拒绝显示规则层或 Screen 入站策略返回的原因，危险状态只用于销毁目标；所有反馈层均 `HitTestInvisible`，原子拒绝后保持携带。负重牌堆使用 C++-only `bAcceptsExternalCardDrop=false`：外部来源显示“负重区只接收容量溢出的卡牌”，不自动展开、不调用 Run；负重来源放回原堆仍合法。
 - 详情响应式模式由 Screen 几何决定：逻辑宽度不低于 `DetailDockBreakpointPixels`（基线 1600）时预留 `DetailDockWidthPixels`（基线 360）的固定检查栏；窄屏把同一详情 Widget 重挂到 `CardDetailLayer`，使用 `DetailFloatingSize` 并在卡牌相反侧夹紧。模式切换不得重建卡牌或详情 Widget，也不得改变 Workspace Snapshot。
 - 展开布局按当前卡数和工作台几何预先计算稳定 `FrameRect` / 透镜走廊；鼠标横坐标映射为 `0..CardCount-1` 的连续 `LensFocus`，只有左堆、完整区、右堆的目标身份发生变化时才重排，同一段内移动只更新 Fake3D。整个牌列从当前视觉姿态平滑滑向新目标，默认约 `0.32s` Ease-Out；透镜布局焦点与浏览卡身份必须分离。真实 PointerMove 按当前插值后的视觉卡身与 Canvas ZOrder 获取新浏览卡，重叠位置选择实际显示在最上层的卡，完整卡之间的真实空隙不命中卡牌。随后统一 Frame Scheduler 对同一缓存指针优先使用当前卡的实际卡身、稳定目标卡身和目标可见条带保持身份；只有这三者都不再覆盖指针时才重新解析其它视觉卡。PointerDown 复用该稳定身份。标题拖柄始终拥有最高输入优先级；进入标题冻结最后透镜布局并清除浏览焦点。详情面板使用 Workspace 捕获的实际视觉矩形，经 Workspace → Absolute → `CardDetailLayer` 四角转换后定位。
 - 展开牌堆可按住左 Shift 临时锁定当前 Hand Lens 三段布局。锁定只阻止 `LensFocus` 驱动的新布局求解，实际视觉卡身命中、详情、Fake3D 和普通左键拾取仍正常；松开左 Shift 后立即使用最新缓存鼠标位置恢复重排。开始携带、框选、CardPress、整堆移动、Suspended、收起/切换牌堆、失焦或关闭背包时必须清除该瞬态锁定。Ctrl 多选合同不变。
 - 焦点卡上抬并置顶，不缩放、不改卡面透明度；邻居仅水平移动外层局部姿态。鼠标离开实际卡身后默认等待 `0.12s`，随后只清除上抬、详情和实时卡面，最后一次三段式窗口冻结到该牌堆收起或切换，不返回首次中央窗口。
-- 投影卡、特殊区主卡和负重卡可以进入焦点牌列、启用详情浏览和上抬反馈，但继续保持各自透明度、角标和只读语义，不能选择、框选或携带。
-- 牌堆释放吸附到默认 `16px` 网格或邻近边缘；主体允许部分重叠，但标题拖柄不能相互覆盖，且始终夹紧在 Workspace 内。
+- 投影卡和特殊区主卡可以进入焦点牌列、启用详情浏览和上抬反馈，但继续保持各自透明度、角标和只读语义，不能选择、框选或携带。负重卡不属于只读类型，展开后可选择、框选、携带、跨区移动和出售。
+- 牌堆释放吸附到默认 `16px` 网格或邻近边缘；主体允许部分重叠，但标题拖柄不能相互覆盖，且始终夹紧在 Workspace 内。负重牌堆清空并暂时消失时保留同一 Run 的手工位置和层级，再次出现时恢复；新 Run 或“重置牌堆布局”清除。
 - 普通动效只插值位置和角度；展开/收起默认 `0.18s`，吸附默认 `0.12s`。禁止卡面淡入和动态缩放。
 - Workspace 只能拥有一个按需帧 `ActiveTimer`。`FrameScheduler` 只维护 Presentation Dirty、Frame Work、generation 和延迟补绘任务合同；`PresentationController` 决定并执行“刷新 → 几何 → 指针/延迟 → 运动/Settlement/出售 → 最终视觉命中 → 收起交接 → 卡面补绘”的固定阶段。`RuntimeHost` 只把当前 Geometry、Style、InteractionModel、Registry、Canvas 事实和 UMG/Slate 应用操作提供给 Controller，不保存平行状态。多个刷新请求同帧合并，局部卡牌按 `InstanceId` 取并集，全卡请求覆盖局部集合；帧内新增任务推迟到下一帧。收起完成由实际布局过渡全部结束触发，不使用与 Style 时长平行的回调 Timer。Retainer 最早在请求后的下一次 Slate 调度帧补绘；几何未稳定、卡层不可见或 retained rendering 暂停时保留请求但不空转。没有 Dirty、连续 Work 或到期补绘时 Timer 自动停止。这项为 C++ 性能合同，不需要新增 WBP 节点或重存 `DA_BackpackWorkspaceStyle`。
 - 展开/收起过渡使用一次捕获的固定起点和最终目标；同一 Snapshot 或稳定几何刷新重复提交相同目标时必须保留当前 elapsed transition，不得取消过渡并把整组卡牌瞬移到水平终点。收起时每张需要移动的卡必须直接前往最终折叠位置，禁止先聚到标题中心或其它共享中间点再二次排布；已处于最终位置的锚定卡不创建无意义过渡。
@@ -148,7 +148,7 @@ Workspace 交互模式互斥：`Idle / CardPress / Marquee / Carry / PileMove / 
 
 释放意图必须显式标注 `Pointer / Flux / Pile / Delete` 和目标 Zone。Pointer 保留精确坐标；Flux 释放会清除该卡手工布局并交给确定性布局器；Pile 复用现有原子移动，Delete 在释放时直接预检并提交原子出售。Passive Widget 只广播意图，Run 写入仍由 Screen command flow 提交。
 
-- 选择只属于一个来源区。Interaction Model 只接收按物理 `InstanceId` 去重后的可移动实体卡；同一卡的投影、特殊区主卡预览和负重卡仅进入浏览表现，不得进入选择/携带命中表。通量背景框选只命中通量卡；折叠或展开牌堆的内容背景框选只命中该牌堆的可移动实体卡。折叠状态禁止卡牌本体直接点击，但不能因此从框选命中表移除实体卡；切换来源会清除旧选择。
+- 选择只属于一个来源区。Interaction Model 只接收按物理 `InstanceId` 去重后的可移动实体卡；同一卡的投影和特殊区主卡预览仅进入浏览表现，不得进入选择/携带命中表，负重实体卡则正常进入。通量背景框选只命中通量卡；折叠或展开牌堆的内容背景框选只命中该牌堆的可移动实体卡。折叠状态禁止卡牌本体直接点击，但不能因此从框选命中表移除实体卡；切换来源会清除旧选择。
 - `CardPress`、携带、整堆移动和 Suspended 会锁定或清除展开牌堆浏览焦点。框选或 Ctrl 选择开始时捕获当前实际卡位、角度和 ZOrder，停止未完成的局部重排并让 Interaction Model 使用这份视觉快照；冻结保持到选择清空、开始携带、牌堆收起或来源区切换，退出时从当前视觉姿态连续返回最后窗口，不得瞬移。
 - 展开牌堆的新 Hover 焦点由真实 PointerMove 按实际视觉卡身和 Canvas ZOrder 获取；动画帧内的缓存指针由当前视觉卡身、Hand Lens 稳定目标卡身和当前目标可见条带联合保持。其它重叠实体卡不得仅因当前卡上浮或临时 ZOrder 变化抢占静止指针；真实指针移动仍可重新获取其它可见卡。牌堆标题区域继续立即清除焦点。`CardMotionRoot` 上浮不得反向改变自身 Hover 条件或造成静止鼠标下的 Enter/Leave 循环。
 - 普通左键按下任意可移动卡牌时，Interaction Model 必须在同一输入帧确定选择集合并进入 `Carry`；不得先清除浏览焦点后等待后续 `PointerMove`。对应第一次左键松开只消费起手释放保护并保持携带。Ctrl 点击继续作为多选编辑手势，不强制立即起手。
