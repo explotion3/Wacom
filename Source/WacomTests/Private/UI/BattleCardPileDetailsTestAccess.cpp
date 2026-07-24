@@ -15,7 +15,16 @@
 UWacomBattleCardPileItemViewModel* FWacomBattleCardPileDetailsTestAccess::GetFirstItem(
 	UWacomBattleCardPileDetailsScreen& Screen)
 {
-	return Screen.ItemViewModels.IsEmpty() ? nullptr : Screen.ItemViewModels[0].Get();
+	return GetItem(Screen, 0);
+}
+
+UWacomBattleCardPileItemViewModel* FWacomBattleCardPileDetailsTestAccess::GetItem(
+	UWacomBattleCardPileDetailsScreen& Screen,
+	int32 Index)
+{
+	return Screen.ItemViewModels.IsValidIndex(Index)
+		? Screen.ItemViewModels[Index].Get()
+		: nullptr;
 }
 
 void FWacomBattleCardPileDetailsTestAccess::AttachEntry(
@@ -25,6 +34,45 @@ void FWacomBattleCardPileDetailsTestAccess::AttachEntry(
 {
 	Entry.NativeOnListItemObjectSet(&Item);
 	Screen.HandleEntryWidgetGenerated(Entry);
+}
+
+void FWacomBattleCardPileDetailsTestAccess::ReleaseEntry(
+	UWacomBattleCardPileDetailsScreen& Screen,
+	UBattleCardPileEntryWidget& Entry)
+{
+	Screen.HandleEntryWidgetReleased(Entry);
+	Entry.NativeOnEntryReleased();
+}
+
+void FWacomBattleCardPileDetailsTestAccess::ClickItem(
+	UWacomBattleCardPileDetailsScreen& Screen,
+	UWacomBattleCardPileItemViewModel& Item)
+{
+	Screen.HandleItemClicked(&Item);
+}
+
+void FWacomBattleCardPileDetailsTestAccess::ScrollList(
+	UWacomBattleCardPileDetailsScreen& Screen)
+{
+	Screen.HandleListViewScrolled(0.0f, 0.0f);
+}
+
+void FWacomBattleCardPileDetailsTestAccess::Advance(
+	UWacomBattleCardPileDetailsScreen& Screen,
+	float DeltaSeconds)
+{
+	Screen.NativeTick(FGeometry(), DeltaSeconds);
+}
+
+void FWacomBattleCardPileDetailsTestAccess::ApplyResponsiveLayout(
+	UWacomBattleCardPileDetailsScreen& Screen,
+	const FVector2D& ViewportPixels,
+	float GlobalUIScale)
+{
+	Screen.ResolveAndApplyResponsiveCardLayout(
+		ViewportPixels,
+		GlobalUIScale,
+		true);
 }
 
 void FWacomBattleCardPileDetailsTestAccess::HoverEntry(
@@ -38,6 +86,20 @@ void FWacomBattleCardPileDetailsTestAccess::HoverEntry(
 	else
 	{
 		Entry.NativeOnMouseLeave(FPointerEvent());
+	}
+}
+
+void FWacomBattleCardPileDetailsTestAccess::FocusEntry(
+	UBattleCardPileEntryWidget& Entry,
+	bool bFocused)
+{
+	if (bFocused)
+	{
+		Entry.NativeOnAddedToFocusPath(FFocusEvent());
+	}
+	else
+	{
+		Entry.NativeOnRemovedFromFocusPath(FFocusEvent());
 	}
 }
 
@@ -82,6 +144,16 @@ FVector2D FWacomBattleCardPileDetailsTestAccess::GetCardSize(
 {
 	return Entry.CardHost
 		? FVector2D(Entry.CardHost->GetWidthOverride(), Entry.CardHost->GetHeightOverride())
+		: FVector2D::ZeroVector;
+}
+
+FVector2D FWacomBattleCardPileDetailsTestAccess::GetEntrySize(
+	const UBattleCardPileEntryWidget& Entry)
+{
+	return Entry.EntrySizeBox
+		? FVector2D(
+			Entry.EntrySizeBox->GetWidthOverride(),
+			Entry.EntrySizeBox->GetHeightOverride())
 		: FVector2D::ZeroVector;
 }
 

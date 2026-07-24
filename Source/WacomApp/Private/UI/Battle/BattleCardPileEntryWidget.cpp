@@ -9,6 +9,7 @@
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/ScaleBox.h"
 #include "Components/SizeBox.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -29,8 +30,8 @@ TSharedRef<SWidget> UBattleCardPileEntryWidget::RebuildWidget()
 		}
 
 		EntrySizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("EntrySizeBox"));
-		EntrySizeBox->SetWidthOverride(320.0f);
-		EntrySizeBox->SetHeightOverride(448.0f);
+		EntrySizeBox->SetWidthOverride(198.0f);
+		EntrySizeBox->SetHeightOverride(274.0f);
 		WidgetTree->RootWidget = EntrySizeBox;
 
 		UOverlay* EntryOverlay = WidgetTree->ConstructWidget<UOverlay>(UOverlay::StaticClass(), TEXT("EntryOverlay"));
@@ -46,8 +47,15 @@ TSharedRef<SWidget> UBattleCardPileEntryWidget::RebuildWidget()
 		}
 
 		CardHost = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("CardHost"));
-		CardHost->SetWidthOverride(296.0f);
-		CardHost->SetHeightOverride(420.0f);
+		CardHost->SetWidthOverride(178.0f);
+		CardHost->SetHeightOverride(252.0f);
+		CardHost->SetVisibility(ESlateVisibility::HitTestInvisible);
+		CardScaleBox = WidgetTree->ConstructWidget<UScaleBox>(
+			UScaleBox::StaticClass(), TEXT("CardScaleBox"));
+		CardScaleBox->SetStretch(EStretch::ScaleToFit);
+		CardScaleBox->SetStretchDirection(EStretchDirection::DownOnly);
+		CardScaleBox->SetVisibility(ESlateVisibility::HitTestInvisible);
+		CardHost->SetContent(CardScaleBox);
 		if (UOverlaySlot* CardSlot = EntryOverlay->AddChildToOverlay(CardHost))
 		{
 			CardSlot->SetHorizontalAlignment(HAlign_Center);
@@ -96,43 +104,7 @@ void UBattleCardPileEntryWidget::NativeOnListItemObjectSet(UObject* ListItemObje
 	ItemViewModel = Cast<UWacomBattleCardPileItemViewModel>(ListItemObject);
 	if (const UWacomBattleCardPileItemViewModel* Item = ItemViewModel.Get())
 	{
-		if (SelectionOutlineImage)
-		{
-			if (UOverlaySlot* SelectionSlot = Cast<UOverlaySlot>(SelectionOutlineImage->Slot))
-			{
-				const float HorizontalRoom = FMath::Max(
-					0.0f,
-					Item->EntrySize.X - Item->CardSize.X);
-				const float VerticalRoom = FMath::Max(
-					0.0f,
-					Item->EntrySize.Y - Item->CardSize.Y);
-				const float HorizontalPadding = FMath::Max(
-					0.0f,
-					HorizontalRoom * 0.5f - Item->SelectionOutlineExtentPixels);
-				const float VerticalPadding = FMath::Max(
-					0.0f,
-					VerticalRoom * 0.5f - Item->SelectionOutlineExtentPixels);
-				SelectionSlot->SetPadding(FMargin(
-					HorizontalPadding,
-					VerticalPadding));
-			}
-		}
-		if (EntrySizeBox)
-		{
-			EntrySizeBox->SetWidthOverride(FMath::Max(1.0f, Item->EntrySize.X));
-			EntrySizeBox->SetHeightOverride(FMath::Max(1.0f, Item->EntrySize.Y));
-		}
-		if (CardHost)
-		{
-			CardHost->SetWidthOverride(FMath::Max(1.0f, Item->CardSize.X));
-			CardHost->SetHeightOverride(FMath::Max(1.0f, Item->CardSize.Y));
-		}
-		SetSelectionPresentation(
-			Item->SelectionOutlineMaterial,
-			Item->HoverOutlineAmount,
-			Item->LockedOutlineAmount,
-			Item->SelectionOutlineExtentPixels,
-			Item->bReducedMotion);
+		RefreshResolvedLayout();
 		EnsureCardView(Item->CardViewClass);
 		if (RuntimeCardView)
 		{
@@ -141,6 +113,53 @@ void UBattleCardPileEntryWidget::NativeOnListItemObjectSet(UObject* ListItemObje
 	}
 	bLockedSelected = false;
 	ApplySelectionState();
+}
+
+void UBattleCardPileEntryWidget::RefreshResolvedLayout()
+{
+	const UWacomBattleCardPileItemViewModel* Item = ItemViewModel.Get();
+	if (!Item)
+	{
+		return;
+	}
+
+	if (SelectionOutlineImage)
+	{
+		if (UOverlaySlot* SelectionSlot = Cast<UOverlaySlot>(SelectionOutlineImage->Slot))
+		{
+			const float HorizontalRoom = FMath::Max(
+				0.0f,
+				Item->EntrySize.X - Item->CardSize.X);
+			const float VerticalRoom = FMath::Max(
+				0.0f,
+				Item->EntrySize.Y - Item->CardSize.Y);
+			const float HorizontalPadding = FMath::Max(
+				0.0f,
+				HorizontalRoom * 0.5f - Item->SelectionOutlineExtentPixels);
+			const float VerticalPadding = FMath::Max(
+				0.0f,
+				VerticalRoom * 0.5f - Item->SelectionOutlineExtentPixels);
+			SelectionSlot->SetPadding(FMargin(
+				HorizontalPadding,
+				VerticalPadding));
+		}
+	}
+	if (EntrySizeBox)
+	{
+		EntrySizeBox->SetWidthOverride(FMath::Max(1.0f, Item->EntrySize.X));
+		EntrySizeBox->SetHeightOverride(FMath::Max(1.0f, Item->EntrySize.Y));
+	}
+	if (CardHost)
+	{
+		CardHost->SetWidthOverride(FMath::Max(1.0f, Item->CardSize.X));
+		CardHost->SetHeightOverride(FMath::Max(1.0f, Item->CardSize.Y));
+	}
+	SetSelectionPresentation(
+		Item->SelectionOutlineMaterial,
+		Item->HoverOutlineAmount,
+		Item->LockedOutlineAmount,
+		Item->SelectionOutlineExtentPixels,
+		Item->bReducedMotion);
 }
 
 void UBattleCardPileEntryWidget::NativeOnItemSelectionChanged(bool /*bIsSelected*/)
@@ -201,7 +220,7 @@ void UBattleCardPileEntryWidget::NativeOnRemovedFromFocusPath(const FFocusEvent&
 void UBattleCardPileEntryWidget::EnsureCardView(
 	TSubclassOf<UWacomCardView> RequestedClass)
 {
-	if (!CardHost)
+	if (!CardHost || !CardScaleBox)
 	{
 		return;
 	}
@@ -220,7 +239,7 @@ void UBattleCardPileEntryWidget::EnsureCardView(
 		return;
 	}
 
-	CardHost->ClearChildren();
+	CardScaleBox->ClearChildren();
 	RuntimeCardView = GetWorld()
 		? CreateWidget<UWacomCardView>(this, ClassToUse)
 		: NewObject<UWacomCardView>(this, ClassToUse);
@@ -228,7 +247,7 @@ void UBattleCardPileEntryWidget::EnsureCardView(
 	{
 		RuntimeCardView->SetSurfaceFoilEnabled(false);
 		RuntimeCardView->SetVisibility(ESlateVisibility::HitTestInvisible);
-		CardHost->SetContent(RuntimeCardView);
+		CardScaleBox->SetContent(RuntimeCardView);
 	}
 }
 

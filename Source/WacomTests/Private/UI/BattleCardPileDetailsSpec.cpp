@@ -6,6 +6,7 @@
 #include "Components/Button.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Components/Image.h"
+#include "Components/ScaleBox.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "InputCoreTypes.h"
@@ -111,7 +112,7 @@ bool FWacomUIBattleCardPileDetailsScreenSpec::RunTest(const FString& /*Parameter
 		View.VisibleRuntimeCosts.Num() == 2
 		&& View.VisibleRuntimeCosts[0] == 1
 		&& View.VisibleRuntimeCosts[1] == 4);
-	TestFalse(TEXT("Opening the page does not lock a card by default"), View.LockedInstanceId.IsValid());
+	TestFalse(TEXT("Opening the page does not pin a card by default"), View.PinnedInstanceId.IsValid());
 	TestFalse(TEXT("Opening the page does not show card details by default"), View.bDetailVisible);
 
 	UButton* DiscardTab = WacomBattleCardPileDetailsSpec::FindButton(*Screen, TEXT("DiscardTabButton"));
@@ -131,19 +132,23 @@ bool FWacomUIBattleCardPileDetailsScreenSpec::RunTest(const FString& /*Parameter
 	View = Screen->GetAutomationTestView();
 	TestEqual(TEXT("Discard tab shows the true discard section by default"),
 		View.VisibleInstanceIds.Num(), 1);
-	TestTrue(TEXT("Discard title reports both discard sub-section counts"),
-		Title && Title->GetText().ToString().Contains(TEXT("1+1")));
+	TestEqual(TEXT("Discard title reports only the active discard section"),
+		Title ? Title->GetText().ToString() : FString(),
+		FString(TEXT("弃牌堆 · 1")));
 
 	PlayedSection->OnClicked.Broadcast();
 	View = Screen->GetAutomationTestView();
 	TestEqual(TEXT("Played subsection is separate from discard"),
 		View.ActiveDiscardSection, EWacomBattlePileDiscardSection::Played);
 	TestEqual(TEXT("Played subsection exposes its own instances"), View.VisibleInstanceIds.Num(), 1);
+	TestEqual(TEXT("Played title reports only the active played section"),
+		Title ? Title->GetText().ToString() : FString(),
+		FString(TEXT("本回合已使用 · 1")));
 
 	ExhaustTab->OnClicked.Broadcast();
 	View = Screen->GetAutomationTestView();
 	TestEqual(TEXT("Exhaust is an independent tab"), View.ActiveTab, EWacomBattlePileDetailsTab::Exhaust);
-	TestTrue(TEXT("Empty exhaust section clears the prior selection"), View.bEmpty && !View.LockedInstanceId.IsValid());
+	TestTrue(TEXT("Empty exhaust section clears the prior selection"), View.bEmpty && !View.PinnedInstanceId.IsValid());
 	return true;
 }
 
@@ -209,9 +214,9 @@ bool FWacomUIBattleCardPileDetailsFormalAssetsSpec::RunTest(const FString& /*Par
 		EntryBlueprint->ParentClass
 		&& EntryBlueprint->ParentClass->IsChildOf(UBattleCardPileEntryWidget::StaticClass()));
 	TestTrue(TEXT("Screen carries deterministic builder marker"),
-		ScreenBlueprint->BlueprintDescription.Contains(TEXT("WacomBattlePileDetailsWBP.ContractVersion=5")));
+		ScreenBlueprint->BlueprintDescription.Contains(TEXT("WacomBattlePileDetailsWBP.ContractVersion=7")));
 	TestTrue(TEXT("Entry carries deterministic builder marker"),
-		EntryBlueprint->BlueprintDescription.Contains(TEXT("WacomBattlePileDetailsWBP.ContractVersion=5")));
+		EntryBlueprint->BlueprintDescription.Contains(TEXT("WacomBattlePileDetailsWBP.ContractVersion=7")));
 	TestNotNull(TEXT("Screen exposes the left navigation rail"),
 		ScreenBlueprint->WidgetTree->FindWidget(TEXT("NavigationRail")));
 	TestNotNull(TEXT("Draw navigation exposes its icon image"),
@@ -220,6 +225,28 @@ bool FWacomUIBattleCardPileDetailsFormalAssetsSpec::RunTest(const FString& /*Par
 		ScreenBlueprint->WidgetTree->FindWidget(TEXT("DiscardTabIcon")));
 	TestNotNull(TEXT("Exhaust navigation exposes its icon image"),
 		ScreenBlueprint->WidgetTree->FindWidget(TEXT("ExhaustTabIcon")));
+	TestNotNull(TEXT("Draw navigation exposes its short label"),
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("DrawTabLabelText")));
+	TestNotNull(TEXT("Discard navigation exposes its short label"),
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("DiscardTabLabelText")));
+	TestNotNull(TEXT("Exhaust navigation exposes its short label"),
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("ExhaustTabLabelText")));
+	TestNotNull(TEXT("Draw navigation exposes its count"),
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("DrawTabCountText")));
+	TestNotNull(TEXT("Discard navigation exposes its count"),
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("DiscardTabCountText")));
+	TestNotNull(TEXT("Exhaust navigation exposes its count"),
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("ExhaustTabCountText")));
+	const UButton* DrawTabButton = Cast<UButton>(
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("DrawTabButton")));
+	const UButton* DiscardTabButton = Cast<UButton>(
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("DiscardTabButton")));
+	const UButton* ExhaustTabButton = Cast<UButton>(
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("ExhaustTabButton")));
+	TestTrue(TEXT("Every navigation tab explains its destination"),
+		DrawTabButton && !DrawTabButton->GetToolTipText().IsEmpty()
+		&& DiscardTabButton && !DiscardTabButton->GetToolTipText().IsEmpty()
+		&& ExhaustTabButton && !ExhaustTabButton->GetToolTipText().IsEmpty());
 	TestNotNull(TEXT("Screen exposes the full-screen card grid host"),
 		ScreenBlueprint->WidgetTree->FindWidget(TEXT("CardGridSizeBox")));
 	TestNotNull(TEXT("Screen exposes one reusable card detail host"),
@@ -230,10 +257,27 @@ bool FWacomUIBattleCardPileDetailsFormalAssetsSpec::RunTest(const FString& /*Par
 		ScreenBlueprint->WidgetTree->FindWidget(TEXT("PreviewSizeBox")));
 	TestNull(TEXT("Screen no longer exposes sort controls"),
 		ScreenBlueprint->WidgetTree->FindWidget(TEXT("SortToolbar")));
-	TestNotNull(TEXT("Entry owns a fixed virtualized cell size"),
+	const USizeBox* EntrySize = Cast<USizeBox>(
 		EntryBlueprint->WidgetTree->FindWidget(TEXT("EntrySizeBox")));
-	TestNotNull(TEXT("Entry exposes a fixed-size runtime card host"),
+	const USizeBox* CardHost = Cast<USizeBox>(
 		EntryBlueprint->WidgetTree->FindWidget(TEXT("CardHost")));
+	TestTrue(TEXT("Entry owns the 1080p reference 198 by 274 virtualized cell"),
+		EntrySize
+		&& FMath::IsNearlyEqual(EntrySize->GetWidthOverride(), 198.0f)
+		&& FMath::IsNearlyEqual(EntrySize->GetHeightOverride(), 274.0f));
+	TestTrue(TEXT("Entry exposes the 178 by 252 reference thumbnail host"),
+		CardHost
+		&& FMath::IsNearlyEqual(CardHost->GetWidthOverride(), 178.0f)
+		&& FMath::IsNearlyEqual(CardHost->GetHeightOverride(), 252.0f)
+		&& CardHost->GetVisibility() == ESlateVisibility::HitTestInvisible);
+	const UScaleBox* CardScaleBox = Cast<UScaleBox>(
+		EntryBlueprint->WidgetTree->FindWidget(TEXT("CardScaleBox")));
+	TestNotNull(TEXT("Entry scales the authored card through a ScaleBox"), CardScaleBox);
+	TestTrue(TEXT("Card ScaleBox preserves aspect ratio and only scales down"),
+		CardScaleBox
+		&& CardScaleBox->GetStretch() == EStretch::ScaleToFit
+		&& CardScaleBox->GetStretchDirection() == EStretchDirection::DownOnly
+		&& CardScaleBox->GetVisibility() == ESlateVisibility::HitTestInvisible);
 	TestNotNull(TEXT("Entry exposes a material selection outline image"),
 		EntryBlueprint->WidgetTree->FindWidget(TEXT("SelectionOutlineImage")));
 	TestNull(TEXT("Entry no longer uses a solid selection border"),
@@ -247,6 +291,11 @@ bool FWacomUIBattleCardPileDetailsFormalAssetsSpec::RunTest(const FString& /*Par
 		PanelSlot
 		&& PanelSlot->GetAnchors().Minimum == FVector2D::ZeroVector
 		&& PanelSlot->GetAnchors().Maximum == FVector2D(1.0f, 1.0f));
+	const USizeBox* NavigationRail = Cast<USizeBox>(
+		ScreenBlueprint->WidgetTree->FindWidget(TEXT("NavigationRail")));
+	TestTrue(TEXT("Navigation rail uses the compact authored width"),
+		NavigationRail
+		&& FMath::IsNearlyEqual(NavigationRail->GetWidthOverride(), 96.0f));
 	TestTrue(TEXT("Style supplies an entry class"), Style->EntryWidgetClass != nullptr);
 	TestTrue(TEXT("Style supplies the formal WBP_CardView class"),
 		Style->CardViewClass
@@ -256,8 +305,25 @@ bool FWacomUIBattleCardPileDetailsFormalAssetsSpec::RunTest(const FString& /*Par
 		&& Style->CardDetailPanelClass->GetPathName().Contains(TEXT("WBP_CardDetailPanel")));
 	TestNotNull(TEXT("Style supplies the selection outline material instance"),
 		Style->SelectionOutlineMaterialInstance.Get());
-	TestEqual(TEXT("Cards retain the authored 296px width"), Style->CardWidthPixels, 296.0f);
-	TestEqual(TEXT("Cards retain the authored 420px height"), Style->CardHeightPixels, 420.0f);
+	TestEqual(TEXT("Pile thumbnails use the 178px 1080p reference width"),
+		Style->CardWidthPixels, 178.0f);
+	TestEqual(TEXT("Pile thumbnails use the 252px 1080p reference height"),
+		Style->CardHeightPixels, 252.0f);
+	TestTrue(TEXT("Pile style uses a valid 1920 by 1080 responsive reference"),
+		Style->ResponsiveReferenceViewportPixels.Equals(FVector2D(1920.0f, 1080.0f)));
+	TestEqual(TEXT("Pile style clamps physical scale at 0.90 minimum"),
+		Style->MinimumCardPhysicalScale, 0.90f);
+	TestEqual(TEXT("Pile style clamps physical scale at 1.15 maximum"),
+		Style->MaximumCardPhysicalScale, 1.15f);
+	TestTrue(TEXT("Pile style responsive scale range is valid"),
+		Style->MinimumCardPhysicalScale > 0.0f
+		&& Style->MaximumCardPhysicalScale >= Style->MinimumCardPhysicalScale);
+	TestEqual(TEXT("Pile entries use the compact horizontal spacing"),
+		Style->CardHorizontalSpacingPixels, 12.0f);
+	TestEqual(TEXT("Pile entries use the compact vertical spacing"),
+		Style->CardVerticalSpacingPixels, 14.0f);
+	TestEqual(TEXT("Navigation rail uses the compact width"),
+		Style->NavigationRailWidthPixels, 96.0f);
 	TestNotNull(TEXT("Style supplies the draw pile icon"), Style->DrawPileIconBrush.GetResourceObject());
 	TestNotNull(TEXT("Style supplies the discard pile icon"), Style->DiscardPileIconBrush.GetResourceObject());
 	TestNotNull(TEXT("Style supplies the exhaust pile icon"), Style->ExhaustPileIconBrush.GetResourceObject());

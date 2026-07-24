@@ -16,6 +16,7 @@
 #include "Components/Image.h"
 #include "Components/Overlay.h"
 #include "Components/OverlaySlot.h"
+#include "Components/ScaleBox.h"
 #include "Components/SizeBox.h"
 #include "Components/Spacer.h"
 #include "Components/TextBlock.h"
@@ -56,7 +57,9 @@ namespace
 		TEXT("/Game/Wacom/UI/Battle/Textures/T_UI_BattlePile_Discard_Image2_NoPlate.T_UI_BattlePile_Discard_Image2_NoPlate");
 	constexpr TCHAR ExhaustIconPath[] =
 		TEXT("/Game/Wacom/UI/Battle/Textures/T_UI_BattlePile_Exhaust_Image2_NoPlate.T_UI_BattlePile_Exhaust_Image2_NoPlate");
-	constexpr TCHAR ContractMarker[] = TEXT("WacomBattlePileDetailsWBP.ContractVersion=5");
+	constexpr TCHAR ContractMarker[] = TEXT("WacomBattlePileDetailsWBP.ContractVersion=7");
+	constexpr TCHAR LegacyContractMarkerV6[] = TEXT("WacomBattlePileDetailsWBP.ContractVersion=6");
+	constexpr TCHAR LegacyContractMarkerV5[] = TEXT("WacomBattlePileDetailsWBP.ContractVersion=5");
 	constexpr TCHAR LegacyContractMarkerV4[] = TEXT("WacomBattlePileDetailsWBP.ContractVersion=4");
 	constexpr TCHAR LegacyContractMarkerV3[] = TEXT("WacomBattlePileDetailsWBP.ContractVersion=3");
 	constexpr TCHAR LegacyContractMarkerV2[] = TEXT("WacomBattlePileDetailsWBP.ContractVersion=2");
@@ -86,6 +89,8 @@ namespace
 	bool HasManagedContract(const UWidgetBlueprint& Blueprint)
 	{
 		return Blueprint.BlueprintDescription.Contains(ContractMarker)
+			|| Blueprint.BlueprintDescription.Contains(LegacyContractMarkerV6)
+			|| Blueprint.BlueprintDescription.Contains(LegacyContractMarkerV5)
 			|| Blueprint.BlueprintDescription.Contains(LegacyContractMarkerV4)
 			|| Blueprint.BlueprintDescription.Contains(LegacyContractMarkerV3)
 			|| Blueprint.BlueprintDescription.Contains(LegacyContractMarkerV2)
@@ -244,23 +249,55 @@ namespace
 		UWidgetBlueprint& Blueprint,
 		UVerticalBox& Parent,
 		FName ButtonName,
-		FName IconName)
+		FName IconName,
+		const FText& Label,
+		const FText& Tooltip)
 	{
 		UButton* Button = Blueprint.WidgetTree->ConstructWidget<UButton>(
 			UButton::StaticClass(), ButtonName);
 		MarkWidgetVariable(Blueprint, *Button);
+		Button->SetToolTipText(Tooltip);
+		UVerticalBox* Content = Blueprint.WidgetTree->ConstructWidget<UVerticalBox>(
+			UVerticalBox::StaticClass(),
+			*FString::Printf(TEXT("%s_Content"), *ButtonName.ToString()));
 		USizeBox* IconSize = Blueprint.WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), *FString::Printf(TEXT("%s_Size"), *ButtonName.ToString()));
-		IconSize->SetWidthOverride(72.0f);
-		IconSize->SetHeightOverride(72.0f);
+		IconSize->SetWidthOverride(36.0f);
+		IconSize->SetHeightOverride(36.0f);
 		UImage* Icon = Blueprint.WidgetTree->ConstructWidget<UImage>(UImage::StaticClass(), IconName);
 		MarkWidgetVariable(Blueprint, *Icon);
 		IconSize->SetContent(Icon);
-		Button->SetContent(IconSize);
+		if (UVerticalBoxSlot* IconSlot = Content->AddChildToVerticalBox(IconSize))
+		{
+			IconSlot->SetHorizontalAlignment(HAlign_Center);
+		}
+		const FString Prefix = ButtonName.ToString().LeftChop(6);
+		UTextBlock* LabelText = Blueprint.WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), *FString::Printf(TEXT("%sLabelText"), *Prefix));
+		LabelText->SetText(Label);
+		LabelText->SetJustification(ETextJustify::Center);
+		StyleText(*LabelText, 14, FLinearColor(0.72f, 0.80f, 0.90f, 1.0f));
+		MarkWidgetVariable(Blueprint, *LabelText);
+		if (UVerticalBoxSlot* LabelSlot = Content->AddChildToVerticalBox(LabelText))
+		{
+			LabelSlot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
+			LabelSlot->SetHorizontalAlignment(HAlign_Fill);
+		}
+		UTextBlock* CountText = Blueprint.WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(), *FString::Printf(TEXT("%sCountText"), *Prefix));
+		CountText->SetText(FText::AsNumber(0));
+		CountText->SetJustification(ETextJustify::Center);
+		StyleText(*CountText, 12, FLinearColor(0.52f, 0.62f, 0.72f, 1.0f));
+		MarkWidgetVariable(Blueprint, *CountText);
+		if (UVerticalBoxSlot* CountSlot = Content->AddChildToVerticalBox(CountText))
+		{
+			CountSlot->SetHorizontalAlignment(HAlign_Fill);
+		}
+		Button->SetContent(Content);
 		if (UVerticalBoxSlot* ButtonSlot = Parent.AddChildToVerticalBox(Button))
 		{
-			ButtonSlot->SetPadding(FMargin(20.0f, 12.0f));
-			ButtonSlot->SetHorizontalAlignment(HAlign_Center);
+			ButtonSlot->SetPadding(FMargin(8.0f, 8.0f));
+			ButtonSlot->SetHorizontalAlignment(HAlign_Fill);
 		}
 		return Button;
 	}
@@ -286,8 +323,8 @@ namespace
 		ResetWidgetBlueprint(Blueprint, TEXT("Virtualized Battle pile card entry."));
 		USizeBox* EntrySize = Blueprint.WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("EntrySizeBox"));
-		EntrySize->SetWidthOverride(320.0f);
-		EntrySize->SetHeightOverride(448.0f);
+		EntrySize->SetWidthOverride(198.0f);
+		EntrySize->SetHeightOverride(274.0f);
 		MarkWidgetVariable(Blueprint, *EntrySize);
 		Blueprint.WidgetTree->RootWidget = EntrySize;
 
@@ -307,9 +344,17 @@ namespace
 
 		USizeBox* CardHost = Blueprint.WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("CardHost"));
-		CardHost->SetWidthOverride(296.0f);
-		CardHost->SetHeightOverride(420.0f);
+		CardHost->SetWidthOverride(178.0f);
+		CardHost->SetHeightOverride(252.0f);
+		CardHost->SetVisibility(ESlateVisibility::HitTestInvisible);
 		MarkWidgetVariable(Blueprint, *CardHost);
+		UScaleBox* CardScaleBox = Blueprint.WidgetTree->ConstructWidget<UScaleBox>(
+			UScaleBox::StaticClass(), TEXT("CardScaleBox"));
+		CardScaleBox->SetStretch(EStretch::ScaleToFit);
+		CardScaleBox->SetStretchDirection(EStretchDirection::DownOnly);
+		CardScaleBox->SetVisibility(ESlateVisibility::HitTestInvisible);
+		MarkWidgetVariable(Blueprint, *CardScaleBox);
+		CardHost->SetContent(CardScaleBox);
 		if (UOverlaySlot* CardSlot = EntryOverlay->AddChildToOverlay(CardHost))
 		{
 			CardSlot->SetHorizontalAlignment(HAlign_Center);
@@ -374,7 +419,7 @@ namespace
 
 		USizeBox* NavigationRail = Blueprint.WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("NavigationRail"));
-		NavigationRail->SetWidthOverride(128.0f);
+		NavigationRail->SetWidthOverride(96.0f);
 		MarkWidgetVariable(Blueprint, *NavigationRail);
 		SafeRoot->AddChildToHorizontalBox(NavigationRail);
 		UBorder* NavigationBackground = Blueprint.WidgetTree->ConstructWidget<UBorder>(
@@ -384,9 +429,27 @@ namespace
 		UVerticalBox* NavigationButtons = Blueprint.WidgetTree->ConstructWidget<UVerticalBox>(
 			UVerticalBox::StaticClass(), TEXT("NavigationButtons"));
 		NavigationBackground->SetContent(NavigationButtons);
-		AddNavigationButton(Blueprint, *NavigationButtons, TEXT("DrawTabButton"), TEXT("DrawTabIcon"));
-		AddNavigationButton(Blueprint, *NavigationButtons, TEXT("DiscardTabButton"), TEXT("DiscardTabIcon"));
-		AddNavigationButton(Blueprint, *NavigationButtons, TEXT("ExhaustTabButton"), TEXT("ExhaustTabIcon"));
+		AddNavigationButton(
+			Blueprint,
+			*NavigationButtons,
+			TEXT("DrawTabButton"),
+			TEXT("DrawTabIcon"),
+			NSLOCTEXT("WacomBattlePileDetails", "DrawNavigationLabel", "抽牌"),
+			NSLOCTEXT("WacomBattlePileDetails", "DrawNavigationTooltip", "查看抽牌堆"));
+		AddNavigationButton(
+			Blueprint,
+			*NavigationButtons,
+			TEXT("DiscardTabButton"),
+			TEXT("DiscardTabIcon"),
+			NSLOCTEXT("WacomBattlePileDetails", "DiscardNavigationLabel", "弃牌"),
+			NSLOCTEXT("WacomBattlePileDetails", "DiscardNavigationTooltip", "查看弃牌堆与本回合已使用卡牌"));
+		AddNavigationButton(
+			Blueprint,
+			*NavigationButtons,
+			TEXT("ExhaustTabButton"),
+			TEXT("ExhaustTabIcon"),
+			NSLOCTEXT("WacomBattlePileDetails", "ExhaustNavigationLabel", "消耗"),
+			NSLOCTEXT("WacomBattlePileDetails", "ExhaustNavigationTooltip", "查看消耗区"));
 
 		UBorder* ContentRoot = Blueprint.WidgetTree->ConstructWidget<UBorder>(
 			UBorder::StaticClass(), TEXT("ContentRoot"));
@@ -408,7 +471,7 @@ namespace
 		}
 		UTextBlock* Title = Blueprint.WidgetTree->ConstructWidget<UTextBlock>(
 			UTextBlock::StaticClass(), TEXT("TitleText"));
-		Title->SetText(NSLOCTEXT("WacomBattlePileDetails", "DrawTitle", "抽牌堆 0"));
+		Title->SetText(NSLOCTEXT("WacomBattlePileDetails", "DrawTitle", "抽牌堆 · 0"));
 		StyleText(*Title, 30, FLinearColor(0.94f, 0.97f, 1.0f, 1.0f));
 		MarkWidgetVariable(Blueprint, *Title);
 		Header->AddChildToHorizontalBox(Title);
@@ -435,8 +498,8 @@ namespace
 		MarkWidgetVariable(Blueprint, *CardGridSize);
 		UWacomBattleCardPileTileView* TileView = Blueprint.WidgetTree->ConstructWidget<UWacomBattleCardPileTileView>(
 			UWacomBattleCardPileTileView::StaticClass(), TEXT("VirtualizedCardTileView"));
-		TileView->SetEntryWidth(320.0f);
-		TileView->SetEntryHeight(448.0f);
+		TileView->SetEntryWidth(198.0f);
+		TileView->SetEntryHeight(274.0f);
 		TileView->SetSelectionMode(ESelectionMode::Single);
 		TileView->SetScrollbarVisibility(ESlateVisibility::Visible);
 		TileView->SetRuntimeEntryWidgetClass(EntryClass);
@@ -449,7 +512,7 @@ namespace
 
 		UTextBlock* Empty = Blueprint.WidgetTree->ConstructWidget<UTextBlock>(
 			UTextBlock::StaticClass(), TEXT("EmptyText"));
-		Empty->SetText(NSLOCTEXT("WacomBattlePileDetails", "Empty", "这里还没有卡牌"));
+		Empty->SetText(NSLOCTEXT("WacomBattlePileDetails", "DrawEmpty", "抽牌堆为空"));
 		StyleText(*Empty, 18, FLinearColor(0.58f, 0.64f, 0.72f, 1.0f));
 		Empty->SetVisibility(ESlateVisibility::Collapsed);
 		MarkWidgetVariable(Blueprint, *Empty);
@@ -470,10 +533,25 @@ namespace
 
 	bool ValidateEntry(UWidgetBlueprint& Blueprint)
 	{
+		const USizeBox* EntrySize = Cast<USizeBox>(
+			Blueprint.WidgetTree->FindWidget(TEXT("EntrySizeBox")));
+		const USizeBox* CardHost = Cast<USizeBox>(
+			Blueprint.WidgetTree->FindWidget(TEXT("CardHost")));
+		const UScaleBox* CardScaleBox = Cast<UScaleBox>(
+			Blueprint.WidgetTree->FindWidget(TEXT("CardScaleBox")));
 		return Blueprint.BlueprintDescription.Contains(ContractMarker)
-			&& HasWidget(Blueprint, TEXT("EntrySizeBox"), USizeBox::StaticClass())
+			&& EntrySize
+			&& FMath::IsNearlyEqual(EntrySize->GetWidthOverride(), 198.0f)
+			&& FMath::IsNearlyEqual(EntrySize->GetHeightOverride(), 274.0f)
 			&& HasWidget(Blueprint, TEXT("SelectionOutlineImage"), UImage::StaticClass())
-			&& HasWidget(Blueprint, TEXT("CardHost"), USizeBox::StaticClass());
+			&& CardHost
+			&& FMath::IsNearlyEqual(CardHost->GetWidthOverride(), 178.0f)
+			&& FMath::IsNearlyEqual(CardHost->GetHeightOverride(), 252.0f)
+			&& CardHost->GetVisibility() == ESlateVisibility::HitTestInvisible
+			&& CardScaleBox
+			&& CardScaleBox->GetStretch() == EStretch::ScaleToFit
+			&& CardScaleBox->GetStretchDirection() == EStretchDirection::DownOnly
+			&& CardScaleBox->GetVisibility() == ESlateVisibility::HitTestInvisible;
 	}
 
 	bool ValidateScreen(UWidgetBlueprint& Blueprint)
@@ -490,6 +568,12 @@ namespace
 			{ TEXT("DrawTabIcon"), UImage::StaticClass() },
 			{ TEXT("DiscardTabIcon"), UImage::StaticClass() },
 			{ TEXT("ExhaustTabIcon"), UImage::StaticClass() },
+			{ TEXT("DrawTabLabelText"), UTextBlock::StaticClass() },
+			{ TEXT("DiscardTabLabelText"), UTextBlock::StaticClass() },
+			{ TEXT("ExhaustTabLabelText"), UTextBlock::StaticClass() },
+			{ TEXT("DrawTabCountText"), UTextBlock::StaticClass() },
+			{ TEXT("DiscardTabCountText"), UTextBlock::StaticClass() },
+			{ TEXT("ExhaustTabCountText"), UTextBlock::StaticClass() },
 			{ TEXT("DiscardSectionRoot"), UHorizontalBox::StaticClass() },
 			{ TEXT("DetailPanelHost"), USizeBox::StaticClass() },
 			{ TEXT("CardGridSizeBox"), USizeBox::StaticClass() },
@@ -506,7 +590,24 @@ namespace
 				return false;
 			}
 		}
-		return true;
+		const USizeBox* NavigationRail = Cast<USizeBox>(
+			Blueprint.WidgetTree->FindWidget(TEXT("NavigationRail")));
+		const UWacomBattleCardPileTileView* TileView = Cast<UWacomBattleCardPileTileView>(
+			Blueprint.WidgetTree->FindWidget(TEXT("VirtualizedCardTileView")));
+		const UButton* DrawButton = Cast<UButton>(
+			Blueprint.WidgetTree->FindWidget(TEXT("DrawTabButton")));
+		const UButton* DiscardButton = Cast<UButton>(
+			Blueprint.WidgetTree->FindWidget(TEXT("DiscardTabButton")));
+		const UButton* ExhaustButton = Cast<UButton>(
+			Blueprint.WidgetTree->FindWidget(TEXT("ExhaustTabButton")));
+		return NavigationRail
+			&& FMath::IsNearlyEqual(NavigationRail->GetWidthOverride(), 96.0f)
+			&& TileView
+			&& FMath::IsNearlyEqual(TileView->GetEntryWidth(), 198.0f)
+			&& FMath::IsNearlyEqual(TileView->GetEntryHeight(), 274.0f)
+			&& DrawButton && !DrawButton->GetToolTipText().IsEmpty()
+			&& DiscardButton && !DiscardButton->GetToolTipText().IsEmpty()
+			&& ExhaustButton && !ExhaustButton->GetToolTipText().IsEmpty();
 	}
 
 	UWacomBattleCardPileDetailsStyle* LoadOrBuildStyle(
@@ -573,12 +674,24 @@ namespace
 		const bool bMissingIcons = !IsBrushAssigned(Style->DrawPileIconBrush)
 			|| !IsBrushAssigned(Style->DiscardPileIconBrush)
 			|| !IsBrushAssigned(Style->ExhaustPileIconBrush);
-		if (bMissingClasses || bMissingOutline || bMissingIcons)
+		const bool bLayoutMismatch =
+			!FMath::IsNearlyEqual(Style->CardWidthPixels, 178.0f)
+			|| !FMath::IsNearlyEqual(Style->CardHeightPixels, 252.0f)
+			|| !Style->ResponsiveReferenceViewportPixels.Equals(
+				FVector2D(1920.0f, 1080.0f),
+				KINDA_SMALL_NUMBER)
+			|| !FMath::IsNearlyEqual(Style->MinimumCardPhysicalScale, 0.90f)
+			|| !FMath::IsNearlyEqual(Style->MaximumCardPhysicalScale, 1.15f)
+			|| !FMath::IsNearlyEqual(Style->CardEntryPaddingPixels, 4.0f)
+			|| !FMath::IsNearlyEqual(Style->CardHorizontalSpacingPixels, 12.0f)
+			|| !FMath::IsNearlyEqual(Style->CardVerticalSpacingPixels, 14.0f)
+			|| !FMath::IsNearlyEqual(Style->NavigationRailWidthPixels, 96.0f);
+		if (bMissingClasses || bMissingOutline || bMissingIcons || bLayoutMismatch)
 		{
 			if (!bBuild)
 			{
 				UE_LOG(LogTemp, Error,
-					TEXT("[BattlePileDetailsUIBuilder] Style is missing required classes, outline material, or navigation icons: %s"),
+					TEXT("[BattlePileDetailsUIBuilder] Style is missing required fields or does not match the v7 responsive layout contract: %s"),
 					*ObjectPath);
 				return nullptr;
 			}
@@ -602,6 +715,15 @@ namespace
 			{
 				Style->ExhaustPileIconBrush = MakeIconBrush(*ExhaustIcon);
 			}
+			Style->CardWidthPixels = 178.0f;
+			Style->CardHeightPixels = 252.0f;
+			Style->ResponsiveReferenceViewportPixels = FVector2D(1920.0f, 1080.0f);
+			Style->MinimumCardPhysicalScale = 0.90f;
+			Style->MaximumCardPhysicalScale = 1.15f;
+			Style->CardEntryPaddingPixels = 4.0f;
+			Style->CardHorizontalSpacingPixels = 12.0f;
+			Style->CardVerticalSpacingPixels = 14.0f;
+			Style->NavigationRailWidthPixels = 96.0f;
 			if (!SaveAssetPackage(Style->GetOutermost(), Style, PackagePath))
 			{
 				return nullptr;

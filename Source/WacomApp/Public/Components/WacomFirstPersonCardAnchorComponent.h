@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "Types/WacomInteractionTargetTypes.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
+#include "UI/Card/WacomFirstPersonCardPresentationMetrics.h"
 #include "WacomFirstPersonCardAnchorComponent.generated.h"
 
 class APlayerController;
@@ -894,6 +895,8 @@ public:
 		int32 PointIndex = -1) const;
 
 	TArray<FWacomFirstPersonCardLayerSlotView> BuildActiveCardLayerSlotViews() const;
+	FWacomFirstPersonCardRestingPresentationProfile
+		BuildRestingCardPresentationProfile() const;
 
 	void CommitRuntimeCardLayerFrame(
 		const FWacomFirstPersonCardLayerPresentationFrame& Frame);

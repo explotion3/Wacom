@@ -48,32 +48,44 @@ public:
 	FSlateBrush ExhaustPileIconBrush;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Layout",
-		meta = (ToolTip = "网格中卡面的原始宽度，单位像素；默认 296。只影响浏览布局，不改变卡牌命中或规则。"))
-	float CardWidthPixels = 296.0f;
+		meta = (ToolTip = "卡面缩略 Host 的制作参考宽度，单位逻辑像素；默认 178。正式 BattleHUD 会按当前未悬停手牌的卡体物理尺寸覆盖它；缺少有效手牌 Anchor 时才使用该参考值及响应式回退。正式卡面仍以 296 像素制作，并由 ScaleBox 等比缩放。"))
+	float CardWidthPixels = 178.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Layout",
-		meta = (ToolTip = "网格中卡面的原始高度，单位像素；默认 420。只影响浏览布局。"))
-	float CardHeightPixels = 420.0f;
+		meta = (ToolTip = "卡面缩略 Host 的制作参考高度，单位逻辑像素；默认 252。正式 BattleHUD 会按当前未悬停手牌卡体覆盖实际尺寸；运行时布局、命中和选框仍使用同一局部倍率。"))
+	float CardHeightPixels = 252.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Responsive Layout",
+		meta = (ToolTip = "没有可用 first-person hand Anchor 时，响应式缩略卡回退策略使用的参考物理视口尺寸，单位像素；默认 1920×1080。宽高分别比较并取较小倍率，因此超宽屏不会只因横向空间增加而放大。"))
+	FVector2D ResponsiveReferenceViewportPixels = FVector2D(1920.0f, 1080.0f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Responsive Layout",
+		meta = (ToolTip = "没有可用 first-person hand Anchor 时，缩略卡回退策略允许的最小物理倍率；默认 0.90。正式 BattleHUD 的牌堆卡体改为匹配未悬停手牌，不受此下限裁切。"))
+	float MinimumCardPhysicalScale = 0.90f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Responsive Layout",
+		meta = (ToolTip = "没有可用 first-person hand Anchor 时，缩略卡回退策略允许的最大物理倍率；默认 1.15。正式 BattleHUD 的牌堆卡体改为匹配未悬停手牌，不受此上限裁切。"))
+	float MaximumCardPhysicalScale = 1.15f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Layout",
-		meta = (ToolTip = "每张卡四周的选中边框留白，单位像素；默认 4，推荐 2 到 10。"))
+		meta = (ToolTip = "1080p 参考尺寸下每张卡四周的选中边框留白，单位像素；默认 4，推荐 2 到 10。运行时与缩略卡使用同一局部倍率。"))
 	float CardEntryPaddingPixels = 4.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Layout",
-		meta = (ToolTip = "卡牌网格列间距，单位像素；默认 16，推荐 8 到 32。不会缩放卡牌。"))
-	float CardHorizontalSpacingPixels = 16.0f;
+		meta = (ToolTip = "1080p 参考尺寸下卡牌网格列间距，单位像素；默认 12，推荐 8 到 24。运行时与缩略卡使用同一局部倍率。"))
+	float CardHorizontalSpacingPixels = 12.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Layout",
-		meta = (ToolTip = "卡牌网格行间距，单位像素；默认 20，推荐 8 到 36。不会缩放卡牌。"))
-	float CardVerticalSpacingPixels = 20.0f;
+		meta = (ToolTip = "1080p 参考尺寸下卡牌网格行间距，单位像素；默认 14，推荐 8 到 28。运行时与缩略卡使用同一局部倍率。"))
+	float CardVerticalSpacingPixels = 14.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Layout",
 		meta = (ToolTip = "全屏牌堆页面与视口边缘的安全间距，单位像素；默认 24，推荐 16 到 48。"))
 	float ScreenSafeMarginPixels = 24.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Layout",
-		meta = (ToolTip = "左侧牌堆分页导航栏宽度，单位像素；默认 128，推荐 96 到 160。影响内容区可用宽度。"))
-	float NavigationRailWidthPixels = 128.0f;
+		meta = (ToolTip = "左侧牌堆分页导航栏宽度，单位像素；默认 96，推荐 88 到 128。影响内容区可用宽度。"))
+	float NavigationRailWidthPixels = 96.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Selection",
 		meta = (ToolTip = "临时悬浮或焦点状态写入流光材质的强度；推荐 0.5 到 1.0，不影响布局。"))
@@ -84,7 +96,7 @@ public:
 	float LockedOutlineAmount = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Selection",
-		meta = (ToolTip = "流光外框伸出卡体四周的距离，单位像素；默认 4，推荐 2 到 8。该值必须小于条目留白，不改变卡牌尺寸。"))
+		meta = (ToolTip = "1080p 参考尺寸下流光外框伸出卡体四周的距离，单位像素；默认 4，推荐 2 到 8。运行时与缩略卡使用同一局部倍率。"))
 	float SelectionOutlineExtentPixels = 4.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Pile Details|Detail",

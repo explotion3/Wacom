@@ -68,6 +68,8 @@ Battle / Run snapshot
 
 卡牌有三层彼此独立的尺寸语义：美术真源是 `148 × 210`；`WBP_FPCardView / CardSizeBox` 使用放大一倍的 `296 × 420` 制作画布；运行时 `PresentationScale` 只调整游戏内 first-person 表现，不改变前两者。禁止为了某个分辨率直接改贴图、`CardSizeBox`、Anchor 制作值或 DataAsset Style。
 
+`FWacomViewportPresentationScalePolicy` 只提供“参考物理 Viewport 短边比例 → 物理倍率限制 → 全局 DPI 补偿 → 局部倍率”的通用数学内核。原有 `FWacomFirstPersonCardPresentationScalePolicy` 继续以 `2560×1440 / 0.5–1.0` 参数委托该内核，所有 first-person hand 结果和 Anchor 行为保持不变。`UWacomFirstPersonCardAnchorComponent::BuildRestingCardPresentationProfile()` 只公开正式卡体 `296×420` 与 authored `HandCardRenderScale`，明确排除 fan rotation、Hover、Inspect、Drag、选择和临时 feedback。BattleHUD 牌堆详情页用这份只读指标及同一个 first-person Viewport 物理倍率计算卡体，因此在相同 Viewport/DPI 下与未悬停手牌物理尺寸一致；牌堆不引用 Hand Widget、Slot 或输入状态。正式卡面仍在 `ScaleToFit + DownOnly` Host 内等比缩放，Tile Entry、留白、间距、选框和命中几何跟随同一局部倍率；分辨率变化只原地刷新。独立牌堆 Widget 或缺少有效 Anchor 时才使用 `FWacomBattleCardPileThumbnailScalePolicy` 的 `1920×1080 / 0.90–1.15` 回退。
+
 全局 UI 继续以 `1920 × 1080` 为基准并在 `1.0` 封顶；first-person 卡牌表现单独以 `2560 × 1440` 为基准。App-private `FWacomFirstPersonCardPresentationScalePolicy` 使用物理 Viewport 和当前全局 DPI：
 
 ```text

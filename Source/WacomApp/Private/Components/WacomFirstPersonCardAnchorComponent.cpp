@@ -1888,6 +1888,18 @@ TArray<FWacomFirstPersonCardLayerSlotView> UWacomFirstPersonCardAnchorComponent:
 		: TArray<FWacomFirstPersonCardLayerSlotView>();
 }
 
+FWacomFirstPersonCardRestingPresentationProfile
+UWacomFirstPersonCardAnchorComponent::BuildRestingCardPresentationProfile() const
+{
+	FWacomFirstPersonCardRestingPresentationProfile Profile;
+	Profile.AuthoredCardBodySize =
+		UWacomFirstPersonCardViewWidget::GetDefaultCardBodyHitSize();
+	Profile.AuthoredRenderScale = FMath::IsFinite(HandCardRenderScale)
+		? FMath::Max(0.01f, HandCardRenderScale)
+		: 0.0f;
+	return Profile;
+}
+
 void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardLayerInteractionEnabled(bool bEnabled)
 {
 	if (bFirstPersonCardLayerInteractionEnabled == bEnabled)

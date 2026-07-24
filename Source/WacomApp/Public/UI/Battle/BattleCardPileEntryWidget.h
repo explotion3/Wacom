@@ -10,6 +10,7 @@
 class UImage;
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
+class UScaleBox;
 class USizeBox;
 class UWacomCardView;
 class UWacomBattleCardPileItemViewModel;
@@ -40,6 +41,7 @@ public:
 		bool bInReducedMotion);
 	void SetLockedSelected(bool bInLockedSelected);
 	void SetOwnerReportedPointerHovered(bool bInPointerHovered);
+	void RefreshResolvedLayout();
 	UWacomBattleCardPileItemViewModel* GetItemViewModel() const { return ItemViewModel.Get(); }
 	FWacomBattlePileEntryFocusChangedNative& OnFocusChangedNative() { return FocusChangedNative; }
 	FWacomBattlePileEntryHoverChangedNative& OnHoverChangedNative() { return HoverChangedNative; }
@@ -62,6 +64,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<USizeBox> CardHost;
+
+	UPROPERTY(meta = (BindWidgetOptional))
+	TObjectPtr<UScaleBox> CardScaleBox;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UWacomCardView> RuntimeCardView;

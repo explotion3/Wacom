@@ -20,7 +20,4 @@ public:
 	static FWacomFirstPersonCardPresentationScaleResult Resolve(
 		const FVector2D& ViewportPixelSize,
 		float GlobalUIScale);
-
-private:
-	static float Stabilize(float Value);
 };

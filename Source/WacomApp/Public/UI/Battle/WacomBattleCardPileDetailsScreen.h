@@ -7,6 +7,7 @@
 #include "UI/Battle/BattleCardPileEntryWidget.h"
 #include "UI/Battle/WacomBattleCardPileDetailsTypes.h"
 #include "UI/Battle/WacomBattleSecondaryPanelScreenBase.h"
+#include "UI/Card/WacomFirstPersonCardPresentationMetrics.h"
 #include "WacomBattleCardPileDetailsScreen.generated.h"
 
 class UButton;
@@ -39,8 +40,8 @@ public:
 	float SelectionOutlineExtentPixels = 4.0f;
 	bool bReducedMotion = false;
 	TSubclassOf<UWacomCardView> CardViewClass;
-	FVector2D CardSize = FVector2D(296.0f, 420.0f);
-	FVector2D EntrySize = FVector2D(320.0f, 448.0f);
+	FVector2D CardSize = FVector2D(178.0f, 252.0f);
+	FVector2D EntrySize = FVector2D(198.0f, 274.0f);
 	float EntryPaddingPixels = 4.0f;
 };
 
@@ -52,7 +53,19 @@ struct FWacomBattleCardPileDetailsAutomationView
 	bool bEmpty = true;
 	bool bDetailVisible = false;
 	FGuid DetailInstanceId;
-	FGuid LockedInstanceId;
+	FGuid DetailCandidateInstanceId;
+	FGuid PinnedInstanceId;
+	FVector2D ResolvedCardSize = FVector2D::ZeroVector;
+	FVector2D ResolvedEntrySize = FVector2D::ZeroVector;
+	FVector2D ResolvedViewportPixels = FVector2D::ZeroVector;
+	float ResolvedGlobalUIScale = 1.0f;
+	float TargetPhysicalScale = 1.0f;
+	float LocalPresentationScale = 1.0f;
+	FString Title;
+	FString EmptyMessage;
+	int32 DrawNavigationCount = 0;
+	int32 DiscardNavigationCount = 0;
+	int32 ExhaustNavigationCount = 0;
 	TArray<FGuid> VisibleInstanceIds;
 	TArray<int32> VisibleRuntimeCosts;
 };
@@ -81,6 +94,9 @@ public:
 		const FBattlePileInspectionSnapshot& InSnapshot,
 		EWacomBattlePileDetailsTab InInitialTab);
 
+	void SetRestingHandCardPresentationProfile(
+		const FWacomFirstPersonCardRestingPresentationProfile& InProfile);
+
 	void SetAuthoringDefaults(
 		UWacomBattleCardPileDetailsStyle* InStyle,
 		TSubclassOf<UBattleCardPileEntryWidget> InEntryClass);
@@ -107,6 +123,12 @@ protected:
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> DrawTabIcon;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> DiscardTabIcon;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UImage> ExhaustTabIcon;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DrawTabLabelText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DiscardTabLabelText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ExhaustTabLabelText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DrawTabCountText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> DiscardTabCountText;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UTextBlock> ExhaustTabCountText;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UHorizontalBox> DiscardSectionRoot;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> DiscardSectionButton;
 	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> PlayedSectionButton;
@@ -133,6 +155,15 @@ private:
 	UFUNCTION() void HandlePlayedSectionClicked();
 
 	void ResolveRuntimeBindings();
+	bool QueryViewportPresentationMetrics(
+		FVector2D& OutViewportPixels,
+		float& OutGlobalUIScale) const;
+	void RefreshResponsiveCardLayout(bool bForce = false);
+	void ResolveAndApplyResponsiveCardLayout(
+		const FVector2D& ViewportPixels,
+		float GlobalUIScale,
+		bool bForce = false);
+	void ApplyResolvedCardLayout();
 	void BindControls();
 	void UnbindControls();
 	void RebuildItems();
@@ -149,7 +180,11 @@ private:
 	void HandleEntryHoverChanged(UBattleCardPileEntryWidget& EntryWidget, bool bIsHovered);
 	void HandleEntryFocusChanged(UBattleCardPileEntryWidget& EntryWidget, bool bIsFocused);
 	void ApplyEntrySelectionStates();
-	void SetDetailCandidate(UWacomBattleCardPileItemViewModel* Item);
+	UWacomBattleCardPileItemViewModel* ResolvePreferredDetailItem() const;
+	void RefreshDetailCandidate(bool bShowPinnedImmediately);
+	void SetDetailCandidate(
+		UWacomBattleCardPileItemViewModel* Item,
+		bool bShowImmediately = false);
 	void ClearDetailCandidate();
 	void EnsureDetailPanel();
 	void ShowDetailPanel(UWacomBattleCardPileItemViewModel& Item);
@@ -165,7 +200,7 @@ private:
 
 	UPROPERTY(Transient) FBattlePileInspectionSnapshot InspectionSnapshot;
 	UPROPERTY(Transient) TArray<TObjectPtr<UWacomBattleCardPileItemViewModel>> ItemViewModels;
-	UPROPERTY(Transient) TObjectPtr<UWacomBattleCardPileItemViewModel> LockedItem;
+	UPROPERTY(Transient) TObjectPtr<UWacomBattleCardPileItemViewModel> PinnedItem;
 	UPROPERTY(Transient) TObjectPtr<UWacomBattleCardPileItemViewModel> HoveredItem;
 	UPROPERTY(Transient) TObjectPtr<UWacomBattleCardPileItemViewModel> FocusedItem;
 	UPROPERTY(Transient) TObjectPtr<UWacomBattleCardPileItemViewModel> DetailCandidateItem;
@@ -179,6 +214,16 @@ private:
 	float DetailOpacity = 0.0f;
 	bool bDetailWantsVisible = false;
 	bool bRuntimeSimplifiedMotion = false;
+	bool bHasResolvedCardLayout = false;
+	FVector2D CachedViewportPixels = FVector2D::ZeroVector;
+	float CachedGlobalUIScale = 0.0f;
+	float ResolvedTargetPhysicalScale = 1.0f;
+	float ResolvedLocalPresentationScale = 1.0f;
+	FVector2D ResolvedCardSize = FVector2D(178.0f, 252.0f);
+	FVector2D ResolvedEntrySize = FVector2D(198.0f, 274.0f);
+	float ResolvedEntryPaddingPixels = 4.0f;
+	float ResolvedSelectionOutlineExtentPixels = 4.0f;
+	FWacomFirstPersonCardRestingPresentationProfile RestingHandCardPresentationProfile;
 
 	EWacomBattlePileDetailsTab ActiveTab = EWacomBattlePileDetailsTab::Draw;
 	EWacomBattlePileDiscardSection ActiveDiscardSection = EWacomBattlePileDiscardSection::Discard;

@@ -108,6 +108,14 @@ bool FWacomFirstPersonCardPresentationScaleResolvedConfigSpec::RunTest(const FSt
 	Anchor->DrawnCardEnterArcLiftPixels = 42.0f;
 	Anchor->CardDragStartThresholdPixels = 10.0f;
 
+	const FWacomFirstPersonCardRestingPresentationProfile RestingProfile =
+		Anchor->BuildRestingCardPresentationProfile();
+	TestTrue(TEXT("resting hand profile is valid"), RestingProfile.IsValid());
+	TestTrue(TEXT("resting hand profile exposes the formal card body"),
+		RestingProfile.AuthoredCardBodySize.Equals(FVector2D(296.0f, 420.0f)));
+	TestEqual(TEXT("resting hand profile excludes hover and keeps authored base scale"),
+		RestingProfile.AuthoredRenderScale, 0.55f);
+
 	UWacomFirstPersonCardPileTransferStyle* AuthoredStyle =
 		NewObject<UWacomFirstPersonCardPileTransferStyle>(Anchor);
 	AuthoredStyle->Style.GlyphSize = FVector2D(42.0f, 66.0f);

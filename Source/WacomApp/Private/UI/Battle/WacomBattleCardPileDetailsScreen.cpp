@@ -4,6 +4,7 @@
 
 #include "Cards/CardDefinition.h"
 #include "UI/Battle/BattleCardPileEntryWidget.h"
+#include "UI/Battle/WacomBattleCardPileThumbnailScalePolicy.h"
 #include "UI/Battle/WacomBattleCardPileDetailsStyle.h"
 #include "Settings/WacomSettingsSubsystem.h"
 #include "UI/Card/WacomCardDetailPanel.h"
@@ -11,6 +12,7 @@
 #include "UI/Card/WacomCardView.h"
 
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
 #include "Components/CanvasPanel.h"
@@ -23,6 +25,9 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Engine/GameViewportClient.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
 
 #define LOCTEXT_NAMESPACE "WacomBattleCardPileDetails"
 
@@ -51,23 +56,61 @@ namespace
 		UVerticalBox& Parent,
 		FName ButtonName,
 		FName IconName,
-		TObjectPtr<UImage>& OutIcon)
+		const FText& Label,
+		const FText& Tooltip,
+		TObjectPtr<UImage>& OutIcon,
+		TObjectPtr<UTextBlock>& OutLabel,
+		TObjectPtr<UTextBlock>& OutCount)
 	{
 		UButton* Button = WidgetTree.ConstructWidget<UButton>(UButton::StaticClass(), ButtonName);
 		PRAGMA_DISABLE_DEPRECATION_WARNINGS
 		Button->IsFocusable = true;
 		PRAGMA_ENABLE_DEPRECATION_WARNINGS
+		Button->SetToolTipText(Tooltip);
+		UVerticalBox* Content = WidgetTree.ConstructWidget<UVerticalBox>(
+			UVerticalBox::StaticClass(),
+			*FString::Printf(TEXT("%s_Content"), *ButtonName.ToString()));
 		USizeBox* IconSize = WidgetTree.ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), *FString::Printf(TEXT("%s_Size"), *ButtonName.ToString()));
-		IconSize->SetWidthOverride(72.0f);
-		IconSize->SetHeightOverride(72.0f);
+		IconSize->SetWidthOverride(36.0f);
+		IconSize->SetHeightOverride(36.0f);
 		OutIcon = WidgetTree.ConstructWidget<UImage>(UImage::StaticClass(), IconName);
 		IconSize->SetContent(OutIcon);
-		Button->SetContent(IconSize);
+		if (UVerticalBoxSlot* IconSlot = Content->AddChildToVerticalBox(IconSize))
+		{
+			IconSlot->SetHorizontalAlignment(HAlign_Center);
+		}
+		OutLabel = WidgetTree.ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(),
+			*FString::Printf(TEXT("%sLabelText"), *ButtonName.ToString().LeftChop(6)));
+		OutLabel->SetText(Label);
+		OutLabel->SetJustification(ETextJustify::Center);
+		FSlateFontInfo LabelFont = OutLabel->GetFont();
+		LabelFont.Size = 14;
+		LabelFont.TypefaceFontName = TEXT("Bold");
+		OutLabel->SetFont(LabelFont);
+		if (UVerticalBoxSlot* LabelSlot = Content->AddChildToVerticalBox(OutLabel))
+		{
+			LabelSlot->SetPadding(FMargin(0.0f, 2.0f, 0.0f, 0.0f));
+			LabelSlot->SetHorizontalAlignment(HAlign_Fill);
+		}
+		OutCount = WidgetTree.ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(),
+			*FString::Printf(TEXT("%sCountText"), *ButtonName.ToString().LeftChop(6)));
+		OutCount->SetText(FText::AsNumber(0));
+		OutCount->SetJustification(ETextJustify::Center);
+		FSlateFontInfo CountFont = OutCount->GetFont();
+		CountFont.Size = 12;
+		OutCount->SetFont(CountFont);
+		if (UVerticalBoxSlot* CountSlot = Content->AddChildToVerticalBox(OutCount))
+		{
+			CountSlot->SetHorizontalAlignment(HAlign_Fill);
+		}
+		Button->SetContent(Content);
 		if (UVerticalBoxSlot* ButtonSlot = Parent.AddChildToVerticalBox(Button))
 		{
-			ButtonSlot->SetPadding(FMargin(20.0f, 12.0f));
-			ButtonSlot->SetHorizontalAlignment(HAlign_Center);
+			ButtonSlot->SetPadding(FMargin(8.0f, 8.0f));
+			ButtonSlot->SetHorizontalAlignment(HAlign_Fill);
 		}
 		return Button;
 	}
@@ -184,7 +227,7 @@ TSharedRef<SWidget> UWacomBattleCardPileDetailsScreen::RebuildWidget()
 
 		NavigationRail = WidgetTree->ConstructWidget<USizeBox>(
 			USizeBox::StaticClass(), TEXT("NavigationRail"));
-		NavigationRail->SetWidthOverride(128.0f);
+		NavigationRail->SetWidthOverride(96.0f);
 		if (UHorizontalBoxSlot* NavigationSlot = SafeRoot->AddChildToHorizontalBox(NavigationRail))
 		{
 			NavigationSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
@@ -197,11 +240,35 @@ TSharedRef<SWidget> UWacomBattleCardPileDetailsScreen::RebuildWidget()
 			UVerticalBox::StaticClass(), TEXT("NavigationButtons"));
 		NavigationBackground->SetContent(NavigationButtons);
 		DrawTabButton = AddNavigationButton(
-			*WidgetTree, *NavigationButtons, TEXT("DrawTabButton"), TEXT("DrawTabIcon"), DrawTabIcon);
+			*WidgetTree,
+			*NavigationButtons,
+			TEXT("DrawTabButton"),
+			TEXT("DrawTabIcon"),
+			LOCTEXT("DrawNavigationLabel", "抽牌"),
+			LOCTEXT("DrawNavigationTooltip", "查看抽牌堆"),
+			DrawTabIcon,
+			DrawTabLabelText,
+			DrawTabCountText);
 		DiscardTabButton = AddNavigationButton(
-			*WidgetTree, *NavigationButtons, TEXT("DiscardTabButton"), TEXT("DiscardTabIcon"), DiscardTabIcon);
+			*WidgetTree,
+			*NavigationButtons,
+			TEXT("DiscardTabButton"),
+			TEXT("DiscardTabIcon"),
+			LOCTEXT("DiscardNavigationLabel", "弃牌"),
+			LOCTEXT("DiscardNavigationTooltip", "查看弃牌堆与本回合已使用卡牌"),
+			DiscardTabIcon,
+			DiscardTabLabelText,
+			DiscardTabCountText);
 		ExhaustTabButton = AddNavigationButton(
-			*WidgetTree, *NavigationButtons, TEXT("ExhaustTabButton"), TEXT("ExhaustTabIcon"), ExhaustTabIcon);
+			*WidgetTree,
+			*NavigationButtons,
+			TEXT("ExhaustTabButton"),
+			TEXT("ExhaustTabIcon"),
+			LOCTEXT("ExhaustNavigationLabel", "消耗"),
+			LOCTEXT("ExhaustNavigationTooltip", "查看消耗区"),
+			ExhaustTabIcon,
+			ExhaustTabLabelText,
+			ExhaustTabCountText);
 
 		UBorder* ContentRoot = WidgetTree->ConstructWidget<UBorder>(
 			UBorder::StaticClass(), TEXT("ContentRoot"));
@@ -245,8 +312,8 @@ TSharedRef<SWidget> UWacomBattleCardPileDetailsScreen::RebuildWidget()
 
 		CardGridSizeBox = WidgetTree->ConstructWidget<USizeBox>(USizeBox::StaticClass(), TEXT("CardGridSizeBox"));
 		VirtualizedCardTileView = WidgetTree->ConstructWidget<UWacomBattleCardPileTileView>(UWacomBattleCardPileTileView::StaticClass(), TEXT("VirtualizedCardTileView"));
-		VirtualizedCardTileView->SetEntryWidth(320.0f);
-		VirtualizedCardTileView->SetEntryHeight(448.0f);
+		VirtualizedCardTileView->SetEntryWidth(198.0f);
+		VirtualizedCardTileView->SetEntryHeight(274.0f);
 		VirtualizedCardTileView->SetSelectionMode(ESelectionMode::Single);
 		VirtualizedCardTileView->SetScrollbarVisibility(ESlateVisibility::Visible);
 		VirtualizedCardTileView->SetRuntimeEntryWidgetClass(UBattleCardPileEntryWidget::StaticClass());
@@ -257,7 +324,7 @@ TSharedRef<SWidget> UWacomBattleCardPileDetailsScreen::RebuildWidget()
 		}
 
 		EmptyText = WidgetTree->ConstructWidget<UTextBlock>(UTextBlock::StaticClass(), TEXT("EmptyText"));
-		EmptyText->SetText(LOCTEXT("Empty", "这里还没有卡牌"));
+		EmptyText->SetText(LOCTEXT("DrawEmpty", "抽牌堆为空"));
 		EmptyText->SetJustification(ETextJustify::Center);
 		EmptyText->SetVisibility(ESlateVisibility::Collapsed);
 		if (UVerticalBoxSlot* EmptySlot = RootBox->AddChildToVerticalBox(EmptyText))
@@ -277,6 +344,7 @@ void UWacomBattleCardPileDetailsScreen::NativeConstruct()
 	BindControls();
 	BindRuntimeSettings();
 	ApplyFullscreenLayout();
+	RefreshResponsiveCardLayout(true);
 	RebuildItems();
 }
 
@@ -287,6 +355,9 @@ void UWacomBattleCardPileDetailsScreen::NativeDestruct()
 	ClearItems();
 	RuntimeDetailPanel = nullptr;
 	InspectionSnapshot = FBattlePileInspectionSnapshot();
+	bHasResolvedCardLayout = false;
+	CachedViewportPixels = FVector2D::ZeroVector;
+	CachedGlobalUIScale = 0.0f;
 	Super::NativeDestruct();
 }
 
@@ -295,6 +366,7 @@ void UWacomBattleCardPileDetailsScreen::NativeTick(
 	float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	RefreshResponsiveCardLayout();
 	const float DeltaSeconds = FMath::Max(0.0f, InDeltaTime);
 	if (DetailCandidateItem && !DetailVisibleItem)
 	{
@@ -349,7 +421,19 @@ void UWacomBattleCardPileDetailsScreen::SetPileDetailsContext(
 	ActiveTab = InInitialTab;
 	ActiveDiscardSection = EWacomBattlePileDiscardSection::Discard;
 	ResolveRuntimeBindings();
+	RefreshResponsiveCardLayout(true);
 	RebuildItems();
+}
+
+void UWacomBattleCardPileDetailsScreen::SetRestingHandCardPresentationProfile(
+	const FWacomFirstPersonCardRestingPresentationProfile& InProfile)
+{
+	RestingHandCardPresentationProfile = InProfile;
+	bHasResolvedCardLayout = false;
+	if (WidgetTree && WidgetTree->RootWidget)
+	{
+		RefreshResponsiveCardLayout(true);
+	}
 }
 
 void UWacomBattleCardPileDetailsScreen::SetAuthoringDefaults(
@@ -358,6 +442,7 @@ void UWacomBattleCardPileDetailsScreen::SetAuthoringDefaults(
 {
 	PileDetailsStyle = InStyle;
 	EntryWidgetClass = InEntryClass;
+	bHasResolvedCardLayout = false;
 }
 
 FWacomBattleCardPileDetailsAutomationView
@@ -369,7 +454,31 @@ UWacomBattleCardPileDetailsScreen::GetAutomationTestView() const
 	View.bEmpty = ItemViewModels.IsEmpty();
 	View.bDetailVisible = bDetailWantsVisible && DetailVisibleItem != nullptr;
 	View.DetailInstanceId = DetailVisibleItem ? DetailVisibleItem->View.InstanceId : FGuid();
-	View.LockedInstanceId = LockedItem ? LockedItem->View.InstanceId : FGuid();
+	View.DetailCandidateInstanceId = DetailCandidateItem
+		? DetailCandidateItem->View.InstanceId
+		: FGuid();
+	View.PinnedInstanceId = PinnedItem ? PinnedItem->View.InstanceId : FGuid();
+	View.ResolvedViewportPixels = CachedViewportPixels;
+	View.ResolvedGlobalUIScale = CachedGlobalUIScale;
+	View.TargetPhysicalScale = ResolvedTargetPhysicalScale;
+	View.LocalPresentationScale = ResolvedLocalPresentationScale;
+	View.Title = TitleText ? TitleText->GetText().ToString() : FString();
+	View.EmptyMessage = EmptyText ? EmptyText->GetText().ToString() : FString();
+	View.DrawNavigationCount = DrawTabCountText
+		? FCString::Atoi(*DrawTabCountText->GetText().ToString())
+		: 0;
+	View.DiscardNavigationCount = DiscardTabCountText
+		? FCString::Atoi(*DiscardTabCountText->GetText().ToString())
+		: 0;
+	View.ExhaustNavigationCount = ExhaustTabCountText
+		? FCString::Atoi(*ExhaustTabCountText->GetText().ToString())
+		: 0;
+	if (const UWacomBattleCardPileItemViewModel* FirstItem =
+		ItemViewModels.IsEmpty() ? nullptr : ItemViewModels[0].Get())
+	{
+		View.ResolvedCardSize = FirstItem->CardSize;
+		View.ResolvedEntrySize = FirstItem->EntrySize;
+	}
 	View.VisibleInstanceIds.Reserve(ItemViewModels.Num());
 	View.VisibleRuntimeCosts.Reserve(ItemViewModels.Num());
 	for (const UWacomBattleCardPileItemViewModel* Item : ItemViewModels)
@@ -399,6 +508,12 @@ void UWacomBattleCardPileDetailsScreen::ResolveRuntimeBindings()
 	WACOM_RESOLVE_BINDING(UImage, DrawTabIcon)
 	WACOM_RESOLVE_BINDING(UImage, DiscardTabIcon)
 	WACOM_RESOLVE_BINDING(UImage, ExhaustTabIcon)
+	WACOM_RESOLVE_BINDING(UTextBlock, DrawTabLabelText)
+	WACOM_RESOLVE_BINDING(UTextBlock, DiscardTabLabelText)
+	WACOM_RESOLVE_BINDING(UTextBlock, ExhaustTabLabelText)
+	WACOM_RESOLVE_BINDING(UTextBlock, DrawTabCountText)
+	WACOM_RESOLVE_BINDING(UTextBlock, DiscardTabCountText)
+	WACOM_RESOLVE_BINDING(UTextBlock, ExhaustTabCountText)
 	WACOM_RESOLVE_BINDING(UHorizontalBox, DiscardSectionRoot)
 	WACOM_RESOLVE_BINDING(UButton, DiscardSectionButton)
 	WACOM_RESOLVE_BINDING(UButton, PlayedSectionButton)
@@ -414,7 +529,7 @@ void UWacomBattleCardPileDetailsScreen::ResolveRuntimeBindings()
 	{
 		NavigationRail->SetWidthOverride(PileDetailsStyle
 			? FMath::Max(1.0f, PileDetailsStyle->NavigationRailWidthPixels)
-			: 128.0f);
+			: 96.0f);
 	}
 	if (PileDetailsStyle)
 	{
@@ -444,20 +559,190 @@ void UWacomBattleCardPileDetailsScreen::ResolveRuntimeBindings()
 			? TSubclassOf<UUserWidget>(EntryWidgetClass)
 			: TSubclassOf<UUserWidget>(UBattleCardPileEntryWidget::StaticClass());
 		VirtualizedCardTileView->SetRuntimeEntryWidgetClass(ResolvedEntryClass);
-		if (PileDetailsStyle)
-		{
-			const float EntryPadding = FMath::Max(0.0f, PileDetailsStyle->CardEntryPaddingPixels);
-			const float HorizontalSpacing = FMath::Max(0.0f, PileDetailsStyle->CardHorizontalSpacingPixels);
-			const float VerticalSpacing = FMath::Max(0.0f, PileDetailsStyle->CardVerticalSpacingPixels);
-			VirtualizedCardTileView->SetEntryWidth(
-				FMath::Max(1.0f, PileDetailsStyle->CardWidthPixels)
-				+ EntryPadding * 2.0f + HorizontalSpacing);
-			VirtualizedCardTileView->SetEntryHeight(
-				FMath::Max(1.0f, PileDetailsStyle->CardHeightPixels)
-				+ EntryPadding * 2.0f + VerticalSpacing);
-		}
+		VirtualizedCardTileView->SetEntryWidth(FMath::Max(1.0f, ResolvedEntrySize.X));
+		VirtualizedCardTileView->SetEntryHeight(FMath::Max(1.0f, ResolvedEntrySize.Y));
 	}
 	UpdateNavigationVisuals();
+}
+
+bool UWacomBattleCardPileDetailsScreen::QueryViewportPresentationMetrics(
+	FVector2D& OutViewportPixels,
+	float& OutGlobalUIScale) const
+{
+	OutViewportPixels = FVector2D::ZeroVector;
+	OutGlobalUIScale = 0.0f;
+
+	if (APlayerController* PlayerController = GetOwningPlayer())
+	{
+		int32 Width = 0;
+		int32 Height = 0;
+		PlayerController->GetViewportSize(Width, Height);
+		OutViewportPixels = FVector2D(
+			static_cast<float>(Width),
+			static_cast<float>(Height));
+	}
+	else if (const UWorld* World = GetWorld())
+	{
+		if (const UGameViewportClient* GameViewport = World->GetGameViewport())
+		{
+			if (GameViewport->Viewport)
+			{
+				const FIntPoint Size = GameViewport->Viewport->GetSizeXY();
+				OutViewportPixels = FVector2D(
+					static_cast<float>(Size.X),
+					static_cast<float>(Size.Y));
+			}
+		}
+	}
+
+	OutGlobalUIScale = UWidgetLayoutLibrary::GetViewportScale(this);
+	return OutViewportPixels.X > 0.0f
+		&& OutViewportPixels.Y > 0.0f
+		&& FMath::IsFinite(OutGlobalUIScale)
+		&& OutGlobalUIScale > 0.0f;
+}
+
+void UWacomBattleCardPileDetailsScreen::RefreshResponsiveCardLayout(bool bForce)
+{
+	FVector2D ViewportPixels;
+	float GlobalUIScale = 0.0f;
+	if (!QueryViewportPresentationMetrics(ViewportPixels, GlobalUIScale))
+	{
+		if (bHasResolvedCardLayout)
+		{
+			return;
+		}
+		ViewportPixels = PileDetailsStyle
+			? PileDetailsStyle->ResponsiveReferenceViewportPixels
+			: FVector2D(1920.0f, 1080.0f);
+		GlobalUIScale = 1.0f;
+	}
+	ResolveAndApplyResponsiveCardLayout(ViewportPixels, GlobalUIScale, bForce);
+}
+
+void UWacomBattleCardPileDetailsScreen::ResolveAndApplyResponsiveCardLayout(
+	const FVector2D& ViewportPixels,
+	float GlobalUIScale,
+	bool bForce)
+{
+	if (!bForce
+		&& bHasResolvedCardLayout
+		&& CachedViewportPixels.Equals(ViewportPixels, 0.5f)
+		&& FMath::IsNearlyEqual(CachedGlobalUIScale, GlobalUIScale, 0.001f))
+	{
+		return;
+	}
+
+	const FVector2D ReferenceCardSize = PileDetailsStyle
+		? FVector2D(
+			FMath::Max(1.0f, PileDetailsStyle->CardWidthPixels),
+			FMath::Max(1.0f, PileDetailsStyle->CardHeightPixels))
+		: FVector2D(178.0f, 252.0f);
+	const float ReferencePadding = PileDetailsStyle
+		? FMath::Max(0.0f, PileDetailsStyle->CardEntryPaddingPixels)
+		: 4.0f;
+	const float ReferenceHorizontalSpacing = PileDetailsStyle
+		? FMath::Max(0.0f, PileDetailsStyle->CardHorizontalSpacingPixels)
+		: 12.0f;
+	const float ReferenceVerticalSpacing = PileDetailsStyle
+		? FMath::Max(0.0f, PileDetailsStyle->CardVerticalSpacingPixels)
+		: 14.0f;
+	const float ReferenceOutlineExtent = PileDetailsStyle
+		? FMath::Max(0.0f, PileDetailsStyle->SelectionOutlineExtentPixels)
+		: 4.0f;
+
+	float LayoutScale = 1.0f;
+	const FWacomBattleCardPileHandSizeMatchResult HandSizeMatch =
+		FWacomBattleCardPileThumbnailScalePolicy::ResolveMatchingRestingHand(
+			RestingHandCardPresentationProfile,
+			ViewportPixels,
+			GlobalUIScale);
+	if (HandSizeMatch.bValid)
+	{
+		ResolvedCardSize = HandSizeMatch.LogicalCardBodySize;
+		LayoutScale = ResolvedCardSize.X / ReferenceCardSize.X;
+		ResolvedTargetPhysicalScale =
+			HandSizeMatch.PhysicalCardBodySize.X / ReferenceCardSize.X;
+		ResolvedLocalPresentationScale = LayoutScale;
+	}
+	else
+	{
+		const FVector2D ReferenceViewport = PileDetailsStyle
+			? PileDetailsStyle->ResponsiveReferenceViewportPixels
+			: FVector2D(1920.0f, 1080.0f);
+		const float MinimumPhysicalScale = PileDetailsStyle
+			? PileDetailsStyle->MinimumCardPhysicalScale
+			: 0.90f;
+		const float MaximumPhysicalScale = PileDetailsStyle
+			? PileDetailsStyle->MaximumCardPhysicalScale
+			: 1.15f;
+		const FWacomBattleCardPileThumbnailScaleResult Scale =
+			FWacomBattleCardPileThumbnailScalePolicy::Resolve(
+				ViewportPixels,
+				GlobalUIScale,
+				ReferenceViewport,
+				MinimumPhysicalScale,
+				MaximumPhysicalScale);
+		LayoutScale = Scale.LocalScale;
+		ResolvedTargetPhysicalScale = Scale.TargetPhysicalScale;
+		ResolvedLocalPresentationScale = Scale.LocalScale;
+		ResolvedCardSize = ReferenceCardSize * Scale.LocalScale;
+	}
+
+	CachedViewportPixels = ViewportPixels;
+	CachedGlobalUIScale = GlobalUIScale;
+	ResolvedEntryPaddingPixels = ReferencePadding * LayoutScale;
+	ResolvedSelectionOutlineExtentPixels = ReferenceOutlineExtent * LayoutScale;
+	ResolvedEntrySize = FVector2D(
+		ResolvedCardSize.X
+			+ ResolvedEntryPaddingPixels * 2.0f
+			+ ReferenceHorizontalSpacing * LayoutScale,
+		ResolvedCardSize.Y
+			+ ResolvedEntryPaddingPixels * 2.0f
+			+ ReferenceVerticalSpacing * LayoutScale);
+	bHasResolvedCardLayout = true;
+	ApplyResolvedCardLayout();
+}
+
+void UWacomBattleCardPileDetailsScreen::ApplyResolvedCardLayout()
+{
+	if (VirtualizedCardTileView)
+	{
+		VirtualizedCardTileView->SetEntryWidth(FMath::Max(1.0f, ResolvedEntrySize.X));
+		VirtualizedCardTileView->SetEntryHeight(FMath::Max(1.0f, ResolvedEntrySize.Y));
+	}
+
+	for (UWacomBattleCardPileItemViewModel* Item : ItemViewModels)
+	{
+		if (!Item)
+		{
+			continue;
+		}
+		Item->CardSize = ResolvedCardSize;
+		Item->EntrySize = ResolvedEntrySize;
+		Item->EntryPaddingPixels = ResolvedEntryPaddingPixels;
+		Item->SelectionOutlineExtentPixels = ResolvedSelectionOutlineExtentPixels;
+	}
+
+	if (VirtualizedCardTileView)
+	{
+		for (UUserWidget* EntryWidget : VirtualizedCardTileView->GetDisplayedEntryWidgets())
+		{
+			if (UBattleCardPileEntryWidget* Entry =
+				Cast<UBattleCardPileEntryWidget>(EntryWidget))
+			{
+				Entry->RefreshResolvedLayout();
+				Entry->SetLockedSelected(Entry->GetItemViewModel() == PinnedItem);
+				Entry->InvalidateLayoutAndVolatility();
+			}
+		}
+		VirtualizedCardTileView->InvalidateLayoutAndVolatility();
+	}
+
+	if (bDetailWantsVisible)
+	{
+		UpdateDetailPanelPosition();
+	}
 }
 
 void UWacomBattleCardPileDetailsScreen::ApplyFullscreenLayout()
@@ -543,6 +828,10 @@ const FBattlePileInspectionSectionSnapshot* UWacomBattleCardPileDetailsScreen::R
 void UWacomBattleCardPileDetailsScreen::RebuildItems()
 {
 	ResolveRuntimeBindings();
+	if (!bHasResolvedCardLayout)
+	{
+		RefreshResponsiveCardLayout(true);
+	}
 	ClearItems();
 	UpdateCountLabels();
 
@@ -558,21 +847,12 @@ void UWacomBattleCardPileDetailsScreen::RebuildItems()
 				Item->SelectionOutlineMaterial = PileDetailsStyle->SelectionOutlineMaterialInstance;
 				Item->HoverOutlineAmount = FMath::Max(0.0f, PileDetailsStyle->HoverOutlineAmount);
 				Item->LockedOutlineAmount = FMath::Max(0.0f, PileDetailsStyle->LockedOutlineAmount);
-				Item->SelectionOutlineExtentPixels = FMath::Max(
-					0.0f,
-					PileDetailsStyle->SelectionOutlineExtentPixels);
+				Item->SelectionOutlineExtentPixels = ResolvedSelectionOutlineExtentPixels;
 				Item->bReducedMotion = bRuntimeSimplifiedMotion;
 				Item->CardViewClass = PileDetailsStyle->CardViewClass;
-				const float EntryPadding = FMath::Max(0.0f, PileDetailsStyle->CardEntryPaddingPixels);
-				const float HorizontalSpacing = FMath::Max(0.0f, PileDetailsStyle->CardHorizontalSpacingPixels);
-				const float VerticalSpacing = FMath::Max(0.0f, PileDetailsStyle->CardVerticalSpacingPixels);
-				Item->CardSize = FVector2D(
-					FMath::Max(1.0f, PileDetailsStyle->CardWidthPixels),
-					FMath::Max(1.0f, PileDetailsStyle->CardHeightPixels));
-				Item->EntrySize = FVector2D(
-					Item->CardSize.X + EntryPadding * 2.0f + HorizontalSpacing,
-					Item->CardSize.Y + EntryPadding * 2.0f + VerticalSpacing);
-				Item->EntryPaddingPixels = EntryPadding;
+				Item->CardSize = ResolvedCardSize;
+				Item->EntrySize = ResolvedEntrySize;
+				Item->EntryPaddingPixels = ResolvedEntryPaddingPixels;
 			}
 			if (!Item->CardViewClass)
 			{
@@ -639,19 +919,39 @@ void UWacomBattleCardPileDetailsScreen::UpdateCountLabels()
 	const int32 DiscardCount = CountFor(ECardLocation::Discard);
 	const int32 PlayedCount = CountFor(ECardLocation::Played);
 	const int32 ExhaustCount = CountFor(ECardLocation::Exhaust);
+	if (DrawTabCountText)
+	{
+		DrawTabCountText->SetText(FText::AsNumber(DrawCount));
+	}
+	if (DiscardTabCountText)
+	{
+		DiscardTabCountText->SetText(FText::AsNumber(DiscardCount + PlayedCount));
+	}
+	if (ExhaustTabCountText)
+	{
+		ExhaustTabCountText->SetText(FText::AsNumber(ExhaustCount));
+	}
 	if (TitleText)
 	{
 		switch (ActiveTab)
 		{
 		case EWacomBattlePileDetailsTab::Draw:
-			TitleText->SetText(FText::Format(LOCTEXT("DrawCount", "抽牌堆 {0}"), DrawCount));
+			TitleText->SetText(FText::Format(LOCTEXT("DrawCount", "抽牌堆 · {0}"), DrawCount));
 			break;
 		case EWacomBattlePileDetailsTab::Discard:
-			TitleText->SetText(FText::Format(
-				LOCTEXT("DiscardCombinedCount", "弃牌 {0}+{1}"), DiscardCount, PlayedCount));
+			if (ActiveDiscardSection == EWacomBattlePileDiscardSection::Played)
+			{
+				TitleText->SetText(FText::Format(
+					LOCTEXT("PlayedCount", "本回合已使用 · {0}"), PlayedCount));
+			}
+			else
+			{
+				TitleText->SetText(FText::Format(
+					LOCTEXT("DiscardCount", "弃牌堆 · {0}"), DiscardCount));
+			}
 			break;
 		case EWacomBattlePileDetailsTab::Exhaust:
-			TitleText->SetText(FText::Format(LOCTEXT("ExhaustCount", "消耗 {0}"), ExhaustCount));
+			TitleText->SetText(FText::Format(LOCTEXT("ExhaustCount", "消耗区 · {0}"), ExhaustCount));
 			break;
 		}
 	}
@@ -662,6 +962,23 @@ void UWacomBattleCardPileDetailsScreen::UpdateCountLabels()
 	if (PlayedSectionLabel)
 	{
 		PlayedSectionLabel->SetText(FText::Format(LOCTEXT("PlayedSectionCount", "本回合已使用 {0}"), PlayedCount));
+	}
+	if (EmptyText)
+	{
+		switch (ActiveTab)
+		{
+		case EWacomBattlePileDetailsTab::Draw:
+			EmptyText->SetText(LOCTEXT("DrawEmpty", "抽牌堆为空"));
+			break;
+		case EWacomBattlePileDetailsTab::Discard:
+			EmptyText->SetText(ActiveDiscardSection == EWacomBattlePileDiscardSection::Played
+				? LOCTEXT("PlayedEmpty", "本回合还没有使用卡牌")
+				: LOCTEXT("DiscardEmpty", "弃牌堆为空"));
+			break;
+		case EWacomBattlePileDetailsTab::Exhaust:
+			EmptyText->SetText(LOCTEXT("ExhaustEmpty", "本场战斗还没有消耗卡牌"));
+			break;
+		}
 	}
 }
 
@@ -676,6 +993,8 @@ void UWacomBattleCardPileDetailsScreen::UpdateNavigationVisuals()
 	auto Apply = [this, Idle, Selected](
 		UButton* Button,
 		UImage* Icon,
+		UTextBlock* Label,
+		UTextBlock* Count,
 		EWacomBattlePileDetailsTab Tab)
 	{
 		const bool bSelected = ActiveTab == Tab;
@@ -687,15 +1006,40 @@ void UWacomBattleCardPileDetailsScreen::UpdateNavigationVisuals()
 		{
 			Icon->SetColorAndOpacity(bSelected ? Selected : Idle);
 		}
+		if (Label)
+		{
+			Label->SetColorAndOpacity(FSlateColor(bSelected ? Selected : Idle));
+		}
+		if (Count)
+		{
+			Count->SetColorAndOpacity(FSlateColor(
+				bSelected ? Selected * 0.92f : Idle * 0.82f));
+		}
 	};
-	Apply(DrawTabButton, DrawTabIcon, EWacomBattlePileDetailsTab::Draw);
-	Apply(DiscardTabButton, DiscardTabIcon, EWacomBattlePileDetailsTab::Discard);
-	Apply(ExhaustTabButton, ExhaustTabIcon, EWacomBattlePileDetailsTab::Exhaust);
+	Apply(
+		DrawTabButton,
+		DrawTabIcon,
+		DrawTabLabelText,
+		DrawTabCountText,
+		EWacomBattlePileDetailsTab::Draw);
+	Apply(
+		DiscardTabButton,
+		DiscardTabIcon,
+		DiscardTabLabelText,
+		DiscardTabCountText,
+		EWacomBattlePileDetailsTab::Discard);
+	Apply(
+		ExhaustTabButton,
+		ExhaustTabIcon,
+		ExhaustTabLabelText,
+		ExhaustTabCountText,
+		EWacomBattlePileDetailsTab::Exhaust);
 }
 
 void UWacomBattleCardPileDetailsScreen::ClearItems()
 {
 	HideDetailPanel(true);
+	PinnedItem = nullptr;
 	HoveredItem = nullptr;
 	FocusedItem = nullptr;
 	DetailCandidateItem = nullptr;
@@ -712,7 +1056,6 @@ void UWacomBattleCardPileDetailsScreen::ClearItems()
 		}
 		VirtualizedCardTileView->ClearListItems();
 	}
-	LockedItem = nullptr;
 	ItemViewModels.Reset();
 }
 
@@ -720,12 +1063,9 @@ void UWacomBattleCardPileDetailsScreen::HandleItemClicked(UObject* Item)
 {
 	if (UWacomBattleCardPileItemViewModel* PileItem = Cast<UWacomBattleCardPileItemViewModel>(Item))
 	{
-		if (LockedItem == PileItem)
-		{
-			return;
-		}
-		LockedItem = PileItem;
+		PinnedItem = PinnedItem == PileItem ? nullptr : PileItem;
 		ApplyEntrySelectionStates();
+		RefreshDetailCandidate(PinnedItem == PileItem);
 	}
 }
 
@@ -755,13 +1095,21 @@ void UWacomBattleCardPileDetailsScreen::HandleItemHoveredChanged(
 	{
 		HoveredItem = nullptr;
 	}
-	SetDetailCandidate(HoveredItem ? HoveredItem.Get() : FocusedItem.Get());
+	RefreshDetailCandidate(!HoveredItem && !FocusedItem && PinnedItem != nullptr);
 }
 
 void UWacomBattleCardPileDetailsScreen::HandleListViewScrolled(
 	float /*ItemOffset*/,
 	float /*DistanceRemaining*/)
 {
+	if (PinnedItem
+		&& VirtualizedCardTileView
+		&& !VirtualizedCardTileView->GetEntryWidgetFromItem(PinnedItem))
+	{
+		PinnedItem = nullptr;
+		ApplyEntrySelectionStates();
+		RefreshDetailCandidate(false);
+	}
 	UpdateDetailPanelPosition();
 }
 
@@ -785,7 +1133,7 @@ void UWacomBattleCardPileDetailsScreen::HandleEntryWidgetGenerated(UUserWidget& 
 				Item->LockedOutlineAmount,
 				Item->SelectionOutlineExtentPixels,
 				Item->bReducedMotion);
-			Entry->SetLockedSelected(Item == LockedItem);
+			Entry->SetLockedSelected(Item == PinnedItem);
 		}
 	}
 }
@@ -797,13 +1145,30 @@ void UWacomBattleCardPileDetailsScreen::HandleEntryWidgetReleased(UUserWidget& E
 		UWacomBattleCardPileItemViewModel* ReleasedItem = Entry->GetItemViewModel();
 		Entry->OnHoverChangedNative().RemoveAll(this);
 		Entry->OnFocusChangedNative().RemoveAll(this);
-		if (ReleasedItem && (DetailCandidateItem == ReleasedItem || DetailVisibleItem == ReleasedItem))
+		bool bRefreshDetail = false;
+		if (ReleasedItem && PinnedItem == ReleasedItem)
 		{
-			ClearDetailCandidate();
+			PinnedItem = nullptr;
+			bRefreshDetail = true;
+		}
+		if (ReleasedItem && HoveredItem == ReleasedItem)
+		{
+			HoveredItem = nullptr;
+			bRefreshDetail = true;
 		}
 		if (ReleasedItem && FocusedItem == ReleasedItem)
 		{
 			FocusedItem = nullptr;
+			bRefreshDetail = true;
+		}
+		if (ReleasedItem && (DetailCandidateItem == ReleasedItem || DetailVisibleItem == ReleasedItem))
+		{
+			bRefreshDetail = true;
+		}
+		if (bRefreshDetail)
+		{
+			ApplyEntrySelectionStates();
+			RefreshDetailCandidate(PinnedItem != nullptr);
 		}
 	}
 }
@@ -825,7 +1190,7 @@ void UWacomBattleCardPileDetailsScreen::HandleEntryHoverChanged(
 	{
 		HoveredItem = nullptr;
 	}
-	SetDetailCandidate(HoveredItem ? HoveredItem.Get() : FocusedItem.Get());
+	RefreshDetailCandidate(!HoveredItem && !FocusedItem && PinnedItem != nullptr);
 }
 
 void UWacomBattleCardPileDetailsScreen::HandleEntryFocusChanged(
@@ -845,7 +1210,7 @@ void UWacomBattleCardPileDetailsScreen::HandleEntryFocusChanged(
 	{
 		FocusedItem = nullptr;
 	}
-	SetDetailCandidate(HoveredItem ? HoveredItem.Get() : FocusedItem.Get());
+	RefreshDetailCandidate(!HoveredItem && !FocusedItem && PinnedItem != nullptr);
 }
 
 void UWacomBattleCardPileDetailsScreen::ApplyEntrySelectionStates()
@@ -858,16 +1223,48 @@ void UWacomBattleCardPileDetailsScreen::ApplyEntrySelectionStates()
 	{
 		if (UBattleCardPileEntryWidget* Entry = Cast<UBattleCardPileEntryWidget>(EntryWidget))
 		{
-			Entry->SetLockedSelected(Entry->GetItemViewModel() == LockedItem);
+			Entry->SetLockedSelected(Entry->GetItemViewModel() == PinnedItem);
 		}
 	}
 }
 
+UWacomBattleCardPileItemViewModel*
+UWacomBattleCardPileDetailsScreen::ResolvePreferredDetailItem() const
+{
+	if (HoveredItem)
+	{
+		return HoveredItem.Get();
+	}
+	if (FocusedItem)
+	{
+		return FocusedItem.Get();
+	}
+	return PinnedItem.Get();
+}
+
+void UWacomBattleCardPileDetailsScreen::RefreshDetailCandidate(
+	bool bShowPinnedImmediately)
+{
+	UWacomBattleCardPileItemViewModel* PreferredItem = ResolvePreferredDetailItem();
+	const bool bPinnedIsPreferred = PreferredItem
+		&& PreferredItem == PinnedItem
+		&& !HoveredItem
+		&& !FocusedItem;
+	SetDetailCandidate(
+		PreferredItem,
+		bShowPinnedImmediately || bPinnedIsPreferred);
+}
+
 void UWacomBattleCardPileDetailsScreen::SetDetailCandidate(
-	UWacomBattleCardPileItemViewModel* Item)
+	UWacomBattleCardPileItemViewModel* Item,
+	bool bShowImmediately)
 {
 	if (DetailCandidateItem == Item && (Item || !DetailVisibleItem))
 	{
+		if (bShowImmediately && Item && DetailVisibleItem != Item)
+		{
+			ShowDetailPanel(*Item);
+		}
 		return;
 	}
 	DetailCandidateItem = Item;
@@ -881,6 +1278,10 @@ void UWacomBattleCardPileDetailsScreen::SetDetailCandidate(
 	{
 		DetailVisibleItem = nullptr;
 		bDetailWantsVisible = false;
+	}
+	if (bShowImmediately)
+	{
+		ShowDetailPanel(*Item);
 	}
 }
 

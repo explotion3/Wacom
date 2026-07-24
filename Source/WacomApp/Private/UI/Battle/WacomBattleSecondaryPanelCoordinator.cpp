@@ -239,6 +239,16 @@ void FWacomBattleSecondaryPanelCoordinator::AttachCardPileScreen(
 	ActiveScreen = &Screen;
 	Screen.OnSecondaryPanelClosedNative().RemoveAll(this);
 	Screen.OnSecondaryPanelClosedNative().AddSP(AsShared(), &FWacomBattleSecondaryPanelCoordinator::HandleScreenClosed);
+	if (const UWacomFirstPersonCardAnchorComponent* ActiveAnchor =
+		Runtime.ResolveActiveFirstPersonCardAnchor())
+	{
+		Screen.SetRestingHandCardPresentationProfile(
+			ActiveAnchor->BuildRestingCardPresentationProfile());
+	}
+	else
+	{
+		Screen.SetRestingHandCardPresentationProfile({});
+	}
 	Screen.SetPileDetailsContext(PendingPileSnapshot, PendingPileTab);
 	bCardPileHandHidden = Runtime.SetFirstPersonBattleHandPresentationVisible(false);
 }

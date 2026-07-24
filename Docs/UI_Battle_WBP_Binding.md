@@ -563,27 +563,29 @@ WBP 不应做：不修改牌堆或规则状态，不自行计算数量，也不�
 | 控件名 | 类型 | 运行时职责 |
 |---|---|---|
 | `BackdropButton` / `CloseButton` | `Button` | 面板外点击与显式关闭；其余 Esc、右键、手柄 B 由 Secondary Panel 基类处理 |
-| `NavigationRail` | `SizeBox` | 左侧约 `128px` 的牌区导航栏；保持独立宽度，不参与卡牌网格缩放 |
-| `DrawTabButton` / `DiscardTabButton` / `ExhaustTabButton` | `Button` | 三个主牌区图标页签；当前分页使用 Style 中的冰蓝/暖金选中色 |
+| `NavigationRail` | `SizeBox` | 左侧固定 `96px` 的牌区导航栏；保持独立宽度，不参与卡牌网格缩放 |
+| `DrawTabButton` / `DiscardTabButton` / `ExhaustTabButton` | `Button` | 三个主牌区页签；约 `36px` 图标配合短标签、数量和中文 Tooltip，当前分页使用 Style 中的冰蓝/暖金选中色 |
 | `DrawTabIcon` / `DiscardTabIcon` / `ExhaustTabIcon` | `Image` | 复用现有 Draw / Discard / Exhaust 图标资产，不在 WBP 中复制纹理 |
+| `DrawTabLabelText` / `DiscardTabLabelText` / `ExhaustTabLabelText` | `TextBlock` | 固定短标签：抽牌 / 弃牌 / 消耗 |
+| `DrawTabCountText` / `DiscardTabCountText` / `ExhaustTabCountText` | `TextBlock` | 主牌区数量；弃牌数量为弃牌堆与本回合已使用之和 |
 | `DiscardSectionRoot` | `HorizontalBox` | 仅 Discard 页显示 |
 | `DiscardSectionButton` / `PlayedSectionButton` | `Button` | 真正弃牌与本回合已使用两个独立区域，各自显示准确 Count |
 | `PanelSizeBox` | `SizeBox` | 使用全视口锚点并保留默认 `24px` 安全边距；不再限制为左侧 `680px` 面板 |
 | `CardGridSizeBox` | `SizeBox` | 承载填满剩余页面的卡牌网格 |
 | `VirtualizedCardTileView` | `UWacomBattleCardPileTileView` | 虚拟化逐实例网格，不一次创建整副牌完整 Widget |
-| `TitleText` / `EmptyText` | `TextBlock` | 当前区域与数量、空区域提示；Draw 顺序仍在规则层脱敏，但不显示说明文案 |
+| `TitleText` / `EmptyText` | `TextBlock` | 当前区域与数量、分区专属空状态；Draw 顺序仍在规则层脱敏，但不显示说明文案 |
 | `DetailPanelHost` | `SizeBox` | Screen 级唯一详情宿主；运行时复用一个正式 `WBP_CardDetailPanel`，按悬浮/焦点条目几何在左右侧定位并限制在安全区 |
 
 ### WBP_BattleCardPileEntry
 
-父类：`UBattleCardPileEntryWidget`。必需绑定为 `EntrySizeBox`、`SelectionOutlineImage` 与固定尺寸 `CardHost`。运行时依据 `DA_BattleCardPileDetailsStyle_Default.CardViewClass` 在 Host 中创建正式 `/Game/Wacom/UI/Card/WBP_CardView`，而不是创建只有 C++ fallback 排版的裸 `UWacomCardView`。默认卡体为项目原始 `296×420px`，Tile 条目再增加选框留白与网格间距；`CardHost` 必须保持显式宽高，不允许由 Fill 父槽把卡面非等比拉长。`SelectionOutlineImage` 位于 CardHost 下方，只有 Hover、焦点或点击锁定时才按需创建局部 MID；点击锁定只保留外框，详情仍由当前 Hover/焦点控制。条目回收时必须清除 MID、焦点委托和临时状态。
+父类：`UBattleCardPileEntryWidget`。必需绑定为 `EntrySizeBox`、`SelectionOutlineImage`、`CardHost` 与 `CardScaleBox`。WBP 制作参考尺寸为 `EntrySizeBox 198×274px`、`CardHost 178×252px`；正式 BattleHUD 运行时以当前 Anchor 的“未悬停手牌基础卡体”物理尺寸覆盖 CardHost，并用同一个局部倍率更新 Entry，二者不是固定屏幕物理尺寸。只有缺失有效 Anchor 时才使用 Style 的 Viewport/DPI 响应式回退。`CardHost / CardScaleBox` 都必须不可命中，ScaleBox 使用 `ScaleToFit + DownOnly`。运行时依据 `DA_BattleCardPileDetailsStyle_Default.CardViewClass` 在 ScaleBox 中创建正式 `296×420px /Game/Wacom/UI/Card/WBP_CardView`，而不是创建只有 C++ fallback 排版的裸 `UWacomCardView`，也不使用 RenderTransform 缩放。CardHost、Tile Entry、留白、间距、选框扩展和命中几何必须使用同一个局部倍率；分辨率变化只调用 Entry 的布局刷新，不得重建卡面。`SelectionOutlineImage` 位于 CardHost 下方，只有 Hover、焦点或固定状态时才按需创建局部 MID；点击立即固定详情，再次点击取消，详情来源优先级固定为 `Hover > Keyboard Focus > Pinned`。条目回收、固定卡滚出可见范围、切页和 Screen teardown 时必须清除 MID、焦点委托和无效固定状态。
 
 ```powershell
 -run=WacomBuildBattlePileDetailsUI -Build
 -run=WacomBuildBattlePileDetailsUI -InspectOnly
 ```
 
-Builder 只管理上述两个 WBP、默认 Style 和 Registry 合同；当前正式合同为 v5（全屏虚拟化卡牌网格 + 单详情宿主 + 材质流光选框）。未知人工 WidgetTree 会失败而不是覆盖。第二次 Build 必须无语义变化。页面不提供排序控件，内部固定使用 `RuntimeCost → Name → InstanceId`；Draw 区始终隐藏真实牌序，但不显示额外提示。
+Builder 只管理上述两个 WBP、默认 Style 和 Registry 合同；当前正式合同为 v7（`178×252` ScaleBox 制作参考 + `198×274` Tile Entry + 运行时匹配未悬停手牌卡体 + 无 Anchor 时 `1920×1080 / 0.90–1.15` 响应式回退 + `96px` 标签/数量导航 + 可固定单详情宿主）。未知人工 WidgetTree 会失败而不是覆盖。第二次 Build 必须无语义变化。页面不提供排序控件，内部固定使用 `RuntimeCost → Name → InstanceId`；Draw 区始终隐藏真实牌序，但不显示额外提示。
 
 ## Enemy Panel WBP
 
