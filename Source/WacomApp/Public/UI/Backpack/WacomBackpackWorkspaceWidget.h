@@ -19,6 +19,7 @@ class UWacomFirstPersonCardPlayedDissolveStyle;
 struct FWacomBackpackZoneKey;
 class FWacomBackpackWorkspaceInteractionModel;
 class FWacomBackpackWorkspaceRuntime;
+class FWacomBackpackWorkspaceRuntimeHost;
 class FWacomBackpackWorkspaceVisualState;
 class FWacomBackpackCardDetailController;
 struct FWacomBackpackWorkspaceReconciler;
@@ -228,24 +229,7 @@ private:
 	int32 FullPresentationRefreshCount = 0;
 	/** Screen 完成一次权威 Scene reconcile 后绑定卡牌集合的次数。 */
 	int32 WorkspaceSceneBindCount = 0;
-	/** 基础布局过渡的帧数；与全量刷新计数配合验证定向更新合同。 */
-	int32 BaseCardLayoutTransitionTickCount = 0;
-	/** 基础布局过渡实际更新的卡牌次数。 */
-	int32 BaseCardLayoutTransitionApplyCount = 0;
-	int32 PresentationFlushCount = 0;
-	int32 NavigationTargetsApplyCount = 0;
-	int32 CarryTopologyApplyCount = 0;
-	int32 CarryStripApplyCount = 0;
-	int32 StaticCardStageApplyCount = 0;
-	int32 CardSemanticsStageApplyCount = 0;
-	int32 MotionTargetApplyCount = 0;
-	int32 NavigationPresentationApplyCount = 0;
-	int32 AccessibilityApplyCount = 0;
-	int32 PaintInvalidationApplyCount = 0;
 	int32 LocalCardApplyCount = 0;
-	bool bLastPresentationAppliedAllCards = false;
-	TArray<FGuid> LastPresentationAppliedInstanceIds;
-	int32 FrameSchedulerTickCount = 0;
 #endif
 
 	void EnsureFallbackTree();
@@ -303,7 +287,6 @@ private:
 		TConstArrayView<FGuid> CardInstanceIds = {},
 		bool bAllCards = false,
 		bool bFlushImmediately = true);
-	void FlushPresentationRefresh();
 	void ForEachPresentationCard(
 		const FWacomBackpackWorkspacePresentationRequest& Request,
 		TFunctionRef<void(UWacomDeckCardWidget&)> Apply);
@@ -326,11 +309,9 @@ private:
 	void WakeFrameScheduler();
 	void EnsureFrameSchedulerRunning();
 	void StopFrameScheduler();
-	void RefreshFrameWorkFromState();
 	EActiveTimerReturnType TickFrameScheduler(
 		uint64 TimerGeneration,
 		float DeltaSeconds);
-	bool TickBaseCardLayoutTransitions(float DeltaSeconds);
 	void ApplyStaticCardPresentation(
 		UWacomDeckCardWidget& CardWidget,
 		const UWacomBackpackWorkspaceStyle& Style);
@@ -343,7 +324,6 @@ private:
 	void UpdateExpandedPileLensFocus(FVector2D PointerLocal);
 	void SetExpandedPileLensInputLocked(bool bLocked, bool bResumeImmediately);
 	void SyncExpandedPileLensInputLockFromPointerEvent(const FPointerEvent& PointerEvent);
-	void RefreshExpandedPileVisualHitAtCachedPointer();
 	enum class EExpandedPileHitResolveMode : uint8
 	{
 		PointerAcquisition,
@@ -353,7 +333,6 @@ private:
 		FVector2D PointerLocal,
 		EExpandedPileHitResolveMode ResolveMode) const;
 	void BeginExpandedPileFocusExit();
-	void TickExpandedPileFocusExit(float DeltaTime);
 	void SetExpandedPileFocusIndex(int32 FocusIndex);
 	bool RebuildExpandedPileFocusLayout();
 	void SyncExpandedPileHitLayouts(bool bUseFocusedTargets);
@@ -381,7 +360,6 @@ private:
 	bool ResolveCardDetailAnchorRect(
 		const UWacomDeckCardWidget& Card,
 		FSlateRect& OutWorkspaceLocalRect) const;
-	void FinalizeCompletedSettlements();
 	void CancelInteractionWithReturn();
 	void RestoreStaticCardParents();
 	bool IsSaleDepartureCard(const UWacomDeckCardWidget* CardWidget) const;
@@ -389,13 +367,13 @@ private:
 	bool IsInSettlementVisualLayer(const UWidget* CardWidget) const;
 	void RequestBoundCardFaceRenders();
 	void RequestDeferredCardFaceRender();
-	void ExecuteDeferredCardFaceRender();
 	bool AcceptStableLayoutGeometry(FVector2D LayoutSize);
 	FWacomBackpackWorkspaceRuntime& GetRuntime();
 	const FWacomBackpackWorkspaceRuntime& GetRuntime() const;
 	FWacomBackpackWorkspaceVisualState& GetVisualState();
 	const FWacomBackpackWorkspaceVisualState& GetVisualState() const;
 	const TArray<TWeakObjectPtr<UWacomBackpackZonePileWidget>>& GetRegisteredPileWidgets() const;
+	friend class FWacomBackpackWorkspaceRuntimeHost;
 	friend class FWacomBackpackCardDetailController;
 	friend struct FWacomBackpackWorkspaceReconciler;
 
@@ -492,6 +470,7 @@ struct WACOMAPP_API FWacomBackpackWorkspaceAutomationTestView
 	uint64 FrameSchedulerGeneration = 0;
 	uint64 FrameSchedulerFrameSerial = 0;
 	int32 FrameSchedulerTickCount = 0;
+	TArray<FName> LastFramePhaseOrder;
 	TArray<FVector2D> ActiveBaseCardLayoutTransitionTargetCenters;
 	bool bHasExpandedContentBounds = false;
 	bool bPileCollapseAnimationPending = false;

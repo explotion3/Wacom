@@ -137,6 +137,16 @@ struct FWacomBackpackScreenTestAccess
 	static void TickWorkspaceCardMotion(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		float DeltaSeconds);
+	static bool TickWorkspaceFrameScheduler(
+		UWacomBackpackWorkspaceWidget& Workspace,
+		uint64 TimerGeneration,
+		float DeltaSeconds);
+	static uint64 PrepareIdleWorkspaceFrameScheduler(
+		UWacomBackpackWorkspaceWidget& Workspace);
+	static bool HasWorkspaceRuntime(
+		const UWacomBackpackWorkspaceWidget& Workspace);
+	static void DestructWorkspace(
+		UWacomBackpackWorkspaceWidget& Workspace);
 	static void MoveWorkspaceBrowsePointer(
 		UWacomBackpackWorkspaceWidget& Workspace,
 		FVector2D PointerLocal);

@@ -31,6 +31,7 @@
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackCommandFlow.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceMotionCoordinator.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceRuntime.h"
+#include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceRuntimeHost.h"
 #include "../../../WacomApp/Private/UI/Backpack/WacomBackpackWorkspaceTypes.h"
 
 UWacomBackpackScreen* FWacomBackpackScreenTestAccess::Create(UObject* Outer, URunSession* RunSession)
@@ -297,8 +298,10 @@ void FWacomBackpackScreenTestAccess::FlushDeferredWorkspaceCardFaceRender(
 	if (Screen.WorkspaceWidget)
 	{
 		Screen.WorkspaceWidget->GetRuntime().FrameScheduler.BeginFrame();
-		Screen.WorkspaceWidget->FlushPresentationRefresh();
-		Screen.WorkspaceWidget->ExecuteDeferredCardFaceRender();
+		FWacomBackpackWorkspaceRuntimeHost Host(
+			*Screen.WorkspaceWidget);
+		Host.FlushPresentation();
+		Host.ExecuteDeferredCardFaceRender();
 	}
 }
 
@@ -500,7 +503,8 @@ void FWacomBackpackScreenTestAccess::FlushWorkspaceCarryPointer(
 			*Style,
 			Workspace.GetRuntime().Presentation.IsSimplifiedMotion());
 	}
-	Workspace.FinalizeCompletedSettlements();
+	FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+	Host.FinalizeCompletedSettlements();
 }
 
 void FWacomBackpackScreenTestAccess::RefreshWorkspacePresentation(
@@ -595,7 +599,8 @@ void FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
 	while (RemainingSeconds > UE_SMALL_NUMBER)
 	{
 		const float StepSeconds = FMath::Min(RemainingSeconds, 1.0f / 60.0f);
-		Workspace.RefreshFrameWorkFromState();
+		FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+		Host.RefreshFrameWork();
 		FWacomBackpackWorkspaceFrameScheduler& Scheduler =
 			Workspace.GetRuntime().FrameScheduler;
 		if (!Scheduler.WantsFrame())
@@ -608,6 +613,34 @@ void FWacomBackpackScreenTestAccess::TickWorkspaceCardMotion(
 		Workspace.TickFrameScheduler(Generation, StepSeconds);
 		RemainingSeconds -= StepSeconds;
 	}
+}
+
+bool FWacomBackpackScreenTestAccess::TickWorkspaceFrameScheduler(
+	UWacomBackpackWorkspaceWidget& Workspace,
+	const uint64 TimerGeneration,
+	const float DeltaSeconds)
+{
+	return Workspace.TickFrameScheduler(TimerGeneration, DeltaSeconds)
+		== EActiveTimerReturnType::Continue;
+}
+
+uint64 FWacomBackpackScreenTestAccess::PrepareIdleWorkspaceFrameScheduler(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	Workspace.GetRuntime().FrameScheduler.Reset();
+	return Workspace.GetRuntime().FrameScheduler.MarkTimerRegistered();
+}
+
+bool FWacomBackpackScreenTestAccess::HasWorkspaceRuntime(
+	const UWacomBackpackWorkspaceWidget& Workspace)
+{
+	return Workspace.Runtime.IsValid();
+}
+
+void FWacomBackpackScreenTestAccess::DestructWorkspace(
+	UWacomBackpackWorkspaceWidget& Workspace)
+{
+	Workspace.NativeDestruct();
 }
 
 void FWacomBackpackScreenTestAccess::MoveWorkspaceBrowsePointer(
@@ -718,7 +751,8 @@ void FWacomBackpackScreenTestAccess::TickWorkspaceBrowseExit(
 	UWacomBackpackWorkspaceWidget& Workspace,
 	float DeltaSeconds)
 {
-	Workspace.TickExpandedPileFocusExit(DeltaSeconds);
+	FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+	Host.AdvanceExpandedPileFocusExit(DeltaSeconds);
 }
 
 bool FWacomBackpackScreenTestAccess::MarqueeWorkspacePileContents(
@@ -1306,7 +1340,8 @@ bool FWacomBackpackScreenTestAccess::TickWorkspaceBaseCardLayoutTransitions(
 	UWacomBackpackWorkspaceWidget& Workspace,
 	float DeltaSeconds)
 {
-	return Workspace.TickBaseCardLayoutTransitions(DeltaSeconds);
+	FWacomBackpackWorkspaceRuntimeHost Host(Workspace);
+	return Host.AdvanceBaseCardLayoutTransitions(DeltaSeconds);
 }
 
 void FWacomBackpackScreenTestAccess::SubmitWorkspaceDelete(

@@ -6,6 +6,11 @@
 #include "RunStateTypes.h"
 #include "UI/Backpack/WacomBackpackWorkspaceWidget.h"
 
+class FWacomBackpackWorkspaceRuntimeHost;
+#if WITH_AUTOMATION_TESTS
+struct FWacomBackpackScreenTestAccess;
+#endif
+
 /** Workspace scene-level presentation state; UMG application remains in the Widget adapter. */
 class FWacomBackpackWorkspacePresentationController
 {
@@ -40,6 +45,21 @@ public:
 		*this = FWacomBackpackWorkspacePresentationController();
 	}
 
+	void RequestRefresh(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		EWacomBackpackWorkspacePresentationDirty Reasons,
+		TConstArrayView<FGuid> CardInstanceIds = {},
+		bool bAllCards = false,
+		bool bFlushImmediately = true);
+	void Flush(FWacomBackpackWorkspaceRuntimeHost& Host);
+	void WakeFrame(FWacomBackpackWorkspaceRuntimeHost& Host);
+	void RefreshFrameWork(FWacomBackpackWorkspaceRuntimeHost& Host);
+	EActiveTimerReturnType TickFrame(
+		FWacomBackpackWorkspaceRuntimeHost& Host,
+		uint64 TimerGeneration,
+		float DeltaSeconds);
+
+private:
 	TWeakObjectPtr<UWacomDeckCardWidget> HoveredCardWidget;
 	EZoneKind ExpandedContentZone = EZoneKind::Backpack;
 	FGuid ExpandedContentOwnerInstanceId;
@@ -82,7 +102,36 @@ public:
 	FGuid SelectionFrozenOwnerInstanceId;
 	int32 ExpandedPileFocusLayoutRebuildCount = 0;
 
-private:
 	bool bSimplifiedMotion = false;
 	bool bCarryInputSuspended = false;
+
+#if WITH_AUTOMATION_TESTS
+	struct FAutomationMetrics
+	{
+		int32 PresentationFlushCount = 0;
+		int32 NavigationTargetsApplyCount = 0;
+		int32 CarryTopologyApplyCount = 0;
+		int32 CarryStripApplyCount = 0;
+		int32 StaticCardStageApplyCount = 0;
+		int32 CardSemanticsStageApplyCount = 0;
+		int32 MotionTargetApplyCount = 0;
+		int32 NavigationPresentationApplyCount = 0;
+		int32 AccessibilityApplyCount = 0;
+		int32 PaintInvalidationApplyCount = 0;
+		int32 FrameSchedulerTickCount = 0;
+		int32 BaseCardLayoutTransitionTickCount = 0;
+		int32 BaseCardLayoutTransitionApplyCount = 0;
+		bool bLastPresentationAppliedAllCards = false;
+		TArray<FGuid> LastPresentationAppliedInstanceIds;
+		TArray<FName> LastFramePhaseOrder;
+	};
+
+	FAutomationMetrics AutomationMetrics;
+#endif
+
+	friend class FWacomBackpackWorkspaceRuntimeHost;
+	friend class UWacomBackpackWorkspaceWidget;
+#if WITH_AUTOMATION_TESTS
+	friend struct FWacomBackpackScreenTestAccess;
+#endif
 };
