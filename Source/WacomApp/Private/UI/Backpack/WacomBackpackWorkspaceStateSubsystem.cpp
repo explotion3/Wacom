@@ -100,7 +100,10 @@ void FWacomBackpackWorkspaceStateStore::ReconcilePiles(
 	}
 	for (auto It = PileLayouts.CreateIterator(); It; ++It)
 	{
-		if (!Visible.Contains(It.Key()))
+		// Burden is a transient system-generated zone. Its cards can legitimately
+		// drain to zero and return later in the same Run, so keep the user's manual
+		// pile placement while the visual pile is temporarily absent.
+		if (!Visible.Contains(It.Key()) && It.Key().Zone != EZoneKind::BurdenZone)
 		{
 			It.RemoveCurrent();
 		}

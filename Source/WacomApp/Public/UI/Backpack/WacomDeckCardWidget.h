@@ -48,7 +48,6 @@ enum class EWacomBackpackWorkspaceCardReadOnlyKind : uint8
 	None,
 	BattleProjection,
 	SpecialOwner,
-	BurdenLocked,
 };
 
 /**

@@ -779,7 +779,7 @@ void UWacomBackpackScreen::HandlePileMoveCommitted(
 {
 	URunSession* Run = GetRunSession();
 	const FWacomBackpackZoneKey Key = FWacomBackpackZoneKey::Make(Zone, OwnerInstanceId);
-	if (!Run || !Key.IsValid() || Zone == EZoneKind::BurdenZone)
+	if (!Run || !Key.IsValid())
 	{
 		return;
 	}

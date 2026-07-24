@@ -196,9 +196,11 @@ bool FWacomUIBackpackRealPileSceneIdentitySpec::RunTest(const FString& Parameter
 		Interaction->GetSelection().OrderedSelectedInstanceIds,
 		TArray<FGuid>{ BattleId });
 	FWacomBackpackScreenTestAccess::ClearWorkspaceSelection(*Workspace);
-	TestEqual(TEXT("Burden card remains normally opaque but locked"),
+	TestEqual(TEXT("Collapsed Burden card keeps a normal physical identity"),
 		CollapsedCards[5]->GetWorkspaceReadOnlyKind(),
-		EWacomBackpackWorkspaceCardReadOnlyKind::BurdenLocked);
+		EWacomBackpackWorkspaceCardReadOnlyKind::None);
+	TestFalse(TEXT("Collapsed Burden card waits for pile expansion"),
+		CollapsedCards[5]->IsWorkspaceInteractionEnabled());
 	TestFalse(TEXT("Only Battle projections use read-only opacity"),
 		CollapsedCards[5]->UsesReadOnlyOpacity());
 

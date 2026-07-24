@@ -95,6 +95,7 @@ bool FWacomUIBackpackWorkspaceSceneBuilderIdentitySpec::RunTest(const FString& P
 		Definition.Get(), FGuid(13, 14, 15, 16), EZoneKind::BurdenZone));
 
 	FWacomBackpackWorkspaceStateStore State;
+	State.SetExpandedPile(FWacomBackpackZoneKey::Make(EZoneKind::BurdenZone));
 	const FWacomBackpackWorkspaceScene Scene = FWacomBackpackWorkspaceSceneBuilder::Build(
 		Snapshot,
 		State,
@@ -117,9 +118,24 @@ bool FWacomUIBackpackWorkspaceSceneBuilderIdentitySpec::RunTest(const FString& P
 		Scene.Cards[2].Role, EWacomBackpackDeckCardListReuseRole::SpecialOwner);
 	TestEqual(TEXT("Special content preserves the physical role"),
 		Scene.Cards[3].Role, EWacomBackpackDeckCardListReuseRole::SpecialContent);
-	TestEqual(TEXT("Burden remains locked"),
+	TestEqual(TEXT("Burden is a normal physical workspace card"),
 		Scene.Cards[4].ReadOnlyKind,
-		EWacomBackpackWorkspaceCardReadOnlyKind::BurdenLocked);
+		EWacomBackpackWorkspaceCardReadOnlyKind::None);
+	TestTrue(TEXT("Expanded Burden card is workspace interactive"),
+		Scene.Cards[4].bWorkspaceInteractive);
+	const FWacomBackpackWorkspaceScenePileEntry* BurdenPile = Scene.Piles.FindByPredicate(
+		[](const FWacomBackpackWorkspaceScenePileEntry& Pile)
+		{
+			return Pile.View.Zone == EZoneKind::BurdenZone;
+		});
+	TestNotNull(TEXT("Scene contains the Burden warning pile"), BurdenPile);
+	if (BurdenPile)
+	{
+		TestTrue(TEXT("Burden warning pile is movable"), BurdenPile->View.bMovable);
+		TestTrue(TEXT("Burden warning styling remains enabled"), BurdenPile->View.bWarning);
+		TestFalse(TEXT("Burden rejects external player drops"),
+			BurdenPile->View.bAcceptsExternalCardDrop);
+	}
 	TestTrue(TEXT("Indexed projection source produces a badge"),
 		!Scene.Cards[1].ProjectedBadgeText.IsEmpty());
 	return true;

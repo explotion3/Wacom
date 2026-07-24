@@ -107,7 +107,7 @@ void AppendPileCards(
 		{
 			AddCard(
 				Card, Zone, EWacomBackpackDeckCardListReuseRole::PhysicalList,
-				false, EWacomBackpackWorkspaceCardReadOnlyKind::BurdenLocked,
+				IsInteractive(Card), EWacomBackpackWorkspaceCardReadOnlyKind::None,
 				OutCards);
 		}
 		break;
@@ -162,7 +162,8 @@ TArray<FWacomBackpackZonePileView> FWacomBackpackWorkspaceSceneBuilder::BuildPil
 		Burden.Zone = EZoneKind::BurdenZone;
 		Burden.Title = LOCTEXT("WorkspaceBurdenPile", "负重区");
 		Burden.CardCount = Snapshot.BurdenCards.Num();
-		Burden.bMovable = false;
+		Burden.bMovable = true;
+		Burden.bAcceptsExternalCardDrop = false;
 		Burden.bWarning = true;
 		Burden.bExpanded = IsExpanded(Burden.Zone, FGuid());
 	}

@@ -46,6 +46,7 @@ struct WACOMAPP_API FWacomBackpackZonePileView
 	int32 ProjectedCount = 0;
 	bool bHasCapacity = false;
 	bool bMovable = true;
+	bool bAcceptsExternalCardDrop = true;
 	bool bWarning = false;
 	bool bExpanded = false;
 
