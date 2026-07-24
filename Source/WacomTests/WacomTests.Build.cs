@@ -36,6 +36,7 @@ public class WacomTests : ModuleRules
 			"AssetRegistry",
 			"MaterialEditor",
 			"Niagara",
+			"PropertyEditor",
 			"Slate",
 			"SlateCore",
 			"UnrealEd",

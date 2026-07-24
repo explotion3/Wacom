@@ -106,6 +106,7 @@ void AWacomShopTriggerActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		if (AWacomPlayerController* WacomPC = Cast<AWacomPlayerController>(PC))
 		{
 			WacomPC->UnregisterCandidateInteractable(this);
+			WacomPC->NotifyWorldShopHostEndPlay(this);
 		}
 	}
 
@@ -253,22 +254,28 @@ AWacomShopTriggerActor::ResolveShopEntryViewpoint() const
 	return ShopEntryViewpoint;
 }
 
-AWacomWorldShopHostActor* AWacomShopTriggerActor::ResolveWorldShopHost() const
+FWacomWorldShopPresentationHost
+AWacomShopTriggerActor::ResolveWorldShopHost() const
 {
-	return WorldShopHost;
+	return WorldShopHost
+		? WorldShopHost->BuildPresentationHost()
+		: FWacomWorldShopPresentationHost();
 }
 
 FWacomShopTriggerDebugView AWacomShopTriggerActor::GetShopTriggerDebugView(
 	AWacomPlayerController* PC) const
 {
-	AWacomWorldShopHostActor* ResolvedWorldShopHost = ResolveWorldShopHost();
+	const FWacomWorldShopPresentationHost ResolvedWorldShopHost =
+		ResolveWorldShopHost();
+	AActor* ResolvedWorldShopHostOwner =
+		ResolvedWorldShopHost.GetOwner();
 	FWacomShopTriggerDebugView View;
 	View.ActorName = GetName();
 	View.PersistentId = PersistentId;
 	View.ShopDefinitionName = ShopDefinition ? ShopDefinition->GetName() : TEXT("None");
 	View.ResolvedOfferCount = BuildResolvedOffers().Num();
-	View.WorldShopHostName = ResolvedWorldShopHost
-		? ResolvedWorldShopHost->GetName()
+	View.WorldShopHostName = ResolvedWorldShopHostOwner
+		? ResolvedWorldShopHostOwner->GetName()
 		: TEXT("None");
 	const FWacomWorldShopRouteDecision RouteDecision = FWacomWorldShopRoutePolicy::Evaluate(
 		BuildResolvedVisitRequest(),
@@ -443,7 +450,10 @@ EDataValidationResult AWacomShopTriggerActor::IsDataValid(
 		}
 	}
 
-	if (AWacomWorldShopHostActor* ResolvedWorldShopHost = ResolveWorldShopHost())
+	const FWacomWorldShopPresentationHost ResolvedWorldShopHost =
+		ResolveWorldShopHost();
+	if (AActor* ResolvedWorldShopHostOwner =
+		ResolvedWorldShopHost.GetOwner())
 	{
 		const FWacomWorldShopRouteDecision RouteDecision = FWacomWorldShopRoutePolicy::Evaluate(
 			BuildResolvedVisitRequest(),
@@ -455,7 +465,7 @@ EDataValidationResult AWacomShopTriggerActor::IsDataValid(
 				LOCTEXT("WorldShopRouteFallback",
 					"Shop Trigger 世界商店配置将回退既有 ShopScreen：Actor={0} Host={1} Reason={2} OfferCount={3}。该回退不会截断商店访问。"),
 				FText::FromString(GetName()),
-				FText::FromString(ResolvedWorldShopHost->GetName()),
+				FText::FromString(ResolvedWorldShopHostOwner->GetName()),
 				FText::FromName(RouteDecision.Reason),
 				FText::AsNumber(ResolvedOffers.Num())));
 		}

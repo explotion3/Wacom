@@ -40,7 +40,7 @@ bool FWacomRunWorldInteractionRouter::TryProbeSceneInteractionTarget(
 {
 	OutHandle = FWacomInteractionTargetHandle();
 
-	if (!PlayerController.IsInExplorationFlow())
+	if (!PlayerController.CanRouteRunScenePointerInput())
 	{
 		return false;
 	}
@@ -78,7 +78,7 @@ bool FWacomRunWorldInteractionRouter::TryProbeSceneInteractionTargetAtWidgetPosi
 {
 	OutHandle = FWacomInteractionTargetHandle();
 
-	if (!PlayerController.IsInExplorationFlow())
+	if (!PlayerController.CanRouteRunScenePointerInput())
 	{
 		return false;
 	}
@@ -112,7 +112,7 @@ bool FWacomRunWorldInteractionRouter::TryRouteInteractableClick()
 	{
 		return false;
 	}
-	if (!PlayerController.IsInExplorationFlow())
+	if (!PlayerController.CanRouteRunScenePointerInput())
 	{
 		return false;
 	}
@@ -178,6 +178,12 @@ void FWacomRunWorldInteractionRouter::UpdateTargetProbePreview()
 	{
 		ClearTargetProbePreview();
 		ClearHoverPrompt(TEXT("NotInExploration"));
+		return;
+	}
+	if (!PlayerController.CanRouteRunScenePointerInput())
+	{
+		ClearTargetProbePreview();
+		ClearHoverPrompt(TEXT("BlockedByMenuOrDrag"));
 		return;
 	}
 
@@ -265,7 +271,7 @@ void FWacomRunWorldInteractionRouter::ClearTargetProbePreview()
 bool FWacomRunWorldInteractionRouter::CanShowHoverPrompt() const
 {
 	if (!PlayerController.bEnableRunWorldInteractableHoverPrompt
-		|| !PlayerController.IsInExplorationFlow())
+		|| !PlayerController.CanRouteRunScenePointerInput())
 	{
 		return false;
 	}

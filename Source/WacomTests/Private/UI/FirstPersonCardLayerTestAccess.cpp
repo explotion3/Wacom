@@ -2,6 +2,7 @@
 
 #include "UI/FirstPersonCardLayerTestAccess.h"
 
+#include "Components/CanvasPanel.h"
 #include "Components/RetainerBox.h"
 
 #if WITH_AUTOMATION_TESTS
@@ -219,6 +220,29 @@ void FWacomFirstPersonCardLayerTestAccess::SetViewportSizeOverride(
 	const FVector2D& WidgetViewportSize)
 {
 	Layer.SetViewportSizeOverrideForTest(WidgetViewportSize);
+}
+
+void FWacomFirstPersonCardLayerTestAccess::TickWorldActivitySuppression(
+	UWacomFirstPersonCardLayerWidget& Layer,
+	float DeltaTime)
+{
+	Layer.TickWorldActivitySuppressionForTest(DeltaTime);
+}
+
+FVector2D FWacomFirstPersonCardLayerTestAccess::WorldActivitySuppressionRenderTranslation(
+	const UWacomFirstPersonCardLayerWidget& Layer)
+{
+	return Layer.RootCanvas
+		? Layer.RootCanvas->GetRenderTransform().Translation
+		: FVector2D::ZeroVector;
+}
+
+float FWacomFirstPersonCardLayerTestAccess::WorldActivitySuppressionRenderOpacity(
+	const UWacomFirstPersonCardLayerWidget& Layer)
+{
+	return Layer.RootCanvas
+		? Layer.RootCanvas->GetRenderOpacity()
+		: 1.0f;
 }
 
 FGuid FWacomFirstPersonCardLayerTestAccess::ResolveHoveredCardAtWidgetPosition(

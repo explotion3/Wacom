@@ -5,7 +5,6 @@
 #include "Misc/AutomationTest.h"
 
 #include "Actors/WacomWorldShopActor.h"
-#include "Actors/WacomWorldShopHostActor.h"
 #include "Components/BoxComponent.h"
 #include "Engine/World.h"
 #include "../../../../WacomApp/Private/UI/Shop/WacomWorldShopEntryBoundsGuard.h"
@@ -54,10 +53,8 @@ bool FWacomWorldShopEntryBoundsGuardSpec::RunTest(
 	{
 		return false;
 	}
-	AWacomWorldShopHostActor* Host = Shop->GetInternalWorldShopHost();
 	UBoxComponent* ClickBounds = Shop->GetClickBounds();
-	if (!TestNotNull(TEXT("Formal shop owns an internal host"), Host)
-		|| !TestNotNull(TEXT("Formal shop owns entry click bounds"), ClickBounds))
+	if (!TestNotNull(TEXT("Formal shop owns entry click bounds"), ClickBounds))
 	{
 		return false;
 	}
@@ -73,8 +70,8 @@ bool FWacomWorldShopEntryBoundsGuardSpec::RunTest(
 
 	FWacomWorldShopEntryBoundsGuard Guard;
 	TestTrue(
-		TEXT("Formal child host resolves its parent entry bounds"),
-		Guard.SuppressForHost(Host));
+		TEXT("Formal host owner resolves its own entry bounds"),
+		Guard.SuppressForHost(Shop));
 	TestTrue(TEXT("Guard reports active suppression"), Guard.IsSuppressing());
 	TestEqual(
 		TEXT("Entry bounds stop occluding world cards while shop owns input"),

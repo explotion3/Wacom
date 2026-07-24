@@ -28,6 +28,17 @@ namespace WacomWorldShopViewportInputSpec
 			0.0f,
 			FModifierKeysState());
 	}
+
+	FKeyEvent MakeKeyEvent(FKey Key)
+	{
+		return FKeyEvent(
+			Key,
+			FModifierKeysState(),
+			0,
+			false,
+			0,
+			0);
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -60,11 +71,34 @@ bool FWacomWorldShopViewportInputSpec::RunTest(const FString& Parameters)
 		WacomWorldShopViewportInputSpec::MakeMouseEvent(EKeys::LeftMouseButton, true);
 	const FPointerEvent LeftUp =
 		WacomWorldShopViewportInputSpec::MakeMouseEvent(EKeys::LeftMouseButton, false);
+
+	FWacomGameViewportClientTestAccess::SetRouteOverrides(
+		*ViewportClient,
+		false,
+		nullptr);
+	TestFalse(TEXT("an editor-side release without an owned press is not consumed"),
+		FWacomGameViewportClientTestAccess::DispatchMouseButtonUp(
+			*ViewportClient,
+			LeftUp));
+	TestEqual(
+		TEXT("an editor-side release is never forwarded to the pre-UI route"),
+		FWacomGameViewportClientTestAccess::GetPreUiInputRouteEvents(
+			*ViewportClient).Num(),
+		0);
+
+	FWacomGameViewportClientTestAccess::SetRouteOverrides(
+		*ViewportClient,
+		true,
+		nullptr);
 	TestTrue(TEXT("left press is consumed before Slate under NoCapture"),
 		FWacomGameViewportClientTestAccess::DispatchMouseButtonDown(
 			*ViewportClient,
 			LeftDown));
-	TestTrue(TEXT("left release is consumed and closes the virtual pointer gesture"),
+	FWacomGameViewportClientTestAccess::SetRouteOverrides(
+		*ViewportClient,
+		false,
+		nullptr);
+	TestTrue(TEXT("an owned release stays routed after leaving the game viewport"),
 		FWacomGameViewportClientTestAccess::DispatchMouseButtonUp(
 			*ViewportClient,
 			LeftUp));
@@ -82,6 +116,74 @@ bool FWacomWorldShopViewportInputSpec::RunTest(const FString& Parameters)
 		TestEqual(TEXT("first event is press"), RoutedEvents[0], IE_Pressed);
 		TestEqual(TEXT("second event is release"), RoutedEvents[1], IE_Released);
 	}
+
+	FWacomGameViewportClientTestAccess::SetPreUiInputRouteOverride(
+		*ViewportClient,
+		TOptional<bool>());
+	FWacomGameViewportClientTestAccess::SetRouteOverrides(
+		*ViewportClient,
+		TOptional<bool>(),
+		nullptr);
+	FWacomGameViewportClientTestAccess::UnregisterInputPreProcessor(*ViewportClient);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomWorldShopViewportEscapeInputSpec,
+	"Wacom.UI.WorldShop.Input.NoCaptureSlatePreprocessorRoutesScopedEscape",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomWorldShopViewportEscapeInputSpec::RunTest(const FString& Parameters)
+{
+	if (!TestTrue(TEXT("Slate application is initialized"), FSlateApplication::IsInitialized()))
+	{
+		return false;
+	}
+	UWacomGameViewportClient* ViewportClient =
+		NewObject<UWacomGameViewportClient>(GEngine);
+	if (!TestNotNull(TEXT("Wacom viewport client"), ViewportClient))
+	{
+		return false;
+	}
+
+	FWacomGameViewportClientTestAccess::SetRouteOverrides(
+		*ViewportClient,
+		true,
+		nullptr);
+	FWacomGameViewportClientTestAccess::SetPreUiInputRouteOverride(
+		*ViewportClient,
+		true);
+	FWacomGameViewportClientTestAccess::RegisterInputPreProcessor(*ViewportClient);
+
+	TestTrue(
+		TEXT("Escape is routed while the game viewport owns keyboard context"),
+		FWacomGameViewportClientTestAccess::DispatchKeyDown(
+			*ViewportClient,
+			WacomWorldShopViewportInputSpec::MakeKeyEvent(EKeys::Escape)));
+	TestFalse(
+		TEXT("unrelated keyboard keys remain available to the normal input path"),
+		FWacomGameViewportClientTestAccess::DispatchKeyDown(
+			*ViewportClient,
+			WacomWorldShopViewportInputSpec::MakeKeyEvent(EKeys::A)));
+
+	const TArray<FKey>& RoutedKeys =
+		FWacomGameViewportClientTestAccess::GetPreUiInputRouteKeys(
+			*ViewportClient);
+	TestEqual(TEXT("only Escape reached the World Shop route"), RoutedKeys.Num(), 1);
+	if (RoutedKeys.Num() == 1)
+	{
+		TestEqual(TEXT("routed key is Escape"), RoutedKeys[0], EKeys::Escape);
+	}
+
+	FWacomGameViewportClientTestAccess::SetRouteOverrides(
+		*ViewportClient,
+		false,
+		nullptr);
+	TestFalse(
+		TEXT("Escape outside this game viewport is not consumed"),
+		FWacomGameViewportClientTestAccess::DispatchKeyDown(
+			*ViewportClient,
+			WacomWorldShopViewportInputSpec::MakeKeyEvent(EKeys::Escape)));
 
 	FWacomGameViewportClientTestAccess::SetPreUiInputRouteOverride(
 		*ViewportClient,

@@ -8,6 +8,7 @@
 #include "Framework/Application/IInputProcessor.h"
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/WacomPlayerController.h"
+#include "Input/Events.h"
 #include "Input/Reply.h"
 #include "InputCoreTypes.h"
 #include "Layout/WidgetPath.h"
@@ -32,10 +33,16 @@ public:
 		const FPointerEvent& PointerEvent) override
 	{
 		UWacomGameViewportClient* ViewportClientPtr = ViewportClient.Get();
-		return ViewportClientPtr
+		const bool bHandled = ViewportClientPtr
 			&& ViewportClientPtr->HandlePreprocessedMouseButtonDown(
 				SlateApp,
 				PointerEvent);
+		if (bHandled
+			&& PointerEvent.GetEffectingButton() == EKeys::LeftMouseButton)
+		{
+			PreUiOwnedPointerGestures.Add(BuildPointerGestureKey(PointerEvent));
+		}
+		return bHandled;
 	}
 
 	virtual bool HandleMouseButtonUpEvent(
@@ -43,10 +50,29 @@ public:
 		const FPointerEvent& PointerEvent) override
 	{
 		UWacomGameViewportClient* ViewportClientPtr = ViewportClient.Get();
+		if (PointerEvent.GetEffectingButton() == EKeys::LeftMouseButton
+			&& PreUiOwnedPointerGestures.Remove(
+				BuildPointerGestureKey(PointerEvent)) == 0)
+		{
+			return ViewportClientPtr
+				&& ViewportClientPtr->HandleUnpairedFirstPersonCardMouseButtonUp(
+					PointerEvent);
+		}
 		return ViewportClientPtr
 			&& ViewportClientPtr->HandlePreprocessedMouseButtonUp(
 				SlateApp,
 				PointerEvent);
+	}
+
+	virtual bool HandleKeyDownEvent(
+		FSlateApplication& SlateApp,
+		const FKeyEvent& KeyEvent) override
+	{
+		UWacomGameViewportClient* ViewportClientPtr = ViewportClient.Get();
+		return ViewportClientPtr
+			&& ViewportClientPtr->HandlePreprocessedKeyDown(
+				SlateApp,
+				KeyEvent);
 	}
 
 	virtual void Tick(
@@ -57,7 +83,14 @@ public:
 	}
 
 private:
+	static uint64 BuildPointerGestureKey(const FPointerEvent& PointerEvent)
+	{
+		return (static_cast<uint64>(PointerEvent.GetUserIndex()) << 32)
+			| static_cast<uint32>(PointerEvent.GetPointerIndex());
+	}
+
 	TWeakObjectPtr<UWacomGameViewportClient> ViewportClient;
+	TSet<uint64> PreUiOwnedPointerGestures;
 };
 
 void UWacomGameViewportClient::Init(
@@ -177,7 +210,7 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonDown(
 }
 
 bool UWacomGameViewportClient::HandlePreprocessedMouseButtonUp(
-	FSlateApplication& SlateApp,
+	FSlateApplication& /*SlateApp*/,
 	const FPointerEvent& PointerEvent)
 {
 	if (PointerEvent.GetEffectingButton() != EKeys::LeftMouseButton)
@@ -191,6 +224,48 @@ bool UWacomGameViewportClient::HandlePreprocessedMouseButtonUp(
 		EKeys::LeftMouseButton,
 		IE_Released,
 		FVector2D(PointerEvent.GetScreenSpacePosition()));
+}
+
+bool UWacomGameViewportClient::HandlePreprocessedKeyDown(
+	FSlateApplication& SlateApp,
+	const FKeyEvent& KeyEvent)
+{
+	if (KeyEvent.GetKey() != EKeys::Escape
+		|| !IsOwnGameViewportActiveForKeyboard(
+			SlateApp,
+			KeyEvent.GetUserIndex()))
+	{
+		return false;
+	}
+	return TryRoutePreprocessedInput(
+		KeyEvent.GetInputDeviceId(),
+		KeyEvent.GetKey(),
+		IE_Pressed,
+		TOptional<FVector2D>());
+}
+
+bool UWacomGameViewportClient::HandleUnpairedFirstPersonCardMouseButtonUp(
+	const FPointerEvent& PointerEvent)
+{
+	if (PointerEvent.GetEffectingButton() != EKeys::LeftMouseButton)
+	{
+		return false;
+	}
+
+	AWacomPlayerController* PlayerController =
+		ResolveWacomPlayerController(PointerEvent.GetInputDeviceId());
+	if (!PlayerController)
+	{
+		return false;
+	}
+
+	FWacomFirstPersonCardInputEvent Input;
+	Input.Key = EKeys::LeftMouseButton;
+	Input.Event = IE_Released;
+	Input.Adapter = EWacomFirstPersonCardInputAdapter::SlatePreprocessor;
+	Input.AbsoluteScreenPosition =
+		FVector2D(PointerEvent.GetScreenSpacePosition());
+	return PlayerController->GetFirstPersonCardInputRouter().RouteInput(Input);
 }
 
 bool UWacomGameViewportClient::TryRoutePreprocessedInput(
@@ -264,6 +339,42 @@ bool UWacomGameViewportClient::IsPointerEventInsideOwnGameViewport(
 		SlateApp.GetInteractiveTopLevelWindows(),
 		/*bIgnoreEnabledStatus*/ false,
 		PointerEvent.GetUserIndex());
+	return WidgetsUnderPointer.IsValid()
+		&& WidgetsUnderPointer.ContainsWidget(ViewportWidget.Get());
+}
+
+bool UWacomGameViewportClient::IsOwnGameViewportActiveForKeyboard(
+	FSlateApplication& SlateApp,
+	int32 UserIndex) const
+{
+#if WITH_AUTOMATION_TESTS
+	if (PointerInsideViewportOverrideForAutomation.IsSet())
+	{
+		return PointerInsideViewportOverrideForAutomation.GetValue();
+	}
+#endif
+
+	const TSharedPtr<SViewport> ViewportWidget = GetGameViewportWidget();
+	if (!ViewportWidget.IsValid())
+	{
+		return false;
+	}
+
+	for (TSharedPtr<SWidget> Widget = SlateApp.GetUserFocusedWidget(UserIndex);
+		Widget.IsValid();
+		Widget = Widget->GetParentWidget())
+	{
+		if (Widget.Get() == ViewportWidget.Get())
+		{
+			return true;
+		}
+	}
+
+	const FWidgetPath WidgetsUnderPointer = SlateApp.LocateWindowUnderMouse(
+		SlateApp.GetCursorPos(),
+		SlateApp.GetInteractiveTopLevelWindows(),
+		/*bIgnoreEnabledStatus*/ false,
+		UserIndex);
 	return WidgetsUnderPointer.IsValid()
 		&& WidgetsUnderPointer.ContainsWidget(ViewportWidget.Get());
 }

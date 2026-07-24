@@ -59,12 +59,65 @@ namespace
 		OutCursorPosition = FVector2D(MouseX, MouseY);
 		return true;
 	}
+
+	bool TryResolveNormalizedPlayerCursor(
+		APlayerController& PlayerController,
+		FVector2D& OutNormalizedCursor)
+	{
+		FVector2D ViewportSize = FVector2D::ZeroVector;
+		FVector2D CursorPosition = FVector2D::ZeroVector;
+		// Embedded PIE can report a successful but stale PlayerController mouse
+		// position until the viewport receives its first key or mouse event. Slate's
+		// absolute cursor is live before that activation, so prefer it whenever it is
+		// currently inside the game viewport. The PlayerController path remains the
+		// fallback for platforms or runtime contexts without a usable Slate geometry.
+		const bool bHasCursorPosition = TryResolveSlateViewportCursor(
+			PlayerController,
+			ViewportSize,
+			CursorPosition)
+			|| TryResolvePlayerControllerCursor(
+				PlayerController,
+				ViewportSize,
+				CursorPosition);
+		if (!bHasCursorPosition)
+		{
+			return false;
+		}
+
+		OutNormalizedCursor = FVector2D(
+			FMath::Clamp((CursorPosition.X / ViewportSize.X) * 2.0f - 1.0f, -1.0f, 1.0f),
+			FMath::Clamp((CursorPosition.Y / ViewportSize.Y) * 2.0f - 1.0f, -1.0f, 1.0f));
+		return true;
+	}
+
+	float ShapeCursorAxis(
+		float NormalizedAxis,
+		float DeadZoneNormalized,
+		float ResponseExponent)
+	{
+		const float ClampedAxis = FMath::Clamp(NormalizedAxis, -1.0f, 1.0f);
+		const float Magnitude = FMath::Abs(ClampedAxis);
+		if (Magnitude <= DeadZoneNormalized)
+		{
+			return 0.0f;
+		}
+
+		const float RemappedMagnitude = FMath::Clamp(
+			(Magnitude - DeadZoneNormalized) / (1.0f - DeadZoneNormalized),
+			0.0f,
+			1.0f);
+		return FMath::Sign(ClampedAxis)
+			* FMath::Pow(RemappedMagnitude, ResponseExponent);
+	}
 }
 
 bool FWacomCursorLookProfile::IsFinite() const
 {
 	return FMath::IsFinite(YawClampDegrees)
 		&& FMath::IsFinite(PitchClampDegrees)
+		&& FMath::IsFinite(CursorDeadZoneNormalized.X)
+		&& FMath::IsFinite(CursorDeadZoneNormalized.Y)
+		&& FMath::IsFinite(CursorResponseExponent)
 		&& FMath::IsFinite(LookYawScale)
 		&& FMath::IsFinite(LookPitchScale)
 		&& FMath::IsFinite(LookInterpSpeed);
@@ -79,6 +132,15 @@ FWacomCursorLookProfile FWacomCursorLookProfile::Sanitized() const
 	}
 	Result.YawClampDegrees = FMath::Abs(Result.YawClampDegrees);
 	Result.PitchClampDegrees = FMath::Abs(Result.PitchClampDegrees);
+	Result.CursorDeadZoneNormalized.X = FMath::Clamp(
+		FMath::Abs(Result.CursorDeadZoneNormalized.X),
+		0.0f,
+		0.99f);
+	Result.CursorDeadZoneNormalized.Y = FMath::Clamp(
+		FMath::Abs(Result.CursorDeadZoneNormalized.Y),
+		0.0f,
+		0.99f);
+	Result.CursorResponseExponent = FMath::Max(0.01f, Result.CursorResponseExponent);
 	Result.LookInterpSpeed = FMath::Max(0.0f, Result.LookInterpSpeed);
 	return Result;
 }
@@ -103,31 +165,13 @@ bool UWacomCursorLookDriverComponent::UpdateFromPlayerCursor(
 		return false;
 	}
 
-	FVector2D ViewportSize = FVector2D::ZeroVector;
-	FVector2D CursorPosition = FVector2D::ZeroVector;
-	// Embedded PIE can report a successful but stale PlayerController mouse
-	// position until the viewport receives its first key or mouse event. Slate's
-	// absolute cursor is live before that activation, so prefer it whenever it is
-	// currently inside the game viewport. The PlayerController path remains the
-	// fallback for platforms or runtime contexts without a usable Slate geometry.
-	const bool bHasCursorPosition = TryResolveSlateViewportCursor(
-		*PlayerController,
-		ViewportSize,
-		CursorPosition)
-		|| TryResolvePlayerControllerCursor(
-			*PlayerController,
-			ViewportSize,
-			CursorPosition);
-
-	if (!bHasCursorPosition)
+	FVector2D NormalizedCursor = FVector2D::ZeroVector;
+	if (!TryResolveNormalizedPlayerCursor(*PlayerController, NormalizedCursor))
 	{
 		ResetLookOffset();
 		return false;
 	}
 
-	const FVector2D NormalizedCursor(
-		FMath::Clamp((CursorPosition.X / ViewportSize.X) * 2.0f - 1.0f, -1.0f, 1.0f),
-		FMath::Clamp((CursorPosition.Y / ViewportSize.Y) * 2.0f - 1.0f, -1.0f, 1.0f));
 	UpdateFromNormalizedCursor(
 		NormalizedCursor,
 		DeltaTime,
@@ -144,15 +188,20 @@ bool UWacomCursorLookDriverComponent::UpdateFromPlayerCursor(
 	float DeltaTime,
 	const FWacomCursorLookProfile& Profile)
 {
-	const FWacomCursorLookProfile SafeProfile = Profile.Sanitized();
-	return UpdateFromPlayerCursor(
-		PlayerController,
-		DeltaTime,
-		SafeProfile.YawClampDegrees,
-		SafeProfile.PitchClampDegrees,
-		SafeProfile.LookYawScale,
-		SafeProfile.LookPitchScale,
-		SafeProfile.LookInterpSpeed);
+	if (!PlayerController)
+	{
+		ResetLookOffset();
+		return false;
+	}
+
+	FVector2D NormalizedCursor = FVector2D::ZeroVector;
+	if (!TryResolveNormalizedPlayerCursor(*PlayerController, NormalizedCursor))
+	{
+		ResetLookOffset();
+		return false;
+	}
+	UpdateFromNormalizedCursor(NormalizedCursor, DeltaTime, Profile);
+	return true;
 }
 
 void UWacomCursorLookDriverComponent::UpdateFromNormalizedCursor(
@@ -195,6 +244,14 @@ void UWacomCursorLookDriverComponent::UpdateFromNormalizedCursor(
 	const FWacomCursorLookProfile& Profile)
 {
 	const FWacomCursorLookProfile SafeProfile = Profile.Sanitized();
+	NormalizedCursor.X = ShapeCursorAxis(
+		NormalizedCursor.X,
+		SafeProfile.CursorDeadZoneNormalized.X,
+		SafeProfile.CursorResponseExponent);
+	NormalizedCursor.Y = ShapeCursorAxis(
+		NormalizedCursor.Y,
+		SafeProfile.CursorDeadZoneNormalized.Y,
+		SafeProfile.CursorResponseExponent);
 	UpdateFromNormalizedCursor(
 		NormalizedCursor,
 		DeltaTime,

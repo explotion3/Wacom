@@ -2,21 +2,23 @@
 
 #include "UI/Shop/WacomWorldShopRoutePolicy.h"
 
-#include "Actors/WacomWorldShopHostActor.h"
+#include "GameFramework/Actor.h"
 #include "RunState.h"
+#include "UI/Shop/WacomWorldShopPresentationHost.h"
 
 FWacomWorldShopRouteDecision FWacomWorldShopRoutePolicy::Evaluate(
 	const FRunShopVisitRequest& Request,
-	const AWacomWorldShopHostActor* Host,
+	const FWacomWorldShopPresentationHost& Host,
 	const UWorld* ExpectedWorld)
 {
 	FWacomWorldShopRouteDecision Decision;
-	if (!Host)
+	const AActor* HostOwner = Host.GetOwner();
+	if (!HostOwner)
 	{
 		Decision.Reason = TEXT("MissingHost");
 		return Decision;
 	}
-	if (Host->GetWorld() != ExpectedWorld)
+	if (HostOwner->GetWorld() != ExpectedWorld)
 	{
 		Decision.Reason = TEXT("DifferentWorld");
 		return Decision;
@@ -32,7 +34,7 @@ FWacomWorldShopRouteDecision FWacomWorldShopRoutePolicy::Evaluate(
 		return Decision;
 	}
 	const FWacomWorldShopHostValidationResult Validation =
-		Host->ValidateForOfferCount(Request.Offers.Num());
+		Host.ValidateForOfferCount(Request.Offers.Num());
 	if (!Validation.bValid)
 	{
 		Decision.Reason = Validation.FailureReason;

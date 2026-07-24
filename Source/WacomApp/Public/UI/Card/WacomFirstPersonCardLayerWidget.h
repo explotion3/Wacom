@@ -184,6 +184,17 @@ public:
 	void SetCardLayerInteractionEnabled(bool bEnabled);
 	void SetCardLayerPresentationVisible(bool bVisible);
 	bool IsCardLayerPresentationVisible() const { return bCardLayerPresentationVisible; }
+	void SetCardLayerWorldActivitySuppressed(
+		bool bSuppressed,
+		bool bAnimate = true);
+	bool IsCardLayerWorldActivitySuppressed() const
+	{
+		return bWorldActivitySuppressionTarget;
+	}
+	float GetWorldActivitySuppressionAlpha() const
+	{
+		return WorldActivitySuppressionAlpha;
+	}
 	bool HasActivePresentationPlayback() const;
 	bool HasHandTargetImpactReachedPeak(const FGuid& CardInstanceId) const;
 	void ForceSettlePresentationPlayback();
@@ -307,6 +318,13 @@ private:
 	TArray<FWacomFirstPersonCardPileTransferHint> DeferredPileTransferHints;
 	bool bCardLayerInteractionEnabled = false;
 	bool bCardLayerPresentationVisible = true;
+	bool bWorldActivitySuppressionTarget = false;
+	bool bWorldActivitySuppressionAnimating = false;
+	float WorldActivitySuppressionAlpha = 0.0f;
+	float WorldActivitySuppressionStartAlpha = 0.0f;
+	float WorldActivitySuppressionTargetAlpha = 0.0f;
+	float WorldActivitySuppressionElapsedSeconds = 0.0f;
+	float LastWorldActivityViewportHeight = 0.0f;
 	bool bLogSlotMotionDiagnostics = false;
 	bool bConsumeNextPointerReleaseAfterLockedClose = false;
 #if WITH_AUTOMATION_TESTS
@@ -316,6 +334,7 @@ private:
 	UWacomFirstPersonCardLayerSlotWidget* GetOutgoingSlotWidgetAtForTest(int32 Index) const;
 	void AddUntrackedSlotChildForTest();
 	void SetViewportSizeOverrideForTest(const FVector2D& WidgetViewportSize);
+	void TickWorldActivitySuppressionForTest(float DeltaTime);
 	FGuid ResolveHoveredCardAtWidgetPositionForTest(const FVector2D& WidgetPosition);
 	bool HandleSlotPointerEnteredAtWidgetPositionForTest(
 		UWacomFirstPersonCardLayerSlotWidget& SourceSlot,
@@ -344,6 +363,10 @@ private:
 	UWacomFirstPersonCardLayerSlotWidget* CreateSlotWidget();
 	FWacomFirstPersonCardSlotRuntimeConfig BuildCurrentSlotRuntimeConfig() const;
 	void ApplyLayerVisibility();
+	void TickWorldActivitySuppression(
+		float DeltaTime,
+		float ViewportHeight);
+	void ApplyWorldActivitySuppressionVisual(float ViewportHeight);
 	void EnsurePileTransferWidget();
 	void ProcessDeferredPileTransferHints();
 	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);

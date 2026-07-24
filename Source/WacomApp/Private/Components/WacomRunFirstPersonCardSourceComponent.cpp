@@ -937,14 +937,11 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerSuppress
 		/*bAllowProviderLeaseRevisionSkip*/ false);
 }
 
-void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerInteractionSuppressedByWorldShop(
-	bool bSuppressed)
+void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerWorldActivitySuppressed(
+	bool bSuppressed,
+	bool bAnimate)
 {
-	if (bInteractionSuppressedByWorldShop == bSuppressed)
-	{
-		return;
-	}
-	bInteractionSuppressedByWorldShop = bSuppressed;
+	bWorldActivitySuppressed = bSuppressed;
 	UWacomFirstPersonCardAnchorComponent* Anchor = ResolveFirstPersonCardAnchor();
 	if (!Anchor || !Anchor->HasRuntimeCardLayerData()
 		|| Anchor->GetRuntimeCardLayerSourceId() != RunFirstPersonCardLayerSourceId)
@@ -960,6 +957,9 @@ void UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerInteract
 		&& ActiveMenuLeaseId.IsNone();
 	LifecycleFrame.bCancelActiveDrag = bSuppressed;
 	Anchor->ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
+	Anchor->SetFirstPersonCardLayerWorldActivitySuppressed(
+		bSuppressed,
+		bAnimate);
 }
 
 bool UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerMenuLeaseFromRunCards(
@@ -1067,7 +1067,7 @@ UWacomRunFirstPersonCardSourceComponent::GetRunFirstPersonCardSourceDebugView() 
 	View.bEnabled = bEnableRunFirstPersonCardLayer;
 	View.bActive = bRuntimeSourceActive;
 	View.bSuppressedByGameMenu = bSuppressedByGameMenu;
-	View.bInteractionSuppressedByWorldShop = bInteractionSuppressedByWorldShop;
+	View.bWorldActivitySuppressed = bWorldActivitySuppressed;
 	View.bHasActiveMenuLease = !ActiveMenuLeaseId.IsNone();
 	View.ActiveMenuLeaseId = ActiveMenuLeaseId;
 	View.ActiveMenuLeaseSourceId = ActiveMenuLeaseSourceId;
@@ -1272,13 +1272,19 @@ void UWacomRunFirstPersonCardSourceComponent::WriteRuntimeCardLayerFrame(
 		&& Frame.SourceId == RunFirstPersonCardLayerSourceId;
 	const bool bEnableRuntimeInteraction =
 		(bEnableMenuLeaseDragProbe || bEnableRunWorldCardDropDrag)
-		&& !bInteractionSuppressedByWorldShop;
+		&& !bWorldActivitySuppressed;
 	ApplyMenuLeaseInteractionOverrides(Anchor, bEnableRuntimeInteraction);
 	FWacomFirstPersonCardLayerSourceLifecycleFrame LifecycleFrame =
 		FWacomFirstPersonCardLayerSourceLifecycleFrame::FromPresentationFrame(Frame);
 	LifecycleFrame.bSetInteractionEnabled = true;
 	LifecycleFrame.bInteractionEnabled = bEnableRuntimeInteraction;
 	Anchor.ApplyRuntimeCardLayerSourceLifecycleFrame(LifecycleFrame);
+	if (Frame.SourceId == RunFirstPersonCardLayerSourceId)
+	{
+		Anchor.SetFirstPersonCardLayerWorldActivitySuppressed(
+			bWorldActivitySuppressed,
+			/*bAnimate*/ true);
+	}
 	LastWrittenRuntimeSourceId = Frame.SourceId;
 #if WITH_AUTOMATION_TESTS
 	if (Frame.SourceId == RunFirstPersonCardLayerSourceId)

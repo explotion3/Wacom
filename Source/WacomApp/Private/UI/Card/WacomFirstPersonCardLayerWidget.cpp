@@ -1536,6 +1536,55 @@ void UWacomFirstPersonCardLayerWidget::SetCardLayerPresentationVisible(bool bVis
 	ApplyLayerVisibility();
 }
 
+void UWacomFirstPersonCardLayerWidget::SetCardLayerWorldActivitySuppressed(
+	bool bSuppressed,
+	bool bAnimate)
+{
+	const float NewTargetAlpha = bSuppressed ? 1.0f : 0.0f;
+	const bool bTargetChanged =
+		bWorldActivitySuppressionTarget != bSuppressed;
+	bWorldActivitySuppressionTarget = bSuppressed;
+
+	if (bSuppressed)
+	{
+		ReleaseOwnedSlateMouseCapture();
+		ClearCardPointerView(true);
+		ClearHoveredSlotState(true);
+		ClearCurrentDragState(true);
+	}
+
+	if (!bAnimate)
+	{
+		bWorldActivitySuppressionAnimating = false;
+		WorldActivitySuppressionAlpha = NewTargetAlpha;
+		WorldActivitySuppressionStartAlpha = NewTargetAlpha;
+		WorldActivitySuppressionTargetAlpha = NewTargetAlpha;
+		WorldActivitySuppressionElapsedSeconds = 0.0f;
+		ApplyWorldActivitySuppressionVisual(LastWorldActivityViewportHeight);
+		ApplyLayerVisibility();
+		return;
+	}
+
+	if (!bTargetChanged
+		&& !bWorldActivitySuppressionAnimating
+		&& FMath::IsNearlyEqual(
+			WorldActivitySuppressionAlpha,
+			NewTargetAlpha))
+	{
+		return;
+	}
+
+	WorldActivitySuppressionStartAlpha =
+		WorldActivitySuppressionAlpha;
+	WorldActivitySuppressionTargetAlpha = NewTargetAlpha;
+	WorldActivitySuppressionElapsedSeconds = 0.0f;
+	bWorldActivitySuppressionAnimating = !FMath::IsNearlyEqual(
+		WorldActivitySuppressionStartAlpha,
+		WorldActivitySuppressionTargetAlpha);
+	ApplyLayerVisibility();
+	ApplyWorldActivitySuppressionVisual(LastWorldActivityViewportHeight);
+}
+
 UWacomCardView* UWacomFirstPersonCardLayerWidget::GetCardViewAt(int32 Index) const
 {
 	const UWacomFirstPersonCardLayerSlotWidget* SlotWidget = GetSlotWidgetAt(Index);
@@ -1729,6 +1778,15 @@ void UWacomFirstPersonCardLayerWidget::SetViewportSizeOverrideForTest(const FVec
 	WidgetViewportSizeOverrideForTest = WidgetViewportSize;
 }
 
+void UWacomFirstPersonCardLayerWidget::TickWorldActivitySuppressionForTest(
+	float DeltaTime)
+{
+	const float ViewportHeight = WidgetViewportSizeOverrideForTest.IsSet()
+		? WidgetViewportSizeOverrideForTest.GetValue().Y
+		: 0.0f;
+	TickWorldActivitySuppression(DeltaTime, ViewportHeight);
+}
+
 FGuid UWacomFirstPersonCardLayerWidget::ResolveHoveredCardAtWidgetPositionForTest(
 	const FVector2D& WidgetPosition)
 {
@@ -1874,6 +1932,13 @@ void UWacomFirstPersonCardLayerWidget::NativeDestruct()
 	PlayedPileTransferKeys.Reset();
 	DeferredPileTransferHints.Reset();
 	bConsumeNextPointerReleaseAfterLockedClose = false;
+	bWorldActivitySuppressionTarget = false;
+	bWorldActivitySuppressionAnimating = false;
+	WorldActivitySuppressionAlpha = 0.0f;
+	WorldActivitySuppressionStartAlpha = 0.0f;
+	WorldActivitySuppressionTargetAlpha = 0.0f;
+	WorldActivitySuppressionElapsedSeconds = 0.0f;
+	LastWorldActivityViewportHeight = 0.0f;
 	Super::NativeDestruct();
 }
 
@@ -1882,6 +1947,9 @@ void UWacomFirstPersonCardLayerWidget::NativeTick(
 	float InDeltaTime)
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
+	TickWorldActivitySuppression(
+		InDeltaTime,
+		MyGeometry.GetLocalSize().Y);
 	ProcessDeferredPileTransferHints();
 	if (PileTransferWidget)
 	{
@@ -2019,16 +2087,94 @@ UWacomFirstPersonCardLayerSlotWidget* UWacomFirstPersonCardLayerWidget::CreateSl
 
 void UWacomFirstPersonCardLayerWidget::ApplyLayerVisibility()
 {
-	const ESlateVisibility LayerVisibility = !bCardLayerPresentationVisible
-		? ESlateVisibility::Collapsed
-		: (bCardLayerInteractionEnabled
-			? ESlateVisibility::SelfHitTestInvisible
-			: ESlateVisibility::HitTestInvisible);
+	ESlateVisibility LayerVisibility = ESlateVisibility::Collapsed;
+	if (bCardLayerPresentationVisible)
+	{
+		const bool bSuppressionSettledHidden =
+			bWorldActivitySuppressionTarget
+			&& !bWorldActivitySuppressionAnimating
+			&& FMath::IsNearlyEqual(
+				WorldActivitySuppressionAlpha,
+				1.0f);
+		const bool bCanReceiveInput =
+			bCardLayerInteractionEnabled
+			&& !bWorldActivitySuppressionTarget
+			&& !bWorldActivitySuppressionAnimating
+			&& FMath::IsNearlyZero(
+				WorldActivitySuppressionAlpha);
+		LayerVisibility = bSuppressionSettledHidden
+			? ESlateVisibility::Hidden
+			: (bCanReceiveInput
+				? ESlateVisibility::SelfHitTestInvisible
+				: ESlateVisibility::HitTestInvisible);
+	}
 	SetVisibility(LayerVisibility);
 	if (RootCanvas)
 	{
 		RootCanvas->SetVisibility(LayerVisibility);
 	}
+}
+
+void UWacomFirstPersonCardLayerWidget::TickWorldActivitySuppression(
+	float DeltaTime,
+	float ViewportHeight)
+{
+	if (FMath::IsFinite(ViewportHeight) && ViewportHeight > 0.0f)
+	{
+		LastWorldActivityViewportHeight = ViewportHeight;
+	}
+
+	if (bWorldActivitySuppressionAnimating)
+	{
+		constexpr float SuppressionDurationSeconds = 0.18f;
+		WorldActivitySuppressionElapsedSeconds += FMath::Max(
+			0.0f,
+			DeltaTime);
+		const float LinearProgress = FMath::Clamp(
+			WorldActivitySuppressionElapsedSeconds
+				/ SuppressionDurationSeconds,
+			0.0f,
+			1.0f);
+		const float SmoothProgress = FMath::SmoothStep(
+			0.0f,
+			1.0f,
+			LinearProgress);
+		WorldActivitySuppressionAlpha = FMath::Lerp(
+			WorldActivitySuppressionStartAlpha,
+			WorldActivitySuppressionTargetAlpha,
+			SmoothProgress);
+		if (LinearProgress >= 1.0f)
+		{
+			WorldActivitySuppressionAlpha =
+				WorldActivitySuppressionTargetAlpha;
+			bWorldActivitySuppressionAnimating = false;
+		}
+	}
+
+	ApplyWorldActivitySuppressionVisual(LastWorldActivityViewportHeight);
+	ApplyLayerVisibility();
+}
+
+void UWacomFirstPersonCardLayerWidget::ApplyWorldActivitySuppressionVisual(
+	float ViewportHeight)
+{
+	if (!RootCanvas)
+	{
+		return;
+	}
+
+	constexpr float TuckViewportFraction = 0.42f;
+	const float SafeViewportHeight =
+		FMath::IsFinite(ViewportHeight)
+			? FMath::Max(0.0f, ViewportHeight)
+			: 0.0f;
+	RootCanvas->SetRenderTranslation(FVector2D(
+		0.0f,
+		SafeViewportHeight
+			* TuckViewportFraction
+			* WorldActivitySuppressionAlpha));
+	RootCanvas->SetRenderOpacity(
+		1.0f - WorldActivitySuppressionAlpha);
 }
 
 void UWacomFirstPersonCardLayerWidget::EnsurePileTransferWidget()

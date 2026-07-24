@@ -932,6 +932,14 @@ public:
 		return IsFirstPersonCardLayerInteractionEnabled();
 	}
 
+	void SetFirstPersonCardLayerWorldActivitySuppressed(
+		bool bSuppressed,
+		bool bAnimate = true);
+	bool IsFirstPersonCardLayerWorldActivitySuppressed() const
+	{
+		return bFirstPersonCardLayerWorldActivitySuppressed;
+	}
+
 	UFUNCTION(BlueprintPure, Category = "Wacom|First Person Hand|07 Hover")
 	FGuid GetHoveredCardInstanceId() const;
 
@@ -1076,6 +1084,7 @@ private:
 	mutable bool bHasCachedOwnerConfig = false;
 	bool bFirstPersonCardLayerInteractionEnabled = false;
 	bool bFirstPersonCardLayerPresentationVisible = true;
+	bool bFirstPersonCardLayerWorldActivitySuppressed = false;
 	FDelegateHandle RuntimeSettingsChangedHandle;
 	float RuntimeDecorativeFlashIntensityScale = 1.0f;
 	bool bRuntimeSimplifiedMotion = false;

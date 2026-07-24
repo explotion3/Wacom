@@ -7,23 +7,36 @@
 #include "Actors/WacomWorldShopActor.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Cards/CardDefinition.h"
+#include "Components/ChildActorComponent.h"
+#include "Components/ActorComponent.h"
+#include "Components/PrimitiveComponent.h"
+#include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/WacomRunMapNodeBindingComponent.h"
+#include "Components/WacomWorldShopLayoutAnchorComponent.h"
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
 #include "Engine/Blueprint.h"
+#include "Engine/BlueprintGeneratedClass.h"
+#include "Engine/InheritableComponentHandler.h"
+#include "Engine/Level.h"
 #include "Engine/SCS_Node.h"
 #include "Engine/SimpleConstructionScript.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/World.h"
 #include "Kismet2/KismetEditorUtilities.h"
 #include "Map/WacomFloorMapDefinition.h"
 #include "Map/WacomMapTypes.h"
 #include "Shops/ShopDefinition.h"
+#include "UI/Shop/WacomWorldShopPresentationHost.h"
 
 namespace WacomWorldShopFormalAssetSpec
 {
 	constexpr const TCHAR* BlueprintObjectPath =
 		TEXT("/Game/Wacom/Maps/SceneActor/BP_WacomWorldShop.BP_WacomWorldShop");
+	constexpr const TCHAR* MainMapObjectPath =
+		TEXT("/Game/Wacom/Maps/L_Exploration.L_Exploration");
 	constexpr const TCHAR* ShopObjectPath =
 		TEXT("/Game/Wacom/Data/Shops/DA_Shop_LevelAuthoringSnake.DA_Shop_LevelAuthoringSnake");
 	constexpr const TCHAR* FloorObjectPath =
@@ -148,6 +161,246 @@ namespace WacomWorldShopFormalAssetSpec
 			FString::Printf(TEXT("%s does not affect navigation"), Label),
 			Mesh->CanEverAffectNavigation());
 	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomWorldShopFormalBrowseProfileAndMapInstanceContractSpec,
+	"Wacom.UI.WorldShop.FormalAsset.BrowseProfileAndMapInstanceContract",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomWorldShopFormalBrowseProfileAndMapInstanceContractSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomWorldShopFormalAssetSpec;
+
+	UBlueprint* Blueprint = LoadObject<UBlueprint>(nullptr, BlueprintObjectPath);
+	UWorld* MainWorld = LoadObject<UWorld>(nullptr, MainMapObjectPath);
+	UShopDefinition* Shop = LoadObject<UShopDefinition>(nullptr, ShopObjectPath);
+	if (!TestNotNull(TEXT("Formal world shop Blueprint loads"), Blueprint)
+		|| !TestNotNull(TEXT("L_Exploration loads"), MainWorld)
+		|| !TestNotNull(TEXT("Authoring ShopDefinition loads"), Shop))
+	{
+		return false;
+	}
+
+	FKismetEditorUtilities::CompileBlueprint(Blueprint);
+	if (!TestNotNull(TEXT("Blueprint generated class"),
+			Blueprint->GeneratedClass.Get()))
+	{
+		return false;
+	}
+
+	const AWacomWorldShopActor* BlueprintDefaults =
+		Cast<AWacomWorldShopActor>(
+			Blueprint->GeneratedClass->GetDefaultObject());
+	if (!TestNotNull(TEXT("Blueprint CDO is a formal world shop"),
+			BlueprintDefaults))
+	{
+		return false;
+	}
+
+	if (UBlueprintGeneratedClass* BlueprintClass =
+		Cast<UBlueprintGeneratedClass>(Blueprint->GeneratedClass.Get()))
+	{
+		if (const UInheritableComponentHandler* Handler =
+			BlueprintClass->GetInheritableComponentHandler(false))
+		{
+			TArray<UActorComponent*> OverrideTemplates;
+			Handler->GetAllTemplates(
+				OverrideTemplates,
+				/*bIncludeTransientTemplates*/ true);
+			for (const UActorComponent* Template : OverrideTemplates)
+			{
+				if (!Template
+					|| !Template->GetName().StartsWith(
+						TEXT("OfferLayoutAnchor_")))
+				{
+					continue;
+				}
+
+				TestFalse(
+					*FString::Printf(
+						TEXT("Inherited template %s has no stale Primitive/BodyInstance data"),
+						*Template->GetName()),
+					Template->IsA<UPrimitiveComponent>());
+			}
+		}
+	}
+
+	const auto VerifyRunLiveProfile =
+		[this](
+			const TCHAR* Label,
+			const bool bOverride)
+		{
+			TestFalse(
+				*FString::Printf(
+					TEXT("%s inherits the current Run live look profile"),
+					Label),
+				bOverride);
+		};
+
+	VerifyRunLiveProfile(
+		TEXT("Blueprint CDO"),
+		BlueprintDefaults->bOverrideCursorLookProfile);
+	TestTrue(TEXT("Blueprint uses the enlarged 0.13 card scale"),
+		FMath::IsNearlyEqual(
+			BlueprintDefaults->CardWorldScale,
+			0.13f));
+	TestEqual(TEXT("Blueprint inherits eight visual layout anchors"),
+		BlueprintDefaults->GetOfferLayoutAnchorsSorted().Num(), 8);
+	for (const UWacomWorldShopLayoutAnchorComponent* Anchor :
+		BlueprintDefaults->GetOfferLayoutAnchorsSorted())
+	{
+		TestTrue(TEXT("Blueprint layout preview matches 0.13 card size"),
+			Anchor
+				&& Anchor->GetCardPreviewSizeCm().Equals(
+					FVector2D(93.6f, 126.88f),
+					0.01f));
+	}
+	TestTrue(TEXT("Blueprint keeps the 220 cm close browse preset"),
+		FMath::IsNearlyEqual(
+			BlueprintDefaults->CloseBrowsePresetDistanceCm,
+			220.0f));
+
+	TArray<AWacomWorldShopActor*> FormalShops;
+	for (AActor* Actor : MainWorld->PersistentLevel->Actors)
+	{
+		if (AWacomWorldShopActor* FormalShop =
+			Cast<AWacomWorldShopActor>(Actor))
+		{
+			FormalShops.Add(FormalShop);
+		}
+	}
+	TestEqual(TEXT("L_Exploration owns exactly one formal world shop"),
+		FormalShops.Num(), 1);
+	if (FormalShops.Num() != 1)
+	{
+		return false;
+	}
+
+	AWacomWorldShopActor* FormalShop = FormalShops[0];
+	TestTrue(TEXT("Map instance uses exact BP_WacomWorldShop class"),
+		FormalShop->GetClass() == Blueprint->GeneratedClass);
+	TestEqual(TEXT("Map instance preserves PersistentId"),
+		FormalShop->PersistentId,
+		FName(TEXT("Shop.Test.001")));
+	TestTrue(TEXT("Map instance preserves ShopDefinition"),
+		FormalShop->ShopDefinition == Shop);
+	TestEqual(TEXT("Map instance preserves its authority label"),
+		FormalShop->GetActorLabel(),
+		FString(TEXT("BP_WacomShopTriggerActor")));
+	TestTrue(TEXT("Map instance preserves its authority location"),
+		FormalShop->GetActorLocation().Equals(
+			FVector(-440.0f, 140.0f, 120.0f),
+			0.001f));
+	TestTrue(TEXT("Map instance preserves its authority rotation"),
+		FormalShop->GetActorRotation().Equals(
+			FRotator(0.0f, 155.0f, 0.0f),
+			0.001f));
+	TestTrue(TEXT("Map instance preserves its authority scale"),
+		FormalShop->GetActorScale3D().Equals(
+			FVector(1.0f, 1.222f, 1.0f),
+			0.001f));
+	TestTrue(TEXT("Map instance preserves its 200 cm trigger radius"),
+		FMath::IsNearlyEqual(FormalShop->TriggerRadius, 200.0f));
+
+	const UWacomRunMapNodeBindingComponent* Binding =
+		FormalShop->GetRunMapNodeBindingComponent();
+	TestTrue(TEXT("Map instance preserves Shop.Snake binding"),
+		Binding && Binding->NodeId == FName(TEXT("Shop.Snake")));
+	TestTrue(TEXT("Map instance binding remains Shop"),
+		Binding && Binding->NodeType == EWacomMapNodeType::Shop);
+	VerifyRunLiveProfile(
+		TEXT("Map instance"),
+		FormalShop->bOverrideCursorLookProfile);
+	TestTrue(TEXT("Map instance inherits the enlarged card scale"),
+		FMath::IsNearlyEqual(FormalShop->CardWorldScale, 0.13f));
+
+	const TArray<UWacomWorldShopLayoutAnchorComponent*> BlueprintAnchors =
+		BlueprintDefaults->GetOfferLayoutAnchorsSorted();
+	const TArray<UWacomWorldShopLayoutAnchorComponent*> MapAnchors =
+		FormalShop->GetOfferLayoutAnchorsSorted();
+	TestEqual(
+		TEXT("Blueprint CDO and map instance expose the same anchor count"),
+		MapAnchors.Num(),
+		BlueprintAnchors.Num());
+	for (int32 Index = 0;
+		Index < FMath::Min(BlueprintAnchors.Num(), MapAnchors.Num());
+		++Index)
+	{
+		const UWacomWorldShopLayoutAnchorComponent* BlueprintAnchor =
+			BlueprintAnchors[Index];
+		const UWacomWorldShopLayoutAnchorComponent* MapAnchor =
+			MapAnchors[Index];
+		if (!TestNotNull(
+				*FString::Printf(
+					TEXT("Blueprint anchor %02d exists"),
+					Index + 1),
+				BlueprintAnchor)
+			|| !TestNotNull(
+				*FString::Printf(
+					TEXT("Map anchor %02d exists"),
+					Index + 1),
+				MapAnchor))
+		{
+			continue;
+		}
+
+		const FTransform BlueprintLayout =
+			BlueprintAnchor->GetRelativeTransform();
+		const FTransform MapLayout =
+			MapAnchor->GetRelativeTransform();
+		TestTrue(
+			*FString::Printf(
+				TEXT("Map anchor %02d inherits the Blueprint-authored layout"),
+				Index + 1),
+			MapLayout.Equals(BlueprintLayout, 0.01f));
+	}
+
+	UChildActorComponent* ViewpointComponent =
+		FormalShop->GetShopEntryViewpointComponent();
+	USceneComponent* FocusComponent =
+		FormalShop->GetShopFocusAnchorComponent();
+	const FWacomWorldShopPresentationHost PresentationHost =
+		FormalShop->BuildPresentationHost();
+	TestTrue(TEXT("Map instance is its own formal presentation host"),
+		PresentationHost.IsOwnedBy(FormalShop));
+	TestEqual(TEXT("Map instance exposes eight actual offer anchors"),
+		PresentationHost.GetEnabledOfferAnchorsSorted().Num(), 8);
+	TestTrue(TEXT("Map instance formal host validates for eight offers"),
+		PresentationHost.ValidateForOfferCount(8).bValid);
+	if (!TestNotNull(TEXT("Map instance keeps its Viewpoint component"),
+			ViewpointComponent)
+		|| !TestNotNull(TEXT("Map instance keeps its Focus component"),
+			FocusComponent))
+	{
+		return false;
+	}
+
+	const float ViewpointDistanceCm = FVector::Distance(
+		ViewpointComponent->GetComponentLocation(),
+		FocusComponent->GetComponentLocation());
+	const FVector FocusDirection =
+		(FocusComponent->GetComponentLocation()
+			- ViewpointComponent->GetComponentLocation()).GetSafeNormal();
+	const float FocusAlignment = FVector::DotProduct(
+		ViewpointComponent->GetForwardVector(),
+		FocusDirection);
+	TestTrue(TEXT("Map composition remains inside supported tuning range"),
+		ViewpointDistanceCm >= 180.0f && ViewpointDistanceCm <= 320.0f);
+	TestTrue(TEXT("Map Viewpoint remains aligned to ShopFocus"),
+		FocusAlignment > 0.995f);
+
+	AddInfo(FString::Printf(
+		TEXT("Formal world shop asset audit: Label=%s Location=%s Rotation=%s Scale=%s TriggerRadius=%.2fcm ViewpointDistance=%.2fcm FocusAlignment=%.5f"),
+		*FormalShop->GetActorLabel(),
+		*FormalShop->GetActorLocation().ToString(),
+		*FormalShop->GetActorRotation().ToString(),
+		*FormalShop->GetActorScale3D().ToString(),
+		FormalShop->TriggerRadius,
+		ViewpointDistanceCm,
+		FocusAlignment));
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(

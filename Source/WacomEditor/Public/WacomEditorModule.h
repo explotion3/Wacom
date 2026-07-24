@@ -21,9 +21,13 @@ private:
 	void UnregisterEditorValidators();
 	void RegisterDetailsCustomizations();
 	void UnregisterDetailsCustomizations();
+	void RegisterComponentVisualizers();
+	void UnregisterComponentVisualizers();
 	void RegisterMenus();
 	void ValidateCurrentRunFloor();
 
 	TArray<TStrongObjectPtr<UEditorValidatorBase>> RegisteredValidators;
 	FDelegateHandle ToolMenusStartupCallbackHandle;
+	FDelegateHandle PostEngineInitHandle;
+	bool bComponentVisualizersRegistered = false;
 };

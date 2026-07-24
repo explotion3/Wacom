@@ -2044,6 +2044,13 @@ bool AWacomPlayerController::IsInExplorationFlow() const
 
 bool AWacomPlayerController::CanRouteRunScenePointerInput() const
 {
+#if WITH_AUTOMATION_TESTS
+	if (RunScenePointerRouteOverrideForAutomation.IsSet())
+	{
+		return RunScenePointerRouteOverrideForAutomation.GetValue();
+	}
+#endif
+
 	return IsInExplorationFlow()
 		&& !HasActiveRunGameMenuOrTransitionSuppression()
 		&& !(WorldShopActivityCoordinator && WorldShopActivityCoordinator->IsOwningInput());
@@ -2095,6 +2102,15 @@ void AWacomPlayerController::ClearRunWorldTargetProbePreview()
 	if (RunWorldInteractionRouter)
 	{
 		RunWorldInteractionRouter->ClearTargetProbePreview();
+	}
+}
+
+void AWacomPlayerController::ClearRunWorldInteractionPresentation(FName Reason)
+{
+	ClearRunWorldTargetProbePreview();
+	if (RunWorldInteractionRouter)
+	{
+		RunWorldInteractionRouter->ClearHoverPrompt(Reason);
 	}
 }
 
@@ -2643,7 +2659,7 @@ bool AWacomPlayerController::RequestOpenShop(
 bool AWacomPlayerController::RequestOpenShop(
 	const FRunShopVisitRequest& Request,
 	const FWacomFirstPersonViewStageRequest& StageRequest,
-	AWacomWorldShopHostActor* WorldShopHost)
+	const FWacomWorldShopPresentationHost& WorldShopHost)
 {
 	if (!CanRouteRunScenePointerInput())
 	{
@@ -2678,9 +2694,10 @@ void AWacomPlayerController::CloseWorldShop()
 	}
 }
 
-void AWacomPlayerController::NotifyWorldShopHostEndPlay(AWacomWorldShopHostActor* Host)
+void AWacomPlayerController::NotifyWorldShopHostEndPlay(AActor* HostOwner)
 {
-	if (WorldShopActivityCoordinator && WorldShopActivityCoordinator->IsUsingHost(Host))
+	if (WorldShopActivityCoordinator
+		&& WorldShopActivityCoordinator->IsUsingHost(HostOwner))
 	{
 		WorldShopActivityCoordinator->Close(true);
 	}

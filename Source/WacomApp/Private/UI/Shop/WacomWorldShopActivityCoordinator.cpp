@@ -2,7 +2,6 @@
 
 #include "UI/Shop/WacomWorldShopActivityCoordinator.h"
 
-#include "Actors/WacomWorldShopHostActor.h"
 #include "Camera/WacomFirstPersonViewStageCoordinator.h"
 #include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Camera/WacomFirstPersonViewStageReturnFlow.h"
@@ -14,6 +13,7 @@
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Engine/GameInstance.h"
+#include "GameFramework/Actor.h"
 #include "InputCoreTypes.h"
 #include "Materials/MaterialInterface.h"
 #include "RunSession.h"
@@ -30,7 +30,7 @@ EWacomWorldShopOpenResult FWacomWorldShopActivityCoordinator::TryOpen(
 	AWacomPlayerController& InPlayerController,
 	const FRunShopVisitRequest& Request,
 	const FWacomFirstPersonViewStageRequest& StageRequest,
-	AWacomWorldShopHostActor* InHost)
+	const FWacomWorldShopPresentationHost& InHost)
 {
 	const FWacomWorldShopRouteDecision RouteDecision =
 		FWacomWorldShopRoutePolicy::Evaluate(Request, InHost, InPlayerController.GetWorld());
@@ -38,7 +38,7 @@ EWacomWorldShopOpenResult FWacomWorldShopActivityCoordinator::TryOpen(
 	{
 		UE_LOG(LogTemp, Warning,
 			TEXT("[WorldShop] World route 不可用，回退 ShopScreen Host=%s Reason=%s Offers=%d"),
-			*GetNameSafe(InHost),
+			*GetNameSafe(InHost.GetOwner()),
 			*RouteDecision.Reason.ToString(),
 			Request.Offers.Num());
 		return EWacomWorldShopOpenResult::NotEligible;
@@ -74,7 +74,11 @@ EWacomWorldShopOpenResult FWacomWorldShopActivityCoordinator::TryOpen(
 	const uint32 OpenGeneration = Generation;
 	PlayerController = &InPlayerController;
 	Host = InHost;
-	EntryBoundsGuard.SuppressForHost(InHost);
+	EntryBoundsGuard.SuppressForHost(InHost.GetOwner());
+	InPlayerController.ClearRunWorldInteractionPresentation(
+		TEXT("WorldShopActivity"));
+	ExplorationHUDVisibilityGuard.SuppressForPlayerController(
+		InPlayerController);
 	PendingRequest = Request;
 	bPreviousShowMouseCursor = InPlayerController.bShowMouseCursor;
 	InPlayerController.bShowMouseCursor = true;
@@ -82,14 +86,16 @@ EWacomWorldShopOpenResult FWacomWorldShopActivityCoordinator::TryOpen(
 	if (UWacomRunFirstPersonCardSourceComponent* Source =
 		InPlayerController.GetRunFirstPersonCardSourceComponent())
 	{
-		Source->SetRunFirstPersonCardLayerInteractionSuppressedByWorldShop(true);
+		Source->SetRunFirstPersonCardLayerWorldActivitySuppressed(
+			true,
+			/*bAnimate*/ true);
 	}
 
 	const TWeakObjectPtr<AWacomPlayerController> WeakPC(&InPlayerController);
 	auto CompleteStage = [this, WeakPC, OpenGeneration]()
 	{
 		AWacomPlayerController* PC = WeakPC.Get();
-		AWacomWorldShopHostActor* StrongHost = Host.Get();
+		AActor* StrongHost = Host.GetOwner();
 		AWacomPlayerCharacter* StrongPawn = PC ? PC->GetPawn<AWacomPlayerCharacter>() : nullptr;
 		if (!PC || !StrongHost || !StrongPawn || Generation != OpenGeneration
 			|| State != EState::Staging)
@@ -98,9 +104,9 @@ EWacomWorldShopOpenResult FWacomWorldShopActivityCoordinator::TryOpen(
 			return;
 		}
 		FWacomCursorLookProfile Profile;
-		if (StrongHost->bOverrideCursorLookProfile)
+		if (Host.bOverrideCursorLookProfile)
 		{
-			Profile = StrongHost->CursorLookProfileOverride.Sanitized();
+			Profile = Host.CursorLookProfileOverride.Sanitized();
 		}
 		else if (const UWacomRunPathTraversalComponent* RunPath =
 			StrongPawn->GetRunPathTraversalComponent())
@@ -147,7 +153,7 @@ bool FWacomWorldShopActivityCoordinator::BeginVisitAndPresentation(uint32 Expect
 		this,
 		&FWacomWorldShopActivityCoordinator::HandleRunStateChanged);
 	if (!RefreshPresentation()
-		|| !InputRouter.Initialize(*PC, Host->InteractionDistance))
+		|| !InputRouter.Initialize(*PC, Host.InteractionDistance))
 	{
 		return false;
 	}
@@ -158,7 +164,7 @@ bool FWacomWorldShopActivityCoordinator::BeginVisitAndPresentation(uint32 Expect
 bool FWacomWorldShopActivityCoordinator::RefreshPresentation()
 {
 	AWacomPlayerController* PC = PlayerController.Get();
-	AWacomWorldShopHostActor* StrongHost = Host.Get();
+	AActor* StrongHost = Host.GetOwner();
 	URunSession* Run = PC ? PC->GetRunSession() : nullptr;
 	if (!PC || !StrongHost || !Run || !Run->IsShopVisitActive())
 	{
@@ -169,7 +175,7 @@ bool FWacomWorldShopActivityCoordinator::RefreshPresentation()
 	const TArray<FWacomShopOfferPresentationView> Views =
 		UWacomShopPresentationBuilder::BuildOfferPresentationViews(Snapshot, Gold);
 	const TArray<UWacomWorldShopOfferAnchorComponent*> Anchors =
-		StrongHost->GetEnabledOfferAnchorsSorted();
+		Host.GetEnabledOfferAnchorsSorted();
 	if (Views.Num() > Anchors.Num())
 	{
 		return false;
@@ -202,15 +208,12 @@ bool FWacomWorldShopActivityCoordinator::RefreshPresentation()
 			StrongHost->AddInstanceComponent(Component);
 			Component->SetupAttachment(Anchor);
 			Component->SetRelativeTransform(FTransform::Identity);
-			Component->SetRelativeScale3D(FVector(StrongHost->CardWorldScale));
 			Component->SetWidgetSpace(EWidgetSpace::World);
-			Component->SetDrawSize(StrongHost->CardDrawSize);
-			Component->SetPivot(StrongHost->CardPivot);
-			Component->SetTwoSided(StrongHost->bTwoSided);
 			Component->SetBackgroundColor(FLinearColor::Transparent);
 			Component->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 			Component->SetCollisionResponseToAllChannels(ECR_Ignore);
 			Component->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+			Host.ApplyCardWidgetGeometry(*Component);
 			if (!FWacomWorldCardSurfaceMaterialAdapter::Apply(
 				*Component,
 				FWacomWorldCardSurfaceMaterialAdapter::GetProductionExposureStrength()))
@@ -246,6 +249,7 @@ bool FWacomWorldShopActivityCoordinator::RefreshPresentation()
 		Record->OfferId = View.OfferId;
 		Record->SlotId = Anchor->SlotId;
 		Record->Component->AttachToComponent(Anchor, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		Host.ApplyCardWidgetGeometry(*Record->Component);
 		Record->Widget->SetOfferPresentation(View, Generation);
 	}
 
@@ -387,7 +391,9 @@ void FWacomWorldShopActivityCoordinator::Shutdown()
 		if (UWacomRunFirstPersonCardSourceComponent* Source =
 			PC->GetRunFirstPersonCardSourceComponent())
 		{
-			Source->SetRunFirstPersonCardLayerInteractionSuppressedByWorldShop(false);
+			Source->SetRunFirstPersonCardLayerWorldActivitySuppressed(
+				false,
+				/*bAnimate*/ false);
 		}
 		if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 		{
@@ -404,7 +410,7 @@ void FWacomWorldShopActivityCoordinator::Shutdown()
 
 void FWacomWorldShopActivityCoordinator::DestroyPresentation()
 {
-	AWacomWorldShopHostActor* StrongHost = Host.Get();
+	AActor* StrongHost = Host.GetOwner();
 	for (FWorldCardRecord& Record : WorldCards)
 	{
 		if (UWacomWorldShopCardWidget* Widget = Record.Widget.Get())
@@ -436,11 +442,6 @@ void FWacomWorldShopActivityCoordinator::RestoreExplorationPresentation()
 	if (PC)
 	{
 		PC->bShowMouseCursor = bPreviousShowMouseCursor;
-		if (UWacomRunFirstPersonCardSourceComponent* Source =
-			PC->GetRunFirstPersonCardSourceComponent())
-		{
-			Source->SetRunFirstPersonCardLayerInteractionSuppressedByWorldShop(false);
-		}
 	}
 	if (!PC || !Pawn)
 	{
@@ -459,10 +460,26 @@ void FWacomWorldShopActivityCoordinator::RestoreExplorationPresentation()
 
 void FWacomWorldShopActivityCoordinator::FinishClose()
 {
+	AWacomPlayerController* PC = PlayerController.Get();
+	if (PC)
+	{
+		if (UWacomRunFirstPersonCardSourceComponent* Source =
+			PC->GetRunFirstPersonCardSourceComponent())
+		{
+			Source->SetRunFirstPersonCardLayerWorldActivitySuppressed(
+				false,
+				/*bAnimate*/ true);
+		}
+	}
 	EntryBoundsGuard.Restore();
 	PendingRequest = FRunShopVisitRequest();
 	Host.Reset();
 	PlayerController.Reset();
 	bPurchaseInFlight = false;
 	State = EState::Inactive;
+	ExplorationHUDVisibilityGuard.Restore();
+	if (PC)
+	{
+		PC->RefreshInteractToast();
+	}
 }

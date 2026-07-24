@@ -5,12 +5,13 @@
 #include "CoreMinimal.h"
 #include "RunState.h"
 #include "UI/Shop/WacomWorldShopEntryBoundsGuard.h"
+#include "UI/Shop/WacomWorldShopExplorationHUDVisibilityGuard.h"
 #include "UI/Shop/WacomWorldShopWidgetInputRouter.h"
 #include "UI/Shop/WacomWorldShopHUDWidget.h"
+#include "UI/Shop/WacomWorldShopPresentationHost.h"
 #include "UObject/StrongObjectPtr.h"
 
 class AWacomPlayerController;
-class AWacomWorldShopHostActor;
 class UWidgetComponent;
 class UWacomWorldShopCardWidget;
 struct FWacomFirstPersonViewStageRequest;
@@ -30,14 +31,14 @@ public:
 		AWacomPlayerController& PlayerController,
 		const FRunShopVisitRequest& Request,
 		const FWacomFirstPersonViewStageRequest& StageRequest,
-		AWacomWorldShopHostActor* Host);
+		const FWacomWorldShopPresentationHost& Host);
 
 	bool RouteInputKey(const FKey& Key, EInputEvent Event);
 	void Close(bool bEndVisit = true);
 	void Shutdown();
-	bool IsUsingHost(const AWacomWorldShopHostActor* Candidate) const
+	bool IsUsingHost(const AActor* Candidate) const
 	{
-		return Host.Get() == Candidate && State != EState::Inactive;
+		return Host.IsOwnedBy(Candidate) && State != EState::Inactive;
 	}
 	bool IsOwningInput() const { return State != EState::Inactive; }
 	bool IsActive() const { return State == EState::Active; }
@@ -76,9 +77,11 @@ private:
 	FGuid VisitToken;
 	FRunShopVisitRequest PendingRequest;
 	TWeakObjectPtr<AWacomPlayerController> PlayerController;
-	TWeakObjectPtr<AWacomWorldShopHostActor> Host;
+	FWacomWorldShopPresentationHost Host;
 	TArray<FWorldCardRecord> WorldCards;
 	TStrongObjectPtr<UWacomWorldShopHUDWidget> HUD;
 	FWacomWorldShopEntryBoundsGuard EntryBoundsGuard;
+	FWacomWorldShopExplorationHUDVisibilityGuard
+		ExplorationHUDVisibilityGuard;
 	FWacomWorldShopWidgetInputRouter InputRouter;
 };

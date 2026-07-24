@@ -87,6 +87,16 @@ bool FWacomPlayerControllerRunInteractionTestAccess::CanRouteRunScenePointerInpu
 	return PC ? PC->CanRouteRunScenePointerInput() : false;
 }
 
+void FWacomPlayerControllerRunInteractionTestAccess::SetRunScenePointerRouteOverride(
+	AWacomPlayerControllerProbe* PC,
+	TOptional<bool> bCanRoute)
+{
+	if (PC)
+	{
+		PC->RunScenePointerRouteOverrideForAutomation = bCanRoute;
+	}
+}
+
 void FWacomPlayerControllerRunInteractionTestAccess::RegisterActiveGameMenu(
 	AWacomPlayerControllerProbe* PC,
 	UWacomMenuWidgetBase* Menu)

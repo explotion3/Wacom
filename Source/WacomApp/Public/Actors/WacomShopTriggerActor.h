@@ -8,6 +8,7 @@
 #include "Interaction/WacomWorldInteractable.h"
 #include "Misc/DataValidation.h"
 #include "RunState.h"
+#include "UI/Shop/WacomWorldShopPresentationHost.h"
 #include "WacomShopTriggerActor.generated.h"
 
 class USphereComponent;
@@ -206,9 +207,9 @@ protected:
 	/**
 	 * 解析本次商店访问使用的 World Shop Host。
 	 *
-	 * 旧 Trigger 默认返回关卡手工引用；组合式正式商店可重写为内部 ChildActor。
+	 * 旧 Trigger 默认包装关卡手工引用；组合式正式商店直接返回自身及真实 Anchor。
 	 */
-	virtual AWacomWorldShopHostActor* ResolveWorldShopHost() const;
+	virtual FWacomWorldShopPresentationHost ResolveWorldShopHost() const;
 
 	UFUNCTION()
 	void HandleBeginOverlap(UPrimitiveComponent* OverlappedComp,
@@ -228,19 +229,19 @@ private:
 	void RefreshClickTargetBinding();
 	bool HasDuplicatePersistentIdInWorld() const;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop",
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Shop",
 		meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USphereComponent> TriggerSphere = nullptr;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Click",
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Shop|Click",
 		meta = (AllowPrivateAccess = "true", ToolTip = "鼠标点击命中体。只用于 Visibility trace，不产生 overlap；点击后仍走 IWacomWorldInteractable。"))
 	TObjectPtr<UBoxComponent> ClickBounds = nullptr;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Click",
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Shop|Click",
 		meta = (AllowPrivateAccess = "true", ToolTip = "Shop 触发器默认携带的通用交互目标身份组件。"))
 	TObjectPtr<UWacomInteractionTargetComponent> ClickInteractionTargetComponent = nullptr;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Shop|Click",
+	UPROPERTY(VisibleDefaultsOnly, BlueprintReadOnly, Category = "Wacom|Shop|Click",
 		meta = (AllowPrivateAccess = "true", ToolTip = "把 Shop 触发器标记为 Run World Target，供鼠标 probe 和点击桥接识别。"))
 	TObjectPtr<UWacomRunWorldInteractionTargetBridgeComponent> ClickTargetBridgeComponent = nullptr;
 };

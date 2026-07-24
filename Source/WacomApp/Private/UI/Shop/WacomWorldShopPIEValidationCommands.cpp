@@ -232,7 +232,10 @@ namespace
 			return;
 		}
 		FWacomFirstPersonViewStageRequest CurrentView;
-		if (!PC->RequestOpenShop(Request, CurrentView, Host))
+		if (!PC->RequestOpenShop(
+			Request,
+			CurrentView,
+			Host->BuildPresentationHost()))
 		{
 			Host->Destroy();
 			UE_LOG(LogTemp, Warning,

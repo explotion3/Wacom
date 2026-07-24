@@ -121,6 +121,13 @@ struct FWacomFirstPersonCardLayerTestAccess
 	static void SetViewportSizeOverride(
 		UWacomFirstPersonCardLayerWidget& Layer,
 		const FVector2D& WidgetViewportSize);
+	static void TickWorldActivitySuppression(
+		UWacomFirstPersonCardLayerWidget& Layer,
+		float DeltaTime);
+	static FVector2D WorldActivitySuppressionRenderTranslation(
+		const UWacomFirstPersonCardLayerWidget& Layer);
+	static float WorldActivitySuppressionRenderOpacity(
+		const UWacomFirstPersonCardLayerWidget& Layer);
 	static FGuid ResolveHoveredCardAtWidgetPosition(
 		UWacomFirstPersonCardLayerWidget& Layer,
 		const FVector2D& WidgetPosition);

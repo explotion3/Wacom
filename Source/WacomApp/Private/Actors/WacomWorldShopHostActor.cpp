@@ -34,7 +34,6 @@ AWacomWorldShopHostActor::AWacomWorldShopHostActor()
 				0.0f,
 				(static_cast<float>(Column) - 1.5f) * HorizontalSpacing,
 				(static_cast<float>(1 - Row) - 0.5f) * VerticalSpacing));
-			DefaultOfferAnchors.Add(Anchor);
 		}
 	}
 }
@@ -69,63 +68,24 @@ void AWacomWorldShopHostActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+FWacomWorldShopPresentationHost
+AWacomWorldShopHostActor::BuildPresentationHost() const
+{
+	return FWacomWorldShopPresentationHost::Make(
+		*const_cast<AWacomWorldShopHostActor*>(this),
+		GetEnabledOfferAnchorsSorted(),
+		CardDrawSize,
+		CardPivot,
+		CardWorldScale,
+		InteractionDistance,
+		bTwoSided,
+		bOverrideCursorLookProfile,
+		CursorLookProfileOverride);
+}
+
 FWacomWorldShopHostValidationResult AWacomWorldShopHostActor::ValidateForOfferCount(int32 OfferCount) const
 {
-	FWacomWorldShopHostValidationResult Result;
-	const TArray<UWacomWorldShopOfferAnchorComponent*> Anchors = GetEnabledOfferAnchorsSorted();
-	Result.EnabledAnchorCount = Anchors.Num();
-	if (Anchors.IsEmpty())
-	{
-		Result.FailureReason = TEXT("MissingOfferAnchors");
-		return Result;
-	}
-	if (CardDrawSize.X <= 0 || CardDrawSize.Y <= 0
-		|| !FMath::IsFinite(CardWorldScale) || CardWorldScale <= 0.0f
-		|| !FMath::IsFinite(InteractionDistance) || InteractionDistance <= 0.0f
-		|| !FMath::IsFinite(CardPivot.X) || !FMath::IsFinite(CardPivot.Y))
-	{
-		Result.FailureReason = TEXT("InvalidWidgetProfile");
-		return Result;
-	}
-	if (bOverrideCursorLookProfile && !CursorLookProfileOverride.IsFinite())
-	{
-		Result.FailureReason = TEXT("InvalidLookProfile");
-		return Result;
-	}
-	TSet<FName> SlotIds;
-	TSet<int32> SlotOrders;
-	for (const UWacomWorldShopOfferAnchorComponent* Anchor : Anchors)
-	{
-		if (!Anchor || Anchor->SlotId.IsNone())
-		{
-			Result.FailureReason = TEXT("MissingSlotId");
-			return Result;
-		}
-		if (SlotIds.Contains(Anchor->SlotId) || SlotOrders.Contains(Anchor->SlotOrder))
-		{
-			Result.FailureReason = TEXT("DuplicateSlotIdentity");
-			return Result;
-		}
-		const FTransform Transform = Anchor->GetRelativeTransform();
-		const FVector AnchorScale = Transform.GetScale3D();
-		if (Transform.ContainsNaN()
-			|| FMath::IsNearlyZero(AnchorScale.X)
-			|| FMath::IsNearlyZero(AnchorScale.Y)
-			|| FMath::IsNearlyZero(AnchorScale.Z))
-		{
-			Result.FailureReason = TEXT("InvalidAnchorTransform");
-			return Result;
-		}
-		SlotIds.Add(Anchor->SlotId);
-		SlotOrders.Add(Anchor->SlotOrder);
-	}
-	if (OfferCount < 0 || Anchors.Num() < OfferCount)
-	{
-		Result.FailureReason = TEXT("InsufficientAnchorCapacity");
-		return Result;
-	}
-	Result.bValid = true;
-	return Result;
+	return BuildPresentationHost().ValidateForOfferCount(OfferCount);
 }
 
 #if WITH_EDITOR

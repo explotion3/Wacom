@@ -3,7 +3,6 @@
 #include "UI/Shop/WacomWorldShopEntryBoundsGuard.h"
 
 #include "Actors/WacomShopTriggerActor.h"
-#include "Actors/WacomWorldShopHostActor.h"
 #include "Components/BoxComponent.h"
 
 FWacomWorldShopEntryBoundsGuard::~FWacomWorldShopEntryBoundsGuard()
@@ -12,12 +11,16 @@ FWacomWorldShopEntryBoundsGuard::~FWacomWorldShopEntryBoundsGuard()
 }
 
 bool FWacomWorldShopEntryBoundsGuard::SuppressForHost(
-	AWacomWorldShopHostActor* Host)
+	AActor* HostOwner)
 {
 	Restore();
-	AWacomShopTriggerActor* ShopTrigger = Host
-		? Cast<AWacomShopTriggerActor>(Host->GetParentActor())
-		: nullptr;
+	AWacomShopTriggerActor* ShopTrigger =
+		Cast<AWacomShopTriggerActor>(HostOwner);
+	if (!ShopTrigger && HostOwner)
+	{
+		ShopTrigger =
+			Cast<AWacomShopTriggerActor>(HostOwner->GetParentActor());
+	}
 	UPrimitiveComponent* Bounds = ShopTrigger
 		? ShopTrigger->GetClickBounds()
 		: nullptr;

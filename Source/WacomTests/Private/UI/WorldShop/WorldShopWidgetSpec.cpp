@@ -68,12 +68,34 @@ bool FWacomWorldShopWidgetCardClassSpec::RunTest(const FString& Parameters)
 	}
 	TestNull(TEXT("world card does not nest the first-person Retainer wrapper"),
 		CardWidget->GetWidgetFromName(TEXT("FirstPersonCardPresentation")));
+	TestTrue(TEXT("world card explicitly fills the WidgetComponent render target"),
+		CardWidget->GetWidgetFromName(TEXT("WorldCardRenderSurface"))
+			&& CardWidget->GetWidgetFromName(TEXT("WorldCardRenderSurface"))->IsA<USizeBox>());
+	if (const USizeBox* RenderSurface =
+		Cast<USizeBox>(CardWidget->GetWidgetFromName(TEXT("WorldCardRenderSurface"))))
+	{
+		TestEqual(TEXT("render surface width matches WidgetComponent draw width"),
+			RenderSurface->GetWidthOverride(), 720.0f);
+		TestEqual(TEXT("render surface height matches WidgetComponent draw height"),
+			RenderSurface->GetHeightOverride(), 976.0f);
+	}
 	TestTrue(TEXT("world card owns a 2x resolution scale surface"),
 		CardWidget->GetWidgetFromName(TEXT("WorldCardResolutionScale"))
 			&& CardWidget->GetWidgetFromName(TEXT("WorldCardResolutionScale"))->IsA<UScaleBox>());
 	TestTrue(TEXT("world card owns a fixed logical design surface"),
 		CardWidget->GetWidgetFromName(TEXT("WorldCardDesignSurface"))
 			&& CardWidget->GetWidgetFromName(TEXT("WorldCardDesignSurface"))->IsA<USizeBox>());
+	TestTrue(TEXT("world card face owns an explicit visible footprint"),
+		CardWidget->GetWidgetFromName(TEXT("CardFaceSize"))
+			&& CardWidget->GetWidgetFromName(TEXT("CardFaceSize"))->IsA<USizeBox>());
+	if (const USizeBox* CardFaceSize =
+		Cast<USizeBox>(CardWidget->GetWidgetFromName(TEXT("CardFaceSize"))))
+	{
+		TestEqual(TEXT("visible card face width is explicit"),
+			CardFaceSize->GetWidthOverride(), 296.0f);
+		TestEqual(TEXT("visible card face height is explicit"),
+			CardFaceSize->GetHeightOverride(), 420.0f);
+	}
 	TestNull(TEXT("no independent buy button exists"), CardWidget->GetWidgetFromName(TEXT("BuyButton")));
 	TestNotNull(TEXT("price footer exists"), CardWidget->GetWidgetFromName(TEXT("PriceFooter")));
 	if (const UWidget* Footer = CardWidget->GetWidgetFromName(TEXT("PriceFooter")))

@@ -55,6 +55,7 @@ struct FWacomRunFloorSceneBindingAutomationTestView;
 struct FWacomCardDetailViewData;
 struct FWacomFirstPersonCardInputEvent;
 struct FWacomFirstPersonViewStageRequest;
+struct FWacomWorldShopPresentationHost;
 struct FRunShopOfferInput;
 struct FRunShopVisitRequest;
 struct FInputKeyEventArgs;
@@ -321,10 +322,10 @@ public:
 	bool RequestOpenShop(
 		const FRunShopVisitRequest& Request,
 		const FWacomFirstPersonViewStageRequest& StageRequest,
-		AWacomWorldShopHostActor* WorldShopHost);
+		const FWacomWorldShopPresentationHost& WorldShopHost);
 	bool IsWorldShopActive() const;
 	void CloseWorldShop();
-	void NotifyWorldShopHostEndPlay(AWacomWorldShopHostActor* Host);
+	void NotifyWorldShopHostEndPlay(AActor* HostOwner);
 	bool IsGameMenuViewpointStageTransitionActive() const { return bGameMenuViewpointStageTransitionActive; }
 	bool IsGameMenuViewpointReturnArmed() const { return bGameMenuViewpointReturnArmed; }
 	void BeginGameMenuViewpointStageTransition(FName DebugReason);
@@ -402,6 +403,7 @@ protected:
 	bool CanRouteRunScenePointerInput() const;
 	void UpdateRunWorldTargetProbePreview();
 	void ClearRunWorldTargetProbePreview();
+	void ClearRunWorldInteractionPresentation(FName Reason);
 	void ClearRunMenuDropTargetProbe();
 	void HandleRunFirstPersonCardLayerCardHovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
 	void HandleRunFirstPersonCardLayerCardUnhovered(const FGuid& CardInstanceId, const FWacomFirstPersonCardLayerSlotView& SlotView);
@@ -585,6 +587,9 @@ private:
 	TSharedPtr<FWacomRunPathBranchSelectionController> RunPathBranchSelectionController;
 	TSharedPtr<FWacomRunMapScreenFlow> RunMapScreenFlow;
 	TSharedPtr<FWacomWorldShopActivityCoordinator> WorldShopActivityCoordinator;
+#if WITH_AUTOMATION_TESTS
+	TOptional<bool> RunScenePointerRouteOverrideForAutomation;
+#endif
 	TWeakObjectPtr<UWacomRunPathTraversalComponent> BoundRunPathTraversal;
 	TArray<TWeakObjectPtr<AWacomRunPathBranchTargetActor>> BoundRunPathBranchTargets;
 	uint64 RunExplorationSceneBindingGeneration = 0;
@@ -606,6 +611,7 @@ private:
 	friend class FWacomBattleSceneInteractionRouter;
 	friend class FWacomRunWorldInteractionRouter;
 	friend class FWacomFirstPersonCardInputRouter;
+	friend class FWacomWorldShopActivityCoordinator;
 	friend class FWacomRunFirstPersonCardDetailController;
 	friend class FWacomRunFirstPersonCardDragController;
 	friend class UWacomGameViewportClient;

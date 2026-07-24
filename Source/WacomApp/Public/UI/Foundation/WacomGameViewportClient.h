@@ -9,6 +9,7 @@ class AWacomPlayerController;
 class FSlateApplication;
 class IInputProcessor;
 class SWidget;
+struct FKeyEvent;
 struct FPointerEvent;
 struct FWacomGameViewportClientTestAccess;
 
@@ -49,6 +50,11 @@ private:
 	bool HandlePreprocessedMouseButtonUp(
 		FSlateApplication& SlateApp,
 		const FPointerEvent& PointerEvent);
+	bool HandlePreprocessedKeyDown(
+		FSlateApplication& SlateApp,
+		const FKeyEvent& KeyEvent);
+	bool HandleUnpairedFirstPersonCardMouseButtonUp(
+		const FPointerEvent& PointerEvent);
 	bool TryRoutePreprocessedInput(
 		FInputDeviceId DeviceId,
 		FKey Key,
@@ -61,6 +67,9 @@ private:
 	bool IsPointerEventInsideOwnGameViewport(
 		FSlateApplication& SlateApp,
 		const FPointerEvent& PointerEvent) const;
+	bool IsOwnGameViewportActiveForKeyboard(
+		FSlateApplication& SlateApp,
+		int32 UserIndex) const;
 	AWacomPlayerController* ResolveWacomPlayerController(FInputDeviceId DeviceId) const;
 	static bool HasProjectOwnedFocusPresentation(
 		const TSharedPtr<SWidget>& FocusedWidget);

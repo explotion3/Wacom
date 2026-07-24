@@ -8,6 +8,7 @@ class AWacomPlayerController;
 class SWidget;
 class UWacomGameViewportClient;
 struct FPointerEvent;
+struct FKeyEvent;
 
 #if WITH_AUTOMATION_TESTS
 
@@ -29,6 +30,9 @@ struct FWacomGameViewportClientTestAccess
 		UWacomGameViewportClient& ViewportClient,
 		FKey Key,
 		EInputEvent Event);
+	static bool DispatchKeyDown(
+		UWacomGameViewportClient& ViewportClient,
+		const FKeyEvent& KeyEvent);
 	static void SetRouteOverrides(
 		UWacomGameViewportClient& ViewportClient,
 		TOptional<bool> bPointerInsideViewport,

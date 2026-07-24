@@ -3,13 +3,18 @@
 #include "WacomEditorModule.h"
 
 #include "Actors/WacomBattleEnemyActor.h"
+#include "ComponentVisualizers/WacomWorldShopLayoutAnchorComponentVisualizer.h"
+#include "Components/WacomWorldShopLayoutAnchorComponent.h"
 #include "Details/WacomBattleEnemyActorDetails.h"
 #include "Editor.h"
+#include "Editor/UnrealEdEngine.h"
 #include "EditorValidatorSubsystem.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "Misc/CoreDelegates.h"
 #include "Modules/ModuleManager.h"
 #include "PropertyEditorModule.h"
 #include "ToolMenus.h"
+#include "UnrealEdGlobals.h"
 #include "Validation/WacomCardDefinitionValidator.h"
 #include "Validation/WacomCharacterDefinitionValidator.h"
 #include "Validation/WacomEncounterDefinitionValidator.h"
@@ -70,6 +75,7 @@ namespace
 void FWacomEditorModule::StartupModule()
 {
 	RegisterDetailsCustomizations();
+	RegisterComponentVisualizers();
 	RegisterEditorValidator(NewObject<UWacomCardDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEncounterDefinitionValidator>(GetTransientPackage()));
 	RegisterEditorValidator(NewObject<UWacomEnemyBehaviorDefinitionValidator>(GetTransientPackage()));
@@ -97,6 +103,7 @@ void FWacomEditorModule::ShutdownModule()
 		UToolMenus::UnregisterOwner(WacomEditorToolMenuOwner);
 	}
 	UnregisterDetailsCustomizations();
+	UnregisterComponentVisualizers();
 	UnregisterEditorValidators();
 }
 
@@ -126,6 +133,60 @@ void FWacomEditorModule::UnregisterDetailsCustomizations()
 	{
 		PropertyEditorModule.NotifyCustomizationModuleChanged();
 	}
+}
+
+void FWacomEditorModule::RegisterComponentVisualizers()
+{
+	if (bComponentVisualizersRegistered)
+	{
+		return;
+	}
+	if (!GUnrealEd)
+	{
+		if (!PostEngineInitHandle.IsValid())
+		{
+			PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(
+				this,
+				&FWacomEditorModule::RegisterComponentVisualizers);
+		}
+		return;
+	}
+	if (PostEngineInitHandle.IsValid())
+	{
+		FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
+		PostEngineInitHandle.Reset();
+	}
+	TSharedPtr<FComponentVisualizer> Visualizer =
+		MakeShared<FWacomWorldShopLayoutAnchorComponentVisualizer>();
+	GUnrealEd->RegisterComponentVisualizer(
+		UWacomWorldShopLayoutAnchorComponent::StaticClass()->GetFName(),
+		Visualizer);
+	Visualizer->OnRegister();
+	bComponentVisualizersRegistered = true;
+	UE_LOG(
+		LogTemp,
+		Display,
+		TEXT("[WorldShopAnchorVisualizer] Registered component visualizer"));
+}
+
+void FWacomEditorModule::UnregisterComponentVisualizers()
+{
+	if (PostEngineInitHandle.IsValid())
+	{
+		FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
+		PostEngineInitHandle.Reset();
+	}
+	if (!bComponentVisualizersRegistered)
+	{
+		return;
+	}
+	bComponentVisualizersRegistered = false;
+	if (!GUnrealEd || IsEngineExitRequested() || GExitPurge)
+	{
+		return;
+	}
+	GUnrealEd->UnregisterComponentVisualizer(
+		UWacomWorldShopLayoutAnchorComponent::StaticClass()->GetFName());
 }
 
 void FWacomEditorModule::RegisterMenus()

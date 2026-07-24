@@ -1939,6 +1939,19 @@ void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardLayerPresentationVi
 	}
 }
 
+void UWacomFirstPersonCardAnchorComponent::SetFirstPersonCardLayerWorldActivitySuppressed(
+	bool bSuppressed,
+	bool bAnimate)
+{
+	bFirstPersonCardLayerWorldActivitySuppressed = bSuppressed;
+	if (CardLayerWidget)
+	{
+		CardLayerWidget->SetCardLayerWorldActivitySuppressed(
+			bSuppressed,
+			bAnimate);
+	}
+}
+
 #if WITH_AUTOMATION_TESTS
 TArray<FWacomFirstPersonCardLayerSlotView>
 UWacomFirstPersonCardAnchorComponent::BuildLayoutFixtureCardSlotViews() const
@@ -2483,6 +2496,12 @@ void UWacomFirstPersonCardAnchorComponent::UpdateCardLayer()
 		&& RuntimeState->CanConsumePileTransferHintsForCurrentSource();
 
 	CardLayerOwner->Update(UpdateInput, CardLayerWidget);
+	if (CardLayerWidget)
+	{
+		CardLayerWidget->SetCardLayerWorldActivitySuppressed(
+			bFirstPersonCardLayerWorldActivitySuppressed,
+			/*bAnimate*/ true);
+	}
 }
 
 void UWacomFirstPersonCardAnchorComponent::RemoveCardLayer()

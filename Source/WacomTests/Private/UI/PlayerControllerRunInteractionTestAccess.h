@@ -42,6 +42,9 @@ struct FWacomPlayerControllerRunInteractionTestAccess
 	static bool RouteRunWorldInteractableClick(AWacomPlayerControllerProbe* PC);
 	static bool InputLeftMouseReleased(AWacomPlayerControllerProbe* PC);
 	static bool CanRouteRunScenePointerInput(const AWacomPlayerControllerProbe* PC);
+	static void SetRunScenePointerRouteOverride(
+		AWacomPlayerControllerProbe* PC,
+		TOptional<bool> bCanRoute);
 	static void RegisterActiveGameMenu(
 		AWacomPlayerControllerProbe* PC,
 		UWacomMenuWidgetBase* Menu);

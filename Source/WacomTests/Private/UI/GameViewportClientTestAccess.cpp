@@ -72,6 +72,18 @@ bool FWacomGameViewportClientTestAccess::DispatchReroutedInput(
 		Event);
 }
 
+bool FWacomGameViewportClientTestAccess::DispatchKeyDown(
+	UWacomGameViewportClient& ViewportClient,
+	const FKeyEvent& KeyEvent)
+{
+	return FSlateApplication::IsInitialized()
+		&& ViewportClient.FirstPersonCardInputPreProcessor.IsValid()
+		&& ViewportClient.FirstPersonCardInputPreProcessor
+			->HandleKeyDownEvent(
+				FSlateApplication::Get(),
+				KeyEvent);
+}
+
 void FWacomGameViewportClientTestAccess::SetRouteOverrides(
 	UWacomGameViewportClient& ViewportClient,
 	TOptional<bool> bPointerInsideViewport,

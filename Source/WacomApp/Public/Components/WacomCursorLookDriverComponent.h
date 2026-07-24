@@ -23,6 +23,14 @@ struct WACOMAPP_API FWacomCursorLookProfile
 	float PitchClampDegrees = 8.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
+		meta = (ToolTip = "鼠标中心稳定区的半径，X 为水平、Y 为垂直，按视口半宽/半高归一化。0 表示无死区；推荐商店浏览使用 0.08-0.20。"))
+	FVector2D CursorDeadZoneNormalized = FVector2D::ZeroVector;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
+		meta = (ToolTip = "死区外的鼠标响应指数。1 为线性；大于 1 会让中心附近更稳定，同时仍在屏幕边缘精确达到 Clamp。推荐 1.0-1.6。"))
+	float CursorResponseExponent = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Camera|Cursor Look",
 		meta = (ToolTip = "水平鼠标响应倍率。推荐 0.5-2；不会修改来源组件的制作值。"))
 	float LookYawScale = 1.0f;
 

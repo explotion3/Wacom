@@ -14,15 +14,12 @@
 #include "Components/VerticalBoxSlot.h"
 #include "Styling/SlateBrush.h"
 #include "UI/Card/WacomCardView.h"
+#include "UI/Shop/WacomWorldShopCardGeometry.h"
 
 namespace
 {
 	constexpr const TCHAR* RequiredCardViewClassPath =
 		TEXT("/Game/Wacom/UI/Card/WBP_FirstPersonCardView.WBP_FirstPersonCardView_C");
-	constexpr float WorldCardDesignWidth = 360.0f;
-	constexpr float WorldCardDesignHeight = 488.0f;
-	constexpr float PriceFooterWidth = 296.0f;
-	constexpr float PriceFooterHeight = 52.0f;
 }
 
 UWacomWorldShopCardWidget::UWacomWorldShopCardWidget(const FObjectInitializer& ObjectInitializer)
@@ -123,18 +120,29 @@ void UWacomWorldShopCardWidget::EnsureFallbackWidgetTree()
 	PrimaryActionButton->SetStyle(InvisibleButtonStyle);
 	WidgetTree->RootWidget = PrimaryActionButton;
 
+	USizeBox* RenderSurface = WidgetTree->ConstructWidget<USizeBox>(
+		USizeBox::StaticClass(),
+		TEXT("WorldCardRenderSurface"));
+	RenderSurface->SetWidthOverride(
+		FWacomWorldShopCardGeometry::RenderDrawWidth);
+	RenderSurface->SetHeightOverride(
+		FWacomWorldShopCardGeometry::RenderDrawHeight);
+	PrimaryActionButton->SetContent(RenderSurface);
+
 	UScaleBox* ResolutionScale = WidgetTree->ConstructWidget<UScaleBox>(
 		UScaleBox::StaticClass(),
 		TEXT("WorldCardResolutionScale"));
 	ResolutionScale->SetStretch(EStretch::ScaleToFit);
 	ResolutionScale->SetStretchDirection(EStretchDirection::Both);
-	PrimaryActionButton->SetContent(ResolutionScale);
+	RenderSurface->SetContent(ResolutionScale);
 
 	USizeBox* DesignSurface = WidgetTree->ConstructWidget<USizeBox>(
 		USizeBox::StaticClass(),
 		TEXT("WorldCardDesignSurface"));
-	DesignSurface->SetWidthOverride(WorldCardDesignWidth);
-	DesignSurface->SetHeightOverride(WorldCardDesignHeight);
+	DesignSurface->SetWidthOverride(
+		FWacomWorldShopCardGeometry::LogicalDesignWidth);
+	DesignSurface->SetHeightOverride(
+		FWacomWorldShopCardGeometry::LogicalDesignHeight);
 	ResolutionScale->SetContent(DesignSurface);
 
 	UVerticalBox* Layout = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("CardAndFooter"));
@@ -142,7 +150,9 @@ void UWacomWorldShopCardWidget::EnsureFallbackWidgetTree()
 	USpacer* TopPadding = WidgetTree->ConstructWidget<USpacer>(
 		USpacer::StaticClass(),
 		TEXT("TopPadding"));
-	TopPadding->SetSize(FVector2D(1.0f, 8.0f));
+	TopPadding->SetSize(FVector2D(
+		1.0f,
+		FWacomWorldShopCardGeometry::TopPadding));
 	Layout->AddChildToVerticalBox(TopPadding);
 
 	UClass* ResolvedCardClass = LoadClass<UWacomCardView>(nullptr, RequiredCardViewClassPath);
@@ -160,7 +170,16 @@ void UWacomWorldShopCardWidget::EnsureFallbackWidgetTree()
 		// render target 与色彩损失。World-safe adapter 直接复用精确内层卡面，
 		// 由外部 ScaleBox 做 2x 超采样，不复制卡面内容或规则。
 		CardView->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
-		if (UVerticalBoxSlot* CardSlot = Layout->AddChildToVerticalBox(CardView))
+		USizeBox* CardFaceSize = WidgetTree->ConstructWidget<USizeBox>(
+			USizeBox::StaticClass(),
+			TEXT("CardFaceSize"));
+		CardFaceSize->SetWidthOverride(
+			FWacomWorldShopCardGeometry::CardFaceWidth);
+		CardFaceSize->SetHeightOverride(
+			FWacomWorldShopCardGeometry::CardFaceHeight);
+		CardFaceSize->SetContent(CardView);
+		if (UVerticalBoxSlot* CardSlot =
+			Layout->AddChildToVerticalBox(CardFaceSize))
 		{
 			CardSlot->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
 			CardSlot->SetHorizontalAlignment(HAlign_Center);
@@ -170,8 +189,10 @@ void UWacomWorldShopCardWidget::EnsureFallbackWidgetTree()
 	USizeBox* FooterSize = WidgetTree->ConstructWidget<USizeBox>(
 		USizeBox::StaticClass(),
 		TEXT("PriceFooterSize"));
-	FooterSize->SetWidthOverride(PriceFooterWidth);
-	FooterSize->SetHeightOverride(PriceFooterHeight);
+	FooterSize->SetWidthOverride(
+		FWacomWorldShopCardGeometry::PriceFooterWidth);
+	FooterSize->SetHeightOverride(
+		FWacomWorldShopCardGeometry::PriceFooterHeight);
 	UBorder* Footer = WidgetTree->ConstructWidget<UBorder>(UBorder::StaticClass(), TEXT("PriceFooter"));
 	Footer->SetVisibility(ESlateVisibility::HitTestInvisible);
 	Footer->SetBrushColor(FLinearColor(0.03f, 0.025f, 0.02f, 0.92f));
@@ -203,7 +224,9 @@ void UWacomWorldShopCardWidget::EnsureFallbackWidgetTree()
 	USpacer* BottomPadding = WidgetTree->ConstructWidget<USpacer>(
 		USpacer::StaticClass(),
 		TEXT("BottomPadding"));
-	BottomPadding->SetSize(FVector2D(1.0f, 8.0f));
+	BottomPadding->SetSize(FVector2D(
+		1.0f,
+		FWacomWorldShopCardGeometry::BottomPadding));
 	Layout->AddChildToVerticalBox(BottomPadding);
 }
 

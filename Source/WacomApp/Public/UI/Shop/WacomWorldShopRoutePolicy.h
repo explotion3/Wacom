@@ -4,9 +4,9 @@
 
 #include "CoreMinimal.h"
 
-class AWacomWorldShopHostActor;
 class UWorld;
 struct FRunShopVisitRequest;
+struct FWacomWorldShopPresentationHost;
 
 struct WACOMAPP_API FWacomWorldShopRouteDecision
 {
@@ -19,6 +19,6 @@ struct WACOMAPP_API FWacomWorldShopRoutePolicy
 {
 	static FWacomWorldShopRouteDecision Evaluate(
 		const FRunShopVisitRequest& Request,
-		const AWacomWorldShopHostActor* Host,
+		const FWacomWorldShopPresentationHost& Host,
 		const UWorld* ExpectedWorld);
 };

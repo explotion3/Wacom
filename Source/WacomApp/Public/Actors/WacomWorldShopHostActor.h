@@ -5,25 +5,11 @@
 #include "Components/WacomCursorLookDriverComponent.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "UI/Shop/WacomWorldShopPresentationHost.h"
 #include "WacomWorldShopHostActor.generated.h"
 
 class USceneComponent;
 class UWacomWorldShopOfferAnchorComponent;
-
-USTRUCT(BlueprintType)
-struct WACOMAPP_API FWacomWorldShopHostValidationResult
-{
-	GENERATED_BODY()
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|World Shop")
-	bool bValid = false;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|World Shop")
-	FName FailureReason = NAME_None;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|World Shop")
-	int32 EnabledAnchorCount = 0;
-};
 
 /**
  * World Shop 的场景表现宿主。默认提供 2×4 商品槽；不拥有库存、购买规则或 Visit。
@@ -67,6 +53,7 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|World Shop")
 	TArray<UWacomWorldShopOfferAnchorComponent*> GetEnabledOfferAnchorsSorted() const;
 
+	FWacomWorldShopPresentationHost BuildPresentationHost() const;
 	FWacomWorldShopHostValidationResult ValidateForOfferCount(int32 OfferCount) const;
 
 #if WITH_EDITOR
@@ -79,7 +66,4 @@ protected:
 private:
 	UPROPERTY(VisibleAnywhere, Category = "Wacom|World Shop")
 	TObjectPtr<USceneComponent> SceneRoot = nullptr;
-
-	UPROPERTY(VisibleAnywhere, Instanced, Category = "Wacom|World Shop")
-	TArray<TObjectPtr<UWacomWorldShopOfferAnchorComponent>> DefaultOfferAnchors;
 };
