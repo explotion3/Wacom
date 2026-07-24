@@ -116,6 +116,7 @@ FEffectApplyResult HandleDamage(FEffectExecutionContext& Ctx)
 	Intent.ShieldInteraction = EDamageShieldInteraction::ConsumeShield;
 	Intent.SourceCardInstanceId =
 		(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
+	Intent.CauseTag = Ctx.EffectTag;
 
 	switch (Ctx.TargetKind)
 	{
@@ -135,21 +136,28 @@ FEffectApplyResult HandleDamage(FEffectExecutionContext& Ctx)
 FEffectApplyResult HandleShield(FEffectExecutionContext& Ctx)
 {
 	// 护盾简化为 ApplyStatus.Shield 的特例：不走 StatusStacks，直接加到 Shield 字段。
+	FShieldMutationIntent Intent;
+	Intent.RequestedShield = Ctx.Magnitude;
+	Intent.SourceCardInstanceId =
+		(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
+	Intent.CauseTag = Ctx.EffectTag;
 	if (Ctx.TargetKind == EEffectTargetKind::Player)
 	{
+		Intent.Target = FBattleCombatantHandle::Player();
 		return FEffectApplyResult::FromBool(
 			FBattleCombatantMutationModule::AddShield(
 				*Ctx.State,
-				FBattleCombatantHandle::Player(),
-				Ctx.Magnitude).IsAccepted());
+				*Ctx.Events,
+				Intent).IsAccepted());
 	}
 	if (Ctx.TargetKind == EEffectTargetKind::EnemyPart)
 	{
+		Intent.Target = FBattleCombatantHandle::EnemyPart(Ctx.TargetInstanceId);
 		return FEffectApplyResult::FromBool(
 			FBattleCombatantMutationModule::AddShield(
 				*Ctx.State,
-				FBattleCombatantHandle::EnemyPart(Ctx.TargetInstanceId),
-				Ctx.Magnitude).IsAccepted());
+				*Ctx.Events,
+				Intent).IsAccepted());
 	}
 	return FEffectApplyResult::Failed();
 }

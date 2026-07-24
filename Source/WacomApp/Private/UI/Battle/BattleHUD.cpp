@@ -13,6 +13,7 @@
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
+#include "UI/Battle/WacomBattleFloatingCombatTextLayerWidget.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Battle/WacomBattleHUDEnemyInspectionCoordinator.h"
 #include "UI/Battle/WacomBattleHUDResultApplicator.h"
@@ -223,7 +224,8 @@ TSharedRef<SWidget> UBattleHUD::RebuildWidget()
 			&DiscardPileMotionAnchor,
 			&PlayTargetMotionAnchor,
 			&CombatLogFeed,
-			&BattlePresentationStack});
+			&BattlePresentationStack,
+			&FloatingCombatTextLayer});
 	}
 	return Super::RebuildWidget();
 }
@@ -255,6 +257,7 @@ void UBattleHUD::RebuildChildBattleWidgetsForRuntime()
 	if (PlayerStatusBar) { ChildBattleWidgets.Add(PlayerStatusBar); }
 	if (CombatLogFeed) { ChildBattleWidgets.Add(CombatLogFeed); }
 	if (BattlePresentationStack) { ChildBattleWidgets.Add(BattlePresentationStack); }
+	if (FloatingCombatTextLayer) { ChildBattleWidgets.Add(FloatingCombatTextLayer); }
 	BindCombatLogFeedForRuntime();
 	BindPileDetailsRequestsForRuntime();
 

@@ -473,7 +473,8 @@ BattleState
 | `InitiativeHit` | 出牌前先机命中部位 |
 | `ResistanceResolved` | 合法抵抗比较完成；`Amount=PlayerPeakDamage`、`Count=EnemyPeakDamage`、`bSuccess` 表示严格大于是否成立，成功时 `Tag=Status.Stunned`；失败比较也必须发布 |
 | `PerfectReleaseResolved` | 完美释放效果完成 |
-| `DamageDealt` | 实际扣血 |
+| `DamageDealt` | 单段伤害结算；`Amount` 保持为实际 HP 损失，`DamageResolution` 记录请求伤害、护盾前后、吸收量、Overkill、`Direct / Periodic` 与规则已判定的暴击事实 |
+| `ShieldChanged` | 非伤害来源造成的实际护盾变化；`Amount` 为有符号实际 delta，`Count` 为变化后护盾 |
 | `StatusApplied` | 状态层数施加 |
 | `CardStatusChanged` | 单卡状态物化、消费或清理；Amount=delta，Count=变更后层数 |
 | `CardRuntimeCostChanged` | 单卡运行时费用修正已提交；`CardInstanceId` 为目标卡，`ActorInstanceId` 为来源卡或规则主体，`Tag` 为来源效果，`Amount` 为本次原始 modifier delta，`Count` 为变更后的有效 `RuntimeCost` |
@@ -492,7 +493,9 @@ BattleState
 | `CardGained` | 战斗中获得新卡 |
 | `BattleEnded` | 战斗进入结束态 |
 
-`DamageDealt.Amount` 是本次实际 HP 损失，不是进入伤害流程的名义数值：护盾完全吸收时仍发布事件但 `Amount=0`；部分吸收只记录穿盾后的 HP 损失；overkill 只记录目标受击前剩余 HP。普通卡牌伤害继续填写 `CardInstanceId`，Poison 继续填写 `Tag=Status.Poison`，敌方意图不伪造来源字段。Combat Log、伤害表现 cue 和 Action Preview 都消费这一口径。
+`DamageDealt.Amount` 是本次实际 HP 损失，不是进入伤害流程的名义数值：护盾完全吸收时仍发布事件但 `Amount=0`；部分吸收只记录穿盾后的 HP 损失；overkill 只记录目标受击前剩余 HP。精确分解写入 `FBattleDamageResolutionFact`：`RequestedDamage`、`ShieldBefore / ShieldAbsorbed / ShieldAfter`、`Overkill`、`Kind` 和 `bCritical`。普通 Damage Effect 明确为 `Direct`；Poison 明确为 `Periodic`、继续填写 `Tag=Status.Poison` 并绕过护盾。`bCritical` 只承载规则层已经确认的事实，不在事件、App 或 Widget 内计算概率和倍率。普通卡牌伤害继续填写 `CardInstanceId`，敌方意图不伪造来源字段。Combat Log、伤害表现 cue 和 Action Preview 都消费这一口径。
+
+所有非伤害护盾增加通过 typed shield mutation intent 进入唯一 Combatant Mutation Module，并在实际变化非零时发布一次 `ShieldChanged`。伤害吸收只记录在同一个 `DamageDealt.DamageResolution` 内，不再重复发布 `ShieldChanged`，避免日志、飘字和测试把同一次吸收计为两次。
 
 App 层的世界伤害像素反馈只读取上述 `DamageDealt.Amount`，并按平方根映射视觉强度；不会把粒子强度、Cue 时长或表现 Seed 写回 BattleState。`FWacomBattlePresentationTargetCue.Seed` 是 App presentation 的稳定装饰随机合同：Damage 由事件 Sequence、目标稳定部位 key 和 Amount 构造，TargetConfirmed 由来源卡实例和目标稳定部位 key 构造；不得复用为规则 RNG、伤害方向或存档事实。`EnemyPartHpEmptied` 占用 Destroyed 高优先级 Cue，App 可用它驱动局部崩裂与 authored 破损终态，但不新增规则事件，也不把换图时机或资源写入 BattleState。
 

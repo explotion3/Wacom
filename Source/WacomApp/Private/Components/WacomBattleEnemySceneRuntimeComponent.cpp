@@ -1288,6 +1288,32 @@ UWacomBattleEnemySceneRuntimeComponent::GetPartPresentationBoundsProjectedSizeFo
 
 #endif
 
+bool UWacomBattleEnemySceneRuntimeComponent::TryResolvePartPresentationAnchorWorldLocation(
+	const UWacomBattleEnemyPartComponent& Part,
+	FVector& OutWorldLocation) const
+{
+	const FPartRuntimeState* State = Impl ? FindState(Impl->Parts, Part) : nullptr;
+	if (State)
+	{
+		if (const UWacomBattleEnemyPartImpactAnchorComponent* ImpactAnchor =
+			State->ImpactAnchor.Get())
+		{
+			OutWorldLocation = ImpactAnchor->GetComponentLocation();
+			return true;
+		}
+
+		const FVector BoundsCenter = ResolvePresentationBounds(*State).GetWorldCenter();
+		if (!BoundsCenter.ContainsNaN())
+		{
+			OutWorldLocation = BoundsCenter;
+			return true;
+		}
+	}
+
+	OutWorldLocation = Part.GetComponentLocation();
+	return !OutWorldLocation.ContainsNaN();
+}
+
 void UWacomBattleEnemySceneRuntimeComponent::PlayPartActionAnimation(
 	UWacomBattleEnemyPartComponent& Part,
 	FName IntentId,

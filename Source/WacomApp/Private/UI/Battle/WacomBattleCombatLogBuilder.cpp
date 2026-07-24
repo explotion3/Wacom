@@ -443,6 +443,7 @@ namespace
 		case EBattleEventType::ResistanceResolved:
 		case EBattleEventType::PerfectReleaseResolved:
 		case EBattleEventType::DamageDealt:
+		case EBattleEventType::ShieldChanged:
 		case EBattleEventType::StatusApplied:
 		case EBattleEventType::CardStatusChanged:
 		case EBattleEventType::EnemyPartHpEmptied:
@@ -617,6 +618,7 @@ namespace
 					EGuidFormats::DigitsWithHyphensLower)));
 		}
 		if (Event.Type == EBattleEventType::DamageDealt
+			|| Event.Type == EBattleEventType::ShieldChanged
 			|| Event.Type == EBattleEventType::StatusApplied)
 		{
 			return MakeBracketedLabel(LOCTEXT("DetailsPlayerTarget", "玩家"));
@@ -690,6 +692,71 @@ namespace
 		Entry.IconTag = Event.Tag;
 		Entry.EventSequence = Event.Sequence;
 
+		if (Event.Type == EBattleEventType::DamageDealt)
+		{
+			if (Event.DamageResolution.ShieldAbsorbed > 0)
+			{
+				FWacomBattleCombatLogDetailsEntryView ShieldEntry = Entry;
+				ShieldEntry.MessageText = Event.DamageResolution.ShieldAfter <= 0
+					? LOCTEXT("DetailsShieldAbsorbedBroken", "护盾吸收（击破）")
+					: LOCTEXT("DetailsShieldAbsorbed", "护盾吸收");
+				ShieldEntry.ValueText =
+					FText::AsNumber(Event.DamageResolution.ShieldAbsorbed);
+				ShieldEntry.IconKey = TEXT("ShieldChanged");
+				ShieldEntry.VisualTone = EWacomBattleEventVisualTone::Warning;
+				Group.Entries.Add(MoveTemp(ShieldEntry));
+			}
+
+			if (Event.Amount > 0)
+			{
+				if (Event.DamageResolution.bCritical)
+				{
+					Entry.MessageText = LOCTEXT("DetailsCriticalDamage", "暴击伤害");
+					Entry.VisualTone = EWacomBattleEventVisualTone::Positive;
+				}
+				else if (Event.DamageResolution.Kind == EBattleDamageKind::Periodic)
+				{
+					Entry.MessageText = Event.Tag.IsValid()
+						? FText::Format(
+							LOCTEXT("DetailsPeriodicDamageNamed", "{0}伤害"),
+							FText::FromString(
+								UWacomBattleEventPresentationBuilder::FormatStatusName(
+									Event.Tag)))
+						: LOCTEXT("DetailsPeriodicDamage", "周期伤害");
+				}
+				else
+				{
+					Entry.MessageText = LOCTEXT("DetailsDamage", "受到伤害");
+				}
+				Entry.ValueText = FText::AsNumber(Event.Amount);
+				Group.Entries.Add(Entry);
+
+				if (Event.DamageResolution.Overkill > 0)
+				{
+					FWacomBattleCombatLogDetailsEntryView& Overkill =
+						Group.Entries.AddDefaulted_GetRef();
+					Overkill.EntryKind = EWacomBattleCombatLogDetailsEntryKind::Fact;
+					Overkill.Depth = 2;
+					Overkill.SourceEventType = Event.Type;
+					Overkill.MessageText = FText::Format(
+						LOCTEXT("DetailsOverkill", "溢出伤害 {0}"),
+						FText::AsNumber(Event.DamageResolution.Overkill));
+					Overkill.VisualTone = Entry.VisualTone;
+					Overkill.EventSequence = Event.Sequence;
+				}
+			}
+			else if (Event.DamageResolution.ShieldAbsorbed <= 0)
+			{
+				// Preserve legacy and diagnostic zero-damage facts. A structured
+				// fully absorbed hit already emitted its shield row above and must
+				// not add a misleading second "-0" HP row.
+				Entry.MessageText = LOCTEXT("DetailsZeroDamage", "受到伤害");
+				Entry.ValueText = FText::AsNumber(0);
+				Group.Entries.Add(Entry);
+			}
+			return;
+		}
+
 		switch (Event.Type)
 		{
 		case EBattleEventType::ResistanceResolved:
@@ -701,15 +768,13 @@ namespace
 				: EWacomBattleEventVisualTone::Danger;
 			break;
 
-		case EBattleEventType::DamageDealt:
-			Entry.MessageText = Event.Tag.IsValid()
-				? FText::Format(
-					LOCTEXT("DetailsTaggedDamage", "{0}造成伤害"),
-					FText::FromString(
-						UWacomBattleEventPresentationBuilder::FormatStatusName(
-							Event.Tag)))
-				: LOCTEXT("DetailsDamage", "受到伤害");
-			Entry.ValueText = FText::AsNumber(Event.Amount);
+		case EBattleEventType::ShieldChanged:
+			Entry.MessageText = LOCTEXT("DetailsShieldChanged", "护盾");
+			Entry.ValueText = MakeSignedDeltaText(Event.Amount);
+			Entry.VisualTone = Event.Amount > 0
+				? EWacomBattleEventVisualTone::Positive
+				: EWacomBattleEventVisualTone::Neutral;
+			Entry.IconKey = TEXT("ShieldChanged");
 			break;
 
 		case EBattleEventType::StatusApplied:

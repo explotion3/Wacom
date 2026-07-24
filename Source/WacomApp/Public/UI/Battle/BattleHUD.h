@@ -18,6 +18,7 @@
 class UWacomBattleWidgetBase;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
+class UWacomBattleFloatingCombatTextLayerWidget;
 class UWacomCardDetailPanel;
 class UWacomKnockdownChoiceDialog;
 class UWacomBattleEnemyPartComponent;
@@ -480,6 +481,10 @@ protected:
 
 	UPROPERTY(meta = (BindWidgetOptional))
 	TObjectPtr<UBattlePresentationStackWidget> BattlePresentationStack;
+
+	/** 全屏、不可命中的池化战斗飘字层。二级面板和 Modal 由更高 CommonUI Layer 覆盖。 */
+	UPROPERTY(meta = (BindWidgetOptional, ToolTip = "玩家与敌人共用的全屏战斗飘字层。必须 HitTestInvisible；只消费 BattleHUD 推送的精确表现事实。"))
+	TObjectPtr<UWacomBattleFloatingCombatTextLayerWidget> FloatingCombatTextLayer;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Wacom|Battle|Card Detail|Authoring", meta = (ToolTip = "战斗第一人称手牌详情面板 Widget 类。"))
 	TSubclassOf<UWacomCardDetailPanel> CardDetailPanelClass;

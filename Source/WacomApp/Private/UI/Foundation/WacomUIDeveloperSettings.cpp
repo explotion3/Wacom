@@ -5,6 +5,7 @@
 #include "UI/Backpack/WacomBackpackScreen.h"
 #include "UI/Battle/WacomBattleEnemyPanelWidget.h"
 #include "UI/Battle/WacomBattleEnemyInspectionWidget.h"
+#include "UI/Battle/WacomBattleFloatingCombatTextStyle.h"
 #include "UI/Battle/WacomBattleStatusPresentationCatalog.h"
 #include "UI/Battle/WacomBattleCombatLogDetailsScreen.h"
 #include "UI/Battle/WacomBattleCardPileDetailsScreen.h"
@@ -244,6 +245,24 @@ bool UWacomUIDeveloperSettings::ValidateSettings(TArray<FText>& OutErrors) const
 			BattleStatusPresentationCatalog,
 			LOCTEXT("BattleStatusPresentationCatalogLabel", "BattleStatusPresentationCatalog"),
 			OutErrors);
+	}
+	if (BattleFloatingCombatTextStyle.IsNull())
+	{
+		OutErrors.Add(LOCTEXT(
+			"BattleFloatingCombatTextStyleNull",
+			"BattleFloatingCombatTextStyle 不能为空；HUD 精确战斗飘字需要正式 Style DataAsset。"));
+	}
+	else
+	{
+		ValidateSoftObject(
+			BattleFloatingCombatTextStyle,
+			LOCTEXT("BattleFloatingCombatTextStyleLabel", "BattleFloatingCombatTextStyle"),
+			OutErrors);
+		if (const UWacomBattleFloatingCombatTextStyle* Style =
+			BattleFloatingCombatTextStyle.LoadSynchronous())
+		{
+			Style->ValidateStyle(OutErrors);
+		}
 	}
 	ValidateSoftObject(
 		CardExplanationLexicon,

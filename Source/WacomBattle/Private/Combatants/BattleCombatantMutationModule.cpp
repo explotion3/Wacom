@@ -81,13 +81,45 @@ namespace
 		FBattleEventBus& Events,
 		const FDamageMutationIntent& Intent,
 		const FResolvedCombatant& Target,
-		int32 HpLost)
+		const FDamageMutationResult& Result)
 	{
 		FBattleEvent Event;
 		Event.Type = EBattleEventType::DamageDealt;
 		Event.CardInstanceId = Intent.SourceCardInstanceId;
 		Event.Tag = Intent.CauseTag;
-		Event.Amount = HpLost;
+		Event.Amount = Result.HpLost;
+		Event.DamageResolution.RequestedDamage = Result.RequestedDamage;
+		Event.DamageResolution.ShieldBefore = Result.ShieldBefore;
+		Event.DamageResolution.ShieldAbsorbed = Result.ShieldAbsorbed;
+		Event.DamageResolution.ShieldAfter = Result.ShieldAfter;
+		Event.DamageResolution.Overkill = Result.Overkill;
+		Event.DamageResolution.Kind = Intent.DamageKind;
+		Event.DamageResolution.bCritical = Intent.bCritical;
+		if (Target.EnemyPart)
+		{
+			Event.ActorInstanceId = Target.EnemyPart->InstanceId;
+			Event.ActorEnemyPartKey = Target.EnemyPart->Identity.ToEnemyPartKey();
+		}
+		Events.Emit(MoveTemp(Event));
+	}
+
+	void EmitShieldChangedEvent(
+		FBattleEventBus& Events,
+		const FShieldMutationIntent& Intent,
+		const FResolvedCombatant& Target,
+		const FShieldMutationResult& Result)
+	{
+		if (Result.ShieldAdded == 0)
+		{
+			return;
+		}
+
+		FBattleEvent Event;
+		Event.Type = EBattleEventType::ShieldChanged;
+		Event.CardInstanceId = Intent.SourceCardInstanceId;
+		Event.Tag = Intent.CauseTag;
+		Event.Amount = Result.ShieldAdded;
+		Event.Count = Result.ShieldAfter;
 		if (Target.EnemyPart)
 		{
 			Event.ActorInstanceId = Target.EnemyPart->InstanceId;
@@ -224,7 +256,7 @@ FDamageMutationResult FBattleCombatantMutationModule::ApplyDamage(
 		CheckPlayerHpThresholds(State, Result);
 	}
 
-	EmitDamageEvent(Events, Intent, Target, Result.HpLost);
+	EmitDamageEvent(Events, Intent, Target, Result);
 
 	if (Target.EnemyPart && Target.EnemyPart->CurrentHp <= 0 && !Target.EnemyPart->bDestroyed)
 	{
@@ -267,29 +299,31 @@ FHealingMutationResult FBattleCombatantMutationModule::RestoreHealth(
 
 FShieldMutationResult FBattleCombatantMutationModule::AddShield(
 	FBattleState& State,
-	const FBattleCombatantHandle& TargetHandle,
-	int32 Amount)
+	FBattleEventBus& Events,
+	const FShieldMutationIntent& Intent)
 {
 	FShieldMutationResult Result;
-	Result.RequestedShield = Amount;
-	if (Amount <= 0)
+	Result.RequestedShield = Intent.RequestedShield;
+	if (Intent.RequestedShield <= 0)
 	{
 		Result.Reject = ECombatantMutationReject::NonPositiveAmount;
 		return Result;
 	}
 
 	FResolvedCombatant Target;
-	Result.Reject = ResolveCombatant(State, TargetHandle, Target);
+	Result.Reject = ResolveCombatant(State, Intent.Target, Target);
 	if (!Result.IsAccepted())
 	{
 		return Result;
 	}
 
 	Result.ShieldBefore = FMath::Max(0, *Target.Shield);
-	const int64 RequestedAfter = static_cast<int64>(Result.ShieldBefore) + Amount;
+	const int64 RequestedAfter =
+		static_cast<int64>(Result.ShieldBefore) + Intent.RequestedShield;
 	Result.ShieldAfter = static_cast<int32>(FMath::Min<int64>(RequestedAfter, MAX_int32));
 	Result.ShieldAdded = Result.ShieldAfter - Result.ShieldBefore;
 	*Target.Shield = Result.ShieldAfter;
+	EmitShieldChangedEvent(Events, Intent, Target, Result);
 	return Result;
 }
 

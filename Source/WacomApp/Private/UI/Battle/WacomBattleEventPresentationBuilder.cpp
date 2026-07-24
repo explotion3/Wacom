@@ -23,6 +23,8 @@ namespace
 			return TEXT("EnemyInitiativeChanged");
 		case EBattleEventType::DamageDealt:
 			return TEXT("DamageDealt");
+		case EBattleEventType::ShieldChanged:
+			return TEXT("ShieldChanged");
 		case EBattleEventType::HandLimitDiscarded:
 			return TEXT("HandLimitDiscarded");
 		case EBattleEventType::BattleEnded:
@@ -39,6 +41,10 @@ namespace
 		case EBattleEventType::CardGained:
 		case EBattleEventType::PerfectReleaseResolved:
 			return EWacomBattleEventVisualTone::Positive;
+		case EBattleEventType::ShieldChanged:
+			return E.Amount > 0
+				? EWacomBattleEventVisualTone::Positive
+				: EWacomBattleEventVisualTone::Neutral;
 		case EBattleEventType::BattleEnded:
 			return E.Count == 1
 				? EWacomBattleEventVisualTone::Positive
@@ -84,9 +90,35 @@ namespace
 		case EBattleEventType::PerfectReleaseResolved:
 			return TEXT("完美释放");
 		case EBattleEventType::DamageDealt:
-			return E.Tag.IsValid()
-				? FString::Printf(TEXT("%s造成 %d 点伤害"), *UWacomBattleEventPresentationBuilder::FormatStatusName(E.Tag), E.Amount)
-				: FString::Printf(TEXT("造成 %d 点伤害"), E.Amount);
+		{
+			const bool bIsPeriodic =
+				E.DamageResolution.Kind == EBattleDamageKind::Periodic
+				|| E.Tag == WacomTags::Status_Poison;
+			const FString DamageLabel = E.DamageResolution.bCritical
+				? TEXT("暴击")
+				: bIsPeriodic
+					? (E.Tag.IsValid()
+						? UWacomBattleEventPresentationBuilder::FormatStatusName(E.Tag)
+						: TEXT("周期伤害"))
+					: TEXT("");
+			if (E.DamageResolution.ShieldAbsorbed > 0 && E.Amount > 0)
+			{
+				return FString::Printf(
+					TEXT("护盾吸收 %d，%s造成 %d 点 HP 伤害"),
+					E.DamageResolution.ShieldAbsorbed,
+					*DamageLabel,
+					E.Amount);
+			}
+			if (E.DamageResolution.ShieldAbsorbed > 0)
+			{
+				return FString::Printf(
+					TEXT("护盾吸收 %d 点伤害"),
+					E.DamageResolution.ShieldAbsorbed);
+			}
+			return FString::Printf(TEXT("%s造成 %d 点伤害"), *DamageLabel, E.Amount);
+		}
+		case EBattleEventType::ShieldChanged:
+			return FString::Printf(TEXT("护盾 %+d（当前 %d）"), E.Amount, E.Count);
 		case EBattleEventType::StatusApplied:
 			return FString::Printf(TEXT("施加%s %d 层"), *UWacomBattleEventPresentationBuilder::FormatStatusName(E.Tag), E.Amount);
 		case EBattleEventType::InitiativePushed:

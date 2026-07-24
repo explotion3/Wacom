@@ -105,7 +105,7 @@ struct FWacomBattlePresentationPlan
 {
 	TArray<FWacomBattlePresentationPhase> Phases;
 	int32 CompletionStackEntryId = INDEX_NONE;
-	uint64 ActivityTransactionId = 0;
+	uint64 PresentationTransactionId = 0;
 	int32 PresentedTurnNumberOnCompletion = INDEX_NONE;
 
 	bool IsEmpty() const

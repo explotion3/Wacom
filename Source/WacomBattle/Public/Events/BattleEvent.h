@@ -53,6 +53,49 @@ enum class EBattleEventType : uint8
 	CardPlayDestinationResolved UMETA(DisplayName = "CardPlayDestinationResolved"),
 	DiscardPileReshuffledIntoDraw UMETA(DisplayName = "DiscardPileReshuffledIntoDraw"),
 	CardRuntimeCostChanged UMETA(DisplayName = "CardRuntimeCostChanged"),
+	ShieldChanged          UMETA(DisplayName = "ShieldChanged"),
+};
+
+/** 伤害的规则来源语义。表现层只消费该事实，不从 Tag 或文案反推。 */
+UENUM(BlueprintType)
+enum class EBattleDamageKind : uint8
+{
+	Direct   UMETA(DisplayName = "Direct"),
+	Periodic UMETA(DisplayName = "Periodic"),
+};
+
+/**
+ * DamageDealt 的精确结算明细。
+ *
+ * DamageDealt.Amount 继续表示实际 HP 损失；本结构只补充无法从该旧字段
+ * 无歧义恢复的护盾、请求值、overkill 与来源语义。
+ */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleDamageResolutionFact
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
+	int32 RequestedDamage = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
+	int32 ShieldBefore = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
+	int32 ShieldAbsorbed = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
+	int32 ShieldAfter = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
+	int32 Overkill = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
+	EBattleDamageKind Kind = EBattleDamageKind::Direct;
+
+	/** 仅记录规则层已经判定的暴击事实；本字段本身不计算暴击。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
+	bool bCritical = false;
 };
 
 /**
@@ -93,7 +136,8 @@ enum class EHandCardZoneMoveReason : uint8
  * - CardPlayDestinationResolved：CardInstanceId、CardDestination = 打出结算后的最终区域
  * - InitiativeHit       ：ActorEnemyPartKey = 被命中部位、Amount = 本次 RuntimeCost
  * - ResistanceResolved ：ActorEnemyPartKey = 比较部位、Amount = 玩家最高单段伤害、Count = 敌方最高单段伤害、bSuccess = 严格大于是否成立、成功时 Tag=Status.Stunned
- * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；全盾吸收为 0，overkill 只记剩余 HP，玩家目标时 key 为空
+ * - DamageDealt         ：ActorEnemyPartKey = 受伤害部位、Amount = 实际扣血量；DamageResolution = 精确伤害/护盾明细；玩家目标时 key 为空
+ * - ShieldChanged       ：ActorEnemyPartKey = 目标部位、Amount = 非伤害导致的实际有符号护盾变化、Count = 变化后护盾；玩家目标时 key 为空
  * - StatusApplied       ：ActorEnemyPartKey、Tag = Status.*、Amount = 层数；玩家目标时 key 为空
  * - CardStatusChanged   ：CardInstanceId = 目标卡，Tag = Status.*、Amount = 本次 delta、Count = 变更后层数
  * - CardRuntimeCostChanged：CardInstanceId = 目标卡、ActorInstanceId = 来源卡、Tag = 来源效果、Amount = RuntimeCostModifier delta、Count = 变更后实际 RuntimeCost
@@ -162,6 +206,10 @@ struct WACOMBATTLE_API FBattleEvent
 	/** 通用成功事实；当前由 ResistanceResolved 显式使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	bool bSuccess = false;
+
+	/** DamageDealt 专用精确结算事实。其它事件保持默认值。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	FBattleDamageResolutionFact DamageResolution;
 
 	/** Deck step 完成后的抽牌堆数量；仅 CardsDrawn / DiscardPileReshuffledIntoDraw 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

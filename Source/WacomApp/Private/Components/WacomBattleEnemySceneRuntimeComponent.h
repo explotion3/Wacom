@@ -54,6 +54,9 @@ public:
 
 	FWacomInteractionTargetHandle BuildWorldTargetHandle(
 		const UWacomBattleEnemyPartComponent& Part) const;
+	bool TryResolvePartPresentationAnchorWorldLocation(
+		const UWacomBattleEnemyPartComponent& Part,
+		FVector& OutWorldLocation) const;
 	FWacomBattleEnemyPartRuntimeDebugView BuildPartDebugView(
 		const UWacomBattleEnemyPartComponent& Part) const;
 

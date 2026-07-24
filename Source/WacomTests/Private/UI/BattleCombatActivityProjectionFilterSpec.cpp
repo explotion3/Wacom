@@ -112,6 +112,7 @@ bool FWacomUIBattleCombatActivityProjectionFilterSpec::RunTest(const FString& /*
 	Events.Add(MakeEvent(EBattleEventType::CardGained, 26));
 	Events.Add(MakeEvent(EBattleEventType::CardRuntimeCostChanged, 27, -1));
 	Events.Add(MakeEvent(EBattleEventType::KnockdownChoiceRequested, 28));
+	Events.Add(MakeEvent(EBattleEventType::ShieldChanged, 29, 4));
 
 	const FWacomBattleCombatActivityBatchView ShortBatch =
 		UWacomBattleCombatLogBuilder::BuildCombatActivityBatch(
@@ -145,6 +146,8 @@ bool FWacomUIBattleCombatActivityProjectionFilterSpec::RunTest(const FString& /*
 		ContainsResult(ShortBatch, EBattleEventType::PassiveTriggered));
 	TestFalse(TEXT("Card flow is omitted from the short feed"),
 		ContainsResult(ShortBatch, EBattleEventType::CardDiscarded));
+	TestFalse(TEXT("Shield changes stay out of the short feed"),
+		ContainsResult(ShortBatch, EBattleEventType::ShieldChanged));
 
 	TestTrue(TEXT("Details projection retains zero damage"),
 		ContainsResult(DetailsBatch, EBattleEventType::DamageDealt, 12));
@@ -152,6 +155,8 @@ bool FWacomUIBattleCombatActivityProjectionFilterSpec::RunTest(const FString& /*
 		ContainsResult(DetailsBatch, EBattleEventType::PassiveTriggered));
 	TestTrue(TEXT("Details projection retains card cost changes"),
 		ContainsResult(DetailsBatch, EBattleEventType::CardRuntimeCostChanged));
+	TestTrue(TEXT("Details projection retains actual shield changes"),
+		ContainsResult(DetailsBatch, EBattleEventType::ShieldChanged, 29));
 	TestFalse(TEXT("Details projection omits initiative hit process events"),
 		ContainsResult(DetailsBatch, EBattleEventType::InitiativeHit));
 	TestFalse(TEXT("Details projection omits initiative countdown changes"),
@@ -164,6 +169,8 @@ bool FWacomUIBattleCombatActivityProjectionFilterSpec::RunTest(const FString& /*
 		ContainsDetailLine(FullBlock, EBattleEventType::PassiveTriggered));
 	TestTrue(TEXT("Full history retains card flow"),
 		ContainsDetailLine(FullBlock, EBattleEventType::CardDiscarded));
+	TestTrue(TEXT("Full history retains actual shield changes"),
+		ContainsDetailLine(FullBlock, EBattleEventType::ShieldChanged));
 	return true;
 }
 

@@ -90,6 +90,7 @@ namespace
 				Intent.RequestedDamage = CalculatePoisonDamage(*PlayerPoison);
 				Intent.ShieldInteraction = EDamageShieldInteraction::BypassShield;
 				Intent.CauseTag = WacomTags::Status_Poison;
+				Intent.DamageKind = EBattleDamageKind::Periodic;
 				FBattleCombatantMutationModule::ApplyDamage(State, Events, Intent);
 			}
 		}
@@ -110,6 +111,7 @@ namespace
 			Intent.RequestedDamage = CalculatePoisonDamage(*Poison);
 			Intent.ShieldInteraction = EDamageShieldInteraction::BypassShield;
 			Intent.CauseTag = WacomTags::Status_Poison;
+			Intent.DamageKind = EBattleDamageKind::Periodic;
 			FBattleCombatantMutationModule::ApplyDamage(State, Events, Intent);
 		}
 	}

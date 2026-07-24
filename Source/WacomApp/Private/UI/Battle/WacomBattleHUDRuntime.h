@@ -18,6 +18,7 @@ class AWacomBattleEnemyActor;
 class UBattleCombatLogFeedWidget;
 class UBattleCommandBarWidget;
 class UBattlePresentationStackWidget;
+class UWacomBattleFloatingCombatTextLayerWidget;
 class UBattleSession;
 class UPlayerStatusBar;
 class UPileCountView;
@@ -29,6 +30,7 @@ class UWacomGameUIManagerSubsystem;
 class UWacomKnockdownChoiceDialog;
 class FWacomBattleHUDCardDetailController;
 class FWacomBattleHUDCombatLogController;
+class FWacomBattleHUDFloatingCombatTextController;
 class FWacomBattleHUDCommandController;
 class FWacomBattleHUDCommandBarPresenter;
 class FWacomBattleHUDEnemyInspectionCoordinator;
@@ -96,6 +98,7 @@ public:
 	UWidget* GetPlayTargetMotionAnchor() const;
 	UBattleCombatLogFeedWidget* GetCombatLogFeed() const;
 	UBattlePresentationStackWidget* GetBattlePresentationStack() const;
+	UWacomBattleFloatingCombatTextLayerWidget* GetFloatingCombatTextLayer() const;
 	TObjectPtr<UWacomCardDetailPanel>& GetFirstPersonCardDetailPanelSlot() const;
 	TSubclassOf<UWacomCardDetailPanel> GetCardDetailPanelClass() const;
 	void SetCardDetailPanelClass(TSubclassOf<UWacomCardDetailPanel> PanelClass);
@@ -233,6 +236,7 @@ public:
 
 	void AppendBattleCombatLogBlock(const FWacomBattleCombatLogBlockView& Block);
 	void NotifyBattlePresentationProgress(const FWacomBattlePresentationProgress& Progress);
+	void FlushPresentationTransaction(uint64 PresentationTransactionId);
 	void StoreFirstPersonCardTransitionEvents(const TArray<FBattleEvent>& Events);
 	void QueueDrawPileFeedbackBatch(const FWacomBattleDrawPileFeedbackBatch& Batch);
 	void PrepareDrawPileFeedbackForPresentationFrame(
@@ -363,6 +367,8 @@ public:
 	const FWacomBattleHUDCardDetailController& GetCardDetailController() const;
 	FWacomBattleHUDCombatLogController& GetCombatLogController();
 	const FWacomBattleHUDCombatLogController& GetCombatLogController() const;
+	FWacomBattleHUDFloatingCombatTextController& GetFloatingCombatTextController();
+	const FWacomBattleHUDFloatingCombatTextController& GetFloatingCombatTextController() const;
 	FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge();
 	const FWacomBattleHUDFirstPersonHandBridge& GetFirstPersonHandBridge() const;
 	FWacomBattleHUDPresentationCoordinator& GetPresentationCoordinator();
@@ -425,6 +431,7 @@ private:
 	TSharedPtr<FWacomBattlePresentationTargetRegistry> BattlePresentationTargetRegistry;
 	TSharedPtr<FWacomBattleHUDCardDetailController> CardDetailController;
 	TSharedPtr<FWacomBattleHUDCombatLogController> CombatLogController;
+	TSharedPtr<FWacomBattleHUDFloatingCombatTextController> FloatingCombatTextController;
 	TSharedPtr<FWacomBattleHUDFirstPersonHandBridge> FirstPersonHandBridge;
 	TSharedPtr<FWacomBattleHUDPresentationCoordinator> PresentationCoordinator;
 	TSharedPtr<FWacomBattleHUDSceneEnemyTargetCoordinator> SceneEnemyTargetCoordinator;

@@ -29,13 +29,13 @@ FWacomBattleCombatActivitySynchronizer::ApplyProgress(
 	bool& bOutFlushedRemainder)
 {
 	bOutFlushedRemainder = false;
-	if (Progress.ActivityTransactionId == 0)
+	if (Progress.PresentationTransactionId == 0)
 	{
 		return {};
 	}
 
 	FPendingTransaction* Transaction =
-		PendingTransactions.Find(Progress.ActivityTransactionId);
+		PendingTransactions.Find(Progress.PresentationTransactionId);
 	if (!Transaction)
 	{
 		return {};
@@ -49,7 +49,7 @@ FWacomBattleCombatActivitySynchronizer::ApplyProgress(
 		{
 			if (!IsEnemyGroup(Group))
 			{
-				EmitRootIfNeeded(Progress.ActivityTransactionId, Group, Emissions);
+				EmitRootIfNeeded(Progress.PresentationTransactionId, Group, Emissions);
 				break;
 			}
 		}
@@ -65,7 +65,7 @@ FWacomBattleCombatActivitySynchronizer::ApplyProgress(
 		for (FPendingGroup& Group : Transaction->Groups)
 		{
 			EmitMatchingResults(
-				Progress.ActivityTransactionId,
+				Progress.PresentationTransactionId,
 				Group,
 				[&ReachedSequences](const int32 EventSequence)
 				{
@@ -85,7 +85,7 @@ FWacomBattleCombatActivitySynchronizer::ApplyProgress(
 					Progress.FirstEventSequence,
 					Progress.LastEventSequence))
 			{
-				EmitRootIfNeeded(Progress.ActivityTransactionId, Group, Emissions);
+				EmitRootIfNeeded(Progress.PresentationTransactionId, Group, Emissions);
 				break;
 			}
 		}
@@ -102,9 +102,9 @@ FWacomBattleCombatActivitySynchronizer::ApplyProgress(
 			{
 				continue;
 			}
-			EmitRootIfNeeded(Progress.ActivityTransactionId, Group, Emissions);
+			EmitRootIfNeeded(Progress.PresentationTransactionId, Group, Emissions);
 			EmitMatchingResults(
-				Progress.ActivityTransactionId,
+				Progress.PresentationTransactionId,
 				Group,
 				[&Progress](const int32 EventSequence)
 				{
@@ -122,22 +122,22 @@ FWacomBattleCombatActivitySynchronizer::ApplyProgress(
 		{
 			FWacomBattleCombatActivityEmission& Emission = Emissions.AddDefaulted_GetRef();
 			Emission.Kind = EWacomBattleCombatActivityEmissionKind::SetTurn;
-			Emission.TransactionId = Progress.ActivityTransactionId;
+			Emission.TransactionId = Progress.PresentationTransactionId;
 			Emission.TurnNumber = Progress.PresentedTurnNumber;
 			Transaction->bTurnReleased = true;
 		}
 		break;
 
 	case EWacomBattlePresentationProgressKind::PlanCompleted:
-		return Flush(Progress.ActivityTransactionId, bOutFlushedRemainder);
+		return Flush(Progress.PresentationTransactionId, bOutFlushedRemainder);
 
 	case EWacomBattlePresentationProgressKind::PlanCancelled:
 		if (Progress.CancelPolicy == EWacomBattlePresentationCancelPolicy::DiscardPending)
 		{
-			Discard(Progress.ActivityTransactionId);
+			Discard(Progress.PresentationTransactionId);
 			return {};
 		}
-		return Flush(Progress.ActivityTransactionId, bOutFlushedRemainder);
+		return Flush(Progress.PresentationTransactionId, bOutFlushedRemainder);
 	}
 
 	return Emissions;

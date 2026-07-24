@@ -15,8 +15,10 @@
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
+#include "UI/Battle/WacomBattleFloatingCombatTextLayerWidget.h"
 #include "UI/Battle/WacomBattleHUDCardDetailController.h"
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
+#include "UI/Battle/WacomBattleHUDFloatingCombatTextController.h"
 #include "UI/Battle/WacomBattleHUDCommandController.h"
 #include "UI/Battle/WacomBattleHUDCommandBarPresenter.h"
 #include "UI/Battle/WacomBattleDrawPileFeedbackController.h"
@@ -76,6 +78,7 @@ namespace
 		case EBattleEventType::CardGained:                return TEXT("CardGained");
 		case EBattleEventType::CardsRetained:             return TEXT("CardsRetained");
 		case EBattleEventType::BattleEnded:               return TEXT("BattleEnded");
+		case EBattleEventType::ShieldChanged:              return TEXT("ShieldChanged");
 		default:                                          return TEXT("?");
 		}
 	}
@@ -161,6 +164,7 @@ UWidget* FWacomBattleHUDRuntimeHost::GetDiscardPileMotionAnchor() const { return
 UWidget* FWacomBattleHUDRuntimeHost::GetPlayTargetMotionAnchor() const { return HUD.PlayTargetMotionAnchor; }
 UBattleCombatLogFeedWidget* FWacomBattleHUDRuntimeHost::GetCombatLogFeed() const { return HUD.CombatLogFeed; }
 UBattlePresentationStackWidget* FWacomBattleHUDRuntimeHost::GetBattlePresentationStack() const { return HUD.BattlePresentationStack; }
+UWacomBattleFloatingCombatTextLayerWidget* FWacomBattleHUDRuntimeHost::GetFloatingCombatTextLayer() const { return HUD.FloatingCombatTextLayer; }
 TObjectPtr<UWacomCardDetailPanel>& FWacomBattleHUDRuntimeHost::GetFirstPersonCardDetailPanelSlot() const { return HUD.FirstPersonCardDetailPanel; }
 TSubclassOf<UWacomCardDetailPanel> FWacomBattleHUDRuntimeHost::GetCardDetailPanelClass() const { return HUD.CardDetailPanelClass; }
 void FWacomBattleHUDRuntimeHost::SetCardDetailPanelClass(TSubclassOf<UWacomCardDetailPanel> PanelClass) { HUD.CardDetailPanelClass = PanelClass; }
@@ -293,6 +297,10 @@ void FWacomBattleHUDRuntime::NativeConstruct()
 
 void FWacomBattleHUDRuntime::NativeDestruct()
 {
+	if (FloatingCombatTextController)
+	{
+		FloatingCombatTextController->Clear();
+	}
 	if (SecondaryPanelCoordinator)
 	{
 		SecondaryPanelCoordinator->Shutdown(true);
@@ -331,6 +339,7 @@ void FWacomBattleHUDRuntime::NativeDestruct()
 void FWacomBattleHUDRuntime::NativeTick(float DeltaTime)
 {
 	GetResultApplicator().Tick(DeltaTime);
+	GetFloatingCombatTextController().Tick(DeltaTime);
 	TickCardDetailMotion(DeltaTime);
 	TickBattleSceneEnemyPartHoverProbe(DeltaTime);
 	GetFirstPersonHandBridge().TickPendingPresentationFrames(DeltaTime);
@@ -362,6 +371,7 @@ void FWacomBattleHUDRuntime::NativeOnSessionChanged(
 
 	if (OldSession != NewSession)
 	{
+		GetFloatingCombatTextController().Clear();
 		GetEnemyInspectionCoordinator().CloseInspection(true);
 		if (SecondaryPanelCoordinator)
 		{
@@ -689,6 +699,23 @@ FWacomBattleHUDCombatLogController& FWacomBattleHUDRuntime::GetCombatLogControll
 	return *CombatLogController;
 }
 
+FWacomBattleHUDFloatingCombatTextController&
+FWacomBattleHUDRuntime::GetFloatingCombatTextController()
+{
+	if (!FloatingCombatTextController)
+	{
+		FloatingCombatTextController =
+			MakeShared<FWacomBattleHUDFloatingCombatTextController>(*this);
+	}
+	return *FloatingCombatTextController;
+}
+
+const FWacomBattleHUDFloatingCombatTextController&
+FWacomBattleHUDRuntime::GetFloatingCombatTextController() const
+{
+	return const_cast<FWacomBattleHUDRuntime*>(this)->GetFloatingCombatTextController();
+}
+
 const FWacomBattleHUDCombatLogController& FWacomBattleHUDRuntime::GetCombatLogController() const
 {
 	return const_cast<FWacomBattleHUDRuntime*>(this)->GetCombatLogController();
@@ -950,6 +977,14 @@ void FWacomBattleHUDRuntime::NotifyBattlePresentationProgress(
 	const FWacomBattlePresentationProgress& Progress)
 {
 	GetCombatLogController().ApplyPresentationProgress(Progress);
+	GetFloatingCombatTextController().ApplyPresentationProgress(Progress);
+}
+
+void FWacomBattleHUDRuntime::FlushPresentationTransaction(
+	const uint64 PresentationTransactionId)
+{
+	GetCombatLogController().FlushActivityTransaction(PresentationTransactionId);
+	GetFloatingCombatTextController().FlushTransaction(PresentationTransactionId);
 }
 
 void FWacomBattleHUDRuntime::StoreFirstPersonCardTransitionEvents(

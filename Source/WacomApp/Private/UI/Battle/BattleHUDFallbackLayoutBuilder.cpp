@@ -11,6 +11,7 @@
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/BattlePresentationStackWidget.h"
 #include "UI/Battle/PlayerStatusBar.h"
+#include "UI/Battle/WacomBattleFloatingCombatTextLayerWidget.h"
 #include "UI/Common/PileCountView.h"
 
 namespace
@@ -197,5 +198,20 @@ void FBattleHUDFallbackLayoutBuilder::Build(const FBattleHUDFallbackLayoutBuilde
 			FVector2D(1.0f, 0.0f),
 			FMargin(-455.0f, 12.0f, 220.0f, 260.0f),
 			8);
+	}
+
+	if (UWacomBattleFloatingCombatTextLayerWidget* FloatingText =
+		ConstructWidget(
+			Context.WidgetTree,
+			Context.FloatingCombatTextLayer,
+			TEXT("FloatingCombatTextLayer")))
+	{
+		FloatingText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		SetCanvasSlot(
+			Root->AddChildToCanvas(FloatingText),
+			FAnchors(0.0f, 0.0f, 1.0f, 1.0f),
+			FVector2D::ZeroVector,
+			FMargin(0.0f),
+			9);
 	}
 }

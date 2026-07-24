@@ -262,6 +262,25 @@ FWacomBattleHUDSceneEnemyTargetCoordinator::ResolvePartComponent(
 	return nullptr;
 }
 
+UWacomBattleEnemyPartComponent*
+FWacomBattleHUDSceneEnemyTargetCoordinator::ResolvePartComponent(
+	const FBattleEnemyPartKey& PartKey) const
+{
+	if (!PartKey.IsValidKey())
+	{
+		return nullptr;
+	}
+	for (FPartEntry* Entry : RegisteredParts)
+	{
+		UWacomBattleEnemyPartComponent* Part = Entry ? Entry->Part.Get() : nullptr;
+		if (Part && Entry->ObservedIdentity.ToEnemyPartKey() == PartKey)
+		{
+			return Part;
+		}
+	}
+	return nullptr;
+}
+
 bool FWacomBattleHUDSceneEnemyTargetCoordinator::IsWorldTargetInCurrentRegistry(
 	const FWacomInteractionTargetHandle& Handle) const
 {

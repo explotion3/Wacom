@@ -8,6 +8,7 @@
 #include "Session/BattleSession.h"
 #include "UI/Battle/BattleHUD.h"
 #include "UI/Battle/WacomBattleHUDCombatLogController.h"
+#include "UI/Battle/WacomBattleHUDFloatingCombatTextController.h"
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 #include "UI/Battle/WacomBattleHUDRuntime.h"
 #include "UI/Battle/WacomBattleHUDFirstPersonHandBridge.h"
@@ -304,19 +305,22 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 	}
 
 	LogResultApplicatorRawBattleEvents(Resolution.Events);
-	const uint64 ActivityTransactionId =
+	const uint64 PresentationTransactionId =
 		Runtime.GetCombatLogController().StageResolvedCommand(
 		Context.CombatLogContext,
 		Resolution.Events,
-		Context.PreCommandSnapshot,
-		Resolution.PostSnapshot);
+			Context.PreCommandSnapshot,
+			Resolution.PostSnapshot);
+	Runtime.GetFloatingCombatTextController().StageResolvedCommand(
+		PresentationTransactionId,
+		Resolution.Events);
 
 	if (Context.CombatLogContext.CommandKind == EWacomBattleCombatLogCommandKind::EndTurn
 		&& Runtime.GetPresentationCoordinator().EnqueueEndTurnPresentationPlan(
 			Resolution.PresentationJournal,
 			Resolution.Events,
 			Resolution.PostSnapshot,
-			ActivityTransactionId))
+			PresentationTransactionId))
 	{
 		return;
 	}
@@ -331,7 +335,7 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 			Context,
 			Resolution,
 			PresentationStackEntryId,
-			ActivityTransactionId))
+			PresentationTransactionId))
 	{
 		return;
 	}
@@ -343,12 +347,12 @@ void FWacomBattleHUDResultApplicator::ApplyCommandResolution(
 			Context.PreCommandSnapshot,
 			Resolution.PostSnapshot,
 			PresentationStackEntryId,
-			ActivityTransactionId))
+			PresentationTransactionId))
 	{
 		return;
 	}
 
-	Runtime.GetCombatLogController().FlushActivityTransaction(ActivityTransactionId);
+	Runtime.FlushPresentationTransaction(PresentationTransactionId);
 	Runtime.StoreFirstPersonCardTransitionEvents(Resolution.Events);
 	Runtime.EnqueueBattlePresentationEvents(Resolution.Events, PresentationStackEntryId);
 	Runtime.NativeRefreshFromSnapshot(Resolution.PostSnapshot);

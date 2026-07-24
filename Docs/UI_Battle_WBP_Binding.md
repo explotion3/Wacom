@@ -46,6 +46,7 @@ tags:
 | `PlayTargetMotionAnchor` | `UWidget`，推荐 `SizeBox` | Optional | 无真实目标 Played 的完整逻辑终点；真实目标坐标优先，缺失时回退旧 Played origin |
 | `CombatLogFeed` | `UBattleCombatLogFeedWidget` | Optional | 固定视口流式活动播报与“最后行动 + 当前回合” Footer |
 | `BattlePresentationStack` | `UBattlePresentationStackWidget` | Optional | 已提交卡牌的只读表现 backlog |
+| `FloatingCombatTextLayer` | `UWacomBattleFloatingCombatTextLayerWidget` | Optional（正式资产必须） | 全屏池化精确数值层；Stretch Fill、`HitTestInvisible`，位于普通 HUD/手牌之上且低于 Secondary / Modal CommonUI Layer |
 
 WBP 不应做：
 
@@ -53,6 +54,7 @@ WBP 不应做：
 - 不绑定旧 `HandPanel` 或 `CardDetailLayer` 作为 BattleHUD runtime 路径。
 - 不直接 Push 击倒弹窗、直接消费 `FBattleEvent`、提交 Battle 规则命令或维护表现队列。
 - 不把 `BattlePresentationStack` 做成可点击、可拖拽或规则栈。
+- 不在 WBP、Entry 或 Niagara 中重算伤害、护盾、DOT 或暴击；不为每条飘字添加 Tick、Timer、世界 `WidgetComponent` 或字符贴图 Niagara。
 - 不绑定敌方 2D fallback widget。正式场景敌人走 `SceneEnemyHostSlots + AWacomBattleEnemyActor` prefab；每个 Host Blueprint 直接以 `UWacomBattleEnemyPartComponent` 和其 typed Visual/ImpactAnchor 子组件声明部位。配置 `EncounterDefinition` 的 Trigger 必须执行 `SyncSceneEnemyHostSlotsFromEncounter()` 并用 `SceneEnemyHostSlots` 覆盖每个 EnemySlotId。
 - 不读取或假设 `Snapshot.Enemy`。敌人快照只在 `FBattleSnapshot.Enemies` 中，BattleHUD C++ 会把目标选择、日志和场景 bridge 同步到所有 enemy slot；WBP 不应自行维护第一敌人的兼容显示。
 
@@ -62,6 +64,7 @@ WBP 不应做：
 - 拖牌指向合法敌人部位 / 手牌目标，或无目标卡已经达到 armed commit 可释放状态时，玩家状态条和敌人部位面板可以直接显示 Action Preview projected value；单纯拖出手牌区但未 armed、未指向有效目标或目标无效时不显示玩家侧收益预览。
 - `CombatLogFeed` 在裁切视口中流式显示核心短时活动。默认同时容纳五条历史 / 结果和一条当前根行动；这是视觉背压容量，不是数据裁剪，积压仍按跨组 FIFO 逐条进入。根行动从底部最后行动槽立即出现；连续敌人行动时，尚未读完的上一根行动进入上方历史流而不是被删除。结果和历史根行动达到最短可读时间后从顶部逐条退场；每个可见 Row 在完整生命周期内按 `PlaybackId` 固定复用同一个 Widget，邻近 Row 退场不得触发幸存文字和图标重新绑定。收束时最新根行动只淡出文字和底板，原 Row 图标常驻，新的根行动才替换它。透明 `LastActionButton` 始终覆盖图标槽并在已有根行动时可点击，其余区域不遮挡 HUD、手牌或世界目标。
 - `BattlePresentationStack` 只显示小卡表现，不响应输入。
+- 直接伤害、护盾吸收/获得和 Poison tick 由 `FloatingCombatTextLayer` 显示精确数字；敌人按具体部位、玩家按状态栏定位，生成后不随镜头移动。Layer 和全部 Entry 不阻挡手牌、世界目标或二级面板。
 - 抽牌从 `DrawPileMotionAnchor`（或 `DrawPileView` 中心）进入；弃牌飞向 `DiscardPileMotionAnchor`（或 `DiscardPileView` 中心）。配置有效 Card Use Surface Effect 时，无目标牌与目标牌都停在提交位置播放当前 Style（默认像素翻面收牌，旧菱形波可切回）；`PlayTargetMotionAnchor` 和真实目标坐标仍会采集，但只供效果失效时的旧空间离场 fallback 与未来目标命中反馈使用。
 - 有 `SceneEnemyHostSlots` 的战斗通过 Host prefab 的 typed Part registry 阅读敌方状态；缺 Host 时没有 2D 敌方 fallback，且 `EncounterDefinition` 正式入口会被编辑器验证判为 invalid。
 
@@ -70,6 +73,18 @@ WBP 不应做：
 BattleHUD 战斗手牌由 first-person card layer 提供，不再通过 WBP_BattleHUD 绑定 `UHandPanel`。战斗卡牌详情由 BattleHUD 创建 viewport-level `UWacomCardDetailPanel`，不再需要 BattleHUD WBP 提供 `CardDetailLayer`。详情面板与背包共用 `FWacomCardDetailViewData.Sections` 和 `WBP_CardDetailPanel / WBP_CardDetailSection` 制作合同：Builder 生成语义 `Blocks / Runs`，Panel 动态创建 Section，Section 通过 `UWacomCardDetailRichTextBlock` 渲染正文。WBP 不应从原始 `Description`、`Passive.DisplayText` 或 token kind 自行推断分区；`UWacomCardDetailPanel` 不再提供 `GetDescriptionText()`。
 
 三个 MotionAnchor 推荐使用约 `8 x 8` 的无绘制 `SizeBox`，Visibility 设为 `HitTestInvisible`，不能设为 `Collapsed`。运行时读取缓存几何中心并转换成 DPI-aware 逻辑 viewport 坐标；MotionAnchor 不接收输入、不保存规则状态，也不需要 Blueprint Tick。移动 MotionAnchor 就是在调整完整起点 / 终点，C++ 不再在其上叠加旧位置 offset。当前 `BP_BattleHUD` 资产需要由 UI 制作者按上述准确命名添加可选控件；未添加期间 Draw / Discard 已通过现有 pile view 自动回退，PlayTarget 继续使用旧 Played origin。
+
+## WBP_BattleFloatingCombatTextLayer / Entry
+
+正式路径：
+
+- `/Game/Wacom/UI/Battle/FloatingText/WBP_BattleFloatingCombatTextLayer`
+- `/Game/Wacom/UI/Battle/FloatingText/WBP_BattleFloatingCombatTextEntry`
+- `/Game/Wacom/UI/Battle/FloatingText/DA_BattleFloatingCombatTextStyle_Default`
+
+Layer 父类为 `UWacomBattleFloatingCombatTextLayerWidget`，必需绑定 `EntryCanvas : CanvasPanel`；Root 与 Canvas 必须 `HitTestInvisible`、全屏 Stretch，不能获取焦点或实现 Blueprint Tick。`EntryWidgetClass` 指向正式 Entry WBP。Entry 父类为 `UWacomBattleFloatingCombatTextEntryWidget`，必需绑定 `SemanticIcon : Image`、`CriticalText : TextBlock`、`ValueText : TextBlock`；内部全部视觉节点不可命中。Style 是唯一调节入口，建议先调 `PlayerAnchorOffset / EnemyAnchorOffset`、`EntrySize`、三段时间和同目标 lane 间距，不要在 WBP 图里复制运行时状态机。
+
+敌人可选装饰路径固定为 `/Game/Wacom/VFX/Battle/FloatingText/NS_WacomBattleFloatingShield_Pixel`、`NS_WacomBattleFloatingPeriodic_Pixel`、`NS_WacomBattleFloatingCritical_Pixel`。Niagara 只读取调用方提供的位置与 `User.ShieldBroken` 等表现参数；资源缺失时必须安全降级为纯 UMG 数字。
 
 ## WBP_BattleKnockdownChoiceDialog
 

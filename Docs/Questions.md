@@ -83,3 +83,4 @@ Floor 1 本地启动口径由 Spec 016 关闭：完整 Production Journey 缺失
 |---|---|---|
 | AppToast 是否进入全局日志 | AppToast 当前只做战斗外即时反馈，不进 CommonUI Stack | 是否需要统一全局事件日志；哪些反馈应入日志，哪些只即时显示 |
 | 战斗 Combat Log 保留范围 | `BattleHUD` 当前只在常驻滚动 `CombatLogFeed` 中保留本场最近命令块 | 是否需要战后回放、跨战斗历史或 Run 级日志 |
+| 战斗暴击规则 | `DamageDealt` 已提供 `bCritical` 事实，BattleHUD 已有休眠的金色暴击飘字与可选 Niagara；当前没有任何正式规则设置该事实 | 暴击来源、概率、倍率、可作用对象、与多段/DOT/护盾/抵抗的关系，以及是否需要 Action Preview |

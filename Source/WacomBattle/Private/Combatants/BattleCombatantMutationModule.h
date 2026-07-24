@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Events/BattleEvent.h"
 #include "GameplayTagContainer.h"
 
 struct FBattleEventBus;
@@ -54,6 +55,16 @@ struct FDamageMutationIntent
 	FBattleCombatantHandle Target;
 	int32 RequestedDamage = 0;
 	EDamageShieldInteraction ShieldInteraction = EDamageShieldInteraction::ConsumeShield;
+	FGuid SourceCardInstanceId;
+	FGameplayTag CauseTag;
+	EBattleDamageKind DamageKind = EBattleDamageKind::Direct;
+	bool bCritical = false;
+};
+
+struct FShieldMutationIntent
+{
+	FBattleCombatantHandle Target;
+	int32 RequestedShield = 0;
 	FGuid SourceCardInstanceId;
 	FGameplayTag CauseTag;
 };
@@ -150,8 +161,8 @@ public:
 
 	static FShieldMutationResult AddShield(
 		FBattleState& State,
-		const FBattleCombatantHandle& Target,
-		int32 Amount);
+		FBattleEventBus& Events,
+		const FShieldMutationIntent& Intent);
 
 	static FStatusMutationResult ApplyStatusStacks(
 		FBattleState& State,

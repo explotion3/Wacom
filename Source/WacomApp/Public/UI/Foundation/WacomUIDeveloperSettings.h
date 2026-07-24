@@ -15,6 +15,7 @@ class UWacomActivatableWidget;
 class UWacomAppToastWidget;
 class UWacomBattleEnemyPanelWidget;
 class UWacomBattleEnemyInspectionWidget;
+class UWacomBattleFloatingCombatTextStyle;
 class UWacomBattleStatusPresentationCatalog;
 class UWacomCardDetailTheme;
 class UWacomCardExplanationLexicon;
@@ -71,6 +72,10 @@ public:
 	/** Battle HUD 状态表现目录；为空或加载失败时运行时使用 C++ fallback，但项目校验会失败。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Battle", meta = (ToolTip = "Battle HUD 状态表现 DataAsset。统一状态名称、图标、排序和玩家/敌人 Tooltip 规则；为空或加载失败时运行时使用 C++ fallback，但项目校验会报告错误。"))
 	TSoftObjectPtr<UWacomBattleStatusPresentationCatalog> BattleStatusPresentationCatalog;
+
+	/** HUD 级战斗飘字样式；为空或加载失败时运行时使用 C++ fallback，但项目校验会失败。 */
+	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Battle", meta = (ToolTip = "玩家与敌人共用的 HUD 战斗飘字 Style DataAsset。只配置颜色、节奏、布局和可选 Niagara；为空或加载失败时运行时使用 C++ fallback，但项目校验会报告错误。"))
+	TSoftObjectPtr<UWacomBattleFloatingCombatTextStyle> BattleFloatingCombatTextStyle;
 
 	/** 卡牌详情说明模板 DataAsset；为空时使用 C++ fallback 模板。 */
 	UPROPERTY(Config, EditAnywhere, Category = "Wacom|UI Foundation|Card Detail", meta = (ToolTip = "卡牌详情说明模板 DataAsset。用于把 Effect / Passive facts 编译为详情语义文档；为空时使用 C++ fallback 模板。"))

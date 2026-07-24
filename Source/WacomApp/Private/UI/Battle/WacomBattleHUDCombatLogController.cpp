@@ -109,7 +109,7 @@ void FWacomBattleHUDCombatLogController::ApplyPresentationProgress(
 		}
 		UE_LOG(LogTemp, Warning,
 			TEXT("[BattleCombatActivity] Presentation transaction %llu completed with pending activity sequences: %s"),
-			Progress.ActivityTransactionId,
+			Progress.PresentationTransactionId,
 			*FString::Join(FlushedSequences, TEXT(",")));
 	}
 	ApplyActivityEmissions(Emissions);
@@ -119,7 +119,7 @@ void FWacomBattleHUDCombatLogController::FlushActivityTransaction(
 	const uint64 TransactionId)
 {
 	FWacomBattlePresentationProgress Progress;
-	Progress.ActivityTransactionId = TransactionId;
+	Progress.PresentationTransactionId = TransactionId;
 	Progress.Kind = EWacomBattlePresentationProgressKind::PlanCompleted;
 	ApplyPresentationProgress(Progress);
 }

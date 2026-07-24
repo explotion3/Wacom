@@ -55,19 +55,19 @@ public:
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PostCommandSnapshot,
-		uint64 ActivityTransactionId = 0);
+		uint64 PresentationTransactionId = 0);
 	bool EnqueueResolvedCommandPresentationPlan(
 		const FBattlePresentationJournal& Journal,
 		const TArray<FBattleEvent>& Events,
 		const FBattleSnapshot& PreCommandSnapshot,
 		const FBattleSnapshot& PostCommandSnapshot,
 		int32 PresentationStackEntryId = INDEX_NONE,
-		uint64 ActivityTransactionId = 0);
+		uint64 PresentationTransactionId = 0);
 	bool EnqueuePlayCardPresentationPlan(
 		const FWacomBattleCommandPresentationContext& Context,
 		const FBattleResolution& Resolution,
 		int32 PresentationStackEntryId,
-		uint64 ActivityTransactionId = 0);
+		uint64 PresentationTransactionId = 0);
 	void HandlePileTransferProgress(const FWacomFirstPersonCardPileTransferProgressView& Progress);
 	void ClearQueue();
 	bool IsQueueBusy() const;

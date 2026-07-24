@@ -7,6 +7,7 @@
 class UBattleCommandBarWidget;
 class UBattleCombatLogFeedWidget;
 class UBattlePresentationStackWidget;
+class UWacomBattleFloatingCombatTextLayerWidget;
 class UPlayerStatusBar;
 class UPileCountView;
 class UWidget;
@@ -28,6 +29,7 @@ struct FBattleHUDFallbackLayoutBuilderContext
 	TObjectPtr<UWidget>* PlayTargetMotionAnchor = nullptr;
 	TObjectPtr<UBattleCombatLogFeedWidget>* CombatLogFeed = nullptr;
 	TObjectPtr<UBattlePresentationStackWidget>* BattlePresentationStack = nullptr;
+	TObjectPtr<UWacomBattleFloatingCombatTextLayerWidget>* FloatingCombatTextLayer = nullptr;
 };
 
 /**

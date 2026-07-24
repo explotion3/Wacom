@@ -29,6 +29,8 @@ public:
 	bool IsWorldTargetInCurrentRegistry(const FWacomInteractionTargetHandle& Handle) const;
 	UWacomBattleEnemyPartComponent* ResolvePartComponent(
 		const FWacomInteractionTargetHandle& Handle) const;
+	UWacomBattleEnemyPartComponent* ResolvePartComponent(
+		const FBattleEnemyPartKey& PartKey) const;
 	bool IsPartInCurrentRegistry(const UWacomBattleEnemyPartComponent* Part) const;
 
 	void RebuildRegistry();

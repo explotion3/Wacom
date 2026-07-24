@@ -50,7 +50,7 @@ namespace WacomBattleCombatActivitySynchronizationSpec
 		const EWacomBattlePresentationProgressKind Kind)
 	{
 		FWacomBattlePresentationProgress Progress;
-		Progress.ActivityTransactionId = TransactionId;
+		Progress.PresentationTransactionId = TransactionId;
 		Progress.Kind = Kind;
 		return Progress;
 	}

@@ -24,7 +24,7 @@ enum class EWacomBattlePresentationCancelPolicy : uint8
 /** App-private semantic progress emitted by the single Battle presentation clock. */
 struct FWacomBattlePresentationProgress
 {
-	uint64 ActivityTransactionId = 0;
+	uint64 PresentationTransactionId = 0;
 	EWacomBattlePresentationProgressKind Kind =
 		EWacomBattlePresentationProgressKind::PlanStarted;
 	TArray<int32> EventSequences;
