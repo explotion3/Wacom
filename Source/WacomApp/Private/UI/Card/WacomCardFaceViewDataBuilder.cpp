@@ -5,6 +5,8 @@
 #include "Cards/CardDefinition.h"
 #include "RunSession.h"
 #include "Tags/WacomGameplayTags.h"
+#include "UI/Card/WacomCardExplanationLexicon.h"
+#include "WacomCardExplanationLexiconProvider.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardFaceViewDataBuilder"
 
@@ -42,44 +44,92 @@ namespace WacomCardFaceViewDataBuilder
 			return LastDot != INDEX_NONE ? TagName.Mid(LastDot + 1) : TagName;
 		}
 
-		FString GetKeywordDisplayName(const FGameplayTag& Tag)
+		FText GetKeywordFallbackDisplayName(const FGameplayTag& Tag)
 		{
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Swift))          { return TEXT("迅捷"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Retain))         { return TEXT("保留"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Combo))          { return TEXT("连击"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Companion))      { return TEXT("伙伴"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Weapon))         { return TEXT("武器"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Tool))           { return TEXT("工具"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Hand))           { return TEXT("手"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Exhaust))        { return TEXT("消耗"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_BagProvider))    { return TEXT("容器"); }
-			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_DeleteProvider)) { return TEXT("删牌"); }
-			return ShortGameplayTagName(Tag);
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Swift))          { return LOCTEXT("KeywordSwift", "迅捷"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Retain))         { return LOCTEXT("KeywordRetain", "保留"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Combo))          { return LOCTEXT("KeywordCombo", "连击"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Companion))      { return LOCTEXT("KeywordCompanion", "伙伴"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Weapon))         { return LOCTEXT("KeywordWeapon", "武器"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Tool))           { return LOCTEXT("KeywordTool", "工具"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Hand))           { return LOCTEXT("KeywordHand", "手"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Exhaust))        { return LOCTEXT("KeywordExhaust", "消耗"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_BagProvider))    { return LOCTEXT("KeywordBagProvider", "容器兼容标记"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_DeleteProvider)) { return LOCTEXT("KeywordDeleteProvider", "删牌"); }
+			return FText::FromString(ShortGameplayTagName(Tag));
 		}
 
-		FText BuildTypeLine(const UCardDefinition* Card)
+		struct FTypeLineView
 		{
+			FText Text;
+			TArray<FWacomCardFaceSemanticTokenView> Tokens;
+		};
+
+		FWacomCardFaceSemanticTokenView MakeSemanticToken(
+			const FName SemanticId,
+			const FGameplayTag SourceTag,
+			const FText& FallbackDisplayName)
+		{
+			FWacomCardFaceSemanticTokenView Token;
+			Token.SemanticId = SemanticId;
+			Token.SourceTag = SourceTag;
+			FWacomCardFaceSemanticLexiconEntry Entry;
+			Token.DisplayText =
+				WacomCardExplanationLexiconProvider::FindCardFaceSemantic(
+					SemanticId,
+					SourceTag,
+					Entry)
+				? Entry.DisplayName
+				: FallbackDisplayName;
+			return Token;
+		}
+
+		FTypeLineView BuildTypeLine(const UCardDefinition* Card)
+		{
+			FTypeLineView Result;
 			if (!Card)
 			{
-				return FText::GetEmpty();
+				return Result;
 			}
 
 			if (Card->Physique.Capacity > 0)
 			{
-				return Card->Physique.CapacityEffect.IsValid()
-					? LOCTEXT("TypeContainerB", "容器")
-					: LOCTEXT("TypeContainerA", "背包");
+				const bool bDedicatedContainer =
+					Card->Physique.CapacityEffect.IsValid();
+				Result.Tokens.Add(MakeSemanticToken(
+					bDedicatedContainer
+						? WacomCardFaceSemanticIds::Container
+						: WacomCardFaceSemanticIds::Backpack,
+					FGameplayTag(),
+					bDedicatedContainer
+						? LOCTEXT("TypeContainerB", "容器")
+						: LOCTEXT("TypeContainerA", "背包")));
 			}
-
-			TArray<FString> KeywordNames;
-			for (const FGameplayTag& Tag : Card->Keywords)
+			else
 			{
-				KeywordNames.Add(GetKeywordDisplayName(Tag));
+				for (const FGameplayTag& Tag : Card->Keywords)
+				{
+					Result.Tokens.Add(MakeSemanticToken(
+						Tag.GetTagName(),
+						Tag,
+						GetKeywordFallbackDisplayName(Tag)));
+				}
 			}
 
-			return KeywordNames.Num() > 0
-				? FText::FromString(FString::Join(KeywordNames, TEXT(" / ")))
-				: FText::GetEmpty();
+			FString TypeString;
+			for (FWacomCardFaceSemanticTokenView& Token : Result.Tokens)
+			{
+				if (!TypeString.IsEmpty())
+				{
+					TypeString += TEXT(" / ");
+				}
+				Token.StartIndex = TypeString.Len();
+				const FString DisplayString = Token.DisplayText.ToString();
+				Token.Length = DisplayString.Len();
+				TypeString += DisplayString;
+			}
+			Result.Text = FText::FromString(TypeString);
+			return Result;
 		}
 
 		FText BuildCompactDescriptionText(const UCardDefinition* Card)
@@ -299,7 +349,9 @@ namespace WacomCardFaceViewDataBuilder
 
 		FWacomCardViewData Data;
 		Data.Name = GetCardDisplayName(Card);
-		Data.TypeText = BuildTypeLine(Card);
+		const FTypeLineView TypeLine = BuildTypeLine(Card);
+		Data.TypeText = TypeLine.Text;
+		Data.TypeSemanticTokens = TypeLine.Tokens;
 		Data.Description = BuildCompactDescriptionText(Card);
 		Data.Cost = RuntimeContext.bHasRuntimeCost ? RuntimeContext.RuntimeCost : (Card ? Card->BaseCost : 0);
 		Data.bShowCost = Card != nullptr;

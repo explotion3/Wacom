@@ -134,6 +134,14 @@ public:
 	FVector2D GetCardBodyHitSize() const;
 	bool HasCardBodyHitGeometry() const;
 	bool IsScreenPositionInsideCardBody(const FVector2D& ScreenPosition) const;
+	/**
+	 * Resolves the exact semantic word under a position expressed in this
+	 * card widget's local Slate space. This is read-only and never captures
+	 * input; separators, whitespace and non-TypeText regions fail closed.
+	 */
+	bool TryResolveTypeSemanticTokenAtLocalPosition(
+		const FVector2D& CardLocalPosition,
+		FWacomCardFaceSemanticTokenView& OutToken) const;
 	static FVector2D GetDefaultCardBodyHitSize()
 	{
 		return FVector2D(DefaultCardBodyHitWidth, DefaultCardBodyHitHeight);

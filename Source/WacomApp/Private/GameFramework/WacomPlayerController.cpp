@@ -327,6 +327,10 @@ void AWacomPlayerController::PlayerTick(float DeltaTime)
 	{
 		RunFirstPersonCardDetailController->TickMotion(DeltaTime);
 	}
+	if (WorldShopActivityCoordinator)
+	{
+		WorldShopActivityCoordinator->Tick(DeltaTime);
+	}
 	GetFirstPersonCardInputRouter().PumpActivePointer();
 }
 

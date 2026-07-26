@@ -86,6 +86,25 @@ namespace
 
 	bool AreFirstPersonCardViewDataEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
 	{
+		if (A.TypeSemanticTokens.Num() != B.TypeSemanticTokens.Num())
+		{
+			return false;
+		}
+		for (int32 Index = 0; Index < A.TypeSemanticTokens.Num(); ++Index)
+		{
+			const FWacomCardFaceSemanticTokenView& Left =
+				A.TypeSemanticTokens[Index];
+			const FWacomCardFaceSemanticTokenView& Right =
+				B.TypeSemanticTokens[Index];
+			if (Left.SemanticId != Right.SemanticId
+				|| Left.SourceTag != Right.SourceTag
+				|| !AreTextsEquivalent(Left.DisplayText, Right.DisplayText)
+				|| Left.StartIndex != Right.StartIndex
+				|| Left.Length != Right.Length)
+			{
+				return false;
+			}
+		}
 		return AreTextsEquivalent(A.Name, B.Name)
 			&& AreTextsEquivalent(A.TypeText, B.TypeText)
 			&& AreTextsEquivalent(A.Description, B.Description)

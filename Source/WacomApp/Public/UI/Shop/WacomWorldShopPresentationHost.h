@@ -4,6 +4,7 @@
 
 #include "Components/WacomCursorLookDriverComponent.h"
 #include "CoreMinimal.h"
+#include "UI/Card/WacomWorldCardInteractionTypes.h"
 #include "WacomWorldShopPresentationHost.generated.h"
 
 class AActor;
@@ -42,7 +43,8 @@ struct WACOMAPP_API FWacomWorldShopPresentationHost
 		float InInteractionDistance,
 		bool bInTwoSided,
 		bool bInOverrideCursorLookProfile,
-		const FWacomCursorLookProfile& InCursorLookProfileOverride);
+		const FWacomCursorLookProfile& InCursorLookProfileOverride,
+		const FWacomWorldCardInteractionStyle& InWorldCardInteractionStyle);
 
 	AActor* GetOwner() const { return Owner.Get(); }
 	bool IsOwnedBy(const AActor* Candidate) const
@@ -70,6 +72,7 @@ struct WACOMAPP_API FWacomWorldShopPresentationHost
 	bool bTwoSided = true;
 	bool bOverrideCursorLookProfile = false;
 	FWacomCursorLookProfile CursorLookProfileOverride;
+	FWacomWorldCardInteractionStyle WorldCardInteractionStyle;
 
 private:
 	TWeakObjectPtr<AActor> Owner;

@@ -211,7 +211,8 @@ AWacomWorldShopActor::BuildPresentationHost() const
 		FormalInteractionDistanceCm,
 		/*bTwoSided*/ true,
 		bOverrideCursorLookProfile,
-		CursorLookProfileOverride);
+		CursorLookProfileOverride,
+		WorldCardInteractionStyle);
 }
 
 AWacomFirstPersonViewpointActor*

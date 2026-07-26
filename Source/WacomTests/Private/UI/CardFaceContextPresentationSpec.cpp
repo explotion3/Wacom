@@ -47,6 +47,33 @@ namespace WacomCardFaceContextPresentationSpec
 	{
 		Test.TestEqual(TEXT("Equivalent name"), A.Name.ToString(), B.Name.ToString());
 		Test.TestEqual(TEXT("Equivalent type"), A.TypeText.ToString(), B.TypeText.ToString());
+		Test.TestEqual(
+			TEXT("Equivalent semantic token count"),
+			A.TypeSemanticTokens.Num(),
+			B.TypeSemanticTokens.Num());
+		for (int32 Index = 0;
+			Index < FMath::Min(
+				A.TypeSemanticTokens.Num(),
+				B.TypeSemanticTokens.Num());
+			++Index)
+		{
+			Test.TestEqual(
+				TEXT("Equivalent semantic identity"),
+				A.TypeSemanticTokens[Index].SemanticId,
+				B.TypeSemanticTokens[Index].SemanticId);
+			Test.TestEqual(
+				TEXT("Equivalent semantic display"),
+				A.TypeSemanticTokens[Index].DisplayText.ToString(),
+				B.TypeSemanticTokens[Index].DisplayText.ToString());
+			Test.TestEqual(
+				TEXT("Equivalent semantic range start"),
+				A.TypeSemanticTokens[Index].StartIndex,
+				B.TypeSemanticTokens[Index].StartIndex);
+			Test.TestEqual(
+				TEXT("Equivalent semantic range length"),
+				A.TypeSemanticTokens[Index].Length,
+				B.TypeSemanticTokens[Index].Length);
+		}
 		Test.TestEqual(TEXT("Equivalent description"), A.Description.ToString(), B.Description.ToString());
 		Test.TestEqual(TEXT("Equivalent cost"), A.Cost, B.Cost);
 		Test.TestEqual(TEXT("Equivalent cost visibility"), A.bShowCost, B.bShowCost);

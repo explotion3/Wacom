@@ -3,9 +3,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UI/Card/WacomWorldCardInteractionTypes.h"
 
 class AWacomPlayerController;
-class UWidgetInteractionComponent;
+class UWidgetComponent;
+class UWacomWorldShopWidgetInteractionComponent;
 
 /** World Shop 活动期间唯一的 Mouse WidgetInteraction owner。 */
 class FWacomWorldShopWidgetInputRouter
@@ -13,11 +15,14 @@ class FWacomWorldShopWidgetInputRouter
 public:
 	bool Initialize(AWacomPlayerController& PlayerController, float InteractionDistance);
 	bool RoutePointerKey(const FKey& Key, EInputEvent Event);
+	bool GetPointerSample(
+		FWacomWorldCardPointerSample& OutSample,
+		bool bForceRefresh = false);
 	void CancelAndClear();
 	bool IsActive() const { return WidgetInteraction.IsValid(); }
 
 private:
 	TWeakObjectPtr<AWacomPlayerController> Owner;
-	TWeakObjectPtr<UWidgetInteractionComponent> WidgetInteraction;
+	TWeakObjectPtr<UWacomWorldShopWidgetInteractionComponent> WidgetInteraction;
 	bool bLeftPressed = false;
 };

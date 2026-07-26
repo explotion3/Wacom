@@ -29,6 +29,12 @@ namespace WacomCardExplanationLexiconKeys
 	WACOMAPP_API extern const FName ModifierConditional;
 }
 
+namespace WacomCardFaceSemanticIds
+{
+	WACOMAPP_API extern const FName Backpack;
+	WACOMAPP_API extern const FName Container;
+}
+
 /**
  * One typed explanation template keyed by an effect or passive trigger tag.
  *
@@ -75,6 +81,29 @@ struct WACOMAPP_API FWacomCardExplanationNamedTextEntry
 	FText Text;
 };
 
+/** UI-only tooltip and display-name entry for one compact card-face semantic. */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomCardFaceSemanticLexiconEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Explanation",
+		meta = (ToolTip = "卡面语义的稳定身份。GameplayTag 关键词默认使用完整 Tag 名；背包与容器使用独立 UI 语义 ID。"))
+	FName SemanticId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Explanation",
+		meta = (ToolTip = "可选的来源 GameplayTag。只用于展示和制作检索，不参与卡牌规则。"))
+	FGameplayTag SourceTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Explanation",
+		meta = (ToolTip = "卡面 TypeText 中显示给玩家看的短名称。"))
+	FText DisplayName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Explanation",
+		meta = (MultiLine = true, ToolTip = "鼠标悬浮该卡面关键词时显示的规则说明。只描述现有规则，不执行规则。"))
+	FText Description;
+};
+
 /**
  * Data-driven card explanation templates.
  *
@@ -107,6 +136,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Wacom|Card Explanation")
 	bool FindNamedText(FName Key, FText& OutText) const;
 
+	/**
+	 * Finds the matching card-face semantic entry in this lexicon only.
+	 *
+	 * Matching is by SemanticId first, then by exact SourceTag. A matched entry
+	 * is returned even when DisplayName or Description is empty, so callers can
+	 * merge per field across lexicons. Use the provider seam when the C++
+	 * default lexicon should fill fields a configured asset left empty.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Wacom|Card Explanation")
+	bool FindCardFaceSemantic(
+		FName SemanticId,
+		FGameplayTag SourceTag,
+		FWacomCardFaceSemanticLexiconEntry& OutEntry) const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Explanation", meta = (TitleProperty = "KeyTag", ToolTip = "按 Effect.* tag 匹配的主动效果说明模板。"))
 	TArray<FWacomCardExplanationTemplateEntry> EffectTemplates;
 
@@ -124,6 +167,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Explanation", meta = (TitleProperty = "Key", ToolTip = "详情面板内部固定文案和格式模板。"))
 	TArray<FWacomCardExplanationNamedTextEntry> NamedTexts;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Card Explanation",
+		meta = (TitleProperty = "DisplayName", ToolTip = "卡面 TypeText 的逐词显示名与 Tooltip 说明覆盖。配置资产优先于 C++ 默认词典，且按字段生效：只填 DisplayName 时 Description 仍取 C++ 默认，不会关闭该关键词的 Tooltip。"))
+	TArray<FWacomCardFaceSemanticLexiconEntry> CardFaceSemantics;
 
 private:
 	static bool FindBestTemplate(

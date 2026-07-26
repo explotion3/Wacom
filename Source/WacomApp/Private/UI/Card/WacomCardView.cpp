@@ -21,6 +21,7 @@
 #include "PaperSprite.h"
 #include "UObject/ConstructorHelpers.h"
 #include "UI/Card/WacomCardEffectBadgeWidget.h"
+#include "UI/Card/WacomCardSemanticTextHitLayout.h"
 #include "UI/Card/WacomFirstPersonCardLayerTypes.h"
 #include "UI/Card/WacomPaperSpriteAtlasUtils.h"
 
@@ -110,10 +111,37 @@ namespace
 		return true;
 	}
 
+	bool AreCardFaceSemanticTokensEquivalent(
+		const TArray<FWacomCardFaceSemanticTokenView>& A,
+		const TArray<FWacomCardFaceSemanticTokenView>& B)
+	{
+		if (A.Num() != B.Num())
+		{
+			return false;
+		}
+		for (int32 Index = 0; Index < A.Num(); ++Index)
+		{
+			if (A[Index].SemanticId != B[Index].SemanticId
+				|| A[Index].SourceTag != B[Index].SourceTag
+				|| !AreCardViewTextViewsEquivalent(
+					A[Index].DisplayText,
+					B[Index].DisplayText)
+				|| A[Index].StartIndex != B[Index].StartIndex
+				|| A[Index].Length != B[Index].Length)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	bool AreCardViewDataFieldsEquivalent(const FWacomCardViewData& A, const FWacomCardViewData& B)
 	{
 		return AreCardViewTextViewsEquivalent(A.Name, B.Name)
 			&& AreCardViewTextViewsEquivalent(A.TypeText, B.TypeText)
+			&& AreCardFaceSemanticTokensEquivalent(
+				A.TypeSemanticTokens,
+				B.TypeSemanticTokens)
 			&& AreCardViewTextViewsEquivalent(A.Description, B.Description)
 			&& A.Cost == B.Cost
 			&& A.bShowCost == B.bShowCost
@@ -136,6 +164,9 @@ namespace
 	{
 		return AreCardViewTextViewsEquivalent(A.Name, B.Name)
 			&& AreCardViewTextViewsEquivalent(A.TypeText, B.TypeText)
+			&& AreCardFaceSemanticTokensEquivalent(
+				A.TypeSemanticTokens,
+				B.TypeSemanticTokens)
 			&& A.Value == B.Value
 			&& A.bShowValue == B.bShowValue;
 	}
@@ -444,6 +475,41 @@ bool UWacomCardView::IsScreenPositionInsideCardBody(const FVector2D& ScreenPosit
 	return IsLocalPositionInsideCardBodyBounds(
 		BoundsGeometry.AbsoluteToLocal(ScreenPosition),
 		BoundsSize);
+}
+
+bool UWacomCardView::TryResolveTypeSemanticTokenAtLocalPosition(
+	const FVector2D& CardLocalPosition,
+	FWacomCardFaceSemanticTokenView& OutToken) const
+{
+	if (!TypeText
+		|| CurrentData.TypeText.IsEmpty()
+		|| CurrentData.TypeSemanticTokens.IsEmpty()
+		|| TypeText->GetVisibility() == ESlateVisibility::Collapsed)
+	{
+		return false;
+	}
+
+	const FGeometry& CardGeometry = GetCachedGeometry();
+	const FGeometry& TypeGeometry = TypeText->GetCachedGeometry();
+	const FVector2D TypeSize = TypeGeometry.GetLocalSize();
+	if (CardGeometry.GetLocalSize().IsNearlyZero()
+		|| TypeSize.IsNearlyZero())
+	{
+		return false;
+	}
+
+	const FVector2D AbsolutePosition =
+		CardGeometry.LocalToAbsolute(CardLocalPosition);
+	const FVector2D TypeLocalPosition =
+		TypeGeometry.AbsoluteToLocal(AbsolutePosition);
+	return WacomCardSemanticTextHitLayout::ResolveTokenAtLocalPosition(
+		CurrentData.TypeText.ToString(),
+		CurrentData.TypeSemanticTokens,
+		TypeText->GetFont(),
+		TypeSize,
+		ETextJustify::Center,
+		TypeLocalPosition,
+		OutToken);
 }
 
 bool UWacomCardView::IsLocalPositionInsideCardBodyBounds(

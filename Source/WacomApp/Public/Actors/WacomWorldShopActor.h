@@ -5,6 +5,7 @@
 #include "Actors/WacomShopTriggerActor.h"
 #include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Components/WacomCursorLookDriverComponent.h"
+#include "UI/Shop/WacomWorldShopPresentationHost.h"
 #include "WacomWorldShopActor.generated.h"
 
 class UArrowComponent;
@@ -103,6 +104,11 @@ public:
 		Category = "Wacom|World Shop",
 		meta = (ToolTip = "正式商店全部世界卡统一使用的 Slate 像素到世界厘米绝对缩放。默认 0.13，使完整渲染平面为 93.6×126.9 厘米、可见卡面与价格框约为 77.0×122.7 厘米；建议 0.10-0.16。该值不继承地图 Actor 的非均匀缩放，不允许逐槽缩放。"))
 	float CardWorldScale = 0.13f;
+
+	/** 世界商品卡 Hover、关键词 Tooltip 与固定详情的统一表现参数。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Wacom|World Shop",
+		meta = (ShowOnlyInnerProperties, ToolTip = "正式世界商店的卡牌浏览表现参数。只影响 Hover、Tooltip 和 Inspect，不修改购买或 Run 规则。"))
+	FWacomWorldCardInteractionStyle WorldCardInteractionStyle;
 
 	/** Close Browse 制作预设使用的镜头到 ShopFocus 距离。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|World Shop",

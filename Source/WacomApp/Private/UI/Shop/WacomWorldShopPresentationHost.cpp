@@ -6,6 +6,58 @@
 #include "Components/WacomWorldShopOfferAnchorComponent.h"
 #include "GameFramework/Actor.h"
 
+FWacomWorldCardInteractionStyle
+FWacomWorldCardInteractionStyle::Sanitized() const
+{
+	const FWacomWorldCardInteractionStyle Defaults;
+	FWacomWorldCardInteractionStyle Result = *this;
+	auto PositiveOrDefault = [](const float Value, const float Fallback)
+	{
+		return FMath::IsFinite(Value) && Value > 0.0f ? Value : Fallback;
+	};
+	auto NonNegativeOrDefault = [](const float Value, const float Fallback)
+	{
+		return FMath::IsFinite(Value) && Value >= 0.0f ? Value : Fallback;
+	};
+
+	Result.HoverForwardDistanceCm = NonNegativeOrDefault(
+		HoverForwardDistanceCm,
+		Defaults.HoverForwardDistanceCm);
+	Result.HoverScale = PositiveOrDefault(
+		HoverScale,
+		Defaults.HoverScale);
+	Result.HoverTransitionSeconds = PositiveOrDefault(
+		HoverTransitionSeconds,
+		Defaults.HoverTransitionSeconds);
+	Result.TooltipDelaySeconds = NonNegativeOrDefault(
+		TooltipDelaySeconds,
+		Defaults.TooltipDelaySeconds);
+	Result.TooltipMouseOffsetPixels.X = FMath::IsFinite(
+		TooltipMouseOffsetPixels.X)
+		? TooltipMouseOffsetPixels.X
+		: Defaults.TooltipMouseOffsetPixels.X;
+	Result.TooltipMouseOffsetPixels.Y = FMath::IsFinite(
+		TooltipMouseOffsetPixels.Y)
+		? TooltipMouseOffsetPixels.Y
+		: Defaults.TooltipMouseOffsetPixels.Y;
+	Result.ViewportSafeMarginPixels = NonNegativeOrDefault(
+		ViewportSafeMarginPixels,
+		Defaults.ViewportSafeMarginPixels);
+	Result.TooltipWidthPixels = PositiveOrDefault(
+		TooltipWidthPixels,
+		Defaults.TooltipWidthPixels);
+	Result.InspectPanelSizePixels.X = PositiveOrDefault(
+		InspectPanelSizePixels.X,
+		Defaults.InspectPanelSizePixels.X);
+	Result.InspectPanelSizePixels.Y = PositiveOrDefault(
+		InspectPanelSizePixels.Y,
+		Defaults.InspectPanelSizePixels.Y);
+	Result.InspectPanelMarginPixels = NonNegativeOrDefault(
+		InspectPanelMarginPixels,
+		Defaults.InspectPanelMarginPixels);
+	return Result;
+}
+
 FWacomWorldShopPresentationHost FWacomWorldShopPresentationHost::Make(
 	AActor& InOwner,
 	const TArray<UWacomWorldShopOfferAnchorComponent*>& InOfferAnchors,
@@ -15,7 +67,8 @@ FWacomWorldShopPresentationHost FWacomWorldShopPresentationHost::Make(
 	const float InInteractionDistance,
 	const bool bInTwoSided,
 	const bool bInOverrideCursorLookProfile,
-	const FWacomCursorLookProfile& InCursorLookProfileOverride)
+	const FWacomCursorLookProfile& InCursorLookProfileOverride,
+	const FWacomWorldCardInteractionStyle& InWorldCardInteractionStyle)
 {
 	FWacomWorldShopPresentationHost Result;
 	Result.Owner = &InOwner;
@@ -31,6 +84,8 @@ FWacomWorldShopPresentationHost FWacomWorldShopPresentationHost::Make(
 	Result.bTwoSided = bInTwoSided;
 	Result.bOverrideCursorLookProfile = bInOverrideCursorLookProfile;
 	Result.CursorLookProfileOverride = InCursorLookProfileOverride;
+	Result.WorldCardInteractionStyle =
+		InWorldCardInteractionStyle.Sanitized();
 	return Result;
 }
 

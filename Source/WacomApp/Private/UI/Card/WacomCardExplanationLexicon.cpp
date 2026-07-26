@@ -28,6 +28,12 @@ namespace WacomCardExplanationLexiconKeys
 	const FName ModifierConditional(TEXT("Modifier.Conditional"));
 }
 
+namespace WacomCardFaceSemanticIds
+{
+	const FName Backpack(TEXT("Card.Face.Backpack"));
+	const FName Container(TEXT("Card.Face.Container"));
+}
+
 namespace
 {
 	FWacomCardExplanationTemplateEntry MakeTemplateEntry(
@@ -57,6 +63,20 @@ namespace
 		FWacomCardExplanationNamedTextEntry Entry;
 		Entry.Key = Key;
 		Entry.Text = Text;
+		return Entry;
+	}
+
+	FWacomCardFaceSemanticLexiconEntry MakeCardFaceSemanticEntry(
+		const FName SemanticId,
+		const FGameplayTag& SourceTag,
+		const FText& DisplayName,
+		const FText& Description)
+	{
+		FWacomCardFaceSemanticLexiconEntry Entry;
+		Entry.SemanticId = SemanticId;
+		Entry.SourceTag = SourceTag;
+		Entry.DisplayName = DisplayName;
+		Entry.Description = Description;
 		return Entry;
 	}
 
@@ -151,6 +171,69 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierUnknown, LOCTEXT("DefaultModifierUnknown", "数值修正 {0}")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierConditional, LOCTEXT("DefaultConditionalModifier", "{0}，{1}"))
 	};
+
+	CardFaceSemantics = {
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Swift.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Swift,
+			LOCTEXT("CardFaceSwiftName", "迅捷"),
+			LOCTEXT("CardFaceSwiftDescription", "不造成先机命中、不推进敌方先机、不触发完美释放，并跳过本次出牌后的先机归零行动。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Retain.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Retain,
+			LOCTEXT("CardFaceRetainName", "保留"),
+			LOCTEXT("CardFaceRetainDescription", "回合结束时不会被弃置；只保证留在下一回合手牌池，不保证原位置和顺序。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Combo.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Combo,
+			LOCTEXT("CardFaceComboName", "连击"),
+			LOCTEXT("CardFaceComboDescription", "打出后回到手牌，并尽量恢复打出前的相对位置。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Companion.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Companion,
+			LOCTEXT("CardFaceCompanionName", "伙伴"),
+			LOCTEXT("CardFaceCompanionDescription", "打出时计入伙伴次数；只有伙伴卡会让体格中的最大生命加成生效。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Weapon.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Weapon,
+			LOCTEXT("CardFaceWeaponName", "武器"),
+			LOCTEXT("CardFaceWeaponDescription", "武器类卡牌，可被容量效果、目标筛选及其它武器规则识别。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Tool.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Tool,
+			LOCTEXT("CardFaceToolName", "工具"),
+			LOCTEXT("CardFaceToolDescription", "工具类卡牌，用于卡牌分类和规则筛选。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Hand.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Hand,
+			LOCTEXT("CardFaceHandName", "手"),
+			LOCTEXT("CardFaceHandDescription", "左右手固有卡使用的分类标记。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Exhaust.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Exhaust,
+			LOCTEXT("CardFaceExhaustName", "消耗"),
+			LOCTEXT("CardFaceExhaustDescription", "获得此临时关键词后，本次打出会进入消耗牌堆。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_BagProvider.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_BagProvider,
+			LOCTEXT("CardFaceBagProviderName", "容器兼容标记"),
+			LOCTEXT("CardFaceBagProviderDescription", "历史兼容关键词；当前容量与背包可用性由 Capacity>0 决定，本关键词本身不提供容量。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_DeleteProvider.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_DeleteProvider,
+			LOCTEXT("CardFaceDeleteProviderName", "删牌"),
+			LOCTEXT("CardFaceDeleteProviderDescription", "持有任意一张即可启用删牌换金币；最后一张提供者只能单独出售。")),
+		MakeCardFaceSemanticEntry(
+			WacomCardFaceSemanticIds::Backpack,
+			FGameplayTag(),
+			LOCTEXT("CardFaceBackpackName", "背包"),
+			LOCTEXT("CardFaceBackpackDescription", "A 类容器，容量计入通量存放区总容量。")),
+		MakeCardFaceSemanticEntry(
+			WacomCardFaceSemanticIds::Container,
+			FGameplayTag(),
+			LOCTEXT("CardFaceContainerName", "容器"),
+			LOCTEXT("CardFaceContainerDescription", "B 类容器，开辟专属存放区，容量为卡面容量减一；区内卡牌可获得容量效果。"))
+	};
 }
 
 bool UWacomCardExplanationLexicon::FindEffectTemplate(
@@ -206,6 +289,45 @@ bool UWacomCardExplanationLexicon::FindNamedText(
 		}
 	}
 
+	return false;
+}
+
+bool UWacomCardExplanationLexicon::FindCardFaceSemantic(
+	const FName SemanticId,
+	const FGameplayTag SourceTag,
+	FWacomCardFaceSemanticLexiconEntry& OutEntry) const
+{
+	if (SemanticId.IsNone() && !SourceTag.IsValid())
+	{
+		return false;
+	}
+
+	for (int32 Index = CardFaceSemantics.Num() - 1; Index >= 0; --Index)
+	{
+		const FWacomCardFaceSemanticLexiconEntry& Entry =
+			CardFaceSemantics[Index];
+		if (!SemanticId.IsNone()
+			&& Entry.SemanticId == SemanticId)
+		{
+			OutEntry = Entry;
+			return true;
+		}
+	}
+
+	if (!SourceTag.IsValid())
+	{
+		return false;
+	}
+	for (int32 Index = CardFaceSemantics.Num() - 1; Index >= 0; --Index)
+	{
+		const FWacomCardFaceSemanticLexiconEntry& Entry =
+			CardFaceSemantics[Index];
+		if (Entry.SourceTag.MatchesTagExact(SourceTag))
+		{
+			OutEntry = Entry;
+			return true;
+		}
+	}
 	return false;
 }
 

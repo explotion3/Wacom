@@ -80,7 +80,8 @@ AWacomWorldShopHostActor::BuildPresentationHost() const
 		InteractionDistance,
 		bTwoSided,
 		bOverrideCursorLookProfile,
-		CursorLookProfileOverride);
+		CursorLookProfileOverride,
+		FWacomWorldCardInteractionStyle());
 }
 
 FWacomWorldShopHostValidationResult AWacomWorldShopHostActor::ValidateForOfferCount(int32 OfferCount) const

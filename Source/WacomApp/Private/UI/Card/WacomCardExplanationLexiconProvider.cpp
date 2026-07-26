@@ -66,6 +66,65 @@ namespace WacomCardExplanationLexiconProvider
 		return LoadedLexicon;
 	}
 
+	bool FindCardFaceSemantic(
+		const FName SemanticId,
+		const FGameplayTag SourceTag,
+		FWacomCardFaceSemanticLexiconEntry& OutEntry)
+	{
+		FWacomCardFaceSemanticLexiconEntry ConfiguredEntry;
+		const UWacomCardExplanationLexicon* Configured = GetConfiguredLexicon();
+		const bool bHasConfigured =
+			Configured
+			&& Configured->FindCardFaceSemantic(
+				SemanticId,
+				SourceTag,
+				ConfiguredEntry);
+
+		FWacomCardFaceSemanticLexiconEntry DefaultEntry;
+		const UWacomCardExplanationLexicon* Defaults =
+			GetDefault<UWacomCardExplanationLexicon>();
+		const bool bHasDefault =
+			Defaults
+			&& Defaults->FindCardFaceSemantic(
+				SemanticId,
+				SourceTag,
+				DefaultEntry);
+
+		if (!bHasConfigured && !bHasDefault)
+		{
+			return false;
+		}
+		if (!bHasConfigured)
+		{
+			OutEntry = DefaultEntry;
+			return true;
+		}
+
+		// Configured asset wins per field so authoring one field never blanks
+		// the other. Empty asset fields fall back to the C++ default entry.
+		OutEntry = ConfiguredEntry;
+		if (bHasDefault)
+		{
+			if (OutEntry.DisplayName.IsEmpty())
+			{
+				OutEntry.DisplayName = DefaultEntry.DisplayName;
+			}
+			if (OutEntry.Description.IsEmpty())
+			{
+				OutEntry.Description = DefaultEntry.Description;
+			}
+			if (!OutEntry.SourceTag.IsValid())
+			{
+				OutEntry.SourceTag = DefaultEntry.SourceTag;
+			}
+			if (OutEntry.SemanticId.IsNone())
+			{
+				OutEntry.SemanticId = DefaultEntry.SemanticId;
+			}
+		}
+		return true;
+	}
+
 #if WITH_AUTOMATION_TESTS
 	void ClearCachedLexiconForTests()
 	{

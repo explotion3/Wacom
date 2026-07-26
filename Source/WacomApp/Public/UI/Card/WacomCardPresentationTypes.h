@@ -289,6 +289,42 @@ struct WACOMAPP_API FWacomCardPresentationRuntimeContext
 };
 
 /**
+ * One semantic word rendered inside FWacomCardViewData::TypeText.
+ *
+ * The builder owns both DisplayText and its final character range so passive
+ * presentation code can perform word-level hit testing without re-parsing the
+ * visible string or reading gameplay state.
+ */
+USTRUCT(BlueprintType)
+struct WACOMAPP_API FWacomCardFaceSemanticTokenView
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	FName SemanticId = NAME_None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	FGameplayTag SourceTag;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	FText DisplayText;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	int32 StartIndex = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	int32 Length = 0;
+
+	bool HasValidRangeFor(const FString& Source) const
+	{
+		return !SemanticId.IsNone()
+			&& StartIndex >= 0
+			&& Length > 0
+			&& StartIndex + Length <= Source.Len();
+	}
+};
+
+/**
  * Lightweight data used by reusable card display widgets.
  *
  * This is intentionally UI-only: it is a view model for one visible card, not
@@ -305,6 +341,10 @@ struct WACOMAPP_API FWacomCardViewData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
 	FText TypeText;
+
+	/** Ordered semantic words and their exact character ranges inside TypeText. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView")
+	TArray<FWacomCardFaceSemanticTokenView> TypeSemanticTokens;
 
 	/** Detailed rule text. Default small card faces should usually hide this. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|CardView", meta = (MultiLine = true))

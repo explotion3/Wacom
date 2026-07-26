@@ -5,6 +5,7 @@
 #include "Camera/WacomFirstPersonViewStageCoordinator.h"
 #include "Camera/WacomFirstPersonViewStageRequest.h"
 #include "Camera/WacomFirstPersonViewStageReturnFlow.h"
+#include "Cards/CardDefinition.h"
 #include "Components/WacomBattleCameraLookComponent.h"
 #include "Components/WacomRunFirstPersonCardSourceComponent.h"
 #include "Components/WacomRunPathTraversalComponent.h"
@@ -265,6 +266,7 @@ bool FWacomWorldShopActivityCoordinator::RefreshPresentation()
 	{
 		HUD->SetGold(Gold);
 	}
+	SyncInteractionPresenter(Views);
 	return HUD.IsValid();
 }
 
@@ -290,7 +292,47 @@ bool FWacomWorldShopActivityCoordinator::RouteInputKey(const FKey& Key, EInputEv
 		// not leak into hand, Run branch, or ordinary world-click routing.
 		return true;
 	}
+	if (Key == EKeys::RightMouseButton)
+	{
+		if (Event == IE_Pressed && State == EState::Active)
+		{
+			FWacomWorldCardPointerSample PointerSample;
+			InputRouter.GetPointerSample(
+				PointerSample,
+				/*bForceRefresh*/ true);
+			if (AWacomPlayerController* PC = PlayerController.Get())
+			{
+				InteractionPresenter.RouteRightClick(
+					*PC,
+					PointerSample,
+					Host.WorldCardInteractionStyle);
+			}
+		}
+		// The activity owns right click throughout staging/active/closing so
+		// it cannot leak into first-person hand inspect or world interaction.
+		return true;
+	}
 	return false;
+}
+
+void FWacomWorldShopActivityCoordinator::Tick(const float DeltaTime)
+{
+	if (State != EState::Active)
+	{
+		return;
+	}
+	AWacomPlayerController* PC = PlayerController.Get();
+	if (!PC)
+	{
+		return;
+	}
+	FWacomWorldCardPointerSample PointerSample;
+	InputRouter.GetPointerSample(PointerSample);
+	InteractionPresenter.Tick(
+		*PC,
+		DeltaTime,
+		PointerSample,
+		Host.WorldCardInteractionStyle);
 }
 
 void FWacomWorldShopActivityCoordinator::HandleRunStateChanged()
@@ -336,6 +378,39 @@ void FWacomWorldShopActivityCoordinator::HandleCardPrimaryAction(
 	}
 	RefreshPresentation();
 	bPurchaseInFlight = false;
+}
+
+void FWacomWorldShopActivityCoordinator::SyncInteractionPresenter(
+	const TArray<FWacomShopOfferPresentationView>& Views)
+{
+	AWacomPlayerController* PC = PlayerController.Get();
+	if (!PC)
+	{
+		return;
+	}
+	TArray<FWacomWorldCardInteractionItemView> Items;
+	const int32 Count = FMath::Min(Views.Num(), WorldCards.Num());
+	Items.Reserve(Count);
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		const FWacomShopOfferPresentationView& View = Views[Index];
+		const FWorldCardRecord& Record = WorldCards[Index];
+		UWacomWorldShopCardWidget* Widget = Record.Widget.Get();
+		UWidgetComponent* Component = Record.Component.Get();
+		if (!Widget || !Component || !View.CardDefinition)
+		{
+			continue;
+		}
+		FWacomWorldCardInteractionItemView Item;
+		Item.ItemId = View.OfferId;
+		Item.Definition = View.CardDefinition.Get();
+		Item.WidgetComponent = Component;
+		Item.RootWidget = Widget;
+		Item.CardView = Widget->GetCardView();
+		Item.DetailViewData = View.CardDetailViewData;
+		Items.Add(MoveTemp(Item));
+	}
+	InteractionPresenter.SyncItems(Items);
 }
 
 void FWacomWorldShopActivityCoordinator::Close(bool bEndVisit)
@@ -410,6 +485,7 @@ void FWacomWorldShopActivityCoordinator::Shutdown()
 
 void FWacomWorldShopActivityCoordinator::DestroyPresentation()
 {
+	InteractionPresenter.Reset();
 	AActor* StrongHost = Host.GetOwner();
 	for (FWorldCardRecord& Record : WorldCards)
 	{

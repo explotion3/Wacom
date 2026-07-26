@@ -9,12 +9,14 @@
 #include "UI/Shop/WacomWorldShopWidgetInputRouter.h"
 #include "UI/Shop/WacomWorldShopHUDWidget.h"
 #include "UI/Shop/WacomWorldShopPresentationHost.h"
+#include "UI/Card/WacomWorldCardInteractionPresenter.h"
 #include "UObject/StrongObjectPtr.h"
 
 class AWacomPlayerController;
 class UWidgetComponent;
 class UWacomWorldShopCardWidget;
 struct FWacomFirstPersonViewStageRequest;
+struct FWacomShopOfferPresentationView;
 
 enum class EWacomWorldShopOpenResult : uint8
 {
@@ -34,6 +36,7 @@ public:
 		const FWacomWorldShopPresentationHost& Host);
 
 	bool RouteInputKey(const FKey& Key, EInputEvent Event);
+	void Tick(float DeltaTime);
 	void Close(bool bEndVisit = true);
 	void Shutdown();
 	bool IsUsingHost(const AActor* Candidate) const
@@ -65,6 +68,8 @@ private:
 	bool RefreshPresentation();
 	void HandleRunStateChanged();
 	void HandleCardPrimaryAction(FGuid OfferId, uint32 IntentGeneration);
+	void SyncInteractionPresenter(
+		const TArray<FWacomShopOfferPresentationView>& Views);
 	void DestroyPresentation();
 	void RestoreExplorationPresentation();
 	void FinishClose();
@@ -84,4 +89,5 @@ private:
 	FWacomWorldShopExplorationHUDVisibilityGuard
 		ExplorationHUDVisibilityGuard;
 	FWacomWorldShopWidgetInputRouter InputRouter;
+	FWacomWorldCardInteractionPresenter InteractionPresenter;
 };

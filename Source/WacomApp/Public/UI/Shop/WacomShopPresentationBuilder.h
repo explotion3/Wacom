@@ -25,6 +25,9 @@ struct WACOMAPP_API FWacomShopOfferPresentationView
 	FWacomCardViewData CardViewData;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop")
+	FWacomCardDetailViewData CardDetailViewData;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop")
 	FText CardNameText;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop")

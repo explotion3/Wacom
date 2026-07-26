@@ -3,10 +3,10 @@
 #include "UI/Shop/WacomWorldShopWidgetInputRouter.h"
 
 #include "Components/WidgetComponent.h"
-#include "Components/WidgetInteractionComponent.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "InputCoreTypes.h"
 #include "UI/Shop/WacomWorldShopInteractionPolicy.h"
+#include "UI/Shop/WacomWorldShopWidgetInteractionComponent.h"
 
 bool FWacomWorldShopWidgetInputRouter::Initialize(
 	AWacomPlayerController& PlayerController,
@@ -19,7 +19,8 @@ bool FWacomWorldShopWidgetInputRouter::Initialize(
 	{
 		return false;
 	}
-	UWidgetInteractionComponent* Interaction = NewObject<UWidgetInteractionComponent>(
+	UWacomWorldShopWidgetInteractionComponent* Interaction =
+		NewObject<UWacomWorldShopWidgetInteractionComponent>(
 		InteractionOwner,
 		TEXT("WorldShopWidgetInteraction"));
 	if (!Interaction)
@@ -47,7 +48,8 @@ bool FWacomWorldShopWidgetInputRouter::Initialize(
 
 bool FWacomWorldShopWidgetInputRouter::RoutePointerKey(const FKey& Key, EInputEvent Event)
 {
-	UWidgetInteractionComponent* Interaction = WidgetInteraction.Get();
+	UWacomWorldShopWidgetInteractionComponent* Interaction =
+		WidgetInteraction.Get();
 	if (!Interaction || Key != EKeys::LeftMouseButton)
 	{
 		return false;
@@ -82,9 +84,32 @@ bool FWacomWorldShopWidgetInputRouter::RoutePointerKey(const FKey& Key, EInputEv
 	return false;
 }
 
+bool FWacomWorldShopWidgetInputRouter::GetPointerSample(
+	FWacomWorldCardPointerSample& OutSample,
+	const bool bForceRefresh)
+{
+	OutSample = FWacomWorldCardPointerSample();
+	UWacomWorldShopWidgetInteractionComponent* Interaction =
+		WidgetInteraction.Get();
+	if (!Interaction)
+	{
+		return false;
+	}
+	if (bForceRefresh)
+	{
+		Interaction->RefreshPointerSample();
+	}
+	OutSample.HoveredComponent = Interaction->GetHoveredWidgetComponent();
+	OutSample.LocalHitLocation = Interaction->Get2DHitLocation();
+	OutSample.bOverHitTestVisibleWidget =
+		Interaction->IsOverHitTestVisibleWidget();
+	return OutSample.HasHoveredComponent();
+}
+
 void FWacomWorldShopWidgetInputRouter::CancelAndClear()
 {
-	if (UWidgetInteractionComponent* Interaction = WidgetInteraction.Get())
+	if (UWacomWorldShopWidgetInteractionComponent* Interaction =
+		WidgetInteraction.Get())
 	{
 		if (bLeftPressed)
 		{
