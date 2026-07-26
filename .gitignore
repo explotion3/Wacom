@@ -59,3 +59,8 @@ Content/*
 !Content/DreamMaterials/**
 
 # Keep project source, config, Wacom content, plugins, and docs versioned.
+
+# Git LFS hooks on Windows redirect to "/dev/null", which Git Bash resolves as a
+# literal repo-relative path and creates as ./dev/null/. It is a tooling
+# artifact of worktree/checkout operations, never project content.
+/dev/
