@@ -38,7 +38,7 @@
 
 ### CodeGraph 使用
 
-- 项目已配置 `colbymchenry/codegraph` MCP，并在仓库内建立 `.codegraph` 索引。
+- 项目已配置 `colbymchenry/codegraph` MCP，并在仓库内建立 `.codegraph` 索引。该 MCP 是否可用取决于当前会话；工具不存在时直接用 `rg` / 仓库检索完成同样的探索，不要因此停下或声称无法定位。
 - 探索“某个系统怎么工作、某个函数被谁调用、修改会影响哪里、从 A 怎么流到 B”时，优先使用 CodeGraph：`codegraph_context`、`codegraph_callers`、`codegraph_callees`、`codegraph_impact`、`codegraph_trace`。
 - 查项目文件结构时优先使用 `codegraph_files` 或 `rg --files`，少做全仓库目录扫描；新增文件或刚改过的文件以 live 文件系统为准。
 - CodeGraph 用于快速建立结构认知；真正修改前仍要读取 live 文件内容，以当前工作区文件为准，避免索引延迟或动态调用导致误判。
@@ -47,17 +47,30 @@
 & 'C:\Users\ahhh\AppData\Local\codegraph\current\node.exe' --liftoff-only 'C:\Users\ahhh\AppData\Local\codegraph\current\lib\dist\bin\codegraph.js' sync 'D:\UE_Project\5.7\Wacom'
 ```
 
-### Unreal MCP 使用
+### 资产创建与 Editor 工具
 
-- Unreal Editor 资产操作遵循 `Docs/UnrealMCPWorkflow.md`；固定 role、端口和默认权限以 `Scripts/UnrealMcp/Endpoints.json` 为准。
-- Unreal MCP 只能由当前任务的主会话直接调用。默认禁止 subagent、disposable asset agent 或其它委托会话连接 Unreal MCP、取得 writer lease、制作或保存 `.uasset/.umap`。
-- WBP、Blueprint、Niagara、Material、DreamShader 和其它依赖视觉迭代的资产操作必须由主会话亲自完成工具调用、检查实际变化、迭代效果并组织 PIE/截图验收；不得把完整资产制作任务交给 subagent 后仅接收结果。
-- 当前主会话没有加载目标 endpoint 工具、Editor 重启后工具不可用或存在多个 Editor 时，不得以此为理由创建 MCP subagent。应由主会话完成 named endpoint 配置、Editor 启动和 `AssertReady`；仍无法直接调用时暂停 mutation，报告阻塞并等待用户切换或重启到具备 MCP 工具的主会话。
-- Subagent 仍可在一般协作边界内执行不连接 Unreal MCP、也不读写 Unreal 二进制资产的独立文本/源码工作；这不构成 MCP mutation 例外。
-- MCP 不认识 Codex cwd。调用工具前必须用 `Scripts/Invoke-WacomUnrealMcp.ps1 -Action AssertReady` 校验准确 `.uproject`、PID、进程启动时间、SessionId、port owner、branch 和 HEAD；单独调用 `IsPIERunning` 不能证明 worktree 身份。
-- 任何资产 mutation 前必须取得单一 writer lease，并用完整 `/Game/...` Package allowlist 限制保存范围。`main` 和 `integration` endpoint 默认只读；只有用户明确授权本次资产范围后才能临时解除保护。
-- Editor 生命周期内不切 branch、不更新 HEAD、不运行 C++ 编译。保存并成功释放写锁、正常关闭 Editor，再用 `-Action AssertClosedForBuild` 通过编译门禁。
-- `.uasset/.umap` 不做文本合并。交接必须报告主会话 task/thread ID、MCP session provenance、writer audit、实际变化路径、Git LFS 状态和资产/PIE 验证。
+新建或重建 `.uasset/.umap` 默认使用 commandlet，不依赖交互式 Editor 操作。现有入口位于 `Source/WacomEditor/Private/Commandlets/`，当前 builder 职责和产物清单以 [`Docs/WacomDataAuthoring.md §2`](Docs/WacomDataAuthoring.md) 为准。
+
+标准调用形式，使用目标 worktree 自己的 `.uproject`：
+
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<ProjectRoot>\Wacom.uproject' `
+  -run=<CommandletName> -Unattended -NoPause -NoSplash -NullRHI
+```
+
+约束：
+
+- Commandlet 只服务内容制作和校验，不参与运行时规则，也不作为运行时加载入口。
+- 必须幂等。第二次运行应为 `0 created / 0 saved`，已有资产哈希不变。新增或修改 builder 时同步更新 `Docs/WacomDataAuthoring.md`。
+- 写入范围必须显式。只创建和保存本次任务清单内的 Package，其余一律按只读依赖处理；依赖缺失或父类错误时立即失败，不创建替代资产，也不顺手"修好"清单外的资产。
+- 完成后跑对应 `Wacom.Data.*` / `Wacom.Battle.*` / Run / UI 定向自动化，并核对实际变化路径与 Git LFS 状态。
+- `.uasset/.umap` 不做文本合并。资产改动的交接必须报告实际变化路径、Git LFS 状态、幂等复跑结果和资产 / PIE 验证。
+- Editor 生命周期内不切 branch、不更新 HEAD、不运行 C++ 编译；先正常关闭 Editor 再编译。
+- 资产制作与验收由当前主会话负责。Subagent 只做不读写 `.uasset/.umap` 的源码、文档和测试工作。
+
+需要人眼判断的内容——WBP 布局、材质观感、Niagara 手感、动画节奏、镜头构图——无法由 commandlet 收敛效果时，不要声称已完成。应输出明确的编辑器操作步骤、参数取值和验收点，交由用户在 Editor 中完成并回报结果。
+
+历史上使用 Unreal MCP 进行资产操作的流程记录保留在 [`Docs/UnrealMCPWorkflow.md`](Docs/UnrealMCPWorkflow.md)，供 `specs/014`–`020` 等既有制作批次追溯。当前会话若没有连接 Unreal MCP，按本节的 commandlet 路径工作，不要以缺少 MCP 工具为理由跳过资产验证或把资产任务标记为完成。
 
 ### Spec Kit 使用
 
