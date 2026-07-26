@@ -435,6 +435,7 @@ tags:
   - 说明：已落地 2×4 Host/Anchor、透明 HUD、整卡购买、Mouse WidgetInteraction、Run live look、ShopScreen fallback 和 transient PIE 命令；Floor 1 Production map 未修改。世界卡面直接复用 `WBP_FirstPersonCardView` 与 `M_WorldCardSurface / Masked Exposure / 1.0`，免费购买、重复拒绝、StorageRevision、售出 intent 和 visit 内耗尽 AP 后保持商店打开均已形成合同。组合式 `AWacomWorldShopActor` 现直接拥有 8 个 `USceneComponent` 语义的真实 Offer Anchor，统一正式尺寸为 `720×976 × 0.13≈93.6×126.9 cm`；每个 Anchor 由独立 `VisibleDefaultsOnly` 原生属性锚定，在继承 BP 中仍可编辑 Location/Rotation，但 Level Editor Actor Details 会在生成属性树前排除全部组件引用，避免 `ShopViewFrustum / TriggerSphere / ClickBounds` 的 `BodyInstance` 递归栈溢出。固定 getter 不接纳派生组件。`WacomEditor` 在选中任意 Anchor 时绘制全部八张无碰撞线框与槽号，Construction 只恢复槽身份和单位缩放，不再创建 `UBoxComponent BodyInstance`、内联 `Instanced` Details 数组或向内部 ChildActor 同步 Transform。`DetailsPanelSelectionSafety` 覆盖八个组件的真实 Details 选择、编辑权限与关卡实例 Actor Details 过滤。正式商店关闭独立 Look override，复制 Run Path live profile；Staging 同时收起原手牌并只折叠 ExplorationHUD，保留 CommonUI 输入、商店金币、Esc、反馈和 Toast，镜头返回后恢复原 Widget/Visibility。剩余工作为用户在 BP Viewport 中完成正式卡位、手工关闭旧序列化 override、编译保存后执行真实鼠标购买、退出/重进、曝光和构图人工 PIE。
   - 2026-07-24 输入/预览收口：Visualizer 改为 PostEngineInit 安全幂等注册；World Shop 接管时立即清除普通 Run Hover/Probe，并在活动完成前阻止 Backboard 再次放大；Slate 只消费由游戏视口内 World Shop LeftMouseDown 开始的成对手势，PIE/Editor 控件 MouseUp 不再被截走，NoCapture Esc 使用受游戏视口范围限制的补充路由。人工验收必须使用包含本轮 WacomEditor 源码并完整编译的正确 worktree。
   - 2026-07-24 几何制作收口：`CardWorldScale` 改为不继承地图 Actor 非均匀 Scale 的绝对世界换算；`0.13` 对应外层渲染/命中平面 `93.6×126.9 cm`，可见卡面与价格框约 `77.0×122.7 cm`。Visualizer 同时显示两层轮廓和价格框分隔线并忽略父级缩放，Class Defaults 收敛为一个 World Shop 设置分类和一个组件分类。随后定位并修复 PIE 卡面仅有预览一半大小的根因：根 RenderSurface 现在明确占满 `720×976`，再由内层 ScaleBox 放大 `360×488` 逻辑面；组件几何改为在注册前应用，首帧不再短暂使用默认 `500×500`。待在正确 worktree 人工确认 BP 视口与 PIE 实际尺寸。
+  - 2026-07-25 世界卡浏览切片：新增活动无关的 `FWacomWorldCardInteractionPresenter`，World Shop 首先接入 `8 cm / 1.06 / 0.12 s` Hover、`0.15 s` 逐词 Tooltip 和右键固定 `WBP_CardDetailPanel`。`FWacomCardViewData` 现在携带与最终 `TypeText` 同源的有序语义 Token；`UWacomCardExplanationLexicon` 默认覆盖现有十个关键词及背包/容器，配置资产优先、C++ 默认兜底。左键购买、售出与金币不足规则未修改；剩余为完整编译、自动化与真实 PIE 输入/视口夹紧验收。
 
 - [x] **World Card 世界空间材质选择 PIE**
   - 状态：`Done: Wacom Masked Exposure / ExposureCompensationStrength=1.0 已选定并接入 World Shop`
@@ -446,6 +447,7 @@ tags:
   - 状态：`Ready: 独立 Spec/切片`
   - 归属：Run Event / Card UI
   - 说明：三选一整卡选择、强化卡牌拖入场景槽、卡面关键词语义 Tooltip 分别作为后续活动实现；不得把它们塞回 purchase-only World Shop coordinator。
+  - 2026-07-26 活动无关收口：卡面关键词语义 Tooltip 已由 `FWacomWorldCardInteractionPresenter` 落地。共享类型迁入 `WacomApp/Public/UI/Card/WacomWorldCardInteractionTypes.h`（`FWacomWorldCardInteractionStyle` 与改名后的 `FWacomWorldCardPointerSample`），Presenter 不再包含任何 `UI/Shop/` 头文件，World Shop 退回为首个 pointer sample 生产者。剩余两个活动接入时复用同一 Style / pointer sample 形状；拖卡入场景槽走既有 `WacomRunWorldCardDropReceiver` + `URunSession::SubmitRunWorldCardInteraction`，不新建 drop 框架。
 
 ## 维护规则
 
