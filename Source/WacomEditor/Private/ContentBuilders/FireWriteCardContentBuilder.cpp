@@ -189,21 +189,21 @@ namespace Wacom::ContentBuilder::FireWritePrivate
 		if (Effect.EffectType == WacomTags::Effect_Damage)
 		{
 			return FText::FromString(
-				TEXT("{icon:EffectIcon} 造成 {value:Magnitude} 伤害。"));
+				TEXT("{icon:EffectIcon} 造成 {value:Magnitude} 伤害"));
 		}
 		if (Effect.EffectType == WacomTags::Effect_Heal)
 		{
 			return FText::FromString(
-				TEXT("{icon:EffectIcon} 恢复 {value:Magnitude} 生命。"));
+				TEXT("{icon:EffectIcon} 恢复 {value:Magnitude} 生命"));
 		}
 		if (Effect.EffectType == WacomTags::Status_Shield)
 		{
 			return FText::FromString(
-				TEXT("{icon:EffectIcon} 获得 {value:Magnitude} 护盾。"));
+				TEXT("{icon:EffectIcon} 获得 {value:Magnitude} 护盾"));
 		}
 		if (Effect.EffectType == WacomTags::Effect_Draw)
 		{
-			return FText::FromString(TEXT("抽 {value:Magnitude} 张牌。"));
+			return FText::FromString(TEXT("抽 {value:Magnitude} 张牌"));
 		}
 		if (Effect.EffectType == WacomTags::Effect_ApplyStatus_Poison
 			|| Effect.EffectType == WacomTags::Effect_ApplyStatus_Slow
@@ -212,7 +212,7 @@ namespace Wacom::ContentBuilder::FireWritePrivate
 			|| Effect.EffectType == WacomTags::Effect_ApplyStatus_Burn)
 		{
 			return FText::FromString(
-				TEXT("施加 {value:Magnitude} {status:EffectStatus}。"));
+				TEXT("施加 {value:Magnitude} {status:EffectStatus}"));
 		}
 		return FText::GetEmpty();
 	}
@@ -268,7 +268,7 @@ namespace Wacom::ContentBuilder::FireWritePrivate
 		};
 		auto AddKeyword = [&Result](
 			const FGameplayTag Keyword,
-			const TCHAR* Template = TEXT("{keyword:Keyword}。"))
+			const TCHAR* Template = TEXT("{keyword:Keyword}"))
 		{
 			FWacomCardKeywordExplanationTemplate& Entry =
 				Result.KeywordTemplates.AddDefaulted_GetRef();
@@ -280,67 +280,67 @@ namespace Wacom::ContentBuilder::FireWritePrivate
 		{
 			SetPassive(
 				0,
-				TEXT("本场曾进入消耗区时：战斗胜利或撤离后，永久耐久 +{value:PassiveEffect[0].Magnitude}，灼烧 +{value:PassiveEffect[1].Magnitude}。"));
+				TEXT("战斗结束后：此卡被消耗过则永久提升1点耐久与灼烧效果"));
 		}
 		else if (EnglishName == TEXT("AshBug"))
 		{
 			AddKeyword(WacomTags::Card_Keyword_Exhaust);
 			SetEffect(
 				0,
-				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}。"));
+				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}"));
 			SetPassive(
 				0,
-				TEXT("回合结束时：若本卡在消耗区，免费自动打出，随后进入弃牌堆。"));
+				TEXT("回合结束时：若此卡位于消耗区则将其打出并返回弃牌堆"));
 		}
 		else if (EnglishName == TEXT("SaltMaggot"))
 		{
 			AddKeyword(WacomTags::Card_Keyword_Exhaust);
 			SetEffect(
 				0,
-				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}。"));
+				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}"));
 			SetEffect(
 				1,
-				TEXT("将 {value:Magnitude} 张同阶熔熔盐置入手牌。"));
+				TEXT("生成 {value:Magnitude} 张同阶「熔熔盐」到手牌"));
 		}
 		else if (EnglishName == TEXT("WarmTinderbug"))
 		{
 			AddKeyword(WacomTags::Card_Keyword_Retain);
 			SetEffect(
 				0,
-				TEXT("使手牌中所有卡（包含自身）的灼烧效果 +{value:Magnitude}；已有灼烧的卡牌获得双倍加成。"));
+				TEXT("手牌中灼烧效果+{value:Magnitude}，对灼烧状态的卡牌效果翻倍"));
 			SuppressEffect(1);
 			Result.DynamicCostTemplate = FText::FromString(
-				TEXT("手牌中每有一张 {status:CountedStatus} 卡牌，本卡费用 -{value:ReductionPerMatchingCard}。"));
+				TEXT("手牌中每有一张 {status:CountedStatus} 卡牌，此卡费用-{value:ReductionPerMatchingCard}"));
 		}
 		else if (EnglishName == TEXT("FireflySeed"))
 		{
 			SetEffect(
 				1,
-				TEXT("将本卡的完整战斗复制品随机插入抽牌堆。"));
+				TEXT("将此卡的完整战斗复制品随机插入抽牌堆"));
 			SetPassive(
 				0,
-				TEXT("抽到时：生成 {value:PassiveEffect[0].Magnitude} 张同阶随机萤火虫。"));
+				TEXT("抽到此卡时：生成 {value:PassiveEffect[0].Magnitude} 张同阶随机萤火虫到手牌"));
 		}
 		else if (EnglishName == TEXT("HungryFireflyMaiden"))
 		{
-			SetEffect(0, TEXT("消耗目标伙伴手牌。"));
+			SetEffect(0, TEXT("消耗另一张普通伙伴手牌"));
 			SetEffect(
 				1,
-				TEXT("生成 {value:Magnitude} 张同阶随机萤火虫。"));
+				TEXT("生成 {value:Magnitude} 张同阶随机萤火虫到手牌"));
 		}
 		else if (EnglishName == TEXT("BlazingEyeFirefly"))
 		{
 			AddKeyword(WacomTags::Card_Keyword_Exhaust);
 			SetPassive(
 				0,
-				TEXT("相邻伙伴被打出时：本场自身灼烧效果 +{value:PassiveEffect[0].Magnitude}。"));
+				TEXT("本回合打出相邻伙伴时：此卡灼烧效果+{value:PassiveEffect[0].Magnitude}"));
 		}
 		else if (EnglishName == TEXT("RottenFirefly"))
 		{
 			AddKeyword(WacomTags::Card_Keyword_Exhaust);
 			SetPassive(
 				0,
-				TEXT("相邻伙伴被打出时：本场自身暴击率 +{value:PassiveEffect[0].Magnitude}%。"));
+				TEXT("本回合打出相邻伙伴时：此卡暴击率+{value:PassiveEffect[0].Magnitude}%"));
 		}
 		else if (EnglishName == TEXT("GlimmerFirefly"))
 		{
@@ -351,7 +351,7 @@ namespace Wacom::ContentBuilder::FireWritePrivate
 			AddKeyword(WacomTags::Card_Keyword_Exhaust);
 			SetPassive(
 				0,
-				TEXT("相邻伙伴被打出时：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。"));
+				TEXT("本回合打出相邻伙伴时：此卡费用-{value:PassiveEffect[0].Magnitude}"));
 		}
 		else if (EnglishName == TEXT("EmptyBottle"))
 		{
@@ -362,29 +362,29 @@ namespace Wacom::ContentBuilder::FireWritePrivate
 			AddKeyword(WacomTags::Card_Keyword_Exhaust);
 			SetEffect(
 				0,
-				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}。"));
+				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}"));
 			SetEffect(
 				1,
-				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}。"));
+				TEXT("对所有敌人施加 {value:Magnitude} {status:EffectStatus}"));
 		}
 		else if (EnglishName == TEXT("JadeBeetle"))
 		{
 			SetPassive(
 				0,
-				TEXT("抽到时：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。"));
+				TEXT("每次抽到此卡时：此卡费用-{value:PassiveEffect[0].Magnitude}"));
 		}
 		else if (EnglishName == TEXT("ObsidianBeetle"))
 		{
 			SetPassive(
 				0,
-				TEXT("每次抽到本卡时：本场自身伤害翻倍。"));
+				TEXT("每次抽到此卡时：此卡伤害 X{value:PassiveEffect[0].Magnitude}"));
 		}
 		else if (EnglishName == TEXT("BlindSpider"))
 		{
 			AddKeyword(WacomTags::Card_Keyword_Combo);
 			SetPassive(
 				0,
-				TEXT("每打出一张其它伙伴：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。"));
+				TEXT("每打出一张其他伙伴：此卡费用-{value:PassiveEffect[0].Magnitude}"));
 		}
 		return Result;
 	}

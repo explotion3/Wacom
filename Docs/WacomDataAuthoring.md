@@ -230,21 +230,21 @@ FireWrite 精确 15-card manifest 位于 `/Game/Wacom/Data/Cards/FireWrite`：
 
 | CardDefinition | `EffectTemplates`（按索引） | `PassiveTemplates` / 其它说明 |
 |---|---|---|
-| `OilCandle` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Passive 0 `本场曾进入消耗区时：战斗胜利或撤离后，永久耐久 +{value:PassiveEffect[0].Magnitude}，灼烧 +{value:PassiveEffect[1].Magnitude}。` |
-| `AshBug` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `回合结束时：若本卡在消耗区，免费自动打出，随后进入弃牌堆。` |
-| `SaltMaggot` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。`；1 `将 {value:Magnitude} 张同阶熔熔盐置入手牌。` | Keyword `Exhaust` |
-| `WarmTinderbug` | 0 `使手牌中所有卡（包含自身）的灼烧效果 +{value:Magnitude}；已有灼烧的卡牌获得双倍加成。`；1 suppressed（规则辅助项已由 0 完整表述） | Keyword `Retain`；Dynamic Cost `手牌中每有一张 {status:CountedStatus} 卡牌，本卡费用 -{value:ReductionPerMatchingCard}。` |
-| `FireflySeed` | 0 `施加 {value:Magnitude} {status:EffectStatus}。`；1 `将本卡的完整战斗复制品随机插入抽牌堆。` | 0 `抽到时：生成 {value:PassiveEffect[0].Magnitude} 张同阶随机萤火虫。` |
-| `HungryFireflyMaiden` | 0 `消耗目标伙伴手牌。`；1 `生成 {value:Magnitude} 张同阶随机萤火虫。` | 空数组 |
-| `BlazingEyeFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `相邻伙伴被打出时：本场自身灼烧效果 +{value:PassiveEffect[0].Magnitude}。` |
-| `RottenFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `相邻伙伴被打出时：本场自身暴击率 +{value:PassiveEffect[0].Magnitude}%。` |
-| `GlimmerFirefly` | 0 `抽 {value:Magnitude} 张牌。` | Keyword `Exhaust` |
-| `SlothFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `相邻伙伴被打出时：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。` |
+| `OilCandle` | 0 `施加 {value:Magnitude} {status:EffectStatus}` | Passive 0 `战斗结束后：此卡被消耗过则永久提升1点耐久与灼烧效果` |
+| `AshBug` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}` | Keyword `Exhaust`；Passive 0 `回合结束时：若此卡位于消耗区则将其打出并返回弃牌堆` |
+| `SaltMaggot` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}`；1 `生成 {value:Magnitude} 张同阶「熔熔盐」到手牌` | Keyword `Exhaust` |
+| `WarmTinderbug` | 0 `手牌中灼烧效果+{value:Magnitude}，对灼烧状态的卡牌效果翻倍`；1 suppressed（规则辅助项已由 0 完整表述） | Keyword `Retain`；Dynamic Cost `手牌中每有一张 {status:CountedStatus} 卡牌，此卡费用-{value:ReductionPerMatchingCard}` |
+| `FireflySeed` | 0 `施加 {value:Magnitude} {status:EffectStatus}`；1 `将此卡的完整战斗复制品随机插入抽牌堆` | 0 `抽到此卡时：生成 {value:PassiveEffect[0].Magnitude} 张同阶随机萤火虫到手牌` |
+| `HungryFireflyMaiden` | 0 `消耗另一张普通伙伴手牌`；1 `生成 {value:Magnitude} 张同阶随机萤火虫到手牌` | 空数组 |
+| `BlazingEyeFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}` | Keyword `Exhaust`；Passive 0 `本回合打出相邻伙伴时：此卡灼烧效果+{value:PassiveEffect[0].Magnitude}` |
+| `RottenFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}` | Keyword `Exhaust`；Passive 0 `本回合打出相邻伙伴时：此卡暴击率+{value:PassiveEffect[0].Magnitude}%` |
+| `GlimmerFirefly` | 0 `抽 {value:Magnitude} 张牌` | Keyword `Exhaust`；随机附魔首轮休眠且不进入玩家可见文案 |
+| `SlothFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}` | Keyword `Exhaust`；Passive 0 `本回合打出相邻伙伴时：此卡费用-{value:PassiveEffect[0].Magnitude}` |
 | `EmptyBottle` | 空数组 | Keyword `Exhaust` |
-| `MoltenSalt` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。`；1 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust` |
-| `JadeBeetle` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | 0 `抽到时：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。` |
-| `ObsidianBeetle` | 0 `{icon:EffectIcon} 造成 {value:Magnitude} 伤害。` | 0 `每次抽到本卡时：本场自身伤害翻倍。` |
-| `BlindSpider` | 0 `{icon:EffectIcon} 造成 {value:Magnitude} 伤害。` | Keyword `Combo`；Passive 0 `每打出一张其它伙伴：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。` |
+| `MoltenSalt` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}`；1 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}` | Keyword `Exhaust` |
+| `JadeBeetle` | 0 `施加 {value:Magnitude} {status:EffectStatus}` | 0 `每次抽到此卡时：此卡费用-{value:PassiveEffect[0].Magnitude}` |
+| `ObsidianBeetle` | 0 `{icon:EffectIcon} 造成 {value:Magnitude} 伤害` | 0 `每次抽到此卡时：此卡伤害 X{value:PassiveEffect[0].Magnitude}` |
+| `BlindSpider` | 0 `{icon:EffectIcon} 造成 {value:Magnitude} 伤害` | Keyword `Combo`；Passive 0 `每打出一张其他伙伴：此卡费用-{value:PassiveEffect[0].Magnitude}` |
 
 Status 类句式只放一次 `{status:EffectStatus}`；它会同时提供当前 Status Catalog 的图标、中文名与 GameplayTag，不要再叠加 `{icon:EffectIcon}` 或手写第二个状态名。详情字体不支持 `×`，倍率使用字母 `x` 或“翻倍”。
 

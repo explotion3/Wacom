@@ -420,10 +420,10 @@ bool FWacomUICardExplanationFireWriteAuthoredPresentationSpec::RunTest(
 		TestTrue(
 			TEXT("Warm Tinderbug combines its deterministic Burn aura"),
 			Description.Contains(
-				TEXT("使手牌中所有卡（包含自身）的灼烧效果 +1"))
-			&& Description.Contains(TEXT("已有灼烧的卡牌获得双倍加成")));
+				TEXT("手牌中灼烧效果+1"))
+			&& Description.Contains(TEXT("对灼烧状态的卡牌效果翻倍")));
 		const FString DoubleBonusText =
-			TEXT("已有灼烧的卡牌获得双倍加成");
+			TEXT("对灼烧状态的卡牌效果翻倍");
 		int32 DoubleBonusCount = 0;
 		int32 SearchFrom = 0;
 		while ((SearchFrom = Description.Find(
@@ -443,7 +443,7 @@ bool FWacomUICardExplanationFireWriteAuthoredPresentationSpec::RunTest(
 			TEXT("Warm Tinderbug exposes its dynamic cost passive"),
 			Passive.Contains(TEXT("手牌中每有一张"))
 				&& Passive.Contains(TEXT("灼烧"))
-				&& Passive.Contains(TEXT("本卡费用 -1")));
+				&& Passive.Contains(TEXT("此卡费用-1")));
 		TestFalse(
 			TEXT("Warm Tinderbug detail does not leak template tokens"),
 			Description.Contains(TEXT("{")) || Passive.Contains(TEXT("{")));
@@ -465,7 +465,7 @@ bool FWacomUICardExplanationFireWriteAuthoredPresentationSpec::RunTest(
 		TestTrue(
 			TEXT("Obsidian Beetle exposes its draw-doubling passive"),
 			SectionText(Data, EWacomCardDetailSectionKind::Passive)
-				.Contains(TEXT("每次抽到本卡时：本场自身伤害翻倍")));
+				.Contains(TEXT("每次抽到此卡时：此卡伤害 X2")));
 	}
 
 	const TArray<FString> FireWriteNames = {
