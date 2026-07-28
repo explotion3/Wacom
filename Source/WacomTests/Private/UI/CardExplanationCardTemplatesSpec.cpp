@@ -14,7 +14,7 @@
 
 namespace
 {
-	const FWacomCardDetailSection* FindSection(
+	const FWacomCardDetailSection* FindTemplateSection(
 		const FWacomCardDetailViewData& Data,
 		const EWacomCardDetailSectionKind Kind)
 	{
@@ -32,7 +32,8 @@ namespace
 		const FWacomCardDetailViewData& Data,
 		const EWacomCardDetailSectionKind Kind)
 	{
-		const FWacomCardDetailSection* Section = FindSection(Data, Kind);
+		const FWacomCardDetailSection* Section =
+			FindTemplateSection(Data, Kind);
 		return Section
 			? UWacomCardDetailPlainTextRenderer::RenderSectionPlainText(*Section).ToString()
 			: FString();
@@ -133,7 +134,9 @@ bool FWacomUICardExplanationCardEffectTemplatesSpec::RunTest(
 				TEXT("造成 13 伤害。")));
 
 	const FWacomCardDetailSection* Description =
-		FindSection(PreviewData, EWacomCardDetailSectionKind::Description);
+		FindTemplateSection(
+			PreviewData,
+			EWacomCardDetailSectionKind::Description);
 	TestNotNull(TEXT("Card-specific effect creates a description section"), Description);
 	if (Description)
 	{
@@ -194,7 +197,7 @@ bool FWacomUICardExplanationCardPassiveTemplatesSpec::RunTest(
 		PassiveText.Contains(TEXT("抽到时：\n")));
 
 	const FWacomCardDetailSection* PassiveSection =
-		FindSection(Data, EWacomCardDetailSectionKind::Passive);
+		FindTemplateSection(Data, EWacomCardDetailSectionKind::Passive);
 	TestNotNull(TEXT("Card-specific passive creates a passive section"), PassiveSection);
 	if (PassiveSection)
 	{
@@ -258,7 +261,7 @@ bool FWacomUICardExplanationCardSupplementalTemplatesSpec::RunTest(
 	const FWacomCardDetailViewData Data =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 	const FWacomCardDetailSection* Description =
-		FindSection(Data, EWacomCardDetailSectionKind::Description);
+		FindTemplateSection(Data, EWacomCardDetailSectionKind::Description);
 	TestNotNull(TEXT("Keyword and effect create description section"), Description);
 	if (Description)
 	{
@@ -283,7 +286,7 @@ bool FWacomUICardExplanationCardSupplementalTemplatesSpec::RunTest(
 	}
 
 	const FWacomCardDetailSection* Passive =
-		FindSection(Data, EWacomCardDetailSectionKind::Passive);
+		FindTemplateSection(Data, EWacomCardDetailSectionKind::Passive);
 	TestNotNull(TEXT("Dynamic cost creates a passive section"), Passive);
 	if (Passive)
 	{
