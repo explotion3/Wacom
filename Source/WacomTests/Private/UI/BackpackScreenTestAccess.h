@@ -41,6 +41,7 @@ struct FWacomBackpackPickupPointerSequenceProbe
 struct FWacomBackpackPileMoveCancelProbe
 {
 	bool bBeganMove = false;
+	bool bFrameSchedulerActiveWhileMoving = false;
 	FVector2D PilePositionBefore = FVector2D::ZeroVector;
 	FVector2D PilePositionWhileMoving = FVector2D::ZeroVector;
 	FVector2D PilePositionAfterCancel = FVector2D::ZeroVector;

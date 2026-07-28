@@ -45,6 +45,7 @@ public:
 	const UWacomBackpackWorkspaceStyle& GetStyle() const;
 	FVector2D ToLocalPointer(const FPointerEvent& Event) const;
 
+	void WakeFrameScheduler();
 	void EnsureFrameSchedulerRunning();
 	void FlushPresentation();
 	void RefreshFrameWork();

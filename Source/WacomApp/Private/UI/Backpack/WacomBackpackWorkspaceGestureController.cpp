@@ -387,7 +387,7 @@ bool FWacomBackpackWorkspaceGestureController::TryBeginPileMove(
 	PilePress.Reset();
 	Host.QueuePilePointer(PointerLocal);
 	Host.FlushPilePointer();
-	Host.EnsureFrameSchedulerRunning();
+	Host.WakeFrameScheduler();
 	Host.BroadcastInteractionChanged();
 	return true;
 }

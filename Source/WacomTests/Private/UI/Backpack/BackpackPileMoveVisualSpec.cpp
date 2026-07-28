@@ -75,6 +75,8 @@ bool FWacomUIBackpackPileMoveVisualHandoffSpec::RunTest(const FString& Parameter
 			PointerEnd);
 	Workspace->OnPileMoveCommittedNative.Remove(CancelledCommitHandle);
 	TestTrue(TEXT("Pile move begins before cancellation"), CancelProbe.bBeganMove);
+	TestTrue(TEXT("Active pile move keeps the frame scheduler running"),
+		CancelProbe.bFrameSchedulerActiveWhileMoving);
 	TestFalse(TEXT("Pile frame visibly moved before cancellation"),
 		CancelProbe.PilePositionWhileMoving.Equals(CancelProbe.PilePositionBefore, 0.1f));
 	TestEqual(TEXT("Active pile move temporarily owns the front layer"),

@@ -984,6 +984,8 @@ FWacomBackpackPileMoveCancelProbe FWacomBackpackScreenTestAccess::CancelWorkspac
 			Host,
 			PointerMove))
 		&& Workspace.InteractionModel->IsPileMoving();
+	Probe.bFrameSchedulerActiveWhileMoving =
+		Workspace.GetAutomationTestView().bFrameSchedulerActive;
 	Probe.PilePositionWhileMoving = PileSlot->GetPosition();
 	Probe.PileZOrderWhileMoving = PileSlot->GetZOrder();
 	Workspace.CancelInteraction();

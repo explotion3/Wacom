@@ -82,6 +82,14 @@ FVector2D FWacomBackpackWorkspaceRuntimeHost::ToLocalPointer(
 		Event.GetScreenSpacePosition());
 }
 
+void FWacomBackpackWorkspaceRuntimeHost::WakeFrameScheduler()
+{
+	if (IsValid())
+	{
+		Adapter.GetRuntime().Presentation.WakeFrame(*this);
+	}
+}
+
 void FWacomBackpackWorkspaceRuntimeHost::EnsureFrameSchedulerRunning()
 {
 	Adapter.EnsureFrameSchedulerRunning();
