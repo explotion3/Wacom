@@ -40,11 +40,29 @@ namespace
 		TArray<TObjectPtr<const UObject>>& ReferencedAssets,
 		const UCardDefinition* Def,
 		ECardLocation InitialLocation,
-		const FGameplayTagContainer* CapacityEffectTags = nullptr)
+		const FGameplayTagContainer* CapacityEffectTags = nullptr,
+		const FGuid SourceRunInstanceId = FGuid(),
+		const EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White,
+		const FWacomCardPersistentModifierState* PersistentModifiers = nullptr)
 	{
 		FRuntimeCardInstance Card;
 		Card.InstanceId = FGuid::NewGuid();
 		Card.Definition = Def;
+		Card.SourceRunInstanceId = SourceRunInstanceId;
+		Card.UpgradeTier = UpgradeTier;
+		if (PersistentModifiers)
+		{
+			Card.PersistentModifiers = *PersistentModifiers;
+			Card.EffectMagnitudeBonuses = PersistentModifiers->EffectMagnitudeBonuses;
+		}
+		if (Def)
+		{
+			const int32 BaseDurability = Def->ResolvePhysique(UpgradeTier).Durability;
+			Card.bHasFiniteDurability = BaseDurability > 0;
+			Card.CurrentDurability = BaseDurability > 0
+				? FMath::Max(0, BaseDurability + Card.PersistentModifiers.DurabilityBonus)
+				: 0;
+		}
 		if (CapacityEffectTags)
 		{
 			Card.CapacityEffectTags = *CapacityEffectTags;
@@ -60,7 +78,7 @@ namespace
 		{
 			ReferencedAssets.Add(Def);
 			const bool bIsCompanion = Def->Keywords.HasTagExact(WacomTags::Card_Keyword_Companion);
-			const int32 HpBonus = Def->Physique.MaxHpBonus;
+			const int32 HpBonus = Def->ResolvePhysique(UpgradeTier).MaxHpBonus;
 			if (bIsCompanion && HpBonus > 0)
 			{
 				State.Player.MaxHp     += HpBonus;
@@ -147,7 +165,10 @@ FWacomStatus FBattleInitializer::Initialize(
 				ReferencedAssets,
 				Entry.Definition.Get(),
 				ECardLocation::Draw,
-				&Entry.CapacityEffectTags);
+				&Entry.CapacityEffectTags,
+				Entry.SourceRunInstanceId,
+				Entry.UpgradeTier,
+				&Entry.PersistentModifiers);
 		}
 	}
 	else

@@ -86,16 +86,13 @@ namespace Wacom::ContentBuilder
 			MakeObjectPath(MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeDamageShieldHeal"))));
 		UCardDefinition* BadgeAllRuntimeSupported = LoadGeneratedCard(
 			MakeObjectPath(MakePackagePath(BadgeDisplayRoot, TEXT("DA_Card_Test_BadgeAllRuntimeSupported"))));
-		UCardDefinition* TestShopUpgradeVenomProof = LoadGeneratedCard(
-			TEXT("/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_White.DA_Card_TestShopUpgrade_VenomProof_White"));
 		if (!PoisonFang || !ChifuGongyi || !ZhaoguangMudie || !BugGirlBag
 			|| !PoisonNeedle || !ChitinWard || !AntennaSearch || !MoltCut || !LightHusk || !SilklineFeint
 			|| !DebugKey
 			|| !TestAddCostToSelectedHand || !TestReduceCostToSelectedHand || !TestTargetCost3
 			|| !TestTargetCompanion || !TestRequireCompanionTarget || !TestBlockWeaponTarget
 			|| !TestDiscardSelectedHandCard || !TestExhaustSelectedHandCard || !TestDrawByCost
-			|| !BadgeDamagePoison || !BadgeShieldHeal || !BadgeDamageShieldHeal || !BadgeAllRuntimeSupported
-			|| !TestShopUpgradeVenomProof)
+			|| !BadgeDamagePoison || !BadgeShieldHeal || !BadgeDamageShieldHeal || !BadgeAllRuntimeSupported)
 		{
 			return nullptr;
 		}
@@ -135,7 +132,6 @@ namespace Wacom::ContentBuilder
 			MakeOffer(BadgeShieldHeal, 0),
 			MakeOffer(BadgeDamageShieldHeal, 0),
 			MakeOffer(BadgeAllRuntimeSupported, 0),
-			MakeOffer(TestShopUpgradeVenomProof, 1),
 		};
 		Shop->CardUpgradeService.bEnabled = true;
 		Shop->CardUpgradeService.Prices =

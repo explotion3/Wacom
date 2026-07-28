@@ -2,7 +2,7 @@
 type: data-contract
 scope: wacom-data
 status: active
-updated: 2026-07-24
+updated: 2026-07-28
 tags:
   - wacom/data
   - wacom/dataasset
@@ -77,12 +77,11 @@ UCLASS(BlueprintType)
 class UCardDefinition : public UPrimaryDataAsset
 {
     FName CardId;
-    FName UpgradeFamilyId;
-    TObjectPtr<UCardDefinition> NextUpgradeDefinition;
     FText DisplayName;
     FText Description;
     TObjectPtr<UTexture2D> CardIllustration;
     TObjectPtr<UTexture2D> CardIllustrationDepthMap;
+    FWacomCardExplanationTemplateSet ExplanationTemplates;
     FWacomRunCardFaceDefinition RunFace;
     int32 BaseCost = 0;
     FGameplayTag Rarity;
@@ -94,6 +93,7 @@ class UCardDefinition : public UPrimaryDataAsset
     TArray<FCardEffect> PerfectReleaseEffects;
     TArray<FCardZoneHook> ZoneHooks;
     TArray<FCardPassive> Passives;
+    TArray<FWacomCardTierProfile> TierProfiles;
 };
 ```
 
@@ -102,11 +102,10 @@ class UCardDefinition : public UPrimaryDataAsset
 | 字段 | 语义 |
 |---|---|
 | `CardId` | 内容稳定 ID；用于 debug、测试和运行时实例引用来源，不是 UObject path |
-| `UpgradeFamilyId` | 同一强化链共享的稳定身份；未配置时 `ResolveUpgradeFamilyId()` 兼容回退到自身 `CardId` |
-| `NextUpgradeDefinition` | 下一稀有度的独立不可变 CardDefinition；运行时强化只替换卡牌实例引用，不改写 DataAsset |
 | `DisplayName / Description` | UI 展示文本；规则不从中文自然语言解析效果。`Description` 仍可服务小卡紧凑描述或其它旧 UI；expanded detail 只在没有任何结构化 `Effects / Passives / outcome` section 时把它作为普通正文回退，不解析旧占位。常规详情正文由 `Effects / Passives` 通过 WacomApp 的 semantic explanation document 生成 |
 | `CardIllustration` | 卡牌主题插画 `Texture2D`。第一人称卡面复合材质优先使用该纹理；旧卡为空时沿用实际 CardView（第一人称为 `WBP_FirstPersonCardView`）的 authored `CardArt` Brush。稀有度边框不使用本字段，继续由 CardView 的 `RarityBorderSprites` 以 `PaperSprite` 图集区域解析 |
 | `CardIllustrationDepthMap` | 可选的纯表现灰度深度图。黑色更深、白色更靠近实体 Frame、中灰为 authored 基准；第一人称卡面量化为约 5 级并限制在 Frame 后方。为空时整张插画仍按统一凹入深度显示，不影响规则、Snapshot 或存档。推荐导入为 `Masks / sRGB=false / Nearest / NoMipmaps / UI` |
+| `ExplanationTemplates` | 本 Definition 的详情专属句式。`EffectTemplates / PassiveTemplates` 按规则索引覆盖全局说明，`KeywordTemplates` 显式展示对该卡有说明价值的关键词，`DynamicCostTemplate` 展示结构化动态费用规则；四阶共用同一套句式，数值、图标和状态身份仍从当前 Tier Profile 解析 |
 | `RunFace` | 同一 Definition 的探索表面静态合同；可覆盖名称、插画和深度图，保存探索描述、目标模式、唯一主动作和成功后的处置语义。关闭时旧资产继续是合法 Battle-only 卡 |
 | `BaseCost` | 基础费用；Battle 会叠加 runtime modifier 后 clamp |
 | `Rarity / Keywords` | 静态标签；标签定义见 [WacomGameplayTags.md](./WacomGameplayTags.md) |
@@ -115,8 +114,24 @@ class UCardDefinition : public UPrimaryDataAsset
 | `HandCardTargetFilter` | 仅 `TargetMode=HandCard` 的目标手牌资格过滤 |
 | `Effects / PerfectReleaseEffects` | 主效果与完美释放效果；可制作范围见 [WacomDataAuthoring.md](./WacomDataAuthoring.md) |
 | `ZoneHooks / Passives` | 区域触发和被动触发静态配置；执行时机由 Battle 决定 |
+| `TierProfiles` | 可强化卡严格按 `White / Blue / Yellow / Purple` 保存四个 `FWacomCardTierProfile`；每阶拥有描述、费用、基础暴击率、体质、效果、区域钩子和被动 |
 
-`CardId / UpgradeFamilyId / Rarity` 以及卡牌实例身份是两面共享事实。现有扁平 `BaseCost / Effects / PerfectReleaseEffects / ZoneHooks / Passives / TargetMode / HandCardTargetFilter / Physique` 明确定义为 **Battle Face v1**；切换到 Run Context 不会复制 `FCardInstance`、改变 `InstanceId` 或建立第二套 Definition。强化只替换同一实例的 Definition 引用，因此两面会一起切换到强化版本。
+`CardId / Definition` 与卡牌实例身份是两面共享事实。`TargetMode / HandCardTargetFilter / Keywords / CardIllustration / RunFace` 是跨等级静态合同；`ResolveProfile(Tier)` 是 Battle、Run、预览和 UI 读取数值的唯一入口。现有扁平 `BaseCost / Effects / PerfectReleaseEffects / ZoneHooks / Passives / Physique` 只作为旧卡 White fallback 保留：旧卡可继续使用但不可强化。切换到 Run Context 不会复制 `FCardInstance`、改变 `InstanceId` 或建立第二套 Definition；强化只改变实例 `UpgradeTier`，不替换 Definition。
+
+### CardDefinition 专属详情模板
+
+`FWacomCardExplanationTemplateSet` 只控制详情句式，不参与规则结算。`EffectTemplates` 与当前 Profile 的 `Effects` 对齐，`PassiveTemplates` 与 `Passives` 对齐；数组为空表示整组沿用旧回退，数组非空时数量必须完全一致，其中单个空元素仍可独立回退。单行模板的 `bSuppressInDetails=true` 只用于隐藏已经被另一条玩家句式完整涵盖的规则辅助项，不能删除或绕过规则。`KeywordTemplates` 只能引用 Definition 实际拥有的关键词；`DynamicCostTemplate` 只在当前 Profile 存在有效动态费用规则时合法。可强化卡四阶已经由 Tier Validator 保证结构和顺序一致，因此四阶共用 Definition 上的一份模板，切换 Tier 只改变结构化数值。
+
+正式优先级固定为：
+
+1. `UCardDefinition::ExplanationTemplates` 对应索引的非空模板。
+2. 被动的 legacy `FCardPassive::DisplayText`。
+3. `DA_CardExplanationLexicon_Default` 的全局模板。
+4. C++ 安全回退。
+
+Effect 模板支持 `{value:Magnitude}`、`{icon:EffectIcon}`、`{status:EffectStatus}` 和 `{keyword:Tag}`。Passive 专属模板是该条被动的完整玩家文案，支持 `{value:TriggerThreshold}`，以及 `{value:PassiveEffect[N].Magnitude}`、`{icon:PassiveEffect[N].Icon}`、`{status:PassiveEffect[N].Status}`。Keyword 模板使用 `{keyword:Keyword}`；其显示名复用 Card Face Semantic Lexicon，因此详情中的“保留 / 消耗 / 连击”和卡面 Tooltip 使用同一身份与名称。动态费用模板支持 `{status:CountedStatus}`、`{value:ReductionPerMatchingCard}` 与 `{value:MinimumCost}`。这些参数会编译为原有 `Value / Icon / Status / Keyword` Run；状态与关键词 Run 保留 GameplayTag，数值仍可接收当前 Tier、RuntimeCost 和 Action Preview 的正式覆盖。未知、未闭合、上下文不适用或越界的参数会被 CardDefinition Validator 拒绝，运行时只把未知参数安全显示为原文，不会解释成规则。
+
+专属 Effect 模板只覆盖核心句式，现有 Condition 与 Magnitude Modifier 说明仍自动追加；专属 Passive 模板是完整覆盖，不再重复生成 Trigger / Outcome / Effect 行。卡面效果徽章、关键词、Action Preview 和战斗规则不读取这里的文案。
 
 RunFace 基础结构：
 
@@ -137,7 +152,7 @@ struct FWacomRunCardFaceDefinition
 - `DisplayNameOverride / IllustrationOverride / IllustrationDepthMapOverride` 为空时回退到共享字段。
 - RunFace 只有一个 `PrimaryAction`，其 `ActionTag` 必须是 `Run.Card.Action.*` 的具体子标签，`Magnitude` 必须大于 0；具体语义由未来 Room / 目标事务解释。
 - RunFace 不保存 AP、压力或其它数字成本；成本属于目标 / Room 事务。`UseDisposition` 当前也只是静态意图，本轮没有创建 Room 内耗尽或 Camp 恢复的运行态。
-- `bEnabled=false` 时 Validator 完全跳过 RunFace，不产生迁移警告；启用后要求描述非空、目标非 `None` 且唯一动作合法。当前不要求强化链的每一段都配置 RunFace。
+- `bEnabled=false` 时 Validator 完全跳过 RunFace，不产生迁移警告；启用后要求描述非空、目标非 `None` 且唯一动作合法。RunFace 是 Definition 级共享表面，不按 Tier 复制。
 - 所有正式可入战卡最终都应补齐 RunFace，但当前资产仍处于渐进迁移阶段。
 
 首批四张 RunFace 样卡已经迁移：`触须探路 = Route / Reveal / 1`、`钥匙 = WorldTarget / Unlock / 1`、`蜕壳切 = WorldTarget / Break / 1`、`几丁护片 = WorldTarget / Feed / 1`，处置均为 `ExhaustForCurrentRoom`。它们没有制作名称、插画或深度图 override，因此继续回退共享字段。Battle hand 仍以 Battle Face 为默认面；Run default hand 与 Run menu lease 对已启用卡默认投影 Run Face，未启用旧卡安全回退 Battle Face。另一面只在正式 Battle / Run default hand 的锁定检视中作为只读 ViewData 出现，不改变实例、Definition 或 Zone。
@@ -159,7 +174,7 @@ struct FWacomHandCardTargetFilter
 - 显式 filter 优先；未显式设置时，Battle 按当前兼容推断处理普通手牌和左右手锚点。
 - `RequiredTargetKeywords` 必须全部满足；`BlockedTargetKeywords` 命中任意一个即拒绝。
 - 目标有效关键词 = 卡牌定义关键词 + 战斗内临时关键词。允许锚点时，左右手锚点同样参与关键词条件。
-- self target 永远禁止。费用、卡牌类型、伙伴 / 食物等更细条件还不是当前字段合同。
+- self target 永远禁止。FireWrite 的“饥饿的萤火侍女”使用 `RequiredTargetKeywords=Card.Keyword.Companion`，同时继续由 Battle 拒绝源卡自身与手牌锚点。
 
 `FCardPhysique` 是卡牌身体 / 容量数据：
 
@@ -174,18 +189,20 @@ struct FCardPhysique
 };
 ```
 
-- `MaxHpBonus` 只对带 `Card.Keyword.Companion` 的入战卡计入玩家战内 MaxHp。
-- `Durability` 字段保留，当前规则层未读取；耐久系统接入后再由 Battle / Run resolver 消费。
+- `MaxHpBonus` 只对带 `Card.Keyword.Companion` 的入战卡生效；初始牌与战内新生成伙伴会立即同时提高玩家 MaxHP 与 CurrentHP，贡献整场保留。
+- `Durability=0` 表示无限；正数表示本场可成功出牌次数，并与实例的永久 `DurabilityBonus` 相加。
 - `Capacity=0` 表示普通卡；`Capacity>0` 表示容器卡。
 - `CapacityEffect` 为空表示 A 类容器；有效 tag 表示 B 类容器并展开 SpecialZone。当前已接入的具体效果见 [WacomGameplayTags.md](./WacomGameplayTags.md#cardcapacityeffect)。
 
 容器在 Run 层的容量与背包规则见 [WacomRun.md](./WacomRun.md)，容量效果入战结算见 [WacomBattle.md](./WacomBattle.md)。
 
-### 不可变卡牌强化链
+### 单 Definition 四阶强化
 
-卡牌强化使用独立 Definition 链，合法稀有度边固定为 `White -> Blue -> Yellow -> Purple`。链上每个版本必须有唯一 `CardId` 并共享非空 `UpgradeFamilyId`；旧资产不配置新字段时仍可正常加载，但只表现为不可强化。`MatchesCardIdOrUpgradeFamily()` 统一回答“当前 CardId 或所属强化族是否命中”，不把同族兄弟版本视为精确 Definition 相等。
+可强化卡使用一个 `UCardDefinition` 与四个严格有序 Profile，合法等级固定为 `White -> Blue -> Yellow -> Purple`。`FWacomResolvedCardProfile` 是从指定 Tier 解析出的只读结果；所有规则、Action Preview、卡面、详情和商店预览都消费该结果，禁止直接按 `Rarity` 猜测数值。
 
-`Purple`、`Intrinsic`、`Card.Run.*` 任务卡以及 `Physique.Capacity > 0` 的容器卡禁止配置下一段。相邻版本允许调整卡名、描述、卡面表现、`BaseCost`，以及现有效果/PerfectRelease 效果的 `Magnitude` 或 `Duration`；不得改变 Keyword、TargetMode、TargetFilter、Physique、Effect 数量/顺序/类型/目标、ZoneHook 或 Passive。每一步除稀有度外至少要有一个实际规则数值变化。完整链还必须无循环、无合流、无分叉和跨级；这些制作约束由 WacomEditor catalog validation 检查，不进入运行时 UI。
+四阶必须保持效果、目标、条件、生成池、ZoneHook 和 Passive 结构一致，只允许描述、费用、基础暴击率、体质、Magnitude、Duration、阈值和同一结构内的数值参数变化。Validator 拒绝数量、顺序、Tag、目标、条件、生成策略或被动触发结构漂移。旧 flat 卡解析为 White 且不可强化；不要求批量重存既有资产。
+
+`FCardInstance` 保存 `UpgradeTier` 与 `FWacomCardPersistentModifierState`。持久修正当前包括永久耐久加值及按 Effect Tag 保存的 Magnitude 加值；二者与 Tier 正交。商店强化只推进该实例 Tier，保持 Definition、InstanceId、物理区、顺序、SpecialZone 标记与持久修正不变。
 
 <a id="wacomdata-enemy-part"></a>
 ## §4 Enemy Definition
@@ -537,7 +554,7 @@ Logical Map Graph 的静态真相由 `UWacomJourneyDefinition` 和 `UWacomFloorM
 
 `WacomData` 只定义字段。Battle resolver、dispatcher、validation matrix 和 transient runtime fixture 共同决定这些字段当前是否真正可执行。
 
-`FCardPassive.DisplayText` 是旧展示文本，不是规则真相。正式卡牌详情面板不再把它作为输入；被动详情由 `Trigger / Condition / Effects / TriggerThreshold` 经 WacomApp explanation compiler 生成 semantic blocks/runs。`Passive.Trigger.OnCompanionCount` 的回手说明来自 WacomApp 的 `PassiveOutcomeTemplates`，不要求内容作者在 `Passive.Effects` 里配置不会执行的假效果。
+`FCardPassive.DisplayText` 是 UI-only 的 legacy 被动完整说明，不是规则真相。只有 CardDefinition 对应 `PassiveTemplates` 为空时，当前强化阶的非空 `DisplayText` 才作为完整玩家文案覆盖；两者都为空时才由 `Trigger / Condition / Effects / TriggerThreshold` 经 WacomApp explanation compiler 生成 semantic blocks/runs。`Passive.Trigger.OnCompanionCount` 的回手说明在最终回退路径中来自 WacomApp 的 `PassiveOutcomeTemplates`，不要求内容作者在 `Passive.Effects` 里配置不会执行的假效果。规则执行始终只读取结构化字段。
 
 ## §13 正式 Floor 1 Production 内容合同
 

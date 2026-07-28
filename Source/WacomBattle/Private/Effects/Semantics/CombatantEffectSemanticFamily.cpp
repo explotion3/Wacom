@@ -37,6 +37,8 @@ void AppendCombatantEffectSemanticDescriptors(TArray<FEffectSemanticDescriptor>&
 		EIntentActorTargetPolicy::Self, false, true, true));
 	OutDescriptors.Add(MakeActor(WacomTags::Effect_ApplyStatus_Poison, &WacomEffects::HandleApplyPoison,
 		EIntentActorTargetPolicy::PlayerOrSelf, true, true, true));
+	OutDescriptors.Add(MakeActor(WacomTags::Effect_ApplyStatus_Burn, &WacomEffects::HandleApplyBurn,
+		EIntentActorTargetPolicy::PlayerOrSelf, true, true, true));
 	OutDescriptors.Add(MakeActor(WacomTags::Effect_ApplyStatus_Slow, &WacomEffects::HandleApplySlow,
 		EIntentActorTargetPolicy::PlayerOrSelf, false, true, true));
 	OutDescriptors.Add(MakeActor(WacomTags::Effect_ApplyStatus_Freeze, &WacomEffects::HandleApplyFreeze,

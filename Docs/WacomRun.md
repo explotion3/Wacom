@@ -130,7 +130,7 @@ LowHpThreshold  = 0.2
 
 Run 背包模型按卡牌 instance 运转。每张进入 Run 的卡都有 `FCardInstance.InstanceId`，同名卡也必须作为独立 instance 管理。
 
-一卡两面不增加第二种实例。`UCardDefinition` 同时保存 Battle Face v1 与可选 `RunFace` 静态合同，`FCardInstance.InstanceId + Definition` 仍是唯一身份；强化替换 Definition 时两面随同一实例一起切换。当前 Run 物理区、SaveGame v5 和 Workspace 都不保存 active face，也不复制 Definition。active face 只属于 first-person 局部检视状态，退出锁定检视或来源切换后立即恢复环境默认面。
+一卡两面不增加第二种实例。`UCardDefinition` 同时保存 Battle Face 与可选 `RunFace` 静态合同，`FCardInstance.InstanceId + Definition` 仍是唯一身份；`UpgradeTier` 只选择同一 Definition 内的四阶 Profile。当前 Run 物理区与 SaveGame v6 保存 Tier 和持久修正，Workspace 不保存 active face，也不复制 Definition。active face 只属于 first-person 局部检视状态，退出锁定检视或来源切换后立即恢复环境默认面。
 
 当前四个物理持有区：
 
@@ -179,7 +179,7 @@ Run menu / world drop 与 Battle 共用 first-person Slot 的无效目标提示�
 
 Definition 仍然用于资产语义：`AcquireCardToRun()` / 战斗奖励 / 商店购买 / 世界拾取表达“获得一张某种卡”；RunEvent / DataAsset 可以表达“交出一张某种卡”，由 RunEvent 执行路径在运行态选择一张匹配 instance。玩家直接操作某张已拥有卡时必须先解析到 `InstanceId`。
 
-卡牌版本身份分为两档：`AllowedCardDefinitions` 始终精确匹配当前 Definition；`AllowedCardIds` 同时匹配当前 `CardId` 或 `ResolveUpgradeFamilyId()`。Workspace、地图/节点资格、Run world interaction 和 RunEvent 卡牌支付共用 `UCardDefinition::MatchesCardIdOrUpgradeFamily()`，因此强化后的同一族卡仍可满足稳定 ID 条件，但同族兄弟版本不能绕过精确 Definition 条件。
+卡牌版本身份不再由多 Definition 强化族表达：`AllowedCardDefinitions` 精确匹配 Definition，`AllowedCardIds` 匹配该 Definition 的稳定 `CardId`。强化只改变实例 Tier，因此 Workspace、地图/节点资格、Run world interaction 和 RunEvent 卡牌支付不再需要升级族兼容。
 
 ### 容器分类
 
@@ -254,9 +254,9 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 商店交易规则：
 
 - 打开商店不消耗 Action Point。
-- 成功购买会扣金币、获得卡牌、标记 Offer 已购买；成功强化会扣金币，并只把指定 `InstanceId` 的 Definition 替换为下一不可变版本。
+- 成功购买会扣金币、获得卡牌、标记 Offer 已购买；成功强化会扣金币，并只把指定 `InstanceId` 的 `UpgradeTier` 推进一级。
 - 强化可作用于 Backpack、BattleDeck、BurdenZone 或 SpecialZone 中的实体卡；必须保留 InstanceId、区域、顺序、SpecialZone 标记与容器关系。
-- `FRunShopSnapshot` 暴露静态强化服务和每个 owned instance 的被动 `FRunShopCardUpgradeQuote`。UI 提交的 `FRunShopCardUpgradeCommand` 同时携带预期当前/下一 Definition；RunSession 重新权威计算链、价格、资格与金币，拒绝过期 Quote。
+- `FRunShopSnapshot` 暴露静态强化服务和每个 owned instance 的被动 `FRunShopCardUpgradeQuote`。Quote/Command/Result 携带同一 Definition 与预期 `CurrentTier / NextTier`；RunSession 重新权威解析四阶 Profile、价格、资格与金币，拒绝 Definition、Tier 或 revision 已漂移的 Quote。
 - 本次访问第一次成功交易（购买或强化）与 1 Action Point 原子提交；同次访问后续任一种交易均为 0。兼容字段 `bShopVisitHasPurchase` / `bHasPurchaseThisVisit` 的实际语义现为“本访问已有成功交易”。
 - 浏览、失败购买、失败强化和空手关闭为 0；`EndShopVisit` 不追加交易成本。失败或过期请求保持零修改、零 revision、零广播。
 - 第一次成功交易若耗尽当前时段，只把剩余 Action Point 扣到 0；当前 phase、Shop activity 和 visit 保持不变，玩家仍可浏览并进行本次访问内后续 0 AP 交易。`FRunShopPurchaseResult` / `FRunShopCardUpgradeResult` 不因此报告 visit closed。
@@ -265,9 +265,9 @@ BurdenPressure = Clamp(n * (n + 1) / 2, 0, 100)
 - 同一时刻只能存在一个 active shop visit；重入 Begin 会被 Run 层拒绝，不依赖旧 UI 先完成关闭。
 - App UI 持有 C++ transient visit token，关闭/异步回滚必须通过 token 校验；迟到的旧 Screen 不得结束新访问。token 不进入 RunState/SaveGame。
 
-Debug 可玩竖切沿用同一事务，不增加测试专用购买或强化规则：在 `Journey.Debug / Floor.Debug.01 / Node.Entry` 且没有活动节点交互时，Editor-only 命令 `Wacom.Shop.SeedUpgradePIEValidation` 只把 Gold 补到 3；玩家仍需在 `Shop.Snake` 以 1 Gold 购买 White 测试卡，再由正式 `UpgradeOwnedCardAtShop()` 以 2 Gold 强化为 Blue。命令不发卡、离开 Entry 后拒绝、重复执行不继续加钱。首笔购买消耗本次访问唯一的 1 AP，随后强化为 0 AP；这只是 Debug 路线，Production 经济内容另案冻结。
+旧 Debug 毒牙 White/Blue 强化竖切及其 Editor 命令已经删除；`DA_Shop_DebugSnake` 不再出售这两张测试资产。Production 卡牌使用正式四阶 Profile 与同一套 `UpgradeOwnedCardAtShop()` 事务。
 
-当前 `ShopStates` 与强化报价只保存在 Run 内存态，不写入 SaveGame。卡牌实例仍按 SaveGame v5 的 `DefinitionAssetPath` 保存当前强化版本和原 InstanceId，schema 无需升级；读档不会恢复活动 Shop 或旧 Quote。Actor 商品来源、Definition 字段和 Validate Map/Level 口径见 [WacomData.md](./WacomData.md)、[WacomDataAuthoring.md](./WacomDataAuthoring.md) 和 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
+当前 `ShopStates` 与强化报价只保存在 Run 内存态，不写入 SaveGame；读档不会恢复活动 Shop 或旧 Quote。SaveGame v6 为每张卡保存 Definition path、InstanceId、UpgradeTier 和持久修正。Actor 商品来源、Definition 字段和 Validate Map/Level 口径见 [WacomData.md](./WacomData.md)、[WacomDataAuthoring.md](./WacomDataAuthoring.md) 和 [WacomWorldInteraction.md](./WacomWorldInteraction.md)。
 
 ## §7 RunEvent 事务
 
@@ -441,7 +441,7 @@ Floor 2 的 7 Encounter、3 RunEvent、4 Pickup 与 1 Shop Definition 也已按�
 
 `EncounterId` 是 Battle 内部稳定身份；Run 的撤离重入真相则使用当前 `FloorId + NodeId`。同一个 Encounter 资产可以被多个 Map Node 复用而不会串进度。
 
-GameMode 开战前必须先取得 `Encounter` 的 `FRunNodeActivityTicket`；战斗 UI 启动失败时取消票据。结束时把 `FBattleResultPacket` 和同一票据交给 `SettleEncounterNodeActivity()`，Run 以 working state 原子结算预留、奖励、压力、撤离进度和节点生命周期。旧 `OnBattleFinished*` wrapper 已删除。
+GameMode 开战前必须先取得 `Encounter` 的 `FRunNodeActivityTicket`；战斗 UI 启动失败时取消票据。结束时把 `FBattleResultPacket` 和同一票据交给 `SettleEncounterNodeActivity()`，Run 以 working state 原子结算预留、奖励、压力、撤离进度、节点生命周期和合法卡牌持久 Mutation。`PersistentCardMutations[]` 只按 `SourceRunInstanceId` 命中现有实例，Victory / Withdraw 才应用；同一来源重复项只取一次，战内生成或克隆卡没有 Run 身份、不会写回，Defeat / Undetermined 完全忽略。旧 `OnBattleFinished*` wrapper 已删除。
 
 Outcome 分支：
 
@@ -464,6 +464,7 @@ Journey 成功只由 `UWacomJourneyDefinition::SuccessTerminalNode` 驱动：本
 - `bCrossedLowHpThreshold`：伤口 +5。
 - `bMutualDestruction`：伤口 +10，不直接终止 Run。
 - Victory 包含撤离：结算 `KnockdownExpGains[]` 和 `GainedCards[]`。
+- Victory 包含撤离：应用来源卡的 `PersistentCardMutations[]`；例如虫油蜡烛本场曾进入消耗区时，永久耐久和自身 Burn 效果各增加一次。
 - Defeat / Undetermined 不结算经验和获得卡。
 - `GainedCards[].SourceChoice` 已能区分 Aid / Destroy 来源；Run 只按现有定义获取卡，不重新查询 EnemyPart、奖励表或 UI ViewData，也不需要修改 `FBattleResultPacket`、`FBattleGainedCard`、`FRunState` 或 SaveGame schema。
 - `KnockdownChoices[]` 当前只按 `PartKey` 记日志，后续事件分支再消费。
@@ -502,15 +503,15 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 
 当前 `AWacomGameMode::bSaveSystemEnabled == false`。正常游戏流程不读盘、不写盘；战斗结束和退出时的自动存档会静默 no-op。
 
-下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v5 的实际字段拷贝结果。
+下面只描述底层 `URunSession::SaveToSlot()` / `LoadFromSlot()` 和 `UWacomSaveGame` v6 的实际字段拷贝结果。
 
 `LoadFromSlot()` 成功应用 SaveGame 到 `RunState` 后会标记 Run UI snapshot dirty，并广播一次 `OnRunStateChangedNative`。读档失败（slot 不存在、SaveGame 类型不匹配、版本或字段校验失败）不修改 RunState，也不广播。Run first-person source、ViewModel provider 和其他只读 Run UI 应依赖这条通知更新到读档后的 default workspace / storage 状态；当前 default workspace provider 仍读取 BattleDeck 物理卡和可选投影卡。
 
-### v5 磁盘会保存
+### v6 磁盘会保存
 
 | SaveGame 字段 | 来源 / 说明 |
 |---|---|
-| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 5 |
+| `SaveVersion`、`SavedAtUtc`、`ClientBuildId` | 存档元数据，当前版本为 6 |
 | `CharacterAssetPath` | 当前角色资产路径 |
 | `BattleSeed` | 战斗随机种子 |
 | `Outcome` | `InProgress / Succeeded / Failed` 权威磁盘结果 |
@@ -523,15 +524,15 @@ Validate Map/Level 对 Actor 摆放实例的校验口径见 [WacomWorldInteracti
 | `BurdenZone` | 卡牌 instance 列表 |
 | `SpecialZones` | B 主卡 owner id 与区内卡牌 instance |
 
-卡牌 instance 存档条目保存 `InstanceId`、`DefinitionAssetPath` 和 `bBattleEnabledInSpecialZone`。读档时要求 InstanceId 非零、全表唯一，Definition 能加载成功。
+卡牌 instance 存档条目保存 `InstanceId`、`DefinitionAssetPath`、`UpgradeTier`、`PersistentModifiers` 和 `bBattleEnabledInSpecialZone`。读档时要求 InstanceId 非零、全表唯一，Definition 能加载成功。
 
 若旧档迁移到 v2 后四个 instance 数组全空，读档会按 Character 的 StarterDeck 重新生成 instance；新 GUID 会替代旧运行态身份。
 
-v5 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。`DestroyedTriggerIds` 已从 runtime、SaveGame 对象和 serializer 删除；SaveVersion 暂时保持 5，早期原型存档不受支持，Map Node lifecycle 与 `BattleProgress` 仍不进入磁盘。v3→v4 把 Credential 明确迁移为空集合，不从实体卡牌推断；v4 读档拒绝 `None` 或重复 Credential，失败时 RunState 不变且不广播。v4→v5 把 active 映射为 `InProgress`、inactive 映射为 `Failed`，旧摘要为空。v5 要求 `Succeeded` 必须携带合法摘要，`InProgress / Failed` 不得伪带摘要；`ApplySaveGameToRunState()` 只接受 `InProgress`，在解析资产和构造 working state 前原子拒绝 `Succeeded / Failed` 终态档。终态摘要可写盘，但本轮不开放 Continue、Journey History 或实际自动存档。
+v6 会恢复 `BurdenZone` 的卡牌列表，但不会恢复或重算 `Pressure.Burden`。压力整体仍按下表属于未持久化状态，读档后为默认值。`DestroyedTriggerIds` 已从 runtime、SaveGame 对象和 serializer 删除；Map Node lifecycle 与 `BattleProgress` 仍不进入磁盘。v5→v6 为旧实例补 `White` 和空持久修正，并移除引用已删除 Debug 毒牙 White/Blue 的实例；其它区域和实例身份保持不变。v5 既有终局校验继续生效，`ApplySaveGameToRunState()` 仍只接受 `InProgress`。
 
 ### 当前仍是内存态
 
-| RunState 字段 / 系统 | SaveGame v5 状态 | 读档后的实际结果 |
+| RunState 字段 / 系统 | SaveGame v6 状态 | 读档后的实际结果 |
 |---|---|---|
 | `FingerCount`、`HpPerFinger` | 不保存 | 使用 `FRunState` 默认值，不从 SaveGame 还原 |
 | `Pressure`、`TheftCount` | 不保存 | 压力全为 0，偷窃计数为 0 |

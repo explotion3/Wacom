@@ -47,7 +47,8 @@ void FInitiativeResolver::ResolveResistance(
 	int32 RuntimeCost,
 	const FGuid& SelectedEnemyPartId,
 	const TArray<FGuid>& HitPartIds,
-	const FGuid& CardId)
+	const FGuid& CardId,
+	FCardCriticalResolutionLedger* CriticalLedger)
 {
 	TArray<FResistanceResolutionFact> Facts;
 	FBattleResistanceEvaluator::BuildResolutionFacts(
@@ -57,7 +58,8 @@ void FInitiativeResolver::ResolveResistance(
 		CardId,
 		SelectedEnemyPartId,
 		HitPartIds,
-		Facts);
+		Facts,
+		CriticalLedger);
 
 	for (const FResistanceResolutionFact& Fact : Facts)
 	{
@@ -102,7 +104,12 @@ bool FInitiativeResolver::ResolvePerfectRelease(
 	IBattleOperationAdapter* OperationAdapter)
 {
 	if (bSwift) { return false; }
-	if (Def.PerfectReleaseEffects.IsEmpty()) { return false; }
+	const FRuntimeCardInstance* SourceCard = FBattleRules::FindCard(State, CardId);
+	const EWacomCardUpgradeTier Tier = SourceCard
+		? SourceCard->UpgradeTier
+		: EWacomCardUpgradeTier::White;
+	const TArray<FCardEffect>& PerfectReleaseEffects = Def.ResolvePerfectReleaseEffects(Tier);
+	if (PerfectReleaseEffects.IsEmpty()) { return false; }
 	bool bSourceCardShuffled = false;
 
 	for (const FGuid& PartId : HitPartIds)
@@ -129,7 +136,7 @@ bool FInitiativeResolver::ResolvePerfectRelease(
 				PartId,
 				FGuid() },
 			OperationAdapter);
-		Chain.Execute(Def.PerfectReleaseEffects);
+		Chain.Execute(PerfectReleaseEffects);
 		bSourceCardShuffled |= Chain.WasCardShuffled(CardId);
 	}
 	return bSourceCardShuffled;

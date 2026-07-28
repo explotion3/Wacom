@@ -157,7 +157,7 @@ Boss 使用 `Encounter.Boss` 细分，锁定宝箱使用 Treasure 条件配置�
 - NodeAnchor 的 View 朝向可以面向节点内容，PathSpline 起始切线可以面向道路方向；二者不要求制作时完全相同。开始 Traversal 的首帧保持 NodeAnchor View，App 在短距离内平滑对齐到 PathSpline，禁止用瞬时切换或 Character controller yaw 反写制造镜头中心跳变。
 - 首版入口视觉由 `DShader/Material/World/M_WacomRunBranchEntrance.dsm` 生成 `/Game/DreamMaterials/World/M_WacomRunBranchEntrance`：Available 使用稳定青色，Focused 使用稳定琥珀色；Full / Reduced / Off 只改变装饰脉冲，Off 仍保留合法选择的语义颜色。
 - `WacomEditor` 已提供 Journey/Floor Data Validation、严格只读的 loaded-world Scene Binding Validation、可重复 Debug builder，以及 exact-manifest、initial-only 的 Floor 1 Production Scene seeder。Seeder 只创建缺失资产；已有正确 class 的 Floor、Host Blueprint 或 map 永远只读，不覆盖人工调参。未来图形 authoring Adapter 仍必须编辑同一份 DataAsset，不能维护第二份图数据。
-- Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性。当前 SaveGame v5 保存 Run Credential、Outcome 与最近成功摘要，但仍不保存 Journey/Floor/Node、节点 lifecycle 或 Floor history。
+- Floor、Map Node、Map Edge 和入口使用稳定身份，为未来滚动备份和恢复保留确定性。当前 SaveGame v6 保存 Run Credential、Outcome、最近成功摘要及卡牌实例 Tier / 持久修正，但仍不保存 Journey/Floor/Node、节点 lifecycle 或 Floor history。
 - Editor 场景验证覆盖 Descriptor 缺失/重复/空引用，重复、缺失或意外的 NodeAnchor / EdgePath / content host，host 类型与 typed payload 不一致，以及多出口 Edge 缺失/重复 BranchTarget、单出口 Edge 残留 BranchTarget。Spline 少于 2 点、长度不超过 10 cm、非有限 Transform 和方向颠倒是 Error；端点偏离不超过 100 cm 通过，`(100, 300] cm` 为 Warning，超过 300 cm 为 Error。诊断固定为 `Severity / Code / ObjectPath / Message`，菜单、commandlet、builder 和测试共用同一只读实现。
 - 制作人员可用 `Tools -> Wacom -> Validate Current Run Floor` 验证当前 World；CI/命令行使用 `-run=WacomValidateRunFloorScene -Map=/Game/...`，退出码 `0/1/2` 分别表示通过或仅 Warning、场景合同 Error、参数/加载/Descriptor 解析失败。两个入口都不得修复、标脏或保存 Package。
 - Debug builder 命令为 `-run=WacomBuildRunExplorationDebugAssets`。它只写 Debug Journey/Floor/GameMode/map；Player BP 和三个共享 Run Path Blueprint 只读校验父类，正式 `GM_Wacom`、Authoring 数据和 `L_Exploration` 禁止写。连续运行必须保持 JourneyId、FloorId、NodeId、EdgeId、Actor 计数和内容引用稳定，但不承诺 Debug 生成 Actor GUID 或二进制文件哈希稳定。带 `Wacom.Generated.RunExploration` 的 Anchor/Path/Branch 属于 builder ownership；六个内容 Host 是按 Definition 复用的手工实例，不带该 tag，其 NodeId、NodeType、Blueprint class 和人工 transform 必须跨连续构建保持不变。
@@ -411,7 +411,7 @@ Guardian 无出边，战斗胜利后由通用 Journey success 合同完成 Journ
 
 ### 身份与生产门禁
 
-- `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v5 已通用持久化 Credential、Outcome 与最近一次成功摘要；探索图进度仍未进入磁盘 schema。
+- `Journey.Main.01`、三个 FloorId、每层冻结的 20 个 NodeId/21 个 EdgeId、两个 CardId 与两个 CredentialId 都是稳定身份。SaveGame v6 已通用持久化 Credential、Outcome、最近一次成功摘要和卡牌实例 Tier / 持久修正；探索图进度仍未进入磁盘 schema。
 - 内容 Host 的跨 Floor runtime `PersistentId` 固定按 `<FloorId>.<NodeId>` 派生，例如 `Floor.Main.01.Node.Route.A.01`。Actor Label、资产名、GUID、坐标和 transform 都不是身份。
 - DisplayName、描述、MapPosition 和世界 Transform 仍可调；NodeType、Edge 端点、Journey 顺序和蛇印门槛不是表现调参。
 - 三层共 46 个 Production 节点内容 ID。Floor 1 的 15 个节点已冻结并创建支持资产；Floor 2 的 15 个节点已冻结敌人槽、事件选项、Shop Offers、奖励数值并创建 exact 47-package 资产；Floor 3 的 16 个节点仍只冻结职责。所有视觉资产、Host 和世界 Transform 继续另案；现有带 Debug 语义的 Event/Shop/Reward 夹具不能作为正式引用。

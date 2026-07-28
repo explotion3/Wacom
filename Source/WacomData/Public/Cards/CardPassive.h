@@ -32,10 +32,12 @@ struct WACOMDATA_API FCardPassive
 	FGameplayTag Trigger;
 
 	/**
-	 * UI 详情面板展示文本。只服务卡牌说明，不参与规则结算。
-	 * 为空时 UI 会根据 Trigger / Effects 生成一条 fallback 文本。
+	 * Legacy UI authoring fallback。只服务卡牌说明，不参与规则结算。
+	 * CardDefinition 对应 Passive Template 为空时才读取；本字段也为空时，
+	 * UI 才根据 Trigger / Effects 生成结构化 fallback。
 	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Passive", meta = (MultiLine = true))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Passive",
+		meta = (MultiLine = true, ToolTip = "旧资产兼容的被动完整文案。优先在 CardDefinition.ExplanationTemplates.PassiveTemplates 制作；只有对应专属模板为空时才使用本字段。"))
 	FText DisplayText;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Passive")

@@ -271,6 +271,11 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 	Poison.Magnitude = 2;
 	Card->Effects.Add(Poison);
 
+	FCardEffect Burn;
+	Burn.EffectType = WacomTags::Effect_ApplyStatus_Burn;
+	Burn.Magnitude = 5;
+	Card->Effects.Add(Burn);
+
 	FCardEffect DiscardSelected;
 	DiscardSelected.EffectType = WacomTags::Effect_Card_DiscardSelected;
 	Card->Effects.Add(DiscardSelected);
@@ -280,15 +285,18 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 	const FString Description = SectionPlainText(Data, EWacomCardDetailSectionKind::Description);
 
 	TestTrue(TEXT("Damage effect emits value text"),
-		Description.Contains(TEXT("造成 4 点")) && Description.Contains(TEXT("伤害。")) && Description.Contains(TEXT("[伤]")));
+		Description.Contains(TEXT("造成 4 伤害。")) && Description.Contains(TEXT("[伤]")));
 	TestTrue(TEXT("Heal effect emits value text"),
-		Description.Contains(TEXT("恢复 3 点")) && Description.Contains(TEXT("生命。")) && Description.Contains(TEXT("[疗]")));
+		Description.Contains(TEXT("恢复 3 生命。")) && Description.Contains(TEXT("[疗]")));
 	TestTrue(TEXT("Shield effect emits value text"),
-		Description.Contains(TEXT("获得 5 点")) && Description.Contains(TEXT("护盾。")) && Description.Contains(TEXT("[盾]")));
+		Description.Contains(TEXT("获得 5 护盾。")) && Description.Contains(TEXT("[盾]")));
 	TestTrue(TEXT("Effect condition emits self zone text"), Description.Contains(TEXT("仅当本卡在左手区时")));
 	TestTrue(TEXT("Effect modifier emits target status add text"), Description.Contains(TEXT("仅当目标有中毒时，数值 +3")));
-	TestTrue(TEXT("Effect modifier emits self zone multiply text"), Description.Contains(TEXT("仅当本卡在双手区时，数值 ×2")));
-	TestTrue(TEXT("Poison effect emits status text"), Description.Contains(TEXT("施加 2 层 中毒。")));
+	TestTrue(TEXT("Effect modifier emits self zone multiply text"), Description.Contains(TEXT("仅当本卡在双手区时，数值 x2")));
+	TestFalse(TEXT("Card detail generated text avoids unsupported multiplication glyph"), Description.Contains(TEXT("×")));
+	TestTrue(TEXT("Poison effect emits compact status text"), Description.Contains(TEXT("施加 2 中毒。")));
+	TestTrue(TEXT("Burn effect emits compact status text"), Description.Contains(TEXT("施加 5 灼烧。")));
+	TestFalse(TEXT("Burn effect does not leak typed status slot"), Description.Contains(TEXT("{status:EffectStatus}")));
 	TestTrue(TEXT("Discard selected effect emits action text"), Description.Contains(TEXT("弃置目标手牌。")));
 
 	if (const FWacomCardDetailSection* DescriptionSection =
@@ -299,15 +307,17 @@ bool FWacomUICardExplanationEffectBlocksSpec::RunTest(const FString& /*Parameter
 		TestTrue(TEXT("Damage template emits effect icon markup"),
 			RichText.Contains(TEXT("<wacom-icon id=\"Damage\" label=\"[伤]\"/>")));
 		TestTrue(TEXT("Damage template emits value markup"),
-			RichText.Contains(TEXT("造成 <Value>4</> 点")) && RichText.Contains(TEXT("伤害。")));
+			RichText.Contains(TEXT("造成 <Value>4</> 伤害。")));
 		TestTrue(TEXT("Heal template emits effect icon markup"),
 			RichText.Contains(TEXT("<wacom-icon id=\"Heal\" label=\"[疗]\"/>")));
 		TestTrue(TEXT("Heal template emits value markup"),
-			RichText.Contains(TEXT("恢复 <Value>3</> 点")) && RichText.Contains(TEXT("生命。")));
+			RichText.Contains(TEXT("恢复 <Value>3</> 生命。")));
 		TestTrue(TEXT("Shield template emits effect icon markup"),
 			RichText.Contains(TEXT("<wacom-icon id=\"Shield\" label=\"[盾]\"/>")));
 		TestTrue(TEXT("Shield template emits value markup"),
-			RichText.Contains(TEXT("获得 <Value>5</> 点")) && RichText.Contains(TEXT("护盾。")));
+			RichText.Contains(TEXT("获得 <Value>5</> 护盾。")));
+		TestTrue(TEXT("Status template keeps inline status icon and readable name"),
+			RichText.Contains(TEXT("<wacom-status tag=\"Status.Poison\" label=\"中毒\"/> <Status>中毒</>")));
 	}
 
 	return true;
@@ -330,7 +340,7 @@ bool FWacomUICardExplanationPassiveBlocksSpec::RunTest(const FString& /*Paramete
 	Passive.Condition.ConditionType = WacomTags::Condition_Target_HasStatus;
 	Passive.Condition.ParamTag = WacomTags::Status_Poison;
 	Passive.Condition.bNegate = true;
-	Passive.DisplayText = FText::FromString(TEXT("这段旧手写说明不应进入详情。"));
+	Passive.DisplayText = FText::FromString(TEXT("本卡自定义被动说明。"));
 
 	FCardEffect ShuffleSelf;
 	ShuffleSelf.EffectType = WacomTags::Effect_Shuffle_ToRandomZone;
@@ -343,20 +353,74 @@ bool FWacomUICardExplanationPassiveBlocksSpec::RunTest(const FString& /*Paramete
 	AfterPlayed.Effects.Add(ShuffleSelf);
 	Card->Passives.Add(AfterPlayed);
 
+	FCardPassive Settlement;
+	Settlement.Trigger = WacomTags::Passive_Trigger_OnBattleSettlement;
+	Settlement.Condition.ConditionType = WacomTags::Condition_Self_EverEnteredExhaust;
+	FCardEffect AddDurability;
+	AddDurability.EffectType = WacomTags::Effect_Card_AddPersistentDurability;
+	AddDurability.Magnitude = 1;
+	Settlement.Effects.Add(AddDurability);
+	Card->Passives.Add(Settlement);
+
 	const FWacomCardDetailViewData Data =
 		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get());
 	const FString PassiveText = SectionPlainText(Data, EWacomCardDetailSectionKind::Passive);
 
-	TestTrue(TEXT("Passive trigger emits threshold"), PassiveText.Contains(TEXT("每打出 3 张伙伴：")));
-	TestTrue(TEXT("Passive outcome emits current runtime result"), PassiveText.Contains(TEXT("使此牌回到手中。")));
-	TestTrue(TEXT("Passive condition emits negated target status text"), PassiveText.Contains(TEXT("仅当目标没有中毒时")));
+	TestTrue(TEXT("Authored passive text is the complete player-facing override"), PassiveText.Contains(TEXT("本卡自定义被动说明。")));
+	TestFalse(TEXT("Authored passive suppresses generic trigger expansion"), PassiveText.Contains(TEXT("每打出 3 张伙伴：")));
+	TestFalse(TEXT("Authored passive suppresses generic outcome expansion"), PassiveText.Contains(TEXT("使此牌回到手中。")));
+	TestFalse(TEXT("Authored passive suppresses generic condition expansion"), PassiveText.Contains(TEXT("仅当目标没有中毒时")));
 	TestTrue(TEXT("Executable passive effect still emits structured text"), PassiveText.Contains(TEXT("打出后：\n该牌腾挪至随机区域。")));
-	TestFalse(TEXT("Passive DisplayText is ignored"), PassiveText.Contains(TEXT("旧手写说明")));
+	TestTrue(TEXT("Ever-entered-exhaust condition has player-facing Chinese fallback"),
+		PassiveText.Contains(TEXT("仅当本卡本场曾进入过消耗区时")));
+	TestFalse(TEXT("Ever-entered-exhaust condition does not leak tag leaf"),
+		PassiveText.Contains(TEXT("EverEnteredExhaust")));
 	TestEqual(TEXT("Only executable passive effects are rendered"),
 		CountOccurrences(PassiveText, TEXT("该牌腾挪至随机区域。")),
 		1);
 	TestFalse(TEXT("Passive no longer emits vague condition placeholder"), PassiveText.Contains(TEXT("有条件")));
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUICardExplanationTierAuthoredPassiveSpec,
+	"Wacom.UI.CardExplanation.TierAuthoredPassive",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUICardExplanationTierAuthoredPassiveSpec::RunTest(const FString& /*Parameters*/)
+{
+	TStrongObjectPtr<UCardDefinition> Card(NewObject<UCardDefinition>());
+	Card->CardId = TEXT("Explanation.TierAuthoredPassive");
+	Card->DisplayName = FText::FromString(TEXT("强化被动说明卡"));
+	Card->TierProfiles.SetNum(4);
+
+	for (int32 TierIndex = 0; TierIndex < Card->TierProfiles.Num(); ++TierIndex)
+	{
+		FCardEffect Damage;
+		Damage.EffectType = WacomTags::Effect_Damage;
+		Damage.Magnitude = 5;
+		Card->TierProfiles[TierIndex].Effects.Add(Damage);
+
+		FCardPassive Passive;
+		Passive.Trigger = WacomTags::Passive_Trigger_OnDraw;
+		Passive.DisplayText = FText::FromString(FString::Printf(
+			TEXT("强化阶 %d 的精确被动说明。"),
+			TierIndex));
+		Card->TierProfiles[TierIndex].Passives.Add(Passive);
+	}
+
+	FWacomCardPresentationRuntimeContext RuntimeContext;
+	RuntimeContext.bHasUpgradeTier = true;
+	RuntimeContext.UpgradeTier = EWacomCardUpgradeTier::Blue;
+	const FWacomCardDetailViewData Data =
+		UWacomCardPresentationBuilder::BuildCardDetailViewData(Card.Get(), RuntimeContext);
+	const FString PassiveText = SectionPlainText(Data, EWacomCardDetailSectionKind::Passive);
+
+	TestTrue(TEXT("Card detail uses authored passive from the active upgrade tier"),
+		PassiveText.Contains(TEXT("强化阶 1 的精确被动说明。")));
+	TestFalse(TEXT("Card detail does not leak another tier authored passive"),
+		PassiveText.Contains(TEXT("强化阶 0 的精确被动说明。")));
 	return true;
 }
 
@@ -414,16 +478,14 @@ bool FWacomUICardExplanationMagnitudeSourceSpec::RunTest(const FString& /*Parame
 	const FString Description = SectionPlainText(Data, EWacomCardDetailSectionKind::Description);
 
 	TestTrue(TEXT("RuntimeCost source renders source phrase with current value"),
-		Description.Contains(TEXT("施加 相当于当前费用 2 层 中毒。")));
+		Description.Contains(TEXT("施加 相当于当前费用 2 中毒。")));
 	TestTrue(TEXT("Literal magnitude keeps existing wording"),
-		Description.Contains(TEXT("施加 2 层 中毒。")));
+		Description.Contains(TEXT("施加 2 中毒。")));
 	TestTrue(TEXT("Legacy runtime cost flag renders source phrase"),
-		Description.Contains(TEXT("恢复 相当于当前费用 2 点")) &&
-		Description.Contains(TEXT("生命。")) &&
+		Description.Contains(TEXT("恢复 相当于当前费用 2 生命。")) &&
 		Description.Contains(TEXT("[疗]")));
 	TestTrue(TEXT("TargetStatusStacks source renders status display name"),
-		Description.Contains(TEXT("造成 相当于目标中毒层数 4 点")) &&
-		Description.Contains(TEXT("伤害。")) &&
+		Description.Contains(TEXT("造成 相当于目标中毒层数 4 伤害。")) &&
 		Description.Contains(TEXT("[伤]")));
 	TestTrue(TEXT("RuntimeCost draw renders source phrase with current value"),
 		Description.Contains(TEXT("抽 相当于当前费用 2 张牌。")));
@@ -456,9 +518,9 @@ bool FWacomUICardExplanationMagnitudeSourceSpec::RunTest(const FString& /*Parame
 	const FString PreviewDescription =
 		SectionPlainText(PreviewData, EWacomCardDetailSectionKind::Description);
 	TestTrue(TEXT("Preview override renders final value without source phrase"),
-		PreviewDescription.Contains(TEXT("施加 5 层 中毒。")));
+		PreviewDescription.Contains(TEXT("施加 5 中毒。")));
 	TestFalse(TEXT("Preview override does not attach stale RuntimeCost source phrase"),
-		PreviewDescription.Contains(TEXT("施加 相当于当前费用 5 层 中毒。")));
+		PreviewDescription.Contains(TEXT("施加 相当于当前费用 5 中毒。")));
 	if (const FWacomCardDetailSection* PreviewDescriptionSection =
 		FindSection(PreviewData, EWacomCardDetailSectionKind::Description))
 	{
@@ -508,8 +570,7 @@ bool FWacomUICardExplanationDescriptionFallbackSpec::RunTest(const FString& /*Pa
 	const FString StructuredDescription =
 		SectionPlainText(StructuredData, EWacomCardDetailSectionKind::Description);
 	TestTrue(TEXT("Structured detail still renders effect"),
-		StructuredDescription.Contains(TEXT("造成 3 点")) &&
-		StructuredDescription.Contains(TEXT("伤害。")) &&
+		StructuredDescription.Contains(TEXT("造成 3 伤害。")) &&
 		StructuredDescription.Contains(TEXT("[伤]")));
 	TestFalse(TEXT("Structured detail does not append legacy Description"),
 		StructuredDescription.Contains(TEXT("旧描述")));
@@ -569,11 +630,11 @@ bool FWacomUICardExplanationRuntimePreviewSpec::RunTest(const FString& /*Paramet
 	const FString Description = SectionPlainText(Data, EWacomCardDetailSectionKind::Description);
 
 	TestTrue(TEXT("Runtime preview renders final damage value"),
-		Description.Contains(TEXT("造成 8 点")) && Description.Contains(TEXT("伤害。")) && Description.Contains(TEXT("[伤]")));
+		Description.Contains(TEXT("造成 8 伤害。")) && Description.Contains(TEXT("[伤]")));
 	TestTrue(TEXT("Runtime preview renders final reduced value"),
-		Description.Contains(TEXT("恢复 3 点")) && Description.Contains(TEXT("生命。")) && Description.Contains(TEXT("[疗]")));
+		Description.Contains(TEXT("恢复 3 生命。")) && Description.Contains(TEXT("[疗]")));
 	TestFalse(TEXT("Runtime preview omits old arrow expression"), Description.Contains(TEXT("6 -> 8")));
-	TestTrue(TEXT("Skipped effect gets skipped prefix"), Description.Contains(TEXT("不会生效：施加 2 层 中毒。")));
+	TestTrue(TEXT("Skipped effect gets skipped prefix"), Description.Contains(TEXT("不会生效：施加 2 中毒。")));
 	if (DescriptionSection)
 	{
 		const FString RichText =

@@ -9,6 +9,7 @@
 #include "Effects/Semantics/BattleEffectSemanticsModule.h"
 #include "Enemies/IntentDefinition.h"
 #include "Enemies/IntentEffect.h"
+#include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Tags/WacomGameplayTags.h"
 
@@ -29,18 +30,25 @@ int32 FBattleResistanceEvaluator::EvaluateIntentPeakAttackDamage(
 }
 
 void FBattleResistanceEvaluator::BuildCardDamageProfiles(
-	const FBattleState& State,
+	FBattleState& State,
 	const UCardDefinition& Definition,
 	const int32 RuntimeCost,
 	const FGuid& SourceCardId,
 	const FGuid& SelectedEnemyPartId,
-	TArray<FCardTargetDamageProfile>& OutProfiles)
+	TArray<FCardTargetDamageProfile>& OutProfiles,
+	FCardCriticalResolutionLedger* CriticalLedger)
 {
 	OutProfiles.Reset();
 	TMap<FGuid, int32> PeakDamageByPart;
+	const FRuntimeCardInstance* SourceCard = FBattleRules::FindCard(State, SourceCardId);
+	const EWacomCardUpgradeTier Tier = SourceCard
+		? SourceCard->UpgradeTier
+		: EWacomCardUpgradeTier::White;
 
-	for (const FCardEffect& Effect : Definition.Effects)
+	const TArray<FCardEffect>& Effects = Definition.ResolveEffects(Tier);
+	for (int32 EffectIndex = 0; EffectIndex < Effects.Num(); ++EffectIndex)
 	{
+		const FCardEffect& Effect = Effects[EffectIndex];
 		if (Effect.EffectType != WacomTags::Effect_Damage)
 		{
 			continue;
@@ -54,13 +62,30 @@ void FBattleResistanceEvaluator::BuildCardDamageProfiles(
 			SourceCardId,
 			SelectedEnemyPartId,
 			Invocations);
-		for (const FCardEnemyPartEffectInvocation& Invocation : Invocations)
+		for (int32 InvocationOrdinal = 0;
+			InvocationOrdinal < Invocations.Num();
+			++InvocationOrdinal)
 		{
+			const FCardEnemyPartEffectInvocation& Invocation =
+				Invocations[InvocationOrdinal];
 			if (Invocation.FinalMagnitude > 0)
 			{
+				const bool bCritical = CriticalLedger
+					&& CriticalLedger->Resolve(
+						State,
+						SourceCardId,
+						Effect.EffectType,
+						FCardCriticalInvocationKey{
+							0,
+							EffectIndex,
+							Invocation.TargetEnemyPartInstanceId,
+							InvocationOrdinal });
+				const int32 ResolvedMagnitude = bCritical
+					? Invocation.FinalMagnitude * 2
+					: Invocation.FinalMagnitude;
 				int32& PeakDamage = PeakDamageByPart.FindOrAdd(
 					Invocation.TargetEnemyPartInstanceId);
-				PeakDamage = FMath::Max(PeakDamage, Invocation.FinalMagnitude);
+				PeakDamage = FMath::Max(PeakDamage, ResolvedMagnitude);
 			}
 		}
 	}
@@ -76,13 +101,14 @@ void FBattleResistanceEvaluator::BuildCardDamageProfiles(
 }
 
 void FBattleResistanceEvaluator::BuildResolutionFacts(
-	const FBattleState& State,
+	FBattleState& State,
 	const UCardDefinition& Definition,
 	const int32 RuntimeCost,
 	const FGuid& SourceCardId,
 	const FGuid& SelectedEnemyPartId,
 	const TArray<FGuid>& PerfectReleaseHitPartIds,
-	TArray<FResistanceResolutionFact>& OutFacts)
+	TArray<FResistanceResolutionFact>& OutFacts,
+	FCardCriticalResolutionLedger* CriticalLedger)
 {
 	OutFacts.Reset();
 	TArray<FCardTargetDamageProfile> DamageProfiles;
@@ -92,7 +118,8 @@ void FBattleResistanceEvaluator::BuildResolutionFacts(
 		RuntimeCost,
 		SourceCardId,
 		SelectedEnemyPartId,
-		DamageProfiles);
+		DamageProfiles,
+		CriticalLedger);
 
 	for (const FCardTargetDamageProfile& Profile : DamageProfiles)
 	{

@@ -57,6 +57,8 @@ namespace
 			FCardInstance Inst;
 			Inst.InstanceId = Entry.InstanceId;
 			Inst.Definition = Def;
+			Inst.UpgradeTier = Entry.UpgradeTier;
+			Inst.PersistentModifiers = Entry.PersistentModifiers;
 			Inst.bBattleEnabledInSpecialZone = Entry.bBattleEnabledInSpecialZone;
 			Dest.Add(MoveTemp(Inst));
 		}
@@ -170,6 +172,8 @@ UWacomSaveGame* FRunSaveGameSerializer::BuildSaveGameFromRunState(const FRunStat
 			Entry.DefinitionAssetPath = Inst.Definition
 				? FSoftObjectPath(Inst.Definition)
 				: FSoftObjectPath();
+			Entry.UpgradeTier = Inst.UpgradeTier;
+			Entry.PersistentModifiers = Inst.PersistentModifiers;
 			Entry.bBattleEnabledInSpecialZone = Inst.bBattleEnabledInSpecialZone;
 			Dest.Add(MoveTemp(Entry));
 		}

@@ -7,6 +7,8 @@
 #include "Cards/EffectCondition.h"
 #include "CardEffect.generated.h"
 
+class UCardDefinition;
+
 /**
  * Magnitude 修正操作类型。
  */
@@ -100,6 +102,27 @@ struct WACOMDATA_API FCardEffect
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect")
 	TArray<FMagnitudeModifier> MagnitudeModifiers;
+
+	/**
+	 * 卡牌创建效果的候选池。普通规则效果保持为空。
+	 * 随机生成使用有放回抽取；固定生成通常只配置一个 Definition。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect|Creation",
+		meta = (ToolTip = "卡牌创建效果的候选卡池。随机生成按有放回抽取；普通效果保持为空。"))
+	TArray<TObjectPtr<UCardDefinition>> CardPool;
+
+	/** 动态修改卡牌效果时，指定要修改的 Effect Tag。 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect|Runtime",
+		meta = (ToolTip = "动态加值或倍率作用的 Effect Tag，例如 Effect.ApplyStatus.Burn。"))
+	FGameplayTag AffectedEffectType;
+
+	/**
+	 * 对手牌卡施加动态修正时可选的状态筛选。
+	 * 未设置表示所有已展开目标；设置后只作用于带该卡牌状态的目标。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Effect|Runtime",
+		meta = (ToolTip = "可选的目标卡牌状态筛选。未设置时作用于全部目标。"))
+	FGameplayTag RequiredTargetCardStatus;
 
 	/**
 	 * @deprecated 已被 MagnitudeSource 替代。保留用于兼容旧 DataAsset 反序列化。

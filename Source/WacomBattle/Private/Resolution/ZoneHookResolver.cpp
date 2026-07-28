@@ -3,6 +3,7 @@
 #include "Resolution/ZoneHookResolver.h"
 #include "Effects/Semantics/BattleEffectSemanticsModule.h"
 
+#include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Hand/HandZoneService.h"
 #include "Tags/WacomGameplayTags.h"
@@ -48,7 +49,11 @@ bool FZoneHookResolver::RunOnPlayHooks(
 			SelectedPartId,
 			FGuid() },
 		OperationAdapter);
-	for (const FCardZoneHook& Hook : Def.ZoneHooks)
+	const FRuntimeCardInstance* SourceCard = FBattleRules::FindCard(State, CardId);
+	const EWacomCardUpgradeTier Tier = SourceCard
+		? SourceCard->UpgradeTier
+		: EWacomCardUpgradeTier::White;
+	for (const FCardZoneHook& Hook : Def.ResolveZoneHooks(Tier))
 	{
 		if (Hook.Trigger != WacomTags::ZoneHook_Trigger_OnPlay) { continue; }
 		if (HookZoneTagToEnum(Hook.Zone) != CurrentZone)            { continue; }
@@ -69,7 +74,11 @@ bool FZoneHookResolver::ShouldSkipInitiativePush(
 	const EHandZone CurrentZone = FHandZoneService::GetZoneOf(State, CardId);
 	if (CurrentZone == EHandZone::None) { return false; }
 
-	for (const FCardZoneHook& Hook : Def.ZoneHooks)
+	const FRuntimeCardInstance* SourceCard = FBattleRules::FindCard(State, CardId);
+	const EWacomCardUpgradeTier Tier = SourceCard
+		? SourceCard->UpgradeTier
+		: EWacomCardUpgradeTier::White;
+	for (const FCardZoneHook& Hook : Def.ResolveZoneHooks(Tier))
 	{
 		if (Hook.Trigger != WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit) { continue; }
 		if (HookZoneTagToEnum(Hook.Zone) != CurrentZone)                         { continue; }

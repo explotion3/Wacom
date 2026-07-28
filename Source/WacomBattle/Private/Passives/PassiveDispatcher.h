@@ -7,6 +7,7 @@
 struct FBattleState;
 struct FBattleEventBus;
 struct FRuntimeCardInstance;
+struct FBattleCardPlacementFacts;
 class IBattleOperationAdapter;
 
 /**
@@ -58,4 +59,29 @@ public:
 		FBattleEventBus& Events,
 		const FGuid& DiscardedCardId,
 		IBattleOperationAdapter* OperationAdapter = nullptr);
+
+	/** Runs OnDraw only for cards that survived the formal draw lifecycle. */
+	static void RunOnDraw(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		TConstArrayView<FGuid> DrawnCardIds,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
+
+	static void RunOnCompanionPlayed(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FGuid& PlayedCardId,
+		const FBattleCardPlacementFacts& PrePlayPlacement,
+		bool bAllowAdjacent,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
+
+	static void RunOnTurnEnd(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		IBattleOperationAdapter* OperationAdapter = nullptr);
+
+	/** Victory / Withdraw 时执行一次战后持久成长被动。 */
+	static void RunOnBattleSettlement(
+		FBattleState& State,
+		FBattleEventBus& Events);
 };

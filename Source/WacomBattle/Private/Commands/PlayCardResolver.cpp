@@ -4,6 +4,7 @@
 #include "Commands/PlayCardEvaluation.h"
 
 #include "Core/BattleRules.h"
+#include "Core/BattleOperationAdapter.h"
 #include "Core/BattleState.h"
 #include "Effects/Semantics/BattleEffectSemanticsModule.h"
 #include "Enemy/EnemyPartActionResolver.h"
@@ -115,6 +116,15 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 		Events.Emit(Ev);
 	}
 
+	FCardCriticalResolutionLedger MainCriticalLedger;
+	const FBattleOperationDescriptor CriticalOperation{
+		EBattleOperationKind::DirectRule,
+		EBattleOperationDeterminism::Random,
+		FGameplayTag(),
+		/*bReportUnresolvedWhenSkipped*/false };
+	MainCriticalLedger.bAllowRolls =
+		OperationAdapter.ShouldExecute(CriticalOperation);
+
 	FInitiativeResolver::ResolveResistance(
 		State,
 		Events,
@@ -122,7 +132,8 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 		RuntimeCost,
 		SelectedPartId,
 		HitPartIds,
-		CardId);
+		CardId,
+		&MainCriticalLedger);
 
 	// ================ 4. 主效果 ================
 	// 主效果自成一条词法 chain（与 ZoneHook / PerfectRelease / AfterPlayed 互不串）。
@@ -134,9 +145,10 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 				RuntimeCost,
 				CardId,
 				SelectedPartId,
-				SelectedHandCardId },
+				SelectedHandCardId,
+				&MainCriticalLedger },
 			&OperationAdapter);
-		MainChain.Execute(Def->Effects);
+		MainChain.Execute(Def->ResolveEffects(EvaluatedCard->UpgradeTier));
 		bSourceExplicitlyMoved |= MainChain.WasCardShuffled(CardId);
 	}
 
@@ -171,6 +183,24 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 		Events.Emit(Ev);
 	}
 
+	// A successful play consumes finite durability only after all primary
+	// effects (including full clone creation) have resolved.
+	bool bForceExhaustFromDurability = false;
+	if (FRuntimeCardInstance* DurabilityCard = FBattleRules::FindCard(State, CardId);
+		DurabilityCard
+			&& DurabilityCard->bHasFiniteDurability
+			&& DurabilityCard->CurrentDurability > 0)
+	{
+		--DurabilityCard->CurrentDurability;
+		if (DurabilityCard->CurrentDurability <= 0)
+		{
+			DurabilityCard->CurrentDurability = 0;
+			bForceExhaustFromDurability = true;
+			DurabilityCard->TemporaryKeywords.AddTag(
+				WacomTags::Card_Keyword_Exhaust);
+		}
+	}
+
 	// ================ 7. 卡牌去向 ================
 	const ECardLocation ResolvedCardDestination =
 		FBattleCardZoneTransition::ResolvePlayedCardDestination(
@@ -178,6 +208,7 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 		CardId,
 		bAnchor,
 		bCombo,
+		bForceExhaustFromDurability,
 		bSourceExplicitlyMoved,
 		Prepared.GetPrePlayPlacement());
 	{
@@ -196,6 +227,13 @@ FWacomStatus FPlayCardResolver::ResolvePrepared(
 			++State.Player.CompanionPlayedCount;
 		}
 	}
+	FPassiveDispatcher::RunOnCompanionPlayed(
+		State,
+		Events,
+		CardId,
+		Prepared.GetPrePlayPlacement(),
+		true,
+		&OperationAdapter);
 
 	// ================ 9. AfterPlayed 被动 ================
 	// 必须在"卡牌去向"之后触发（Combo 留在手牌，其他的如果作用于本卡会失败但不崩）。

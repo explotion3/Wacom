@@ -223,11 +223,6 @@ const TCHAR* FWacomGeneratedBattleContentAssets::DebugSnakeShopPath()
 	return TEXT("/Game/Wacom/Data/Shops/DA_Shop_DebugSnake.DA_Shop_DebugSnake");
 }
 
-const TCHAR* FWacomGeneratedBattleContentAssets::TestShopUpgradeVenomProofWhitePath()
-{
-	return TEXT("/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_White.DA_Card_TestShopUpgrade_VenomProof_White");
-}
-
 TArray<const TCHAR*> FWacomGeneratedBattleContentAssets::StarterPackCardPaths()
 {
 	return {
@@ -339,8 +334,7 @@ TArray<FWacomGeneratedBattleContentShopOfferExpectation> FWacomGeneratedBattleCo
 		{ BadgeDamagePoisonCardPath(), 0 },
 		{ BadgeShieldHealCardPath(), 0 },
 		{ BadgeDamageShieldHealCardPath(), 0 },
-		{ BadgeAllRuntimeSupportedCardPath(), 0 },
-		{ TestShopUpgradeVenomProofWhitePath(), 1 }
+		{ BadgeAllRuntimeSupportedCardPath(), 0 }
 	};
 }
 

@@ -43,12 +43,15 @@ bool FWacomBattleRuleContentContract::IsSupportedConditionType(const FGameplayTa
 {
 	return !ConditionType.IsValid()
 		|| ConditionType == WacomTags::Condition_Self_InZone
-		|| ConditionType == WacomTags::Condition_Target_HasStatus;
+		|| ConditionType == WacomTags::Condition_Self_InCardLocation
+		|| ConditionType == WacomTags::Condition_Target_HasStatus
+		|| ConditionType == WacomTags::Condition_Self_EverEnteredExhaust;
 }
 
 bool FWacomBattleRuleContentContract::IsStackStatusTag(const FGameplayTag& StatusTag)
 {
 	return StatusTag == WacomTags::Status_Poison
+		|| StatusTag == WacomTags::Status_Burn
 		|| StatusTag == WacomTags::Status_Freeze
 		|| StatusTag == WacomTags::Status_Twilight
 		|| StatusTag == WacomTags::Status_Stunned;
@@ -60,6 +63,7 @@ bool FWacomBattleRuleContentContract::IsRemovableCombatantStatusTag(
 	// Enemy Slow is an immediate initiative operation; it has no lingering
 	// combatant stack to remove. Card Slow is owned by card-state lifecycle.
 	return StatusTag == WacomTags::Status_Poison
+		|| StatusTag == WacomTags::Status_Burn
 		|| StatusTag == WacomTags::Status_Freeze
 		|| StatusTag == WacomTags::Status_Twilight
 		|| StatusTag == WacomTags::Status_Stunned;
@@ -76,7 +80,9 @@ bool FWacomBattleRuleContentContract::IsCardKeywordTag(const FGameplayTag& Keywo
 		|| KeywordTag == WacomTags::Card_Keyword_Hand
 		|| KeywordTag == WacomTags::Card_Keyword_Exhaust
 		|| KeywordTag == WacomTags::Card_Keyword_BagProvider
-		|| KeywordTag == WacomTags::Card_Keyword_DeleteProvider;
+		|| KeywordTag == WacomTags::Card_Keyword_DeleteProvider
+		|| KeywordTag == WacomTags::Card_Keyword_Food
+		|| KeywordTag == WacomTags::Card_Keyword_Container;
 }
 
 bool FWacomBattleRuleContentContract::IsCardLocationTag(const FGameplayTag& LocationTag)
@@ -96,7 +102,12 @@ bool FWacomBattleRuleContentContract::IsHandZoneTag(const FGameplayTag& ZoneTag)
 bool FWacomBattleRuleContentContract::IsExecutablePassiveTrigger(const FGameplayTag& Trigger)
 {
 	return Trigger == WacomTags::Passive_Trigger_AfterPlayed
-		|| Trigger == WacomTags::Passive_Trigger_OnDiscard;
+		|| Trigger == WacomTags::Passive_Trigger_OnDiscard
+		|| Trigger == WacomTags::Passive_Trigger_OnTurnEnd
+		|| Trigger == WacomTags::Passive_Trigger_OnDraw
+		|| Trigger == WacomTags::Passive_Trigger_OnAdjacentCompanionPlayed
+		|| Trigger == WacomTags::Passive_Trigger_OnOtherCompanionPlayed
+		|| Trigger == WacomTags::Passive_Trigger_OnBattleSettlement;
 }
 
 bool FWacomBattleRuleContentContract::IsSpecialPassiveTriggerWithoutEffects(const FGameplayTag& Trigger)
@@ -111,9 +122,7 @@ bool FWacomBattleRuleContentContract::IsEventOnlyPassiveTrigger(const FGameplayT
 
 bool FWacomBattleRuleContentContract::IsReservedPassiveTrigger(const FGameplayTag& Trigger)
 {
-	return Trigger == WacomTags::Passive_Trigger_OnTurnStart
-		|| Trigger == WacomTags::Passive_Trigger_OnTurnEnd
-		|| Trigger == WacomTags::Passive_Trigger_OnDraw;
+	return Trigger == WacomTags::Passive_Trigger_OnTurnStart;
 }
 
 bool FWacomBattleRuleContentContract::IsSupportedCardEffectTarget(

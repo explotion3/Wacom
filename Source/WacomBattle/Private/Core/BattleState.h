@@ -153,6 +153,9 @@ struct FBattleState
 	 */
 	bool bMutualDestruction = false;
 
+	/** Victory / Withdraw 的 OnBattleSettlement 被动只允许结算一次。 */
+	bool bSettlementPassivesResolved = false;
+
 	/**
 	 * 战内累计的部位击倒经验记账。
 	 *

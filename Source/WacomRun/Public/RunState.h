@@ -140,13 +140,13 @@ struct WACOMRUN_API FRunShopCardUpgradeQuote
 	FGuid InstanceId;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> CurrentDefinition = nullptr;
+	TObjectPtr<UCardDefinition> Definition = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> NextDefinition = nullptr;
+	EWacomCardUpgradeTier CurrentTier = EWacomCardUpgradeTier::White;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
-	FName UpgradeFamilyId = NAME_None;
+	EWacomCardUpgradeTier NextTier = EWacomCardUpgradeTier::White;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
 	FGameplayTag CurrentRarity;
@@ -164,7 +164,7 @@ struct WACOMRUN_API FRunShopCardUpgradeQuote
 	FName DisabledReason = NAME_None;
 };
 
-/** 被动 UI 提交的乐观并发请求；Definition guard 用于拒绝过期报价。 */
+/** 被动 UI 提交的乐观并发请求；Definition + Tier guard 用于拒绝过期报价。 */
 USTRUCT(BlueprintType)
 struct WACOMRUN_API FRunShopCardUpgradeCommand
 {
@@ -174,10 +174,10 @@ struct WACOMRUN_API FRunShopCardUpgradeCommand
 	FGuid InstanceId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> ExpectedCurrentDefinition = nullptr;
+	TObjectPtr<UCardDefinition> ExpectedDefinition = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Run|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> ExpectedNextDefinition = nullptr;
+	EWacomCardUpgradeTier ExpectedCurrentTier = EWacomCardUpgradeTier::White;
 };
 
 /** 当前商店 UI/测试可读取的只读快照。 */
@@ -245,10 +245,13 @@ struct WACOMRUN_API FRunShopCardUpgradeResult
 	FGuid InstanceId;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> PreviousDefinition = nullptr;
+	TObjectPtr<UCardDefinition> Definition = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> NewDefinition = nullptr;
+	EWacomCardUpgradeTier PreviousTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
+	EWacomCardUpgradeTier NewTier = EWacomCardUpgradeTier::White;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Shop|Upgrade")
 	int32 GoldCost = 0;

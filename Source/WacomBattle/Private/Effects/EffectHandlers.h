@@ -21,6 +21,7 @@ namespace WacomEffects
 
 	// ---- ApplyStatus 系列 ----
 	FEffectApplyResult HandleApplyPoison(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleApplyBurn(FEffectExecutionContext& Ctx);
 	FEffectApplyResult HandleApplySlow(FEffectExecutionContext& Ctx);
 	FEffectApplyResult HandleApplyFreeze(FEffectExecutionContext& Ctx);
 	FEffectApplyResult HandleApplyTwilight(FEffectExecutionContext& Ctx);
@@ -35,6 +36,15 @@ namespace WacomEffects
 	FEffectApplyResult HandleCardReduceCost(FEffectExecutionContext& Ctx);
 	FEffectApplyResult HandleCardDiscardSelected(FEffectExecutionContext& Ctx);
 	FEffectApplyResult HandleCardExhaustSelected(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleGenerateToHand(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleGenerateRandomFromPoolToHand(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleCloneSelfIntoDraw(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleAddEffectMagnitude(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleMultiplyEffectMagnitude(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleAddCriticalChance(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleAddPersistentDurability(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleAddPersistentEffectMagnitude(FEffectExecutionContext& Ctx);
+	FEffectApplyResult HandleAutoPlaySelf(FEffectExecutionContext& Ctx);
 
 	// ---- Draw / Discard / Exhaust ----
 	FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx);

@@ -39,7 +39,8 @@ struct FWacomShopScreenFlow
 		const FWacomShopCardUpgradePresentationView& CachedView);
 
 	static FText BuildUpgradeSuccessToastText(
-		const UCardDefinition* PreviousDefinition,
-		const UCardDefinition* NewDefinition);
+		const UCardDefinition* Definition,
+		EWacomCardUpgradeTier PreviousTier,
+		EWacomCardUpgradeTier NewTier);
 	static FText BuildUpgradeFailureToastText(FName DisabledReason);
 };

@@ -2,6 +2,7 @@
 
 #include "UI/Battle/WacomBattleHandPresentationController.h"
 
+#include "UI/Battle/WacomBattleCardChangeFeedbackPolicy.h"
 #include "UI/Battle/WacomBattleCardPresentationHelper.h"
 #include "UI/Battle/WacomBattleEffectBadgeFeedbackBuilder.h"
 
@@ -204,8 +205,8 @@ void FWacomBattleHandPresentationController::StoreTransitionEvents(const TArray<
 {
 	for (const FBattleEvent& Event : Events)
 	{
-		if (Event.Type == EBattleEventType::CardRuntimeCostChanged
-			|| Event.Type == EBattleEventType::CardStatusChanged)
+		if (WacomBattleCardChangeFeedbackPolicy::LicensesEffectBadgeRewrite(
+			Event.Type))
 		{
 			PendingCardDataChangeEvents.Add(Event);
 		}

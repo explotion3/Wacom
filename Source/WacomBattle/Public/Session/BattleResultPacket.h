@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "Types/WacomEnums.h"
 #include "Runtime/BattleEnemyKeys.h"
 #include "Runtime/BattlePartSlotIdentity.h"
@@ -10,6 +11,19 @@
 
 class UCardDefinition;
 class UEnemyDefinition;
+
+/** 战内确认后写回同一 Run 卡实例的持久修正。 */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattlePersistentCardMutation
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FGuid SourceRunInstanceId;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	FWacomCardPersistentModifierState PersistentModifiers;
+};
 
 /**
  * 单个被破坏部位给予玩家的经验值记账。
@@ -185,6 +199,13 @@ struct WACOMBATTLE_API FBattleResultPacket
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
 	TArray<FBattleGainedCard> GainedCards;
+
+	/**
+	 * 按 SourceRunInstanceId 写回的单卡持久修正。
+	 * 仅 Victory（含 Withdraw）由 Run 层应用；战内生成卡没有来源身份，不会进入本数组。
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")
+	TArray<FBattlePersistentCardMutation> PersistentCardMutations;
 
 	/** 本场战斗中所有被破坏的完整部位身份（内部 identity 投影）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Result")

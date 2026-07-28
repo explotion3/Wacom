@@ -2,7 +2,7 @@
 type: tech-debt
 scope: wacom-current-debt
 status: active
-updated: 2026-07-24
+updated: 2026-07-28
 tags:
   - wacom/tech-debt
   - wacom/docs
@@ -41,10 +41,11 @@ tags:
 |---|---|---|
 | 存档系统暂停 | `bSaveSystemEnabled = false`；底层 SaveGame / RunState 拷贝和迁移机制保留 | Demo 完善后恢复 Bootstrap 读盘、PauseMenu Save、MainMenu Continue |
 | RunEvent 状态 | `RunEventStates` 当前只保存在 Run 内存态 | 接入 SaveGame，并定义状态生命周期 |
-| Shop 状态 | `ShopStates`、强化服务配置和本访问交易标记当前只保存在 Run 内存态；卡牌实例自身的当前强化 Definition 仍由 v5 `DefinitionAssetPath` 正常保存 | 接入 SaveGame 时定义库存/服务刷新、跨日保留和活动访问不恢复规则 |
+| Shop 状态 | `ShopStates`、强化服务配置和本访问交易标记当前只保存在 Run 内存态；卡牌实例 Tier 与持久修正由 SaveGame v6 保存 | 接入 SaveGame 时定义库存/服务刷新、跨日保留和活动访问不恢复规则 |
 | 金币存档 | `Gold` 当前作为 Run 内资源，不写入 SaveGame | 恢复存档系统时确认是否入档 |
 | `BattleState` 非反射 | 裸 struct + pImpl，GC 引用靠 Session 的 `ReferencedAssets` | 若需存档 / 网络，升级为 USTRUCT 或 UObject |
-| SaveGame 迁移 | 版本迁移 switch 已有 v0 到 v5 连续模型 | 每次升版本加新 case，永远不改已存在 case；Shop 强化本身不需要新 schema |
+| SaveGame 迁移 | 版本迁移 switch 已有 v0 到 v6 连续模型；v5→v6 补 Tier/持久修正并清理旧 Debug 毒牙 | 每次升版本加新 case，永远不改已存在 case |
+| 旧卡 flat profile fallback | 未迁移旧卡继续把扁平 BaseCost/Effects/Physique 等解析为 White，保持可玩但不可强化 | 全部正式旧卡迁入四阶 Profile 后删除 flat fallback 和相关兼容测试 |
 | Shop 首次交易字段命名 | `bShopVisitHasPurchase` / `bHasPurchaseThisVisit` 为兼容保留名称，实际已表示本访问发生过成功购买或强化 | 下次破坏性公共合同整理时统一重命名为 transaction/commerce；此前所有新逻辑按“成功交易”解释，禁止只检查购买 |
 | Encounter lifecycle 持久化 | Map Node lifecycle 与 `BattleProgress` 仍只存在于内存；旧 `DestroyedTriggerIds` Actor 投影已经删除，SaveVersion 暂留 v5，早期原型存档不受支持 | 正式重新启用存档时升级 schema，直接持久化 Map Node lifecycle 与按 `FWacomMapNodeHandle` 分区的必要战斗进度，不恢复 Actor ID 投影 |
 | EnemyPart `KnockdownRewardCard` legacy 字段 | 旧 TrainingWarrior、Snake 和其它尚未授权迁移的 Part 仍可让 Aid/Destroy 回退读取同一张卡；新字段与 legacy 混填由 validator 拒绝 | 先迁 TrainingWarrior、Snake 和全部 Production Part 到显式 Aid/Destroy，运行 builder 双跑与 Battle/Run/UI 回归，再用 AssetRegistry/引用审计证明零 legacy 依赖；满足前不得删除字段或 fallback |
@@ -170,6 +171,7 @@ UI 当前事实入口见 `WacomUI.md`；CommonUI shell 见 `WacomUIFoundation.md
 - First-person presentation frame 生产写入已收口：Run source 和 Battle hand presentation controller 不再写 legacy `bApplyAsPresentationFrame`，正式路径显式设置 `CommitMode`；该 legacy 字段仅作为旧调用兼容保留。
 - Card detail `ChangeLines` legacy text path 已清理：`FWacomCardDetailViewData` 不再暴露未渲染的变化文本字段，Battle target preview 文本旁路也已移除；费用和目标预览表现应走卡面数值、`EffectPreviews` 或正式 `Sections` semantic document。
 - Card detail `PassiveLines` legacy mirror 已清理：被动正文只通过正式 `Sections` / explanation blocks 承载，`Passive.DisplayText` fallback 不再生成平行纯文本字段，也不再作为详情面板输入。
+- `FCardPassive::DisplayText` 字段仍为旧资产 authoring fallback：正式优先级已经迁到 `UCardDefinition::ExplanationTemplates.PassiveTemplates`。待旧卡逐步补齐专属模板并完成内容迁移后，应删除该字段及 DisplayText 分支；当前不能提前删除，否则会让未迁移卡牌丢失准确被动文案。
 - Card detail `TaskLines` 与扁平 `TokenLines` legacy mirror 已清理：`FWacomCardDetailViewData` 的正式详情文档只保留 `Sections`，后续任务、预览或风味文本应新增正式 section，而不是维护平行数组镜像。
 - Card detail `Description` legacy mirror 已清理：`FWacomCardDetailViewData` 不再暴露平行纯文本正文或 `UWacomCardDetailPanel::GetDescriptionText()`；`UCardDefinition::Description` 只在没有任何结构化详情 section 时作为普通正文回退，不解析旧占位，也不重新成为规则说明入口。
 - Card detail explanation system 已收口：`UWacomCardPresentationBuilder` 保留为 public / Blueprint facade，`WacomCardDetailDocumentBuilder` 负责详情 `Sections` 组装，`WacomCardExplanationCompiler` 负责 block / section 组装，`WacomCardExplanationTemplateResolver` 负责词典模板选择与 fallback 模板，`WacomCardExplanationTemplateRenderer` 负责 typed slot 到 runs 的转换，Widget 不承载 Description / Passive / Effect 分区逻辑。

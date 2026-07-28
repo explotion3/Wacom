@@ -55,8 +55,8 @@ bool FWacomRunSaveGameOutcomeMigrationSpec::RunTest(const FString& /*Parameters*
 		TStrongObjectPtr<UWacomSaveGame> Save(NewObject<UWacomSaveGame>());
 		Save->SaveVersion = 0;
 		Save->bRunActive = true;
-		TestTrue(TEXT("v0 migrates continuously to v5"), UWacomSaveGame::MigrateIfNeeded(Save.Get()));
-		TestEqual(TEXT("v0 reaches v5"), Save->SaveVersion, 5);
+		TestTrue(TEXT("v0 migrates continuously to v6"), UWacomSaveGame::MigrateIfNeeded(Save.Get()));
+		TestEqual(TEXT("v0 reaches v6"), Save->SaveVersion, 6);
 		TestEqual(TEXT("v0 active becomes InProgress"), Save->Outcome, ERunOutcome::InProgress);
 		TestFalse(TEXT("v0 has no fabricated summary"), Save->bHasCompletionSummary);
 	}
@@ -70,8 +70,8 @@ bool FWacomRunSaveGameOutcomeMigrationSpec::RunTest(const FString& /*Parameters*
 		Save->bHasCompletionSummary = true;
 		Save->CompletionSummary = MakeDiskSummary();
 
-		TestTrue(TEXT("v4 migrates to v5"), UWacomSaveGame::MigrateIfNeeded(Save.Get()));
-		TestEqual(TEXT("v4 reaches v5"), Save->SaveVersion, 5);
+		TestTrue(TEXT("v4 migrates to v6"), UWacomSaveGame::MigrateIfNeeded(Save.Get()));
+		TestEqual(TEXT("v4 reaches v6"), Save->SaveVersion, 6);
 		TestEqual(TEXT("v4 activity maps to Outcome"), Save->Outcome,
 			bLegacyActive ? ERunOutcome::InProgress : ERunOutcome::Failed);
 		TestFalse(TEXT("v4 migration clears unavailable summary"), Save->bHasCompletionSummary);
@@ -87,7 +87,7 @@ bool FWacomRunSaveGameOutcomeMigrationSpec::RunTest(const FString& /*Parameters*
 		TestTrue(TEXT("valid v5 success schema accepted"), UWacomSaveGame::MigrateIfNeeded(Save.Get()));
 	}
 
-	AddExpectedError(TEXT("v5 Outcome/CompletionSummary 组合非法"), EAutomationExpectedErrorFlags::Contains, 3);
+	AddExpectedError(TEXT("Outcome/CompletionSummary 组合非法"), EAutomationExpectedErrorFlags::Contains, 3);
 	{
 		TStrongObjectPtr<UWacomSaveGame> Save(NewObject<UWacomSaveGame>());
 		Save->Outcome = ERunOutcome::Succeeded;
@@ -129,12 +129,12 @@ bool FWacomRunSaveGameSuccessRoundtripSpec::RunTest(const FString& /*Parameters*
 	SourceState.CompletionSummary = MakeRuntimeSummary();
 
 	TStrongObjectPtr<UWacomSaveGame> Save(Source->BuildSaveGameFromRunState());
-	if (!TestNotNull(TEXT("Succeeded Run can build a v5 save"), Save.Get()))
+	if (!TestNotNull(TEXT("Succeeded Run can build a v6 save"), Save.Get()))
 	{
 		return false;
 	}
 
-	TestEqual(TEXT("Save schema is v5"), Save->SaveVersion, 5);
+	TestEqual(TEXT("Save schema is v6"), Save->SaveVersion, 6);
 	TestEqual(TEXT("Outcome roundtrips to disk"), Save->Outcome, ERunOutcome::Succeeded);
 	TestTrue(TEXT("Completion summary present"), Save->bHasCompletionSummary);
 	TestEqual(TEXT("JourneyId serialized"), Save->CompletionSummary.JourneyId,

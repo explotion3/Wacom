@@ -8,6 +8,7 @@
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Events/BattleEventBus.h"
+#include "Hand/BattleCardZoneTransition.h"
 #include "Initiative/BattleInitiativeTimelineModule.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
@@ -305,6 +306,55 @@ void FBattleStatusSemanticsModule::MaterializePendingHandAfflictions(
 	}
 }
 
+TArray<FGuid> FBattleStatusSemanticsModule::ResolvePlayerBurnForDrawnCards(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	TConstArrayView<FGuid> DrawnCardIds)
+{
+	TArray<FGuid> SurvivingDrawnCards;
+	SurvivingDrawnCards.Reserve(DrawnCardIds.Num());
+	for (const FGuid& CardId : DrawnCardIds)
+	{
+		FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardId);
+		if (!Card || Card->Location != ECardLocation::Hand)
+		{
+			continue;
+		}
+
+		const int32 PlayerBurn = FBattleCombatantStatusFacts::GetStacks(
+			State.Player.StatusStacks,
+			WacomTags::Status_Burn);
+		if (PlayerBurn > 0)
+		{
+			FBattleCombatantMutationModule::RemoveStatusStacks(
+				State,
+				FBattleCombatantHandle::Player(),
+				WacomTags::Status_Burn,
+				1);
+			const FCardStatusMutationResult CardBurn =
+				FBattleCardRuntimeStateModule::ApplyStatusStacks(
+					State,
+					Events,
+					CardId,
+					WacomTags::Status_Burn,
+					1);
+			if (CardBurn.StacksAfter >= 3)
+			{
+				FBattleCardZoneTransition::ExhaustCardsFromHand(
+					State,
+					Events,
+					TArray<FGuid>{ CardId },
+					FBattleCardZoneTransitionCause::FromEffect(
+						FGuid(),
+						WacomTags::Status_Burn));
+				continue;
+			}
+		}
+		SurvivingDrawnCards.Add(CardId);
+	}
+	return SurvivingDrawnCards;
+}
+
 void FBattleStatusSemanticsModule::ExpireTurnEndCardStatuses(
 	FBattleState& State,
 	FBattleEventBus& Events)
@@ -364,6 +414,41 @@ void FBattleStatusSemanticsModule::ResolveAfterEnemyPartAction(
 	FBattleEventBus& Events)
 {
 	ResolvePoisonForAllHosts(State, Events);
+}
+
+bool FBattleStatusSemanticsModule::ResolveEnemyBurnBeforeIntent(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	const FGuid& EnemyPartInstanceId)
+{
+	FRuntimeEnemyPart* Part = FBattleRules::FindEnemyPart(State, EnemyPartInstanceId);
+	if (!Part || Part->bDestroyed)
+	{
+		return false;
+	}
+
+	const int32 BurnStacks = FBattleCombatantStatusFacts::GetStacks(
+		Part->StatusStacks,
+		WacomTags::Status_Burn);
+	if (BurnStacks <= 0)
+	{
+		return true;
+	}
+
+	FDamageMutationIntent Damage;
+	Damage.Target = FBattleCombatantHandle::EnemyPart(EnemyPartInstanceId);
+	Damage.RequestedDamage = BurnStacks;
+	Damage.ShieldInteraction = EDamageShieldInteraction::ConsumeShield;
+	Damage.CauseTag = WacomTags::Status_Burn;
+	Damage.DamageKind = EBattleDamageKind::Periodic;
+	FBattleCombatantMutationModule::ApplyDamage(State, Events, Damage);
+
+	FBattleCombatantMutationModule::RemoveStatusStacks(
+		State,
+		FBattleCombatantHandle::EnemyPart(EnemyPartInstanceId),
+		WacomTags::Status_Burn,
+		BurnStacks - (BurnStacks / 2));
+	return !Part->bDestroyed;
 }
 
 void FBattleStatusSemanticsModule::ProjectPendingPlayerStatuses(

@@ -17,6 +17,10 @@ namespace WacomCardExplanationLexiconKeys
 	const FName ConditionUnknownStatus(TEXT("Condition.UnknownStatus"));
 	const FName ConditionSelfInZone(TEXT("Condition.SelfInZone"));
 	const FName ConditionSelfNotInZone(TEXT("Condition.SelfNotInZone"));
+	const FName ConditionSelfInCardLocation(TEXT("Condition.SelfInCardLocation"));
+	const FName ConditionSelfNotInCardLocation(TEXT("Condition.SelfNotInCardLocation"));
+	const FName ConditionSelfEverEnteredExhaust(TEXT("Condition.SelfEverEnteredExhaust"));
+	const FName ConditionSelfNeverEnteredExhaust(TEXT("Condition.SelfNeverEnteredExhaust"));
 	const FName ConditionTargetHasStatus(TEXT("Condition.TargetHasStatus"));
 	const FName ConditionTargetHasNoStatus(TEXT("Condition.TargetHasNoStatus"));
 	const FName ConditionFallback(TEXT("Condition.Fallback"));
@@ -103,14 +107,15 @@ namespace
 UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 {
 	EffectTemplates = {
-		MakeTemplateEntry(WacomTags::Effect_Damage, LOCTEXT("DefaultDamage", "{icon:EffectIcon} 造成 {value:Magnitude} 点伤害。")),
-		MakeTemplateEntry(WacomTags::Effect_Heal, LOCTEXT("DefaultHeal", "{icon:EffectIcon} 恢复 {value:Magnitude} 点生命。")),
-		MakeTemplateEntry(WacomTags::Status_Shield, LOCTEXT("DefaultShield", "{icon:EffectIcon} 获得 {value:Magnitude} 点护盾。")),
+		MakeTemplateEntry(WacomTags::Effect_Damage, LOCTEXT("DefaultDamage", "{icon:EffectIcon} 造成 {value:Magnitude} 伤害。")),
+		MakeTemplateEntry(WacomTags::Effect_Heal, LOCTEXT("DefaultHeal", "{icon:EffectIcon} 恢复 {value:Magnitude} 生命。")),
+		MakeTemplateEntry(WacomTags::Status_Shield, LOCTEXT("DefaultShield", "{icon:EffectIcon} 获得 {value:Magnitude} 护盾。")),
 		MakeTemplateEntry(WacomTags::Effect_Draw, LOCTEXT("DefaultDraw", "抽 {value:Magnitude} 张牌。")),
-		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Poison, LOCTEXT("DefaultPoison", "施加 {value:Magnitude} 层 {status:EffectStatus}。")),
-		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Slow, LOCTEXT("DefaultSlow", "施加 {value:Magnitude} 层 {status:EffectStatus}。")),
-		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Freeze, LOCTEXT("DefaultFreeze", "施加 {value:Magnitude} 层 {status:EffectStatus}。")),
-		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Twilight, LOCTEXT("DefaultTwilight", "施加 {value:Magnitude} 层 {status:EffectStatus}。")),
+		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Poison, LOCTEXT("DefaultPoison", "施加 {value:Magnitude} {status:EffectStatus}。")),
+		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Slow, LOCTEXT("DefaultSlow", "施加 {value:Magnitude} {status:EffectStatus}。")),
+		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Freeze, LOCTEXT("DefaultFreeze", "施加 {value:Magnitude} {status:EffectStatus}。")),
+		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Twilight, LOCTEXT("DefaultTwilight", "施加 {value:Magnitude} {status:EffectStatus}。")),
+		MakeTemplateEntry(WacomTags::Effect_ApplyStatus_Burn, LOCTEXT("DefaultBurn", "施加 {value:Magnitude} {status:EffectStatus}。")),
 		MakeTemplateEntry(WacomTags::Effect_Card_AddCost, LOCTEXT("DefaultAddCost", "目标手牌费用增加 {value:Magnitude}。")),
 		MakeTemplateEntry(WacomTags::Effect_Card_ReduceCost, LOCTEXT("DefaultReduceCost", "目标手牌费用降低 {value:Magnitude}。")),
 		MakeTemplateEntry(WacomTags::Effect_Card_DiscardSelected, LOCTEXT("DefaultDiscardSelected", "弃置目标手牌。")),
@@ -123,6 +128,15 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 		MakeTemplateEntry(WacomTags::Effect_Shuffle_Random, LOCTEXT("DefaultShuffleRandom", "随机腾挪 1 张手牌。")),
 		MakeTemplateEntry(WacomTags::Effect_Shuffle_FromBothToOther, LOCTEXT("DefaultShuffleFromBothToOther", "将双手区随机 1 张卡牌腾挪至其他区域。")),
 		MakeTemplateEntry(WacomTags::Effect_Shuffle_ToRandomZone, LOCTEXT("DefaultShuffleToRandomZone", "该牌腾挪至随机区域。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_GenerateToHand, LOCTEXT("DefaultGenerateToHand", "生成 {value:Magnitude} 张指定卡牌到手牌。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_GenerateRandomFromPoolToHand, LOCTEXT("DefaultGenerateRandomToHand", "随机生成 {value:Magnitude} 张卡牌到手牌。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_CloneSelfIntoDraw, LOCTEXT("DefaultCloneSelfIntoDraw", "将本卡的完整复制品随机插入抽牌堆。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_AddEffectMagnitude, LOCTEXT("DefaultAddEffectMagnitude", "使目标卡牌的指定效果 +{value:Magnitude}。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_MultiplyEffectMagnitude, LOCTEXT("DefaultMultiplyEffectMagnitude", "使目标卡牌的指定效果倍率 x{value:Magnitude}。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_AddCriticalChance, LOCTEXT("DefaultAddCriticalChance", "使目标卡牌本场暴击率 +{value:Magnitude}%。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_AddPersistentDurability, LOCTEXT("DefaultAddPersistentDurability", "使本卡永久耐久 +{value:Magnitude}。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_AddPersistentEffectMagnitude, LOCTEXT("DefaultAddPersistentEffectMagnitude", "使本卡指定效果永久 +{value:Magnitude}。"))
+		,MakeTemplateEntry(WacomTags::Effect_Card_AutoPlaySelf, LOCTEXT("DefaultAutoPlaySelf", "免费自动打出本卡。"))
 	};
 
 	PassiveTriggerTemplates = {
@@ -133,6 +147,9 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 		MakeTemplateEntry(WacomTags::Passive_Trigger_OnTurnEnd, LOCTEXT("DefaultPassiveTurnEnd", "回合结束：")),
 		MakeTemplateEntry(WacomTags::Passive_Trigger_OnDraw, LOCTEXT("DefaultPassiveDraw", "抽到时：")),
 		MakeTemplateEntry(WacomTags::Passive_Trigger_OnDiscard, LOCTEXT("DefaultPassiveDiscard", "弃掉时："))
+		,MakeTemplateEntry(WacomTags::Passive_Trigger_OnAdjacentCompanionPlayed, LOCTEXT("DefaultPassiveAdjacentCompanion", "相邻伙伴打出时："))
+		,MakeTemplateEntry(WacomTags::Passive_Trigger_OnOtherCompanionPlayed, LOCTEXT("DefaultPassiveOtherCompanion", "打出其他伙伴时："))
+		,MakeTemplateEntry(WacomTags::Passive_Trigger_OnBattleSettlement, LOCTEXT("DefaultPassiveBattleSettlement", "战斗胜利或撤离后："))
 	};
 
 	PassiveOutcomeTemplates = {
@@ -148,7 +165,11 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 	TagDisplayNames = {
 		MakeTagDisplayEntry(WacomTags::HandZone_Left, LOCTEXT("DefaultHandZoneLeft", "左手区")),
 		MakeTagDisplayEntry(WacomTags::HandZone_Both, LOCTEXT("DefaultHandZoneBoth", "双手区")),
-		MakeTagDisplayEntry(WacomTags::HandZone_Right, LOCTEXT("DefaultHandZoneRight", "右手区"))
+		MakeTagDisplayEntry(WacomTags::HandZone_Right, LOCTEXT("DefaultHandZoneRight", "右手区")),
+		MakeTagDisplayEntry(WacomTags::CardLocation_Draw, LOCTEXT("DefaultCardLocationDraw", "抽牌堆")),
+		MakeTagDisplayEntry(WacomTags::CardLocation_Discard, LOCTEXT("DefaultCardLocationDiscard", "弃牌堆")),
+		MakeTagDisplayEntry(WacomTags::CardLocation_Exhaust, LOCTEXT("DefaultCardLocationExhaust", "消耗区")),
+		MakeTagDisplayEntry(WacomTags::CardLocation_Hand, LOCTEXT("DefaultCardLocationHand", "手牌"))
 	};
 
 	NamedTexts = {
@@ -161,13 +182,17 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionUnknownStatus, LOCTEXT("DefaultUnknownStatus", "指定状态")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfInZone, LOCTEXT("DefaultSelfInZone", "仅当本卡在{0}时")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfNotInZone, LOCTEXT("DefaultSelfNotInZone", "仅当本卡不在{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfInCardLocation, LOCTEXT("DefaultSelfInCardLocation", "仅当本卡位于{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfNotInCardLocation, LOCTEXT("DefaultSelfNotInCardLocation", "仅当本卡不位于{0}时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfEverEnteredExhaust, LOCTEXT("DefaultSelfEverEnteredExhaust", "仅当本卡本场曾进入过消耗区时")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionSelfNeverEnteredExhaust, LOCTEXT("DefaultSelfNeverEnteredExhaust", "仅当本卡本场从未进入过消耗区时")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionTargetHasStatus, LOCTEXT("DefaultTargetHasStatus", "仅当目标有{0}时")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionTargetHasNoStatus, LOCTEXT("DefaultTargetHasNoStatus", "仅当目标没有{0}时")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionFallback, LOCTEXT("DefaultFallbackCondition", "仅当满足{0}时")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ConditionFallbackNegated, LOCTEXT("DefaultFallbackNegatedCondition", "仅当不满足{0}时")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierAddPositive, LOCTEXT("DefaultModifierAddPositive", "数值 +{0}")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierAddNegative, LOCTEXT("DefaultModifierAddNegative", "数值 {0}")),
-		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierMultiply, LOCTEXT("DefaultModifierMultiply", "数值 ×{0}")),
+		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierMultiply, LOCTEXT("DefaultModifierMultiply", "数值 x{0}")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierUnknown, LOCTEXT("DefaultModifierUnknown", "数值修正 {0}")),
 		MakeNamedTextEntry(WacomCardExplanationLexiconKeys::ModifierConditional, LOCTEXT("DefaultConditionalModifier", "{0}，{1}"))
 	};
@@ -223,6 +248,16 @@ UWacomCardExplanationLexicon::UWacomCardExplanationLexicon()
 			WacomTags::Card_Keyword_DeleteProvider,
 			LOCTEXT("CardFaceDeleteProviderName", "删牌"),
 			LOCTEXT("CardFaceDeleteProviderDescription", "持有任意一张即可启用删牌换金币；最后一张提供者只能单独出售。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Food.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Food,
+			LOCTEXT("CardFaceFoodName", "食物"),
+			LOCTEXT("CardFaceFoodDescription", "食物类卡牌；首轮仅作为正式分类供目标筛选与后续规则扩展。")),
+		MakeCardFaceSemanticEntry(
+			WacomTags::Card_Keyword_Container.GetTag().GetTagName(),
+			WacomTags::Card_Keyword_Container,
+			LOCTEXT("CardFaceContainerKeywordName", "容器"),
+			LOCTEXT("CardFaceContainerKeywordDescription", "容器类卡牌；有效容量仍由体质中的 Capacity 与 CapacityEffect 共同决定。")),
 		MakeCardFaceSemanticEntry(
 			WacomCardFaceSemanticIds::Backpack,
 			FGameplayTag(),

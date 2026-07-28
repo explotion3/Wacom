@@ -40,6 +40,8 @@ namespace
 		const FLinearColor& FallbackTint,
 		const FWacomBattleStatusRuleTextSet& PlayerRules,
 		const FWacomBattleStatusRuleTextSet& EnemyPartRules,
+		const FWacomBattleStatusRuleTextSet& CardRules =
+			FWacomBattleStatusRuleTextSet(),
 		std::initializer_list<FGameplayTag> Aliases = {})
 	{
 		FWacomBattleStatusPresentationEntry Entry;
@@ -49,6 +51,7 @@ namespace
 		Entry.IconBrush = MakeFallbackBrush(FallbackTint);
 		Entry.PlayerRules = PlayerRules;
 		Entry.EnemyPartRules = EnemyPartRules;
+		Entry.CardRules = CardRules;
 		for (const FGameplayTag Alias : Aliases)
 		{
 			Entry.LookupAliases.Add(Alias);
@@ -63,7 +66,8 @@ namespace
 			|| StatusTag == WacomTags::Status_Slow
 			|| StatusTag == WacomTags::Status_Freeze
 			|| StatusTag == WacomTags::Status_Twilight
-			|| StatusTag == WacomTags::Status_Stunned;
+			|| StatusTag == WacomTags::Status_Stunned
+			|| StatusTag == WacomTags::Status_Burn;
 	}
 
 	void ValidateTemplate(
@@ -150,6 +154,7 @@ UWacomBattleStatusPresentationCatalog::UWacomBattleStatusPresentationCatalog()
 				LOCTEXT("EnemyPoisonCore", "每层在结算时造成 {PoisonDamagePerStack} 点生命伤害，并穿透护盾。"),
 				LOCTEXT("EnemyPoisonTiming", "玩家每打出一张牌或任一敌方部位行动后结算。"),
 				LOCTEXT("EnemyPoisonPolicy", "结算不减层；可通过移除状态效果降低层数。")),
+			FWacomBattleStatusRuleTextSet(),
 			{ WacomTags::Effect_ApplyStatus_Poison }),
 		MakeEntry(
 			WacomTags::Status_Slow,
@@ -164,6 +169,7 @@ UWacomBattleStatusPresentationCatalog::UWacomBattleStatusPresentationCatalog()
 				LOCTEXT("EnemySlowCore", "施加时按层数延后该部位当前意图的先机。"),
 				LOCTEXT("EnemySlowTiming", "效果成功施加时立即结算。"),
 				LOCTEXT("EnemySlowPolicy", "不保留为敌方部位的持久状态。")),
+			FWacomBattleStatusRuleTextSet(),
 			{ WacomTags::Effect_ApplyStatus_Slow }),
 		MakeEntry(
 			WacomTags::Status_Freeze,
@@ -178,6 +184,7 @@ UWacomBattleStatusPresentationCatalog::UWacomBattleStatusPresentationCatalog()
 				LOCTEXT("EnemyFreezeCore", "每层拦截下一张会真实推进先机的非迅捷卡。"),
 				LOCTEXT("EnemyFreezeTiming", "该卡推进对应部位先机时触发。"),
 				LOCTEXT("EnemyFreezePolicy", "每次触发消耗 1 层；不会使敌人跳过行动。")),
+			FWacomBattleStatusRuleTextSet(),
 			{ WacomTags::Effect_ApplyStatus_Freeze }),
 		MakeEntry(
 			WacomTags::Status_Twilight,
@@ -192,6 +199,7 @@ UWacomBattleStatusPresentationCatalog::UWacomBattleStatusPresentationCatalog()
 				LOCTEXT("EnemyTwilightCore", "下一意图的先机增加当前暮气层数。"),
 				LOCTEXT("EnemyTwilightTiming", "安装下一意图的基础先机后触发。"),
 				LOCTEXT("EnemyTwilightPolicy", "触发后层数向下减半；剩余层数继续保留。")),
+			FWacomBattleStatusRuleTextSet(),
 			{ WacomTags::Effect_ApplyStatus_Twilight }),
 		MakeEntry(
 			WacomTags::Status_Stunned,
@@ -206,6 +214,24 @@ UWacomBattleStatusPresentationCatalog::UWacomBattleStatusPresentationCatalog()
 				LOCTEXT("EnemyStunnedCore", "使该部位跳过下一次敌方行动。"),
 				LOCTEXT("EnemyStunnedTiming", "该部位到达行动边界、准备执行意图时触发。"),
 				LOCTEXT("EnemyStunnedPolicy", "每次触发消耗 1 层；叠层可连续跳过多次行动。"))),
+		MakeEntry(
+			WacomTags::Status_Burn,
+			LOCTEXT("StatusBurn", "灼烧"),
+			45,
+			FLinearColor(1.0f, 0.38f, 0.12f, 1.0f),
+			MakeRules(
+				LOCTEXT("PlayerBurnCore", "每抽到一张牌，将 1 层灼烧转移到该牌。"),
+				LOCTEXT("PlayerBurnTiming", "主动抽牌、回合抽牌和从牌堆正式抽回时按抽取顺序触发。"),
+				LOCTEXT("PlayerBurnPolicy", "每次转移自身减少 1 层；直接生成到手牌不会触发。")),
+			MakeRules(
+				LOCTEXT("EnemyBurnCore", "行动前受到等于当前层数的周期伤害，护盾正常吸收。"),
+				LOCTEXT("EnemyBurnTiming", "到达行动边界后、眩晕和 Intent 效果之前触发。"),
+				LOCTEXT("EnemyBurnPolicy", "结算后层数向下减半；灼烧致死会阻止本次 Intent。")),
+			MakeRules(
+				LOCTEXT("CardBurnCore", "该牌累计到 3 层灼烧时立即进入消耗区。"),
+				LOCTEXT("CardBurnTiming", "玩家灼烧在该牌正式抽入手牌时转移 1 层。"),
+				LOCTEXT("CardBurnPolicy", "层数会跨手牌与各牌堆保留至战斗结束。")),
+			{ WacomTags::Effect_ApplyStatus_Burn }),
 		MakeEntry(
 			WacomTags::Status_Shield,
 			LOCTEXT("StatusShield", "护盾"),
@@ -388,6 +414,7 @@ EDataValidationResult UWacomBattleStatusPresentationCatalog::IsDataValid(
 		WacomTags::Status_Freeze,
 		WacomTags::Status_Twilight,
 		WacomTags::Status_Stunned,
+		WacomTags::Status_Burn,
 		WacomTags::Status_Shield,
 	};
 	for (const FGameplayTag RequiredStatus : RequiredStatuses)
@@ -399,6 +426,25 @@ EDataValidationResult UWacomBattleStatusPresentationCatalog::IsDataValid(
 				FText::FromString(RequiredStatus.ToString())));
 			Result = EDataValidationResult::Invalid;
 		}
+	}
+	if (const FWacomBattleStatusPresentationEntry* Burn =
+		FindEntry(WacomTags::Status_Burn))
+	{
+		ValidateRules(
+			Burn->PlayerRules,
+			LOCTEXT("BurnPlayerRulesField", "Status.Burn.PlayerRules"),
+			Context,
+			Result);
+		ValidateRules(
+			Burn->EnemyPartRules,
+			LOCTEXT("BurnEnemyRulesField", "Status.Burn.EnemyPartRules"),
+			Context,
+			Result);
+		ValidateRules(
+			Burn->CardRules,
+			LOCTEXT("BurnCardRulesField", "Status.Burn.CardRules"),
+			Context,
+			Result);
 	}
 
 	if (!IsIconBrushAssetConfigured(FallbackIconBrush))

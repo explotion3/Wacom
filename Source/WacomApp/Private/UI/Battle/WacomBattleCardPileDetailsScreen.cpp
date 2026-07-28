@@ -155,6 +155,21 @@ namespace
 			FWacomCardPresentationRuntimeContext RuntimeContext;
 			RuntimeContext.bHasRuntimeCost = true;
 			RuntimeContext.RuntimeCost = Card.RuntimeCost;
+			RuntimeContext.bHasUpgradeTier = true;
+			RuntimeContext.UpgradeTier = Card.UpgradeTier;
+			RuntimeContext.bHasCurrentDurability = Card.bHasFiniteDurability;
+			RuntimeContext.CurrentDurability = Card.CurrentDurability;
+			RuntimeContext.CurrentEffectMagnitudes.Reserve(
+				Card.CurrentEffectMagnitudes.Num());
+			for (const FBattleCardEffectMagnitudeSnapshot& SnapshotMagnitude :
+				Card.CurrentEffectMagnitudes)
+			{
+				FWacomCardPresentationRuntimeContext::FCurrentEffectMagnitude&
+					PresentationMagnitude =
+						RuntimeContext.CurrentEffectMagnitudes.AddDefaulted_GetRef();
+				PresentationMagnitude.EffectIndex = SnapshotMagnitude.EffectIndex;
+				PresentationMagnitude.Magnitude = SnapshotMagnitude.Magnitude;
+			}
 			View.CardViewData = UWacomCardPresentationBuilder::BuildCardViewData(
 				Card.Definition,
 				RuntimeContext);

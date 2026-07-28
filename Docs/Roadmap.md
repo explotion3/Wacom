@@ -49,8 +49,8 @@ tags:
 | Trigger | 入口 / 依赖 | 接入要求 |
 |---|---|---|
 | `Passive.Trigger.OnTurnStart` | Reserved；Turn Lifecycle 已固定 start boundary，但无运行时 Dispatcher | 出现正式卡牌时，定义触发对象 / 次数 / chain，并在 `Phase=TurnStart` 后、等待值重置和抽牌前接入 |
-| `Passive.Trigger.OnTurnEnd` | Reserved；Turn Lifecycle 已固定 end boundary，但无运行时 Dispatcher | 出现正式卡牌时，定义触发对象 / 次数 / chain，并在 `TurnEnded` 后、卡牌清理前接入 |
-| `Passive.Trigger.OnDraw` | Reserved；无运行时 Dispatcher | 出现正式卡牌时，先定义 Effect.Draw 与回合抽牌是否同语义，再从卡牌已进入 hand queue 后的单一入口接入 |
+| `Passive.Trigger.OnTurnEnd` | 已接入；`TurnEnded` 后、卡牌清理前按稳定身份触发 | 新内容只需遵守制作矩阵与自动出牌递归门禁 |
+| `Passive.Trigger.OnDraw` | 已接入；真实 Draw 入手、灼烧转移和 Pending Affliction 后触发 | 直接生成到手牌不得伪造 Draw / OnDraw |
 | `Passive.Trigger.OnEnemyPartDestroyed` | 触发点方向见 [WacomBattle.md](./WacomBattle.md) / [Game_Design.md](./Game_Design.md) | 后续需要破坏部位触发卡时接入 |
 | `Passive.Trigger.OnPlayerDamaged` | 未做 | 可由战内伤口阈值跨越 flag 承接；先观察是否需要独立被动 trigger |
 
@@ -99,7 +99,7 @@ tags:
 | 项 | 入口 / 依赖 | 后续方向 |
 |---|---|---|
 | 商店内容 | 当前商店规则与数据入口见 [WacomRun.md](./WacomRun.md) / [WacomData.md](./WacomData.md) | 设计随机商品池、价格公式、库存刷新规则 |
-| 卡牌强化规则 | 不可变 Definition 链、制作校验、实例级原子交易、被动 Quote/Result、升级族匹配、Save v5 当前版本持久化和 Debug White→Blue 路线已落地 | 冻结首批 Production 强化链与正式 Shop 价格；后续只通过 DataAsset 扩展，不复制运行时规则 |
+| 卡牌强化规则 | 单 Definition 四阶 Profile、制作校验、实例级 Tier 原子交易、被动 Quote/Result、Save v6 Tier/持久修正和 FireWrite 首批内容已落地 | 冻结正式 Shop 价格；后续只通过同一 Definition 的 Tier Profile 扩展，不复制运行时规则 |
 | 商店 UI | 正式 `WBP_ShopScreen` 已全局注册，购买/强化双页签、InstanceId 列表、前后 CardView/字段差异、内联确认和 Toast 已接入 | PIE 通过后继续补 Production 视觉主题、商品 hover 详情、售罄表现；有性能证据后再考虑列表虚拟化 |
 | 商店存档 | 当前内存态边界见 [TechDebt: 数据与存档债](./TechDebt.md#techdebt-data-save) | 接入 SaveGame，并决定商店库存是否跨日或跨地图保留 |
 

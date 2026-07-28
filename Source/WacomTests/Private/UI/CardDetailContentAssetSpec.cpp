@@ -268,6 +268,20 @@ bool FWacomUICardDetailDefaultContentAssetsSpec::RunTest(const FString& /*Parame
 		Theme->ResolveStatusBrush(WacomTags::Status_Twilight));
 	TestNotNull(TEXT("Card detail theme resolves Stunned status brush or fallback"),
 		Theme->ResolveStatusBrush(WacomTags::Status_Stunned));
+	const FWacomCardDetailStatusBrushEntry* BurnStatusBrush =
+		Theme->StatusBrushes.FindByPredicate([](
+			const FWacomCardDetailStatusBrushEntry& Entry)
+		{
+			return Entry.StatusTag == WacomTags::Status_Burn;
+		});
+	TestNotNull(TEXT("Card detail theme has an explicit Burn status brush"),
+		BurnStatusBrush);
+	if (BurnStatusBrush)
+	{
+		TestTrue(TEXT("Card detail theme Burn status brush is configured"),
+			UWacomCardDetailTheme::IsInlineBrushConfigured(
+				BurnStatusBrush->Brush));
+	}
 	TestTrue(TEXT("Card detail inline icon render offset is finite"),
 		FMath::IsFinite(Theme->InlineIconRenderOffset.X) &&
 		FMath::IsFinite(Theme->InlineIconRenderOffset.Y));

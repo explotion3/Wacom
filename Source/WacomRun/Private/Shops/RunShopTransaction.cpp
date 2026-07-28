@@ -18,27 +18,9 @@ namespace
 	bool IsForbiddenUpgradeCard(const UCardDefinition* Card)
 	{
 		return !Card
-			|| Card->Rarity == WacomTags::Card_Rarity_Intrinsic
+			|| !Card->UsesTierProfiles()
 			|| Card->CardId.ToString().StartsWith(TEXT("Card.Run."), ESearchCase::CaseSensitive)
-			|| Card->Physique.Capacity > 0;
-	}
-
-	bool IsDirectUpgradeRarity(const FGameplayTag& From, const FGameplayTag& To)
-	{
-		return (From == WacomTags::Card_Rarity_White && To == WacomTags::Card_Rarity_Blue)
-			|| (From == WacomTags::Card_Rarity_Blue && To == WacomTags::Card_Rarity_Yellow)
-			|| (From == WacomTags::Card_Rarity_Yellow && To == WacomTags::Card_Rarity_Purple);
-	}
-
-	bool IsRuntimeUpgradeLinkValid(const UCardDefinition* Current, const UCardDefinition* Next)
-	{
-		return Current
-			&& Next
-			&& !IsForbiddenUpgradeCard(Current)
-			&& !IsForbiddenUpgradeCard(Next)
-			&& !Current->UpgradeFamilyId.IsNone()
-			&& Current->ResolveUpgradeFamilyId() == Next->ResolveUpgradeFamilyId()
-			&& IsDirectUpgradeRarity(Current->Rarity, Next->Rarity);
+			|| Card->ResolvePhysique(EWacomCardUpgradeTier::White).Capacity > 0;
 	}
 
 	bool TryResolveUpgradePrice(
@@ -106,7 +88,8 @@ namespace
 	{
 		FRunShopCardUpgradeQuote Quote;
 		Quote.InstanceId = Instance.InstanceId;
-		Quote.CurrentDefinition = Instance.Definition;
+		Quote.Definition = Instance.Definition;
+		Quote.CurrentTier = Instance.UpgradeTier;
 		if (!Instance.InstanceId.IsValid())
 		{
 			Quote.DisabledReason = TEXT("InvalidCardInstanceId");
@@ -118,14 +101,10 @@ namespace
 			return Quote;
 		}
 
-		const UCardDefinition* Current = Instance.Definition;
-		Quote.UpgradeFamilyId = Current->ResolveUpgradeFamilyId();
-		Quote.CurrentRarity = Current->Rarity;
-		Quote.NextDefinition = Current->NextUpgradeDefinition;
-		if (Quote.NextDefinition)
-		{
-			Quote.NextRarity = Quote.NextDefinition->Rarity;
-		}
+		const UCardDefinition* Definition = Instance.Definition;
+		Quote.CurrentRarity = Definition->ResolveRarity(Quote.CurrentTier);
+		const bool bHasNextTier = WacomCardUpgrade::TryGetNext(Quote.CurrentTier, Quote.NextTier);
+		Quote.NextRarity = Definition->ResolveRarity(Quote.NextTier);
 
 		if (!IsRunStateActiveForShop(State))
 		{
@@ -142,24 +121,19 @@ namespace
 			Quote.DisabledReason = TEXT("CardUpgradeServiceDisabled");
 			return Quote;
 		}
-		if (IsForbiddenUpgradeCard(Current))
+		if (IsForbiddenUpgradeCard(Definition))
 		{
 			Quote.DisabledReason = TEXT("CardUpgradeIneligible");
 			return Quote;
 		}
-		if (!Quote.NextDefinition)
+		if (!bHasNextTier)
 		{
 			Quote.DisabledReason = TEXT("NoNextUpgrade");
 			return Quote;
 		}
-		if (!IsRuntimeUpgradeLinkValid(Current, Quote.NextDefinition))
-		{
-			Quote.DisabledReason = TEXT("InvalidUpgradeChain");
-			return Quote;
-		}
 		if (!TryResolveUpgradePrice(
 			ShopState.CardUpgradeService,
-			Current->Rarity,
+			Quote.CurrentRarity,
 			Quote.Price))
 		{
 			Quote.DisabledReason = TEXT("UpgradePriceMissing");
@@ -434,21 +408,22 @@ FRunShopCardUpgradeResult FRunShopTransaction::UpgradeOwnedCard(
 	}
 
 	const FRunShopCardUpgradeQuote Quote = BuildUpgradeQuote(State, *ShopState, Location.Instance);
-	Result.PreviousDefinition = Quote.CurrentDefinition;
-	Result.NewDefinition = Quote.NextDefinition;
+	Result.Definition = Quote.Definition;
+	Result.PreviousTier = Quote.CurrentTier;
+	Result.NewTier = Quote.NextTier;
 	if (!Quote.bCanUpgrade)
 	{
 		Result.DisabledReason = Quote.DisabledReason;
 		return Result;
 	}
-	if (Command.ExpectedCurrentDefinition != Quote.CurrentDefinition)
+	if (Command.ExpectedDefinition != Quote.Definition)
 	{
-		Result.DisabledReason = TEXT("StaleCurrentDefinition");
+		Result.DisabledReason = TEXT("StaleDefinition");
 		return Result;
 	}
-	if (Command.ExpectedNextDefinition != Quote.NextDefinition)
+	if (Command.ExpectedCurrentTier != Quote.CurrentTier)
 	{
-		Result.DisabledReason = TEXT("StaleNextDefinition");
+		Result.DisabledReason = TEXT("StaleCurrentTier");
 		return Result;
 	}
 
@@ -462,7 +437,7 @@ FRunShopCardUpgradeResult FRunShopTransaction::UpgradeOwnedCard(
 	Result.bFirstTransactionThisVisit = !State.bShopVisitHasPurchase;
 	Result.GoldCost = Quote.Price;
 	State.Gold -= Quote.Price;
-	MutableInstance->Definition = Quote.NextDefinition;
+	MutableInstance->UpgradeTier = Quote.NextTier;
 	State.bShopVisitHasPurchase = true;
 	Result.bSucceeded = true;
 	return Result;

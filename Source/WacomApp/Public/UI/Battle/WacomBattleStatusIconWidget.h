@@ -20,6 +20,7 @@ enum class EWacomBattleStatusInspectionHost : uint8
 	Unknown UMETA(DisplayName = "未知"),
 	Player UMETA(DisplayName = "玩家"),
 	EnemyPart UMETA(DisplayName = "敌方部位"),
+	Card UMETA(DisplayName = "卡牌"),
 };
 
 USTRUCT(BlueprintType, meta = (ToolTip = "Battle UI 状态图标的只读展示数据。由 Snapshot 中的 Statuses / StatusStacks 转换而来，不写入规则状态。"))

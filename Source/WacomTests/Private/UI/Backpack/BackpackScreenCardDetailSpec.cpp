@@ -63,7 +63,7 @@ bool FWacomUIBackpackCardDetailBuildDataSpec::RunTest(const FString& /*Parameter
 	TestEqual(TEXT("Detail name"), Data.Name.ToString(), TEXT("暮色引虫灯"));
 	TestEqual(TEXT("Detail description section uses explanation template"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Description),
-		TEXT("施加 1 层 中毒。"));
+		TEXT("施加 1 中毒。"));
 	TestFalse(TEXT("Description section does not contain passive copy"),
 		JoinCardDetailSectionTextForTest(Data, EWacomCardDetailSectionKind::Description).Contains(TEXT("被动")));
 	TestTrue(TEXT("Detail document has no task section before schema support"),

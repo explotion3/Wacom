@@ -44,13 +44,6 @@ namespace
 			&& CardId != State.Cards.RightHandInstanceId;
 	}
 
-	int32 ComputeRuntimeCostWithDelta(const FRuntimeCardInstance& Card, int32 ModifierDelta)
-	{
-		return FBattleCardRuntimeStateModule::EvaluateCostWithRuntimeModifierDelta(
-			Card,
-			ModifierDelta).EffectiveCost;
-	}
-
 	EEffectTargetPlanKind BuildGenericCardTargetPlan(const FGameplayTag& Target)
 	{
 		if (Target == WacomTags::Target_Player || Target == WacomTags::Target_Self)
@@ -92,6 +85,7 @@ bool FEffectSemanticDescriptor::SupportsCardTarget(
 		return Target == WacomTags::Target_Self;
 	case EEffectCardTargetPolicy::CardCost:
 		return Target == WacomTags::Target_Self
+			|| Target == WacomTags::Target_AllHandCards
 			|| Target == WacomTags::Target_LastShuffledCard
 			|| (Target == WacomTags::Target_SelectedHandCard
 				&& CardTargetMode == ECardTargetMode::HandCard);
@@ -206,13 +200,19 @@ void FEffectSemanticDescriptor::ProjectTargetPreview(
 	case EEffectProjectionPolicy::ReduceCardCost:
 		OutEffect.bHasTargetHandCardCostPreview = true;
 		OutEffect.TargetHandCardRuntimeCostBefore =
-			ComputeRuntimeCostWithDelta(*Context.TargetHandCard, Scratch.SelectedHandCardCostModifierDelta);
+			FBattleCardRuntimeStateModule::EvaluateCostWithRuntimeModifierDelta(
+				Context.State,
+				*Context.TargetHandCard,
+				Scratch.SelectedHandCardCostModifierDelta).EffectiveCost;
 		Scratch.SelectedHandCardCostModifierDelta +=
 			ProjectionPolicy == EEffectProjectionPolicy::AddCardCost
 				? Context.Magnitude
 				: -Context.Magnitude;
 		OutEffect.TargetHandCardRuntimeCostAfter =
-			ComputeRuntimeCostWithDelta(*Context.TargetHandCard, Scratch.SelectedHandCardCostModifierDelta);
+			FBattleCardRuntimeStateModule::EvaluateCostWithRuntimeModifierDelta(
+				Context.State,
+				*Context.TargetHandCard,
+				Scratch.SelectedHandCardCostModifierDelta).EffectiveCost;
 		break;
 	case EEffectProjectionPolicy::DiscardSelected:
 	case EEffectProjectionPolicy::ExhaustSelected:

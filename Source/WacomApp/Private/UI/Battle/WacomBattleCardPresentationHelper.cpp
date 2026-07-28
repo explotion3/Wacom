@@ -121,8 +121,23 @@ namespace WacomBattleCardPresentation
 		FWacomCardPresentationRuntimeContext Context;
 		Context.bHasRuntimeCost = true;
 		Context.RuntimeCost = CardSnapshot.RuntimeCost;
+		Context.bHasUpgradeTier = true;
+		Context.UpgradeTier = CardSnapshot.UpgradeTier;
+		Context.bHasCurrentDurability = CardSnapshot.bHasFiniteDurability;
+		Context.CurrentDurability = CardSnapshot.CurrentDurability;
 		Context.bHasPlayableState = true;
 		Context.bIsPlayable = CardSnapshot.bIsPlayable;
+		Context.CurrentEffectMagnitudes.Reserve(
+			CardSnapshot.CurrentEffectMagnitudes.Num());
+		for (const FBattleCardEffectMagnitudeSnapshot& SnapshotMagnitude :
+			CardSnapshot.CurrentEffectMagnitudes)
+		{
+			FWacomCardPresentationRuntimeContext::FCurrentEffectMagnitude&
+				PresentationMagnitude =
+					Context.CurrentEffectMagnitudes.AddDefaulted_GetRef();
+			PresentationMagnitude.EffectIndex = SnapshotMagnitude.EffectIndex;
+			PresentationMagnitude.Magnitude = SnapshotMagnitude.Magnitude;
+		}
 		return Context;
 	}
 

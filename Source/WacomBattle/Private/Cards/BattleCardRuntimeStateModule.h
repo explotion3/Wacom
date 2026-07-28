@@ -35,8 +35,11 @@ struct FCardStatusMutationResult
 class FBattleCardRuntimeStateModule final
 {
 public:
-	static FCardCostFacts EvaluateCost(const FRuntimeCardInstance& Card);
+	static FCardCostFacts EvaluateCost(
+		const FBattleState& State,
+		const FRuntimeCardInstance& Card);
 	static FCardCostFacts EvaluateCostWithRuntimeModifierDelta(
+		const FBattleState& State,
 		const FRuntimeCardInstance& Card,
 		int32 RuntimeModifierDelta);
 
@@ -51,6 +54,24 @@ public:
 		FBattleEventBus& Events,
 		const FGuid& CardInstanceId,
 		int32 Delta,
+		const FGuid& SourceInstanceId = FGuid(),
+		const FGameplayTag& SourceEffect = FGameplayTag());
+
+	static bool ApplyEffectMagnitudeBonus(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FGuid& CardInstanceId,
+		const FGameplayTag& AffectedEffectType,
+		int32 Delta,
+		const FGuid& SourceInstanceId = FGuid(),
+		const FGameplayTag& SourceEffect = FGameplayTag());
+
+	static bool MultiplyEffectMagnitude(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FGuid& CardInstanceId,
+		const FGameplayTag& AffectedEffectType,
+		float Multiplier,
 		const FGuid& SourceInstanceId = FGuid(),
 		const FGameplayTag& SourceEffect = FGameplayTag());
 

@@ -9,6 +9,7 @@ class UCardDefinition;
 class UWacomCardExplanationLexicon;
 struct FCardEffect;
 struct FCardPassive;
+struct FWacomCardDynamicCostRule;
 
 namespace WacomCardExplanationTemplateRenderer
 {
@@ -30,8 +31,23 @@ namespace WacomCardExplanationTemplateRenderer
 		const UCardDefinition* Card,
 		const FCardEffect* Effect,
 		const FCardPassive* Passive,
+		int32 EffectIndex,
 		const FWacomCardPresentationRuntimeContext& RuntimeContext,
 		const FWacomCardPresentationRuntimeContext::FEffectPreview* Preview,
+		const UWacomCardExplanationLexicon* Lexicon,
+		const FString& StableIdPrefix);
+
+	void CompileKeywordTemplate(
+		FWacomCardDetailBlock& Block,
+		const FText& Template,
+		FGameplayTag Keyword,
+		const UWacomCardExplanationLexicon* Lexicon,
+		const FString& StableIdPrefix);
+
+	void CompileDynamicCostTemplate(
+		FWacomCardDetailBlock& Block,
+		const FText& Template,
+		const FWacomCardDynamicCostRule& DynamicCostRule,
 		const UWacomCardExplanationLexicon* Lexicon,
 		const FString& StableIdPrefix);
 }

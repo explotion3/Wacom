@@ -3,7 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "GameplayTagContainer.h"
+#include "Snapshots/BattleCardRuntimeSnapshot.h"
 #include "Types/WacomEnums.h"
 #include "BattlePileInspectionSnapshot.generated.h"
 
@@ -22,6 +24,15 @@ struct WACOMBATTLE_API FBattlePileCardSnapshot
 	TObjectPtr<const UCardDefinition> Definition = nullptr;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Pile Inspection")
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Pile Inspection")
+	int32 CurrentDurability = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Pile Inspection")
+	bool bHasFiniteDurability = false;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Pile Inspection")
 	ECardLocation Location = ECardLocation::Unknown;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Pile Inspection")
@@ -32,6 +43,10 @@ struct WACOMBATTLE_API FBattlePileCardSnapshot
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Pile Inspection")
 	FGameplayTagContainer TemporaryKeywords;
+
+	/** 与手牌快照相同的当前确定性、无目标效果数值。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Pile Inspection")
+	TArray<FBattleCardEffectMagnitudeSnapshot> CurrentEffectMagnitudes;
 };
 
 /** 一个权威卡牌区域的只读检查投影。 */

@@ -68,7 +68,7 @@ Floor 2 四敌人的八张 Aid/Destroy 卡、十二 Part 映射、允许重复�
 | Camp Activity 内容 | Camp ticket、最近合法节点、取消、typed handler seam 与 Night→Morning 已落地；普通活动不减 Decay；Shop 卡牌强化事务已独立落地 | Rest 的 Hunger / Fatigue 恢复值、资源成本、重复使用、是否另设 Camp 强化及 Camp Screen |
 | RunEvent 完成状态生命周期 | 当前按场景 `PersistentId` 记录，内存态保存 | 是否跨存档、跨日、跨地图保留；重复访问是否允许不同事件类型覆盖 |
 | Shop 库存生命周期 | 当前按场景 `PersistentId` 在内存态保留 | 是否跨存档、跨日、跨地图保留；随机库存何时刷新 |
-| Shop 强化内容与表现 | 不可变链、原子交易、AP、Quote/Result、双页签、前后对比、内联确认/Toast 与 Debug White→Blue 路线已落地；未启用服务的 Shop 仍保持 purchase-only | 首批 Production 卡牌各档数值与各正式 Shop 分档价格；是否需要 Production 专属视觉主题 |
+| Shop 强化内容与表现 | 单 Definition 四阶 Profile、实例 Tier 原子交易、AP、Quote/Result、双页签、前后对比与内联确认/Toast 已落地；Debug White→Blue 资产链已删除，未启用服务的 Shop 仍保持 purchase-only | 正式 Shop 的分档价格与是否需要 Production 专属视觉主题 |
 
 Floor 1 世界资产权威已由 Spec 015 关闭：采用独立新建的 `/Game/Wacom/Maps/Run/L_Run_Floor_Main_01`，不迁移、不覆盖 `L_Exploration`，也不复用 Debug map 作为 Production 权威。跨层 world handoff 和 Floor 2/3 场景仍是实现任务，不再是 Floor 1 权威选择问题。
 
@@ -83,4 +83,5 @@ Floor 1 本地启动口径由 Spec 016 关闭：完整 Production Journey 缺失
 |---|---|---|
 | AppToast 是否进入全局日志 | AppToast 当前只做战斗外即时反馈，不进 CommonUI Stack | 是否需要统一全局事件日志；哪些反馈应入日志，哪些只即时显示 |
 | 战斗 Combat Log 保留范围 | `BattleHUD` 当前只在常驻滚动 `CombatLogFeed` 中保留本场最近命令块 | 是否需要战后回放、跨战斗历史或 Run 级日志 |
-| 战斗暴击规则 | `DamageDealt` 已提供 `bCritical` 事实，BattleHUD 已有休眠的金色暴击飘字与可选 Niagara；当前没有任何正式规则设置该事实 | 暴击来源、概率、倍率、可作用对象、与多段/DOT/护盾/抵抗的关系，以及是否需要 Action Preview |
+| 卡牌暴击率视觉 | 卡牌基础暴击率已属于 Tier Profile；Damage/Heal/Shield/Poison/Burn 独立 Roll、成功翻倍，抵抗复用同次判定；Action Preview 固定无暴击且不消耗 RNG | 后续卡牌美术调整时，如何在卡面/详情表现暴击率与临时加值；当前不显示概率 |
+| 微光·萤火虫随机附魔 | `GlimmerFirefly` 的 Draw 2 与伙伴体质已落地；“随机附魔”首轮完全休眠，资产文案与正式规则都不承诺该效果 | 附魔池、持续范围、可重复性、随机权重、与完整克隆/强化 Tier 的继承关系 |

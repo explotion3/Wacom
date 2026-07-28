@@ -10,6 +10,7 @@
 
 struct FBattleEventBus;
 struct FBattleState;
+struct FCardEffect;
 class IBattleOperationAdapter;
 
 enum class EEffectSourceKind : uint8
@@ -72,7 +73,10 @@ struct FEffectExecutionContext
 	FGuid TargetInstanceId;
 
 	FGameplayTag EffectTag;
+	const FCardEffect* SourceEffect = nullptr;
 	int32 Magnitude = 0;
+	int32 PreCriticalMagnitude = 0;
+	bool bCritical = false;
 	int32 Duration = 0;
 	FHandAfflictionDelivery HandAffliction;
 	FEffectParameters Parameters;

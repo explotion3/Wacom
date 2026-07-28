@@ -14,6 +14,7 @@
  *
  * 内置支持（按 ConditionType tag）：
  * - Condition.Self.InZone            自卡当前在指定区域（ParamTag = HandZone.*）
+ * - Condition.Self.InCardLocation    自卡当前在指定牌堆（ParamTag = CardLocation.*）
  * - Condition.Target.HasStatus       目标部位含指定状态（ParamTag = Status.*）
  *
  * 扩展：新增条件时在 ConditionResolver 注册。

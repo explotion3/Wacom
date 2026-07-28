@@ -52,6 +52,38 @@ namespace WacomBattleCommandHandFeedbackPresentationSpec
 			Fixture.MakeSinglePartEnemy(20, 50),
 			31);
 	}
+
+	UCardDefinition* MakeHandCardMagnitudeModifier(
+		FWacomBattleFixture& Fixture,
+		int32 Magnitude)
+	{
+		UCardDefinition* Card = Fixture.MakeNoopCard(0);
+		Card->TargetMode = ECardTargetMode::HandCard;
+		Card->HandCardTargetFilter.bUseExplicitHandCardTargetFilter = true;
+		Card->HandCardTargetFilter.bAllowNormalHandCards = true;
+		Card->HandCardTargetFilter.bAllowHandAnchors = false;
+
+		FCardEffect Effect;
+		Effect.EffectType = WacomTags::Effect_Card_AddEffectMagnitude;
+		Effect.Target = WacomTags::Target_SelectedHandCard;
+		Effect.AffectedEffectType = WacomTags::Effect_ApplyStatus_Burn;
+		Effect.Magnitude = Magnitude;
+		Card->Effects.Add(Effect);
+		return Card;
+	}
+
+	UCardDefinition* MakeBurnBadgeTarget(
+		FWacomBattleFixture& Fixture,
+		int32 Magnitude)
+	{
+		UCardDefinition* Card = Fixture.MakeNoopCard(1);
+		FCardEffect Burn;
+		Burn.EffectType = WacomTags::Effect_ApplyStatus_Burn;
+		Burn.Target = WacomTags::Target_AllEnemyParts;
+		Burn.Magnitude = Magnitude;
+		Card->Effects.Add(Burn);
+		return Card;
+	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -305,6 +337,145 @@ bool FWacomUIBattleCommandCostRewritePhaseOrderTest::RunTest(
 		TEXT("Command-owned badge rewrite blocks the same outcome phase"),
 		BadgeHint->bBlocksPresentationPhase);
 	TestEqual(TEXT("Outcome badge rewrite contains one stable item"), BadgeHint->EffectBadgeChanges.Num(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleCommandEffectMagnitudeRewriteTest,
+	"Wacom.UI.Battle.CommandPresentation.HandTargetEffectMagnitudeRewrite",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleCommandEffectMagnitudeRewriteTest::RunTest(
+	const FString& /*Parameters*/)
+{
+	using namespace WacomBattleCommandHandFeedbackPresentationSpec;
+
+	UWorld* World = FindAutomationWorld();
+	if (!TestNotNull(TEXT("Automation world"), World))
+	{
+		return false;
+	}
+
+	FWacomBattleFixture Fixture;
+	UCardDefinition* SourceDefinition =
+		MakeHandCardMagnitudeModifier(Fixture, 1);
+	UCardDefinition* TargetDefinition =
+		MakeBurnBadgeTarget(Fixture, 1);
+	const FWacomInitializedBattleSession Initialized =
+		Fixture.CreateInitializedSession(
+			Fixture.MakeCharacter(
+				Fixture.MakeNoopCard(0),
+				Fixture.MakeNoopCard(0),
+				{ SourceDefinition, TargetDefinition, Fixture.MakeNoopCard(0),
+					Fixture.MakeNoopCard(0), Fixture.MakeNoopCard(0) }),
+			Fixture.MakeSinglePartEnemy(20, 50),
+			71);
+	TUniquePtr<FWacomBattleHUDTestHarness> Harness =
+		FWacomBattleHUDTestHarness::CreateHUDWithPlayer(World);
+	if (!TestNotNull(TEXT("Initialized session"), Initialized.Session)
+		|| !TestNotNull(TEXT("HUD harness"), Harness.Get()))
+	{
+		return false;
+	}
+	Harness->SetInitializedSession(Initialized);
+	UWacomBattleHUDDetailTest* HUD = Harness->HUD();
+	if (!TestNotNull(TEXT("HUD"), HUD))
+	{
+		return false;
+	}
+
+	const FBattleSnapshot PreSnapshot = Initialized.Session->BuildSnapshot();
+	const FGuid SourceCardId =
+		FWacomBattleFixture::FindHandInstanceByCardId(
+			PreSnapshot,
+			SourceDefinition->CardId);
+	const FGuid TargetCardId =
+		FWacomBattleFixture::FindHandInstanceByCardId(
+			PreSnapshot,
+			TargetDefinition->CardId);
+	const FBattleResolution Resolution =
+		Initialized.Session->ResolveCommand(
+			FBattleCommand::MakePlayCardOnHandCard(
+				SourceCardId,
+				TargetCardId));
+	if (!TestTrue(
+		TEXT("Magnitude-modifier command succeeds"),
+		Resolution.IsOk()))
+	{
+		return false;
+	}
+
+	FWacomBattleCombatLogCommandContext LogContext =
+		UWacomBattleCombatLogBuilder::BuildPlayCardCommandContext(
+			PreSnapshot,
+			SourceCardId,
+			FBattlePartSlotIdentity(),
+			TargetCardId);
+	LogContext.CardTargetPreview.bHasPreview = true;
+	LogContext.CardTargetPreview.TargetKind =
+		EWacomBattleCardPreviewTargetKind::HandCard;
+	LogContext.CardTargetPreview.SourceCardInstanceId = SourceCardId;
+	LogContext.CardTargetPreview.TargetHandCardInstanceId = TargetCardId;
+	HUD->ApplyCommandResolutionForTest(
+		LogContext,
+		PreSnapshot,
+		Resolution,
+		Initialized.Session,
+		SourceCardId);
+
+	for (int32 Step = 0;
+		Step < 12 && HUD->IsPresentationPlanActiveForTest();
+		++Step)
+	{
+		HUD->AdvanceBattlePresentationQueueForTest();
+	}
+
+	const TArray<FWacomFirstPersonCardLayerFeedbackHint> FeedbackHints =
+		HUD->GetSubmittedPresentationPlanFeedbackHintsForTest();
+	const FWacomFirstPersonCardLayerFeedbackHint* BadgeHint =
+		FeedbackHints.FindByPredicate(
+			[&TargetCardId](
+				const FWacomFirstPersonCardLayerFeedbackHint& Hint)
+			{
+				return Hint.CardInstanceId == TargetCardId
+					&& Hint.FeedbackKind ==
+						EWacomFirstPersonCardLayerFeedbackKind::
+							EffectBadgeChange;
+			});
+	if (!TestNotNull(
+		TEXT("Committed magnitude change emits a Badge rewrite"),
+		BadgeHint))
+	{
+		return false;
+	}
+	TestTrue(
+		TEXT("Command-owned Badge rewrite blocks the outcome phase"),
+		BadgeHint->bBlocksPresentationPhase);
+	TestEqual(
+		TEXT("Only Burn visibly changes"),
+		BadgeHint->EffectBadgeChanges.Num(),
+		1);
+	if (BadgeHint->EffectBadgeChanges.Num() == 1)
+	{
+		const FWacomFirstPersonCardEffectBadgeChange& Change =
+			BadgeHint->EffectBadgeChanges[0];
+		TestEqual(
+			TEXT("Burn keeps its stable Badge identity"),
+			Change.PresentationKey,
+			FName(TEXT("Badge.Burn")));
+		TestEqual(
+			TEXT("Animation keeps the old Burn value"),
+			Change.OldValue,
+			1);
+		TestEqual(
+			TEXT("Animation receives the new Burn value"),
+			Change.NewValue,
+			2);
+		TestEqual(
+			TEXT("Burn bonus uses the increase animation"),
+			Change.Direction,
+			EWacomFirstPersonCardEffectBadgeValueDirection::Increase);
+	}
 	return true;
 }
 

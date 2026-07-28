@@ -83,6 +83,7 @@ public:
 		const FGuid& CardInstanceId,
 		bool bIsAnchor,
 		bool bIsCombo,
+		bool bForceExhaust,
 		bool bSourceExplicitlyMoved,
 		const FBattleCardPlacementFacts& PrePlayPlacement);
 

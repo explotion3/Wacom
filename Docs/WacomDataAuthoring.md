@@ -2,7 +2,7 @@
 type: data-authoring-reference
 scope: wacom-data-authoring
 status: active
-updated: 2026-07-24
+updated: 2026-07-28
 tags:
   - wacom/data
   - wacom/authoring
@@ -49,7 +49,7 @@ Builder 当前职责：
 | `BuildEncounterContent()` | 其它旧 Encounter 生成入口；单蛇 Encounter 已由 `BuildSnakeContent()` 统一拥有 |
 | `BuildTrainingWarriorContent()` | TrainingWarrior 规则数据、奖励卡、语义动画 Style、Host Blueprint 与单敌人 Encounter；只读取正式 `/Game/Wacom` 素材 |
 | `BuildBugGirlContent()` | 虫妹角色、左右手、伙伴初始牌、容器 / 功能卡、starter pack、debug key、卡对卡测试卡、badge 测试卡 |
-| `BuildShopContent()` | `DA_Shop_DebugSnake`，保留原 24 个商品并追加 1 Gold 的 ShopUpgrade White 测试卡；强化服务价格固定为 White/Blue/Yellow `2/3/4` |
+| `BuildShopContent()` | `DA_Shop_DebugSnake` 的通用 Debug 商品；不再拥有旧多 Definition 强化测试卡 |
 | `BuildRunEventContent()` | `DA_Event_DebugSnakeGift`、`DA_Event_DebugFlagReward` |
 | `BuildRunPickupDefinitionContent()` | `DA_Pickup_DebugGold3`、`DA_Pickup_DebugPoisonFang` |
 | `BuildRunWorldCardInteractionDefinitionContent()` | `DA_RunWorldCardInteraction_DebugKeyGold3` |
@@ -148,7 +148,7 @@ Enemy HUD 的通用布局迁移已经完成，正式 Panel / Entry / Inspection 
 | Snake Host 内容包 | `/Game/Wacom/Core/Enemy/BP_EnemyHost_Snake`；按 Definition 顺序生成 Head / Body / Tail typed Part，每段直接拥有错帧 Slime Flipbook Layer 与独立单帧 Destroyed，占位资产禁止正式出包 |
 | SlimeTrio 内容包 | `Enemy.SlimeTrio`，Left / Core / Right 三部位；`BP_EnemyHost_SlimeTrio` 横向复用独立 Slime Placeholder Idle，以错帧、尺寸和 Tint 区分，局部 Destroyed 互不影响；无奖励卡和行动动画，禁止正式出包 |
 | TrainingWarrior 内容包 | `DA_Enemy_TrainingWarrior`、单 Body Part、Attack → Guard → Cleave 行为、`DA_Encounter_TrainingWarriorSingle`、语义动画 Style 与 `BP_EnemyHost_TrainingWarrior` |
-| `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡、badge 测试卡和末尾的 ShopUpgrade White 测试卡；共 25 Offer |
+| `DA_Shop_DebugSnake` | 固定卖毒牙、部分正式卡、starter pack、debug key、卡对卡测试卡、按当前费用抽牌测试卡和 badge 测试卡；旧 ShopUpgrade White/Blue 已移除，共 24 Offer |
 | `DA_Event_DebugSnakeGift` | 蛇巢遗物调试事件：获得毒牙、单卡支付交出毒牙、金币 / 压力与显式 Action Point policy |
 | `DA_Event_DebugFlagReward` | RunFlag 与 `MinGold + AddGold(-N)` 组合样例 |
 | `DA_Pickup_DebugGold3` | 数据驱动金币 PickupDefinition，固定获得 3 金币 |
@@ -178,7 +178,7 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 当前校验边界：
 
-- Card / EnemyPart / Enemy / EnemyBehavior / Character 校验 ID、基础数值、必填引用、数组索引、Gameplay tag 命名空间和当前 battle rule content contract。Card 的局部校验还检查下一段稀有度、同族身份、禁止卡种、结构不漂移和实际数值变化；catalog 校验负责跨资产的 CardId/链唯一性、循环、合流与分叉。`RunFace.bEnabled=false` 时不产生迁移 warning；启用后要求探索描述非空、TargetMode 非 None、PrimaryAction 使用 `Run.Card.Action.*` 具体子标签且 Magnitude 大于 0。可选 Run 深度图覆盖与共享深度图使用同一推荐纹理设置 warning。本轮不要求强化链各段的 RunFace 完整性。首批样卡固定为触须探路 `Route/Reveal`、钥匙 `WorldTarget/Unlock`、蜕壳切 `WorldTarget/Break`、几丁护片 `WorldTarget/Feed`，Magnitude 均为 1、处置均为 `ExhaustForCurrentRoom`，名称与插画使用共享 fallback。一次性迁移 Commandlet 已在保存、重载与第二次 `saved=0` 审计后删除；正式源码不提供通用资产 mutation 入口。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量或生成资产路径。
+- Card / EnemyPart / Enemy / EnemyBehavior / Character 校验 ID、基础数值、必填引用、数组索引、Gameplay tag 命名空间和当前 battle rule content contract。Card 的四阶校验由 `FWacomCardTierProfileValidation` 完成：严格要求 White/Blue/Yellow/Purple 四项、跨阶结构不漂移，并允许费用、体质、暴击率、Magnitude、Duration、阈值和本地化描述变化；旧 flat 卡继续作为 White-only fallback。`RunFace.bEnabled=false` 时不产生迁移 warning；启用后要求探索描述非空、TargetMode 非 None、PrimaryAction 使用 `Run.Card.Action.*` 具体子标签且 Magnitude 大于 0。可选 Run 深度图覆盖与共享深度图使用同一推荐纹理设置 warning。它们不校验文案质量、数值平衡、流派构筑、固定卡组数量或生成资产路径。
 - Enemy 校验 `PartSlotId` 必填且不重复，并在配置 `DefaultBehavior / BehaviorOverride / InitialIntentSetId` 时检查对应 phase 和 intent set 是否存在。
 - Scene Enemy Host 的诊断与写入严格分层，不属于 `WacomData` schema 或 Validator mutation。`WacomApp` 的纯 Authoring Report 只读取 Host 的 typed Part/Layer/Anchor SCS 层级与 `EnemyDefinition`；`WacomEditor` 的显式同步为缺失槽位创建纯 `USceneComponent` 的 `UWacomBattleEnemyPartComponent`、默认 `Visual_Main` Flipbook Layer 和 ImpactAnchor，从 `PartDefinition.PartId` 派生 `PartId`，并把该 Main Layer 写入唯一 `InteractionVisualLayerId`。已有 Component Transform、Paper2D 属性、Layer 与 Anchor 保留；surplus 不删除，多选共用事务，无变化不 dirty package。Builder 与同步服务不再提供 `HitBoundsExtent` 或 BoxExtent 写入。正式 interaction Sprite 使用 authored Idle/Flipbook 第一帧、`Use3DPhysics + ShrinkWrapped`、Alpha Threshold `0.30`、Detail `0.65`、Simplify Epsilon `1.5px` 与 Collision Thickness `12cm`；非 interaction typed visual 必须保持 authored `NoCollision`。Report/Validator 将缺失或歧义 ID、空稳定帧、无 BodySetup/几何、错误 thickness 和运行时 transient fallback 全部视为正式内容错误；fallback 只防止运行时软锁，不能让资产通过校验。描边父材质只由 `DShader/Material/World/M_WacomBattleEnemyPartInteractionOutline.dsm` 生成到 `/Game/DreamMaterials/World/M_WacomBattleEnemyPartInteractionOutline`；`Scripts/SetupBattleEnemyPartInteractionAssets.py` 只接线 Style 与迁移 Host/Sprite，不创建或重建手工材质图。
 - Host validator 检查重复/未知 PartSlotId、PartId mismatch、缺失视觉、重复 LayerId、Visual/Anchor 非直接子组件、多 Anchor、无效 Style 与多个 terminal clip owner。Validator、Report、Map Validate 都不生成、删除或改写组件。
@@ -198,22 +198,55 @@ Editor Validator 由 `WacomEditor` 注册到 `UEditorValidatorSubsystem`。共�
 
 不要把 Validator 放进 `WacomData`，否则运行时模块会反向依赖编辑器能力。
 
-### Card Upgrade 链制作
+### 单 Definition 四阶制作与 FireWrite
 
-每个强化等级必须是独立 `UCardDefinition` package；不要复制一张卡后保留相同 `CardId`，也不要让运行时修改 DataAsset 的 Rarity/Effect。相邻版本填写同一个显式 `UpgradeFamilyId`，前一版本的 `NextUpgradeDefinition` 只指向下一稀有度，Purple 末端保持空。旧卡不准备进入强化系统时两个新字段都保持空。
+可强化卡只创建一个 `UCardDefinition` package，并按 `White / Blue / Yellow / Purple` 填满四个 `TierProfiles`。Definition 级名称、插画、关键词、TargetMode、HandCardTargetFilter 和生成池身份保持静态；四阶效果、条件、目标、顺序、ZoneHook 与 Passive 触发结构必须一致。不要再创建 `*_White / *_Blue` 资产链，也不要恢复 `UpgradeFamilyId / NextUpgradeDefinition`。
 
-单资产 Data Validation 会沿可达链检查合法边和结构稳定性；正式 manifest、定向制作工具或内容测试还必须把整组候选传给 `FWacomCardUpgradeCatalogValidation::Validate()`，以捕获只看单链无法发现的重复 CardId、多个前驱、同族多根、合流或环。Shop 价格表只决定当前商店开放的稀有度档和金币，不应复制卡牌数值。
+FireWrite 使用定向命令：
 
-Spec 020 只落地首条 Debug 竖切链和通用 Shop WBP：
-
-```text
-/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_White
-/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_Blue
-/Game/Wacom/Data/Shops/DA_Shop_DebugSnake
-/Game/Wacom/UI/Shop/WBP_ShopScreen
+```powershell
+& 'E:\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' '<ProjectRoot>\Wacom.uproject' `
+  -run=WacomBuildFireWriteCardContent -SeedMissing -MigrateLegacyUpgrade `
+  -WriteExplanationTemplates -SyncSeedDefaults -SyncExplanationLexiconDefaults `
+  -CompareSeedDefaults -Unattended -NoPause -NoSplash -NullRHI
 ```
 
-定向命令 `WacomSeedDebugShopUpgradeVerticalSlice` 的保存白名单只能是上述四个 Package；它以 missing-only / exact known-repair 方式创建或修复，不得调用全量 `WacomRegenerateContent`。WidgetTree 中每个 source widget 都必须持有稳定 GUID，卡牌 Damage/Poison Effect 必须显式填写 `Target.SingleEnemyPart`；二次执行必须为零创建、零修改、零保存。Debug Shop 的未来 builder defaults 已同步，但日常验证不得执行 builder 覆盖人工内容。Production 强化链和各正式 Shop 价格仍需独立内容冻结。
+- 默认无参数为 InspectOnly；`-SeedMissing` 只创建缺失的 15 张 `/Game/Wacom/Data/Cards/FireWrite/DA_Card_*`。
+- `-MigrateLegacyUpgrade` 只允许更新 Status Catalog、Card Explanation Lexicon、`DA_Shop_DebugSnake` 并删除两张旧 Debug 毒牙。
+- `-WriteExplanationTemplates` 是显式、定向的模板迁移：只把下表的 `ExplanationTemplates` 写入这 15 张 FireWrite CardDefinition，不改写规则、四阶数值、Description、DisplayText、插画、关键词或引用。已有内容不使用该开关时仍保持只读。
+- `-SyncSeedDefaults` 是显式的 FireWrite 规则修复入口：先用 formal editable-property strict compare 找出与冻结设计 Seed 不一致的卡，只重写这些不一致 package。它不会扫描或保存 15-card manifest 之外的资产；日常 Inspect 和 `-WriteExplanationTemplates` 不隐式启用该模式。
+- `-SyncExplanationLexiconDefaults` 只恢复通用 Damage、Heal、Shield、Draw、Poison、Slow、Freeze、Twilight、Burn 九类模板为 C++ 已确认句式；Lexicon 的其它模板、状态名、条件、被动与卡面语义配置保持原样。
+- 先创建 15 个对象，再配置萤火虫池、熔熔盐和完整克隆引用，避免 package 顺序依赖。
+- 已存在且 class 正确的 FireWrite 卡不会被日常命令覆盖；首轮冻结差异使用 `-CompareSeedDefaults` 检查。
+- 第二次完全相同命令必须报告 `0 created / 0 saved / 0 deleted`，且全部资产哈希稳定。
+
+FireWrite 精确 15-card manifest 位于 `/Game/Wacom/Data/Cards/FireWrite`：
+
+`OilCandle`、`AshBug`、`SaltMaggot`、`WarmTinderbug`、`FireflySeed`、`HungryFireflyMaiden`、`BlazingEyeFirefly`、`RottenFirefly`、`GlimmerFirefly`、`SlothFirefly`、`EmptyBottle`、`MoltenSalt`、`JadeBeetle`、`ObsidianBeetle`、`BlindSpider`。CardId 固定为 `Card.FireWrite.<EnglishName>`；首轮插画为空并走正式卡面 fallback。随机萤火虫池固定为四张 Firefly，使用有放回抽取；Molt Salt 与萤火虫命名生成物只继承来源 Tier。
+
+#### FireWrite 详情模板权威表
+
+`WacomBuildFireWriteCardContent` 的 transient seed、`-WriteExplanationTemplates` 与 `-CompareSeedDefaults` 共用下表。Effect/Passive 数组长度必须分别等于 White Profile 的规则数组长度；四阶只保存这一份模板。Keyword 与动态费用句式也属于该 Definition 的详情合同。迁移后仍可在每张 `UCardDefinition > Card|Presentation|Explanation` 中人工微调，后续只有再次显式运行 `-WriteExplanationTemplates`（或用于恢复完整冻结 Seed 的 `-SyncSeedDefaults`）才会恢复为本表。
+
+| CardDefinition | `EffectTemplates`（按索引） | `PassiveTemplates` / 其它说明 |
+|---|---|---|
+| `OilCandle` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Passive 0 `本场曾进入消耗区时：战斗胜利或撤离后，永久耐久 +{value:PassiveEffect[0].Magnitude}，灼烧 +{value:PassiveEffect[1].Magnitude}。` |
+| `AshBug` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `回合结束时：若本卡在消耗区，免费自动打出，随后进入弃牌堆。` |
+| `SaltMaggot` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。`；1 `将 {value:Magnitude} 张同阶熔熔盐置入手牌。` | Keyword `Exhaust` |
+| `WarmTinderbug` | 0 `使手牌中所有卡（包含自身）的灼烧效果 +{value:Magnitude}；已有灼烧的卡牌获得双倍加成。`；1 suppressed（规则辅助项已由 0 完整表述） | Keyword `Retain`；Dynamic Cost `手牌中每有一张 {status:CountedStatus} 卡牌，本卡费用 -{value:ReductionPerMatchingCard}。` |
+| `FireflySeed` | 0 `施加 {value:Magnitude} {status:EffectStatus}。`；1 `将本卡的完整战斗复制品随机插入抽牌堆。` | 0 `抽到时：生成 {value:PassiveEffect[0].Magnitude} 张同阶随机萤火虫。` |
+| `HungryFireflyMaiden` | 0 `消耗目标伙伴手牌。`；1 `生成 {value:Magnitude} 张同阶随机萤火虫。` | 空数组 |
+| `BlazingEyeFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `相邻伙伴被打出时：本场自身灼烧效果 +{value:PassiveEffect[0].Magnitude}。` |
+| `RottenFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `相邻伙伴被打出时：本场自身暴击率 +{value:PassiveEffect[0].Magnitude}%。` |
+| `GlimmerFirefly` | 0 `抽 {value:Magnitude} 张牌。` | Keyword `Exhaust` |
+| `SlothFirefly` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust`；Passive 0 `相邻伙伴被打出时：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。` |
+| `EmptyBottle` | 空数组 | Keyword `Exhaust` |
+| `MoltenSalt` | 0 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。`；1 `对所有敌人施加 {value:Magnitude} {status:EffectStatus}。` | Keyword `Exhaust` |
+| `JadeBeetle` | 0 `施加 {value:Magnitude} {status:EffectStatus}。` | 0 `抽到时：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。` |
+| `ObsidianBeetle` | 0 `{icon:EffectIcon} 造成 {value:Magnitude} 伤害。` | 0 `每次抽到本卡时：本场自身伤害翻倍。` |
+| `BlindSpider` | 0 `{icon:EffectIcon} 造成 {value:Magnitude} 伤害。` | Keyword `Combo`；Passive 0 `每打出一张其它伙伴：本场自身费用 -{value:PassiveEffect[0].Magnitude}，最低 0。` |
+
+Status 类句式只放一次 `{status:EffectStatus}`；它会同时提供当前 Status Catalog 的图标、中文名与 GameplayTag，不要再叠加 `{icon:EffectIcon}` 或手写第二个状态名。详情字体不支持 `×`，倍率使用字母 `x` 或“翻倍”。
 
 Map validation 的 report 和执行器归 `WacomEditor`；transient graph fixtures 与自动化归 `WacomTests`。`WacomData` 只提供可反射的静态 authoring types，不依赖 `WacomRun`、关卡 Actor 或 Editor API。
 
@@ -511,7 +544,8 @@ Run Map UI 资产由独立命令构建，不修改关卡或 Floor 数据：
 | `Wacom.Data.BattleStarterContent.BadgeDisplayTestCardAssetValidation` | 检查 badge 测试卡、DebugSnake 商店 0 金币出售和 CardPresentationBuilder badge view |
 | `Wacom.Data.Shop.DebugSnakeAssetValidation` | 验证 DebugSnake 商店能通过 validator |
 | `Wacom.Data.Shop.DebugSnakeAsset` | 验证商品顺序和价格，避免内容生成漂移 |
-| `Wacom.Editor.DebugShopUpgradeVerticalSlice` | 验证四 Package manifest、已知 repair 边界、AssetRegistry class/load、WBP compile/GUID/全局注册和命令存在 |
+| `Wacom.Data.CardTierProfiles` | 验证四阶解析、跨阶结构校验和旧 flat White fallback |
+| `Wacom.Data.FireWrite` | 验证 15 张 FireWrite 真实资产、CardId、四阶数值、关键词、目标和生成引用 |
 | `Wacom.Data.RunEvent.DebugSnakeGiftAsset` | 验证蛇巢遗物事件节点、选项、条件、效果和毒牙引用 |
 | `Wacom.Data.RunEvent.DebugFlagRewardAsset` | 验证 RunFlag、金币门槛 / 扣费、奖励和 reset flags 样例 |
 | `Wacom.Battle.GeneratedStarterContent` | 使用真实生成资产进入 `UBattleSession`，验证核心卡牌、辅助卡和 Snake 意图能产生预期 Snapshot/Event |
@@ -589,6 +623,7 @@ struct FHandAfflictionDelivery
 | `Effect.Damage` | 伤害值 | SingleEnemyPart / AllEnemyParts / Player | - | - | Literal / RuntimeCost / TargetStatusStacks | 部位 HP 归零立即破坏 |
 | `Effect.Heal` | 治疗量 | Self(->Player) / Player | - | - | Literal | 恢复玩家 HP，并按规则移除中毒 |
 | `Effect.ApplyStatus.Poison` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | - | Literal / RuntimeCost | 层数模型 |
+| `Effect.ApplyStatus.Burn` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | - | Literal | 施加层数可暴击；敌人行动前 DOT，玩家按抽牌转移到卡 |
 | `Effect.ApplyStatus.Slow` | 强度 | Player / SingleEnemyPart / AllEnemyParts | - | 0 | Literal | 敌方立即延迟当前意图；玩家创建 Pending Hand Affliction |
 | `Effect.ApplyStatus.Freeze` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | 0 | Literal | 敌方拦截后续卡牌推进；玩家创建 Pending Hand Affliction |
 | `Effect.ApplyStatus.Twilight` | 层数 | Player / SingleEnemyPart / AllEnemyParts | - | 0 | Literal | 敌方作用于下一意图；玩家污染下回合整手牌 |
@@ -604,6 +639,15 @@ struct FHandAfflictionDelivery
 | `Effect.Discard` | 张数 | Self / Player | - | - | Literal | 随机弃掉普通手牌，不弃锚点 |
 | `Effect.ExhaustSelf` | - | Self(本卡) | - | - | - | 通过临时 `Card.Keyword.Exhaust` 交给打出后去向阶段 |
 | `Effect.GainKeyword` | - | LastShuffledCard / SelectedHandCard | Card.Keyword.* | - | - | `TargetZone` 在 decode seam 转换为 Keyword 参数 |
+| `Effect.Card.GenerateToHand` | 创建张数 | Self | - | - | Literal | 从 `CardPool` 命名生成，继承来源 Tier |
+| `Effect.Card.GenerateRandomFromPoolToHand` | 创建张数 | Self | - | - | Literal | 从 `CardPool` 有放回随机生成，继承来源 Tier |
+| `Effect.Card.CloneSelfIntoDraw` | - | Self | - | - | - | 新 InstanceId 完整克隆战内状态，不继承 Run 身份 |
+| `Effect.Card.AddEffectMagnitude` | 加值 | Self | Effect.* | - | Literal | `TargetZone` 指定被修改 Effect Tag |
+| `Effect.Card.MultiplyEffectMagnitude` | 倍率 | Self | Effect.* | - | Literal | 倍率按整数存储并累计相乘 |
+| `Effect.Card.AddCriticalChance` | 百分点 | Self | - | - | Literal | 战内加值，最终 clamp 100% |
+| `Effect.Card.AutoPlaySelf` | - | Self | - | - | - | 只供 OnTurnEnd 从 Exhaust 免费自动出牌 |
+| `Effect.Card.AddPersistentDurability` | 永久加值 | Self | - | - | Literal | 只供 OnBattleSettlement |
+| `Effect.Card.AddPersistentEffectMagnitude` | 永久加值 | Self | Effect.* | - | Literal | 只供 OnBattleSettlement |
 | `Effect.RemoveStatus` | 层数 | Player / SingleEnemyPart | Status.Poison / Freeze / Twilight / Stunned | - | Literal / TargetStatusStacks | 不支持 Shield；敌方 Slow 是即时操作，没有可移除层数 |
 | `Effect.ModifyInitiative` | 先机增量 | SingleEnemyPart | - | - | Literal / TargetStatusStacks | 正数增加，负数减少 |
 
@@ -615,6 +659,7 @@ struct FHandAfflictionDelivery
 |---|---|---:|---:|---|
 | `Effect.Damage` | `Target.Player` | > 0 | 0 | 对玩家造成伤害 |
 | `Effect.ApplyStatus.Poison` | `Target.Player` 或 `Target.Self` | > 0 | >= 0 | 持久 Combatant 层数 |
+| `Effect.ApplyStatus.Burn` | `Target.Player` 或 `Target.Self` | > 0 | 0 | 持久 Combatant 灼烧层数 |
 | `Effect.ApplyStatus.Slow / Freeze` | `Target.Player` | `y > 0` | 0 | `HandAffliction.TargetCardCount=x>0`，默认 RandomUnique |
 | `Effect.ApplyStatus.Twilight` | `Target.Player` | `y > 0` | 0 | 固定作用于下回合抽牌后的当前整手牌 |
 | `Effect.ApplyStatus.Slow / Freeze / Twilight` | `Target.Self` | > 0 | 0 | Self 表示行动部位；HandAffliction 必须保持默认 |
@@ -671,6 +716,8 @@ struct FEffectCondition
 |---|---|---|---|
 | Invalid | 永真 | - | - |
 | `Condition.Self.InZone` | 本卡当前在指定区域 | `HandZone.*` | - |
+| `Condition.Self.InCardLocation` | 本卡当前在指定牌堆 | `CardLocation.*` | - |
+| `Condition.Self.EverEnteredExhaust` | 本卡本场曾进入消耗区 | - | - |
 | `Condition.Target.HasStatus` | 目标部位含指定持久状态 | `Status.Poison / Freeze / Twilight / Stunned` | - |
 
 `FCardZoneHook`：
@@ -708,10 +755,15 @@ struct FCardPassive
 | `Passive.Trigger.OnCompanionCount` | 特殊回手触发 | 是 | 否 |
 | `Passive.Trigger.OnTwilightTriggered` | EventOnly / 展示占位 | 否 | 否 |
 | `Passive.Trigger.OnTurnStart` | Reserved | 否 | 否 |
-| `Passive.Trigger.OnTurnEnd` | Reserved | 否 | 否 |
-| `Passive.Trigger.OnDraw` | Reserved | 否 | 否 |
+| `Passive.Trigger.OnTurnEnd` | 可执行 | 否 | 是；允许 `AutoPlaySelf` |
+| `Passive.Trigger.OnDraw` | 可执行 | 否 | 是 |
+| `Passive.Trigger.OnAdjacentCompanionPlayed` | 可执行 | 否 | 是；只看出牌前左右邻居 |
+| `Passive.Trigger.OnOtherCompanionPlayed` | 可执行 | 否 | 是 |
+| `Passive.Trigger.OnBattleSettlement` | 可执行 | 否 | 是；Victory/Withdraw 至多一次 |
 
-`DisplayText` 是旧展示文本，不再进入正式卡牌详情面板。被动详情由 `Trigger / Effects / Condition / TriggerThreshold` 通过 WacomApp explanation template 生成；`OnCompanionCount` 的回手结果由 `PassiveOutcomeTemplates` 展示，`Passive.Effects` 仍不会执行。无结构化详情的功能卡可以通过 `UCardDefinition::Description` 获得普通正文回退，但该回退不解析 `{Effect.0}`，也不是规则真相。战斗规则仍只读取结构化字段。
+`UCardDefinition::ExplanationTemplates` 是优先级最高的 UI-only 句式，四阶共用并按 Effect/Passive 索引取当前结构化数值。`FCardPassive::DisplayText` 保留为旧资产兼容：只有对应 CardDefinition Passive Template 为空时才作为完整被动覆盖；两者都为空时才由 `Trigger / Effects / Condition / TriggerThreshold` 通过 WacomApp explanation template 生成结构化回退。`OnCompanionCount` 的回手结果由 `PassiveOutcomeTemplates` 展示，`Passive.Effects` 仍不会执行。无结构化详情的功能卡可以通过 `UCardDefinition::Description` 获得普通正文回退，但该回退不解析 `{Effect.0}`，也不是规则真相。战斗规则始终只读取结构化字段。
+
+Effect 专属模板允许 `{value:Magnitude}`、`{icon:EffectIcon}`、`{status:EffectStatus}`、`{keyword:Tag}`。Passive 专属模板允许 `{value:TriggerThreshold}`，以及指向同一被动结构化效果的 `{value:PassiveEffect[N].Magnitude}`、`{icon:PassiveEffect[N].Icon}`、`{status:PassiveEffect[N].Status}`。非空模板数组必须与规则数组等长；非法索引、未知类型、上下文不适用和未闭合 Token 会被 CardDefinition Validator 拒绝。专属 Effect 后仍自动追加 Condition 与 Magnitude Modifier；专属 Passive 是完整玩家文案，不再重复展开 Trigger/Outcome/Effect。全局效果句式继续在 `DA_CardExplanationLexicon_Default.EffectTemplates` 制作：Damage / Heal / Shield 保留 `{icon:EffectIcon}`，Poison / Slow / Freeze / Twilight / Burn 只通过 `{status:EffectStatus}` 同时输出状态图标和名称。详情字体不支持数学乘号，制作文本和 explanation template 应使用字母 `x` 或“翻倍”，不得使用 `×`。
 
 ## §9 扩展制作矩阵时的检查点
 

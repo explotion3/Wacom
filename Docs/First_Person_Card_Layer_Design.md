@@ -2,7 +2,7 @@
 type: presentation-contract
 scope: wacom-first-person-card-layer
 status: active
-updated: 2026-07-23
+updated: 2026-07-28
 tags:
   - wacom/ui
   - wacom/cards
@@ -283,9 +283,9 @@ Layer 的每卡反馈容器是确定性的 Feedback Bundle，不再以单值 Map
 
 ### EffectBadge 局部重写与生命周期反馈
 
-`FWacomCardViewEffectBadge` 使用 `PresentationKey` 表达同一张卡内紧凑语义的稳定表现身份。卡面按 `Damage / Poison / Heal / Shield` 等 Badge Kind 聚合同类型效果，使用 `Badge.<Kind>` 作为身份；同类型的无条件效果组成权威基础值，带条件效果只在目标预览判定生效时加入预览总值。例如“4 点基础伤害 + 目标中毒时额外 5 点伤害”平时只显示一枚 `Damage=4`，有效目标上预览为 `9`；中毒层数始终留在独立 `Poison` Badge，不会并入伤害。`Value` 始终保存权威基础值，目标预览只写 `bHasPreviewValue / PreviewValue / bPreviewSkipped`，切换目标、取消 Preview 或重复同一目标刷新不会误播正式变化。
+`FWacomCardViewEffectBadge` 使用 `PresentationKey` 表达同一张卡内紧凑语义的稳定表现身份。卡面按 `Damage / Poison / Burn / Heal / Shield` 等 Badge Kind 聚合同类型效果，使用 `Badge.<Kind>` 作为身份；同类型的无条件效果使用 Battle Snapshot 按 EffectIndex 发布的当前确定性 Magnitude 组成权威静止值，带条件效果只在目标预览判定生效时加入预览总值。因此相邻伙伴触发的 Burn 加值、OnDraw Damage 倍率等战内修正不需要先进入拖卡即可更新；“4 点基础伤害 + 目标中毒时额外 5 点伤害”平时仍只显示一枚 `Damage=4`，有效目标上预览为 `9`。`Value` 保存最近真实 Snapshot 的当前值，目标预览只写 `bHasPreviewValue / PreviewValue / bPreviewSkipped`，切换目标、取消 Preview 或重复同一目标刷新不会污染静止值或误播正式变化；暴击仍只在提交后揭露。
 
-目标 Preview 直接驱动现有 `UWacomCardEffectBadgeWidget`：预测数字通过 `DigitHost` 内每个数字 Image 的临时 MID 低强度呼吸；只有整个语义组都无法在当前目标上生效时，Badge 才保持槽位和权威数字并整体降到约 `0.28` 透明度，不再绘制覆盖卡面的像素叉。若同组仍有基础贡献，跳过的条件分量只是不计入预览总值，Badge 保持正常。正式 `EffectBadgeChange` 只允许由明确 Battle 事件许可后，再用 Pre/Post Snapshot 按稳定 Key 比较可见 Badge 得出；首次显示、普通 Snapshot、Hover、重排、Preview 与取消 Preview 均不得推断正式反馈。当前生产链只从 `CardRuntimeCostChanged / CardStatusChanged` 派生实际可见的 `ValueChanged`；`Added / Removed` 的 Hint、Playback、移除后重排与新增展开能力已经建立，但必须等未来明确的动态 Effect 事务接入，不能从普通数组差异静默推断。
+目标 Preview 直接驱动现有 `UWacomCardEffectBadgeWidget`：预测数字通过 `DigitHost` 内每个数字 Image 的临时 MID 低强度呼吸；只有整个语义组都无法在当前目标上生效时，Badge 才保持槽位和权威数字并整体降到约 `0.28` 透明度，不再绘制覆盖卡面的像素叉。若同组仍有基础贡献，跳过的条件分量只是不计入预览总值，Badge 保持正常。正式 `EffectBadgeChange` 只允许由明确 Battle 事件许可后，再用 Pre/Post Snapshot 按稳定 Key 比较可见 Badge 得出；首次显示、普通 Snapshot、Hover、重排、Preview 与取消 Preview 均不得推断正式反馈。当前生产链以 `CardRuntimeCostChanged / CardStatusChanged / CardEffectMagnitudeChanged` 许可实际可见的 `ValueChanged`：最后一种事件由 Battle 在 Add/Multiply runtime effect modifier 时逐目标发布，因此相邻伙伴 Burn 加值、OnDraw Damage 倍率和多卡光环沿用现有旧数字消散、新数字重组与 Root 回弹。`Added / Removed` 的 Hint、Playback、移除后重排与新增展开能力已经建立，但必须等未来明确的动态 Effect 事务接入，不能从普通数组差异静默推断。
 
 正式数值变化默认约 `0.28s`：框体保持，旧数字局部消散、新数字从中心重组，同时 Badge Root 执行一次 `1.0 → 0.94 → 1.08 → 1.0` 回弹。移除阶段先保留旧槽位约 `0.18s`，随后幸存项按缓存几何约 `0.14s` 平移归位，再与约 `0.22s` 新增展开自然衔接；几何无效时直接切换，不阻塞其它反馈。同卡多项按稳定 Key 排序并以 `0.035s` 错峰、最多额外等待 `0.12s`。费用重写和 Badge 重写作用于不同 Image，因此可在 `CommandOutcome` 并行，阶段等待较晚完成者；目标即将 Played、Discarded、Exhausted 或 CardUseReform 时 Departure 优先并清理 Badge MID、临时数字、Paint 与 Root Transform。
 
@@ -358,7 +358,11 @@ Battle 回合边界快捷键 `IA_Wait` / `IA_EndTurn` 在 PlayerController 入�
 
 需要敌方部位目标的卡 release 到合法 world enemy part 后，BattleHUD 调用现有 play-card world target 路径。需要手牌目标的卡 release 到合法 first-person card target 后，BattleHUD 提交 hand-card target。UI 手势层只提交 target identity，不判断加费、减费、弃置或消耗规则。Battle first-person hand bridge 生成 hand-card release / probe / full-hand affordance 时，只消费 `UBattleSession::ValidateTargetWithCard()` 返回的合法性和 reject reason；非 hand-card source 的卡牌目标停留在 probe-only，真实 hand-card source 的无效目标才显示 invalid card-target feedback。
 
-Battle Action Preview 只在有效释放语义成立时由 BattleHUD / first-person hand bridge 请求：拖拽源卡压中合法 world enemy part、合法 hand-card target，或无目标卡已经达到 `ArmedForCommit` 提交距离后，bridge 调用 `UBattleSession::BuildCardActionPreview()`，再把只读 projected values 交给 BattleHUD runtime 更新卡面 / 详情 / 玩家状态条 / 敌人部位面板。规则层还要求当前阶段是 `PlayerAction` 并通过完整 PlayCard preflight；`PendingKnockdownChoice`、BattleEnd 或其它非玩家行动阶段即使目标本身仍合法，也不会生成 Action Preview。抵抗预览也是 Battle facts：`FBattleCardResistancePreview` 已包含逐部位玩家 / 敌方最高单段伤害和成功状态，`bWillAct / bWillSkipActionDueToStun` 已区分真实行动与眩晕跳过；Card Layer 与 App 只透传、显示，不读取 Effect 或 Intent 重算。单纯拖出手牌区但尚未 armed、仍在寻找目标或目标无效时，first-person layer 只显示轻量候选目标提示，不显示玩家侧回血、护盾或敌人净结果。release、cancel、离开有效目标、退出无目标 armed 状态、snapshot version 变化或 BattleEnd 时，BattleHUD 必须清理 action preview，让 hand layer、玩家状态条和敌人面板恢复最近一次真实 Snapshot / ViewData。
+Battle Action Preview 只在有效释放语义成立时由 BattleHUD / first-person hand bridge 请求：拖拽源卡压中合法 world enemy part、合法 hand-card target，或无目标卡已经达到 `ArmedForCommit` 提交距离后，bridge 调用 `UBattleSession::BuildCardActionPreview()`，再把只读 projected values 交给 BattleHUD runtime 更新卡面 / 详情 / 玩家状态条 / 敌人部位面板。规则层还要求当前阶段是 `PlayerAction` 并通过完整 PlayCard preflight；`PendingKnockdownChoice`、BattleEnd 或其它非玩家行动阶段即使目标本身仍合法，也不会生成 Action Preview。抵抗预览也是 Battle facts：`FBattleCardResistancePreview` 已包含逐部位玩家 / 敌方最高单段伤害和成功状态，`bWillAct / bWillSkipActionDueToStun` 已区分真实行动与眩晕跳过；Card Layer 与 App 只透传、显示，不读取 Effect 或 Intent 重算。卡牌暴击属于正式提交后的隐藏 RNG：Preview 固定使用无暴击数值，不消耗随机账本、不显示暴击率，也不提前改变抵抗比较。单纯拖出手牌区但尚未 armed、仍在寻找目标或目标无效时，first-person layer 只显示轻量候选目标提示，不显示玩家侧回血、护盾或敌人净结果。release、cancel、离开有效目标、退出无目标 armed 状态、snapshot version 变化或 BattleEnd 时，BattleHUD 必须清理 action preview，让 hand layer、玩家状态条和敌人面板恢复最近一次真实 Snapshot / ViewData。
+
+Battle hand、牌堆与详情的卡牌实例身份始终是 `Definition + UpgradeTier + InstanceId`。ViewData Builder 通过 `UCardDefinition::ResolveProfile()` 读取同一 Definition 当前阶的费用、体质、效果和说明，再叠加 Snapshot 中的当前耐久、费用、卡牌状态和按 EffectIndex 发布的当前确定性 Magnitude；WBP 不查找下一阶 Definition，也不重算 Tier 或效果修正。命名生成物只继承来源 Tier，完整克隆额外复制当前耐久和战内修正，但两者都获得新 InstanceId；这些规则事实必须在 Snapshot / transition hint 进入 Card Layer 之前完成。
+
+Card Layer 不解析详情模板。`UCardDefinition::ExplanationTemplates` 只由 App 层 explanation compiler 在构建 `FWacomCardDetailViewData.Sections` 时读取；四阶共用同一套句式，值仍来自当前 `ResolveProfile()` 和 runtime preview。模板生成的 Icon / Status / Keyword 保留类型化 Run 与 GameplayTag，不影响卡面效果徽章、拖卡预演或 first-person Slot 状态机。
 
 悬浮、Inspect 和拖拽期间，卡牌层记录 DPI-aware widget-space 指针和归一化视口坐标，用于 Card Depth、拖拽速度倾斜、提交距离、目标 probe 和 camera-look override。Hover 使用 `bAllowCameraLookDuringCardPointer / CardPointerCameraLookScale / CardPointerCameraLookInterpSpeedOverride`；进入 Inspect 或正式 Drag 后，改由 `bAllowCameraLookDuringCardDrag / CardDragCameraLookScale / CardDragCameraLookInterpSpeedOverride` 使用同一 `FWacomFirstPersonCardDragView` 的归一化指针无缝接管。BattleHUD bridge 写入已激活 BattleCamera，Run PlayerController 写入已激活且未 suspended 的 RunPath；release、cancel、source 解绑 / 清理时必须清除 override。该路径不恢复旧共享 camera-look bridge，也不改变鼠标捕获或规则提交。
 

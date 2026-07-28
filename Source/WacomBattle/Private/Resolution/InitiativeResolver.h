@@ -8,6 +8,7 @@ struct FBattleState;
 struct FBattleEventBus;
 class UCardDefinition;
 class IBattleOperationAdapter;
+struct FCardCriticalResolutionLedger;
 
 /**
  * 先机命中 / 抵抗 / 完美释放。
@@ -50,7 +51,8 @@ public:
 		int32 RuntimeCost,
 		const FGuid& SelectedEnemyPartId,
 		const TArray<FGuid>& HitPartIds,
-		const FGuid& CardId);
+		const FGuid& CardId,
+		FCardCriticalResolutionLedger* CriticalLedger = nullptr);
 
 	/**
 	 * 对命中部位执行完美释放效果。

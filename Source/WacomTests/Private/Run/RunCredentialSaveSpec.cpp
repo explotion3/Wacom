@@ -59,7 +59,7 @@ bool FWacomRunCredentialSaveRoundtripSpec::RunTest(const FString& /*Parameters*/
 		return false;
 	}
 
-	TestEqual(TEXT("Save schema is v5"), Save->SaveVersion, 5);
+	TestEqual(TEXT("Save schema is v6"), Save->SaveVersion, 6);
 	TestEqual(TEXT("All credentials serialized"), Save->GrantedCredentialIds.Num(), 3);
 	if (Save->GrantedCredentialIds.Num() == 3)
 	{
@@ -100,7 +100,7 @@ bool FWacomRunCredentialSaveV3MigrationSpec::RunTest(const FString& /*Parameters
 
 	TStrongObjectPtr<URunSession> Loaded(NewObject<URunSession>());
 	TestTrue(TEXT("v3 save migrates and applies"), Loaded->ApplySaveGameToRunState(Save.Get()));
-	TestEqual(TEXT("Save migrated to v5"), Save->SaveVersion, 5);
+	TestEqual(TEXT("Save migrated to v6"), Save->SaveVersion, 6);
 	TestEqual(TEXT("v3 migration explicitly clears credentials"),
 		Loaded->GetRunState().GrantedCredentialIds.Num(), 0);
 	TestFalse(TEXT("No physical-card inference grants serpent credential"),

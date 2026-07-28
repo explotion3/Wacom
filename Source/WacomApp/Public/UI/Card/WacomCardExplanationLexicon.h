@@ -18,6 +18,10 @@ namespace WacomCardExplanationLexiconKeys
 	WACOMAPP_API extern const FName ConditionUnknownStatus;
 	WACOMAPP_API extern const FName ConditionSelfInZone;
 	WACOMAPP_API extern const FName ConditionSelfNotInZone;
+	WACOMAPP_API extern const FName ConditionSelfInCardLocation;
+	WACOMAPP_API extern const FName ConditionSelfNotInCardLocation;
+	WACOMAPP_API extern const FName ConditionSelfEverEnteredExhaust;
+	WACOMAPP_API extern const FName ConditionSelfNeverEnteredExhaust;
 	WACOMAPP_API extern const FName ConditionTargetHasStatus;
 	WACOMAPP_API extern const FName ConditionTargetHasNoStatus;
 	WACOMAPP_API extern const FName ConditionFallback;

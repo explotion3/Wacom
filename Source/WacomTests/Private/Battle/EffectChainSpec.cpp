@@ -13,7 +13,7 @@
 
 namespace
 {
-	FCardEffect MakeEffect(
+	FCardEffect MakeChainEffect(
 		const FGameplayTag& EffectType,
 		int32 Magnitude,
 		const FGameplayTag& Target,
@@ -51,12 +51,12 @@ bool FWacomBattleEffectChainContinuesAfterHandlerFailureSpec::RunTest(const FStr
 	FWacomBattleFixture Fixture;
 	UCardDefinition* Card = Fixture.MakeNoopCard(/*Cost*/0);
 	Card->Effects = {
-		MakeEffect(
+		MakeChainEffect(
 			WacomTags::Effect_RemoveStatus,
 			/*Magnitude*/1,
 			WacomTags::Target_Player,
 			WacomTags::Status_Slow),
-		MakeEffect(
+		MakeChainEffect(
 			WacomTags::Status_Shield,
 			/*Magnitude*/4,
 			WacomTags::Target_Player),
@@ -93,16 +93,16 @@ bool FWacomBattleEffectChainScratchFailureAndIsolationSpec::RunTest(const FStrin
 	FWacomBattleFixture Fixture;
 	UCardDefinition* Card = Fixture.MakeNoopCard(/*Cost*/0);
 	Card->Effects = {
-		MakeEffect(
+		MakeChainEffect(
 			WacomTags::Effect_Shuffle_Random,
 			/*Magnitude*/0,
 			WacomTags::Target_RandomHandCard),
-		MakeEffect(
+		MakeChainEffect(
 			WacomTags::Effect_RemoveStatus,
 			/*Magnitude*/1,
 			WacomTags::Target_Player,
 			WacomTags::Status_Slow),
-		MakeEffect(
+		MakeChainEffect(
 			WacomTags::Effect_Card_ReduceCost,
 			/*Magnitude*/1,
 			WacomTags::Target_LastShuffledCard),
@@ -110,7 +110,7 @@ bool FWacomBattleEffectChainScratchFailureAndIsolationSpec::RunTest(const FStrin
 
 	FCardPassive AfterPlayed;
 	AfterPlayed.Trigger = WacomTags::Passive_Trigger_AfterPlayed;
-	AfterPlayed.Effects.Add(MakeEffect(
+	AfterPlayed.Effects.Add(MakeChainEffect(
 		WacomTags::Effect_Card_ReduceCost,
 		/*Magnitude*/1,
 		WacomTags::Target_LastShuffledCard));

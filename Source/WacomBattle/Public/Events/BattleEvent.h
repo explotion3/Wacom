@@ -54,6 +54,9 @@ enum class EBattleEventType : uint8
 	DiscardPileReshuffledIntoDraw UMETA(DisplayName = "DiscardPileReshuffledIntoDraw"),
 	CardRuntimeCostChanged UMETA(DisplayName = "CardRuntimeCostChanged"),
 	ShieldChanged          UMETA(DisplayName = "ShieldChanged"),
+	EffectResolved         UMETA(DisplayName = "EffectResolved"),
+	CardCreated            UMETA(DisplayName = "CardCreated"),
+	CardEffectMagnitudeChanged UMETA(DisplayName = "CardEffectMagnitudeChanged"),
 };
 
 /** 伤害的规则来源语义。表现层只消费该事实，不从 Tag 或文案反推。 */
@@ -96,6 +99,68 @@ struct WACOMBATTLE_API FBattleDamageResolutionFact
 	/** 仅记录规则层已经判定的暴击事实；本字段本身不计算暴击。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Damage")
 	bool bCritical = false;
+};
+
+/** One applied effect invocation after deterministic modifiers and critical resolution. */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleEffectResolutionFact
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Effect")
+	FGameplayTag EffectType;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Effect")
+	int32 PreCriticalMagnitude = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Effect")
+	int32 ResolvedMagnitude = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Effect")
+	bool bCritical = false;
+};
+
+/** Runtime card effect-magnitude mutation kind. */
+UENUM(BlueprintType)
+enum class EBattleCardEffectMagnitudeMutationKind : uint8
+{
+	None          UMETA(DisplayName = "None"),
+	AdditiveBonus UMETA(DisplayName = "AdditiveBonus"),
+	Multiplier    UMETA(DisplayName = "Multiplier"),
+};
+
+/**
+ * CardEffectMagnitudeChanged 的精确规则事实。
+ *
+ * 描述卡实例持有的运行时 modifier 变化，不绑定具体战斗目标，也不计算
+ * 最终效果值。表现层只把该事件作为许可，再比较同一卡的前后 Snapshot。
+ */
+USTRUCT(BlueprintType)
+struct WACOMBATTLE_API FBattleCardEffectMagnitudeChangeFact
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Card")
+	FGameplayTag AffectedEffectType;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Card")
+	FGameplayTag SourceEffectType;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Card")
+	EBattleCardEffectMagnitudeMutationKind MutationKind =
+		EBattleCardEffectMagnitudeMutationKind::None;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Card")
+	int32 AdditiveBonusBefore = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Card")
+	int32 AdditiveBonusAfter = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Card")
+	float MultiplierBefore = 1.0f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event|Card")
+	float MultiplierAfter = 1.0f;
 };
 
 /**
@@ -141,6 +206,7 @@ enum class EHandCardZoneMoveReason : uint8
  * - StatusApplied       ：ActorEnemyPartKey、Tag = Status.*、Amount = 层数；玩家目标时 key 为空
  * - CardStatusChanged   ：CardInstanceId = 目标卡，Tag = Status.*、Amount = 本次 delta、Count = 变更后层数
  * - CardRuntimeCostChanged：CardInstanceId = 目标卡、ActorInstanceId = 来源卡、Tag = 来源效果、Amount = RuntimeCostModifier delta、Count = 变更后实际 RuntimeCost
+ * - CardEffectMagnitudeChanged：CardInstanceId = 目标卡、ActorInstanceId = 来源卡、Tag = 被修改 Effect；CardEffectMagnitudeChange = 精确 modifier 事实
  * - EnemyInitiativeChanged：ActorEnemyPartKey、Tag = 原因、Amount = 实际 delta、Count = 变更后倒计时
  * - InitiativePushed    ：Amount = 本次尝试推进量（RuntimeCost）；冻结可能使部分部位实际变化为 0
  * - WaitPerformed       ：Amount = 本次等待值
@@ -210,6 +276,14 @@ struct WACOMBATTLE_API FBattleEvent
 	/** DamageDealt 专用精确结算事实。其它事件保持默认值。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
 	FBattleDamageResolutionFact DamageResolution;
+
+	/** EffectResolved 专用的结构化结算事实。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	FBattleEffectResolutionFact EffectResolution;
+
+	/** CardEffectMagnitudeChanged 专用的结构化卡牌数值修改事实。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")
+	FBattleCardEffectMagnitudeChangeFact CardEffectMagnitudeChange;
 
 	/** Deck step 完成后的抽牌堆数量；仅 CardsDrawn / DiscardPileReshuffledIntoDraw 使用。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Event")

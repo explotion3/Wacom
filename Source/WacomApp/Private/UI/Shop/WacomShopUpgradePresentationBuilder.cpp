@@ -79,30 +79,43 @@ void AppendEffectChanges(
 	}
 }
 
-FText BuildChangeSummary(const UCardDefinition* Current, const UCardDefinition* Next)
+FText BuildChangeSummary(
+	const UCardDefinition* Definition,
+	EWacomCardUpgradeTier CurrentTier,
+	EWacomCardUpgradeTier NextTier)
 {
-	if (!Current || !Next)
+	if (!Definition)
 	{
 		return FText::GetEmpty();
 	}
 
 	TArray<FText> Lines;
-	if (Current->Rarity != Next->Rarity)
+	const FGameplayTag CurrentRarity = Definition->ResolveRarity(CurrentTier);
+	const FGameplayTag NextRarity = Definition->ResolveRarity(NextTier);
+	if (CurrentRarity != NextRarity)
 	{
 		Lines.Add(FText::Format(
 			LOCTEXT("RarityChange", "稀有度：{0} → {1}"),
-			RarityName(Current->Rarity),
-			RarityName(Next->Rarity)));
+			RarityName(CurrentRarity),
+			RarityName(NextRarity)));
 	}
-	if (Current->BaseCost != Next->BaseCost)
+	const int32 CurrentCost = Definition->ResolveBaseCost(CurrentTier);
+	const int32 NextCost = Definition->ResolveBaseCost(NextTier);
+	if (CurrentCost != NextCost)
 	{
 		Lines.Add(FText::Format(
 			LOCTEXT("CostChange", "费用：{0} → {1}"),
-			FText::AsNumber(Current->BaseCost),
-			FText::AsNumber(Next->BaseCost)));
+			FText::AsNumber(CurrentCost),
+			FText::AsNumber(NextCost)));
 	}
-	AppendEffectChanges(Current->Effects, Next->Effects, Lines);
-	AppendEffectChanges(Current->PerfectReleaseEffects, Next->PerfectReleaseEffects, Lines);
+	AppendEffectChanges(
+		Definition->ResolveEffects(CurrentTier),
+		Definition->ResolveEffects(NextTier),
+		Lines);
+	AppendEffectChanges(
+		Definition->ResolvePerfectReleaseEffects(CurrentTier),
+		Definition->ResolvePerfectReleaseEffects(NextTier),
+		Lines);
 
 	FString Joined;
 	for (int32 Index = 0; Index < Lines.Num(); ++Index)
@@ -149,13 +162,24 @@ UWacomShopUpgradePresentationBuilder::BuildUpgradePresentationView(
 {
 	FWacomShopCardUpgradePresentationView View;
 	View.InstanceId = Quote.InstanceId;
-	View.CurrentDefinition = Quote.CurrentDefinition;
-	View.NextDefinition = Quote.NextDefinition;
-	View.CurrentCardViewData = UWacomCardPresentationBuilder::BuildCardViewData(Quote.CurrentDefinition);
-	View.NextCardViewData = UWacomCardPresentationBuilder::BuildCardViewData(Quote.NextDefinition);
+	View.Definition = Quote.Definition;
+	View.CurrentTier = Quote.CurrentTier;
+	View.NextTier = Quote.NextTier;
+	FWacomCardPresentationRuntimeContext CurrentContext;
+	CurrentContext.bHasUpgradeTier = true;
+	CurrentContext.UpgradeTier = Quote.CurrentTier;
+	FWacomCardPresentationRuntimeContext NextContext;
+	NextContext.bHasUpgradeTier = true;
+	NextContext.UpgradeTier = Quote.NextTier;
+	View.CurrentCardViewData = UWacomCardPresentationBuilder::BuildCardViewData(
+		Quote.Definition,
+		CurrentContext);
+	View.NextCardViewData = UWacomCardPresentationBuilder::BuildCardViewData(
+		Quote.Definition,
+		NextContext);
 	ApplyNextCardValueEmphasis(View.CurrentCardViewData, View.NextCardViewData);
-	View.CurrentCardNameText = CardName(Quote.CurrentDefinition);
-	View.NextCardNameText = CardName(Quote.NextDefinition);
+	View.CurrentCardNameText = CardName(Quote.Definition);
+	View.NextCardNameText = CardName(Quote.Definition);
 	View.PriceText = FText::Format(LOCTEXT("Price", "{0} 金币"), FText::AsNumber(Quote.Price));
 	View.ActionText = FText::Format(
 		LOCTEXT("UpgradeAction", "支付 {0} 金币并强化"),
@@ -163,7 +187,7 @@ UWacomShopUpgradePresentationBuilder::BuildUpgradePresentationView(
 	View.bCanUpgrade = Quote.bCanUpgrade;
 	View.DisabledReason = Quote.DisabledReason;
 	View.StatusText = Quote.bCanUpgrade ? FText::GetEmpty() : BuildUpgradeFailureText(Quote.DisabledReason);
-	View.ChangeSummaryText = BuildChangeSummary(Quote.CurrentDefinition, Quote.NextDefinition);
+	View.ChangeSummaryText = BuildChangeSummary(Quote.Definition, Quote.CurrentTier, Quote.NextTier);
 	return View;
 }
 
@@ -174,9 +198,11 @@ UWacomShopUpgradePresentationBuilder::BuildUpgradePresentationViews(
 	TArray<FWacomShopCardUpgradePresentationView> Views;
 	for (const FRunShopCardUpgradeQuote& Quote : Snapshot.CardUpgradeQuotes)
 	{
-		// A terminal or ordinary card is not a candidate. Invalid links that still expose a
-		// next definition stay visible with their authoritative disabled reason.
-		if (Quote.NextDefinition)
+		// 只有采用完整四阶 Profile 且尚有下一阶的实例进入强化列表。
+		EWacomCardUpgradeTier IgnoredNextTier = EWacomCardUpgradeTier::White;
+		if (Quote.Definition
+			&& Quote.Definition->UsesTierProfiles()
+			&& WacomCardUpgrade::TryGetNext(Quote.CurrentTier, IgnoredNextTier))
 		{
 			Views.Add(BuildUpgradePresentationView(Quote));
 		}
@@ -190,8 +216,8 @@ FText UWacomShopUpgradePresentationBuilder::BuildUpgradeFailureText(FName Disabl
 	{
 		return LOCTEXT("InsufficientGold", "金币不足");
 	}
-	if (DisabledReason == TEXT("StaleCurrentDefinition")
-		|| DisabledReason == TEXT("StaleNextDefinition")
+	if (DisabledReason == TEXT("StaleDefinition")
+		|| DisabledReason == TEXT("StaleCurrentTier")
 		|| DisabledReason == TEXT("CardLocationChanged"))
 	{
 		return LOCTEXT("StaleQuote", "卡牌状态已变化，请重新选择");
@@ -199,10 +225,6 @@ FText UWacomShopUpgradePresentationBuilder::BuildUpgradeFailureText(FName Disabl
 	if (DisabledReason == TEXT("UpgradePriceMissing"))
 	{
 		return LOCTEXT("PriceMissing", "商店未配置该稀有度的强化价格");
-	}
-	if (DisabledReason == TEXT("InvalidUpgradeChain"))
-	{
-		return LOCTEXT("InvalidChain", "强化链无效");
 	}
 	if (DisabledReason == TEXT("CardUpgradeServiceDisabled"))
 	{
@@ -226,23 +248,15 @@ FText UWacomShopUpgradePresentationBuilder::BuildUpgradeFailureText(FName Disabl
 }
 
 FText UWacomShopUpgradePresentationBuilder::BuildUpgradeSuccessText(
-	const UCardDefinition* PreviousDefinition,
-	const UCardDefinition* NewDefinition)
+	const UCardDefinition* Definition,
+	EWacomCardUpgradeTier PreviousTier,
+	EWacomCardUpgradeTier NewTier)
 {
-	const FText PreviousName = CardName(PreviousDefinition);
-	const FText NewName = CardName(NewDefinition);
-	if (PreviousDefinition && NewDefinition && PreviousName.EqualTo(NewName))
-	{
-		return FText::Format(
-			LOCTEXT("UpgradeSucceededSameName", "已强化：{0}（{1} → {2}）"),
-			NewName,
-			RarityName(PreviousDefinition->Rarity),
-			RarityName(NewDefinition->Rarity));
-	}
 	return FText::Format(
-		LOCTEXT("UpgradeSucceeded", "已强化：{0} → {1}"),
-		PreviousName,
-		NewName);
+		LOCTEXT("UpgradeSucceeded", "已强化：{0}（{1} → {2}）"),
+		CardName(Definition),
+		RarityName(Definition ? Definition->ResolveRarity(PreviousTier) : FGameplayTag()),
+		RarityName(Definition ? Definition->ResolveRarity(NewTier) : FGameplayTag()));
 }
 
 #undef LOCTEXT_NAMESPACE

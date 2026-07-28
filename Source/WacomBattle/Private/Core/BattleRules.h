@@ -22,7 +22,9 @@ public:
 	// -------- 费用 --------
 
 	/** 计算一张卡的 RuntimeCost。= max(0, BaseCost + RuntimeCostModifier)。 */
-	static int32 ComputeRuntimeCost(const FRuntimeCardInstance& Card);
+	static int32 ComputeRuntimeCost(
+		const FBattleState& State,
+		const FRuntimeCardInstance& Card);
 
 	/** 所有存活部位的当前先机之和。 */
 	static int32 ComputeEnemyInitiativeSum(const FBattleState& State);

@@ -1066,6 +1066,9 @@ bool URunSession::BuildInitParamsForBattle(
 		{
 			FBattleDeckEntry Entry;
 			Entry.Definition = Inst.Definition;
+			Entry.SourceRunInstanceId = Inst.InstanceId;
+			Entry.UpgradeTier = Inst.UpgradeTier;
+			Entry.PersistentModifiers = Inst.PersistentModifiers;
 			OutParams.BattleDeckEntries.Add(MoveTemp(Entry));
 		}
 	}
@@ -1078,7 +1081,7 @@ bool URunSession::BuildInitParamsForBattle(
 		if (!FindInstance(SZ.OwnerInstanceId, Owner, OwnerZone, OwnerZoneOwnerId)
 			|| OwnerZone != EZoneKind::BattleDeck
 			|| !Owner.Definition
-			|| !Owner.Definition->Physique.CapacityEffect.IsValid())
+			|| !Owner.Definition->ResolvePhysique(Owner.UpgradeTier).CapacityEffect.IsValid())
 		{
 			continue;
 		}
@@ -1092,7 +1095,11 @@ bool URunSession::BuildInitParamsForBattle(
 
 			FBattleDeckEntry Entry;
 			Entry.Definition = Inst.Definition;
-			Entry.CapacityEffectTags.AddTag(Owner.Definition->Physique.CapacityEffect);
+			Entry.SourceRunInstanceId = Inst.InstanceId;
+			Entry.UpgradeTier = Inst.UpgradeTier;
+			Entry.PersistentModifiers = Inst.PersistentModifiers;
+			Entry.CapacityEffectTags.AddTag(
+				Owner.Definition->ResolvePhysique(Owner.UpgradeTier).CapacityEffect);
 			OutParams.BattleDeckEntries.Add(MoveTemp(Entry));
 		}
 	}

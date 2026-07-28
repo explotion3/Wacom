@@ -65,6 +65,10 @@ struct WACOMAPP_API FWacomBattleStatusPresentationEntry
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Status Presentation",
 		meta = (ToolTip = "状态位于敌方部位时使用的准确三行规则说明。"))
 	FWacomBattleStatusRuleTextSet EnemyPartRules;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Wacom|Battle|Status Presentation",
+		meta = (ToolTip = "状态位于战斗内卡牌实例上时使用的准确三行规则说明；只在该状态存在卡牌宿主语义时填写。"))
+	FWacomBattleStatusRuleTextSet CardRules;
 };
 
 /**

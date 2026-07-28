@@ -3,6 +3,7 @@
 #include "Hand/BattleCardZoneTransition.h"
 
 #include "Cards/CardZoneAggregate.h"
+#include "Cards/CardDefinition.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
 #include "Deck/DeckService.h"
@@ -196,6 +197,7 @@ ECardLocation FBattleCardZoneTransition::ResolvePlayedCardDestination(
 	const FGuid& CardInstanceId,
 	bool bIsAnchor,
 	bool bIsCombo,
+	bool bForceExhaust,
 	bool bSourceExplicitlyMoved,
 	const FBattleCardPlacementFacts& PrePlayPlacement)
 {
@@ -209,6 +211,18 @@ ECardLocation FBattleCardZoneTransition::ResolvePlayedCardDestination(
 	if (bSourceExplicitlyMoved)
 	{
 		return Card->Location;
+	}
+
+	// Durability reaching zero is a successful-play terminal destination.
+	// It intentionally outranks Combo's normal return-to-hand behavior.
+	if (bForceExhaust)
+	{
+		FCardZoneAggregate::MoveCardFrom(
+			State,
+			CardInstanceId,
+			ECardLocation::Hand,
+			ECardLocation::Exhaust);
+		return ECardLocation::Exhaust;
 	}
 
 	// Preserve the existing precedence: Combo anchors return to their hand slot.
@@ -235,7 +249,9 @@ ECardLocation FBattleCardZoneTransition::ResolvePlayedCardDestination(
 		return ECardLocation::Limbo;
 	}
 
-	if (Card->TemporaryKeywords.HasTagExact(WacomTags::Card_Keyword_Exhaust))
+	if ((Card->Definition
+			&& Card->Definition->Keywords.HasTagExact(WacomTags::Card_Keyword_Exhaust))
+		|| Card->TemporaryKeywords.HasTagExact(WacomTags::Card_Keyword_Exhaust))
 	{
 		FCardZoneAggregate::MoveCardFrom(
 			State,

@@ -82,7 +82,7 @@ bool FWacomRunSaveGameRoundtripSpec::RunTest(const FString& /*Parameters*/)
 	TestNotNull(TEXT("BuildSaveGameFromRunState non-null"), Sg);
 	if (!Sg) { return false; }
 
-	TestEqual(TEXT("Save schema is version 5"), UWacomSaveGame::CurrentSaveVersion, 5);
+	TestEqual(TEXT("Save schema is version 6"), UWacomSaveGame::CurrentSaveVersion, 6);
 	TestEqual(TEXT("SaveVersion == Current"), Sg->SaveVersion, UWacomSaveGame::CurrentSaveVersion);
 	TestEqual(TEXT("BattleSeed passthrough"), Sg->BattleSeed, 4242);
 	TestEqual(TEXT("Outcome passthrough"), Sg->Outcome, ERunOutcome::InProgress);
@@ -248,8 +248,8 @@ bool FWacomRunSaveGameLoadNotifiesRunStateChangedSpec::RunTest(const FString& /*
 // 是为了在测试模块编译时也复检（spec task 4.7 明确要求）。两处任一失配都会触发编译错。
 // =====================================================================================
 
-static_assert(UWacomSaveGame::CurrentSaveVersion == 5,
-	"SaveGame 必须保持 v5；"
+static_assert(UWacomSaveGame::CurrentSaveVersion == 6,
+	"SaveGame 必须保持 v6；"
 	"若改 CurrentSaveVersion，请同步更新 MigrateIfNeeded 迁移链与本文件断言。");
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -276,15 +276,15 @@ bool FWacomRunSaveGameMigrateAndRejectSpec::RunTest(const FString& /*Parameters*
 		Sg->SpecialZones.Add(JunkSz);
 
 		const bool bMigrated = UWacomSaveGame::MigrateIfNeeded(Sg.Get());
-		TestTrue(TEXT("v0 → v5 迁移成功"), bMigrated);
-		TestEqual(TEXT("v0 → SaveVersion == 5"), Sg->SaveVersion, 5);
+		TestTrue(TEXT("v0 → v6 迁移成功"), bMigrated);
+		TestEqual(TEXT("v0 → SaveVersion == 6"), Sg->SaveVersion, 6);
 		TestEqual(TEXT("v0 → Backpack 清空"), Sg->Backpack.Num(), 0);
 		TestEqual(TEXT("v0 → BattleDeck 清空"), Sg->BattleDeck.Num(), 0);
 		TestEqual(TEXT("v0 → BurdenZone 清空"), Sg->BurdenZone.Num(), 0);
 		TestEqual(TEXT("v0 → SpecialZones 清空"), Sg->SpecialZones.Num(), 0);
 	}
 
-	// ---- R7.3 / R7.8a：v1 → v5 迁移 ----
+	// ---- R7.3 / R7.8a：v1 → v6 迁移 ----
 	{
 		TStrongObjectPtr<UWacomSaveGame> Sg(NewObject<UWacomSaveGame>());
 		Sg->SaveVersion = 1;
@@ -295,23 +295,23 @@ bool FWacomRunSaveGameMigrateAndRejectSpec::RunTest(const FString& /*Parameters*
 		Sg->BattleDeck.Add(JunkCard);
 
 		const bool bMigrated = UWacomSaveGame::MigrateIfNeeded(Sg.Get());
-		TestTrue(TEXT("v1 → v5 迁移成功"), bMigrated);
-		TestEqual(TEXT("v1 → SaveVersion == 5"), Sg->SaveVersion, 5);
+		TestTrue(TEXT("v1 → v6 迁移成功"), bMigrated);
+		TestEqual(TEXT("v1 → SaveVersion == 6"), Sg->SaveVersion, 6);
 		TestEqual(TEXT("v1 → Backpack 清空"), Sg->Backpack.Num(), 0);
 		TestEqual(TEXT("v1 → BattleDeck 清空"), Sg->BattleDeck.Num(), 0);
 		TestEqual(TEXT("v1 → BurdenZone 清空"), Sg->BurdenZone.Num(), 0);
 		TestEqual(TEXT("v1 → SpecialZones 清空"), Sg->SpecialZones.Num(), 0);
 	}
 
-	// ---- R7.7 / R7.8d：SaveVersion = 6（来自更新版本客户端）→ MigrateIfNeeded false ----
-	// 此外 SaveVersion 不应被改写（保持 6，便于上层日志诊断）。
+	// ---- R7.7 / R7.8d：SaveVersion = 7（来自更新版本客户端）→ MigrateIfNeeded false ----
+	// 此外 SaveVersion 不应被改写（保持 7，便于上层日志诊断）。
 	{
 		TStrongObjectPtr<UWacomSaveGame> Sg(NewObject<UWacomSaveGame>());
-		Sg->SaveVersion = 6;
+		Sg->SaveVersion = 7;
 
 		const bool bMigrated = UWacomSaveGame::MigrateIfNeeded(Sg.Get());
-		TestFalse(TEXT("v6（未来版本）拒绝迁移"), bMigrated);
-		TestEqual(TEXT("v6 SaveVersion 不被改写"), Sg->SaveVersion, 6);
+		TestFalse(TEXT("v7（未来版本）拒绝迁移"), bMigrated);
+		TestEqual(TEXT("v7 SaveVersion 不被改写"), Sg->SaveVersion, 7);
 	}
 
 	return true;
@@ -348,7 +348,7 @@ bool FWacomRunSaveGameStarterDeckRebuildSpec::RunTest(const FString& /*Parameter
 	// 手动构造 v5 + 四数组全空 + 指向当前角色的 SaveGame，
 	// 模拟"v0/v1 迁移后"或"全新档"两种共同走 R7.4 重建路径的情形。
 	TStrongObjectPtr<UWacomSaveGame> Sg(NewObject<UWacomSaveGame>());
-	Sg->SaveVersion = UWacomSaveGame::CurrentSaveVersion;  // == 5
+	Sg->SaveVersion = UWacomSaveGame::CurrentSaveVersion;  // == 6
 	Sg->CharacterAssetPath = FSoftObjectPath(Char);
 	Sg->BattleSeed = 7;
 	Sg->Outcome = ERunOutcome::InProgress;

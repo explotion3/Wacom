@@ -130,15 +130,15 @@ Logical Map Graph 不新增 UE Module，继续沿用现有依赖链：
 
 `URunSession::Initialize(FRunInitializationParams)` 使用完整 working state，成功时一次提交角色持有区、Journey/Floor、时间、压力和探索版本并返回 `FRunInitializationResult`；失败时保留旧 Session。App 和测试都必须显式消费该结果，不保留只返回 bool 的初始化入口。
 
-Run scene refresh 同样采用 working-state 原子提交：Snapshot 先与唯一 Descriptor 的 Floor 对齐，再完整构建 Registry 和 Coordinator plan；版本/Floor 漂移、场景身份错误或表现预检失败都保留上一代已安装状态。场景绑定收口本身没有修改 `WacomRun` Snapshot/Command/Resolution；后续 Credential 与 Journey success 切片把 SaveGame 依次升到 v4/v5，但没有新增 GameplayTag、`Build.cs` 或模块依赖，`WacomEditor` 继续使用既有 Private `WacomApp` 依赖。
+Run scene refresh 同样采用 working-state 原子提交：Snapshot 先与唯一 Descriptor 的 Floor 对齐，再完整构建 Registry 和 Coordinator plan；版本/Floor 漂移、场景身份错误或表现预检失败都保留上一代已安装状态。场景绑定收口本身没有修改 `WacomRun` Snapshot/Command/Resolution；后续 Credential、Journey success 与卡牌实例强化切片把 SaveGame 依次升到 v4/v5/v6，但没有反转模块依赖，`WacomEditor` 继续使用既有 Private `WacomApp` 依赖。
 
-需要资产制作、Details 面板或 Blueprint 只读绑定的数据类型使用反射；探索 Command、Resolution、一次性 token 和 resolver/module 保持普通 C++。`UWacomRunPathTraversalComponent` 是唯一场景移动组件，Segment / Branch / Anchor 只保存场景绑定身份，不形成第二份规则图。当前 SaveGame schema 5 保存确定排序的 `GrantedCredentialIds`、`ERunOutcome` 与独立成功摘要；v4 active/inactive 分别迁移为 InProgress/Failed。Journey/Floor/Node、节点生命周期和 Floor history 仍不保存，终态档也不能恢复为活动 Run，因此不能宣称支持地图恢复或 Continue。
+需要资产制作、Details 面板或 Blueprint 只读绑定的数据类型使用反射；探索 Command、Resolution、一次性 token 和 resolver/module 保持普通 C++。`UWacomRunPathTraversalComponent` 是唯一场景移动组件，Segment / Branch / Anchor 只保存场景绑定身份，不形成第二份规则图。当前 SaveGame schema 6 除确定排序的 `GrantedCredentialIds`、`ERunOutcome` 与独立成功摘要外，还保存每张卡实例的 `UpgradeTier` 与持久修正；v4 active/inactive 分别迁移为 InProgress/Failed，旧卡实例迁移为 White。Journey/Floor/Node、节点生命周期和 Floor history 仍不保存，终态档也不能恢复为活动 Run，因此不能宣称支持地图恢复或 Continue。
 
 Journey success 继续遵守既有依赖方向：`WacomData` 只声明 `DisplayName + SuccessTerminalNode` 静态终局，`WacomRun` 在 terminal Encounter working-state 事务中生成 Outcome/summary/末尾 event，`WacomApp` 只消费 event、展示 passive ViewData 并编排 CommonUI teardown/travel，`WacomEditor` 只做静态制作校验。Defeat 与 success 不复用状态语义；Screen 不读取 RunSession，也不调用 travel。该切片没有增加模块、GameplayTag 或依赖边。
 
 击倒分支奖励同样沿用单向依赖：`WacomData` 的 `UEnemyPartDefinition` 保存 Aid/Destroy 静态引用并提供唯一 legacy-compatible C++ 查询；`WacomBattle` 在原有选择事务中消费查询，同时生成不含规则对象的只读奖励摘要；`WacomApp` 的 Dialog 只渲染摘要并提交选择意图；`WacomEditor` 用 General/FormalProduction profile 管制作门禁；`WacomRun` 继续只消费 `FBattleGainedCard.SourceChoice` 和 Card Definition。不得让 App 直接读取 Part Definition、让 Editor validator 进入 runtime、或为奖励预览新增 Battle/Run 状态和模块依赖。
 
-商店卡牌强化也保持 `WacomData -> WacomRun -> WacomApp`：Data 声明不可变 Definition 链和 Shop 静态价格，Editor 校验局部结构与完整 catalog 图；Run 聚合根按 InstanceId 在 working state 中权威重算 Quote、扣费、替换 Definition 并复用 commerce/AP settlement；App 只转发 visit request、展示只读 Quote/Result 和提交带 Definition guard 的意图。Battle 继续只消费 Run 构造的当前 Definition，SaveGame v5 继续保存该 DefinitionAssetPath；没有新增模块依赖、GameplayTag 或 schema。静态 Definition 永不在运行时被改写。
+商店卡牌强化也保持 `WacomData -> WacomRun -> WacomApp`：Data 以单一 Definition 的四个严格 Tier Profile 声明数值，Editor 校验四阶结构一致性；Run 聚合根按 InstanceId 在 working state 中权威重算 `CurrentTier -> NextTier` Quote、扣费并只提升实例 Tier，复用 commerce/AP settlement；App 只转发 visit request、展示只读 Quote/Result 和提交带 Definition/Tier guard 的意图。Battle 消费 Run 投影的同一 Definition、Tier 与持久修正，SaveGame v6 保存 DefinitionAssetPath、Tier 和持久修正。静态 Definition 永不在运行时被改写。
 
 ## 5. 目录结构
 

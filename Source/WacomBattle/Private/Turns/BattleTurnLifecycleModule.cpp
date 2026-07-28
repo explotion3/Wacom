@@ -11,6 +11,7 @@
 #include "Hand/BattleCardZoneTransition.h"
 #include "Hand/HandZoneService.h"
 #include "Presentation/BattlePresentationJournal.h"
+#include "Passives/PassiveDispatcher.h"
 #include "Snapshots/BattleSnapshotBuilder.h"
 #include "Statuses/BattleStatusSemanticsModule.h"
 #include "Types/WacomEnums.h"
@@ -62,7 +63,13 @@ namespace
 
 		WacomBattleEvents::EmitDeckDrawResult(Events, DrawResult);
 
+		const TArray<FGuid> SurvivingDrawnCards =
+			FBattleStatusSemanticsModule::ResolvePlayerBurnForDrawnCards(
+				State,
+				Events,
+				DrawnCardIds);
 		FBattleStatusSemanticsModule::MaterializePendingHandAfflictions(State, Events);
+		FPassiveDispatcher::RunOnDraw(State, Events, SurvivingDrawnCards);
 
 		FBattleEvent HandZoneEvent;
 		HandZoneEvent.Type = EBattleEventType::HandZoneChanged;
@@ -99,7 +106,7 @@ void FBattleTurnLifecycleModule::CompleteCurrentTurn(
 	TurnEndedEvent.Count = State.TurnNumber;
 	Events.Emit(TurnEndedEvent);
 
-	// Reserved boundary: future OnTurnEnd resolves after TurnEnded and before card cleanup.
+	FPassiveDispatcher::RunOnTurnEnd(State, Events);
 	FBattleStatusSemanticsModule::ExpireTurnEndCardStatuses(State, Events);
 	// PlayedPile natural cleanup is intentionally not a discard event and never runs OnDiscard.
 	FDeckService::MovePlayedPileToDiscard(State);

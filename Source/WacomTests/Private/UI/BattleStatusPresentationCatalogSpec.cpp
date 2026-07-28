@@ -117,6 +117,37 @@ bool FWacomUIBattleStatusPresentationCatalogCombatActivityIconSpec::RunTest(
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
+	FWacomUIBattleStatusPresentationCatalogProjectBurnIconSpec,
+	"Wacom.UI.Battle.StatusPresentationCatalog.ProjectAssetHasAuthoredBurnIcon",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWacomUIBattleStatusPresentationCatalogProjectBurnIconSpec::RunTest(
+	const FString& /*Parameters*/)
+{
+	const UWacomUIDeveloperSettings* Settings =
+		GetDefault<UWacomUIDeveloperSettings>();
+	const UWacomBattleStatusPresentationCatalog* Catalog =
+		Settings->BattleStatusPresentationCatalog.LoadSynchronous();
+	if (!TestNotNull(TEXT("Project config resolves the formal status catalog"),
+		Catalog))
+	{
+		return false;
+	}
+
+	const FWacomBattleStatusPresentationEntry* Burn =
+		Catalog->FindEntry(WacomTags::Status_Burn);
+	if (!TestNotNull(TEXT("Formal catalog contains Status.Burn"), Burn))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("Formal Burn entry references an authored icon resource"),
+		UWacomBattleStatusPresentationCatalog::IsIconBrushAssetConfigured(
+			Burn->IconBrush));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FWacomUIBattleStatusPresentationCatalogHostRulesSpec,
 	"Wacom.UI.Battle.StatusPresentationCatalog.HostRulesUseBattleConstants",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -204,6 +235,23 @@ bool FWacomUIBattleStatusPresentationCatalogValidationSpec::RunTest(
 	TestEqual(TEXT("Complete transient catalog validates"),
 		Catalog->IsDataValid(ValidContext),
 		EDataValidationResult::Valid);
+
+	FWacomBattleStatusPresentationEntry* BurnEntry =
+		Catalog->Entries.FindByPredicate([](
+			const FWacomBattleStatusPresentationEntry& Entry)
+		{
+			return Entry.StatusTag == WacomTags::Status_Burn;
+		});
+	if (TestNotNull(TEXT("Burn entry exists for icon validation"), BurnEntry))
+	{
+		const FSlateBrush SavedBurnBrush = BurnEntry->IconBrush;
+		BurnEntry->IconBrush = FSlateBrush();
+		FDataValidationContext MissingBurnIconContext;
+		TestEqual(TEXT("Authored catalog rejects a missing Burn icon"),
+			Catalog->IsDataValid(MissingBurnIconContext),
+			EDataValidationResult::Invalid);
+		BurnEntry->IconBrush = SavedBurnBrush;
+	}
 
 	Catalog->Entries[1].LookupAliases.Add(
 		WacomTags::Effect_ApplyStatus_Poison);

@@ -59,6 +59,13 @@ void FWacomBattleStatusTooltipPresentationBuilder::PopulateRuleText(
 		ApplyRules(InOutView, Entry->EnemyPartRules);
 		return;
 	}
+	if (InOutView.InspectionHost == EWacomBattleStatusInspectionHost::Card)
+	{
+		ApplyRules(InOutView, Entry->CardRules.IsComplete()
+			? Entry->CardRules
+			: Catalog.UnknownRules);
+		return;
+	}
 	ApplyRules(InOutView, Catalog.UnknownRules);
 }
 

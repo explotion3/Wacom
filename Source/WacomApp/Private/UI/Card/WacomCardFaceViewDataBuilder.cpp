@@ -56,6 +56,8 @@ namespace WacomCardFaceViewDataBuilder
 			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Exhaust))        { return LOCTEXT("KeywordExhaust", "消耗"); }
 			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_BagProvider))    { return LOCTEXT("KeywordBagProvider", "容器兼容标记"); }
 			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_DeleteProvider)) { return LOCTEXT("KeywordDeleteProvider", "删牌"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Food))           { return LOCTEXT("KeywordFood", "食物"); }
+			if (Tag.MatchesTagExact(WacomTags::Card_Keyword_Container))      { return LOCTEXT("KeywordContainer", "容器"); }
 			return FText::FromString(ShortGameplayTagName(Tag));
 		}
 
@@ -84,7 +86,16 @@ namespace WacomCardFaceViewDataBuilder
 			return Token;
 		}
 
-		FTypeLineView BuildTypeLine(const UCardDefinition* Card)
+		EWacomCardUpgradeTier ResolveTier(const FWacomCardPresentationRuntimeContext& RuntimeContext)
+		{
+			return RuntimeContext.bHasUpgradeTier
+				? RuntimeContext.UpgradeTier
+				: EWacomCardUpgradeTier::White;
+		}
+
+		FTypeLineView BuildTypeLine(
+			const UCardDefinition* Card,
+			const FWacomCardPresentationRuntimeContext& RuntimeContext)
 		{
 			FTypeLineView Result;
 			if (!Card)
@@ -92,10 +103,11 @@ namespace WacomCardFaceViewDataBuilder
 				return Result;
 			}
 
-			if (Card->Physique.Capacity > 0)
+			const FCardPhysique& Physique = Card->ResolvePhysique(ResolveTier(RuntimeContext));
+			if (Physique.Capacity > 0)
 			{
 				const bool bDedicatedContainer =
-					Card->Physique.CapacityEffect.IsValid();
+					Physique.CapacityEffect.IsValid();
 				Result.Tokens.Add(MakeSemanticToken(
 					bDedicatedContainer
 						? WacomCardFaceSemanticIds::Container
@@ -132,14 +144,21 @@ namespace WacomCardFaceViewDataBuilder
 			return Result;
 		}
 
-		FText BuildCompactDescriptionText(const UCardDefinition* Card)
+		FText BuildCompactDescriptionText(
+			const UCardDefinition* Card,
+			const FWacomCardPresentationRuntimeContext& RuntimeContext)
 		{
-			if (!Card || Card->Description.IsEmpty())
+			if (!Card)
 			{
 				return FText::GetEmpty();
 			}
 
-			FString Text = Card->Description.ToString();
+			const FText& Description = Card->ResolveDescription(ResolveTier(RuntimeContext));
+			if (Description.IsEmpty())
+			{
+				return FText::GetEmpty();
+			}
+			FString Text = Description.ToString();
 			Text.ReplaceInline(TEXT("\r\n"), TEXT("\n"));
 			Text.ReplaceInline(TEXT("\r"), TEXT("\n"));
 
@@ -158,25 +177,28 @@ namespace WacomCardFaceViewDataBuilder
 			return FText::FromString(Text);
 		}
 
-		FText BuildPhysiqueText(const UCardDefinition* Card)
+		FText BuildPhysiqueText(
+			const UCardDefinition* Card,
+			const FWacomCardPresentationRuntimeContext& RuntimeContext)
 		{
 			if (!Card)
 			{
 				return FText::GetEmpty();
 			}
 
+			const FCardPhysique& Physique = Card->ResolvePhysique(ResolveTier(RuntimeContext));
 			TArray<FString> Parts;
-			if (Card->Physique.Durability > 0)
+			if (Physique.Durability > 0)
 			{
-				Parts.Add(FString::Printf(TEXT("%d耐久"), Card->Physique.Durability));
+				Parts.Add(FString::Printf(TEXT("%d耐久"), Physique.Durability));
 			}
-			if (Card->Physique.Capacity > 0)
+			if (Physique.Capacity > 0)
 			{
-				Parts.Add(FString::Printf(TEXT("%d容量"), Card->Physique.Capacity));
+				Parts.Add(FString::Printf(TEXT("%d容量"), Physique.Capacity));
 			}
-			if (Card->Physique.MaxHpBonus > 0)
+			if (Physique.MaxHpBonus > 0)
 			{
-				Parts.Add(FString::Printf(TEXT("+%d生命"), Card->Physique.MaxHpBonus));
+				Parts.Add(FString::Printf(TEXT("+%d生命"), Physique.MaxHpBonus));
 			}
 
 			return Parts.Num() > 0
@@ -204,18 +226,43 @@ namespace WacomCardFaceViewDataBuilder
 			return nullptr;
 		}
 
+		const FWacomCardPresentationRuntimeContext::FCurrentEffectMagnitude*
+			FindCurrentEffectMagnitude(
+				const FWacomCardPresentationRuntimeContext& RuntimeContext,
+				int32 EffectIndex)
+		{
+			for (const FWacomCardPresentationRuntimeContext::FCurrentEffectMagnitude&
+				Magnitude : RuntimeContext.CurrentEffectMagnitudes)
+			{
+				if (Magnitude.EffectIndex == EffectIndex)
+				{
+					return &Magnitude;
+				}
+			}
+			return nullptr;
+		}
+
 		int32 GetBaseDisplayMagnitude(
 			const FCardEffect& Effect,
 			const UCardDefinition* Card,
-			const FWacomCardPresentationRuntimeContext& RuntimeContext)
+			const FWacomCardPresentationRuntimeContext& RuntimeContext,
+			int32 EffectIndex)
 		{
+			if (const FWacomCardPresentationRuntimeContext::FCurrentEffectMagnitude*
+				CurrentMagnitude =
+					FindCurrentEffectMagnitude(RuntimeContext, EffectIndex))
+			{
+				return CurrentMagnitude->Magnitude;
+			}
 			if (UsesRuntimeCostMagnitude(Effect))
 			{
 				if (RuntimeContext.bHasRuntimeCost)
 				{
 					return RuntimeContext.RuntimeCost;
 				}
-				return Card ? Card->BaseCost : Effect.Magnitude;
+				return Card
+					? Card->ResolveBaseCost(ResolveTier(RuntimeContext))
+					: Effect.Magnitude;
 			}
 			return Effect.Magnitude;
 		}
@@ -288,6 +335,10 @@ namespace WacomCardFaceViewDataBuilder
 			{
 				OutKind = EWacomCardViewEffectBadgeKind::Poison;
 			}
+			else if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Burn))
+			{
+				OutKind = EWacomCardViewEffectBadgeKind::Burn;
+			}
 			else
 			{
 				return false;
@@ -337,7 +388,7 @@ namespace WacomCardFaceViewDataBuilder
 			Data.ArtDepthMap = Card && Card->RunFace.IllustrationDepthMapOverride
 				? Card->RunFace.IllustrationDepthMapOverride
 				: (Card ? Card->CardIllustrationDepthMap : nullptr);
-			Data.Rarity = Card ? Card->Rarity : FGameplayTag();
+			Data.Rarity = Card ? Card->ResolveRarity(ResolveTier(RuntimeContext)) : FGameplayTag();
 			Data.bShowValue = false;
 			Data.bShowPhysique = false;
 			Data.bShowDurability = false;
@@ -349,25 +400,30 @@ namespace WacomCardFaceViewDataBuilder
 
 		FWacomCardViewData Data;
 		Data.Name = GetCardDisplayName(Card);
-		const FTypeLineView TypeLine = BuildTypeLine(Card);
+		const FTypeLineView TypeLine = BuildTypeLine(Card, RuntimeContext);
 		Data.TypeText = TypeLine.Text;
 		Data.TypeSemanticTokens = TypeLine.Tokens;
-		Data.Description = BuildCompactDescriptionText(Card);
-		Data.Cost = RuntimeContext.bHasRuntimeCost ? RuntimeContext.RuntimeCost : (Card ? Card->BaseCost : 0);
+		Data.Description = BuildCompactDescriptionText(Card, RuntimeContext);
+		Data.Cost = RuntimeContext.bHasRuntimeCost
+			? RuntimeContext.RuntimeCost
+			: (Card ? Card->ResolveBaseCost(ResolveTier(RuntimeContext)) : 0);
 		Data.bShowCost = Card != nullptr;
 		Data.bHasCostPreview = RuntimeContext.bHasRuntimeCostPreview;
 		Data.PreviewCost = RuntimeContext.RuntimeCostPreview;
 		Data.Art = Card ? Card->CardIllustration : nullptr;
 		Data.ArtDepthMap = Card ? Card->CardIllustrationDepthMap : nullptr;
-		Data.Rarity = Card ? Card->Rarity : FGameplayTag();
+		Data.Rarity = Card ? Card->ResolveRarity(ResolveTier(RuntimeContext)) : FGameplayTag();
 		Data.Value = URunSession::GetDeleteGoldRewardForCard(Card);
 		Data.bShowValue = Data.Value > 0;
-		Data.PhysiqueText = BuildPhysiqueText(Card);
+		Data.PhysiqueText = BuildPhysiqueText(Card, RuntimeContext);
 		Data.bShowPhysique = !Data.PhysiqueText.IsEmpty();
 		if (Card)
 		{
-			int32 Effective = Card->Physique.Durability;
-			if (Effective == 0) Effective = Card->Physique.MaxHpBonus;
+			const FCardPhysique& Physique = Card->ResolvePhysique(ResolveTier(RuntimeContext));
+			int32 Effective = RuntimeContext.bHasCurrentDurability
+				? RuntimeContext.CurrentDurability
+				: Physique.Durability;
+			if (Effective == 0) Effective = Physique.MaxHpBonus;
 			Data.Durability = Effective;
 			Data.bShowDurability = Effective > 0;
 		}
@@ -398,11 +454,12 @@ namespace WacomCardFaceViewDataBuilder
 			return Badges;
 		}
 		TArray<FEffectBadgeAggregate> Aggregates;
-		Aggregates.Reserve(Card->Effects.Num());
+		const TArray<FCardEffect>& Effects = Card->ResolveEffects(ResolveTier(RuntimeContext));
+		Aggregates.Reserve(Effects.Num());
 
-		for (int32 EffectIndex = 0; EffectIndex < Card->Effects.Num(); ++EffectIndex)
+		for (int32 EffectIndex = 0; EffectIndex < Effects.Num(); ++EffectIndex)
 		{
-			const FCardEffect& Effect = Card->Effects[EffectIndex];
+			const FCardEffect& Effect = Effects[EffectIndex];
 			EWacomCardViewEffectBadgeKind Kind = EWacomCardViewEffectBadgeKind::Generic;
 			if (!TryResolveEffectBadgeKind(Effect, Kind))
 			{
@@ -420,7 +477,11 @@ namespace WacomCardFaceViewDataBuilder
 				Aggregate->Kind = Kind;
 			}
 
-			const int32 BaseMagnitude = GetBaseDisplayMagnitude(Effect, Card, RuntimeContext);
+			const int32 BaseMagnitude = GetBaseDisplayMagnitude(
+				Effect,
+				Card,
+				RuntimeContext,
+				EffectIndex);
 			const int32 AuthoritativeContribution = Effect.Condition.IsSet() ? 0 : BaseMagnitude;
 			Aggregate->AuthoritativeValue += AuthoritativeContribution;
 

@@ -7,6 +7,7 @@
 #include "Commands/KnockdownChoiceAvailability.h"
 #include "Commands/PlayCardEvaluation.h"
 #include "Events/BattleEventBus.h"
+#include "Passives/PassiveDispatcher.h"
 #include "Session/BattleCommandPipeline.h"
 #include "Session/BattleInitializer.h"
 #include "Session/BattleResultPacketBuilder.h"
@@ -220,5 +221,164 @@ int32 UBattleSession::GetNextEventSequenceForAutomationTest() const
 int32 UBattleSession::GetRandomCurrentSeedForAutomationTest() const
 {
 	return State ? State->Rng.GetCurrentSeed() : INDEX_NONE;
+}
+
+bool UBattleSession::SetPlayerStatusStacksForAutomationTest(
+	const FGameplayTag& Status,
+	const int32 Stacks)
+{
+	if (!State || !Status.IsValid())
+	{
+		return false;
+	}
+	if (Stacks > 0)
+	{
+		State->Player.StatusStacks.FindOrAdd(Status) = Stacks;
+	}
+	else
+	{
+		State->Player.StatusStacks.Remove(Status);
+	}
+	++State->StateVersion;
+	return true;
+}
+
+bool UBattleSession::SetEnemyPartStatusStacksForAutomationTest(
+	const FBattleEnemyPartKey& PartKey,
+	const FGameplayTag& Status,
+	const int32 Stacks)
+{
+	if (!State || !PartKey.IsValidKey() || !Status.IsValid())
+	{
+		return false;
+	}
+	const int32* PartIndex = State->Enemy.PartIndexByKey.Find(PartKey);
+	if (!PartIndex || !State->Enemy.Parts.IsValidIndex(*PartIndex))
+	{
+		return false;
+	}
+	TMap<FGameplayTag, int32>& StatusStacks =
+		State->Enemy.Parts[*PartIndex].StatusStacks;
+	if (Stacks > 0)
+	{
+		StatusStacks.FindOrAdd(Status) = Stacks;
+	}
+	else
+	{
+		StatusStacks.Remove(Status);
+	}
+	++State->StateVersion;
+	return true;
+}
+
+bool UBattleSession::SetEnemyPartShieldForAutomationTest(
+	const FBattleEnemyPartKey& PartKey,
+	const int32 Shield)
+{
+	if (!State || !PartKey.IsValidKey())
+	{
+		return false;
+	}
+	const int32* PartIndex = State->Enemy.PartIndexByKey.Find(PartKey);
+	if (!PartIndex || !State->Enemy.Parts.IsValidIndex(*PartIndex))
+	{
+		return false;
+	}
+	State->Enemy.Parts[*PartIndex].Shield = FMath::Max(0, Shield);
+	++State->StateVersion;
+	return true;
+}
+
+bool UBattleSession::SetCardStatusStacksForAutomationTest(
+	const FGuid& CardInstanceId,
+	const FGameplayTag& Status,
+	const int32 Stacks)
+{
+	if (!State || !CardInstanceId.IsValid() || !Status.IsValid())
+	{
+		return false;
+	}
+	const int32* CardIndex = State->Cards.CardIndexById.Find(CardInstanceId);
+	if (!CardIndex || !State->Cards.AllCards.IsValidIndex(*CardIndex))
+	{
+		return false;
+	}
+	TMap<FGameplayTag, int32>& StatusStacks =
+		State->Cards.AllCards[*CardIndex].StatusStacks;
+	if (Stacks > 0)
+	{
+		StatusStacks.FindOrAdd(Status) = Stacks;
+	}
+	else
+	{
+		StatusStacks.Remove(Status);
+	}
+	++State->StateVersion;
+	return true;
+}
+
+bool UBattleSession::SetCardRuntimeCostModifierForAutomationTest(
+	const FGuid& CardInstanceId,
+	const int32 Modifier)
+{
+	if (!State || !CardInstanceId.IsValid())
+	{
+		return false;
+	}
+	const int32* CardIndex = State->Cards.CardIndexById.Find(CardInstanceId);
+	if (!CardIndex || !State->Cards.AllCards.IsValidIndex(*CardIndex))
+	{
+		return false;
+	}
+	State->Cards.AllCards[*CardIndex].RuntimeCostModifier = Modifier;
+	++State->StateVersion;
+	return true;
+}
+
+bool UBattleSession::SetCardCriticalChanceBonusForAutomationTest(
+	const FGuid& CardInstanceId,
+	const int32 BonusPercent)
+{
+	if (!State || !CardInstanceId.IsValid())
+	{
+		return false;
+	}
+	const int32* CardIndex = State->Cards.CardIndexById.Find(CardInstanceId);
+	if (!CardIndex || !State->Cards.AllCards.IsValidIndex(*CardIndex))
+	{
+		return false;
+	}
+	State->Cards.AllCards[*CardIndex].CriticalChanceBonusPercent =
+		FMath::Clamp(BonusPercent, 0, 100);
+	++State->StateVersion;
+	return true;
+}
+
+bool UBattleSession::ResolveSettlementPassivesForAutomationTest()
+{
+	if (!State || !EventBus)
+	{
+		return false;
+	}
+	FPassiveDispatcher::RunOnBattleSettlement(*State, *EventBus);
+	++State->StateVersion;
+	return true;
+}
+
+bool UBattleSession::GetCardRuntimeStateForAutomationTest(
+	const FGuid& CardInstanceId,
+	FRuntimeCardInstance& OutCard) const
+{
+	if (!State || !CardInstanceId.IsValid())
+	{
+		return false;
+	}
+	const int32* CardIndex = State->Cards.CardIndexById.Find(CardInstanceId);
+	if (!CardIndex || !State->Cards.AllCards.IsValidIndex(*CardIndex))
+	{
+		return false;
+	}
+	OutCard = State->Cards.AllCards[*CardIndex];
+	return true;
 }
 #endif

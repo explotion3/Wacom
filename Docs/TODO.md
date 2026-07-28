@@ -94,10 +94,10 @@ tags:
   - 说明：Floor 2/3 各冻结 20 Node/21 Edge 双分岔图；Floor 2 使用 `Card.Run.MoltSeal` + `Credential.Run.MoltSeal` 进入 Floor 3，Floor 3 无 Shop/Entrance 并以无出边 Guardian 作为 Journey terminal design node。三层最短/完整为 `26–28 / 44–46 AP`，正常目标约 5–6 天。Floor 2 静态内容资产已创建；Floor 2 Floor/world、Floor 3 内容/资产/world 与 Production Journey 仍未创建。
 
 - [x] **通用 Journey 成功结算与终局交接**
-  - 状态：`Done: terminal Outcome/summary/event、Save v5、被动总结页与主菜单交接已落地`
+  - 状态：`Done: terminal Outcome/summary/event、Save v6、被动总结页与主菜单交接已落地`
   - 归属：Run / App / Save / UI / Tests
   - 入口：[WacomRun.md](./WacomRun.md) / [WacomMap.md](./WacomMap.md) / [WacomApp.md](./WacomApp.md) / `specs/010-journey-success-settlement-baseline/`
-  - 说明：Production Journey 必须声明合法 `SuccessTerminalNode`；terminal 非撤离 Victory 原子提交 `Outcome=Succeeded`、成功摘要和末尾 `JourneySucceeded` event。SaveGame v5 可持久化 Outcome/摘要但只允许 InProgress 恢复；GameMode 在 Return-to-Run staging 后显示原生 fallback 总结页，确认/Back 或 push failure 都 teardown 后次帧返回 `L_MainMenu`。没有复用 Defeat、Actor label、EncounterId、伪 FloorEntrance 或 Level Blueprint 特例。
+  - 说明：Production Journey 必须声明合法 `SuccessTerminalNode`；terminal 非撤离 Victory 原子提交 `Outcome=Succeeded`、成功摘要和末尾 `JourneySucceeded` event。当前 SaveGame v6 继续持久化 Outcome/摘要且只允许 InProgress 恢复；GameMode 在 Return-to-Run staging 后显示原生 fallback 总结页，确认/Back 或 push failure 都 teardown 后次帧返回 `L_MainMenu`。没有复用 Defeat、Actor label、EncounterId、伪 FloorEntrance 或 Level Blueprint 特例。
 
 - [ ] **Defeat / 压力满 / 手指耗尽的统一总结交接**
   - 状态：`Ready for design`
@@ -299,16 +299,22 @@ tags:
   - 入口：[Roadmap: 探索事件](./Roadmap.md#roadmap-runevent)
 
 - [x] **商店卡牌强化规则与制作合同基线**
-  - 状态：`Done: Spec 019 runtime/data contract complete`
+  - 状态：`Done: FireWrite 单 Definition 四阶模型已替换 Spec 019 强化链`
   - 归属：Run / Data / App / Editor
   - 入口：[WacomRun.md](./WacomRun.md) / [WacomData.md](./WacomData.md)
-  - 说明：已实现不可变单步强化链、catalog/Shop 制作校验、按 InstanceId 原子替换 Definition、被动 Quote/Result、购买/强化共享首次交易 AP、升级族资格兼容、Save v5 当前 Definition roundtrip 和五档回收价值。未创建任何强化资产、Shop WBP 或价格内容。
+  - 说明：强化按同一 `UCardDefinition` 的 `White / Blue / Yellow / Purple` Profile 提升实例 Tier；InstanceId、区域和持久修正保持不变。Quote/Result 使用 Definition + CurrentTier + NextTier guard，Save v6 roundtrip Tier 与持久修正；旧 flat 卡只作为不可强化 White fallback。
 
 - [x] **Debug Shop 卡牌强化可玩竖切与通用 WBP**
-  - 状态：`Done: Spec 020 automation complete; pending final user PIE acceptance before commit`
+  - 状态：`Superseded: Debug 毒牙资产与旧强化 Builder 已删除，通用 Shop WBP 保留`
   - 归属：Run / Data / App / Editor
   - 入口：[WacomApp.md](./WacomApp.md) / [WacomDataAuthoring.md](./WacomDataAuthoring.md)
-  - 说明：已实现购买/强化双页签、InstanceId 列表、前后 CardView/数值差异、内联确认、权威 Result Toast、Debug White→Blue 测试链、DebugSnake 第 25 Offer 与 2/3/4 价格，以及 Entry-only 3 Gold PIE 辅助命令。正式 Production 强化卡和价格未冻结。
+  - 说明：购买/强化双页签、InstanceId 列表、同 Definition 不同 Tier 的前后 CardView/数值差异、内联确认与权威 Result Toast 继续保留；Debug White→Blue 两资产链、旧 Builder/测试和 DebugSnake 失效商品已由 FireWrite 迁移移除。
+
+- [ ] **微光·萤火虫随机附魔规则**
+  - 状态：`Design required；FireWrite 首轮明确休眠`
+  - 归属：Battle / Data / UI
+  - 入口：[Questions.md](./Questions.md) / [WacomBattle.md](./WacomBattle.md)
+  - 说明：当前 `GlimmerFirefly` 只执行伙伴生命贡献与 Draw 2；资产文案不显示随机附魔，运行时也不注册占位效果。后续需先冻结附魔池、权重、持续范围、重复规则及生成/完整克隆/Tier 的继承口径，再接入正式结构化规则。
 
 - [ ] **商店正式化后续：Production 强化内容、随机商品池、价格公式、存档接入**
   - 状态：`Blocked: 地图节点 / 存档口径`

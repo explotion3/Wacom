@@ -5,19 +5,29 @@
 #include "Cards/CardDefinition.h"
 #include "Core/BattleRules.h"
 #include "Core/BattleState.h"
+#include "Snapshots/BattleCardRuntimeSnapshotBuilder.h"
 #include "Snapshots/BattlePileInspectionSnapshot.h"
 
 namespace WacomBattlePileInspectionSnapshotBuilderPrivate
 {
-	FBattlePileCardSnapshot BuildCard(const FRuntimeCardInstance& Card)
+	FBattlePileCardSnapshot BuildCard(
+		const FBattleState& State,
+		const FRuntimeCardInstance& Card)
 	{
 		FBattlePileCardSnapshot Out;
 		Out.InstanceId = Card.InstanceId;
 		Out.Definition = Card.Definition;
+		Out.UpgradeTier = Card.UpgradeTier;
+		Out.CurrentDurability = Card.CurrentDurability;
+		Out.bHasFiniteDurability = Card.bHasFiniteDurability;
 		Out.Location = Card.Location;
-		Out.RuntimeCost = FBattleRules::ComputeRuntimeCost(Card);
+		Out.RuntimeCost = FBattleRules::ComputeRuntimeCost(State, Card);
 		Out.StatusStacks = Card.StatusStacks;
 		Out.TemporaryKeywords = Card.TemporaryKeywords;
+		WacomBattleCardRuntimeSnapshotBuilder::BuildCurrentEffectMagnitudes(
+			State,
+			Card,
+			Out.CurrentEffectMagnitudes);
 		return Out;
 	}
 
@@ -36,7 +46,7 @@ namespace WacomBattlePileInspectionSnapshotBuilderPrivate
 		{
 			if (const FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardId))
 			{
-				Out.Cards.Add(BuildCard(*Card));
+				Out.Cards.Add(BuildCard(State, *Card));
 			}
 		}
 

@@ -6,6 +6,7 @@
 
 struct FBattleState;
 struct FIntentDefinition;
+struct FCardCriticalResolutionLedger;
 class UCardDefinition;
 
 /** Per-target peak single-hit damage resolved before the card's main effects. */
@@ -31,19 +32,21 @@ public:
 	static int32 EvaluateIntentPeakAttackDamage(const FIntentDefinition& Intent);
 
 	static void BuildCardDamageProfiles(
-		const FBattleState& State,
+		FBattleState& State,
 		const UCardDefinition& Definition,
 		int32 RuntimeCost,
 		const FGuid& SourceCardId,
 		const FGuid& SelectedEnemyPartId,
-		TArray<FCardTargetDamageProfile>& OutProfiles);
+		TArray<FCardTargetDamageProfile>& OutProfiles,
+		FCardCriticalResolutionLedger* CriticalLedger = nullptr);
 
 	static void BuildResolutionFacts(
-		const FBattleState& State,
+		FBattleState& State,
 		const UCardDefinition& Definition,
 		int32 RuntimeCost,
 		const FGuid& SourceCardId,
 		const FGuid& SelectedEnemyPartId,
 		const TArray<FGuid>& PerfectReleaseHitPartIds,
-		TArray<FResistanceResolutionFact>& OutFacts);
+		TArray<FResistanceResolutionFact>& OutFacts,
+		FCardCriticalResolutionLedger* CriticalLedger = nullptr);
 };

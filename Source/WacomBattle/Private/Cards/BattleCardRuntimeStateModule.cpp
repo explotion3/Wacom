@@ -43,20 +43,57 @@ namespace
 }
 
 FCardCostFacts FBattleCardRuntimeStateModule::EvaluateCost(
+	const FBattleState& State,
 	const FRuntimeCardInstance& Card)
 {
-	return EvaluateCostWithRuntimeModifierDelta(Card, 0);
+	return EvaluateCostWithRuntimeModifierDelta(State, Card, 0);
 }
 
 FCardCostFacts FBattleCardRuntimeStateModule::EvaluateCostWithRuntimeModifierDelta(
+	const FBattleState& State,
 	const FRuntimeCardInstance& Card,
 	int32 RuntimeModifierDelta)
 {
 	FCardCostFacts Facts;
-	Facts.BaseCost = Card.Definition ? Card.Definition->BaseCost : 0;
+	const FWacomResolvedCardProfile ResolvedProfile = Card.Definition
+		? Card.Definition->ResolveProfile(Card.UpgradeTier)
+		: FWacomResolvedCardProfile();
+	Facts.BaseCost = ResolvedProfile.BaseCost;
 	Facts.RuntimeModifier = Card.RuntimeCostModifier + RuntimeModifierDelta;
 	Facts.SlowModifier = GetPositiveStacks(Card.StatusStacks, WacomTags::Status_Slow);
 	Facts.TwilightModifier = GetPositiveStacks(Card.StatusStacks, WacomTags::Status_Twilight);
+	int32 DynamicReduction = 0;
+	if (ResolvedProfile.DynamicCostRule)
+	{
+		const FWacomCardDynamicCostRule& Rule =
+			*ResolvedProfile.DynamicCostRule;
+		if (Rule.CountHandCardsWithStatus.IsValid()
+			&& Rule.ReductionPerMatchingCard > 0)
+		{
+			int32 MatchingCount = 0;
+			for (const FGuid& HandCardId : State.Cards.Hand)
+			{
+				const FRuntimeCardInstance* HandCard =
+					FBattleRules::FindCard(State, HandCardId);
+				if (HandCard
+					&& GetPositiveStacks(
+						HandCard->StatusStacks,
+						Rule.CountHandCardsWithStatus) > 0)
+				{
+					++MatchingCount;
+				}
+			}
+			DynamicReduction = MatchingCount * Rule.ReductionPerMatchingCard;
+			Facts.EffectiveCost = FMath::Max(
+				Rule.MinimumCost,
+				Facts.BaseCost
+					+ Facts.RuntimeModifier
+					+ Facts.SlowModifier
+					+ Facts.TwilightModifier
+					- DynamicReduction);
+			return Facts;
+		}
+	}
 	Facts.EffectiveCost = FMath::Max(
 		0,
 		Facts.BaseCost
@@ -70,7 +107,7 @@ bool FBattleCardRuntimeStateModule::IsCostLegal(
 	const FBattleState& State,
 	const FRuntimeCardInstance& Card)
 {
-	return EvaluateCost(Card).EffectiveCost <= FBattleRules::ComputeEnemyInitiativeSum(State);
+	return EvaluateCost(State, Card).EffectiveCost <= FBattleRules::ComputeEnemyInitiativeSum(State);
 }
 
 int32 FBattleCardRuntimeStateModule::GetStatusStacks(
@@ -127,7 +164,94 @@ bool FBattleCardRuntimeStateModule::ApplyRuntimeCostModifier(
 	Event.CardInstanceId = CardInstanceId;
 	Event.Tag = SourceEffect;
 	Event.Amount = Delta;
-	Event.Count = EvaluateCost(*Card).EffectiveCost;
+	Event.Count = EvaluateCost(State, *Card).EffectiveCost;
+	Events.Emit(Event);
+	return true;
+}
+
+bool FBattleCardRuntimeStateModule::ApplyEffectMagnitudeBonus(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	const FGuid& CardInstanceId,
+	const FGameplayTag& AffectedEffectType,
+	int32 Delta,
+	const FGuid& SourceInstanceId,
+	const FGameplayTag& SourceEffect)
+{
+	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardInstanceId);
+	if (!Card || !AffectedEffectType.IsValid() || Delta == 0)
+	{
+		return false;
+	}
+
+	const int32 BonusBefore =
+		Card->EffectMagnitudeBonuses.FindRef(AffectedEffectType);
+	const int32 BonusAfter = BonusBefore + Delta;
+	Card->EffectMagnitudeBonuses.FindOrAdd(AffectedEffectType) = BonusAfter;
+	const float StoredMultiplier =
+		Card->EffectMagnitudeMultipliers.FindRef(AffectedEffectType);
+	const float EffectiveMultiplier =
+		StoredMultiplier > 0.0f ? StoredMultiplier : 1.0f;
+
+	FBattleEvent Event;
+	Event.Type = EBattleEventType::CardEffectMagnitudeChanged;
+	Event.ActorInstanceId = SourceInstanceId;
+	Event.CardInstanceId = CardInstanceId;
+	Event.Tag = AffectedEffectType;
+	Event.CardEffectMagnitudeChange.AffectedEffectType = AffectedEffectType;
+	Event.CardEffectMagnitudeChange.SourceEffectType = SourceEffect;
+	Event.CardEffectMagnitudeChange.MutationKind =
+		EBattleCardEffectMagnitudeMutationKind::AdditiveBonus;
+	Event.CardEffectMagnitudeChange.AdditiveBonusBefore = BonusBefore;
+	Event.CardEffectMagnitudeChange.AdditiveBonusAfter = BonusAfter;
+	Event.CardEffectMagnitudeChange.MultiplierBefore = EffectiveMultiplier;
+	Event.CardEffectMagnitudeChange.MultiplierAfter = EffectiveMultiplier;
+	Events.Emit(Event);
+	return true;
+}
+
+bool FBattleCardRuntimeStateModule::MultiplyEffectMagnitude(
+	FBattleState& State,
+	FBattleEventBus& Events,
+	const FGuid& CardInstanceId,
+	const FGameplayTag& AffectedEffectType,
+	float Multiplier,
+	const FGuid& SourceInstanceId,
+	const FGameplayTag& SourceEffect)
+{
+	FRuntimeCardInstance* Card = FBattleRules::FindCard(State, CardInstanceId);
+	if (!Card || !AffectedEffectType.IsValid() || Multiplier <= 0.0f)
+	{
+		return false;
+	}
+
+	const float StoredMultiplier =
+		Card->EffectMagnitudeMultipliers.FindRef(AffectedEffectType);
+	const float MultiplierBefore =
+		StoredMultiplier > 0.0f ? StoredMultiplier : 1.0f;
+	const float MultiplierAfter = MultiplierBefore * Multiplier;
+	if (FMath::IsNearlyEqual(MultiplierBefore, MultiplierAfter))
+	{
+		return true;
+	}
+	Card->EffectMagnitudeMultipliers.FindOrAdd(AffectedEffectType) =
+		MultiplierAfter;
+	const int32 AdditiveBonus =
+		Card->EffectMagnitudeBonuses.FindRef(AffectedEffectType);
+
+	FBattleEvent Event;
+	Event.Type = EBattleEventType::CardEffectMagnitudeChanged;
+	Event.ActorInstanceId = SourceInstanceId;
+	Event.CardInstanceId = CardInstanceId;
+	Event.Tag = AffectedEffectType;
+	Event.CardEffectMagnitudeChange.AffectedEffectType = AffectedEffectType;
+	Event.CardEffectMagnitudeChange.SourceEffectType = SourceEffect;
+	Event.CardEffectMagnitudeChange.MutationKind =
+		EBattleCardEffectMagnitudeMutationKind::Multiplier;
+	Event.CardEffectMagnitudeChange.AdditiveBonusBefore = AdditiveBonus;
+	Event.CardEffectMagnitudeChange.AdditiveBonusAfter = AdditiveBonus;
+	Event.CardEffectMagnitudeChange.MultiplierBefore = MultiplierBefore;
+	Event.CardEffectMagnitudeChange.MultiplierAfter = MultiplierAfter;
 	Events.Emit(Event);
 	return true;
 }

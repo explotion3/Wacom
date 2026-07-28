@@ -7,6 +7,7 @@
 #include "Core/BattleState.h"
 #include "Hand/HandZoneService.h"
 #include "Rules/BattleRuleContentContract.h"
+#include "Snapshots/BattleCardRuntimeSnapshotBuilder.h"
 #include "Snapshots/BattleSnapshot.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
@@ -121,9 +122,11 @@ namespace
 		EnemySnap.Parts.Add(PartSnap);
 	}
 
-	int32 ComputeRuntimeCost(const FRuntimeCardInstance& Card)
+	int32 ComputeRuntimeCost(
+		const FBattleState& State,
+		const FRuntimeCardInstance& Card)
 	{
-		return FBattleRules::ComputeRuntimeCost(Card);
+		return FBattleRules::ComputeRuntimeCost(State, Card);
 	}
 
 	const FRuntimeCardInstance* FindCard(const FBattleState& State, const FGuid& InstanceId)
@@ -200,7 +203,10 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		FHandCardSnapshot HandCard;
 		HandCard.InstanceId    = Card->InstanceId;
 		HandCard.Definition    = Card->Definition;
-		HandCard.RuntimeCost   = ComputeRuntimeCost(*Card);
+		HandCard.UpgradeTier   = Card->UpgradeTier;
+		HandCard.CurrentDurability = Card->CurrentDurability;
+		HandCard.bHasFiniteDurability = Card->bHasFiniteDurability;
+		HandCard.RuntimeCost   = ComputeRuntimeCost(State, *Card);
 		HandCard.bIsCostLegal  = FBattleCardRuntimeStateModule::IsCostLegal(State, *Card);
 		HandCard.Statuses      = FBattleCardRuntimeStateModule::BuildStatusProjection(*Card);
 		HandCard.StatusStacks  = Card->StatusStacks;
@@ -209,6 +215,10 @@ FBattleSnapshot FBattleSnapshotBuilder::Build(const FBattleState& State)
 		HandCard.bIsHandAnchor = FHandZoneService::IsHandAnchor(State, CardId);
 		HandCard.bIsPlayable   = HandCard.bIsCostLegal && !HandCard.bIsFrozen;
 		HandCard.bIsSwift      = HasSwiftKeyword(*Card);
+		WacomBattleCardRuntimeSnapshotBuilder::BuildCurrentEffectMagnitudes(
+			State,
+			*Card,
+			HandCard.CurrentEffectMagnitudes);
 
 		if (CardId == State.Cards.LeftHandInstanceId)  { Out.Hand.bLeftHandPresent = true; }
 		if (CardId == State.Cards.RightHandInstanceId) { Out.Hand.bRightHandPresent = true; }

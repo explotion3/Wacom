@@ -7,6 +7,7 @@
 #include "Core/BattleState.h"
 #include "Hand/HandZoneService.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Runtime/RuntimeCardInstance.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Types/WacomEnums.h"
 
@@ -64,6 +65,40 @@ namespace
 		return FBattleCombatantStatusFacts::HasStatusExact(Part->StatusStacks, P.Cond.ParamTag);
 	}
 
+	bool EvalSelfEverEnteredExhaust(const FEvalParams& P)
+	{
+		const FRuntimeCardInstance* Card =
+			FBattleRules::FindCard(P.State, P.SelfCardId);
+		return Card && Card->bEverEnteredExhaust;
+	}
+
+	bool EvalSelfInCardLocation(const FEvalParams& P)
+	{
+		const FRuntimeCardInstance* Card =
+			FBattleRules::FindCard(P.State, P.SelfCardId);
+		if (!Card)
+		{
+			return false;
+		}
+		if (P.Cond.ParamTag == WacomTags::CardLocation_Draw)
+		{
+			return Card->Location == ECardLocation::Draw;
+		}
+		if (P.Cond.ParamTag == WacomTags::CardLocation_Discard)
+		{
+			return Card->Location == ECardLocation::Discard;
+		}
+		if (P.Cond.ParamTag == WacomTags::CardLocation_Exhaust)
+		{
+			return Card->Location == ECardLocation::Exhaust;
+		}
+		if (P.Cond.ParamTag == WacomTags::CardLocation_Hand)
+		{
+			return Card->Location == ECardLocation::Hand;
+		}
+		return false;
+	}
+
 	/**
 	 * 注册表。第一次 Evaluate 时懒初始化。
 	 */
@@ -73,7 +108,13 @@ namespace
 		{
 			TMap<FGameplayTag, FConditionEvaluator> M;
 			M.Add(WacomTags::Condition_Self_InZone,      &EvalSelfInZone);
+			M.Add(
+				WacomTags::Condition_Self_InCardLocation,
+				&EvalSelfInCardLocation);
 			M.Add(WacomTags::Condition_Target_HasStatus, &EvalTargetHasStatus);
+			M.Add(
+				WacomTags::Condition_Self_EverEnteredExhaust,
+				&EvalSelfEverEnteredExhaust);
 			return M;
 		}();
 		return Registry;

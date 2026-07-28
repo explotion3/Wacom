@@ -2,7 +2,7 @@
 type: tag-reference
 scope: wacom-gameplay-tags
 status: active
-updated: 2026-07-24
+updated: 2026-07-28
 tags:
   - wacom/data
   - wacom/gameplay-tags
@@ -48,6 +48,8 @@ tags:
 | `Card.Keyword.Tool` | `Card_Keyword_Tool` | 工具 |
 | `Card.Keyword.Hand` | `Card_Keyword_Hand` | 手，左右手固有卡使用 |
 | `Card.Keyword.Exhaust` | `Card_Keyword_Exhaust` | 临时关键词：本卡打出后进入消耗牌堆 |
+| `Card.Keyword.Food` | `Card_Keyword_Food` | 食物分类；当前只建立正式内容分类，不附带通用规则 |
+| `Card.Keyword.Container` | `Card_Keyword_Container` | 容器分类；正式内容必须同时满足 `Physique.Capacity > 0` |
 | `Card.Keyword.BagProvider` | `Card_Keyword_BagProvider` | 历史 / 兼容内容标记；当前容量真相以 `Physique.Capacity > 0` 的容器卡为准 |
 | `Card.Keyword.DeleteProvider` | `Card_Keyword_DeleteProvider` | 删牌换金币能力提供者；四种物理持有区任一实体卡带有该 tag 即启用出售，最后一张提供者只能单独出售 |
 
@@ -99,6 +101,7 @@ tags:
 | `Effect.ApplyStatus.Slow` | `Effect_ApplyStatus_Slow` | 敌方即时延迟当前意图；玩家投递下回合卡牌减速 |
 | `Effect.ApplyStatus.Freeze` | `Effect_ApplyStatus_Freeze` | 敌方拦截后续卡牌推进；玩家投递下回合冻结卡 |
 | `Effect.ApplyStatus.Twilight` | `Effect_ApplyStatus_Twilight` | 敌方延迟下一意图；玩家投递下回合整手牌暮气 |
+| `Effect.ApplyStatus.Burn` | `Effect_ApplyStatus_Burn` | 施加灼烧；卡牌每次 invocation 独立判定暴击，后续 DOT 不再判定 |
 | `Effect.Shuffle.Random` | `Effect_Shuffle_Random` | 随机腾挪 |
 | `Effect.Shuffle.FromBothToOther` | `Effect_Shuffle_FromBothToOther` | 从双手区腾挪到其他区域 |
 | `Effect.Shuffle.ToRandomZone` | `Effect_Shuffle_ToRandomZone` | 把本卡腾挪到随机区域 |
@@ -106,6 +109,15 @@ tags:
 | `Effect.Card.ReduceCost` | `Effect_Card_ReduceCost` | 对目标卡 RuntimeCostModifier 减少 |
 | `Effect.Card.DiscardSelected` | `Effect_Card_DiscardSelected` | 将 `Target.SelectedHandCard` 指定的普通手牌移入弃牌堆 |
 | `Effect.Card.ExhaustSelected` | `Effect_Card_ExhaustSelected` | 将 `Target.SelectedHandCard` 指定的普通手牌移入消耗牌堆 |
+| `Effect.Card.GenerateToHand` | `Effect_Card_GenerateToHand` | 生成指定卡到手牌；继承来源 Tier，使用新 InstanceId，不触发 Draw / OnDraw |
+| `Effect.Card.GenerateRandomFromPoolToHand` | `Effect_Card_GenerateRandomFromPoolToHand` | 从指定池有放回随机生成卡到手牌 |
+| `Effect.Card.CloneSelfIntoDraw` | `Effect_Card_CloneSelfIntoDraw` | 以新 InstanceId 完整克隆本卡运行时状态并随机插入抽牌堆；不继承 Run 身份 |
+| `Effect.Card.AddEffectMagnitude` | `Effect_Card_AddEffectMagnitude` | 按 Effect Tag 给本卡增加战内数值加成 |
+| `Effect.Card.MultiplyEffectMagnitude` | `Effect_Card_MultiplyEffectMagnitude` | 按 Effect Tag 累乘本卡战内数值倍率 |
+| `Effect.Card.AddCriticalChance` | `Effect_Card_AddCriticalChance` | 给本卡增加战内暴击率，最终封顶 100% |
+| `Effect.Card.AutoPlaySelf` | `Effect_Card_AutoPlaySelf` | 从被动上下文免费自动使用自身；不占用玩家手牌位置 |
+| `Effect.Card.AddPersistentDurability` | `Effect_Card_AddPersistentDurability` | 战斗结算时为来源 Run 实例增加永久耐久 |
+| `Effect.Card.AddPersistentEffectMagnitude` | `Effect_Card_AddPersistentEffectMagnitude` | 战斗结算时按 Effect Tag 为来源 Run 实例增加永久效果数值 |
 | `Effect.Draw` | `Effect_Draw` | 从指定卡牌区域移动卡牌到手牌 |
 | `Effect.Discard` | `Effect_Discard` | 随机弃掉手牌中的普通卡 |
 | `Effect.ExhaustSelf` | `Effect_ExhaustSelf` | 标记本卡打出后进入消耗牌堆 |
@@ -113,15 +125,13 @@ tags:
 | `Effect.RemoveStatus` | `Effect_RemoveStatus` | 移除目标持久 Combatant 状态层数；不移除即时敌方 Slow |
 | `Effect.ModifyInitiative` | `Effect_ModifyInitiative` | 修改目标敌方部位当前先机 |
 
-当前没有 `Effect.ApplyStatus.Burn` 或 `Status.Burn`。UI 的 Burn 徽章只是美术预留位，不能作为正式 DataAsset 配置依据。
-
 ## §7 Magnitude.Source
 
 | Tag | 代码名 | 说明 |
 |---|---|---|
 | `Magnitude.Source.Literal` | `Magnitude_Source_Literal` | FinalMagnitude = `Magnitude` 字段 |
 | `Magnitude.Source.RuntimeCost` | `Magnitude_Source_RuntimeCost` | FinalMagnitude = 本卡当前 RuntimeCost |
-| `Magnitude.Source.HandCount` | `Magnitude_Source_HandCount` | Reserved；resolver 有入口，但当前制作矩阵不允许正式资产使用 |
+| `Magnitude.Source.HandCount` | `Magnitude_Source_HandCount` | 读取当前普通手牌中符合 `TargetZone` 状态筛选的卡牌数量 |
 | `Magnitude.Source.TargetStatusStacks` | `Magnitude_Source_TargetStatusStacks` | FinalMagnitude = 目标部位上 `TargetZone` 指定 Status tag 的层数 |
 
 ## §8 Condition
@@ -129,7 +139,9 @@ tags:
 | Tag | 代码名 | 说明 |
 |---|---|---|
 | `Condition.Self.InZone` | `Condition_Self_InZone` | 本卡当前在指定区域 |
+| `Condition.Self.InCardLocation` | `Condition_Self_InCardLocation` | 本卡当前位于 `TargetZone` 指定的 Draw / Hand / Discard / Exhaust 区域 |
 | `Condition.Target.HasStatus` | `Condition_Target_HasStatus` | 目标部位含指定状态 |
+| `Condition.Self.EverEnteredExhaust` | `Condition_Self_EverEnteredExhaust` | 本卡在当前战斗是否曾因任意原因进入过消耗区 |
 
 ## §9 Status
 
@@ -141,6 +153,7 @@ tags:
 | `Status.Twilight` | `Status_Twilight` | 敌方下一意图延迟层数或随卡持久费用状态 |
 | `Status.Stunned` | `Status_Stunned` | 晕厥 |
 | `Status.Shield` | `Status_Shield` | 护盾数值入口；不进入 `StatusStacks` |
+| `Status.Burn` | `Status_Burn` | 灼烧；敌人在 Intent 前结算 DOT 并减半，玩家侧在真实抽牌时逐层转移到卡牌 |
 
 ## §10 Target
 
@@ -155,6 +168,7 @@ tags:
 | `Target.Adjacent.Right` | `Target_Adjacent_Right` | 相邻右方；tag 已声明，解析未实现 |
 | `Target.LastShuffledCard` | `Target_LastShuffledCard` | 最近一次 Shuffle 的被移动卡 |
 | `Target.SelectedHandCard` | `Target_SelectedHandCard` | `TargetMode=HandCard` 卡牌打出时，玩家选择的目标手牌 |
+| `Target.AllHandCards` | `Target_AllHandCards` | 当前所有普通手牌；常用于手牌 aura 或批量卡牌运行时效果 |
 
 ## §11 ZoneHook.Trigger
 
@@ -171,9 +185,12 @@ tags:
 | `Passive.Trigger.OnCompanionCount` | `Passive_Trigger_OnCompanionCount` | 全局 Companion 计数达阈值 |
 | `Passive.Trigger.OnTwilightTriggered` | `Passive_Trigger_OnTwilightTriggered` | 暮气施加成功时 |
 | `Passive.Trigger.OnTurnStart` | `Passive_Trigger_OnTurnStart` | 玩家回合开始时；dispatcher 方法存在，主流程未接入 |
-| `Passive.Trigger.OnTurnEnd` | `Passive_Trigger_OnTurnEnd` | 玩家回合结束时；dispatcher 方法存在，主流程未接入 |
-| `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡被抽到手牌时；dispatcher 方法存在，主流程未接入 |
+| `Passive.Trigger.OnTurnEnd` | `Passive_Trigger_OnTurnEnd` | 玩家回合结束、普通清理前触发 |
+| `Passive.Trigger.OnDraw` | `Passive_Trigger_OnDraw` | 本卡经正式 Draw 流程存活进入手牌后触发 |
 | `Passive.Trigger.OnDiscard` | `Passive_Trigger_OnDiscard` | 本卡被真正弃掉时；打出后自然进弃牌堆不触发 |
+| `Passive.Trigger.OnAdjacentCompanionPlayed` | `Passive_Trigger_OnAdjacentCompanionPlayed` | 打出前左右直接邻居中的伙伴被使用时触发；自动出牌没有邻接位置 |
+| `Passive.Trigger.OnOtherCompanionPlayed` | `Passive_Trigger_OnOtherCompanionPlayed` | 其它伙伴被正式或自动使用时触发 |
+| `Passive.Trigger.OnBattleSettlement` | `Passive_Trigger_OnBattleSettlement` | Victory / Withdraw 战斗结算时触发，用于来源 Run 实例的持久 Mutation |
 
 ## UI Widget Registry
 

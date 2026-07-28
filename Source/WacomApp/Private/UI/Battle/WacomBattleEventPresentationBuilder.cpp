@@ -148,6 +148,7 @@ namespace
 			return E.Count == 1 ? TEXT("战斗胜利") : TEXT("战斗失败");
 		case EBattleEventType::HandZoneChanged:
 		case EBattleEventType::CardStatusChanged:
+		case EBattleEventType::CardEffectMagnitudeChanged:
 		case EBattleEventType::EnemyInitiativeChanged:
 		case EBattleEventType::CardDiscarded:
 		case EBattleEventType::CardExhausted:

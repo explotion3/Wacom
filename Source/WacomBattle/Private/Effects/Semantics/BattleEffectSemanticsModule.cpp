@@ -70,6 +70,15 @@ namespace
 		return FEffectSemanticRegistry::Find(EffectType);
 	}
 
+	bool IsCriticalEligibleEffect(const FGameplayTag& EffectType)
+	{
+		return EffectType == WacomTags::Effect_Damage
+			|| EffectType == WacomTags::Effect_Heal
+			|| EffectType == WacomTags::Status_Shield
+			|| EffectType == WacomTags::Effect_ApplyStatus_Poison
+			|| EffectType == WacomTags::Effect_ApplyStatus_Burn;
+	}
+
 	void FillCardTarget(
 		FEffectExecutionContext& Context,
 		EEffectTargetPlanKind TargetPlan,
@@ -122,6 +131,7 @@ namespace
 		Context.SourceKind = EEffectSourceKind::Card;
 		Context.SourceInstanceId = Bindings.SourceCardId;
 		Context.EffectTag = Effect.EffectType;
+		Context.SourceEffect = &Effect;
 		Context.Magnitude = Magnitude;
 		Context.Duration = Effect.Duration;
 		Context.Parameters = Semantics
@@ -155,7 +165,9 @@ namespace
 		FBattleState& State,
 		FBattleEventBus& Events,
 		const FCardEffect& Effect,
-		int32 Magnitude,
+		int32 PreCriticalMagnitude,
+		int32 ResolvedMagnitude,
+		bool bCritical,
 		const FEffectSemanticDescriptor* Semantics,
 		EEffectTargetPlanKind TargetPlan,
 		const FCardEffectChainBindings& Bindings,
@@ -170,10 +182,12 @@ namespace
 			State,
 			Events,
 			Effect,
-			Magnitude,
+			ResolvedMagnitude,
 			Semantics,
 			Bindings,
 			OperationAdapter);
+		Context.PreCriticalMagnitude = PreCriticalMagnitude;
+		Context.bCritical = bCritical;
 
 		if (ExpandedEnemyPartId.IsValid())
 		{
@@ -197,6 +211,24 @@ namespace
 			{
 				InOutLastShuffledCardId = Result.ShuffledCardId;
 				InOutShuffledCardIds.Add(Result.ShuffledCardId);
+			}
+			if (Result.bApplied)
+			{
+				FBattleEvent Event;
+				Event.Type = EBattleEventType::EffectResolved;
+				Event.CardInstanceId = Bindings.SourceCardId;
+				Event.ActorInstanceId = Context.TargetInstanceId;
+				Event.Tag = Effect.EffectType;
+				Event.EffectResolution.EffectType = Effect.EffectType;
+				Event.EffectResolution.PreCriticalMagnitude = PreCriticalMagnitude;
+				Event.EffectResolution.ResolvedMagnitude = ResolvedMagnitude;
+				Event.EffectResolution.bCritical = bCritical;
+				if (Context.TargetKind == EEffectTargetKind::EnemyPart)
+				{
+					Event.ActorEnemyPartKey =
+						FBattleRules::FindEnemyPartKey(State, Context.TargetInstanceId);
+				}
+				Events.Emit(MoveTemp(Event));
 			}
 		}
 	}
@@ -235,6 +267,41 @@ namespace
 	}
 }
 
+bool FCardCriticalResolutionLedger::Resolve(
+	FBattleState& State,
+	const FGuid& SourceCardId,
+	const FGameplayTag& EffectType,
+	const FCardCriticalInvocationKey& Key)
+{
+	if (!IsCriticalEligibleEffect(EffectType))
+	{
+		return false;
+	}
+	if (const bool* Existing = Rolls.Find(Key))
+	{
+		return *Existing;
+	}
+
+	bool bCritical = false;
+	if (bAllowRolls)
+	{
+		const FRuntimeCardInstance* SourceCard = FBattleRules::FindCard(State, SourceCardId);
+		if (SourceCard && SourceCard->Definition)
+		{
+			const int32 Chance = FMath::Clamp(
+				SourceCard->Definition->ResolveBaseCriticalChancePercent(
+					SourceCard->UpgradeTier)
+					+ SourceCard->CriticalChanceBonusPercent,
+				0,
+				100);
+			bCritical = Chance >= 100
+				|| (Chance > 0 && State.Rng.RandRange(1, 100) <= Chance);
+		}
+	}
+	Rolls.Add(Key, bCritical);
+	return bCritical;
+}
+
 FCardEffectChain::FCardEffectChain(
 	FBattleState& InState,
 	FBattleEventBus& InEvents,
@@ -245,6 +312,19 @@ FCardEffectChain::FCardEffectChain(
 	, Bindings(InBindings)
 	, OperationAdapter(InOperationAdapter)
 {
+	if (!Bindings.CriticalLedger && OperationAdapter)
+	{
+		const FBattleOperationDescriptor CriticalOperation{
+			EBattleOperationKind::DirectRule,
+			EBattleOperationDeterminism::Random,
+			FGameplayTag(),
+			/*bReportUnresolvedWhenSkipped*/false };
+		OwnedCriticalLedger.bAllowRolls =
+			OperationAdapter->ShouldExecute(CriticalOperation);
+	}
+	CriticalLedger = Bindings.CriticalLedger
+		? Bindings.CriticalLedger
+		: &OwnedCriticalLedger;
 }
 
 void FCardEffectChain::Execute(TConstArrayView<FCardEffect> Effects)
@@ -257,8 +337,10 @@ void FBattleEffectSemanticsModule::ExecuteCardEffects(
 	TConstArrayView<FCardEffect> Effects)
 {
 	check(Chain.State && Chain.Events);
-	for (const FCardEffect& Effect : Effects)
+	const int32 SegmentIndex = Chain.NextSegmentIndex++;
+	for (int32 EffectIndex = 0; EffectIndex < Effects.Num(); ++EffectIndex)
 	{
+		const FCardEffect& Effect = Effects[EffectIndex];
 		const FEffectSemanticDescriptor* Semantics = FindDescriptor(Effect.EffectType);
 		const EEffectTargetPlanKind TargetPlan = Semantics
 			? Semantics->BuildCardTargetPlan(Effect.Target)
@@ -274,13 +356,30 @@ void FBattleEffectSemanticsModule::ExecuteCardEffects(
 				Chain.Bindings.SourceCardId,
 				Chain.Bindings.SelectedEnemyPartId,
 				Invocations);
-			for (const FCardEnemyPartEffectInvocation& Invocation : Invocations)
+			for (int32 InvocationOrdinal = 0;
+				InvocationOrdinal < Invocations.Num();
+				++InvocationOrdinal)
 			{
+				const FCardEnemyPartEffectInvocation& Invocation =
+					Invocations[InvocationOrdinal];
+				const bool bCritical = Chain.CriticalLedger->Resolve(
+					*Chain.State,
+					Chain.Bindings.SourceCardId,
+					Effect.EffectType,
+					FCardCriticalInvocationKey{
+						SegmentIndex,
+						EffectIndex,
+						Invocation.TargetEnemyPartInstanceId,
+						InvocationOrdinal });
 				ExecuteCardInvocation(
 					*Chain.State,
 					*Chain.Events,
 					Effect,
 					Invocation.FinalMagnitude,
+					bCritical
+						? Invocation.FinalMagnitude * 2
+						: Invocation.FinalMagnitude,
+					bCritical,
 					Semantics,
 					TargetPlan,
 					Chain.Bindings,
@@ -307,12 +406,25 @@ void FBattleEffectSemanticsModule::ExecuteCardEffects(
 				continue;
 			}
 			const FCardEnemyPartEffectInvocation& Invocation = Invocations[0];
+			const bool bCritical = Chain.CriticalLedger->Resolve(
+				*Chain.State,
+				Chain.Bindings.SourceCardId,
+				Effect.EffectType,
+				FCardCriticalInvocationKey{
+					SegmentIndex,
+					EffectIndex,
+					Invocation.TargetEnemyPartInstanceId,
+					0 });
 
 			ExecuteCardInvocation(
 				*Chain.State,
 				*Chain.Events,
 				Effect,
 				Invocation.FinalMagnitude,
+				bCritical
+					? Invocation.FinalMagnitude * 2
+					: Invocation.FinalMagnitude,
+				bCritical,
 				Semantics,
 				TargetPlan,
 				Chain.Bindings,
@@ -338,12 +450,32 @@ void FBattleEffectSemanticsModule::ExecuteCardEffects(
 			Chain.Bindings.RuntimeCost,
 			Chain.Bindings.SelectedEnemyPartId,
 			Chain.Bindings.SourceCardId);
+		FGuid CriticalTargetId;
+		if (TargetPlan == EEffectTargetPlanKind::SourceCard)
+		{
+			CriticalTargetId = Chain.Bindings.SourceCardId;
+		}
+		else if (TargetPlan == EEffectTargetPlanKind::SelectedHandCard)
+		{
+			CriticalTargetId = Chain.Bindings.SelectedHandCardId;
+		}
+		const bool bCritical = Chain.CriticalLedger->Resolve(
+			*Chain.State,
+			Chain.Bindings.SourceCardId,
+			Effect.EffectType,
+			FCardCriticalInvocationKey{
+				SegmentIndex,
+				EffectIndex,
+				CriticalTargetId,
+				0 });
 
 		ExecuteCardInvocation(
 			*Chain.State,
 			*Chain.Events,
 			Effect,
 			FinalMagnitude,
+			bCritical ? FinalMagnitude * 2 : FinalMagnitude,
+			bCritical,
 			Semantics,
 			TargetPlan,
 			Chain.Bindings,
@@ -565,6 +697,21 @@ int32 FBattleEffectSemanticsModule::EvaluateCardFinalMagnitude(
 			break;
 		default:
 			break;
+		}
+	}
+
+	if (const FRuntimeCardInstance* SourceCard =
+		FBattleRules::FindCard(State, SourceCardId))
+	{
+		if (const int32* Bonus = SourceCard->EffectMagnitudeBonuses.Find(Effect.EffectType))
+		{
+			FinalMagnitude += *Bonus;
+		}
+		if (const float* Multiplier =
+			SourceCard->EffectMagnitudeMultipliers.Find(Effect.EffectType))
+		{
+			FinalMagnitude = FMath::RoundToInt(
+				static_cast<float>(FinalMagnitude) * FMath::Max(0.0f, *Multiplier));
 		}
 	}
 

@@ -2,6 +2,7 @@
 
 #include "WacomCardExplanationTemplateResolver.h"
 
+#include "Cards/CardDefinition.h"
 #include "Cards/CardEffect.h"
 #include "Cards/CardPassive.h"
 #include "Tags/WacomGameplayTags.h"
@@ -20,15 +21,15 @@ namespace WacomCardExplanationTemplateResolver
 		{
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Damage))
 			{
-				return LOCTEXT("TemplateDamage", "{icon:EffectIcon} 造成 {value:Magnitude} 点伤害。");
+				return LOCTEXT("TemplateDamage", "{icon:EffectIcon} 造成 {value:Magnitude} 伤害。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Heal))
 			{
-				return LOCTEXT("TemplateHeal", "{icon:EffectIcon} 恢复 {value:Magnitude} 点生命。");
+				return LOCTEXT("TemplateHeal", "{icon:EffectIcon} 恢复 {value:Magnitude} 生命。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Status_Shield))
 			{
-				return LOCTEXT("TemplateShield", "{icon:EffectIcon} 获得 {value:Magnitude} 点护盾。");
+				return LOCTEXT("TemplateShield", "{icon:EffectIcon} 获得 {value:Magnitude} 护盾。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Draw))
 			{
@@ -37,9 +38,10 @@ namespace WacomCardExplanationTemplateResolver
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Poison)
 				|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Slow)
 				|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Freeze)
-				|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Twilight))
+				|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Twilight)
+				|| Effect.EffectType.MatchesTagExact(WacomTags::Effect_ApplyStatus_Burn))
 			{
-				return LOCTEXT("TemplateApplyStatus", "施加 {value:Magnitude} 层 {status:EffectStatus}。");
+				return LOCTEXT("TemplateApplyStatus", "施加 {value:Magnitude} {status:EffectStatus}。");
 			}
 			if (Effect.EffectType.MatchesTagExact(WacomTags::Effect_Card_AddCost))
 			{
@@ -124,6 +126,18 @@ namespace WacomCardExplanationTemplateResolver
 			{
 				return LOCTEXT("TemplatePassiveDiscard", "弃掉时：");
 			}
+			if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnAdjacentCompanionPlayed))
+			{
+				return LOCTEXT("TemplatePassiveAdjacentCompanion", "相邻伙伴打出时：");
+			}
+			if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnOtherCompanionPlayed))
+			{
+				return LOCTEXT("TemplatePassiveOtherCompanion", "打出其他伙伴时：");
+			}
+			if (Passive.Trigger.MatchesTagExact(WacomTags::Passive_Trigger_OnBattleSettlement))
+			{
+				return LOCTEXT("TemplatePassiveBattleSettlement", "战斗胜利或撤离后：");
+			}
 			return FText::Format(
 				LOCTEXT("TemplatePassiveUnknown", "{0}："),
 				FText::FromString(WacomCardExplanationText::GetDisplayTagLeafName(Passive.Trigger)));
@@ -141,9 +155,20 @@ namespace WacomCardExplanationTemplateResolver
 	}
 
 	FText ResolveEffectTemplate(
+		const UCardDefinition* Card,
 		const FCardEffect& Effect,
-		const UWacomCardExplanationLexicon* Lexicon)
+		const UWacomCardExplanationLexicon* Lexicon,
+		const int32 EffectIndex)
 	{
+		if (Card)
+		{
+			if (const FText* CardTemplate =
+				Card->ExplanationTemplates.FindEffectTemplate(EffectIndex))
+			{
+				return *CardTemplate;
+			}
+		}
+
 		FWacomCardExplanationTemplateEntry Entry;
 		if (Lexicon && Lexicon->FindEffectTemplate(Effect.EffectType, Entry))
 		{
@@ -158,6 +183,24 @@ namespace WacomCardExplanationTemplateResolver
 				*Effect.EffectType.ToString());
 		}
 		return DefaultEffectTemplate(Effect);
+	}
+
+	bool ResolveCardPassiveTemplate(
+		const UCardDefinition* Card,
+		const int32 PassiveIndex,
+		FText& OutTemplate)
+	{
+		if (!Card)
+		{
+			return false;
+		}
+		if (const FText* CardTemplate =
+			Card->ExplanationTemplates.FindPassiveTemplate(PassiveIndex))
+		{
+			OutTemplate = *CardTemplate;
+			return true;
+		}
+		return false;
 	}
 
 	FText ResolvePassiveTriggerTemplate(

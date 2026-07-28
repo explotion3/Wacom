@@ -6,14 +6,39 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "Types/WacomEnums.h"
+#include "Cards/CardExplanationTemplateTypes.h"
 #include "Cards/CardEffect.h"
 #include "Cards/CardPhysique.h"
 #include "Cards/CardZoneHook.h"
 #include "Cards/CardPassive.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "Cards/WacomCardFaceTypes.h"
 #include "CardDefinition.generated.h"
 
 class UTexture2D;
+
+/**
+ * 单个 Definition 在指定强化等级下的统一只读 Battle Profile。
+ *
+ * 本结构只持有 Definition 内部字段的只读指针，生命周期不得超过来源
+ * UCardDefinition。它刻意不反射、不复制效果数组，供 Battle、Run 与 App
+ * 使用同一解析结果，同时避免高频 Snapshot 复制整份制作数据。
+ */
+struct WACOMDATA_API FWacomResolvedCardProfile
+{
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+	bool bUsesTierProfile = false;
+	const FText* Description = nullptr;
+	int32 BaseCost = 0;
+	int32 BaseCriticalChancePercent = 0;
+	const FWacomCardDynamicCostRule* DynamicCostRule = nullptr;
+	const FCardPhysique* Physique = nullptr;
+	const TArray<FCardEffect>* Effects = nullptr;
+	const TArray<FCardEffect>* PerfectReleaseEffects = nullptr;
+	const TArray<FCardZoneHook>* ZoneHooks = nullptr;
+	const TArray<FCardPassive>* Passives = nullptr;
+	FGameplayTag Rarity;
+};
 
 /** TargetMode=HandCard 时的手牌目标基础筛选。 */
 USTRUCT(BlueprintType)
@@ -52,22 +77,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	FName CardId;
 
-	/**
-	 * 强化链稳定身份。同一条强化链的所有独立 CardDefinition 必须显式填写同一个值。
-	 * 未加入强化链的旧卡可以留空，C++ 查询会兼容回退到 CardId。
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Upgrade",
-		meta = (ToolTip = "卡牌强化族稳定 ID。同一强化链的所有版本必须相同；未加入强化链的旧卡可留空并回退到 CardId。"))
-	FName UpgradeFamilyId = NAME_None;
-
-	/**
-	 * 直接下一稀有度的不可变 CardDefinition。为空表示当前没有下一层。
-	 * 只允许 White→Blue→Yellow→Purple；具体结构一致性由 WacomEditor validator 检查。
-	 */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Upgrade",
-		meta = (ToolTip = "直接下一稀有度的卡牌定义。只允许 White→Blue→Yellow→Purple；运行时强化会替换卡牌实例的 Definition，不会修改本资产。"))
-	TObjectPtr<UCardDefinition> NextUpgradeDefinition = nullptr;
-
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	FText DisplayName;
 
@@ -79,6 +88,16 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Presentation", meta = (ToolTip = "可选的插画局部深度图。黑色表示更深，白色表示更靠近实体卡框，中灰表示插画 authored 基准深度；推荐与 CardIllustration 同尺寸或同比例，使用 Masks、sRGB=false、Nearest、NoMipmaps。为空时整张插画仍按统一凹入深度显示。"))
 	TObjectPtr<UTexture2D> CardIllustrationDepthMap = nullptr;
+
+	/**
+	 * 本卡专属的 Battle 详情说明模板。
+	 *
+	 * 四个强化等级共用同一套句式；运行时 Value / Icon / Status 仍从当前
+	 * Tier Profile 的结构化规则生成。空集合保持旧卡牌的 Lexicon 回退行为。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Presentation|Explanation",
+		meta = (ToolTip = "本卡专属详情句式。Effects / Passives 按索引覆盖全局模板；留空时保持旧卡牌回退。只影响 UI，不参与战斗规则。"))
+	FWacomCardExplanationTemplateSet ExplanationTemplates;
 
 	/** 同一 CardDefinition 的探索表面。卡牌实例与 Definition 身份不会因表面切换而复制。 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Run Face",
@@ -120,10 +139,28 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	TArray<FCardPassive> Passives;
 
-	/** 未配置 UpgradeFamilyId 的旧卡兼容回退到 CardId。 */
-	FName ResolveUpgradeFamilyId() const;
+	/**
+	 * 单 Definition 四阶强化数据。空数组表示旧 flat 卡，只解析为 White 且不可强化；
+	 * 可强化卡必须严格提供 White/Blue/Yellow/Purple 四项。
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Upgrade",
+		meta = (ToolTip = "单 Definition 的四阶 Battle Profile。可强化卡必须严格填写白、蓝、黄、紫四项；空数组表示旧卡 White fallback。"))
+	TArray<FWacomCardTierProfile> TierProfiles;
 
-	/** Candidate 同时允许匹配当前版本 CardId 或稳定强化族 ID；None 永不匹配。 */
+	bool UsesTierProfiles() const;
+	const FWacomCardTierProfile* FindTierProfile(EWacomCardUpgradeTier Tier) const;
+	FWacomResolvedCardProfile ResolveProfile(EWacomCardUpgradeTier Tier) const;
+	FText ResolveDescription(EWacomCardUpgradeTier Tier) const;
+	int32 ResolveBaseCost(EWacomCardUpgradeTier Tier) const;
+	int32 ResolveBaseCriticalChancePercent(EWacomCardUpgradeTier Tier) const;
+	const FCardPhysique& ResolvePhysique(EWacomCardUpgradeTier Tier) const;
+	const TArray<FCardEffect>& ResolveEffects(EWacomCardUpgradeTier Tier) const;
+	const TArray<FCardEffect>& ResolvePerfectReleaseEffects(EWacomCardUpgradeTier Tier) const;
+	const TArray<FCardZoneHook>& ResolveZoneHooks(EWacomCardUpgradeTier Tier) const;
+	const TArray<FCardPassive>& ResolvePassives(EWacomCardUpgradeTier Tier) const;
+	FGameplayTag ResolveRarity(EWacomCardUpgradeTier Tier) const;
+
+	/** 单 Definition 后 CardId 本身就是稳定身份。 */
 	bool MatchesCardIdOrUpgradeFamily(FName Candidate) const;
 
 	/** 是否具有已启用的探索表面。不会检查完整 authoring 合法性。 */

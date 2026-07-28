@@ -82,6 +82,8 @@ bool FCardZoneAggregate::RegisterCard(
 
 	const FGuid CardInstanceId = Card.InstanceId;
 	Card.Location = InitialLocation;
+	Card.bEverEnteredExhaust =
+		Card.bEverEnteredExhaust || InitialLocation == ECardLocation::Exhaust;
 	const int32 NewIndex = State.Cards.AllCards.Add(MoveTemp(Card));
 	State.Cards.CardIndexById.Add(CardInstanceId, NewIndex);
 
@@ -172,6 +174,10 @@ bool FCardZoneAggregate::MoveCard(
 		TargetZone->Insert(CardInstanceId, InsertedIndex);
 	}
 	Card.Location = TargetLocation;
+	if (TargetLocation == ECardLocation::Exhaust)
+	{
+		Card.bEverEnteredExhaust = true;
+	}
 
 	if (OutFact)
 	{

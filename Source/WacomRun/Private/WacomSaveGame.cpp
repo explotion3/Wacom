@@ -19,6 +19,38 @@ bool FRunCompletionSummarySaveEntry::IsValid() const
 
 namespace
 {
+	constexpr TCHAR LegacyVenomProofWhitePath[] =
+		TEXT("/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_White.DA_Card_TestShopUpgrade_VenomProof_White");
+	constexpr TCHAR LegacyVenomProofBluePath[] =
+		TEXT("/Game/Wacom/Data/Cards/Debug/ShopUpgrade/DA_Card_TestShopUpgrade_VenomProof_Blue.DA_Card_TestShopUpgrade_VenomProof_Blue");
+
+	bool IsRemovedLegacyUpgradeCard(const FCardInstanceSaveEntry& Entry)
+	{
+		const FString Path = Entry.DefinitionAssetPath.ToString();
+		return Path == LegacyVenomProofWhitePath || Path == LegacyVenomProofBluePath;
+	}
+
+	void MigrateCardEntriesToV6(TArray<FCardInstanceSaveEntry>& Entries)
+	{
+		Entries.RemoveAllSwap(IsRemovedLegacyUpgradeCard, EAllowShrinking::No);
+		for (FCardInstanceSaveEntry& Entry : Entries)
+		{
+			Entry.UpgradeTier = EWacomCardUpgradeTier::White;
+			Entry.PersistentModifiers = FWacomCardPersistentModifierState();
+		}
+	}
+
+	void MigrateCardInstancesToV6(UWacomSaveGame& SaveGame)
+	{
+		MigrateCardEntriesToV6(SaveGame.Backpack);
+		MigrateCardEntriesToV6(SaveGame.BattleDeck);
+		MigrateCardEntriesToV6(SaveGame.BurdenZone);
+		for (FSpecialZoneSaveEntry& Zone : SaveGame.SpecialZones)
+		{
+			MigrateCardEntriesToV6(Zone.Cards);
+		}
+	}
+
 	bool HasValidV5OutcomeSchema(const UWacomSaveGame& SaveGame)
 	{
 		switch (SaveGame.Outcome)
@@ -40,14 +72,14 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 {
 	if (!SaveGame) { return false; }
 
-	// 已经是最新版本：仍需校验 v5 Outcome/摘要组合，不能让非法终态进入 apply。
+	// 已经是最新版本：仍需校验 Outcome/摘要组合，不能让非法终态进入 apply。
 	if (SaveGame->SaveVersion == CurrentSaveVersion)
 	{
 		const bool bValid = HasValidV5OutcomeSchema(*SaveGame);
 		if (!bValid)
 		{
 			UE_LOG(LogTemp, Error,
-				TEXT("[WacomSaveGame] v5 Outcome/CompletionSummary 组合非法"));
+				TEXT("[WacomSaveGame] Outcome/CompletionSummary 组合非法"));
 		}
 		return bValid;
 	}
@@ -112,9 +144,12 @@ bool UWacomSaveGame::MigrateIfNeeded(UWacomSaveGame* SaveGame)
 		SaveGame->SaveVersion = 5;
 		[[fallthrough]];
 
-	// case CurrentSaveVersion - 1: // 实际会是具体数字
-	//     SaveGame->SaveVersion = CurrentSaveVersion;
-	//     break;
+	case 5:
+		// v5 -> v6：单 Definition 四阶强化。旧链式 Debug 毒牙不属于正式内容，
+		// 从所有物理区移除；其余旧实例显式初始化为 White 且没有持久修正。
+		MigrateCardInstancesToV6(*SaveGame);
+		SaveGame->SaveVersion = 6;
+		break;
 
 	default:
 		break;

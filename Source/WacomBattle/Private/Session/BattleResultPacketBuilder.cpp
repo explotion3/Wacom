@@ -16,6 +16,18 @@ FBattleResultPacket FBattleResultPacketBuilder::Build(const FBattleState& State)
 	Packet.KnockdownExpGains       = State.PendingKnockdownExpGains;
 	Packet.KnockdownChoices        = State.PendingKnockdownChoices;
 	Packet.GainedCards             = State.PendingGainedCards;
+	Packet.PersistentCardMutations.Reserve(State.Cards.AllCards.Num());
+	for (const FRuntimeCardInstance& Card : State.Cards.AllCards)
+	{
+		if (!Card.SourceRunInstanceId.IsValid())
+		{
+			continue;
+		}
+		FBattlePersistentCardMutation Mutation;
+		Mutation.SourceRunInstanceId = Card.SourceRunInstanceId;
+		Mutation.PersistentModifiers = Card.PersistentModifiers;
+		Packet.PersistentCardMutations.Add(MoveTemp(Mutation));
+	}
 	Packet.DestroyedParts          = State.DestroyedParts;
 	Packet.DestroyedPartKeys.Reserve(State.DestroyedParts.Num());
 	for (const FBattlePartSlotIdentity& Identity : State.DestroyedParts)

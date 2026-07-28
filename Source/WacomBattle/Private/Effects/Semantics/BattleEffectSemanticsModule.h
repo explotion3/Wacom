@@ -12,6 +12,42 @@ struct FCardEffect;
 struct FIntentEffect;
 class IBattleOperationAdapter;
 
+struct FCardCriticalInvocationKey
+{
+	int32 SegmentIndex = 0;
+	int32 EffectIndex = 0;
+	FGuid TargetInstanceId;
+	int32 InvocationOrdinal = 0;
+
+	bool operator==(const FCardCriticalInvocationKey& Other) const
+	{
+		return SegmentIndex == Other.SegmentIndex
+			&& EffectIndex == Other.EffectIndex
+			&& TargetInstanceId == Other.TargetInstanceId
+			&& InvocationOrdinal == Other.InvocationOrdinal;
+	}
+};
+
+FORCEINLINE uint32 GetTypeHash(const FCardCriticalInvocationKey& Key)
+{
+	uint32 Hash = HashCombine(GetTypeHash(Key.SegmentIndex), GetTypeHash(Key.EffectIndex));
+	Hash = HashCombine(Hash, GetTypeHash(Key.TargetInstanceId));
+	return HashCombine(Hash, GetTypeHash(Key.InvocationOrdinal));
+}
+
+/** A single formal card transaction's deterministic critical-roll ledger. */
+struct FCardCriticalResolutionLedger
+{
+	bool bAllowRolls = true;
+	TMap<FCardCriticalInvocationKey, bool> Rolls;
+
+	bool Resolve(
+		FBattleState& State,
+		const FGuid& SourceCardId,
+		const FGameplayTag& EffectType,
+		const FCardCriticalInvocationKey& Key);
+};
+
 /** Runtime bindings shared by every segment of one card effect chain. */
 struct FCardEffectChainBindings
 {
@@ -19,6 +55,7 @@ struct FCardEffectChainBindings
 	FGuid SourceCardId;
 	FGuid SelectedEnemyPartId;
 	FGuid SelectedHandCardId;
+	FCardCriticalResolutionLedger* CriticalLedger = nullptr;
 };
 
 /** One resolved enemy-part invocation before the effect mutates battle state. */
@@ -62,6 +99,9 @@ private:
 	FBattleEventBus* Events = nullptr;
 	FCardEffectChainBindings Bindings;
 	IBattleOperationAdapter* OperationAdapter = nullptr;
+	FCardCriticalResolutionLedger OwnedCriticalLedger;
+	FCardCriticalResolutionLedger* CriticalLedger = nullptr;
+	int32 NextSegmentIndex = 0;
 	FGuid LastShuffledCardId;
 	TSet<FGuid> ShuffledCardIds;
 };

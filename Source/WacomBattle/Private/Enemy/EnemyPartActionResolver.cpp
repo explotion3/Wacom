@@ -82,10 +82,16 @@ namespace
 			Ev.EnemyPhaseId    = Part.CurrentPhaseId;
 			Ev.Count           = bSkip ? 0 : 1;
 			Events.Emit(Ev);
-		}
+			}
 
-		if (!bSkip)
-		{
+			const bool bSurvivedBurn =
+				FBattleStatusSemanticsModule::ResolveEnemyBurnBeforeIntent(
+					State,
+					Events,
+					Part.InstanceId);
+
+			if (bSurvivedBurn && !bSkip)
+			{
 			FBattleEffectSemanticsModule::ExecuteEnemyIntentChain(
 				State,
 				Events,
@@ -93,10 +99,10 @@ namespace
 				Part.InstanceId,
 				OperationAdapter);
 		}
-		else
-		{
-			ConsumeStunOnAct(State, Part);
-		}
+			else if (bSurvivedBurn)
+			{
+				ConsumeStunOnAct(State, Part);
+			}
 
 		// Action Preview deliberately keeps the current intent visible at initiative 0.
 		// Formal commit refreshes the next intent exactly as before.
@@ -110,11 +116,11 @@ namespace
 				/*bReportUnresolvedWhenSkipped*/false };
 			bShouldRefreshIntent = OperationAdapter->ShouldExecute(RefreshOperation);
 		}
-		if (bShouldRefreshIntent)
+			if (bSurvivedBurn && bShouldRefreshIntent)
 		{
 			FEnemyIntentSelector::RefreshIntentForPart(State, Part, &Events);
 		}
-		else
+			else if (bSurvivedBurn)
 		{
 			FBattleInitiativeTimelineModule::SetCurrent(Part, 0);
 		}

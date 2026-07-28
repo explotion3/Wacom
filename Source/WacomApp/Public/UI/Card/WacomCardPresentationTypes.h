@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "GameplayTagContainer.h"
 #include "WacomCardPresentationTypes.generated.h"
 
@@ -269,6 +270,12 @@ struct WACOMAPP_API FWacomCardViewEffectBadge
  */
 struct WACOMAPP_API FWacomCardPresentationRuntimeContext
 {
+	struct FCurrentEffectMagnitude
+	{
+		int32 EffectIndex = INDEX_NONE;
+		int32 Magnitude = 0;
+	};
+
 	struct FEffectPreview
 	{
 		int32 EffectIndex = INDEX_NONE;
@@ -279,12 +286,18 @@ struct WACOMAPP_API FWacomCardPresentationRuntimeContext
 
 	bool bHasRuntimeCost = false;
 	int32 RuntimeCost = 0;
+	bool bHasUpgradeTier = false;
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+	bool bHasCurrentDurability = false;
+	int32 CurrentDurability = 0;
 	bool bHasRuntimeCostPreview = false;
 	int32 RuntimeCostPreview = 0;
 
 	bool bHasPlayableState = false;
 	bool bIsPlayable = true;
 
+	/** Snapshot-authored resting values. Target preview remains a separate overlay. */
+	TArray<FCurrentEffectMagnitude> CurrentEffectMagnitudes;
 	TArray<FEffectPreview> EffectPreviews;
 };
 

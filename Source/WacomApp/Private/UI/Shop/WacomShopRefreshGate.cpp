@@ -135,9 +135,9 @@ uint32 FWacomShopRefreshGate::BuildUpgradeRefreshSignature(
 	for (const FRunShopCardUpgradeQuote& Quote : Snapshot.CardUpgradeQuotes)
 	{
 		Hash = HashGuidForShopRefresh(Hash, Quote.InstanceId);
-		Hash = HashCombine(Hash, GetTypeHash(Quote.CurrentDefinition ? Quote.CurrentDefinition->CardId : NAME_None));
-		Hash = HashCombine(Hash, GetTypeHash(Quote.NextDefinition ? Quote.NextDefinition->CardId : NAME_None));
-		Hash = HashCombine(Hash, GetTypeHash(Quote.UpgradeFamilyId));
+		Hash = HashCombine(Hash, GetTypeHash(Quote.Definition ? Quote.Definition->CardId : NAME_None));
+		Hash = HashCombine(Hash, static_cast<uint32>(Quote.CurrentTier));
+		Hash = HashCombine(Hash, static_cast<uint32>(Quote.NextTier));
 		Hash = HashCombine(Hash, static_cast<uint32>(Quote.Price));
 		Hash = HashCombine(Hash, Quote.bCanUpgrade ? 1u : 0u);
 		Hash = HashCombine(Hash, GetTypeHash(Quote.DisabledReason));

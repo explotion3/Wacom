@@ -50,7 +50,7 @@ WacomBattle 不负责 UI 展示、世界 Actor authoring、Run 探索、存档�
 | `PlayCardResolver` | 唯一 PlayCard Transaction Implementation；只消费 Prepared PlayCard，不重复前置规则 |
 | `EffectSemanticRegistry / semantic families / CardEffectChain` | Effect descriptor 唯一事实、按 Combatant/CardMovement/CardRuntime/Initiative 分组的 Implementation，以及运行时 chain scratch |
 | `BattleStatusSemanticsModule` | Status Semantics 的唯一 Private Implementation；解释宿主、生命周期、消费、Poison cadence 与 Pending Hand Affliction |
-| `BattleCardRuntimeStateModule` | 单卡状态、费用组成、冻结限制和卡牌状态事件的唯一 Private Implementation |
+| `BattleCardRuntimeStateModule` | 单卡状态、费用组成、效果数值 modifier 和对应卡牌变化事件的唯一 Private Implementation |
 | `BattleInitiativeTimelineModule` | 正常运行时 `CurrentInitiative` 的唯一写入口，返回逐部位实际变化 facts |
 | `HandZoneService` | 手牌区域、上限和腾挪规则 |
 | `CardZoneAggregate` | 所有 runtime card 注册、定位容器、`Location` 与同区顺序的唯一 Private 写入口 |
@@ -86,9 +86,9 @@ Battle 初始化只接受 `FBattleInitParams.EnemySlots` 作为敌人入口。`U
 
 战斗抽牌堆来源只接受两级 contract：`FBattleInitParams.BattleDeckEntries` 非空时使用 entries，并保留 Run 传入的 `CapacityEffectTags`；entries 为空时回退 `Character->StarterDeck`，仅服务 direct fixture / debug fallback。旧的 definition-only `BattleDeckOverride` 入口已删除，Run 正式入口必须通过 `URunSession::BuildInitParamsForBattle()` 生成 entries。
 
-商店强化发生在 Run 持有卡实例上：InstanceId 不变，只把该实例的静态 Definition 引用替换为链中下一版本。随后 `BuildInitParamsForBattle()` 自然把当前 Definition 投影到 `BattleDeckEntries`，Battle 因而读取新版本的费用、稀有度和效果；Battle 不解析强化族、不修改 DataAsset，也不新增公共强化合同。战斗中的临时 Cost modifier 仍属于 `FRuntimeCardInstance`，不能写回强化链。
+商店强化发生在 Run 持有卡实例上：Definition 与 InstanceId 不变，只推进实例 `UpgradeTier`。`BuildInitParamsForBattle()` 把 `SourceRunInstanceId / Definition / UpgradeTier / PersistentModifiers / CapacityEffectTags` 投影到 `BattleDeckEntries`；Battle 通过 `ResolveProfile(Tier)` 读取当前费用、体质、效果和被动。战斗临时费用、状态、关键词、暴击和效果修正仍属于 `FRuntimeCardInstance`；只有显式 `PersistentCardMutation` 能在胜利或撤离结算后写回 Run。
 
-牌堆详情使用独立的按需只读合同 `UBattleSession::BuildPileInspectionSnapshot()`，不会扩大普通高频 `FBattleSnapshot`。返回值固定包含 Draw、Discard、Played 和 Exhaust 四个区域，每张实例只携带 Definition、位置、运行时费用、状态层数和临时关键词。Draw 区会在 Battle 层按 Definition 稳定路径与 InstanceId 重新排序并标记 `bOrderHidden=true`；调用方永远拿不到真实区域索引、抽取方向或内部抽牌顺序。构建检查快照不得发布事件、推进 Battle Version、消耗 RNG 或改变任意牌区。
+牌堆详情使用独立的按需只读合同 `UBattleSession::BuildPileInspectionSnapshot()`，不会扩大普通高频 `FBattleSnapshot`。返回值固定包含 Draw、Discard、Played 和 Exhaust 四个区域，每张实例携带 Definition、位置、运行时费用、状态层数、临时关键词和按 EffectIndex 保存的当前确定性效果数值。Draw 区会在 Battle 层按 Definition 稳定路径与 InstanceId 重新排序并标记 `bOrderHidden=true`；调用方永远拿不到真实区域索引、抽取方向或内部抽牌顺序。构建检查快照不得发布事件、推进 Battle Version、消耗 RNG 或改变任意牌区。
 
 `FBattleSnapshot.Enemies` 是敌人快照的唯一 public 入口。它按初始化 `EnemySlots` 顺序输出 `FEnemySnapshot`，每个 enemy 下再输出 `Parts`。不再提供 `FBattleSnapshot.Enemy` 或“第一个敌人”别名；UI、日志、场景目标绑定和新测试都应遍历 `Enemies`，或在明确单敌人 fixture 中显式读取 `Enemies[0]`。敌方部位长期身份以 `EncounterId + EnemySlotId + PartSlotId` 为准；`PartId` 只保留在静态内容定义和 debug 语义中，不参与运行时目标匹配。
 
@@ -120,6 +120,8 @@ Prepared PlayCard 只保存状态版本、规范化命令、运行时费用、An
 `UBattleSession::ValidateTargetWithCard(CardInstanceId, TargetHandle)` 是拖拽 preview / debug 使用的只读 Target Probe 入口，返回 `FWacomBattleTargetValidationResult`。它严格回答一个具体显式目标是否与源卡兼容：`None / Self` 不接受显式对象，`AllEnemyParts` 仅接受可解析的存活敌人部位。调用方读取 `bCanTarget` 判断是否可选，并可使用 `RejectReason / DebugSummary / ResolvedPartKey` 做 UI 反馈和排查；不再保留 bool-only 兼容入口。
 
 `UBattleSession::BuildCardTargetPreview(CardInstanceId, TargetHandle)` 是 Battle 卡牌目标预览的 public 入口。它消费 PlayCard Evaluation 生成的 Preview Candidate，再返回 `FBattleCardTargetPreview`：validation、源卡运行时费用 / 迅捷事实、规范化执行绑定、可选 Preview Focus，以及每个主效果的 preview magnitude / skip facts。该 Interface 只读，不触发事件、不修改手牌 / 敌人 / 状态，也不模拟整次 `PlayCard` 事务。
+
+普通 `FHandCardSnapshot` 会按 EffectIndex 发布 `CurrentEffectMagnitudes`：Battle 使用正式 Effect Semantics 计算当前来源卡、RuntimeCost、手牌数量、条件 Modifier、战内 Effect 加值/倍率和 Weapon 容量加成，但不绑定具体目标、不消耗暴击 RNG。它是静止卡面和详情的权威当前数值，使相邻伙伴、OnDraw 倍率或其它战内修正能在 Snapshot 刷新时立即出现。目标状态、目标条件和其它必须依赖具体对象的事实仍由 Target Preview 覆盖；隐藏暴击只在正式提交时揭露。App / Widget 不得从 Definition 与 runtime delta 重算这组事实。
 
 敌人部位目标的 preview 归 `WacomBattle` 计算，复用 Effect Semantics 的 target / magnitude plan、`ConditionResolver`、`MagnitudeModifiers`、武器容量伤害 +3 和伤害 clamp。App / Widget 只能把这些 facts 转成卡面和详情 ViewData，不能复制或重算战斗规则。
 
@@ -155,14 +157,15 @@ Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 
 6. 执行卡牌主动 `Effect`。
 7. 执行完美释放效果。
 8. 非迅捷卡推进敌方先机，除非被 `ZoneHook.OnPerfectReleaseHit` 跳过。
-9. 执行卡牌离开手牌后的去向规则，并紧接着发射携带最终 `ECardLocation` 的 `CardPlayDestinationResolved`。
-10. 若本卡有 Companion 关键词，全局计数 +1。
-11. 执行 `Passive.AfterPlayed`。
-12. 执行 `Passive.OnCompanionCount`。
-13. 消费本卡 Twilight、解除出牌前相邻卡 Freeze，并结算 `Poison`。
-14. 若有部位先机 <= 0，执行敌方部位行动子流程。
-15. 检查战斗结束。
-16. 返回执行阶段；`BattleSession` 在整条命令成功后统一 commit 并只递增一次 `StateVersion`。
+9. 主效果和复制全部完成后，有限耐久卡扣 1；降到 0 时标记本次必须进入 Exhaust。
+10. 执行卡牌离开手牌后的去向规则，并紧接着发射携带最终 `ECardLocation` 的 `CardPlayDestinationResolved`；耐久耗尽优先于 Combo 普通回手。
+11. 若本卡有 Companion 关键词，全局计数 +1，并按出牌前左右直接邻居触发 `OnAdjacentCompanionPlayed`，再触发其它手牌伙伴监听。
+12. 执行 `Passive.AfterPlayed`。
+13. 执行 `Passive.OnCompanionCount`。
+14. 消费本卡 Twilight、解除出牌前相邻卡 Freeze，并结算 `Poison`。
+15. 若有部位先机 <= 0，执行敌方部位行动子流程。
+16. 检查战斗结束；胜利或撤离只运行一次 `OnBattleSettlement`。
+17. 返回执行阶段；`BattleSession` 在整条命令成功后统一 commit 并只递增一次 `StateVersion`。
 
 起始阶段：
 
@@ -174,8 +177,11 @@ Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 
 -> 合并上回合保留普通卡与本回合新抽普通卡
 -> 重新随机编排普通卡池
 -> 重新插入左右手锚点
+-> 发 CardsDrawn
+-> 按 CardsDrawn 稳定顺序把玩家灼烧逐层转移到所抽卡；达到 3 层的卡立即消耗
 -> 物化 Pending Hand Affliction 到当前完整手牌
--> 发 CardsDrawn / HandZoneChanged
+-> 对仍在手牌的真实抽入卡执行 OnDraw
+-> 发 HandZoneChanged
 -> Phase 切到 PlayerAction
 ```
 
@@ -183,6 +189,7 @@ Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 
 
 ```text
 发 TurnEnded
+-> 执行 OnTurnEnd（包括消耗区灰烬虫免费自动出牌）
 -> 清除所有卡牌回合级 Slow / Freeze
 -> 本回合使用牌堆自然进入弃牌堆
 -> EndTurn Hand Card Zone Transition 从同一份迁移前 Hand 求值 retained / discarded facts
@@ -205,9 +212,7 @@ Commit Evaluation 在任何事件或状态修改前完成；`FPlayCardResolver` 
 -> 返回 PlayerAction
 ```
 
-当前未接入通用“战斗开始时 / OnTurnStart / OnDraw”效果调用点。玩家侧手牌状态物化是明确的 typed lifecycle stage，固定在抽牌与 Hand 重建后、末尾 `HandZoneChanged` 前，不代表开放通用 callback registry。未来 `OnTurnStart` 仍只能在 `Phase=TurnStart` 后、等待值重置与抽牌前接入；`OnDraw` 必须另行定义回合抽牌与 Effect.Draw 是否共享语义。
-
-当前未接入“回合结束时 / 持续到回合结束”效果系统。`OnTurnEnd` 继续是 Reserved 制作语义；未来固定在 `TurnEnded` 后、牌堆与手牌清理前接入，until-turn-end expiry 固定在 retain facts 后、第一道 BattleEnd gate 前接入。非保留普通卡仍发生在敌方行动前；若要调整顺序，需同步更新规则文档和 [TechDebt.md](./TechDebt.md) 中的时序债。
+`OnDraw` 只对真正通过 Draw / Discard / Exhaust 抽牌流程进入手牌、且未被玩家灼烧在入手阶段消耗的卡触发；直接生成到手牌不触发。`OnTurnEnd` 固定在 `TurnEnded` 后、卡牌状态清理和牌区迁移前。`OnTurnStart` 仍为 Reserved；until-turn-end expiry 仍保留在 retain facts 后、第一道 BattleEnd gate 前。
 
 ## §5 手牌区域规则
 
@@ -269,11 +274,13 @@ Cost 推进：
 
 `Resistance` 在合法先机命中时判定，且先于 `PerfectReleaseEffects`。参与比较的部位必须同时满足：出牌前 `RuntimeCost == CurrentInitiative`、本卡对该部位存在条件成立且 FinalMagnitude 大于 0 的 `Effect.Damage` invocation、该部位当前意图存在指向 Player 且 Magnitude 大于 0 的 `Effect.Damage`。单体 / 全体不使用额外分支；目标集合直接来自 Damage Effect 的正式目标展开，因此非目标部位、条件失败伤害、0 伤害和非攻击意图都不产生抵抗比较。
 
-玩家抵抗值取该目标全部合法 Damage invocation 中最高的单段 FinalMagnitude，不求和；FinalMagnitude 与正式效果执行、Target Preview 共用同一套目标条件、RuntimeCost / MagnitudeSource、Modifier 和 Weapon `+3` 求值。敌方攻击值取当前意图中全部 `Effect.Damage + Target.Player + Magnitude > 0` 的最高单段伤害；意图不再制作独立抵抗数值。`AllEnemyParts` 的条件和 FinalMagnitude 必须按各部位分别计算。
+玩家抵抗值取该目标全部合法 Damage invocation 中最高的单段 FinalMagnitude，不求和；确定性 Magnitude 与 Target Preview 共用同一套目标条件、RuntimeCost / MagnitudeSource、Modifier 和 Weapon `+3` 求值。正式提交再使用同一个按 `Segment + EffectIndex + Target + InvocationOrdinal` 缓存的暴击账本，抵抗与随后主效果读取同一次判定，所以正式玩家峰值取暴击后的最高单段伤害且不会二次 Roll。敌方攻击值取当前意图中全部 `Effect.Damage + Target.Player + Magnitude > 0` 的最高单段伤害；意图不再制作独立抵抗数值。`AllEnemyParts` 的条件和 FinalMagnitude 必须按各部位分别计算。
 
 当 `PlayerPeakDamage > EnemyPeakDamage` 时抵抗成功，通过正式状态入口给该部位增加 1 层 `Status.Stunned`；相等或更低时比较失败但仍发布 `ResistanceResolved`。抵抗不改变本卡伤害、不改变先机推进。眩晕可叠层；每次敌人到达行动边界时消费 1 层并跳过该次行动。迅捷卡不产生 `InitiativeHit`、Resistance 或 PerfectRelease；出牌开始时已冻结的部位也不参与这三类事实。
 
 UI 先机预测、scene part Status Badge 和拖卡 preview 只读取 Snapshot / validation 事实，不提交命令、不模拟完整 resolver。表现合同见 [WacomBattleUI.md](./WacomBattleUI.md)、[WacomWorldInteraction.md](./WacomWorldInteraction.md) 和 [First_Person_Card_Layer_Design.md](./First_Person_Card_Layer_Design.md)。
+
+卡牌暴击率来自当前 Tier Profile 的 `BaseCriticalChancePercent` 与战内实例加值，角色和玩家没有暴击率。每个 Effect invocation、每个目标独立 Roll；Damage、Heal、Shield、Poison 和 Burn 在所有确定性 Magnitude 修正完成后暴击并把本次值乘 2。Poison/Burn 只在施加层数时判定，后续 DOT 不再次暴击；Slow、Freeze、Twilight、Stunned、Draw、费用、创建和先机不暴击。Action Preview 使用确定性 adapter，不消耗 RNG、不展示概率且始终投影无暴击结果。每个已应用 invocation 发布 `EffectResolved`，其中记录暴击前值、最终值和 `bCritical`；Damage 同步把事实写入 `DamageResolution.bCritical`。
 
 ## §7 状态、保留、ZoneHook 与 Passive
 
@@ -283,6 +290,12 @@ UI 先机预测、scene part Status Badge 和拖卡 preview 只读取 Snapshot /
 - 敌方部位每行动一次后，对敌我双方各结算一次当前中毒层数伤害。
 
 `Poison` 每层造成 8 点生命伤害，即单次结算伤害为当前中毒层数 × 8；玩家与敌方部位使用同一规则。中毒穿透护盾，层数不因结算而减少。`Effect.Heal` 治疗玩家时，移除治疗量 10% 的中毒层数，向下取整；层数为 0 时移除 `Status.Poison`。
+
+`Burn` 按宿主分流：
+
+- 敌人部位到达行动边界后、Intent 效果和晕厥跳过判定执行前，受到等于当前层数的 `Periodic + Status.Burn` 伤害；伤害正常消耗护盾，随后层数变为 `floor(Stack / 2)`。灼烧致死则不执行 Intent；晕厥部位仍先结算灼烧。
+- 玩家灼烧只在真实抽牌批次逐卡转移：每张实际进入手牌的卡消耗玩家 1 层并获得 1 层卡牌灼烧；卡牌达到 3 层立即进消耗区且不执行 OnDraw。主动抽牌、回合抽牌及从弃牌/消耗区正式抽回都触发，直接生成到手牌不触发。
+- 卡牌灼烧随实例跨 Hand、Draw、Discard 和 Exhaust 保存到战斗结束。
 
 状态不共享一个万能存储。玩家/敌方部位的持久层数存于 Combatant `StatusStacks`；单卡层数存于 `FRuntimeCardInstance.StatusStacks`；尚未选择具体卡牌的玩家侧控制存于 `PendingHandAfflictions`。每种宿主都只有一份可变真相，Snapshot 的 `Statuses` 从正层数 facts 投影。当前不实现 timed status，Effect 的 `Duration` 不创建平行状态实例。
 
@@ -294,6 +307,7 @@ UI 先机预测、scene part Status Badge 和拖卡 preview 只读取 Snapshot /
 - 玩家 Twilight 在下个玩家回合物化到当前整手牌，层数计入 RuntimeCost；成功打出该牌后减半，并随卡跨 Hand / Played / Discard / Draw 持久化。
 - 敌方 Freeze 每层拦截一次下一张会真实推进先机的卡，并只阻止对应部位；不再跳过敌方行动。
 - 玩家 Freeze 在下个玩家回合随机不重复选择 `x` 张牌；冻结卡不能 Commit / Action Preview，打出其出牌前左或右邻牌会解除全部 Freeze，TurnEnd 仍未解除的 Freeze 清除。
+- 玩家、敌人和卡牌 Burn 使用上述独立时序；不存在通用“每回合扣血”回调。
 
 玩家侧 `x` 与 `y` 分离：`FIntentEffect.HandAffliction.TargetCardCount=x`，`Magnitude=y`。Twilight 固定使用当前整手牌。选择消耗 `BattleState.Rng`，Action Preview 使用复制状态，不泄漏正式 RNG。
 
@@ -317,18 +331,24 @@ UI 先机预测、scene part Status Badge 和拖卡 preview 只读取 Snapshot /
 | `OnTwilightTriggered` | 暮气施加成功时 | 发 `PassiveTriggered` 事件；当前不改 Magnitude |
 | `AfterPlayed` | 本卡打出完成后 | 典型效果为自腾挪到随机区域 |
 | `OnDiscard` | 本卡真实从手牌进入弃牌堆后 | 发 `CardDiscarded` 后执行本卡 Effect Chain；PlayedPile 自然清理和 Exhaust 不触发 |
+| `OnDraw` | 卡牌经正式 Draw 流程入手并通过灼烧转移后 | 对该卡执行被动；直接生成到手牌不触发 |
+| `OnTurnEnd` | `TurnEnded` 后、卡牌清理前 | 可执行普通效果或从 Exhaust 免费自动出牌 |
+| `OnAdjacentCompanionPlayed` | 打出伙伴前的左右直接邻居 | 只触发仍存在的相邻卡；自动出牌没有手牌位置，不触发 |
+| `OnOtherCompanionPlayed` | 其它伙伴成功打出 | 对手牌中的监听卡触发 |
+| `OnBattleSettlement` | Victory 或 Withdraw 收束 | 全场至多一次；可产生按来源 Run InstanceId 写回的持久修正 |
 
 ## §8 Effect Semantics、Effect Chain 与制作边界
 
 Private `FEffectSemanticRegistry` 保存不可变 `FEffectSemanticDescriptor`，是 EffectTag、Card / Intent 支持、目标政策、MagnitudeSource、typed 参数、determinism、handler 与 Target Preview projector 的共同事实来源。descriptor 的注册按 `CombatantMutation`、`CardMovement`、`CardRuntimeMutation`、`Initiative` 四个 semantic family 分文件维护；`BattleEffectSemanticsModule` 只负责 effect chain 执行、目标展开、magnitude 和 preview 编排，不再同时承担制作支持表。`FIntentEffect` 的窄类型 `HandAffliction` 与 `FCardEffect.TargetZone` 的 legacy decode 约定保持不变。
 
-`FCardEffectChain` 是 scratch 的词法所有者。Main 独立一条；所有匹配 OnPlay ZoneHook 共享一条；PerfectRelease 每个命中部位独立一条；AfterPlayed 的匹配 passive 共享一条；OnDiscard 每个 passive 独立一条。Handler 失败只表示当前 invocation 未应用，card chain 继续；Intent chain 也不因 handler 失败停止，只在玩家死亡时停止剩余效果。`OnTurnStart / OnTurnEnd / OnDraw` 当前没有运行时 Implementation，其 chain 生命周期在正式开放制作语义时再定义。
+`FCardEffectChain` 是 scratch 的词法所有者。Main 独立一条；所有匹配 OnPlay ZoneHook 共享一条；PerfectRelease 每个命中部位独立一条；AfterPlayed 的匹配 passive 共享一条；OnDiscard 每个 passive 独立一条。OnDraw、OnTurnEnd、伙伴触发和战后触发由 `PassiveDispatcher` 在各自明确边界建立 chain。Handler 失败只表示当前 invocation 未应用，card chain 继续；Intent chain 也不因 handler 失败停止，只在玩家死亡时停止剩余效果。`OnTurnStart` 仍没有运行时 Implementation。
 
 | EffectTag | Handler | 当前语义 |
 |---|---|---|
 | `Effect.Damage` | DamageHandler | 造成伤害 |
 | `Effect.Heal` | HealHandler | 恢复玩家 HP，并按治疗量移除玩家中毒 |
 | `Effect.ApplyStatus.Poison` | ApplyStatusHandler | 施加中毒 |
+| `Effect.ApplyStatus.Burn` | ApplyStatusHandler | 施加灼烧；层数本身可暴击，后续 DOT 不再暴击 |
 | `Effect.ApplyStatus.Slow` | ApplyStatusHandler | 敌方当前意图即时延迟；玩家创建下回合随机手牌减速 |
 | `Effect.ApplyStatus.Freeze` | ApplyStatusHandler | 敌方拦截下一次卡牌推进；玩家创建下回合随机冻结卡 |
 | `Effect.ApplyStatus.Twilight` | ApplyStatusHandler | 敌方延迟下一意图并减半；玩家污染下回合整手牌；继续触发 `OnTwilightTriggered` |
@@ -343,6 +363,12 @@ Private `FEffectSemanticRegistry` 保存不可变 `FEffectSemanticDescriptor`，
 | `Effect.Card.DiscardSelected` | SelectedHandCardZoneMoveHandler | 要求 `Target.SelectedHandCard`；目标普通手牌移入弃牌堆并触发 `OnDiscard` |
 | `Effect.Card.ExhaustSelected` | SelectedHandCardZoneMoveHandler | 要求 `Target.SelectedHandCard`；目标普通手牌移入消耗牌堆，不触发 `OnDiscard` |
 | `Effect.GainKeyword` | GainKeywordHandler | 给目标手牌临时添加 decoded Keyword 参数 |
+| `Effect.Card.GenerateToHand / GenerateRandomFromPoolToHand` | CardCreationService | 创建新 InstanceId，只继承来源 Tier；直接入手不触发 Draw/OnDraw/玩家灼烧 |
+| `Effect.Card.CloneSelfIntoDraw` | CardCreationService | 新 InstanceId 完整克隆来源战内状态并插入 Draw；不继承 Run 身份 |
+| `Effect.Card.AddEffectMagnitude / MultiplyEffectMagnitude` | CardRuntimeMutation | 按参数 Effect Tag 修改来源卡本场加值或倍率 |
+| `Effect.Card.AddCriticalChance` | CardRuntimeMutation | 增加来源卡本场暴击率，最终 clamp 到 100% |
+| `Effect.Card.AddPersistentDurability / AddPersistentEffectMagnitude` | CardRuntimeMutation | 战后被动修改来源卡持久投影，只由 Result Packet 写回 Run |
+| `Effect.Card.AutoPlaySelf` | TurnEnd Passive | 从 Exhaust 免费自动出牌，完成后进入 Discard |
 | `Effect.RemoveStatus` | RemoveStatusHandler | 移除目标持久 Combatant Status；不允许移除即时敌方 Slow |
 | `Effect.ModifyInitiative` | ModifyInitiativeHandler | 通过 Initiative Timeline 修改目标部位当前先机 |
 | `Status.Shield` | ShieldHandler | 写入护盾字段 |
@@ -375,7 +401,8 @@ GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWaco
 -> 移除已破坏部位
 -> 移除不能行动部位
 -> 按部位顺序逐个结算
-   -> 若部位处于晕厥，跳过当前意图并消耗 1 层
+   -> 先结算该部位 Burn，正常消耗护盾并把层数减半；致死则停止
+   -> 若存活且部位处于晕厥，跳过当前意图并消耗 1 层
    -> 否则执行该部位当前意图
    -> 刷新该部位意图
    -> 安装新意图基础先机，并结算该部位 Twilight
@@ -403,7 +430,7 @@ GameplayTag 已声明不等于已可制作。能否进入 DataAsset，以 `FWaco
 
 Private `BattleCombatantMutationModule` 是运行时 HP、Shield、stack status、玩家 HP 阈值和敌方部位破坏边沿的唯一 Implementation。调用方只提交 Player / EnemyPart handle 与 typed mutation intent；Module 不接收 Operation Adapter，也不决定 Effect Chain、Poison 触发时机、击倒阶段或 Battle End。
 
-普通伤害按 `Shield -> HP` 结算，Poison 显式选择绕过护盾。致死部位的固定顺序是：完成 HP mutation 并发布 `DamageDealt`，随后置 `bDestroyed=true / CurrentInitiative=0`，发布 `EnemyPartHpEmptied`，最后写经验、`DestroyedParts` 和 pending knockdown。`KnockdownChoiceRequested` 仍由命令管线在事务结束后发布。初始化恢复预破坏部位使用无 EventBus 的专用入口，因此不会重复发布事件、经验或击倒选择。
+普通伤害与 Burn 按 `Shield -> HP` 结算，Poison 显式选择绕过护盾。致死部位的固定顺序是：完成 HP mutation 并发布 `DamageDealt`，随后置 `bDestroyed=true / CurrentInitiative=0`，发布 `EnemyPartHpEmptied`，最后写经验、`DestroyedParts` 和 pending knockdown。`KnockdownChoiceRequested` 仍由命令管线在事务结束后发布。初始化恢复预破坏部位使用无 EventBus 的专用入口，因此不会重复发布事件、经验或击倒选择。
 
 ```text
 BattleState
@@ -422,6 +449,7 @@ BattleState
 │   ├── PendingKnockdownEvents[]
 │   ├── PendingKnockdownChoices[]
 │   ├── PendingGainedCards[]
+│   ├── bSettlementPassivesResolved
 │   └── DestroyedParts[]（内部 identity 投影）
 ├── PlayerState
 │   ├── CurrentHp / MaxHp
@@ -430,7 +458,7 @@ BattleState
 │   └── CompanionPlayedCount
 ├── CardContainers
 │   ├── LeftHandInstanceId / RightHandInstanceId
-│   ├── AllCards[]（RuntimeCostModifier + Card StatusStacks）
+│   ├── AllCards[]（Tier / SourceRunInstanceId / Durability / Card Status / Critical / Effect modifiers）
 │   ├── Hand
 │   ├── DrawPile
 │   ├── PlayedPile
@@ -450,6 +478,7 @@ BattleState
 |---|---|
 | 普通牌 | 本回合使用牌堆 |
 | 消耗牌 | 消耗牌堆 |
+| 有限耐久在本次成功出牌后降到 0 | 消耗牌堆；优先于 Combo 和普通去向 |
 | 左手牌 / 右手牌 | `Limbo` |
 | 连击牌 | 通过 Card Zone Transaction 按出牌前邻居 / index 返回原位置；显式腾挪优先 |
 | 保留牌打出 | 本回合使用牌堆；保留只影响回合结束弃牌 |
@@ -478,6 +507,7 @@ BattleState
 | `StatusApplied` | 状态层数施加 |
 | `CardStatusChanged` | 单卡状态物化、消费或清理；Amount=delta，Count=变更后层数 |
 | `CardRuntimeCostChanged` | 单卡运行时费用修正已提交；`CardInstanceId` 为目标卡，`ActorInstanceId` 为来源卡或规则主体，`Tag` 为来源效果，`Amount` 为本次原始 modifier delta，`Count` 为变更后的有效 `RuntimeCost` |
+| `CardEffectMagnitudeChanged` | 单卡效果加值或倍率已提交；`CardInstanceId` 为目标卡，`ActorInstanceId` 为来源卡，`Tag` 为被修改 Effect，结构化 fact 保存来源效果、Add/Multiply 类型及 modifier 前后值 |
 | `EnemyInitiativeChanged` | 单个敌方部位实际先机变化或 Freeze 抑制事实 |
 | `InitiativePushed` | 非迅捷卡的 RuntimeCost 推进尝试摘要 |
 | `WaitPerformed` | 玩家等待 |
@@ -491,9 +521,11 @@ BattleState
 | `CardDiscarded` | 卡牌因弃牌规则从手牌进入弃牌堆；同一迁移批次的逐张事件共享完整有序 `CardInstanceIds`、稳定 `HandCardZoneMoveBatchSequence` 与批次后 `DiscardPileCountAfter`，逐张事件和 `OnDiscard` 顺序不变 |
 | `CardExhausted` | 卡牌因消耗规则从手牌进入消耗牌堆 |
 | `CardGained` | 战斗中获得新卡 |
+| `EffectResolved` | 已应用的单个 Effect invocation；记录 EffectType、暴击前后 Magnitude 与 `bCritical` |
+| `CardCreated` | 战内创建或克隆的新卡；携带新实例与来源卡身份 |
 | `BattleEnded` | 战斗进入结束态 |
 
-`DamageDealt.Amount` 是本次实际 HP 损失，不是进入伤害流程的名义数值：护盾完全吸收时仍发布事件但 `Amount=0`；部分吸收只记录穿盾后的 HP 损失；overkill 只记录目标受击前剩余 HP。精确分解写入 `FBattleDamageResolutionFact`：`RequestedDamage`、`ShieldBefore / ShieldAbsorbed / ShieldAfter`、`Overkill`、`Kind` 和 `bCritical`。普通 Damage Effect 明确为 `Direct`；Poison 明确为 `Periodic`、继续填写 `Tag=Status.Poison` 并绕过护盾。`bCritical` 只承载规则层已经确认的事实，不在事件、App 或 Widget 内计算概率和倍率。普通卡牌伤害继续填写 `CardInstanceId`，敌方意图不伪造来源字段。Combat Log、伤害表现 cue 和 Action Preview 都消费这一口径。
+`DamageDealt.Amount` 是本次实际 HP 损失，不是进入伤害流程的名义数值：护盾完全吸收时仍发布事件但 `Amount=0`；部分吸收只记录穿盾后的 HP 损失；overkill 只记录目标受击前剩余 HP。精确分解写入 `FBattleDamageResolutionFact`：`RequestedDamage`、`ShieldBefore / ShieldAbsorbed / ShieldAfter`、`Overkill`、`Kind` 和 `bCritical`。普通 Damage Effect 明确为 `Direct`；Poison 与 Burn DOT 明确为 `Periodic` 并填写对应 Status Tag，Poison 绕过护盾而 Burn 消耗护盾。`bCritical` 只承载规则层已经确认的事实，不在事件、App 或 Widget 内计算概率和倍率。普通卡牌伤害继续填写 `CardInstanceId`，敌方意图不伪造来源字段。Combat Log、伤害表现 cue 和 Action Preview 都消费这一口径。
 
 所有非伤害护盾增加通过 typed shield mutation intent 进入唯一 Combatant Mutation Module，并在实际变化非零时发布一次 `ShieldChanged`。伤害吸收只记录在同一个 `DamageDealt.DamageResolution` 内，不再重复发布 `ShieldChanged`，避免日志、飘字和测试把同一次吸收计为两次。
 
@@ -502,6 +534,8 @@ App 层的世界伤害像素反馈只读取上述 `DamageDealt.Amount`，并按�
 伤害导致部位破坏时，事件顺序固定为 `DamageDealt -> EnemyPartHpEmptied`；击倒请求由命令管线稍后追加。`StatusApplied.Amount` 仍表示本次新增层数，普通 Effect ApplyStatus 保持空来源卡，Resistance Stun 保持 `ResistanceResolved -> StatusApplied` 并携带来源卡。Combatant 状态移除继续静默；Card Status 的物化、减半、解冻与清理统一使用 `CardStatusChanged`。
 
 `CardRuntimeCostChanged` 是“费用 modifier 已成功写入”的显式规则事实，不替代 Snapshot。Clamp 后可见费用可能没有变化，因此 App 只有在同时看到该事件（或确实可能改费的 `CardStatusChanged`）以及前后已展示 Snapshot 的 `RuntimeCost` 差异时，才播放费用重写反馈。普通 Snapshot 刷新、Target Preview 和取消 Preview 不得从数值差异单独反推这项语义；Target Preview 仍可显示预测后的费用，因此正式重写 Hint 必须保存前后 Snapshot 的权威费用对，不能依赖提交时屏幕上恰好显示的 Sprite。
+
+`CardEffectMagnitudeChanged` 是 `BattleCardRuntimeStateModule` 写入 `EffectMagnitudeBonuses / EffectMagnitudeMultipliers` 时逐目标发布的 append-only 表现事实。它不保存依赖具体战斗目标的最终效果值，也不替代 `CurrentEffectMagnitudes` Snapshot；App 只把事件作为正式 Badge 反馈许可，再按稳定 `PresentationKey` 比较同一卡的 Pre/Post Snapshot。Add/Multiply 即使影响多张手牌也必须逐卡发布，普通刷新、目标预演、取消预演和最终可见值未变化都不得因此误播。
 
 `CardsDrawn` 的公共合同是“本批真实入手卡实例列表”：`CardInstanceIds` 按规则抽取 / 从弃牌堆或消耗牌堆移入手牌的顺序记录卡实例 ID，`Count` 始终等于 `CardInstanceIds.Num()`，仅作为旧 debug / 测试读取的兼容计数字段。因普通手牌容量不足而未移动的卡不会进入 `CardInstanceIds`，也不会触发 `CardsDrawn`。单卡事件继续使用 `CardInstanceId`，批量抽牌不要让 UI 再从前后 `FBattleSnapshot` 差异猜测抽到的是哪几张牌。
 
@@ -540,6 +574,7 @@ EndTurn presentation journal 的 checkpoint 生成时机只由 Turn Lifecycle �
 | `KnockdownExpGains[]` | `BattleState.PendingKnockdownExpGains` | 部位破坏经验记账 |
 | `KnockdownChoices[]` | `BattleState.PendingKnockdownChoices` | 玩家击倒三选一选择列表 |
 | `GainedCards[]` | `BattleState.PendingGainedCards` | 战斗中获得、战后可能进入 Run 的卡牌 |
+| `PersistentCardMutations[]` | 带有效 `SourceRunInstanceId` 的 runtime card | 当前持久修正投影；Victory/Withdraw 由 Run 按来源实例幂等写回，战内生成/克隆卡没有 Run 身份因而不输出 |
 | `DestroyedPartKeys[]` | `BattleState.DestroyedParts -> FBattleEnemyPartKey` | 本场截至结束已破坏部位的稳定公开 key，用于 Run 撤离重入 |
 | `DestroyedParts[]` | `BattleState.DestroyedParts` | 内部 identity 投影，用于 runtime 汇总和 debug；Battle 外规则真相使用 `DestroyedPartKeys[]`。外部消费者需要计数时使用 packet 的 key-first 入口，只有旧数据 / 手写 packet 缺有效 key 时才 fallback 到该投影 |
 

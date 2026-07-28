@@ -67,10 +67,15 @@ namespace WacomCardExplanationCompiler
 
 		WacomCardExplanationTemplateRenderer::CompileTemplate(
 			Block,
-			WacomCardExplanationTemplateResolver::ResolveEffectTemplate(Effect, Lexicon),
+			WacomCardExplanationTemplateResolver::ResolveEffectTemplate(
+				Card,
+				Effect,
+				Lexicon,
+				EffectIndex),
 			Card,
 			&Effect,
 			nullptr,
+			EffectIndex,
 			RuntimeContext,
 			Preview,
 			Lexicon,
@@ -91,6 +96,74 @@ namespace WacomCardExplanationCompiler
 		return Block;
 	}
 
+	FWacomCardDetailBlock BuildPassiveTemplateBlock(
+		const UCardDefinition* Card,
+		const FCardPassive& Passive,
+		const FText& Template,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext,
+		const UWacomCardExplanationLexicon* Lexicon,
+		const int32 PassiveIndex)
+	{
+		const FString StableIdPrefix =
+			FString::Printf(TEXT("Passive.%d.Authored"), PassiveIndex);
+		FWacomCardDetailBlock Block;
+		Block.BlockId = FName(*FString::Printf(TEXT("%s.Block"), *StableIdPrefix));
+		Block.Kind = EWacomCardDetailBlockKind::PassiveOutcome;
+
+		WacomCardExplanationTemplateRenderer::CompileTemplate(
+			Block,
+			Template,
+			Card,
+			nullptr,
+			&Passive,
+			INDEX_NONE,
+			RuntimeContext,
+			nullptr,
+			Lexicon,
+			StableIdPrefix);
+		return Block;
+	}
+
+	FWacomCardDetailBlock BuildKeywordTemplateBlock(
+		const FGameplayTag Keyword,
+		const FText& Template,
+		const UWacomCardExplanationLexicon* Lexicon,
+		const int32 KeywordIndex)
+	{
+		const FString StableIdPrefix =
+			FString::Printf(TEXT("Keyword.%d.Authored"), KeywordIndex);
+		FWacomCardDetailBlock Block;
+		Block.BlockId =
+			FName(*FString::Printf(TEXT("%s.Block"), *StableIdPrefix));
+		Block.Kind = EWacomCardDetailBlockKind::EffectSentence;
+		WacomCardExplanationTemplateRenderer::CompileKeywordTemplate(
+			Block,
+			Template,
+			Keyword,
+			Lexicon,
+			StableIdPrefix);
+		return Block;
+	}
+
+	FWacomCardDetailBlock BuildDynamicCostTemplateBlock(
+		const FWacomCardDynamicCostRule& DynamicCostRule,
+		const FText& Template,
+		const UWacomCardExplanationLexicon* Lexicon)
+	{
+		const FString StableIdPrefix = TEXT("DynamicCost.Authored");
+		FWacomCardDetailBlock Block;
+		Block.BlockId =
+			FName(*FString::Printf(TEXT("%s.Block"), *StableIdPrefix));
+		Block.Kind = EWacomCardDetailBlockKind::PassiveOutcome;
+		WacomCardExplanationTemplateRenderer::CompileDynamicCostTemplate(
+			Block,
+			Template,
+			DynamicCostRule,
+			Lexicon,
+			StableIdPrefix);
+		return Block;
+	}
+
 	FWacomCardDetailBlock BuildPassiveTriggerBlock(
 		const FCardPassive& Passive,
 		const UWacomCardExplanationLexicon* Lexicon,
@@ -108,6 +181,7 @@ namespace WacomCardExplanationCompiler
 			nullptr,
 			nullptr,
 			&Passive,
+			INDEX_NONE,
 			EmptyContext,
 			nullptr,
 			Lexicon,
@@ -146,6 +220,7 @@ namespace WacomCardExplanationCompiler
 			nullptr,
 			nullptr,
 			&Passive,
+			INDEX_NONE,
 			EmptyContext,
 			nullptr,
 			Lexicon,

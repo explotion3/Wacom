@@ -6,6 +6,7 @@
 #include "Effects/Semantics/EffectSemanticTypes.h"
 
 #include "Cards/CardDefinition.h"
+#include "Cards/BattleCardCreationService.h"
 #include "Cards/CardPassive.h"
 #include "Cards/BattleCardRuntimeStateModule.h"
 #include "Combatants/BattleCombatantMutationModule.h"
@@ -19,6 +20,7 @@
 #include "Hand/HandZoneService.h"
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Passives/PassiveDispatcher.h"
 #include "Tags/WacomGameplayTags.h"
 #include "Statuses/BattleStatusRuleConstants.h"
 #include "Statuses/BattleStatusSemanticsModule.h"
@@ -91,7 +93,7 @@ namespace
 		for (const FRuntimeCardInstance& C : Ctx.State->Cards.AllCards)
 		{
 			if (!C.Definition) { continue; }
-			for (const FCardPassive& Passive : C.Definition->Passives)
+			for (const FCardPassive& Passive : C.Definition->ResolvePassives(C.UpgradeTier))
 			{
 				if (Passive.Trigger == WacomTags::Passive_Trigger_OnTwilightTriggered)
 				{
@@ -117,6 +119,7 @@ FEffectApplyResult HandleDamage(FEffectExecutionContext& Ctx)
 	Intent.SourceCardInstanceId =
 		(Ctx.SourceKind == EEffectSourceKind::Card) ? Ctx.SourceInstanceId : FGuid();
 	Intent.CauseTag = Ctx.EffectTag;
+	Intent.bCritical = Ctx.bCritical;
 
 	switch (Ctx.TargetKind)
 	{
@@ -165,6 +168,11 @@ FEffectApplyResult HandleShield(FEffectExecutionContext& Ctx)
 FEffectApplyResult HandleApplyPoison(FEffectExecutionContext& Ctx)
 {
 	return FEffectApplyResult::FromBool(ApplyStatusToTarget(Ctx, WacomTags::Status_Poison));
+}
+
+FEffectApplyResult HandleApplyBurn(FEffectExecutionContext& Ctx)
+{
+	return FEffectApplyResult::FromBool(ApplyStatusToTarget(Ctx, WacomTags::Status_Burn));
 }
 
 FEffectApplyResult HandleApplySlow(FEffectExecutionContext& Ctx)
@@ -280,6 +288,244 @@ FEffectApplyResult HandleCardExhaustSelected(FEffectExecutionContext& Ctx)
 			Ctx.OperationAdapter)).MovedAny());
 }
 
+namespace
+{
+	FRuntimeCardInstance* ResolveRuntimeMutationTarget(
+		FEffectExecutionContext& Ctx)
+	{
+		const FGuid TargetId = Ctx.TargetInstanceId.IsValid()
+			? Ctx.TargetInstanceId
+			: Ctx.SourceInstanceId;
+		return FBattleRules::FindCard(*Ctx.State, TargetId);
+	}
+
+	bool PassesRuntimeCardFilter(
+		const FRuntimeCardInstance& Card,
+		const FCardEffect& Effect)
+	{
+		return !Effect.RequiredTargetCardStatus.IsValid()
+			|| FBattleCardRuntimeStateModule::HasStatus(
+				Card,
+				Effect.RequiredTargetCardStatus);
+	}
+
+	template <typename Mutation>
+	int32 ApplyToRuntimeCardTargets(
+		FEffectExecutionContext& Ctx,
+		Mutation&& Apply)
+	{
+		if (!Ctx.SourceEffect)
+		{
+			return 0;
+		}
+		int32 AppliedCount = 0;
+		if (Ctx.SourceEffect->Target == WacomTags::Target_AllHandCards)
+		{
+			const TArray<FGuid> StableHand = Ctx.State->Cards.Hand;
+			for (const FGuid& CardId : StableHand)
+			{
+				FRuntimeCardInstance* Card = FBattleRules::FindCard(*Ctx.State, CardId);
+				if (Card
+					&& Card->Location == ECardLocation::Hand
+					&& PassesRuntimeCardFilter(*Card, *Ctx.SourceEffect)
+					&& Apply(*Card))
+				{
+					++AppliedCount;
+				}
+			}
+			return AppliedCount;
+		}
+		FRuntimeCardInstance* Card = ResolveRuntimeMutationTarget(Ctx);
+		if (Card
+			&& PassesRuntimeCardFilter(*Card, *Ctx.SourceEffect)
+			&& Apply(*Card))
+		{
+			++AppliedCount;
+		}
+		return AppliedCount;
+	}
+}
+
+FEffectApplyResult HandleGenerateToHand(FEffectExecutionContext& Ctx)
+{
+	if (!Ctx.SourceEffect || Ctx.Magnitude <= 0 || Ctx.SourceEffect->CardPool.IsEmpty())
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const FRuntimeCardInstance* Source =
+		FBattleRules::FindCard(*Ctx.State, Ctx.SourceInstanceId);
+	if (!Source)
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const EWacomCardUpgradeTier Tier = Source->UpgradeTier;
+	int32 Created = 0;
+	for (int32 Index = 0; Index < Ctx.Magnitude; ++Index)
+	{
+		const UCardDefinition* Definition = Ctx.SourceEffect->CardPool[0];
+		if (Definition
+			&& FBattleCardCreationService::CreateNamed(
+				*Ctx.State,
+				*Ctx.Events,
+				*Definition,
+				Tier,
+				ECardLocation::Hand,
+				Ctx.SourceInstanceId).IsValid())
+		{
+			++Created;
+		}
+	}
+	return FEffectApplyResult::FromBool(Created > 0);
+}
+
+FEffectApplyResult HandleGenerateRandomFromPoolToHand(FEffectExecutionContext& Ctx)
+{
+	if (!Ctx.SourceEffect || Ctx.Magnitude <= 0 || Ctx.SourceEffect->CardPool.IsEmpty())
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const FRuntimeCardInstance* Source =
+		FBattleRules::FindCard(*Ctx.State, Ctx.SourceInstanceId);
+	if (!Source)
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const EWacomCardUpgradeTier Tier = Source->UpgradeTier;
+	int32 Created = 0;
+	for (int32 Index = 0; Index < Ctx.Magnitude; ++Index)
+	{
+		const int32 PoolIndex =
+			Ctx.State->Rng.RandRange(0, Ctx.SourceEffect->CardPool.Num() - 1);
+		const UCardDefinition* Definition = Ctx.SourceEffect->CardPool[PoolIndex];
+		if (Definition
+			&& FBattleCardCreationService::CreateNamed(
+				*Ctx.State,
+				*Ctx.Events,
+				*Definition,
+				Tier,
+				ECardLocation::Hand,
+				Ctx.SourceInstanceId).IsValid())
+		{
+			++Created;
+		}
+	}
+	return FEffectApplyResult::FromBool(Created > 0);
+}
+
+FEffectApplyResult HandleCloneSelfIntoDraw(FEffectExecutionContext& Ctx)
+{
+	const FRuntimeCardInstance* Source =
+		FBattleRules::FindCard(*Ctx.State, Ctx.SourceInstanceId);
+	if (!Source)
+	{
+		return FEffectApplyResult::Failed();
+	}
+	return FEffectApplyResult::FromBool(
+		FBattleCardCreationService::CloneComplete(
+			*Ctx.State,
+			*Ctx.Events,
+			*Source,
+			ECardLocation::Draw).IsValid());
+}
+
+FEffectApplyResult HandleAddEffectMagnitude(FEffectExecutionContext& Ctx)
+{
+	if (!Ctx.SourceEffect
+		|| !Ctx.SourceEffect->AffectedEffectType.IsValid()
+		|| Ctx.Magnitude == 0)
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const FGameplayTag Affected = Ctx.SourceEffect->AffectedEffectType;
+	return FEffectApplyResult::FromBool(ApplyToRuntimeCardTargets(
+		Ctx,
+		[&Ctx, Affected, Delta = Ctx.Magnitude](FRuntimeCardInstance& Card)
+		{
+			return FBattleCardRuntimeStateModule::ApplyEffectMagnitudeBonus(
+				*Ctx.State,
+				*Ctx.Events,
+				Card.InstanceId,
+				Affected,
+				Delta,
+				Ctx.SourceInstanceId,
+				Ctx.EffectTag);
+		}) > 0);
+}
+
+FEffectApplyResult HandleMultiplyEffectMagnitude(FEffectExecutionContext& Ctx)
+{
+	if (!Ctx.SourceEffect
+		|| !Ctx.SourceEffect->AffectedEffectType.IsValid()
+		|| Ctx.Magnitude <= 0)
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const FGameplayTag Affected = Ctx.SourceEffect->AffectedEffectType;
+	return FEffectApplyResult::FromBool(ApplyToRuntimeCardTargets(
+		Ctx,
+		[&Ctx, Affected, Multiplier = static_cast<float>(Ctx.Magnitude)](
+			FRuntimeCardInstance& Card)
+		{
+			return FBattleCardRuntimeStateModule::MultiplyEffectMagnitude(
+				*Ctx.State,
+				*Ctx.Events,
+				Card.InstanceId,
+				Affected,
+				Multiplier,
+				Ctx.SourceInstanceId,
+				Ctx.EffectTag);
+		}) > 0);
+}
+
+FEffectApplyResult HandleAddCriticalChance(FEffectExecutionContext& Ctx)
+{
+	return FEffectApplyResult::FromBool(ApplyToRuntimeCardTargets(
+		Ctx,
+		[Delta = Ctx.Magnitude](FRuntimeCardInstance& Card)
+		{
+			Card.CriticalChanceBonusPercent = FMath::Clamp(
+				Card.CriticalChanceBonusPercent + Delta,
+				0,
+				100);
+			return Delta != 0;
+		}) > 0);
+}
+
+FEffectApplyResult HandleAddPersistentDurability(FEffectExecutionContext& Ctx)
+{
+	return FEffectApplyResult::FromBool(ApplyToRuntimeCardTargets(
+		Ctx,
+		[Delta = Ctx.Magnitude](FRuntimeCardInstance& Card)
+		{
+			Card.PersistentModifiers.DurabilityBonus += Delta;
+			return Delta != 0;
+		}) > 0);
+}
+
+FEffectApplyResult HandleAddPersistentEffectMagnitude(FEffectExecutionContext& Ctx)
+{
+	if (!Ctx.SourceEffect
+		|| !Ctx.SourceEffect->AffectedEffectType.IsValid()
+		|| Ctx.Magnitude == 0)
+	{
+		return FEffectApplyResult::Failed();
+	}
+	const FGameplayTag Affected = Ctx.SourceEffect->AffectedEffectType;
+	return FEffectApplyResult::FromBool(ApplyToRuntimeCardTargets(
+		Ctx,
+		[Affected, Delta = Ctx.Magnitude](FRuntimeCardInstance& Card)
+		{
+			Card.PersistentModifiers.EffectMagnitudeBonuses.FindOrAdd(Affected) += Delta;
+			return true;
+		}) > 0);
+}
+
+FEffectApplyResult HandleAutoPlaySelf(FEffectExecutionContext& /*Ctx*/)
+{
+	// OnTurnEnd owns the action boundary and intercepts this semantic marker.
+	return FEffectApplyResult::Failed();
+}
+
 // ================ Draw / Discard / Exhaust / Heal ================
 
 FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx)
@@ -327,6 +573,22 @@ FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx)
 		const TArray<FGuid>& DrawnIds = DrawResult.DrawnCardIds;
 		FHandZoneService::InsertCardsIntoHandAtRandom(*Ctx.State, DrawnIds);
 		WacomBattleEvents::EmitDeckDrawResult(*Ctx.Events, DrawResult);
+		const TArray<FGuid> SurvivingDrawnCards =
+			FBattleStatusSemanticsModule::ResolvePlayerBurnForDrawnCards(
+				*Ctx.State,
+				*Ctx.Events,
+				DrawnIds);
+		FBattleStatusSemanticsModule::MaterializePendingHandAfflictions(
+			*Ctx.State,
+			*Ctx.Events);
+		FPassiveDispatcher::RunOnDraw(
+			*Ctx.State,
+			*Ctx.Events,
+			SurvivingDrawnCards,
+			Ctx.OperationAdapter);
+		FBattleEvent HandChanged;
+		HandChanged.Type = EBattleEventType::HandZoneChanged;
+		Ctx.Events->Emit(MoveTemp(HandChanged));
 		return FEffectApplyResult::FromBool(DrawnIds.Num() > 0);
 	}
 
@@ -356,6 +618,22 @@ FEffectApplyResult HandleDraw(FEffectExecutionContext& Ctx)
 	if (MovedIds.Num() > 0)
 	{
 		WacomBattleEvents::EmitCardsDrawn(*Ctx.Events, MovedIds);
+		const TArray<FGuid> SurvivingDrawnCards =
+			FBattleStatusSemanticsModule::ResolvePlayerBurnForDrawnCards(
+				*Ctx.State,
+				*Ctx.Events,
+				MovedIds);
+		FBattleStatusSemanticsModule::MaterializePendingHandAfflictions(
+			*Ctx.State,
+			*Ctx.Events);
+		FPassiveDispatcher::RunOnDraw(
+			*Ctx.State,
+			*Ctx.Events,
+			SurvivingDrawnCards,
+			Ctx.OperationAdapter);
+		FBattleEvent HandChanged;
+		HandChanged.Type = EBattleEventType::HandZoneChanged;
+		Ctx.Events->Emit(MoveTemp(HandChanged));
 	}
 	return FEffectApplyResult::FromBool(MovedIds.Num() > 0);
 }

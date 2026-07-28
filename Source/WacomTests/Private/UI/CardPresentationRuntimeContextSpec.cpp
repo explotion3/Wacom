@@ -106,6 +106,29 @@ namespace
 		return false;
 	}
 
+	bool HasAuthoritativeDetailValueRun(
+		const FWacomCardDetailViewData& DetailData,
+		int32 ExpectedValue)
+	{
+		for (const FWacomCardDetailSection& Section : DetailData.Sections)
+		{
+			for (const FWacomCardDetailBlock& Block : Section.Blocks)
+			{
+				for (const FWacomCardDetailRun& Run : Block.Runs)
+				{
+					if (Run.Kind == EWacomCardDetailRunKind::Value
+						&& Run.bHasValue
+						&& Run.Value == ExpectedValue
+						&& !Run.bHasPreviewValue)
+					{
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
 	bool HasSkippedDetailStatusRun(
 		const FWacomCardDetailViewData& DetailData,
 		const FGameplayTag& ExpectedStatusTag)
@@ -148,6 +171,29 @@ bool FWacomUICardPresentationRuntimeContextSpec::RunTest(const FString& /*Parame
 	TestBadge(*this, ViewData.EffectBadges, 1, EWacomCardViewEffectBadgeKind::Poison, 5);
 	TestBadge(*this, ViewData.EffectBadges, 2, EWacomCardViewEffectBadgeKind::Heal, 5);
 	TestBadge(*this, ViewData.EffectBadges, 3, EWacomCardViewEffectBadgeKind::Shield, 6);
+
+	FWacomCardPresentationRuntimeContext CurrentMagnitudeContext = RuntimeContext;
+	FWacomCardPresentationRuntimeContext::FCurrentEffectMagnitude CurrentPoison;
+	CurrentPoison.EffectIndex = 1;
+	CurrentPoison.Magnitude = 8;
+	CurrentMagnitudeContext.CurrentEffectMagnitudes.Add(CurrentPoison);
+	const FWacomCardViewData CurrentMagnitudeViewData =
+		UWacomCardPresentationBuilder::BuildCardViewData(
+			Card.Get(),
+			CurrentMagnitudeContext);
+	TestBadge(*this,
+		CurrentMagnitudeViewData.EffectBadges,
+		1,
+		EWacomCardViewEffectBadgeKind::Poison,
+		8);
+
+	Card->Description = FText::GetEmpty();
+	const FWacomCardDetailViewData CurrentMagnitudeDetail =
+		UWacomCardPresentationBuilder::BuildCardDetailViewData(
+			Card.Get(),
+			CurrentMagnitudeContext);
+	TestTrue(TEXT("Detail uses authoritative current effect magnitude without preview"),
+		HasAuthoritativeDetailValueRun(CurrentMagnitudeDetail, 8));
 
 	FWacomCardPresentationRuntimeContext PreviewContext = RuntimeContext;
 	FWacomCardPresentationRuntimeContext::FEffectPreview DamageOverride;

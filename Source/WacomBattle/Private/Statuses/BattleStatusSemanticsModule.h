@@ -62,6 +62,16 @@ public:
 		FBattleState& State,
 		FBattleEventBus& Events);
 
+	/**
+	 * Transfers one player Burn stack to each actually drawn card in stable
+	 * draw order. Cards reaching three stacks exhaust immediately and are not
+	 * returned for OnDraw dispatch.
+	 */
+	static TArray<FGuid> ResolvePlayerBurnForDrawnCards(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		TConstArrayView<FGuid> DrawnCardIds);
+
 	/** Slow and player-card Freeze are turn-scoped; Twilight deliberately persists. */
 	static void ExpireTurnEndCardStatuses(
 		FBattleState& State,
@@ -78,6 +88,15 @@ public:
 	static void ResolveAfterEnemyPartAction(
 		FBattleState& State,
 		FBattleEventBus& Events);
+
+	/**
+	 * Enemy action-boundary Burn: damage current stacks through shield, then
+	 * retain floor(stacks / 2). Returns whether the part survived to execute Intent.
+	 */
+	static bool ResolveEnemyBurnBeforeIntent(
+		FBattleState& State,
+		FBattleEventBus& Events,
+		const FGuid& EnemyPartInstanceId);
 
 	/** Adds pending player hand-control facts to the public player status projection. */
 	static void ProjectPendingPlayerStatuses(

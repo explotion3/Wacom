@@ -6,6 +6,7 @@
 #include "UI/Card/WacomCardExplanationLexicon.h"
 #include "WacomCardExplanationCompiler.h"
 #include "WacomCardExplanationLexiconProvider.h"
+#include "WacomCardExplanationTemplateResolver.h"
 #include "WacomCardExplanationText.h"
 
 #define LOCTEXT_NAMESPACE "WacomCardDetailDocumentBuilder"
@@ -55,6 +56,8 @@ namespace WacomCardDetailDocumentBuilder
 			FWacomCardPresentationRuntimeContext PassiveContext;
 			PassiveContext.bHasRuntimeCost = RuntimeContext.bHasRuntimeCost;
 			PassiveContext.RuntimeCost = RuntimeContext.RuntimeCost;
+			PassiveContext.bHasUpgradeTier = RuntimeContext.bHasUpgradeTier;
+			PassiveContext.UpgradeTier = RuntimeContext.UpgradeTier;
 			PassiveContext.bHasPlayableState = RuntimeContext.bHasPlayableState;
 			PassiveContext.bIsPlayable = RuntimeContext.bIsPlayable;
 			return PassiveContext;
@@ -97,12 +100,42 @@ namespace WacomCardDetailDocumentBuilder
 			return Data;
 		}
 
+		const EWacomCardUpgradeTier Tier = RuntimeContext.bHasUpgradeTier
+			? RuntimeContext.UpgradeTier
+			: EWacomCardUpgradeTier::White;
+		const FWacomResolvedCardProfile ResolvedProfile =
+			Card->ResolveProfile(Tier);
+		const TArray<FCardEffect>& Effects = *ResolvedProfile.Effects;
+		const TArray<FCardPassive>& Passives = *ResolvedProfile.Passives;
+		const FText& Description = Card->ResolveDescription(Tier);
+
 		TArray<FWacomCardDetailBlock> DescriptionBlocks;
-		for (int32 EffectIndex = 0; EffectIndex < Card->Effects.Num(); ++EffectIndex)
+		for (int32 KeywordIndex = 0;
+			KeywordIndex < Card->ExplanationTemplates.KeywordTemplates.Num();
+			++KeywordIndex)
 		{
+			const FWacomCardKeywordExplanationTemplate& KeywordTemplate =
+				Card->ExplanationTemplates.KeywordTemplates[KeywordIndex];
+			FWacomCardDetailBlock KeywordBlock =
+				WacomCardExplanationCompiler::BuildKeywordTemplateBlock(
+					KeywordTemplate.Keyword,
+					KeywordTemplate.Template,
+					Lexicon,
+					KeywordIndex);
+			if (IsRenderableBlock(KeywordBlock))
+			{
+				DescriptionBlocks.Add(MoveTemp(KeywordBlock));
+			}
+		}
+		for (int32 EffectIndex = 0; EffectIndex < Effects.Num(); ++EffectIndex)
+		{
+			if (Card->ExplanationTemplates.ShouldSuppressEffect(EffectIndex))
+			{
+				continue;
+			}
 			DescriptionBlocks.Add(WacomCardExplanationCompiler::BuildEffectBlock(
 				Card,
-				Card->Effects[EffectIndex],
+				Effects[EffectIndex],
 				RuntimeContext,
 				Lexicon,
 				EffectIndex,
@@ -113,9 +146,50 @@ namespace WacomCardDetailDocumentBuilder
 		TArray<FWacomCardDetailBlock> PassiveBlocks;
 		const FWacomCardPresentationRuntimeContext PassiveRuntimeContext =
 			MakePassiveRuntimeContext(RuntimeContext);
-		for (int32 PassiveIndex = 0; PassiveIndex < Card->Passives.Num(); ++PassiveIndex)
+		if (ResolvedProfile.DynamicCostRule
+			&& !Card->ExplanationTemplates.DynamicCostTemplate.IsEmpty())
 		{
-			const FCardPassive& Passive = Card->Passives[PassiveIndex];
+			FWacomCardDetailBlock DynamicCostBlock =
+				WacomCardExplanationCompiler::BuildDynamicCostTemplateBlock(
+					*ResolvedProfile.DynamicCostRule,
+					Card->ExplanationTemplates.DynamicCostTemplate,
+					Lexicon);
+			if (IsRenderableBlock(DynamicCostBlock))
+			{
+				PassiveBlocks.Add(MoveTemp(DynamicCostBlock));
+			}
+		}
+		for (int32 PassiveIndex = 0; PassiveIndex < Passives.Num(); ++PassiveIndex)
+		{
+			if (Card->ExplanationTemplates.ShouldSuppressPassive(PassiveIndex))
+			{
+				continue;
+			}
+			const FCardPassive& Passive = Passives[PassiveIndex];
+			FText CardPassiveTemplate;
+			if (WacomCardExplanationTemplateResolver::ResolveCardPassiveTemplate(
+				Card,
+				PassiveIndex,
+				CardPassiveTemplate))
+			{
+				PassiveBlocks.Add(
+					WacomCardExplanationCompiler::BuildPassiveTemplateBlock(
+						Card,
+						Passive,
+						CardPassiveTemplate,
+						PassiveRuntimeContext,
+						Lexicon,
+						PassiveIndex));
+				continue;
+			}
+			if (!Passive.DisplayText.IsEmpty())
+			{
+				PassiveBlocks.Add(WacomCardExplanationCompiler::BuildPlainTextBlock(
+					FName(*FString::Printf(TEXT("Passive.%d.Authored.Block"), PassiveIndex)),
+					EWacomCardDetailBlockKind::PassiveOutcome,
+					Passive.DisplayText));
+				continue;
+			}
 
 			TArray<FWacomCardDetailBlock> PassiveFollowUpBlocks;
 			FWacomCardDetailBlock OutcomeBlock =
@@ -182,13 +256,13 @@ namespace WacomCardDetailDocumentBuilder
 				WacomCardExplanationLexiconKeys::SectionPassiveTitle,
 				LOCTEXT("PassivesSectionTitle", "被动")),
 			MoveTemp(PassiveBlocks));
-		if (Data.Sections.IsEmpty() && !Card->Description.IsEmpty())
+		if (Data.Sections.IsEmpty() && !Description.IsEmpty())
 		{
 			TArray<FWacomCardDetailBlock> FallbackBlocks;
 			FallbackBlocks.Add(WacomCardExplanationCompiler::BuildPlainTextBlock(
 				FName(TEXT("Description.Fallback.Block")),
 				EWacomCardDetailBlockKind::Paragraph,
-				Card->Description));
+				Description));
 			WacomCardExplanationCompiler::AddCardDetailSection(
 				Data,
 				FName(TEXT("Description")),

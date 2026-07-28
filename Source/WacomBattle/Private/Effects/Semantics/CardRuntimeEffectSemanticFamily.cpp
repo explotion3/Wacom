@@ -46,4 +46,65 @@ void AppendCardRuntimeEffectSemanticDescriptors(TArray<FEffectSemanticDescriptor
 	GainKeyword.ProjectionPolicy = EEffectProjectionPolicy::GainKeyword;
 	GainKeyword.bRequiresParameter = true;
 	OutDescriptors.Add(GainKeyword);
+
+	auto AddRuntime = [&OutDescriptors](
+		const FGameplayTag& Tag,
+		FEffectHandler Handler,
+		const EBattleOperationDeterminism Determinism,
+		const bool bUsesMagnitude)
+	{
+		FEffectSemanticDescriptor Descriptor;
+		Descriptor.EffectType = Tag;
+		Descriptor.Family = EEffectSemanticFamily::CardRuntimeMutation;
+		Descriptor.Handler = Handler;
+		Descriptor.Determinism = Determinism;
+		Descriptor.CardTargetPolicy = EEffectCardTargetPolicy::CardCost;
+		Descriptor.bUsesPositiveMagnitude = bUsesMagnitude;
+		OutDescriptors.Add(Descriptor);
+	};
+	AddRuntime(
+		WacomTags::Effect_Card_GenerateToHand,
+		&WacomEffects::HandleGenerateToHand,
+		EBattleOperationDeterminism::Deterministic,
+		true);
+	AddRuntime(
+		WacomTags::Effect_Card_GenerateRandomFromPoolToHand,
+		&WacomEffects::HandleGenerateRandomFromPoolToHand,
+		EBattleOperationDeterminism::Random,
+		true);
+	AddRuntime(
+		WacomTags::Effect_Card_CloneSelfIntoDraw,
+		&WacomEffects::HandleCloneSelfIntoDraw,
+		EBattleOperationDeterminism::Random,
+		false);
+	AddRuntime(
+		WacomTags::Effect_Card_AddEffectMagnitude,
+		&WacomEffects::HandleAddEffectMagnitude,
+		EBattleOperationDeterminism::Deterministic,
+		true);
+	AddRuntime(
+		WacomTags::Effect_Card_MultiplyEffectMagnitude,
+		&WacomEffects::HandleMultiplyEffectMagnitude,
+		EBattleOperationDeterminism::Deterministic,
+		true);
+	AddRuntime(
+		WacomTags::Effect_Card_AddCriticalChance,
+		&WacomEffects::HandleAddCriticalChance,
+		EBattleOperationDeterminism::Deterministic,
+		true);
+	AddRuntime(
+		WacomTags::Effect_Card_AddPersistentDurability,
+		&WacomEffects::HandleAddPersistentDurability,
+		EBattleOperationDeterminism::Deterministic,
+		true);
+	AddRuntime(
+		WacomTags::Effect_Card_AddPersistentEffectMagnitude,
+		&WacomEffects::HandleAddPersistentEffectMagnitude,
+		EBattleOperationDeterminism::Deterministic,
+		true);
+	AddRuntime(
+		WacomTags::Effect_Card_AutoPlaySelf,
+		&WacomEffects::HandleAutoPlaySelf,
+		EBattleOperationDeterminism::Deterministic,
+		false);
 }

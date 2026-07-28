@@ -9,6 +9,7 @@
 
 class UCardDefinition;
 class UWacomCardExplanationLexicon;
+struct FWacomCardDynamicCostRule;
 
 namespace WacomCardExplanationCompiler
 {
@@ -25,6 +26,25 @@ namespace WacomCardExplanationCompiler
 		const FCardPassive& Passive,
 		const UWacomCardExplanationLexicon* Lexicon,
 		int32 PassiveIndex);
+
+	FWacomCardDetailBlock BuildPassiveTemplateBlock(
+		const UCardDefinition* Card,
+		const FCardPassive& Passive,
+		const FText& Template,
+		const FWacomCardPresentationRuntimeContext& RuntimeContext,
+		const UWacomCardExplanationLexicon* Lexicon,
+		int32 PassiveIndex);
+
+	FWacomCardDetailBlock BuildKeywordTemplateBlock(
+		FGameplayTag Keyword,
+		const FText& Template,
+		const UWacomCardExplanationLexicon* Lexicon,
+		int32 KeywordIndex);
+
+	FWacomCardDetailBlock BuildDynamicCostTemplateBlock(
+		const FWacomCardDynamicCostRule& DynamicCostRule,
+		const FText& Template,
+		const UWacomCardExplanationLexicon* Lexicon);
 
 	FWacomCardDetailBlock BuildPassiveOutcomeBlock(
 		const FCardPassive& Passive,

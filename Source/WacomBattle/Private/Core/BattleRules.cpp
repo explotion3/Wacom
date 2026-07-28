@@ -7,10 +7,13 @@
 #include "Runtime/RuntimeCardInstance.h"
 #include "Runtime/RuntimeEnemyPart.h"
 #include "Cards/CardDefinition.h"
+#include "Passives/PassiveDispatcher.h"
 
-int32 FBattleRules::ComputeRuntimeCost(const FRuntimeCardInstance& Card)
+int32 FBattleRules::ComputeRuntimeCost(
+	const FBattleState& State,
+	const FRuntimeCardInstance& Card)
 {
-	return FBattleCardRuntimeStateModule::EvaluateCost(Card).EffectiveCost;
+	return FBattleCardRuntimeStateModule::EvaluateCost(State, Card).EffectiveCost;
 }
 
 int32 FBattleRules::ComputeEnemyInitiativeSum(const FBattleState& State)
@@ -156,6 +159,10 @@ bool FBattleRules::CheckAndApplyBattleEnd(FBattleState& State, FBattleEventBus& 
 		State.Outcome = EBattleOutcome::Defeat;
 	}
 	State.Phase = EBattlePhase::BattleEnd;
+	if (State.Outcome == EBattleOutcome::Victory)
+	{
+		FPassiveDispatcher::RunOnBattleSettlement(State, Events);
+	}
 
 	FBattleEvent Ev;
 	Ev.Type  = EBattleEventType::BattleEnded;

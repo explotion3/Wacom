@@ -13,6 +13,8 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Tool,      "Card.Keyword.Tool");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Hand,      "Card.Keyword.Hand");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Exhaust,   "Card.Keyword.Exhaust");
+	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Food,      "Card.Keyword.Food");
+	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_Container, "Card.Keyword.Container");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_BagProvider, "Card.Keyword.BagProvider");
 	UE_DEFINE_GAMEPLAY_TAG(Card_Keyword_DeleteProvider, "Card.Keyword.DeleteProvider");
 
@@ -44,6 +46,7 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Effect_ApplyStatus_Slow,          "Effect.ApplyStatus.Slow");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_ApplyStatus_Freeze,        "Effect.ApplyStatus.Freeze");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_ApplyStatus_Twilight,      "Effect.ApplyStatus.Twilight");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_ApplyStatus_Burn,          "Effect.ApplyStatus.Burn");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Shuffle_Random,            "Effect.Shuffle.Random");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Shuffle_FromBothToOther,   "Effect.Shuffle.FromBothToOther");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Shuffle_ToRandomZone,      "Effect.Shuffle.ToRandomZone");
@@ -51,6 +54,15 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_ReduceCost,           "Effect.Card.ReduceCost");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_DiscardSelected,      "Effect.Card.DiscardSelected");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_ExhaustSelected,      "Effect.Card.ExhaustSelected");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_GenerateToHand,       "Effect.Card.GenerateToHand");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_GenerateRandomFromPoolToHand, "Effect.Card.GenerateRandomFromPoolToHand");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_CloneSelfIntoDraw,    "Effect.Card.CloneSelfIntoDraw");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AddEffectMagnitude,   "Effect.Card.AddEffectMagnitude");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_MultiplyEffectMagnitude, "Effect.Card.MultiplyEffectMagnitude");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AddCriticalChance,    "Effect.Card.AddCriticalChance");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AutoPlaySelf,         "Effect.Card.AutoPlaySelf");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AddPersistentDurability, "Effect.Card.AddPersistentDurability");
+	UE_DEFINE_GAMEPLAY_TAG(Effect_Card_AddPersistentEffectMagnitude, "Effect.Card.AddPersistentEffectMagnitude");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Draw,                      "Effect.Draw");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_Discard,                   "Effect.Discard");
 	UE_DEFINE_GAMEPLAY_TAG(Effect_ExhaustSelf,               "Effect.ExhaustSelf");
@@ -66,7 +78,9 @@ namespace WacomTags
 
 	// -------- Condition --------
 	UE_DEFINE_GAMEPLAY_TAG(Condition_Self_InZone,            "Condition.Self.InZone");
+	UE_DEFINE_GAMEPLAY_TAG(Condition_Self_InCardLocation,    "Condition.Self.InCardLocation");
 	UE_DEFINE_GAMEPLAY_TAG(Condition_Target_HasStatus,       "Condition.Target.HasStatus");
+	UE_DEFINE_GAMEPLAY_TAG(Condition_Self_EverEnteredExhaust, "Condition.Self.EverEnteredExhaust");
 
 	// -------- Status --------
 	UE_DEFINE_GAMEPLAY_TAG(Status_Poison,   "Status.Poison");
@@ -75,6 +89,7 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Status_Twilight, "Status.Twilight");
 	UE_DEFINE_GAMEPLAY_TAG(Status_Stunned,  "Status.Stunned");
 	UE_DEFINE_GAMEPLAY_TAG(Status_Shield,   "Status.Shield");
+	UE_DEFINE_GAMEPLAY_TAG(Status_Burn,     "Status.Burn");
 
 	// -------- Target --------
 	UE_DEFINE_GAMEPLAY_TAG(Target_Self,             "Target.Self");
@@ -86,6 +101,7 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Target_Adjacent_Right,   "Target.Adjacent.Right");
 	UE_DEFINE_GAMEPLAY_TAG(Target_LastShuffledCard, "Target.LastShuffledCard");
 	UE_DEFINE_GAMEPLAY_TAG(Target_SelectedHandCard, "Target.SelectedHandCard");
+	UE_DEFINE_GAMEPLAY_TAG(Target_AllHandCards,     "Target.AllHandCards");
 
 	// -------- Interaction.Target --------
 	UE_DEFINE_GAMEPLAY_TAG(Interaction_Target_Battle_EnemyPart, "Interaction.Target.Battle.EnemyPart");
@@ -103,6 +119,9 @@ namespace WacomTags
 	UE_DEFINE_GAMEPLAY_TAG(Passive_Trigger_OnTurnEnd,            "Passive.Trigger.OnTurnEnd");
 	UE_DEFINE_GAMEPLAY_TAG(Passive_Trigger_OnDraw,               "Passive.Trigger.OnDraw");
 	UE_DEFINE_GAMEPLAY_TAG(Passive_Trigger_OnDiscard,            "Passive.Trigger.OnDiscard");
+	UE_DEFINE_GAMEPLAY_TAG(Passive_Trigger_OnAdjacentCompanionPlayed, "Passive.Trigger.OnAdjacentCompanionPlayed");
+	UE_DEFINE_GAMEPLAY_TAG(Passive_Trigger_OnOtherCompanionPlayed, "Passive.Trigger.OnOtherCompanionPlayed");
+	UE_DEFINE_GAMEPLAY_TAG(Passive_Trigger_OnBattleSettlement, "Passive.Trigger.OnBattleSettlement");
 
 	// -------- CardLocation --------
 	UE_DEFINE_GAMEPLAY_TAG(CardLocation_Draw,       "CardLocation.Draw");

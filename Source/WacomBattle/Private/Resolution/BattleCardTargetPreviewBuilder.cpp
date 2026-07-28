@@ -26,7 +26,8 @@ namespace
 
 		Preview.TargetKind = EWacomBattleCardPreviewTargetKind::HandCard;
 		Preview.TargetHandCardInstanceId = TargetCard->InstanceId;
-		Preview.TargetHandCardRuntimeCostBefore = FBattleRules::ComputeRuntimeCost(*TargetCard);
+		Preview.TargetHandCardRuntimeCostBefore =
+			FBattleRules::ComputeRuntimeCost(State, *TargetCard);
 		Preview.TargetHandCardRuntimeCostAfter = Preview.TargetHandCardRuntimeCostBefore;
 	}
 }
@@ -95,7 +96,7 @@ FBattleCardTargetPreview FBattleCardTargetPreviewBuilder::Build(
 
 	FBattleEffectSemanticsModule::ProjectCardChain(
 		State,
-		Definition->Effects,
+		Definition->ResolveEffects(SourceCard->UpgradeTier),
 		FCardEffectChainBindings{
 			Candidate.RuntimeCost,
 			Candidate.SourceCardInstanceId,

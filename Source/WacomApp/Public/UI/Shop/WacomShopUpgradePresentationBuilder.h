@@ -10,7 +10,7 @@
 
 class UCardDefinition;
 
-/** UI-only view for one owned physical card that has a next upgrade definition. */
+/** UI-only view for one owned physical card that has a next upgrade tier. */
 USTRUCT(BlueprintType)
 struct WACOMAPP_API FWacomShopCardUpgradePresentationView
 {
@@ -20,10 +20,13 @@ struct WACOMAPP_API FWacomShopCardUpgradePresentationView
 	FGuid InstanceId;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> CurrentDefinition = nullptr;
+	TObjectPtr<UCardDefinition> Definition = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|Upgrade")
-	TObjectPtr<UCardDefinition> NextDefinition = nullptr;
+	EWacomCardUpgradeTier CurrentTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|Upgrade")
+	EWacomCardUpgradeTier NextTier = EWacomCardUpgradeTier::White;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Shop|Upgrade")
 	FWacomCardViewData CurrentCardViewData;
@@ -76,6 +79,7 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Wacom|Shop|Upgrade")
 	static FText BuildUpgradeSuccessText(
-		const UCardDefinition* PreviousDefinition,
-		const UCardDefinition* NewDefinition);
+		const UCardDefinition* Definition,
+		EWacomCardUpgradeTier PreviousTier,
+		EWacomCardUpgradeTier NewTier);
 };

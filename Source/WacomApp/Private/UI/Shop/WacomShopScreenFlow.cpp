@@ -86,8 +86,8 @@ bool FWacomShopScreenFlow::UpgradeCard(
 
 	FRunShopCardUpgradeCommand Command;
 	Command.InstanceId = CachedView.InstanceId;
-	Command.ExpectedCurrentDefinition = CachedView.CurrentDefinition;
-	Command.ExpectedNextDefinition = CachedView.NextDefinition;
+	Command.ExpectedDefinition = CachedView.Definition;
+	Command.ExpectedCurrentTier = CachedView.CurrentTier;
 	const FRunShopCardUpgradeResult Result = Run->UpgradeOwnedCardAtShop(Command);
 	if (!Result.bSucceeded)
 	{
@@ -110,7 +110,10 @@ bool FWacomShopScreenFlow::UpgradeCard(
 	if (ToastSubsystem)
 	{
 		ToastSubsystem->ShowTextToast(
-			BuildUpgradeSuccessToastText(Result.PreviousDefinition, Result.NewDefinition),
+			BuildUpgradeSuccessToastText(
+				Result.Definition,
+				Result.PreviousTier,
+				Result.NewTier),
 			EWacomAppToastTone::Positive);
 	}
 	if (Result.bVisitClosedAfterUpgrade || !Run->IsShopVisitActive())
@@ -123,12 +126,14 @@ bool FWacomShopScreenFlow::UpgradeCard(
 }
 
 FText FWacomShopScreenFlow::BuildUpgradeSuccessToastText(
-	const UCardDefinition* PreviousDefinition,
-	const UCardDefinition* NewDefinition)
+	const UCardDefinition* Definition,
+	EWacomCardUpgradeTier PreviousTier,
+	EWacomCardUpgradeTier NewTier)
 {
 	return UWacomShopUpgradePresentationBuilder::BuildUpgradeSuccessText(
-		PreviousDefinition,
-		NewDefinition);
+		Definition,
+		PreviousTier,
+		NewTier);
 }
 
 FText FWacomShopScreenFlow::BuildUpgradeFailureToastText(FName DisabledReason)

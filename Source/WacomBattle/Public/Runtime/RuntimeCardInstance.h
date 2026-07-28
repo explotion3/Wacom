@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "GameplayTagContainer.h"
 #include "Types/WacomEnums.h"
 #include "RuntimeCardInstance.generated.h"
@@ -25,6 +26,40 @@ struct WACOMBATTLE_API FRuntimeCardInstance
 
 	UPROPERTY()
 	TObjectPtr<const UCardDefinition> Definition = nullptr;
+
+	/** 对应 Run 实体卡身份；战内生成/复制卡保持无效，禁止写回持久成长。 */
+	UPROPERTY()
+	FGuid SourceRunInstanceId;
+
+	UPROPERTY()
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY()
+	FWacomCardPersistentModifierState PersistentModifiers;
+
+	/** 0 表示无限；有限卡在战斗开始/创建时解析为当前剩余次数。 */
+	UPROPERTY()
+	int32 CurrentDurability = 0;
+
+	/** Distinguishes unlimited durability from a finite card that reached zero. */
+	UPROPERTY()
+	bool bHasFiniteDurability = false;
+
+	/** 本场是否曾以任何原因进入消耗区。 */
+	UPROPERTY()
+	bool bEverEnteredExhaust = false;
+
+	/** 本场卡牌自身暴击率增量，最终 Clamp 到 [0,100]。 */
+	UPROPERTY()
+	int32 CriticalChanceBonusPercent = 0;
+
+	/** 按 Effect Tag 保存的本场数值加成。 */
+	UPROPERTY()
+	TMap<FGameplayTag, int32> EffectMagnitudeBonuses;
+
+	/** 按 Effect Tag 保存的本场倍率，未配置等价于 1。 */
+	UPROPERTY()
+	TMap<FGameplayTag, float> EffectMagnitudeMultipliers;
 
 	/** 本场战斗内 Cost 修正累计。RuntimeCost = clamp(BaseCost + RuntimeCostModifier, 0, ...)。 */
 	UPROPERTY()

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "GameplayTagContainer.h"
 #include "Interactions/RunWorldCardInteractionDefinition.h"
 #include "RunStateTypes.generated.h"
@@ -18,7 +19,9 @@ class UCardDefinition;
  *
  * 字段语义：
  *   - `InstanceId`：全局唯一 GUID，进入背包系统时用 `FGuid::NewGuid()` 一次性分配，之后只读。
- *   - `Definition`：指向卡牌静态数据；只有 Run 权威商店强化事务可在保留 InstanceId/区域的前提下替换为下一版本。
+ *   - `Definition`：指向卡牌静态数据；强化只改变本实例的 UpgradeTier，不替换 Definition。
+ *   - `UpgradeTier`：本实例当前强化阶，White/Blue/Yellow/Purple。
+ *   - `PersistentModifiers`：跨战斗持久的单卡成长；与 Definition/Tier 正交。
  *   - `bBattleEnabledInSpecialZone`：仅当本 instance 位于某 SpecialZone 时有意义。
  *       true  = 随对应 B 主卡入战参战；
  *       false = 仅"被特殊收纳"不参战。
@@ -34,6 +37,12 @@ struct WACOMRUN_API FCardInstance
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck")
 	TObjectPtr<UCardDefinition> Definition = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck")
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck")
+	FWacomCardPersistentModifierState PersistentModifiers;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Wacom|Run|Deck")
 	bool bBattleEnabledInSpecialZone = false;

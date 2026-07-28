@@ -3,7 +3,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "GameplayTagContainer.h"
+#include "Snapshots/BattleCardRuntimeSnapshot.h"
 #include "Types/WacomEnums.h"
 #include "HandSnapshot.generated.h"
 
@@ -24,6 +26,15 @@ struct WACOMBATTLE_API FHandCardSnapshot
 
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	TObjectPtr<const UCardDefinition> Definition = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	int32 CurrentDurability = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	bool bHasFiniteDurability = false;
 
 	/** 本场战斗内实际生效的 Cost（含修正）。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
@@ -60,6 +71,13 @@ struct WACOMBATTLE_API FHandCardSnapshot
 	/** 本卡当前是否拥有迅捷关键词（含战斗内临时关键词）。用于 UI 预测，不改变规则判断来源。 */
 	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
 	bool bIsSwift = false;
+
+	/**
+	 * 各主动效果当前确定性数值。包含战斗内来源卡加值/倍率，不包含目标专属条件或暴击。
+	 * UI 应以 EffectIndex 匹配；目标预演可以临时覆盖这里的静止卡面数值。
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Wacom|Battle|Snapshot")
+	TArray<FBattleCardEffectMagnitudeSnapshot> CurrentEffectMagnitudes;
 };
 
 /**

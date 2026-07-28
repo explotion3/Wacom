@@ -87,6 +87,41 @@ namespace
 			State.AcquiredSkills.Add(WacomTags::SkillSlot_Placeholder);
 		}
 	}
+
+	FCardInstance* FindMutableCardInstance(
+		FRunState& State,
+		const FGuid& InstanceId)
+	{
+		auto FindIn = [&InstanceId](TArray<FCardInstance>& Cards)
+			-> FCardInstance*
+		{
+			return Cards.FindByPredicate(
+				[&InstanceId](const FCardInstance& Card)
+				{
+					return Card.InstanceId == InstanceId;
+				});
+		};
+		if (FCardInstance* Found = FindIn(State.Backpack))
+		{
+			return Found;
+		}
+		if (FCardInstance* Found = FindIn(State.BattleDeck))
+		{
+			return Found;
+		}
+		if (FCardInstance* Found = FindIn(State.BurdenZone))
+		{
+			return Found;
+		}
+		for (FSpecialZone& SpecialZone : State.SpecialZones)
+		{
+			if (FCardInstance* Found = FindIn(SpecialZone.Cards))
+			{
+				return Found;
+			}
+		}
+		return nullptr;
+	}
 }
 
 bool FRunBattleSettlementResolver::Resolve(
@@ -187,6 +222,29 @@ bool FRunBattleSettlementResolver::Resolve(
 	// Victory 包括撤离；Defeat / Undetermined 不结算。
 	if (Packet.Outcome == EBattleOutcome::Victory)
 	{
+		TSet<FGuid> AppliedMutationIds;
+		for (const FBattlePersistentCardMutation& Mutation :
+			Packet.PersistentCardMutations)
+		{
+			if (!Mutation.SourceRunInstanceId.IsValid()
+				|| AppliedMutationIds.Contains(Mutation.SourceRunInstanceId))
+			{
+				continue;
+			}
+			FCardInstance* Card = FindMutableCardInstance(
+				State,
+				Mutation.SourceRunInstanceId);
+			if (!Card)
+			{
+				UE_LOG(LogTemp, Error,
+					TEXT("[RunSession] Battle card mutation source was not found: %s"),
+					*Mutation.SourceRunInstanceId.ToString());
+				return false;
+			}
+			Card->PersistentModifiers = Mutation.PersistentModifiers;
+			AppliedMutationIds.Add(Mutation.SourceRunInstanceId);
+		}
+
 		for (const FBattleGainedCard& GainedCard : Packet.GainedCards)
 		{
 			if (!GainedCard.Definition)

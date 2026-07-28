@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "GameFramework/SaveGame.h"
 #include "RunOutcomeTypes.h"
 #include "UObject/SoftObjectPath.h"
@@ -29,6 +30,12 @@ struct WACOMRUN_API FCardInstanceSaveEntry
 
 	UPROPERTY(SaveGame)
 	FSoftObjectPath DefinitionAssetPath;
+
+	UPROPERTY(SaveGame)
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY(SaveGame)
+	FWacomCardPersistentModifierState PersistentModifiers;
 
 	UPROPERTY(SaveGame)
 	bool bBattleEnabledInSpecialZone = false;
@@ -128,8 +135,9 @@ public:
 	 *   v2 → v3: 移除 DefeatedEnemyAssetPaths（旧 Trigger 完成投影不再受支持）
 	 *   v3 → v4: 引入独立于实体卡牌的 Run Credential 集合
 	 *   v4 → v5: 引入 Run Outcome 与独立 Journey 成功摘要
+	 *   v5 → v6: 卡实例增加强化阶与持久修正，并移除旧 Debug 毒牙强化链实例
 	 */
-	static constexpr int32 CurrentSaveVersion = 5;
+	static constexpr int32 CurrentSaveVersion = 6;
 
 	/**
 	 * 防止有人未同步修改 MigrateIfNeeded 迁移链就升 / 降版本号。
@@ -137,7 +145,7 @@ public:
 	 *   - 同步把这里的硬编码值与 MigrateIfNeeded 的 case 链一起改；
 	 *   - 要么不改（编译失败提醒下一位作者去看 MigrateIfNeeded）。
 	 */
-	static_assert(CurrentSaveVersion == 5,
+	static_assert(CurrentSaveVersion == 6,
 		"CurrentSaveVersion 升级必须同步更新 MigrateIfNeeded 的 case 链与本断言。");
 
 	/**

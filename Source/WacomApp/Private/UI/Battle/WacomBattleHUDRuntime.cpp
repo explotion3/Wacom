@@ -79,6 +79,7 @@ namespace
 		case EBattleEventType::CardsRetained:             return TEXT("CardsRetained");
 		case EBattleEventType::BattleEnded:               return TEXT("BattleEnded");
 		case EBattleEventType::ShieldChanged:              return TEXT("ShieldChanged");
+		case EBattleEventType::CardEffectMagnitudeChanged: return TEXT("CardEffectMagnitudeChanged");
 		default:                                          return TEXT("?");
 		}
 	}

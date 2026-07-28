@@ -2,6 +2,7 @@
 
 #include "UI/Battle/WacomBattleHUDPresentationCoordinator.h"
 
+#include "UI/Battle/WacomBattleCardChangeFeedbackPolicy.h"
 #include "UI/Battle/WacomBattleEnemyActionPlaybackTypes.h"
 #include "Components/WacomFirstPersonCardAnchorComponent.h"
 #include "Components/Widget.h"
@@ -500,8 +501,8 @@ namespace
 		TMap<FGuid, int32> LastRelevantSequenceByCard;
 		for (const FBattleEvent& Event : Events)
 		{
-			if ((Event.Type == EBattleEventType::CardRuntimeCostChanged
-					|| Event.Type == EBattleEventType::CardStatusChanged)
+			if (WacomBattleCardChangeFeedbackPolicy::LicensesCostRewrite(
+					Event.Type)
 				&& Event.CardInstanceId.IsValid())
 			{
 				int32& LastSequence = LastRelevantSequenceByCard.FindOrAdd(Event.CardInstanceId);
@@ -572,8 +573,8 @@ namespace
 		TMap<FGuid, int32> LastRelevantSequenceByCard;
 		for (const FBattleEvent& Event : Events)
 		{
-			if ((Event.Type == EBattleEventType::CardRuntimeCostChanged
-					|| Event.Type == EBattleEventType::CardStatusChanged)
+			if (WacomBattleCardChangeFeedbackPolicy::LicensesEffectBadgeRewrite(
+					Event.Type)
 				&& Event.CardInstanceId.IsValid())
 			{
 				int32& Sequence = LastRelevantSequenceByCard.FindOrAdd(Event.CardInstanceId);

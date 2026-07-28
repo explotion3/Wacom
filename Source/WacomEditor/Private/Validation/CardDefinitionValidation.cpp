@@ -1,9 +1,10 @@
 // Copyright Wacom. All Rights Reserved.
 
 #include "Validation/CardDefinitionValidation.h"
-#include "Validation/CardUpgradeCatalogValidation.h"
+#include "Validation/CardTierProfileValidation.h"
 
 #include "Cards/CardDefinition.h"
+#include "Cards/CardExplanationTemplateContract.h"
 #include "Rules/BattleRuleContentContract.h"
 #include "Tags/WacomGameplayTags.h"
 
@@ -51,6 +52,22 @@ namespace
 			{
 				AddValidationError(OutErrors,
 					FormatValidationError(TEXT("{0} 的 ParamTag 必须是 HandZone.*。"), OwnerLabel));
+			}
+			return;
+		}
+
+		if (Condition.ConditionType
+			== WacomTags::Condition_Self_InCardLocation)
+		{
+			if (Condition.ParamTag != WacomTags::CardLocation_Draw
+				&& Condition.ParamTag != WacomTags::CardLocation_Discard
+				&& Condition.ParamTag != WacomTags::CardLocation_Exhaust
+				&& Condition.ParamTag != WacomTags::CardLocation_Hand)
+			{
+				AddValidationError(OutErrors,
+					FormatValidationError(
+						TEXT("{0} 的 ParamTag 必须是 CardLocation.*。"),
+						OwnerLabel));
 			}
 			return;
 		}
@@ -288,7 +305,10 @@ namespace
 			|| Tag == WacomTags::Passive_Trigger_OnTurnStart
 			|| Tag == WacomTags::Passive_Trigger_OnTurnEnd
 			|| Tag == WacomTags::Passive_Trigger_OnDraw
-			|| Tag == WacomTags::Passive_Trigger_OnDiscard;
+			|| Tag == WacomTags::Passive_Trigger_OnDiscard
+			|| Tag == WacomTags::Passive_Trigger_OnAdjacentCompanionPlayed
+			|| Tag == WacomTags::Passive_Trigger_OnOtherCompanionPlayed
+			|| Tag == WacomTags::Passive_Trigger_OnBattleSettlement;
 	}
 
 	void ValidatePassive(
@@ -352,6 +372,215 @@ namespace
 			CardTargetMode,
 			OutErrors);
 	}
+
+	void ValidateExplanationTemplates(
+		const UCardDefinition& CardDefinition,
+		TArray<FText>& OutErrors)
+	{
+		const TArray<FCardEffect>* Effects = &CardDefinition.Effects;
+		const TArray<FCardPassive>* Passives = &CardDefinition.Passives;
+		if (!CardDefinition.TierProfiles.IsEmpty())
+		{
+			Effects = &CardDefinition.TierProfiles[0].Effects;
+			Passives = &CardDefinition.TierProfiles[0].Passives;
+		}
+
+		const TArray<FWacomCardExplanationLineTemplate>& EffectTemplates =
+			CardDefinition.ExplanationTemplates.EffectTemplates;
+		if (!EffectTemplates.IsEmpty() && EffectTemplates.Num() != Effects->Num())
+		{
+			AddValidationError(
+				OutErrors,
+				FText::FromString(FString::Printf(
+					TEXT("ExplanationTemplates.EffectTemplates 数量必须与 Effects 一致：当前 %d，规则 %d。"),
+					EffectTemplates.Num(),
+					Effects->Num())));
+		}
+		for (int32 Index = 0;
+			Index < FMath::Min(EffectTemplates.Num(), Effects->Num());
+			++Index)
+		{
+			if (EffectTemplates[Index].bSuppressInDetails)
+			{
+				if (!EffectTemplates[Index].Template.IsEmpty())
+				{
+					AddValidationError(
+						OutErrors,
+						FText::FromString(FString::Printf(
+							TEXT("ExplanationTemplates.EffectTemplates[%d] 已隐藏时 Template 必须为空。"),
+							Index)));
+				}
+				continue;
+			}
+			if (EffectTemplates[Index].Template.IsEmpty())
+			{
+				continue;
+			}
+
+			TArray<FString> TemplateErrors;
+			WacomCardExplanationTemplateContract::ValidateEffectTemplate(
+				EffectTemplates[Index].Template,
+				(*Effects)[Index],
+				TemplateErrors);
+			for (const FString& Error : TemplateErrors)
+			{
+				AddValidationError(
+					OutErrors,
+					FText::FromString(FString::Printf(
+						TEXT("ExplanationTemplates.EffectTemplates[%d]：%s"),
+						Index,
+						*Error)));
+			}
+		}
+
+		const TArray<FWacomCardExplanationLineTemplate>& PassiveTemplates =
+			CardDefinition.ExplanationTemplates.PassiveTemplates;
+		if (!PassiveTemplates.IsEmpty() && PassiveTemplates.Num() != Passives->Num())
+		{
+			AddValidationError(
+				OutErrors,
+				FText::FromString(FString::Printf(
+					TEXT("ExplanationTemplates.PassiveTemplates 数量必须与 Passives 一致：当前 %d，规则 %d。"),
+					PassiveTemplates.Num(),
+					Passives->Num())));
+		}
+		for (int32 Index = 0;
+			Index < FMath::Min(PassiveTemplates.Num(), Passives->Num());
+			++Index)
+		{
+			if (PassiveTemplates[Index].bSuppressInDetails)
+			{
+				if (!PassiveTemplates[Index].Template.IsEmpty())
+				{
+					AddValidationError(
+						OutErrors,
+						FText::FromString(FString::Printf(
+							TEXT("ExplanationTemplates.PassiveTemplates[%d] 已隐藏时 Template 必须为空。"),
+							Index)));
+				}
+				continue;
+			}
+			if (PassiveTemplates[Index].Template.IsEmpty())
+			{
+				continue;
+			}
+
+			TArray<FString> TemplateErrors;
+			WacomCardExplanationTemplateContract::ValidatePassiveTemplate(
+				PassiveTemplates[Index].Template,
+				(*Passives)[Index],
+				TemplateErrors);
+			for (const FString& Error : TemplateErrors)
+			{
+				AddValidationError(
+					OutErrors,
+					FText::FromString(FString::Printf(
+						TEXT("ExplanationTemplates.PassiveTemplates[%d]：%s"),
+						Index,
+						*Error)));
+			}
+		}
+
+		TSet<FGameplayTag> SeenKeywordTemplates;
+		for (int32 Index = 0;
+			Index < CardDefinition.ExplanationTemplates.KeywordTemplates.Num();
+			++Index)
+		{
+			const FWacomCardKeywordExplanationTemplate& KeywordTemplate =
+				CardDefinition.ExplanationTemplates.KeywordTemplates[Index];
+			if (!KeywordTemplate.Keyword.IsValid())
+			{
+				AddValidationError(
+					OutErrors,
+					FText::FromString(FString::Printf(
+						TEXT("ExplanationTemplates.KeywordTemplates[%d].Keyword 无效。"),
+						Index)));
+			}
+			else
+			{
+				if (!CardDefinition.Keywords.HasTagExact(KeywordTemplate.Keyword))
+				{
+					AddValidationError(
+						OutErrors,
+						FText::FromString(FString::Printf(
+							TEXT("ExplanationTemplates.KeywordTemplates[%d] 的 %s 不存在于 CardDefinition.Keywords。"),
+							Index,
+							*KeywordTemplate.Keyword.ToString())));
+				}
+				if (SeenKeywordTemplates.Contains(KeywordTemplate.Keyword))
+				{
+					AddValidationError(
+						OutErrors,
+						FText::FromString(FString::Printf(
+							TEXT("ExplanationTemplates.KeywordTemplates[%d] 重复制作关键词 %s。"),
+							Index,
+							*KeywordTemplate.Keyword.ToString())));
+				}
+				SeenKeywordTemplates.Add(KeywordTemplate.Keyword);
+			}
+			if (KeywordTemplate.Template.IsEmpty())
+			{
+				AddValidationError(
+					OutErrors,
+					FText::FromString(FString::Printf(
+						TEXT("ExplanationTemplates.KeywordTemplates[%d].Template 不能为空。"),
+						Index)));
+				continue;
+			}
+
+			TArray<FString> TemplateErrors;
+			WacomCardExplanationTemplateContract::ValidateKeywordTemplate(
+				KeywordTemplate.Template,
+				KeywordTemplate.Keyword,
+				TemplateErrors);
+			for (const FString& Error : TemplateErrors)
+			{
+				AddValidationError(
+					OutErrors,
+					FText::FromString(FString::Printf(
+						TEXT("ExplanationTemplates.KeywordTemplates[%d]：%s"),
+						Index,
+						*Error)));
+			}
+		}
+
+		if (!CardDefinition.ExplanationTemplates.DynamicCostTemplate.IsEmpty())
+		{
+			const FWacomCardDynamicCostRule* DynamicCostRule = nullptr;
+			if (!CardDefinition.TierProfiles.IsEmpty())
+			{
+				DynamicCostRule =
+					&CardDefinition.TierProfiles[0].DynamicCostRule;
+			}
+			if (!DynamicCostRule
+				|| !DynamicCostRule->CountHandCardsWithStatus.IsValid()
+				|| DynamicCostRule->ReductionPerMatchingCard <= 0)
+			{
+				AddValidationError(
+					OutErrors,
+					LOCTEXT(
+						"ExplanationDynamicCostWithoutRule",
+						"ExplanationTemplates.DynamicCostTemplate 需要有效的 DynamicCostRule。"));
+			}
+			else
+			{
+				TArray<FString> TemplateErrors;
+				WacomCardExplanationTemplateContract::
+					ValidateDynamicCostTemplate(
+						CardDefinition.ExplanationTemplates.DynamicCostTemplate,
+						*DynamicCostRule,
+						TemplateErrors);
+				for (const FString& Error : TemplateErrors)
+				{
+					AddValidationError(
+						OutErrors,
+						FText::FromString(
+							TEXT("ExplanationTemplates.DynamicCostTemplate：")
+							+ Error));
+				}
+			}
+		}
+	}
 }
 
 bool FWacomCardDefinitionValidation::Validate(
@@ -398,60 +627,99 @@ bool FWacomCardDefinitionValidation::Validate(
 
 	ValidateRunFace(CardDefinition->RunFace, OutErrors);
 
-	ValidateEffects(
-		CardDefinition->Effects,
-		TEXT("Effects"),
-		FWacomBattleRuleContentContract::ECardEffectContext::MainEffect,
-		CardDefinition->TargetMode,
-		OutErrors);
-	ValidateEffects(
-		CardDefinition->PerfectReleaseEffects,
-		TEXT("PerfectReleaseEffects"),
-		FWacomBattleRuleContentContract::ECardEffectContext::PerfectRelease,
-		CardDefinition->TargetMode,
-		OutErrors);
-
-	for (int32 HookIndex = 0; HookIndex < CardDefinition->ZoneHooks.Num(); ++HookIndex)
+	const auto ValidateProfileCollections =
+		[CardDefinition, &OutErrors](
+			const TArray<FCardEffect>& Effects,
+			const TArray<FCardEffect>& PerfectReleaseEffects,
+			const TArray<FCardZoneHook>& ZoneHooks,
+			const TArray<FCardPassive>& Passives,
+			const FString& Prefix)
 	{
-		const FCardZoneHook& ZoneHook = CardDefinition->ZoneHooks[HookIndex];
-		const FString HookLabel = FString::Printf(TEXT("ZoneHooks[%d]"), HookIndex);
-
-		if (!FWacomBattleRuleContentContract::IsHandZoneTag(ZoneHook.Zone))
-		{
-			AddValidationError(OutErrors,
-				FormatValidationError(TEXT("{0} 的 Zone 必须是 HandZone.*。"), HookLabel));
-		}
-
-		if (!IsZoneHookTriggerTag(ZoneHook.Trigger))
-		{
-			AddValidationError(OutErrors,
-				FormatValidationError(TEXT("{0} 的 Trigger 必须是 ZoneHook.Trigger.*。"), HookLabel));
-		}
-
-		if (ZoneHook.Trigger == WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit
-			&& !ZoneHook.ExtraEffects.IsEmpty())
-		{
-			AddValidationError(OutErrors,
-				FormatValidationError(TEXT("{0} 当前只作为跳过先机推进标记，不执行 ExtraEffects。"), HookLabel));
-		}
-
 		ValidateEffects(
-			ZoneHook.ExtraEffects,
-			HookLabel + TEXT(".ExtraEffects"),
-			FWacomBattleRuleContentContract::ECardEffectContext::ZoneHookOnPlay,
+			Effects,
+			Prefix + TEXT("Effects"),
+			FWacomBattleRuleContentContract::ECardEffectContext::MainEffect,
 			CardDefinition->TargetMode,
 			OutErrors);
-	}
+		ValidateEffects(
+			PerfectReleaseEffects,
+			Prefix + TEXT("PerfectReleaseEffects"),
+			FWacomBattleRuleContentContract::ECardEffectContext::PerfectRelease,
+			CardDefinition->TargetMode,
+			OutErrors);
 
-	for (int32 PassiveIndex = 0; PassiveIndex < CardDefinition->Passives.Num(); ++PassiveIndex)
+		for (int32 HookIndex = 0; HookIndex < ZoneHooks.Num(); ++HookIndex)
+		{
+			const FCardZoneHook& ZoneHook = ZoneHooks[HookIndex];
+			const FString HookLabel = FString::Printf(
+				TEXT("%sZoneHooks[%d]"),
+				*Prefix,
+				HookIndex);
+
+			if (!FWacomBattleRuleContentContract::IsHandZoneTag(ZoneHook.Zone))
+			{
+				AddValidationError(OutErrors,
+					FormatValidationError(TEXT("{0} 的 Zone 必须是 HandZone.*。"), HookLabel));
+			}
+
+			if (!IsZoneHookTriggerTag(ZoneHook.Trigger))
+			{
+				AddValidationError(OutErrors,
+					FormatValidationError(TEXT("{0} 的 Trigger 必须是 ZoneHook.Trigger.*。"), HookLabel));
+			}
+
+			if (ZoneHook.Trigger == WacomTags::ZoneHook_Trigger_OnPerfectReleaseHit
+				&& !ZoneHook.ExtraEffects.IsEmpty())
+			{
+				AddValidationError(OutErrors,
+					FormatValidationError(TEXT("{0} 当前只作为跳过先机推进标记，不执行 ExtraEffects。"), HookLabel));
+			}
+
+			ValidateEffects(
+				ZoneHook.ExtraEffects,
+				HookLabel + TEXT(".ExtraEffects"),
+				FWacomBattleRuleContentContract::ECardEffectContext::ZoneHookOnPlay,
+				CardDefinition->TargetMode,
+				OutErrors);
+		}
+
+		for (int32 PassiveIndex = 0; PassiveIndex < Passives.Num(); ++PassiveIndex)
+		{
+			ValidatePassive(
+				Passives[PassiveIndex],
+				FString::Printf(TEXT("%sPassives[%d]"), *Prefix, PassiveIndex),
+				CardDefinition->TargetMode,
+				OutErrors);
+		}
+	};
+
+	if (CardDefinition->TierProfiles.IsEmpty())
 	{
-		const FCardPassive& Passive = CardDefinition->Passives[PassiveIndex];
-		const FString PassiveLabel = FString::Printf(TEXT("Passives[%d]"), PassiveIndex);
-
-		ValidatePassive(Passive, PassiveLabel, CardDefinition->TargetMode, OutErrors);
+		ValidateProfileCollections(
+			CardDefinition->Effects,
+			CardDefinition->PerfectReleaseEffects,
+			CardDefinition->ZoneHooks,
+			CardDefinition->Passives,
+			FString());
+	}
+	else
+	{
+		for (int32 TierIndex = 0; TierIndex < CardDefinition->TierProfiles.Num(); ++TierIndex)
+		{
+			const FWacomCardTierProfile& Profile = CardDefinition->TierProfiles[TierIndex];
+			ValidateProfileCollections(
+				Profile.Effects,
+				Profile.PerfectReleaseEffects,
+				Profile.ZoneHooks,
+				Profile.Passives,
+				FString::Printf(TEXT("TierProfiles[%d]."), TierIndex));
+		}
 	}
 
-	FWacomCardUpgradeCatalogValidation::AppendReachableChainErrors(CardDefinition, OutErrors);
+	FWacomCardTierProfileValidation::AppendTierProfileErrors(
+		CardDefinition,
+		OutErrors);
+	ValidateExplanationTemplates(*CardDefinition, OutErrors);
 
 	return OutErrors.IsEmpty();
 }

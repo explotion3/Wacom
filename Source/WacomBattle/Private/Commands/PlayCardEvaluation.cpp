@@ -67,7 +67,7 @@ namespace
 		}
 
 		Result.Definition = Result.Card->Definition;
-		Result.RuntimeCost = FBattleRules::ComputeRuntimeCost(*Result.Card);
+		Result.RuntimeCost = FBattleRules::ComputeRuntimeCost(State, *Result.Card);
 		Result.bAnchor = Result.Card->InstanceId == State.Cards.LeftHandInstanceId
 			|| Result.Card->InstanceId == State.Cards.RightHandInstanceId;
 		Result.bSwift = HasKeyword(*Result.Card, WacomTags::Card_Keyword_Swift);

@@ -72,6 +72,41 @@ namespace WacomCardExplanationConditionRenderer
 						StatusName);
 			}
 
+			if (Condition.ConditionType.MatchesTagExact(
+				WacomTags::Condition_Self_InCardLocation))
+			{
+				const FText LocationName = Condition.ParamTag.IsValid()
+					? WacomCardExplanationText::GetDisplayTagName(
+						Condition.ParamTag,
+						Lexicon)
+					: LOCTEXT("UnknownCardLocation", "指定牌堆");
+				return Condition.bNegate
+					? FormatLexiconText(
+						Lexicon,
+						WacomCardExplanationLexiconKeys::ConditionSelfNotInCardLocation,
+						LOCTEXT("SelfNotInCardLocation", "仅当本卡不位于{0}时"),
+						LocationName)
+					: FormatLexiconText(
+						Lexicon,
+						WacomCardExplanationLexiconKeys::ConditionSelfInCardLocation,
+						LOCTEXT("SelfInCardLocation", "仅当本卡位于{0}时"),
+						LocationName);
+			}
+
+			if (Condition.ConditionType.MatchesTagExact(
+				WacomTags::Condition_Self_EverEnteredExhaust))
+			{
+				return Condition.bNegate
+					? WacomCardExplanationText::ResolveNamedText(
+						Lexicon,
+						WacomCardExplanationLexiconKeys::ConditionSelfNeverEnteredExhaust,
+						LOCTEXT("SelfNeverEnteredExhaust", "仅当本卡本场从未进入过消耗区时"))
+					: WacomCardExplanationText::ResolveNamedText(
+						Lexicon,
+						WacomCardExplanationLexiconKeys::ConditionSelfEverEnteredExhaust,
+						LOCTEXT("SelfEverEnteredExhaust", "仅当本卡本场曾进入过消耗区时"));
+			}
+
 			FString ConditionSummary = WacomCardExplanationText::GetDisplayTagLeafName(Condition.ConditionType);
 			if (Condition.ParamTag.IsValid())
 			{
@@ -121,7 +156,7 @@ namespace WacomCardExplanationConditionRenderer
 				return FormatLexiconText(
 					Lexicon,
 					WacomCardExplanationLexiconKeys::ModifierMultiply,
-					LOCTEXT("ModifierMultiply", "数值 ×{0}"),
+					LOCTEXT("ModifierMultiply", "数值 x{0}"),
 					ValueText);
 			default:
 				return FormatLexiconText(

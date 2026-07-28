@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cards/CardUpgradeTypes.h"
 #include "UObject/Object.h"
 #include "GameplayTagContainer.h"
 #include "Types/WacomEnums.h"
@@ -46,6 +47,16 @@ struct WACOMBATTLE_API FBattleDeckEntry
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	TObjectPtr<const UCardDefinition> Definition = nullptr;
 
+	/** Run 实体卡身份；战内生成卡为空，结算时只有有效来源能写回持久成长。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	FGuid SourceRunInstanceId;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	EWacomCardUpgradeTier UpgradeTier = EWacomCardUpgradeTier::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
+	FWacomCardPersistentModifierState PersistentModifiers;
+
 	/** 来自 SpecialZone 的卡：单元素集合 = 主卡 CapacityEffect。来自备战区原生位置：空集合。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wacom|Battle")
 	FGameplayTagContainer CapacityEffectTags;
@@ -53,6 +64,7 @@ struct WACOMBATTLE_API FBattleDeckEntry
 
 struct FBattleState;
 struct FBattleEventBus;
+struct FRuntimeCardInstance;
 #if WITH_AUTOMATION_TESTS
 struct FWacomBattleSessionTestAccess;
 #endif
@@ -324,6 +336,30 @@ private:
 	bool ContainsReferencedAssetForAutomationTest(const UObject* Asset) const;
 	int32 GetNextEventSequenceForAutomationTest() const;
 	int32 GetRandomCurrentSeedForAutomationTest() const;
+	bool SetPlayerStatusStacksForAutomationTest(
+		const FGameplayTag& Status,
+		int32 Stacks);
+	bool SetEnemyPartStatusStacksForAutomationTest(
+		const FBattleEnemyPartKey& PartKey,
+		const FGameplayTag& Status,
+		int32 Stacks);
+	bool SetEnemyPartShieldForAutomationTest(
+		const FBattleEnemyPartKey& PartKey,
+		int32 Shield);
+	bool SetCardStatusStacksForAutomationTest(
+		const FGuid& CardInstanceId,
+		const FGameplayTag& Status,
+		int32 Stacks);
+	bool SetCardRuntimeCostModifierForAutomationTest(
+		const FGuid& CardInstanceId,
+		int32 Modifier);
+	bool SetCardCriticalChanceBonusForAutomationTest(
+		const FGuid& CardInstanceId,
+		int32 BonusPercent);
+	bool ResolveSettlementPassivesForAutomationTest();
+	bool GetCardRuntimeStateForAutomationTest(
+		const FGuid& CardInstanceId,
+		FRuntimeCardInstance& OutCard) const;
 #endif
 
 	/** 持有 FBattleState 和 FBattleEventBus。裸指针 + 手动管理，避免 TUniquePtr 在 UHT gen.cpp 里需要完整定义。 */

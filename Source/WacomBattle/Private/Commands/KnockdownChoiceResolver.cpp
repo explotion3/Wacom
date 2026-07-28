@@ -11,6 +11,7 @@
 #include "Presentation/BattlePresentationJournal.h"
 #include "Rewards/BattleCardGrantService.h"
 #include "Runtime/RuntimeEnemyPart.h"
+#include "Passives/PassiveDispatcher.h"
 
 FWacomStatus FKnockdownChoiceResolver::Resolve(
 	FBattleState& State,
@@ -67,6 +68,7 @@ FWacomStatus FKnockdownChoiceResolver::Resolve(
 	{
 		State.Outcome  = EBattleOutcome::Victory;
 		State.Phase    = EBattlePhase::BattleEnd;
+		FPassiveDispatcher::RunOnBattleSettlement(State, Events);
 
 		FBattleEvent Ended;
 		Ended.Type  = EBattleEventType::BattleEnded;
