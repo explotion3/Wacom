@@ -73,6 +73,14 @@ namespace WacomWorldInteractableContractHelpers
 		{
 			return Reject(TEXT("BoundNodeNotCurrent"));
 		}
+		if (Snapshot.ActiveActivityKind != ERunExplorationActivityKind::None)
+		{
+			// BeginTraversal intentionally keeps CurrentNode at the source until arrival.
+			// A node-id-only check would therefore leave the departed source content
+			// interactable throughout the corridor and allow presentation staging to
+			// begin before WacomRun rejects the conflicting activity.
+			return Reject(TEXT("RunActivityActive"));
+		}
 
 		const FRunMapNodeSnapshot* CurrentNode = Snapshot.Nodes.FindByPredicate(
 			[&Snapshot](const FRunMapNodeSnapshot& Node)

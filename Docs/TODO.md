@@ -466,3 +466,7 @@ tags:
 
 > [!note] 迁移说明
 > 原 `TODO.md` 的未实现功能已迁入 [`Roadmap.md`](Roadmap.md)；临时写法、临时决定、兼容入口已迁入 [`TechDebt.md`](TechDebt.md)；待确认规则问题已迁入 [`Questions.md`](Questions.md)。已经正式化到领域文档、UI 专题文档和 Data 专题文档的实现，不再在这里重复追踪。
+## 2026-07-29 Run 节点离场后的世界交互资格收口
+
+- [x] `UWacomRunMapNodeBindingComponent` 的正式世界交互资格不再只比较 `CurrentNode`：任何独占 `ActiveActivityKind`（尤其 Traversal）期间均 fail closed，避免离开 Shop 节点进入通道后仍能点击 Trigger、先播放 Entry Viewpoint staging 再被 Run 规则拒绝。
+- [x] 新增 `Wacom.UI.WorldInteraction.NodeEligibility.BoundShopDisablesDuringTraversal`，覆盖 anchored 可点击、Traversal 立即禁用、取消 Traversal 返回源节点后恢复。
