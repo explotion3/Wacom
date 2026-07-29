@@ -174,7 +174,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wacom|Run|First Person Cards")
 	void SetRunFirstPersonCardLayerSuppressedByGameMenu(bool bSuppressed);
 
-	/** 收起或恢复当前默认 Run 手牌，不清空 entries、不创建 menu lease、不播放入场 hint。 */
+	/**
+	 * 世界活动接管时切换到 0-entry suppressed presentation source；释放后从最新 Run
+	 * snapshot 重建默认 source，并为恢复的卡牌生成 RunHandEntered 表现。
+	 */
 	void SetRunFirstPersonCardLayerWorldActivitySuppressed(
 		bool bSuppressed,
 		bool bAnimate = true);
@@ -367,6 +370,7 @@ private:
 	bool bRuntimeSourceActive = false;
 	bool bSuppressedByGameMenu = false;
 	bool bWorldActivitySuppressed = false;
+	bool bForceSettleNextWorldActivityRestore = false;
 	FName ActiveMenuLeaseId = NAME_None;
 	FName ActiveMenuLeaseSourceId = NAME_None;
 	FWacomRunMenuCardLeaseRequest ActiveMenuLeaseProviderRequest;

@@ -181,7 +181,7 @@ Primary Action 的 Normal/Hovered/Pressed/Disabled 画刷全部是 `FSlateNoReso
 
 `FWacomCursorLookProfile` 除 Clamp、Scale 和 Interp 外还提供 `CursorDeadZoneNormalized` 与 `CursorResponseExponent`。死区按水平/垂直轴独立移除并重新映射到 `0..1`，随后应用正指数曲线；鼠标到达视口边缘时仍精确达到 Clamp。默认 `DeadZone=(0,0) / Exponent=1` 与旧 Run/Battle 线性行为等价。组合式正式商店默认不覆盖 Look Profile，进入后复制玩家当前 Run Path 的 live Clamp、Scale、Interp、DeadZone 和 Exponent；Host 的可选 override 只保留给 transient 验证或未来明确需要独立镜头手感的活动，不写回 Run/Battle 制作参数。
 
-World Shop 入场不再只冻结手牌点击，而是使用可复用的 Run hand `World Activity Suppression`。它立即取消 hover/drag 和交互，在 `0.18 s` 内把同一个 card layer 向下移动 `0.42×viewport height` 并淡出；卡牌 entries、`SourceId`、`InstanceId`、Slot Widget 和 transition hint 都不清空。退出时必须先完成 Run Path 镜头返回，再反向恢复同一批 Widget，因此不会产生新的 `RunHandEntered` hint 或重播发牌动画；Staging 失败、Host teardown 和 Shutdown 都必须释放 suppression，Shutdown 使用立即恢复。
+World Shop 入场使用 Run hand `World Activity Suppression` 取得表现源所有权。它立即取消 hover/drag/inspect，把 Anchor 切换到与 GameMenu 共用的 0-entry suppressed presentation source，并清空当前 Slot/Widget 表现；这只修改 App 的手牌 presentation，不清空 `WacomRun` 的 Backpack、BattleDeck、卡牌 InstanceId 或 StorageRevision。退出时必须先完成 Run Path 镜头返回，再从最新 Run snapshot 重建默认 source；所有恢复卡牌生成 `RunHandEntered` hint，因此会像关闭 Backpack 一样重新播放整批手牌入场。Staging 失败、Host teardown 和 Shutdown 都必须释放 suppression；Shutdown 可立即 settle，不让动画越过 teardown 生命周期。
 
 世界卡面曝光与合成模式通过独立 transient PIE 实验台验证，不直接拿正式商店承担材质试错。命令 `Wacom.WorldCardRender.OpenPIEValidation [OptionalCardDefinitionPath]` 会用同一个 `FWacomCardViewData` 同时创建一张屏幕空间参考卡，以及 `Engine Transparent`、`Engine Masked`、`Wacom Masked Raw`、`Wacom Masked Exposure` 四张相机相对世界卡；它们都直接使用精确的 `WBP_FirstPersonCardView`，世界卡统一为 `720×976` DrawSize 和 `0.10` world scale。该实验不打开 Shop Visit、不访问或修改 Run、金币、背包、手牌和购买状态，世界卡也没有碰撞、焦点或输入命中。
 
@@ -193,7 +193,7 @@ World Shop 入场不再只冻结手牌点击，而是使用可复用的 Run hand
 
 `WacomEditor` 的 Anchor Component Visualizer 必须在 `GUnrealEd` 可用后幂等注册；模块早于 Editor engine 启动时延迟到 PostEngineInit，不允许静默跳过。线框只存在于包含该 Editor 模块实现并完成全量编译的 worktree/Editor 进程，不能用另一分支的已运行 Editor 验收尚未集成的工具源码。
 
-正式 Host Owner 进入 World Shop 活动后，App-private entry-bounds guard 会把同一组合 Actor 的入口 `ClickBounds` 临时设为 `NoCollision`，避免它在卡牌前截断 Mouse WidgetInteraction 的 `Visibility` trace；旧外部 Host 仍可通过 Parent Actor 兼容解析。只有镜头完全返回 Run Path、活动结束后才恢复进入前的碰撞模式。并行的 Exploration HUD visibility guard 只把 Game Layer 当前 `UWacomExplorationHUD` 根可见性折叠为 `Collapsed`，不 Deactivate、不 Pop，因此 CommonUI `GameAndUI / NoCapture` 输入配置保持不变；商店金币、Esc、购买反馈与全局 Toast 继续显示。正常退出、Staging 失败、Host Owner EndPlay 和 Shutdown 都必须恢复进入前的精确 Visibility，并刷新当前世界交互提示。
+正式 Host Owner 进入 World Shop 活动后，App-private entry-bounds guard 会把同一组合 Actor 的入口 `ClickBounds` 临时设为 `NoCollision`，避免它在卡牌前截断 Mouse WidgetInteraction 的 `Visibility` trace；旧外部 Host 仍可通过 Parent Actor 兼容解析。只有镜头完全返回 Run Path、活动结束后才恢复进入前的碰撞模式。并行的 Exploration HUD visibility guard 只把 Game Layer 当前 `UWacomExplorationHUD` 根可见性折叠为 `Collapsed`，不 Deactivate、不 Pop，因此 CommonUI `GameAndUI / NoCapture` 输入配置保持不变；商店金币、Esc、购买反馈与全局 Toast 继续显示。正常退出、Staging 失败、Host Owner EndPlay 和 Shutdown 都必须恢复进入前的精确 Visibility，将 Slate user focus 交还游戏视口，再刷新当前世界交互提示和 first-person hand hover。
 
 World Shop 从 Staging 起接管指针时，必须立即清除普通 Run Hover/Probe，并让后续 probe、hover、click 全部服从统一 Run scene pointer gate；因此 Backboard 不得继续缩放或写入 CustomDepth。Slate preprocessor 只为游戏视口内被 World Shop 实际消费的 LeftMouseDown 保留成对 Release，不能吞掉 Editor/PIE 控件自己的 MouseUp；NoCapture 下的 Esc 只在当前游戏视口拥有焦点或鼠标上下文、且 World Shop 正在接管输入时补充转发。
 

@@ -72,7 +72,7 @@ private:
 		const TArray<FWacomShopOfferPresentationView>& Views);
 	void DestroyPresentation();
 	void RestoreExplorationPresentation();
-	void FinishClose();
+	void FinishClose(bool bAnimateHandEntry = true);
 
 	EState State = EState::Inactive;
 	uint32 Generation = 0;

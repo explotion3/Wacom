@@ -477,10 +477,10 @@ Development Preview 已删除，不得重新建立静态卡牌 fallback 或把�
 
 Slot gesture 测试应通过 `InteractionIntent` 构造 entry / slot，避免再用 `TargetMode` 作为手势配置入口；只有验证 Battle adapter 投影时，才允许用 adapter 私有实现或测试内显式命名的 Battle target-mode projection helper。
 
-## §11 World activity interaction-only suppression
+## §11 World activity presentation-source suppression
 
-World Shop LookOnly 使用 `UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerInteractionSuppressedByWorldShop`。该门禁只向当前默认 Run source 提交 `bInteractionEnabled=false/true` lifecycle 控制，不清空或重建 entries，不创建 menu lease，不改变 source id，也不生成 transition hint。因此进入/退出实体商店时手牌保持可见且不会重播 `RunHandEntered`；活动期间 hover/drag/drop/详情等交互被冻结。
+World Shop LookOnly 使用 `UWacomRunFirstPersonCardSourceComponent::SetRunFirstPersonCardLayerWorldActivitySuppressed`。进入时它取得 Run hand presentation ownership，向 Anchor 写入与 GameMenu 共用的 0-entry `Suppressed` frame；这会原子取消 hover/drag/详情、关闭交互并清空当前 Slot/Widget 表现，但不会修改 `WacomRun` 的 Backpack、BattleDeck、InstanceId 或 StorageRevision。活动期间的购买仍只写权威 Run 状态，Run state notification 不能越过该门禁重新显示手牌。
 
 World Shop 只复用卡面资产和 ViewData，不复用 HUD hand 的完整 first-person presentation wrapper。世界 Widget 中必须直接承载 `WBP_FirstPersonCardView`，通过 `360×488` 逻辑面与 2× WidgetComponent supersampling 保证清晰度；不得把带 Retainer/Fake3D 的 `WBP_FPCardView` 再嵌套进世界 Widget RenderTarget，因为双重离屏合成会导致颜色、对比度和清晰度退化。HUD 手牌仍按 §9 使用 `WBP_FPCardView`，两条路径共享 CardView contract，而不是共享最终渲染容器。
 
-它不能替代 GameMenu suppression：真正覆盖手牌的 Backpack/ShopScreen/RunEvent 仍使用既有 menu source/lease 与 transition suppression。World activity 退出、Host EndPlay、PlayerController EndPlay 和失败回滚都必须对称释放 interaction-only 门禁。
+World activity 释放必须在 Run Path 镜头返回后执行：Source 从最新 Run snapshot 重建 `RunDefault`，为所有恢复卡生成 `RunHandEntered`，所以重新出现的手牌与关闭 Backpack 一样播放整批入场，而不是复用旧 Widget 身份。它仍不替代 menu lease：Backpack/ShopScreen/RunEvent 的候选卡接管继续使用既有 menu provider/source 合同。World activity 退出、Host EndPlay、PlayerController EndPlay 和失败回滚都必须对称释放门禁；正常退出还必须把 Slate focus 交还游戏视口，确保恢复后的 hover 可以立即命中。

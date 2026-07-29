@@ -14,6 +14,7 @@
 #include "GameFramework/WacomPlayerCharacter.h"
 #include "GameFramework/WacomPlayerController.h"
 #include "Engine/GameInstance.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/Actor.h"
 #include "InputCoreTypes.h"
 #include "Materials/MaterialInterface.h"
@@ -463,13 +464,6 @@ void FWacomWorldShopActivityCoordinator::Shutdown()
 	if (PC)
 	{
 		PC->bShowMouseCursor = bPreviousShowMouseCursor;
-		if (UWacomRunFirstPersonCardSourceComponent* Source =
-			PC->GetRunFirstPersonCardSourceComponent())
-		{
-			Source->SetRunFirstPersonCardLayerWorldActivitySuppressed(
-				false,
-				/*bAnimate*/ false);
-		}
 		if (AWacomPlayerCharacter* Pawn = PC->GetPawn<AWacomPlayerCharacter>())
 		{
 			FWacomFirstPersonViewStageCoordinator::CancelActiveStage(*Pawn);
@@ -480,7 +474,7 @@ void FWacomWorldShopActivityCoordinator::Shutdown()
 			Pawn->SetExplorationInputEnabled(true, true);
 		}
 	}
-	FinishClose();
+	FinishClose(/*bAnimateHandEntry*/ false);
 }
 
 void FWacomWorldShopActivityCoordinator::DestroyPresentation()
@@ -534,7 +528,7 @@ void FWacomWorldShopActivityCoordinator::RestoreExplorationPresentation()
 		[this]() { FinishClose(); });
 }
 
-void FWacomWorldShopActivityCoordinator::FinishClose()
+void FWacomWorldShopActivityCoordinator::FinishClose(bool bAnimateHandEntry)
 {
 	AWacomPlayerController* PC = PlayerController.Get();
 	if (PC)
@@ -544,7 +538,7 @@ void FWacomWorldShopActivityCoordinator::FinishClose()
 		{
 			Source->SetRunFirstPersonCardLayerWorldActivitySuppressed(
 				false,
-				/*bAnimate*/ true);
+				bAnimateHandEntry);
 		}
 	}
 	EntryBoundsGuard.Restore();
@@ -554,6 +548,10 @@ void FWacomWorldShopActivityCoordinator::FinishClose()
 	bPurchaseInFlight = false;
 	State = EState::Inactive;
 	ExplorationHUDVisibilityGuard.Restore();
+	if (FSlateApplication::IsInitialized())
+	{
+		FSlateApplication::Get().SetAllUserFocusToGameViewport();
+	}
 	if (PC)
 	{
 		PC->RefreshInteractToast();
